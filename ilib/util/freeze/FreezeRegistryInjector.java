@@ -1,42 +1,16 @@
-/*
- * This file is a part of MoreItems
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package ilib.util.freeze;
 
-import com.google.common.collect.BiMap;
 import ilib.Config;
+import ilib.ImpLib;
 import ilib.util.ForgeUtil;
 import ilib.util.Registries;
-import roj.reflect.IFieldAccessor;
-import roj.reflect.ReflectionUtils;
 
-import net.minecraft.entity.Entity;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
 
+import net.minecraftforge.fml.common.ModContainer;
 import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.fml.common.registry.EntityRegistry;
 import net.minecraftforge.fml.common.registry.EntityRegistry.EntityRegistration;
@@ -44,82 +18,76 @@ import net.minecraftforge.registries.ForgeRegistry;
 import net.minecraftforge.registries.IForgeRegistry.MissingFactory;
 import net.minecraftforge.registries.IForgeRegistryEntry;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+
 /**
- * Your description here
- *
  * @author Roj233
- * @version 0.1
  * @since 2021/8/26 20:03
  */
-public class FreezeRegistryInjector {
-    static BiMap<Class<? extends Entity>, EntityRegistration> entityClassRegistrations;
+public class FreezeRegistryInjector<T extends IForgeRegistryEntry<T>> implements MissingFactory<T>  {
+	/**
+	 * @see ilib.asm.nx.FastTileConst#create(World, NBTTagCompound)
+	 *
+	 */
+	public static void inject() throws ReflectiveOperationException {
+		Field acc = ForgeRegistry.class.getDeclaredField("missing");
+		acc.setAccessible(true);
 
-    /**
-     * @see ilib.asm.nixim.FastTileConst#create(World, NBTTagCompound)
-     */
-    @SuppressWarnings("unchecked")
-    public static void inject() {
-        IFieldAccessor accessor, a2;
-        try {
-            accessor = ReflectionUtils.accessField(ForgeRegistry.class.getDeclaredField("missing"));
-            if(entityClassRegistrations == null) {
-                a2 = ReflectionUtils.accessField(EntityRegistry.class.getDeclaredField("entityClassRegistrations"));
-                a2.setInstance(EntityRegistry.instance());
-                entityClassRegistrations = (BiMap<Class<? extends Entity>, EntityRegistration>) a2.getObject();
-                entityClassRegistrations.put(FreezedEntity.class, EntityRegistry.instance().
-                        new EntityRegistration(ForgeUtil.getCurrentMod(), new ResourceLocation("armor_stand"),
-                                               FreezedEntity.class, "armor_stand_1", 12580,
-                                               32, 999999, false, null));
-                a2.clearInstance();
-            }
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
-            return;
-        }
-        accessor.setInstance(Registries.item());
+		if (Config.freezeUnknownEntries.contains("item")) {
+			acc.set(Registries.item(), new FreezeRegistryInjector<>(0));
+		}
 
-        if(Config.freezeUnknownEntries.contains("item"))
-            accessor.setObject(new Injector<>(0)); // Item inject
+		if (Config.freezeUnknownEntries.contains("block")) {
+			acc.set(Registries.block(), new FreezeRegistryInjector<>(1));
+		}
 
-        accessor.setInstance(Registries.block()); // Block inject
-        if(Config.freezeUnknownEntries.contains("block"))
-            accessor.setObject(new Injector<>(1));
+		if (Config.freezeUnknownEntries.contains("entity")) {
+			acc.set(Registries.entity(), new FreezeRegistryInjector<>(2));
 
-        accessor.setInstance(Registries.entity()); // Entity inject
-        if(Config.freezeUnknownEntries.contains("entity"))
-            accessor.setObject(new Injector<>(2));
+			ModContainer mc = ForgeUtil.findModById(ImpLib.MODID);
+			EntityRegistration entry = EntityRegistry.instance()
+				.new EntityRegistration(mc, new ResourceLocation("armor_stand"), FreezedEntity.class, "freezed", 12580, 64, 999999, false, null);
 
-        accessor.clearInstance();
-    }
+			// 对于只用一次的反射调用，就没必要用DirectAccessor了，开销反而更高, 占用了classid和metaspace
+			Method m = EntityRegistry.class.getDeclaredMethod("insert", Class.class, EntityRegistration.class);
+			m.setAccessible(true);
+			m.invoke(EntityRegistry.instance(), FreezedTileEntity.class, entry);
+		}
 
-    static final class Injector<T extends IForgeRegistryEntry<T>> implements MissingFactory<T> {
-        final byte type;
-        public Injector(int i) {
-            this.type = (byte) i;
-        }
+		if (Config.freezeUnknownEntries.contains("tile")) {
+			TileEntity.register("ilib:freezed", FreezedTileEntity.class);
+		}
+	}
 
-        @Override
-        @SuppressWarnings("unchecked")
-        public T createMissing(ResourceLocation reg, boolean b) {
-            switch (type) {
-                case 0:
-                    return (T) new FreezedBlock().setRegistryName(reg);
-                case 1:
-                    return (T) new FreezedItem().setRegistryName(reg);
-                case 2:
-                    return (T) new EntityEntry(FreezedEntity.class, "freezed") {
-                        @Override
-                        public int hashCode() {
-                            return getRegistryName() == null ? 0 : getRegistryName().hashCode();
-                        }
+	final byte type;
 
-                        @Override
-                        public boolean equals(Object obj) {
-                            return obj instanceof EntityEntry && ((EntityEntry) obj).getRegistryName().equals(getRegistryName());
-                        }
-                    }.setRegistryName(reg);
-            }
-            throw new InternalError("Unknown type " + type);
-        }
-    }
+	public FreezeRegistryInjector(int i) {
+		this.type = (byte) i;
+	}
+
+	@Override
+	@SuppressWarnings("unchecked")
+	public T createMissing(ResourceLocation reg, boolean b) {
+		switch (type) {
+			default:
+			case 0:
+				return (T) new FreezedItem().setRegistryName(reg);
+			case 1:
+				new Throwable().printStackTrace();
+				return (T) new FreezedBlock().setRegistryName(reg);
+			case 2:
+				return (T) new EntityEntry(FreezedEntity.class, "freezed") {
+					@Override
+					public int hashCode() {
+						return getRegistryName() == null ? 0 : getRegistryName().hashCode();
+					}
+
+					@Override
+					public boolean equals(Object obj) {
+						return obj instanceof EntityEntry && ((EntityEntry) obj).getRegistryName().equals(getRegistryName());
+					}
+				}.setRegistryName(reg);
+		}
+	}
 }

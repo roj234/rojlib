@@ -1,123 +1,89 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.asm.cst;
 
-import roj.util.ByteWriter;
+import roj.asm.type.TypeHelper;
+import roj.text.CharList;
+import roj.util.DynByteBuf;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 17:16
  */
 public final class CstNameAndType extends Constant {
-    private short nameIndex, typeIndex;
+	private CstUTF name, type;
 
-    private CstUTF name, type;
+	public CstNameAndType() {}
 
-    public CstNameAndType() {}
+	public CstNameAndType(CstUTF nameIndex, CstUTF typeIndex) {
+		this.name = nameIndex;
+		this.type = typeIndex;
+	}
 
-    public CstNameAndType(int nameIndex, int typeIndex) {
-        this.nameIndex = (short) nameIndex;
-        this.typeIndex = (short) typeIndex;
-    }
+	@Override
+	public byte type() {
+		return Constant.NAME_AND_TYPE;
+	}
 
-    @Override
-    public byte type() {
-        return CstType.NAME_AND_TYPE;
-    }
+	@Override
+	public final void write(DynByteBuf w) {
+		w.put(Constant.NAME_AND_TYPE).putShort(name.getIndex()).putShort(type.getIndex());
+	}
 
-    @Override
-    public final void write(ByteWriter w) {
-        w.writeByte(CstType.NAME_AND_TYPE)
-         .writeShort(getNameIndex())
-         .writeShort(getTypeIndex());
-    }
+	public final String toString() {
+		CharList sb = new CharList().append(super.toString())
+			.append(" 引用[").append(name.getIndex()).append(",").append(type.getIndex()).append("] ");
+		return parseNodeDesc(sb, null, name.str(), type.str());
+	}
+	static String parseNodeDesc(CharList sb, String owner, String name, String type) {
+		if (owner != null) {
+			name = owner.substring(owner.lastIndexOf('/')+1)+'.'+name;
+		}
 
-    public final String toString() {
-        return super.toString() + " " + (name == null ? nameIndex : name.getString() + " (" + name.getIndex() + ")") + ':' + (type == null ? typeIndex : type.getString() + " (" + type.getIndex() + ")");
-    }
+		if (type.startsWith("(")) {
+			try {
+				return sb.append(TypeHelper.humanize(TypeHelper.parseMethod(type), name, true)).toString();
+			} catch (Exception ignored) {}
+		} else {
+			try {
+				TypeHelper.parseField(type).toString(sb);
+				return sb.append(' ').append(name).toString();
+			} catch (Exception ignored) {}
+		}
+		return sb.append("[解析失败] ").append(name).append('|').append(type).toString();
+	}
 
+	public final int hashCode() {
+		return 31 * name.hashCode() + type.hashCode();
+	}
 
-    public final int hashCode() {
-        return (name.hashCode() << 16) ^ type.hashCode();
-    }
+	public final boolean equals(Object o) {
+		return o instanceof CstNameAndType && equals0((CstNameAndType) o);
+	}
 
+	public final boolean equals0(CstNameAndType ref) {
+		if (ref == this) return true;
+		return ref.name.equals(name) && ref.type.equals(type);
+	}
 
-    public final boolean equals(Object o) {
-        return o instanceof CstNameAndType && equals0((CstNameAndType) o);
-    }
+	public final CstUTF name() { return name; }
+	public final void name(CstUTF name) {
+		if (name == null) throw new NullPointerException("name");
+		this.name = name;
+	}
 
-    public final boolean equals0(CstNameAndType ref) {
-        if (ref == this)
-            return true;
-        return ref.getNameIndex() == getNameIndex() && ref.getTypeIndex() == getTypeIndex();
-    }
+	public final CstUTF getType() {
+		return type;
+	}
+	public final void setType(CstUTF type) {
+		if (type == null)
+			throw new NullPointerException("type");
+		this.type = type;
+	}
 
-    public final int getNameIndex() {
-        return name == null ? nameIndex & 0xFFFF : name.getIndex();
-    }
-
-    public final int getTypeIndex() {
-        return type == null ? typeIndex & 0xFFFF : type.getIndex();
-    }
-
-    public final CstUTF getName() {
-        return name;
-    }
-
-    public final void setName(CstUTF name) {
-        if (name == null) {
-            throw new NullPointerException("name");
-        }
-        this.name = name;
-        this.nameIndex = (short) name.getIndex();
-    }
-
-    public final CstUTF getType() {
-        return type;
-    }
-
-    public final void setType(CstUTF type) {
-        if (type == null) {
-            throw new NullPointerException("type");
-        }
-        this.type = type;
-        this.typeIndex = (short) type.getIndex();
-    }
-
-    @Override
-    public final CstNameAndType clone() {
-        CstNameAndType slf = (CstNameAndType) super.clone();
-        if (name != null)
-            slf.name = (CstUTF) name.clone();
-        if (type != null)
-            slf.type = (CstUTF) type.clone();
-        return slf;
-    }
+	@Override
+	public final CstNameAndType clone() {
+		CstNameAndType slf = (CstNameAndType) super.clone();
+		slf.name = (CstUTF) name.clone();
+		slf.type = (CstUTF) type.clone();
+		return slf;
+	}
 }

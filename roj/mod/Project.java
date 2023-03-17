@@ -1,18 +1,18 @@
 package roj.mod;
 
-import roj.asm.mapper.ConstMapper;
+import roj.archive.zip.ZipOutput;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.concurrent.task.AbstractExecutionTask;
-import roj.config.JSONConfiguration;
+import roj.concurrent.task.AsyncTask;
+import roj.config.FileConfig;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.config.data.CString;
-import roj.io.FileUtil;
+import roj.dev.Compiler;
 import roj.io.IOUtil;
-import roj.io.MutableZipFile;
-import roj.mod.compiler.Compiler;
+import roj.mapper.ConstMapper;
+import roj.mod.FileFilter.CmtATEntry;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
@@ -20,9 +20,8 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.channels.FileLock;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
@@ -40,226 +39,233 @@ import static roj.mod.Shared.*;
  * @author Roj233
  * @since 2021/7/11 13:59
  */
-public final class Project extends JSONConfiguration {
-    static final MyHashMap<String, Project> projects = new MyHashMap<>();
-    static final Matcher matcher = Pattern.compile("^[a-z_][a-z0-9_]*$").matcher("");
+public final class Project extends FileConfig {
+	static final MyHashMap<String, Project> projects = new MyHashMap<>();
+	static final Matcher matcher = Pattern.compile("^[a-z_][a-z0-9_]*$").matcher("");
 
-    public static Project load(String name) {
-        if(!matcher.reset(name).matches())
-            throw new IllegalArgumentException("名称必须为全小写,不能以数字开头,可以包含下划线 ^[a-z_][a-z0-9_]*$");
-        Project project = projects.get(name);
-        if(project == null)
-            projects.put(name, project = new Project(name));
-        else
-            project.reload();
-        return project;
-    }
+	public static Project load(String name) {
+		if (!matcher.reset(name).matches()) throw new IllegalArgumentException("名称必须为全小写,不能以数字开头,可以包含下划线 ^[a-z_][a-z0-9_]*$");
+		Project project = projects.get(name);
+		if (project == null) projects.put(name, project = new Project(name));
+		else project.reload();
+		return project;
+	}
 
-    final String name;
-    String version, atName;
-    Charset charset;
-    List<Project> dependencies;
-    final Compiler compiler;
+	final String name;
+	String version, atName;
+	Charset charset;
+	List<Project> dependencies;
+	final Compiler compiler;
 
-    ConstMapper.State state;
-    String atConfigPathStr;
-    File source, resource, stamp;
+	ConstMapper.State state;
+	String atConfigPathStr;
+	File srcPath, resPath, binJar;
 
-    static FileFilter resourceFilter = new FileFilter();
-    MyHashMap<String, byte[]> resourceCache = new MyHashMap<>(100);
+	static final FileFilter resourceFilter = new FileFilter();
+	MyHashMap<String, String> resources = new MyHashMap<>(100);
 
-    MutableZipFile dstZip, stampZip, sourceZip;
+	ZipOutput dstFile, binFile;
+	Set<CmtATEntry> atEntryCache = new MyHashSet<>();
 
-    private Project(String name) {
-        super(new File(BASE, "config/" + name + ".json"), false);
-        this.name = name;
+	private Project(String name) {
+		super(new File(BASE, "config/" + name + ".json"), false);
+		this.name = name;
 
-        String abs = BASE.getAbsolutePath();
-        resource = new File(abs + File.separatorChar + "projects" + File.separatorChar + name + File.separatorChar + "resources" + File.separatorChar);
-        source = new File(abs + File.separatorChar + "projects" + File.separatorChar + name + File.separatorChar + "java" + File.separatorChar);
-        stamp = new File(abs + File.separatorChar + "bin" + File.separatorChar + name + "-dev.jar");
-        try {
-            sourceZip = new MutableZipFile(new File(abs + File.separatorChar + "bin" + File.separatorChar + name + "-src.zip"));
-        } catch (IOException e) {
-            CmdUtil.warning("源码备份损坏", e);
-            CmdUtil.warning("为了防止自动操作让我想死，请手动解决问题");
-            LockSupport.parkNanos(3_000_000_000L);
-            System.exit(-2);
-        }
+		resPath = new File(BASE, "projects/" + name + "/resources");
+		srcPath = new File(BASE, "projects/" + name + "/java");
+		binJar = new File(BASE, "bin/" + name + "-dev.jar");
 
-        Set<String> ignores = new MyHashSet<>();
-        FMDMain.readTextList(ignores::add, "忽略的编译错误码");
-        this.compiler = new Compiler(null, null, ignores, source.getAbsolutePath().replace(File.separatorChar, '/'));
+		// noinspection all
+		resPath.mkdirs();
+		// noinspection all
+		srcPath.mkdirs();
+		// noinspection all
+		binJar.getParentFile().mkdir();
 
-        try {
-            this.stampZip = new MutableZipFile(stamp);
-            if(stamp.length() == 0)
-                if(!stamp.setLastModified(0))
-                    CmdUtil.warning("无法初始化stampFileTime");
-            // 防止有别的进程修改，而本进程又可以修改
-            FileLock lock = stampZip.getFile().getChannel().tryLock(0, 0, true);
-            if(null == lock) {
-                CmdUtil.warning("无法初始化stampFileLock");
-            }
-        } catch (IOException e) {
-            CmdUtil.warning("无法初始化stampFileZip, 请尝试重新启动FMD, 若无效, 请删除 " + stamp.getAbsolutePath(), e);
-            if(stampZip != null) {
-                try {
-                    stampZip.close();
-                } catch (IOException ignored) {}
-            }
-            // noinspection all
-            stamp.delete();
-            LockSupport.parkNanos(3_000_000_000L);
-            System.exit(-2);
-        }
+		// 自动备份源码已删除
 
-        init();
-    }
+		Set<String> ignores = new MyHashSet<>();
+		FMDMain.readTextList(ignores::add, "忽略的编译错误码");
+		this.compiler = new Compiler(null, null, ignores, srcPath.getAbsolutePath().replace(File.separatorChar, '/'));
 
-    public List<Project> getAllDependencies() {
-        if(dependencies.isEmpty())
-            return dependencies;
+		try {
+			if (binJar.length() == 0) if (!binJar.createNewFile() || !binJar.setLastModified(0)) CmdUtil.warning("无法初始化StampFileTime");
+			this.binFile = new ZipOutput(binJar);
+		} catch (Throwable e) {
+			CmdUtil.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 " + binJar.getAbsolutePath(), e);
+			LockSupport.parkNanos(3_000_000_000L);
+			System.exit(-2);
+		}
 
-        LinkedMyHashMap<Project, Void> projects = new LinkedMyHashMap<>();
+		load();
+	}
 
-        List<Project> dest = new ArrayList<>(this.dependencies);
-        List<Project> dest2 = new ArrayList<>();
-        while (!dest.isEmpty()) {
-            for (int i = 0; i < dest.size(); i++) {
-                projects.put(dest.get(i), null);
-                dest2.addAll(dest.get(i).dependencies);
-            }
-            List<Project> tmp = dest;
-            dest = dest2;
-            dest2 = tmp;
-            dest2.clear();
-        }
+	public List<Project> getAllDependencies() {
+		if (dependencies.isEmpty()) return dependencies;
 
-        for (Map.Entry<Project, Void> entry : projects.entrySet()) {
-            dest2.add(entry.getKey());
-        }
+		LinkedMyHashMap<Project, Void> projects = new LinkedMyHashMap<>();
 
-        return dest2;
-    }
+		List<Project> dest = new ArrayList<>(this.dependencies);
+		List<Project> dest2 = new ArrayList<>();
+		while (!dest.isEmpty()) {
+			for (int i = 0; i < dest.size(); i++) {
+				projects.put(dest.get(i), null);
+				dest2.addAll(dest.get(i).dependencies);
+			}
+			List<Project> tmp = dest;
+			dest = dest2;
+			dest2 = tmp;
+			dest2.clear();
+		}
 
-    public String dependencyString() {
-        CharList cl = new CharList();
-        if(!dependencies.isEmpty()) {
-            for (int i = 0; i < dependencies.size(); i++) {
-                cl.append(dependencies.get(i).name).append('|');
-            }
-            cl.setIndex(cl.length() - 1);
-        }
-        return cl.toString();
-    }
+		for (Map.Entry<Project, Void> entry : projects.entrySet()) {
+			dest2.add(entry.getKey());
+		}
 
-    public void setDependencyString(String text) {
-        List<String> depend = TextUtil.split(new ArrayList<>(), text, '|');
-        for (int i = 0; i < depend.size(); i++) {
-            dependencies.add(Project.load(depend.get(i)));
-        }
-    }
+		return dest2;
+	}
 
-    protected void readConfig(CMapping map) {
-        version = map.putIfAbsent("version", "1.0.0");
+	public String dependencyString() {
+		CharList cl = new CharList();
+		if (!dependencies.isEmpty()) {
+			for (int i = 0; i < dependencies.size(); i++) {
+				cl.append(dependencies.get(i).name).append('|');
+			}
+			cl.setLength(cl.length() - 1);
+		}
+		return cl.toString();
+	}
 
-        String cs = map.putIfAbsent("charset", "UTF-8");
-        charset = StandardCharsets.UTF_8;
-        try {
-            charset = Charset.forName(cs);
-        } catch (UnsupportedCharsetException e) {
-            CmdUtil.warning(name + " 的字符集不存在");
-        }
+	public void setDependencyString(String text) {
+		List<String> depend = TextUtil.split(new ArrayList<>(), text, '|');
+		for (int i = 0; i < depend.size(); i++) {
+			dependencies.add(Project.load(depend.get(i)));
+		}
+	}
 
-        String atName = this.atName = map.putIfAbsent("atConfig", "");
+	protected void load(CMapping map) {
+		version = map.putIfAbsent("version", "1.0.0");
 
-        atConfigPathStr = atName.length() > 0 ? resource.getPath() + File.separatorChar + "META-INF" + File.separatorChar + atName + ".cfg" : null;
+		String cs = map.putIfAbsent("charset", "UTF-8");
+		charset = StandardCharsets.UTF_8;
+		try {
+			charset = Charset.forName(cs);
+		} catch (UnsupportedCharsetException e) {
+			CmdUtil.warning(name + " 的字符集不存在");
+		}
 
-        List<String> required = map.getOrCreateList("dependency").asStringList();
-        if(!required.isEmpty()) {
-            for (int i = 0; i < required.size(); i++) {
-                File config = new File(BASE, "/config/" + required.get(i) + ".json");
-                if (!config.exists()) {
-                    CmdUtil.warning(name + " 的前置" + required.get(i) + "未找到");
-                } else {
-                    required.set(i, Helpers.cast(load(required.get(i))));
-                }
-            }
-            dependencies = Helpers.cast(required);
-        } else {
-            dependencies = Collections.emptyList();
-        }
-    }
+		String atName = this.atName = map.putIfAbsent("atConfig", "");
 
-    public AbstractExecutionTask getResourceTask() {
-        return new AbstractExecutionTask() {
-            @Override
-            public void run() {
-                initForwardMapper();
+		atConfigPathStr = atName.length() > 0 ? resPath.getPath() + "/META-INF/" + atName + ".cfg" : null;
 
-                MyHashSet<String> set = watcher.getModified(Project.this, ProjectWatcher.ID_RES);
-                if(!resourceCache.isEmpty() && !set.contains(null)) {
-                    int len = resource.getAbsolutePath().length();
-                    for (String s : set) {
-                        File file = new File(s);
-                        if(file.isDirectory()) continue;
-                        try {
-                            resourceCache.put(s.substring(len + 1).replace('\\', '/'), IOUtil.read(new FileInputStream(file)));
-                        } catch (IOException e) {
-                            Helpers.throwAny(e);
-                        }
-                    }
-                } else {
-                    resourceCache.clear();
+		List<String> required = map.getOrCreateList("dependency").asStringList();
+		if (!required.isEmpty()) {
+			for (int i = 0; i < required.size(); i++) {
+				File config = new File(BASE, "/config/" + required.get(i) + ".json");
+				if (!config.exists()) {
+					CmdUtil.warning(name + " 的前置" + required.get(i) + "未找到");
+				} else {
+					required.set(i, Helpers.cast(load(required.get(i))));
+				}
+			}
+			dependencies = Helpers.cast(required);
+		} else {
+			dependencies = Collections.emptyList();
+		}
+	}
 
-                    FileUtil.findAndOpenStream(resource, Helpers.cast(resourceCache), resourceFilter);
+	public AsyncTask<Void> getResourceTask(long stamp) {
 
-                    Set<Map.Entry<String, Object>> entrySet = Helpers.cast(resourceCache.entrySet());
+		return new AsyncTask<Void>() {
+			@Override
+			protected Void invoke() {
+				int len = resPath.getAbsolutePath().length();
 
-                    for (Map.Entry<String, Object> entry : entrySet) {
-                        try {
-                            entry.setValue(IOUtil.read((InputStream) entry.getValue()));
-                        } catch (IOException e) {
-                            Helpers.throwAny(e);
-                        }
-                    }
-                }
-            }
-        };
-    }
+				if (stamp != -1L) {
+					MyHashSet<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
+					if (!resources.isEmpty() && !set.contains(null)) {
+						synchronized (set) {
+							for (String s : set) {
+								String relPath = s.substring(len + 1).replace('\\', '/');
+								resources.put(relPath, s);
 
-    public void registerWatcher() {
-        try {
-            Shared.watcher.register(this);
-        } catch (IOException e) {
-            CmdUtil.warning("无法启动文件监控", e);
-        }
-    }
+								try {
+									dstFile.setS(relPath, () -> {
+										try {return new FileInputStream(s);
+										} catch (FileNotFoundException e) {Helpers.athrow(e);}
+										return null;
+									});
+								} catch (IOException e) {
+									CmdUtil.warning("资源文件", e);
+								}
+							}
+							set.clear();
+						}
+					} else {
+						resourceFilter.reset(stamp, FileFilter.F_RES_TIME);
+						loadFromFilter(len);
+					}
+				} else {
+					resourceFilter.reset(stamp, FileFilter.F_RES);
+					resources.clear();
+					loadFromFilter(len);
 
-    @Override
-    protected void saveConfig(CMapping map) {
-        map.put("charset", charset == null ? "UTF-8" : charset.name());
-        map.put("version", version);
-        map.put("atConfig", atName);
+					for (Map.Entry<String, String> entry : resources.entrySet()) {
+						try {
+							dstFile.set(entry.getKey(), new FileInputStream(entry.getValue()));
+						} catch (IOException e) {
+							CmdUtil.warning("资源文件", e);
+						}
+					}
+				}
 
-        CList list = new CList(dependencies.size());
-        for (int i = 0; i < dependencies.size(); i++) {
-            list.add(CString.valueOf(dependencies.get(i).name));
-        }
-        map.put("dependency", list);
-    }
+				loadMapper();
+				return null;
+			}
+		};
+	}
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Project project = (Project) o;
-        return name.equals(project.name);
-    }
+	private void loadFromFilter(int len) {
+		List<File> files = IOUtil.findAllFiles(resPath, resourceFilter);
+		for (int i = 0; i < files.size(); i++) {
+			String s = files.get(i).getAbsolutePath();
+			String relPath = s.substring(len + 1).replace('\\', '/');
 
-    @Override
-    public int hashCode() {
-        return name.hashCode();
-    }
+			resources.put(relPath, s);
+		}
+	}
+
+	public void registerWatcher() {
+		try {
+			Shared.watcher.register(this);
+		} catch (IOException e) {
+			CmdUtil.warning("无法启动文件监控", e);
+		}
+	}
+
+	@Override
+	protected void save(CMapping map) {
+		map.put("charset", charset == null ? "UTF-8" : charset.name());
+		map.put("version", version);
+		map.put("atConfig", atName);
+
+		CList list = new CList(dependencies.size());
+		for (int i = 0; i < dependencies.size(); i++) {
+			list.add(CString.valueOf(dependencies.get(i).name));
+		}
+		map.put("dependency", list);
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+		Project project = (Project) o;
+		return name.equals(project.name);
+	}
+
+	@Override
+	public int hashCode() {
+		return name.hashCode();
+	}
 }

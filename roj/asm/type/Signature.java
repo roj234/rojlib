@@ -1,443 +1,482 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.asm.type;
 
-import roj.asm.util.IGeneric;
-import roj.asm.util.IType;
+import roj.asm.cst.ConstantPool;
+import roj.asm.tree.attr.Attribute;
 import roj.collect.LinkedMyHashMap;
-import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
+import roj.config.word.ITokenizer;
+import roj.io.IOUtil;
 import roj.math.MutableInt;
 import roj.text.CharList;
+import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.function.UnaryOperator;
 
 /**
  * 泛型签名
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
-public class Signature implements IType {
-    public Map<String, List<Generic>> genericTypeMap;
+public class Signature extends Attribute {
+	public Map<String, List<IType>> typeParams;
 
-    public static final byte METHOD = 1,
-            FIELD_OR_CLASS = 0,
-            CLASS = -1;
+	public static final byte METHOD = 1, FIELD = 0, CLASS = -1;
 
-    /**
-     * Contract: values[0] is class, other is interface
-     */
-    public List<IGeneric> values;
-    public IGeneric returns;
-    public final byte type;
-    public List<IGeneric> throwsException;
+	public byte type;
+	/**
+	 * Contract: values[0] is extend, other is implement
+	 */
+	public List<IType> values;
+	public List<IType> Throws;
 
-    public Signature(int type) {
-        this.genericTypeMap = new MyHashMap<>();
-        this.values = new ArrayList<>();
-        this.type = (byte) type;
-    }
+	public static IType any() {
+		return Any.I;
+	}
+	public static IType placeholder() {
+		return EmptyClass.I;
+	}
 
-    public Signature(Map<String, List<Generic>> genericTypeMap, List<IGeneric> value, boolean isMethod, List<IGeneric> exceptions) {
-        this.genericTypeMap = genericTypeMap;
-        this.returns = value.remove(value.size() - 1);
-        this.values = value;
-        this.type = (isMethod ? METHOD : (value.isEmpty() ? FIELD_OR_CLASS : CLASS));
-        this.throwsException = exceptions;
-    }
+	public Signature(int type) {
+		super("Signature");
+		this.typeParams = Collections.emptyMap();
+		this.values = Collections.emptyList();
+		this.type = (byte) type;
+	}
 
-    @Override
-    public String toGeneric() {
-        CharList sb = new CharList();
-        if (!genericTypeMap.isEmpty()) {
-            sb.append('<');
-            for (Map.Entry<String, List<Generic>> entry : genericTypeMap.entrySet()) {
-                sb.append(entry.getKey()).append(':');
-                Collection<Generic> list = entry.getValue();
+	public Signature(Map<String, List<IType>> typeParams, List<IType> value, boolean isMethod, List<IType> Throws) {
+		super("Signature");
+		this.typeParams = typeParams;
+		this.values = value;
+		this.type = (isMethod ? METHOD : (value.isEmpty() ? FIELD : CLASS));
+		this.Throws = Throws;
+	}
 
-                boolean flag = false;
-                for (Generic value : list) {
-                    if (value.type == Generic.TYPE_CLASS) {
-                        if (flag) {
-                            throw new IllegalArgumentException("At most one class extend!");
-                        }
-                        flag = true;
-                    }
-                    value.appendGeneric(sb);
-                }
-            }
-            sb.append('>');
-        }
-        if (type != FIELD_OR_CLASS) {
-            if (type == METHOD)
-                sb.append('(');
-            for (int i = 0; i < values.size(); i++) {
-                values.get(i).appendGeneric(sb);
-            }
-            if (type == METHOD)
-                sb.append(')');
-        }
-        returns.appendGeneric(sb);
-        if (throwsException != null) {
-            for (IGeneric value : throwsException) {
-                sb.append('^');
-                value.appendGeneric(sb);
-            }
-        }
-        return sb.toString();
-    }
+	public void validate() {
+		for (Map.Entry<String, List<IType>> entry : typeParams.entrySet()) {
+			List<IType> list = entry.getValue();
 
-    public String getSignatureType() {
-        if (genericTypeMap.isEmpty())
-            return "";
-        CharList sb = new CharList(40).append('<');
-        for (Map.Entry<String, List<Generic>> entry : genericTypeMap.entrySet()) {
-            appendTypeParameter(sb, entry.getKey(), entry.getValue());
-            sb.append(", ");
-        }
-        sb.setIndex(sb.length() - 2);
-        return sb.append('>').toString();
-    }
+			for (int i = 0; i < list.size(); i++) {
+				list.get(i).checkPosition(IType.TYPE_PARAMETER_ENV, i);
+			}
+		}
 
-    public void appendTypeParameter(CharList sb, String name, List<Generic> list) {
-        sb.append(name);
-        if (list == null)
-            list = genericTypeMap.getOrDefault(name, Collections.emptyList());
-        if (list.isEmpty()) return;
-        if (list.size() > 1 || !list.get(0).owner.equals("java/lang/Object")) {
-            sb.append(" extends ");
-            for (Generic value : list) {
-                value.appendString(sb, this);
-                sb.append(" & ");
-            }
-            sb.setIndex(sb.length() - 3);
-        }
-    }
+		if (type == METHOD) {
+			for (int i = 0; i < values.size() - 1; i++) {
+				values.get(i).checkPosition(IType.INPUT_ENV, i);
+			}
+			values.get(values.size() - 1).checkPosition(IType.OUTPUT_ENV, 0);
 
-    public String toString() {
-        CharList sb = new CharList();
-        if (type == FIELD_OR_CLASS) {
-            returns.appendString(sb, this);
-        } else {
-            if (type == METHOD) {
-                returns.appendString(sb, this);
-                sb.append(' ').append('(');
-                for (int i = 0; i < values.size(); i++) {
-                    values.get(i).appendString(sb, this);
-                    sb.append(", ");
-                }
-                sb.setIndex(sb.length() - 2);
-                sb.append(')');
-            } else {
-                for (int i = 0; i < values.size(); i++) {
-                    values.get(i).appendString(sb, this);
-                }
-                returns.appendString(sb, this);
-            }
-        }
-        return sb.toString();
-    }
+			if (Throws != null) {
+				for (int i = 0; i < Throws.size(); i++) {
+					Throws.get(i).checkPosition(IType.THROW_ENV, i);
+				}
+			}
+		} else {
+			for (int i = 0; i < values.size(); i++) {
+				values.get(i).checkPosition(IType.FIELD_ENV, i);
+			}
+			if (Throws != null) {
+				throw new IllegalStateException("Throws is not null in non-METHOD signature");
+			}
+			if (type == FIELD && values.size() != 1)
+				throw new IllegalStateException("values.size() > 1 in FIELD signature");
+		}
+	}
 
-    public void rename(UnaryOperator<String> fn) {
-        for (Collection<Generic> values : genericTypeMap.values()) {
-            for (Generic value : values) {
-                value.rename(fn);
-            }
-        }
-        if (values != null) {
-            for (int i = 0; i < values.size(); i++) {
-                rename0(fn, values.get(i));
-            }
-        }
-        rename0(fn, returns);
-    }
+	//@Override
+	public String toDesc() {
+		CharList sb = IOUtil.getSharedCharBuf();
 
-    static void rename0(UnaryOperator<String> fn, IGeneric value) {
-        if (value.getClass() == Type.class) {
-            Type type = (Type) value;
-            if (type.owner != null)
-                type.owner = fn.apply(type.owner);
-        } else {
-            ((Generic) value).rename(fn);
-        }
-    }
+		if (!typeParams.isEmpty()) {
+			sb.append('<');
+			for (Map.Entry<String, List<IType>> entry : typeParams.entrySet()) {
+				sb.append(entry.getKey());
+				List<IType> list = entry.getValue();
 
-    @Override
-    public boolean isGeneric() {
-        return true;
-    }
+				list.get(0).toDesc(sb.append(':'));
 
-    public static void main(String[] args) {
-        Signature signature = parse(args[0]);
-        System.out.println("toString(): " + signature.toString());
-        System.out.println("getSignatureType(): " + signature.getSignatureType());
-        System.out.println("toGeneric(): " + signature.toGeneric());
-    }
+				for (int i = 1; i < list.size(); i++) {
+					list.get(i).toDesc(sb.append(':'));
+				}
+			}
+			sb.append('>');
+		}
 
-    private static final int F_TEST_ITF = 1, F_PRIMITIVE = 2, F_IS_SUB_CLASS = 4;
+		if (type == METHOD) {
+			sb.append('(');
+			for (int i = 0; i < values.size() - 1; i++) values.get(i).toDesc(sb);
+			sb.append(')');
+			values.get(values.size() - 1).toDesc(sb);
 
-    /**
-     * Signatures encode declarations written in the Java programming language that use types outside the type system of the Java Virtual Machine. They support reflection and debugging, as well as compilation when only class files are available.
-     * <p>
-     * A Java compiler must emit a signature for any class, interface, constructor, method, or field whose declaration uses type variables or parameterized types. Specifically, a Java compiler must emit:
-     * <p>
-     * A class signature for any class or interface declaration which is either generic, or has a parameterized type as a superclass or superinterface, or both.
-     * <p>
-     * A method signature for any method or constructor declaration which is either generic, or has a type variable or parameterized type as the return type or a formal parameter type, or has a type variable in a throws clause, or any combination thereof.
-     * <p>
-     * If the throws clause of a method or constructor declaration does not involve type variables, then a compiler may treat the declaration as having no throws clause for the purpose of emitting a method signature.
-     * <p>
-     * A field signature for any field, formal parameter, or local variable declaration whose type uses a type variable or a parameterized type.
-     * <p>
-     * Signatures are specified using a grammar which follows the notation of §4.3.1. In addition to that notation:
-     * <p>
-     * The syntax [x] on the right-hand side of a production denotes zero or one occurrences of x. That is, x is an optional symbol. The alternative which contains the optional symbol actually defines two alternatives: one that omits the optional symbol and one that includes it.
-     * <p>
-     * A very long right-hand side may be continued on a second line by clearly indenting the second line.
-     * <p>
-     * The grammar includes the terminal symbol Identifier to denote the name of a type, field, method, formal parameter, local variable, or type variable, as generated by a Java compiler. Such a name must not contain any of the ASCII characters . ; [ / < > : (that is, the characters forbidden in method names (§4.2.2) and also colon) but may contain characters that must not appear in an identifier in the Java programming language (JLS §3.8).
-     * <p>
-     * Signatures rely on a hierarchy of nonterminals known as type signatures:
-     * <p>
-     * A Java type signature represents either a reference type or a primitive type of the Java programming language.
-     * <p>
-     * 下面都啥鬼东西，不如实践
-     */
+			if (Throws != null) {
+				for (int i = 0; i < Throws.size(); i++) {
+					sb.append('^');
+					Throws.get(i).toDesc(sb);
+				}
+			}
+		} else {
+			for (int i = 0; i < values.size(); i++) {
+				values.get(i).toDesc(sb);
+			}
+		}
 
-    public static Signature parse(String generic) {
-        MutableInt mi = new MutableInt();
-        CharList tmp = ParamHelper.sharedBuffer.get();
-        tmp.clear();
+		return sb.toString();
+	}
 
-        int i = 0;
+	@Override
+	protected void toByteArray1(DynByteBuf w, ConstantPool cp) {
+		w.putShort(cp.getUtfId(toDesc()));
+	}
 
-        Map<String, List<Generic>> map = new LinkedMyHashMap<>();
+	public String getTypeParam() {
+		if (typeParams.isEmpty()) return "";
 
-        if (generic.charAt(0) == '<') {
-            i = 1;
+		CharList sb = IOUtil.getSharedCharBuf();
 
-            outer:
-            while (i < generic.length()) {
-                char cr = generic.charAt(i++);
-                switch (cr) {
-                    case ':': {
-                        String key = tmp.toString();
-                        tmp.clear();
-                        List<Generic> list = new ArrayList<>(4);
+		sb.append('<');
+		Iterator<Map.Entry<String, List<IType>>> itr = typeParams.entrySet().iterator();
+		while (true) {
+			Map.Entry<String, List<IType>> entry = itr.next();
+			appendTypeParameter(sb, entry.getKey(), entry.getValue());
 
-                        boolean first = true;
+			if (!itr.hasNext()) break;
+			sb.append(", ");
+		}
 
-                        while (first || hasNext(generic, i)) {
-                            mi.setValue(i);
-                            tmp.clear();
-                            list.add((Generic) getSignatureValue(generic, mi, F_TEST_ITF, tmp));
-                            i = mi.getValue();
-                            first = false;
-                        }
-                        tmp.clear();
+		return sb.append('>').toString();
+	}
 
-                        map.put(key, list);
-                        continue;
-                    }
-                    case '>':
-                        break outer;
-                    default:
-                        tmp.append(cr);
-                }
-            }
-        }
+	public void appendTypeParameter(CharList sb, String name, List<IType> list) {
+		sb.append(name);
+		if (list == null) list = typeParams.getOrDefault(name, Collections.emptyList());
+		if (list.isEmpty()) return;
+		if (list.size() > 1 || !list.get(0).owner().equals("java/lang/Object")) {
+			sb.append(" extends ");
+			int i = list.get(0).owner().equals("java/lang/Object") ? 1 : 0;
+			while (true) {
+				IType value = list.get(i++);
+				value.toString(sb);
+				if (i == list.size()) break;
+				sb.append(" & ");
+			}
+		}
+	}
 
-        boolean isMethod = generic.charAt(i) == '(';
-        if (isMethod) {
-            i++;
-        }
+	public String toString() {
+		CharList sb = IOUtil.getSharedCharBuf();
+		if (type == FIELD) {
+			values.get(0).toString(sb);
+		} else {
+			if (type == METHOD) {
+				toMethodString(sb, null);
+			} else {
+				getTypeParam();
+				if (!values.get(0).owner().equals("java/lang/Object")) values.get(0).toString(sb.append(" extends "));
+				if (values.size() > 1) {
+					sb.append(" implements ");
+					int i = 1;
+					for (;;) {
+						values.get(i).toString(sb);
+						if (++i == values.size()) break;
+						sb.append(", ");
+					}
+				}
+			}
+		}
+		return sb.toString();
+	}
 
-        List<IGeneric> exceptions = new ArrayList<>();
+	public void toMethodString(CharList sb, String name) {
+		values.get(values.size() - 1).toString(sb);
+		if (name != null) sb.append(' ').append(name);
+		sb.append(' ').append('(');
+		int i = 0;
+		if (values.size() > 1) {
+			for (;;) {
+				values.get(i).toString(sb);
+				if (++i == values.size()-1) break;
+				sb.append(", ");
+			}
+		}
+		sb.append(')');
 
-        boolean returnVal = false;
-        List<IGeneric> params = new ArrayList<>();
-        while (i < generic.length()) {
-            switch (generic.charAt(i)) {
-                case '^':
-                    if (returnVal) {
-                        mi.setValue(i + 1);
-                        tmp.clear();
-                        exceptions.add(getSignatureValue(generic, mi, 0, tmp));
-                        i = mi.getValue();
+		if (Throws != null && !Throws.isEmpty()) {
+			sb.append(" throws ");
+			i = 0;
+			for(;;) {
+				Throws.get(i).toString(sb);
+				if (++i == Throws.size()) break;
+				sb.append(", ");
+			}
+		}
+	}
 
-                        continue;
-                    } else {
-                        throw new IllegalArgumentException("[" + (i) + "(" + generic.charAt(i) + ")]" + generic);
-                    }
-                case ')':
-                    if (!returnVal) {
-                        i++;
-                        returnVal = true;
-                        break;
-                    } else {
-                        throw new IllegalArgumentException("[" + (i) + "(" + generic.charAt(i) + ")]" + generic);
-                    }
-            }
+	public void rename(UnaryOperator<String> fn) {
+		for (List<IType> values : typeParams.values()) {
+			for (int i = values.size() - 1; i >= 0; i--) {
+				values.get(i).rename(fn);
+			}
+		}
 
-            mi.setValue(i);
-            tmp.clear();
-            params.add(getSignatureValue(generic, mi, F_PRIMITIVE, tmp));
-            i = mi.getValue();
-        }
+		if (values != null) {
+			for (int i = 0; i < values.size(); i++) {
+				values.get(i).rename(fn);
+			}
+		}
+	}
 
-        return new Signature(map, params, isMethod, exceptions);
-    }
+	public static void main(String[] args) {
+		Signature signature = parse(args[0]);
+		System.out.println("toString(): " + signature);
+		System.out.println("getTypeParam(): " + signature.getTypeParam());
+		System.out.println("toDesc(): " + signature.toDesc());
+		signature.validate();
+	}
 
-    private static boolean hasNext(String generic, int i) {
-        switch (generic.charAt(i++)) {
-            case ':':
-                return true;
-            case 'L':
-            case 'T':
-                return generic.charAt(i) != ':';
-            case '>':
-            default:
-                return false;
-        }
-    }
+	public static Signature parse(CharSequence s) {
+		return parse(s, 99);
+	}
 
-    @SuppressWarnings("fallthrough")
-    private static IGeneric getSignatureValue(String s, MutableInt mi, int F, CharList tmp) {
-        int i = mi.getValue();
+	public static Signature parse(CharSequence s, int expect) {
+		MutableInt i1 = new MutableInt();
+		CharList tmp = IOUtil.getSharedCharBuf();
 
-        int arrayLevel = 0;
-        byte subClass = 0;
+		int i = 0;
 
-        byte cat;
-        if ((F & F_IS_SUB_CLASS) == 0) {
-            switch (s.charAt(i)) {
-                case '+':
-                    subClass = Generic.EX_EXTENDS;
-                    i++;
-                    break;
-                case '-':
-                    subClass = Generic.EX_SUPERS;
-                    i++;
-                    break;
-                case '[':
-                    while (s.charAt(i) == '[') {
-                        arrayLevel++;
-                        i++;
-                    }
-            }
+		Signature sign = new Signature(0);
 
-            final char c = s.charAt(i);
-            if ((F & F_PRIMITIVE) != 0) {
-                if (NativeType.isValid((byte) c) && c != NativeType.CLASS) {
-                    mi.setValue(i + 1);
-                    return new Type(c, arrayLevel);
-                }
-            }
+		// type parameter
+		if (s.charAt(0) == '<') {
+			sign.typeParams = new LinkedMyHashMap<>();
+			sign.type = CLASS;
 
-            out:
-            switch (c) {
-                case '*': {
-                    mi.setValue(i + 1);
-                    return new Generic(Generic.TYPE_CLASS, "*", arrayLevel, subClass);
-                }
-                case 'T':
-                    cat = Generic.TYPE_TYPE_PARAM;
-                    break;
-                case 'L':
-                    cat = Generic.TYPE_CLASS;
-                    break;
-                case ':':
-                    if ((F & F_TEST_ITF) != 0) {
-                        switch (s.charAt(++i)) {
-                            case 'L':
-                                cat = Generic.TYPE_INHERIT_CLASS;
-                                break out;
-                            case 'T': // <S:Ljava/lang/Object;T::TS;>     <S, T extends S>
-                                cat = Generic.TYPE_INHERIT_TYPE_PARAM;
-                                break out;
-                        }
-                    }
-                default:
-                    throw new IllegalArgumentException("[" + (i) + "(" + s.charAt(i) + ")]" + s);
-            }
-            i++;
-        } else {
-            cat = Generic.TYPE_SUB_CLASS;
-        }
+			if (expect == FIELD) error("type parameter begin('<') in FIELD type", 0, s);
+			i = 1;
 
-        boolean shouldFindNext = false;
+			while (i < s.length()) {
+				int j = i;
+				while (s.charAt(j) != ':') {
+					j++;
+					if (j >= s.length()) error("EOF before found type name end(':')", j, s);
+				}
+				if (i == j) error("type parameter name is empty", j, s);
+				String name = s.subSequence(i,j).toString();
 
-        while (i < s.length()) {
-            char c1 = s.charAt(i++);
-            if (c1 == ';' || c1 == '<') {
-                i--;
-                if (c1 == '<')
-                    shouldFindNext = true;
-                break;
-            }
-            tmp.append(c1);
-        }
+				// +1: skip ':'
+				i = j + 1;
+				SimpleList<IType> vals = new SimpleList<>(2);
 
-        if (tmp.length() == 0) {
-            throw new IllegalArgumentException("[" + (i) + "(" + s.charAt(i) + ")]" + s);
-        }
+				// first parameter: 'extends'
+				// 'nullable': use '::' mark EmptyClass
+				i1.setValue(i);
+				vals.add(getSignatureValue(s, i1, F_TYPE_CLASS, tmp));
+				i = i1.getValue();
 
-        Generic value = new Generic(cat, tmp.toString(), arrayLevel, subClass);
-        // probably: method generic should check class generic...
-        //if(cat == Generic.TYPE_TYPE_PARAM && !tnKeySet.contains(value.owner))
-        //    throw new IllegalArgumentException("没找到Type Variable " + value.owner);
+				// other parameters: 'implements'
+				while (s.charAt(i) == ':') {
+					if (i >= s.length()) error("before type desc end( != ':')", i, s);
 
-        if (shouldFindNext) {
-            i++;
-            while (i < s.length() && s.charAt(i) != '>') {
-                mi.setValue(i);
-                tmp.clear();
-                value.addChild(getSignatureValue(s, mi, F & ~F_IS_SUB_CLASS, tmp));
-                i = mi.getValue();
-            }
-        }
-        if (s.charAt(i) != ';') {
-            if (s.charAt(i) != '>') {
-                throw new IllegalArgumentException("[" + (i) + "(" + s.charAt(i) + ")]" + s);
-            } else if (s.charAt(++i) != ';') {
-                if (s.charAt(i) != '.')
-                    throw new IllegalArgumentException("[" + (i) + "(" + s.charAt(i) + ")]" + s);
-                else {
-                    mi.setValue(i + 1);
-                    tmp.clear();
-                    value.subClass = (Generic) getSignatureValue(s, mi, (F & 1) | F_IS_SUB_CLASS, tmp);
-                    i = mi.getValue() - 1;
-                }
-            }
-        }
+					i1.setValue(i+1);
+					vals.add(getSignatureValue(s, i1, F_INTERFACE, tmp));
+					i = i1.getValue();
+				}
 
-        mi.setValue(i + 1);
-        return value;
-    }
+				if (vals.size() == 1 && vals.get(0) == EmptyClass.I)
+					error("redundant EmptyClass",i,s);
+
+				sign.typeParams.put(name, vals);
+
+				if (s.charAt(i) == '>') {
+					i++;
+					break;
+				}
+			}
+		}
+
+		List<IType> v = sign.values = new SimpleList<>(2);
+
+		boolean isMethod = s.charAt(i) == '(';
+		if (isMethod) {
+			if (expect != 99 && expect != METHOD) error("excepting " + expect + " and is METHOD", i, s);
+			sign.type = METHOD;
+			i1.setValue(i+1);
+
+			// in
+			while (s.charAt(i1.getValue()) != ')') {
+				v.add(getSignatureValue(s, i1, F_PRIMITIVE, tmp));
+			}
+			i1.increment();
+
+			// out
+			v.add(getSignatureValue(s, i1, F_PRIMITIVE, tmp));
+
+			// throws
+			i = i1.getAndIncrement();
+			if (i < s.length()) {
+				if (s.charAt(i) != '^') error("THROWS should begin with '^'", i, s);
+
+				v = sign.Throws = new SimpleList<>(2);
+				while (i1.getValue() < s.length()) {
+					v.add(getSignatureValue(s, i1, 0, tmp));
+					i1.increment();
+				}
+			}
+		} else {
+			i1.setValue(i);
+			// extends or field type
+			v.add(getSignatureValue(s, i1, 0, tmp));
+
+			// implements
+			i = i1.getValue();
+			if (i < s.length()) {
+				if (expect != 99 && expect != CLASS) error("excepting " + expect + " and is CLASS", i, s);
+				sign.type = CLASS;
+
+				while (i1.getValue() < s.length()) {
+					v.add(getSignatureValue(s, i1, F_INTERFACE, tmp));
+				}
+			}
+		}
+
+		if (sign.type != expect && expect != 99) {
+			sign.type = (byte) expect;
+		}
+
+		// 当前上下文不足以检测缺失的类型参数.
+		return sign;
+	}
+
+	public static IType parseGeneric(CharSequence s) {
+		return getSignatureValue(s, new MutableInt(), 0, IOUtil.getSharedCharBuf());
+	}
+
+	static void error(String msg, int i, CharSequence s) {
+		throw new IllegalArgumentException("[" + i + "(" + (i>=s.length()? "EOF":s.charAt(i)) + ")]" + msg + " in " + ITokenizer.addSlashes(s));
+	}
+
+	private static final int F_INTERFACE = 0x1000, F_PRIMITIVE = 0x2000, F_SUBCLASS = 0x4000, F_TYPE_CLASS = 0x8000;
+
+	private static IType getSignatureValue(CharSequence s, MutableInt mi, int flag, CharList tmp) {
+		tmp.clear();
+		int i = mi.getValue();
+
+		int array = i;
+		while (s.charAt(i) == '[') i++;
+		array = i-array;
+
+		char c = s.charAt(i);
+		mi.setValue(i+1);
+		switch (c) {
+			case ':':
+				if ((flag & F_TYPE_CLASS) == 0)
+					error("unexpected ':', not F_TYPE_CLASS flag",i,s);
+				mi.decrement();
+				return EmptyClass.I;
+
+			case 'L':
+				return genericUse(s,mi,tmp,array|(flag&0xF00));
+
+			case 'T':
+				c = _getDesc(s,mi,tmp);
+				if (c != ';') error("excepting ';' but got " + c,mi.getValue()-1,s);
+				return new TypeParam(tmp.toString(), array, (flag >>> 8) & 0xF);
+
+			default:
+				if ((flag & F_PRIMITIVE) == 0)
+					error("flag PRIMITIVE is not set("+flag+")",i,s);
+				try {
+					return array == 0 ? Type.std(c) : new Type(c, array);
+				} catch (Exception e) {
+					error("not valid type: " + c,i,s);
+					return Helpers.nonnull();
+				}
+		}
+	}
+
+	private static IType genericUse(CharSequence s, MutableInt mi, CharList tmp, int flag) {
+		char c = _getDesc(s, mi, tmp);
+		int pos = mi.getValue();
+
+		IGeneric g;
+		if ((flag & F_SUBCLASS) != 0) {
+			g = new GenericSub(tmp.toString());
+		} else if ((flag & 0xF00) != 0) {
+			g = new Generic(tmp.toString(), flag&0xFF, (byte) ((flag >>> 8)&0xF));
+		} else g = null;
+
+		if (c == '<') {
+			if (g == null) g = new Generic(tmp.toString(), flag&0xFF, (byte) ((flag >>> 8)&0xF));
+
+			childrenLoop:
+			while (true) {
+				if (pos >= s.length()) error("在参数结束之前",pos,s);
+				c = s.charAt(pos);
+				switch (c) {
+					case '>':
+						if (g.children.isEmpty()) error("空参数列表", pos, s);
+						pos++;
+						break childrenLoop;
+					case '*':
+						pos++;
+						g.addChild(Any.I);
+						break;
+					default:
+						int ex;
+						switch (c) {
+							case '+':
+								pos++;
+								ex = Generic.EX_EXTENDS << 8;
+								break;
+							case '-':
+								pos++;
+								ex = Generic.EX_SUPER << 8;
+								break;
+							default:
+								ex = 0;
+								break;
+						}
+						mi.setValue(pos);
+						g.addChild(getSignatureValue(s, mi, F_PRIMITIVE | ex, tmp));
+						pos = mi.getValue();
+						break;
+				}
+			}
+			c = s.charAt(pos);
+			mi.setValue(pos+1);
+		}
+
+		if (c == '.') {
+			if (g == null) g = new Generic(tmp.toString(), flag&0xFF, (byte) ((flag >>> 8)&0xF));
+
+			g.sub = (GenericSub) genericUse(s, mi, tmp, F_SUBCLASS);
+		} else if (c != ';') error("未预料的 '"+c+"' 期待';'或'.'",pos,s);
+
+		if (g != null) return g;
+		return new Type(tmp.toString(), flag&0xFF);
+	}
+
+	private static char _getDesc(CharSequence s, MutableInt mi, CharList tmp) {
+		int j = mi.getValue();
+		while (true) {
+			switch (s.charAt(j)) {
+				case ';':
+				case '.':
+				case '<':
+					if (mi.getValue() == j)
+						error("类名为空",j,s);
+					tmp.clear();
+					tmp.append(s,mi.getValue(),j);
+					mi.setValue(j+1);
+					return s.charAt(j);
+			}
+			j++;
+			if (j >= s.length()) error("在类名结束之前 (';')",j,s);
+		}
+	}
 }

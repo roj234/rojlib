@@ -1,244 +1,203 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.collect;
 
-
-import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.util.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
- * @since  2021/2/2 19:59
+ * @since 2021/2/2 19:59
  */
-public class BSLowHeap<T> implements Collection<T> {
-    static final int DEF_SIZE = 16;
-    static final float INC_RATE = 1.5f;
+public class BSLowHeap<E> extends AbstractList<E> {
+	static final int DEF_SIZE = 16;
 
-    protected final Comparator<T> cmp;
+	protected final Comparator<E> cmp;
 
-    protected Object[] entries;
-    protected int size;
+	protected Object[] entries;
+	protected int size;
 
-    @SuppressWarnings("unchecked")
-    protected final int binarySearch(T key) {
-        key.getClass();
+	@SuppressWarnings("unchecked")
+	protected final int binarySearch(E key) {
+		key.getClass();
 
-        int low = 0;
-        int high = size - 1;
+		int low = 0;
+		int high = size - 1;
 
-        Object[] a = entries;
+		Object[] a = entries;
 
-        while (low <= high) {
-            int mid = (low + high) >>> 1;
-            int midVal = cmp.compare((T) a[mid], key);
+		while (low <= high) {
+			int mid = (low + high) >>> 1;
+			int midVal = cmp.compare((E) a[mid], key);
 
-            if (midVal < 0) {
-                low = mid + 1;
-            } else if (midVal > 0) {
-                high = mid - 1;
-            } else
-                return mid; // key found
-        }
+			if (midVal < 0) {
+				low = mid + 1;
+			} else if (midVal > 0) {
+				high = mid - 1;
+			} else {
+				return mid; // key found
+			}
+		}
 
-        // low ...
+		// low ...
 
-        return -(low + 1);  // key not found.
-    }
+		return -(low + 1);  // key not found.
+	}
 
-    public BSLowHeap(Comparator<T> cmp) {
-        this(DEF_SIZE, cmp);
-    }
+	public BSLowHeap(Comparator<E> cmp) {
+		this(DEF_SIZE, cmp);
+	}
 
-    public BSLowHeap(int capacity, Comparator<T> cmp) {
-        if(capacity <= 1)
-            capacity = DEF_SIZE;
-        this.entries = Helpers.cast(new Object[capacity]);
-        this.cmp = cmp;
-    }
+	public BSLowHeap(int capacity, Comparator<E> cmp) {
+		if (capacity <= 1) capacity = DEF_SIZE;
+		this.entries = Helpers.cast(new Object[capacity]);
+		this.cmp = cmp == null ? Helpers.cast(Comparator.naturalOrder()) : cmp;
+	}
 
-    /* 增长二叉堆容量 */
-    @SuppressWarnings("unchecked")
-    public void resize() {
-        Object[] entriesO = this.entries;
+	public void ensureCapacity(int cap) {
+		if (entries.length >= cap) return;
+		Object[] entriesO = entries;
 
-        Object[] entriesN = new Object[(int) (entriesO.length * INC_RATE + 1)];
-        System.arraycopy(entriesO, 0, entriesN, 0, entriesO.length);
-        this.entries = entriesN;
-    }
+		Object[] entriesN = new Object[cap];
+		System.arraycopy(entriesO, 0, entriesN, 0, size);
+		this.entries = entriesN;
+	}
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public boolean remove(Object o) {
-        int i = indexOf((T) o);
-        return i != -1 && remove(i) != null;
-    }
+	public Object[] array() {
+		return entries;
+	}
 
-    @Override
-    public boolean containsAll(Collection<?> c) {
-        for (Object o : c) {
-            if(!contains(o))
-                return false;
-        }
-        return true;
-    }
+	@Override
+	public boolean remove(Object o) {
+		int i = indexOf(o);
+		return i != -1 && remove(i) != null;
+	}
 
-    @Override
-    public boolean addAll(Collection<? extends T> c) {
-        for (T o : c) {
-            add(o);
-        }
-        return true;
-    }
+	@Override
+	public boolean addAll(int index, @Nonnull Collection<? extends E> c) {
+		throw new UnsupportedOperationException();
+	}
 
-    @Override
-    public boolean removeAll(Collection<?> c) {
-        boolean fl = false;
-        for (Object o : c) {
-            fl |= remove(o);
-        }
-        return fl;
-    }
+	/* 入堆操作 */
+	public boolean add(E node) {
+		int nearest = binarySearch(node);
+		if (nearest >= 0) {
+			return false;
+		} else {
+			int i = -nearest - 1;
 
-    @Override
-    public boolean retainAll(@Nonnull Collection<?> c) {
-        throw new UnsupportedOperationException("懒得搞");
-    }
+			if (size == entries.length-1) {
+				ensureCapacity(size<<1);
+			}
 
-    /* 入堆操作 */
-    public boolean add(T node) {
-        if (size == entries.length - 1) {
-            resize();
-        }
+			Object[] arr = entries;
+			if (size - i > 0) System.arraycopy(arr, i, arr, i+1, size-i);
+			arr[i] = node;
+			size++;
+			return true;
+		}
+	}
 
-        int nearest = binarySearch(node);
-        if(nearest >= 0) {
-            return false;
-        } else {
-            int index = -nearest - 1;
-            final Object[] data1 = this.entries;
-            if(size - index > 0)
-                System.arraycopy(data1, index, data1, index + 1, size - index);
-            data1[index] = node;
-            size++;
-            return true;
-        }
-    }
+	@SuppressWarnings("unchecked")
+	public E remove(int idx) {
+		if (idx >= size) throw new ArrayIndexOutOfBoundsException(idx);
 
-    @SuppressWarnings("unchecked")
-    public T remove(int index) {
-        Object[] data1 = this.entries;
-        if(size - index - 1 > 0)
-            System.arraycopy(data1, index + 1, data1, index, size - index - 1);
-        T t = (T) data1[--size];
-        data1[size] = null;
-        return t;
-    }
+		Object[] data1 = this.entries;
+		E e = (E) data1[idx];
+		if (size - idx - 1 > 0) System.arraycopy(data1, idx + 1, data1, idx, size - idx - 1);
+		data1[--size] = null;
+		return e;
+	}
 
-    public T pop() {
-        return remove(0);
-    }
+	public void removeRange(int begin, int end) {
+		if (begin >= end) return;
+		System.arraycopy(entries, end, entries, begin, size - end);
 
-    public int indexOf(T node) {
-        int index = binarySearch(node);
+		int size1 = size;
+		for (int i = size = begin + size - end; i < size1; i++) {
+			entries[i] = null;
+		}
+	}
 
-        return index >= 0 ? index : -1;
-    }
+	public E pop() {
+		return remove(0);
+	}
 
-    @SuppressWarnings("unchecked")
-    public T top() {
-        return (T) entries[0];
-    }
+	@SuppressWarnings("unchecked")
+	public int indexOf(Object o) {
+		int index = binarySearch((E) o);
 
-    @SuppressWarnings("unchecked")
-    public T bottom() {
-        return (T) entries[size - 1];
-    }
+		return index >= 0 ? index : -1;
+	}
 
-    @SuppressWarnings("unchecked")
-    public T get(int idx) {
-        return (T) entries[idx];
-    }
+	@Override
+	public int lastIndexOf(Object o) {
+		return indexOf(o);
+	}
 
-    public void clear() {
-        for (int i = 0; i < size; i++) {
-            entries[i] = null;
-        }
-        size = 0;
-    }
+	@SuppressWarnings("unchecked")
+	public E top() {
+		if (0 >= size) throw new ArrayIndexOutOfBoundsException(0);
+		return (E) entries[0];
+	}
 
-    @Override
-    public String toString() {
-        return "BSLowHeap[" + ArrayUtil.toString(entries, 0, size) + ']';
-    }
+	@SuppressWarnings("unchecked")
+	public E bottom() {
+		if (0 >= size) throw new ArrayIndexOutOfBoundsException(-1);
+		return (E) entries[size - 1];
+	}
 
-    public int size() {
-        return size;
-    }
+	@SuppressWarnings("unchecked")
+	public E get(int idx) {
+		if (idx >= size) throw new ArrayIndexOutOfBoundsException(idx);
+		return (E) entries[idx];
+	}
 
-    public boolean isEmpty() {
-        return size == 0;
-    }
+	@Override
+	@SuppressWarnings("unchecked")
+	public E set(int idx, E el) {
+		if (idx >= size) throw new ArrayIndexOutOfBoundsException(idx);
+		E oel = (E) entries[idx];
+		entries[idx] = el;
+		return oel;
+	}
 
-    @Override
-    @SuppressWarnings("unchecked")
-    public boolean contains(Object o) {
-        return indexOf((T) o) != -1;
-    }
+	public void clear() {
+		for (int i = 0; i < size; i++) {
+			entries[i] = null;
+		}
+		size = 0;
+	}
 
-    @Nonnull
-    @Override
-    @SuppressWarnings("unchecked")
-    public Iterator<T> iterator() {
-        return entries == null || size == 0 ? Collections.emptyIterator() : new ArrayIterator<>((T[]) entries, 0, size);
-    }
+	public int size() {
+		return size;
+	}
 
-    @Nonnull
-    @Override
-    public Object[] toArray() {
-        if(entries == null || size == 0)
-            return new Object[0];
-        Object[] objs = new Object[size];
-        System.arraycopy(entries, 0, objs, 0, size);
-        return objs;
-    }
+	@Override
+	public boolean contains(Object o) {
+		return indexOf(o) != -1;
+	}
 
-    @Nonnull
-    @Override
-    public <T1> T1[] toArray(@Nonnull T1[] a) {
-        if(entries == null)
-            return a;
-        if(a.length < size)
-            a = Arrays.copyOf(a, size);
-        System.arraycopy(entries, 0, a, 0, size);
-        return a;
-    }
+	@Nonnull
+	@Override
+	public Iterator<E> iterator() {
+		return listIterator(0);
+	}
+
+	@Nonnull
+	@Override
+	@SuppressWarnings("unchecked")
+	public ListIterator<E> listIterator(int index) {
+		return entries == null || size == 0 ? Collections.emptyListIterator() : new ArrayIterator<>((E[]) entries, index, size);
+	}
+
+	@Override
+	public void sort(Comparator<? super E> c) {
+		if (c != cmp && c != null) throw new UnsupportedOperationException();
+	}
+
+	public void i_addNoCmp(E ent) {
+		ensureCapacity(size+2);
+		entries[size++] = ent;
+	}
 }

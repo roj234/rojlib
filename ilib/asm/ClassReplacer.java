@@ -1,82 +1,79 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package ilib.asm;
 
 import ilib.Config;
-import net.minecraft.launchwrapper.IClassTransformer;
 import roj.asm.Parser;
+import roj.asm.cst.Constant;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
+import roj.io.IOUtil;
+import roj.text.CharList;
+
+import net.minecraft.launchwrapper.IClassTransformer;
+
+import java.util.List;
 
 /**
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 17:16
  */
 public class ClassReplacer implements IClassTransformer {
-    public static final  ClassReplacer INSTANCE = new ClassReplacer();
-    private static final MyHashMap<String, byte[]> list = new MyHashMap<>();
+	public static final ClassReplacer FIRST = new ClassReplacer();
+	public static final ClassReplacer LAST = new ClassReplacer();
+	private final MyHashMap<String, byte[]> list = new MyHashMap<>();
 
-    @Override
-    public byte[] transform(String name, String trName, final byte[] basicClass) {
-        if (!list.containsKey(trName))
-            return basicClass;
+	@Override
+	public byte[] transform(String name, String trName, byte[] code) {
+		byte[] replace = list.remove(trName);
+		if (replace == null) return code;
 
-        if ((Config.debug & 2) != 0) {
-            System.out.println("Replaced class " + trName + "(" + name + ')');
-        }
+		if ((Config.debug & 2) != 0) {
+			Loader.logger.info("CL替换 " + trName + "(" + name + ')');
+		}
 
-        return list.remove(trName);
-    }
+		return replace;
+	}
 
-    public static void add(String name, byte[] arr, String father) {
-        ConstantData data = Parser.parseConstants(arr);
+	public void add(String name, String father, byte[] arr, boolean replace) {
+		if (Config.controlViaFile) {
+			if (!Config.instance.getConfig().getOrCreateMap("每文件控制.ClassReplacer").putIfAbsent(name, true)) return;
+		}
 
-        data.parentCst.getValue().setString(father);
+		ConstantData data = Parser.parseConstants(arr);
+		String target = name.replace('.', '/');
 
-        CstUTF value = data.nameCst.getValue();
+		if (replace) {
+			List<Constant> cp = data.cp.array();
+			CharList tmp1 = IOUtil.getSharedCharBuf();
+			for (int i = 0; i < cp.size(); i++) {
+				Constant c = cp.get(i);
+				if (c.type() == Constant.UTF) {
+					CstUTF cu = (CstUTF) c;
+					tmp1.append(cu.str()).replace(data.name, target);
+					data.cp.setUTFValue(cu, tmp1.toString());
+					tmp1.clear();
+				}
+			}
+		}
 
-        String tmp;
-        boolean eq = value.getString().equals(tmp = name.replace('.', '/'));
-        value.setString(tmp);
-        list.put(name, eq ? arr : Parser.toByteArray(data));
-    }
+		if (father != null) {
+			data.parent(father);
+		}
 
-    /**
-     * using dot
-     */
-    public static void add(String name, byte[] arr) {
-        ConstantData data = Parser.parseConstants(arr);
-        CstUTF value = data.nameCst.getValue();
+		data.name(target);
 
-        String tmp;
-        boolean eq = value.getString().equals(tmp = name.replace('.', '/'));
-        value.setString(tmp);
-        list.put(name, eq ? arr : Parser.toByteArray(data));
-    }
+		list.put(name.replace('/', '.'), Parser.toByteArray(data));
+	}
+
+	public void addDeep(String name, byte[] arr) {
+		add(name, null, arr, true);
+	}
+
+	public void add(String name, byte[] arr, String father) {
+		add(name, father, arr, false);
+	}
+
+	public void add(String name, byte[] arr) {
+		add(name, null, arr, false);
+	}
 }

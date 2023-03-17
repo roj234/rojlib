@@ -1,404 +1,512 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.config.data;
 
-import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
-import roj.config.word.AbstLexer;
-import roj.text.TextUtil;
+import roj.config.IniParser;
+import roj.config.NBTParser;
+import roj.config.TOMLParser;
+import roj.config.VinaryParser;
+import roj.config.serial.CVisitor;
+import roj.config.word.ITokenizer;
+import roj.text.CharList;
+import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.*;
 
 /**
- * Config Mapping
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/31 21:17
  */
 public class CMapping extends CEntry {
-    final Map<String, CEntry> map;
-    private boolean dot = false;
+	public static final String CONFIG_TOPLEVEL = "<root>";
 
-    public CMapping() {
-        this.map = new LinkedMyHashMap<>();
-    }
+	final Map<String, CEntry> map;
+	CharList dot;
 
-    public CMapping(Map<String, CEntry> map) {
-        this.map = map;
-    }
+	public CMapping() { this.map = new MyHashMap<>(); }
+	public CMapping(Map<String, CEntry> map) { this.map = map; }
+	public CMapping(int size) { this.map = new MyHashMap<>(size); }
 
-    public CMapping(int size) {
-        this.map = new MyHashMap<>(size);
-    }
+	public final int size() {
+		return map.size();
+	}
 
-    public int size() {
-        return map.size();
-    }
+	public CharList dot(boolean dotMode) {
+		if (dotMode == (dot == null)) this.dot = dotMode ? new CharList() : null;
+		return dot;
+	}
 
-    public CMapping dotMode(boolean dotMode) {
-        this.dot = dotMode;
-        return this;
-    }
+	@Override
+	public Type getType() {
+		return Type.MAP;
+	}
 
-    public Map<String, CEntry> raw() {
-        return map;
-    }
+	public final Map<String, CEntry> raw() {
+		return map;
+	}
+	public final Set<String> keySet() {
+		return map.keySet();
+	}
+	public final Set<Map.Entry<String, CEntry>> entrySet() {
+		return map.entrySet();
+	}
+	public final Collection<CEntry> values() {
+		return map.values();
+	}
 
-    @Nonnull
-    @Override
-    public Type getType() {
-        return Type.MAP;
-    }
+	// region PUT
 
-    @Nonnull
-    public Set<String> keySet() {
-        return map.keySet();
-    }
+	public final CEntry put(String key, CEntry entry) {
+		return put1(key, entry == null ? CNull.NULL : entry, 0);
+	}
+	public final CEntry put(String key, String entry) {
+		if (entry == null) return map.remove(key);
 
-    @Nonnull
-    public Set<Map.Entry<String, CEntry>> entrySet() {
-        return map.entrySet();
-    }
+		CEntry prev = get(key);
+		if (prev.getType() == Type.STRING) {
+			((CString) prev).value = entry;
+			return null;
+		} else {
+			return put1(key, CString.valueOf(entry), 0);
+		}
+	}
+	public final CEntry put(String key, int entry) {
+		CEntry prev = get(key);
+		if (prev.getType() == Type.INTEGER) {
+			((CInteger) prev).value = entry;
+			return null;
+		} else {
+			return put1(key, CInteger.valueOf(entry), 0);
+		}
+	}
+	public final CEntry put(String key, long entry) {
+		CEntry prev = get(key);
+		if (prev.getType() == Type.LONG) {
+			((CLong) prev).value = entry;
+			return null;
+		} else {
+			return put1(key, CLong.valueOf(entry), 0);
+		}
+	}
+	public final CEntry put(String key, double entry) {
+		CEntry prev = get(key);
+		if (prev.getType() == Type.DOUBLE) {
+			((CDouble) prev).value = entry;
+			return null;
+		} else {
+			return put1(key, CDouble.valueOf(entry), 0);
+		}
+	}
+	public final CEntry put(String key, boolean entry) {
+		return put1(key, CBoolean.valueOf(entry), 0);
+	}
 
-    @Nonnull
-    public Collection<CEntry> values() {
-        return map.values();
-    }
 
-    public CEntry put(@Nonnull String key, CEntry entry) {
-        return GOC(key, entry == null ? CNull.NULL : entry, true);
-    }
+	public final CEntry putIfAbsent(String key, CEntry v) {
+		return put1(key, v, Q_SET_IF_ABSENT);
+	}
+	public final String putIfAbsent(String key, String v) {
+		return put1(key, CString.valueOf(v), Q_SET_IF_ABSENT).asString();
+	}
+	public final boolean putIfAbsent(String key, boolean v) {
+		return put1(key, CBoolean.valueOf(v), Q_SET_IF_ABSENT).asBool();
+	}
+	public final int putIfAbsent(String key, int v) {
+		return put1(key, CInteger.valueOf(v), Q_SET_IF_ABSENT).asInteger();
+	}
+	public final long putIfAbsent(String key, long v) {
+		return put1(key, CLong.valueOf(v), Q_SET_IF_ABSENT).asLong();
+	}
+	public final double putIfAbsent(String key, double v) {
+		return put1(key, CDouble.valueOf(v), Q_SET_IF_ABSENT).asDouble();
+	}
+	public final CMapping getOrCreateMap(String key) {
+		return put1(key, new CMapping(), Q_SET_IF_ABSENT).asMap();
+	}
+	public final CList getOrCreateList(String key) {
+		return put1(key, new CList(), Q_SET_IF_ABSENT).asList();
+	}
 
-    public CEntry put(@Nonnull String key, String entry) {
-        CEntry prev = get(key);
-        if (prev.getType() == Type.STRING) {
-            if (entry == null) {
-                return put(key, CNull.NULL);
-            }
-            ((CString) prev).value = entry;
-            return null;
-        } else {
-            return put(key, entry == null ? CNull.NULL : new CString(entry));
-        }
-    }
+	private CEntry put1(String k, CEntry v, int f) {
+		if (null == dot) {
+			if ((f & Q_SET_IF_ABSENT) == 0 || !map.getOrDefault(k, CNull.NULL).isSimilar(v)) {
+				map.put(k, v);
+				return v;
+			}
+			return map.getOrDefault(k, v);
+		}
 
-    public CEntry put(@Nonnull String key, int entry) {
-        CEntry prev = get(key);
-        if (prev.getType() == Type.INTEGER) {
-            ((CInteger) prev).value = entry;
-            return null;
-        } else {
-            return put(key, new CInteger(entry));
-        }
-    }
+		return query(k, Q_CREATE_MID|Q_SET|f, v, dot);
+	}
 
-    public CEntry put(@Nonnull String key, double entry) {
-        CEntry prev = get(key);
-        if (prev.getType() == Type.DOUBLE) {
-            ((CDouble) prev).value = entry;
-            return null;
-        } else {
-            return put(key, new CDouble(entry));
-        }
-    }
+	/**
+	 * 使自身符合def中定义的规则（字段名称，类型，数量）
+	 * 多出的将被删除（可选）
+	 */
+	public final void format(CMapping def, boolean deep, boolean remove) {
+		Map<String, CEntry> map = this.map;
+		for (Map.Entry<String, CEntry> entry : def.map.entrySet()) {
+			String k = entry.getKey();
 
-    public CEntry put(@Nonnull String key, long entry) {
-        CEntry prev = get(key);
-        if (prev.getType() == Type.LONG) {
-            ((CLong) prev).value = entry;
-            return null;
-        } else {
-            return put(key, new CLong(entry));
-        }
-    }
+			CEntry myEnt = map.putIfAbsent(entry.getKey(), entry.getValue());
+			if (myEnt == null) continue;
+			CEntry oEnt = entry.getValue();
 
-    public CEntry put(@Nonnull String key, boolean entry) {
-        return put(key, CBoolean.valueOf(entry));
-    }
+			if (!myEnt.getType().isSimilar(oEnt.getType())) {
+				map.put(k, oEnt);
+			} else if (myEnt.getType() == Type.MAP && deep) {
+				myEnt.asMap().format(oEnt.asMap(), true, remove);
+			}
+		}
+		if (remove) {
+			for (Iterator<Map.Entry<String, CEntry>> itr = map.entrySet().iterator(); itr.hasNext(); ) {
+				if (!def.map.containsKey(itr.next().getKey())) {
+					itr.remove();
+				}
+			}
+		}
+	}
 
-    public long getLong(String key) {
-        CEntry entry = getDottedEntry(key);
-        return entry.getType().fits(Type.LONG) ? entry.asLong() : 0L;
-    }
+	// endregion
+	// region GET
 
-    public boolean getBool(String key) {
-        CEntry entry = getDottedEntry(key);
-        return entry.getType().fits(Type.BOOL) && entry.asBool();
-    }
+	public final boolean containsKey(String key) {
+		return get1(key, null) != null;
+	}
+	public final boolean containsKey(String key, Type type) {
+		return type.isSimilar(get(key).getType());
+	}
 
-    public String getString(String key) {
-        CEntry entry = getDottedEntry(key);
-        return entry.getType().fits(Type.STRING) ? entry.asString() : "";
-    }
+	public final boolean getBool(String key) {
+		CEntry entry = get(key);
+		return Type.BOOL.isSimilar(entry.getType()) && entry.asBool();
+	}
+	public final String getString(String key) {
+		CEntry entry = get(key);
+		return Type.STRING.isSimilar(entry.getType()) ? entry.asString() : "";
+	}
+	public final String getString(String key, String def) {
+		CEntry entry = get(key);
+		return Type.STRING.isSimilar(entry.getType()) ? entry.asString() : def;
+	}
+	public final int getInteger(String key) {
+		CEntry entry = get(key);
+		return entry.isNumber() ? entry.asInteger() : 0;
+	}
+	public final long getLong(String key) {
+		CEntry entry = get(key);
+		return entry.isNumber() ? entry.asLong() : 0;
+	}
+	public final double getDouble(String key) {
+		CEntry entry = get(key);
+		return entry.isNumber() ? entry.asDouble() : 0;
+	}
 
-    private CEntry getDottedEntry(String key) {
-        return getDottedEntry(key, false, CNull.NULL);
-    }
+	public final CEntry get(String key) {
+		return get1(key, CNull.NULL);
+	}
+	public final CEntry getOrNull(String key) {
+		return get1(key, null);
+	}
+	public final CEntry getDot(String path) {
+		return query(path, 0, CNull.NULL, dot == null ? new CharList() : dot);
+	}
 
-    private CEntry getDottedEntry(String keys, boolean force, CEntry defaultValue) {
-        if (keys == null) {
-            return defaultValue;
-        }
-        if (!dot && !force) return map.getOrDefault(keys, defaultValue);
-        String[] arr = TextUtil.split(keys, '.');
-        CEntry entry = this;
-        for (int i = 0; i < arr.length; i++) {
-            StringBuilder key = new StringBuilder(arr[i]);
+	private CEntry get1(String k, CEntry def) {
+		if (k == null) return def;
+		if (null == dot) return map.getOrDefault(k, def);
+		return query(k, 0, CNull.NULL, dot);
+	}
 
-            while (key.charAt(key.length() - 1) == '\\') {
-                key.setCharAt(key.length() - 1, '.');
-                key.append(arr[++i]);
-            }
+	// endregion
 
-            entry = entry.asMap().map.get(key.toString());
-            if (entry == null || entry.getType() == Type.NULL) return defaultValue;
+	/**
+	 * @param self 优先从自身合并
+	 */
+	public void merge(CMapping o, boolean self, boolean deep) {
+		if (!deep) {
+			if (!self) {
+				map.putAll(o.map);
+			} else {
+				for (Map.Entry<String, CEntry> entry : o.map.entrySet()) {
+					map.putIfAbsent(entry.getKey(), entry.getValue());
+				}
+			}
+		} else {
+			if (self) {
+				for (Map.Entry<String, CEntry> entry : o.map.entrySet()) {
+					CEntry oEnt = entry.getValue();
+					CEntry myEnt = map.putIfAbsent(entry.getKey(), oEnt);
+					if (myEnt != null) {
+						if (myEnt.getType() == Type.MAP && Type.MAP.isSimilar(oEnt.getType())) {
+							myEnt.asMap().merge(oEnt.asMap(), true, true);
+						}
+					}
+				}
+			} else {
+				for (Map.Entry<String, CEntry> entry : o.map.entrySet()) {
+					CEntry oEnt = entry.getValue();
+					CEntry myEnt = map.put(entry.getKey(), oEnt);
+					if (myEnt != null) {
+						if (myEnt.getType() == Type.MAP && Type.MAP.isSimilar(oEnt.getType())) {
+							myEnt.asMap().merge(oEnt.asMap(), false, true);
+							map.put(entry.getKey(), myEnt);
+						}
+					}
+				}
+			}
+		}
+	}
 
-        }
-        return entry;
-    }
+	public final void remove(String name) {
+		map.remove(name);
+	}
 
-    public int getInteger(String key) {
-        CEntry entry = getDottedEntry(key);
-        return entry.getType().isNumber() ? entry.asInteger() : 0;
-    }
+	public final void clear() {
+		map.clear();
+	}
 
-    public double getDouble(String key) {
-        CEntry entry = getDottedEntry(key);
-        return entry.getType().isNumber() ? entry.asDouble() : 0;
-    }
+	@Override
+	public CMapping asMap() {
+		return this;
+	}
 
-    @Nullable
-    public CEntry getOrNull(String key) {
-        return getDottedEntry(key, false, null);
-    }
+	protected String getCommentInternal(String key) {return null;}
+	public boolean isCommentSupported() {return false;}
+	public Map<String, String> getComments() {return Collections.emptyMap();}
+	public void putCommentDotted(String key, String val) {throw new UnsupportedOperationException();}
+	public CMapping withComments() { return new CCommMap(map); }
+	public void clearComments(boolean withSub) {
+		if (withSub) {
+			for (CEntry entry : map.values()) {
+				if (entry.getType() == Type.MAP) {
+					entry.asMap().clearComments(true);
+				}
+			}
+		}
+	}
 
-    @Nonnull
-    public CEntry get(String key) {
-        return getDottedEntry(key, false, CNull.NULL);
-    }
+	protected final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }
 
-    @Nonnull
-    public CEntry getDot(String key) {
-        return getDottedEntry(key, true, CNull.NULL);
-    }
+	@Override
+	public byte getNBTType() { return NBTParser.COMPOUND; }
 
-    private CEntry GOC(String keys, CEntry value, boolean force) {
-        if (!dot) {
-            if (force || !containsKey(keys, value)) map.put(keys, value);
-            return map.getOrDefault(keys, value);
-        }
-        List<String> arr = TextUtil.split(new ArrayList<>(), keys, '.');
-        CEntry entry = this;
+	@Override
+	public CharList toINI(CharList sb, int depth) {
+		if (!map.isEmpty()) {
+			Iterator<Map.Entry<String, CEntry>> itr = map.entrySet().iterator();
+			if (depth == 0) {
+				CEntry root = map.get(CONFIG_TOPLEVEL);
+				if (root != null) root.toINI(sb, 1);
 
-        for (int i = 0; i < arr.size(); i++) {
-            StringBuilder key = new StringBuilder(arr.get(i));
+				while (itr.hasNext()) {
+					Map.Entry<String, CEntry> entry = itr.next();
 
-            while (key.charAt(key.length() - 1) == '\\') {
-                key.setCharAt(key.length() - 1, '.');
-                key.append(arr.get(++i));
-            }
+					String key = entry.getKey();
+					if (key.equals(CONFIG_TOPLEVEL)) continue;
 
-            String key1 = key.toString();
+					String comment = getCommentInternal(entry.getKey());
+					if (comment != null && comment.length() > 0) {
+						addComments(sb, 0, comment, ";", "\n");
+					}
 
-            CMapping prev = entry.asMap();
+					sb.append('[');
+					if (key.indexOf(']') >= 0) {
+						ITokenizer.addSlashes(sb.append('"'), entry.getKey()).append('"');
+					} else {
+						sb.append(key);
+					}
+					sb.append(']').append('\n');
 
-            entry = prev.map.getOrDefault(key1, CNull.NULL);
-            if (i == arr.size() - 1) {
-                if (!entry.isSimilar(value) || force) {
-                    prev.map.put(key1, entry = value);
-                }
-            } else {
-                if (entry.getType() == Type.NULL) {
-                    prev.map.put(key1, entry = new CMapping());
-                }
-            }
+					entry.getValue().toINI(sb, 1);
+					if (!itr.hasNext()) break;
+					sb.append('\n');
+				}
+			} else if (depth == 1) {
+				while (itr.hasNext()) {
+					Map.Entry<String, CEntry> entry = itr.next();
 
-        }
-        return entry == CNull.NULL ? value : entry;
+					String key = entry.getKey();
+					boolean safe = IniParser.literalSafe(key);
 
-    }
+					CEntry v = entry.getValue();
+					if (v.getType() == Type.LIST) {
+						List<CEntry> list = v.asList().raw();
+						for (int i = 0; i < list.size(); i++) {
+							if (safe) {
+								sb.append(key);
+							} else {
+								ITokenizer.addSlashes(sb.append('"'), entry.getKey()).append('"');
+							}
+							list.get(i).toINI(sb.append('='), 2);
+							sb.append('\n');
+						}
+					} else {
+						if (safe) {
+							sb.append(key);
+						} else {
+							ITokenizer.addSlashes(sb.append('"'), entry.getKey()).append('"');
+						}
 
-    public CEntry putIfAbsent(@Nonnull String key, @Nonnull CEntry entry) {
-        return GOC(key, entry, false);
-    }
+						v.toINI(sb.append('='), 2).append('\n');
+					}
+				}
+			} else {
+				throw new IllegalArgumentException("INI不支持两级以上的映射");
+			}
+		}
+		return sb;
+	}
 
-    public String putIfAbsent(@Nonnull String key, @Nonnull String entry) {
-        return GOC(key, CString.valueOf(entry), false).asString();
-    }
+	@Override
+	public CharList toTOML(CharList sb, int depth, CharSequence chain) {
+		if (!map.isEmpty()) {
+			if (chain.length() > 0 && depth < 2) {
+				if (TOMLParser.literalSafe(chain)) {
+					sb.append('[').append(chain).append("]\n");
+				} else {
+					ITokenizer.addSlashes(sb.append('['), chain).append("]\n");
+				}
+			}
+			if (depth == 0 && map.containsKey(CONFIG_TOPLEVEL))
+				map.get(CONFIG_TOPLEVEL).toTOML(sb, 0, chain).append('\n');
 
-    public int putIfAbsent(@Nonnull String key, int entry) {
-        return GOC(key, CInteger.valueOf(entry), false).asInteger();
-    }
+			if (depth == 3) sb.append('{');
+			for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+				String comment = getCommentInternal(entry.getKey());
+				if (comment != null && comment.length() > 0) {
+					addComments(sb, 0, comment, "#", "\n");
+				}
 
-    public double putIfAbsent(@Nonnull String key, double entry) {
-        return GOC(key, CDouble.valueOf(entry), false).asDouble();
-    }
+				CEntry v = entry.getValue();
+				switch (v.getType()) {
+					case MAP:
+						if (entry.getKey().equals(CONFIG_TOPLEVEL) && depth == 0) continue;
+						v.toTOML(sb, depth == 3 ? 3 : 1, entry.getKey()).append('\n');
+						break;
+					case LIST:
+						v.toTOML(sb, depth == 3 ? 3 : 0, entry.getKey()).append('\n');
+						break;
+					default:
+						if (TOMLParser.literalSafe(entry.getKey())) {
+							sb.append(entry.getKey());
+						} else {
+							ITokenizer.addSlashes(sb.append('"'), chain).append('"');
+						}
+						sb.append(" = ");
+						if (depth == 3) {
+							v.toTOML(sb, 0, "").append(", ");
+						} else {
+							v.toTOML(sb, 0, "").append('\n');
+						}
+				}
+			}
+			sb.delete(sb.length() - (depth == 3 ? 2 : 0), sb.length());
+			if (depth == 3) sb.append('}');
+		}
+		return sb;
+	}
 
-    public boolean putIfAbsent(@Nonnull String key, boolean entry) {
-        return GOC(key, CBoolean.valueOf(entry), false).asBool();
-    }
+	@SuppressWarnings("fallthrough")
+	public static void addComments(CharList sb, int depth, CharSequence com, CharSequence prefix, CharSequence postfix) {
+		int r = 0, i = 0, prev = 0;
+		while (i < com.length()) {
+			switch (com.charAt(i)) {
+				case '\r':
+					if (i + 1 >= com.length() || com.charAt(i + 1) != '\n') {
+						break;
+					} else {
+						r = 1;
+						i++;
+					}
+				case '\n':
+					if (prev != i) {
+						for (int j = 0; j < depth; j++) sb.append(' ');
+						sb.append(prefix).append(com, prev, i - r).append(postfix);
+					}
+					prev = i + 1;
+					r = 0;
+					break;
+			}
+			i++;
+		}
 
-    public boolean containsKey(@Nullable String key) {
-        return getOrNull(key) != null;
-    }
+		if (prev != i) {
+			for (int j = 0; j < depth; j++) sb.append(' ');
+			sb.append(prefix).append(com, prev, i).append(postfix);
+		}
+	}
 
-    public boolean containsKey(@Nullable String key, @Nonnull Type type) {
-        return get(key).getType().fits(type);
-    }
+	@Override
+	public Object unwrap() {
+		MyHashMap<String, Object> caster = Helpers.cast(new MyHashMap<>(map));
+		for (Map.Entry<String, Object> entry : caster.entrySet()) {
+			entry.setValue(((CEntry) entry.getValue()).unwrap());
+		}
+		return caster;
+	}
 
-    private boolean containsKey(@Nullable String key, @Nonnull CEntry entry) {
-        return get(key).isSimilar(entry);
-    }
+	@Override
+	protected void toBinary(DynByteBuf w, VinaryParser struct) {
+		if (struct != null) {
+			String[] sortedId = struct.tryCompress(map, w);
+			if (sortedId != null) {
+				for (String id : sortedId) map.get(id).toBinary(w,struct);
+				return;
+			}
+		}
 
-    public void merge(CMapping anotherMapping, boolean selfBetter, boolean deep) {
-        if (!deep) {
-            if (!selfBetter) {
-                this.map.putAll(anotherMapping.map);
-            } else {
-                Map<String, CEntry> map1 = new MyHashMap<>(this.map);
-                this.map.putAll(anotherMapping.map);
-                this.map.putAll(map1);
-            }
-        } else {
-            Map<String, CEntry> map = new MyHashMap<>(anotherMapping.map);
-            for (Map.Entry<String, CEntry> entry : this.map.entrySet()) {
-                CEntry s_val = entry.getValue();
-                CEntry t_val = map.remove(entry.getKey());
-                if (t_val != null) {
-                    if (s_val.getType().fits(t_val.getType())) {
-                        switch (s_val.getType()) {
-                            case MAP:
-                                if (!selfBetter) t_val.asMap().merge(s_val.asMap(), false, true);
-                                else s_val.asMap().merge(t_val.asMap(), true, true);
-                                break;
-                            case LIST:
-                                if (!selfBetter) t_val.asList().addAll(s_val.asList());
-                                else s_val.asList().addAll(t_val.asList());
-                                break;
-                        }
-                    }
-                    if (!selfBetter) entry.setValue(t_val);
-                }
-            }
-            this.map.putAll(map);
-        }
-    }
+		w.put((byte) Type.MAP.ordinal()).putVUInt(map.size());
+		if (map.isEmpty()) return;
+		for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+			entry.getValue().toBinary(w.putZhCn(entry.getKey()), struct);
+		}
+	}
 
-    public void clear() {
-        map.clear();
-    }
+	@Override
+	public void toB_encode(DynByteBuf w) {
+		w.put((byte) 'd');
+		if (!map.isEmpty()) {
+			for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+				String k = entry.getKey();
+				w.putAscii(Integer.toString(DynByteBuf.byteCountUTF8(k))).put((byte)':').putUTFData(k);
 
-    @Nonnull
-    @Override
-    public CMapping asMap() {
-        return this;
-    }
+				entry.getValue().toB_encode(w);
+			}
+		}
+		w.put((byte) 'e');
+	}
 
-    @Override
-    public StringBuilder toYAML(StringBuilder sb, int depth) {
-        if (!map.isEmpty()) {
-            sb.append('\n');
-            for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-                for (int i = 0; i < depth; i++) {
-                    sb.append(' ');
-                }
-                sb.append((CString.YAMLADDITIONALCHECK && CString.yamlAdditionalCheck(entry.getKey())) ? entry.getKey() : addSlash(entry.getKey())).append(':').append(' ');
-                entry.getValue().toYAML(sb, depth + 2).append('\n');
-            }
-            return sb.delete(sb.length() - 1, sb.length());
-        }
-        return sb.append("{}");
-    }
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
 
-    @Override
-    public StringBuilder toJSON(StringBuilder sb, int depth) {
-        sb.append('{');
-        if (!map.isEmpty()) {
-            if (depth < 0) {
-                for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-                    sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"').append(':');
-                    entry.getValue().toJSON(sb, -9999999).append(',');
-                }
-                sb.delete(sb.length() - 1, sb.length());
-            } else {
-                sb.append('\n');
-                for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-                    for (int i = 0; i < depth + 4; i++) {
-                        sb.append(' ');
-                    }
+		CMapping mapping = (CMapping) o;
+		return map.equals(mapping.map);
+	}
+	public int hashCode() { return map.hashCode(); }
 
-                    sb.append('"').append(AbstLexer.addSlashes(entry.getKey())).append('"').append(':').append(' ');
-                    entry.getValue().toJSON(sb, depth + 4).append(',').append('\n');
-                }
-                sb.delete(sb.length() - 2, sb.length() - 1);
-                for (int i = 0; i < depth; i++) {
-                    sb.append(' ');
-                }
-            }
-        }
-        return sb.append('}');
-    }
+	@Override
+	public void forEachChild(CVisitor ser) {
+		ser.valueMap(map.size());
+		if (!map.isEmpty()) {
+			for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+				ser.key(entry.getKey());
+				entry.getValue().forEachChild(ser);
+			}
+		}
+		ser.pop();
+	}
 
-    @Override
-    public Object toNudeObject() {
-        MyHashMap<String, Object> caster = Helpers.cast(new MyHashMap<>(map));
-        for (Map.Entry<String, Object> entry : caster.entrySet()) {
-            entry.setValue(((CEntry) entry.getValue()).toNudeObject());
-        }
-        return caster;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        CMapping mapping = (CMapping) o;
-
-        return Objects.equals(map, mapping.map);
-    }
-
-    @Override
-    public int hashCode() {
-        return map != null ? map.hashCode() : 0;
-    }
-
-    public CMapping getOrCreateMap(String key) {
-        return GOC(key, new CMapping(), false).asMap();
-    }
-
-    public CList getOrCreateList(String key) {
-        return GOC(key, new CList(), false).asList();
-    }
-
-    public void remove(String name) {
-        map.remove(name);
-    }
+	public void forEachChildSorted(CVisitor ser, String... names) {
+		ser.valueMap();
+		for (String name : names) {
+			CEntry value = map.get(name);
+			if (value != null) {
+				ser.key(name);
+				value.forEachChild(ser);
+			}
+		}
+		ser.pop();
+	}
 }

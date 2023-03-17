@@ -1,77 +1,63 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.asm.tree.insn;
 
 import roj.asm.OpcodeUtil;
-import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.asm.visitor.CodeWriter;
+
+import static roj.asm.Opcodes.*;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/24 23:21
  */
 public final class U2InsnNode extends InsnNode implements IIndexInsnNode {
-    public U2InsnNode(byte code, int index) {
-        super(code);
-        this.index = (char) index;
-    }
+	public U2InsnNode(byte code, int index) {
+		super(code);
+		this.index = (char) index;
+	}
 
-    public char index;
+	@Override
+	protected boolean validate() {
+		switch (code) {
+			case ISTORE: case LSTORE: case FSTORE: case DSTORE: case ASTORE:
+			case ILOAD: case LLOAD: case FLOAD: case DLOAD: case ALOAD:
+			case RET: case SIPUSH:
+				return true;
+		}
+		return false;
+	}
 
-    @Override
-    public int nodeType() {
-        int c = code & 0xFF;
-        return (c >= 0x15 && c <= 0x19) || (c >= 0x36 && c <= 0x3a) ? T_LOAD_STORE : T_OTHER;
-    }
+	public char index;
 
-    public int getIndex() {
-        return index;
-    }
+	@Override
+	public int nodeType() {
+		int c = code & 0xFF;
+		return (c >= 0x15 && c <= 0x19) || (c >= 0x36 && c <= 0x3a) ? T_LOAD_STORE : T_OTHER;
+	}
 
-    @Override
-    public void setIndex(int index) {
-        if(index < 0 || index > 65535)
-            throw new IndexOutOfBoundsException("U2InsnNode supports [0,65535]");
-        this.index = (char) index;
-    }
+	public int getIndex() {
+		return code==RET||code==SIPUSH?(short)index:index;
+	}
 
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
-        w.writeByte(code).writeShort(index);
-    }
+	@Override
+	public void setIndex(int index) {
+		if (index < -32768 || index > 65535) throw new IndexOutOfBoundsException("U2InsnNode supports [-32768,65535]");
+		this.index = (char) index;
+	}
 
-    @Override
-    public int nodeSize() {
-        return 3;
-    }
+	public void serialize(CodeWriter cw) {
+		if (code == SIPUSH) {
+			cw.smallNum(SIPUSH, index);
+		} else {
+			cw.var(code, index);
+		}
+	}
 
-    public String toString() {
-        return OpcodeUtil.toString0(code, (int) index);
-    }
+	@Override
+	public int nodeSize(int prevBci) {
+		return code == SIPUSH || (index & 0xFF00) != 0 ? 3 : 2;
+	}
+
+	public String toString() {
+		return OpcodeUtil.toString0(code) + " " + getIndex();
+	}
 }

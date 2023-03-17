@@ -1,34 +1,16 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.config.data;
 
-import roj.config.word.AbstLexer;
-import roj.util.Helpers;
+import org.jetbrains.annotations.Nullable;
+import roj.config.VinaryParser;
+import roj.config.serial.CVisitor;
+import roj.config.serial.ToJson;
+import roj.config.serial.ToYaml;
+import roj.config.word.ITokenizer;
+import roj.io.IOUtil;
+import roj.text.CharList;
+import roj.text.TextUtil;
+import roj.util.DynByteBuf;
 
-import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.Map;
 
@@ -36,151 +18,208 @@ import java.util.Map;
  * Config Entry
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/31 21:17
  */
 public abstract class CEntry {
-    protected CEntry() {}
+	protected CEntry() {}
 
-    @Nonnull
-    public abstract Type getType();
+	public abstract Type getType();
+	protected boolean isNumber() { return getType().isNumber(); }
 
-    ////// easy caster
+	public static final int Q_SET = 1, Q_SET_IF_ABSENT = 2, Q_SET_IF_NOT_SIMILAR = 4, Q_CREATE_MID = 8, Q_REPLACE_MID = 16, Q_RETURN_CONTAINER = 32;
+	public final CEntry query(CharSequence sql) {
+		return query(sql, 0, null, IOUtil.getSharedCharBuf());
+	}
+	public final CEntry query(CharSequence sql, int flag, @Nullable CEntry def, CharList tmp) {
+		CEntry node = this;
 
-    @Nonnull
-    public String asString() {
-        throw new ClassCastException(getType() + " unable cast to 'string'");
-    }
+		tmp.clear();
+		boolean quoted = false;
 
-    public int asInteger() {
-        throw new ClassCastException(getType() + " unable cast to 'int'");
-    }
+		int prevI = 0;
+		for (int i = 0; i < sql.length(); i++) {
+			char c = sql.charAt(i);
+			switch (c) {
+				case '"': quoted ^= true; continue;
+				case '.': case '[': if (quoted) break;
+					if (sql.charAt(prevI) != ']') {
+						if (node.getType() != Type.MAP) throw new IllegalStateException("期待映射 '" + sql.subSequence(0, prevI) + "' 实际为 " + node.getType());
 
-    public double asDouble() {
-        throw new ClassCastException(getType() + " unable cast to 'double'");
-    }
+						node = getInMap(node, tmp, flag, c=='[');
+						tmp.clear();
+						if (node == null) return def;
+					}
 
-    public long asLong() {
-        throw new ClassCastException(getType() + " unable cast to 'long'");
-    }
+					if (c == '[') {
+						if (node.getType() != Type.LIST) throw new IllegalStateException("期待列表 '" + sql.subSequence(0, i) + "' 实际为 " + node.getType());
 
-    @Nonnull
-    public CMapping asMap() {
-        throw new ClassCastException(getType() + " unable cast to 'map'");
-    }
+						int j = ++i;
+						foundEnd: {
+							for (; j < sql.length(); j++) {
+								if (sql.charAt(j) == ']') break foundEnd;
+							}
+							throw new IllegalArgumentException("invalid ListEq: not end: " + sql);
+						}
 
-    @Nonnull
-    public CList asList() {
-        throw new ClassCastException(getType() + " unable cast to 'list'");
-    }
+						if (j==i) throw new IllegalArgumentException("invalid ListEq: not number: " + sql);
+						if (tmp.length() > 0) throw new AssertionError();
+						int pos = (int) ITokenizer.parseNumber(tmp.append(sql, i, j), TextUtil.INT_MAXS, 10, false);
+						tmp.clear();
 
-    public boolean asBool() {
-        throw new ClassCastException(getType() + " unable cast to 'boolean'");
-    }
+						if (j == sql.length()-1) {
+							List<CEntry> list = node.asList().raw();
+							if (list.size() <= pos) {
+								if ((flag & Q_SET) == 0) return def;
+								if (def != null) {
+									while (list.size() <= pos) list.add(CNull.NULL);
+									list.set(pos, def);
+								}
 
-    public <T> CObject<T> asObject(Class<T> clazz) {
-        throw new ClassCastException(getType() + " unable cast to 'java_object'");
-    }
+								return null;
+							} else {
+								CEntry entry = node.asList().get(pos);
 
-    ////// toString methods
+								set:
+								if ((flag & Q_SET) != 0) {
+									if (def == null) return list.remove(pos);
 
-    public abstract StringBuilder toYAML(StringBuilder sb, int depth);
+									if ((flag & Q_SET_IF_ABSENT) != 0 && entry != CNull.NULL) {
+										break set;
+									} else if ((flag & Q_SET_IF_NOT_SIMILAR) != 0 && entry.isSimilar(def)) {
+										break set;
+									}
 
-    public final String toYAML() {
-        return toYAML(new StringBuilder(), 0).toString();
-    }
+									list.set(pos, def);
+								}
 
-    public final StringBuilder toYAMLb() {
-        return toYAML(new StringBuilder(), 0);
-    }
+								return entry;
+							}
+						} else if ((c=sql.charAt(j+1)) != '.' && c != '[') {
+							throw new IllegalArgumentException("invalid ListEq: excepting '.' or '[' at "+(j+1)+": " + sql);
+						} else if (c == '.') j++;
 
-    public abstract StringBuilder toJSON(StringBuilder sb, int depth);
+						node = node.asList().get(pos);
+						i = j;
+					}
+					prevI = i;
+					continue;
+			}
+			tmp.append(c);
+		}
 
-    public final String toJSON() {
-        return toJSON(new StringBuilder(), 0).toString();
-    }
+		if (node.getType() != Type.MAP) throw new IllegalStateException("match failed: '" + sql.subSequence(0, prevI) + "' is not a MAP but " + node.getType());
 
-    public final StringBuilder toJSONb() {
-        return toJSON(new StringBuilder(), 0);
-    }
+		if ((flag & Q_RETURN_CONTAINER) != 0) return node;
 
-    @Override
-    public final String toString() {
-        return toShortJSON();
-    }
+		Map<String, CEntry> map = node.asMap().raw();
+		if ((flag & Q_SET) == 0) return map.getOrDefault(tmp, def);
 
-    public final String toShortJSON() {
-        return toJSON(new StringBuilder(), -9999999).toString();
-    }
+		if (def == null) return map.remove(tmp);
 
-    public final StringBuilder toShortJSONb() {
-        return toJSON(new StringBuilder(), -9999999);
-    }
+		CEntry v = map.getOrDefault(tmp, CNull.NULL);
+		if ((flag & Q_SET_IF_ABSENT) != 0 && v != CNull.NULL) {
+			return v;
+		} else if ((flag & Q_SET_IF_NOT_SIMILAR) != 0 && v.isSimilar(def)) {
+			return v;
+		}
 
-    // Convert util
+		map.put(tmp.toString(), def);
+		return def;
+	}
+	private static CEntry getInMap(CEntry node, CharList name, int opFlag, boolean list) {
+		Map<String, CEntry> _map = node.asMap().raw();
+		node = _map.getOrDefault(name, CNull.NULL);
+		// 这里不对错误的type扔异常，sql和pos传进来浪费
+		if (node.getType() == Type.NULL || (node.getType() != (list?Type.LIST:Type.MAP) && (opFlag & Q_REPLACE_MID) != 0)) {
+			if ((opFlag & Q_CREATE_MID) != 0) {
+				if (list) throw new IllegalStateException("Cannot create LIST");
+				_map.put(name.toString(), node = new CMapping());
+			} else {
+				return null;
+			}
+		}
+		return node;
+	}
 
-    /**
-     * 转换为"裸"对象 <br>
-     *     适配垃圾软件
-     * @return Map, List, String or 基本类型的包装
-     */
-    public abstract Object toNudeObject();
+	////// easy caster
 
-    /**
-     * 包装"裸"对象
-     * @param o 裸对象
-     * @return Config对象
-     */
-    @Deprecated
-    public static CEntry wrapNudeObject(Object o) {
-        if(o instanceof Map) {
-            Map<String, Object> map = Helpers.cast(o);
-            CMapping dst = new CMapping(map.size());
-            for (Map.Entry<String, Object> entry : map.entrySet()) {
-                dst.put(entry.getKey(), wrapNudeObject(entry.getValue()));
-            }
-            return dst;
-        } else if (o instanceof List) {
-            List<Object> list = Helpers.cast(o);
-            CList dst = new CList(list.size());
-            for (int i = 0; i < list.size(); i++) {
-                dst.add(wrapNudeObject(list.get(i)));
-            }
-            return dst;
-        } else if (o instanceof String) {
-            return CString.valueOf(o.toString());
-        } else if (o instanceof Boolean) {
-            return CBoolean.valueOf((Boolean) o);
-        } else if (o instanceof Integer) {
-            return CInteger.valueOf((Integer) o);
-        } else if (o instanceof Long) {
-            return CLong.valueOf((Long) o);
-        } else if (o instanceof Double) {
-            return CDouble.valueOf((Double) o);
-        } else if (o == null) {
-            return CNull.NULL;
-        } else {
-            return new CObject<>(o);
-        }
-    }
+	public String asString() { throw new ClassCastException(getType() + "不是字符串"); }
+	public int asInteger() { throw new ClassCastException(getType() + "不是整数"); }
+	public double asDouble() { throw new ClassCastException(getType() + "不是浮点数"); }
+	public long asLong() { throw new ClassCastException(getType() + "不是长整数"); }
+	public boolean asBool() { throw new ClassCastException(getType() + "不是布尔值"); }
+	public CMapping asMap() { throw new ClassCastException(getType() + "不是地图(迫真)"); }
+	public CList asList() { throw new ClassCastException(getType() + "不是列表"); }
 
-    // Utilities
+	////// toString methods
 
-    public boolean equalsTo(CEntry entry) {
-        return equals(entry);
-    }
+	@Override
+	public String toString() { return toShortJSON(); }
 
-    protected static String addSlash(String key) {
-        for (int i = 0; i < key.length(); i++) {
-            char c = key.charAt(i);
-            if (AbstLexer.SPECIAL_CHARS.contains(c)) {
-                return "\"" + AbstLexer.addSlashes(key) + "\"";
-            }
-        }
-        return key;
-    }
+	protected abstract CharList toJSON(CharList sb, int depth);
 
-    protected boolean isSimilar(CEntry value) {
-        return value.getType() == this.getType();
-    }
+	public final String toJSON() {
+		ToJson ser = new ToJson(4);
+		forEachChild(ser.sb(IOUtil.getSharedCharBuf()));
+		return ser.toString();
+	}
+	public final CharList toJSONb() {
+		ToJson ser = new ToJson(4);
+		forEachChild(ser);
+		return ser.getValue();
+	}
+	public final String toShortJSON() {
+		ToJson ser = new ToJson();
+		forEachChild(ser.sb(IOUtil.getSharedCharBuf()));
+		return ser.toString();
+	}
+	public final CharList toShortJSONb() {
+		ToJson ser = new ToJson();
+		forEachChild(ser);
+		return ser.getValue();
+	}
+
+	public final String toYAML() {
+		ToYaml ser = new ToYaml();
+		forEachChild(ser.sb(IOUtil.getSharedCharBuf()));
+		return ser.toString();
+	}
+	public final CharList toYAMLb() {
+		ToYaml ser = new ToYaml();
+		forEachChild(ser);
+		return ser.getValue();
+	}
+
+	protected CharList toINI(CharList sb, int depth) { return toJSON(sb, 0); }
+	public final String toINI() { return toINI(IOUtil.getSharedCharBuf(), 0).toString(); }
+	public final CharList toINIb() { return toINI(new CharList(), 0); }
+	public final CharList appendINI(CharList sb) { return toINI(sb, 0); }
+
+	protected CharList toTOML(CharList sb, int depth, CharSequence chain) { return toJSON(sb, 0); }
+	public final String toTOML() { return toTOML(IOUtil.getSharedCharBuf(), 0, new CharList()).toString(); }
+	public final CharList toTOMLb() { return toTOML(new CharList(), 0, new CharList()); }
+	public final CharList appendTOML(CharList sb, CharList tmp) { return toTOML(sb, 0, tmp); }
+
+	// Converting
+
+	public abstract void forEachChild(CVisitor ser);
+
+	//@MagicConstant(valuesFromClass = NBTParser.class)
+	public byte getNBTType() { throw new ClassCastException(getType()+"无法序列化为NBT"); }
+
+	public abstract Object unwrap();
+
+	public final DynByteBuf toBinary(DynByteBuf w) {
+		toBinary(w, null);
+		return w;
+	}
+	public final void _toBinary(DynByteBuf w, VinaryParser struct) {
+		struct.reset();
+		toBinary(w, struct);
+	}
+	protected abstract void toBinary(DynByteBuf w, @Nullable VinaryParser struct);
+
+	public void toB_encode(DynByteBuf w) { throw new ClassCastException(getType() + "无法序列化为B-encode"); }
+
+	public boolean isSimilar(CEntry o) { return getType().isSimilar(o.getType()); }
 }

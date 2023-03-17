@@ -1,294 +1,351 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.concurrent;
 
 import org.jetbrains.annotations.Async;
-import roj.concurrent.task.ExecutionTask;
+import roj.collect.IntMap;
+import roj.collect.MyHashSet;
+import roj.collect.RingBuffer;
 import roj.concurrent.task.ITask;
-import roj.util.ArrayUtil;
+import roj.util.Helpers;
 
-import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.LockSupport;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
-public class TaskPool implements ThreadStateMonitor, TaskHandler {
-    protected final TaskExecutor[] thread;
-    protected final MyThreadFactory factory;
+import static roj.reflect.FieldAccessor.u;
 
-    public static final MyThreadFactory DEFAULT = TaskExecutor::new;
+public class TaskPool implements TaskHandler {
+	@FunctionalInterface
+	public interface MyThreadFactory {
+		TaskPool.ExecutorImpl get(TaskPool pool);
+	}
 
-    @FunctionalInterface
-    public interface MyThreadFactory {
-        TaskExecutor get(TaskPool pool);
-    }
+	@FunctionalInterface
+	public interface RejectPolicy {
+		void onReject(TaskPool pool, ITask task);
+	}
 
-    protected int core, max, addThr, maxThr;
-    protected int running;
+	private final MyHashSet<ExecutorImpl> threads = new MyHashSet<>();
+	private final MyThreadFactory factory;
+	private RejectPolicy policy;
 
-    protected final AtomicInteger lock = new AtomicInteger();
+	final int core, max, newThr, idleTime;
+	private volatile int running, parking;
+	private long prevStop;
 
-    public TaskPool(int coreThreads, int maxThreads, int threshold, int maxTaskPerThread, MyThreadFactory factory) {
-        this.core = coreThreads;
-        this.max = maxThreads;
-        this.addThr = threshold;
-        this.thread = new TaskExecutor[maxThreads];
-        this.maxThr = maxTaskPerThread;
-        this.factory = factory;
-    }
+	static {
+		try {
+			RUNNING_OFFSET = u.objectFieldOffset(TaskPool.class.getDeclaredField("running"));
+			PARKING_OFFSET = u.objectFieldOffset(TaskPool.class.getDeclaredField("parking"));
+		} catch (NoSuchFieldException e) {
+			e.printStackTrace();
+		}
+	}
+	private static long RUNNING_OFFSET, PARKING_OFFSET;
 
-    public TaskPool(int coreThreads, int maxThreads, int threshold, int stopTimeout, String namePrefix) {
-        this.core = coreThreads;
-        this.max = maxThreads;
-        this.addThr = threshold;
-        this.thread = new TaskExecutor[maxThreads];
-        this.maxThr = 1024;
+	final ReentrantLock lock = new ReentrantLock();
+	final Condition noFull = lock.newCondition();
+	final RingBuffer<ITask> tasks;
+	final TransferQueue<ITask> fastPath = new LinkedTransferQueue<>();
 
-        this.factory = new PrefixFactory(namePrefix, stopTimeout);
-    }
+	public TaskPool(int coreThreads, int maxThreads, int newThreshold, int rejectThreshold, int stopTimeout, MyThreadFactory factory) {
+		this.core = coreThreads;
+		this.max = maxThreads;
+		this.newThr = newThreshold;
+		this.idleTime = stopTimeout;
+		this.factory = factory;
 
-    public TaskPool(int coreThreads, int maxThreads, int threshold) {
-        this.core = coreThreads;
-        this.max = maxThreads;
-        this.addThr = threshold;
-        this.thread = new TaskExecutor[maxThreads];
-        this.factory = DEFAULT;
-    }
+		tasks = new RingBuffer<>(Math.min(64, rejectThreshold), rejectThreshold);
+	}
 
-    @Override
-    @Async.Schedule
-    public void pushTask(ITask task) {
-        if (running == -1) {
-            throw new RejectedExecutionException("TaskPool was shutdown.");
-        }
-        int minPending = Integer.MAX_VALUE;
-        TaskExecutor th = null;
+	public TaskPool(int coreThreads, int maxThreads, int newThreshold, int stopTimeout, String namePrefix) {
+		this.core = coreThreads;
+		this.max = maxThreads;
+		if (coreThreads > maxThreads) throw new IllegalArgumentException("coreThreads > maxThreads");
+		this.newThr = newThreshold;
+		this.idleTime = stopTimeout;
+		if (stopTimeout < 100) throw new IllegalArgumentException("stopTimeout < 100");
+		this.factory = new PrefixFactory(namePrefix);
 
-        final TaskExecutor[] processors = this.thread;
+		tasks = new RingBuffer<>(64, 99999999);
+	}
 
-        int ov = lightLock(lock);
+	private static final AtomicInteger poolId = new AtomicInteger();
 
-        int len = running;
-        if (len <= 0) {
-            if(len < 0) {
-                throw new RejectedExecutionException("TaskPool was shutdown.");
-            }
+	public TaskPool(int coreThreads, int maxThreads, int threshold) {
+		this(coreThreads, maxThreads, threshold, 60000, "pool-" + poolId.getAndIncrement() + "-by" + Thread.currentThread().getId() + "-");
+	}
 
-            newWorker(task, ov);
-            return;
-        }
+	public static TaskPool CpuMassive() { return CpuMassiveHolder.P; }
+	private static final class CpuMassiveHolder {
+		static final TaskPool P = new TaskPool(1, Runtime.getRuntime().availableProcessors(), 0, 60000, "Cpu任务-");
+	}
 
-        for (int i = 0; i < len; i++) {
-            TaskExecutor p = processors[i];
-            if (p.getTaskAmount() < minPending) {
-                th = p;
-                minPending = p.getTaskAmount();
-            }
-        }
+	public static TaskPool ParallelPool() {
+		return new TaskPool(0, Runtime.getRuntime().availableProcessors()+1, 128);
+	}
 
-        if(len < core && minPending > 0) {
-            newWorker(task, ov);
-            return;
-        }
+	@Override
+	@Async.Schedule
+	public void pushTask(ITask task) {
+		if (task.isCancelled()) return;
 
-        if (minPending >= addThr) {
-            if (len < max) {
-                newWorker(task, ov);
-                return;
-            } else if (minPending >= maxThr) {
-                onReject(task, minPending);
-                return;
-            }
-        }
+		int len = running;
+		if (len <= 0) {
+			if (len < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
 
-        untilCas(lock, ov + 1, ov);
+			newWorker();
+		}
 
-        th.pushTask(task);
-    }
+		// 等待立即结束的短时任务
+		try {
+			if (fastPath.tryTransfer(task, 10, TimeUnit.MICROSECONDS)) return;
+		} catch (InterruptedException ignored) {}
 
-    protected void onReject(ITask task, int minPending) {
-        // maybe execution by caller
-        throw new RejectedExecutionException("Minimum tasks on thread (" + minPending + ") is larger than limit (" + maxThr + ")");
-    }
+		if (task.isCancelled()) return;
 
-    private void newWorker(ITask task, int ov) {
-        untilCas(lock, ov + 1, -2); // -2 new thread, -1 stop , -3 shutdown
+		len = running;
+		if (len < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
+		else {
+			if (len < core ||
+				len < max &&
+					(newThr == 0 ||
+					(newThr < 0 ? tasks.size()/len : tasks.size()) > Math.abs(newThr))
+			) {
+				newWorker();
+			}
+		}
 
-        TaskExecutor pc = factory.get(this);
-        pc.getClass();
-        thread[running++] = pc;
-        pc.setDaemon(true);
-        pc.start();
-        pc.pushTask(task);
+		lock.lock();
+		try {
+			if (tasks.remaining() == 0) {
+				if (policy != null) {
+					policy.onReject(this, task);
+				} else {
+					throwPolicy(this, task);
+				}
+			} else {
+				tasks.ringAddLast(task);
+			}
+		} finally {
+			lock.unlock();
+		}
+	}
 
-        lock.set(ov);
-    }
+	private ITask pollTask() {
+		boolean timeout = false;
 
-    private static void untilCas(AtomicInteger lock, int from, int to) {
-        int i = 0;
-        while (!lock.compareAndSet(from, to)) {
-            Thread.yield();
-            if (lock.compareAndSet(from, to)) break;
-            LockSupport.parkNanos(20);
-            if (i++ > 1000)
-                throw new Error("Failed to get lock " + from + " => " + to + ": " + lock.getAndSet(0));
-        }
-    }
+		main:
+		for(;;) {
+			// shutdown
+			if (running < 0) {
+				int r;
+				do {
+					r = running;
+				} while (!u.compareAndSwapInt(this, RUNNING_OFFSET, r, r+1));
 
-    private static int lightLock(AtomicInteger lock) {
-        int ov;
-        do {
-            ov = lock.get();
-            if (ov < 0) {
-                Thread.yield();
-            }
+				if (r == -2) {
+					synchronized (threads) { threads.notifyAll(); }
+				}
+				return null;
+			}
 
-            ov = lock.get();
-            if (ov < 0) {
-                LockSupport.parkNanos(20);
-            } else {
-                untilCas(lock, ov, ov + 1);
-                break;
-            }
-        } while (true);
-        return ov;
-    }
+			if (running > core &&
+				timeout &&
+				System.currentTimeMillis() - prevStop >= idleTime) {
 
-    @Async.Schedule
-    public ExecutionTask pushRunnable(Runnable runnable) {
-        ExecutionTask task = new ExecutionTask(runnable);
-        pushTask(task);
-        return task;
-    }
+				int r = running;
+				if (u.compareAndSwapInt(this, RUNNING_OFFSET, r, r-1)) {
+					prevStop = System.currentTimeMillis();
+					return null;
+				}
+			}
 
-    @Override
-    public void clearTasks() {
-        if (running == -1) return;
-        final TaskExecutor[] processors = this.thread;
+			timeout = false;
+			try {
+				if (!tasks.isEmpty()) {
+					lock.lock();
+					try {
+						while (!tasks.isEmpty()) {
+							ITask task = tasks.removeFirst();
+							if (!task.isCancelled()) return task;
+						}
+					} finally {
+						noFull.signalAll();
+						lock.unlock();
+					}
+				}
 
-        int ov = lightLock(lock);
-        for (int i = 0, len = running; i < len; i++) {
-            TaskExecutor executor = processors[i];
-            executor.clearTasks();
-        }
+				int r;
+				do {
+					r = parking;
+				} while (!u.compareAndSwapInt(this, PARKING_OFFSET, r, r+1));
 
-        untilCas(lock, ov + 1, ov);
-    }
+				synchronized (this) { notifyAll(); }
 
-    @Override
-    public boolean threadDeath(TaskExecutor executor) {
-        if (running > core && taskLength() / running < addThr) {
-            int len = this.running - 1;
-            final TaskExecutor last = this.thread[len];
+				try {
+					// original noEmpty.await
+					Object task = fastPath.poll(idleTime, TimeUnit.MILLISECONDS);
+					if (task == null || task == IntMap.UNDEFINED) {
+						timeout = true;
+					} else {
+						// noinspection all
+						ITask tt = (ITask) task;
+						if (!tt.isCancelled()) return tt;
+					}
+				} finally {
+					do {
+						r = parking;
+					} while (!u.compareAndSwapInt(this, PARKING_OFFSET, r, r-1));
+				}
+			} catch (InterruptedException ignored) {}
+		}
+	}
 
-            if (last != executor) {
-                return false;
-            }
+	private void newWorker() {
+		int r = running;
+		if (u.compareAndSwapInt(this, RUNNING_OFFSET, r, r+1)) {
+			ExecutorImpl t = factory.get(this);
+			synchronized (threads) { threads.add(t); }
+			t.start();
+		}
+	}
 
-            untilCas(lock, 0, -1);
+	public void setRejectPolicy(RejectPolicy policy) { this.policy = policy; }
 
-            thread[len] = null;
-            this.running = len;
+	public static void throwPolicy(TaskPool pool, ITask task) { throw new RejectedExecutionException("Too many tasks pending"); }
+	public static void executePolicy(TaskPool pool, ITask task) {
+		try {
+			task.execute();
+		} catch (Exception e) {
+			if (!(e instanceof ExecutionException)) {
+				e = new ExecutionException(e);
+			}
+			Helpers.athrow(e);
+		}
+	}
+	public static void waitPolicy(TaskPool pool, ITask task) {
+		while (pool.tasks.remaining() == 0) {
+			pool.noFull.awaitUninterruptibly();
+			if (pool.running < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
 
-            lock.set(0);
+			if (!pool.fastPath.tryTransfer(task)) {
+				pool.tasks.ringAddLast(task);
+			}
+		}
+	}
+	public static void newThreadPolicy(TaskPool pool, ITask task) { new ImmediateExecutor(task).start(); }
 
-            return true;
-        }
+	@Override
+	public void clearTasks() {
+		lock.lock();
+		tasks.clear();
+		noFull.signalAll();
+		lock.unlock();
+	}
 
-        return running < 0;
-    }
+	public void shutdown() {
+		lock.lock();
 
-    public void wakeupAll() {
-        for (TaskExecutor te : thread) {
-            if (te != null) {
-                LockSupport.unpark(te);
-            }
-        }
-    }
+		int r;
+		do {
+			r = running;
+		} while (!u.compareAndSwapInt(this, RUNNING_OFFSET, r, -r-1));
 
-    public void shutdown() {
-        untilCas(lock, 0, -3);
-        int running = this.running;
-        this.running = -1;
-        lock.set(0);
+		tasks.clear();
 
-        final TaskExecutor[] processors = this.thread;
-        for (int i = 0; i < running; i++) {
-            TaskExecutor th = processors[i];
-            th.clearTasks();
-            th.interrupt();
-        }
-    }
+		while (fastPath.tryTransfer(Helpers.cast(IntMap.UNDEFINED)));
+		noFull.signalAll();
 
-    @Override
-    public String toString() {
-        return "TaskPool{" + "thr=" + ArrayUtil.toString(thread, 0, running) + ", range=[" + core + ',' + max + "], lock=" + lock.get() + '}';
-    }
+		lock.unlock();
+	}
 
-    @Override
-    public boolean working() {
-        return running >= 0;
-    }
+	public boolean working() {
+		return running >= 0;
+	}
 
-    public TaskExecutor[] threads() {
-        synchronized (this) {
-            int l = running;
-            TaskExecutor[] res = new TaskExecutor[l];
-            System.arraycopy(thread, 0, res, 0, l);
-            return res;
-        }
-    }
+	public Thread[] threads() {
+		synchronized (threads) {
+			return threads.toArray(new Thread[threads.size()]);
+		}
+	}
 
-    public void waitUntilFinish() {
-        while (taskLength() > 0) {
-            LockSupport.parkNanos(100);
-        }
-    }
+	public int taskPending() { return tasks.size(); }
 
-    public void waitUntilFinish(long timeout) {
-        if(timeout <= 0) {
-            waitUntilFinish();
-            return;
-        }
-        long time = System.currentTimeMillis() + timeout;
-        while (System.currentTimeMillis() < time && taskLength() > 0) {
-            LockSupport.parkNanos(100);
-        }
-    }
+	public void awaitFinish() {
+		synchronized (this) {
+			while ((!tasks.isEmpty() || running != parking) && running > 0) {
+				try {
+					wait(0);
+				} catch (InterruptedException e) {
+					break;
+				}
+			}
+		}
+	}
+	public boolean awaitFinish(long timeout)  {
+		long time = System.currentTimeMillis() + timeout;
+		synchronized (this) {
+			while ((!tasks.isEmpty() || running != parking) && running > 0) {
+				long dt = time - System.currentTimeMillis();
+				if (dt < 0) return false;
+				try {
+					wait(dt);
+				} catch (InterruptedException e) {
+					break;
+				}
+			}
+		}
+		return true;
+	}
 
-    public int taskLength() {
-        int sum = 0;
+	public void awaitShutdown() throws InterruptedException {
+		synchronized (threads) {
+			while (running != -1) threads.wait();
+		}
+	}
 
-        final TaskExecutor[] processors = this.thread;
-        for (int i = 0, len = running; i < len; i++) {
-            TaskExecutor executor = processors[i];
-            if(executor != null)
-                sum += executor.getTaskAmount();
-        }
+	@Override
+	public String toString() {
+		return "TaskPool{" + ", range=[" + core + ',' + max + "], lock=" + lock + '}';
+	}
 
-        return sum;
-    }
+	public static void yield() {
+		Thread t = Thread.currentThread();
+		if (t instanceof ExecutorImpl) {
+			// todo
+		}
+	}
 
+	public class ExecutorImpl extends FastLocalThread {
+		protected ExecutorImpl() { setDaemon(true); }
+		protected ExecutorImpl(String name) {
+			setName(name);
+			setDaemon(true);
+		}
+		protected ExecutorImpl(ThreadGroup tg, String name) {
+			super(tg, name);
+			setName(name);
+			setDaemon(true);
+		}
+
+		@Override
+		public void run() {
+			while (true) {
+				ITask task = pollTask();
+				if (task == null) break;
+
+				try {
+					if (!task.isCancelled()) {
+						task.execute();
+						if (task.continueExecuting()) pushTask(task);
+					}
+				} catch (Throwable e) {
+					e.printStackTrace();
+				}
+			}
+
+			synchronized (threads) { threads.remove(this); }
+		}
+	}
 }

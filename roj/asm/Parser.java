@@ -1,380 +1,393 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.asm;
 
-import roj.asm.cst.Constant;
-import roj.asm.cst.CstClass;
-import roj.asm.cst.CstUTF;
+import roj.asm.cst.*;
 import roj.asm.tree.*;
-import roj.asm.tree.attr.AttrUnknown;
-import roj.asm.tree.attr.Attribute;
-import roj.asm.util.*;
-import roj.collect.CharMap;
+import roj.asm.tree.attr.*;
+import roj.asm.type.Signature;
+import roj.asm.util.AttributeList;
+import roj.collect.SimpleList;
+import roj.io.IOUtil;
 import roj.util.ByteList;
-import roj.util.ByteReader;
-import roj.util.Helpers;
+import roj.util.DynByteBuf;
+import roj.util.TypedName;
 
 import javax.annotation.Nonnull;
-import java.util.ArrayList;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
- * Roj ASM parser (字节码解析器) <br>
- * 基于Java 8 构造 <br>
- *     现已支持 Java 15 (需要测试)
- *
+ * 字节码解析器
  * @author Roj234
- * @version 2.0
+ * @version 2.4
  * @since 2021/5/29 17:16
  */
 public final class Parser {
-    // region CLAZZ parse LOD 2
-
-    public static Clazz parse(byte[] buf) {
-        return parse(new ByteList(buf));
-    }
-
-    @SuppressWarnings("fallthrough")
-    public static Clazz parse(ByteList buf) {
-        if (buf == null) throw new NullPointerException("Bytecode is null!");
-
-        Clazz result = new Clazz();
-        ByteReader r = SharedBuf.reader(buf);
-
-        if (r.readInt() != 0xcafebabe) {
-            throw new IllegalArgumentException("Illegal header");
-        }
-
-        result.version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
-        ConstantPool pool = new ConstantPool(r.readUnsignedShort());
-        try {
-            pool.read(r);
-        } catch (Exception e) {
-            throw new RuntimeException("Corrupted constant pool: ", e);
-        }
-
-        /**
-         * If the ACC_MODULE flag is set in the access_flags item, then no other flag in the access_flags item may be
-         * set, and the following rules apply to the rest of the ClassFile structure:
-         *
-         * major_version, minor_version: ≥ 53.0 (i.e., Java SE 9 and above)
-         *
-         * this_class: module-info
-         *
-         * super_class, interfaces_count, fields_count, methods_count: zero
-         */
-        result.accesses = AccessFlag.of(r.readShort());
-        try {
-            result.name = pool.getName(r);
-        } catch (ArrayIndexOutOfBoundsException e) {
-            result.name = "ERROR: Unknown cpi";
-        }
-        boolean module = result.accesses.hasAll(AccessFlag.MODULE);
-        if(module && result.accesses.flag != AccessFlag.MODULE)
-            throw new IllegalArgumentException("Module should only have 'module' flag");
-
-        result.parent = pool.getName(r);
-        if (result.parent == null && (!"java/lang/Object".equals(result.name) || module)) {
-            throw new IllegalArgumentException("No father found");
-        }
-
-        int len = r.readUnsignedShort();
-        List<String> interfaces = result.interfaces;
-        if(module && len != 0)
-            throw new IllegalArgumentException("Module should not have interfaces");
-        for (int i = 0; i < len; i++) {
-            interfaces.add(pool.getName(r));
-        }
-
-        len = r.readUnsignedShort();
-        List<Field> fields = result.fields;
-        if(module && len != 0)
-            throw new IllegalArgumentException("Module should not have fields");
-        for (int i = 0; i < len; i++) {
-            FlagList access = AccessFlag.of(r.readShort());
-            CstUTF name = (CstUTF) pool.get(r);
-            CstUTF desc = (CstUTF) pool.get(r);
-
-            Field field = new Field(access, name.getString(), desc.getString());
-            field.initAttributes(pool, r);
-            fields.add(field);
-        }
-
-        len = r.readUnsignedShort();
-        if(module && len != 0)
-            throw new IllegalArgumentException("Module should not have methods");
-        List<Method> methods = result.methods;
-        for (int i = 0; i < len; i++) {
-            FlagList access = AccessFlag.of(r.readShort());
-            CstUTF name = (CstUTF) pool.get(r);
-            CstUTF desc = (CstUTF) pool.get(r);
-
-            Method method = new Method(access, result, name.getString(), desc.getString());
-            method.initAttributes(pool, r);
-            methods.add(method);
-        }
-
-        result.initAttributes(pool, r);
-
-        return result;
-    }
-
-    public static byte[] toByteArray(Clazz c) {
-        return SharedBuf.store(c).getByteArray();
-    }
-
-    public static ByteList toByteArrayShared(Clazz c) {
-        return SharedBuf.store(c);
-    }
-
-    // endregion
-    // region CONSTANT DATA parse LOD 1
+	public static final int CTYPE_ACCESS = 0;
+	public static final int CTYPE_PARSED = 1;
+	public static final int CTYPE_REFLECT = 2;
 
-    public static ConstantData parseConstants(byte[] buf) {
-        return parseConstants(new ByteList(buf));
-    }
-
-    @Nonnull
-    public static ConstantData parseConstants(ByteList buf) {
-        ByteReader r = SharedBuf.reader(buf);
-
-        if (r.readInt() != 0xcafebabe) {
-            throw new IllegalArgumentException("Illegal header");
-        }
-        int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
-
-        ConstantPool pool = new ConstantPool(r.readUnsignedShort());
-        pool.read(r);
-
-        ConstantData result = new ConstantData(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
-
-        int len = r.readUnsignedShort();
-
-        List<CstClass> itf = result.interfaces;
-        for (int i = 0; i < len; i++) {
-            itf.add((CstClass) pool.get(r));
-        }
-
-        len = r.readUnsignedShort();
-        List<FieldSimple> fields = result.fields;
-        for (int i = 0; i < len; i++) {
-            FieldSimple field = new FieldSimple(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
-
-            AttributeList attributes = field.attributes;
-            int attrLen = r.readUnsignedShort();
-            attributes.ensureCapacity(attrLen);
-
-            for (int j = 0; j < attrLen; j++) {
-                String name0 = ((CstUTF) pool.get(r)).getString();
-
-                Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
-                attributes.add(attr);
-            }
-            fields.add(field);
-        }
-
-        len = r.readUnsignedShort();
-        List<MethodSimple> methods = result.methods;
-        for (int i = 0; i < len; i++) {
-            MethodSimple method = new MethodSimple(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
-            method.cn(result.name);
-
-            AttributeList attributes = method.attributes;
-            int attrLen = r.readUnsignedShort();
-            attributes.ensureCapacity(attrLen);
-
-            for (int j = 0; j < attrLen; j++) {
-                String name0 = ((CstUTF) pool.get(r)).getString();
-
-                Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
-                attributes.add(attr);
-            }
-            methods.add(method);
-        }
-
-        len = r.readUnsignedShort();
-        AttributeList attributes = result.attributes;
-        attributes.ensureCapacity(len);
-
-        for (int i = 0; i < len; i++) {
-            String name0 = ((CstUTF) pool.get(r)).getString();
-
-            Attribute attr = new AttrUnknown(name0, r.readBytesDelegated(r.readInt()));
-
-            attributes.add(attr);
-        }
-
-        return result;
-    }
-
-    public static byte[] toByteArray(ConstantData c) {
-        return SharedBuf.store(c).getByteArray();
-    }
-
-    public static ByteList toByteArrayShared(ConstantData c) {
-        return SharedBuf.store(c);
-    }
-
-    // endregion
-    // region ACCESS parse LOD 0
-
-    public static AccessData parseAccess(byte[] buf) {
-        return parseAcc0(buf.clone(), new ByteList(buf));
-    }
-
-    public static AccessData parseAccessDirect(byte[] buf) {
-        return parseAcc0(buf, new ByteList(buf));
-    }
-
-    @Nonnull
-    public static AccessData parseAcc0(byte[] dst, ByteList src) {
-        ByteReader r = SharedBuf.reader(src);
-
-        if (r.readInt() != 0xcafebabe) {
-            throw new IllegalArgumentException("Illegal header");
-        }
-        r.index += 4; // ver
-
-        ConstantNamePool pool = new ConstantNamePool(r.readUnsignedShort());
-        pool.skip(r);
-        CharMap<Constant> map = pool.map;
-        r.index += 2;
-        map.put(r.readChar(), null);
-        map.put(r.readChar(), null);
-
-        int len = r.readUnsignedShort();
-        for (int i = 0; i < len; i++) {
-            map.put(r.readChar(), null);
-        }
-
-        for (int k = 0; k < 2; k++) {
-            len = r.readUnsignedShort();
-            for (int i = 0; i < len; i++) {
-                r.index += 2;
-                map.put(r.readChar(), null);
-                map.put(r.readChar(), null);
-
-                int attrs = r.readUnsignedShort();
-                for (int j = 0; j < attrs; j++) {
-                    r.index += 2;
-                    int ol = r.readInt();
-                    r.index += ol;
-                }
-            }
-        }
-
-        pool.init(r);
-
-        int cfo = r.index; // acc
-
-        r.index += 2;
-
-        String self = pool.getName(r);
-        String parent = pool.getName(r);
-
-        len = r.readUnsignedShort();  // itf
-        List<String> itf = new ArrayList<>(len);
-        for (int i = 0; i < len; i++) {
-            itf.add(pool.getName(r));
-        }
-
-        List<?>[] arr = new List<?>[2];
-        for (int k = 0; k < 2; k++) {
-            len = r.readUnsignedShort();
-            List<AccessData.MOF> com = new ArrayList<>(len);
-            for (int i = 0; i < len; i++) {
-                int offset = r.index;
-
-                char acc = r.readChar();
-
-                AccessData.MOF d = new AccessData.MOF(((CstUTF) pool.get(r)).getString(),
-                                                      ((CstUTF) pool.get(r)).getString(), offset);
-                d.acc = acc;
-                com.add(d);
-
-                int attrs = r.readUnsignedShort();
-                for (int j = 0; j < attrs; j++) {
-                    r.index += 2;
-                    int ol = r.readInt();
-                    r.index += ol;
-                }
-            }
-            arr[k] = com;
-        }
-
-        return new AccessData(dst, Helpers.cast(arr[0]), Helpers.cast(arr[1]), cfo, self, parent, itf);
-    }
-
-    // endregion
-    // region SIMPLE parse LOD -1
-
-    public static List<String> simpleData(byte[] buf) {
-        return simpleData(new ByteList(buf));
-    }
-
-    public static List<String> simpleData(ByteList buf) {
-        ByteReader r = SharedBuf.reader(buf);
-        if (r.readInt() != 0xcafebabe) {
-            throw new IllegalArgumentException("Illegal header");
-        }
-
-        r.index += 4; // ver
-
-        ConstantNamePool pool = new ConstantNamePool(r.readUnsignedShort());
-        pool.skip(r);
-        CharMap<Constant> map = pool.map;
-        r.index += 2;
-        map.put(r.readChar(), null);
-        map.put(r.readChar(), null);
-
-        int len = r.readUnsignedShort();
-        for (int i = 0; i < len; i++) {
-            map.put(r.readChar(), null);
-        }
-
-        pool.init(r);
-
-        r.index += 2;
-
-        List<String> list = new ArrayList<>();
-
-        list.add(pool.getName(r));
-        list.add(pool.getName(r));
-
-        len = r.readUnsignedShort();
-        for (int i = 0; i < len; i++) {
-            list.add(pool.getName(r));
-        }
-
-        return list;
-    }
-
-    // endregion
-    public static ByteReader reader(Attribute attr) {
-        return SharedBuf.reader(attr.getRawData());
-    }
+	public static final int FTYPE_SIMPLE = 0;
+	public static final int FTYPE_FULL = 1;
+	public static final int FTYPE_REFLECT = 2;
+
+	public static final int MTYPE_SIMPLE = 3;
+	public static final int MTYPE_FULL = 4;
+	public static final int MTYPE_REFLECT = 5;
+
+	public static final int MFTYPE_LOD1 = 6;
+
+	public static final int CODE_ATTR = 7;
+	public static final int RECORD_ATTR = 8;
+
+	// region CLAZZ parse LOD 2
+
+	public static ConstantData parse(Class<?> o) {
+		String fn = o.getName().replace('.', '/').concat(".class");
+		ClassLoader cl = o.getClassLoader();
+		try (InputStream in = cl==null?ClassLoader.getSystemResourceAsStream(fn):cl.getResourceAsStream(fn)) {
+			return parse(IOUtil.getSharedByteBuf().readStreamFully(in));
+		} catch (Exception ignored) {}
+		return null;
+	}
+
+	public static ConstantData parse(byte[] buf) {
+		return parse(new ByteList(buf));
+	}
+
+	@SuppressWarnings("fallthrough")
+	public static ConstantData parse(DynByteBuf buf) {
+		DynByteBuf r = AsmShared.local().copy(buf);
+
+		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
+		int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
+
+		ConstantPool pool = new ConstantPool(r.readUnsignedShort());
+		pool.read(r, true);
+
+		ConstantData data = new ConstantData(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
+
+		int len = r.readUnsignedShort();
+
+		SimpleList<CstClass> itf = data.interfaces;
+		itf.ensureCapacity(len);
+		while (len-- > 0) itf.add((CstClass) pool.get(r));
+
+		len = r.readUnsignedShort();
+		SimpleList<FieldNode> fields = data.fields;
+		fields.ensureCapacity(len);
+		while (len-- > 0) {
+			Field field = new Field(r.readShort(), ((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str());
+			fields.add(field);
+
+			attr(pool, r, field, Signature.FIELD);
+		}
+
+		len = r.readUnsignedShort();
+		SimpleList<MethodNode> methods = data.methods;
+		methods.ensureCapacity(len);
+		while (len-- > 0) {
+			Method method = new Method(r.readShort(), data, ((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str());
+			methods.add(method);
+
+			attr(pool, r, method, Signature.METHOD);
+		}
+
+		attr(pool, r, data, Signature.CLASS);
+		// in order to compress
+		data.cp.clear();
+		return data;
+	}
+
+	private static void attr(ConstantPool pool, DynByteBuf r, Attributed node, int origin) {
+		int len = r.readUnsignedShort();
+		if (len == 0) return;
+
+		int origEnd = r.wIndex();
+
+		AttributeList list = node.attributes();
+		list.ensureCapacity(len);
+
+		while (len-- > 0) {
+			String name = ((CstUTF) pool.get(r)).str();
+			int length = r.readInt();
+			int end = r.rIndex + length;
+			r.wIndex(end);
+
+			Attribute attr = attr(node, pool, name, r, origin);
+			list.i_direct_add(null == attr ? new AttrUnknown(name, r.slice(length)) : attr);
+
+			// 忽略过长的属性.
+			r.rIndex = end;
+			r.wIndex(origEnd);
+		}
+	}
+
+	public static void withParsedAttribute(ConstantData data) {
+		ConstantPool pool = data.cp;
+
+		SimpleList<FieldNode> fields = data.fields;
+		for (int i = 0; i < fields.size(); i++) {
+			FieldNode node = fields.get(i);
+			if (node instanceof RawField) {
+				fields.set(i, new Field(data, (RawField) node));
+			} else {
+				AttributeList list = node.attributesNullable();
+				if (list != null) parseAttributes(node,pool,list,Signature.FIELD);
+			}
+		}
+
+		SimpleList<MethodNode> methods = data.methods;
+		for (int i = 0; i < methods.size(); i++) {
+			MethodNode node = methods.get(i);
+			if (node instanceof RawMethod) {
+				methods.set(i, new Method(data, (RawMethod) node));
+			} else {
+				AttributeList list = node.attributesNullable();
+				if (list != null) parseAttributes(node,pool, list,Signature.METHOD);
+			}
+		}
+
+		AttributeList list = data.attributesNullable();
+		if (list != null) parseAttributes(data,pool, list,Signature.CLASS);
+
+		pool.clear();
+	}
+
+	public static void parseAttributes(Attributed node, ConstantPool cp, AttributeList list, int origin) {
+		AsmShared as = AsmShared.local();
+
+		for (int i = 0; i < list.size(); i++) {
+			Attribute attr = list.get(i);
+			if (attr.getClass() == AttrUnknown.class) {
+				DynByteBuf data = as.copy(attr.getRawData());
+				attr = attr(node, cp, attr.name(), data, origin);
+				if (attr == null) continue;
+				list.set(i, attr);
+			}
+		}
+	}
+	@SuppressWarnings("unchecked")
+	public static <T extends Attribute> T parseAttribute(Attributed node, ConstantPool cp, TypedName<T> type, AttributeList list, int origin) {
+		Attribute attr = list == null ? null : (Attribute) list.getByName(type.name);
+		if (attr == null) return null;
+		if (attr.getClass() == AttrUnknown.class) {
+			attr = attr(node, cp, type.name, AsmShared.local().copy(attr.getRawData()), origin);
+			if (attr == null) {
+				if (skipToStringParse) return null;
+				throw new UnsupportedOperationException("不支持的属性");
+			}
+			list.add(attr);
+		}
+		return (T) attr;
+	}
+	private static boolean skipToStringParse;
+	public static Attribute attr(Attributed node, ConstantPool cp, String name, DynByteBuf data, int origin) {
+		if (skipToStringParse) return null;
+
+		int len = data.rIndex;
+		try {
+			switch (name) {
+				case "RuntimeVisibleTypeAnnotations":
+				case "RuntimeInvisibleTypeAnnotations": return new TypeAnnotations(name, data, cp);
+				case "RuntimeVisibleAnnotations":
+				case "RuntimeInvisibleAnnotations": return new Annotations(name, data, cp);
+				case "RuntimeVisibleParameterAnnotations":
+				case "RuntimeInvisibleParameterAnnotations": return new ParameterAnnotations(name, data, cp);
+				case "Signature": return Signature.parse(((CstUTF) cp.get(data)).str(), origin);
+				case "Synthetic": case "Deprecated": break;
+				// method only
+				case "MethodParameters": limit(origin,Signature.METHOD); return new MethodParameters(data, cp);
+				case "Exceptions": limit(origin,Signature.METHOD); return new AttrStringList(name, data, cp, 0);
+				case "AnnotationDefault": limit(origin,Signature.METHOD); return new AnnotationDefault(data, cp);
+				case "Code": limit(origin,Signature.METHOD); return new AttrCode((MethodNode) node, data, cp);
+				// field only
+				case "ConstantValue": limit(origin,Signature.FIELD); return new ConstantValue(cp.get(data));
+				// class only
+				case "Record": limit(origin,Signature.CLASS); return new AttrRecord(data, cp);
+				case "InnerClasses": limit(origin,Signature.CLASS); return new InnerClasses(data, cp);
+				case "Module": limit(origin,Signature.CLASS); return new AttrModule(data, cp);
+				case "ModulePackages": limit(origin,Signature.CLASS); return new AttrModulePackages(data, cp);
+				case "ModuleMainClass":
+				case "NestHost": limit(origin,Signature.CLASS); return new AttrClassRef(name, data, cp);
+				case "PermittedSubclasses":
+				case "NestMembers": limit(origin,Signature.CLASS); return new AttrStringList(name, data, cp, 0);
+				case "SourceFile": limit(origin,Signature.CLASS); return new AttrUTF(name, ((CstUTF) cp.get(data)).str());
+				case "BootstrapMethods": limit(origin,Signature.CLASS); return new BootstrapMethods(data, cp);
+				// 匿名类所属的方法
+				case "EnclosingMethod": limit(origin,Signature.CLASS); return new EnclosingMethod((CstClass) cp.get(data), (CstNameAndType) cp.get(data));
+				case "SourceDebugExtension": break;
+			}
+		} /*catch (OperationDone e) {
+			// slightly ignore
+		} */catch (Throwable e) {
+			skipToStringParse = true;
+			String s = node.toString();
+			skipToStringParse = false;
+			data.rIndex = len;
+			throw new IllegalStateException("无法读取"+s+"的属性'"+name+"',长度为"+data.readableBytes()+",数据:"+data.dump(), e);
+		}
+		return null;
+	}
+	private static void limit(int type, int except) {
+		if (type != except) throw new IllegalStateException("意料之外的属性,仅能在"+except+"中出现,却在"+type);
+	}
+
+	// endregion
+	// region CONSTANT DATA parse LOD 1
+
+	public static ConstantData parseConstants(Class<?> o) {
+		String fn = o.getName().replace('.', '/').concat(".class");
+		ClassLoader cl = o.getClassLoader();
+		try (InputStream in = cl==null?ClassLoader.getSystemResourceAsStream(fn):cl.getResourceAsStream(fn)) {
+			if (in != null) return parseConstants(IOUtil.getSharedByteBuf().readStreamFully(in).toByteArray());
+		} catch (IOException ignored) {}
+		return null;
+	}
+
+	public static ConstantData parseConstants(byte[] buf) {
+		return parseConstants(new ByteList(buf));
+	}
+
+	@Nonnull
+	public static ConstantData parseConstants(DynByteBuf buf) {
+		DynByteBuf r = AsmShared.local().copy(buf);
+
+		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
+		int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
+
+		ConstantPool pool = new ConstantPool(r.readUnsignedShort());
+		pool.read(r, false);
+
+		ConstantData data = new ConstantData(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
+
+		int len = r.readUnsignedShort();
+
+		SimpleList<CstClass> itf = data.interfaces;
+		itf.ensureCapacity(len);
+		while (len-- > 0) itf.add((CstClass) pool.get(r));
+
+		len = r.readUnsignedShort();
+		SimpleList<FieldNode> fields = data.fields;
+		fields.ensureCapacity(len);
+		while (len-- > 0) {
+			RawField field = new RawField(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
+			fields.add(field);
+
+			withUnparsedAttribute(pool, r, field);
+		}
+
+		len = r.readUnsignedShort();
+		SimpleList<MethodNode> methods = data.methods;
+		methods.ensureCapacity(len);
+		while (len-- > 0) {
+			RawMethod method = new RawMethod(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
+			method.cn(data.name);
+			methods.add(method);
+
+			withUnparsedAttribute(pool, r, method);
+		}
+
+		withUnparsedAttribute(pool, r, data);
+		return data;
+	}
+
+	private static void withUnparsedAttribute(ConstantPool pool, DynByteBuf r, Attributed node) {
+		int len = r.readUnsignedShort();
+		if (len == 0) return;
+
+		AttributeList list = node.attributes();
+		list.ensureCapacity(len);
+		while (len-- > 0) {
+			CstUTF name = (CstUTF) pool.get(r);
+			list.i_direct_add(new AttrUnknown(name, r.slice(r.readInt())));
+		}
+	}
+
+	// endregion
+	// region ACCESS parse LOD 0
+
+	public static AccessData parseAccess(byte[] buf) {
+		return parseAcc0(buf, new ByteList(buf));
+	}
+
+	@Nonnull
+	public static AccessData parseAcc0(byte[] dst, DynByteBuf buf) {
+		DynByteBuf r = AsmShared.local().copy(buf);
+
+		if (r.readInt() != 0xcafebabe) {
+			throw new IllegalArgumentException("Illegal header");
+		}
+		r.rIndex += 4; // ver
+
+		ConstantPool pool = AsmShared.local().constPool();
+		pool.init(r.readUnsignedShort());
+		pool.readName(r);
+
+		int cfo = r.rIndex; // acc
+		r.rIndex += 2;
+
+		AccessData data = new AccessData(dst, cfo, pool.getName(r), pool.getName(r));
+
+		int len = r.readUnsignedShort();
+		SimpleList<String> itf = new SimpleList<>(len);
+		while (len-- > 0) itf.add(pool.getName(r));
+
+		data.itf = itf;
+
+		for (int k = 0; k < 2; k++) {
+			len = r.readUnsignedShort();
+			List<AccessData.MOF> com = new SimpleList<>(len);
+			while (len-- > 0) {
+				int offset = r.rIndex;
+
+				char acc = r.readChar();
+
+				AccessData.MOF d = data.new MOF(((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str(), offset);
+				d.acc = acc;
+				com.add(d);
+
+				int attrs = r.readUnsignedShort();
+				for (int j = 0; j < attrs; j++) {
+					r.rIndex += 2;
+					int ol = r.readInt();
+					r.rIndex += ol;
+				}
+			}
+			if (k == 0) data.fields = com;
+			else data.methods = com;
+		}
+		return data;
+	}
+
+	// endregion
+	// region FOREACH CONSTANT LOD 0
+
+	public static void forEachConstant(DynByteBuf buf, Consumer<Constant> c) {
+		DynByteBuf r = AsmShared.local().copy(buf);
+		if (r.readInt() != 0xcafebabe) {
+			throw new IllegalArgumentException("Illegal header");
+		}
+
+		r.rIndex += 4; // ver
+
+		ConstantPool cp = AsmShared.local().constPool();
+		cp.init(r.readUnsignedShort());
+		cp.setAddListener(c);
+		cp.read(r, false);
+	}
+
+	// endregion
+
+	public static byte[] toByteArray(IClass c) {
+		return c.getBytes(AsmShared.getBuf()).toByteArray();
+	}
+	public static ByteList toByteArrayShared(IClass c) {
+		return (ByteList) c.getBytes(AsmShared.getBuf());
+	}
+
+	public static DynByteBuf reader(Attribute attr) {
+		return AsmShared.local().copy(attr.getRawData());
+	}
 }

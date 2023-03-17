@@ -1,37 +1,9 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.asm.type;
 
-import roj.asm.util.IGeneric;
+import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.function.UnaryOperator;
 
@@ -39,153 +11,170 @@ import java.util.function.UnaryOperator;
  * 泛型类型
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
-public class Generic implements IGeneric {
-    public static final byte
-            TYPE_TYPE_PARAM         = 0,
-            TYPE_INHERIT_TYPE_PARAM = 1,
-            TYPE_CLASS              = 2,
-            TYPE_INHERIT_CLASS      = 3,
-            TYPE_SUB_CLASS          = 4,
+public class Generic extends IGeneric {
+	public static final byte EX_NONE = 0, EX_SUPER = 1, EX_EXTENDS = 2;
 
-            EX_NONE = 0,
-            EX_SUPERS = 1,
-            EX_EXTENDS = -1;
+	public byte extendType;
+	private byte array;
 
-    public final byte type;
-    @Nonnull
-    public String owner;
-    @Nullable
-    public Generic subClass;
-    public int array;
-    public byte extendType;
-    @Nullable
-    public List<IGeneric> children;
+	public static Generic parameterized(Class<?> owner, Class<?>... params) {
+		List<Type> types = TypeHelper.parseMethod(TypeHelper.class2asm(params, owner));
+		Type own = types.remove(types.size()-1);
+		Generic g = new Generic(own.owner,own.array(),EX_NONE);
+		g.children = Helpers.cast(types);
+		return g;
+	}
 
-    public Generic(byte type, @Nonnull String owner, int array, byte extendType) {
-        this.type = type;
-        this.owner = owner;
-        this.array = array;
-        this.extendType = extendType;
-    }
+	public Generic() {}
 
-    public void addChild(IGeneric child) {
-        if (children == null) {
-            children = new LinkedList<>();
-        }
-        //if(child.arrayLevel != 0)
-        //    throw new IllegalArgumentException("Child couldn't be array");
-        //if(child.subClass)
-        //    throw new IllegalArgumentException("Child couldn't be subClass");
+	public Generic(String owner, int array, byte extendType) {
+		this.extendType = extendType;
+		this.owner = owner;
+		setArrayDim(array);
+	}
 
-        children.add(child);
-    }
+	public boolean isRealGeneric() {
+		return !children.isEmpty() || "*".equals(owner) || extendType != 0 || sub != null;
+	}
 
-    public void appendGeneric(CharList sb) {
-        if (owner.equals("*")) {
-            sb.append('*');
-        } else {
-            sb.append(getCatDesc());
-            sb.append(owner);
-            if (children != null && !children.isEmpty()) {
-                sb.append('<');
-                for (IGeneric child : children) {
-                    child.appendGeneric(sb);
-                }
-                sb.append('>');
-            }
-            if (subClass != null) {
-                subClass.appendGeneric(sb);
-            } else {
-                sb.append(';');
-            }
-        }
-    }
+	public void toDesc(CharList sb) {
+		if (extendType != 0) sb.append(extendType == EX_SUPER ? '-' : '+');
+		for (int i = array&0xFF; i > 0; i--) sb.append('[');
+		sb.append('L').append(owner);
 
-    private char[] getCatDesc() {
-        if (type == TYPE_SUB_CLASS)
-            return new char[]{'.'};
-        int arrLen = array + 1 + (type & 1) + (extendType != 0 ? 1 : 0);
-        char[] chars = new char[arrLen];
+		if (!children.isEmpty()) {
+			sb.append('<');
+			for (int i = 0; i < children.size(); i++) {
+				children.get(i).toDesc(sb);
+			}
+			sb.append('>');
+		}
 
-        int i = 0;
-        if (extendType != 0)
-            chars[i++] = extendType == EX_SUPERS ? '-' : '+';
-        if ((type & 1) != 0)
-            chars[i++] = ':';
-        for (; i < arrLen - 1; i++) {
-            chars[i] = '[';
-        }
+		if (sub != null) sub.toDesc(sb);
+		else sb.append(';');
+	}
 
-        switch (type) {
-            case TYPE_CLASS:
-            case TYPE_INHERIT_CLASS:
-                chars[arrLen - 1] = 'L';
-                return chars;
-            case TYPE_TYPE_PARAM:
-            case TYPE_INHERIT_TYPE_PARAM:
-                chars[arrLen - 1] = 'T';
-                return chars;
-        }
-        throw new IllegalArgumentException(String.valueOf(type));
-    }
+	public void rename(UnaryOperator<String> fn) {
+		if (sub != null) {
+			recursionSubs(fn, sub, new CharList().append(owner), 1);
+		}
+		owner = fn.apply(owner);
 
+		for (int i = 0; i < children.size(); i++) {
+			children.get(i).rename(fn);
+		}
+	}
 
-    protected void rename(UnaryOperator<String> renameFunction) {
-        if (type != TYPE_TYPE_PARAM && type != TYPE_INHERIT_TYPE_PARAM && type != TYPE_SUB_CLASS)
-            owner = renameFunction.apply(owner);
-        if (subClass != null) {
-            String tmp = renameFunction.apply(owner + '$' + subClass.owner);
-            int idx = tmp.indexOf('$');
-            owner = tmp.substring(0, idx);
-            subClass.owner = tmp.substring(idx + 1);
-        }
-        if (children != null) {
-            for (IGeneric value : children) {
-                Signature.rename0(renameFunction, value);
-            }
-        }
-    }
+	private void recursionSubs(UnaryOperator<String> fn, GenericSub sub, CharList t, int dollar) {
+		t.append('$').append(sub.owner);
 
-    public void appendString(CharList sb, Signature fn) {
-        switch (extendType) {
-            case EX_SUPERS:
-                sb.append("? supers ");
-                break;
-            case EX_EXTENDS:
-                sb.append("? extends ");
-                break;
-        }
-        if (owner.equals("*")) {
-            sb.append('?');
-        } else if (fn != null && (type == TYPE_TYPE_PARAM || type == TYPE_INHERIT_TYPE_PARAM)) {
-            fn.appendTypeParameter(sb, owner, null);
-        } else {
-            int start = owner.lastIndexOf('/') + 1;
-            sb.append(owner, start, owner.length() - start);
-        }
-        if (children != null && !children.isEmpty()) {
-            sb.append('<');
-            for (int i = 0; i < children.size(); i++) {
-                children.get(i).appendString(sb, fn);
-                sb.append(", ");
-            }
-            sb.setIndex(sb.length() - 2);
-            sb.append('>');
-        }
-        if (subClass != null) {
-            subClass.appendString(sb.append('.'), fn);
-        }
-        for (int i = 0; i < array; i++) {
-            sb.append("[]");
-        }
-    }
+		if (sub.sub != null) {
+			int len = t.length();
+			recursionSubs(fn, sub.sub, t, dollar+1);
+			t.setLength(len);
+		}
 
-    public String toString() {
-        CharList cl = new CharList();
-        appendString(cl, null);
-        return cl.toString();
-    }
+		String rpl = fn.apply(t.toString());
+		if (t.equals(rpl)) return;
+
+		int i = 0;
+		while (dollar-- > 0) {
+			i = rpl.indexOf('$', i);
+			if (i < 0) throw new IllegalStateException("Non-static sub class renaming error: " + t + " => " + rpl);
+		}
+		sub.owner = rpl.substring(i+1);
+	}
+
+	public void toString(CharList sb) {
+		switch (extendType) {
+			case EX_SUPER: sb.append("? super "); break;
+			case EX_EXTENDS: sb.append("? extends "); break;
+		}
+
+		int start = owner.lastIndexOf('/') + 1;
+		sb.append(owner, start, owner.length());
+
+		if (!children.isEmpty()) {
+			sb.append('<');
+			int i = 0;
+			while (true) {
+				children.get(i++).toString(sb);
+				if (i == children.size()) break;
+				sb.append(", ");
+			}
+			sb.append('>');
+		}
+
+		if (sub != null) sub.toString(sb.append('.'));
+
+		for (int i = array&0xFF; i > 0; i--) sb.append("[]");
+	}
+
+	@Override
+	public void checkPosition(int env, int pos) {}
+
+	@Override
+	public byte genericType() {
+		return GENERIC_TYPE;
+	}
+
+	@Override
+	public Type rawType() {
+		return new Type(owner, array&0xFF);
+	}
+
+	@Override
+	public String owner() {
+		return owner;
+	}
+
+	@Override
+	public void owner(String owner) {
+		if (sub != null) throw new IllegalStateException("sub != null");
+		this.owner = owner;
+	}
+
+	@Override
+	public int array() {
+		return array&0xFF;
+	}
+
+	@Override
+	public void setArrayDim(int array) {
+		if (array > 255 || array < 0)
+			throw new ArrayIndexOutOfBoundsException(array);
+		this.array = (byte) array;
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+
+		Generic generic = (Generic) o;
+
+		if (extendType != generic.extendType) return false;
+		if (array != generic.array) return false;
+		if (!owner.equals(generic.owner)) return false;
+		if (sub != null ? !sub.equals(generic.sub) : generic.sub != null) return false;
+		return children.equals(generic.children);
+	}
+
+	@Override
+	public int hashCode() {
+		int h = extendType;
+		h = 31 * h + owner.hashCode();
+		h = 31 * h + (sub != null ? sub.hashCode() : 0);
+		h = 31 * h + array;
+		h = 31 * h + children.hashCode();
+		return h;
+	}
+
+	public String toString() {
+		CharList cl = IOUtil.getSharedCharBuf();
+		toString(cl);
+		return cl.toString();
+	}
 }

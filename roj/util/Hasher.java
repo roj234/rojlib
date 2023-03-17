@@ -1,28 +1,3 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.util;
 
 
@@ -32,39 +7,39 @@ package roj.util;
  * @author Maximilian Luz
  */
 public class Hasher {
-    private static final int FNV_PRIME = 16777619;
-    private static final int FNV_BASE = (int) 2166136261L;
+	private static final int FNV_PRIME = 16777619;
+	private static final int FNV_BASE = (int) 2166136261L;
 
-    private int hash;
+	private int hash;
 
-    public Hasher() {
-        this.hash = FNV_BASE;
-    }
+	public Hasher() {
+		this.hash = FNV_BASE;
+	}
 
-    public int getHash() {
-        return hash;
-    }
+	public int getHash() {
+		return hash;
+	}
 
-    public Hasher add(Object obj) {
-        hash = ((obj != null ? obj.hashCode() : 0) ^ hash) * FNV_PRIME;
-        return this;
-    }
+	public Hasher add(Object obj) {
+		hash = ((obj != null ? obj.hashCode() : 0) ^ hash) * FNV_PRIME;
+		return this;
+	}
 
-    public Hasher add(int obj) {
-        hash = ((obj ^ (obj >> 16)) ^ hash) * FNV_PRIME;
-        return this;
-    }
+	public Hasher add(int obj) {
+		hash = ((obj ^ (obj >> 16)) ^ hash) * FNV_PRIME;
+		return this;
+	}
 
-    public Hasher add(float obj) {
-        return add(Float.floatToIntBits(obj));
-    }
+	public Hasher add(float obj) {
+		return add(Float.floatToIntBits(obj));
+	}
 
-    public Hasher add(long obj) {
-        hash = (int) (((obj ^ (obj >> 32)) ^ hash) * FNV_PRIME);
-        return this;
-    }
+	public Hasher add(long obj) {
+		hash = (int) (((obj ^ (obj >> 32)) ^ hash) * FNV_PRIME);
+		return this;
+	}
 
-    public Hasher add(double obj) {
-        return add(Double.doubleToLongBits(obj));
-    }
+	public Hasher add(double obj) {
+		return add(Double.doubleToLongBits(obj));
+	}
 }

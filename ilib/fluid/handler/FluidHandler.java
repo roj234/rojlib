@@ -1,47 +1,19 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-/**
- * This file is a part of more items mod (MI)
- * (L) Copyleft 2018-20XX 版权没有，仿冒不究
- * <p>
- * File version : 不知道...
- * Author: R__
- * Filename: FluidHandler.java
- */
 package ilib.fluid.handler;
+
+import roj.collect.IntIterator;
+import roj.collect.MyBitSet;
 
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.EnumFacing;
+
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidTank;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
+import net.minecraftforge.fluids.capability.FluidTankPropertiesWrapper;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidTankProperties;
 
@@ -49,345 +21,204 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 public abstract class FluidHandler implements IFluidHandler, ICapabilityProvider {
+	public FluidTank[] tanks;
 
-    public static final int[] E = new int[0];
-    // NBT Tags
-    protected static final String SIZE_NBT_TAG = "Size";
-    protected static final String TANK_ID_NBT_TAG = "TankID";
-    protected static final String TANKS_NBT_TAG = "Tanks";
+	public static class SimpleImpl extends FluidHandler {
+		protected MyBitSet inputs, outputs;
+		public boolean changed;
 
-    // Tanks
-    public FluidTank[] tanks;
+		public SimpleImpl(int[] inputs, int[] outputs, FluidTank... tanks) {
+			this.tanks = tanks;
+			this.inputs = MyBitSet.from(inputs);
+			this.outputs = MyBitSet.from(outputs);
+		}
 
-    public static class StdFluidHandler extends FluidHandler {
-        protected int[] inputs;
-        protected int[] outputs;
+		public SimpleImpl(int inputs, int outputs, FluidTank... tanks) {
+			this.tanks = tanks;
+			this.inputs = MyBitSet.fromRange(0, inputs);
+			this.outputs = MyBitSet.fromRange(inputs, inputs + outputs);
+		}
 
-        public StdFluidHandler(FluidTank... tanks) {
-            this.tanks = tanks;
-            this.inputs = this.outputs = E;
-        }
+		public SimpleImpl(MyBitSet inputs, MyBitSet outputs, FluidTank... tanks) {
+			this.tanks = tanks;
+			this.inputs = inputs;
+			this.outputs = outputs;
+		}
 
-        public StdFluidHandler(int[] inputs, int[] outputs, FluidTank... tanks) {
-            this.tanks = tanks;
-            this.inputs = inputs;
-            this.outputs = outputs;
-        }
+		@Override
+		public void onTankChanged(FluidTank tank) {
+			changed = true;
+		}
 
-        @Override
-        protected void setupTanks() {
-        }
+		@Override
+		protected MyBitSet getInputTanks() {
+			return inputs;
+		}
 
-        @Override
-        protected int[] getInputTanks() {
-            return inputs;
-        }
+		@Override
+		protected MyBitSet getOutputTanks() {
+			return outputs;
+		}
+	}
 
-        @Override
-        protected int[] getOutputTanks() {
-            return outputs;
-        }
-    }
+	public FluidHandler() {}
 
-    /**
-     * Default constructor, calls the setupTanks method to setup the tanks
-     */
-    public FluidHandler() {
-        setupTanks();
-    }
+	protected abstract MyBitSet getInputTanks();
 
+	protected abstract MyBitSet getOutputTanks();
 
-    /*******************************************************************************************************************
-     * Abstract Methods                                                                                                *
-     *******************************************************************************************************************/
+	/*******************************************************************************************************************
+	 * FluidHandler                                                                                                    *
+	 *******************************************************************************************************************/
 
-    /**
-     * Used to set up the tanks needed. You can insert any number of tanks
-     */
-    protected abstract void setupTanks();
+	public void onTankChanged(FluidTank tank) {}
 
-    /**
-     * Which tanks can input
-     *
-     * @return An array with the indexes of the input tanks
-     */
-    protected abstract int[] getInputTanks();
+	protected boolean canFill(Fluid fluid) {
+		for (IntIterator i = getInputTanks().iterator(); i.hasNext(); ) {
+			FluidStack fluid1 = tanks[i.nextInt()].getFluid();
+			if (fluid1 == null || fluid1.getFluid() == null || fluid1.getFluid() == fluid) return true;
+		}
+		return false;
+	}
 
-    /**
-     * Which tanks can output
-     *
-     * @return An array with the indexes of the output tanks
-     */
-    protected abstract int[] getOutputTanks();
+	protected boolean canDrain(Fluid fluid) {
+		for (IntIterator i = getOutputTanks().iterator(); i.hasNext(); ) {
+			FluidStack fluid1 = tanks[i.nextInt()].getFluid();
+			if (fluid1 != null && (fluid == null || fluid1.getFluid() == fluid)) return true;
+		}
+		return false;
+	}
 
-    /*******************************************************************************************************************
-     * FluidHandler                                                                                                    *
-     *******************************************************************************************************************/
+	public NBTTagCompound writeToNBT(NBTTagCompound tag) {
+		NBTTagList list = new NBTTagList();
+		for (FluidTank tank : tanks) {
+			if (tank != null && tank.getFluid() != null) {
+				NBTTagCompound tag1 = new NBTTagCompound();
+				tank.writeToNBT(tag1);
+				list.appendTag(tag1);
+			} else {
+				list.appendTag(new NBTTagCompound());
+			}
+		}
+		tag.setTag("Tanks", list);
+		return tag;
+	}
 
-    /**
-     * Called when something happens to the tank, you should mark the block for update here if a tile
-     */
-    public void onTankChanged(FluidTank tank, boolean superUpdate) {
-        //markForUpdate(3);
-    }
+	public void readFromNBT(NBTTagCompound tag) {
+		NBTTagList list = tag.getTagList("Tanks", 10);
+		int x = Math.min(tanks.length, list.tagCount());
 
-    /**
-     * Used to convert a number of buckets into MB
-     *
-     * @param buckets How many buckets
-     * @return The amount of buckets in MB
-     */
-    public int bucketsToMB(int buckets) {
-        return Fluid.BUCKET_VOLUME * buckets;
-    }
+		for (int i = 0; i < x; i++) {
+			NBTTagCompound tag1 = list.getCompoundTagAt(i);
+			if (tag1.isEmpty()) {
+				tanks[i].setFluid(null);
+			} else {
+				tanks[i].readFromNBT(tag1);
+			}
+		}
+	}
 
-    /**
-     * Returns true if the given fluid can be inserted
-     * <p>
-     * More formally, this should return true if fluid is able to enter
-     */
-    protected boolean canFill(Fluid fluid) {
-        for (Integer x : getInputTanks()) {
-            if (x < tanks.length)
-                if ((tanks[x].getFluid() == null || tanks[x].getFluid().getFluid() == null) ||
-                        (tanks[x].getFluid() != null && tanks[x].getFluid().getFluid() == fluid))
-                    return true;
-        }
-        return false;
-    }
+	public boolean hasCapability(@Nonnull Capability<?> c, EnumFacing facing) {
+		return c == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY;
+	}
 
-    /**
-     * Returns true if the given fluid can be extracted
-     * <p>
-     * More formally, this should return true if fluid is able to leave
-     */
-    protected boolean canDrain(Fluid fluid) {
-        for (Integer x : getOutputTanks()) {
-            if (x < tanks.length)
-                if (tanks[x].getFluid() != null && tanks[x].getFluid().getFluid() != null)
-                    return true;
-        }
-        return false;
-    }
+	@SuppressWarnings("unchecked")
+	public <T> T getCapability(@Nonnull Capability<T> c, EnumFacing facing) {
+		return c == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY ? (T) this : null;
+	}
 
-    /*******************************************************************************************************************
-     * Tile Methods                                                                                                    *
-     *******************************************************************************************************************/
+	/**
+	 * Returns an array of objects which represent the internal tanks.
+	 * These objects cannot be used to manipulate the internal tanks.
+	 *
+	 * @return Properties for the relevant internal tanks.
+	 */
+	@Override
+	public IFluidTankProperties[] getTankProperties() {
+		IFluidTankProperties[] prop = new IFluidTankProperties[tanks.length];
+		for (int i = 0; i < tanks.length; i++) {
+			prop[i] = new FluidTankPropertiesWrapper(tanks[i]);
+		}
+		return prop;
+	}
 
-    /**
-     * Used to save the object to an NBT tag
-     *
-     * @param compound The tag to save to
-     */
-    public NBTTagCompound writeToNBT(NBTTagCompound compound) {
-        int id = 0;
-        compound.setInteger(SIZE_NBT_TAG, tanks.length);
-        NBTTagList tagList = new NBTTagList();
-        for (FluidTank tank : tanks) {
-            if (tank != null) {
-                NBTTagCompound tankCompound = new NBTTagCompound();
-                tankCompound.setByte(TANK_ID_NBT_TAG, (byte) id);
-                id += 1;
-                tank.writeToNBT(tankCompound);
-                tagList.appendTag(tankCompound);
-            }
-        }
-        compound.setTag(TANKS_NBT_TAG, tagList);
-        return compound;
-    }
+	@Override
+	public int fill(FluidStack stack, boolean doFill) {
+		if (stack != null && stack.getFluid() != null) {
+			for (IntIterator i = getInputTanks().iterator(); i.hasNext(); ) {
+				FluidTank tank = tanks[i.nextInt()];
+				int filled = tank.fill(stack, false);
+				if (filled > 0) {
+					if (!doFill) return filled;
 
-    /**
-     * Used to read from an NBT tag
-     *
-     * @param compound The tag to read from
-     */
-    public void readFromNBT(NBTTagCompound compound) {
-        NBTTagList tagList = compound.getTagList(TANKS_NBT_TAG, 10);
-        int size = compound.getInteger(SIZE_NBT_TAG);
-        if (size != tanks.length && compound.hasKey(SIZE_NBT_TAG)) tanks = new FluidTank[size];
-        for (int x = 0; x < tagList.tagCount(); x++) {
-            NBTTagCompound tankCompound = tagList.getCompoundTagAt(x);
-            byte position = tankCompound.getByte(TANK_ID_NBT_TAG);
-            if (position < tanks.length)
-                tanks[position].readFromNBT(tankCompound);
-        }
-    }
+					int actual = tank.fill(stack, true);
+					onTankChanged(tank);
+					return actual;
+				}
+			}
+		}
+		return 0;
+	}
 
-    public boolean hasCapability(@Nonnull Capability<?> capability, EnumFacing facing) {
-        return capability == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY;
-    }
+	public boolean fillAtomically(int x, FluidStack stack, boolean doFill) {
+		if (stack != null && stack.getFluid() != null) {
+			FluidTank tank = tanks[x];
+			if (tank.fill(stack, false) == stack.amount) {
+				if (!doFill) return true;
+				tank.fill(stack, true);
+				onTankChanged(tank);
+				return true;
+			}
+		}
+		return false;
+	}
 
-    @SuppressWarnings("unchecked")
-    public <T> T getCapability(@Nonnull Capability<T> capability, EnumFacing facing) {
-        if (capability == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY)
-            return (T) this;
-        else
-            return null;
-    }
+	@Nullable
+	@Override
+	public FluidStack drain(int amount, boolean doDrain) {
+		for (IntIterator i = getOutputTanks().iterator(); i.hasNext(); ) {
+			FluidTank tank = tanks[i.nextInt()];
+			FluidStack stack = tank.drain(amount, false);
+			if (stack != null) {
+				if (!doDrain) return stack;
 
-    /*******************************************************************************************************************
-     * IFluidHandler                                                                                                   *
-     *******************************************************************************************************************/
+				tank.drain(amount, true);
+				onTankChanged(tank);
+				return stack;
+			}
+		}
+		return null;
+	}
 
-    /**
-     * Returns an array of objects which represent the internal tanks.
-     * These objects cannot be used to manipulate the internal tanks.
-     *
-     * @return Properties for the relevant internal tanks.
-     */
-    @Override
-    public IFluidTankProperties[] getTankProperties() {
-        IFluidTankProperties[] properties = new IFluidTankProperties[tanks.length];
-        for (int x = 0; x < tanks.length; x++) {
-            FluidTank tank = tanks[x];
-            properties[x] = new IFluidTankProperties() {
-                @Nullable
-                @Override
-                public FluidStack getContents() {
-                    return tank.getFluid();
-                }
+	@Nullable
+	@Override
+	public FluidStack drain(FluidStack stack, boolean doDrain) {
+		for (IntIterator i = getOutputTanks().iterator(); i.hasNext(); ) {
+			FluidTank tank = tanks[i.nextInt()];
 
-                @Override
-                public int getCapacity() {
-                    return tank.getCapacity();
-                }
+			FluidStack in = tank.getFluid();
+			if (in == null || in.getFluid() != stack.getFluid()) continue;
+			in = tank.drain(stack.amount, false);
 
-                @Override
-                public boolean canFill() {
-                    return tank.canFill();
-                }
+			if (in != null) {
+				if (!doDrain) return in;
+				tank.drain(stack.amount, true);
+				onTankChanged(tank);
+				return in;
+			}
+		}
+		return null;
+	}
 
-                @Override
-                public boolean canDrain() {
-                    return tank.canDrain();
-                }
-
-                @Override
-                public boolean canFillFluidType(FluidStack fluidStack) {
-                    return tank.canFillFluidType(fluidStack);
-                }
-
-                @Override
-                public boolean canDrainFluidType(FluidStack fluidStack) {
-                    return tank.canDrainFluidType(fluidStack);
-                }
-            };
-        }
-        return properties;
-    }
-
-    public boolean canAndFill(int x, FluidStack resource, boolean doFill) {
-        if (resource != null && resource.getFluid() != null) {
-            if (tanks[x].fill(resource, false) == resource.amount) {
-                if (!doFill)
-                    return true;
-                boolean flag = tanks[x].getFluid() == null || tanks[x].getFluidAmount() == 0;
-                tanks[x].fill(resource, true);
-                onTankChanged(tanks[x], flag);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Fills fluid into internal tanks, distribution is left entirely to the IFluidHandler.
-     *
-     * @param resource FluidStack representing the Fluid and maximum amount of fluid to be filled.
-     * @param doFill   If false, fill will only be simulated.
-     * @return Amount of resource that was (or would have been, if simulated) filled.
-     */
-    @Override
-    public int fill(FluidStack resource, boolean doFill) {
-        if (resource != null && resource.getFluid() != null && canFill(resource.getFluid())) {
-            for (Integer x : getInputTanks()) {
-                if (x < tanks.length) {
-                    int filled = tanks[x].fill(resource, false);
-                    if (filled > 0) {
-                        if (!doFill)
-                            return filled;
-                        boolean flag = tanks[x].getFluid() == null || tanks[x].getFluidAmount() == 0;
-                        int actual = tanks[x].fill(resource, true);
-                        onTankChanged(tanks[x], flag);
-                        return actual;
-                    }
-                }
-            }
-        }
-        return 0;
-    }
-
-    public boolean canAndDrain(int x, int amount, boolean doDrain) {
-        if (x < tanks.length) {
-            FluidStack stack = tanks[x].drain(amount, false);
-            if (stack != null && stack.amount == amount) {
-                if (!doDrain)
-                    return true;
-                tanks[x].drain(amount, true);
-
-                onTankChanged(tanks[x], tanks[x].getFluid() == null || tanks[x].getFluidAmount() == 0);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Drains fluid out of internal tanks, distribution is left entirely to the IFluidHandler.
-     * <p/>
-     * This method is not Fluid-sensitive.
-     *
-     * @param maxDrain Maximum amount of fluid to drain.
-     * @param doDrain  If false, drain will only be simulated.
-     * @return FluidStack representing the Fluid and amount that was (or would have been, if
-     * simulated) drained.
-     */
-    @Nullable
-    @Override
-    public FluidStack drain(int maxDrain, boolean doDrain) {
-        FluidStack fluidStack;
-        for (Integer x : getOutputTanks()) {
-            if (x < tanks.length) {
-                fluidStack = tanks[x].drain(maxDrain, false);
-                if (fluidStack != null) {
-                    if (!doDrain)
-                        return fluidStack;
-                    tanks[x].drain(maxDrain, true);
-                    onTankChanged(tanks[x], tanks[x].getFluid() == null || tanks[x].getFluidAmount() == 0);
-                    return fluidStack;
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Drains fluid out of internal tanks, distribution is left entirely to the IFluidHandler.
-     *
-     * @param resource FluidStack representing the Fluid and maximum amount of fluid to be drained.
-     * @param doDrain  If false, drain will only be simulated.
-     * @return FluidStack representing the Fluid and amount that was (or would have been, if
-     * simulated) drained.
-     */
-    @Nullable
-    @Override
-    public FluidStack drain(FluidStack resource, boolean doDrain) {
-        FluidStack fluidStack;
-        for (Integer x : getOutputTanks()) {
-            if (x < tanks.length) {
-                fluidStack = tanks[x].getFluid();
-                if (fluidStack == null || fluidStack.getFluid() != resource.getFluid()) continue;
-                fluidStack = tanks[x].drain(resource.amount, false);
-
-                if (fluidStack != null) {
-                    if (!doDrain)
-                        return fluidStack;
-                    tanks[x].drain(resource.amount, true);
-                    onTankChanged(tanks[x], tanks[x].getFluid() == null || tanks[x].getFluidAmount() == 0);
-                    return fluidStack;
-                }
-            }
-        }
-        return null;
-    }
+	public boolean drainAtomically(int id, int amount, boolean doDrain) {
+		FluidTank tank = tanks[id];
+		FluidStack stack = tank.drain(amount, false);
+		if (stack != null && stack.amount == amount) {
+			if (!doDrain) return true;
+			tank.drain(amount, true);
+			onTankChanged(tank);
+			return true;
+		}
+		return false;
+	}
 }

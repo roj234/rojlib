@@ -1,845 +1,741 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.collect;
 
-import roj.concurrent.OperationDone;
-import roj.math.MutableBoolean;
+import roj.collect.TrieEntry.Itr;
+import roj.collect.TrieEntry.KeyItr;
+import roj.io.IOUtil;
+import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import static roj.collect.IntMap.NOT_USING;
+import static roj.collect.IntMap.UNDEFINED;
 
 /**
- * No description provided
- *
+ * Enhance: 改成byte[]存储数据（用VIVIC），当然如果用Java9就没有必要了
  * @author Roj234
- * @version 0.1
  * @since 2021/2/21 10:39
  */
-public class TrieTree<V> implements Map<CharSequence, V> {
-    static final int COMPRESS_START_DEPTH = 1,
-            MIN_REMOVE_ARRAY_SIZE = 8;
-
-    static class Entry<V> extends TrieEntry {
-        V value;
-
-        @SuppressWarnings("unchecked")
-        Entry(char c) {
-            super(c);
-            this.value = (V) NOT_USING;
-        }
-
-        Entry(char c, Entry<V> entry) {
-            super(c);
-            this.value = entry.value;
-        }
-        
-        int recursionSum() {
-            int i = value == IntMap.NOT_USING ? 0 : 1;
-            if (size > 0) {
-                for (TrieEntry value : this) {
-                    i += value.recursionSum();
-                }
-            }
-            return i;
-        }
-
-        @SuppressWarnings("unchecked")
-        public int copyFrom(TrieEntry x) {
-            Entry<?> node = (Entry<?>) x;
-            int v = 0;
-            if(node.value != IntMap.NOT_USING && value == IntMap.NOT_USING) {
-                this.value = (V) node.value;
-                v = 1;
-            }
-
-            for (TrieEntry entry : node) {
-                TrieEntry sub = getChild(entry.c);
-                if (sub == null) putChild(sub = newInstance());
-                v += sub.copyFrom(entry);
-            }
-            return v;
-        }
-
-        @Override
-        protected Entry<V> newInstance() {
-            Entry<V> entry = new Entry<>(c);
-            entry.value = value;
-            return entry;
-        }
-
-        public V getValue() {
-            if (value == IntMap.NOT_USING)
-                throw new UnsupportedOperationException();
-            return value;
-        }
-
-        public V setValue(V value) {
-            if (value == IntMap.NOT_USING)
-                throw new UnsupportedOperationException();
-            V ov = this.value;
-            this.value = value;
-            return ov;
-        }
-    }
-
-    static final class PEntry<V> extends Entry<V> {
-        CharSequence val;
-
-        PEntry(CharSequence val) {
-            super(val.charAt(0));
-            this.val = val;
-        }
-
-        PEntry(CharSequence val, Entry<V> entry) {
-            super(val.charAt(0), entry);
-            this.val = val;
-        }
-
-        @Override
-        protected Entry<V> newInstance() {
-            Entry<V> entry = new PEntry<>(val);
-            entry.value = value;
-            return entry;
-        }
-
-        CharSequence text() {
-            return val;
-        }
-
-        @Override
-        void append(CharList sb) {
-            sb.append(val);
-        }
-
-        @Override
-        int length() {
-            return val.length();
-        }
-
-        @Override
-        public String toString() {
-            return "PE{" + val + '}';
-        }
-    }
-
-    Entry<V> root = new Entry<>((char) 0);
-    int size = 0;
-
-    public TrieTree() {
-    }
-
-    public TrieTree(Map<CharSequence, V> map) {
-        putAll(map);
-    }
-
-    public void addTrieTree(TrieTree<? extends V> m) {
-        size += root.copyFrom(Helpers.cast(m.root));
-    }
-
-    @SuppressWarnings("unchecked")
-    Entry<V> entryForPut(CharSequence s, int i, int len) {
-        if (len - i < 0)
-            throw new IllegalArgumentException("delta length < 0");
-
-        Entry<V> entry = root;
-        Entry<V> prev;
-        for (; i < len; i++) {
-            char c = s.charAt(i);
-            prev = entry;
-            entry = (Entry<V>) entry.getChild(c);
-            if (entry == null) {
-                // 前COMPRESS_START_DEPTH个字符, 避免频繁插入带来效率损失
-                if (len - i == 1 || i < COMPRESS_START_DEPTH) {
-                    prev.putChild(entry = new Entry<>(c));
-                } else {
-                    prev.putChild(entry = new PEntry<>(s.subSequence(i, len)));
-                    break;
-                }
-            } else if (entry.text() != null) { // # split
-                // PEntry
-
-                final CharSequence text = entry.text();
-
-                // lastMatch = 1; // of i(minAdd) off
-                int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
-                // a - bcd
-                if (lastMatch == text.length()) {
-                    // do nothing... as it for next
-                    i += lastMatch - 1;
-                } else {
-
-                    // [0 - 2) => bc
-                    if (lastMatch == 1) {
-                        prev.putChild(entry = new Entry<>(text.charAt(0), entry));
-                    } else {
-                        ((PEntry<V>) entry).val = text.subSequence(0, lastMatch);
-                    }
-
-                    // [2, 3) => d
-                    Entry<V> child;
-                    if (text.length() - 1 == lastMatch) {
-                        // only one char
-                        child = new Entry<>(text.charAt(lastMatch), entry);
-                    } else {
-                        child = new PEntry<>(text.subSequence(lastMatch, text.length()), entry);
-                    }
-
-                    entry.resetMap();
-                    entry.value = (V) IntMap.NOT_USING;
-                    entry.putChild(child);
-
-                    //System.out.println("E to " + entry + " and " + child);
-
-                    if (len - i - 1 == lastMatch) {
-                        child = new Entry<>(s.charAt(len - 1));
-                    } else {
-                        if (len == i + lastMatch) {
-                            // entry = child
-                            break;
-                        } else {
-                            child = new PEntry<>(s.subSequence(i + lastMatch, len));
-                        }
-                    }
-
-                    entry.putChild(child);
-                    entry = child;
-
-                    break;
-                }
-            }
-        }
-        if (entry.value == IntMap.NOT_USING) {
-            size++;
-            entry.value = null;
-        }
-        return entry;
-    }
-
-    @SuppressWarnings("unchecked")
-    public Entry<V> getEntry(CharSequence s, int i, int len) {
-        if (len - i < 0)
-            throw new IllegalArgumentException("delta length < 0");
-
-        Entry<V> entry = root;
-        for (; i < len; i++) {
-            entry = (Entry<V>) entry.getChild(s.charAt(i));
-            if (entry == null)
-                return null;
-            final CharSequence text = entry.text();
-            if (text != null) {
-                int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
-                if (lastMatch != text.length())
-                    return null;
-                i += text.length() - 1;
-            }
-        }
-        return entry.value != IntMap.NOT_USING ? entry : null;
-    }
-
-    public Entry<V> getRoot() {
-        return root;
-    }
-
-    @Override
-    public int size() {
-        return size;
-    }
-
-    @Override
-    public boolean isEmpty() {
-        return size == 0;
-    }
-
-    @Override
-    public V put(CharSequence key, V e) {
-        return put(key, 0, key.length(), e);
-    }
-
-    public V put(CharSequence key, int len, V e) {
-        return put(key, 0, len, e);
-    }
-
-    public V put(CharSequence key, int off, int len, V e) {
-        Entry<V> entry = entryForPut(key, off, len);
-        V v = entry.value;
-        entry.value = e;
-
-        return v;
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public void putAll(@Nonnull Map<? extends CharSequence, ? extends V> m) {
-        if (m instanceof TrieTree) {
-            addTrieTree((TrieTree<? extends V>) m);
-            return;
-        }
-        for (Map.Entry<? extends CharSequence, ? extends V> entry : m.entrySet()) {
-            this.put(entry.getKey(), entry.getValue());
-        }
-    }
-
-    @Override
-    public V remove(Object k) {
-        CharSequence s = (CharSequence) k;
-        return remove(s, 0, s.length(), NOT_USING);
-    }
-
-    public V remove(CharSequence s, int len) {
-        return remove(s, 0, len, NOT_USING);
-    }
-
-    public V remove(CharSequence s, int i, int len) {
-        return remove(s, i, len, NOT_USING);
-    }
-
-    @SuppressWarnings("unchecked")
-    V remove(CharSequence s, int i, int len, Object tc) {
-        if(len - i < 0)
-            throw new IllegalArgumentException("delta length < 0");
-
-        SimpleList<Entry<V>> list = new SimpleList<>(Math.min(len - i, MIN_REMOVE_ARRAY_SIZE));
-
-        Entry<V> entry = root;
-        for (; i < len; i++) {
-            entry = (Entry<V>) entry.getChild(s.charAt(i));
-            if (entry == null)
-                return null;
-
-            list.add(entry);
-
-            final CharSequence text = entry.text();
-            if (text != null) {
-                int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
-                if (lastMatch != text.length())
-                    return null;
-                i += text.length() - 1;
-            }
-        }
-        if(entry.value == NOT_USING)
-            return null;
-        if(!Objects.equals(entry.value, tc) && tc != NOT_USING)
-            return null;
-
-        size--;
-
-        if (!list.isEmpty()) {
-            i = list.size;
-
-            while (--i >= 0) {
-                Entry<V> prev = list.get(i);
-
-                if (prev.recursionSum() != 0) {
-                    prev.removeChild(entry);
-                    break;
-                }
-                entry = prev;
-            }
-            list.size = i + 1;
-
-            // 下面还有东西
-            if (i >= COMPRESS_START_DEPTH) {
-                entry = list.get(i);
-
-                CharList sb = new CharList().append(entry.text() == null ? entry.c : entry.text());
-
-                while (entry.childrenCount() == 1) {
-                    entry = (Entry<V>) entry.iterator().next();
-
-                    sb.append(entry.text() == null ? entry.c : entry.text());
-                }
-
-                if (sb.length() > 0) {
-                    (COMPRESS_START_DEPTH > 0 && i == 0 ? root : list.get(i - 1)).putChild(sb.length() == 1 ? new Entry<>(sb.charAt(0), entry) : new PEntry<>(sb.toString(), entry));
-                }
-            }
-
-            list.clear();
-        }
-
-        return entry.value;
-    }
-
-    @Override
-    public boolean containsKey(Object i) {
-        final CharSequence s = (CharSequence) i;
-        return containsKey(s, 0, s.length());
-    }
-
-    public boolean containsKey(CharSequence s, int len) {
-        return containsKey(s, 0, len);
-    }
-
-    public boolean containsKey(CharSequence s, int off, int len) {
-        return getEntry(s, off, len) != null;
-    }
-
-    @Override
-    public boolean containsValue(Object value) {
-        MutableBoolean mb = new MutableBoolean(false);
-        try {
-            forEach((k, v) -> {
-                if (Objects.equals(value, v)) {
-                    mb.set(true);
-                    throw OperationDone.INSTANCE;
-                }
-            });
-        } catch (OperationDone ignored) {
-        }
-        return mb.get();
-    }
-
-    public Map.Entry<Integer, V> longestMatches(CharSequence s) {
-        return longestMatches(s, 0, s.length());
-    }
-
-    public Map.Entry<Integer, V> longestMatches(CharSequence s, int len) {
-        return longestMatches(s, 0, len);
-    }
-
-    @SuppressWarnings("unchecked")
-    public Map.Entry<Integer, V> longestMatches(CharSequence s, int i, int len) {
-        int d = 0;
-
-        Entry<V> entry = root, next;
-        for (; i < len; i++) {
-            next = (Entry<V>) entry.getChild(s.charAt(i));
-            if (next == null)
-                break;
-            entry = next;
-            final CharSequence text = entry.text();
-            if (text != null) {
-                int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
-                if (lastMatch != text.length()) {
-                    d += lastMatch;
-                    break;
-                }
-                i += text.length() - 1;
-                d += text.length();
-            } else {
-                d++;
-            }
-        }
-
-        return entry.value == NOT_USING ? null : new AbstractMap.SimpleImmutableEntry<>(d, entry.value);
-    }
-
-    public List<V> valueMatches(CharSequence s, int limit) {
-        return valueMatches(s, 0, s.length(), limit);
-    }
-
-    public List<V> valueMatches(CharSequence s, int len, int limit) {
-        return valueMatches(s, 0, len, limit);
-    }
-
-    public List<V> valueMatches(CharSequence s, int i, int len, int limit) {
-        CharList base = new CharList();
-        Entry<V> entry = matches(s, i, len, base);
-        if (entry == null)
-            return Collections.emptyList();
-
-        ArrayList<V> values = new ArrayList<>(Math.min(entry.recursionSum(), limit));
-        try {
-            recursionEntry(entry, (k, v) -> {
-                if (values.size() >= limit) {
-                    throw OperationDone.INSTANCE;
-                }
-                values.add(v);
-            }, base);
-        } catch (OperationDone ignored) {}
-        return values;
-    }
-
-    public List<Map.Entry<String, V>> entryMatches(CharSequence s, int limit) {
-        return entryMatches(s, 0, s.length(), limit);
-    }
-
-    public List<Map.Entry<String, V>> entryMatches(CharSequence s, int len, int limit) {
-        return entryMatches(s, 0, len, limit);
-    }
-
-    public List<Map.Entry<String, V>> entryMatches(CharSequence s, int i, int len, int limit) {
-        CharList base = new CharList();
-        Entry<V> entry = matches(s, i, len, base);
-        if (entry == null)
-            return Collections.emptyList();
-
-        ArrayList<Map.Entry<String, V>> entries = new ArrayList<>(Math.min(entry.recursionSum(), limit));
-        try {
-            recursionEntry(entry, (k, v) -> {
-                if (entries.size() >= limit) {
-                    throw OperationDone.INSTANCE;
-                }
-                entries.add(new AbstractMap.SimpleImmutableEntry<>(k.toString(), v));
-            }, base);
-        } catch (OperationDone ignored) {}
-        return entries;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Entry<V> matches(CharSequence s, int i, int len, CharList sb) {
-        Entry<V> entry = root;
-        for (; i < len; i++) {
-            entry = (Entry<V>) entry.getChild(s.charAt(i));
-            if (entry == null) {
-                return null;
-            }
-            final CharSequence text = entry.text();
-            if (text != null) {
-                int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
-                if (lastMatch != text.length()) {
-                    if(lastMatch < len - i) // 字符串没匹配上
-                        return null;
-
-                    sb.append(text);
-                    break;
-                }
-                i += text.length() - 1;
-                sb.append(text);
-            } else {
-                sb.append(entry.c);
-            }
-        }
-
-        return entry;
-    }
-
-    /**
-     * internal: nodes.forEach(if(s.startsWith(node)))
-     * s: abcdef
-     * node: abcdef / abcde / abcd... true
-     * node: abcdefg  ... false
-     */
-    public boolean startsWith(CharSequence s) {
-        return startsWith(s, 0, s.length());
-    }
-
-    public boolean startsWith(CharSequence s, int len) {
-        return startsWith(s, 0, len);
-    }
-
-    @SuppressWarnings("unchecked")
-    public boolean startsWith(CharSequence s, int i, int len) {
-        Entry<V> entry = root;
-        for (; i < len; i++) {
-            entry = (Entry<V>) entry.getChild(s.charAt(i));
-            if (entry == null)
-                return false;
-            final CharSequence text = entry.text();
-            if (text != null) {
-                int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
-                if (lastMatch != text.length()) {
-                    return false;
-                    // 不符合规定: entry.value != NOT_USING && lastMatch == len - i;
-                }
-                i += text.length() - 1;
-            }
-
-            if (entry.value != IntMap.NOT_USING)
-                return true;
-        }
-        return entry.value != IntMap.NOT_USING;
-    }
-
-    @Override
-    public V get(Object id) {
-        CharSequence s = (CharSequence) id;
-        return get(s, 0, s.length());
-    }
-
-    public V get(CharSequence s, int length) {
-        return get(s, 0, length);
-    }
-
-    public V get(CharSequence s, int offset, int length) {
-        Entry<V> entry = getEntry(s, offset, length);
-        return entry == null ? null : entry.value;
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder("TrieTree").append('{');
-        if (!isEmpty()) {
-            forEach((k, v) -> sb.append(k).append('=').append(v).append(','));
-            sb.deleteCharAt(sb.length() - 1);
-        }
-        return sb.append('}').toString();
-    }
-
-    @Override
-    public void clear() {
-        size = 0;
-        root.clear();
-    }
-
-    /**
-     * @see #forEach(BiConsumer)
-     */
-    @Nonnull
-    @Override
-    @Deprecated
-    public Set<CharSequence> keySet() {
-        Set<CharSequence> set = new MyHashSet<>(size);
-        forEach((k, v) -> set.add(k));
-        return Collections.unmodifiableSet(set);
-    }
-
-    @Nonnull
-    @Override
-    public Collection<V> values() {
-        return new Values<>(this);
-    }
-
-    public Iterator<Entry<V>> mapItr() {
-        return new MapItr<>(root);
-    }
-    
-    private static class MapItr<V> extends AbstractIterator<Entry<V>> {
-        SimpleList<Entry<V>> a = new SimpleList<>(), b = new SimpleList<>();
-        int listIndex = 0;
-
-        public MapItr(Entry<V> root) {
-            a.add(root);
-        }
-
-        @Override
-        @SuppressWarnings("unchecked")
-        public boolean computeNext() {
-            final SimpleList<Entry<V>> a = this.a;
-            if(a.size == 0)
-                return false;
-
-            while (listIndex < a.size) {
-                if((result = a.get(listIndex++)).value != NOT_USING)
-                    return true;
-            }
-            listIndex = 0;
-
-            final SimpleList<Entry<V>> b = this.b;
-            for (Entry<V> entry : a) {
-                if(entry.size > 0) {
-                    b.ensureCapacity(b.size + entry.size);
-                    for (TrieEntry subEntry : entry) {
-                        b.add((Entry<V>) subEntry);
-                    }
-                }
-            }
-
-            // Swap
-            SimpleList<Entry<V>> tmp1 = this.a;
-            tmp1.size = 0;
-            this.a = this.b;
-            this.b = tmp1;
-
-            return computeNext();
-
-        }
-    }
-
-    static final class Values<V> extends AbstractCollection<V> {
-        private final TrieTree<V> map;
-
-        public Values(TrieTree<V> map) {
-            this.map = map;
-        }
-
-        public final int size() {
-            return map.size();
-        }
-
-        public final void clear() {
-            map.clear();
-        }
-
-        public final Iterator<V> iterator() {
-            return isEmpty() ? Collections.emptyIterator() : new Iterator<V>() {
-                final MapItr<V> itr = new MapItr<>(map.root);
-
-                @Override
-                public boolean hasNext() {
-                    return itr.hasNext();
-                }
-
-                @Override
-                public V next() {
-                    return itr.next().value;
-                }
-            };
-        }
-
-        public final boolean contains(Object o) {
-            return map.containsValue(o);
-        }
-
-        public final boolean remove(Object o) {
-            throw new UnsupportedOperationException();
-        }
-
-        public final Spliterator<V> spliterator() {
-            return Spliterators.spliterator(iterator(), size(), 0);
-        }
-    }
-
-    /**
-     * @see #forEach(BiConsumer)
-     */
-    @Nonnull
-    @Override
-    @Deprecated
-    public Set<Map.Entry<CharSequence, V>> entrySet() {
-        Set<Map.Entry<CharSequence, V>> set = new MyHashSet<>(size);
-        forEach((k, v) -> set.add(new AbstractMap.SimpleImmutableEntry<>(k, v)));
-        return Collections.unmodifiableSet(set);
-    }
-
-    @Override
-    public void forEach(BiConsumer<? super CharSequence, ? super V> consumer) {
-        recursionEntry(root, consumer, new CharList());
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <V> void recursionEntry(Entry<V> parent, BiConsumer<? super CharSequence, ? super V> consumer, CharList sb) {
-        if (parent.value != IntMap.NOT_USING) {
-            consumer.accept(sb.toString(), parent.value);
-        }
-        for (TrieEntry entry : parent) {
-            entry.append(sb);
-            recursionEntry((Entry<V>) entry, consumer, sb);
-            sb.setIndex(sb.length() - entry.length());
-        }
-    }
-
-    @Override
-    public boolean remove(Object key, Object value) {
-        int os = size;
-        CharSequence cs = (CharSequence) key;
-        remove(cs, 0, cs.length(), value);
-        return os != size;
-    }
-
-    @Override
-    public boolean replace(CharSequence key, V oldValue, V newValue) {
-        Entry<V> entry = getEntry(key, 0, key.length());
-        if(entry == null || entry.value == NOT_USING)
-            return false;
-        if(Objects.equals(oldValue, entry.value)) {
-            entry.value = newValue;
-            return true;
-        }
-        return false;
-    }
-
-    @Override
-    public V compute(CharSequence key, BiFunction<? super CharSequence, ? super V, ? extends V> remappingFunction) {
-        Entry<V> entry = getEntry(key, 0, key.length());
-        V newV = remappingFunction.apply(key, entry == null || entry.value == NOT_USING ? null : entry.value);
-        if(newV == null) {
-            if(entry != null && entry.value != NOT_USING) {
-                remove(key, 0, key.length());
-            }
-            return null;
-        } else if(entry == null) {
-            entry = entryForPut(key, 0, key.length());
-        }
-
-        if(entry.value == NOT_USING)
-            size++;
-        entry.value = newV;
-
-        return newV;
-    }
-
-    @Override
-    public V computeIfAbsent(CharSequence key, Function<? super CharSequence, ? extends V> mappingFunction) {
-        Entry<V> entry = getEntry(key, 0, key.length());
-        if(entry != null && entry.value != NOT_USING)
-            return entry.value;
-        if(entry == null) {
-            entry = entryForPut(key, 0, key.length());
-        }
-        if(entry.value == NOT_USING)
-            size++;
-        return entry.value = mappingFunction.apply(key);
-    }
-
-    @Override
-    public V computeIfPresent(CharSequence key,
-                              BiFunction<? super CharSequence, ? super V, ? extends V> remappingFunction) {
-        Entry<V> entry = getEntry(key, 0, key.length());
-        if(entry == null || entry.value == NOT_USING)
-            return null;
-        if(entry.value == null)
-            return null; // default implement guarantee
-        V newV = remappingFunction.apply(key, entry.value);
-        if(newV == null) {
-            remove(key, 0, key.length());
-            return null;
-        }
-
-        return entry.value = newV;
-    }
-
-    @Override
-    public V getOrDefault(Object key, V defaultValue) {
-        CharSequence cs = (CharSequence) key;
-        Entry<V> entry = getEntry(cs, 0, cs.length());
-        if(entry == null || entry.value == NOT_USING)
-            return defaultValue;
-        return entry.value;
-    }
-
-    @Override
-    public V putIfAbsent(CharSequence key, V value) {
-        int os = size;
-        Entry<V> entry = entryForPut(key, 0, key.length());
-        if(os != size) {
-            return entry.value = value;
-        }
-        return entry.value;
-    }
-
-    @Override
-    public V replace(CharSequence key, V value) {
-        Entry<V> entry = getEntry(key, 0, key.length());
-        if(entry == null)
-            return null;
-
-        V v = entry.value;
-        if(v == NOT_USING)
-            v = null;
-
-        entry.value = value;
-        return v;
-    }
+public class TrieTree<V> extends AbstractMap<CharSequence, V> {
+	static final int COMPRESS_START_DEPTH = 1, MIN_REMOVE_ARRAY_SIZE = 5;
+
+	public static class Entry<V> extends TrieEntry {
+		V value;
+
+		@SuppressWarnings("unchecked")
+		Entry(char c) {
+			super(c);
+			this.value = (V) UNDEFINED;
+		}
+
+		Entry(char c, Entry<V> entry) {
+			super(c);
+			this.length = entry.length;
+			this.size = entry.size;
+			this.entries = entry.entries;
+			this.value = entry.value;
+		}
+
+		@Override
+		boolean isValid() {
+			return value != UNDEFINED;
+		}
+
+		@SuppressWarnings("unchecked")
+		public int copyFrom(TrieEntry x) {
+			Entry<?> node = (Entry<?>) x;
+			int v = 0;
+			if (node.value != UNDEFINED && value == UNDEFINED) {
+				this.value = (V) node.value;
+				v = 1;
+			}
+
+			for (TrieEntry entry : node) {
+				TrieEntry sub = getChild(entry.c);
+				if (sub == null) putChild(sub = entry.clone());
+				v += sub.copyFrom(entry);
+			}
+			return v;
+		}
+
+		public V getValue() {
+			if (value == UNDEFINED) throw new UnsupportedOperationException();
+			return value;
+		}
+
+		public V setValue(V value) {
+			if (value == UNDEFINED || this.value == UNDEFINED) throw new UnsupportedOperationException();
+			V ov = this.value;
+			this.value = value;
+			return ov;
+		}
+	}
+
+	static final class PEntry<V> extends Entry<V> {
+		CharSequence val;
+
+		PEntry(CharSequence val) {
+			super(val.charAt(0));
+			this.val = val;
+		}
+
+		PEntry(CharSequence val, Entry<V> entry) {
+			super(val.charAt(0), entry);
+			this.val = val;
+		}
+
+		CharSequence text() {
+			return val;
+		}
+
+		@Override
+		void append(CharList sb) {
+			sb.append(val);
+		}
+
+		@Override
+		int length() {
+			return val.length();
+		}
+
+		@Override
+		public String toString() {
+			return "PE{" + val + '}';
+		}
+	}
+
+	Entry<V> root = new Entry<>((char) 0);
+	int size = 0;
+
+	public TrieTree() {
+	}
+
+	public TrieTree(Map<CharSequence, V> map) {
+		putAll(map);
+	}
+
+	public void addTrieTree(TrieTree<? extends V> m) {
+		size += root.copyFrom(Helpers.cast(m.root));
+	}
+
+	@SuppressWarnings("unchecked")
+	Entry<V> entryForPut(CharSequence s, int i, int len) {
+		if (len - i < 0) throw new IllegalArgumentException("Δlength < 0");
+
+		Entry<V> entry = root;
+		Entry<V> prev;
+		for (; i < len; i++) {
+			char c = s.charAt(i);
+			prev = entry;
+			entry = (Entry<V>) entry.getChild(c);
+			if (entry == null) {
+				// 前COMPRESS_START_DEPTH个字符，或者只剩一个字符不压缩
+				if (len - i == 1 || i < COMPRESS_START_DEPTH) {
+					prev.putChild(entry = new Entry<>(c));
+				} else {
+					prev.putChild(entry = new PEntry<>(s.subSequence(i, len)));
+					break;
+				}
+			} else if (entry.text() != null) {
+				final CharSequence text = entry.text();
+
+				int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
+				if (lastMatch == text.length()) {
+					// 全部match
+					i += lastMatch - 1;
+				} else {
+					// 拆分P1: 前半部分[0, lastMatch)
+					if (lastMatch == 1) {
+						prev.putChild(new Entry<>(entry.c));
+					} else {
+						((PEntry<V>) entry).val = text.subSequence(0, lastMatch);
+					}
+
+					// 拆分P2: 后半部分[lastMatch, text.length)
+					Entry<V> child;
+					if (text.length() - 1 == lastMatch) {
+						child = new Entry<>(text.charAt(lastMatch), entry);
+					} else {
+						child = new PEntry<>(text.subSequence(lastMatch, text.length()), entry);
+					}
+
+					// entry的数据已复制到了child
+					entry.clear();
+					entry.value = (V) UNDEFINED;
+
+					// 目的：避免之前修改entry的值
+					(entry = (Entry<V>) prev.getChild(entry.c)).putChild(child);
+
+					// 插入新的entry
+					lastMatch += i;
+					if (len == lastMatch + 1) {
+						// 情况1
+						// 原先 abcde 插入 abcdf
+						// 一个字符
+						child = new Entry<>(s.charAt(len - 1));
+					} else {
+						if (len == lastMatch) {
+							// 情况2
+							// 原先 abcde 插入 abcd
+							// 拆分的P1就是child
+							break;
+						} else {
+							// 情况2
+							// 原先 abcde 插入 abcdef
+							child = new PEntry<>(s.subSequence(lastMatch, len));
+						}
+					}
+
+					entry.putChild(child);
+					entry = child;
+
+					break;
+				}
+			}
+		}
+		if (entry.value == UNDEFINED) {
+			size++;
+			entry.value = null;
+		}
+		return entry;
+	}
+
+	private Entry<V> getEntry(CharSequence s, int i, int len) {
+		return getEntry1(s, i, len, EXACT);
+	}
+
+	private static final int EXACT = 0, FIRST_NON_NULL = 1, LAST_NON_NULL = 2;
+	@Nullable
+	@SuppressWarnings("unchecked")
+	Entry<V> getEntry1(CharSequence s, int i, int len, int kind) {
+		if (len - i < 0) throw new IllegalArgumentException("Δlength < 0");
+
+		Entry<V> entry = root, prev;
+		while (i < len) {
+			prev = entry;
+			entry = (Entry<V>) entry.getChild(s.charAt(i));
+			if (entry == null) return kind == LAST_NON_NULL && prev != root ? prev : null;
+
+			CharSequence text = entry.text();
+			if (text != null) {
+				int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
+				if (lastMatch != text.length()) return kind == LAST_NON_NULL && prev != root ? prev : null;
+				i += text.length();
+			} else i++;
+
+			if (kind == FIRST_NON_NULL && entry.value != UNDEFINED) return entry;
+		}
+		return entry.value != UNDEFINED ? entry : null;
+	}
+
+	public Entry<V> getRoot() {
+		return root;
+	}
+
+	@Override
+	public int size() {
+		return size;
+	}
+
+	@Override
+	public V put(CharSequence key, V e) {
+		return put(key, 0, key.length(), e);
+	}
+
+	public V put(CharSequence key, int len, V e) {
+		return put(key, 0, len, e);
+	}
+
+	public V put(CharSequence key, int off, int len, V e) {
+		Entry<V> entry = entryForPut(key, off, len);
+		V v = entry.value;
+		entry.value = e;
+
+		return v;
+	}
+
+	@Override
+	@SuppressWarnings("unchecked")
+	public void putAll(@Nonnull Map<? extends CharSequence, ? extends V> m) {
+		if (m instanceof TrieTree) {
+			addTrieTree((TrieTree<? extends V>) m);
+			return;
+		}
+		for (Map.Entry<? extends CharSequence, ? extends V> entry : m.entrySet()) {
+			this.put(entry.getKey(), entry.getValue());
+		}
+	}
+
+	@Override
+	public V remove(Object k) {
+		CharSequence s = (CharSequence) k;
+		return remove(s, 0, s.length(), UNDEFINED);
+	}
+
+	public V remove(CharSequence s, int len) {
+		return remove(s, 0, len, UNDEFINED);
+	}
+
+	public V remove(CharSequence s, int i, int len) {
+		return remove(s, i, len, UNDEFINED);
+	}
+
+	@SuppressWarnings("unchecked")
+	V remove(CharSequence s, int i, int len, Object tc) {
+		if (len - i < 0) throw new IllegalArgumentException("Δlength < 0");
+
+		SimpleList<Entry<V>> list = new SimpleList<>();
+
+		Entry<V> entry = root;
+		while (i < len) {
+			list.add(entry);
+
+			entry = (Entry<V>) entry.getChild(s.charAt(i));
+			if (entry == null) return null;
+
+			CharSequence text = entry.text();
+			if (text != null) {
+				int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
+				if (lastMatch != text.length()) return null;
+				i += text.length();
+			} else i++;
+		}
+		if (entry.value == UNDEFINED) return null;
+		if (!Objects.equals(entry.value, tc) && tc != UNDEFINED) return null;
+
+		size--;
+
+		i = list.size - 1;
+
+		Entry<V> prev = entry;
+		while (i >= 0) {
+			Entry<V> curr = list.get(i);
+
+			// 清除单线连接:
+			// root <== a <== b <== cd <== efg
+			if (curr.size > 1 || curr.isValid()) {
+				curr.removeChild(prev);
+
+				// 压缩剩余的entry
+				// root <== a <== b (curr) <== def <== ghi
+				if (curr.size == 1 && curr.value == UNDEFINED && i >= COMPRESS_START_DEPTH) {
+					CharList sb = IOUtil.ddLayeredCharBuf();
+
+					do {
+						curr.append(sb);
+
+						TrieEntry[] entries = curr.entries;
+						for (TrieEntry trieEntry : entries) {
+							if (trieEntry != null) {
+								curr = (Entry<V>) trieEntry;
+								break;
+							}
+						}
+					} while (curr.size == 1);
+					curr.append(sb);
+					// sb = "bdefghi"
+
+					// sb.length 必定大于 1
+					// 因为至少包含 curr 与 curr.next
+					list.get(i - 1).putChild(new PEntry<>(sb.toString(), curr));
+					sb._free();
+				}
+				return entry.value;
+			}
+			prev = curr;
+			i--;
+		}
+		throw new AssertionError("Entry list chain size");
+	}
+
+	@Override
+	public boolean containsKey(Object i) {
+		final CharSequence s = (CharSequence) i;
+		return containsKey(s, 0, s.length());
+	}
+	public boolean containsKey(CharSequence s, int off, int len) {
+		return getEntry(s, off, len) != null;
+	}
+
+	public Map.Entry<MutableInt, V> longestMatches(CharSequence s) {
+		return longestMatches(s, 0, s.length());
+	}
+	public Map.Entry<MutableInt, V> longestMatches(CharSequence s, int i, int len) {
+		MyHashMap.Entry<MutableInt, V> entry = new MyHashMap.Entry<>(new MutableInt(), null);
+		longestIn(s,i,len,entry);
+		return entry.getKey().getValue() < 0 ? null : entry;
+	}
+	/**
+	 * 返回：s能连续匹配在map中的最长长度
+	 * map=["abcd"=A, "abcedf"=B]
+	 * s="abc", 返回 3, feed: -1=UNDEFINED
+	 * s="abcd" 返回 4, feed: 4=A
+	 * s="abcde" 返回 5, feed: 4=A
+	 * s="abcdef" 返回 6, feed: 6=B
+	 */
+	@SuppressWarnings("unchecked")
+	public int longestIn(CharSequence s, int i, int len, MyHashMap.Entry<MutableInt, V> feed) {
+		feed.k.setValue(-1);
+
+		int d = 0;
+
+		Entry<V> entry = root;
+		while (i < len) {
+			entry = (Entry<V>) entry.getChild(s.charAt(i));
+			if (entry == null) break;
+
+			CharSequence text = entry.text();
+			if (text != null) {
+				int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
+				d += lastMatch;
+
+				if (lastMatch < text.length()) break;
+				i += text.length();
+			} else {
+				d++;
+				i++;
+			}
+
+			if (entry.value != UNDEFINED) {
+				feed.k.setValue(d);
+				feed.v = entry.value;
+			}
+		}
+		return d;
+	}
+
+	@SuppressWarnings("unchecked")
+	public int longestWithCallback(CharSequence s, int i, int len, MutableInt cont, BiFunction<MutableInt, V, Boolean> callback) {
+		int d = 0;
+
+		Entry<V> entry = root;
+		while (i < len) {
+			entry = (Entry<V>) entry.getChild(s.charAt(i));
+			if (entry == null) break;
+
+			CharSequence text = entry.text();
+			if (text != null) {
+				int lastMatch = TextUtil.lastMatches(text, 0, s, i, len-i);
+				d += lastMatch;
+
+				if (lastMatch < text.length()) break;
+				i += text.length();
+			} else {
+				d++;
+				i++;
+			}
+
+			if (entry.value != UNDEFINED) {
+				cont.setValue(d);
+				if (callback.apply(cont, entry.value)) break;
+			}
+		}
+		return d;
+	}
+
+	public List<V> valueMatches(CharSequence s, int limit) {
+		return valueMatches(s, 0, s.length(), limit);
+	}
+	@SuppressWarnings("unchecked")
+	public List<V> valueMatches(CharSequence s, int i, int len, int limit) {
+		KeyItr itr = matches(s, i, len);
+		if (itr == null) return Collections.emptyList();
+
+		SimpleList<V> values = new SimpleList<>();
+		while (itr.hasNext()) {
+			if (values.size() >= limit) break;
+
+			itr.next();
+			values.add(((Entry<V>) itr.ent).value);
+		}
+		return values;
+	}
+
+	public List<Map.Entry<String, V>> entryMatches(CharSequence s, int limit) {
+		return entryMatches(s, 0, s.length(), limit);
+	}
+	@SuppressWarnings("unchecked")
+	public List<Map.Entry<String, V>> entryMatches(CharSequence s, int i, int len, int limit) {
+		KeyItr itr = matches(s, i, len);
+		if (itr == null) return Collections.emptyList();
+
+		SimpleList<Map.Entry<String, V>> entries = new SimpleList<>();
+		while (itr.hasNext()) {
+			if (entries.size() >= limit) {
+				break;
+			}
+			entries.add(new AbstractMap.SimpleImmutableEntry<>(itr.next().toString(), ((Entry<V>) itr.ent).value));
+		}
+		return entries;
+	}
+
+	public KeyItr matchesIterator(CharSequence s) {
+		return matchesIterator(s, 0, s.length());
+	}
+
+	/**
+	 * <pre>
+	 *   TrieEntry.KeyItr itr = map.matchesIterator(name);
+	 *   while (itr.hasNext()) {
+	 *       CharSequence key = itr.next();
+	 *       TrieEntry val = itr.entry();
+	 *   }</pre>
+	 */
+	public KeyItr matchesIterator(CharSequence s, int i, int len) {
+		Entry<V> entry = matches(s, i, len, IOUtil.getSharedCharBuf());
+		return entry == null ? null : new KeyItr(entry, new CharList(32));
+	}
+
+	private KeyItr matches(CharSequence s, int i, int len) {
+		CharList prefix = IOUtil.getSharedCharBuf();
+		Entry<V> entry = matches(s, i, len, prefix);
+		return entry == null ? null : new KeyItr(entry, prefix);
+	}
+	@SuppressWarnings("unchecked")
+	private Entry<V> matches(CharSequence s, int i, int len, CharList prefix) {
+		Entry<V> entry = root;
+		while (i < len) {
+			entry = (Entry<V>) entry.getChild(s.charAt(i));
+			if (entry == null) return null;
+
+			CharSequence text = entry.text();
+			if (text != null) {
+				int lastMatches = TextUtil.lastMatches(text, 0, s, i, len - i);
+				if (lastMatches != text.length()) {
+					// 字符串没匹配上
+					if (lastMatches < len - i) return null;
+
+					prefix.append(text);
+					break;
+				}
+				i += text.length();
+			} else {
+				i++;
+			}
+
+			entry.append(prefix);
+		}
+
+		return entry;
+	}
+
+	/**
+	 * s.startsWith(any value in map)
+	 */
+	public final boolean startsWith_R(CharSequence s) {
+		return startsWith_R(s, 0, s.length());
+	}
+	public boolean startsWith_R(CharSequence s, int i, int len) {
+		return null != getEntry1(s, i, len, FIRST_NON_NULL);
+	}
+
+	@Override
+	public final V get(Object id) {
+		CharSequence s = (CharSequence) id;
+		return get(s, 0, s.length());
+	}
+	public V get(CharSequence s, int off, int len) {
+		Entry<V> entry = getEntry(s, off, len);
+		return entry == null ? null : entry.value;
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder("TrieTree").append('{');
+		if (!isEmpty()) {
+			forEach((k, v) -> sb.append(k).append('=').append(v).append(','));
+			sb.deleteCharAt(sb.length() - 1);
+		}
+		return sb.append('}').toString();
+	}
+
+	@Override
+	public void clear() {
+		size = 0;
+		root.clear();
+	}
+
+	public Iterator<Entry<V>> mapItr() {
+		return new Itr<Entry<V>, Entry<V>>() {
+			{setupDepthFirst(root);}
+
+			@Override
+			public boolean computeNext() {
+				boolean v = _computeNextDepthFirst();
+				if (v) result = ent;
+				return v;
+			}
+		};
+	}
+
+	/**
+	 * @see #forEach(BiConsumer)
+	 */
+	@Nonnull
+	@Override
+	@Deprecated
+	public Set<Map.Entry<CharSequence, V>> entrySet() {
+		return new EntrySet<>(this);
+	}
+
+	public void forEachSince(CharSequence s, BiConsumer<? super CharSequence, ? super V> consumer) {
+		forEachSince(s, 0, s.length(), consumer);
+	}
+	public void forEachSince(CharSequence s, int i, int len, BiConsumer<? super CharSequence, ? super V> consumer) {
+		CharList base = new CharList();
+		Entry<V> entry = matches(s, i, len, base);
+		if (entry == null) return;
+		recursionEntry(root, consumer, base);
+	}
+
+	@Override
+	public void forEach(BiConsumer<? super CharSequence, ? super V> consumer) {
+		recursionEntry(root, consumer, new CharList());
+	}
+
+	@SuppressWarnings("unchecked")
+	private static <V> void recursionEntry(Entry<V> parent, BiConsumer<? super CharSequence, ? super V> consumer, CharList sb) {
+		if (parent.value != UNDEFINED) {
+			consumer.accept(sb.toString(), parent.value);
+		}
+		for (TrieEntry entry : parent) {
+			entry.append(sb);
+			recursionEntry((Entry<V>) entry, consumer, sb);
+			sb.setLength(sb.length() - entry.length());
+		}
+	}
+
+	static class EntrySet<V> extends AbstractSet<Map.Entry<CharSequence, V>> {
+		private final TrieTree<V> map;
+
+		public EntrySet(TrieTree<V> map) {
+			this.map = map;
+		}
+
+		public final int size() {
+			return map.size();
+		}
+
+		public final void clear() {
+			map.clear();
+		}
+
+		@Nonnull
+		public final Iterator<Map.Entry<CharSequence, V>> iterator() {
+			return new Itr<Map.Entry<CharSequence, V>, Entry<V>>() {
+				{
+					setupDepthFirst(map.root);
+					key();
+				}
+
+				@Override
+				public boolean computeNext() {
+					boolean v = _computeNextDepthFirst();
+					if (v) result = new SimpleImmutableEntry<>(seq.toString(), ent.getValue());
+					return v;
+				}
+			};
+		}
+	}
+
+
+	@Override
+	public boolean remove(Object key, Object value) {
+		int os = size;
+		CharSequence cs = (CharSequence) key;
+		remove(cs, 0, cs.length(), value);
+		return os != size;
+	}
+
+	@Override
+	public boolean replace(CharSequence key, V oldValue, V newValue) {
+		Entry<V> entry = getEntry(key, 0, key.length());
+		if (entry == null || entry.value == UNDEFINED) return false;
+		if (Objects.equals(oldValue, entry.value)) {
+			entry.value = newValue;
+			return true;
+		}
+		return false;
+	}
+
+	@Override
+	public V compute(CharSequence key, BiFunction<? super CharSequence, ? super V, ? extends V> remap) {
+		Entry<V> entry = getEntry(key, 0, key.length());
+		V newV = remap.apply(key, entry == null || entry.value == UNDEFINED ? null : entry.value);
+		if (newV == null) {
+			if (entry != null && entry.value != UNDEFINED) {
+				remove(key, 0, key.length(), UNDEFINED);
+			}
+			return null;
+		} else if (entry == null) {
+			entry = entryForPut(key, 0, key.length());
+		}
+
+		if (entry.value == UNDEFINED) size++;
+		entry.value = newV;
+
+		return newV;
+	}
+
+	@Override
+	public V computeIfAbsent(CharSequence key, Function<? super CharSequence, ? extends V> map) {
+		Entry<V> entry = getEntry(key, 0, key.length());
+		if (entry != null && entry.value != UNDEFINED) return entry.value;
+		if (entry == null) {
+			entry = entryForPut(key, 0, key.length());
+		}
+		if (entry.value == UNDEFINED) size++;
+		return entry.value = map.apply(key);
+	}
+
+	@Override
+	public V computeIfPresent(CharSequence key, BiFunction<? super CharSequence, ? super V, ? extends V> remap) {
+		Entry<V> entry = getEntry(key, 0, key.length());
+		if (entry == null || entry.value == UNDEFINED) return null;
+		if (entry.value == null) return null; // default implement guarantee
+		V newV = remap.apply(key, entry.value);
+		if (newV == null) {
+			remove(key, 0, key.length(), UNDEFINED);
+			return null;
+		}
+
+		return entry.value = newV;
+	}
+
+	@Override
+	public V getOrDefault(Object key, V defaultValue) {
+		CharSequence cs = (CharSequence) key;
+		Entry<V> entry = getEntry(cs, 0, cs.length());
+		if (entry == null || entry.value == UNDEFINED) return defaultValue;
+		return entry.value;
+	}
+
+	@Override
+	public V putIfAbsent(CharSequence key, V value) {
+		int os = size;
+		Entry<V> entry = entryForPut(key, 0, key.length());
+		if (os != size) {
+			entry.value = value;
+			return null;
+		}
+		return entry.value;
+	}
+
+	@Override
+	public V replace(CharSequence key, V value) {
+		Entry<V> entry = getEntry(key, 0, key.length());
+		if (entry == null) return null;
+
+		V v = entry.value;
+		if (v == UNDEFINED) v = null;
+
+		entry.value = value;
+		return v;
+	}
 }

@@ -1,28 +1,3 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 /**
  * This file is a part of MI <br>
  * (L) Copyleft 2018-20XX 版权没有，仿冒不究
@@ -33,343 +8,237 @@
  */
 package ilib.gui;
 
-import ilib.ClientProxy;
-import ilib.client.util.RenderUtils;
-import ilib.gui.comp.BaseComponent;
-import ilib.gui.comp.display.ComTabs;
-import ilib.gui.comp.display.ComText;
-import ilib.util.PlayerUtil;
-import ilib.util.TextHelperM;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.FontRenderer;
+import ilib.client.RenderUtils;
+import ilib.gui.comp.Component;
+import ilib.gui.comp.GTabs;
+import ilib.gui.util.GuiListener;
+import org.lwjgl.input.Mouse;
+import roj.collect.SimpleList;
+
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.OpenGlHelper;
-import net.minecraft.client.renderer.RenderHelper;
-import net.minecraft.entity.player.InventoryPlayer;
-import net.minecraft.inventory.Slot;
-import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.math.MathHelper;
-import org.lwjgl.input.Mouse;
 
-import javax.annotation.Nonnull;
+import net.minecraftforge.client.event.GuiScreenEvent;
+import net.minecraftforge.common.MinecraftForge;
+
 import java.awt.*;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
-public abstract class GuiBase<T extends ContainerEmpty> extends GuiContainer implements IGui {
-    // Variables
-    protected String name;
-    protected ComText titleComponent;
+public abstract class GuiBase<T extends ContainerIL> extends GuiContainer implements IGui {
+	protected String name;
 
-    protected T inventory;
+	protected T inventory;
 
-    public ResourceLocation textureLocation;
+	public ResourceLocation tex;
 
-    protected List<BaseComponent> components = new ArrayList<>();
-    protected ComTabs rightTabs, leftTabs;
+	protected GuiListener listener;
 
-    protected int imgX = 256;
-    protected int imgY = 256;
+	protected List<Component> components = new SimpleList<>();
+	private final List<Component>[] clicked = GuiHelper.createClickedComponentList();
 
-    protected final void setImageSize(int w, int h) {
-        this.imgX = w;
-        this.imgY = h;
-    }
+	public GuiBase(T inventory, int width, int height, String title, ResourceLocation texture) {
+		super(inventory);
+		this.xSize = width;
+		this.ySize = height;
+		this.name = title;
+		this.tex = texture;
+		this.inventory = inventory;
+	}
 
-    @Nonnull
-    @Override
-    public final FontRenderer getFontRenderer() {
-        if (fontRenderer != null)
-            return fontRenderer;
-        return ClientProxy.mc.fontRenderer;
-    }
+	public GuiBase(T inventory) {
+		super(inventory);
+		this.inventory = inventory;
+	}
 
-    public GuiBase(T inventory, int width, int height, String title, ResourceLocation texture) {
-        super(inventory);
-        this.xSize = width;
-        this.ySize = height;
-        this.name = title;
-        this.textureLocation = texture;
-        this.inventory = inventory;
-    }
+	@Override
+	public final void initGui() {
+		super.initGui();
 
-    protected void init() {
-        initComponents();
-        initTabs();
-    }
+		init();
 
-    @Override
-    public void initGui() {
-        super.initGui();
+		for (int i = 0; i < components.size(); i++) {
+			Component com = components.get(i);
+			com.onInit();
+		}
+	}
 
-        for (BaseComponent component : components) {
-            component.onInit();
-        }
-    }
+	protected void init() {
+		components.clear();
+		addComponents();
+	}
 
-    protected void initComponents() {
-        rightTabs = new ComTabs(this, xSize + 1);
-        leftTabs = new ComTabs(this, -1);
+	protected abstract void addComponents();
 
-        titleComponent = new ComText(this,
-                xSize / 2 - (getFontRenderer().getStringWidth(TextHelperM.translate(name)) / 2),
-                3, name, null);
-        components.add(titleComponent);
+	@Override
+	protected void renderHoveredToolTip(int mouseX, int mouseY) {
+		mouseX -= guiLeft;
+		mouseY -= guiTop;
 
-        addComponents();
-    }
+		if (mc.player.inventory.getItemStack().isEmpty() && hoveredSlot != null && hoveredSlot.getHasStack()) {
+			this.renderToolTip(hoveredSlot.getStack(), mouseX, mouseY);
+		}
 
-    protected void initTabs() {
-        addRightTabs(rightTabs);
-        addLeftTabs(leftTabs);
+		for (int i = 0; i < components.size(); i++) {
+			Component com = components.get(i);
+			if (com.isMouseOver(mouseX, mouseY)) {
+				com.renderTooltip(mouseX, mouseY, mouseX, mouseY);
+			}
+		}
+	}
 
-        components.add(rightTabs);
-        components.add(leftTabs);
-    }
+	@Override
+	public TileEntity getTileEntity() { // slow
+		return null;
+	}
 
-    protected abstract void addComponents();
+	@Override
+	public final ResourceLocation getTexture() {
+		return this.tex;
+	}
 
-    protected void addRightTabs(ComTabs tabs) {
-    }
+	@Override
+	protected void mouseClicked(int x, int y, int button) throws IOException {
+		super.mouseClicked(x, y, button);
 
-    protected void addLeftTabs(ComTabs tabs) {
-    }
+		x -= guiLeft;
+		y -= guiTop;
 
-    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        try {
-            drawDefaultBackground();
-        } catch (Exception ignored) {
-        }
+		if (listener != null) listener.mouseDown(x, y, button);
 
-        GlStateManager.pushMatrix();
-        this.drawGuiContainerBackgroundLayer(partialTicks, mouseX, mouseY);
-        GlStateManager.popMatrix();
+		List<Component> clicked = this.clicked[button];
+		for (int i = 0; i < components.size(); i++) {
+			Component com = components.get(i);
+			if (com.isMouseOver(x, y)) {
+				com.mouseDown(x, y, button);
+				clicked.add(com);
+			}
+		}
+	}
 
-        GlStateManager.disableRescaleNormal();
-        RenderHelper.disableStandardItemLighting();
-        //GlStateManager.disableLighting();
-        //GlStateManager.disableDepth();
+	@Override
+	protected void mouseReleased(int x, int y, int button) {
+		super.mouseReleased(x, y, button);
 
-        //super.super.drawScreen(mouseX, mouseY, partialTicks);
+		x -= guiLeft;
+		y -= guiTop;
 
-        RenderHelper.enableGUIStandardItemLighting();
+		if (listener != null) listener.mouseUp(x, y, button);
 
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(guiLeft, guiTop, 0);
-        GlStateManager.enableRescaleNormal();
-        this.hoveredSlot = null;
-        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240, 240);
+		List<Component> clicked = this.clicked[button];
+		for (int i = 0; i < clicked.size(); i++) {
+			clicked.get(i).mouseUp(x, y, button);
+		}
+		clicked.clear();
+	}
 
-        RenderUtils.colorWhite();
-        for (int i = 0, len = this.inventorySlots.inventorySlots.size(); i < len; i++) {
-            Slot slot = this.inventorySlots.inventorySlots.get(i);
-            if (shouldSlotBeRendered(slot)) {
-                this.drawSlot(slot);
-                if (this.isMouseOverSlot(slot, mouseX, mouseY)) {
-                    this.hoveredSlot = slot;
-                    GlStateManager.disableLighting();
-                    GlStateManager.disableDepth();
-                    GlStateManager.colorMask(true, true, true, false);
-                    this.drawGradientRect(slot.xPos, slot.yPos, slot.xPos + 16, slot.yPos + 16, -2130706433, -2130706433);
-                    GlStateManager.colorMask(true, true, true, true);
-                    GlStateManager.enableDepth();
-                    GlStateManager.enableLighting();
-                }
-            }
+	@Override
+	protected void mouseClickMove(int x, int y, int button, long time) {
+		x -= guiLeft;
+		y -= guiTop;
 
-        }
+		if (listener != null) listener.mouseDrag(x, y, button, time);
 
-        RenderHelper.disableStandardItemLighting();
-        GlStateManager.pushMatrix();
-        this.drawGuiContainerForegroundLayer(mouseX, mouseY);
-        GlStateManager.popMatrix();
-        RenderHelper.enableGUIStandardItemLighting();
+		List<Component> clicked = this.clicked[button];
+		for (int i = 0; i < clicked.size(); i++) {
+			clicked.get(i).mouseDrag(x, y, button, time);
+		}
+	}
 
-        InventoryPlayer inventoryplayer = this.mc.player.inventory;
-        ItemStack stack = this.draggedStack.isEmpty() ? inventoryplayer.getItemStack() : this.draggedStack;
-        if (!stack.isEmpty()) {
-            String s = null;
-            if (!this.draggedStack.isEmpty() && this.isRightMouseClick) {
-                stack = stack.copy();
-                stack.setCount(MathHelper.ceil((float) stack.getCount() / 2.0F));
-            } else if (this.dragSplitting && this.dragSplittingSlots.size() > 1) {
-                stack = stack.copy();
-                stack.setCount(this.dragSplittingRemnant);
-            }
+	@Override
+	public void handleMouseInput() throws IOException {
+		super.handleMouseInput();
 
-            int off = this.draggedStack.isEmpty() ? 8 : 16;
-            this.drawItemStack(stack, mouseX - guiLeft - 8, mouseY - guiTop - off, stack.isEmpty() ? "\u00a7e0" : null);
-        }
+		int dir = Mouse.getEventDWheel();
+		if (dir != 0) {
+			int x = Mouse.getEventX() * width / mc.displayWidth - guiLeft;
+			int y = height - Mouse.getEventY() * height / mc.displayHeight - 1 - guiTop;
 
-        if (!this.returningStack.isEmpty()) {
-            float f = (float) (Minecraft.getSystemTime() - this.returningStackTime) / 100.0F;
-            if (f >= 1.0F) {
-                f = 1.0F;
-                this.returningStack = ItemStack.EMPTY;
-            }
+			if (listener != null) listener.mouseScrolled(x, y, dir);
 
-            int l2 = this.returningStackDestSlot.xPos - this.touchUpX;
-            int i3 = this.returningStackDestSlot.yPos - this.touchUpY;
-            int l1 = this.touchUpX + (int) ((float) l2 * f);
-            int i2 = this.touchUpY + (int) ((float) i3 * f);
-            this.drawItemStack(this.returningStack, l1, i2, null);
-        }
+			for (int i = 0; i < components.size(); i++) {
+				Component com = components.get(i);
+				com.mouseScrolled(x, y, dir / 120);
+			}
+		}
+	}
 
-        GlStateManager.popMatrix();
-        GlStateManager.enableLighting();
-        GlStateManager.enableDepth();
-        RenderHelper.enableStandardItemLighting();
+	@Override
+	protected void keyTyped(char typedChar, int keyCode) throws IOException {
+		super.keyTyped(typedChar, keyCode);
 
-        renderHoveredToolTip(mouseX, mouseY);
-        for (BaseComponent component : components) {
-            if (component.isMouseOver(mouseX - guiLeft, mouseY - guiTop)) {
-                component.renderToolTip(mouseX, mouseY);
-            }
-        }
-    }
+		for (int i = 0; i < components.size(); i++) {
+			Component com = components.get(i);
+			com.keyTyped(typedChar, keyCode);
+		}
+	}
 
-    protected boolean shouldSlotBeRendered(Slot slot) {
-        return slot.isEnabled();
-    }
+	@Override
+	protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
+		GuiHelper.renderForeground(mouseX - guiLeft, mouseY - guiTop, components);
 
-    public final void drawTexturedModalRect(int x, int y, int u, int v, int w, int h) {
-        if (imgX == 256 && imgY == 256) {
-            if (w > 256 || h > 256)
-                drawScaledCustomSizeModalRect(x, y, u, v, w, h, 256, 256, 256, 256);
-            else
-                RenderUtils.fastRect(x, y, u, v, w, h);
-        } else {
-            RenderUtils.fastRect(x, y, u, v, w, h, imgX, imgY);
-        }
-    }
+		renderHoveredToolTip(mouseX, mouseY);
+	}
 
-    @Override
-    public TileEntity getTileEntity() { // slow
-        return null;
-    }
+	@Override
+	protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
+		drawBackgroundImage();
 
-    @Override
-    public final ResourceLocation getTexture() {
-        return this.textureLocation;
-    }
+		GlStateManager.pushMatrix();
+		GlStateManager.translate(guiLeft, guiTop, 0);
 
-    @Override
-    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
-        super.mouseClicked(mouseX, mouseY, mouseButton);
+		GuiHelper.renderBackground(mouseX - guiLeft, mouseY - guiTop, components);
 
-        for (BaseComponent component : components) {
-            if (component.isMouseOver(mouseX - guiLeft, mouseY - guiTop)) {
-                component.mouseDown(mouseX - guiLeft, mouseY - guiTop, mouseButton);
-            }
-        }
-    }
+		GlStateManager.popMatrix();
+	}
 
-    @Override
-    protected void mouseReleased(int mouseX, int mouseY, int state) {
-        super.mouseReleased(mouseX, mouseY, state);
+	protected void drawBackgroundImage() {
+		drawWorldBackground(0);
 
-        for (BaseComponent component : components) {
-            if (component.isMouseOver(mouseX - guiLeft, mouseY - guiTop)) {
-                component.mouseUp(mouseX - guiLeft, mouseY - guiTop, state);
-            }
-        }
-    }
+		if (tex != null) {
+			RenderUtils.bindTexture(tex);
+			RenderUtils.fastRect(guiLeft, guiTop, 0, 0, xSize, ySize);
+		}
 
-    @Override
-    protected void mouseClickMove(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
-        super.mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick);
-        for (BaseComponent component : components) {
-            if (component.isMouseOver(mouseX - guiLeft, mouseY - guiTop)) {
-                component.mouseDrag(mouseX - guiLeft, mouseY - guiTop, clickedMouseButton, timeSinceLastClick);
-            }
-        }
-    }
+		MinecraftForge.EVENT_BUS.post(new GuiScreenEvent.BackgroundDrawnEvent(this));
+	}
 
-    @Override
-    public void handleMouseInput() throws IOException {
-        super.handleMouseInput();
-        int scrollDirection = Mouse.getEventDWheel();
-        if (scrollDirection != 0) {
-            int x = Mouse.getX(), y = Mouse.getY();
-            PlayerUtil.broadcastAll("MX " + x +" MY " + y);
-            for (BaseComponent component : components) {
-                component.mouseScrolled(x, y, scrollDirection > 0 ? 1 : -1);
-            }
-        }
-    }
+	public final int getLeft() {
+		return guiLeft;
+	}
 
-    @Override
-    protected void keyTyped(char typedChar, int keyCode) throws IOException {
-        super.keyTyped(typedChar, keyCode);
-        for (BaseComponent component : components) {
-            component.keyTyped(typedChar, keyCode);
-        }
-    }
+	public final int getTop() {
+		return guiTop;
+	}
 
-    @Override
-    protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
-        RenderUtils.bindTexture(textureLocation);
-        for (BaseComponent component : components) {
-            RenderUtils.prepareRenderState();
-            component.renderOverlay(0, 0, mouseX - guiLeft, mouseY - guiTop);
-            RenderUtils.restoreRenderState();
-        }
-    }
+	public final int getWidth() {
+		return xSize;
+	}
 
-    @Override
-    protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
-        RenderUtils.prepareRenderState();
-        GlStateManager.translate(guiLeft, guiTop, 0);
+	public final int getHeight() {
+		return ySize;
+	}
 
-        RenderUtils.bindTexture(textureLocation);
-        drawTexturedModalRect(0, 0, 0, 0, xSize + 1, ySize + 1);
+	public List<Rectangle> getCoveredAreas(List<Rectangle> areas) {
+		areas.add(new Rectangle(guiLeft, guiTop, xSize, ySize));
+		for (int i = 0; i < components.size(); i++) {
+			Component com = components.get(i);
+			if (com instanceof GTabs) {
+				((GTabs) com).getAreasCovered(guiLeft, guiTop, areas);
+			} else {
+				areas.add(new Rectangle(com.getArea(guiLeft, guiTop)));
+			}
+		}
+		return areas;
+	}
 
-        for (BaseComponent component : components) {
-            GlStateManager.pushMatrix();
-            component.render(0, 0, mouseX - guiLeft, mouseY - guiTop);
-            GlStateManager.popMatrix();
-        }
-        RenderUtils.restoreRenderState();
-        RenderUtils.restoreColor();
-    }
+	public GuiListener getListener() {
+		return listener;
+	}
 
-    public final int getGuiLeft() {
-        return guiLeft;
-    }
-
-    public final int getGuiTop() {
-        return guiTop;
-    }
-
-    public final int getXSize() {
-        return xSize;
-    }
-
-    public final int getYSize() {
-        return ySize;
-    }
-
-    public final int getImgXSize() {
-        return imgX;
-    }
-
-    public final int getImgYSize() {
-        return imgY;
-    }
-
-    public final List<Rectangle> getCoveredAreas(List<Rectangle> areas) {
-        areas.add(new Rectangle(guiLeft, guiTop, xSize, ySize));
-        for (BaseComponent component : components) {
-            if (component instanceof ComTabs) {
-                ComTabs tabCollection = (ComTabs) component;
-                areas.addAll(tabCollection.getAreasCovered(guiLeft, guiTop));
-            } else
-                areas.add(new Rectangle(component.getArea(guiLeft, guiTop)));
-        }
-        return areas;
-    }
+	public void setListener(GuiListener listener) {
+		this.listener = listener;
+	}
 }

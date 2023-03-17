@@ -1,37 +1,14 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package ilib.fluid;
 
 import ilib.ImpLib;
-import ilib.Registry;
+import ilib.Register;
 import ilib.util.ForgeUtil;
+
 import net.minecraft.block.material.Material;
 import net.minecraft.init.SoundEvents;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.SoundEvent;
+
 import net.minecraftforge.fluids.BlockFluidBase;
 import net.minecraftforge.fluids.BlockFluidClassic;
 import net.minecraftforge.fluids.Fluid;
@@ -41,187 +18,149 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51java
  */
 public class FluidHelper {
-    public static final ResourceLocation
-            LAVA_STILL = new ResourceLocation(ImpLib.MODID, "fluid/base_lava"),
-            LAVA_FLOW = new ResourceLocation(ImpLib.MODID, "fluid/base_lava_flow"),
-            WATER_STILL = new ResourceLocation(ImpLib.MODID, "fluid/base_water"),
-            WATER_FLOW = new ResourceLocation(ImpLib.MODID, "fluid/base_water_flow");
+	public static final ResourceLocation LAVA_STILL = new ResourceLocation(ImpLib.MODID, "fluid/base_lava"), LAVA_FLOW = new ResourceLocation(ImpLib.MODID,
+																																			  "fluid/base_lava_flow"), WATER_STILL = new ResourceLocation(
+		ImpLib.MODID, "fluid/base_water"), WATER_FLOW = new ResourceLocation(ImpLib.MODID, "fluid/base_water_flow");
 
-    public static void completeLoad() {
-        FluidTankHelper.FLUID_NAME_IDS = FluidRegistry.fluidIDs;
-        /*
-        BiMap<Fluid, Integer> fluidIDs = FluidRegistry.fluidIDs;
-        for(Map.Entry<Fluid,Integer> entry : fluidIDs.entrySet()) {
-            // hashCode: 如果++客户端少了一个那就乐呵了
-            // 重复倒也是个问题...
-            Fluid f = FluidTankHelper.FLUID_NAME_IDS.put(entry.getValue(), entry.getKey());
-            if(f != null) {
-                String s = ("The fluid " + f.getName() + " has same hashCode(" + entry.getKey().hashCode() + ") with " + entry.getValue().getName() + " which may cause some bugs.");
-                for (int i = 0; i < 10; i++) {
-                    ImpLib.logger().warn(s);
-                }
-            }
-        }
-        */
-    }
+	public static Fluid registerFluid(String name, FluidBuilder builder) {
+		Fluid prev = FluidRegistry.getFluid(name);
+		if (prev != null) {
+			ImpLib.logger().info("Fluid " + name + " has been registered.");
+			return prev;
+		}
 
-    /**
-     * Forge具有化神奇为腐朽的能力 <br>
-     * 神说,要有FluidBuilder <br>
-     * 一行代码搞定, 从未如此简单
-     *
-     * @param name    流体注册名
-     * @param builder FluidBuilder配置好的实例
-     * @since Before preInit
-     */
-    public static Fluid registerFluid(@Nonnull String name, @Nonnull FluidBuilder builder) {
-        Fluid fluid = builder.fluid(name);
+		Fluid fluid = builder.fluid(name);
 
-        if (FluidRegistry.isFluidRegistered(fluid)) {
-            ImpLib.logger().info("Found fluid " + fluid.getName() + ", the registration is canceled.");
-            return FluidRegistry.getFluid(name);
-        }
-        FluidRegistry.registerFluid(fluid);
-        FluidRegistry.addBucketForFluid(fluid);
+		FluidRegistry.registerFluid(fluid);
+		FluidRegistry.addBucketForFluid(fluid);
 
-        registerFluidBlock(fluid, builder.hasColor() ? new BlockFluidColorable(fluid, builder.material) : new BlockFluidClassic(fluid, builder.material));
+		BlockFluidBase block = new BlockFluidClassic(fluid, builder.material);
+		fluid.setBlock(block);
 
-        return fluid;
-    }
+		Register.registerFluidBlock(name, block);
+		return fluid;
+	}
 
-    /**
-     * Forge具有化神奇为腐朽的能力 <br>
-     * 神说,要有FluidBuilder <br>
-     * 一行代码搞定, 从未如此简单
-     *
-     * @param name    流体注册名
-     * @param builder FluidBuilder配置好的实例
-     * @param fluid   流体的实例，实现NBT控制之类的功能
-     * @since Before preInit
-     */
-    public static void registerFluid(@Nonnull String name, @Nonnull FluidBuilder builder, @Nonnull Fluid fluid) {
-        fluid = builder.fluid(fluid, name);
+	public static void registerFluid(String name, FluidBuilder builder, Fluid fluid) {
+		Fluid prev = FluidRegistry.getFluid(name);
+		if (prev != null) {
+			ImpLib.logger().info("Fluid " + name + " has been registered.");
+			return;
+		}
 
-        if (FluidRegistry.isFluidRegistered(fluid)) {
-            ImpLib.logger().info("Found fluid " + fluid.getName() + ", the registration is canceled.");
-            return;
-        }
-        FluidRegistry.registerFluid(fluid);
-        FluidRegistry.addBucketForFluid(fluid);
+		fluid = builder.fluid(fluid, name);
 
-        registerFluidBlock(fluid, builder.hasColor() ? new BlockFluidColorable(fluid, builder.material) : new BlockFluidClassic(fluid, builder.material));
-    }
+		FluidRegistry.registerFluid(fluid);
+		FluidRegistry.addBucketForFluid(fluid);
 
-    private static void registerFluidBlock(@Nonnull Fluid fluid, @Nonnull BlockFluidBase block) {
-        //fluid.setBlock(block);
-        Registry.registerFluidBlock(fluid.getName(), block);
-    }
+		BlockFluidBase block = new BlockFluidClassic(fluid, builder.material);
+		fluid.setBlock(block);
 
-    public static class FluidBuilder {
-        protected Integer color;
-        protected Material material;
-        protected int density;
-        protected int viscosity;
-        protected int luminosity;
-        protected int temperature;
-        protected SoundEvent soundFill;
-        protected SoundEvent soundDrain;
-        protected boolean isGas;
-        protected ResourceLocation locStill;
-        protected ResourceLocation locFlow;
+		Register.registerFluidBlock(name, block);
+	}
 
-        public FluidBuilder setColor(@Nullable Integer number) {
-            this.color = number;
-            return this;
-        }
+	public static class FluidBuilder {
+		protected Integer color;
+		protected Material material;
+		protected int density;
+		protected int viscosity;
+		protected int luminosity;
+		protected int temperature;
+		protected SoundEvent soundFill;
+		protected SoundEvent soundDrain;
+		protected boolean isGas;
+		protected ResourceLocation locStill;
+		protected ResourceLocation locFlow;
 
-        public FluidBuilder setMaterial(@Nonnull Material material) {
-            this.material = material;
-            return this;
-        }
+		public FluidBuilder color(@Nullable Integer color) {
+			this.color = color;
+			return this;
+		}
 
-        public FluidBuilder setSound(@Nonnull SoundEvent fill, @Nonnull SoundEvent drain) {
-            this.soundFill = fill;
-            this.soundDrain = drain;
-            return this;
-        }
+		public FluidBuilder material(Material material) {
+			this.material = material;
+			return this;
+		}
 
-        public FluidBuilder setGas(boolean e) {
-            this.isGas = e;
-            return this;
-        }
+		public FluidBuilder sound(SoundEvent fill, SoundEvent drain) {
+			this.soundFill = fill;
+			this.soundDrain = drain;
+			return this;
+		}
 
-        public FluidBuilder setResource(@Nonnull ResourceLocation resStill, @Nonnull ResourceLocation resFlow) {
-            this.locStill = resStill;
-            this.locFlow = resFlow;
-            return this;
-        }
+		public FluidBuilder gas(boolean e) {
+			this.isGas = e;
+			return this;
+		}
 
-        public FluidBuilder setDensity(int number) {
-            this.density = number;
-            return this;
-        }
+		public FluidBuilder texture(ResourceLocation still, ResourceLocation flow) {
+			this.locStill = still;
+			this.locFlow = flow;
+			return this;
+		}
 
-        public FluidBuilder setViscosity(int number) {
-            this.viscosity = number;
-            return this;
-        }
+		public FluidBuilder density(int number) {
+			this.density = number;
+			return this;
+		}
 
-        public FluidBuilder setLight(int number) {
-            this.luminosity = number;
-            return this;
-        }
+		public FluidBuilder viscosity(int number) {
+			this.viscosity = number;
+			return this;
+		}
 
-        public FluidBuilder setTemper(int number) {
-            this.temperature = number;
-            return this;
-        }
+		public FluidBuilder light(int number) {
+			this.luminosity = number;
+			return this;
+		}
 
-        public FluidBuilder setWater() {
-            return setMaterial(Material.WATER).setLight(0).setTemper(295).setDensity(1000).setViscosity(1000).setGas(false).setSound(SoundEvents.ITEM_BUCKET_FILL, SoundEvents.ITEM_BUCKET_EMPTY).setResource(WATER_STILL, WATER_FLOW);
-        }
+		public FluidBuilder temp(int number) {
+			this.temperature = number;
+			return this;
+		}
 
-        public FluidBuilder setLava() {
-            return setMaterial(Material.LAVA).setLight(15).setTemper(1300).setDensity(3000).setViscosity(3000).setGas(false).setSound(SoundEvents.ITEM_BUCKET_FILL_LAVA, SoundEvents.ITEM_BUCKET_EMPTY_LAVA).setResource(LAVA_STILL, LAVA_FLOW);
-        }
+		public FluidBuilder water() {
+			return material(Material.WATER).light(0)
+										   .temp(295)
+										   .density(1000)
+										   .viscosity(1000)
+										   .gas(false)
+										   .sound(SoundEvents.ITEM_BUCKET_FILL, SoundEvents.ITEM_BUCKET_EMPTY)
+										   .texture(WATER_STILL, WATER_FLOW);
+		}
 
-        public boolean hasColor() {
-            return this.color != null;
-        }
+		public FluidBuilder lava() {
+			return material(Material.LAVA).light(15)
+										  .temp(1300)
+										  .density(3000)
+										  .viscosity(3000)
+										  .gas(false)
+										  .sound(SoundEvents.ITEM_BUCKET_FILL_LAVA, SoundEvents.ITEM_BUCKET_EMPTY_LAVA)
+										  .texture(LAVA_STILL, LAVA_FLOW);
+		}
 
-        public Fluid fluid(Fluid originFluid, @Nonnull String name) {
-            return originFluid
-                    .setUnlocalizedName(ForgeUtil.getCurrentModId() + '.' + name)
-                    .setDensity(density)
-                    .setViscosity(viscosity)
-                    .setLuminosity(luminosity)
-                    .setTemperature(temperature)
-                    .setGaseous(isGas)
-                    .setColor(color == null ? -1 : color)
+		public boolean hasColor() {
+			return this.color != null;
+		}
 
-                    .setFillSound(soundFill)
-                    .setEmptySound(soundDrain);
-        }
+		public Fluid fluid(Fluid f, @Nonnull String name) {
+			return f.setUnlocalizedName(ForgeUtil.getCurrentModId() + '.' + name)
+					.setDensity(density)
+					.setViscosity(viscosity)
+					.setLuminosity(luminosity)
+					.setTemperature(temperature)
+					.setGaseous(isGas)
+					.setColor(color == null ? -1 : color)
+					.setFillSound(soundFill)
+					.setEmptySound(soundDrain);
+		}
 
-        public Fluid fluid(@Nonnull String name) {
-            return new Fluid(name, locStill, locFlow)
-                    .setUnlocalizedName(ForgeUtil.getCurrentModId() + '.' + name)
-                    .setDensity(density)
-                    .setViscosity(viscosity)
-                    .setLuminosity(luminosity)
-                    .setTemperature(temperature)
-                    .setGaseous(isGas)
-                    .setColor(color == null ? -1 : color)
-
-                    .setFillSound(soundFill)
-                    .setEmptySound(soundDrain);
-        }
-    }
+		public Fluid fluid(@Nonnull String name) {
+			return fluid(new Fluid(name, locStill, locFlow), name);
+		}
+	}
 }

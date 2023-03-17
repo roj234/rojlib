@@ -1,70 +1,114 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package ilib.world.structure;
 
+import ilib.ImpLib;
 import ilib.util.BlockHelper;
-import ilib.world.structure.schematic.Schematic;
+import ilib.util.EntityHelper;
+import ilib.world.schematic.Schematic;
+
+import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.server.management.PlayerChunkMap;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.BlockPos.PooledMutableBlockPos;
 import net.minecraft.world.World;
-/**
- * No description provided
- *
+import net.minecraft.world.WorldServer;
+
+import java.util.List;
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
-public final class Structure extends AbstractStructure {
-    protected GenerationType genType;
+public class Structure {
+	public static final int F_REPLACE_AIR = 1, F_SPAWN_ENTITY = 2;
 
-    public Structure(Schematic schematic, GenerationType type) {
-        super(schematic);
-        this.genType = type;
-    }
+	protected Schematic schematic;
 
-    public Structure(Schematic schematic) {
-        this(schematic, GenerationType.SURFACE);
-    }
+	public Structure(Schematic schematic) {
+		this.schematic = schematic;
+	}
 
-    @Override
-    public void generate(World world, BlockPos loc) {
-        int yCoord = getYCoord(world, loc);
-        generate(world, loc.getX(), yCoord, loc.getZ());
-    }
+	public void generate(World world, BlockPos loc, int flag) {
+		generate(world, loc.getX(), loc.getY(), loc.getZ(), flag);
+	}
 
-    protected int getYCoord(World world, BlockPos pos) {
-        int yCoord = pos.getY();
-        switch (this.genType) {
-            case SURFACE:
-                yCoord = BlockHelper.getSurfaceBlockY(world, pos.getX(), pos.getZ());
-        }
-        return yCoord;
-    }
+	public void generate(World world, int xCoord, int yCoord, int zCoord, int flag) {
+		if (world.isRemote) throw new IllegalStateException("world.isRemote");
 
-    public GenerationType getGenerationType() {
-        return this.genType;
-    }
+		Schematic schem = this.getSchematic();
+
+		WorldServer ws = (WorldServer) world;
+		PlayerChunkMap map = ws.getPlayerChunkMap();
+		BlockPos.PooledMutableBlockPos wPos = PooledMutableBlockPos.retain();
+		for (int x = 0; x < schem.width(); x++) {
+			for (int y = 0; y < schem.height(); y++) {
+				for (int z = 0; z < schem.length(); ++z) {
+					int worldX = xCoord + x;
+					int worldY = yCoord + y;
+					int worldZ = zCoord + z;
+
+					IBlockState state = schem.getBlockState(x, y, z);
+					if (state != null) {
+						Block block = state.getBlock();
+						if (!block.isAir(state, ws, wPos.setPos(worldX, worldY, worldZ))) {
+							ws.getChunk(wPos).setBlockState(wPos, state);
+							if (block.hasTileEntity(state)) {
+								NBTTagCompound tag = schem.getTileData(x, y, z, worldX, worldY, worldZ);
+								if (tag != null) {
+									TileEntity tile = ws.getTileEntity(wPos);
+									if (tile == null) {
+										ImpLib.logger().warn("Not a tile at " + worldX + ',' + worldY + ',' + worldZ + ", tag: " + tag);
+										continue;
+									}
+									tile.readFromNBT(tag);
+									BlockHelper.updateBlock(ws, wPos);
+								}
+							}
+						} else if ((flag & F_REPLACE_AIR) != 0 && !ws.isAirBlock(wPos)) {
+							ws.getChunk(wPos).setBlockState(wPos, BlockHelper.AIR_STATE);
+							ws.removeTileEntity(wPos);
+						}
+						map.markBlockForUpdate(wPos);
+					}
+				}
+			}
+		}
+
+		for (int x = 0; x < schem.width(); x++) {
+			for (int y = 0; y < schem.height(); y++) {
+				for (int z = 0; z < schem.length(); ++z) {
+					IBlockState state = schem.getBlockState(x, y, z);
+					if (state != null) {
+						int worldX = xCoord + x;
+						int worldY = yCoord + y;
+						int worldZ = zCoord + z;
+
+						ws.checkLight(wPos.setPos(worldX, worldY, worldZ));
+					}
+				}
+			}
+		}
+
+		wPos.release();
+
+		if ((flag & F_SPAWN_ENTITY) != 0) {
+			List<NBTTagCompound> entities = schem.getEntities();
+			for (int i = 0; i < entities.size(); i++) {
+				NBTTagCompound tag = entities.get(i);
+				EntityHelper.spawnEntityFromTag(tag, ws, tag.getInteger("x") + xCoord, tag.getInteger("y") + yCoord, tag.getInteger("z") + zCoord);
+			}
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	public <T extends Structure> T setSchematic(Schematic schematic) {
+		this.schematic = schematic;
+		return (T) this;
+	}
+
+	public Schematic getSchematic() {
+		return this.schematic;
+	}
 }

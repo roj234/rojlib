@@ -1,263 +1,209 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.io.down;
 
-import roj.concurrent.WaitingIOFuture;
-import roj.concurrent.task.AbstractCalcTask;
-import roj.io.FileUtil;
-import roj.net.tcp.client.HttpClient;
-import roj.net.tcp.client.HttpConnection;
+import roj.concurrent.task.ITask;
+import roj.io.IOUtil;
+import roj.io.source.Source;
+import roj.net.ch.ChannelCtx;
+import roj.net.ch.ChannelHandler;
+import roj.net.ch.Event;
+import roj.net.ch.MyChannel;
+import roj.net.http.HttpHead;
+import roj.net.http.HttpRequest;
+import roj.util.DynByteBuf;
+import roj.util.NamespaceKey;
 
-import javax.annotation.Nullable;
-import java.io.File;
+import java.io.Closeable;
+import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.RandomAccessFile;
-import java.net.URL;
-import java.util.concurrent.ExecutionException;
 
 /**
- * @author Roj234
- * @version 0.1
- * @since  2020/9/13 12:28
+ * @author Roj233
+ * @since 2022/2/28 21:49
  */
-public class Downloader extends AbstractCalcTask<Void> implements Runnable, WaitingIOFuture {
-    public static final int UPDATE_FREQUENCY = 1000;
+abstract class Downloader implements ITask, Closeable, ChannelHandler {
+	Downloader(Source file) { this.file = file; }
 
-    public final File file;
-    public final HttpConnection conn;
-    public final long startPos, length;
-    private long downloaded;
-    public final int id;
-    private final RandomAccessFile info;
-    private final IProgressHandler progress;
+	final Source file;
+	HttpRequest client;
+	MyChannel ch;
+	DownloadTask owner;
+	IProgress progress;
 
-    @Override
-    public boolean cancel(boolean mayInterruptIfRunning) {
-        boolean done = super.cancel(mayInterruptIfRunning);
-        if(done && info != null) {
-            try {
-                info.close();
-            } catch (IOException ignored) {}
-        }
-        return done;
-    }
+	volatile byte state;
+	static final byte DISCONNECTED = 0, CONNECTING = 1, DOWNLOADING = 2, SUCCESS = 3, FAILED = 4;
 
-    /**
-     * 多线程下载器
-     *
-     * @see Downloader#Downloader(int, File, File, URL, long, long, IProgressHandler)
-     */
-    public Downloader(int pid, File downloadTo, @Nullable File infoFile, URL url, long len) throws IOException {
-        this(pid, downloadTo, infoFile, url, 0, len, null);
-    }
+	long begin = System.currentTimeMillis();
 
-    /**
-     * 多线程下载器
-     *
-     * @see Downloader#Downloader(int, File, File, URL, long, long, IProgressHandler)
-     */
-    public Downloader(int pid, File downloadTo, @Nullable File infoFile, URL url, long start, long len) throws IOException {
-        this(pid, downloadTo, infoFile, url, start, len, null);
-    }
+	abstract long getDownloaded();
+	abstract long getRemain();
+	abstract long getTotal();
+	abstract long getAverageSpeed();
+	abstract int getDelta();
 
-    /**
-     * 多线程下载器
-     *
-     * @param pid        多线程ID
-     * @param downloadTo 保存目标
-     * @param infoFile   进度文件 (null: 不使用)
-     * @param url        下载地址
-     * @param start      起始位置
-     * @param len        文件长度
-     * @param progress   进度条监视器
-     */
-    public Downloader(int pid, File downloadTo, @Nullable File infoFile, URL url, long start, long len, IProgressHandler progress) throws IOException {
-        this.id = pid;
-        this.file = downloadTo;
-        this.conn = new HttpConnection(url);
-        this.startPos = start;
-        this.length = len;
-        this.progress = progress;
-        if (progress != null)
-            progress.handleJoin(this);
+	@Override
+	public final void channelOpened(ChannelCtx ctx) throws IOException {
+		HttpHead header = client.response();
+		int code = header.getCode();
+		if (code < 200 || code > 299) {
+			throw new FileNotFoundException("远程返回: " + header);
+		}
+	}
 
-        if (infoFile != null) {
-            this.info = new RandomAccessFile(infoFile, "rw");
-            if (this.info.length() < 8 * pid + 8)
-                this.info.setLength(8 * pid + 8);
-            info.seek(8 * pid);
-            this.downloaded = info.readLong();
-            if (downloaded >= length)
-                downloaded = -1;
-            if (downloaded == -1) {
-                writePos(-1);
-                info.close();
-                if (progress != null)
-                    progress.handleDone(this);
-            }
-        } else {
-            this.info = null;
-        }
+	@Override
+	public final void channelTick(ChannelCtx ctx) throws IOException {
+		if (progress != null && progress.wasShutdown()) close();
+		if (++idle > IOUtil.timeout) retry();
+	}
 
-        HttpClient client = conn.getClient();
-        client.method("GET")
-              .header("User-Agent", FileUtil.USER_AGENT)
-              .connectTimeout(FileUtil.TIMEOUT);
-        client.readTimeout(FileUtil.TIMEOUT);
-    }
+	@Override
+	public final void channelRead(ChannelCtx ctx, Object msg) throws IOException {
+		DynByteBuf buf = (DynByteBuf) msg;
 
-    @Override
-    public void calculate(Thread thread) {
-        executing = true;
-        try {
-            waitFor();
-        } catch (Throwable e) {
-            exception = new ExecutionException(e);
-        }
-        executing = false;
+		idle = 0;
 
-        synchronized (this) {
-            notifyAll();
-        }
-    }
+		int len = buf.readableBytes();
+		try {
+			file.write(buf);
+		} finally {
+			if (progress != null) progress.onChange(this);
 
-    public void run() {
-        try {
-            waitFor();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
+			onUpdate(len);
+		}
+	}
 
-    @Override
-    public String toString() {
-        return "Downloader#" + id + " " + startPos + " => " + (startPos + length - 1) + " (downloaded " + downloaded + ")";
-    }
+	@Override
+	public final void channelClosed(ChannelCtx ctx) throws IOException {
+		if (state >= SUCCESS) return;
+		if (state != DISCONNECTED) retry();
+	}
 
-    public long getDownloaded() {
-        return downloaded;
-    }
+	@Override
+	public final void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
+		if (retry == 0) {
+			if (owner.ex == null)
+				owner.ex = ex;
+			ex.printStackTrace();
+		}
+		ctx.close();
+	}
 
-    long last;
+	@Override
+	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
+		NamespaceKey id = event.id;
+		if (id.equals(HttpRequest.DOWNLOAD_EOF)) {
+			if (event.getData() == Boolean.TRUE)
+				done();
+		}
+	}
 
-    private void writePos(long i) throws IOException {
-        if (info != null) {
-            long t = System.currentTimeMillis();
-            if(t - last > 100) {
-                info.seek(8 * id);
-                info.writeLong(i);
-                last = t;
-            }
-        }
-    }
+	abstract void onBeforeSend(HttpRequest client) throws Exception;
+	abstract void onUpdate(int r) throws IOException;
+	abstract void onDone() throws IOException;
 
-    @Override
-    public void waitFor() throws IOException {
-        if (this.downloaded == -1 || downloaded >= length) {
-            out = null;
-            return;
-        }
+	void onClose() {}
 
-        try {
-            conn.getClient()
-                .header("RANGE", "bytes=" + (startPos + downloaded) + '-' + (startPos + length - 1));
-            InputStream is = this.conn.getInputStream();
+	final void done() throws IOException {
+		synchronized (client) {
+			if (state >= SUCCESS) return;
+			state = SUCCESS;
+		}
+		onDone();
+		if (progress != null) progress.onFinish(this);
+		owner.onSubDone();
+		close();
+	}
 
-            try {
-                try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
-                    raf.seek(startPos + downloaded);
+	int idle, retry;
 
-                    byte[] data = new byte[FileUtil.BUFFER_SIZE];
+	private void retry() throws IOException {
+		idle = 0;
 
-                    long deltaRead = 0;
+		if ((progress == null || !progress.wasShutdown()) && retry-- > 0) {
+			synchronized (client) {
+				if (state >= SUCCESS) {
+					close();
+					return;
+				}
+				state = DISCONNECTED;
+			}
 
-                    int read;
-                    long lastTime = System.currentTimeMillis();
-                    int speedLowCount = 0;
-                    while (downloaded < length && -1 != (read = is.read(data))) {
-                        raf.write(data, 0, read);
-                        downloaded += read;
-                        deltaRead += read;
+			ch.close();
+			DownloadTask.QUERY.pushTask(this);
+		} else {
+			if (progress != null) progress.shutdown();
+			close();
+		}
+	}
 
-                        writePos(downloaded);
+	public final void waitFor() throws InterruptedException {
+		synchronized (client) {
+			while (state < SUCCESS) client.wait();
+		}
+	}
 
-                        if(progress != null && !progress.continueDownload())
-                            return;
+	@Override
+	public final void close() {
+		boolean fail = false;
+		synchronized (client) {
+			if (state < SUCCESS) {
+				state = FAILED;
+				fail = true;
+			}
+		}
+		if (fail) owner.cancel();
 
-                        double t;
-                        if (read != 0 && (t = System.currentTimeMillis() - lastTime) > UPDATE_FREQUENCY) {
-                            lastTime = System.currentTimeMillis();
+		if (ch != null) {
+			try {
+				ch.close();
+			} catch (IOException ignored) {}
+		}
 
-                            long speed = (long) (deltaRead * 1000d / t);
+		try {
+			file.close();
+		} catch (IOException ignored) {}
 
-                            if (progress != null)
-                                progress.handleProgress(this, downloaded, deltaRead);
+		onClose();
 
-                            if (speed < 1024 * 10 && downloaded < length) {
-                                if (++speedLowCount == 3) {
-                                    if (progress != null)
-                                        progress.handleReconnect(this, downloaded);
+		synchronized (client) {
+			client.notifyAll();
+		}
+	}
 
-                                    conn.disconnect();
+	public final boolean isDone() { return state >= SUCCESS; }
 
-                                    speedLowCount = 0;
+	@Override
+	public final void execute() throws Exception {
+		if (progress != null && progress.wasShutdown()) {
+			close();
+			return;
+		}
 
-                                    conn.getClient()
-                                        .header("RANGE", "bytes=" + (startPos + downloaded) + '-' + (startPos + length - 1));
-                                    is = conn.getInputStream();
+		try {
+			onBeforeSend(client);
+			synchronized (client) {
+				if (state >= SUCCESS) {
+					close();
+					return;
+				}
+				state = CONNECTING;
+			}
 
-                                    raf.seek(startPos + this.downloaded);
-                                }
-                            } else {
-                                speedLowCount--;
-                            }
+			MyChannel ctx = ch;
+			if (ctx != null) ctx.close();
 
-                            deltaRead = 0;
-                        }
-                    }
+			ch = ctx = MyChannel.openTCP();
+			ctx.addLast("Downloader", this);
 
-                    writePos(-1);
-                    if (progress != null)
-                        progress.handleDone(this);
-                }
-            } finally {
-                is.close();
-            }
-        } catch (Throwable e) {
-            if(progress != null)
-                progress.errorCaught();
-            throw e;
-        } finally {
-            if (info != null) {
-                try {
-                    info.close();
-                } catch (IOException ignored) {}
-            }
-            out = null;
-        }
-    }
+			client.connect(ctx, IOUtil.timeout);
+			HttpRequest.POLLER.register(ctx, null);
+		} catch (Exception e) {
+			e.printStackTrace();
+			close();
+		}
+	}
+
+	@Override
+	public String toString() {
+		return "D{Ste="+state+"/Fin="+getDownloaded()+"/Rem="+getRemain()+"/Tot="+getTotal()+"}";
+	}
 }

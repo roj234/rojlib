@@ -1,28 +1,3 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.opengl;
 
 import org.lwjgl.opengl.GL11;
@@ -40,105 +15,104 @@ import static roj.opengl.vertex.VertexFormat.Entry;
  * Display Buffer
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/21 22:51
  */
 public class DisplayBuffer {
-    private int bufferId = -1, listId = -1;
-    private final VertexFormat            vertexFormat;
-    private final Consumer<VertexBuilder> drawer;
-    private final VertexBuilder           vertexBuilder;
+	private int vbo = -1, list = -1;
+	private final VertexFormat vf;
+	private final VertexBuilder vb;
+	private final int mode;
 
-    protected DisplayBuffer(VertexFormat format, VertexBuilder builder) {
-        this.vertexFormat = format;
-        vertexBuilder = builder;
-        this.drawer = null;
-    }
+	private final Consumer<VertexBuilder> drawer;
+	private boolean drawn;
 
-    public DisplayBuffer(VertexFormat format, Consumer<VertexBuilder> drawer, VertexBuilder builder) {
-        this.vertexFormat = format;
-        this.drawer = drawer;
-        vertexBuilder = builder;
-    }
+	protected DisplayBuffer(VertexFormat vf, VertexBuilder tmpVb, int mode) {
+		this.vf = vf;
+		this.vb = tmpVb;
+		this.mode = mode;
+		drawer = null;
+	}
 
-    protected void drawInternal(VertexBuilder vb) {
-        drawer.accept(vb);
-    }
+	public DisplayBuffer(VertexFormat vf, VertexBuilder tmpVb, int mode, Consumer<VertexBuilder> h) {
+		this.vf = vf;
+		this.vb = tmpVb;
+		this.mode = mode;
+		drawer = h;
+	}
 
-    public final void firstDraw(int mode) {
-        firstDraw(mode, true);
-    }
+	protected void drawInternal(VertexBuilder vb) {
+		drawer.accept(vb);
+	}
 
-    public void firstDraw(int mode, boolean compileOnly) {
-        if (this.listId < 0) {
-            if((this.listId = GL11.glGenLists(1)) == 0) {
-                int id = GL11.glGetError();
-                String msg;
-                if (id != 0) {
-                    msg = GLU.gluErrorString(id);
-                } else {
-                    msg = "Unknown";
-                }
-                throw new IllegalStateException("Failed to generate list: " + msg);
-            }
-        }
-        if (vboSupported) {
-            if (this.bufferId < 0) {
-                this.bufferId = VboUtil.glGenBuffers();
-            }
-            VboUtil.glBindBuffer(VboUtil.GL_ARRAY_BUFFER, this.bufferId);
-        } else {
-            GL11.glNewList(this.listId, compileOnly ? GL11.GL_COMPILE : GL11.GL_COMPILE_AND_EXECUTE);
-        }
+	public final void init() {
+		init(true);
+	}
 
-        VertexBuilder vb = vertexBuilder;
+	public final void init(boolean compileOnly) {
+		if (list < 0) {
+			if ((list = GL11.glGenLists(1)) == 0) {
+				int id = GL11.glGetError();
+				String msg;
+				if (id != 0) {
+					msg = GLU.gluErrorString(id);
+				} else {
+					msg = "Unknown";
+				}
+				throw new IllegalStateException("Failed to generate list: " + msg);
+			}
+		}
+		if (!vboSupported) {
+			GL11.glNewList(list, compileOnly ? GL11.GL_COMPILE : GL11.GL_COMPILE_AND_EXECUTE);
+		}
 
-        vb.begin(vertexFormat);
+		VertexBuilder vb = this.vb;
 
-        drawInternal(vb);
+		vb.begin(vf);
 
-        vb.end();
-        if (vboSupported) {
-            VboUtil.glBufferData(VboUtil.GL_ARRAY_BUFFER, vb.getBuffer(), VboUtil.GL_STATIC_DRAW);
-            VboUtil.glBindBuffer(VboUtil.GL_ARRAY_BUFFER, 0);
-            int vertexCount = vb.getVertexCount();
+		drawInternal(vb);
 
-            GL11.glNewList(this.listId, GL11.GL_COMPILE);
+		vb.end();
+		if (vboSupported) {
+			if (vbo < 0) vbo = VboUtil.glGenBuffers();
 
-            VboUtil.glBindBuffer(VboUtil.GL_ARRAY_BUFFER, this.bufferId);
+			// send to GPU
+			VboUtil.glBindBuffer(VboUtil.GL_ARRAY_BUFFER, vbo);
+			VboUtil.glBufferData(VboUtil.GL_ARRAY_BUFFER, vb.getBuffer(), VboUtil.GL_STATIC_DRAW);
+			VboUtil.glBindBuffer(VboUtil.GL_ARRAY_BUFFER, 0);
+			GL11.glNewList(list, compileOnly ? GL11.GL_COMPILE : GL11.GL_COMPILE_AND_EXECUTE);
 
-            VertexFormat.Entry[] list = vertexFormat.entries();
+			VboUtil.glBindBuffer(VboUtil.GL_ARRAY_BUFFER, vbo);
 
-            int size = vertexFormat.getSize();
-            for (Entry value : list) {
-                VboUtil.preDrawVBO(value, size);
-            }
+			VertexFormat.Entry[] list = vf.entries();
 
-            GL11.glDrawArrays(mode, 0, vertexCount);
-            VboUtil.glBindBuffer(VboUtil.GL_ARRAY_BUFFER, 0);
+			int size = vf.getSize();
+			for (Entry value : list) VboUtil.preDrawVBO(value, size);
 
-            for (Entry entry : list) {
-                VboUtil.postDraw(entry);
-            }
-        } else {
-            VboUtil.drawVertexes(mode, vb);
-        }
-        GL11.glEndList();
-    }
+			GL11.glDrawArrays(mode, 0, vb.getVertexCount());
+			VboUtil.glBindBuffer(VboUtil.GL_ARRAY_BUFFER, 0);
 
-    public void draw() {
-        GL11.glCallList(this.listId);
-    }
+			for (Entry entry : list) VboUtil.postDraw(entry);
+		} else {
+			VboUtil.drawCPUVertexes(mode, vb);
+		}
+		GL11.glEndList();
+		drawn = true;
+	}
 
-    @Override
-    public void finalize() {
-        if (this.bufferId >= 0) {
-            VboUtil.glDeleteBuffers(this.bufferId);
-            this.bufferId = -1;
-        }
-        if (this.listId >= 0) {
-            GL11.glDeleteLists(this.listId, 1);
-            this.listId = -1;
-        }
-    }
+	public void draw() {
+		if (!drawn) init(false);
+		else GL11.glCallList(list);
+	}
+
+	public void delete() {
+		if (vbo >= 0) {
+			VboUtil.glDeleteBuffers(vbo);
+			vbo = -1;
+		}
+		if (list >= 0) {
+			GL11.glDeleteLists(list, 1);
+			list = -1;
+		}
+		drawn = false;
+	}
 }

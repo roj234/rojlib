@@ -1,32 +1,7 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.config;
 
-import roj.math.MathUtils;
 import roj.text.CharList;
+import roj.text.TextUtil;
 
 /**
  * Signals that an error has been reached unexpectedly
@@ -35,139 +10,177 @@ import roj.text.CharList;
  * @see Exception
  */
 public final class ParseException extends Exception {
-    private static final long serialVersionUID = 3703218443322787635L;
-    private static final boolean DEBUG = true;
+	private static final long serialVersionUID = 3703218443322787635L;
 
-    /**
-     * The zero-based character offset into the string being parsed at which
-     * the error was found during parsing.
-     */
-    private final int index;
+	/**
+	 * The zero-based character offset into the string being parsed at which
+	 * the error was found during parsing.
+	 */
+	private final int index;
 
-    private int line = -2, linePos;
-    private CharSequence lineContent;
+	private int line = -2, linePos;
+	private CharSequence lineContent;
+	private CharList path;
 
-    /**
-     * Constructs a ParseException with the specified detail message and
-     * offset.
-     * A detail message is a String that describes this particular exception.
-     *
-     * @param reason       the detail message
-     * @param index the position where the error is found while parsing.
-     */
-    public ParseException(CharSequence all, String reason, int index, Throwable cause) {
-        super(reason, cause, true, DEBUG);
-        this.index = index;
-        this.lineContent = all;
-    }
+	public ParseException(CharSequence all, String reason, int index) {
+		this(all,reason,index,null);
+	}
+	public ParseException(CharSequence all, String reason, int index, Throwable cause) {
+		super(filter(reason), cause, true, true);
+		this.index = index;
+		this.lineContent = all;
+	}
 
-    public int getIndex() {
-        return index;
-    }
+	public ParseException(String reason, int index) {
+		super(reason, null, true, true);
+		this.index = index;
+		noDetail();
+	}
 
-    public int getLine() {
-        return line;
-    }
+	private static String filter(String reason) {
+		for (int i = 0; i < reason.length(); i++) {
+			char c = reason.charAt(i);
+			if (c < 32) {
+				StringBuilder sb = new StringBuilder().append(reason, 0, i);
+				for (int j = i; j < reason.length(); j++) {
+					c = reason.charAt(j);
+					if (c < 32) {
+						sb.append("#").append((int) c);
+					} else {
+						sb.append(c);
+					}
+				}
+				return sb.toString();
+			}
+		}
+		return reason;
+	}
 
-    public int getLineOffset() {
-        return linePos;
-    }
+	public int getIndex() {
+		return index;
+	}
 
-    @Override
-    public String getMessage() {
-        return !(getCause() instanceof ParseException) ? super.getMessage() : getCause().getMessage();
-    }
+	public int getLine() {
+		return line;
+	}
 
-    public String getLineContent() {
-        return lineContent.toString();
-    }
+	public int getLineOffset() {
+		return linePos;
+	}
 
-    @SuppressWarnings("fallthrough")
-    public void __lineParser() {
-        if(this.line != -2) return;
+	public CharSequence getPath() {
+		return path;
+	}
 
-        CharList chars = new CharList(20);
+	public ParseException addPath(CharSequence pathSeq) {
+		if (path == null) path = new CharList();
+		path.insert(0, pathSeq);
+		return this;
+	}
 
-        CharSequence keys = this.lineContent;
+	@Override
+	public String getMessage() {
+		return !(getCause() instanceof ParseException) ? super.getMessage() : getCause().getMessage();
+	}
 
-        int target = index;
-        if(target > keys.length() || target < 0) {
-            noDetail();
-            return;
-        }
+	public String getLineContent() {
+		return lineContent.toString();
+	}
 
-        int line = 1, linePos = 0;
-        int i = 0;
+	@SuppressWarnings("fallthrough")
+	private void __lineParser() {
+		if (this.line != -2) return;
 
-        for (; i < target; i++) {
-            char c1 = keys.charAt(i);
-            switch (c1) {
-                case '\r':
-                    if(i + 1 < keys.length() && keys.charAt(i + 1) == '\n') // \r\n
-                        i++;
-                case '\n':
-                    linePos = 0;
-                    line++;
-                    chars.clear();
-                    break;
-                default:
-                    linePos++;
-                    chars.append(c1);
-            }
-        }
+		CharList chars = new CharList(20);
 
-        o:
-        for (; i < keys.length(); i++) {
-            char c1 = keys.charAt(i);
-            switch (c1) {
-                case '\r':
-                case '\n':
-                    break o; // till this line end
-                default:
-                    chars.append(c1);
-            }
-        }
+		CharSequence keys = this.lineContent;
 
-        this.line = line;
-        this.linePos = linePos - 1;
-        this.lineContent = chars.toString();
-    }
+		int target = index;
+		if (target > keys.length() || target < 0) {
+			noDetail();
+			return;
+		}
 
-    public void noDetail() {
-        this.line = 0;
-        this.linePos = 8;
-        this.lineContent = "<UNKNOWN ERROR>";
-    }
+		int line = 1, linePos = 0;
+		int i = 0;
 
-    @Override
-    public String toString() {
-        String msg = getMessage() == null ? (getCause() == null ? "<未提供>" : getCause().toString()) : getMessage();
+		for (; i < target; i++) {
+			char c1 = keys.charAt(i);
+			switch (c1) {
+				case '\r':
+					if (i + 1 < keys.length() && keys.charAt(i + 1) == '\n') // \r\n
+					{i++;}
+				case '\n':
+					linePos = 0;
+					line++;
+					chars.clear();
+					break;
+				default:
+					linePos++;
+					chars.append(c1);
+			}
+		}
 
-        __lineParser();
+		o:
+		for (; i < keys.length(); i++) {
+			char c1 = keys.charAt(i);
+			switch (c1) {
+				case '\r':
+				case '\n':
+					break o; // till this line end
+				default:
+					chars.append(c1);
+			}
+		}
 
-        String line = getLineContent();
+		this.line = line;
+		this.linePos = linePos - 1;
+		this.lineContent = chars.toString();
+	}
 
-        StringBuilder k = new StringBuilder().append("解析错误:\r\n  Line ").append(this.line).append(": ");
+	private void noDetail() {
+		line = 0;
+		linePos = 0;
+		lineContent = "<无数据>";
+	}
 
-        if (line.length() > 512) {
-            k.append("当前行偏移量 ").append(this.linePos);
-        } else {
-            k.append(line).append("\r\n");
-            int off = this.linePos + 10 + MathUtils.digitCount(this.line);
-            for (int i = 0; i < off; i++) {
-                k.append('-');
-            }
+	@Override
+	public String toString() {
+		String msg = getMessage() == null ? (getCause() == null ? "<未提供>" : getCause().toString()) : getMessage();
 
-            for (int i = linePos; i >= 0; i--) {
-                char c = line.charAt(i);
-                if (c > 255) // 双字节我直接看做中文了, 再说吧
-                    k.append('-');
-                else if(c == 9) // 制表符, cmd中显示5个
-                    k.append("----");
-            }
-            k.append('^');
-        }
+		try {
+			__lineParser();
+		} catch (Exception ignored) {
+			noDetail();
+		}
 
-        return k.append("\r\n总偏移量: ").append(this.index).append("\r\n原因: ").append(msg).append("\r\n").toString();
-    }
+		String line = getLineContent();
+
+		CharList k = new CharList().append("解析错误:\r\n  Line ").append(this.line).append(": ");
+
+		if (line.length() > 512) {
+			k.append("当前行偏移量 ").append(this.linePos);
+		} else {
+			k.append(line).append("\r\n");
+			int off = this.linePos + 10 + TextUtil.digitCount(this.line);
+			for (int i = 0; i < off; i++) {
+				k.append('-');
+			}
+
+			for (int i = linePos; i >= 0; i--) {
+				char c = line.charAt(i);
+				if (c > 255) // 双字节我直接看做中文了, 再说吧
+					k.append('-');
+				else if(c == 9) // 制表符, cmd中显示4个
+					k.append("----");
+			}
+			k.append('^');
+		}
+
+		k.append("\r\n总偏移量: ").append(index);
+		if (path != null) {
+			k.append("\r\n对象位置: ").append(path);
+		}
+		return k.append("\r\n原因: ").append(msg).append("\r\n").toString();
+	}
 }

@@ -1,381 +1,496 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.collect;
 
 import roj.math.MathUtils;
-import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
-import java.util.Arrays;
+import java.util.AbstractSet;
+import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
 import java.util.PrimitiveIterator.OfInt;
 
+import static roj.collect.AbstractIterator.*;
 import static roj.collect.IntMap.MAX_NOT_USING;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
- * @since 2021/4/21 22:51
+ * @since 2023/4/3 10:22
  */
-public class IntSet implements CItrMap<IntSet.Entry>, Iterable<Integer> {
-    public static class Entry implements EntryIterable<Entry> {
-        protected int k;
+public class IntSet extends AbstractSet<Integer> {
+	static final class Entry {
+		int k, set;
 
-        protected Entry(int k) {
-            this.k = k;
-        }
+		Entry(int k) {
+			this.k = k;
+		}
 
-        protected Entry next;
+		Entry next;
+	}
 
-        @Override
-        public Entry nextEntry() {
-            return next;
-        }
-    }
+	private Entry[] entries;
+	private int size = 0, mask = 1;
 
-    protected Entry[] entries;
-    protected int size = 0;
+	private boolean resizeRequested;
 
-    int length = 2;
+	public IntSet() { this(16); }
+	public IntSet(int size) { ensureCapacity(size); }
 
-    float loadFactor = 0.8f;
+	public IntSet(int... arr) {
+		ensureCapacity(arr.length);
+		addAll(arr);
+	}
+	public IntSet(IntSet list) { addAll(list); }
 
-    public IntSet() {
-        this(16);
-    }
+	public void ensureCapacity(int size) {
+		if (size <= mask+1) return;
+		mask = MathUtils.getMin2PowerOf(size)-1;
+		resize();
+	}
 
-    public IntSet(int... arr) {
-        ensureCapacity(arr.length);
-        this.addAll(arr);
-    }
+	@Nonnull
+	public IntIterator iterator() {
+		return new Itr(this);
+	}
 
-    public IntSet(int size) {
-        ensureCapacity(size);
-    }
+	public int[] toIntArray() {
+		int[] result = new int[size];
 
-    public IntSet(IntSet list) {
-        this.loadFactor = list.loadFactor;
-        ensureCapacity(list.size());
-        this.addAll(list);
-    }
+		int i = 0;
+		for (PrimitiveIterator.OfInt itr = this.iterator(); itr.hasNext(); ) {
+			int v = itr.nextInt();
+			result[i++] = v;
+		}
 
-    public void ensureCapacity(int size) {
-        if (size < length) return;
-        length = MathUtils.getMin2PowerOf(size);
-        resize();
-    }
+		return result;
+	}
 
-    @Nonnull
-    public PrimitiveIterator.OfInt iterator() {
-        return new SetItr(this);
-    }
+	public int size() { return size; }
 
-    @Nonnull
-    //@Override
-    public int[] toArray() {
-        int[] result = new int[size];
+	public void resize() {
+		if (entries == null) return;
 
-        int i = 0;
-        for (PrimitiveIterator.OfInt itr = this.iterator(); itr.hasNext(); ) {
-            int v = itr.nextInt();
-            result[i++] = v;
-        }
+		Entry[] newEntries = new Entry[mask+1];
+		Entry entry, next;
+		int i = 0, j = entries.length;
+		for (; i < j; i++) {
+			entry = entries[i];
+			entries[i] = null;
+			while (entry != null) {
+				next = entry.next;
 
-        return result;
-    }
+				int newKey = indexFor(entry.k);
+				Entry old = newEntries[newKey];
 
-    public boolean isEmpty() {
-        return size == 0;
-    }
+				// dualEntry
+				if ((entry.k&31) != 0) {
+					if (entry.set != 0) {
+						int newKey2 = indexFor(entry.set);
+						if (newKey2 != newKey) {
+							Entry entry1 = getCachedEntry(entry.set);
+							entry.set = 0;
 
-    public int size() {
-        return size;
-    }
+							Entry old1 = newEntries[newKey2];
+							newEntries[newKey2] = entry1;
+							entry1.next = old1;
+						}
+					}
+				}
 
-    @Override
-    public void removeEntry0(Entry kEntry) {
-        remove(kEntry.k);
-    }
+				newEntries[newKey] = entry;
+				entry.next = old;
+				entry = next;
+			}
+		}
 
-    public void addAll(IntSet otherSet) {
-        if (otherSet.entries == null)
-            return;
-        for (int i = 0; i < otherSet.length; i++) {
-            Entry entry = otherSet.entries[i];
-            if (entry == null)
-                continue;
-            while (entry != null) {
-                this.add(entry.k);
-                entry = entry.next;
-            }
-        }
-    }
+		this.entries = newEntries;
+	}
 
-    public void resize() {
-        if (entries == null)
-            return;
-        //System.err.println("扩容为: "+ DELIM);
-        Entry[] newEntries = new Entry[length];
-        Entry entry;
-        Entry next;
-        int i = 0, j = entries.length;
-        for (; i < j; i++) {
-            entry = entries[i];
-            entries[i] = null;
-            while (entry != null) {
-                next = entry.next;
-                int newKey = indexFor(entry.k);
-                Entry old = newEntries[newKey];
-                newEntries[newKey] = entry;
-                entry.next = old;
-                entry = next;
-            }
-        }
+	public final boolean contains(Object o) { return contains((int) o); }
+	public final boolean contains(int key) {
+		int mKey = key & ~31;
 
-        this.entries = newEntries;
+		Entry e = getEntryFirst(key);
+		while (e != null) {
+			// bitset entry
+			if (e.k == mKey) return (e.set&(1<<(key&31))) != 0;
 
-    }
+			// key.isDual() && entry.isDual()
+			if (key != mKey && (e.k & 31) != 0) {
+				if (e.k == key || e.set == key) return true;
+			}
+			e = e.next;
+		}
+		return false;
+	}
 
-    public boolean add(int key) {
-        if (size > length * loadFactor) {
-            length <<= 1;
-            resize();
-        }
+	public final boolean add(Integer v) { return add((int) v); }
+	public final boolean add(int key) {
+		if (resizeRequested) {
+			resizeRequested = false;
+			mask = ((mask+1) << 1) - 1;
+			resize();
+		}
 
-        int k2 = key - 1;
+		int mKey = key & ~31;
 
-        Entry entry = getOrCreateEntry(key, k2);
-        if (entry.k == k2) {
-            entry.k = key;
-            afterAdd(key);
-            size++;
-            return true;
-        }
-        return false;
-    }
+		if (entries == null) entries = new Entry[mask+1];
 
-    //@Override
-    public boolean containsAll(int... collection) {
-        for (int o : collection) {
-            if (!contains(o))
-                return false;
-        }
-        return true;
-    }
+		int i = indexFor(key);
+		Entry entry = entries[i];
+		if (entry == null) {
+			entry = entries[i] = getCachedEntry(key);
 
-    //@Override
-    public boolean addAll(int... collection) {
-        boolean a = false;
-        for (int k : collection) {
-            a |= this.add(k);
-        }
-        return a;
-    }
+			if (key == mKey) {
+				entry.set = 1;
+				merge(key, entry);
+			}
 
-    //@Override
-    public boolean removeAll(@Nonnull int... collection) {
-        boolean k = false;
-        for (int o : collection) {
-            k |= remove(o);
-        }
-        return k;
-    }
+			size++;
+			return true;
+		}
 
-    public boolean intersection(IntSet collection) {
-        boolean m = false;
-        for (OfInt itr = this.iterator(); itr.hasNext(); ) {
-            int i = itr.nextInt();
-            if(!collection.contains(i)) {
-                itr.remove();
-                m = true;
-            }
-        }
-        return m;
-    }
+		int depth = 0;
+		Entry pendEntry = null, dualEntry = null;
+		while (true) {
+			// bitset entry
+			if (entry.k == mKey) {
+				int set = entry.set;
+				if (set != (set |= 1<<(key&31) )) {
+					entry.set = set;
+					size++;
+					return true;
+				}
+				return false;
+			}
 
-    void afterAdd(int key) {
-    }
+			// key.isDual() && entry.isDual()
+			if (key != mKey && (entry.k & 31) != 0) {
+				// 'dual' entry hold 2 ints, not bitset
+				// better for random data
+				if (entry.k == key || entry.set == key) return false;
 
-    public boolean remove(int id) {
-        Entry prevEntry = null;
-        Entry toRemove = null;
-        {
-            Entry entry = getEntryFirst(id, -1, false);
-            while (entry != null) {
-                if (entry.k == id) {
-                    toRemove = entry;
-                    break;
-                }
-                prevEntry = entry;
-                entry = entry.next;
-            }
-        }
+				if (dualEntry == null) {
+					if ((entry.k & ~31) == mKey) dualEntry = entry;
+					// int#2
+					else if (entry.set == 0) pendEntry = entry;
+					else if ((entry.set & ~31) == mKey) {
+						int t = entry.set;
+						entry.set = entry.k;
+						entry.k = t;
 
-        if (toRemove == null)
-            return false;
+						dualEntry = entry;
+					}
+				}
+			}
 
-        afterRemove(toRemove);
+			if (entry.next == null) break;
+			entry = entry.next;
+			depth++;
+		}
 
-        this.size--;
+		if (depth > 3) resizeRequested = true;
 
-        if (prevEntry != null) {
-            prevEntry.next = toRemove.next;
-        } else {
-            this.entries[indexFor(id)] = toRemove.next;
-        }
+		size++;
 
-        putRemovedEntry(toRemove);
+		// convert to bitset
+		if (dualEntry != null) {
+			int int1 = dualEntry.k;
+			int int2 = dualEntry.set;
 
-        return true;
-    }
+			dualEntry.k = mKey;
+			dualEntry.set = (1<<(key&31)) | (1<<(int1&31));
 
-    void afterRemove(Entry key) {
-    }
+			entry = merge(key, dualEntry);
+			if (int2 != 0) {
+				if ((int2 & ~31) == mKey) {
+					dualEntry.set |= 1<<(int2&31);
+				} else {
+					entry.next = getCachedEntry(int2);
+				}
+			}
+			return true;
+		} else if (pendEntry != null) {
+			pendEntry.set = key;
+			return true;
+		}
 
-    public boolean contains(int o) {
-        Entry entry = getEntry(o);
-        return entry != null;
-    }
+		entry = (entry.next = getCachedEntry(key));
 
-    Entry getEntry(int id) {
-        Entry entry = getEntryFirst(id, -1, false);
-        while (entry != null) {
-            if (id == entry.k)
-                return entry;
-            entry = entry.next;
-        }
-        return null;
-    }
+		// force bitset
+		if (key == mKey) {
+			entry.set = 1;
+			merge(key, entry);
+		}
+		return true;
+	}
 
-    Entry getOrCreateEntry(int id, int def) {
-        Entry entry = getEntryFirst(id, def, true);
-        if (entry.k == def)
-            return entry;
-        while (true) {
-            if (id == entry.k)
-                return entry;
-            if (entry.next == null)
-                break;
-            entry = entry.next;
-        }
-        Entry firstUnused = getCachedEntry(def);
-        entry.next = firstUnused;
-        return firstUnused;
-    }
+	@Nonnull
+	private Entry merge(int key, Entry dualEntry) {
+		int mKey = dualEntry.k;
 
-    int indexFor(int id) {
-        return (id ^ (id >>> 16)) & (length - 1);
-    }
+		Entry entry = entries[indexFor(key)];
+		Entry prev = null;
+		while (true) {
+			if ((entry.k & 31) != 0) {
+				if ((entry.set & ~31) == mKey) {
+					dualEntry.set |= (1<<(entry.set&31));
+					entry.set = 0;
+				}
 
-    protected Entry notUsing = null;
+				if ((entry.k & ~31) == mKey) {
+					dualEntry.set |= (1<<(entry.k&31));
 
-    protected Entry getCachedEntry(int id) {
-        Entry cached = this.notUsing;
-        if (cached != null) {
-            cached.k = id;
-            this.notUsing = cached.next;
-            cached.next = null;
-            return cached;
-        }
+					if (entry.set != 0) {
+						entry.k = entry.set;
+						entry.set = 0;
+					} else {
+						Entry next = entry.next;
+						if (prev != null) prev.next = next;
+						else entries[indexFor(key)] = next;
 
-        return new Entry(id);
-    }
+						putRemovedEntry(entry);
+						entry = next != null ? next : prev;
+						if (entry == null) throw new AssertionError();
+					}
+				}
+			}
 
-    protected void putRemovedEntry(Entry entry) {
-        if (notUsing != null && notUsing.k > MAX_NOT_USING) {
-            return;
-        }
-        entry.next = notUsing;
-        entry.k = notUsing == null ? 1 : notUsing.k + 1;
-        notUsing = entry;
-    }
+			if (entry.next == null) break;
+			prev = entry;
+			entry = entry.next;
+		}
+		return entry;
+	}
 
-    Entry getEntryFirst(int id, int def, boolean create) {
-        int i = indexFor(id);
-        if (entries == null) {
-            if (!create)
-                return null;
-            entries = new Entry[length];
-        }
-        Entry entry;
-        if ((entry = entries[i]) == null) {
-            if (!create)
-                return null;
-            entries[i] = entry = getCachedEntry(def);
-        }
-        return entry;
-    }
+	public final boolean remove(Object o) { return remove((int) o); }
+	public final boolean remove(int key) {
+		int mKey = key & ~31;
 
+		Entry prev = null;
+		Entry entry = getEntryFirst(key);
+		while (entry != null) {
+			// bitset entry
+			if (entry.k == mKey) {
+				int set = entry.set;
+				if (set == (set &= ~(1<<(key&31)))) return false;
 
-    public String toString() {
-        StringBuilder sb = new StringBuilder(getClass().getName()).append('[');
-        for (PrimitiveIterator.OfInt itr = this.iterator(); itr.hasNext(); ) {
-            sb.append(itr.nextInt()).append(',');
-        }
-        return sb.append(']').toString();
-    }
+				size--;
+				if (set == 0) {
+					if (prev != null) prev.next = entry.next;
+					else entries[indexFor(key)] = entry.next;
 
-    public void slowClear() {
-        if (size == 0)
-            return;
-        size = 0;
-        if (entries != null) {
-            length = 16;
-            entries = null;
-        }
-        if(notUsing != null) {
-            notUsing = null;
-        }
-    }
+					putRemovedEntry(entry);
+				} else {
+					entry.set = set;
+				}
 
-    public void clear() {
-        if (size == 0)
-            return;
-        size = 0;
-        if (entries != null)
-            if (notUsing == null || notUsing.k < MAX_NOT_USING) {
-                for (int i = 0; i < length; i++) {
-                    if (entries[i] != null) {
-                        putRemovedEntry(Helpers.cast(entries[i]));
-                        entries[i] = null;
-                    }
-                }
-            } else Arrays.fill(entries, null);
-    }
+				return true;
+			}
 
-    private static class SetItr extends MapItr<Entry> implements PrimitiveIterator.OfInt {
-        public SetItr(IntSet map) {
-            super(map.entries, map);
-        }
+			// key.isDual() && entry.isDual()
+			if (key != mKey && (entry.k & 31) != 0) {
+				if (entry.k == key) {
+					size--;
 
-        public int nextInt() {
-            return nextT().k;
-        }
-    }
+					if (entry.set == 0) {
+						if (prev != null) prev.next = entry.next;
+						else entries[indexFor(key)] = entry.next;
+
+						putRemovedEntry(entry);
+					} else {
+						entry.k = entry.set;
+						entry.set = 0;
+					}
+					return true;
+				}
+
+				if (entry.set == key) {
+					size--;
+					entry.set = 0;
+					return true;
+				}
+			}
+
+			prev = entry;
+			entry = entry.next;
+		}
+		return false;
+	}
+
+	public void addAll(IntSet other) {
+		Entry[] ov = other.entries;
+		if (ov == null) return;
+		ensureCapacity(other.size());
+
+		for (Entry entry : ov) {
+			while (entry != null) {
+				add(entry.k);
+				entry = entry.next;
+			}
+		}
+	}
+
+	public boolean containsAll(int... array) {
+		for (int o : array) {
+			if (!contains(o)) return false;
+		}
+		return true;
+	}
+
+	public boolean addAll(int... array) {
+		boolean a = false;
+		for (int k : array) {
+			a |= add(k);
+		}
+		return a;
+	}
+
+	public boolean removeAll(int... array) {
+		boolean k = false;
+		for (int o : array) {
+			k |= remove(o);
+		}
+		return k;
+	}
+
+	public boolean intersection(IntSet other) {
+		boolean m = false;
+		for (OfInt itr = iterator(); itr.hasNext(); ) {
+			int i = itr.nextInt();
+			if (!other.contains(i)) {
+				itr.remove();
+				m = true;
+			}
+		}
+		return m;
+	}
+
+	private int indexFor(int id) {
+		id >>= 5;
+		return (id ^ (id >>> 16)) & mask;
+	}
+
+	private Entry notUsing = null;
+	private Entry getCachedEntry(int key) {
+		Entry entry = notUsing;
+		if (entry != null) {
+			notUsing = entry.next;
+
+			entry.k = key;
+			entry.set = 0;
+			entry.next = null;
+			return entry;
+		}
+
+		return new Entry(key);
+	}
+	private void putRemovedEntry(Entry entry) {
+		if (notUsing != null && notUsing.k > MAX_NOT_USING) return;
+
+		entry.next = notUsing;
+		entry.k = notUsing == null ? 1 : notUsing.k+1;
+		notUsing = entry;
+	}
+
+	private Entry getEntryFirst(int key) {
+		return entries == null ? null : entries[indexFor(key)];
+	}
+
+	public void clear() {
+		if (size == 0) return;
+		size = 0;
+
+		for (int i = 0; i < entries.length; i++) {
+			if (entries[i] != null) {
+				putRemovedEntry(entries[i]);
+				entries[i] = null;
+			}
+		}
+	}
+
+	private static final class Itr implements IntIterator {
+		private byte stage;
+		private int i, set, value;
+		private Entry entry;
+
+		private final IntSet map;
+		private final Entry[] arr;
+
+		Itr(IntSet map) {
+			this.map = map;
+			arr = map.entries;
+			if (arr == null) stage = ENDED;
+		}
+
+		private boolean computeNext() {
+			while (true) {
+				if (set != 0) {
+					while (true) {
+						boolean hasNext = (set & 1) == 0;
+						value++;
+						set >>>= 1;
+						if (!hasNext) return true;
+					}
+				}
+
+				find: {
+					if (entry != null) {
+						if ((entry.k&31) != 0 && value == entry.k) {
+							if (entry.set != 0) {
+								value = entry.set;
+								return true;
+							}
+						}
+
+						if (entry.next != null) {
+							entry = entry.next;
+							break find;
+						}
+					}
+
+					do {
+						if (i == arr.length) return false;
+						entry = arr[i++];
+					} while (entry == null);
+				}
+
+				// dual entry
+				if ((entry.k&31) != 0) {
+					value = entry.k;
+					return true;
+				} else {
+					set = entry.set;
+					value = entry.k-1;
+				}
+			}
+		}
+
+		@Override
+		public final boolean hasNext() {
+			check();
+			return stage != ENDED;
+		}
+
+		@Override
+		public int nextInt() {
+			check();
+			if (stage == ENDED) throw new NoSuchElementException();
+			stage = GOTTEN;
+			return value;
+		}
+
+		@Override
+		public final void remove() {
+			if (stage != GOTTEN) throw new IllegalStateException();
+
+			int v = value;
+			check();
+			map.remove(v);
+		}
+
+		private void check() {
+			if (stage <= 1) {
+				stage = computeNext() ? CHECKED : ENDED;
+			}
+		}
+	}
 }

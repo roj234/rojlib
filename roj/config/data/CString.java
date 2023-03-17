@@ -1,160 +1,125 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.config.data;
 
-import roj.config.YAMLParser;
-import roj.config.word.AbstLexer;
-import roj.math.MathUtils;
+import roj.config.IniParser;
+import roj.config.NBTParser;
+import roj.config.VinaryParser;
+import roj.config.serial.CVisitor;
+import roj.config.word.ITokenizer;
+import roj.text.CharList;
+import roj.text.TextUtil;
+import roj.util.DynByteBuf;
 
 import javax.annotation.Nonnull;
 import java.util.Objects;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/31 21:17
  */
 public final class CString extends CEntry {
-    public String value;
+	public String value;
 
-    public CString(String string) {
-        this.value = string;
-    }
+	public CString(String string) {
+		// null check
+		this.value = string.toString();
+	}
 
-    @Nonnull
-    @Override
-    public Type getType() {
-        return Type.STRING;
-    }
+	@Nonnull
+	@Override
+	public Type getType() {
+		return Type.STRING;
+	}
 
-    public static CString valueOf(String s) {
-        return new CString(s);
-    }
+	@Override
+	protected boolean isNumber() {
+		return TextUtil.isNumber(value) >= 0;
+	}
 
-    @Nonnull
-    @Override
-    public String asString() {
-        return value;
-    }
+	public static CString valueOf(String s) {
+		return new CString(s);
+	}
 
-    @Override
-    public double asDouble() {
-        return Double.parseDouble(value);
-    }
+	@Nonnull
+	@Override
+	public String asString() {
+		return value;
+	}
 
-    @Override
-    public int asInteger() {
-        return MathUtils.parseInt(value);
-    }
+	@Override
+	public double asDouble() {
+		return Double.parseDouble(value);
+	}
 
-    @Override
-    public long asLong() {
-        return Long.parseLong(value);
-    }
+	@Override
+	public int asInteger() {
+		return TextUtil.parseInt(value);
+	}
 
-    @Override
-    public boolean asBool() {
-        return Boolean.parseBoolean(value);
-    }
+	@Override
+	public long asLong() {
+		return Long.parseLong(value);
+	}
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        CString that = (CString) o;
-        return Objects.equals(value, that.value);
-    }
+	@Override
+	public boolean asBool() {
+		return Boolean.parseBoolean(value);
+	}
 
-    @Override
-    public boolean equalsTo(CEntry entry) {
-        return entry.getType().fits(Type.STRING) && entry.asString().equals(value);
-    }
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+		CString that = (CString) o;
+		return Objects.equals(value, that.value);
+	}
 
-    @Override
-    public int hashCode() {
-        return value == null ? 0 : value.hashCode();
-    }
+	@Override
+	public int hashCode() {
+		return value == null ? 0 : value.hashCode();
+	}
 
-    @Override
-    public StringBuilder toYAML(StringBuilder sb, int depth) {
-        if(!YAMLADDITIONALCHECK || !yamlAdditionalCheck(value))
-            return toJSON(sb, depth);
-        return sb.append(value);
-    }
+	@Override
+	public boolean isSimilar(CEntry o) {
+		return o.getType() == Type.STRING || (o.getType().isSimilar(Type.STRING) && o.asString().equals(value));
+	}
 
-    static final boolean YAMLADDITIONALCHECK = System.getProperty("roj.config.noYamlAddChk") == null;
-    static boolean yamlAdditionalCheck(CharSequence value) {
-        if(value.length() == 0)
-            return false;
-        if(value.length() >= 4 && value.length() <= 5) {
-            switch (value.toString()) {
-                case "null":
-                case "Null":
-                case "NULL":
-                case "true":
-                case "True":
-                case "TRUE":
-                case "false":
-                case "False":
-                case "FALSE":
-                    return false;
-            }
-        }
-        if((value.length() == 1 ? YAMLParser.YAML_SPEC_CHARS_NOT_SINGLE : YAMLParser.YAML_SPEC_CHARS_NOT_BEGIN).indexOf(value.charAt(0)) != -1)
-            return false;
+	//@Override
+	protected CharList toXML(CharList sb, int depth) {
+		return value == null ? sb.append("null") : !value.startsWith("<![CDATA[") && value.indexOf('<') >= 0 ? sb.append("<![CDATA[").append(value).append("]]>") : sb.append(value);
+	}
 
-        char last = value.charAt(value.length() - 1);
-        if (AbstLexer.WHITESPACE.contains(last)) {
-            return false;
-        }
+	@Override
+	public CharList toJSON(CharList sb, int depth) {
+		return value == null ? sb.append("null") : ITokenizer.addSlashes(sb.append('"'), value).append('"');
+	}
 
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            switch (c) {
-                case '\r':
-                case '\n':
-                    return false;
-                case ':':
-                    if(i != 0)
-                        return false;
-            }
-        }
-        return true;
-    }
+	@Override
+	protected CharList toINI(CharList sb, int depth) {
+		return IniParser.literalSafe(value) ? sb.append(value) : ITokenizer.addSlashes(sb.append('"'), value).append('"');
+	}
 
-    @Override
-    public StringBuilder toJSON(StringBuilder sb, int depth) {
-        return sb.append('"').append(AbstLexer.addSlashes(value)).append('"');
-    }
+	@Override
+	public byte getNBTType() {
+		return NBTParser.STRING;
+	}
 
-    @Override
-    public Object toNudeObject() {
-        return value;
-    }
+	@Override
+	public Object unwrap() {
+		return value;
+	}
 
+	@Override
+	protected void toBinary(DynByteBuf w, VinaryParser struct) {
+		w.put((byte) Type.STRING.ordinal()).putZhCn(value);
+	}
+
+	@Override
+	public void toB_encode(DynByteBuf w) {
+		w.putAscii(Integer.toString(DynByteBuf.byteCountUTF8(value))).put((byte)':').putUTFData(value);
+	}
+
+	@Override
+	public void forEachChild(CVisitor ser) {
+		ser.value(value);
+	}
 }

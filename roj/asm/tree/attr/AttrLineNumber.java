@@ -1,84 +1,100 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.asm.tree.attr;
 
 import roj.asm.tree.insn.InsnNode;
-import roj.asm.util.ConstantPool;
+import roj.asm.visitor.CodeWriter;
+import roj.asm.visitor.Label;
 import roj.collect.IntMap;
-import roj.collect.ToIntMap;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.collect.SimpleList;
+import roj.util.DynByteBuf;
+
+import java.util.List;
+import java.util.Map;
 
 import static roj.asm.tree.insn.InsnNode.validate;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/4/30 19:27
  */
-public final class AttrLineNumber extends Attribute implements ICodeAttribute {
-    public final ToIntMap<InsnNode> map;
+public final class AttrLineNumber extends Attribute implements CodeAttributeSpec {
+	public List<LineNumber> list;
 
-    public AttrLineNumber() {
-        super("LineNumberTable");
-        this.map = new ToIntMap<>();
-    }
+	public AttrLineNumber() {
+		super("LineNumberTable");
+		this.list = new SimpleList<>();
+	}
 
-    public AttrLineNumber(ByteReader r, IntMap<InsnNode> pcCounter) {
-        super("LineNumberTable");
+	public AttrLineNumber(DynByteBuf r, IntMap<InsnNode> pc) {
+		super("LineNumberTable");
 
-        final int tableLen = r.readUnsignedShort();
+		int count = r.readUnsignedShort();
+		List<LineNumber> list = this.list = new SimpleList<>(count);
+		while (count-- > 0) {
+			int i = r.readUnsignedShort();
+			InsnNode node = pc.get(i);
+			if (node == null) {
+				System.err.println("AttrLineNumber.java:36: No code at " + i);
+				r.rIndex += 2;
+			}
+			else list.add(new LineNumber(node, r.readUnsignedShort()));
+		}
+	}
 
-        ToIntMap<InsnNode> map = this.map = new ToIntMap<>(tableLen);
-        for (int i = 0; i < tableLen; i++) {
-            int index = r.readUnsignedShort();
-            InsnNode node = pcCounter.get(index);
-            if (node == null)
-                throw new NullPointerException("Couldn't found bytecode offset for line number table: " + index);
-            map.putInt(node, r.readUnsignedShort());
-        }
-    }
+	public String toString() {
+		StringBuilder sb = new StringBuilder("LineNumberTable:   Node <=======> Line\n");
+		for (int i = 0; i < list.size(); i++) {
+			LineNumber ln = list.get(i);
+			sb.append("                  ").append(ln.node).append(" = ").append((int)ln.line).append('\n');
+		}
+		return sb.toString();
+	}
 
-    public String toString() {
-        StringBuilder sb = new StringBuilder("LineNumberTable:   Node <=======> Line\n");
-        for (ToIntMap.Entry<InsnNode> entry : map.selfEntrySet()) {
-            sb.append("                  ").append(entry.getKey()).append(" = ").append(entry.getInt()).append('\n');
-        }
-        return sb.toString();
-    }
+	@Override
+	public boolean isEmpty() {
+		return list.isEmpty();
+	}
 
-    @Override
-    public void toByteArray(ConstantPool pool, ByteWriter w, ToIntMap<InsnNode> pcRev) {
-        w.writeShort(map.size());
-        for (ToIntMap.Entry<InsnNode> entry : map.selfEntrySet()) {
-            w.writeShort(pcRev.getInt(validate(entry.getKey())))
-                    .writeShort(entry.getInt());
-        }
-    }
+	@Override
+	public void toByteArray(CodeWriter c) {
+		DynByteBuf w = c.bw;
+		w.putShort(list.size());
+		if (list.isEmpty()) return;
+
+		list.sort((o1, o2) -> Integer.compare(o1.bci(), o2.bci()));
+		for (int i = 0; i < list.size(); i++) {
+			LineNumber ln = list.get(i);
+			w.putShort(ln.bci()).putShort(ln.line);
+		}
+	}
+
+	@Override
+	public void preToByteArray(Map<InsnNode, Label> concerned) {
+		for (int i = 0; i < list.size(); i++) {
+			LineNumber ln = list.get(i);
+			AttrCode.monitorNode(concerned, ln.node = validate(ln.node));
+		}
+	}
+
+	public static final class LineNumber {
+		public InsnNode node;
+		public Label alternative;
+		char line;
+
+		public int bci() {
+			return alternative == null ? node.bci : alternative.getValue();
+		}
+
+		public LineNumber(InsnNode node, int i) {
+			this.node = node;
+			this.line = (char) i;
+		}
+
+		public int getLine() {
+			return line;
+		}
+
+		public void setLine(int line) {
+			this.line = (char) line;
+		}
+	}
 }

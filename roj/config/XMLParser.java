@@ -1,595 +1,402 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.config;
 
-import roj.collect.LongBitSet;
-import roj.collect.MyHashMap;
+import roj.collect.Int2IntMap;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashSet;
-import roj.concurrent.OperationDone;
+import roj.collect.TrieTree;
 import roj.config.data.*;
-import roj.config.word.AbstLexer;
+import roj.config.serial.CVisitor;
+import roj.config.serial.ToEntry;
+import roj.config.serial.ToXEntry;
 import roj.config.word.Word;
-import roj.config.word.WordPresets;
+import roj.net.http.HttpUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Set;
+import java.io.File;
+import java.io.IOException;
+import java.util.function.Predicate;
 
-import static roj.config.JSONParser.unexpected;
+import static roj.config.JSONParser.*;
+import static roj.config.word.Word.*;
 
 /**
  * XML - 可扩展标记语言（EXtensible Markup Language）
- * <BR>
- * 元数据（有关数据的数据）应当存储为属性，而数据本身应当存储为元素。
- * <p>
+ *
  * @author Roj234
- * Filename: XMLParser.java
  */
-public class XMLParser {
-    public static final short
-            left_curly_bracket = 10,
-            right_curly_bracket = 11,
-            slash = 12, equ = 13, ask = 14,
-            semicolon = 15, not = 16, colon = 17,
-            namespace = 18, unknown = 19;
-    public static final MyHashSet<String> HTML_CLOSE_TAGS;
-    static {
-        HTML_CLOSE_TAGS = new MyHashSet<>("meta", "link", "input", "img");
-    }
+public class XMLParser extends Parser<CList> {
+	static final short
+		tag_start = 13, tag_end = 14, tag_end_close = 15,
+		equ = 16, ask = 17,
+		tag_start_close = 18, header_start = 19,
+		header_end = 20, CDATA_STRING = 21;
 
-    public static void main(String[] args) throws ParseException {
-        String xml = TextUtil.concat(args, ' ');
+	private static final TrieTree<Word> XML_TOKENS = new TrieTree<>();
+	private static final MyBitSet XML_LENDS = new MyBitSet();
+	private static final Int2IntMap XML_FC = new Int2IntMap();
+	static {
+		addKeywords(XML_TOKENS, 10, "true", "false");
+		addSymbols(XML_TOKENS, XML_LENDS, 13, "<", ">", "/>", "=", "?", "</", "<?", "?>");
+		addWhitespace(XML_LENDS);
 
-        System.out.println("INPUT = " + xml);
+		fcSetDefault(XML_FC, 3);
+		XML_FC.put('\'', C_SYH);
+		XML_FC.put('<', 2); // magic number in switch
+	}
 
-        final XHeader xmls = parse(xml);
-        System.out.print("XML = " + xmls.toString());
-    }
+	{ tokens = XML_TOKENS; literalEnd = XML_LENDS; firstChar = XML_FC; }
 
-    public static XHeader parse(String string) throws ParseException {
-        return parse((XMLexer) new XMLexer().init(string));
-    }
+	public static final int FORCE_XML_HEADER = 1, LENIENT = 2, HTML = 8, PROCESS_ENTITY = 16;
+	private static final MyHashSet<String> HTML_SHORT_TAGS = new MyHashSet<>(TextUtil.split("!doctype|br|img|link|input|source|track|param", '|'));
 
-    public static XHeader parse(XMLexer wr) throws ParseException {
-        XHeader ce = xmlHeader(wr);
-        if (wr.hasNext()) {
-            throw wr.err("期待 /EOF");
-        }
-        return ce;
-    }
+	public static Document parses(CharSequence string) throws ParseException {
+		return new XMLParser().parseToXml(string, LENIENT);
+	}
+	public static Document parses(CharSequence string, int flag) throws ParseException {
+		return new XMLParser().parseToXml(string, flag);
+	}
 
-    public static XHeader xmlHeader(XMLexer wr) throws ParseException {
-        Word w = wr.nextWord();
-        if (w.type() == left_curly_bracket) {
-            except(wr, ask, "?");
-            w = wr.nextWord();
-            if (w.type() != WordPresets.LITERAL || !w.val().equals("xml")) {
-                unexpected(wr, w.val(), "xml");
-            }
+	@Override
+	public final int availableFlags() { return FORCE_XML_HEADER | LENIENT | UNESCAPED_SINGLE_QUOTE | PROCESS_ENTITY; }
 
-            MyHashMap<String, CEntry> attributes = new MyHashMap<>();
-            ArrayList<AbstXML> children = new ArrayList<>();
+	@Override
+	public final String format() { return "XML"; }
 
-            o:
-            while (true) {
-                w = wr.nextWord();
-                switch (w.type()) {
-                    case ask:
-                        except(wr, right_curly_bracket, ">");
-                        break o;
-                    case namespace:
-                    case WordPresets.LITERAL: {
-                        String aName = w.val();
-                        except(wr, equ, "=");
-                        attributes.put(aName, of(wr.nextWord()));
-                    }
-                    break;
-                    case right_curly_bracket:
-                        break o;
-                    default:
-                        unexpected(wr, w.val(), "属性 / '>'");
-                }
-            }
+	public Document parseToXml(CharSequence text, int flag) throws ParseException {
+		ToXEntry entry = new ToXEntry();
+		parse(entry, text, flag);
+		return (Document) entry.get();
+	}
 
-            o:
-            while (true) {
-                w = wr.nextWord();
-                switch (w.type()) {
-                    case left_curly_bracket:
-                        wr.retractWord();
-                        children.add(xmlElement(wr));
-                        break;
-                    case WordPresets.EOF:
-                        break o;
-                    default:
-                        unexpected(wr, w.val(), "<");
-                        break;
-                }
-            }
+	public Document parseToXml(File file, int flag) throws ParseException, IOException {
+		ToXEntry entry = new ToXEntry();
+		parseRaw(entry, file, flag);
+		return (Document) entry.get();
+	}
 
-            return new XHeader(attributes.isEmpty() ? Collections.emptyMap() : attributes, children.isEmpty() ? Collections.emptyList() : children);
+	@Override
+	public CList parse(CharSequence text, int flag) throws ParseException {
+		ToEntry entry = new ToEntry();
+		parse(entry, text, flag);
+		return entry.get().asList();
+	}
 
-        } else {
-            unexpected(wr, w.val());
-            return Helpers.nonnull();
-        }
-    }
+	private CVisitor cc;
 
-    @SuppressWarnings("fallthrough")
-    public static XElement xmlElement(XMLexer wr) throws ParseException {
-        Word w = wr.nextWord();
-        if (w.type() == left_curly_bracket) {
-            w = wr.nextWord();
+	@Override
+	public <CV extends CVisitor> CV parse(CV cv, CharSequence text, int flag) throws ParseException {
+		this.flag = flag;
+		cc = cv;
+		init(text);
+		try {
+			if ((flag & HTML) != 0) needCLOSE = (s) -> !HTML_SHORT_TAGS.contains(s.toLowerCase());
+			ccXmlHeader();
+		} catch (ParseException e) {
+			throw e.addPath("$");
+		} finally {
+			cc = null;
+			input = null;
+		}
+		return cv;
+	}
 
-            String name;
-            switch (w.type()) {
-                case namespace:
-                case WordPresets.LITERAL:
-                    name = w.val();
-                    break;
-                default:
-                    unexpected(wr, w.val(), "标签名");
-                    return null;
-            }
+	private void ccXmlHeader() throws ParseException {
+		cc.valueList();
 
-            String value = null;
-            MyHashMap<String, CEntry> attributes = new MyHashMap<>();
-            ArrayList<AbstXML> children = new ArrayList<>();
+		Word w = next();
+		if (w.type() != header_start) {
+			if ((flag & FORCE_XML_HEADER) != 0) unexpected(w.val(), "<?xml");
+			retractWord();
+			cc.vsopt("xml:headless", true);
+		} else {
+			if (!readLiteral().val().equalsIgnoreCase("xml")) {
+				throw err("<? 但不是 <?xml");
+			}
 
-            boolean needCloseTag = true;
+			w = next();
+			if (w.type() != header_end) {
+				cc.valueMap();
+				do {
+					if (w.type() != LITERAL) {
+						if (w.type() != STRING || (flag & LENIENT) == 0)
+							throw err("期待属性名称");
+					}
+					w = readAttribute(w);
+				} while (w.type() != header_end);
+				cc.pop();
+			}
+		}
 
-            o:
-            while (true) {
-                w = wr.nextWord();
-                switch (w.type()) {
-                    case slash:
-                        needCloseTag = false;
-                        except(wr, right_curly_bracket, ">");
-                    case right_curly_bracket:
-                        break o;
-                    case namespace:
-                    case WordPresets.LITERAL: {
-                        String aName = w.val();
-                        if(wr.nextWord().type() == equ) {
-                            // todo 这里可以拿到xmlns:xxx if aName.startsWith("xmlns:")
-                            attributes.put(aName, of(wr.nextWord()));
-                        } else {
-                            wr.retractWord();
-                            attributes.put(aName, CString.valueOf(""));
-                        }
-                    }
-                    break;
-                    default:
-                        unexpected(wr, w.val(), "属性 / '>'");
-                }
-            }
+		while (true) {
+			w = next();
+			if (w.type() != tag_start) {
+				if ((flag & HTML) == 0 || w.type() == EOF)
+					break;
+			}
+			ccXmlElem();
+		}
 
-            if (needCloseTag && !wr.noCloseTags.contains(name)) {
-                AbstLexer.Snapshot lcb = wr.snapshot();
-                w = wr.nextWord();
+		if (w.type() != EOF) unexpected(w.val(), "eof");
 
-                if (!wr.checkCDATATag(w)) {
-                    o:
-                    while (w.type() != WordPresets.EOF) {
-                        if (w.type() == left_curly_bracket) {
-                            w = wr.nextWord();
-                            if (w.type() == slash) {
-                                w = wr.nextWord();
+		cc.pop();
+	}
 
-                                switch (w.type()) {
-                                    case WordPresets.LITERAL:
-                                    case namespace:
-                                        if (!w.val().equals(name)) {
-                                            ParseException e = wr.err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
-                                            if(wr.lenient) {
-                                                System.out.println(e.toString());
-                                                wr.errorTag = w.val();
-                                                break o;
-                                            } else {
-                                                throw e;
-                                            }
-                                        }
+	private void ccXmlElem() throws ParseException {
+		String name = except(LITERAL, "元素名称").val();
 
-                                        break o;
-                                    default:
-                                        unexpected(wr, w.val(), "标签名");
-                                        break;
-                                }
+		cc.valueList();
+		cc.value(name);
 
-                                break;
-                            } else {
-                                wr.restore(lcb);
-                                XElement xe = xmlElement(wr);
-                                if(xe != null) {
-                                    children.add(xe);
-                                }
-                                wr.snapshot(lcb);
-                                w = wr.nextWord();
-                            }
-                        } else {
-                            wr.retractWord();
-                            // 这里可以跳过元素里面的内容
-                            final XText str = wr.readString(0, null);
-                            if(str != null)
-                                children.add(str);
-                            wr.snapshot(lcb);
-                            w = wr.nextWord();
-                        }
-                    }
-                } else {
-                    wr.retractWord();
-                    final XText str = wr.readString(1, null);
-                    if(str != null)
-                        children.add(str);
+		Word w = next();
 
-                    //if(CDATA == 1) {
-                        except(wr, left_curly_bracket, "<");
-                        except(wr, slash, "/");
-                        w = wr.nextWord();
-                        switch (w.type()) {
-                            case WordPresets.LITERAL:
-                            case namespace:
-                                if (!w.val().equals(name)) {
-                                    throw wr.err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
-                                }
+		if (w.type() != tag_end_close && w.type() != tag_end) {
+			cc.valueMap();
+			do {
+				if (w.type() != LITERAL) {
+					if (w.type() != STRING || (flag & LENIENT) == 0)
+						throw err("期待属性名称");
+				}
+				w = readAttribute(w);
+			} while (w.type() != tag_end_close && w.type() != tag_end);
+			cc.pop();
+		}
 
-                                break;
-                            default:
-                                unexpected(wr, w.val(), "标签名");
-                                break;
-                        }
-                    //}
-                }
+		if (w.type() == tag_end_close || !needCLOSE.test(name)) {
+			cc.vsopt("xml:short_tag", true);
+			cc.pop();
+			return;
+		}
 
-                if(!wr.lenient || wr.hasNext())
-                    except(wr, right_curly_bracket, ">");
-            }
+		int i = 0;
 
-            return new XElement(name, attributes.isEmpty() ? Collections.emptyMap() : attributes, children.isEmpty() ? Collections.emptyList() : children, !needCloseTag);
-        } else {
-            unexpected(wr, w.val());
-        }
-        throw OperationDone.NEVER;
-    }
+		w = readValue();
+		flushBefore(index);
 
-    static void except(AbstLexer wr, short id, String s) throws ParseException {
-        Word w = wr.nextWord();
-        if (w.type() != id) {
-            unexpected(wr, w.val(), s);
-        }
-    }
+		if (w.type() != tag_start_close) {
+			cc.valueList();
 
-    public static CEntry of(Word word) {
-        switch (word.type()) {
-            case WordPresets.DECIMAL_D:
-            case WordPresets.DECIMAL_F:
-                return CDouble.valueOf(word.number().asDouble());
-            case WordPresets.INTEGER:
-                return CInteger.valueOf(word.number().asInt());
-            case WordPresets.STRING:
-                return CString.valueOf(word.val());
-            case WordPresets.LITERAL:
-                switch (word.val()) {
-                    case "true":
-                        return CBoolean.valueOf(true);
-                    case "false":
-                        return CBoolean.valueOf(false);
-                    default:
-                        return CString.valueOf(word.val());
-                }
-        }
-        throw new IllegalArgumentException(String.valueOf(word));
-    }
+			label:
+			while (true) {
+				switch (w.type()) {
+					case tag_start_close: break label;
+					case tag_start:
+						try {
+							ccXmlElem();
+						} catch (ParseException e) {
+							throw e.addPath('.'+name+'['+i+']');
+						}
+						break;
+					case CDATA_STRING: cc.value(w.val()); cc.vsopt("xml:cdata", true); break;
+					case LITERAL: cc.value(w.val()); break;
+					case EOF:
+						if ((flag & HTML) != 0) {
+							cc.pop();
+							cc.pop();
+							return;
+						}
+						throw err("未预料的文件尾");
+					default: unexpected(w.val());
+				}
 
-    public static final class XMLexer extends AbstLexer {
-        static final LongBitSet XML_SPECIAL = LongBitSet.from("+-<>/=?;!:");
+				i++;
+				w = readValue();
+				flushBefore(index);
+			}
 
-        public Set<String> noCloseTags = Collections.emptySet();
-        public boolean     keepAmp, lenient;
-        String errorTag;
+			cc.pop();
+		}
 
-        public XMLexer noCloseTags(@Nonnull Set<String> noCloseTags) {
-            this.noCloseTags = noCloseTags;
-            return this;
-        }
+		if (!name.equals(except(LITERAL, "元素名称").val())) {
+			if ((flag & LENIENT) == 0) throw err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
+			errorTag = w.val();
+		}
+		except(tag_end, ">");
 
-        public XMLexer keepAmp(boolean keepAmp) {
-            this.keepAmp = keepAmp;
-            return this;
-        }
+		cc.pop();
+	}
 
-        public XMLexer lenient(boolean lenient) {
-            this.lenient = lenient;
-            return this;
-        }
+	private Word readAttribute(Word w) throws ParseException {
+		cc.key(w.val());
+		w = next();
 
-        @Override
-        protected Word readLiteral() {
-            CharSequence input = this.input;
-            int index = this.index;
+		if (w.type() == equ) {
+			of(next()).forEachChild(cc);
+			return next();
+		} else {
+			cc.valueNull();
+			return w;
+		}
+	}
 
-            CharList temp = this.found;
-            temp.clear();
+	@SuppressWarnings("fallthrough")
+	public static boolean literalSafe(CharSequence text) {
+		if (LITERAL_UNSAFE) return false;
+		if (text.length() == 0) return false;
 
-            boolean ns = false;
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			if (c == '<' || c == '&') return false;
+		}
+		return true;
+	}
 
-            while (index < input.length()) {
-                char c = input.charAt(index++);
-                if ((!XML_SPECIAL.contains(c) || c == '-') && !WHITESPACE.contains(c)) {
-                    if (c == ':') {
-                        ns = true;
-                    }
-                    temp.append(c);
-                } else {
-                    index--;
-                    break;
-                }
-            }
+	@Deprecated
+	public static CEntry of(Word w) {
+		switch (w.type()) {
+			case TRUE: return CBoolean.TRUE;
+			case FALSE: return CBoolean.FALSE;
+			case NULL: return CNull.NULL;
+			case DOUBLE:
+			case FLOAT: return CDouble.valueOf(w.asDouble());
+			case INTEGER: return CInteger.valueOf(w.asInt());
+			case LONG: return CLong.valueOf(w.asLong());
+			case STRING:
+			case LITERAL: return CString.valueOf(w.val());
+		}
+		throw new IllegalArgumentException("不是简单类型:" + w);
+	}
 
-            this.index = index;
+	public Predicate<String> needCLOSE = Helpers.alwaysTrue();
+	public String errorTag;
 
-            if (temp.length() == 0) {
-                return eof();
-            }
+	public XMLParser setCloseTagPredicate(Predicate<String> p) {
+		this.needCLOSE = p == null ? Helpers.alwaysTrue() : p;
+		return this;
+	}
 
-            return formClip(ns ? namespace : WordPresets.LITERAL, temp.toString());
-        }
+	@Override
+	@SuppressWarnings("fallthrough")
+	public final Word readWord() throws ParseException {
+		CharSequence in = input;
+		int i = index;
 
-        @Override
-        @SuppressWarnings("fallthrough")
-        public Word readWord() throws ParseException {
-            CharSequence input = this.input;
-            int index = this.index;
+		while (i < in.length()) {
+			char c = in.charAt(i);
+			switch (XML_FC.getOrDefaultInt(c, 0)) {
+				case C_WHITESPACE: break;
+				case C_MAY__NUMBER_SIGN:
+					if (i+1 < in.length() && NUMBER.contains(in.charAt(i+1))) {
+						index = i;
+						return readDigit(true);
+					}
+					// fall to literal(symbol)
+				default:
+				case C_DEFAULT: index = i; return readSymbol();
+				case C_NUMBER: index = i; return readDigit(false);
+				case C_SYH:
+					index = i+1;
+					return formClip(STRING, readSlashString(c, (flag & UNESCAPED_SINGLE_QUOTE) == 0 || c == '"'));
+				case 2:
+					index = i;
+					int j = checkCommentOrCDATA(i+1, false);
+					if (j > 0) formClip(CDATA_STRING, in.subSequence(i+9, j));
+					if (j == 0) return readSymbol();
+					i = index;
+					continue;
+			}
+			i++;
+		}
+		index = i;
+		return eof();
+	}
 
-            int rem;
-            while ((rem = input.length() - index) > 0) {
-                int c = input.charAt(index++);
-                switch (c) {
-                    case '\'':
-                    case '"':
-                        this.index = index;
-                        return readConstString((char) c);
-                    case '<':
-                        if (rem > 4 && input.charAt(index) == '!' && input.charAt(index + 1) == '-' && input.charAt(index + 2) == '-') { // <!--
-                            index += 3;
-                            while (index < input.length()) {
-                                while (index < input.length() && input.charAt(index++) != '-') ; // -->
-                                if (input.charAt(index) == '-' && input.charAt(index + 1) == '>') {
-                                    index += 2;
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                    default: {
-                        if (!WHITESPACE.contains(c)) {
-                            this.index = index - 1;
-                            if (XML_SPECIAL.contains(c)) {
-                                switch (c) {
-                                    case '-':
-                                    case '+':
-                                        if(input.length() > index && NUMBER.contains(input.charAt(index))) {
-                                            return readDigit(true);
-                                        }
-                                        break;
-                                }
-                                return readSymbol();
-                            } else if (NUMBER.contains(c)) {
-                                return readDigit(false);
-                            } else {
-                                return readLiteral();
-                            }
-                        }
-                    }
-                }
-            }
-            this.index = index;
-            return eof();
-        }
+	final Word readValue() throws ParseException {
+		CharSequence in = input;
+		int i = index;
+		int prevI = i;
 
-        @SuppressWarnings("fallthrough")
-        public XText readString(int CDATA, String name) throws ParseException {
-            CharSequence input = this.input;
-            int index = this.index;
+		int c = 0;
+		while (i < in.length()) {
+			c = in.charAt(i);
+			if (!WHITESPACE.contains(c)) break;
+			i++;
+		}
+		index = i;
+		if (i == in.length()) return eof();
 
-            CharList temp = found;
-            temp.clear();
+		while (c == '<') {
+			c = checkCommentOrCDATA(i+1, false);
+			if (c > 0) return formClip(CDATA_STRING, in.subSequence(i+9, c));
 
-            switch (CDATA) {
-                case 0:
-                    o:
-                    while (index < input.length()) {
-                        char c = input.charAt(index++);
-                        switch (c) {
-                            case '<':
-                                index--;
-                                break o;
-                            case '&':
-                                if(!keepAmp) {
-                                    temp.append(decodeEntity());
-                                    break;
-                                }
-                            default:
-                                temp.append(c);
-                                break;
-                        }
-                    }
-                    break;
-                case 1:
-                    index += 9;
-                    while (index < input.length()) { //]]>
-                        char c = input.charAt(index++);
-                        if (c == ']' && input.charAt(index) == ']' && input.charAt(index + 1) == '>') {
-                            index += 2;
-                            break;
-                        }
-                        temp.append(c);
-                    }
-                    break;
-                case 2:
-                    int xc = 0;
-                    this.index = index;
-                    o:
-                    while (hasNext()) {
-                        Word c = nextWord();
-                        if(c.type() == WordPresets.EOF) break;
-                        if(c.val().length() != 1) {
-                            temp.append(c.val());
-                        } else {
-                            switch (c.type()) {
-                                case right_curly_bracket:
-                                    if (xc > 0) {
-                                        xc--;
-                                    }
-                                    temp.append(c.val());
-                                    break;
-                                case left_curly_bracket:
-                                    if(hasNext() && !WHITESPACE.contains(offset(0)) && xc++ == 0) {
-                                        Word c2 = nextWord();
-                                        if(c2.type() == slash) {
-                                            c2 = nextWord();
-                                            if(c2.type() == WordPresets.LITERAL) {
-                                                if(c2.val().equals(name)) {
-                                                    break o;
-                                                }
-                                            }
-                                            temp.append("</").append(c2.val());
-                                        } else {
-                                            temp.append('<').append(c2.val());
-                                        }
-                                        break;
-                                    }
-                                default:
-                                    temp.append(c.val());
-                                    break;
-                            }
-                        }
-                    }
-                    break;
-            }
+			i = index;
+			if (c == 0) break;
+			c = in.charAt(i);
+		}
 
-            this.index = index;
+		Word w = tryMatchToken();
+		if (w != null) return w;
 
-            //if (temp.length() == 0 && CDATA != 2)
-            //    throw err("未预料的 EOF");
+		CharList v = found; v.clear();
 
-            return temp.length() > 0 ? new XText(temp.toString()) : null;
-        }
+		// restore whitespace
+		i = prevI;
 
-        private char decodeEntity() throws ParseException {
-            String v = readLiteral().val();
+		findstr:
+		while (i < in.length()) {
+			c = in.charAt(i);
+			while (c == '<') {
+				v.append(in, prevI, i);
 
-            char c;
-            switch (v) {
-                case "lt":
-                    c = '<';
-                    break;
-                case "gt":
-                    c = '>';
-                    break;
-                case "amp":
-                    c = '&';
-                    break;
-                case "apos":
-                    c = '\'';
-                    break;
-                case "quot":
-                    c = '"';
-                    break;
-                default:
-                    throw err("无效转义符/作者不知道的转义符");
-            }
+				c = checkCommentOrCDATA(i+1, true);
+				if (c >= 0) {
+					prevI = i;
+					break findstr;
+				}
 
-            if (!readSymbol().val().equals(";")) {
-                throw err("转义需要以;结束");
-            }
+				prevI = i = index;
+				continue findstr;
+			}
 
-            return c;
-        }
+			if (c == '&' && (flag & PROCESS_ENTITY) != 0) {
+				v.append(in, prevI, i++);
 
-        /**
-         * 回收利用Word对象
-         */
-        protected Word formClip(short id, CharSequence s) {
-            if(cached == null) {
-                cached = new Word();
-            }
-            return cached.reset(id, index, s.toString());
-        }
+				int j = i;
+				while (j < in.length()) {
+					c = in.charAt(j);
+					if (c == ';') break;
+					j++;
+				}
 
-        @Override
-        protected Word readSymbol() throws ParseException {
-            String v;
-            short id;
-            switch (next()) {
-                case '<':
-                    v = "<";
-                    id = left_curly_bracket;
-                    break;
-                case '/':
-                    v = "/";
-                    id = slash;
-                    break;
-                case '>':
-                    v = ">";
-                    id = right_curly_bracket;
-                    break;
-                case '=':
-                    v = "=";
-                    id = equ;
-                    break;
-                case '?':
-                    v = "?";
-                    id = ask;
-                    break;
-                case ';':
-                    v = ";";
-                    id = semicolon;
-                    break;
-                case '!':
-                    v = "!";
-                    id = not;
-                    break;
-                case ':':
-                    v = ":";
-                    id = colon;
-                    break;
-                default:
-                    throw err("无效字符 '" + offset(-1) + '\'');
-            }
+				handleAmp(in.subSequence(i, j), v);
+				prevI = i = j;
+			} else {
+				i++;
+			}
+		}
+		v.append(in, prevI, i);
 
-            return formClip(id, v);
-        }
+		index = i;
+		return formClip(LITERAL, v);
+	}
 
-        public boolean checkCDATATag(Word w) {
-            return TextUtil.regionMatches(input, index, "![CDATA[", 0);
-        }
-    }
+	private int checkCommentOrCDATA(int i, boolean quick) throws ParseException {
+		CharSequence in = input;
+		if (TextUtil.regionMatches("!--", 0, in, i)) { // <!--
+			int j = TextUtil.gIndexOf(in, "-->", i+3, in.length());
+			if (j < 0) throw err("在注释结束前遇到了文件尾");
+			if (comment != null) {
+				comment.clear();
+				cc.comment(comment.append(in, i+3, j).toString());
+			}
+			index = j+3;
+			return -1;
+		} else if (TextUtil.regionMatches("![CDATA[", 0, in, i)) { // CDATA
+			if (quick) return 1;
+
+			int j = TextUtil.gIndexOf(in, "]]>", i +8, in.length());
+			if (j < 0) throw err("在CDATA结束前遇到了文件尾");
+
+			index = j+3;
+			return j;
+		}
+
+		return 0;
+	}
+
+	protected void handleAmp(CharSequence seq, CharList out) throws ParseException { HttpUtil.htmlspecial_decode_all(out, seq); }
+
+	@Override
+	protected final Word onInvalidNumber(char value, int i, String reason) throws ParseException { return readLiteral(); }
 }

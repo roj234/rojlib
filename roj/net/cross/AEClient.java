@@ -1,462 +1,305 @@
-/*
- * This file is a part of MoreItems
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.net.cross;
 
-import roj.collect.MyHashSet;
-import roj.concurrent.task.ITaskNaCl;
-import roj.io.NonblockingUtil;
-import roj.net.ssl.EngineAllocator;
-import roj.net.ssl.SslConfig;
-import roj.net.ssl.SslEngineFactory;
-import roj.net.tcp.util.InsecureSocket;
-import roj.net.tcp.util.SecureSocket;
-import roj.net.tcp.util.WrappedSocket;
+import roj.io.IOUtil;
+import roj.net.ch.*;
 import roj.util.ByteList;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
-import roj.util.FastLocalThread;
+import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
-import java.io.Closeable;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.ConnectException;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.security.GeneralSecurityException;
-import java.util.concurrent.locks.LockSupport;
+import java.net.InetAddress;
+import java.net.SocketAddress;
+import java.net.StandardSocketOptions;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Consumer;
 
 import static roj.net.cross.Util.*;
 
 /**
- * AbyssalEye Dedicated Client
+ * AbyssalEye Client
  *
  * @author Roj233
- * @version 0.3.1
  * @since 2021/8/18 0:09
  */
-public class AEClient implements Runnable, Closeable {
-    static final EngineAllocator AE_SSL;
+public class AEClient extends IAEClient {
+	public static final int MAX_CHANNEL_COUNT = 6;
 
-    static {
-        EngineAllocator alloc = null;
-        try {
-            InputStream stream = AEClient.class.getResourceAsStream("/META-INF/client.ks");
-            if (stream != null)
-            alloc = SslEngineFactory.getSslFactory(new SslConfig() {
-                @Override
-                public boolean isServerSide() {
-                    return false;
-                }
+	public char[] portMap;
+	public int clientId;
 
-                @Override
-                public InputStream getPkPath() {
-                    return null;
-                }
+	protected Listener[] servers;
 
-                @Override
-                public InputStream getCaPath() {
-                    return stream;
-                }
+	final ConcurrentLinkedQueue<Object> asyncTick, asyncRead;
 
-                @Override
-                public char[] getPasswd() {
-                    return "123456".toCharArray();
-                }
-            });
-        } catch (IOException | GeneralSecurityException e) {
-            e.printStackTrace();
-        }
-        AE_SSL = alloc;
-    }
+	public AEClient(SocketAddress server, String id, String token) {
+		super(server, id, token);
+		this.asyncTick = new ConcurrentLinkedQueue<>();
+		this.asyncRead = new ConcurrentLinkedQueue<>();
+	}
 
-    boolean ssl;
-    String id, token;
+	public final void awaitLogin() throws InterruptedException {
+		if (free != null) return;
+		synchronized (this) {
+			wait();
+		}
+	}
 
-    ServerSocket      local;
-    InetSocketAddress localServer, server;
+	protected void notifyLogon() {
+		synchronized (this) {
+			notifyAll();
+		}
+	}
 
-    final MyHashSet<Worker> workers;
-    final TaskRunner task;
-    int freeThreads, maxWorkers, error;
+	public final void notifyPortMapModified() throws IOException {
+		if (free == null) throw new IOException("Client closed");
 
-    boolean shutdownRequested;
+		for (int j = 0; j < servers.length; j++) {
+			Listener cn = servers[j];
+			char port = portMap[j];
+			if (cn != null) {
+				if (port != cn.port) {
+					try {
+						cn.socket.close();
+					} catch (IOException ignored) {}
+					servers[j] = null;
+				}
+			}
+			if (servers[j] == null && port > 0) {
+				servers[j] = new Listener(port, j);
+				try {
+					servers[j].start(loop);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
 
-    AEClient(String roomId, String roomToken, InetSocketAddress server, InetSocketAddress local, boolean ssl, int magic) {
-        this.id = roomId;
-        this.token = roomToken;
-        this.server = server;
-        this.ssl = ssl;
-        this.workers = new MyHashSet<>();
-        this.maxWorkers = 32;
-        this.task = new TaskRunner();
-        if(local != null)
-            this.localServer = local;
-    }
+	@Override
+	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
+		received = true;
 
-    public AEClient(String roomId, String roomToken, InetSocketAddress server, InetSocketAddress local, boolean ssl) throws IOException {
-        this(roomId, roomToken, server, null, ssl, 0);
-        ServerSocket socket = this.local = new ServerSocket();
-        socket.setReuseAddress(true);
-        socket.bind(local, maxWorkers);
-    }
+		DynByteBuf rb = (DynByteBuf) msg;
+		switch (rb.get() & 0xFF) {
+			case P_FAIL:
+				print("上次的操作失败了");
+				break;
+			case P_HEARTBEAT:
+				break;
+			case P_LOGOUT:
+				logout(ctx);
+				break;
+			case P_CHANNEL_CLOSE:
+				int src = rb.readInt();
+				int id = rb.readInt();
 
-    public void close() throws IOException {
-        if(local != null)
-            local.close();
-        Object[] arr;
-        synchronized (workers) {
-            arr = workers.toArray(new Object[workers.size()]);
-        }
-        shutdownRequested = true;
-        for (Object o : arr) {
-            Worker w = (Worker) o;
-            w.interrupt();
-        }
-        for (Object o : arr) {
-            Worker w = (Worker) o;
-            try {
-                w.join();
-            } catch (InterruptedException ignored) {}
-        }
-    }
+				Pipe pair = socketsById.remove(id);
+				if (pair == null) break;
 
-    public void run() {
-        long t = System.currentTimeMillis();
-        while (true) {
-            Socket client;
-            try {
-                client = local.accept();
-            } catch (IOException e) {
-                break;
-            }
-            if (error > (System.currentTimeMillis() - t) / 10) {
-                break;
-            }
-            t = System.currentTimeMillis();
-            error = 0;
-            try {
-                if (workers.size() >= maxWorkers) {
-                    client.close();
-                    syncPrint("连接数超限! " + workers.size() + "/" + maxWorkers);
-                }
-                initSocketPref(client);
-                InsecureSocket client1 = new InsecureSocket(client, NonblockingUtil.fd(client));
-                x:
-                synchronized (workers) {
-                    if (freeThreads > 0) {
-                        for (Worker wx : workers) {
-                            if (wx.client == null) {
-                                wx.client = client1;
-                                LockSupport.unpark(wx.self);
-                                freeThreads--;
-                                break x;
-                            }
-                        }
-                    }
-                    task.pushTask(new Worker(client1));
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        try {
-            local.close();
-        } catch (IOException ignored) {}
-    }
+				pair.close();
 
-    class Worker extends FastLocalThread implements ITaskNaCl {
-        Worker(WrappedSocket client) {
-            setDaemon(true);
-            this.client = client;
-            this.ob = new ByteList();
-        }
+				List<Pipe> pairs = free[((SpAttach) pair.att).portId];
+				if (!pairs.isEmpty()) pairs.remove(pair);
 
-        Thread self;
-        WrappedSocket client;
-        ByteList ob;
+				print((src < 0 ? "服务端" : "房主") + "关闭了频道 #" + id);
+				break;
+			case P_CHANNEL_OPEN_FAIL:
+				GetPipe task = (GetPipe) asyncRead.poll();
+				if (task == null || task.cipher == null) throw new IOException("错误的状态");
 
-        // 子机ID
-        int slaveId;
-        long lastConnect;
+				src = rb.readInt();
+				task.fail((src < 0 ? "服务端" : "房主") + "拒绝开启频道: " + rb.readVUIUTF());
+				break;
+			case P_CHANNEL_RESULT:
+				task = (GetPipe) asyncRead.poll();
+				if (task == null || task.cipher == null) throw new IOException("错误的状态");
 
-        // 统计信息
-        long lastHeart;
+				rb.read(task.cipher, 32, 32);
+				long pipe = rb.readLong();
+				print("申请了频道 #" + (pipe >>> 32));
+				asyncPipeLogin(pipe, task.cipher, task);
+				break;
+			case P_CHANNEL_RESET:
+				print("服务端返回重置完毕");
+				break;
+			case P_EMBEDDED_DATA:
+				break;
+			default:
+				onError(rb, null);
+				ctx.close();
+				break;
+		}
+	}
 
-        @Override
-        public String toString() {
-            return client + " #" + slaveId;
-        }
+	@Override
+	public void channelTick(ChannelCtx ctx) throws IOException {
+		if (portMap == null) return;
 
-        @Override
-        public void run() {
-            self = this;
-            try {
-                run1();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            synchronized (workers) {
-                workers.remove(this);
-            }
-            slaveId = -1;
-        }
+		super.channelTick(ctx);
 
-        void run1() throws IOException {
-            self.setName("SW " + this);
-            Socket remote = new Socket();
-            try {
-                remote.connect(server);
-            } catch (ConnectException e) {
-                syncPrint("无法连接至服务器");
-                error++;
-                return;
-            }
-            WrappedSocket channel = ssl ? SecureSocket.get(remote, NonblockingUtil.fd(remote), AE_SSL, true) : new InsecureSocket(remote, NonblockingUtil.fd(remote));
-            try {
-                int read = 0;
-                conn:
-                {
-                    int result = handshakeClient(channel);
-                    if(result != 0) {
-                        syncPrint("握手失败: " + result);
-                        break conn;
-                    }
-                    ByteList buf = channel.buffer();
-                    ByteReader r = new ByteReader(buf);
-                    ByteWriter w = new ByteWriter(buf);
+		ByteList tmp = IOUtil.getSharedByteBuf();
+		Object o = asyncTick.poll();
+		checkInterrupt:
+		if (o instanceof Pipe) {
+			// release
+			Pipe pipe = (Pipe) o;
+			SpAttach att = (SpAttach) pipe.att;
+			List<Pipe> pairs = free[att.portId];
+			if (pairs == Collections.EMPTY_LIST) pairs = free[att.portId] = new ArrayList<>(3);
+			pairs.add(pipe);
+		} else if (o instanceof GetPipe) {
+			GetPipe gp = (GetPipe) o;
+			if (socketsById.size() > MAX_CHANNEL_COUNT) {
+				gp.fail("打开的频道过多(" + MAX_CHANNEL_COUNT + ")");
+				break checkInterrupt;
+			}
 
-                    w.writeByte((byte) PS_CONNECT).writeByte((byte) ByteWriter.byteCountUTF8(id)).writeByte((byte) ByteWriter.byteCountUTF8(token)).writeByte((byte) 0).writeAllUTF(id).writeAllUTF(token);
-                    if(writeAndFlush(channel, buf, TIMEOUT_TRANSFER) < 0) {
-                        syncPrint(this + ": 连接数据包发送超时");
-                        break conn;
-                    }
-                    buf.clear();
+			asyncRead.offer(gp);
 
-                    int heart = 0;
-                    int except = -1;
-                    while (!shutdownRequested) {
-                        while ((read = channel.read(except == -1 ? 1 : except - buf.pos())) == 0 || buf.pos() < except) {
-                            if(--heart <= 0) {
-                                if(heart % T_CLIENT_HEARTBEAT_RETRY == 0) {
-                                    if (writeEx(channel, (byte) PS_HEARTBEAT) < 0) {
-                                        syncPrint(this + ": 心跳发送失败");
-                                    }
-                                } else if(heart < -T_CLIENT_HEARTBEAT_TIMEOUT) {
-                                    syncPrint(this + ": 没收到服务端心跳");
-                                    break conn;
-                                }
-                            }
-                            if(shutdownRequested) break conn;
-                            int r1 = client == null ? 0 : client.read();
-                            if (r1 != 0) {
-                                if(r1 > 0) {
-                                    ByteList ob = this.ob;
-                                    ob.clear();
-                                    ByteList cb = client.buffer();
-                                    w.list = ob;
-                                    w.writeByte((byte) PS_DATA).writeInt(cb.pos()).writeBytes(cb)
-                                     .list = buf;
-                                    cb.clear();
+			List<Pipe> pairs = free[gp.portId];
+			if (pairs.isEmpty()) {
+				byte[] cipher = gp.cipher = new byte[64];
+				rnd.nextBytes(cipher);
 
-                                    if (writeAndFlush(channel, ob, TIMEOUT_TRANSFER) < 0) {
-                                        syncPrint(this + ": 数据发送失败! " + buf.writePos() + "/" + buf.pos());
-                                        break;
-                                    }
-                                    ob.clear();
-                                } else {
-                                    //syncPrint(this + ": 下级断开连接");
-                                    if (freeThreads < maxWorkers) {
-                                        synchronized (workers) {
-                                            freeThreads++;
-                                        }
-                                        syncPrint(this + ": free idle 30");
-                                        client = null;
-                                        // 连接保留30s
-                                        lastConnect = System.currentTimeMillis();
-                                        if(writeEx(channel, (byte) PS_RESET) < 0) {
-                                            syncPrint(this + ": 重置发送失败");
-                                            break conn;
-                                        }
-                                    } else {
-                                        syncPrint(this + ": 断开(释放)");
-                                        break conn;
-                                    }
-                                }
-                            } else {
-                                LockSupport.parkNanos(20);
-                                if (client == null && System.currentTimeMillis() - lastConnect > 30000) {
-                                    syncPrint(this + ": 断开(释放,超时)");
-                                    synchronized (workers) {
-                                        freeThreads--;
-                                    }
-                                    break conn;
-                                }
-                            }
-                        }
-                        if (read < 0 || shutdownRequested) {
-                            break;
-                        }
-                        if(buf.pos() < 1) {
-                            continue;
-                        }
-                        switch (buf.get(0) & 0xFF) {
-                            case PS_HEARTBEAT:
-                                lastHeart = System.currentTimeMillis();
-                                buf.clear();
-                                break;
-                            case PS_LOGON:
-                                if(buf.pos() < 5) {
-                                    except = 5;
-                                    break;
-                                }
-                                except = -1;
-                                r.index = 1;
-                                slaveId = r.readInt();
-                                syncPrint(this + ": 登录成功 #" + slaveId);
-                                buf.clear();
-                                break;
-                            case PS_DISCONNECT:
-                                syncPrint(this + ": 断开连接(协议)");
-                                break conn;
-                            case PS_STATE:
-                                if(buf.pos() < 2) {
-                                    except = 2;
-                                    break;
-                                }
-                                except = -1;
-                                syncPrint(this + ": 上次的转发状态: " + RSTATE_NAMES[buf.getU(1)]);
-                                buf.clear();
-                                break;
-                            case PS_SERVER_DATA:
-                                r.index = 1;
-                                if(buf.pos() < 5) {
-                                    except = 5;
-                                    break;
-                                }
-                                int value = r.readInt();
-                                if(buf.pos() < value + 5) {
-                                    except = value + 5;
-                                    break;
-                                }
-                                except = -1;
+				tmp.put((byte) PS_REQUEST_CHANNEL).put((byte) gp.portId).put(cipher, 0, 32);
+				break checkInterrupt;
+			}
 
-                                if(client == null) {
-                                    syncPrint(this + ": 丢弃转发数据? " + value);
-                                    buf.clear();
-                                    break;
-                                }
-                                buf.writePos(5);
-                                if(writeAndFlush(client, buf, TIMEOUT_TRANSFER) < 0) {
-                                    syncPrint(this + ": 本地传输超时 " + buf.writePos() + "/" + buf.pos());
-                                    break;
-                                }
-                                buf.clear();
-                                break;
-                            default:
-                                error++;
-                                int bc = buf.getU(0) - 0x20;
-                                if(buf.pos() == 1 && bc >= 0 && bc < ERROR_NAMES.length) {
-                                    syncPrint(this + ": 错误 " + ERROR_NAMES[bc]);
-                                } else {
-                                    syncPrint(this + ": 未知数据包: " + buf);
-                                }
-                                buf.clear();
-                                break conn;
-                        }
-                        heart = T_CLIENT_HEARTBEAT_TIME;
-                    }
-                }
-                if(read < 0) {
-                    syncPrint("连接非正常断开: " + read);
-                } else {
-                    syncPrint("连接断开");
-                }
+			Pipe target = pairs.remove(pairs.size() - 1);
+			SpAttach att = (SpAttach) target.att;
 
-                try {
-                    writeEx(channel, (byte) PS_DISCONNECT);
-                } catch (IOException ignored) {}
-                while (!channel.shutdown()) {
-                    LockSupport.parkNanos(100);
-                }
-                channel.close();
-                if(client != null) {
-                    while (!client.shutdown()) {
-                        LockSupport.parkNanos(100);
-                    }
-                    client.close();
-                }
-            } catch (Throwable e) {
-                onError(channel, e);
-            }
-        }
+			if (DEBUG) print("复用 #" + att);
+			// 通知对面重新连接下
+			tmp.put((byte) P_CHANNEL_RESET).putInt(att.channelId);
 
-        @Override
-        public void calculate(Thread thread) throws Exception {
-            // noinspection all
-            interrupted();
-            self = thread;
-            try {
-                run1();
-            } finally {
-                self.setName("SW Idle");
-                synchronized (workers) {
-                    workers.remove(this);
-                }
-            }
-            slaveId = -1;
-        }
+			gp.accept(target);
+		}
 
-        @Override
-        public boolean isDone() {
-            return slaveId == -1;
-        }
-    }
+		if (tmp.wIndex() > 0) {
+			ctx.channelWrite(tmp);
+		}
+	}
 
-    void onError(WrappedSocket channel, Throwable e) {
-        ByteList buf = channel.buffer();
-        int bc;
-        if(buf.pos() == 1 && (bc = buf.getU(0) - 0x20) >= 0 && bc < ERROR_NAMES.length) {
-            syncPrint(channel + ": 错误 " + ERROR_NAMES[bc]);
-        } else {
-            String msg = e.getMessage();
-            if (!"Broken pipe".equals(msg) && !"Connection reset by peer".equals(msg)) {
-                e.printStackTrace();
-            }
-        }
+	@Override
+	protected void prepareLogin(MyChannel ctx) {
+		byte[] idBytes = id.getBytes(StandardCharsets.UTF_8);
+		byte[] tokenBytes = token.getBytes(StandardCharsets.UTF_8);
 
-        try {
-            /*
-             * Only try once
-             */
-            channel.shutdown();
-        } catch (IOException ignored) {}
+		ByteList tmp = IOUtil.getSharedByteBuf();
+		tmp.put((byte) idBytes.length).put((byte) tokenBytes.length).put(idBytes).put(tokenBytes);
 
-        try {
-            channel.close();
-        } catch (IOException ignored) {}
-    }
+		ctx.addLast("auth", new AEAuthenticator(tmp.toByteArray(), PS_LOGIN_C)).addLast("auth_after", new ChannelHandler() {
+			@Override
+			public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
+				DynByteBuf rb = (DynByteBuf) msg;
+				int infoLen = rb.get() & 0xFF;
+				int motdLen = rb.get() & 0xFF;
+				int portLen = rb.get() & 0xFF;
+
+				int clientId = rb.readInt();
+
+				print("服务器MOTD: " + rb.readUTF(infoLen));
+				print("房间MOTD: " + rb.readUTF(motdLen));
+				print("客户端ID: " + clientId);
+
+				if (portLen > 32) throw new IllegalArgumentException("系统限制: 端口映射数量 < 32");
+				char[] ports = new char[portLen];
+				for (int i = 0; i < portLen; i++) {
+					ports[i] = rb.readChar();
+				}
+
+				ctx.removeSelf();
+
+				AEClient.this.portMap = ports;
+				AEClient.this.clientId = clientId;
+				AEClient.this.free = Helpers.cast(new List<?>[ports.length]);
+				Arrays.fill(free, Collections.emptyList());
+				AEClient.this.servers = new Listener[ports.length];
+
+				notifyLogon();
+			}
+		});
+	}
+
+	@Override
+	public void channelClosed(ChannelCtx ctx) throws IOException {
+		if (servers != null) {
+			for (Listener cn : servers) {
+				if (cn != null) {
+					try {
+						cn.socket.close();
+					} catch (IOException ignored) {}
+				}
+			}
+		}
+		super.channelClosed(ctx);
+	}
+
+	final class Listener implements Consumer<MyChannel> {
+		final ServerSock socket;
+		final int portId;
+		final char port;
+
+		public Listener(char port, int portId) throws IOException {
+			socket = ServerSock.openTCP().bind(InetAddress.getLoopbackAddress(), port, 100).setOption(StandardSocketOptions.SO_REUSEADDR, true);
+			this.portId = portId;
+			this.port = port;
+		}
+
+		public void start(SelectorLoop loop) throws IOException {
+			socket.register(loop, this);
+		}
+
+		@Override
+		public void accept(MyChannel ch) {
+			try {
+				initSocketPref(ch);
+				asyncTick.offer(new GetPipe(portId, ch));
+			} catch (IOException e) {
+				Helpers.athrow(e);
+			}
+		}
+	}
+
+	final class GetPipe implements Consumer<Pipe> {
+		final int portId;
+		final MyChannel ch;
+		byte[] cipher;
+
+		GetPipe(int id, MyChannel ch) {
+			portId = id;
+			this.ch = ch;
+		}
+
+		public void accept(Pipe pair) {
+			try {
+				pair.setDown(ch);
+				loop.register(pair, (Consumer<Pipe>) (pipe) -> {
+					if (pipe.isUpstreamEof()) {
+						System.out.println("管道结束 " + pipe.att);
+						return;
+					}
+					try {
+						asyncTick.offer(pipe);
+					} catch (Throwable e) {
+						System.out.println("管道回收失败 " + pipe.att);
+						e.printStackTrace();
+					}
+				});
+			} catch (Exception e) {
+				try {
+					ch.close();
+				} catch (IOException ignored) {}
+			}
+		}
+
+		public void fail(String s) {
+			System.out.println("GetPipe() failed with " + s);
+		}
+	}
 }

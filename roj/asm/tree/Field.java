@@ -1,230 +1,123 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.asm.tree;
 
-import roj.asm.SharedBuf;
-import roj.asm.cst.CstUTF;
-import roj.asm.tree.attr.*;
-import roj.asm.type.ParamHelper;
+import roj.asm.AsmShared;
+import roj.asm.Parser;
+import roj.asm.cst.ConstantPool;
+import roj.asm.tree.attr.AttrUnknown;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.attr.ConstantValue;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
-import roj.asm.util.ConstantPool;
-import roj.asm.util.FlagList;
-import roj.util.ByteList;
-import roj.util.ByteReader;
-import roj.util.ByteWriter;
+import roj.util.DynByteBuf;
+import roj.util.TypedName;
 
-import java.util.PrimitiveIterator;
+import java.util.Objects;
 
 /**
  * @author Roj234
- * @version 1.0
  * @since 2021/6/18 9:51
  */
-public final class Field implements MoFNode {
-    public Field(FlagList accesses, String name, String type) {
-        this.accesses = accesses;
-        this.name = name;
-        this.type = ParamHelper.parseField(type);
-    }
+public final class Field implements FieldNode {
+	public Field(int access, String name, String type) {
+		this.access = (char) access;
+		this.name = name;
+		this.type = type;
+	}
 
-    public Field(FlagList accesses, String name, Type type) {
-        this.accesses = accesses;
-        this.name = name;
-        this.type = type;
-    }
+	public Field(int access, String name, Type type) {
+		this.access = (char) access;
+		this.name = name;
+		this.type = type;
+	}
 
-    public Field(ConstantData data, FieldSimple field) {
-        this(field.accesses, field.name.getString(), field.type.getString());
+	public Field(ConstantData data, RawField field) {
+		this(field.access, field.name.str(), field.type.str());
 
-        ConstantPool pool = data.cp;
-        ByteReader r = new ByteReader();
+		AttributeList al = field.attributesNullable();
+		if (al != null && !al.isEmpty()) {
+			attributes = new AttributeList(al);
+			Parser.parseAttributes(this, data.cp, attributes, Signature.FIELD);
+		}
+	}
 
-        AttributeList al = field.attributes;
-        attributes.ensureCapacity(al.size());
-        for (int i = 0; i < al.size(); i++) {
-            Attribute attr = al.get(i);
-            if(attr.getClass() == AttrUnknown.class) {
-                r.refresh(attr.getRawData());
+	public Field(java.lang.reflect.Field f) {
+		this.name = f.getName();
+		this.access = (char) f.getModifiers();
+		this.type = TypeHelper.class2asm(f.getType());
+	}
 
-                String name = attr.name;
+	public String name;
+	private Object type;
 
-                handleAttribute(pool, r, name, r.length());
+	public char access;
 
-                if (!r.isFinished()) {
-                    System.err.println("[Warning] Attribute " + name + " has " + (r.length() - r.index) + " bytes not " + "read correctly!");
-                }
-            } else {
-                attributes.add(attr);
-            }
-        }
-    }
+	private AttributeList attributes;
 
-    public void initAttributes(ConstantPool pool, ByteReader r) {
-        int len = r.readUnsignedShort();
-        for (int i = 0; i < len; i++) {
-            String name = ((CstUTF) pool.get(r)).getString();
-            final int length = r.readInt();
+	public void toByteArray(DynByteBuf w, ConstantPool pool) {
+		w.putShort(access).putShort(pool.getUtfId(name)).putShort(pool.getUtfId(rawDesc()));
 
-            final int end = r.index + length;
-            handleAttribute(pool, r, name, length);
+		if (attributes == null) {
+			w.putShort(0);
+		} else {
+			attributes.toByteArray(w, pool);
+		}
+	}
 
-            if (r.index != end) {
-                System.err.println("[Warning] Attribute " + name + " has " + (end - r.index) + " bytes not read correctly!");
-                r.index = end;
-            }
-        }
-    }
+	RawField i_downgrade(ConstantPool cw) {
+		RawField f = new RawField(access, cw.getUtf(name), cw.getUtf(rawDesc()));
+		if (attributes == null) return f;
 
-    private void handleAttribute(ConstantPool pool, ByteReader r, String name, int length) {
-        Attribute attr;
-        switch (name) {
-            case "RuntimeVisibleTypeAnnotations":
-            case "RuntimeInvisibleTypeAnnotations":
-                attr = new AttrTypeAnnotation(name, r, pool, this);
-                break;
-            // 字段泛型签名
-            case "Signature":
-                signature = Signature.parse(((CstUTF) pool.get(r)).getString());
-                return;
-            // 字段注解
-            case "RuntimeVisibleAnnotations":
-            case "RuntimeInvisibleAnnotations":
-                attr = new AttrAnnotation(name, r, pool);
-                break;
-            // static final型‘常量’的默认值
-            case "ConstantValue":
-                attr = new AttrConstantValue(pool.get(r));
-                break;
-            // 由编译器生成
-            case "Synthetic":
-                // 弃用
-            case "Deprecated":
-            default:
-                attr = new AttrUnknown(name, r.readBytesDelegated(length));
-        }
-        attributes.add(attr);
-    }
+		AttributeList fAttr = f.attributes();
+		fAttr.ensureCapacity(attributes.size());
+		DynByteBuf w = AsmShared.getBuf();
+		for (int i = 0; i < attributes.size(); i++) {
+			fAttr.add(AttrUnknown.downgrade(cw, w, this.attributes.get(i)));
+		}
+		return f;
+	}
 
-    public String name;
-    public Type type;
-    public FlagList accesses;
-    public AttributeList attributes = new AttributeList();
-    public Signature signature;
+	public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedName<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Signature.FIELD); }
+	public Attribute attrByName(String name) { return attributes == null ? null : (Attribute) attributes.getByName(name); }
 
-    public void toByteArray(ConstantPool pool, ByteWriter w) {
-        w.writeShort(accesses.flag).writeShort(pool.getUtfId(name)).writeShort(pool.getUtfId(ParamHelper.getField(type)));
+	public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
+	public AttributeList attributesNullable() { return attributes; }
 
-        if (signature != null)
-            attributes.add(new AttrUTF(AttrUTF.SIGNATURE, signature.toGeneric()));
-        w.writeShort((short) attributes.size());
-        for (Attribute attribute : attributes) {
-            attribute.toByteArray(pool, w);
-        }
-    }
+	public String name() { return name; }
+	public void name(ConstantPool cp, String name) { this.name = name; }
 
-    @Override
-    public String name() {
-        return name;
-    }
+	public String rawDesc() { return type instanceof Type ? ((Type) type).toDesc() : type.toString(); }
+	public void rawDesc(ConstantPool cp, String desc) { type = Objects.requireNonNull(desc); }
 
-    @Override
-    public String rawDesc() {
-        return ParamHelper.getField(type);
-    }
+	public Type fieldType() {
+		if (!(type instanceof Type)) type = TypeHelper.parseField(type.toString());
+		return (Type) type;
+	}
+	public void fieldType(Type type) { this.type = Objects.requireNonNull(type); }
 
-    @Override
-    public int type() {
-        return 1;
-    }
+	public char modifier() { return access; }
+	public void modifier(int flag) { access = (char) flag; }
 
-    @Override
-    public FlagList accessFlag() {
-        return accesses;
-    }
+	public int type() { return Parser.FTYPE_FULL; }
 
-    FieldSimple i_downgrade(ConstantPool cw) {
-        FieldSimple f = new FieldSimple(accesses, cw.getUtf(name), cw.getUtf(rawDesc()));
-        f.attributes.ensureCapacity(attributes.size() +
-                                            (signature == null ? 0 : 1));
-        ByteWriter w = new ByteWriter(SharedBuf.i_get());
-        for (int i = 0; i < attributes.size(); i++) {
-            f.attributes.add(AttrUnknown.downgrade(cw, w, attributes.get(i)));
-        }
-        if (signature != null) {
-            w.list.clear();
-            w.writeShort(cw.getUtfId(signature.toGeneric()));
-            f.attributes.add(new AttrUnknown(AttrUTF.SIGNATURE, new ByteList(w.toByteArray())));
-        }
-        return f;
-    }
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
 
-    public AttrAnnotation getAnnotations() {
-        return (AttrAnnotation) attributes.getByName(AttrAnnotation.VISIBLE);
-    }
+		Attribute a;
+		a = parsedAttr(null, Attribute.RtAnnotations);
+		if (a != null) sb.append("    ").append(a).append('\n');
+		a = parsedAttr(null, Attribute.ClAnnotations);
+		if (a != null) sb.append("    ").append(a).append('\n');
 
-    public AttrAnnotation getInvisibleAnnotations() {
-        return (AttrAnnotation) attributes.getByName(AttrAnnotation.INVISIBLE);
-    }
+		sb.append("    ");
+		Signature sig = parsedAttr(null, Attribute.SIGNATURE);
+		AccessFlag.toString(access, AccessFlag.TS_FIELD, sb).append(sig != null ? sig : fieldType()).append(' ').append(name);
 
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
+		ConstantValue cv = parsedAttr(null, Attribute.ConstantValue);
+		if (cv != null) sb.append(" = ").append(cv.c);
 
-        if (getAnnotations() != null)
-            sb.append("    ").append(getAnnotations()).append('\n');
-        if (getInvisibleAnnotations() != null)
-            sb.append("    ").append(getInvisibleAnnotations()).append('\n');
-
-        sb.append("    ");
-        for (PrimitiveIterator.OfInt itr = accesses.iterator(); itr.hasNext(); ) {
-            sb.append(AccessFlag.byIdField(itr.nextInt())).append(' ');
-        }
-        sb.append(signature != null ? signature : type).append(' ').append(name);
-
-        AttrConstantValue constant = (AttrConstantValue) attributes.getByName("ConstantValue");
-        if (constant != null) {
-            sb.append(" = ").append(constant.c);
-        }
-        sb.append('\n');
-
-        if (!attributes.isEmpty()) {
-            for (Attribute attr : attributes) {
-                switch (attr.name) {
-                    case AttrAnnotation.VISIBLE:
-                    case AttrAnnotation.INVISIBLE:
-                    case "ConstantValue":
-                        continue;
-                }
-                sb.append("      ").append(attr.toString()).append('\n');
-            }
-            sb.deleteCharAt(sb.length() - 1);
-        }
-        return sb.toString();
-    }
+		return sb.toString();
+	}
 }

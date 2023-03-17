@@ -8,11 +8,11 @@ package roj.lavac.util;
  * @since 2020/12/31 18:44
  */
 public class UnableCastException extends Exception {
-    public final String from, to;
+	public final String from, to;
 
-    public UnableCastException(String from, String to) {
-        super("Should be caught" , null, true, false);
-        this.from = from;
-        this.to = to;
-    }
+	public UnableCastException(String from, String to) {
+		super("Should be caught", null, true, false);
+		this.from = from;
+		this.to = to;
+	}
 }

@@ -1,318 +1,238 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.asm;
 
+import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipArchive;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstString;
-import roj.asm.cst.CstType;
 import roj.asm.tree.ConstantData;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.config.ParseException;
-import roj.config.word.AbstLexer;
+import roj.config.word.ITokenizer;
 import roj.config.word.Word;
-import roj.config.word.WordPresets;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
-import roj.io.MutableZipFile;
-import roj.math.MathUtils;
 import roj.text.CharList;
+import roj.text.StreamReader;
 import roj.util.ByteList;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.*;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
- * @since  2020/10/18 14:46
+ * @since 2020/10/18 14:46
  */
 public class Translator {
-    static boolean apply;
-    static Map<String, IntMap<String>> value = new MyHashMap<>();
+	private static Map<String, IntMap<String>> value;
+	private static OutputStream out1;
 
-    public static void main(String[] args) throws IOException, ParseException {
-        if (args.length < 2) {
-            System.out.println("Translator [-apply] <file>... <dictionary>");
-            return;
-        }
+	public static void main(String[] args) throws IOException, ParseException {
+		if (args.length < 2) {
+			System.out.println("Translator [-apply] <file>... <dictionary>");
+			return;
+		}
 
-        for (int i = 0; i < args.length - 1; i++) {
-            String s = args[i];
-            if (s.equals("-apply")) {
-                apply = true;
-                apply(args);
-                return;
-            }
-            parse(new File(s));
-        }
+		if (args[0].equals("-apply")) {
+			value = new MyHashMap<>();
+			parse(args);
 
-        String out = args[args.length - 1];
+			for (int i = 1; i < args.length - 1; i++) apply(new File(args[i]));
+			return;
+		}
 
-        StringBuilder sb = new StringBuilder(100000);
+		try (OutputStream out = new BufferedOutputStream(new FileOutputStream(args[args.length-1]))) {
+			out1 = out;
+			for (int i = 0; i < args.length - 1; i++) read(new File(args[i]));
+			out1 = null;
+		}
+	}
 
-        for (Map.Entry<String, IntMap<String>> entry : value.entrySet()) {
-            sb.append(entry.getKey()).append(':').append('\n');
-            for (IntMap.Entry<String> entry1 : entry.getValue().entrySet()) {
-                sb.append(' ').append(' ').append(entry1.getKey()).append('=').append('"').append(AbstLexer.addSlashes(entry1.getValue())).append('"').append('\n');
-            }
-        }
+	private static void parse(String[] args) throws IOException, ParseException {
+		ITokenizer wr = new ITokenizer() {
+			@Override
+			public Word readWord() throws ParseException {
+				int i = index;
+				CharSequence in = input;
 
-        try (FileOutputStream fos = new FileOutputStream(new File(out))) {
-            fos.write(sb.toString().getBytes(StandardCharsets.UTF_8));
-        }
+				while (i < in.length()) {
+					int c = in.charAt(i++);
+					switch (c) {
+						case '\'': case '"':
+							index = i;
+							return readConstString((char) c);
+						case '/':
+							index = i;
+							Word w = javaComment(found);
+							if (w != null) return w;
+							break;
+						case '=': case ':':
+							index = i;
+							return formClip((short) c, String.valueOf((char) c));
+						default: {
+							if (!WHITESPACE.contains(c)) {
+								index = i-1;
+								if (NUMBER.contains(c)) {
+									return readDigit(false);
+								} else {
+									return readLiteral();
+								}
+							}
+						}
+					}
+				}
+				index = i;
+				return eof();
+			}
+		}.init(new StreamReader(new FileInputStream(args[args.length-1])));
 
-    }
+		Word w = wr.except(Word.STRING, "Class Name");
+		while (wr.hasNext()) {
+			String name = w.val();
+			wr.except(':', ":");
 
-    private static void apply(String[] args) throws IOException, ParseException {
-        String in = args[args.length - 1];
-        AbstLexer wr = new AbstLexer() {
-            @Override
-            public Word readWord() throws ParseException {
-                int index = this.index;
-                final CharSequence input = this.input;
+			IntMap<String> map = new IntMap<>();
 
-                while (index < input.length()) {
-                    int c = input.charAt(index++);
-                    switch (c) {
-                        case '\'':
-                        case '"':
-                            this.index = index;
-                            return readConstString((char) c);
-                        case '/':
-                            this.index = index;
-                            Word word = ignoreStdNote();
-                            if (word != null)
-                                return word;
-                            break;
-                        case '=':
-                        case ':':
-                            this.index = index - 1;
-                            return readSymbol();
-                        default: {
-                            if (!WHITESPACE.contains(c)) {
-                                this.index = index - 1;
-                                if (NUMBER.contains(c)) {
-                                    return readDigit(false);
-                                } else {
-                                    return readLiteral();
-                                }
-                            }
-                        }
-                    }
-                }
-                this.index = index;
-                return eof();
-            }
+			w = wr.except(Word.INTEGER, "CST String Id");
+			while (wr.hasNext()) {
+				int pos = w.asInt();
+				wr.except('=', "=");
+				w = wr.except(Word.STRING, "Quoted I18n value");
+				map.putInt(pos, w.val());
 
+				w = wr.readWord();
+				if (w.type() != Word.INTEGER) break;
+			}
 
-            /**
-             * @return 标识符 or 变量
-             */
-            protected Word readLiteral() {
-                int index = this.index;
-                final CharSequence input = this.input;
+			value.put(name, map);
+		}
+	}
 
-                CharList temp = this.found;
-                temp.clear();
+	private static void apply(File f) throws IOException {
+		if (f.isDirectory()) {
+			IOUtil.findAllFiles(f, file -> {
+				String name = file.getName().toLowerCase(Locale.ROOT);
+				if (name.endsWith(".zip") || name.endsWith(".jar") || name.endsWith(".class")) {
+					try {
+						apply(file);
+					} catch (IOException e) {
+						System.out.println("错误，这个文件没法读取: " + file.getAbsolutePath());
+						e.printStackTrace();
+					}
+				}
+				return false;
+			});
+		} else if (f.isFile()) {
+			ByteList ib = IOUtil.getSharedByteBuf();
 
-                while (index < input.length()) {
-                    int c = input.charAt(index++);
-                    if (c != ':' && c != '=') {
-                        temp.append((char) c);
-                    } else {
-                        index--;
-                        break;
-                    }
-                }
-                this.index = index;
-                if (temp.length() == 0) {
-                    return eof();
-                }
+			if (f.getName().endsWith(".class")) {
+				byte[] mod = apply("", ib.readStreamFully(new FileInputStream(f)));
+				if (mod != null) {
+					System.out.println("已修改的内容: " + f.getName());
+					try (FileOutputStream fos = new FileOutputStream(f)) {
+						fos.write(mod);
+					}
+				}
+			} else {
+				try (ZipArchive mzf = new ZipArchive(f)) {
+					mzf.getEND().setComment("Roj234's class translator");
 
-                return formAlphabetClip(temp);
-            }
-        }.init(IOUtil.readUTF(new File(in)));
+					String path = f.getName()+'/';
+					for (ZEntry file : mzf.getEntries().values()) {
+						String name = file.getName();
+						if (name.endsWith(".class")) {
+							ib.clear();
 
-        while (wr.hasNext()) {
-            Word w = wr.readWord();
-            String name = w.val();
-            if (wr.next() != ':') {
-                throw wr.err("Delim is not :");
-            }
+							byte[] mod = apply(path, mzf.get(file, ib));
+							if (mod != null) {
+								System.out.println("已修改的内容: " + path+name);
+								mzf.put(name, new ByteList(mod));
+							}
+						} else if (name.endsWith("/")) {
+							mzf.put(name, null);
+						}
+					}
 
-            IntMap<String> im = new IntMap<>();
-            while (wr.hasNext()) {
-                Word w1 = wr.readWord();
-                if (w1.type() != WordPresets.INTEGER) {
-                    throw wr.err("Is not number");
-                }
-                Word w2 = wr.readWord();
-                if (!w2.val().equals("=")) {
-                    throw wr.err("Is not =");
-                }
-                w2 = wr.readWord();
-                if (w2.type() != WordPresets.STRING) {
-                    throw wr.err("Is not Slash_String");
-                }
-                im.put(MathUtils.parseInt(w1.val(), 10), w2.val());
-                w2 = wr.nextWord();
-                wr.retractWord();
-                if (w2.type() != WordPresets.INTEGER) {
-                    break;
-                }
-            }
+					mzf.store();
+				}
+			}
+		}
+	}
+	private static byte[] apply(String path, ByteList ib) {
+		ConstantData data = Parser.parseConstants(ib);
 
-            value.put(name, im);
-        }
+		IntMap<String> map = value.get(path+data.name);
+		if (map == null) return null;
 
-        for (int i = 1; i < args.length - 1; i++) {
-            String s = args[i];
-            if (s.equals("-apply")) {
-                continue;
-            }
+		boolean any = false;
 
-            apply0(new File(s));
-        }
-    }
+		List<Constant> array = data.cp.array();
+		for (IntMap.Entry<String> entry : map.selfEntrySet()) {
+			CstString ref = (CstString) array.get(entry.getIntKey()-1);
+			if (!ref.name().str().equals(entry.getValue())) {
+				ref.setValue(data.cp.getUtf(entry.getValue()));
+				any = true;
+			}
+		}
 
-    public static void apply0(File f) throws IOException {
-        if (f.isDirectory()) {
-            for (File file : FileUtil.findAllFiles(f)) {
-                apply0(file);
-            }
-        } else if (f.isFile()) {
-            if (f.getName().endsWith(".class")) {
-                byte[] bytes = applyClass("/", IOUtil.read(f));
-                if (bytes != null) {
-                    System.out.println("已修改的内容: " + f.getName());
-                    try (FileOutputStream fos = new FileOutputStream(f)) {
-                        fos.write(bytes);
-                    }
-                }
-            } else {
-                applyZipFile(f);
-            }
-        }
-    }
+		return any ? Parser.toByteArray(data) : null;
+	}
 
-    public static void applyZipFile(File f) throws IOException {
-        MutableZipFile mzf = new MutableZipFile(f);
-        mzf.getEOF().setComment("Powered by Roj-ASM class file translator");
+	private static void read(File f) throws IOException {
+		if (f.isDirectory()) {
+			IOUtil.findAllFiles(f, file -> {
+				String name = file.getName().toLowerCase(Locale.ROOT);
+				if (name.endsWith(".zip") || name.endsWith(".jar") || name.endsWith(".class")) {
+					try {
+						read(file);
+					} catch (IOException e) {
+						System.out.println("错误，这个文件没法读取: " + file.getAbsolutePath());
+						e.printStackTrace();
+					}
+				}
+				return false;
+			});
+		} else if (f.isFile()) {
+			ByteList buf = IOUtil.getSharedByteBuf();
+			if (f.getName().endsWith(".class")) {
+				read("", buf.readStreamFully(new FileInputStream(f)));
+			} else {
+				try (ZipFile zf = new ZipFile(f)) {
+					String path = f.getName()+'/';
+					Enumeration<? extends ZipEntry> e = zf.entries();
+					while (e.hasMoreElements()) {
+						ZipEntry ze = e.nextElement();
+						if (ze.getName().endsWith(".class")) {
+							buf.clear();
+							read(path, buf.readStreamFully(zf.getInputStream(ze)));
+						}
+					}
+				}
+			}
+		}
+	}
+	private static void read(String path, ByteList ib) throws IOException {
+		ConstantData data = Parser.parseConstants(ib);
 
-        ZipFile zf = new ZipFile(f);
-        String fn = f.getName() + '/';
-        Enumeration<? extends ZipEntry> e = zf.entries();
+		CharList sb = IOUtil.getSharedCharBuf();
+		sb.append(path).append(data.name).append(':').append('\n');
+		boolean any = false;
 
-        while (e.hasMoreElements()) {
-            ZipEntry ze = e.nextElement();
-            if (!ze.isDirectory()) {
-                if (ze.getName().endsWith(".class")) {
-                    byte[] bytes = applyClass(fn, IOUtil.read(zf.getInputStream(ze)));
-                    if (bytes != null) {
-                        System.out.println("已修改的内容: " + fn + ze.getName());
-                        mzf.setFileData(ze.getName(), new ByteList(bytes));
-                    }
-                }
-            } else {
-                mzf.setFileData(ze.getName(), null);
-            }
-        }
+		List<Constant> array = data.cp.array();
+		for (int i = 0; i < array.size(); i++) {
+			Constant s = array.get(i);
+			if (s.type() == Constant.STRING) {
+				sb.append('\t').append(s.getIndex()).append('=').append('"');
+				ITokenizer.addSlashes(sb, ((CstString) s).name().str()).append('"').append('\n');
 
-        zf.close();
-        mzf.store();
-    }
+				any = true;
+			}
+		}
 
-    public static byte[] applyClass(String path, byte[] bc) {
-        ConstantData data = Parser.parseConstants(bc);
-
-        IntMap<String> map = value.get(path + data.name);
-        if (map == null)
-            return null;
-
-        List<Constant> constants = data.cp.array();
-
-        for (IntMap.Entry<String> entry : map.entrySet()) {
-            final CstString string = (CstString) constants.get(entry.getKey());
-            //System.out.println(string.getValue().getString() + " to " + entry.getValue());
-            string.setValue(data.cp.getUtf(entry.getValue()));
-        }
-
-        return Parser.toByteArray(data);
-    }
-
-    public static void parse(File f) throws IOException {
-        if (f.isDirectory()) {
-            for (File file : FileUtil.findAllFiles(f)) {
-                parse(file);
-            }
-        } else if (f.isFile()) {
-            if (f.getName().endsWith(".class")) {
-                addClass("/", IOUtil.read(f));
-            } else {
-                readZipFile(f);
-            }
-        }
-    }
-
-    public static void readZipFile(File f) throws IOException {
-        ZipFile zf = new ZipFile(f);
-        String fn = f.getName() + '/';
-        Enumeration<? extends ZipEntry> e = zf.entries();
-        while (e.hasMoreElements()) {
-            ZipEntry ze = e.nextElement();
-            if (!ze.isDirectory() && ze.getName().endsWith(".class")) {
-                addClass(fn, IOUtil.read(zf.getInputStream(ze)));
-            }
-        }
-    }
-
-    public static void addClass(String path, byte[] bc) {
-        ConstantData data = Parser.parseConstants(bc);
-
-        IntMap<String> map = new IntMap<>();
-
-        List<Constant> array = data.cp.array();
-        for (int i = 0; i < array.size(); i++) {
-            Constant s = array.get(i);
-            if (s.type() == CstType.STRING) {
-                map.put(s.getIndex(), ((CstString) s).getValue().getString());
-            }
-        }
-
-        if (!map.isEmpty())
-            value.put(path + data.name, map);
-    }
+		if (any) IOUtil.SharedCoder.get().encodeTo(out1);
+	}
 }

@@ -1,197 +1,211 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.ui;
-
-/**
- * No description provided
- *
- * @author Roj234
- * @version 0.1
- * @since 2021/5/29 20:45
- */
 
 import org.jetbrains.annotations.ApiStatus.OverrideOnly;
 import roj.io.DummyOutputStream;
 import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.util.ByteList;
-import roj.util.ByteReader;
+import roj.util.ByteList.Slice;
 
 import javax.annotation.Nonnull;
+import java.io.IOException;
 import java.io.PrintStream;
-import java.io.UTFDataFormatException;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 
-public abstract class DelegatedPrintStream extends PrintStream {
-    protected final CharList sb = new CharList();
-    protected final int MAX;
+/**
+ * @author Roj234
+ * @since 2021/5/29 20:45
+ */
+public class DelegatedPrintStream extends PrintStream {
+	public static CharList exceptionToString(Throwable e) {
+		DelegatedPrintStream err = new DelegatedPrintStream(99999);
+		e.printStackTrace(err);
+		return err.sb;
+	}
 
-    public DelegatedPrintStream(int max) {
-        super(DummyOutputStream.INSTANCE);
-        MAX = max;
-    }
+	protected CharList sb = new CharList();
+	protected final int MAX;
+	private CharsetDecoder cd;
 
-    public final void write(int var1) {
-        sb.append((char) var1);
-        if(sb.length() > MAX) {
-            sb.delete(0);
-        }
-    }
+	public DelegatedPrintStream(int max) {
+		super(DummyOutputStream.INSTANCE);
+		MAX = max;
+	}
 
-    public final void write(@Nonnull byte[] arr, int off, int len) {
-        if(sb.length() + len > MAX) {
-            sb.delete(0, sb.length() + len - MAX);
-        }
+	public synchronized final void write(int var1) {
+		if (var1 == '\n') newLine();
+		else {
+			sb.append((char) var1);
+			if (sb.length() > MAX) {
+				sb.delete(0);
+			}
+		}
+	}
 
-        try {
-            ByteReader.decodeUTF(-1, sb, new ByteList.ReadOnlySubList(arr, off, len));
-        } catch (UTFDataFormatException e) {
-            e.printStackTrace();
-        }
-    }
+	public synchronized final void write(@Nonnull byte[] b, int off, int len) {
+		if (sb.length() + len > MAX) {
+			sb.delete(0, sb.length() + len - MAX);
+		}
 
-    private void write(char[] var1) {
-        if(sb.length() + var1.length > MAX) {
-            sb.delete(0, sb.length() + var1.length - MAX);
-        }
-        sb.append(var1);
-    }
+		int pOff = off;
+		while (len-- > 0) {
+			if (b[off] == '\n') {
+				decode(b, pOff, off-pOff);
+				pOff = off+1;
+				newLine();
+			}
+			off++;
+		}
 
-    private void write(String var1) {
-        if(sb.length() + var1.length() > MAX) {
-            sb.delete(0, sb.length() + var1.length() - MAX);
-        }
-        sb.append(var1);
-    }
+		if (off > pOff) decode(b, pOff, off-pOff);
+	}
 
-    @OverrideOnly
-    protected void newLine() {
-        sb.clear();
-    }
+	private void decode(byte[] b, int off, int len) {
+		Charset cs = Charset.defaultCharset();
+		if (cs == StandardCharsets.UTF_8) {
+			try {
+				ByteList.decodeUTF(-1, sb, new Slice(b, off, len));
+				return;
+			} catch (IOException ignored) {}
+		}
 
-    public final void flush() {
-    }
+		if (cd == null) cd = cs.newDecoder().onUnmappableCharacter(CodingErrorAction.REPLACE).onMalformedInput(CodingErrorAction.REPLACE);
 
-    public final void close() {
-    }
+		ByteBuffer in = ByteBuffer.wrap(b, off, len);
+		sb.ensureCapacity((int) (sb.length() + cd.maxCharsPerByte() * len));
+		CharBuffer out = sb.toCharBuffer(); out.clear();
+		cd.decode(in, out, true);
+		out.flip(); sb.append(out);
+	}
 
-    public final boolean checkError() {
-        return false;
-    }
+	private synchronized void write(CharSequence str) {
+		int i = 0;
+		while (true) {
+			i = TextUtil.gAppendToNextCRLF(str, i, sb);
+			if (sb.length() > MAX) {
+				sb.setLength(MAX-9);
+				sb.append("<该行过长...>");
+			}
+			if (i < str.length()) newLine();
+			else break;
+		}
+	}
 
-    public final PrintStream append(CharSequence var1, int var2, int var3) {
-        this.write(var1 == null ? "null" : var1.subSequence(var2, var3).toString());
-        return this;
-    }
+	@OverrideOnly
+	protected synchronized void newLine() {
+		sb.clear();
+	}
 
-    public final void print(boolean var1) {
-        this.write(var1 ? "true" : "false");
-    }
+	public final void flush() {}
+	public final void close() {}
+	public final boolean checkError() {
+		return false;
+	}
 
-    public final void print(char var1) {
-        this.write(String.valueOf(var1));
-    }
+	public final PrintStream append(CharSequence var1, int var2, int var3) {
+		write(var1 == null ? "null" : var1.subSequence(var2, var3).toString());
+		return this;
+	}
 
-    public final void print(int var1) {
-        this.write(String.valueOf(var1));
-    }
+	public final void print(boolean var1) {
+		write(var1 ? "true" : "false");
+	}
 
-    public final void print(long var1) {
-        this.write(String.valueOf(var1));
-    }
+	public final void print(char var1) {
+		write(String.valueOf(var1));
+	}
 
-    public final void print(float var1) {
-        this.write(String.valueOf(var1));
-    }
+	public final void print(int var1) {
+		write(String.valueOf(var1));
+	}
 
-    public final void print(double var1) {
-        this.write(String.valueOf(var1));
-    }
+	public final void print(long var1) {
+		write(String.valueOf(var1));
+	}
 
-    public final void print(@Nonnull char[] var1) {
-        this.write(var1);
-    }
+	public final void print(float var1) {
+		write(String.valueOf(var1));
+	}
 
-    public final void print(String var1) {
-        if (var1 == null) {
-            var1 = "null";
-        }
+	public final void print(double var1) {
+		write(String.valueOf(var1));
+	}
 
-        this.write(var1);
-    }
+	public final void print(@Nonnull char[] var1) {
+		write(new CharList(var1));
+	}
 
-    public final void print(Object var1) {
-        this.write(String.valueOf(var1));
-    }
+	public final void print(String var1) {
+		if (var1 == null) var1 = "null";
+		write(var1);
+	}
 
-    public final void println() {
-        this.newLine();
-    }
+	public final void print(Object var1) {
+		write(var1 instanceof CharSequence ? (CharSequence) var1 : String.valueOf(var1));
+	}
 
-    public final void println(boolean var1) {
-        this.print(var1);
-        this.newLine();
-    }
+	public final void println() {
+		newLine();
+	}
 
-    public final void println(char var1) {
-        this.print(var1);
-        this.newLine();
-    }
+	public final synchronized void println(boolean var1) {
+		print(var1);
+		newLine();
+	}
 
-    public final void println(int var1) {
-        this.print(var1);
-        this.newLine();
-    }
+	public final synchronized void println(char var1) {
+		print(var1);
+		newLine();
+	}
 
-    public final void println(long var1) {
-        this.print(var1);
-        this.newLine();
-    }
+	public final synchronized void println(int var1) {
+		print(var1);
+		newLine();
+	}
 
-    public final void println(float var1) {
-        this.print(var1);
-        this.newLine();
-    }
+	public final synchronized void println(long var1) {
+		print(var1);
+		newLine();
+	}
 
-    public final void println(double var1) {
-        this.print(var1);
-        this.newLine();
-    }
+	public final synchronized void println(float var1) {
+		print(var1);
+		newLine();
+	}
 
-    public final void println(@Nonnull char[] var1) {
-        this.print(var1);
-        this.newLine();
-    }
+	public final synchronized void println(double var1) {
+		print(var1);
+		newLine();
+	}
 
-    public final void println(String var1) {
-        this.print(var1);
-        this.newLine();
-    }
+	public final synchronized void println(@Nonnull char[] var1) {
+		print(var1);
+		newLine();
+	}
 
-    public final void println(Object var1) {
-        String var2 = String.valueOf(var1);
-        this.print(var2);
-        this.newLine();
-    }
+	public final synchronized void println(String var1) {
+		print(var1);
+		newLine();
+	}
+
+	public final void println(Object var1) {
+		String var2 = String.valueOf(var1);
+		synchronized (this) {
+			print(var2);
+			newLine();
+		}
+	}
+
+	public CharList getChars() {
+		return sb;
+	}
+
+	public int getMax() {
+		return MAX;
+	}
 }

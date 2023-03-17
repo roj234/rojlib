@@ -1,68 +1,45 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.asm.tree.attr;
 
-import roj.asm.util.ConstantPool;
+import roj.asm.cst.ConstantPool;
+import roj.asm.cst.CstUTF;
 import roj.util.ByteList;
-import roj.util.ByteWriter;
+import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
- * @version 0.1
- * @since  2020/10/21 22:45
+ * @since 2020/10/21 22:45
  */
-public final class AttrUnknown extends Attribute {
-    public static Attribute downgrade(ConstantPool cw, ByteWriter w, Attribute attr) {
-        ByteList l = w.list;
-        l.clear();
-        attr.toByteArray1(cw, w);
-        return new AttrUnknown(attr.name, new ByteList(l.toByteArray()));
-    }
+public class AttrUnknown extends Attribute {
+	public static Attribute downgrade(ConstantPool cw, DynByteBuf tmp, Attribute attr) {
+		tmp.clear();
+		attr.toByteArray1(tmp, cw);
+		return new AttrUnknown(attr.name(), new ByteList(tmp.toByteArray()));
+	}
 
-    public AttrUnknown(String attrName, ByteList bytes) {
-        super(attrName);
-        this.data = bytes;
-    }
+	public AttrUnknown(String name, DynByteBuf data) {
+		super(name);
+		this.data = data;
+	}
+	public AttrUnknown(CstUTF name, DynByteBuf data) {
+		super(name);
+		this.data = data;
+	}
 
-    private ByteList data;
+	private DynByteBuf data;
 
-    @Override
-    protected void toByteArray1(ConstantPool pool, ByteWriter w) {
-        w.writeBytes(data);
-    }
+	@Override
+	public void toByteArray(DynByteBuf w, ConstantPool pool) {
+		DynByteBuf data = getRawData();
+		w.putShort(name instanceof CstUTF ? pool.reset((CstUTF) name).getIndex() : pool.getUtfId(name.toString()))
+		 .putInt(data.readableBytes()).put(data);
+	}
 
-    public String toString() {
-        return name + ": " + data.toString();
-    }
+	@Override
+	public String name() { return name instanceof CstUTF ? ((CstUTF) name).str() : name.toString(); }
 
-    public ByteList getRawData() {
-        return data;
-    }
 
-    public void setRawData(ByteList data) {
-        this.data = data;
-    }
+	public String toString() { return name() + ": " + data.dump(); }
+
+	public DynByteBuf getRawData() { return data; }
+	public void setRawData(DynByteBuf data) { this.data = data; }
 }

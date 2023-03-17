@@ -1,207 +1,238 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.net;
 
-import roj.math.MathUtils;
+import roj.asm.type.Type;
+import roj.reflect.DirectAccessor;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import sun.net.InetAddressCachePolicy;
 
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+import java.util.LinkedHashMap;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
- * @since  2020/10/30 23:05
+ * @since 2020/10/30 23:05
  */
 public final class NetworkUtil {
-    public static void trustAllCertificates() throws NoSuchAlgorithmException, KeyManagementException {
-        SSLContext context = SSLContext.getInstance("SSL");
-        context.init(null, new TrustManager[]{new TrustAllManager()}, new SecureRandom());
+	public static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
 
-        HttpsURLConnection.setDefaultSSLSocketFactory(context.getSocketFactory());
-        SSLContext.setDefault(context);
-    }
+	static InetAddress any;
+	public static InetAddress anyLocalAddress() {
+		if (any != null) return any;
+		return any = new InetSocketAddress(0).getAddress();
+	}
 
-    public static void trustAllHosts() {
-        HttpsURLConnection.setDefaultHostnameVerifier((host, session) -> true);
-    }
+	// IP Conservation
 
-    public static int number2hex(int i, byte[] buf) {
-        int pos = 7;
+	public static byte[] IPv42int(CharSequence ip) {
+		byte[] arr = new byte[4];
 
-        final byte[] digits = TextUtil.digits;
+		int found = 0;
+		CharList fl = new CharList(5);
+		for (int i = 0; i < ip.length(); i++) {
+			char c = ip.charAt(i);
+			if (c == '.') {
+				arr[found++] = (byte) TextUtil.parseInt(fl);
+				if (found == 4) throw new RuntimeException("IP format error " + ip);
+				fl.clear();
+			} else {
+				fl.append(c);
+			}
+		}
 
-        while (i > 15) {
-            buf[pos--] = digits[i & 15];
-            i >>>= 4;
-        }
-        buf[pos] = digits[i & 15];
+		if (fl.length() == 0 || found != 3) throw new RuntimeException("IP format error " + ip);
+		arr[3] = (byte) TextUtil.parseInt(fl);
+		return arr;
+	}
 
-        return pos;
-    }
+	public static byte[] IPv62int(CharSequence ip) {
+		// subnet mask
+		int len = TextUtil.gIndexOf(ip, '%');
+		if (len < 0) len = ip.length();
 
-    // IP Conservation
+		byte[] arr = new byte[16];
 
-    public static byte[] IPv42int(CharSequence ip) {
-        byte[] arr = new byte[4];
+		int j = 0, colon = -1;
+		CharList fl = new CharList(5);
+		for (int i = 0; i < len; i++) {
+			char c = ip.charAt(i);
+			if (c == ':') {
+				if (fl.length() == 0) {
+					if (i == 0) throw new IllegalArgumentException("Not support :: at first");
+					if (ip.charAt(i - 1) != ':') throw new IllegalArgumentException("Single ':': " + ip);
+					if (colon >= 0) throw new IllegalArgumentException("More than one ::");
+					colon = j;
+					continue;
+				}
+				int st = TextUtil.parseInt(fl, 16);
+				arr[j++] = (byte) (st >> 8);
+				arr[j++] = (byte) st;
 
-        int found = 0;
-        CharList fl = new CharList(5);
-        for (int i = 0; i < ip.length(); i++) {
-            char c = ip.charAt(i);
-            if(c == '.') {
-                arr[found++] = (byte) MathUtils.parseInt(fl);
-                if(found == 4)
-                    throw new RuntimeException("IP format error " + ip);
-                fl.clear();
-            } else {
-                fl.append(c);
-            }
-        }
+				if (j == 16) throw new IllegalArgumentException("Address overflow: " + ip);
+				fl.clear();
+			} else if (TextUtil.HEX.contains(c)) {
+				fl.append(c);
+			} else {
+				throw new IllegalArgumentException("Invalid character at " + i + ": " + ip);
+			}
+		}
 
-        if(fl.length() == 0 || found != 3)
-            throw new RuntimeException("IP format error " + ip);
-        arr[3] = (byte) MathUtils.parseInt(fl);
-        return arr;
-    }
+		if ((colon == -1 && (fl.length() == 0 || j != 14)) || j > 14) throw new IllegalArgumentException("Address overflow: " + ip);
+		int st = TextUtil.parseInt(fl, 16);
+		arr[j++] = (byte) (st >> 8);
+		arr[j] = (byte) st;
 
-    //todo support ::
-    public static byte[] IPv62int(CharSequence ip) {
-        byte[] arr = new byte[16];
+		if (colon >= 0) {
+			len = j - colon + 1;
+			for (int i = 1; i <= len; i++) {
+				arr[16 - i] = arr[j - i + 1];
+				arr[j - i + 1] = 0;
+			}
+		}
 
-        int found = 0;
-        CharList fl = new CharList(5);
-        for (int i = 0; i < ip.length(); i++) {
-            char c = ip.charAt(i);
-            if(c == ':') {
-                int st = MathUtils.parseInt(fl);
-                arr[found++] = (byte) (st >> 8);
-                arr[found++] = (byte) st;
+		return arr;
+	}
 
-                if(found == 16)
-                    throw new RuntimeException("IP format error " + ip);
-                fl.clear();
-            } else {
-                fl.append(c);
-            }
-        }
+	public static byte[] ip2bytes(CharSequence ip) {
+		return TextUtil.gLastIndexOf(ip, '.') != -1 ? IPv42int(ip) : IPv62int(ip);
+	}
 
-        if(fl.length() == 0 || found != 14)
-            throw new RuntimeException("IP format error " + ip);
-        int st = MathUtils.parseInt(fl);
-        arr[14] = (byte) (st >> 8);
-        arr[15] = (byte) st;
-        return arr;
-    }
+	public static String bytes2ip(byte[] bytes) {
+		if (bytes.length == 4) {
+			// IPv4
+			return bytes2ipv4(bytes, 0);
+		} else {
+			// IPv6
+			assert bytes.length == 16;
 
-    public static byte[] ip2bytes(CharSequence ip) {
-        return TextUtil.lastIndexOf(ip, '.') != -1 ? IPv42int(ip) : IPv62int(ip);
-    }
+			return bytes2ipv6(bytes, 0);
+		}
+	}
 
-    public static String bytes2ip(byte[] bytes) {
-        if(bytes.length == 4) {
-            // IPv4
-            return bytes2ipv4(bytes, 0);
-        } else {
-            // IPv6
-            assert bytes.length == 16;
+	public static String bytes2ipv6(byte[] bytes, int off) {
+		// xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
+		CharList sb = new CharList(24);
+		for (int i = 0; i < 8; i++) {
+			sb.append(Integer.toHexString((0xFF & bytes[off++]) << 8 | (bytes[off++] & 0xFF))).append(':');
+		}
+		sb.setLength(sb.length() - 1);
 
-            return bytes2ipv6(bytes, 0);
-        }
-    }
+		return sb.toString();
+	}
 
-    public static String bytes2ipv6(byte[] bytes, int off) {
-        // xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
-        CharList sb = new CharList();
-        for (int i = 0; i < 8; i ++) {
-            sb.append(Integer.toHexString((0xFF & bytes[off++]) << 8 | (bytes[off++] & 0xFF))).append(':');
-        }
-        sb.setIndex(sb.length() - 1);
+	public static String bytes2ipv4(byte[] bytes, int off) {
+		return String.valueOf(bytes[off++] & 0xFF) + '.' + (bytes[off++] & 0xFF) + '.' + (bytes[off++] & 0xFF) + '.' + (bytes[off] & 0xFF);
+	}
 
-        return sb.toString();
-    }
+	public static void putHostCache(boolean negative, String host, long expire, InetAddress... addresses) {
+		initUtil();
+		synchronized (Util.getHostCache()) {
+			Object cache = Util.newCacheEntry(addresses, expire);
+			Util.getInternalMap(negative ? Util.getNegativeHostCache() : Util.getHostCache()).put(host, cache);
+		}
+	}
 
-    public static String bytes2ipv4(byte[] bytes, int off) {
-        return String.valueOf(bytes[off++] & 0xFF) +
-                '.' +
-                (bytes[off++] & 0xFF) +
-                '.' +
-                (bytes[off++] & 0xFF) +
-                '.' +
-                (bytes[off] & 0xFF);
-    }
+	public static void setHostCachePolicy(boolean negative, int seconds) {
+		if (seconds < 0) seconds = -1;
+		initUtil();
+		if (negative) {
+			Util.setNegCachePolicy(seconds);
+			Util.setNegCacheSet(true);
+		} else {
+			Util.setPosCachePolicy(seconds);
+			Util.setPosCacheSet(true);
+		}
+	}
 
-    // javax.net.ssl.X509TrustManager
-    public static final class TrustAllManager implements X509TrustManager {
-        /**
-         * //dummy
-         *
-         * @param chain    同位体的证书链
-         * @param authType 基于客户端证书的验证类型
-         * @throws IllegalArgumentException 如果 null 或长度为零的 chain 传递给 chain 参数，或者 null 或长度为零的字符串传递给 authType 参数
-         * @throws CertificateException     如果证书链不受此 TrustManager 信任。
-         */
-        @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-        }
+	private static void initUtil() {
+		if (Util == null) {
+			synchronized (NetworkUtil.class) {
+				if (Util == null) {
+					DirectAccessor<H> b = DirectAccessor.builder(H.class);
+					try {
+						b.i_construct("java.net.InetAddress$CacheEntry", "([Ljava/net/InetAddress;J)V", "newCacheEntry")
+						 .access(InetAddress.class, new String[] {"addressCache", "negativeCache"}, new String[] {"getHostCache", "getNegativeHostCache"}, null)
+						 .i_access("java.net.InetAddress$Cache", "cache", new Type("java/util/LinkedHashMap"), "getInternalMap", null, false);
+					} catch (Throwable e) {
+						e.printStackTrace();
+					}
+					try {
+						Class<?> pl = InetAddressCachePolicy.class;
+						String[] fieldName = new String[] {"cachePolicy", "negativeCachePolicy", "propertySet", "propertyNegativeSet"};
+						try {
+							pl.getDeclaredField("propertySet");
+						} catch (NoSuchFieldException e) {
+							fieldName[2] = "set";
+							fieldName[3] = "negativeSet";
+						}
+						b.access(pl, fieldName, null, new String[] {"setPosCachePolicy", "setNegCachePolicy", "setPosCacheSet", "setNegCacheSet"});
+					} catch (Throwable e) {
+						e.printStackTrace();
+					}
+					Util = b.build();
+				}
+			}
+		}
+	}
 
-        /**
-         * 给出同位体提供的部分或完整的证书链，构建到可信任的根的证书路径，并且返回是否可以确认和信任将其用于基于验证类型的服务器 SSL 验证。
-         * 验证类型是表示为一个 String 的密码套件的密钥交换算法部分，例如 "RSA"、"DHE_DSS"。
-         * 注：对于一些可输出的密码套件，密钥交换算法是在运行时的联络期间确定的。
-         * 例如，对于 TLS_RSA_EXPORT_WITH_RC4_40_MD5，当临时的 RSA 密钥 用于密钥交换时 authType 应为 RSA_EXPORT，当使用来自服务器证书的密钥时 authType 应为 RSA。
-         * 检查是否大小写敏感的。
-         *
-         * @param chain    同位体的证书链
-         * @param authType 使用的密钥交换算法
-         * @throws IllegalArgumentException 如果 null 或长度为零的 chain 传递给 chain 参数，或者 null 或长度为零的字符串传递给 authType 参数
-         * @throws CertificateException     如果证书链不受此 TrustManager 信任。
-         */
-        @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-        }
+	static volatile H Util;
 
-        /**
-         * 返回受验证同位体信任的认证中心的数组。
-         *
-         * @return 可接受的 CA 发行者证书的非 null（可能为空）的数组。
-         */
-        @Override
-        public X509Certificate[] getAcceptedIssuers() {
-            return new X509Certificate[0];
-        }
-    }
+	private interface H {
+		Object newCacheEntry(InetAddress[] addresses, long expire);
+
+		default Object getHostCache() {
+			throw new UnsupportedOperationException();
+		}
+		default Object getNegativeHostCache() {
+			throw new UnsupportedOperationException();
+		}
+
+		default LinkedHashMap<String, Object> getInternalMap(Object cache) {
+			throw new UnsupportedOperationException();
+		}
+
+		default void setPosCachePolicy(int seconds) {
+			throw new UnsupportedOperationException();
+		}
+		default void setNegCachePolicy(int seconds) {
+			throw new UnsupportedOperationException();
+		}
+
+		default void setPosCacheSet(boolean set) {
+			throw new UnsupportedOperationException();
+		}
+		default void setNegCacheSet(boolean set) {
+			throw new UnsupportedOperationException();
+		}
+	}
+
+	public static InetSocketAddress getListenAddress(String s) {
+		return getAddressByString(s, null);
+	}
+	public static InetSocketAddress getConnectAddress(String s) {
+		return getAddressByString(s, InetAddress.getLoopbackAddress());
+	}
+	public static InetSocketAddress getAddressByString(String s, InetAddress defaultAddr) {
+		if (s == null || s.isEmpty()) throw new IllegalArgumentException("null port");
+
+		int pos = s.lastIndexOf(':');
+
+		InetAddress host;
+		try {
+			host = pos < 0 ? defaultAddr : InetAddress.getByName(s.substring(0, pos));
+		} catch (UnknownHostException e) {
+			throw new IllegalArgumentException("unknown host");
+		}
+
+		InetSocketAddress addr;
+		try {
+			addr = new InetSocketAddress(host, Integer.parseInt(s.substring(pos+1)));
+		} catch (NumberFormatException e) {
+			throw new IllegalArgumentException("illegal port");
+		}
+		return addr;
+	}
 }

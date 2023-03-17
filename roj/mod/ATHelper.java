@@ -1,47 +1,27 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.mod;
 
-import roj.asm.AccessTransformer;
+import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipOutput;
+import roj.asm.Parser;
+import roj.asm.tree.ConstantData;
+import roj.asm.util.TransformUtil;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.io.IOUtil;
-import roj.io.ZipUtil;
 import roj.ui.CmdUtil;
-import roj.util.ByteList;
+import roj.util.Helpers;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.*;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
+import java.io.InputStream;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
+import static roj.mapper.ConstMapper.DONT_LOAD_PREFIX;
 import static roj.mod.Shared.BASE;
 import static roj.mod.Shared.TMP_DIR;
 
@@ -49,92 +29,178 @@ import static roj.mod.Shared.TMP_DIR;
  * Text AT Processor
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/30 19:59
  */
-public final class ATHelper {
-    private static final List<ZipFile>       libraries = new ArrayList<>();
-    private static final Map<String, byte[]> classes   = new MyHashMap<>();
+final class ATHelper {
+	private static final List<ATHelper> libraries = new SimpleList<>();
 
-    private File binJar;
-    private ByteList atCfg;
+	private static final ATHelper AT_BACKUP_LIB = new ATHelper(new File(BASE, "class/at_backup.zip_at"));
+	static ZipArchive getBackupFile() throws IOException {
+		AT_BACKUP_LIB.open();
+		return AT_BACKUP_LIB.zf;
+	}
 
-    public void init(String name, ByteList atCfg, Map<String, Collection<String>> map) throws IOException {
-        if(libraries.isEmpty()) {
-            initZip(new File(BASE, "class"));
-            Shared.load_S2M_Map();
-        }
+	public static File getJarName(String name) {
+		return new File(TMP_DIR, "at-" + name.hashCode() + ".jar");
+	}
 
-        this.atCfg = atCfg;
-        File binJar = this.binJar = new File(TMP_DIR, "at-" + atCfg.hashCode() + ".jar");
-        binJar.deleteOnExit();
+	public static void close() {
+		for (int i = 0; i < libraries.size(); i++) {
+			try {
+				libraries.get(i).close1();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		libraries.clear();
+	}
 
-        MyHashSet<String> tmp = new MyHashSet<>();
-        ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(binJar));
-        for (Map.Entry<String, Collection<String>> entry : map.entrySet()) {
-            String name1 = entry.getKey().replace('.', '/') + ".class";
-            ZipEntry ze = new ZipEntry(name1);
-            zos.putNextEntry(ze);
+	public static void makeATJar(String name, Map<String, Collection<String>> map) throws IOException {
+		ZipOutput zo = new ZipOutput(getJarName(name));
+		zo.setCompress(true);
+		try {
+			zo.begin(true);
+			transform(zo, map, false);
+		} finally {
+			zo.close();
+		}
+	}
+	public static void transform(ZipOutput zo, Map<String, Collection<String>> map, boolean forIDE) throws IOException {
+		Shared.loadSrg2Mcp();
 
-            tmp.clear();
-            for (String s : entry.getValue()) {
-                tmp.add(Shared.srg2mcp.getOrDefault(s, s));
-            }
-            byte[] transform = transform(name1, tmp);
-            if(transform == null) {
-                CmdUtil.warning("无法转换 " + entry.getKey());
-            } else {
-                zos.write(transform);
-            }
-            zos.closeEntry();
-        }
-        ZipUtil.close(zos);
-    }
+		if (libraries.isEmpty()) {
+			for (File path : new File(BASE, "class").listFiles()) {
+				String fn = path.getName().trim().toLowerCase();
+				if (!fn.startsWith(DONT_LOAD_PREFIX) && (fn.endsWith(".jar") || fn.endsWith(".zip"))) libraries.add(new ATHelper(path));
+			}
+		} else {
+			for (int i = libraries.size()-1; i >= 0; i--) {
+				try {
+					if (!libraries.get(i).open()) libraries.remove(i);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		libraries.add(AT_BACKUP_LIB);
 
-    public ByteList getAtCfgBytes() {
-        return atCfg;
-    }
+		try {
+			Map<String, Collection<String>> subClasses = new MyHashMap<>();
 
-    public String getFakeJarPath() {
-        return binJar.getAbsolutePath();
-    }
+			for (String s : map.keySet()) {
+				s = s.replace('.', '/');
 
-    public static void gc() throws IOException {
-        classes.clear();
-        for (ZipFile zf : libraries) {
-            zf.close();
-        }
-        libraries.clear();
-    }
+				int i = s.lastIndexOf('$');
+				if (i >= 0) {
+					String par = s.substring(0, i);
+					map.putIfAbsent(par.replace('/', '.'), Collections.emptyList());
+					subClasses.computeIfAbsent(par+".class", Helpers.fnLinkedList()).add(s);
+				}
+			}
 
-    static byte[] transform(String name, Set<String> names) {
-        byte[] is = classes.get(name);
-        if(is == null) {
-            for (int i = 0; i < libraries.size(); i++) {
-                ZipFile zf = libraries.get(i);
-                ZipEntry ze = zf.getEntry(name);
-                if(ze != null) {
-                    try {
-                        classes.put(name, is = IOUtil.read(zf.getInputStream(ze)));
-                        break;
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-        }
-        if(is != null) {
-            is = AccessTransformer.openSome(is, names);
-        }
-        return is;
-    }
+			MyHashSet<String> tmp = new MyHashSet<>();
+			for (Map.Entry<String, Collection<String>> entry : map.entrySet()) {
+				String name = entry.getKey().replace('.', '/') + ".class";
 
-    static void initZip(File cp) throws IOException {
-        for (File path : cp.listFiles()) {
-            String name = path.getName();
-            if (name.startsWith("[noread]") || !(name.endsWith(".jar") || name.endsWith(".zip")))
-                continue;
-            libraries.add(new ZipFile(path));
-        }
-    }
+				tmp.clear();
+				for (String s : entry.getValue()) {
+					tmp.add(Shared.srg2mcp.getOrDefault(s, s));
+				}
+
+				InputStream source = getBytecode(name);
+				if (source == null) {
+					CmdUtil.warning("无法找到 " + name);
+				} else {
+					ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(source));
+
+					TransformUtil.makeAccessible(data, tmp);
+
+					Collection<String> subclasses = subClasses.remove(name);
+					if (subclasses != null) TransformUtil.makeSubclassAccessible(data, subclasses);
+
+					if (!forIDE) TransformUtil.trimCode(data);
+
+					Parser.withParsedAttribute(data);
+					zo.set(name, () -> Parser.toByteArrayShared(data));
+				}
+			}
+		} finally {
+			// AT_BACKUP
+			libraries.remove(libraries.size()-1);
+			for (int i = libraries.size() - 1; i >= 0; i--) {
+				try {
+					ZipArchive zf1 = libraries.get(i).zf;
+					if (zf1 == null) libraries.remove(i);
+					else zf1.closeFile();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+	private static InputStream getBytecode(String name) {
+		for (int i = libraries.size()-1; i >= 0; i--) {
+			try {
+				InputStream in = libraries.get(i).getStream(name);
+				if (in != null) return in;
+			} catch (Throwable e) {
+				e.printStackTrace();
+			}
+		}
+		return null;
+	}
+
+	private final File file;
+	private ZipArchive zf;
+	private long lastModify;
+
+	private ATHelper(File file) {
+		this.file = file;
+	}
+
+	private InputStream getStream(String name) throws IOException {
+		if (zf == null && !open()) return null;
+		ZEntry entry = zf.getEntries().get(name);
+		if (entry != null) {
+			if (open()) return zf.getStream(entry);
+		}
+		return null;
+	}
+
+	private boolean open() throws IOException {
+		if (this == AT_BACKUP_LIB) {
+			if (zf == null) zf = new ZipArchive(file, 0);
+			else zf.reopen();
+			return true;
+		}
+
+		if (!file.isFile()) {
+			close1();
+			return false;
+		} else {
+			long lastMod = file.lastModified();
+
+			if (zf != null) {
+				zf.reopen();
+
+				if (lastMod != lastModify) {
+					zf.reload();
+
+					lastModify = lastMod;
+				}
+			} else {
+				zf = new ZipArchive(file, ZipArchive.FLAG_BACKWARD_READ);
+				lastModify = lastMod;
+			}
+		}
+
+		return true;
+	}
+
+	private void close1() throws IOException {
+		if (zf != null) {
+			zf.close();
+			zf = null;
+		}
+	}
 }

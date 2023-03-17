@@ -1,122 +1,126 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.asm.util;
 
+import roj.asm.cst.ConstantPool;
 import roj.asm.tree.attr.Attribute;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.util.DynByteBuf;
 
 import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
- * @since  2020/10/25 16:50
+ * @since 2020/10/25 16:50
  */
 public final class AttributeList extends SimpleList<Attribute> {
-    private Map<String, Attribute> byName;
+	private static final int THE_SIZE = 4;
+	private Map<String, Attribute> byName;
 
-    public AttributeList(AttributeList other) {
-        super(other);
-    }
+	public AttributeList() {}
+	public AttributeList(int cap) {
+		super(cap);
+	}
 
-    public void putByName(Attribute attr) {
-        int index = -1;
-        for (int i = 0; i < size; i++) {
-            if (((Attribute) list[i]).name.equals(attr.name)) {
-                index = i;
-                break;
-            }
-        }
-        if (index == -1)
-            add(attr);
-        else
-            list[index] = attr;
-        if (byName != null)
-            byName.put(attr.name, attr);
-    }
+	public AttributeList(AttributeList l) {
+		super(l);
+		if (l.size > 0 && l.byName != null) byName = new MyHashMap<>(l.byName);
+	}
 
-    public Object getByName(String name) {
-        if (byName == null) {
-            byName = new MyHashMap<>(size);
-            for (int i = 0; i < size; i++) {
-                Attribute attr = (Attribute) list[i];
-                byName.put(attr.name, attr);
-            }
-            return byName.get(name);
-        }
-        Object o = byName.get(name);
-        if (o == null) {
-            for (int i = 0; i < size; i++) {
-                if (((Attribute) list[i]).name.equals(name)) {
-                    byName.put(name, (Attribute) list[i]);
-                    return list[i];
-                }
-            }
-        }
-        return o;
-    }
+	public Object getByName(String name) {
+		if (byName == null) {
+			if (size < THE_SIZE) {
+				int o = _indexOf(name);
+				return o<0?null:list[o];
+			}
+			byName = new MyHashMap<>(size);
+			return _find(name);
+		}
+		Object o = byName.get(name);
+		if (o == null) return _find(name);
+		return o;
+	}
 
-    public boolean removeByName(String name) {
-        for (int i = 0; i < size; i++) {
-            if (((Attribute) list[i]).name.equals(name)) {
-                remove(i);
-                return true;
-            }
-        }
-        return false;
-    }
+	private Attribute _find(String name) {
+		for (int i = 0; i < size; i++) {
+			Attribute attr = (Attribute) list[i];
+			byName.put(attr.name(), attr);
+		}
+		return byName.get(name);
+	}
+	private int _indexOf(String name) {
+		for (int i = 0; i < size; i++) {
+			if (((Attribute) list[i]).name().equals(name)) {
+				return i;
+			}
+		}
+		return -1;
+	}
 
-    @Override
-    public Attribute remove(int index) {
-        Attribute attr = super.remove(index);
-        if (byName != null)
-            byName.remove(attr.name);
-        return attr;
-    }
+	public boolean removeByName(String name) {
+		for (int i = 0; i < size; i++) {
+			if (((Attribute) list[i]).name().equals(name)) {
+				remove(i);
+				return true;
+			}
+		}
+		return false;
+	}
 
-    @Override
-    public boolean add(Attribute attribute) {
-        if (byName == null)
-            return super.add(attribute);
-        Attribute a1 = byName.put(attribute.name, attribute);
-        if (a1 != null) {
-            super.set(indexOfAddress(a1), attribute);
-            return true;
-        } else {
-            return super.add(attribute);
-        }
-    }
+	@Override
+	public Attribute remove(int i) {
+		Attribute attr = super.remove(i);
+		if (byName != null) byName.remove(attr.name());
+		return attr;
+	}
 
-    public AttributeList() {
-    }
+	@Override
+	public void clear() {
+		super.clear();
+		if (byName != null) byName.clear();
+	}
 
-    public AttributeList(int capacity) {
-        super(capacity);
-    }
+	public void i_direct_add(Attribute attr) {
+		super.add(attr);
+		if (byName != null) byName.clear();
+	}
+
+	@Override
+	public boolean add(Attribute attr) {
+		if (attr == null) throw new NullPointerException("attr");
+		if (byName == null) {
+			if (size > THE_SIZE) getByName("");
+
+			Object[] o = list;
+			for (int i = 0; i < size; i++) {
+				if (((Attribute) o[i]).name().equals(attr.name())) {
+					o[i] = attr;
+					return true;
+				}
+			}
+		} else {
+			Attribute a1 = byName.put(attr.name(), attr);
+			if (a1 != null) {
+				list[indexOfAddress(a1)] = attr;
+				return true;
+			}
+		}
+		return super.add(attr);
+	}
+
+	@Override
+	public Attribute set(int i, Attribute now) {
+		Attribute prev = super.set(i, now);
+		if (byName != null) {
+			byName.remove(prev.name());
+			byName.put(now.name(), now);
+		}
+		return prev;
+	}
+
+	public void toByteArray(DynByteBuf w, ConstantPool cw) {
+		w.putShort(size);
+		Object[] o = list;
+		for (int i = 0; i < size; i++)
+			((Attribute) o[i]).toByteArray(w, cw);
+	}
 }

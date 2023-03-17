@@ -1,103 +1,71 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.asm.tree.insn;
 
+import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstClass;
-import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.asm.type.TypeHelper;
+import roj.asm.visitor.CodeWriter;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/2 23:28
  */
-public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, IClassInsnNode {
-    public MDArrayInsnNode() {
-        super(Opcodes.MULTIANEWARRAY);
-    }
+public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode {
+	public MDArrayInsnNode() {
+		super(Opcodes.MULTIANEWARRAY);
+	}
 
-    public MDArrayInsnNode(CstClass clazz, int dimension) {
-        super(Opcodes.MULTIANEWARRAY);
-        this.owner = clazz.getValue().getString();
-        this.dimension = dimension;
-    }
+	public MDArrayInsnNode(CstClass clazz, int dimension) {
+		super(Opcodes.MULTIANEWARRAY);
+		this.owner = clazz.name().str();
+		setDimension(dimension);
+	}
 
-    @Override
-    public int nodeType() {
-        return T_MULTIANEWARRAY;
-    }
+	public MDArrayInsnNode(String clazz, int dimension) {
+		super(Opcodes.MULTIANEWARRAY);
+		this.owner = clazz;
+		setDimension(dimension);
+	}
 
-    public String owner;
-    public int dimension;
+	@Override
+	public int nodeType() {
+		return T_MULTIANEWARRAY;
+	}
 
-    public int getIndex() {
-        return dimension;
-    }
+	public String owner;
+	private byte dimension;
 
-    @Override
-    public void setIndex(int index) {
-        throw new UnsupportedOperationException("Cannot change dimension by setter, manually cast plz");
-    }
+	public int getIndex() {
+		return dimension&0xFF;
+	}
 
-    @Override
-    protected boolean validate() {
-        return code == Opcodes.MULTIANEWARRAY;
-    }
+	@Override
+	public void setIndex(int index) {
+		throw new UnsupportedOperationException("Cannot change dimension by setter, manually cast plz");
+	}
 
-    @Override
-    public void owner(String clazz) {
-        // noinspection all
-        this.owner = clazz.toString();
-    }
+	public void setDimension(int dimension) {
+		if (dimension < 0 || dimension > 255)
+			throw new ArrayIndexOutOfBoundsException(dimension);
+		this.dimension = (byte) dimension;
+	}
 
-    public String owner() {
-        return owner;
-    }
+	@Override
+	protected boolean validate() {
+		return code == Opcodes.MULTIANEWARRAY;
+	}
 
-    @Override
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
-        w.writeByte(code)
-         .writeShort(cw.getClassId(owner))
-         .writeByte((byte) this.dimension);
-    }
+	@Override
+	public void serialize(CodeWriter cw) {
+		cw.multiArray(owner, dimension);
+	}
 
-    @Override
-    public int nodeSize() {
-        return 4;
-    }
+	@Override
+	public int nodeSize(int prevBci) {
+		return 4;
+	}
 
-    public String toString() {
-        StringBuilder sb = new StringBuilder(super.toString()).append(' ').append(owner);
-        for (int i = 0; i < dimension; i++) {
-            sb.append("[]");
-        }
-        return sb.toString();
-    }
+	public String toString() {
+		return OpcodeUtil.toString0(code) + " " + TypeHelper.parseField(owner);
+	}
 }

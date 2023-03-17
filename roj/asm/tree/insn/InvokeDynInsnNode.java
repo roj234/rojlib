@@ -1,105 +1,71 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
 import roj.asm.cst.CstDynamic;
-import roj.asm.type.ParamHelper;
 import roj.asm.type.Type;
-import roj.asm.util.ConstantPool;
-import roj.util.ByteWriter;
+import roj.asm.type.TypeHelper;
+import roj.asm.visitor.CodeWriter;
+
+import java.util.List;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/6/18 9:51
  */
-public final class InvokeDynInsnNode extends IInvokeInsnNode {
-    public InvokeDynInsnNode() {
-        super(Opcodes.INVOKEDYNAMIC);
-    }
+public final class InvokeDynInsnNode extends InsnNode {
+	public InvokeDynInsnNode(CstDynamic ref, int type) {
+		super(Opcodes.INVOKEDYNAMIC);
+		this.tableIdx = ref.tableIdx;
+		this.name = ref.desc().name().str();
+		this.desc = ref.desc().getType().str();
+	}
 
-    public InvokeDynInsnNode(CstDynamic ref, int type) {
-        super(Opcodes.INVOKEDYNAMIC);
-        this.tableIdx = ref.tableIdx;
-        this.name = ref.getDesc().getName().getString();
-        this.rawParam = ref.getDesc().getType().getString();
-    }
+	public InvokeDynInsnNode(int idx, String name, String desc, int type) {
+		super(Opcodes.INVOKEDYNAMIC);
+		this.tableIdx = (char) idx;
+		this.name = name;
+		this.desc = desc;
+	}
 
-    @Override
-    public int nodeType() {
-        return T_INVOKE_DYNAMIC;
-    }
+	public String name, desc;
+	/**
+	 * bootstrap table index
+	 */
+	public char tableIdx;
 
-    @Override
-    protected boolean validate() {
-        return code == Opcodes.INVOKEDYNAMIC;
-    }
-    /**
-     * bootstrap table index
-     */
-    public char tableIdx;
+	@Override
+	public int nodeType() {
+		return T_INVOKE_DYNAMIC;
+	}
 
-    /**
-     * The third and fourth operand bytes of each invokedynamic instruction must have the value zero. <br>
-     * Thus, we ignore it again(Previous in InvokeItfInsnNode).
-     */
-    @Override
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
-        if (params != null) {
-            params.add(returnType);
-            rawParam = ParamHelper.getMethod(params);
-            params.remove(params.size() - 1);
-        }
-        w.writeByte(code).writeShort(cw.getInvokeDynId(tableIdx, name, rawParam)).writeShort(0);
-    }
+	@Override
+	protected boolean validate() {
+		return code == Opcodes.INVOKEDYNAMIC;
+	}
 
-    @Override
-    public int nodeSize() {
-        return 5;
-    }
+	@Override
+	public void serialize(CodeWriter cw) {
+		cw.invokeDyn(tableIdx, name, desc, 0);
+	}
 
-    public String toString() {
-        initPar();
-        StringBuilder sb = new StringBuilder(super.toString()).append(" #").append((int) tableIdx).append(' ').append(returnType).append(" ?").append('.').append(name).append('(');
-        if (!params.isEmpty()) {
-            for (int i = 0; i < params.size(); i++) {
-                Type par = params.get(i);
-                sb.append(par).append(", ");
-            }
-            sb.delete(sb.length() - 2, sb.length());
-        }
-        return sb.append(')').toString();
-    }
+	@Override
+	public int nodeSize(int prevBci) {
+		return 5;
+	}
 
-    @Override
-    public void rawDesc(String desc) {
-        throw new UnsupportedOperationException("InvokeDyn does not support 'classed' descriptor");
-    }
+	public String toString() {
+		List<Type> params = TypeHelper.parseMethod(desc);
+		StringBuilder sb = new StringBuilder(super.toString()).append(" #").append((int) tableIdx).append(' ').append(params.remove(params.size()-1)).append(" ?").append('.').append(name).append('(');
+
+		if (!params.isEmpty()) {
+			int i = 0;
+			while (true) {
+				Type par = params.get(i++);
+				sb.append(par);
+				if (i == params.size()) break;
+				sb.append(", ");
+			}
+		}
+		return sb.append(')').toString();
+	}
 }

@@ -1,356 +1,421 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.config;
 
-import roj.collect.IBitSet;
-import roj.collect.LongBitSet;
+import roj.collect.*;
 import roj.config.data.*;
-import roj.config.word.AbstLexer;
 import roj.config.word.Word;
-import roj.config.word.WordPresets;
+import roj.config.word.Word_D;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.util.ByteList;
-import roj.util.ByteReader;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
 
-import static roj.config.JSONParser.unexpected;
+import static roj.config.JSONParser.*;
+import static roj.config.word.Word.*;
 
 /**
- *
+ * 汤小明的小巧明晰语言 <br>
+ * 注释，八进制需要使用java的表示法: 0[oct...]
  *
  * @author Roj234
- * @version 0.1
- * @since /
+ * @since 2022/1/6 19:49
  */
-public class TOMLParser {
-    static final short
-            TRUE = 10,
-            FALSE = 11,
-            NULL = 12,
-            left_m_bracket = 13,
-            right_m_bracket = 14,
-            left_l_bracket = 19,
-            right_l_bracket = 20,
-            comma = 15, // ,
-            colon = 16, // :
-            delim = 17, // -
-            _DATE_ = 18;
+public final class TOMLParser extends Parser<CMapping> {
+	public static final int LENIENT = 1;
+	private static final int INLINE = 2;
+	private static final short eq = 18, dot = 19, dlmb = 20, drmb = 21;
 
-    public static void main(String[] args) throws ParseException, IOException {
-        CharList yaml = new CharList();
-        ByteReader.decodeUTF(-1, yaml, new ByteList(IOUtil.read(new File(args[0]))));
+	private static final TrieTree<Word> TOML_TOKENS = new TrieTree<>();
+	private static final MyBitSet TOML_LENDS = new MyBitSet();
+	private static final Int2IntMap TOML_FC = new Int2IntMap(), TOML_FC_NUM = new Int2IntMap();
+	static {
+		addKeywords(TOML_TOKENS, TRUE, "true", "false", "null");
+		addSymbols(TOML_TOKENS, TOML_LENDS, left_l_bracket, "{", "}", "[", "]", ",", "=", ".", "[[", "]]");
+		addWhitespace(TOML_LENDS);
 
-        System.out.print("YML = " + parse(yaml).toYAML());
-    }
+		num("nan", Double.NaN);
+		num("inf", Double.POSITIVE_INFINITY);
 
-    public static CMapping parse(CharSequence string) throws ParseException {
-        return parse((TOMLLexer) new TOMLLexer().init(string), 0);
-    }
+		TOML_FC.put('#', C_COMMENT);
+		fcFill(TOML_FC, " \r\n\t\f", C_WHITESPACE);
+		fcFill(TOML_FC, "'\"", C_SYH);
 
-    /**
-     * @param flag <BR>
-     *             2: 对重复的key报错 <BR>
-     *             4: 解析注释
-     */
-    public static CMapping parse(TOMLLexer wr, int flag) throws ParseException {
-        wr.comment = (flag & 4) != 0;
-        CMapping ce = tomlObject(wr, (byte) flag & ~1);
-        if (wr.hasNext()) {
-            throw wr.err("期待 /EOF");
-        }
-        return ce;
-    }
+		TOML_FC_NUM.putAll(TOML_FC);
+		fcFill(TOML_FC_NUM, "+-", C_MAY__NUMBER_SIGN);
+		fcFill(TOML_FC_NUM, "0123456789", C_NUMBER);
 
+		TOML_LENDS.addAll("+-#\"'");
+	}
+	private static void num(String k, double v) {
+		Word_D pos = new Word_D(DOUBLE, 0, v, k);
+		TOML_TOKENS.put(k, pos);
+		TOML_TOKENS.put("+"+k, pos);
+		TOML_TOKENS.put("-"+k, new Word_D(DOUBLE, 0, v, k));
+	}
 
-    /**
-     * 解析数组定义 <BR>
-     * [xxx, yyy, zzz] or []
-     */
-    static CList tomlFlowArray(TOMLLexer wr, byte flag) throws ParseException {
-        CList list = new CList();
+	{ tokens = TOML_TOKENS; literalEnd = TOML_LENDS; firstChar = TOML_FC_NUM; }
 
-        boolean more = false;
+	public static void main(String[] args) throws ParseException, IOException {
+		System.out.print(parses(IOUtil.readUTF(new File(args[0]))).toTOML());
+	}
 
-        o:
-        while (true) {
-            Word w = wr.nextWord();
-            switch (w.type()) {
-                case right_m_bracket:
-                    break o;
-                case comma:
-                    if (more) {
-                        unexpected(wr, ",");
-                    }
-                    more = true;
-                    break;
-                default:
-                    wr.retractWord();
-                    more = false;
-                    list.add(tomlRead(wr, flag));
-                    break;
-            }
-        }
+	public static CMapping parses(CharSequence string) throws ParseException {
+		return new TOMLParser().parse(string, 0);
+	}
+	public static CMapping parses(CharSequence string, int flag) throws ParseException {
+		return new TOMLParser().parse(string, flag);
+	}
 
-        return list;
-    }
+	@Override
+	public final CMapping parse(CharSequence text, int flags) throws ParseException {
+		this.flag = flags;
+		init(text);
 
-    /**
-     * 解析对象定义 <BR>
-     * {xxx: yyy, zzz: uuu}
-     */
-    @SuppressWarnings("fallthrough")
-    static CMapping tomlFlowObject(TOMLLexer wr, byte flag) throws ParseException {
-        CMapping map = new CMapping();
+		CMapping entry;
+		try {
+			entry = parse0(flags);
+			if ((flags & NO_EOF) == 0) except(EOF);
+		} catch (ParseException e) {
+			throw e.addPath("$");
+		} finally {
+			init(null);
+		}
 
-        boolean more = false;
+		return entry;
+	}
 
-        o:
-        while (true) {
-            Word name = wr.nextWord().copy();
-            switch (name.type()) {
-                case right_l_bracket:
-                    break o;
-                case comma:
-                    if (more) {
-                        unexpected(wr, ",");
-                    }
-                    more = true;
-                    continue;
-                case WordPresets.STRING:
-                    break;
-                case WordPresets.LITERAL:
-                    if((flag & 2) != 0)
-                        break;
-                default:
-                    unexpected(wr, name.val(), "字符串");
-            }
+	public final int availableFlags() { return LENIENT; }
+	public final String format() { return "TOML"; }
 
-            if((flag & 1) != 0 && map.containsKey(name.val()))
-                throw wr.err("重复的key: " + name.val());
+	@Override
+	public final CharList append(CEntry entry, int flag, CharList sb) {
+		return entry.appendTOML(sb, new CharList());
+	}
 
-            more = false;
+	/**
+	 * @param flag LENIENT 允许修改行内表
+	 */
+	public CMapping parse0(int flag) throws ParseException {
+		CMapping map = new CMapping();
 
-            Word w = wr.nextWord();
-            if (w.type() != colon)
-                unexpected(wr, w.val(), ":");
+		CMapping root = tomlObject(flag);
+		if (root.size() > 0) map.put(CMapping.CONFIG_TOPLEVEL, root);
 
-            map.put(name.val(), tomlRead(wr, flag));
-        }
+		o:
+		while (hasNext()) {
+			Word w = next();
+			switch (w.type()) {
+				case left_m_bracket:
+					w = next();
+					if (w.type() != LITERAL && w.type() != STRING) unexpected(w.val(), "键");
+					dotName(w.val(), map, flag);
+					w = next();
+					if (w.type() != right_m_bracket) unexpected(w.val(), "]");
+					try {
+						put(flag | INLINE);
+					} catch (ParseException e) {
+						throw e.addPath('.' + k);
+					}
+					break;
+				case dlmb:
+					w = next();
+					if (w.type() != LITERAL && w.type() != STRING) unexpected(w.val(), "键");
+					dotName(w.val(), map, flag);
+					w = next();
+					if (w.type() != drmb) unexpected(w.val(), "]");
+					v.getOrCreateList(k).add(tomlObject(flag));
+					break;
+				case EOF: break o;
+				default: unexpected(w.val(), "[ 或 [[");
+			}
+		}
 
-        if (map.containsKey("==", Type.STRING)) {
-            ObjSerializer<?> deserializer = ObjSerializer.REGISTRY.get(map.getString("=="));
-            if (deserializer != null) {
-                return new CObject<>(map, deserializer);
-            }
-        }
+		return map;
+	}
 
-        return map;
-    }
+	/**
+	 * 解析对象定义 <BR>
+	 * {xxx = yyy, zzz = uuu}
+	 */
+	@SuppressWarnings("fallthrough")
+	private CMapping tomlObject(int flag) throws ParseException {
+		Map<String, CEntry> map1 = (flag & ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>();
+		CMapping map = (flag & INLINE) != 0 ? new CTOMLFxMap(map1) : new CMapping(map1);
 
-    /**
-     * 解析对象定义 <BR>
-     * a : r \r\n
-     * c : x
-     */
-    @SuppressWarnings("fallthrough")
-    static CMapping tomlObject(TOMLLexer wr, int flag) throws ParseException {
-        CMapping map = new CMapping();
+		boolean more = true;
 
-        return map;
-    }
+		o:
+		while (true) {
+			firstChar = TOML_FC;
+			Word w = next();
+			firstChar = TOML_FC_NUM;
 
-    private static CEntry tomlRead(TOMLLexer wr, int flag) throws ParseException {
-        Word w = wr.nextWord();
-        switch (w.type()) {
-            case WordPresets.COMMENT:
-                return new CComment(w.val());
-            case left_m_bracket:
-                //return yamlFlowArray(wr, flag);
-            case WordPresets.STRING:
-            case WordPresets.LITERAL: {
-                int i = wr.lastWord;
-                if(wr.nextWord().type() == colon) {
-                    wr.index = i;
-                    return tomlObject(wr, flag);
-                } else {
-                    wr.retractWord();
-                    return CString.valueOf(w.val());
-                }
-            }
-            case WordPresets.DECIMAL_D:
-            case WordPresets.DECIMAL_F:
-                return CDouble.valueOf(w.val());
-            case WordPresets.INTEGER:
-                return CInteger.valueOf(w.val());
-            case TRUE:
-            case FALSE:
-                return CBoolean.valueOf(w.type() == TRUE);
-            case NULL:
-                return CNull.NULL;
-            default:
-                unexpected(wr, w.val());
-                return null;
-        }
-    }
+			switch (w.type()) {
+				case right_l_bracket: break o;
+				case comma:
+					if ((flag & INLINE) == 0) unexpected(w.val(), "键");
+					if (more) unexpected(",");
+					more = true;
+					continue;
+				case DOUBLE:
+				case FLOAT: throw err("别闹");
+				case INTEGER:
+				case LITERAL:
+				case STRING: break;
+				default:
+					if ((flag & INLINE) == 0) {
+						retractWord();
+						break o;
+					}
+					unexpected(w.val(), "字符串");
+			}
 
-    private static final class TOMLLexer extends AbstLexer {
-        static final IBitSet SPECIAL = LongBitSet.from("+-()#.=?\"'[]");
+			dotName(w.val(), map, flag);
 
-        boolean comment;
+			if (!more && (flag & LENIENT_COMMA) == 0) unexpected(w.val(), "逗号");
+			more = false;
 
-        @Override
-        public Word readWord() throws ParseException {
-            int i = this.index;
-            CharSequence in = this.input;
-            while (i < in.length()) {
-                int c = in.charAt(i++);
-                switch (c) {
-                    case '"':
-                        this.index = i;
-                        return readConstString((char) c);
-                    case '#': {
-                        int s = i, e = s;
-                        while (i < in.length()) { // 单行注释
-                            c = in.charAt(i++);
-                            if (c == '\r' || c == '\n') {
-                                e = i - 3;
-                                if (c == '\r' && i < in.length() && in.charAt(i) == '\n')
-                                    i++;
-                                break;
-                            }
-                        }
+			except(eq, "=");
+			try {
+				put(flag & ~INLINE);
+			} catch (ParseException e) {
+				throw e.addPath(k + '.');
+			}
+			if ((flag & (INLINE | LENIENT)) == 0) ensureLineEnd();
+		}
 
-                        if (comment) {
-                            this.index = i;
-                            return formClip(WordPresets.COMMENT, in.subSequence(s, e));
-                        }
-                    }
-                    break;
-                    default: {
-                        if (!WHITESPACE.contains(c)) {
-                            this.index = --i;
-                            if (SPECIAL.contains(c)) {
-                                switch (c) {
-                                    case '-':
-                                    case '+':
-                                        if(in.length() > i && NUMBER.contains(in.charAt(i))) {
-                                            return readDigit(true);
-                                        }
-                                        break;
-                                }
-                                return readSymbol();
-                            } else if (NUMBER.contains(c)) {
-                                return readDigit(false);
-                            } else {
-                                return readLiteral();
-                            }
-                        }
-                    }
-                }
-            }
-            this.index = i;
-            return eof();
-        }
+		return map;
+	}
 
-        /**
-         * @return 标识符 or 变量
-         */
-        protected Word readLiteral() {
-            final CharSequence in = this.input;
-            int i = this.index;
+	private void put(int flag) throws ParseException {
+		CEntry entry = ((flag & INLINE) != 0) ? tomlObject(flag & ~INLINE) : element(flag);
+		CEntry me = v.raw().putIfAbsent(k, entry);
+		if (me != null) {
+			if (entry.getType() != me.getType()) throw err("覆盖已存在的 " + me.toShortJSONb());
+			if (me.getType() != Type.MAP) throw err("这不是表");
+			me.asMap().merge(entry.asMap(), false, true);
+		}
+	}
 
-            CharList temp = this.found;
-            temp.clear();
+	CEntry element(int flag) throws ParseException {
+		Word w = next();
+		switch (w.type()) {
+			case left_l_bracket: return tomlObject(flag | INLINE);
+			case left_m_bracket: return JSONParser.list(this, new CTOMLList(), flag);
+			case STRING:
+			case LITERAL: {
+				int i = prevIndex;
+				if (next().type() == eq) {
+					index = i;
+					return tomlObject(flag);
+				} else {
+					retractWord();
+					return CString.valueOf(w.val());
+				}
+			}
+			case RFCDATE_DATE: return new CDate(w.asLong());
+			case RFCDATE_DATETIME:
+			case RFCDATE_DATETIME_TZ: return new CTimestamp(w.asLong());
+			case DOUBLE:
+			case FLOAT: return CDouble.valueOf(w.asDouble());
+			case INTEGER: return CInteger.valueOf(w.asInt());
+			case LONG: return CLong.valueOf(w.asLong());
+			case TRUE: return CBoolean.TRUE;
+			case FALSE: return CBoolean.FALSE;
+			case NULL: return CNull.NULL;
+			default: unexpected(w.val()); return Helpers.nonnull();
+		}
+	}
 
-            while (i < in.length()) {
-                int c = in.charAt(i++);
-                if ((!SPECIAL.contains(c) || c == '-') && !WHITESPACE.contains(c)) {
-                    temp.append((char) c);
-                } else {
-                    i--;
-                    break;
-                }
-            }
-            this.index = i;
+	@SuppressWarnings("fallthrough")
+	public static boolean literalSafe(CharSequence text) {
+		if (LITERAL_UNSAFE) return false;
+		if (text.length() == 0) return false;
 
-            if (temp.length() == 0) {
-                return eof();
-            }
+		for (int i = 0; i < text.length(); i++) {
+			if (TOML_LENDS.contains(text.charAt(i))) return false;
+		}
+		return true;
+	}
 
-            String s = temp.toString();
+	@SuppressWarnings("fallthrough")
+	@Override
+	public Word readWord() throws ParseException {
+		CharSequence in = input;
+		int i = index;
 
-            short id = WordPresets.LITERAL;
-            switch (s) {
-                case "true":
-                case "yes":
-                case "on":
-                    id = TRUE;
-                    break;
-                case "false":
-                case "no":
-                case "off":
-                    id = FALSE;
-                    break;
-                case "null":
-                    id = NULL;
-                    break;
-            }
+		while (i < in.length()) {
+			char c = in.charAt(i++);
+			switch (firstChar.getOrDefaultInt(c, 0)) {
+				case C_WHITESPACE: break;
+				case C_MAY__NUMBER_SIGN:
+					if (i < in.length() && NUMBER.contains(in.charAt(i))) {
+						index = i-1;
+						return readDigit(true);
+					}
+					// fall to literal(symbol)
+				default:
+				case C_DEFAULT: index = i-1; return readSymbol();
+				case C_NUMBER:
+					index = i-1;
 
-            return formClip(id, s);
-        }
+					if (in.length() - i > 5 && in.charAt(i + 3) == '-') {
+						Word w = ISO8601Datetime(true);
+						if (w != null) return w;
+					} else if (in.length() - i > 3 && in.charAt(i + 1) == ':') {
+						Word w = ISO8601Datetime(true);
+						if (w != null) return w;
+					}
 
-        @Override
-        protected Word readSymbol() throws ParseException {
-            char c = next();
+					return readDigit(false);
+				case C_COMMENT:
+					index = i;
+					singleLineComment(comment);
+					i = index;
+					break;
+				case C_SYH:
+					index = i;
 
-            short id;
-            switch (c) {
-                case '[':
-                    id = left_m_bracket;
-                    break;
-                case ']':
-                    id = right_m_bracket;
-                    break;
-                case ':':
-                    id = colon;
-                    break;
-                case ',':
-                    id = comma;
-                    break;
-                case '-':
-                    id = delim;
-                    break;
-                default:
-                    throw err("无效字符 '" + c + '\'');
-            }
+					CharSequence val;
+					if (in.charAt(i) == c) {
+						if (i+1 < in.length() && in.charAt(i+1) == c) {
+							index = i+2;
+							val = readMultiLine(c); // """ or '''
+						} else {
+							val = "";
+						}
+					} else {
+						val = readSlashString(c, c == '"');
+					}
+					return formClip(STRING, val);
+			}
+		}
 
-            return formClip(id, String.valueOf(c));
-        }
-    }
+		index = i;
+		return eof();
+	}
+
+	private String readMultiLine(char end3) throws ParseException {
+		CharSequence in = input;
+		int i = index;
+
+		//if (remain() < 3) throw err("EOF");
+
+		CharList v = found; v.clear();
+
+		while (i < in.length()) {
+			char c = in.charAt(i);
+			if (c != '\r' && c != '\n') break;
+			i++;
+		}
+
+		int end3Amount = 0;
+		boolean slash = false;
+		boolean skip = false;
+
+		while (i < in.length()) {
+			char c = in.charAt(i++);
+			if (slash) {
+				i = _removeSlash(input, c, v, i, end3);
+				slash = false;
+			} else {
+				if (end3 == c) {
+					if (++end3Amount == 3) {
+						index = i;
+
+						v.setLength(v.length()-3);
+						return v.toString();
+					}
+
+					v.append(c);
+				} else {
+					end3Amount = 0;
+					if (c == '\\' && end3 == '"') {
+						if (in.charAt(i) == '\r' || in.charAt(i) == '\n') {
+							skip = true;
+						} else {
+							slash = true;
+						}
+					} else if (!skip || !WHITESPACE.contains(c)) {
+						skip = false;
+						v.append(c);
+					}
+				}
+			}
+		}
+
+		int orig = index;
+		index = i;
+
+		throw err("未终止的 引号 (" + end3 + end3 + end3 + ")", orig);
+	}
+
+	@Override
+	protected void onNumberFlow(CharSequence value, short fromLevel, short toLevel) throws ParseException {
+		if (toLevel == DOUBLE) throw err("数之大,一个long放不下!");
+	}
+
+	String k; CMapping v;
+
+	private void dotName(String v, CMapping map, int flag) throws ParseException {
+		firstChar = TOML_FC;
+		CMapping lv = map;
+		loop:
+		do {
+			Word w = next();
+			if (w.type() == dot) {
+				w = next();
+				switch (w.type()) {
+					case DOUBLE:
+					case FLOAT: throw err("别闹");
+					case INTEGER:
+					case LITERAL:
+					case STRING:
+						Map<String, CEntry> raw = lv.raw();
+						CEntry entry = raw.get(v);
+						if (entry == null) {
+							raw.put(v, entry = new CMapping((flag & ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>()));
+						} else if (entry.getType() == Type.LIST) {
+							CList list = entry.asList();
+							if (list.size() == 0) throw err("空的行内数组");
+							entry = list.get(list.size() - 1);
+						}
+						if (entry.getType() == Type.MAP) {
+							lv = entry.asMap();
+							if ((flag & LENIENT) == 0 && lv.getClass() == CTOMLFxMap.class) {
+								throw err("不能修改行内表");
+							}
+						} else {
+							throw err("不能覆写已存在的非表");
+						}
+						v = w.val();
+						break;
+					default:
+						retractWord();
+						break loop;
+				}
+			} else {
+				retractWord();
+				break;
+			}
+		} while (true);
+		firstChar = TOML_FC_NUM;
+		this.k = v;
+		this.v = lv;
+	}
+
+	private void ensureLineEnd() throws ParseException {
+		CharSequence in = this.input;
+		int i = this.index;
+		while (i < in.length()) {
+			char c = in.charAt(i);
+			if (c == '\r' || c == '\n') {
+				break;
+			}
+			if (!WHITESPACE.contains(c)) throw err("我们建议你换个行");
+		}
+		index = i;
+	}
 }

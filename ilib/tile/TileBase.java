@@ -1,36 +1,9 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package ilib.tile;
 
-import ilib.api.tile.MetaTile;
 import ilib.util.BlockHelper;
-import ilib.util.PlayerUtil;
+
 import net.minecraft.block.Block;
-import net.minecraft.crash.CrashReportCategory;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
@@ -38,263 +11,144 @@ import net.minecraft.network.play.server.SPacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.text.TextComponentString;
-import net.minecraft.world.EnumSkyBlock;
 import net.minecraft.world.World;
+
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nonnull;
-/**
- * No description provided
- *
+
+/**
  * @author Roj234
- * @version 0.1
  * @since 2021/6/15 16:19
  */
 public abstract class TileBase extends TileEntity {
-    private World selfWorld = null;
-    protected EntityPlayer lastInteract = null;
-    private int tryInitCount;
+	public TileBase() {}
 
-    public TileBase() {
-    }
+	// region tick
 
-    // Define of [Tick] begin;
+	protected boolean canTick() {
+		return true;
+	}
 
-    protected boolean canTick() {
-        return true;
-    }
+	public void func_73660_a() {
+		update();
+	}
 
-    public void func_73660_a() {
-        update();
-    }
+	public void update() {
+		baseTick();
 
-    public void update() {
-        if (!inited) {
-            trySelfInit();
-            return;
-        }
+		if (canTick()) {
+			onTick();
+			if (!world.isRemote) {
+				onServerTick();
+			}
+		}
+	}
 
-        if (canTick()) {
-            onTick();
-            if (getWorld().isRemote) {
-                onClientTick();
-            } else {
-                onServerTick();
-            }
-        }
+	public final void sendDataUpdate() {
+		BlockHelper.sendTileUpdate(this);
+	}
 
-        baseTick();
-        if (getWorld().isRemote) {
-            baseTickClient();
-        } else {
-            baseTickServer();
-        }
-    }
+	protected void onTick() {}
 
-    /**
-     * 更新外貌，不包括数据
-     */
-    public final void markForStateUpdate(int flags) {
-        BlockHelper.updateBlockState(getWorld(), getPos());
-    }
+	protected void onServerTick() {}
 
-    public final void markForLightUpdate() {
-        getWorld().checkLightFor(EnumSkyBlock.BLOCK, pos);
-    }
+	protected void baseTick() {}
 
-    public final void markForDataUpdate() {
-        BlockHelper.updateBlockData(this);
-    }
+	// endregion
+	// region sync helper
 
-    protected void onTick() {
-    }
+	public boolean func_70300_a(EntityPlayer player) {
+		return isUsableByPlayer(player);
+	}
 
-    protected void onClientTick() {
-    }
+	public boolean isUsableByPlayer(@Nonnull EntityPlayer player) {
+		if (getWorld().getTileEntity(this.pos) != this) {
+			return false;
+		}
 
-    protected void onServerTick() {
-    }
+		final double MAXIMUM_DISTANCE_SQ = 8.0 * 8.0;
 
-    protected void baseTick() {
-    }
+		return player.getDistanceSq(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) < MAXIMUM_DISTANCE_SQ;
+	}
 
-    protected void baseTickClient() {
-    }
+	public void clientReload() {
+		BlockHelper.updateBlock(getWorld(), getPos());
+	}
 
-    protected void baseTickServer() {
-    }
+	@Override
+	public NBTTagCompound getUpdateTag() {
+		NBTTagCompound tag = writeToNBT(new NBTTagCompound());
+		tag.removeTag("id");
+		return tag;
+	}
 
-    // Define of [Tick] end;
-    // Define of [Name and Data getter] begin;
+	@Override
+	public final SPacketUpdateTileEntity getUpdatePacket() {
+		return new SPacketUpdateTileEntity(getPos(), 0, getUpdateTag());
+	}
 
-    @Override
-    public void addInfoToCrashReport(CrashReportCategory cat) {
-        super.addInfoToCrashReport(cat);
-        cat.addDetail("MI_MoreDebugData", this::getCustomDebugData);
-    }
+	@Override
+	public final void onDataPacket(NetworkManager net, SPacketUpdateTileEntity pkt) {
+		handleUpdateTag(pkt.getNbtCompound());
+	}
 
-    public String getCustomDebugData() {
-        return "~undefined~";
-    }
+	protected final void handleUpdateTagFallback(NBTTagCompound tag) {
+		NBTTagCompound tag1 = writeToNBT(new NBTTagCompound());
+		for (String key : tag1.getKeySet()) {
+			if (!tag.hasKey(key)) tag.setTag(key, tag1.getTag(key));
+		}
+		this.readFromNBT(tag);
+	}
 
-    // Define of [Name and Data getter] end;
-    // Define of [Auto Initialization] begin;
+	// endregion
+	// fastUtil
 
-    private boolean inited;
+	@Override
+	@SideOnly(Side.CLIENT)
+	public void setPos(BlockPos posIn) {
+		super.setPos(posIn);
+		cacheAB = null;
+	}
 
-    protected boolean inited() {
-        return inited;
-    }
+	@Override
+	@SideOnly(Side.CLIENT)
+	public void updateContainingBlockInfo() {
+		super.updateContainingBlockInfo();
+		cacheAB = null;
+	}
 
-    protected boolean init(int meta) {
-        return true;
-    }
+	@SideOnly(Side.CLIENT)
+	private AxisAlignedBB cacheAB;
 
-    @Override
-    public void validate() {
-        super.validate();
-        if (super.getWorld() != null)
-            selfWorld = super.getWorld();
-        if (!inited) {
-            trySelfInit();
-        }
-    }
+	@SideOnly(Side.CLIENT)
+	public AxisAlignedBB getRenderBoundingBox() {
+		if (cacheAB != null) return cacheAB;
 
-    private void trySelfInit() {
-        if (getWorld() != null) {
-            if (!getWorld().isBlockLoaded(pos, false))
-                return;
-            updateContainingBlockInfo();
-            int meta = getBlockMetadata();
-            if (meta == 0 && this instanceof MetaTile) { // stored data in tileentity (may)
-                meta = ((MetaTile) this).getMeta();
-            }
-            trySelfInit0(meta, true);
-        }
-    }
+		Block type = this.getBlockType();
+		BlockPos pos = this.getPos();
+		if (type != null) {
+			try {
+				return cacheAB = world.getBlockState(pos).getCollisionBoundingBox(world, pos).offset(pos);
+			} catch (Throwable e) {
+				return cacheAB = new AxisAlignedBB(pos.add(-1, 0, -1), this.getPos().add(1, 1, 1));
+			}
+		}
 
-    private void trySelfInit0(int meta, boolean flag) {
-        inited = init(meta);
-        if (!inited) {
-            tryInitCount++;
-            if (tryInitCount > 2) {
-                PlayerUtil.broadcastAll(new TextComponentString("Block at world " + getWorld().provider.getDimension() + " position " + pos + " was broken!!!"));
-                getWorld().removeTileEntity(pos);
-            }
-        }
-    }
+		return cacheAB = new AxisAlignedBB(pos.add(-1, 0, -1), pos.add(1, 1, 1));
+	}
 
-    // Define of [Auto Initialization] end;
-    // Define of [Fixed world getter] begin;
+	public boolean canRenderBreaking() {
+		return false;
+	}
 
-    @Override
-    public final void setWorldCreate(@Nonnull World world) {
-        this.selfWorld = world;
-        setWorld(world);
-    }
+	public boolean restrictNBTCopy() {
+		return false;
+	}
 
-    @Override
-    @Nonnull
-    public final World getWorld() {
-        World w;
-        return (w = super.getWorld()) != null ? w : this.selfWorld;
-    }
-
-    @Nonnull
-    @Override
-    public NBTTagCompound writeToNBT(@Nonnull NBTTagCompound tag) {
-        if (this instanceof MetaTile) {
-            tag.setInteger("Ty", ((MetaTile) this).getMeta());
-        }
-        return super.writeToNBT(tag);
-    }
-
-    public void readFromNBT(@Nonnull NBTTagCompound tag) {
-        super.readFromNBT(tag);
-        if (this instanceof MetaTile) {
-            trySelfInit0(tag.getInteger("Ty"), false);
-        }
-    }
-
-    // Define of [Fixed world getter] end;
-    // Define of [SyncHelper] begin;
-
-    public boolean func_70300_a(EntityPlayer player) {
-        return isUsableByPlayer(player);
-    }
-
-    public boolean isUsableByPlayer(@Nonnull EntityPlayer player) {
-        if (getWorld().getTileEntity(this.pos) != this) {
-            return false;
-        }
-
-        this.lastInteract = player;
-
-        final double X_CENTRE_OFFSET = 0.5;
-        final double Y_CENTRE_OFFSET = 0.5;
-        final double Z_CENTRE_OFFSET = 0.5;
-        final double MAXIMUM_DISTANCE_SQ = 8.0 * 8.0;
-
-        return player.getDistanceSq(pos.getX() + X_CENTRE_OFFSET,
-                pos.getY() + Y_CENTRE_OFFSET, pos.getZ() + Z_CENTRE_OFFSET) < MAXIMUM_DISTANCE_SQ;
-    }
-
-    public void clientReload() {
-        BlockHelper.updateBlock(getWorld(), getPos());
-    }
-
-    @Nonnull
-    @Override
-    public final SPacketUpdateTileEntity getUpdatePacket() {
-        final int METADATA = getBlockMetadata();
-
-        return new SPacketUpdateTileEntity(getPos(), METADATA, getUpdateTag());
-    }
-
-    @Override
-    public final void onDataPacket(@Nonnull NetworkManager net, @Nonnull SPacketUpdateTileEntity pkt) {
-        handleUpdateTag(pkt.getNbtCompound());
-    }
-
-    @Override
-    @Nonnull
-    public NBTTagCompound getUpdateTag() {
-        return writeToNBT(new NBTTagCompound());
-    }
-
-    @Override
-    public final void handleUpdateTag(@Nonnull NBTTagCompound tag) {
-        this.readFromNBT(tag);
-    }
-
-    // fastUtil
-
-    @SideOnly(Side.CLIENT)
-    public AxisAlignedBB getRenderBoundingBox() {
-        Block type = this.getBlockType();
-        BlockPos pos = this.getPos();
-        if (type != null) {
-            try {
-                AxisAlignedBB cbb = this.world.getBlockState(this.getPos()).getCollisionBoundingBox(this.world, pos).offset(pos);
-                cbb.contains(Vec3d.ZERO);
-                return cbb;
-            } catch (Throwable e) {
-                return new AxisAlignedBB(this.getPos().add(-1, 0, -1), this.getPos().add(1, 1, 1));
-            }
-        }
-
-        return new AxisAlignedBB(pos.add(-1, 0, -1), pos.add(1, 1, 1));
-    }
-
-    public boolean canRenderBreaking() {
-        return false;
-    }
-
-    public boolean restrictNBTCopy() {
-        return false;
-    }
-
+	@Override
+	public boolean shouldRefresh(World world, BlockPos pos, IBlockState oldState, IBlockState newState) {
+		return oldState.getBlock() != newState.getBlock();
+	}
 }

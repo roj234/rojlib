@@ -1,52 +1,35 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.mod;
 
-import roj.concurrent.TaskExecutor;
+import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFileWriter;
+import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.io.DummyOutputStream;
-import roj.io.FileUtil;
-import roj.text.CharList;
+import roj.io.IOUtil;
+import roj.math.Version;
+import roj.mod.fp.Fabric;
+import roj.mod.fp.Forge;
+import roj.mod.fp.LegacyForge;
+import roj.mod.fp.WorkspaceBuilder;
+import roj.mod.mapping.MappingFormat;
 import roj.text.TextUtil;
+import roj.ui.CmdUtil;
+import roj.ui.EasyProgressBar;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
-import roj.util.ByteReader;
 
 import javax.swing.*;
-import java.awt.*;
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
+import static roj.mapper.ConstMapper.DONT_LOAD_PREFIX;
 import static roj.mod.MCLauncher.*;
 import static roj.mod.Shared.*;
 
@@ -54,406 +37,347 @@ import static roj.mod.Shared.*;
  * FMD Install window
  *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/31 21:17
  */
-public class FMDInstall extends JFrame {
-    static final TaskExecutor waiter = new TaskExecutor();
-
-    public FMDInstall(boolean auto) {
-        super("FMD " + VERSION + " 安装");
-
-        JButton terminal = new JButton("退出");
-        terminal.addActionListener((e) -> System.exit(0));
-
-        if(!auto) {
-            JButton install = new JButton("安装");
-            JButton quickInst = new JButton("一键安装");
-
-            install.addActionListener((ev) -> {
-                if(!waiter.sleeping())
-                    return;
-                waiter.execute(FMDInstall::install);
-            });
-
-            quickInst.addActionListener((ev) -> {
-                if(!waiter.sleeping())
-                    return;
-                waiter.execute(() -> {
-                    FMDInstall.quickInst(null);
-                });
-            });
-
-            add(quickInst);
-            add(install);
-            add(terminal);
-            add(new JTextArea("1. 安装功能已更新, 更好用了\n" +
-                    "2. 但是你仍然需要一些基础知识\n" +
-                    "3. 看不懂我也没救了\n" +
-                    "4. 为啥有些方法是abc\n" +
-                    "  => 因为映射表少了! (不是我干的,它自己就少)"));
-        } else {
-            add(terminal);
-            final JLabel label = new JLabel("自动安装中... 出错请退出重来");
-            MCLauncher.waitOut = new PrintStream(DummyOutputStream.INSTANCE) {
-                @Override
-                public void println(String x) {
-                    label.setText(x);
-                }
-            };
-            add(label);
-        }
-
-        pack();
-        setLayout(new FlowLayout());
-        setResizable(!auto);
-        setBounds(700, 500, 320, auto ? 80 : 180);
-        setVisible(true);
-
-        validate();
-    }
-
-    private static void quickInst(String code) {
-        if(code == null)
-            code = JOptionPane.showInputDialog(activeWindow, "请输入一键安装代码\n示例: '1.16.5|36.0.42||1'", "询问", JOptionPane.QUESTION_MESSAGE);
-        if(code == null)
-            return;
-
-        List<String> list = TextUtil.split(new ArrayList<>(4), new CharList(), code, '|', 8, true);
-        if(list.size() < 4 || list.size() > 5) {
-            error("安装代码无效");
-            return;
-        }
-
-        MCLauncher.load();
-
-        File mcRoot = getMcRoot();
-        if(mcRoot == null)
-            return;
-
-        CList versions = MCLauncher.getMcVersionList(MAIN_CONFIG.get("启动器配置").asMap());
-        if (versions == null) return;
-
-        CMapping target = null;
-        for(CEntry entry : versions) {
-            CMapping des = entry.asMap();
-            if(des.getString("id").equals(list.get(0))) {
-                target = des;
-                break;
-            }
-        }
-
-        if(target == null) {
-            error("MC版本不存在");
-            return;
-        }
-
-        File mcJar = new File(mcRoot, "/versions/" + target.getString("id") + '/' + target.getString("id") + ".jar");
-        if(!mcJar.isFile())
-            MCLauncher.onClickInstall(target, false);
-
-        File mcJson = new File(mcRoot, "/versions/" + target.getString("id") + '/' + target.getString("id") + ".json");
-        if(!MCLauncher.installMinecraftClient(mcRoot, mcJson, false)) {
-            error("下载native失败");
-            return;
-        }
-
-        String mcVer = MCLauncher.config.getString("mc_version");
-
-        CMapping cfgLan = MAIN_CONFIG.get("启动器配置").asMap();
-        try {
-            CharList out = new CharList(10000);
-            ByteReader.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
-
-            versions = JSONParser.parse(out).asList();
-        } catch (ParseException | IOException e) {
-            error("获取数据出了点错...\n请查看控制台");
-            e.printStackTrace();
-            return;
-        }
-
-        target = null;
-        for(CEntry entry : versions) {
-            CMapping des = entry.asMap();
-            if(des.getString("version").equals(list.get(1))) {
-                target = des;
-                break;
-            }
-        }
-
-        if(target == null) {
-            error("Forge版本不存在");
-            return;
-        }
-
-        mcJson = new File(mcRoot, "/versions/" + mcVer + "-forge-" + target.getString("version") + '/' + mcVer + "-forge-" + target.getString("version") + ".json");
-
-        if(!mcJson.isFile())
-            MCLauncher.onClickInstall(target, true);
-
-        if(!MCLauncher.installMinecraftClient(mcRoot, mcJson, false)) {
-            error("下载forge的native失败");
-            return;
-        }
-
-        doInstall(mcRoot, mcJson, list.subList(2, list.size()));
-    }
-
-    private static File getMcRoot() {
-        CMapping cfgGen = MAIN_CONFIG.get("通用").asMap();
-        File mcRoot = new File(cfgGen.getString("MC目录"));
-        if(!mcRoot.isDirectory()) {
-            JFileChooser fileChooser = new JFileChooser(BASE);
-            fileChooser.setDialogTitle("选择MC安装位置");
-            fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-
-            int status = fileChooser.showOpenDialog(activeWindow);
-            //没有选打开按钮结果提示
-            if (status == JFileChooser.APPROVE_OPTION) {
-                MAIN_CONFIG.get("通用").asMap().put("MC目录", fileChooser.getSelectedFile().getAbsolutePath());
-                return fileChooser.getSelectedFile();
-            } else {
-                error("用户取消操作.");
-                return null;
-            }
-        }
-        return mcRoot;
-    }
-
-    private static void install() {
-        File mcRoot = getMcRoot();
-        if(mcRoot == null)
-            return;
-
-        List<File> versions = MCLauncher.findVersions(new File(mcRoot, "/versions/"));
-
-        if(versions.size() < 1) {
-            versions = downloadMC(mcRoot);
-            if (versions == null) return;
-        }
-
-        String[] obj = new String[versions.size()];
-        int i = 0;
-        for (; i < versions.size(); i++) {
-            String s = versions.get(i).getName();
-            final int index = s.lastIndexOf('.');
-            obj[i] = index == -1 ? s : s.substring(0, index);
-        }
-
-        String s = (String) JOptionPane.showInputDialog(activeWindow,"请选择你的MC版本:\n", "询问", JOptionPane.QUESTION_MESSAGE, null, obj, obj[0]);
-        if(s == null) {
-            versions = downloadMC(mcRoot);
-            if (versions == null) return;
-        }
-        for (i = 0; i < obj.length; i++) {
-            if(obj[i].equals(s))
-                break;
-        }
-
-        doInstall(mcRoot, versions.get(i), null);
-    }
-
-    private static List<File> downloadMC(File mcRoot) {
-        List<File> versions;
-        MCLauncher.load();
-
-        CMapping cfgLan = MAIN_CONFIG.get("启动器配置").asMap();
-
-        CList vList = MCLauncher.getMcVersionList(cfgLan);
-        if (vList == null) {
-            error("manifest地址配置有误或者无网络连接\n请手动下载MC");
-            return null;
-        }
-
-        VersionSelect wnd = new VersionSelect(vList.raw(), false);
-        synchronized (wnd) {
-            try {
-                wnd.wait();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-        versions = MCLauncher.findVersions(new File(mcRoot, "/versions/"));
-
-        if(versions.isEmpty())
-            return null;
-
-        MCLauncher.installMinecraftClient(mcRoot, versions.get(0), false);
-
-        String mcVer = MCLauncher.config.getString("mc_version");
-
-        try {
-            CharList out = new CharList(10000);
-            ByteReader.decodeUTF(-1, out, new ByteList(FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer))));
-
-            vList = JSONParser.parseIntern(out).asList();
-        } catch (ParseException | IOException e) {
-            error("获取forge版本数据出错");
-            e.printStackTrace();
-            return null;
-        }
-
-        wnd = new VersionSelect(vList.raw(), true);
-        synchronized (wnd) {
-            try {
-                wnd.wait();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-        List<File> versions2 = MCLauncher.findVersions(new File(mcRoot, "/versions/"));
-        versions2.remove(versions.get(0));
-
-        if(versions2.isEmpty())
-            return null;
-
-        MCLauncher.installMinecraftClient(mcRoot, versions2.get(0), false);
-        return versions;
-    }
-
-    private static void doInstall(File mcRoot, File mcJson, List<String> prefilledAnswers) {
-        try {
-            if(FMDMain.changeVersion(mcRoot, mcJson, new Gui(prefilledAnswers)) != 0) {
-                error("安装工程中有错误发生, 请看控制台");
-            } else {
-                info("安装成功!");
-                System.exit(0);
-            }
-        } catch (Throwable e) {
-            e.printStackTrace();
-            error("安装工程中有异常错误发生, 请看控制台");
-        }
-    }
-
-    public static void main(String[] args) {
-        UIUtil.systemLook();
-        MAIN_CONFIG.size();
-        activeWindow = new FMDInstall(args.length > 0);
-        activeWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
-        if(args.length > 0) {
-            quickInst(args[0]);
-            System.exit(0);
-        } else {
-            waiter.setName("Async Install");
-            waiter.start();
-        }
-    }
-
-    static final class Gui extends UIWarp {
-        String msg;
-        String[] objs;
-
-        int call;
-        final List<String> ans;
-
-        public Gui(List<String> answer) {
-            ans = answer;
-        }
-
-        @Override
-        boolean getBoolean(String msg) {
-            return JOptionPane.showConfirmDialog(activeWindow, "是否需要清除该死的ParametersAreNonnullByDefault之类注解", "询问", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
-        }
-
-        @Override
-        int getNumberInRange(int min, int max) {
-            if(ans != null) {
-                return Integer.parseInt(ans.get(call++));
-            }
-
-            String[] obj = objs;
-            if(obj == null) {
-                obj = new String[max - min];
-                for (int i = min; i < max; i++)
-                    obj[i - min] = String.valueOf(i);
-            }
-
-            String s;
-            do {
-                s = (String) JOptionPane.showInputDialog(activeWindow, msg != null ? msg : "请选择", "询问", JOptionPane.QUESTION_MESSAGE, null, obj, obj[0]);
-            } while (s == null);
-
-            int i = 0;
-            for (; i < obj.length; i++) {
-                if(s == obj[i])
-                    break;
-            }
-
-            this.objs = null;
-            this.msg = null;
-            return i + min;
-        }
-
-        @Override
-        String userInput(String msg, boolean optional) {
-            if(ans != null) {
-                return ans.get(call++);
-            }
-
-            String[] obj = objs;
-            if(obj == null) {
-                String s;
-                do {
-                    s = JOptionPane.showInputDialog(activeWindow, this.msg != null ? (this.msg.startsWith("$") ? msg + this.msg.substring(1) : this.msg) : msg, "询问", JOptionPane.QUESTION_MESSAGE);
-                } while (s == null && !optional);
-
-                this.msg = null;
-                return s == null ? "" : s;
-            } else {
-                String s;
-                do {
-                    s = (String) JOptionPane.showInputDialog(activeWindow, this.msg != null ? this.msg : msg, "询问", JOptionPane.QUESTION_MESSAGE, null, obj, obj[0]);
-                } while (s == null && !optional);
-
-                this.msg = null;
-                this.objs = null;
-                return s == null ? "" : s;
-            }
-        }
-
-        @Override
-        void stageInfo(int id, boolean... flags) {
-            if(ans != null)
-                return;
-
-            switch (id) {
-                case 0:
-                    msg = "$\n如果不要修改请留空";
-                    break;
-                case 1:
-                    msg = "请选择你使用的映射表类别";
-
-                    String[] objs = new String[] {
-                            "MCP", "<不可用>", "<不可用>", "自定义", "手动下载"
-                    };
-                    if(flags[0])
-                        objs[1] = "MC官方";
-                    if(flags[1])
-                        objs[2] = "YARN (WIP)";
-
-                    this.objs = objs;
-                    break;
-                case 2: {
-                    this.objs = new String[] {
-                            "MCP", "MC官方"
-                    };
-                }
-                break;
-                case 3:
-                    info("请看控制台.");
-                    break;
-                case 4:
-                    msg = "\n请输入你要下载的MCP版本\n稳定版(stable-<id>)格式: s-<id>\n快照版(snapshot-<date>)格式: <date>";
-                    break;
-            }
-        }
-
-        @Override
-        boolean isConsole() {
-            return false;
-        }
-    }
+public class FMDInstall {
+	private static int changeVersion() throws IOException {
+		Shared._lock();
+
+		CMapping cfgGen = CONFIG.get("通用").asMap();
+
+		File mcRoot = new File(cfgGen.getString("MC目录"));
+		if (!mcRoot.isDirectory()) mcRoot = UIUtil.readFile("MC目录(.minecraft)");
+		if (!new File(mcRoot, "/versions/").isDirectory()) mcRoot = new File(mcRoot, ".minecraft");
+
+		List<File> versions = MCLauncher.findVersions(new File(mcRoot, "/versions/"));
+
+		File mcJson = null;
+		if (versions.isEmpty()) {
+			CmdUtil.error("没有找到任何MC版本！请确认目录是否正确", true);
+			return -1;
+		} else {
+			String versionJson = CONFIG.getString("MC版本JSON");
+			if (!versionJson.isEmpty()) {
+				for (int i = 0; i < versions.size(); i++) {
+					File file = versions.get(i);
+					if (file.getName().equals(versionJson)) {
+						mcJson = file;
+					}
+				}
+			}
+			if (mcJson == null) mcJson = versions.get(UIUtil.selectOneFile(versions, "MC版本"));
+		}
+
+		return setupWorkspace(mcRoot, mcJson, new InputDelegate());
+	}
+
+	@SuppressWarnings("unchecked")
+	static int setupWorkspace(File mcRoot, File mcJson, InputDelegate gui) throws IOException {
+		watcher.terminate();
+
+		CMapping cfgGen = CONFIG.get("通用").asMap();
+
+		// region retain game info
+		MyHashSet<String> skipped = new MyHashSet<>();
+		FMDMain.readTextList(skipped::add, "忽略的libraries");
+		File nativePath = new File(mcJson.getParentFile(), "$natives");
+
+		Object[] result = getRunConf(mcRoot, mcJson, nativePath, skipped, true, cfgGen);
+		if (result == null) return -1;
+
+		File jar = (File) result[1];
+		Collection<String> libraries = ((Map<String, String>) result[2]).values();
+		CMapping json = (CMapping) result[3];
+		boolean is113orHigher = (boolean) result[4];
+
+		if (!json.getString("type").equals("release")) {
+			CmdUtil.error("不支持快照版本");
+			return -1;
+		}
+
+		MCLauncher.load();
+		config.put("mc_conf", (CMapping) result[0]);
+		config.put("mc_version", json.getString("id"));
+		MCLauncher.save();
+
+		String mcVersion = json.get("clientVersion").asString();
+		if (mcVersion.isEmpty()) mcVersion = new Version(jar.getName()).toString();
+		// endregion
+
+		WorkspaceBuilder wb = createBuilder(libraries, is113orHigher);
+
+		CMapping downloads = json.get("downloads").asMap();
+
+		boolean canDownloadOfficial = downloads.containsKey("client_mappings");
+		gui.init(new Version(mcVersion), json, wb.getId());
+
+		CMapping mfJson = gui.getSelectedMappingFormat();
+		MappingFormat fmt;
+		try {
+			CMapping global = new JSONParser().parseRaw(new File(BASE, "util/mapping/@common.json")).asMap();
+			mfJson.merge(global, true, true);
+			fmt = new MappingFormat(mfJson);
+		} catch (ParseException | IOException e) {
+			e.printStackTrace();
+			return -1;
+		}
+
+		Map<String, Object> cfg = new MyHashMap<>();
+
+		cfg.put("tmp", new SimpleList<>());
+		cfg.put("mc_json", json);
+		cfg.put("version", mcVersion);
+
+		File override = new File(BASE, "util/override.cfg");
+		if (override.isFile()) cfg.put("override", IOUtil.readUTF(override));
+
+		String mirror = cfgGen.getBool("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null;
+		File mcServer = downloadMinecraftFile(downloads, "server", mirror);
+
+		File libraryRoot = new File(mcRoot, "/libraries/");
+
+		if (fmt.hasMCP()) MCPVersionDetect.doDetect(cfg, gui);
+
+		// region clean previous mapping
+		File mcpSrgPath = MCP2SRG_PATH;
+		if (mcpSrgPath.isFile() && !mcpSrgPath.delete()) CmdUtil.warning("无法删除旧的映射数据");
+		File cache0 = new File(BASE, "/util/mapCache.lzma");
+		if (cache0.isFile() && !cache0.delete()) CmdUtil.error("无法删除映射缓存 mapCache.lzma!", true);
+		ATHelper.getBackupFile().empty();
+		// endregion
+		if (System.getProperty("fmd.maponly") != null) {
+			CmdUtil.info("设置了fmd.maponly 仅生成映射表！");
+			MappingFormat.MapResult maps = fmt.map(cfg, TMP_DIR);
+			maps.tsrgCompile.saveMap(mcpSrgPath);
+			maps.tsrgDeobf.saveMap(new File(BASE, "deobf.map"));
+		}
+
+		wb.jsonPath = mcJson;
+		wb.mf = fmt;
+		wb.mf_cfg = cfg;
+		wb.file.putInt(0, jar);
+		wb.file.putInt(1, mcServer);
+		wb.loadLibraries(libraryRoot, libraries);
+		Task.pushTask(wb);
+
+		copyLibrary(libraryRoot, libraries, wb);
+
+		if (!wb.awaitSuccess()) return -1;
+
+		CmdUtil.info("Persistent AT...");
+		FMDMain.preAT();
+		return 0;
+	}
+
+	private static WorkspaceBuilder createBuilder(Collection<String> lib, boolean highVersion) {
+		for (String s : lib) {
+			if (s.contains("minecraftforge")) {
+				return highVersion ? new Forge() : new LegacyForge();
+			} else if (s.contains("fabricmc")) {
+				return new Fabric();
+			}
+		}
+		CmdUtil.error("无法为当前版本找到合适的WorkspaceBuilder (您是否安装了模组加载器如forge?)");
+		return null;
+	}
+
+	private static void copyLibrary(File baseDir, Collection<String> lib, WorkspaceBuilder proc) throws IOException {
+		EasyProgressBar bar = new EasyProgressBar("复制库文件");
+		int finished = 0;
+		int total = lib.size();
+
+		File merged = new File(BASE, "class/"+DONT_LOAD_PREFIX+"libraries.jar");
+		MyHashMap<String, String> dupChecker = new MyHashMap<>();
+		try (ZipFileWriter zfw = new ZipFileWriter(merged, false)) {
+			for (Iterator<String> itr = lib.iterator(); itr.hasNext(); bar.update((double) ++finished / total, 1)) {
+				String pkg = itr.next();
+
+				File file = new File(baseDir, pkg);
+				if (!file.isFile()) {
+					CmdUtil.error("library不存在: " + pkg);
+					continue;
+				}
+				if (proc.mergeLibraryHook(file, pkg)) continue;
+
+				final boolean _USE_PATCHY = false;
+				if (pkg.startsWith("com/mojang/patchy") && !_USE_PATCHY) {
+					if (DEBUG) CmdUtil.info("跳过Patchy " + pkg);
+					continue;
+				}
+
+				try (ZipArchive mzf = new ZipArchive(file, ZipArchive.FLAG_BACKWARD_READ)) {
+					for (ZEntry entry : mzf.getEntries().values()) {
+						if (entry.getName().endsWith(".class")) {
+							String prevPkg = dupChecker.get(entry.getName());
+							if (prevPkg != null) {
+								if (!pkg.equals(prevPkg)) {
+									prevPkg = prevPkg.substring(prevPkg.lastIndexOf('/') + 1);
+									pkg = pkg.substring(pkg.lastIndexOf('/') + 1);
+									CmdUtil.warning("重复的 " + entry.getName() + " 在 " + prevPkg + " 和 " + pkg, true);
+								}
+							} else {
+								zfw.copy(mzf, entry);
+
+								dupChecker.put(entry.getName(), pkg);
+							}
+						}
+					}
+				}
+			}
+			bar.end("成功");
+		} catch (Exception e) {
+			bar.end("失败", CmdUtil.Color.RED);
+			throw e;
+		} finally {
+			bar.dispose();
+		}
+	}
+
+	private static void quickInst(String code) {
+		if (code == null) code = JOptionPane.showInputDialog(activeWindow, "请输入一键安装代码\n示例: '1.16.5|36.0.42||1'", "询问", JOptionPane.QUESTION_MESSAGE);
+		if (code == null) return;
+
+		List<String> list = TextUtil.split(new ArrayList<>(4), code, '|', 8, true);
+		if (list.size() < 4 || list.size() > 5) {
+			error("安装代码无效");
+			return;
+		}
+
+		MCLauncher.load();
+
+		File mcRoot = getMcRoot();
+		if (mcRoot == null) return;
+
+		CList versions = MCLauncher.getMcVersionList(CONFIG.get("启动器配置").asMap());
+		if (versions == null) return;
+
+		CMapping target = null;
+		for (CEntry entry : versions) {
+			CMapping des = entry.asMap();
+			if (des.getString("id").equals(list.get(0))) {
+				target = des;
+				break;
+			}
+		}
+
+		if (target == null) {
+			error("MC版本不存在");
+			return;
+		}
+
+		File mcJar = new File(mcRoot, "/versions/" + target.getString("id") + '/' + target.getString("id") + ".jar");
+		if (!mcJar.isFile()) MCLauncher.onClickInstall(target, false);
+
+		File mcJson = new File(mcRoot, "/versions/" + target.getString("id") + '/' + target.getString("id") + ".json");
+		if (!MCLauncher.installMinecraftClient(mcRoot, mcJson, false)) {
+			error("下载native失败");
+			return;
+		}
+
+		String mcVer = MCLauncher.config.getString("mc_version");
+
+		CMapping cfgLan = CONFIG.get("启动器配置").asMap();
+		try {
+			ByteList bl = IOUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer));
+			versions = new JSONParser().parseRaw(bl).asList();
+		} catch (ParseException | IOException e) {
+			error("获取数据出了点错...\n请查看控制台");
+			e.printStackTrace();
+			return;
+		}
+
+		target = null;
+		for (CEntry entry : versions) {
+			CMapping des = entry.asMap();
+			if (des.getString("version").equals(list.get(1))) {
+				target = des;
+				break;
+			}
+		}
+
+		if (target == null) {
+			error("Forge版本不存在");
+			return;
+		}
+
+		mcJson = new File(mcRoot, "/versions/" + mcVer + "-forge-" + target.getString("version") + '/' + mcVer + "-forge-" + target.getString("version") + ".json");
+
+		if (!mcJson.isFile()) MCLauncher.onClickInstall(target, true);
+
+		if (!MCLauncher.installMinecraftClient(mcRoot, mcJson, false)) {
+			error("下载forge的native失败");
+			return;
+		}
+
+		doInstall(mcRoot, mcJson, list.subList(2, list.size()));
+	}
+
+	private static File getMcRoot() {
+		CMapping cfgGen = CONFIG.get("通用").asMap();
+		File mcRoot = new File(cfgGen.getString("MC目录"));
+		if (!mcRoot.isDirectory()) {
+			JFileChooser fileChooser = new JFileChooser(BASE);
+			fileChooser.setDialogTitle("选择MC安装位置");
+			fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+
+			int status = fileChooser.showOpenDialog(activeWindow);
+			//没有选打开按钮结果提示
+			if (status == JFileChooser.APPROVE_OPTION) {
+				CONFIG.get("通用").asMap().put("MC目录", fileChooser.getSelectedFile().getAbsolutePath());
+				return fileChooser.getSelectedFile();
+			} else {
+				error("用户取消操作.");
+				return null;
+			}
+		}
+		return mcRoot;
+	}
+
+	// todo notify install client first
+	private static void doInstall(File mcRoot, File mcJson, List<String> prefilledAnswers) {
+		try {
+			if (setupWorkspace(mcRoot, mcJson, new Automatic(prefilledAnswers)) != 0) {
+				error("安装工程中有错误发生, 请看控制台");
+			} else {
+				info("安装成功!");
+				System.exit(0);
+			}
+		} catch (Throwable e) {
+			e.printStackTrace();
+			error("安装工程中有异常错误发生, 请看控制台");
+		}
+	}
+
+	public static void main(String[] args) throws IOException {
+		UIUtil.systemLook();
+		CONFIG.size();
+		changeVersion();
+		//quickInst(args.length == 0 ? null : args[0]);
+	}
+
+	// 1.12.2|forge|13.8.23.2783|mymapping|32
+	static final class Automatic extends InputDelegate {
+		final List<String> ans;
+
+		public Automatic(List<String> answer) {
+			ans = answer;
+		}
+
+		@Override
+		String getMCPVersion() throws IOException {
+			return super.getMCPVersion();
+		}
+
+		@Override
+		String getMinecraftVersionForMCP() throws IOException {
+			return super.getMinecraftVersionForMCP();
+		}
+
+		@Override
+		CMapping getSelectedMappingFormat() throws IOException {
+			return super.getSelectedMappingFormat();
+		}
+	}
+
+	public static final File MCP2SRG_PATH = new File(BASE, "util/mcp-srg.srg");
 }

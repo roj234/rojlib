@@ -1,124 +1,137 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package roj.util;
+
+import roj.config.word.ITokenizer;
+import roj.io.IOUtil;
+import roj.text.CharList;
 
 import java.util.List;
 import java.util.Random;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
- * @since  2020/10/15 0:43
+ * @since 2020/10/15 0:43
  */
 public final class ArrayUtil {
-    public static <T> T[] inverse(T[] arr) {
-        return inverse(arr, 0, arr.length);
-    }
+	public static String pack(int[] arr) {
+		ByteList tmp = IOUtil.getSharedByteBuf();
+		for (int i = 0; i < arr.length; i++) tmp.putInt(arr[i]);
+		return Base128(tmp);
+	}
+	public static String pack(byte[] arr) { return Base128(ByteList.wrap(arr)); }
 
-    public static <T> T[] inverse(T[] arr, int i, int length) {
-        if (--length <= 0)
-            return arr; // empty or one
-        // i = 0, arr.length = 4, e = 2
-        // swap 0 and 3 swap 1 and 2
-        for (int e = Math.max((length + 1) >> 1, 1); i < e; i++) {
-            T a = arr[i];
-            arr[i] = arr[length - i];
-            arr[length - i] = a;
-        }
-        return arr;
-    }
+	private static String Base128(ByteList tmp) {
+		BitWriter br = new BitWriter(tmp);
+		CharList sb = IOUtil.getSharedCharBuf();
+		sb.ensureCapacity(tmp.readableBytes() * 8/7 + 1);
+		while (br.readableBits() >= 7) sb.append((char) (br.readBit(7)+1));
+		if (br.readableBits() > 0) sb.append((char) (br.readBit(br.readableBits())+1));
+		return ITokenizer.addSlashes(sb);
+	}
 
-    public static <T> T[] inverse(T[] arr, int size) {
-        return inverse(arr, 0, size);
-    }
+	private static ByteList UnBase128(String s) {
+		int len = s.length() * 7/8;
 
-    public static <T> List<T> inverse(List<T> arr) {
-        return inverse(arr, 0, arr.size());
-    }
+		ByteList tmp = ByteList.allocate(len,len);
+		BitWriter br = new BitWriter(tmp);
+		for (int i = 0; i < s.length()-1; i++) br.writeBit(7, s.charAt(i)-1);
 
-    public static <T> List<T> inverse(List<T> arr, int i, int length) {
-        if (--length <= 0)
-            return arr; // empty or one
-        // i = 0, arr.length = 4, e = 2
-        // swap 0 and 3 swap 1 and 2
-        for (int e = Math.max((length + 1) >> 1, 1); i < e; i++) {
-            T a = arr.get(i);
-            arr.set(i, arr.get(length - i));
-            arr.set(length - i, a);
-        }
-        return arr;
-    }
+		br.writeBit(8-br.bitIndex, s.charAt(s.length()-1)-1);
+		br.endBitWrite();
 
-    public static void shuffle(Object[] arr, Random random) {
-        for (int i = 0; i < arr.length; i++) {
-            Object a = arr[i];
-            int an = random.nextInt(arr.length);
-            arr[i] = arr[an];
-            arr[an] = a;
-        }
-    }
+		return tmp;
+	}
 
-    public static <T> void shuffle(List<T> arr, Random random) {
-        for (int i = 0; i < arr.size(); i++) {
-            T a = arr.get(i);
-            int an = random.nextInt(arr.size());
-            arr.set(i, arr.get(an));
-            arr.set(an, a);
-        }
-    }
+	public static byte[] unpackB(String s) {
+		return UnBase128(s).list;
+	}
+	public static int[] unpackI(String s) {
+		ByteList list = UnBase128(s);
+		int[] b = new int[list.readableBytes()>>>2];
+		for (int i = 0; i < b.length; i++) b[i] = list.readInt();
+		return b;
+	}
 
-    public static boolean rangedEquals(byte[] list, int offset, int pos, byte[] list1, int offset1, int pos1) {
-        if(pos - offset != pos1 - offset1)
-            return false;
-        while (offset < pos) {
-            if(list[offset++] != list1[offset1++])
-                return false;
-        }
-        return true;
-    }
+	public static <T> T[] inverse(T[] arr) {
+		return inverse(arr, 0, arr.length);
+	}
 
-    public static String toString(Object[] list, int i, int length) {
-        StringBuilder sb = new StringBuilder();
-        if (length - i <= 0)
-            return "";
+	public static <T> T[] inverse(T[] arr, int i, int length) {
+		if (--length <= 0) return arr;
 
-        for (; i < length; i++) {
-            sb.append(list[i]).append(", ");
-        }
-        sb.delete(sb.length() - 2, sb.length());
-        return sb.toString();
-    }
+		for (int e = Math.max((length + 1) >> 1, 1); i < e; i++) {
+			T a = arr[i];
+			arr[i] = arr[length - i];
+			arr[length - i] = a;
+		}
+		return arr;
+	}
 
-    public static int rangedHashCode(byte[] list, int offset, int pos) {
-        int hash = 0;
-        while (offset < pos) {
-            hash = list[offset++] + 31 * hash;
-        }
-        return hash;
-    }
+	public static <T> T[] inverse(T[] arr, int size) {
+		return inverse(arr, 0, size);
+	}
+
+	public static <T> List<T> inverse(List<T> arr) {
+		return inverse(arr, 0, arr.size());
+	}
+
+	public static <T> List<T> inverse(List<T> arr, int i, int length) {
+		if (--length <= 0) return arr; // empty or one
+		// i = 0, arr.length = 4, e = 2
+		// swap 0 and 3 swap 1 and 2
+		for (int e = Math.max((length + 1) >> 1, 1); i < e; i++) {
+			T a = arr.get(i);
+			arr.set(i, arr.get(length - i));
+			arr.set(length - i, a);
+		}
+		return arr;
+	}
+
+	public static void shuffle(Object[] arr, Random random) {
+		for (int i = 0; i < arr.length; i++) {
+			Object a = arr[i];
+			int an = random.nextInt(arr.length);
+			arr[i] = arr[an];
+			arr[an] = a;
+		}
+	}
+
+	public static <T> void shuffle(List<T> arr, Random random) {
+		for (int i = 0; i < arr.size(); i++) {
+			T a = arr.get(i);
+			int an = random.nextInt(arr.size());
+			arr.set(i, arr.get(an));
+			arr.set(an, a);
+		}
+	}
+
+	public static boolean rangedEquals(byte[] b, int off1, int len1, byte[] b1, int off2, int len2) {
+		if (len1 != len2) return false;
+		len1 += off1;
+		while (off1 < len1) {
+			if (b[off1++] != b1[off2++]) return false;
+		}
+		return true;
+	}
+
+	public static String toString(Object[] list, int i, int length) {
+		if (length - i <= 0) return "[]";
+		StringBuilder sb = new StringBuilder().append('[');
+
+		for (; i < length; i++) {
+			sb.append(list[i]).append(", ");
+		}
+		sb.delete(sb.length() - 2, sb.length());
+		return sb.append(']').toString();
+	}
+
+	public static int rangedHashCode(byte[] b, int off, int len) {
+		if (len == 0) return 0;
+
+		len += off;
+		int hash = 1;
+		while (off < len) {
+			hash = b[off++] + 31 * hash;
+		}
+		return hash;
+	}
 }

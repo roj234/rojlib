@@ -1,147 +1,89 @@
-/*
- * This file is a part of MI
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 Roj234
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
 package roj.asm.tree.insn;
 
 import roj.asm.Opcodes;
-import roj.asm.util.ConstantPool;
-import roj.collect.IIntMap;
-import roj.collect.IntMap;
-import roj.collect.LinkedIntMap;
-import roj.util.ByteWriter;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.visitor.CodeWriter;
+import roj.asm.visitor.Label;
+import roj.asm.visitor.SwitchSegment;
+import roj.collect.BSLowHeap;
 
-import java.util.PrimitiveIterator;
+import java.util.List;
+import java.util.Map;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2021/5/29 1:55
  */
 public final class SwitchInsnNode extends InsnNode {
-    public SwitchInsnNode(byte code) {
-        super(code);
-        this.switcher = new LinkedIntMap<>();
-    }
+	public SwitchInsnNode(byte code) {
+		super(code);
+		this.targets = new BSLowHeap<>(null);
+	}
 
-    public SwitchInsnNode(byte code, InsnNode def, LinkedIntMap<InsnNode> switcher) {
-        super(code);
-        this.def = def;
-        this.switcher = switcher;
-    }
+	public SwitchInsnNode(byte code, InsnNode def, List<SwitchEntry> targets) {
+		super(code);
+		this.def = def;
+		this.targets = targets;
+		targets.sort(null);
+	}
 
-    @Override
-    protected boolean validate() {
-        switch (code) {
-            case Opcodes.TABLESWITCH:
-            case Opcodes.LOOKUPSWITCH:
-                return true;
-        }
-        return false;
-    }
+	@Override
+	protected boolean validate() {
+		switch (code) {
+			case Opcodes.TABLESWITCH:
+			case Opcodes.LOOKUPSWITCH: return true;
+		}
+		return false;
+	}
 
-    @Override
-    public int nodeType() {
-        return T_SWITCH;
-    }
+	@Override
+	public int nodeType() {
+		return T_SWITCH;
+	}
 
-    public InsnNode         def;
-    public IntMap<InsnNode> switcher;
+	public InsnNode def;
+	public List<SwitchEntry> targets;
 
-    private IIntMap<InsnNode> pcRev;
+	private Label defLabel;
 
-    private byte pad = -1;
+	public void branch(int number, InsnNode label) {
+		targets.add(new SwitchEntry(number, label));
+	}
 
-    public void pad(int codeLength, IIntMap<InsnNode> pcRev) {
-        this.pad = (byte) (3 - (codeLength & 3));
-        this.pcRev = pcRev;
-    }
+	@Override
+	public void preSerialize(Map<InsnNode, Label> labels) {
+		for (int i = 0; i < targets.size(); i++) {
+			SwitchEntry entry = targets.get(i);
+			InsnNode node = validate((InsnNode) entry.pos);
+			entry.pos = node;
+			entry.insnPos = AttrCode.monitorNode(labels, node);
+		}
 
-    @Override
-    public int nodeSize() {
-        if(pad == -1) {
-            throw new IllegalStateException();
-        }
-        return code == Opcodes.TABLESWITCH ?
-                1 + pad + 4 + 8 + (switcher.size() << 2) :
-                1 + pad + 8 + (switcher.size() << 3);
-    }
+		defLabel = AttrCode.monitorNode(labels, def = validate(def));
+	}
+	public int pad(int codeLength) {
+		return 3 - (codeLength & 3);
+	}
 
-    @Override
-    public void toByteArray(ConstantPool cw, ByteWriter w) {
-        if(pad == -1) {
-            throw new IllegalStateException();
-        }
+	@Override
+	public int nodeSize(int prevBci) {
+		return pad(prevBci) + (code == Opcodes.TABLESWITCH ? 1 + 4 + 8 + (targets.size() << 2) : 1 + 8 + (targets.size() << 3));
+	}
 
-        IIntMap<InsnNode> pcRev = this.pcRev;
-        int self = pcRev.getInt(this);
+	@Override
+	public void serialize(CodeWriter cw) {
+		SwitchSegment sin = CodeWriter.newSwitch(code);
+		sin.def = defLabel;
+		sin.targets = targets;
+		cw.switches(sin);
+	}
 
-        // 共享... 问题在这
-        byte[] data = w.writeByte(code).list.list;
-        int pos = w.list.pos();
-        w.list.pos(pos + pad);
-        for (int i = 0; i < pad; i++) {
-            data[pos++] = 0;
-        }
-        if (this.code == Opcodes.TABLESWITCH) {
-            int lo = Integer.MAX_VALUE;
-            int hi = Integer.MIN_VALUE;
-            for (PrimitiveIterator.OfInt itr = switcher.keySet().iterator(); itr.hasNext(); ) {
-                int val = itr.nextInt();
-                if (val > hi) hi = val;
-                if (val < lo) lo = val;
-            }
+	public String toString() {
+		StringBuilder sb = new StringBuilder(super.toString()).append(" {\n");
+		for (SwitchEntry entry : targets) {
+			sb.append("        ").append(entry.key).append(" => #").append(entry.getBci()).append('\n');
+		}
+		return sb.append("        default: ").append(def).append("\n    }").toString();
+	}
 
-            if (hi < lo)
-                throw new IllegalArgumentException(switcher.toString());
-
-            w.writeInt(pcRev.getInt(validate(def)) - self)
-                    .writeInt(lo).writeInt(hi);
-            for (InsnNode node : switcher.values()) {
-                w.writeInt(pcRev.getInt(validate(node)) - self);
-            }
-        } else {
-            w.writeInt(pcRev.getInt(validate(def)) - self)
-                    .writeInt(switcher.size());
-            for (IntMap.Entry<InsnNode> entry : switcher.entrySet()) {
-                w.writeInt(entry.getKey())
-                        .writeInt(pcRev.getInt(validate(entry.getValue())) - self);
-            }
-        }
-
-        this.pcRev = null;
-        this.pad = -1;
-    }
-
-    public String toString() {
-        StringBuilder sb = new StringBuilder(super.toString()).append(" {\n");
-        for (IntMap.Entry<InsnNode> entry : switcher.entrySet()) {
-            sb.append("               ").append(entry.getKey()).append(" : ").append(entry.getValue()).append('\n');
-        }
-        return sb.append("               default: ").append(def).append("\n            }").toString();
-    }
 }
