@@ -4,14 +4,14 @@ import roj.RequireUpgrade;
 import roj.asm.AsmShared;
 import roj.asm.OpcodeUtil;
 import roj.asm.cst.*;
-import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.MoFNode;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.insn.InsnNode;
+import roj.asm.tree.attr.CodeAttributeSpec;
 import roj.asm.tree.insn.SwitchEntry;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
+import roj.asm.util.ICodeWriter;
+import roj.collect.IdentitySet;
 import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
@@ -21,26 +21,31 @@ import roj.util.Helpers;
 
 import java.util.List;
 
+import static roj.asm.OpcodeUtil.assertCate;
+import static roj.asm.OpcodeUtil.assertTrait;
 import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj233
  * @since 2021/8/16 19:07
  */
-public class CodeWriter extends CodeVisitor {
+public class CodeWriter extends CodeVisitor implements ICodeWriter {
+	public static final boolean ENABLE_FV = false;
+
 	public DynByteBuf bw;
 	private DynByteBuf codeOb;
 	public ConstantPool cpw;
 
 	private final List<Segment> segments = new SimpleList<>();
 
-	private final List<Label> labels = new SimpleList<>();
+	private final IdentitySet<Label> labels = new IdentitySet<>();
 	private final IntList offsets = new IntList();
 
 	public MethodNode mn;
 	public int interpretFlags;
+	public boolean debugLines;
 
-	private SimpleList<Frame2> frames;
+	public SimpleList<Frame2> frames;
 	private FrameVisitor fv;
 	private boolean hasFrames;
 
@@ -118,11 +123,11 @@ public class CodeWriter extends CodeVisitor {
 		len1 = r.readUnsignedShort();
 		int wend = r.wIndex();
 		while (len1 > 0) {
-			String name = ((CstUTF) cp.get(r)).getString();
+			String name = ((CstUTF) cp.get(r)).str();
 			int end = r.readInt() + r.rIndex;
 			r.wIndex(end);
 			try {
-				preVisitAttribute(name, r, bciR2W);
+				preVisitAttribute(name, r, bciR2W, len);
 				r.rIndex = end;
 			} finally {
 				r.wIndex(wend);
@@ -141,7 +146,7 @@ public class CodeWriter extends CodeVisitor {
 		if (entry != null) label(entry.getValue());
 	}
 
-	protected void preVisitAttribute(String name, DynByteBuf r, IntMap<Label> concerned) {
+	protected void preVisitAttribute(String name, DynByteBuf r, IntMap<Label> concerned, int len1) {
 		switch (name) {
 			case "LineNumberTable":
 				int len = r.readUnsignedShort();
@@ -155,8 +160,10 @@ public class CodeWriter extends CodeVisitor {
 			case "LocalVariableTypeTable":
 				len = r.readUnsignedShort();
 				while (len > 0) {
-					concerned.putInt(r.readUnsignedShort(), newLabel());
-					concerned.putInt(r.readUnsignedShort(), newLabel());
+					int start = r.readUnsignedShort();
+					int end = start + r.readUnsignedShort();
+					concerned.putInt(start, newLabel());
+					if (end < len1) concerned.putInt(end, newLabel());
 					r.rIndex += 6;
 					len--;
 				}
@@ -180,34 +187,34 @@ public class CodeWriter extends CodeVisitor {
 		codeOb.put(NEWARRAY).put(type);
 	}
 	protected final void multiArray(CstClass clz, int dimension) {
-		multiArray(clz.getValue().getString(), dimension);
+		multiArray(clz.name().str(), dimension);
 	}
 	public void multiArray(String clz, int dimension) {
 		codeOb.put(MULTIANEWARRAY).putShort(cpw.getClassId(clz)).put((byte) dimension);
 	}
 	protected final void clazz(byte code, CstClass clz) {
-		clazz(code, clz.getValue().getString());
+		clazz(code, clz.name().str());
 	}
 	public void clazz(byte code, String clz) {
 		assertCate(code,OpcodeUtil.CATE_CLASS);
 		codeOb.put(code).putShort(cpw.getClassId(clz));
 	}
 	public void increase(int id, int count) {
-		DynByteBuf ob = codeOb.put(IINC);
-		if (id >= 0xFF || (short) count != count) {
-			ob.putShort(id).putShort(count);
+		DynByteBuf ob = codeOb;
+		if (id >= 0xFF || (byte) count != count) {
+			// constant fold
+			ob.putShort(((WIDE&0xFF)<<8) | (IINC&0xFF)).putShort(id).putShort(count);
 		} else {
-			ob.put((byte) id).put((byte) count);
+			ob.put(IINC).put((byte) id).put((byte) count);
 		}
 	}
-	public void ldc(byte code, Constant c) {
-		assertCate(code,OpcodeUtil.CATE_LDC);
+	protected final void ldc(byte code, Constant c) { ldc(c); }
+	public void ldc(Constant c) {
 		c = cpw.reset(c);
 		switch (c.type()) {
 			case Constant.DYNAMIC:
-				String dyn = ((CstDynamic) c).desc().getType().getString();
+				String dyn = ((CstDynamic) c).desc().getType().str();
 				if (dyn.charAt(0) == Type.DOUBLE || dyn.charAt(0) == Type.LONG) {
-					if (code != 0 && code != LDC2_W) throw new IllegalStateException("require LDC2_W but got LDC/LDC_W for " + c);
 					codeOb.put(LDC2_W).putShort(c.getIndex());
 					return;
 				}
@@ -226,53 +233,40 @@ public class CodeWriter extends CodeVisitor {
 			default: throw new IllegalStateException("Constant " + c + " is not loadable");
 		}
 
-		if (code == LDC2_W) throw new IllegalStateException("require LDC/LDC_W but got LDC2_W for " + c);
 		int i = c.getIndex();
-		if (i < 256) {
-			codeOb.put(LDC).put((byte) i);
-		} else {
-			codeOb.put(LDC_W).putShort(i);
-		}
+		if (i < 256) codeOb.put(LDC).put((byte) i);
+		else codeOb.put(LDC_W).putShort(i);
 	}
-	public void ldc(Constant c) {
-		ldc(LDC, c);
+	protected final void invokeDyn(CstDynamic dyn, int type) {
+		invokeDyn(dyn.tableIdx, dyn.desc().name().str(), dyn.desc().getType().str(), type);
 	}
-	public void invoke_dynamic(CstDynamic dyn, int type) {
-		codeOb.put(INVOKEDYNAMIC).putShort(cpw.reset(dyn).getIndex()).putShort(type);
-	}
-	/**
-	 * The third and fourth operand bytes of each invokedynamic instruction must have the value zero. <br>
-	 * Thus, we ignore it again(Previous in InvokeItfInsnNode).
-	 */
-	public void invoke_dynamic(int idx, String name, String desc, int type) {
+	public void invokeDyn(int idx, String name, String desc, int type) {
 		codeOb.put(INVOKEDYNAMIC).putShort(cpw.getInvokeDynId(idx, name, desc)).putShort(type);
 	}
-	protected final void invoke_interface(CstRefItf itf, short argc) {
+	protected final void invokeItf(CstRefItf itf, short argc) {
 		CstNameAndType desc = itf.desc();
-		invoke_interface(itf.getClassName(), desc.getName().getString(), desc.getType().getString());
+		invokeItf(itf.className(), desc.name().str(), desc.getType().str());
 	}
-	public void invoke_interface(String owner, String name, String type) {
-		codeOb.put(INVOKEINTERFACE).putShort(cpw.getItfRefId(owner, name, type)).putShort(TypeHelper.paramSize(1+type) << 8);
+	public void invokeItf(String owner, String name, String desc) {
+		codeOb.put(INVOKEINTERFACE).putShort(cpw.getItfRefId(owner, name, desc)).putShort(TypeHelper.paramSize(1+desc) << 8);
 	}
 	protected final void invoke(byte code, CstRef method) {
 		CstNameAndType desc = method.desc();
-		invoke(code, method.getClassName(), desc.getName().getString(), desc.getType().getString());
+		invoke(code, method.className(), desc.name().str(), desc.getType().str());
 	}
 	public void invoke(byte code, String owner, String name, String desc) {
-		assertCate(code,OpcodeUtil.CATE_METHOD);
+		// calling by user code
 		if (code == INVOKEINTERFACE) {
-			new Throwable("use invoke_interface instead!").printStackTrace();
-			invoke_interface(owner, name, desc);
+			invokeItf(owner, name, desc);
 			return;
 		}
+
+		assertCate(code,OpcodeUtil.CATE_METHOD);
 		codeOb.put(code).putShort(cpw.getMethodRefId(owner, name, desc));
 	}
 	protected final void field(byte code, CstRefField field) {
 		CstNameAndType desc = field.desc();
-		field(code, field.getClassName(), desc.getName().getString(), desc.getType().getString());
-	}
-	public final void field(byte code, String owner, String name, Type type) {
-		field(code, owner, name, TypeHelper.getField(type));
+		field(code, field.className(), desc.name().str(), desc.getType().str());
 	}
 	public void field(byte code, String owner, String name, String type) {
 		assertCate(code,OpcodeUtil.CATE_FIELD);
@@ -283,7 +277,7 @@ public class CodeWriter extends CodeVisitor {
 	}
 	public void jump(byte code, Label label) {
 		assertTrait(code,OpcodeUtil.TRAIT_JUMP);
-		segment(new JumpSegment(code, label));
+		_segment(new JumpSegment(code, label));
 	}
 	public void one(byte code) {
 		assertTrait(code,OpcodeUtil.TRAIT_ZERO_ADDRESS);
@@ -299,12 +293,17 @@ public class CodeWriter extends CodeVisitor {
 		}
 	}
 	public void var(byte code, int value) {
-		assertTrait(code,OpcodeUtil.TRAIT_LOAD_STORE_LEN);
+		assertCate(code,OpcodeUtil.CATE_LOAD_STORE_LEN);
 		DynByteBuf ob = codeOb;
 		if ((value&0xFF00) != 0) {
 			ob.put(WIDE).put(code).putShort(value);
 		} else {
-			ob.put(code).put((byte) value);
+			if (value <= 3) {
+				byte c = code >= ISTORE ? ISTORE : ILOAD;
+				ob.put((byte) (((code-c) << 2) + c + 5 + value));
+			} else {
+				ob.put(code).put((byte) value);
+			}
 		}
 	}
 	public void jsr(int value) {
@@ -322,7 +321,7 @@ public class CodeWriter extends CodeVisitor {
 	}
 	public void switches(SwitchSegment c) {
 		if (c == null) throw new NullPointerException("SwitchSegment c");
-		segment(c);
+		_segment(c);
 	}
 	protected final void tableSwitch(DynByteBuf r) {
 		int def = r.readInt();
@@ -358,23 +357,14 @@ public class CodeWriter extends CodeVisitor {
 
 	// endregion
 	// region easier instructions
+	public DynByteBuf cob() { return codeOb; }
+
 	public final void newObject(String name) {
 		clazz(NEW, name);
 		one(DUP);
 		invoke(INVOKESPECIAL, name, "<init>", "()V");
 	}
-	public final void invoke(byte code, MethodNode mn) {
-		invoke(code, mn.ownerClass(), mn.name(), mn.rawDesc());
-	}
-	public final void invoke(byte code, IClass cz, int id) {
-		MoFNode node = cz.methods().get(id);
-		invoke(code, cz.name(), node.name(), node.rawDesc());
-	}
-	public final void field(byte code, IClass cz, int id) {
-		MoFNode node = cz.fields().get(id);
-		field(code, cz.name(), node.name(), node.rawDesc());
-	}
-	public final void loadInt(int value) {
+	public final void ldc(int value) {
 		DynByteBuf ob = codeOb;
 		if (value >= -1 && value <= 5) {
 			ob.put((byte) (value+3));
@@ -387,29 +377,34 @@ public class CodeWriter extends CodeVisitor {
 		}
 	}
 	public final void unpackArray(int slot, Class<?>... types) {
+		Type[] types1 = new Type[types.length];
+		for (int i = 0; i < types.length; i++) types1[i] = TypeHelper.class2type(types[i]);
+		unpackArray(slot, 0, types1);
+	}
+	public final void unpackArray(int slot, int begin, Type... types) {
 		for (int i = 0; i < types.length; i++) {
 			var(ALOAD, slot);
-			loadInt(i);
+			ldc(begin+i);
 			one(AALOAD);
 
-			Class<?> klass = types[i];
+			Type klass = types[i];
 			if (klass.isPrimitive()) {
-				switch (klass.getName()) {
-					case "boolean":
+				switch (klass.type) {
+					case Type.BOOLEAN:
 						clazz(CHECKCAST, "java/lang/Boolean");
 						invoke(INVOKESPECIAL, "java/lang/Boolean", "booleanValue", "()Z");
 						break;
-					case "char":
+					case Type.CHAR:
 						clazz(CHECKCAST, "java/lang/Character");
 						invoke(INVOKESPECIAL, "java/lang/Character", "charValue", "()C");
 						break;
 					default:
 						clazz(CHECKCAST, "java/lang/Number");
-						invoke(INVOKEVIRTUAL, "java/lang/Number", klass.getName()+"Value", "()"+TypeHelper.class2asm(klass));
+						invoke(INVOKEVIRTUAL, "java/lang/Number", Type.toString(klass.type)+"Value", "()"+(char)klass.type);
 						break;
 				}
 			} else {
-				clazz(CHECKCAST, klass.getName().replace('.', '/'));
+				clazz(CHECKCAST, klass.getActualClass());
 			}
 		}
 	}
@@ -419,44 +414,12 @@ public class CodeWriter extends CodeVisitor {
 		invoke(INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V");
 	}
 
-	public final void retract(int i) {
+	public void clear() {
 		if (state != 1) throw new IllegalStateException();
-		if (codeOb.wIndex() < i) throw new IllegalStateException("插入的跳转语句无法撤销");
-		codeOb.wIndex(codeOb.wIndex()-i);
-	}
-
-	public final void add(InsnNode fa) {
-		checkNode(fa);
-		fa.serialize(this);
-	}
-
-	private StaticSegment mark;
-	public final void addMark(InsnNode node) {
-		if (mark == null) throw new IllegalStateException("Mark is not available");
-		checkNode(node);
-
-		DynByteBuf prevOb = codeOb;
-
-		codeOb = mark.data;
-		mark.length = -1;
-		node.serialize(this);
-
-		codeOb = prevOb;
-	}
-
-	// by using mark, offset will be inaccurate
-	public final void mark() {
-		if (bciR2W != null) throw new IllegalStateException("Mark is not available");
-
-		segment(null);
-		mark = (StaticSegment) segments.get(segments.size()-2);
-	}
-
-	private static void checkNode(InsnNode node) {
-		int i = node.nodeType();
-		if (i == 6 || i == 10) {
-			throw new IllegalArgumentException("CodeWriter is not compatible with InsnNode jumping: " + node);
-		}
+		segments.clear();
+		bci = 0;
+		codeOb = bw;
+		bw.wIndex(tmpLenOffset);
 	}
 	// endregion
 
@@ -488,6 +451,7 @@ public class CodeWriter extends CodeVisitor {
 			int[] off = offsets.getRawArray();
 			updateOffset(segments, off);
 
+			codeOb = bw;
 			boolean changed;
 			do {
 				bci = wi - begin;
@@ -503,9 +467,10 @@ public class CodeWriter extends CodeVisitor {
 				changed |= updateOffset(segments, off);
 			} while (changed);
 
-			if (interpretFlags != 0) {
+			if (ENABLE_FV && interpretFlags != 0) {
 				if (fv == null) initFrames(mn, interpretFlags);
-				fv.preVisit(bw, begin, segments);
+				codeOb = bw.slice(begin, bw.wIndex()-begin);
+				fv.preVisit(segments);
 			}
 
 			segments.clear();
@@ -519,8 +484,8 @@ public class CodeWriter extends CodeVisitor {
 		sumOffset(segments, offSum);
 
 		boolean changed = false;
-		for (int j = 0; j < labels.size(); j++) {
-			changed |= labels.get(j).update(offsets);
+		for (Label label : labels) {
+			changed |= label.update(offsets);
 		}
 		return changed;
 	}
@@ -549,15 +514,15 @@ public class CodeWriter extends CodeVisitor {
 		// 在这里是exception的数量
 		tmpLen++;
 
-		if (interpretFlags != 0) {
-			fv.visitExceptionEntry(start, end, handler, type == null ? null : type.getValue().getString());
+		if (ENABLE_FV && interpretFlags != 0) {
+			fv.visitExceptionEntry(start, end, handler, type == null ? null : type.name().str());
 		}
 	}
 	public void visitException(Label start, Label end, Label handler, String type) {
 		if (state != 2) throw new IllegalStateException();
 
 		int endId = end == null ? bci : end.getValue();
-		if (interpretFlags != 0) {
+		if (ENABLE_FV && interpretFlags != 0) {
 			fv.visitExceptionEntry(start.getValue(), endId, handler.getValue(), type);
 		}
 
@@ -577,18 +542,41 @@ public class CodeWriter extends CodeVisitor {
 		bw.putShort(0);
 
 		hasFrames = false;
-		if (interpretFlags != 0) {
+		if (ENABLE_FV && interpretFlags != 0) {
 			interpretFlags = 0;
 
-			fv.finish(this);
+			frames = (SimpleList<Frame2>) fv.finish(codeOb, cpw);
+
+			int stack = visitAttributeI("StackMapTable");
+			//frames.remove(0);
+			bw.putShort(frames.size());
+			FrameVisitor.writeFrames(frames, bw, cpw);
+			visitAttributeIEnd(stack);
+
 			hasFrames = true;
 		}
+
+		if (debugLines) lineNumberDebug();
 	}
 
 	void _addFrames(DynByteBuf data) {
 		bw.putShort(cpw.getUtfId("StackMapTable")).putInt(data.readableBytes()).put(data);
 		data.rIndex = data.wIndex();
 		tmpLen++;
+	}
+
+	public final void lineNumberDebug() {
+		int stack = visitAttributeI("LineNumberTable");
+		bw.putShort(0);
+		int pos = bw.wIndex();
+		new CodeVisitor() {
+			@Override
+			void _visitNodePre() {
+				CodeWriter.this.bw.putShort(bci).putShort(bci);
+			}
+		}.visitCopied(cpw, bw);
+		bw.putShort(pos-2,(bw.wIndex()-pos)/4);
+		visitAttributeIEnd(stack);
 	}
 
 	public final int visitAttributeI(String name) {
@@ -633,8 +621,10 @@ public class CodeWriter extends CodeVisitor {
 				if (len1 == 0) return;
 
 				while (len1-- > 0) {
-					b.putShort(b.rIndex, bciR2W.get(b.readUnsignedShort()).getValue());
-					b.putShort(b.rIndex, bciR2W.get(b.readUnsignedShort()).getValue());
+					int start = b.readUnsignedShort();
+					int end = start+b.readUnsignedShort();
+					b.putShort(b.rIndex-4, start = bciR2W.get(start).getValue())
+					 .putShort(b.rIndex-2, (end>=bci?bci:bciR2W.get(end).getValue()) - start);
 					b.rIndex += 6;
 				}
 				break;
@@ -642,7 +632,7 @@ public class CodeWriter extends CodeVisitor {
 				if (hasFrames) return;
 				hasFrames = true;
 
-				if (interpretFlags == 0) {
+				//if (interpretFlags == 0) {
 					boolean mod = false;
 					for (int i = 0; i < frames.size(); i++) {
 						Frame2 f = frames.get(i);
@@ -656,7 +646,7 @@ public class CodeWriter extends CodeVisitor {
 						len = b.readableBytes();
 					}
 					frames = null;
-				}
+				//}
 				break;
 		}
 		b.rIndex = pos;
@@ -669,8 +659,15 @@ public class CodeWriter extends CodeVisitor {
 	public final void visitAttribute(Attribute a) {
 		if (state != 3) throw new IllegalStateException();
 
-		a.toByteArray(bw, cpw);
-		tmpLen++;
+		if (a instanceof CodeAttributeSpec) {
+			int stack = visitAttributeI(a.name());
+			if (stack < 0) return;
+			((CodeAttributeSpec) a).toByteArray(this);
+			visitAttributeIEnd(stack);
+		} else {
+			a.toByteArray(bw, cpw);
+			tmpLen++;
+		}
 	}
 
 	public void visitEnd() {
@@ -716,7 +713,7 @@ public class CodeWriter extends CodeVisitor {
 			} else {
 				Label l1 = bciR2W.get(pos);
 				if (l1 != null) {
-					labels.remove(labels.size()-1);
+					labels.remove(l);
 					return l1;
 				} else {
 					bciR2W.putInt(pos, l);
@@ -764,7 +761,7 @@ public class CodeWriter extends CodeVisitor {
 		return fv;
 	}
 
-	private void segment(Segment c) {
+	public final void _segment(Segment c) {
 		if (segments.isEmpty()) segments.add(new StaticSegment(bw, offset = bw.wIndex()-tmpLenOffset));
 		else if (!codeOb.isReadable()) segments.remove(segments.size() - 1);
 		else {
@@ -781,12 +778,5 @@ public class CodeWriter extends CodeVisitor {
 		StaticSegment ss = new StaticSegment(offset);
 		segments.add(ss);
 		codeOb = ss.data;
-	}
-
-	private static void assertCate(byte code, int i) {
-		if (i != (i = OpcodeUtil.category(code))) throw new IllegalArgumentException("参数错误,不支持的操作码类型/"+i+"/"+OpcodeUtil.toString0(code));
-	}
-	private static void assertTrait(byte code, int i) {
-		if ((i & OpcodeUtil.trait(code)) == 0) throw new IllegalArgumentException("参数错误,不支持的操作码特性/"+OpcodeUtil.trait(code)+"/"+OpcodeUtil.toString0(code));
 	}
 }

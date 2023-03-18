@@ -1,8 +1,9 @@
 package roj.config.data;
 
 import roj.config.NBTParser;
-import roj.config.serial.CConsumer;
-import roj.config.serial.Structs;
+import roj.config.VinaryParser;
+import roj.config.serial.CVisitor;
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 
 import javax.annotation.Nonnull;
@@ -18,38 +19,15 @@ public final class CBoolean extends CEntry {
 
 	@Nonnull
 	@Override
-	public Type getType() {
-		return Type.BOOL;
-	}
+	public Type getType() { return Type.BOOL; }
 
-	public static CEntry valueOf(boolean b) {
-		return b ? TRUE : FALSE;
-	}
+	public static CEntry valueOf(boolean b) { return b ? TRUE : FALSE; }
+	public static CEntry valueOf(String val) { return valueOf(Boolean.parseBoolean(val)); }
 
-	public static CEntry valueOf(String val) {
-		return valueOf(Boolean.parseBoolean(val));
-	}
-
-	@Override
-	public int asInteger() {
-		return this == TRUE ? 1 : 0;
-	}
-
-	@Override
-	public double asDouble() {
-		return this == TRUE ? 1 : 0;
-	}
-
-	@Nonnull
-	@Override
-	public String asString() {
-		return this == TRUE ? "true" : "false";
-	}
-
-	@Override
-	public boolean asBool() {
-		return this == TRUE;
-	}
+	public int asInteger() { return this == TRUE ? 1 : 0; }
+	public double asDouble() { return this == TRUE ? 1 : 0; }
+	public String asString() { return this == TRUE ? "true" : "false"; }
+	public boolean asBool() { return this == TRUE; }
 
 	@Override
 	public boolean isSimilar(CEntry o) {
@@ -57,18 +35,11 @@ public final class CBoolean extends CEntry {
 	}
 
 	@Override
-	public StringBuilder toJSON(StringBuilder sb, int depth) {
-		return sb.append(this == TRUE);
-	}
+	public CharList toJSON(CharList sb, int depth) { return sb.append(asString()); }
 
 	@Override
 	public byte getNBTType() {
 		return NBTParser.BYTE;
-	}
-
-	@Override
-	public void toNBT(DynByteBuf w) {
-		w.write(this == TRUE ? 1 : 0);
 	}
 
 	@Override
@@ -77,17 +48,17 @@ public final class CBoolean extends CEntry {
 	}
 
 	@Override
-	public void toBinary(DynByteBuf w, Structs struct) {
+	protected void toBinary(DynByteBuf w, VinaryParser struct) {
 		w.put((byte) Type.BOOL.ordinal()).putBool(this == TRUE);
 	}
 
 	@Override
 	public int hashCode() {
-		return this == TRUE ? 432895 : 1278;
+		return asInteger();
 	}
 
 	@Override
-	public void forEachChild(CConsumer ser) {
+	public void forEachChild(CVisitor ser) {
 		ser.value(this == TRUE);
 	}
 }

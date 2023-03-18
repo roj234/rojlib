@@ -1,7 +1,6 @@
 package roj.mapper.util;
 
 import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstNameAndType;
 import roj.asm.cst.CstRef;
 import roj.asm.tree.MoFNode;
 import roj.asm.util.AccessFlag;
@@ -65,10 +64,9 @@ public class Desc implements MoFNode {
 	}
 
 	public final Desc read(CstRef ref) {
-		this.owner = ref.getClassName();
-		CstNameAndType a = ref.desc();
-		this.name = a.getName().getString();
-		this.param = a.getType().getString();
+		this.owner = ref.className();
+		this.name = ref.descName();
+		this.param = ref.descType();
 		return this;
 	}
 
@@ -92,12 +90,12 @@ public class Desc implements MoFNode {
 	}
 
 	@Override
-	public void accessFlag(int flag) {
+	public void modifier(int flag) {
 		this.flags = (char) flag;
 	}
 
 	@Override
-	public final char accessFlag() {
+	public final char modifier() {
 		return flags;
 	}
 

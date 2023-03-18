@@ -11,6 +11,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static roj.asm.type.Type.*;
+
 public final class TypeHelper {
 	public final Type type;
 	public final Map<String, Object> val;
@@ -31,26 +33,26 @@ public final class TypeHelper {
 	public static Object toPrimitive(AnnVal param) {
 		switch (param.type()) {
 			default: // should not go there
-			case AnnVal.FLOAT: return param.asFloat();
-			case AnnVal.DOUBLE: return param.asDouble();
-			case AnnVal.LONG: return param.asLong();
-			case AnnVal.INT: return param.asInt();
+			case FLOAT: return param.asFloat();
+			case DOUBLE: return param.asDouble();
+			case LONG: return param.asLong();
+			case INT: return param.asInt();
 			case AnnVal.STRING: return param.asString();
-			case AnnVal.SHORT: return (short) param.asInt();
-			case AnnVal.CHAR: return (char) param.asInt();
-			case AnnVal.BYTE: return (byte) param.asInt();
-			case AnnVal.BOOLEAN: return param.asInt() == 1;
+			case SHORT: return (short) param.asInt();
+			case CHAR: return (char) param.asInt();
+			case BYTE: return (byte) param.asInt();
+			case BOOLEAN: return param.asInt() == 1;
 			case AnnVal.ENUM:
 				AnnValEnum ave = param.asEnum();
 				return new ModAnnotation.EnumHolder(ave.clazz, ave.value);
-			case AnnVal.ARRAY:
+			case ARRAY:
 				List<AnnVal> value = param.asArray();
 				List<Object> list = new ArrayList<>(value.size());
 				for (int i = 0; i < value.size(); i++) {
 					list.add(toPrimitive(value.get(i)));
 				}
 				return list;
-			case AnnVal.CLASS: return Type.getType(roj.asm.type.TypeHelper.getField(param.asClass()));
+			case AnnVal.ANNOTATION_CLASS: return Type.getType(roj.asm.type.TypeHelper.getField(param.asClass()));
 			case AnnVal.ANNOTATION: return toPrimitive(param.asAnnotation().values);
 		}
 	}

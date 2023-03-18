@@ -1,13 +1,13 @@
 package roj.util;
 
 import roj.io.IOUtil;
+import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import sun.misc.Unsafe;
 import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
-import java.io.UTFDataFormatException;
 import java.nio.*;
 import java.util.ConcurrentModificationException;
 import java.util.List;
@@ -130,12 +130,12 @@ public class DirectByteList extends DynByteBuf {
 
 	// region PUTxxx
 
-	public final DirectByteList put(byte e) {
-		u.putByte(moveWI(1)+address, e);
+	public final DirectByteList put(int e) {
+		u.putByte(moveWI(1)+address, (byte) e);
 		return this;
 	}
-	public final DirectByteList put(int i, byte e) {
-		u.putByte(testWI(i, 1)+address, e);
+	public final DirectByteList put(int i, int e) {
+		u.putByte(testWI(i, 1)+address, (byte) e);
 		return this;
 	}
 
@@ -274,22 +274,17 @@ public class DirectByteList extends DynByteBuf {
 	public final DirectByteList putUTFData0(CharSequence s, int len) {
 		long addr = moveWI(len)+address;
 
-		for (int i = 0; i < s.length(); i++) {
-			char c = s.charAt(i);
-			if ((c >= 0x0001) && (c <= 0x007F)) {
-				u.putByte(addr++, (byte) c);
-			} else if (c > 0x07FF) {
-				u.putByte(addr++, (byte) (0xE0 | ((c >> 12) & 0x0F)));
-				u.putByte(addr++, (byte) (0x80 | ((c >> 6) & 0x3F)));
-				u.putByte(addr++, (byte) (0x80 | (c & 0x3F)));
-			} else {
-				u.putByte(addr++, (byte) (0xC0 | ((c >> 6) & 0x1F)));
-				u.putByte(addr++, (byte) (0x80 | (c & 0x3F)));
-			}
-		}
+		ByteList.jutf8_encode_all(s, null, addr, len);
 		return this;
 	}
-	public final DirectByteList putVICData0(CharSequence s, int len) {
+
+	public final DynByteBuf putUtf8mb4Data(CharSequence s, int len) {
+		long addr = moveWI(len)+address;
+		ByteList.utf8mb4_encode_all(s, null, addr, len);
+		return this;
+	}
+
+	public final DirectByteList putVStrData0(CharSequence s, int len) {
 		long addr = moveWI(len)+address;
 
 		for (int i = 0; i < s.length(); i++) {
@@ -453,50 +448,69 @@ public class DirectByteList extends DynByteBuf {
 	}
 
 	public final String readAscii(int i, int len) {
+		if (len <= 0) return "";
+
 		long addr = testWI(i, len)+address;
-		CharList tmp = IOUtil.getSharedCharBuf();
-		tmp.ensureCapacity(len);
-		while (len-- > 0) tmp.append((char)u.getByte(addr++));
-		return tmp.toString();
+
+		ArrayCache cache = ArrayCache.getDefaultCache();
+		char[] ob = cache.getCharArray(Math.max(len/2,128), false);
+		int j = 0;
+		while (len-- > 0) ob[j++] = (char)u.getByte(addr++);
+
+		String s = new String(ob, 0, j);
+		cache.putArray(ob);
+		return s;
 	}
 	public final String readUTF(int len) {
-		testWI(rIndex, len);
+		if (len <= 0) return "";
+
+		int ri = moveRI(len);
 
 		CharList out = IOUtil.getSharedCharBuf();
 		out.ensureCapacity(len);
 		try {
-			decodeUTF0(address, rIndex, rIndex + len, out);
+			ByteList.utf8mb4_decode(null, address, ri, len, out, -1, false);
 		} catch (IOException e) {
-			throw new IllegalArgumentException(e.getMessage());
+			Helpers.athrow(e);
 		}
-		rIndex += len;
 		return out.toString();
 	}
-	public final String readVIC(int len) {
+	public final String readVStr(int len) {
+		if (len <= 0) return "";
+
 		long addr = moveRI(len)+address;
 
-		CharList sb = IOUtil.getSharedCharBuf();
-		sb.ensureCapacity(len);
-
+		ArrayCache cache = ArrayCache.getDefaultCache();
+		char[] ob = cache.getCharArray(Math.max(len/2,128), false);
+		int j = 0;
 
 		while (len > 0) {
+			if (j == ob.length) {
+				char[] ob1 = cache.getCharArray(MathUtils.getMin2PowerOf(ob.length+3), false);
+				System.arraycopy(ob, 0, ob1, 0, j);
+				cache.putArray(ob);
+				ob = ob1;
+			}
+
 			byte b = u.getByte(addr++);
 
-			if (b == 0) {
-				sb.append((char) ((u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr++) & 0xFF)));
-				len -= 3;
-			} else if ((b & 0x80) != 0) {
-				sb.append((char) ((((b & 0x7F) << 8) | (u.getByte(addr++) & 0xFF)) + 0x80));
+			if ((b & 0x80) != 0) {
+				ob[j++] = (char) ((((b & 0x7F) << 8) | (u.getByte(addr++) & 0xFF)) + 0x80);
 				len -= 2;
+			} else if (b == 0) {
+				ob[j++] = (char) ((u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr++) & 0xFF));
+				len -= 3;
 			} else {
-				sb.append((char) b);
+				ob[j++] = (char) b;
 				len -= 1;
 			}
 		}
 
-		if (len < 0) throw new IllegalStateException();
+		if (len < 0) throw new IllegalArgumentException("在结尾处被截断");
 
-		return sb.toString();
+		String s = new String(ob, 0, j);
+		cache.putArray(ob);
+		return s;
 	}
 
 	@Override
@@ -577,7 +591,7 @@ public class DirectByteList extends DynByteBuf {
 
 	@Override
 	public String dump() {
-		return getClass().getSimpleName()+TextUtil.dumpBytes(toByteArray(), 0, readableBytes())+'\n';
+		return "DirectBuffer:"+TextUtil.dumpBytes(toByteArray(), 0, readableBytes());
 	}
 
 	// endregion
@@ -605,71 +619,6 @@ public class DirectByteList extends DynByteBuf {
 			srcAddr += size;
 			offset += size;
 		}
-	}
-
-	@SuppressWarnings("fallthrough")
-	static int decodeUTF0(long addr, int i, int max, Appendable out) throws IOException {
-		int c;
-		while (i < max) {
-			c = u.getByte(addr+i) & 0xFF;
-			if (c > 127) break;
-			i++;
-			out.append((char) c);
-		}
-
-		int c2, c3, c4;
-		while (i < max) {
-			c = u.getByte(addr + i) & 0xFF;
-			switch (c >> 4) {
-				case 0: case 1: case 2: case 3:
-				case 4: case 5: case 6: case 7:
-					/* 0xxxxxxx*/
-					i++;
-					out.append((char) c);
-					break;
-				case 12: case 13:
-					/* 110xxxxx   10xxxxxx*/
-					if (i+2 >= max) throw new UTFDataFormatException("malformed input: partial character at end");
-
-					i++;
-					c2 = u.getByte(addr + i++);
-					if ((c2 & 0xC0) != 0x80) throw new UTFDataFormatException("malformed input around byte " + i);
-
-					out.append((char) (((c & 0x1F) << 6) | (c2 & 0x3F)));
-					break;
-				case 14:
-					/* 1110xxxx  10xxxxxx  10xxxxxx */
-					if (i+3 >= max) throw new UTFDataFormatException("malformed input: partial character at end");
-
-					i++;
-					c2 = u.getByte(addr + i++);
-					c3 = u.getByte(addr + i++);
-					if (((c2^c3) & 0xC0) != 0) throw new UTFDataFormatException("malformed input around byte " + i);
-
-					out.append((char) (((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | c3 & 0x3F));
-					break;
-				default:
-				case 15:
-					/* 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx */
-					if (i+4 >= max) throw new UTFDataFormatException("malformed input: partial character at end");
-
-					i++;
-					c2 = u.getByte(addr + i++);
-					c3 = u.getByte(addr + i++);
-					c4 = u.getByte(addr + i++);
-					if (((c2^c3^c4) & 0xC0) != 0x80) throw new UTFDataFormatException("malformed input around byte " + i);
-
-					c4 = ((c & 7) << 18) | ((c2 & 0x3F) << 12) | ((c3 & 0x3F) << 6) | c4 & 0x3F;
-					if (Character.charCount(c4) == 1) {
-						out.append((char) c4);
-					} else {
-						out.append(Character.highSurrogate(c4)).append(Character.lowSurrogate(c4));
-					}
-					break;
-			}
-		}
-
-		return i;
 	}
 
 	@Override

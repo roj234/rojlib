@@ -72,19 +72,19 @@ public class Websocketd extends WebsocketManager implements Router {
 	static final MyHashMap<String, String> tmp = new MyHashMap<>();
 	private static String res(String name) throws IOException {
 		String v = tmp.get(name);
-		if (v == null) tmp.put(name, v = IOUtil.readUTF("META-INF/html/" + name));
+		if (v == null) tmp.put(name, v = IOUtil.readResUTF("META-INF/html/" + name));
 		return v;
 	}
 
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws IOException {
 		switch (req.path()) {
-			case "/bundle.min.css":
+			case "bundle.min.css":
 				return new StringResponse(res("bundle.min.css"), "text/css");
-			case "/bundle.min.js":
+			case "bundle.min.js":
 				return new StringResponse(res("bundle.min.js"), "text/javascript");
-			case "/":
-				if ("websocket".equals(req.header("Upgrade"))) {
+			case "":
+				if ("websocket".equals(req.getField("Upgrade"))) {
 					return switchToWebsocket(req, rh);
 				}
 				return new StringResponse(res("websocketd_ui.html"), "text/html");

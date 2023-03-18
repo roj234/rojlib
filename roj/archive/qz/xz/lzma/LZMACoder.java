@@ -33,19 +33,19 @@ abstract class LZMACoder {
 	final int posMask;
 
 	final int[] reps = new int[REPS];
-	final State state = new State();
+	int state;
 
-	final short[][] isMatch = new short[State.STATES][POS_STATES_MAX];
-	final short[] isRep = new short[State.STATES];
-	final short[] isRep0 = new short[State.STATES];
-	final short[] isRep1 = new short[State.STATES];
-	final short[] isRep2 = new short[State.STATES];
-	final short[][] isRep0Long = new short[State.STATES][POS_STATES_MAX];
+	final short[][] isMatch = new short[STATES][POS_STATES_MAX];
+	final short[] isRep = new short[STATES];
+	final short[] isRep0 = new short[STATES];
+	final short[] isRep1 = new short[STATES];
+	final short[] isRep2 = new short[STATES];
+	final short[][] isRep0Long = new short[STATES][POS_STATES_MAX];
 	final short[][] distSlots = new short[DIST_STATES][DIST_SLOTS];
 	final short[][] distSpecial = {new short[2], new short[2], new short[4], new short[4], new short[8], new short[8], new short[16], new short[16], new short[32], new short[32]};
 	final short[] distAlign = new short[ALIGN_SIZE];
 
-	static final int getDistState(int len) {
+	static int getDistState(int len) {
 		return len < DIST_STATES + MATCH_LEN_MIN ? len - MATCH_LEN_MIN : DIST_STATES - 1;
 	}
 
@@ -58,7 +58,7 @@ abstract class LZMACoder {
 		reps[1] = 0;
 		reps[2] = 0;
 		reps[3] = 0;
-		state.reset();
+		state = LIT_LIT;
 
 		for (int i = 0; i < isMatch.length; ++i)
 			RangeCoder.initProbs(isMatch[i]);
@@ -80,8 +80,35 @@ abstract class LZMACoder {
 		RangeCoder.initProbs(distAlign);
 	}
 
+	// REGION STATE
+	static final int STATES = 12;
+	static final int LIT_STATES = 7;
+	static final int
+		LIT_LIT = 0,
+		MATCH_LIT_LIT = 1,
+		REP_LIT_LIT = 2,
+		SHORTREP_LIT_LIT = 3,
+		MATCH_LIT = 4,
+		REP_LIT = 5,
+		SHORTREP_LIT = 6,
+		LIT_MATCH = 7,
+		LIT_LONGREP = 8,
+		LIT_SHORTREP = 9,
+		NONLIT_MATCH = 10,
+		NONLIT_REP = 11;
 
-	abstract class LiteralCoder {
+	static int state_updateLiteral(int state) {
+		if (state <= SHORTREP_LIT_LIT) return LIT_LIT;
+		else if (state <= LIT_SHORTREP) return state-3;
+		else return state-6;
+	}
+	static int state_updateMatch(int state) { return state < LIT_STATES ? LIT_MATCH : NONLIT_MATCH; }
+	static int state_updateLongRep(int state) { return state < LIT_STATES ? LIT_LONGREP : NONLIT_REP; }
+	static int state_updateShortRep(int state) { return state < LIT_STATES ? LIT_SHORTREP : NONLIT_REP; }
+	static boolean state_isLiteral(int state) { return state < LIT_STATES; }
+	// ENDREGION
+
+	static abstract class LiteralCoder {
 		private final int lc;
 		private final int literalPosMask;
 
@@ -96,8 +123,7 @@ abstract class LZMACoder {
 			return low + high;
 		}
 
-
-		abstract class LiteralSubcoder {
+		static abstract class LiteralSubcoder {
 			final short[] probs = new short[0x300];
 
 			void reset() {
@@ -107,7 +133,7 @@ abstract class LZMACoder {
 	}
 
 
-	abstract class LengthCoder {
+	static abstract class LengthCoder {
 		static final int LOW_SYMBOLS = 1 << 3;
 		static final int MID_SYMBOLS = 1 << 3;
 		static final int HIGH_SYMBOLS = 1 << 8;

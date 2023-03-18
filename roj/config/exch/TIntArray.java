@@ -1,11 +1,12 @@
 package roj.config.exch;
 
 import roj.config.NBTParser;
+import roj.config.VinaryParser;
 import roj.config.data.CEntry;
 import roj.config.data.CInteger;
 import roj.config.data.CList;
 import roj.config.data.Type;
-import roj.config.serial.Structs;
+import roj.config.serial.CVisitor;
 import roj.util.DynByteBuf;
 
 import java.util.AbstractList;
@@ -15,26 +16,24 @@ import java.util.AbstractList;
  * @since 2022/5/17 1:43
  */
 public final class TIntArray extends CList {
-	private class Ints extends AbstractList<CEntry> {
-		CInteger cache = new CInteger(0);
+	private final class Ints extends AbstractList<CEntry> {
+		private final CInteger ref = new CInteger(0);
 
 		@Override
-		public CEntry get(int index) {
-			cache.value = data[index];
-			return cache;
+		public CEntry get(int i) {
+			ref.value = data[i];
+			return ref;
 		}
 
 		@Override
-		public CEntry set(int index, CEntry element) {
-			cache.value = data[index];
-			data[index] = element.asInteger();
-			return cache;
+		public CEntry set(int i, CEntry e) {
+			ref.value = data[i];
+			data[i] = e.asInteger();
+			return ref;
 		}
 
 		@Override
-		public int size() {
-			return data.length;
-		}
+		public int size() { return data.length; }
 	}
 
 	public int[] data;
@@ -49,29 +48,14 @@ public final class TIntArray extends CList {
 	//    Immutable TByte ?
 	//    出了问题再说吧
 
-	@Override
-	public Object unwrap() {
-		return data;
+	public Object unwrap() { return data; }
+
+	public byte getNBTType() { return NBTParser.INT_ARRAY; }
+
+	protected void toBinary(DynByteBuf w, VinaryParser struct) {
+		w.put((byte) (((1 + Type.INTEGER.ordinal()) << 4))).putVUInt(data.length);
+		for (int i : data) w.putInt(i);
 	}
 
-	@Override
-	public byte getNBTType() {
-		return NBTParser.INT_ARRAY;
-	}
-
-	@Override
-	public void toNBT(DynByteBuf w) {
-		w.writeInt(data.length);
-		for (int i : data) {
-			w.writeInt(i);
-		}
-	}
-
-	@Override
-	public void toBinary(DynByteBuf w, Structs struct) {
-		w.put((byte) (((1 + Type.INTEGER.ordinal()) << 4))).putVarInt(data.length, false);
-		for (int i : data) {
-			w.putInt(i);
-		}
-	}
+	public void forEachChild(CVisitor ser) { ser.value(data); }
 }

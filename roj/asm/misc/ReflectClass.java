@@ -4,10 +4,8 @@ import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MoFNode;
-import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
 
-import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -49,11 +47,12 @@ public class ReflectClass implements IClass {
 
 	@Override
 	public String parent() {
-		return owner.getSuperclass().getName().replace('.', '/');
+		Class<?> parent = owner.getSuperclass();
+		return parent == null ? null : parent.getName().replace('.', '/');
 	}
 
 	@Override
-	public char accessFlag() {
+	public char modifier() {
 		return owner == null ? 0 : (char) owner.getModifiers();
 	}
 
@@ -114,14 +113,11 @@ public class ReflectClass implements IClass {
 	}
 
 	public ConstantData unreflected() {
-		try {
-			String cn = owner.getName().replace('.', '/').concat(".class");
-			InputStream in = owner.getClassLoader().getResourceAsStream(cn);
-			if (in == null) return null;
-			return Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(in).toByteArray());
-		} catch (Exception e) {
-			e.printStackTrace();
-			return null;
-		}
+		return Parser.parseConstants(owner);
 	}
+
+	@Override
+	public boolean equals(Object obj) { return obj instanceof ReflectClass && ((ReflectClass) obj).owner == owner; }
+	@Override
+	public int hashCode() { return owner.hashCode(); }
 }

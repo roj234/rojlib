@@ -3,84 +3,54 @@ package roj.concurrent;
 import roj.io.buf.BufferPool;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 /**
  * @author Roj233
  * @since 2021/12/30 12:31
  */
-public final class PacketBuffer extends CASRingBuffer<DynByteBuf> {
-	static final class Buf {
-		DynByteBuf buffer;
+public final class PacketBuffer extends ManyPutOneGet<DynByteBuf> {
+	static final class Buf extends Entry<DynByteBuf> {
 		BufferPool pool;
 	}
 
+	public PacketBuffer(int max) { super(max); }
+
+	@Override
+	protected Buf createEntry() { return new Buf(); }
+
 	public void offer(DynByteBuf b) {
-		if (isFull()) throw new IllegalArgumentException("PacketBuffer is full");
+		Buf entry = new Buf();
+		entry.pool = BufferPool.localPool();
+		entry.ref = entry.pool.buffer(true, b.readableBytes()).put(b);
+		b.rIndex = b.wIndex();
 
-		DynByteBuf prev = ringAddLast(b);
-		if (prev != null) throw new IllegalArgumentException("PacketBuffer is full");
-	}
-
-	public DynByteBuf poll() {
-		return removeWith(null);
+		offer(entry, true);
 	}
 
 	public DynByteBuf take(DynByteBuf b) {
-		return removeWith(b);
+		DynByteBuf r = removeWith(b, true);
+		return r == null ? b : r;
 	}
+	public boolean mayTake(DynByteBuf b) { return removeWith(b, false) == b; }
 
-	private DynByteBuf removeWith(DynByteBuf buf) {
-		DynByteBuf v;
+	private DynByteBuf removeWith(DynByteBuf buf, boolean must) {
+		DynByteBuf finalBuf = buf;
+		Buf entry = (Buf) poll(must ? Helpers.alwaysTrue() : e -> e.ref.readableBytes() <= finalBuf.writableBytes());
+		if (entry == null) return null;
 
-		int head = readLock(HEAD_OFF);
-		Object[] array = this.array;
+		DynByteBuf data = entry.ref;
+		if (data == null) throw new InternalError();
 
 		try {
-			v = remove(array, head, buf);
-			if (v == null) isEmpty = true;
+			if (data.readableBytes() > buf.writableBytes()) buf = new ByteList().put(buf);
+			else buf.put(data);
 		} finally {
-			lock.releaseShared(head);
+			entry.pool.reserve(entry.ref);
+			entry.pool = null;
+			entry.ref = null;
 		}
 
-		return v;
-	}
-
-	public PacketBuffer(int max) {
-		super(max);
-	}
-	public PacketBuffer(int cap, int max) {
-		super(cap, max);
-	}
-
-	protected DynByteBuf insert(Object[] array, int i, DynByteBuf e) {
-		Buf buf = (Buf) array[i];
-		DynByteBuf v = null;
-		if (buf == null) {
-			array[i] = buf = new Buf();
-		} else if (buf.buffer != null) {
-			v = ByteList.allocate(buf.buffer.readableBytes()).put(buf.buffer);
-			buf.pool.reserve(buf.buffer);
-		}
-
-		buf.pool = BufferPool.localPool();
-		buf.buffer = buf.pool.buffer(e.readableBytes()).put(e);
-
-		return v;
-	}
-
-	private DynByteBuf remove(Object[] array, int i, DynByteBuf b) {
-		Buf buf = (Buf) array[i];
-		if (buf != null && buf.buffer != null) {
-			if (b == null || b.writableBytes() < buf.buffer.readableBytes()) {
-				b = ByteList.allocate(buf.buffer.readableBytes());
-			}
-
-			DynByteBuf v = b.put(buf.buffer);
-			buf.pool.reserve(buf.buffer);
-			buf.buffer = null;
-			return v;
-		}
-
-		return null;
+		return buf;
 	}
 }

@@ -2,6 +2,7 @@ package roj.config;
 
 import roj.collect.*;
 import roj.config.data.*;
+import roj.config.serial.ToYaml;
 import roj.config.word.Word;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -19,17 +20,17 @@ import static roj.config.word.Word.STRING;
  * @author Roj234
  * @since 2021/7/7 2:03
  */
-public final class YAMLParser extends Parser {
+public class YAMLParser extends Parser<CEntry> {
 	public static final int LENIENT = 2;
 
-	private static final short delim = 19,
+	static final short delim = 19,
 		ask = 20,  join = 21,
 		anchor = 22, ref = 23, force_cast = 24,
 		multiline = 25, multiline_clump = 26;
 
 	private static final TrieTree<Word> YAML_TOKENS = new TrieTree<>();
 	// - for timestamp
-	private static final MyBitSet YAML_LENDS = new MyBitSet(), YAML_LENDS_NUM = MyBitSet.from("\r\n");
+	private static final MyBitSet YAML_LENDS = new MyBitSet(), YAML_LENDS_NUM = MyBitSet.from("\r\n"), JSON_KEY = MyBitSet.from("[]{},:");
 	private static final Int2IntMap YAML_C2C = new Int2IntMap(), YAML_C2C_NN = new Int2IntMap();
 
 	static {
@@ -65,33 +66,16 @@ public final class YAMLParser extends Parser {
 	}
 
 	public YAMLParser() {}
+	public YAMLParser(int flag) { super(flag); }
+
+	public final int availableFlags() { return ORDERED_MAP | LENIENT_COMMA | LENIENT | NO_DUPLICATE_KEY | NO_EOF; }
+	public final String format() { return "YAML"; }
 
 	@Override
-	public CEntry parse(CharSequence text, int flag) throws ParseException {
-		try {
-			this.flag = flag;
-			CEntry entry = init(text).element(flag);
-
-			if ((flag & NO_EOF) == 0 && next().type() != Word.EOF) throw err("期待 /EOF");
-			return entry;
-		} catch (ParseException e) {
-			throw e.addPath("$");
-		}
-	}
-
-	@Override
-	public int acceptableFlags() {
-		return ORDERED_MAP | LENIENT_COMMA | LENIENT | NO_DUPLICATE_KEY | NO_EOF;
-	}
-
-	@Override
-	public String format() {
-		return "YAML";
-	}
-
-	@Override
-	public CharSequence toString(CEntry entry, int flag) {
-		return entry.toYAMLb();
+	public final CharList append(CEntry entry, int flag, CharList sb) {
+		ToYaml ser = new ToYaml();
+		entry.forEachChild(ser.sb(sb));
+		return sb;
 	}
 
 	/**
@@ -140,7 +124,6 @@ public final class YAMLParser extends Parser {
 	 * a : r \r\n
 	 * c : x
 	 */
-	@SuppressWarnings("fallthrough")
 	private CEntry yamlObject(Word w) throws ParseException {
 		Map<String, CEntry> map = (flag & ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>();
 		Map<String, String> comment = null;
@@ -149,6 +132,7 @@ public final class YAMLParser extends Parser {
 		int firstIndent = getIndent();
 		if (firstIndent <= superIndent) throw err("下级缩进("+firstIndent+")<=上级("+superIndent+")");
 
+		retractWord();
 		cyl:
 		while (true) {
 			String name = w.val();
@@ -189,10 +173,7 @@ public final class YAMLParser extends Parser {
 				default: unexpected(w.val(), "字符串");
 			}
 
-			firstChar = YAML_C2C_NN;
-			w = next();
-			firstChar = YAML_C2C;
-
+			w = nextNN();
 			if (w.type() == EOF) break;
 
 			int indent = getIndent();
@@ -212,7 +193,7 @@ public final class YAMLParser extends Parser {
 		return comment == null ? new CMapping(map) : new CCommMap(map, comment);
 	}
 
-	CEntry element(int flag) throws ParseException {
+	final CEntry element(int flag) throws ParseException {
 		Word w = next();
 		String cnt = w.val();
 		switch (w.type()) {
@@ -234,8 +215,20 @@ public final class YAMLParser extends Parser {
 					default: throw err("我不知道你要转换成啥, 支持 str float int bool map set: " + cnt);
 				}
 			}
-			case left_m_bracket: return JSONParser.list(this, new CList(), flag|LITERAL_KEY);
-			case left_l_bracket: return JSONParser.map(this, flag|LITERAL_KEY);
+			case left_m_bracket:
+				this.flag |= LITERAL_KEY;
+				try {
+					return JSONParser.list(this, new CList(), flag|LITERAL_KEY);
+				} finally {
+					this.flag ^= LITERAL_KEY;
+				}
+			case left_l_bracket:
+				this.flag |= LITERAL_KEY;
+				try {
+					return JSONParser.map(this, flag|LITERAL_KEY);
+				} finally {
+					this.flag ^= LITERAL_KEY;
+				}
 			case multiline: case multiline_clump: return CString.valueOf(cnt);
 			case Word.STRING:
 			case Word.LITERAL: {
@@ -289,15 +282,13 @@ public final class YAMLParser extends Parser {
 		}
 	}
 
-	private final Word tmpKey = new Word();
+	final Word tmpKey = new Word();
 	private CEntry checkMap() throws ParseException {
-		int i = lastWordBegin;
+		int i = prevIndex;
 		Word firstKey = tmpKey.init(wd.type(), wd.pos(), wd.val());
 
 		int ln = prevLN;
-		firstChar = YAML_C2C_NN;
-		short type = next().type();
-		firstChar = YAML_C2C;
+		short type = nextNN().type();
 
 		if (type == colon) {
 			if (getIndent() <= prevIndent) {
@@ -309,7 +300,6 @@ public final class YAMLParser extends Parser {
 				}
 			}
 
-			retractWord();
 			return yamlObject(firstKey);
 		}
 
@@ -341,27 +331,31 @@ public final class YAMLParser extends Parser {
 		for (int i = 1; i < text.length(); i++) {
 			c = text.charAt(i);
 			if (c == '\n') return 1;
-			if (c == ':' && (i+1 >= text.length() || WHITESPACE.contains(text.charAt(i+1)))) return 0;
+			if (i+1 >= text.length() || WHITESPACE.contains(text.charAt(i+1))) {
+				if (c == ':' || c == '-') {
+					return 0;
+				}
+			}
 		}
 
 		return -1;
 	}
 
-	private final MyHashMap<String, CEntry> anchors = new MyHashMap<>();
-	private int prevIndent;
+	final MyHashMap<String, CEntry> anchors = new MyHashMap<>();
+	int prevIndent;
 
 	@Override
-	public YAMLParser init(CharSequence seq) {
+	public final YAMLParser init(CharSequence seq) {
 		anchors.clear();
-		flag = 0;
 		prevIndent = -1;
+		indentPos = -1;
 		aFlag |= COMPUTE_LINES;
 		super.init(seq);
 		return this;
 	}
 	@Override
 	@SuppressWarnings("fallthrough")
-	public Word readWord() throws ParseException {
+	public final Word readWord() throws ParseException {
 		prevLN = LN;
 
 		CharSequence in = input;
@@ -418,9 +412,16 @@ public final class YAMLParser extends Parser {
 		}
 	}
 
+	protected final Word nextNN() throws ParseException {
+		firstChar = YAML_C2C_NN;
+		Word w = next();
+		firstChar = YAML_C2C;
+		return w;
+	}
+
 	@SuppressWarnings("fallthrough")
 	@Override
-	protected boolean isValidCombo(int off, Word word) {
+	protected final boolean isValidCombo(int off, Word word) {
 		switch (word.type()) {
 			case TRUE: case FALSE: case NULL:
 				if (!whiteSpaceUntilNextLine(index+off)) return false;
@@ -436,16 +437,14 @@ public final class YAMLParser extends Parser {
 		}
 		return super.isValidCombo(off, word);
 	}
-
 	private boolean onNextLine(int len) {
 		CharSequence in = input;
-		int i = lastWordBegin;
+		int i = prevIndex;
 		while (i < len) {
 			if (in.charAt(i++) == '\n') return true;
 		}
 		return false;
 	}
-
 	private boolean whiteSpaceUntilNextLine(int i) {
 		CharSequence in = input;
 		while (i < in.length()) {
@@ -457,7 +456,7 @@ public final class YAMLParser extends Parser {
 	}
 
 	@Override
-	protected Word readDigit(boolean sign) throws ParseException {
+	protected final Word readDigit(boolean sign) throws ParseException {
 		literalEnd = YAML_LENDS_NUM;
 		try {
 			return digitReader(sign, DIGIT_HBO);
@@ -465,9 +464,8 @@ public final class YAMLParser extends Parser {
 			literalEnd = YAML_LENDS;
 		}
 	}
-
 	@Override
-	protected Word onInvalidNumber(char value, int i, String reason) throws ParseException {
+	protected final Word onInvalidNumber(char value, int i, String reason) throws ParseException {
 		if (lookAhead(4) == '-') {
 			Word w = ISO8601Datetime(false);
 			if (w != null) return w;
@@ -475,7 +473,7 @@ public final class YAMLParser extends Parser {
 		return readLiteral();
 	}
 
-	protected Word readLiteral() {
+	protected final Word readLiteral() {
 		CharSequence in = input;
 		int i = index;
 
@@ -485,8 +483,14 @@ public final class YAMLParser extends Parser {
 			char c = in.charAt(i);
 			if (c == '\r' || c == '\n') break;
 
-			if (c == ':' && (i+1 >= in.length() || WHITESPACE.contains(in.charAt(i+1)))) {
-				break;
+			if (JSON_KEY.contains(c)) {
+				if (c == ':') {
+					if (i + 1 >= in.length() || WHITESPACE.contains(in.charAt(i + 1))) {
+						break;
+					}
+				} else if ((flag & LITERAL_KEY) != 0) {
+					break;
+				}
 			}
 
 			// trim
@@ -508,7 +512,7 @@ public final class YAMLParser extends Parser {
 	}
 
 	@Override
-	protected Word _formClip(Word w) throws ParseException {
+	protected final Word _formClip(Word w) throws ParseException {
 		CharSequence in = input;
 		int i = index;
 		CharList v = found; v.clear();
@@ -536,21 +540,22 @@ public final class YAMLParser extends Parser {
 			}
 
 			// 然后算初始的Indent
-			boolean longer = false;
+			int longer = 0;
 			int indent = i;
 			while (true) {
 				if (i == in.length()) return formClip(multiline, "");
 
 				c = in.charAt(i);
 				if (c != ' ' && c != '\t') {
-					if (c == '\n' || (c == '\r' && ++i < in.length() && in.charAt(i) == '\n')) {
+					if ((longer & 1) == 0 && c == '\n' || (c == '\r' && ++i < in.length() && in.charAt(i) == '\n')) {
 						v.append('\n');
 						indent = ++i;
-						longer = true;
+						longer |= 2;
 						continue;
 					}
-
 					break;
+				} else {
+					longer |= 1;
 				}
 				i++;
 			}
@@ -563,7 +568,7 @@ public final class YAMLParser extends Parser {
 				//a: >
 				//
 				//b:
-				if (longer) return formClip(multiline, "");
+				if ((longer&2) != 0) return formClip(multiline, "");
 
 				throw err("缩进长度应大于"+min, i);
 			}
@@ -664,20 +669,35 @@ public final class YAMLParser extends Parser {
 		return formClip(w.type(), v);
 	}
 
-	private int getIndent() {
+	int indent, indentPos = -1;
+	final int getIndent() {
+		if (index == indentPos) return indent;
+
 		CharSequence in = input;
 		int count = 0;
-		int i = index;
+		int i = indentPos = index;
 		while (i > 0) {
 			char c = in.charAt(--i);
 			switch (c) {
-				case '\r': case '\n': return count;
-				case '-': if (count > 0) return Integer.MAX_VALUE;
+				case '\'': case '"': i = escapePrev(c,i); break;
+				case '\r': case '\n': return indent = count;
+				case '-': if (count > 0) return indent = Integer.MAX_VALUE;
 				break;
 				case ' ': case '\t': count++; break;
 				default: count = 0; break;
 			}
 		}
+
+		indent = 0;
 		return 0;
+	}
+
+	private int escapePrev(char c, int i) {
+		CharSequence in = input;
+		while (i > 0) {
+			char c1 = in.charAt(--i);
+			if (c1 == c && (i==0 || in.charAt(i-1) != '\\')) break;
+		}
+		return i;
 	}
 }

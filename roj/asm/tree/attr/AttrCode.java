@@ -10,7 +10,6 @@ import roj.asm.tree.MethodNode;
 import roj.asm.tree.insn.*;
 import roj.asm.util.AttributeList;
 import roj.asm.util.ExceptionEntry;
-import roj.asm.util.InsnList;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Frame2;
 import roj.asm.visitor.FrameVisitor;
@@ -22,7 +21,6 @@ import roj.util.DynByteBuf;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.io.PrintStream;
 import java.util.List;
 import java.util.Map;
 
@@ -30,7 +28,7 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @version 1.3
+ * @version 2.0
  * @since 2021/6/18 9:51
  */
 public class AttrCode extends Attribute implements Attributed {
@@ -69,10 +67,6 @@ public class AttrCode extends Attribute implements Attributed {
 		int len = r.readUnsignedShort();
 		if (len > 0) {
 			SimpleList<ExceptionEntry> ex = exceptions = new SimpleList<>(len);
-			// start_pc,end_pc,handler_pc中的值都表示的是PC计数器中的指令地址
-			//exception_table表示的意思是：
-			//如果字节码从第start_pc行到第end_pc行之间出现了catch_type所描述的异常类型，那么将跳转到handler_pc行继续处理。
-			// catchType => ConstantClass extends Throwable
 			for (int i = 0; i < len; i++) {
 				int pci;
 				ex.add(new ExceptionEntry(pc.get(r.readUnsignedShort()), // start
@@ -88,38 +82,39 @@ public class AttrCode extends Attribute implements Attributed {
 		if (len == 0) return;
 
 		attributes = new AttributeList(len);
-		try {
-			// CustomNPCs你是真的有毛病啊啊啊啊啊
-			while (r.isReadable()) {
-				String name = ((CstUTF) cp.get(r)).getString();
-				int end = r.readInt() + r.rIndex;
+		while (len-- > 0) {
+			String name = ((CstUTF) cp.get(r)).str();
+			int exw = r.wIndex();
+			int br;
+			r.wIndex(r.readInt()+(br=r.rIndex));
+			try {
 				switch (name) {
 					case "LineNumberTable":
-						attributes.add(new AttrLineNumber(r, pc));
+						attributes.i_direct_add(new AttrLineNumber(r, pc));
 						break;
-					case "LocalVariableTable":
-					case "LocalVariableTypeTable":
-						// LocalVariableTypeTable是可选的
-						attributes.add(new AttrLocalVars(name, cp, r, pc, largestIndex));
+					case "LocalVariableTable": case "LocalVariableTypeTable":
+						attributes.i_direct_add(new AttrLocalVars(name, cp, r, pc, largestIndex));
 						break;
 					case "StackMapTable":
 						// 不会有人大改代码还直接在原SMT上改的吧，不会的吧
 						// 不管怎么样，我把这里的验证删了，这样至少在As-Is模式下不需要读取外部类(Var2.merge)
 						FrameVisitor.readFrames(frames = new SimpleList<>(), r, cp, pc, owner, localSize, stackSize);
 						break;
-					case "RuntimeInvisibleTypeAnnotations":
-					case "RuntimeVisibleTypeAnnotations":
-						attributes.add(new TypeAnnotations(name, r, cp));
+					case "RuntimeInvisibleTypeAnnotations": case "RuntimeVisibleTypeAnnotations":
+						attributes.i_direct_add(new TypeAnnotations(name, r, cp));
 						break;
 					default: System.err.println("[R.A.AC]Skip unknown " + name + " for " + (owner.ownerClass() + '.' + owner.name()));
 				}
-				if (r.rIndex != end) {
-					System.err.println("[R.A.AC]" + (end - r.rIndex) + " bytes not read correctly!");
-					r.rIndex = end;
+
+				if (r.isReadable()) {
+					System.err.println("无法读取"+owner.ownerClass()+"."+owner.name()+"的'Code'的子属性'"+name+"' ,剩余了"+r.readableBytes()+",数据:"+r.dump());
 				}
+			} catch (Throwable e) {
+				r.rIndex = br;
+				throw new RuntimeException("读取子属性'"+name+"',数据:"+r.dump(), e);
+			} finally {
+				r.wIndex(exw);
 			}
-		} catch (Throwable e) {
-			throw new RuntimeException(owner.ownerClass() + '.' + owner.name() + ": read attribute", e);
 		}
 	}
 
@@ -133,7 +128,7 @@ public class AttrCode extends Attribute implements Attributed {
 		InsnList insn = instructions;
 		Map<InsnNode, Label> labels = AsmShared.local()._Map(insn.size());
 		for (int i = 0; i < insn.size(); i++) {
-			insn.get(i).preSerialize(c, labels);
+			insn.get(i).preSerialize(labels);
 		}
 
 		SimpleList<ExceptionEntry> exs = exceptions;
@@ -193,7 +188,7 @@ public class AttrCode extends Attribute implements Attributed {
 
 		c.visitAttributes();
 
-		if (interpretFlags != 0) {
+		if (CodeWriter.ENABLE_FV && interpretFlags != 0) {
 			FrameVisitor fv = c.getFv();
 
 			if ((interpretFlags & COMPUTE_SIZES) != 0) {
@@ -201,17 +196,7 @@ public class AttrCode extends Attribute implements Attributed {
 				localSize = (char) fv.maxLocalSize;
 			}
 			if ((interpretFlags & COMPUTE_FRAMES) != 0) {
-				List<Frame2> f = fv.getFrames();
-				if (f.isEmpty()) {
-					if (frames != null) frames.clear();
-					frames = null;
-				} else {
-					if (frames == null) frames = f;
-					else {
-						frames.clear();
-						frames.addAll(f);
-					}
-				}
+				frames = c.frames;
 			}
 		} else {
 			s:
@@ -228,21 +213,14 @@ public class AttrCode extends Attribute implements Attributed {
 			for (int i = 0; i < attrs.size(); i++) {
 				Attribute attr = attrs.get(i);
 				if (attr.isEmpty()) continue;
-
-				if (attr instanceof CodeAttributeSpec) {
-					int stack = c.visitAttributeI(attr.name);
-					if (stack < 0) continue;
-					((CodeAttributeSpec) attr).toByteArray(c);
-					c.visitAttributeIEnd(stack);
-				} else {
-					c.visitAttribute(attr);
-				}
+				c.visitAttribute(attr);
 			}
 		}
 
 		c.visitEnd();
 	}
 
+	public static final ThreadLocal<AttrCode> WORKING_ON = new ThreadLocal<>();
 	public static Label monitorNode(Map<InsnNode, Label> labels, InsnNode node) {
 		node = InsnNode.validate(node);
 		Label label = labels.get(node);
@@ -256,145 +234,127 @@ public class AttrCode extends Attribute implements Attributed {
 		IntMap<InsnNode> pci = AsmShared.local()._IntMap(owner);
 		pci.ensureCapacity(len / 2);
 
+		InsnList insn = instructions;
+		insn.ensureCapacity(len / 2);
+
 		int begin = r.rIndex;
 		len += begin;
 
 		int negXXX = 0;
-		InsnList insn = this.instructions;
 		int bci = 0;
-		InsnNode curr = null;
+		InsnNode curr;
 		boolean widen = false;
 		while (r.rIndex < len) {
-			try {
-				byte code = OpcodeUtil.byId(r.readByte());
-				if (widen) OpcodeUtil.checkWide(code);
-				switch (code) {
-					case PUTFIELD:
-					case GETFIELD:
-					case PUTSTATIC:
-					case GETSTATIC:
-						curr = new FieldInsnNode(code, (CstRefField) pool.get(r));
-						break;
-					case INVOKEVIRTUAL:
-					case INVOKESPECIAL:
-					case INVOKESTATIC:
-						curr = new InvokeInsnNode(code, (CstRef) pool.get(r));
-						break;
-					case INVOKEINTERFACE:
-						curr = new InvokeItfInsnNode((CstRefItf) pool.get(r), r.readShort());
-						break;
-					case INVOKEDYNAMIC:
-						curr = new InvokeDynInsnNode((CstDynamic) pool.get(r), r.readUnsignedShort());
-						break;
-					case GOTO:
-					case IFEQ:
-					case IFNE:
-					case IFLT:
-					case IFGE:
-					case IFGT:
-					case IFLE:
-					case IF_icmpeq:
-					case IF_icmpne:
-					case IF_icmplt:
-					case IF_icmpge:
-					case IF_icmpgt:
-					case IF_icmple:
-					case IF_acmpeq:
-					case IF_acmpne:
-					case IFNULL:
-					case IFNONNULL:
-						curr = new JmPrimer(code, r.readShort());
-						break;
-					case GOTO_W:
-						curr = new JmPrimer(code, r.readInt());
-						break;
+			byte code = OpcodeUtil.byId(r.readByte());
+			if (widen) OpcodeUtil.checkWide(code);
+			switch (code) {
+				case PUTFIELD:
+				case GETFIELD:
+				case PUTSTATIC:
+				case GETSTATIC:
+					curr = new FieldInsnNode(code, (CstRefField) pool.get(r));
+					break;
+				case INVOKEVIRTUAL:
+				case INVOKESPECIAL:
+				case INVOKESTATIC:
+					curr = new InvokeInsnNode(code, (CstRef) pool.get(r));
+					break;
+				case INVOKEINTERFACE:
+					curr = new InvokeInsnNode(code, (CstRefItf) pool.get(r));
+					r.rIndex += 2;
+					break;
+				case INVOKEDYNAMIC:
+					curr = new InvokeDynInsnNode((CstDynamic) pool.get(r), r.readUnsignedShort());
+					break;
+				case GOTO:
+				case IFEQ:
+				case IFNE:
+				case IFLT:
+				case IFGE:
+				case IFGT:
+				case IFLE:
+				case IF_icmpeq:
+				case IF_icmpne:
+				case IF_icmplt:
+				case IF_icmpge:
+				case IF_icmpgt:
+				case IF_icmple:
+				case IF_acmpeq:
+				case IF_acmpne:
+				case IFNULL:
+				case IFNONNULL:
+					curr = new JmPrimer(code, r.readShort());
+					break;
+				case GOTO_W:
+					curr = new JmPrimer(code, r.readInt());
+					break;
 
-					case JSR:
-						curr = new JsrInsnNode(code, r.readShort());
-						break;
-					case JSR_W:
-						curr = new JsrInsnNode(code, r.readInt());
-						break;
-					case RET:
-						curr = new U2InsnNode(code, widen?r.readShort():r.readByte());
-						break;
-					case SIPUSH:
-						curr = new U2InsnNode(code, r.readShort());
-						break;
-					case BIPUSH:
-					case NEWARRAY:
-						curr = new U1InsnNode(code, r.readByte());
-						break;
-					case LDC:
-						curr = new LdcInsnNode(code, pool.array(r.readUnsignedByte()));
-						break;
-					case LDC_W:
-					case LDC2_W:
-						curr = new LdcInsnNode(code, pool.get(r));
-						break;
-					case IINC:
-						curr = widen ? new IncrInsnNode(r.readUnsignedShort(), r.readShort()) : new IncrInsnNode(r.readUnsignedByte(), r.readByte());
-						break;
-					case NEW:
-					case ANEWARRAY:
-					case INSTANCEOF:
-					case CHECKCAST:
-						curr = new ClassInsnNode(code, (CstClass) pool.get(r));
-						break;
-					case MULTIANEWARRAY:
-						curr = new MDArrayInsnNode((CstClass) pool.get(r), r.readUnsignedByte());
-						break;
-					case ISTORE:
-					case LSTORE:
-					case FSTORE:
-					case DSTORE:
-					case ASTORE:
-					case ILOAD:
-					case LLOAD:
-					case FLOAD:
-					case DLOAD:
-					case ALOAD:
-						curr = new U2InsnNode(code, widen?r.readUnsignedShort():r.readUnsignedByte());
-						break;
-					case TABLESWITCH:
-						// align
-						r.rIndex += (4 - ((r.rIndex - begin) & 3)) & 3;
-						curr = parseTableSwitch(r);
-						break;
-					case LOOKUPSWITCH:
-						r.rIndex += (4 - ((r.rIndex - begin) & 3)) & 3;
-						curr = parseLookupSwitch(r);
-						break;
-					case WIDE:
-						widen = true;
-						continue;
-					default:
-						curr = new NPInsnNode(code);
-						break;
-				}
-				insn.add(curr);
-				widen = false;
-			} catch (Throwable e) {
-				final PrintStream err = System.err;
-
-				err.println("Please report to Roj234 with all messages below.");
-				err.println("====================PARSING NODE====================");
-				err.println("Prev: " + curr);
-				r.rIndex = begin + bci;
-				try {
-					err.println("Except: " + OpcodeUtil.toString0(r.readByte()));
-				} catch (Throwable e111) {
-					r.rIndex = begin + bci;
-					err.println("Except: " + r.readByte());
-				}
-				err.println();
-				err.println("PrevIndex: " + bci);
-				err.println("Index: " + (r.rIndex - begin));
-				err.println(r.slice(begin, len - begin));
-				err.println("====================PARSING NODE====================");
-
-				throw new InternalError("At " + (owner.ownerClass() + '.' + owner.name()), e);
+				case JSR:
+					curr = new JsrInsnNode(code, r.readShort());
+					break;
+				case JSR_W:
+					curr = new JsrInsnNode(code, r.readInt());
+					break;
+				case RET:
+					curr = new U2InsnNode(code, widen?r.readShort():r.readByte());
+					break;
+				case SIPUSH:
+					curr = new U2InsnNode(code, r.readShort());
+					break;
+				case BIPUSH:
+				case NEWARRAY:
+					curr = new U1InsnNode(code, r.readByte());
+					break;
+				case LDC:
+					curr = new LdcInsnNode(pool.array(r.readUnsignedByte()));
+					break;
+				case LDC_W:
+				case LDC2_W:
+					curr = new LdcInsnNode(pool.get(r));
+					break;
+				case IINC:
+					curr = widen ? new IncrInsnNode(r.readUnsignedShort(), r.readShort()) : new IncrInsnNode(r.readUnsignedByte(), r.readByte());
+					break;
+				case NEW:
+				case ANEWARRAY:
+				case INSTANCEOF:
+				case CHECKCAST:
+					curr = new ClassInsnNode(code, (CstClass) pool.get(r));
+					break;
+				case MULTIANEWARRAY:
+					curr = new MDArrayInsnNode((CstClass) pool.get(r), r.readUnsignedByte());
+					break;
+				case ISTORE:
+				case LSTORE:
+				case FSTORE:
+				case DSTORE:
+				case ASTORE:
+				case ILOAD:
+				case LLOAD:
+				case FLOAD:
+				case DLOAD:
+				case ALOAD:
+					curr = new U2InsnNode(code, widen?r.readUnsignedShort():r.readUnsignedByte());
+					break;
+				case TABLESWITCH:
+					// align
+					r.rIndex += (4 - ((r.rIndex - begin) & 3)) & 3;
+					curr = parseTableSwitch(r);
+					break;
+				case LOOKUPSWITCH:
+					r.rIndex += (4 - ((r.rIndex - begin) & 3)) & 3;
+					curr = parseLookupSwitch(r);
+					break;
+				case WIDE:
+					widen = true;
+					continue;
+				default:
+					curr = new NPInsnNode(code);
+					break;
 			}
+			insn.add(curr);
+			widen = false;
+
 			if (curr.nodeType() == 123) {
 				// noinspection all
 				JmPrimer jp = (JmPrimer) curr;
@@ -439,14 +399,13 @@ public class AttrCode extends Attribute implements Attributed {
 	private InsnNode validateJump(IntMap<InsnNode> pci, int index, JmPrimer self) {
 		InsnNode node = pci.getOrDefault(index - 1, null);
 		if (node != null && node.getOpcode() == WIDE) throw new IllegalArgumentException("Jump target must not \"after\" wide");
-		try {
-			return pci.get(index);
-		} catch (Throwable e) {
+		node = pci.get(index);
+		if (node == null)
 			throw new IllegalArgumentException("At " + (owner.ownerClass() + '.' + owner.name()) +
 				"\nNo Such Target at " + index +
 				"\n Node: " + self +
 				"\n Nodes:\n" + this);
-		}
+		return node;
 	}
 
 	private static JmPrimer parseTableSwitch(DynByteBuf r) {
@@ -507,18 +466,11 @@ public class AttrCode extends Attribute implements Attributed {
 			}
 		}
 		AttrLocalVars lvt = getLVT();
-		if (lvt != null) sb.append("    LVT: ").append(lvt.toString(getLVTT()));
+		if (lvt != null) sb.append("    变量: ").append(lvt.toString(getLVTT()));
 		if (frames != null) {
-			sb.append("    StackMapTable: \n");
+			sb.append("    SMT: \n");
 			for (int i = 0; i < frames.size(); i++) {
 				sb.append(frames.get(i));
-			}
-		}
-		if (attrByName("Exceptions") != null) {
-			sb.append("    Throws: \n");
-			List<String> classes = ((AttrStringList) attributes.getByName("Exceptions")).classes;
-			for (int i = 0; i < classes.size(); i++) {
-				sb.append("        ").append(classes.get(i)).append('\n');
 			}
 		}
 		return sb.toString();
@@ -533,7 +485,7 @@ public class AttrCode extends Attribute implements Attributed {
 	}
 
 	public void clear() {
-		exceptions.clear();
+		exceptions = null;
 		instructions.clear();
 		frames = null;
 		attributes.clear();
@@ -553,7 +505,7 @@ public class AttrCode extends Attribute implements Attributed {
 		return attributes;
 	}
 
-	public char accessFlag() {
+	public char modifier() {
 		throw new UnsupportedOperationException();
 	}
 

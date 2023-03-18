@@ -27,7 +27,7 @@ public final class MutableBigInteger implements Comparable<MutableBigInteger> {
 		ptr = o._n2(val);
 	}
 
-	public MutableBigInteger(int[] val) {
+	public MutableBigInteger(int... val) {
 		ptr = o._n3(val);
 	}
 

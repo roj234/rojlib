@@ -5,7 +5,7 @@ package roj.archive.qz.bcj;
  * @author Lasse Collin <lasse.collin@tukaani.org>, Roj234
  * @since 2023/3/16 0016 2:23
  */
-public class ARMThumbFilter extends BCJFilter {
+public class ARMThumbFilter extends Filter {
     public ARMThumbFilter(boolean isEncoder, int startPos) {
         super(isEncoder);
         pos = checkStartOffset(startPos, 2) + 4;
@@ -24,7 +24,7 @@ public class ARMThumbFilter extends BCJFilter {
                 src <<= 1;
 
                 int dest;
-                if (isEncoder) dest = src + (pos + i - off);
+                if (encode) dest = src + (pos + i - off);
                 else dest = src - (pos + i - off);
 
                 dest >>>= 1;

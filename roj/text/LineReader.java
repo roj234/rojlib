@@ -1,8 +1,5 @@
 package roj.text;
 
-import roj.config.word.ReadOnDemand;
-import roj.config.word.StreamAsChars;
-
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,17 +19,17 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 	private int index, size = -1, lineNumber;
 
 	public LineReader(InputStream in) throws IOException {
-		str = new StreamAsChars(in);
+		str = new StreamReader(in);
 	}
 	public LineReader(InputStream in, Charset cs) throws IOException {
-		str = new StreamAsChars(in, cs);
+		str = new StreamReader(in, cs);
 	}
 	public LineReader(InputStream in, Charset cs, boolean cleanEmpty) throws IOException {
-		this.str = new StreamAsChars(in);
+		this.str = new StreamReader(in);
 		this.keepEmpty = !cleanEmpty;
 	}
 	public LineReader(InputStream in, Charset cs, boolean cleanEmpty, boolean reusable) throws IOException {
-		this.str = new StreamAsChars(in);
+		this.str = new StreamReader(in);
 		this.keepEmpty = !cleanEmpty;
 		this.reuse = reusable;
 	}
@@ -165,7 +162,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 
 		int r = 0, i = index;
 		CharSequence s = str;
-		if (!reuse) ((ReadOnDemand) s).freeBufferBefore(i);
+		if (!reuse) ((StreamReader) s).releaseBefore(i);
 		while (i < s.length()) {
 			switch (s.charAt(i)) {
 				case '\r':
@@ -219,7 +216,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 		int lines = oLines;
 		int r = 0, prev = index, i = index;
 		CharSequence s = str;
-		if (!reuse) ((ReadOnDemand) s).freeBufferBefore(i);
+		if (!reuse) ((StreamReader) s).releaseBefore(i);
 		while (i < s.length()) {
 			switch (s.charAt(i)) {
 				case '\r':
@@ -261,6 +258,6 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 
 	@Override
 	public void close() throws IOException {
-		if (!reuse) ((ReadOnDemand) str).close();
+		if (!reuse) ((StreamReader) str).close();
 	}
 }

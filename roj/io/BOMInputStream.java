@@ -11,7 +11,7 @@ import java.io.InputStream;
  * @since 2021/3/7 11:58
  */
 public class BOMInputStream extends PushbackInputStream {
-	String encoding;
+	String charset;
 
 	public BOMInputStream(InputStream in) {
 		this(in, "UTF-8");
@@ -19,7 +19,7 @@ public class BOMInputStream extends PushbackInputStream {
 
 	public BOMInputStream(InputStream in, String defaultEnc) {
 		super(in);
-		this.encoding = defaultEnc;
+		this.charset = defaultEnc;
 		this.buffer = new byte[4];
 		this.bOff = -1;
 		this.bLen = 4;
@@ -30,13 +30,13 @@ public class BOMInputStream extends PushbackInputStream {
 		if (autoInit) init();
 	}
 
-	public String getEncoding() throws IOException {
+	public final String getCharset() throws IOException {
 		init();
-		return encoding;
+		return charset;
 	}
 
 	@Override
-	public int available() throws IOException {
+	public final int available() throws IOException {
 		init();
 		return super.available();
 	}
@@ -45,9 +45,7 @@ public class BOMInputStream extends PushbackInputStream {
 	 * Skip BOM bytes
 	 */
 	protected void init() throws IOException {
-		if (bOff != -1) {
-			return;
-		}
+		if (bOff != -1) return;
 
 		byte[] bom = buffer;
 		int n = bLen = in.read(bom, 0, 4);
@@ -57,7 +55,7 @@ public class BOMInputStream extends PushbackInputStream {
 		switch (bom[0] & 0xFF) {
 			case 0x00:
 				if ((bom[1] == (byte) 0x00) && (bom[2] == (byte) 0xFE) && (bom[3] == (byte) 0xFF)) {
-					encoding = "UTF-32BE";
+					charset = "UTF-32BE";
 					rev = 4;
 				}
 				break;
@@ -65,10 +63,10 @@ public class BOMInputStream extends PushbackInputStream {
 			case 0xFF:
 				if (bom[1] == (byte) 0xFE) {
 					if ((bom[2] == (byte) 0x00) && (bom[3] == (byte) 0x00)) {
-						encoding = "UTF-32LE";
+						charset = "UTF-32LE";
 						rev = 4;
 					} else {
-						encoding = "UTF-16LE";
+						charset = "UTF-16LE";
 						rev = 2;
 					}
 				}
@@ -76,14 +74,14 @@ public class BOMInputStream extends PushbackInputStream {
 
 			case 0xEF:
 				if ((bom[1] == (byte) 0xBB) && (bom[2] == (byte) 0xBF)) {
-					encoding = "UTF-8";
+					charset = "UTF-8";
 					rev = 3;
 				}
 				break;
 
 			case 0xFE:
 				if ((bom[1] == (byte) 0xFF)) {
-					encoding = "UTF-16BE";
+					charset = "UTF-16BE";
 					rev = 2;
 				}
 				break;
@@ -93,13 +91,13 @@ public class BOMInputStream extends PushbackInputStream {
 	}
 
 	@Override
-	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
+	public final int read(@Nonnull byte[] b, int off, int len) throws IOException {
 		init();
 		return super.read(b, off, len);
 	}
 
 	@Override
-	public int read() throws IOException {
+	public final int read() throws IOException {
 		init();
 		return super.read();
 	}

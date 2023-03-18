@@ -10,7 +10,7 @@
 
 package roj.archive.qz.xz.rangecoder;
 
-import roj.archive.qz.xz.ArrayCache;
+import roj.util.ArrayCache;
 
 import java.io.IOException;
 import java.io.OutputStream;

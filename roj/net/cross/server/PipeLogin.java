@@ -56,7 +56,7 @@ final class PipeLogin extends Stated {
 			print("管道 #" + user + " 开启");
 			AtomicInteger i = server.remain;
 			try {
-				server.man.register(pipe, p -> {
+				server.man.getLoop().register(pipe, p -> {
 					i.addAndGet(2);
 					PipeGroup group1 = (PipeGroup) ((Pipe) p).att;
 					try {

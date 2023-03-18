@@ -241,7 +241,7 @@ public abstract class Obfuscator {
 		List<? extends MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			RawMethod method = (RawMethod) methods.get(i);
-			int acc = method.accesses;
+			int acc = method.access;
 			if ((flags & ADD_SYNTHETIC) != 0) {
 				acc |= AccessFlag.SYNTHETIC;
 			} else if ((flags & REMOVE_SYNTHETIC) != 0) {
@@ -251,10 +251,10 @@ public abstract class Obfuscator {
 				acc &= ~AccessFlag.PROTECTED;
 				acc |= AccessFlag.PUBLIC;
 			}
-			method.accesses = (char) acc;
+			method.access = (char) acc;
 
-			if ((desc.name = method.name.getString()).charAt(0) == '<') continue; // clinit, init
-			desc.param = method.type.getString();
+			if ((desc.name = method.name.str()).charAt(0) == '<') continue; // clinit, init
+			desc.param = method.type.str();
 			if (0 == (acc & (AccessFlag.STATIC | AccessFlag.PRIVATE))) {
 				if (isInherited(desc)) continue;
 			}
@@ -270,7 +270,7 @@ public abstract class Obfuscator {
 		List<? extends FieldNode> fields = data.fields;
 		for (int i = 0; i < fields.size(); i++) {
 			RawField field = (RawField) fields.get(i);
-			int acc = field.accesses;
+			int acc = field.access;
 			if ((flags & ADD_SYNTHETIC) != 0) {
 				acc |= AccessFlag.SYNTHETIC;
 			} else if ((flags & REMOVE_SYNTHETIC) != 0) {
@@ -280,10 +280,10 @@ public abstract class Obfuscator {
 				acc &= ~AccessFlag.PROTECTED;
 				acc |= AccessFlag.PUBLIC;
 			}
-			field.accesses = (char) acc;
+			field.access = (char) acc;
 
-			desc.name = field.name.getString();
-			desc.param = field.type.getString();
+			desc.name = field.name.str();
+			desc.param = field.type.str();
 			desc.flags = (char) acc;
 
 			String fs = obfFieldName(data, desc);

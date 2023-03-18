@@ -23,7 +23,7 @@ final class Layer3 extends Layer {
 	private final SynthesisTask filterCh0;
 	private SynthesisTask filterCh1;
 
-	static final TaskPool DECODER = new TaskPool(0, 2, 1, 120000, "L3 Dec");
+	static final TaskPool DECODER = TaskPool.CpuMassive();
 
 	public Layer3(Header header, AudioBuffer audio) {
 		super(header, audio, new BitStream(0));

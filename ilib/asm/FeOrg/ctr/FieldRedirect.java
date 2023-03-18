@@ -7,12 +7,12 @@ import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.MoFNode;
 import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.FieldInsnNode;
+import roj.asm.tree.insn.InsnList;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
-import roj.asm.util.AttrHelper;
 import roj.asm.util.Context;
-import roj.asm.util.InsnList;
 
 import java.util.List;
 
@@ -70,10 +70,10 @@ public class FieldRedirect implements ContextClassTransformer {
 		if (getMethod == null) throw new RuntimeException("Error processing " + clsName + " - no get method found (is the code somehow obfuscated?)");
 
 		for (int j = 0; j < methods.size(); j++) {
-			MethodNode method = methods.get(j);
-			if (method.name().equals(bypass)) continue;
+			MethodNode mn = methods.get(j);
+			if (mn.name().equals(bypass)) continue;
 
-			AttrCode code = AttrHelper.getOrCreateCode(data.cp, method);
+			AttrCode code = mn.parsedAttr(data.cp, Attribute.Code);
 			if (code == null) continue;
 
 			InsnList insn = code.instructions;
@@ -83,12 +83,7 @@ public class FieldRedirect implements ContextClassTransformer {
 					FieldInsnNode fi = (FieldInsnNode) node;
 					// GETFIELD
 					if (fieldRef.equals(fi.name)) {
-						InvokeInsnNode replace = new InvokeInsnNode(Opcodes.INVOKEVIRTUAL);
-						replace.owner = data.name;
-						replace.name = getMethod.name();
-						replace.rawDesc(getMethod.rawDesc());
-
-						insn.set(i, replace);
+						insn.set(i, new InvokeInsnNode(Opcodes.INVOKEVIRTUAL, data.name, getMethod.name(), getMethod.rawDesc()));
 					}
 				}
 			}

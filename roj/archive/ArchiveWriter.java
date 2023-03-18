@@ -15,6 +15,8 @@ import java.io.IOException;
  * @since 2023/3/15 0015 8:34
  */
 public interface ArchiveWriter extends Closeable {
+	ArchiveEntry createEntry(String fileName);
+
 	void copy(ArchiveFile owner, ArchiveEntry entry) throws IOException;
 
 	default void write(ArchiveEntry entry, DynByteBuf data) throws IOException {

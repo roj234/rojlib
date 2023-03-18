@@ -1,6 +1,7 @@
 package roj.archive.qz;
 
 import roj.archive.ArchiveEntry;
+import roj.text.ACalendar;
 
 import java.io.File;
 import java.io.IOException;
@@ -125,10 +126,10 @@ public class QZEntry implements ArchiveEntry {
             if ((flag & DIRECTORY) != 0) sb.append("文件夹");
             else if ((flag & ANTI) == 0) sb.append("空文件");
         }
-        if ((flag & AT) != 0) sb.append(", AT=").append(accessTime);
-        if ((flag & CT) != 0) sb.append(", CT=").append(createTime);
-        if ((flag & MT) != 0) sb.append(", MT=").append(modifyTime);
-        if ((flag & ATTR) != 0) sb.append(", ATTR=").append(attributes);
+        if ((flag & AT) != 0) sb.append(", AT=").append(ACalendar.toLocalTimeString(getAccessTime()));
+        if ((flag & CT) != 0) sb.append(", CT=").append(ACalendar.toLocalTimeString(getCreationTime()));
+        if ((flag & MT) != 0) sb.append(", MT=").append(ACalendar.toLocalTimeString(getModificationTime()));
+        if ((flag & ATTR) != 0) appendWindowsAttribute(sb.append(", ATTR="));
         if ((flag & CRC) != 0) sb.append(", CRC32=").append(Integer.toHexString(crc32));
 
         if (uSize > 0) {
@@ -137,5 +138,12 @@ public class QZEntry implements ArchiveEntry {
             if (offset != 0) sb.append('+').append(offset);
         }
         return sb.append('}').toString();
+    }
+
+    private void appendWindowsAttribute(StringBuilder sb) {
+        if ((attributes& 1) != 0) sb.append("readonly, ");
+        if ((attributes& 2) != 0) sb.append("hidden, ");
+        if ((attributes& 4) != 0) sb.append("system, ");
+        if ((attributes&32) != 0) sb.append("archive, ");
     }
 }

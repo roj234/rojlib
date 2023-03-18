@@ -7,7 +7,6 @@ public interface ResponseHeader {
 	ChannelCtx ch();
 
 	void finishHandler(HFinishHandler o);
-	void postHandler(HPostHandler ph);
 
 	ResponseHeader code(int code);
 	ResponseHeader die();

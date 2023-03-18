@@ -9,7 +9,6 @@ import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
 import roj.net.ch.handler.Timeout;
 import roj.net.http.HttpHead;
-import roj.net.http.IHttpClient;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.NamespaceKey;
@@ -22,7 +21,7 @@ import java.io.IOException;
  * @author Roj234
  * @since 2022/10/7 0007 21:38
  */
-public class HttpClient20 extends IHttpClient implements ChannelHandler {
+public class HttpClient20 implements ChannelHandler {
 	public static final NamespaceKey H2_GOAWAY = NamespaceKey.of("h2:go_away");
 
 	private static final boolean PROTOCOL_IGNORE = true;
@@ -98,6 +97,7 @@ public class HttpClient20 extends IHttpClient implements ChannelHandler {
 
 	// Other frames (from any stream) MUST NOT occur between the HEADERS frame and any CONTINUATION frames that might follow.
 	boolean continuous;
+	private int state;
 
 	public HttpClient20() {}
 
@@ -468,8 +468,8 @@ public class HttpClient20 extends IHttpClient implements ChannelHandler {
 	public void channelClosed(ChannelCtx ctx) throws IOException {
 		if (errCode == -1 && ctx.isOutputOpen()) {
 			DynByteBuf list = IOUtil.getSharedByteBuf().putMedium(0)
-								  .put((byte) FRAME_GOAWAY).put((byte) 0)
-								  .putInt(streamId).putInt(Integer.MAX_VALUE);
+									.put((byte) FRAME_GOAWAY).put((byte) 0)
+									.putInt(streamId).putInt(Integer.MAX_VALUE);
 			try {
 				ctx.channelWrite(withLength(list));
 			} catch (IOException ignored) {}
@@ -494,8 +494,8 @@ public class HttpClient20 extends IHttpClient implements ChannelHandler {
 		H2Ping ping = this.ping = new H2Ping();
 
 		DynByteBuf list = IOUtil.getSharedByteBuf().putMedium(8)
-							  .put((byte) FRAME_PING).put((byte) 0)
-							  .putInt(0).putLong(ping.sendTime = System.currentTimeMillis());
+								.put((byte) FRAME_PING).put((byte) 0)
+								.putInt(0).putLong(ping.sendTime = System.currentTimeMillis());
 		try {
 			ctx.channelWrite(list);
 		} catch (IOException ignored) {}
@@ -507,8 +507,8 @@ public class HttpClient20 extends IHttpClient implements ChannelHandler {
 		H2Stream c = streams.remove(id);
 		if (c != null) c.local_error(error);
 		DynByteBuf list = IOUtil.getSharedByteBuf().putMedium(4)
-							  .put((byte) FRAME_RST_STREAM).put((byte) 0)
-							  .putInt(id).putInt(error);
+								.put((byte) FRAME_RST_STREAM).put((byte) 0)
+								.putInt(id).putInt(error);
 		try {
 			ctx.channelWrite(list);
 		} catch (IOException ignored) {}
@@ -530,8 +530,8 @@ public class HttpClient20 extends IHttpClient implements ChannelHandler {
 		if (preClose == 0) {
 			preClose = streamId;
 			DynByteBuf list = IOUtil.getSharedByteBuf().putMedium(0)
-								  .put((byte) FRAME_GOAWAY).put((byte) 0)
-								  .putInt(streamId).putInt(id);
+									.put((byte) FRAME_GOAWAY).put((byte) 0)
+									.putInt(streamId).putInt(id);
 			try {
 				ctx.channelWrite(withLength(list));
 			} catch (IOException ignored) {}
@@ -557,9 +557,8 @@ public class HttpClient20 extends IHttpClient implements ChannelHandler {
 		return buf.putMedium(0, buf.wIndex()-6);
 	}
 
-	public IHttpClient enableH2Parallelism() {
+	public void enableH2Parallelism() {
 		vendor_flag |= VF_PARALLEL;
-		return this;
 	}
 
 	public H2Stream newStream(int id) {
@@ -573,21 +572,12 @@ public class HttpClient20 extends IHttpClient implements ChannelHandler {
 		return stream;
 	}
 
-	@Override
-	public ChannelHandler asChannelHandler() {
-		if ((vendor_flag & VF_PARALLEL) != 0)
-			throw new IllegalStateException("Parallel mode");
-		return this;
-	}
-
-	@Override
 	public HttpHead response() {
 		if ((vendor_flag & VF_PARALLEL) != 0)
 			throw new IllegalStateException("Parallel mode");
 		return streams.get(1).header;
 	}
 
-	@Override
 	public void waitFor() throws InterruptedException {
 		if ((vendor_flag & VF_PARALLEL) != 0)
 			throw new IllegalStateException("Parallel mode");

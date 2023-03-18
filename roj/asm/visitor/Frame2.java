@@ -86,12 +86,14 @@ public final class Frame2 {
 	public final void addMonitorV(IntMap<Label> w) {
 		if (locals != null) {
 			for (Var2 v : locals) {
-				if (!w.containsKey(v.bci)) w.putInt(v.bci, new Label());
+				int bci = v.bci();
+				if (bci >= 0 && !w.containsKey(bci)) w.putInt(bci, new Label());
 			}
 		}
 		if (stacks != null) {
 			for (Var2 v : stacks) {
-				if (!w.containsKey(v.bci)) w.putInt(v.bci, new Label());
+				int bci = v.bci();
+				if (bci >= 0 && !w.containsKey(bci)) w.putInt(bci, new Label());
 			}
 		}
 	}
@@ -99,11 +101,11 @@ public final class Frame2 {
 		boolean b = false;
 		if (locals != null) {
 			for (Var2 v : locals)
-				if (v.bci != (v.bci = w.get(v.bci).getValue())) b = true;
+				if (v.bci() >= 0 && v.bci != (v.bci = w.get(v.bci).getValue())) b = true;
 		}
 		if (stacks != null) {
 			for (Var2 v : stacks)
-				if (v.bci != (v.bci = w.get(v.bci).getValue())) b = true;
+				if (v.bci() >= 0 && v.bci != (v.bci = w.get(v.bci).getValue())) b = true;
 		}
 		return b;
 	}
@@ -135,7 +137,7 @@ public final class Frame2 {
 	}
 
 	public String toString() {
-		StringBuilder sb = new StringBuilder("  ").append(getName(type)).append(" #").append(target);
+		StringBuilder sb = new StringBuilder("  ").append(getName(type)).append(" #").append(bci());
 		if (locals != null && locals.length > 0) {
 			sb.append("\n      Local: [");
 			int i = 0;

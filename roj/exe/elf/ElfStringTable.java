@@ -24,7 +24,7 @@ public class ElfStringTable implements ElfSegment {
 		String name = cache.get(idx);
 		if (name == null) {
 			data.rIndex = idx;
-			int len = data.readZeroTerminate();
+			int len = data.readZeroTerminate(0);
 			name = data.readAscii(len);
 			cache.putInt(idx, name);
 		}

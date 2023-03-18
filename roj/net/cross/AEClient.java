@@ -113,7 +113,7 @@ public class AEClient extends IAEClient {
 				if (task == null || task.cipher == null) throw new IOException("错误的状态");
 
 				src = rb.readInt();
-				task.fail((src < 0 ? "服务端" : "房主") + "拒绝开启频道: " + rb.readVarIntUTF());
+				task.fail((src < 0 ? "服务端" : "房主") + "拒绝开启频道: " + rb.readVUIUTF());
 				break;
 			case P_CHANNEL_RESULT:
 				task = (GetPipe) asyncRead.poll();
@@ -240,7 +240,7 @@ public class AEClient extends IAEClient {
 		super.channelClosed(ctx);
 	}
 
-	final class Listener implements Consumer<ServerSock> {
+	final class Listener implements Consumer<MyChannel> {
 		final ServerSock socket;
 		final int portId;
 		final char port;
@@ -256,11 +256,8 @@ public class AEClient extends IAEClient {
 		}
 
 		@Override
-		public void accept(ServerSock sock) {
-			if (!sock.isOpen()) return;
-
+		public void accept(MyChannel ch) {
 			try {
-				MyChannel ch = sock.accept();
 				initSocketPref(ch);
 				asyncTick.offer(new GetPipe(portId, ch));
 			} catch (IOException e) {

@@ -1,7 +1,6 @@
 package ilib.asm.rpl;
 
 import roj.collect.SimpleList;
-import roj.concurrent.FastThreadLocal;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.util.EnumFacing;
@@ -15,7 +14,7 @@ import net.minecraft.util.math.Vec3i;
  */
 public final class PMB_TL extends BlockPos.MutableBlockPos {
 	private boolean field_185350_f;
-	private static final FastThreadLocal<SimpleList<PMB_TL>> ul = FastThreadLocal.withInitial(SimpleList::new);
+	private static final ThreadLocal<SimpleList<PMB_TL>> ul = ThreadLocal.withInitial(SimpleList::new);
 
 	private PMB_TL(int _lvt_1_, int _lvt_2_, int _lvt_3_) {
 		super(_lvt_1_, _lvt_2_, _lvt_3_);
@@ -36,7 +35,7 @@ public final class PMB_TL extends BlockPos.MutableBlockPos {
 	public static PooledMutableBlockPos func_185339_c(int xIn, int yIn, int zIn) {
 		SimpleList<PMB_TL> pool = ul.get();
 		if (!pool.isEmpty()) {
-			PMB_TL p = pool.remove(pool.size() - 1);
+			PMB_TL p = pool.pop();
 			if (p != null && p.field_185350_f) {
 				p.field_185350_f = false;
 				p.setPos(xIn, yIn, zIn);

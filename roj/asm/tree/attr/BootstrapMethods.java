@@ -61,7 +61,7 @@ public final class BootstrapMethods extends Attribute {
 				list.add(c);
 			}
 			CstRef ref = handle.getRef();
-			methods.add(new BootstrapMethod(ref.getClassName(), ref.desc().getName().getString(), ref.desc().getType().getString(), handle.kind, ref.type(), list));
+			methods.add(new BootstrapMethod(ref.className(), ref.desc().name().str(), ref.desc().getType().str(), handle.kind, ref.type(), list));
 		}
 
 		return methods;
@@ -231,7 +231,7 @@ public final class BootstrapMethods extends Attribute {
 
 		public String interfaceDesc() {
 			CstMethodType mType = (CstMethodType) arguments.get(0);
-			return mType.getValue().getString();
+			return mType.name().str();
 		}
 
 		public CstRef implementor() {

@@ -36,26 +36,36 @@ public class NativeMemory {
 		}
 		Object newHeapBuffer2(Object buf, int mark, int pos, int lim, int cap, int off, Object memorySegmentProxy);
 
+		default byte[] getHb(ByteBuffer buf) { return null; }
+		default int getOffset(ByteBuffer buf) { return 0; }
+		void setHb(ByteBuffer buf, byte[] hb);
+		void setOffset(ByteBuffer buf, int offset);
+
 		void setCapacity(Buffer b, int newCapacity);
 		void setAddress(Buffer b, long newAddress);
 
 		Object newCleaner(Object ref, Runnable callback);
+		void invokeClean(Object cleaner);
 
 		boolean isDirectMemoryPageAligned();
 	}
 
 	static final H hlp;
-
 	static {
 		try {
 			DirectAccessor<H> da = DirectAccessor.builder(H.class);
+			try {
+				da.access(ByteBuffer.class, new String[]{"hb","offset"});
+			} catch (Exception ignored) {}
+
 			boolean j17 = ReflectionUtils.JAVA_VERSION >= 17;
-			boolean j9 = ReflectionUtils.JAVA_VERSION > 8;
-			da.construct(Class.forName("java.nio.DirectByteBuffer"), new String[]{j17 ?"newDirectBuffer2":"newDirectBuffer"}, j17?Collections.emptyList():null)
-			  .construct(Class.forName("java.nio.HeapByteBuffer"), new String[]{j17 ?"newHeapBuffer2":"newHeapBuffer"}, j17?Collections.emptyList():null)
-			  .delegate(Class.forName(j9 ?"jdk.internal.ref.Cleaner":"sun.misc.Cleaner"), "create", "newCleaner")
-			  .delegate(Class.forName(j9 ?"jdk.internal.misc.VM":"sun.misc.VM"), "isDirectMemoryPageAligned")
-				.access(Buffer.class, new String[]{"capacity", "address"}, null, new String[]{"setCapacity","setAddress"});
+			boolean j9 = ReflectionUtils.JAVA_VERSION >= 9;
+			da.construct(Class.forName("java.nio.DirectByteBuffer"), new String[]{j17?"newDirectBuffer2":"newDirectBuffer"}, j17?Collections.emptyList():null)
+			  .construct(Class.forName("java.nio.HeapByteBuffer"), new String[]{j17?"newHeapBuffer2":"newHeapBuffer"}, j17?Collections.emptyList():null)
+			  .delegate(Class.forName(j9?"jdk.internal.misc.VM":"sun.misc.VM"), "isDirectMemoryPageAligned")
+			  .access(Buffer.class, new String[]{"capacity", "address"}, null, new String[]{"setCapacity","setAddress"});
+			Class<?> cleaner = Class.forName(j9?"jdk.internal.ref.Cleaner" : "sun.misc.Cleaner");
+			da.delegate(cleaner, new String[] {"create", "clean"}, new String[] {"newCleaner", "invokeClean"});
 
 			String[] names = {"pageSize", "reserveMemory", "unreserveMemory"};
 			hlp = da.delegate(Class.forName("java.nio.Bits"), names, j17 ? new String[] {"pageSize", "reserveMemory2", "unreserveMemory2"} : names).build();
@@ -75,9 +85,23 @@ public class NativeMemory {
 	public static ByteBuffer newHeapBuffer(byte[] buf, int mark, int pos, int lim, int cap, int off) {
 		return hlp.newHeapBuffer(buf, mark, pos, lim, cap, off);
 	}
+	public static void cleanNativeMemory(Object cleaner) {
+		hlp.invokeClean(cleaner);
+	}
+	public static byte[] getArray(ByteBuffer buf) {
+		return hlp.getHb(buf);
+	}
+	public static int getOffset(ByteBuffer buf) {
+		return hlp.getOffset(buf);
+	}
 
 	public NativeMemory() {
 		hlp.newCleaner(this, unmanaged);
+	}
+
+	public NativeMemory(int size) {
+		this();
+		allocate(size);
 	}
 
 	private final Unmanaged unmanaged = new Unmanaged();
@@ -118,10 +142,6 @@ public class NativeMemory {
 
 	public boolean expandInline(int required) {
 		return false;
-	}
-
-	public static void GC你别过来(NativeMemory nm) {
-		if (nm != null) nm.lock.getHoldCount();
 	}
 
 	static final class Unmanaged implements Runnable {

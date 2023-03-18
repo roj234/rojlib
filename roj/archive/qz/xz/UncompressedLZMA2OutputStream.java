@@ -9,10 +9,13 @@
 
 package roj.archive.qz.xz;
 
+import roj.io.Finishable;
+import roj.util.ArrayCache;
+
 import java.io.IOException;
 import java.io.OutputStream;
 
-class UncompressedLZMA2OutputStream extends FinishableOutputStream {
+class UncompressedLZMA2OutputStream extends OutputStream implements Finishable {
 	private final ArrayCache arrayCache;
 
 	private OutputStream out;
@@ -112,8 +115,8 @@ class UncompressedLZMA2OutputStream extends FinishableOutputStream {
 			writeEndMarker();
 
 			try {
-				if (out instanceof FinishableOutputStream)
-					((FinishableOutputStream) out).finish();
+				if (out instanceof Finishable)
+					((Finishable) out).finish();
 			} catch (IOException e) {
 				try {
 					close();

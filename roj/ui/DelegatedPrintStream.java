@@ -3,6 +3,7 @@ package roj.ui;
 import org.jetbrains.annotations.ApiStatus.OverrideOnly;
 import roj.io.DummyOutputStream;
 import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.ByteList.Slice;
 
@@ -83,26 +84,15 @@ public class DelegatedPrintStream extends PrintStream {
 	}
 
 	private synchronized void write(CharSequence str) {
-		int i = 0, prev = 0;
-		while (i < str.length()) {
-			if ('\n' == str.charAt(i)) {
-				if (sb.length() + i-prev > MAX) {
-					sb.delete(0, sb.length() + i-prev - MAX);
-				}
-
-				sb.append(str, prev, i);
-				newLine();
-				prev = i + 1;
+		int i = 0;
+		while (true) {
+			i = TextUtil.gAppendToNextCRLF(str, i, sb);
+			if (sb.length() > MAX) {
+				sb.setLength(MAX-9);
+				sb.append("<该行过长...>");
 			}
-			i++;
-		}
-
-		if (prev < i) {
-			if (sb.length() + i-prev > MAX) {
-				sb.delete(0, sb.length() + i-prev - MAX);
-			}
-
-			sb.append(str, prev, i);
+			if (i < str.length()) newLine();
+			else break;
 		}
 	}
 

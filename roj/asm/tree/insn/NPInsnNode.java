@@ -11,12 +11,9 @@ public final class NPInsnNode extends InsnNode {
 		super(code);
 	}
 
+	@Deprecated
 	public static NPInsnNode of(byte code) {
 		return new NPInsnNode(code);
-	}
-
-	public static NPInsnNode of(int code) {
-		return new NPInsnNode((byte) code);
 	}
 
 	@Override

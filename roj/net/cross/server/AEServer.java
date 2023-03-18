@@ -1,19 +1,17 @@
 package roj.net.cross.server;
 
 import roj.collect.IntMap;
-import roj.concurrent.PrefixFactory;
 import roj.concurrent.Shutdownable;
 import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
 import roj.net.ch.MyChannel;
-import roj.net.ch.SelectorLoop;
-import roj.net.ch.ServerSock;
 import roj.net.ch.handler.Compress;
 import roj.net.ch.handler.MSSCipher;
 import roj.net.ch.handler.Timeout;
 import roj.net.ch.handler.VarintSplitter;
+import roj.net.ch.osi.ServerLaunch;
 import roj.net.mss.MSSEngine;
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -36,13 +34,13 @@ import static roj.net.cross.Util.*;
  * @author Roj233
  * @since 2021/8/17 22:17
  */
-public class AEServer implements Shutdownable, Consumer<ServerSock> {
+public class AEServer implements Shutdownable, Consumer<MyChannel> {
 	static AEServer server;
 
 	// 20分钟
 	static final int PIPE_TIMEOUT = 1200_000;
 
-	byte[] info = EmptyArrays.BYTES;
+	byte[] info = ArrayCache.BYTES;
 
 	public void setMOTD(String motd) {
 		info = motd.getBytes(StandardCharsets.UTF_8);
@@ -55,38 +53,21 @@ public class AEServer implements Shutdownable, Consumer<ServerSock> {
 	final Random rnd;
 
 	private final TaskPool asyncPool;
-	final SelectorLoop man;
+	final ServerLaunch man;
 	private final Supplier<MSSEngine> factory;
 
-	final ServerSock s;
 	final AtomicInteger remain;
 
 	public AEServer(InetSocketAddress addr, int conn, Supplier<MSSEngine> factory) throws IOException {
 		server = this;
 
-		s = ServerSock.openTCP().bind(addr.getAddress(), addr.getPort(), conn).setOption(StandardSocketOptions.SO_REUSEADDR, true);
+		this.man = ServerLaunch.tcp().listen_(addr, conn).option(StandardSocketOptions.SO_REUSEADDR, true).initializator(this);
 
 		this.remain = new AtomicInteger(conn);
 		this.factory = factory;
 		this.rnd = new SecureRandom();
 
-		int thr = Runtime.getRuntime().availableProcessors();
-		String p = System.getProperty("AE.client_selectors");
-		if (p != null) {
-			try {
-				thr = Integer.parseInt(p);
-			} catch (NumberFormatException ignored) {}
-		}
-		this.man = new SelectorLoop(this, "AE 服务器IO", 0, thr, 60000, 100);
-
-		thr = 6;
-		p = System.getProperty("AE.executors");
-		if (p != null) {
-			try {
-				thr = Integer.parseInt(p);
-			} catch (NumberFormatException ignored) {}
-		}
-		this.asyncPool = new TaskPool(1, thr, 1, 1, 120000, new PrefixFactory("Executor"));
+		this.asyncPool = TaskPool.ParallelPool();
 		this.asyncPool.setRejectPolicy(TaskPool::newThreadPolicy);
 	}
 
@@ -95,14 +76,8 @@ public class AEServer implements Shutdownable, Consumer<ServerSock> {
 	}
 
 	@Override
-	public void accept(ServerSock sock) {
-		if (!sock.isOpen()) {
-			shutdown();
-			return;
-		}
+	public void accept(MyChannel ctx) {
 		try {
-			MyChannel ctx = sock.accept();
-
 			if (remain.decrementAndGet() <= 0) {
 				remain.getAndIncrement();
 				ctx.close();
@@ -120,9 +95,6 @@ public class AEServer implements Shutdownable, Consumer<ServerSock> {
 				   .addLast("state", Handshake.HANDSHAKE)
 				   .addLast("handler", client);
 				ctx.attachment(Client.CLIENT, client);
-				ctx.open();
-
-				man.register(ctx, null);
 			}
 		} catch (Throwable e) {
 			e.printStackTrace();
@@ -159,11 +131,10 @@ public class AEServer implements Shutdownable, Consumer<ServerSock> {
 	public void shutdown() {
 		if (shutdown) return;
 		try {
-			s.close();
+			man.close();
 		} catch (IOException ignored) {}
 
 		asyncPool.shutdown();
-		man.shutdown();
 
 		for (Room room : rooms.values()) {
 			room.token = null;
@@ -204,6 +175,7 @@ public class AEServer implements Shutdownable, Consumer<ServerSock> {
 	}
 
 	public void start() throws IOException {
-		s.register(man, this);
+		man.launch();
+		man.getLoop().setOwner(this);
 	}
 }

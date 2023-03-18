@@ -51,7 +51,7 @@ public class Shader {
 	 * Shared code for compiling a shader program's shader
 	 */
 	protected int createShader(String shader, int shaderType, boolean isPath) throws IOException {
-		shader = isPath ? IOUtil.readUTF(shader) : shader;
+		shader = isPath ? IOUtil.readResUTF(shader) : shader;
 		int id = GL20.glCreateShader(shaderType);
 
 		if (id == 0) throw new RuntimeException("Shader type: " + shaderType);

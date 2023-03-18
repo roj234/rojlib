@@ -14,9 +14,12 @@ import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.InsnHelper;
 import roj.asm.util.InsnList;
+import roj.asm.visitor.CodeWriter;
+import roj.asm.visitor.Label;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.text.CharList;
+import roj.util.Helpers;
 import roj.util.VarMapperX;
 import roj.util.VarMapperX.VarX;
 
@@ -32,11 +35,14 @@ import static roj.asm.frame.VarType.*;
  * @author Roj233
  * @since 2022/2/5 11:50
  */
+@Deprecated
 public class MethodPoet extends Interpreter {
-	public ClassPoet parent;
+	public CodeWriter cw;
 
 	public Method method;
+	@Deprecated
 	public AttrCode code;
+	@Deprecated
 	public InsnList insn;
 	public boolean preferSpace;
 
@@ -44,15 +50,13 @@ public class MethodPoet extends Interpreter {
 	private final MyHashSet<Variable> stored = new MyHashSet<>();
 	private final List<Variable> thisArgs = new SimpleList<>();
 
-	public MethodPoet(ClassPoet parent) {
-		this.parent = parent;
-	}
+	public MethodPoet() {}
 
 	@Override
 	public void init(MethodNode owner) {
 		Method m = (Method) owner;
 		this.method = m;
-		this.code = m.code = new AttrCode(owner);
+		this.code = m.setCode(new AttrCode(owner));
 		this.insn = code.instructions;
 		super.init(owner);
 
@@ -60,7 +64,7 @@ public class MethodPoet extends Interpreter {
 		stored.clear();
 		thisArgs.clear();
 
-		boolean vir = 0 == (owner.accessFlag() & AccessFlag.STATIC);
+		boolean vir = 0 == (owner.modifier() & AccessFlag.STATIC);
 		if (vir) { // this
 			Variable v = new Variable("this", new Type(owner.ownerClass()));
 			v.curType = local.list[0];
@@ -273,6 +277,10 @@ public class MethodPoet extends Interpreter {
 	public MethodPoet node(InsnNode node) {
 		super.visitNode(node);
 		insn.add(node);
+		return this;
+	}
+
+	public MethodPoet node(Label node) {
 		return this;
 	}
 
@@ -538,9 +546,8 @@ public class MethodPoet extends Interpreter {
 		return true;
 	}
 
-	public MethodPoet goto1(InsnNode label) {
-		insn.add(new JumpInsnNode(label));
-		return this;
+	public MethodPoet goto1(Label label) {
+		return jump(GOTO, label);
 	}
 
 	public MethodPoet if1(byte opcode, InsnNode label) {
@@ -700,7 +707,7 @@ public class MethodPoet extends Interpreter {
 
 	// endregion
 
-	public ClassPoet done() {
+	public void finish() {
 		VarMapperX vmx = new VarMapperX();
 		List<Variable> tmp1 = thisArgs;
 		tmp1.clear();
@@ -752,14 +759,12 @@ public class MethodPoet extends Interpreter {
 		System.out.println("maxStackSize= " + maxStackSize);
 		code.localSize = (char) maxInUse;
 		code.stackSize = (char) maxStackSize;
-
-		return parent;
 	}
 
-	public LabelInsnNode label() {
+	public Label label() {
 		LabelInsnNode label = new LabelInsnNode();
 		insn.add(label);
-		return label;
+		return Helpers.nonnull();
 	}
 
 	public final Var2 stackTop() {
@@ -804,5 +809,9 @@ public class MethodPoet extends Interpreter {
 		public int hashCode() {
 			return System.identityHashCode(this);
 		}
+	}
+
+	public MethodPoet jump(byte code, Label target) {
+		return this;
 	}
 }

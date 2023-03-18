@@ -2,7 +2,6 @@ package roj.net.ddns;
 
 import roj.config.JSONParser;
 import roj.config.data.CMapping;
-import roj.config.word.StreamAsChars;
 import roj.io.IOUtil;
 import roj.net.URIUtil;
 import roj.net.http.Headers;
@@ -63,7 +62,7 @@ public class CTLightCat extends IpGetter {
 			if (System.currentTimeMillis() - refreshTime > 60000) refreshAccessToken();
 
 			SyncHttpClient shc = pool.request(new URL("http://"+catUrl+"/cgi-bin/luci/admin/settings/gwinfo?get=part"), APPLY_TOKEN);
-			CMapping url = JSONParser.parses(new StreamAsChars(shc.getInputStream())).asMap();
+			CMapping url = new JSONParser().parseRaw(shc.getInputStream()).asMap();
 
 			InetAddress WANIP = InetAddress.getByName(url.getString("WANIP")),
 						WANIPv6 = InetAddress.getByName(url.getString("WANIPv6"));

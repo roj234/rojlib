@@ -1,7 +1,9 @@
 package roj.asm.tree;
 
+import roj.asm.cst.ConstantPool;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.util.AttributeList;
+import roj.util.TypedName;
 
 import javax.annotation.Nullable;
 
@@ -15,6 +17,10 @@ public interface Attributed {
 		return list == null ? null : (Attribute) list.getByName(name);
 	}
 
+	default <T extends Attribute> T parsedAttr(ConstantPool cp, TypedName<T> type) {
+		throw new UnsupportedOperationException("未实现");
+	}
+
 	default void putAttr(Attribute inv) {
 		attributes().add(inv);
 	}
@@ -25,8 +31,8 @@ public interface Attributed {
 	@Nullable
 	default AttributeList attributesNullable() {return null;}
 
-	char accessFlag();
-	default void accessFlag(int flag) {
+	char modifier();
+	default void modifier(int flag) {
 		throw new UnsupportedOperationException(getClass().getName());
 	}
 

@@ -1,6 +1,6 @@
 package roj.concurrent;
 
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 
 /**
  * @author Roj233
@@ -19,6 +19,6 @@ public class FastLocalThread extends Thread {
 		super(tg, name);
 	}
 
-	Object[] localDataArray = EmptyArrays.OBJECTS;
+	Object[] localDataArray = ArrayCache.OBJECTS;
 	final Object arrayLock = new Object();
 }

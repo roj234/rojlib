@@ -15,7 +15,7 @@ public final class AttrClassRef extends Attribute {
 
 	public AttrClassRef(String name, DynByteBuf r, ConstantPool pool) {
 		super(name);
-		this.owner = ((CstClass) pool.get(r)).getValue().getString();
+		this.owner = ((CstClass) pool.get(r)).name().str();
 	}
 
 	public String owner;

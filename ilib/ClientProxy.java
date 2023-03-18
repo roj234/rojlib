@@ -173,8 +173,8 @@ public final class ClientProxy extends ServerProxy {
 
 	static {
 		try {
-			itemMergedModel = new BlockStateBuilder(IOUtil.readUTF(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/items.json"), true);
-			blockMergedModel = new BlockStateBuilder(IOUtil.readUTF(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/blocks.json"), false);
+			itemMergedModel = new BlockStateBuilder(IOUtil.readResUTF(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/items.json"), true);
+			blockMergedModel = new BlockStateBuilder(IOUtil.readResUTF(ClientProxy.class, "assets/" + ImpLib.MODID + "/blockstates/blocks.json"), false);
 			fluidMergedModel = new BlockStateBuilder(false).setDefaultModel("forge:fluid");
 		} catch (IOException e) {
 			e.printStackTrace();

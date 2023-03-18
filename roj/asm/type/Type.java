@@ -1,6 +1,5 @@
 package roj.asm.type;
 
-import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.Helpers;
@@ -16,22 +15,22 @@ import java.util.function.UnaryOperator;
 public final class Type implements IType {
 	public static final char ARRAY = '[', CLASS = 'L', VOID = 'V', BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT = 'S', INT = 'I', FLOAT = 'F', DOUBLE = 'D', LONG = 'J';
 
-	private static final Object[][] MAP = new Object[26][];
+	static final Object[][] MAP = new Object[26][];
 	static {
-		A(ARRAY, "[", "array", 4);
-		A(CLASS, "L", "class", 4);
-		A(VOID, "V", "void", 5);
-		A(BOOLEAN, "Z", "boolean", 0);
-		A(BYTE, "B", "byte", 0);
-		A(CHAR, "C", "char", 0);
-		A(SHORT, "S", "short", 0);
-		A(INT, "I", "int", 0);
-		A(FLOAT, "F", "float", 2);
-		A(DOUBLE, "D", "double", 3);
-		A(LONG, "J", "long", 1);
+		A(ARRAY, "[", null, null, 4);
+		A(CLASS, "L", "object", "A", 4);
+		A(VOID, "V", "void", null, 5);
+		A(BOOLEAN, "Z", "boolean", "I", 0);
+		A(BYTE, "B", "byte", "I", 0);
+		A(CHAR, "C", "char", "I", 0);
+		A(SHORT, "S", "short", "I", 0);
+		A(INT, "I", "int", "I", 0);
+		A(FLOAT, "F", "float", "F", 2);
+		A(DOUBLE, "D", "double", "D", 3);
+		A(LONG, "J", "long", "L", 1);
 	}
-	private static void A(char c, String str, String desc, int off) {
-		MAP[c-BYTE] = new Object[] {str, desc, new Type((byte)c, false), off};
+	private static void A(char c, String desc, String name, String opName, int off) {
+		MAP[c-BYTE] = new Object[] {desc, name, new Type((byte)c, false), off, opName};
 	}
 
 	public static String toDesc(int type) {
@@ -40,8 +39,7 @@ public final class Type implements IType {
 		if (arr == null) return Helpers.nonnull();
 		return arr[0].toString();
 	}
-
-	public static String toString(byte type) {
+	public static String toString(int type) {
 		if (type < BYTE || type > ARRAY) return Helpers.nonnull();
 		Object[] arr = MAP[type-BYTE];
 		if (arr == null) return Helpers.nonnull();
@@ -51,14 +49,6 @@ public final class Type implements IType {
 	public static boolean isValid(int c) {
 		if (c < BYTE || c > ARRAY) return false;
 		return MAP[c-BYTE] != null;
-	}
-
-	public static byte validate(int c) {
-		if (c >= BYTE && c <= ARRAY) {
-			Object[] arr = MAP[c-BYTE];
-			if (arr != null) return (byte) c;
-		}
-		throw new IllegalArgumentException("Illegal type desc " + (char)c);
 	}
 
 	public static Type std(int c) {
@@ -80,23 +70,20 @@ public final class Type implements IType {
 		type = c;
 	}
 
-	public Type(char type) {
-		this(type, 0);
-	}
-
+	public Type(char type) { this(type, 0); }
 	/**
 	 * TYPE_OTHER
 	 */
 	public Type(int type, int array) {
-		this.type = validate(type);
-		if (type == ARRAY) throw new IllegalStateException("Array type is only for compute");
+		if (!isValid(type)) throw new IllegalArgumentException("Not valid type: " + type);
+		if (type == ARRAY) throw new IllegalArgumentException("Array type is only for switch");
+		if (type == CLASS) throw new IllegalArgumentException("Owner cannot be null");
+
+		this.type = (byte) type;
 		setArrayDim(array);
 	}
 
-	public Type(String type) {
-		this(type, 0);
-	}
-
+	public Type(String type) { this(type, 0); }
 	/**
 	 * TYPE_CLASS
 	 */
@@ -115,11 +102,7 @@ public final class Type implements IType {
 
 	@Override
 	public void toString(CharList sb) {
-		if (this.owner != null) {
-			sb.append(owner);
-		} else {
-			sb.append(toString(type));
-		}
+		sb.append(this.owner != null ? owner : toString(type));
 		for (int i = array&0xFF; i > 0; i--) sb.append("[]");
 	}
 
@@ -134,10 +117,7 @@ public final class Type implements IType {
 	}
 
 	@Override
-	public String owner() {
-		if (owner == null) throw new IllegalStateException("Kind is not class");
-		return owner;
-	}
+	public String owner() { return owner; }
 
 	@Override
 	public void owner(String owner) {
@@ -169,33 +149,21 @@ public final class Type implements IType {
 	}
 
 	public byte shiftedOpcode(int code, boolean allowVoid) {
-		if (array != 0) return (byte) (4+code);
-		int v = (int) MAP[type-BYTE][3];
-		if (v == 5 && !allowVoid) throw new IllegalStateException("VOID is not allowed");
-		return (byte) (v+code);
+		if (type == VOID && !allowVoid) throw new IllegalStateException("VOID is not allowed");
+		return (byte) ((int) MAP[getActualType()-BYTE][3]+code);
 	}
 
-	@Deprecated
 	public String nativeName() {
-		switch (type) {
-			case CLASS:
-				return "A";
-			case VOID:
-				return "";
-			case BOOLEAN:
-			case BYTE:
-			case CHAR:
-			case SHORT:
-			case INT:
-				return "I";
-			case FLOAT:
-				return "F";
-			case DOUBLE:
-				return "D";
-			case LONG:
-				return "L";
-		}
-		throw OperationDone.NEVER;
+		return MAP[getActualType()-BYTE][4].toString();
+	}
+	public boolean isPrimitive() {
+		return array == 0 && type != CLASS;
+	}
+	public int getActualType() {
+		return array == 0 ? type : CLASS;
+	}
+	public String getActualClass() {
+		return array == 0 ? owner : toDesc();
 	}
 
 	public String toString() {

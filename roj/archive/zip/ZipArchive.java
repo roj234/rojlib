@@ -5,7 +5,6 @@ import roj.archive.ArchiveFile;
 import roj.archive.ChecksumInputStream;
 import roj.collect.*;
 import roj.collect.RSegmentTree.Range;
-import roj.concurrent.FastThreadLocal;
 import roj.crypt.CipheR;
 import roj.crypt.CipherInputStream;
 import roj.crypt.CipherOutputStream;
@@ -17,8 +16,8 @@ import roj.io.source.BufferedSource;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.io.source.SplittedSource;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
-import roj.util.EmptyArrays;
 import roj.util.Helpers;
 
 import java.io.*;
@@ -61,8 +60,8 @@ public class ZipArchive implements ArchiveFile {
 	private Deflater deflater;
 
 	private static final Comparator<ZEntry> CEN_SORTER = (o1, o2) -> Long.compare(o1.offset, o2.offset);
-	static final FastThreadLocal<List<InflateIn>> inflaters = FastThreadLocal.withInitial(SimpleList::new);
-	static final int MAX_INFLATER_SIZE = 16;
+	static final ThreadLocal<List<InflateIn>> inflaters = ThreadLocal.withInitial(SimpleList::new);
+	static final int MAX_INFLATER_SIZE = 10;
 
 	byte flags;
 
@@ -106,11 +105,11 @@ public class ZipArchive implements ArchiveFile {
 		ZIP_AES = 51;
 
 	public ZipArchive(String name) throws IOException {
-		this(new File(name), FLAG_KILL_EXT | FLAG_VERIFY, 0, StandardCharsets.UTF_8);
+		this(new File(name), FLAG_KILL_EXT | FLAG_VERIFY | FLAG_BACKWARD_READ, 0, StandardCharsets.UTF_8);
 	}
 
 	public ZipArchive(File file) throws IOException {
-		this(file, FLAG_KILL_EXT | FLAG_VERIFY, 0, StandardCharsets.UTF_8);
+		this(file, FLAG_KILL_EXT | FLAG_VERIFY | FLAG_BACKWARD_READ, 0, StandardCharsets.UTF_8);
 	}
 
 	public ZipArchive(File file, int flag) throws IOException {
@@ -224,7 +223,7 @@ public class ZipArchive implements ArchiveFile {
 		end.cDirLen = end.cDirOffset = 0;
 
 		try {
-			if ((flags & FLAG_BACKWARD_READ) != 0 && r.hasChannel()) readBackward();
+			if ((flags & FLAG_BACKWARD_READ) != 0 && r.hasChannel() && r.length() > 128) readBackward();
 			else readForward();
 		} catch (EOFException e) {
 			ZipException ze = (ZipException) new ZipException("Unexpected EOF at " + r.position()).initCause(e);
@@ -253,7 +252,7 @@ public class ZipArchive implements ArchiveFile {
 
 	private void readForward() throws IOException {
 		Source r1 = r;
-		if (!r.isBuffered()) r = new BufferedSource(r, 1024);
+		if (!r.isBuffered()) r = BufferedSource.wrap(r);
 
 		// found_end = 1
 		// found_zip64 = 2
@@ -316,7 +315,7 @@ public class ZipArchive implements ArchiveFile {
 		mb.order(ByteOrder.BIG_ENDIAN);
 
 		boolean hasEnd = false;
-		int pos = mb.capacity();
+		int pos = mb.capacity()-3;
 		while (pos > 0) {
 			if ((mb.get(--pos) & 0xFF) != 'P') continue;
 
@@ -345,7 +344,7 @@ public class ZipArchive implements ArchiveFile {
 			entries.ensureCapacity(end.cDirOnDisk);
 
 			Source r1 = r;
-			if (!r.isBuffered()) r = new BufferedSource(r, 1024);
+			if (!r.isBuffered()) r = BufferedSource.wrap(r);
 
 			try {
 				r.seek(end.cDirOffset);
@@ -550,13 +549,13 @@ public class ZipArchive implements ArchiveFile {
 		END end = this.end;
 
 		if (!zip64) {
-			//end.diskId = buf.readUShortLE();
-			//end.cDirBegin = buf.readUShortLE();
-			end.cDirOnDisk = buf.readUShortLE();
-			end.cDirTotal = buf.readUShortLE();
+			//end.diskId = buf.readUShortLE(0);
+			//end.cDirBegin = buf.readUShortLE(2);
+			end.cDirOnDisk = buf.readUShortLE(4);
+			end.cDirTotal = buf.readUShortLE(6);
 
-			end.cDirLen = buf.readUIntLE();
-			end.cDirOffset = buf.readUIntLE();
+			end.cDirLen = buf.readUIntLE(8);
+			end.cDirOffset = buf.readUIntLE(12);
 		}
 
 		int commentLen = buf.readUShortLE(16);
@@ -564,12 +563,14 @@ public class ZipArchive implements ArchiveFile {
 			buf = read(commentLen);
 			end.comment = buf.toByteArray();
 		} else {
-			end.comment = EmptyArrays.BYTES;
+			end.comment = ArrayCache.BYTES;
 		}
 
 		return !zip64 && (end.cDirLen == U32_MAX || end.cDirOffset == U32_MAX || end.cDirOnDisk == 0xFFFF);
 	}
 	private void readEND64() throws IOException {
+		ByteList buf = read((int) read(8).readLongLE());
+		END end = this.end;
 		// 0  u2 ver
 		// 2  u2 ver
 		// 4  u4 diskId
@@ -578,19 +579,11 @@ public class ZipArchive implements ArchiveFile {
 		// 20 u8 totalEntryCount
 		// 28 u8 cDirLen
 		// 36 u8 cDirBegin
+		end.cDirOnDisk = (int) buf.readLongLE(12);
+		end.cDirTotal = (int) buf.readLongLE(20);
 
-		ByteList buf = read((int) read(8).readLongLE());
-		buf.rIndex = 4; // skip version ... maybe do a check?
-
-		END end = this.end;
-
-		//end.diskId = buf.readIntLE();
-		//end.cDirBegin = buf.readIntLE();
-		end.cDirOnDisk = (int) buf.readLongLE();
-		end.cDirTotal = (int) buf.readLongLE();
-
-		end.cDirLen = buf.readLongLE();
-		end.cDirOffset = buf.readLongLE();
+		end.cDirLen = buf.readLongLE(28);
+		end.cDirOffset = buf.readLongLE(36);
 	}
 
 	// endregion
@@ -667,15 +660,18 @@ public class ZipArchive implements ArchiveFile {
 			}
 		}
 
-		if (file.method == ZipEntry.DEFLATED) {
-			List<InflateIn> infs = inflaters.get();
-			if (infs.isEmpty()) in = new InflateIn(in);
-			else in = infs.remove(infs.size() - 1).reset(in);
-		}
+		if (file.method == ZipEntry.DEFLATED) in = _cachedInflate(in);
 
 		if ((file.mzfFlag & MZ_NOCRC) == 0 && (flags & FLAG_VERIFY) != 0)
 			in = new ChecksumInputStream(in, new CRC32(), file.CRC32 & 0xFFFFFFFFL);
 
+		return in;
+	}
+
+	public static InputStream _cachedInflate(InputStream in) {
+		List<InflateIn> infs = inflaters.get();
+		if (infs.isEmpty()) in = new InflateIn(in);
+		else in = infs.remove(infs.size() - 1).reset(in);
 		return in;
 	}
 
@@ -1073,9 +1069,7 @@ public class ZipArchive implements ArchiveFile {
 		bw.writeToStream(out);
 		bw.clear();
 
-		if (r.length() != r.position()) {
-			r.setLength(r.position());
-		}
+		r.setLength(r.position());
 	}
 
 	private static void checkName(EntryMod entry) {

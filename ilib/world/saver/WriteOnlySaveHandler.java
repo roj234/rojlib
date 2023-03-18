@@ -2,6 +2,7 @@ package ilib.world.saver;
 
 import ilib.ImpLib;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.CompressedStreamTools;
@@ -37,7 +38,7 @@ public class WriteOnlySaveHandler extends SaveHandler implements ISaveHandler, I
 	public static final int VERSION_1_12_2 = 19133;
 
 	public WriteOnlySaveHandler(File worldDir, WorldInfo worldInfo) {
-		super(worldDir, "", true, ChunkSavingProvider.DEAFULTFIXER);
+		super(worldDir, "", true, Minecraft.getMinecraft().getDataFixer());
 		this.worldDirectory = worldDir;
 		this.worldDirectory.mkdirs();
 

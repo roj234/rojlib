@@ -5,7 +5,7 @@ package roj.archive.qz.bcj;
  * @author Lasse Collin <lasse.collin@tukaani.org>, Roj234
  * @since 2023/3/16 0016 2:19
  */
-public class X86Filter extends BCJFilter {
+public class X86Filter extends Filter {
     private static final boolean[] MASK_TO_ALLOWED_STATUS = {true, true, true, false, true, false, false, false};
     private static final int[] MASK_TO_BIT_NUMBER = {0, 1, 2, 2, 3, 3, 3, 3};
 
@@ -53,7 +53,7 @@ public class X86Filter extends BCJFilter {
                     | ((buf[i + 4] & 0xFF) << 24);
                 int dest;
                 while (true) {
-                    if (isEncoder)
+                    if (encode)
                         dest = src + (pos + i - off);
                     else
                         dest = src - (pos + i - off);

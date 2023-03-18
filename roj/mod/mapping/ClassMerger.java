@@ -93,17 +93,17 @@ public class ClassMerger {
 	private Method detectPriority(ConstantData cstM, Method mainMethod, ConstantData cstS, MoFNode sub) {
 		Method subMethod = sub instanceof Method ? (Method) sub : new Method(cstS, (RawMethod) sub);
 
-		if (subMethod.code == null) return mainMethod;
-		if (mainMethod.code == null) return subMethod;
+		if (subMethod.getCode() == null) return mainMethod;
+		if (mainMethod.getCode() == null) return subMethod;
 
-		if (mainMethod.code.instructions.size() != subMethod.code.instructions.size()) {
+		if (mainMethod.getCode().instructions.size() != subMethod.getCode().instructions.size()) {
 			replaceMethod++;
 
 			//CmdUtil.warning("R/" + cstM.name + '.' + mainMethod.name() + mainMethod.rawDesc());
 		}
 
 		// 指令合并太草了
-		if (mainMethod.code.instructions.size() >= subMethod.code.instructions.size()) {
+		if (mainMethod.getCode().instructions.size() >= subMethod.getCode().instructions.size()) {
 			return mainMethod;
 		}
 		return subMethod;
@@ -114,7 +114,7 @@ public class ClassMerger {
 		if (scs == null) return;
 		List<InnerClasses.InnerClass> mcs = AttrHelper.getInnerClasses(main.cp, main);
 		if (mcs == null) {
-			main.attributes().add(sub.attrByName("InnerClasses"));
+			main.putAttr(sub.attrByName("InnerClasses"));
 			return;
 		}
 

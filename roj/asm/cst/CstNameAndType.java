@@ -1,5 +1,7 @@
 package roj.asm.cst;
 
+import roj.asm.type.TypeHelper;
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 
 /**
@@ -27,7 +29,26 @@ public final class CstNameAndType extends Constant {
 	}
 
 	public final String toString() {
-		return super.toString() + " " + name.getString() + " (" + name.getIndex() + ")" + ':' + type.getString() + " (" + type.getIndex() + ")";
+		CharList sb = new CharList().append(super.toString())
+			.append(" 引用[").append(name.getIndex()).append(",").append(type.getIndex()).append("] ");
+		return parseNodeDesc(sb, null, name.getString(), type.getString());
+	}
+	static String parseNodeDesc(CharList sb, String owner, String name, String type) {
+		if (owner != null) {
+			name = owner.substring(owner.lastIndexOf('/')+1)+'.'+name;
+		}
+
+		if (type.startsWith("(")) {
+			try {
+				return sb.append(TypeHelper.humanize(TypeHelper.parseMethod(type), name, true)).toString();
+			} catch (Exception ignored) {}
+		} else {
+			try {
+				TypeHelper.parseField(type).toString(sb);
+				return sb.append(' ').append(name).toString();
+			} catch (Exception ignored) {}
+		}
+		return sb.append("[解析失败] ").append(name).append('|').append(type).toString();
 	}
 
 	public final int hashCode() {

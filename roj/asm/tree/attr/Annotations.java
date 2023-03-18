@@ -34,17 +34,15 @@ public final class Annotations extends Attribute {
 	@Override
 	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
 		w.putShort(annotations.size());
-		for (Annotation annotation : annotations) {
-			annotation.toByteArray(pool, w);
+		for (int i = 0; i < annotations.size(); i++) {
+			annotations.get(i).toByteArray(pool, w);
 		}
 	}
 
 	public static List<Annotation> parse(ConstantPool pool, DynByteBuf r) {
 		int len = r.readUnsignedShort();
 		List<Annotation> annos = new SimpleList<>(len);
-		while (len-- > 0) {
-			annos.add(Annotation.deserialize(pool, r));
-		}
+		while (len-- > 0) annos.add(Annotation.deserialize(pool, r));
 		return annos;
 	}
 

@@ -31,7 +31,7 @@ public abstract class CstRefUTF extends Constant {
 	}
 
 	public final String toString() {
-		return super.toString() + " : " + value.getString() + " (" + value.getIndex() + ")";
+		return super.toString() + " 引用["+value.getIndex()+"] " + value.getString();
 	}
 
 	public final int hashCode() {

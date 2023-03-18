@@ -31,6 +31,9 @@ public final class LZMA2 extends QZCoder {
     public InputStream decode(InputStream in, byte[] password, long uncompressedSize, int maxMemoryLimitInKb) throws IOException {
         int dictSize = getDictSize();
 
+        if (uncompressedSize > LZMA2Options.DICT_SIZE_MIN)
+            dictSize = (int) Math.min(uncompressedSize, dictSize);
+
         int memoryUsage = LZMA2InputStream.getMemoryUsage(dictSize);
         if (memoryUsage > maxMemoryLimitInKb) throw new MemoryLimitException(memoryUsage, maxMemoryLimitInKb);
 
@@ -39,7 +42,7 @@ public final class LZMA2 extends QZCoder {
 
     @Override
     public String toString() {
-        return "LZMA2:"+(31-Integer.numberOfLeadingZeros(getDictSize()));
+        return "LZMA2:"+(options != null ? options : (31-Integer.numberOfLeadingZeros(dictSize)));
     }
 
     private int getDictSize() {
@@ -66,4 +69,6 @@ public final class LZMA2 extends QZCoder {
         if (options != null)
             options.setDictSize(size);
     }
+
+    public LZMA2Options options() { return options;  }
 }

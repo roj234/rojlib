@@ -1,7 +1,6 @@
 package roj.text;
 
 import roj.io.IOUtil;
-import roj.math.MathUtils;
 
 import javax.annotation.Nullable;
 import java.util.TimeZone;
@@ -230,53 +229,31 @@ public class ACalendar {
 		}
 	}
 
-	public static final String[] UTCWEEK = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}, UTCMONTH = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+	public static final String[] UTCWEEK = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"},
+		UTCMONTH = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
-	public CharList formatDate(CharSequence format, long stamp) {
-		return formatDate(format, stamp, IOUtil.getSharedCharBuf());
+	public static String toLocalTimeString(long time) {
+		return new ACalendar().formatDate("Y-m-d H:i:s.xP", time).toString();
 	}
 
+	public CharList formatDate(CharSequence format, long stamp) { return formatDate(format, stamp, IOUtil.getSharedCharBuf()); }
 	public CharList formatDate(CharSequence format, long stamp, CharList sb) {
 		int[] date = get(stamp);
 		char c;
 		for (int i = 0; i < format.length(); i++) {
 			switch (c = format.charAt(i)) {
-				case 'L':
-					sb.append(date[REN_YEAR]);
-					break;
-				case 'Y':
-					sb.append(date[YEAR]);
-					break;
-				case 'y':
-					sb.append(date[YEAR] % 100);
-					break;
-				case 'd':
-					TextUtil.pad(sb, date[DAY], 2);
-					break;
-				case 'j':
-					sb.append(date[DAY]);
-					break;
-				case 'l':
-					sb.append("星期").append(MathUtils.CHINA_NUMERIC[date[DAY_OF_WEEK]]);
-					break;
-				case 'W':
-					sb.append(UTCWEEK[date[DAY_OF_WEEK] - 1]);
-					break;
-				case 'w':
-					sb.append(date[DAY_OF_WEEK] - 1);
-					break;
-				case 'N':
-					sb.append(date[DAY_OF_WEEK]);
-					break;
-				case 'm':
-					TextUtil.pad(sb, date[MONTH], 2);
-					break;
-				case 'x':
-					TextUtil.pad(sb, date[MILLISECOND], 3);
-					break;
-				case 'n':
-					sb.append(date[MONTH]);
-					break;
+				case 'L': sb.append(date[REN_YEAR]); break;
+				case 'Y': sb.append(date[YEAR]); break;
+				case 'y': sb.append(date[YEAR] % 100); break;
+				case 'd': TextUtil.pad(sb, date[DAY], 2); break;
+				case 'j': sb.append(date[DAY]); break;
+				case 'l': sb.append("星期").append(TextUtil.CHINA_NUMERIC[date[DAY_OF_WEEK]]); break;
+				case 'W': sb.append(UTCWEEK[date[DAY_OF_WEEK]-1]); break;
+				case 'w': sb.append(date[DAY_OF_WEEK]-1); break;
+				case 'N': sb.append(date[DAY_OF_WEEK]); break;
+				case 'm': TextUtil.pad(sb, date[MONTH], 2); break;
+				case 'x': TextUtil.pad(sb, date[MILLISECOND], 3); break;
+				case 'n': sb.append(date[MONTH]); break;
 				case 't': // 本月有几天
 					int mth = date[MONTH];
 					if (mth == 2) {
@@ -285,32 +262,20 @@ public class ACalendar {
 						sb.append(((mth & 1) != 0) == mth < 8 ? 31 : 30);
 					}
 					break;
-				case 'a':
-					sb.append(date[HOUR] > 11 ? "pm" : "am");
-					break;
-				case 'A':
-					sb.append(date[HOUR] > 11 ? "PM" : "AM");
-					break;
+				case 'a': sb.append(date[HOUR] > 11 ? "pm" : "am"); break;
+				case 'A': sb.append(date[HOUR] > 11 ? "PM" : "AM"); break;
 				case 'g': // am/pm时间
 					int h = date[HOUR] % 12;
 					sb.append(h == 0 ? 12 : h);
 					break;
-				case 'G':
-					sb.append(date[HOUR]);
-					break;
+				case 'G': sb.append(date[HOUR]); break;
 				case 'h':
 					h = date[HOUR] % 12;
 					TextUtil.pad(sb, h == 0 ? 12 : h, 2);
 					break;
-				case 'H':
-					TextUtil.pad(sb, date[HOUR], 2);
-					break;
-				case 'i':
-					TextUtil.pad(sb, date[MINUTE], 2);
-					break;
-				case 's':
-					TextUtil.pad(sb, date[SECOND], 2);
-					break;
+				case 'H': TextUtil.pad(sb, date[HOUR], 2); break;
+				case 'i': TextUtil.pad(sb, date[MINUTE], 2); break;
+				case 's': TextUtil.pad(sb, date[SECOND], 2); break;
 				case 'O': // timezone offset 2
 					tzoff(stamp, sb);
 					break;
@@ -319,21 +284,29 @@ public class ACalendar {
 					if (v > 0) sb.insert(v+3, ':');
 					else sb.append('Z');
 					break;
-				case 'c':
-					formatDate("Y-m-dTH:i:sP", stamp, sb);
-					break;
-				case 'M':
-					sb.append(UTCMONTH[date[MONTH] - 1]);
-					break;
-				case 'U':
-					sb.append(stamp / 1000);
-					break;
-				default:
-					sb.append(c);
-					break;
+				case 'c': formatDate("Y-m-dTH:i:sP", stamp, sb); break;
+				case 'M': sb.append(UTCMONTH[date[MONTH] - 1]); break;
+				case 'U': sb.append(stamp / 1000); break;
+				default: sb.append(c); break;
 			}
 		}
 		return sb;
+	}
+
+	private int tzoff(long stamp, CharList sb) {
+		if (timezone == null) return -1;
+		// 这里曾经有个负号
+		int offset = timezone.getOffset(stamp);
+		if (offset == 0) return -1;
+
+		int pos = sb.length();
+		sb.append(offset>0?'+':'-');
+
+		offset /= 60000;
+
+		TextUtil.pad(sb, Math.abs(offset / 60), 2);
+		TextUtil.pad(sb, offset % 60, 2);
+		return pos;
 	}
 
 	public CharList toRFCDate(long date) {
@@ -352,7 +325,7 @@ public class ACalendar {
 		}
 		if (week == 8) throw new IllegalArgumentException("Invalid week " + str);
 		if (seq.charAt(3) != ',' || seq.charAt(4) != ' ') throw new IllegalArgumentException("分隔符错误");
-		int day = MathUtils.parseInt(seq, 5, 7, 10);
+		int day = TextUtil.parseInt(seq, 5, 7, 10);
 		if (seq.charAt(7) != ' ') throw new IllegalArgumentException("分隔符错误");
 
 		str = seq.subSequence(8, 11).toString();
@@ -367,13 +340,13 @@ public class ACalendar {
 
 		if (seq.charAt(11) != ' ') throw new IllegalArgumentException("分隔符错误");
 
-		int year = MathUtils.parseInt(seq, 12, 16, 10);
+		int year = TextUtil.parseInt(seq, 12, 16, 10);
 		if (seq.charAt(16) != ' ') throw new IllegalArgumentException("分隔符错误");
-		int h = MathUtils.parseInt(seq, 17, 19, 10);
+		int h = TextUtil.parseInt(seq, 17, 19, 10);
 		if (seq.charAt(19) != ':') throw new IllegalArgumentException("分隔符错误");
-		int m = MathUtils.parseInt(seq, 20, 22, 10);
+		int m = TextUtil.parseInt(seq, 20, 22, 10);
 		if (seq.charAt(22) != ':') throw new IllegalArgumentException("分隔符错误");
-		int s = MathUtils.parseInt(seq, 23, 25, 10);
+		int s = TextUtil.parseInt(seq, 23, 25, 10);
 		if (seq.charAt(25) != ' ') throw new IllegalArgumentException("分隔符错误");
 
 		if (h > 23) throw new IllegalArgumentException("你一天" + h + "小时");
@@ -387,7 +360,7 @@ public class ACalendar {
 			case '-':
 				i = 1;
 			case '+':
-				i *= MathUtils.parseInt(seq, 27, 30, 10);
+				i *= TextUtil.parseInt(seq, 27, 30, 10);
 				int d = i % 100;
 				if (d < -59 || d > 59) throw new IllegalArgumentException("你一小时" + d + "分钟");
 				a += 60000 * d;
@@ -405,17 +378,6 @@ public class ACalendar {
 		}
 
 		return a;
-	}
-
-	private int tzoff(long stamp, CharList sb) {
-		if (timezone == null) return -1;
-		int offset = -timezone.getOffset(stamp);
-		if (offset == 0) return -1;
-
-		int pos = sb.length();
-		sb.append(offset>0?'+':'-');
-		TextUtil.pad(sb, offset / 60 * 1000, 4);
-		return pos;
 	}
 
 	private static final int[] TIME_DT = {60, 1800, 3600, 86400, 604800, 2592000, 15552000};

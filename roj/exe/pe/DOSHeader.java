@@ -30,9 +30,6 @@ typedef struct _IMAE_DOS_HEADER {		//DOS .EXE header                            
 		WORD e_res2[10];					//Reserved words                                     0x28
 		LONG e_lfanew;						//File address of new exe header                     0x3C
 	};
-	AES-XTS format
-	TLS1.3: Certificate preencode
-	Set-Cookie: user=xxxx; Path=/; Domain=www.example.com
 	*/
 	public char cblp;
 	public char pages;

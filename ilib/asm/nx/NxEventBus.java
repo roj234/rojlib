@@ -9,7 +9,7 @@ import roj.asm.nixim.Shadow;
 import roj.asm.type.TypeHelper;
 import roj.collect.MyHashMap;
 import roj.reflect.ReflectionUtils;
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 import roj.util.Helpers;
 
 import net.minecraftforge.fml.common.FMLLog;
@@ -104,7 +104,7 @@ abstract class NxEventBus {
 	private static ListenerList getManager(Class<?> type) throws ReflectiveOperationException {
 		ListenerList manager = listenerManagers.get(type);
 		if (manager == null) {
-			Constructor<?> ctr = type.getConstructor(EmptyArrays.CLASSES);
+			Constructor<?> ctr = type.getConstructor(ArrayCache.CLASSES);
 			ctr.setAccessible(true);
 			manager = ((Event)ctr.newInstance()).getListenerList();
 			listenerManagers.put(type, manager);
@@ -130,7 +130,7 @@ abstract class NxEventBus {
 			EventPriority priority = h == null ? EventPriority.NORMAL : EventPriority.valueOf(h.getValue());
 
 			EventInvokerV2 asm = new EventInvokerV2(method, target instanceof Class ? null : target, filter, EventInvokerV2.Helper.getInstance(list, busID), priority,
-													(Boolean) map.getOrDefault("", false));
+													(Boolean) map.getOrDefault("receiveCanceled", false));
 
 			if (IContextSetter.class.isAssignableFrom(type)) asm.setContext(owner);
 

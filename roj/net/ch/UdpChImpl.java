@@ -168,7 +168,7 @@ class UdpChImpl extends MyChannel {
 	}
 
 	protected void read() throws IOException {
-		while (true) {
+		while (state == OPENED) {
 			BufferPool bp = alloc();
 			DynByteBuf buf = bp.buffer(true, buffer);
 

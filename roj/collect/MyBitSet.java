@@ -1,5 +1,7 @@
 package roj.collect;
 
+import roj.util.DynByteBuf;
+
 import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
@@ -65,7 +67,7 @@ public class MyBitSet implements Iterable<Integer> {
 		return set;
 	}
 
-	public boolean contains(int key) {
+	public final boolean contains(int key) {
 		if (key < 0 || (key >>> 6) >= set.length) return false;
 		return (set[key >>> 6] & (1L << (key & 63))) != 0;
 	}
@@ -81,19 +83,11 @@ public class MyBitSet implements Iterable<Integer> {
 		}
 	}
 
-	public int size() {
-		return size;
-	}
+	public final int size() { return size; }
+	public final int first() { return nextTrue(0); }
+	public final int last() { return max; }
 
-	public int first() {
-		return nextTrue(0);
-	}
-
-	public int last() {
-		return max;
-	}
-
-	public MyBitSet addAll(MyBitSet ibs) {
+	public final MyBitSet addAll(MyBitSet ibs) {
 		if (ibs.max < 0) return this;
 		// 100% true ...
 		expand(ibs.max);
@@ -117,14 +111,12 @@ public class MyBitSet implements Iterable<Integer> {
 		return this;
 	}
 
-	public MyBitSet addAll(CharSequence s) {
-		for (int i = 0; i < s.length(); i++) {
-			add(s.charAt(i));
-		}
+	public final MyBitSet addAll(CharSequence s) {
+		for (int i = 0; i < s.length(); i++) add(s.charAt(i));
 		return this;
 	}
 
-	public boolean add(int e) {
+	public final boolean add(int e) {
 		if (e < 0) throw new IllegalArgumentException();
 		if (e > max) max = e;
 		expand(e);
@@ -137,7 +129,7 @@ public class MyBitSet implements Iterable<Integer> {
 		return false;
 	}
 
-	public boolean remove(int e) {
+	public final boolean remove(int e) {
 		if (e < 0 || (e >>> 6) >= set.length) return false;
 		//expand(e);
 		if ((set[e >>> 6] & 1L << (e & 63)) != 0) {
@@ -149,16 +141,22 @@ public class MyBitSet implements Iterable<Integer> {
 		return false;
 	}
 
-	public void set(int i, boolean b) {
+	public final void set(int i, boolean b) {
 		if (b) add(i);
 		else remove(i);
 	}
 
-	public int nextTrue(int pos) {
+	public final boolean allFalse(int from, int to) {
+		int pos = trueRange(from, (Math.min(max,to)+64>>>6));
+		return pos >= to || pos < 0;
+	}
+	public final int nextTrue(int pos) {
+		return trueRange(pos, (max+64)>>>6);
+	}
+	private int trueRange(int pos, int max) {
 		if (pos < 0) pos = 0;
 
 		int i = pos >>> 6;
-		int max = (this.max+64)>>>6;
 		if (i >= max) return -1;
 
 		long v = set[i] & (-1L << pos);
@@ -169,11 +167,17 @@ public class MyBitSet implements Iterable<Integer> {
 		}
 	}
 
-	public int nextFalse(int pos) {
+	public final boolean allTrue(int from, int to) {
+		int pos = falseRange(from, (Math.min(max,to)+64>>>6));
+		return pos >= to;
+	}
+	public final int nextFalse(int pos) {
+		return falseRange(pos, (max+64)>>>6);
+	}
+	private int falseRange(int pos, int max) {
 		if (pos < 0) pos = 0;
 
 		int i = pos >>> 6;
-		int max = (this.max+64)>>>6;
 		if (i >= max) return pos;
 
 		long v = ~set[i] & (-1L << pos);
@@ -187,7 +191,7 @@ public class MyBitSet implements Iterable<Integer> {
 	/**
 	 * @return 第n个真bit
 	 */
-	public int nthTrue(int n) {
+	public final int nthTrue(int n) {
 		if (n < 0 || n > max) return -1;
 
 		int i = 0;
@@ -205,7 +209,7 @@ public class MyBitSet implements Iterable<Integer> {
 		return -1;
 	}
 
-	public int addRange(int from, int to) {
+	public final int addRange(int from, int to) {
 		if (from < 0 || to < 0) throw new IllegalArgumentException("from/to="+from+"/"+to);
 		expand(to);
 		to--;
@@ -213,7 +217,7 @@ public class MyBitSet implements Iterable<Integer> {
 		return setRange(from, to, false);
 	}
 
-	public int removeRange(int from, int to) {
+	public final int removeRange(int from, int to) {
 		if (from < 0 || to < 0) throw new IllegalArgumentException("from/to="+from+"/"+to);
 		to = Math.min(to-1, max);
 		int i = -setRange(from, to, true);
@@ -244,7 +248,7 @@ public class MyBitSet implements Iterable<Integer> {
 		return size - s;
 	}
 
-	public int prevTrue(int pos) {
+	public final int prevTrue(int pos) {
 		if (pos < 0) return -1;
 
 		int i = pos >>> 6;
@@ -259,7 +263,7 @@ public class MyBitSet implements Iterable<Integer> {
 		}
 	}
 
-	public int prevFalse(int pos) {
+	public final int prevFalse(int pos) {
 		if (pos < 0) return -1;
 
 		int i = pos >>> 6;
@@ -279,7 +283,7 @@ public class MyBitSet implements Iterable<Integer> {
 		return new FItr();
 	}
 
-	public void fill(int len) {
+	public final void fill(int len) {
 		expand(len);
 
 		int x = len >> 6;
@@ -290,7 +294,7 @@ public class MyBitSet implements Iterable<Integer> {
 		max = len;
 	}
 
-	public MyBitSet copy() {
+	public final MyBitSet copy() {
 		MyBitSet copied = new MyBitSet(cap);
 		System.arraycopy(set, 0, copied.set, 0, set.length);
 		copied.max = this.max;
@@ -298,7 +302,7 @@ public class MyBitSet implements Iterable<Integer> {
 		return copied;
 	}
 
-	public void clear() {
+	public final void clear() {
 		Arrays.fill(set, 0);
 		max = -1;
 		size = 0;
@@ -327,6 +331,61 @@ public class MyBitSet implements Iterable<Integer> {
 		str[aa] = '}';
 		return new String(str);
 	}
+
+	public static MyBitSet readBits(DynByteBuf buf, int byteLength) {
+		if (byteLength == 0) return new MyBitSet();
+
+		long[] set = new long[(byteLength+63)/64];
+		int i = 0;
+		int count = 0;
+
+		while (byteLength >= 64) {
+			long bits = buf.readLongLE();
+
+			count += Long.bitCount(bits);
+			set[i++] = invertBits(bits);
+
+			byteLength -= 64;
+		}
+
+		int shl = 0;
+		long fin = 0;
+		while (byteLength > 0) {
+			fin |= (long) buf.readUnsignedByte() << shl;
+			shl += 8;
+			byteLength -= 8;
+		}
+
+		count += Long.bitCount(fin);
+		set[set.length-1] = invertBits(fin);
+
+		return new MyBitSet(set, count);
+	}
+	public void writeBits(DynByteBuf buf) {
+		int size = max+1;
+
+		int i = 0;
+
+		while (size >= 64) {
+			buf.putLongLE(invertBits(set[i++]));
+			size -= 64;
+		}
+
+		long fin = invertBits(set[i]);
+		while (size > 0) {
+			buf.put((byte) fin);
+			fin >>>= 8;
+			size -= 8;
+		}
+	}
+	static long invertBits(long i) {
+		// 反转每个byte中的每个bit
+		i = (i & 0x5555555555555555L) << 1 | (i >>> 1) & 0x5555555555555555L;
+		i = (i & 0x3333333333333333L) << 2 | (i >>> 2) & 0x3333333333333333L;
+		i = (i & 0x0f0f0f0f0f0f0f0fL) << 4 | (i >>> 4) & 0x0f0f0f0f0f0f0f0fL;
+		return i;
+	}
+	public int byteLength() { return (max+8) / 8; }
 
 	public class FItr implements IntIterator {
 		int stage = INITIAL;
@@ -387,7 +446,7 @@ public class MyBitSet implements Iterable<Integer> {
 		}
 	}
 
-	public long[] array() {
+	public final long[] array() {
 		return set;
 	}
 }

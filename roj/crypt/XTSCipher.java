@@ -1,19 +1,23 @@
 package roj.crypt;
 
+import roj.RequireTest;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.Cipher;
 import javax.crypto.ShortBufferException;
-import java.security.GeneralSecurityException;
+import java.security.InvalidKeyException;
+import java.security.SecureRandom;
+import java.security.spec.AlgorithmParameterSpec;
 import java.util.Arrays;
 
 /**
  * @author Roj233
  * @since 2022/2/17 22:05
  */
-public class XTSCipher implements CipheR {
-	private final CipheR cip;
+@RequireTest
+public class XTSCipher extends RCipherSpi {
+	private final RCipherSpi cip;
 	private byte[] key1, key2;
 	private int flag;
 
@@ -23,41 +27,25 @@ public class XTSCipher implements CipheR {
 	private final ByteList t1, t2;
 	private final byte[] t3;
 
-	public XTSCipher(CipheR cip) {
+	public XTSCipher(RCipherSpi cip) {
 		this(cip, 2);
 	}
 
-	public XTSCipher(CipheR cip, int multiplier) {
+	public XTSCipher(RCipherSpi cip, int multiplier) {
 		this.cip = cip;
-		if (cip.getBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
-		t1 = ByteList.allocate(cip.getBlockSize(),cip.getBlockSize());
-		t2 = ByteList.allocate(cip.getBlockSize(),cip.getBlockSize());
-		t3 = new byte[cip.getBlockSize()];
+		if (cip.engineGetBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
+		t1 = ByteList.allocate(cip.engineGetBlockSize(),cip.engineGetBlockSize());
+		t2 = ByteList.allocate(cip.engineGetBlockSize(),cip.engineGetBlockSize());
+		t3 = new byte[cip.engineGetBlockSize()];
 		GFA = multiplier;
 	}
 
-	@Override
-	public int getBlockSize() {
-		return cip.getBlockSize();
-	}
+	public int engineGetBlockSize() { return cip.engineGetBlockSize(); }
+	public boolean isBaseCipher() { return false; }
+	public String getAlgorithm() { return "XTS"; }
 
 	@Override
-	public boolean isBaseCipher() {
-		return false;
-	}
-
-	@Override
-	public String getAlgorithm() {
-		return "XTS";
-	}
-
-	@Override
-	public int getMaxKeySize() {
-		return cip.getMaxKeySize()<<1;
-	}
-
-	@Override
-	public void setKey(byte[] key, int flags) {
+	public void init(int flags, byte[] key, AlgorithmParameterSpec config, SecureRandom random) {
 		key1 = Arrays.copyOfRange(key, 0, key.length / 2);
 		key2 = Arrays.copyOfRange(key, key.length / 2, key.length);
 
@@ -66,8 +54,8 @@ public class XTSCipher implements CipheR {
 	}
 
 	@Override
-	public void crypt(DynByteBuf in, DynByteBuf out) throws GeneralSecurityException {
-		if (in.readableBytes() < cip.getBlockSize()) throw new IllegalBlockSizeException("At least one block is required for XTS");
+	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
+		if (in.readableBytes() < cip.engineGetBlockSize()) throw new ShortBufferException("At least one block is required for XTS");
 		if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
 
 		byte[] b1 = t1.array();
@@ -75,7 +63,7 @@ public class XTSCipher implements CipheR {
 		byte[] b2 = t2.array();
 		ByteList t2_ = ByteList.wrap(b2);
 		byte[] b3 = this.t3;
-		CipheR cip = this.cip;
+		RCipherSpi cip = this.cip;
 
 		// begin of new block
 		// X = E(I)
@@ -84,20 +72,24 @@ public class XTSCipher implements CipheR {
 		t2.putLong(sectorNo++);
 		for (int i = 8; i < b2.length; i++) b2[i] = 0;
 
-		cip.setKey(key1, CipheR.ENCRYPT);
-		t1.clear();
-		cip.crypt(t2, t1);
+		try {
+			cip.init(Cipher.ENCRYPT_MODE, key1);
+			t1.clear();
+			cip.cryptOneBlock(t2, t1);
 
-		cip.setKey(key2, flag);
+			cip.init(flag, key2);
+		} catch (InvalidKeyException e) {
+			throw new RuntimeException(e);
+		}
 
-		boolean DEC = (flag & CipheR.DECRYPT) != 0;
+		boolean DEC = flag == Cipher.DECRYPT_MODE;
 		int lim = DEC && in.readableBytes() % b1.length != 0 ? b1.length << 1 : b1.length;
 		while (in.readableBytes() >= lim) {
 			// C = E(P ^ X) ^ X
 			for (int i = 0; i < b1.length; i++) b2[i] = (byte) (b1[i] ^ in.get());
 			t2.rIndex = 0;
 			t2_.wIndex(0);
-			cip.crypt(t2, t2_);
+			cip.cryptOneBlock(t2, t2_);
 
 			for (int i = 0; i < b1.length; i++) out.put((byte) (b1[i] ^ b2[i]));
 
@@ -121,7 +113,7 @@ public class XTSCipher implements CipheR {
 
 				t2.rIndex = 0;
 				t2_.wIndex(0);
-				cip.crypt(t2, t2_);
+				cip.cryptOneBlock(t2, t2_);
 
 				for (i = 0; i < b1.length; i++) out.put((byte) (b1[i] ^ b2[i]));
 				// write remain
@@ -140,7 +132,7 @@ public class XTSCipher implements CipheR {
 				for (int i = 0; i < b1.length; i++) b2[i] ^= b1[i];
 				t2.rIndex = 0;
 				t2_.wIndex(0);
-				cip.crypt(t2, t2_);
+				cip.cryptOneBlock(t2, t2_);
 
 				// b2[0,rem] 最后的明文, [rem,len] 密文block[len-2] remain
 				int rem = in.readableBytes();
@@ -159,7 +151,7 @@ public class XTSCipher implements CipheR {
 				for (int i = rem; i < b1.length; i++) b2[i] ^= b1[i];
 				t2.rIndex = 0;
 				t2_.wIndex(0);
-				cip.crypt(t2, t2_);
+				cip.cryptOneBlock(t2, t2_);
 
 				// put plain[len-2]
 				for (int i = 0; i < b1.length; i++) out.put((byte) (b1[i] ^ b2[i]));

@@ -126,26 +126,7 @@ public final class ServerLaunch {
 		if (initializator == null) throw new IllegalStateException("no initializator");
 
 		sock.bind(addr, backlog);
-		if (sock.isTCP()) {
-			sock.register(getLoop(), sock -> {
-				if (!sock.isOpen() && !hasLoop) {
-					loop.shutdown();
-					return;
-				}
-
-				try {
-					MyChannel ctx = sock.accept();
-					initializator.accept(ctx);
-					ctx.open();
-					loop.register(ctx, null);
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-			});
-		} else {
-			initializator.accept(sock.accept());
-			sock.register(getLoop(), null);
-		}
+		sock.register(getLoop(), initializator);
 
 		return loop;
 	}
@@ -155,6 +136,11 @@ public final class ServerLaunch {
 			loop = new SelectorLoop(owner, threadPrefix, threadInit, threadMin, threadMax, threadTimeout, threadThreshold, daemon);
 		}
 		return loop;
+	}
+
+	public void close() throws IOException {
+		if (loop != null && !hasLoop) loop.shutdown();
+		sock.close();
 	}
 
 	public InetSocketAddress address() {

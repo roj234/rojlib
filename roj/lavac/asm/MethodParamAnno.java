@@ -15,7 +15,7 @@ public class MethodParamAnno implements Attributed {
 	}
 
 	@Override
-	public char accessFlag() {
+	public char modifier() {
 		return 0;
 	}
 

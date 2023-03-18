@@ -127,8 +127,6 @@ public final class NiximProxy extends NiximSystem implements ContextClassTransfo
 			case "client": return Loader.testClientSide();
 			case "server": return !Loader.testClientSide();
 			case "coremod_flag": return !Config.hasIncompatibleCoremod(Integer.parseInt(argument.get(1).value));
-
-			case "_nixim_not_custom_font": return Config.customFont.isEmpty();
 		}
 		throw new UnsupportedOperationException();
 	}

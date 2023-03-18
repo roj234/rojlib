@@ -8,7 +8,6 @@ import roj.config.JSONParser;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.mapper.SimpleObfuscator;
 import roj.util.ByteList;
@@ -76,7 +75,7 @@ public class UserFriendlyObfUI {
 
 		// 混淆
 		List<Context> contexts = Context.fromZip(src, StandardCharsets.UTF_8);
-		obf.loadLibraries(FileUtil.findAllFiles(new File(BASE, "class")));
+		obf.loadLibraries(IOUtil.findAllFiles(new File(BASE, "class")));
 		obf.obfuscate(contexts);
 
 		// 保存

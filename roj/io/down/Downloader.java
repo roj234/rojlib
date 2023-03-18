@@ -1,7 +1,7 @@
 package roj.io.down;
 
 import roj.concurrent.task.ITask;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.io.source.Source;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
@@ -60,7 +60,7 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 	@Override
 	public final void channelTick(ChannelCtx ctx) throws IOException {
 		if (progress != null && progress.wasShutdown()) close();
-		if (++idle > FileUtil.timeout) close();
+		if (++idle > IOUtil.timeout) retry();
 	}
 
 	@Override
@@ -218,7 +218,7 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 			ctx.addLast("HH", client.asChannelHandler())
 			   .addLast("Downloader", this);
 
-			client.connect(ctx, FileUtil.timeout);
+			client.connect(ctx, IOUtil.timeout);
 			IHttpClient.POLLER.register(ctx, null);
 		} catch (Exception e) {
 			e.printStackTrace();

@@ -20,7 +20,7 @@ public final class LeakDetector {
 	private static final ReentrantLock checkLock = new ReentrantLock();
 
 	static {
-		String m = System.clearProperty("leak_detect");
+		String m = System.clearProperty("roj.net.LD");
 		if (m == null) m = "";
 
 		switch (m) {
@@ -78,25 +78,29 @@ public final class LeakDetector {
 	}
 
 	private boolean shouldTrack(Object o) {
-		return mode == 2 || counter++ % 1223 == 0;
+		return mode == 2 || counter++ % 611 == 0;
 	}
 
 	static final class LD extends PhantomReference<Object> {
-		private final String name;
+		private final String thread, type;
 		private final Throwable trace;
 		boolean released;
 
 		public LD(Object ref) {
 			super(ref, leaked);
-			name = ref.getClass().getSimpleName();
-			trace = mode == 2 ? new Throwable() : null;
+			thread = Thread.currentThread().getName();
+			type = ref.getClass().getSimpleName();
+			trace = new Throwable("");
 		}
 
 		public void check() {
 			if (released) return;
 
-			System.err.println("===================== LEAK: "+name+" not released after use =====================");
-			if (trace != null) trace.printStackTrace();
+			System.err.println("===================== Resource LEAK =====================");
+			System.out.println("Thread: " + thread);
+			System.out.println("Type: " + type);
+			trace.printStackTrace();
+			System.err.println("===================== Resource LEAK =====================");
 		}
 	}
 }

@@ -96,7 +96,7 @@ public class ModAPITransformer extends net.minecraftforge.fml.common.asm.transfo
 			SimpleList<CstClass> interfaces = cn.interfaces;
 			for (int i = 0; i < interfaces.size(); i++) {
 				CstClass cc = interfaces.get(i);
-				if (cc.getValue().getString().equals(itfNative)) {
+				if (cc.name().str().equals(itfNative)) {
 					interfaces.remove(i);
 					break check;
 				}
@@ -108,10 +108,10 @@ public class ModAPITransformer extends net.minecraftforge.fml.common.asm.transfo
 		Attribute sign = cn.attrByName("Signature");
 		if (sign != null) {
 			CstUTF v = (CstUTF) cn.cp.get(Parser.reader(sign));
-			SignatureReader sr = new SignatureReader(v.getString());
+			SignatureReader sr = new SignatureReader(v.str());
 			SBForge sw = new SBForge(itfNative);
 			sr.accept(sw);
-			v.setString(sw.toString());
+			cn.cp.setUTFValue(v, sw.toString());
 			if (debug) log("Optional - signature remove {}", sw);
 		}
 		if (stripRefs) {

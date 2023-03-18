@@ -2,10 +2,17 @@ package roj.archive.qz.xz;
 
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.lzma.LZMAEncoder;
+import roj.concurrent.TaskPool;
+import roj.io.DummyOutputStream;
+import roj.math.MathUtils;
+import roj.text.CharList;
+import roj.text.TextUtil;
+import roj.util.ArrayCache;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class LZMA2Options implements Cloneable {
 	public static final int BEST_SPEED = 1;
@@ -115,14 +122,14 @@ public class LZMA2Options implements Cloneable {
 		setPreset(preset);
 	}
 
-	public LZMA2Options(int dictSize, int lc, int lp, int pb, int mode, int niceLen, int mf, int depthLimit) throws UnsupportedOptionsException {
-		setDictSize(dictSize);
-		setLcLp(lc, lp);
-		setPb(pb);
-		setMode(mode);
-		setNiceLen(niceLen);
-		setMatchFinder(mf);
-		setDepthLimit(depthLimit);
+	public LZMA2Options(int dictSize, int lc, int lp, int pb, int mode, int niceLen, int mf, int depthLimit) {
+		setDictSize(dictSize)
+			.setLcLp(lc, lp)
+			.setPb(pb)
+			.setMode(mode)
+			.setNiceLen(niceLen)
+			.setMatchFinder(mf)
+			.setDepthLimit(depthLimit);
 	}
 
 	/**
@@ -171,19 +178,16 @@ public class LZMA2Options implements Cloneable {
 	 * but sizes of 2^n and 2^n&nbsp;+&nbsp;2^(n-1) bytes are somewhat
 	 * recommended.
 	 *
-	 * @throws UnsupportedOptionsException <code>dictSize</code> is not supported
+	 * @throws IllegalArgumentException <code>dictSize</code> is not supported
 	 */
-	public void setDictSize(int dictSize) throws UnsupportedOptionsException {
-		if (dictSize < DICT_SIZE_MIN) throw new UnsupportedOptionsException("LZMA2 dictionary size must be at least 4 KiB: " + dictSize + " B");
-
-		if (dictSize > DICT_SIZE_MAX) throw new UnsupportedOptionsException("LZMA2 dictionary size must not exceed " + (DICT_SIZE_MAX >> 20) + " MiB: " + dictSize + " B");
+	public LZMA2Options setDictSize(int dictSize) {
+		if (dictSize < DICT_SIZE_MIN) throw new IllegalArgumentException("LZMA2 dictionary size must be at least 4 KiB: " + dictSize + " B");
+		if (dictSize > DICT_SIZE_MAX) throw new IllegalArgumentException("LZMA2 dictionary size must not exceed " + (DICT_SIZE_MAX >> 20) + " MiB: " + dictSize + " B");
 
 		this.dictSize = dictSize;
+		return this;
 	}
-
-	public int getDictSize() {
-		return dictSize;
-	}
+	public int getDictSize() { return dictSize; }
 
 	/**
 	 * Sets a preset dictionary. Use null to disable the use of
@@ -199,34 +203,20 @@ public class LZMA2Options implements Cloneable {
 	 * near the end of the preset dictionary. The preset dictionary used
 	 * for compression is also needed for decompression.
 	 */
-	public void setPresetDict(byte[] presetDict) {
+	public LZMA2Options setPresetDict(byte[] presetDict) {
 		this.presetDict = presetDict;
+		return this;
 	}
-
-	public byte[] getPresetDict() {
-		return presetDict;
-	}
+	public byte[] getPresetDict() { return presetDict; }
 
 	/**
 	 * Sets the number of literal context bits and literal position bits.
 	 * <p>
-	 * The sum of <code>lc</code> and <code>lp</code> is limited to 4.
-	 * Trying to exceed it will throw an exception. This function lets
-	 * you change both at the same time.
-	 *
-	 * @throws UnsupportedOptionsException <code>lc</code> and <code>lp</code>
-	 * are invalid
-	 */
-	public void setLcLp(int lc, int lp) throws UnsupportedOptionsException {
-		if (lc < 0 || lp < 0 || lc > LC_LP_MAX || lp > LC_LP_MAX || lc + lp > LC_LP_MAX) throw new UnsupportedOptionsException("lc + lp must not exceed " + LC_LP_MAX + ": " + lc + " + " + lp);
-
-		this.lc = lc;
-		this.lp = lp;
-	}
-
-	/**
-	 * Sets the number of literal context bits.
+	 * <code>Lp</code> affects what kind of alignment in the uncompressed data is
+	 * assumed when encoding literals. See {@link #setPb(int) setPb} for
+	 * more information about alignment.
 	 * <p>
+	 * <p> Lc:
 	 * All bytes that cannot be encoded as matches are encoded as literals.
 	 * That is, literals are simply 8-bit bytes that are encoded one at
 	 * a time.
@@ -244,42 +234,22 @@ public class LZMA2Options implements Cloneable {
 	 * try <code>setLc(4)</code>. Sometimes it helps a little, and sometimes it
 	 * makes compression worse. If it makes it worse, test for example
 	 * <code>setLc(2)</code> too.
-	 *
-	 * @throws UnsupportedOptionsException <code>lc</code> is invalid, or the sum
-	 * of <code>lc</code> and <code>lp</code>
-	 * exceed LC_LP_MAX
-	 */
-	public void setLc(int lc) throws UnsupportedOptionsException {
-		setLcLp(lc, lp);
-	}
-
-	/**
-	 * Sets the number of literal position bits.
 	 * <p>
-	 * This affets what kind of alignment in the uncompressed data is
-	 * assumed when encoding literals. See {@link #setPb(int) setPb} for
-	 * more information about alignment.
+	 * <p>
+	 * The sum of <code>lc</code> and <code>lp</code> is limited to 4.
+	 * Trying to exceed it will throw an exception. This function lets
+	 * you change both at the same time.
 	 *
-	 * @throws UnsupportedOptionsException <code>lp</code> is invalid, or the sum
-	 * of <code>lc</code> and <code>lp</code>
-	 * exceed LC_LP_MAX
+	 * @throws IllegalArgumentException <code>lc</code> and <code>lp</code>
+	 * are invalid
 	 */
-	public void setLp(int lp) throws UnsupportedOptionsException {
-		setLcLp(lc, lp);
-	}
+	public LZMA2Options setLcLp(int lc, int lp) {
+		if ((lc|lp) < 0 || lc + lp > LC_LP_MAX)
+			throw new IllegalArgumentException("lc + lp must not exceed " + LC_LP_MAX + ": " + lc + " + " + lp);
 
-	/**
-	 * Gets the number of literal context bits.
-	 */
-	public int getLc() {
-		return lc;
-	}
-
-	/**
-	 * Gets the number of literal position bits.
-	 */
-	public int getLp() {
-		return lp;
+		this.lc = lc;
+		this.lp = lp;
+		return this;
 	}
 
 	/**
@@ -303,20 +273,20 @@ public class LZMA2Options implements Cloneable {
 	 * 16-byte alignment. It might be worth taking into account when designing
 	 * file formats that are likely to be often compressed with LZMA2.
 	 *
-	 * @throws UnsupportedOptionsException <code>pb</code> is invalid
+	 * @throws IllegalArgumentException <code>pb</code> is invalid
 	 */
-	public void setPb(int pb) throws UnsupportedOptionsException {
-		if (pb < 0 || pb > PB_MAX) throw new UnsupportedOptionsException("pb must not exceed " + PB_MAX + ": " + pb);
+	public LZMA2Options setPb(int pb) {
+		if (pb < 0 || pb > PB_MAX) throw new IllegalArgumentException("pb must not exceed " + PB_MAX + ": " + pb);
 
 		this.pb = pb;
+		return this;
 	}
 
-	/**
-	 * Gets the number of position bits.
-	 */
-	public int getPb() {
-		return pb;
-	}
+	public int getLc() { return lc; }
+	public int getLp() { return lp; }
+	public int getPb() { return pb; }
+
+	public byte getPropByte() { return (byte) ((pb * 5 + lp) * 9 + lc); }
 
 	/**
 	 * Sets the compression mode.
@@ -333,20 +303,15 @@ public class LZMA2Options implements Cloneable {
 	 * compress the data at all (and doesn't use a match finder) and will
 	 * simply wrap it in uncompressed LZMA2 chunks.
 	 *
-	 * @throws UnsupportedOptionsException <code>mode</code> is not supported
+	 * @throws IllegalArgumentException <code>mode</code> is not supported
 	 */
-	public void setMode(int mode) throws UnsupportedOptionsException {
-		if (mode < MODE_UNCOMPRESSED || mode > MODE_NORMAL) throw new UnsupportedOptionsException("Unsupported compression mode: " + mode);
+	public LZMA2Options setMode(int mode) {
+		if (mode < MODE_UNCOMPRESSED || mode > MODE_NORMAL) throw new IllegalArgumentException("Unsupported compression mode: " + mode);
 
 		this.mode = mode;
+		return this;
 	}
-
-	/**
-	 * Gets the compression mode.
-	 */
-	public int getMode() {
-		return mode;
-	}
+	public int getMode() { return mode; }
 
 	/**
 	 * Sets the nice length of matches.
@@ -355,21 +320,16 @@ public class LZMA2Options implements Cloneable {
 	 * to give better compression at the expense of speed. The default
 	 * depends on the preset.
 	 *
-	 * @throws UnsupportedOptionsException <code>niceLen</code> is invalid
+	 * @throws IllegalArgumentException <code>niceLen</code> is invalid
 	 */
-	public void setNiceLen(int niceLen) throws UnsupportedOptionsException {
-		if (niceLen < NICE_LEN_MIN) throw new UnsupportedOptionsException("Minimum nice length of matches is " + NICE_LEN_MIN + " bytes: " + niceLen);
-		if (niceLen > NICE_LEN_MAX) throw new UnsupportedOptionsException("Maximum nice length of matches is " + NICE_LEN_MAX + ": " + niceLen);
+	public LZMA2Options setNiceLen(int niceLen) {
+		if (niceLen < NICE_LEN_MIN) throw new IllegalArgumentException("Minimum nice length of matches is " + NICE_LEN_MIN + " bytes: " + niceLen);
+		if (niceLen > NICE_LEN_MAX) throw new IllegalArgumentException("Maximum nice length of matches is " + NICE_LEN_MAX + ": " + niceLen);
 
 		this.niceLen = niceLen;
+		return this;
 	}
-
-	/**
-	 * Gets the nice length of matches.
-	 */
-	public int getNiceLen() {
-		return niceLen;
-	}
+	public int getNiceLen() { return niceLen; }
 
 	/**
 	 * Sets the match finder type.
@@ -379,19 +339,14 @@ public class LZMA2Options implements Cloneable {
 	 * than Binary Tree match finders. The default depends on the preset:
 	 * 0-3 use <code>MF_HC4</code> and 4-9 use <code>MF_BT4</code>.
 	 *
-	 * @throws UnsupportedOptionsException <code>mf</code> is not supported
+	 * @throws IllegalArgumentException <code>mf</code> is not supported
 	 */
-	public void setMatchFinder(int mf) throws UnsupportedOptionsException {
-		if (mf != MF_HC4 && mf != MF_BT4) throw new UnsupportedOptionsException("Unsupported match finder: " + mf);
+	public LZMA2Options setMatchFinder(int mf) {
+		if (mf != MF_HC4 && mf != MF_BT4) throw new IllegalArgumentException("Unsupported match finder: " + mf);
 		this.mf = mf;
+		return this;
 	}
-
-	/**
-	 * Gets the match finder type.
-	 */
-	public int getMatchFinder() {
-		return mf;
-	}
+	public int getMatchFinder() { return mf; }
 
 	/**
 	 * Sets the match finder search depth limit.
@@ -406,30 +361,24 @@ public class LZMA2Options implements Cloneable {
 	 * higher than 1000 unless you are prepared to interrupt the compression
 	 * in case it is taking far too long.
 	 *
-	 * @throws UnsupportedOptionsException <code>depthLimit</code> is invalid
+	 * @throws IllegalArgumentException <code>depthLimit</code> is invalid
 	 */
-	public void setDepthLimit(int depthLimit) throws UnsupportedOptionsException {
-		if (depthLimit < 0) throw new UnsupportedOptionsException("Depth limit cannot be negative: " + depthLimit);
-
+	public LZMA2Options setDepthLimit(int depthLimit) {
+		if (depthLimit < 0) throw new IllegalArgumentException("Depth limit cannot be negative: " + depthLimit);
 		this.depthLimit = depthLimit;
+		return this;
 	}
-
-	/**
-	 * Gets the match finder search depth limit.
-	 */
-	public int getDepthLimit() {
-		return depthLimit;
-	}
+	public int getDepthLimit() { return depthLimit; }
 
 	public int getEncoderMemoryUsage() {
 		return (mode == MODE_UNCOMPRESSED) ? UncompressedLZMA2OutputStream.getMemoryUsage() : LZMA2OutputStream.getMemoryUsage(this);
 	}
 
-	public FinishableOutputStream getOutputStream(OutputStream out) {
+	public OutputStream getOutputStream(OutputStream out) {
 		return getOutputStream(out, ArrayCache.getDefaultCache());
 	}
 
-	public FinishableOutputStream getOutputStream(OutputStream out, ArrayCache arrayCache) {
+	public OutputStream getOutputStream(OutputStream out, ArrayCache arrayCache) {
 		if (mode == MODE_UNCOMPRESSED) return new UncompressedLZMA2OutputStream(out, arrayCache);
 
 		return new LZMA2OutputStream(out, this, arrayCache);
@@ -447,12 +396,101 @@ public class LZMA2Options implements Cloneable {
 		return new LZMA2InputStream(in, dictSize, presetDict, arrayCache);
 	}
 
-	public Object clone() {
+	public LZMA2Options clone() {
 		try {
-			return super.clone();
+			return (LZMA2Options) super.clone();
 		} catch (CloneNotSupportedException e) {
 			assert false;
 			throw new RuntimeException();
 		}
+	}
+
+	public int findBestProps(byte[] data) {
+		int min = data.length;
+		int minLc = -1;
+		int minLp = -1;
+		int minPb = -1;
+
+		for (int lc = 0; lc <= 4; lc++) {
+			this.lc = lc;
+			for (int lp = 0; lp <= 4-lc; lp++) {
+				this.lp = lp;
+				for (int pb = 0; pb <= 4; pb++) {
+					this.pb = pb;
+
+					DummyOutputStream counter = new DummyOutputStream();
+					try (OutputStream os = getOutputStream(counter)) {
+						os.write(data);
+					} catch (Exception e) {
+						continue;
+					}
+
+					if (counter.wrote < min) {
+						minLc = lc;
+						minLp = lp;
+						minPb = pb;
+						min = counter.wrote;
+					}
+				}
+			}
+		}
+
+		this.lc = minLc;
+		this.lp = minLp;
+		this.pb = minPb;
+		return min;
+	}
+	public int findBestPropsAsync(byte[] data, TaskPool th) {
+		AtomicReference<Object[]> ref = new AtomicReference<>();
+
+		for (int lc = 0; lc <= 4; lc++) {
+			for (int lp = 0; lp <= 4-lc; lp++) {
+				for (int pb = 0; pb <= 4; pb++) {
+					LZMA2Options copy = clone();
+					copy.lc = lc;
+					copy.lp = lp;
+					copy.pb = pb;
+
+					th.pushTask(() -> {
+						DummyOutputStream counter = new DummyOutputStream();
+						try (OutputStream os = getOutputStream(counter)) {
+							os.write(data);
+						} catch (Exception ignored) {}
+
+						Object[] b = new Object[]{copy, counter.wrote};
+						while (true) {
+							Object[] prev = ref.get();
+							if (prev != null && (int)prev[1] <= counter.wrote) return;
+							if (ref.compareAndSet(prev, b)) return;
+						}
+					});
+				}
+			}
+		}
+
+		th.awaitFinish();
+		Object[] min = ref.get();
+		LZMA2Options best = (LZMA2Options) min[0];
+		this.lc = best.lc;
+		this.lp = best.lp;
+		this.pb = best.pb;
+		return (int)min[1];
+	}
+
+	@Override
+	public String toString() {
+		CharList sb = new CharList();
+
+		if (MathUtils.getMin2PowerOf(dictSize) == dictSize) sb.append(31-Integer.numberOfLeadingZeros(dictSize));
+		else sb.append(TextUtil.scaledNumber(dictSize));
+
+		if (lc != LC_DEFAULT) sb.append(":lc").append(lc);
+		if (lp != LP_DEFAULT) sb.append(":lp").append(lp);
+		if (pb != PB_DEFAULT) sb.append(":pb").append(pb);
+
+		if (mode == MODE_FAST) sb.append(" FAST");
+		else if (mode == MODE_UNCOMPRESSED) sb.append(" STORE");
+
+		return sb.toStringAndFree();
 	}
 }

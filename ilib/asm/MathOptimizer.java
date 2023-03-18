@@ -1,21 +1,23 @@
 package ilib.asm;
 
-import roj.asm.Opcodes;
 import roj.asm.cst.*;
-import roj.asm.tree.insn.*;
+import roj.asm.tree.insn.InsnList;
+import roj.asm.tree.insn.InvokeInsnNode;
+import roj.asm.tree.insn.LabelInsnNode;
 import roj.asm.util.Context;
-import roj.asm.util.InsnList;
 
 import net.minecraft.util.math.MathHelper;
 
 import java.util.List;
 import java.util.Set;
 
+import static roj.asm.Opcodes.*;
+
 /**
  * @author Roj234
  * @since 2021/10/19 20:38
  */
-public final class MathOptimizer implements Opcodes {
+public final class MathOptimizer {
 	static void optimizeMathHelper(Context ctx) {
 		List<Constant> csts = ctx.getData().cp.array();
 		for (int i = 0; i < csts.size(); i++) {
@@ -37,7 +39,8 @@ public final class MathOptimizer implements Opcodes {
 					break;
 				case Constant.INT:
 					CstInt in = (CstInt) cst;
-					if (in.value == 65536) {in.value = 32768;} else if (in.value == 65535) in.value = 32767;
+					if (in.value == 65536) in.value = 32768;
+					else if (in.value == 65535) in.value = 32767;
 					break;
 			}
 		}
@@ -63,11 +66,11 @@ public final class MathOptimizer implements Opcodes {
 		List<CstRef> methodRefs = ctx.getMethodConstants();
 		for (int i = 0; i < methodRefs.size(); i++) {
 			CstRef ref = methodRefs.get(i);
-			if (ref.getClassName().equals("java/lang/Math")) {
-				switch (ref.desc().getName().getString()) {
+			if (ref.className().equals("java/lang/Math")) {
+				switch (ref.desc().name().str()) {
 					case "sin":
 					case "cos":
-						ref.setClazz(ctx.getData().cp.getClazz("ilib/asm/transformers/MathOptimizer"));
+						ref.clazz(ctx.getData().cp.getClazz("ilib/asm/transformers/MathOptimizer"));
 						break;
 				}
 			}
@@ -80,13 +83,13 @@ public final class MathOptimizer implements Opcodes {
 		List<CstRef> methodRefs = ctx.getMethodConstants();
 		for (int i = 0; i < methodRefs.size(); i++) {
 			CstRef ref = methodRefs.get(i);
-			if (ENUM_VALUES_CALL.contains(ref.getClassName())) {
+			if (ENUM_VALUES_CALL.contains(ref.className())) {
 				// 这个一般都会放在for循环里面，如果不是，就崩溃吧 233
 				// 开个线程每秒检测似乎没毛病，但是很丑，不是么
 				// 也许可以放在必须解析code的地方
-				if ("values".equals(ref.desc().getName().getString())) {
-					ref.setClazz(ctx.getData().cp.getClazz("ilib/asm/transformers/MathOptimizer"));
-					ref.desc(ctx.getData().cp.getDesc("sharedValues", ref.desc().getType().getString()));
+				if ("values".equals(ref.desc().name().str())) {
+					ref.clazz(ctx.getData().cp.getClazz("ilib/asm/transformers/MathOptimizer"));
+					ref.desc(ctx.getData().cp.getDesc("sharedValues", ref.desc().getType().str()));
 				}
 			}
 		}
@@ -155,7 +158,7 @@ public final class MathOptimizer implements Opcodes {
 			return null;
 		}
 		String name = node.name;
-		String descriptor = node.rawDesc();
+		String descriptor = node.awslDesc();
 		InsnList insns = new InsnList();
 		if (descriptor.indexOf('I') != -1) {
 			switch (name) {
@@ -164,28 +167,28 @@ public final class MathOptimizer implements Opcodes {
 				case "func_76130_a":
 				case "abs": {
 					LabelInsnNode label = new LabelInsnNode();
-					insns.add(NPInsnNode.of(DUP));
-					insns.add(new JumpInsnNode(IFGE, label));
-					insns.add(NPInsnNode.of(INEG));
+					insns.one(DUP);
+					insns.jump(IFGE, label);
+					insns.one(INEG);
 					insns.add(label);
 					break;
 				}
 				case "max": {
 					LabelInsnNode label = new LabelInsnNode();
-					insns.add(NPInsnNode.of(DUP2));
-					insns.add(new JumpInsnNode(IF_icmpge, label));
-					insns.add(NPInsnNode.of(SWAP));
+					insns.one(DUP2);
+					insns.jump(IF_icmpge, label);
+					insns.one(SWAP);
 					insns.add(label);
-					insns.add(NPInsnNode.of(POP));
+					insns.one(POP);
 					break;
 				}
 				case "min": {
 					LabelInsnNode label = new LabelInsnNode();
-					insns.add(NPInsnNode.of(DUP2));
-					insns.add(new JumpInsnNode(IF_icmple, label));
-					insns.add(NPInsnNode.of(SWAP));
+					insns.one(DUP2);
+					insns.jump(IF_icmple, label);
+					insns.one(SWAP);
 					insns.add(label);
-					insns.add(NPInsnNode.of(POP));
+					insns.one(POP);
 					break;
 				}
 			}
@@ -194,24 +197,24 @@ public final class MathOptimizer implements Opcodes {
 				default:
 					return null;
 				case "toRadians":
-					insns.add(new LdcInsnNode(new CstDouble(180D)));
-					insns.add(NPInsnNode.of(DDIV));
-					insns.add(new LdcInsnNode(new CstDouble(Math.PI)));
-					insns.add(NPInsnNode.of(DMUL));
+					insns.ldc(new CstDouble(180D));
+					insns.one(DDIV);
+					insns.ldc(new CstDouble(Math.PI));
+					insns.one(DMUL);
 					break;
 				case "toDegrees":
-					insns.add(new LdcInsnNode(new CstDouble(180D)));
-					insns.add(NPInsnNode.of(DMUL));
-					insns.add(new LdcInsnNode(new CstDouble(Math.PI)));
-					insns.add(NPInsnNode.of(DDIV));
+					insns.ldc(new CstDouble(180D));
+					insns.one(DMUL);
+					insns.ldc(new CstDouble(Math.PI));
+					insns.one(DDIV);
 					break;
 				case "abs": {
 					LabelInsnNode label = new LabelInsnNode();
-					insns.add(NPInsnNode.of(DUP2));
-					insns.add(NPInsnNode.of(DCONST_0));
-					insns.add(NPInsnNode.of(DCMPG));
-					insns.add(new JumpInsnNode(IFGE, label));
-					insns.add(NPInsnNode.of(DNEG));
+					insns.one(DUP2);
+					insns.one(DCONST_0);
+					insns.one(DCMPG);
+					insns.jump(IFGE, label);
+					insns.one(DNEG);
 					insns.add(label);
 					break;
 				}
@@ -223,37 +226,37 @@ public final class MathOptimizer implements Opcodes {
 				case "func_76135_e":
 				case "abs": {
 					LabelInsnNode label = new LabelInsnNode();
-					insns.add(NPInsnNode.of(DUP));
-					insns.add(NPInsnNode.of(FCONST_0));
-					insns.add(NPInsnNode.of(FCMPG));
-					insns.add(new JumpInsnNode(IFGE, label));
-					insns.add(NPInsnNode.of(FNEG));
+					insns.one(DUP);
+					insns.one(FCONST_0);
+					insns.one(FCMPG);
+					insns.jump(IFGE, label);
+					insns.one(FNEG);
 					insns.add(label);
 					break;
 				}
 				case "max": {
 					LabelInsnNode label = new LabelInsnNode();
-					insns.add(NPInsnNode.of(DUP2));
-					insns.add(NPInsnNode.of(FCMPL));
-					insns.add(new JumpInsnNode(IFGE, label));
-					insns.add(NPInsnNode.of(SWAP));
+					insns.one(DUP2);
+					insns.one(FCMPL);
+					insns.jump(IFGE, label);
+					insns.one(SWAP);
 					insns.add(label);
-					insns.add(NPInsnNode.of(POP));
+					insns.one(POP);
 					break;
 				}
 				case "min": {
 					LabelInsnNode label = new LabelInsnNode();
-					insns.add(NPInsnNode.of(DUP2));
-					insns.add(NPInsnNode.of(FCMPL));
-					insns.add(new JumpInsnNode(IFLE, label));
-					insns.add(NPInsnNode.of(SWAP));
+					insns.one(DUP2);
+					insns.one(FCMPL);
+					insns.jump(IFLE, label);
+					insns.one(SWAP);
 					insns.add(label);
-					insns.add(NPInsnNode.of(POP));
+					insns.one(POP);
 					break;
 				}
 				//                case "square":
-				//                    insns.add(NPInsnNode.of(DUP));
-				//                    insns.add(NPInsnNode.of(FMUL));
+				//                    insns.one(DUP);
+				//                    insns.one(FMUL);
 				//                    break;
 			}
 		} else {

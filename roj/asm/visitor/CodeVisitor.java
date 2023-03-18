@@ -46,7 +46,7 @@ public class CodeVisitor {
 		len = r.readUnsignedShort();
 		int wend = r.wIndex();
 		while (len-- > 0) {
-			String name = ((CstUTF) cp.get(r)).getString();
+			String name = ((CstUTF) cp.get(r)).str();
 			int length = r.readInt();
 			int end = length + r.rIndex;
 			r.wIndex(end);
@@ -98,10 +98,10 @@ public class CodeVisitor {
 					invoke(code, (CstRef) cp.get(r));
 					break;
 				case INVOKEINTERFACE:
-					invoke_interface((CstRefItf) cp.get(r), r.readShort());
+					invokeItf((CstRefItf) cp.get(r), r.readShort());
 					break;
 				case INVOKEDYNAMIC:
-					invoke_dynamic((CstDynamic) cp.get(r), r.readUnsignedShort());
+					invokeDyn((CstDynamic) cp.get(r), r.readUnsignedShort());
 					break;
 
 				case GOTO:
@@ -201,13 +201,27 @@ public class CodeVisitor {
 
 	public void visitSize(int stackSize, int localSize) {}
 
+	protected final boolean decompressVar(byte code) {
+		String name = OpcodeUtil.toString0(code);
+		// xLOAD_y
+		if (name.length() == 7 && name.startsWith("LOAD_", 1)) {
+			var((byte) OpcodeUtil.getByName().getInt(name.substring(0,5)), name.charAt(6) - '0');
+			return true;
+		} else if (name.length() == 8 && name.startsWith("STORE_", 1)) {
+			var((byte) OpcodeUtil.getByName().getInt(name.substring(0,6)), name.charAt(7) - '0');
+			return true;
+		}
+
+		return false;
+	}
+
 	protected void newArray(byte type) {}
 	protected void multiArray(CstClass clz, int dimension) {}
 	protected void clazz(byte code, CstClass clz) {}
 	protected void increase(int id, int count) {}
 	protected void ldc(byte code, Constant c) {}
-	protected void invoke_dynamic(CstDynamic dyn, int type) {}
-	protected void invoke_interface(CstRefItf itf, short argc) {}
+	protected void invokeDyn(CstDynamic dyn, int type) {}
+	protected void invokeItf(CstRefItf itf, short argc) {}
 	protected void invoke(byte code, CstRef method) {}
 	protected void field(byte code, CstRefField field) {}
 	protected void jump(byte code, int offset) {}

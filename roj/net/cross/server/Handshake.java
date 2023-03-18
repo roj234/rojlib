@@ -2,8 +2,7 @@ package roj.net.cross.server;
 
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
-import roj.net.ch.Event;
-import roj.net.ch.handler.MSSCipher;
+import roj.net.mss.MSSException;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -42,18 +41,10 @@ final class Handshake extends Stated {
 		int type = rb.get() & 0xFF;
 		ChannelHandler ch;
 		switch (type) {
-			case PS_LOGIN_C:
-				ch = ClientLogin.CLIENT_LOGIN;
-				break;
-			case PS_LOGIN_H:
-				ch = HostLogin.HOST_LOGIN;
-				break;
-			case PS_LOGIN_PIPE:
-				ch = PipeLogin.PIPE_LOGIN;
-				break;
-			default:
-				ctx.postEvent(new Event(MSSCipher.MSS_NOTIFY, "无效的角色类型 " + type));
-				return;
+			case PS_LOGIN_C: ch = ClientLogin.CLIENT_LOGIN; break;
+			case PS_LOGIN_H: ch = HostLogin.HOST_LOGIN; break;
+			case PS_LOGIN_PIPE: ch = PipeLogin.PIPE_LOGIN; break;
+			default: throw new MSSException(33, "无效的角色类型 " + type, null);
 		}
 
 		ctx.replaceSelf(ch);

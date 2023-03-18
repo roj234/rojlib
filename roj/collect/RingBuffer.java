@@ -1,8 +1,8 @@
 package roj.collect;
 
 import roj.math.MathUtils;
+import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
-import roj.util.EmptyArrays;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -85,7 +85,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 
 	public RingBuffer(int capacity, int maxCapacity) {
 		maxCap = maxCapacity;
-		array = capacity == 0 ? EmptyArrays.OBJECTS : new Object[capacity];
+		array = capacity == 0 ? ArrayCache.OBJECTS : new Object[capacity];
 	}
 
 	public static <T> RingBuffer<T> infCap() {
@@ -121,8 +121,8 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		int fence = tail;
 		Object[] arr = array;
 		do {
-			newArray[j++] = arr[i++];
 			if (j == newArray.length) break;
+			newArray[j++] = arr[i++];
 
 			if (i == arr.length) i = 0;
 		} while (i != fence);
@@ -203,12 +203,8 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		E val = (E) array[h];
 		array[h] = null;
 
-		if (--size == 0) {
-			head = tail = 0;
-		} else {
-			h++;
-			head = h == array.length ? 0 : h;
-		}
+		if (--size == 0) head = tail = 0;
+		else head = ++h == array.length ? 0 : h;
 
 		return val;
 	}
@@ -223,11 +219,8 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		E val = (E) array[t];
 		array[t] = null;
 
-		if (--size == 0) {
-			head = tail = 0;
-		} else {
-			tail = t;
-		}
+		if (--size == 0) head = tail = 0;
+		else tail = t;
 
 		return val;
 	}
@@ -327,41 +320,39 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 
 	@SuppressWarnings("unchecked")
 	public E ringAddFirst(E e) {
-		int h = head;
 		int s = size;
 		if (s < maxCap) {
 			if (s == array.length) ensureCapacity(array.length + 10);
-			size = s + 1;
-		} else {
-			if (tail == h) {
-				tail = h == 0 ? array.length-1 : h-1;
-			}
+			size = s+1;
 		}
 
-		head = h == 0 ? (h = array.length-1) : --h;
+		int h = head;
+		int nextH = h == 0 ? array.length-1 : h-1;
+		if (tail == h && size == maxCap) tail = nextH;
 
-		E v = (E) array[h];
-		array[h] = e;
+		E v = (E) array[nextH];
+		array[nextH] = e;
+
+		head = nextH;
 		return v;
 	}
 
 	@SuppressWarnings("unchecked")
 	public E ringAddLast(E e) {
-		int t = tail;
 		int s = size;
 		if (s < maxCap) {
 			if (s == array.length) ensureCapacity(array.length + 10);
-			size = s + 1;
-		} else {
-			if (t == head) {
-				if (++head == array.length) head = 0;
-			}
+			size = s+1;
 		}
 
-		E v = (E) array[t];
-		array[t++] = e;
+		int t = tail;
+		int nextT = t == array.length-1 ? 0 : t+1;
+		if (head == t && size == maxCap) head = nextT;
 
-		if ((tail = t) == array.length) tail = 0;
+		E v = (E) array[t];
+		array[t] = e;
+
+		tail = nextT;
 		return v;
 	}
 
@@ -470,7 +461,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 			head = head == array.length-1 ? 0 : head+1;
 		} else {
 			// [0, tail)
-			if (t > 1 && t-i-1 > 0) System.arraycopy(array, t-1, array, t-2, t-i-1);
+			if (i > 0 && t-i-1 > 0) System.arraycopy(array, i+1, array, i, t-i-1);
 			array[tail = t-1] = null;
 		}
 

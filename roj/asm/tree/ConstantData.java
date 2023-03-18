@@ -1,12 +1,12 @@
 package roj.asm.tree;
 
+import roj.asm.AsmShared;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cst.ConstantPool;
 import roj.asm.cst.CstClass;
-import roj.asm.cst.CstNameAndType;
-import roj.asm.cst.CstUTF;
-import roj.asm.tree.attr.*;
+import roj.asm.tree.attr.AttrUnknown;
+import roj.asm.tree.attr.Attribute;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
@@ -18,6 +18,7 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.TypedName;
 
 import java.io.FileOutputStream;
 import java.util.AbstractList;
@@ -27,14 +28,11 @@ import static roj.asm.Opcodes.*;
 import static roj.asm.util.AccessFlag.*;
 
 /**
- * Class LOD 2
- *
  * @author Roj234
  * @since 2021/5/30 19:59
  */
-public class ConstantData implements IClass, AttributeReader {
+public class ConstantData implements IClass {
 	private static final java.lang.reflect.Field N, P;
-
 	static {
 		try {
 			N = ConstantData.class.getDeclaredField("name");
@@ -61,7 +59,7 @@ public class ConstantData implements IClass, AttributeReader {
 	public final SimpleList<FieldNode> fields = new SimpleList<>();
 	public final SimpleList<MethodNode> methods = new SimpleList<>();
 
-	AttributeList attributes;
+	private AttributeList attributes;
 
 	@SuppressWarnings("fallthrough")
 	public void verify() {
@@ -124,10 +122,10 @@ public class ConstantData implements IClass, AttributeReader {
 						fn = 0;
 						break;
 					case ANNOTATION:
-					case SUPER_OR_SYNC:
+					case SUPER:
 					case SYNTHETIC:
 					case STRICTFP:
-					case VOLATILE_OR_BRIDGE:
+					case BRIDGE:
 						break;
 					case MODULE:
 						if (access == MODULE) break;
@@ -169,7 +167,7 @@ public class ConstantData implements IClass, AttributeReader {
 		this.cp = new ConstantPool();
 		this.name = null;
 		this.parent = "java/lang/Object";
-		this.access = AccessFlag.PUBLIC | AccessFlag.SUPER_OR_SYNC;
+		this.access = AccessFlag.PUBLIC | AccessFlag.SUPER;
 		this.version = 49 << 16;
 	}
 
@@ -188,19 +186,13 @@ public class ConstantData implements IClass, AttributeReader {
 		}
 	}
 
+	@Override
+	public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedName<T> type) { return Parser.parseAttribute(this,this.cp,type,attributes,Signature.CLASS); }
 	public Attribute attrByName(String name) {
 		return attributes == null ? null : (Attribute) attributes.getByName(name);
 	}
-
-	@Override
-	public AttributeList attributes() {
-		return attributes == null ? attributes = new AttributeList() : attributes;
-	}
-
-	@Override
-	public AttributeList attributesNullable() {
-		return attributes;
-	}
+	public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
+	public AttributeList attributesNullable() { return attributes; }
 
 	@Override
 	public ConstantPool cp() {
@@ -230,15 +222,9 @@ public class ConstantData implements IClass, AttributeReader {
 			methods.get(i).toByteArray(w, cw);
 		}
 
-		AttributeList attributes = this.attributes;
-		if (attributes == null) {
-			w.putShort(0);
-		} else {
-			w.putShort(attributes.size());
-			for (int i = 0, l = attributes.size(); i < l; i++) {
-				attributes.get(i).toByteArray(w, cw);
-			}
-		}
+		AttributeList attr = attributes;
+		if (attr == null) w.putShort(0);
+		else attr.toByteArray(w, cw);
 
 		int pos = w.wIndex();
 		int cpl = cw.byteLength() + 10;
@@ -265,32 +251,13 @@ public class ConstantData implements IClass, AttributeReader {
 				fields.set(i, Helpers.cast(((Field) fields.get(i)).i_downgrade(cp)));
 			}
 		}
-	}
 
-	@Override
-	public Attribute parseAttribute(ConstantPool pool, DynByteBuf r, String name, int length) {
-		switch (name) {
-			case "Record": return new AttrRecord(r, pool);
-			case "RuntimeVisibleTypeAnnotations":
-			case "RuntimeInvisibleTypeAnnotations": return new TypeAnnotations(name, r, pool);
-			case "InnerClasses": return new InnerClasses(r, pool);
-			case "Module": return new AttrModule(r, pool);
-			case "ModulePackages": return new AttrModulePackages(r, pool);
-			case "ModuleMainClass":
-			case "NestHost": return new AttrClassRef(name, r, pool);
-			case "PermittedSubclasses":
-			case "NestMembers": return new AttrStringList(name, r, pool, 0);
-			case "RuntimeInvisibleAnnotations":
-			case "RuntimeVisibleAnnotations": return new Annotations(name, r, pool);
-			case "SourceFile": return new AttrUTF(name, ((CstUTF) pool.get(r)).getString());
-			case "Signature": return Signature.parse(((CstUTF) pool.get(r)).getString());
-			case "BootstrapMethods": return new BootstrapMethods(r, pool);
-			// A class must have an EnclosingMethod attribute if and only if it represents a local class or an anonymous class (JLS §14.3, JLS §15.9.5).
-			// if and only if => 在且仅在 内部类中含有
-			case "EnclosingMethod": return new EnclosingMethod((CstClass) pool.get(r), (CstNameAndType) pool.get(r));
-			case "Deprecated":
-			case "SourceDebugExtension":
-			default: return length < 0 ? null : new AttrUnknown(name, r);
+		AttributeList attrs = attributes;
+		if (attrs != null) {
+			DynByteBuf w = AsmShared.getBuf();
+			for (int i = 0; i < attrs.size(); i++) {
+				attrs.set(i, AttrUnknown.downgrade(cp, w, attrs.get(i)));
+			}
 		}
 	}
 
@@ -298,93 +265,56 @@ public class ConstantData implements IClass, AttributeReader {
 	public String toString() {
 		StringBuilder sb = new StringBuilder(1000);
 
-		Parser.withParsedAttribute(cp, this);
-
-		Attribute a = attrByName(Annotations.VISIBLE);
+		Attribute a = parsedAttr(cp, Attribute.RtAnnotations);
 		if (a != null) sb.append(a);
-		a = attrByName(Annotations.INVISIBLE);
+		a = parsedAttr(cp, Attribute.ClAnnotations);
 		if (a != null) sb.append(a);
 
 		AccessFlag.toString(access, AccessFlag.TS_CLASS, sb);
-		sb.append(this.name.substring(this.name.lastIndexOf('/') + 1));
-		a = attrByName("Signature");
+		sb.append(name.substring(name.lastIndexOf('/')+1));
+		a = parsedAttr(cp, Attribute.SIGNATURE);
 		if (a != null) {
-			if (!(a instanceof Signature)) a = Signature.parse(((AttrUTF) a).value, Signature.CLASS);
 			sb.append(a);
-		}
-		else {
-			if (!"java/lang/Object".equals(this.parent) && this.parent != null) sb.append(" extends ").append(this.parent);
-			if (this.interfaces.size() > 0) {
+		} else {
+			if (!"java/lang/Object".equals(parent) && parent != null) sb.append(" extends ").append(parent);
+			if (interfaces.size() > 0) {
 				sb.append(" implements ");
-				for (CstClass c : this.interfaces) {
+				for (CstClass c : interfaces) {
 					String i = c.getValue().getString();
-					sb.append(i.substring(i.lastIndexOf('/') + 1)).append(", ");
+					sb.append(i.substring(i.lastIndexOf('/')+1)).append(", ");
 				}
 				sb.delete(sb.length() - 2, sb.length());
 			}
 		}
-		sb.append("\n\n");
-		if (!this.fields.isEmpty()) {
-			for (FieldNode i : this.fields) {
-				sb.append(i).append("\n");
+		if (!fields.isEmpty()) {
+			sb.append("\n\n");
+			for (int i = 0; i < fields.size(); i++) {
+				sb.append(fields.get(i)).append("\n");
 			}
 			sb.deleteCharAt(sb.length() - 1);
 		}
-		sb.append("\n\n");
-		if (!this.methods.isEmpty()) {
-			for (MethodNode i : this.methods) {
-				sb.append(i).append("\n");
+		if (!methods.isEmpty()) {
+			sb.append("\n\n");
+			for (int i = 0; i < methods.size(); i++) {
+				sb.append(methods.get(i)).append("\n");
 			}
 			sb.deleteCharAt(sb.length() - 1);
 		}
-		sb.append("\n\n");
-		if (attributes != null) {
-			for (int j = 0; j < attributes.size(); j++) {
-				Attribute i = attributes.get(j);
-				switch (i.name) {
-					case "Signature":
-					case Annotations.INVISIBLE:
-					case Annotations.VISIBLE: continue;
-				}
-				sb.append("   ").append(i).append('\n');
-			}
-			sb.deleteCharAt(sb.length() - 1);
-		}
-		return sb.toString();
+
+		return sb.append("\n").toString();
 	}
 
-	@Override
-	public final String name() {
-		return nameCst.getValue().getString();
-	}
-	@Override
-	public final String parent() {
-		return parentCst == null ? null : parentCst.getValue().getString();
-	}
-	@Override
-	public final void accessFlag(int flag) {
-		this.access = (char) flag;
-	}
-	@Override
-	public final char accessFlag() {
-		return access;
-	}
-	@Override
-	public final List<String> interfaces() {
-		return itfView == null ? itfView = new ItfView() : itfView;
-	}
-	@Override
-	public final List<? extends MoFNode> methods() {
-		return methods;
-	}
-	@Override
-	public final List<? extends MoFNode> fields() {
-		return fields;
-	}
-	@Override
-	public final int type() {
-		return Parser.CTYPE_PARSED;
-	}
+	public final String name() { return nameCst.getValue().getString(); }
+	public final String parent() { return parentCst == null ? null : parentCst.getValue().getString(); }
+
+	public final void modifier(int flag) { access = (char) flag; }
+	public final char modifier() { return access; }
+
+	public final List<String> interfaces() { return itfView == null ? itfView = new ItfView() : itfView; }
+	public final List<? extends MoFNode> methods() { return methods; }
+	public final List<? extends MoFNode> fields() { return fields; }
+
+	public final int type() { return Parser.CTYPE_PARSED; }
 
 	public final void dump() {
 		try (FileOutputStream fos = new FileOutputStream(name.replace('/', '.') + ".class")) {
@@ -471,6 +401,7 @@ public class ConstantData implements IClass, AttributeReader {
 
 	public final CodeWriter newMethod(int acc, String name, String desc) {
 		RawMethod m0 = new RawMethod(acc, cp.getUtf(name), cp.getUtf(desc));
+		m0.cn(this.name);
 		methods.add(Helpers.cast(m0));
 		if ((acc & (ABSTRACT|NATIVE)) != 0) return Helpers.nonnull();
 		AttrCodeWriter cw = new AttrCodeWriter(cp, m0);

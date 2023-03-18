@@ -5,7 +5,10 @@ import roj.math.MathUtils;
 import javax.annotation.Nonnull;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
-import java.util.*;
+import java.util.AbstractSet;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
 
 /**
  * @author Roj234
@@ -19,28 +22,12 @@ public class WeakHashSet<K> extends AbstractSet<K> implements MapLike<WeakHashSe
 	private final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 
 	protected static class Entry extends WeakReference<Object> implements MapLikeEntry<Entry> {
-		public Entry(ReferenceQueue<Object> queue, Object referent) {
-			super(referent, queue);
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			Object ano = get();
-			return ano == null ? obj == null : ano.equals(obj);
-		}
-
-		@Override
-		public int hashCode() {
-			return hash;
-		}
-
+		public Entry(Object referent, ReferenceQueue<Object> queue) { super(referent, queue); }
 		int hash;
 		Entry next;
 
 		@Override
-		public Entry nextEntry() {
-			return next;
-		}
+		public Entry nextEntry() { return next; }
 	}
 
 	protected Entry[] entries;
@@ -91,8 +78,6 @@ public class WeakHashSet<K> extends AbstractSet<K> implements MapLike<WeakHashSe
 	}
 
 	public void resize() {
-		doEvict();
-
 		Entry[] newEntries = new Entry[length];
 		Entry entry;
 		Entry next;
@@ -102,10 +87,12 @@ public class WeakHashSet<K> extends AbstractSet<K> implements MapLike<WeakHashSe
 			entries[i] = null;
 			while (entry != null) {
 				next = entry.next;
-				int newKey = indexFor(entry.hash);
-				Entry old = newEntries[newKey];
-				newEntries[newKey] = entry;
-				entry.next = old;
+				if (entry.get() != null) {
+					int newKey = entry.hash & (length - 1);
+					Entry old = newEntries[newKey];
+					newEntries[newKey] = entry;
+					entry.next = old;
+				}
 				entry = next;
 			}
 		}
@@ -119,33 +106,37 @@ public class WeakHashSet<K> extends AbstractSet<K> implements MapLike<WeakHashSe
 
 		doEvict();
 
-		int hash = key.hashCode();
-		int index = indexFor(hash);
-		Entry result;
+		int hash = hashCode(key);
 		if (entries == null) entries = new Entry[length];
-		result = entries[index];
+
+		int index = hash & (length - 1);
+		Entry entry = entries[index];
+
+		if (entry == null) {
+			(entries[index] = new Entry(key, queue)).hash = hash;
+			size++;
+			return true;
+		}
+
+		while (true) {
+			if (equals(entry, key)) return false;
+
+			if (entry.next == null) break;
+			entry = entry.next;
+		}
 
 		if (size > length * 0.8f) {
 			length <<= 1;
 			resize();
 		}
 
-		if (result == null) {
-			(entries[index] = new Entry(queue, key)).hash = hash;
-			size++;
-			return true;
-		}
-		while (true) {
-			if (result.equals(key)) {
-				return false;
-			}
-			if (result.next == null) break;
-			result = result.next;
-		}
-		(result.next = new Entry(queue, key)).hash = hash;
+		(entry.next = new Entry(key, queue)).hash = hash;
 		size++;
 		return true;
 	}
+
+	protected int hashCode(Object key) { return key.hashCode(); }
+	protected boolean equals(Entry a, Object b) { Object o = a.get(); return o != null && o.equals(b); }
 
 	@Override
 	public boolean remove(Object key) {
@@ -154,14 +145,14 @@ public class WeakHashSet<K> extends AbstractSet<K> implements MapLike<WeakHashSe
 		doEvict();
 
 		if (entries == null) return false;
-		int index = indexFor(key.hashCode());
+		int index = hashCode(key) & (length-1);
 		Entry curr = entries[index];
 		Entry prev = null;
 		while (curr != null) {
-			if (Objects.equals(curr.get(), key)) {
-				if (prev == null) {entries[index] = null;} else {
-					prev.next = curr.next;
-				}
+			if (equals(curr, key)) {
+				if (prev == null) entries[index] = null;
+				else prev.next = curr.next;
+
 				return true;
 			}
 			prev = curr;
@@ -177,13 +168,10 @@ public class WeakHashSet<K> extends AbstractSet<K> implements MapLike<WeakHashSe
 
 		doEvict();
 
-		int index = indexFor(key.hashCode());
-		Entry curr = entries[index];
-		while (curr != null) {
-			if (Objects.equals(curr.get(), key)) {
-				return true;
-			}
-			curr = curr.next;
+		Entry entry = entries[hashCode(key) & (length-1)];
+		while (entry != null) {
+			if (equals(entry, key)) return true;
+			entry = entry.next;
 		}
 		return false;
 	}
@@ -191,34 +179,28 @@ public class WeakHashSet<K> extends AbstractSet<K> implements MapLike<WeakHashSe
 	@Nonnull
 	@Override
 	public Iterator<K> iterator() {
-		// 这不香吗
 		return isEmpty() ? Collections.emptyIterator() : new SetItr<>(this);
 	}
 
-	int indexFor(int obj) {
-		return obj & (length - 1);
-	}
-
 	public void doEvict() {
-		Entry entry;
+		Entry remove;
+
 		o:
-		while ((entry = (Entry) queue.poll()) != null) {
+		while ((remove = (Entry) queue.poll()) != null) {
 			if (entries == null) continue;
 
-			Entry curr = entries[indexFor(entry.hash)];
+			// get prev
+			Entry curr = entries[remove.hash & (length-1)];
 			Entry prev = null;
-			while (curr != entry) {
+			while (curr != remove) {
 				if (curr == null) continue o;
 
 				prev = curr;
 				curr = curr.next;
 			}
 
-			if (prev == null) {
-				entries[indexFor(entry.hash)] = null;
-			} else {
-				prev.next = curr.next;
-			}
+			if (prev == null) entries[remove.hash & (length-1)] = null;
+			else prev.next = remove.next;
 			size--;
 		}
 	}

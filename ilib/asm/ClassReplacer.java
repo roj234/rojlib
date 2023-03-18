@@ -49,8 +49,8 @@ public class ClassReplacer implements IClassTransformer {
 				Constant c = cp.get(i);
 				if (c.type() == Constant.UTF) {
 					CstUTF cu = (CstUTF) c;
-					tmp1.append(cu.getString()).replace(data.name, target);
-					cu.setString(tmp1.toString());
+					tmp1.append(cu.str()).replace(data.name, target);
+					data.cp.setUTFValue(cu, tmp1.toString());
 					tmp1.clear();
 				}
 			}

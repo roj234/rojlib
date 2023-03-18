@@ -35,15 +35,15 @@ public final class InnerClasses extends Attribute {
 		List<InnerClass> classes = new SimpleList<>(count);
 
 		while (count-- > 0) {
-			String selfName = ((CstClass) pool.get(r)).getValue().getString();
+			String selfName = ((CstClass) pool.get(r)).name().str();
 			CstClass outer = (CstClass) pool.get(r);
 			// If C is not a member of a class or an interface (that is, if C is a top-level class or interface (JLS §7.6) or a local class (JLS §14.3) or an anonymous class (JLS §15.9.5)), the value of the outer_class_info_index item must be 0.
-			String outerName = outer == null ? null : outer.getValue().getString();
+			String outerName = outer == null ? null : outer.name().str();
 
 			CstUTF nameS = (CstUTF) pool.get(r);
 			// If C is anonymous (JLS §15.9.5), the item must be null
 			// Otherwise, the item must be a Utf8
-			String name = nameS == null ? null : nameS.getString();
+			String name = nameS == null ? null : nameS.str();
 
 			classes.add(new InnerClass(selfName, outerName, name, r.readChar()));
 		}
@@ -100,7 +100,7 @@ public final class InnerClasses extends Attribute {
 
 		public static InnerClass reference(String from, IClass referent) {
 			int i = referent.name().lastIndexOf('$');
-			return new InnerClass(referent.name(), from, referent.name().substring(i + 1), referent.accessFlag());
+			return new InnerClass(referent.name(), from, referent.name().substring(i + 1), referent.modifier());
 		}
 
 		public String toString() {

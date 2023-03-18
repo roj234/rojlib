@@ -43,7 +43,7 @@ class ClientWork extends Stated {
 
 				if (refused != null) {
 					print(W + ": 拒绝创建管道: " + refused);
-					ctx.channelWrite(IOUtil.getSharedByteBuf().put((byte) P_CHANNEL_OPEN_FAIL).putInt(0).putVarIntUTF(refused));
+					ctx.channelWrite(IOUtil.getSharedByteBuf().put((byte) P_CHANNEL_OPEN_FAIL).putInt(0).putVUIUTF(refused));
 					break;
 				}
 

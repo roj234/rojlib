@@ -26,7 +26,7 @@ import java.util.function.UnaryOperator;
 public class Signature extends Attribute {
 	public Map<String, List<IType>> typeParams;
 
-	public static final byte METHOD = 1, FIELD_OR_CLASS = 0, CLASS = -1;
+	public static final byte METHOD = 1, FIELD = 0, CLASS = -1;
 
 	public byte type;
 	/**
@@ -53,7 +53,7 @@ public class Signature extends Attribute {
 		super("Signature");
 		this.typeParams = typeParams;
 		this.values = value;
-		this.type = (isMethod ? METHOD : (value.isEmpty() ? FIELD_OR_CLASS : CLASS));
+		this.type = (isMethod ? METHOD : (value.isEmpty() ? FIELD : CLASS));
 		this.Throws = Throws;
 	}
 
@@ -84,7 +84,7 @@ public class Signature extends Attribute {
 			if (Throws != null) {
 				throw new IllegalStateException("Throws is not null in non-METHOD signature");
 			}
-			if (type == FIELD_OR_CLASS && values.size() != 1)
+			if (type == FIELD && values.size() != 1)
 				throw new IllegalStateException("values.size() > 1 in FIELD signature");
 		}
 	}
@@ -170,7 +170,7 @@ public class Signature extends Attribute {
 
 	public String toString() {
 		CharList sb = IOUtil.getSharedCharBuf();
-		if (type == FIELD_OR_CLASS) {
+		if (type == FIELD) {
 			values.get(0).toString(sb);
 		} else {
 			if (type == METHOD) {
@@ -197,10 +197,12 @@ public class Signature extends Attribute {
 		if (name != null) sb.append(' ').append(name);
 		sb.append(' ').append('(');
 		int i = 0;
-		for (;;) {
-			values.get(i).toString(sb);
-			if (++i == values.size()-1) break;
-			sb.append(", ");
+		if (values.size() > 1) {
+			for (;;) {
+				values.get(i).toString(sb);
+				if (++i == values.size()-1) break;
+				sb.append(", ");
+			}
 		}
 		sb.append(')');
 
@@ -234,6 +236,7 @@ public class Signature extends Attribute {
 		System.out.println("toString(): " + signature);
 		System.out.println("getTypeParam(): " + signature.getTypeParam());
 		System.out.println("toDesc(): " + signature.toDesc());
+		signature.validate();
 	}
 
 	public static Signature parse(CharSequence s) {
@@ -253,7 +256,7 @@ public class Signature extends Attribute {
 			sign.typeParams = new LinkedMyHashMap<>();
 			sign.type = CLASS;
 
-			if (expect == FIELD_OR_CLASS) error("type parameter begin('<') in FIELD type", 0, s);
+			if (expect == FIELD) error("type parameter begin('<') in FIELD type", 0, s);
 			i = 1;
 
 			while (i < s.length()) {
@@ -277,7 +280,7 @@ public class Signature extends Attribute {
 
 				// other parameters: 'implements'
 				while (s.charAt(i) == ':') {
-					if (i >= s.length()) error("EOF before found type desc end( != ':')", i, s);
+					if (i >= s.length()) error("before type desc end( != ':')", i, s);
 
 					i1.setValue(i+1);
 					vals.add(getSignatureValue(s, i1, F_INTERFACE, tmp));
@@ -345,10 +348,11 @@ public class Signature extends Attribute {
 			sign.type = (byte) expect;
 		}
 
+		// 当前上下文不足以检测缺失的类型参数.
 		return sign;
 	}
 
-	public static IType parseTypeGeneric(CharSequence s) {
+	public static IType parseGeneric(CharSequence s) {
 		return getSignatureValue(s, new MutableInt(), 0, IOUtil.getSharedCharBuf());
 	}
 
@@ -411,10 +415,11 @@ public class Signature extends Attribute {
 
 			childrenLoop:
 			while (true) {
+				if (pos >= s.length()) error("在参数结束之前",pos,s);
 				c = s.charAt(pos);
 				switch (c) {
 					case '>':
-						if (g.children.isEmpty()) error("empty generic use", pos, s);
+						if (g.children.isEmpty()) error("空参数列表", pos, s);
 						pos++;
 						break childrenLoop;
 					case '*':
@@ -430,7 +435,7 @@ public class Signature extends Attribute {
 								break;
 							case '-':
 								pos++;
-								ex = Generic.EX_SUPERS << 8;
+								ex = Generic.EX_SUPER << 8;
 								break;
 							default:
 								ex = 0;
@@ -450,7 +455,7 @@ public class Signature extends Attribute {
 			if (g == null) g = new Generic(tmp.toString(), flag&0xFF, (byte) ((flag >>> 8)&0xF));
 
 			g.sub = (GenericSub) genericUse(s, mi, tmp, F_SUBCLASS);
-		} else if (c != ';') error("unexcepted " + c + " wanting ';'",pos,s);
+		} else if (c != ';') error("未预料的 '"+c+"' 期待';'或'.'",pos,s);
 
 		if (g != null) return g;
 		return new Type(tmp.toString(), flag&0xFF);
@@ -464,14 +469,14 @@ public class Signature extends Attribute {
 				case '.':
 				case '<':
 					if (mi.getValue() == j)
-						error("empty class name",j,s);
+						error("类名为空",j,s);
 					tmp.clear();
 					tmp.append(s,mi.getValue(),j);
 					mi.setValue(j+1);
 					return s.charAt(j);
 			}
 			j++;
-			if (j >= s.length()) error("EOF before found desc end (';')",j,s);
+			if (j >= s.length()) error("在类名结束之前 (';')",j,s);
 		}
 	}
 }

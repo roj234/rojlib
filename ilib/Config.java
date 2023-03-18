@@ -48,7 +48,7 @@ public final class Config extends FileConfig {
 		chunkOpt, colorCode, controlViaFile, fastNodeWalk, asyncTexLoad, otherSort, asyncChunkGen,
 		trimEvent, fastEntityList, inheritEntityType, infMods, asyncPopulate, fastAdv, noJoinSpawn,
 		noShade, trimNBT, guiButton, doorMod, noPrefixWarning, fixUUIDDup, noDeathAnim, fastBiomeBlend,
-		fastPacketProc, biomeBlendFabulously, asyncTexLoadEx, WTFIsIt, farSight, showPlayerName,
+		fastPacketProc, biomeBlendFabulously, asyncTexLoadEx, WTFIsIt, farSight, alwaysShowName,
 		fastExplosion, fastExplosion2;
 
 	public static int fpsLowTime, fpsLowFPS, clientNetworkTimeout, chatLength, debug, maxParticleCountPerLayer,
@@ -59,7 +59,7 @@ public final class Config extends FileConfig {
 
 	public static long maxChunkTimeTick, nbtMaxLength;
 
-	public static String title, clientBrand, customFont;
+	public static String title, clientBrand;
 
 	public static Set<String> disableTileEntities, siTimeExcludeTargets, siTimeExcludeDmgs, siTimeExcludeAttackers, noUpdate, noAnim;
 
@@ -84,8 +84,6 @@ public final class Config extends FileConfig {
 		if (threadPriority != -1) {
 			Thread.currentThread().setPriority(threadPriority);
 		}
-		// todo
-		//  1. phosphor
 	}
 
 	// 往下不是配置项，而是算出来的
@@ -205,8 +203,8 @@ public final class Config extends FileConfig {
 		map.putCommentDotted("优化.优化随机刻", "其实没啥用，除非你randomTickSpeed开到几千");
 		fastRandomTick = map.putIfAbsent("优化.优化随机刻", true);
 		leavesMem = map.putIfAbsent("优化.优化树叶的内存占用", true);
-		map.putCommentDotted("优化.替换EnumFacing\\.values()", "降低大量区块更新时的CPU占用");
-		replaceEnumFacing = map.putIfAbsent("优化.替换EnumFacing\\.values()", true);
+		map.putCommentDotted("优化.\"替换EnumFacing.values()\"", "降低大量区块更新时的CPU占用");
+		replaceEnumFacing = map.putIfAbsent("优化.\"替换EnumFacing.values()\"", true);
 		worldGenOpt = map.putIfAbsent("优化.世界生成优化", true);
 		fastExplosion = map.putIfAbsent("优化.爆炸优化", true);
 		map.putCommentDotted("优化.激进爆炸优化", "优化后的方法无法触发ExplosionEvent.Detonate事件");
@@ -450,7 +448,7 @@ public final class Config extends FileConfig {
 
 
 		if (side) {
-			showPlayerName = map.putIfAbsent("功能.客户端.一直显示玩家昵称", false);
+			alwaysShowName = map.putIfAbsent("功能.客户端.一直显示玩家昵称", false);
 
 			guiButton = map.putIfAbsent("功能.客户端.开启主菜单的按钮", true);
 			noDeathAnim = map.putIfAbsent("功能.客户端.关闭死亡动画", false);
@@ -489,9 +487,6 @@ public final class Config extends FileConfig {
 
 			map.putCommentDotted("功能.客户端.清澈的岩浆", "如果要实现'I See Lava' mod的全部功能，你需要用材质包把岩浆的材质替换成半透明的");
 			clearLava = map.putIfAbsent("功能.客户端.清澈的岩浆", false);
-			map.putCommentDotted("功能.客户端.自定义字体", "效果一般...感觉做的挺失败的\n" +
-				"比如在下面填个宋体，黑体");
-			customFont = map.putIfAbsent("功能.客户端.自定义字体", "");
 
 			int tooltipFlags = map.putIfAbsent("功能.客户端.高级提示框.注册名", true) ? 1 : 0;
 			tooltipFlags |= map.putIfAbsent("功能.客户端.高级提示框.未本地化名", false) ? 1 << 1 : 0;
@@ -509,7 +504,7 @@ public final class Config extends FileConfig {
 
 			map.putCommentDotted("功能.客户端.Tooltip分页", "长度改-1关闭");
 			pagedTooltipLen = map.putIfAbsent("功能.客户端.Tooltip分页.长度", 16);
-			pagedTooltipTime = map.putIfAbsent("功能.客户端.Tooltip分页.切换时间(帧)", 300);
+			pagedTooltipTime = map.putIfAbsent("功能.客户端.Tooltip分页.切换时间(秒)", 10);
 			noticeItemChange = map.putIfAbsent("功能.客户端.提示物品改变", false);
 
 			title = map.putIfAbsent("功能.客户端.窗口标题", "Minecraft 1.12.2");

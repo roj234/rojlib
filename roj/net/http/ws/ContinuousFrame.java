@@ -8,39 +8,30 @@ import roj.util.DynByteBuf;
  * @since 2022/11/11 0011 1:30
  */
 final class ContinuousFrame {
-	ContinuousFrame(int data) {
-		this.data = (byte) data;
-	}
+	ContinuousFrame(int data) { this.data = (byte) data; }
 
 	public final byte data;
 	int fragments;
-	private DynByteBuf payload;
+	private DynByteBuf packet;
 	long length;
 
-	public int fragments() {
-		return fragments;
-	}
-
-	public long length() {
-		return length;
-	}
+	public int fragments() { return fragments; }
+	public long length() { return length; }
+	public DynByteBuf payload() { return packet; }
 
 	public void append(ChannelCtx ctx, DynByteBuf b) {
-		payload = payload == null ? ctx.allocate(true, b.readableBytes()) : ctx.alloc().expand(payload, b.readableBytes(), true);
+		if (packet == null) packet = ctx.allocate(true, b.readableBytes());
+		else if (packet.writableBytes()<b.readableBytes()) packet = ctx.alloc().expand(packet, b.readableBytes());
 
-		payload.put(b);
+		packet.put(b);
 		length += b.readableBytes();
 		fragments++;
 	}
 
-	public DynByteBuf payload(ChannelCtx ctx) {
-		return payload;
-	}
-
 	public void clear(ChannelCtx ctx) {
-		if (payload != null) {
-			ctx.reserve(payload);
-			payload = null;
+		if (packet != null) {
+			ctx.reserve(packet);
+			packet = null;
 		}
 	}
 

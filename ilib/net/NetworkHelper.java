@@ -22,7 +22,7 @@ public class NetworkHelper {
 			return;
 		}
 		buf.putVarInt(list.length);
-		for (String s : list) buf.putVarIntUTF(s);
+		for (String s : list) buf.putVUIUTF(s);
 	}
 
 	public static String[] getStringList(ByteList buf) {
@@ -30,7 +30,7 @@ public class NetworkHelper {
 		if (length == -1) return null;
 		String[] result = new String[length];
 		for (int i = 0; i < length; i++) {
-			result[i] = buf.readVarIntUTF();
+			result[i] = buf.readVUIUTF();
 		}
 		return result;
 	}

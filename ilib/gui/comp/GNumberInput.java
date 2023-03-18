@@ -1,7 +1,6 @@
 package ilib.gui.comp;
 
 import ilib.gui.IGui;
-import roj.math.MathUtils;
 import roj.text.TextUtil;
 
 /**
@@ -87,6 +86,6 @@ public class GNumberInput extends GTextInput {
 	}
 
 	private void a() {
-		setMaxLength(Math.max(MathUtils.digitCount(min), MathUtils.digitCount(max)));
+		setMaxLength(Math.max(TextUtil.digitCount(min), TextUtil.digitCount(max)));
 	}
 }

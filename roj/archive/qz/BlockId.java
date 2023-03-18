@@ -1,30 +1,41 @@
 package roj.archive.qz;
 
 interface BlockId {
-     byte iEnd = 0;
-     byte iHeader = 1;
-     byte iProp = 2;
-     byte iMoreStream = 3;
-     byte iArchiveInfo = 4;
-     byte iFilesInfo = 5;
-     byte iStreamInfo = 6;
-     byte iWordBlockInfo = 7;
-     byte iBlockFileMap = 8;
-     byte iSize = 9;
-     byte iCRC32 = 10;
-     byte iWordBlock = 11;
-     byte iWordBlockSizes = 12;
-     byte iFileCounts = 13;
-     byte iEmpty = 14;
-     byte iEmptyFile = 15;
-     byte iDeleteFile = 16;
-     byte iFileName = 17;
-     byte iCTime = 18;
-     byte iATime = 19;
-     byte iMTime = 20;
-     byte iAttribute = 21;
-     byte iComment = 22;
-     byte iPackedHeader = 23;
-     byte iStartPos = 24;
-     byte iDummy = 25;
+     byte kEnd = 0;
+
+     byte kHeader = 1;
+
+     byte kArchiveProperties = 2;
+
+     byte kAdditionalStreamsInfo = 3;
+     byte kMainStreamsInfo = 4;
+     byte kFilesInfo = 5;
+
+     byte kPackInfo = 6;
+     byte kUnPackInfo = 7;
+     byte kSubStreamsInfo = 8;
+
+     byte kSize = 9;
+     byte kCRC = 10;
+
+     byte kFolder = 11;
+
+     byte kCodersUnPackSize = 12;
+     byte kNumUnPackStream = 13;
+
+     byte kEmptyStream = 14;
+     byte kEmptyFile = 15;
+     byte kAnti = 16;
+
+     byte kName = 17;
+     byte kCTime = 18;
+     byte kATime = 19;
+     byte kMTime = 20;
+     byte kWinAttributes = 21;
+     byte kComment = 22;
+
+     byte kEncodedHeader = 23;
+
+     byte kStartPos = 24;
+     byte kDummy = 25;
 }

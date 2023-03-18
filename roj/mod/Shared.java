@@ -10,11 +10,9 @@ import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.dev.HRRemote;
 import roj.io.BOMInputStream;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
 import roj.mapper.ConstMapper;
-import roj.mapper.MapUtil;
 import roj.mapper.util.Desc;
 import roj.misc.CpFilter;
 import roj.mod.plugin.Plugin;
@@ -39,7 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class Shared {
 	public static final boolean DEBUG;
 	public static final String MC_BINARY = "forgeMcBin";
-	public static final String VERSION = "2.0-alpha";
+	public static final String VERSION = "2.0.2";
 
 	public static final File BASE, TMP_DIR, CONFIG_DIR;
 
@@ -59,7 +57,7 @@ public final class Shared {
 	}
 
 	public static final TaskSequencer PeriodicTask = new TaskSequencer();
-	public static final TaskPool Task = new TaskPool(2, Math.min(8, Runtime.getRuntime().availableProcessors()), 2, 5000, "异步任务");
+	public static final TaskPool Task = TaskPool.CpuMassive();
 
 	public static void async(Runnable... run) {
 		Thread[] t = new Thread[run.length];
@@ -81,11 +79,11 @@ public final class Shared {
 		File file = new File(BASE, "config.json");
 		try {
 			final BOMInputStream bom = new BOMInputStream(new FileInputStream(file), "UTF8");
-			if (!bom.getEncoding().equals("UTF8")) { // 检测到了则是 UTF-8
-				CmdUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getEncoding());
+			if (!bom.getCharset().equals("UTF8")) { // 检测到了则是 UTF-8
+				CmdUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getCharset());
 			}
 
-			CONFIG = JSONParser.parses(IOUtil.readAs(bom, bom.getEncoding()), 7).asMap();
+			CONFIG = JSONParser.parses(IOUtil.readAs(bom, bom.getCharset()), 7).asMap();
 			CONFIG.dot(true);
 		} catch (ParseException | ClassCastException e) {
 			CmdUtil.error(file.getAbsolutePath() + " 有语法错误! 请修正!", e);
@@ -225,16 +223,22 @@ public final class Shared {
 
 		boolean launchOnly = System.getProperty("fmd.launch_only") != null || CONFIG.getBool("启动器模式");
 
-		TMP_DIR = new File(BASE, "tmp/");
+		TMP_DIR = new File(BASE, "tmp");
 
 		if (!TMP_DIR.isDirectory() && !TMP_DIR.mkdir()) {
 			CmdUtil.error("无法创建临时文件夹: " + TMP_DIR.getAbsolutePath());
 			System.exit(-2);
 		}
 
-		CONFIG_DIR = new File(BASE, "/config/");
+		File classDir = new File(BASE, "class");
+		if (!launchOnly && !classDir.isDirectory() && !classDir.mkdir()) {
+			CmdUtil.error("无法创建库文件夹: " + classDir.getAbsolutePath());
+			System.exit(-2);
+		}
+
+		CONFIG_DIR = new File(BASE, "config");
 		if (!launchOnly && !CONFIG_DIR.isDirectory() && !CONFIG_DIR.mkdirs()) {
-			CmdUtil.error("无法创建配置保存文件夹: " + CONFIG_DIR.getAbsolutePath());
+			CmdUtil.error("无法创建配置文件夹: " + CONFIG_DIR.getAbsolutePath());
 			System.exit(-2);
 		}
 
@@ -250,7 +254,7 @@ public final class Shared {
 		DownloadTask.defChunkStart = threads > 0 ? 4096 : Integer.MAX_VALUE;
 		DownloadTask.defMaxChunks = threads;
 		DownloadTask.userAgent = cfgGen.getString("UserAgent");
-		FileUtil.timeout = cfgGen.getInteger("下载超时");
+		IOUtil.timeout = cfgGen.getInteger("下载超时");
 
 		IFileWatcher w = null;
 		if (!launchOnly) {
@@ -285,8 +289,6 @@ public final class Shared {
 			if (CONFIG.getBool("子类实现")) {
 				mapperFwd.flag |= ConstMapper.FLAG_CHECK_SUB_IMPL;
 			}
-
-			MapUtil.setAsyncPool(Task);
 		}
 
 		if (w == null) w = new IFileWatcher();

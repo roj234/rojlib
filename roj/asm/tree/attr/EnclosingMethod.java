@@ -23,12 +23,12 @@ public final class EnclosingMethod extends Attribute {
 	public EnclosingMethod(CstClass clazz, CstNameAndType method) {
 		super("EnclosingMethod");
 		// 当并非被代码文本意义上的'函数'创建时(etc {}, static{}, x = ?), 需为Null
-		owner = clazz.getValue().getString();
+		owner = clazz.name().str();
 		if (method == null) {
 			name = PREDEFINED;
 		} else {
-			name = method.getName().getString();
-			parameters = TypeHelper.parseMethod(method.getType().getString());
+			name = method.name().str();
+			parameters = TypeHelper.parseMethod(method.getType().str());
 			returnType = parameters.remove(parameters.size() - 1);
 		}
 	}

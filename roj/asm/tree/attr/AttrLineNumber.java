@@ -60,10 +60,10 @@ public final class AttrLineNumber extends Attribute implements CodeAttributeSpec
 		w.putShort(list.size());
 		if (list.isEmpty()) return;
 
-		list.sort((o1, o2) -> Integer.compare(o1.node.bci, o2.node.bci));
+		list.sort((o1, o2) -> Integer.compare(o1.bci(), o2.bci()));
 		for (int i = 0; i < list.size(); i++) {
 			LineNumber ln = list.get(i);
-			w.putShort(ln.node.bci).putShort(ln.line);
+			w.putShort(ln.bci()).putShort(ln.line);
 		}
 	}
 
@@ -77,7 +77,12 @@ public final class AttrLineNumber extends Attribute implements CodeAttributeSpec
 
 	public static final class LineNumber {
 		public InsnNode node;
+		public Label alternative;
 		char line;
+
+		public int bci() {
+			return alternative == null ? node.bci : alternative.getValue();
+		}
 
 		public LineNumber(InsnNode node, int i) {
 			this.node = node;

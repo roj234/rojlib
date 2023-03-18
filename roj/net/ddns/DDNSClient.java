@@ -7,6 +7,7 @@ import roj.config.YAMLParser;
 import roj.config.data.CEntry;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
+import roj.ui.CmdUtil;
 
 import java.io.File;
 import java.net.Inet4Address;
@@ -21,7 +22,7 @@ import java.util.*;
  */
 public class DDNSClient implements Runnable {
 	public static void main(String[] args) throws Exception {
-		CMapping cfg = YAMLParser.parses(IOUtil.readUTF(new File("D:\\Desktop\\DDNS.yaml")));
+		CMapping cfg = YAMLParser.parses(IOUtil.readUTF(new File("D:\\Desktop\\DDNS.yaml"))).asMap();
 		new DDNSClient(cfg).run();
 	}
 
@@ -62,7 +63,14 @@ public class DDNSClient implements Runnable {
 		InetAddress[] prev = null;
 		do {
 			// another url http://ipv6.pingipv6.com/ip/
-			InetAddress[] address = ip.getAddress(hasV6);
+			InetAddress[] address;
+			try {
+				address = ip.getAddress(hasV6);
+			} catch (Exception e) {
+				CmdUtil.warning("无法获取IP", e);
+				continue;
+			}
+
 			if (!Arrays.equals(prev, address)) {
 				prev = address;
 
@@ -93,9 +101,7 @@ public class DDNSClient implements Runnable {
 		} while (running);
 	}
 
-	public void stop()  {
-		running = false;
-	}
+	public void stop() { running = false; }
 
 	private static boolean hasIpV6Adapter() throws SocketException {
 		Enumeration<NetworkInterface> itfs = NetworkInterface.getNetworkInterfaces();

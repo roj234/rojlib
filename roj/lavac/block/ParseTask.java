@@ -2,12 +2,12 @@ package roj.lavac.block;
 
 import roj.asm.Opcodes;
 import roj.asm.tree.Field;
-import roj.asm.tree.Method;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.FieldInsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
 import roj.asm.util.AccessFlag;
+import roj.asm.visitor.CodeWriter;
 import roj.config.ParseException;
 import roj.config.word.Word;
 import roj.lavac.expr.ASTNode;
@@ -29,10 +29,14 @@ public interface ParseTask {
 
 			ExprParser ep = CompileLocalCache.get().ep;
 
-			Method m = u.getClinit();
-			MethodPoetL poet = u.ctx().createMethodPoet(u, m);
+			CodeWriter m = u.getClinit();
+			MethodPoetL poet = u.ctx().createMethodPoet(u, m.mn);
 			Field owner = (Field) p;
+			if ((owner.access & AccessFlag.STATIC) != 0) {
 
+			} else {
+
+			}
 			ASTNode expr = ep.read(u, 0, null);
 			expr.write(poet, false);
 
@@ -46,7 +50,7 @@ public interface ParseTask {
 			}
 
 			// todo if is not static?
-			poet.node(new FieldInsnNode(Opcodes.PUTSTATIC, u.name, owner.name, owner.type));
+			poet.node(new FieldInsnNode(Opcodes.PUTSTATIC, u.name, owner.name, owner.fieldType()));
 		};
 	}
 
@@ -57,8 +61,8 @@ public interface ParseTask {
 
 			ExprParser ep = CompileLocalCache.get().ep;
 
-			Method m = u.getClinit();
-			MethodPoetL poet = u.ctx().createMethodPoet(u, m);
+			CodeWriter m = u.getClinit();
+			MethodPoetL poet = u.ctx().createMethodPoet(u, m.mn);
 			Field owner = (Field) p;
 
 			poet.new1(u.name).dup();
@@ -73,7 +77,7 @@ public interface ParseTask {
 					throw wr.err("unexpected:" + w.val());
 			}
 			poet.node(new InvokeInsnNode(Opcodes.INVOKESPECIAL, u.name, "<init>", u.ctx().findSuitableMethod(poet, u, "<init>", p)))
-				.node(new FieldInsnNode(Opcodes.PUTSTATIC, u.name, owner.name, owner.type));
+				.node(new FieldInsnNode(Opcodes.PUTSTATIC, u.name, owner.name, owner.fieldType()));
 		};
 	}
 
@@ -85,7 +89,7 @@ public interface ParseTask {
 			bp.init(u, start, mn);
 			bp.type = 0;
 
-			int off = (mn.accessFlag() & AccessFlag.STATIC) == 0 ? 1 : 0;
+			int off = (mn.modifier() & AccessFlag.STATIC) == 0 ? 1 : 0;
 			for (int i = 0; i < names.size(); i++) {
 				bp.variables.put(names.get(i), bp.mw.arg(i+off));
 			}

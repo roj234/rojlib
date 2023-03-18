@@ -1,10 +1,9 @@
 package roj.io.down;
 
 import roj.io.source.Source;
-import roj.net.http.IHttpClient;
+import roj.net.http.HttpRequest;
 
 import java.io.IOException;
-import java.net.URL;
 
 /**
  * @author Roj233
@@ -14,10 +13,7 @@ final class Streaming extends Downloader {
 	private long downloaded;
 	private int delta;
 
-	Streaming(Source file, URL url, IProgress p) {
-		super(file, url);
-		progress = p;
-	}
+	Streaming(Source file) { super(file); }
 
 	long getDownloaded() {
 		return downloaded;
@@ -50,7 +46,7 @@ final class Streaming extends Downloader {
 	}
 
 	@Override
-	void onBeforeSend(IHttpClient client) throws IOException {
+	void onBeforeSend(HttpRequest q) throws IOException {
 		downloaded = 0;
 		file.seek(0);
 	}

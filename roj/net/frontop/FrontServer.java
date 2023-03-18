@@ -28,7 +28,7 @@ public abstract class FrontServer extends WebsocketManager implements Router {
 		String v = tmp.get(name);
 		if (v == null) {
 			synchronized (tmp) {
-				tmp.put(name, v = IOUtil.readUTF("META-INF/html/" + name));
+				tmp.put(name, v = IOUtil.readResUTF("META-INF/html/" + name));
 			}
 		}
 		return v;

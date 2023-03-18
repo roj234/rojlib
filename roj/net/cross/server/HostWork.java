@@ -53,7 +53,7 @@ final class HostWork extends Stated {
 				w = W.room.clients.get(clientId);
 				if (w != null) {
 					rb.clear();
-					rb.put((byte) P_CHANNEL_OPEN_FAIL).putInt(W.clientId).putVarIntUTF("E31");
+					rb.put(P_CHANNEL_OPEN_FAIL).putInt(W.clientId).putVUIUTF("E31");
 					w.sync(rb);
 				} else if (Util.DEBUG) print(W + ": 管道失败: 无效的ID " + clientId);
 				break;

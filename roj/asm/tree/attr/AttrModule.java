@@ -153,10 +153,10 @@ public final class AttrModule extends Attribute {
 		public ModuleInfo() {}
 
 		public ModuleInfo read(DynByteBuf r, ConstantPool pool) {
-			name = ((CstModule) pool.get(r)).getValue().getString();
+			name = ((CstModule) pool.get(r)).name().str();
 			access = r.readUnsignedShort();
 			CstUTF utf = (CstUTF) pool.get(r);
-			version = utf == null ? null : utf.getString();
+			version = utf == null ? null : utf.str();
 			return this;
 		}
 
@@ -178,12 +178,12 @@ public final class AttrModule extends Attribute {
 		public ExportInfo() {}
 
 		public ExportInfo read(DynByteBuf r, ConstantPool pool) {
-			Package = ((CstPackage) pool.get(r)).getValue().getString();
+			Package = ((CstPackage) pool.get(r)).name().str();
 			access = r.readUnsignedShort();
 			int len = r.readUnsignedShort();
 			accessible = new SimpleList<>(len);
 			while (len-- > 0) {
-				accessible.add(((CstModule) pool.get(r)).getValue().getString());
+				accessible.add(((CstModule) pool.get(r)).name().str());
 			}
 			return this;
 		}

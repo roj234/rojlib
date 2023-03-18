@@ -1,6 +1,5 @@
 package roj.net.mss;
 
-import javax.crypto.Cipher;
 import java.security.*;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
@@ -35,10 +34,10 @@ public class JPrivateKey extends JKey implements MSSPrivateKey {
 	}
 
 	@Override
-	public Cipher privateCipher() {
+	public Signature signer(SecureRandom random) {
 		try {
-			Cipher c = Cipher.getInstance(pri.getAlgorithm());
-			c.init(Cipher.ENCRYPT_MODE, pri);
+			Signature c = Signature.getInstance("NONEwith"+key.getAlgorithm());
+			c.initSign(pri, random);
 			return c;
 		} catch (GeneralSecurityException e) {
 			throw new IllegalStateException(e);

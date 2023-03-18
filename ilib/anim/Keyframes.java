@@ -109,7 +109,7 @@ public final class Keyframes {
 	}
 
 	public static Keyframes fromByteArray(ByteList r) {
-		Keyframes kfs = new Keyframes(r.readVIVIC());
+		Keyframes kfs = new Keyframes(r.readVStr());
 		for (int len = r.readVarInt(false); len > 0; len--) {
 			kfs.add(Keyframe.fromByteArray(r));
 		}
@@ -118,7 +118,7 @@ public final class Keyframes {
 	}
 
 	public void toByteArray(ByteList w) {
-		w.putVarIntVIC(name).putVarInt(keyframes.size(), false);
+		w.putVStr(name).putVarInt(keyframes.size(), false);
 
 		List<Keyframe> kfs = keyframes;
 		for (int i = 0; i < kfs.size(); i++) {

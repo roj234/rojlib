@@ -1,5 +1,6 @@
 package roj.net.ch;
 
+import roj.collect.SimpleList;
 import roj.io.buf.BufferPool;
 import roj.util.DynByteBuf;
 import roj.util.NamespaceKey;
@@ -13,7 +14,8 @@ import java.net.SocketAddress;
  * @since 2022/11/10 0010 16:36
  */
 public final class ChannelCtx {
-	public final MyChannel root;
+	MyChannel root;
+
 	public final String name;
 	ChannelHandler handler;
 
@@ -25,6 +27,7 @@ public final class ChannelCtx {
 	}
 
 	public MyChannel channel() { return root; }
+	public void invokeLater(Runnable r) { root.invokeLater(r); }
 
 	public SocketAddress remoteAddress() { return root.remoteAddress(); }
 	public SocketAddress localAddress() { return root.localAddress(); }
@@ -32,8 +35,6 @@ public final class ChannelCtx {
 	public boolean isOpen() { return root.isOpen(); }
 	public boolean isInputOpen() { return root.isInputOpen(); }
 	public boolean isOutputOpen() { return root.isOutputOpen(); }
-
-	public int getState() { return root.getState(); }
 
 	public void channelOpened() throws IOException {
 		if (next != null) next.handler.channelOpened(next);
@@ -75,7 +76,23 @@ public final class ChannelCtx {
 	public void exceptionCaught(Throwable ex) throws Exception {
 		if (next != null) next.handler.exceptionCaught(next, ex);
 		else {
-			ex.printStackTrace();
+			Throwable ex1 = ex;
+			while (ex != null) {
+				SimpleList<StackTraceElement> list = SimpleList.asModifiableList(ex.getStackTrace());
+				for (int i = 0; i < list.size(); i++) {
+					StackTraceElement el = list.get(i);
+					if (el.getMethodName().startsWith("channel")) {
+						if (el.getClassName().startsWith("roj.net.ch.Channel")) {
+							list.remove(i--);
+						}
+					}
+				}
+
+				ex.setStackTrace(list.toArray(new StackTraceElement[0]));
+				ex = ex.getCause();
+			}
+			ex1.printStackTrace();
+
 			root.close();
 		}
 	}
@@ -104,7 +121,7 @@ public final class ChannelCtx {
 	}
 
 	public void removeSelf() {
-		channel().remove(this);
+		root.remove(this);
 	}
 
 	public ChannelCtx prev() {
@@ -128,7 +145,5 @@ public final class ChannelCtx {
 	// endregion
 
 	@Override
-	public String toString() {
-		return name + "=" + handler;
-	}
+	public String toString() { return name + "=" + handler; }
 }

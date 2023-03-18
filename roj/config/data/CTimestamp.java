@@ -1,6 +1,6 @@
 package roj.config.data;
 
-import roj.config.serial.CConsumer;
+import roj.config.serial.CVisitor;
 
 import javax.annotation.Nonnull;
 
@@ -20,7 +20,7 @@ public final class CTimestamp extends CLong {
 	}
 
 	@Override
-	public void forEachChild(CConsumer ser) {
+	public void forEachChild(CVisitor ser) {
 		ser.valueTimestamp(value);
 	}
 }

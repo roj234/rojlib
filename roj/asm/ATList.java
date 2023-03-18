@@ -21,7 +21,7 @@ public class ATList {
 
 	public static void parse(Class<?> provider, String name) {
 		try {
-			parse(IOUtil.readUTF(provider, name));
+			parse(IOUtil.readResUTF(provider, name));
 		} catch (IOException e) {
 			throw new RuntimeException("Failed to parse AT file: " + name + " not found");
 		}
@@ -39,7 +39,7 @@ public class ATList {
 				System.err.println("Unknown entry " + conf);
 				continue;
 			}
-			ATList.add(lst.get(0).replace('/', '.'), lst.get(1));
+			add(lst.get(0).replace('/', '.'), lst.get(1));
 		}
 	}
 

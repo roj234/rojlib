@@ -26,25 +26,24 @@ import java.lang.reflect.Method;
  * @since 2021/8/26 20:03
  */
 public class FreezeRegistryInjector<T extends IForgeRegistryEntry<T>> implements MissingFactory<T>  {
-	static int uniq;
-
 	/**
 	 * @see ilib.asm.nx.FastTileConst#create(World, NBTTagCompound)
 	 *
 	 */
 	public static void inject() throws ReflectiveOperationException {
 		Field acc = ForgeRegistry.class.getDeclaredField("missing");
+		acc.setAccessible(true);
 
 		if (Config.freezeUnknownEntries.contains("item")) {
 			acc.set(Registries.item(), new FreezeRegistryInjector<>(0));
 		}
 
 		if (Config.freezeUnknownEntries.contains("block")) {
-			acc.set(Registries.item(), new FreezeRegistryInjector<>(1));
+			acc.set(Registries.block(), new FreezeRegistryInjector<>(1));
 		}
 
 		if (Config.freezeUnknownEntries.contains("entity")) {
-			acc.set(Registries.item(), new FreezeRegistryInjector<>(2));
+			acc.set(Registries.entity(), new FreezeRegistryInjector<>(2));
 
 			ModContainer mc = ForgeUtil.findModById(ImpLib.MODID);
 			EntityRegistration entry = EntityRegistry.instance()

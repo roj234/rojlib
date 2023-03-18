@@ -13,7 +13,9 @@ public final class SQLite extends DbConnector {
 	static {
 		try {
 			Class.forName("org.sqlite.JDBC");
-		} catch (ClassNotFoundException ignored) {}
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		}
 	}
 
 	private final File db;

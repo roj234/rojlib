@@ -13,36 +13,25 @@ import java.util.zip.ZipEntry;
  */
 public class JarReaderStream extends JarOutputStream {
 	private BiConsumer<ZipEntry, ByteList> consumer;
-	private final ByteList byteCache = new ByteList(256);
-	private ZipEntry entryCache;
 
-	public JarReaderStream(BiConsumer<ZipEntry, ByteList> zipEntryConsumer) throws IOException {
+	private final ByteList buf = new ByteList(256);
+	private ZipEntry entry;
+
+	public JarReaderStream(BiConsumer<ZipEntry, ByteList> c) throws IOException {
 		super(DummyOutputStream.INSTANCE);
-		this.consumer = zipEntryConsumer;
+		consumer = c;
 	}
 
-	public void putNextEntry(ZipEntry var1) {
-		entryCache = var1;
-	}
+	public void putNextEntry(ZipEntry ze) { entry = ze; }
 
-	@Override
-	public void write(int i) {
-		byteCache.put((byte) i);
-	}
+	public void write(int b) { buf.put((byte) b); }
+	public void write(byte[] b, int off, int len) { buf.put(b, off, len); }
 
-	@Override
-	public void write(byte[] bytes, int i, int i1) {
-		byteCache.put(bytes, i, i1);
-	}
-
-	@Override
 	public void closeEntry() {
-		consumer.accept(entryCache, byteCache);
-		entryCache = null;
-		byteCache.clear();
+		consumer.accept(entry, buf);
+		entry = null;
+		buf.clear();
 	}
 
-	public void setConsumer(BiConsumer<ZipEntry, ByteList> consumer) {
-		this.consumer = consumer;
-	}
+	public void setConsumer(BiConsumer<ZipEntry, ByteList> c) { consumer = c; }
 }

@@ -9,7 +9,7 @@ import net.minecraft.tileentity.TileEntity;
  * @author Roj233
  * @since 2021/8/26 19:36
  */
-public final class FreezedTileEntity extends TileEntity {
+public class FreezedTileEntity extends TileEntity {
 	public FreezedTileEntity() {
 		this.isInitial = true;
 		new Throwable("未授权的创建").printStackTrace();

@@ -1,5 +1,6 @@
 package ilib.asm.rpl;
 
+import roj.io.IOUtil;
 import roj.io.MyRegionFile;
 import roj.util.ByteList;
 
@@ -21,11 +22,12 @@ public class FastChunkSL extends MyRegionFile {
 		lock = new ReentrantReadWriteLock();
 	}
 
+	@Deprecated
 	protected synchronized void func_76706_a(int x, int z, byte[] data, int length) {
-		ByteList list = ByteList.wrap(data, 0, length);
+		ByteList buf = IOUtil.getSharedByteBuf().put(DEFLATE).put(data, 0, length);
 		lock.writeLock().lock();
 		try {
-			write(x + z * 32, DEFLATE, list);
+			write(x + z * 32, buf);
 		} catch (IOException e) {
 			e.printStackTrace();
 		} finally {

@@ -18,7 +18,7 @@ public final class ExceptionEntry {
 	public ExceptionEntry(InsnNode start, InsnNode end, InsnNode handler, CstClass catchType) {
 		// 如果catch_type项的值为零，则为所有异常调用此异常处理程序。
 		// 0 => Constant.null
-		this(start,end,handler,catchType == null ? ANY : catchType.getValue().getString());
+		this(start,end,handler,catchType == null ? ANY : catchType.name().str());
 	}
 
 	public ExceptionEntry(InsnNode start, InsnNode end, InsnNode handler, String catchType) {

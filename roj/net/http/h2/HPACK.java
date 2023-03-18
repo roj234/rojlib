@@ -199,7 +199,7 @@ public final class HPACK {
 
 		if (id < 0) {
 			// 1xxx xxxx
-			writeInt(0x80, 7, id, out);
+			writeInt(0x80, 7, -id, out);
 			return;
 		}
 
@@ -227,43 +227,39 @@ public final class HPACK {
 	public Field decode(DynByteBuf in) throws H2Error {
 		Field f = null;
 		int k = in.readUnsignedByte();
-		switch (k>>>6) {
+		switch (k>>>4) {
 			// 1xxx xxxx
 			// Indexed Header Field
-			case 2:
-			case 3:
+			case 8: case 9: case 10: case 11:
+			case 12: case 13: case 14: case 15:
 				k &= 0x7F;
 				if (k == 0) throw new H2Error(HttpClient20.ERROR_COMPRESS, "Illegal value");
 				f = decode_tbl.getField(k==0x7F?readInt(in, 0x7F):k);
 				break;
 			// 01xx xxxx
 			// Literal Header Field with Incremental Indexing
-			case 1:
+			case 4: case 5: case 6: case 7:
 				decode_tbl._add(f = getField(in, k, 63));
 				break;
+			// 001x xxxx
+			// Dynamic Table Size Update
+			case 2: case 3:
+				k &= 31;
+				if (k == 31) k = readInt(in, 31);
+				if (k < 0) throw new H2Error(HttpClient20.ERROR_COMPRESS, "Illegal table size");
+				decode_tbl.setCapacity(k);
+				break;
+			// 0001 xxxx
+			// Literal Header Field Never Indexed
+			case 1:
+				f = getField(in, k, 15);
+				break;
+			// 0000 xxxx
+			// Literal Header Field without Indexing
 			case 0:
-				switch ((k>>>4) & 3) {
-					// 001x xxxx
-					// Dynamic Table Size Update
-					case 3:
-					case 2:
-						k &= 31;
-						if (k == 31) k = readInt(in, 31);
-						if (k < 0) throw new H2Error(HttpClient20.ERROR_COMPRESS, "Illegal table size");
-						decode_tbl.setCapacity(k);
-						break;
-					// 0001 xxxx
-					// Literal Header Field Never Indexed
-					case 1:
-						f = getField(in, k, 15);
-						break;
-					// 0000 xxxx
-					// Literal Header Field without Indexing
-					case 0:
-						f = getField(in, k, 15);
-						//f.never_index = true;
-						break;
-				}
+				f = getField(in, k, 15);
+				//f.never_index = true;
+				break;
 		}
 		return f;
 	}
@@ -295,7 +291,6 @@ public final class HPACK {
 			huffmanEncode(str, bu.reset(out));
 		} else {
 			writeInt(0, 7, str.length(), out);
-			out.ensureWritable(str.length());
 			out.putAscii(str);
 		}
 	}
@@ -395,9 +390,10 @@ public final class HPACK {
 		ByteList list = ByteList.allocate(999);
 		Base64.decode(table, list);
 
+		BitWriter br = new BitWriter(list);
 		for (int i = 0; i < 257; i++) {
-			int len = list.readBit(5);
-			int code = list.readBit(len);
+			int len = br.readBit(5);
+			int code = br.readBit(len);
 
 			HUFFMAN_SYM[i] = code;
 			HUFFMAN_SYM_LEN[i] = (byte) len;

@@ -1,28 +1,26 @@
 package roj.archive.zip;
 
 import roj.crypt.CRCAny;
-import roj.crypt.CipheR;
+import roj.crypt.RCipherSpi;
 import roj.util.DynByteBuf;
 
+import javax.crypto.Cipher;
 import javax.crypto.ShortBufferException;
-import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
+import java.security.spec.AlgorithmParameterSpec;
 
 /**
  * @implNote ZipCrypto has known vulnerability
  * @author Roj234
  * @since 2022/11/12 0012 1:45
  */
-public final class ZipCrypto implements CipheR {
+public final class ZipCrypto extends RCipherSpi {
 	int key0,key1,key2;
-	public byte mode;
+	// int iv0,iv1,iv2;
 
-	@Override
-	public int getMaxKeySize() {
-		return 0;
-	}
+	public boolean encrypt;
 
-	@Override
-	public void setKey(byte[] key, int flags) {
+	public void init(int mode, byte[] key) {
 		int key0 = 0x12345678;
 		int key1 = 0x23456789;
 		int key2 = 0x34567890;
@@ -37,17 +35,17 @@ public final class ZipCrypto implements CipheR {
 		this.key0 = key0;
 		this.key1 = key1;
 		this.key2 = key2;
-		this.mode = (byte) (flags & CipheR.DECRYPT);
+		this.encrypt = Cipher.ENCRYPT_MODE == mode;
 	}
+	public void init(int mode, byte[] key, AlgorithmParameterSpec config, SecureRandom random) { init(mode, key); }
 
 	@Override
-	public void crypt(DynByteBuf in, DynByteBuf out) throws GeneralSecurityException {
+	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
 		if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
 
 		int key0 = this.key0;
 		int key1 = this.key1;
 		int key2 = this.key2;
-		boolean encrypt = mode==0;
 
 		while (in.isReadable()) {
 			int inByte = in.readUnsignedByte();
@@ -57,7 +55,6 @@ public final class ZipCrypto implements CipheR {
 
 			out.put((byte) outByte);
 
-			// OFB ?
 			key0 = CRCAny.CRC_32.update(key0, encrypt?inByte:outByte);
 			key1 = key1 + (key0 & 0xFF);
 			key1 = key1 * 134775813 + 1;

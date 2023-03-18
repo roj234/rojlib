@@ -3,72 +3,100 @@ package roj.config;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.config.data.CEntry;
-import roj.config.word.StreamAsChars;
+import roj.config.serial.CVisitor;
 import roj.config.word.Tokenizer;
 import roj.config.word.Word;
+import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.text.StreamReader;
+import roj.text.StreamWriter;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-import static roj.config.JSONParser.COMMENT;
-import static roj.config.JSONParser.INTERN;
+import static roj.config.JSONParser.*;
+import static roj.config.word.Word.EOF;
 
 /**
  * @author Roj233
  * @since 2022/5/17 2:25
  */
-public abstract class Parser extends Tokenizer {
+public abstract class Parser<T extends CEntry> extends Tokenizer implements BinaryParser {
 	public static final boolean LITERAL_UNSAFE = Boolean.getBoolean("roj.config.noRawCheck");
 
 	protected Parser() {
 		this(0);
 	}
 	protected Parser(int solidFlag) {
-		this.flag = (byte) solidFlag;
+		this.flag = solidFlag;
 		ipool = (solidFlag & INTERN) != 0 ? new MyHashSet<>() : null;
 		if ((solidFlag & COMMENT) != 0) comment = new CharList();
 	}
 
-	public CEntry parse(CharSequence text) throws ParseException {
-		return parse(text, 0);
+	public final T parse(CharSequence text) throws ParseException { return parse(text, 0); }
+	@SuppressWarnings("unchecked")
+	public T parse(CharSequence text, int flag) throws ParseException {
+		this.flag = flag;
+		init(text);
+
+		CEntry entry;
+		try {
+			entry = element(flag);
+			if ((flag & NO_EOF) == 0) except(EOF);
+		} catch (ParseException e) {
+			throw e.addPath("$");
+		} finally {
+			init(null);
+		}
+
+		return (T) entry;
 	}
-	public abstract CEntry parse(CharSequence text, int flag) throws ParseException;
+	CEntry element(int flag) throws ParseException {
+		throw new UnsupportedOperationException("Not implemented");
+	}
+
+	public <CV extends CVisitor> CV parse(CV cv, CharSequence text, int flag) throws ParseException {
+		parse(text,flag).forEachChild(cv);
+		return cv;
+	}
 
 	public Charset charset = StandardCharsets.UTF_8;
-	public Parser charset(Charset le) {
-		charset = le;
+	public final Parser<T> charset(Charset cs) {
+		charset = cs;
 		return this;
 	}
-	public final CEntry parseRaw(File file) throws IOException, ParseException {
-		return parseRaw(file, 0);
-	}
-	public CEntry parseRaw(File file, int flag) throws IOException, ParseException {
-		return parse(StreamAsChars.from(file, charset), flag);
-	}
-	public final CEntry parseRaw(DynByteBuf buf) throws ParseException {
-		return parseRaw(buf, 0);
-	}
-	public final CEntry parseRaw(DynByteBuf buf, int flag) throws ParseException {
-		try {
-			return parseRaw(buf.asInputStream(), flag);
-		} catch (IOException e) {
-			return Helpers.nonnull();
+
+	public final T parseRaw(File file, int flag) throws IOException, ParseException {
+		try (StreamReader in = new StreamReader(file, charset)) {
+			return parse(in, flag);
 		}
 	}
-	public CEntry parseRaw(InputStream in, int flag) throws IOException, ParseException {
-		return parse(new StreamAsChars(in, charset), flag);
+	public final  <CV extends CVisitor> CV parseRaw(File file, CV cv, int flag) throws IOException, ParseException {
+		try (StreamReader text = new StreamReader(file, charset)) {
+			return parse(cv, text, flag);
+		}
+	}
+	public final T parseRaw(DynByteBuf buf, int flag) throws IOException, ParseException {
+		return parseRaw(buf.asInputStream(), flag);
+	}
+	public final T parseRaw(InputStream in, int flag) throws IOException, ParseException {
+		try (StreamReader text = new StreamReader(in, charset)) {
+			return parse(text, flag);
+		}
+	}
+	public final <CV extends CVisitor> CV parseRaw(InputStream in, CV cv, int flag) throws IOException, ParseException {
+		try (StreamReader text = new StreamReader(in, charset)) {
+			return parse(cv, text, flag);
+		}
 	}
 
-	abstract CEntry element(int flag) throws ParseException;
-
-	public abstract int acceptableFlags();
+	public abstract int availableFlags();
 	public abstract String format();
 
 	public MyHashSet<CharSequence> ipool;
@@ -102,10 +130,18 @@ public abstract class Parser extends Tokenizer {
 		comment.clear();
 	}
 
-	public final CharSequence toString(CEntry entry) {
-		return toString(entry, 0);
-	}
-	public CharSequence toString(CEntry entry, int flag) {
-		throw new UnsupportedOperationException("Not implemented yet");
+	public final String toString(CEntry entry) { return toString(entry, 0); }
+	public final String toString(CEntry entry, int flag) { return append(entry, flag, IOUtil.getSharedCharBuf()).toString(); }
+	public CharList append(CEntry entry, int flag, CharList sb) { throw new UnsupportedOperationException(); }
+
+	public final void serialize(CEntry entry, DynByteBuf out) throws IOException { serialize(entry, 0, out); }
+	public final void serialize(CEntry entry, OutputStream out) throws IOException { serialize(entry, 0, out); }
+	public void serialize(CEntry entry, int flag, OutputStream out) throws IOException {
+		StreamWriter os = new StreamWriter(out, charset);
+		try {
+			append(entry, flag, os);
+		} finally {
+			os.finish();
+		}
 	}
 }

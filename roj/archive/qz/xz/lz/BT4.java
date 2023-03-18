@@ -10,37 +10,20 @@
 
 package roj.archive.qz.xz.lz;
 
-import roj.archive.qz.xz.ArrayCache;
+import roj.util.ArrayCache;
+
+import static roj.reflect.FieldAccessor.u;
 
 final class BT4 extends LZEncoder {
-	private final Hash234 hash;
-	private final int[] tree;
+	private final long tree;
 	private final int depthLimit;
 
-	private final int cyclicSize;
-	private int cyclicPos = -1;
-	private int lzPos;
-
-	static int getMemoryUsage(int dictSize) {
-		return Hash234.getMemoryUsage(dictSize) + dictSize / (1024 / 8) + 10;
-	}
+	static int getMemoryUsage(int dictSize) { return Hash234.getMemoryUsage(dictSize) + dictSize / (1024 / 8) + 10; }
 
 	BT4(int dictSize, int beforeSizeMin, int readAheadMax, int niceLen, int matchLenMax, int depthLimit, ArrayCache arrayCache) {
 		super(dictSize, beforeSizeMin, readAheadMax, niceLen, matchLenMax, arrayCache);
-
-		cyclicSize = dictSize + 1;
-		lzPos = cyclicSize;
-
-		hash = new Hash234(dictSize, arrayCache);
-		tree = arrayCache.getIntArray(cyclicSize * 2, false);
-
+		tree = mem.allocate(cyclicSize<<3);
 		this.depthLimit = depthLimit > 0 ? depthLimit : 16 + niceLen / 2;
-	}
-
-	public void putArraysToCache(ArrayCache pool) {
-		pool.putArray(tree);
-		hash.putArraysToCache(pool);
-		super.putArraysToCache(pool);
 	}
 
 	private int movePos() {
@@ -50,7 +33,7 @@ final class BT4 extends LZEncoder {
 			if (++lzPos == Integer.MAX_VALUE) {
 				int normalizationOffset = Integer.MAX_VALUE - cyclicSize;
 				hash.normalize(normalizationOffset);
-				normalize(tree, cyclicSize * 2, normalizationOffset);
+				normalize(tree, cyclicSize*2, normalizationOffset);
 				lzPos -= normalizationOffset;
 			}
 
@@ -86,7 +69,7 @@ final class BT4 extends LZEncoder {
 		// The hashing algorithm guarantees that if the first byte
 		// matches, also the second byte does, so there's no need to
 		// test the second byte.
-		if (delta2 < cyclicSize && buf[readPos - delta2] == buf[readPos]) {
+		if (delta2 < cyclicSize && u.getByte(buf + readPos - delta2) == u.getByte(buf + readPos)) {
 			lenBest = 2;
 			mlen[0] = 2;
 			mdist[0] = delta2 - 1;
@@ -97,7 +80,7 @@ final class BT4 extends LZEncoder {
 		// is different from the match possibly found by the two-byte hash.
 		// Also here the hashing algorithm guarantees that if the first byte
 		// matches, also the next two bytes do.
-		if (delta2 != delta3 && delta3 < cyclicSize && buf[readPos - delta3] == buf[readPos]) {
+		if (delta2 != delta3 && delta3 < cyclicSize && u.getByte(buf + readPos - delta3) == u.getByte(buf + readPos)) {
 			lenBest = 3;
 			mdist[mcount++] = delta3 - 1;
 			delta2 = delta3;
@@ -105,7 +88,7 @@ final class BT4 extends LZEncoder {
 
 		// If a match was found, see how long it is.
 		if (mcount > 0) {
-			while (lenBest < matchLenLimit && buf[readPos + lenBest - delta2] == buf[readPos + lenBest]) ++lenBest;
+			while (lenBest < matchLenLimit && u.getByte(buf + readPos + lenBest - delta2) == u.getByte(buf + readPos + lenBest)) ++lenBest;
 
 			mlen[mcount - 1] = lenBest;
 
@@ -123,8 +106,8 @@ final class BT4 extends LZEncoder {
 
 		int depth = depthLimit;
 
-		int ptr0 = (cyclicPos << 1) + 1;
-		int ptr1 = cyclicPos << 1;
+		long ptr0 = tree + (cyclicPos << 3) + 4;
+		long ptr1 = tree + (cyclicPos << 3);
 		int len0 = 0;
 		int len1 = 0;
 
@@ -135,16 +118,21 @@ final class BT4 extends LZEncoder {
 			// if the distance of the potential match exceeds the
 			// dictionary size.
 			if (depth-- == 0 || delta >= cyclicSize) {
-				tree[ptr0] = 0;
-				tree[ptr1] = 0;
+				u.putInt(ptr0, 0);
+				u.putInt(ptr1, 0);
 				return;
 			}
 
-			int pair = (cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) << 1;
+			long pair = tree + ((cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) << 3);
 			int len = Math.min(len0, len1);
 
-			if (buf[readPos + len - delta] == buf[readPos + len]) {
-				while (++len < matchLenLimit) if (buf[readPos + len - delta] != buf[readPos + len]) break;
+			long pos = buf + readPos + len;
+			long prevPos = pos - delta;
+
+			if (u.getByte(prevPos) == u.getByte(pos)) {
+				while (++len < matchLenLimit) {
+					if (u.getByte(++prevPos) != u.getByte(++pos)) break;
+				}
 
 				if (len > lenBest) {
 					lenBest = len;
@@ -153,22 +141,22 @@ final class BT4 extends LZEncoder {
 					++mcount;
 
 					if (len >= niceLenLimit) {
-						tree[ptr1] = tree[pair];
-						tree[ptr0] = tree[pair + 1];
+						u.putInt(ptr1, u.getInt(pair));
+						u.putInt(ptr0, u.getInt(pair + 4));
 						return;
 					}
 				}
 			}
 
-			if ((buf[readPos + len - delta] & 0xFF) < (buf[readPos + len] & 0xFF)) {
-				tree[ptr1] = currentMatch;
-				ptr1 = pair + 1;
-				currentMatch = tree[ptr1];
+			if ((u.getByte(prevPos) & 0xFF) < (u.getByte(pos) & 0xFF)) {
+				u.putInt(ptr1, currentMatch);
+				ptr1 = pair + 4;
+				currentMatch = u.getInt(ptr1);
 				len1 = len;
 			} else {
-				tree[ptr0] = currentMatch;
+				u.putInt(ptr0, currentMatch);
 				ptr0 = pair;
-				currentMatch = tree[ptr0];
+				currentMatch = u.getInt(ptr0);
 				len0 = len;
 			}
 		}
@@ -177,8 +165,9 @@ final class BT4 extends LZEncoder {
 	private void skip(int niceLenLimit, int currentMatch) {
 		int depth = depthLimit;
 
-		int ptr0 = (cyclicPos << 1) + 1;
-		int ptr1 = cyclicPos << 1;
+		long ptr1 = tree + (cyclicPos << 3);
+		long ptr0 = ptr1 + 4;
+
 		int len0 = 0;
 		int len1 = 0;
 
@@ -186,36 +175,36 @@ final class BT4 extends LZEncoder {
 			int delta = lzPos - currentMatch;
 
 			if (depth-- == 0 || delta >= cyclicSize) {
-				tree[ptr0] = 0;
-				tree[ptr1] = 0;
+				u.putInt(ptr0, 0);
+				u.putInt(ptr1, 0);
 				return;
 			}
 
-			int pair = (cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) << 1;
+			long pair = tree + ((cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) << 3);
 			int len = Math.min(len0, len1);
 
-			if (buf[readPos + len - delta] == buf[readPos + len]) {
+			if (u.getByte(buf + readPos + len - delta) == u.getByte(buf + readPos + len)) {
 				// No need to look for longer matches than niceLenLimit
 				// because we only are updating the tree, not returning
 				// matches found to the caller.
 				do {
 					if (++len == niceLenLimit) {
-						tree[ptr1] = tree[pair];
-						tree[ptr0] = tree[pair + 1];
+						u.putInt(ptr1, u.getInt(pair));
+						u.putInt(ptr0, u.getInt(pair + 4));
 						return;
 					}
-				} while (buf[readPos + len - delta] == buf[readPos + len]);
+				} while (u.getByte(buf + readPos + len - delta) == u.getByte(buf + readPos + len));
 			}
 
-			if ((buf[readPos + len - delta] & 0xFF) < (buf[readPos + len] & 0xFF)) {
-				tree[ptr1] = currentMatch;
-				ptr1 = pair + 1;
-				currentMatch = tree[ptr1];
+			if ((u.getByte(buf + readPos + len - delta) & 0xFF) < (u.getByte(buf + readPos + len) & 0xFF)) {
+				u.putInt(ptr1, currentMatch);
+				ptr1 = pair + 4;
+				currentMatch = u.getInt(ptr1);
 				len1 = len;
 			} else {
-				tree[ptr0] = currentMatch;
+				u.putInt(ptr0, currentMatch);
 				ptr0 = pair;
-				currentMatch = tree[ptr0];
+				currentMatch = u.getInt(ptr0);
 				len0 = len;
 			}
 		}

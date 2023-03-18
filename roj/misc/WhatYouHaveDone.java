@@ -2,7 +2,6 @@ package roj.misc;
 
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.text.LineReader;
 import roj.text.UTFCoder;
@@ -26,7 +25,7 @@ public class WhatYouHaveDone {
 
 		System.out.println("正在计算...");
 		ToIntMap<String> map = new ToIntMap<>();
-		for (File file : FileUtil.findAllFiles(f, file -> file.getName().endsWith(".java"))) {
+		for (File file : IOUtil.findAllFiles(f, file -> file.getName().endsWith(".java"))) {
 			x.byteBuf.clear();
 			x.byteBuf.readStreamFully(new FileInputStream(file));
 			// 是否计算空行

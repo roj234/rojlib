@@ -40,6 +40,14 @@ public class Event {
 	}
 
 	public void setCancelled(boolean cancelled) {
-		if (cancelled) {state |= 1;} else state &= ~1;
+		if (cancelled) state |= 1;
+		else state &= ~1;
 	}
+
+	private static final byte STOP = 32, REVERSE = 64;
+	public void stopPropagate() { state |= STOP; }
+	public Event capture() { state |= REVERSE; return this; }
+
+	public boolean _stop() { return (state&STOP) != 0; }
+	public boolean _reverse() { return (state&REVERSE) != 0; }
 }

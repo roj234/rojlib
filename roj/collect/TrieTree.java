@@ -325,7 +325,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 				// 压缩剩余的entry
 				// root <== a <== b (curr) <== def <== ghi
 				if (curr.size == 1 && curr.value == UNDEFINED && i >= COMPRESS_START_DEPTH) {
-					CharList sb = new CharList(16);
+					CharList sb = IOUtil.ddLayeredCharBuf();
 
 					do {
 						curr.append(sb);
@@ -344,6 +344,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 					// sb.length 必定大于 1
 					// 因为至少包含 curr 与 curr.next
 					list.get(i - 1).putChild(new PEntry<>(sb.toString(), curr));
+					sb._free();
 				}
 				return entry.value;
 			}

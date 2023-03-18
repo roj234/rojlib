@@ -89,7 +89,7 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 		pointBin = p;
 	}
 
-	public void setCare(boolean care) {
+	public void withContent(boolean care) {
 		if (arrSize != 0) throw new IllegalStateException("Not empty");
 		this.care = care;
 	}
@@ -370,10 +370,10 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 	}
 
 	public static final class Wrap<T1> implements Range {
-		public int s, e;
+		public long s, e;
 		public T1 sth;
 
-		public Wrap(T1 sth, int s, int e) {
+		public Wrap(T1 sth, long s, long e) {
 			this.sth = sth;
 			this.s = s;
 			this.e = e;

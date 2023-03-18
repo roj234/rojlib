@@ -13,8 +13,7 @@ package roj.archive.qz.xz.rangecoder;
 import java.io.IOException;
 
 public abstract class RangeDecoder extends RangeCoder {
-	int range = 0;
-	int code = 0;
+	int range, code;
 
 	public abstract void normalize() throws IOException;
 

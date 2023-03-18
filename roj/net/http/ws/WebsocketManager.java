@@ -51,14 +51,14 @@ public abstract class WebsocketManager {
 	}
 
 	public final Response switchToWebsocket(Request req, ResponseHeader handle) {
-		String ver = req.header("sec-websocket-version");
-		String protocol = req.header("sec-websocket-protocol");
+		String ver = req.getField("sec-websocket-version");
+		String protocol = req.getField("sec-websocket-protocol");
 		if (!ver.equals("13") || !validProtocol.contains(protocol)) {
 			handle.code(503);
 			return new StringResponse("Unsupported protocol \"" + protocol + "\"");
 		}
 
-		String key = req.header("sec-websocket-Key");
+		String key = req.getField("sec-websocket-key");
 		handle.code(101).headers("upgrade: websocket\r\n" +
 			"connection: Upgrade\r\n" +
 			"sec-websocket-version: 13");
@@ -68,7 +68,7 @@ public abstract class WebsocketManager {
 		}
 
 		boolean zip = false;
-		String ext = req.header("sec-websocket-extensions");
+		String ext = req.getField("sec-websocket-extensions");
 		if (ext.contains("permessage-deflate")) {
 			zip = true;
 			handle.header("sec-websocket-extensions", "permessage-deflate");

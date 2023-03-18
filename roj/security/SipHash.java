@@ -33,7 +33,7 @@ public class SipHash {
 
 	public long digest(CharSequence msg) {
 		reset(k0, k1);
-		DynByteBuf b = IOUtil.getSharedByteBuf().putVarIntVIC(msg);
+		DynByteBuf b = IOUtil.getSharedByteBuf().putVStr(msg);
 		// 我懒 反正也不会拿去比较
 		update(b.put(padding));
 		return hash();

@@ -13,10 +13,6 @@ import static roj.asm.Opcodes.*;
  * @since 2021/5/24 23:21
  */
 public class JumpInsnNode extends InsnNode {
-	public JumpInsnNode() {
-		super(GOTO);
-	}
-
 	public JumpInsnNode(InsnNode target) {
 		super(GOTO);
 		this.target = target;
@@ -50,12 +46,8 @@ public class JumpInsnNode extends InsnNode {
 	public InsnNode target;
 	Label label;
 
-	public final void setTarget(InsnNode target) {
-		this.target = target;
-	}
-
 	@Override
-	public void preSerialize(CodeWriter c, Map<InsnNode, Label> labels) {
+	public void preSerialize(Map<InsnNode, Label> labels) {
 		label = AttrCode.monitorNode(labels, target = validate(target));
 	}
 
@@ -69,6 +61,6 @@ public class JumpInsnNode extends InsnNode {
 	}
 
 	public final String toString() {
-		return super.toString() + " => #" + (int)target.bci;
+		return super.toString() + " => #" + (int)validate(target).bci;
 	}
 }

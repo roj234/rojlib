@@ -11,6 +11,7 @@ import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
+import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -44,7 +45,7 @@ public final class AttrLocalVars extends Attribute implements CodeAttributeSpec 
 
 			InsnNode startNode = pc.get(start);
 			if (startNode == null) {
-				throw new NullPointerException("No code at " + start + ", len=" + maxIdx);
+				throw new NullPointerException("No code at " + start + ", len=" + maxIdx + ", pc="+pc);
 			}
 
 			InsnNode endNode;
@@ -52,7 +53,7 @@ public final class AttrLocalVars extends Attribute implements CodeAttributeSpec 
 			else {
 				endNode = pc.get(end);
 				if (endNode == null) {
-					throw new NullPointerException("No code at " + end + ", len=" + maxIdx);
+					throw new NullPointerException("No code at " + end + ", len=" + maxIdx + ", pc="+pc);
 				}
 			}
 
@@ -60,7 +61,7 @@ public final class AttrLocalVars extends Attribute implements CodeAttributeSpec 
 
 			name = ((CstUTF) pool.get(r)).getString();
 			String desc = ((CstUTF) pool.get(r)).getString();
-			list.add(new LocalVariable(r.readUnsignedShort(), name, generic ? Signature.parseTypeGeneric(desc) : TypeHelper.parseField(desc), startNode, endNode));
+			list.add(new LocalVariable(r.readUnsignedShort(), name, generic ? Signature.parseGeneric(desc) : TypeHelper.parseField(desc), startNode, endNode));
 		}
 		this.list = list;
 	}
@@ -97,12 +98,19 @@ public final class AttrLocalVars extends Attribute implements CodeAttributeSpec 
 		return toString(null);
 	}
 	public String toString(AttrLocalVars table) {
-		StringBuilder sb = new StringBuilder("Slot\tType\tName\tStart\tEnd");
+		List<Object> a = new SimpleList<>("Slot","Type","Name","Start","End",IntMap.UNDEFINED);
+		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < list.size(); i++) {
 			LocalVariable v = list.get(i);
-			sb.append('\n').append(table != null ? table.getSimilar(v) : v);
+			v = table != null ? table.getSimilar(v) : v;
+			a.add(v.slot);
+			a.add(v.type);
+			a.add(v.name);
+			a.add((int)v.start.bci);
+			a.add(v.end==null?"-1":(int)v.end.bci);
+			a.add(IntMap.UNDEFINED);
 		}
-		return sb.toString();
+		return TextUtil.prettyTable(sb, " ", " ", "    ", a.toArray()).toString();
 	}
 	private LocalVariable getSimilar(LocalVariable lv) {
 		for (int i = 0; i < list.size(); i++) {

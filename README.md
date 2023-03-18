@@ -6,13 +6,32 @@
   4. 没啥人用, 不用考虑向前兼容
   5. 谁帮我写写FrameVisitor？
 
-# 2023/02/12
-    DirectAccessor和全部代码已支持Java17!
-如何实现请看`Java9Compat`  
-Java9-Java16: 通过匿名类鉴权漏洞，无需添加VM参数(无感)  
-Java17及以上: 漏洞被修复，需要添加参数`--add-opens=java.base/java.lang=ALL-UNNAMED`
+# 2023/03/23 更新
+    高级序列化器实装
+    另外我们还支持了7z的压缩和解压
+请看`roj.config.serial.SerializerManager`  
+由于接口特殊（见`roj.config.serial.Adapter`）  
+可能你想自定义序列化不是那么容易？
 
-# 这里都有啥  
+# 这里都有啥
+## roj.archive
+`ZipArchive/ZipFileWriter`: zip
+* 读写
+* 任意编码
+* AES加密/ZipCrypto加密
+* 分卷
+* 增量修改 —— 无需处理没修改的,比如给加密的压缩文件增加新文件
+* 仅读取CEN(更快)
+* Info-ZIP UnicodePath和高精度时间戳的支持 （只读）  
+
+`QZArchive/QZFileWriter`: 7z
+* 读写
+* AES加密
+* 分卷
+* 固实
+* 压缩文件头
+
+
 ## roj.asm  
     自己做的ASM, 资料来自VM规范  
 内附：`roj.asm.Translator`, `roj.asm.util.Transformers`, `roj.asm.nixim.*`
@@ -67,18 +86,125 @@ Java17及以上: 漏洞被修复，需要添加参数`--add-opens=java.base/java
 ## roj.config  
   JSON YAML TOML INI XML 解析器  
 前四个配置文件格式使用统一数据结构 `roj.config.data.CEntry`  
-CEntry包含了接收StringBuilder做参数的toJSON toYAML toTOML toINI以及序列化为二进制的toBinary/fromBinary  
+
+使用`CEntry.toJSON` toYAML toTOML toINI等还原到字符串  
+或使用`CConsumer`和配套的`CEntry.foreachChild`  
+#### 读写(二进制)`NBT`,`torrent`  
+#### 只读`xlsx`,`csv`(这玩意格式如此简单也没必单独弄个方法吧)  
+
 XML也可以与CEntry互转 `CEntry AbstXML.toJSON()`  
-XML/CEntry均支持dot-get: a.b[2].c  
-序列化：  
+XML/CEntry均支持dot-get: `a.b[2].c`  
+#### 序列化：  
   使用ASM动态生成类，支持任意对象（不只实体类！）的序列化/反序列化  
   支持数组，不用反射  
   标记(flag):   
-   LENIENT = 1, 对于只能序列化不能反序列化的class不报错  
-   NONSTATIC = 2, 非静态模式 (不根据字段类型而根据序列化时的对象class来获取序列化器)  
-   AUTOGEN = 4, 对未知的class自动生成序列化器  
-   NOINHERIT = 8 不开启序列化器的继承 (任意序列化器都将处理class的所有字段)  
-非常人性化的错误  
+ * `GENERATE` = 1, 对未知的class自动生成序列化器  
+ * `CHECK_INTERFACE` = 2, 检查实现的接口是否有序列化器  
+ * `CHECK_PARENT` = 4, 检查父类是否有序列化器  
+ * `DYNAMIC` = 8 动态模式 (不根据字段类型而根据序列化时的对象class来获取序列化器)
+
+```java
+
+import roj.config.serial.Name;
+import roj.config.serial.Via;
+
+import java.nio.charset.Charset;
+
+public class Test {
+  public static void main(String[] args) throws Exception {
+    // 这是必须的，并且在SerializerManager初始化前调用
+    AdapterOverride.overridePermission();
+
+    SerializerManager man = new SerializerManager();
+	// 自定义序列化方式(使用@As调用)
+    man.registerAsType("hex_color", int.class, new UserAdapter());
+    // 自定义序列化器
+    man.register(Charset.class, new UserAdapter());
+
+    CAdapter<Pojo> adapter = man.adapter(Pojo.class);
+
+    Pojo p = new Pojo();
+    p.color = 0xAABBCC;
+    p.charset = StandardCharsets.UTF_8;
+    p.map = Collections.singletonMap("114514", Collections.singletonMap("1919810", 23333L));
+
+    // 可以换成 ToJson / ToYaml
+    ToEntry ser = new ToEntry();
+    adapter.write(ser, p);
+    System.out.println(ser.get().toJSONb());
+    /**
+     {
+        "charset": "UTF-8",
+        "myColor": "#aabbcc",
+        "map": {
+          "114514": {
+              "1919810": 23333
+          }
+        }
+     }
+     */
+
+    // 使用CCJson,CCYaml从文本读取(不生成无用对象),或者CEntry
+    System.out.println(adapter.read(new CCJson(), ser.get().toJSONb(), 0));
+  }
+
+  public static class Pojo {
+    // 自定义序列化方式
+    @As("hex_color")
+    // 自定义序列化名称
+    @Name("myColor")
+    // 上面的AdapterOverride就是为了写private
+    private int color;
+    // 通过getter或setter来访问字段
+    @Via(get = "getCharset", set = "setCharset")
+    public Charset charset;
+    // 支持任意对象和多层泛型
+    // 字段类型为接口和抽象类时，会用ObjAny序列化对象，会使用==表示对象的class
+    // 如果你碰得到这种情况，最好还是手动序列化... 自动生成的序列化器并不会管父类的字段
+    public Map<String, Map<String, Object>> map;
+
+    //使用transient避免被序列化
+    private transient Object doNotSerializeMe;
+
+    // 若有无参构造器则调用之，否则allocateInstance
+    public Pojo() {}
+
+    public Charset getCharset() {
+      return charset;
+    }
+
+    public void setCharset(Charset charset) {
+      this.charset = charset;
+    }
+
+    @Override
+    public String toString() {
+      return "Pojo{" + "color=" + color + '}';
+    }
+  }
+
+  public static class UserAdapter {
+    String doWrite(int c) {
+      return "#" + Integer.toHexString(c);
+    }
+
+    int doRead(String o) {
+      return Integer.parseInt(o.substring(1), 16);
+    }
+
+    String serializeMyObject(Charset cs) {
+      return cs.name();
+    }
+
+    Charset deserMyObj(String s) {
+      return Charset.forName(s);
+    }
+  }
+}
+
+
+```
+#### 人性化的错误(仅适用于等宽字体,不适用于CharSequenceInputStream)  
 ```  
 解析错误:  
   Line 39: "最大线程数": 96, , ,  
@@ -95,17 +221,17 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 ......  
 ```
 
-保存Map中共有的Key节约空间: `roj.config.serial.Structs`  
-  
-  
-### Usage
-    直接调用各parser的静态parse方法  
-new一个也行
-别忘了好朋友`ReadOnDemand`
+#### 保存Map中共有的Key节约空间: `roj.config.VinaryParser`
+
+#### Usage
+    调用各parser的静态parses方法  
+new一个也行  
+`roj.config.ConfigMaster.parse`也行  
+继承它也行
   
 ## roj.crypt  
     几种加密/哈希算法，还有CFB等套在块密码上面的壳子  
-  `SM3` `SM4` XChaCha20-Poly1305 AES-256-GCM  
+  `SM3` `SM4` `XChaCha20-Poly1305` `AES-256-GCM`  
   `MT19937`  
   `PBKDF2` `HMAC`  
 
@@ -121,11 +247,8 @@ new一个也行
   多线程下载 `Downloader`
   `BOMInputStream`  
   `BoxFile` 类似electron的asar  
-  `MutableZipFile`
-  * 支持读写任意编码和AES加密/ZipCrypto加密的压缩文件\
-  * 增量修改 —— 无需处理没修改的,比如给加密的压缩文件增加新文件
-  * 从CEN开始读取
-  * Info-ZIP UnicodePath和高精度时间戳的支持 （只读）  
+  `ChineseInputStream`
+  * 中文编码检测, 包括 UTF32 UTF16 UTF8 GB18030
 
 `BinaryDB` 分块锁的实验品,似乎效率还行
   
@@ -205,11 +328,8 @@ new一个也行
 * 更多使用方法请看mcbbs的发布贴: xxxx
 * 你还可以在这里下载编译好的版本
 
-_Warning: 正在重构_
-
 ## roj.net
-    基于管线的网络请求处理 `roj.net.ch`
-    通过Unsafe调native方法
+    基于管线的网络请求
 
 HTTP服务器, 客户端  
   * 长连接
@@ -219,7 +339,7 @@ HTTP服务器, 客户端
   * Websocket ready
   * HTTP2.0 (WIP)
 
-DNS服务器(不支持IPV6，待重构)  
+DNS服务器 
 
 内网穿透工具 AEClient / AEServer / AEHost`roj.net.cross`  
 * [ ] UPnP  

@@ -45,7 +45,8 @@ public class HRAgent extends Thread {
 	// 因为‘我编译我自己’
 	// 只允许本地连接, 因为数据明文传输
 	public static void premain(String agentArgs, Instrumentation inst) {
-		if (inst != null) {instInst = inst;} else inst = instInst;
+		if (inst != null) instInst = inst;
+		else inst = instInst;
 
 		if (!inst.isRedefineClassesSupported()) {
 			System.err.println("[HR] VM不允许类的重定义");
@@ -210,9 +211,9 @@ public class HRAgent extends Thread {
 					roj.asm.tree.Method myMethod = new roj.asm.tree.Method(m);
 					cd.methods.add(Helpers.cast(myMethod));
 					if ((myMethod.access & (AccessFlag.ABSTRACT | AccessFlag.NATIVE)) == 0) {
-						AttrCode code = myMethod.code = new AttrCode(myMethod);
+						AttrCode code = myMethod.setCode(new AttrCode(myMethod));
 						code.localSize = (char) TypeHelper.paramSize(myMethod.rawDesc());
-						code.instructions.add(InsnHelper.X_RETURN(myMethod.getReturnType().nativeName()));
+						code.instructions.add(InsnHelper.X_RETURN(myMethod.returnType().nativeName()));
 					}
 				}
 			}

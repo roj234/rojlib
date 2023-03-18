@@ -21,9 +21,9 @@ import javax.annotation.Nullable;
  * @author Roj233
  * @since 2022/4/27 12:39
  */
-@Nixim("net.minecraft.world.WorldServer")
+@Nixim("/")
 class NxChunkSave extends WorldServer {
-	@Shadow("field_73063_M")
+	@Shadow
 	private PlayerChunkMap playerChunkMap;
 
 	public NxChunkSave() {

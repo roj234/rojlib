@@ -6,9 +6,7 @@ import roj.archive.zip.ZipCrypto;
 import roj.archive.zip.ZipFileWriter;
 import roj.collect.IntMap;
 import roj.concurrent.TaskPool;
-import roj.crypt.CipheR;
 import roj.crypt.CipherInputStream;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.text.TextUtil;
 import roj.ui.EasyProgressBar;
@@ -29,13 +27,7 @@ import java.util.zip.ZipEntry;
  * @since 2022/11/12 0012 18:12
  */
 public class Main {
-	static TaskPool pool;
-	static {
-		int threads = Integer.parseInt(System.getProperty("threads", Integer.toString((int) (Runtime.getRuntime().availableProcessors()/1.5f))));
-		System.out.println("并行线程: " + threads);
-		pool = new TaskPool(0, threads,0);
-		pool.setRejectPolicy(TaskPool::waitPolicy);
-	}
+	static TaskPool pool = TaskPool.CpuMassive();
 
 	public static void main(String[] args) throws Exception {
 		// ADOBE_JPEG:  0 "FFD8 FFEE 000E 4164 6F62 6500 64C0 0000" -2 "FFD9"
@@ -65,7 +57,7 @@ public class Main {
 		}
 
 		File file = new File(args[0]);
-		List<File> files = file.isDirectory() ? FileUtil.findAllFiles(file, file1 -> file1.getName().endsWith(".zip") && !file1.getName().endsWith(".crk.zip")) :
+		List<File> files = file.isDirectory() ? IOUtil.findAllFiles(file, file1 -> file1.getName().endsWith(".zip") && !file1.getName().endsWith(".crk.zip")) :
 			Collections.singletonList(file);
 		for (File f : files) {
 			try {
@@ -153,7 +145,7 @@ public class Main {
 
 		ByteList r = ByteList.wrap(IOUtil.read(key));
 		ZipCrypto zc = new ZipCrypto();
-		zc.mode = CipheR.DECRYPT;
+		zc.encrypt = false;
 		int[] state = {r.readInt(), r.readInt(), r.readInt()};
 		Inflater inf = new Inflater(true);
 
@@ -174,7 +166,7 @@ public class Main {
 						InputStream iin = entry.getMethod() == 0 ? in : new InflaterInputStream(in, inf);
 						entry.setMethod(ZipEntry.STORED); // 不压缩
 						dst.beginEntry(entry);
-						FileUtil.copyStream(iin, dst);
+						IOUtil.copyStream(iin, dst);
 						dst.closeEntry();
 					}
 					ep.update((float) ++i / size, 1);
@@ -205,7 +197,7 @@ public class Main {
 	private static byte[] getExample(byte[] cipher, int[] key) throws IOException {
 		ZipCrypto zc = new ZipCrypto();
 
-		zc.setKey(new byte[0], CipheR.DECRYPT);
+		zc.init(ZipCrypto.DECRYPT_MODE, new byte[0], null, null);
 		zc.copyState(key, true);
 
 		CipherInputStream cs = new CipherInputStream(new ByteArrayInputStream(cipher), zc);

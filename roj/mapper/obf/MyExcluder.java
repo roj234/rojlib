@@ -25,7 +25,7 @@ import java.util.List;
  */
 public class MyExcluder extends CodeVisitor {
 	public static boolean isClassExclusive(IClass clz, Desc desc) {
-		if (0 != (clz.accessFlag() & AccessFlag.ENUM)) {
+		if (0 != (clz.modifier() & AccessFlag.ENUM)) {
 			if (desc.name.equals("values")) return desc.param.startsWith("()");
 			if (desc.name.equals("valueOf")) return desc.param.startsWith("(Ljava/lang/String;)");
 			if (desc.name.equals("VALUES")) return desc.param.startsWith("L");
@@ -58,19 +58,19 @@ public class MyExcluder extends CodeVisitor {
 		switch (c.type()) {
 			case Constant.STRING:
 				ldcPos = bci;
-				ldcVal1 = ((CstString) c).getValue().getString();
+				ldcVal1 = ((CstString) c).name().str();
 				stack = 2;
 				break;
 			case Constant.CLASS:
 				if (stack-- > 0) return;
-				ldcVal2 = ((CstClass) c).getValue().getString();
+				ldcVal2 = ((CstClass) c).name().str();
 				break;
 		}
 	}
 
 	@Override
 	public void invoke(byte code, CstRef method) {
-		String name = method.getClassName();
+		String name = method.className();
 		if (code == Opcodes.INVOKESTATIC && name.startsWith("java/util/concurrent/atomic/Atomic") && name.endsWith("FieldUpdater") && bci == ldcPos + 3) {
 			excludes.add(new Desc(ldcVal2, ldcVal1));
 		}

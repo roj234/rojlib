@@ -3,6 +3,7 @@ package roj.asm;
 import roj.asm.cst.Constant;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.LdcInsnNode;
+import roj.collect.ToIntMap;
 
 import static roj.asm.Opcodes.*;
 
@@ -63,8 +64,20 @@ public final class OpcodeUtil {
 		}
 	}
 
-	private static final String[] Desc = new String[256];
-	private static final byte[] Cate = new byte[256];
+	public static final String[] Desc = new String[256];
+	public static final byte[] Cate = new byte[256];
+
+	private static ToIntMap<CharSequence> byName;
+	public static ToIntMap<CharSequence> getByName() {
+		if (byName == null) {
+			byName = new ToIntMap<>(128);
+			for (int i = 0; i < Desc.length; i++) {
+				if (Desc[i] == null) continue;
+				byName.putInt(Desc[i], i);
+			}
+		}
+		return byName;
+	}
 
 	public static byte byId(byte code) {
 		if (Desc[code&0xFF] == null) throw new IllegalStateException("Unknown bytecode 0x"+Integer.toHexString(code&0xFF));
@@ -77,10 +90,10 @@ public final class OpcodeUtil {
 	}
 
 	public static final int CATE_MISC = 0,
-		CATE_LOAD=1, CATE_STORE=2, CATE_CONST=3, CATE_LDC = 4,
+		CATE_LOAD=1, CATE_STORE=2, CATE_CONST=3, CATE_LDC=4,
 		CATE_MATH=5, CATE_STACK=6, CATE_MATH_CAST=7,
 		CATE_IF=8, CATE_RETURN=9, CATE_GOTO=10,
-		CATE_CLASS=11, CATE_METHOD=12, CATE_FIELD=13;
+		CATE_CLASS=11, CATE_METHOD=12, CATE_FIELD=13, CATE_ARRAY_SL = 14;
 	public static int category(int code) {
 		return Cate[code&0xFF]&0xF;
 	}
@@ -88,9 +101,14 @@ public final class OpcodeUtil {
 		TRAIT_ZERO_ADDRESS=16,
 		TRAIT_LOAD_STORE_LEN=32,
 		TRAIT_JUMP=64,
-		TRAIT_LOAD_INT=128;
+		TRAIT_ILFDA = 128;
+		//TRAIT_LOAD_INT=128;
 	public static int trait(int code) {
 		return Cate[code&0xFF]&0xF0;
+	}
+
+	public static int flag(int code) {
+		return Cate[code&0xFF]&0xFF;
 	}
 
 	static {
@@ -153,13 +171,18 @@ public final class OpcodeUtil {
 		Cate[IFNULL&0xFF] |= CATE_IF|TRAIT_JUMP;
 		Cate[IFNONNULL&0xFF] |= CATE_IF|TRAIT_JUMP;
 
-		fset(16,17, TRAIT_LOAD_INT);
+		//fset(16,17, TRAIT_LOAD_INT);
+		fset(46, 53, CATE_ARRAY_SL);
+		fset(79, 86, CATE_ARRAY_SL);
+		fset(1,15, TRAIT_ILFDA);
+		fset(21,86, TRAIT_ILFDA);
+		fset(96,152, TRAIT_ILFDA);
+		fset(172,177, TRAIT_ILFDA);
+
 		fset(21, 25, TRAIT_LOAD_STORE_LEN);
 		fset(54, 58, TRAIT_LOAD_STORE_LEN);
 	}
 	private static void fset(int from, int to, int cat) {
-		while (from <= to) {
-			Cate[from++] |= cat;
-		}
+		while (from <= to) Cate[from++] |= cat;
 	}
 }

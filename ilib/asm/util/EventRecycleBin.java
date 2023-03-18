@@ -2,7 +2,6 @@ package ilib.asm.util;
 
 import ilib.util.Reflection;
 import roj.collect.MyHashMap;
-import roj.concurrent.FastThreadLocal;
 import roj.util.Helpers;
 
 import net.minecraftforge.fml.common.eventhandler.Event;
@@ -14,7 +13,7 @@ import java.util.List;
  * @since 2022/4/22 21:53
  */
 public class EventRecycleBin extends MyHashMap<Class<? extends Event>, List<Event>> {
-	private static final FastThreadLocal<EventRecycleBin> registry = FastThreadLocal.withInitial(EventRecycleBin::new);
+	private static final ThreadLocal<EventRecycleBin> registry = ThreadLocal.withInitial(EventRecycleBin::new);
 
 	public static EventRecycleBin getLocalInstance() {
 		return registry.get();

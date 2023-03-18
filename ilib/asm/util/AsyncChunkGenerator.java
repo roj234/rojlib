@@ -84,12 +84,12 @@ public class AsyncChunkGenerator {
 	}
 
 	public static void sync(long timeout) {
-		e.pushTask(AsyncTask.fromVoid(() -> {
+		e.pushTask(() -> {
 			long time;
 			while ((time = timeout - System.nanoTime()) > 0) {
 				LockSupport.parkNanos(time);
 			}
-		}));
+		});
 	}
 
 	public static Chunk syncCallback(AsyncTask<Chunk> task, ChunkPos pos, ChunkProviderServer cp) {

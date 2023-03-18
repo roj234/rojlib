@@ -10,6 +10,7 @@ import roj.asm.tree.attr.MethodParameters.MethodParam;
 import roj.asm.type.*;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttrHelper;
+import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.*;
 import roj.config.ParseException;
@@ -39,14 +40,11 @@ import static roj.config.word.Word.LITERAL;
 import static roj.lavac.parser.JavaLexer.*;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
- *
  * @author solo6975
  * @since 2020/12/31 17:34
  */
 public final class CompileUnit extends ConstantData {
-	static final int NON_FIELD_ACC = AccessFlag.TRANSIENT_OR_VARARGS | AccessFlag.VOLATILE_OR_BRIDGE;
+	static final int NON_FIELD_ACC = AccessFlag.TRANSIENT | AccessFlag.VOLATILE;
 	static final int NON_METHOD_ACC = AccessFlag.STRICTFP | AccessFlag.NATIVE;
 	static final int _ACC_DEFAULT = 1 << 17, _ACC_ANNOTATION = 1 << 18, _ACC_RECORD = 1 << 19,
 		_ACC_INNERCLASS = 0x0040, _ACC_ANONYMOUS = 0x0080;
@@ -158,7 +156,7 @@ public final class CompileUnit extends ConstantData {
 		// }
 
 		c.name(IOUtil.getSharedCharBuf().append(name).append("$").append(_children.size() + 1).toString());
-		c.access = AccessFlag.SYNTHETIC | AccessFlag.FINAL | AccessFlag.SUPER_OR_SYNC | _ACC_ANONYMOUS;
+		c.access = AccessFlag.SYNTHETIC | AccessFlag.FINAL | AccessFlag.SUPER | _ACC_ANONYMOUS;
 		c.parent(parent.owner());
 
 		c.copyTmpFromCache();
@@ -184,7 +182,7 @@ public final class CompileUnit extends ConstantData {
 		if (mn != null) {
 			ownerAttr.name = mn.name();
 			ownerAttr.parameters = mn.parameters();
-			ownerAttr.returnType = mn.getReturnType();
+			ownerAttr.returnType = mn.returnType();
 		}
 		c.putAttr(ownerAttr);
 
@@ -496,7 +494,7 @@ public final class CompileUnit extends ConstantData {
 				case AccessFlag.INTERFACE | AccessFlag.ANNOTATION:
 					break;
 				case 0:
-					acc |= AccessFlag.NATIVE|AccessFlag.PRIVATE|AccessFlag.PROTECTED|AccessFlag.TRANSIENT_OR_VARARGS|AccessFlag.VOLATILE_OR_BRIDGE|AccessFlag.SUPER_OR_SYNC;
+					acc |= AccessFlag.NATIVE|AccessFlag.PRIVATE|AccessFlag.PROTECTED|AccessFlag.TRANSIENT|AccessFlag.VOLATILE|AccessFlag.SYNCHRONIZED;
 					break;
 			}
 
@@ -564,7 +562,7 @@ public final class CompileUnit extends ConstantData {
 				methodIdx.add(w.pos());
 				if ((acc & NON_FIELD_ACC) != 0) fireDiagnostic(Diagnostic.Kind.ERROR, "illegal_modifier_compound");
 
-				Method method = new Method(acc, this, name, null);
+				Method method = new Method(acc, this, name, "()V");
 				method.setReturnType(type);
 				if (!annotations.isEmpty()) addAnnotation(method, new SimpleList<>(annotations));
 
@@ -633,7 +631,7 @@ public final class CompileUnit extends ConstantData {
 						}
 						switch (w.type()) {
 							case right_s_bracket:
-								if (lsVarargs) method.access |= AccessFlag.TRANSIENT_OR_VARARGS;
+								if (lsVarargs) method.access |= AccessFlag.TRANSIENT;
 								break label;
 							case comma: continue;
 							default: throw wr.err("unexpected:" + w.val());
@@ -691,14 +689,14 @@ public final class CompileUnit extends ConstantData {
 				} else {
 					if (w.type() != left_l_bracket) throw wr.err("必须包含方法体");
 
-					method.code = new AttrCode(method);
+					method.setCode(new AttrCode(method));
 					exprTask.put(method, ParseTask.Method(paramNames, wr.index, skipCode(wr, BRACKET_METHOD)));
 				}
 			} else { // field
 				if ((acc & NON_METHOD_ACC) != 0) fireDiagnostic(Diagnostic.Kind.ERROR, "illegal_modifier_compound");
 				wr.retractWord();
 
-				Signature s = _signatureCommit((SignaturePrimer) signature, Signature.FIELD_OR_CLASS, null);
+				Signature s = _signatureCommit((SignaturePrimer) signature, Signature.FIELD, null);
 
 				List<AnnotationPrimer> list = annotations.isEmpty() ? null : new SimpleList<>(annotations);
 
@@ -768,16 +766,16 @@ public final class CompileUnit extends ConstantData {
 					f = AccessFlag.STRICTFP;
 					break;
 				case VOLATILE:
-					f = AccessFlag.VOLATILE_OR_BRIDGE;
+					f = AccessFlag.VOLATILE;
 					break;
 				case TRANSIENT:
-					f = AccessFlag.TRANSIENT_OR_VARARGS;
+					f = AccessFlag.TRANSIENT;
 					break;
 				case NATIVE:
 					f = AccessFlag.NATIVE;
 					break;
 				case SYNCHRONIZED:
-					f = AccessFlag.SUPER_OR_SYNC;
+					f = AccessFlag.SYNCHRONIZED;
 					break;
 				case FINAL:
 					f = (1 << 22) | AccessFlag.FINAL;
@@ -810,7 +808,7 @@ public final class CompileUnit extends ConstantData {
 		w = wr.next();
 		switch (w.type()) {
 			case CLASS: // class
-				acc |= AccessFlag.SUPER_OR_SYNC;
+				acc |= AccessFlag.SUPER;
 				break;
 			case INTERFACE: // interface
 				if ((acc & (AccessFlag.FINAL)) != 0) throw wr.err("illegal_modifier:interface:final");
@@ -987,12 +985,9 @@ public final class CompileUnit extends ConstantData {
 				}
 			}
 			switch (w.type()) {
-				case gtr:
-					break generic;
-				case comma:
-					break;
-				default:
-					throw wr.err("unexpected", w);
+				case gtr: break generic;
+				case comma: break;
+				default: throw wr.err("unexpected", w);
 			}
 		}
 
@@ -1017,7 +1012,7 @@ public final class CompileUnit extends ConstantData {
 				w = wr.next();
 				switch (w.type()) {
 					// A<? super
-					case SUPER: g.extendType = Generic.EX_SUPERS; break;
+					case SUPER: g.extendType = Generic.EX_SUPER; break;
 					case EXTENDS: g.extendType = Generic.EX_EXTENDS; break;
 					// A<?
 					case gtr: case comma:
@@ -1198,8 +1193,8 @@ public final class CompileUnit extends ConstantData {
 			fireDiagnostic(Diagnostic.Kind.ERROR, "unable_resolve:PARENT:" + parent);
 			return;
 		} else {
-            int acc = pInfo.accessFlag();
-            if (0 == (acc & AccessFlag.SUPER_OR_SYNC)) {
+            int acc = pInfo.modifier();
+            if (0 == (acc & AccessFlag.SUPER)) {
                 if (0 != (acc & AccessFlag.ANNOTATION)) {
                     fireDiagnostic(Diagnostic.Kind.NOTE, "inherit:annotation");
                 } else if (0 != (acc & AccessFlag.ENUM)) {
@@ -1230,7 +1225,7 @@ public final class CompileUnit extends ConstantData {
             if (info == null) {
 				fireDiagnostic(Diagnostic.Kind.ERROR, "unable_resolve:INTERFACE:" + itfs.get(i));
 			} else {
-                int acc = info.accessFlag();
+                int acc = info.modifier();
                 if (0 == (acc & AccessFlag.INTERFACE)) {
                     fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:non_interface");
                 }
@@ -1249,7 +1244,7 @@ public final class CompileUnit extends ConstantData {
 		for (int i = 0; i < fields.size(); i++) {
 			Field f = fields.get(i);
 			if ((access & AccessFlag.INTERFACE) != 0) {
-				int acc = f.accesses;
+				int acc = f.access;
 				if ((acc & (AccessFlag.PRIVATE|AccessFlag.PROTECTED)) != 0) {
 					if (ctx.isSpecEnabled(CompilerConfig.INTERFACE_INACCESSIBLE_FIELD)) {
 						if ((acc & AccessFlag.PRIVATE) != 0)
@@ -1258,18 +1253,18 @@ public final class CompileUnit extends ConstantData {
 						fireDiagnostic(Diagnostic.Kind.ERROR, "modifier_not_allowed:"+acc);
 					}
 				}
-				f.accesses = (char) (AccessFlag.STATIC | acc);
+				f.access = (char) (AccessFlag.STATIC | acc);
 			}
 
 			allNodeNames.add(f.name);
 		}
 
 		boolean autoInit = (access & AccessFlag.INTERFACE) == 0;
-		List<Method> methods = Helpers.cast(this.methods);
+		List<MethodNode> methods = this.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			diagPos = methodIdx.get(i);
 
-			Method m = methods.get(i);
+			Method m = (Method) methods.get(i);
 			if (m.name.equals("<init>")) {
 				autoInit = false;
 				if ((access & AccessFlag.ENUM) != 0) {
@@ -1297,13 +1292,13 @@ public final class CompileUnit extends ConstantData {
 					if (info == null) {
 						fireDiagnostic(Diagnostic.Kind.ERROR, "unable_resolve:EXCEPTION:"+classes.get(i));
 					} else {
-						int acc = info.accessFlag();
+						int acc = info.modifier();
 						if (0 == (acc & AccessFlag.PUBLIC)) {
 							if (!MapUtil.arePackagesSame(name, info.name())) {
 								fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:package-private");
 							}
 						}
-						if (!ctx.canInstanceOf(info.name(), "java/lang/Throwable", -1)) {
+						if (!ctx.canInstanceOf("java/lang/Throwable", info.name(), -1)) {
 							fireDiagnostic(Diagnostic.Kind.ERROR, "excepting_exception:"+classes.get(i));
 						}
 						classes.set(j, info.name());
@@ -1319,7 +1314,7 @@ public final class CompileUnit extends ConstantData {
 				MethodNode m = m1.get(i);
 				if (m.name().equals("<init>")) {
 					if (m.rawDesc().equals("()V")) {
-						if (_accessible(pInfo, m.accessFlag())) {
+						if (_accessible(pInfo, m.modifier())) {
 							parentNoPar = 1;
 						} else {
 							fireDiagnostic(Diagnostic.Kind.ERROR, "constructor_inaccessible");
@@ -1347,7 +1342,11 @@ public final class CompileUnit extends ConstantData {
 		// region Type扩展
 		diagPos = -2;
 
-		toResolve.addAll(toResolve_unc);
+		for (IType type : toResolve_unc) {
+			if (type.owner() != null) {
+				toResolve.add(type);
+			}
+		}
 		toResolve_unc.clear();
 
 		for (int i = 0; i < toResolve.size(); i++) {
@@ -1425,19 +1424,15 @@ public final class CompileUnit extends ConstantData {
 		if (this == target) return true;
 
 		boolean pkg = false;
-		if ((target.accessFlag() & AccessFlag.PUBLIC) == 0) {
+		if ((target.modifier() & AccessFlag.PUBLIC) == 0) {
 			if (!MapUtil.arePackagesSame(name, target.name())) return false;
 			pkg = true;
 		}
 		switch (acc & (AccessFlag.PUBLIC | AccessFlag.PROTECTED | AccessFlag.PRIVATE)) {
-			case AccessFlag.PUBLIC:
-				return true;
-			case AccessFlag.PROTECTED:
-				if (ctx.canInstanceOf(name, target.name(), 0)) return true;
-			case 0:
-				return pkg || MapUtil.arePackagesSame(name, target.name());
-			case AccessFlag.PRIVATE:
-				return false;
+			case AccessFlag.PUBLIC: return true;
+			case AccessFlag.PROTECTED: if (ctx.canInstanceOf(name, target.name(), 0)) return true;
+			case 0: return pkg || MapUtil.arePackagesSame(name, target.name());
+			case AccessFlag.PRIVATE: return false;
 		}
 		return false;
 	}
@@ -1495,15 +1490,11 @@ public final class CompileUnit extends ConstantData {
 	// endregion
 	// region 阶段3 编译代码块
 
-	public Method getClinit() {
+	public CodeWriter getClinit() {
 		int v = getMethod("<clinit>");
-		if (v >= 0) return (Method) methods.get(v);
+		if (v >= 0) return ((AttrCodeWriter)methods.get(v).attrByName("Code")).cw;
 
-		Method clinit = new Method(AccessFlag.PUBLIC | AccessFlag.STATIC | AccessFlag.SYNTHETIC, this, "<clinit>", "()V");
-		methods.add(clinit);
-		clinit.code = new AttrCode(clinit);
-
-		return clinit;
+		return newMethod(AccessFlag.PUBLIC | AccessFlag.STATIC | AccessFlag.SYNTHETIC, "<clinit>", "()V");
 	}
 
 	public void S3_Code() throws ParseException {
@@ -1523,7 +1514,7 @@ public final class CompileUnit extends ConstantData {
 				List<? extends MoFNode> methods = a.clazzInst.methods();
 				for (int j = 0; j < methods.size(); j++) {
 					MethodNode m = (MethodNode) methods.get(j);
-					if ((m.accessFlag() & AccessFlag.STATIC) != 0) continue;
+					if ((m.modifier() & AccessFlag.STATIC) != 0) continue;
 					if (m.attrByName(AnnotationDefault.NAME) == null) {
 						if (!a.values.containsKey(m.name())) {
 							missed.add(m.name());
@@ -1532,7 +1523,7 @@ public final class CompileUnit extends ConstantData {
 					}
 
 					ParseTask task = Helpers.cast(a.values.remove(m.name()));
-					if (task != null) task.parse(this, m.getReturnType());
+					if (task != null) task.parse(this, m.returnType());
 				}
 
 				ctx.invokePartialAnnotationProcessor(this, a, missed);
@@ -1555,19 +1546,17 @@ public final class CompileUnit extends ConstantData {
 		currentNode = root;
 
 		if (!clInitTask.isEmpty()) {
-			Method clinit = getClinit();
-			AttrCode code = clinit.code;
+			CodeWriter clinit = getClinit();
 			for (int i = 0; i < clInitTask.size(); i++) {
-				clInitTask.get(i).parse(this, code);
+				clInitTask.get(i).parse(this, clinit);
 			}
 			clInitTask.clear();
 		}
 
 		if (!initTask.isEmpty()) {
-			Method init = new Method(AccessFlag.PUBLIC | AccessFlag.STATIC | AccessFlag.SYNTHETIC, this, "<init>", "()V");
-			AttrCode code = new AttrCode(init);
+			CodeWriter init = newMethod(AccessFlag.PUBLIC | AccessFlag.STATIC | AccessFlag.SYNTHETIC, "<init>", "()V");
 			for (int i = 0; i < initTask.size(); i++) {
-				initTask.get(i).parse(this, code);
+				initTask.get(i).parse(this, init);
 			}
 			// todo append to init last
 			initTask.clear();
@@ -1576,7 +1565,7 @@ public final class CompileUnit extends ConstantData {
 		for (Map.Entry<Attributed, ParseTask> entry : exprTask.entrySet()) {
 			Attributed k = entry.getKey();
 			if (k instanceof Method) {
-				SignaturePrimer s1 = (SignaturePrimer) ((Method) k).attrByName("Signature");
+				SignaturePrimer s1 = (SignaturePrimer) k.attrByName("Signature");
 				currentNode = s1 == null ? root : s1;
 			} else {
 				currentNode = root;

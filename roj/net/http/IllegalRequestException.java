@@ -19,6 +19,12 @@ public class IllegalRequestException extends IOException {
 		response = new StringResponse(msg);
 	}
 
+	public IllegalRequestException(int code, String msg, Throwable cause) {
+		super(msg, cause);
+		this.code = code;
+		response = new StringResponse(msg);
+	}
+
 	public IllegalRequestException(int code, Throwable x) {
 		super(x);
 		this.code = code;

@@ -2,7 +2,7 @@ package roj;
 
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
 import roj.io.down.ProgressGroupedMulti;
 import roj.io.down.ProgressMulti;
@@ -101,7 +101,7 @@ public final class MultiFileDownloader {
 			return;
 		}
 
-		File file = new File(id, FileUtil.fileName(url1.getPath()));
+		File file = new File(id, IOUtil.fileName(url1.getPath()));
 		if (file.isFile()) {
 			progress.finished++;
 			return;

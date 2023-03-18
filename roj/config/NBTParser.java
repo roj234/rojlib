@@ -1,9 +1,11 @@
 package roj.config;
 
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
-import roj.config.data.*;
-import roj.config.exch.*;
+import roj.config.data.CEntry;
+import roj.config.data.CMapping;
+import roj.config.serial.CVisitor;
+import roj.config.serial.ToEntry;
+import roj.config.serial.ToNBT;
+import roj.util.DynByteBuf;
 
 import java.io.DataInput;
 import java.io.DataInputStream;
@@ -15,58 +17,94 @@ import java.io.InputStream;
  *
  * @see <a href="https://github.com/udoprog/c10t/blob/master/docs/NBT.txt">Online NBT specification</a>
  */
-public final class NBTParser {
+public final class NBTParser implements BinaryParser {
+	public static final int DONT_FOLLOW_MINECRAFT = 1;
 	public static final byte END = 0, BYTE = 1, SHORT = 2, INT = 3, LONG = 4, FLOAT = 5, DOUBLE = 6, BYTE_ARRAY = 7, STRING = 8, LIST = 9, COMPOUND = 10, INT_ARRAY = 11, LONG_ARRAY = 12;
 
 	public static CMapping parse(InputStream is) throws IOException {
-		return parse((DataInput) (is instanceof DataInputStream ? is : new DataInputStream(is)));
+		return parse((DataInput) (is instanceof DataInput ? is : new DataInputStream(is)));
 	}
-
 	public static CMapping parse(DataInput in) throws IOException {
-		byte flg = in.readByte();
-		if (flg != COMPOUND) throw new IOException("Topmost entry must be a COMPOUND");
-		char n = in.readChar();
-		if (n != 0) throw new IOException("Topmost entry must not have name");
-		return read0(in, flg).asMap();
+		ToEntry copy = new ToEntry();
+		root(copy, in, 0);
+		return copy.get().asMap();
+	}
+	public static CEntry parseAny(DataInput in) throws IOException {
+		ToEntry copy = new ToEntry();
+		root(copy, in, DONT_FOLLOW_MINECRAFT);
+		return copy.get();
 	}
 
-	private static CEntry read0(DataInput in, byte type) throws IOException {
+	@Override
+	public <T extends CVisitor> T parseRaw(InputStream in, T cc, int flag) throws IOException {
+		root(cc, (DataInput) (in instanceof DataInput ? in : new DataInputStream(in)), flag);
+		return cc;
+	}
+	public <T extends CVisitor> T parseRaw(DynByteBuf buf, T cc, int flag) throws IOException {
+		root(cc, buf, flag);
+		return cc;
+	}
+
+	public static void root(CVisitor cc, DataInput in, int flag) throws IOException {
+		byte type = in.readByte();
+		if ((flag & DONT_FOLLOW_MINECRAFT) == 0 && type != COMPOUND) throw new IOException("根据MC的要求,根节点必须是COMPOUND");
+		if (type == 0) return;
+
+		char n = in.readChar();
+		if (n != 0) throw new IOException("根节点不应该有名称");
+		element(cc, in, type);
+	}
+
+	private static void element(CVisitor cc, DataInput in, byte type) throws IOException {
 		switch (type) {
 			case END:
 			default: throw new IOException("Corrupted NBT");
-			case BYTE: return TByte.valueOf(in.readByte());
-			case SHORT: return TShort.valueOf(in.readShort());
-			case INT: return CInteger.valueOf(in.readInt());
-			case LONG: return CLong.valueOf(in.readLong());
-			case FLOAT: return TFloat.valueOf(in.readFloat());
-			case DOUBLE: return CDouble.valueOf(in.readDouble());
+			case BYTE: cc.value(in.readByte()); break;
+			case SHORT: cc.value(in.readShort()); break;
+			case INT: cc.value(in.readInt()); break;
+			case LONG: cc.value(in.readLong()); break;
+			case FLOAT: cc.value(in.readFloat()); break;
+			case DOUBLE: cc.value(in.readDouble()); break;
 			case BYTE_ARRAY:
 				byte[] ba = new byte[in.readInt()];
 				in.readFully(ba);
-				return new TByteArray(ba);
-			case STRING: return CString.valueOf(in.readUTF());
+				cc.value(ba);
+				break;
+			case STRING: cc.value(in.readUTF()); break;
 			case LIST:
 				byte listType = in.readByte();
 				int len = in.readInt();
-				SimpleList<CEntry> lo = new SimpleList<>(len);
-				while (len-- > 0) lo.add(read0(in, listType));
-				return new CList(lo);
+				cc.valueList(len);
+				while (len-- > 0) element(cc, in, listType);
+				cc.pop();
+				break;
 			case COMPOUND:
-				MyHashMap<String, CEntry> tags = new MyHashMap<>();
+				cc.valueMap();
 				do {
 					byte flg = in.readByte();
 					if (flg == 0) break;
-					tags.put(in.readUTF(), read0(in, flg));
+					cc.key(in.readUTF());
+					element(cc, in, flg);
 				} while (true);
-				return new CMapping(tags);
+				cc.pop();
+				break;
 			case INT_ARRAY:
 				int[] ia = new int[in.readInt()];
 				for (int i = 0; i < ia.length; i++) ia[i] = in.readInt();
-				return new TIntArray(ia);
+				cc.value(ia);
+				break;
 			case LONG_ARRAY:
 				long[] la = new long[in.readInt()];
 				for (int i = 0; i < la.length; i++) la[i] = in.readLong();
-				return new TLongArray(la);
+				cc.value(la);
+				break;
 		}
 	}
+
+	public void serialize(CEntry entry, DynByteBuf out) throws IOException {
+		if (entry.getNBTType() != COMPOUND) throw new IOException("根据MC的要求,根节点必须是COMPOUND");
+		entry.forEachChild(new ToNBT(out));
+	}
+
+	public String format() { return "NBT"; }
 }

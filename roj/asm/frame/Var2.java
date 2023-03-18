@@ -4,6 +4,7 @@ import roj.asm.tree.insn.InsnNode;
 import roj.asm.visitor.FrameVisitor;
 import roj.collect.MyHashSet;
 
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -50,7 +51,7 @@ public final class Var2 {
 	}
 	public Var2(byte type, String owner) {
 		this.type = type;
-		this.owner = owner;
+		this.owner = Objects.requireNonNull(owner, "owner");
 	}
 
 	public Var2(InsnNode init_bci) {
@@ -171,5 +172,15 @@ public final class Var2 {
 		} else {
 			return type > 100 ? "Any" : VarType.toString(type);
 		}
+	}
+
+	public Var2 copy() {
+		Var2 c = new Var2(type);
+		c.bci = bci;
+		c.bci2 = bci2;
+		c.owner = owner;
+		if (limitation != null)
+		c.limitation = new MyHashSet<>(limitation);
+		return c;
 	}
 }

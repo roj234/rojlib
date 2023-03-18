@@ -3,7 +3,6 @@ package roj.asm.tree;
 import roj.asm.AsmShared;
 import roj.asm.Parser;
 import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstUTF;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.attr.MethodParameters.MethodParam;
 import roj.asm.type.*;
@@ -11,15 +10,16 @@ import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
+import roj.util.TypedName;
 
-import javax.annotation.Nullable;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public final class Method implements MethodNode, AttributeReader {
+public final class Method implements MethodNode {
 	public Method(int access, IClass owner, String name, String desc) {
 		this.access = (char) access;
 		this.owner = owner.name();
@@ -35,22 +35,18 @@ public final class Method implements MethodNode, AttributeReader {
 	}
 
 	public Method(ConstantData data, RawMethod method) {
-		this.access = method.accesses;
+		this.access = method.access;
 		this.owner = data.name;
 		this.name = method.name.getString();
 		this.rawDesc = method.type.getString();
 
-		boolean hasCode = false;
-
 		AttributeList al = method.attributesNullable();
 		if (al != null && !al.isEmpty()) {
 			attributes = new AttributeList(al);
-			hasCode = attributes.getByName("Code") != null;
-
-			Parser.withParsedAttribute(data.cp, this);
+			Parser.parseAttributes(this, data.cp, attributes, Signature.METHOD);
 		}
 
-		if (!hasCode && 0 == (access & (AccessFlag.ABSTRACT | AccessFlag.NATIVE))) {
+		if ((attrByName("Code") == null) == (0 == (access & (AccessFlag.ABSTRACT | AccessFlag.NATIVE)))) {
 			System.err.println("Method.java:52: Non-abstract " + data.name + '.' + name + rawDesc + " missing Code.");
 		}
 	}
@@ -62,67 +58,36 @@ public final class Method implements MethodNode, AttributeReader {
 		owner = m.getDeclaringClass().getName().replace('.', '/');
 	}
 
-	@Override
-	public Attribute parseAttribute(ConstantPool pool, DynByteBuf r, String name, int length) {
-		switch (name) {
-			case "RuntimeVisibleTypeAnnotations":
-			case "RuntimeInvisibleTypeAnnotations":
-				return new TypeAnnotations(name, r, pool);
-			// 方法注解
-			case "RuntimeVisibleAnnotations":
-			case "RuntimeInvisibleAnnotations":
-				return new Annotations(name, r, pool);
-			// 参数注解
-			case "RuntimeVisibleParameterAnnotations":
-			case "RuntimeInvisibleParameterAnnotations":
-				return new ParameterAnnotations(name, r, pool);
-			// 泛型签名
-			case "Signature":
-				return Signature.parse(((CstUTF) pool.get(r)).getString(), Signature.METHOD);
-			// 显示方法参数的标识符
-			case "MethodParameters":
-				return new MethodParameters(r, pool);
-			case "Exceptions":
-				return new AttrStringList(name, r, pool, 0);
-			case "AnnotationDefault":
-				return new AnnotationDefault(r, pool);
-			case "Code":
-				return code = new AttrCode(this, r, pool);
-			case "Synthetic":
-			case "Deprecated":
-			default: return length < 0 ? null : new AttrUnknown(name, r.slice(length));
-		}
-	}
-
 	public String owner;
 
 	public String name;
 	public char access;
 	private String rawDesc;
-	private List<Type> params;
+	private SimpleList<Type> params;
 	private Type returnType;
 
 	private AttributeList attributes;
 
-	public AttrCode code;
+	public void toByteArray(DynByteBuf w, ConstantPool pool) {
+		w.putShort(access).putShort(pool.getUtfId(name)).putShort(pool.getUtfId(rawDesc()));
+
+		if (attributes == null) {
+			w.putShort(0);
+			return;
+		}
+		attributes.toByteArray(w, pool);
+	}
 
 	RawMethod i_downgrade(ConstantPool cw) {
-		if (params != null) {
-			params.add(returnType);
-			rawDesc = TypeHelper.getMethod(params, rawDesc);
-			params.remove(params.size() - 1);
-		}
-		RawMethod m = new RawMethod(access, cw.getUtf(name), cw.getUtf(rawDesc));
+		RawMethod m = new RawMethod(access, cw.getUtf(name), cw.getUtf(rawDesc()));
 		m.owner = owner;
 		if (params != null) m.params = params;
 
-		if (attributes == null && code == null) return m;
+		if (attributes == null) return m;
 
 		AttributeList lowAttrs = m.attributes();
 
 		AttributeList attrs = attributes();
-		if (code != null) attrs.add(code);
-
 		lowAttrs.ensureCapacity(attrs.size());
 
 		DynByteBuf w = AsmShared.getBuf();
@@ -133,62 +98,86 @@ public final class Method implements MethodNode, AttributeReader {
 	}
 
 	@Override
-	public Attribute attrByName(String name) {
-		return attributes == null ? null : (Attribute) attributes.getByName(name);
+	public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedName<T> type) {
+		return Parser.parseAttribute(this, cp, type, attributes, Signature.METHOD);
 	}
+
+	public Attribute attrByName(String name) { return attributes == null ? null : (Attribute) attributes.getByName(name); }
+	public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
+	public AttributeList attributesNullable() { return attributes; }
 
 	@Override
-	public AttributeList attributes() {
-		return attributes == null ? attributes = new AttributeList() : attributes;
-	}
+	public String ownerClass() { return owner; }
 
-	@Nullable
-	@Override
-	public AttributeList attributesNullable() {
-		return attributes;
-	}
+	public String name() { return name; }
+	public void name(ConstantPool cp, String name) { this.name = Objects.requireNonNull(name); }
 
-	public void toByteArray(DynByteBuf w, ConstantPool pool) {
+	public String rawDesc() {
 		if (params != null) {
 			params.add(returnType);
 			rawDesc = TypeHelper.getMethod(params, rawDesc);
 			params.remove(params.size() - 1);
+		} else {
+			assert rawDesc != null;
 		}
-		w.putShort(access).putShort(pool.getUtfId(name)).putShort(pool.getUtfId(rawDesc));
-
-		if (code != null) attributes().add(code);
-
-		if (attributes == null) {
-			w.putShort(0);
-			return;
+		return rawDesc;
+	}
+	public void rawDesc(ConstantPool cp, String desc) {
+		rawDesc = Objects.requireNonNull(desc);
+		if (params != null) {
+			params.clear();
+			TypeHelper.parseMethod(desc,params);
+			returnType = params.remove(params.size()-1);
 		}
-		attributes.toByteArray(w, pool);
+	}
+
+	public List<Type> parameters() { initPar(); return params; }
+	public Type returnType() {
+		return returnType == null ? returnType = TypeHelper.parseReturn(rawDesc) : returnType;
+	}
+	public void setReturnType(Type ret) { initPar(); returnType = ret; }
+
+	public char modifier() { return access; }
+	public void modifier(int flag) { access = (char) flag; }
+
+	public int type() { return Parser.MTYPE_FULL; }
+
+	private void initPar() {
+		if (params == null) {
+			if (rawDesc == null) throw new IllegalStateException("rawDesc和desc均为null");
+			params = (SimpleList<Type>) TypeHelper.parseMethod(rawDesc);
+			returnType = params.remove(params.size()-1);
+		}
 	}
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 
-		if (getAnnotations() != null) sb.append("    ").append(getAnnotations()).append('\n');
-		if (getInvisibleAnnotations() != null) sb.append("    ").append(getInvisibleAnnotations()).append('\n');
+		Attribute a;
 
-		sb.append("    ");
-		AccessFlag.toString(access, AccessFlag.TS_METHOD, sb);
+		a = parsedAttr(null, Attribute.RtAnnotations);
+		if (a != null) sb.append("    ").append(a).append('\n');
+		a = parsedAttr(null, Attribute.ClAnnotations);
+		if (a != null) sb.append("    ").append(a).append('\n');
+
+		AccessFlag.toString(access, AccessFlag.TS_METHOD, sb.append("    "));
 		initPar();
-		Attribute a = attrByName("Signature");
-		Signature signature = a instanceof Signature ? (Signature) a : null;
-		if (signature != null) {
-			sb.append(signature.values.get(signature.values.size() - 1));
+
+		Signature sig = parsedAttr(null, Attribute.SIGNATURE);
+		if (sig != null) {
+			sb.append(sig.values.get(sig.values.size() - 1));
 		} else {
 			sb.append(returnType);
 		}
 		sb.append(' ').append(name).append('(');
 
 		if (params.size() > 0) {
-			MethodParameters acc = getParameterAccesses();
+			MethodParameters acc = parsedAttr(null, Attribute.MethodParameters);
 			if (acc != null) {
+				AttrCode code = getCode();
 				List<LocalVariable> list = code != null && code.getLVT() != null ? code.getLVT().list : null;
 				for (int j = 0; j < params.size(); j++) {
-					IType p = signature != null && signature.values.size() > j ? signature.values.get(j) : params.get(j);
+					IType p = sig != null && sig.values.size() > j ? sig.values.get(j) : params.get(j);
 					MethodParam e = acc.flags.size() <= j ? null : acc.flags.get(j);
 					String name = list == null ? e == null ? "<unknown>" : e.name : list.get(j).name;
 
@@ -206,137 +195,39 @@ public final class Method implements MethodNode, AttributeReader {
 
 			sb.delete(sb.length() - 2, sb.length());
 		}
-
 		sb.append(')');
 
-		AttrStringList throwsEx = getThrows();
-		if (throwsEx != null) {
+		AttrStringList exceptions = parsedAttr(null, Attribute.Exceptions);
+		if (exceptions != null) {
 			sb.append(" throws ");
-			List<String> classes = throwsEx.classes;
+			List<String> classes = exceptions.classes;
 			for (int i = 0; i < classes.size(); i++) {
 				String clz = classes.get(i);
 				sb.append(clz.substring(clz.lastIndexOf('/') + 1)).append(", ");
 			}
 			sb.delete(sb.length() - 2, sb.length());
 		}
-		if (code != null && !code.instructions.isEmpty()) sb.append("\n      Code: \n").append(code);
-		if (attributes != null) {
-			boolean pr = false;
-			for (int i = 0; i < attributes.size(); i++) {
-				Attribute attr = attributes.get(i);
-				switch (attr.name) {
-					case "Code":
-					case "Signature":
-					case MethodParameters.NAME:
-					case Annotations.INVISIBLE:
-					case Annotations.VISIBLE:
-					case "Exceptions": continue;
-				}
-				if (!pr) {
-					sb.append("\n      Attributes: \n");
-					pr = true;
-				}
-				sb.append("         ").append(attr).append('\n');
-			}
-		}
+
+		Object code = attrByName("Code");
+		if (code != null && (!(code instanceof AttrCode) || !((AttrCode) code).instructions.isEmpty()))
+			sb.append("\n      代码:\n").append(code);
+
 		return sb.toString();
 	}
 
-	@Override
-	public String ownerClass() {
-		return owner;
-	}
-
-	@Override
-	public String name() {
-		return name;
-	}
-
-	@Override
-	public List<Type> parameters() {
-		initPar();
-		return params;
-	}
-
-	@Override
-	public Type getReturnType() {
-		if (returnType == null) {
-			if (rawDesc == null) {initPar();} else return returnType = TypeHelper.parseReturn(rawDesc);
+	@Deprecated
+	public AttrCode getCode() {
+		Object code = attrByName("Code");
+		if (!(code instanceof AttrCode) && code != null) {
+			new IllegalStateException(code.toString()).printStackTrace();
+			return null;
 		}
-		return returnType;
+		return (AttrCode) code;
 	}
 
-	public void setReturnType(Type returnType) {
-		initPar();
-		this.returnType = returnType;
-	}
-
-	private void initPar() {
-		if (params == null) {
-			if (rawDesc == null) { // fallback
-				params = new SimpleList<>();
-				returnType = Type.std(Type.VOID);
-				return;
-			}
-			params = TypeHelper.parseMethod(rawDesc);
-			returnType = params.remove(params.size() - 1);
-		}
-	}
-
-	public String rawDesc() {
-		if (this.rawDesc == null) {
-			if (params != null) {
-				params.add(returnType);
-				String v = TypeHelper.getMethod(params);
-				params.remove(params.size() - 1);
-				return v;
-			}
-		}
-		return this.rawDesc;
-	}
-
-	@Override
-	public void name(ConstantPool cp, String name) {
-		this.name = name;
-	}
-
-	public void rawDesc(ConstantPool cp, String param) {
-		this.rawDesc = param;
-		if (params != null) {
-			params.clear();
-			TypeHelper.parseMethod(param, params);
-			returnType = params.remove(params.size() - 1);
-		}
-	}
-
-	@Override
-	public int type() {
-		return Parser.MTYPE_FULL;
-	}
-
-	@Override
-	public void accessFlag(int flag) {
-		this.access = (char) flag;
-	}
-
-	@Override
-	public char accessFlag() {
-		return access;
-	}
-
-	public Annotations getAnnotations() {
-		return attributes == null ? null : (Annotations) attributes.getByName(Annotations.VISIBLE);
-	}
-
-	public Annotations getInvisibleAnnotations() {
-		return attributes == null ? null : (Annotations) attributes.getByName(Annotations.INVISIBLE);
-	}
-
-	public MethodParameters getParameterAccesses() {
-		return attributes == null ? null : (MethodParameters) attributes.getByName(MethodParameters.NAME);
-	}
-
-	public AttrStringList getThrows() {
-		return attributes == null ? null : (AttrStringList) attributes.getByName(AttrStringList.EXCEPTIONS);
+	@Deprecated
+	public AttrCode setCode(AttrCode code) {
+		putAttr(code);
+		return code;
 	}
 }

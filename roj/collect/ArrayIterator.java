@@ -7,76 +7,46 @@ import java.util.NoSuchElementException;
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-public class ArrayIterator<E> implements ListIterator<E> {
+public final class ArrayIterator<E> implements ListIterator<E> {
 	public ArrayIterator(E[] array, int i, int j) {
 		this.list = array;
-		this.index = i;
-		this.prevId = i - 1;
-		this.length = j;
+		this.i = i;
+		this.mark = i - 1;
+		this.len = j;
 	}
 
 	public ArrayIterator(E[] array, int i) {
 		this.list = array;
-		this.index = i;
-		this.prevId = i - 1;
-		this.length = array.length;
+		this.i = i;
+		this.mark = i - 1;
+		this.len = array.length;
 	}
 
 	public ArrayIterator(E[] array) {
 		this.list = array;
-		this.length = array.length;
+		this.len = array.length;
 	}
 
 	private final E[] list;
 
-	protected int index = 0;
-	protected int prevId = -1;
-	protected int length;
+	private int i = 0;
+	private int mark = -1;
+	private final int len;
 
-	@Override
-	public boolean hasNext() {
-		return index < length;
-	}
-
-	@Override
+	public boolean hasNext() { return i < len; }
 	public E next() {
-		if (index >= length) throw new NoSuchElementException();
-		return list[prevId = index++];
+		if (i >= len) throw new NoSuchElementException();
+		return list[mark = i++];
 	}
+	public int nextIndex() { return i; }
 
-	@Override
-	public boolean hasPrevious() {
-		return index > 0;
-	}
-
-	@Override
-	public E previous() {
-		return list[prevId = index--];
-	}
-
-	@Override
-	public int nextIndex() {
-		return index + 1;
-	}
-
-	@Override
+	public boolean hasPrevious() { return i > 0; }
+	public E previous() { return list[mark = i--]; }
 	public int previousIndex() {
-		return index - 1;
+		return i-1;
 	}
 
-	@Override
-	public void remove() {
-		throw new UnsupportedOperationException();
-		//list[prevId] = null;
-	}
-
-	@Override
-	public void set(E e) {
-		list[prevId] = e;
-	}
-
-	@Override
-	public void add(E e) {
-		throw new UnsupportedOperationException();
-	}
+	public void remove() { throw new UnsupportedOperationException(); }
+	public void set(E e) { list[mark] = e; }
+	public void add(E e) { throw new UnsupportedOperationException(); }
 }

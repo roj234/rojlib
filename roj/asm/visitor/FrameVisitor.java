@@ -17,7 +17,6 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.mapper.MapUtil;
 import roj.text.CharList;
-import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
 import java.util.Arrays;
@@ -34,8 +33,10 @@ import static roj.asm.visitor.Frame2.*;
 public class FrameVisitor {
 	public static final ThreadLocal<FrameVisitor> LOCAL = new ThreadLocal<>();
 	static final String ANY_OBJECT = "java/lang/Object";
-	public Object maxStackSize;
-	public Object maxLocalSize;
+
+	public int maxStackSize;
+	public int maxLocalSize;
+	public String asa;
 
 	boolean firstOnly;
 	MethodNode mn;
@@ -62,13 +63,13 @@ public class FrameVisitor {
 		current = new BasicBlock2(0, "0: first frame");
 
 		boolean _init_ = owner.name().equals("<init>");
-		if (0 == (owner.accessFlag() & AccessFlag.STATIC)) { // this
+		if (0 == (owner.modifier() & AccessFlag.STATIC)) { // this
 			set(0, new Var2(_init_ ? UNINITIAL_THIS : REFERENCE, owner.ownerClass()));
 		} else if (_init_) {
 			throw new IllegalArgumentException("static <init> method");
 		}
 
-		int j = 0 == (owner.accessFlag()&AccessFlag.STATIC) ? 1 : 0;
+		int j = 0 == (owner.modifier()&AccessFlag.STATIC) ? 1 : 0;
 		List<Type> types = owner.parameters();
 		for (int i = 0; i < types.size(); i++) {
 			Var2 v = castType(types.get(i));
@@ -77,8 +78,10 @@ public class FrameVisitor {
 			if (v.type == DOUBLE || v.type == LONG) set(j++, Var2.TOP);
 		}
 
+		initS = Arrays.copyOf(current.local, current.localMax);
 		add(current);
 	}
+	private Var2[] initS;
 
 	public Frame2 visitFirst(MethodNode owner, DynByteBuf r, ConstantPool cp) {
 		init(owner);
@@ -106,7 +109,6 @@ public class FrameVisitor {
 
 				BasicBlock2 fs = new BasicBlock2(jmp.target.getValue(), i+": "+OpcodeUtil.toString0(jmp.code)+" target");
 				jumpTo.putInt(jmp.bci, new SimpleList<>(fs)); add(fs);
-				System.out.println("bci for " + jmp + "=" + jmp.bci);
 
 				// however is normal execution
 				if (jmp.code != GOTO && jmp.code != GOTO_W) {
@@ -156,7 +158,7 @@ public class FrameVisitor {
 			throw new RuntimeException("Bytecode iteration failed at BCI#" + bci, e);
 		} finally {
 			LOCAL.remove();
-			mn = null;
+			//mn = null;
 			code = null;
 			current = null;
 			paramList.clear();
@@ -171,21 +173,30 @@ public class FrameVisitor {
 		for (int i = 0; i < blocks.size(); i++) {
 			blocks.get(i).updatePreHook();
 		}
-		blocks.get(0).chainUpdate(new MyHashSet<>()); // link frames
+		blocks.get(0).chainUpdate(new MyHashSet<>(), new SimpleList<>(), initS); // link frames
+		System.out.println("名"+mn.name());
 		for (int i = 0; i < blocks.size(); i++) {
 			blocks.get(i).updatePostHook();
+			System.out.println(blocks.get(i));
 		}
 
-		Var2[] lastLocal = new Var2[0];
+		Var2[] lastLocal = initS;
 
-		for (int i = 0; i < blocks.size(); i++) {
+		maxLocalSize = maxStackSize = 0;
+		for (int i = 1; i < blocks.size(); i++) {
 			BasicBlock2 fs = blocks.get(i);
+			maxLocalSize = Math.max(maxLocalSize, Math.max(fs.localMax,fs.inheritLocalMax));
+			maxStackSize = 100;//Math.max(maxStackSize, fs.inheritStackSize+fs.stackSize);
 			if (fs.noFrame) {
 				blocks.remove(i--); continue;
 			}
 
-			Var2[] local = fs.packed__local;
-			Var2[] stack = fs.packed__stack;
+			Var2[] local = fs.vLocal;
+			for (int j = 0; j < local.length; j++) {
+				Var2 var2 = local[j];
+				if (var2 == null) local[j] = Var2.TOP;
+			}
+			Var2[] stack = fs.vStack;
 
 			Frame2 frame = new Frame2();
 			frame.target = fs.bci;
@@ -193,11 +204,10 @@ public class FrameVisitor {
 			frame.stacks = stack;
 			frames.add(frame);
 
-			// todo shrnk mode
 			/*block:
 			if (stack.length < 2) {
 				// todo local equal
-				if (eq(lastLocal.list, lastLocal.length, local.list, local.length)) {
+				if (eq(lastLocal, lastLocal.length, local, local.length)) {
 					frame.type = (short) (stack.length == 0 ? same : same_local_1_stack);
 				} else if (stack.length == 0) {
 					int delta = local.length - lastLocal.length;
@@ -206,27 +216,27 @@ public class FrameVisitor {
 					int j = Math.min(local.length, lastLocal.length);
 
 					while (j-- > 0) {
-						if (local.list[j] == null || !local.list[j].eq(lastLocal.list[j])) break block;
+						if (local[j] == null || !local[j].eq(lastLocal[j])) break block;
 					}
 
 					frame.type = (short) (delta < 0 ? chop : append);
 				}
-			}*/
-			if (frame.type < 0) frame.type = full;
+			}
+			if (frame.type < 0) */frame.type = full;
 
-			lastLocal = fs.packed__local;
+			lastLocal = local;
 		}
 
-		System.out.println("Input state " + TextUtil.deepToString(blocks));
-		System.out.println("Computed frame " + TextUtil.deepToString(frames));
+		asa = String.valueOf(frames);
 		blocks.clear();
 
 		int stack = c.visitAttributeI("StackMapTable");
-		frames.remove(0);
+		//frames.remove(0);
+		c.bw.putShort(frames.size());
 		writeFrames(frames, c.bw, c.cpw);
 		c.visitAttributeIEnd(stack);
 
-		frames.clear();
+		//frames.clear();
 	}
 
 	// endregion
@@ -419,7 +429,7 @@ public class FrameVisitor {
 				case FRETURN:
 				case LRETURN:
 				case DRETURN:
-				case ARETURN: pop(castType(mn.getReturnType())); eof = true; break;
+				case ARETURN: pop(castType(mn.returnType())); eof = true; break;
 				case ATHROW: pop("java/lang/Throwable"); eof = true; break;
 
 				case MONITORENTER: case MONITOREXIT: pop(ANY_OBJECT); break;
@@ -577,14 +587,36 @@ public class FrameVisitor {
 		switch (code) {
 			case CHECKCAST: pop(ANY_OBJECT); push(name); break;
 			case NEW: push(UNINITIAL, name); break;
-			case ANEWARRAY: pop(INT); push(name.endsWith(";")  || name.startsWith("[") ? "[" + name : "[L" + name + ';'); break;
+			case ANEWARRAY: pop(INT);
+				if (name.endsWith(";") || name.startsWith("[")) push("[".concat(name));
+				else {
+					sb.clear();
+					push(sb.append("[L").append(name).append(';').toString());
+				}
+				break;
 		}
 	}
 	private void ldc(Constant c) {
-		byte type = c.type();
-		if (type == Constant.DYNAMIC) type = Type.validate(((CstDynamic) c).desc().getType().getString().charAt(0));
+		int type = c.type();
+		if (type == Constant.DYNAMIC) {
+			String typeStr = ((CstDynamic) c).desc().getType().getString();
+			type = typeStr.charAt(0);
+			if (!Type.isValid(type)) throw new UnsupportedOperationException("未知的type:"+typeStr);
+			switch (type) {
+				case Type.CLASS:
+					new Throwable("debug:type_class:"+typeStr).printStackTrace();
+					push(typeStr.substring(1,typeStr.length()-1));
+					break;
+				case Type.BOOLEAN: case Type.BYTE:
+				case Type.SHORT: case Type.CHAR:
+				case Type.INT: push(INT); break;
+				case Type.DOUBLE: push(DOUBLE); break;
+				case Type.FLOAT: push(FLOAT); break;
+				case Type.LONG: push(LONG); break;
+			}
+			return;
+		}
 
-		BasicBlock2 s = this.current;
 		switch (type) {
 			case Constant.INT: push(INT);break;
 			case Constant.LONG: push(LONG);break;
@@ -723,57 +755,43 @@ public class FrameVisitor {
 		}
 	}
 
-	private Var2 get(int vid, byte type) {
-		return get(vid, Var2.except(type, null));
-	}
-	private Var2 get(int vid, String owner) {
-		return get(vid, new Var2(REFERENCE, owner));
-	}
-	private Var2 get(int vid, Var2 v) {
-		BasicBlock2 s = this.current;
-		if (vid < s.local.length && s.local[vid] != null) {
-			s.local[vid].merge(v);
-			return s.local[vid];
+	private Var2 get(int i, byte type) { return get(i, Var2.except(type, null)); }
+	private Var2 get(int i, String type) { return get(i, new Var2(REFERENCE, type)); }
+	private Var2 get(int i, Var2 v) {
+		BasicBlock2 s = current;
+		if (i < s.local.length && s.local[i] != null) {
+			s.local[i].merge(v);
+			return s.local[i];
 		}
 
-		if (vid >= s.inheritLocal.length) {
-			s.inheritLocal = Arrays.copyOf(s.inheritLocal, vid+1);
-		}
-		if (s.inheritLocalMax <= vid) s.inheritLocalMax = vid+1;
-		Var2[] arr = s.inheritLocal;
-		if (arr[vid] != null) {
-			arr[vid].merge(v);
-			return arr[vid];
+		if (i >= s.inheritLocal.length) s.inheritLocal = Arrays.copyOf(s.inheritLocal, i+1);
+		if (s.inheritLocalMax <= i) s.inheritLocalMax = i+1;
+
+		Var2[] inherit = s.inheritLocal;
+		if (inherit[i] != null) {
+			inherit[i].merge(v);
+			return inherit[i];
 		} else {
-			return arr[vid] = v;
+			return inherit[i] = v;
 		}
 	}
-	private void set(int vid, Var2 v) {
-		BasicBlock2 s = this.current;
-		if (vid >= s.local.length) {
-			s.local = Arrays.copyOf(s.local, vid+1);
-		}
-		if (s.localMax <= vid) s.localMax = vid+1;
-		s.local[vid] = v;
-		if (v.type == LONG || v.type == DOUBLE) {
-			set(vid+1, Var2.TOP);
-		}
+	private void set(int i, Var2 v) {
+		BasicBlock2 s = current;
+		if (i >= s.local.length) s.local = Arrays.copyOf(s.local, i+1);
+		if (s.localMax <= i) s.localMax = i+1;
+
+		s.local[i] = v;
+		if (v.type == LONG || v.type == DOUBLE) set(i+1, Var2.TOP);
 	}
 
-	private Var2 pop(byte type) {
-		return pop(Var2.except(type, null));
-	}
-	private Var2 pop(CharSequence owner) {
-		return pop(Var2.except(REFERENCE, owner));
-	}
+	private Var2 pop(byte type) { return pop(Var2.except(type, null)); }
+	private Var2 pop(String type) { return pop(new Var2(REFERENCE, type)); }
 	private Var2 pop(Var2 v) {
 		BasicBlock2 s = this.current;
 		if (s.stackSize == 0) {
 			if (v == null) v = Var2.any();
-			if (s.inheritStackSize >= s.inheritStack.length) {
-				s.inheritStack = Arrays.copyOf(s.inheritStack, s.inheritStackSize +1);
-			}
-			s.inheritStack[s.inheritStackSize++] = v;
+			if (s.inheritStackSize >= s.inheritStack.length) s.inheritStack = Arrays.copyOf(s.inheritStack, s.inheritStackSize+1);
+			s.inheritStack[s.inheritStackSize++] = v.copy();
 			return v;
 		} else {
 			Var2 v1;
@@ -797,25 +815,15 @@ public class FrameVisitor {
 		if (v.type == DOUBLE || v.type == LONG) throw new IllegalArgumentException("TOP was operated");
 		return v;
 	}
-	private Var2 pop12() {
-		return pop(new Var2(ANY2));
-	}
+	private Var2 pop12() { return pop(new Var2(ANY2)); }
 
-	private void push(byte type) {
-		push(Var2.except(type, null));
-	}
-	private void push(String owner) {
-		push(new Var2(REFERENCE, owner));
-	}
-	private void push(byte type, String owner) {
-		push(Var2.except(type, owner));
-	}
+	private void push(byte type) { push(Var2.except(type, null)); }
+	private void push(String owner) { push(new Var2(REFERENCE, owner)); }
+	private void push(byte type, String owner) { push(Var2.except(type, owner)); }
 	private void push(Var2 v) {
-		BasicBlock2 s = this.current;
-		if (s.stackSize >= s.stack.length) {
-			s.stack = Arrays.copyOf(s.stack, s.stackSize +1);
-		}
-		s.stack[s.stackSize++] = v;
+		BasicBlock2 s = current;
+		if (s.stackSize >= s.stack.length) s.stack = Arrays.copyOf(s.stack, s.stackSize+1);
+		s.stack[s.stackSize++] = v.copy();
 	}
 	// endregion
 	// region Frame merge / compute
@@ -864,7 +872,7 @@ public class FrameVisitor {
 
 	// endregion
 	// region Frame writing
-	public static void readFrames(List<Frame2> fr, DynByteBuf r, ConstantPool cp, IntMap<InsnNode> pc, MethodNode owner, int lo, int st) {
+	public static void readFrames(List<Frame2> fr, DynByteBuf r, ConstantPool cp, IntMap<InsnNode> pc, MethodNode owner, int lMax, int sMax) {
 		fr.clear();
 
 		int allOffset = -1;
@@ -905,22 +913,16 @@ public class FrameVisitor {
 					off = r.readUnsignedShort();
 
 					int len = r.readUnsignedShort();
-					if (len > lo)
-						throw new IllegalStateException(owner.ownerClass() + '.' + owner.name() + ": Frame local (" + len + ") > maximum local variable size (" + lo + ")");
+					if (len > lMax) throw new IllegalStateException("Full帧的变量数量超过限制("+len+") > ("+lMax+")");
 
 					f.locals = new Var2[len];
-					for (int j = 0; j < len; j++) {
-						f.locals[j] = getVar(cp, r, pc, owner);
-					}
+					for (int j = 0; j < len; j++) f.locals[j] = getVar(cp, r, pc, owner);
 
 					len = r.readUnsignedShort();
-					if (len > st)
-						throw new IllegalStateException(owner.ownerClass() + '.' + owner.name() + ": Frame stack (" + len + ") > maximum operand stack size (" + st + ")");
+					if (len > sMax) throw new IllegalStateException("Full帧的栈大小超过限制("+len+") > ("+sMax+")");
 
 					f.stacks = new Var2[len];
-					for (int j = 0; j < len; j++) {
-						f.stacks[j] = getVar(cp, r, pc, owner);
-					}
+					for (int j = 0; j < len; j++) f.stacks[j] = getVar(cp, r, pc, owner);
 				}
 				break;
 			}
@@ -931,8 +933,7 @@ public class FrameVisitor {
 				if (n != null) {
 					f.target2 = n;
 				} else {
-					System.out.println(fr);
-					throw new IllegalArgumentException(owner.ownerClass() + '.' + owner.name() + ": Frame target null: " + allOffset);
+					throw new IllegalArgumentException("帧的目标无法找到 "+allOffset+"/"+fr);
 				}
 			} else {
 				f.target = allOffset;
@@ -1026,13 +1027,10 @@ public class FrameVisitor {
 	}
 
 	private static void putVar(Var2 v, DynByteBuf w, ConstantPool cp) {
+		w.put(v.type);
 		switch (v.type) {
-			case VarType.REFERENCE: w.put(v.type).putShort(cp.getClassId(v.owner)); break;
-			case VarType.UNINITIAL: w.put(v.type).putShort(v.bci()); break;
-			case VarType.LONG: w.put((byte) 4); break;
-			case VarType.FLOAT: w.put((byte) 2); break;
-			case VarType.DOUBLE: w.put((byte) 3); break;
-			default: w.put(v.type);
+			case VarType.REFERENCE: w.putShort(cp.getClassId(v.owner)); break;
+			case VarType.UNINITIAL: w.putShort(v.bci()); break;
 		}
 	}
 	// endregion

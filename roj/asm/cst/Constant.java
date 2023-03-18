@@ -28,42 +28,30 @@ public abstract class Constant implements Cloneable {
 		PACKAGE = 20;
 	public static final byte _TOP_ = -1;
 
-	static final String[] indexes = {
-		"UTF", null, "INT", "FLOAT", "LONG", "DOUBLE", "CLASS", "STRING",
-		"FIELD", "METHOD", "INTERFACE", "NAME_AND_TYPE", null, null,
+	private static final String[] indexes = {
+		"UTF", null, "int", "float", "long", "double", "类", "String",
+		"字段", "方法", "接口", "DESC", null, null,
 		"METHOD_HANDLE", "METHOD_TYPE", "DYNAMIC", "INVOKE_DYNAMIC",
-		"MODULE", "PACKAGE"
+		"模块", "包"
 	};
+	public static String toString(int id) { return id < 1 || id > 20 ? null : indexes[id-1]; }
 
-	public static String toString(int id) {
-		return id < 1 || id > 20 ? null : indexes[id - 1];
-	}
-
-	char index;
+	private char index;
 
 	Constant() {}
 
 	@Internal
-	public abstract void write(DynByteBuf w);
+	abstract void write(DynByteBuf w);
 
-	@Override
 	public abstract boolean equals(Object o);
-
-	@Override
 	public abstract int hashCode();
 
-	public String toString() {
-		return toString(type()) + "#" + (int) index;
-	}
+	public String toString() { return toString(type()) + "#" + (int) index; }
 
-	@Internal
-	public void setIndex(int index) {
-		this.index = (char) index;
+	final void setIndex(int i) {
+		this.index = (char) i;
 	}
-
-	public int getIndex() {
-		return index;
-	}
+	public final int getIndex() { return index; }
 
 	public abstract byte type();
 

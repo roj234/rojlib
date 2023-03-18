@@ -1,6 +1,6 @@
 package roj.mod.fp;
 
-import LZMA.LzmaInputStream;
+import roj.archive.qz.xz.LZMAInputStream;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.util.Context;
 import roj.collect.MyHashSet;
@@ -57,8 +57,6 @@ public final class LegacyForge extends WorkspaceBuilder {
 
 		File forgeFile = new File(root, forge);
 		file.putInt(10, forgeFile);
-
-		loadClass("LZMA.LzmaInputStream", new File(root, get1(artifacts, "lzma/lzma")));
 	}
 
 	public void run() {
@@ -98,6 +96,7 @@ public final class LegacyForge extends WorkspaceBuilder {
 				}
 				ctx.getData();
 			}
+			patcher.patchClientEmpty(list);
 			System.out.println("prepareClient: done");
 
 			arr[1] = list;
@@ -126,6 +125,7 @@ public final class LegacyForge extends WorkspaceBuilder {
 				}
 				ctx.getData();
 			}
+			patcher.patchServerEmpty(list);
 			System.out.println("prepareServer: done");
 
 			arr[2] = list;
@@ -133,7 +133,7 @@ public final class LegacyForge extends WorkspaceBuilder {
 		Runnable prepareMapping = () -> {
 			try (ZipFile zf = new ZipFile(forgeJar)) {
 				Mapping forgeSrg = new Mapping();
-				forgeSrg.loadMap(new LzmaInputStream(zf.getInputStream(zf.getEntry("deobfuscation_data-"+mf_cfg.get("version")+".lzma"))), false);
+				forgeSrg.loadMap(new LZMAInputStream(zf.getInputStream(zf.getEntry("deobfuscation_data-"+mf_cfg.get("version")+".lzma"))), false);
 				mf_cfg.put("map.legacy_forge", forgeSrg);
 
 				arr[3] = Context.fromZip(forgeJar, StandardCharsets.UTF_8);

@@ -1,5 +1,8 @@
 package roj.config.data;
 
+import roj.io.IOUtil;
+import roj.text.CharList;
+
 import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.function.Consumer;
@@ -134,16 +137,15 @@ public abstract class XEntry implements Iterable<XEntry> {
 
 	@Override
 	public final String toString() {
-		StringBuilder sb = new StringBuilder(128);
+		CharList sb = IOUtil.getSharedCharBuf();
 		toXML(sb, 0);
 		return sb.toString();
 	}
-	public StringBuilder toCompatXML() {
-		StringBuilder sb = new StringBuilder(128);
+	public CharList toCompatXML() {
+		CharList sb = new CharList(128);
 		toCompatXML(sb);
 		return sb;
 	}
-	protected abstract void toXML(StringBuilder sb, int depth);
-	protected abstract void toCompatXML(StringBuilder sb);
-
+	protected abstract void toXML(CharList sb, int depth);
+	protected abstract void toCompatXML(CharList sb);
 }

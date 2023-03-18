@@ -10,7 +10,7 @@
 
 package roj.archive.qz.xz.lz;
 
-import roj.archive.qz.xz.ArrayCache;
+import roj.util.ArrayCache;
 
 final class HC4 extends LZEncoder {
 	private final Hash234 hash;
@@ -104,7 +104,7 @@ final class HC4 extends LZEncoder {
 		// The hashing algorithm guarantees that if the first byte
 		// matches, also the second byte does, so there's no need to
 		// test the second byte.
-		if (delta2 < cyclicSize && buf[readPos - delta2] == buf[readPos]) {
+		if (delta2 < cyclicSize && u.getByte(buf + readPos - delta2) == u.getByte(buf + readPos)) {
 			lenBest = 2;
 			mlen[0] = 2;
 			mdist[0] = delta2 - 1;
@@ -115,7 +115,7 @@ final class HC4 extends LZEncoder {
 		// is different from the match possibly found by the two-byte hash.
 		// Also here the hashing algorithm guarantees that if the first byte
 		// matches, also the next two bytes do.
-		if (delta2 != delta3 && delta3 < cyclicSize && buf[readPos - delta3] == buf[readPos]) {
+		if (delta2 != delta3 && delta3 < cyclicSize && u.getByte(buf + readPos - delta3) == u.getByte(buf + readPos)) {
 			lenBest = 3;
 			mdist[mcount++] = delta3 - 1;
 			delta2 = delta3;
@@ -123,7 +123,7 @@ final class HC4 extends LZEncoder {
 
 		// If a match was found, see how long it is.
 		if (mcount > 0) {
-			while (lenBest < matchLenLimit && buf[readPos + lenBest - delta2] == buf[readPos + lenBest]) ++lenBest;
+			while (lenBest < matchLenLimit && u.getByte(buf + readPos + lenBest - delta2) == u.getByte(buf + readPos + lenBest)) ++lenBest;
 
 			mlen[mcount - 1] = lenBest;
 
@@ -151,10 +151,10 @@ final class HC4 extends LZEncoder {
 			// Test the first byte and the first new byte that would give us
 			// a match that is at least one byte longer than lenBest. This
 			// too short matches get quickly skipped.
-			if (buf[readPos + lenBest - delta] == buf[readPos + lenBest] && buf[readPos - delta] == buf[readPos]) {
+			if (u.getByte(buf + readPos + lenBest - delta) == u.getByte(buf + readPos + lenBest) && u.getByte(buf + readPos - delta) == u.getByte(buf + readPos)) {
 				// Calculate the length of the match.
 				int len = 0;
-				while (++len < matchLenLimit) if (buf[readPos + len - delta] != buf[readPos + len]) break;
+				while (++len < matchLenLimit) if (u.getByte(buf + readPos + len - delta) != u.getByte(buf + readPos + len)) break;
 
 				// Use the match if and only if it is better than the longest
 				// match found so far.

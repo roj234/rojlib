@@ -9,7 +9,7 @@ import ilib.net.packet.MsgSyncField;
 import ilib.net.packet.MsgSyncFields;
 import ilib.util.BlockHelper;
 import roj.collect.SimpleList;
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.tileentity.TileEntity;
@@ -40,8 +40,8 @@ public class FieldSyncer {
 
 	public <T extends TileEntity & Syncable> FieldSyncer(T sync, int fieldAmount) {
 		this.owner = sync;
-		this.fields = fieldAmount == 0 ? EmptyArrays.INTS : new int[fieldAmount];
-		this.prevFields = fieldAmount == 0 ? EmptyArrays.INTS : new int[fieldAmount];
+		this.fields = fieldAmount == 0 ? ArrayCache.INTS : new int[fieldAmount];
+		this.prevFields = fieldAmount == 0 ? ArrayCache.INTS : new int[fieldAmount];
 	}
 
 	public void openGui(EntityPlayerMP player) {
@@ -197,8 +197,8 @@ public class FieldSyncer {
 				break;
 		}
 		if (fields.length <= to) {
-			fields = Arrays.copyOf(fields, to);
-			prevFields = Arrays.copyOf(prevFields, to);
+			fields = Arrays.copyOf(fields, to+1);
+			prevFields = Arrays.copyOf(prevFields, to+1);
 		}
 		fieldCount = Math.max(to, fieldCount);
 		return this;

@@ -7,6 +7,7 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnValString;
 import roj.asm.tree.anno.Annotation;
+import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.SwitchEntry;
 import roj.asm.type.*;
 import roj.asm.util.AccessFlag;
@@ -18,11 +19,10 @@ import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.collect.TrieTree;
+import roj.config.CCJson;
 import roj.config.JSONParser;
-import roj.config.ParseException;
-import roj.config.data.CEntry;
-import roj.config.data.CNull;
-import roj.io.IOUtil;
+import roj.config.serial.CAdapter;
+import roj.config.serial.SerializerManager;
 import roj.mapper.ParamNameMapper;
 import roj.math.MutableInt;
 import roj.net.http.Action;
@@ -32,7 +32,6 @@ import roj.reflect.FastInit;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -100,135 +99,132 @@ public class OKRouter implements Router {
 		ToIntMap<String> validator = new ToIntMap<>();
 
 		String fn = o.getClass().getName().replace('.', '/').concat(".class");
-		try (InputStream in = o.getClass().getClassLoader().getResourceAsStream(fn)) {
-			ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(in));
-			SimpleList<MethodNode> methods = data.methods;
-			for (int i = 0; i < methods.size(); i++) {
-				MethodNode mn = methods.get(i);
+		ConstantData data = Parser.parseConstants(o.getClass());
 
-				List<Annotation> list = AttrHelper.getAnnotations(data.cp, mn, false);
-				Annotation a = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Route");
-				if (a == null) {
-					a = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Validator");
-					if (a == null) continue;
+		SimpleList<MethodNode> methods = data.methods;
+		for (int i = 0; i < methods.size(); i++) {
+			MethodNode mn = methods.get(i);
 
-					validator.putInt(a.getString("value", mn.name()), id++);
-				} else {
-					handlers.putInt(a, id++);
-					if (a.getString("value") == null)
-						a.put("value", new AnnValString(mn.name().replace("__", "/")));
-				}
+			List<Annotation> list = AttrHelper.getAnnotations(data.cp, mn, false);
+			Annotation a = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Route");
+			if (a == null) {
+				a = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Validator");
+				if (a == null) continue;
 
-				Label self = cw.label();
-				seg.targets.add(new SwitchEntry(seg.targets.size(), self));
-				seg.def = self;
-				List<Type> par = mn.parameters();
+				validator.putInt(a.getString("value", mn.name()), id++);
+			} else {
+				handlers.putInt(a, id++);
+				if (a.getString("value") == null)
+					a.put("value", new AnnValString(mn.name().replace("__", "/")));
+			}
 
-				noBody:{
-					int begin = 2;
+			Label self = cw.label();
+			seg.targets.add(new SwitchEntry(seg.targets.size(), self));
+			seg.def = self;
+			List<Type> par = mn.parameters();
 
-					hasBody:
-					if (par.size() <= 2) {
-						if (par.isEmpty()) {
-							cw.one(POP2);
+			noBody:{
+				int begin = 2;
 
-							break noBody;
-						}
-
-						if (!REQ.equals(par.get(0).owner)) {
-							cw.one(POP2);
-
-							begin = 0;
-							break hasBody;
-						}
-
-						if (par.size() == 1) {
-							cw.one(POP);
-							break noBody;
-						}
-
-						if(!RESP.equals(par.get(1).owner)) {
-							cw.one(POP);
-
-							begin = 1;
-							break hasBody;
-						}
+				hasBody:
+				if (par.size() <= 2) {
+					if (par.isEmpty()) {
+						cw.one(POP2);
 
 						break noBody;
 					}
 
-					if (a.clazz.endsWith("Validator")) {
-						cw.one(ALOAD_3);
-						cw.clazz(CHECKCAST, PostSetting.class.getName().replace('.', '/'));
-					} else {
-						provideBodyPars(cw, data.cp, mn, begin);
+					if (!REQ.equals(par.get(0).owner)) {
+						cw.one(POP2);
+
+						begin = 0;
+						break hasBody;
 					}
+
+					if (par.size() == 1) {
+						cw.one(POP);
+						break noBody;
+					}
+
+					if(!RESP.equals(par.get(1).owner)) {
+						cw.one(POP);
+
+						begin = 1;
+						break hasBody;
+					}
+
+					break noBody;
 				}
 
-				cw.invoke(INVOKEVIRTUAL, mn.ownerClass(), mn.name(), mn.rawDesc());
-				if (mn.getReturnType().type != Type.CLASS) {
-					if (mn.getReturnType().type != Type.VOID)
-						throw new IllegalArgumentException("方法返回值不是void或对象:"+mn.info());
-					else cw.one(ACONST_NULL);
+				if (a.clazz.endsWith("Validator")) {
+					cw.one(ALOAD_3);
+					cw.clazz(CHECKCAST, PostSetting.class.getName().replace('.', '/'));
+				} else {
+					provideBodyPars(cw, data.cp, mn, begin);
 				}
-				cw.one(ARETURN);
-
-				Annotation a1 = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Accepts");
-				if (a1 != null) a.put("accepts", a1.values.get("value"));
 			}
 
-			Dispatcher ah = (Dispatcher) FastInit.make(hndInst);
-			for (int i = 0; i < handlers.size(); i++) {
-				Annotation a = handlers.get(i);
-				ASet set = new ASet();
+			cw.invoke(INVOKEVIRTUAL, mn.ownerClass(), mn.name(), mn.rawDesc());
+			if (mn.returnType().type != Type.CLASS) {
+				if (mn.returnType().type != Type.VOID)
+					throw new IllegalArgumentException("方法返回值不是void或对象:"+mn);
+				else cw.one(ACONST_NULL);
+			}
+			cw.one(ARETURN);
 
-				set.accepts = a.getInt("accepts", -1);
-				set.req = ah.copyWith(i, o);
+			Annotation a1 = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Accepts");
+			if (a1 != null) a.put("accepts", a1.values.get("value"));
+		}
 
-				String vname = a.getString("validator", "");
-				if (!vname.equals("")) {
-					int vid = validator.getOrDefault(vname, -1);
-					if (vid < 0) throw new IllegalArgumentException("未找到验证器/"+a);
-					set.prec = ah.copyWith(vid, o);
+		Dispatcher ah = (Dispatcher) FastInit.make(hndInst);
+		for (int i = 0; i < handlers.size(); i++) {
+			Annotation a = handlers.get(i);
+			ASet set = new ASet();
+
+			set.accepts = a.getInt("accepts", -1);
+			set.req = ah.copyWith(i, o);
+
+			String vname = a.getString("validator", "");
+			if (!vname.equals("")) {
+				int vid = validator.getOrDefault(vname, -1);
+				if (vid < 0) throw new IllegalArgumentException("未找到验证器/"+a);
+				set.prec = ah.copyWith(vid, o);
+			}
+
+			String type = a.getEnumValue("type", "ASIS");
+			set.prefix = type.equals("PREFIX");
+
+			String url = a.getString("value");
+			if (!set.prefix && url.endsWith("/"))
+				url = url.substring(0, url.length()-1);
+
+			Object prev = route.putIfAbsent(url, set);
+			if (prev instanceof ASet) {
+				ASet prevReq = ((ASet) prev);
+				ASet[] newReq = new ASet[8];
+
+				if ((prevReq.accepts & set.accepts) != 0)
+					throw new IllegalArgumentException("冲突的请求类型处理器/"+o + " in "+prevReq+"|"+set);
+
+				for (int j = 0; j < 8; j++) {
+					if ((set.accepts & (1<<j)) != 0) {
+						newReq[j] = set;
+					} else if ((prevReq.accepts & (1<<j)) != 0) {
+						newReq[j] = prevReq;
+					}
 				}
 
-				String type = a.getEnumValue("type", "ASIS");
-				set.prefix = type.equals("PREFIX");
-
-				String url = a.getString("value");
-				if (!set.prefix && url.endsWith("/"))
-					url = url.substring(0, url.length()-1);
-
-				Object prev = route.putIfAbsent(url, set);
-				if (prev instanceof ASet) {
-					ASet prevReq = ((ASet) prev);
-					ASet[] newReq = new ASet[8];
-
-					if ((prevReq.accepts & set.accepts) != 0)
-						throw new IllegalArgumentException("冲突的请求类型处理器/"+o + " in "+prevReq+"|"+set);
-
-					for (int j = 0; j < 8; j++) {
-						if ((set.accepts & (1<<j)) != 0) {
-							newReq[j] = set;
-						} else if ((prevReq.accepts & (1<<j)) != 0) {
-							newReq[j] = prevReq;
-						}
-					}
-
-					route.put(url, newReq);
-				} else if (prev != null) {
-					ASet[] newReq = ((ASet[]) prev);
-					for (int j = 0; j < 8; j++) {
-						if ((set.accepts & (1<<j)) != 0) {
-							if (newReq[j] != null)
-								throw new IllegalArgumentException("冲突的请求类型处理器/"+o + " in "+newReq[j]+"|"+set+":"+Action.toString(j));
-							newReq[j] = set;
-						}
+				route.put(url, newReq);
+			} else if (prev != null) {
+				ASet[] newReq = ((ASet[]) prev);
+				for (int j = 0; j < 8; j++) {
+					if ((set.accepts & (1<<j)) != 0) {
+						if (newReq[j] != null)
+							throw new IllegalArgumentException("冲突的请求类型处理器/"+o + " in "+newReq[j]+"|"+set+":"+Action.toString(j));
+						newReq[j] = set;
 					}
 				}
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
 		}
 
 		return this;
@@ -243,7 +239,7 @@ public class OKRouter implements Router {
 		List<List<Annotation>> annos = AttrHelper.getParameterAnnotation(cp, m, false);
 		if (annos == null) annos = Collections.emptyList();
 
-		Signature signature = AttrHelper.getSignature(cp, m);
+		Signature signature = m.parsedAttr(cp, Attribute.SIGNATURE);
 		List<IType> genTypes = signature == null ? Collections.emptyList() : signature.values;
 
 		List<String> parNames = ParamNameMapper.getParameterName(cp, m);
@@ -280,12 +276,13 @@ public class OKRouter implements Router {
 
 		void process(ConstantPool cp, @Nullable Annotation field, String name, Type type, Generic genType) {
 			if (field == null) field = DEFAULT;
-			if (name == null && field.getString("value") == null) throw new IllegalArgumentException("编译时是否保存了方法参数名称？");
 
 			String from1 = field.getEnumValue("from", "INHERIT");
 			if (from1.equals("INHERIT")) from1 = from;
-			int json = 0;
 			int fromSlot = 0;
+
+			if (name == null && field.getString("value") == null && !from1.equals("JSON"))
+				throw new IllegalArgumentException("编译时是否保存了方法参数名称？");
 
 			CodeWriter c = cw;
 			switch (from1) {
@@ -323,34 +320,29 @@ public class OKRouter implements Router {
 					}
 					break;
 				case "JSON":
-					json = 1;
-					fromSlot = (slot >>> 24) & 0xFF;
-					if (fromSlot == 0) {
+					if ((bodyKind & 4) == 0) {
 						bodyKind |= 4;
 
+						if (type.getActualType() != Type.CLASS) throw new IllegalArgumentException("那你用JSON类型有什么意义？");
+						if (name != null) throw new IllegalArgumentException("那你用JSON类型有什么意义？");
+
 						c.one(ALOAD_1);
-						c.invoke(INVOKESTATIC, SELF, "_JParse", "(L"+REQ+";)Lroj/config/data/CEntry;");
-						c.var(ASTORE, fromSlot = nextSlot);
-						slot |= nextSlot++ << 24;
+						c.ldc(new CstString(genType==null?type.toDesc():genType.toDesc()));
+						c.invoke(INVOKESTATIC, SELF, "_JAdapt", "("+REQ+"Ljava/lang/String;)Ljava/lang/Object;");
+					} else {
+						throw new IllegalArgumentException("JSON类型仅能出现一次(反序列化啊,你还要闹哪样)");
 					}
 					break;
 			}
 			if ((bodyKind & 6) == 6) throw new IllegalArgumentException("不能同时使用POST_KV和JSON");
+			if (name == null) return;
 
 			if (fromSlot == 0) throw new IllegalStateException("不支持的类型/"+from1);
 
 			c.var(ALOAD, fromSlot);
 			c.ldc(new CstString(field.getString("value", name)));
-			if (json == 0) {
-				c.invoke_interface("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
-				convert(type);
-			} else {
-				c.invoke(INVOKESTATIC, SELF, "_JQuery", "(Lroj/config/data/CEntry;Ljava/lang/String;)Lroj/config/data/CEntry;");
-				convertJson(type, genType);
-			}
-		}
+			c.invokeItf("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
 
-		private void convert(Type type) {
 			if (type.owner != null || type.array() > 0) {
 				if (type.owner != null) {
 					if (type.owner.equals("java/lang/String") ||
@@ -374,91 +366,10 @@ public class OKRouter implements Router {
 				cw.one(ATHROW);
 				cw.label(label);
 			} else {
-				String name = Type.toString(type.type);
+				name = Type.toString(type.type);
 				name = Character.toUpperCase(name.charAt(0))+name.substring(1);
 				cw.invoke(INVOKESTATIC, "java/lang/"+name, "parse"+(name.equals("Integer")?"Int":name), "(Ljava/lang/String;)"+(char)type.type);
 			}
-		}
-
-		private void convertJson(Type type, Generic generic) {
-			if (type.array() > 0) throw new IllegalArgumentException("不知道如何将CEntry转换为"+type);
-
-			if (type.owner != null) {
-				switch (type.owner) {
-					case "java/lang/String":
-					case "java/lang/CharSequence":
-						cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "asString", "()Ljava/lang/String;");
-						break;
-					case "java/lang/Object":
-						cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "unwrap", "()Ljava/lang/Object;");
-						break;
-					case "java/util/Set":
-					case "roj/collect/MyHashSet":
-						cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "asList", "()Lroj/config/data/CList;");
-						convertSet(firstType(generic));
-						break;
-					case "java/util/List":
-					case "java/util/Collection":
-					case "roj/collect/SimpleList":
-						cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "asList", "()Lroj/config/data/CList;");
-						convertList(firstType(generic));
-						break;
-					case "java/util/Map":
-						if (!firstType(generic).equals("java/lang/String"))
-							throw new UnsupportedOperationException("不用String的key坏文明！"+generic);
-						break;
-					default:
-						if (type.owner.startsWith("roj/config/data")) {
-							cw.clazz(CHECKCAST, type.owner);
-							break;
-						}
-
-						throw new IllegalArgumentException("不知道如何将CEntry转换为"+type);
-				}
-				return;
-			}
-
-			switch (type.type) {
-				case Type.BOOLEAN:
-					cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "asBool", "()Z");
-					break;
-				case Type.BYTE:
-					cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "asInteger", "()I");
-					cw.one(I2B);
-					break;
-				case Type.CHAR:
-					cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "asInteger", "()I");
-					cw.one(I2C);
-					break;
-				case Type.SHORT:
-					cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "asInteger", "()I");
-					cw.one(I2S);
-					break;
-				case Type.INT:
-					cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "asInteger", "()I");
-					break;
-				case Type.FLOAT:
-					cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "asDouble", "()D");
-					cw.one(D2F);
-					break;
-				case Type.DOUBLE:
-					cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "asDouble", "()D");
-					break;
-				case Type.LONG:
-					cw.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", "asLong", "()J");
-					break;
-				default: throw new IllegalArgumentException("should not reach here " + type);
-			}
-		}
-
-		private void convertList(String type) {
-			if (!type.equals("java/lang/String")) throw new UnsupportedOperationException("暂不支持"+type);
-			cw.invoke(INVOKEVIRTUAL, "roj/config/data/CList", "asStringList", "()Lroj/collect/SimpleList;");
-		}
-
-		private void convertSet(String type) {
-			if (!type.equals("java/lang/String")) throw new UnsupportedOperationException("暂不支持"+type);
-			cw.invoke(INVOKEVIRTUAL, "roj/config/data/CList", "asStringSet", "()Lroj/collect/MyHashSet;");
 		}
 
 		private static String firstType(Generic generic) {
@@ -533,30 +444,28 @@ public class OKRouter implements Router {
 		return new StringResponse(ret.toString());
 	}
 
-
-	public static CEntry _JParse(Request req) throws IllegalRequestException {
-		if (req.postBuffer() == null) throw new IllegalRequestException(400, "No post data");
-
-		JSONParser jsonp = (JSONParser) req.threadLocalCtx().get("or:jsonp");
-		if (jsonp == null) req.threadLocalCtx().put("or:jsonp", jsonp = new JSONParser());
-
-		try {
-			return jsonp.parseRaw(req.postBuffer(), JSONParser.NO_DUPLICATE_KEY|JSONParser.LITERAL_KEY);
-		} catch (ParseException e) {
-			throw new IllegalRequestException(400, "Not valid json");
-		}
+	private static final class LazyAdapter {
+		static final SerializerManager ADAPTER_FACTORY = new SerializerManager();
 	}
-	public static CEntry _JQuery(CEntry entry, String path) {
-		return entry.query(path, 0, CNull.NULL, IOUtil.getSharedCharBuf());
+
+	public static Object _JAdapt(Request req, String type) throws IllegalRequestException {
+		if (req.postBuffer() == null) throw new IllegalRequestException(400, "Not post");
+
+		CCJson jsonp = (CCJson) req.threadLocalCtx().get("or:jsonp");
+		if (jsonp == null) req.threadLocalCtx().put("or:jsonp", jsonp = new CCJson());
+
+		CAdapter<?> adapter = LazyAdapter.ADAPTER_FACTORY.adapter(Signature.parseGeneric(type));
+		try {
+			adapter.reset();
+			jsonp.parseRaw(req.postBuffer(), adapter, JSONParser.LITERAL_KEY);
+			return adapter.result();
+		} catch (Exception e) {
+			throw new IllegalRequestException(400, "JSON数据无效", e);
+		}
 	}
 
 	interface Dispatcher {
 		Object invoke(Request req, ResponseHeader srv, Object extra);
 		Dispatcher copyWith(int methodId, Object ref);
-	}
-
-	public interface ParamHandler<T> {
-		ParamHandler<T> begin(Request req, ResponseHeader srv);
-		T finish(Request req);
 	}
 }

@@ -2,7 +2,9 @@ package roj.asm.type;
 
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.util.Helpers;
 
+import java.util.List;
 import java.util.function.UnaryOperator;
 
 /**
@@ -12,10 +14,18 @@ import java.util.function.UnaryOperator;
  * @since 2021/6/18 9:51
  */
 public class Generic extends IGeneric {
-	public static final byte EX_NONE = 0, EX_SUPERS = 1, EX_EXTENDS = 2;
+	public static final byte EX_NONE = 0, EX_SUPER = 1, EX_EXTENDS = 2;
 
 	public byte extendType;
 	private byte array;
+
+	public static Generic parameterized(Class<?> owner, Class<?>... params) {
+		List<Type> types = TypeHelper.parseMethod(TypeHelper.class2asm(params, owner));
+		Type own = types.remove(types.size()-1);
+		Generic g = new Generic(own.owner,own.array(),EX_NONE);
+		g.children = Helpers.cast(types);
+		return g;
+	}
 
 	public Generic() {}
 
@@ -30,7 +40,7 @@ public class Generic extends IGeneric {
 	}
 
 	public void toDesc(CharList sb) {
-		if (extendType != 0) sb.append(extendType == EX_SUPERS ? '-' : '+');
+		if (extendType != 0) sb.append(extendType == EX_SUPER ? '-' : '+');
 		for (int i = array&0xFF; i > 0; i--) sb.append('[');
 		sb.append('L').append(owner);
 
@@ -79,7 +89,7 @@ public class Generic extends IGeneric {
 
 	public void toString(CharList sb) {
 		switch (extendType) {
-			case EX_SUPERS: sb.append("? super "); break;
+			case EX_SUPER: sb.append("? super "); break;
 			case EX_EXTENDS: sb.append("? extends "); break;
 		}
 
@@ -122,6 +132,7 @@ public class Generic extends IGeneric {
 
 	@Override
 	public void owner(String owner) {
+		if (sub != null) throw new IllegalStateException("sub != null");
 		this.owner = owner;
 	}
 

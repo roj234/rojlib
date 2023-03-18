@@ -11,7 +11,7 @@ import roj.util.*;
  * @since 2022/6/1 7:05
  */
 public class BitmapBPool implements BPool {
-	private final NativeMemory direct = new NativeMemory();
+	private final NativeMemory mem = new NativeMemory();
 	private long directAddr = -1;
 	private byte[] heap;
 
@@ -33,24 +33,20 @@ public class BitmapBPool implements BPool {
 
 			if (max-min < size) return -1;
 
-			int off = min;
-			int i = off;
+			int i = min;
 
 			while (true) {
-				if (i != (i = nextFalse(i))) {
-					if (i < 0) break;
-					off = i;
+				i = nextFalse(i);
+				if (i+size > max) break;
+				if (!allFalse(i, i+size)) {
+					i++;
+					continue;
 				}
-				i++;
 
-				if (i > max) break;
-
-				if (i-off >= size) {
-					addRange(off, off+size);
-					if (off == min) min = nextFalse(off+size);
-					if (off+size == max) max = prevFalse(off);
-					return off;
-				}
+				addRange(i, i+size);
+				if (i == min) min = nextFalse(i+size);
+				if (i+size == max) max = prevFalse(i);
+				return i;
 			}
 
 			return -1;
@@ -69,10 +65,7 @@ public class BitmapBPool implements BPool {
 			int cEnd = off / chunk;
 			if (cStart < min || cEnd > max) return false;
 
-			for (int i = cStart; i < cEnd; i++) {
-				if (contains(i)) return false;
-			}
-
+			if (!allFalse(cStart,cEnd)) return false;
 			addRange(cStart, cEnd);
 
 			if (min == cStart) min = nextFalse((off+size) / chunk);
@@ -85,10 +78,7 @@ public class BitmapBPool implements BPool {
 			int cEnd = (off+size+extraSize+ chunk -1) / chunk;
 			if (cStart < min || cEnd > max) return false;
 
-			for (int i = cStart; i < cEnd; i++) {
-				if (contains(i)) return false;
-			}
-
+			if (!allFalse(cStart,cEnd)) return false;
 			addRange(cStart, cEnd);
 
 			if (min == cStart) min = nextFalse(cEnd);
@@ -125,7 +115,7 @@ public class BitmapBPool implements BPool {
 	public DynByteBuf allocate(boolean direct, int cap) {
 		if (cap > capacity >> 1) return null;
 
-		if ((cap & (chunk-1)) != 0) cap = (cap/chunk+1) * chunk;
+		cap = (cap+chunk-1)& -chunk;
 
 		int off = (direct ? dUsed : hUsed).allocate(cap);
 		if (off < 0) return null;
@@ -133,12 +123,12 @@ public class BitmapBPool implements BPool {
 		if (direct) {
 			DirectByteList.Slice db;
 			if (dBuf.isEmpty()) {
-				if (directAddr < 0) directAddr = this.direct.allocate(capacity);
+				if (directAddr < 0) directAddr = mem.allocate(capacity);
 				db = new DirectByteList.Slice();
 			} else {
 				db = dBuf.remove(dBuf.size() - 1);
 			}
-			return db.set(this.direct, directAddr + off * chunk, cap);
+			return db.set(mem, directAddr + off * chunk, cap);
 		} else {
 			ByteList.Slice db;
 			if (hBuf.isEmpty()) {
@@ -147,7 +137,7 @@ public class BitmapBPool implements BPool {
 			} else {
 				db = hBuf.remove(hBuf.size() - 1);
 			}
-			return db.set(heap, off * chunk, cap);
+			return db.setW(heap, off * chunk, cap);
 		}
 	}
 
@@ -158,15 +148,13 @@ public class BitmapBPool implements BPool {
 
 			dUsed.release((int) ((buf.address() - directAddr) / chunk), b.capacity());
 			b.set(null, 0, 0);
-			if (dBuf.size() < piece/2)
-				dBuf.add(b);
+			if (dBuf.size() < piece/2) dBuf.add(b);
 		} else {
 			ByteList.Slice b = (ByteList.Slice) buf;
 
 			hUsed.release(b.arrayOffset() / chunk, b.capacity());
-			b.set(EmptyArrays.BYTES, 0, 0);
-			if (hBuf.size() < piece/2)
-				hBuf.add(b);
+			b.setW(ArrayCache.BYTES, 0, 0);
+			if (hBuf.size() < piece/2) hBuf.add(b);
 		}
 	}
 
@@ -174,7 +162,7 @@ public class BitmapBPool implements BPool {
 	public boolean isPooled(DynByteBuf buf) {
 		if (buf.isDirect()) {
 			long addr = buf.address();
-			return directAddr > 0 && addr >= directAddr && addr < directAddr+direct.length();
+			return directAddr > 0 && addr >= directAddr && addr < directAddr+mem.length();
 		} else if (buf.hasArray()) {
 			return buf.array() == heap;
 		}
@@ -187,7 +175,7 @@ public class BitmapBPool implements BPool {
 		expandInPlace:
 		if (buf.isDirect()) {
 			long addr = buf.address();
-			if (directAddr >= 0 && addr >= directAddr && addr < directAddr+direct.length()) {
+			if (directAddr >= 0 && addr >= directAddr && addr < directAddr+mem.length()) {
 				DirectByteList.Slice b = (DirectByteList.Slice) buf;
 				if (addAtEnd) {
 					if (!dUsed.insertAfter((int) (addr - directAddr), b.capacity(), more)) break expandInPlace;

@@ -2,7 +2,6 @@ package roj.asm.tree.insn;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.asm.OpcodeUtil;
-import roj.asm.util.InsnList;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.util.Helpers;
@@ -16,18 +15,18 @@ import java.util.Map;
 public abstract class InsnNode implements Helpers.Node {
 	public char bci;
 
-	public static final int T_OTHER = 0;
-	public static final int T_LOAD_STORE = 1;
-	public static final int T_CLASS = 2;
-	public static final int T_FIELD = 3;
-	public static final int T_INVOKE = 4;
-	public static final int T_INVOKE_DYNAMIC = 5;
-	public static final int T_GOTO_IF = 6;
-	public static final int T_LABEL = 7;
-	public static final int T_LDC = 8;
-	public static final int T_IINC = 9;
-	public static final int T_SWITCH = 10;
-	public static final int T_MULTIANEWARRAY = 11;
+	@Deprecated
+	public static final int T_OTHER = OpcodeUtil.CATE_MISC;
+	public static final int T_LOAD_STORE = OpcodeUtil.CATE_LOAD_STORE;
+	public static final int T_INVOKE_DYNAMIC = 2;
+	public static final int T_IINC = 3;
+	public static final int T_LDC = OpcodeUtil.CATE_LDC;
+	public static final int T_MULTIANEWARRAY = 5;
+	public static final int T_SWITCH = 6;
+	public static final int T_GOTO_IF = OpcodeUtil.CATE_IF;
+	public static final int T_CLASS = OpcodeUtil.CATE_CLASS;
+	public static final int T_INVOKE = OpcodeUtil.CATE_METHOD;
+	public static final int T_FIELD = OpcodeUtil.CATE_FIELD;
 
 	protected InsnNode() {}
 	protected InsnNode(byte code) {
@@ -44,8 +43,6 @@ public abstract class InsnNode implements Helpers.Node {
 			throw new IllegalArgumentException("Unsupported opcode 0x" + Integer.toHexString(code & 0xFF));
 		}
 	}
-
-	public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {}
 
 	public final InsnNode next() {
 		return next;
@@ -95,10 +92,15 @@ public abstract class InsnNode implements Helpers.Node {
 		return T_OTHER;
 	}
 
-	public void preSerialize(CodeWriter c, Map<InsnNode, Label> labels) {}
+	public void preSerialize(Map<InsnNode, Label> labels) {}
 	public abstract void serialize(CodeWriter cw);
 
-	public abstract int nodeSize(int prevBci);
+	public int nodeSize(int prevBci) { return 0; }
+
+	@Override
+	public int hashCode() {
+		return bci*code;
+	}
 
 	public String toString() {
 		return OpcodeUtil.toString0(code);

@@ -22,22 +22,19 @@ class UdpServerSock extends ServerSock {
 	}
 
 	@Override
-	public MyChannel accept() throws IOException {
-		throw new UnsupportedOperationException();
-	}
+	public void register(SelectorLoop loop, Consumer<MyChannel> listener) throws IOException {
+		if (listen$ != null && key.isValid()) throw new IllegalStateException("Already registered");
 
-	@Override
-	public ServerSock register(SelectorLoop loop, Consumer<ServerSock> listener) throws IOException {
-		if (listener != null) throw new IllegalStateException("UDP listener is not supported");
+		listen$ = listener;
 
 		udp.buffer = rcvBuf;
 		udp.open();
 
 		try {
+			listener.accept(udp);
 			loop.register(udp, null, SelectionKey.OP_READ);
 		} catch (Exception e) {
 			Helpers.athrow(e);
 		}
-		return this;
 	}
 }

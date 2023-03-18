@@ -67,6 +67,8 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 		}
 	}
 
+	public ArchiveEntry createEntry(String fileName) { return new ZEntry(fileName); }
+
 	public void setComment(String comment) {
 		eof.setComment(comment);
 	}
@@ -280,6 +282,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 	}
 
 	public void closeEntry() throws IOException {
+		if (entry == null) return;
 		Source f = this.file;
 
 		if (entry.getMethod() != ZipEntry.STORED) {

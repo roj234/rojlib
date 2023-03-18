@@ -6,6 +6,5 @@ package roj.asm.tree.insn;
  */
 public interface IIndexInsnNode {
 	int getIndex();
-
 	void setIndex(int index);
 }

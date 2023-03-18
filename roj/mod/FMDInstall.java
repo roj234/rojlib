@@ -11,8 +11,6 @@ import roj.config.ParseException;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.config.word.StreamAsChars;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.math.Version;
 import roj.mod.fp.Fabric;
@@ -20,6 +18,7 @@ import roj.mod.fp.Forge;
 import roj.mod.fp.LegacyForge;
 import roj.mod.fp.WorkspaceBuilder;
 import roj.mod.mapping.MappingFormat;
+import roj.text.StreamReader;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
 import roj.ui.EasyProgressBar;
@@ -116,7 +115,7 @@ public class FMDInstall {
 		CMapping mfJson = gui.getSelectedMappingFormat();
 		MappingFormat fmt;
 		try {
-			CMapping global = JSONParser.parses(StreamAsChars.from(new File(BASE, "util/mapping/@common.json"))).asMap();
+			CMapping global = new JSONParser().parseRaw(new File(BASE, "util/mapping/@common.json")).asMap();
 			mfJson.merge(global, true, true);
 			fmt = new MappingFormat(mfJson);
 		} catch (ParseException | IOException e) {
@@ -143,8 +142,8 @@ public class FMDInstall {
 		// region clean previous mapping
 		File mcpSrgPath = MCP2SRG_PATH;
 		if (mcpSrgPath.isFile() && !mcpSrgPath.delete()) CmdUtil.warning("无法删除旧的映射数据");
-		File cache0 = new File(BASE, "/util/remapCache.bin");
-		if (cache0.isFile() && !cache0.delete()) CmdUtil.error("无法删除映射缓存 util/remapCache.bin!", true);
+		File cache0 = new File(BASE, "/util/mapCache.lzma");
+		if (cache0.isFile() && !cache0.delete()) CmdUtil.error("无法删除映射缓存 mapCache.lzma!", true);
 		ATHelper.getBackupFile().empty();
 		// endregion
 		if (System.getProperty("fmd.maponly") != null) {
@@ -280,8 +279,8 @@ public class FMDInstall {
 
 		CMapping cfgLan = CONFIG.get("启动器配置").asMap();
 		try {
-			ByteList bl = FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer));
-			versions = JSONParser.parses(new StreamAsChars(bl.asInputStream())).asList();
+			ByteList bl = IOUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer));
+			versions = JSONParser.parses(new StreamReader(bl.asInputStream())).asList();
 		} catch (ParseException | IOException e) {
 			error("获取数据出了点错...\n请查看控制台");
 			e.printStackTrace();

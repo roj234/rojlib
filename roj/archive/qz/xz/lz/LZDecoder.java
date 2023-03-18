@@ -10,8 +10,8 @@
 
 package roj.archive.qz.xz.lz;
 
-import roj.archive.qz.xz.ArrayCache;
 import roj.archive.qz.xz.CorruptedInputException;
+import roj.util.ArrayCache;
 
 import java.io.DataInputStream;
 import java.io.IOException;

@@ -20,8 +20,10 @@ final class WordBlock extends WordBlock4W {
 		sb.append("字块{\n")
 		  .append("  位于").append(offset).append('+').append(size).append('\n');
 		myToString(sb);
-		sb.append("\n  包含").append(fileCount).append("个文件\n")
-		  .append("  CRC=").append((hasCrc&1)==0?"~":Integer.toHexString(crc)).append('/').append((hasCrc&2)==0?"~":Integer.toHexString(cCrc));
+		sb.append("\n  包含").append(fileCount).append("个文件");
+
+		if ((hasCrc&3) != 0)
+			sb.append("\n  CRC=").append((hasCrc&1)==0?"~":Integer.toHexString(crc)).append('/').append((hasCrc&2)==0?"~":Integer.toHexString(cCrc));
 		return sb.append("\n}").toString();
 	}
 }

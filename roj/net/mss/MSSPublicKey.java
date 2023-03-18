@@ -1,6 +1,6 @@
 package roj.net.mss;
 
-import javax.crypto.Cipher;
+import java.security.Signature;
 
 /**
  * @author solo6975
@@ -10,5 +10,5 @@ public interface MSSPublicKey {
 	String getAlgorithm();
 
 	byte[] publicKey();
-	Cipher publicCipher();
+	Signature verifier();
 }

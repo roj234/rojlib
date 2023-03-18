@@ -1,6 +1,7 @@
 package roj.collect;
 
-import roj.util.EmptyArrays;
+import roj.math.MathUtils;
+import roj.util.ArrayCache;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -19,34 +20,21 @@ public class SimpleList<E> extends AbstractList<E> implements RandomAccess {
 	public byte capacityType;
 
 	public SimpleList() {
-		list = EmptyArrays.OBJECTS;
+		list = ArrayCache.OBJECTS;
 	}
 
 	public SimpleList(int size) {
-		list = size == 0 ? EmptyArrays.OBJECTS : new Object[size];
+		list = size == 0 ? ArrayCache.OBJECTS : new Object[size];
 	}
 
 	public SimpleList(int size, int cap) {
-		list = size == 0 ? EmptyArrays.OBJECTS : new Object[size];
+		list = size == 0 ? ArrayCache.OBJECTS : new Object[size];
 		capacityType = (byte) cap;
 	}
 
-	@SafeVarargs
-	@SuppressWarnings("varargs")
-	public SimpleList(@Nonnull E... es) {
-		list = new Object[es.length];
-		System.arraycopy(es, 0, list, 0, es.length);
-		size = es.length;
-	}
-
 	public SimpleList(Collection<? extends E> c) {
-		list = c.size() == 0 ? EmptyArrays.OBJECTS : c.toArray();
+		list = c.isEmpty() ? ArrayCache.OBJECTS : c.toArray();
 		size = list.length;
-	}
-
-	@Deprecated
-	public static <E> List<E> one(E e) {
-		return Collections.singletonList(e);
 	}
 
 	public void ensureCapacity(int cap) {
@@ -58,17 +46,20 @@ public class SimpleList<E> extends AbstractList<E> implements RandomAccess {
 		}
 	}
 
+	@SafeVarargs
+	public static <T> SimpleList<T> asModifiableList(T... trace) {
+		SimpleList<T> list = new SimpleList<>();
+		list.list = trace;
+		list.size = trace.length;
+		return list;
+	}
+
 	protected int nextCap(int cap) {
-		switch (capacityType) {
-			case -1:
-				throw new ArrayIndexOutOfBoundsException("ArraySize locked to " + list.length);
-			case 0:
-			default:
-				return cap + 10;
-			case 1:
-				return (cap * 3) >> 1;
-			case 2:
-				return cap << 1;
+		switch (capacityType&3) {
+			default: case 0: return cap + 10;
+			case 1: return 1 + ((cap*3) >> 1);
+			case 2: return MathUtils.getMin2PowerOf(cap+1);
+			case 3: throw new ArrayIndexOutOfBoundsException("Capacity locked: " + list.length);
 		}
 	}
 
@@ -104,6 +95,11 @@ public class SimpleList<E> extends AbstractList<E> implements RandomAccess {
 		}
 	}
 
+	@SuppressWarnings("unchecked")
+	public E pop() {
+		return size == 0 ? null : (E) list[--size];
+	}
+
 	@Nonnull
 	public Iterator<E> iterator() {
 		return listIterator(0);
@@ -112,7 +108,7 @@ public class SimpleList<E> extends AbstractList<E> implements RandomAccess {
 	@Nonnull
 	@Override
 	public Object[] toArray() {
-		if (size == 0) return EmptyArrays.OBJECTS;
+		if (size == 0) return ArrayCache.OBJECTS;
 		Object[] arr = new Object[size];
 		System.arraycopy(list, 0, arr, 0, size);
 		return arr;
@@ -121,12 +117,13 @@ public class SimpleList<E> extends AbstractList<E> implements RandomAccess {
 	@Nonnull
 	@Override
 	@SuppressWarnings("unchecked")
-	public <T> T[] toArray(@Nonnull T[] arr) {
-		if (arr.length < size) {
-			return (T[]) Arrays.copyOf(list, size, arr.getClass());
-		}
-		System.arraycopy(list, 0, arr, 0, size);
-		return arr;
+	public <T> T[] toArray(@Nonnull T[] a) {
+		if (a.length < size) return (T[]) Arrays.copyOf(list, size, a.getClass());
+
+		System.arraycopy(list, 0, a, 0, size);
+		if (a.length > size) a[size] = null;
+
+		return a;
 	}
 
 	public Object[] getRawArray() {
@@ -376,7 +373,7 @@ public class SimpleList<E> extends AbstractList<E> implements RandomAccess {
 	@Nonnull
 	@Override
 	public ListIterator<E> listIterator(int i) {
-		return new SimpleItr(i);
+		return new Itr(i);
 	}
 
 	@Override
@@ -390,10 +387,7 @@ public class SimpleList<E> extends AbstractList<E> implements RandomAccess {
 		return (E) list[i];
 	}
 
-	public void fastClear() {
-		size = 0;
-	}
-
+	public void fastClear() { size = 0; }
 	public void clear() {
 		if (list == null || size == 0) return;
 		for (int i = 0; i < size; i++) {
@@ -437,61 +431,33 @@ public class SimpleList<E> extends AbstractList<E> implements RandomAccess {
 		this.size = i;
 	}
 
-	private final class SimpleItr implements ListIterator<E> {
-		private int index, prevId;
+	private final class Itr implements ListIterator<E> {
+		int i, mark = -1;
 
-		public SimpleItr() {
-		}
+		Itr(int pos) { this.i = pos; }
 
-		public SimpleItr(int index) {
-			this.index = index;
-		}
-
-		@Override
-		public boolean hasNext() {
-			return index < size;
-		}
-
-		@Override
+		public boolean hasNext() { return i < size; }
 		@SuppressWarnings("unchecked")
-		public E next() {
-			return (E) SimpleList.this.list[prevId = index++];
-		}
+		public E next() { return (E) list[mark = i++]; }
+		public int nextIndex() { return i; }
 
-		@Override
-		public boolean hasPrevious() {
-			return index > 0;
-		}
-
-		@Override
+		public boolean hasPrevious() { return i > 0; }
 		@SuppressWarnings("unchecked")
-		public E previous() {
-			return (E) SimpleList.this.list[prevId = index--];
-		}
+		public E previous() { return (E) list[mark = --i]; }
+		public int previousIndex() { return i-1; }
 
-		@Override
-		public int nextIndex() {
-			return index + 1;
-		}
-
-		@Override
-		public int previousIndex() {
-			return index - 1;
-		}
-
-		@Override
 		public void remove() {
-			SimpleList.this.remove(index = prevId);
+			if (mark == -1) throw new IllegalStateException();
+			SimpleList.this.remove(mark);
+			if (mark < i) i--;
+			mark = -1;
 		}
+		public void set(E v) { list[mark] = v; }
+		public void add(E v) {
+			if (mark == -1) throw new IllegalStateException();
 
-		@Override
-		public void set(E e) {
-			SimpleList.this.set(prevId, e);
-		}
-
-		@Override
-		public void add(E e) {
-			SimpleList.this.add(prevId, e);
+			SimpleList.this.add(i++, v);
+			mark = -1;
 		}
 	}
 }

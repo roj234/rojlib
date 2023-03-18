@@ -53,6 +53,10 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 		ensureCapacity(size);
 	}
 
+	public IntBiMap(Map<Integer,V> map) {
+		putAll(map);
+	}
+
 	public void ensureCapacity(int size) {
 		if (size < length) return;
 		length = MathUtils.getMin2PowerOf(size);
@@ -70,11 +74,36 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 		return entry == null ? v : entry.v;
 	}
 
+	public int getValueOrDefault(V val, int def) {
+		Entry<V> entry = getValueEntry(val);
+		return entry == null ? def : entry.k;
+	}
+
 	public Set<Map.Entry<Integer, V>> entrySet() {
 		return Helpers.cast(new EntrySet<>(this));
 	}
 	public Set<Entry<V>> selfEntrySet() {
 		return new EntrySet<>(this);
+	}
+
+	@SuppressWarnings("unchecked")
+	public void putAll(IntBiMap<V> map) {
+		if (map.entries == null) return;
+		this.ensureCapacity(size + map.size());
+		for (int i = 0; i < map.length; i++) {
+			IntMap.Entry<?> entry = map.entries[i];
+			while (entry != null) {
+				putInt(entry.k, (V) entry.v);
+
+				entry = entry.next;
+			}
+		}
+	}
+
+	@Override
+	public void putAll(Map<? extends Integer, ? extends V> m) {
+		if (m instanceof IntBiMap) putAll(Helpers.cast(m));
+		else super.putAll(m);
 	}
 
 	public int size() {

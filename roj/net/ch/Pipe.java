@@ -1,7 +1,7 @@
 package roj.net.ch;
 
-import roj.crypt.CipheR;
-import roj.crypt.MyCipher;
+import roj.crypt.AEADParameterSpec;
+import roj.crypt.RCipherSpi;
 import roj.crypt.SM3;
 import roj.crypt.XChaCha;
 import roj.io.NIOUtil;
@@ -16,6 +16,8 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.security.GeneralSecurityException;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
 import java.util.Arrays;
 
 import static roj.io.NIOUtil.UNAVAILABLE;
@@ -235,7 +237,7 @@ public class Pipe implements Selectable {
 	}
 
 	public static class CipherPipe extends Pipe {
-		final CipheR enc, dec;
+		final XChaCha enc, dec;
 		final byte[] pass;
 
 		public CipherPipe(byte[] pass) {
@@ -251,17 +253,19 @@ public class Pipe implements Selectable {
 			super.reset();
 			byte[] iv = Arrays.copyOf(pass, 24);
 
-			enc.setKey(pass, MyCipher.ENCRYPT);
-			enc.setOption(XChaCha.NONCE, iv);
-			dec.setKey(pass, MyCipher.DECRYPT);
-			dec.setOption(XChaCha.NONCE, iv);
+			try {
+				enc.init(XChaCha.ENCRYPT_MODE, pass, new AEADParameterSpec(iv), null);
+				dec.init(XChaCha.DECRYPT_MODE, pass, new AEADParameterSpec(iv), null);
+			} catch (InvalidAlgorithmParameterException | InvalidKeyException e) {
+				e.printStackTrace();
+			}
 		}
 
 		@Override
 		protected void cipher(DynByteBuf src, boolean toDown) {
 			if (!src.isReadable()) return;
 
-			CipheR cip = toDown ? dec : enc;
+			RCipherSpi cip = toDown ? dec : enc;
 			int idx = src.rIndex;
 			DynByteBuf dst = src.slice(src.rIndex, src.readableBytes());
 			dst.wIndex(0);

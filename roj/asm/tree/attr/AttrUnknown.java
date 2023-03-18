@@ -28,7 +28,7 @@ public class AttrUnknown extends Attribute {
 	}
 
 	public String toString() {
-		return name + ": " + data.toString();
+		return name + ": " + data.dump();
 	}
 
 	public DynByteBuf getRawData() {

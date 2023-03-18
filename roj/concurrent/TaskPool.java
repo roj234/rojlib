@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -61,8 +62,19 @@ public class TaskPool implements TaskHandler {
 		tasks = new RingBuffer<>(64, 4096);
 	}
 
+	private static final AtomicInteger poolId = new AtomicInteger();
+
 	public TaskPool(int coreThreads, int maxThreads, int threshold) {
-		this(coreThreads, maxThreads, threshold, 60000, "pool-" + Thread.currentThread().getName() + "-");
+		this(coreThreads, maxThreads, threshold, 60000, "pool-" + poolId.getAndIncrement() + "-by" + Thread.currentThread().getId() + "-");
+	}
+
+	public static TaskPool CpuMassive() { return CpuMassiveHolder.P; }
+	private static final class CpuMassiveHolder {
+		static final TaskPool P = new TaskPool(1, Runtime.getRuntime().availableProcessors(), 1, 60000, "Cpu任务-");;
+	}
+
+	public static TaskPool ParallelPool() {
+		return new TaskPool(0, Runtime.getRuntime().availableProcessors()<<1, 128);
 	}
 
 	@Async.Schedule

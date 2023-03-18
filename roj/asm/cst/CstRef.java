@@ -1,5 +1,6 @@
 package roj.asm.cst;
 
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 
 /**
@@ -23,7 +24,9 @@ public abstract class CstRef extends Constant {
 	}
 
 	public final String toString() {
-		return super.toString() + ' ' + clazz.getValue().getString() + '.' + desc.getName().getString() + ':' + desc.getType().getString();
+		CharList sb = new CharList().append(super.toString())
+			.append(" 引用[").append(clazz.getIndex()).append(",").append(desc.getIndex()).append("] ");
+		return CstNameAndType.parseNodeDesc(sb, clazz.getValue().getString(), desc.getName().getString(), desc.getType().getString());
 	}
 
 	public final String getClassName() {

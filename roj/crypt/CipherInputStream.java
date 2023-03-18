@@ -32,7 +32,7 @@ public class CipherInputStream extends InputStream {
 		if (c.getBlockSize() != 0) {
 			this.pool = BufferPool.localPool();
 			this.o = (ByteList) pool.buffer(false, CipherOutputStream.BUFFER_SIZE);
-			this.i.set(o.array(), o.arrayOffset(), o.capacity());
+			this.i.setW(o.array(), o.arrayOffset(), o.capacity());
 		} else {
 			this.o = new ByteList.Slice();
 		}
@@ -52,9 +52,9 @@ public class CipherInputStream extends InputStream {
 			len = in.read(b, off, len);
 			if (len > 0) {
 				try {
-					ByteList in = i.set(b, off, len);
+					ByteList in = i.setW(b, off, len);
 					in.wIndex(len);
-					c.crypt(in, ((ByteList.Slice)o).set(b, off, len));
+					c.crypt(in, ((ByteList.Slice)o).setW(b, off, len));
 				} catch (GeneralSecurityException e) {
 					throw new IOException(e);
 				}

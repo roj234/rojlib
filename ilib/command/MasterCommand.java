@@ -52,7 +52,7 @@ public final class MasterCommand extends CommandBase {
 	}
 
 	public void execute(@Nonnull MinecraftServer server, @Nonnull ICommandSender sender, @Nonnull String[] args) throws CommandException {
-		if (helpComponent == null) helpComponent = new TextComponentString("/" + getName() + " help <name>");
+		if (helpComponent == null) helpComponent = new TextComponentString("/" + name + " help <name>");
 		if (args.length >= 1) {
 			String s = args[0];
 			ISubCommand command = subCommands.get(s);
@@ -61,7 +61,7 @@ public final class MasterCommand extends CommandBase {
 				return;
 			} else if ("help".equals(s)) {
 				if (args.length == 1) {
-					sender.sendMessage(new TextComponentString(getName() + " help <name>"));
+					sender.sendMessage(new TextComponentString(name + " help <name>"));
 				} else {
 					command = subCommands.get(args[1]);
 					if (command != null) sender.sendMessage(new TextComponentTranslation(command.getHelp()));
@@ -71,7 +71,7 @@ public final class MasterCommand extends CommandBase {
 		}
 		if (canUseCommands == null) {
 			if (subCommands.size() == 0) throw new CommandException("没有子命令! 这是一个BUG!");
-			StringBuilder sb = new StringBuilder("/" + getName() + " <");
+			StringBuilder sb = new StringBuilder("/" + name + " <");
 			for (String str : subCommands.keySet()) {
 				sb.append(str);
 				sb.append('/');
@@ -103,9 +103,9 @@ public final class MasterCommand extends CommandBase {
 		} else if (args.length > 1) {
 			String s = args[0];
 			ISubCommand command = subCommands.get(s);
-			return command == null ? ("help".equals(s) ? getListOfStringsMatchingLastWord(args, subCommands.keySet()) : AbstractSubCommand.EMPTY) : command.getTabCompletionOptions(server, sender,
-																																													removeFirst(args),
-																																													pos);
+			return command == null ?
+				("help".equals(s) ? getListOfStringsMatchingLastWord(args, subCommands.keySet()) : AbstractSubCommand.EMPTY) :
+				command.getTabCompletionOptions(server, sender, removeFirst(args), pos);
 		} else {
 			return AbstractSubCommand.EMPTY;
 		}

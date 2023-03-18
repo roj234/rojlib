@@ -1,6 +1,10 @@
 package roj.crypt;
 
-import java.util.Random;
+import roj.io.IOUtil;
+import roj.util.ByteList;
+import roj.util.Helpers;
+
+import java.security.InvalidAlgorithmParameterException;
 
 /**
  * <a href="https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-xchacha">Draft-XChaCha</a>
@@ -10,46 +14,19 @@ import java.util.Random;
  */
 public final class XChaCha extends ChaCha {
 	public XChaCha() {}
-
 	public XChaCha(int round) {super(round);}
 
-	boolean keySet;
 	byte[] iv;
 
-	@Override
-	public String getAlgorithm() {
-		return "XChaCha";
+	void rngIv() {
+		if (iv == null) iv = new byte[24];
+		rng.nextBytes(iv);
+		setIv(iv);
 	}
 
-	@Override
-	public void setKey(byte[] pass, int flags) {
-		super.setKey(pass, flags);
-		keySet = true;
-		if (iv != null) {
-			setNonce(iv);
-		}
-	}
-
-	@Override
-	public void setOption(String key, Object value) {
-		switch (key) {
-			case NONCE:
-				byte[] nonce = (byte[]) value;
-				if (keySet) setNonce(nonce);
-				else iv = nonce;
-				break;
-			case RANDOM_GENERATE_NONCE:
-				Random rng = (Random) value;
-				nonce = new byte[24];
-				rng.nextBytes(nonce);
-				if (keySet) setNonce(nonce);
-				else iv = nonce;
-				break;
-		}
-	}
-
-	public void setNonce(byte[] v) {
-		if (v.length != 24) throw new IllegalArgumentException("Nonce(IV) should be 192 bits length");
+	void setIv(byte[] iv) {
+		if (iv.length != 24) Helpers.athrow(new InvalidAlgorithmParameterException("Nonce 长度应当是24, got " + iv.length));
+		ByteList b = IOUtil.SharedCoder.get().wrap(iv);
 
 		int[] Src = key, Dst = tmp;
 
@@ -61,7 +38,10 @@ public final class XChaCha extends ChaCha {
 		// kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
 		// nnnnnnnn  nnnnnnnn  nnnnnnnn  nnnnnnnn
 		System.arraycopy(Src, 0, Dst, 0, 12);
-		Conv.b2i_LE(v, 0, 16, Dst, 12);
+		Dst[12] = b.readIntLE();
+		Dst[13] = b.readIntLE();
+		Dst[14] = b.readIntLE();
+		Dst[15] = b.readIntLE();
 
 		Round(Dst, round);
 
@@ -70,6 +50,7 @@ public final class XChaCha extends ChaCha {
 		Src[5] = Dst[1];
 		Src[6] = Dst[2];
 		Src[7] = Dst[3];
+
 		Src[8] = Dst[12];
 		Src[9] = Dst[13];
 		Src[10] = Dst[14];
@@ -79,7 +60,8 @@ public final class XChaCha extends ChaCha {
 		Src[13] = 0;
 
 		// Put Remain Nonce
-		Conv.b2i_LE(v, 16, 8, Src, 14);
+		Src[14] = b.readIntLE();
+		Src[15] = b.readIntLE();
 		reset();
 	}
 }

@@ -7,6 +7,7 @@ import java.io.IOException;
  * @author Roj234
  * @since 2020/12/19 22:35
  */
+@Deprecated // use native ?
 public interface FDRW {
 	int read(FileDescriptor fd, long addr, int len) throws IOException;
 	long readv(FileDescriptor fd, long addr, int len) throws IOException;

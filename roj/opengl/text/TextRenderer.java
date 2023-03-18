@@ -223,7 +223,7 @@ public class TextRenderer {
 	}
 
 	public int getCharWidth(char c) {
-		return (int) (getRawWidth(c) * scale);
+		return (int) Math.floor(getRawWidth(c) * scale);
 	}
 	public float getCharWidthFloat(char c) {
 		return getRawWidth(c) * scale;
@@ -231,7 +231,7 @@ public class TextRenderer {
 
 	private int getRawWidth(char c) {
 		switch (c) {
-			case ' ': case ' ': c = '-'; break;
+			case ' ': case ' ': return font.getCharWidth('1');
 			case 167: return -1;
 		}
 		return font.getCharWidth(c);
@@ -249,7 +249,7 @@ public class TextRenderer {
 
 	public final float i_renderChar(char ch, float italic) {
 		switch (ch) {
-			case ' ': case ' ': return font.getCharWidth('-');
+			case ' ': case ' ': return font.getCharWidth('1');
 		}
 
 		Glyph tex = font.getOrCreateEntry(ch);
@@ -297,7 +297,7 @@ public class TextRenderer {
 
 		// 删除线
 		if ((flag & 2) != 0) {
-			float fhDiv2 = lineHeight / 4f;
+			float fhDiv2 = lineHeight / 2f;
 			vb.pos(posX, posY + fhDiv2, 0).endVertex();
 			vb.pos(posX + len, posY + fhDiv2, 0).endVertex();
 			vb.pos(posX + len, posY + fhDiv2 - 1, 0).endVertex();
@@ -306,7 +306,7 @@ public class TextRenderer {
 
 		// 下划线
 		if ((flag & 4) != 0) {
-			float fhDiv2 = lineHeight / 2f;
+			float fhDiv2 = lineHeight + 1;
 			vb.pos(posX - 1, posY + fhDiv2, 0).endVertex();
 			vb.pos(posX + len, posY + fhDiv2, 0).endVertex();
 			vb.pos(posX + len, posY + fhDiv2 - 1, 0).endVertex();

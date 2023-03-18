@@ -14,12 +14,12 @@ import roj.crypt.Base64;
 import roj.crypt.SM3;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
-import roj.math.MathUtils;
 import roj.math.MutableInt;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.osi.ServerLaunch;
 import roj.net.http.Action;
 import roj.net.http.Headers;
+import roj.net.http.HttpUtil;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.srv.*;
 import roj.net.http.ws.WebsocketHandler;
@@ -63,7 +63,7 @@ public class Server extends WebsocketManager implements Router, Context {
 	@Override
 	protected WebsocketHandler newWorker(Request req, ResponseHeader handle) {
 		ChatImpl w = new ChatImpl();
-		w.owner = (User) userMap.get((int) req.ctx().get("id"));
+		w.owner = (User) userMap.get((int) req.threadContext().remove("id"));
 		return w;
 	}
 
@@ -159,8 +159,7 @@ public class Server extends WebsocketManager implements Router, Context {
 	@Override
 	public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
 		if (cfg != null) {
-			cfg.postMaxLength(postMaxLength(req));
-			cfg.postMaxTime(1000);
+			cfg.postAccept(postMaxLength(req), 1000);
 		}
 	}
 
@@ -185,7 +184,7 @@ public class Server extends WebsocketManager implements Router, Context {
 				return 0;
 			}
 
-			int fileCount = MathUtils.parseInt(req.path().substring(12));
+			int fileCount = TextUtil.parseInt(req.path().substring(12));
 			boolean img = req.path().startsWith("/img/");
 			req.handler().postHandler(new UploadHandler(req, fileCount, uid, img));
 			return img ? 4194304 : 16777216;
@@ -210,12 +209,12 @@ public class Server extends WebsocketManager implements Router, Context {
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws Exception {
 		rh.headers("Access-Control-Allow-Headers: MCTK\r\n" +
-			"Access-Control-Allow-Origin: " + req.header("Origin"));
+			"Access-Control-Allow-Origin: " + req.getField("Origin"));
 
-		if (CorsUtil.isPreflightRequest(req)) {
+		if (HttpUtil.isCORSPreflight(req)) {
 			return rh.code(200)
 					 .headers("Access-Control-Allow-Headers: MCTK\r\n" +
-						 "Access-Control-Allow-Origin: " + req.header("Origin") + "\r\n" +
+						 "Access-Control-Allow-Origin: " + req.getField("Origin") + "\r\n" +
 						 "Access-Control-Max-Age: 2592000\r\n" +
 						 "Access-Control-Allow-Methods: *")
 					 .returnNull();
@@ -224,11 +223,11 @@ public class Server extends WebsocketManager implements Router, Context {
 		// Strict-Transport-Security: max-age=1000; includeSubDomains
 
 		// IM
-		if ("websocket".equals(req.header("Upgrade"))) {
+		if ("websocket".equals(req.getField("Upgrade"))) {
 			int id = verifyHash(req.path().substring(1), rh);
 			if (id < 0) return rh.code(403).returnNull();
 
-			req.ctx().put("id", id);
+			req.threadContext().put("id", id);
 			return switchToWebsocket(req, rh);
 		}
 
@@ -240,7 +239,7 @@ public class Server extends WebsocketManager implements Router, Context {
 		Response v = null;
 		switch (lst.get(0)) {
 			case "":
-				return rh.returns(new StringResponse("MyChat Server"));
+				return new StringResponse("MyChat Server");
 			case "friend":
 				if (lst.size() < 2) break;
 				if (uid < 0) break;
@@ -349,7 +348,7 @@ public class Server extends WebsocketManager implements Router, Context {
 					return false;
 				});
 				v = new HttpFile(file).response(req, rh);
-				if (!req.header("Origin").isEmpty()) rh.headers("Access-Control-Allow-Origin: *");
+				if (!req.getField("Origin").isEmpty()) rh.headers("Access-Control-Allow-Origin: *");
 				return v;
 			}
 			case "html":
@@ -358,7 +357,7 @@ public class Server extends WebsocketManager implements Router, Context {
 		}
 
 		if (v != null) {
-			if (!req.header("Origin").isEmpty()) rh.code(200).headers("Access-Control-Allow-Origin: *");
+			if (!req.getField("Origin").isEmpty()) rh.code(200).headers("Access-Control-Allow-Origin: *");
 			return v;
 		}
 
@@ -374,7 +373,7 @@ public class Server extends WebsocketManager implements Router, Context {
 	}
 
 	private static Response doUpload(Request req) {
-		UploadHandler ph = (UploadHandler) req.ctx().get(Request.CTX_POST_HANDLER);
+		UploadHandler ph = (UploadHandler) req.postHandler();
 		if (ph == null) return null;
 
 		ToJson ser = new ToJson();
@@ -408,7 +407,7 @@ public class Server extends WebsocketManager implements Router, Context {
 				CMapping m = new CMapping();
 				m.put("user", userMap.get(uid).put());
 				m.put("protocol", "WSChat");
-				m.put("address", "ws://127.0.0.1:1999/" + req.header("MCTK"));
+				m.put("address", "ws://127.0.0.1:1999/" + req.getField("MCTK"));
 				m.put("ok", 1);
 				return new StringResponse(m.toShortJSONb());
 			case "set_info":
@@ -432,7 +431,7 @@ public class Server extends WebsocketManager implements Router, Context {
 				User u = (User) userMap.get(uid);
 				u.username = x.get("name").toString();
 				u.desc = x.get("desc").toString();
-				u.flag2 = MathUtils.parseInt(x.get("flag").toString());
+				u.flag2 = TextUtil.parseInt(x.get("flag").toString());
 				u.onDataChanged(this);
 
 				rs = dao.setUserData(u);
@@ -454,7 +453,7 @@ public class Server extends WebsocketManager implements Router, Context {
 				u = (User) userMap.get(rs.uid);
 
 				if (u.worker != null) {
-					u.worker.sendExternalLogout("您已在异地登录, 如果这不是您的操作...<br />" + "但是我们没有开发账号冻结机制... <br />" + "目的IP地址: " + req.handler().ch.remoteAddress() + "<br />" + "UA: " + req.header(
+					u.worker.sendExternalLogout("您已在异地登录, 如果这不是您的操作...<br />" + "但是我们没有开发账号冻结机制... <br />" + "目的IP地址: " + req.handler().ch.remoteAddress() + "<br />" + "UA: " + req.getField(
 						"User-Agent") + "<br />" + "时间: " + new ACalendar().formatDate("Y-m-d H:i:s.x", System.currentTimeMillis()));
 				}
 
@@ -504,23 +503,23 @@ public class Server extends WebsocketManager implements Router, Context {
 		Map<String, String> $_REQUEST = req.fields();
 		switch (lst.get(1)) {
 			case "list":
-				int[] num = (int[]) req.threadLocalCtx().get("IA");
+				int[] num = (int[]) req.threadContext().get("IA");
 				num[0] = 10;
 
 				int uid1;
 				if (lst.size() > 2) {
-					if (!MathUtils.parseIntOptional(lst.get(2), num)) return jsonErr("参数错误");
+					if (!TextUtil.parseIntOptional(lst.get(2), num)) return jsonErr("参数错误");
 					uid1 = num[0];
 				} else {
 					uid1 = -1;
 				}
 
 				num[0] = 10;
-				if (!MathUtils.parseIntOptional($_REQUEST.get("off"), num)) return jsonErr("参数错误");
+				if (!TextUtil.parseIntOptional($_REQUEST.get("off"), num)) return jsonErr("参数错误");
 				int off1 = num[0];
 
 				num[0] = 10;
-				if (!MathUtils.parseIntOptional($_REQUEST.get("len"), num)) return jsonErr("参数错误");
+				if (!TextUtil.parseIntOptional($_REQUEST.get("len"), num)) return jsonErr("参数错误");
 				int len1 = num[0];
 
 				req.handler().chunked();
@@ -636,7 +635,7 @@ public class Server extends WebsocketManager implements Router, Context {
 	}
 
 	private static int verifyHash(Request req) {
-		return verifyHash(req.header("MCTK"), req.handler());
+		return verifyHash(req.getField("MCTK"), req.handler());
 	}
 
 	private static int verifyHash(String hash, ResponseHeader rh) {
@@ -647,7 +646,7 @@ public class Server extends WebsocketManager implements Router, Context {
 		int[] num = (int[]) L.get("IA");
 		num[0] = 10;
 
-		return i > 0 && MathUtils.parseIntOptional(hash.substring(0, i), num) && userMap.get(num[0]) instanceof User && TextUtil.safeEquals(hash((User) userMap.get(num[0]), rh),
+		return i > 0 && TextUtil.parseIntOptional(hash.substring(0, i), num) && userMap.get(num[0]) instanceof User && TextUtil.safeEquals(hash((User) userMap.get(num[0]), rh),
 																																			hash.substring(i + 1)) ? num[0] : -1;
 	}
 

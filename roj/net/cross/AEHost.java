@@ -111,7 +111,7 @@ public class AEHost extends IAEClient {
 					print("客户端 #" + clientId + " 开启频道被阻止: " + reason);
 
 					ByteList tmp = IOUtil.getSharedByteBuf();
-					tmp.put((byte) P_CHANNEL_OPEN_FAIL).putInt(clientId).putVarIntUTF(reason);
+					tmp.put(P_CHANNEL_OPEN_FAIL).putInt(clientId).putVUIUTF(reason);
 					ctx.channelWrite(tmp);
 				} else {
 					asyncPipeLogin(rb.readLong(), ciphers, pipe -> {

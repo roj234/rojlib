@@ -1,14 +1,14 @@
 package roj.collect;
 
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 /**
  * @author Roj233
  * @since 2023/3/3 22:32
  */
-public class LRUCache<K, V> extends LinkedMyHashMap<K, V> implements Cache<V> {
+public class LRUCache<K, V> extends LinkedMyHashMap<K, V> implements Cache<K,V> {
 	private final int maximumCapacity, removeAtOnce;
-	private Consumer<V> listener;
+	private BiConsumer<K,V> listener;
 
 	public LRUCache(int maxCap) {
 		this(maxCap, 1);
@@ -27,7 +27,7 @@ public class LRUCache<K, V> extends LinkedMyHashMap<K, V> implements Cache<V> {
 	}
 
 	@Override
-	public void setEvictListener(Consumer<V> listener) {
+	public void setEvictListener(BiConsumer<K,V> listener) {
 		this.listener = listener;
 	}
 
@@ -38,9 +38,10 @@ public class LRUCache<K, V> extends LinkedMyHashMap<K, V> implements Cache<V> {
 		while (entry != null && amount > 0) {
 			LinkedEntry<K, V> tmp = entry.n;
 
+			K k = entry.k;
 			V v = entry.v;
-			remove(entry.k);
-			if (listener != null) listener.accept(v);
+			remove(k);
+			if (listener != null) listener.accept(k,v);
 			amount--;
 
 			entry = tmp;

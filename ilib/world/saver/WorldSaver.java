@@ -5,8 +5,8 @@ import ilib.ClientProxy;
 import ilib.ImpLib;
 import ilib.util.DimensionHelper;
 import ilib.util.PlayerUtil;
-import roj.concurrent.TaskSequencer;
 import roj.concurrent.task.ITask;
+import roj.concurrent.timing.Scheduler;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
@@ -34,8 +34,7 @@ public final class WorldSaver {
 		return ClientProxy.mc.getIntegratedServer() != null;
 	}
 
-	static TaskSequencer executor = new TaskSequencer();
-	static Thread seqThread = new Thread(executor);
+	static boolean inited;
 
 	@SubscribeEvent
 	public static void onWorldUnload(WorldEvent.Unload event) {
@@ -77,7 +76,7 @@ public final class WorldSaver {
 				ilib.ATHandler.setChunkProvider(w, savingProvider);
 				ilib.ATHandler.setClientChunkProvider((WorldClient) w, savingProvider);
 				ATHandler.setMapStorage(w, new MapStorage(handler));
-				executor.register(new BlockIdSaver(handler, w.getWorldInfo()), 0, 1000, 1);
+				Scheduler.getDefaultScheduler().executeLater(new BlockIdSaver(handler, w.getWorldInfo()), 1000);
 				enter = true;
 			} catch (Throwable e) {
 				PlayerUtil.sendTo(null, "世界注入失败: " + e);
@@ -88,10 +87,8 @@ public final class WorldSaver {
 
 	private static void _changeState() {
 		if (enable) {
-			if (seqThread.getState() == Thread.State.NEW) {
-				seqThread.setDaemon(true);
-				seqThread.setName("WorldSaver Timer");
-				seqThread.start();
+			if (!inited) {
+				inited = true;
 				TagGetter.register();
 			}
 			WorldClient w = Minecraft.getMinecraft().world;

@@ -1,7 +1,7 @@
 package roj.archive.zip;
 
 import roj.io.IOUtil;
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 
 import java.util.Arrays;
 
@@ -17,7 +17,7 @@ public final class END {
 
 	long cDirLen, cDirOffset;
 
-	byte[] comment = EmptyArrays.BYTES;
+	byte[] comment = ArrayCache.BYTES;
 
 	@Override
 	public String toString() {
@@ -25,7 +25,7 @@ public final class END {
 	}
 
 	public void setComment(String str) {
-		comment = str == null || str.isEmpty() ? EmptyArrays.BYTES : IOUtil.SharedCoder.get().encode(str);
+		comment = str == null || str.isEmpty() ? ArrayCache.BYTES : IOUtil.SharedCoder.get().encode(str);
 		if (comment.length > 65535) {
 			comment = Arrays.copyOf(comment, 65535);
 			throw new IllegalArgumentException("Comment too long");
@@ -33,6 +33,6 @@ public final class END {
 	}
 
 	public void setComment(byte[] str) {
-		comment = str == null ? EmptyArrays.BYTES : str;
+		comment = str == null ? ArrayCache.BYTES : str;
 	}
 }

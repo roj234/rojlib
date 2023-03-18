@@ -6,7 +6,6 @@ import roj.archive.ArchiveWriter;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
-import roj.io.buf.BufferPool;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.util.ByteList;
@@ -346,18 +345,9 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
         if (finished) return;
         finished = true;
 
-        BufferPool pool = BufferPool.localPool();
-        DynByteBuf tmp = pool.buffer(false, 1024);
-
-        ByteList.Streamed out = new ByteList.Streamed(null, false) {
-            { list = tmp.array(); }
-
-            public int arrayOffset() { return tmp.arrayOffset(); }
-            public int capacity() { return tmp.capacity(); }
-            public int maxCapacity() { return tmp.maxCapacity(); }
-
+        ByteList.WriteOut out = new ByteList.WriteOut(null) {
             public void flush() {
-                blockCrc32.update(list, 0, realWIndex());
+                blockCrc32.update(list, arrayOffset(), realWIndex());
                 super.flush();
             }
         };
@@ -393,9 +383,8 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
                 hstart = pos1;
             }
         } finally {
-            pool.reserve(tmp);
             try {
-                out.flush();
+                out.close();
             } finally {
                 if (this.out != null) {
                     this.out.close();
@@ -460,12 +449,12 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
 
     private void writeStreamInfo(long offset) {
         buf.put(iStreamInfo)
-         .putVSLong(offset)
-         .putVSInt(blocks.size())
+         .putVULong(offset)
+         .putVUInt(blocks.size())
 
          .write(iSize);
         for (int i = 0; i < blocks.size(); i++)
-            buf.putVSLong(blocks.get(i).size);
+            buf.putVULong(blocks.get(i).size);
 
         if (storeStreamCrc) {
             buf.write(iCRC32);
@@ -488,12 +477,12 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
         buf.put(iWordBlockInfo)
 
          .put(iWordBlock)
-         .putVSLong(blocks.size())
-         .put((byte) 0);
+         .putVUInt(blocks.size())
+         .put(0);
 
         ByteList w = IOUtil.getSharedByteBuf();
         for (WordBlock4W b : blocks) {
-            buf.putVSLong(b.sortedCoders.length);
+            buf.putVUInt(b.sortedCoders.length);
             // always simple codec
             for (QZCoder c : b.sortedCoders) {
                 w.clear();
@@ -506,21 +495,21 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
                 buf.put((byte) flags).put(id);
 
                 if (w.wIndex() > 0) {
-                    buf.putVSInt(w.wIndex()).put(w);
+                    buf.putVUInt(w.wIndex()).put(w);
                 }
             }
 
             // pipe
             for (int i = 0; i < b.sortedCoders.length-1; i++)
-                buf.putVSLong(i+1).putVSLong(i);
+                buf.putVUInt(i+1).putVUInt(i);
         }
 
         buf.write(iWordBlockSizes);
         for (WordBlock4W b : blocks) {
             if (b.outSizes != null)
                 for (long size : b.outSizes)
-                    buf.putVSLong(size);
-            buf.putVSLong(b.uSize);
+                    buf.putVULong(size);
+            buf.putVULong(b.uSize);
         }
 
         buf.write(iCRC32);
@@ -544,14 +533,14 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
         if (files.size() > blocks.size()) {
             buf.write(iFileCounts);
             for (int i = 0; i < blocks.size(); i++)
-                buf.putVSInt(blocks.get(i).fileCount);
+                buf.putVUInt(blocks.get(i).fileCount);
 
             buf.write(iSize);
             int j = 0;
             for (int i = 0; i < blocks.size(); i++) {
                 int count = blocks.get(i).fileCount-1;
                 while (count-- > 0)
-                    buf.putVSLong(files.get(j++).uSize);
+                    buf.putVULong(files.get(j++).uSize);
                 j++;
             }
 
@@ -600,7 +589,7 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
     }
 
     private void writeFilesInfo() {
-        buf.put(iFilesInfo).putVSLong(files.size());
+        buf.put(iFilesInfo).putVUInt(files.size());
 
         if (flagSum[0] > 0) writeBitMap(iEmpty, j -> files.get(j).uSize == 0);
         if (flagSum[1] > 0) writeBitMap(iEmptyFile, j -> (files.get(j).flag&QZEntry.DIRECTORY) == 0);
@@ -624,12 +613,12 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
     private void writeBitMap(int id, IntFunction<Boolean> fn) {
         ByteList buf = IOUtil.getSharedByteBuf();
         writeBits(fn, files.size(), buf);
-        this.buf.put((byte) id).putVSLong(buf.wIndex()).put(buf);
+        this.buf.put((byte) id).putVUInt(buf.wIndex()).put(buf);
     }
     private void writeFileNames() {
         buf.write(iFileName);
 
-        ByteList buf = IOUtil.getSharedByteBuf().put((byte) 0);
+        ByteList buf = IOUtil.getSharedByteBuf().put(0);
 
         for (int j = 0; j < files.size(); j++) {
             String s = files.get(j).getName();
@@ -638,7 +627,7 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
             buf.putShortLE(0);
         }
 
-        this.buf.putVSLong(buf.wIndex()).put(buf);
+        this.buf.putVUInt(buf.wIndex()).put(buf);
     }
     private void writeSparseAttribute(int id, int flag, int count, BiConsumer<QZEntry, DynByteBuf> fn) {
         ByteList buf = IOUtil.getSharedByteBuf();
@@ -656,7 +645,7 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
                 fn.accept(entry, buf);
         }
 
-        this.buf.put((byte) id).putVSLong(buf.wIndex()).put(buf);
+        this.buf.put((byte) id).putVUInt(buf.wIndex()).put(buf);
     }
 
     private static void writeBits(IntFunction<Boolean> fn, int len, DynByteBuf buf) {

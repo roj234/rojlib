@@ -5,7 +5,7 @@ package roj.archive.qz.bcj;
  * @author Lasse Collin <lasse.collin@tukaani.org>, Roj234
  * @since 2023/3/16 0016 2:22
  */
-public class ARMFilter extends BCJFilter {
+public class ARMFilter extends Filter {
     public ARMFilter(boolean isEncoder, int startPos) {
         super(isEncoder);
         pos = checkStartOffset(startPos, 4) + 8;
@@ -23,7 +23,7 @@ public class ARMFilter extends BCJFilter {
                 src <<= 2;
 
                 int addr;
-                if (isEncoder) addr = src + (pos + i - off);
+                if (encode) addr = src + (pos + i - off);
                 else addr = src - (pos + i - off);
 
                 addr >>>= 2;

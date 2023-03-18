@@ -11,17 +11,26 @@ import java.util.Arrays;
  */
 public final class Label extends MutableInt {
 	int block, offset;
+	Throwable trace = new Throwable();
 
-	public Label() {
-		super(-1);
+	public Label() { clear(); }
+
+	public void clear() {
+		value = -1;
 		block = -2;
 		offset = -1;
+	}
+
+	public void set(Label label) {
+		value = label.value;
+		block = label.block;
+		offset = label.offset;
 	}
 
 	@Override
 	public int getValue() {
 		int v = super.getValue();
-		if (v < 0) throw new IllegalArgumentException("Not ready for serialize/"+this);
+		if (v < 0) throw new IllegalArgumentException("Not ready for serialize/"+this, trace);
 		return v;
 	}
 	public int getOptionalValue() {

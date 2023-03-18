@@ -1,6 +1,7 @@
 package roj.util;
 
 import roj.RequireUpgrade;
+import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
 import java.io.DataInput;
@@ -9,6 +10,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.List;
+
+import static java.lang.Character.MAX_HIGH_SURROGATE;
+import static java.lang.Character.MIN_HIGH_SURROGATE;
 
 /**
  * @author Roj233
@@ -61,13 +65,8 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 
 	public abstract boolean isDirect();
 
-	public boolean immutableCapacity() {
-		return false;
-	}
-
-	public boolean isBuffer() {
-		return true;
-	}
+	public boolean immutableCapacity() { return false; }
+	public boolean hasBuffer() { return true; }
 
 	public long address() {
 		throw new UnsupportedOperationException();
@@ -101,13 +100,13 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 	int moveRI(int i) {
 		int t = rIndex;
 		int e = t+i;
-		if (e > wIndex) throw new ArrayIndexOutOfBoundsException("mov=" + i + ",rIdx=" + rIndex + ",wIdx=" + wIndex);
+		if (e > wIndex) throw new IndexOutOfBoundsException("mov=" + i + ",rIdx=" + rIndex + ",wIdx=" + wIndex);
 		rIndex = e;
 		return t;
 	}
 
 	int testWI(int i, int req) {
-		if (i + req > wIndex) throw new ArrayIndexOutOfBoundsException("mov=" + req + ",rIdx=" + i + ",wIdx=" + wIndex);
+		if (i + req > wIndex) throw new IndexOutOfBoundsException("mov=" + req + ",rIdx=" + i + ",wIdx=" + wIndex);
 		return i;
 	}
 
@@ -151,75 +150,20 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 	}
 	// endregion
 	// region DataOutput
-	@Override
-	public final void write(int b) {
-		put((byte) b);
-	}
-
-	@Override
-	public final void write(@Nonnull byte[] b) {
-		put(b, 0, b.length);
-	}
-
-	@Override
-	public final void write(@Nonnull byte[] b, int off, int len) {
-		put(b, off, len);
-	}
-
-	@Override
-	public final void writeBoolean(boolean v) {
-		put((byte) (v ? 1 : 0));
-	}
-
-	@Override
-	public final void writeByte(int v) {
-		put((byte) v);
-	}
-
-	@Override
-	public final void writeShort(int s) {
-		put((byte) (s >>> 8)).put((byte) s);
-	}
-
-	@Override
-	public final void writeChar(int c) {
-		writeShort(c);
-	}
-
-	@Override
-	public final void writeInt(int i) {
-		putInt(i);
-	}
-
-	@Override
-	public final void writeLong(long l) {
-		putLong(l);
-	}
-
-	@Override
-	public final void writeFloat(float v) {
-		putInt(Float.floatToRawIntBits(v));
-	}
-
-	@Override
-	public final void writeDouble(double v) {
-		putLong(Double.doubleToRawLongBits(v));
-	}
-
-	@Override
-	public void writeBytes(@Nonnull String s) {
-		putAscii(s);
-	}
-
-	@Override
-	public final void writeChars(@Nonnull String s) {
-		putChars(s);
-	}
-
-	@Override
-	public final void writeUTF(@Nonnull String str) {
-		putUTF(str);
-	}
+	public final void write(int b) { put((byte) b); }
+	public final void write(@Nonnull byte[] b) { put(b, 0, b.length); }
+	public final void write(@Nonnull byte[] b, int off, int len) { put(b, off, len); }
+	public final void writeBoolean(boolean v) { put((byte) (v ? 1 : 0)); }
+	public final void writeByte(int v) { put((byte) v); }
+	public final void writeShort(int s) { putShort(s); }
+	public final void writeChar(int c) { writeShort(c); }
+	public final void writeInt(int i) { putInt(i); }
+	public final void writeLong(long l) { putLong(l); }
+	public final void writeFloat(float v) { putInt(Float.floatToRawIntBits(v)); }
+	public final void writeDouble(double v) { putLong(Double.doubleToRawLongBits(v)); }
+	public void writeBytes(@Nonnull String s) { putAscii(s); }
+	public final void writeChars(@Nonnull String s) { putChars(s); }
+	public final void writeUTF(@Nonnull String str) { putUTF(str); }
 
 	@Override
 	public final int skipBytes(int i) {
@@ -234,8 +178,8 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 		return put((byte) (b?1:0));
 	}
 
-	public abstract DynByteBuf put(byte e);
-	public abstract DynByteBuf put(int i, byte e);
+	public abstract DynByteBuf put(int e);
+	public abstract DynByteBuf put(int i, int e);
 
 	public final DynByteBuf put(byte[] b) {
 		return put(b, 0, b.length);
@@ -289,22 +233,41 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 		} while (true);
 	}
 
-	public DynByteBuf putVSInt(int i) {
-		return putVSLong(i);
-	}
+	// fastpath for int
+	public final DynByteBuf putVUInt(int i) {
+		negative:
+		if (i <= 0x3FFF) {
+			if (i < 0) break negative;
+			// 7
+			if (i <= 0x7F) return put((byte) i);
+			// 14: 0b10xxxxxx B
+			return putShort(0x8000 | i);
+		} else if (i <= 0xFFFFFFF) {
+			// 21: 0b110xxxxx B B
+			if (i <= 0x1FFFFF) return put((byte) (0xC0 | (i>>>16))).putShortLE(i);
+			// 28: 0b1110xxxx B B B
+			return put((byte) (0xE0 | (i>>>24))).putMediumLE(i);
+		}
 
-	public final DynByteBuf putVSLong(long l) {
+		// 35: 0b11110xxx B B B B
+		return put((byte) 0xF0).putIntLE(i);
+	}
+	public final DynByteBuf putVULong(long l) {
+		if ((l & 0xFFFFFFFF00000000L) == 0) return putVUInt((int) l);
+
 		int firstByte = 0;
 		int mask = 0x80;
+		long max = 0x80;
 		int i;
 
 		for (i = 0; i < 8; i++) {
-			if (l < ((1L << (7 * (i+1))))) {
-				firstByte |= (l >>> (8 * i));
+			if (l < max) {
+				firstByte |= (l >>> (i<<3));
 				break;
 			}
 			firstByte |= mask;
 			mask >>>= 1;
+			max <<= 7;
 		}
 
 		put((byte) firstByte);
@@ -401,9 +364,7 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 
 		for (int i = 0; i < len; i++) {
 			int c = s.charAt(i);
-			if (c < 0x0001) {
-				utfLen ++;
-			} else if (c > 0x007F) {
+			if (c == 0 || c > 0x007F) {
 				if (c > 0x07FF) {
 					utfLen += 2;
 				} else {
@@ -416,15 +377,41 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 	}
 	public abstract DynByteBuf putUTFData0(CharSequence s, int len);
 
-	public final DynByteBuf putVarIntVIC(CharSequence s) {
-		int len = byteCountVIC(s);
-		putVarLong(this, len);
-		return putVICData0(s, len);
+	public static int byteCountUtf8mb4(CharSequence s) {
+		int len = s.length();
+		int utfLen = len;
+
+		for (int i = 0; i < len;) {
+			int c = s.charAt(i++);
+			if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
+				if (i == len) throw new IllegalStateException("Trailing leading surrogate character");
+				c = TextUtil.codepoint(c,s.charAt(i++));
+			}
+
+			if (c <= 0x7FFF) {
+				if (c > 0x7F) {
+					utfLen++;
+				}
+			} else {
+				if (c > 0xFFFF) {
+					utfLen += 3;
+				} else {
+					utfLen += 2;
+				}
+			}
+		}
+		return utfLen;
 	}
-	public final DynByteBuf putVICData(CharSequence s) {
-		return putVICData0(s, byteCountVIC(s));
+	public abstract DynByteBuf putUtf8mb4Data(CharSequence s, int len);
+
+	public final DynByteBuf putVStr(CharSequence s) {
+		int len = byteCountVStr(s);
+		return putVUInt(len).putVStrData0(s, len);
 	}
-	public static int byteCountVIC(CharSequence s) {
+	public final DynByteBuf putVStrData(CharSequence s) {
+		return putVStrData0(s, byteCountVStr(s));
+	}
+	public static int byteCountVStr(CharSequence s) {
 		int len = s.length();
 		for (int i = 0; i < s.length(); i++) {
 			char c = s.charAt(i);
@@ -438,7 +425,7 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 		}
 		return len;
 	}
-	public abstract DynByteBuf putVICData0(CharSequence s, int len);
+	public abstract DynByteBuf putVStrData0(CharSequence s, int len);
 
 	public abstract DynByteBuf put(ByteBuffer buf);
 
@@ -550,36 +537,40 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 		throw new RuntimeException("VarLong长度超限 at " + rIndex);
 	}
 
-	public final int readVSInt() {
+	public final int readVUInt() {
 		int b = readUnsignedByte();
-
-		int mask = 0x80;
-		int value = 0;
-		for (int i = 0;; i += 8) {
-			if ((b & mask) == 0)
-				return value | (b & (mask-1)) << i;
-
-			if (i == 32) break;
-
-			value |= readUnsignedByte() << i;
-			mask >>>= 1;
+		if ((b&0x80) == 0) return b;
+		if ((b&0x40) == 0) return ((b&0x3F)<< 8) | readUnsignedByte();
+		if ((b&0x20) == 0) return ((b&0x1F)<<16) | readUShortLE();
+		if ((b&0x10) == 0) return ((b&0x0F)<<24) | readMediumLE();
+		if ((b&0x08) == 0) {
+			if ((b&7) == 0)
+				return readIntLE();
 		}
-
-		throw new RuntimeException("VSInt长度超限 at " + rIndex);
+		throw new RuntimeException("VUInt长度超限 at " + rIndex);
 	}
-
-	public final long readVSLong() {
+	public final long readVULong() {
 		int b = readUnsignedByte();
 
-		int mask = 0x80;
-		long value = 0;
-		for (int i = 0;; i += 8) {
-			if ((b & mask) == 0)
-				return value | (b & (mask-1)) << i;
+		if ((b&0x80) == 0) return b;
+		if ((b&0x40) == 0) return ((b&0x3FL)<< 8) | readUnsignedByte();
+		if ((b&0x20) == 0) return ((b&0x1FL)<<16) | readUShortLE();
+		if ((b&0x10) == 0) return ((b&0x0FL)<<24) | readMediumLE();
+		if ((b&0x08) == 0) return ((b&0x07L)<<32) | readUIntLE();
+		if ((b&0x04) == 0) return ((b&0x03L)<<40) | readUIntLE() | (long) readUnsignedByte() << 32;
+		if ((b&0x02) == 0) return ((b&0x01L)<<48) | readUIntLE() | (long) readUShortLE()     << 40;
+		if ((b&0x01) == 0) return 					readUIntLE() | (long) readMediumLE()     << 48;
+		return readLongLE();
 
-			value |= (long) readUnsignedByte() << i;
-			mask >>>= 1;
-		}
+		//int mask = 0x80;
+		//long value = 0;
+		//for (int i = 0;; i += 8) {
+		//	if ((b & mask) == 0)
+		//		return value | (b & (mask-1)) << i;
+
+		//	value |= (get()&0xFFL) << i;
+		//	mask >>>= 1;
+		//}
 	}
 
 	public final int readInt() {
@@ -652,10 +643,10 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 		return readUTF(l);
 	}
 
-	public final String readVIVIC() {
-		return readVIC(readVarInt(false));
+	public final String readVStr() {
+		return readVStr(readVUInt());
 	}
-	public abstract String readVIC(int len);
+	public abstract String readVStr(int len);
 
 	public abstract String readLine();
 

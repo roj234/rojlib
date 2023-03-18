@@ -159,4 +159,10 @@ public final class UIUtil {
 	public static char[] readPassword() {
 		return System.console().readPassword("");
 	}
+
+	public static void pause() {
+		try {
+			userInput("按回车继续");
+		} catch (IOException ignored) {}
+	}
 }

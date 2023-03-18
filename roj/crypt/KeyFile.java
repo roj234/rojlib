@@ -1,7 +1,6 @@
 package roj.crypt;
 
 import roj.io.IOUtil;
-import roj.util.ByteList;
 
 import java.io.*;
 import java.security.*;
@@ -35,51 +34,42 @@ public class KeyFile {
 	}
 
 	public KeyPair getKeyPair(File pri, File pub, byte[] pass) throws GeneralSecurityException {
+		FeedbackCipher c = new FeedbackCipher(new AES(), FeedbackCipher.MODE_CTR);
+		pass = HMAC.Sha256ExpandKey(pass, null, 32);
+
 		KeyPair pair;
 		if (!pri.isFile()) {
 			try {
 				pair = GEN.generateKeyPair();
-				try (DataOutputStream out = new DataOutputStream(new FileOutputStream(pri))) {
-					byte[] t = pair.getPublic().getEncoded();
-					out.writeShort(t.length);
-					out.write(t);
 
-					t = pair.getPrivate().getEncoded();
-					out.writeShort(t.length);
-
-					XChaCha_Poly1305 cip = new XChaCha_Poly1305();
-					cip.setKey(pass, CipheR.ENCRYPT);
-					cip.cryptBegin();
-					cip.encrypt(ByteList.wrap(t), ByteList.wrapWrite(t));
-
-					out.write(t);
-					out.write(cip.getHash().list, 0, 16);
+				try (OutputStream dos = new FileOutputStream(pub)) {
+					dos.write(pair.getPublic().getEncoded());
 				}
 
-				if (pub != null) {
-					try (FileOutputStream dos = new FileOutputStream(pub)) {
-						dos.write(pair.getPublic().getEncoded());
-					}
+				try (OutputStream out = new FileOutputStream(pri)) {
+					byte[] iv = SecureRandom.getSeed(16);
+					out.write(iv);
+
+					c.init(RCipherSpi.ENCRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
+					CipherOutputStream cos = new CipherOutputStream(out, c);
+					cos.write(pair.getPrivate().getEncoded());
+					cos.close();
 				}
 			} catch (IOException e) {
 				return null;
 			}
 		} else {
-			try(DataInputStream in = new DataInputStream(new FileInputStream(pri))) {
-				byte[] pubBytes = new byte[in.readUnsignedShort()];
-				in.readFully(pubBytes);
+			try {
+				PublicKey pu = getPublic(pub);
 
-				byte[] priBytes = new byte[16 + in.readUnsignedShort()];
-				in.readFully(priBytes);
-				ByteList priOut = ByteList.wrapWrite(priBytes);
+				try (InputStream in = new FileInputStream(pri)) {
+					byte[] iv = new byte[16];
+					IOUtil.readFully(in, iv, 0, 16);
+					c.init(RCipherSpi.DECRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
 
-				XChaCha_Poly1305 cip = new XChaCha_Poly1305();
-				cip.setKey(pass, CipheR.DECRYPT);
-				cip.crypt(ByteList.wrap(priBytes), priOut);
-
-				PrivateKey pk = FACTORY.generatePrivate(new PKCS8EncodedKeySpec(priOut.toByteArray()));
-				PublicKey pu = FACTORY.generatePublic(new X509EncodedKeySpec(pubBytes));
-				return new KeyPair(pu, pk);
+					PrivateKey pk = FACTORY.generatePrivate(new PKCS8EncodedKeySpec(IOUtil.read(new CipherInputStream(in, c))));
+					return new KeyPair(pu, pk);
+				}
 			} catch (IOException e) {
 				return null;
 			}

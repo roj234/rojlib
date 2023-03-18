@@ -1,7 +1,7 @@
 package roj.exe.pe;
 
 import roj.exe.ExeFile;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.util.ByteList;
@@ -128,13 +128,13 @@ public class PEFile extends ExeFile {
 		} else if (newLen == oldLen || (doMove && !isLastTable(idx) && type != Table.CERTIFICATE_TABLE)) {
 			if (newLen > oldLen) {
 				long from = (idx >>> 32) + oldLen;
-				FileUtil.transferFileSelf(src.channel(), from, (idx >>> 32) + newLen, src.length() - from);
+				IOUtil.transferFileSelf(src.channel(), from, (idx >>> 32) + newLen, src.length() - from);
 			}
 			src.seek(idx >>> 32);
 			src.write(data.list, data.arrayOffset(), newLen);
 			if (newLen < oldLen) {
 				long from = (idx >>> 32) + oldLen;
-				FileUtil.transferFileSelf(src.channel(), from, (idx >>> 32) + newLen, src.length() - from);
+				IOUtil.transferFileSelf(src.channel(), from, (idx >>> 32) + newLen, src.length() - from);
 			}
 			dataIndexes[type.ordinal()] = (idx & 0xFFFFFFFF00000000L) | newLen;
 		} else if (isLastTable(idx)) {

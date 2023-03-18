@@ -5,6 +5,8 @@ import roj.asm.cst.CstUTF;
 import roj.asm.type.Type;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
+import roj.io.IOUtil;
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -98,7 +100,7 @@ public class Annotation {
 
 	public final List<AnnVal> getArray(String name) {
 		AnnVal av = values.get(name);
-		if (av == null) return Helpers.nonnull();
+		if (av == null) return Collections.emptyList();
 		return av.asArray();
 	}
 
@@ -112,14 +114,14 @@ public class Annotation {
 	}
 
 	public static Annotation deserialize(ConstantPool pool, DynByteBuf r) {
-		String type = ((CstUTF) pool.get(r)).getString();
+		String type = ((CstUTF) pool.get(r)).str();
 		int len = r.readUnsignedShort();
 
 		Map<String, AnnVal> params;
 		if (len > 0) {
 			params = new LinkedMyHashMap<>(len);
 			while (len-- > 0) {
-				params.put(((CstUTF) pool.get(r)).getString(), AnnVal.parse(pool, r));
+				params.put(((CstUTF) pool.get(r)).str(), AnnVal.parse(pool, r));
 			}
 		} else {
 			params = Collections.emptyMap();
@@ -129,7 +131,9 @@ public class Annotation {
 	}
 
 	public void toByteArray(ConstantPool pool, DynByteBuf w) {
-		w.putShort(pool.getUtfId("L" + clazz + ';')).putShort(values.size());
+		CharList sb = IOUtil.ddLayeredCharBuf().append('L').append(clazz).append(';');
+		w.putShort(pool.getUtfId(sb)).putShort(values.size());
+		sb._free();
 		for (Map.Entry<String, AnnVal> e : values.entrySet()) {
 			e.getValue().toByteArray(pool, w.putShort(pool.getUtfId(e.getKey())));
 		}

@@ -1,5 +1,8 @@
 package roj.mapper;
 
+import roj.archive.qz.xz.LZMA2Options;
+import roj.archive.qz.xz.LZMAInputStream;
+import roj.archive.qz.xz.LZMAOutputStream;
 import roj.archive.zip.ZipUtil;
 import roj.asm.Parser;
 import roj.asm.cst.Constant;
@@ -7,22 +10,24 @@ import roj.asm.cst.CstClass;
 import roj.asm.cst.CstDynamic;
 import roj.asm.cst.CstRef;
 import roj.asm.tree.*;
+import roj.asm.tree.anno.AnnVal;
+import roj.asm.tree.anno.Annotation;
+import roj.asm.tree.attr.Annotations;
 import roj.asm.tree.attr.AttrRecord;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.BootstrapMethods;
+import roj.asm.type.Signature;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
-import roj.asm.util.AttrHelper;
 import roj.asm.util.Context;
 import roj.collect.*;
 import roj.concurrent.collect.ConcurrentFindHashMap;
 import roj.concurrent.collect.ConcurrentFindHashSet;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.mapper.util.Desc;
 import roj.mapper.util.MapperList;
 import roj.mapper.util.SubImpl;
-import roj.text.DottedStringPool;
+import roj.text.StringPool;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -33,8 +38,6 @@ import java.nio.file.NotDirectoryException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
-import java.util.zip.DeflaterOutputStream;
-import java.util.zip.InflaterInputStream;
 
 /**
  * 第二代Class映射器
@@ -45,7 +48,7 @@ import java.util.zip.InflaterInputStream;
  */
 public class ConstMapper extends Mapping {
 	public static final String DONT_LOAD_PREFIX = "[x]";
-	public static final int FLAG_STATIC_MAP = 1, FLAG_CHECK_SUB_IMPL = 2, TRIM_DUPLICATE = 4;
+	public static final int FLAG_STATIC_MAP = 1, FLAG_CHECK_SUB_IMPL = 2, TRIM_DUPLICATE = 4, FLAG_CHECK_ANNOTATION = 8;
 
 	// 'CMPC': Const Remapper Cache
 	private static final int FILE_HEADER = 0x634d5063;
@@ -86,114 +89,100 @@ public class ConstMapper extends Mapping {
 
 	// region 缓存
 
+	private static LZMA2Options getLZMAOption() {
+		return new LZMA2Options(6).setDictSize(2097152).setPb(0);
+	}
+
 	public void saveCache(long hash, File cache) throws IOException {
-		DottedStringPool pool = new DottedStringPool('/');
+		StringPool pool = new StringPool();
 		if (!checkFieldType) pool.add("");
 
 		ByteList w = IOUtil.getSharedByteBuf();
 
-		w.putVarInt(classMap.size(), false);
+		w.putVUInt(classMap.size());
 		for (Map.Entry<String, String> s : classMap.entrySet()) {
-			pool.writeDlm(pool.writeDlm(w, s.getKey()), s.getValue());
+			pool.add(pool.add(w, s.getKey()), s.getValue());
 		}
-		w.putInt(FILE_HEADER);
 
-		w.putVarInt(fieldMap.size(), false);
+		w.putVUInt(fieldMap.size());
 		for (Map.Entry<Desc, String> s : fieldMap.entrySet()) {
-			Desc descriptor = s.getKey();
-			pool.writeString(pool.writeString(pool.writeString(pool.writeDlm(w, descriptor.owner), descriptor.name), descriptor.param).putShort(descriptor.flags), s.getValue());
+			Desc desc = s.getKey();
+			pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.flags), s.getValue());
 		}
-		w.putInt(FILE_HEADER);
 
-		w.putVarInt(methodMap.size(), false);
+		w.putVUInt(methodMap.size());
 		for (Map.Entry<Desc, String> s : methodMap.entrySet()) {
-			Desc descriptor = s.getKey();
-			pool.writeString(pool.writeString(pool.writeString(pool.writeDlm(w, descriptor.owner), descriptor.name), descriptor.param).putShort(descriptor.flags), s.getValue());
+			Desc desc = s.getKey();
+			pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.flags), s.getValue());
 		}
-		w.putInt(FILE_HEADER);
 
-		w.putVarInt(libSupers.size(), false);
+		w.putVUInt(libSupers.size());
 		for (Map.Entry<String, List<String>> s : libSupers.entrySet()) {
-			pool.writeDlm(w, s.getKey());
+			pool.add(w, s.getKey());
 
 			List<String> list = s.getValue();
-			w.putVarInt(list.size(), false);
-			for (String c : list) {
-				pool.writeDlm(w, c);
-			}
+			w.putVUInt(list.size());
+			for (int i = 0; i < list.size(); i++) pool.add(w, list.get(i));
 		}
-		w.putInt(FILE_HEADER);
 
-		w.putVarInt(libSkipped.size(), false);
+		w.putVUInt(libSkipped.size());
 		for (Desc s : libSkipped) {
-			pool.writeString(pool.writeString(pool.writeDlm(w, s.owner), s.name), s.param);
+			pool.add(pool.add(pool.add(w, s.owner), s.name), s.param);
 		}
 
-		try (OutputStream fos = new DeflaterOutputStream(new FileOutputStream(cache))) {
-			int pw = w.wIndex();
+		try (OutputStream out = new LZMAOutputStream(new FileOutputStream(cache), getLZMAOption(), -1)) {
+			ByteList.WriteOut w1 = new ByteList.WriteOut(out);
+			pool.writePool(w1.putInt(FILE_HEADER).putLong(hash));
+			w1.flush();
 
-			w.putInt(FILE_HEADER).putLong(hash);
-			pool.writePool(w);
-
-			w.rIndex = pw;
-			w.writeToStream(fos);
-
-			w.rIndex = 0;
-			w.wIndex(pw);
-			w.writeToStream(fos);
+			w.writeToStream(out);
 		}
 	}
 
-	public boolean readCache(long hash, File cache) throws IOException {
-		if (cache.length() == 0) throw new FileNotFoundException();
-		ByteList r = IOUtil.getSharedByteBuf().readStreamFully(new InflaterInputStream(new FileInputStream(cache)));
+	public Boolean readCache(long hash, File cache) throws IOException {
+		if (cache.length() == 0) return null;
+		ByteList r = IOUtil.getSharedByteBuf().readStreamFully(new LZMAInputStream(new FileInputStream(cache)));
 
 		if (r.readInt() != FILE_HEADER) throw new IllegalArgumentException("file header");
 
 		boolean readClassInheritanceMap = r.readLong() == hash;
 
-		DottedStringPool pool = new DottedStringPool(r, '/');
+		StringPool pool = new StringPool(r);
 
-		int len = r.readVarInt(false);
-		for (int i = 0; i < len; i++) {
-			classMap.put(pool.readDlm(r), pool.readDlm(r));
+		int len = r.readVUInt();
+		while(len-- > 0) {
+			classMap.put(pool.get(r), pool.get(r));
 		}
-		if (r.readInt() != FILE_HEADER) throw new IllegalArgumentException("class map");
 
-		len = r.readVarInt(false);
+		len = r.readVUInt();
 		fieldMap.ensureCapacity(len);
-		for (int i = 0; i < len; i++) {
-			fieldMap.put(new Desc(pool.readDlm(r), pool.readString(r), pool.readString(r), r.readUnsignedShort()), pool.readString(r));
+		while(len-- > 0) {
+			fieldMap.put(new Desc(pool.get(r), pool.get(r), pool.get(r), r.readUnsignedByte()), pool.get(r));
 		}
-		if (r.readInt() != FILE_HEADER) throw new IllegalArgumentException("field map");
 
-		len = r.readVarInt(false);
+		len = r.readVUInt();
 		methodMap.ensureCapacity(len);
-		for (int i = 0; i < len; i++) {
-			methodMap.put(new Desc(pool.readDlm(r), pool.readString(r), pool.readString(r), r.readUnsignedShort()), pool.readString(r));
+		while(len-- > 0) {
+			methodMap.put(new Desc(pool.get(r), pool.get(r), pool.get(r), r.readUnsignedByte()), pool.get(r));
 		}
-		if (r.readInt() != FILE_HEADER) throw new IllegalArgumentException("method map");
 
 		if (!readClassInheritanceMap) return false;
 
-		len = r.readVarInt(false);
-		for (int i = 0; i < len; i++) {
-			String name = pool.readDlm(r);
+		len = r.readVUInt();
+		while(len-- > 0) {
+			String name = pool.get(r);
 
-			int len2 = r.readVarInt(false);
-			MapperList list2 = new MapperList(len2);
-			for (int j = 0; j < len2; j++) {
-				list2.add(pool.readDlm(r));
-			}
-			list2._init_();
+			int len2 = r.readVUInt();
+			MapperList sch = new MapperList(len2);
+			while(len2-- > 0) sch.add(pool.get(r));
+			sch._init_();
 
-			libSupers.put(name, list2);
+			libSupers.put(name, sch);
 		}
-		if (r.readInt() != FILE_HEADER) throw new IllegalArgumentException("library super map");
 
-		len = r.readVarInt(false);
-		for (int i = 0; i < len; i++) {
-			libSkipped.add(new Desc(pool.readDlm(r), pool.readString(r), pool.readString(r)));
+		len = r.readVUInt();
+		while(len-- > 0) {
+			libSkipped.add(new Desc(pool.get(r), pool.get(r), pool.get(r)));
 		}
 
 		return true;
@@ -305,10 +294,23 @@ public class ConstMapper extends Mapping {
 		ArrayList<String> list = new ArrayList<>(cnt);
 		if (!"java/lang/Object".equals(data.parent)) {
 			list.add(data.parent);
+
+			if ((flag & FLAG_CHECK_ANNOTATION) != 0) {
+				Attribute attr = data.attrByName(Attribute.ClAnnotations.name);
+				if (attr != null) {
+					Annotations a = (Annotations) Parser.attr(data, data.cp, Attribute.ClAnnotations.name, Parser.reader(attr), Signature.CLASS);
+					Annotation annotation = AttrHelper.getAnnotation(a.annotations, "roj/mapper/Inherited");
+					if (annotation != null) {
+						for (AnnVal klass : annotation.getArray("value")) {
+							list.add(klass.asClass().owner);
+						}
+					}
+				}
+			}
 		}
 
 		for (int i = 0; i < itfs.size(); i++) {
-			list.add(itfs.get(i).getValue().getString());
+			list.add(itfs.get(i).name().str());
 		}
 
 		selfSupers.put(data.name, list);
@@ -349,7 +351,7 @@ public class ConstMapper extends Mapping {
 						for (int i = 0; i < methods1.size(); i++) {
 							MoFNode m = methods1.get(i);
 							if (desc.param.equals(m.rawDesc()) && desc.name.equals(m.name())) {
-								desc.flags = m.accessFlag();
+								desc.flags = m.modifier();
 								break;
 							}
 						}
@@ -380,8 +382,8 @@ public class ConstMapper extends Mapping {
 			RawMethod m = (RawMethod) methods.get(i);
 
 			sp.owner = data.name;
-			sp.name = m.name.getString();
-			sp.param = m.type.getString();
+			sp.name = m.name.str();
+			sp.param = m.type.str();
 
 			int j = 0;
 			while (true) {
@@ -434,8 +436,8 @@ public class ConstMapper extends Mapping {
 			RawField f = (RawField) fields.get(i);
 
 			sp.owner = data.name;
-			sp.name = f.name.getString();
-			sp.param = checkFieldType ? f.type.getString() : "";
+			sp.name = f.name.str();
+			sp.param = checkFieldType ? f.type.str() : "";
 
 			int j = 0;
 			while (true) {
@@ -466,8 +468,8 @@ public class ConstMapper extends Mapping {
 		for (int i = 0; i < fields.size(); i++) {
 			RawField field = (RawField) fields.get(i);
 
-			md.name = field.name.getString();
-			md.param = checkFieldType ? field.type.getString() : "";
+			md.name = field.name.str();
+			md.param = checkFieldType ? field.type.str() : "";
 
 			String newName = fieldMap.get(md);
 			if (newName != null) {
@@ -527,7 +529,7 @@ public class ConstMapper extends Mapping {
 					mapRef(data, (CstRef) c, false);
 					break;
 				case Constant.INVOKE_DYNAMIC:
-					if (bs == null) bs = AttrHelper.getBootstrapMethods(data.cp, data);
+					if (bs == null) bs = data.parsedAttr(data.cp,Attribute.BootstrapMethods);
 					if (bs == null) throw new IllegalArgumentException("有lambda却无BootstrapMethod, " + data.name);
 					mapLambda(bs, data, (CstDynamic) c);
 					break;
@@ -547,11 +549,11 @@ public class ConstMapper extends Mapping {
 
 		Desc md = MapUtil.getInstance().sharedDC;
 
-		md.name = dyn.desc().getName().getString();
+		md.name = dyn.desc().name().str();
 		// FP: init / clinit
 		if (md.name.startsWith("<")) return;
 
-		String allDesc = dyn.desc().getType().getString();
+		String allDesc = dyn.desc().getType().str();
 		if (!allDesc.endsWith(";")) return;
 
 		md.param = ibm.interfaceDesc();
@@ -584,7 +586,7 @@ public class ConstMapper extends Mapping {
 
 		if (method) {
 			// FP: init / clinit
-			if (ref.desc().getName().getString().startsWith("<")) return;
+			if (ref.desc().name().str().startsWith("<")) return;
 			/**
 			 * Fast path
 			 */
@@ -628,7 +630,7 @@ public class ConstMapper extends Mapping {
 			Helpers.athrow(new NotDirectoryException(folder.getAbsolutePath()));
 		}
 
-		loadLibraries(FileUtil.findAllFiles(folder));
+		loadLibraries(IOUtil.findAllFiles(folder));
 	}
 
 	public void loadLibraries(List<?> files) {
@@ -690,7 +692,7 @@ public class ConstMapper extends Mapping {
 						//if (d) System.out.println("found " + m + " => " + entry.getValue());
 						Desc md = entry.getKey();
 						if (md.flags == Desc.UNSET) throw new IllegalStateException("缺少元素 " + md);
-						if ((md.flags & (AccessFlag.FINAL | AccessFlag.STATIC)) != 0 || 0 != (method.accessFlag() & (AccessFlag.PRIVATE | AccessFlag.STATIC))) {
+						if ((md.flags & (AccessFlag.FINAL | AccessFlag.STATIC)) != 0 || 0 != (method.modifier() & (AccessFlag.PRIVATE | AccessFlag.STATIC))) {
 
 							//if (d) System.out.println("fall 1: " + method.accessFlag() + "\n" + md.flags);
 							// 第一类第二类
@@ -748,7 +750,7 @@ public class ConstMapper extends Mapping {
 
 	protected void handleUnmatched(MyHashSet<Desc> rest) {
 		if (!rest.isEmpty()) {
-			System.out.println("[ConstMapper/WARN]: 缺少元素("+rest.size()+"): " + rest.iterator().next());
+			System.out.println("[ConstMapper/WARN]: 缺少元素("+rest.size()+"): " + (DEBUG?rest:rest.iterator().next()));
 
 			for (Desc missing : rest) { // 将没有flag的全部填充为public
 				missing.flags = AccessFlag.PUBLIC;
@@ -769,7 +771,7 @@ public class ConstMapper extends Mapping {
 					throw new IllegalArgumentException(new FileNotFoundException(folder.getAbsolutePath()));
 				}
 
-				list = FileUtil.findAllFiles(folder);
+				list = IOUtil.findAllFiles(folder);
 			} else {list = (List<Object>) libPath;}
 			hash = MapUtil.libHash(list);
 		}
@@ -796,18 +798,22 @@ public class ConstMapper extends Mapping {
 						CmdUtil.warning("缓存读取失败: " + e.getMessage());
 					}
 				}
-
-				clear();
 			} finally {
 				if (result == null) {
+					clear();
+
 					if (map instanceof File) loadMap((File) map, reverse);
 					else if (map instanceof InputStream) loadMap((InputStream) map, reverse);
 					else if (map instanceof ByteList) loadMap(((ByteList) map).asInputStream(), reverse);
 				}
-				if (libPath != null && result != Boolean.TRUE) {
-					if (libPath instanceof File) {loadLibraries((File) libPath);} else loadLibraries((List<Object>) libPath);
+				if (result != Boolean.TRUE) {
+					if (libPath != null) {
+						if (libPath instanceof File) loadLibraries((File) libPath);
+						else loadLibraries((List<Object>) libPath);
+					}
+
+					saveCache(hash, cacheFile);
 				}
-				saveCache(hash, cacheFile);
 			}
 		}
 	}
@@ -819,7 +825,7 @@ public class ConstMapper extends Mapping {
 	 * Set reference name
 	 */
 	static void setRefName(ConstantData data, CstRef ref, String newName) {
-		ref.desc(data.cp.getDesc(newName, ref.desc().getType().getString()));
+		ref.desc(data.cp.getDesc(newName, ref.desc().getType().str()));
 	}
 
 	public void clear() {
@@ -951,7 +957,7 @@ public class ConstMapper extends Mapping {
 
 				Desc ent = flags.find(d);
 				if (ent != d) {
-					ent.flags = n.accessFlag();
+					ent.flags = n.modifier();
 					flags.remove(d);
 				}
 			}

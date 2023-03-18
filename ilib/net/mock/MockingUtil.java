@@ -69,7 +69,7 @@ public class MockingUtil {
 			versionNumbers = new ToIntMap<>();
 			try {
 				SimpleList<String> tmp = new SimpleList<>(5);
-				for (String s : new LineReader(IOUtil.readUTF("META-INF/version.map"), true)) {
+				for (String s : new LineReader(IOUtil.readResUTF("META-INF/version.map"), true)) {
 					if (s.startsWith("#")) continue;
 					tmp.clear();
 					TextUtil.split(tmp, s, '\t');

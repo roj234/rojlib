@@ -14,17 +14,15 @@ public class AttrCodeWriter extends AttrUnknown {
 	public final CodeWriter cw;
 	public final MethodNode mn;
 
-	public AttrCodeWriter(ConstantPool cp, MethodNode mn) {
-		super("Code", new ByteList());
-		cw = new CodeWriter();
-		cw.init(super.getRawData(), cp);
+	public AttrCodeWriter(ConstantPool cp, MethodNode mn) { this(cp, mn, new CodeWriter()); }
+	public AttrCodeWriter(ConstantPool cp, MethodNode mn, CodeWriter cw) {
+		super("Code", null);
+		ByteList buf = new ByteList();
+		this.cw = cw;
+		cw.init(buf, cp);
 		cw.mn = mn;
 		this.mn = mn;
-	}
-
-	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
-		w.put(getRawData());
+		setRawData(buf);
 	}
 
 	@Override

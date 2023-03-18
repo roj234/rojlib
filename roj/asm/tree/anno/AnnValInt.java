@@ -16,38 +16,15 @@ public final class AnnValInt extends AnnVal {
 	public final byte type;
 	public int value;
 
-	@Override
-	public int asInt() {
-		return value;
-	}
+	public int asInt() { return value; }
+	public float asFloat() { return value; }
+	public long asLong() { return value; }
+	public double asDouble() { return value; }
 
-	@Override
-	public double asDouble() {
-		return value;
-	}
+	public byte type() { return type; }
 
-	@Override
-	public float asFloat() {
-		return value;
-	}
-
-	@Override
-	public long asLong() {
-		return value;
-	}
-
-	public void toByteArray(ConstantPool pool, DynByteBuf w) {
-		w.put(type).putShort(pool.getIntId(value));
-	}
-
-	public String toString() {
-		return String.valueOf(value);
-	}
-
-	@Override
-	public byte type() {
-		return type;
-	}
+	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put(type).putShort(cp.getIntId(value)); }
+	public String toString() { return String.valueOf(value); }
 
 	@Override
 	public boolean equals(Object o) {

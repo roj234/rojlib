@@ -9,6 +9,7 @@ import roj.asm.type.TypeHelper;
 import roj.asm.util.AttributeList;
 import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
+import roj.util.TypedName;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -31,14 +32,14 @@ public final class AttrRecord extends Attribute {
 			Val rd = new Val();
 			variables.add(rd);
 
-			rd.name = ((CstUTF) pool.get(r)).getString();
-			rd.type = ((CstUTF) pool.get(r)).getString();
+			rd.name = ((CstUTF) pool.get(r)).str();
+			rd.type = ((CstUTF) pool.get(r)).str();
 			int len1 = r.readUnsignedShort();
 			if (len1 > 0) {
 				rd.attributes = new AttributeList(len1);
 				while (len1-- > 0) {
-					String name0 = ((CstUTF) pool.get(r)).getString();
-					rd.attributes.add(new AttrUnknown(name0, r.slice(r.readInt())));
+					String name0 = ((CstUTF) pool.get(r)).str();
+					rd.attributes.i_direct_add(new AttrUnknown(name0, r.slice(r.readInt())));
 				}
 			}
 		}
@@ -91,7 +92,12 @@ public final class AttrRecord extends Attribute {
 		}
 
 		@Override
-		public char accessFlag() {
+		public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedName<T> type) {
+			return Parser.parseAttribute(this,cp,type,attributes, Parser.RECORD_ATTR);
+		}
+
+		@Override
+		public char modifier() {
 			throw new UnsupportedOperationException();
 		}
 

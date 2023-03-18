@@ -2,19 +2,24 @@ package roj.text;
 
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
+import roj.io.IOUtil;
+import roj.math.MathUtils;
 import roj.math.MutableInt;
+import roj.util.ArrayCache;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.CharBuffer;
 import java.util.Arrays;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * @author Roj234
  * @since 2021/6/19 1:28
  */
-public class CharList implements CharSequence, Appendable {
+public class CharList implements CharSequence, Appender {
 	// region Number helper
 	static void getChars(long l, int charPos, char[] buf) {
 		long q;
@@ -61,362 +66,95 @@ public class CharList implements CharSequence, Appendable {
 		return (char) ((r%10) + '0');
 	}
 
-	static int stringSize(long x) {
-		long p = 10;
-		for (int i=1; i<19; i++) {
-			if (x < p)
-				return i;
-			p = 10*p;
-		}
-		return 19;
-	}
-
-	private final static int [] sizeTable = { 9, 99, 999, 9999, 99999, 999999, 9999999,
-									  99999999, 999999999, Integer.MAX_VALUE };
-	static int stringSize(int x) {
-		for (int i=0; ; i++)
-			if (x <= sizeTable[i])
-				return i+1;
-	}
 	// endregion
 
 	public char[] list;
-	protected int ptr;
+	protected int len;
 
-	public CharList() {
-		this.ptr = 0;
-	}
-
-	public CharList(int len) {
-		list = new char[len];
-	}
-
+	public CharList() { list = ArrayCache.CHARS; }
+	public CharList(int len) { list = new char[len]; }
 	public CharList(char[] array) {
 		list = array;
-		ptr = array.length;
+		len = array.length;
 	}
 
-	public int arrayLength() {
-		return list.length;
+	public final char charAt(int i) {
+		if (i >= len) throw new StringIndexOutOfBoundsException("off="+i+",len="+len);
+		return list[i];
+	}
+	public final void set(int i, char c) {
+		if (i >= len) throw new StringIndexOutOfBoundsException("off="+i+",len="+len);
+		list[i] = c;
 	}
 
-	public int length() {
-		return ptr;
+	public final int length() { return len; }
+	public final void setLength(int i) {
+		if (i > list.length) ensureCapacity(i);
+		this.len = i;
 	}
 
-	public CharList append(char e) {
-		int i = this.ptr++;
-		ensureCapacity(this.ptr);
-		list[i] = e;
-		return this;
-	}
-
-	public final CharList readFully(Reader in) throws IOException {
-		return readFully(in, true);
-	}
-
+	public final CharList readFully(Reader in) throws IOException { return readFully(in, true); }
 	public final CharList readFully(Reader in, boolean close) throws IOException {
-		ensureCapacity(ptr+127);
+		ensureCapacity(len+127);
 
 		int r;
 		do {
-			r = in.read(list, ptr, list.length - ptr);
+			r = in.read(list, len, list.length-len);
 			if (r <= 0) break;
-			ptr += r;
-			ensureCapacity(ptr+1);
+			len += r;
+			ensureCapacity(len+1);
 		} while (true);
 		if (close) in.close();
 		return this;
 	}
 
-	public void delete(int index) {
-		delete(index, index+1);
-	}
-
 	public void ensureCapacity(int required) {
-		if (list == null || required > list.length) {
-			char[] newList = new char[Math.max(((required * 3) >> 1), 32)];
-			if (list != null && ptr > 0) System.arraycopy(list, 0, newList, 0, Math.min(ptr, list.length));
+		if (required > list.length) {
+			int newLen = Math.max(((required * 3) >> 1), 32);
+
+			ArrayCache cache = ArrayCache.getDefaultCache();
+			cache.putArray(list);
+			char[] newList = cache.getCharArray(newLen, false);
+
+			if (len > 0) System.arraycopy(list, 0, newList, 0, Math.min(len, list.length));
 			list = newList;
 		}
 	}
 
-	public CharList append(char[] array) {
-		return append(array, 0, array.length);
-	}
-	public CharList append(char[] c, int start, int end) {
-		int length = end - start;
-		if (length == 0) return this;
+	// region search
+	public final boolean contains(CharSequence s) { return indexOf(s, 0) >= 0; }
+	public final int indexOf(CharSequence s) { return indexOf(s, 0); }
+	public final int indexOf(CharSequence s, int from) { return match(s, from, len-s.length()+1); }
+	public final boolean startsWith(CharSequence s) { return s.length() == 0 || match(s, 0, 1) >= 0; }
+	public final boolean endsWith(CharSequence s) { return s.length() == 0 || match(s, len-s.length(), len-s.length()+1) >= 0; }
 
-		if (start < 0 || end > c.length || c.length < end - start || start > end) {
-			throw new StringIndexOutOfBoundsException("len=" + c.length + ",str=" + start + ",end=" + end);
-		}
-		ensureCapacity(ptr + length);
-		System.arraycopy(c, start, list, ptr, length);
-		ptr += length;
-		return this;
-	}
-
-	public CharList append(CharList list) {
-		return append(list.list, 0, list.ptr);
-	}
-	public CharList append(CharList list, int start, int end) {
-		return append(list.list, start, end);
-	}
-
-	public CharList append(Object cs) {
-		return append(String.valueOf(cs));
-	}
-
-	public CharList append(CharSequence cs) {
-		if (cs == null) return append("null");
-		return append(cs, 0, cs.length());
-	}
-
-	public CharList append(String s) {
-		if (s == null) s = "null";
-		ensureCapacity(ptr + s.length());
-		s.getChars(0, s.length(), list, ptr);
-		ptr += s.length();
-		return this;
-	}
-
-	public CharList append(CharSequence cs, int start, int end) {
-		if (cs instanceof CharList) {
-			return append(((CharList) cs).list, start, end);
-		}
-		if (cs instanceof Slice) {
-			Slice s = (Slice) cs;
-			return append(s.array, s.off + start, s.off + end);
-		}
-
-		ensureCapacity(ptr + end - start);
-
-		char[] list = this.list;
-		int j = ptr;
-
-		for (int i = start; i < end; i++) {
-			list[j++] = cs.charAt(i);
-		}
-		ptr = j;
-
-		return this;
-	}
-
-	public CharList append(int i) {
-		if (i == Integer.MIN_VALUE) {
-			append("-2147483648");
-			return this;
-		}
-
-		int len = (i < 0) ? stringSize(-i)+1 : stringSize(i);
-		int end = ptr+len;
-		ensureCapacity(end);
-
-		if (i < 0) {
-			list[ptr] = '-';
-			i = -i;
-		}
-
-		getChars(i, end, list);
-
-		ptr = end;
-		return this;
-	}
-
-	public CharList append(long l) {
-		if (l == Long.MIN_VALUE) {
-			append("-9223372036854775808");
-			return this;
-		}
-
-		int len = (l < 0) ? stringSize(-l)+1 : stringSize(l);
-		int end = ptr+len;
-		ensureCapacity(end);
-
-		if (l < 0) {
-			list[ptr] = '-';
-			l = -l;
-		}
-		getChars(l, end, list);
-
-		ptr = end;
-		return this;
-	}
-
-	public void set(int index, char e) {
-		list[index] = e;
-	}
-
-	public char charAt(int i) {
-		if (i >= ptr) throw new StringIndexOutOfBoundsException("len=" + ptr + ",off=" + i);
-		return list[i]; // 2
-	}
-
-	public void setLength(int i) {
-		if (list == null) {
-			if (i == 0) return;
-			throw new StringIndexOutOfBoundsException("len=0,off=" + i);
-		}
-		if (i > list.length) throw new StringIndexOutOfBoundsException("len=" + list.length + ",off=" + i);
-		this.ptr = i;
-	}
-
-	@Override
-	public boolean equals(Object o) {
-		if (this == o) return true;
-		if (!(o instanceof CharSequence)) return false;
-
-		CharSequence cs = (CharSequence) o;
-
-		if (ptr != cs.length()) return false;
-		final char[] list = this.list;
-		for (int i = 0; i < ptr; i++) {
-			if (list[i] != cs.charAt(i)) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	@Override
-	public int hashCode() {
-		int hash = 0;
-
-		final char[] list = this.list;
-		for (int i = 0; i < ptr; i++) {
-			hash = 31 * hash + list[i];
-		}
-		return hash;
-	}
-
-	@Nonnull
-	public String toString() {
-		return toString(0, ptr);
-	}
-
-	@Override
-	public CharSequence subSequence(int start, int end) {
-		int len = ptr;
-
-		if (start == 0 && end == len) {
-			return this;
-		}
-
-		if (0 <= start && start <= end && end <= len) {
-			return end == start ? "" : new Slice(list, start, end);
-		} else {
-			throw new StringIndexOutOfBoundsException("len=" + len + ",str=" + start + ",end=" + end);
-		}
-	}
-
-	public void clear() {
-		ptr = 0;
-	}
-
-	public CharList replace(char a, char b) {
-		return replace(a, b, 0, ptr);
-	}
-
-	public CharList replace(char o, char n, int i, int len) {
-		char[] list = this.list;
-		for (; i < len; i++) {
-			if (list[i] == o) {
-				list[i] = n;
-			}
-		}
-		return this;
-	}
-
-	public void replace(int start, int end, CharSequence s) {
-		if (start < 0) {
-			throw new StringIndexOutOfBoundsException("len=" + s.length() + ",str=" + start + ",end=" + end);
-		} else {
-			if (start > end) {
-				throw new StringIndexOutOfBoundsException("len=" + s.length() + ",str=" + start + ",end=" + end);
-			} else {
-				if (end > this.ptr) end = this.ptr;
-
-				int origLen = end - start;
-				if (origLen > 0) {
-					if (origLen > s.length()) {
-						int delta = s.length() - origLen; // < 0
-						System.arraycopy(list, end, list, end + delta, this.ptr - end);
-						this.ptr += delta;
-						end = start + s.length();
-					} else if (origLen < s.length()) {
-						insert(end, s, origLen, s.length());
-					}
-
-					char[] list = this.list;
-					int j = 0;
-					while (start < end) {
-						list[start++] = s.charAt(j++);
+	private int match(CharSequence s, int start, int end) {
+		char[] b = list;
+		o:
+		for (; start < end; start++) {
+			if (b[start] == s.charAt(0)) {
+				for (int j = 1; j < s.length(); j++) {
+					if (b[start + j] != s.charAt(j)) {
+						continue o;
 					}
 				}
+				return start;
 			}
 		}
+
+		return -1;
 	}
 
-	/**
-	 * 不在替换结果中搜索
-	 * "aaaa".replace("aa","a") => "aa"
-	 */
-	public CharList replace(CharSequence str, CharSequence target) {
-		int pos = 0;
-		while ((pos = indexOf(str, pos)) != -1) {
-			replace(pos, pos+str.length(), target);
-			pos += target.length();
-		}
-		return this;
-	}
-	/**
-	 * 在替换结果中搜索
-	 * "aaaa".replaceInReplaceResult("aa","a") => "a"
-	 */
-	public CharList replaceInReplaceResult(CharSequence str, CharSequence target) {
-		int pos = 0;
-		while ((pos = indexOf(str, pos)) != -1) {
-			replace(pos, pos+str.length(), target);
-		}
-		return this;
-	}
-	public CharList replaceMulti(String[] str, String[] target) {
-		TrieTree<String> map = new TrieTree<>();
-		for (int i = 0; i < str.length; i++) {
-			map.put(str[i], target[i]);
-		}
-		int pos = 0;
+	public final int lastIndexOf(CharSequence str) { return lastIndexOf(str, len); }
+	public final int lastIndexOf(CharSequence str, int from) {
+		int i = Math.min(len-str.length(), from);
 
-		MyHashMap.Entry<MutableInt, String> entry = new MyHashMap.Entry<>(new MutableInt(), null);
-		while (true) {
-			map.longestIn(this, pos, ptr, entry);
-			int len = entry.getKey().getValue();
-			if (len < 0) break;
-
-			replace(pos, pos+len, entry.getValue());
-			pos += len;
-		}
-
-		return this;
-	}
-
-	public int indexOf(CharSequence str) {
-		return indexOf(str, 0);
-	}
-	public int indexOf(CharSequence str, int from) {
-		return findForward(str, from, ptr-str.length()+1);
-	}
-
-	private int findForward(CharSequence str, int from, int to) {
-		int i = from;
-
-		char[] list = this.list;
+		char[] b = list;
 		o:
-		for (; i < to; i++) {
-			if (list[i] == str.charAt(0)) {
+		for (; i >= 0; i--) {
+			if (b[i] == str.charAt(0)) {
 				for (int j = 1; j < str.length(); j++) {
-					if (list[i + j] != str.charAt(j)) {
+					if (b[i + j] != str.charAt(j)) {
 						continue o;
 					}
 				}
@@ -427,54 +165,10 @@ public class CharList implements CharSequence, Appendable {
 		return -1;
 	}
 
-	public int lastIndexOf(CharSequence str) {
-		return lastIndexOf(str, 0);
-	}
-
-	public int lastIndexOf(CharSequence str, int to) {
-		int i = ptr - str.length();
-
-		char[] list = this.list;
-		o:
-		for (; i >= to; i--) {
-			if (list[i] == str.charAt(0)) {
-				for (int j = 1; j < str.length(); j++) {
-					if (list[i + j] != str.charAt(j)) {
-						continue o;
-					}
-				}
-				return i;
-			}
-		}
-
-		return -1;
-	}
-
-	public boolean startsWith(CharSequence str) {
-		return str.length() == 0 || findForward(str, 0, 1) >= 0;
-	}
-	public boolean endsWith(CharSequence str) {
-		return str.length() == 0 || findForward(str, ptr-str.length(), ptr-str.length()+1) >= 0;
-	}
-
-	public char[] toCharArray() {
-		return Arrays.copyOf(list, ptr);
-	}
-
-	public String toString(int start, int end) {
-		return end <= start ? "" : new String(list, start, end-start);
-	}
-
-	public boolean regionMatches(int index, CharSequence str) {
-		return regionMatches(index, str, 0, str.length());
-	}
-
-	public boolean regionMatches(int index, CharSequence str, int offset) {
-		return regionMatches(index, str, offset, str.length());
-	}
-
+	public final boolean regionMatches(int i, CharSequence s) { return regionMatches(i,s,0,s.length()); }
+	public final boolean regionMatches(int i, CharSequence s, int sOff) { return regionMatches(i,s,sOff,s.length()); }
 	public boolean regionMatches(int index, CharSequence str, int off, int length) {
-		if (index + length > ptr) return false;
+		if (index + length > len) return false;
 
 		char[] list = this.list;
 		for (int i = index; off < length; i++, off++) {
@@ -484,120 +178,369 @@ public class CharList implements CharSequence, Appendable {
 		return true;
 	}
 
-	public void delete(int start, int end) {
-		if (start < 0) {
-			throw new StringIndexOutOfBoundsException("len=" + ptr + ",str=" + start + ",end=" + end);
-		} else {
-			if (start > end) {
-				throw new StringIndexOutOfBoundsException("len=" + ptr + ",str=" + start + ",end=" + end);
-			} else {
-				if (end > this.ptr) end = this.ptr;
+	// endregion
+	// region append
+	public final CharList append(char c) {
+		ensureCapacity(len+1);
+		list[len++] = c;
+		return this;
+	}
+	public final CharList appendCodePoint(int cp) {
+		if (!Character.isSupplementaryCodePoint(cp)) return append((char)cp);
+		return append(Character.highSurrogate(cp)).append(Character.lowSurrogate(cp));
+	}
 
-				int delta = end - start;
-				if (delta > 0) {
-					if (end != this.ptr) System.arraycopy(this.list, start + delta, this.list, start, this.ptr - end);
-					this.ptr -= delta;
-				}
-			}
+	public final CharList append(char[] c) {
+		return append(c, 0, c.length);
+	}
+	public CharList append(char[] c, int start, int end) {
+		checkBounds(start,end,c.length);
+
+		int l = end - start;
+		if (l == 0) return this;
+
+		ensureCapacity(len+l);
+		System.arraycopy(c, start, list, len, l);
+		len += l;
+		return this;
+	}
+	public final CharList append(CharList c) {
+		return append(c.list, 0, c.len);
+	}
+	public final CharList append(CharList c, int start, int end) {
+		if (end > c.len) throw new StringIndexOutOfBoundsException("len="+c.len +",start="+start+",end="+end);
+		return append(c.list, start, end);
+	}
+	public final CharList append(CharSequence csq) {
+		if (csq == null) return append("null");
+		return append(csq, 0, csq.length());
+	}
+	public CharList append(CharSequence cs, int start, int end) {
+		if (cs instanceof CharList) return append((CharList) cs, start, end);
+		if (cs instanceof Slice) {
+			Slice s = (Slice) cs;
+			return append(s.array, s.off + start, s.off + end);
+		}
+
+		checkBounds(start,end,cs.length());
+		ensureCapacity(len + end-start);
+
+		char[] list = this.list;
+		int j = len;
+		for (int i = start; i < end; i++)
+			list[j++] = cs.charAt(i);
+		len = j;
+
+		return this;
+	}
+	public final CharList append(String s) {
+		if (s == null) s = "null";
+		ensureCapacity(len + s.length());
+		s.getChars(0, s.length(), list, len);
+		len += s.length();
+		return this;
+	}
+	public final CharList append(Object o) {
+		return append(o == null ? "null" : o.toString());
+	}
+
+	public final CharList append(int i) {
+		if (i == Integer.MIN_VALUE) {
+			append("-2147483648");
+			return this;
+		}
+
+		int len = (i < 0) ? TextUtil.digitCount(-i)+1 : TextUtil.digitCount(i);
+		ensureCapacity(this.len+len);
+		int end = this.len+len;
+
+		if (i < 0) {
+			list[this.len] = '-';
+			i = -i;
+		}
+		getChars(i, end, list);
+
+		this.len = end;
+		return this;
+	}
+	public final CharList append(long l) {
+		if (l == Long.MIN_VALUE) {
+			append("-9223372036854775808");
+			return this;
+		}
+
+		int len = (l < 0) ? TextUtil.digitCount(-l)+1 : TextUtil.digitCount(l);
+		ensureCapacity(this.len+len);
+		int end = this.len+len;
+
+		if (l < 0) {
+			list[this.len] = '-';
+			l = -l;
+		}
+		getChars(l, end, list);
+
+		this.len = end;
+		return this;
+	}
+
+	public final CharList append(float f) {
+		StringBuilder sb = IOUtil.SharedCoder.get().numberHelper;
+		sb.delete(0,sb.length()).append(f);
+		ensureCapacity(len+sb.length());
+		sb.getChars(0,sb.length(),list,len);
+		len += sb.length();
+		return this;
+	}
+
+	public final CharList append(double d) {
+		StringBuilder sb = IOUtil.SharedCoder.get().numberHelper;
+		sb.delete(0,sb.length()).append(d);
+		ensureCapacity(len+sb.length());
+		sb.getChars(0,sb.length(),list,len);
+		len += sb.length();
+		return this;
+	}
+
+	// endregion
+	// region insert
+	public final CharList insert(int pos, char c) {
+		ensureCapacity(len+1);
+		if (len > pos) System.arraycopy(list, pos, list, pos+1, len-pos);
+		list[pos] = c;
+		len++;
+		return this;
+	}
+
+	public final CharList insert(int pos, CharSequence s) { return insert(pos, s, 0, s.length()); }
+	public final CharList insert(int pos, CharSequence s, int start, int end) {
+		checkBounds(start,end,s.length());
+		int len = end - start;
+		if (len == 0) return this;
+		ensureCapacity(len + this.len);
+
+		char[] c = list;
+		if (this.len - pos > 0)
+			System.arraycopy(c, pos, c, pos + len, this.len - pos);
+
+		while (start < end) c[pos++] = s.charAt(start++);
+		this.len += len;
+
+		return this;
+	}
+	// endregion
+	// region delete
+	public final void delete(int pos) { delete(pos, pos+1); }
+	public final void delete(int start, int end) {
+		checkBounds(start, end, len);
+		int l = end-start;
+		if (l > 0) {
+			if (end != len) System.arraycopy(list, start+l, list, start, len-end);
+			len -= l;
 		}
 	}
 
-	public CharList trim() {
-		int len = ptr;
+	public final CharList trim() {
+		int len = this.len;
 		int st = 0;
 		char[] val = list;    /* avoid getfield opcode */
 
 		while ((st < len) && (val[st] <= ' ')) {
 			st++;
 		}
-		while ((st < len) && (val[len - 1] <= ' ')) {
+		while ((st < len) && (val[len-1] <= ' ')) {
 			len--;
 		}
 
-		ptr = len;
-		if (st > 0) {
-			delete(0, st);
+		this.len = len;
+		if (st > 0) delete(0, st);
+		return this;
+	}
+
+	public final void clear() { len = 0; }
+	// endregion
+	// region replace
+	public final CharList replace(char a, char b) { return replace(a, b, 0, len); }
+	public final CharList replace(char a, char b, int off, int len) {
+		checkBounds(off,off+len,this.len);
+		char[] c = list;
+		for (; off < len; off++)
+			if (c[off] == a) c[off] = b;
+		return this;
+	}
+
+	public final void replace(int start, int end, CharSequence s) {
+		checkBounds(start,end,len);
+
+		int l = end - start;
+		if (l > 0) {
+			if (l > s.length()) {
+				int delta = s.length() - l; // < 0
+				System.arraycopy(list, end, list, end + delta, this.len - end);
+				this.len += delta;
+				end = start + s.length();
+			} else if (l < s.length()) {
+				insert(end, s, l, s.length());
+			}
+
+			char[] c = list;
+			int j = 0;
+			while (start < end)
+				c[start++] = s.charAt(j++);
 		}
-
-		return this;
-	}
-
-	public CharList insert(int pos, char str) {
-		ensureCapacity(1 + ptr);
-		if (ptr - pos > 0) System.arraycopy(list, pos, list, pos + 1, ptr - pos);
-		list[pos] = str;
-		ptr++;
-		return this;
-	}
-
-	public CharList insert(int pos, CharSequence str) {
-		return insert(pos, str, 0, str.length());
-	}
-
-	public CharList insert(int pos, CharSequence s, int str, int end) {
-		int len = end - str;
-		ensureCapacity(len + ptr);
-		char[] list = this.list;
-		if (ptr - pos > 0 && len > 0) System.arraycopy(list, pos, list, pos + len, ptr - pos);
-		while (str < end) {
-			list[pos++] = s.charAt(str++);
-		}
-		ptr += len;
-
-		return this;
-	}
-
-	public CharList appendCodePoint(int cp) {
-		return append(Character.highSurrogate(cp)).append(Character.lowSurrogate(cp));
-	}
-
-	public boolean contains(CharSequence s) {
-		return indexOf(s, 0) != -1;
-	}
-
-	public CharBuffer toCharBuffer() {
-		return CharBuffer.wrap(list, 0, ptr);
 	}
 
 	/**
-	 * 只读
+	 * 不在替换结果中搜索
+	 * "aaaa".replace("aa","a") => "aa"
 	 */
-	public final static class Slice implements CharSequence {
+	public final CharList replace(CharSequence str, CharSequence target) {
+		CharList out = null;
+
+		String targetArray = target.toString();
+
+		int prevI = 0, i = 0;
+		while ((i = indexOf(str, i)) != -1) {
+			if (prevI == 0) out = new CharList(len);
+			out.append(list, prevI, i).append(targetArray);
+
+			i += str.length();
+			prevI = i;
+		}
+
+		if (prevI == 0) return this;
+		out.append(list, prevI, len);
+
+		ArrayCache.getDefaultCache().putArray(list);
+
+		list = out.list;
+		len = out.len;
+
+		return this;
+	}
+	/**
+	 * 在替换结果中搜索
+	 * "aaaa".replaceInReplaceResult("aa","a") => "a"
+	 */
+	public final CharList replaceInReplaceResult(CharSequence str, CharSequence target) {
+		int pos = len;
+		while ((pos = lastIndexOf(str, pos)) != -1) {
+			replace(pos, pos+str.length(), target);
+		}
+		return this;
+	}
+	public final CharList replaceMulti(String[] str, String[] target) {
+		TrieTree<String> map = new TrieTree<>();
+		for (int i = 0; i < str.length; i++) map.put(str[i], target[i]);
+		return replaceMulti(map);
+	}
+	public final CharList replaceMulti(TrieTree<String> map) {
+		int pos = 0;
+
+		MyHashMap.Entry<MutableInt, String> entry = new MyHashMap.Entry<>(new MutableInt(), null);
+		while (pos < len) {
+			map.longestIn(this, pos, len, entry);
+			int len = entry.getKey().getValue();
+			if (len < 0) {
+				pos++;
+				continue;
+			}
+
+			replace(pos, pos+len, entry.getValue());
+			pos += entry.getValue().length();
+		}
+
+		return this;
+	}
+	public final void replaceEx(Pattern regexp, CharSequence literal) {
+		CharList out = null;
+
+		Matcher m = regexp.matcher(this);
+
+		int i = 0;
+		while (m.find(i)) {
+			if (i == 0) out = new CharList(this.len);
+			out.append(list, i, m.start()).append(literal);
+
+			i = m.end();
+		}
+
+		if (i == 0) return;
+		out.append(list, i, len);
+
+		ArrayCache.getDefaultCache().putArray(list);
+
+		list = out.list;
+		len = out.len;
+	}
+	// endregion
+	public final CharSequence subSequence(int start, int end) {
+		checkBounds(start,end,len);
+		if (start == 0 && end == len) return this;
+		return start==end ? "" : new Slice(list, start, end);
+	}
+	public final String toString() { return toString(0, len); }
+	public final String toString(int start, int end) {
+		checkBounds(start,end,len);
+		return start==end ? "" : new String(list, start, end-start);
+	}
+
+	public final char[] toCharArray() { return Arrays.copyOf(list, len); }
+	public final CharBuffer toCharBuffer() { return CharBuffer.wrap(list, 0, len); }
+
+	private static void checkBounds(int start, int end, int len) {
+		if (start < 0 || end > len || len < end - start || start > end)
+			throw new StringIndexOutOfBoundsException("start="+ start +",end="+ end +",length="+len);
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof CharSequence)) return false;
+
+		CharSequence cs = (CharSequence) o;
+
+		if (len != cs.length()) return false;
+		char[] c = list;
+		for (int i = 0; i < len; i++) {
+			if (c[i] != cs.charAt(i)) return false;
+		}
+		return true;
+	}
+
+	@Override
+	public int hashCode() {
+		int hash = 0;
+
+		char[] c = list;
+		for (int i = 0; i < len; i++) {
+			hash = 31 * hash + c[i];
+		}
+		return hash;
+	}
+
+	public static final class Slice implements CharSequence {
 		private final char[] array;
-		private final int off, end;
+		private final int off, len;
 
 		public Slice(char[] array, int start, int end) {
 			this.array = array;
 			this.off = start;
-			this.end = end;
+			this.len = end-start;
 		}
 
-		@Override
-		public CharSequence subSequence(int start, int end) {
-			if (start == 0 && end == this.end - off) return this;
-
-			if (0 <= start && start <= end && end <= this.end - off) {
-				return end == start ? "" : new Slice(array, start + off, end + this.end);
-			} else {
-				throw new StringIndexOutOfBoundsException("len=" + (this.end - off) + ",str=" + start + ",end=" + end);
-			}
-		}
-
-		@Override
-		public String toString() {
-			return new String(array, off, end - off);
-		}
-
-		@Override
-		public int length() {
-			return end - off;
-		}
-
-		@Override
+		public int length() { return len; }
 		public char charAt(int i) {
-			if (i >= end - off) throw new StringIndexOutOfBoundsException("len=" + (end - off) + ",idx=" + i);
-			return array[off + i];
+			if (i >= len) throw new StringIndexOutOfBoundsException("off="+i+",len="+len);
+			return array[off+i];
 		}
+		public CharSequence subSequence(int start, int end) {
+			if (start == 0 && end == len) return this;
+			checkBounds(start,end,len);
+
+			return start==end ? "" : new Slice(array, start+off, end+off);
+		}
+		@Nonnull
+		public String toString() { return new String(array, off, len); }
 
 		@Override
 		public boolean equals(Object o) {
@@ -606,12 +549,12 @@ public class CharList implements CharSequence, Appendable {
 
 			CharSequence cs = (CharSequence) o;
 
-			if (end - off != cs.length()) return false;
+			if (len != cs.length()) return false;
 
-			char[] list = array;
+			int len = this.len+off;
 			int j = 0;
-			for (int i = off; i < end; i++) {
-				if (list[i] != cs.charAt(j++)) {
+			for (int i = off; i < len; i++) {
+				if (array[i] != cs.charAt(j++)) {
 					return false;
 				}
 			}
@@ -622,11 +565,47 @@ public class CharList implements CharSequence, Appendable {
 		public int hashCode() {
 			int hash = 0;
 
-			char[] list = array;
-			for (int i = off; i < end; i++) {
-				hash = 31 * hash + list[i];
+			int len = this.len+off;
+			for (int i = off; i < len; i++) {
+				hash = 31 * hash + array[i];
 			}
 			return hash;
 		}
+	}
+
+	public int compareTo(CharSequence o) {
+		int len1 = len;
+		int len2 = o.length();
+
+		char[] v1 = list;
+		char[] v2;
+		int lim = Math.min(len1, len2);
+		if (o instanceof CharList) {
+			v2 = ((CharList) o).list;
+
+			int i = 0;
+			while (i < lim) {
+				int c1 = v1[i] - v2[i];
+				if (c1 != 0) return c1;
+				i++;
+			}
+		} else {
+			String s = o.toString();
+			v2 = ArrayCache.getDefaultCache().getCharArray(512, false);
+			int off = 0;
+			while (off < lim) {
+				int end = Math.min(off+2, lim);
+				s.getChars(off,end,v2,0);
+
+				int i = 0;
+				while (off < end) {
+					int c1 = v1[off++] - v2[i];
+					if (c1 != 0) return c1;
+					i++;
+				}
+			}
+			ArrayCache.getDefaultCache().putArray(v2);
+		}
+		return len1 - len2;
 	}
 }

@@ -4,8 +4,8 @@ import ilib.ImpLib;
 import ilib.client.RenderUtils;
 import ilib.gui.GuiHelper;
 import org.lwjgl.opengl.GL11;
+import roj.asm.util.Context;
 import roj.collect.SimpleList;
-import roj.reflect.EnumHelper;
 
 import net.minecraft.client.audio.ISound;
 import net.minecraft.client.audio.MusicTicker;
@@ -27,9 +27,10 @@ public class XiBaoHelper {
 	private static final ResourceLocation XIBAO_TEXTURE = new ResourceLocation(ImpLib.MODID, "textures/gui/xibao.png");
 	private static final SoundEvent XIBAO_CRASH_SOUND = new SoundEvent(new ResourceLocation(ImpLib.MODID, "crash"));
 	private static final SoundEvent XIBAO_DISCONNECT_SOUND = new SoundEvent(new ResourceLocation(ImpLib.MODID, "disconnect"));
-	public static final MusicTicker.MusicType XIBAO = new EnumHelper<>(MusicTicker.MusicType.class)
-		.setValueName(null)
-		.make("XIBAO", 7, new Class<?>[] {SoundEvent.class, int.class, int.class}, new Object[] {XIBAO_CRASH_SOUND, 200000000, 200000000});
+	/**
+	 * @see ilib.asm.Transformer#xibaoHook(Context)
+	 */
+	public static final MusicTicker.MusicType XIBAO = MusicTicker.MusicType.valueOf("XIBAO");
 
 	private static ISound playing;
 

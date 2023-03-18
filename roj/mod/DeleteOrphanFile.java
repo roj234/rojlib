@@ -8,7 +8,6 @@ import roj.config.ParseException;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.misc.CpFilter;
 import roj.text.CharList;
@@ -43,7 +42,7 @@ public class DeleteOrphanFile {
 	static void operate(File assets, File libraries, SimpleList<File> versionss) throws IOException {
 		MyHashMap<String, File> librariesToRemove = new MyHashMap<>();
 		int pathLen = libraries.getAbsolutePath().length() + 1;
-		FileUtil.findAllFiles(libraries, file -> {
+		IOUtil.findAllFiles(libraries, file -> {
 			librariesToRemove.put(file.getAbsolutePath().substring(pathLen).replace('\\', '/'), file);
 			return false;
 		});
@@ -77,14 +76,14 @@ public class DeleteOrphanFile {
 				CList libraries1 = json.getOrCreateList("libraries");
 				for (int j = 0; j < libraries1.size(); j++) {
 					String name = libraries1.get(j).asMap().getString("name");
-					CharList maven = FileUtil.mavenPath(name);
+					CharList maven = IOUtil.mavenPath(name);
 					librariesToRemove.remove(maven);
 				}
 			}
 		}
 
 		MyHashMap<String, File> assetsToRemove = new MyHashMap<>();
-		FileUtil.findAllFiles(new File(assets, "objects"), file -> {
+		IOUtil.findAllFiles(new File(assets, "objects"), file -> {
 			assetsToRemove.put(file.getName(), file);
 			return false;
 		});

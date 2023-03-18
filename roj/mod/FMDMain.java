@@ -16,12 +16,12 @@ import roj.config.data.Type;
 import roj.config.word.Tokenizer;
 import roj.dev.ByteListOutput;
 import roj.dev.Compiler;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.mapper.CodeMapper;
 import roj.mapper.ConstMapper;
 import roj.mapper.ConstMapper.State;
 import roj.mapper.MapUtil;
+import roj.mapper.util.Desc;
 import roj.mapper.util.ResWriter;
 import roj.mod.FileFilter.CmtATEntry;
 import roj.mod.MCLauncher.RunMinecraftTask;
@@ -44,6 +44,8 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
 
 import static javax.swing.JOptionPane.*;
@@ -66,10 +68,11 @@ public final class FMDMain {
 				CmdUtil.rainbow("FMD 更快的mod开发环境 " + VERSION + " By Roj234");
 				System.out.println();
 
-				PeriodicTask.register(new ScheduledTask(100, 100, 0, () -> {
+				PeriodicTask.register(new ScheduledTask(100, 100, 100, () -> {
 					synchronized (CmdUtil.originalOut) {
 						CmdUtil.cursorBackup();
-						CmdUtil.cursorUpSet0(2);
+						CmdUtil.cursorUp(8000);
+						CmdUtil.cursorDownSet0(1);
 						CmdUtil.clearLine();
 						CmdUtil.sonic("https://www.github.com/roj234/rojlib");
 						CmdUtil.cursorPrev();
@@ -115,6 +118,9 @@ public final class FMDMain {
 		int exitCode = 0;
 
 		switch (args[0]) {
+			case "sd": case "stackdeobf":
+				exitCode = stackDeobf();
+				break;
 			case "b": case "build":
 				exitCode = build(buildArgs(args));
 				break;
@@ -174,6 +180,48 @@ public final class FMDMain {
 		CmdUtil.info("主线程运行时长" + (costTime / 1000d));
 
 		if (exitCode != 0) System.exit(exitCode);
+	}
+
+	private static final Pattern EXCEPTION_PATTERN = Pattern.compile("at ([a-zA-Z\\d\\-_.]+)\\(.+?(?::\\d+)?\\)");
+	private static int stackDeobf() throws IOException {
+		System.out.println("输入任意数据，并以END终止");
+
+		Shared.loadMapper();
+		CharList out = IOUtil.getSharedCharBuf();
+		while (true) {
+			String line = UIUtil.in.readLine();
+			if (line == null || line.equals("END")) break;
+
+			Matcher exc = EXCEPTION_PATTERN.matcher(line);
+			if (exc.matches()) {
+				String data = line.substring(exc.start(1), exc.end(1));
+
+				int i = data.lastIndexOf('.');
+				String clazz = data.substring(0, i).replace('.', '/');
+				String method = data.substring(i +1);
+
+				clazz = mapperFwd.getClassMap().flip().getOrDefault(clazz, clazz);
+				String methodA = method;
+				for (Map.Entry<Desc, String> entry : mapperFwd.getMethodMap().entrySet()) {
+					if (entry.getValue().equals(method)) {
+						Desc d = entry.getKey();
+						if (d.owner.equals(clazz)) {
+							methodA = d.name;
+							break;
+						} else {
+							methodA = d.name;
+						}
+					}
+				}
+
+				out.append(line, 0, exc.start(1)).append(clazz).append('.').append(methodA).append('\n');
+			} else {
+				out.append(line).append('\n');
+			}
+		}
+
+		System.out.print(out);
+		return 0;
 	}
 
 	private static void showAbout() {
@@ -392,7 +440,7 @@ public final class FMDMain {
 		if (args.length > 1) {
 			files = Collections.singletonList(new File(CONFIG_DIR, args[1]+".json"));
 		} else {
-			files = FileUtil.findAllFiles(CONFIG_DIR, (f) -> {
+			files = IOUtil.findAllFiles(CONFIG_DIR, (f) -> {
 				String name = f.getName().toLowerCase();
 				return name.endsWith(".json");
 			});
@@ -468,7 +516,7 @@ public final class FMDMain {
 	private static void copy4run(File dest, Project p) throws IOException {
 		File src = new File(BASE, p.name + '-' + p.version + ".jar");
 		File dst = new File(dest, p.name + ".jar");
-		FileUtil.copyFile(src, dst);
+		IOUtil.copyFile(src, dst);
 	}
 
 	public static int build(Map<String, Object> args) throws IOException {
@@ -552,7 +600,7 @@ public final class FMDMain {
 		long stamp = p.binJar.lastModified();
 
 		if (files == null) {
-			files = FileUtil.findAllFiles(source, FileFilter.INST.reset(stamp, increment ? FileFilter.F_SRC_TIME : FileFilter.F_SRC_ANNO));
+			files = IOUtil.findAllFiles(source, FileFilter.INST.reset(stamp, increment ? FileFilter.F_SRC_TIME : FileFilter.F_SRC_ANNO));
 			if (DEBUG) System.out.println("FileFilter.getSrc(): " + (files.size() < 100 ? files : files.subList(0, 100)));
 		}
 
@@ -576,7 +624,7 @@ public final class FMDMain {
 							}
 
 							CmdUtil.warning("找到AT注解, 使用全量编译");
-							files = FileUtil.findAllFiles(source, FileFilter.INST.reset(0, FileFilter.F_SRC_ANNO));
+							files = IOUtil.findAllFiles(source, FileFilter.INST.reset(0, FileFilter.F_SRC_ANNO));
 							increment = false;
 							break;
 						}
@@ -699,6 +747,8 @@ public final class FMDMain {
 
 		Compiler.showErrorCode(args.containsKey("showErrorCode"));
 		if (p.compiler.compile(options, files)) {
+			if (CONFIG.getBool("自动编译")) AutoCompile.setEnabled(true);
+
 			try {
 				writeRes.get();
 			} catch (Exception e) {
@@ -852,6 +902,9 @@ public final class FMDMain {
 			}
 
 			return 1;
+		} else if (!args.containsKey("zl")) {
+			// todo test
+			AutoCompile.setEnabled(false);
 		}
 
 		return -1;
@@ -873,7 +926,7 @@ public final class FMDMain {
 
 	private static boolean ensureWritable(File jarFile) {
 		int amount = 30 * 20;
-		while (jarFile.isFile() && !FileUtil.checkTotalWritePermission(jarFile) && amount > 0) {
+		while (jarFile.isFile() && !IOUtil.checkTotalWritePermission(jarFile) && amount > 0) {
 			if ((amount % 100) == 0) CmdUtil.warning("输出jar已被锁定, 请在30秒内解除对它的锁定，否则编译无法继续");
 			LockSupport.parkNanos(50_000_000L);
 			amount--;

@@ -234,7 +234,7 @@ public final class Client implements ChannelHandler {
 									 .addLast("timeout", new Timeout(5000, 5000))
 									 .addLast("UPNP Handler", pinger);
 			ctx.connect(new InetSocketAddress(InetAddress.getByAddress(ip), port));
-			server.man.register(ctx, null, SelectionKey.OP_CONNECT);
+			server.man.getLoop().register(ctx, null, SelectionKey.OP_CONNECT);
 		} catch (Exception e) {
 			e.printStackTrace();
 			task = null;

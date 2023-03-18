@@ -1,8 +1,9 @@
 package roj.config.data;
 
 import roj.config.NBTParser;
-import roj.config.serial.CConsumer;
-import roj.config.serial.Structs;
+import roj.config.VinaryParser;
+import roj.config.serial.CVisitor;
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 
 import javax.annotation.Nonnull;
@@ -72,7 +73,7 @@ public class CLong extends CEntry {
 	}
 
 	@Override
-	public StringBuilder toJSON(StringBuilder sb, int depth) {
+	public CharList toJSON(CharList sb, int depth) {
 		return sb.append(value);
 	}
 
@@ -82,17 +83,12 @@ public class CLong extends CEntry {
 	}
 
 	@Override
-	public void toNBT(DynByteBuf w) {
-		w.writeLong(value);
-	}
-
-	@Override
 	public Object unwrap() {
 		return value;
 	}
 
 	@Override
-	public void toBinary(DynByteBuf w, Structs struct) {
+	protected void toBinary(DynByteBuf w, VinaryParser struct) {
 		w.put((byte) Type.LONG.ordinal()).putLong(value);
 	}
 
@@ -102,7 +98,7 @@ public class CLong extends CEntry {
 	}
 
 	@Override
-	public void forEachChild(CConsumer ser) {
+	public void forEachChild(CVisitor ser) {
 		ser.value(value);
 	}
 }

@@ -36,107 +36,52 @@ public class Transformer implements ContextClassTransformer {
 	@Override
 	public void transform(String trName, Context ctx) {
 		switch (trName) {
-			case "net.minecraft.util.math.MathHelper":
-				MathOptimizer.optimizeMathHelper(ctx);
-				break;
-			case "net.minecraft.client.multiplayer.WorldClient":
-				if (Config.replaceEntityList || Config.noShitSound) transformWorldClient(ctx);
-				break;
-			case "net.minecraft.entity.item.EntityMinecart":
-				if (Config.fixMinecart) onlySteveOnCart(ctx);
-				break;
-			case "net.minecraft.client.Minecraft":
-				transformMinecraft(ctx);
-				break;
-			case "net.minecraft.inventory.ContainerRepair$2":
-				if (Config.noAnvilTax) transformAnvilSlot(ctx);
-				break;
-			case "net.minecraft.server.MinecraftServer":
-				if (Config.enableTPSChange) changeTPS(ctx);
-				break;
-			case "net.minecraft.server.management":
-				transformPlayerChunkMap(ctx);
-				break;
-			case "org.apache.logging.log4j.core.lookup.JndiLookup":
-				transformLOG4J2(ctx);
-				break;
-			case "net.minecraft.stats.RecipeBookServer":
-				if (Config.noRecipeBook) noRecipeBook(ctx);
-				break;
-			case "net.minecraft.client.gui.recipebook.GuiRecipeBook":
-				if (Config.noRecipeBook) noRecipeBook_client(ctx);
-				break;
-			case "net.minecraft.advancements.AdvancementManager":
-				if (Config.noAdvancement) noAdvancement(ctx);
-				break;
-			case "net.minecraft.entity.player.EntityPlayer":
-				if (Config.attackCD == 0) noAttackCD(ctx);
-				break;
-			case "net.minecraft.entity.EntityLivingBase":
-				if (Config.noCollision) noEntityCollision(ctx);
-				if (Config.fastDismount) fastDismount(ctx);
-				break;
-			case "net.minecraft.server.management.PlayerInteractionManager":
-				if (Config.noGhostBlock) noGhostBlock(ctx);
-				break;
+			case "net.minecraft.util.math.MathHelper": MathOptimizer.optimizeMathHelper(ctx); break;
+			case "net.minecraft.client.multiplayer.WorldClient": if (Config.replaceEntityList || Config.noShitSound) transformWorldClient(ctx); break;
+			case "net.minecraft.entity.item.EntityMinecart": if (Config.fixMinecart) onlySteveOnCart(ctx); break;
+			case "net.minecraft.client.Minecraft": transformMinecraft(ctx); break;
+			case "net.minecraft.inventory.ContainerRepair$2": if (Config.noAnvilTax) transformAnvilSlot(ctx); break;
+			case "net.minecraft.server.MinecraftServer": if (Config.enableTPSChange) changeTPS(ctx); break;
+			case "net.minecraft.server.management": transformPlayerChunkMap(ctx); break;
+			case "org.apache.logging.log4j.core.lookup.JndiLookup": transformLOG4J2(ctx); break;
+			case "net.minecraft.stats.RecipeBookServer": if (Config.noRecipeBook) noRecipeBook(ctx); break;
+			case "net.minecraft.client.gui.recipebook.GuiRecipeBook": if (Config.noRecipeBook) noRecipeBook_client(ctx); break;
+			case "net.minecraft.advancements.AdvancementManager": if (Config.noAdvancement) noAdvancement(ctx); break;
+			case "net.minecraft.entity.player.EntityPlayer": if (Config.attackCD == 0) noAttackCD(ctx); break;
+			case "net.minecraft.entity.EntityLivingBase": if (Config.noCollision) noEntityCollision(ctx); if (Config.fastDismount) fastDismount(ctx); break;
+			case "net.minecraft.server.management.PlayerInteractionManager": if (Config.noGhostBlock) noGhostBlock(ctx); break;
 			case "net.minecraft.block.BlockPistonBase":
-			case "net.minecraft.block.BlockRedstoneWire":
-				if (Config.noSoManyBlockPos) {
-					fastEnumFacing(ctx);
-					return;
-				}
-				break;
-			case "net.minecraft.client.network.NetHandlerPlayClient":
-				if (Config.separateDismount) transformDismountMessage(ctx);
-				break;
-			case "net.minecraft.world.WorldServer":
-				if (Config.myNextTickList) tickMyHashSet(ctx);
-				break;
-			case "net.minecraft.client.renderer.OpenGlHelper":
-				if (Config.oshi886) oshi886(ctx);
-				break;
-			case "net.minecraft.util.EnumFacing":
-				if (Config.replaceEnumFacing) transformEnumFacing(ctx);
-				return;
-			case "net.minecraft.client.renderer.RegionRenderCacheBuilder":
-				if (Config.smallBuf) transformRRCB(ctx);
-				break;
-			case "paulscode.sound.libraries.ChannelLWJGLOpenAL":
-				if (Config.soundRecycle) transformChannel(ctx);
-				break;
-			case "net.minecraft.client.renderer.RenderGlobal":
-				transformRG(ctx);
-				break;
-			case "net.minecraft.client.renderer.BufferBuilder":
-				if (Config.smallBuf) NxBuf2(ctx);
-				break;
-			case "net.minecraft.client.renderer.GLAllocation":
-				transformGLAlloc(ctx);
-				break;
-			case "net.minecraft.client.particle.ParticleManager":
-				if (Config.maxParticleCountPerLayer != 16384) transformParticleCount(ctx);
-				break;
-			case "net.minecraftforge.event.entity.EntityEvent":
-				if (Config.trimEvent) trimEvent_0(ctx);
-				break;
-			case "net.minecraftforge.event.entity.living.LivingEvent":
-				if (Config.trimEvent) trimEvent_1(ctx);
-				break;
-			case "net.minecraftforge.event.entity.player.PlayerEvent":
-				if (Config.trimEvent) trimEvent_2(ctx);
-				break;
-			case "net.minecraft.client.renderer.entity.RenderLivingBase":
-				if (Config.noDeathAnim) noDeathAnim_Red(ctx);
-				break;
-			case "net.minecraft.client.renderer.EntityRenderer":
-				if (Config.noDeathAnim) noDeathAnim_Rotate(ctx);
-				break;
-			case "net.minecraftforge.fml.common.FMLModContainer":
-				betterClassLoadingError(ctx);
-				break;
+			case "net.minecraft.block.BlockRedstoneWire": if (Config.noSoManyBlockPos) { fastEnumFacing(ctx); return; } break;
+			case "net.minecraft.client.network.NetHandlerPlayClient": if (Config.separateDismount) transformDismountMessage(ctx); break;
+			case "net.minecraft.world.WorldServer": if (Config.myNextTickList) tickMyHashSet(ctx); break;
+			case "net.minecraft.client.renderer.OpenGlHelper": if (Config.oshi886) oshi886(ctx); break;
+			case "net.minecraft.util.EnumFacing": if (Config.replaceEnumFacing) transformEnumFacing(ctx); return;
+			case "net.minecraft.client.renderer.RegionRenderCacheBuilder": if (Config.smallBuf) transformRRCB(ctx); break;
+			case "paulscode.sound.libraries.ChannelLWJGLOpenAL": if (Config.soundRecycle) transformChannel(ctx); break;
+			case "net.minecraft.client.renderer.RenderGlobal": transformRG(ctx); break;
+			case "net.minecraft.client.renderer.BufferBuilder": if (Config.smallBuf) NxBuf2(ctx); break;
+			case "net.minecraft.client.renderer.GLAllocation": transformGLAlloc(ctx); break;
+			case "net.minecraft.client.particle.ParticleManager": if (Config.maxParticleCountPerLayer != 16384) transformParticleCount(ctx); break;
+			case "net.minecraftforge.event.entity.EntityEvent": if (Config.trimEvent) trimEvent_0(ctx); break;
+			case "net.minecraftforge.event.entity.living.LivingEvent": if (Config.trimEvent) trimEvent_1(ctx); break;
+			case "net.minecraftforge.event.entity.player.PlayerEvent": if (Config.trimEvent) trimEvent_2(ctx); break;
+			case "net.minecraft.client.renderer.entity.RenderLivingBase": if (Config.noDeathAnim) noDeathAnim_Red(ctx); break;
+			case "net.minecraft.client.renderer.EntityRenderer": if (Config.noDeathAnim) noDeathAnim_Rotate(ctx); break;
+			case "net.minecraftforge.fml.common.FMLModContainer": betterClassLoadingError(ctx); break;
+			case "net.minecraftforge.fml.client.FMLClientHandler": loadCompleteEvent(ctx); break;
 		}
 		if (Config.replaceEnumFacing) fastEnumFacing(ctx);
 		if (Config.tractDirectMem) traceDirectMemory(ctx);
+	}
+
+	private void loadCompleteEvent(Context ctx) {
+		Method m = ctx.getData().getUpgradedMethod("onInitializationComplete");
+		InsnList insn = m.getCode().instructions;
+		InsnList b = new InsnList();
+		b.add(new FieldInsnNode(GETSTATIC, "ilib/asm/Loader", "EVENT_BUS", "Lilib/util/Hook;"));
+		b.add(new LdcInsnNode(new CstString("LoadCompleteEx")));
+		b.add(new InvokeInsnNode(INVOKEVIRTUAL, "ilib/util/Hook", "triggerOnce", "(Ljava/lang/String;)V"));
+		insn.addAll(0, b);
 	}
 
 	private static void betterClassLoadingError(Context ctx) {
@@ -149,7 +94,7 @@ public class Transformer implements ContextClassTransformer {
 
 	private static void noDeathAnim_Red(Context ctx) {
 		Method setBrightness = ctx.getData().getUpgradedMethod("func_177092_a");
-		InsnList insn = setBrightness.code.instructions;
+		InsnList insn = setBrightness.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			InsnNode node = insn.get(i);
 			if (node.getOpcode() == GETFIELD) {
@@ -166,7 +111,7 @@ public class Transformer implements ContextClassTransformer {
 
 	private static void noDeathAnim_Rotate(Context ctx) {
 		Method hurtCameraEffect = ctx.getData().getUpgradedMethod("func_78482_e");
-		InsnList insn = hurtCameraEffect.code.instructions;
+		InsnList insn = hurtCameraEffect.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			InsnNode node = insn.get(i);
 			if (node.getOpcode() == INVOKEVIRTUAL) {
@@ -183,7 +128,7 @@ public class Transformer implements ContextClassTransformer {
 
 	private static void trimEvent_0(Context ctx) {
 		ConstantData data = ctx.getData();
-		data.fields.get(data.getField("entity")).accessFlag(AccessFlag.PUBLIC | AccessFlag.FINAL);
+		data.fields.get(data.getField("entity")).modifier(AccessFlag.PUBLIC | AccessFlag.FINAL);
 	}
 
 	private static void trimEvent_1(Context ctx) {
@@ -191,7 +136,7 @@ public class Transformer implements ContextClassTransformer {
 		data.fields.remove(data.getField("entityLiving"));
 
 		Method init = data.getUpgradedMethod("<init>");
-		InsnList insn = init.code.instructions;
+		InsnList insn = init.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			if (insn.get(i).getOpcode() == INVOKESPECIAL) {
 				insn.removeRange(i + 1, insn.size() - 1);
@@ -200,7 +145,7 @@ public class Transformer implements ContextClassTransformer {
 		}
 
 		Method getEntityLiving = data.getUpgradedMethod("getEntityLiving");
-		insn = getEntityLiving.code.instructions;
+		insn = getEntityLiving.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			if (insn.get(i).getOpcode() == GETFIELD) {
 				FieldInsnNode fin = (FieldInsnNode) insn.get(i);
@@ -218,7 +163,7 @@ public class Transformer implements ContextClassTransformer {
 		data.fields.remove(data.getField("entityPlayer"));
 
 		Method init = data.getUpgradedMethod("<init>");
-		InsnList insn = init.code.instructions;
+		InsnList insn = init.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			if (insn.get(i).getOpcode() == INVOKESPECIAL) {
 				insn.removeRange(i + 1, insn.size() - 1);
@@ -227,7 +172,7 @@ public class Transformer implements ContextClassTransformer {
 		}
 
 		Method getEntityPlayer = data.getUpgradedMethod("getEntityPlayer");
-		insn = getEntityPlayer.code.instructions;
+		insn = getEntityPlayer.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			if (insn.get(i).getOpcode() == GETFIELD) {
 				FieldInsnNode fin = (FieldInsnNode) insn.get(i);
@@ -257,7 +202,7 @@ public class Transformer implements ContextClassTransformer {
 		}
 
 		Method growBuffer = ctx.getData().getUpgradedMethod("func_181670_b");
-		InsnList insn = growBuffer.code.instructions;
+		InsnList insn = growBuffer.getCode().instructions;
 		int j = 0;
 		for (int i = 0; i < insn.size(); i++) {
 			InsnNode node = insn.get(i);
@@ -284,7 +229,7 @@ public class Transformer implements ContextClassTransformer {
 
 	private static void transformParticleCount(Context ctx) {
 		Method m = ctx.getData().getUpgradedMethod("func_78868_a");
-		InsnList insn = m.code.instructions;
+		InsnList insn = m.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			InsnNode node = insn.get(i);
 			if (node instanceof IIndexInsnNode && ((IIndexInsnNode) node).getIndex() == 16384) {
@@ -297,7 +242,7 @@ public class Transformer implements ContextClassTransformer {
 		List<? extends MethodNode> cp = ctx.getData().methods;
 		for (int i = 0; i < cp.size(); i++) {
 			MethodNode node = cp.get(i);
-			node.accessFlag(node.accessFlag() & ~AccessFlag.SUPER_OR_SYNC);
+			node.modifier(node.modifier() & ~AccessFlag.SYNCHRONIZED);
 		}
 	}
 
@@ -380,7 +325,7 @@ public class Transformer implements ContextClassTransformer {
 		fastEnumFacing(ctx);
 
 		Method m = ctx.getData().getUpgradedMethod("<clinit>");
-		InsnList insn = m.code.instructions;
+		InsnList insn = m.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			InsnNode node = insn.get(i);
 			if (node.nodeType() == InsnNode.T_INVOKE) {
@@ -442,7 +387,7 @@ public class Transformer implements ContextClassTransformer {
 		ConstantData data = ctx.getData();
 		Method mn = data.getUpgradedMethod("func_190901_a");
 
-		InsnList insn = mn.code.instructions;
+		InsnList insn = mn.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			InsnNode node = insn.get(i);
 			if (node.getOpcode() == INVOKEVIRTUAL) {
@@ -463,7 +408,7 @@ public class Transformer implements ContextClassTransformer {
 		Method mn = data.getUpgradedMethod("func_72693_b");
 
 		int i, j = 0;
-		InsnList insn = mn.code.instructions;
+		InsnList insn = mn.getCode().instructions;
 		for (i = 0; i < insn.size(); i++) {
 			if (j == 2) break;
 
@@ -494,7 +439,7 @@ public class Transformer implements ContextClassTransformer {
 		ConstantData data = ctx.getData();
 		Method mn = data.getUpgradedMethod("run");
 
-		InsnList insn = mn.code.instructions;
+		InsnList insn = mn.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			InsnNode node = insn.get(i);
 			if (node.getOpcode() == LDC2_W) {
@@ -544,7 +489,7 @@ public class Transformer implements ContextClassTransformer {
 	private static String randomTitle() {
 		LineReader slr;
 		try {
-			slr = new LineReader(IOUtil.readUTF("assets/minecraft/texts/splashes.txt"));
+			slr = new LineReader(IOUtil.readResUTF("assets/minecraft/texts/splashes.txt"));
 			slr.skipLines(new Random(System.currentTimeMillis()).nextInt(slr.size()));
 			return "我的世界 1.12.2 —— " + slr.next();
 		} catch (Throwable e) {
@@ -554,7 +499,7 @@ public class Transformer implements ContextClassTransformer {
 	}
 
 	private static Method beginLoading(Method method) {
-		InsnList insn = method.code.instructions;
+		InsnList insn = method.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			InsnNode node = insn.get(i);
 			if (node.getOpcode() == INVOKEVIRTUAL) {
@@ -576,7 +521,7 @@ public class Transformer implements ContextClassTransformer {
 		ConstantData data = ctx.getData();
 		Method mn = data.getUpgradedMethod("func_180460_a");
 
-		InsnList list = mn.code.instructions;
+		InsnList list = mn.getCode().instructions;
 		final IntBiMap<InsnNode> pc = list.getPCMap();
 
 		int i = 420;
@@ -591,7 +536,7 @@ public class Transformer implements ContextClassTransformer {
 			}
 		}
 		logger.error("'EntityMinecart' transform failed.");
-		logger.error(mn.code.toString());
+		logger.error(mn.getCode().toString());
 		throw new RuntimeException("出错了");
 	}
 
@@ -605,7 +550,7 @@ public class Transformer implements ContextClassTransformer {
 		if (Config.replaceEntityList) {
 			Method mn = data.getUpgradedMethod("<init>");
 
-			InsnList list = mn.code.instructions;
+			InsnList list = mn.getCode().instructions;
 
 			int i = 4;
 			do {
@@ -664,8 +609,8 @@ public class Transformer implements ContextClassTransformer {
 		// remove final
 		for (int i = 0; i < data.fields.size(); i++) {
 			FieldNode n = data.fields.get(i);
-			if ((n.accessFlag() & AccessFlag.STATIC) == 0)
-				n.accessFlag(n.accessFlag() & ~AccessFlag.FINAL);
+			if ((n.modifier() & AccessFlag.STATIC) == 0)
+				n.modifier(n.modifier() & ~AccessFlag.FINAL);
 		}
 
 		CodeWriter isVisible = replaceWithEmpty(data, "func_191878_b", true);
@@ -716,7 +661,7 @@ public class Transformer implements ContextClassTransformer {
 		Method mn = new Method(data, (RawMethod) data.methods.get(i));
 		data.methods.set(i, Helpers.cast(mn));
 
-		AttrCode code = mn.code;
+		AttrCode code = mn.getCode();
 		InsnList list = code.instructions;
 		InsnNode ARETURN = list.remove(list.size() - 1);
 		// this.player.connection.sendPacket(new SPacketBlockChange(world, pos));
@@ -756,17 +701,17 @@ public class Transformer implements ContextClassTransformer {
 
 		MethodNode ms = data.methods.get(i);
 
-		Method mn = new Method(ms.accessFlag(), data, ms.name(), ms.rawDesc());
-		data.methods.set(i, Helpers.cast(mn));
+		Method cleanMethod = new Method(ms.modifier(), data, ms.name(), ms.rawDesc());
+		data.methods.set(i, Helpers.cast(cleanMethod));
 
 		Object code = ms.attrByName("Code");
 		if (code != null) {
 			if (mod) {
-				AttrCodeWriter attr = new AttrCodeWriter(data.cp, ms);
-				ms.attributes().putByName(attr);
+				AttrCodeWriter attr = new AttrCodeWriter(data.cp, cleanMethod);
+				cleanMethod.attributes().putByName(attr);
 				return attr.cw;
 			}
-			TransformUtil.trimCode(data, mn);
+			TransformUtil.trimCode(data, cleanMethod);
 		}
 		return Helpers.nonnull();
 	}

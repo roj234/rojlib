@@ -106,9 +106,8 @@ public class CRCAny implements Checksum {
 		// see Integer.reverse
 		static int reverse(int bits, int in) {
 			int out = 0;
-			while (bits-- > 0) {
-				out <<= 1;
-				if ((in & 1) != 0) out |= 1;
+			for (int i = 0; i < bits; i++) {
+				out = (out << 1) | (in & 1);
 				in >>>= 1;
 			}
 			return out;

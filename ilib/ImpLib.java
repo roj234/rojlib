@@ -58,7 +58,6 @@ import net.minecraftforge.fml.common.ModMetadata;
 import net.minecraftforge.fml.common.SidedProxy;
 import net.minecraftforge.fml.common.asm.transformers.AccessTransformer;
 import net.minecraftforge.fml.common.discovery.ASMDataTable;
-import net.minecraftforge.fml.common.discovery.JarDiscoverer;
 import net.minecraftforge.fml.common.discovery.asm.ModAnnotation;
 import net.minecraftforge.fml.common.event.*;
 import net.minecraftforge.fml.common.patcher.ClassPatchManager;
@@ -98,10 +97,10 @@ import java.util.jar.Manifest;
 public class ImpLib {
 	public static final String MODID = "ilib";
 	public static final String NAME = "又一个优化mod";
-	public static final String VERSION = "1.1.2";
+	public static final String VERSION = "1.1.5";
 
 	public static final boolean isClient = FMLCommonHandler.instance().getEffectiveSide().isClient();
-	public static final Hook EVENT_BUS = new Hook();
+	public static final Hook EVENT_BUS = Loader.EVENT_BUS;
 	public static final List<CommandBase> COMMANDS = new SimpleList<>();
 
 	public static Logger logger() {
@@ -112,12 +111,12 @@ public class ImpLib {
 	public static ServerProxy proxy;
 
 	static {
+		Thread.currentThread().setName(isClient ? "客" : "服");
 		simplifyThreadName();
 		Loader.onModConstruct();
 	}
 
 	public static void simplifyThreadName() {
-		Thread.currentThread().setName(isClient ? "客" : "服");
 		try {
 			Field nameField = ThreadNameCachingStrategy.class.getDeclaredField("THREADLOCAL_NAME");
 			nameField.setAccessible(true);
@@ -205,12 +204,6 @@ public class ImpLib {
 			Register.block("chest_loot", block, new ItemBlockMI(block), null, 24, true);
 		}
 
-		try {
-			JarDiscoverer.class.getDeclaredMethod("IL_preinit").invoke(null);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
 		MiscOptimize.attributeRangeSet(Config.setAttributeRange);
 
 		List<String> errors = Config.checkIncompatibleMod();
@@ -222,10 +215,10 @@ public class ImpLib {
 			errors.add("按确认重启MC");
 
 			try {
-				JOptionPane.showMessageDialog(null, "ImpLib发现兼容性问题", String.join("\n", errors), JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(null, String.join("\n", errors), "《Minecraft》需要重启", JOptionPane.ERROR_MESSAGE);
 			} catch (Throwable onServer) {}
 
-			errors.add(0, "ImpLib发现兼容性问题:");
+			errors.add(0, "《Minecraft》需要重启:");
 			String info = String.join("\n", errors);
 			ForgeUtil.getCurrentMod().getMetadata().name = info;
 			throw new IllegalStateException(info);
@@ -294,10 +287,11 @@ public class ImpLib {
 												   .register(MySubs.CHECK_OD)
 												   .register(new CmdSchematic())
 												   .register(MySubs.REGEN)
-												   .register((new CmdSubCmd("debug")).setHelp("command.mi.help.debug.1")
-																					 .register(MySubs.RENDER_INFO)
-																					 .register(MySubs.BLOCK_UPDATE)
-																					 .register(MySubs.TILE_TEST))
+												   .register((new CmdSubCmd("debug"))
+													   .setHelp("command.mi.help.debug.1")
+													   .register(MySubs.RENDER_INFO)
+													   .register(MySubs.BLOCK_UPDATE)
+													   .register(MySubs.TILE_TEST))
 												   .register(new CmdILFill())
 												   .register(MySubs.GC)
 												   .register(MySubs.UNLOAD_CHUNKS)

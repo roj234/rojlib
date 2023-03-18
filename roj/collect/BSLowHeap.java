@@ -48,11 +48,10 @@ public class BSLowHeap<E> extends AbstractList<E> {
 		this(DEF_SIZE, cmp);
 	}
 
-	@SuppressWarnings("unchecked")
 	public BSLowHeap(int capacity, Comparator<E> cmp) {
 		if (capacity <= 1) capacity = DEF_SIZE;
 		this.entries = Helpers.cast(new Object[capacity]);
-		this.cmp = cmp == null ? (o1, o2) -> ((Comparable<E>) o1).compareTo(o2) : cmp;
+		this.cmp = cmp == null ? Helpers.cast(Comparator.naturalOrder()) : cmp;
 	}
 
 	public void ensureCapacity(int cap) {
@@ -62,6 +61,10 @@ public class BSLowHeap<E> extends AbstractList<E> {
 		Object[] entriesN = new Object[cap];
 		System.arraycopy(entriesO, 0, entriesN, 0, size);
 		this.entries = entriesN;
+	}
+
+	public Object[] array() {
+		return entries;
 	}
 
 	@Override

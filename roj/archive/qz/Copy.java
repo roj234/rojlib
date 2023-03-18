@@ -5,7 +5,7 @@ import java.io.OutputStream;
 
 public final class Copy extends QZCoder {
     public static final Copy INSTANCE = new Copy();
-    Copy() {}
+    private Copy() {}
 
     QZCoder factory() { return this; }
     private static final byte[] ID = {0};

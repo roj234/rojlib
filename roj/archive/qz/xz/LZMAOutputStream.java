@@ -13,6 +13,9 @@ package roj.archive.qz.xz;
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.lzma.LZMAEncoder;
 import roj.archive.qz.xz.rangecoder.RangeEncoderToStream;
+import roj.io.Finishable;
+import roj.math.MathUtils;
+import roj.util.ArrayCache;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -22,7 +25,7 @@ import java.io.OutputStream;
  *
  * @since 1.6
  */
-public class LZMAOutputStream extends FinishableOutputStream {
+public class LZMAOutputStream extends OutputStream implements Finishable {
 	private OutputStream out;
 
 	private final ArrayCache arrayCache;
@@ -53,6 +56,10 @@ public class LZMAOutputStream extends FinishableOutputStream {
 		rc = new RangeEncoderToStream(out);
 
 		int dictSize = options.getDictSize();
+		if (expectedUncompressedSize >= 0 && dictSize > expectedUncompressedSize) {
+			dictSize = MathUtils.getMin2PowerOf((int) expectedUncompressedSize);
+		}
+
 		lzma = LZMAEncoder.getInstance(rc, options.getLc(), options.getLp(), options.getPb(),
 			options.getMode(), dictSize, 0, options.getNiceLen(), options.getMatchFinder(), options.getDepthLimit(), arrayCache);
 
@@ -66,7 +73,7 @@ public class LZMAOutputStream extends FinishableOutputStream {
 			lz.setPresetDict(dictSize, presetDict);
 		}
 
-		props = (options.getPb() * 5 + options.getLp()) * 9 + options.getLc();
+		props = options.getPropByte();
 
 		if (useHeader) {
 			// Props byte stores lc, lp, and pb.
@@ -244,10 +251,12 @@ public class LZMAOutputStream extends FinishableOutputStream {
 		try {
 			finish();
 		} finally {
-			try {
-				out.close();
-			} finally {
-				out = null;
+			if (out != null) {
+				try {
+					out.close();
+				} finally {
+					out = null;
+				}
 			}
 		}
 	}

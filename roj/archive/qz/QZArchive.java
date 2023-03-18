@@ -109,7 +109,7 @@ public class QZArchive implements ArchiveFile{
 			r.close();
 			r = null;
 
-			Arrays.fill(password, (byte) 0);
+			if (password != null) Arrays.fill(password, (byte) 0);
 		}
 	}
 
@@ -268,8 +268,11 @@ public class QZArchive implements ArchiveFile{
 		computeOffset(d);
 		WordBlock b = d.blocks[0];
 
+		pool.reserve(buf);
+		buf = ByteList.EMPTY;
+
 		try (InputStream in = getSolidStream("<header>", new BufferedSource(r, 1024, pool, false), b, null)) {
-			buf.clear();
+			buf = (ByteList) pool.buffer(false, (int) b.uSize);
 			buf.readStreamFully(in);
 
 			if (buf.wIndex() < b.uSize) throw new EOFException("数据流过早终止");
@@ -787,18 +790,18 @@ public class QZArchive implements ArchiveFile{
 		return i;
 	}
 	private long readVarLong() throws IOException {
-		long i = buf.readVSLong();
+		long i = buf.readVULong();
 		if (i < 0) throw new IOException("sign error:"+i);
 		return i;
 	}
 	private int readVarInt() throws IOException {
-		int i = buf.readVSInt();
-		if (i < 0) throw new IOException("sign error:"+i);
-		return i;
+		long i = buf.readVULong();
+		if (i < 0 || i > Integer.MAX_VALUE) throw new IOException("sign error:"+i);
+		return (int) i;
 	}
 	private int readVarInt(int max) throws IOException {
-		int i = (int) buf.readVSLong();
-		if (i < 0 || i > max) throw new IOException("长度超出限制");
+		int i = readVarInt();
+		if (i > max) throw new IOException("长度超出限制");
 		return i;
 	}
 	private void end(int type) throws IOException {
@@ -825,6 +828,7 @@ public class QZArchive implements ArchiveFile{
 		return entries;
 	}
 
+	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback) { parallelDecompress(th, callback, password); }
 	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback, byte[] pass) {
 		for (WordBlock b : blocks) {
 			th.pushTask(() -> {
@@ -853,7 +857,7 @@ public class QZArchive implements ArchiveFile{
 	}
 
 	public InputStream getStream(String entry) throws IOException {
-		QZEntry file = byName.get(entry);
+		QZEntry file = getEntries().get(entry);
 		if (file == null) return null;
 		return getStream(file, null);
 	}
@@ -872,7 +876,8 @@ public class QZArchive implements ArchiveFile{
 					activeEntry = file;
 					// assert...
 					activeIn.skip(activeIn.remain);
-					activeInRoot.skip(size);
+					activeIn.remain = e.uSize;
+					blockInput.skip(size);
 					return activeIn;
 				}
 				size += e.uSize;
@@ -880,8 +885,10 @@ public class QZArchive implements ArchiveFile{
 			}
 		}
 
+		closeSolidStream();
+
 		Source r = this.r.threadSafeCopy();
-		InputStream in = getSolidStream(file.name, r.isBuffered()?r:new BufferedSource(r, 1024, pool, true), file.block, pass);
+		InputStream in = blockInput = getSolidStream(file.name, r.isBuffered()?r:BufferedSource.autoClose(r), file.block, pass);
 		if (in.skip(file.offset) < file.offset) {
 			in.close();
 			throw new EOFException("数据流过早终止");
@@ -889,9 +896,7 @@ public class QZArchive implements ArchiveFile{
 
 		LimitInputStream fin = new LimitInputStream(in, file.uSize);
 		if (file.next != null) {
-			closeSolidStream();
 			activeEntry = file;
-			activeInRoot = in;
 			activeIn = fin;
 		}
 
@@ -900,15 +905,15 @@ public class QZArchive implements ArchiveFile{
 	}
 
 	private QZEntry activeEntry;
-	private InputStream activeInRoot;
+	private InputStream blockInput;
 	private LimitInputStream activeIn;
 	private void closeSolidStream() throws IOException {
-		if (activeEntry != null) {
-			activeInRoot.close();
-			activeInRoot = null;
-			activeIn = null;
-			activeEntry = null;
+		if (blockInput != null) {
+			blockInput.close();
+			blockInput = null;
 		}
+		activeIn = null;
+		activeEntry = null;
 	}
 
 	private InputStream getSolidStream(String name, Source src, WordBlock b, byte[] pass) throws IOException {

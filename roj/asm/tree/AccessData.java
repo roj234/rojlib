@@ -72,14 +72,14 @@ public final class AccessData implements IClass {
 		}
 
 		@Override
-		public void accessFlag(int flag) {
+		public void modifier(int flag) {
 			acc = (char) flag;
 			byteCode[dao] = (byte) (flag >>> 8);
 			byteCode[dao + 1] = (byte) flag;
 		}
 
 		@Override
-		public char accessFlag() {
+		public char modifier() {
 			return acc;
 		}
 
@@ -104,10 +104,10 @@ public final class AccessData implements IClass {
 		}
 	}
 
-	public char accessFlag() {
+	public char modifier() {
 		return (char) ((byteCode[cao] & 0xff) << 8 | (byteCode[cao + 1] & 0xff));
 	}
-	public void accessFlag(int flag) {
+	public void modifier(int flag) {
 		acc = (char) flag;
 		byteCode[cao] = (byte) (flag >>> 8);
 		byteCode[cao + 1] = (byte) flag;

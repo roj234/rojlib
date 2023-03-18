@@ -94,18 +94,17 @@ public class SameServerFinder {
 		public void channelOpened(ChannelCtx ctx) throws IOException {
 			System.out.println("open " + ctx.remoteAddress());
 			ByteList buf = IOUtil.getSharedByteBuf();
-			buf.put((byte) 0); // packet id: handshake
-			buf.putVarInt(1343, false); // protocol
+			buf.put(0) // packet id: handshake
+			   .putVarInt(1343, false); // protocol
 			InetSocketAddress addr = ((InetSocketAddress) ctx.remoteAddress());
-			buf.putVarIntUTF(addr.getHostName()+"\u0000FML\u0000"); // host
-			buf.putShort(addr.getPort()); // port
-			buf.putVarInt(1, false); // status query
+			buf.putVarIntUTF(addr.getHostName()+"\u0000FML\u0000") // host
+			   .putShort(addr.getPort()) // port
+			   .putVarInt(1, false); // status query
 
 			ctx.channelWrite(buf);
 
 			buf.clear();
-			buf.put((byte) 0);
-			ctx.channelWrite(buf);
+			ctx.channelWrite(buf.put(0));
 		}
 
 		@Override
@@ -130,8 +129,6 @@ public class SameServerFinder {
 				System.out.println(ctx.remoteAddress()+"/"+json.getDot("players.online")+"/"+json.getDot("players.max"));
 				System.out.println(ccc);
 
-				json.remove("description");
-				json.remove("players");
 				System.err.println(json.toJSONb());
 			} finally {
 				ctx.close();

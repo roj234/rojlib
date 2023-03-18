@@ -2,8 +2,6 @@ package roj.net.mss;
 
 import roj.collect.ToIntMap;
 import roj.crypt.*;
-import roj.crypt.ec.ECDH;
-import roj.crypt.ec.NamedCurve;
 import roj.util.Helpers;
 
 import java.security.MessageDigest;
@@ -53,61 +51,50 @@ public final class CipherSuite {
 		KEX_NAME2ID.putInt(algorithm, id);
 	}
 
-	public static final int KEX_DH = 0;
-	public static final int KEX_ECDH_SECP384R1 = 1;
-	public static final int KEX_ECDH_BrainPool384R1 = 2;
+	public static final int KEX_DHE_ffdhe2048 = 0;
+	public static final int KEX_ECDHE_secp384r1 = 1;
 
-	public static MSSCiphers
-		CIPHER_AES_GCM = new SimpleCiphers(32, AES_GCM::new),
-		CIPHER_SM4_CFB8 = new SimpleCiphers(32, SM4::new, MyCipher.MODE_CFB),
-		CIPHER_XCHACHA20 = new SimpleCiphers(32, XChaCha::new),
-		CIPHER_XCHACHA20_POLY1305 = new SimpleCiphers(32, XChaCha_Poly1305::new);
+	public static final MSSCipherFactory
+		CIPHER_AES_128_GCM = new SimpleCipherFactory(16, AES_GCM::new),
+		CIPHER_AES_256_GCM = new SimpleCipherFactory(32, AES_GCM::new),
+		CIPHER_CHACHA20_POLY1305 = new SimpleCipherFactory(32, ChaCha_Poly1305::new),
+		CIPHER_XCHACHA20_POLY1305 = new SimpleCipherFactory(32, XChaCha_Poly1305::new);
 
 	public static Supplier<MessageDigest> SIGN_SHA256, SIGN_SHA384;
 
 	static {
-		// mandatory
 		try {
-			register(PUB_X509_RSA,  new JKeyFactory("RSA"));
-			register(PUB_X509_CERTIFICATE, new JCertificateFactory());
-			register(KEX_DH, "DH", DH::new);
 			SIGN_SHA256 = cloneFrom("SHA-256");
+			SIGN_SHA384 = cloneFrom("SHA-384");
+
+			register(PUB_X509_RSA, new JKeyFactory("RSA"));
+			register(PUB_X509_CERTIFICATE, new JCertificateFactory());
+			register(PUB_X509_DSA, new JKeyFactory("DSA"));
+			register(PUB_X509_EC, new JKeyFactory("EC"));
+
+			_DHE(KEX_DHE_ffdhe2048, DHGroup.ffdhe2048);
+			_ECDHE(KEX_ECDHE_secp384r1, ECGroup.secp384r1);
 		} catch (Exception e) {
 			Helpers.athrow(e);
 		}
-
-		// optional
-		try {
-			register(PUB_X509_DSA,  new JKeyFactory("DSA"));
-			register(PUB_X509_EC,  new JKeyFactory("EC"));
-			registerECDH(KEX_ECDH_SECP384R1, NamedCurve.secp384r1);
-			registerECDH(KEX_ECDH_BrainPool384R1, NamedCurve.bp384r1);
-			SIGN_SHA384 = cloneFrom("SHA-384");
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
 	}
 
-	private static void registerECDH(int id, NamedCurve curve) {
-		register(id, "ECDH-"+curve.getObjectId(), () -> new ECDH(curve));
-	}
+	private static void _ECDHE(int i, ECGroup c) { register(i, "ECDHE-"+c.name, c); }
+	private static void _DHE(int i, DHGroup c) { register(i, "DHE-"+c.name, c); }
 
 	private static Supplier<MessageDigest> cloneFrom(String algo) throws NoSuchAlgorithmException {
 		MessageDigest md = MessageDigest.getInstance(algo);
 		return () -> {
-			try {
-				return (MessageDigest) md.clone();
-			} catch (Exception e) {
-				return null;
-			}
+			try { return (MessageDigest) md.clone();
+			} catch (Exception e) { Helpers.athrow(e); return null; }
 		};
 	}
 
 	public final short id;
-	public final MSSCiphers ciphers;
+	public final MSSCipherFactory ciphers;
 	public final Supplier<MessageDigest> sign;
 
-	public CipherSuite(int id, MSSCiphers ciphers, Supplier<MessageDigest> sign) {
+	public CipherSuite(int id, MSSCipherFactory ciphers, Supplier<MessageDigest> sign) {
 		this.id = (short) id;
 		this.ciphers = ciphers;
 		this.sign = sign;

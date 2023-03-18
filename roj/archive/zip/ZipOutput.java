@@ -2,6 +2,7 @@ package roj.archive.zip;
 
 import roj.io.IOUtil;
 import roj.util.ByteList;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
@@ -66,6 +67,16 @@ public final class ZipOutput implements AutoCloseable {
 			all.writeNamed(name, data.get(), compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
 		} else {
 			some.put(name, data, compress);
+		}
+	}
+
+	public void setS(String name, Supplier<InputStream> data) throws IOException {
+		if (useZFW) {
+			try (InputStream in = data.get()) {
+				set(name, in);
+			}
+		} else {
+			some.put(name, Helpers.cast(data), compress);
 		}
 	}
 

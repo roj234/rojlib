@@ -4,7 +4,7 @@ import roj.collect.SimpleList;
 import roj.concurrent.FastLocalThread;
 import roj.concurrent.Shutdownable;
 import roj.util.Helpers;
-import roj.util.SleepingBeauty;
+import roj.util.HighResolutionTimer;
 
 import java.io.IOException;
 import java.nio.channels.ClosedSelectorException;
@@ -22,9 +22,9 @@ import java.util.function.Consumer;
  */
 public class SelectorLoop implements Shutdownable {
 	public static final BiConsumer<String, Throwable> PRINT_HANDLER = (reason, error) -> error.printStackTrace();
-	static { SleepingBeauty.sleep(); }
+	static { HighResolutionTimer.activate(); }
 
-	class Poller extends FastLocalThread implements Consumer<SelectionKey> {
+	final class Poller extends FastLocalThread implements Consumer<SelectionKey> {
 		private Selector selector;
 		private long prevAlert;
 
@@ -117,7 +117,13 @@ public class SelectorLoop implements Shutdownable {
 						continue;
 					}
 
-					onSelected(key, att, t);
+					try {
+						t.selected(key.readyOps());
+					} catch (Exception e) {
+						if (uncaughtException(t, "T_SELECTED", e)) {
+							safeClose(att, key);
+						}
+					}
 				}
 
 				if (!sel.isOpen()) break;
@@ -138,7 +144,17 @@ public class SelectorLoop implements Shutdownable {
 					int cycle = Math.min(missedTime, 10);
 					time += cycle;
 
-					while (cycle-- > 0) onTick(keys);
+					while (cycle-- > 0) {
+						//synchronized (sel.keys()) {
+							try {
+								keys.forEach(this);
+							} catch (ConcurrentModificationException ignored) {
+								// by source code, forEach only check modCount after iterate
+								// since entry modification designed to by concurrent 'safe'
+								// and we hold the lock
+							}
+						//}
+					}
 				} else {
 					if (selected.isEmpty()) delayed++;
 
@@ -174,30 +190,8 @@ public class SelectorLoop implements Shutdownable {
 			}
 		}
 
-		void onSelected(SelectionKey key, Att att, Selectable t) {
-			try {
-				t.selected(key.readyOps());
-			} catch (Exception e) {
-				if (uncaughtException(t, "T_SELECTED", e)) {
-					safeClose(att, key);
-				}
-			}
-		}
-
-		void onTick(Set<SelectionKey> keys) {
-			//synchronized (sel.keys()) {
-				try {
-					keys.forEach(this);
-				} catch (ConcurrentModificationException ignored) {
-					// by source code, forEach only check modCount after iterate
-					// since entry modification designed to by concurrent 'safe'
-					// and we hold the lock
-				}
-			//}
-		}
-
 		@Override
-		public final void accept(SelectionKey key) {
+		public void accept(SelectionKey key) {
 			Att att = (Att) key.attachment();
 			try {
 				att.s.tick(1);
@@ -288,7 +282,7 @@ public class SelectorLoop implements Shutdownable {
 		Thread[] t = this.threads = new Poller[Math.max(minThreads, 2)];
 		for (int i = 0; i < initThreads; i++) {
 			try {
-				(t[i] = createThread()).start();
+				(t[i] = new Poller()).start();
 			} catch (IOException e) {
 				throw new IllegalStateException("Unable initialize thread", e);
 			}
@@ -381,7 +375,7 @@ public class SelectorLoop implements Shutdownable {
 	public void register(Selectable t, Consumer<? extends Selectable> callback, int ops) throws IOException {
 		if (t == null) throw new NullPointerException("Selectable t");
 
-		Att att = createAttachment();
+		Att att = new Att();
 		att.s = t;
 		att.cb = Helpers.cast(callback);
 
@@ -429,7 +423,7 @@ public class SelectorLoop implements Shutdownable {
 				System.arraycopy(threads, 0, ts, 0, i);
 				threads = ts;
 			}
-			thread = ts[i] = createThread();
+			thread = ts[i] = new Poller();
 		}
 
 		try {
@@ -438,14 +432,6 @@ public class SelectorLoop implements Shutdownable {
 		} finally {
 			thread.start();
 		}
-	}
-
-	Att createAttachment() {
-		return new Att();
-	}
-
-	Poller createThread() throws IOException {
-		return this.new Poller();
 	}
 
 	static class Att {

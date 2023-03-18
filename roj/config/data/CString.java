@@ -2,10 +2,11 @@ package roj.config.data;
 
 import roj.config.IniParser;
 import roj.config.NBTParser;
-import roj.config.serial.CConsumer;
-import roj.config.serial.Structs;
+import roj.config.VinaryParser;
+import roj.config.serial.CVisitor;
 import roj.config.word.ITokenizer;
-import roj.math.MathUtils;
+import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
 import javax.annotation.Nonnull;
@@ -46,7 +47,7 @@ public final class CString extends CEntry {
 
 	@Override
 	public int asInteger() {
-		return MathUtils.parseInt(value);
+		return TextUtil.parseInt(value);
 	}
 
 	@Override
@@ -78,17 +79,17 @@ public final class CString extends CEntry {
 	}
 
 	//@Override
-	protected StringBuilder toXML(StringBuilder sb, int depth) {
+	protected CharList toXML(CharList sb, int depth) {
 		return value == null ? sb.append("null") : !value.startsWith("<![CDATA[") && value.indexOf('<') >= 0 ? sb.append("<![CDATA[").append(value).append("]]>") : sb.append(value);
 	}
 
 	@Override
-	public StringBuilder toJSON(StringBuilder sb, int depth) {
+	public CharList toJSON(CharList sb, int depth) {
 		return value == null ? sb.append("null") : ITokenizer.addSlashes(value, sb.append('"')).append('"');
 	}
 
 	@Override
-	protected StringBuilder toINI(StringBuilder sb, int depth) {
+	protected CharList toINI(CharList sb, int depth) {
 		return IniParser.literalSafe(value) ? sb.append(value) : ITokenizer.addSlashes(value, sb.append('"')).append('"');
 	}
 
@@ -98,18 +99,13 @@ public final class CString extends CEntry {
 	}
 
 	@Override
-	public void toNBT(DynByteBuf w) {
-		w.putUTF(value);
-	}
-
-	@Override
 	public Object unwrap() {
 		return value;
 	}
 
 	@Override
-	public void toBinary(DynByteBuf w, Structs struct) {
-		w.put((byte) Type.STRING.ordinal()).putVarIntVIC(value);
+	protected void toBinary(DynByteBuf w, VinaryParser struct) {
+		w.put((byte) Type.STRING.ordinal()).putVStr(value);
 	}
 
 	@Override
@@ -118,7 +114,7 @@ public final class CString extends CEntry {
 	}
 
 	@Override
-	public void forEachChild(CConsumer ser) {
+	public void forEachChild(CVisitor ser) {
 		ser.value(value);
 	}
 }

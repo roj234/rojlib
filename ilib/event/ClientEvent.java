@@ -316,14 +316,6 @@ public final class ClientEvent {
 		if (Config.fixSBOverF3) GuiIngameForge.renderObjective = !mc.gameSettings.showDebugInfo;
 		if (mc.gameSettings.showDebugInfo && Config.betterF3 && !mc.gameSettings.showLagometer) {
 			MyDebugOverlay.process(event.getLeft(), event.getRight());
-
-			//            long i = 2048576000000L;
-			//            long l = Runtime.getRuntime().totalMemory();
-			//            event.getRight().set(1, String.format("Mem: % 2d%% %03d/%03dMB", l * 100L / i, l>>20, i>>20));
-			//            event.getRight().set(4, "CPU: 4096x Genuine Intel(R)");
-			//            event.getRight().set(6, "Display: 854x480 (Nvidia)");
-			//            event.getRight().set(7, "Nvidia TbForce STX 9090Ti");
-			//            event.getLeft().set(1, "1919810 fps (0 chunk updates) T: inf fancy-clouds vbo");
 		}
 	}
 
@@ -605,7 +597,7 @@ public final class ClientEvent {
 		List<String> tooltip = Reflection.HELPER.getModifiableList(event.getLines());
 
 		if (lastRender == null || !InventoryUtil.areItemStacksEqual(event.getStack(), lastRender) || tooltip.size() != prevLen) {
-			timer = 0;
+			timer = (int) System.currentTimeMillis();
 			prevLen = tooltip.size();
 
 			lastRender = event.getStack().copy();
@@ -631,11 +623,10 @@ public final class ClientEvent {
 			backup = tooltip.toArray(new String[tooltip.size()]);
 		}
 
-		if (timer < 0) return;
+		if (timer == -1) return;
 		int pages = (int) Math.ceil(((double) backup.length) / rows);
 
-		int v = timer++ / Config.pagedTooltipTime;
-		if (v >= pages) v = timer = 0;
+		int v = (((int)System.currentTimeMillis() - timer) / Config.pagedTooltipTime) % pages;
 
 		int end = Math.min(backup.length, (v + 1) * rows);
 
@@ -644,7 +635,7 @@ public final class ClientEvent {
 			tooltip.add(backup[i]);
 		}
 
-		tooltip.add(String.valueOf(v + 1) + '/' + pages + " 页 (" + (Config.pagedTooltipTime - timer % Config.pagedTooltipTime) + ")");
+		tooltip.add(String.valueOf(v + 1) + '/' + pages + " 页 (" + (Config.pagedTooltipTime - ((int)System.currentTimeMillis() - timer) % Config.pagedTooltipTime) + ")");
 	}
 
 	// endregion

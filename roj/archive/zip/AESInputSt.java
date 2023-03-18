@@ -37,8 +37,7 @@ final class AESInputSt extends CipherInputStream {
 		byte[] remote = new byte[10];
 		IOUtil.readFully(in, remote, 0, 10);
 
-		ZipAES crypto = (ZipAES) c;
-		byte[] local = crypto.getTrailers();
+		byte[] local = ((ZipAES) c).getTrailers();
 
 		if (!MessageDigest.isEqual(local, remote)) throw new ZipException("HMAC checksum: excepting " + Arrays.toString(local) + ", got " + Arrays.toString(remote) + "\n" + "You can disable this by unset VERIFY bit");
 	}

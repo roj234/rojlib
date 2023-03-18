@@ -4,7 +4,6 @@ import roj.collect.MyHashMap;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.math.MathUtils;
 import roj.net.NetworkUtil;
 import roj.net.URIUtil;
 import roj.net.ch.*;
@@ -13,7 +12,10 @@ import roj.net.http.Action;
 import roj.net.http.srv.Request;
 import roj.net.http.srv.ResponseHeader;
 import roj.net.http.srv.StringResponse;
-import roj.net.http.srv.autohandled.*;
+import roj.net.http.srv.autohandled.Accepts;
+import roj.net.http.srv.autohandled.Body;
+import roj.net.http.srv.autohandled.From;
+import roj.net.http.srv.autohandled.Route;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextUtil;
@@ -71,7 +73,7 @@ public class DnsServer implements ChannelHandler {
 		for (int i = 0; i < list.size(); i++) {
 			String id = list.get(i).asString();
 			int j = id.lastIndexOf(':');
-			forwardDns.add(new InetSocketAddress(id.substring(0, j), MathUtils.parseInt(id.substring(j + 1))));
+			forwardDns.add(new InetSocketAddress(id.substring(0, j), TextUtil.parseInt(id.substring(j + 1))));
 			System.out.println(forwardDns);
 		}
 		if (!cfg.getString("fakeDnsServer").isEmpty()) fakeDns = new InetSocketAddress(cfg.getString("fakeDnsServer"), 53);
@@ -839,7 +841,7 @@ public class DnsServer implements ChannelHandler {
 
 	@Route("")
 	@Body(From.GET)
-	public StringResponse index(@Field String msg) throws Exception {
+	public StringResponse index(String msg) throws Exception {
 		StringBuilder sb = new StringBuilder().append("<head><meta charset='UTF-8' /><title>AsyncDns 1.2</title></head><h1>Welcome! <br> Asyncorized_MC 基于DNS的广告屏蔽器 1.2</h1>");
 
 		if (msg != null && !msg.isEmpty()) {
@@ -885,7 +887,7 @@ public class DnsServer implements ChannelHandler {
 			} else {
 				Record e = new Record();
 				e.TTL = Integer.MAX_VALUE;
-				short qType = (short) MathUtils.parseInt(type);
+				short qType = (short) TextUtil.parseInt(type);
 				e.qType = qType;
 				if (qType == Q_A || qType == Q_AAAA) {
 					e.data = NetworkUtil.ip2bytes(cnt);

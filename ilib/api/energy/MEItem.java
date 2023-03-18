@@ -1,9 +1,11 @@
 package ilib.api.energy;
 
-import ilib.capabilities.INBTSerializable;
+import net.minecraft.nbt.NBTTagCompound;
+
+import net.minecraftforge.common.util.INBTSerializable;
 
 // ME unit define
-public interface MEItem extends INBTSerializable {
+public interface MEItem extends INBTSerializable<NBTTagCompound> {
 	enum EnergyType {
 		RECEIVER, STORAGE, PROVIDER, TUBE
 	}

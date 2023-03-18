@@ -2,6 +2,7 @@ package roj.config;
 
 import roj.collect.*;
 import roj.config.data.*;
+import roj.config.serial.ToJson;
 import roj.config.word.Word;
 import roj.text.CharList;
 import roj.util.Helpers;
@@ -15,7 +16,7 @@ import static roj.config.word.Word.*;
  *
  * @author Roj234
  */
-public class JSONParser extends Parser {
+public class JSONParser extends Parser<CEntry> {
 	static final short TRUE = 10, FALSE = 11, NULL = 12, left_l_bracket = 13, right_l_bracket = 14, left_m_bracket = 15, right_m_bracket = 16, comma = 17, colon = 18;
 
 	private static final TrieTree<Word> JSON_TOKENS = new TrieTree<>();
@@ -25,7 +26,6 @@ public class JSONParser extends Parser {
 		addKeywords(JSON_TOKENS, 10, "true", "false", "null");
 		addSymbols(JSON_TOKENS, JSON_LENDS, 13, "{", "}", "[", "]", ",", ":");
 		addWhitespace(JSON_LENDS);
-		JSON_LENDS.addAll("+-");
 		fcSetDefault(JSON_C2C, 7);
 		JSON_C2C.put('\'', C_SYH);
 	}
@@ -50,47 +50,27 @@ public class JSONParser extends Parser {
 
 	public JSONParser() {}
 	public JSONParser(int solidFlag) {
-		this.flag = (byte) solidFlag;
-		ipool = (solidFlag & INTERN) != 0 ? new MyHashSet<>() : null;
-		if ((solidFlag & COMMENT) != 0) comment = new CharList();
+		super(solidFlag);
 	}
 
 	@Override
-	public final CEntry parse(CharSequence text, int flags) throws ParseException {
-		init(text);
-		this.flag = (byte) flags;
+	public CEntry element(int flag) throws ParseException { return element(this, flag); }
 
-		CEntry entry;
-		try {
-			entry = element((byte) flags);
-		} catch (ParseException e) {
-			throw e.addPath("$");
-		}
+	public final int availableFlags() { return NO_DUPLICATE_KEY|LITERAL_KEY|UNESCAPED_SINGLE_QUOTE|NO_EOF|LENIENT_COMMA|ORDERED_MAP; }
+	public final String format() { return "JSON"; }
 
-		if ((flags & NO_EOF) == 0 && next().type() != EOF) throw err("期待 /EOF");
-		return entry;
-	}
-
-	@Override
-	public int acceptableFlags() {
-		return NO_DUPLICATE_KEY|LITERAL_KEY|UNESCAPED_SINGLE_QUOTE|NO_EOF| LENIENT_COMMA |ORDERED_MAP;
-	}
-
-	@Override
-	public String format() {
-		return "JSON";
-	}
-
-	@Override
-	public CharSequence toString(CEntry entry, int flag) {
-		return flag == 0 ? entry.toJSONb() : entry.toShortJSONb();
+	public final CharList append(CEntry entry, int flag, CharList sb) {
+		ToJson ser = new ToJson();
+		if (flag != 0) ser.tabIndent();
+		entry.forEachChild(ser.sb(sb));
+		return sb;
 	}
 
 	/**
 	 * 解析数组定义 <BR>
 	 * [xxx, yyy, zzz] or []
 	 */
-	static CList list(Parser wr, CList list, int flag) throws ParseException {
+	static CList list(Parser<?> wr, CList list, int flag) throws ParseException {
 		boolean more = true;
 
 		o:
@@ -109,9 +89,9 @@ public class JSONParser extends Parser {
 			more = false;
 
 			try {
-				list.add(wr.element(flag));
+				list.add(element(wr, flag));
 			} catch (ParseException e) {
-				throw e.addPath("[" + list.size() + "]");
+				throw e.addPath("["+list.size()+"]");
 			}
 		}
 
@@ -124,7 +104,7 @@ public class JSONParser extends Parser {
 	 * {xxx: yyy, zzz: uuu}
 	 */
 	@SuppressWarnings("fallthrough")
-	static CMapping map(Parser wr, int flag) throws ParseException {
+	static CMapping map(Parser<?> wr, int flag) throws ParseException {
 		Map<String, CEntry> map = (flag & ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>();
 		Map<String, String> comment = null;
 		boolean more = true;
@@ -153,9 +133,9 @@ public class JSONParser extends Parser {
 
 			wr.except(colon, ":");
 			try {
-				map.put(v, wr.element(flag));
+				map.put(v, element(wr, flag));
 			} catch (ParseException e) {
-				throw e.addPath('.' + v);
+				throw e.addPath('.'+v);
 			}
 		}
 
@@ -163,11 +143,10 @@ public class JSONParser extends Parser {
 		return comment == null ? new CMapping(map) : new CCommMap(map, comment);
 	}
 
-	@SuppressWarnings("fallthrough")
-	CEntry element(int flag) throws ParseException {
-		Word w = next();
+	private static CEntry element(Parser<?> wr, int flag) throws ParseException {
+		Word w = wr.next();
 		switch (w.type()) {
-			case left_m_bracket: return list(this, new CList(), flag);
+			case left_m_bracket: return list(wr, new CList(), flag);
 			case STRING: return CString.valueOf(w.val());
 			case DOUBLE:
 			case FLOAT: return CDouble.valueOf(w.asDouble());
@@ -176,14 +155,14 @@ public class JSONParser extends Parser {
 			case TRUE: return CBoolean.TRUE;
 			case FALSE: return CBoolean.FALSE;
 			case NULL: return CNull.NULL;
-			case left_l_bracket: return map(this, flag);
+			case left_l_bracket: return map(wr, flag);
 			case LITERAL: if ((flag & LITERAL_KEY) != 0) return CString.valueOf(w.val());
-			default: unexpected(w.val()); return Helpers.nonnull();
+			default: wr.unexpected(w.val()); return Helpers.nonnull();
 		}
 	}
 
 	@Override
-	protected Word readConstString(char key) throws ParseException {
+	protected final Word readConstString(char key) throws ParseException {
 		return formClip(STRING, readSlashString(key, key != '\'' || (flag & UNESCAPED_SINGLE_QUOTE) == 0));
 	}
 }

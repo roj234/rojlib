@@ -3,7 +3,6 @@ package roj.reflect;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.IClass;
 import roj.asm.util.AccessFlag;
 import roj.asm.visitor.CodeWriter;
 import roj.util.ByteList;
@@ -15,30 +14,25 @@ import static roj.asm.util.AccessFlag.PUBLIC;
  * @since 2020/12/6 15:04
  */
 public final class FastInit {
-	private static Object CallbackBuffer;
+	private static final ThreadLocal<Object> Callback = new ThreadLocal<>();
+	public static void __(Object handle) { Callback.set(handle); }
 
-	public static void syncCallback(Object handle) {
-		CallbackBuffer = handle;
-	}
-
-	public static Object make(IClass var) {
-		return make(var, ClassDefiner.INSTANCE);
-	}
-	public static Object make(IClass var, ClassDefiner l) {
+	public static Object make(ConstantData var) { return make(var, ClassDefiner.INSTANCE); }
+	public static Object make(ConstantData var, ClassDefiner l) {
 		ByteList buf = Parser.toByteArrayShared(var);
 		String name = var.name().replace('/', '.');
 
-		synchronized (FastInit.class) {
-			try {
-				Class<?> klass = l.defineClassC(name, buf);
-				FieldAccessor.u.ensureClassInitialized(klass);
-				if (null == CallbackBuffer) throw new IllegalStateException("初始化失败: 你是否调用了prepare()来写入<clinit>?");
-				return CallbackBuffer;
-			} catch (Throwable e) {
-				throw new IllegalStateException("初始化失败", e);
-			} finally {
-				CallbackBuffer = null;
-			}
+		try {
+			Class<?> klass = l.defineClassC(name, buf);
+			FieldAccessor.u.ensureClassInitialized(klass);
+			Object o = Callback.get();
+			if (null == o) throw new IllegalStateException("初始化失败: 你是否调用了prepare()来写入<clinit>?");
+			return o;
+		} catch (Throwable e) {
+			var.dump();
+			throw new IllegalStateException("初始化失败", e);
+		} finally {
+			Callback.remove();
 		}
 	}
 
@@ -49,7 +43,7 @@ public final class FastInit {
 		cw.visitSize(2,0);
 
 		cw.newObject(clz.name);
-		cw.invoke(Opcodes.INVOKESTATIC, FastInit.class.getName().replace('.', '/'), "syncCallback", "(Ljava/lang/Object;)V");
+		cw.invoke(Opcodes.INVOKESTATIC, FastInit.class.getName().replace('.', '/'), "__", "(Ljava/lang/Object;)V");
 		cw.one(Opcodes.RETURN);
 		cw.finish();
 	}

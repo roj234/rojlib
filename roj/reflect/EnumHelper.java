@@ -4,7 +4,7 @@ import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 import roj.util.Helpers;
 
 import java.lang.reflect.Constructor;
@@ -91,7 +91,7 @@ public final class EnumHelper<E extends Enum<E>> {
 	}
 
 	public E make(String value, int ordinal) {
-		return make(value, ordinal, EmptyArrays.CLASSES, EmptyArrays.OBJECTS);
+		return make(value, ordinal, ArrayCache.CLASSES, ArrayCache.OBJECTS);
 	}
 
 	public E make(String value, int ordinal, Class<?>[] additionalTypes, Object[] additional) {

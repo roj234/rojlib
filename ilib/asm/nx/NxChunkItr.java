@@ -18,7 +18,7 @@ import java.util.Iterator;
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-@Nixim("net.minecraft.world.World")
+@Nixim("/")
 abstract class NxChunkItr extends World {
 	protected NxChunkItr() {
 		super(null, null, null, null, false);

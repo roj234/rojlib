@@ -9,6 +9,7 @@ import roj.config.XMLParser;
 import roj.config.word.ITokenizer;
 import roj.config.word.Tokenizer;
 import roj.config.word.Word;
+import roj.text.CharList;
 import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
@@ -323,7 +324,7 @@ public class XElement extends XEntry {
 	}
 	// endregion
 
-	public void toXML(StringBuilder sb, int depth) {
+	public void toXML(CharList sb, int depth) {
 		sb.append('<').append(tag);
 		if (!attributes.isEmpty()) {
 			for (Map.Entry<String, CEntry> entry : attributes.entrySet()) {
@@ -358,7 +359,7 @@ public class XElement extends XEntry {
 		sb.append("</").append(tag).append('>');
 	}
 
-	public void toCompatXML(StringBuilder sb) {
+	public void toCompatXML(CharList sb) {
 		sb.append('<').append(tag);
 		if (!attributes.isEmpty()) {
 			for (Map.Entry<String, CEntry> entry : attributes.entrySet()) {

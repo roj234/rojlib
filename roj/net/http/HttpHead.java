@@ -41,13 +41,8 @@ public class HttpHead extends Headers {
 		return a;
 	}
 
-	public String versionStr() {
-		return isRequest ? c : a;
-	}
-
-	public Version version() {
-		return new Version(isRequest ? c : a);
-	}
+	public String versionStr() { return isRequest ? c : a; }
+	public Version version() { return new Version(isRequest ? c : a); }
 
 	@Override
 	public String toString() {
@@ -107,9 +102,6 @@ public class HttpHead extends Headers {
 		return null;
 	}
 
-	public String getHeaderField(String name) {
-		return getOrDefault(name, "");
-	}
 	public long getContentLengthLong() {
 		return Long.parseLong(getOrDefault("content-length", "-1"));
 	}

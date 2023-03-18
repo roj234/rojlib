@@ -7,7 +7,7 @@ import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 import roj.util.Helpers;
 
 import net.minecraft.client.renderer.block.model.BakedQuad;
@@ -69,7 +69,7 @@ class NxLight extends LightUtil {
 					unpack(quad.getVertexData(), data, formatTo, v, map[e]);
 					c.put(e, data);
 				} else {
-					c.put(e, EmptyArrays.FLOATS);
+					c.put(e, ArrayCache.FLOATS);
 				}
 			}
 		}

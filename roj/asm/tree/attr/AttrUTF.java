@@ -21,7 +21,7 @@ public final class AttrUTF extends Attribute {
 
 	public AttrUTF(String name, DynByteBuf r, ConstantPool pool) {
 		super(name);
-		this.value = ((CstUTF) pool.get(r)).getString();
+		this.value = ((CstUTF) pool.get(r)).str();
 	}
 
 	public String value;

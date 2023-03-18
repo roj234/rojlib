@@ -46,7 +46,8 @@ public class FilePlayer extends Thread {
 
 			Source source = null;
 			try {
-				if (o instanceof ByteList) {source = new MemorySource((ByteList) o);} else if (o instanceof File) {
+				if (o instanceof ByteList) source = new MemorySource((ByteList) o);
+				else if (o instanceof File) {
 					source = new FileSource((File) o);
 				} else {
 					source = (Source) o;

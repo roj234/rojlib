@@ -1,6 +1,7 @@
 package roj.asm.tree.anno;
 
 import roj.asm.cst.ConstantPool;
+import roj.asm.type.Type;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -10,21 +11,19 @@ import java.util.List;
  * @since 2021/1/9 14:23
  */
 public final class AnnValArray extends AnnVal {
-	public AnnValArray(List<AnnVal> value) {
-		this.value = value;
-	}
+	public AnnValArray(List<AnnVal> v) { value = v; }
 
 	public List<AnnVal> value;
 
 	@Override
-	public List<AnnVal> asArray() {
-		return value;
-	}
+	public List<AnnVal> asArray() { return value; }
 
-	public void toByteArray(ConstantPool pool, DynByteBuf w) {
-		w.put((byte) ARRAY).putShort(value.size());
+	public byte type() { return Type.ARRAY; }
+
+	public void toByteArray(ConstantPool cp, DynByteBuf w) {
+		w.put((byte) Type.ARRAY).putShort(value.size());
 		for (int i = 0; i < value.size(); i++) {
-			value.get(i).toByteArray(pool, w);
+			value.get(i).toByteArray(cp, w);
 		}
 	}
 
@@ -41,22 +40,13 @@ public final class AnnValArray extends AnnVal {
 	}
 
 	@Override
-	public byte type() {
-		return ARRAY;
-	}
-
-	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 
-		AnnValArray array = (AnnValArray) o;
-
-		return value.equals(array.value);
+		return value.equals(((AnnValArray) o).value);
 	}
 
 	@Override
-	public int hashCode() {
-		return value.hashCode();
-	}
+	public int hashCode() { return value.hashCode(); }
 }

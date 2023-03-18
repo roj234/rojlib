@@ -2,7 +2,6 @@ package roj.net;
 
 import roj.collect.MyBitSet;
 import roj.io.IOUtil;
-import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.ByteList;
@@ -43,14 +42,14 @@ public class URIUtil {
 
 								if (i+6 > len) break;
 								try {
-									sb.append((char) MathUtils.parseInt(src, i+2, i+6, 16));
+									sb.append((char) TextUtil.parseInt(src, i+2, i+6, 16));
 								} catch (Exception e) {
 									break;
 								}
 								i += 6;
 							} else {
 								try {
-									tmp.put((byte) MathUtils.parseInt(src, i+1, i+3, 16));
+									tmp.put((byte) TextUtil.parseInt(src, i+1, i+3, 16));
 								} catch (Exception e) {
 									break;
 								}

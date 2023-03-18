@@ -9,21 +9,26 @@ import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 public abstract class DualBuffered<W, R> {
 	final class Sync extends AbstractQueuedSynchronizer {
 		private static final int WRITING = 4, DIRTY = 2, PAUSE = 1;
+		private final int WriteUnlock;
+
+		Sync(boolean instant) {
+			WriteUnlock = instant ? DIRTY|PAUSE : DIRTY;
+		}
 
 		// write lock
 		protected final boolean tryAcquire(int unused) {
 			Thread current = Thread.currentThread();
 
 			for(;;) {
-				int i = getState();
-				if ((i & PAUSE) != 0) return false;
-				if ((i & WRITING) != 0) {
+				int c = getState();
+				if ((c & PAUSE) != 0) return false;
+				if ((c & WRITING) != 0) {
 					if (getExclusiveOwnerThread() == current)
 						throw new IllegalMonitorStateException("no-reentrant support");
 					return false;
 				}
 
-				if (compareAndSetState(i, i|WRITING)) break;
+				if (compareAndSetState(c, c|WRITING)) break;
 			}
 
 			setExclusiveOwnerThread(current);
@@ -36,14 +41,15 @@ public abstract class DualBuffered<W, R> {
 
 			for(;;) {
 				int c = getState();
-				if (compareAndSetState(c, (c^WRITING) | DIRTY)) {
+
+				if ((c&WRITING) == 0) throw new IllegalMonitorStateException("未锁定");
+				if (compareAndSetState(c, (c^WRITING) | WriteUnlock)) {
 					if ((c&~(DIRTY|PAUSE)) == 0) tryInvokeFlush();
 					break;
 				}
 			}
 
 			setExclusiveOwnerThread(null);
-
 			return true;
 		}
 
@@ -54,8 +60,8 @@ public abstract class DualBuffered<W, R> {
 				int c = getState();
 				if ((c & PAUSE) != 0) return -1;
 
-				if (c+4 < 0) throw new IllegalArgumentException("lock count overflow");
-				if (compareAndSetState(c, c+4)) return 1;
+				if (c+8 < 0) throw new IllegalStateException("计数器溢出");
+				if (compareAndSetState(c, c+8)) return 1;
 
 				limit--;
 			}
@@ -65,11 +71,10 @@ public abstract class DualBuffered<W, R> {
 
 		// read unlock
 		protected final boolean tryReleaseShared(int unused) {
-			if (getState() == -1 && getExclusiveOwnerThread() != null)
-				throw new IllegalMonitorStateException("locked in write mode");
-
 			for (;;) {
 				int c = getState();
+
+				if (c < 8) throw new IllegalMonitorStateException("未锁定");
 				if (compareAndSetState(c, c-8)) {
 					if ((c&~(DIRTY|PAUSE)) == 8) tryInvokeFlush();
 					return true;
@@ -98,7 +103,7 @@ public abstract class DualBuffered<W, R> {
 
 	protected W w;
 	protected R r;
-	private final Sync sync = new Sync();
+	private final Sync sync = new Sync(false);
 
 	public DualBuffered() {}
 

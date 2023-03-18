@@ -3,6 +3,7 @@ package roj.math;
 import roj.collect.IntList;
 import roj.config.word.ITokenizer;
 import roj.text.CharList;
+import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
 
@@ -43,7 +44,7 @@ public final class Version {
 			} else {
 				if (dot) {
 					// only 1 \r or \n
-					this.items.add(MathUtils.parseInt(buf));
+					this.items.add(TextUtil.parseInt(buf));
 					buf.clear();
 				}
 				buf.append(c);
@@ -51,7 +52,7 @@ public final class Version {
 			}
 		}
 		if (buf.length() != 0) {
-			this.items.add(MathUtils.parseInt(buf));
+			this.items.add(TextUtil.parseInt(buf));
 		}
 
 		return this;

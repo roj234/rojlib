@@ -3,6 +3,7 @@ package ilib.asm;
 import ilib.Config;
 import ilib.asm.FeOrg.ctr.*;
 import ilib.asm.util.SafeSystem;
+import ilib.util.Hook;
 import io.netty.bootstrap.Bootstrap;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -55,6 +56,8 @@ import static ilib.asm.NiximProxy.niximUser;
 public class Loader implements IFMLLoadingPlugin {
 	public static final Logger logger = LogManager.getLogger("又一个优化mod");
 	public static final long beginTime = System.currentTimeMillis();
+
+	public static final Hook EVENT_BUS = new Hook();
 
 	public static boolean hasOF;
 	public static ASMDataTable Annotations;
@@ -141,15 +144,12 @@ public class Loader implements IFMLLoadingPlugin {
 		//Nx("!NxRecord");
 		//Nx("!FastETE");
 		//Nx("!TrackerAdd");
-		// todo 用上LargestRectangle+shader
-		// todo 3-side rendering, 先写一个方法int getSideBits(Vec3d obsPos, Vec3f obsVec, Vec3d tgPos, Vec3f tgVec)
-		// todo ScreenShotHelper (GL_GET INT_ARGB -> Direct -> BufferImage int[])
 
 		// 快速压缩
 		if (Config.fastPacketProc) {
-			ClassReplacer.FIRST.add("net.minecraft.network.NettyVarint21FrameEncoder", IOUtil.read("ilib/asm/rpl/VarIntEncoder.class"));
-			ClassReplacer.FIRST.add("net.minecraft.network.NettyVarint21FrameDecoder", IOUtil.read("ilib/asm/rpl/VarIntDecoder.class"));
-			ClassReplacer.FIRST.add("net.minecraft.network.NettyCompressionEncoder", IOUtil.read("ilib/asm/rpl/FastZip.class"));
+			ClassReplacer.FIRST.add("net.minecraft.network.NettyVarint21FrameEncoder", IOUtil.readRes("ilib/asm/rpl/VarIntEncoder.class"));
+			ClassReplacer.FIRST.add("net.minecraft.network.NettyVarint21FrameDecoder", IOUtil.readRes("ilib/asm/rpl/VarIntDecoder.class"));
+			ClassReplacer.FIRST.add("net.minecraft.network.NettyCompressionEncoder", IOUtil.readRes("ilib/asm/rpl/FastZip.class"));
 			//ClassReplacer.FIRST.add("net.minecraft.network.NettyCompressionDecoder", IOUtil.read("ilib/asm/rpl/FastUnzip.class"));
 		}
 
@@ -162,7 +162,7 @@ public class Loader implements IFMLLoadingPlugin {
 		}
 
 		if (Config.fastMobSpawn) {
-			ClassReplacer.FIRST.add("net.minecraft.world.WorldEntitySpawner", IOUtil.read("ilib/asm/rpl/MobSpawn.class"));
+			ClassReplacer.FIRST.add("net.minecraft.world.WorldEntitySpawner", IOUtil.readRes("ilib/asm/rpl/MobSpawn.class"));
 		}
 
 		// endregion
@@ -192,6 +192,8 @@ public class Loader implements IFMLLoadingPlugin {
 		Nx("!FixFurnaceCart");
 		// endregion
 
+		ClassReplacer.LAST.add("net.minecraftforge.fml.client.SplashProgress$SplashFontRenderer", IOUtil.readRes("ilib/asm/rpl/RplFR.class"));
+
 		boolean isClient = testClientSide();
 
 		if (isClient) {
@@ -218,8 +220,8 @@ public class Loader implements IFMLLoadingPlugin {
 				Nx("!NoTextureAnim");
 			}
 
-			if (Config.showPlayerName) {
-				Nx("!client/PlayerNameSeen");
+			if (Config.alwaysShowName) {
+				Nx("!client/AlwaysShowName");
 			}
 
 			if (Config.infMods) {
@@ -228,7 +230,6 @@ public class Loader implements IFMLLoadingPlugin {
 
 			if (Config.fastCaps) {
 				Nx("!FastCaps0");
-				Nx("!FastCaps1");
 			}
 
 			if (Config.traceAABB) {
@@ -273,14 +274,8 @@ public class Loader implements IFMLLoadingPlugin {
 				Nx("!client/NxClearLava");
 			}
 
-			if (!Config.customFont.isEmpty()) {
-				// @Dynamic merged
+			if (Config.fastFont) {
 				Nx("!client/NxFastFont");
-				Nx("!client/NxNewFont");
-			} else {
-				if (Config.fastFont) {
-					Nx("!client/NxFastFont");
-				}
 			}
 
 			if (Config.noRecipeBook) {
@@ -331,7 +326,7 @@ public class Loader implements IFMLLoadingPlugin {
 				Nx("!client/async/NxSprite");
 				Nx("!client/async/NxLoaderEx");
 				Nx("!client/async/NxTexUtil");
-				ClassReplacer.LAST.add("net.minecraft.client.renderer.texture.Stitcher", IOUtil.read("ilib/asm/rpl/RplStitcher.class"));
+				ClassReplacer.LAST.add("net.minecraft.client.renderer.texture.Stitcher", IOUtil.readRes("ilib/asm/rpl/RplStitcher.class"));
 			}
 
 			if (Config.minimumFPS > 0 || Config.entityCulling) {
@@ -339,6 +334,10 @@ public class Loader implements IFMLLoadingPlugin {
 				Nx("!client/NiximRenderGlobal");
 			}
 
+
+			if (Config.fpsLowTime > 0) {
+				Nx("!client/AutoFPSHook");
+			}
 			if (Config.showySelectBox) {
 				Nx("!client/NxSelectionBox");
 			}
@@ -375,7 +374,7 @@ public class Loader implements IFMLLoadingPlugin {
 			if (Config.noSoManyAABB) {
 				Nx("!client/NxBP4");
 			}
-			ClassReplacer.LAST.add("net.minecraft.client.renderer.block.model.ModelBlock$Deserializer", IOUtil.read("ilib/asm/nx/client/model/ModelBlockDeserializer.class"));
+			ClassReplacer.LAST.add("net.minecraft.client.renderer.block.model.ModelBlock$Deserializer", IOUtil.readRes("ilib/asm/nx/client/model/ModelBlockDeserializer.class"));
 		} else {
 			if (Config.noDuplicateLogin) {
 				Nx("!NoDuplicateLogin");
@@ -391,10 +390,10 @@ public class Loader implements IFMLLoadingPlugin {
 		Nx("!FastEntityConst");
 
 		// BlockPos$PooledMutableBlockPos的无锁化
-		ClassReplacer.LAST.addDeep("net.minecraft.util.math.BlockPos$PooledMutableBlockPos", IOUtil.read("ilib/asm/rpl/PMB_TL.class"));
+		ClassReplacer.LAST.addDeep("net.minecraft.util.math.BlockPos$PooledMutableBlockPos", IOUtil.readRes("ilib/asm/rpl/PMB_TL.class"));
 
 		// 重复利用ChunkOutputStream的缓冲区
-		ClassReplacer.FIRST.add("net.minecraft.world.chunk.storage.RegionFile", IOUtil.read("ilib/asm/rpl/FastChunkSL.class"));
+		ClassReplacer.FIRST.add("net.minecraft.world.chunk.storage.RegionFile", IOUtil.readRes("ilib/asm/rpl/FastChunkSL.class"));
 
 		// EntityDataManager无锁化
 		Nx("!NoDataLock");
@@ -453,7 +452,7 @@ public class Loader implements IFMLLoadingPlugin {
 		}
 
 		if (Config.replaceOIM) {
-			ClassReplacer.FIRST.add("net.minecraft.util.ObjectIntIdentityMap", IOUtil.read("META-INF/nixim/ObjectIntIdentityMap.class"));
+			ClassReplacer.FIRST.add("net.minecraft.util.ObjectIntIdentityMap", IOUtil.readRes("META-INF/nixim/ObjectIntIdentityMap.class"));
 			Nx("META-INF/nixim/MapClear.class");
 			Nx("META-INF/nixim/MapGet.class");
 		}
@@ -461,7 +460,7 @@ public class Loader implements IFMLLoadingPlugin {
 		if (Config.asyncChunkGen) {
 			Nx("!NxAsyncPCME");
 			Nx("!NxPlayerChunks");
-			ClassReplacer.LAST.addDeep("net.minecraft.world.gen.layer.IntCache", IOUtil.read("ilib/asm/rpl/FastIntCache.class"));
+			ClassReplacer.LAST.addDeep("net.minecraft.world.gen.layer.IntCache", IOUtil.readRes("ilib/asm/rpl/FastIntCache.class"));
 		}
 
 		if (Config.entityAabbCache) {
@@ -610,7 +609,7 @@ public class Loader implements IFMLLoadingPlugin {
 		if (inProgress) return;
 		inProgress = true;
 
-		if (Config.replaceTransformer) {
+		if (Config.replaceTransformer && false) {
 			for (int i = 0; i < list.size(); i++) {
 				IClassTransformer ts = list.get(i);
 				switch (ts.getClass().getName()) {

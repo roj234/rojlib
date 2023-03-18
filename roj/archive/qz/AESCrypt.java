@@ -1,10 +1,11 @@
 package roj.archive.qz;
 
 import roj.crypt.*;
+import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
-import roj.util.EmptyArrays;
 import roj.util.Helpers;
 
+import javax.crypto.Cipher;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -34,7 +35,7 @@ public final class AESCrypt extends QZCoder {
         SecureRandom srnd = new SecureRandom();
         srnd.nextBytes(iv);
 
-        if (saltLength == 0) salt = EmptyArrays.BYTES;
+        if (saltLength == 0) salt = ArrayCache.BYTES;
         else salt = srnd.generateSeed(saltLength);
 
         init(pass);
@@ -48,17 +49,24 @@ public final class AESCrypt extends QZCoder {
     public OutputStream encode(OutputStream out) throws IOException {
         if (lastKey == null) throw new IOException("没有密码");
 
-        MyCipher cip = new MyCipher(new AES(dec, false), MyCipher.MODE_CBC);
-        cip.setOption("IV", iv);
+        FeedbackCipher cip = new FeedbackCipher(new AES(dec, false), FeedbackCipher.MODE_CBC);
+        try {
+            cip.init(Cipher.ENCRYPT_MODE, null, new IvParameterSpecNC(iv), null);
+        } catch (Exception e) {
+            Helpers.athrow(e);
+        }
         return new CipherOutputStream(out, cip);
     }
     public InputStream decode(InputStream in, byte[] key, long uncompressedSize, int maxMemoryLimitInKb) throws IOException {
         if (key == null) throw new IOException("没有密码");
         init(key);
 
-        MyCipher cip = new MyCipher(dec, MyCipher.MODE_CBC);
-        cip.setOption("IV", iv);
-        cip.setOption(MyCipher.MC_DECRYPT, true);
+        FeedbackCipher cip = new FeedbackCipher(dec, FeedbackCipher.MODE_CBC);
+        try {
+            cip.init(Cipher.DECRYPT_MODE, null, new IvParameterSpecNC(iv), null);
+        } catch (Exception e) {
+            Helpers.athrow(e);
+        }
         return new CipherInputStream(in, cip);
     }
 
@@ -94,7 +102,11 @@ public final class AESCrypt extends QZCoder {
             realKey = sha.digest();
         }
 
-        dec.setKey(realKey, CipheR.DECRYPT);
+        try {
+            dec.init(Cipher.DECRYPT_MODE, realKey);
+        } catch (Exception e) {
+            Helpers.athrow(e);
+        }
     }
 
     @Override
@@ -116,9 +128,8 @@ public final class AESCrypt extends QZCoder {
         cyclePower = (byte) (b0 & 0x3f);
         int ivLen = ((b0 >> 6) & 1) + (b1 & 0x0f);
         int saltLen = ((b0 >> 7) & 1) + (b1 >> 4);
-        //if (ivLen != 16) throw new IllegalStateException("iv is not 16");
 
-        salt = saltLen == 0 ? EmptyArrays.BYTES : buf.readBytes(saltLen);
+        salt = saltLen == 0 ? ArrayCache.BYTES : buf.readBytes(saltLen);
         buf.read(iv, 0, ivLen);
         while (ivLen < 16) iv[ivLen++] = 0;
     }

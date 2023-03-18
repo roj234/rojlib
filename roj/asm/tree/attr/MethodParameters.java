@@ -29,7 +29,7 @@ public final class MethodParameters extends Attribute {
 		int len = r.readUnsignedByte();
 		SimpleList<MethodParam> params = new SimpleList<>(len);
 		while (len-- > 0) {
-			String name = ((CstUTF) pool.get(r)).getString();
+			String name = ((CstUTF) pool.get(r)).str();
 			params.add(new MethodParam(name, r.readChar()));
 		}
 		return params;

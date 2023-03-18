@@ -30,7 +30,7 @@ public class MarkerTransformer implements ContextClassTransformer {
 		String rulesResource;
 		File file = new File(rulesFile);
 		if (!file.exists()) {
-			rulesResource = IOUtil.readUTF(MarkerTransformer.class, rulesFile);
+			rulesResource = IOUtil.readResUTF(MarkerTransformer.class, rulesFile);
 		} else {
 			rulesResource = IOUtil.readUTF(new FileInputStream(file));
 		}

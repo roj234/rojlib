@@ -10,42 +10,25 @@ import roj.util.DynByteBuf;
  * @since 2021/6/18 9:51
  */
 public final class AnnValClass extends AnnVal {
-	public AnnValClass(String className) {
-		this.value = TypeHelper.parseField(className);
-	}
+	public AnnValClass(String className) { value = TypeHelper.parseField(className); }
 
 	public Type value;
 
-	@Override
-	public Type asClass() {
-		return value;
-	}
+	public Type asClass() { return value; }
 
-	public void toByteArray(ConstantPool pool, DynByteBuf w) {
-		w.put((byte) CLASS).putShort(pool.getUtfId(TypeHelper.getField(value)));
-	}
+	public byte type() { return ANNOTATION_CLASS; }
 
-	public String toString() {
-		return value + ".class";
-	}
-
-	@Override
-	public byte type() {
-		return CLASS;
-	}
+	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) ANNOTATION_CLASS).putShort(cp.getUtfId(TypeHelper.getField(value))); }
+	public String toString() { return value + ".class"; }
 
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 
-		AnnValClass aClass = (AnnValClass) o;
-
-		return value.equals(aClass.value);
+		return value.equals(((AnnValClass) o).value);
 	}
 
 	@Override
-	public int hashCode() {
-		return value.hashCode();
-	}
+	public int hashCode() { return value.hashCode(); }
 }

@@ -1,6 +1,7 @@
 package roj.config.serial;
 
 import roj.config.word.ITokenizer;
+import roj.util.ArrayCache;
 
 /**
  * @author Roj233
@@ -8,54 +9,42 @@ import roj.config.word.ITokenizer;
  */
 public class ToJson extends ToSomeString {
 	public ToJson() {
-		this(0);
+		this.indent = ArrayCache.CHARS;
 	}
 
 	public ToJson(int indent) {
-		this.indent = new char[indent];
-		for (int i = 0; i < indent; i++) {
-			this.indent[i] = ' ';
-		}
+		spaceIndent(indent);
 	}
 
 	public ToJson(String indent) {
 		this.indent = indent.toCharArray();
 	}
 
-	@Override
-	protected void listNext() {
-		sb.append(",");
-		indent(depth);
-	}
-
-	@Override
-	protected void mapNext() {
-		sb.append(",");
-	}
-
-	@Override
-	protected void endLevel() {
-		indent(depth);
+	protected final void listNext() { sb.append(","); }
+	protected final void mapNext() { sb.append(","); }
+	protected final void endLevel() {
+		if ((flag&NEXT) != 0) indent(depth);
 		sb.append((flag & 12) == LIST ? ']' : '}');
 	}
 
-	@Override
-	public void valueMap() {
-		push(MAP | NEXT);
-		sb.append('{');
-	}
+	public final void valueMap() { push(MAP); sb.append('{'); }
+	public final void valueList() { push(LIST); sb.append('['); }
 
 	@Override
-	public void valueList() {
-		push(LIST);
-		sb.append('[');
-		indent(depth);
+	protected void indent(int x) {
+		if (indent.length > 0) {
+			sb.append('\n');
+			if (comment != null) writeSingleLineComment("//");
+			while (x > 0) {
+				sb.append(indent);
+				x--;
+			}
+		}
 	}
 
-	@Override
-	public void key0(String key) {
+	public final void key0(String key) {
 		indent(depth);
-		ITokenizer.addSlashes(key, sb.append('"')).append("\":");
+		ITokenizer.addSlashes(sb.append('"'), key).append("\":");
 		if (indent.length > 0) sb.append(' ');
 	}
 }

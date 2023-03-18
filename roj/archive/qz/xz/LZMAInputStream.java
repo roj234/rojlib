@@ -13,8 +13,8 @@ package roj.archive.qz.xz;
 import roj.archive.qz.xz.lz.LZDecoder;
 import roj.archive.qz.xz.lzma.LZMADecoder;
 import roj.archive.qz.xz.rangecoder.RangeDecoderFromStream;
+import roj.util.ArrayCache;
 
-import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -135,15 +135,16 @@ public class LZMAInputStream extends InputStream {
 	}
 
 	public LZMAInputStream(InputStream in, int memoryLimit, ArrayCache arrayCache) throws IOException {
-		DataInputStream inData = new DataInputStream(in);
+		byte[] h = new byte[13];
+		if (in.read(h) != 13) throw new EOFException();
 
 		// Properties byte (lc, lp, and pb)
-		byte propsByte = inData.readByte();
+		byte propsByte = h[0];
 
 		// Dictionary size is an unsigned 32-bit little endian integer.
 		int dictSize = 0;
 		for (int i = 0; i < 4; ++i)
-			dictSize |= inData.readUnsignedByte() << (8 * i);
+			dictSize |= (h[i+1]&0xFF) << (8 * i);
 
 		// Uncompressed size is an unsigned 64-bit little endian integer.
 		// The maximum 64-bit value is a special case (becomes -1 here)
@@ -151,7 +152,7 @@ public class LZMAInputStream extends InputStream {
 		// the uncompressed size beforehand.
 		long uncompSize = 0;
 		for (int i = 0; i < 8; ++i)
-			uncompSize |= (long) inData.readUnsignedByte() << (8 * i);
+			uncompSize |= (long) (h[i+5]&0xFF) << (8 * i);
 
 		// Check the memory usage limit.
 		int memoryNeeded = getMemoryUsage(dictSize, propsByte);
@@ -398,7 +399,9 @@ public class LZMAInputStream extends InputStream {
 	}
 
 	public int read(byte[] buf, int off, int len) throws IOException {
-		if (off < 0 || len < 0 || off + len < 0 || off + len > buf.length) throw new IndexOutOfBoundsException();
+		if (off < 0 || len < 0 || off + len < 0 || off + len > buf.length) {
+			throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+buf.length);
+		}
 		if (len == 0) return 0;
 
 		if (in == null) throw new IOException("Stream closed");
@@ -471,6 +474,11 @@ public class LZMAInputStream extends InputStream {
 		}
 	}
 
+	@Override
+	public int available() throws IOException {
+		return (int) Math.min(remainingSize, Integer.MAX_VALUE);
+	}
+
 	private synchronized void putArraysToCache() {
 		if (lz != null) {
 			lz.putArraysToCache(arrayCache);
@@ -479,9 +487,8 @@ public class LZMAInputStream extends InputStream {
 	}
 
 	public synchronized void close() throws IOException {
+		putArraysToCache();
 		if (in != null) {
-			putArraysToCache();
-
 			try {
 				in.close();
 			} finally {

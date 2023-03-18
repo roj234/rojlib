@@ -18,15 +18,14 @@ import java.util.List;
 // 去除xyz的final
 //!!AT [ "net.minecraft.util.math.Vec3d", ["field_72450_a", "field_72448_b", "field_72449_c"]]
 public interface Reflection {
-	Reflection HELPER = preloadNecessaryClassesBeforeDefine(DirectAccessor.builder(Reflection.class)).access(Vec3d.class, new String[] {"field_72450_a", "field_72448_b", "field_72449_c"}, null,
-																											 new String[] {"setVecX", "setVecY", "setVecZ"})
-																									 //.delegate(EnumSet.class, "addAll")
-																									 .i_access("java/util/Collections$UnmodifiableList", "list", new Type("java/util/List"),
-																											   "getModifiableList", null, false)
-																									 .access(BlockRedstoneWire.class, "field_150181_a", null, "setRedstoneProvidePower")
-																									 .access(Event.class, "phase", null, "setEventPhase")
-																									 .delegate(Event.class, "setup", "resetEvent")
-																									 .build();
+	Reflection HELPER = preloadNecessaryClassesBeforeDefine(DirectAccessor.builder(Reflection.class))
+		.access(Vec3d.class, new String[] {"field_72450_a", "field_72448_b", "field_72449_c"}, null, new String[] {"setVecX", "setVecY", "setVecZ"})
+		//.delegate(EnumSet.class, "addAll")
+		.i_access("java/util/Collections$UnmodifiableList", "list", new Type("java/util/List"), "getModifiableList", null, false)
+		.access(BlockRedstoneWire.class, "field_150181_a", null, "setRedstoneProvidePower")
+		.access(Event.class, "phase", null, "setEventPhase")
+		.delegate(Event.class, "setup", "resetEvent")
+		.build();
 
 	static DirectAccessor<Reflection> preloadNecessaryClassesBeforeDefine(DirectAccessor<Reflection> builder) {
 		return builder;

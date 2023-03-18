@@ -18,12 +18,8 @@ public class Timeout implements ChannelHandler {
 	public int writeTimeout, readTimeout, pending;
 	public long lastRead, lastWrite;
 
-	public Timeout() {
-		lastRead = System.currentTimeMillis();
-	}
-
 	public Timeout(int r, int w) {
-		this();
+		lastRead = System.currentTimeMillis();
 		readTimeout = r;
 		writeTimeout = w;
 	}
@@ -41,7 +37,7 @@ public class Timeout implements ChannelHandler {
 	}
 
 	@Override
-	public void channelFlushed(ChannelCtx ctx) throws IOException {
+	public void channelFlushed(ChannelCtx ctx) {
 		lastWrite = System.currentTimeMillis();
 		pending--;
 	}
@@ -49,14 +45,17 @@ public class Timeout implements ChannelHandler {
 	@Override
 	public void channelTick(ChannelCtx ctx) throws IOException {
 		long time = System.currentTimeMillis();
-		if (time - lastRead > readTimeout) {
+		if (readTimeout > 0 && time - lastRead > readTimeout) {
 			if (ctx.postEvent(READ_TIMEOUT).getResult() != Event.RESULT_DENY)
-				ctx.close();
+				closeChannel(ctx);
 			lastRead = time;
 		}
-		if (pending > 0 && time - lastWrite > writeTimeout) {
-			ctx.postEvent(WRITE_TIMEOUT);
+		if (writeTimeout > 0 && pending > 0 && time - lastWrite > writeTimeout) {
+			if (ctx.postEvent(WRITE_TIMEOUT).getResult() != Event.RESULT_DENY)
+				closeChannel(ctx);
 			lastWrite = time;
 		}
 	}
+
+	protected void closeChannel(ChannelCtx ctx) throws IOException { ctx.close(); }
 }

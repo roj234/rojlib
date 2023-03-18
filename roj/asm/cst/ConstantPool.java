@@ -1,17 +1,17 @@
 package roj.asm.cst;
 
+import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
 import java.util.List;
 import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @version 1.3
+ * @version 1.4
  * @since 2021/5/29 17:16
  */
 public class ConstantPool {
@@ -27,10 +27,10 @@ public class ConstantPool {
 	}
 
 	public ConstantPool(int len) {
-		this.cst = new Constant[(this.index = len) - 1];
+		this.cst = new Constant[(index = len) - 1];
 		this.constants = new SimpleList<>();
 		this.constants.setRawArray(cst);
-		this.constants.i_setSize(len - 1);
+		this.constants.i_setSize(len-1);
 		this.refMap = new MyHashSet<>(cst.length);
 	}
 
@@ -170,14 +170,10 @@ public class ConstantPool {
 				}
 				return new CstUTF(data);
 			}
-			case Constant.INT:
-				return new CstInt(r.readInt());
-			case Constant.FLOAT:
-				return new CstFloat(r.readFloat());
-			case Constant.LONG:
-				return new CstLong(r.readLong());
-			case Constant.DOUBLE:
-				return new CstDouble(r.readDouble());
+			case Constant.INT: return new CstInt(r.readInt());
+			case Constant.FLOAT: return new CstFloat(r.readFloat());
+			case Constant.LONG: return new CstLong(r.readLong());
+			case Constant.DOUBLE: return new CstDouble(r.readDouble());
 
 			case Constant.METHOD_TYPE:
 			case Constant.MODULE:
@@ -269,19 +265,12 @@ public class ConstantPool {
 		throw new IllegalArgumentException("pool["+i+"]的常量类型不匹配: 期待: " + Constant.toString(b) + " 得到: " + o);
 	}
 
-	public List<Constant> array() {
-		return constants;
-	}
-
-	public Constant array(int i) {
-		return i-- == 0 ? null : constants.get(i);
-	}
-
+	public List<Constant> array() { return constants; }
+	public Constant array(int i) { return i-- == 0 ? null : constants.get(i); }
 	public Constant get(DynByteBuf r) {
 		int id = r.readUnsignedShort();
 		return id-- == 0 ? null : constants.get(id);
 	}
-
 	public String getName(DynByteBuf r) {
 		int id = r.readUnsignedShort()-1;
 		return id < 0 ? null : ((CstClass) constants.get(id)).getValue().getString();
@@ -338,10 +327,7 @@ public class ConstantPool {
 
 		return utf;
 	}
-
-	public int getUtfId(CharSequence msg) {
-		return getUtf(msg).getIndex();
-	}
+	public int getUtfId(CharSequence msg) { return getUtf(msg).getIndex(); }
 
 	public CstNameAndType getDesc(String name, String type) {
 		CstUTF uName = getUtf(name);
@@ -358,10 +344,7 @@ public class ConstantPool {
 
 		return (CstNameAndType) ref;
 	}
-
-	public int getDescId(String name, String desc) {
-		return getDesc(name, desc).getIndex();
-	}
+	public int getDescId(String name, String desc) { return getDesc(name, desc).getIndex(); }
 
 	public CstClass getClazz(String name) {
 		CstUTF uName = getUtf(name);
@@ -376,10 +359,7 @@ public class ConstantPool {
 
 		return (CstClass) ref;
 	}
-
-	public int getClassId(String owner) {
-		return getClazz(owner).getIndex();
-	}
+	public int getClassId(String owner) { return getClazz(owner).getIndex(); }
 
 	public CstRefMethod getMethodRef(String owner, String name, String desc) {
 		CstClass clazz = getClazz(owner);
@@ -396,10 +376,7 @@ public class ConstantPool {
 
 		return (CstRefMethod) ref;
 	}
-
-	public int getMethodRefId(String owner, String name, String desc) {
-		return getMethodRef(owner, name, desc).getIndex();
-	}
+	public int getMethodRefId(String owner, String name, String desc) { return getMethodRef(owner, name, desc).getIndex(); }
 
 	public CstRefField getFieldRef(String owner, String name, String desc) {
 		CstClass clazz = getClazz(owner);
@@ -416,10 +393,7 @@ public class ConstantPool {
 
 		return (CstRefField) ref;
 	}
-
-	public int getFieldRefId(String owner, String name, String desc) {
-		return getFieldRef(owner, name, desc).getIndex();
-	}
+	public int getFieldRefId(String owner, String name, String desc) { return getFieldRef(owner, name, desc).getIndex(); }
 
 	public CstRefItf getItfRef(String owner, String name, String desc) {
 		CstClass clazz = getClazz(owner);
@@ -436,21 +410,15 @@ public class ConstantPool {
 
 		return (CstRefItf) ref;
 	}
-
-	public int getItfRefId(String owner, String name, String desc) {
-		return getItfRef(owner, name, desc).getIndex();
-	}
+	public int getItfRefId(String owner, String name, String desc) { return getItfRef(owner, name, desc).getIndex(); }
 
 	private CstRef getRefByType(String owner, String name, String desc, byte type) {
 		switch (type) {
-			case Constant.FIELD:
-				return getFieldRef(owner, name, desc);
-			case Constant.METHOD:
-				return getMethodRef(owner, name, desc);
-			case Constant.INTERFACE:
-				return getItfRef(owner, name, desc);
+			case Constant.FIELD: return getFieldRef(owner, name, desc);
+			case Constant.METHOD: return getMethodRef(owner, name, desc);
+			default: // no default branch
+			case Constant.INTERFACE: return getItfRef(owner, name, desc);
 		}
-		return Helpers.nonnull();
 	}
 
 	public CstMethodHandle getMethodHandle(String owner, String name, String desc, byte kind, byte type) {
@@ -466,10 +434,7 @@ public class ConstantPool {
 		}
 		return found;
 	}
-
-	public int getMethodHandleId(String owner, String name, String desc, byte kind, byte type) {
-		return getMethodHandle(owner, name, desc, kind, type).getIndex();
-	}
+	public int getMethodHandleId(String owner, String name, String desc, byte kind, byte type) { return getMethodHandle(owner, name, desc, kind, type).getIndex(); }
 
 	public CstDynamic getInvokeDyn(boolean isMethod, int table, String name, String desc) {
 		CstNameAndType nat = getDesc(name, desc);
@@ -483,14 +448,8 @@ public class ConstantPool {
 		}
 		return found;
 	}
-
-	public int getInvokeDynId(int table, String name, String desc) {
-		return getInvokeDyn(true, table, name, desc).getIndex();
-	}
-
-	public int getDynId(int table, String name, String desc) {
-		return getInvokeDyn(false, table, name, desc).getIndex();
-	}
+	public int getInvokeDynId(int table, String name, String desc) { return getInvokeDyn(true, table, name, desc).getIndex(); }
+	public int getDynId(int table, String name, String desc) { return getInvokeDyn(false, table, name, desc).getIndex(); }
 
 	public CstPackage getPackage(String owner) {
 		CstUTF name = getUtf(owner);
@@ -505,10 +464,7 @@ public class ConstantPool {
 
 		return (CstPackage) ref;
 	}
-
-	public int getPackageId(String owner) {
-		return getPackage(owner).getIndex();
-	}
+	public int getPackageId(String owner) { return getPackage(owner).getIndex(); }
 
 	public CstModule getModule(String owner) {
 		CstUTF name = getUtf(owner);
@@ -523,48 +479,34 @@ public class ConstantPool {
 
 		return (CstModule) ref;
 	}
-
-	public int getModuleId(String owner) {
-		return getModule(owner).getIndex();
-	}
+	public int getModuleId(String owner) { return getModule(owner).getIndex(); }
 
 	public int getIntId(int i) {
 		initRefMap();
 
 		Constant ref = refMap.find(fp.set(i));
-		if (ref == fp) {
-			addConstant(ref = new CstInt(i));
-		}
+		if (ref == fp) addConstant(ref = new CstInt(i));
 		return ref.getIndex();
 	}
-
-	public int getDoubleId(double i) {
-		initRefMap();
-
-		Constant ref = refMap.find(fp.set(i));
-		if (ref == fp) {
-			addConstant(ref = new CstDouble(i));
-		}
-		return ref.getIndex();
-	}
-
-	public int getFloatId(float i) {
-		initRefMap();
-
-		Constant ref = refMap.find(fp.set(i));
-		if (ref == fp) {
-			addConstant(ref = new CstFloat(i));
-		}
-		return ref.getIndex();
-	}
-
 	public int getLongId(long i) {
 		initRefMap();
 
 		Constant ref = refMap.find(fp.set(i));
-		if (ref == fp) {
-			addConstant(ref = new CstLong(i));
-		}
+		if (ref == fp) addConstant(ref = new CstLong(i));
+		return ref.getIndex();
+	}
+	public int getFloatId(float i) {
+		initRefMap();
+
+		Constant ref = refMap.find(fp.set(i));
+		if (ref == fp) addConstant(ref = new CstFloat(i));
+		return ref.getIndex();
+	}
+	public int getDoubleId(double i) {
+		initRefMap();
+
+		Constant ref = refMap.find(fp.set(i));
+		if (ref == fp) addConstant(ref = new CstDouble(i));
 		return ref.getIndex();
 	}
 
@@ -579,9 +521,11 @@ public class ConstantPool {
 				dyn.setDesc(reset(dyn.desc()));
 			}
 			break;
-			case Constant.STRING:
 			case Constant.CLASS:
-			case Constant.METHOD_TYPE: {
+			case Constant.STRING:
+			case Constant.METHOD_TYPE:
+			case Constant.MODULE:
+			case Constant.PACKAGE: {
 				CstRefUTF ref = (CstRefUTF) c;
 				ref.setValue(reset(ref.getValue()));
 			}
@@ -612,8 +556,7 @@ public class ConstantPool {
 			case Constant.UTF:
 				// No need to do anything, just append it
 				break;
-			default:
-				throw new IllegalArgumentException("Unsupported type: " + c.type());
+			default: throw new IllegalArgumentException("Unsupported type: " + c.type());
 		}
 
 		initRefMap();
@@ -644,7 +587,20 @@ public class ConstantPool {
 
 	@Override
 	public String toString() {
-		return "ConstantPool{" + "constants[" + index + "]=" + TextUtil.deepToString(constants) + '}';
+		Object[] array = new Object[constants.size()*4];
+		int i = 0;
+		for (int j = 0; j < constants.size(); j++) {
+			Constant c = constants.get(j);
+			String s1 = Integer.toString(c.getIndex());
+			int k = s1.length()+2;
+			array[i++] = s1;
+			s1 = Constant.toString(c.type());
+			k += s1.length();
+			array[i++] = s1;
+			array[i++] = c.toString().substring(k);
+			array[i++] = IntMap.UNDEFINED;
+		}
+		return TextUtil.prettyTable(new StringBuilder("constants[" + index + "]=["), " ", " ", "    ", array).append("]").toString();
 	}
 
 	public void clear() {

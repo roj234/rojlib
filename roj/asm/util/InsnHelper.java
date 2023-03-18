@@ -1,10 +1,13 @@
 package roj.asm.util;
 
+import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.cst.*;
 import roj.asm.tree.insn.*;
 import roj.asm.type.Type;
 import roj.asm.visitor.CodeWriter;
+import roj.asm.visitor.Label;
+import roj.asm.visitor.SwitchSegment;
 import roj.collect.Int2IntMap;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
@@ -34,22 +37,16 @@ public class InsnHelper {
 
 	private static byte getValue(char x, byte base) {
 		switch (Character.toUpperCase(x)) {
-			case 'I':
-				break;
-			case 'L':
-				base += 1;
-				break;
-			case 'F':
-				base += 2;
-				break;
-			case 'D':
-				base += 3;
-				break;
-			case 'A':
-				base += 4;
-				break;
-			default:
-				throw new NumberFormatException("Value out of range [ILFDA] got " + x);
+			case 'Z':
+			case 'B':
+			case 'S':
+			case 'C':
+			case 'I': break;
+			case 'L': base += 1; break;
+			case 'F': base += 2; break;
+			case 'D': base += 3; break;
+			case 'A': base += 4; break;
+			default: throw new NumberFormatException("Value out of range [ILFDA] got " + x);
 		}
 		return base;
 	}
@@ -64,6 +61,7 @@ public class InsnHelper {
 	public static byte X_RETURN222(String x) {
 		return x.isEmpty() ? RETURN : getValue(x.charAt(0), IRETURN);
 	}
+	@Deprecated
 	public static byte X_RETURN222(Type x) {
 		return x.shiftedOpcode(IRETURN, true);
 	}
@@ -80,13 +78,7 @@ public class InsnHelper {
 
 	public static InsnNode loadInt(int number) {
 		switch (number) {
-			case -1:
-			case 0:
-			case 1:
-			case 2:
-			case 3:
-			case 4:
-			case 5:
+			case -1: case 0: case 1: case 2: case 3: case 4: case 5:
 				return NPInsnNode.of((byte) (ICONST_0 + number));
 			default:
 				if ((byte) number == number) {
@@ -101,15 +93,10 @@ public class InsnHelper {
 
 	public static void loadLongSlow(long number, InsnList target) {
 		switch ((int) number) {
-			case 0:
-			case 1:
+			case 0: case 1:
 				target.add(NPInsnNode.of((byte) (LCONST_0 + number)));
 				break;
-			case -1:
-			case 2:
-			case 3:
-			case 4:
-			case 5:
+			case -1: case 2: case 3: case 4: case 5:
 				target.add(NPInsnNode.of((byte) (ICONST_0 + number)));
 				target.add(NPInsnNode.of(I2L));
 				break;
@@ -131,11 +118,8 @@ public class InsnHelper {
 
 	public static InsnNode loadLong(long number) {
 		switch ((int) number) {
-			case 0:
-			case 1:
-				return NPInsnNode.of((byte) (LCONST_0 + number));
-			default:
-				return new LdcInsnNode(LDC2_W, new CstLong(number));
+			case 0: case 1: return NPInsnNode.of((byte) (LCONST_0 + number));
+			default: return new LdcInsnNode(LDC2_W, new CstLong(number));
 		}
 	}
 
@@ -146,15 +130,10 @@ public class InsnHelper {
 			return;
 		}
 		switch (n) {
-			case 0:
-			case 1:
-			case 2:
+			case 0: case 1: case 2:
 				target.add(NPInsnNode.of((byte) (FCONST_0 + number)));
 				break;
-			case -1:
-			case 3:
-			case 4:
-			case 5:
+			case -1: case 3: case 4: case 5:
 				target.add(NPInsnNode.of((byte) (ICONST_0 + number)));
 				target.add(NPInsnNode.of(I2F));
 				break;
@@ -186,15 +165,10 @@ public class InsnHelper {
 			return;
 		}
 		switch (n) {
-			case 0:
-			case 1:
+			case 0: case 1:
 				target.add(NPInsnNode.of((byte) (DCONST_0 + number)));
 				break;
-			case -1:
-			case 2:
-			case 3:
-			case 4:
-			case 5:
+			case -1: case 2: case 3: case 4: case 5:
 				target.add(NPInsnNode.of((byte) (ICONST_0 + number)));
 				target.add(NPInsnNode.of(I2D));
 				break;
@@ -220,18 +194,29 @@ public class InsnHelper {
 		return NPInsnNode.of((byte) (DCONST_0 + number));
 	}
 
+	public static byte changeCodeType(int code, Type from, Type to) {
+		int flag = OpcodeUtil.flag(code);
+		if ((flag&OpcodeUtil.TRAIT_ILFDA) == 0) return (byte) code;
+
+		String name = OpcodeUtil.toString0(code);
+		if ((flag&0xF) == OpcodeUtil.CATE_ARRAY_SL)
+			return (byte) ((name.endsWith("STORE") ? 33 : 0)+XALoad(to));
+
+		if (from != null && name.charAt(0) != from.nativeName().charAt(0)) return (byte) code;
+
+		CharList sb = IOUtil.getSharedCharBuf().append(name);
+		sb.list[0] = to.nativeName().charAt(0);
+
+		int v = OpcodeUtil.getByName().getOrDefault(sb, -1);
+		if (v < 0) throw new IllegalStateException("找不到"+sb);
+		return (byte) v;
+	}
+
 	public static void compress(@Nonnull InsnList list, byte base, int id) {
 		switch (base) {
-			case ALOAD:
-			case DLOAD:
-			case ILOAD:
-			case FLOAD:
-			case LLOAD:
-			case ISTORE:
-			case FSTORE:
-			case LSTORE:
-			case DSTORE:
-			case ASTORE:
+			case ALOAD: case DLOAD: case ILOAD: case FLOAD: case LLOAD:
+			case ISTORE: case FSTORE: case LSTORE:
+			case DSTORE: case ASTORE:
 				if (id <= 3) {
 					list.add(i_loadStoreSmall(base, id));
 				} else if (id <= 255) {
@@ -248,108 +233,30 @@ public class InsnHelper {
 		}
 	}
 
+	@Deprecated
 	public static void compress(CodeWriter cw, byte base, int id) {
-		switch (base) {
-			case ALOAD:
-			case DLOAD:
-			case ILOAD:
-			case FLOAD:
-			case LLOAD:
-			case ISTORE:
-			case FSTORE:
-			case LSTORE:
-			case DSTORE:
-			case ASTORE:
-				if (id <= 3) {
-					cw.one(i_loadStoreSmall222(base, id));
-				} else if (id <= 65535) {
-					cw.var(base, id);
-				} else {
-					throw new IllegalArgumentException("No more thad 65535 types!");
-				}
-				break;
-			default: throw new IllegalArgumentException("Unsupported base 0x" + Integer.toHexString(base));
-		}
+		cw.var(base, id);
 	}
 
 	public static byte i_loadStoreSmall222(byte base, int id) {
-		return(byte) ((base <= 25 ? ((base - 0x15) * 4 + 0x1a) : ((base - 0x36) * 4 + 0x3b)) + id);
+		return(byte) ((base <= ALOAD ? ((base - ILOAD)*4 + ILOAD_0) : ((base - ISTORE)*4 + ISTORE_0)) + id);
 	}
 
 	@Nonnull
 	public static NPInsnNode i_loadStoreSmall(byte base, int id) {
-		return NPInsnNode.of((byte) ((base <= 25 ? ((base - 0x15) * 4 + 0x1a) : ((base - 0x36) * 4 + 0x3b)) + id));
+		return NPInsnNode.of(i_loadStoreSmall222(base, id));
 	}
 
 	public static int getVarId(InsnNode node) {
-		switch (node.getOpcode()) {
-			case ALOAD_0:
-			case FLOAD_0:
-			case ILOAD_0:
-			case DLOAD_0:
-			case LLOAD_0:
+		String name = OpcodeUtil.toString0(node.code);
 
-			case ASTORE_0:
-			case FSTORE_0:
-			case ISTORE_0:
-			case DSTORE_0:
-			case LSTORE_0:
-				return 0;
+		int vid = name.charAt(name.length()-1) - '0';
+		if (vid >= 0 && vid <= 3) return vid;
 
-			case ALOAD_1:
-			case FLOAD_1:
-			case ILOAD_1:
-			case DLOAD_1:
-			case LLOAD_1:
+		if ((OpcodeUtil.trait(node.code)&OpcodeUtil.TRAIT_LOAD_STORE_LEN) != 0)
+			return ((IIndexInsnNode) node).getIndex();
 
-			case ASTORE_1:
-			case FSTORE_1:
-			case ISTORE_1:
-			case DSTORE_1:
-			case LSTORE_1:
-				return 1;
-
-			case ALOAD_2:
-			case FLOAD_2:
-			case ILOAD_2:
-			case DLOAD_2:
-			case LLOAD_2:
-
-			case ASTORE_2:
-			case FSTORE_2:
-			case ISTORE_2:
-			case DSTORE_2:
-			case LSTORE_2:
-				return 2;
-
-			case ALOAD_3:
-			case FLOAD_3:
-			case ILOAD_3:
-			case DLOAD_3:
-			case LLOAD_3:
-
-			case ASTORE_3:
-			case FSTORE_3:
-			case ISTORE_3:
-			case DSTORE_3:
-			case LSTORE_3:
-				return 3;
-
-			case ALOAD:
-			case DLOAD:
-			case FLOAD:
-			case LLOAD:
-			case ILOAD:
-
-			case ASTORE:
-			case FSTORE:
-			case ISTORE:
-			case DSTORE:
-			case LSTORE:
-				return ((IIndexInsnNode) node).getIndex();
-			default:
-				return -1;
-		}
+		return -1;
 	}
 
 	public static InsnNode decompress(InsnNode node) {
@@ -471,16 +378,11 @@ public class InsnHelper {
 				case "char":
 				case "byte":
 				case "boolean":
-				case "short":
-					return "I";
-				case "double":
-					return "D";
-				case "long":
-					return "L";
-				case "float":
-					return "F";
-				case "void":
-					return "";
+				case "short": return "I";
+				case "long": return "L";
+				case "float": return "F";
+				case "double": return "D";
+				case "void": return "";
 			}
 		}
 		return "A";
@@ -488,47 +390,46 @@ public class InsnHelper {
 
 	public static byte Type2PrimitiveArray(int nativeType) {
 		switch (nativeType) {
-			case 'Z':
-				return 4;
-			case 'C':
-				return 5;
-			case 'F':
-				return 6;
-			case 'D':
-				return 7;
-			case 'B':
-				return 8;
-			case 'S':
-				return 9;
-			case 'I':
-				return 10;
-			case 'J':
-				return 11;
-			default:
-				throw new IllegalArgumentException();
+			case 'Z': return 4;
+			case 'C': return 5;
+			case 'F': return 6;
+			case 'D': return 7;
+			case 'B': return 8;
+			case 'S': return 9;
+			case 'I': return 10;
+			case 'J': return 11;
+			default: throw new IllegalArgumentException(String.valueOf((char)nativeType));
 		}
 	}
 
 	public static byte PrimitiveArray2Type(int id) {
 		switch (id) {
-			case 4:
-				return 'Z';
-			case 5:
-				return 'C';
-			case 6:
-				return 'F';
-			case 7:
-				return 'D';
-			case 8:
-				return 'B';
-			case 9:
-				return 'S';
-			case 10:
-				return 'I';
-			case 11:
-				return 'J';
+			case 4: return 'Z';
+			case 5: return 'C';
+			case 6: return 'F';
+			case 7: return 'D';
+			case 8: return 'B';
+			case 9: return 'S';
+			case 10: return 'I';
+			case 11: return 'J';
 		}
 		throw new IllegalStateException("Unknown PrimArrayType " + id);
+	}
+
+	public static byte XAStore(Type type) { return (byte) (XALoad(type)+33); }
+	public static byte XALoad(Type type) {
+		switch (type.type) {
+			case 'I': return IALOAD;
+			case 'J': return LALOAD;
+			case 'F': return FALOAD;
+			case 'D': return DALOAD;
+			case 'L': return AALOAD;
+			case 'Z':
+			case 'B': return BALOAD;
+			case 'C': return CALOAD;
+			case 'S': return SALOAD;
+			default: throw new IllegalArgumentException();
+		}
 	}
 
 	public static void newArray(InsnList list, Type t, int size) {
@@ -557,7 +458,7 @@ public class InsnHelper {
 
 		CharList sb = IOUtil.getSharedCharBuf();
 		t.toDesc(sb);
-		list.add(new ClassInsnNode(ANEWARRAY, new String(sb.list, 1, sb.length()-1)));
+		list.add(new ClassInsnNode(ANEWARRAY, sb.toString(1,sb.length()-1)));
 	}
 
 	public static void switchString(InsnList list, Map<String, InsnNode> target, InsnNode def) {
@@ -596,6 +497,44 @@ public class InsnHelper {
 				list.add(new JumpInsnNode(IFNE, entry1.getValue()));
 			}
 			list.add(new JumpInsnNode(def));
+		}
+	}
+
+	public static void switchString222(CodeWriter c, Map<String, Label> target, Label def) {
+		if (target.isEmpty()) {
+			c.jump(GOTO, def);
+			return;
+		}
+
+		c.one(DUP);
+		c.invoke(INVOKESPECIAL, "java/lang/String", "hashCode", "()I");
+
+		SwitchSegment sw = CodeWriter.newSwitch(LOOKUPSWITCH);
+		c.switches(sw);
+		sw.def = def;
+
+		// check duplicate
+		IntMap<List<Map.Entry<String, Label>>> tmp = new IntMap<>(target.size());
+		for (Map.Entry<String, Label> entry : target.entrySet()) {
+			int hash = entry.getKey().hashCode();
+
+			List<Map.Entry<String, Label>> dup = tmp.get(hash);
+			if (dup == null) tmp.putInt(hash, dup = new SimpleList<>(2));
+			dup.add(entry);
+		}
+
+		for (IntMap.Entry<List<Map.Entry<String, Label>>> entry : tmp.selfEntrySet()) {
+			Label pos = new Label();
+			sw.targets.add(new SwitchEntry(entry.getIntKey(), pos));
+			c.label(pos);
+			List<Map.Entry<String, Label>> list1 = entry.getValue();
+			for (int i = 0; i < list1.size(); i++) {
+				Map.Entry<String, Label> entry1 = list1.get(i);
+				c.ldc(new CstString(entry1.getKey()));
+				c.invoke(INVOKESPECIAL, "java/lang/String", "equals", "(Ljava/lang/Object;)Z");
+				c.jump(IFNE, entry1.getValue());
+			}
+			c.jump(GOTO, def);
 		}
 	}
 

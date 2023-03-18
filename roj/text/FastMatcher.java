@@ -8,6 +8,8 @@ import static roj.util.ArrayGetter.*;
  * KMP在汉字中表现很差，啊，但是BM牺牲了空间
  * @author Roj234
  * @since 2023/1/24 0024 4:02
+ *
+ * 建议使用DynByteBuf,应该会在不减慢多少速度的情况下减少很多内存占用
  */
 public class FastMatcher {
 	private Object skip;
@@ -15,9 +17,8 @@ public class FastMatcher {
 	private int min, max, dt;
 	private CharSequence needle;
 
-	public FastMatcher(CharSequence needle) {
-		setPattern(needle);
-	}
+	public FastMatcher() {}
+	public FastMatcher(CharSequence needle) { setPattern(needle); }
 
 	public void setPattern(CharSequence s) {
 		needle = s;
@@ -84,4 +85,6 @@ public class FastMatcher {
 		}
 		return -1;
 	}
+
+	public CharSequence needle() { return needle; }
 }

@@ -10,10 +10,14 @@
 
 package roj.archive.qz.xz.lz;
 
-import roj.archive.qz.xz.ArrayCache;
+import roj.util.ArrayCache;
+import roj.util.NativeMemory;
+import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.OutputStream;
+
+import static roj.reflect.FieldAccessor.u;
 
 public abstract class LZEncoder {
 	public static final int MF_HC4 = 0x04;
@@ -36,7 +40,7 @@ public abstract class LZEncoder {
 	final int matchLenMax;
 	final int niceLen;
 
-	final byte[] buf;
+	final long buf;
 	final int bufSize; // To avoid buf.length with an array-cached buf.
 
 	public final int[] mlen, mdist;
@@ -48,10 +52,20 @@ public abstract class LZEncoder {
 	private int writePos = 0;
 	private int pendingSize = 0;
 
-	static void normalize(int[] positions, int positionsCount, int normalizationOffset) {
-		for (int i = 0; i < positionsCount; ++i) {
-			if (positions[i] <= normalizationOffset) positions[i] = 0;
-			else positions[i] -= normalizationOffset;
+	final Hash234 hash;
+	final NativeMemory mem, memBuf;
+
+	final int cyclicSize;
+	int cyclicPos = -1;
+	int lzPos;
+
+	static void normalize(long addr, int len, int off) {
+		for (int i = 0; i < len; ++i) {
+			int val = u.getInt(addr)-off;
+			if (val < 0) val = 0;
+			u.putInt(addr, val);
+
+			addr += 4;
 		}
 	}
 
@@ -109,25 +123,37 @@ public abstract class LZEncoder {
 	 */
 	LZEncoder(int dictSize, int extraSizeBefore, int extraSizeAfter, int niceLen, int matchLenMax, ArrayCache pool) {
 		bufSize = getBufSize(dictSize, extraSizeBefore, extraSizeAfter, matchLenMax);
-		buf = pool.getByteArray(bufSize, false);
+		memBuf = new NativeMemory();
+		buf = memBuf.allocate(bufSize);
 
-		// Substracting 1 because the shortest match that this match
+		// Subtracting 1 because the shortest match that this match
 		// finder can find is 2 bytes, so there's no need to reserve
 		// space for one-byte matches.
-		mdist = pool.getIntArray(niceLen-1, false);
-		mlen = pool.getIntArray(niceLen-1, false);
+		mdist = pool.getIntArray(niceLen-1, 0);
+		mlen = pool.getIntArray(niceLen-1, 0);
 
 		keepSizeBefore = extraSizeBefore + dictSize;
 		keepSizeAfter = extraSizeAfter + matchLenMax;
 
 		this.matchLenMax = matchLenMax;
 		this.niceLen = niceLen;
+
+		hash = new Hash234(dictSize);
+
+		// +1 because we need dictSize bytes of history + the current byte.
+		cyclicSize = dictSize + 1;
+		lzPos = cyclicSize;
+
+		mem = new NativeMemory();
 	}
 
-	public void putArraysToCache(ArrayCache pool) {
-		pool.putArray(buf);
+	public final void release(ArrayCache pool) {
 		pool.putArray(mdist);
 		pool.putArray(mlen);
+
+		hash.release();
+		mem.release();
+		memBuf.release();
 	}
 
 	/**
@@ -135,7 +161,7 @@ public abstract class LZEncoder {
 	 * function must be called immediately after creating the LZEncoder
 	 * before any data has been encoded.
 	 */
-	public void setPresetDict(int dictSize, byte[] presetDict) {
+	public final void setPresetDict(int dictSize, byte[] presetDict) {
 		assert !isStarted();
 		assert writePos == 0;
 
@@ -144,7 +170,7 @@ public abstract class LZEncoder {
 			// size, copy only the tail of the preset dictionary.
 			int copySize = Math.min(presetDict.length, dictSize);
 			int offset = presetDict.length - copySize;
-			System.arraycopy(presetDict, offset, buf, 0, copySize);
+			u.copyMemory(presetDict, Unsafe.ARRAY_BYTE_BASE_OFFSET+offset, null, buf, copySize);
 			writePos += copySize;
 			skip(copySize);
 		}
@@ -160,7 +186,7 @@ public abstract class LZEncoder {
 		// alignment of the uncompressed data.
 		int moveOffset = (readPos + 1 - keepSizeBefore) & ~15;
 		int moveSize = writePos - moveOffset;
-		System.arraycopy(buf, moveOffset, buf, 0, moveSize);
+		u.copyMemory(buf+moveOffset, buf, moveSize);
 
 		readPos -= moveOffset;
 		readLimit -= moveOffset;
@@ -170,7 +196,7 @@ public abstract class LZEncoder {
 	/**
 	 * Copies new data into the LZEncoder's buffer.
 	 */
-	public int fillWindow(byte[] in, int off, int len) {
+	public final int fillWindow(byte[] in, int off, int len) {
 		assert !finishing;
 
 		// Move the sliding window if needed.
@@ -180,7 +206,7 @@ public abstract class LZEncoder {
 		// some of the input bytes may be left unused.
 		if (len > bufSize - writePos) len = bufSize - writePos;
 
-		System.arraycopy(in, off, buf, writePos, len);
+		u.copyMemory(in, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, null, buf+writePos, len);
 		writePos += len;
 
 		// Set the new readLimit but only if there's enough data to allow
@@ -220,15 +246,13 @@ public abstract class LZEncoder {
 	 * Returns true if at least one byte has already been run through
 	 * the match finder.
 	 */
-	public boolean isStarted() {
-		return readPos != -1;
-	}
+	public final boolean isStarted() { return readPos != -1; }
 
 	/**
 	 * Marks that all the input needs to be made available in
 	 * the encoded output.
 	 */
-	public void setFlushing() {
+	public final void setFlushing() {
 		readLimit = writePos - 1;
 		processPendingBytes();
 	}
@@ -237,7 +261,7 @@ public abstract class LZEncoder {
 	 * Marks that there is no more input remaining. The read position
 	 * can be advanced until the end of the data.
 	 */
-	public void setFinishing() {
+	public final void setFinishing() {
 		readLimit = writePos - 1;
 		finishing = true;
 		processPendingBytes();
@@ -247,12 +271,13 @@ public abstract class LZEncoder {
 	 * Tests if there is enough input available to let the caller encode
 	 * at least one more byte.
 	 */
-	public boolean hasEnoughData(int alreadyReadLen) {
-		return readPos - alreadyReadLen < readLimit;
-	}
+	public final boolean hasEnoughData(int alreadyReadLen) { return readPos - alreadyReadLen < readLimit; }
 
-	public void copyUncompressed(OutputStream out, int backward, int len) throws IOException {
-		out.write(buf, readPos + 1 - backward, len);
+	public final void copyUncompressed(OutputStream out, int backward, int len) throws IOException {
+		byte[] arr = ArrayCache.getDefaultCache().getByteArray(len, false);
+		u.copyMemory(null, buf+readPos+1-backward, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET, len);
+		out.write(arr,0,len);
+		ArrayCache.getDefaultCache().putArray(arr);
 	}
 
 	/**
@@ -262,7 +287,7 @@ public abstract class LZEncoder {
 	 * <code>skip</code> hasn't been called yet and no preset dictionary
 	 * is being used.
 	 */
-	public int getAvail() {
+	public final int getAvail() {
 		assert isStarted();
 		return writePos - readPos;
 	}
@@ -271,9 +296,8 @@ public abstract class LZEncoder {
 	 * Gets the lowest four bits of the absolute offset of the current byte.
 	 * Bits other than the lowest four are undefined.
 	 */
-	public int getPos() {
-		return readPos;
-	}
+	public final int getPos() { return readPos; }
+
 	/**
 	 * Gets the byte from the given backward offset.
 	 * <p>
@@ -283,12 +307,8 @@ public abstract class LZEncoder {
 	 * <p>
 	 * This function is equivalent to <code>getByte(0, backward)</code>.
 	 */
-	public int getByte(int backward) {
-		return buf[readPos - backward] & 0xFF;
-	}
-	public int getByte(int forward, int backward) {
-		return buf[readPos + forward - backward] & 0xFF;
-	}
+	public final int getByte(int backward) { return u.getByte(buf+readPos-backward)&0xFF; }
+	public final int getByte(int forward, int backward) { return u.getByte(buf+readPos+forward-backward)&0xFF; }
 
 	/**
 	 * Get the length of a match at the given distance.
@@ -298,11 +318,11 @@ public abstract class LZEncoder {
 	 *
 	 * @return length of the match; it is in the range [0, lenLimit]
 	 */
-	public int getMatchLen(int dist, int lenLimit) {
+	public final int getMatchLen(int dist, int lenLimit) {
 		int backPos = readPos - dist - 1;
 		int len = 0;
 
-		while (len < lenLimit && buf[readPos + len] == buf[backPos + len]) ++len;
+		while (len < lenLimit && u.getByte(buf+readPos+len) == u.getByte(buf+backPos+len)) ++len;
 
 		return len;
 	}
@@ -316,17 +336,17 @@ public abstract class LZEncoder {
 	 *
 	 * @return length of the match; it is in the range [0, lenLimit]
 	 */
-	public int getMatchLen(int forward, int dist, int lenLimit) {
+	public final int getMatchLen(int forward, int dist, int lenLimit) {
 		int curPos = readPos + forward;
 		int backPos = curPos - dist - 1;
 		int len = 0;
 
-		while (len < lenLimit && buf[curPos + len] == buf[backPos + len]) ++len;
+		while (len < lenLimit && u.getByte(buf+curPos+len) == u.getByte(buf+backPos+len)) ++len;
 
 		return len;
 	}
 
-	public boolean verifyMatches() {
+	public final boolean verifyMatches() {
 		int lenLimit = Math.min(getAvail(), matchLenMax);
 
 		for (int i = 0; i < mcount; ++i)
@@ -350,7 +370,7 @@ public abstract class LZEncoder {
 	 * @return the number of bytes available or zero if there
 	 * is not enough input available
 	 */
-	int movePos(int requiredForFlushing, int requiredForFinishing) {
+	final int movePos(int requiredForFlushing, int requiredForFinishing) {
 		assert requiredForFlushing >= requiredForFinishing;
 
 		++readPos;

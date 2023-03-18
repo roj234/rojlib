@@ -12,7 +12,7 @@ public enum Type {
 	public static final Type[] VALUES = values();
 
 	public boolean isNumber() {
-		return ordinal() >= INTEGER.ordinal() && ordinal() <= DOUBLE.ordinal();
+		return ordinal() >= INTEGER.ordinal();
 	}
 
 	public boolean isSimilar(Type type) {
@@ -29,6 +29,7 @@ public enum Type {
 			case Int2:
 			case Float4:
 				switch (type) {
+					case STRING:
 					case BOOL:
 					case INTEGER:
 					case LONG:
@@ -40,5 +41,9 @@ public enum Type {
 				}
 			default: return false;
 		}
+	}
+
+	public boolean isContainer() {
+		return this == MAP || this == LIST;
 	}
 }

@@ -1,5 +1,6 @@
 package roj.io.source;
 
+import roj.io.SourceInputStream;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -68,21 +69,28 @@ public abstract class Source extends DataOutputStream implements Closeable {
 	public abstract void setLength(long length) throws IOException;
 	public abstract long length() throws IOException;
 
-	public boolean hasChannel() {
-		return false;
-	}
-	public FileChannel channel() {
-		return null;
-	}
+	public boolean hasChannel() { return false; }
+	public FileChannel channel() { return null; }
 
 	public void close() throws IOException {}
 	public void reopen() throws IOException, UnsupportedOperationException {
 		throw new UnsupportedOperationException();
 	}
 
-	public abstract DataInput asDataInput();
-	public DataOutput asDataOutput() { return this; }
-	public abstract InputStream asInputStream();
+	private DataInputStream dis;
+	public DataInput asDataInput() {
+		if (dis == null) dis = new DataInputStream(asInputStream());
+		return dis;
+	}
+	public InputStream asInputStream() {
+		long len;
+		try {
+			len = length()-position();
+		} catch (IOException e) {
+			len = 0;
+		}
+		return new SourceInputStream(this, len);
+	}
 
 	/**
 	 * Did not ensure return is writable

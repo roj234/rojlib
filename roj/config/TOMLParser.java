@@ -22,7 +22,7 @@ import static roj.config.word.Word.*;
  * @author Roj234
  * @since 2022/1/6 19:49
  */
-public final class TOMLParser extends Parser {
+public final class TOMLParser extends Parser<CMapping> {
 	public static final int LENIENT = 1;
 	private static final int INLINE = 2;
 	private static final short eq = 18, dot = 19, dlmb = 20, drmb = 21;
@@ -70,33 +70,28 @@ public final class TOMLParser extends Parser {
 
 	@Override
 	public final CMapping parse(CharSequence text, int flags) throws ParseException {
+		this.flag = flags;
 		init(text);
-		this.flag = 0;
 
 		CMapping entry;
 		try {
-			entry = parse0((byte) flags);
+			entry = parse0(flags);
+			if ((flags & NO_EOF) == 0) except(EOF);
 		} catch (ParseException e) {
 			throw e.addPath("$");
+		} finally {
+			init(null);
 		}
 
-		if ((flags & NO_EOF) == 0 && next().type() != EOF) throw err("期待 /EOF");
 		return entry;
 	}
 
-	@Override
-	public int acceptableFlags() {
-		return LENIENT;
-	}
+	public final int availableFlags() { return LENIENT; }
+	public final String format() { return "TOML"; }
 
 	@Override
-	public String format() {
-		return "TOML";
-	}
-
-	@Override
-	public CharSequence toString(CEntry entry, int flag) {
-		return entry.toTOMLb();
+	public final CharList append(CEntry entry, int flag, CharList sb) {
+		return entry.appendTOML(sb, new CharList());
 	}
 
 	/**
@@ -106,7 +101,7 @@ public final class TOMLParser extends Parser {
 		CMapping map = new CMapping();
 
 		CMapping root = tomlObject(flag);
-		if (root.size() > 0) map.put("<root>", root);
+		if (root.size() > 0) map.put(CMapping.CONFIG_TOPLEVEL, root);
 
 		o:
 		while (hasNext()) {
@@ -211,7 +206,7 @@ public final class TOMLParser extends Parser {
 			case left_m_bracket: return JSONParser.list(this, new CTOMLList(), flag);
 			case STRING:
 			case LITERAL: {
-				int i = lastWordBegin;
+				int i = prevIndex;
 				if (next().type() == eq) {
 					index = i;
 					return tomlObject(flag);

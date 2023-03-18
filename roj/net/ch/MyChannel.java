@@ -3,11 +3,9 @@ package roj.net.ch;
 import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
+import roj.concurrent.TaskPool;
 import roj.io.buf.BufferPool;
-import roj.util.DynByteBuf;
-import roj.util.NamespaceKey;
-import roj.util.NativeMemory;
-import roj.util.TypedName;
+import roj.util.*;
 
 import java.io.IOException;
 import java.net.ConnectException;
@@ -17,7 +15,10 @@ import java.net.SocketOption;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.channels.spi.AbstractSelectableChannel;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -29,7 +30,7 @@ public abstract class MyChannel implements Selectable {
 
 	ChannelCtx pipelineHead, pipelineTail;
 
-	private final MyHashMap<TypedName<?>, Object> attachments = new MyHashMap<>();
+	private Map<TypedName<?>, Object> attachments = Collections.emptyMap();
 
 	SelectionKey key = DummySelectionKey.INSTANCE;
 	AbstractSelectableChannel ch;
@@ -221,6 +222,22 @@ public abstract class MyChannel implements Selectable {
 		}
 		return list;
 	}
+	public void movePipeFrom(MyChannel ch) {
+		ChannelCtx pipe = ch.pipelineHead;
+		while (pipe != null) {
+			pipe.handler.handlerRemoved(pipe);
+			pipe.handler.handlerAdded(pipe);
+
+			pipe.root = this;
+
+			pipe = pipe.next;
+		}
+
+		this.pipelineHead = ch.pipelineHead;
+		this.pipelineTail = ch.pipelineTail;
+
+		ch.pipelineHead = ch.pipelineTail = null;
+	}
 	// endregion
 
 	public final int getState() {
@@ -255,10 +272,9 @@ public abstract class MyChannel implements Selectable {
 		return (T) attachments.get(key);
 	}
 	@SuppressWarnings("unchecked")
-	public final <T> T attachment(TypedName<T> key, T val) {
-		synchronized (attachments) {
-			return (T) attachments.put(key, val);
-		}
+	public synchronized final <T> T attachment(TypedName<T> key, T val) {
+		if (attachments.isEmpty()) attachments = new MyHashMap<>(4);
+		return (T) (val == null ? attachments.remove(key) : attachments.put(key, val));
 	}
 
 	// region State
@@ -322,11 +338,20 @@ public abstract class MyChannel implements Selectable {
 		if (event == null) throw new NullPointerException("event");
 		lock.lock();
 		try {
-			// todo propagate direction
-			ChannelCtx pipe = pipelineTail;
-			while (pipe != null) {
-				pipe.handler.onEvent(pipe, event);
-				pipe = pipe.prev;
+			if (event._reverse()) {
+				ChannelCtx pipe = pipelineHead;
+				while (pipe != null) {
+					pipe.handler.onEvent(pipe, event);
+					if (event._stop()) break;
+					pipe = pipe.next;
+				}
+			} else {
+				ChannelCtx pipe = pipelineTail;
+				while (pipe != null) {
+					pipe.handler.onEvent(pipe, event);
+					if (event._stop()) break;
+					pipe = pipe.prev;
+				}
 			}
 		} finally {
 			lock.unlock();
@@ -408,6 +433,7 @@ public abstract class MyChannel implements Selectable {
 			lock.unlock();
 		}
 	}
+	public int getConnectTimeoutRemain() { return timeout; }
 
 	public final void open() throws IOException {
 		lock.lock();
@@ -579,11 +605,18 @@ public abstract class MyChannel implements Selectable {
 	}
 
 	protected void closeHandler() throws IOException {
+		Throwable ee = null;
 		ChannelCtx pipe = pipelineTail;
 		while (pipe != null) {
-			pipe.handler.channelClosed(pipe);
+			try {
+				pipe.handler.channelClosed(pipe);
+			} catch (Throwable e) {
+				if (ee == null) ee = e;
+				else ee.addSuppressed(e);
+			}
 			pipe = pipe.prev;
 		}
+		if (ee != null) Helpers.athrow(ee);
 	}
 
 	protected final void fireWriteDone() throws IOException {
@@ -634,4 +667,17 @@ public abstract class MyChannel implements Selectable {
 	public final boolean isClosePending() {
 		return state == CLOSE_PENDING;
 	}
+
+	public void invokeLater(Runnable r) {
+		TaskPool.CpuMassive().pushTask(() -> {
+			lock.lock();
+			try {
+				r.run();
+			} finally {
+				lock.unlock();
+			}
+		});
+	}
+
+	public Lock lock() { return lock; }
 }

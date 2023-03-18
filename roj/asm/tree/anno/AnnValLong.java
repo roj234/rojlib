@@ -1,6 +1,7 @@
 package roj.asm.tree.anno;
 
 import roj.asm.cst.ConstantPool;
+import roj.asm.type.Type;
 import roj.util.DynByteBuf;
 
 /**
@@ -8,57 +9,28 @@ import roj.util.DynByteBuf;
  * @since 2021/2/7 20:39
  */
 public final class AnnValLong extends AnnVal {
-	public AnnValLong(long value) {
-		this.value = value;
-	}
+	public AnnValLong(long v) { value = v; }
 
 	public long value;
 
-	@Override
-	public int asInt() {
-		return (int) value;
-	}
+	public int asInt() { return (int) value; }
+	public float asFloat() { return value; }
+	public long asLong() { return value; }
+	public double asDouble() { return value; }
 
-	@Override
-	public double asDouble() {
-		return value;
-	}
+	public byte type() { return Type.LONG; }
 
-	@Override
-	public float asFloat() {
-		return value;
-	}
-
-	@Override
-	public long asLong() {
-		return value;
-	}
-
-	public void toByteArray(ConstantPool pool, DynByteBuf w) {
-		w.put((byte) LONG).putShort(pool.getLongId(value));
-	}
-
-	public String toString() {
-		return String.valueOf(value);
-	}
-
-	@Override
-	public byte type() {
-		return LONG;
-	}
+	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) Type.LONG).putShort(cp.getLongId(value)); }
+	public String toString() { return String.valueOf(value); }
 
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 
-		AnnValLong aLong = (AnnValLong) o;
-
-		return value == aLong.value;
+		return value == ((AnnValLong) o).value;
 	}
 
 	@Override
-	public int hashCode() {
-		return (int) (value ^ (value >>> 32));
-	}
+	public int hashCode() { return (int) (value ^ (value >>> 32)); }
 }

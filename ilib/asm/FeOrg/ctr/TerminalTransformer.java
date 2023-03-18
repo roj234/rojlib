@@ -9,10 +9,10 @@ import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.insn.InsnList;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.tree.insn.InvokeInsnNode;
 import roj.asm.util.Context;
-import roj.asm.util.InsnList;
 import roj.asm.visitor.CodeWriter;
 import roj.util.ByteList;
 
@@ -44,10 +44,10 @@ public class TerminalTransformer extends CodeWriter implements ContextClassTrans
 				CstRef ref = (CstRef) c;
 				if (ref.matches("java/lang/System", "exit", "(I)V")) {
 					warn();
-					ref.setClazz(data.cp.getClazz(callbackOwner));
+					ref.clazz(data.cp.getClazz(callbackOwner));
 					ref.desc(data.cp.getDesc("systemExitCalled", "(I)V"));
-				} else if (ref.getClassName().equals("java/lang/Runtime")) {
-					String n = ref.desc().getName().getString();
+				} else if (ref.className().equals("java/lang/Runtime")) {
+					String n = ref.desc().name().str();
 					if (n.equals("halt") || n.equals("exit")) {
 						doVisit = true;
 					}
@@ -70,7 +70,7 @@ public class TerminalTransformer extends CodeWriter implements ContextClassTrans
 			mName = method.name();
 			mDesc = method.rawDesc();
 
-			Attribute attr = (Attribute) method.attributes().getByName("Code");
+			Attribute attr = method.attrByName("Code");
 			if (attr != null) {
 				dirty = false;
 

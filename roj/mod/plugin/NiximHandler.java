@@ -3,7 +3,7 @@ package roj.mod.plugin;
 import roj.asm.nixim.NiximSystem;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MoFNode;
-import roj.asm.tree.anno.AnnValString;
+import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.util.AttrHelper;
 import roj.asm.util.Context;
@@ -63,9 +63,9 @@ public class NiximHandler implements Plugin {
 						if (name != null) {
 							String owner = MapUtil.getInstance().sharedDC.owner;
 							if (!prevOwner.equals(owner)) {
-								anno.put("owner", new AnnValString(owner));
+								anno.put("owner", AnnVal.valueOf(owner));
 							}
-							anno.put("value", new AnnValString(name));
+							anno.put("value", AnnVal.valueOf(name));
 						} else {
 							CmdUtil.warning("无法为对象找到签名: " + data.name + " " + node);
 						}
@@ -75,7 +75,7 @@ public class NiximHandler implements Plugin {
 					if (anno.getBoolean("map", false)) {
 						String name = map(dest, node);
 						if (name != null) {
-							anno.put("value", new AnnValString(name));
+							anno.put("value", AnnVal.valueOf(name));
 						} else {
 							CmdUtil.warning("无法为对象找到签名: " + data.name + " " + node);
 						}
@@ -86,7 +86,7 @@ public class NiximHandler implements Plugin {
 					if (value.isEmpty()) {
 						String name = map(dest, node);
 						if (name != null) {
-							anno.put("value", new AnnValString(name));
+							anno.put("value", AnnVal.valueOf(name));
 						} else {
 							CmdUtil.warning("无法为对象找到签名: " + data.name + " " + node);
 						}

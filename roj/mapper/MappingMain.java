@@ -317,7 +317,7 @@ public class MappingMain {
 				int len = dis.readInt();
 
 				tmp.clear();
-				IOUtil.SharedCoder.get().decodeFrom(dis, tmp, len);
+				IOUtil.SharedCoder.get().decodeUpto(dis, tmp, len);
 
 				Mapping m = new Mapping();
 				m.loadMap(new LineReader(tmp), false);

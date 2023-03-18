@@ -10,9 +10,8 @@ import ilib.util.TimeUtil;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.ToLongMap;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.util.ByteList;
-import roj.util.ByteList.Streamed;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -36,7 +35,6 @@ import java.util.Map;
  * @since 2021/5/30 22:59
  */
 public class Sync {
-	static ByteList NULL_BYTES = new Streamed();
 	static MyChannel SYNC = new MyChannel("IL_SYN");
 
 	ToLongMap<String> fileMD5 = new ToLongMap<>();
@@ -49,7 +47,7 @@ public class Sync {
 		if (!dir.isDirectory()) throw new IllegalArgumentException("Not a directory");
 
 		scriptDirectory = dir.getAbsolutePath();
-		List<File> scriptFiles = FileUtil.findAllFiles(dir);
+		List<File> scriptFiles = IOUtil.findAllFiles(dir);
 		for (File file : scriptFiles) {
 			try (FileInputStream stream = new FileInputStream(file)) {
 				fileData.put(file.getAbsolutePath(), new ByteList().readStreamFully(stream));
@@ -62,9 +60,9 @@ public class Sync {
 		md5.wIndex(16);
 		for (Map.Entry<String, ByteList> entry : fileData.entrySet()) {
 			ByteList bl = entry.getValue();
-			FileUtil.MD5.update(bl.list, 0, bl.wIndex());
-			FileUtil.MD5.digest(md5.list);
-			FileUtil.MD5.reset();
+			IOUtil.MD5.update(bl.list, 0, bl.wIndex());
+			IOUtil.MD5.digest(md5.list);
+			IOUtil.MD5.reset();
 			md5.rIndex = 0;
 			fileMD5.put(entry.getKey(), md5.readLong() ^ md5.readLong());
 		}
@@ -226,7 +224,7 @@ public class Sync {
 			} else {
 				if (owner.replied.add(ctx.getPlayer())) {
 					for (Map.Entry<String, ByteList> entry : msg.files.entrySet()) {
-						entry.setValue(owner.fileData.getOrDefault(entry.getKey(), NULL_BYTES));
+						entry.setValue(owner.fileData.getOrDefault(entry.getKey(), ByteList.EMPTY));
 					}
 					SYNC.sendTo(msg, (EntityPlayerMP) ctx.getPlayer());
 				} else {

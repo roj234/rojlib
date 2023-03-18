@@ -30,7 +30,7 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 	protected Object[] entries;
 	protected int size, mask = 1;
 
-	static final float LOAD_FACTOR = 0.8f;
+	static final float LOAD_FACTOR = 1f;
 
 	public MyHashSet() {
 		this(16);
@@ -254,6 +254,11 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 			return UNDEFINED;
 		}
 		Object obj = entries[i];
+		if (obj == null) {
+			entries[i] = id;
+			return UNDEFINED;
+		}
+
 		while (obj instanceof Entry) {
 			Entry prev = (Entry) obj;
 			if (eq(id, prev.k)) return prev.k;

@@ -4,8 +4,8 @@ import roj.collect.MyHashMap;
 import roj.config.IniParser;
 import roj.config.NBTParser;
 import roj.config.TOMLParser;
-import roj.config.serial.CConsumer;
-import roj.config.serial.Structs;
+import roj.config.VinaryParser;
+import roj.config.serial.CVisitor;
 import roj.config.word.ITokenizer;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
@@ -18,18 +18,14 @@ import java.util.*;
  * @since 2021/5/31 21:17
  */
 public class CMapping extends CEntry {
+	public static final String CONFIG_TOPLEVEL = "<root>";
+
 	final Map<String, CEntry> map;
 	CharList dot;
 
-	public CMapping() {
-		this.map = new MyHashMap<>();
-	}
-	public CMapping(Map<String, CEntry> map) {
-		this.map = map;
-	}
-	public CMapping(int size) {
-		this.map = new MyHashMap<>(size);
-	}
+	public CMapping() { this.map = new MyHashMap<>(); }
+	public CMapping(Map<String, CEntry> map) { this.map = map; }
+	public CMapping(int size) { this.map = new MyHashMap<>(size); }
 
 	public final int size() {
 		return map.size();
@@ -276,18 +272,10 @@ public class CMapping extends CEntry {
 	}
 
 	protected String getCommentInternal(String key) {return null;}
-
 	public boolean isCommentSupported() {return false;}
-
 	public Map<String, String> getComments() {return Collections.emptyMap();}
-
 	public void putCommentDotted(String key, String val) {throw new UnsupportedOperationException();}
-
-	public CMapping withComments() {
-		if (getType() != Type.MAP) throw new UnsupportedOperationException();
-		return new CCommMap(map);
-	}
-
+	public CMapping withComments() { return new CCommMap(map); }
 	public void clearComments(boolean withSub) {
 		if (withSub) {
 			for (CEntry entry : map.values()) {
@@ -298,78 +286,24 @@ public class CMapping extends CEntry {
 		}
 	}
 
-	@Override
-	public StringBuilder toJSON(StringBuilder sb, int depth) {
-		sb.append('{');
-		if (!map.isEmpty()) {
-			Iterator<Map.Entry<String, CEntry>> itr = map.entrySet().iterator();
-			if (depth < 0) {
-				while (true) {
-					Map.Entry<String, CEntry> entry = itr.next();
-					ITokenizer.addSlashes(entry.getKey(), sb.append('"')).append('"').append(':');
-					entry.getValue().toJSON(sb, -1);
-					if (!itr.hasNext()) break;
-					sb.append(',');
-				}
-			} else {
-				sb.append('\n');
-				while (true) {
-					Map.Entry<String, CEntry> entry = itr.next();
-
-					String comment = getCommentInternal(entry.getKey());
-					if (comment != null && comment.length() > 0) {
-						addComments(sb, depth + 4, comment, "//", "\n");
-					}
-
-					for (int i = 0; i < depth + 4; i++) sb.append(' ');
-
-					ITokenizer.addSlashes(entry.getKey(), sb.append('"')).append('"').append(':').append(' ');
-					entry.getValue().toJSON(sb, depth + 4);
-					if (!itr.hasNext()) break;
-					sb.append(",\n");
-				}
-				sb.append('\n');
-				for (int i = 0; i < depth; i++) {
-					sb.append(' ');
-				}
-			}
-		}
-		return sb.append('}');
-	}
+	protected final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }
 
 	@Override
-	public byte getNBTType() {
-		return NBTParser.COMPOUND;
-	}
+	public byte getNBTType() { return NBTParser.COMPOUND; }
 
 	@Override
-	public void toNBT(DynByteBuf w) {
-		for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-			CEntry tag = entry.getValue();
-			w.put(tag.getNBTType()).putUTF(entry.getKey());
-			tag.toNBT(w);
-		}
-		w.put(NBTParser.END);
-	}
-
-	public void writeToNBT(DynByteBuf w) {
-		toNBT(w.put(NBTParser.COMPOUND).putShort(0));
-	}
-
-	@Override
-	public StringBuilder toINI(StringBuilder sb, int depth) {
+	public CharList toINI(CharList sb, int depth) {
 		if (!map.isEmpty()) {
 			Iterator<Map.Entry<String, CEntry>> itr = map.entrySet().iterator();
 			if (depth == 0) {
-				CEntry root = map.get("<root>");
-				if (root != null) {
-					root.toINI(sb, 1);
-				}
+				CEntry root = map.get(CONFIG_TOPLEVEL);
+				if (root != null) root.toINI(sb, 1);
+
 				while (itr.hasNext()) {
 					Map.Entry<String, CEntry> entry = itr.next();
 
 					String key = entry.getKey();
-					if (key.equals("<root>")) continue;
+					if (key.equals(CONFIG_TOPLEVEL)) continue;
 
 					String comment = getCommentInternal(entry.getKey());
 					if (comment != null && comment.length() > 0) {
@@ -425,7 +359,7 @@ public class CMapping extends CEntry {
 	}
 
 	@Override
-	public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
+	public CharList toTOML(CharList sb, int depth, CharSequence chain) {
 		if (!map.isEmpty()) {
 			if (chain.length() > 0 && depth < 2) {
 				if (TOMLParser.literalSafe(chain)) {
@@ -434,7 +368,8 @@ public class CMapping extends CEntry {
 					ITokenizer.addSlashes(chain, sb.append('[')).append("]\n");
 				}
 			}
-			if (depth == 0 && map.containsKey("<root>")) map.get("<root>").toTOML(sb, 0, chain).append('\n');
+			if (depth == 0 && map.containsKey(CONFIG_TOPLEVEL))
+				map.get(CONFIG_TOPLEVEL).toTOML(sb, 0, chain).append('\n');
 
 			if (depth == 3) sb.append('{');
 			for (Map.Entry<String, CEntry> entry : map.entrySet()) {
@@ -446,7 +381,7 @@ public class CMapping extends CEntry {
 				CEntry v = entry.getValue();
 				switch (v.getType()) {
 					case MAP:
-						if (entry.getKey().equals("<root>") && depth == 0) continue;
+						if (entry.getKey().equals(CONFIG_TOPLEVEL) && depth == 0) continue;
 						v.toTOML(sb, depth == 3 ? 3 : 1, entry.getKey()).append('\n');
 						break;
 					case LIST:
@@ -473,7 +408,7 @@ public class CMapping extends CEntry {
 	}
 
 	@SuppressWarnings("fallthrough")
-	protected static void addComments(StringBuilder sb, int depth, CharSequence com, CharSequence prefix, CharSequence postfix) {
+	public static void addComments(CharList sb, int depth, CharSequence com, CharSequence prefix, CharSequence postfix) {
 		int r = 0, i = 0, prev = 0;
 		while (i < com.length()) {
 			switch (com.charAt(i)) {
@@ -512,14 +447,19 @@ public class CMapping extends CEntry {
 	}
 
 	@Override
-	public void toBinary(DynByteBuf w, Structs struct) {
-		if (struct != null && struct.tryCompress(this, w)) {
-			return;
+	protected void toBinary(DynByteBuf w, VinaryParser struct) {
+		if (struct != null) {
+			String[] sortedId = struct.tryCompress(map, w);
+			if (sortedId != null) {
+				for (String id : sortedId) map.get(id).toBinary(w,struct);
+				return;
+			}
 		}
-		w.put((byte) Type.MAP.ordinal()).putVarInt(map.size(), false);
+
+		w.put((byte) Type.MAP.ordinal()).putVUInt(map.size());
 		if (map.isEmpty()) return;
 		for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-			entry.getValue().toBinary(w.putVarIntVIC(entry.getKey()), struct);
+			entry.getValue().toBinary(w.putVStr(entry.getKey()), struct);
 		}
 	}
 
@@ -537,7 +477,6 @@ public class CMapping extends CEntry {
 		w.put((byte) 'e');
 	}
 
-	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
@@ -545,15 +484,11 @@ public class CMapping extends CEntry {
 		CMapping mapping = (CMapping) o;
 		return map.equals(mapping.map);
 	}
+	public int hashCode() { return map.hashCode(); }
 
 	@Override
-	public int hashCode() {
-		return map.hashCode();
-	}
-
-	@Override
-	public void forEachChild(CConsumer ser) {
-		ser.valueMap();
+	public void forEachChild(CVisitor ser) {
+		ser.valueMap(map.size());
 		if (!map.isEmpty()) {
 			for (Map.Entry<String, CEntry> entry : map.entrySet()) {
 				ser.key(entry.getKey());
@@ -563,7 +498,7 @@ public class CMapping extends CEntry {
 		ser.pop();
 	}
 
-	public void forEachChildSorted(CConsumer ser, String... names) {
+	public void forEachChildSorted(CVisitor ser, String... names) {
 		ser.valueMap();
 		for (String name : names) {
 			CEntry value = map.get(name);

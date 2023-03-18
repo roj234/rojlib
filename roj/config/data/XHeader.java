@@ -1,5 +1,7 @@
 package roj.config.data;
 
+import roj.text.CharList;
+
 import java.util.Map;
 
 /**
@@ -11,7 +13,7 @@ public final class XHeader extends XElement {
 		super("?xml");
 	}
 
-	public void toXML(StringBuilder sb, int depth) {
+	public void toXML(CharList sb, int depth) {
 		if (depth != 0) throw new UnsupportedOperationException("Xml header must on top");
 
 		if (attributes != null) {
@@ -34,7 +36,7 @@ public final class XHeader extends XElement {
 		}
 	}
 
-	public void toCompatXML(StringBuilder sb) {
+	public void toCompatXML(CharList sb) {
 		if (attributes != null) {
 			sb.append("<?xml");
 			if (!attributes.isEmpty()) {

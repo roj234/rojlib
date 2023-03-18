@@ -1,20 +1,19 @@
 package roj.reflect;
 
 import roj.asm.cst.CstClass;
-import roj.asm.cst.CstString;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.insn.FieldInsnNode;
+import roj.asm.tree.insn.InsnList;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.InsnHelper;
-import roj.asm.util.InsnList;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 
 import javax.annotation.Nullable;
 import java.lang.reflect.Constructor;
@@ -124,7 +123,7 @@ public final class DirectAccessor<T> {
 			CodeWriter cw = var.newMethod(PUBLIC, "toString", "()Ljava/lang/String;");
 
 			cw.visitSize(1,1);
-			cw.ldc(LDC, new CstString(sb.toString()));
+			cw.ldc(sb.toString());
 			cw.one(ARETURN);
 			cw.finish();
 
@@ -364,7 +363,7 @@ public final class DirectAccessor<T> {
 			for (int j = 0; j < params.length; j++) {
 				Class<?> param = params[j];
 				String tag = InsnHelper.XPrefix(param);
-				InsnHelper.compress(cw, InsnHelper.X_LOAD(tag.charAt(0)), size++);
+				cw.var(InsnHelper.X_LOAD(tag.charAt(0)), size++);
 				if (check && !param.isAssignableFrom(params2[j])) cw.clazz(CHECKCAST, param.getName().replace('.', '/'));
 				switch (tag) {
 					case "D":
@@ -594,7 +593,7 @@ public final class DirectAccessor<T> {
 			int j = size;
 			for (Class<?> param : params) {
 				String tag = InsnHelper.XPrefix(param);
-				InsnHelper.compress(cw, InsnHelper.X_LOAD(tag.charAt(0)), ++size);
+				cw.var(InsnHelper.X_LOAD(tag.charAt(0)), ++size);
 				if (check && !param.isPrimitive() && !param.isAssignableFrom(params2[j])) // 强制转换再做检查...
 					cw.clazz(CHECKCAST, param.getName().replace('.', '/'));
 				j++;
@@ -609,7 +608,7 @@ public final class DirectAccessor<T> {
 			if (isStatic != 0) {
 				cw.invoke(INVOKESTATIC, tName, tm.getName(), tDesc);
 			} else if (target.isInterface()) {
-				cw.invoke_interface(tName, tm.getName(), tDesc);
+				cw.invokeItf(tName, tm.getName(), tDesc);
 			} else {
 				cw.invoke((flags != null && flags.contains(i) ? INVOKESPECIAL : INVOKEVIRTUAL), tName, tm.getName(), tDesc);
 			}
@@ -732,12 +731,12 @@ public final class DirectAccessor<T> {
 
 		for (int i = 0, len = fieldFs.length; i < len; i++) {
 			Field field = fieldFs[i];
-			Type fType = TypeHelper.parseField(TypeHelper.class2asm(field.getType()));
+			Type fType = TypeHelper.class2type(field.getType());
 			boolean isStatic = (field.getModifiers() & AccessFlag.STATIC) != 0;
 
 			Method getter = getterMs[i];
 			if (getter != null) {
-				Class<?>[] params2 = isStatic || useCache ? EmptyArrays.CLASSES : getter.getParameterTypes();
+				Class<?>[] params2 = isStatic || useCache ? ArrayCache.CLASSES : getter.getParameterTypes();
 				CodeWriter cw = var.newMethod(PUBLIC, getter.getName(), TypeHelper.class2asm(params2, getter.getReturnType()));
 
 				byte type = fType.type;
@@ -818,7 +817,7 @@ public final class DirectAccessor<T> {
 		for (int i = 0; i < params.size(); i++) {
 			Type param = params.get(i);
 			char x = param.nativeName().charAt(0);
-			InsnHelper.compress(cw, InsnHelper.X_LOAD(x), ++size);
+			cw.var(InsnHelper.X_LOAD(x), ++size);
 			switch (x) {
 				case 'D':
 				case 'L':
@@ -863,7 +862,7 @@ public final class DirectAccessor<T> {
 		for (int i = 0; i < params.size(); i++) {
 			Type param = params.get(i);
 			char x = param.nativeName().charAt(0);
-			InsnHelper.compress(cw, InsnHelper.X_LOAD(x), ++size);
+			cw.var(InsnHelper.X_LOAD(x), ++size);
 			switch (x) {
 				case 'D':
 				case 'L': size++;
@@ -875,7 +874,7 @@ public final class DirectAccessor<T> {
 		if (isStatic) {
 			cw.invoke(INVOKESTATIC, target, self.getName(), desc);
 		} else if (opcode == INVOKEINTERFACE) {
-			cw.invoke_interface(target, self.getName(), desc);
+			cw.invokeItf(target, self.getName(), desc);
 		} else {
 			cw.invoke(opcode, target, self.getName(), desc);
 		}
@@ -906,7 +905,7 @@ public final class DirectAccessor<T> {
 		target = target.replace('.', '/');
 
 		if (getter != null) {
-			Class<?>[] params2 = isStatic ? EmptyArrays.CLASSES : getter.getParameterTypes();
+			Class<?>[] params2 = isStatic ? ArrayCache.CLASSES : getter.getParameterTypes();
 			CodeWriter cw = var.newMethod(PUBLIC, getter.getName(), TypeHelper.class2asm(params2, getter.getReturnType()));
 
 			byte typeId = type.type;
@@ -1042,7 +1041,7 @@ public final class DirectAccessor<T> {
 
 		clz.parent(MAGIC_ACCESSOR_CLASS);
 		clz.interfaces.add(new CstClass(invokerName.replace('.', '/')));
-		clz.access = AccessFlag.SUPER_OR_SYNC | PUBLIC;
+		clz.access = AccessFlag.SUPER | PUBLIC;
 	}
 
 	/**

@@ -19,8 +19,7 @@ public abstract class BottomLine implements AutoCloseable {
 				System.setOut(sysOutDeg);
 				System.setErr(sysOutDeg);
 				CmdUtil.out = sysOutDeg;
-			}
-			if (active.size() > 64) return;
+			} else if (active.size() > 64) return;
 
 			active.add(this);
 			sysOut.println();
@@ -38,7 +37,7 @@ public abstract class BottomLine implements AutoCloseable {
 				pos = active.indexOf(this);
 			}
 
-			CmdUtil.cursorUp(active.size()-pos);
+			CmdUtil.cursorUpSet0(active.size()-pos);
 			sysOut.println(b);
 			int j = active.size()-pos-1;
 			if (j > 0) CmdUtil.cursorDown(j);
@@ -63,14 +62,18 @@ public abstract class BottomLine implements AutoCloseable {
 
 			batchClear();
 			if (!clearText) {
-				CmdUtil.cursorUp(1);
+				CmdUtil.cursorUpSet0(1);
 				CmdUtil.clearLine();
 				sysOut.println(batch);
 			}
 
 			batchRender();
 		}
+		doDispose();
 	}
+
+	protected void doDispose() {}
+
 	@Override
 	public void close() {
 		dispose(false);
@@ -100,6 +103,7 @@ public abstract class BottomLine implements AutoCloseable {
 				@Override
 				protected void newLine() {
 					batchClear();
+
 					sysOut.println(sb);
 					sb.clear();
 

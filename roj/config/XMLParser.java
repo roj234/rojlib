@@ -19,7 +19,7 @@ import static roj.config.word.Word.*;
  *
  * @author Roj234
  */
-public class XMLParser extends Parser {
+public class XMLParser extends Parser<CMapping> {
 	private static final short left_curly_bracket = 13, right_curly_bracket = 14, slash = 15,
 		equ = 16, ask = 17, element_end = 18, header_start = 19,
 		header_end = 20, CDATA_STRING = 21;
@@ -51,12 +51,12 @@ public class XMLParser extends Parser {
 	}
 
 	@Override
-	public CEntry parse(CharSequence text, int flag) throws ParseException {
+	public CMapping parse(CharSequence text, int flag) throws ParseException {
 		return parseTo1(text, flag).toJSON();
 	}
 
 	@Override
-	public int acceptableFlags() {
+	public int availableFlags() {
 		return NO_EOF | FORCE_XML_HEADER | LENIENT | UNESCAPED_SINGLE_QUOTE | PROCESS_ENTITY;
 	}
 
@@ -65,21 +65,19 @@ public class XMLParser extends Parser {
 		return "XML";
 	}
 
-	@Override
-	public CharSequence toString(CEntry entry, int flag) {
-		throw new UnsupportedOperationException("Not implemented yet");
-	}
-
 	public XHeader parseTo1(CharSequence text, int flag) throws ParseException {
 		this.flag = flag;
 		init(text);
+
 		XHeader x;
 		try {
 			x = xmlHeader(flag);
+			if ((flag & NO_EOF) == 0) except(EOF);
 		} catch (ParseException e) {
 			throw e.addPath("$");
+		} finally {
+			init(null);
 		}
-		if ((flag & NO_EOF) == 0 && next().type() != EOF) throw err("期待 /EOF");
 		return x;
 	}
 
@@ -279,7 +277,7 @@ public class XMLParser extends Parser {
 						if (j < 0) throw err("在CDATA结束前遇到了文件尾");
 
 						index = j+2;
-						return formClip(CDATA_STRING, in.subSequence(i, j).toString());
+						return formClip(CDATA_STRING, in.subSequence(i, j));
 					}
 					return readLiteral();
 			}

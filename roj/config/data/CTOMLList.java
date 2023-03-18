@@ -1,5 +1,7 @@
 package roj.config.data;
 
+import roj.text.CharList;
+
 import java.util.List;
 
 /**
@@ -10,17 +12,8 @@ public final class CTOMLList extends CList {
 	public boolean fixed = true;
 
 	public CTOMLList() {}
+	public CTOMLList(int size) { super(size); }
+	public CTOMLList(List<CEntry> list) { super(list); }
 
-	public CTOMLList(int size) {
-		super(size);
-	}
-
-	public CTOMLList(List<CEntry> list) {
-		super(list);
-	}
-
-	@Override
-	public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
-		return super.toTOML(sb, fixed ? 3 : depth, chain);
-	}
+	public CharList toTOML(CharList sb, int depth, CharSequence chain) { return super.toTOML(sb, fixed ? 3 : depth, chain); }
 }

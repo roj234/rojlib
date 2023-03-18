@@ -13,7 +13,7 @@ import java.util.Random;
  * @author solo6975
  * @since 2022/2/12 17:54
  */
-public final class OAEP implements Padding {
+public final class OAEP {
 	static final MessageDigest COMM_H;
 
 	static {
@@ -71,16 +71,8 @@ public final class OAEP implements Padding {
 	/**
 	 * 数据(密文)长度
 	 */
-	public int length() {
-		return t.length + r.length;
-	}
+	public int length() { return t.length + r.length; }
 
-	@Override
-	public int getPaddedLength(int data) {
-		return length();
-	}
-
-	@Override
 	public void pad(byte[] src, int srcOff, int srcLen, byte[] dst, int dstOff) throws GeneralSecurityException {
 		srcLen += srcOff;
 		if (srcLen > t.length) throw new BadPaddingException("Unable to pad");
@@ -118,7 +110,6 @@ public final class OAEP implements Padding {
 		System.arraycopy(r, 0, dst, dstOff + t.length, r.length);
 	}
 
-	@Override
 	public int unpad(byte[] src, int srcOff, int srcLen, byte[] dst, int dstOff) throws GeneralSecurityException {
 		if (srcLen < length()) throw new BadPaddingException();
 
@@ -147,10 +138,5 @@ public final class OAEP implements Padding {
 
 		while (m_len-- > 0) if (dst[m_len + dstOff] != 0) return m_len + 1;
 		return 0;
-	}
-
-	@Override
-	public String name() {
-		return "OAEP";
 	}
 }

@@ -13,4 +13,5 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface Body {
 	From value();
+	boolean nonnull() default false;
 }

@@ -127,48 +127,32 @@ public class CmdUtil {
 		if (ENABLE) originalOut.print("\u001B[" + (bg + (hl ? 70 : 10)) + 'm');
 	}
 
-	public static void cursorUpSet0(int line) {
-		cursor0('F', line);
-	}
-	public static void cursorDownSet0(int line) {
-		cursor0('E', line);
-	}
-	public static void cursorUp(int line) {
-		cursor0('A', line);
-	}
-	public static void cursorDown(int line) {
-		cursor0('B', line);
-	}
-	public static void cursorRight(int line) {
-		cursor0('C', line);
-	}
-	public static void cursorLeft(int line) {
-		cursor0('D', line);
-	}
+	public static void cursorUpSet0(int line) { cursor0('F', line); }
+	public static void cursorDownSet0(int line) { cursor0('E', line); }
+	public static void cursorUp(int line) { cursor0('A', line); }
+	public static void cursorDown(int line) { cursor0('B', line); }
+	public static void cursorRight(int line) { cursor0('C', line); }
+	public static void cursorLeft(int line) { cursor0('D', line); }
 	private static void cursor0(char cr, int line) {
 		if (ENABLE) originalOut.print(("\u001b[" + line) + cr);
 	}
 
 	public static void cursorBackup() {
-		//Save Position: \u001b[{s} saves the current cursor position
-		//Save Position: \u001b[{u} restores the cursor to the last saved position
-		originalOut.print("\u001b[{s}");
+		// saves the current cursor position
+		// \u001b[s
+		// restores the cursor to the last saved position
+		// \u001b[u
+		originalOut.print("\u001b[s");
 	}
 	public static void cursorPrev() {
-		originalOut.print("\u001b[{u}");
+		originalOut.print("\u001b[u");
 	}
 
-	public static void clearLine() {
-		clear0(2);
-	}
-	public static void clearAfter() {
-		clear0(0);
-	}
-	public static void clearBefore() {
-		clear0(1);
-	}
+	public static void clearLine() { clear0(2); }
+	public static void clearAfter() { clear0(0); }
+	public static void clearBefore() { clear0(1); }
 	private static void clear0(int cat) {
-		if (ENABLE) originalOut.print("\u001b[" + cat + 'K');
+		if (ENABLE) originalOut.print("\u001b["+cat+'K');
 	}
 
 	public static void fg(int fg) {

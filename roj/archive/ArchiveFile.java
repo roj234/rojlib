@@ -11,6 +11,9 @@ import java.util.Map;
  */
 public interface ArchiveFile extends Closeable {
 	void close() throws IOException;
+	/**
+	 * Reload this archive file from disk, discarding any unsaved changes
+	 */
 	void reload() throws IOException;
 
 	Map<String, ? extends ArchiveEntry> getEntries();

@@ -1,14 +1,13 @@
 package roj.config;
 
 import roj.collect.Int2IntMap;
-import roj.collect.LinkedMyHashMap;
-import roj.collect.MyHashMap;
-import roj.config.data.*;
-import roj.config.exch.TByteArray;
+import roj.config.data.CEntry;
+import roj.config.serial.CVisitor;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.ByteList;
+import roj.util.DynByteBuf;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -18,10 +17,9 @@ import static roj.config.JSONParser.*;
 
 /**
  * bittorrent解析器
- *
  * @author Roj234
  */
-public class BencodeParser {
+public final class BencodeParser implements BinaryParser {
 	public static final int SKIP_UTF_DECODE = 2;
 
 	private static final Int2IntMap BEN_C2C = new Int2IntMap();
@@ -38,64 +36,77 @@ public class BencodeParser {
 		}
 	}
 
-	public static CEntry parse(InputStream cs) throws IOException, ParseException {
-		return new BencodeParser().parse(cs, 0);
+	public static CEntry parses(InputStream in) throws IOException, ParseException {
+		return new BencodeParser().parseRaw(in, 0);
 	}
 
-	public CEntry parse(InputStream in, int flags) throws IOException, ParseException {
+	@Override
+	public <T extends CVisitor> T parseRaw(InputStream in, T cc, int flag) throws IOException, ParseException {
 		this.in = in;
+		this.cc = cc;
 		try {
-			return el((byte) flags);
+			element(flag);
 		} catch (ParseException e) {
 			throw e.addPath("$");
+		} finally {
+			this.in = null;
+			this.cc = null;
 		}
+		return cc;
 	}
 
-	public int acceptableFlags() {
-		return NO_DUPLICATE_KEY|NO_EOF|ORDERED_MAP;
-	}
+	public void serialize(CEntry entry, DynByteBuf out) throws IOException { entry.toB_encode(out); }
+	public int availableFlags() { return NO_DUPLICATE_KEY|SKIP_UTF_DECODE|ORDERED_MAP; }
+	public String format() { return "B-encode"; }
 
 	private InputStream in;
+	private CVisitor cc;
 	private final ByteList buf = new ByteList(64);
 
-	private CEntry el(int flag) throws IOException, ParseException {
+	boolean element(int flag) throws IOException, ParseException {
 		int c = in.read();
 		switch (BEN_C2C.getOrDefaultInt(c, -2)) {
 			default: throw err("无效的字符 " + c);
 			case -1: throw err("未预料的EOF ");
-			case 0: return null; // END e
-			case 1: return list(flag); // LIST l
-			case 2: return map(flag); // DICT d
+			case 0: return false; // END e
+			case 1: list(flag); break; // LIST l
+			case 2: map(flag); break; // DICT d
 			case 3: // INT i
 				long v = readInt(-1);
-				return v < Integer.MIN_VALUE || v > Integer.MAX_VALUE ? CLong.valueOf(v) : CInteger.valueOf((int) v);
+				if (v < Integer.MIN_VALUE || v > Integer.MAX_VALUE) {
+					cc.value(v);
+				} else {
+					cc.value((int) v);
+				}
+				break;
 			case 4: // STRING <number>
 				ByteList b = readString(c);
 				if ((flag & SKIP_UTF_DECODE) == 0) {
 					try {
-						return CString.valueOf(b.readUTF(b.readableBytes()));
+						cc.value(b.readUTF(b.readableBytes()));
 					} catch (IllegalArgumentException ignored) {}
 				}
-				return new TByteArray(b.toByteArray());
+				cc.value(b.toByteArray());
+				break;
 		}
+		return true;
 	}
-	private CList list(int flag) throws IOException, ParseException {
-		CList list = new CList();
+	private void list(int flag) throws IOException, ParseException {
+		cc.valueList();
+		int size = 0;
 
 		while (true) {
 			try {
-				CEntry el = el(flag);
-				if (el == null) break;
-				list.add(el);
+				if (!element(flag)) break;
 			} catch (ParseException e) {
-				throw e.addPath("[" + list.size() + "]");
+				throw e.addPath("["+size+"]");
 			}
+			size++;
 		}
-
-		return list;
+		cc.pop();
 	}
-	private CMapping map(int flag) throws IOException, ParseException {
-		CMapping map = new CMapping((flag & ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>());
+	private void map(int flag) throws IOException, ParseException {
+		cc.valueMap();
 
 		while (true) {
 			int c = in.read();
@@ -106,18 +117,15 @@ public class BencodeParser {
 			ByteList b = readString(c);
 			String k = b.readUTF(b.readableBytes());
 
-			if ((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(k)) throw err("重复的key: " + k);
-
+			cc.key(k);
 			try {
-				CEntry el = el(flag);
-				if (el == null) throw err("未预料的END");
-				map.put(k, el);
+				if (!element(flag)) throw err("未预料的END");
 			} catch (ParseException e) {
-				throw e.addPath('.' + k);
+				throw e.addPath('.'+k);
 			}
 		}
 
-		return map;
+		cc.pop();
 	}
 
 	private ByteList readString(int c) throws IOException, ParseException {

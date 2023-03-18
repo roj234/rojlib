@@ -2,25 +2,21 @@ package roj.io.source;
 
 import roj.collect.LRUCache;
 import roj.collect.MyHashMap;
-import roj.io.SourceInputStream;
 import roj.io.buf.BufferPool;
 import roj.math.MutableInt;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import java.io.DataInput;
-import java.io.DataInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.channels.FileChannel;
 import java.util.Iterator;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 /**
  * @author Roj233
  * @since 2021/8/18 13:36
  */
-public class BufferedSource extends Source implements Consumer<ByteList> {
+public class BufferedSource extends Source implements BiConsumer<MutableInt,ByteList> {
 	public static final int PAGE = 4096;
 	private long pos, len;
 	private int sync;
@@ -158,17 +154,6 @@ public class BufferedSource extends Source implements Consumer<ByteList> {
 		if (close) s.reopen();
 	}
 
-	private DataInputStream dis;
-	@Override
-	public DataInput asDataInput() {
-		if (dis == null) dis = new DataInputStream(asInputStream());
-		return dis;
-	}
-	@Override
-	public InputStream asInputStream() {
-		return new SourceInputStream(this, len - pos);
-	}
-
 	@Override
 	public Source threadSafeCopy() throws IOException {
 		return s.threadSafeCopy();
@@ -248,7 +233,7 @@ public class BufferedSource extends Source implements Consumer<ByteList> {
 	}
 
 	@Override
-	public void accept(ByteList buffer) {
+	public void accept(MutableInt key,ByteList buffer) {
 		pool.reserve(buffer);
 	}
 }

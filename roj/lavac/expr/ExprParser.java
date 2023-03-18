@@ -3,6 +3,7 @@ package roj.lavac.expr;
 import roj.asm.tree.insn.LabelInsnNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.asm.visitor.Label;
 import roj.collect.Int2IntMap;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
@@ -60,7 +61,7 @@ public final class ExprParser {
 
 	@SuppressWarnings("fallthrough")
 	@Nullable
-	public ASTNode read(CompileUnit ctx, int exprFlag, LabelInsnNode ifFalse) throws ParseException {
+	public ASTNode read(CompileUnit ctx, int exprFlag, Label ifFalse) throws ParseException {
 		try {
 			return read0(ctx, exprFlag, ifFalse, null);
 		} finally {
@@ -74,7 +75,7 @@ public final class ExprParser {
 	 *
 	 * @throws ParseException if error occurs.
 	 */
-	private ASTNode read0(CompileUnit ctx, int exprFlag, LabelInsnNode ifFalse, Type excepting) throws ParseException {
+	private ASTNode read0(CompileUnit ctx, int exprFlag, Label ifFalse, Type excepting) throws ParseException {
 		ArrayList<ASTNode> tmp = words;
 		if (busy) {
 			try {

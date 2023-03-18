@@ -19,7 +19,7 @@ import java.util.zip.ZipException;
 import static java.util.zip.GZIPInputStream.GZIP_MAGIC;
 
 public class HttpClient11 extends IHttpClient implements ChannelHandler {
-	static final int SEND_HEAD=0,RECV_HEAD=1,PROCESS_COMPRESS=2,RECV_BODY=3,RECV_CHECKSUM=4,HANG=5;
+	static final int SEND_HEAD=0,RECV_HEAD=1,PROCESS_COMPRESS=2,RECV_BODY=3,RECV_CHECKSUM=4,IDLE=5;
 
 	HttpHead response;
 
@@ -98,7 +98,7 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 			case "cs:cin": // ChunkSplitter.CHUNK_IN_EOF
 				if (response.getContentEncoding().equals("identity")) {
 					sendEof(ctx, true);
-				} else if (state == RECV_CHECKSUM || crc != null) {
+				} else if (state == RECV_CHECKSUM) {
 					sendEof(ctx, false);
 					throw new ZipException("Unexpected gzip EOS: checksum missing");
 				}
@@ -150,6 +150,7 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 					    ("len="+rcv+"|"+rcvByte));
 				}
 				sendEof(ctx, true);
+				crc = null;
 
 				if (buf.isReadable()) throw new IOException("多余的数据: " + buf);
 				return;
@@ -164,7 +165,7 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 				ctx.channelOpened();
 
 				if (action.equals("HEAD")) {
-					state = HANG;
+					state = IDLE;
 					return;
 				}
 
@@ -209,44 +210,38 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 				state = RECV_BODY;
 				ctx.handler().channelRead(ctx, buf);
 				return;
-			case HANG: if (buf.isReadable()) throw new IOException("Trailer data: " + buf);
+			case IDLE: if (buf.isReadable()) throw new IOException("Trailer data: " + buf.dump());
 		}
 	}
 
 	@Override
 	public void channelWrite(ChannelCtx ctx, Object msg) throws IOException {
-		if (body instanceof String) {
-			ctx.channelWrite(msg);
-		} else {
-			throw new UnsupportedOperationException();
-		}
+		if (body instanceof String) ctx.channelWrite(msg);
+		else throw new UnsupportedOperationException();
 	}
 
-	private void sendEof(ChannelCtx ctx, boolean reusable) throws IOException {
+	private void sendEof(ChannelCtx ctx, boolean success) throws IOException {
 		if (!sendEof) {
 			sendEof = true;
-			Event event = new Event(DOWNLOAD_EOF);
-			event.setData(reusable);
-			ctx.postEvent(event);
-			synchronized (this) {
-				notifyAll();
-			}
 
-			if (response.getHeaderField("connection").equalsIgnoreCase("close")) {
+			Event event = new Event(DOWNLOAD_EOF);
+			event.setData(success);
+			ctx.postEvent(event);
+
+			synchronized (this) { notifyAll(); }
+
+			if (response != null && response.getHeaderField("connection").equalsIgnoreCase("close")) {
 				ctx.close();
-			} else {
-				state = HANG;
 			}
 		}
+		state = IDLE;
 	}
 
 	@Override
 	public void channelClosed(ChannelCtx ctx) throws IOException {
-		synchronized (this) {
-			if (!sendEof) {
-				sendEof = true;
-				notifyAll();
-			}
+		if (!sendEof) {
+			sendEof = true;
+			synchronized (this) { notifyAll(); }
 		}
 	}
 

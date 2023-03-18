@@ -41,6 +41,6 @@ public final class InvokeItfInsnNode extends InvokeInsnNode {
 	}
 
 	public void serialize(CodeWriter cw) {
-		cw.invoke_interface(owner, name, rawDesc());
+		cw.invokeItf(owner, name, rawDesc());
 	}
 }

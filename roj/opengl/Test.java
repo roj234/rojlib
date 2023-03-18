@@ -7,7 +7,7 @@ import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.GL11;
 import roj.collect.SimpleList;
 import roj.config.data.CMapping;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.math.Vec3f;
 import roj.opengl.render.SkyRenderer;
 import roj.opengl.texture.TextureAtlas;
@@ -52,7 +52,7 @@ public class Test extends Game {
 	}
 
 	protected void init() {
-		FileUtil.findAllFiles(new File("D:\\mc\\FMD-1.5.2\\projects\\mi\\resources"), file -> {
+		IOUtil.findAllFiles(new File("D:\\mc\\FMD-1.5.2\\projects\\mi\\resources"), file -> {
 			if (file.getName().endsWith(".png")) {
 				String path = file.getAbsolutePath();
 				if (!path.contains("gui") && !path.contains("sky"))

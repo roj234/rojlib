@@ -21,22 +21,28 @@ public class AutoFPS {
 	private static int targetFPS;
 	private static float targetVol;
 
+	private static boolean isDown;
+	private static long hwts, ts;
+
 	private static int backupFPS;
 	private static float backupVolume;
 	private static boolean backupVSync;
 
 	public static final Minecraft mc = Minecraft.getMinecraft();
 
-	private static boolean checkActive() {
+	public static boolean checkActive() {
 		// 防止未响应
 		Display.processMessages();
 		if (!Display.isVisible()) return false;
 
+		long t = Math.max(Keyboard.getEventNanoseconds(), Mouse.getEventNanoseconds());
+		if (t > hwts) {
+			hwts = t;
+			ts = System.currentTimeMillis();
+		}
+
 		if (Display.isActive() || Mouse.isInsideWindow()) {
-			long t1 = Keyboard.getEventNanoseconds()/1000000;
-			long t2 = Mouse.getEventNanoseconds()/1000000;
-			return System.currentTimeMillis() - t1 <= waitingTime &&
-					System.currentTimeMillis() - t2 <= waitingTime;
+			return System.currentTimeMillis() - ts < waitingTime;
 		}
 		return false;
 	}
@@ -62,11 +68,10 @@ public class AutoFPS {
 	}
 
 	private static void fpsDown() {
-		if (backupFPS == -114514) {
+		if (!isDown) {
 			backupFPS = mc.gameSettings.limitFramerate;
 			mc.gameSettings.limitFramerate = targetFPS;
-			if (mc.gameSettings.enableVsync) {
-				backupVSync = true;
+			if (backupVSync = mc.gameSettings.enableVsync) {
 				Display.setVSyncEnabled(false);
 			}
 
@@ -74,11 +79,13 @@ public class AutoFPS {
 				backupVolume = mc.gameSettings.getSoundLevel(SoundCategory.MASTER);
 				mc.gameSettings.setSoundLevel(SoundCategory.MASTER, targetVol);
 			}
+
+			isDown = true;
 		}
 	}
 
 	private static void fpsUp() {
-		if (backupFPS != -114514) {
+		if (isDown) {
 			mc.gameSettings.limitFramerate = backupFPS;
 			if (backupVSync) Display.setVSyncEnabled(true);
 
@@ -86,7 +93,7 @@ public class AutoFPS {
 				mc.gameSettings.setSoundLevel(SoundCategory.MASTER, backupVolume);
 			}
 
-			backupFPS = -114514;
+			isDown = false;
 		}
 	}
 }

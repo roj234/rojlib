@@ -1,5 +1,6 @@
 package roj.asm.type;
 
+import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -72,7 +73,7 @@ public final class TypeHelper {
 	/**
 	 * 方法参数所占空间
 	 *
-	 * @see roj.asm.tree.insn.InvokeItfInsnNode#serialize
+	 * @see roj.asm.util.ICodeWriter#invokeItf(String, String, String)
 	 */
 	public static int paramSize(String desc) {
 		int cnt = 0;
@@ -145,6 +146,7 @@ public final class TypeHelper {
 
 	/**
 	 * 转换字段type为字符串
+	 * @see Type#toDesc()
 	 */
 	public static String getField(Type type) {
 		if (type.owner == null && type.array() == 0) return toDesc(type.type);
@@ -172,6 +174,14 @@ public final class TypeHelper {
 		return sb.equals(prev) ? prev : sb.toString();
 	}
 
+	private static final MyHashMap<String, Object[]> PD;
+	static {
+		PD = new MyHashMap<>(MAP.length);
+		for (Object[] o : MAP) {
+			if (o != null && o[1] != null) PD.put(o[1].toString(), o);
+		}
+	}
+
 	/**
 	 * 转换class为字段的asm type
 	 */
@@ -184,20 +194,25 @@ public final class TypeHelper {
 			clazz = tmp;
 			sb.append('[');
 		}
-		if (clazz.isPrimitive()) {
-			switch (clazz.getName()) {
-				case "int": return sb.append(INT);
-				case "short": return sb.append(SHORT);
-				case "double": return sb.append(DOUBLE);
-				case "long": return sb.append(LONG);
-				case "float": return sb.append(FLOAT);
-				case "char": return sb.append(CHAR);
-				case "byte": return sb.append(BYTE);
-				case "boolean": return sb.append(BOOLEAN);
-				case "void": return sb.append(VOID);
-			}
-		}
+
+		if (clazz.isPrimitive()) return sb.append(PD.get(clazz.getName())[0].toString());
 		return sb.append('L').append(clazz.getName().replace('.', '/')).append(';');
+	}
+
+	public static Type class2type(Class<?> clazz) {
+		int arr = 0;
+		Class<?> tmp;
+		while ((tmp = clazz.getComponentType()) != null) {
+			clazz = tmp;
+			arr++;
+		}
+
+		if (clazz.isPrimitive()) {
+			Type type = (Type) PD.get(clazz.getName())[2];
+			return arr == 0 ? type : new Type(type.type, arr);
+		}
+
+		return new Type(clazz.getName().replace('.', '/'), arr);
 	}
 
 	/**
@@ -223,16 +238,22 @@ public final class TypeHelper {
 	 * @return void <init>(java.lang.String, double)
 	 */
 	public static String humanize(List<Type> types, String methodName, boolean trimPackage) {
-		Type ret = types.remove(types.size() - 1);
+		Type t = types.remove(types.size() - 1);
 
 		CharList sb = IOUtil.getSharedCharBuf();
-		ret.toString(sb);
+		if (trimPackage && t.owner != null) {
+			String o = t.owner;
+			sb.append(o, o.lastIndexOf('/') + 1, o.length());
+			for (int j = t.array() - 1; j >= 0; j--) sb.append("[]");
+		} else {
+			t.toString(sb);
+		}
 		sb.append(' ').append(methodName).append("(");
 
 		if (!types.isEmpty()) {
 			int i = 0;
 			do {
-				Type t = types.get(i++);
+				t = types.get(i++);
 				if (trimPackage && t.owner != null) {
 					String o = t.owner;
 					sb.append(o, o.lastIndexOf('/') + 1, o.length());
@@ -245,7 +266,7 @@ public final class TypeHelper {
 			} while (true);
 		}
 
-		types.add(ret);
+		types.add(t);
 
 		return sb.append(')').toString();
 	}

@@ -10,7 +10,7 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.config.data.CString;
 import roj.dev.Compiler;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.mapper.ConstMapper;
 import roj.mod.FileFilter.CmtATEntry;
 import roj.text.CharList;
@@ -209,7 +209,7 @@ public final class Project extends FileConfig {
 				} else {
 					resources.clear();
 
-					List<File> files = FileUtil.findAllFiles(resPath, resourceFilter);
+					List<File> files = IOUtil.findAllFiles(resPath, resourceFilter);
 					for (int i = 0; i < files.size(); i++) {
 						String s = files.get(i).getAbsolutePath();
 						String relPath = s.substring(len + 1).replace('\\', '/');

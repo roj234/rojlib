@@ -202,7 +202,7 @@ public abstract class Game {
 
 		fr.setFontSize(24);
 
-		CharList time = new ACalendar(TimeZone.getTimeZone("UTC")).formatDate("H:i:s", System.currentTimeMillis()-startTime);
+		CharList time = new ACalendar(TimeZone.getTimeZone("UTC")).format("H:i:s", System.currentTimeMillis()-startTime);
 		fr.renderString(time, width-fr.getStringWidth(time), 0);
 
 		fr.renderString("加载中", 0, 0);

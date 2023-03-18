@@ -9,10 +9,10 @@ import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.config.data.Type;
-import roj.config.word.StreamAsChars;
 import roj.math.Vec3f;
 import roj.math.Vec3i;
 import roj.math.Vec4d;
+import roj.text.StreamReader;
 
 import java.io.File;
 import java.io.IOException;
@@ -85,7 +85,7 @@ public class RaytraceCulling {
 		try(ZipArchive mzf = new ZipArchive(new File(args[0]))) {
 			for (Map.Entry<String, ZEntry> entry : mzf.getEntries().entrySet()) {
 				if (MODEL.reset(entry.getKey()).matches()) {
-					CMapping data = JSONParser.parses(new StreamAsChars(mzf.getStream(entry.getValue()))).asMap();
+					CMapping data = JSONParser.parses(new StreamReader(mzf.getStream(entry.getValue()))).asMap();
 					if (!data.containsKey("elements")) continue;
 					List<Box> model = loadModel(data.getOrCreateList("elements"));
 					raytraceCull(model);

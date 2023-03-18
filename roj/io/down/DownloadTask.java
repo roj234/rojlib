@@ -5,7 +5,7 @@ import roj.concurrent.TaskPool;
 import roj.concurrent.Waitable;
 import roj.concurrent.task.ITask;
 import roj.io.FastFailException;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.net.ch.ChannelCtx;
@@ -63,7 +63,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 	 * 单线程下载文件
 	 */
 	public static Waitable download(String url, File file, IProgress handler) throws IOException {
-		if (file.isFile()) return new FileUtil.ImmediateFuture();
+		if (file.isFile()) return new IOUtil.ImmediateFuture();
 
 		DownloadTask ad = createTask(url, file, handler);
 		ad.operation = STREAM_DOWNLOAD;
@@ -79,7 +79,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 	 * 多线程下载文件
 	 */
 	public static Waitable downloadMTD(String url, File file, IProgress pg) throws IOException {
-		if (file.isFile()) return new FileUtil.ImmediateFuture();
+		if (file.isFile()) return new IOUtil.ImmediateFuture();
 
 		DownloadTask ad = createTask(url, file, pg);
 		QUERY.pushTask(ad);
@@ -91,7 +91,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 		if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new IOException("无法创建下载目录");
 
 		File info = new File(file.getAbsolutePath() + ".nfo");
-		if (info.isFile() && !FileUtil.checkTotalWritePermission(info)) {
+		if (info.isFile() && !IOUtil.checkTotalWritePermission(info)) {
 			throw new IOException("下载进度文件无法写入");
 		}
 
@@ -157,10 +157,10 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 
 			ctx.removeAll();
 			ctx.addLast("h11@client", client.asChannelHandler())
-			   .addLast("Timer", new Timeout(FileUtil.timeout, 2000))
+			   .addLast("Timer", new Timeout(IOUtil.timeout, 2000))
 			   .addLast("Checker", this);
 
-			client.connect(ctx, FileUtil.timeout);
+			client.connect(ctx, IOUtil.timeout);
 
 			IHttpClient.POLLER.register(ctx, null);
 		} catch (Exception e) {
@@ -207,7 +207,6 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 	@Override
 	public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
 		this.ex = ex;
-		ex.printStackTrace();
 		cancel();
 	}
 
@@ -237,7 +236,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 		this.encoding = encoding;
 
 		File tmpFile = new File(file.getAbsolutePath() + ".tmp");
-		if (len > 0) FileUtil.allocSparseFile(tmpFile, len);
+		if (len > 0) IOUtil.allocSparseFile(tmpFile, len);
 
 		if (operation == STREAM_DOWNLOAD || len < 0 || !"bytes".equals(conn.getHeaderField("accept-ranges"))) {
 			Source tmp = new FileSource(tmpFile);
@@ -403,7 +402,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 					throw new FastFailException("Unknown compress method " + encoding + " in " + tempFile);
 				}
 				try (FileOutputStream fos = new FileOutputStream(file)) {
-					FileUtil.copyStream(in, fos);
+					IOUtil.copyStream(in, fos);
 				} finally {
 					if (inf != null) inf.end();
 				}

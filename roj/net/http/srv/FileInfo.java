@@ -11,7 +11,7 @@ import java.io.InputStream;
  * @since 2023/2/3 0003 15:38
  */
 public interface FileInfo {
-	int CH_DEFL = 1, CH_WANT_DEFL = 2, CH_RA_RAW = 4, CH_RA_DEFL = 8;
+	int FILE_DEFLATED = 1, FILE_WANT_DEFLATE = 2, FILE_RA = 4, FILE_RA_DEFLATE = 8;
 	int stats();
 
 	long length(boolean deflated);

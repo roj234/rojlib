@@ -77,7 +77,7 @@ public class HRRemote {
 		if (modified.size() > 9999) throw new IllegalArgumentException("Too many classes modified");
 
 		ByteList tmp = IOUtil.getSharedByteBuf();
-		tmp.put((byte) 0x66).putShort(modified.size());
+		tmp.put(0x66).putShort(modified.size());
 		for (int i = 0; i < modified.size(); i++) {
 			IClass clz = modified.get(i);
 			tmp.putUTF(clz.name().replace('/', '.'));

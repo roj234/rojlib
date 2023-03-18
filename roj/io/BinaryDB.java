@@ -98,7 +98,7 @@ public class BinaryDB {
 
 			DataFile.PieceLock pLock = file.convertToPiece(id1);
 			try {
-				InputStream in = file.getData1(id1, pLock.file, info);
+				InputStream in = file._getData(id1, pLock.file, info);
 				if (in != null) return new BufferedInputStream(in, 1024) {
 					DataFile.PieceLock p = pLock;
 
@@ -144,20 +144,6 @@ public class BinaryDB {
 		holder[0] = empty;
 		return out;
 	}
-	public long insert(ByteList data) throws IOException {
-		insertLock.lock();
-		long empty;
-		try {
-			empty = nextEmpty;
-			nextInsertIndex();
-		} finally {
-			insertLock.unlock();
-		}
-
-		boolean modify = modify(empty, data, false);
-		if (!modify) throw new AssertionError("Fatal Error: lock violation");
-		return empty;
-	}
 
 	public MyRegionFile.ManagedOutputStream modify(long id, int type, Boolean except) throws IOException {
 		if (id < 0) return null;
@@ -185,7 +171,7 @@ public class BinaryDB {
 						@Override
 						public synchronized void close() throws IOException {
 							if (buf != null) {
-								file.write1(id,p.file,type,buf,file.lock);
+								file._write(id,p.file,buf,file.lock);
 								file.pool.reserve(buf);
 								buf = null;
 							}
@@ -200,36 +186,6 @@ public class BinaryDB {
 				} catch (Throwable e) {
 					lock.unlock();
 					throw e;
-				}
-			}
-
-			lock.unlock();
-		}
-	}
-	public boolean modify(long id, ByteList data, Boolean except) throws IOException {
-		if (id < 0) return false;
-		while (true) {
-			DataFile file = loadFile1(id);
-
-			int subId = (int) (id & chunkMask);
-			if (except != null && except != file.hasData(subId)) return false;
-			if (file.outOfBounds(subId)) return false;
-
-			Lock lock = file.lock;
-			lock.lock();
-			if (file.isOpen()) {
-				try {
-					if (except != null && except != file.hasData(subId)) return false;
-
-					DataFile.PieceLock pLock = file.convertToPiece(subId);
-					try {
-						file.write1(subId, pLock.file, MyRegionFile.PLAIN, data, lock);
-					} finally {
-						pLock.unlock();
-					}
-					return true;
-				} finally {
-					lock.unlock();
 				}
 			}
 
@@ -423,8 +379,8 @@ public class BinaryDB {
 
 		public DataFile(File file, int chunkSize, int fileCap, BufferPool pool, int flags) throws IOException {
 			super(new FileSource(file), chunkSize, fileCap, flags);
-			load();
 			this.pool = pool;
+			load();
 		}
 
 		private PieceLock convertToPiece(int id) throws IOException {
@@ -523,12 +479,7 @@ public class BinaryDB {
 		private final class PieceLock extends AbstractQueuedSynchronizer {
 			int _id;
 			final Source file;
-			MyInflaterInputStream iin = new MyInflaterInputStream(new InputStream() {
-				@Override
-				public int read() throws IOException {
-					return -1;
-				}
-			});
+			MyInflaterInputStream iin = new MyInflaterInputStream(new LimitInputStream(null,0));
 			MyDeflaterOutputStream din = new MyDeflaterOutputStream(DummyOutputStream.INSTANCE);
 
 			PieceLock(Source source) {

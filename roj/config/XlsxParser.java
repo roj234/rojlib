@@ -7,9 +7,9 @@ import roj.config.data.XElement;
 import roj.config.data.XEntry;
 import roj.config.data.XHeader;
 import roj.config.word.ITokenizer;
-import roj.config.word.StreamAsChars;
 import roj.io.FastFailException;
-import roj.math.MathUtils;
+import roj.text.StreamReader;
+import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
 import java.io.File;
@@ -173,14 +173,14 @@ public abstract class XlsxParser extends XMLParser {
 			yPos += v;
 		}
 
-		xy[0] = MathUtils.parseInt(str, i, str.length(), 10);
+		xy[0] = TextUtil.parseInt(str, i, str.length(), 10);
 		xy[1] = yPos;
 	}
 
 	private XHeader readWith(ZipFile zip, ZipEntry entry, Consumer<XEntry> c) throws IOException,ParseException {
 		try (InputStream in = zip.getInputStream(entry)) {
 			consumer = c;
-			return parseTo1(new StreamAsChars(in, cs), 0);
+			return parseTo1(new StreamReader(in, cs), 0);
 		} finally {
 			clearIPool();
 		}

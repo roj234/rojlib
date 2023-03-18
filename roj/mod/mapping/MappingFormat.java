@@ -264,6 +264,8 @@ public class MappingFormat {
 
 		for (Map.Entry<Desc, String> entry : tsrgCompile.getMethodMap().entrySet()) {
 			Desc k = entry.getKey();
+			// useless entry
+			if (k.name.equals(entry.getValue())) continue;
 
 			md.owner = klassRev.getOrDefault(k.owner, k.owner);
 			md.name = entry.getValue();
@@ -271,7 +273,7 @@ public class MappingFormat {
 
 			List<String> param = params.remove(md);
 			if (param != null) {
-				System.out.println("MappingFormat.java:274: re-transform: " + md + " => " + k.name);
+				System.out.println("MappingFormat.java:276: mapped param: " + md + " => " + k.name);
 				md.name = k.name;
 				params.put(md.copy(), param);
 			}

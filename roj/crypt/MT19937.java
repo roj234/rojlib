@@ -27,6 +27,7 @@ public class MT19937 extends Random {
 		MT[0] = (int) (seed ^ (seed >>> 32));
 		for(int i = 1; i < 624; i++)
 			MT[i] = 1812433253 * (MT[i-1] ^ (MT[i-1] >>> 30)) + i;
+		this.i = 0;
 	}
 
 	private void nextIter() {

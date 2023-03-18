@@ -112,7 +112,7 @@ public abstract class WorkspaceBuilder implements ITask {
 					wait();
 				} catch (InterruptedException ignored) {}
 			}
-			Shared.Task.waitUntilFinish();
+			Shared.Task.awaitFinish();
 		}
 		if (error != 0) CmdUtil.warning("错误码 "+error);
 		return error == 0;

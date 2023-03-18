@@ -9,12 +9,9 @@ import java.util.NoSuchElementException;
  */
 public abstract class AbstractIterator<T> implements Iterator<T> {
 	protected T result;
-	protected int stage = INITIAL;
+	protected byte stage = INITIAL;
 
-	public static final int INITIAL = 0;
-	public static final int GOTTEN = 1;
-	public static final int CHECKED = 2;
-	public static final int ENDED = 3;
+	public static final byte INITIAL = 0, GOTTEN = 1, CHECKED = 2, ENDED = 3;
 
 	@Override
 	public final boolean hasNext() {

@@ -202,7 +202,7 @@ class NiximRenderGlobal extends RenderGlobal {
 
 							MCHooksClient.rpl_renderNameTag(partialTicks, rm, entity);
 						} else {
-							++countEntitiesRendered;
+							countEntitiesRendered++;
 
 							rm.renderEntityStatic(entity, partialTicks, false);
 

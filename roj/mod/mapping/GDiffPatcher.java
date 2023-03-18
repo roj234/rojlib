@@ -1,8 +1,9 @@
 package roj.mod.mapping;
 
-import LZMA.LzmaInputStream;
+import roj.archive.qz.xz.LZMAInputStream;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
+import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.io.JarReaderStream;
 import roj.reflect.ReflectionUtils;
@@ -106,7 +107,7 @@ public final class GDiffPatcher {
 
 	private static void append(int len, ByteList src, ByteList dst) {
 		dst.ensureCapacity(dst.wIndex() + len);
-		System.arraycopy(src.list, src.rIndex, dst.list, dst.wIndex(), len);
+		System.arraycopy(src.list, src.rIndex+src.arrayOffset(), dst.list, dst.arrayOffset()+dst.wIndex(), len);
 		src.rIndex += len;
 		dst.wIndex(dst.wIndex() + len);
 	}
@@ -126,6 +127,20 @@ public final class GDiffPatcher {
 		ByteList patch = patch(name, data, serverPatches);
 		if (patch != null) serverSuccessCount++;
 		return patch;
+	}
+
+	public void patchClientEmpty(List<Context> ctx) { patchEMPTY(clientPatches, ctx); }
+	public void patchServerEmpty(List<Context> ctx) { patchEMPTY(serverPatches, ctx); }
+	private void patchEMPTY(Map<String, List<Patch>> patches, List<Context> ctx) {
+		for (Map.Entry<String, List<Patch>> entry : patches.entrySet()) {
+			if (entry.getValue().get(0).exist) {
+				CmdUtil.warning("missing " + entry.getKey());
+				continue;
+			}
+			String name = entry.getKey();
+			ByteList patch = patch(name, ByteList.EMPTY, patches);
+			ctx.add(new Context(name, patch));
+		}
 	}
 
 	public ByteList patch(String name, ByteList data, Map<String, List<Patch>> patchMap) {
@@ -150,7 +165,7 @@ public final class GDiffPatcher {
 				adler32.reset();
 				if (patch.checksum != inputChecksum) {
 					errorCount++;
-					CmdUtil.warning("类 " + patch.source + " 的效验码不正确.");
+					CmdUtil.warning("类 " + patch.source + " 的校验码不正确.");
 					return null;
 				}
 			}
@@ -174,7 +189,7 @@ public final class GDiffPatcher {
 
 	public void setup113(InputStream serverStream, Map<String, String> unmapper) {
 		try {
-			try (LzmaInputStream decompressed = new LzmaInputStream(serverStream)) {
+			try (LZMAInputStream decompressed = new LZMAInputStream(serverStream)) {
 				serverPatches = new MyHashMap<>();
 				ZipInputStream zis = new ZipInputStream(decompressed);
 				ZipEntry ze;
@@ -199,16 +214,16 @@ public final class GDiffPatcher {
 	public void setup112(InputStream in) {
 		if (ReflectionUtils.JAVA_VERSION >= 14) throw new IllegalArgumentException("Java14起删除了Pack200 再说了你写1.12的mod用啥J"+ReflectionUtils.JAVA_VERSION);
 		try {
-			try (LzmaInputStream decompressed = new LzmaInputStream(in)) {
+			try (LZMAInputStream decompressed = new LZMAInputStream(in)) {
 				clientPatches = new MyHashMap<>();
 				serverPatches = new MyHashMap<>();
 				JarOutputStream jos = new JarReaderStream(((entry, bl) -> {
 					try {
 						Patch cp = readPatch(bl);
 						if (entry.getName().startsWith("binpatch/client")) {
-							clientPatches.computeIfAbsent(cp.source + ".class", Helpers.fnArrayList()).add(cp);
+							clientPatches.computeIfAbsent(cp.source+".class", Helpers.fnArrayList()).add(cp);
 						} else if (entry.getName().startsWith("binpatch/server")) {
-							serverPatches.computeIfAbsent(cp.source + ".class", Helpers.fnArrayList()).add(cp);
+							serverPatches.computeIfAbsent(cp.source+".class", Helpers.fnArrayList()).add(cp);
 						} else {
 							CmdUtil.warning("未知名字 " + entry.getName());
 						}
@@ -263,7 +278,7 @@ public final class GDiffPatcher {
 		public final int checksum;
 
 		public Patch(String source, String target, boolean exist, int checksum, byte[] patch) {
-			this.source = source;
+			this.source = source.replace('.', '/');
 			//this.target = target;
 			this.exist = exist;
 			this.checksum = checksum;
@@ -271,7 +286,7 @@ public final class GDiffPatcher {
 		}
 
 		public String toString() {
-			return "Src: " + source + " Patch.length: " + patch.length + ", Target.length: " + (exist ? " > 0" : " = 0");
+			return "Name=" + source + ",Len=" + patch.length + ",Exist=" + exist;
 		}
 	}
 }

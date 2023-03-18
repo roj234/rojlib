@@ -5,7 +5,6 @@ package roj.net.http;
  * @since 2020/11/28 20:17
  */
 public final class Action {
-	public static final int MAY_BODY = 0b10110;
 	public static final int GET = 0, POST = 1, PUT = 2, HEAD = 3, DELETE = 4, OPTIONS = 5, TRACE = 6, CONNECT = 7;
 
 	public static int valueOf(String name) {

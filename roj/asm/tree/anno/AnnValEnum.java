@@ -10,29 +10,18 @@ import roj.util.DynByteBuf;
 public final class AnnValEnum extends AnnVal {
 	public AnnValEnum(String type, String value) {
 		// 当你已知这不可能是基本类型...
-		this.clazz = type.substring(1, type.length() - 1);
+		this.clazz = type.substring(1, type.length()-1);
 		this.value = value;
 	}
 
 	public String clazz, value;
 
-	@Override
-	public AnnValEnum asEnum() {
-		return this;
-	}
+	public AnnValEnum asEnum() { return this; }
 
-	public void toByteArray(ConstantPool pool, DynByteBuf w) {
-		w.put((byte) ENUM).putShort(pool.getUtfId("L" + this.clazz + ';')).putShort(pool.getUtfId(value));
-	}
+	public byte type() { return ENUM; }
 
-	public String toString() {
-		return String.valueOf(clazz) + '.' + value;
-	}
-
-	@Override
-	public byte type() {
-		return ENUM;
-	}
+	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) ENUM).putShort(cp.getUtfId("L" + clazz + ';')).putShort(cp.getUtfId(value)); }
+	public String toString() { return String.valueOf(clazz) + '.' + value; }
 
 	@Override
 	public boolean equals(Object o) {

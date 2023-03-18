@@ -26,10 +26,6 @@ public final class AttributeList extends SimpleList<Attribute> {
 		if (l.size > 0 && l.byName != null) byName = new MyHashMap<>(l.byName);
 	}
 
-	public void putByName(Attribute attr) {
-		add(attr);
-	}
-
 	public Object getByName(String name) {
 		if (byName == null) {
 			if (size < THE_SIZE) {
@@ -47,13 +43,13 @@ public final class AttributeList extends SimpleList<Attribute> {
 	private Attribute _find(String name) {
 		for (int i = 0; i < size; i++) {
 			Attribute attr = (Attribute) list[i];
-			byName.put(attr.name, attr);
+			byName.put(attr.name(), attr);
 		}
 		return byName.get(name);
 	}
 	private int _indexOf(String name) {
 		for (int i = 0; i < size; i++) {
-			if (((Attribute) list[i]).name.equals(name)) {
+			if (((Attribute) list[i]).name().equals(name)) {
 				return i;
 			}
 		}
@@ -62,7 +58,7 @@ public final class AttributeList extends SimpleList<Attribute> {
 
 	public boolean removeByName(String name) {
 		for (int i = 0; i < size; i++) {
-			if (((Attribute) list[i]).name.equals(name)) {
+			if (((Attribute) list[i]).name().equals(name)) {
 				remove(i);
 				return true;
 			}
@@ -73,13 +69,18 @@ public final class AttributeList extends SimpleList<Attribute> {
 	@Override
 	public Attribute remove(int i) {
 		Attribute attr = super.remove(i);
-		if (byName != null) byName.remove(attr.name);
+		if (byName != null) byName.remove(attr.name());
 		return attr;
 	}
 
 	@Override
 	public void clear() {
 		super.clear();
+		if (byName != null) byName.clear();
+	}
+
+	public void i_direct_add(Attribute attr) {
+		super.add(attr);
 		if (byName != null) byName.clear();
 	}
 
@@ -91,13 +92,13 @@ public final class AttributeList extends SimpleList<Attribute> {
 
 			Object[] o = list;
 			for (int i = 0; i < size; i++) {
-				if (((Attribute) o[i]).name.equals(attr.name)) {
+				if (((Attribute) o[i]).name().equals(attr.name())) {
 					o[i] = attr;
 					return true;
 				}
 			}
 		} else {
-			Attribute a1 = byName.put(attr.name, attr);
+			Attribute a1 = byName.put(attr.name(), attr);
 			if (a1 != null) {
 				list[indexOfAddress(a1)] = attr;
 				return true;
@@ -110,8 +111,8 @@ public final class AttributeList extends SimpleList<Attribute> {
 	public Attribute set(int i, Attribute now) {
 		Attribute prev = super.set(i, now);
 		if (byName != null) {
-			byName.remove(prev.name);
-			byName.put(now.name, now);
+			byName.remove(prev.name());
+			byName.put(now.name(), now);
 		}
 		return prev;
 	}

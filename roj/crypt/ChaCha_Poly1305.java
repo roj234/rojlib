@@ -4,202 +4,124 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import javax.crypto.AEADBadTagException;
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
 import javax.crypto.ShortBufferException;
-import java.nio.ByteBuffer;
-import java.util.Random;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.SecureRandom;
+import java.security.spec.AlgorithmParameterSpec;
 
 /**
- * ChaCha_Poly1305: <br>
- * <a href="https://www.rfc-editor.org/info/rfc8439">RFC8439</a>
+ * ChaCha_Poly1305: <a href="https://www.rfc-editor.org/info/rfc8439">RFC8439</a>
  *
  * @author solo6975
  * @since 2022/2/14 13:40
  */
-public class ChaCha_Poly1305 implements CipheR {
-	public static final String NONCE = "IV", AAD = "AAD", PRNG = "PRNG";
-	static final int INITED = 2;
-
+public final class ChaCha_Poly1305 extends RCipherSpi {
 	final ChaCha c;
-	final Poly1305 p;
-	final ByteList tb;
+	final Poly1305 p = new Poly1305();
+	final ByteList tmp = ByteList.allocate(32,32);
 
-	private byte[] aad;
-	private byte flag;
-	private long processed;
+	private long lenAAD, processed;
 
-	Random prng;
+	private boolean decrypt;
+	private byte state;
 
-	public ChaCha_Poly1305() {
-		this(new ChaCha());
+	private ChaCha_Poly1305(ChaCha c) { this.c = c; }
+	public static RCipherSpi ChaCha1305() { return new ChaCha_Poly1305(new ChaCha()); }
+	public static RCipherSpi XChaCha1305() { return new ChaCha_Poly1305(new XChaCha()); }
+
+	public final void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
+		c.init(mode, key, par, random);
+		this.decrypt = mode == Cipher.DECRYPT_MODE;
 	}
 
-	public ChaCha_Poly1305(ChaCha chacha) {
-		this.c = chacha;
-		this.p = new Poly1305();
-		this.tb = new ByteList(32);
-	}
-
-	public final void setPRNG(Random rng) {
-		this.prng = rng;
-	}
-
-	public final Random getPRNG() {
-		return prng;
-	}
+	public int engineGetOutputSize(int data) { return decrypt ? data - 16 : data + 16; }
 
 	@Override
-	public String getAlgorithm() {
-		return "ChaCha_Poly1305";
-	}
+	public final void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
+		if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
 
-	@Override
-	public int getMaxKeySize() {
-		return 32;
-	}
-
-	@Override
-	public final void setKey(byte[] key, int flags) {
-		c.setKey(key, flags);
-		this.flag = (byte) flags;
-	}
-
-	public final void setAAD(byte[] aad) {
-		this.aad = aad;
-	}
-
-	// Note that it is not acceptable to use a truncation of a counter encrypted with a
-	// 128-bit or 256-bit cipher, because such a truncation may repeat after a short time.
-	public final void setNonce(byte[] nonce) {
-		c.setNonce(nonce);
-	}
-
-	@Override
-	public final void setOption(String key, Object value) {
-		switch (key) {
-			case NONCE:
-				c.setNonce((byte[]) value);
-				break;
-			case AAD:
-				aad = (byte[]) value;
-				break;
-			case PRNG:
-				prng = (Random) value;
-				break;
+		if (state != 2) {
+			if (state == 0) cryptBegin();
+			else finishAAD();
+			state = 2;
 		}
-	}
 
-	@Override
-	public final int getBlockSize() {
-		return 0;
-	}
+		if (decrypt) {
+			in.wIndex(in.wIndex() - 16);
+			if (in.isReadable()) {
+				processed += in.readableBytes();
 
-	@Override
-	public int getCryptSize(int data) {
-		return (flag & DECRYPT) != 0 ? data - 16 : data + 16;
-	}
+				int pos = in.rIndex;
+				p.update(in);
+				in.rIndex = pos;
 
-	void generateNonce(int[] key) {
-		key[13] = prng.nextInt();
-		key[14] = prng.nextInt();
-		key[15] = prng.nextInt();
-	}
-
-	@Override
-	public final void crypt(DynByteBuf in, DynByteBuf out) throws AEADBadTagException, ShortBufferException {
-		if ((flag & CipheR.DECRYPT) == 0) {
-			if (out.writableBytes() < in.readableBytes() + 16) throw new ShortBufferException();
-			cryptBegin();
-			encrypt(in, out);
-			out.put(getHash().list, 0, 16);
+				c.crypt(in, out);
+			}
+			in.wIndex(in.wIndex() + 16);
 		} else {
-			if (out.writableBytes() < in.readableBytes() - 16) throw new ShortBufferException();
-			if (!in.isReadable()) return;
-			cryptBegin();
-			in.wIndex(in.wIndex()-16);
-			decrypt(in, out);
-			in.wIndex(in.wIndex()+16);
-			decryptFinal(in);
+			processed += in.readableBytes();
+
+			int pos = out.wIndex();
+
+			c.crypt(in, out);
+			p.update(out.slice(pos, out.wIndex()-pos));
+		}
+	}
+	public void cryptFinal1(DynByteBuf in, DynByteBuf out) throws ShortBufferException, BadPaddingException {
+		if (decrypt) {
+			if (in.readableBytes() < 16) throw new ShortBufferException();
+
+			finalBlock();
+			tmp.clear();
+			p.digest(tmp);
+
+			int v = 0;
+			for (int i = 3; i >= 0; i--) v |= tmp.readInt() ^ in.readInt();
+			if (v != 0) throw new AEADBadTagException();
+		} else {
+			if (out.writableBytes() < 16) throw new ShortBufferException();
+
+			finalBlock();
+			p.digest(out);
 		}
 	}
 
-	public final void cryptBegin() {
+	public final void insertAAD(DynByteBuf aad) {
+		if (state == 0) {
+			cryptBegin();
+			state = 1;
+		} else if (state > 1) throw new IllegalStateException("AAD 必须在加密开始前提供");
+
+		lenAAD += aad.readableBytes();
+		p.update(aad);
+	}
+	private void finishAAD() {
+		int len = (int) (lenAAD & 15);
+		while ((len++ & 15) != 0) p.update((byte) 0);
+	}
+
+	private void cryptBegin() {
 		ChaCha c = this.c;
-		int[] key = c.key;
 
-		if (prng != null) generateNonce(key);
-
-		key[12] = 0;
 		c.reset();
 		c.KeyStream();
 
-		byte[] l = tb.list;
-		Conv.i2b(c.tmp, 0, 8, l, 0);
+		tmp.clear();
+		for (int i = 0; i < 8; i++) tmp.putInt(c.tmp[i]);
 
-		Poly1305 p = this.p;
-		p.setSignKey(l);
+		p.setSignKey(tmp.list);
 
-		byte[] aad = this.aad;
-		if (aad != null) {
-			int len = aad.length;
-			p.update(aad);
-			while ((len++ & 15) != 0) p.update((byte) 0);
-		}
-
-		processed = 0;
-		flag |= INITED;
+		lenAAD = processed = 0;
 	}
-	public final void encrypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
-		int len = in.readableBytes();
-		int pos = out.wIndex();
-		c.crypt(in, out);
-
-		if (out.hasArray()) p.update(out.array(), out.arrayOffset()+pos, out.wIndex()-pos);
-		else {
-			ByteBuffer buf = out.nioBuffer();
-			buf.limit(out.wIndex()).position(pos);
-			p.update(buf);
-		}
-
-		processed += len;
-	}
-	public final void decrypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
-		if (in.hasArray()) p.update(in.array(), in.arrayOffset()+in.rIndex, in.readableBytes());
-		else {
-			ByteBuffer bb = in.nioBuffer();
-			bb.limit(bb.limit() - 16);
-			p.update(bb);
-		}
-
-		processed += in.readableBytes();
-
-		c.crypt(in, out);
-	}
-	public final void decryptFinal(DynByteBuf in) throws AEADBadTagException {
-		ByteList h = getHash();
-		int ok = 0;
-		//  If the timing of the tag comparison operation reveals how long
-		//  a prefix of the calculated and received tags is identical.
-		for (int i = 3; i >= 0; i--) {
-			ok |= h.readInt() ^ in.readInt();
-		}
-		if (ok != 0) throw new AEADBadTagException();
-	}
-	public final ByteList getHash() {
-		if ((flag & INITED) == 0) return tb;
-
+	private void finalBlock() {
 		int len = (int) (processed & 15);
 		while ((len++ & 15) != 0) p.update((byte) 0);
 
-		ByteList tb = this.tb;
-		tb.clear();
-		tb.putLongLE(aad == null ? 0 : aad.length).putLongLE(processed);
+		ByteList tb = tmp; tb.clear();
+		tb.putLongLE(lenAAD).putLongLE(processed);
 		p.update(tb.list, 0, 16);
-		tb.clear();
-
-		p._digestFinal(p.bList, tb);
-
-		flag &= ~INITED;
-
-		return tb;
 	}
 }

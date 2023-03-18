@@ -4,7 +4,7 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 
 import static roj.asm.type.Generic.EX_EXTENDS;
-import static roj.asm.type.Generic.EX_SUPERS;
+import static roj.asm.type.Generic.EX_SUPER;
 
 /**
  * @author Roj234
@@ -50,7 +50,7 @@ public final class TypeParam implements IType {
 
 	@Override
 	public void toDesc(CharList sb) {
-		if (extendType != 0) sb.append(extendType == EX_SUPERS ? '-' : '+');
+		if (extendType != 0) sb.append(extendType == EX_SUPER ? '-' : '+');
 		for (int i = array & 0xFF; i > 0; i--) sb.append("[");
 		sb.append('T').append(name).append(';');
 	}
@@ -58,7 +58,7 @@ public final class TypeParam implements IType {
 	@Override
 	public void toString(CharList sb) {
 		switch (extendType) {
-			case EX_SUPERS: sb.append("? super "); break;
+			case EX_SUPER: sb.append("? super "); break;
 			case EX_EXTENDS: sb.append("? extends "); break;
 		}
 
@@ -84,8 +84,8 @@ public final class TypeParam implements IType {
 	@Override
 	public int hashCode() {
 		int result = name.hashCode();
-		result = 31 * result + (int) extendType;
-		result = 31 * result + (int) array;
+		result = 31 * result + extendType;
+		result = 31 * result + array;
 		return result;
 	}
 

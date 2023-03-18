@@ -64,7 +64,7 @@ public class HFTP implements Router {
 
 			ServerLaunch.tcp().listen(null, Integer.parseInt(args[1])).initializator((ctx) -> {
 				ctx/*.addLast("MSS", new MSSCipher(factory.newEngine()))*/
-				   .addLast("Http", new HttpServer11(router));
+				   .addLast("Http", HttpServer11.create(router));
 			}).launch();
 		}
 	}
@@ -80,7 +80,7 @@ public class HFTP implements Router {
 	@Override
 	public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
 		if (req.path().equals("upload") && cfg != null) {
-			cfg.postMaxLength(Integer.MAX_VALUE);
+			cfg.postAccept(Integer.MAX_VALUE, 0);
 		}
 		router.checkHeader(req, cfg);
 	}
@@ -142,7 +142,7 @@ public class HFTP implements Router {
 
 		if (req.path().equals("del")) return f.delete()?"ok":"fail";
 
-		return new HttpFile(f).response(req, rh);
+		return new DiskFileInfo(f).response(req, rh);
 	}
 
 	@Route

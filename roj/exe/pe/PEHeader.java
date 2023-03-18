@@ -173,7 +173,7 @@ public class PEHeader implements PESegment {
 		  .append("\n  区段:        ")
 		  .append((int) sectionCount)
 		  .append("\n  时间戳:      ")
-		  .append(new ACalendar().formatDate("Y-m-d H:i:s", getTimestamp()))
+		  .append(ACalendar.toLocalTimeString(getTimestamp()))
 		  .append("\n  符号表:      0x")
 		  .append(Integer.toHexString(symbolTableOffset))
 		  .append(" @ Size=")

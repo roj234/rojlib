@@ -25,6 +25,6 @@ public class LCTime implements LogComponent {
 	public void appendTo(LogContext ctx, Map<String, Object> tmp, CharList cl) {
 		ACalendar cal = (ACalendar) tmp.get("LCAL");
 		if (cal == null) tmp.put("LCAL", cal = new ACalendar());
-		cal.formatDate(format, System.currentTimeMillis(), cl);
+		cal.format(format, System.currentTimeMillis(), cl);
 	}
 }

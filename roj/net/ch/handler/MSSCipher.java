@@ -2,12 +2,11 @@ package roj.net.ch.handler;
 
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.Event;
 import roj.net.mss.MSSEngine;
 import roj.net.mss.MSSEngineClient;
 import roj.net.mss.MSSException;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.NamespaceKey;
 
 import java.io.IOException;
 
@@ -18,8 +17,8 @@ import static roj.util.ByteList.EMPTY;
  * @since 2022/5/17 13:11
  */
 public class MSSCipher extends PacketMerger {
-	public static final NamespaceKey MSS_NOTIFY = NamespaceKey.of("mss:close_notify");
 	private final MSSEngine engine;
+	private boolean sslMode;
 
 	public MSSCipher(MSSEngine engine) {
 		super();
@@ -31,32 +30,31 @@ public class MSSCipher extends PacketMerger {
 		this.engine = new MSSEngineClient();
 	}
 
+	public MSSCipher sslMode() {
+		sslMode = true;
+		return this;
+	}
+
+	public MSSEngine getEngine() { return engine; }
+
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
-		handShake(engine, ctx, EMPTY);
-		if (engine.isHandshakeDone()) {
-			ctx.channelOpened();
-		}
+		handshake(ctx, EMPTY);
+		if (engine.isHandshakeDone()) ctx.channelOpened();
 	}
 
 	@Override
 	public void channelWrite(ChannelCtx ctx, Object msg) throws IOException {
 		if (!ctx.isOutputOpen()) return;
 
-		DynByteBuf data = (DynByteBuf) msg;
-
-		int req;
+		DynByteBuf in = (DynByteBuf) msg;
 		DynByteBuf out = ctx.allocate(false, 1024);
 		try {
 			do {
-				req = engine.wrap(data, out);
-				if (req >= 0) {
-					ctx.channelWrite(out);
-				} else {
-					ctx.reserve(out);
-					out = ctx.allocate(false, -req);
-				}
-			} while (data.isReadable());
+				int req = engine.wrap(in, out);
+				if (req >= 0) ctx.channelWrite(out);
+				else out = ctx.alloc().expand(out,-req);
+			} while (in.isReadable());
 		} finally {
 			ctx.reserve(out);
 		}
@@ -64,97 +62,89 @@ public class MSSCipher extends PacketMerger {
 
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
-		DynByteBuf data = (DynByteBuf) msg;
+		DynByteBuf in = (DynByteBuf) msg;
 
 		if (!engine.isHandshakeDone()) {
-			handShake(engine, ctx, data);
-			if (engine.isHandshakeDone()) {
-				ctx.channelOpened();
-				if (!data.isReadable()) return;
-			} else {
-				return;
-			}
+			handshake(ctx, in);
+			if (!engine.isHandshakeDone()) return;
+
+			ctx.channelOpened();
+			if (!in.isReadable()) return;
 		}
 
-		int req;
 		DynByteBuf out = ctx.allocate(false, 1024);
 		try {
-			do {
-				req = engine.unwrap(data, out);
-				if (!out.isReadable()) return;
-
-				if (req < 0) {
-					int cap = out.capacity()-req;
-					ctx.reserve(out);
-					out = ctx.allocate(false, cap);
-				} else {
+			while (true) {
+				int req = engine.unwrap(in, out);
+				if (req > 0) {
+					out = ctx.alloc().expand(out, req);
+				} else if (req == 0) {
 					mergedRead(ctx, out);
 					out.clear();
-					if (!data.isReadable()) return;
+
+					if (!in.isReadable()) return;
+				} else {
+					return;
 				}
-			} while (true);
+			}
 		} finally {
 			ctx.reserve(out);
 		}
 	}
 
-	private static void handShake(MSSEngine engine, ChannelCtx ctx, DynByteBuf recv) throws IOException {
+	private void handshake(ChannelCtx ctx, DynByteBuf rx) throws IOException {
 		int req;
 
-		DynByteBuf out = ctx.allocate(true, 1024);
+		DynByteBuf tx = ctx.allocate(true, 1024);
 		try {
 			do {
 				try {
-					req = engine.handshake(out, recv);
+					req = sslMode ? engine.handshakeSSL(tx, rx) : engine.handshake(tx, rx);
 				} catch (MSSException e) {
-					if (!engine.isClientMode()) {
-						ctx.channelWrite(IOUtil.getSharedByteBuf().putAscii("" +
+					if (!engine.isClientMode() && e.code == MSSEngine.ILLEGAL_PACKET) {
+						ctx.channelWrite(IOUtil.getSharedByteBuf().putAscii(
 							"HTTP/1.1 400 Bad Request\r\n" +
-							"Connection: close\r\n" +
-							"\r\n" +
-							"<h1>This is a MSS protocol server</h1>"));
+								"Connection: close\r\n" +
+								"\r\n" +
+								"<h1>This is not a HTTP server</h1>"));
 					}
 					throw e;
 				}
 				switch (req) {
 					case MSSEngine.HS_OK:
-						if (out.wIndex() > 0) {
-							ctx.channelWrite(out);
-							out.clear();
+						if (tx.wIndex() > 0) {
+							ctx.channelWrite(tx);
+							tx.clear();
 						}
 						if (engine.isHandshakeDone()) return;
 						break;
 					case MSSEngine.HS_BUFFER_UNDERFLOW: return;
-					case MSSEngine.HS_BUFFER_OVERFLOW:
-						ctx.reserve(out);
-						out = ctx.allocate(true, engine.getBufferSize());
+					default: // overflow
+						tx = ctx.alloc().expand(tx,req);
 				}
 			} while (true);
 		} finally {
-			ctx.reserve(out);
+			ctx.reserve(tx);
 		}
 	}
 
 	@Override
 	public void channelClosed(ChannelCtx ctx) throws IOException {
 		super.channelClosed(ctx);
-
-		try {
-			channelWrite(ctx, EMPTY);
-		} catch (IOException ignored) {}
-		engine.close(null);
+		engine.close();
 	}
 
 	@Override
-	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id.equals(MSS_NOTIFY)) {
-			if (engine.isClosed()) {
-				event.setResult(Event.RESULT_DENY);
-			} else {
-				event.setResult(Event.RESULT_ACCEPT);
-				engine.close(String.valueOf(event.getData()));
-				channelWrite(ctx, EMPTY);
+	public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
+		if (ex instanceof MSSException) {
+			if (!sslMode) {
+				try {
+					ByteList ob = IOUtil.getSharedByteBuf();
+					((MSSException) ex).notifyRemote(engine, ob);
+					ctx.channelWrite(ob);
+				} catch (Exception ignored) {}
 			}
 		}
+		ctx.exceptionCaught(ex);
 	}
 }

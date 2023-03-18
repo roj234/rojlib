@@ -39,8 +39,7 @@ public class SafeInputStream extends InputStream {
 		try {
 			return in.read();
 		} catch (IOException e) {
-			ex = e;
-			closed = true;
+			kaboom(e);
 			return -1;
 		}
 	}

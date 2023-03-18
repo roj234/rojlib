@@ -1,6 +1,6 @@
 package roj.sql;
 
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -17,7 +17,7 @@ public class DbStatement {
 
 	public DbStatement(String query) {
 		this.query = query;
-		this.values = EmptyArrays.OBJECTS;
+		this.values = ArrayCache.OBJECTS;
 	}
 
 	public DbStatement(String query, Object... values) {

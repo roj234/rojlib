@@ -17,14 +17,14 @@ import java.util.Map;
 public final class SwitchInsnNode extends InsnNode {
 	public SwitchInsnNode(byte code) {
 		super(code);
-		this.branches = new BSLowHeap<>(null);
+		this.targets = new BSLowHeap<>(null);
 	}
 
-	public SwitchInsnNode(byte code, InsnNode def, List<SwitchEntry> branches) {
+	public SwitchInsnNode(byte code, InsnNode def, List<SwitchEntry> targets) {
 		super(code);
 		this.def = def;
-		this.branches = branches;
-		branches.sort(null);
+		this.targets = targets;
+		targets.sort(null);
 	}
 
 	@Override
@@ -42,14 +42,18 @@ public final class SwitchInsnNode extends InsnNode {
 	}
 
 	public InsnNode def;
-	public List<SwitchEntry> branches;
+	public List<SwitchEntry> targets;
 
 	private Label defLabel;
 
+	public void branch(int number, InsnNode label) {
+		targets.add(new SwitchEntry(number, label));
+	}
+
 	@Override
-	public void preSerialize(CodeWriter c, Map<InsnNode, Label> labels) {
-		for (int i = 0; i < branches.size(); i++) {
-			SwitchEntry entry = branches.get(i);
+	public void preSerialize(Map<InsnNode, Label> labels) {
+		for (int i = 0; i < targets.size(); i++) {
+			SwitchEntry entry = targets.get(i);
 			InsnNode node = validate((InsnNode) entry.pos);
 			entry.pos = node;
 			entry.insnPos = AttrCode.monitorNode(labels, node);
@@ -63,20 +67,20 @@ public final class SwitchInsnNode extends InsnNode {
 
 	@Override
 	public int nodeSize(int prevBci) {
-		return pad(prevBci) + (code == Opcodes.TABLESWITCH ? 1 + 4 + 8 + (branches.size() << 2) : 1 + 8 + (branches.size() << 3));
+		return pad(prevBci) + (code == Opcodes.TABLESWITCH ? 1 + 4 + 8 + (targets.size() << 2) : 1 + 8 + (targets.size() << 3));
 	}
 
 	@Override
 	public void serialize(CodeWriter cw) {
 		SwitchSegment sin = CodeWriter.newSwitch(code);
 		sin.def = defLabel;
-		sin.targets = branches;
+		sin.targets = targets;
 		cw.switches(sin);
 	}
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder(super.toString()).append(" {\n");
-		for (SwitchEntry entry : branches) {
+		for (SwitchEntry entry : targets) {
 			sb.append("        ").append(entry.key).append(" => #").append(entry.getBci()).append('\n');
 		}
 		return sb.append("        default: ").append(def).append("\n    }").toString();

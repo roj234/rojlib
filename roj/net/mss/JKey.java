@@ -1,8 +1,8 @@
 package roj.net.mss;
 
-import javax.crypto.Cipher;
 import java.security.GeneralSecurityException;
 import java.security.PublicKey;
+import java.security.Signature;
 
 /**
  * @author solo6975
@@ -26,10 +26,10 @@ public class JKey implements MSSPublicKey {
 	}
 
 	@Override
-	public Cipher publicCipher() {
+	public Signature verifier() {
 		try {
-			Cipher c = Cipher.getInstance(key.getAlgorithm());
-			c.init(Cipher.DECRYPT_MODE, key);
+			Signature c = Signature.getInstance("NONEwith"+key.getAlgorithm());
+			c.initVerify(key);
 			return c;
 		} catch (GeneralSecurityException e) {
 			throw new IllegalStateException("Should not happen");

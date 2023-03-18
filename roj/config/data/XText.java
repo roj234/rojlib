@@ -1,6 +1,7 @@
 package roj.config.data;
 
 import roj.config.XMLParser;
+import roj.text.CharList;
 
 /**
  * @author Roj234
@@ -29,12 +30,8 @@ public final class XText extends XEntry {
 		return CString.valueOf(value);
 	}
 
-	@Override
-	protected void toXML(StringBuilder sb, int depth) {
-		toCompatXML(sb);
-	}
-	@Override
-	protected void toCompatXML(StringBuilder sb) {
+	protected void toXML(CharList sb, int depth) { toCompatXML(sb); }
+	protected void toCompatXML(CharList sb) {
 		if (CDATA_flag == ALWAYS_ENCODE || (CDATA_flag == CHECK_ENCODE && !XMLParser.literalSafe(value))) sb.append("<![CDATA[").append(value).append("]]>");
 		else sb.append(value);
 	}

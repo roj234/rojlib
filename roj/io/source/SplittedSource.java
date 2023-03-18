@@ -1,10 +1,9 @@
 package roj.io.source;
 
 import roj.collect.SimpleList;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -55,10 +54,10 @@ public class SplittedSource extends Source {
 		path = src.getSource().getParentFile();
 		String name = src.getSource().getName();
 		if (!name.endsWith(".001")) throw new ZipException("文件的扩展名必须为001");
-		this.name = FileUtil.noExtName(name);
+		this.name = IOUtil.noExtName(name);
 
 		fragmentSizeL = size;
-		fragmentSize = (int) Math.min(Integer.MAX_VALUE, size);
+		fragmentSize = size;
 
 		ref = new SimpleList<>();
 		ref.add(s = src);
@@ -108,6 +107,7 @@ public class SplittedSource extends Source {
 		return r;
 	}
 
+	private final CharList t = new CharList();
 	private void next() throws IOException {
 		if (ref.size() > frag + 1) {
 			s = ref.get(++frag);
@@ -119,21 +119,17 @@ public class SplittedSource extends Source {
 		if (s != null && s.length() != fragmentSizeL) s.setLength(fragmentSizeL);
 		if (ref.size() >= 999) throw new IOException("文件分卷过多：999");
 
-		CharList sb = new CharList().append(name).append('.');
-		TextUtil.pad(sb, ref.size() + 1, 3);
-		s = new FileSource(new File(path, sb.toString()));
+		t.clear();
+		TextUtil.pad(t.append(name).append('.'), ref.size()+1, 3);
+		s = new FileSource(new File(path, t.toString()));
 		ref.add(s);
 		frag++;
 	}
 
 	protected void getNextSource() {}
 
-	private final ByteList wrapper = new ByteList();
 	public void write(byte[] b, int off, int len) throws IOException {
-		wrapper.list = b;
-		wrapper.rIndex = off;
-		wrapper.wIndex(off + len);
-		write(wrapper);
+		write(IOUtil.SharedCoder.get().wrap(b, off, len));
 	}
 	public void write(DynByteBuf data) throws IOException {
 		int remain = data.readableBytes();

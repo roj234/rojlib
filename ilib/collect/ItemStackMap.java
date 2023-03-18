@@ -26,20 +26,31 @@ public final class ItemStackMap<V> extends MyHashMap<ItemStack, V> {
 
 	@Override
 	public Entry<ItemStack, V> getEntry(ItemStack id) {
+		return getMyEntry(id, false);
+	}
+
+	private Entry<ItemStack, V> getMyEntry(ItemStack id, boolean _32767) {
 		Entry<ItemStack, V> entry = getEntryFirst(id, false);
+
 		int dmg = id.getItemDamage();
 		while (entry != null) {
 			ItemStack s = entry.k;
-			if (id.getItem() == s.getItem() && id.getItemDamage() == s.getItemDamage()) {
+			if (id.getItem() == s.getItem() &&
+				id.getItemDamage() == s.getItemDamage()) {
 				return entry;
 			}
 			entry = entry.next;
 		}
-		if (dmg != 32767) {
+
+		if (!_32767) {
 			id.setItemDamage(32767);
-			entry = getEntry(id);
-			id.setItemDamage(dmg);
+			try {
+				return getMyEntry(id, true);
+			} finally {
+				id.setItemDamage(dmg);
+			}
 		}
-		return entry;
+
+		return null;
 	}
 }

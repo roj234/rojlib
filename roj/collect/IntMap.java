@@ -14,22 +14,11 @@ import java.util.function.Supplier;
  */
 public class IntMap<V> extends AbstractMap<Integer, V> implements MapLike<IntMap.Entry<V>>, IIntMap<V> {
 	public static final Object UNDEFINED = new Object() {
-		@Override
-		public String toString() {
-			return "roj.collect.UNDEFINED";
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			return obj == UNDEFINED;
-		}
-
-		@Override
-		public int hashCode() {
-			return 0;
-		}
+		public String toString() { return "roj.collect.UNDEFINED"; }
+		public boolean equals(Object obj) { return obj == UNDEFINED; }
+		public int hashCode() { return 0; }
 	};
-	protected static final int MAX_NOT_USING = 5;
+	public static final int MAX_NOT_USING = 5;
 
 	@SuppressWarnings("unchecked")
 	public void putAll(IntMap<? extends V> map) {

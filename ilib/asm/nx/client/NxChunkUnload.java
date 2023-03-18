@@ -11,9 +11,9 @@ import net.minecraft.client.multiplayer.WorldClient;
  * @author solo6975
  * @since 2022/5/2 22:59
  */
-@Nixim("net.minecraft.client.multiplayer.WorldClient")
+@Nixim("/")
 abstract class NxChunkUnload extends WorldClient {
-	@Shadow("field_73033_b")
+	@Shadow
 	private ChunkProviderClient clientChunkProvider;
 
 	NxChunkUnload() {

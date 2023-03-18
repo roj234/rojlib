@@ -4,6 +4,7 @@ import roj.net.ch.ChannelCtx;
 import roj.net.http.Code;
 import roj.net.http.Headers;
 import roj.net.http.IllegalRequestException;
+import roj.text.UTF8MB4;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -12,10 +13,11 @@ import java.io.StringWriter;
 
 public class StringResponse implements Response {
 	final String mime;
-	final CharSequence content;
+	final CharSequence str;
 
 	public StringResponse(CharSequence c, String mime) {
-		content = c;
+		if (c == null) throw new NullPointerException("str");
+		str = c;
 		this.mime = mime==null?null:mime + "; charset=UTF-8";
 	}
 
@@ -63,11 +65,19 @@ public class StringResponse implements Response {
 	}
 
 	private DynByteBuf buf;
+	private int off;
 
 	public boolean send(ResponseWriter rh) throws IOException {
 		if (buf == null) throw new IllegalStateException("Not prepared");
+
 		rh.write(buf);
-		return buf.isReadable();
+		if (buf.isReadable()) return true;
+
+		buf.clear();
+		off = UTF8MB4.CODER.encodeFixedOut(str,off, str.length(),buf,buf.capacity());
+		rh.write(buf);
+
+		return buf.isReadable() || off < str.length();
 	}
 
 	@Override
@@ -80,11 +90,13 @@ public class StringResponse implements Response {
 
 	@Override
 	public void prepare(ResponseHeader srv, Headers h) {
-		if (content.length() > 127) srv.compressed();
+		int len = str.length();
+		if (len > 127) srv.compressed();
 
-		int len = DynByteBuf.byteCountUTF8(content);
-		buf = srv.ch().allocate(true, len).putUTFData0(content, len);
+		buf = srv.ch().allocate(true, 4096);
 		if (mime != null) h.putIfAbsent("content-type", mime);
-		h.putIfAbsent("content-length", Integer.toString(len));
+
+		if (len < 10000) h.putIfAbsent("content-length", Integer.toString(DynByteBuf.byteCountUTF8(str)));
+		else srv.chunked();
 	}
 }

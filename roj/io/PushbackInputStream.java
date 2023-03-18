@@ -24,9 +24,7 @@ public class PushbackInputStream extends FilterInputStream {
 		this.bLen = len;
 	}
 
-	public void setIn(InputStream in) {
-		this.in = in;
-	}
+	protected void bufferEmpty() {}
 
 	@Override
 	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
@@ -34,16 +32,20 @@ public class PushbackInputStream extends FilterInputStream {
 		if (k < bLen) {
 			int rm = bLen - k;
 			if (len <= rm) {
+				System.arraycopy(buffer, k, b, off, len);
+
 				if (len == rm) {
 					bOff = bLen = 0;
+					bufferEmpty();
 				} else {
 					bOff = k + len;
 				}
-				System.arraycopy(buffer, k, b, off, len);
 				return len;
 			} else {
-				bOff = bLen = 0;
 				System.arraycopy(buffer, k, b, off, rm);
+				bOff = bLen = 0;
+				bufferEmpty();
+
 				int read = in.read(b, off + rm, len - rm);
 				return (read > 0 ? read : 0) + rm;
 			}
@@ -56,7 +58,10 @@ public class PushbackInputStream extends FilterInputStream {
 	public int read() throws IOException {
 		if (bOff < bLen) {
 			byte b = buffer[bOff++];
-			if (bOff == bLen) bOff = bLen = 0;
+			if (bOff == bLen) {
+				bOff = bLen = 0;
+				bufferEmpty();
+			}
 			return b;
 		} else {
 			return in.read();
@@ -76,20 +81,18 @@ public class PushbackInputStream extends FilterInputStream {
 			if (n <= rm) {
 				if (n == rm) {
 					bOff = bLen = 0;
+					bufferEmpty();
 				} else {
 					bOff = (int) (k + n);
 				}
 				return n;
 			} else {
 				bOff = bLen = 0;
+				bufferEmpty();
 				return rm + in.skip(n-rm);
 			}
 		}
 
 		return in.skip(n);
-	}
-
-	public int getBufferPos() {
-		return bOff;
 	}
 }

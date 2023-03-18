@@ -1,12 +1,11 @@
 package roj.net.ch;
 
-import roj.io.NIOUtil;
+import roj.io.FastFailException;
 import roj.io.buf.BufferPool;
 import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.util.DynByteBuf;
 
-import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -20,7 +19,7 @@ import static roj.util.ByteList.EMPTY;
  * @author Roj233
  * @since 2022/5/18 0:00
  */
-final class TcpChImpl extends MyChannel {
+class TcpChImpl extends MyChannel {
 	private static volatile H TcpUtil;
 	private interface H {
 		default boolean isInputOpen(SocketChannel sc) {
@@ -34,7 +33,6 @@ final class TcpChImpl extends MyChannel {
 	}
 
 	private SocketChannel sc;
-	private final FileDescriptor fd;
 
 	int buffer;
 
@@ -62,8 +60,6 @@ final class TcpChImpl extends MyChannel {
 				}
 			}
 		}
-
-		this.fd = NIOUtil.tcpFD(server);
 	}
 
 	@Override
@@ -138,14 +134,21 @@ final class TcpChImpl extends MyChannel {
 	@Override
 	protected void read() throws IOException {
 		DynByteBuf buf = rb;
-		while (ch.isOpen()) {
+		while (ch.isOpen() && state == OPENED) {
 			if (!buf.isWritable()) {
 				if (buf == EMPTY) rb = buf = alloc().buffer(true, buffer);
 				else rb = buf = alloc().expand(buf, buf.capacity());
 			}
 
 			ByteBuffer nioBuffer = syncNioRead(buf);
-			int r = sc.read(nioBuffer);
+			int r;
+			try {
+				r = sc.read(nioBuffer);
+			} catch (IOException e) {
+				if (TcpUtil.isOutputOpen(sc)) throw new FastFailException(e.getMessage());
+				close();
+				return;
+			}
 			buf.wIndex(nioBuffer.position());
 
 			if (r < 0) {

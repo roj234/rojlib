@@ -16,7 +16,7 @@ import java.awt.*;
  * @author solo6975
  * @since 2022/5/2 16:05
  */
-@Nixim("net.minecraftforge.client.GuiIngameForge")
+@Nixim("/")
 abstract class NxOverlayShadow extends GuiIngameForge {
 	@Shadow("/")
 	private FontRenderer fontrenderer;

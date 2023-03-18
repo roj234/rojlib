@@ -6,12 +6,13 @@ import roj.asm.frame.Var2;
 import roj.asm.frame.VarType;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.AttrCode;
-import roj.asm.tree.insn.*;
 import roj.asm.util.AttrHelper;
 import roj.asm.util.Context;
-import roj.asm.util.InsnList;
+import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Frame2;
+import roj.asm.visitor.FrameVisitor;
+import roj.asm.visitor.Label;
+import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import net.minecraftforge.fml.common.asm.transformers.EventSubscriptionTransformer;
@@ -66,7 +67,7 @@ public class EventSubTrans implements ContextClassTransformer {
 				case "()V":
 					switch (method.name()) {
 						case "setup":
-							if ((method.accessFlag() & 4) != 0) hasSetup = true;
+							if ((method.modifier() & 4) != 0) hasSetup = true;
 							break;
 						case "<init>":
 							hasDefaultCtr = true;
@@ -74,7 +75,7 @@ public class EventSubTrans implements ContextClassTransformer {
 					}
 					break;
 				case "()Z":
-					if ((method.accessFlag() & 1) != 0) {
+					if ((method.modifier() & 1) != 0) {
 						switch (method.name()) {
 							case "isCancelable":
 								hasCancelable = true;
@@ -86,7 +87,7 @@ public class EventSubTrans implements ContextClassTransformer {
 					}
 					break;
 				case "()Lnet/minecraftforge/fml/common/eventhandler/ListenerList;":
-					if (method.name().equals("getListenerList") && (method.accessFlag() & 1) != 0) {
+					if (method.name().equals("getListenerList") && (method.modifier() & 1) != 0) {
 						hasGetListenerList = true;
 					}
 					break;
@@ -101,22 +102,16 @@ public class EventSubTrans implements ContextClassTransformer {
 			for (int i = 0; i < anns.size(); i++) {
 				Annotation ann = anns.get(i);
 				if (!hasResult && ann.clazz.equals("net/minecraftforge/fml/common/eventhandler/Event$HasResult")) {
-					method = new Method(1, data, "hasResult", boolDesc);
-					method.code = new AttrCode(method);
-					method.code.localSize = 2;
-					method.code.stackSize = 1;
-					method.code.instructions.add(NPInsnNode.of(4));
-					method.code.instructions.add(NPInsnNode.of(172));
-					data.methods.add(Helpers.cast(method));
+					CodeWriter cw = data.newMethod(1, "hasResult", boolDesc);
+					cw.visitSize(1, 2);
+					cw.one(ICONST_1);
+					cw.one(IRETURN);
 					edited = true;
 				} else if (!hasCancelable && ann.clazz.equals("net/minecraftforge/fml/common/eventhandler/Cancelable")) {
-					method = new Method(1, data, "isCancelable", boolDesc);
-					method.code = new AttrCode(method);
-					method.code.localSize = 2;
-					method.code.stackSize = 1;
-					method.code.instructions.add(NPInsnNode.of(4));
-					method.code.instructions.add(NPInsnNode.of(172));
-					data.methods.add(Helpers.cast(method));
+					CodeWriter cw = data.newMethod(1, "isCancelable", boolDesc);
+					cw.visitSize(1, 2);
+					cw.one(ICONST_1);
+					cw.one(IRETURN);
 					edited = true;
 				}
 			}
@@ -132,55 +127,49 @@ public class EventSubTrans implements ContextClassTransformer {
 			data.fields.add(Helpers.cast(new Field(10, "LISTENER_LIST", listDesc)));
 
 			if (!hasDefaultCtr) {
-				method = new Method(1, data, "<init>", voidDesc);
-				method.code = new AttrCode(method);
-				method.code.localSize = 1;
-				method.code.stackSize = 1;
-				InsnList insn = method.code.instructions;
-				insn.add(NPInsnNode.of(ALOAD_0));
-				insn.add(new InvokeInsnNode(INVOKESPECIAL, data.parent, "<init>", voidDesc));
-				insn.add(NPInsnNode.of(177));
-				data.methods.add(Helpers.cast(method));
+				CodeWriter cw = data.newMethod(1, "<init>", voidDesc);
+				cw.visitSize(1,1);
+				cw.one(ALOAD_0);
+				cw.invoke(INVOKESPECIAL, data.parent, "<init>", voidDesc);
+				cw.one(RETURN);
 			}
 
-			method = new Method(4, data, "setup", voidDesc);
-			method.code = new AttrCode(method);
-			method.code.localSize = 1;
-			method.code.stackSize = 3;
-			InsnList insn = method.code.instructions;
-			insn.add(NPInsnNode.of(ALOAD_0));
-			insn.add(new InvokeInsnNode(INVOKESPECIAL, data.parent, "setup", voidDesc));
+			CodeWriter cw = data.newMethod(4,"setup", voidDesc);
+			cw.visitSize(3,1);
+			cw.one(ALOAD_0);
+			cw.invoke(INVOKESPECIAL, data.parent, "setup", voidDesc);
+			cw.field(GETSTATIC, data.name, "LISTENER_LIST", listDesc);
+			Label inited = new Label();
+			cw.jump(IFNONNULL, inited);
 
-			insn.add(new FieldInsnNode(GETSTATIC, data.name, "LISTENER_LIST", listDesc));
-			LabelInsnNode inited = new LabelInsnNode();
-			insn.add(new JumpInsnNode(IFNONNULL, inited));
+			cw.clazz(Opcodes.NEW, listClass);
+			cw.one(DUP);
+			cw.one(ALOAD_0);
+			cw.invoke(INVOKESPECIAL, data.parent, "getListenerList", listDescM);
+			cw.invoke(INVOKESPECIAL, listClass, "<init>", "("+listDesc+")V");
+			cw.field(PUTSTATIC, data.name, "LISTENER_LIST", listDesc);
 
-			insn.add(new ClassInsnNode(Opcodes.NEW, listClass));
-			insn.add(NPInsnNode.of(DUP));
-			insn.add(NPInsnNode.of(ALOAD_0));
-			insn.add(new InvokeInsnNode(INVOKESPECIAL, data.parent, "getListenerList", listDescM));
-			insn.add(new InvokeInsnNode(INVOKESPECIAL, listClass, "<init>", "(" + listDesc + ")V"));
-			insn.add(new FieldInsnNode(PUTSTATIC, data.name, "LISTENER_LIST", listDesc));
+			cw.label(inited);
+			cw.one(RETURN);
 
-			insn.add(inited);
-			NPInsnNode lastRet = NPInsnNode.of(177);
-			insn.add(lastRet);
+			cw.visitExceptions();
+			cw.visitAttributes();
 
 			//  same #0xb1 返回, Event
-			Frame2 f = new Frame2(Frame2.same, lastRet);
+			Frame2 f = new Frame2(Frame2.same, inited.getValue());
 			f.locals(new Var2(VarType.REFERENCE, data.name));
-			method.code.frames = Collections.singletonList(f);
 
-			data.methods.add(Helpers.cast(method));
+			int stack = cw.visitAttributeI("StackMapTable");
+			if (stack >= 0) {
+				DynByteBuf bw = cw.bw;
+				FrameVisitor.writeFrames(Collections.singletonList(f), bw.putShort(1), data.cp);
+				cw.visitAttributeIEnd(stack);
+			}
 
-			method = new Method(1, data, "getListenerList", listDescM);
-			method.code = new AttrCode(method);
-			method.code.localSize = 1;
-			method.code.stackSize = 1;
-			insn = method.code.instructions;
-			insn.add(new FieldInsnNode(GETSTATIC, data.name, "LISTENER_LIST", listDesc));
-			insn.add(NPInsnNode.of(176));
-			data.methods.add(Helpers.cast(method));
+			cw = data.newMethod(4,"getListenerList", listDescM);
+			cw.visitSize(1,1);
+			cw.field(GETSTATIC, data.name, "LISTENER_LIST", listDesc);
+			cw.one(ARETURN);
 			return true;
 		}
 	}

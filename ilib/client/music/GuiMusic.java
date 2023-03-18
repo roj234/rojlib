@@ -12,7 +12,7 @@ import ilib.gui.comp.*;
 import ilib.gui.util.ComponentListener;
 import ilib.gui.util.Direction;
 import ilib.gui.util.PositionProxy;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.sound.mp3.Header;
 import roj.sound.mp3.Player;
 import roj.sound.util.FilePlayer;
@@ -286,7 +286,7 @@ public class GuiMusic extends GuiBaseNI implements ComponentListener {
 	}
 
 	private static List<File> getMusicList() {
-		List<File> files = FileUtil.findAllFiles(new File("music"), file -> file.getName().toLowerCase().endsWith(".mp3"));
+		List<File> files = IOUtil.findAllFiles(new File("music"), file -> file.getName().toLowerCase().endsWith(".mp3"));
 		instance.playList = files;
 		updateId(files);
 		return files;

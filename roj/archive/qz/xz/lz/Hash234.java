@@ -10,8 +10,8 @@
 
 package roj.archive.qz.xz.lz;
 
-import roj.archive.qz.xz.ArrayCache;
 import roj.crypt.CRCAny;
+import roj.util.ArrayCache;
 
 final class Hash234 {
 	private static final int HASH_2_SIZE = 1 << 10;
@@ -65,14 +65,14 @@ final class Hash234 {
 	}
 
 	static final int[] crcTable = CRCAny.CRC_32.getTable();
-	void calcHashes(byte[] buf, int off) {
-		int temp = crcTable[buf[off] & 0xFF] ^ (buf[off + 1] & 0xFF);
+	void calcHashes(long buf, int off) {
+		int temp = crcTable[u.getByte(buf + off) & 0xFF] ^ (u.getByte(buf + off + 1) & 0xFF);
 		hash2Value = temp & HASH_2_MASK;
 
-		temp ^= (buf[off + 2] & 0xFF) << 8;
+		temp ^= (u.getByte(buf + off + 2) & 0xFF) << 8;
 		hash3Value = temp & HASH_3_MASK;
 
-		temp ^= crcTable[buf[off + 3] & 0xFF] << 5;
+		temp ^= crcTable[u.getByte(buf + off + 3) & 0xFF] << 5;
 		hash4Value = temp & hash4Mask;
 	}
 

@@ -1,6 +1,7 @@
 package roj.config.data;
 
 import roj.collect.MyHashMap;
+import roj.text.CharList;
 
 import java.util.Map;
 
@@ -11,20 +12,9 @@ import java.util.Map;
 public class CTOMLFxMap extends CMapping {
 	public boolean fixed = true;
 
-	public CTOMLFxMap() {
-		super(new MyHashMap<>());
-	}
+	public CTOMLFxMap() { super(); }
+	public CTOMLFxMap(Map<String, CEntry> map) { super(map); }
+	public CTOMLFxMap(int size) { super(new MyHashMap<>(size)); }
 
-	public CTOMLFxMap(Map<String, CEntry> map) {
-		super(map);
-	}
-
-	public CTOMLFxMap(int size) {
-		super(new MyHashMap<>(size));
-	}
-
-	@Override
-	public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
-		return super.toTOML(sb, fixed ? 3 : depth, chain);
-	}
+	public CharList toTOML(CharList sb, int depth, CharSequence chain) { return super.toTOML(sb, fixed ? 3 : depth, chain); }
 }

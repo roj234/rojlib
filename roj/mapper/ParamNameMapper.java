@@ -23,7 +23,7 @@ import java.util.List;
  */
 public abstract class ParamNameMapper {
 	public static List<String> getParameterName(ConstantPool cp, MethodNode m) {
-		int j = (m.accessFlag() & AccessFlag.STATIC) == 0 ? 1 : 0;
+		int j = (m.modifier() & AccessFlag.STATIC) == 0 ? 1 : 0;
 
 		int len = TypeHelper.paramSize(m.rawDesc())+j;
 		SimpleList<String> names = new SimpleList<>(len);
@@ -61,13 +61,13 @@ public abstract class ParamNameMapper {
 			a = (AttrUnknown) m.attrByName("MethodParameters");
 			if (a != null) {
 				int i = 0;
-				int j = (m.accessFlag() & AccessFlag.STATIC) == 0 ? 1 : 0;
+				int j = (m.modifier() & AccessFlag.STATIC) == 0 ? 1 : 0;
 				List<Type> parameters = m.parameters();
 
 				DynByteBuf r = Parser.reader(a);
 				int len = r.readUnsignedByte();
 				while (len-- > 0) {
-					String name = ((CstUTF) pool.get(r)).getString();
+					String name = ((CstUTF) pool.get(r)).str();
 					if (parNames.get(j) == null && validNameChars.contains(name.charAt(0))) parNames.set(j, name);
 
 					r.rIndex += 2;
@@ -93,7 +93,7 @@ public abstract class ParamNameMapper {
 			len = r.readUnsignedShort();
 
 			while (len-- > 0) {
-				String aname = ((CstUTF) pool.get(r)).getString();
+				String aname = ((CstUTF) pool.get(r)).str();
 				int end = r.readInt() + r.rIndex;
 				switch (aname) {
 					case "LocalVariableTable":
@@ -101,10 +101,10 @@ public abstract class ParamNameMapper {
 						for (int j = 0; j < list.size(); j++) {
 							V entry = list.get(j);
 
-							String ref = mapType(entry.type.getString());
+							String ref = mapType(entry.type.str());
 							if (ref != null) pool.setUTFValue(entry.type, ref);
 
-							String name = entry.name.getString();
+							String name = entry.name.str();
 							if (entry.start == 0 && parNames.size() > entry.slot) {
 								replaced.add(entry.slot);
 
@@ -115,7 +115,7 @@ public abstract class ParamNameMapper {
 										continue;
 									}
 								} else {
-									parNames.set(entry.slot, entry.name.getString());
+									parNames.set(entry.slot, entry.name.str());
 								}
 							}
 
@@ -129,10 +129,10 @@ public abstract class ParamNameMapper {
 						for (int j = 0; j < list.size(); j++) {
 							V entry = list.get(j);
 
-							String ref = mapGeneric(entry.type.getString());
+							String ref = mapGeneric(entry.type.str());
 							if (ref != null) pool.setUTFValue(entry.type, ref);
 
-							String name = entry.name.getString();
+							String name = entry.name.str();
 							if (entry.start == 0 && parNames.size() > entry.slot) {
 								replaced.add(entry.slot);
 
@@ -143,7 +143,7 @@ public abstract class ParamNameMapper {
 										continue;
 									}
 								} else {
-									parNames.set(entry.slot, entry.name.getString());
+									parNames.set(entry.slot, entry.name.str());
 								}
 							}
 
@@ -166,7 +166,7 @@ public abstract class ParamNameMapper {
 		add:
 		if (!parNames.isEmpty()) {
 			int i = 0;
-			int j = (m.accessFlag() & AccessFlag.STATIC) == 0 ? 1 : 0;
+			int j = (m.modifier() & AccessFlag.STATIC) == 0 ? 1 : 0;
 
 			List<Type> parameters = m.parameters();
 			ByteList attr = IOUtil.getSharedByteBuf().put((byte) 0);
@@ -189,7 +189,7 @@ public abstract class ParamNameMapper {
 			}
 			attr.put(0, (byte) i);
 
-			m.attributes().putByName(new AttrUnknown("MethodParameters", ByteList.wrap(attr.toByteArray())));
+			m.putAttr(new AttrUnknown("MethodParameters", ByteList.wrap(attr.toByteArray())));
 			return true;
 		}
 		return false;

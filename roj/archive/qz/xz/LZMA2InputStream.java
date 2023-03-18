@@ -13,6 +13,7 @@ package roj.archive.qz.xz;
 import roj.archive.qz.xz.lz.LZDecoder;
 import roj.archive.qz.xz.lzma.LZMADecoder;
 import roj.archive.qz.xz.rangecoder.RangeDecoderFromBuffer;
+import roj.util.ArrayCache;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -247,9 +248,8 @@ public class LZMA2InputStream extends InputStream {
 	}
 
 	public synchronized void close() throws IOException {
+		putArraysToCache();
 		if (in != null) {
-			putArraysToCache();
-
 			try {
 				in.close();
 			} finally {

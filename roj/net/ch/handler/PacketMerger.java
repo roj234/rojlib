@@ -19,8 +19,9 @@ public abstract class PacketMerger implements ChannelHandler {
 		DynByteBuf m = merged;
 		if (m != null) {
 			int more = pkt.readableBytes()-m.writableBytes();
-			if (more > 0) m = ctx.alloc().expand(m, more, true);
+			if (more > 0) m = ctx.alloc().expand(m, more);
 			m.put(pkt);
+			pkt.rIndex = pkt.wIndex();
 			pkt = m;
 			merged = null;
 		}
@@ -38,6 +39,7 @@ public abstract class PacketMerger implements ChannelHandler {
 					m = null;
 				} else {
 					merged = ctx.allocate(pkt.isDirect(), pkt.readableBytes()).put(pkt);
+					pkt.rIndex = pkt.wIndex();
 				}
 			}
 		} finally {

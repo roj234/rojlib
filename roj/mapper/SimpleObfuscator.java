@@ -9,15 +9,11 @@ import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrUTF;
 import roj.asm.tree.attr.AttrUnknown;
-import roj.asm.tree.insn.InsnNode;
-import roj.asm.tree.insn.InvokeInsnNode;
-import roj.asm.tree.insn.LdcInsnNode;
-import roj.asm.tree.insn.NPInsnNode;
+import roj.asm.tree.insn.*;
 import roj.asm.type.*;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.util.Context;
-import roj.asm.util.InsnList;
 import roj.asm.visitor.CodeVisitor;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.MyHashMap;
@@ -27,7 +23,6 @@ import roj.config.JSONParser;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.mapper.obf.MyExcluder;
 import roj.mapper.obf.policy.*;
@@ -150,7 +145,7 @@ public final class SimpleObfuscator extends Obfuscator {
 						obf.flags |= 2;
 					}
 					if (map.containsKey("libPath")) {
-						obf.loadLibraries(FileUtil.findAllFiles(new File(map.getString("libPath")), file -> file.getName().endsWith(".jar") || file.getName().endsWith(".zip")));
+						obf.loadLibraries(IOUtil.findAllFiles(new File(map.getString("libPath")), file -> file.getName().endsWith(".jar") || file.getName().endsWith(".zip")));
 					}
 					if (map.containsKey("mapping")) {
 						obf.m1.loadMap(new ByteArrayInputStream(IOUtil.SharedCoder.get().encode(map.getString("mapping"))), false);
@@ -167,7 +162,7 @@ public final class SimpleObfuscator extends Obfuscator {
 					lineLog = args[++i];
 					break;
 				case "libPath":
-					obf.loadLibraries(FileUtil.findAllFiles(new File(args[++i]), file -> file.getName().endsWith(".jar") || file.getName().endsWith(".zip")));
+					obf.loadLibraries(IOUtil.findAllFiles(new File(args[++i]), file -> file.getName().endsWith(".jar") || file.getName().endsWith(".zip")));
 					break;
 				case "cs":
 					charset = Charset.forName(args[++i]);
@@ -207,7 +202,7 @@ public final class SimpleObfuscator extends Obfuscator {
 
 		if (lineLog != null) {
 			try (FileOutputStream fos = new FileOutputStream(lineLog)) {
-				ByteList.encodeUTF(obf.lineLog).writeToStream(fos);
+				IOUtil.SharedCoder.get().encodeTo(obf.lineLog, fos);
 			}
 		}
 
@@ -368,9 +363,9 @@ public final class SimpleObfuscator extends Obfuscator {
 				desc.owner = m1.classMap.getOrDefault(data.name, data.name);
 				for (int j = methods.size() - 1; j >= 0; j--) {
 					RawMethod m = (RawMethod) methods.get(j);
-					if (!m.type.getString().equals("(Ljava/lang/String;)Ljava/lang/String;")) continue;
+					if (!m.type.str().equals("(Ljava/lang/String;)Ljava/lang/String;")) continue;
 
-					desc.name = m.name.getString();
+					desc.name = m.name.str();
 					if (cf.decoders.containsKey(desc)) {
 						ConstantData dg = new ConstantData();
 						dg.version = data.version;
@@ -381,12 +376,12 @@ public final class SimpleObfuscator extends Obfuscator {
 						method.name = "decode0";
 						dg.methods.add(method);
 
-						InsnList ins = method.code.instructions;
+						InsnList ins = method.getCode().instructions;
 						for (int k = 0; k < ins.size(); k++) {
 							InsnNode node = ins.get(k);
 							if (node.nodeType() == InsnNode.T_INVOKE) {
 								InvokeInsnNode cin = (InvokeInsnNode) node;
-								if (cin.name.equals("getStackTrace") && cin.rawDesc().equals("[Ljava/lang/StackTraceElement;")) {
+								if (cin.name.equals("getStackTrace") && cin.awslDesc().equals("[Ljava/lang/StackTraceElement;")) {
 									cin.code = Opcodes.INVOKESTATIC;
 									cin.owner = SimpleObfuscator.class.getName().replace('.', '/');
 									cin.name = "_syncGetStackTrace";
@@ -452,8 +447,8 @@ public final class SimpleObfuscator extends Obfuscator {
 								InsnNode next = insn.get(k + 1);
 								if (next.nodeType() == InsnNode.T_INVOKE) {
 									InvokeInsnNode iin = (InvokeInsnNode) next;
-									if (iin.code == Opcodes.INVOKESTATIC && iin.rawDesc().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
-										CstUTF utf = ((CstString) ldc.c).getValue();
+									if (iin.code == Opcodes.INVOKESTATIC && iin.awslDesc().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
+										CstUTF utf = ((CstString) ldc.c).name();
 										//if (!intr.done.contains(utf.getString())) {
 											String value = cf.tryDecode(iin, null, utf);
 											if (value != null) {
@@ -463,7 +458,7 @@ public final class SimpleObfuscator extends Obfuscator {
 												continue;
 											}
 										//}
-										m.attributes().putByName(code);
+										m.putAttr(code);
 										insn.remove(++k)._i_replace(ldc);
 									}
 								}
@@ -505,7 +500,7 @@ public final class SimpleObfuscator extends Obfuscator {
 
 		@Override
 		public void invoke(byte code, CstRef method) {
-			if (code == Opcodes.INVOKESTATIC && method.desc().getType().getString().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
+			if (code == Opcodes.INVOKESTATIC && method.desc().getType().str().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
 				if (bci - ldcPos > 3) return;
 				decoders.putIfAbsent(tmp.read(method).copy(), null);
 				user = true;
@@ -520,11 +515,11 @@ public final class SimpleObfuscator extends Obfuscator {
 			}
 			tmp.owner = iin.owner;
 			tmp.name = iin.name;
-			tmp.param = iin.rawDesc();
+			tmp.param = iin.awslDesc();
 			Decoder dec = decoders.get(tmp);
 			if (dec != null) {
 				try {
-					return dec.decode(utf.getString());
+					return dec.decode(utf.str());
 				} catch (Throwable e) {
 					System.err.println("解密失败: ");
 					e.printStackTrace();
@@ -538,11 +533,11 @@ public final class SimpleObfuscator extends Obfuscator {
 	static final Map<String, List<IType>> fake2 = new MyHashMap<>();
 
 	static {
-		fake2.put("\u0000", Collections.singletonList(new Generic("int", 23, Generic.EX_SUPERS)));
+		fake2.put("\u0000", Collections.singletonList(new Generic("int", 23, Generic.EX_SUPER)));
 		fake2.put("\u0001", Collections.singletonList(new Generic("long", 0, Generic.EX_EXTENDS)));
-		fake2.put("\u0002", Collections.singletonList(new Generic("double", 0, Generic.EX_SUPERS)));
+		fake2.put("\u0002", Collections.singletonList(new Generic("double", 0, Generic.EX_SUPER)));
 		fake2.put("\u0003", Collections.singletonList(new Generic("short", 46, Generic.EX_NONE)));
-		fake2.put("\u0004", Collections.singletonList(new Generic("char", 0, Generic.EX_SUPERS)));
+		fake2.put("\u0004", Collections.singletonList(new Generic("char", 0, Generic.EX_SUPER)));
 	}
 
 	static void clearSign(ConstantData data) {
@@ -567,20 +562,20 @@ public final class SimpleObfuscator extends Obfuscator {
 	void fakeSign(ConstantData data) {
 		Signature sign1 = getSign(Signature.CLASS);
 
-		if (data.methods.isEmpty() || data.fields.isEmpty() || rand.nextFloat() > 0.11f) data.attributes().putByName(new AttrUTF("Signature", sign1.toDesc()));
+		if (data.methods.isEmpty() || data.fields.isEmpty() || rand.nextFloat() > 0.11f) data.attributes().add(new AttrUTF("Signature", sign1.toDesc()));
 
 		sign1 = getSign(Signature.METHOD);
 
 		List<? extends MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
-			if (rand.nextFloat() > 0.66f) methods.get(i).attributes().putByName(new AttrUTF("Signature", sign1.toDesc()));
+			if (rand.nextFloat() > 0.66f) methods.get(i).attributes().add(new AttrUTF("Signature", sign1.toDesc()));
 		}
 
-		sign1 = getSign(Signature.FIELD_OR_CLASS);
+		sign1 = getSign(Signature.FIELD);
 
 		List<? extends FieldNode> fields = data.fields;
 		for (int i = 0; i < fields.size(); i++) {
-			if (rand.nextFloat() > 0.66f) fields.get(i).attributes().putByName(new AttrUTF("Signature", sign1.toDesc()));
+			if (rand.nextFloat() > 0.66f) fields.get(i).attributes().add(new AttrUTF("Signature", sign1.toDesc()));
 		}
 	}
 
@@ -621,7 +616,7 @@ public final class SimpleObfuscator extends Obfuscator {
 			}*/
 
 			while (len1-- > 0) {
-				String name = ((CstUTF) pool.get(r)).getString();
+				String name = ((CstUTF) pool.get(r)).str();
 				int len = r.readInt();
 				int end = len + r.rIndex;
 				switch (name) {
@@ -786,7 +781,7 @@ public final class SimpleObfuscator extends Obfuscator {
 	@Override
 	public String obfClass(IClass cls) {
 		String origin = cls.name();
-		if (packageExclusions.strStartsWithThis(origin) || classExclusions.contains(origin) || cls.accessFlag() == AccessFlag.MODULE) return TREMINATE_THIS_CLASS;
+		if (packageExclusions.strStartsWithThis(origin) || classExclusions.contains(origin) || cls.modifier() == AccessFlag.MODULE) return TREMINATE_THIS_CLASS;
 
 		tempF.clear();
 		tempM.clear();

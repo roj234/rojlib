@@ -1,10 +1,16 @@
 package roj.crypt;
 
+import roj.concurrent.OperationDone;
+import roj.io.IOUtil;
+import roj.reflect.FieldAccessor;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import sun.misc.Unsafe;
 
 import java.security.DigestException;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 /**
  * @author solo6975
@@ -111,45 +117,37 @@ public class HMAC extends MessageDigest implements MessageAuthenticCode {
 		return hmac.digest(IKM);
 	}
 
-	public static void HKDF_expand(HMAC hmac, byte[] PRK, DynByteBuf info, int L, DynByteBuf out) {
-		hmac.setSignKey(PRK);
-
-		if (info != null) hmac.update(info);
-		hmac.update((byte) 0);
-		byte[] io = hmac.digestShared();
-
-		int i = 1;
-		while (L > 0) {
-			hmac.update(io);
-			if (info != null) hmac.update(info);
-			hmac.update((byte) i++);
-
-			out.put(hmac.digestShared(),0,Math.min(L,io.length));
-
-			L -= io.length;
-		}
-	}
-
-	public static byte[] HKDF_expand(HMAC hmac, byte[] PRK, DynByteBuf info, int L) {
-		hmac.setSignKey(PRK);
-
+	public static byte[] HKDF_expand(MessageAuthenticCode mac, byte[] PRK, int L) { return HKDF_expand(mac, PRK, ByteList.EMPTY, L); }
+	public static byte[] HKDF_expand(MessageAuthenticCode mac, byte[] PRK, DynByteBuf info, int L) {
 		byte[] out = new byte[L];
+		HKDF_expand(mac, PRK, info, L, out, Unsafe.ARRAY_BYTE_BASE_OFFSET);
+		return out;
+	}
+	public static void HKDF_expand(MessageAuthenticCode mac, byte[] PRK, DynByteBuf info, int L, Object ref, long address) {
+		mac.setSignKey(PRK);
 
-		if (info != null) hmac.update(info);
-		hmac.update((byte) 0);
-		byte[] io = hmac.digestShared();
+		if (info != null) mac.update(info);
+		mac.update((byte) 0);
+		byte[] io = mac.digestShared();
 
 		int off = 0;
 		int i = 1;
 		while (off < L) {
-			hmac.update(io);
-			if (info != null) hmac.update(info);
-			hmac.update((byte) i++);
+			mac.update(io);
+			if (info != null) mac.update(info);
+			mac.update((byte) i++);
 
-			System.arraycopy(hmac.digestShared(), 0, out, off, Math.min(io.length, L-off));
+			FieldAccessor.u.copyMemory(mac.digestShared(), Unsafe.ARRAY_BYTE_BASE_OFFSET, ref, address+off, Math.min(io.length, L-off));
 
 			off += io.length;
 		}
-		return out;
+	}
+
+	public static byte[] Sha256ExpandKey(byte[] key, byte[] salt, int len) {
+		try {
+			return HKDF_expand(new HMAC(MessageDigest.getInstance("SHA-256")), key, salt == null ? ByteList.EMPTY : IOUtil.SharedCoder.get().wrap(salt), len);
+		} catch (NoSuchAlgorithmException e) {
+			throw OperationDone.NEVER;
+		}
 	}
 }

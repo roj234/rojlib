@@ -1,5 +1,9 @@
 package roj.util;
 
+import roj.config.word.ITokenizer;
+import roj.io.IOUtil;
+import roj.text.CharList;
+
 import java.util.List;
 import java.util.Random;
 
@@ -8,14 +12,52 @@ import java.util.Random;
  * @since 2020/10/15 0:43
  */
 public final class ArrayUtil {
+	public static String pack(int[] arr) {
+		ByteList tmp = IOUtil.getSharedByteBuf();
+		for (int i = 0; i < arr.length; i++) tmp.putInt(arr[i]);
+		return Base128(tmp);
+	}
+	public static String pack(byte[] arr) { return Base128(ByteList.wrap(arr)); }
+
+	private static String Base128(ByteList tmp) {
+		BitWriter br = new BitWriter(tmp);
+		CharList sb = IOUtil.getSharedCharBuf();
+		sb.ensureCapacity(tmp.readableBytes() * 8/7 + 1);
+		while (br.readableBits() >= 7) sb.append((char) (br.readBit(7)+1));
+		if (br.readableBits() > 0) sb.append((char) (br.readBit(br.readableBits())+1));
+		return ITokenizer.addSlashes(sb);
+	}
+
+	private static ByteList UnBase128(String s) {
+		int len = s.length() * 7/8;
+
+		ByteList tmp = ByteList.allocate(len,len);
+		BitWriter br = new BitWriter(tmp);
+		for (int i = 0; i < s.length()-1; i++) br.writeBit(7, s.charAt(i)-1);
+
+		br.writeBit(8-br.bitIndex, s.charAt(s.length()-1)-1);
+		br.endBitWrite();
+
+		return tmp;
+	}
+
+	public static byte[] unpackB(String s) {
+		return UnBase128(s).list;
+	}
+	public static int[] unpackI(String s) {
+		ByteList list = UnBase128(s);
+		int[] b = new int[list.readableBytes()>>>2];
+		for (int i = 0; i < b.length; i++) b[i] = list.readInt();
+		return b;
+	}
+
 	public static <T> T[] inverse(T[] arr) {
 		return inverse(arr, 0, arr.length);
 	}
 
 	public static <T> T[] inverse(T[] arr, int i, int length) {
-		if (--length <= 0) return arr; // empty or one
-		// i = 0, arr.length = 4, e = 2
-		// swap 0 and 3 swap 1 and 2
+		if (--length <= 0) return arr;
+
 		for (int e = Math.max((length + 1) >> 1, 1); i < e; i++) {
 			T a = arr[i];
 			arr[i] = arr[length - i];

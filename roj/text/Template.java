@@ -94,14 +94,18 @@ public final class Template {
 		int i = 0;
 		for (int j = 0; j < pos.length; j++) {
 			String val = env.get(names[j]);
-			if (val == null) throw new IllegalArgumentException("参数 '" + names[j] + "' 缺失");
+			if (val == null && !env.containsKey(names[j])) throw new IllegalArgumentException("参数 '" + names[j] + "' 缺失");
 			out.append(data, i, i += pos[j]).append(val);
 		}
 		return out.append(data, i, data.length);
 	}
 
 	public CharList replace(List<String> env, CharList out) {
-		if (intNames == null) makeIntName();
+		try {
+			if (intNames == null) makeIntName();
+		} catch (NumberFormatException e) {
+			throw new IllegalArgumentException("有参数名称不是数字:"+e.getMessage());
+		}
 
 		int i = 0;
 		for (int j = 0; j < pos.length; j++) {

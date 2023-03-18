@@ -25,7 +25,7 @@ public class UPnPPinger implements ChannelHandler {
 	public void channelOpened(ChannelCtx ctx) throws IOException {
 		// todo
 		ByteList tmp = IOUtil.getSharedByteBuf();
-		tmp.putVarIntUTF("MSS UPNP PING TEST");
+		tmp.putVUIUTF("MSS UPNP PING TEST");
 		ctx.channelWrite(tmp);
 	}
 

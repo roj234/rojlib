@@ -14,14 +14,11 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 public final class RangeEncoderToStream extends RangeEncoder {
-	private final OutputStream out;
+	public final OutputStream out;
 
 	public RangeEncoderToStream(OutputStream out) {
-		this.out = out;
-		reset();
+		this.out = out; reset();
 	}
 
-	void writeByte(int b) throws IOException {
-		out.write(b);
-	}
+	void writeByte(int b) throws IOException { out.write(b); }
 }

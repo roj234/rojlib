@@ -1,13 +1,11 @@
 package roj.concurrent;
 
-import roj.concurrent.task.AsyncTask;
 import roj.concurrent.task.ITask;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executor;
 import java.util.concurrent.locks.LockSupport;
 
-public class TaskExecutor extends FastLocalThread implements TaskHandler, Executor {
+public class TaskExecutor extends FastLocalThread implements TaskHandler {
 	ConcurrentLinkedQueue<ITask> tasks = new ConcurrentLinkedQueue<>();
 	volatile boolean running = true;
 
@@ -76,16 +74,6 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler, Execut
 		queue.clear();
 
 		LockSupport.unpark(this);
-	}
-
-	@Override
-	public String toString() {
-		return "TE{" + "task=" + tasks + '}';
-	}
-
-	@Override
-	public void execute(Runnable command) {
-		pushTask(AsyncTask.fromVoid(command));
 	}
 
 	public void waitFor() throws InterruptedException {

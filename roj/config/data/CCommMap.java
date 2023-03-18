@@ -1,6 +1,7 @@
 package roj.config.data;
 
 import roj.collect.MyHashMap;
+import roj.config.serial.CVisitor;
 import roj.text.CharList;
 
 import java.util.Map;
@@ -13,31 +14,17 @@ public class CCommMap extends CMapping {
 	Map<String, String> comments = new MyHashMap<>();
 
 	public CCommMap() {}
-	public CCommMap(Map<String, CEntry> map) {
-		super(map);
-	}
-	public CCommMap(int size) {
-		super(size);
-	}
+	public CCommMap(Map<String, CEntry> map) { super(map); }
+	public CCommMap(int size) { super(size); }
 	public CCommMap(Map<String, CEntry> map, Map<String, String> comment) {
 		super(map);
 		comments = comment;
 	}
 
 	@Override
-	public final String getCommentInternal(String key) {
-		return comments.get(key);
-	}
-
-	@Override
-	public final CMapping withComments() {
-		return this;
-	}
-
-	@Override
-	public final boolean isCommentSupported() {
-		return true;
-	}
+	public final String getCommentInternal(String key) { return comments.get(key); }
+	public final CMapping withComments() { return this; }
+	public final boolean isCommentSupported() { return true; }
 
 	public void putCommentDotted(String key, String val) {
 		if (dot != null) {
@@ -95,10 +82,37 @@ public class CCommMap extends CMapping {
 		return i;
 	}
 
-
-
 	@Override
 	public final Map<String, String> getComments() {
 		return comments;
+	}
+
+	@Override
+	public void forEachChild(CVisitor ser) {
+		ser.valueMap();
+		if (!map.isEmpty()) {
+			for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+				String s = comments.get(entry.getKey());
+				if (s != null) ser.comment(s);
+
+				ser.key(entry.getKey());
+				entry.getValue().forEachChild(ser);
+			}
+		}
+		ser.pop();
+	}
+
+	public void forEachChildSorted(CVisitor ser, String... names) {
+		ser.valueMap();
+		for (String k : names) {
+			CEntry v = map.get(k);
+			if (v != null) {
+				String s = comments.get(k);
+				if (s != null) ser.comment(s);
+				ser.key(k);
+				v.forEachChild(ser);
+			}
+		}
+		ser.pop();
 	}
 }

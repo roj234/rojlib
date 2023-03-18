@@ -20,19 +20,18 @@ import java.util.regex.Matcher;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-@Nixim("/")
-abstract class JarDiscoverer extends net.minecraftforge.fml.common.discovery.JarDiscoverer {
-	@Copy(staticInitializer = "init")
-	static Matcher cfMatcher;
+@Nixim(value = "/", copyItf = true)
+final class JarDiscoverer extends net.minecraftforge.fml.common.discovery.JarDiscoverer implements Runnable {
+	@Copy(staticInitializer = "init", targetIsFinal = true)
+	private static Matcher cfMatcher;
 	@Copy
-	static boolean inited;
+	private static boolean inited;
 	private static void init() {
 		cfMatcher = ITypeDiscoverer.classFile.matcher("");
+		Loader.EVENT_BUS.add("preInit", new JarDiscoverer());
 	}
 	@Copy
-	public static void IL_preinit() {
-		inited = true;
-	}
+	public void run() { inited = true; }
 
 	@Inject("/")
 	public List<ModContainer> discover(ModCandidate candidate, ASMDataTable table) {

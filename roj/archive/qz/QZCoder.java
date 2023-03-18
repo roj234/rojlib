@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.zip.Deflater;
 
 /**
  * @author Roj234
@@ -35,17 +36,16 @@ public abstract class QZCoder {
 
 	static QZCoder create(ByteList buf, int len) {
 		if (coders.isEmpty()) {
-			// <clinit> order
-
-			// PPMd: 4,1,8
-			// Bzip2: 4,2,2
-			reg(new Copy());
+			reg(Copy.INSTANCE);
 			reg(new AESCrypt());
+			reg(new Deflate(Deflater.DEFAULT_COMPRESSION));
 			reg(new LZMA(true));
 			reg(new LZMA2(true));
-			reg(new BCJ(BCJ.X86));
-			reg(new BCJ(BCJ.ARM));
-			reg(new BCJ(BCJ.ARM_THUMB));
+			reg(BCJ.X86);
+			reg(BCJ.ARM);
+			reg(BCJ.ARM_THUMB);
+			reg(new Delta());
+			reg(new BCJ2());
 		}
 		buf = buf.slice(len);
 		QZCoder coder = coders.get(buf);

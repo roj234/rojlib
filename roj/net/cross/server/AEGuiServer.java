@@ -2,19 +2,14 @@ package roj.net.cross.server;
 
 import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
-import roj.config.data.CMapping;
-import roj.config.serial.ToJson;
 import roj.crypt.KeyFile;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.net.NetworkUtil;
 import roj.net.ch.SelectorLoop;
 import roj.net.cross.Util;
-import roj.net.frontop.FrontServer;
-import roj.net.http.ws.WebsocketHandler;
 import roj.net.mss.JPrivateKey;
 import roj.net.mss.SimpleEngineFactory;
-import roj.text.CharList;
 import roj.text.logging.LogContext;
 import roj.text.logging.Logger;
 import roj.text.logging.LoggingStream;
@@ -25,7 +20,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -103,11 +97,11 @@ public class AEGuiServer {
 			e.printStackTrace();
 			return;
 		}
-		server.man.setDaemon(false);
+		server.man.getLoop().setDaemon(false);
 		server.setMOTD(motd);
 		server.start();
 
-		if (webPort != -1) runServer(webPort, server.man);
+		if (webPort != -1) runServer(webPort, server.man.getLoop());
 
 		LogContext ctx = Logger.getDefaultContext();
 		LogDestination prev = log ? ctx.destination() : null;
@@ -149,12 +143,13 @@ public class AEGuiServer {
 
 	private static String res(String name) throws IOException {
 		String v = tmp.get(name);
-		if (v == null) tmp.put(name, v = IOUtil.readUTF("META-INF/html/" + name));
+		if (v == null) tmp.put(name, v = IOUtil.readResUTF("META-INF/html/" + name));
 		return v;
 	}
 
 	private static void runServer(int port, SelectorLoop man) throws IOException {
-		new FrontServer(FrontServer.res("server.html")) {
+		throw new UnsupportedOperationException("not implemented yet");
+		/*new FrontServer(FrontServer.res("server.html")) {
 			String room;
 			int timer;
 
@@ -169,7 +164,7 @@ public class AEGuiServer {
 				String id = data.getString("id");
 				switch (id) {
 					case "power":
-						w.error(WebsocketHandler.ERR_OK, null);
+						w.get().error(WebsocketHandler.ERR_OK, null);
 						server.shutdown();
 						break;
 					case "join":
@@ -216,6 +211,6 @@ public class AEGuiServer {
 					send(t.getValue());
 				}
 			}
-		}.simpleRun(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), man);
+		}.simpleRun(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), man);*/
 	}
 }

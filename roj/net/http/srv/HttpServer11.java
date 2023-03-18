@@ -1,41 +1,38 @@
 package roj.net.http.srv;
 
-import roj.RequireUpgrade;
+import roj.NativeLibrary;
 import roj.collect.MyHashMap;
+import roj.collect.ObjectPool;
 import roj.collect.RingBuffer;
-import roj.collect.SimpleList;
-import roj.concurrent.FastThreadLocal;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
-import roj.net.ch.MyChannel;
+import roj.net.ch.handler.PacketMerger;
 import roj.net.ch.handler.StreamCompress;
 import roj.net.ch.osi.ServerLaunch;
 import roj.net.http.*;
+import roj.net.http.srv.error.GreatErrorPage;
 import roj.text.ACalendar;
-import roj.text.LineReader;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.NamespaceKey;
 
 import javax.net.ssl.SSLException;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
 import java.util.List;
 import java.util.TimeZone;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 
 import static roj.net.http.HttpClient11.setChunk;
 
-public final class HttpServer11 implements
+public final class HttpServer11 extends PacketMerger implements
 								ChannelHandler,
 								PostSetting, BiConsumer<String, String>,
 								ResponseHeader, ResponseWriter {
@@ -50,70 +47,32 @@ public final class HttpServer11 implements
 
 		public final ACalendar date = RFC_DATE.copy();
 		public final MyHashMap<String, Object> ctx = new MyHashMap<>();
+
 		final RingBuffer<HttpServer11> hanging = new RingBuffer<>(KEEPALIVE_MAX);
 
-		final List<Request> requests = new SimpleList<>();
-		final List<Headers> headers = new SimpleList<>();
-
-		final ByteList tmp = new ByteList(128);
+		final ObjectPool<Request> requests = new ObjectPool<>(() -> {
+			Request req = new Request();
+			req.threadCtx = ctx;
+			return req;
+		}, 10);
 
 		Local() {}
 
-		public String toRFC(long time) {
-			return date.toRFCDate(time).toString();
-		}
-
-		final Headers allocHeader() {
-			if (headers.isEmpty()) return new Headers();
-			Headers h = headers.remove(headers.size() - 1);
-			h.clear();
-			return h;
-		}
-		final void releaseHeader(HttpServer11 srv) {
-			if (srv.h != null) {
-				srv.h.clear();
-				if (headers.size() < MAX_REQEUST_CACHE) {
-					headers.add(srv.h);
-				}
-				srv.h = null;
-			}
-		}
-
-		final Request allocReq(HttpServer11 srv) {
-			Request req;
-			if (requests.isEmpty()) {
-				req = new Request();
-			} else {
-				req = requests.remove(requests.size()-1);
-			}
-			req.threadCtx = ctx;
-			req.handler = srv;
-			return srv.req = req;
-		}
-		final void releaseReq(HttpServer11 srv) {
-			if (srv.req != null) {
-				srv.req.free();
-				if (requests.size() < MAX_REQEUST_CACHE) {
-					requests.add(srv.req);
-				}
-				srv.req = null;
-			}
-		}
+		public String toRFC(long time) { return date.toRFCString(time); }
 	}
+	public static final ThreadLocal<Local> TSO = ThreadLocal.withInitial(Local::new);
 
 	public static ServerLaunch simple(InetSocketAddress addr, int backlog, Router router) throws IOException {
 		return ServerLaunch.tcp().threadPrefix("HTTP服务器").threadMax(4)
 						   .listen_(addr, backlog)
 						   .option(StandardSocketOptions.SO_REUSEADDR, true)
-						   .initializator((ctx) -> ctx.addLast("h11@server", new HttpServer11(router)));
+						   .initializator((ctx) -> ctx.addLast("h11@server", create(router)));
 	}
-
-	public static final FastThreadLocal<Local> TSO = FastThreadLocal.withInitial(Local::new);
 
 	// state
 	private static final byte UNOPENED = 0, RECV_HEAD = 1, RECV_BODY = 2, PROCESSING = 3, SEND_HEAD = 4, SEND_BODY = 5, SEND_DONE = 6, HANG_PRE = 7, HANG = 8, CLOSED = 9;
 	// flag
-	private static final byte KEPT_ALIVE = 1, CHUNK = 2, GZIP_MODE = 4, HAS_ERROR = 8, WANT_COMPRESS = 16, EXT_POST_BUFFER = 32;
+	private static final byte KEPT_ALIVE = 1, CHUNK = 2, GZIP_MODE = 4, UNCAUGHT_ERROR = 8, WANT_COMPRESS = 16, EXT_POST_BUFFER = 32;
 
 	private byte state, flag;
 	private long time;
@@ -126,20 +85,16 @@ public final class HttpServer11 implements
 	private HFinishHandler fh;
 	private HPostHandler ph;
 
-	ByteList postBuffer;
+	private ByteList postBuffer;
 
 	private int code;
-	private Headers h;
 	private Response body;
 
-	public HttpServer11(Router router) {
-		this.router = router;
-	}
+	private HttpServer11(Router router) { this.router = router; }
+	public static HttpServer11 create(Router r) { return new HttpServer11(r); }
 
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
-		h = TSO.get().allocHeader();
-
 		state = HANG;
 		time = System.currentTimeMillis() + 1000;
 	}
@@ -175,7 +130,7 @@ public final class HttpServer11 implements
 				// 500ms for close-notify or hang
 				time = System.currentTimeMillis() + 500;
 
-				if ("close".equalsIgnoreCase(h.get("connection"))) {
+				if ("close".equalsIgnoreCase(req.responseHeader.get("connection"))) {
 					ch.channel().closeGracefully();
 					state = CLOSED;
 				} else {
@@ -194,7 +149,12 @@ public final class HttpServer11 implements
 				case RECV_HEAD:
 				case RECV_BODY:
 				case PROCESSING:
-					if (!ctx.isOutputOpen()) return;
+					if (!ctx.isOutputOpen() || req == null) {
+						ctx.channel().closeGracefully();
+						time = System.currentTimeMillis() + 500;
+						state = CLOSED;
+						return;
+					}
 
 					time = System.currentTimeMillis() + 500;
 					code(state == PROCESSING ? 504 : 408).die();
@@ -212,9 +172,8 @@ public final class HttpServer11 implements
 						break;
 					}
 				case HANG:
-				case SEND_HEAD:
-				case SEND_BODY:
-				case CLOSED:
+				case SEND_HEAD: case SEND_BODY:
+				case CLOSED: default:
 					ctx.close();
 					break;
 			}
@@ -270,14 +229,16 @@ public final class HttpServer11 implements
 					int act = Action.valueOf(method);
 					if (act < 0) throw new IllegalRequestException(Code.METHOD_NOT_ALLOWED, "无效请求类型 " + method);
 
-					req = TSO.get().allocReq(this).init(act, path, query);
+					Local local = TSO.get();
+					req = local.requests.get().init(act, path, query);
+					req.handler = this;
 				}
 
 				// headers
 				Headers h = req;
 				try {
 					int avail = data.readableBytes();
-					boolean finish = h.parseHead(data, TSO.get().tmp);
+					boolean finish = h.parseHead(data, IOUtil.getSharedByteBuf());
 
 					if((headerLen -= avail-data.readableBytes()) < 0) throw new IllegalArgumentException("header too large");
 
@@ -288,42 +249,30 @@ public final class HttpServer11 implements
 
 				validateHeader(h);
 
-				if ((Action.MAY_BODY & (1<<req.action())) == 0) {
-					router.checkHeader(req, null);
-					ctx.channelOpened();
+				String lenStr = req.get("content-length");
+				String encoding = req.get("transfer-encoding");
+				if (lenStr == null && encoding == null) {
+					exceptPostSize = -2;
+
+					if (checkHeader(ctx, null)) return;
 					process();
 					return;
-				} else {
-					String s = req.get("content-length");
-					exceptPostSize = s != null ? Long.parseLong(s) : -1;
-					postSize = Router.DEFAULT_POST_SIZE;
-
-					router.checkHeader(req, this);
-					ctx.channelOpened();
 				}
 
-				boolean chunk = "chunked".equalsIgnoreCase(req.header("transfer-encoding"));
+				exceptPostSize = lenStr != null ? Long.parseLong(lenStr) : -1;
+				postSize = Router.DEFAULT_POST_SIZE;
 
-				String cl = req.header("content-length");
-				if (!cl.isEmpty()) {
-					long len = Long.parseLong(cl);
-					if (len > postSize) throw new IllegalRequestException(Code.ENTITY_TOO_LARGE);
+				if (checkHeader(ctx, this)) return;
 
-					// 注：没有并发，只是没有MutableLong
-					req.postFields = new AtomicLong(len);
+				boolean chunk = "chunked".equalsIgnoreCase(encoding);
 
-					if (ph == null) {
-						//if (len > 65535) throw new IllegalRequestException(Code.INTERNAL_ERROR, "对于大小超过64KB的post请求,必须使用PostHandler");
-
-						postBuffer = (ByteList) ctx.alloc().buffer(false, (int) len);
-						flag |= EXT_POST_BUFFER;
-					}
-				} else if (chunk || req.header("connection").equalsIgnoreCase("close")) {
-					req.postFields = new AtomicLong(postSize);
-					if (postBuffer == null) postBuffer = TSO.get().tmp;
-					postBuffer.clear();
+				if (lenStr != null) {
+					if (exceptPostSize > postSize) throw new IllegalRequestException(Code.ENTITY_TOO_LARGE);
+					preparePostBuffer(ctx, postSize = exceptPostSize);
+				} else if (chunk) {
+					preparePostBuffer(ctx, postSize);
 				} else {
-					throw new IllegalRequestException(Code.BAD_REQUEST, "无法确定请求体长度");
+					throw new IllegalRequestException(Code.BAD_REQUEST, "不支持的传输编码"+encoding);
 				}
 
 				state = RECV_BODY;
@@ -334,49 +283,67 @@ public final class HttpServer11 implements
 					return;
 				}
 			case RECV_BODY:
-				AtomicLong len = (AtomicLong) req.postFields;
-				HPostHandler ph = this.ph;
-
-				int r = data.readableBytes();
-				long v = len.get()-r;
-				if (v <= 0) {
+				long remain = postSize-data.readableBytes();
+				_if:
+				if (remain <= 0) {
 					if (!req.containsKey("content-length")) {
+						if (remain == 0) break _if;
 						die().code(Code.ENTITY_TOO_LARGE);
 					} else {
 						// 两个请求连在一起？
 						ctx.readInactive();
 
 						int w = data.wIndex();
-						data.wIndex(data.rIndex+(int)len.get());
+						data.wIndex(data.rIndex+(int)postSize);
 
-						if (ph != null) ph.onData(data);
-						else postBuffer.put(data);
+						if (ph != null) mergedRead(ctx, data);
+						else if (postBuffer != null) postBuffer.put(data);
 
-						data.rIndex += len.get();
+						data.rIndex = data.wIndex();
 						data.wIndex(w);
 
-						req.postFields = ph == null ? postBuffer : null;
+						req.postFields = ph == null ? postBuffer : ph;
 						process();
 					}
 					return;
 				}
 
+				postSize -= data.readableBytes();
 				if (ph != null) {
-					ph.onData(data);
-					len.addAndGet(-data.readableBytes());
-				} else {
+					mergedRead(ctx, data);
+				} else if (postBuffer != null) {
 					postBuffer.put(data);
-					data.clear();
 				}
+				data.clear();
 				break;
 			case PROCESSING: throw new IOException("Unexpected PROCESSING");
 			default: ch.readInactive();
 		}
 	}
+	private void preparePostBuffer(ChannelCtx ctx, long len) {
+		// post accept
+		if (ph != null || state != RECV_BODY) return;
+
+		if (len > 8388608) throw new IllegalArgumentException("必须使用PostHandler");
+
+		if (len <= 65535) {
+			postBuffer = (ByteList) ctx.alloc().buffer(false, (int) len);
+			flag |= EXT_POST_BUFFER;
+		} else {
+			// if "USE_CACHE" is on
+			if (postBuffer == null) postBuffer = new ByteList();
+			postBuffer.clear();
+		}
+	}
 
 	public long postExceptLength() { return exceptPostSize; }
-	public void postMaxLength(long len) { postSize = len; }
-	public void postMaxTime(int t) { time += t;}
+	public void postAccept(long len, int t) {
+		if (state == RECV_HEAD) state = RECV_BODY;
+		else throw new IllegalStateException();
+		postSize = len;
+		time += t;
+	}
+	public boolean postAccepted() { return state == RECV_BODY; }
 
 	private static void validateHeader(Headers h) throws IllegalRequestException {
 		int c = h.getCount("content-length");
@@ -393,10 +360,10 @@ public final class HttpServer11 implements
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
 		NamespaceKey id = event.id;
-		if (id.equals(ChunkSplitter.CHUNK_IN_EOF) || id.equals(MyChannel.IN_EOF)) {
+		if (id.equals(ChunkSplitter.CHUNK_IN_EOF)) {
 			if (state != RECV_BODY) return;
 
-			req.postFields = ph == null ? postBuffer : null;
+			req.postFields = ph == null ? postBuffer : ph;
 			process();
 			event.setResult(Event.RESULT_ACCEPT);
 		}
@@ -412,28 +379,20 @@ public final class HttpServer11 implements
 			return;
 		}
 
-		boolean alreadyError = (flag&HAS_ERROR) != 0;
-		flag |= HAS_ERROR;
+		boolean alreadyError = (flag&UNCAUGHT_ERROR) != 0;
+		flag |= UNCAUGHT_ERROR;
 		if (req != null && state <= SEND_HEAD) {
 			try {
-				h.clear();
-				if ((req.action()&Action.MAY_BODY) != 0) {
-					h.put("connection", "close");
+				req.responseHeader.clear();
+
+				if (body != null) {
+					try {
+						body.release(ch);
+					} catch (Exception ignored) {}
+					body = null;
 				}
 
-				finish(false);
-
-				if (ex instanceof IllegalRequestException) {
-					IllegalRequestException ire = (IllegalRequestException) ex;
-					code = ire.code;
-					body = ire.response == null ? StringResponse.httpErr(ire.code) : ire.response;
-				} else if (!alreadyError) {
-					code = 500;
-					body = makeErrorResponse(ex);
-
-					ex.printStackTrace();
-				}
-
+				onError(ex);
 				sendHead();
 				return;
 			} catch (Throwable ignored) {}
@@ -442,28 +401,54 @@ public final class HttpServer11 implements
 		ctx.exceptionCaught(ex);
 	}
 
+	private boolean checkHeader(ChannelCtx ctx, PostSetting cfg) throws IOException {
+		try {
+			router.checkHeader(req, cfg);
+			ctx.channelOpened();
+		} catch (Throwable e) {
+			onError(e);
+			sendHead();
+			return true;
+		}
+		return false;
+	}
 	private void process() throws IOException {
+		exceptPostSize = -2;
 		state = PROCESSING;
-		Response resp;
 		try {
 			if (ph != null) {
+				mergedRead(ch, ByteList.EMPTY);
 				ph.onSuccess();
-				req.ctx().put(Request.CTX_POST_HANDLER, ph);
 			}
-			resp = router.response(req, this);
+			Response resp = router.response(req, this);
+			if (body == null) body = resp;
+			else assert resp == null;
 		} catch (Throwable e) {
-			// noinspection all
-			if (e instanceof IllegalRequestException) Helpers.athrow(e);
-			resp = makeErrorResponse(e);
+			onError(e);
 		}
-		if (body == null) body = resp;
 		sendHead();
+	}
+	private void onError(Throwable e) {
+		if (exceptPostSize != -2) {
+			req.responseHeader.put("connection", "close");
+		}
+
+		if (e instanceof IllegalRequestException) {
+			IllegalRequestException ire = (IllegalRequestException) e;
+
+			code = ire.code;
+			body = ire.response == null ? StringResponse.httpErr(ire.code) : ire.response;
+		} else {
+			code = 500;
+			body = makeErrorResponse(e);
+
+			e.printStackTrace();
+		}
 	}
 
 	private Response makeErrorResponse(Throwable e) {
-		File source = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\java");
-		if (source.isDirectory()) return StringResponse.forError(0, e);
-		/*if (!DEBUG)*/ return StringResponse.httpErr(500);
+		if (NativeLibrary.IN_DEV) return GreatErrorPage.display(req, e);
+		return StringResponse.httpErr(500);
 	}
 
 	// region Write head
@@ -479,13 +464,16 @@ public final class HttpServer11 implements
 	}
 
 	private void sendHead() throws IOException {
-		state = SEND_HEAD;
-		if (code == 0) code = body == null ? 500 : 200;
+		if (code == 0) code = 200;
+		if (body == Response.EMPTY) body = null; // fast path
 
-		ByteList hdr = IOUtil.getSharedByteBuf();
+		ByteList hdr = IOUtil.ddLayeredByteBuf();
 		hdr.putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put((byte) ' ').putAscii(Code.getDescription(code)).putAscii("\r\n");
 
-		if (req != null && "close".equalsIgnoreCase(req.header("connection"))) h.put("connection", "close");
+		req.packToHeader();
+		Headers h = req.responseHeader;
+
+		if ("close".equalsIgnoreCase(req.getField("connection"))) h.put("connection", "close");
 		else if ((flag & KEPT_ALIVE) == 0) {
 			if (SERVER_NAME != null) h.putIfAbsent("server", SERVER_NAME);
 			h.putIfAbsent("connection", "keep-alive");
@@ -494,6 +482,7 @@ public final class HttpServer11 implements
 		if (body == null) h.put("content-length", "0");
 		else body.prepare(this, h);
 
+		state = SEND_HEAD;
 		_enc = ENC_PLAIN;
 
 		if (req != null && req.containsKey("accept-encoding") &&
@@ -501,7 +490,7 @@ public final class HttpServer11 implements
 			(flag&WANT_COMPRESS) != 0 && !h.containsKey("content-encoding")) {
 
 			_maxQ = 0;
-			Headers.decodeVal(req.get("accept-encoding"), this);
+			Headers.complexValue(req.get("accept-encoding"), this, false);
 		}
 
 		int enc = _enc;
@@ -522,6 +511,7 @@ public final class HttpServer11 implements
 			hdr.putShort(0x1f8b).putLong((long) Deflater.DEFLATED << 56);
 			out.handler().channelWrite(out, hdr);
 		}
+		hdr.close();
 
 		time = System.currentTimeMillis() + router.writeTimeout(req, body);
 		state = body == null ? SEND_DONE : SEND_BODY;
@@ -540,17 +530,26 @@ public final class HttpServer11 implements
 
 		if (state == HANG) t.hanging.remove(this);
 
-		t.releaseReq(this);
+		if (req != null) {
+			req.free();
+			t.requests.reserve(req);
+			req = null;
+		}
 
-		if ((flag & EXT_POST_BUFFER) != 0) {
-			ch.alloc().reserve(postBuffer);
-			postBuffer = null;
+		ByteList pb = postBuffer;
+		postBuffer = null;
+		if (pb != null) {
+			if ((flag & EXT_POST_BUFFER) != 0) {
+				try {
+					pb.close();
+				} catch (IOException ignored) {}
+			} else if (close) {
+				pb._free();
+			}
 		}
 
 		code = 0;
 		flag &= (KEPT_ALIVE | GZIP_MODE);
-		if (close) t.releaseHeader(this);
-		else h.clear();
 
 		if (def != null && close) def.end();
 
@@ -567,6 +566,7 @@ public final class HttpServer11 implements
 			body = null;
 		}
 		if (ph != null) {
+			ch.channel().remove("h11@body_handler");
 			try {
 				ph.onComplete();
 			} catch (Exception e1) {
@@ -575,14 +575,20 @@ public final class HttpServer11 implements
 			}
 			ph = null;
 		}
+		try {
+			super.channelClosed(ch);
+		} catch (Exception e1) {
+			if (e == null) e = e1;
+			else e.addSuppressed(e1);
+		}
 		if (e != null) Helpers.athrow(e);
 	}
 
 	public void finishHandler(HFinishHandler o) { fh = o; }
-	public void postHandler(HPostHandler o) { ph = o; }
+	public void postHandler(HPostHandler o) { ph = o; ch.channel().addAfter(ch, "h11@body_handler", o); }
 
 	public boolean hasError() {
-		return (flag & HAS_ERROR) != 0;
+		return (flag & UNCAUGHT_ERROR) != 0;
 	}
 
 	// region ResponseHeader
@@ -594,7 +600,7 @@ public final class HttpServer11 implements
 	}
 
 	@Override
-	public ResponseHeader die() { h.put("connection", "close"); return this; }
+	public ResponseHeader die() { req.responseHeader.put("connection", "close"); return this; }
 
 	public ResponseHeader chunked() { flag |= CHUNK; return this; }
 	public ResponseHeader compressed() { flag |= WANT_COMPRESS; return this; }
@@ -604,38 +610,28 @@ public final class HttpServer11 implements
 
 	@Override
 	public ResponseHeader date() {
-		h.put("date", TSO.get().toRFC(System.currentTimeMillis()));
+		req.responseHeader.put("date", TSO.get().toRFC(System.currentTimeMillis()));
 		return this;
 	}
 
 	@Override
 	public ResponseHeader header(String k, String v) {
-		h.put(k, v);
+		req.responseHeader.put(k, v);
 		return this;
 	}
 
 	@Override
 	public ResponseHeader headers(String hdr) {
-		for (String line : new LineReader(hdr, true)) {
-			int pos = line.indexOf(':');
-			h.put(line.substring(0, pos), line.substring(pos + 1).trim());
-		}
+		req.responseHeader.putAllS(hdr);
 		return this;
 	}
 
 	@Override
-	public Headers headers() {
-		return h;
-	}
+	public Headers headers() { return req.responseHeader; }
 
 	@Override
 	public ChannelCtx ch() {
 		return ch;
-	}
-
-	@RequireUpgrade
-	public Response upgradeH2() {
-		return null;
 	}
 
 	// endregion
@@ -767,7 +763,7 @@ public final class HttpServer11 implements
 	}
 
 	private float _maxQ;
-	private int _enc;
+	private byte _enc;
 	@Override
 	public void accept(String k, String v) {
 		int sup = isTypeSupported(k);
@@ -782,7 +778,7 @@ public final class HttpServer11 implements
 			}
 
 			if (Q > _maxQ) {
-				_enc = sup;
+				_enc = (byte) sup;
 				_maxQ = Q;
 			}
 		}

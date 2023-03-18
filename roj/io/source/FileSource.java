@@ -1,6 +1,6 @@
 package roj.io.source;
 
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.io.SourceInputStream;
 import roj.util.DynByteBuf;
 
@@ -110,7 +110,7 @@ public class FileSource extends Source {
 
 	@Override
 	public void moveSelf(long from, long to, long length) throws IOException {
-		FileUtil.transferFileSelf(channel(), from, to, length);
+		IOUtil.transferFileSelf(channel(), from, to, length);
 	}
 
 	@Override

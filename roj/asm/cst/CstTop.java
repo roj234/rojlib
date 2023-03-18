@@ -69,27 +69,27 @@ public final class CstTop extends Constant {
 	public CstTop set(CstUTF name, CstUTF type) {
 		this.type = NAME_AND_TYPE;
 
-		strVal = name.getString();
-		strVal2 = type.getString();
-		hash = (name.hashCode() << 16) ^ type.hashCode();
+		strVal = name.str();
+		strVal2 = type.str();
+		hash = 31 * name.hashCode() + type.hashCode();
 		return this;
 	}
 
 	public CstTop set(byte cat, CstUTF value) {
 		type = cat;
 
-		strVal = value.getString();
-		hash = value.hashCode() * cat;
+		strVal = value.str();
+		hash = 31 * value.hashCode() + cat;
 		return this;
 	}
 
-	public CstTop set(byte cat, CstClass owner, CstNameAndType desc) {
+	public CstTop set(byte cat, CstClass clazz, CstNameAndType desc) {
 		type = cat;
 
-		strVal = owner.getValue().getString();
-		strVal2 = desc.getName().getString();
-		strVal3 = desc.getType().getString();
-		hash = (owner.hashCode() << 16) ^ desc.hashCode() * cat;
+		strVal = clazz.name().str();
+		strVal2 = desc.name().str();
+		strVal3 = desc.getType().str();
+		hash = 31 * (31 * desc.hashCode() + clazz.name().hashCode()) + cat;
 		return this;
 	}
 
@@ -97,9 +97,9 @@ public final class CstTop extends Constant {
 		type = METHOD_HANDLE;
 
 		intVal = kind;
-		strVal = ref.getClassName();
-		strVal2 = ref.desc().getName().getString();
-		strVal3 = ref.desc().getType().getString();
+		strVal = ref.className();
+		strVal2 = ref.desc().name().str();
+		strVal3 = ref.desc().getType().str();
 		hash = ref.hashCode() << 3 | kind;
 		return this;
 	}
@@ -108,8 +108,8 @@ public final class CstTop extends Constant {
 		type = cat;
 
 		intVal = table;
-		strVal = desc.getName().getString();
-		strVal2 = desc.getType().getString();
+		strVal = desc.name().str();
+		strVal2 = desc.getType().str();
 		hash = (desc.hashCode() * 31 + table) * 31 * cat;
 		return this;
 	}
@@ -122,42 +122,37 @@ public final class CstTop extends Constant {
 		Constant c = (Constant) o;
 		if (c.type() != type) return false;
 		switch (type) {
-			case UTF:
-				return strVal.equals(((CstUTF) c).getString());
-			case INT:
-				return intVal == ((CstInt) c).value;
-			case FLOAT:
-				return intVal == Float.floatToRawIntBits(((CstFloat) c).value);
-			case LONG:
-				return longVal == ((CstLong) c).value;
-			case DOUBLE:
-				return longVal == Double.doubleToRawLongBits(((CstDouble) c).value);
+			case UTF: return strVal.equals(((CstUTF) c).str());
+			case INT: return intVal == ((CstInt) c).value;
+			case FLOAT: return intVal == Float.floatToRawIntBits(((CstFloat) c).value);
+			case LONG: return longVal == ((CstLong) c).value;
+			case DOUBLE: return longVal == Double.doubleToRawLongBits(((CstDouble) c).value);
 			case CLASS:
 			case MODULE:
 			case PACKAGE:
 			case STRING:
 			case METHOD_TYPE:
-				return strVal.equals(((CstRefUTF) c).getValue().getString());
+				return strVal.equals(((CstRefUTF) c).name().str());
 			case NAME_AND_TYPE: {
 				CstNameAndType r = (CstNameAndType) c;
-				return strVal.equals(r.getName().getString()) && strVal2.equals(r.getType().getString());
+				return strVal.equals(r.name().str()) && strVal2.equals(r.getType().str());
 			}
 			case FIELD:
 			case METHOD:
 			case INTERFACE: {
 				CstRef r = (CstRef) c;
-				return strVal.equals(r.getClassName()) && strVal2.equals(r.desc().getName().getString()) && strVal3.equals(r.desc().getType().getString());
+				return strVal.equals(r.className()) && strVal2.equals(r.desc().name().str()) && strVal3.equals(r.desc().getType().str());
 			}
 			case METHOD_HANDLE: {
 				CstMethodHandle r = (CstMethodHandle) c;
-				return intVal == r.kind && strVal.equals(r.getRef().getClassName()) && strVal2.equals(r.getRef().desc().getName().getString()) && strVal3.equals(
-					r.getRef().desc().getType().getString());
+				return intVal == r.kind && strVal.equals(r.getRef().className()) && strVal2.equals(r.getRef().desc().name().str()) && strVal3.equals(
+					r.getRef().desc().getType().str());
 			}
 			case DYNAMIC:
 			case INVOKE_DYNAMIC: {
 				CstDynamic r = (CstDynamic) c;
 				CstNameAndType t = r.desc();
-				return intVal == r.tableIdx && strVal.equals(t.getName().getString()) && strVal2.equals(t.getType().getString());
+				return intVal == r.tableIdx && strVal.equals(t.name().str()) && strVal2.equals(t.getType().str());
 			}
 		}
 		return false;

@@ -28,13 +28,13 @@ import java.util.UUID;
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-@Nixim("net.minecraft.world.WorldServer")
+@Nixim("/")
 abstract class NxTickChunk extends WorldServer {
 	NxTickChunk() {
 		super(null, null, null, 0, null);
 	}
 
-	@Shadow("field_73063_M")
+	@Shadow()
 	private PlayerChunkMap playerChunkMap;
 
 	@Inject("/")

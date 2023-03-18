@@ -108,7 +108,7 @@ public class MCHooks {
 
 		SwitchSegment _switch = CodeWriter.newSwitch(TABLESWITCH);
 		cw.switches(_switch);
-		cw.label(_switch.def);
+		_switch.def = cw.label();
 		cw.one(ACONST_NULL);
 		cw.one(ARETURN);
 

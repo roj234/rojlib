@@ -36,7 +36,7 @@ public final class HKlass {
 		interfaces.clear();
 		interfaces.ensureCapacity(info.interfaces.size());
 		for (CstClass c : info.interfaces) {
-			interfaces.add(c.getValue().getString());
+			interfaces.add(c.name().str());
 		}
 
 		List<? extends MoFNode> nodes = info.fields;
@@ -47,10 +47,10 @@ public final class HKlass {
 
 		for (int i = 0; i < nodes.size(); i++) {
 			MoFNode field = nodes.get(i);
-			if ((field.accessFlag()&AccessFlag.STATIC) != 0) {
-				staticFields.add(new HFieldDesc(info.name, field.name(), field.rawDesc(), field.accessFlag()));
+			if ((field.modifier()&AccessFlag.STATIC) != 0) {
+				staticFields.add(new HFieldDesc(info.name, field.name(), field.rawDesc(), field.modifier()));
 			} else {
-				Desc e = new Desc(info.name, field.name(), field.rawDesc(), field.accessFlag());
+				Desc e = new Desc(info.name, field.name(), field.rawDesc(), field.modifier());
 				fields.add(e);
 				fieldSum.add(e);
 			}
@@ -64,8 +64,8 @@ public final class HKlass {
 
 		for (int i = 0; i < nodes.size(); i++) {
 			MoFNode method = nodes.get(i);
-			HMethodDesc e = new HMethodDesc(info.name, method.name(), method.rawDesc(), method.accessFlag());
-			if ((method.accessFlag()&(AccessFlag.PRIVATE|AccessFlag.STATIC|AccessFlag.FINAL)) != 0) {
+			HMethodDesc e = new HMethodDesc(info.name, method.name(), method.rawDesc(), method.modifier());
+			if ((method.modifier()&(AccessFlag.PRIVATE|AccessFlag.STATIC|AccessFlag.FINAL)) != 0) {
 				methods.add(e);
 			} else {
 				iMethods.add(e);

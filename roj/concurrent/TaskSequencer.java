@@ -101,6 +101,7 @@ public class TaskSequencer implements Runnable {
 
 				time = System.currentTimeMillis();
 			} else {
+				next.add(task);
 				break;
 			}
 		}
@@ -146,8 +147,7 @@ public class TaskSequencer implements Runnable {
 
 		add.add(t);
 		Scheduled peek = remover.peek();
-		long time = peek == null ? Long.MAX_VALUE : peek.nextRun;
-		if (t.nextRun < time) LockSupport.unpark(worker);
+		if (peek == null || t.nextRun < peek.nextRun) LockSupport.unpark(worker);
 
 		lock.unlock();
 		return t;

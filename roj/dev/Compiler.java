@@ -8,7 +8,6 @@ import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.SimpleList;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.text.CharList;
@@ -105,7 +104,7 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 				proc.waitFor();
 
 				int i = output.getAbsolutePath().length()+1;
-				List<File> files1 = FileUtil.findAllFiles(output);
+				List<File> files1 = IOUtil.findAllFiles(output);
 				compiled = new SimpleList<>(files1.size());
 				for (File file1 : files1) {
 					compiled.add(new ByteListOutput("", "") {
@@ -232,13 +231,12 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 				cw.field(Opcodes.GETFIELD, data, 2);
 				cw.invoke(Opcodes.INVOKESTATIC, "roj/dev/Compiler", "proxyGetOutput", TypeHelper.class2asm(new Class<?>[]{StandardJavaFileManager.class, JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class, List.class, String.class}, JavaFileObject.class));
 			} else {
-				cw.invoke_interface(jfm, cw.mn.name(), desc);
+				cw.invokeItf(jfm, cw.mn.name(), desc);
 			}
-			cw.one(cw.mn.getReturnType().shiftedOpcode(Opcodes.IRETURN, true));
+			cw.one(cw.mn.returnType().shiftedOpcode(Opcodes.IRETURN, true));
 			cw.finish();
 		}
 
-		data.dump();
 		return ClassDefiner.INSTANCE.defineClassC("roj.dev.Compiler$SFMHelper", Parser.toByteArrayShared(data));
 	}
 
@@ -280,11 +278,13 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 			}
 			sb.append(errorMsg(diag.getKind())).append(':').append(' ').append(diag.getMessage(Locale.CHINA)).append('\n');
 			if (diag.getLineNumber() >= 0) {
-				sb.append(getNearCode(diag.getSource(), diag.getLineNumber())).append('\n');
-				for (int i = 0; i < diag.getColumnNumber(); i++) {
-					sb.append(' ');
+				try {
+					sb.append(getNearCode(diag.getSource(), diag.getLineNumber())).append('\n');
+					for (int i = 0; i < diag.getColumnNumber(); i++) sb.append(' ');
+					sb.set(sb.length()-1, '^');
+				} catch (Throwable e) {
+					sb.append("无法显示代码: ").append(e.getClass().getName()).append(": ").append(e.getMessage());
 				}
-				sb.set(sb.length() - 1, '^');
 				sb.append('\n');
 			}
 			if (showErrorCode) out.println(diag.getCode());
@@ -303,19 +303,11 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 
 	private String errorMsg(Diagnostic.Kind kind) {
 		switch (kind) {
-			case NOTE:
-				return "注";
-			case ERROR:
-				errors++;
-				return "错误";
-			case OTHER:
-				return "其他";
-			case WARNING:
-				warnings++;
-				return "警告";
-			case MANDATORY_WARNING:
-				warnings++;
-				return "强警告";
+			case NOTE: return "注";
+			case ERROR: errors++; return "错误";
+			case OTHER: return "其他";
+			case WARNING: warnings++; return "警告";
+			case MANDATORY_WARNING: warnings++; return "强警告";
 		}
 		return "";
 	}

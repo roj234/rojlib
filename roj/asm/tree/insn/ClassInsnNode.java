@@ -12,11 +12,7 @@ import roj.asm.visitor.CodeWriter;
  * @author Roj234
  * @since 2021/5/29 17:16
  */
-public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
-	public ClassInsnNode(byte code) {
-		super(code);
-	}
-
+public final class ClassInsnNode extends InsnNode {
 	public ClassInsnNode(byte code, String owner) {
 		super(code);
 		this.owner = owner;
@@ -24,38 +20,13 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
 
 	public ClassInsnNode(byte code, CstClass clazz) {
 		super(code);
-		this.owner = clazz.getValue().getString();
+		this.owner = clazz.name().str();
 	}
 
-	@Override
-	protected boolean validate() {
-		switch (code) {
-			case Opcodes.NEW:
-			case Opcodes.CHECKCAST:
-			case Opcodes.INSTANCEOF:
-			case Opcodes.ANEWARRAY:
-				return true;
-			default:
-				return false;
-		}
-	}
-
-	@Override
-	public int nodeType() {
-		return T_CLASS;
-	}
+	protected boolean validate() { return OpcodeUtil.category(code) == OpcodeUtil.CATE_CLASS; }
+	public int nodeType() { return T_CLASS; }
 
 	public String owner;
-
-	public String owner() {
-		return owner;
-	}
-
-	@Override
-	public void owner(String clazz) {
-		// noinspection all
-		this.owner = clazz.toString();
-	}
 
 	@Override
 	public void serialize(CodeWriter cw) {
@@ -66,9 +37,7 @@ public final class ClassInsnNode extends InsnNode implements IClassInsnNode {
 	}
 
 	@Override
-	public int nodeSize(int prevBci) {
-		return 3;
-	}
+	public int nodeSize(int prevBci) { return 3; }
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder().append(OpcodeUtil.toString0(code)).append(" ").append(owner.endsWith(";") ? TypeHelper.parseField(owner) : owner);

@@ -2,7 +2,6 @@ package roj.net.http.srv;
 
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.net.URIUtil;
 import roj.net.http.Action;
@@ -55,7 +54,7 @@ public final class Request extends Headers {
 		this.action = action;
 		this.path = path;
 		try {
-			safePath = FileUtil.safePath(URIUtil.decodeURI(path));
+			safePath = IOUtil.safePath(URIUtil.decodeURI(path));
 		} catch (MalformedURLException e) {
 			throw new IllegalRequestException(400, "bad query");
 		}

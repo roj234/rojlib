@@ -6,7 +6,7 @@ import roj.collect.TrieTree;
 import roj.config.ParseException;
 import roj.config.word.Tokenizer;
 import roj.config.word.Word;
-import roj.kscript.parser.JSLexer;
+import roj.mildwind.parser.JSLexer;
 import roj.text.TextUtil;
 
 /**

@@ -39,11 +39,20 @@ public class SipHashMap<K extends CharSequence, V> extends MyHashMap<K, V> {
 		}
 
 		long v = hash.digest(id);
-		return ((int) (v >>> 32) ^ (int) v);
+		v = (v >>> 32) ^ v;
+		v = (v >>> 16) ^ v;
+		v = (v >>>  8) ^ v;
+		v = (v >>>  4) ^ v;
+		return (int) v;
 	}
 
 	@Override
 	public Entry<K, V> getOrCreateEntry(K id) {
+		if (size > length * loadFactor) {
+			length <<= 1;
+			resize();
+		}
+
 		Entry<K, V> entry = getEntryFirst(id, true);
 		if (entry.v == UNDEFINED) return entry;
 		int i = 4;

@@ -18,12 +18,13 @@ import java.util.List;
  * @since 2021/8/25 1:06
  */
 public interface ReflectionClient {
-	ReflectionClient HELPER = preloadNecessaryClassesBeforeDefine(DirectAccessor.builder(ReflectionClient.class)).access(GuiMainMenu.class, "field_73975_c", null, "setMainMenuSplash")
-																												 .access(FMLClientHandler.class, "resourcePackList")
-																												 .access(SoundHandler.class, "field_147694_f", "getSoundManager", null)
-																												 .access(SoundManager.class, "field_148617_f", "getInited", null)
-																												 .delegate(Render.class, "func_177067_a", "renderName")
-																												 .build();
+	ReflectionClient HELPER = preloadNecessaryClassesBeforeDefine(DirectAccessor.builder(ReflectionClient.class))
+		.access(GuiMainMenu.class, "field_73975_c", null, "setMainMenuSplash")
+		.access(FMLClientHandler.class, "resourcePackList")
+		.access(SoundHandler.class, "field_147694_f", "getSoundManager", null)
+		.access(SoundManager.class, "field_148617_f", "getInited", null)
+		.delegate(Render.class, "func_177067_a", "renderName")
+		.build();
 
 	static DirectAccessor<ReflectionClient> preloadNecessaryClassesBeforeDefine(DirectAccessor<ReflectionClient> builder) {
 		return builder;

@@ -1,8 +1,10 @@
 package roj.archive.qz;
 
-import roj.archive.qz.xz.*;
+import roj.archive.qz.xz.LZMA2Options;
+import roj.archive.qz.xz.LZMAInputStream;
+import roj.archive.qz.xz.LZMAOutputStream;
+import roj.archive.qz.xz.MemoryLimitException;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,15 +32,10 @@ public final class LZMA extends QZCoder {
         int lp = props / 9;
         int lc = props - lp * 9;
 
-        LZMA2Options options = new LZMA2Options();
-        try {
-            options.setPb(pb);
-            options.setLcLp(lc, lp);
-            options.setDictSize(dictSize);
-        } catch (UnsupportedOptionsException e) {
-            Helpers.athrow(e);
-        }
-        return options;
+        return new LZMA2Options()
+            .setPb(pb)
+            .setLcLp(lc, lp)
+            .setDictSize(dictSize);
     }
     public void setOptions(LZMA2Options options) {
         this.options = options;
@@ -55,7 +52,7 @@ public final class LZMA extends QZCoder {
         int dictSize;
 
         if (options != null) {
-            props = (byte) ((options.getPb() * 5 + options.getLp()) * 9 + options.getLc());
+            props = options.getPropByte();
             dictSize = options.getDictSize();
         } else {
             props = this.props;
@@ -73,13 +70,12 @@ public final class LZMA extends QZCoder {
 
     @Override
     public String toString() {
-        return "LZMA:"+(31-Integer.numberOfLeadingZeros(options==null?dictSize:options.getDictSize()));
+        return "LZMA:"+(options != null ? options : (31-Integer.numberOfLeadingZeros(dictSize)));
     }
 
     void writeOptions(DynByteBuf buf) {
         if (options != null) {
-            byte propsByte = (byte) ((options.getPb() * 5 + options.getLp()) * 9 + options.getLc());
-            buf.put(propsByte).putIntLE(options.getDictSize());
+            buf.put(options.getPropByte()).putIntLE(options.getDictSize());
         } else {
             buf.put(props).putIntLE(dictSize);
         }

@@ -1,10 +1,11 @@
 package roj.config.exch;
 
 import roj.config.NBTParser;
+import roj.config.VinaryParser;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.Type;
-import roj.config.serial.Structs;
+import roj.config.serial.CVisitor;
 import roj.util.DynByteBuf;
 
 import java.util.AbstractList;
@@ -14,26 +15,24 @@ import java.util.AbstractList;
  * @since 2022/5/17 1:43
  */
 public final class TByteArray extends CList {
-	private class Bytes extends AbstractList<CEntry> {
-		TByte cache = new TByte((byte) 0);
+	private final class Bytes extends AbstractList<CEntry> {
+		private final TByte ref = new TByte((byte) 0);
 
 		@Override
-		public CEntry get(int index) {
-			cache.value = data[index];
-			return cache;
+		public CEntry get(int i) {
+			ref.value = data[i];
+			return ref;
 		}
 
 		@Override
-		public CEntry set(int index, CEntry element) {
-			cache.value = data[index];
-			data[index] = (byte) element.asInteger();
-			return cache;
+		public CEntry set(int i, CEntry e) {
+			ref.value = data[i];
+			data[i] = (byte) e.asInteger();
+			return ref;
 		}
 
 		@Override
-		public int size() {
-			return data.length;
-		}
+		public int size() { return data.length; }
 	}
 
 	public byte[] data;
@@ -44,32 +43,15 @@ public final class TByteArray extends CList {
 		this.data = data;
 	}
 
-	//    重复使用一个对象会出问题么
-	//    Immutable TByte ?
-	//    出了问题再说吧
+	public Object unwrap() { return data; }
 
-	@Override
-	public Object unwrap() {
-		return data;
+	public byte getNBTType() { return NBTParser.BYTE_ARRAY; }
+
+	protected void toBinary(DynByteBuf w, VinaryParser struct) {
+		w.put((byte) (((1 + Type.Int1.ordinal()) << 4))).putVUInt(data.length).write(data);
 	}
 
-	@Override
-	public byte getNBTType() {
-		return NBTParser.BYTE_ARRAY;
-	}
+	public void toB_encode(DynByteBuf w) { w.putAscii(Integer.toString(data.length)).put((byte) ':').put(data); }
 
-	@Override
-	public void toNBT(DynByteBuf w) {
-		w.putInt(data.length).write(data);
-	}
-
-	@Override
-	public void toBinary(DynByteBuf w, Structs struct) {
-		w.put((byte) (((1 + Type.Int1.ordinal()) << 4))).putVarInt(data.length, false).write(data);
-	}
-
-	@Override
-	public void toB_encode(DynByteBuf w) {
-		w.putAscii(Integer.toString(data.length)).put((byte) ':').put(data);
-	}
+	public void forEachChild(CVisitor ser) { ser.value(data); }
 }

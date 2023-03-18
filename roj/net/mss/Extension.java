@@ -10,8 +10,7 @@ public class Extension {
 		pre_shared_certificate = 2,
 		session = 3,
 		certificate_request = 4,
-		certificate = 5,
-		certificate_verify = 6;
+		certificate = 5;
 
 	public static CharMap<DynByteBuf> read(DynByteBuf buf) {
 		int len = buf.readUnsignedShort();
@@ -39,5 +38,21 @@ public class Extension {
 				buf.putShort(b.readableBytes()).put(b);
 			}
 		}
+	}
+
+	public static void writeSSL(CharMap<DynByteBuf> ext, DynByteBuf buf) {
+		buf.putShort(0);
+		int pos = buf.wIndex();
+		if (ext == null) return;
+		for (CharMap.Entry<DynByteBuf> entry : ext.selfEntrySet()) {
+			DynByteBuf b = entry.getValue();
+			buf.putShort(entry.getChar());
+			if (b == null) {
+				buf.putShort(0);
+			} else {
+				buf.putShort(b.readableBytes()).put(b);
+			}
+		}
+		buf.putShort(pos-2, buf.wIndex()-pos);
 	}
 }

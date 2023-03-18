@@ -14,7 +14,6 @@ import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.concurrent.FastThreadLocal;
 import roj.concurrent.TaskPool;
 import roj.mapper.util.*;
 import roj.text.CharList;
@@ -38,7 +37,7 @@ import java.util.function.Consumer;
  * @since 2020/8/19 21:32
  */
 public final class MapUtil {
-	private static final FastThreadLocal<MapUtil> ThreadBasedCache = FastThreadLocal.withInitial(MapUtil::new);
+	private static final ThreadLocal<MapUtil> ThreadBasedCache = ThreadLocal.withInitial(MapUtil::new);
 
 	public static final int CPU = Runtime.getRuntime().availableProcessors();
 
@@ -102,7 +101,7 @@ public final class MapUtil {
 
 		for (int k = 0; k < ctx.size(); k++) {
 			ConstantData data = ctx.get(k).getData();
-			if ((data.accessFlag() & (AccessFlag.INTERFACE | AccessFlag.ANNOTATION | AccessFlag.MODULE)) != 0) continue;
+			if ((data.modifier() & (AccessFlag.INTERFACE | AccessFlag.ANNOTATION | AccessFlag.MODULE)) != 0) continue;
 
 			List<String> superClasses = superClasses(data.parent, mapper.selfSupers);
 			c:
@@ -112,7 +111,7 @@ public final class MapUtil {
 				List<CstClass> itfs = data.interfaces;
 				for (int i = 0; i < itfs.size(); i++) {
 					CstClass itf = itfs.get(i);
-					String name = itf.getValue().getString();
+					String name = itf.name().str();
 					if (!superClasses.contains(name)) {
 						break c;
 					}
@@ -152,7 +151,7 @@ public final class MapUtil {
 
 				for (int j = 0; j < nodes.size(); j++) {
 					MoFNode method = nodes.get(j);
-					if ((method.accessFlag() & AccessFlag.PRIVATE) != 0) continue;
+					if ((method.modifier() & AccessFlag.PRIVATE) != 0) continue;
 					if ((natCheck.name = method.name()).startsWith("<")) continue;
 					natCheck.param = method.rawDesc();
 
@@ -172,7 +171,7 @@ public final class MapUtil {
 						s_get.owners.add(parent);
 
 						// native不能
-						if ((method.accessFlag() & AccessFlag.NATIVE) != 0) s_get.immutable = true;
+						if ((method.modifier() & AccessFlag.NATIVE) != 0) s_get.immutable = true;
 						// 至少有一个类不是要处理的类: 不能混淆
 						if (!methods.containsKey(parent)) s_get.immutable = true;
 
@@ -434,7 +433,8 @@ public final class MapUtil {
 			if (isInterface >= 0 && clz.interfaces().contains(testClass)) return true;
 
 			instClass = clz.parent();
-		} while (true);
+		} while (instClass != null);
+		return false;
 	}
 
 	// endregion
@@ -446,11 +446,7 @@ public final class MapUtil {
 		return writer;
 	}
 
-	private static TaskPool POOL = new TaskPool(1, CPU, 1, 60000, "Mapper-Worker");
-
-	public static void setAsyncPool(TaskPool task) {
-		POOL = task;
-	}
+	public static TaskPool POOL = TaskPool.CpuMassive();
 
 	static void async(Consumer<Context> action, List<List<Context>> ctxs) {
 		ArrayList<Worker> wait = new ArrayList<>(ctxs.size());

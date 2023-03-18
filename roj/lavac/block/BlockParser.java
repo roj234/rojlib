@@ -9,10 +9,12 @@ import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrLavaSpec;
-import roj.asm.tree.insn.*;
+import roj.asm.tree.insn.NPInsnNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.util.ExceptionEntry;
+import roj.asm.util.ExceptionEntryCWP;
+import roj.asm.visitor.Label;
+import roj.asm.visitor.SwitchSegment;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -324,19 +326,19 @@ public class BlockParser {
 
 		except(right_s_bracket);
 
-		LabelInsnNode bStr = mw.dup().store(v0).node(NPInsnNode.of(Opcodes.MONITORENTER)).label();
+		Label bStr = mw.dup().store(v0).node(NPInsnNode.of(Opcodes.MONITORENTER)).label();
 
 		except(left_s_bracket);
 		block();
 		except(right_s_bracket);
 
-		LabelInsnNode bEnd = mw.label();
-		LabelInsnNode end = new LabelInsnNode();
+		Label bEnd = mw.label();
+		Label end = new Label();
 
-		LabelInsnNode proc = mw.goto1(end).label();
+		Label proc = mw.goto1(end).label();
 		mw.load(v0).node(NPInsnNode.of(Opcodes.MONITOREXIT)).throw1();
 
-		mw.code.exceptions.add(new ExceptionEntry(bStr, bEnd, proc, (String) null));
+		mw.addException(bStr,bEnd,proc,(String)null);
 
 		mw.node(end).load(v0).node(NPInsnNode.of(Opcodes.MONITOREXIT));
 	}
@@ -384,14 +386,14 @@ public class BlockParser {
 	private int varId;
 
 	// finally的return之前的hook
-	private LabelInsnNode returnHookNode;
+	private Label returnHookNode;
 	private int returnHookNodeRef;
 
 	// 记录当前代码块增加的label, 以便超出作用域之后移除
 	private final SimpleList<List<String>> labelAdded = new SimpleList<>();
 	private final MyHashMap<String, LabelInfo> labels = new MyHashMap<>();
 	// 按照代码块(循环)深度递增的,方便break/continue寻找
-	private LabelInsnNode curBreak, curContinue;
+	private Label curBreak, curContinue;
 
 	// 对于循环上一条语句的label的支持
 	private LabelInfo labelBeforeLoop;
@@ -408,13 +410,13 @@ public class BlockParser {
 		except(left_l_bracket);
 
 		// todo auto-try
-		LabelInsnNode prevRh = returnHookNode;
+		Label prevRh = returnHookNode;
 		int prevRef = returnHookNodeRef;
-		returnHookNode = new LabelInsnNode();
+		returnHookNode = new Label();
 		returnHookNodeRef = 0;
 
-		LabelInsnNode blockEnd = new LabelInsnNode();
-		LabelInsnNode tryBegin = new LabelInsnNode(), tryEnd = new LabelInsnNode();
+		Label blockEnd = new Label();
+		Label tryBegin = new Label(), tryEnd = new Label();
 		mw.node(tryBegin);
 
 		block();
@@ -433,8 +435,7 @@ public class BlockParser {
 			if (w.type() == CATCH) {
 				if ((flag & 1) != 0) throw wr.err("duplicate:catch");
 
-				ExceptionEntry ex = new ExceptionEntry(tryBegin, tryEnd, new LabelInsnNode(), (String) null);
-				mw.code.exceptions.add(ex);
+				ExceptionEntryCWP ex = mw.addException(tryBegin,tryEnd,new Label(),null);
 
 				w = wr.next();
 				switch (w.type()) {
@@ -485,15 +486,14 @@ public class BlockParser {
 			}
 		}
 
-		LabelInsnNode rh = returnHookNode;
+		Label rh = returnHookNode;
 		int ref = returnHookNodeRef;
 		returnHookNode = prevRh;
 		returnHookNodeRef = prevRef;
 
 		if (w.type() == FINALLY) {
-			LabelInsnNode finHere = new LabelInsnNode();
-			ExceptionEntry ex = new ExceptionEntry(tryBegin, blockEnd, finHere, ExceptionEntry.ANY);
-			mw.code.exceptions.add(ex);
+			Label finHere = new Label();
+			mw.addException(tryBegin, blockEnd, finHere, ExceptionEntryCWP.ANY);
 
 			varId++;
 			Variable exc = new Variable("e."+ varId, null);
@@ -506,7 +506,7 @@ public class BlockParser {
 				int idx = wr.index;
 				if (hasNormalEnd) {
 					block();
-					mw.goto1(blockEnd = new LabelInsnNode());
+					mw.goto1(blockEnd = new Label());
 				}
 
 				// 副本的 2/3: return劫持
@@ -535,9 +535,9 @@ public class BlockParser {
 				//mixed ret;
 				//Throwable body;
 
-				Variable cate = new Variable("c."+ varId, mw.method.getReturnType());
-				Variable ret = new Variable("t."+ varId, mw.method.getReturnType());
-				LabelInsnNode body = new LabelInsnNode();
+				Variable cate = new Variable("c."+ varId, mw.method.returnType());
+				Variable ret = new Variable("t."+ varId, mw.method.returnType());
+				Label body = new Label();
 
 				// 副本的 1/3: 正常执行(可选)
 				if (hasNormalEnd) {
@@ -565,11 +565,11 @@ public class BlockParser {
 				block();
 
 				if (mw.executable()) {
-					LabelInsnNode return__ = new LabelInsnNode();
+					Label return__ = new Label();
 					mw.load(cate)
-					  .node(new JumpInsnNode(Opcodes.IFEQ, blockEnd))
+					  .jump(Opcodes.IFEQ, blockEnd)
 					  .load(cate).const1(1)
-					  .node(new JumpInsnNode(Opcodes.IF_acmpeq, return__))
+					  .jump(Opcodes.IF_acmpeq, return__)
 					  .load(exc).throw1()
 					  .node(return__).load(ret).return1();
 				}
@@ -615,7 +615,7 @@ public class BlockParser {
 			case Word.LITERAL:
 				LabelInfo info = labels.get(w.val());
 				if (info != null) {
-					InsnNode node = isBreak ? info.onBreak : info.onContinue;
+					Label node = isBreak ? info.onBreak : info.onContinue;
 					if (node != null) {
 						mw.goto1(node);
 						_assertBlockEnd();
@@ -628,7 +628,7 @@ public class BlockParser {
 				}
 				break;
 			case semicolon:
-				InsnNode node = isBreak ? curBreak : curContinue;
+				Label node = isBreak ? curBreak : curContinue;
 				if (node == null) {
 					_onError(w, "goto.not_label");
 				} else {
@@ -680,7 +680,7 @@ public class BlockParser {
 	 * if 条件判断语句
 	 */
 	private void _if() throws ParseException {
-		LabelInsnNode ifFalse = condition(true, right_s_bracket);
+		Label ifFalse = condition(true, right_s_bracket);
 		if (ifFalse == null) return;
 
 		body();
@@ -708,12 +708,12 @@ public class BlockParser {
 	 * @return false 跳转点
 	 */
 	@Nullable
-	private LabelInsnNode condition(boolean checkBracket, short end) throws ParseException {
+	private Label condition(boolean checkBracket, short end) throws ParseException {
 		if (checkBracket) except(left_s_bracket);
 
 		ExprParser parser = ep;
 
-		LabelInsnNode ifFalse = new LabelInsnNode();
+		Label ifFalse = new Label();
 
 		ASTNode equ = parser.read(file, (checkBracket ? 16 : 0), ifFalse);
 		if (equ == null) {
@@ -724,7 +724,7 @@ public class BlockParser {
 		equ.write(mw, false);
 
 		if (!(equ instanceof Binary)) { // 简单表达式 => IS_TRUE, 复杂的话有，嗯，Binary todo 测试
-			mw.if1(Opcodes.IFEQ, ifFalse);
+			mw.jump(Opcodes.IFEQ, ifFalse);
 		}
 
 		except(end);
@@ -739,7 +739,7 @@ public class BlockParser {
 	 *
 	 * @param ifFalse false跳转点
 	 */
-	private void _else(LabelInsnNode ifFalse) throws ParseException {
+	private void _else(Label ifFalse) throws ParseException {
 		Word word = wr.next();
 		if (word.type() != ELSE) {
 			wr.retractWord();
@@ -750,7 +750,7 @@ public class BlockParser {
 			return;
 		}
 
-		LabelInsnNode end = new LabelInsnNode();
+		Label end = new Label();
 
 		word = wr.next();
 		mw.goto1(end).node(ifFalse);
@@ -771,7 +771,7 @@ public class BlockParser {
 	 * for循环
 	 */
 	private void _for() throws ParseException {
-		LabelInsnNode continueTo = new LabelInsnNode();
+		Label continueTo = new Label();
 		mw.node(continueTo);
 
 		except(left_s_bracket);
@@ -789,7 +789,7 @@ public class BlockParser {
 			createdVar = false;
 		}
 
-		LabelInsnNode breakTo = condition(false, semicolon);
+		Label breakTo = condition(false, semicolon);
 		if (breakTo == null) return;
 
 		List<ASTNode> execLast = new SimpleList<>();
@@ -802,7 +802,7 @@ public class BlockParser {
 
 		except(right_s_bracket);
 
-		LabelInsnNode prevBrk = curBreak, prevCon = curContinue;
+		Label prevBrk = curBreak, prevCon = curContinue;
 		enterCycle(continueTo, breakTo);
 		try {
 			body();
@@ -811,12 +811,11 @@ public class BlockParser {
 		}
 
 		if (!execLast.isEmpty()) {
-			InsnNode node = continueTo.next();
 			mw.node(continueTo);
 			for (int i = 0; i < execLast.size(); i++) {
 				execLast.get(i).write(mw, true);
 			}
-			mw.goto1(node);
+			mw.goto1(continueTo);
 		} else {
 			mw.goto1(continueTo);
 		}
@@ -826,7 +825,7 @@ public class BlockParser {
 		if (createdVar) popVar();
 	}
 
-	private void enterCycle(LabelInsnNode continueTo, LabelInsnNode breakTo) {
+	private void enterCycle(Label continueTo, Label breakTo) {
 		LabelInfo info = labelBeforeLoop;
 		if (info != null) {
 			info.onBreak = breakTo;
@@ -840,7 +839,7 @@ public class BlockParser {
 		labelAdded.add(new SimpleList<>());
 	}
 
-	private void endCycle(LabelInsnNode prevContinueTo, LabelInsnNode prevBreakTo) {
+	private void endCycle(Label prevContinueTo, Label prevBreakTo) {
 		curContinue = prevContinueTo;
 		curBreak = prevBreakTo;
 		List<String> set = labelAdded.remove(labelAdded.size() - 1);
@@ -851,12 +850,12 @@ public class BlockParser {
 	 * do-while循环
 	 */
 	private void _do() throws ParseException {
-		LabelInsnNode prevBrk = curBreak, prevCon = curContinue;
+		Label prevBrk = curBreak, prevCon = curContinue;
 
-		LabelInsnNode continueTo = new LabelInsnNode();
+		Label continueTo = new Label();
 		mw.node(continueTo);
 
-		LabelInsnNode breakTo = new LabelInsnNode();
+		Label breakTo = new Label();
 		enterCycle(continueTo, breakTo);
 
 		try {
@@ -866,7 +865,7 @@ public class BlockParser {
 		}
 
 		except(WHILE);
-		LabelInsnNode breakTo1 = condition(true, right_s_bracket);
+		Label breakTo1 = condition(true, right_s_bracket);
 		if (breakTo1 == null) return;
 
 		mw.goto1(continueTo).node(breakTo).node(breakTo1);
@@ -878,12 +877,12 @@ public class BlockParser {
 	 * while循环
 	 */
 	private void _while() throws ParseException {
-		LabelInsnNode prevBrk = curBreak, prevCon = curContinue;
+		Label prevBrk = curBreak, prevCon = curContinue;
 
-		LabelInsnNode continueTo = new LabelInsnNode();
+		Label continueTo = new Label();
 		mw.node(continueTo);
 
-		LabelInsnNode breakTo = condition(true, right_s_bracket);
+		Label breakTo = condition(true, right_s_bracket);
 		if (breakTo == null) return;
 
 		enterCycle(continueTo, breakTo);
@@ -914,8 +913,8 @@ public class BlockParser {
 
 		except(left_l_bracket);
 
-		LabelInsnNode breakTo = new LabelInsnNode();
-		SwitchInsnNode node = new SwitchInsnNode(Opcodes.TABLESWITCH);
+		Label breakTo = new Label();
+		SwitchSegment node = new SwitchSegment(Opcodes.TABLESWITCH);
 
 		Type sType = expr.type();
 		int kind = 0;
@@ -990,9 +989,9 @@ public class BlockParser {
 					if (cst != null && !cst.equals(null)) {
 						// todo skip block
 					} else {
-						LabelInsnNode here = mw.label();
+						Label here = mw.label();
 						for (int i = 0; i < labelsCur.size(); i++) {
-							node.branches.add(new SwitchEntry(labelsCur.get(i).asInt(), here));
+							node.branch(labelsCur.get(i).asInt(), here);
 						}
 						switchBlock(breakTo);
 					}
@@ -1018,10 +1017,10 @@ public class BlockParser {
 
 			sectionFlag = prev;
 
-			if ((node.branches.size() + (node.def == null ? 0 : 1)) < 2) {
+			if ((node.targets.size() + (node.def == null ? 0 : 1)) < 2) {
 				_onWarning(w, "switch.too_less_case");
 				if (node.def != null) {
-					InsnNode next = node.def.next();
+					Label next = node.def;
 					System.out.println("switch.default.next= " + next);
 					System.out.println("todo: switch less than 2 branches to if");
 				}
@@ -1037,8 +1036,8 @@ public class BlockParser {
 	}
 
 	@SuppressWarnings("fallthrough")
-	private void switchBlock(LabelInsnNode endPoint) throws ParseException {
-		LabelInsnNode prevBrk = curBreak;
+	private void switchBlock(Label endPoint) throws ParseException {
+		Label prevBrk = curBreak;
 		enterCycle(null, endPoint);
 		try {
 			o:
@@ -1134,7 +1133,7 @@ public class BlockParser {
 			return true;
 		}
 
-		int pos = wr.lastWordBegin;
+		int pos = wr.prevIndex;
 		wr.index = pos;
 
 		// 变量赋值只能是 TYPE + LITERAL

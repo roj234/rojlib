@@ -5,7 +5,6 @@ import roj.io.IOUtil;
 import roj.mapper.MapUtil;
 import roj.mapper.Mapping;
 import roj.mapper.util.Desc;
-import roj.math.MathUtils;
 import roj.text.LineReader;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
@@ -150,7 +149,7 @@ public final class MCPMapping extends Mapping {
 				continue;
 			}
 
-			int slotId = MathUtils.parseInt(tmp.get(2));
+			int slotId = TextUtil.parseInt(tmp.get(2));
 
 			for (Desc desc : data) {
 				List<String> list = params.computeIfAbsent(desc, Helpers.fnArrayList());

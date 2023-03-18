@@ -24,17 +24,9 @@ public class CtxEmbedded extends MyChannel {
 	MyChannel owner;
 	InetSocketAddress remote, local;
 
-	public void setRemote(SocketAddress remote) {
-		this.remote = (InetSocketAddress) remote;
-	}
-
-	public void setLocal(SocketAddress local) {
-		this.local = (InetSocketAddress) local;
-	}
-
-	public MyChannel getOwner() {
-		return owner;
-	}
+	public void setRemote(SocketAddress remote) { this.remote = (InetSocketAddress) remote; }
+	public void setLocal(SocketAddress local) { this.local = (InetSocketAddress) local; }
+	public MyChannel getOwner() { return owner; }
 
 	public void clonePipelines() {
 		pipelineHead = pipelineTail = null;
@@ -46,10 +38,8 @@ public class CtxEmbedded extends MyChannel {
 		}
 	}
 
-	@SuppressWarnings("serial")
-	public CtxEmbedded(MyChannel sender) {
-		this.owner = sender;
-	}
+	public CtxEmbedded() {}
+	public CtxEmbedded(MyChannel sender) { this.owner = sender; }
 
 	@Override
 	public SocketAddress localAddress() {
@@ -64,44 +54,26 @@ public class CtxEmbedded extends MyChannel {
 	// region Empty embedded overrides
 
 	@Override
-	public void register(Selector sel, int ops, Object att) throws IOException {
-		throw new IOException("Channel is embedded");
-	}
+	public void register(Selector sel, int ops, Object att) throws IOException { throw new IOException("Channel is embedded"); }
 
 	@Override
 	public void readInactive() {}
-
 	@Override
 	public void readActive() {}
 
 	@Override
-	public <T> MyChannel setOption(SocketOption<T> k, T v) throws IOException {
-		return this;
-	}
+	public <T> MyChannel setOption(SocketOption<T> k, T v) throws IOException { return this; }
+	@Override
+	public <T> T getOption(SocketOption<T> k) throws IOException { throw new IOException("Channel is embedded"); }
 
 	@Override
-	public <T> T getOption(SocketOption<T> k) throws IOException {
-		throw new IOException("Channel is embedded");
-	}
-
+	protected boolean connect0(InetSocketAddress na) throws IOException { throw new IOException("Channel is embedded"); }
 	@Override
-	protected boolean connect0(InetSocketAddress na) throws IOException {
-		throw new IOException("Channel is embedded");
-	}
-
+	protected SocketAddress finishConnect0() throws IOException { throw new IOException("Channel is embedded"); }
 	@Override
-	protected SocketAddress finishConnect0() throws IOException {
-		throw new IOException("Channel is embedded");
-	}
+	protected void disconnect0() throws IOException { throw new IOException("Channel is embedded"); }
 
-	@Override
-	protected void disconnect0() throws IOException {
-		throw new IOException("Channel is embedded");
-	}
-
-	public void flush() throws IOException {
-		owner.flush();
-	}
+	public void flush() throws IOException { if (owner != null) owner.flush(); }
 
 	@Override
 	protected void read() throws IOException {}
@@ -109,19 +81,7 @@ public class CtxEmbedded extends MyChannel {
 	// endregion
 
 	@Override
-	public boolean isOpen() {
-		return state < CLOSED && owner.isOpen();
-	}
-
-	@Override
-	public boolean isInputOpen() {
-		return state < CLOSED && owner.isInputOpen();
-	}
-
-	@Override
-	public boolean isOutputOpen() {
-		return state < CLOSED && owner.isOutputOpen();
-	}
+	public boolean isOpen() { return state < CLOSED && (owner == null || owner.isOpen()); }
 
 	protected void write(Object o) throws IOException {
 		owner.fireChannelWrite(o);
@@ -129,7 +89,7 @@ public class CtxEmbedded extends MyChannel {
 
 	@Override
 	protected void closeHandler() throws IOException {
-		owner.postEvent(new Event(EMBEDDED_CLOSE, this));
+		if (owner != null) owner.postEvent(new Event(EMBEDDED_CLOSE, this));
 		super.closeHandler();
 	}
 }

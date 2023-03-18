@@ -1,6 +1,9 @@
 package ilib.asm.nx.client;
 
-import roj.asm.nixim.*;
+import roj.asm.nixim.Copy;
+import roj.asm.nixim.Inject;
+import roj.asm.nixim.Nixim;
+import roj.asm.nixim.Shadow;
 import roj.collect.Int2IntMap;
 import roj.opengl.text.TextRenderer;
 import roj.text.TextUtil;
@@ -19,7 +22,6 @@ import java.util.List;
 @Nixim("/")
 class NxFastFont extends FontRenderer {
 	@Copy(targetIsFinal = true, staticInitializer = "init1")
-	@Dynamic("_nixim_not_custom_font")
 	private static Int2IntMap ID_MAP;
 
 	private static void init1() {
@@ -42,14 +44,11 @@ class NxFastFont extends FontRenderer {
 	}
 
 	@Inject
-	@Dynamic("_nixim_not_custom_font")
 	public int getCharWidth(char c) {
-		if (c == 160) {
+		if (c == 160 || c == ' ') {
 			return 4;
 		} else if (c == 167) {
 			return -1;
-		} else if (c == ' ') {
-			return 4;
 		} else {
 			if (c > 0 && !unicodeFlag && ID_MAP.containsKey(c)) {
 				return this.charWidth[ID_MAP.getOrDefaultInt(c, 0)];

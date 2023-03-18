@@ -155,7 +155,8 @@ public class FontTex {
 			}
 		}
 		Glyph tex = glyphs.get(c);
-		if (tex != null) textureIds.getEntry(tex.textureId).v = (int) (System.currentTimeMillis()/1000);
+		if (tex != null && tex.textureId > 0)
+			textureIds.getEntry(tex.textureId).v = (int) (System.currentTimeMillis()/1000);
 		return tex;
 	}
 
@@ -176,7 +177,7 @@ public class FontTex {
 		entry.setWidth(width);
 		int newWidth = (int) (entry.width + entry.xOff);
 		if (newWidth != entry.width) {
-			byWidth.get((char) entry.width).remove(c);
+			byWidth.get((char) entry.width).removeByValue(c);
 			byWidth.computeIfAbsent((char) newWidth, WII).add(c);
 		}
 	}

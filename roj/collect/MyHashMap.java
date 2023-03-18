@@ -166,11 +166,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	public void putAll(@Nonnull Map<? extends K, ? extends V> map) {
 		ensureCapacity(size + map.size());
 		if (map instanceof MyHashMap) putAll((MyHashMap<K, V>) map);
-		else {
-			for (Map.Entry<? extends K, ? extends V> entry : map.entrySet()) {
-				put(entry.getKey(), entry.getValue());
-			}
-		}
+		else super.putAll(map);
 	}
 
 	void afterAccess(Entry<K, V> entry, V now) {

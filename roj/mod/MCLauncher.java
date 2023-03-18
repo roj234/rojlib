@@ -28,7 +28,6 @@ import roj.config.word.ITokenizer;
 import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.io.BOMInputStream;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
 import roj.io.down.ProgressGroupedMulti;
@@ -156,12 +155,12 @@ public class MCLauncher extends JFrame {
 		File basePath = new File(config.getString("mc_conf.root"));
 		File debugLog = new File(basePath, "minecraft.log");
 		if (e != null || debugLog.length() > 8388608) {
-			FileUtil.deleteFile(debugLog);
+			IOUtil.deleteFile(debugLog);
 		}
 		File logs = new File(basePath, "logs");
-		FileUtil.deletePath(logs);
+		IOUtil.deletePath(logs);
 		File crashes = new File(basePath, "crash-reports");
-		FileUtil.deletePath(crashes);
+		IOUtil.deletePath(crashes);
 
 		CmdUtil.warning("清除了没啥用的日志文件!");
 	}
@@ -333,7 +332,7 @@ public class MCLauncher extends JFrame {
 			CList versions;
 			try {
 				CharList out = new CharList(10000);
-				ByteList.decodeUTF(-1, out, FileUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer)));
+				ByteList.decodeUTF(-1, out, IOUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer)));
 
 				versions = JSONParser.parses(out, JSONParser.INTERN).asList();
 			} catch (ParseException | IOException e) {
@@ -353,7 +352,7 @@ public class MCLauncher extends JFrame {
 		if (versions == null) {
 			try {
 				CharList out = new CharList(100000);
-				ByteList.decodeUTF(-1, out, FileUtil.downloadFileToMemory(cfgLan.getString("mc版本manifest地址")));
+				ByteList.decodeUTF(-1, out, IOUtil.downloadFileToMemory(cfgLan.getString("mc版本manifest地址")));
 
 				cache_mc_versions = versions = JSONParser.parses(out, JSONParser.INTERN).asMap().get("versions").asList();
 			} catch (ParseException | IOException e) {
@@ -686,7 +685,7 @@ public class MCLauncher extends JFrame {
 						}
 
 					} else if (s.startsWith("[")) {
-						v = new File(forced.contains(entry.getKey()) ? mcLibPath : libraryPath, FileUtil.mavenPath(s.substring(1, s.length() - 1)).toString()).getAbsolutePath();
+						v = new File(forced.contains(entry.getKey()) ? mcLibPath : libraryPath, IOUtil.mavenPath(s.substring(1, s.length() - 1)).toString()).getAbsolutePath();
 					} else {
 						CmdUtil.error("未知参数 " + s);
 						continue;
@@ -746,7 +745,7 @@ public class MCLauncher extends JFrame {
 							CmdUtil.info("服务端处理器: " + i + ", 跳过");
 						}
 					}
-					File path = new File(libraryPath, FileUtil.mavenPath(op.getString("jar")).toString());
+					File path = new File(libraryPath, IOUtil.mavenPath(op.getString("jar")).toString());
 					if (!path.isFile()) {
 						CmdUtil.error("无法找到文件 " + path.getAbsolutePath());
 						return false;
@@ -773,7 +772,7 @@ public class MCLauncher extends JFrame {
 					for (CEntry entry : op.get("args").asList()) {
 						String s = entry.asString();
 						if (s.startsWith("[")) {
-							s = new File(libraryPath, FileUtil.mavenPath(s.substring(1, s.length() - 1)).toString()).getAbsolutePath();
+							s = new File(libraryPath, IOUtil.mavenPath(s.substring(1, s.length() - 1)).toString()).getAbsolutePath();
 						} else {
 							int j = s.indexOf('{');
 							if (j != -1) {
@@ -832,7 +831,7 @@ public class MCLauncher extends JFrame {
 
 			final File dst = new File(installDir, ver + ".json");
 			if (!mcJsonTmp.renameTo(dst)) {
-				FileUtil.copyFile(mcJsonTmp, dst);
+				IOUtil.copyFile(mcJsonTmp, dst);
 			}
 		} else {
 			final CMapping install = instConf.get("install").asMap();
@@ -845,7 +844,7 @@ public class MCLauncher extends JFrame {
 				return false;
 			}
 
-			File dest = new File(mcRoot, "/libraries/" + FileUtil.mavenPath(install.getString("path")));
+			File dest = new File(mcRoot, "/libraries/" + IOUtil.mavenPath(install.getString("path")));
 			File parent = dest.getParentFile();
 			if (!parent.isDirectory() && !parent.mkdirs()) {
 				error("无法创建forge jar保存目录 " + dest.getAbsolutePath());
@@ -996,11 +995,11 @@ public class MCLauncher extends JFrame {
 		if (conf.isFile()) {
 			try {
 				final BOMInputStream bom = new BOMInputStream(new FileInputStream(conf), "UTF8");
-				if (!bom.getEncoding().equals("UTF8")) { // 检测到了则是 UTF-8
-					CmdUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getEncoding());
+				if (!bom.getCharset().equals("UTF8")) { // 检测到了则是 UTF-8
+					CmdUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getCharset());
 				}
 
-				config = JSONParser.parses(IOUtil.readAs(bom, bom.getEncoding())).asMap();
+				config = JSONParser.parses(IOUtil.readAs(bom, bom.getCharset())).asMap();
 				config.dot(true);
 				CEntry path = config.getOrNull("mc_conf.native_path");
 				if (path != null) {
@@ -1247,7 +1246,7 @@ public class MCLauncher extends JFrame {
 		mc_conf.put("native_path", nativePath.getAbsolutePath());
 
 		if (nativePath.isDirectory()) {
-			if (cleanNatives && !FileUtil.deletePath(nativePath)) {
+			if (cleanNatives && !IOUtil.deletePath(nativePath)) {
 				CmdUtil.error("无法清空natives, 请手动删除");
 				return null;
 			}
@@ -1515,18 +1514,10 @@ public class MCLauncher extends JFrame {
 		if (nt) {
 			String t;
 			switch (OS.CURRENT) {
-				case UNIX:
-					t = "unix";
-					break;
-				case WINDOWS:
-					t = "windows";
-					break;
-				case MAC_OS:
-					t = "osx";
-					break;
-				default:
-					CmdUtil.warning("未知系统版本 " + OS.CURRENT);
-					return;
+				case UNIX: t = "unix"; break;
+				case WINDOWS: t = "windows"; break;
+				case MAC_OS: t = "osx"; break;
+				default: CmdUtil.warning("未知系统版本 " + OS.CURRENT); return;
 			}
 			sb.append('-').append(classifiers = natives.getString(t).replace("${arch}", OS.ARCH));
 		}
@@ -1580,14 +1571,14 @@ public class MCLauncher extends JFrame {
 				ConstantData data = Parser.parseConstants(b);
 				Method mn = data.getUpgradedMethod("lookup");
 
-				InsnList insn = mn.code.instructions;
+				InsnList insn = mn.getCode().instructions;
 				if (insn.size() > 3) {
-					mn.code.clear();
+					mn.getCode().clear();
 
 					insn.add(new LdcInsnNode(new CstString("JNDI功能已关闭")));
 					insn.add(new NPInsnNode(Opcodes.ARETURN));
-					mn.code.stackSize = 1;
-					mn.code.localSize = 3;
+					mn.getCode().stackSize = 1;
+					mn.getCode().localSize = 3;
 					mzf.put("org/apache/logging/log4j/core/lookup/JndiLookup.class", new ByteList(Parser.toByteArray(data)));
 					mzf.store();
 					CmdUtil.success("修补了Log4j2漏洞");
@@ -1716,6 +1707,8 @@ public class MCLauncher extends JFrame {
 	// endregion
 
 	private static void extractNatives(CMapping data, File libFile, File nativePath) {
+		nativePath.mkdirs();
+
 		CMapping extractInfo = data.get("extract").asMap();
 		CList exclude = extractInfo.get("exclude").asList();
 
@@ -1845,7 +1838,8 @@ public class MCLauncher extends JFrame {
 
 	public static void downloadAndVerifyMD5(String url, File target) throws IOException {
 		if (!target.exists()) {
-			downloadAndVerifyMD5(url, ByteList.readUTF(FileUtil.downloadFileToMemory(url + ".md5")), target);
+			ByteList buf = IOUtil.downloadFileToMemory(url+".md5");
+			downloadAndVerifyMD5(url, buf.readUTF(buf.readableBytes()), target);
 		}
 	}
 

@@ -7,7 +7,7 @@ import ilib.util.BlockHelper;
 import org.lwjgl.opengl.GL11;
 import roj.collect.RingBuffer;
 import roj.math.Vec3d;
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -416,8 +416,8 @@ public abstract class StormHandler {
 	}
 
 	protected void spawnParticle(World world, double pX, double pY, double pZ) {
-		if (rnd.nextDouble() > 0.85) {world.spawnParticle(EnumParticleTypes.DRIP_WATER, pX, pY, pZ, 0, 1, 0, EmptyArrays.INTS);} else if (rnd.nextDouble() > 0.6)
-			world.spawnParticle(EnumParticleTypes.WATER_DROP, pX, pY, pZ, 0, 1, 0, EmptyArrays.INTS);
+		if (rnd.nextDouble() > 0.85) {world.spawnParticle(EnumParticleTypes.DRIP_WATER, pX, pY, pZ, 0, 1, 0, ArrayCache.INTS);} else if (rnd.nextDouble() > 0.6)
+			world.spawnParticle(EnumParticleTypes.WATER_DROP, pX, pY, pZ, 0, 1, 0, ArrayCache.INTS);
 	}
 
 	protected void playStormSoundAbove(World world, double x, double y, double z) {

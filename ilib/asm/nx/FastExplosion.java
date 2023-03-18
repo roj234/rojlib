@@ -7,7 +7,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Shadow;
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -175,7 +175,7 @@ public class FastExplosion extends Explosion {
 			(1 + (world.rand.nextFloat() - world.rand.nextFloat()) * 0.2F) * 0.7F);
 		world.spawnParticle(
 			size >= 2 && damagesTerrain ? EnumParticleTypes.EXPLOSION_HUGE : EnumParticleTypes.EXPLOSION_LARGE, x, y, z, 1,
-			0, 0, EmptyArrays.INTS);
+			0, 0, ArrayCache.INTS);
 
 		if (!damagesTerrain && !causesFire) return;
 

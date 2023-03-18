@@ -2,13 +2,12 @@ package roj.dev;
 
 import roj.config.ParseException;
 import roj.config.XMLParser;
-import roj.config.data.XElement;
-import roj.config.data.XEntry;
-import roj.config.data.XHeader;
-import roj.io.IOUtil;
+import roj.config.data.Document;
+import roj.config.data.Element;
+import roj.config.data.Node;
+import roj.text.StreamWriter;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.List;
 
@@ -22,29 +21,30 @@ public final class IDEAHelper {
 	public static void config(File imlPath, String projName, boolean remove) throws IOException, ParseException {
 		String basePath = "file://$MODULE_DIR$/projects/" + projName + "/";
 
-		XHeader header = XMLParser.parses(IOUtil.readUTF(imlPath));
-		XElement content = header.getXS("module.component[name=\"NewModuleRootManager\"].content").get(0).asElement();
-		List<XEntry> sourceUrls = content.children();
+		Document xml = new XMLParser().parseToXml(imlPath,0);
+		Element content = xml.querySelector("/module/component[name=\"NewModuleRootManager\"]/content").asElement();
+		List<Node> sourceUrls = content.children();
 		for (int i = 0; i < sourceUrls.size(); i++) {
-			XElement element = sourceUrls.get(i).asElement();
+			Element element = sourceUrls.get(i).asElement();
 			if (element.attr("url").asString().startsWith(basePath)) {
-				if (remove) {sourceUrls.remove(i--);} else return;
+				if (remove) sourceUrls.remove(i--);
+				else return; // already have
 			}
 		}
 
 		if (!remove) {
-			XElement el = new XElement("sourceFolder");
-			el.put("isTestSource", "false");
-			el.put("url", basePath + "java");
+			Element el = xml.createElement("sourceFolder")
+				.attr("isTestSource", "false")
+				.attr("url", basePath + "java");
 			content.add(el);
-			el = new XElement("sourceFolder");
-			el.put("type", "java-resource");
-			el.put("url", basePath + "resources");
+			el = xml.createElement("sourceFolder")
+				.attr("type", "java-resource")
+				.attr("url", basePath + "resources");
 			content.add(el);
 		}
 
-		try (FileOutputStream fos = new FileOutputStream(imlPath)) {
-			IOUtil.SharedCoder.get().encodeTo(header.toCompatXML(), fos);
+		try (StreamWriter sb = StreamWriter.to(imlPath)) {
+			xml.toCompatXML(sb);
 		}
 	}
 }

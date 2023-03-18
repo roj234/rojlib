@@ -437,7 +437,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		return 86400000L * day + 3600_000L * ((dtime >> 11) & 0x1f) + 60_000L * ((dtime >> 5) & 0x3f) + 1000L * ((dtime << 1) & 0x3e);
 	}
 	public static int java2DosTime(long time) {
-		int[] arr = ACalendar.get1(time + TimeZone.getDefault().getOffset(time));
+		int[] arr = ACalendar.parse1(time + TimeZone.getDefault().getOffset(time));
 		int year = arr[ACalendar.YEAR] - 1980;
 		if (year < 0) {
 			return (1 << 21) | (1 << 16)/*ZipEntry.DOSTIME_BEFORE_1980*/;

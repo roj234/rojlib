@@ -229,7 +229,7 @@ public class ToIntMap<K> extends AbstractMap<K, Integer> implements MapLike<ToIn
 		{
 			Entry<K> entry = getEntryFirst(id, false);
 			while (entry != null) {
-				if (Objects.equals(id, entry.k)) {
+				if (equals(id, entry.k)) {
 					toRemove = entry;
 					break;
 				}
@@ -317,9 +317,7 @@ public class ToIntMap<K> extends AbstractMap<K, Integer> implements MapLike<ToIn
 	public Entry<K> getEntry(K id) {
 		Entry<K> entry = getEntryFirst(id, false);
 		while (entry != null) {
-			if (Objects.equals(id, entry.k)) {
-				return entry;
-			}
+			if (equals(id, entry.k)) return entry;
 			entry = entry.next;
 		}
 		return null;
@@ -330,7 +328,7 @@ public class ToIntMap<K> extends AbstractMap<K, Integer> implements MapLike<ToIn
 		Entry<K> entry = getEntryFirst(id, true);
 		if (entry.k == UNDEFINED) return entry;
 		while (true) {
-			if (Objects.equals(id, entry.k)) return entry;
+			if (equals(id, entry.k)) return entry;
 			if (entry.next == null) break;
 			entry = entry.next;
 		}
@@ -339,9 +337,12 @@ public class ToIntMap<K> extends AbstractMap<K, Integer> implements MapLike<ToIn
 		return firstUnused;
 	}
 
-	private int indexFor(K id) {
+	protected int indexFor(K id) {
 		int v;
 		return id == null ? 0 : ((v = id.hashCode()) ^ (v >>> 16));
+	}
+	protected boolean equals(K in, K entry) {
+		return in == null ? entry == null : in.equals(entry);
 	}
 
 	@SuppressWarnings("unchecked")

@@ -17,8 +17,8 @@ import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.reflect.FieldAccessor;
 import roj.reflect.ReflectionUtils;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
-import roj.util.EmptyArrays;
 import roj.util.Helpers;
 
 import net.minecraft.block.Block;
@@ -118,7 +118,7 @@ public class MCHooksClient extends BlockPos.MutableBlockPos {
 	public final float[] data = new float[4];
 	public final float[] data2 = new float[6];
 	public final float[][] normals = new float[4][4];
-	public float[] data3 = EmptyArrays.FLOATS;
+	public float[] data3 = ArrayCache.FLOATS;
 	public int[] data4;
 
 	public final MyVisGraph graph = new MyVisGraph();
@@ -438,7 +438,7 @@ public class MCHooksClient extends BlockPos.MutableBlockPos {
 		double y = entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * partialTicks - rm.renderPosY;
 		double z = entity.lastTickPosZ + (entity.posZ - entity.lastTickPosZ) * partialTicks - rm.renderPosZ;
 
-		if (entity.hasCustomName()) {
+		if (entity.hasCustomName() || entity.getAlwaysRenderNameTagForRender()) {
 			Render<Entity> re = rm.getEntityRenderObject(entity);
 			if (re != null && rm.renderEngine != null) {
 				try {

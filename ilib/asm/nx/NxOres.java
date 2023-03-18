@@ -27,7 +27,7 @@ import java.util.List;
  * @author Roj234
  * @since 2020/11/14 15:09
  */
-@Nixim("net.minecraftforge.oredict.OreDictionary")
+@Nixim("/")
 class NxOres extends OreDictionary {
 	@Shadow("/")
 	private static List<String> idToName;
@@ -170,7 +170,7 @@ class NxOres extends OreDictionary {
 					}
 				}
 
-				return set.toArray();
+				return set.toIntArray();
 			}
 		}
 	}

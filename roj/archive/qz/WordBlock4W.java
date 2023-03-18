@@ -30,8 +30,10 @@ class WordBlock4W {
 		StringBuilder sb = new StringBuilder();
 		sb.append("字块M{\n");
 		myToString(sb);
-		sb.append("\n  包含").append(fileCount).append("个文件\n")
-		  .append("  CRC=").append((hasCrc&1)==0?"~":Integer.toHexString(crc)).append('/').append((hasCrc&2)==0?"~":Integer.toHexString(cCrc));
+		sb.append("\n  包含").append(fileCount).append("个文件");
+
+		if ((hasCrc&3) != 0)
+			sb.append("\n  CRC=").append((hasCrc&1)==0?"~":Integer.toHexString(crc)).append('/').append((hasCrc&2)==0?"~":Integer.toHexString(cCrc));
 		return sb.append("\n}").toString();
 	}
 	protected void myToString(StringBuilder sb) {
@@ -46,7 +48,7 @@ class WordBlock4W {
 			k[i+1] = s;
 		}
 
-		TextUtil.prettyTable(sb.append("  "), "    ", " => ", "  ", k);
+		TextUtil.prettyTable(sb, "    ", " => ", "  ", k);
 	}
 
 	public final class Counter extends FilterOutputStream {

@@ -1,12 +1,11 @@
 package roj.io.down;
 
 import roj.io.source.Source;
-import roj.net.http.IHttpClient;
+import roj.net.http.HttpRequest;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.net.URL;
 
 /**
  * @author Roj234
@@ -19,13 +18,12 @@ final class Chunked extends Downloader {
 	long off, len;
 	private int delta;
 
-	public Chunked(int seq, Source file, File Info, URL url, long off, long len, IProgress progress) throws IOException {
-		super(file, url);
+	public Chunked(int seq, Source file, File Info, long off, long len) throws IOException {
+		super(file);
 		this.beginLen = len;
 
 		if (Info != null) {
 			this.info = new RandomAccessFile(Info, "rw");
-			if (this.info.length() < 8 * seq + 8) this.info.setLength(8 * seq + 8);
 			info.seek(8 * seq);
 			long dt = info.readLong();
 			off += dt;
@@ -33,15 +31,13 @@ final class Chunked extends Downloader {
 			if (len <= 0 || dt < 0) {
 				if (dt > 0) writePos(-1);
 				state = SUCCESS;
-				close();
+				info.close();
+				file.close();
 				return;
 			}
 		} else {
 			this.info = null;
 		}
-
-		this.progress = progress;
-		if (progress != null) progress.onJoin(this);
 
 		this.off = off;
 		this.len = len;
@@ -70,9 +66,9 @@ final class Chunked extends Downloader {
 	}
 
 	@Override
-	protected void onBeforeSend(IHttpClient client) throws IOException {
+	protected void onBeforeSend(HttpRequest q) throws IOException {
 		file.seek(off);
-		client.header("RANGE", "bytes=" + off + '-' + (off+len-1));
+		q.header("range", "bytes="+off+'-'+(off+len-1));
 	}
 
 	@Override

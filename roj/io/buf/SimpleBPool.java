@@ -1,10 +1,7 @@
 package roj.io.buf;
 
 import roj.collect.BSLowHeap;
-import roj.collect.IdentitySet;
-import roj.util.ByteList;
-import roj.util.DirectByteList;
-import roj.util.DynByteBuf;
+import roj.util.*;
 
 import java.util.Comparator;
 
@@ -13,15 +10,18 @@ import java.util.Comparator;
  * @since 2022/6/1 7:05
  */
 public class SimpleBPool implements BPool {
-	private static final Comparator<DynByteBuf> CMP = (o1, o2) -> {
-		int v = Integer.compare(o2.capacity(), o1.capacity());
+	private static final Comparator<Object> CMP = (o1, o2) -> {
+		int a = o1 instanceof byte[] ? ((byte[]) o1).length : (int) ((NativeMemory) o1).length();
+		int b = o2 instanceof byte[] ? ((byte[]) o2).length : (int) ((NativeMemory) o2).length();
+
+		int v = Integer.compare(a, b);
 		if (v != 0) return v;
+
 		return Integer.compare(System.identityHashCode(o1), System.identityHashCode(o2));
 	};
 
-	private final BSLowHeap<DynByteBuf> direct = new BSLowHeap<>(CMP);
-	private final BSLowHeap<DynByteBuf> heap = new BSLowHeap<>(CMP);
-	private final IdentitySet<DynByteBuf> using = new IdentitySet<>();
+	private final BSLowHeap<NativeMemory> direct = new BSLowHeap<>(Helpers.cast(CMP));
+	private final BSLowHeap<byte[]> heap = new BSLowHeap<>(Helpers.cast(CMP));
 	protected int min, max, maxCount;
 
 	public SimpleBPool(int min, int max, int maxCount) {
@@ -36,70 +36,55 @@ public class SimpleBPool implements BPool {
 	}
 
 	@Override
-	public DynByteBuf allocate(boolean direct, int cap) {
-		BSLowHeap<DynByteBuf> h = direct ? this.direct : this.heap;
-
+	public boolean allocate(boolean bDirect, int cap, PooledBuffer cb) {
+		if (cap > max) return false;
 		if (cap < min) cap = min;
 
-		if (!h.isEmpty() && cap < max) {
-			if (h.get(0).capacity() >= cap) {
-				for (int i = 1; i < h.size(); i++) {
-					if (h.get(i).capacity() < cap) {
-						DynByteBuf bb = h.remove(i-1);
-						bb.clear();
-						using.add(bb);
-						return bb;
-					}
+		if (bDirect) {
+			for (int i = direct.size()-1; i >= 0; i--) {
+				NativeMemory nm = direct.get(i);
+				if (nm.length() >= cap) {
+					direct.remove(i);
+					cb.set(nm, nm.address(), (int) nm.length());
+					return true;
 				}
 			}
 
-			DynByteBuf bb = h.remove(h.size()-1);
-			bb.clear();
-			bb.ensureCapacity(cap);
-			using.add(bb);
-			return bb;
-		}
-
-		int cap1 = Math.max(cap, max);
-		DynByteBuf bb = direct ? DirectByteList.allocateDirect(cap, cap1) : ByteList.allocate(cap, cap1);
-		using.add(bb);
-		return bb;
-	}
-
-	@Override
-	public void reserve(DynByteBuf buf) {
-		if (!using.remove(buf)) throw new IllegalStateException("should not reach here");
-		if (buf.capacity() > max) return;
-
-		BSLowHeap<DynByteBuf> h = buf.isDirect() ? direct : heap;
-		if (h.size() < maxCount) {
-			h.add(buf);
+			NativeMemory nm = new NativeMemory(cap);
+			cb.set(nm, nm.address(), (int) nm.length());
 		} else {
-			if (h.get(h.size() - 1).capacity() < buf.capacity()) {
-				DynByteBuf buf1 = h.remove(h.size()-1);
-				h.add(buf);
-				buf = buf1;
+			for (int i = heap.size()-1; i >= 0; i--) {
+				byte[] bb = heap.get(i);
+				if (bb.length >= cap) {
+					heap.remove(i);
+					cb.set(bb,0,bb.length);
+					return true;
+				}
 			}
+
+			byte[] bb = ArrayCache.getDefaultCache().getByteArray(cap, false);
+			cb.set(bb,0,bb.length);
 		}
 
+		return true;
+	}
+
+	@Override
+	public boolean reserve(DynByteBuf buf) {
 		if (buf.isDirect()) {
-			((DirectByteList) buf)._free();
-		}
-	}
-
-	@Override
-	public boolean isPooled(DynByteBuf buf) {
-		return using.contains(buf);
-	}
-
-	@Override
-	public boolean expand(DynByteBuf buf, int more, boolean addAtEnd) {
-		if (addAtEnd) {
-			if (buf.capacity()+more < buf.maxCapacity()) {
-				buf.ensureCapacity(buf.capacity()+more);
-				return true;
+			BSLowHeap<NativeMemory> h = direct;
+			h.add(((DirectByteList) buf).memory());
+			while (h.size() > maxCount) {
+				h.remove(h.size()-1).release();
+			}
+		} else {
+			BSLowHeap<byte[]> h = heap;
+			h.add(buf.array());
+			while (h.size() > maxCount) {
+				ArrayCache.getDefaultCache().putArray(h.remove(h.size()-1));
 			}
 		}
-		return false;
+
+		return true;
 	}
 }

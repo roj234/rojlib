@@ -5,9 +5,9 @@ import roj.collect.MyBitSet;
 import roj.collect.TrieTree;
 import roj.config.ParseException;
 import roj.io.IOUtil;
-import roj.math.MathUtils;
 import roj.math.MutableInt;
 import roj.text.CharList;
+import roj.text.TextUtil;
 
 import java.util.function.BiFunction;
 
@@ -19,7 +19,7 @@ public class Tokenizer extends ITokenizer {
 	public static final int PARSE_NUMBER = 1, PARSE_SIGNED_NUMBER = 2, JAVA_COMMENT = 4, COMPUTE_LINES = 8;
 
 	protected static final int C_DEFAULT = 0, C_WHITESPACE = 1, C_COMMENT = 2, C_SYH = 3, C_DYH = 4, C_MAY__NUMBER_SIGN = 5, C_NUMBER = 6;
-	private static final Int2IntMap DEFAULT_C2C = new Int2IntMap();
+	protected static final Int2IntMap DEFAULT_C2C = new Int2IntMap();
 	static { fcSetDefault(DEFAULT_C2C, PARSE_NUMBER|PARSE_SIGNED_NUMBER|JAVA_COMMENT); }
 
 	protected static void fcSetDefault(Int2IntMap c, int flag) {
@@ -88,7 +88,7 @@ public class Tokenizer extends ITokenizer {
 				i++;
 				if (i == text.length()) break;
 			}
-			int val = MathUtils.parseInt(text, j, i, 10);
+			int val = TextUtil.parseInt(text, j, i, 10);
 
 			indexes.put(key, new Word().init(val, 0, key));
 
@@ -153,21 +153,21 @@ public class Tokenizer extends ITokenizer {
 					case C_WHITESPACE: break;
 					case C_MAY__NUMBER_SIGN:
 						if (i < in.length() && NUMBER.contains(in.charAt(i))) {
-							index = i-1;
+							prevIndex = index = i-1;
 							return readDigit(true);
 						}
 						// fall to literal(symbol)
 					default:
-					case C_DEFAULT: index = i-1; return readSymbol();
-					case C_NUMBER: index = i-1; return readDigit(false);
+					case C_DEFAULT: prevIndex = index = i-1; return readSymbol();
+					case C_NUMBER: prevIndex = index = i-1; return readDigit(false);
 					case C_COMMENT:
-						index = i;
+						prevIndex = index = i;
 						Word w = javaComment(comment);
 						if (w != null) return w;
 						i = index;
 						break;
-					case C_DYH: index = i; return readConstChar();
-					case C_SYH: index = i; return readConstString(c);
+					case C_DYH: prevIndex = index = i; return readConstChar();
+					case C_SYH: prevIndex = index = i; return readConstString(c);
 				}
 			}
 		} finally {
@@ -179,7 +179,7 @@ public class Tokenizer extends ITokenizer {
 
 	@Override
 	public final void retractWord() {
-		int w = lastWordBegin;
+		int w = prevIndex;
 		super.retractWord();
 		//LN = prevLN;
 		//LNIndex = w;
@@ -225,6 +225,12 @@ public class Tokenizer extends ITokenizer {
 	private Word _bestMatch;
 	@Override
 	protected final Word readSymbol() throws ParseException {
+		Word w = tryMatchToken();
+		if (w != null) return w;
+		return readLiteral();
+	}
+
+	protected final Word tryMatchToken() throws ParseException {
 		CharSequence in = input;
 		int i = index;
 
@@ -233,7 +239,7 @@ public class Tokenizer extends ITokenizer {
 			tokens.longestWithCallback(in, i, in.length(), posHold, searcher);
 
 		Word w = _bestMatch;
-		if (w == null) return readLiteral();
+		if (w == null) return null;
 
 		if (w.getClass() == Word.class) {
 			if (w.index < 0) {
@@ -265,7 +271,7 @@ public class Tokenizer extends ITokenizer {
 
 		if (prevI == i) {
 			if (i >= in.length()) return eof();
-			throw err("literalEnd() failed at '" + in.charAt(i)+"'");
+			throw err("literalEnd() failed on '" + in.charAt(i)+"'");
 		}
 		index = i;
 

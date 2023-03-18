@@ -7,10 +7,7 @@ import roj.util.DynByteBuf;
  * @since 2023/2/8 0008 10:00
  */
 public interface BPool {
-	DynByteBuf allocate(boolean direct, int cap);
-	void reserve(DynByteBuf buf);
-	boolean isPooled(DynByteBuf buf);
-	default boolean expand(DynByteBuf buf, int more, boolean addAtEnd) {
-		return false;
-	}
+	boolean allocate(boolean direct, int minCapacity, PooledBuffer callback);
+	boolean reserve(DynByteBuf buf);
+	default boolean expand(DynByteBuf buf, int more, boolean addAtEnd) { return false; }
 }

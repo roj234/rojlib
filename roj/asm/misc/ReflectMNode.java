@@ -40,7 +40,7 @@ public final class ReflectMNode implements MethodNode {
 	}
 
 	@Override
-	public char accessFlag() {
+	public char modifier() {
 		return (char) method.getModifiers();
 	}
 
@@ -77,7 +77,7 @@ public final class ReflectMNode implements MethodNode {
 	}
 
 	@Override
-	public Type getReturnType() {
+	public Type returnType() {
 		return TypeHelper.parseReturn(rawDesc());
 	}
 }

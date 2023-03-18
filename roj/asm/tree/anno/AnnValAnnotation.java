@@ -8,27 +8,14 @@ import roj.util.DynByteBuf;
  * @since 2021/1/9 14:23
  */
 public final class AnnValAnnotation extends AnnVal {
-	public AnnValAnnotation(Annotation value) {
-		this.value = value;
-	}
+	public AnnValAnnotation(Annotation v) { value = v; }
 
 	public Annotation value;
 
-	@Override
-	public Annotation asAnnotation() {
-		return value;
-	}
+	public Annotation asAnnotation() { return value; }
 
-	public void toByteArray(ConstantPool pool, DynByteBuf w) {
-		value.toByteArray(pool, w.put((byte) ANNOTATION));
-	}
+	public byte type() { return ANNOTATION; }
 
-	public String toString() {
-		return value.toString();
-	}
-
-	@Override
-	public byte type() {
-		return ANNOTATION;
-	}
+	public void toByteArray(ConstantPool cp, DynByteBuf w) { value.toByteArray(cp, w.put((byte) ANNOTATION)); }
+	public String toString() { return value.toString(); }
 }

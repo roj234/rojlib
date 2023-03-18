@@ -1,8 +1,8 @@
 package roj.config.data;
 
-import roj.config.serial.CConsumer;
-import roj.math.MathUtils;
+import roj.config.serial.CVisitor;
 import roj.text.ACalendar;
+import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
 
@@ -23,7 +23,7 @@ public final class CDate extends CLong {
 		int i = 0, off = 0, k = 0;
 		while (i < val.length()) {
 			if (val.charAt(i++) == '-') {
-				buf[k++] = MathUtils.parseInt(val, off, i - off, 10);
+				buf[k++] = TextUtil.parseInt(val, off, i - off, 10);
 				off = i;
 			}
 		}
@@ -38,7 +38,7 @@ public final class CDate extends CLong {
 	}
 
 	@Override
-	public void forEachChild(CConsumer ser) {
+	public void forEachChild(CVisitor ser) {
 		ser.valueDate(value);
 	}
 }

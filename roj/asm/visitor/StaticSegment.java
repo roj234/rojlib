@@ -30,7 +30,7 @@ final class StaticSegment extends Segment {
 	}
 
 	@Override
-	void computeLength() {
+	protected void computeLength() {
 		if (startBci > 0) length = data.wIndex();
 	}
 

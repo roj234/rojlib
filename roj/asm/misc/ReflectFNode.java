@@ -36,7 +36,7 @@ public final class ReflectFNode implements FieldNode {
 	}
 
 	@Override
-	public char accessFlag() {
+	public char modifier() {
 		return (char) field.getModifiers();
 	}
 

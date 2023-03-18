@@ -1,10 +1,10 @@
 package roj.net.http;
 
-import roj.math.MathUtils;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
 import roj.net.ch.handler.PacketMerger;
+import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.NamespaceKey;
@@ -59,7 +59,6 @@ public class ChunkSplitter extends PacketMerger implements ChannelHandler {
 
 				int actualR = (int) Math.min(inLen, buf.readableBytes());
 
-				System.out.println(actualR);
 				buf.wIndex(buf.rIndex+actualR);
 				try {
 					mergedRead(ctx, buf);
@@ -102,7 +101,7 @@ public class ChunkSplitter extends PacketMerger implements ChannelHandler {
 				tmp.rIndex = 0;
 				tmp.wIndex(i-prevI);
 
-				inLen = MathUtils.parseInt(tmp, 16);
+				inLen = TextUtil.parseInt(tmp, 16);
 			} catch (NumberFormatException e) {
 				throw new IllegalArgumentException("ChunkEncoding: 长度无效: "+tmp.dump());
 			}

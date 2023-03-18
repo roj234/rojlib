@@ -3,6 +3,8 @@ package ilib.asm.nx;
 import roj.asm.nixim.Copy;
 import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
+import roj.collect.SimpleList;
+import roj.util.Helpers;
 
 import net.minecraft.nbt.NBTBase;
 import net.minecraft.nbt.NBTTagCompound;
@@ -13,10 +15,11 @@ import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityDispatcher;
 import net.minecraftforge.common.capabilities.ICapabilityProvider;
 import net.minecraftforge.common.util.INBTSerializable;
+import net.minecraftforge.fml.common.FMLLog;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,34 +28,87 @@ import java.util.Map;
  */
 //使用preAT
 @Nixim(value = "/", copyItf = true)
-class FastCaps0 extends CapabilityDispatcher implements FastCaps2 {
-	FastCaps0() {
-		super(null);
-	}
-
-	@Inject(value = "<init>", at = Inject.At.TAIL)
-	private void _initLast(Map<ResourceLocation, ICapabilityProvider> list, @Nullable ICapabilityProvider parent) {
-		Arrays.sort(names);
-	}
-
+class FastCaps0 extends CapabilityDispatcher implements FastCaps1 {
 	@Copy(unique = true)
 	private NBTBase[] lazyData;
+
+	FastCaps0() { super(null); }
+
+	@Inject(value = "<init>", at = Inject.At.REPLACE)
+	public void _initLast(Map<ResourceLocation, ICapabilityProvider> list, @Nullable ICapabilityProvider parent) {
+		$$$CONSTRUCTOR();
+
+		List<ICapabilityProvider> capList = new SimpleList<>(list.values());
+		if (parent != null) capList.add(parent);
+
+		capList.sort((o1, o2) -> {
+			int v1 = o1 instanceof INBTSerializable ? 0 : 1;
+			int v2 = o2 instanceof INBTSerializable ? 0 : 1;
+			return Integer.compare(v1, v2);
+		});
+
+		caps = capList.toArray(new ICapabilityProvider[capList.size()]);
+
+		int writables = 0;
+		for (; writables < capList.size(); writables++) {
+			if (!(capList.get(writables) instanceof INBTSerializable)) break;
+		}
+
+		names = new String[writables];
+		if (trackable()) {
+			lazyData = new NBTBase[writables];
+		} else {
+			writers = Helpers.cast(new INBTSerializable<?>[writables]);
+			System.arraycopy(caps, 0, writers, 0, writables);
+		}
+
+		for (Map.Entry<ResourceLocation, ICapabilityProvider> entry : list.entrySet()) {
+			for (int i = 0; i < writables; i++) {
+				if (entry.getValue() == caps[i]) {
+					names[i] = entry.getKey().toString();
+					break;
+				}
+			}
+		}
+
+		if (parent instanceof INBTSerializable) {
+			for (int i = 0; i < writables; i++) {
+				if (parent == caps[i]) {
+					names[i] = "Parent";
+					break;
+				}
+			}
+		}
+	}
+
+	private void $$$CONSTRUCTOR() {}
+
 	@Copy(unique = true)
-	private boolean trackable;
-	@Copy
-	public void setTrackable() {
-		trackable = true;
-		if (lazyData == null) lazyData = new NBTBase[names.length];
+	private static int report;
+	@Copy(unique = true)
+	private boolean trackable() {
+		Class<?> a = getClass(), b = CapabilityDispatcher.class;
+		if (a == b) return true;
+		try {
+			boolean ok = a.getMethod("serializeNBT").equals(b.getMethod("serializeNBT")) &&
+				a.getMethod("deserializeNBT", NBTTagCompound.class).equals(b.getMethod("deserializeNBT", NBTTagCompound.class)) &&
+				a.getMethod("getCapability", Capability.class, EnumFacing.class).equals(b.getMethod("getCapability", Capability.class, EnumFacing.class));
+			if (!ok && report++ < 10) {
+				FMLLog.bigWarning("草真有人这么干啊.jpg 报告ImpLib作者啊谢谢你了");
+			}
+			return ok;
+		} catch (Exception e) {
+			return false;
+		}
 	}
-	@Copy
-	public boolean isTrackable() {
-		return trackable;
-	}
+
 	@Copy
 	public NBTBase[] getLazyData() {
-		for (int i = 0; i < lazyData.length; i++) {
-			if (lazyData[i] == null) {
-				lazyData[i] = writers[i].serializeNBT();
+		if (lazyData != null) {
+			for (int i = 0; i < lazyData.length; i++) {
+				if (lazyData[i] == null) {
+					lazyData[i] = ((INBTSerializable<?>)caps[i]).serializeNBT();
+				}
 			}
 		}
 		return lazyData;
@@ -60,35 +116,27 @@ class FastCaps0 extends CapabilityDispatcher implements FastCaps2 {
 
 	@Inject("/")
 	public boolean areCompatible(CapabilityDispatcher o) {
-		if (o == null) {
-			return writers.length == 0;
-		} else if (writers.length == 0) {
-			return o.writers.length == 0;
-		}
+		if (o == this) return true;
+		if (o == null) return names.length == 0;
+		if (names.length != o.names.length) return false;
+		if (names.length == 0) return true;
 
-		FastCaps2 self = _isTrackable(this);
-		FastCaps2 other = _isTrackable(o);
-		if (self.isTrackable()) {
-			if (other.isTrackable()) {
-				return fullEq(self.getLazyData(), other.getLazyData());
-			} else {
-				return halfEq(self.getLazyData(), names, o.serializeNBT());
-			}
-		} else if (other.isTrackable()) {
-			return halfEq(other.getLazyData(), o.names, serializeNBT());
+		NBTBase[] selfNbt = getLazyData();
+		// noinspection all
+		NBTBase[] otherNbt = ((FastCaps1)(Object)o).getLazyData();
+		if (selfNbt != null) {
+			if (otherNbt != null) return fullEq(selfNbt, otherNbt);
+			else return halfEq(selfNbt, names, o.serializeNBT());
+		} else if (otherNbt != null) {
+			return halfEq(otherNbt, o.names, serializeNBT());
 		} else {
 			return serializeNBT().equals(o.serializeNBT());
 		}
 	}
 
 	@Copy(unique = true)
-	private static FastCaps2 _isTrackable(CapabilityDispatcher caps0) {
-		return ((FastCaps2)(Object)caps0);
-	}
-	@Copy(unique = true)
 	private static boolean fullEq(NBTBase[] a, NBTBase[] b) {
 		int len = a.length;
-		if (b.length != len) return false;
 
 		for (int i=0; i<len; i++) {
 			NBTBase o1 = a[i], o2 = b[i];
@@ -100,7 +148,6 @@ class FastCaps0 extends CapabilityDispatcher implements FastCaps2 {
 	@Copy(unique = true)
 	private static boolean halfEq(NBTBase[] a, String[] names, NBTTagCompound tag) {
 		int len = a.length;
-		if (tag.getSize() != len) return false;
 
 		for (int i = 0; i<len; i++) {
 			NBTBase o1 = a[i], o2 = tag.getTag(names[i]);
@@ -118,7 +165,7 @@ class FastCaps0 extends CapabilityDispatcher implements FastCaps2 {
 
 			T ret = cap.getCapability(capability, facing);
 			if (ret != null) {
-				if (lazyData != null) lazyData[i] = null;
+				if (lazyData != null && cap instanceof INBTSerializable) lazyData[i] = null;
 				return ret;
 			}
 		}
@@ -131,9 +178,8 @@ class FastCaps0 extends CapabilityDispatcher implements FastCaps2 {
 		NBTTagCompound nbt = new NBTTagCompound();
 
 		NBTBase[] lazy = lazyData;
-		INBTSerializable<NBTBase>[] w = writers;
-		for(int i = 0; i < w.length; i++) {
-			NBTBase tag = w[i].serializeNBT();
+		for(int i = 0; i < names.length; i++) {
+			NBTBase tag = ((INBTSerializable<?>)caps[i]).serializeNBT();
 			nbt.setTag(names[i], tag);
 
 			if (lazy != null) lazy[i] = tag;
@@ -145,11 +191,10 @@ class FastCaps0 extends CapabilityDispatcher implements FastCaps2 {
 	@Inject("/")
 	public void deserializeNBT(NBTTagCompound nbt) {
 		NBTBase[] lazy = lazyData;
-		INBTSerializable<NBTBase>[] w = writers;
-		for(int i = 0; i < w.length; i++) {
+		for(int i = 0; i < names.length; i++) {
 			NBTBase tag = nbt.getTag(names[i]);
 			if (tag != null) {
-				w[i].deserializeNBT(tag);
+				((INBTSerializable<?>)caps[i]).deserializeNBT(Helpers.cast(tag));
 				if (lazy != null) lazy[i] = tag;
 			}
 		}

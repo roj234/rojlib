@@ -97,7 +97,7 @@ abstract class FastResPack extends FileResourcePack {
 		return set = path;
 	}
 
-	@Inject("/")
+	@Inject(value = "/", at = Inject.At.REMOVE)
 	protected void finalize() throws IOException {
 		System.err.println("MOJANG IS SB");
 	}

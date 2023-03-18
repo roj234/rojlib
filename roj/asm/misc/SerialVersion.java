@@ -50,7 +50,7 @@ public class SerialVersion {
 				continue;
 			}
 
-			int access = node.accessFlag() & (PUBLIC | PRIVATE | PROTECTED | STATIC | FINAL | SUPER_OR_SYNC | NATIVE | ABSTRACT | STRICTFP);
+			int access = node.modifier() & (PUBLIC | PRIVATE | PROTECTED | STATIC | FINAL | SYNCHRONIZED | NATIVE | ABSTRACT | STRICTFP);
 			if ((access & PRIVATE) == 0) {
 				("<init>".equals(name) ? constructors : methods).add(new Item(name, node.rawDesc(), access));
 			}
@@ -58,7 +58,7 @@ public class SerialVersion {
 
 		ByteList w = new ByteList(128);
 		w.putUTF(cz.name().replace('/', '.'));
-		int access = cz.accessFlag();
+		int access = cz.modifier();
 		if ((access & INTERFACE) != 0) {
 			access = methods.size() > 0 ? access | ABSTRACT : access & -1025;
 		}
@@ -72,9 +72,9 @@ public class SerialVersion {
 
 		BSLowHeap<Item> fields = new BSLowHeap<>(ITEM_SORTER);
 		for (MoFNode node : cz.fields()) {
-			access = node.accessFlag();
-			if ((access & PRIVATE) == 0 || (access & (STATIC | TRANSIENT_OR_VARARGS)) == 0) {
-				access &= (PUBLIC | PROTECTED | STATIC | FINAL | VOLATILE_OR_BRIDGE);
+			access = node.modifier();
+			if ((access & PRIVATE) == 0 || (access & (STATIC | TRANSIENT)) == 0) {
+				access &= (PUBLIC | PROTECTED | STATIC | FINAL | VOLATILE);
 				fields.add(new Item(node.name(), node.rawDesc(), access));
 			}
 		}

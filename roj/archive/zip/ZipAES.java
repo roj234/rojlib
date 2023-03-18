@@ -1,35 +1,37 @@
 package roj.archive.zip;
 
 import roj.crypt.AES;
+import roj.crypt.FeedbackCipher;
 import roj.crypt.HMAC;
-import roj.crypt.MyCipher;
 import roj.crypt.PBKDF2;
+import roj.io.IOUtil;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
-import java.io.DataInputStream;
+import javax.crypto.Cipher;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.security.GeneralSecurityException;
+import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.security.spec.AlgorithmParameterSpec;
 import java.util.Arrays;
 
 /**
  * @author Roj234
  * @since 2022/11/14 0012 0:16
  */
-final class ZipAES extends MyCipher {
+final class ZipAES extends FeedbackCipher {
 	static final int SALT_LENGTH = 16;
 	static final int KEY_LENGTH = 32;
 	static final int COMPOSITE_KEY_LENGTH = 2 * KEY_LENGTH + 2;
 	static final int PBKDF2_ITERATION_COUNT = 1000;
 
-	HMAC hmac;
-	byte[] verifier = new byte[2];
+	final HMAC hmac;
+	final byte[] verifier = new byte[2];
 	byte[] salt;
-	boolean headerSent;
 
 	public ZipAES() {
 		super(new AES(), MODE_CTR);
@@ -41,33 +43,34 @@ final class ZipAES extends MyCipher {
 	}
 
 	@Override
-	public void setKey(byte[] key, int flags) {
-		if (salt == null) {
-			salt = new byte[SALT_LENGTH];
-			new SecureRandom().nextBytes(salt);
-		}
+	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) {
+		decrypt = mode == Cipher.DECRYPT_MODE;
+
+		if (salt == null) salt = SecureRandom.getSeed(SALT_LENGTH);
 
 		byte[] compositeKey = PBKDF2.PBKDF2_Derive(hmac, key, salt, PBKDF2_ITERATION_COUNT, COMPOSITE_KEY_LENGTH);
 
-		super.setKey(Arrays.copyOf(compositeKey, KEY_LENGTH), flags); // AES Key
+		try {
+			cip.init(Cipher.ENCRYPT_MODE, Arrays.copyOf(compositeKey, KEY_LENGTH)); // AES Key
+		} catch (InvalidKeyException e) {
+			Helpers.athrow(e);
+		}
 		hmac.setSignKey(compositeKey, KEY_LENGTH, KEY_LENGTH); // HMAC key
 		System.arraycopy(compositeKey, 2*KEY_LENGTH, verifier, 0, 2); // Verification key
 
-		iv.array()[0] = 1;
-	}
+		tmp.clear();
+		vec.clear();
 
-	@Override
-	public void setOption(String key, Object value) {
-		salt = (byte[]) value;
+		Arrays.fill(vec.array(), (byte) 0);
+		vec.array()[0] = 1;
+		vec.wIndex(16);
 	}
 
 	public boolean setKeyDecrypt(byte[] key, InputStream in) throws IOException {
-		DataInputStream din = new DataInputStream(in);
-
-		din.readFully(salt = new byte[SALT_LENGTH]);
-		setKey(key, DECRYPT);
-		int v = din.readUnsignedShort();
-		return (((verifier[0] & 0xFF) << 8) | (verifier[1] & 0xFF)) == v;
+		salt = new byte[SALT_LENGTH];
+		IOUtil.readFully(in, salt, 0, salt.length);
+		init(DECRYPT_MODE, key, null, null);
+		return (verifier[0]&0xFF) == in.read() && (verifier[1]&0xFF) == in.read();
 	}
 
 	public void sendHeaders(OutputStream out) throws IOException {
@@ -84,16 +87,15 @@ final class ZipAES extends MyCipher {
 	}
 
 	@Override
-	public void crypt(DynByteBuf in, DynByteBuf out) throws GeneralSecurityException {
+	public void crypt(DynByteBuf in, DynByteBuf out) {
 		int outPos = out.wIndex();
 
-		if ((mode & DECRYPT) != 0) {
-			hmac.update(in);
-		}
+		if (decrypt) hmac.update(in);
 
-		if (!try4(in, out)) try1(in, out, in.readableBytes());
+		try4(in, out);
+		try1(in, out, in.readableBytes());
 
-		if ((mode & DECRYPT) == 0) {
+		if (!decrypt) {
 			int outRpos = out.rIndex;
 			out.rIndex = outPos;
 			hmac.update(out);

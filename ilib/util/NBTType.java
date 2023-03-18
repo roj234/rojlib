@@ -29,7 +29,7 @@ public class NBTType {
 			case LONG:
 			case FLOAT:
 			case DOUBLE:
-				sb.append("\u00a7b").append(tag);
+				sb.append("\u00a7e").append(tag);
 				break;
 			case STRING:
 				sb.append("\u00a7a").append(tag);
@@ -65,7 +65,7 @@ public class NBTType {
 				if (!compound.isEmpty()) {
 					Set<String> set = compound.getKeySet();
 					for (String s : set) {
-						ITokenizer.addSlashes(s, sb.append("\u00a7b\"")).append("\"\u00a7e: ");
+						ITokenizer.addSlashes(sb.append("\u00a7b\""), s).append("\"\u00a7e: ");
 						betterRender(compound.getTag(s), sb);
 						sb.append("\u00a7a,");
 					}

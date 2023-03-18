@@ -9,15 +9,11 @@ import roj.concurrent.task.ITask;
 import roj.config.JSONParser;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.config.word.StreamAsChars;
 import roj.crypt.HMAC;
 import roj.io.IOUtil;
 import roj.net.URIUtil;
 import roj.net.http.SyncHttpClient;
-import roj.text.ACalendar;
-import roj.text.CharList;
-import roj.text.TextUtil;
-import roj.text.UTFCoder;
+import roj.text.*;
 import roj.ui.CmdUtil;
 import roj.util.Helpers;
 
@@ -74,7 +70,7 @@ public class Aliyun implements DDNSService {
 			@Override
 			protected CMapping invoke() throws Exception {
 				SyncHttpClient client = pool.request(url, null);
-				return JSONParser.parses(new StreamAsChars(client.getInputStream(), StandardCharsets.UTF_8)).asMap();
+				return JSONParser.parses(new StreamReader(client.getInputStream(), StandardCharsets.UTF_8)).asMap();
 			}
 		};
 	}
@@ -289,7 +285,7 @@ public class Aliyun implements DDNSService {
 	}
 
 	private CMapping _parse(SyncHttpClient shc) throws Exception {
-		CMapping map = JSONParser.parses(new StreamAsChars(shc.getInputStream(), StandardCharsets.UTF_8)).asMap();
+		CMapping map = JSONParser.parses(new StreamReader(shc.getInputStream(), StandardCharsets.UTF_8)).asMap();
 		if (map.containsKey("Message"))
 			throw new IllegalArgumentException("API错误: " + map.getString("Message"));
 		return map;

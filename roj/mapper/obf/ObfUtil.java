@@ -7,12 +7,12 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.Method;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.RawMethod;
+import roj.asm.tree.insn.InsnList;
 import roj.asm.tree.insn.LabelInsnNode;
 import roj.asm.tree.insn.NPInsnNode;
 import roj.asm.tree.insn.SwitchInsnNode;
 import roj.asm.util.Context;
 import roj.asm.util.InsnHelper;
-import roj.asm.util.InsnList;
 import roj.collect.ToIntMap;
 import roj.io.IOUtil;
 import roj.util.Helpers;
@@ -30,7 +30,7 @@ public class ObfUtil {
 
 	static {
 		try {
-			ConstantData total = Parser.parse(IOUtil.read("roj/mapper/obf/ObfUtil.class"));
+			ConstantData total = Parser.parse(IOUtil.readRes("roj/mapper/obf/ObfUtil.class"));
 			Method txa = total.getUpgradedMethod("TextXORA");
 			//txa.code.attributes.clear();
 			textXOR_A = txa;
@@ -284,7 +284,7 @@ public class ObfUtil {
 		LabelInsnNode label = new LabelInsnNode();
 		prepend.add(label);
 		prepend.add(switcher);
-		InsnList insn = method.code.instructions;
+		InsnList insn = method.getCode().instructions;
 		for (int i = 0; i < insn.size(); i++) {
 			if (InsnHelper.getVarId(insn.get(i)) >= 0) {
 				throw new UnsupportedOperationException("todo!");

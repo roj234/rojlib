@@ -1,6 +1,8 @@
 package roj.reflect;
 
 import roj.asm.AsmShared;
+import roj.asm.Parser;
+import roj.asm.tree.IClass;
 import roj.util.ByteList;
 
 import java.io.File;
@@ -75,11 +77,14 @@ public class ClassDefiner extends ClassLoader {
 		return super.loadClass(className, init);
 	}
 
-	public Class<?> defineClass(String name, byte[] bytes) throws ClassFormatError {
+	public final Class<?> defineClass(String name, byte[] bytes) throws ClassFormatError {
 		return defineClassC(name, bytes, 0, bytes.length);
 	}
-
-	public Class<?> defineClassC(String name, ByteList data) throws ClassFormatError {
+	public final Class<?> defineClassC(IClass data) {
+		ByteList list = Parser.toByteArrayShared(data);
+		return defineClassC(data.name().replace('/', '.'), list);
+	}
+	public final Class<?> defineClassC(String name, ByteList data) throws ClassFormatError {
 		try {
 			return defineClassC(name, data.list, data.arrayOffset() + data.rIndex, data.wIndex());
 		} finally {

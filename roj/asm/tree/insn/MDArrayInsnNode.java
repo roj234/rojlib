@@ -10,14 +10,14 @@ import roj.asm.visitor.CodeWriter;
  * @author Roj234
  * @since 2021/6/2 23:28
  */
-public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, IClassInsnNode {
+public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode {
 	public MDArrayInsnNode() {
 		super(Opcodes.MULTIANEWARRAY);
 	}
 
 	public MDArrayInsnNode(CstClass clazz, int dimension) {
 		super(Opcodes.MULTIANEWARRAY);
-		this.owner = clazz.getValue().getString();
+		this.owner = clazz.name().str();
 		setDimension(dimension);
 	}
 
@@ -53,16 +53,6 @@ public final class MDArrayInsnNode extends InsnNode implements IIndexInsnNode, I
 	@Override
 	protected boolean validate() {
 		return code == Opcodes.MULTIANEWARRAY;
-	}
-
-	@Override
-	public void owner(String clazz) {
-		// noinspection all
-		this.owner = clazz.toString();
-	}
-
-	public String owner() {
-		return owner;
 	}
 
 	@Override

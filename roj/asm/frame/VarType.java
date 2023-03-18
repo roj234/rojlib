@@ -13,27 +13,21 @@ public final class VarType {
 	public static int ofType(Type type) {
 		if (type.array() > 0) return -2;
 		switch (type.type) {
-			case Type.VOID:
-				return -1;
+			case Type.VOID: return -1;
 			case Type.BOOLEAN:
 			case Type.BYTE:
 			case Type.CHAR:
 			case Type.SHORT:
-			case Type.INT:
-				return INT;
-			case Type.FLOAT:
-				return FLOAT;
-			case Type.DOUBLE:
-				return DOUBLE;
-			case Type.LONG:
-				return LONG;
-			case Type.CLASS:
-				return -2;
+			case Type.INT: return INT;
+			case Type.FLOAT: return FLOAT;
+			case Type.DOUBLE: return DOUBLE;
+			case Type.LONG: return LONG;
+			case Type.CLASS: return -2;
 		}
 		throw OperationDone.NEVER;
 	}
 
-	static final String[] toString = {"top", "int", "long", "float", "double", "{null}", "uninitial_this", "object", "uninitial"};
+	static final String[] toString = {"top", "int", "float", "double", "long", "{null}", "uninitial_this", "object", "uninitial"};
 
 	public static String toString(byte type) {
 		return toString[type];

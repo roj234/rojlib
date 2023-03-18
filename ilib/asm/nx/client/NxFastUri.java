@@ -15,10 +15,10 @@ import java.util.concurrent.CompletableFuture;
  */
 @Nixim("net.minecraft.client.gui.GuiScreen")
 class NxFastUri {
-	@Shadow("field_175287_a")
+	@Shadow
 	private static Logger LOGGER;
 
-	@Inject("func_175282_a")
+	@Inject
 	private void openWebLink(URI url) {
 		CompletableFuture.runAsync(() -> {
 			try {

@@ -1,6 +1,7 @@
 package roj.asm.tree.anno;
 
 import roj.asm.cst.ConstantPool;
+import roj.asm.type.Type;
 import roj.util.DynByteBuf;
 
 /**
@@ -8,44 +9,19 @@ import roj.util.DynByteBuf;
  * @since 2021/1/9 14:23
  */
 public final class AnnValDouble extends AnnVal {
-	public AnnValDouble(double value) {
-		this.value = value;
-	}
+	public AnnValDouble(double v) { value = v; }
 
 	public double value;
 
-	@Override
-	public int asInt() {
-		return (int) value;
-	}
+	public int asInt() { return (int) value; }
+	public float asFloat() { return (float) value; }
+	public long asLong() { return (long) value; }
+	public double asDouble() { return value; }
 
-	@Override
-	public double asDouble() {
-		return value;
-	}
+	public byte type() { return Type.DOUBLE; }
 
-	@Override
-	public float asFloat() {
-		return (float) value;
-	}
-
-	@Override
-	public long asLong() {
-		return (long) value;
-	}
-
-	public void toByteArray(ConstantPool pool, DynByteBuf w) {
-		w.put((byte) DOUBLE).putShort(pool.getDoubleId(value));
-	}
-
-	public String toString() {
-		return String.valueOf(value);
-	}
-
-	@Override
-	public byte type() {
-		return DOUBLE;
-	}
+	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) Type.DOUBLE).putShort(cp.getDoubleId(value)); }
+	public String toString() { return String.valueOf(value); }
 
 	@Override
 	public boolean equals(Object o) {

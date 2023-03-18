@@ -77,10 +77,10 @@ public final class SideTransformer implements ContextClassTransformer {
 
 			for (int i = methods.size() - 1; i >= 0; i--) {
 				MethodNode m = methods.get(i);
-				if ((m.accessFlag() & AccessFlag.SYNTHETIC) == 0) continue;
+				if ((m.modifier() & AccessFlag.SYNTHETIC) == 0) continue;
 				for (int j = 0; j < handles.size(); j++) {
 					CstNameAndType method = handles.get(j).implementor().desc();
-					if (m.name().equals(method.getName().getString()) && m.rawDesc().equals(method.getType().getString())) {
+					if (m.name().equals(method.name().str()) && m.rawDesc().equals(method.getType().str())) {
 						methods.remove(i);
 						LG.accept(m);
 						break;
@@ -130,11 +130,11 @@ public final class SideTransformer implements ContextClassTransformer {
 		}
 
 		@Override
-		public void invoke_dynamic(CstDynamic dyn, int type) {
+		public void invokeDyn(CstDynamic dyn, int type) {
 			BootstrapMethods.BootstrapMethod handle = methods.get(dyn.tableIdx);
 			if (META_FACTORY.equals0(handle)) {
 				CstRef method = handle.implementor();
-				if (method.getClassName().equals(owner)) {
+				if (method.className().equals(owner)) {
 					handles.add(handle);
 				}
 			}

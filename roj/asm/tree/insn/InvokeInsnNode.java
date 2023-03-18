@@ -52,8 +52,8 @@ public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
 
 	public InvokeInsnNode(IClass clazz, int index) {
 		MoFNode mn = clazz.methods().get(index);
-		setOpcode((mn.accessFlag() & AccessFlag.STATIC) != 0 ? Opcodes.INVOKESTATIC :
-			(mn.accessFlag() & (AccessFlag.PRIVATE | AccessFlag.FINAL)) != 0 ? Opcodes.INVOKESPECIAL :
+		setOpcode((mn.modifier() & AccessFlag.STATIC) != 0 ? Opcodes.INVOKESTATIC :
+			(mn.modifier() & (AccessFlag.PRIVATE | AccessFlag.FINAL)) != 0 ? Opcodes.INVOKESPECIAL :
 			Opcodes.INVOKEVIRTUAL);
 		this.owner = clazz.name();
 		this.name = mn.name();
@@ -140,18 +140,10 @@ public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
 	}
 
 	public final String toString() {
-		StringBuilder sb = new StringBuilder(super.toString()).append(' ').append(returnType()).append(' ').append(owner.substring(owner.lastIndexOf('/') + 1)).append('.').append(name).append('(');
-
-		List<Type> params = parameters();
-		if (!params.isEmpty()) {
-			int i = 0;
-			while (true) {
-				Type par = params.get(i++);
-				sb.append(par);
-				if (i == params.size()) break;
-				sb.append(", ");
-			}
-		}
-		return sb.append(')').toString();
+		List<Type> types = parameters();
+		types.add(returnType);
+		String s = TypeHelper.humanize(types,owner.substring(owner.lastIndexOf('/')+1)+'.'+name,true);
+		types.remove(types.size()-1);
+		return super.toString() + ' ' + s;
 	}
 }

@@ -10,9 +10,9 @@ import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextUtil;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.EmptyArrays;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -147,7 +147,7 @@ public class FileResponse implements Response {
 			}
 		}
 
-		ranges = EmptyArrays.LONGS;
+		ranges = ArrayCache.LONGS;
 
 		if (req.containsKey("If-Range")) {
 			String s = req.get("If-Range");

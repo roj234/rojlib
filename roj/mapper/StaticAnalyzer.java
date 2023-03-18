@@ -11,7 +11,7 @@ import roj.asm.visitor.CodeVisitor;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.mapper.util.Desc;
 
 import java.io.File;
@@ -26,7 +26,7 @@ import java.util.Map;
  */
 public class StaticAnalyzer {
 	public static void main(String[] args) throws Exception {
-		FileUtil.copyFile(new File(args[0]), new File(args[1]));
+		IOUtil.copyFile(new File(args[0]), new File(args[1]));
 		Map<String, Context> map = new MyHashMap<>();
 
 		ZipArchive zf = new ZipArchive(new File(args[1]));
@@ -37,7 +37,7 @@ public class StaticAnalyzer {
 			}
 		}
 
-		List<String> list = new SimpleList<>(args);
+		List<String> list = SimpleList.asModifiableList(args);
 		list.remove(0);
 		list.remove(0);
 		for (int i = 0; i < list.size(); i++) {
@@ -80,7 +80,7 @@ public class StaticAnalyzer {
 	private static void analyzeClass0(Context ctx, List<String> next) {
 		List<CstClass> classes = ctx.getClassConstants();
 		for (int i = 0; i < classes.size(); i++) {
-			next.add(classes.get(i).getValue().getString());
+			next.add(classes.get(i).name().str());
 		}
 	}
 
@@ -137,7 +137,7 @@ public class StaticAnalyzer {
 
 		@Override
 		public void invoke(byte code, CstRef method) {
-			if (!method.getClassName().equals(self)) {
+			if (!method.className().equals(self)) {
 				user.add(new Desc().read(method));
 			}
 		}

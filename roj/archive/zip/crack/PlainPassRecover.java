@@ -249,7 +249,7 @@ public class PlainPassRecover implements Macros, ITask {
 
 					Main.pool.pushTask(copy);
 				}
-				Main.pool.waitUntilFinish();
+				Main.pool.awaitFinish();
 
 				if (w.found) return w.kill();
 			}

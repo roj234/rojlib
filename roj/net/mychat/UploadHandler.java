@@ -4,12 +4,11 @@ import roj.concurrent.FastThreadLocal;
 import roj.concurrent.task.AsyncTask;
 import roj.crypt.Base64;
 import roj.crypt.SM3;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
-import roj.math.MathUtils;
 import roj.net.http.srv.HttpServer11;
 import roj.net.http.srv.MultipartFormHandler;
 import roj.net.http.srv.Request;
+import roj.text.TextUtil;
 import roj.text.UTFCoder;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -83,7 +82,7 @@ public class UploadHandler extends MultipartFormHandler {
 	protected void onKey(CharSequence key) {
 		close0();
 
-		int i = this.i = MathUtils.parseInt(key);
+		int i = this.i = TextUtil.parseInt(key);
 		if (i < 0 || i > files.length) throw new ArrayIndexOutOfBoundsException();
 		try {
 			fos = new FileOutputStream(files[i] = getFile());
@@ -182,7 +181,7 @@ public class UploadHandler extends MultipartFormHandler {
 					}
 				} else {
 					if (!cur.renameTo(old)) {
-						FileUtil.copyFile(cur, old);
+						IOUtil.copyFile(cur, old);
 						if (!cur.delete()) throw new IOException("Unable delete old file " + cur);
 					}
 					files[i] = old;

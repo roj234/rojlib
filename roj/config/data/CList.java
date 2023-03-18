@@ -5,10 +5,11 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.config.NBTParser;
 import roj.config.TOMLParser;
+import roj.config.VinaryParser;
 import roj.config.Wrapping;
-import roj.config.serial.CConsumer;
-import roj.config.serial.Structs;
+import roj.config.serial.CVisitor;
 import roj.config.word.ITokenizer;
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 
 import javax.annotation.Nonnull;
@@ -35,8 +36,11 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		this.list = (List<CEntry>) list;
 	}
 
+	@Deprecated
 	public static CList of(Object... arr) {
-		return Wrapping.wrap(arr).asList();
+		CList list1 = new CList(arr.length);
+		for (Object o : arr) list1.add(Wrapping.wrap(o));
+		return list1;
 	}
 
 	public final boolean isEmpty() {
@@ -70,19 +74,15 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	public final void add(String s) {
 		list.add(CString.valueOf(s));
 	}
-
 	public final void add(int s) {
 		list.add(CInteger.valueOf(s));
 	}
-
 	public final void add(double s) {
 		list.add(CDouble.valueOf(s));
 	}
-
 	public final void add(long s) {
 		list.add(CLong.valueOf(s));
 	}
-
 	public final void add(boolean b) {
 		list.add(CBoolean.valueOf(b));
 	}
@@ -92,8 +92,32 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	}
 
 	@Nonnull
-	public CEntry get(int index) {
-		return list.get(index);
+	public CEntry get(int i) {
+		return list.get(i);
+	}
+	public final boolean getBool(int i) {
+		CEntry entry = list.get(i);
+		return Type.BOOL.isSimilar(entry.getType()) && entry.asBool();
+	}
+	public final String getString(int i) {
+		CEntry entry = list.get(i);
+		return Type.STRING.isSimilar(entry.getType()) ? entry.asString() : "";
+	}
+	public final int getInteger(int i) {
+		CEntry entry = list.get(i);
+		return entry.getType().isNumber() ? entry.asInteger() : 0;
+	}
+	public final long getLong(int i) {
+		CEntry entry = list.get(i);
+		return entry.getType().isNumber() ? entry.asLong() : 0;
+	}
+	public final double getDouble(int i) {
+		CEntry entry = list.get(i);
+		return entry.getType().isNumber() ? entry.asDouble() : 0;
+	}
+
+	public CEntry remove(int i) {
+		return list.remove(i);
 	}
 
 	@Nonnull
@@ -157,31 +181,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	}
 
 	@Override
-	public final StringBuilder toJSON(StringBuilder sb, int depth) {
-		sb.append('[');
-		if (!list.isEmpty()) {
-			if (depth < 0) {
-				for (int j = 0; j < list.size(); j++) {
-					list.get(j).toJSON(sb, -1).append(',');
-				}
-				sb.delete(sb.length() - 1, sb.length());
-			} else {
-				sb.append('\n');
-				for (int j = 0; j < list.size(); j++) {
-					CEntry entry = list.get(j);
-					for (int i = 0; i < depth + 4; i++) {
-						sb.append(' ');
-					}
-					entry.toJSON(sb, depth + 4).append(",\n");
-				}
-				sb.delete(sb.length() - 2, sb.length() - 1);
-				for (int i = 0; i < depth; i++) {
-					sb.append(' ');
-				}
-			}
-		}
-		return sb.append(']');
-	}
+	public final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }
 
 	@Override
 	public byte getNBTType() {
@@ -189,24 +189,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	}
 
 	@Override
-	public void toNBT(DynByteBuf w) {
-		List<CEntry> list = this.list;
-		if (list.isEmpty()) {
-			w.put(NBTParser.END).writeInt(0);
-			return;
-		}
-
-		byte prevType = list.get(0).getNBTType();
-		w.put(prevType).writeInt(list.size());
-		for (int i = 0; i < list.size(); i++) {
-			CEntry entry = list.get(i);
-			if (entry.getNBTType() != prevType) throw new IllegalStateException("Illegal NBTList: types are not same: " + list);
-			entry.toNBT(w);
-		}
-	}
-
-	@Override
-	public final StringBuilder toINI(StringBuilder sb, int depth) {
+	public final CharList toINI(CharList sb, int depth) {
 		if (depth != 1) {
 			throw new IllegalArgumentException("Can not serialize LIST to INI at depth " + depth);
 		}
@@ -217,7 +200,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	}
 
 	@Override
-	public StringBuilder toTOML(StringBuilder sb, int depth, CharSequence chain) {
+	public CharList toTOML(CharList sb, int depth, CharSequence chain) {
 		if (list.isEmpty()) {
 			return sb.append("[]");
 		} else if (depth != 3) {
@@ -230,7 +213,8 @@ public class CList extends CEntry implements Iterable<CEntry> {
 				}
 				list.get(i).toTOML(sb.append("]]\n"), 2, chain).append("\n");
 			}
-			return sb.delete(sb.length() - 1, sb.length());
+			sb.setLength(sb.length()-1);
+			return sb;
 		} else {
 			if (!TOMLParser.literalSafe(chain)) {
 				ITokenizer.addSlashes(chain, sb);
@@ -258,21 +242,32 @@ public class CList extends CEntry implements Iterable<CEntry> {
 
 	@Override
 	@SuppressWarnings("fallthrough")
-	public void toBinary(DynByteBuf w, Structs struct) {
+	protected void toBinary(DynByteBuf w, VinaryParser struct) {
 		int iType = -1;
+
 		List<CEntry> list = this.list;
 		for (int i = 0; i < list.size(); i++) {
-			int type1 = list.get(i).getType().ordinal();
+			int type = list.get(i).getType().ordinal();
+			if (type == 0) {
+				iType = -1;
+				break;
+			}
+
 			if (iType == -1) {
-				iType = type1;
-			} else if (iType != type1 || type1 == /*Type.LIST.ordinal()*/0) {
+				iType = type;
+			} else if (iType != type) {
 				iType = -1;
 				break;
 			}
 		}
-		w.put((byte) (((1 + iType) << 4)/* | Type.LIST.ordinal()*/)).putVarInt(list.size(), false);
+
+		if (iType == 1 && struct != null) iType = -1;
+
+		w.put((byte) (((1 + iType) << 4))).putVUInt(list.size());
+
 		Type type = iType >= 0 ? Type.VALUES[iType] : null;
 		if (type == null) {
+			// list, map, or mixed different types
 			for (int i = 0; i < list.size(); i++) {
 				list.get(i).toBinary(w, struct);
 			}
@@ -293,43 +288,18 @@ public class CList extends CEntry implements Iterable<CEntry> {
 						bvi = 8;
 					}
 					break;
+				// noMap
 				case INTEGER: w.putInt(el.asInteger()); break;
-				case MAP:
-					if (struct == null || !struct.tryCompress(el.asMap(), w)) {
-						if (struct != null) w.put((byte) el.getType().ordinal());
-
-						Map<String, CEntry> map = el.asMap().raw();
-						w.putVarInt(map.size(), false);
-						if (!map.isEmpty()) {
-							for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-								entry.getValue().toBinary(w.putVarIntVIC(entry.getKey()), struct);
-							}
-						}
-					}
-					break;
-				case LONG:
-					w.putLong(el.asLong());
-					break;
-				case DOUBLE:
-					w.putDouble(el.asDouble());
-					break;
-				case STRING:
-					w.putVarIntVIC(el.asString());
-					break;
-				case Int1:
-					w.put((byte) el.asInteger());
-					break;
-				case Int2:
-					w.putShort(el.asInteger());
-					break;
-				case Float4:
-					w.putFloat((float) el.asDouble());
-					break;
+				case LONG: w.putLong(el.asLong()); break;
+				case DOUBLE: w.putDouble(el.asDouble()); break;
+				case STRING: w.putVStr(el.asString()); break;
+				case Int1: w.put((byte) el.asInteger()); break;
+				case Int2: w.putShort(el.asInteger()); break;
+				case Float4: w.putFloat((float) el.asDouble()); break;
 			}
 		}
-		if (bvi != 8) {
-			w.put((byte) bv);
-		}
+
+		if (bvi != 8) w.put((byte) bv);
 	}
 
 	@Override
@@ -357,12 +327,10 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	}
 
 	@Override
-	public final void forEachChild(CConsumer ser) {
-		ser.valueList();
-		List<CEntry> l = this.list;
-		for (int i = 0; i < l.size(); i++) {
-			l.get(i).forEachChild(ser);
-		}
+	public void forEachChild(CVisitor ser) {
+		List<CEntry> l = list;
+		ser.valueList(l.size());
+		for (int i = 0; i < l.size(); i++) l.get(i).forEachChild(ser);
 		ser.pop();
 	}
 }

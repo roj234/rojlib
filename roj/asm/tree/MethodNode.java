@@ -11,9 +11,5 @@ import java.util.List;
 public interface MethodNode extends MoFNode {
 	String ownerClass();
 	List<Type> parameters();
-	Type getReturnType();
-
-	default String info() {
-		return ownerClass()+"."+name()+rawDesc();
-	}
+	Type returnType();
 }

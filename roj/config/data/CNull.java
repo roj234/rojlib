@@ -1,7 +1,8 @@
 package roj.config.data;
 
-import roj.config.serial.CConsumer;
-import roj.config.serial.Structs;
+import roj.config.VinaryParser;
+import roj.config.serial.CVisitor;
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 
 import javax.annotation.Nonnull;
@@ -59,7 +60,7 @@ public final class CNull extends CEntry {
 	}
 
 	@Override
-	public StringBuilder toJSON(StringBuilder sb, int depth) {
+	public CharList toJSON(CharList sb, int depth) {
 		return sb.append("null");
 	}
 
@@ -69,7 +70,7 @@ public final class CNull extends CEntry {
 	}
 
 	@Override
-	public void toBinary(DynByteBuf w, Structs struct) {
+	protected void toBinary(DynByteBuf w, VinaryParser struct) {
 		w.put((byte) Type.NULL.ordinal());
 	}
 
@@ -89,7 +90,7 @@ public final class CNull extends CEntry {
 	}
 
 	@Override
-	public void forEachChild(CConsumer ser) {
+	public void forEachChild(CVisitor ser) {
 		ser.valueNull();
 	}
 }

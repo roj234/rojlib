@@ -7,7 +7,7 @@ import ilib.gui.comp.Component;
 import ilib.gui.comp.*;
 import ilib.gui.util.ComponentListener;
 import ilib.gui.util.PositionProxy;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 
 import net.minecraft.client.gui.GuiScreen;
 
@@ -31,7 +31,7 @@ public class GuiMockPackets extends GuiBaseNI implements ComponentListener {
 		super(-1, -1, Component.TEXTURE);
 		this.prevScreen = menu;
 		baseDir.mkdir();
-		rulePacketAdapters = FileUtil.findAllFiles(baseDir);
+		rulePacketAdapters = IOUtil.findAllFiles(baseDir);
 	}
 
 	@Override
@@ -84,7 +84,7 @@ public class GuiMockPackets extends GuiBaseNI implements ComponentListener {
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
-					rulePacketAdapters = FileUtil.findAllFiles(baseDir);
+					rulePacketAdapters = IOUtil.findAllFiles(baseDir);
 					((SavedPackets) components.get(1)).refresh();
 					break;
 				case 999:

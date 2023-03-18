@@ -5,8 +5,8 @@ import roj.config.ParseException;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.Type;
-import roj.config.word.StreamAsChars;
 import roj.io.PushbackInputStream;
+import roj.text.StreamReader;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -74,10 +74,10 @@ class FileFilter implements Predicate<File> {
 				if (buffer[i] == '/' && regionMatches(buffer, i, COMMENT_BEGIN)) {
 					PushbackInputStream in1 = new PushbackInputStream(in);
 					in1.setBuffer(buffer, i + COMMENT_BEGIN.length(), len);
-					StreamAsChars sr = new StreamAsChars(in1) {
+					StreamReader sr = new StreamReader(in1) {
 						@Override
-						protected int fillIn(char[] buf, int off, int len) throws IOException {
-							len = super.fillIn(buf, off, len);
+						protected int fill(char[] buf, int off, int len) throws IOException {
+							len = super.fill(buf, off, len);
 							if (len <= 0) return len;
 
 							for (int i = 0; i < len; i++) {

@@ -10,9 +10,9 @@ import roj.collect.MyHashMap;
 import roj.config.ParseException;
 import roj.config.word.ITokenizer;
 import roj.config.word.Word;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.text.StreamReader;
 import roj.util.ByteList;
 
 import java.io.*;
@@ -88,7 +88,7 @@ public class Translator {
 				index = i;
 				return eof();
 			}
-		}.init(new FileInputStream(args[args.length-1]));
+		}.init(new StreamReader(new FileInputStream(args[args.length-1])));
 
 		Word w = wr.except(Word.STRING, "Class Name");
 		while (wr.hasNext()) {
@@ -114,7 +114,7 @@ public class Translator {
 
 	private static void apply(File f) throws IOException {
 		if (f.isDirectory()) {
-			FileUtil.findAllFiles(f, file -> {
+			IOUtil.findAllFiles(f, file -> {
 				String name = file.getName().toLowerCase(Locale.ROOT);
 				if (name.endsWith(".zip") || name.endsWith(".jar") || name.endsWith(".class")) {
 					try {
@@ -173,7 +173,7 @@ public class Translator {
 		List<Constant> array = data.cp.array();
 		for (IntMap.Entry<String> entry : map.selfEntrySet()) {
 			CstString ref = (CstString) array.get(entry.getIntKey()-1);
-			if (!ref.getValue().getString().equals(entry.getValue())) {
+			if (!ref.name().str().equals(entry.getValue())) {
 				ref.setValue(data.cp.getUtf(entry.getValue()));
 				any = true;
 			}
@@ -184,7 +184,7 @@ public class Translator {
 
 	private static void read(File f) throws IOException {
 		if (f.isDirectory()) {
-			FileUtil.findAllFiles(f, file -> {
+			IOUtil.findAllFiles(f, file -> {
 				String name = file.getName().toLowerCase(Locale.ROOT);
 				if (name.endsWith(".zip") || name.endsWith(".jar") || name.endsWith(".class")) {
 					try {
@@ -227,7 +227,7 @@ public class Translator {
 			Constant s = array.get(i);
 			if (s.type() == Constant.STRING) {
 				sb.append('\t').append(s.getIndex()).append('=').append('"');
-				ITokenizer.addSlashes(((CstString) s).getValue().getString(), sb).append('"').append('\n');
+				ITokenizer.addSlashes(sb, ((CstString) s).name().str()).append('"').append('\n');
 
 				any = true;
 			}

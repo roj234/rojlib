@@ -311,19 +311,12 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 	public boolean contains(CharSequence i, int len) {
 		return getEntry(i, 0, len) != null;
 	}
-
 	public boolean contains(CharSequence i, int off, int len) {
 		return getEntry(i, off, len) != null;
 	}
 
-	public int longestMatches(CharSequence s) {
-		return longestMatches(s, 0, s.length());
-	}
-
-	public int longestMatches(CharSequence s, int len) {
-		return longestMatches(s, 0, len);
-	}
-
+	public int longestMatches(CharSequence s) { return longestMatches(s, 0, s.length()); }
+	public int longestMatches(CharSequence s, int len) { return longestMatches(s, 0, len); }
 	public int longestMatches(CharSequence s, int i, int len) {
 		int d = 0;
 
@@ -349,14 +342,8 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 		return entry.isEnd ? d : -1;
 	}
 
-	public List<String> keyMatches(CharSequence s, int limit) {
-		return keyMatches(s, 0, s.length(), limit);
-	}
-
-	public List<String> keyMatches(CharSequence s, int len, int limit) {
-		return keyMatches(s, 0, len, limit);
-	}
-
+	public List<String> keyMatches(CharSequence s, int limit) { return keyMatches(s, 0, s.length(), limit); }
+	public List<String> keyMatches(CharSequence s, int len, int limit) { return keyMatches(s, 0, len, limit); }
 	public List<String> keyMatches(CharSequence s, int i, int len, int limit) {
 		CharList sb = new CharList();
 

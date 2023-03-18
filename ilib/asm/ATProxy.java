@@ -22,7 +22,7 @@ public class ATProxy implements ContextClassTransformer {
 	public byte[] transform(String name, String trName, byte[] clz) {
 		Loader.wrapTransformers();
 
-		Collection<String> toOpen = getMapping().get(name);
+		Collection<String> toOpen = getMapping().get(trName);
 		if (toOpen != null) TransformUtil.makeAccessible(Parser.parseAccess(clz), toOpen);
 		return clz;
 	}

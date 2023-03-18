@@ -77,7 +77,7 @@ public class AsyncTask<T> implements Future<T>, ITask {
 
 	@Override
 	public T get() throws InterruptedException, ExecutionException {
-		if (this.isCancelled()) {
+		if (this.canceled) {
 			throw new CancellationException();
 		}
 
@@ -88,7 +88,7 @@ public class AsyncTask<T> implements Future<T>, ITask {
 			}
 		}
 
-		if (this.isCancelled()) {
+		if (this.canceled) {
 			throw new CancellationException();
 		}
 
@@ -99,7 +99,7 @@ public class AsyncTask<T> implements Future<T>, ITask {
 
 	@Override
 	public T get(long timeout, @Nonnull TimeUnit unit) throws InterruptedException, TimeoutException, ExecutionException {
-		if (this.isCancelled()) {
+		if (this.canceled) {
 			throw new CancellationException();
 		}
 
@@ -110,7 +110,7 @@ public class AsyncTask<T> implements Future<T>, ITask {
 			}
 		}
 
-		if (this.isCancelled()) {
+		if (this.canceled) {
 			throw new CancellationException();
 		}
 

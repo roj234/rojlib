@@ -3,8 +3,7 @@ package roj.mod;
 import com.sun.nio.file.ExtendedWatchEventModifier;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.concurrent.Scheduled;
-import roj.concurrent.task.ScheduledRunnable;
+import roj.concurrent.timing.Scheduled;
 import roj.ui.CmdUtil;
 import roj.util.Helpers;
 
@@ -111,19 +110,19 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 								shouldReload = true;
 							}
 						} else if (id.equals("config.json")) {
-							if (reloadCfgTask != null && reloadCfgTask.getNextRun() > 0) reloadCfgTask.cancel();
-							reloadCfgTask = Shared.PeriodicTask.register(new ScheduledRunnable(0, 1000, 1, Shared::loadConfig));
+							if (reloadCfgTask != null) reloadCfgTask.cancel();
+							reloadCfgTask = Shared.PeriodicTask.executeLater(Shared::loadConfig, 1000);
 							break;
 						}
 					}
 				}
 				if (shouldReload) {
-					if (reloadMapTask != null && reloadMapTask.getNextRun() > 0) reloadMapTask.cancel();
-					reloadMapTask = Shared.PeriodicTask.register(new ScheduledRunnable(0, 2000, 1, () -> {
+					if (reloadMapTask != null) reloadMapTask.cancel();
+					reloadMapTask = Shared.PeriodicTask.executeLater(() -> {
 						CmdUtil.warning("清除映射表缓存");
 						Shared.mapperFwd.clear();
 						ATHelper.close();
-					}));
+					}, 2000);
 				}
 
 				if (!key.reset()) {

@@ -4,7 +4,6 @@ import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.IClass;
 import roj.collect.MyHashMap;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 
 import java.io.File;
@@ -25,7 +24,7 @@ public class LibraryFolder implements Library, Predicate<File> {
 
 		info = new MyHashMap<>();
 
-		FileUtil.findAllFiles(file, this);
+		IOUtil.findAllFiles(file, this);
 	}
 
 	private int baseDir;

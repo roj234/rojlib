@@ -1,16 +1,14 @@
 package roj.text;
 
-import roj.collect.IntMap;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.*;
 import roj.io.IOUtil;
-import roj.math.MathUtils;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.IOException;
 import java.util.*;
+
+import static java.lang.Character.*;
 
 /**
  * @author Roj234
@@ -182,10 +180,10 @@ public class TextUtil {
 	}
 
 	public static CharList bytes2hex(byte[] b, int off, int len, CharList sb) {
-		sb.ensureCapacity(sb.ptr + len << 1);
+		sb.ensureCapacity(sb.len + len << 1);
 		len += off;
 		char[] tmp = sb.list;
-		int j = sb.ptr;
+		int j = sb.len;
 		while (off < len) {
 			int bb = b[off++] & 0xFF;
 			tmp[j++] = b2h(bb >>> 4);
@@ -202,7 +200,8 @@ public class TextUtil {
 	 *
 	 * @return -1 不是, 0 整数, 1 小数
 	 */
-	public static int isNumber(CharSequence s) {
+	public static int isNumber(CharSequence s) { return isNumber(s, LONG_MAXS); }
+	public static int isNumber(CharSequence s, byte[] max) {
 		if (s == null || s.length() == 0) return -1;
 		int dot = 0;
 		int i = 0;
@@ -223,7 +222,178 @@ public class TextUtil {
 			}
 		}
 
-		return dot>0 || (!checkMax(LONG_MAXS, s, off, s.charAt(0) == '-')) ? 1 : 0;
+		return dot>0 || (max != null && !checkMax(max, s, off, s.charAt(0) == '-')) ? 1 : 0;
+	}
+
+	/**
+	 * Implementation detail: The runtime complexity is in O(log2(n)). <br>
+	 * Negative numbers has the same number of digits as the corresponding positive ones.
+	 *
+	 * @param n The given integer
+	 *
+	 * @return The number of digits of the given integer n in O(log2(n))
+	 */
+	public static int digitCount(int n) {
+		if (n == Integer.MIN_VALUE) return 10;
+		if (n < 0) return digitCount(-n)+1;
+
+		if (n < 100000) /* 1 <= digit count <= 5 */ {
+			if (n < 100) /* 1 <= digit count <= 2 */
+				return (n < 10) ? 1 : 2;
+			else /* 3 <= digit count <= 5 */
+				if (n < 1000) return 3;
+				else /* 4 <= digit count <= 5 */
+					return (n < 10000) ? 4 : 5;
+		} else /* 6 <= digit count <= 10 */
+			if (n < 10000000) /* 6 <= digit count <= 7 */
+				return (n < 1000000) ? 6 : 7;
+			else /* 8 <= digit count <= 10 */
+				if (n < 100000000) return 8;
+				else /* 9 <= digit count <= 10 */
+					return (n < 1000000000) ? 9 : 10;
+	}
+
+	// fallback
+	public static int digitCount(long x) {
+		if (x == Long.MIN_VALUE) return 20;
+		if (x < 0) return digitCount(-x)+1;
+
+		long p = 10;
+		for (int i=1; i<19; i++) {
+			if (x < p) return i;
+			p = 10*p;
+		}
+		return 19;
+	}
+
+	public static final char[] CHINA_NUMERIC = new char[] {'零', '一', '二', '三', '四', '五', '六', '七', '八', '九'};
+	static final char[] CHINA_NUMERIC_POSITION = new char[] {'十', '百', '千'};
+	static final char[] CHINA_NUMERIC_LEV = new char[] {'万', '亿'};
+	public static StringBuilder toChinaString(StringBuilder sb, long number) {
+		int pos = sb.length();
+		if (number == 0) return sb.append(CHINA_NUMERIC[0]);
+		if (number < 0) {
+			sb.append('负');
+			number = -number;
+		}
+		while (number > 0) {
+			int curs = (int) (number % 10);
+			number = (number - curs) / 10;
+			sb.append(CHINA_NUMERIC[curs]);
+		} // Step 1 一二三四五六七八九
+		sb.reverse();
+
+		final int firstLength = 3; // 万
+
+		final char C_ZERO = CHINA_NUMERIC[0];
+
+		int j = 0;
+		boolean k = false;
+		for (int i = sb.length() - 1; i >= 1; i--) {
+			char c = sb.charAt(i - 1);
+			if (c != C_ZERO) {
+				char t = j == firstLength ? CHINA_NUMERIC_LEV[k ? 1 : 0] : CHINA_NUMERIC_POSITION[j];
+				sb.insert(i, t);
+			} else if (j == firstLength) {
+				sb.setCharAt(i, CHINA_NUMERIC_LEV[k ? 1 : 0]);
+			}
+			if ((j++) == CHINA_NUMERIC_POSITION.length) {
+				j = 0;
+				k = !k;
+			}
+		} // Step 2 六万七千八百九十一亿二千三百四十五万六千七百八十九
+
+		int zero = -1;
+		int van = 0;
+		for (int i = sb.length() - 1; i > 0; i--) {
+			char c = sb.charAt(i);
+			switch (c) {
+				case '零': {
+					if (zero == -1 || zero++ > 0) sb.deleteCharAt(i);
+				}
+				break;
+				// rem 亿万 因为是反过来的
+				case '万': {
+					van = 1;
+					if (zero != -1) zero++;
+				}
+				break;
+				case '亿': {
+					if (zero != -1) zero++;
+					if (van == 1) {
+						sb.deleteCharAt(i + 1);
+						van = 0;
+					}
+				}
+				break;
+				default:
+					zero = 0;
+					van = 0;
+			}
+		}
+
+		if (sb.length() > 2 && sb.length() > pos &&
+			sb.charAt(0) == CHINA_NUMERIC[1] && sb.charAt(1) == CHINA_NUMERIC_POSITION[0]) sb.deleteCharAt(pos);
+
+		return sb;
+	}
+
+	public static int parseInt(CharSequence s) throws NumberFormatException {
+		return parseInt(s, 10);
+	}
+	public static int parseInt(CharSequence s, int radix) throws NumberFormatException {
+		boolean n = s.charAt(0) == '-';
+		int i = parseInt(s, n ? 1 : 0, s.length(), radix);
+		return n ? -i : i;
+	}
+	public static int parseInt(CharSequence s, int i, int end, int radix) throws NumberFormatException {
+		long result = 0;
+
+		if (end - i > 0) {
+			int digit;
+
+			while (i < end) {
+				if ((digit = Character.digit(s.charAt(i++), radix)) < 0)
+					throw new NumberFormatException("Not a number at offset " + (i - 1) + "(" + s.charAt(i - 1) + "): " + s.subSequence(i-1,end));
+
+				result *= radix;
+				result += digit;
+			}
+		} else {
+			throw new NumberFormatException("Len=0: " + s);
+		}
+
+		if (result > 4294967295L || result < Integer.MIN_VALUE) throw new NumberFormatException("Value overflow " + result + " : " + s.subSequence(i,end));
+
+		return (int) result;
+	}
+
+	public static boolean parseIntOptional(CharSequence s, int[] radixAndReturn) {
+		if (s == null) return false;
+
+		long result = 0;
+		int radix = radixAndReturn[0];
+
+		if (s.length() > 0) {
+			int i = 0, len = s.length();
+
+			int digit;
+
+			while (i < len) {
+				if ((digit = Character.digit(s.charAt(i++), radix)) < 0) return false;
+
+				result *= radix;
+				result += digit;
+			}
+		} else {
+			return false;
+		}
+
+		if (result > 4294967295L || result < Integer.MIN_VALUE) return false;
+
+		radixAndReturn[0] = (int) result;
+
+		return true;
 	}
 
 	public static final byte[] INT_MAXS = new byte[] {'2', '1', '4', '7', '4', '8', '3', '6', '4', '8'};
@@ -242,7 +412,7 @@ public class TextUtil {
 	}
 
 	public static void pad(CharList sb, int number, int min) {
-		for (int i = min - MathUtils.digitCount(number) - 1; i >= 0; i--) {
+		for (int i = min - digitCount(number) - 1; i >= 0; i--) {
 			sb.append('0');
 		}
 		sb.append(number);
@@ -607,17 +777,17 @@ public class TextUtil {
 
 	// endregion
 
-	public static Appendable prettyTable(Appendable a, Object... parm) {
+	public static <T extends Appendable> T prettyTable(T a, Object... parm) {
 		return prettyTable(a, " ", " ", " ", parm);
 	}
-	public static Appendable prettyTable(Appendable a, String headSep, Object... parm) {
+	public static <T extends Appendable> T prettyTable(T a, String headSep, Object... parm) {
 		return prettyTable(a, headSep, headSep, " ", parm);
 	}
-	public static Appendable prettyTable(Appendable a, String headSep, String sep, String pfx, Object... parm) {
+	public static <T extends Appendable> T prettyTable(T a, String headSep, String sep, String pfx, Object... parm) {
 		if (headSep.length() != sep.length()) throw new IllegalArgumentException("headSep.length != sep.length");
 		List<List<String>> lines = new SimpleList<>();
 		List<String> val = new SimpleList<>();
-		int len = 0;
+		IntList len1 = new IntList();
 
 		for (Object o : parm) {
 			if (o == IntMap.UNDEFINED) {
@@ -627,32 +797,52 @@ public class TextUtil {
 			}
 			String s = String.valueOf(o);
 			val.add(s);
-			if (s.length() > len) len = s.length();
+			while (len1.size() < val.size()) len1.add(0);
+
+			int len = len1.get(val.size()-1);
+			int strlen = uiLen(s);
+			if (strlen > len) len1.set(val.size()-1, strlen);
 		}
 		lines.add(val);
 
 		try {
 			for (int i = 0; i < lines.size(); i++) {
-				List<String> line = lines.get(i);
-				for (int j = 0; j < line.size()-1; j++) {
-					String s = line.get(j);
-					a.append(s);
-					int k = len-s.length();
-					while (k-- > 0) a.append(' ');
-					a.append(i == 0 ? headSep : sep);
-				}
+				a.append('\n');
 
-				String s = line.get(line.size()-1);
-				a.append(s);
-				if (i == lines.size()-1) break;
-				int k = len-s.length();
-				while (k-- > 0) a.append(' ');
-				a.append('\n').append(pfx);
+				List<String> line = lines.get(i);
+				if (!line.isEmpty()) {
+					a.append(pfx);
+
+					for (int j = 0; j < line.size()-1; j++) {
+						String s = line.get(j);
+						a.append(s);
+						int k = len1.get(j)-uiLen(s);
+						while (k-- > 0) a.append(' ');
+						a.append(i == 0 ? headSep : sep);
+					}
+
+					String s = line.get(line.size()-1);
+					a.append(s);
+					if (i == lines.size()-1) break;
+					int k = len1.get(line.size()-1)-uiLen(s);
+					while (k-- > 0) a.append(' ');
+				}
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
 		return a;
+	}
+
+	private static int uiLen(String s) {
+		int len = 0;
+		for (int i = 0; i < s.length(); i++) {
+			char c = s.charAt(i);
+			if (c > 0xFF) len += 2;
+			else if (c == '\t') len += 4;
+			else len++;
+		}
+		return len;
 	}
 
 	public static boolean safeEquals(CharSequence a, CharSequence b) {
@@ -666,5 +856,11 @@ public class TextUtil {
 
 	public static String replaceAll(CharSequence str, CharSequence find, CharSequence replace) {
 		return IOUtil.getSharedCharBuf().append(str).replace(find, replace).toString();
+	}
+
+	public static int codepoint(int h, int l) {
+		return ((h << 10) + l) + (MIN_SUPPLEMENTARY_CODE_POINT
+			- (MIN_HIGH_SURROGATE << 10)
+			- MIN_LOW_SURROGATE);
 	}
 }

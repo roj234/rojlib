@@ -5,6 +5,7 @@ import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.config.data.*;
 import roj.config.word.Word;
+import roj.text.CharList;
 
 import java.util.Map;
 
@@ -15,7 +16,7 @@ import static roj.config.word.Word.*;
  * @author Roj233
  * @since 2022/1/6 13:46
  */
-public final class IniParser extends Parser {
+public final class IniParser extends Parser<CMapping> {
 	public static final int UNESCAPE = 4;
 
 	private static final short eq = 14;
@@ -35,54 +36,41 @@ public final class IniParser extends Parser {
 	public static CMapping parses(CharSequence string) throws ParseException {
 		return new IniParser().parse(string, 0).asMap();
 	}
-	public static CMapping parses(CharSequence string, int flag) throws ParseException {
-		return new IniParser().parse(string, flag).asMap();
-	}
 
 	@Override
 	public CMapping parse(CharSequence text, int flags) throws ParseException {
+		this.flag = flags;
 		init(text);
 		try {
-			return iniRoot(flags);
+			CMapping map = new CMapping();
+
+			String name = CMapping.CONFIG_TOPLEVEL;
+			while (true) {
+				try {
+					map.put(name, iniValue(flags));
+				} catch (ParseException e) {
+					throw e.addPath('.' + name);
+				}
+
+				Word w = next();
+				if (w.type() != left_m_bracket) break;
+				name = readTill(LB); index++;
+				if (name == null) break;
+
+				if ((flags & NO_DUPLICATE_KEY) != 0 && map.containsKey(name)) throw err("重复的key: " + name);
+			}
+			return map;
 		} catch (ParseException e) {
 			throw e.addPath("$");
+		} finally {
+			init(null);
 		}
 	}
 
-	@Override
-	public int acceptableFlags() {
-		return NO_DUPLICATE_KEY|UNESCAPE;
-	}
+	public int availableFlags() { return NO_DUPLICATE_KEY|UNESCAPE; }
+	public String format() { return "INI"; }
 
-	@Override
-	public String format() {
-		return "INI";
-	}
-
-	@Override
-	public CharSequence toString(CEntry entry, int flag) {
-		return entry.toINIb();
-	}
-
-	private CMapping iniRoot(int flag) throws ParseException {
-		CMapping map = new CMapping();
-
-		String name = "<root>";
-		while (true) {
-			try {
-				map.put(name, iniValue(flag));
-			} catch (ParseException e) {
-				throw e.addPath('.' + name);
-			}
-
-			Word w = next();
-			if (w.type() != left_m_bracket) break;
-			name = readTill(LB); index++;
-			if (name == null) break;
-			if ((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(name)) throw err("重复的key: " + name);
-		}
-		return map;
-	}
+	public CharList append(CEntry entry, int flag, CharList sb) { return entry.appendINI(sb); }
 
 	private CEntry iniValue(int flag) throws ParseException {
 		Word w = next();

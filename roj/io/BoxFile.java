@@ -175,7 +175,7 @@ public class BoxFile implements Closeable {
 		int off = fe.length + nameBytes + 6;
 		if (infoMap.lastEntry().v != fe) {
 			long dataEnd = fe.offset + fe.length;
-			FileUtil.transferFileSelf(rf.getChannel(), dataEnd, fe.offset - nameBytes - 6, rf.length() - freeBytes - dataEnd);
+			IOUtil.transferFileSelf(rf.getChannel(), dataEnd, fe.offset - nameBytes - 6, rf.length() - freeBytes - dataEnd);
 
 			Iterator<F> itr = infoMap.values().iterator();
 			while (itr.hasNext()) {
@@ -229,7 +229,7 @@ public class BoxFile implements Closeable {
 			if (infoMap.lastEntry().v != fe) {
 				long prevEnd = fe.offset + fe.length;
 
-				FileUtil.transferFileSelf(rf.getChannel(), prevEnd, fe.offset + list.wIndex(), rf.length() - freeBytes - prevEnd);
+				IOUtil.transferFileSelf(rf.getChannel(), prevEnd, fe.offset + list.wIndex(), rf.length() - freeBytes - prevEnd);
 
 				if (delta != 0) {
 					Iterator<F> itr = infoMap.values().iterator();

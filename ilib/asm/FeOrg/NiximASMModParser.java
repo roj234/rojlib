@@ -79,7 +79,7 @@ public class NiximASMModParser extends ASMModParser implements FastParser, Consu
 	public void sendToTable(ASMDataTable table, ModCandidate candidate) {
 		List<CstClass> itf = data.interfaces;
 		for (int i = 0; i < itf.size(); i++) {
-			table.addASMData(candidate, itf.get(i).getValue().getString(), data.name, null, null);
+			table.addASMData(candidate, itf.get(i).name().str(), data.name, null, null);
 		}
 
 		this.table = table;

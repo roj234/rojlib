@@ -18,7 +18,7 @@ import java.util.IdentityHashMap;
  */
 public class AsyncTexHook {
 	public static final ThreadLocal<AsyncTexHook> local = ThreadLocal.withInitial(AsyncTexHook::new);
-	public static final TaskPool pool = new TaskPool(0, Math.min(Runtime.getRuntime().availableProcessors() * 2, 24), 1, 4000, "材质上传");
+	public static final TaskPool pool = TaskPool.ParallelPool();
 	public final TextureManager tman = new TextureManager();
 	public IdentityHashMap<IBlockState, ModelResourceLocation> models = Maps.newIdentityHashMap();
 	public MyHashSet<ResourceLocation> paths = new MyHashSet<>();

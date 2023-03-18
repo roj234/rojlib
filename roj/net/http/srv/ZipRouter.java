@@ -39,7 +39,7 @@ public class ZipRouter implements Router {
 			return StringResponse.httpErr(Code.NOT_FOUND);
 		}
 		rh.code(200).headers("Cache-Control: max-age=86400");
-		return new FileResponse().init(req, new ZipFileInfo(zipFs, ze));
+		return FileResponse.response(req, new ZipFileInfo(zipFs, ze));
 	}
 
 	static final class ZipFileInfo implements FileInfo {
@@ -53,14 +53,10 @@ public class ZipRouter implements Router {
 		}
 
 		@Override
-		public int stats() {
-			return ze.getMethod() == ZipEntry.DEFLATED ? CH_DEFL | CH_RA_DEFL : CH_RA_RAW;
-		}
+		public int stats() { return ze.getMethod() == ZipEntry.DEFLATED ? FILE_DEFLATED|FILE_RA_DEFLATE : FILE_RA; }
 
 		@Override
-		public long length(boolean deflated) {
-			return deflated ? ze.getCompressedSize() : ze.getSize();
-		}
+		public long length(boolean deflated) { return deflated ? ze.getCompressedSize() : ze.getSize(); }
 
 		@Override
 		public InputStream get(boolean deflated, long offset) throws IOException {
@@ -77,13 +73,9 @@ public class ZipRouter implements Router {
 		}
 
 		@Override
-		public long lastModified() {
-			return ze.getModificationTime();
-		}
+		public long lastModified() { return ze.getModificationTime(); }
 
 		@Override
-		public void prepare(ResponseHeader srv, Headers h) {
-			h.put("Content-Type", FileResponse.getMimeType(ze.getName()));
-		}
+		public void prepare(ResponseHeader srv, Headers h) { h.put("Content-Type", FileResponse.getMimeType(ze.getName())); }
 	}
 }

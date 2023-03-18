@@ -15,7 +15,6 @@ import sun.misc.Unsafe;
 
 import java.lang.reflect.Method;
 import java.security.ProtectionDomain;
-import java.util.Arrays;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -28,13 +27,15 @@ import static roj.asm.Opcodes.*;
  */
 public final class Java9Compat {
 	static {
-		AsmShared.local().setLevel(true);
-		try {
-			DefineClassHandle1();
-		} catch (Exception e) {
-			e.printStackTrace();
-		} finally {
-			AsmShared.local().setLevel(false);
+		if (ReflectionUtils.JAVA_VERSION > 8) {
+			AsmShared.local().setLevel(true);
+			try {
+				DefineClassHandle1();
+			} catch (Exception e) {
+				e.printStackTrace();
+			} finally {
+				AsmShared.local().setLevel(false);
+			}
 		}
 	}
 
@@ -100,8 +101,10 @@ public final class Java9Compat {
 				乌拉 = (Class<?>) m.invoke(null, null, data.name, bytes, 0, bytes.length, null, null);
 			} catch (Exception e) {
 				if (NativeLibrary.loaded) {
-					乌拉 = nDefineClass(data.name, bytes, 0, bytes.length, null, null);
-					break j17;
+					try {
+						乌拉 = nDefineClass(data.name, bytes, 0, bytes.length, null, null);
+						break j17;
+					} catch (Throwable ignored) {}
 				}
 				new Error("添加 --add-opens=java.base/java.lang=ALL-UNNAMED", e).printStackTrace();
 				System.exit(1);
@@ -117,35 +120,10 @@ public final class Java9Compat {
 
 	private static native Class<?> nDefineClass(String name, byte[] b, int off, int len, ProtectionDomain pd, String source);
 
-	/**
-	 * 在base module中加载类
-	 * kernel为base类
-	 * user为继承kernel的类
-	 */
-	public static Class<?> LoadInVM(Class<?> loader, byte[] kernel, byte[] user) {
-		String uuid = "java/util/RLVM"+Arrays.hashCode(kernel);
-
-		ConstantData data = Parser.parseConstants(kernel);
-		data.access |= AccessFlag.PUBLIC;
-		data.name(uuid);
-		ByteList buf = Parser.toByteArrayShared(data);
-		Class<?> kdrv = DefineClassHandle().apply(new Object[]{
-			data.name, buf.list, 0, buf.wIndex(), null, null
-		});
-
-		data = Parser.parseConstants(user);
-		data.getParentCstInternal().getValue().setString(uuid);
-		data.parent(uuid);
-		buf = Parser.toByteArrayShared(data);
-		DefineClassHandle().apply(new Object[]{
-			data.name, buf.list, 0, buf.wIndex(), loader.getClassLoader(), null
-		});
-
-		return kdrv;
-	}
-
 	private static Class<?> Java9OpenMagic;
 	public synchronized static String HackMagicAccessor() {
+		if (ReflectionUtils.JAVA_VERSION <= 8) return "sun/reflect/MagicAccessorImpl";
+
 		final String name = "java/util/IL🐎";
 
 		if (Java9OpenMagic == null) {

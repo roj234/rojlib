@@ -7,9 +7,9 @@ import ilib.util.PlayerUtil;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ChunkProviderClient;
 import net.minecraft.network.PacketBuffer;
-import net.minecraft.util.datafix.DataFixer;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
@@ -42,13 +42,11 @@ public class ChunkSavingProvider extends ChunkProviderClient {
 	private final World world;
 	private final AnvilChunkLoader loader;
 
-	protected static final DataFixer DEAFULTFIXER = new DataFixer(1343);
-
 	public ChunkSavingProvider(World world, File chunkSavingloc) {
 		super(world);
 		this.blankChunk = new EmptyChunk(world, 0, 0);
 		this.world = world;
-		this.loader = new AnvilChunkLoader(chunkSavingloc, DEAFULTFIXER);
+		this.loader = new AnvilChunkLoader(chunkSavingloc, Minecraft.getMinecraft().getDataFixer());
 	}
 
 	@Override

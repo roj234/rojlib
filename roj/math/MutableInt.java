@@ -7,7 +7,7 @@ package roj.math;
 public class MutableInt extends Number implements Comparable<MutableInt> {
 	private static final long serialVersionUID = 512176391864L;
 
-	private int value;
+	public int value;
 
 	public MutableInt() {}
 	public MutableInt(int v) {

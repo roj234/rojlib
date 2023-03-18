@@ -24,12 +24,14 @@ import java.util.Map;
 import java.util.function.UnaryOperator;
 
 import static roj.asm.tree.anno.AnnVal.*;
+import static roj.asm.type.Type.*;
 
 /**
  * 修改class名字
  *
  * @author Roj234
  * @since 2021/6/18 9:51
+ * // todo: 高版本的新增属性的处理
  */
 public final class CodeMapper extends Mapping {
 	private Map<Desc, List<String>> paramNameMap;
@@ -159,7 +161,7 @@ public final class CodeMapper extends Mapping {
 			}
 		}
 
-		BootstrapMethods bs = AttrHelper.getBootstrapMethods(data.cp, data);
+		BootstrapMethods bs = data.parsedAttr(data.cp,Attribute.BootstrapMethods);
 		if (bs != null) {
 			List<BootstrapMethods.BootstrapMethod> methods = bs.methods;
 			for (int i = 0; i < methods.size(); i++) {
@@ -170,7 +172,7 @@ public final class CodeMapper extends Mapping {
 					if (cst.type() == Constant.METHOD_TYPE) {
 						CstMethodType type = (CstMethodType) cst;
 
-						String oldCls = type.getValue().getString();
+						String oldCls = type.name().str();
 						String newCls = U.mapMethodParam(classMap, oldCls);
 
 						if (!oldCls.equals(newCls)) {
@@ -235,7 +237,7 @@ public final class CodeMapper extends Mapping {
 		int len = r.readChar();
 		while (len-- > 0) {
 			CstUTF owner = (CstUTF) pool.get(r);
-			String newOwner = U.mapFieldType(classMap, owner.getString());
+			String newOwner = U.mapFieldType(classMap, owner.str());
 			if (newOwner != null) {
 				r.putShort(r.rIndex-2, pool.getUtfId(newOwner));
 			}
@@ -247,7 +249,7 @@ public final class CodeMapper extends Mapping {
 		}
 	}
 
-	private void mapAnnotationNode(MapUtil U, ConstantPool pool, DynByteBuf r) {
+	private void mapAnnotationNode(MapUtil U, ConstantPool cp, DynByteBuf r) {
 		switch (r.readUnsignedByte()) {
 			case BOOLEAN:
 			case BYTE:
@@ -260,17 +262,17 @@ public final class CodeMapper extends Mapping {
 			case STRING:
 				r.rIndex += 2;
 				break;
-			case CLASS: {
-				CstUTF owner = (CstUTF) pool.get(r);
-				String newOwner = U.mapFieldType(classMap, owner.getString());
+			case ANNOTATION_CLASS: {
+				CstUTF owner = (CstUTF) cp.get(r);
+				String newOwner = U.mapFieldType(classMap, owner.str());
 				if (newOwner != null) {
-					r.putShort(r.rIndex-2, pool.getUtfId(newOwner));
+					r.putShort(r.rIndex-2, cp.getUtfId(newOwner));
 				}
 			}
 			break;
 			case ENUM: {
-				CstUTF owner = (CstUTF) pool.get(r);
-				CstUTF name = (CstUTF) pool.get(r);
+				CstUTF owner = (CstUTF) cp.get(r);
+				CstUTF name = (CstUTF) cp.get(r);
 
 				if (checkFieldType) {
 					System.out.println("[Warn]checkFieldType is not compatible with @Interface.Enum type");
@@ -279,19 +281,19 @@ public final class CodeMapper extends Mapping {
 				Desc fd = U.sharedDC;
 				String prevOwner = fd.owner;
 
-				fd.owner = owner.getString();
-				fd.name = name.getString();
+				fd.owner = owner.str();
+				fd.name = name.str();
 				fd.param = "";
 
 				String newName = fieldMap.get(fd);
 				if (newName != null) {
 					System.out.println("[ANN] E " + fd + " => " + newName);
-					r.putShort(r.rIndex - 2, pool.getUtfId(newName));
+					r.putShort(r.rIndex - 2, cp.getUtfId(newName));
 				}
 				String newOwner = classMap.get(fd.owner);
 				if (newOwner != null) {
-					System.out.println("[ANN] E " + owner.getString() + " => " + newOwner);
-					owner.setString(newOwner);
+					System.out.println("[ANN] E " + owner.str() + " => " + newOwner);
+					cp.setUTFValue(owner, newOwner);
 				}
 
 				fd.owner = prevOwner;
@@ -302,14 +304,14 @@ public final class CodeMapper extends Mapping {
 				int len = r.readUnsignedShort();
 				while (len-- > 0) {
 					r.rIndex += 2;
-					mapAnnotationNode(U, pool, r);
+					mapAnnotationNode(U, cp, r);
 				}
 			}
 			break;
 			case ARRAY:
 				int len = r.readUnsignedShort();
 				while (len-- > 0) {
-					mapAnnotationNode(U, pool, r);
+					mapAnnotationNode(U, cp, r);
 				}
 				break;
 		}
@@ -319,7 +321,7 @@ public final class CodeMapper extends Mapping {
 		Attribute a = list.attrByName("Signature");
 		if (a == null) return;
 
-		Signature generic = Signature.parse(((CstUTF) pool.array(Parser.reader(a).readUnsignedShort())).getString());
+		Signature generic = a instanceof Signature ? (Signature) a : Signature.parse(((CstUTF) pool.array(Parser.reader(a).readUnsignedShort())).str());
 		generic.rename(NAME_REMAPPER);
 		list.putAttr(generic);
 	}
@@ -337,7 +339,7 @@ public final class CodeMapper extends Mapping {
 		List<CstClass> itf = data.interfaces;
 		for (int i = 0; i < itf.size(); i++) {
 			CstClass clz = itf.get(i);
-			name = U.mapOwner(classMap, clz.getValue().getString(), false);
+			name = U.mapOwner(classMap, clz.name().str(), false);
 			if (name != null) clz.setValue(data.cp.getUtf(name));
 		}
 	}
@@ -355,8 +357,8 @@ public final class CodeMapper extends Mapping {
 			/**
 			 * Method Name
 			 */
-			md.name = method.name.getString();
-			md.param = method.type.getString();
+			md.name = method.name.str();
+			md.param = method.type.str();
 
 			String newName = methodMap.get(md);
 			if (newName != null) {
@@ -366,7 +368,7 @@ public final class CodeMapper extends Mapping {
 			/**
 			 * Method Parameters
 			 */
-			oldCls = method.type.getString();
+			oldCls = method.type.str();
 			newCls = U.mapMethodParam(classMap, oldCls);
 
 			if (!oldCls.equals(newCls)) {
@@ -386,8 +388,8 @@ public final class CodeMapper extends Mapping {
 			/**
 			 * Field Name
 			 */
-			md.name = field.name.getString();
-			if (checkFieldType) md.param = field.type.getString();
+			md.name = field.name.str();
+			if (checkFieldType) md.param = field.type.str();
 
 			String newName = fieldMap.get(md);
 			if (newName != null) {
@@ -397,7 +399,7 @@ public final class CodeMapper extends Mapping {
 			/**
 			 * Field Type
 			 */
-			oldCls = field.type.getString();
+			oldCls = field.type.str();
 			newCls = U.mapFieldType(classMap, oldCls);
 
 			if (newCls != null) {
@@ -424,7 +426,7 @@ public final class CodeMapper extends Mapping {
 					/**
 					 * 修改{@link CstRefMethod}方法调用
 					 */
-					oldCls = method.desc().getType().getString();
+					oldCls = method.descType();
 					newCls = U.mapMethodParam(classMap, oldCls);
 
 					if (!newCls.equals(oldCls)) {
@@ -437,7 +439,7 @@ public final class CodeMapper extends Mapping {
 					/**
 					 * 修改class名字
 					 */
-					oldCls = clazz.getValue().getString();
+					oldCls = clazz.name().str();
 					newCls = U.mapOwner(classMap, oldCls, false);
 					if (newCls != null) {
 						clazz.setValue(data.cp.getUtf(newCls));
@@ -450,7 +452,7 @@ public final class CodeMapper extends Mapping {
 					/**
 					 * 修改{@link CstRefField}字段类型
 					 */
-					oldCls = field.desc().getType().getString();
+					oldCls = field.descType();
 					newCls = U.mapFieldType(classMap, oldCls);
 
 					if (newCls != null) {
@@ -463,7 +465,7 @@ public final class CodeMapper extends Mapping {
 					/**
 					 * Lambda方法的参数
 					 */
-					oldCls = dyn.desc().getType().getString();
+					oldCls = dyn.desc().getType().str();
 					newCls = U.mapMethodParam(classMap, oldCls);
 
 					if (!oldCls.equals(newCls)) {

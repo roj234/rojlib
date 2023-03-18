@@ -301,7 +301,7 @@ public final class UPnPDevice {
 				}
 			}
 			sb.append("</m:").append(action).append("></SOAP-ENV:Body></SOAP-ENV:Envelope>");
-			ByteList list = ByteList.encodeUTF(XMLParser.parses(sb).toString());
+			ByteList data = IOUtil.getSharedByteBuf().putUTFData(sb);
 
 			IHttpClient client = IHttpClient.create(IHttpClient.V1_1);
 			Headers map = client.url(new URL(controlURL)).method("POST").headers();
@@ -309,9 +309,9 @@ public final class UPnPDevice {
 			map.put("Content-Type", "text/xml");
 			map.put("SOAPAction", "\"" + serviceType + "#" + action + "\"");
 			map.put("Connection", "Close");
-			map.put("Content-Length", String.valueOf(list.wIndex()));
+			map.put("Content-Length", String.valueOf(data.wIndex()));
 
-			client.body(list);
+			client.body(new ByteList(data.toByteArray()));
 
 			SyncHttpClient sbr = IHttpClient.syncWait(client, 15000, 1000);
 			try {

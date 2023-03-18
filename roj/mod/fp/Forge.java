@@ -7,7 +7,6 @@ import roj.concurrent.OperationDone;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMapping;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.mod.MCLauncher;
 import roj.text.CharList;
@@ -106,7 +105,7 @@ public final class Forge extends WorkspaceBuilder {
 			zf.close();
 
 			String mcSrgClient = installconf.getDot("data.MC_SRG.client").asString();
-			mcClear = new File(root, FileUtil.mavenPath(mcSrgClient.substring(1, mcSrgClient.length() - 1)).toString());
+			mcClear = new File(root, IOUtil.mavenPath(mcSrgClient.substring(1, mcSrgClient.length() - 1)).toString());
 		} catch (IOException e) {
 			throw new IllegalArgumentException("IO eror, forge安装器 '" + forgeInstaller.getAbsolutePath() + "'", e);
 		} catch (OperationDone | ParseException e) {
@@ -126,7 +125,7 @@ public final class Forge extends WorkspaceBuilder {
 
 	@Nonnull
 	private static List<File> getSpecialSource(File librariesPath) {
-		return FileUtil.findAllFiles(librariesPath, (file -> {
+		return IOUtil.findAllFiles(librariesPath, (file -> {
 			String n = file.getName();
 			// f@@k them ALL
 			return n.startsWith("SpecialSource") || n.startsWith("asm-") || n.startsWith("guava-") || n.startsWith("jopt-simple-");
@@ -135,7 +134,6 @@ public final class Forge extends WorkspaceBuilder {
 
 	@Override
 	void loadLibraries1(File root, TrieTree<String> artifacts) {
-		loadClass("LZMA.LzmaInputStream", new File(root, get1(artifacts, "lzma/lzma")));
 		skipLib = new MyHashSet<>(artifacts.valueMatches("net/minecraftforge/forge/", 99));
 	}
 

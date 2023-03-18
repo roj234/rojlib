@@ -53,10 +53,12 @@ public final class LZMADecoder extends LZMACoder {
 		while (lz.hasSpace()) {
 			int posState = lz.getPos() & posMask;
 
-			if (rc.decodeBit(isMatch[state.get()], posState) == 0) {
+			if (rc.decodeBit(isMatch[state], posState) == 0) {
 				literalDecoder.decode();
 			} else {
-				int len = rc.decodeBit(isRep, state.get()) == 0 ? decodeMatch(posState) : decodeRepMatch(posState);
+				int len = rc.decodeBit(isRep, state) == 0
+					? decodeMatch(posState)
+					: decodeRepMatch(posState);
 
 				// NOTE: With LZMA1 streams that have the end marker,
 				// this will throw CorruptedInputException. LZMAInputStream
@@ -69,7 +71,7 @@ public final class LZMADecoder extends LZMACoder {
 	}
 
 	private int decodeMatch(int posState) throws IOException {
-		state.updateMatch();
+		state = state_updateMatch(state);
 
 		reps[3] = reps[2];
 		reps[2] = reps[1];
@@ -96,18 +98,18 @@ public final class LZMADecoder extends LZMACoder {
 	}
 
 	private int decodeRepMatch(int posState) throws IOException {
-		if (rc.decodeBit(isRep0, state.get()) == 0) {
-			if (rc.decodeBit(isRep0Long[state.get()], posState) == 0) {
-				state.updateShortRep();
+		if (rc.decodeBit(isRep0, state) == 0) {
+			if (rc.decodeBit(isRep0Long[state], posState) == 0) {
+				state = state_updateShortRep(state);
 				return 1;
 			}
 		} else {
 			int tmp;
 
-			if (rc.decodeBit(isRep1, state.get()) == 0) {
+			if (rc.decodeBit(isRep1, state) == 0) {
 				tmp = reps[1];
 			} else {
-				if (rc.decodeBit(isRep2, state.get()) == 0) {
+				if (rc.decodeBit(isRep2, state) == 0) {
 					tmp = reps[2];
 				} else {
 					tmp = reps[3];
@@ -121,7 +123,7 @@ public final class LZMADecoder extends LZMACoder {
 			reps[0] = tmp;
 		}
 
-		state.updateLongRep();
+		state = state_updateLongRep(state);
 
 		return repLenDecoder.decode(posState);
 	}
@@ -139,8 +141,7 @@ public final class LZMADecoder extends LZMACoder {
 		}
 
 		void reset() {
-			for (int i = 0; i < subdecoders.length; ++i)
-				subdecoders[i].reset();
+			for (LiteralSubdecoder x : subdecoders) x.reset();
 		}
 
 		void decode() throws IOException {
@@ -153,7 +154,7 @@ public final class LZMADecoder extends LZMACoder {
 			void decode() throws IOException {
 				int symbol = 1;
 
-				if (state.isLiteral()) {
+				if (state_isLiteral(state)) {
 					do {
 						symbol = (symbol << 1) | rc.decodeBit(probs, symbol);
 					} while (symbol < 0x100);
@@ -174,11 +175,10 @@ public final class LZMADecoder extends LZMACoder {
 				}
 
 				lz.putByte((byte) symbol);
-				state.updateLiteral();
+				state = state_updateLiteral(state);
 			}
 		}
 	}
-
 
 	private class LengthDecoder extends LengthCoder {
 		int decode(int posState) throws IOException {

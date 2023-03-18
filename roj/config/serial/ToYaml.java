@@ -14,23 +14,15 @@ import static roj.config.word.ITokenizer.WHITESPACE;
  * @since 2022/2/19 19:14
  */
 public class ToYaml extends ToSomeString {
+	private static final char[] DEFAULT_INDENT = {' '};
+
 	public ToYaml() {
-		this(1);
+		indent = DEFAULT_INDENT;
 	}
 
 	public ToYaml(int indent) {
 		if (indent == 0) throw new IllegalArgumentException("YAML requires indent");
-
-		this.indent = new char[indent];
-		for (int i = 0; i < indent; i++) {
-			this.indent[i] = ' ';
-		}
-	}
-
-	@Override
-	public void setIndent(char... indent) {
-		if (indent.length == 0) throw new IllegalArgumentException("YAML requires indent");
-		super.setIndent(indent);
+		spaceIndent(indent);
 	}
 
 	public ToYaml multiline(boolean b) {
@@ -39,62 +31,47 @@ public class ToYaml extends ToSomeString {
 	}
 
 	private boolean topLevel, multiline;
-	private void myIndent() {
-		int x = depth;
 
+	protected final void listIndent() {}
+	protected final void listNext() { indent(depth); sb.append("- "); }
+
+	protected final void mapNext() {}
+	protected final void endLevel() {}
+
+	@Override
+	protected void indent(int x) {
 		if (topLevel) sb.append('\n');
 		else topLevel = true;
 
-		while (x > 1) {
+		x--;
+
+		if (comment != null) writeSingleLineComment("#");
+
+		while (x > 0){
 			sb.append(indent);
 			x--;
 		}
 	}
 
-	@Override
-	protected void listNext() {
-		myIndent();
-		sb.append("- ");
-	}
-
-	@Override
-	protected void mapNext() {}
-
-	@Override
-	protected void endLevel() {}
-
-	@Override
-	public void valueMap() {
-		push(MAP | NEXT);
-	}
-
-	@Override
-	public void valueList() {
-		push(LIST);
-		listNext();
-	}
+	public final void valueMap() { push(MAP); }
+	public final void valueList() { push(LIST); listNext(); }
 
 	private ACalendar cal;
-
 	@Override
-	public void valueDate(long value) {
-		int f = preValue();
+	public final void valueDate(long value) {
+		preValue();
 		if (cal == null) cal = new ACalendar(TimeZone.getTimeZone("UTC"));
 		cal.formatDate("Y-m-d", value, sb);
-		postValue(f);
 	}
-
 	@Override
-	public void valueTimestamp(long value) {
-		int f = preValue();
+	public final void valueTimestamp(long value) {
+		preValue();
 		if (cal == null) cal = new ACalendar(TimeZone.getTimeZone("UTC"));
-
 		cal.formatDate("Y-m-dTH:i:s.xZ", value, sb);
-		postValue(f);
 	}
 
 	@Override
-	protected void valString(String key) {
+	protected final void valString(String key) {
 		int check = YAMLParser.literalSafe(key);
 		noFound:
 		if (check<0) {
@@ -145,18 +122,16 @@ public class ToYaml extends ToSomeString {
 	}
 
 	@Override
-	protected void valNull() {
-		sb.append('~');
-	}
+	protected final void valNull() { sb.append('~'); }
 
 	@Override
-	public void key0(String key) {
-		myIndent();
+	public final void key0(String key) {
+		indent(depth);
 		(YAMLParser.literalSafe(key)<0 ? sb.append(key) : ITokenizer.addSlashes(key, sb.append('"')).append('"')).append(": ");
 	}
 
 	@Override
-	public void reset() {
+	public final void reset() {
 		super.reset();
 		topLevel = false;
 	}

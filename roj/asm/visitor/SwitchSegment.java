@@ -8,7 +8,7 @@ import roj.util.DynByteBuf;
 
 import java.util.List;
 
-import static roj.asm.Opcodes.TABLESWITCH;
+import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
@@ -17,8 +17,10 @@ import static roj.asm.Opcodes.TABLESWITCH;
 public final class SwitchSegment extends Segment {
 	public Label def;
 	public List<SwitchEntry> targets;
-	private final byte code;
+	private byte code;
 	int bci;
+
+	boolean opt;
 
 	SwitchSegment(int code, Label def, List<SwitchEntry> targets, int origPos) {
 		this.code = (byte) code;
@@ -30,14 +32,30 @@ public final class SwitchSegment extends Segment {
 		this.length = code == Opcodes.TABLESWITCH ? 1 + pad + 4 + 8 + (targets.size() << 2) : 1 + pad + 8 + (targets.size() << 3);
 	}
 
-	SwitchSegment(int code) {
+	public SwitchSegment() { this(false); }
+	public SwitchSegment(boolean optimizeToGoto) { this(0); this.opt = optimizeToGoto; }
+	public SwitchSegment(int code) {
 		this.code = (byte) code;
 		this.targets = new BSLowHeap<>(null);
 		this.length = 1;
 	}
 
+	public void branch(int number, Label label) {
+		targets.add(new SwitchEntry(number, label));
+	}
+
 	@Override
 	public boolean put(CodeWriter to) {
+		if (code == 0) computeCode();
+		if (targets.isEmpty() && opt) {
+			to.bw.put(Opcodes.POP);
+			JumpSegment seg = new JumpSegment(GOTO, def);
+			seg.length = length;
+			boolean b = seg.put(to);
+			length = seg.length;
+			return b;
+		}
+
 		DynByteBuf o = to.bw;
 		int begin = o.wIndex();
 
@@ -68,6 +86,28 @@ public final class SwitchSegment extends Segment {
 			return true;
 		}
 		return false;
+	}
+
+	private void computeCode() {
+		List<SwitchEntry> m = targets;
+		if (m.isEmpty()) {
+			code = LOOKUPSWITCH;
+			return;
+		}
+
+		int lo = m.get(0).key;
+		int hi = m.get(m.size()-1).key;
+
+		float delta = (hi - lo) * 1.5f;
+		if (delta > m.size()) {
+			code = TABLESWITCH;
+			for (int i = lo; i < hi; i++) {
+				m.add(new SwitchEntry(i, def));
+			}
+		} else {
+			code = LOOKUPSWITCH;
+		}
+
 	}
 
 	@Override

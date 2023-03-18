@@ -2,7 +2,6 @@ package roj.lavac;
 
 import roj.collect.MyHashMap;
 import roj.config.ParseException;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.lavac.parser.CompileContext;
 import roj.lavac.parser.CompileUnit;
@@ -245,7 +244,7 @@ public final class Lavac {
 				throw new RuntimeException(f.getAbsolutePath() + " not exist.");
 			}
 			if (f.isDirectory()) {
-				for (File f1 : FileUtil.findAllFiles(f)) {
+				for (File f1 : IOUtil.findAllFiles(f)) {
 					addSrc(f1, ctxs, ctx);
 				}
 			} else if (!addSrc(f, ctxs, ctx)) {
@@ -275,7 +274,7 @@ public final class Lavac {
 				throw new RuntimeException(f + " not exist.");
 			}
 			if (f.isDirectory()) {
-				for (File f1 : FileUtil.findAllFiles(f)) {
+				for (File f1 : IOUtil.findAllFiles(f)) {
 					addClassPath(f1);
 				}
 			} else if (!addClassPath(f)) {

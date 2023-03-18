@@ -2,7 +2,7 @@ package roj.misc;
 
 import roj.config.word.Tokenizer;
 import roj.config.word.Word;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.sound.SoundUtil;
 import roj.sound.util.FilePlayer;
 import roj.sound.util.JavaAudio;
@@ -30,7 +30,7 @@ public class MP3Player {
 			return;
 		}
 
-		List<File> files = FileUtil.findAllFiles(new File(args[0]), file -> file.getName().toLowerCase().endsWith(".mp3"));
+		List<File> files = IOUtil.findAllFiles(new File(args[0]), file -> file.getName().toLowerCase().endsWith(".mp3"));
 		FilePlayer play = new FilePlayer(files);
 		play.start();
 

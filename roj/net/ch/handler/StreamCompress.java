@@ -98,7 +98,12 @@ public class StreamCompress implements ChannelHandler {
 
 		if (inf.finished()) {
 			in.rIndex -= inf.getRemaining();
-			ctx.postEvent(new Event(IN_EOF, this));
+
+			Event event = new Event(IN_EOF, this);
+			ctx.postEvent(event);
+
+			if (in.isReadable() && event.getResult() != Event.RESULT_DENY)
+				ctx.channelRead(in);
 		}
 	}
 
@@ -164,12 +169,8 @@ public class StreamCompress implements ChannelHandler {
 
 		if (!id.getNamespace().equals("sc")) return;
 		switch (id.getPath()) {
-			case "reset_in":
-				inf.reset();
-				break;
-			case "reset_out":
-				def.reset();
-				break;
+			case "reset_in": inf.reset(); break;
+			case "reset_out": def.reset(); break;
 			case "out_eof":
 				if (def != null) {
 					def.finish();

@@ -1,6 +1,7 @@
 package roj.net.ch.handler;
 
-import roj.config.MCfgParser;
+import roj.config.ParseException;
+import roj.config.VinaryParser;
 import roj.config.data.CEntry;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
@@ -15,23 +16,19 @@ import java.io.IOException;
  * @since 2022/5/17 15:57
  */
 public class BinaryJSON implements ChannelHandler {
-	public static final BinaryJSON INSTANCE = new BinaryJSON();
+	private final VinaryParser parser = new VinaryParser();
 
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
-		ctx.channelRead(MCfgParser.parse((DynByteBuf) msg));
+		try {
+			ctx.channelRead(parser.parseRaw((DynByteBuf) msg));
+		} catch (ParseException ignored) {} // will not throw
 	}
 
 	@Override
 	public void channelWrite(ChannelCtx ctx, Object msg) throws IOException {
 		ByteList tmp = IOUtil.getSharedByteBuf();
-		((CEntry) msg).toBinary(tmp);
-
-		DynByteBuf tmp1 = ctx.allocate(false, tmp.readableBytes()).put(tmp);
-		try {
-			ctx.channelWrite(tmp1);
-		} finally {
-			ctx.reserve(tmp1);
-		}
+		parser.serialize(((CEntry) msg), tmp);
+		ctx.channelWrite(tmp);
 	}
 }

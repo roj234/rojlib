@@ -2,7 +2,7 @@ package ilib.command.sub;
 
 import com.google.common.collect.ImmutableList;
 import ilib.command.MasterCommand;
-import roj.util.EmptyArrays;
+import roj.util.ArrayCache;
 
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
@@ -50,7 +50,7 @@ public abstract class AbstractSubCommand implements ISubCommand {
 	}
 
 	public void notifyCommandListener(ICommandSender sender, String text) {
-		notifyCommandListener(sender, text, EmptyArrays.OBJECTS);
+		notifyCommandListener(sender, text, ArrayCache.OBJECTS);
 	}
 
 	public void notifyCommandListener(ICommandSender sender, String text, Object... params) {

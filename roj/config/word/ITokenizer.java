@@ -5,15 +5,13 @@ import roj.collect.MyBitSet;
 import roj.concurrent.OperationDone;
 import roj.concurrent.Ref;
 import roj.config.ParseException;
-import roj.math.MathUtils;
 import roj.text.ACalendar;
 import roj.text.CharList;
+import roj.text.StreamReader;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.Charset;
 
 import static roj.config.word.Word.*;
 
@@ -32,7 +30,7 @@ public abstract class ITokenizer {
 	protected final CharList found = new CharList(32);
 	protected MyBitSet literalEnd = WHITESPACE;
 
-	public int index, lastWordBegin;
+	public int index, prevIndex;
 
 	// for number word
 	private Word lastWord;
@@ -46,18 +44,12 @@ public abstract class ITokenizer {
 	public ITokenizer() {}
 
 	public ITokenizer init(CharSequence seq) {
-		lastWordBegin = -1;
+		prevIndex = -1;
 		index = 0;
 		input = seq;
 		marker = -3;
-		aFlag = (byte) (seq instanceof ReadOnDemand ? _AF_ROD : 0);
+		aFlag = (byte) (seq instanceof StreamReader ? _AF_ROD : 0);
 		return this;
-	}
-	public final ITokenizer init(InputStream in) {
-		return init(new StreamAsChars(in));
-	}
-	public final ITokenizer init(InputStream in, Charset cs) {
-		return init(new StreamAsChars(in, cs));
 	}
 
 	public final CharSequence getText() {
@@ -67,7 +59,7 @@ public abstract class ITokenizer {
 	public void emptyWordCache() {
 		if (marker == -1) {
 			marker = -3;
-			index = lastWordBegin;
+			index = prevIndex;
 		}
 	}
 
@@ -79,10 +71,10 @@ public abstract class ITokenizer {
 			return lastWord.init(lastWordId, lastWordPos, lastWordVal);
 		}
 
-		if ((aFlag&_AF_ROD) != 0) ((ReadOnDemand)input).freeBufferBefore(lastWordBegin);
+		flushBefore(prevIndex);
 
 		marker = 1;
-		lastWordBegin = index;
+		prevIndex = index;
 		Word w = readWord();
 		lastWord = w;
 		lastWordEnd = index;
@@ -90,6 +82,10 @@ public abstract class ITokenizer {
 		lastWordPos = w.pos();
 		lastWordVal = w.val();
 		return w;
+	}
+
+	protected final void flushBefore(int i) {
+		if ((aFlag&_AF_ROD) != 0) ((StreamReader)input).releaseBefore(i);
 	}
 
 	/**
@@ -132,25 +128,30 @@ public abstract class ITokenizer {
 		DESLASHES.putInt('\n', -5);
 	}
 
-	public static String addSlashes(CharSequence key) {
-		return addSlashes(key, new StringBuilder()).toString();
-	}
-	public static <T extends Appendable> T addSlashes(CharSequence key, T to) {
-		return addSlashes(key, 0, to, '\0');
-	}
+	public static String addSlashes(CharSequence key) { return addSlashes(new StringBuilder(), key).toString(); }
+	public static <T extends Appendable> T addSlashes(T to, CharSequence key) { return addSlashes(key, 0, to, '\0'); }
 	public static <T extends Appendable> T addSlashes(CharSequence key, int since, T to, char ignore) {
 		try {
 			if (since > 0) to.append(key, 0, since);
+
+			int prevI = since;
 			for (int i = since; i < key.length(); i++) {
 				char c = key.charAt(i);
 				int v = ADDSLASHES.getOrDefaultInt(c, 0);
 				if (v > 0 && c != ignore) {
-					to.append('\\').append((char) v);
-					continue;
+					to.append(key, prevI, i).append('\\').append((char) v);
+					prevI = i+1;
+				} else if (c < 32 || c == 127) { // CharacterData is not open
+					String s = Integer.toHexString(c);
+					to.append(key, prevI, i).append("\\u");
+					int j = s.length();
+					while (j++ < 4) to.append('0');
+					to.append(s);
+					prevI = i+1;
 				}
-
-				to.append(c);
 			}
+
+			to.append(key, prevI, key.length());
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
@@ -223,7 +224,7 @@ public abstract class ITokenizer {
 	}
 
 	@SuppressWarnings("fallthrough")
-	protected static int _removeSlash(CharSequence in, char c, Appendable out, int i, char end) throws ParseException {
+	protected static int _removeSlash(CharSequence in, char c, Appendable out, int i, char end) {
 		try {
 			int v = DESLASHES.getOrDefaultInt(c, 0);
 			if (v == 0) {
@@ -237,12 +238,12 @@ public abstract class ITokenizer {
 			switch (v) {
 				case -1: out.append('/'); break;
 				case -2: // UXXXXXXXX
-					int UIndex = MathUtils.parseInt(in, i, i += 8, 16);
+					int UIndex = TextUtil.parseInt(in, i, i += 8, 16);
 					if (Character.charCount(UIndex) > 1) out.append(Character.highSurrogate(UIndex)).append(Character.lowSurrogate(UIndex));
 					else out.append((char) UIndex);
 					break;
 				case -3: // uXXXX
-					int uIndex = MathUtils.parseInt(in, i, i += 4, 16);
+					int uIndex = TextUtil.parseInt(in, i, i += 4, 16);
 					out.append((char) uIndex);
 					break;
 				case -4: out.append("\r"); if (in.charAt(i) == '\n') i++;
@@ -375,10 +376,10 @@ public abstract class ITokenizer {
 	 * @param id 词类型
 	 */
 	protected Word formClip(short id, CharSequence s) {
-		return wd.init(id, lastWordBegin, s.toString());
+		return wd.init(id, prevIndex, s.toString());
 	}
 	protected final Word eof() {
-		return wd.init(EOF, lastWordBegin, "/EOF");
+		return wd.init(EOF, prevIndex, "/EOF");
 	}
 	protected final Word wd = new Word();
 
@@ -445,11 +446,14 @@ public abstract class ITokenizer {
 		int prevI = i;
 		while (true) {
 			c = in.charAt(i);
-			if (literalEnd.contains(c)) break;
 
 			// 检测位置有误(不在结尾)的 d f l 但是放过hex中的df
 			if ((flag & _NF_END) != 0) return onInvalidNumber(c, i, "期待[空白]");
-			if (!set.contains(c) && c != '_') return onInvalidNumber(c, i, "非法的字符"+c);
+			if (!set.contains(c) && c != '_') {
+				// todo moved from #449
+				if (literalEnd.contains(c)) break;
+				return onInvalidNumber(c, i, "非法的字符"+c);
+			}
 
 			switch (c) {
 				case 'E': case 'e': // 5e3之类的
@@ -701,7 +705,7 @@ public abstract class ITokenizer {
 			throw OperationDone.INSTANCE;
 		}
 
-		int num = MathUtils.parseInt(in, prevI, i, 10);
+		int num = TextUtil.parseInt(in, prevI, i, 10);
 		if (max > 0 && num > max) {
 			err.set("错误的时间范围");
 			throw OperationDone.INSTANCE;
@@ -767,13 +771,13 @@ public abstract class ITokenizer {
 
 	// region exception
 
-	public Word except(int type) throws ParseException {
+	public final Word except(int type) throws ParseException {
 		Word w = next();
 		if (w.type() == type) return w;
 		throw err("未预料的: " + w.val() + ", 期待: #" + type);
 	}
 
-	public Word except(int type, String v) throws ParseException {
+	public final Word except(int type, String v) throws ParseException {
 		Word w = next();
 		if (w.type() == type) return w;
 		throw err("未预料的: " + w.val() + ", 期待: " + v);

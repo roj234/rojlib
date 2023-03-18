@@ -2,7 +2,7 @@ package roj.collect;
 
 import roj.util.Helpers;
 
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 import static roj.collect.IntMap.UNDEFINED;
 
@@ -12,7 +12,7 @@ import static roj.collect.IntMap.UNDEFINED;
  * @author Roj233
  * @since 2021/9/9 23:17
  */
-public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<V> {
+public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 	public static final class Entry<K, V> extends MyHashMap.Entry<K, V> {
 		Bucket owner;
 		Entry<K, V> lfuPrev, lfuNext;
@@ -43,7 +43,7 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<V> {
 	private int wellDepth;
 	private Bucket well;
 
-	private Consumer<V> listener;
+	private BiConsumer<K,V> listener;
 
 	public LFUCache(int maxCap) {
 		this(maxCap, 16);
@@ -96,7 +96,7 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<V> {
 	}
 
 	@Override
-	public void setEvictListener(Consumer<V> listener) {
+	public void setEvictListener(BiConsumer<K,V> listener) {
 		this.listener = listener;
 	}
 
@@ -110,9 +110,12 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<V> {
 			Entry<?, ?> entry = b.entry;
 			while (entry != null && amount-- > 0) {
 				Entry<?, ?> next = entry.lfuNext;
+
+				Object k = entry.k;
 				Object v = entry.v;
-				remove(entry.k);
-				if (listener != null) listener.accept(Helpers.cast(v));
+
+				remove(k);
+				if (listener != null) listener.accept(Helpers.cast(k), Helpers.cast(v));
 				entry = next;
 			}
 
@@ -171,22 +174,16 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<V> {
 		b.entry = entry;
 	}
 	private void unlink(Entry<K, V> entry) {
-		if (entry.lfuPrev != null) {
-			Entry<K, V> next = entry.lfuPrev.lfuNext = entry.lfuNext;
-			if (next != null) next.lfuPrev = entry.lfuPrev;
-		} else {
-			Bucket b = entry.owner;
-			Entry<K, V> next = entry.lfuNext;
+		if (entry.lfuPrev == null) entry.owner.entry = entry.lfuNext;
+		else entry.lfuPrev.lfuNext = entry.lfuNext;
 
-			if (next == null) {
-				if (b.prev != null) { // do not remove head (1)
-					drain(b);
-				}
-			} else {
-				b.entry = next;
-				next.lfuPrev = null;
+		if (entry.lfuNext == null) {
+			Bucket b = entry.owner;
+			if (b.prev != null && b.entry == null) { // do not remove head (1)
+				drain(b);
 			}
 		}
+		else entry.lfuNext.lfuPrev = entry.lfuPrev;
 	}
 
 	private void drain(Bucket o) {

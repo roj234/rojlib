@@ -14,11 +14,13 @@ public final class MySql extends DbConnector {
 	static {
 		try {
 			Class.forName("com.mysql.jdbc.Driver");
-		} catch (ClassNotFoundException ignored) {}
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		}
 	}
 
-	public MySql(String url, String db, String name, String pass) {
-		this(url + "/" + db, name, pass);
+	public MySql(String url, String db, String user, String pass) {
+		this(url + "/" + db, user, pass);
 	}
 
 	public MySql(String url, String name, String pass) {

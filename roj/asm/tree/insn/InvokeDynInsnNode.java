@@ -40,7 +40,7 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
 
 	@Override
 	public void serialize(CodeWriter cw) {
-		cw.invoke_dynamic(tableIdx, name, rawDesc(), 0);
+		cw.invokeDyn(tableIdx, name, rawDesc(), 0);
 	}
 
 	@Override

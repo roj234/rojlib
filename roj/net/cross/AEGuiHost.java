@@ -91,20 +91,20 @@ public class AEGuiHost {
 
 	private static String res(String name) throws IOException {
 		String v = tmp.get(name);
-		if (v == null) tmp.put(name, v = IOUtil.readUTF("META-INF/html/" + name));
+		if (v == null) tmp.put(name, v = IOUtil.readResUTF("META-INF/html/" + name));
 		return v;
 	}
 
 	private static void runServer(int port) throws IOException {
 		HttpServer11.simple(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64, (request, rh) -> {
 			switch (request.path()) {
-				case "/bundle.min.css":
+				case "bundle.min.css":
 					return new StringResponse(res("bundle.min.css"), "text/css");
-				case "/bundle.min.js":
+				case "bundle.min.js":
 					return new StringResponse(res("bundle.min.js"), "text/javascript");
-				case "/":
+				case "":
 					return new StringResponse(res("client_owner.html"), "text/html");
-				case "/user_list":
+				case "user_list":
 					CList lx = new CList();
 					for (IntMap.Entry<Client> entry : client.clients.selfEntrySet()) {
 						CMapping map = new CMapping();
@@ -127,7 +127,7 @@ public class AEGuiHost {
 						lx.add(map);
 					}
 					return new StringResponse(lx.toShortJSONb(), "application/json");
-				case "/kick_user":
+				case "kick_user":
 					int count = 0;
 					String[] arr = request.postFields().get("users").split(",");
 					int[] arrs = new int[arr.length];

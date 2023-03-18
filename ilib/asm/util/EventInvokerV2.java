@@ -162,7 +162,7 @@ public final class EventInvokerV2 implements IEventListener {
 				cw.one(Opcodes.ALOAD_0);
 				cw.field(Opcodes.GETFIELD, c, fid);
 				cw.one(Opcodes.ALOAD_1);
-				cw.invoke_interface("net/minecraftforge/fml/common/eventhandler/IGenericEvent", "getGenericType", "()Ljava/lang/reflect/Type;");
+				cw.invokeItf("net/minecraftforge/fml/common/eventhandler/IGenericEvent", "getGenericType", "()Ljava/lang/reflect/Type;");
 				cw.jump(Opcodes.IF_acmpne, label);
 			}
 
@@ -191,7 +191,7 @@ public final class EventInvokerV2 implements IEventListener {
 				cw.one(Opcodes.ALOAD_1);
 				cw.one(Opcodes.ALOAD_0);
 				cw.field(Opcodes.GETFIELD, c, fid);
-				cw.invoke_interface("net/minecraftforge/fml/common/eventhandler/IContextSetter", "setModContainer", "(Lnet/minecraftforge/fml/common/ModContainer;)V");
+				cw.invokeItf("net/minecraftforge/fml/common/eventhandler/IContextSetter", "setModContainer", "(Lnet/minecraftforge/fml/common/ModContainer;)V");
 			}
 
 			if (handler != null) {

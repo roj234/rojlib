@@ -6,6 +6,10 @@ package roj.net.http.srv;
  */
 public interface PostSetting {
 	long postExceptLength();
-	void postMaxLength(long len);
-	void postMaxTime(int time);
+	/**
+	 * @param extraTime 再给多少ms用来接收请求
+	 */
+	void postAccept(long maxLen, int extraTime);
+	void postHandler(HPostHandler ph);
+	boolean postAccepted();
 }

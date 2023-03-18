@@ -5,20 +5,22 @@ import roj.archive.zip.ZipArchive;
 import roj.asm.Opcodes;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.util.ByteList;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 
+import static roj.asm.Opcodes.IRETURN;
 import static roj.asm.type.Type.*;
 
 /**
@@ -36,21 +38,19 @@ public class TransformUtil {
 			RawMethod ms = (RawMethod) methods.get(i);
 
 			if (ms.attrByName("Code") != null) {
-				trimCode(data, ms).finish();
-
+				trimCode(data, ms);
 				flag = true;
 			}
 		}
 		return flag;
 	}
-	public static CodeWriter trimCode(ConstantData data, MethodNode ms) {
-		AttrCodeWriter attr = new AttrCodeWriter(data.cp, ms);
-		ms.attributes().putByName(attr);
-		CodeWriter cw = attr.cw;
+	public static void trimCode(ConstantData data, MethodNode ms) {
+		CodeWriter cw = new CodeWriter();
+		cw.init(new ByteList(16), data.cp);
 
-		Type t = ms.getReturnType();
+		Type t = ms.returnType();
 
-		cw.visitSize(t.length(), TypeHelper.paramSize(ms.rawDesc()) + ((AccessFlag.STATIC & ms.accessFlag()) == 0 ? 1 : 0));
+		cw.visitSize(t.length(), TypeHelper.paramSize(ms.rawDesc()) + ((AccessFlag.STATIC & ms.modifier()) == 0 ? 1 : 0));
 
 		switch (t.type) {
 			case CLASS: cw.one(Opcodes.ACONST_NULL); break;
@@ -61,8 +61,10 @@ public class TransformUtil {
 			case DOUBLE: cw.one(Opcodes.DCONST_0); break;
 			case LONG: cw.one(Opcodes.LCONST_0); break;
 		}
-		cw.one(InsnHelper.X_RETURN222(t));
-		return cw;
+		cw.one(t.shiftedOpcode(IRETURN, true));
+		cw.finish();
+
+		ms.putAttr(new AttrUnknown("Code", cw.bw));
 	}
 
 	// region Access Transformer
@@ -71,7 +73,7 @@ public class TransformUtil {
 	 */
 	public static void makeAccessible(IClass data, Collection<String> toOpen) {
 		if (toOpen.contains("<$extend>")) {
-			data.accessFlag(toPublic(data.accessFlag(), true));
+			data.modifier(toPublic(data.modifier(), true));
 		}
 
 		boolean starP = true;
@@ -104,8 +106,8 @@ public class TransformUtil {
 			MoFNode node = nodes.get(i);
 			if (toOpen != null && !toOpen.contains(node.name()) && !toOpen.contains(node.name()+'|'+node.rawDesc())) continue;
 
-			int flag = toPublic(node.accessFlag(), starP || toOpen != null);
-			node.accessFlag(flag);
+			int flag = toPublic(node.modifier(), starP || toOpen != null);
+			node.modifier(flag);
 		}
 	}
 	private static int toPublic(int flag, boolean starP) {
@@ -157,7 +159,7 @@ public class TransformUtil {
 		AttributeList list = a.attributesNullable();
 		if (list == null) return;
 		for (int i = list.size() - 1; i >= 0; i--) {
-			if (!permitted.contains(list.get(i).name)) list.remove(i);
+			if (!permitted.contains(list.get(i).name())) list.remove(i);
 		}
 	}
 	// endregion

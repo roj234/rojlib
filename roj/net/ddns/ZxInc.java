@@ -2,7 +2,6 @@ package roj.net.ddns;
 
 import roj.config.JSONParser;
 import roj.config.data.CMapping;
-import roj.config.word.StreamAsChars;
 import roj.net.http.SyncHttpClient;
 import roj.ui.CmdUtil;
 
@@ -14,6 +13,8 @@ import java.net.URL;
  * @since 2023/1/28 0028 1:23
  */
 public class ZxInc extends IpGetter {
+	JSONParser parser = new JSONParser();
+
 	@Override
 	public boolean supportsV6() { return true; }
 
@@ -21,13 +22,13 @@ public class ZxInc extends IpGetter {
 	public InetAddress[] getAddress(boolean checkV6) {
 		try {
 			SyncHttpClient shc = pool.request(new URL("https://v4.ip.zxinc.org/info.php?type=json"), null);
-			CMapping url = JSONParser.parses(new StreamAsChars(shc.getInputStream())).asMap();
+			CMapping url = parser.parseRaw(shc.getInputStream()).asMap();
 			InetAddress ipv4 = InetAddress.getByName(url.getDot("data.myip").asString());
 
 			InetAddress ipv6;
 			if (checkV6) {
 				shc = pool.request(new URL("https://v6.ip.zxinc.org/info.php?type=json"), null);
-				url = JSONParser.parses(new StreamAsChars(shc.getInputStream())).asMap();
+				url = parser.parseRaw(shc.getInputStream()).asMap();
 				ipv6 = InetAddress.getByName(url.getDot("data.myip").asString());
 			} else {
 				ipv6 = null;

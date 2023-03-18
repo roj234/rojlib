@@ -34,7 +34,7 @@ public final class AttrModulePackages extends Attribute {
 		int count = r.readUnsignedShort();
 		List<String> pkg = new SimpleList<>(count);
 		while (count-- > 0) {
-			pkg.add(((CstPackage) pool.get(r)).getValue().getString());
+			pkg.add(((CstPackage) pool.get(r)).name().str());
 		}
 		return pkg;
 	}

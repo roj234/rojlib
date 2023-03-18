@@ -6,7 +6,7 @@ import ilib.world.saver.tag.ITagGetter;
 import ilib.world.saver.tag.WailaTagGetter;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.concurrent.task.AsyncTask;
+import roj.concurrent.timing.Scheduler;
 
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.multiplayer.WorldClient;
@@ -48,11 +48,11 @@ public class TagGetter {
 		WailaTagGetter.isWailaInstalled = false;
 		delegate = null;
 
-		WorldSaver.executor.register(AsyncTask.fromVoid(() -> {
+		Scheduler.getDefaultScheduler().executeLater(() -> {
 			if (WailaTagGetter.isWailaInstalled) {
 				delegate = new WailaTagGetter();
 			}
-		}), 1000, 1000, 1);
+		}, 1000);
 	}
 
 	@SubscribeEvent

@@ -3,7 +3,6 @@ package ilib.client.music;
 import ilib.ClientProxy;
 import roj.collect.SimpleList;
 import roj.io.BoxFile;
-import roj.io.FileUtil;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.MemorySource;
@@ -118,7 +117,7 @@ public class MusicPlayer extends FilePlayer {
 		} else {
 			new Thread(() -> {
 				try {
-					ByteList dst = FileUtil.downloadFileToMemory(url);
+					ByteList dst = IOUtil.downloadFileToMemory(url);
 					cache.put(url, dst);
 					play(new MemorySource(dst));
 				} catch (IOException e) {

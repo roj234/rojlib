@@ -84,7 +84,7 @@ public class SignaturePrimer extends Signature {
 			values.add(returns);
 			returns = null;
 		} else {
-			values.add(mn.getReturnType());
+			values.add(mn.returnType());
 		}
 	}
 

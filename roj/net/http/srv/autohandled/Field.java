@@ -14,4 +14,5 @@ import java.lang.annotation.Target;
 public @interface Field {
 	String value() default "";
 	From from() default From.INHERIT;
+	boolean nonnull() default false;
 }

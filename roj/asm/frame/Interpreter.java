@@ -17,10 +17,10 @@ public class Interpreter {
 	public Interpreter() {}
 
 	byte returnType;
-	protected final VarList stack = new VarList(), local = new VarList();
+	protected VarList stack, local;
 	public int maxStackSize, maxLocalSize;
 
-	CharList sb = new CharList();
+	CharList sb;
 
 	public void init(MethodNode owner) {}
 	final void pushRefArray(String name) {}

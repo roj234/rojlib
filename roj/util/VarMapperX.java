@@ -35,7 +35,7 @@ public class VarMapperX extends VarMapper {
 	    public static void main(String[] args) throws Exception {
 
 
-			byte[] b = IOUtil.read("roj/mod/FMDMain.class");
+			byte[] b = IOUtil.readRes("roj/mod/FMDMain.class");
 			ConstantData cd = Parser.parseConstants(b);
 			for (MethodNode mn : cd.methods) {
 				Attribute c = mn.attrByName("Code");

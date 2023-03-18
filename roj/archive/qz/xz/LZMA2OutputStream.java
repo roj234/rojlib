@@ -13,11 +13,13 @@ package roj.archive.qz.xz;
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.lzma.LZMAEncoder;
 import roj.archive.qz.xz.rangecoder.RangeEncoderToBuffer;
+import roj.io.Finishable;
+import roj.util.ArrayCache;
 
 import java.io.IOException;
 import java.io.OutputStream;
 
-class LZMA2OutputStream extends FinishableOutputStream {
+class LZMA2OutputStream extends OutputStream implements Finishable {
 	static final int COMPRESSED_SIZE_MAX = 64 << 10;
 
 	private final ArrayCache arrayCache;
@@ -68,14 +70,12 @@ class LZMA2OutputStream extends FinishableOutputStream {
 			dictResetNeeded = false;
 		}
 
-		props = (options.getPb() * 5 + options.getLp()) * 9 + options.getLc();
+		props = options.getPropByte();
 	}
 
-	private byte[] b0;
 	public void write(int b) throws IOException {
-		if (b0 == null) b0 = new byte[1];
-		b0[0] = (byte) b;
-		write(b0, 0, 1);
+		chunkHeader[0] = (byte) b;
+		write(chunkHeader, 0, 1);
 	}
 
 	public void write(byte[] buf, int off, int len) throws IOException {
@@ -134,10 +134,11 @@ class LZMA2OutputStream extends FinishableOutputStream {
 			else control = 0x80;
 		}
 
-		control |= (uncompressedSize - 1) >>> 16;
+		--uncompressedSize;
+		control |= uncompressedSize >>> 16;
 		chunkHeader[0] = (byte) control;
-		chunkHeader[1] = (byte) ((uncompressedSize - 1) >>> 8);
-		chunkHeader[2] = (byte) (uncompressedSize - 1);
+		chunkHeader[1] = (byte) (uncompressedSize >>> 8);
+		chunkHeader[2] = (byte) uncompressedSize;
 		chunkHeader[3] = (byte) ((compressedSize - 1) >>> 8);
 		chunkHeader[4] = (byte) (compressedSize - 1);
 
@@ -226,8 +227,8 @@ class LZMA2OutputStream extends FinishableOutputStream {
 		writeEndMarker();
 
 		try {
-			if (out instanceof FinishableOutputStream)
-				((FinishableOutputStream) out).finish();
+			if (out instanceof Finishable)
+				((Finishable) out).finish();
 		} catch (Throwable e) {
 			try {
 				close();

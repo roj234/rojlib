@@ -2,7 +2,7 @@ package roj.mod.mapping;
 
 import roj.config.data.CEntry;
 import roj.config.data.CMapping;
-import roj.io.FileUtil;
+import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
 import roj.io.down.ProgressMulti;
 import roj.mod.MCLauncher;
@@ -41,10 +41,7 @@ public interface MapSource {
 				String url = cfg.getString("url");
 				Map<String, CEntry> header;
 				if (cfg.containsKey("header")) {
-					header = cfg.getOrCreateMap("header").raw();
-					for (Map.Entry<String, CEntry> entry : header.entrySet()) {
-						entry.setValue(Helpers.cast(entry.getValue().asString()));
-					}
+					header = Helpers.cast(cfg.get("header").unwrap());
 				} else {
 					header = Collections.emptyMap();
 				}
@@ -68,7 +65,7 @@ public interface MapSource {
 					vars = Collections.emptyMap();
 				}
 				if (cfg.containsKey("repo")) {
-					url += FileUtil.mavenPath(cfg.getString("repo"));
+					url += IOUtil.mavenPath(cfg.getString("repo"));
 				}
 
 				String finalUrl = url;
@@ -89,7 +86,7 @@ public interface MapSource {
 						try {
 							DownloadTask task = DownloadTask.createTask(cl.toString(), tmp, new ProgressMulti());
 							task.ETag = false;
-							task.headers = Helpers.cast(header);
+							task.client.headers(Helpers.cast(header));
 							DownloadTask.QUERY.pushTask(task);
 							task.waitFor();
 						} catch (Exception e) {

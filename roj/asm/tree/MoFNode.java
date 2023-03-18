@@ -10,17 +10,11 @@ import javax.annotation.Nullable;
  * @since 2021/5/12 0:23
  */
 public interface MoFNode extends Attributed {
-	default void toByteArray(DynByteBuf w, ConstantPool pool) {
-		throw new UnsupportedOperationException(getClass().getName() + " does not support encoding");
-	}
+	default void toByteArray(DynByteBuf w, ConstantPool pool) { throw new UnsupportedOperationException(getClass().getName() + " does not support encoding"); }
 
 	String name();
-	default void name(@Nullable ConstantPool cp, String name) {
-		throw new UnsupportedOperationException();
-	}
+	default void name(@Nullable ConstantPool cp, String name) { throw new UnsupportedOperationException(); }
 
 	String rawDesc();
-	default void rawDesc(@Nullable ConstantPool cp, String rawDesc) {
-		throw new UnsupportedOperationException();
-	}
+	default void rawDesc(@Nullable ConstantPool cp, String rawDesc) { throw new UnsupportedOperationException(); }
 }

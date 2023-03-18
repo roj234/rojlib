@@ -1,9 +1,8 @@
 package roj.net.ddns;
 
-import roj.net.http.SyncHttpClient;
 import roj.text.TextUtil;
-import roj.ui.CmdUtil;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URL;
 
@@ -13,16 +12,9 @@ import java.net.URL;
  */
 public class ToolLu extends IpGetter {
 	@Override
-	public InetAddress[] getAddress(boolean checkV6) {
-		try {
-			SyncHttpClient shc = pool.request(new URL("https://ip.tool.lu/"), null);
-			shc.waitFor();
-			String str = shc.getAsUTF8Str();
-			InetAddress WANIP = InetAddress.getByName(TextUtil.split(str, ' ').get(1));
-			return new InetAddress[] { WANIP, null };
-		} catch (Exception e) {
-			CmdUtil.error("getAddress", e);
-		}
-		return null;
+	public InetAddress[] getAddress(boolean checkV6) throws IOException {
+		String str = pooledRequest(new URL("https://ip.tool.lu/")).utf();
+		InetAddress WANIP = InetAddress.getByName(TextUtil.split(str, ' ').get(1));
+		return new InetAddress[] { WANIP, null };
 	}
 }

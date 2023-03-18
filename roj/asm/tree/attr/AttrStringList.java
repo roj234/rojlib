@@ -43,7 +43,7 @@ public final class AttrStringList extends Attribute {
 				break;
 			case 1:
 				while (len-- > 0) {
-					classes.add(((CstUTF) pool.get(r)).getString());
+					classes.add(((CstUTF) pool.get(r)).str());
 				}
 				break;
 		}

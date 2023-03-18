@@ -214,6 +214,7 @@ public final class Poly1305 extends MessageDigest implements MessageAuthenticCod
 	@Override
 	protected byte[] engineDigest() {
 		ByteList b = IOUtil.SharedCoder.get().wrap(new byte[16]);
+		b.clear();
 		_digestFinal(bList, b);
 		bList.clear();
 		return b.list;

@@ -1,22 +1,15 @@
 package roj.net;
 
 import roj.asm.type.Type;
-import roj.math.MathUtils;
 import roj.reflect.DirectAccessor;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import sun.net.InetAddressCachePolicy;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.X509Certificate;
 import java.util.LinkedHashMap;
 
 /**
@@ -25,13 +18,6 @@ import java.util.LinkedHashMap;
  */
 public final class NetworkUtil {
 	public static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
-
-	public static void trustAllCertificates() {
-		try {
-			SSLContext.getDefault().init(null, new TrustManager[] {new TrustAllManager()}, null);
-		} catch (NoSuchAlgorithmException | KeyManagementException ignored) {}
-		// should not happen
-	}
 
 	static InetAddress any;
 	public static InetAddress anyLocalAddress() {
@@ -49,7 +35,7 @@ public final class NetworkUtil {
 		for (int i = 0; i < ip.length(); i++) {
 			char c = ip.charAt(i);
 			if (c == '.') {
-				arr[found++] = (byte) MathUtils.parseInt(fl);
+				arr[found++] = (byte) TextUtil.parseInt(fl);
 				if (found == 4) throw new RuntimeException("IP format error " + ip);
 				fl.clear();
 			} else {
@@ -58,7 +44,7 @@ public final class NetworkUtil {
 		}
 
 		if (fl.length() == 0 || found != 3) throw new RuntimeException("IP format error " + ip);
-		arr[3] = (byte) MathUtils.parseInt(fl);
+		arr[3] = (byte) TextUtil.parseInt(fl);
 		return arr;
 	}
 
@@ -81,7 +67,7 @@ public final class NetworkUtil {
 					colon = j;
 					continue;
 				}
-				int st = MathUtils.parseInt(fl, 16);
+				int st = TextUtil.parseInt(fl, 16);
 				arr[j++] = (byte) (st >> 8);
 				arr[j++] = (byte) st;
 
@@ -95,7 +81,7 @@ public final class NetworkUtil {
 		}
 
 		if ((colon == -1 && (fl.length() == 0 || j != 14)) || j > 14) throw new IllegalArgumentException("Address overflow: " + ip);
-		int st = MathUtils.parseInt(fl, 16);
+		int st = TextUtil.parseInt(fl, 16);
 		arr[j++] = (byte) (st >> 8);
 		arr[j] = (byte) st;
 
@@ -139,19 +125,6 @@ public final class NetworkUtil {
 
 	public static String bytes2ipv4(byte[] bytes, int off) {
 		return String.valueOf(bytes[off++] & 0xFF) + '.' + (bytes[off++] & 0xFF) + '.' + (bytes[off++] & 0xFF) + '.' + (bytes[off] & 0xFF);
-	}
-
-	public static final class TrustAllManager implements X509TrustManager {
-		@Override
-		public void checkClientTrusted(X509Certificate[] chain, String authType) {}
-
-		@Override
-		public void checkServerTrusted(X509Certificate[] chain, String authType) {}
-
-		@Override
-		public X509Certificate[] getAcceptedIssuers() {
-			return new X509Certificate[0];
-		}
 	}
 
 	public static void putHostCache(boolean negative, String host, long expire, InetAddress... addresses) {
@@ -211,28 +184,28 @@ public final class NetworkUtil {
 		Object newCacheEntry(InetAddress[] addresses, long expire);
 
 		default Object getHostCache() {
-			throw new UnsupportedOperationException("Failed to get the field");
+			throw new UnsupportedOperationException();
 		}
 		default Object getNegativeHostCache() {
-			throw new UnsupportedOperationException("Failed to get the field");
+			throw new UnsupportedOperationException();
 		}
 
 		default LinkedHashMap<String, Object> getInternalMap(Object cache) {
-			throw new UnsupportedOperationException("Failed to get the field");
+			throw new UnsupportedOperationException();
 		}
 
 		default void setPosCachePolicy(int seconds) {
-			throw new UnsupportedOperationException("Failed to get the field");
+			throw new UnsupportedOperationException();
 		}
 		default void setNegCachePolicy(int seconds) {
-			throw new UnsupportedOperationException("Failed to get the field");
+			throw new UnsupportedOperationException();
 		}
 
 		default void setPosCacheSet(boolean set) {
-			throw new UnsupportedOperationException("Failed to get the field");
+			throw new UnsupportedOperationException();
 		}
 		default void setNegCacheSet(boolean set) {
-			throw new UnsupportedOperationException("Failed to get the field");
+			throw new UnsupportedOperationException();
 		}
 	}
 

@@ -37,7 +37,7 @@ public class CipherOutputStream extends FilterOutputStream {
 
 			pool = BufferPool.localPool();
 			o = (ByteList) pool.buffer(false, len);
-			i.set(o.array(),o.arrayOffset(),o.capacity());
+			i.setW(o.array(),o.arrayOffset(),o.capacity());
 			block = len;
 		} else {
 			o = new ByteList.Slice();
@@ -58,8 +58,8 @@ public class CipherOutputStream extends FilterOutputStream {
 			ByteList ob = o;
 
 			if (block == 0) {
-				ib.set(b, off, len).wIndex(len);
-				c.crypt(ib, ((ByteList.Slice)ob).set(b, off, len));
+				ib.setW(b, off, len).wIndex(len);
+				c.crypt(ib, ((ByteList.Slice)ob).setW(b, off, len));
 				out.write(b, off, len);
 				return;
 			}

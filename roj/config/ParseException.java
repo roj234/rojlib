@@ -1,7 +1,7 @@
 package roj.config;
 
-import roj.math.MathUtils;
 import roj.text.CharList;
+import roj.text.TextUtil;
 
 /**
  * Signals that an error has been reached unexpectedly
@@ -22,6 +22,9 @@ public final class ParseException extends Exception {
 	private CharSequence lineContent;
 	private CharList path;
 
+	public ParseException(CharSequence all, String reason, int index) {
+		this(all,reason,index,null);
+	}
 	public ParseException(CharSequence all, String reason, int index, Throwable cause) {
 		super(filter(reason), cause, true, true);
 		this.index = index;
@@ -159,7 +162,7 @@ public final class ParseException extends Exception {
 			k.append("当前行偏移量 ").append(this.linePos);
 		} else {
 			k.append(line).append("\r\n");
-			int off = this.linePos + 10 + MathUtils.digitCount(this.line);
+			int off = this.linePos + 10 + TextUtil.digitCount(this.line);
 			for (int i = 0; i < off; i++) {
 				k.append('-');
 			}
