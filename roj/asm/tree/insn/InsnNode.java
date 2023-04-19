@@ -102,6 +102,11 @@ public abstract class InsnNode implements Helpers.Node {
 		return bci*code;
 	}
 
+	@Override
+	public int hashCode() {
+		return bci*code;
+	}
+
 	public String toString() {
 		return OpcodeUtil.toString0(code);
 	}

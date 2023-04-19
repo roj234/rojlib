@@ -196,7 +196,7 @@ public class TextUtil {
 	// region 数字相关
 
 	/**
-	 * 是否为数字
+	 * 是否为数字(simple check for unmarked(LFD/xE+y) int/long/double)
 	 *
 	 * @return -1 不是, 0 整数, 1 小数
 	 */

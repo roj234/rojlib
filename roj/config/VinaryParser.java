@@ -63,18 +63,22 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 	private String[] tmp;
 	private int matches;
 
-	// this is not so easy / WIP
-	boolean partialMatch;
-
 	private CVisitor cc;
 	private final List<String[]> decodeTab = new SimpleList<>();
 	private byte[] decodeMap = DECODE_MAP;
 	private int tinyIdCount;
 
+	private boolean asArray;
+
 	public VinaryParser() {
 		this.tab = new Struct[16];
 		this.mask = 15;
 		this.tmp = new String[20];
+	}
+
+	public VinaryParser asArray() {
+		asArray = true;
+		return this;
 	}
 
 	@Override
@@ -163,11 +167,17 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 	}
 	private void parseList(int type, DynByteBuf r) throws IOException {
 		int cap = r.readVUInt();
-		cc.valueList(cap);
 		if (type == 0) {
+			cc.valueList(cap);
 			while (cap-- > 0) element(r);
 		} else {
-			switch (Type.VALUES[--type]) {
+			Type value = Type.VALUES[--type];
+
+			if (!asArray || (value != Type.INTEGER && value != Type.LONG && value != Type.Int1)) {
+				cc.valueList(cap);
+			}
+
+			switch (value) {
 				case BOOL:
 					int bi = 0;
 					while (cap-- > 0) {
@@ -192,12 +202,44 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 						cc.pop();
 					}
 					break;
-				case INTEGER: while (cap-- > 0) cc.value(r.readInt()); break;
+				case INTEGER: {
+					if (asArray) {
+						int[] data = new int[cap];
+						int i = 0;
+						while (cap-- > 0) data[i++] = r.readInt();
+						cc.value(data);
+						return;
+					} else {
+						while (cap-- > 0) cc.value(r.readInt());
+					}
+				}
+				break;
 				case NULL: while (cap-- > 0) cc.valueNull(); break;
-				case LONG: while (cap-- > 0) cc.value(r.readLong());break;
+				case LONG: {
+					if (asArray) {
+						long[] data = new long[cap];
+						int i = 0;
+						while (cap-- > 0) data[i++] = r.readLong();
+						cc.value(data);
+						return;
+					} else {
+						while (cap-- > 0) cc.value(r.readLong());
+					}
+				}
+				break;
 				case DOUBLE: while (cap-- > 0) cc.value(r.readDouble()); break;
 				case STRING: while (cap-- > 0) cc.value(r.readVStr()); break;
-				case Int1: while (cap-- > 0) cc.value(r.readByte()); break;
+				case Int1: {
+					if (asArray) {
+						byte[] data = new byte[cap];
+						r.read(data);
+						cc.value(data);
+						return;
+					} else {
+						while (cap-- > 0) cc.value(r.readByte());
+					}
+				}
+				break;
 				case Int2: while (cap-- > 0) cc.value(r.readShort()); break;
 				case Float4: while (cap-- > 0) cc.value(r.readFloat()); break;
 				default: throw new IllegalArgumentException("Unsupported type");

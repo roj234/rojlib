@@ -129,7 +129,7 @@ public final class SerializerManager {
 			ConstantData data = Parser.parse(o.getClass());
 			if (data == null) throw new IllegalArgumentException("无法获取"+o+"的类文件");
 
-			Type clsType = TypeHelper.parseField(TypeHelper.class2asm(cls));
+			Type clsType = TypeHelper.class2type(cls);
 			MethodNode writer = null, reader = null;
 			for (MethodNode mn : data.methods) {
 				List<Type> par = mn.parameters();
@@ -170,7 +170,7 @@ public final class SerializerManager {
 		ConstantData data = Parser.parse(o.getClass());
 		if (data == null) throw new IllegalArgumentException("无法获取"+o+"的类文件");
 
-		Type clsType = TypeHelper.parseField(TypeHelper.class2asm(cls));
+		Type clsType = TypeHelper.class2type(cls);
 		MethodNode writer = null, reader = null;
 		for (MethodNode mn : data.methods) {
 			List<Type> par = mn.parameters();
@@ -360,7 +360,7 @@ public final class SerializerManager {
 				throw new RuntimeException(e);
 			}
 
-			Type asmType = TypeHelper.parseField(TypeHelper.class2asm(type));
+			Type asmType = TypeHelper.class2type(type);
 			Type methodType = asmType.nativeName().equals("I") ? Type.std(Type.INT) : asmType;
 			ConstantData c = new LongByeBye(Type.LONG,asmType,methodType,asmType,true) {
 				@Override

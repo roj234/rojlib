@@ -105,15 +105,15 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	}
 	public final int getInteger(int i) {
 		CEntry entry = list.get(i);
-		return entry.getType().isNumber() ? entry.asInteger() : 0;
+		return entry.isNumber() ? entry.asInteger() : 0;
 	}
 	public final long getLong(int i) {
 		CEntry entry = list.get(i);
-		return entry.getType().isNumber() ? entry.asLong() : 0;
+		return entry.isNumber() ? entry.asLong() : 0;
 	}
 	public final double getDouble(int i) {
 		CEntry entry = list.get(i);
-		return entry.getType().isNumber() ? entry.asDouble() : 0;
+		return entry.isNumber() ? entry.asDouble() : 0;
 	}
 
 	public CEntry remove(int i) {

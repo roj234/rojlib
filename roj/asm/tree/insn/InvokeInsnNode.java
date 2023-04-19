@@ -1,119 +1,49 @@
 package roj.asm.tree.insn;
 
+import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstRef;
-import roj.asm.tree.IClass;
-import roj.asm.tree.MoFNode;
-import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
-import roj.asm.util.InsnList;
 import roj.asm.visitor.CodeWriter;
 
-import java.util.List;
-
 /**
- * invokevirtual invokespecial invokestatic
+ * invokevirtual invokespecial invokestatic invokeinterface
  *
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
-	public InvokeInsnNode(byte code) {
-		super(code);
-	}
-
-	public InvokeInsnNode(byte code, String fullDesc) {
-		super(code);
-		fullDesc(fullDesc);
-	}
-
+public class InvokeInsnNode extends InsnNode {
 	public InvokeInsnNode(byte code, String owner, String name, String desc) {
 		super(code);
 		this.owner = owner;
 		this.name = name;
-		this.rawDesc = desc;
+		this.desc = desc;
 	}
 
 	public InvokeInsnNode(byte code, CstRef ref) {
 		super(code);
 		this.owner = ref.getClassName();
 		this.name = ref.desc().getName().getString();
-		this.rawDesc = ref.desc().getType().getString();
+		this.desc = ref.desc().getType().getString();
 	}
 
-	public InvokeInsnNode(byte code, IClass clazz, int index) {
-		super(code);
-		MoFNode mn = clazz.methods().get(index);
-		this.owner = clazz.name();
-		this.name = mn.name();
-		this.rawDesc = mn.rawDesc();
-	}
+	protected boolean validate() { return OpcodeUtil.category(code) == OpcodeUtil.CATE_METHOD; }
+	public final int nodeType() { return T_INVOKE; }
 
-	public InvokeInsnNode(IClass clazz, int index) {
-		MoFNode mn = clazz.methods().get(index);
-		setOpcode((mn.modifier() & AccessFlag.STATIC) != 0 ? Opcodes.INVOKESTATIC :
-			(mn.modifier() & (AccessFlag.PRIVATE | AccessFlag.FINAL)) != 0 ? Opcodes.INVOKESPECIAL :
-			Opcodes.INVOKEVIRTUAL);
-		this.owner = clazz.name();
-		this.name = mn.name();
-		this.rawDesc = mn.rawDesc();
-	}
+	public String owner, name, desc;
 
-	@Override
-	protected boolean validate() {
-		switch (code) {
-			case Opcodes.INVOKESTATIC:
-			case Opcodes.INVOKESPECIAL:
-			case Opcodes.INVOKEVIRTUAL:
-				return true;
-		}
-		return false;
-	}
-
-	@Override
-	/**
-	 * fn validFor invokespecial() bool
-	 *   return name == <init> ||
-	 *      name in owner.methods ||
-	 *      name in owner.superClass.methods ||
-	 *      name in owner.interfaces.each(methods) ||
-	 *      name in Object.class
-	 */ public void verify(InsnList list, int index, int mainVer) throws IllegalArgumentException {
-		if (name.startsWith("<")) {
-			if (!name.equals("<init>")) throw new IllegalArgumentException("Calling methods name begin with '<' ('\\u003c') can only be named '<init>'");
-			if (code != Opcodes.INVOKESPECIAL) throw new IllegalArgumentException("Only the invokespecial instruction is allowed to invoke an instance initialization method");
-		}
-	}
-
-	public String owner;
-
-	@Override
-	public final int nodeType() {
-		return T_INVOKE;
-	}
-
-	@Override
-	public final String owner() {
-		return owner;
-	}
-
-	@Override
-	public final void owner(String clazz) {
-		// noinspection all
-		this.owner = clazz.toString();
+	@Deprecated
+	public final String awslDesc() {
+		return desc;
 	}
 
 	public void serialize(CodeWriter cw) {
-		cw.invoke(code, owner, name, rawDesc());
+		if (Opcodes.INVOKEINTERFACE == code) cw.invokeItf(owner, name, desc);
+		else cw.invoke(code, owner, name, desc);
 	}
 
-	@Override
-	public int nodeSize(int prevBci) {
-		return 3;
-	}
+	public int nodeSize(int prevBci) { return 3; }
 
-	@Override
 	public final void fullDesc(String desc) {
 		int cIdx = desc.indexOf('.');
 
@@ -126,24 +56,11 @@ public class InvokeInsnNode extends IInvokeInsnNode implements IClassInsnNode {
 		}
 		this.name = name;
 
-		this.rawDesc = desc.substring(nIdx + 1);
-		if (params != null) {
-			params.clear();
-			TypeHelper.parseMethod(rawDesc, params);
-			returnType = params.remove(params.size() - 1);
-		}
-	}
-
-	@Override
-	public String fullDesc() {
-		return owner + '.' + name + ':' + rawDesc;
+		this.desc = desc.substring(nIdx + 1);
 	}
 
 	public final String toString() {
-		List<Type> types = parameters();
-		types.add(returnType);
-		String s = TypeHelper.humanize(types,owner.substring(owner.lastIndexOf('/')+1)+'.'+name,true);
-		types.remove(types.size()-1);
+		String s = TypeHelper.humanize(TypeHelper.parseMethod(desc),owner.substring(owner.lastIndexOf('/')+1)+'.'+name,true);
 		return super.toString() + ' ' + s;
 	}
 }

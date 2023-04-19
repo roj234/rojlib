@@ -1,7 +1,6 @@
 package roj.asm.frame;
 
 import roj.asm.cst.CstClass;
-import roj.asm.cst.CstString;
 import roj.asm.frame.node.VarIncrNode;
 import roj.asm.frame.node.VarSLNode;
 import roj.asm.tree.Method;
@@ -13,15 +12,12 @@ import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.InsnHelper;
-import roj.asm.util.InsnList;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.text.CharList;
 import roj.util.Helpers;
-import roj.util.VarMapperX;
-import roj.util.VarMapperX.VarX;
 
 import java.util.List;
 
@@ -44,7 +40,6 @@ public class MethodPoet extends Interpreter {
 	public AttrCode code;
 	@Deprecated
 	public InsnList insn;
-	public boolean preferSpace;
 
 	private final MyHashSet<Variable> used = new MyHashSet<>();
 	private final MyHashSet<Variable> stored = new MyHashSet<>();
@@ -87,52 +82,38 @@ public class MethodPoet extends Interpreter {
 	// region opcodes
 
 	public MethodPoet const1(int n) {
-		insn.add(InsnHelper.loadInt(n));
+		insn.ldc(n);
 		
 		return this;
 	}
 
 	public MethodPoet const1(long n) {
-		if (preferSpace) {
-			InsnHelper.loadLongSlow(n, insn);
-		} else {
-			insn.add(InsnHelper.loadLong(n));
-		}
+		insn.ldc(n);
 		return this;
 	}
 
 	public MethodPoet const1(float n) {
-		if (preferSpace) {
-			InsnHelper.loadFloatSlow(n, insn);
-		} else {
-			insn.add(InsnHelper.loadFloat(n));
-		}
-		
+		insn.ldc(n);
 		return this;
 	}
 
 	public MethodPoet const1(double n) {
-		if (preferSpace) {
-			InsnHelper.loadDoubleSlow(n, insn);
-		} else {
-			insn.add(InsnHelper.loadDouble(n));
-		}
-		
+		insn.ldc(n);
 		return this;
 	}
 
 	public MethodPoet const1(String value) {
-		insn.add(new LdcInsnNode(new CstString(value)));
+		insn.ldc(value);
 		return this;
 	}
 
 	public MethodPoet constClass(String value) {
-		insn.add(new LdcInsnNode(new CstClass(value)));
+		insn.ldc(new CstClass(value));
 		return this;
 	}
 
 	public MethodPoet constNull() {
-		insn.add(NPInsnNode.of(ACONST_NULL));
+		insn.one(ACONST_NULL);
 		return this;
 	}
 
@@ -159,7 +140,7 @@ public class MethodPoet extends Interpreter {
 			case LONG:
 			case FLOAT:
 			case DOUBLE:
-				insn.add(NPInsnNode.of((byte) (IXOR + 3 * v.type)));
+				insn.one((byte) (IXOR + 3 * v.type));
 				stack.list[stack.length - 1] = Var2.INT;
 				break;
 			case INT:
@@ -264,7 +245,7 @@ public class MethodPoet extends Interpreter {
 			}
 		} else {
 		}
-		insn.add(NPInsnNode.of(code));
+		insn.one(code);
 		return this;
 	}
 
@@ -286,7 +267,7 @@ public class MethodPoet extends Interpreter {
 
 	public MethodPoet pop1() {
 		byte code = pop0().type;
-		insn.add(NPInsnNode.of(code == DOUBLE || code == LONG ? POP2 : POP));
+		insn.one(code == DOUBLE || code == LONG ? POP2 : POP);
 		return this;
 	}
 
@@ -312,7 +293,7 @@ public class MethodPoet extends Interpreter {
 
 	private MethodPoet dup0(byte code) {
 		boolean f = stackTop().type == TOP;
-		insn.add(NPInsnNode.of(f ? code + 3 : code));
+		insn.one(f ? (byte) (code + 3) : code);
 		VarList s = this.stack;
 		if (f) {
 			Var2 t = s.list[s.length - 1];
@@ -326,7 +307,7 @@ public class MethodPoet extends Interpreter {
 	}
 
 	public MethodPoet swap() {
-		insn.add(NPInsnNode.of(SWAP));
+		insn.one(SWAP);
 
 		VarList s = this.stack;
 		int p = s.length - 1;
@@ -374,7 +355,7 @@ public class MethodPoet extends Interpreter {
 			default:
 				throw new NumberFormatException(v.toString());
 		}
-		insn.add(NPInsnNode.of((byte) opcode));
+		insn.one((byte) opcode);
 		return this;
 	}
 
@@ -414,7 +395,7 @@ public class MethodPoet extends Interpreter {
 			default:
 				throw new NumberFormatException(v.toString());
 		}
-		insn.add(NPInsnNode.of((byte) opcode));
+		insn.one((byte) opcode);
 		return this;
 	}
 
@@ -428,7 +409,7 @@ public class MethodPoet extends Interpreter {
 					insn.add(new VarIncrNode(v, amount));
 					return this;
 				} else {
-					load(v).insn.add(InsnHelper.loadInt(amount));
+					load(v).insn.ldc(amount);
 					return add();
 				}
 			case LONG:
@@ -506,7 +487,7 @@ public class MethodPoet extends Interpreter {
 			case INT:
 				if (fr != INT) base++;
 		}
-		insn.add(NPInsnNode.of((byte) base));
+		insn.one((byte) base);
 		return this;
 	}
 
@@ -514,13 +495,13 @@ public class MethodPoet extends Interpreter {
 		cast(INT);
 		switch (nativeType) {
 			case Type.CHAR:
-				insn.add(NPInsnNode.of(I2C));
+				insn.one(I2C);
 				break;
 			case Type.SHORT:
-				insn.add(NPInsnNode.of(I2S));
+				insn.one(I2S);
 				break;
 			case Type.BYTE:
-				insn.add(NPInsnNode.of(I2B));
+				insn.one(I2B);
 				break;
 			default:
 				throw new IllegalArgumentException();
@@ -551,7 +532,7 @@ public class MethodPoet extends Interpreter {
 	}
 
 	public MethodPoet if1(byte opcode, InsnNode label) {
-		insn.add(new JumpInsnNode(opcode, label));
+		insn.jump(opcode, label);
 		return this;
 	}
 
@@ -563,7 +544,7 @@ public class MethodPoet extends Interpreter {
 
 	public MethodPoet return1() {
 		if (returnType == Type.VOID) {
-			insn.add(NPInsnNode.of(RETURN));
+			insn.one(RETURN);
 			return this;
 		}
 		char t1;
@@ -592,16 +573,14 @@ public class MethodPoet extends Interpreter {
 				opc = ARETURN;
 		}
 		checkReturn(t1);
-		insn.add(NPInsnNode.of(opc));
+		insn.one(opc);
 		return this;
 	}
 
 	// getfield, invoke, and comparing nodes use #node
 
 	public MethodPoet new1(String clazz) {
-		ClassInsnNode node = new ClassInsnNode(NEW, clazz);
-
-		insn.add(node);
+		insn.clazz(NEW, clazz);
 		return this;
 	}
 
@@ -659,7 +638,7 @@ public class MethodPoet extends Interpreter {
 	public MethodPoet arrayLen() {
 		popArray();
 
-		insn.add(NPInsnNode.of(ARRAYLENGTH));
+		insn.one(ARRAYLENGTH);
 		return this;
 	}
 
@@ -669,7 +648,7 @@ public class MethodPoet extends Interpreter {
 
 	public MethodPoet throw1() {
 		pop(REFERENCE);
-		insn.add(NPInsnNode.of(ATHROW));
+		insn.one(ATHROW);
 		return this;
 	}
 
@@ -701,13 +680,13 @@ public class MethodPoet extends Interpreter {
 
 	public MethodPoet lock(boolean lock) {
 		pop(REFERENCE);
-		insn.add(NPInsnNode.of(lock ? MONITORENTER : MONITOREXIT));
+		insn.one(lock ? MONITORENTER : MONITOREXIT);
 		return this;
 	}
 
 	// endregion
 
-	public void finish() {
+	public void finish() {/*
 		VarMapperX vmx = new VarMapperX();
 		List<Variable> tmp1 = thisArgs;
 		tmp1.clear();
@@ -758,7 +737,7 @@ public class MethodPoet extends Interpreter {
 		System.out.println("maxInUse= " + maxInUse);
 		System.out.println("maxStackSize= " + maxStackSize);
 		code.localSize = (char) maxInUse;
-		code.stackSize = (char) maxStackSize;
+		code.stackSize = (char) maxStackSize;*/
 	}
 
 	public Label label() {
@@ -787,7 +766,7 @@ public class MethodPoet extends Interpreter {
 
 	public static class Variable extends LocalVariable {
 		public boolean constant;
-		VarX att;
+		//VarX att;
 
 		public Variable(String name) {
 			super("", null);

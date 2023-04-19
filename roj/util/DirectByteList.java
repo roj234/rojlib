@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.*;
 import java.util.ConcurrentModificationException;
 import java.util.List;
+import java.util.function.IntUnaryOperator;
 
 import static roj.reflect.FieldAccessor.u;
 
@@ -263,22 +264,20 @@ public class DirectByteList extends DynByteBuf {
 		}
 		return this;
 	}
-	@Override
-	public DirectByteList putAscii(int wi, CharSequence s) {
+	public final DirectByteList putAscii(int wi, CharSequence s) {
 		long addr = testWI(wi, s.length())+address;
 		for (int i = 0; i < s.length(); i++) {
 			u.putByte(addr++, (byte) s.charAt(i));
 		}
 		return this;
 	}
-	public final DirectByteList putUTFData0(CharSequence s, int len) {
-		long addr = moveWI(len)+address;
 
-		ByteList.jutf8_encode_all(s, null, addr, len);
-		return this;
+	public final void _writeDioUTF(String s, int byteLen) {
+		long addr = moveWI(byteLen)+address;
+		ByteList.jutf8_encode_all(s, null, addr, byteLen);
 	}
 
-	public final DynByteBuf putUtf8mb4Data(CharSequence s, int len) {
+	public final DirectByteList putUTFData0(CharSequence s, int len) {
 		long addr = moveWI(len)+address;
 		ByteList.utf8mb4_encode_all(s, null, addr, len);
 		return this;
@@ -542,6 +541,17 @@ public class DirectByteList extends DynByteBuf {
 			i++;
 		}
 		return -1;
+	}
+
+	public final void forEachByte(IntUnaryOperator operator) {
+		long i = address+rIndex;
+		long e = address+wIndex;
+		while (i < e) {
+			int v = operator.applyAsInt(u.getByte(i));
+			u.putByte(i, (byte) v);
+
+			i++;
+		}
 	}
 
 	// endregion

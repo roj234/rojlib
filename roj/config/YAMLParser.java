@@ -21,7 +21,7 @@ import static roj.config.word.Word.STRING;
  * @since 2021/7/7 2:03
  */
 public class YAMLParser extends Parser<CEntry> {
-	public static final int LENIENT = 2;
+	public static final int LENIENT = 4;
 
 	static final short delim = 19,
 		ask = 20,  join = 21,
@@ -30,7 +30,7 @@ public class YAMLParser extends Parser<CEntry> {
 
 	private static final TrieTree<Word> YAML_TOKENS = new TrieTree<>();
 	// - for timestamp
-	private static final MyBitSet YAML_LENDS = new MyBitSet(), YAML_LENDS_NUM = MyBitSet.from("\r\n"), JSON_KEY = MyBitSet.from("[]{},:");
+	private static final MyBitSet YAML_LENDS = new MyBitSet(), YAML_LENDS_NUM = MyBitSet.from("\r\n"), JSON_KEY = MyBitSet.from("\r\n[]{},:");
 	private static final Int2IntMap YAML_C2C = new Int2IntMap(), YAML_C2C_NN = new Int2IntMap();
 
 	static {
@@ -217,17 +217,21 @@ public class YAMLParser extends Parser<CEntry> {
 			}
 			case left_m_bracket:
 				this.flag |= LITERAL_KEY;
+				this.literalEnd = JSON_KEY;
 				try {
 					return JSONParser.list(this, new CList(), flag|LITERAL_KEY);
 				} finally {
 					this.flag ^= LITERAL_KEY;
+					this.literalEnd = YAML_LENDS;
 				}
 			case left_l_bracket:
 				this.flag |= LITERAL_KEY;
+				this.literalEnd = JSON_KEY;
 				try {
 					return JSONParser.map(this, flag|LITERAL_KEY);
 				} finally {
 					this.flag ^= LITERAL_KEY;
+					this.literalEnd = YAML_LENDS;
 				}
 			case multiline: case multiline_clump: return CString.valueOf(cnt);
 			case Word.STRING:
@@ -457,6 +461,8 @@ public class YAMLParser extends Parser<CEntry> {
 
 	@Override
 	protected final Word readDigit(boolean sign) throws ParseException {
+		if ((flag & LITERAL_KEY) != 0) return digitReader(sign, DIGIT_HBO);
+
 		literalEnd = YAML_LENDS_NUM;
 		try {
 			return digitReader(sign, DIGIT_HBO);
@@ -481,9 +487,9 @@ public class YAMLParser extends Parser<CEntry> {
 
 		while (i < in.length()) {
 			char c = in.charAt(i);
-			if (c == '\r' || c == '\n') break;
-
 			if (JSON_KEY.contains(c)) {
+				if (c == '\r' || c == '\n') break;
+
 				if (c == ':') {
 					if (i + 1 >= in.length() || WHITESPACE.contains(in.charAt(i + 1))) {
 						break;

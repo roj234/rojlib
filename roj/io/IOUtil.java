@@ -242,12 +242,10 @@ public final class IOUtil {
 			for (String path : files) {
 				File dir = new File(path);
 				while ((dir = dir.getParentFile()) != null) {
-					String[] list = dir.list();
-					if (list != null && list.length == 0) {
-						if (!dir.delete()) System.err.println("无法删除目录 " + dir);
-						oneRemoved = true;
-						i++;
-					}
+					if (!dir.delete()) break;
+
+					oneRemoved = true;
+					i++;
 				}
 			}
 		}

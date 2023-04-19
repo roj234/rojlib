@@ -17,7 +17,7 @@ public final class DHE implements KeyAgreement {
 
 	public DHE(DHGroup group) { this.group = group; }
 
-	public String getAlgorithm() { return "DH"; }
+	public String getAlgorithm() { return "DHE-"+group.name; }
 
 	public void init(SecureRandom r) {
 		// short exponent

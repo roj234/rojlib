@@ -72,10 +72,10 @@ public final class FMDMain {
 					synchronized (CmdUtil.originalOut) {
 						CmdUtil.cursorBackup();
 						CmdUtil.cursorUp(8000);
-						CmdUtil.cursorDownSet0(1);
+						CmdUtil.cursorDownCol0(1);
 						CmdUtil.clearLine();
 						CmdUtil.sonic("https://www.github.com/roj234/rojlib");
-						CmdUtil.cursorPrev();
+						CmdUtil.cursorRestore();
 					}
 				}));
 
@@ -497,6 +497,7 @@ public final class FMDMain {
 			if (port == 0) port = 4485;
 
 			CEntry jvm = mc_conf.get("jvmArg");
+			System.out.println(jvm.toJSONb());
 			if (jvm.getType() == Type.STRING) {
 				CList list = new CList(2);
 				list.add(jvm.asString());

@@ -4,12 +4,10 @@ import roj.RequireUpgrade;
 import roj.archive.zip.ZipArchive;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.cst.CstString;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.Method;
-import roj.asm.tree.insn.LdcInsnNode;
-import roj.asm.tree.insn.NPInsnNode;
-import roj.asm.util.InsnList;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.insn.InsnList;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -1571,14 +1569,15 @@ public class MCLauncher extends JFrame {
 				ConstantData data = Parser.parseConstants(b);
 				Method mn = data.getUpgradedMethod("lookup");
 
-				InsnList insn = mn.getCode().instructions;
+				AttrCode code = mn.getCode();
+				InsnList insn = code.instructions;
 				if (insn.size() > 3) {
-					mn.getCode().clear();
+					code.clear();
 
-					insn.add(new LdcInsnNode(new CstString("JNDI功能已关闭")));
-					insn.add(new NPInsnNode(Opcodes.ARETURN));
-					mn.getCode().stackSize = 1;
-					mn.getCode().localSize = 3;
+					insn.ldc("JNDI功能已关闭");
+					insn.one(Opcodes.ARETURN);
+					code.stackSize = 1;
+					code.localSize = 3;
 					mzf.put("org/apache/logging/log4j/core/lookup/JndiLookup.class", new ByteList(Parser.toByteArray(data)));
 					mzf.store();
 					CmdUtil.success("修补了Log4j2漏洞");
@@ -1968,7 +1967,7 @@ public class MCLauncher extends JFrame {
 		}
 
 		@Override
-		public Void invoke() throws IOException {
+		public Void invoke() {
 			while (!entries.isEmpty()) {
 				Entry e = entries.remove(entries.size() - 1);
 				while (true) {

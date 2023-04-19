@@ -1,6 +1,8 @@
 package roj.asm.frame;
 
 import roj.asm.tree.insn.InsnNode;
+import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.asm.visitor.FrameVisitor;
 import roj.collect.MyHashSet;
 
@@ -180,7 +182,21 @@ public final class Var2 {
 		c.bci2 = bci2;
 		c.owner = owner;
 		if (limitation != null)
-		c.limitation = new MyHashSet<>(limitation);
+			c.limitation = new MyHashSet<>(limitation);
 		return c;
+	}
+
+	public Type type() {
+		switch (type) {
+			case VarType.INT: return Type.std(Type.INT);
+			case VarType.FLOAT: return Type.std(Type.FLOAT);
+			case VarType.DOUBLE: return Type.std(Type.DOUBLE);
+			case VarType.LONG: return Type.std(Type.LONG);
+			case VarType.NULL: return new Type("java/lang/Object");
+			case VarType.REFERENCE: return owner.charAt(0) == '[' ? TypeHelper.parseField(owner) : new Type(owner);
+			case VarType.UNINITIAL_THIS:
+			case VarType.UNINITIAL:
+			default: throw new UnsupportedOperationException(String.valueOf(type));
+		}
 	}
 }

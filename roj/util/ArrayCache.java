@@ -7,6 +7,7 @@ import roj.math.MutableInt;
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -30,22 +31,21 @@ public class ArrayCache {
 		return cache;
 	}
 
-	private static final int CACHEABLE_SIZE_MIN = 128;
 	private static final int LARGE_ARRAY_SIZE = 524288;
 	private static final int CHIP_SIZE = 256;
 	private static final int SIZES_MAX = 64;
 	private static final int ARRAYS_MAX = 9;
 	private static final int WARMUP_THRESHOLD = 4;
 
-	private final LFUCache<MutableInt, RingBuffer<Reference<byte[]>>> byteCache = new LFUCache<>(SIZES_MAX, 1);
-	private final LFUCache<MutableInt, RingBuffer<Reference<char[]>>> charCache = new LFUCache<>(SIZES_MAX, 1);
-	private final LFUCache<MutableInt, RingBuffer<Reference<int[]>>> intCache = new LFUCache<>(SIZES_MAX, 1);
+	private final Map<MutableInt, RingBuffer<Reference<byte[]>>> byteCache = new LFUCache<>(SIZES_MAX, 1);
+	private final Map<MutableInt, RingBuffer<Reference<char[]>>> charCache = new LFUCache<>(SIZES_MAX, 1);
+	private final Map<MutableInt, RingBuffer<Reference<int[]>>> intCache = new LFUCache<>(SIZES_MAX, 1);
 	private final ReentrantLock lock = new ReentrantLock();
 	private final MutableInt val = new MutableInt();
-	private int usage, memory;
+	private int usage;
 
-	private <T> T getArray(LFUCache<MutableInt, RingBuffer<Reference<T>>> cache, int size) {
-		if (size < CACHEABLE_SIZE_MIN) return null;
+	private <T> T getArray(Map<MutableInt, RingBuffer<Reference<T>>> cache, int size) {
+		if (size < CHIP_SIZE) return null;
 		if (usage < WARMUP_THRESHOLD && size < LARGE_ARRAY_SIZE) return null;
 
 		lock.lock();
@@ -67,14 +67,14 @@ public class ArrayCache {
 			lock.unlock();
 		}
 	}
-	private <T> void putArray(LFUCache<MutableInt, RingBuffer<Reference<T>>> cache, T array, int size) {
-		if (size < CACHEABLE_SIZE_MIN) return;
+	private <T> void putArray(Map<MutableInt, RingBuffer<Reference<T>>> cache, T array, int size) {
+		if (size < CHIP_SIZE) return;
 
 		lock.lock();
 		try {
 			if (++usage < WARMUP_THRESHOLD && size < LARGE_ARRAY_SIZE) return;
 
-			val.setValue(((size+CHIP_SIZE-1)& -CHIP_SIZE) / CHIP_SIZE);
+			val.setValue(size/CHIP_SIZE);
 			RingBuffer<Reference<T>> stack = cache.get(val);
 			if (stack == null) {
 				stack = new RingBuffer<>(ARRAYS_MAX);

@@ -64,7 +64,7 @@ public final class Parser {
 		int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
 
 		ConstantPool pool = new ConstantPool(r.readUnsignedShort());
-		pool.read(r);
+		pool.read(r, true);
 
 		ConstantData data = new ConstantData(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
 
@@ -116,11 +116,7 @@ public final class Parser {
 			r.wIndex(end);
 
 			Attribute attr = attr(node, pool, name, r, origin);
-			if (null == attr) {
-				list.add(new AttrUnknown(name,r.slice(length)));
-			} else {
-				list.add(attr);
-			}
+			list.i_direct_add(null == attr ? new AttrUnknown(name, r.slice(length)) : attr);
 
 			// 忽略过长的属性.
 			r.rIndex = end;
@@ -166,7 +162,7 @@ public final class Parser {
 			Attribute attr = list.get(i);
 			if (attr.getClass() == AttrUnknown.class) {
 				DynByteBuf data = as.copy(attr.getRawData());
-				attr = attr(node, cp, attr.name, data, origin);
+				attr = attr(node, cp, attr.name(), data, origin);
 				if (attr == null) continue;
 				list.set(i, attr);
 			}
@@ -182,7 +178,7 @@ public final class Parser {
 				if (skipToStringParse) return null;
 				throw new UnsupportedOperationException("不支持的属性");
 			}
-			list.putByName(attr);
+			list.add(attr);
 		}
 		return (T) attr;
 	}
@@ -262,7 +258,7 @@ public final class Parser {
 		int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
 
 		ConstantPool pool = new ConstantPool(r.readUnsignedShort());
-		pool.read(r);
+		pool.read(r, false);
 
 		ConstantData data = new ConstantData(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
 
@@ -304,8 +300,8 @@ public final class Parser {
 		AttributeList list = node.attributes();
 		list.ensureCapacity(len);
 		while (len-- > 0) {
-			String name = ((CstUTF) pool.get(r)).getString();
-			list.add(new AttrUnknown(name, r.slice(r.readInt())));
+			CstUTF name = (CstUTF) pool.get(r);
+			list.i_direct_add(new AttrUnknown(name, r.slice(r.readInt())));
 		}
 	}
 
@@ -379,7 +375,7 @@ public final class Parser {
 		ConstantPool cp = AsmShared.local().constPool();
 		cp.init(r.readUnsignedShort());
 		cp.setAddListener(c);
-		cp.read(r);
+		cp.read(r, false);
 	}
 
 	// endregion

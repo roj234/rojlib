@@ -20,6 +20,7 @@ import roj.text.CharList;
 import roj.util.DynByteBuf;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static roj.asm.Opcodes.*;
@@ -34,13 +35,10 @@ public class FrameVisitor {
 	public static final ThreadLocal<FrameVisitor> LOCAL = new ThreadLocal<>();
 	static final String ANY_OBJECT = "java/lang/Object";
 
-	public int maxStackSize;
-	public int maxLocalSize;
-	public String asa;
+	public int maxStackSize, maxLocalSize;
 
 	boolean firstOnly;
 	MethodNode mn;
-	DynByteBuf code;
 	private final IntMap<BasicBlock2> stateIn = new IntMap<>();
 	private final List<BasicBlock2> stateOut = new SimpleList<>();
 	private final IntMap<List<BasicBlock2>> jumpTo = new IntMap<>();
@@ -52,15 +50,13 @@ public class FrameVisitor {
 	SimpleList<Type> paramList = new SimpleList<>();
 	CharList sb = new CharList();
 
-	private List<Frame2> frames;
-
 	void init(MethodNode owner) {
 		mn = owner;
 
 		firstOnly = false;
 		stateIn.clear();
 		jumpTo.clear();
-		current = new BasicBlock2(0, "0: first frame");
+		current = add(0, "beginning");
 
 		boolean _init_ = owner.name().equals("<init>");
 		if (0 == (owner.modifier() & AccessFlag.STATIC)) { // this
@@ -79,7 +75,6 @@ public class FrameVisitor {
 		}
 
 		initS = Arrays.copyOf(current.local, current.localMax);
-		add(current);
 	}
 	private Var2[] initS;
 
@@ -101,65 +96,58 @@ public class FrameVisitor {
 
 	// region Full frame computing methods
 
-	void preVisit(DynByteBuf code, int codeBegin, List<Segment> segments) {
+	void preVisit(List<Segment> segments) {
 		for (int i = 1; i < segments.size();i++) {
 			Segment s = segments.get(i);
 			if (s.getClass() == JumpSegment.class) {
-				JumpSegment jmp = (JumpSegment) s;
+				JumpSegment js = (JumpSegment) s;
 
-				BasicBlock2 fs = new BasicBlock2(jmp.target.getValue(), i+": "+OpcodeUtil.toString0(jmp.code)+" target");
-				jumpTo.putInt(jmp.bci, new SimpleList<>(fs)); add(fs);
+				BasicBlock2 fs = add(js.target.getValue(), OpcodeUtil.toString0(js.code)+"#"+js.bci+": target");
 
-				// however is normal execution
-				if (jmp.code != GOTO && jmp.code != GOTO_W) {
-					fs = new BasicBlock2(jmp.bci + jmp.length, OpcodeUtil.toString0(jmp.code) + " target fail(" + i + ")");
-					fs.noFrame = true;
-					jumpTo.get(jmp.bci).add(fs);
-					add(fs);
+				// normal execution
+				if (js.code != GOTO && js.code != GOTO_W) {
+					BasicBlock2 fs1 = add(js.bci+3, OpcodeUtil.toString0(js.code)+"#"+js.bci+": continue");
+					fs1.noFrame = true;
+					jumpTo.putInt(js.bci, new SimpleList<>(fs,fs1));
+				} else {
+					jumpTo.putInt(js.bci, Collections.singletonList(fs));
 				}
 			} else if (s.getClass() == SwitchSegment.class) {
-				SwitchSegment sw = (SwitchSegment) s;
-				List<BasicBlock2> list = Arrays.asList(new BasicBlock2[sw.targets.size()+1]);
+				SwitchSegment ss = (SwitchSegment) s;
+				List<BasicBlock2> list = Arrays.asList(new BasicBlock2[ss.targets.size()+1]);
 
-				BasicBlock2 _default = new BasicBlock2(sw.def.getValue(), i+": switch default");
-				list.set(0, _default);
-				add(_default);
-				for (int j = 0; j < sw.targets.size();) {
-					BasicBlock2 branch = new BasicBlock2(sw.targets.get(j).getBci(), i+": switch branch # "+j);
-					list.set(++j, branch);
-					add(branch);
+				list.set(0, add(ss.def.getValue(), "switch#"+ss.bci+": default"));
+				for (int j = 0; j < ss.targets.size();) {
+					list.set(++j, add(ss.targets.get(j).getBci(), "switch#"+ss.bci+": branch("+ss.targets.get(j).key+")"));
 				}
-				jumpTo.putInt(sw.bci, list);
+				jumpTo.putInt(ss.bci, list);
 			}
 		}
-
-		this.code = code.slice(codeBegin, code.wIndex()-codeBegin);
 	}
 
 	public void visitExceptionEntry(int start, int end, int handler, String type) {
-		BasicBlock2 fs = new BasicBlock2(handler, "exception " + type + " handler in " + start + "," + end);
-		current = fs;
+		current = add(handler, "exception#["+start+','+end+"]: "+type);
 		push(type == null ? "java/lang/Throwable" : type);
-		add(fs);
 	}
-	private void add(BasicBlock2 fs) {
-		BasicBlock2 fs1 = stateIn.putInt(fs.bci, fs);
-		if (fs1 != null) fs.merge(fs1);
+	private BasicBlock2 add(int pos, String desc) {
+		BasicBlock2 target = stateIn.get(pos);
+		if (target == null) stateIn.put(pos, target = new BasicBlock2(pos, desc));
+		else target.merge(desc, false);
+		return target;
 	}
 
-	public void finish(CodeWriter c) {
-		if (stateIn.size() <= 1) return;
+	public List<Frame2> finish(DynByteBuf code, ConstantPool cp) {
+		if (stateIn.size() <= 1) return null;
 
 		current = null;
 		LOCAL.set(this);
 		try {
-			visitBytecode(code, c.cpw);
+			visitBytecode(code, cp);
 		} catch (Throwable e) {
 			throw new RuntimeException("Bytecode iteration failed at BCI#" + bci, e);
 		} finally {
 			LOCAL.remove();
 			//mn = null;
-			code = null;
 			current = null;
 			paramList.clear();
 			sb.clear();
@@ -168,7 +156,7 @@ public class FrameVisitor {
 		if (!stateIn.isEmpty()) throw new IllegalArgumentException("以下BCI未找到: " + stateIn.values());
 
 		List<BasicBlock2> blocks = stateOut;
-		List<Frame2> frames = this.frames = new SimpleList<>();
+		List<Frame2> frames = new SimpleList<>();
 
 		for (int i = 0; i < blocks.size(); i++) {
 			blocks.get(i).updatePreHook();
@@ -227,23 +215,14 @@ public class FrameVisitor {
 			lastLocal = local;
 		}
 
-		asa = String.valueOf(frames);
 		blocks.clear();
 
-		int stack = c.visitAttributeI("StackMapTable");
 		//frames.remove(0);
-		c.bw.putShort(frames.size());
-		writeFrames(frames, c.bw, c.cpw);
-		c.visitAttributeIEnd(stack);
-
+		return frames;
 		//frames.clear();
 	}
 
 	// endregion
-
-	public List<Frame2> getFrames() {
-		return frames;
-	}
 
 	private static boolean eq(Var2[] local, int len, Var2[] local1, int len1) {
 		if (len != len1) return false;
@@ -698,12 +677,14 @@ public class FrameVisitor {
 		}
 	}
 	private void jump() {
-		List<BasicBlock2> list = jumpTo.remove(bci);
-		if (list == null) {
-			if (!firstOnly) throw new AssertionError("No branch target at #"+bci + "\n" + jumpTo);
+		if (firstOnly) {
 			eof = true;
 			return;
 		}
+
+		List<BasicBlock2> list = jumpTo.remove(bci);
+		assert list != null;
+
 		for (int i = 0; i < list.size(); i++) {
 			BasicBlock2 t = list.get(i);
 			current.to(t);

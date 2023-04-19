@@ -5,14 +5,14 @@ import roj.config.VinaryParser;
 import roj.config.data.CEntry;
 import roj.config.data.CMapping;
 import roj.config.exch.TByteArray;
-import roj.crypt.*;
+import roj.crypt.AES_GCM;
+import roj.crypt.HMAC;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.ui.CmdUtil;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
 
-import javax.crypto.Cipher;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -31,17 +31,18 @@ public class MyPassIs {
 
 		System.out.print("请输入保护主密钥的主密码(不会显示):");
 		byte[] pass = IOUtil.SharedCoder.get().encode(new CharList(UIUtil.readPassword()));
-		pass = HMAC.HKDF_expand(mac, pass, 32);
+		pass = mac.HKDF_expand(pass, 32);
 
 		CmdUtil.clearScreen();
 
 		ByteList buf = IOUtil.getSharedByteBuf();
 
 		CMapping data;
+		// Aw5QH\z>%lC~
 
-		RCipherSpi cipher = new FeedbackCipher(new AES(), FeedbackCipher.MODE_CTR);
-		IvParameterSpecNC iv = new IvParameterSpecNC(new byte[16]);
-		cipher.init(Cipher.ENCRYPT_MODE, pass, iv, null);
+		AES_GCM master_cipher = new AES_GCM();
+		master_cipher.setOption("IV", new byte[16]);
+		master_cipher.setKey(pass, AES_GCM.ENCRYPT);
 		byte[] master_key;
 
 		File masterKey = new File("key.bjson");
@@ -54,13 +55,20 @@ public class MyPassIs {
 			data.put("key", new TByteArray(master_key));
 			data.put("record", new CMapping());
 		} else {
-			cipher.init(Cipher.DECRYPT_MODE, pass, iv, null);
+			master_cipher.setKey(pass, AES_GCM.DECRYPT);
+			try {
+				master_cipher.cryptInline(buf.readStreamFully(new FileInputStream(masterKey)), buf.readableBytes());
+			} catch (Exception e) {
+				System.out.println("密码错误: ");
+				e.printStackTrace();
+				return;
+			}
 
-			data = new VinaryParser().asArray().parseRaw(buf.readStreamFully(new CipherInputStream(new FileInputStream(masterKey), cipher))).asMap();
+			data = new VinaryParser().asArray().parseRaw(buf).asMap();
 			buf.clear();
 			master_key = (byte[]) data.get("key").unwrap();
 		}
-		cipher.init(Cipher.ENCRYPT_MODE, pass, iv, null);
+		master_cipher.setKey(pass, AES_GCM.ENCRYPT);
 
 
 		main:
@@ -111,7 +119,7 @@ public class MyPassIs {
 			int cnt = accounts.getInteger(account);
 			while (true) {
 				buf.clear();
-				byte[] gen_pass = HMAC.HKDF_expand(mac, master_key, buf.putUTFData(account).putInt(cnt), length);
+				byte[] gen_pass = mac.HKDF_expand(master_key, buf.putUTFData(account).putInt(cnt), length);
 
 				CharList sb = IOUtil.getSharedCharBuf();
 				for (int i = 0; i < gen_pass.length; i++) {
@@ -134,7 +142,7 @@ public class MyPassIs {
 			try (FileOutputStream out = new FileOutputStream(masterKey)) {
 				buf.clear();
 				new VinaryParser().serialize(data, buf);
-				cipher.cryptInline(buf,buf.readableBytes());
+				master_cipher.cryptInline(buf,buf.readableBytes());
 				buf.writeToStream(out);
 			}
 		}

@@ -3,6 +3,7 @@ package roj.asm.tree.insn;
 import roj.asm.Opcodes;
 import roj.asm.cst.CstDynamic;
 import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.asm.visitor.CodeWriter;
 
 import java.util.List;
@@ -11,17 +12,26 @@ import java.util.List;
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public final class InvokeDynInsnNode extends IInvokeInsnNode {
-	public InvokeDynInsnNode() {
-		super(Opcodes.INVOKEDYNAMIC);
-	}
-
+public final class InvokeDynInsnNode extends InsnNode {
 	public InvokeDynInsnNode(CstDynamic ref, int type) {
 		super(Opcodes.INVOKEDYNAMIC);
 		this.tableIdx = ref.tableIdx;
 		this.name = ref.desc().getName().getString();
-		this.rawDesc = ref.desc().getType().getString();
+		this.desc = ref.desc().getType().getString();
 	}
+
+	public InvokeDynInsnNode(int idx, String name, String desc, int type) {
+		super(Opcodes.INVOKEDYNAMIC);
+		this.tableIdx = (char) idx;
+		this.name = name;
+		this.desc = desc;
+	}
+
+	public String name, desc;
+	/**
+	 * bootstrap table index
+	 */
+	public char tableIdx;
 
 	@Override
 	public int nodeType() {
@@ -33,14 +43,9 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
 		return code == Opcodes.INVOKEDYNAMIC;
 	}
 
-	/**
-	 * bootstrap table index
-	 */
-	public char tableIdx;
-
 	@Override
 	public void serialize(CodeWriter cw) {
-		cw.invokeDyn(tableIdx, name, rawDesc(), 0);
+		cw.invokeDyn(tableIdx, name, desc, 0);
 	}
 
 	@Override
@@ -49,9 +54,9 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
 	}
 
 	public String toString() {
-		StringBuilder sb = new StringBuilder(super.toString()).append(" #").append((int) tableIdx).append(' ').append(returnType).append(" ?").append('.').append(name).append('(');
+		List<Type> params = TypeHelper.parseMethod(desc);
+		StringBuilder sb = new StringBuilder(super.toString()).append(" #").append((int) tableIdx).append(' ').append(params.remove(params.size()-1)).append(" ?").append('.').append(name).append('(');
 
-		List<Type> params = parameters();
 		if (!params.isEmpty()) {
 			int i = 0;
 			while (true) {
@@ -62,15 +67,5 @@ public final class InvokeDynInsnNode extends IInvokeInsnNode {
 			}
 		}
 		return sb.append(')').toString();
-	}
-
-	@Override
-	public void fullDesc(String desc) {
-		throw new UnsupportedOperationException("InvokeDyn does not support 'classed' descriptor");
-	}
-
-	@Override
-	public String fullDesc() {
-		throw new UnsupportedOperationException("InvokeDyn does not support 'classed' descriptor");
 	}
 }

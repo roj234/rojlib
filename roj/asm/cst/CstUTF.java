@@ -1,8 +1,6 @@
 package roj.asm.cst;
 
-import roj.text.CharList;
-import roj.text.UTF8MB4;
-import roj.util.ByteList;
+import roj.io.IOUtil;
 import roj.util.DynByteBuf;
 
 /**
@@ -10,21 +8,22 @@ import roj.util.DynByteBuf;
  * @since 2021/5/29 17:16
  */
 public final class CstUTF extends Constant {
-	Object data;
+	private Object data;
 
 	public CstUTF() {}
 	public CstUTF(String s) { data = s; }
 
 	CstUTF(Object b) { data = b; }
+	final void i_setData(Object b) { data = b; }
 
-	public String str() {
-		if (data instanceof byte[]) {
-			ByteList buf = ByteList.wrap((byte[]) data);
-			CharList out = new CharList();
-			UTF8MB4.CODER.decodeFixedIn(buf, buf.length(), out);
-			data = out.toStringAndFree();
-		}
+	public String getString() {
+		if (data instanceof byte[]) data = IOUtil.SharedCoder.get().decode(((byte[]) data));
 		return data.toString();
+	}
+
+	public void setString(String s) {
+		// noinspection all
+		data = s.toString();
 	}
 
 	@Override
@@ -34,22 +33,19 @@ public final class CstUTF extends Constant {
 		else w.writeUTF(data.toString());
 	}
 
-	int _length() {
-		if (data instanceof byte[]) return ((byte[]) data).length;
-		return DynByteBuf.byteCountDioUTF(data.toString());
-	}
-
-	public String toString() { return super.toString() + ' ' + str(); }
+	public String toString() { return super.toString() + ' ' + getString(); }
 
 	@Override
 	public byte type() { return Constant.UTF; }
 
-	public int hashCode() { return 1 + str().hashCode(); }
+	public int hashCode() {
+		return 1 + getString().hashCode();
+	}
 
 	public boolean equals(Object o) {
 		if (o == this) return true;
 		if (!(o instanceof CstUTF)) return false;
 		CstUTF ref = (CstUTF) o;
-		return this.str().equals(ref.str());
+		return this.getString().equals(ref.getString());
 	}
 }

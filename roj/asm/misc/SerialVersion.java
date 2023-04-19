@@ -57,7 +57,7 @@ public class SerialVersion {
 		}
 
 		ByteList w = new ByteList(128);
-		w.putUTF(cz.name().replace('/', '.'));
+		w.writeUTF(cz.name().replace('/', '.'));
 		int access = cz.modifier();
 		if ((access & INTERFACE) != 0) {
 			access = methods.size() > 0 ? access | ABSTRACT : access & -1025;
@@ -67,7 +67,7 @@ public class SerialVersion {
 		String[] itf = cz.interfaces().toArray(new String[cz.interfaces().size()]);
 		Arrays.sort(itf);
 		for (String s : itf) {
-			w.putUTF(s.replace('/', '.'));
+			w.writeUTF(s.replace('/', '.'));
 		}
 
 		BSLowHeap<Item> fields = new BSLowHeap<>(ITEM_SORTER);
@@ -79,21 +79,21 @@ public class SerialVersion {
 			}
 		}
 		for (int i = 0; i < fields.size(); ++i) {
-			w.putUTF(fields.get(i).name);
-			w.putInt(fields.get(i).access).putUTF(fields.get(i).desc);
+			w.writeUTF(fields.get(i).name);
+			w.putInt(fields.get(i).access).writeUTF(fields.get(i).desc);
 		}
 		if (clInit) {
-			w.putUTF("<clinit>");
-			w.putInt(STATIC).putUTF("()V");
+			w.writeUTF("<clinit>");
+			w.putInt(STATIC).writeUTF("()V");
 		}
 
 		for (int i = 0; i < constructors.size(); ++i) {
-			w.putUTF(constructors.get(i).name);
-			w.putInt(constructors.get(i).access).putUTF(constructors.get(i).desc.replace('/', '.'));
+			w.writeUTF(constructors.get(i).name);
+			w.putInt(constructors.get(i).access).writeUTF(constructors.get(i).desc.replace('/', '.'));
 		}
 		for (int i = 0; i < methods.size(); ++i) {
-			w.putUTF(methods.get(i).name);
-			w.putInt(methods.get(i).access).putUTF(methods.get(i).desc.replace('/', '.'));
+			w.writeUTF(methods.get(i).name);
+			w.putInt(methods.get(i).access).writeUTF(methods.get(i).desc.replace('/', '.'));
 		}
 
 		MessageDigest localSha = LOCAL_SHA.getAndSet(null);
@@ -122,7 +122,7 @@ public class SerialVersion {
 		}
 
 		Field fl = new Field(STATIC | FINAL, "serialVersionUID", Type.std(Type.LONG));
-		fl.attributes().putByName(new ConstantValue(new CstLong(svuid)));
+		fl.putAttr(new ConstantValue(new CstLong(svuid)));
 		cz.fields().add(Helpers.cast(fl));
 		return true;
 	}

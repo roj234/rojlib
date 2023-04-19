@@ -52,7 +52,7 @@ public final class CstNameAndType extends Constant {
 	}
 
 	public final int hashCode() {
-		return (name.hashCode() << 16) ^ type.hashCode();
+		return 31 * name.hashCode() + type.hashCode();
 	}
 
 	public final boolean equals(Object o) {

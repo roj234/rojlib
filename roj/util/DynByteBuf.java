@@ -1,6 +1,5 @@
 package roj.util;
 
-import roj.RequireUpgrade;
 import roj.text.TextUtil;
 
 import javax.annotation.Nonnull;
@@ -10,6 +9,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.function.IntUnaryOperator;
 
 import static java.lang.Character.MAX_HIGH_SURROGATE;
 import static java.lang.Character.MIN_HIGH_SURROGATE;
@@ -163,7 +163,27 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 	public final void writeDouble(double v) { putLong(Double.doubleToRawLongBits(v)); }
 	public void writeBytes(@Nonnull String s) { putAscii(s); }
 	public final void writeChars(@Nonnull String s) { putChars(s); }
-	public final void writeUTF(@Nonnull String str) { putUTF(str); }
+	public final void writeUTF(@Nonnull String str) {
+		int byteLen = byteCountDioUTF(str);
+		putShort(byteLen)._writeDioUTF(str, byteLen);
+	}
+	public static int byteCountDioUTF(@Nonnull String str) {
+		int len = str.length();
+		int byteLen = len;
+
+		for (int i = 0; i < len; i++) {
+			int c = str.charAt(i);
+			if (c == 0 || c > 0x007F) {
+				if (c > 0x07FF) {
+					byteLen += 2;
+				} else {
+					byteLen ++;
+				}
+			}
+		}
+		return byteLen;
+	}
+	public abstract void _writeDioUTF(String s, int byteLen);
 
 	@Override
 	public final int skipBytes(int i) {
@@ -283,7 +303,6 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 	}
 	public abstract DynByteBuf putIntLE(int wi, int i);
 
-	@RequireUpgrade
 	public DynByteBuf putInt(int i) {
 		return putInt(moveWI(4), i);
 	}
@@ -313,7 +332,6 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 		return putLong(wi, Double.doubleToRawLongBits(d));
 	}
 
-	@RequireUpgrade
 	public DynByteBuf putShort(int s) {
 		return putShort(moveWI(2), s);
 	}
@@ -354,7 +372,6 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 		putVarLong(this, len);
 		return putUTFData0(s, len);
 	}
-	@RequireUpgrade
 	public DynByteBuf putUTFData(CharSequence s) {
 		return putUTFData0(s, byteCountUTF8(s));
 	}
@@ -362,33 +379,15 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 		int len = s.length();
 		int utfLen = len;
 
-		for (int i = 0; i < len; i++) {
-			int c = s.charAt(i);
-			if (c == 0 || c > 0x007F) {
-				if (c > 0x07FF) {
-					utfLen += 2;
-				} else {
-					utfLen ++;
-				}
-			}
-		}
-
-		return utfLen;
-	}
-	public abstract DynByteBuf putUTFData0(CharSequence s, int len);
-
-	public static int byteCountUtf8mb4(CharSequence s) {
-		int len = s.length();
-		int utfLen = len;
-
 		for (int i = 0; i < len;) {
 			int c = s.charAt(i++);
 			if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-				if (i == len) throw new IllegalStateException("Trailing leading surrogate character");
+				if (i == len) throw new IllegalStateException("Trailing high surrogate \\u" + Integer.toHexString(c));
 				c = TextUtil.codepoint(c,s.charAt(i++));
+				utfLen--;
 			}
 
-			if (c <= 0x7FFF) {
+			if (c <= 0x7FF) {
 				if (c > 0x7F) {
 					utfLen++;
 				}
@@ -402,7 +401,7 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 		}
 		return utfLen;
 	}
-	public abstract DynByteBuf putUtf8mb4Data(CharSequence s, int len);
+	public abstract DynByteBuf putUTFData0(CharSequence s, int len);
 
 	public final DynByteBuf putVStr(CharSequence s) {
 		int len = byteCountVStr(s);
@@ -621,15 +620,11 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 		return Double.longBitsToDouble(readLong(i));
 	}
 
-	public final String readAscii(int len) {
-		return readAscii(moveRI(len), len);
-	}
+	public final String readAscii(int len) { return readAscii(moveRI(len), len); }
 	public abstract String readAscii(int pos, int len);
 
 	@Nonnull
-	public final String readUTF() {
-		return readUTF(readUnsignedShort());
-	}
+	public final String readUTF() { return readUTF(readUnsignedShort()); }
 	public abstract String readUTF(int len);
 
 	public final String readVarIntUTF() {
@@ -637,7 +632,6 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 	}
 	public final String readVarIntUTF(int max) {
 		int l = readVarInt(false);
-		if (l < 0) throw new IllegalArgumentException("Invalid string length " + l);
 		if (l == 0) return "";
 		if (l > max) throw new IllegalArgumentException("Maximum allowed " + max + " got " + l);
 		return readUTF(l);
@@ -652,6 +646,7 @@ public abstract class DynByteBuf extends OutputStream implements DataInput, Data
 
 	public abstract int readZeroTerminate();
 
+	public abstract void forEachByte(IntUnaryOperator operator);
 	// endregion
 	// region Buffer Ops
 

@@ -203,7 +203,7 @@ public class ConstantData implements IClass {
 	public DynByteBuf getBytes(DynByteBuf w) {
 		ConstantPool cw = this.cp;
 
-		w.putShort(access).putShort(cw.getClassId(name)).putShort(parent == null ? 0 : cw.getClassId(parent)).putShort(interfaces.size());
+		w.putShort(access).putShort(cw.reset(nameCst).getIndex()).putShort(parent == null ? 0 : cw.reset(parentCst).getIndex()).putShort(interfaces.size());
 
 		List<CstClass> interfaces = this.interfaces;
 		for (int i = 0; i < interfaces.size(); i++) {
@@ -371,23 +371,14 @@ public class ConstantData implements IClass {
 	}
 	@Override
 	public final void parent(String name) {
-		if (name == null) {
-			parentCst = null;
-		} else {
-			parentCst = cp.getClazz(name);
-		}
+		parentCst = name == null ? null : cp.getClazz(name);
 
 		try {
 			P.set(this, name);
 		} catch (IllegalAccessException ignored) {}
 	}
 
-	public CstClass getNameCstInternal() {
-		return nameCst;
-	}
-	public CstClass getParentCstInternal() {
-		return parentCst;
-	}
+	public CstClass getParentCstInternal() { return parentCst; }
 
 	public final int newField(int acc, String name, Type clazz) {
 		return newField(acc,name, TypeHelper.getField(clazz));

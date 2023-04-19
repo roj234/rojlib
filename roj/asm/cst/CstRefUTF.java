@@ -35,7 +35,7 @@ public abstract class CstRefUTF extends Constant {
 	}
 
 	public final int hashCode() {
-		return value.hashCode() * type();
+		return 31 * value.hashCode() + type();
 	}
 
 	public final boolean equals(Object o) {

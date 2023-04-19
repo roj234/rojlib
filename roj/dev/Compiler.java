@@ -202,7 +202,7 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 		for (int i = 0; i < 3; i++) {
 			c.one(Opcodes.ALOAD_0);
 			c.one(Opcodes.ALOAD_1);
-			c.loadInt(i);
+			c.ldc(i);
 			c.one(Opcodes.AALOAD);
 			c.clazz(Opcodes.CHECKCAST, data.fields.get(i).fieldType().owner);
 			c.field(Opcodes.PUTFIELD, data, i);

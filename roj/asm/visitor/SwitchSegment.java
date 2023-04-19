@@ -63,7 +63,7 @@ public final class SwitchSegment extends Segment {
 		o.put(code);
 
 		int pad = (4 - ((self+1) & 3)) & 3;
-		while (pad-- > 0) o.put((byte) 0);
+		while (pad-- > 0) o.put(0);
 
 		List<SwitchEntry> m = targets;
 		if (code == TABLESWITCH) {

@@ -191,15 +191,15 @@ public class CMapping extends CEntry {
 	}
 	public final int getInteger(String key) {
 		CEntry entry = get(key);
-		return entry.getType().isNumber() ? entry.asInteger() : 0;
+		return entry.isNumber() ? entry.asInteger() : 0;
 	}
 	public final long getLong(String key) {
 		CEntry entry = get(key);
-		return entry.getType().isNumber() ? entry.asLong() : 0;
+		return entry.isNumber() ? entry.asLong() : 0;
 	}
 	public final double getDouble(String key) {
 		CEntry entry = get(key);
-		return entry.getType().isNumber() ? entry.asDouble() : 0;
+		return entry.isNumber() ? entry.asDouble() : 0;
 	}
 
 	public final CEntry get(String key) {

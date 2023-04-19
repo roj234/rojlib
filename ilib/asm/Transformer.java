@@ -2,6 +2,7 @@ package ilib.asm;
 
 import ilib.Config;
 import ilib.api.ContextClassTransformer;
+import roj.RequireTest;
 import roj.asm.cst.*;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrCode;
@@ -9,14 +10,16 @@ import roj.asm.tree.insn.*;
 import roj.asm.type.Type;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.Context;
-import roj.asm.util.InsnList;
 import roj.asm.util.TransformUtil;
 import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.IntBiMap;
 import roj.io.IOUtil;
+import roj.reflect.EnumHelper;
 import roj.text.LineReader;
 import roj.util.Helpers;
+
+import net.minecraft.util.SoundEvent;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -69,12 +72,21 @@ public class Transformer implements ContextClassTransformer {
 			case "net.minecraft.client.renderer.EntityRenderer": if (Config.noDeathAnim) noDeathAnim_Rotate(ctx); break;
 			case "net.minecraftforge.fml.common.FMLModContainer": betterClassLoadingError(ctx); break;
 			case "net.minecraftforge.fml.client.FMLClientHandler": loadCompleteEvent(ctx); break;
+			case "net.minecraft.client.audio.MusicTicker$MusicType": if (Config.xiBao != 0) xibaoHook(ctx); break;
 		}
 		if (Config.replaceEnumFacing) fastEnumFacing(ctx);
 		if (Config.tractDirectMem) traceDirectMemory(ctx);
 	}
 
-	private void loadCompleteEvent(Context ctx) {
+	@RequireTest
+	private static void xibaoHook(Context ctx) {
+		EnumHelper eh = new EnumHelper(ctx.getData());
+		eh.add("XIBAO", new Class<?>[]{SoundEvent.class, int.class, int.class},
+			"ilib/asm/util/XiBaoHelper.XIBAO_CRASH_SOUND:Lnet/minecraft/util/SoundEvent;", 200000000, 200000000);
+		eh.commit();
+	}
+
+	private static void loadCompleteEvent(Context ctx) {
 		Method m = ctx.getData().getUpgradedMethod("onInitializationComplete");
 		InsnList insn = m.getCode().instructions;
 		InsnList b = new InsnList();
@@ -396,7 +408,7 @@ public class Transformer implements ContextClassTransformer {
 					node1.code = INVOKESTATIC;
 					node1.owner = "ilib/misc/MCHooks";
 					node1.name = "playerAnvilClick";
-					node1.rawDesc("(Lnet/minecraft/entity/player/EntityPlayer;I)V");
+					node1.desc = "(Lnet/minecraft/entity/player/EntityPlayer;I)V";
 					break;
 				}
 			}
@@ -665,14 +677,14 @@ public class Transformer implements ContextClassTransformer {
 		InsnList list = code.instructions;
 		InsnNode ARETURN = list.remove(list.size() - 1);
 		// this.player.connection.sendPacket(new SPacketBlockChange(world, pos));
-		list.add(NPInsnNode.of(ALOAD_0));
+		list.one(ALOAD_0);
 		list.add(new FieldInsnNode(GETFIELD, "net/minecraft/server/management/PlayerInteractionManager", "field_73090_b", new Type("net/minecraft/entity/player/EntityPlayerMP")));
 		list.add(new FieldInsnNode(GETFIELD, "net/minecraft/entity/player/EntityPlayerMP", "field_71135_a", new Type("net/minecraft/network/NetHandlerPlayServer")));
 		list.add(new ClassInsnNode(NEW, "net/minecraft/network/play/server/SPacketBlockChange"));
-		list.add(NPInsnNode.of(DUP));
-		list.add(NPInsnNode.of(ALOAD_0));
+		list.one(DUP);
+		list.one(ALOAD_0);
 		list.add(new FieldInsnNode(GETFIELD, "net/minecraft/server/management/PlayerInteractionManager", "field_73092_a", new Type("net/minecraft/world/World")));
-		list.add(NPInsnNode.of(ALOAD_1));
+		list.one(ALOAD_1);
 		list.add(new InvokeInsnNode(INVOKESPECIAL, "net/minecraft/network/play/server/SPacketBlockChange", "<init>", "(Lnet/minecraft/world/World;Lnet/minecraft/util/math/BlockPos;)V"));
 		list.add(new InvokeInsnNode(INVOKEVIRTUAL, "net/minecraft/network/NetHandlerPlayServer", "func_147359_a", "(Lnet/minecraft/network/Packet;)V"));
 		list.add(ARETURN);
@@ -708,7 +720,7 @@ public class Transformer implements ContextClassTransformer {
 		if (code != null) {
 			if (mod) {
 				AttrCodeWriter attr = new AttrCodeWriter(data.cp, cleanMethod);
-				cleanMethod.attributes().putByName(attr);
+				cleanMethod.putAttr(attr);
 				return attr.cw;
 			}
 			TransformUtil.trimCode(data, cleanMethod);

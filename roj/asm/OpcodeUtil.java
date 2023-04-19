@@ -90,7 +90,7 @@ public final class OpcodeUtil {
 	}
 
 	public static final int CATE_MISC = 0,
-		CATE_LOAD=1, CATE_STORE=2, CATE_CONST=3, CATE_LDC=4,
+		CATE_LOAD_STORE=1, CATE_LOAD_STORE_LEN=2, CATE_CONST=3, CATE_LDC=4,
 		CATE_MATH=5, CATE_STACK=6, CATE_MATH_CAST=7,
 		CATE_IF=8, CATE_RETURN=9, CATE_GOTO=10,
 		CATE_CLASS=11, CATE_METHOD=12, CATE_FIELD=13, CATE_ARRAY_SL = 14;
@@ -99,10 +99,9 @@ public final class OpcodeUtil {
 	}
 	public static final int
 		TRAIT_ZERO_ADDRESS=16,
-		TRAIT_LOAD_STORE_LEN=32,
+		//TRAIT_LOAD_INT=32,
 		TRAIT_JUMP=64,
-		TRAIT_ILFDA = 128;
-		//TRAIT_LOAD_INT=128;
+		TRAIT_ILFDA=128;
 	public static int trait(int code) {
 		return Cate[code&0xFF]&0xF0;
 	}
@@ -153,8 +152,10 @@ public final class OpcodeUtil {
 
 		fset(1,17, CATE_CONST);
 		fset(18,20, CATE_LDC);
-		fset(21,45, CATE_LOAD);
-		fset(54,78, CATE_STORE);
+		fset(21, 25, CATE_LOAD_STORE_LEN);
+		fset(26,45, CATE_LOAD_STORE);
+		fset(54, 58, CATE_LOAD_STORE_LEN);
+		fset(59,78, CATE_LOAD_STORE);
 		fset(87,95, CATE_STACK);
 		fset(96,131, CATE_MATH);
 		fset(133, 147, CATE_MATH_CAST);
@@ -178,9 +179,6 @@ public final class OpcodeUtil {
 		fset(21,86, TRAIT_ILFDA);
 		fset(96,152, TRAIT_ILFDA);
 		fset(172,177, TRAIT_ILFDA);
-
-		fset(21, 25, TRAIT_LOAD_STORE_LEN);
-		fset(54, 58, TRAIT_LOAD_STORE_LEN);
 	}
 	private static void fset(int from, int to, int cat) {
 		while (from <= to) Cate[from++] |= cat;

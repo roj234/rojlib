@@ -1,386 +1,227 @@
 package roj.reflect;
 
+import roj.asm.Opcodes;
+import roj.asm.Parser;
+import roj.asm.cst.CstClass;
+import roj.asm.cst.CstInt;
+import roj.asm.cst.CstRef;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.MethodNode;
+import roj.asm.tree.attr.AttrCode;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.insn.*;
 import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
-import roj.collect.MyHashMap;
+import roj.asm.util.InsnHelper;
+import roj.asm.visitor.CodeVisitor;
 import roj.collect.SimpleList;
-import roj.util.ArrayCache;
-import roj.util.Helpers;
+import roj.collect.ToLongMap;
+import roj.concurrent.OperationDone;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
+import static roj.asm.Opcodes.*;
+
 /**
- * 动态修改Enum <BR>
- * 推荐preload
- *
+ * @see <a href="https://github.com/SpongePowered/Mixin/issues/387">Add support for adding enum constants</a>
  * @author Roj234
- * @since 2021/5/2 8:22
+ * @since 2023/4/19 2:06
  */
-public final class EnumHelper<E extends Enum<E>> {
+public final class EnumHelper extends CodeVisitor {
 	public static final CDirAcc cDirAcc;
-	private static final FieldAccessor ordinalAcc;
+	public interface CDirAcc { Map<String, Enum<?>> enumConstantDirectory(Class<? extends Enum<?>> clazz); }
+	static { cDirAcc = DirectAccessor.builder(CDirAcc.class).unchecked().delegate(Class.class, "enumConstantDirectory", "enumConstantDirectory").build(); }
+	// 以上都没用
 
-	public interface CDirAcc {
-		Map<String, Enum<?>> enumConstantDirectory(Class<? extends Enum<?>> clazz);
-		Object[] getEnumConstantsShared(Class<? extends Enum<?>> clazz);
+	private final ToLongMap<String> parPos = new ToLongMap<>();
 
-		void setEnumData(Class<? extends Enum<?>> clazz, Object _void);
-		void setEnumData2(Class<? extends Enum<?>> clazz, Object _void);
+	private final ConstantData ref;
+	private AttrCode staticInit;
 
-		Object newInstance0(Constructor<?> c, Object... params) throws InstantiationException, IllegalArgumentException, InvocationTargetException;
-	}
+	private CstInt len;
+	private final InsnList toAdd = new InsnList();
+	private int addPos, lvid;
 
-	static {
-		DirectAccessor<CDirAcc> b = DirectAccessor.builder(CDirAcc.class).unchecked().delegate(Class.class, "enumConstantDirectory", "enumConstantDirectory");
+	public EnumHelper(ConstantData klass) {
+		if ((klass.access & AccessFlag.ENUM) == 0) throw new IllegalStateException("Not enum class: " + klass.name());
 
-		if (!ReflectionUtils.OPENJ9) {
-			b.access(Class.class, "enumConstantDirectory", null, "setEnumData")
-			 .access(Class.class, "enumConstants", "getEnumConstantsShared", "setEnumData2");
-		} else  {
-			b.i_access("java/lang/Class", "enumVars", new Type("java/lang/Class$EnumVars"), null, "setEnumData2", false);
-		}
+		ref = klass;
+		klass.normalize();
 
-		try {
-			String cn = ReflectionUtils.JAVA_VERSION <= 8 ? "sun.reflect.NativeConstructorAccessorImpl" : "jdk.internal.reflect.NativeConstructorAccessorImpl";
-			b.delegate(Class.forName(cn), "newInstance0");
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		}
+		SimpleList<MethodNode> methods = klass.methods;
+		for (int i = 0; i < methods.size(); i++) {
+			MethodNode mn = methods.get(i);
+			if (mn.name().equals("<init>")) {
+				try {
+					visit(klass.cp, Parser.reader(mn.attrByName("Code")));
+				} catch (OperationDone found) {
+					SimpleList<Type> param = new SimpleList<>(mn.parameters());
+					param.remove(Math.max(nameId, ordinalId));
+					param.remove(Math.min(nameId, ordinalId));
+					param.add(Type.std(Type.VOID));
 
-		cDirAcc = b.build();
-
-		FieldAccessor t;
-		try {
-			t = ReflectionUtils.access(Enum.class.getDeclaredField("ordinal"));
-		} catch (NoSuchFieldException e) {
-			Helpers.athrow(e);
-			t = null;
-		}
-		ordinalAcc = t;
-	}
-
-	private final Class<E> clazz;
-	private final Field[] fields;
-	private FieldAccessor values;
-	private final Collection<Field> switchFields;
-	private final SimpleList<UndoInfo<E>> undoStack = new SimpleList<>();
-
-	private Class<?>[] lastAdditionalTypes;
-	private Constructor<?> lastConstructor;
-
-	public String valueName = "$VALUES";
-
-	/**
-	 * Switch uses ordinal to decide enum;
-	 */
-	public EnumHelper(Class<E> clazz, Class<?>... switchUsers) {
-		this.clazz = clazz;
-		this.fields = clazz.getDeclaredFields();
-		if (!clazz.isEnum()) throw new IllegalArgumentException("Not an enum");
-		try {
-			this.switchFields = findSwitchMaps(switchUsers);
-		} catch (Exception e) {
-			throw new IllegalArgumentException("Could not create the class", e);
-		}
-	}
-
-	public E make(String value, int ordinal) {
-		return make(value, ordinal, ArrayCache.CLASSES, ArrayCache.OBJECTS);
-	}
-
-	public E make(String value, int ordinal, Class<?>[] additionalTypes, Object[] additional) {
-		try {
-			undoStack.add(new UndoInfo<>(this));
-
-			Constructor<?> cst;
-			if (Arrays.equals(additionalTypes, lastAdditionalTypes)) {
-				cst = lastConstructor;
-			} else {
-				lastConstructor = cst = findConstructor(additionalTypes, clazz);
-				lastAdditionalTypes = additionalTypes;
-			}
-
-			cst.setAccessible(true);
-			return construct(clazz, cst, value, ordinal, additional);
-		} catch (ReflectiveOperationException e) {
-			throw new IllegalArgumentException("Could not create enum", e);
-		}
-	}
-
-	public EnumHelper<E> setValueName(String valueName) {
-		this.valueName = valueName;
-		return this;
-	}
-
-	private void _setClassInternals(E from, E to) {
-		if (to == null) {
-			cDirAcc.setEnumData2(clazz, null);
-			if (!ReflectionUtils.OPENJ9)
-				cDirAcc.setEnumData(clazz, null);
-		} else {
-			Map<String, E> map = Helpers.cast(cDirAcc.enumConstantDirectory(clazz));
-			map.put(to.name(), to);
-			if (from == null) {
-				cDirAcc.setEnumData2(clazz, null);
-			} else {
-				E[] arr = Helpers.cast(cDirAcc.getEnumConstantsShared(clazz));
-				if (from.ordinal() != to.ordinal()) throw new AssertionError("from.ordinal() != to.ordinal()");
-				arr[from.ordinal()] = to;
-			}
-		}
-	}
-
-	/**
-	 * Add enum instance, overwrite if exists.
-	 * <p/>
-	 * Overwrite:
-	 * Replace constant field and array.
-	 * <p/>
-	 * The ordinal will be set.
-	 * <p/>
-	 * Warning: This should probably never be called,
-	 * since it can cause permanent changes to the enum
-	 * values.  Use only in extreme conditions.
-	 */
-	public void add(E e) {
-		if (e == null) throw new NullPointerException();
-
-		undoStack.add(new UndoInfo<>(this));
-
-		FieldAccessor vf = findValuesField(valueName);
-
-		E[] values = values();
-		for (int i = 0; i < values.length; i++) {
-			E value = values[i];
-
-			if (value.name().equals(e.name())) {
-				ordinalAcc.setInt(e, value.ordinal());
-				_setClassInternals(values[i], e);
-				values[i] = e;
-				replace(e.name(), e);
-				return;
-			}
-		}
-
-		E[] newValues = Arrays.copyOf(values, values.length + 1);
-		newValues[newValues.length - 1] = e;
-		vf.setObject(null, newValues);
-
-		int ordinal = newValues.length - 1;
-		ordinalAcc.setInt(e, ordinal);
-		_setClassInternals(null, e);
-
-		addSwitch();
-	}
-
-	private FieldAccessor findValuesField(String valueId) {
-		if (values == null) {
-			for (Field field : fields) {
-				if ((valueId == null ? field.getType().getComponentType() == clazz : field.getName().equals(valueId)) && (field.getModifiers() & AccessFlag.STATIC) != 0) {
-					return values = ReflectionUtils.access(field);
+					long v = 0;
+					v |= (long)i << 24;
+					v |= nameId << 16;
+					v |= ordinalId << 8;
+					v |= param.size()+1;
+					parPos.put(TypeHelper.getMethod(param), v);
 				}
-			}
-		}
-		return values;
-	}
+			} else if (mn.name().equals("<clinit>")) {
+				staticInit = mn.parsedAttr(klass.cp, Attribute.Code);
 
-	/**
-	 * !Set constant to null.
-	 */
-	public boolean delete(E e) {
-		if (e == null) throw new NullPointerException();
+				InsnList list = staticInit.instructions;
+				int j = 0;
 
-		undoStack.add(new UndoInfo<>(this));
-
-		E[] values = values();
-		for (int i = 0; i < values.length; i++) {
-			E value = values[i];
-
-			if (value.name().equals(e.name())) {
-				E[] newValues = Arrays.copyOf(values, values.length - 1);
-				System.arraycopy(values, i + 1, newValues, i, values.length - i - 1);
-
-				for (int j = i; j < newValues.length; j++) {
-					ordinalAcc.setInt(newValues[j], j);
-				}
-
-				findValuesField(valueName).setObject(null, newValues);
-				removeSwitch(i);
-				_setClassInternals(e, null);
-				replace(e.name(), null);
-
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	public void restore() {
-		if (undoStack.isEmpty()) return;
-		UndoInfo<E> info = undoStack.get(0);
-		if (info != null) {
-			info.undo();
-			undoStack.clear();
-		}
-	}
-
-	public boolean undo() {
-		if (undoStack.isEmpty()) return false;
-		UndoInfo<E> info = undoStack.remove(undoStack.size() - 1);
-
-		info.undo();
-		return true;
-	}
-
-	private Constructor<?> findConstructor(Class<?>[] add, Class<E> clazz) throws NoSuchMethodException {
-		Class<?>[] paramType = new Class<?>[add.length + 2];
-		paramType[0] = String.class;
-		paramType[1] = int.class;
-		if (add.length > 0) System.arraycopy(add, 0, paramType, 2, add.length);
-
-		return clazz.getDeclaredConstructor(paramType);
-	}
-
-	private E construct(Class<E> clazz, Constructor<?> cst, String value, int ordinal, Object[] add) throws ReflectiveOperationException {
-		Object[] param = new Object[add.length + 2];
-		param[0] = value;
-		param[1] = ordinal;
-		if (add.length > 0) System.arraycopy(add, 0, param, 2, add.length);
-
-		E cast = clazz.cast(cDirAcc.newInstance0(cst, param));
-
-		Map<String, E> map = Helpers.cast(cDirAcc.enumConstantDirectory(clazz));
-		map.put(value, cast);
-
-		return cast;
-	}
-
-	private void replace(String name, Object val) {
-		for (Field field : fields) {
-			if (field.getName().equals(name)) {
-				ReflectionUtils.setFinal(field, val);
-			}
-		}
-	}
-
-	private Collection<Field> findSwitchMaps(Class<?>[] switchUsers) {
-		Collection<Field> result = new LinkedList<>();
-
-		try {
-			for (Class<?> switchUser : switchUsers) {
-				String name = switchUser.getName();
-				int i = 0;
-
-				while (true) {
-					try {
-						Class<?> suspect = Class.forName(String.format("%s$%d", name, ++i));
-						Field[] fields = suspect.getDeclaredFields();
-
-						for (Field field : fields) {
-							String fieldName = field.getName();
-
-							if (fieldName.startsWith("$SwitchMap$") && fieldName.endsWith(clazz.getSimpleName())) {
-								field.setAccessible(true);
-								result.add(field);
+				loop:
+				for (; j < list.size(); j++) {
+					InsnNode node = list.get(j);
+					lvid = Math.max(InsnHelper.getVarId(node), lvid);
+					if (node.getOpcode() == ANEWARRAY) {
+						ClassInsnNode cin = ((ClassInsnNode) node);
+						if (cin.owner.equals(klass.name)) {
+							node = list.get(j-1);
+							switch (node.getOpcode()) {
+								case ICONST_0: case ICONST_1: case ICONST_2: case ICONST_3: case ICONST_4: case ICONST_5:
+									len = new CstInt(node.getOpcode()-3);
+								break;
+								case BIPUSH: case SIPUSH:
+									len = new CstInt(((IIndexInsnNode) node).getIndex());
+									break;
+								case LDC:
+								case LDC_W:
+									len = ((CstInt) ((LdcInsnNode) node).c);
+									break loop;
+								default: throw new IllegalArgumentException("what is " + node);
 							}
+							list.set(j-1, new LdcInsnNode(len));
+
+							addPos = j+1;
+							break;
 						}
-					} catch (ClassNotFoundException e) {
-						break;
 					}
 				}
 			}
-		} catch (Exception e) {
-			throw new IllegalArgumentException("Could not get switch map", e);
-		}
-
-		return result;
-	}
-
-	private void addSwitch() {
-		try {
-			for (Field field : switchFields) {
-				int[] switches = (int[]) field.get(null);
-				switches = Arrays.copyOf(switches, switches.length + 1);
-				ReflectionUtils.setFinal(field, switches);
-			}
-		} catch (ReflectiveOperationException e) {
-			throw new IllegalArgumentException(e);
 		}
 	}
 
-	private void removeSwitch(int ordinal) {
-		try {
-			for (Field switchField : switchFields) {
-				int[] old = (int[]) switchField.get(null);
-				int[] now = Arrays.copyOf(old, old.length - 1);
-				System.arraycopy(old, ordinal + 1, now, ordinal, old.length - ordinal - 1);
-				ReflectionUtils.setFinal(switchField, now);
-			}
-		} catch (ReflectiveOperationException e) {
-			throw new IllegalArgumentException(e);
-		}
+	private int state, nameId, ordinalId;
+
+	@Override
+	protected void one(byte code) {
+		decompressVar(code);
 	}
 
-	@SuppressWarnings("unchecked")
-	public E[] values() {
-		return (E[]) findValuesField(valueName).getObject(null);
-	}
-
-	private static final class UndoInfo<E extends Enum<E>> {
-		private final E[] values;
-		private final MyHashMap<Field, int[]> switchValues;
-		private final EnumHelper<E> helper;
-
-		private UndoInfo(EnumHelper<E> helper) {
-			try {
-				this.helper = helper;
-				E[] v = helper.values();
-				this.values = v == null ? null : v.clone();
-				this.switchValues = new MyHashMap<>(helper.switchFields.size());
-
-				for (Field switchField : helper.switchFields) {
-					int[] arr = (int[]) switchField.get(null);
-					switchValues.put(switchField, arr.clone());
+	// protected Enum(String name, int ordinal)
+	@Override
+	@SuppressWarnings("fallthrough")
+	protected void var(byte code, int id) {
+		switch (state) {
+			case 3:
+				state = 0;
+			case 0:
+				if (code == Opcodes.ALOAD && id == 0) {
+					state = 1;
 				}
-			} catch (ReflectiveOperationException e) {
-				throw new IllegalArgumentException("Could not record undo", e);
-			}
+				break;
+			case 1:
+				if (code == Opcodes.ALOAD) {
+					nameId = id-1;
+					state = 2;
+				} else {
+					state = 0;
+				}
+				break;
+			case 2:
+				if (code == Opcodes.ILOAD) {
+					ordinalId = id-1;
+					state = 3;
+				} else {
+					state = 0;
+				}
+				break;
+		}
+	}
+
+	@Override
+	protected void invoke(byte code, CstRef method) {
+		if (method.getClassName().equals("java/lang/Enum") && method.desc().getName().getString().equals("<init>")) {
+			assert state == 3;
+			throw OperationDone.INSTANCE;
+		}
+	}
+
+	/**
+	 * @return 新枚举的ordinal
+	 */
+	public int add(String name, Class<?>[] types, Object... param) {
+		return add(name, TypeHelper.class2asm(types, void.class), param);
+	}
+	public int add(String name, String desc, Object... param) {
+		long mi = parPos.getOrDefault(desc, 0);
+		if (mi == 0) throw new IllegalStateException("no such constructor: " + desc);
+
+		int nid = (int)(mi>>>16)&0xFF, oid = (int)(mi>>>8)&0xFF, len = (int)mi&0xFF;
+
+		InsnList l = toAdd;
+		l.one(DUP);
+		l.ldc(this.len.value);
+		l.clazz(NEW, ref.name);
+		l.one(DUP);
+
+		int stackSize = 7 + TypeHelper.paramSize(desc);
+		if (staticInit.stackSize < stackSize) {
+			staticInit.stackSize = (char) stackSize;
 		}
 
-		private void undo() {
-			helper.findValuesField(helper.valueName).setObject(null, values);
-
-			for (int i = 0; i < values.length; i++) {
-				ordinalAcc.setInt(values[i], i);
-			}
-
-			// reset all the constants defined inside the enum
-			Map<String, E> valueOf = new MyHashMap<>(values.length);
-
-			for (E e : values) {
-				valueOf.put(e.name(), e);
-			}
-
-			for (Field field : helper.fields) {
-				E e = valueOf.get(field.getName());
-
-				if (e != null) {
-					ReflectionUtils.setFinal(field, e);
+		List<Type> types = TypeHelper.parseMethod(desc);
+		int j = 0;
+		for (int i = 0; i < len; i++) {
+			if (i == nid) {
+				l.ldc(name);
+				continue;
+			} else if (i == oid) {
+				l.ldc(this.len.value);
+				continue;
+			} else if (param[j] == null) {
+				l.one(ACONST_NULL);
+			} else {
+				Type klass = types.get(j);
+				Object v = param[j];
+				if (klass.isPrimitive()) {
+					switch (klass.type) {
+						case Type.BOOLEAN: l.ldc((boolean)v ? 1 : 0); break;
+						case Type.CHAR: l.ldc((char)v); break;
+						default:
+						case Type.INT: l.ldc(((Number)v).intValue()); break;
+						case Type.LONG: l.ldc(((Number)v).longValue()); break;
+						case Type.FLOAT: l.ldc(((Number)v).floatValue()); break;
+						case Type.DOUBLE: l.ldc(((Number)v).doubleValue()); break;
+					}
+				} else {
+					switch (klass.owner()) {
+						case "java/lang/String":
+						case "java/lang/CharSequence": l.ldc(v.toString()); break;
+						case "java/lang/Class": l.ldc(new CstClass(v.toString())); break;
+						default: l.field(GETSTATIC, (String) v);
+					}
 				}
 			}
 
-			for (Map.Entry<Field, int[]> entry : switchValues.entrySet()) {
-				Field field = entry.getKey();
-				int[] mappings = entry.getValue();
-				ReflectionUtils.setFinal(field, mappings);
-			}
+			j++;
 		}
+		l.invoke(INVOKESPECIAL, ref, (int)(mi>>>24));
+		l.one(AASTORE);
+
+		return this.len.value++;
+	}
+
+	public void commit() {
+		if (toAdd.isEmpty()) return;
+		staticInit.instructions.addAll(addPos, toAdd);
+		addPos += toAdd.size();
+		toAdd.clear();
 	}
 }

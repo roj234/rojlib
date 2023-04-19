@@ -363,9 +363,9 @@ public final class SimpleObfuscator extends Obfuscator {
 				desc.owner = m1.classMap.getOrDefault(data.name, data.name);
 				for (int j = methods.size() - 1; j >= 0; j--) {
 					RawMethod m = (RawMethod) methods.get(j);
-					if (!m.type.str().equals("(Ljava/lang/String;)Ljava/lang/String;")) continue;
+					if (!m.type.getString().equals("(Ljava/lang/String;)Ljava/lang/String;")) continue;
 
-					desc.name = m.name.str();
+					desc.name = m.name.getString();
 					if (cf.decoders.containsKey(desc)) {
 						ConstantData dg = new ConstantData();
 						dg.version = data.version;
@@ -448,7 +448,7 @@ public final class SimpleObfuscator extends Obfuscator {
 								if (next.nodeType() == InsnNode.T_INVOKE) {
 									InvokeInsnNode iin = (InvokeInsnNode) next;
 									if (iin.code == Opcodes.INVOKESTATIC && iin.awslDesc().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
-										CstUTF utf = ((CstString) ldc.c).name();
+										CstUTF utf = ((CstString) ldc.c).getValue();
 										//if (!intr.done.contains(utf.getString())) {
 											String value = cf.tryDecode(iin, null, utf);
 											if (value != null) {
@@ -500,7 +500,7 @@ public final class SimpleObfuscator extends Obfuscator {
 
 		@Override
 		public void invoke(byte code, CstRef method) {
-			if (code == Opcodes.INVOKESTATIC && method.desc().getType().str().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
+			if (code == Opcodes.INVOKESTATIC && method.desc().getType().getString().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
 				if (bci - ldcPos > 3) return;
 				decoders.putIfAbsent(tmp.read(method).copy(), null);
 				user = true;
@@ -519,7 +519,7 @@ public final class SimpleObfuscator extends Obfuscator {
 			Decoder dec = decoders.get(tmp);
 			if (dec != null) {
 				try {
-					return dec.decode(utf.str());
+					return dec.decode(utf.getString());
 				} catch (Throwable e) {
 					System.err.println("解密失败: ");
 					e.printStackTrace();
@@ -533,11 +533,11 @@ public final class SimpleObfuscator extends Obfuscator {
 	static final Map<String, List<IType>> fake2 = new MyHashMap<>();
 
 	static {
-		fake2.put("\u0000", Collections.singletonList(new Generic("int", 23, Generic.EX_SUPER)));
+		fake2.put("\u0000", Collections.singletonList(new Generic("int", 23, Generic.EX_SUPERS)));
 		fake2.put("\u0001", Collections.singletonList(new Generic("long", 0, Generic.EX_EXTENDS)));
-		fake2.put("\u0002", Collections.singletonList(new Generic("double", 0, Generic.EX_SUPER)));
+		fake2.put("\u0002", Collections.singletonList(new Generic("double", 0, Generic.EX_SUPERS)));
 		fake2.put("\u0003", Collections.singletonList(new Generic("short", 46, Generic.EX_NONE)));
-		fake2.put("\u0004", Collections.singletonList(new Generic("char", 0, Generic.EX_SUPER)));
+		fake2.put("\u0004", Collections.singletonList(new Generic("char", 0, Generic.EX_SUPERS)));
 	}
 
 	static void clearSign(ConstantData data) {
@@ -616,7 +616,7 @@ public final class SimpleObfuscator extends Obfuscator {
 			}*/
 
 			while (len1-- > 0) {
-				String name = ((CstUTF) pool.get(r)).str();
+				String name = ((CstUTF) pool.get(r)).getString();
 				int len = r.readInt();
 				int end = len + r.rIndex;
 				switch (name) {

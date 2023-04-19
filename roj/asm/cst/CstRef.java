@@ -46,7 +46,7 @@ public abstract class CstRef extends Constant {
 	}
 
 	public final int hashCode() {
-		return (clazz.hashCode() << 16) ^ desc.hashCode() * type();
+		return 31 * (31 * desc.hashCode() + clazz.getValue().hashCode()) + type();
 	}
 
 	public final boolean equals(Object o) {
@@ -56,7 +56,7 @@ public abstract class CstRef extends Constant {
 	public final boolean equals0(CstRef ref) {
 		if (ref == this) return true;
 		if (ref.getClass() != getClass()) return false;
-		return ref.clazz.equals0(clazz) && ref.desc.equals0(desc);
+		return ref.clazz.getValue().equals(clazz.getValue()) && ref.desc.equals0(desc);
 	}
 
 	public CstClass getClazz() {

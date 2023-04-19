@@ -61,8 +61,12 @@ public class BitmapBPool implements BPool {
 		}
 
 		boolean insertBefore(int off, int size, int extraSize) {
+			if (off < extraSize) return false;
+
 			int cStart = (off - extraSize) / chunk;
 			int cEnd = off / chunk;
+			if (cStart == cEnd) return true;
+
 			if (cStart < min || cEnd > max) return false;
 
 			if (!allFalse(cStart,cEnd)) return false;
@@ -74,8 +78,10 @@ public class BitmapBPool implements BPool {
 		}
 
 		boolean insertAfter(int off, int size, int extraSize) {
-			int cStart = (off+size) / chunk;
-			int cEnd = (off+size+extraSize+ chunk -1) / chunk;
+			int cStart = (off+size+chunk-1) / chunk;
+			int cEnd = (off+size+extraSize+chunk-1) / chunk;
+			if (cStart == cEnd) return true;
+
 			if (cStart < min || cEnd > max) return false;
 
 			if (!allFalse(cStart,cEnd)) return false;
@@ -197,7 +203,6 @@ public class BitmapBPool implements BPool {
 				} else {
 					if (!dUsed.insertBefore(b.arrayOffset(), b.capacity(), more)) break expandInPlace;
 					b.update(b.arrayOffset()-more, b.capacity()+more);
-					b.rIndex += more;
 					b.wIndex(b.wIndex()+more);
 				}
 				return true;

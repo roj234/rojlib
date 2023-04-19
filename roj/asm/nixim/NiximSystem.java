@@ -285,7 +285,7 @@ public class NiximSystem implements NiximHelper {
 			if (nx.bsm != null && !nx.bsm.isEmpty()) {
 				BootstrapMethods selfBSM = data.parsedAttr(data.cp,Attribute.BootstrapMethods);
 				if (selfBSM == null) {
-					data.attributes().putByName(selfBSM = new BootstrapMethods());
+					data.putAttr(selfBSM = new BootstrapMethods());
 				}
 
 				for (IntMap.Entry<LambdaInfo> entry : nx.bsm.selfEntrySet()) {
@@ -350,7 +350,7 @@ public class NiximSystem implements NiximHelper {
 					} else {
 						clinit = new Method(AccessFlag.PUBLIC | AccessFlag.STATIC, data, "<clinit>", "()V");
 						clinit.setCode(new AttrCode(clinit));
-						clinit.getCode().instructions.add(NPInsnNode.of(RETURN));
+						clinit.getCode().instructions.one(RETURN);
 						methods.add(Helpers.cast(clinit));
 					}
 					AttrCode code = clinit.getCode();
@@ -362,7 +362,7 @@ public class NiximSystem implements NiximHelper {
 						String n = "^" + Integer.toString(data.methods.size(), 36);
 						val.name = n;
 						data.methods.add(Helpers.cast(val));
-						code.instructions.add(new InvokeInsnNode(INVOKESTATIC, data.name, n, "()V"));
+						code.instructions.invokeS(data.name, n, "()V");
 						do {
 							if (!itr.hasNext()) break o;
 							val = itr.next();
@@ -433,6 +433,7 @@ public class NiximSystem implements NiximHelper {
 
 	private static void doInject(InjectState s, ConstantData data, List<? extends MethodNode> methods, int index) throws TransformException {
 		if (!methods.get(index).rawDesc().equals(s.method.rawDesc())) throw new TransformException("目标与Nixim方法返回值不匹配 " + methods.get(index));
+		AttrCode CODE = s.method.getCode();
 		switch (s.at) {
 			case "REMOVE":
 				methods.remove(index);
@@ -440,26 +441,26 @@ public class NiximSystem implements NiximHelper {
 			case "REPLACE": {
 				st:
 				if (s.method.name.equals("<init>")) {
-					InvokeInsnNode iin = (InvokeInsnNode) s.method.getCode().instructions.get(s.superCallEnd);
+					InvokeInsnNode iin = (InvokeInsnNode) CODE.instructions.get(s.superCallEnd);
 					if (iin.name.startsWith(SPEC_M_CONSTRUCTOR_THIS)) {
 						iin.name = "<init>";
-						if (iin.rawDesc().equals(s.method.rawDesc())) throw new TransformException("this循环调用自身!");
+						if (iin.desc.equals(s.method.rawDesc())) throw new TransformException("this循环调用自身!");
 						iin.owner = data.name;
 						for (int i = 0; i < methods.size(); i++) {
 							MethodNode mn = methods.get(i);
-							if (mn.rawDesc().equals(iin.rawDesc())) break st;
+							if (mn.rawDesc().equals(iin.desc)) break st;
 						}
 						throw new TransformException("覆盖的构造器不存在:S");
 					} else {
 						// 无法检查上级构造器是否存在, 但是Object还是可以查一下
 						iin.owner = data.parent;
-						if (data.parent.equals("java/lang/Object") && !"()V".equals(iin.rawDesc())) {
+						if (data.parent.equals("java/lang/Object") && !"()V".equals(iin.desc)) {
 							throw new TransformException("覆盖的构造器中的上级调用不存在(Object parent)\n" +
 								"如果您使用[构造器覆盖],不建议[用构造器]覆盖\n" +
 								"或者你也许忘了: $$CONSTRUCTOR是对Nixim目标的父类的调用");
 						}
 					}
-					s.method.getCode().interpretFlags = AttrCode.COMPUTE_FRAMES;
+					CODE.interpretFlags = AttrCode.COMPUTE_FRAMES;
 					s.method.owner = data.name;
 					iin.name = "<init>";
 				}
@@ -484,14 +485,14 @@ public class NiximSystem implements NiximHelper {
 				}
 
 				int pl = computeParamLength(tm, null);
-				InsnList insn2 = s.method.getCode().instructions;
+				InsnList insn2 = CODE.instructions;
 				InsnNode entryPoint;
 				if (s.assignId != null) {
 					int size = insn2.size();
 					for (Int2IntMap.Entry entry : s.assignId.selfEntrySet()) {
 						int tKey = entry.getIntKey() - 1 + pl;
-						InsnHelper.compress(insn2, (byte) (entry.v - (ISTORE - ILOAD)), tKey);
-						InsnHelper.compress(insn2, (byte) entry.v, entry.getIntKey());
+						insn2.var((byte) (entry.v - (ISTORE - ILOAD)), tKey);
+						insn2.var((byte) entry.v, entry.getIntKey());
 					}
 					entryPoint = insn2.get(size);
 				} else {
@@ -505,9 +506,9 @@ public class NiximSystem implements NiximHelper {
 
 				insn.addAll(superBegin, insn2);
 				tm.getCode().interpretFlags = AttrCode.COMPUTE_FRAMES;
-				tm.getCode().stackSize = (char) Math.max(tm.getCode().stackSize, s.method.getCode().stackSize);
-				tm.getCode().localSize = (char) Math.max(tm.getCode().localSize, s.method.getCode().localSize);
-				if (debug) copyLine(s.method.getCode(), tm.getCode());
+				tm.getCode().stackSize = (char) Math.max(tm.getCode().stackSize, CODE.stackSize);
+				tm.getCode().localSize = (char) Math.max(tm.getCode().localSize, CODE.localSize);
+				if (debug) copyLine(CODE, tm.getCode());
 			}
 			break;
 			case "INVOKE": {
@@ -535,12 +536,12 @@ public class NiximSystem implements NiximHelper {
 							String desc;
 							if ((node1.code == INVOKESTATIC) == isStatic > 0) {
 								// 相同
-								desc = node1.rawDesc();
+								desc = node1.desc;
 							} else if (node1.code != INVOKESTATIC) {
 								// virtual -> static
-								desc = "(L" + node1.owner + ';' + node1.rawDesc().substring(1);
+								desc = "(L" + node1.owner + ';' + node1.desc.substring(1);
 							} else {
-								desc = node1.rawDesc();
+								desc = node1.desc;
 								if (clazz != null) {
 									isStatic = -1;
 									insn.add(i++, NPInsnNode.of(ALOAD_0));
@@ -559,7 +560,7 @@ public class NiximSystem implements NiximHelper {
 							node1.code = isStatic > 0 ? INVOKESTATIC : INVOKESPECIAL;
 							node1.owner = data.name;
 							node1.name = s.method2.name;
-							node1.rawDesc(s.method2.rawDesc());
+							node1.desc = s.method2.rawDesc();
 							used++;
 						}
 					}
@@ -586,7 +587,7 @@ public class NiximSystem implements NiximHelper {
 
 				Type ret = TypeHelper.parseReturn(tm.rawDesc());
 				byte base = ret.shiftedOpcode(ILOAD, true);
-				InsnList injectInsn = s.method.getCode().instructions;
+				InsnList injectInsn = CODE.instructions;
 				if (s.superCallEnd > 0) injectInsn.removeRange(0, s.superCallEnd + 1);
 				byte type;
 				// ILOAD+5 = VOID
@@ -630,8 +631,7 @@ public class NiximSystem implements NiximHelper {
 						}
 						accessedMax = Math.max(accessedMax, i2);
 					} else if (i > 0 && InsnHelper.isReturn(node.code)) {
-						JumpInsnNode Goto = new JumpInsnNode();
-						Goto.setTarget(FIRST);
+						JumpInsnNode Goto = new JumpInsnNode(FIRST);
 						// 将返回值（如果存在）存放到指定的变量
 						// 将目标方法中return替换成goto开头
 						switch (type & 3) {
@@ -664,12 +664,12 @@ public class NiximSystem implements NiximHelper {
 						Int2IntMap.Entry entry = itr.next();
 						if (entry.v != 0) {
 							byte tCode = (byte) (entry.v - (ISTORE - ILOAD));
-							InsnHelper.compress(prepend, tCode, entry.getIntKey());
+							prepend.var(tCode, entry.getIntKey());
 							int tKey = ++accessedMax;
-							InsnHelper.compress(prepend, (byte) entry.v, tKey);
+							prepend.var((byte) entry.v, tKey);
 							// re-load 加上恢复用的指令
-							InsnHelper.compress(targetInsn, tCode, tKey);
-							InsnHelper.compress(targetInsn, (byte) entry.v, entry.getIntKey());
+							targetInsn.var(tCode, tKey);
+							targetInsn.var((byte) entry.v, entry.getIntKey());
 						} else {
 							itr.remove();
 						}
@@ -680,9 +680,9 @@ public class NiximSystem implements NiximHelper {
 				}
 				targetInsn.addAll(injectInsn);
 				tm.getCode().interpretFlags = AttrCode.COMPUTE_FRAMES;
-				tm.getCode().stackSize = (char) Math.max(tm.getCode().stackSize, s.method.getCode().stackSize);
-				tm.getCode().localSize = (char) Math.max(tm.getCode().localSize, s.method.getCode().localSize);
-				if (debug) copyLine(s.method.getCode(), tm.getCode());
+				tm.getCode().stackSize = (char) Math.max(tm.getCode().stackSize, CODE.stackSize);
+				tm.getCode().localSize = (char) Math.max(tm.getCode().localSize, CODE.localSize);
+				if (debug) copyLine(CODE, tm.getCode());
 			}
 			break;
 			case "OLD_SUPER_INJECT":
@@ -726,7 +726,7 @@ public class NiximSystem implements NiximHelper {
 						// found
 
 						InsnList tmp = new InsnList();
-						ctx.mapId(s.method.getCode().instructions, tmp);
+						ctx.mapId(CODE.instructions, tmp);
 
 						toFind.get(i)._i_replace(tmp.get(0));
 						InsnNode finalNode = toFind.get(i + check.size());
@@ -746,9 +746,9 @@ public class NiximSystem implements NiximHelper {
 						}
 
 						tm.getCode().interpretFlags = AttrCode.COMPUTE_FRAMES;
-						tm.getCode().stackSize = (char) Math.max(tm.getCode().stackSize, s.method.getCode().stackSize);
-						tm.getCode().localSize = (char) Math.max(tm.getCode().localSize, s.method.getCode().localSize);
-						if (debug) copyLine(s.method.getCode(), tm.getCode());
+						tm.getCode().stackSize = (char) Math.max(tm.getCode().stackSize, CODE.stackSize);
+						tm.getCode().localSize = (char) Math.max(tm.getCode().localSize, CODE.localSize);
+						if (debug) copyLine(CODE, tm.getCode());
 						return;
 					}
 				}
@@ -761,7 +761,7 @@ public class NiximSystem implements NiximHelper {
 		if (lnFr == null) return;
 		AttrLineNumber lnTo = (AttrLineNumber) to.attrByName("LineNumberTable");
 		if (lnTo == null) {
-			to.attributes().putByName(lnFr);
+			to.attributes().add(lnFr);
 			return;
 		}
 
@@ -1369,9 +1369,9 @@ public class NiximSystem implements NiximHelper {
 						Int2IntMap.Entry entry = itr.next();
 						if (entry.v != 0) {
 							byte tCode = (byte) (entry.v - (ISTORE - ILOAD));
-							InsnHelper.compress(prepend, tCode, entry.getIntKey());
+							prepend.var(tCode, entry.getIntKey());
 							int tKey = entry.getIntKey() - 1 + paramLength;
-							InsnHelper.compress(prepend, (byte) entry.v, tKey);
+							prepend.var((byte) entry.v, tKey);
 						} else {
 							itr.remove();
 						}
@@ -1426,7 +1426,7 @@ public class NiximSystem implements NiximHelper {
 								InvokeInsnNode iin = (InvokeInsnNode) node;
 								// 将返回值（如果存在）存放到指定的变量，用特殊的字段名(startWith: $$$RETURN_VAL)指定
 								if (iin.name.startsWith(SPEC_M_RETVAL)) {
-									if (iin.returnType().type != method.returnType().type)
+									if (TypeHelper.parseReturn(iin.desc).type != method.returnType().type)
 										throw new TransformException("返回值指代#"+s.retVal().size()+"(CodeIndex: "+ i +")的返回值不适用于目的方法的" + method.returnType());
 									s.retVal().add(i - 1);
 								}
@@ -1526,17 +1526,7 @@ public class NiximSystem implements NiximHelper {
 	}
 
 	private static void processInvokeDyn(InvokeDynInsnNode ind, String name, String dest) {
-		List<Type> parameters = ind.parameters();
-		for (int i = 0; i < parameters.size(); i++) {
-			Type type = parameters.get(i);
-			if (name.equals(type.owner)) {
-				type.owner = dest;
-			}
-		}
-
-		if (name.equals(ind.returnType().owner)) {
-			ind.returnType().owner = dest;
-		}
+		ind.desc = MapUtil.getInstance().mapMethodParam(Collections.singletonMap(name, dest), ind.desc);
 	}
 
 	private static void processShadow(Context ctx, boolean b, String targetDef, Set<ShadowCheck> shadowChecks, NiximHelper h) {

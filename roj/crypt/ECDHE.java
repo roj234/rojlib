@@ -30,7 +30,7 @@ public final class ECDHE implements KeyAgreement {
 	}
 
 	@Override
-	public String getAlgorithm() { return "ECDH-"+group.getObjectId(); }
+	public String getAlgorithm() { return "ECDHE-"+group.name; }
 
 	@Override
 	public void init(SecureRandom r) {

@@ -97,10 +97,6 @@ public class CmdUtil {
 		if (ENABLE&reset) o.print("\u001B[0m");
 	}
 
-	public static void setRGB(PrintStream o, int r, int g, int b, boolean foreground) {
-		if (ENABLE) o.print("\u001B[;"+(38+(foreground?0:10))+";2;"+r+';'+g+';'+b+'m');
-	}
-
 	private static final char[] rainbow = new char[] {'c', '6', 'e', 'a', 'b', '9', 'd'};
 	private static final char[] sonic = new char[] {'9', '9', '9', '9', 'f', '9', 'f', 'f', '9', 'f',
 													'f', '9', 'b', 'f', '7', '7', '7', '7', '7', '7',
@@ -127,8 +123,13 @@ public class CmdUtil {
 		if (ENABLE) originalOut.print("\u001B[" + (bg + (hl ? 70 : 10)) + 'm');
 	}
 
-	public static void cursorUpSet0(int line) { cursor0('F', line); }
-	public static void cursorDownSet0(int line) { cursor0('E', line); }
+	public static void setRGB(int r, int g, int b, boolean foreground) {
+		if (ENABLE) originalOut.print("\u001B[;"+(38+(foreground?0:10))+";2;"+r+';'+g+';'+b+'m');
+	}
+
+	public static void cursorSet(int line, int column) { if (ENABLE) originalOut.print("\u001b["+line +';'+column+'H'); }
+	public static void cursorUpCol0(int line) { cursor0('F', line); }
+	public static void cursorDownCol0(int line) { cursor0('E', line); }
 	public static void cursorUp(int line) { cursor0('A', line); }
 	public static void cursorDown(int line) { cursor0('B', line); }
 	public static void cursorRight(int line) { cursor0('C', line); }
@@ -144,14 +145,26 @@ public class CmdUtil {
 		// \u001b[u
 		originalOut.print("\u001b[s");
 	}
-	public static void cursorPrev() {
+	public static void cursorRestore() {
 		originalOut.print("\u001b[u");
 	}
 
-	public static void clearLine() { clear0(2); }
-	public static void clearAfter() { clear0(0); }
-	public static void clearBefore() { clear0(1); }
-	private static void clear0(int cat) {
+	public static void getCursor() {
+		if (ENABLE) originalOut.print("\u001b[6n");
+		// ESC[n;mR
+	}
+
+	public static void clearScreen() { if (ENABLE) originalOut.print("\u001b[1;1H\u001b[2J"); }
+	public static void clearScreenAfter() { cs0(0); }
+	public static void clearScreenBefore() { cs0(1); }
+	private static void cs0(int cat) {
+		if (ENABLE) originalOut.print("\u001b["+cat+'J');
+	}
+
+	public static void clearLine() { cl0(2); }
+	public static void clearLineAfter() { cl0(0); }
+	public static void clearLineBefore() { cl0(1); }
+	private static void cl0(int cat) {
 		if (ENABLE) originalOut.print("\u001b["+cat+'K');
 	}
 

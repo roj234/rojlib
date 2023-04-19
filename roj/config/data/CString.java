@@ -30,6 +30,11 @@ public final class CString extends CEntry {
 		return Type.STRING;
 	}
 
+	@Override
+	protected boolean isNumber() {
+		return TextUtil.isNumber(value) >= 0;
+	}
+
 	public static CString valueOf(String s) {
 		return new CString(s);
 	}

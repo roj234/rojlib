@@ -20,6 +20,8 @@ import java.util.regex.Pattern;
  * @since 2021/6/19 1:28
  */
 public class CharList implements CharSequence, Appender {
+	static final boolean USE_CACHE = true;
+
 	// region Number helper
 	static void getChars(long l, int charPos, char[] buf) {
 		long q;
@@ -112,9 +114,14 @@ public class CharList implements CharSequence, Appender {
 		if (required > list.length) {
 			int newLen = Math.max(((required * 3) >> 1), 32);
 
-			ArrayCache cache = ArrayCache.getDefaultCache();
-			cache.putArray(list);
-			char[] newList = cache.getCharArray(newLen, false);
+			char[] newList;
+			if (USE_CACHE) {
+				ArrayCache cache = ArrayCache.getDefaultCache();
+				cache.putArray(list);
+				newList = cache.getCharArray(newLen, false);
+			} else {
+				newList = new char[newLen];
+			}
 
 			if (len > 0) System.arraycopy(list, 0, newList, 0, Math.min(len, list.length));
 			list = newList;

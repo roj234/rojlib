@@ -2,14 +2,14 @@ package roj.net.mss;
 
 import roj.collect.CharMap;
 import roj.collect.IntMap;
-import roj.crypt.HKDFPRNG;
+import roj.crypt.CipheR;
 import roj.crypt.HMAC;
 import roj.crypt.KeyAgreement;
-import roj.crypt.RCipherSpi;
 import roj.io.buf.BufferPool;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 
@@ -42,24 +42,69 @@ public abstract class MSSEngine {
 	static final int WRITE_PENDING = 0x80;
 
 	byte flag, stage;
-
 	HMAC keyDeriver;
-	RCipherSpi encoder, decoder;
+	int bufferSize;
+	CipheR encoder, decoder;
 	byte[] sharedKey;
-
 	protected MSSSession session;
+	MSSException error;
 
 	public abstract void switches(int sw);
-	public int switches() { return flag; }
+	public int switches() {
+		return flag;
+	}
 
 	/**
 	 * 客户端模式
 	 */
 	public abstract boolean isClientMode();
-	public final boolean isHandshakeDone() { return stage >= HS_DONE; }
-	public final boolean isClosed() { return stage == HS_FAIL; }
+
+	public final boolean isClosed() {
+		return stage == HS_FAIL;
+	}
 
 	public abstract void setPSC(IntMap<MSSPublicKey> keys);
+
+	/**
+	 * 关闭引擎
+	 * 若reason!=null会在下次调用wrap时向对等端发送关闭消息
+	 */
+	public final void close(String reason) {
+		if (stage > HS_DONE) return;
+
+		endCipher();
+		stage = HS_FAIL;
+
+		if (reason != null) {
+			byte[] r = reason.replaceAll("[^a-zA-Z \\-_.]", "").getBytes(StandardCharsets.UTF_8);
+			toWrite = allocateTmpBuffer(r.length+6).put(P_ALERT).putShort(2+r.length).put(INTERNAL_ERROR).put(r);
+		}
+	}
+
+	private void endCipher() {
+		encoder = decoder = null;
+		sharedKey = null;
+	}
+
+	public final void reset() {
+		endCipher();
+		this.stage = 0;
+		this.sharedKey = null;
+		this.toWrite = null;
+		this.flag = 0;
+		this.session = null;
+		this.keyDeriver = null;
+		this.error = null;
+	}
+
+	public final boolean isHandshakeDone() {
+		return stage >= HS_DONE;
+	}
+
+	public final byte[] getKey(String name, int length) {
+		if (stage != HS_DONE) throw new IllegalStateException();
+		return deriveKey(name, length);
+	}
 
 	protected int getSupportedKeyExchanges() {
 		return (1 << CipherSuite.KEX_DHE_ffdhe2048) | (1 << CipherSuite.KEX_ECDHE_secp384r1);
@@ -81,23 +126,23 @@ public abstract class MSSEngine {
 			return e;
 		}
 	}
+	protected void processExtensions(CharMap<DynByteBuf> extIn, CharMap<DynByteBuf> extOut, int i) {
 
-	protected void processExtensions(CharMap<DynByteBuf> extIn, CharMap<DynByteBuf> extOut, int i) {}
-
+	}
 	public static final byte[] EMPTY_32 = new byte[32];
 
 	final void initKeyDeriver(CipherSuite suite, byte[] sharedKey_pre) {
 		keyDeriver = new HMAC(suite.sign.get());
-		sharedKey = HMAC.HKDF_expand(keyDeriver, sharedKey_pre, ByteList.wrap(sharedKey), 64);
+		sharedKey = keyDeriver.HKDF_expand(sharedKey_pre, ByteList.wrap(sharedKey), 64);
 	}
-	final byte[] deriveKey(String name, int len) {
-		DynByteBuf info = allocateTmpBuffer(ByteList.byteCountUTF8(name)+2).putUTF(name);
-		byte[] secret = HMAC.HKDF_expand(keyDeriver, sharedKey,info,len);
+	protected final byte[] deriveKey(String name, int len) {
+		DynByteBuf info = allocateTmpBuffer(256);
+		info.putShort(1145141919+name.length())
+			.putAscii("mss_").putAscii(name);
+
+		byte[] secret = keyDeriver.HKDF_expand(sharedKey,info,len);
 		freeTmpBuffer(info);
 		return secret;
-	}
-	public final SecureRandom getPRNG(String name) {
-		return new HKDFPRNG(keyDeriver, sharedKey, name);
 	}
 
 	protected DynByteBuf allocateTmpBuffer(int capacity) {
@@ -107,29 +152,9 @@ public abstract class MSSEngine {
 		BufferPool.localPool().reserve(buf);
 	}
 
-	public final void close() {
-		encoder = decoder = null;
-		sharedKey = null;
-		keyDeriver = null;
-		if (toWrite != null) {
-			freeTmpBuffer(toWrite);
-			toWrite = null;
-		}
-		stage = HS_FAIL;
-	}
-	private void close(String reason) throws MSSException {
-		close();
-		throw new MSSException(reason);
-	}
-
-	public final void reset() {
-		close();
-		stage = INITIAL;
-	}
-
 	DynByteBuf toWrite;
 
-	public static final int HS_OK = 0, HS_BUFFER_UNDERFLOW = -1;
+	public static final int HS_OK = 0, HS_BUFFER_OVERFLOW = -1, HS_BUFFER_UNDERFLOW = -2;
 
 	// 内部状态
 	static final int INITIAL = 0, SERVER_HELLO = 1, FINISH_WAIT = 3;
@@ -137,13 +162,13 @@ public abstract class MSSEngine {
 	static final int HS_DONE = 4, HS_FAIL = 5;
 
 	// 数据包
-	static final byte PROTOCOL_VERSION = 21;
+	static final byte PROTOCOL_VERSION = 20;
 
 	static final int H_MAGIC = 0x53534E43;
-	static final byte H_CLIENT_HELLO = 0x40, H_SERVER_HELLO = 0x41, H_ENCRYPTED_EXTENSION = 0x42;
-	static final byte P_ALERT = 0x30, P_DATA = 0x31, P_PREDATA = 0x32;
+	static final byte H_CLIENT_HELLO = 0x40, H_SERVER_HELLO = 0x41, H_PRE_DATA = 0x42, H_FINISHED = 0x43;
+	static final byte P_ALERT = 0x30, P_DATA = 0x31, P_CHANGE_KEY = 0x32;
 
-	public static final byte
+	static final byte
 		ILLEGAL_PACKET = 0,
 		CIPHER_FAULT = 1,
 		VERSION_MISMATCH = 2,
@@ -151,112 +176,99 @@ public abstract class MSSEngine {
 		ILLEGAL_PARAM = 4,
 		NEGOTIATION_FAILED = 6;
 
-	final int ensureWritable(DynByteBuf out, int len) {
-		int size = len - out.writableBytes();
-		return size > 0 ? size : 0;
+	public final int getBufferSize() {
+		if (bufferSize == 0) throw new IllegalStateException();
+		int cap = bufferSize;
+		bufferSize = 0;
+		return cap;
 	}
-	final int readPacket(DynByteBuf rx) throws MSSException {
-		if (!rx.isReadable()) return HS_BUFFER_UNDERFLOW;
-
-		int pos = rx.rIndex;
-		int hdr = rx.getU(pos);
-		int lenHdr = hdr >= 0x40 ? 4 : 3;
-
-		int siz = rx.readableBytes()-lenHdr;
-		if (siz < 0) return siz;
-
-		int len = lenHdr==3 ? rx.readUnsignedShort(pos+1) : rx.readMedium(pos+1);
-		if (siz < len) return siz-len;
-
-		rx.rIndex += lenHdr;
-		rx.wIndex(rx.rIndex+len);
-
-		if (hdr == P_ALERT) handleError(rx);
-		return hdr;
+	final int of(int rem) {
+		bufferSize = rem;
+		return HS_BUFFER_OVERFLOW;
 	}
-	final void handleError(DynByteBuf in) throws MSSException {
-		int flag;
-		byte[] signLocal;
-		if (keyDeriver != null) {
-			keyDeriver.setSignKey(deriveKey("alert", keyDeriver.getDigestLength()));
-			DynByteBuf slice = in.slice(in.rIndex, in.readableBytes() - keyDeriver.getDigestLength());
-			keyDeriver.update(slice);
-			flag = 0;
-			signLocal = keyDeriver.digestShared();
-		} else {
-			flag = 1;
-			signLocal = null;
+	final int checkRcv(DynByteBuf rcv) {
+		if (!rcv.isReadable()) {
+			bufferSize = 1;
+			return HS_BUFFER_UNDERFLOW;
+		}
+		int pos = rcv.rIndex;
+		int lenLen = rcv.getU(pos) >= 0x40 ? 4 : 3;
+
+		int siz = rcv.readableBytes()-lenLen;
+		if (siz < 0) {
+			bufferSize = -siz;
+			return HS_BUFFER_UNDERFLOW;
 		}
 
-		close();
-
-		int errCode = in.readUnsignedByte();
-		String errMsg = in.readUTF(in.readUnsignedByte());
-
-		if (signLocal != null) {
-			if (in.readableBytes() < signLocal.length) {
-				flag = 1;
-			} else {
-				for (byte b : signLocal)
-					flag |= b ^ in.get();
-			}
+		int len = lenLen==3 ? rcv.readUnsignedShort(pos+1) : rcv.readMedium(pos+1);
+		if (siz < len) {
+			bufferSize = len-siz;
+			return HS_BUFFER_UNDERFLOW;
 		}
 
-		throw new MSSException("对等端错误: {trustable="+(flag==0)+",code="+errCode+",msg='"+errMsg+"'}");
+		rcv.rIndex += lenLen;
+		rcv.wIndex(rcv.rIndex+len);
+		return rcv.getU(pos);
 	}
 
 	/**
 	 * 进行握手操作
 	 *
-	 * @param tx 发送缓冲
-	 * @param rx 接收的数据
+	 * @param snd 预备发送的数据缓冲区
+	 * @param rcv 接收到的数据
 	 *
-	 * @return 状态 OK(0) BUFFER_OVERFLOW(>0) BUFFER_UNDERFLOW(<0)
+	 * @return 状态 HS_OK HS_BUFFER_OVERFLOW HS_BUFFER_UNDERFLOW
 	 */
-	public abstract int handshake(DynByteBuf tx, DynByteBuf rx) throws MSSException;
+	public abstract int handshake(DynByteBuf snd, DynByteBuf rcv) throws MSSException;
 
 	/**
 	 * 解码收到的数据
 	 *
-	 * @param in 接收缓冲
-	 * @param out 目的缓冲
+	 * @param i 接收缓冲
+	 * @param o 目的缓冲
 	 *
-	 * @return 状态 OK(0) BUFFER_OVERFLOW(>0) BUFFER_UNDERFLOW(<0)
+	 * @return 0ok，正数代表还需要n个字节的输入，负数代表还需要n个字节的输出
 	 */
-	public final int unwrap(DynByteBuf in, DynByteBuf out) throws MSSException {
-		if (decoder == null) throw new MSSException("不适合的状态:" + stage);
-
-		int lim = in.wIndex();
-
-		boolean first = true;
-		while (true) {
-			int type = readPacket(in);
-			if (type < 0) return first ? type : 0;
-			first = false;
-
-			try {
-				if (type == P_DATA) {
-					if (in.readableBytes() >= 32768) close("数据包过大");
-
-					int size = decoder.engineGetOutputSize(in.readableBytes()) - out.writableBytes();
-					if (size > 0) {
-						in.rIndex -= 3;
-						return size;
-					}
-
-					try {
-						decoder.cryptFinal(in, out);
-					} catch (GeneralSecurityException e) {
-						error(e);
-						close("解密失败");
-					}
-				} else {
-					close("illegal_packet");
-				}
-			} finally {
-				in.wIndex(lim);
-			}
+	public final int unwrap(DynByteBuf i, DynByteBuf o) throws MSSException {
+		if (stage != HS_DONE) {
+			if (error != null) throw error;
+			throw new MSSException("不适合的状态:" + stage);
 		}
+
+		int lim = i.wIndex();
+
+		int type = checkRcv(i);
+		if (type < 0) return -type;
+
+		try {
+			int res = unwrap(type, i, o);
+			if (res != 0) i.rIndex -= 3;
+			return res;
+		} finally {
+			i.wIndex(lim);
+		}
+	}
+
+	private int unwrap(int type, DynByteBuf in, DynByteBuf out) throws MSSException {
+		switch (type) {
+			case P_DATA:
+				if (in.readableBytes() >= 18000) _close("数据包过大");
+
+				int size = out.writableBytes() - decoder.getCryptSize(in.readableBytes());
+				if (size < 0) return size;
+
+				int pos = out.wIndex();
+				try {
+					decoder.crypt(in, out);
+				} catch (GeneralSecurityException e) {
+					_close("解密失败");
+				}
+				break;
+			case P_CHANGE_KEY: _close("ChangeKeySpec not implemented yet"); break;
+			case P_ALERT: checkAndThrowError(in); break;
+			default: _close("illegal_packet");
+		}
+		return 0;
 	}
 
 	/**
@@ -268,34 +280,112 @@ public abstract class MSSEngine {
 	 * @return 负数代表还需要至少n个字节的输出缓冲
 	 */
 	public int wrap(DynByteBuf in, DynByteBuf out) throws MSSException {
-		if (encoder == null) throw new MSSException("不适合的状态:" + stage);
+		if (stage != HS_DONE) {
+			if (stage == HS_FAIL && toWrite != null) {
+				int t = out.writableBytes() - toWrite.readableBytes();
+				if (t < 0) return t;
+				out.put(toWrite);
+				freeTmpBuffer(toWrite);
+				toWrite = null;
+				return 0;
+			}
+			if (error != null) throw error;
+			throw new MSSException("不适合的状态:" + stage);
+		}
 
 		int lim = in.wIndex();
 
-		int w = Math.min(in.readableBytes(), 32767);
+		// 嗯，就是人工限制, 2^14
+		int w = Math.min(in.readableBytes(), 16384);
 
-		int t = out.writableBytes() - 3 - encoder.engineGetOutputSize(w);
+		int t = out.writableBytes() -4 -w;
 		if (t < 0) return t;
 
 		try {
 			in.wIndex(in.rIndex + w);
-			out.put(decoder == null ? P_PREDATA : P_DATA).putShort(encoder.engineGetOutputSize(w));
-			encoder.cryptFinal(in, out);
+			out.put(P_DATA).putShort(encoder.getCryptSize(w));
+			encoder.crypt(in, out);
 		} catch (GeneralSecurityException e) {
-			close("加密失败");
+			_close("加密失败");
 		} finally {
 			in.wIndex(lim);
 		}
 		return 0;
 	}
 
-	@Override
-	public String toString() {
-		return "MSSEngine{" + "flag=" + flag + ", stage=" + stage + ", session=" + session + '}';
+	private void _close(String reason) throws MSSException {
+		close(reason);
+		error = new MSSException(reason);
+		throw error;
 	}
 
-	static int error(int code, String reason) throws MSSException { throw new MSSException(code, reason, null); }
-	static int error(Throwable ex) throws MSSException { throw new MSSException(CIPHER_FAULT, "", ex); }
+	@Override
+	public String toString() {
+		return "MSSEngine{" + "flag=" + flag + ", stage=" + stage + ", session=" + session + ", error=" + error + '}';
+	}
 
-	public abstract int handshakeSSL(DynByteBuf out, DynByteBuf recv) throws MSSException;
+	// region Error
+
+	final void checkAndThrowError(DynByteBuf in) throws MSSException {
+		endCipher();
+		stage = HS_FAIL;
+
+		int flag;
+		byte[] signLocal;
+		if (keyDeriver != null && sharedKey != null) {
+			keyDeriver.setSignKey(deriveKey("alert", keyDeriver.getDigestLength()));
+			keyDeriver.update(in.slice(in.rIndex, 2 + in.getU(in.rIndex + 1)));
+			flag = 0;
+			signLocal = keyDeriver.digestShared();
+		} else {
+			flag = 1;
+			signLocal = null;
+		}
+
+		int errCode = in.readUnsignedByte();
+		String errMsg = in.readUTF(in.readUnsignedByte());
+
+		if (signLocal != null) {
+			if (in.readableBytes() < signLocal.length) {
+				flag = 1;
+			} else {
+				for (int i = 0; i < signLocal.length; i++) {
+					flag |= signLocal[i] ^ in.get();
+				}
+			}
+		}
+
+		throw new MSSException("对等端错误: {trustable="+(flag==0)+",code="+errCode+",msg='"+errMsg+"'}");
+	}
+
+	final int error(int code, String reason, DynByteBuf snd) throws MSSException {
+		stage = HS_FAIL;
+
+		MSSException e = error = new MSSException(code + ": " + reason);
+		if (reason == null) {
+			close(null);
+			throw e;
+		}
+
+		byte[] data = reason.getBytes(StandardCharsets.UTF_8);
+		if (snd.capacity() < 6 + data.length) {
+			close(null);
+			throw e;
+		}
+		snd.put(P_ALERT).putShort(2+data.length).put((byte) code).put((byte) data.length).put(data);
+		return HS_OK;
+	}
+
+	final int error(Throwable ex, DynByteBuf snd) throws MSSException {
+		stage = HS_FAIL;
+
+		error = new MSSException("cipher fault", ex);
+		if (snd.capacity() < 3) throw error;
+
+		snd.clear();
+		snd.put(P_ALERT).putShort(2).put(CIPHER_FAULT).put((byte) 0);
+		return HS_OK;
+	}
+
+	// endregion
 }

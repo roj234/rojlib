@@ -27,9 +27,9 @@ import java.util.List;
  * @since 2023/3/19 0019 20:37
  */
 public class LongByeBye extends CodeWriter {
-	private int templateType = Type.LONG;
+	private final int templateType;
 	private final Type internalType, methodType, callingType;
-	private boolean replaceCallingName;
+	private final boolean replaceCallingName;
 
 	public LongByeBye(int templateType, Type internalType, Type methodType, Type callingType, boolean replaceCallingName) {
 		this.templateType = templateType;
@@ -128,8 +128,8 @@ public class LongByeBye extends CodeWriter {
 	}
 
 	@Override
-	public void ldc(byte code, Constant c) {
-		super.ldc(code, c);
+	public void ldc(Constant c) {
+		super.ldc(c);
 	}
 
 	private String replaceArrayClass(String clz) {
@@ -169,8 +169,8 @@ public class LongByeBye extends CodeWriter {
 	private byte replaceCode(byte code) {
 		switch (OpcodeUtil.category(code)) {
 			case OpcodeUtil.CATE_MATH_CAST:
-			case OpcodeUtil.CATE_LOAD:
-			case OpcodeUtil.CATE_STORE:
+			case OpcodeUtil.CATE_LOAD_STORE:
+			case OpcodeUtil.CATE_LOAD_STORE_LEN:
 			case OpcodeUtil.CATE_MATH:
 			case OpcodeUtil.CATE_ARRAY_SL:
 				code = InsnHelper.changeCodeType(code, Type.std(templateType), internalType);

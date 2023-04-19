@@ -15,6 +15,7 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.ReadOnlyBufferException;
 import java.util.List;
+import java.util.function.IntUnaryOperator;
 
 import static java.lang.Character.MAX_HIGH_SURROGATE;
 import static java.lang.Character.MIN_HIGH_SURROGATE;
@@ -25,6 +26,7 @@ import static roj.reflect.FieldAccessor.u;
  * @since 2021/5/29 20:45
  */
 public class ByteList extends DynByteBuf implements CharSequence, Appendable {
+	static final boolean USE_CACHE = true;
 	public static final ByteList EMPTY = new Slice(ArrayCache.BYTES, 0, 0);
 
 	public byte[] list;
@@ -119,9 +121,14 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		if (required > list.length) {
 			int newLen = list.length == 0 ? Math.max(required, 256) : ((required * 3) >>> 1) + 1;
 
-			ArrayCache cache = ArrayCache.getDefaultCache();
-			cache.putArray(list);
-			byte[] newList = cache.getByteArray(newLen, false);
+			byte[] newList;
+			if (USE_CACHE) {
+				ArrayCache cache = ArrayCache.getDefaultCache();
+				cache.putArray(list);
+				newList = cache.getByteArray(newLen, false);
+			} else {
+				newList = new byte[newLen];
+			}
 
 			if (wIndex > 0) System.arraycopy(list, 0, newList, 0, wIndex);
 			list = newList;
@@ -324,14 +331,21 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		return this;
 	}
 
-	public final ByteList putUTFData(CharSequence s) { return putUTFData0(s, byteCountUTF8(s)); }
-	public final ByteList putUTFData0(CharSequence s, int len) {
-		int wi = moveWI(len);
-		jutf8_encode_all(s, list, Unsafe.ARRAY_BYTE_BASE_OFFSET+wi+arrayOffset(), len);
-		return this;
+	@SuppressWarnings("deprecation")
+	public final void _writeDioUTF(String s, int byteLen) {
+		int wi = moveWI(byteLen);
+
+		// better on Java 9 and later
+		if (byteLen == s.length()) {
+			s.getBytes(0,byteLen,list,wi);
+			return;
+		}
+
+		jutf8_encode_all(s, list, Unsafe.ARRAY_BYTE_BASE_OFFSET+wi+arrayOffset(), byteLen);
 	}
 
-	public final DynByteBuf putUtf8mb4Data(CharSequence s, int len) {
+	public final ByteList putUTFData(CharSequence s) { return putUTFData0(s, byteCountUTF8(s)); }
+	public final ByteList putUTFData0(CharSequence s, int len) {
 		int wi = moveWI(len);
 		utf8mb4_encode_all(s, list, Unsafe.ARRAY_BYTE_BASE_OFFSET+wi+arrayOffset(), len);
 		return this;
@@ -551,7 +565,6 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		int off = moveRI(len);
 
 		CharList sb = IOUtil.getSharedCharBuf();
-		sb.ensureCapacity(len);
 		try {
 			utf8mb4_decode(list, Unsafe.ARRAY_BYTE_BASE_OFFSET+arrayOffset(), off, len, sb, -1, false);
 		} catch (IOException e) {
@@ -627,6 +640,18 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 			i++;
 		}
 		return -1;
+	}
+
+	public final void forEachByte(IntUnaryOperator operator) {
+		byte[] b = list;
+		int i = rIndex + arrayOffset();
+		int e = wIndex + arrayOffset();
+		while (i < e) {
+			int v = operator.applyAsInt(b[i]);
+			b[i] = (byte) v;
+
+			i++;
+		}
 	}
 
 	public final ByteList slice(int length) {
@@ -728,8 +753,6 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		}
 		int ri = in.moveRI(len);
 
-		if (out instanceof CharList) ((CharList) out).ensureCapacity(len);
-
 		if (in.isDirect()) {
 			utf8mb4_decode(null, in.address(), ri, len, out, -1, false);
 		} else {
@@ -809,7 +832,7 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 					if (Character.charCount(c4) == 1) {
 						out.append((char) c4);
 					} else {
-						if (outMax-- == 0) { i -= 4; break;}
+						if (outMax-- == 0) { i -= 4; break; }
 
 						out.append(Character.highSurrogate(c4)).append(Character.lowSurrogate(c4));
 					}
@@ -828,7 +851,7 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		overflow:{
 			while (i < len) {
 				int c = s.charAt(i);
-				if (c > 0x7F) break;
+				if (c == 0 || c > 0x7F) break;
 				i++;
 
 				if ((byte_len -= 1) < 0) break overflow;
@@ -838,8 +861,8 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 			while (i < len) {
 				int c = s.charAt(i++);
 
-				if (c > 0x7F) {
-					if (c <= 0x7FFF) {
+				if (c == 0 || c > 0x7F) {
+					if (c <= 0x7FF) {
 						if ((byte_len -= 2) < 0) break overflow;
 						u.putByte(ref, addr++, (byte) (0xC0 | ((c >> 6) & 0x1F)));
 						u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
@@ -855,7 +878,7 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 				}
 			}
 		}
-		if (byte_len < 0) throw new IllegalArgumentException("长度断言失败,少了至少"+ -byte_len +"字节");
+		if (byte_len != 0) throw new IllegalArgumentException("长度断言失败,少了至少"+ -byte_len +"字节");
 	}
 	public static void utf8mb4_encode_all(CharSequence s, Object ref, long addr, int byte_len) {
 		int i = 0;
@@ -899,7 +922,7 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 			}
 		}
 		}
-		if (byte_len < 0) throw new IllegalArgumentException("长度断言失败,少了至少"+ -byte_len +"字节");
+		if (byte_len != 0) throw new IllegalArgumentException("长度断言失败,少了至少"+ -byte_len +"字节");
 	}
 	public static long utf8mb4_encode(CharSequence s, Object ref, long addr, int max_len) {
 		long base = addr;
@@ -1071,6 +1094,8 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		public Slice(byte[] b, int off, int len) { setR(b, off, len); }
 
 		public ByteList setW(byte[] b, int off, int len) {
+			assert this != EMPTY;
+
 			wIndex = rIndex = 0;
 
 			list = b;
