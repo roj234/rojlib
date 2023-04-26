@@ -7,7 +7,6 @@ import roj.asm.visitor.CodeWriter;
  * @since 2021/6/27 13:36
  */
 public final class LabelInsnNode extends InsnNode {
-	public LabelInsnNode() { super((byte) 0); }
-	public void serialize(CodeWriter cw) { throw new UnsupportedOperationException(); }
-	public int nodeSize(int prevBci) { return -1; }
+	public LabelInsnNode() { super((byte) -1); }
+	public void serialize(CodeWriter cw) {}
 }

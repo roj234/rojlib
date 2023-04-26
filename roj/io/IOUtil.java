@@ -1,12 +1,9 @@
 package roj.io;
 
-import roj.RequireUpgrade;
 import roj.collect.SimpleList;
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.Waitable;
-import roj.io.down.DownloadTask;
-import roj.net.http.IHttpClient;
-import roj.net.http.SyncHttpClient;
+import roj.net.http.HttpRequest;
 import roj.text.CharList;
 import roj.text.StreamReader;
 import roj.text.TextUtil;
@@ -17,7 +14,6 @@ import roj.util.Helpers;
 import java.io.*;
 import java.net.URL;
 import java.nio.ByteBuffer;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.FileChannel;
 import java.nio.charset.UnsupportedCharsetException;
 import java.nio.file.*;
@@ -36,20 +32,30 @@ import java.util.function.Predicate;
 public final class IOUtil {
 	public static final FastThreadLocal<UTFCoder> SharedCoder = FastThreadLocal.withInitial(UTFCoder::new);
 
-	/**
-	 * Should not use in static initializator!!!
-	 */
+	public static ByteList ddLayeredByteBuf() {
+		ByteList bb = new ByteList();
+		bb.ensureCapacity(1024);
+		return bb;
+	}
+	public static CharList ddLayeredCharBuf() {
+		CharList sb = new CharList();
+		sb.ensureCapacity(1024);
+		return sb;
+	}
+
+	// 上面给API用，下面给实际代码用
+
 	public static ByteList getSharedByteBuf() {
 		ByteList o = SharedCoder.get().byteBuf;
-		o.ensureCapacity(1024);
 		o.clear();
+		o.ensureCapacity(1024);
 		return o;
 	}
 
 	public static CharList getSharedCharBuf() {
 		CharList o = SharedCoder.get().charBuf;
-		o.ensureCapacity(1024);
 		o.clear();
+		o.ensureCapacity(1024);
 		return o;
 	}
 
@@ -103,6 +109,12 @@ public final class IOUtil {
 		}
 	}
 
+	public static String readString(InputStream in) throws IOException {
+		try (StreamReader sr = StreamReader.auto(in)) {
+			return new CharList().readFully(sr).toString();
+		}
+	}
+
 	public static void write(CharSequence cs, File out) throws IOException {
 		try (FileOutputStream fos = new FileOutputStream(out)) {
 			SharedCoder.get().encodeTo(cs, fos);
@@ -113,6 +125,7 @@ public final class IOUtil {
 		SharedCoder.get().encodeTo(cs, out);
 	}
 
+	public static void readFully(InputStream in, byte[] b) throws IOException { readFully(in, b, 0, b.length); }
 	public static void readFully(InputStream in, byte[] b, int off, int len) throws IOException {
 		while (len > 0) {
 			int r = in.read(b, off, len);
@@ -348,25 +361,8 @@ public final class IOUtil {
 	// todo 支持HTTP2.0后移走
 	public static int timeout = 10000;
 
-	@RequireUpgrade
 	public static ByteList downloadFileToMemory(String url) throws IOException {
-		IHttpClient con = process302(new URL(url));
-		SyncHttpClient sbr = IHttpClient.syncWait(con, 15000, 1000);
-		try {
-			sbr.waitFor();
-		} catch (InterruptedException e) {
-			sbr.disconnect();
-			throw new ClosedByInterruptException();
-		}
-		return sbr.getResult();
-	}
-
-	public static IHttpClient process302(URL url) throws IOException {
-		DownloadTask task = new DownloadTask(url, null, null, null);
-		task.operation = DownloadTask.REDIRECT_ONLY;
-		DownloadTask.QUERY.pushTask(task);
-		task.waitFor();
-		return task.getClient();
+		return HttpRequest.nts().url(new URL(url)).execute().bytes();
 	}
 
 	public static final class ImmediateFuture implements Waitable {

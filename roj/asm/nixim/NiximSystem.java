@@ -8,7 +8,6 @@ import roj.asm.TransformException;
 import roj.asm.cst.*;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.AnnVal;
-import roj.asm.tree.anno.AnnValString;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.attr.AttrLineNumber.LineNumber;
@@ -880,7 +879,7 @@ public class NiximSystem implements NiximHelper {
 			Annotation copy = getAnnotation(h, data.cp, method, A_COPY);
 			if (copy != null) {
 				if (copy.containsKey("staticInitializer") || copy.containsKey("targetIsFinal")) {
-					throw new TransformException("staticInitializer/targetIsFinal属性只能用在字段上！位置: " + data.name + '.' + method.name + " " + method.type.getString());
+					throw new TransformException("staticInitializer/targetIsFinal属性只能用在字段上！位置: " + data.name + '.' + method.name + " " + method.type.str());
 				}
 				String name = copy.getString("value");
 				if (copy.getInt("unique", 0) > 0) {
@@ -966,7 +965,7 @@ public class NiximSystem implements NiximHelper {
 				entry.toName = remapName;
 				entries.add(entry);
 
-				map.put("value", new AnnValString(method.name()));
+				map.put("value", AnnVal.valueOf(method.name()));
 				method.name = data.cp.getUtf(remapName);
 				tmpInjects.put(method, map);
 				methods.remove(i);
@@ -1036,25 +1035,25 @@ public class NiximSystem implements NiximHelper {
 			}
 			CstRef ref = refs.get(k++);
 
-			NiximData nx1 = parentNx.get(ref.getClassName());
+			NiximData nx1 = parentNx.get(ref.className());
 			if (nx1 != null) {
 				RemapEntry target = nx1.remaps.find(tmp.read(ref));
 				if (target != tmp) {
 					String name = target.toClass;
-					if (name != null && !name.equals(ref.getClassName())) ref.setClazz(data.cp.getClazz(name));
+					if (name != null && !name.equals(ref.className())) ref.clazz(data.cp.getClazz(name));
 					name = target.toName;
 					if (name != null && !name.equals(tmp.name)) ref.desc(data.cp.getDesc(name, tmp.desc));
 				}
 			}
 
 			CstUTF desc = ref.desc().getType();
-			desc.setString(tr.mapMethodParam(fakeMap, desc.getString()));
+			ctx.getData().cp.setUTFValue(desc, tr.mapMethodParam(fakeMap, desc.str()));
 		}
 
 		List<CstClass> clzs = ctx.getClassConstants();
 		for (int i = 0; i < clzs.size(); i++) {
 			CstClass clz = clzs.get(i);
-			NiximData nx1 = parentNx.get(clz.getValue().getString());
+			NiximData nx1 = parentNx.get(clz.name().str());
 			if (nx1 != null) {
 				clz.setValue(data.cp.getUtf(nx1.dest));
 			}
@@ -1199,7 +1198,7 @@ public class NiximSystem implements NiximHelper {
 					CstMethodHandle handle = (CstMethodHandle) c;
 					CstRef ref = handle.getRef();
 
-					if (!ref.getClassName().equals(destClass)) {
+					if (!ref.className().equals(destClass)) {
 						// not self method
 						break;
 					}
@@ -1207,7 +1206,7 @@ public class NiximSystem implements NiximHelper {
 					List<? extends MethodNode> nodes = data.methods;
 					for (int j = 0; j < nodes.size(); j++) {
 						RawMethod method = (RawMethod) nodes.get(j);
-						if (method.name.equals(ref.desc().getName()) && method.type.equals(ref.desc().getType())) {
+						if (method.name.equals(ref.desc().name()) && method.type.equals(ref.desc().getType())) {
 							Method lmd = new Method(data, method);
 							lmd.name = "NLambda^" + copyMethod.size();
 							ref.desc(data.cp.getDesc(lmd.name, lmd.rawDesc()));
@@ -1246,12 +1245,12 @@ public class NiximSystem implements NiximHelper {
 			}
 			CstRef ref = refs.get(k++);
 
-			NiximData nx1 = parentNx.get(ref.getClassName());
+			NiximData nx1 = parentNx.get(ref.className());
 			if (nx1 != null) {
 				RemapEntry target = nx1.remaps.find(tester.read(ref));
 				if (target != tester) {
 					String name = target.toClass;
-					if (name != null && !name.equals(ref.getClassName())) ref.setClazz(data.cp.getClazz(name));
+					if (name != null && !name.equals(ref.className())) ref.clazz(data.cp.getClazz(name));
 					name = target.toName;
 					if (name != null && !name.equals(tester.name)) {
 						ref.desc(data.cp.getDesc(name, tester.desc));
@@ -1260,7 +1259,7 @@ public class NiximSystem implements NiximHelper {
 			}
 
 			CstUTF desc = ref.desc().getType();
-			desc.setString(tr.mapMethodParam(fakeMap, desc.getString()));
+			ctx.getData().cp.setUTFValue(desc, tr.mapMethodParam(fakeMap, desc.str()));
 		}
 
 		for (int i = 0; i < data.methods.size(); i++) {
@@ -1271,7 +1270,7 @@ public class NiximSystem implements NiximHelper {
 		List<CstClass> clzs = ctx.getClassConstants();
 		for (int i = 0; i < clzs.size(); i++) {
 			CstClass clz = clzs.get(i);
-			NiximData nx1 = parentNx.get(clz.getValue().getString());
+			NiximData nx1 = parentNx.get(clz.name().str());
 			if (nx1 != null) {
 				clz.setValue(data.cp.getUtf(nx1.dest));
 			}
@@ -1605,7 +1604,7 @@ public class NiximSystem implements NiximHelper {
 				if (ann.getInt("copyItf", 0) != 0) {
 					List<CstClass> itf = data.interfaces;
 					for (int i = 0; i < itf.size(); i++) {
-						nx.addItfs.add(itf.get(i).getValue().getString());
+						nx.addItfs.add(itf.get(i).name().str());
 					}
 				}
 				flag = ann.getInt("flag", 0);
@@ -1779,7 +1778,7 @@ public class NiximSystem implements NiximHelper {
 		@Override
 		@RequireTest
 		public void invoke(byte code, CstRef method) {
-			if (code == INVOKEVIRTUAL && method.desc().getName().getString().equals("<init>")) {
+			if (code == INVOKEVIRTUAL && method.desc().name().str().equals("<init>")) {
 				for (int i = 0; i < 100; i++) {
 					System.err.println("INVOKEINIT " + (I.get(I.rIndex - 3) == INVOKEVIRTUAL));
 				}
@@ -1793,7 +1792,7 @@ public class NiximSystem implements NiximHelper {
 		public void field(byte code, CstRefField field) {
 			checkAccess(field);
 			if (!isInit && (code == PUTFIELD || code == PUTSTATIC)) {
-				if (field.getClassName().equals(data.name)) {
+				if (field.className().equals(data.name)) {
 					ShadowCheck sc = nx.shadowChecks.find((ShadowCheck) tmp.read(field));
 					if (sc != tmp && (sc.flag & AccessFlag.FINAL) != 0) {
 						Helpers.athrow(new TransformException("不能修改final或为实际上final的字段 " + data.name + '.' + tmp));
@@ -1803,14 +1802,14 @@ public class NiximSystem implements NiximHelper {
 		}
 
 		private void checkAccess(CstRef ref) {
-			if (ref.getClassName().equals(data.name) && inaccessible.contains(tmp.read(ref))) {
+			if (ref.className().equals(data.name) && inaccessible.contains(tmp.read(ref))) {
 				Helpers.athrow(new TransformException("无法访问" + data.name + '.' + tmp + ": 会出现 IllegalAccessError / NoSuchFieldError"));
 			}
 		}
 
 		private void checkInvokeTarget(CstRef ref) {
-			if (ref.getClassName().equals(nx.dest) && tmp.read(ref).equals(tmp2)) {
-				ref.setClazz(data.cp.getClazz("//MARKER"));
+			if (ref.className().equals(nx.dest) && tmp.read(ref).equals(tmp2)) {
+				ref.clazz(data.cp.getClazz("//MARKER"));
 			}
 		}
 	}

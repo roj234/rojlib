@@ -81,7 +81,7 @@ public class FileResponse implements Response {
 	private String splitter;
 
 	public static FileResponse cached(Request req) {
-		Map<String, Object> map = req.threadLocalCtx();
+		Map<String, Object> map = req.threadContext();
 
 		FileResponse resp = (FileResponse) map.get("FileResp");
 		if (resp == null) map.put("FileResp", resp = new FileResponse());
@@ -94,11 +94,11 @@ public class FileResponse implements Response {
 
 		int stat = info.stats();
 
-		if (null != Headers.decodeOneValue(req.header("Accept-Encoding"), "deflate")) {
-			if ((stat & FileInfo.CH_DEFL) != 0) {
+		if (req.getFieldValue("accept-encoding", "deflate") != null) {
+			if ((stat & FileInfo.FILE_DEFLATED) != 0) {
 				def = 1;
 				req.handler.header("Content-Encoding", "deflate");
-			} else if ((stat & FileInfo.CH_WANT_DEFL) != 0) {
+			} else if ((stat & FileInfo.FILE_WANT_DEFLATE) != 0) {
 				def = 2;
 				req.handler.compressed();
 			}
@@ -171,7 +171,7 @@ public class FileResponse implements Response {
 			}
 		}
 
-		if (!req.containsKey("Range") || (stat & (def==1? FileInfo.CH_RA_DEFL: FileInfo.CH_RA_RAW)) == 0) {
+		if (!req.containsKey("Range") || (stat & (def==1? FileInfo.FILE_RA_DEFLATE : FileInfo.FILE_RA)) == 0) {
 			plus(200, req);
 			return this;
 		}

@@ -1,13 +1,13 @@
 package roj.net.http;
 
 import roj.io.IOUtil;
-import roj.net.URIUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
 import roj.net.ch.handler.StreamCompress;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -18,18 +18,18 @@ import java.util.zip.ZipException;
 
 import static java.util.zip.GZIPInputStream.GZIP_MAGIC;
 
-public class HttpClient11 extends IHttpClient implements ChannelHandler {
-	static final int SEND_HEAD=0,RECV_HEAD=1,PROCESS_COMPRESS=2,RECV_BODY=3,RECV_CHECKSUM=4,IDLE=5;
+public class HttpClient11 extends HttpRequest implements ChannelHandler {
+	static final int SEND_HEAD=0,RECV_HEAD=1,PROCESSING=2,PROCESS_COMPRESS=3,RECV_BODY=4,RECV_CHECKSUM=5,IDLE=6;
 
-	HttpHead response;
+	private HttpHead response;
 
-	boolean sendEof;
-	long len;
+	private boolean sendEof;
+	private long len;
 
-	CRC32 crc;
-	int rcv;
+	private CRC32 crc;
+	private int rcv;
 
-	public HttpClient11() {}
+	HttpClient11() {}
 
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
@@ -37,50 +37,52 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 		sendEof = false;
 
 		crc = null;
+		rcv = 0;
+		response = null;
 
 		setCompr(ctx, null);
 		setChunk(ctx, 0);
 
-		if (body instanceof DynByteBuf)
-			header.put("content-length", Integer.toString(((DynByteBuf) body).readableBytes()));
-		else if (body instanceof String) {
-			header.put("transfer-encoding", "chunked");
-		} else header.put("content-length", "0");
-
-		header.putIfAbsent("accept", "text/html, image/gif, image/jpeg, *; q=.2, */*; q=.2");
-		header.putIfAbsent("connection", "keep-alive");
-		header.putIfAbsent("user-agent", "Java-Http-Client/2.0.0");
-		header.putIfAbsent("accept-encoding", "gzip, deflate");
-
-		ByteList text = IOUtil.getSharedByteBuf();
-		text.putAscii(action).putAscii(" ");
-		if (urlPreEncoded) {
-			text.putAscii(url.getPath().isEmpty()?"/": url.getPath());
-			if (url.getQuery() != null) text.put((byte) '?').putAscii(url.getQuery());
-		} else {
-			ByteList tmp = (ByteList) ctx.allocate(false, Math.max(url.getPath().length(), (url.getQuery() == null ? 0 : url.getQuery().length())) * 5);
-			try {
-				if (url.getPath().isEmpty()) text.putAscii("/");
-				else URIUtil.encodeURI(url.getPath(), tmp, text, URIUtil.URI_SAFE);
-				if (url.getQuery() != null) URIUtil.encodeURI(url.getQuery(), tmp, text.put((byte) '?'), URIUtil.URI_SAFE);
-			} finally {
-				ctx.reserve(tmp);
-			}
-		}
-
-		header.encode(text.putAscii(" HTTP/1.1\r\n"));
+		ByteList text = IOUtil.getSharedByteBuf().putAscii(method()).putAscii(" ");
+		_appendPath(text).putAscii(" HTTP/1.1\r\n");
+		Headers hdr = _getHeaders();
+		hdr.encode(text);
 
 		ctx.channelWrite(text.putShort(0x0D0A));
 
-		if (body instanceof DynByteBuf) {
-			ctx.channelWrite(body);
-			body = null;
-		} else if (body instanceof String) {
-			setChunk(ctx, 1);
+		_getBody();
+		if (_body instanceof DynByteBuf) {
+			DynByteBuf b = (DynByteBuf) _body;
+			ctx.channelWrite(b.slice(b.rIndex, b.readableBytes()));
+		} else {
+			/*if ("deflate".equalsIgnoreCase(hdr.get("content-encoding")))
+				setCompr(ctx, 1);*/
+			if ("chunked".equalsIgnoreCase(hdr.get("transfer-encoding")))
+				setChunk(ctx, 1);
 		}
 
-		response = null;
 		state = RECV_HEAD;
+	}
+
+	@Override
+	public void channelTick(ChannelCtx ctx) throws IOException {
+		if (_body != null) {
+			Object body1 = _write(ctx, _body);
+			if (body1 == null) {
+				ctx.postEvent(StreamCompress.OUT_EOF);
+				ctx.postEvent(ChunkSplitter.CHUNK_OUT_EOF);
+
+				if (_body instanceof AutoCloseable) {
+					try {
+						((AutoCloseable) _body).close();
+					} catch (Exception e) {
+						Helpers.athrow(e);
+					}
+				}
+			}
+
+			_body = body1;
+		}
 	}
 
 	@Override
@@ -101,13 +103,6 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 				} else if (state == RECV_CHECKSUM) {
 					sendEof(ctx, false);
 					throw new ZipException("Unexpected gzip EOS: checksum missing");
-				}
-				break;
-			case "hc:body_eof": // BODY_EOF
-				if (body instanceof String) {
-					ctx.postEvent(StreamCompress.OUT_EOF);
-					ctx.postEvent(ChunkSplitter.CHUNK_OUT_EOF);
-					body = null;
 				}
 				break;
 		}
@@ -162,9 +157,11 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 				if (!response.parseHead(buf, IOUtil.getSharedByteBuf())) return;
 
 				len = response.getContentLengthLong();
+				state = PROCESSING;
 				ctx.channelOpened();
+				if (state != PROCESSING) return;
 
-				if (action.equals("HEAD")) {
+				if (method().equals("HEAD")) {
 					state = IDLE;
 					return;
 				}
@@ -183,7 +180,7 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 				String CE = response.getContentEncoding();
 				switch (CE) {
 					case "gzip": {
-						if (buf.readableBytes() < 4) return;
+						if (buf.readableBytes() < 10) return;
 
 						int pos = buf.rIndex;
 						try {
@@ -214,24 +211,18 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 		}
 	}
 
-	@Override
-	public void channelWrite(ChannelCtx ctx, Object msg) throws IOException {
-		if (body instanceof String) ctx.channelWrite(msg);
-		else throw new UnsupportedOperationException();
-	}
-
 	private void sendEof(ChannelCtx ctx, boolean success) throws IOException {
 		if (!sendEof) {
 			sendEof = true;
 
-			Event event = new Event(DOWNLOAD_EOF);
+			Event event = new Event(DOWNLOAD_EOF).capture();
 			event.setData(success);
 			ctx.postEvent(event);
 
 			synchronized (this) { notifyAll(); }
 
-			if (response != null && response.getHeaderField("connection").equalsIgnoreCase("close")) {
-				ctx.close();
+			if (response != null && response.getField("connection").equalsIgnoreCase("close")) {
+				ctx.channel().closeGracefully();
 			}
 		}
 		state = IDLE;
@@ -239,6 +230,7 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 
 	@Override
 	public void channelClosed(ChannelCtx ctx) throws IOException {
+		_close();
 		if (!sendEof) {
 			sendEof = true;
 			synchronized (this) { notifyAll(); }
@@ -254,11 +246,11 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 	/*
 	 * File header flags.
 	 */
-	private final static int FTEXT = 1;    // Extra text
-	private final static int FHCRC = 2;    // Header CRC
+	private final static int FTEXT = 1;     // Extra text
+	private final static int FHCRC = 2;     // Header CRC
 	private final static int FEXTRA = 4;    // Extra field
-	private final static int FNAME = 8;    // File name
-	private final static int FCOMMENT = 16;   // File comment
+	private final static int FNAME = 8;     // File name
+	private final static int FCOMMENT = 16; // File comment
 	private static int checkGZHeader(DynByteBuf buf) throws IOException {
 		int rPos = buf.rIndex;
 
@@ -334,21 +326,12 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 	}
 
 	@Override
-	public HttpHead response() {
-		return response;
-	}
-
-	@Override
-	public ChannelHandler asChannelHandler() {
-		return this;
-	}
+	public HttpHead response() { return response; }
 
 	@Override
 	public void waitFor() throws InterruptedException {
 		synchronized (this) {
-			if (sendEof) {
-				notifyAll();
-			}
+			while (!sendEof) { wait(); }
 		}
 	}
 
@@ -397,5 +380,10 @@ public class HttpClient11 extends IHttpClient implements ChannelHandler {
 		if (op == -1) cs.enableIn();
 		else cs.enableOut();
 		return hwarp;
+	}
+
+	@Override
+	public HttpRequest clone() {
+		return _copyTo(new HttpClient11());
 	}
 }

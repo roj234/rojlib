@@ -25,7 +25,7 @@ import roj.config.data.CMapping;
 import roj.config.word.ITokenizer;
 import roj.config.word.Tokenizer;
 import roj.config.word.Word;
-import roj.io.BOMInputStream;
+import roj.io.ChineseInputStream;
 import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
 import roj.io.down.ProgressGroupedMulti;
@@ -241,7 +241,7 @@ public class MCLauncher extends JFrame {
 
 		boolean skip = false;
 		do {
-			Task.waitUntilFinish(TIMEOUT_TIME - (System.currentTimeMillis() - str));
+			Task.awaitFinish(TIMEOUT_TIME - (System.currentTimeMillis() - str));
 			if (Task.taskPending() <= 0) return;
 
 			if (!skip) {
@@ -992,7 +992,7 @@ public class MCLauncher extends JFrame {
 		File conf = new File(BASE, "launcher.json");
 		if (conf.isFile()) {
 			try {
-				final BOMInputStream bom = new BOMInputStream(new FileInputStream(conf), "UTF8");
+				ChineseInputStream bom = new ChineseInputStream(new FileInputStream(conf));
 				if (!bom.getCharset().equals("UTF8")) { // 检测到了则是 UTF-8
 					CmdUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getCharset());
 				}

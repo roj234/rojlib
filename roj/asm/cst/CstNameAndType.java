@@ -31,7 +31,7 @@ public final class CstNameAndType extends Constant {
 	public final String toString() {
 		CharList sb = new CharList().append(super.toString())
 			.append(" 引用[").append(name.getIndex()).append(",").append(type.getIndex()).append("] ");
-		return parseNodeDesc(sb, null, name.getString(), type.getString());
+		return parseNodeDesc(sb, null, name.str(), type.str());
 	}
 	static String parseNodeDesc(CharList sb, String owner, String name, String type) {
 		if (owner != null) {
@@ -64,20 +64,15 @@ public final class CstNameAndType extends Constant {
 		return ref.name.equals(name) && ref.type.equals(type);
 	}
 
-	public final CstUTF getName() {
-		return name;
-	}
-
-	public final void setName(CstUTF name) {
-		if (name == null)
-			throw new NullPointerException("name");
+	public final CstUTF name() { return name; }
+	public final void name(CstUTF name) {
+		if (name == null) throw new NullPointerException("name");
 		this.name = name;
 	}
 
 	public final CstUTF getType() {
 		return type;
 	}
-
 	public final void setType(CstUTF type) {
 		if (type == null)
 			throw new NullPointerException("type");

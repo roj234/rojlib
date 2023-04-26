@@ -78,7 +78,7 @@ public final class Parser {
 		SimpleList<FieldNode> fields = data.fields;
 		fields.ensureCapacity(len);
 		while (len-- > 0) {
-			Field field = new Field(r.readShort(), ((CstUTF) pool.get(r)).getString(), ((CstUTF) pool.get(r)).getString());
+			Field field = new Field(r.readShort(), ((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str());
 			fields.add(field);
 
 			attr(pool, r, field, Signature.FIELD);
@@ -88,7 +88,7 @@ public final class Parser {
 		SimpleList<MethodNode> methods = data.methods;
 		methods.ensureCapacity(len);
 		while (len-- > 0) {
-			Method method = new Method(r.readShort(), data, ((CstUTF) pool.get(r)).getString(), ((CstUTF) pool.get(r)).getString());
+			Method method = new Method(r.readShort(), data, ((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str());
 			methods.add(method);
 
 			attr(pool, r, method, Signature.METHOD);
@@ -110,7 +110,7 @@ public final class Parser {
 		list.ensureCapacity(len);
 
 		while (len-- > 0) {
-			String name = ((CstUTF) pool.get(r)).getString();
+			String name = ((CstUTF) pool.get(r)).str();
 			int length = r.readInt();
 			int end = r.rIndex + length;
 			r.wIndex(end);
@@ -183,40 +183,40 @@ public final class Parser {
 		return (T) attr;
 	}
 	private static boolean skipToStringParse;
-	private static Attribute attr(Attributed node, ConstantPool cp, String name, DynByteBuf r, int origin) {
+	public static Attribute attr(Attributed node, ConstantPool cp, String name, DynByteBuf data, int origin) {
 		if (skipToStringParse) return null;
 
-		int len = r.rIndex;
+		int len = data.rIndex;
 		try {
 			switch (name) {
 				case "RuntimeVisibleTypeAnnotations":
-				case "RuntimeInvisibleTypeAnnotations": return new TypeAnnotations(name, r, cp);
+				case "RuntimeInvisibleTypeAnnotations": return new TypeAnnotations(name, data, cp);
 				case "RuntimeVisibleAnnotations":
-				case "RuntimeInvisibleAnnotations": return new Annotations(name, r, cp);
+				case "RuntimeInvisibleAnnotations": return new Annotations(name, data, cp);
 				case "RuntimeVisibleParameterAnnotations":
-				case "RuntimeInvisibleParameterAnnotations": return new ParameterAnnotations(name, r, cp);
-				case "Signature": return Signature.parse(((CstUTF) cp.get(r)).getString(), origin);
+				case "RuntimeInvisibleParameterAnnotations": return new ParameterAnnotations(name, data, cp);
+				case "Signature": return Signature.parse(((CstUTF) cp.get(data)).str(), origin);
 				case "Synthetic": case "Deprecated": break;
 				// method only
-				case "MethodParameters": limit(origin,Signature.METHOD); return new MethodParameters(r, cp);
-				case "Exceptions": limit(origin,Signature.METHOD); return new AttrStringList(name, r, cp, 0);
-				case "AnnotationDefault": limit(origin,Signature.METHOD); return new AnnotationDefault(r, cp);
-				case "Code": limit(origin,Signature.METHOD); return new AttrCode((MethodNode) node, r, cp);
+				case "MethodParameters": limit(origin,Signature.METHOD); return new MethodParameters(data, cp);
+				case "Exceptions": limit(origin,Signature.METHOD); return new AttrStringList(name, data, cp, 0);
+				case "AnnotationDefault": limit(origin,Signature.METHOD); return new AnnotationDefault(data, cp);
+				case "Code": limit(origin,Signature.METHOD); return new AttrCode((MethodNode) node, data, cp);
 				// field only
-				case "ConstantValue": limit(origin,Signature.FIELD); return new ConstantValue(cp.get(r));
+				case "ConstantValue": limit(origin,Signature.FIELD); return new ConstantValue(cp.get(data));
 				// class only
-				case "Record": limit(origin,Signature.CLASS); return new AttrRecord(r, cp);
-				case "InnerClasses": limit(origin,Signature.CLASS); return new InnerClasses(r, cp);
-				case "Module": limit(origin,Signature.CLASS); return new AttrModule(r, cp);
-				case "ModulePackages": limit(origin,Signature.CLASS); return new AttrModulePackages(r, cp);
+				case "Record": limit(origin,Signature.CLASS); return new AttrRecord(data, cp);
+				case "InnerClasses": limit(origin,Signature.CLASS); return new InnerClasses(data, cp);
+				case "Module": limit(origin,Signature.CLASS); return new AttrModule(data, cp);
+				case "ModulePackages": limit(origin,Signature.CLASS); return new AttrModulePackages(data, cp);
 				case "ModuleMainClass":
-				case "NestHost": limit(origin,Signature.CLASS); return new AttrClassRef(name, r, cp);
+				case "NestHost": limit(origin,Signature.CLASS); return new AttrClassRef(name, data, cp);
 				case "PermittedSubclasses":
-				case "NestMembers": limit(origin,Signature.CLASS); return new AttrStringList(name, r, cp, 0);
-				case "SourceFile": limit(origin,Signature.CLASS); return new AttrUTF(name, ((CstUTF) cp.get(r)).getString());
-				case "BootstrapMethods": limit(origin,Signature.CLASS); return new BootstrapMethods(r, cp);
+				case "NestMembers": limit(origin,Signature.CLASS); return new AttrStringList(name, data, cp, 0);
+				case "SourceFile": limit(origin,Signature.CLASS); return new AttrUTF(name, ((CstUTF) cp.get(data)).str());
+				case "BootstrapMethods": limit(origin,Signature.CLASS); return new BootstrapMethods(data, cp);
 				// 匿名类所属的方法
-				case "EnclosingMethod": limit(origin,Signature.CLASS); return new EnclosingMethod((CstClass) cp.get(r), (CstNameAndType) cp.get(r));
+				case "EnclosingMethod": limit(origin,Signature.CLASS); return new EnclosingMethod((CstClass) cp.get(data), (CstNameAndType) cp.get(data));
 				case "SourceDebugExtension": break;
 			}
 		} /*catch (OperationDone e) {
@@ -225,8 +225,8 @@ public final class Parser {
 			skipToStringParse = true;
 			String s = node.toString();
 			skipToStringParse = false;
-			r.rIndex = len;
-			throw new IllegalStateException("无法读取"+s+"的属性'"+name+"',长度为"+r.readableBytes()+",数据:"+r.dump(), e);
+			data.rIndex = len;
+			throw new IllegalStateException("无法读取"+s+"的属性'"+name+"',长度为"+data.readableBytes()+",数据:"+data.dump(), e);
 		}
 		return null;
 	}
@@ -344,7 +344,7 @@ public final class Parser {
 
 				char acc = r.readChar();
 
-				AccessData.MOF d = data.new MOF(((CstUTF) pool.get(r)).getString(), ((CstUTF) pool.get(r)).getString(), offset);
+				AccessData.MOF d = data.new MOF(((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str(), offset);
 				d.acc = acc;
 				com.add(d);
 

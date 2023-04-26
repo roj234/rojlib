@@ -32,13 +32,13 @@ public final class AttrRecord extends Attribute {
 			Val rd = new Val();
 			variables.add(rd);
 
-			rd.name = ((CstUTF) pool.get(r)).getString();
-			rd.type = ((CstUTF) pool.get(r)).getString();
+			rd.name = ((CstUTF) pool.get(r)).str();
+			rd.type = ((CstUTF) pool.get(r)).str();
 			int len1 = r.readUnsignedShort();
 			if (len1 > 0) {
 				rd.attributes = new AttributeList(len1);
 				while (len1-- > 0) {
-					String name0 = ((CstUTF) pool.get(r)).getString();
+					String name0 = ((CstUTF) pool.get(r)).str();
 					rd.attributes.i_direct_add(new AttrUnknown(name0, r.slice(r.readInt())));
 				}
 			}

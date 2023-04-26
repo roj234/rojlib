@@ -3,7 +3,6 @@ package roj.text;
 import roj.crypt.Base64;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -76,7 +75,7 @@ public class UTFCoder {
 	public String decode(DynByteBuf b) {
 		if (!keep) charBuf.clear();
 		try {
-			ByteList.decodeUTF(b.wIndex(), charBuf, b);
+			ByteList.decodeUTF(b.readableBytes(), charBuf, b);
 		} catch (IOException ignored) {}
 		return charBuf.toString();
 	}
@@ -256,105 +255,54 @@ public class UTFCoder {
 	}
 
 	public int encodeTo(CharSequence str, OutputStream out) throws IOException {
-		if (str.getClass() == CharList.class) {
-			return encodeTo(((CharList) str).list, 0, str.length(), out);
-		}
-		if (out instanceof ByteList) {
-			int len = ByteList.byteCountUTF8(str);
-			((ByteList) out).putUTFData0(str, len);
+		if (out instanceof DynByteBuf) {
+			int len = DynByteBuf.byteCountUTF8(str);
+			((DynByteBuf) out).putUTFData0(str, len);
 			return len;
 		}
 
 		ByteList ob = byteBuf; ob.clear(); ob.ensureCapacity(3072);
-		byte[] list = ob.list;
 
-		int i = 0, j = 0, wrote = 0;
-		int len = str.length();
-		while (i < len) {
-			char c = str.charAt(i++);
-			if ((c > 0) && (c <= 0x007F)) {
-				list[j++] = (byte) c;
-			} else if (c > 0x07FF) {
-				list[j++] = (byte) (0xE0 | ((c >> 12) & 0x0F));
-				list[j++] = (byte) (0x80 | ((c >> 6) & 0x3F));
-				list[j++] = (byte) (0x80 | (c & 0x3F));
-			} else {
-				list[j++] = (byte) (0xC0 | ((c >> 6) & 0x1F));
-				list[j++] = (byte) (0x80 | (c & 0x3F));
-			}
-			if (list.length - j < 10) {
-				wrote += j;
-				out.write(list, 0, j);
-				j = 0;
-			}
+		int wrote = 0;
+		int off = 0;
+		while (off < str.length()) {
+			off = UTF8MB4.CODER.encodeLoop(str, off, str.length(), ob, ob.capacity(), 0);
+
+			ob.writeToStream(out);
+			wrote += ob.wIndex();
+			ob.clear();
 		}
-
-		wrote += j;
-		out.write(list, 0, j);
-
-		return wrote;
-	}
-
-	public int encodeTo(char[] str, int i, int len, OutputStream out) throws IOException {
-		ByteList ob = byteBuf; ob.clear(); ob.ensureCapacity(3072);
-
-		byte[] b = ob.list;
-
-		int j = ob.arrayOffset(), wrote = 0;
-		while (i < len) {
-			char c = str[i++];
-			if ((c > 0) && (c <= 0x007F)) {
-				b[j++] = (byte) c;
-			} else if (c > 0x07FF) {
-				b[j++] = (byte) (0xE0 | ((c >> 12) & 0x0F));
-				b[j++] = (byte) (0x80 | ((c >> 6) & 0x3F));
-				b[j++] = (byte) (0x80 | (c & 0x3F));
-			} else {
-				b[j++] = (byte) (0xC0 | ((c >> 6) & 0x1F));
-				b[j++] = (byte) (0x80 | (c & 0x3F));
-			}
-			if (b.length - j < 10) {
-				wrote += j;
-				out.write(b, 0, j);
-				j = 0;
-			}
-		}
-
-		wrote += j;
-		out.write(b, 0, j);
 
 		return wrote;
 	}
 
 	public int decodeFrom(InputStream in) throws IOException {
 		charBuf.clear();
-		return decodeFrom(in, charBuf, -1);
+		return decodeUpto(in, charBuf, -1);
 	}
+	public int decodeUpto(InputStream in, Appendable to, int len) throws IOException {
+		ByteList ob = byteBuf; ob.clear(); ob.ensureCapacity(4096);
 
-	public int decodeFrom(InputStream in, Appendable to, int max) throws IOException {
-		ByteList ob = byteBuf; ob.ensureCapacity(4096);
-		byte[] b = ob.list;
+		if (len < 0) len = Integer.MAX_VALUE;
+		int read = 0;
+		while (len > 0) {
+			int d = ob.readStream(in, Math.min(ob.unsafeWritableBytes(), len));
+			if (d == 0) break; // EOF
 
-		long max1 = max > 0 ? max : Long.MAX_VALUE;
-		int i = 0, read = 0;
-		do {
-			int except = (int) Math.min(b.length - i, max1);
-			i = in.read(b, i, except);
-			if (i < 0) {
-				in.close();
-				break;
-			}
-			read += i;
-			max1 -= i;
+			read += d;
+			len -= d;
 
-			int c = ByteList.utf8mb4_decode(b, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, i, to, -1, true);
-			if (c < i) System.arraycopy(b, c, b, 0, i -= c);
-			else i = 0;
-		} while (max1 > 0);
+			UTF8MB4.CODER.decodeLoop(ob, ob.readableBytes(), to, Integer.MAX_VALUE, true);
+			ob.compact();
+		}
+
+		UTF8MB4.CODER.decodeLoop(ob, ob.readableBytes(), to, Integer.MAX_VALUE, false);
 
 		return read;
 	}
 
 	public ByteList wrap(byte[] b) { return shell.setR(b,0,b.length); }
 	public ByteList wrap(byte[] b, int off, int len) { return shell.setR(b,off,len); }
+
+	public final ByteList.Slice shellB = new ByteList.Slice();
 }

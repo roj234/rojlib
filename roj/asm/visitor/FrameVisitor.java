@@ -108,7 +108,7 @@ public class FrameVisitor {
 				if (js.code != GOTO && js.code != GOTO_W) {
 					BasicBlock2 fs1 = add(js.bci+3, OpcodeUtil.toString0(js.code)+"#"+js.bci+": continue");
 					fs1.noFrame = true;
-					jumpTo.putInt(js.bci, new SimpleList<>(fs,fs1));
+					jumpTo.putInt(js.bci, SimpleList.asModifiableList(fs,fs1));
 				} else {
 					jumpTo.putInt(js.bci, Collections.singletonList(fs));
 				}
@@ -400,7 +400,7 @@ public class FrameVisitor {
 					CstClass c = (CstClass) cp.get(r);
 					int alen = r.readUnsignedByte();
 					while (alen-- > 0) pop(INT);
-					push(c.getValue().getString());
+					push(c.name().str());
 					break;
 
 				case RETURN: eof = true; break;
@@ -562,7 +562,7 @@ public class FrameVisitor {
 	}
 
 	private void clazz(byte code, CstClass clz) {
-		String name = clz.getValue().getString();
+		String name = clz.name().str();
 		switch (code) {
 			case CHECKCAST: pop(ANY_OBJECT); push(name); break;
 			case NEW: push(UNINITIAL, name); break;
@@ -578,7 +578,7 @@ public class FrameVisitor {
 	private void ldc(Constant c) {
 		int type = c.type();
 		if (type == Constant.DYNAMIC) {
-			String typeStr = ((CstDynamic) c).desc().getType().getString();
+			String typeStr = ((CstDynamic) c).desc().getType().str();
 			type = typeStr.charAt(0);
 			if (!Type.isValid(type)) throw new UnsupportedOperationException("未知的type:"+typeStr);
 			switch (type) {
@@ -610,10 +610,10 @@ public class FrameVisitor {
 	}
 	private void invoke_dynamic(CstDynamic dyn, int type) {
 		CstNameAndType nat = dyn.desc();
-		String desc = nat.getType().getString();
+		String desc = nat.getType().str();
 
 		SimpleList<Type> list = paramList; list.clear();
-		TypeHelper.parseMethod(nat.getType().getString(), list);
+		TypeHelper.parseMethod(nat.getType().str(), list);
 
 		Type retVal = list.remove(list.size()-1);
 		for (int i = list.size() - 1; i >= 0; i--) {
@@ -625,7 +625,7 @@ public class FrameVisitor {
 		CstNameAndType nat = method.desc();
 
 		SimpleList<Type> list = paramList; list.clear();
-		TypeHelper.parseMethod(nat.getType().getString(), list);
+		TypeHelper.parseMethod(nat.getType().str(), list);
 
 		Type retVal = list.remove(list.size()-1);
 		for (int i = list.size() - 1; i >= 0; i--) {
@@ -633,8 +633,8 @@ public class FrameVisitor {
 		}
 
 		if (code != INVOKESTATIC) {
-			String owner = method.getClazz().getValue().getString();
-			if (code == INVOKESPECIAL && nat.getName().getString().equals("<init>")) {
+			String owner = method.clazz().name().str();
+			if (code == INVOKESPECIAL && nat.name().str().equals("<init>")) {
 				Var2 v1 = Var2.except(REFERENCE, owner);
 				v1.bci = bci;
 
@@ -648,17 +648,17 @@ public class FrameVisitor {
 		if (v != null) push(v);
 	}
 	private void field(byte code, CstRefField field) {
-		Type fType = TypeHelper.parseField(field.desc().getType().getString());
+		Type fType = TypeHelper.parseField(field.desc().getType().str());
 		switch (code) {
 			case GETSTATIC: push(castType(fType)); break;
 			case PUTSTATIC: pop(castType(fType)); break;
 			case GETFIELD:
-				pop(field.getClazz().getValue().getString());
+				pop(field.clazz().name().str());
 				push(castType(fType));
 				break;
 			case PUTFIELD:
 				pop(castType(fType));
-				pop(field.getClazz().getValue().getString());
+				pop(field.clazz().name().str());
 				break;
 		}
 	}
@@ -924,7 +924,7 @@ public class FrameVisitor {
 	private static Var2 getVar(ConstantPool pool, DynByteBuf r, IntMap<InsnNode> pc, MethodNode owner) {
 		byte type = r.readByte();
 		switch (type) {
-			case REFERENCE: return new Var2(type, ((CstClass) pool.get(r)).getValue().getString());
+			case REFERENCE: return new Var2(type, ((CstClass) pool.get(r)).name().str());
 			case UNINITIAL:
 				if (pc != null) {
 					int id = r.readUnsignedShort();

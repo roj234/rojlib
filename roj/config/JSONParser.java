@@ -143,6 +143,7 @@ public class JSONParser extends Parser<CEntry> {
 		return comment == null ? new CMapping(map) : new CCommMap(map, comment);
 	}
 
+	@SuppressWarnings("fallthrough")
 	private static CEntry element(Parser<?> wr, int flag) throws ParseException {
 		Word w = wr.next();
 		switch (w.type()) {

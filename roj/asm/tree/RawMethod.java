@@ -39,18 +39,18 @@ public final class RawMethod extends RawNode implements MethodNode {
 	public List<Type> parameters() {
 		if (params == null) {
 			params = new SimpleList<>();
-			TypeHelper.parseMethod(type.getString(),params);
+			TypeHelper.parseMethod(type.str(),params);
 			params.i_setSize(params.size()-1);
 		}
 		return params;
 	}
 	public Type returnType() {
 		if (params != null) return (Type) params.getRawArray()[params.size()];
-		return TypeHelper.parseReturn(type.getString());
+		return TypeHelper.parseReturn(type.str());
 	}
 
 	public int type() { return Parser.MTYPE_SIMPLE; }
 	public String toString() {
-		return AccessFlag.toString(access, AccessFlag.TS_METHOD) + TypeHelper.humanize(TypeHelper.parseMethod(type.getString()), name.getString(), true);
+		return AccessFlag.toString(access, AccessFlag.TS_METHOD) + TypeHelper.humanize(TypeHelper.parseMethod(type.str()), name.str(), true);
 	}
 }

@@ -1,5 +1,6 @@
 package roj.config;
 
+import roj.NativeLibrary;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.config.data.CEntry;
@@ -17,7 +18,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static roj.config.JSONParser.*;
@@ -66,7 +66,8 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 		return cv;
 	}
 
-	public Charset charset = StandardCharsets.UTF_8;
+	// auto detect
+	public Charset charset = null;
 	public final Parser<T> charset(Charset cs) {
 		charset = cs;
 		return this;
@@ -75,9 +76,12 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 	public final T parseRaw(File file, int flag) throws IOException, ParseException {
 		try (StreamReader in = new StreamReader(file, charset)) {
 			return parse(in, flag);
+		} catch (ParseException e) {
+			if (NativeLibrary.IN_DEV) return parse(IOUtil.readString(file), flag);
+			throw e;
 		}
 	}
-	public final  <CV extends CVisitor> CV parseRaw(File file, CV cv, int flag) throws IOException, ParseException {
+	public final <CV extends CVisitor> CV parseRaw(File file, CV cv, int flag) throws IOException, ParseException {
 		try (StreamReader text = new StreamReader(file, charset)) {
 			return parse(cv, text, flag);
 		}
@@ -101,7 +105,7 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 
 	public MyHashSet<CharSequence> ipool;
 	protected Word formClip(short id, CharSequence s) {
-		if (ipool!=null) {
+		if (ipool!=null && s.getClass() != String.class) {
 			CharSequence word = ipool.find(s);
 			if (word == s) {
 				ipool.add(s = s.toString());

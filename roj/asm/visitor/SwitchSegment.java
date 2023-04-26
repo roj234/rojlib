@@ -66,6 +66,7 @@ public final class SwitchSegment extends Segment {
 		while (pad-- > 0) o.put(0);
 
 		List<SwitchEntry> m = targets;
+		if (def == null) throw new NullPointerException("default分支");
 		if (code == TABLESWITCH) {
 			int lo = m.get(0).key;
 			int hi = m.get(m.size() - 1).key;

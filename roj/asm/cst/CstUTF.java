@@ -8,22 +8,16 @@ import roj.util.DynByteBuf;
  * @since 2021/5/29 17:16
  */
 public final class CstUTF extends Constant {
-	private Object data;
+	Object data;
 
 	public CstUTF() {}
 	public CstUTF(String s) { data = s; }
 
 	CstUTF(Object b) { data = b; }
-	final void i_setData(Object b) { data = b; }
 
-	public String getString() {
+	public String str() {
 		if (data instanceof byte[]) data = IOUtil.SharedCoder.get().decode(((byte[]) data));
 		return data.toString();
-	}
-
-	public void setString(String s) {
-		// noinspection all
-		data = s.toString();
 	}
 
 	@Override
@@ -33,19 +27,22 @@ public final class CstUTF extends Constant {
 		else w.writeUTF(data.toString());
 	}
 
-	public String toString() { return super.toString() + ' ' + getString(); }
+	int _length() {
+		if (data instanceof byte[]) return ((byte[]) data).length;
+		return DynByteBuf.byteCountDioUTF(data.toString());
+	}
+
+	public String toString() { return super.toString() + ' ' + str(); }
 
 	@Override
 	public byte type() { return Constant.UTF; }
 
-	public int hashCode() {
-		return 1 + getString().hashCode();
-	}
+	public int hashCode() { return 1 + str().hashCode(); }
 
 	public boolean equals(Object o) {
 		if (o == this) return true;
 		if (!(o instanceof CstUTF)) return false;
 		CstUTF ref = (CstUTF) o;
-		return this.getString().equals(ref.getString());
+		return this.str().equals(ref.str());
 	}
 }

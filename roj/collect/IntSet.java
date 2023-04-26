@@ -200,11 +200,12 @@ public class IntSet extends AbstractSet<Integer> {
 			dualEntry.set = (1<<(key&31)) | (1<<(int1&31));
 
 			entry = merge(key, dualEntry);
-
-			if ((int2 & ~31) == mKey) {
-				dualEntry.set |= 1<<(int2&31);
-			} else if (int2 != 0) {
-				entry.next = getCachedEntry(int2);
+			if (int2 != 0) {
+				if ((int2 & ~31) == mKey) {
+					dualEntry.set |= 1<<(int2&31);
+				} else {
+					entry.next = getCachedEntry(int2);
+				}
 			}
 			return true;
 		} else if (pendEntry != null) {

@@ -58,11 +58,11 @@ public class YAMLParser extends Parser<CEntry> {
 	}
 	{ tokens = YAML_TOKENS; literalEnd = YAML_LENDS; firstChar = YAML_C2C; }
 
-	public static CMapping parses(CharSequence string) throws ParseException {
-		return new YAMLParser().parse(string, 0).asMap();
+	public static CEntry parses(CharSequence string) throws ParseException {
+		return new YAMLParser().parse(string, 0);
 	}
-	public static CMapping parses(CharSequence string, int flag) throws ParseException {
-		return new YAMLParser().parse(string, flag).asMap();
+	public static CEntry parses(CharSequence string, int flag) throws ParseException {
+		return new YAMLParser().parse(string, flag);
 	}
 
 	public YAMLParser() {}

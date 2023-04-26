@@ -21,7 +21,6 @@ import java.util.function.IntFunction;
 import java.util.zip.CRC32;
 
 import static roj.archive.qz.BlockId.*;
-import static roj.archive.qz.QZArchive.invertBits;
 
 /**
  * @author Roj234
@@ -579,7 +578,7 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
                     }
                 }
 
-                writeBits(set);
+                set.writeBits(buf);
                 buf.put(w);
             }
 
@@ -660,23 +659,5 @@ public class QZFileWriter extends OutputStream implements ArchiveWriter {
             }
         }
         if (shl != 7) buf.write(v);
-    }
-    private void writeBits(MyBitSet set1) {
-        long[] set = set1.array();
-        int size = set1.last()+1;
-
-        int i = 0;
-
-        while (size >= 64) {
-            buf.putLongLE(invertBits(set[i++]));
-            size -= 64;
-        }
-
-        long fin = invertBits(set[i]);
-        while (size > 0) {
-            buf.put((byte) fin);
-            fin >>>= 8;
-            size -= 8;
-        }
     }
 }

@@ -72,7 +72,7 @@ public abstract class ToSomeString implements CVisitor {
 		else valString(s);
 	}
 	protected void valString(String l) {
-		ITokenizer.addSlashes(l, sb.append('"')).append('"');
+		ITokenizer.addSlashes(sb.append('"'), l).append('"');
 	}
 
 	public final void value(long l) { preValue(); sb.append(l); }
@@ -106,9 +106,9 @@ public abstract class ToSomeString implements CVisitor {
 		int i = depth / 8;
 		int j = (depth++ & 7) << 2;
 
-		int[] LV = this.stack;
-		if (LV.length < i) {
-			this.stack = LV = Arrays.copyOf(LV, i);
+		int[] LV = stack;
+		if (LV.length <= i) {
+			stack = LV = Arrays.copyOf(LV, i+1);
 		}
 		LV[i] = (LV[i] & ~(15 << j)) | (flag << j);
 
@@ -157,12 +157,6 @@ public abstract class ToSomeString implements CVisitor {
 		sb.clear();
 	}
 
-	public final void flush() throws IOException {
-		if (sb instanceof StreamWriter) {
-			while (depth > 0) pop();
-			((StreamWriter) sb).flush();
-		}
-	}
 	public final void finish() throws IOException {
 		if (sb instanceof StreamWriter) {
 			while (depth > 0) pop();
@@ -170,7 +164,9 @@ public abstract class ToSomeString implements CVisitor {
 		}
 	}
 	public final void close() throws IOException {
-		if (sb instanceof StreamWriter)
+		if (sb instanceof StreamWriter) {
+			finish();
 			((StreamWriter) sb).close();
+		}
 	}
 }

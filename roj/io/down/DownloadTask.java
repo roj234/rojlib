@@ -1,5 +1,6 @@
 package roj.io.down;
 
+import roj.collect.SimpleList;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.concurrent.Waitable;
@@ -13,14 +14,15 @@ import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
 import roj.net.ch.MyChannel;
 import roj.net.ch.handler.Timeout;
+import roj.net.http.AutoRedirect;
 import roj.net.http.HttpClient11;
 import roj.net.http.HttpHead;
-import roj.net.http.IHttpClient;
+import roj.net.http.HttpRequest;
 import roj.text.ACalendar;
+import roj.util.Helpers;
 
 import java.io.*;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -114,234 +116,167 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 	public boolean ETag = defETag, checkTime = true;
 	public boolean acceptDecompress;
 
-	public Map<String, String> headers = defHeaders;
-
 	public int operation;
-	public static final int NORMAL_DOWNLOAD = 0, STREAM_DOWNLOAD = 1, REDIRECT_ONLY = 2;
+	public static final int NORMAL_DOWNLOAD = 0, STREAM_DOWNLOAD = 1;
 
-	private final IHttpClient client = IHttpClient.create(IHttpClient.V1_1);
-	private MyChannel ch;
+	public final HttpRequest client;
 
 	public DownloadTask(URL address, File file, IProgress handler, File info) {
-		client.url(address);
+		client = HttpRequest.nts().url(address).headers(defHeaders);
 		this.file = file;
 		this.handler = handler;
 		this.info = info;
 	}
 
-	public URL getURL() {
-		return client.url();
-	}
-
-	public IHttpClient getClient() {
-		return client;
-	}
-
 	@Override
 	public void execute() {
+		if (done.get() == -1) {
+			guardedFinish();
+			return;
+		}
+
+		MyChannel ch = null;
 		try {
-			if (done.get() == -1) {
-				guardedFinish();
-				return;
-			}
+			client.header("User-Agent", userAgent).header("range", "bytes=0-");
 
-			client.header("User-Agent", userAgent);
-			client.headers(headers, false);
+			ch = MyChannel.openTCP();
 
-			MyChannel ctx = ch;
-			if (ctx == null || !ctx.isOpen()) {
-				ch = ctx = MyChannel.openTCP();
-			} else {
-				ctx.disconnect();
-			}
+			ch.addLast("Redirect", new AutoRedirect(client, IOUtil.timeout, maxRedirect))
+			  .addLast("Checker", this);
 
-			ctx.removeAll();
-			ctx.addLast("h11@client", client.asChannelHandler())
-			   .addLast("Timer", new Timeout(IOUtil.timeout, 2000))
-			   .addLast("Checker", this);
+			client.connect(ch, IOUtil.timeout);
 
-			client.connect(ctx, IOUtil.timeout);
-
-			IHttpClient.POLLER.register(ctx, null);
+			HttpRequest.POLLER.register(ch, null);
 		} catch (Exception e) {
 			ex = e;
+			done.compareAndSet(0, -3);
 			try {
-				ch.close();
+				if (ch != null) ch.close();
 			} catch (Exception ignored) {}
 		}
 	}
 
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
-		Timeout h = (Timeout) ctx.channel().handler("Timer").handler();
-		h.lastRead = System.currentTimeMillis();
+		ctx.channel().addBefore(ctx, "Timer", new Timeout(IOUtil.timeout, 2000));
 
-		HttpHead header = client.response();
-		int code = header.getCode();
-		if (code >= 200 && code < 400) {
-			String location = header.get("Location");
-			if (location != null) {
-				if (maxRedirect-- < 0) throw new FastFailException("重定向过多");
-				client.url(new URL(location));
-				QUERY.pushTask(this);
-				return;
-			} else if (code >= 300) {
-				throw new FastFailException("远程返回状态码: " + header);
+		HttpHead h = client.response();
+		String lastMod = h.getField("last-modified");
+		if (!lastMod.isEmpty()) time = ACalendar.parseRFCDate(lastMod);
+
+		long len = h.getContentLengthLong();
+		String encoding = null;
+		if(!h.getContentEncoding().equals("identity")) {
+			if (!acceptDecompress) len = -1;
+			else encoding = h.getContentEncoding();
+		}
+		this.encoding = encoding;
+
+		File tmpFile = new File(file.getAbsolutePath()+".tmp");
+		if (len > 0) IOUtil.allocSparseFile(tmpFile, len);
+
+		try (RandomAccessFile raf = new RandomAccessFile(info, "rw")) {
+			int chunks;
+			if (chunkStart < 0 || len < chunkStart) chunks = len==0?0:1;
+			else chunks = Math.min(maxChunks, (int) (len/minChunkSize));
+
+			_continue: {
+			_retry: {
+				if (raf.length() <= 8) break _retry;
+				if (raf.readLong() != len) break _retry;
+				raf.seek((chunks+1) << 3);
+
+				String s = raf.readUTF();
+				if (!s.equals(h.getField("encoding"))) break _retry;
+
+				s = raf.readUTF();
+				if (checkTime && !s.equals(h.getField("last-modified"))) break _retry;
+
+				s = raf.readUTF();
+				if (ETag && !s.equals(h.getField("etag"))) break _retry;
+
+				break _continue;
 			}
 
-			done.set(0);
-			beginDownload();
-			ctx.close();
-		} else {
-			throw new FastFailException("远程返回状态码: " + header);
+			raf.seek(0);
+			raf.writeLong(len);
+			raf.write(new byte[(chunks)<<3]);
+
+			raf.writeUTF(h.getField("encoding"));
+			raf.writeUTF(h.getField("last-modified"));
+			raf.writeUTF(h.getField("etag"));
+			}
 		}
+
+		URL url = client.url();
+		List<Downloader> tasks = new SimpleList<>();
+
+		if (operation == STREAM_DOWNLOAD || len < 0 || (
+			!"bytes".equals(h.getField("accept-ranges")) &&
+			h.getField("content-range").isEmpty()
+		)) {
+			Source tmp = new FileSource(tmpFile);
+			Downloader d = len < 0 ? new Streaming(tmp) : new Chunked(1, tmp, info,0, len);
+			if (len < 0 || d.getRemain() > 0) {
+				tasks = Collections.singletonList(d);
+			}
+		} else {
+			int id = 1;
+			long off = 0;
+
+			if (chunkStart >= 0 && len >= chunkStart) {
+				long each = Math.max(len / maxChunks, minChunkSize);
+				while (len >= each) {
+					Chunked d = new Chunked(id++, new FileSource(tmpFile), info, off, each);
+
+					off += each;
+					len -= each;
+
+					if (len < each && len < minChunkSize) {
+						// 如果下载完毕
+						if (d.len > 0) d.len += len;
+						len = 0;
+					}
+
+					if (d.getRemain() > 0) tasks.add(d);
+				}
+			}
+			if (len > 0) {
+				Chunked d = new Chunked(id, new FileSource(tmpFile), info, off, len);
+				if (d.getRemain() > 0) done.incrementAndGet();
+			}
+		}
+
+		if (tasks.isEmpty()) {
+			done.set(-1);
+			this.tasks = Collections.emptyList();
+			QUERY.pushTask(this);
+		} else {
+			done.set(tasks.size());
+			this.tasks = tasks;
+			for (int i = 0; i < tasks.size(); i++) execute(tasks.get(i));
+		}
+	}
+	private void execute(Downloader d) {
+		d.owner = this;
+		d.progress = handler;
+		d.retry = retryCount;
+		d.client = client.clone();
+		if (handler != null) handler.onJoin(d);
+		QUERY.pushTask(d);
 	}
 
 	@Override
 	public void channelClosed(ChannelCtx ctx) throws IOException {
-		synchronized (this) {
-			notifyAll();
-		}
+		synchronized (this) { notifyAll(); }
 	}
-
 	@Override
-	public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
-		this.ex = ex;
-		cancel();
+	public void exceptionCaught(ChannelCtx ctx, Throwable e) throws Exception {
+		ex = e; cancel();
 	}
-
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id == Timeout.READ_TIMEOUT) {
-			ex = new FastFailException("Read Timeout");
-		}
-	}
-
-	private void beginDownload() throws IOException {
-		if (operation == REDIRECT_ONLY) {
-			tasks = Collections.emptyList();
-			return;
-		}
-
-		HttpHead conn = client.response();
-		String lastMod = conn.getHeaderField("last-modified");
-		if (!lastMod.isEmpty()) time = ACalendar.parseRFCDate(lastMod);
-
-		long len = conn.getContentLengthLong();
-		String encoding = null;
-		if(!conn.getContentEncoding().equals("identity")) {
-			if (!acceptDecompress) len = -1;
-			else encoding = conn.getContentEncoding();
-		}
-		this.encoding = encoding;
-
-		File tmpFile = new File(file.getAbsolutePath() + ".tmp");
-		if (len > 0) IOUtil.allocSparseFile(tmpFile, len);
-
-		if (operation == STREAM_DOWNLOAD || len < 0 || !"bytes".equals(conn.getHeaderField("accept-ranges"))) {
-			Source tmp = new FileSource(tmpFile);
-			Downloader d = len < 0 ? new Streaming(tmp, client.url(), handler) : new Chunked(0, tmp, info, client.url(), 0, len, handler);
-			if (len < 0 || d.getRemain() > 0) {
-				done.incrementAndGet();
-				d.owner = this;
-				d.retry = retryCount;
-				d.client.headers(headers, false);
-
-				QUERY.pushTask(d);
-			}
-			if (done.get() == 0) {
-				tasks = Collections.emptyList();
-				guardedFinish();
-			} else {
-				tasks = Collections.singletonList(d);
-			}
-			return;
-		}
-
-		File info = new File(file.getAbsolutePath() + ".nfo");
-		try (RandomAccessFile raf = new RandomAccessFile(info, "rw")) {
-			int chk;
-			if (chunkStart < 0 || len < chunkStart) {
-				chk = len==0?0:1;
-			} else {
-				chk = Math.min(maxChunks, (int) (len/minChunkSize));
-			}
-
-			reset: {
-				canContinue: {
-					if (raf.length() <= 8) break canContinue;
-					if (raf.readLong() != len) break canContinue;
-					raf.seek((chk + 1) << 3);
-
-					String s = raf.readUTF();
-					if (!s.equals(conn.getHeaderField("encoding"))) break canContinue;
-
-					s = raf.readUTF();
-					if (checkTime && !s.equals(conn.getHeaderField("last-modified"))) break canContinue;
-
-					s = raf.readUTF();
-					if (ETag && !s.equals(conn.getHeaderField("etag"))) break canContinue;
-
-					break reset;
-				}
-
-				raf.seek(0);
-				raf.writeLong(len);
-				raf.write(new byte[(chk)<<3]);
-
-				raf.writeUTF(conn.getHeaderField("encoding"));
-				raf.writeUTF(conn.getHeaderField("last-modified"));
-				raf.writeUTF(conn.getHeaderField("etag"));
-			}
-		}
-
-		int id = 1;
-		long off = 0;
-
-		List<Downloader> tasks = new ArrayList<>(maxChunks);
-		URL url = client.url();
-		if (chunkStart >= 0 && len >= chunkStart) {
-			long each = Math.max(len / maxChunks, minChunkSize);
-			while (len >= each) {
-				Chunked d = new Chunked(id++, new FileSource(tmpFile), info, url, off, each, handler);
-
-				off += each;
-				len -= each;
-
-				if (len < each && len < minChunkSize) {
-					// 如果下载完毕
-					if (d.len > 0) d.len += len;
-					len = 0;
-				}
-
-				if (d.getRemain() > 0) {
-					done.incrementAndGet();
-					d.owner = this;
-					d.retry = retryCount;
-					d.client.headers(headers, false);
-					QUERY.pushTask(d);
-					tasks.add(d);
-				}
-			}
-		}
-		if (len > 0) {
-			Chunked d = new Chunked(id, new FileSource(tmpFile), info, url, off, len, handler);
-			if (d.getRemain() > 0) {
-				done.incrementAndGet();
-				d.owner = this;
-				d.retry = retryCount;
-				d.client.headers(headers, false);
-				QUERY.pushTask(d);
-				tasks.add(d);
-			}
-		}
-
-		if (done.get() == 0) {
-			this.tasks = Collections.emptyList();
-			guardedFinish();
-		} else {
-			this.tasks = tasks;
-		}
+		if (event.id == Timeout.READ_TIMEOUT) ex = new FastFailException("Read Timeout");
 	}
 
 	private List<Downloader> tasks;
@@ -351,12 +286,15 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 	public void waitFor() throws IOException {
 		while (true) {
 			if (ex != null) {
+				if (ex instanceof IOException) Helpers.athrow(ex);
+
 				IOException e = new IOException(ex);
 				e.setStackTrace(new StackTraceElement[0]);
 				throw e;
 			}
 
 			if (done.get() < -1) break;
+
 			synchronized (this) {
 				try {
 					wait();
@@ -441,34 +379,21 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 		if (time != 0) file.setLastModified(time);
 	}
 
-	public boolean isSuccessful() {
-		return done.get() == -2;
-	}
-
+	public boolean isSuccessful() { return done.get() == -2; }
 	@Override
-	public boolean isDone() {
-		return done.get() < -1;
-	}
-
+	public boolean isDone() { return done.get() < -1; }
 	@Override
 	public void cancel() {
 		if (ex == null) ex = new CancellationException();
 		if (done.getAndSet(-4) == -4) return;
 
-		try {
-			if (ch != null) ch.close();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
 		if (handler != null) handler.shutdown();
 		if (tasks != null) {
 			for (int i = 0; i < tasks.size(); i++) {
 				tasks.get(i).close();
 			}
 		}
-		synchronized (this) {
-			notifyAll();
-		}
+		synchronized (this) { notifyAll(); }
 	}
 
 	void onSubDone() {

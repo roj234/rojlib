@@ -207,7 +207,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 			for (int i = 0; i < list.size(); i++) {
 				sb.append("[[");
 				if (!TOMLParser.literalSafe(chain)) {
-					ITokenizer.addSlashes(chain, sb);
+					ITokenizer.addSlashes(sb, chain);
 				} else {
 					sb.append(chain);
 				}
@@ -217,7 +217,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 			return sb;
 		} else {
 			if (!TOMLParser.literalSafe(chain)) {
-				ITokenizer.addSlashes(chain, sb);
+				ITokenizer.addSlashes(sb, chain);
 			} else {
 				sb.append(chain);
 			}
@@ -292,7 +292,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 				case INTEGER: w.putInt(el.asInteger()); break;
 				case LONG: w.putLong(el.asLong()); break;
 				case DOUBLE: w.putDouble(el.asDouble()); break;
-				case STRING: w.putVStr(el.asString()); break;
+				case STRING: w.putZhCn(el.asString()); break;
 				case Int1: w.put((byte) el.asInteger()); break;
 				case Int2: w.putShort(el.asInteger()); break;
 				case Float4: w.putFloat((float) el.asDouble()); break;

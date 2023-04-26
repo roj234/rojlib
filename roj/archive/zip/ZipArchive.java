@@ -5,7 +5,6 @@ import roj.archive.ArchiveFile;
 import roj.archive.ChecksumInputStream;
 import roj.collect.*;
 import roj.collect.RSegmentTree.Range;
-import roj.crypt.CipheR;
 import roj.crypt.CipherInputStream;
 import roj.crypt.CipherOutputStream;
 import roj.io.IOUtil;
@@ -26,6 +25,7 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel.MapMode;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.ObjLongConsumer;
@@ -80,7 +80,6 @@ public class ZipArchive implements ArchiveFile {
 		FLAG_KILL_EXT	   = 1,
 		FLAG_VERIFY		   = 2,
 		FLAG_BACKWARD_READ = 4,
-		FLAG_MULTI_FILES   = 8,
 		FLAG_FORCE_UTF     = 16,
 		FLAG_LINKED_MAP    = 32;
 
@@ -132,7 +131,7 @@ public class ZipArchive implements ArchiveFile {
 		if (r.length() > 0) reload();
 	}
 
-	public ZipArchive(Source source, int flag, Charset cs) throws IOException {
+	public ZipArchive(Source source, int flag, Charset cs) {
 		this(flag, cs);
 		file = null;
 		r = source;
@@ -520,7 +519,8 @@ public class ZipArchive implements ArchiveFile {
 
 		if ((flags & FLAG_BACKWARD_READ) != 0) {
 			r.seek(fileHeader + 28);
-			extraLen = r.asDataInput().readUnsignedShort();
+			extraLen = r.read() | (r.read()<<8);
+			if (extraLen < 0) throw new EOFException();
 
 			entry.offset = fileHeader + 30 + nameLen + extraLen;
 			entry.extraLenOfLOC = (char) extraLen;
@@ -638,7 +638,7 @@ public class ZipArchive implements ArchiveFile {
 			if (pass == null) throw new IOException("File is encrypted: " + file);
 			if (file.getEncryptType() == CRYPT_ZIP2) {
 				ZipCrypto c = new ZipCrypto();
-				c.setKey(pass, CipheR.DECRYPT);
+				c.init(ZipCrypto.DECRYPT_MODE, pass);
 
 				in = new CipherInputStream(in, c);
 
@@ -656,6 +656,8 @@ public class ZipArchive implements ArchiveFile {
 				((SourceInputStream) in).remain -= 10;
 				if ((flags & FLAG_VERIFY) != 0) {
 					in = new AESInputSt(in, c);
+				} else {
+					in = new CipherInputStream(in, c);
 				}
 			}
 		}
@@ -876,7 +878,7 @@ public class ZipArchive implements ArchiveFile {
 				if (mf.cryptType != CRYPT_NONE) {
 					if (mf.cryptType == CRYPT_ZIP2) {
 						ZipCrypto c = new ZipCrypto();
-						c.setKey(mf.pass, CipheR.ENCRYPT);
+						c.init(ZipCrypto.ENCRYPT_MODE, mf.pass);
 						cout = new CipherOutputStream(cout, c);
 
 						byte[] rnd = new byte[12];
@@ -886,7 +888,9 @@ public class ZipArchive implements ArchiveFile {
 						cout.write(rnd);
 					} else {
 						za = new ZipAES();
-						za.setKey(mf.pass, CipheR.ENCRYPT);
+						try {
+							za.init(ZipAES.ENCRYPT_MODE, mf.pass);
+						} catch (InvalidKeyException ignored) {}
 						za.sendHeaders(out);
 
 						cout = new CipherOutputStream(cout, za);
@@ -941,7 +945,7 @@ public class ZipArchive implements ArchiveFile {
 				if (mf.cryptType != CRYPT_NONE) {
 					if (mf.cryptType == CRYPT_ZIP2) {
 						ZipCrypto c = new ZipCrypto();
-						c.setKey(mf.pass, CipheR.ENCRYPT);
+						c.init(ZipCrypto.ENCRYPT_MODE, mf.pass);
 						cout = new CipherOutputStream(cout, c);
 
 						byte[] rnd = new byte[12];
@@ -951,7 +955,9 @@ public class ZipArchive implements ArchiveFile {
 						cout.write(rnd);
 					} else {
 						za = new ZipAES();
-						za.setKey(mf.pass, CipheR.ENCRYPT);
+						try {
+							za.init(ZipAES.ENCRYPT_MODE, mf.pass);
+						} catch (InvalidKeyException ignored) {}
 						za.sendHeaders(out);
 
 						cout = new CipherOutputStream(cout, za);

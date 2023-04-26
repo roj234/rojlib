@@ -25,7 +25,7 @@ public class BitMapper extends BitWriter {
 	}
 
 	public String encode(CharSequence cs) {
-		return encode(IOUtil.getSharedByteBuf().putVStrData(cs)).toString();
+		return encode(IOUtil.getSharedByteBuf().putZhCnData(cs)).toString();
 	}
 
 	public CharList encode(DynByteBuf buf) {
@@ -65,6 +65,6 @@ public class BitMapper extends BitWriter {
 
 	public String decode(CharSequence cs) {
 		ByteList v = decodeR(cs);
-		return v.readVStr(v.readableBytes());
+		return v.readZhCn(v.readableBytes());
 	}
 }

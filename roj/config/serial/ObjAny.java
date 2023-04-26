@@ -7,9 +7,9 @@ import java.util.List;
  * @since 2022/1/11 17:45
  */
 final class ObjAny extends Adapter {
-	final SerializerManager gen;
+	final SerializerFactory gen;
 
-	ObjAny(SerializerManager type) {
+	ObjAny(SerializerFactory type) {
 		this.gen = type;
 	}
 

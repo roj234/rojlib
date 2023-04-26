@@ -23,16 +23,16 @@ public class CipherInputStream extends InputStream {
 	private final ByteList o;
 	private BufferPool pool;
 
-	protected final CipheR c;
-	private int cipherPos;
+	protected final RCipherSpi c;
+	private int cw,cr;
 
-	public CipherInputStream(InputStream in, CipheR c) {
+	public CipherInputStream(InputStream in, RCipherSpi c) {
 		this.in = in;
 		this.c = c;
-		if (c.getBlockSize() != 0) {
+		if (c.engineGetBlockSize() != 0) {
 			this.pool = BufferPool.localPool();
 			this.o = (ByteList) pool.buffer(false, CipherOutputStream.BUFFER_SIZE);
-			this.i.setW(o.array(), o.arrayOffset(), o.capacity());
+			this.i.set(o.array(), o.arrayOffset(), o.capacity());
 		} else {
 			this.o = new ByteList.Slice();
 		}
@@ -48,13 +48,11 @@ public class CipherInputStream extends InputStream {
 	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
 		if (eof) return -1;
 
-		if (c.getBlockSize() == 0) {
+		if (c.engineGetBlockSize() == 0) {
 			len = in.read(b, off, len);
 			if (len > 0) {
 				try {
-					ByteList in = i.setW(b, off, len);
-					in.wIndex(len);
-					c.crypt(in, ((ByteList.Slice)o).setW(b, off, len));
+					c.crypt(i.setR(b, off, len), ((ByteList.Slice)o).set(b, off, len));
 				} catch (GeneralSecurityException e) {
 					throw new IOException(e);
 				}
@@ -77,24 +75,30 @@ public class CipherInputStream extends InputStream {
 				off += avl;
 				myLen -= avl;
 
-				o.wIndex(cipherPos);
+				o.rIndex = cr;
+				o.wIndex(cw);
 				o.compact();
 
 				i.clear();
-				i.wIndex(o.wIndex());
 
 				if (o.readStream(in, o.writableBytes()) <= 0) {
 					eof = true;
 
-					if (!o.isReadable()) close();
-					else throw new IOException("Cipher拒绝处理 " + o.readableBytes() + " 大小的块");
+					if (!o.isReadable()) {
+						close();
+						return len-myLen;
+					}
 
-					return len-myLen;
+					c.cryptFinal(o, i);
+					if (o.isReadable()) throw new IOException("Cipher拒绝处理 " + o.readableBytes() + " 大小的块");
+				} else {
+					c.crypt(o, i);
 				}
 
-				c.crypt(o, i);
 				// hide ciphertext
-				cipherPos = o.wIndex();
+				cr = o.rIndex;
+				cw = o.wIndex();
+
 				o.rIndex = 0;
 				o.wIndex(i.wIndex());
 			}

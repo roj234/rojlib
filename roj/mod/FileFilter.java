@@ -82,7 +82,7 @@ class FileFilter implements Predicate<File> {
 
 							for (int i = 0; i < len; i++) {
 								if (buf[off++] == '\n') {
-									eof = true;
+									eof = -2;
 									return i;
 								}
 							}

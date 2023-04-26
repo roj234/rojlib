@@ -35,7 +35,6 @@ public abstract class Scheduled implements ITask {
 	public final long getNextRun() { return nextRun; }
 
 	public synchronized final void cancel() { nextRun = -2; }
-	public boolean cancel(boolean force) { nextRun = -2; return true; }
 	public final boolean isCancelled() { return nextRun < 0; }
 
 	public void execute() throws Exception {

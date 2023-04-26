@@ -10,5 +10,5 @@ import roj.collect.MyBitSet;
 interface GenAdapter {
 	void init(IntBiMap<String> fieldId, MyBitSet optionalEx);
 	default IntBiMap<String> fieldNames() { return null; }
-	Adapter copy(SerializerManager man, Object par);
+	Adapter copy(SerializerFactory man, Object par);
 }

@@ -18,7 +18,6 @@ import roj.mod.fp.Forge;
 import roj.mod.fp.LegacyForge;
 import roj.mod.fp.WorkspaceBuilder;
 import roj.mod.mapping.MappingFormat;
-import roj.text.StreamReader;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
 import roj.ui.EasyProgressBar;
@@ -280,7 +279,7 @@ public class FMDInstall {
 		CMapping cfgLan = CONFIG.get("启动器配置").asMap();
 		try {
 			ByteList bl = IOUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer));
-			versions = JSONParser.parses(new StreamReader(bl.asInputStream())).asList();
+			versions = new JSONParser().parseRaw(bl).asList();
 		} catch (ParseException | IOException e) {
 			error("获取数据出了点错...\n请查看控制台");
 			e.printStackTrace();

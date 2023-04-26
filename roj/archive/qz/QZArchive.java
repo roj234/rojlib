@@ -34,10 +34,11 @@ import static roj.archive.qz.BlockId.*;
 /**
  * 我去除了大部分C++的味道，但是保留了一部分，这样你才知道自己用的是Java
  * 已支持多线程解压
+ * hint: 7z的密码是UTF_16LE的
  * @author Roj233
  * @since 2022/3/14 7:09
  */
-public class QZArchive implements ArchiveFile{
+public class QZArchive implements ArchiveFile {
 	public File file;
 
 	Source r;
@@ -317,9 +318,9 @@ public class QZArchive implements ArchiveFile{
 
 			int len = readVarInt();
 			switch (id) {
-				case iEmpty: empty = readBits(count); break;
-				case iEmptyFile: emptyFile = readBits(Objects.requireNonNull(empty, "属性顺序错误").size()); break;
-				case iDeleteFile: anti = readBits(Objects.requireNonNull(empty, "属性顺序错误").size()); break;
+				case iEmpty: empty = MyBitSet.readBits(buf, count); break;
+				case iEmptyFile: emptyFile = MyBitSet.readBits(buf, Objects.requireNonNull(empty, "属性顺序错误").size()); break;
+				case iDeleteFile: anti = MyBitSet.readBits(buf, Objects.requireNonNull(empty, "属性顺序错误").size()); break;
 				default: buf.rIndex += len; break;
 			}
 		}
@@ -749,45 +750,9 @@ public class QZArchive implements ArchiveFile{
 			set = new MyBitSet();
 			set.fill(size);
 		} else {
-			set = readBits(size);
+			set = MyBitSet.readBits(buf, size);
 		}
 		return set;
-	}
-	private MyBitSet readBits(int size) {
-		if (size == 0) return new MyBitSet();
-
-		long[] set = new long[(size+63)/64];
-		int i = 0;
-		int count = 0;
-
-		while (size >= 64) {
-			long bits = buf.readLongLE();
-
-			count += Long.bitCount(bits);
-			set[i++] = invertBits(bits);
-
-			size -= 64;
-		}
-
-		int shl = 0;
-		long fin = 0;
-		while (size > 0) {
-			fin |= (long) buf.readUnsignedByte() << shl;
-			shl += 8;
-			size -= 8;
-		}
-
-		count += Long.bitCount(fin);
-		set[set.length-1] = invertBits(fin);
-
-		return new MyBitSet(set, count);
-	}
-	static long invertBits(long i) {
-		// 反转每个byte中的每个bit
-		i = (i & 0x5555555555555555L) << 1 | (i >>> 1) & 0x5555555555555555L;
-		i = (i & 0x3333333333333333L) << 2 | (i >>> 2) & 0x3333333333333333L;
-		i = (i & 0x0f0f0f0f0f0f0f0fL) << 4 | (i >>> 4) & 0x0f0f0f0f0f0f0f0fL;
-		return i;
 	}
 	private long readVarLong() throws IOException {
 		long i = buf.readVULong();

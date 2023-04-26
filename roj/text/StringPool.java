@@ -1,6 +1,7 @@
 package roj.text;
 
 import roj.collect.IntBiMap;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.util.ArrayList;
@@ -14,38 +15,50 @@ import java.util.List;
 public class StringPool {
 	final IntBiMap<String> list = new IntBiMap<>();
 	final List<String> ordered;
-	long length;
 
-	public StringPool() { ordered = new ArrayList<>(); }
+	public StringPool() {
+		this.ordered = new ArrayList<>();
+	}
 
 	public StringPool(DynByteBuf w) {
-		int len = w.readVUInt();
-		String[] array = new String[len];
+		int length = w.readVUInt();
+		String[] array = new String[length];
 		this.ordered = Arrays.asList(array);
-		for (int i = 0; i < len; i++) {
-			array[i] = w.readZhCn();
+		for (int i = 0; i < length; i++) {
+			array[i] = w.readVUIUTF();
 		}
 	}
 
 	public DynByteBuf writePool(DynByteBuf w) {
 		w.putVUInt(ordered.size());
-		for (int i = 0; i < ordered.size(); i++) w.putZhCn(ordered.get(i));
+		for (int i = 0; i < ordered.size(); i++) w.putVUIUTF(ordered.get(i));
 		return w;
 	}
 
-	public DynByteBuf add(DynByteBuf w, String s) { return w.putVUInt(add(s)); }
-	public String get(DynByteBuf r) { return ordered.get(r.readVUInt()); }
-
-	public int size() { return ordered.size(); }
-	public long length() { return length; }
-
-	public int add(String s) {
-		int id = list.getInt(s);
+	public DynByteBuf writeString(DynByteBuf w, String string) {
+		int id = list.getInt(string);
 		if (id == -1) {
-			length += s.length();
-			list.putByValue(id = list.size(), s);
-			ordered.add(s);
+			list.putByValue(id = list.size(), string);
+			ordered.add(string);
 		}
-		return id;
+		return w.putVUInt(id);
+	}
+
+	public String readString(ByteList r) {
+		return ordered.get(r.readVUInt());
+	}
+
+	public int size() {
+		return ordered.size();
+	}
+
+	public int add(String string) {
+		int id = list.getInt(string);
+		if (id == -1) {
+			list.putByValue(id = list.size(), string);
+			ordered.add(string);
+			return id;
+		}
+		return -1;
 	}
 }

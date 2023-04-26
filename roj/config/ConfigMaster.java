@@ -3,12 +3,10 @@ package roj.config;
 import roj.config.data.CEntry;
 import roj.config.serial.CAdapter;
 import roj.io.IOUtil;
-import roj.text.StreamReader;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 import static roj.config.JSONParser.*;
@@ -30,7 +28,7 @@ public class ConfigMaster {
 				bp = p = new CCYaml(flag);
 				break;
 			case "xml":
-				flag = UNESCAPED_SINGLE_QUOTE;
+				flag = 0;
 				bp = p = new XMLParser();
 				break;
 			case "json":
@@ -58,17 +56,7 @@ public class ConfigMaster {
 	public BinaryParser binParser() { return bp; }
 	public int flag() { return flag; }
 
-	public static <T> T adapt(CAdapter<T> ser, File file) throws IOException, ParseException {
-		ConfigMaster c = create(file);
-		ser.reset();
-
-		if (c.p != null) c.p.parse(ser,StreamReader.auto(file),0);
-		else c.bp.parseRaw(file,ser,0);
-
-		if (!ser.finished()) throw new IllegalStateException("数据结构有误");
-		return ser.result();
-	}
-
+	public static <T> T adapt(CAdapter<T> ser, File file) throws IOException, ParseException { return adapt(ser,file,null); }
 	public static <T> T adapt(CAdapter<T> ser, File file, Charset cs) throws IOException, ParseException {
 		ConfigMaster c = create(file);
 		ser.reset();
@@ -80,9 +68,7 @@ public class ConfigMaster {
 		return ser.result();
 	}
 
-	public static CEntry parse(File file) throws IOException, ParseException {
-		return parse(file, StandardCharsets.UTF_8);
-	}
+	public static CEntry parse(File file) throws IOException, ParseException { return parse(file, null); }
 	public static CEntry parse(File file, Charset cs) throws IOException, ParseException {
 		ConfigMaster c = create(file);
 

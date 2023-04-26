@@ -95,7 +95,7 @@ public class FileSync implements ChannelHandler {
 			});
 		}
 		timestamp = lastMod.value;
-		System.out.println("找到 "+hashes.size()+" 个文件, 最新的在 " + ACalendar.toLocalTimeString(timestamp) + " 修改");
+		System.out.println("找到 "+hashes.size()+" 个文件, 最新的在 " + new ACalendar().formatDate("Y-m-d H:i:s", timestamp) + " 修改");
 
 		boolean tls = config.getBool("security");
 		boolean obf = config.getBool("obfuscate");
@@ -261,7 +261,7 @@ public class FileSync implements ChannelHandler {
 			// end packet
 			if (type == 2) {
 				long serverTime = buf.readLong();
-				System.out.println("服务器在 " + ACalendar.toLocalTimeString(serverTime) + " 修改");
+				System.out.println("服务器在 " + new ACalendar().formatDate("Y-m-d H:i:s", serverTime) + " 修改");
 				ctx.channel().closeGracefully();
 				return;
 			}

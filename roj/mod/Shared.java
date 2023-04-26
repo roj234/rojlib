@@ -4,12 +4,12 @@ import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.concurrent.FastLocalThread;
 import roj.concurrent.TaskPool;
-import roj.concurrent.TaskSequencer;
+import roj.concurrent.timing.Scheduler;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.dev.HRRemote;
-import roj.io.BOMInputStream;
+import roj.io.ChineseInputStream;
 import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
 import roj.mapper.ConstMapper;
@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class Shared {
 	public static final boolean DEBUG;
 	public static final String MC_BINARY = "forgeMcBin";
-	public static final String VERSION = "2.0.2";
+	public static final String VERSION = "2.0.3";
 
 	public static final File BASE, TMP_DIR, CONFIG_DIR;
 
@@ -56,7 +56,7 @@ public final class Shared {
 		}
 	}
 
-	public static final TaskSequencer PeriodicTask = new TaskSequencer();
+	public static final Scheduler PeriodicTask = Scheduler.getDefaultScheduler();
 	public static final TaskPool Task = TaskPool.CpuMassive();
 
 	public static void async(Runnable... run) {
@@ -78,7 +78,7 @@ public final class Shared {
 	static void loadConfig() {
 		File file = new File(BASE, "config.json");
 		try {
-			final BOMInputStream bom = new BOMInputStream(new FileInputStream(file), "UTF8");
+			ChineseInputStream bom = new ChineseInputStream(new FileInputStream(file));
 			if (!bom.getCharset().equals("UTF8")) { // 检测到了则是 UTF-8
 				CmdUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getCharset());
 			}
@@ -154,7 +154,7 @@ public final class Shared {
 					}
 					mapperRev = null;
 					try {
-						mapperFwd.initEnv(map, new File(BASE, "/class/"), new File(BASE, "/util/remapCache.bin"), false);
+						mapperFwd.initEnv(map, new File(BASE, "/class/"), new File(BASE, "/util/mapCache.lzma"), false);
 						if (DEBUG) CmdUtil.success("正向映射表已加载");
 					} catch (Exception e) {
 						CmdUtil.error("正向映射表加载失败", e);
@@ -258,11 +258,6 @@ public final class Shared {
 
 		IFileWatcher w = null;
 		if (!launchOnly) {
-			Thread seqWorker = new FastLocalThread(PeriodicTask);
-			seqWorker.setDaemon(true);
-			seqWorker.setName("定时任务");
-			seqWorker.start();
-
 			if (CONFIG.getBool("文件修改监控")) {
 				try {
 					w = new FileWatcher();

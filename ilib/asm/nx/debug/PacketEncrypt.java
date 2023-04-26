@@ -4,7 +4,8 @@ import roj.asm.nixim.Inject;
 import roj.asm.nixim.Nixim;
 import roj.asm.nixim.Shadow;
 import roj.crypt.AES;
-import roj.crypt.MyCipher;
+import roj.crypt.FeedbackCipher;
+import roj.crypt.RCipherSpi;
 import roj.util.ByteList;
 
 import net.minecraft.network.PacketBuffer;
@@ -33,10 +34,10 @@ class PacketEncrypt extends SPacketEncryptionRequest {
 		this.hashedServerId = _lvt_1_.readString(20);
 		byte[] key = _lvt_1_.readByteArray();
 		this.verifyToken = _lvt_1_.readByteArray();
-		MyCipher sm4 = new MyCipher(new AES(), MyCipher.MODE_CFB);
-		sm4.setKey(verifyToken, MyCipher.DECRYPT);
+		FeedbackCipher mc = new FeedbackCipher(new AES(), FeedbackCipher.MODE_CFB);
 		try {
-			sm4.crypt(ByteList.wrap(key), ByteList.wrap(key));
+			mc.init(RCipherSpi.DECRYPT_MODE, verifyToken, null, null);
+			mc.cryptFinal(ByteList.wrap(key), ByteList.wrapWrite(key));
 		} catch (GeneralSecurityException e) {
 			e.printStackTrace();
 		}
@@ -48,11 +49,11 @@ class PacketEncrypt extends SPacketEncryptionRequest {
 		buf.writeString(this.hashedServerId);
 
 		byte[] encoded = this.publicKey.getEncoded();
-		MyCipher sm4 = new MyCipher(new AES(), MyCipher.MODE_CFB);
+		FeedbackCipher mc = new FeedbackCipher(new AES(), FeedbackCipher.MODE_CFB);
 		byte[] token = this.verifyToken;
-		sm4.setKey(token, MyCipher.ENCRYPT);
 		try {
-			sm4.crypt(ByteList.wrap(encoded), ByteList.wrap(encoded));
+			mc.init(RCipherSpi.ENCRYPT_MODE, token, null, null);
+			mc.cryptFinal(ByteList.wrap(encoded), ByteList.wrapWrite(encoded));
 		} catch (GeneralSecurityException e) {
 			e.printStackTrace();
 		}

@@ -1,7 +1,7 @@
 package roj.net.mss;
 
-import roj.crypt.CipheR;
-import roj.crypt.MyCipher;
+import roj.crypt.FeedbackCipher;
+import roj.crypt.RCipherSpi;
 
 import java.util.function.Supplier;
 
@@ -11,29 +11,27 @@ import java.util.function.Supplier;
  */
 public class SimpleCipherFactory implements MSSCipherFactory {
 	protected final int keySize, mcFlag;
-	protected final Supplier<CipheR> provider;
+	protected final Supplier<RCipherSpi> provider;
 
-	public SimpleCipherFactory(int keySize, Supplier<CipheR> provider) {
+	public SimpleCipherFactory(int keySize, Supplier<RCipherSpi> provider) {
 		this.keySize = keySize;
 		this.provider = provider;
 		this.mcFlag = 0;
 	}
 
-	public SimpleCipherFactory(int keySize, Supplier<CipheR> provider, int mcFlag) {
+	public SimpleCipherFactory(int keySize, Supplier<RCipherSpi> provider, int mcFlag) {
 		this.keySize = keySize;
 		this.provider = provider;
 		this.mcFlag = mcFlag;
 	}
 
 	@Override
-	public int getKeySize() {
-		return keySize;
-	}
+	public int getKeySize() { return keySize; }
 
 	@Override
-	public CipheR get() {
-		CipheR r = provider.get();
-		if (mcFlag != 0) r = new MyCipher(r, mcFlag);
+	public RCipherSpi get() {
+		RCipherSpi r = provider.get();
+		if (mcFlag != 0) r = new FeedbackCipher(r, mcFlag);
 		return r;
 	}
 }

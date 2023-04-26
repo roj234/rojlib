@@ -104,15 +104,27 @@ public class TextUtil {
 	}
 
 	public static String scaledNumber(long number) {
+		CharList sb = new CharList();
+
 		if (number < 0) return "-" + scaledNumber(-number);
 		if (number >= 1000000) {
 			if (number >= 1000000000) {
-				return String.valueOf(number / 1000000000) + '.' + number % 1000000000 / 10000000 + 'G';
+				sb.append(number / 1000000000).append('.');
+				int v = (int) (number % 1000000000 / 10000000);
+				if (v < 10) sb.append('0');
+				return sb.append(v).append('G').toString();
 			}
-			return String.valueOf(number / 1000000) + '.' + number % 1000000 / 10000 + 'M';
+
+			sb.append(number / 1000000).append('.');
+			int v = (int) (number % 1000000 / 10000);
+			if (v < 10) sb.append('0');
+			return sb.append(v).append('M').toString();
 		} else {
 			if (number >= 1000) {
-				return String.valueOf(number / 1000) + '.' + number % 1000 / 10 + 'k';
+				sb.append(number / 1000).append('.');
+				int v = (int) (number % 1000 / 10);
+				if (v < 10) sb.append('0');
+				return sb.append(v).append('M').toString();
 			}
 			return String.valueOf(number);
 		}
@@ -412,9 +424,11 @@ public class TextUtil {
 	}
 
 	public static void pad(CharList sb, int number, int min) {
-		for (int i = min - digitCount(number) - 1; i >= 0; i--) {
-			sb.append('0');
-		}
+		for (int i = min - digitCount(number) - 1; i >= 0; i--) sb.append('0');
+		sb.append(number);
+	}
+	public static void pad(CharList sb, long number, int min) {
+		for (int i = min - digitCount(number) - 1; i >= 0; i--) sb.append('0');
 		sb.append(number);
 	}
 
@@ -862,5 +876,18 @@ public class TextUtil {
 		return ((h << 10) + l) + (MIN_SUPPLEMENTARY_CODE_POINT
 			- (MIN_HIGH_SURROGATE << 10)
 			- MIN_LOW_SURROGATE);
+	}
+
+	public static String join(Iterable<?> split, CharSequence c) {
+		Iterator<?> itr = split.iterator();
+		if (!itr.hasNext()) return "";
+
+		CharList tmp = IOUtil.ddLayeredCharBuf();
+		while (true) {
+			tmp.append(itr.next());
+			if (!itr.hasNext()) break;
+			tmp.append(c);
+		}
+		return tmp.toStringAndFree();
 	}
 }

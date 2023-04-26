@@ -1,5 +1,6 @@
 package roj.config.data;
 
+import roj.config.serial.CVisitor;
 import roj.io.IOUtil;
 import roj.text.CharList;
 
@@ -17,49 +18,25 @@ public abstract class XEntry implements Iterable<XEntry> {
 	protected XEntry() {}
 
 	public abstract boolean isString();
-	public String asString() {
-		throw new IllegalArgumentException("类型不是文字(提示,即使是<t>1</t>你也要调用child(0).asText() )");
-	}
-	public XElement asElement() {
-		throw new IllegalArgumentException("类型不是元素");
-	}
+	public String asString() { throw new IllegalArgumentException("类型不是文字(提示,即使是<t>1</t>你也要调用child(0).asText() )"); }
+	public XElement asElement() { throw new IllegalArgumentException("类型不是元素"); }
 
 	// region attr
-	public CEntry attr(String v) {
-		return CNull.NULL;
-	}
-	public void attr(String k, CEntry v) {
-		throw new UnsupportedOperationException();
-	}
-	public Map<String, CEntry> attributes() {
-		return Collections.emptyMap();
-	}
-	public Map<String, CEntry> attributesForRead() {
-		return Collections.emptyMap();
-	}
+	public CEntry attr(String v) { return CNull.NULL;  }
+	public void attr(String k, CEntry v) { throw new UnsupportedOperationException(); }
+	public Map<String, CEntry> attributes() { return Collections.emptyMap(); }
+	public Map<String, CEntry> attributesForRead() { return Collections.emptyMap(); }
 	// endregion
 	// region children
-	public int size() {
-		return 0;
-	}
-	public void add(@Nonnull XEntry entry) {
-		throw new UnsupportedOperationException();
-	}
+	public int size() { return 0; }
+	public void add(@Nonnull XEntry entry) { throw new UnsupportedOperationException(); }
 	@Nonnull
-	public XEntry child(int index) {
-		throw new ArrayIndexOutOfBoundsException(index);
-	}
+	public XEntry child(int index) { throw new ArrayIndexOutOfBoundsException(index); }
 	@Nonnull
 	@Override
-	public final Iterator<XEntry> iterator() {
-		return childrenForRead().iterator();
-	}
-	public List<XEntry> children() {
-		return Collections.emptyList();
-	}
-	public List<XEntry> childrenForRead() {
-		return Collections.emptyList();
-	}
+	public final Iterator<XEntry> iterator() { return childrenForRead().iterator(); }
+	public List<XEntry> children() { return Collections.emptyList(); }
+	public List<XEntry> childrenForRead() { return Collections.emptyList(); }
 	public void clear() {}
 	// endregion
 	// region children extended
@@ -128,12 +105,7 @@ public abstract class XEntry implements Iterable<XEntry> {
 	}
 	// endregion
 
-	public abstract CEntry toJSON();
-	public static XEntry fromJSON(CEntry entry) {
-		if (entry.getType() == Type.STRING) return new XText(entry.toString());
-		CMapping map = entry.asMap();
-		return (map.containsKey("I") ? new XElement("") : new XHeader()).read(map);
-	}
+	public abstract void toJSON(CVisitor cc);
 
 	@Override
 	public final String toString() {

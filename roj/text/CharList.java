@@ -6,6 +6,7 @@ import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.math.MutableInt;
 import roj.util.ArrayCache;
+import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -80,6 +81,11 @@ public class CharList implements CharSequence, Appender {
 		len = array.length;
 	}
 
+	public CharList(CharSequence s) {
+		this.list = ArrayCache.getDefaultCache().getCharArray(s.length(), false);
+		append(s);
+	}
+
 	public final char charAt(int i) {
 		if (i >= len) throw new StringIndexOutOfBoundsException("off="+i+",len="+len);
 		return list[i];
@@ -125,6 +131,31 @@ public class CharList implements CharSequence, Appender {
 
 			if (len > 0) System.arraycopy(list, 0, newList, 0, Math.min(len, list.length));
 			list = newList;
+		}
+	}
+
+	public void _free() {
+		clear();
+
+		char[] b = list;
+		list = ArrayCache.CHARS;
+		ArrayCache.getDefaultCache().putArray(b);
+	}
+
+	public String toStringAndFree() {
+		String s = toString();
+		_free();
+		return s;
+	}
+
+	public Appendable appendToAndFree(Appendable sb) {
+		try {
+			return sb.append(this);
+		} catch (IOException e) {
+			Helpers.athrow(e);
+			return sb;
+		} finally {
+			_free();
 		}
 	}
 
@@ -223,10 +254,12 @@ public class CharList implements CharSequence, Appender {
 		return append(csq, 0, csq.length());
 	}
 	public CharList append(CharSequence cs, int start, int end) {
-		if (cs instanceof CharList) return append((CharList) cs, start, end);
-		if (cs instanceof Slice) {
+		Class<?> c = cs.getClass();
+		if (c == CharList.class) return append((CharList) cs, start, end);
+		if (c == String.class) return append(cs.toString(), start, end);
+		if (c == CharList.Slice.class) {
 			Slice s = (Slice) cs;
-			return append(s.array, s.off + start, s.off + end);
+			return append(s.list, s.off + start, s.off + end);
 		}
 
 		checkBounds(start,end,cs.length());
@@ -240,16 +273,15 @@ public class CharList implements CharSequence, Appender {
 
 		return this;
 	}
-	public final CharList append(String s) {
-		if (s == null) s = "null";
-		ensureCapacity(len + s.length());
-		s.getChars(0, s.length(), list, len);
-		len += s.length();
+	public final CharList append(String s) { if (s == null) s = "null"; return append(s,0,s.length()); }
+	public CharList append(String s, int start, int end) {
+		int len1 = end-start;
+		ensureCapacity(len+len1);
+		s.getChars(start, end, list, len);
+		len += len1;
 		return this;
 	}
-	public final CharList append(Object o) {
-		return append(o == null ? "null" : o.toString());
-	}
+	public final CharList append(Object o) { return append(o == null ? "null" : o.toString()); }
 
 	public final CharList append(int i) {
 		if (i == Integer.MIN_VALUE) {
@@ -526,11 +558,11 @@ public class CharList implements CharSequence, Appender {
 	}
 
 	public static final class Slice implements CharSequence {
-		private final char[] array;
-		private final int off, len;
+		public final char[] list;
+		public final int off, len;
 
-		public Slice(char[] array, int start, int end) {
-			this.array = array;
+		public Slice(char[] list, int start, int end) {
+			this.list = list;
 			this.off = start;
 			this.len = end-start;
 		}
@@ -538,16 +570,16 @@ public class CharList implements CharSequence, Appender {
 		public int length() { return len; }
 		public char charAt(int i) {
 			if (i >= len) throw new StringIndexOutOfBoundsException("off="+i+",len="+len);
-			return array[off+i];
+			return list[off+i];
 		}
 		public CharSequence subSequence(int start, int end) {
 			if (start == 0 && end == len) return this;
 			checkBounds(start,end,len);
 
-			return start==end ? "" : new Slice(array, start+off, end+off);
+			return start==end ? "" : new Slice(list, start+off, end+off);
 		}
 		@Nonnull
-		public String toString() { return new String(array, off, len); }
+		public String toString() { return new String(list, off, len); }
 
 		@Override
 		public boolean equals(Object o) {
@@ -561,7 +593,7 @@ public class CharList implements CharSequence, Appender {
 			int len = this.len+off;
 			int j = 0;
 			for (int i = off; i < len; i++) {
-				if (array[i] != cs.charAt(j++)) {
+				if (list[i] != cs.charAt(j++)) {
 					return false;
 				}
 			}
@@ -574,7 +606,7 @@ public class CharList implements CharSequence, Appender {
 
 			int len = this.len+off;
 			for (int i = off; i < len; i++) {
-				hash = 31 * hash + array[i];
+				hash = 31 * hash + list[i];
 			}
 			return hash;
 		}

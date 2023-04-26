@@ -2,20 +2,27 @@ package roj.net.http.srv;
 
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
+import roj.io.session.SessionProvider;
 import roj.net.URIUtil;
+import roj.net.ch.ChannelCtx;
+import roj.net.ch.CtxEmbedded;
+import roj.net.ch.MyChannel;
 import roj.net.http.Action;
+import roj.net.http.Cookie;
 import roj.net.http.Headers;
 import roj.net.http.IllegalRequestException;
+import roj.net.http.auth.AuthScheme;
 import roj.security.SipHashMap;
 import roj.text.CharList;
+import roj.text.StreamReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
-import java.io.UTFDataFormatException;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.util.Collections;
@@ -23,38 +30,27 @@ import java.util.List;
 import java.util.Map;
 
 public final class Request extends Headers {
-	public static final String CTX_POST_HANDLER = "PH";
-
 	private int action;
 
-	private String path, safePath;
-	private List<String> pushd = new SimpleList<>();
+	private String path, initPath;
 
 	Object postFields, getFields;
-	private Map<String, String> cookie;
+	private Map<String, Cookie> cookie;
 
-	Map<String, Object> ctx, threadCtx;
+	Map<String, Object> threadCtx;
 	HttpServer11 handler;
 
 	Request() {}
 
-	public Map<String, Object> ctx() {
-		if (ctx == null) ctx = new MyHashMap<>(4);
-		return ctx;
-	}
-	public Map<String, Object> threadLocalCtx() {
-		return threadCtx;
-	}
-
-	public HttpServer11 handler() {
-		return handler;
-	}
+	public Map<String, Object> threadContext() { return threadCtx; }
+	@Deprecated
+	public HttpServer11 handler() { return handler; }
+	public MyChannel connection() { return handler.ch.channel(); }
 
 	Request init(int action, String path, String query) throws IllegalRequestException {
 		this.action = action;
-		this.path = path;
 		try {
-			safePath = IOUtil.safePath(URIUtil.decodeURI(path));
+			this.path = initPath = IOUtil.safePath(URIUtil.decodeURI(path));
 		} catch (MalformedURLException e) {
 			throw new IllegalRequestException(400, "bad query");
 		}
@@ -63,119 +59,94 @@ public final class Request extends Headers {
 	}
 
 	public void free() {
-		pushd.clear();
-		path = safePath = null;
+		path = initPath = null;
 		handler = null;
 		cookie = null;
 		postFields = getFields = null;
 		clear();
-		if (ctx != null) ctx.clear();
-		threadCtx = null;
+		session_write_close();
+		responseHeader.clear();
 	}
 
-	public int action() {
-		return action;
-	}
+	public int action() { return action; }
 
-	public String rawPath() {
-		return path;
-	}
-	public String path() {
-		return safePath;
-	}
+	public String path() { return path; }
+	public Request resetPath() { path = initPath; return this; }
 
 	public Request subDirectory(int i) {
-		CharList buf = IOUtil.getSharedCharBuf();
-		List<String> dir = directories();
-		if (i < dir.size()) {
-			while (true) {
-				buf.append(dir.get(i++));
-				if (i == dir.size()) break;
-				buf.append('/');
-			}
-		}
-		safePath = buf.toString();
+		while (i-- > 0) path = path.substring(0, path.lastIndexOf('/'));
 		return this;
 	}
 
-	public String directory(int i) {
-		return directories().get(i);
-	}
 	public List<String> directories() {
-		if (pushd.isEmpty()) {
-			List<String> paths = TextUtil.split(pushd, path(), '/', -1, true);
-			if (paths.isEmpty()) paths.add("");
-			else if (paths.get(0).isEmpty()) paths.remove(0);
-		}
-		return pushd;
+		List<String> paths = TextUtil.split(new SimpleList<>(), path(), '/', -1, true);
+		if (paths.isEmpty()) paths.add("");
+		else if (paths.get(0).isEmpty()) paths.remove(0);
+		return paths;
 	}
 
+	// region request info
 	public Map<String, String> postFields() throws IllegalRequestException {
 		if (postFields instanceof ByteList) {
 			ByteList pf = (ByteList) postFields;
 
 			String ct = getOrDefault("content-type", "");
-			if (ct.startsWith("multipart")) {
-				SipHashMap<String, String> map = new SipHashMap<>();
-				new MultipartFormHandler(this) {
-					String key1;
+			if (ct.startsWith("multipart/")) {
+				try {
+					MultipartFormHandler handler = new MultipartFormHandler(this) {
+						@Override
+						protected void onKey(ChannelCtx ctx, String name) {}
+						@Override
+						protected void onValue(ChannelCtx ctx, DynByteBuf buf) { map.put(name, buf.readUTF(buf.readableBytes())); }
+					};
 
-					@Override
-					protected void onKey(CharSequence key) {
-						if (key1 != null) map.put(key1, "");
-						key1 = key.toString();
-					}
+					CtxEmbedded ch = new CtxEmbedded();
+					ch.addLast("_", handler);
+					ch.fireChannelRead(pf);
+					handler.onSuccess();
+					handler.onComplete();
+					ch.close();
 
-					@Override
-					protected void onValue(DynByteBuf buf) {
-						map.put(key1, buf.readUTF(buf.readableBytes()));
-						key1 = null;
-					}
-				}.onData(pf);
-				postFields = map;
+					postFields = handler.map;
+				} catch (IOException e) {
+					IllegalRequestException ex = new IllegalRequestException(400, e.getMessage());
+					ex.setStackTrace(e.getStackTrace());
+					throw ex;
+				} catch (IllegalArgumentException e) {
+					throw new IllegalRequestException(400, "Request.postFields()不支持二进制(文件)数据,请使用PostHandler");
+				}
 			} else {
-				postFields = parseSimpleField(pf, "&");
+				try {
+					postFields = simpleValue(pf, "&", true);
+				} catch (MalformedURLException e) {
+					throw new IllegalRequestException(400, e.getMessage());
+				}
 			}
 		}
-		return Helpers.cast(postFields);
+		return postFields == null ? Collections.emptyMap() : Helpers.cast(postFields);
 	}
-
-	public String postString() throws UTFDataFormatException {
+	public String postString() {
 		if (postFields instanceof ByteList) {
-			ByteList pf = (ByteList) postFields;
-
-			String str = pf.readUTF(pf.readableBytes());
-			postFields = str;
-			return str;
+			try (StreamReader sr = new StreamReader((ByteList) postFields, null)) {
+				postFields = IOUtil.read(sr);
+			} catch (IOException e) {
+				return null;
+			}
 		}
-		return Helpers.cast(postFields);
+		return (String) postFields;
 	}
-
-	public ByteList postBuffer() {
-		return (ByteList) postFields;
-	}
+	public ByteList postBuffer() { return (ByteList) postFields; }
+	public HPostHandler postHandler() { return ((HPostHandler) postFields); }
 
 	public Map<String, String> getFields() throws IllegalRequestException {
-		if (getFields instanceof CharSequence)
-			getFields = parseSimpleField((CharSequence) getFields, "&");
-		return Helpers.cast(getFields);
-	}
-
-	private static Map<String, String> parseSimpleField(CharSequence query, String splitter) throws IllegalRequestException {
-		List<String> queries = TextUtil.split(query, splitter);
-		SipHashMap<String, String> map = new SipHashMap<>(queries.size());
-
-		try {
-			for (int i = 0; i < queries.size(); i++) {
-				String s = queries.get(i);
-				int j = s.indexOf('=');
-				if (j == -1) map.put(URIUtil.decodeURI(s), "");
-				else map.put(URIUtil.decodeURI(s.substring(0, j)), URIUtil.decodeURI(s.substring(j+1)));
+		if (getFields instanceof CharSequence) {
+			try {
+				getFields = simpleValue((CharSequence) getFields, "&", true);
+			} catch (MalformedURLException e) {
+				throw new IllegalRequestException(400, e.getMessage());
 			}
-		} catch (MalformedURLException e) {
-			throw new IllegalRequestException(400, e.getMessage());
 		}
-		return map;
+		return Helpers.cast(getFields);
 	}
 
 	public String getFieldsRaw() {
@@ -211,21 +182,117 @@ public final class Request extends Headers {
 		return host == null ? ((InetSocketAddress)handler.ch.remoteAddress()).getHostString() : host;
 	}
 
-	public Map<String, String> cookie() throws IllegalRequestException {
+	public Map<String, Cookie> cookie() throws IllegalRequestException {
 		if (cookie == null) {
-			String str = get("cookie");
-			if (str == null) cookie = Collections.emptyMap();
-			else cookie = parseSimpleField(str, "; ");
+			Map<String, String> fromClient;
+			try {
+				fromClient = getCookieFromClient();
+				if (fromClient.isEmpty()) return cookie = new MyHashMap<>();
+			} catch (MalformedURLException e) {
+				throw new IllegalRequestException(400, e.getMessage());
+			}
+
+			for (Map.Entry<String, ?> entry : fromClient.entrySet()) {
+				Cookie c = new Cookie(entry.getKey(), entry.getValue().toString());
+				c.clearDirty();
+				entry.setValue(Helpers.cast(c));
+			}
+			cookie = Helpers.cast(fromClient);
 		}
 		return cookie;
 	}
+	// endregion
 
-	@Nonnull
-	public String header(String s) {
-		return getOrDefault(s, "");
+	final Headers responseHeader = new Headers();
+	public Headers responseHeader() { return responseHeader; }
+
+	void packToHeader() {
+		if (cookie != null) {
+			List<Cookie> modified = new SimpleList<>();
+			for (Map.Entry<String, Cookie> entry : cookie.entrySet()) {
+				Cookie c = entry.getValue();
+				if (c.isDirty()) modified.add(c);
+			}
+			if (!modified.isEmpty()) responseHeader.sendCookieToClient(modified);
+		}
+	}
+
+	private String sessionName = "JSESSIONID", sessionId;
+	private Map<String,Object> session;
+
+	public Request sessionName(String prefix) {
+		this.sessionName = prefix; return this;
+	}
+
+	public Map<String,Object> session() throws IllegalRequestException { return session(true); }
+	public Map<String,Object> session(boolean createIfNonExist) throws IllegalRequestException {
+		SessionProvider provider = SessionProvider.getDefault();
+		if (provider == null) throw new IllegalStateException("没有session provider");
+
+		if (session == null) {
+			Cookie c = cookie().get(sessionName);
+			if (c != null && SessionProvider.isValid(c.value())) sessionId = c.value();
+			else if (!createIfNonExist) return null;
+			else {
+				c = new Cookie(sessionName, sessionId = provider.createSession()).httpOnly(true);
+				cookie.put(sessionName, c);
+			}
+			session = provider.loadSession(sessionId);
+			if (session == null && createIfNonExist) session = new MyHashMap<>();
+		}
+		return session;
+	}
+
+	public void session_write_close() {
+		if (session != null) {
+			SessionProvider.getDefault().saveSession(sessionId, session);
+			session = null;
+		}
+	}
+
+	public void session_destroy() throws IllegalRequestException {
+		session(false);
+		if (sessionId != null) {
+			SessionProvider.getDefault().destroySession(sessionId);
+			session = null;
+			sessionId = null;
+
+			Cookie ck = new Cookie(sessionName, "");
+			ck.expires(System.currentTimeMillis()-1);
+			cookie.put(sessionName, ck);
+		}
+	}
+
+	public void authorize(String message, AuthScheme... schemes) throws IllegalRequestException {
+		String auth = getField("authorization");
+		if (!auth.isEmpty()) {
+			int i = auth.indexOf(' ');
+			String type = auth.substring(0,i);
+			for (AuthScheme alg : schemes) {
+				if (alg.type().equals(type)) {
+					try {
+						String str = alg.check(auth.substring(i+1));
+						if (str == null) return;
+						message = str;
+					} catch (Exception e) {
+						message = "无效的请求";
+					}
+					break;
+				}
+			}
+		}
+		// WWW-Authenticate: Basic realm="Fantasy"
+		CharList sb = IOUtil.ddLayeredCharBuf();
+		for (AuthScheme authScheme : schemes) sb.append(authScheme.type()).append(' ');
+		ITokenizer.addSlashes(sb.append("realm=\""), URIUtil.encodeURI(message)).append("\"");
+		responseHeader.put("www-authenticate", sb.toStringAndFree());
+
+		throw new IllegalRequestException(401, StringResponse.httpErr(401));
 	}
 
 	public String toString() {
-		return Action.toString(action) + ' ' + host() + path;
+		StringBuilder sb = new StringBuilder().append(Action.toString(action)).append(' ').append(host()).append(path).append(" HTTP/1.1\n");
+		encode(sb);
+		return sb.toString();
 	}
 }

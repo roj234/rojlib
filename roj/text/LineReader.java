@@ -40,7 +40,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 	public LineReader(CharSequence s, boolean cleanEmpty) {
 		this.str = s;
 		this.keepEmpty = !cleanEmpty;
-		this.reuse = true;
+		this.reuse = !(s instanceof StreamReader);
 	}
 
 	@SuppressWarnings("fallthrough")

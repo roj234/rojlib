@@ -6,6 +6,7 @@ import roj.collect.SimpleList;
 import roj.collect.TrieTree;
 import roj.config.ParseException;
 import roj.config.XMLParser;
+import roj.config.serial.CVisitor;
 import roj.config.word.ITokenizer;
 import roj.config.word.Tokenizer;
 import roj.config.word.Word;
@@ -29,7 +30,7 @@ public class XElement extends XEntry {
 	private static class XSLexer extends Tokenizer {
 		private static final MyBitSet TOKEN_CHAR = new MyBitSet();
 		private static final TrieTree<Word> TOKEN_ID = new TrieTree<>();
-		static { addSymbols(TOKEN_ID, TOKEN_CHAR, 10, TextUtil.split1("( ) . [ ] * == != | ,", ' ')); addWhitespace(TOKEN_CHAR); }
+		static { addSymbols(TOKEN_ID, TOKEN_CHAR, 10, TextUtil.split1("( ) . [ ] * = != | ,", ' ')); addWhitespace(TOKEN_CHAR); }
 
 		{
 			literalEnd = TOKEN_CHAR;
@@ -223,20 +224,16 @@ public class XElement extends XEntry {
 	// endregion
 
 	public String tag;
-	public boolean likeClose;
+	public boolean shortTag;
 
 	public XElement(String tag) {
 		this.tag = tag;
 	}
 
 	@Override
-	public boolean isString() {
-		return false;
-	}
+	public boolean isString() { return false; }
 	@Override
-	public XElement asElement() {
-		return this;
-	}
+	public XElement asElement() { return this; }
 
 	public String valueAsString() {
 		if (children.size() > 1) throw new UnsupportedOperationException("child count > 1");
@@ -325,15 +322,9 @@ public class XElement extends XEntry {
 	// endregion
 
 	public void toXML(CharList sb, int depth) {
-		sb.append('<').append(tag);
-		if (!attributes.isEmpty()) {
-			for (Map.Entry<String, CEntry> entry : attributes.entrySet()) {
-				sb.append(' ').append(entry.getKey()).append('=');
-				entry.getValue().toJSON(sb, 0);
-			}
-		}
+		writeTag(sb);
 
-		if (likeClose && children.isEmpty()) {
+		if (shortTag && children.isEmpty()) {
 			sb.append(" />");
 			return;
 		}
@@ -360,18 +351,14 @@ public class XElement extends XEntry {
 	}
 
 	public void toCompatXML(CharList sb) {
-		sb.append('<').append(tag);
-		if (!attributes.isEmpty()) {
-			for (Map.Entry<String, CEntry> entry : attributes.entrySet()) {
-				sb.append(' ').append(entry.getKey()).append('=');
-				entry.getValue().toJSON(sb, 0);
-			}
-		}
+		writeTag(sb);
 
-		if (likeClose && children.isEmpty()) {
+		if (shortTag && children.isEmpty()) {
 			sb.append("/>");
 			return;
 		}
+
+		sb.append('>');
 
 		for (int i = 0; i < children.size(); i++) {
 			children.get(i).toCompatXML(sb);
@@ -379,48 +366,54 @@ public class XElement extends XEntry {
 		sb.append("</").append(tag).append('>');
 	}
 
-	public CMapping toJSON() {
-		CMapping map = new CMapping();
-		if (!attributes.isEmpty()) map.put("A", new CMapping(attributes));
-		if (!children.isEmpty()) {
-			if (children.size() == 1) {
-				map.put("C", children.get(0).toJSON());
-			} else {
-				CList list = new CList(children.size());
-				List<XEntry> xmls = children;
-				for (int i = 0; i < xmls.size(); i++) {
-					list.add(xmls.get(i).toJSON());
+	final void writeTag(CharList sb) {
+		sb.append('<').append(tag);
+		if (!attributes.isEmpty()) {
+			for (Map.Entry<String, CEntry> entry : attributes.entrySet()) {
+				sb.append(' ');
+				if (entry.getValue().getType() != Type.NULL) {
+					sb.append(entry.getKey()).append('=');
+					entry.getValue().toJSON(sb, 0);
+				} else {
+					String key = entry.getKey();
+					if (key.contains(" ") || key.contains("\"") || key.contains("'") || key.contains("<") || key.contains("&")) {
+						ITokenizer.addSlashes(sb.append('"'), key).append('"');
+					} else {
+						sb.append(key);
+					}
 				}
-				map.put("C", list);
 			}
 		}
-
-		map.put("I", tag);
-		return map;
 	}
 
-	final XEntry read(CMapping map) {
-		tag = map.getString("I");
+	public void toJSON(CVisitor cc) {
+		int size = 0;
+		if (!tag.equals("?xml")) size++;
+		if (!attributes.isEmpty()) size++;
+		if (!children.isEmpty()) size++;
+		cc.valueList(size);
 
-		if (map.containsKey("A", Type.MAP)) {
-			Map<String, CEntry> map1 = attributes();
-			map1.clear();
-			map1.putAll(map.get("A").asMap().map);
+		if (!tag.equals("?xml")) cc.value(tag);
+		if (!attributes.isEmpty()) {
+			cc.valueMap(attributes.size());
+			for (Map.Entry<String, CEntry> entry : attributes.entrySet()) {
+				cc.key(entry.getKey());
+				entry.getValue().forEachChild(cc);
+			}
+			cc.pop();
 		}
-
-		CEntry ch = map.get("C");
-		if (ch.getType() != Type.NULL) {
-			List<XEntry> d = children(); d.clear();
-
-			if (ch.getType() == Type.LIST) {
-				List<CEntry> children = ch.asList().raw();
-				for (int i = 0; i < children.size(); i++) {
-					d.add(fromJSON(children.get(i)));
-				}
+		if (!children.isEmpty()) {
+			if (children.size() == 1 && children.get(0).isString()) {
+				children.get(0).toJSON(cc);
 			} else {
-				d.add(fromJSON(ch));
+				cc.valueList(children.size());
+				for (int i = 0; i < children.size(); i++) {
+					children.get(i).toJSON(cc);
+				}
+				cc.pop();
 			}
 		}
-		return this;
+
+		cc.pop();
 	}
 }

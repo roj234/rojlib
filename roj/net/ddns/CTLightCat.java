@@ -4,15 +4,13 @@ import roj.config.JSONParser;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.net.URIUtil;
-import roj.net.http.Headers;
-import roj.net.http.IHttpClient;
+import roj.net.http.HttpRequest;
 import roj.net.http.SyncHttpClient;
 import roj.ui.CmdUtil;
 import roj.util.ByteList;
 
 import java.net.InetAddress;
 import java.net.URL;
-import java.util.function.Consumer;
 
 /**
  * @author Roj234
@@ -22,21 +20,22 @@ public class CTLightCat extends IpGetter {
 	private String accessToken;
 	private long refreshTime;
 
-	private final Consumer<IHttpClient> APPLY_TOKEN = (hc) -> hc.header("Cookie", "sysauth="+accessToken);
 	private boolean refreshAccessToken() {
 		try {
-			SyncHttpClient shc = pool.request(new URL("http://"+catUrl+"/cgi-bin/luci"), hc -> {
-				ByteList b = IOUtil.getSharedByteBuf().putAscii("username=useradmin&psd=").putAscii(URIUtil.encodeURIComponent(pass));
-				hc.method("POST").body(ByteList.wrap(b.toByteArray())).header("Content-Type","application/x-www-form-urlencoded");
-			});
-			shc.waitFor();
-			if (shc.getHead().getCode() == 302) {
-				refreshTime = System.currentTimeMillis();
+			ByteList body = IOUtil.getSharedByteBuf().putAscii("username=useradmin&psd=").putAscii(URIUtil.encodeURIComponent(pass));
+			SyncHttpClient shc = HttpRequest.nts()
+				.url(new URL("http://"+catUrl+"/cgi-bin/luci"))
+				.header("Content-Type","application/x-www-form-urlencoded")
+				.body(ByteList.wrap(body.toByteArray()))
+				.executePooled();
 
-				accessToken = Headers.decodeOneValue(shc.getHead().getHeaderField("Set-Cookie"), "sysauth");
+			if (shc.head().getCode() == 302) {
+				refreshTime = System.currentTimeMillis();
+				accessToken = shc.head().getFieldValue("Set-Cookie", "sysauth");
 				if (accessToken != null) return true;
 			}
-			CmdUtil.warning("[getAddress]无法获取AccessToken 是否密码错误？: " + shc.getHead());
+
+			CmdUtil.warning("[getAddress]无法获取AccessToken 是否密码错误？: " + shc.head());
 		} catch (Exception e) {
 			CmdUtil.error("getAddress", e);
 		}
@@ -46,9 +45,7 @@ public class CTLightCat extends IpGetter {
 	private String pass, catUrl;
 
 	@Override
-	public boolean supportsV6() {
-		return true;
-	}
+	public boolean supportsV6() { return true; }
 
 	@Override
 	public void loadConfig(CMapping config) {
@@ -57,19 +54,18 @@ public class CTLightCat extends IpGetter {
 	}
 
 	@Override
-	public InetAddress[] getAddress(boolean checkV6) {
-		try {
-			if (System.currentTimeMillis() - refreshTime > 60000) refreshAccessToken();
+	public InetAddress[] getAddress(boolean checkV6) throws Exception {
+		if (System.currentTimeMillis() - refreshTime > 60000) refreshAccessToken();
 
-			SyncHttpClient shc = pool.request(new URL("http://"+catUrl+"/cgi-bin/luci/admin/settings/gwinfo?get=part"), APPLY_TOKEN);
-			CMapping url = new JSONParser().parseRaw(shc.getInputStream()).asMap();
+		SyncHttpClient shc = HttpRequest.nts()
+										.url(new URL("http://"+catUrl+"/cgi-bin/luci/admin/settings/gwinfo?get=part"))
+										.header("Cookie", "sysauth="+accessToken)
+										.executePooled();
 
-			InetAddress WANIP = InetAddress.getByName(url.getString("WANIP")),
-						WANIPv6 = InetAddress.getByName(url.getString("WANIPv6"));
-			return new InetAddress[] { WANIP, WANIPv6 };
-		} catch (Exception e) {
-			CmdUtil.error("getAddress", e);
-		}
-		return null;
+		CMapping url = new JSONParser().parseRaw(shc.stream()).asMap();
+
+		InetAddress WANIP = InetAddress.getByName(url.getString("WANIP")),
+			WANIPv6 = InetAddress.getByName(url.getString("WANIPv6"));
+		return new InetAddress[] { WANIP, WANIPv6 };
 	}
 }

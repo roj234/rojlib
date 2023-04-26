@@ -98,8 +98,8 @@ public class Transformer implements ContextClassTransformer {
 
 	private static void betterClassLoadingError(Context ctx) {
 		for (CstClass clz : ctx.getClassConstants()) {
-			if (clz.getValue().getString().equals("java/lang/ClassNotFoundException")) {
-				clz.getValue().setString("java/lang/Throwable");
+			if (clz.name().str().equals("java/lang/ClassNotFoundException")) {
+				ctx.getData().cp.setUTFValue(clz.name(), "java/lang/Throwable");
 			}
 		}
 	}
@@ -279,13 +279,13 @@ public class Transformer implements ContextClassTransformer {
 		List<CstRef> methods = ctx.getMethodConstants();
 		for (int i = 0; i < methods.size(); i++) {
 			CstRef ref = methods.get(i);
-			if (ref.getClassName().equals("org/lwjgl/BufferUtils")) {
-				if (ref.desc().getName().getString().equals("createByteBuffer")) {
-					ref.setClazz(data.cp.getClazz("ilib/asm/Transformer"));
+			if (ref.className().equals("org/lwjgl/BufferUtils")) {
+				if (ref.descName().equals("createByteBuffer")) {
+					ref.clazz(data.cp.getClazz("ilib/asm/Transformer"));
 				}
-			} else if (ref.getClassName().equals("java/nio/ByteBuffer")) {
-				if (ref.desc().getName().getString().startsWith("allocateDirect")) {
-					ref.setClazz(data.cp.getClazz("ilib/asm/Transformer"));
+			} else if (ref.className().equals("java/nio/ByteBuffer")) {
+				if (ref.descName().startsWith("allocateDirect")) {
+					ref.clazz(data.cp.getClazz("ilib/asm/Transformer"));
 				}
 			}
 		}
@@ -306,8 +306,8 @@ public class Transformer implements ContextClassTransformer {
 		List<CstClass> clz = ctx.getClassConstants();
 		for (int i = 0; i < clz.size(); i++) {
 			CstClass ref = clz.get(i);
-			if (ref.getValue().getString().equals("org/lwjgl/BufferUtils")) {
-				ref.getValue().setString("ilib/asm/util/MCHooksClient");
+			if (ref.name().str().equals("org/lwjgl/BufferUtils")) {
+				data.cp.setUTFValue(ref.name(), "ilib/asm/util/MCHooksClient");
 			}
 		}
 	}
@@ -352,9 +352,9 @@ public class Transformer implements ContextClassTransformer {
 		List<CstClass> cref = ctx.getClassConstants();
 		for (int i = 0; i < cref.size(); i++) {
 			CstClass c = cref.get(i);
-			if (c.getValue().getString().equals("oshi/SystemInfo")) {
+			if (c.name().str().equals("oshi/SystemInfo")) {
 				// 会报NoSuchMethodError, 不过它在一个try-catch里
-				c.getValue().setString("java/lang/Object");
+				cp.setUTFValue(c.name(), "java/lang/Object");
 				break;
 			}
 		}
@@ -365,8 +365,8 @@ public class Transformer implements ContextClassTransformer {
 		List<CstRef> mref = ctx.getMethodConstants();
 		for (int i = 0; i < mref.size(); i++) {
 			CstRef m = mref.get(i);
-			if (m.desc().getName().getString().equals("newHashSet")) {
-				m.setClazz(cp.getClazz("roj/util/Helpers"));
+			if (m.descName().equals("newHashSet")) {
+				m.clazz(cp.getClazz("roj/util/Helpers"));
 				m.desc(cp.getDesc("newMyHashSet", "()Lroj/collect/MyHashSet;"));
 				break;
 			}
@@ -378,10 +378,11 @@ public class Transformer implements ContextClassTransformer {
 		for (int i = 0; i < mref.size(); i++) {
 			CstRef m = mref.get(i);
 			// I18n.format
-			if (m.desc().getName().getString().equals("func_135052_a")) {
+			if (m.descName().equals("func_135052_a")) {
 				// 只有一处引用，所以不用data.cp.newXXX
-				m.getClazz().getValue().setString("ilib/misc/MCHooks");
-				m.desc().getName().setString("dismountMessage");
+				ConstantPool cp = ctx.getData().cp;
+				cp.setUTFValue(m.clazz().name(), "ilib/misc/MCHooks");
+				cp.setUTFValue(m.desc().name(), "dismountMessage");
 				break;
 			}
 		}
@@ -474,9 +475,9 @@ public class Transformer implements ContextClassTransformer {
 			for (int i = 0; i < array.size(); i++) {
 				Constant c = array.get(i);
 				if (c.type() == Constant.UTF) {
-					CstUTF cstUTF = (CstUTF) c;
-					if ("Minecraft 1.12.2".equals(cstUTF.getString())) {
-						cstUTF.setString(Config.title.equals("random") ? randomTitle() : Config.title);
+					CstUTF title = (CstUTF) c;
+					if ("Minecraft 1.12.2".equals(title.str())) {
+						data.cp.setUTFValue(title, Config.title.equals("random") ? randomTitle() : Config.title);
 						found = true;
 						break;
 					}
@@ -488,8 +489,8 @@ public class Transformer implements ContextClassTransformer {
 			List<CstRef> methodRef = ctx.getMethodConstants();
 			for (int i = 0; i < methodRef.size(); i++) {
 				CstRef ref = methodRef.get(i);
-				if (ref.getClassName().equals("java/lang/System") && ref.desc().getName().getString().equals("gc")) {
-					ref.setClazz(data.cp.getClazz("ilib/misc/MCHooks"));
+				if (ref.className().equals("java/lang/System") && ref.descName().equals("gc")) {
+					ref.clazz(data.cp.getClazz("ilib/misc/MCHooks"));
 					ref.desc(data.cp.getDesc("empty", "()V"));
 					logger.debug("redirectGC: done.");
 					break;
@@ -698,9 +699,9 @@ public class Transformer implements ContextClassTransformer {
 		for (int i = 0; i < methods.size(); i++) {
 			CstRef ref = methods.get(i);
 			if (ref.matches("net/minecraft/util/EnumFacing", "values", "()[Lnet/minecraft/util/EnumFacing;")) {
-				ref.setClazz(data.cp.getClazz("ilib/misc/MCHooks"));
+				ref.clazz(data.cp.getClazz("ilib/misc/MCHooks"));
 			} else if (ref.matches("net/minecraft/util/BlockRenderLayer", "values", "()[Lnet/minecraft/util/BlockRenderLayer;")) {
-				ref.setClazz(data.cp.getClazz("ilib/asm/util/MCHooksClient"));
+				ref.clazz(data.cp.getClazz("ilib/asm/util/MCHooksClient"));
 			}
 		}
 	}

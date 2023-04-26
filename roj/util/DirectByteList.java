@@ -1,14 +1,10 @@
 package roj.util;
 
-import roj.io.IOUtil;
-import roj.math.MathUtils;
-import roj.text.CharList;
 import roj.text.TextUtil;
 import sun.misc.Unsafe;
-import sun.nio.ch.DirectBuffer;
 
-import java.io.IOException;
 import java.nio.*;
+import java.nio.charset.StandardCharsets;
 import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
@@ -62,38 +58,26 @@ public class DirectByteList extends DynByteBuf {
 
 	DirectByteList(boolean unused) {}
 
-	public void _free() {
+	public synchronized void _free() {
 		clear();
 		length = 0;
 
 		address = 0;
-		nm.release();
+		if (nm != null) {
+			nm.release();
+			nm = null;
+		}
 	}
 
-	@Override
-	public int capacity() {
-		return length;
-	}
-	@Override
-	public int maxCapacity() {
-		return Integer.MAX_VALUE;
-	}
-	@Override
-	public boolean immutableCapacity() {
-		return nm == null;
-	}
-	@Override
-	public final boolean isDirect() {
-		return true;
-	}
-	@Override
-	public final long address() {
-		return address;
-	}
-	@Override
-	public final boolean hasArray() {
-		return false;
-	}
+	public NativeMemory memory() { return nm; }
+
+	public int capacity() { return length; }
+	public int maxCapacity() { return nm == null ? length : 2147000000; }
+	public boolean immutableCapacity() { return nm == null; }
+	public final boolean isDirect() { return true; }
+	public final long address() { return address; }
+	public final long _unsafeAddr() { return address; }
+	public final boolean hasArray() { return false; }
 
 	@Override
 	public final void copyTo(long addr, int len) {
@@ -272,42 +256,15 @@ public class DirectByteList extends DynByteBuf {
 		return this;
 	}
 
-	public final void _writeDioUTF(String s, int byteLen) {
+	final void _writeDioUTF(String s, int byteLen) {
 		long addr = moveWI(byteLen)+address;
-		ByteList.jutf8_encode_all(s, null, addr, byteLen);
-	}
-
-	public final DirectByteList putUTFData0(CharSequence s, int len) {
-		long addr = moveWI(len)+address;
-		ByteList.utf8mb4_encode_all(s, null, addr, len);
-		return this;
-	}
-
-	public final DirectByteList putVStrData0(CharSequence s, int len) {
-		long addr = moveWI(len)+address;
-
-		for (int i = 0; i < s.length(); i++) {
-			char c = s.charAt(i);
-			if (c >= 0x8080) {
-				u.putByte(addr++, (byte) 0);
-				u.putByte(addr++, (byte) (c >>> 8));
-				u.putByte(addr++, (byte) c);
-			} else if (c == 0 || c >= 0x80) {
-				c -= 0x80;
-				u.putByte(addr++, (byte) ((c >>> 8) | 0x80));
-				u.putByte(addr++, (byte) c);
-			} else {
-				u.putByte(addr++, (byte) c);
-			}
-		}
-		return this;
+		ByteList.jutf8_encode_all(s, null, addr);
 	}
 
 	public final DirectByteList put(ByteBuffer buf) {
 		int rem = buf.remaining();
 		if (buf.isDirect()) {
-			DirectBuffer db = (DirectBuffer) buf;
-			u.copyMemory(db.address()+buf.position(), moveWI(rem)+address, rem);
+			u.copyMemory(NativeMemory.getAddress(buf)+buf.position(), moveWI(rem)+address, rem);
 		} else if (buf.hasArray()) {
 			copyFromArray(buf.array(), Unsafe.ARRAY_BYTE_BASE_OFFSET, buf.arrayOffset() + buf.position(), moveWI(rem)+address, rem);
 		} else {
@@ -460,57 +417,6 @@ public class DirectByteList extends DynByteBuf {
 		cache.putArray(ob);
 		return s;
 	}
-	public final String readUTF(int len) {
-		if (len <= 0) return "";
-
-		int ri = moveRI(len);
-
-		CharList out = IOUtil.getSharedCharBuf();
-		out.ensureCapacity(len);
-		try {
-			ByteList.utf8mb4_decode(null, address, ri, len, out, -1, false);
-		} catch (IOException e) {
-			Helpers.athrow(e);
-		}
-		return out.toString();
-	}
-	public final String readVStr(int len) {
-		if (len <= 0) return "";
-
-		long addr = moveRI(len)+address;
-
-		ArrayCache cache = ArrayCache.getDefaultCache();
-		char[] ob = cache.getCharArray(Math.max(len/2,128), false);
-		int j = 0;
-
-		while (len > 0) {
-			if (j == ob.length) {
-				char[] ob1 = cache.getCharArray(MathUtils.getMin2PowerOf(ob.length+3), false);
-				System.arraycopy(ob, 0, ob1, 0, j);
-				cache.putArray(ob);
-				ob = ob1;
-			}
-
-			byte b = u.getByte(addr++);
-
-			if ((b & 0x80) != 0) {
-				ob[j++] = (char) ((((b & 0x7F) << 8) | (u.getByte(addr++) & 0xFF)) + 0x80);
-				len -= 2;
-			} else if (b == 0) {
-				ob[j++] = (char) ((u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr++) & 0xFF));
-				len -= 3;
-			} else {
-				ob[j++] = (char) b;
-				len -= 1;
-			}
-		}
-
-		if (len < 0) throw new IllegalArgumentException("在结尾处被截断");
-
-		String s = new String(ob, 0, j);
-		cache.putArray(ob);
-		return s;
-	}
 
 	@Override
 	@SuppressWarnings("deprecation")
@@ -533,7 +439,7 @@ public class DirectByteList extends DynByteBuf {
 		return new String(tmp, 0);
 	}
 
-	public final int readZeroTerminate() {
+	public final int readZeroTerminate(int b) {
 		long i = address+rIndex;
 		int r = wIndex-rIndex;
 		while (r-- > 0) {
@@ -651,12 +557,12 @@ public class DirectByteList extends DynByteBuf {
 
 	@Override
 	public String toString() {
-		byte[] tmp = new byte[readableBytes()];
-		copyToArray(address+rIndex, tmp, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, tmp.length);
-		return "DBL{" + TextUtil.dumpBytes(tmp) + "}";
+		byte[] tmp = new byte[wIndex];
+		copyToArray(address, tmp, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, tmp.length);
+		return new String(tmp, StandardCharsets.US_ASCII);
 	}
 
-	public static final class Slice extends DirectByteList {
+	public static class Slice extends DirectByteList {
 		public Slice() {
 			super(false);
 		}

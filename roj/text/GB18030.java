@@ -2,9 +2,12 @@ package roj.text;
 
 import roj.archive.qz.xz.LZMAInputStream;
 import roj.io.ChineseInputStream;
+import roj.reflect.FieldAccessor;
+import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 import java.util.function.IntConsumer;
 
@@ -16,37 +19,38 @@ import static roj.reflect.FieldAccessor.u;
  * @author Roj234
  * @since 2023/4/27 0027 15:48
  */
-public final class GB18030 extends UnsafeCharset {
-	public static final UnsafeCharset CODER = new GB18030(), THROW_ON_FAIL = new GB18030();
+public class GB18030 extends UnsafeCharset {
+	public static final UnsafeCharset CODER = new GB18030();
 
 	@Override
 	public String name() { return "GB18030"; }
 
 	private static final int TAB2 = 24066;
-	private static final char[] TABLE = new char[63486];
-	private static final char[] REVERSE_TABLE = new char[65408];
+	private static final char[] TABLE = new char[63494];
+	private static final char[] REVERSE_TABLE = new char[65536];
 
 	static {
 		try (InputStream in = new LZMAInputStream(ChineseInputStream.class.getResourceAsStream("/META-INF/gb18030.lzma"))) {
 			byte[] b = new byte[1024];
-			int off = 0;
+			long off = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN ? Unsafe.ARRAY_CHAR_BASE_OFFSET : 0;
 			while (true) {
-				// UTF16-BE
+				// UTF16-LE chars
 				int r = in.read(b);
 				if (r < 0) break;
-
-				for (int i = 0; i < r; i+=2) {
-					char c = (char) ((b[i+1] & 0xFF) | ((b[i] & 0xFF) << 8));
-					int id = (off + i) >> 1;
-					TABLE[id] = c;
-					if (c != 0) {
-						REVERSE_TABLE[c-128] = (char) (id+1);
+				if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) {
+					FieldAccessor.u.copyMemory(b, Unsafe.ARRAY_BYTE_BASE_OFFSET, TABLE, off, r);
+				} else {
+					for (int i = 0; i < r; i+=2) {
+						TABLE[((int)off+i) >> 1] = (char) ((b[i]&0xFF) | ((b[i+1]&0xFF) << 8));
 					}
 				}
 				off += r;
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+		for (int i = 0; i < TABLE.length; i++) {
+			REVERSE_TABLE[TABLE[i]] = (char) (i + 1);
 		}
 	}
 
@@ -77,11 +81,11 @@ public final class GB18030 extends UnsafeCharset {
 					len--;
 
 					if (c > 0xFFFF) {
-						cp = c + 123464 + TAB2;
+						cp = c + (123464 + 0x10000);
 						break check;
 					}
 				}
-				cp = REVERSE_TABLE[c-128] - 1;
+				cp = REVERSE_TABLE[c]-1;
 			}
 
 			if (cp < TAB2) len++;
@@ -97,18 +101,23 @@ public final class GB18030 extends UnsafeCharset {
 
 		long i = base+pos;
 		long max = base+end;
-		outMax += off;
 
 		int c;
-		while (i < max && off < outMax) {
+		while (i < max) {
+			if (outMax == 0) return (i-base) << 32;
+
 			c = u.getByte(ref, i);
 			if (c < 0) break;
 			i++;
+			outMax--;
 			out[off++] = (char) c;
 		}
 
 		malformed: {
-		while (i < max && off < outMax) {
+		while (i < max) {
+			if (outMax == 0) break;
+			outMax--;
+
 			c = u.getByte(ref,i++);
 			// US_ASCII
 			if (c >= 0) {
@@ -117,14 +126,10 @@ public final class GB18030 extends UnsafeCharset {
 			}
 
 			c &= 0xFF;
-			// ask windows for reason...
-			if (c == 128) {
-				out[off++] = '€';
-				continue;
-			}
-			if (c == 255) break malformed;
+			if (c == 128 || c == 255) break malformed;
 			if (i == max) {
 				i--;
+				outMax++;
 				break;
 			}
 
@@ -134,6 +139,7 @@ public final class GB18030 extends UnsafeCharset {
 			if (c2 <= 57) {
 				if (max-i < 2) {
 					i -= 2;
+					outMax++;
 					break;
 				}
 
@@ -150,24 +156,22 @@ public final class GB18030 extends UnsafeCharset {
 				} else {
 					cp -= 123464 + Character.MIN_SUPPLEMENTARY_CODE_POINT;
 					if (cp < 0 || cp > 1048575) break malformed;
-					if (outMax-off < 2) return (i-base) << 32;
+					if (outMax == 0) return (i-base) << 32;
+					outMax--;
 
 					out[off++] = (char)((cp>>>10) + Character.MIN_HIGH_SURROGATE);
 					out[off++] = (char)((cp&1023) + Character.MIN_LOW_SURROGATE);
 				}
 			} else {
 				// double
-				if (c2 == 127 || c2 == 255 || c2 < 64) {
-					if (this != THROW_ON_FAIL) out[off++] = INVALID;
-					else break malformed;
-				}
+				if (c2 == 127 || c2 == 255 || c2 < 64) break malformed;
 
-				int cp = (c-129) * (255-64) + (c2-64);
+				int cp = (c-128) * (255-64) + (c2-64);
 				out[off++] = TABLE[cp];
 			}
 		}
 
-		return ((i-base) << 32) | off;}
+		return ((i-base) << 32) | outMax;}
 		throw new IllegalArgumentException((int) (i-base) + " 附近解码错误");
 	}
 
@@ -186,9 +190,7 @@ public final class GB18030 extends UnsafeCharset {
 
 			c &= 0xFF;
 			if (c == 128 || c == 255) {
-				if (c == 128) c = '€';
-				else c = MALFORMED;
-				cs.accept(c);
+				cs.accept(MALFORMED - 1);
 				continue;
 			}
 			if (i == max) {
@@ -258,39 +260,36 @@ public final class GB18030 extends UnsafeCharset {
 		while (i < end) {
 			int c = s[i];
 			if (c > 0x7F) break;
-			if (outMax == 0) return ((long) i << 32);
-
 			i++;
+
+			if (outMax == 0) return ((long) i << 32);
 			outMax--;
 
 			u.putByte(ref, addr++, (byte) c);
 		}
 
 		while (i < end) {
-			int c = s[i];
+			int c = s[i++];
 
 			if (c <= 0x7F) {
 				if (outMax == 0) break;
-
-				i++;
 				outMax--;
 
 				u.putByte(ref, addr++, (byte) c);
 				continue;
 			}
 
-			int sum = 1;
 			int cp;
-			check:{
+			check:
+			{
 				if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-					c = TextUtil.codepoint(c, s[i+1]);
-					sum++;
+					c = TextUtil.codepoint(c, s[i++]);
 					if (c > 0xFFFF) {
 						cp = c + 123464 + TAB2;
 						break check;
 					}
 				}
-				cp = REVERSE_TABLE[c-128] - 1;
+				cp = REVERSE_TABLE[c] - 1;
 				if (cp < 0) throw new AssertionError();
 			}
 
@@ -298,7 +297,7 @@ public final class GB18030 extends UnsafeCharset {
 				if (outMax < 2) break;
 				outMax -= 2;
 
-				u.putByte(ref, addr++, (byte) (129 + (cp / 191)));
+				u.putByte(ref, addr++, (byte) (128 + (cp / 191)));
 				u.putByte(ref, addr++, (byte) (cp % 191 + 64));
 			} else { // four bytes
 				if (outMax < 4) break;
@@ -313,7 +312,6 @@ public final class GB18030 extends UnsafeCharset {
 				u.putByte(ref, addr++, (byte) (129 + cp / 10));
 				u.putByte(ref, addr++, (byte) (48 + cp % 10));
 			}
-			i += sum;
 		}
 
 		return ((long)i << 32) | outMax;

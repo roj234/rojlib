@@ -48,4 +48,6 @@ public interface CVisitor {
 	default void rawString(CharSequence v) {
 		throw new UnsupportedOperationException();
 	}
+
+	default void vsopt(String k, Object v) {}
 }

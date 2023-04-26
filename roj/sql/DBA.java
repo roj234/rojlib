@@ -1,6 +1,9 @@
 package roj.sql;
 
-import roj.collect.*;
+import roj.collect.IntBiMap;
+import roj.collect.MyHashMap;
+import roj.collect.RingBuffer;
+import roj.collect.SimpleList;
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.net.http.srv.error.GreatErrorPage;
@@ -26,12 +29,10 @@ public final class DBA implements AutoCloseable {
 	private List<String> rawField = Collections.emptyList();
 
 	private Connection connection;
-	private Statement defaultStm;
+	private Statement selectStm;
 	private ResultSet set;
 
-	final RingBuffer<String> logs;
-
-	private DBA parent;
+	RingBuffer<String> logs = new RingBuffer<>(10);
 
 	public static DBA getInstance() {
 		DBA dba = CMAP.get();
@@ -52,24 +53,14 @@ public final class DBA implements AutoCloseable {
 		});
 	}
 
-	private DBA() {
-		logs = new RingBuffer<>(10);
-	}
-	public DBA(DBA parent) {
-		this.parent = parent;
-		this.logs = parent.logs;
-	}
+	public DBA() {}
 
 	public synchronized void close() throws SQLException {
 		reset();
 		try {
-			if (!connection().getAutoCommit()) {
-				transEnd(false);
-			}
-
-			if (defaultStm != null) {
-				defaultStm.close();
-				defaultStm = null;
+			if (selectStm != null) {
+				selectStm.close();
+				selectStm = null;
 				set = null;
 			}
 		} finally {
@@ -100,13 +91,12 @@ public final class DBA implements AutoCloseable {
 			"le"          ,  "<=?0",
 			"gt"          ,  ">?0",
 			"ge"          ,  ">=?0",
-			"like"        ,  "LIKE \"%?0%\"",
-			"notlike"     ,  "NOT LIKE \"%?0%\"",
-			"leftlike"    ,  "LIKE \"%?0\"",
-			"rightlike"   ,  "LIKE \"?0%\"",
-			"anybit"      ,  "&?0 != 0",
-			"allbit"      ,  "&?0 = ?1",
-			"notbit"      ,  "&?0 = 0",
+			"like"        ,  "LIKE %?0%",
+			"notlike"     ,  "NOT LIKE %?0%",
+			"leftlike"    ,  "LIKE %?0",
+			"rightlike"   ,  "LIKE ?0%",
+			"bit"         ,  "&?0 != 0",
+			"nbit"        ,  "&?0 = 0",
 			"between"     ,  "BETWEEN ?0 AND ?1",
 			"notbetween"  ,  "NOT BETWEEN ?0 AND ?1",
 			"betweeni"    ,  "BETWEEN ?0 AND ?1",
@@ -121,12 +111,10 @@ public final class DBA implements AutoCloseable {
 		return map;
 	}
 
-	public DBA where(String k) { where.clear(); where.append(k); return this; }
-	public DBA where(int id) { return where("Id", Integer.toString(id)); }
-	public DBA where(String k, Object v) { return where(Collections.singletonMap(k,v), false, true); }
-	public DBA andWhere(String k, Object v) { return where(Collections.singletonMap(k,v), false, false); }
-	public DBA andWhere(String k) { where.append(" AND ").append(k); return this; }
-	public DBA where(Map<String,?> map, boolean raw_statement_if_null, boolean clear_where) {
+	public DBA where(String k) { this.where.clear(); this.where.append(k); return this; }
+	public DBA where(String k, String v) { return where(Collections.singletonMap(k,v), false, true); }
+	private DBA andWhere(String k, String v) { return where(Collections.singletonMap(k,v), false, false); }
+	public DBA where(Map<String,String> map, boolean value_not_null, boolean clear_where) {
 		if (clear_where) where.clear();
 		else where.append(" AND ");
 
@@ -135,15 +123,14 @@ public final class DBA implements AutoCloseable {
 		CharList aa = new CharList();
 		CharList bb = new CharList();
 
-		for (Map.Entry<String, ?> entry : map.entrySet()) {
+		for (Map.Entry<String, String> entry : map.entrySet()) {
 			String k = entry.getKey();
+			String v = entry.getValue();
 
-			if (raw_statement_if_null && entry.getValue() == null) {
+			if (value_not_null && v == null) {
 				where.append(k).append(',');
 				continue;
 			}
-
-			String v = entry.getValue().toString();
 
 			int i = k.indexOf('|');
 			if (i >= 0) {
@@ -158,12 +145,12 @@ public final class DBA implements AutoCloseable {
 					List<String> component = TextUtil.split(v, '|');
 					for (int j = 0; j < component.size(); j++) {
 						aa.clear();
-						bb.replace("?"+j, m.endsWith("like") ? ITokenizer.addSlashes(aa, component.get(j)) : myescape(aa, component.get(j)));
+						bb.replace("?"+j, myescape(aa,component.get(j)));
 					}
 					if (bb.contains("?"+component.size())) throw new IllegalArgumentException("$myWhere: 缺少组件 " + matcher);
 				} else {
 					aa.clear();
-					bb.replace("?0", m.endsWith("like") ? ITokenizer.addSlashes(aa, v) : myescape(aa, v));
+					bb.replace("?0", myescape(aa, v));
 				}
 
 				where.append(bb);
@@ -179,7 +166,6 @@ public final class DBA implements AutoCloseable {
 		return this;
 	}
 
-	public DBA rawFieldForSelect(String field) { this.field.clear(); this.field.append(field); this.rawField.clear(); return this; }
 	public DBA field(String field) { rawField = TextUtil.split(field, ","); fieldString(); return this; }
 	public DBA fields(String... field) { rawField = Arrays.asList(field); fieldString(); return this; }
 	public DBA fields(List<String> field) { rawField = field; fieldString(); return this; }
@@ -227,19 +213,16 @@ public final class DBA implements AutoCloseable {
 		String sql = makeSelect(true).toStringAndFree();
 		logs.ringAddLast(sql);
 
-		if (defaultStm == null) defaultStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_READ_ONLY);
-
-		set = defaultStm.executeQuery(sql);
-		select_index = null;
-
-		_fragSize = fragment;
-		_fragOff = 0;
-		set.next();
-		_fragTot = set.getLong(1);
-		if (_fragTot > 0) {
-			set.close();
-			next_page();
+		if (selectStm == null) selectStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_READ_ONLY);
+		try (ResultSet set = selectStm.executeQuery(sql)) {
+			_fragSize = fragment;
+			_fragOff = 0;
+			set.next();
+			_fragTot = set.getLong(1);
 		}
+
+		select_index = null;
+		next_page();
 		return this;
 	}
 	public boolean next_page() throws SQLException {
@@ -252,7 +235,7 @@ public final class DBA implements AutoCloseable {
 		String sql = sb.toStringAndFree();
 		logs.ringAddLast(sql);
 
-		set = defaultStm.executeQuery(sql);
+		set = selectStm.executeQuery(sql);
 		return true;
 	}
 
@@ -261,16 +244,13 @@ public final class DBA implements AutoCloseable {
 
 		CharList sb = makeSelect(false);
 		if (limit.length() > 0) sb.append(" LIMIT ").append(limit);
-		return query(sb.toStringAndFree());
-	}
 
-	public DBA query(String sql) throws SQLException {
+		String sql = sb.toStringAndFree();
 		logs.ringAddLast(sql);
 
-		if (defaultStm == null) defaultStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_READ_ONLY);
-		set = defaultStm.executeQuery(sql);
+		if (selectStm == null) selectStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_READ_ONLY);
+		set = selectStm.executeQuery(sql);
 		select_index = null;
-
 		return this;
 	}
 
@@ -340,7 +320,7 @@ public final class DBA implements AutoCloseable {
 		int count = meta.getColumnCount();
 		IntBiMap<String> index = new IntBiMap<>(count);
 		for (int i = 0; i < count;) {
-			index.forcePut(i, meta.getColumnLabel(++i));
+			index.putInt(i, meta.getColumnLabel(++i));
 		}
 		return select_index = index;
 	}
@@ -449,28 +429,15 @@ public final class DBA implements AutoCloseable {
 	 */
 	public int found_rows() throws SQLException { return getsyscount("found_rows"); }
 
-	private final IntList affected_ids = new IntList();
-	public int affected_id() { return affected_ids.isEmpty() ? -1 : affected_ids.get(0); }
-	public IntList affected_ids() { return affected_ids; }
-
-	private int affected_count;
+	private int lastAffected;
 	/**
 	 *	返回update,insert,delete上所影响的条数
 	 */
-	public int affected_rows() { return affected_count; }
+	public int affected_rows() { return lastAffected; }
 
-	public static final class RawStatement {
-		final String s;
-		public RawStatement(String s) {this.s = s;}
-		public String toString() { return s; }
-	}
-	// 别用空参数...
-	@Deprecated
-	public void update() throws SQLException { throw new SQLException(); }
-	public int update(Object... values) throws SQLException { return update(Arrays.asList(values)); }
-	public int update(List<?> values) throws SQLException {
+	public int update(List<CharSequence> values) throws SQLException {
 		if (table.length() == 0) throw new SQLException("table not defined");
-		if (rawField.isEmpty()) throw new SQLException("field not defined, or not for update");
+		if (field.length() == 0) throw new SQLException("field not defined");
 
 		if (values.size() < rawField.size()) throw new SQLException("field数量少于values长度");
 
@@ -478,11 +445,8 @@ public final class DBA implements AutoCloseable {
 		sb.append("UPDATE ").append(table).append(" SET ");
 		int i = 0;
 		while (true) {
-			sb.append('`').append(rawField.get(i)).append("`=");
-			Object o = values.get(i);
-			if (o == null) sb.append("NULL");
-			else if (o instanceof RawStatement) sb.append(o.toString());
-			else myescape(sb, o instanceof CharSequence ? (CharSequence) o : o.toString());
+			sb.append('`').append(rawField.get(i)).append("`=\"");
+			myescape(sb, values.get(i));
 			if (++i == values.size()) break;
 			sb.append(",");
 		}
@@ -496,36 +460,28 @@ public final class DBA implements AutoCloseable {
 			sb.append(" LIMIT ").append(limit);
 		}
 
-		affected_ids.clear();
 		return CRUD(sb);
 	}
 
-	// 别用空参数...
-	@Deprecated
-	public void insert() throws SQLException { throw new SQLException(); }
-	public boolean insert(Object... values) throws SQLException { return insert(Arrays.asList(values)); }
-	public boolean insert(List<?> values) throws SQLException {
+	public boolean insert(List<CharSequence> values) throws SQLException {
 		if (table.length() == 0) throw new SQLException("table not defined");
-		if (rawField.isEmpty()) throw new SQLException("field not defined, or not for update");
+		if (field.length() == 0) throw new SQLException("field not defined");
 
 		CharList sb = IOUtil.ddLayeredCharBuf();
 		sb.append("INSERT INTO ").append(table).append(" (").append(field).append(") VALUES (");
 		int i = 0;
 		while (true) {
-			Object o = values.get(i);
-			if (o == null) sb.append("NULL");
-			else myescape(sb, o instanceof CharSequence ? (CharSequence) o : o.toString());
+			myescape(sb, values.get(i));
 			if (++i == values.size()) break;
 			sb.append(",");
 		}
 		sb.append(")");
 
-		affected_ids.clear();
 		return CRUD(sb) > 0;
 	}
-	public int insertMulti(Iterator<List<?>> manyValues, boolean atomicInsert) throws SQLException {
+	public int insertMulti(Iterator<List<CharSequence>> manyValues, boolean atomicInsert) throws SQLException {
 		if (table.length() == 0) throw new SQLException("table not defined");
-		if (rawField.isEmpty()) throw new SQLException("field not defined, or not for update");
+		if (field.length() == 0) throw new SQLException("field not defined");
 
 		Statement stm = connection().createStatement();
 		if (atomicInsert) transBegin();
@@ -540,14 +496,12 @@ public final class DBA implements AutoCloseable {
 		int j = 0;
 		try {
 			while (true) {
-				List<?> values = manyValues.next();
+				List<CharSequence> values = manyValues.next();
 
 				sb.append('(');
 				int i = 0;
 				while (true) {
-					Object o = values.get(i);
-					if (o == null) sb.append("NULL");
-					else myescape(sb, o instanceof CharSequence ? (CharSequence) o : o.toString());
+					myescape(sb, values.get(i));
 					if (++i == values.size()) break;
 					sb.append(',');
 				}
@@ -556,8 +510,7 @@ public final class DBA implements AutoCloseable {
 				if (sb.length() > 262144 || !manyValues.hasNext()) {
 					String sql = sb.toString();
 					logs.ringAddLast(sql);
-					successCount += defaultStm.executeUpdate(sql);
-					pullId(defaultStm);
+					successCount += selectStm.executeUpdate(sql);
 					sb.setLength(headerLen);
 					if (!manyValues.hasNext()) break;
 					continue;
@@ -567,12 +520,12 @@ public final class DBA implements AutoCloseable {
 			}
 		} finally {
 			sb._free();
-			defaultStm.close();
+			selectStm.close();
 
 			if (atomicInsert) transEnd(success);
 		}
 
-		return affected_count = successCount;
+		return lastAffected = successCount;
 	}
 
 	public int delete() throws SQLException {
@@ -590,7 +543,6 @@ public final class DBA implements AutoCloseable {
 			sb.append(" LIMIT ").append(limit);
 		}
 
-		affected_ids.clear();
 		return CRUD(sb);
 	}
 
@@ -601,24 +553,11 @@ public final class DBA implements AutoCloseable {
 		logs.ringAddLast(sql);
 
 		try (Statement st = connection().createStatement()) {
-			affected_count = st.executeUpdate(sql, Statement.RETURN_GENERATED_KEYS);
-			if (affected_count > 0) {
-				pullId(st);
-			}
-			return affected_count;
-		}
-	}
-
-	private void pullId(Statement st) throws SQLException {
-		if (connection().getMetaData().supportsGetGeneratedKeys()) {
-			ResultSet set = st.getGeneratedKeys();
-			while (set.next()) affected_ids.add(set.getInt(1));
+			return lastAffected = st.executeUpdate(sql);
 		}
 	}
 
 	public Connection connection() throws SQLException {
-		if (parent != null) return parent.connection();
-
 		if (connection == null) {
 			connection = pool.getConnection(1000);
 			if (connection == null) throw new SQLException("failed to get connection in 1000ms");
@@ -691,7 +630,5 @@ public final class DBA implements AutoCloseable {
 			.select()
 			.getrows_colkey();
 	}
-
-	public String lastSql() { return logs.peekLast(); }
 	// endregion
 }

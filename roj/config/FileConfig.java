@@ -2,12 +2,12 @@ package roj.config;
 
 import roj.config.data.CCommMap;
 import roj.config.data.CMapping;
-import roj.io.BOMInputStream;
 import roj.io.IOUtil;
-import roj.text.StreamReader;
 
-import java.io.*;
-import java.nio.charset.Charset;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 
 /**
  * 配置文件
@@ -36,9 +36,9 @@ public abstract class FileConfig extends ConfigMaster {
 		}
 	}
 	public final void reload() {
-		try (BOMInputStream fis = new BOMInputStream(new FileInputStream(file), "UTF-8")) {
-			StreamReader str = new StreamReader(fis, Charset.forName(fis.getCharset()));
-			load(map = p.parse(str, flag).asMap().withComments());
+		try {
+			p.charset = null;
+			load(map = p.parseRaw(file, flag).asMap().withComments());
 		} catch (IOException | ParseException | ClassCastException e) {
 			e.printStackTrace();
 			if (map == null) {

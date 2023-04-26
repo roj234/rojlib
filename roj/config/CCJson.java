@@ -25,6 +25,7 @@ public final class CCJson extends JSONParser implements CCParser {
 			throw e.addPath("$");
 		} finally {
 			cc = null;
+			input = null;
 		}
 		return cv;
 	}

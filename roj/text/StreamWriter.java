@@ -1,53 +1,80 @@
 package roj.text;
 
 import roj.io.Finishable;
-import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import java.io.*;
+import java.io.Closeable;
+import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.WritableByteChannel;
 import java.nio.charset.*;
+import java.nio.file.StandardOpenOption;
 
 /**
  * @author Roj234
  * @since 2023/3/18 0018 0:11
  */
 public class StreamWriter extends CharList implements Appender, AutoCloseable, Finishable {
-	private final OutputStream out;
+	private final Closeable out;
+	private final byte type;
 
 	private final CharsetEncoder ce;
+	private final UnsafeCharset ucs;
 	private final ByteBuffer ob;
 	private CharBuffer ib;
 
 	private BufferPool pool;
 	private final DynByteBuf buf1;
 
-	private final ArrayCache cache = ArrayCache.getDefaultCache();
-
-	public static StreamWriter to(File file) throws FileNotFoundException {
-		return new StreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8);
+	public static StreamWriter to(File file) throws IOException { return to(file, StandardCharsets.UTF_8); }
+	public static StreamWriter to(File file, Charset cs) throws IOException {
+		return new StreamWriter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING), cs);
 	}
-	public static StreamWriter to(File file, Charset cs) throws FileNotFoundException {
-		return new StreamWriter(new FileOutputStream(file), cs);
+	public static StreamWriter append(File file) throws IOException { return append(file, StandardCharsets.UTF_8); }
+	public static StreamWriter append(File file, Charset cs) throws IOException {
+		return new StreamWriter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.APPEND), cs);
 	}
 
-	public StreamWriter(OutputStream out, Charset charset) {
+	public StreamWriter(Closeable out, Charset charset) {
 		this(out,charset,BufferPool.localPool());
 	}
-	public StreamWriter(OutputStream out, Charset cs, BufferPool pool) {
-		this.list = cache.getCharArray(512, false);
+	public StreamWriter(Closeable out, Charset cs, BufferPool pool) {
+		this.list = ArrayCache.getDefaultCache().getCharArray(512, false);
 		this.out = out;
 
-		ce = cs == StandardCharsets.UTF_8 ? null : cs.newEncoder().onUnmappableCharacter(CodingErrorAction.REPORT);
+		if (StandardCharsets.UTF_8 == cs) {
+			ucs = UTF8MB4.CODER;
+			ce = null;
+		} else if (GB18030.is(cs)) {
+			ucs = GB18030.CODER;
+			ce = null;
+		} else {
+			ucs = null;
+			ce = cs.newEncoder().onUnmappableCharacter(CodingErrorAction.REPORT);
+		}
 
 		this.pool = pool;
-		this.buf1 = pool.buffer(false, 1024);
+		buf1 = pool.buffer(!(out instanceof OutputStream), 1024);
 
 		ob = buf1.nioBuffer();
+		ob.clear();
+
+		if (out instanceof DynByteBuf) {
+			type = 2;
+		} else if (out instanceof OutputStream) {
+			type = 0;
+		} else if (out instanceof WritableByteChannel) {
+			type = 1;
+		} else {
+			throw new IllegalArgumentException("无法确定 " + out.getClass().getName() + " 的类型");
+		}
 	}
 
 	@Override
@@ -62,33 +89,42 @@ public class StreamWriter extends CharList implements Appender, AutoCloseable, F
 			}
 
 			if (list.length-len < cap) {
-				char[] newArray = cache.getCharArray(cap, false);
+				ArrayCache ac = ArrayCache.getDefaultCache();
+				char[] newArray = ac.getCharArray(cap, false);
 				System.arraycopy(list, 0, newArray, 0, len);
-				cache.putArray(list);
+				ac.putArray(list);
 				list = newArray;
 				ib = null;
 			}
 		}
 	}
 
-	public final void write(String str) throws IOException { write(str, 0, str.length()); }
-	public final void write(String str, int off, int len) throws IOException {
-		flush();
-		len += off;
-		while (off < len) {
-			int myLen = Math.min(list.length, len-off);
-			str.getChars(off, myLen, list, 0);
-			this.len = myLen;
-			flush();
-			off += len;
-		}
-	}
-
+	private CharBuffer excb;
 	public final CharList append(char[] c, int start, int end) {
 		try {
 			flush();
-			if (ce == null) IOUtil.SharedCoder.get().encodeTo(c,start,end-start,out);
-			else writeBuf(false, CharBuffer.wrap(c, start, end-start));
+			if (excb == null || excb.array() != c) excb = CharBuffer.wrap(c, start, end-start);
+			else excb.limit(end).position(start);
+			encode(false, excb);
+		} catch (IOException e) {
+			Helpers.athrow(e);
+		}
+		return this;
+	}
+
+	@Override
+	public final CharList append(String s, int start, int end) {
+		try {
+			flush();
+			char[] ch = list;
+			while (start < end) {
+				len = Math.min(end-start, ch.length);
+				s.getChars(start, start+len, ch, 0);
+				if (len < ch.length) break;
+
+				start += len;
+				flush();
+			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
@@ -96,8 +132,10 @@ public class StreamWriter extends CharList implements Appender, AutoCloseable, F
 	}
 
 	public final CharList append(CharSequence cs, int start, int end) {
-		if (cs instanceof CharList) return append((CharList) cs, start, end);
-		if (cs instanceof Slice) return super.append(cs, start, end);
+		Class<?> c = cs.getClass();
+		if (c == CharList.class) return append((CharList) cs, start, end);
+		if (c == String.class) return append(cs.toString(), start, end);
+		if (c == CharList.Slice.class) super.append(cs, start, end);
 
 		char[] ch = list;
 		int j = len;
@@ -121,25 +159,35 @@ public class StreamWriter extends CharList implements Appender, AutoCloseable, F
 
 	public void flush() throws IOException {
 		if (len == 0) return;
-		if (ce == null) {
-			IOUtil.SharedCoder.get().encodeTo(list, 0, len, out);
-			len = 0;
-			return;
-		}
 
 		if (ib == null) ib = CharBuffer.wrap(list);
 		ib.position(0).limit(len);
 
-		writeBuf(false, ib);
+		encode(false, ib);
 	}
 
-	private void writeBuf(boolean EOF, CharBuffer ib) throws IOException {
+	private void encode(boolean EOF, CharBuffer ib) throws IOException {
+		if (ucs != null) {
+			if (type == 2) {
+				ucs.encodeFully(ib, (DynByteBuf) out);
+			} else {
+				int i = 0;
+				while (i < ib.length()) {
+					buf1.clear();
+					i = ucs.encodeFixedOut(ib, i, ib.length(), buf1, buf1.capacity());
+					ob.position(buf1.wIndex());
+					flush_ce();
+				}
+			}
+
+			return;
+		}
+
 		while (true) {
-			ob.clear();
-			CoderResult cr = ce.encode(ib, ob, EOF);
+			CoderResult cr = ce.encode(ib, ob, false);
 			if (cr.isUnmappable()) throw new IOException(ce + " cannot encode");
 
-			out.write(ob.array(),ob.arrayOffset(),ob.position());
+			flush_ce();
 
 			if (cr.isUnderflow()) {
 				ib.compact().flip();
@@ -149,27 +197,39 @@ public class StreamWriter extends CharList implements Appender, AutoCloseable, F
 		}
 
 		if (EOF) {
-			ob.clear();
-			ce.flush(ob);
-			if (ob.position() > 0)
-				out.write(ob.array(),ob.arrayOffset(),ob.position());
+			CoderResult cr = ce.encode(ib, ob, true);
+			do {
+				flush_ce();
+			} while (!ce.flush(ob).isUnderflow());
+			flush_ce();
 		}
+	}
+	private void flush_ce() throws IOException {
+		if (ob.position() > 0) {
+			switch (type) {
+				case 2:
+				case 0: ((OutputStream) out).write(ob.array(),ob.arrayOffset(),ob.position()); break;
+				case 1: ob.flip(); ((WritableByteChannel) out).write(ob); break;
+			}
+		}
+		ob.clear();
 	}
 
 	@Override
 	public synchronized void finish() throws IOException {
-		if (pool != null) {
+		if (list != null) {
 			flush();
 
 			if (ce != null) {
-				if (ib == null) ib = CharBuffer.allocate(0);
-				writeBuf(true, ib);
+				encode(true, ib == null ? CharBuffer.wrap(ArrayCache.CHARS) : ib);
 			}
 
-			pool.reserve(buf1);
-			pool = null;
+			if (pool != null) {
+				pool.reserve(buf1);
+				pool = null;
+			}
 
-			cache.putArray(list);
+			ArrayCache.getDefaultCache().putArray(list);
 			list = null;
 		}
 	}

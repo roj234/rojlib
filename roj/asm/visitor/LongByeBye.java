@@ -48,8 +48,8 @@ public class LongByeBye extends CodeWriter {
 		for (int i = 0; i < list.size(); i++) {
 			Constant c = list.get(i);
 			if (c.type() == Constant.CLASS) {
-				CstUTF ref = ((CstClass) c).getValue();
-				d.cp.setUTFValue(ref, replaceArrayClass(ref.getString()));
+				CstUTF ref = ((CstClass) c).name();
+				d.cp.setUTFValue(ref, replaceArrayClass(ref.str()));
 			}/* else if (c.type() == Constant.NAME_AND_TYPE) {
 				CstUTF ref = ((CstNameAndType) c).getType();
 				d.cp.setUTFValue(ref, replaceDesc(ref.getString()));

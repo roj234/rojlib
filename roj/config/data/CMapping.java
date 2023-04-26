@@ -312,7 +312,7 @@ public class CMapping extends CEntry {
 
 					sb.append('[');
 					if (key.indexOf(']') >= 0) {
-						ITokenizer.addSlashes(entry.getKey(), sb.append('"')).append('"');
+						ITokenizer.addSlashes(sb.append('"'), entry.getKey()).append('"');
 					} else {
 						sb.append(key);
 					}
@@ -336,7 +336,7 @@ public class CMapping extends CEntry {
 							if (safe) {
 								sb.append(key);
 							} else {
-								ITokenizer.addSlashes(entry.getKey(), sb.append('"')).append('"');
+								ITokenizer.addSlashes(sb.append('"'), entry.getKey()).append('"');
 							}
 							list.get(i).toINI(sb.append('='), 2);
 							sb.append('\n');
@@ -345,7 +345,7 @@ public class CMapping extends CEntry {
 						if (safe) {
 							sb.append(key);
 						} else {
-							ITokenizer.addSlashes(entry.getKey(), sb.append('"')).append('"');
+							ITokenizer.addSlashes(sb.append('"'), entry.getKey()).append('"');
 						}
 
 						v.toINI(sb.append('='), 2).append('\n');
@@ -365,7 +365,7 @@ public class CMapping extends CEntry {
 				if (TOMLParser.literalSafe(chain)) {
 					sb.append('[').append(chain).append("]\n");
 				} else {
-					ITokenizer.addSlashes(chain, sb.append('[')).append("]\n");
+					ITokenizer.addSlashes(sb.append('['), chain).append("]\n");
 				}
 			}
 			if (depth == 0 && map.containsKey(CONFIG_TOPLEVEL))
@@ -391,7 +391,7 @@ public class CMapping extends CEntry {
 						if (TOMLParser.literalSafe(entry.getKey())) {
 							sb.append(entry.getKey());
 						} else {
-							ITokenizer.addSlashes(chain, sb.append('"')).append('"');
+							ITokenizer.addSlashes(sb.append('"'), chain).append('"');
 						}
 						sb.append(" = ");
 						if (depth == 3) {
@@ -459,7 +459,7 @@ public class CMapping extends CEntry {
 		w.put((byte) Type.MAP.ordinal()).putVUInt(map.size());
 		if (map.isEmpty()) return;
 		for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-			entry.getValue().toBinary(w.putVStr(entry.getKey()), struct);
+			entry.getValue().toBinary(w.putZhCn(entry.getKey()), struct);
 		}
 	}
 

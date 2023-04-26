@@ -3,18 +3,17 @@ package roj.concurrent;
 import org.jetbrains.annotations.Async;
 import roj.collect.MyHashSet;
 import roj.collect.RingBuffer;
-import roj.concurrent.task.AsyncTask;
 import roj.concurrent.task.ITask;
 import roj.util.Helpers;
 
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
+import static roj.reflect.FieldAccessor.u;
 
 public class TaskPool implements TaskHandler {
 	@FunctionalInterface
@@ -27,15 +26,25 @@ public class TaskPool implements TaskHandler {
 		void onReject(TaskPool pool, ITask task);
 	}
 
-	private final Set<ExecutorImpl> threads = new MyHashSet<>();
+	private final MyHashSet<ExecutorImpl> threads = new MyHashSet<>();
 	private final MyThreadFactory factory;
 	private RejectPolicy policy;
 
 	final int core, max, newThr, idleTime;
-	private int running;
+	private volatile int running, parking;
 	private long prevStop;
 
-	final ReentrantLock lock = new ReentrantLock(true);
+	static {
+		try {
+			RUNNING_OFFSET = u.objectFieldOffset(TaskPool.class.getDeclaredField("running"));
+			PARKING_OFFSET = u.objectFieldOffset(TaskPool.class.getDeclaredField("parking"));
+		} catch (NoSuchFieldException e) {
+			e.printStackTrace();
+		}
+	}
+	private static long RUNNING_OFFSET, PARKING_OFFSET;
+
+	final ReentrantLock lock = new ReentrantLock();
 	final Condition noFull = lock.newCondition(), noEmpty = lock.newCondition();
 	final RingBuffer<ITask> tasks;
 
@@ -59,7 +68,7 @@ public class TaskPool implements TaskHandler {
 		if (stopTimeout < 100) throw new IllegalArgumentException("stopTimeout < 100");
 		this.factory = new PrefixFactory(namePrefix);
 
-		tasks = new RingBuffer<>(64, 4096);
+		tasks = new RingBuffer<>(64, 99999999);
 	}
 
 	private static final AtomicInteger poolId = new AtomicInteger();
@@ -70,18 +79,11 @@ public class TaskPool implements TaskHandler {
 
 	public static TaskPool CpuMassive() { return CpuMassiveHolder.P; }
 	private static final class CpuMassiveHolder {
-		static final TaskPool P = new TaskPool(1, Runtime.getRuntime().availableProcessors(), 1, 60000, "Cpu任务-");;
+		static final TaskPool P = new TaskPool(1, Runtime.getRuntime().availableProcessors(), 1, 60000, "Cpu任务-");
 	}
 
 	public static TaskPool ParallelPool() {
-		return new TaskPool(0, Runtime.getRuntime().availableProcessors()<<1, 128);
-	}
-
-	@Async.Schedule
-	public AsyncTask<Void> pushRunnable(Runnable runnable) {
-		AsyncTask<Void> task = AsyncTask.fromVoid(runnable);
-		pushTask(task);
-		return task;
+		return new TaskPool(0, Runtime.getRuntime().availableProcessors()+1, 128);
 	}
 
 	@Override
@@ -123,25 +125,86 @@ public class TaskPool implements TaskHandler {
 		}
 	}
 
-	private void newWorker() {
-		lock.lock();
-		try {
-			ExecutorImpl pc = factory.get(this);
-			pc.start();
-			threads.add(pc);
-			running++;
-		} finally {
-			lock.unlock();
+	private ITask pollTask() {
+		boolean timeout = false;
+
+		main:
+		for(;;) {
+			// shutdown
+			if (running < 0) {
+				int r;
+				do {
+					r = running;
+				} while (!u.compareAndSwapInt(this, RUNNING_OFFSET, r, r+1));
+
+				if (r == -2) {
+					synchronized (threads) { threads.notifyAll(); }
+				}
+				return null;
+			}
+
+			if (running > core &&
+				timeout &&
+				System.currentTimeMillis() - prevStop >= idleTime) {
+
+				int r = running;
+				if (u.compareAndSwapInt(this, RUNNING_OFFSET, r, r-1)) {
+					prevStop = System.currentTimeMillis();
+					return null;
+				}
+			}
+
+			timeout = false;
+			try {
+				lock.lock();
+				try {
+					while (tasks.isEmpty()) {
+						int r;
+						do {
+							r = parking;
+						} while (!u.compareAndSwapInt(this, PARKING_OFFSET, r, r+1));
+						synchronized (TaskPool.this) {
+							notifyAll();
+						}
+
+						try {
+							if (!noEmpty.await(idleTime, TimeUnit.MILLISECONDS)) {
+								timeout = true;
+								continue main;
+							}
+						} finally {
+							do {
+								r = parking;
+							} while (!u.compareAndSwapInt(this, PARKING_OFFSET, r, r-1));
+							synchronized (TaskPool.this) {
+								notifyAll();
+							}
+						}
+					}
+
+					do {
+						ITask task = tasks.removeFirst();
+						if (!task.isCancelled()) return task;
+					} while (!tasks.isEmpty());
+				} finally {
+					lock.unlock();
+				}
+			} catch (InterruptedException ignored) {}
 		}
 	}
 
-	public void setRejectPolicy(RejectPolicy policy) {
-		this.policy = policy;
+	private void newWorker() {
+		int r = running;
+		if (u.compareAndSwapInt(this, RUNNING_OFFSET, r, r+1)) {
+			ExecutorImpl t = factory.get(this);
+			synchronized (threads) { threads.add(t); }
+			t.start();
+		}
 	}
 
-	public static void throwPolicy(TaskPool pool, ITask task) {
-		throw new RejectedExecutionException("Too many tasks pending");
-	}
+	public void setRejectPolicy(RejectPolicy policy) { this.policy = policy; }
+
+	public static void throwPolicy(TaskPool pool, ITask task) { throw new RejectedExecutionException("Too many tasks pending"); }
 	public static void executePolicy(TaskPool pool, ITask task) {
 		try {
 			task.execute();
@@ -159,54 +222,30 @@ public class TaskPool implements TaskHandler {
 		pool.tasks.ringAddLast(task);
 		pool.noEmpty.signal();
 	}
-	public static void newThreadPolicy(TaskPool pool, ITask task) {
-		new ImmediateExecutor(task).start();
-	}
+	public static void newThreadPolicy(TaskPool pool, ITask task) { new ImmediateExecutor(task).start(); }
 
 	@Override
 	public void clearTasks() {
 		lock.lock();
 		tasks.clear();
 		noFull.signalAll();
-		tasks.clear();
 		lock.unlock();
-	}
-
-	boolean canExit(Thread t) {
-		// closed
-		if (running < 0) return true;
-
-		if (running > core &&
-			tasks.size() / running < newThr &&
-			System.currentTimeMillis() - prevStop >= idleTime) {
-
-			lock.lock();
-
-			prevStop = System.currentTimeMillis();
-
-			threads.remove(t);
-			running--;
-
-			lock.unlock();
-
-			return true;
-		}
-		return false;
 	}
 
 	public void shutdown() {
 		lock.lock();
 
-		running = -1;
+		int r;
+		do {
+			r = running;
+		} while (!u.compareAndSwapInt(this, RUNNING_OFFSET, r, -r-1));
+
 		tasks.clear();
+
 		noEmpty.signalAll();
 		noFull.signalAll();
 
 		lock.unlock();
-
-		synchronized (this) {
-			notifyAll();
-		}
 	}
 
 	public boolean working() {
@@ -214,70 +253,60 @@ public class TaskPool implements TaskHandler {
 	}
 
 	public Thread[] threads() {
-		lock.lock();
-		try {
+		synchronized (threads) {
 			return threads.toArray(new Thread[threads.size()]);
-		} finally {
-			lock.unlock();
 		}
 	}
 
-	public int taskPending() {
-		return tasks.size();
-	}
+	public int taskPending() { return tasks.size(); }
 
-	public void waitUntilFinish() {
+	public void awaitFinish() {
 		synchronized (this) {
-			try {
-				if (tasks.isEmpty()) return;
-				wait();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+			while ((!tasks.isEmpty() || running != parking) && running > 0) {
+				try {
+					wait(0);
+				} catch (InterruptedException ignored) {}
 			}
 		}
 	}
-
-	public boolean waitUntilFinish(long timeout)  {
-		if (timeout <= 0) {
-			waitUntilFinish();
-		} else {
-			synchronized (this) {
-				if (tasks.isEmpty()) return true;
+	public boolean awaitFinish(long timeout)  {
+		long time = System.currentTimeMillis() + timeout;
+		synchronized (this) {
+			while ((!tasks.isEmpty() || running != parking) && running > 0) {
+				long dt = time - System.currentTimeMillis();
+				if (dt < 0) return false;
 				try {
-					wait(timeout);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+					wait(dt);
+				} catch (InterruptedException ignored) {}
 			}
 		}
+		return true;
+	}
 
-		return tasks.isEmpty();
+	public void awaitShutdown() throws InterruptedException {
+		synchronized (threads) {
+			while (running != -1) threads.wait();
+		}
 	}
 
 	@Override
 	public String toString() {
-		return "TaskPool{" + "thr=" + threads + ", range=[" + core + ',' + max + "], lock=" + lock + '}';
+		return "TaskPool{" + ", range=[" + core + ',' + max + "], lock=" + lock + '}';
 	}
 
 	public static void yield() {
 		Thread t = Thread.currentThread();
 		if (t instanceof ExecutorImpl) {
-			((ExecutorImpl) t).tryExecuteNext();
+			// todo
 		}
 	}
 
 	public class ExecutorImpl extends FastLocalThread {
-		int finished;
-
-		protected ExecutorImpl() {
-			setDaemon(true);
-		}
-
+		protected ExecutorImpl() { setDaemon(true); }
 		protected ExecutorImpl(String name) {
 			setName(name);
 			setDaemon(true);
 		}
-
 		protected ExecutorImpl(ThreadGroup tg, String name) {
 			super(tg, name);
 			setName(name);
@@ -286,93 +315,21 @@ public class TaskPool implements TaskHandler {
 
 		@Override
 		public void run() {
-			Lock lock = TaskPool.this.lock;
-
-			out:
-			while (working()) {
-				ITask task;
-				try {
-					lock.lock();
-
-					if (tasks.isEmpty()) {
-						synchronized (TaskPool.this) {
-							TaskPool.this.notifyAll();
-						}
-						do {
-							if (!noEmpty.await(idleTime, TimeUnit.MILLISECONDS)) {
-								if (canExit(this)) break out;
-								continue out;
-							}
-						} while (tasks.isEmpty());
-					}
-
-					// 减少上下文切换的开销
-					try {
-						do {
-							task = tasks.removeFirst();
-						} while (task.isCancelled() && !tasks.isEmpty());
-					} catch (Throwable e) {
-						e.printStackTrace();
-						continue;
-					} finally {
-						noFull.signal();
-					}
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-					continue;
-				} finally {
-					lock.unlock();
-				}
+			while (true) {
+				ITask task = pollTask();
+				if (task == null) break;
 
 				try {
-					// double check after unlocked
 					if (!task.isCancelled()) {
 						task.execute();
-						finished++;
-						if (task.continueExecuting()) {
-							pushTask(task);
-						}
+						if (task.continueExecuting()) pushTask(task);
 					}
 				} catch (Throwable e) {
 					e.printStackTrace();
 				}
 			}
-		}
 
-		void tryExecuteNext() {
-			if (!working()) return;
-			if (tasks.isEmpty()) return;
-
-			ITask task;
-			try {
-				lock.lock();
-				if (tasks.isEmpty()) return;
-
-				try {
-					do {
-						task = tasks.removeFirst();
-					} while (task.isCancelled() && !tasks.isEmpty());
-				} catch (Throwable e) {
-					e.printStackTrace();
-					return;
-				} finally {
-					noFull.signal();
-				}
-			} finally {
-				lock.unlock();
-			}
-
-			try {
-				if (!task.isCancelled()) {
-					task.execute();
-					finished++;
-					if (task.continueExecuting()) {
-						pushTask(task);
-					}
-				}
-			} catch (Throwable e) {
-				e.printStackTrace();
-			}
+			synchronized (threads) { threads.remove(this); }
 		}
 	}
 }

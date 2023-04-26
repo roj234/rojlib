@@ -5,6 +5,7 @@ import roj.concurrent.task.AsyncTask;
 import roj.crypt.Base64;
 import roj.crypt.SM3;
 import roj.io.IOUtil;
+import roj.net.ch.ChannelCtx;
 import roj.net.http.srv.HttpServer11;
 import roj.net.http.srv.MultipartFormHandler;
 import roj.net.http.srv.Request;
@@ -79,10 +80,10 @@ public class UploadHandler extends MultipartFormHandler {
 	}
 
 	@Override
-	protected void onKey(CharSequence key) {
+	protected void onKey(ChannelCtx ctx, String name) throws IOException {
 		close0();
 
-		int i = this.i = TextUtil.parseInt(key);
+		int i = this.i = TextUtil.parseInt(name);
 		if (i < 0 || i > files.length) throw new ArrayIndexOutOfBoundsException();
 		try {
 			fos = new FileOutputStream(files[i] = getFile());
@@ -119,10 +120,10 @@ public class UploadHandler extends MultipartFormHandler {
 	}
 
 	@Override
-	protected void onValue(DynByteBuf buf) {
+	protected void onValue(ChannelCtx ctx, DynByteBuf buf) {
 		if (fos == null) return;
 		try {
-			if (hasArray) {
+			if (buf.hasArray()) {
 				try {
 					fos.write(buf.array(), buf.arrayOffset() + buf.rIndex, buf.readableBytes());
 					sm3.update(buf.array(), buf.arrayOffset() + buf.rIndex, buf.readableBytes());

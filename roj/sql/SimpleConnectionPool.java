@@ -46,7 +46,7 @@ public class SimpleConnectionPool {
 		if (pooledConnections <= 0 || pooledConnections > 32) throw new IllegalArgumentException("仅支持1-32个连接");
 		this.pool = new Connection[pooledConnections];
 		this.stale = new long[pooledConnections];
-		this.multiplier = 0; // 先乐观一点
+		this.multiplier = (int) System.nanoTime();
 	}
 
 	public SQLException removeStale(long timeout) {
@@ -90,7 +90,7 @@ public class SimpleConnectionPool {
 					id = (id+1)&(pool.length-1);
 					if (lock.tryLock(id)) break;
 
-					Object[] conn = transfer.poll(10, TimeUnit.MICROSECONDS);
+					Object[] conn = transfer.poll(1, TimeUnit.MILLISECONDS);
 					if (conn != null) {
 						connId.set(conn);
 						stale[(int) conn[0]] = System.currentTimeMillis();

@@ -27,13 +27,13 @@ public final class CipherSuite {
 		if (PKF_ID2INST[id] != null) throw new IllegalArgumentException("Already has id " + id);
 		PKF_ID2INST[id] = kf;
 		PKF_NAME2ID.putInt(kf.getAlgorithm(), id);
+		ALL_CERTIFICATE_TYPE |= 1 << id;
 	}
 
 	public static final int PUB_X509_RSA = 0;
 	public static final int PUB_X509_CERTIFICATE = 1;
-	public static final int PUB_X509_EC = 2;
-	public static final int PUB_X509_DSA = 3;
-	public static final int ALL_CERTIFICATE_TYPE = 7;
+	public static final int PUB_X509_EdDSA = 2;
+	public static int ALL_CERTIFICATE_TYPE = 0;
 
 	private static final Supplier<KeyAgreement>[] KEX_ID2INST = Helpers.cast(new Supplier<?>[32]);
 	private static final ToIntMap<String> KEX_NAME2ID = new ToIntMap<>(32);
@@ -43,7 +43,7 @@ public final class CipherSuite {
 		return (byte) i;
 	}
 	public static KeyAgreement getKeyAgreement(int type) {
-		return KEX_ID2INST[type].get();
+		return type < 0 || type >= KEX_ID2INST.length || KEX_ID2INST[type] == null ? null : KEX_ID2INST[type].get();
 	}
 	public static void register(int id, String algorithm, Supplier<KeyAgreement> kf) {
 		if (KEX_ID2INST[id] != null) throw new IllegalArgumentException("Already has id " + id);
@@ -57,8 +57,8 @@ public final class CipherSuite {
 	public static final MSSCipherFactory
 		CIPHER_AES_128_GCM = new SimpleCipherFactory(16, AES_GCM::new),
 		CIPHER_AES_256_GCM = new SimpleCipherFactory(32, AES_GCM::new),
-		CIPHER_CHACHA20_POLY1305 = new SimpleCipherFactory(32, ChaCha_Poly1305::new),
-		CIPHER_XCHACHA20_POLY1305 = new SimpleCipherFactory(32, XChaCha_Poly1305::new);
+		CIPHER_CHACHA20_POLY1305 = new SimpleCipherFactory(32, ChaCha_Poly1305::ChaCha1305),
+		CIPHER_XCHACHA20_POLY1305 = new SimpleCipherFactory(32, ChaCha_Poly1305::XChaCha1305);
 
 	public static Supplier<MessageDigest> SIGN_SHA256, SIGN_SHA384;
 
@@ -69,8 +69,9 @@ public final class CipherSuite {
 
 			register(PUB_X509_RSA, new JKeyFactory("RSA"));
 			register(PUB_X509_CERTIFICATE, new JCertificateFactory());
-			register(PUB_X509_DSA, new JKeyFactory("DSA"));
-			register(PUB_X509_EC, new JKeyFactory("EC"));
+			try {
+				register(PUB_X509_EdDSA, new JKeyFactory("EdDSA"));
+			} catch (Exception ignored) {}
 
 			_DHE(KEX_DHE_ffdhe2048, DHGroup.ffdhe2048);
 			_ECDHE(KEX_ECDHE_secp384r1, ECGroup.secp384r1);

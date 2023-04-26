@@ -4,7 +4,6 @@ import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskExecutor;
-import roj.concurrent.task.AsyncTask;
 import roj.concurrent.task.ITask;
 import roj.config.JSONParser;
 import roj.config.data.CList;
@@ -12,8 +11,12 @@ import roj.config.data.CMapping;
 import roj.crypt.HMAC;
 import roj.io.IOUtil;
 import roj.net.URIUtil;
+import roj.net.http.HttpRequest;
 import roj.net.http.SyncHttpClient;
-import roj.text.*;
+import roj.text.ACalendar;
+import roj.text.CharList;
+import roj.text.TextUtil;
+import roj.text.UTFCoder;
 import roj.ui.CmdUtil;
 import roj.util.Helpers;
 
@@ -27,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import static roj.net.ddns.IpGetter.pooledRequest;
+
 /**
  * @author Roj234
  * @since 2023/1/27 0027 19:03
@@ -39,8 +44,6 @@ public class Aliyun implements DDNSService {
 
 	private String AccessKeyId, AccessKeySecret;
 	private Random rnd = new SecureRandom();
-
-	private static final HttpPool pool = new HttpPool(8, 5000);
 
 	private URL makeUrl(Map<String, String> param) {
 		Map<String, String> queries = new MyHashMap<>(param);
@@ -64,15 +67,6 @@ public class Aliyun implements DDNSService {
 			// should not happen!
 			return Helpers.nonnull();
 		}
-	}
-	private AsyncTask<CMapping> execute(URL url) {
-		return new AsyncTask<CMapping>() {
-			@Override
-			protected CMapping invoke() throws Exception {
-				SyncHttpClient client = pool.request(url, null);
-				return JSONParser.parses(new StreamReader(client.getInputStream(), StandardCharsets.UTF_8)).asMap();
-			}
-		};
 	}
 
 	private String makeQuery(Map<String, String> queries) {
@@ -261,7 +255,7 @@ public class Aliyun implements DDNSService {
 		par.put("Type", type);
 
 		try {
-			SyncHttpClient shc = pool.request(makeUrl(par), null);
+			SyncHttpClient shc = HttpRequest.nts().url(makeUrl(par)).executePooled();
 			CMapping cfg = _parse(shc);
 		} catch (Exception e) {
 			CmdUtil.error("请求参数: " + par, e);
@@ -277,15 +271,14 @@ public class Aliyun implements DDNSService {
 		par.put("Type", type);
 
 		try {
-			SyncHttpClient shc = pool.request(makeUrl(par), null);
-			CMapping cfg = _parse(shc);
+			CMapping cfg = _parse(pooledRequest(makeUrl(par)));
 		} catch (Exception e) {
 			CmdUtil.error("请求参数: " + par, e);
 		}
 	}
 
 	private CMapping _parse(SyncHttpClient shc) throws Exception {
-		CMapping map = JSONParser.parses(new StreamReader(shc.getInputStream(), StandardCharsets.UTF_8)).asMap();
+		CMapping map = new JSONParser().parseRaw(shc.stream()).asMap();
 		if (map.containsKey("Message"))
 			throw new IllegalArgumentException("API错误: " + map.getString("Message"));
 		return map;
@@ -294,7 +287,7 @@ public class Aliyun implements DDNSService {
 	private ITask _init(Map<String, String> param) {
 		URL url = makeUrl(param);
 		return () -> {
-			CMapping cfg = _parse(pool.request(url, null));
+			CMapping cfg = _parse(pooledRequest(url));
 			System.out.println(cfg);
 			CList list = cfg.getDot("DomainRecords.Record").asList();
 			for (int i = 0; i < list.size(); i++) {

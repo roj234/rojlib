@@ -37,8 +37,8 @@ public final class Method implements MethodNode {
 	public Method(ConstantData data, RawMethod method) {
 		this.access = method.access;
 		this.owner = data.name;
-		this.name = method.name.getString();
-		this.rawDesc = method.type.getString();
+		this.name = method.name.str();
+		this.rawDesc = method.type.str();
 
 		AttributeList al = method.attributesNullable();
 		if (al != null && !al.isEmpty()) {

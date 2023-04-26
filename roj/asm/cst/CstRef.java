@@ -26,14 +26,21 @@ public abstract class CstRef extends Constant {
 	public final String toString() {
 		CharList sb = new CharList().append(super.toString())
 			.append(" 引用[").append(clazz.getIndex()).append(",").append(desc.getIndex()).append("] ");
-		return CstNameAndType.parseNodeDesc(sb, clazz.getValue().getString(), desc.getName().getString(), desc.getType().getString());
+		return CstNameAndType.parseNodeDesc(sb, clazz.name().str(), desc.name().str(), desc.getType().str());
 	}
 
-	public final String getClassName() {
-		return clazz.getValue().getString();
+	public final String className() { return clazz.name().str(); }
+	public final String descName() { return desc.name().str(); }
+	public final String descType() { return desc.getType().str(); }
+
+	public CstClass clazz() {
+		return clazz;
+	}
+	public CstNameAndType desc() {
+		return desc;
 	}
 
-	public final void setClazz(CstClass clazz) {
+	public final void clazz(CstClass clazz) {
 		if (clazz == null)
 			throw new NullPointerException("clazz");
 		this.clazz = clazz;
@@ -46,7 +53,7 @@ public abstract class CstRef extends Constant {
 	}
 
 	public final int hashCode() {
-		return 31 * (31 * desc.hashCode() + clazz.getValue().hashCode()) + type();
+		return 31 * (31 * desc.hashCode() + clazz.name().hashCode()) + type();
 	}
 
 	public final boolean equals(Object o) {
@@ -56,15 +63,7 @@ public abstract class CstRef extends Constant {
 	public final boolean equals0(CstRef ref) {
 		if (ref == this) return true;
 		if (ref.getClass() != getClass()) return false;
-		return ref.clazz.getValue().equals(clazz.getValue()) && ref.desc.equals0(desc);
-	}
-
-	public CstClass getClazz() {
-		return clazz;
-	}
-
-	public CstNameAndType desc() {
-		return desc;
+		return ref.clazz.name().equals(clazz.name()) && ref.desc.equals0(desc);
 	}
 
 	@Override
@@ -76,6 +75,6 @@ public abstract class CstRef extends Constant {
 	}
 
 	public boolean matches(String clazz, String name, String desc) {
-		return this.clazz.getValue().getString().equals(clazz) && this.desc.getName().getString().equals(name) && this.desc.getType().getString().equals(desc);
+		return this.clazz.name().str().equals(clazz) && this.desc.name().str().equals(name) && this.desc.getType().str().equals(desc);
 	}
 }

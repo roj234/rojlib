@@ -9,10 +9,10 @@ import roj.util.DynByteBuf;
 public final class MSSSession {
 	public DynByteBuf id;
 	public final byte[] key;
-	public final MSSCipherFactory ciphers;
+	public final CipherSuite suite;
 
-	public MSSSession(byte[] key, MSSCipherFactory ciphers) {
+	public MSSSession(byte[] key, CipherSuite suite) {
 		this.key = key;
-		this.ciphers = ciphers;
+		this.suite = suite;
 	}
 }

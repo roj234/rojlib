@@ -7,14 +7,16 @@ import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
 
 /**
- * @author Roj234
+ * @author Lasse Collin <lasse.collin@tukaani.org>, Roj234
  * @since 2023/3/16 0016 0:06
  */
-public abstract class Filter extends RCipherSpi {
-    final boolean encode;
+public abstract class BCJFilter extends RCipherSpi {
+    final boolean isEncoder;
     int pos;
 
-    Filter(boolean encode) { this.encode = encode; }
+    BCJFilter(boolean encoder) {
+        isEncoder = encoder;
+    }
 
     public static int checkStartOffset(int pos, int alignment) {
         if ((pos & (alignment-1)) != 0) throw new IllegalArgumentException("Start offset must be a multiple of " + alignment);
@@ -32,10 +34,6 @@ public abstract class Filter extends RCipherSpi {
         int len = filter(in.array(), in.relativeArrayOffset(), in.readableBytes());
         in.rIndex += len;
         out.wIndex(out.wIndex()+len);
-    }
-    protected void cryptFinal1(DynByteBuf in, DynByteBuf out) {
-        out.put(in);
-        in.rIndex = in.wIndex();
     }
 
     protected abstract int filter(byte[] b, int off, int len);

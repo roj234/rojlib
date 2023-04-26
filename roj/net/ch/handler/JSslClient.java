@@ -18,15 +18,19 @@ import java.security.NoSuchAlgorithmException;
  * @since 2022/5/17 13:11
  */
 public class JSslClient extends PacketMerger {
-	private final SSLEngine engine;
+	private SSLEngine engine;
 	private SSLEngineResult.HandshakeStatus status;
 
-	private final ByteBuffer[] tmp;
+	private final ByteBuffer[] tmp = new ByteBuffer[1];
 	private int maxRcv, maxSnd;
 
 	public JSslClient() {
 		super();
+		maxSnd = maxRcv = 512;
+	}
 
+	@Override
+	public void handlerAdded(ChannelCtx ctx) {
 		try {
 			engine = SSLContext.getDefault().createSSLEngine();
 		} catch (NoSuchAlgorithmException e) {
@@ -35,8 +39,6 @@ public class JSslClient extends PacketMerger {
 
 		engine.setNeedClientAuth(false);
 		engine.setUseClientMode(true);
-		tmp = new ByteBuffer[1];
-		maxSnd = maxRcv = 512;
 	}
 
 	@Override

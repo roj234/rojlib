@@ -1,17 +1,7 @@
 
-# 写在前面  
-  1. 全是破轮子
-  2. 基本就是想到什么就写什么
-  3. 重构是家常便饭, 我在努力多写一点注释
-  4. 没啥人用, 不用考虑向前兼容
-  5. 谁帮我写写FrameVisitor？
+# 2023/05/18 更新  
+  http改了一堆，用起来可方便了
 
-# 2023/03/23 更新
-    高级序列化器实装
-    另外我们还支持了7z的压缩和解压
-请看`roj.config.serial.SerializerManager`  
-由于接口特殊（见`roj.config.serial.Adapter`）  
-可能你想自定义序列化不是那么容易？
 
 # 这里都有啥
 ## roj.archive
@@ -84,16 +74,20 @@
  * `RingBuffer`
   
 ## roj.config  
-  JSON YAML TOML INI XML 解析器  
-前四个配置文件格式使用统一数据结构 `roj.config.data.CEntry`  
+  JSON YAML TOML INI XML NBT Torrent(Bencode) CSV 解析器  
+全部使用统一数据结构 `roj.config.data.CEntry`
+#### 自动识别文本文件编码
 
 使用`CEntry.toJSON` toYAML toTOML toINI等还原到字符串  
-或使用`CConsumer`和配套的`CEntry.foreachChild`  
-#### 读写(二进制)`NBT`,`torrent`  
-#### 只读`xlsx`,`csv`(这玩意格式如此简单也没必单独弄个方法吧)  
 
-XML也可以与CEntry互转 `CEntry AbstXML.toJSON()`  
-XML/CEntry均支持dot-get: `a.b[2].c`  
+以及访问者模式的`CVisitor`,除了给CEntry用还可以给Parser用  
+CVisitor有下面这些  
+* ToEntry ToJson ToNBT ToXEntry ToYaml
+
+XEntry(更节约内存和方便的储存XML)可以与CEntry互转  
+XEntry/CEntry均支持dot-get: `a.b[2].c`
+
+#### 另外还有XlsxParser, 以及CSV是只读的(格式如此简单也没必要)
 #### 序列化：  
   使用ASM动态生成类，支持任意对象（不只实体类！）的序列化/反序列化  
   支持数组，不用反射  
@@ -106,17 +100,17 @@ XML/CEntry均支持dot-get: `a.b[2].c`
 ```java
 
 import roj.config.serial.Name;
+import roj.config.serial.SerializerFactory;
+import roj.config.serial.SerializerFactoryFactory;
 import roj.config.serial.Via;
 
 import java.nio.charset.Charset;
 
 public class Test {
   public static void main(String[] args) throws Exception {
-    // 这是必须的，并且在SerializerManager初始化前调用
-    AdapterOverride.overridePermission();
-
-    SerializerManager man = new SerializerManager();
-	// 自定义序列化方式(使用@As调用)
+    // 为什么这么设计可以去看看SerializerFactoryFactory里面写了什么
+    SerializerFactory man = SerializerFactoryFactory.create();
+    // 自定义序列化方式(使用@As调用)
     man.registerAsType("hex_color", int.class, new UserAdapter());
     // 自定义序列化器
     man.register(Charset.class, new UserAdapter());
@@ -134,13 +128,13 @@ public class Test {
     System.out.println(ser.get().toJSONb());
     /**
      {
-        "charset": "UTF-8",
-        "myColor": "#aabbcc",
-        "map": {
-          "114514": {
-              "1919810": 23333
-          }
-        }
+     "charset": "UTF-8",
+     "myColor": "#aabbcc",
+     "map": {
+     "114514": {
+     "1919810": 23333
+     }
+     }
      }
      */
 
@@ -204,7 +198,7 @@ public class Test {
 
 
 ```
-#### 人性化的错误(仅适用于等宽字体,不适用于CharSequenceInputStream)  
+#### 人性化的错误(仅适用于等宽字体,不适用于StreamReader)  
 ```  
 解析错误:  
   Line 39: "最大线程数": 96, , ,  
@@ -247,8 +241,6 @@ new一个也行
   多线程下载 `Downloader`
   `BOMInputStream`  
   `BoxFile` 类似electron的asar  
-  `ChineseInputStream`
-  * 中文编码检测, 包括 UTF32 UTF16 UTF8 GB18030
 
 `BinaryDB` 分块锁的实验品,似乎效率还行
   
@@ -496,11 +488,10 @@ public static void sendTitle(AbstractPlayer player, String title) {
 ## roj.ui  
     请搞到libcpp.dll或在ps中执行
   `CmdUtil` 给控制台来点颜色看看！支持MC转义  
-  `EasyProgressBar` tqdm in java!  
+  `EasyProgressBar` 进度条
   
 ## roj.util  
   `DynByteBuf`，能扩展的ByteBuffer，也许Streamed，可作为Input/OutputStream, DataInput/Output
   `ComboRandom`，多个种子的random  
-  `FastThreadLocal` 空间换时间，与`FastLocalThread`更配哦  
   `GIFDecoder` 解码GIF文件  
-  `VarMapperX` 变量分配器(WIP)，即使是上一版验证过没bug的VarMapper也比sb的javac好
+  `VarMapperX` 变量ID分配器

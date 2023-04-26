@@ -42,6 +42,7 @@ public class NativeMemory {
 		void setOffset(ByteBuffer buf, int offset);
 
 		void setCapacity(Buffer b, int newCapacity);
+		long getAddress(Buffer b);
 		void setAddress(Buffer b, long newAddress);
 
 		Object newCleaner(Object ref, Runnable callback);
@@ -63,7 +64,7 @@ public class NativeMemory {
 			da.construct(Class.forName("java.nio.DirectByteBuffer"), new String[]{j17?"newDirectBuffer2":"newDirectBuffer"}, j17?Collections.emptyList():null)
 			  .construct(Class.forName("java.nio.HeapByteBuffer"), new String[]{j17?"newHeapBuffer2":"newHeapBuffer"}, j17?Collections.emptyList():null)
 			  .delegate(Class.forName(j9?"jdk.internal.misc.VM":"sun.misc.VM"), "isDirectMemoryPageAligned")
-			  .access(Buffer.class, new String[]{"capacity", "address"}, null, new String[]{"setCapacity","setAddress"});
+			  .access(Buffer.class, new String[]{"capacity", "address"}, new String[]{null,"getAddress"}, new String[]{"setCapacity","setAddress"});
 			Class<?> cleaner = Class.forName(j9?"jdk.internal.ref.Cleaner" : "sun.misc.Cleaner");
 			da.delegate(cleaner, new String[] {"create", "clean"}, new String[] {"newCleaner", "invokeClean"});
 
@@ -88,12 +89,10 @@ public class NativeMemory {
 	public static void cleanNativeMemory(Object cleaner) {
 		hlp.invokeClean(cleaner);
 	}
-	public static byte[] getArray(ByteBuffer buf) {
-		return hlp.getHb(buf);
-	}
-	public static int getOffset(ByteBuffer buf) {
-		return hlp.getOffset(buf);
-	}
+
+	public static byte[] getArray(ByteBuffer buf) { return hlp.getHb(buf); }
+	public static int getOffset(ByteBuffer buf) { return hlp.getOffset(buf); }
+	public static long getAddress(ByteBuffer buf) { return hlp.getAddress(buf); }
 
 	public NativeMemory() {
 		hlp.newCleaner(this, unmanaged);

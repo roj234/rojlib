@@ -1,6 +1,7 @@
 package roj.config.data;
 
 import roj.config.XMLParser;
+import roj.config.serial.CVisitor;
 import roj.text.CharList;
 
 /**
@@ -13,22 +14,15 @@ public final class XText extends XEntry {
 	public String value;
 	public byte CDATA_flag;
 
-	public XText(String text) {
-		value = text;
-	}
+	public XText(String text) { value = text; }
 
 	@Override
-	public boolean isString() {
-		return true;
-	}
+	public boolean isString() { return true; }
 	@Override
-	public String asString() {
-		return value;
-	}
+	public String asString() { return value; }
 
-	public CString toJSON() {
-		return CString.valueOf(value);
-	}
+	@Override
+	public void toJSON(CVisitor cc) { cc.value(value); }
 
 	protected void toXML(CharList sb, int depth) { toCompatXML(sb); }
 	protected void toCompatXML(CharList sb) {

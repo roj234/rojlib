@@ -34,7 +34,7 @@ public final class Field implements FieldNode {
 	}
 
 	public Field(ConstantData data, RawField field) {
-		this(field.access, field.name.getString(), field.type.getString());
+		this(field.access, field.name.str(), field.type.str());
 
 		AttributeList al = field.attributesNullable();
 		if (al != null && !al.isEmpty()) {

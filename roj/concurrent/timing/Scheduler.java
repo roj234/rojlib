@@ -108,7 +108,6 @@ public class Scheduler implements Runnable {
 				continue;
 			}
 
-			time = System.currentTimeMillis();
 			if (time < task.nextRun) {
 				remain.add(task);
 				break;
@@ -123,7 +122,10 @@ public class Scheduler implements Runnable {
 				} else dirty = true;
 
 				if (executor != null && !task.forceOnScheduler()) executor.pushTask(task);
-				else task.execute();
+				else {
+					task.execute();
+					time = System.currentTimeMillis();
+				}
 
 				if (timeout) {
 					synchronized (tasks) {

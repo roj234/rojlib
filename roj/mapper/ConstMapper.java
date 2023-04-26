@@ -19,6 +19,7 @@ import roj.asm.tree.attr.BootstrapMethods;
 import roj.asm.type.Signature;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
+import roj.asm.util.AttrHelper;
 import roj.asm.util.Context;
 import roj.collect.*;
 import roj.concurrent.collect.ConcurrentFindHashMap;
@@ -101,33 +102,37 @@ public class ConstMapper extends Mapping {
 
 		w.putVUInt(classMap.size());
 		for (Map.Entry<String, String> s : classMap.entrySet()) {
-			pool.add(pool.add(w, s.getKey()), s.getValue());
+			pool.writeString(pool.writeString(w, s.getKey()), s.getValue());
 		}
+		w.putInt(FILE_HEADER);
 
 		w.putVUInt(fieldMap.size());
 		for (Map.Entry<Desc, String> s : fieldMap.entrySet()) {
-			Desc desc = s.getKey();
-			pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.flags), s.getValue());
+			Desc descriptor = s.getKey();
+			pool.writeString(pool.writeString(pool.writeString(pool.writeString(w, descriptor.owner), descriptor.name), descriptor.param).putShort(descriptor.flags), s.getValue());
 		}
+		w.putInt(FILE_HEADER);
 
 		w.putVUInt(methodMap.size());
 		for (Map.Entry<Desc, String> s : methodMap.entrySet()) {
-			Desc desc = s.getKey();
-			pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.flags), s.getValue());
+			Desc descriptor = s.getKey();
+			pool.writeString(pool.writeString(pool.writeString(pool.writeString(w, descriptor.owner), descriptor.name), descriptor.param).putShort(descriptor.flags), s.getValue());
 		}
+		w.putInt(FILE_HEADER);
 
 		w.putVUInt(libSupers.size());
 		for (Map.Entry<String, List<String>> s : libSupers.entrySet()) {
-			pool.add(w, s.getKey());
+			pool.writeString(w, s.getKey());
 
 			List<String> list = s.getValue();
 			w.putVUInt(list.size());
-			for (int i = 0; i < list.size(); i++) pool.add(w, list.get(i));
+			for (int i = 0; i < list.size(); i++) pool.writeString(w, list.get(i));
 		}
+		w.putInt(FILE_HEADER);
 
 		w.putVUInt(libSkipped.size());
 		for (Desc s : libSkipped) {
-			pool.add(pool.add(pool.add(w, s.owner), s.name), s.param);
+			pool.writeString(pool.writeString(pool.writeString(w, s.owner), s.name), s.param);
 		}
 
 		try (OutputStream out = new LZMAOutputStream(new FileOutputStream(cache), getLZMAOption(), -1)) {
@@ -150,39 +155,45 @@ public class ConstMapper extends Mapping {
 		StringPool pool = new StringPool(r);
 
 		int len = r.readVUInt();
-		while(len-- > 0) {
-			classMap.put(pool.get(r), pool.get(r));
+		for (int i = 0; i < len; i++) {
+			classMap.put(pool.readString(r), pool.readString(r));
 		}
+		if (r.readInt() != FILE_HEADER) throw new IllegalArgumentException("class map");
 
 		len = r.readVUInt();
 		fieldMap.ensureCapacity(len);
-		while(len-- > 0) {
-			fieldMap.put(new Desc(pool.get(r), pool.get(r), pool.get(r), r.readUnsignedByte()), pool.get(r));
+		for (int i = 0; i < len; i++) {
+			fieldMap.put(new Desc(pool.readString(r), pool.readString(r), pool.readString(r), r.readUnsignedShort()), pool.readString(r));
 		}
+		if (r.readInt() != FILE_HEADER) throw new IllegalArgumentException("field map");
 
 		len = r.readVUInt();
 		methodMap.ensureCapacity(len);
-		while(len-- > 0) {
-			methodMap.put(new Desc(pool.get(r), pool.get(r), pool.get(r), r.readUnsignedByte()), pool.get(r));
+		for (int i = 0; i < len; i++) {
+			methodMap.put(new Desc(pool.readString(r), pool.readString(r), pool.readString(r), r.readUnsignedShort()), pool.readString(r));
 		}
+		if (r.readInt() != FILE_HEADER) throw new IllegalArgumentException("method map");
 
 		if (!readClassInheritanceMap) return false;
 
 		len = r.readVUInt();
-		while(len-- > 0) {
-			String name = pool.get(r);
+		for (int i = 0; i < len; i++) {
+			String name = pool.readString(r);
 
 			int len2 = r.readVUInt();
-			MapperList sch = new MapperList(len2);
-			while(len2-- > 0) sch.add(pool.get(r));
-			sch._init_();
+			MapperList list2 = new MapperList(len2);
+			for (int j = 0; j < len2; j++) {
+				list2.add(pool.readString(r));
+			}
+			list2._init_();
 
-			libSupers.put(name, sch);
+			libSupers.put(name, list2);
 		}
+		if (r.readInt() != FILE_HEADER) throw new IllegalArgumentException("library super map");
 
 		len = r.readVUInt();
-		while(len-- > 0) {
-			libSkipped.add(new Desc(pool.get(r), pool.get(r), pool.get(r)));
+		for (int i = 0; i < len; i++) {
+			libSkipped.add(new Desc(pool.readString(r), pool.readString(r), pool.readString(r)));
 		}
 
 		return true;
@@ -806,14 +817,11 @@ public class ConstMapper extends Mapping {
 					else if (map instanceof InputStream) loadMap((InputStream) map, reverse);
 					else if (map instanceof ByteList) loadMap(((ByteList) map).asInputStream(), reverse);
 				}
-				if (result != Boolean.TRUE) {
-					if (libPath != null) {
-						if (libPath instanceof File) loadLibraries((File) libPath);
-						else loadLibraries((List<Object>) libPath);
-					}
-
-					saveCache(hash, cacheFile);
+				if (libPath != null && result != Boolean.TRUE) {
+					if (libPath instanceof File) loadLibraries((File) libPath);
+					else loadLibraries((List<Object>) libPath);
 				}
+				saveCache(hash, cacheFile);
 			}
 		}
 	}

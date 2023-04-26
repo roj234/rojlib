@@ -1,5 +1,6 @@
 package roj.net.http.srv;
 
+import roj.NotThreadSafe;
 import roj.net.http.IllegalRequestException;
 
 import javax.annotation.Nullable;
@@ -16,7 +17,7 @@ public interface Router {
 	default int writeTimeout(@Nullable Request req, @Nullable Response resp) { return 2000; }
 	default int readTimeout() { return 5000; }
 
-	Response response(Request req, ResponseHeader rh) throws Exception;
+	Response response(@NotThreadSafe Request req, ResponseHeader rh) throws Exception;
 
 	default void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
 		if (cfg != null) cfg.postAccept(8388608, 0);

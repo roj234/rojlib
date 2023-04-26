@@ -1,7 +1,8 @@
 package ilib.misc;
 
 import roj.config.data.CMapping;
-import roj.config.serial.SerializerManager;
+import roj.config.serial.SerializerFactory;
+import roj.config.serial.SerializerFactoryFactory;
 
 import net.minecraft.util.ResourceLocation;
 
@@ -71,7 +72,7 @@ public class LoottableBuilder {
 		}
 	}
 
-	static SerializerManager ser = new SerializerManager(SerializerManager.GENERATE|SerializerManager.CHECK_INTERFACE|SerializerManager.CHECK_PARENT);
+	static SerializerFactory ser = SerializerFactoryFactory.create(SerializerFactory.GENERATE| SerializerFactory.CHECK_INTERFACE| SerializerFactory.CHECK_PARENT);
 
 	private void save() {
 		//put(identifier.getNamespace() + ":assets/lootables/" + identifier.getPath() + ".json"), this);

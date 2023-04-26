@@ -12,7 +12,7 @@ import java.util.List;
  * @since 2023/3/18 0018 12:55
  */
 abstract class Adapter {
-	Adapter withGenericType(SerializerManager man, List<IType> genericType) { return this; }
+	Adapter withGenericType(SerializerFactory man, List<IType> genericType) { return this; }
 
 	void read(AdaptContext ctx, boolean l) {read(ctx, (Object)l);}
 	void read(AdaptContext ctx, int l) {read(ctx, (Object)l);}

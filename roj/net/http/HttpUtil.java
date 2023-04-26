@@ -1,10 +1,10 @@
 package roj.net.http;
 
 import roj.collect.TrieTree;
-import roj.io.IOUtil;
-import roj.net.http.srv.HttpServer11;
 import roj.net.http.srv.Request;
+import roj.text.CharList;
 
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -12,33 +12,75 @@ import java.util.regex.Pattern;
  * @since 2023/2/24 0024 2:01
  */
 public class HttpUtil {
-	public static Request request() {
-		return (Request) HttpServer11.TSO.get().ctx.get("CURRENT_REQUEST");
-	}
+	// region CORS
+	public static final String ACCESS_CONTROL_ALLOW_HEADERS = "Access-Control-Allow-Headers";
+	public static final String ACCESS_CONTROL_ALLOW_ORIGIN = "Access-Control-Allow-Origin";
+	public static final String ACCESS_CONTROL_MAX_aGE = "Access-Control-Max-Age";
+	public static final String ACCESS_CONTROL_ALLOW_METHODS = "Access-Control-Allow-Methods";
+	public static final String ACCESS_CONTROL_ALLOW_CREDENTIALS = "Access-Control-Allow-Credentials";
 
-	public static String htmlspecial(CharSequence str) {
-		return IOUtil.getSharedCharBuf().append(str).replaceMulti(array("&", "<", ">", "\"", "'"), array("&amp;", "&lt;", "&gt;", "&quot;", "")).toString();
+	public static boolean isCORSPreflight(Request req) {
+		return req.action() == Action.OPTIONS && req.containsKey("Origin") && req.containsKey("Access-Control-Request-Method");
 	}
-
-	public static String htmlspecial_decode(CharSequence str) {
-		return IOUtil.getSharedCharBuf().append(str).replaceMulti(array("&lt;", "&gt;", "&quot;", "", "&amp;"), array("<", ">", "\"", "'", "&")).toString();
-	}
-
-	public static String htmlspecial_decode_all(CharSequence str) {
-		return IOUtil.getSharedCharBuf().append(str).replaceMulti(decode_large).toString();
-	}
-
-	private static String[] array(String... s) { return s; }
+	// endregion
 
 	static final Pattern pa = Pattern.compile("(up.browser|up.link|mmp|symbian|smartphone|midp|wap|phone|iphone|ipad|ipod|android|xoom)", Pattern.CASE_INSENSITIVE);
 	public static boolean is_wap(Request req) {
 		String ua = req.get("user-agent");
 		if (ua != null && pa.matcher(ua).matches()) return true;
 
-		return req.header("accept").contains("application/vnd.wap.xhtml+xml");
+		return req.getField("accept").contains("application/vnd.wap.xhtml+xml");
 	}
 
-	private static final TrieTree<String> decode_large = new TrieTree<>();
+	public static String htmlspecial(CharSequence str) { return h(str).toStringAndFree(); }
+	public static String htmlspecial_decode(CharSequence str) { return hd(str).toStringAndFree(); }
+	public static String htmlspecial_decode_all(CharSequence str) { return hd2(str).toStringAndFree(); }
+
+	public static CharList htmlspecial(CharList sb, CharSequence str) { return (CharList) h(str).appendToAndFree(sb); }
+	public static CharList htmlspecial_decode(CharList sb, CharSequence str) { return (CharList) hd(str).appendToAndFree(sb); }
+	public static CharList htmlspecial_decode_all(CharList sb, CharSequence str) { return (CharList) hd2(str).appendToAndFree(sb); }
+
+	private static CharList h(CharSequence s) { return new CharList(s).replaceMulti(Encode); }
+	private static CharList hd(CharSequence s) { return new CharList(s).replaceMulti(Decode); }
+	private static CharList hd2(CharSequence s) {
+		CharList sb = new CharList(s).replaceMulti(LargeTable.Table);
+		Matcher m = AmpBang.matcher(sb);
+
+		int pos = 0;
+		char[] ab = new char[2];
+		while (m.find(pos)) {
+			int start = m.start(0);
+			int end = m.end(0);
+			int id = Integer.parseInt(m.group(1));
+
+			String s1;
+			if (id <= 0xFFFF) {
+				ab[0] = (char) id;
+				s1 = new String(ab,0,1);
+			} else {
+				ab[0] = Character.highSurrogate(id);
+				ab[1] = Character.lowSurrogate(id);
+				s1 = new String(ab);
+			}
+
+			sb.replace(start, end, s1);
+			pos = Math.max(0, end-11);
+		}
+		return sb;
+	}
+
+	private static final Pattern AmpBang = Pattern.compile("&#([0-9]{1,8});");
+	private static final TrieTree<String> Encode = new TrieTree<>();
+	private static final TrieTree<String> Decode = new TrieTree<>();
+	static {
+		String[] T_encode = {"&amp;", "&lt;", "&gt;", "&quot;", "&apos;"}, T_decode = {"&", "<", ">", "\"", "'"};
+		for (int i = 0; i < T_encode.length; i++) {
+			Encode.put(T_decode[i], T_encode[i]);
+			Decode.put(T_encode[i], T_decode[i]);
+		}
+	}
+	static class LargeTable {
+	private static final TrieTree<String> Table = new TrieTree<>();
 	static {
 		// Reference: https://www.degraeve.com/reference/specialcharacters.php
 		// Reference: https://box3.cn
@@ -78,7 +120,7 @@ public class HttpUtil {
 		"&thetasym;ϑ\n" + "&there4;∴\n" + "&thorn;þ\n" + "&times;×\n" + "&tau;τ\n" + "&trade;™\n" +
 		"&upsilon;υ\n" + "&upsih;ϒ\n" + "&uarr;↑\n" + "&uacute;ú\n" + "&uArr;⇑\n" + "&ucirc;û\n" +
 		"&uuml;ü\n" + "&uml;¨\n" + "&ugrave;ù\n" + "&weierp;℘\n" + "&xi;ξ\n" + "&yacute;ý\n" + "&yen;¥\n" +
-		"&yuml;ÿ\n" + "&zeta;ζ\n" + "&apos;'";
+		"&yuml;ÿ\n" + "&zeta;ζ\n" + "&apos;'\n" + "&emsp;　";
 		int i = 0;
 		int l;
 		int[] s = new int[4];
@@ -99,9 +141,10 @@ public class HttpUtil {
 			String val = TABLE.substring(i,k);
 			i = k+1;
 
-			decode_large.put(TABLE, s[0], s[1], val);
-			if (l > 2) decode_large.put(TABLE, s[2], s[3], val);
+			Table.put(TABLE, s[0], s[1], val);
+			if (l > 2) Table.put(TABLE, s[2], s[3], val);
 		}
+	}
 	}
 
 	// 禁止缓存

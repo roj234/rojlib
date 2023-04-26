@@ -4,6 +4,7 @@ import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.text.TextUtil;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -170,7 +171,7 @@ public class ConstantPool {
 				Object data = parseUTF ? r.readUTF() : r.readBytes(r.readUnsignedShort());
 				if (arr[i] != null) {
 					try {
-						((CstUTF) arr[i]).i_setData(data);
+						((CstUTF) arr[i]).data = data;
 					} catch (Exception e) {
 						typeError(i, b, arr[i]);
 					}
@@ -224,7 +225,7 @@ public class ConstantPool {
 				if (arr[i] != null) {
 					try {
 						CstNameAndType nat = (CstNameAndType) arr[i];
-						nat.setName(name);
+						nat.name(name);
 						nat.setType(type);
 					} catch (Exception e) {
 						typeError(i, b, arr[i]);
@@ -281,7 +282,7 @@ public class ConstantPool {
 	}
 	public String getName(DynByteBuf r) {
 		int id = r.readUnsignedShort()-1;
-		return id < 0 ? null : ((CstClass) constants.get(id)).getValue().getString();
+		return id < 0 ? null : ((CstClass) constants.get(id)).name().str();
 	}
 
 	private final CstTop fp = new CstTop();
@@ -298,12 +299,29 @@ public class ConstantPool {
 		}
 	}
 
-	public void setUTFValue(CstUTF utf, String value) {
-		initRefMap();
-		if (!refMap.remove(utf))
-			throw new IllegalStateException("not able to remove " + utf);
-		utf.setString(value);
-		refMap.add(utf);
+	public void setUTFValue(CstUTF c, String str) {
+		int id = c.getIndex()-1;
+		if (id < 0 || id >= constants.size() || constants.getRawArray()[id] != c) {
+			throw new IllegalArgumentException(c + "不在该常量池中");
+		}
+
+		boolean rm;
+		if (!refMap.isEmpty()) {
+			rm = refMap.remove(c);
+			assert rm : "不在该常量池中";
+			refMap.add(c);
+		} else {
+			rm = false;
+		}
+
+		int prev = c._length();
+		int curr = ByteList.byteCountDioUTF(str);
+
+		length += curr - prev;
+
+		c.data = str;
+
+		if (rm) refMap.add(c);
 	}
 
 	private void addConstant(Constant c) {
@@ -312,7 +330,7 @@ public class ConstantPool {
 		constants.add(c);
 
 		switch (c.type()) {
-			case Constant.UTF: length += 3 + DynByteBuf.byteCountDioUTF(((CstUTF) c).getString()); break;
+			case Constant.UTF: length += 3 + DynByteBuf.byteCountDioUTF(((CstUTF) c).str()); break;
 			case Constant.INT: case Constant.FLOAT:
 			case Constant.NAME_AND_TYPE: case Constant.INVOKE_DYNAMIC:
 			case Constant.METHOD: case Constant.FIELD: case Constant.INTERFACE:
@@ -341,8 +359,8 @@ public class ConstantPool {
 		Constant o = refMap.find(fp.set(msg));
 		if (o == fp) {
 			addConstant(utf = new CstUTF(msg.toString()));
-		} else if (!msg.equals((utf = (CstUTF) o).getString())) {
-			throw new IllegalStateException("Unfit utf id!!! G: '" + utf.getString() + "' E: '" + msg + '\'');
+		} else if (!msg.equals((utf = (CstUTF) o).str())) {
+			throw new IllegalStateException("Unfit utf id!!! G: '" + utf.str() + "' E: '" + msg + '\'');
 		}
 
 		return utf;
@@ -356,7 +374,7 @@ public class ConstantPool {
 		Object ref = refMap.find(fp.set(uName, uType));
 		if (ref == fp) {
 			CstNameAndType t = new CstNameAndType();
-			t.setName(uName);
+			t.name(uName);
 			t.setType(uType);
 			addConstant(t);
 			ref = t;
@@ -388,7 +406,7 @@ public class ConstantPool {
 		Object ref = refMap.find(fp.set(Constant.METHOD, clazz, nat));
 		if (ref == fp) {
 			CstRefMethod t = new CstRefMethod();
-			t.setClazz(clazz);
+			t.clazz(clazz);
 			t.desc(nat);
 			addConstant(t);
 			ref = t;
@@ -405,7 +423,7 @@ public class ConstantPool {
 		Object ref = refMap.find(fp.set(Constant.FIELD, clazz, nat));
 		if (ref == fp) {
 			CstRefField t = new CstRefField();
-			t.setClazz(clazz);
+			t.clazz(clazz);
 			t.desc(nat);
 			addConstant(t);
 			ref = t;
@@ -422,7 +440,7 @@ public class ConstantPool {
 		Object ref = refMap.find(fp.set(Constant.INTERFACE, clazz, nat));
 		if (ref == fp) {
 			CstRefItf t = new CstRefItf();
-			t.setClazz(clazz);
+			t.clazz(clazz);
 			t.desc(nat);
 			addConstant(t);
 			ref = t;
@@ -546,7 +564,7 @@ public class ConstantPool {
 			case Constant.MODULE:
 			case Constant.PACKAGE: {
 				CstRefUTF ref = (CstRefUTF) c;
-				ref.setValue(reset(ref.getValue()));
+				ref.setValue(reset(ref.name()));
 			}
 			break;
 			case Constant.METHOD_HANDLE: {
@@ -558,13 +576,13 @@ public class ConstantPool {
 			case Constant.INTERFACE:
 			case Constant.FIELD: {
 				CstRef ref = (CstRef) c;
-				ref.setClazz(reset(ref.getClazz()));
+				ref.clazz(reset(ref.clazz()));
 				ref.desc(reset(ref.desc()));
 			}
 			break;
 			case Constant.NAME_AND_TYPE: {
 				CstNameAndType nat = (CstNameAndType) c;
-				nat.setName(reset(nat.getName()));
+				nat.name(reset(nat.name()));
 				nat.setType(reset(nat.getType()));
 			}
 			break;

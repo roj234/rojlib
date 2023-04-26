@@ -22,9 +22,9 @@ public class InvokeInsnNode extends InsnNode {
 
 	public InvokeInsnNode(byte code, CstRef ref) {
 		super(code);
-		this.owner = ref.getClassName();
-		this.name = ref.desc().getName().getString();
-		this.desc = ref.desc().getType().getString();
+		this.owner = ref.className();
+		this.name = ref.descName();
+		this.desc = ref.descType();
 	}
 
 	protected boolean validate() { return OpcodeUtil.category(code) == OpcodeUtil.CATE_METHOD; }

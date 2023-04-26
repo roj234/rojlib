@@ -118,7 +118,7 @@ public class ToYaml extends ToSomeString {
 			return;
 		}
 
-		ITokenizer.addSlashes(key, sb.append('"')).append('"');
+		ITokenizer.addSlashes(sb.append('"'), key).append('"');
 	}
 
 	@Override
@@ -127,7 +127,7 @@ public class ToYaml extends ToSomeString {
 	@Override
 	public final void key0(String key) {
 		indent(depth);
-		(YAMLParser.literalSafe(key)<0 ? sb.append(key) : ITokenizer.addSlashes(key, sb.append('"')).append('"')).append(": ");
+		(YAMLParser.literalSafe(key)<0 ? sb.append(key) : ITokenizer.addSlashes(sb.append('"'), key).append('"')).append(": ");
 	}
 
 	@Override

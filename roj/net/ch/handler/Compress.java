@@ -8,17 +8,14 @@ import java.io.IOException;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
-import java.util.zip.ZipException;
 
 /**
  * @author Roj234
  * @since 2022/6/1 23:20
  */
 public class Compress implements ChannelHandler {
-	public static final int F_AUTO_MERGE = 1, F_PER_INPUT_RESET = 2;
-	private static final int F_CONTINUOUS = 8;
+	public static final int F_PER_INPUT_RESET = 1;
 
-	private static final int MAX_SPLIT_PACKET = 20;
 	public static final byte[] SYNC_END = {0, 0, -1, -1};
 
 	private Deflater def;
@@ -27,22 +24,16 @@ public class Compress implements ChannelHandler {
 	private int max, thr, buf;
 	private byte flag;
 
-	private int rPkt, wPkt;
 	private DynByteBuf merged;
+	private int prevLen;
 
-	public Compress() {
-		this(Deflater.DEFAULT_COMPRESSION);
-	}
-
-	public Compress(int lvl) {
-		this(8192, 256, 4096, lvl);
-	}
+	public Compress() { this(Deflater.DEFAULT_COMPRESSION); }
+	public Compress(int lvl) { this(2097152, 256, 4096, lvl); }
 
 	public Compress(int max, int thr, int buf, int lvl) {
 		this.max = max;
 		this.thr = thr;
 		this.buf = buf;
-		this.flag = F_AUTO_MERGE | F_PER_INPUT_RESET;
 
 		if (thr < max) {
 			this.def = new Deflater(lvl, true);
@@ -53,100 +44,65 @@ public class Compress implements ChannelHandler {
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 		DynByteBuf in = (DynByteBuf) msg;
-		int len = in.readVarInt(false);
-		if (len == 0) {
+		int type = in.readUnsignedByte();
+		if (type == 0) {
 			ctx.channelRead(in);
 			return;
 		}
-		len += thr;
 
-		if (in.readableBytes() < thr) throw new ZipException("Length(" + len + ") < Zip(" + thr + ")");
-		if (len > max + MAX_SPLIT_PACKET) throw new ZipException("Length(" + len + ") > Max(" + max + ")");
+		int len = merged == null ? in.readVUInt() + thr : prevLen;
+		if (len > max) throw new IOException("Length("+len+") > Max("+max+")");
+
+		boolean hasMorePacket = type == 2;
 
 		DynByteBuf tmp1 = null;
 		if (in.hasArray()) {
 			inf.setInput(in.array(), in.arrayOffset() + in.rIndex, in.readableBytes());
-			in.skipBytes(in.readableBytes());
+			in.rIndex = in.wIndex();
 		} else {
 			tmp1 = ctx.allocate(false, Math.min(buf, in.readableBytes()));
 		}
 
-		DynByteBuf out = ctx.allocate(false, len);
-		int v = 0;
+		DynByteBuf out = merged != null ? merged : ctx.allocate(false, len);
+		int v = out.wIndex();
 
 		try {
-			do {
-				while (!inf.needsInput()) {
+			while (true) {
+				while (true) {
 					try {
-						int j = inf.inflate(out.array(), out.arrayOffset() + v, len - v);
+						int j = inf.inflate(out.array(), out.arrayOffset() + v, out.capacity() - v);
 						v += j;
 						if (j == 0) break;
 					} catch (DataFormatException e) {
-						throw new ZipException(e.getMessage());
+						throw new IOException(e.getMessage());
 					}
 				}
 
-				if (in == null) break;
-
-				if (!in.isReadable()) {
-					inf.setInput(SYNC_END);
-					in = null;
-					continue;
-				}
+				if (!in.isReadable()) break;
 
 				int cnt = Math.min(in.readableBytes(), tmp1.capacity());
 				in.read(tmp1.array(), tmp1.arrayOffset(), cnt);
 				inf.setInput(tmp1.array(), tmp1.arrayOffset(), cnt);
-			} while (true);
-
-			if (v != len) {
-				if (wPkt != 0) throw new ZipException("解压的长度(" + v + ") != 包头的长度(" + len + ")");
-
-				wPkt = len - v;
-				if (wPkt < 0 || wPkt > MAX_SPLIT_PACKET) throw new ZipException("解压的长度(" + v + ") != 包头的长度(" + len + ")");
 			}
 
 			out.wIndex(v);
-			if (wPkt > 0 && (flag & F_AUTO_MERGE) != 0) {
-				merge(ctx, out);
-				out = null;
+			if (!hasMorePacket) {
+				merged = null;
 
-				if (--wPkt == 0) {
-					out = merged;
-					merged = null;
-					ctx.channelRead(out);
-					ctx.reserve(out);
-				}
-			} else {
+				if (v != len) throw new IOException("解压的长度("+v+") != 包头的长度("+len+")");
 				ctx.channelRead(out);
-				if (wPkt > 0) wPkt--;
+			} else {
+				merged = out;
+				prevLen = len;
+				out = null;
 			}
 		} finally {
-			if (wPkt == 0 && (flag & F_PER_INPUT_RESET) != 0) {
-				inf.reset();
-			}
 			if (tmp1 != null) ctx.reserve(tmp1);
-			if (out != null) ctx.reserve(out);
-		}
-	}
+			if (out != null) {
+				if ((flag & F_PER_INPUT_RESET) != 0) inf.reset();
 
-	private void merge(ChannelCtx ctx, DynByteBuf out) {
-		DynByteBuf m = merged;
-		if (m != null) {
-			if (m.writableBytes() < out.readableBytes()) {
-				DynByteBuf tmp = ctx.allocate(true, m.readableBytes() + out.readableBytes());
-				tmp.put(m).put(out);
-
-				ctx.reserve(m);
-				m = tmp;
-			} else {
-				m.put(out);
+				ctx.reserve(out);
 			}
-			merged = m.compact();
-
-			ctx.reserve(out);
-		} else {
-			merged = out;
 		}
 	}
 
@@ -154,53 +110,42 @@ public class Compress implements ChannelHandler {
 	public void channelWrite(ChannelCtx ctx, Object msg) throws IOException {
 		DynByteBuf in = (DynByteBuf) msg;
 
-		if (in.readableBytes() > max) {
-			rPkt = 1 + in.readableBytes() / max;
-			if (rPkt > MAX_SPLIT_PACKET) throw new IOException("数据包过大");
-			flag |= F_CONTINUOUS;
-			try {
-				while (in.readableBytes() > max) {
-					channelWrite(ctx, in.slice(max));
-				}
-			} finally {
-				flag ^= F_CONTINUOUS;
-			}
-		}
-
 		DynByteBuf out;
 		if (in.readableBytes() <= thr) {
-			out = ctx.allocate(false, in.readableBytes() + 1);
-			out.put(0).put(in);
+			out = ctx.alloc().expand(in, 1, false, false);
 			try {
-				ctx.channelWrite(out);
+				ctx.channelWrite(out.put(0, 0));
 			} finally {
-				ctx.reserve(out);
+				if (out != in) ctx.reserve(out);
 			}
 			return;
 		}
 
-		out = ctx.allocate(false, Math.min(in.readableBytes(), max));
-		out.putVarInt(in.readableBytes() - thr + rPkt, false);
-		rPkt = 0;
+		out = ctx.allocate(false, Math.min(buf, in.readableBytes()+5))
+				 .put(1).putVUInt(in.readableBytes() - thr);
 
 		DynByteBuf tmp1 = null;
 		if (in.hasArray()) {
-			def.setInput(in.array(), in.arrayOffset() + in.rIndex, in.readableBytes());
-			in.skipBytes(in.readableBytes());
+			def.setInput(in.array(), in.arrayOffset()+in.rIndex, in.readableBytes());
+			in.rIndex = in.wIndex();
 		} else {
 			tmp1 = ctx.allocate(false, Math.min(buf, in.readableBytes()));
 		}
 
 		try {
 			int v = out.wIndex();
-			do {
-				while (!def.needsInput()) {
-					int i = def.deflate(out.array(), out.arrayOffset() + v, out.capacity() - v);
+			while (true) {
+				int flush = in.isReadable() ? Deflater.NO_FLUSH : Deflater.SYNC_FLUSH;
+				while (true) {
+					int i = def.deflate(out.array(), out.arrayOffset() + v, out.capacity() - v, flush);
 
 					if ((v += i) == out.capacity()) {
-						out.rIndex = v = 0;
-						out.wIndex(out.capacity());
+						out.put(0, 2);
+						out.rIndex = 0;
+						out.wIndex(v);
 						ctx.channelWrite(out);
+
+						v = 1;
 					} else if (i == 0) break;
 				}
 
@@ -209,31 +154,16 @@ public class Compress implements ChannelHandler {
 				int cnt = Math.min(in.readableBytes(), tmp1.capacity());
 				in.read(tmp1.array(), tmp1.arrayOffset(), cnt);
 				def.setInput(tmp1.array(), tmp1.arrayOffset(), cnt);
-			} while (true);
-
-			while (true) {
-				int i = def.deflate(out.array(), out.arrayOffset() + v, out.capacity() - v, Deflater.SYNC_FLUSH);
-
-				if ((v += i) == out.capacity()) {
-					out.rIndex = 0;
-					if ((flag & F_CONTINUOUS) != 0) v -= 4;
-					out.wIndex(v);
-					ctx.channelWrite(out);
-
-					v = 0;
-				} else if (i == 0) break;
 			}
 
 			if (v > 0) {
+				out.put(0, 1);
 				out.rIndex = 0;
-				if ((flag & F_CONTINUOUS) != 0) v -= 4;
 				out.wIndex(v);
 				ctx.channelWrite(out);
 			}
 		} finally {
-			if ((flag & (F_PER_INPUT_RESET | F_CONTINUOUS)) == F_PER_INPUT_RESET) {
-				def.reset();
-			}
+			if ((flag & F_PER_INPUT_RESET) != 0) def.reset();
 
 			if (tmp1 != null) ctx.reserve(tmp1);
 			ctx.reserve(out);
@@ -250,21 +180,5 @@ public class Compress implements ChannelHandler {
 			ctx.reserve(merged);
 			merged = null;
 		}
-	}
-
-	public void setCompressionThreshold(int t) {
-		this.thr = t;
-	}
-
-	public void setMaxBufferSize(int buf) {
-		this.buf = buf;
-	}
-
-	public void setSplitThreshold(int t) {
-		this.max = t;
-	}
-
-	public void setFlag(byte flag) {
-		this.flag = flag;
 	}
 }

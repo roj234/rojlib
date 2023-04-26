@@ -1,5 +1,6 @@
 package roj.net.http;
 
+import roj.NativeLibrary;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
@@ -100,17 +101,9 @@ public abstract class HttpRequest {
 		return this;
 	}
 	public final HttpRequest url(String protocol, String site, String path) { return url(protocol, site, path, null); }
-
-	/**
-	 * @param protocol http/https
-	 * @param site 站点(Host|Address)
-	 * @param path 路径
-	 * @param query 不以?开始的请求参数
-	 */
 	public final HttpRequest url(String protocol, String site, String path, String query) {
 		this.protocol = protocol.toLowerCase();
 		this.site = site;
-		if (!path.startsWith("/")) throw new IllegalArgumentException("path must start with /");
 		this.path = path;
 		this.query = query;
 
@@ -129,7 +122,7 @@ public abstract class HttpRequest {
 			port = Integer.parseInt(this.site.substring(port+1));
 		}
 		try {
-			return new URL(protocol, site, port, _appendPath(new CharList()).toStringAndFree());
+			return new URL(protocol, site, port, _appendPath(new CharList()).toString());
 		} catch (MalformedURLException e) {
 			Helpers.athrow(e);
 			return Helpers.nonnull();

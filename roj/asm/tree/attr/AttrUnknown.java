@@ -35,7 +35,7 @@ public class AttrUnknown extends Attribute {
 	}
 
 	@Override
-	public String name() { return name instanceof CstUTF ? ((CstUTF) name).getString() : name.toString(); }
+	public String name() { return name instanceof CstUTF ? ((CstUTF) name).str() : name.toString(); }
 
 
 	public String toString() { return name() + ": " + data.dump(); }

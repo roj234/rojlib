@@ -1,11 +1,9 @@
 package roj.util;
 
-import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.lavac.api.PreCompile;
-import roj.math.MathUtils;
-import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.text.UTF8MB4;
 import sun.misc.Unsafe;
 
 import java.io.IOException;
@@ -17,15 +15,13 @@ import java.nio.ReadOnlyBufferException;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
 
-import static java.lang.Character.MAX_HIGH_SURROGATE;
-import static java.lang.Character.MIN_HIGH_SURROGATE;
 import static roj.reflect.FieldAccessor.u;
 
 /**
  * @author Roj234
  * @since 2021/5/29 20:45
  */
-public class ByteList extends DynByteBuf implements CharSequence, Appendable {
+public class ByteList extends DynByteBuf implements Appendable {
 	static final boolean USE_CACHE = true;
 	public static final ByteList EMPTY = new Slice(ArrayCache.BYTES, 0, 0);
 
@@ -47,9 +43,7 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		return bl;
 	}
 
-	public static ByteList allocate(int cap) {
-		return new ByteList(cap);
-	}
+	public static ByteList allocate(int cap) { return new ByteList(cap); }
 	public static ByteList allocate(int capacity, int maxCapacity) {
 		return new ByteList(capacity) {
 			@Override
@@ -59,18 +53,14 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 			}
 
 			@Override
-			public int maxCapacity() {
-				return maxCapacity;
-			}
+			public int maxCapacity() { return maxCapacity; }
 		};
 	}
 
-	public ByteList() {
-		list = ArrayCache.BYTES;
-	}
-
+	public ByteList() { list = ArrayCache.BYTES; }
 	public ByteList(int len) {
-		list = new byte[len];
+		// todo
+		list = /*USE_CACHE ? ArrayCache.getDefaultCache().getByteArray(len, false) : */new byte[len];
 	}
 
 	public ByteList(byte[] array) {
@@ -78,34 +68,20 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		wIndex = array.length;
 	}
 
-	@Override
-	public int capacity() {
-		return list.length;
-	}
-	@Override
-	public int maxCapacity() {
-		return 2147000000;
+	public synchronized void _free() {
+		clear();
+		byte[] b = list;
+		setArray(ArrayCache.BYTES);
+		ArrayCache.getDefaultCache().putArray(b);
 	}
 
-	@Override
-	public final boolean isDirect() {
-		return false;
-	}
-
-	@Override
-	public boolean hasArray() {
-		return true;
-	}
-	@Override
-	public byte[] array() {
-		return list;
-	}
-	public int arrayOffset() {
-		return 0;
-	}
-	public final int relativeArrayOffset() {
-		return arrayOffset()+rIndex;
-	}
+	public int capacity() { return list.length; }
+	public int maxCapacity() { return 2147000000; }
+	public final boolean isDirect() { return false; }
+	public long _unsafeAddr() { return Unsafe.ARRAY_BYTE_BASE_OFFSET+arrayOffset(); }
+	public boolean hasArray() { return true; }
+	public byte[] array() { return list; }
+	public int arrayOffset() { return 0; }
 
 	@Override
 	public final void copyTo(long address, int len) {
@@ -114,7 +90,6 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 
 	public void clear() {
 		wIndex = rIndex = 0;
-		if (br != null) br.reset(this);
 	}
 
 	public void ensureCapacity(int required) {
@@ -332,7 +307,7 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 	}
 
 	@SuppressWarnings("deprecation")
-	public final void _writeDioUTF(String s, int byteLen) {
+	final void _writeDioUTF(String s, int byteLen) {
 		int wi = moveWI(byteLen);
 
 		// better on Java 9 and later
@@ -341,44 +316,12 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 			return;
 		}
 
-		jutf8_encode_all(s, list, Unsafe.ARRAY_BYTE_BASE_OFFSET+wi+arrayOffset(), byteLen);
+		jutf8_encode_all(s, list, _unsafeAddr()+wi);
 	}
 
-	public final ByteList putUTFData(CharSequence s) { return putUTFData0(s, byteCountUTF8(s)); }
-	public final ByteList putUTFData0(CharSequence s, int len) {
-		int wi = moveWI(len);
-		utf8mb4_encode_all(s, list, Unsafe.ARRAY_BYTE_BASE_OFFSET+wi+arrayOffset(), len);
-		return this;
-	}
+	public final ByteList putUTFData(CharSequence s) { return (ByteList) super.putUTFData(s); }
 
-	public final ByteList putVStrData0(CharSequence s, int len) {
-		int wi = moveWI(len) + arrayOffset();
-		byte[] list = this.list;
-
-		for (int i = 0; i < s.length(); i++) {
-			char c = s.charAt(i);
-			if (c >= 0x8080) {
-				list[wi++] = 0;
-				list[wi++] = (byte) (c >>> 8);
-				list[wi++] = (byte) c;
-			} else if (c == 0 || c >= 0x80) {
-				c -= 0x80;
-				list[wi++] = (byte) ((c >>> 8) | 0x80);
-				list[wi++] = (byte) c;
-			} else {
-				list[wi++] = (byte) c;
-			}
-		}
-
-		wi = wIndex-wi-arrayOffset();
-		if (wi != 0) throw new IllegalArgumentException("长度断言失败,多了="+wi);
-
-		return this;
-	}
-
-	public final ByteList putAscii(CharSequence s) {
-		return putAscii(moveWI(s.length()), s);
-	}
+	public final ByteList putAscii(CharSequence s) { return putAscii(moveWI(s.length()), s); }
 	@SuppressWarnings("deprecation")
 	public final ByteList putAscii(int wi, CharSequence s) {
 		wi = testWI(wi, s.length());
@@ -393,11 +336,9 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		return this;
 	}
 
-	public Appendable append(CharSequence s) throws IOException {
-		return append(s,0, s.length());
-	}
+	public final Appendable append(CharSequence s) { return append(s,0, s.length()); }
 	@SuppressWarnings("deprecation")
-	public Appendable append(CharSequence s, int start, int end) throws IOException {
+	public Appendable append(CharSequence s, int start, int end) {
 		int wi = end-start;
 		if ((wi|start|(s.length()-end)) < 0) throw new IndexOutOfBoundsException();
 		wi = moveWI(wi);
@@ -411,9 +352,7 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		}
 		return this;
 	}
-	public Appendable append(char c) throws IOException {
-		return put((byte) c);
-	}
+	public Appendable append(char c) { return put((byte) c); }
 
 	public final ByteList put(ByteBuffer buf) {
 		int rem = buf.remaining();
@@ -559,59 +498,6 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		return new String(list, 0, testWI(i, len), len);
 	}
 
-	public final String readUTF(int len) {
-		if (len <= 0) return "";
-
-		int off = moveRI(len);
-
-		CharList sb = IOUtil.getSharedCharBuf();
-		try {
-			utf8mb4_decode(list, Unsafe.ARRAY_BYTE_BASE_OFFSET+arrayOffset(), off, len, sb, -1, false);
-		} catch (IOException e) {
-			Helpers.athrow(e);
-		}
-		return sb.toString();
-	}
-
-	public final String readVStr(int len) {
-		if (len <= 0) return "";
-
-		int off = moveRI(len) + arrayOffset();
-
-		byte[] list = this.list;
-
-		ArrayCache cache = ArrayCache.getDefaultCache();
-		char[] ob = cache.getCharArray(Math.max(len/2,128), false);
-		int j = 0;
-
-		while (len > 0) {
-			if (j == ob.length) {
-				char[] ob1 = cache.getCharArray(MathUtils.getMin2PowerOf(ob.length+3), false);
-				System.arraycopy(ob, 0, ob1, 0, j);
-				cache.putArray(ob);
-				ob = ob1;
-			}
-
-			byte b = list[off++];
-			if (b == 0) {
-				ob[j++] = (char) ((list[off++] & 0xFF) << 8 | (list[off++] & 0xFF));
-				len -= 3;
-			} else if ((b & 0x80) != 0) {
-				ob[j++] = (char) ((((b & 0x7F) << 8) | (list[off++] & 0xFF)) + 0x80);
-				len -= 2;
-			} else {
-				ob[j++] = (char) b;
-				len -= 1;
-			}
-		}
-
-		if (len < 0) throw new IllegalStateException("Partial character at end");
-
-		String s = new String(ob, 0, j);
-		cache.putArray(ob);
-		return s;
-	}
-
 	@Override
 	@SuppressWarnings("deprecation")
 	public final String readLine() {
@@ -631,7 +517,7 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		return s;
 	}
 
-	public final int readZeroTerminate() {
+	public final int readZeroTerminate(int b) {
 		int i = rIndex + arrayOffset();
 		int end = wIndex + arrayOffset();
 		byte[] l = list;
@@ -654,8 +540,11 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		}
 	}
 
+	// endregion
+	// region Buffer Ops
+
 	public final ByteList slice(int length) {
-		if (length == 0) return new ByteList();
+		if (length == 0) return EMPTY;
 		ByteList list = slice(rIndex, length);
 		rIndex += length;
 		return list;
@@ -663,51 +552,6 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 	public final ByteList slice(int off, int len) {
 		return new Slice(list, off + arrayOffset(), len);
 	}
-
-	// region Old BitReader
-	private BitWriter br;
-
-	public final int readBit1() {
-		if (br == null) br = new BitWriter(this);
-		return br.readBit1();
-	}
-
-	public final int readBit(int numBits) {
-		if (br == null) br = new BitWriter(this);
-		return br.readBit(numBits);
-	}
-
-	public void skipBits(int i) {
-		if (br == null) br = new BitWriter(this);
-		br.skipBits(i);
-	}
-
-	public void endBitRead() {
-		if (br == null) br = new BitWriter(this);
-		br.endBitRead();
-	}
-
-	// endregion
-	// region ASCII sequence
-
-	@Override
-	public int length() {
-		return wIndex;
-	}
-
-	@Override
-	public char charAt(int i) {
-		return (char) list[testWI(i, 1) + arrayOffset()];
-	}
-
-	@Override
-	public CharSequence subSequence(int start, int end) {
-		return new Slice(list, start, end - start);
-	}
-
-	// endregion
-	// endregion
-	// region Buffer Ops
 
 	@Override
 	public final ByteList compact() {
@@ -742,242 +586,37 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 	// endregion
 
 	@PreCompile
-	public static int FOURCC(CharSequence x) {
-		return ((x.charAt(0) & 0xFF) << 24) | ((x.charAt(1) & 0xFF) << 16) | ((x.charAt(2) & 0xFF) << 8) | ((x.charAt(3) & 0xFF));
-	}
+	public static int FOURCC(CharSequence x) { return ((x.charAt(0) & 0xFF) << 24) | ((x.charAt(1) & 0xFF) << 16) | ((x.charAt(2) & 0xFF) << 8) | ((x.charAt(3) & 0xFF)); }
+	@PreCompile
+	public static String UNFOURCC(int fc) { return new String(new char[]{(char) (fc >>> 24), (char) ((fc >>> 16) & 0xFF), (char) ((fc >>> 8) & 0xFF), (char) (fc & 0xFF)}); }
 
+	@Deprecated
 	public static void decodeUTF(int len, Appendable out, DynByteBuf in) throws IOException {
 		if (len <= 0) {
 			len = in.readableBytes();
 			if (len <= 0) return;
 		}
-		int ri = in.moveRI(len);
-
-		if (in.isDirect()) {
-			utf8mb4_decode(null, in.address(), ri, len, out, -1, false);
-		} else {
-			utf8mb4_decode(in.array(), Unsafe.ARRAY_BYTE_BASE_OFFSET+in.arrayOffset(), ri, len, out, -1, false);
-		}
+		UTF8MB4.CODER.decodeFixedIn(in, len, out);
 	}
 
-	public static int utf8mb4_decode(Object ref, long base, int pos, int len, Appendable out, int outMax, boolean partial) throws IOException {
-		if (pos < 0) throw new IllegalArgumentException("pos="+pos);
+	static void jutf8_encode_all(String s, Object ref, long addr) {
+		int i = 0, len = s.length();
+		while (i < len) {
+			int c = s.charAt(i++);
 
-		long i = base+pos;
-		long max = i+len;
-
-		int c;
-		while (i < max) {
-			if (outMax == 0) return (int) (i-base);
-
-			c = u.getByte(ref, i);
-			if (c < 0) break;
-			i++;
-			outMax--;
-			out.append((char) c);
-		}
-
-		truncate: {
-		malformed: {
-		int c2, c3, c4;
-		while (i < max) {
-			if (outMax-- == 0) break;
-
-			c = u.getByte(ref, i++) & 0xFF;
-			switch (c >> 4) {
-				case 0: case 1: case 2: case 3:
-				case 4: case 5: case 6: case 7:
-					/* 0xxxxxxx*/
-					out.append((char) c);
-					break;
-				case 12: case 13:
-					/* 110xxxxx   10xxxxxx*/
-					if (i >= max) break truncate;
-
-					c2 = u.getByte(ref, i++);
-					if ((c2 & 0xC0) != 0x80) {
-						i -= 1;
-						break malformed;
-					}
-
-					out.append((char) (((c & 0x1F) << 6) | (c2 & 0x3F)));
-					break;
-				case 14:
-					/* 1110xxxx  10xxxxxx  10xxxxxx */
-					if (i+1 >= max) break truncate;
-
-					c2 = u.getByte(ref, i++);
-					c3 = u.getByte(ref, i++);
-					if (((c2^c3) & 0xC0) != 0) {
-						i -= 2;
-						break malformed;
-					}
-
-					out.append((char) (((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | c3 & 0x3F));
-					break;
-				default:
-				case 15:
-					/* 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx */
-					if (i+2 >= max) break truncate;
-
-					c2 = u.getByte(ref, i++);
-					c3 = u.getByte(ref, i++);
-					c4 = u.getByte(ref, i++);
-					if (((c2^c3^c4) & 0xC0) != 0x80) {
-						i -= 3;
-						break malformed;
-					}
-
-					c4 = ((c & 7) << 18) | ((c2 & 0x3F) << 12) | ((c3 & 0x3F) << 6) | c4 & 0x3F;
-					if (Character.charCount(c4) == 1) {
-						out.append((char) c4);
-					} else {
-						if (outMax-- == 0) { i -= 4; break; }
-
-						out.append(Character.highSurrogate(c4)).append(Character.lowSurrogate(c4));
-					}
-					break;
-			}
-		}
-
-		return (int) (i-base);}
-		throw new IllegalArgumentException((int) (i-base) + " 附近解码错误");}
-		if (partial) return (int) (i-base);
-		throw new IllegalArgumentException("被截断");
-	}
-	public static void jutf8_encode_all(CharSequence s, Object ref, long addr, int byte_len) {
-		int i = 0;
-		int len = s.length();
-		overflow:{
-			while (i < len) {
-				int c = s.charAt(i);
-				if (c == 0 || c > 0x7F) break;
-				i++;
-
-				if ((byte_len -= 1) < 0) break overflow;
+			if (c == 0 || c > 0x7F) {
+				if (c <= 0x7FF) {
+					u.putByte(ref, addr++, (byte) (0xC0 | ((c >> 6) & 0x1F)));
+					u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
+				} else {
+					u.putByte(ref, addr++, (byte) (0xE0 | ((c >> 12) & 0x0F)));
+					u.putByte(ref, addr++, (byte) (0x80 | ((c >> 6) & 0x3F)));
+					u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
+				}
+			} else {
 				u.putByte(ref, addr++, (byte) c);
 			}
-
-			while (i < len) {
-				int c = s.charAt(i++);
-
-				if (c == 0 || c > 0x7F) {
-					if (c <= 0x7FF) {
-						if ((byte_len -= 2) < 0) break overflow;
-						u.putByte(ref, addr++, (byte) (0xC0 | ((c >> 6) & 0x1F)));
-						u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
-					} else {
-						if ((byte_len -= 3) < 0) break overflow;
-						u.putByte(ref, addr++, (byte) (0xE0 | ((c >> 12) & 0x0F)));
-						u.putByte(ref, addr++, (byte) (0x80 | ((c >> 6) & 0x3F)));
-						u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
-					}
-				} else {
-					if ((byte_len -= 1) < 0) break overflow;
-					u.putByte(ref, addr++, (byte) c);
-				}
-			}
 		}
-		if (byte_len != 0) throw new IllegalArgumentException("长度断言失败,少了至少"+ -byte_len +"字节");
-	}
-	public static void utf8mb4_encode_all(CharSequence s, Object ref, long addr, int byte_len) {
-		int i = 0;
-		int len = s.length();
-		overflow:{
-		while (i < len) {
-			int c = s.charAt(i);
-			if (c > 0x7F) break;
-			i++;
-
-			if ((byte_len -= 1) < 0) break overflow;
-			u.putByte(ref, addr++, (byte) c);
-		}
-
-		while (i < len) {
-			int c = s.charAt(i++);
-			if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-				c = TextUtil.codepoint(c,s.charAt(i++));
-			}
-
-			if (c <= 0x7FF) {
-				if (c > 0x7F) {
-					if ((byte_len -= 2) < 0) break overflow;
-					u.putByte(ref, addr++, (byte) (0xC0 | ((c >> 6) & 0x1F)));
-					u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
-				} else {
-					if ((byte_len -= 1) < 0) break overflow;
-					u.putByte(ref, addr++, (byte) c);
-				}
-			} else {
-				if (c > 0xFFFF) {
-					if ((byte_len -= 4) < 0) break overflow;
-					u.putByte(ref, addr++, (byte) (0xF0 | ((c >> 18) & 0x07)));
-					u.putByte(ref, addr++, (byte) (0x80 | ((c >> 12) & 0x3F)));
-				} else {
-					if ((byte_len -= 3) < 0) break overflow;
-					u.putByte(ref, addr++, (byte) (0xE0 | ((c >> 12) & 0x0F)));
-				}
-				u.putByte(ref, addr++, (byte) (0x80 | ((c >> 6) & 0x3F)));
-				u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
-			}
-		}
-		}
-		if (byte_len != 0) throw new IllegalArgumentException("长度断言失败,少了至少"+ -byte_len +"字节");
-	}
-	public static long utf8mb4_encode(CharSequence s, Object ref, long addr, int max_len) {
-		long base = addr;
-		long max = addr+max_len;
-
-		int i = 0;
-		int len = s.length();
-		while (i < len) {
-			if (addr == max) break;
-
-			int c = s.charAt(i);
-			if (c > 0x7F) break;
-			i++;
-			u.putByte(ref, addr++, (byte) c);
-		}
-
-		int previ;
-		while (i < len) {
-			if (addr == max) break;
-			previ = i;
-
-			int c = s.charAt(i++);
-			if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-				if (i == len) {
-					if (i == s.length()) throw new IllegalArgumentException("缺失surrogate pair");
-
-					i--;
-					break;
-				}
-				c = TextUtil.codepoint(c,s.charAt(i++));
-			}
-
-			if (c <= 0x7FF) {
-				if (c > 0x7F) {
-					if (max-addr < 2) { i = previ; break; }
-					u.putByte(ref, addr++, (byte) (0xC0 | ((c >> 6) & 0x1F)));
-					u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
-				} else {
-					u.putByte(ref, addr++, (byte) c);
-				}
-			} else {
-				if (c > 0xFFFF) {
-					if (max-addr < 4) { i = previ; break; }
-					u.putByte(ref, addr++, (byte) (0xF0 | ((c >> 18) & 0x07)));
-					u.putByte(ref, addr++, (byte) (0x80 | ((c >> 12) & 0x3F)));
-				} else {
-					if (max-addr < 3) { i = previ; break; }
-					u.putByte(ref, addr++, (byte) (0xE0 | ((c >> 12) & 0x0F)));
-				}
-				u.putByte(ref, addr++, (byte) (0x80 | ((c >> 6) & 0x3F)));
-				u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
-			}
-		}
-
-		return ((addr-base) << 32) | i;
 	}
 
 	@Override
@@ -1087,13 +726,13 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		private static UnsupportedOperationException a() { return new UnsupportedOperationException("stream buffer is not readable"); }
 	}
 
-	public static final class Slice extends ByteList {
+	public static class Slice extends ByteList {
 		private int off, len;
 
 		public Slice() {}
 		public Slice(byte[] b, int off, int len) { setR(b, off, len); }
 
-		public ByteList setW(byte[] b, int off, int len) {
+		public ByteList set(byte[] b, int off, int len) {
 			assert this != EMPTY;
 
 			wIndex = rIndex = 0;
@@ -1108,7 +747,7 @@ public class ByteList extends DynByteBuf implements CharSequence, Appendable {
 		}
 
 		public ByteList setR(byte[] array, int off, int len) {
-			setW(array,off,len).wIndex = len;
+			set(array,off,len).wIndex = len;
 			return this;
 		}
 

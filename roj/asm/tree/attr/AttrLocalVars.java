@@ -59,8 +59,8 @@ public final class AttrLocalVars extends Attribute implements CodeAttributeSpec 
 
 			//The given local variable must have a value at indexes into the code array in the interval [start_pc, start_pc + length)
 
-			name = ((CstUTF) pool.get(r)).getString();
-			String desc = ((CstUTF) pool.get(r)).getString();
+			name = ((CstUTF) pool.get(r)).str();
+			String desc = ((CstUTF) pool.get(r)).str();
 			list.add(new LocalVariable(r.readUnsignedShort(), name, generic ? Signature.parseGeneric(desc) : TypeHelper.parseField(desc), startNode, endNode));
 		}
 		this.list = list;
@@ -98,7 +98,7 @@ public final class AttrLocalVars extends Attribute implements CodeAttributeSpec 
 		return toString(null);
 	}
 	public String toString(AttrLocalVars table) {
-		List<Object> a = new SimpleList<>("Slot","Type","Name","Start","End",IntMap.UNDEFINED);
+		List<Object> a = SimpleList.asModifiableList("Slot","Type","Name","Start","End",IntMap.UNDEFINED);
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < list.size(); i++) {
 			LocalVariable v = list.get(i);

@@ -16,6 +16,7 @@ import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * todo Vueize
@@ -35,7 +36,7 @@ public abstract class FrontServer extends WebsocketManager implements Router {
 	}
 
 	private final String HTML;
-	protected WebsocketHandler w;
+	protected AtomicReference<WebsocketHandler> w = new AtomicReference<>();
 	protected PacketBuffer pb = new PacketBuffer(10);
 	public FrontServer(String html) {
 		HTML = html;
@@ -57,7 +58,7 @@ public abstract class FrontServer extends WebsocketManager implements Router {
 			case "/bundle.min.js":
 				return new StringResponse(res("bundle.min.js"), "text/javascript");
 			case "/":
-				if ("websocket".equals(req.header("Upgrade"))) {
+				if ("websocket".equals(req.getField("Upgrade"))) {
 					return switchToWebsocket(req, rh);
 				}
 				return new StringResponse(HTML, "text/html");
@@ -79,8 +80,8 @@ public abstract class FrontServer extends WebsocketManager implements Router {
 	protected void update(String id, CharSequence val) throws IOException {
 		CharList sb = IOUtil.getSharedCharBuf();
 		sb.append("{\"_\":\"update\",\"id\":\"");
-		ITokenizer.addSlashes(id, sb).append("\",\"value\":\"");
-		ITokenizer.addSlashes(val, sb).append("\"}");
+		ITokenizer.addSlashes(sb, id).append("\",\"value\":\"");
+		ITokenizer.addSlashes(sb, val).append("\"}");
 
 		pb.offer(IOUtil.SharedCoder.get().encodeR(sb));
 	}
@@ -88,8 +89,8 @@ public abstract class FrontServer extends WebsocketManager implements Router {
 	protected void append(String id, CharSequence val) throws IOException {
 		CharList sb = IOUtil.getSharedCharBuf();
 		sb.append("{\"_\":\"append\",\"id\":\"");
-		ITokenizer.addSlashes(id, sb).append("\",\"value\":\"");
-		ITokenizer.addSlashes(val, sb).append("\"}");
+		ITokenizer.addSlashes(sb, id).append("\",\"value\":\"");
+		ITokenizer.addSlashes(sb, val).append("\"}");
 
 		pb.offer(IOUtil.SharedCoder.get().encodeR(sb));
 	}
@@ -97,6 +98,8 @@ public abstract class FrontServer extends WebsocketManager implements Router {
 	@Override
 	protected WebsocketHandler newWorker(Request req, ResponseHeader handle) {
 		return new WebsocketHandler() {
+			final JSONParser parser = new JSONParser();
+
 			@Override
 			protected void onData(int ph, DynByteBuf in) throws IOException {
 				if (ph != FRAME_TEXT) {
@@ -106,7 +109,7 @@ public abstract class FrontServer extends WebsocketManager implements Router {
 
 				CMapping map;
 				try {
-					map = JSONParser.parses(WebsocketHandler.decodeToUTF(in), JSONParser.LITERAL_KEY | JSONParser.NO_DUPLICATE_KEY).asMap();
+					map = parser.parseRaw(in, JSONParser.LITERAL_KEY | JSONParser.NO_DUPLICATE_KEY).asMap();
 				} catch (Exception e) {
 					error(ERR_INVALID_DATA, "json parse failed");
 					return;
@@ -116,22 +119,18 @@ public abstract class FrontServer extends WebsocketManager implements Router {
 
 			@Override
 			public void handlerAdded(ChannelCtx ctx) {
-				synchronized (FrontServer.this) {
-					try {
-						if (w != null) {
-							w.error(1000, "Logged in another location");
-						}
-						w = this;
-						onWorkerJoin();
-					} catch (IOException ignored) {}
+				try {
+					WebsocketHandler w1 = w.getAndSet(this);
+					if (w1 != null) w1.error(1000, "Logged in another location");
+					onWorkerJoin();
+				} catch (IOException e) {
+					e.printStackTrace();
 				}
 			}
 
 			@Override
 			public void channelClosed(ChannelCtx ctx) throws IOException {
-				synchronized (FrontServer.this) {
-					if (w == this) w = null;
-				}
+				w.compareAndSet(this, null);
 			}
 
 			@Override

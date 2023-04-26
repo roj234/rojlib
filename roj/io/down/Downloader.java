@@ -8,36 +8,29 @@ import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
 import roj.net.ch.MyChannel;
 import roj.net.http.HttpHead;
-import roj.net.http.IHttpClient;
+import roj.net.http.HttpRequest;
 import roj.util.DynByteBuf;
 import roj.util.NamespaceKey;
 
 import java.io.Closeable;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.URL;
 
 /**
  * @author Roj233
  * @since 2022/2/28 21:49
  */
 abstract class Downloader implements ITask, Closeable, ChannelHandler {
-	Downloader(Source file, URL url) {
-		this.file = file;
-		client = IHttpClient.create(IHttpClient.V1_1).url(url)
-							.method("GET").header("User-Agent", DownloadTask.userAgent);
-	}
+	Downloader(Source file) { this.file = file; }
 
 	final Source file;
-	final IHttpClient client;
+	HttpRequest client;
 	MyChannel ch;
 	DownloadTask owner;
-	//Throwable ex;
+	IProgress progress;
 
 	volatile byte state;
 	static final byte DISCONNECTED = 0, CONNECTING = 1, DOWNLOADING = 2, SUCCESS = 3, FAILED = 4;
-
-	IProgress progress;
 
 	long begin = System.currentTimeMillis();
 
@@ -50,7 +43,6 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 	@Override
 	public final void channelOpened(ChannelCtx ctx) throws IOException {
 		HttpHead header = client.response();
-
 		int code = header.getCode();
 		if (code < 200 || code > 299) {
 			throw new FileNotFoundException("远程返回: " + header);
@@ -70,16 +62,9 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 		idle = 0;
 
 		int len = buf.readableBytes();
-
-		DynByteBuf arrayBuf = buf.hasArray() ? buf : ctx.allocate(false, buf.readableBytes());
-		if (buf != arrayBuf) arrayBuf.put(buf);
-
 		try {
-			file.write(arrayBuf.array(), arrayBuf.arrayOffset() + arrayBuf.rIndex, arrayBuf.readableBytes());
+			file.write(buf);
 		} finally {
-			if (arrayBuf != buf) ctx.reserve(arrayBuf);
-			buf.rIndex = buf.wIndex();
-
 			if (progress != null) progress.onChange(this);
 
 			onUpdate(len);
@@ -105,12 +90,13 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
 		NamespaceKey id = event.id;
-		if (id.equals(IHttpClient.DOWNLOAD_EOF)) {
-			done();
+		if (id.equals(HttpRequest.DOWNLOAD_EOF)) {
+			if (event.getData() == Boolean.TRUE)
+				done();
 		}
 	}
 
-	abstract void onBeforeSend(IHttpClient client) throws Exception;
+	abstract void onBeforeSend(HttpRequest client) throws Exception;
 	abstract void onUpdate(int r) throws IOException;
 	abstract void onDone() throws IOException;
 
@@ -132,8 +118,7 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 	private void retry() throws IOException {
 		idle = 0;
 
-		IHttpClient client = this.client;
-		if ((progress == null || !progress.wasShutdown()) && retry-- > 0 && client != null) {
+		if ((progress == null || !progress.wasShutdown()) && retry-- > 0) {
 			synchronized (client) {
 				if (state >= SUCCESS) {
 					close();
@@ -151,11 +136,8 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 	}
 
 	public final void waitFor() throws InterruptedException {
-		IHttpClient client = this.client;
 		synchronized (client) {
-			while (state < SUCCESS) {
-				client.wait();
-			}
+			while (state < SUCCESS) client.wait();
 		}
 	}
 
@@ -187,9 +169,7 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 		}
 	}
 
-	public final boolean isDone() {
-		return state >= SUCCESS;
-	}
+	public final boolean isDone() { return state >= SUCCESS; }
 
 	@Override
 	public final void execute() throws Exception {
@@ -209,17 +189,13 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 			}
 
 			MyChannel ctx = ch;
-			if (ctx == null || !ctx.isOpen() || ctx.isClosePending()) {
-				ch = ctx = MyChannel.openTCP();
-			} else {
-				ctx.disconnect();
-				ctx.removeAll();
-			}
-			ctx.addLast("HH", client.asChannelHandler())
-			   .addLast("Downloader", this);
+			if (ctx != null) ctx.close();
+
+			ch = ctx = MyChannel.openTCP();
+			ctx.addLast("Downloader", this);
 
 			client.connect(ctx, IOUtil.timeout);
-			IHttpClient.POLLER.register(ctx, null);
+			HttpRequest.POLLER.register(ctx, null);
 		} catch (Exception e) {
 			e.printStackTrace();
 			close();

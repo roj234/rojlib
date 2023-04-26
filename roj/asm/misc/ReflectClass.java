@@ -117,7 +117,7 @@ public class ReflectClass implements IClass {
 	}
 
 	@Override
-	public boolean equals(Object obj) { return obj instanceof ReflectClass && ((ReflectClass) obj).owner == owner; }
-	@Override
-	public int hashCode() { return owner.hashCode(); }
+	public boolean equals(Object obj) {
+		return obj instanceof ReflectClass && ((ReflectClass) obj).owner == owner;
+	}
 }

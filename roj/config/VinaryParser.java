@@ -122,13 +122,13 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 					}
 				}
 
-				arr = new String[r.readVarInt(false)+1];
+				arr = new String[r.readVUInt()+1];
 				for (int i = 0; i < arr.length; i++) {
-					arr[i] = r.readVStr();
+					arr[i] = r.readZhCn();
 				}
 				decodeTab.add(arr);
 			} else if (rid == LONG) {
-				arr = decodeTab.get(r.readVarInt(false)+tinyIdCount);
+				arr = decodeTab.get(r.readVUInt()+tinyIdCount);
 			} else {
 				arr = decodeTab.get((rid-1)&0xFF);
 			}
@@ -148,12 +148,12 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 				int size = r.readVUInt();
 				cc.valueMap(size);
 				while (size-- > 0) {
-					cc.key(r.readVStr());
+					cc.key(r.readZhCn());
 					element(r);
 				}
 				cc.pop();
 				break;
-			case STRING: cc.value(r.readVStr()); break;
+			case STRING: cc.value(r.readZhCn()); break;
 			case NULL: cc.valueNull(); break;
 			case BOOL: cc.value(r.readBoolean()); break;
 			case INTEGER: cc.value(r.readInt()); break;
@@ -196,7 +196,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 						int size = r.readVUInt();
 						cc.valueMap(size);
 						while (size-- > 0) {
-							cc.key(r.readVStr());
+							cc.key(r.readZhCn());
 							element(r);
 						}
 						cc.pop();
@@ -228,7 +228,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 				}
 				break;
 				case DOUBLE: while (cap-- > 0) cc.value(r.readDouble()); break;
-				case STRING: while (cap-- > 0) cc.value(r.readVStr()); break;
+				case STRING: while (cap-- > 0) cc.value(r.readZhCn()); break;
 				case Int1: {
 					if (asArray) {
 						byte[] data = new byte[cap];
@@ -286,7 +286,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 				if (id < TINY_ID_COUNT) {
 					w.put(ENCODE_MAP[id]);
 				} else {
-					w.put(LONG).putVarInt(id-TINY_ID_COUNT, false);
+					w.put(LONG).putVUInt(id-TINY_ID_COUNT);
 				}
 
 				return entry.names;
@@ -309,8 +309,8 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 		w.write(STUDY);
 		if (size == 1) w.write(Type.VALUES.length);
 
-		w.putVarInt(len-1, false);
-		for (int i = 0; i < len; i++) w.putVStr(m[i]);
+		w.putVUInt(len-1);
+		for (int i = 0; i < len; i++) w.putZhCn(m[i]);
 
 		return entry.names;
 	}

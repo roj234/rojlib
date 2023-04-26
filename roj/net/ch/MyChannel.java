@@ -5,7 +5,10 @@ import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.io.buf.BufferPool;
-import roj.util.*;
+import roj.util.DynByteBuf;
+import roj.util.NamespaceKey;
+import roj.util.NativeMemory;
+import roj.util.TypedName;
 
 import java.io.IOException;
 import java.net.ConnectException;
@@ -18,7 +21,6 @@ import java.nio.channels.spi.AbstractSelectableChannel;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -605,18 +607,11 @@ public abstract class MyChannel implements Selectable {
 	}
 
 	protected void closeHandler() throws IOException {
-		Throwable ee = null;
 		ChannelCtx pipe = pipelineTail;
 		while (pipe != null) {
-			try {
-				pipe.handler.channelClosed(pipe);
-			} catch (Throwable e) {
-				if (ee == null) ee = e;
-				else ee.addSuppressed(e);
-			}
+			pipe.handler.channelClosed(pipe);
 			pipe = pipe.prev;
 		}
-		if (ee != null) Helpers.athrow(ee);
 	}
 
 	protected final void fireWriteDone() throws IOException {
@@ -678,6 +673,4 @@ public abstract class MyChannel implements Selectable {
 			}
 		});
 	}
-
-	public Lock lock() { return lock; }
 }

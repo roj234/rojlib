@@ -147,7 +147,7 @@ public final class EnumHelper extends CodeVisitor {
 
 	@Override
 	protected void invoke(byte code, CstRef method) {
-		if (method.getClassName().equals("java/lang/Enum") && method.desc().getName().getString().equals("<init>")) {
+		if (method.className().equals("java/lang/Enum") && method.desc().name().str().equals("<init>")) {
 			assert state == 3;
 			throw OperationDone.INSTANCE;
 		}

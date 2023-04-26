@@ -16,6 +16,7 @@ import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.reflect.FieldAccessor;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.TypedName;
@@ -32,13 +33,11 @@ import static roj.asm.util.AccessFlag.*;
  * @since 2021/5/30 19:59
  */
 public class ConstantData implements IClass {
-	private static final java.lang.reflect.Field N, P;
+	private static final long N, P;
 	static {
 		try {
-			N = ConstantData.class.getDeclaredField("name");
-			N.setAccessible(true);
-			P = ConstantData.class.getDeclaredField("parent");
-			P.setAccessible(true);
+			N = FieldAccessor.u.objectFieldOffset(ConstantData.class.getDeclaredField("name"));
+			P = FieldAccessor.u.objectFieldOffset(ConstantData.class.getDeclaredField("parent"));
 		} catch (NoSuchFieldException e) {
 			throw new RuntimeException(e);
 		}
@@ -176,13 +175,13 @@ public class ConstantData implements IClass {
 		this.version = version;
 		this.access = (char) access;
 		this.nameCst = ((CstClass) cp.array(nameIndex));
-		this.name = nameCst.getValue().getString();
+		this.name = nameCst.name().str();
 		if (parentIndex == 0) {
 			this.parentCst = null;
 			this.parent = Helpers.nonnull();
 		} else {
 			this.parentCst = ((CstClass) cp.array(parentIndex));
-			this.parent = parentCst.getValue().getString();
+			this.parent = parentCst.name().str();
 		}
 	}
 
@@ -203,7 +202,10 @@ public class ConstantData implements IClass {
 	public DynByteBuf getBytes(DynByteBuf w) {
 		ConstantPool cw = this.cp;
 
-		w.putShort(access).putShort(cw.reset(nameCst).getIndex()).putShort(parent == null ? 0 : cw.reset(parentCst).getIndex()).putShort(interfaces.size());
+		w.putShort(access)
+		 .putShort(cw.reset(nameCst).getIndex())
+		 .putShort(parent == null ? 0 : parentCst == null ? (parentCst = cw.getClazz(parent)).getIndex() : cw.reset(parentCst).getIndex())
+		 .putShort(interfaces.size());
 
 		List<CstClass> interfaces = this.interfaces;
 		for (int i = 0; i < interfaces.size(); i++) {
@@ -280,7 +282,7 @@ public class ConstantData implements IClass {
 			if (interfaces.size() > 0) {
 				sb.append(" implements ");
 				for (CstClass c : interfaces) {
-					String i = c.getValue().getString();
+					String i = c.name().str();
 					sb.append(i.substring(i.lastIndexOf('/')+1)).append(", ");
 				}
 				sb.delete(sb.length() - 2, sb.length());
@@ -304,8 +306,8 @@ public class ConstantData implements IClass {
 		return sb.append("\n").toString();
 	}
 
-	public final String name() { return nameCst.getValue().getString(); }
-	public final String parent() { return parentCst == null ? null : parentCst.getValue().getString(); }
+	public final String name() { return nameCst.name().str(); }
+	public final String parent() { return parentCst == null ? null : parentCst.name().str(); }
 
 	public final void modifier(int flag) { access = (char) flag; }
 	public final char modifier() { return access; }
@@ -362,23 +364,17 @@ public class ConstantData implements IClass {
 					((Method) mn).owner = name;
 				}
 			}
-			cp.setUTFValue(nameCst.getValue(), name);
+			cp.setUTFValue(nameCst.name(), name);
 		}
 
-		try {
-			N.set(this, name);
-		} catch (IllegalAccessException ignored) {}
+		FieldAccessor.u.putObject(this, N, name);
 	}
 	@Override
 	public final void parent(String name) {
 		parentCst = name == null ? null : cp.getClazz(name);
 
-		try {
-			P.set(this, name);
-		} catch (IllegalAccessException ignored) {}
+		FieldAccessor.u.putObject(this, P, name);
 	}
-
-	public CstClass getParentCstInternal() { return parentCst; }
 
 	public final int newField(int acc, String name, Type clazz) {
 		return newField(acc,name, TypeHelper.getField(clazz));
@@ -416,7 +412,7 @@ public class ConstantData implements IClass {
 	}
 	public final void cloneable(boolean invokeSuper) {
 		for (int i = 0; i < interfaces.size(); i++) {
-			if (interfaces.get(i).getValue().getString().equals("java/lang/Cloneable")) return;
+			if (interfaces.get(i).name().str().equals("java/lang/Cloneable")) return;
 		}
 
 		CodeWriter c = newMethod(PUBLIC, "clone", "()Ljava/lang/Object;");
@@ -434,13 +430,13 @@ public class ConstantData implements IClass {
 	private class ItfView extends AbstractList<String> {
 		@Override
 		public String get(int index) {
-			return interfaces.get(index).getValue().getString();
+			return interfaces.get(index).name().str();
 		}
 
 		@Override
 		public String set(int index, String obj) {
 			CstClass prev = interfaces.set(index, cp.getClazz(obj));
-			return prev.getValue().getString();
+			return prev.name().str();
 		}
 
 		@Override
@@ -450,7 +446,7 @@ public class ConstantData implements IClass {
 
 		@Override
 		public String remove(int index) {
-			return interfaces.remove(index).getValue().getString();
+			return interfaces.remove(index).name().str();
 		}
 
 		@Override
@@ -469,7 +465,7 @@ public class ConstantData implements IClass {
 		@Override
 		public int indexOf(Object o) {
 			for (int i = 0; i < interfaces.size(); i++) {
-				if (interfaces.get(i).getValue().getString().equals(o)) {
+				if (interfaces.get(i).name().str().equals(o)) {
 					return i;
 				}
 			}

@@ -25,5 +25,5 @@ public final class RawField extends RawNode implements FieldNode {
 	public Type fieldType() { return TypeHelper.parseField(rawDesc()); }
 
 	public int type() { return Parser.FTYPE_SIMPLE; }
-	public String toString() { return AccessFlag.toString(access, AccessFlag.TS_FIELD) + fieldType() + ' ' + name.getString(); }
+	public String toString() { return AccessFlag.toString(access, AccessFlag.TS_FIELD) + fieldType() + ' ' + name.str(); }
 }

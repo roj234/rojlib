@@ -8,7 +8,6 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.task.AsyncTask;
-import roj.concurrent.task.ScheduledTask;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
@@ -68,7 +67,7 @@ public final class FMDMain {
 				CmdUtil.rainbow("FMD 更快的mod开发环境 " + VERSION + " By Roj234");
 				System.out.println();
 
-				PeriodicTask.register(new ScheduledTask(100, 100, 100, () -> {
+				PeriodicTask.executeTimer(() -> {
 					synchronized (CmdUtil.originalOut) {
 						CmdUtil.cursorBackup();
 						CmdUtil.cursorUp(8000);
@@ -77,7 +76,7 @@ public final class FMDMain {
 						CmdUtil.sonic("https://www.github.com/roj234/rojlib");
 						CmdUtil.cursorRestore();
 					}
-				}));
+				}, 100, 100, 100);
 
 				System.out.println();
 				CmdUtil.info("可用指令: build, run, project, edit, ref, at, reobf, deobf, gc, reload, auto");
@@ -281,7 +280,8 @@ public final class FMDMain {
 			File out = index == -1 ? new File(path + "-结果") : new File(path.substring(0, index) + "-结果.jar");
 			ZipFileWriter zfw = new ZipFileWriter(out);
 
-			AsyncTask<Void> resTask = Task.pushRunnable(new ResWriter(zfw, res));
+			AsyncTask<Void> resTask = new AsyncTask<>(new ResWriter(zfw, res));
+			Task.pushTask(resTask);
 
 			m.remap(DEBUG, list);
 			m.getExtendedSuperList().add(m.snapshot(null));

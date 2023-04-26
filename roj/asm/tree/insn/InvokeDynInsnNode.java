@@ -16,8 +16,8 @@ public final class InvokeDynInsnNode extends InsnNode {
 	public InvokeDynInsnNode(CstDynamic ref, int type) {
 		super(Opcodes.INVOKEDYNAMIC);
 		this.tableIdx = ref.tableIdx;
-		this.name = ref.desc().getName().getString();
-		this.desc = ref.desc().getType().getString();
+		this.name = ref.desc().name().str();
+		this.desc = ref.desc().getType().str();
 	}
 
 	public InvokeDynInsnNode(int idx, String name, String desc, int type) {

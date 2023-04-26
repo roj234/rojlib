@@ -34,10 +34,10 @@ public abstract class RawNode implements MoFNode {
 		attributes.toByteArray(w, pool);
 	}
 
-	public final String name() { return name.getString(); }
+	public final String name() { return name.str(); }
 	public final void name(ConstantPool cp, String name) { this.name = Objects.requireNonNull(cp,"cp").getUtf(name); }
 
-	public final String rawDesc() { return type.getString(); }
+	public final String rawDesc() { return type.str(); }
 	public final void rawDesc(ConstantPool cp, String rawDesc) { type = Objects.requireNonNull(cp,"cp").getUtf(rawDesc); }
 
 	public final void modifier(int flag) { access = (char) flag; }

@@ -2,9 +2,11 @@ package roj.net;
 
 import roj.collect.MyBitSet;
 import roj.io.IOUtil;
+import roj.reflect.FieldAccessor;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.ByteList;
+import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -16,9 +18,17 @@ import java.net.MalformedURLException;
  */
 public class URIUtil {
 	public static String decodeURI(CharSequence src) throws MalformedURLException {
-		return decodeURI(src, IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf()).toString();
+		CharList sb = IOUtil.ddLayeredCharBuf();
+		ByteList bb = IOUtil.ddLayeredByteBuf();
+
+		try {
+			return decodeURI(src, sb, bb).toString();
+		} finally {
+			sb._free();
+			bb._free();
+		}
 	}
-	public static CharList decodeURI(CharSequence src, CharList sb, ByteList tmp) throws MalformedURLException {
+	public static <T extends Appendable> T decodeURI(CharSequence src, T sb, DynByteBuf tmp) throws MalformedURLException {
 		tmp.clear();
 
 		int len = src.length();
@@ -64,14 +74,18 @@ public class URIUtil {
 
 						if (i >= len) return sb;
 						c = src.charAt(i);
-					} catch (IOException e) {
+					} catch (Exception e) {
 						// not compatible with RFC 2396
 						throw new MalformedURLException("无法作为UTF8解析:" + e.getMessage());
 					}
 					break;
 			}
 
-			sb.append(c);
+			try {
+				sb.append(c);
+			} catch (IOException e) {
+				Helpers.athrow(e);
+			}
 			i++;
 		}
 		return sb;
@@ -80,20 +94,40 @@ public class URIUtil {
 	public static final MyBitSet URI_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!@#$&*()_+-=/?.,:;'");
 	public static final MyBitSet URI_COMPONENT_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!*()_-.'");
 
-	public static CharList encodeURI(CharSequence src) {
-		return encodeURI(src, IOUtil.getSharedByteBuf(), IOUtil.getSharedCharBuf(), URI_SAFE);
+	public static String encodeURI(CharSequence src) {
+		return encodeURI(IOUtil.ddLayeredCharBuf(), src).toStringAndFree();
 	}
-	public static CharList encodeURIComponent(CharSequence src) {
-		return encodeURI(src, IOUtil.getSharedByteBuf(), IOUtil.getSharedCharBuf(), URI_COMPONENT_SAFE);
+	public static String encodeURIComponent(CharSequence src) {
+		return encodeURIComponent(IOUtil.ddLayeredCharBuf(), src).toStringAndFree();
 	}
-	public static <T extends Appendable> T encodeURI(CharSequence src, ByteList tmpib, T ob, MyBitSet safe) {
-		tmpib.clear(); tmpib.putUTFData(src);
-
+	public static <T extends Appendable> T encodeURI(T sb, CharSequence src) {
+		ByteList bb = IOUtil.ddLayeredByteBuf();
 		try {
-			for (int i = 0; i < tmpib.wIndex(); i++) {
-				int j = tmpib.list[i]&0xFF;
-				if (safe.contains(j)) ob.append((char) j);
-				else ob.append('%').append(Integer.toString(j, 16));
+			return encodeURI(bb.putUTFData(src), sb, URI_SAFE);
+		} finally {
+			bb._free();
+		}
+	}
+	public static <T extends Appendable> T encodeURIComponent(T sb, CharSequence src) {
+		ByteList bb = IOUtil.ddLayeredByteBuf();
+		try {
+			return encodeURI(bb.putUTFData(src), sb, URI_COMPONENT_SAFE);
+		} finally {
+			bb._free();
+		}
+	}
+	public static <T extends Appendable> T encodeURI(DynByteBuf ib, T ob, MyBitSet safe) {
+		try {
+			Object ref = ib.array();
+			long off = ib._unsafeAddr();
+			long end = off + ib.readableBytes();
+
+			while (off < end) {
+				int c = FieldAccessor.u.getByte(ref, off++)&0xFF;
+				ib.rIndex++;
+
+				if (safe.contains(c)) ob.append((char) c);
+				else ob.append('%').append(Integer.toString(c, 16));
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);

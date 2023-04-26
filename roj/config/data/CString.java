@@ -90,12 +90,12 @@ public final class CString extends CEntry {
 
 	@Override
 	public CharList toJSON(CharList sb, int depth) {
-		return value == null ? sb.append("null") : ITokenizer.addSlashes(value, sb.append('"')).append('"');
+		return value == null ? sb.append("null") : ITokenizer.addSlashes(sb.append('"'), value).append('"');
 	}
 
 	@Override
 	protected CharList toINI(CharList sb, int depth) {
-		return IniParser.literalSafe(value) ? sb.append(value) : ITokenizer.addSlashes(value, sb.append('"')).append('"');
+		return IniParser.literalSafe(value) ? sb.append(value) : ITokenizer.addSlashes(sb.append('"'), value).append('"');
 	}
 
 	@Override
@@ -110,7 +110,7 @@ public final class CString extends CEntry {
 
 	@Override
 	protected void toBinary(DynByteBuf w, VinaryParser struct) {
-		w.put((byte) Type.STRING.ordinal()).putVStr(value);
+		w.put((byte) Type.STRING.ordinal()).putZhCn(value);
 	}
 
 	@Override

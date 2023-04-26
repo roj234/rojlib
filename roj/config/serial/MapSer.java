@@ -1,35 +1,37 @@
 package roj.config.serial;
 
+import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.util.Helpers;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntFunction;
 
 /**
  * @author Roj233
  * @since 2022/1/11 17:45
  */
 final class MapSer extends Adapter {
-	final Adapter targetSer;
+	private final Adapter valueType;
+	private final IntFunction<Map<String,?>> newMap;
 
-	MapSer(Adapter type) {
-		this.targetSer = type;
-	}
+	MapSer(Adapter type, IntFunction<Map<String,?>> newMap) { this.valueType = type; this.newMap = newMap; }
 
 	@Override
-	Adapter withGenericType(SerializerManager man, List<IType> genericType) {
+	Adapter withGenericType(SerializerFactory man, List<IType> genericType) {
 		if (genericType.size() != 2) throw new IllegalArgumentException(genericType.toString());
 
-		Adapter genSer = man.get(genericType.get(1));
-		return genSer == null ? this : new MapSer(genSer);
+		Adapter value = man.get(genericType.get(1));
+		return value == null ? this : new MapSer(value, newMap);
 	}
 
 	@Override
 	protected void map(AdaptContext ctx, int size) {
 		ctx.fieldId = -1;
-		ctx.ref = size < 0 ? new MyHashMap<>() : new MyHashMap<>(size);
+		ctx.ref = newMap != null ? newMap.apply(size) : size < 0 ? new MyHashMap<>() : new MyHashMap<>(size);
 	}
 
 	@Override
@@ -38,7 +40,7 @@ final class MapSer extends Adapter {
 		ctx.serCtx = key;
 
 		ctx.fieldState = 0;
-		ctx.pushHook(0, targetSer);
+		ctx.pushHook(0, valueType);
 	}
 
 	@Override
@@ -54,6 +56,10 @@ final class MapSer extends Adapter {
 
 	@Override
 	boolean valueIsMap() { return true; }
+
+	// empty map
+	@Override
+	int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return 1; }
 
 	@Override
 	void write(CVisitor c, Object o) {
@@ -75,7 +81,7 @@ final class MapSer extends Adapter {
 			} catch (ClassCastException e) {
 				throw new IllegalArgumentException("MapSer的map必须用字符串key");
 			}
-			targetSer.write(c, entry.getValue());
+			valueType.write(c, entry.getValue());
 		}
 	}
 }

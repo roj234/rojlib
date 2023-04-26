@@ -3,7 +3,6 @@ package roj.net.upnp;
 import roj.collect.MyHashMap;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.task.AsyncTask;
-import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.XMLParser;
 import roj.config.data.XElement;
@@ -11,8 +10,7 @@ import roj.config.data.XEntry;
 import roj.io.IOUtil;
 import roj.net.http.Headers;
 import roj.net.http.HttpHead;
-import roj.net.http.IHttpClient;
-import roj.net.http.SyncHttpClient;
+import roj.net.http.HttpRequest;
 import roj.text.TextUtil;
 import roj.text.UTFCoder;
 import roj.util.ByteList;
@@ -220,19 +218,16 @@ public final class UPnPDevice {
 			}
 		}
 
-		IHttpClient client = IHttpClient.create(IHttpClient.V1_1);
-		client.url(new URL(loc)).header("Connection", "close");
+		HttpRequest query = HttpRequest.nts().url(new URL(loc)).header("Connection", "close");
 
 		int slash = loc.indexOf('/', 7);
 		if (slash >= 0) loc = loc.substring(0, slash);
 
+		// todo should move up ?
 		String loc1 = loc;
 
-		SyncHttpClient sbr = IHttpClient.syncWait(client, 15000, 1000);
-		sbr.waitFor();
-
 		List<Service> services = device.services = new ArrayList<>();
-		XElement xml = XMLParser.parses(sbr.getResult(), JSONParser.NO_EOF);
+		XElement xml = XMLParser.parses(query.execute().str());
 		List<XElement> xmlServices = xml.getAllByTagName("service");
 		for (int i = 0; i < xmlServices.size(); i++) {
 			XElement xServ = xmlServices.get(i);
@@ -303,24 +298,15 @@ public final class UPnPDevice {
 			sb.append("</m:").append(action).append("></SOAP-ENV:Body></SOAP-ENV:Envelope>");
 			ByteList data = IOUtil.getSharedByteBuf().putUTFData(sb);
 
-			IHttpClient client = IHttpClient.create(IHttpClient.V1_1);
-			Headers map = client.url(new URL(controlURL)).method("POST").headers();
-			map.clear();
-			map.put("Content-Type", "text/xml");
-			map.put("SOAPAction", "\"" + serviceType + "#" + action + "\"");
-			map.put("Connection", "Close");
-			map.put("Content-Length", String.valueOf(data.wIndex()));
+			HttpRequest query = HttpRequest.nts()
+				.url(new URL(controlURL))
+				.header("Content-Type", "text/xml")
+				.header("SOAPAction", "\"" + serviceType + "#" + action + "\"")
+				.header("Connection", "Close")
+				.header("Content-Length", String.valueOf(data.wIndex()))
+				.body(new ByteList(data.toByteArray()));
 
-			client.body(new ByteList(data.toByteArray()));
-
-			SyncHttpClient sbr = IHttpClient.syncWait(client, 15000, 1000);
-			try {
-				sbr.waitFor();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-
-			XElement header = XMLParser.parses(sbr.getResult(), JSONParser.NO_EOF | XMLParser.LENIENT);
+			XElement header = XMLParser.parses(query.execute().bytes(), XMLParser.LENIENT);
 
 			XElement elm = header.child(0).child(0).child(0).asElement();
 			if (!elm.tag.startsWith(action, 2)) {

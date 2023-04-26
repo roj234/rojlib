@@ -1,10 +1,12 @@
 package roj.io.buf;
 
 import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
-import roj.util.*;
+import roj.util.ByteList;
+import roj.util.DirectByteList;
+import roj.util.DynByteBuf;
+import roj.util.NativeMemory;
 
 /**
  * @author Roj233
@@ -16,8 +18,6 @@ public class BitmapBPool implements BPool {
 	private byte[] heap;
 
 	private final BitMap dUsed, hUsed;
-	private final SimpleList<DirectByteList.Slice> dBuf = new SimpleList<>();
-	private final SimpleList<ByteList.Slice> hBuf = new SimpleList<>();
 
 	final class BitMap extends MyBitSet {
 		int min, max;
@@ -113,66 +113,37 @@ public class BitmapBPool implements BPool {
 	}
 
 	@Override
-	public String toString() {
-		return "BitmapPool{" + "D={" + dUsed + "}, H={" + hUsed + "}, ObjPool: D/H/Max="+dBuf.size()+'/'+hBuf.size()+'/'+piece/2+", MaxSize="+capacity+'}';
-	}
+	public String toString() { return "BitmapPool{" + "D={" + dUsed + "}, H={" + hUsed + "}, ChunkCount="+piece+", MaxSize="+capacity+'}'; }
 
 	@Override
-	public DynByteBuf allocate(boolean direct, int cap) {
-		if (cap > capacity >> 1) return null;
+	public boolean allocate(boolean direct, int cap, PooledBuffer cb) {
+		if (cap > capacity >> 1) return false;
 
 		cap = (cap+chunk-1)& -chunk;
 
 		int off = (direct ? dUsed : hUsed).allocate(cap);
-		if (off < 0) return null;
+		if (off < 0) return false;
 
 		if (direct) {
-			DirectByteList.Slice db;
-			if (dBuf.isEmpty()) {
-				if (directAddr < 0) directAddr = mem.allocate(capacity);
-				db = new DirectByteList.Slice();
-			} else {
-				db = dBuf.remove(dBuf.size() - 1);
-			}
-			return db.set(mem, directAddr + off * chunk, cap);
+			if (directAddr < 0) directAddr = mem.allocate(capacity);
+			cb.set(mem, directAddr + off*chunk, cap);
 		} else {
-			ByteList.Slice db;
-			if (hBuf.isEmpty()) {
-				if (heap == null) heap = new byte[capacity];
-				db = new ByteList.Slice();
-			} else {
-				db = hBuf.remove(hBuf.size() - 1);
-			}
-			return db.setW(heap, off * chunk, cap);
+			if (heap == null) heap = new byte[capacity];
+			cb.set(heap, off*chunk, cap);
 		}
+		return true;
 	}
 
 	@Override
-	public void reserve(DynByteBuf buf) {
+	public boolean reserve(DynByteBuf buf) {
 		if (buf.isDirect()) {
 			DirectByteList.Slice b = (DirectByteList.Slice) buf;
-
 			dUsed.release((int) ((buf.address() - directAddr) / chunk), b.capacity());
-			b.set(null, 0, 0);
-			if (dBuf.size() < piece/2) dBuf.add(b);
 		} else {
 			ByteList.Slice b = (ByteList.Slice) buf;
-
 			hUsed.release(b.arrayOffset() / chunk, b.capacity());
-			b.setW(ArrayCache.BYTES, 0, 0);
-			if (hBuf.size() < piece/2) hBuf.add(b);
 		}
-	}
-
-	@Override
-	public boolean isPooled(DynByteBuf buf) {
-		if (buf.isDirect()) {
-			long addr = buf.address();
-			return directAddr > 0 && addr >= directAddr && addr < directAddr+mem.length();
-		} else if (buf.hasArray()) {
-			return buf.array() == heap;
-		}
-		return false;
+		return true;
 	}
 
 	@Override

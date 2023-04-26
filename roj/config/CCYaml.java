@@ -27,6 +27,7 @@ public final class CCYaml extends YAMLParser implements CCParser {
 			throw e.addPath("$");
 		} finally {
 			cc = null;
+			input = null;
 		}
 		return cv;
 	}

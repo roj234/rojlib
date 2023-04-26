@@ -46,18 +46,18 @@ public class ACalendar {
 
 	public int[] get(long unix) {
 		if (timezone != null) unix += timezone.getOffset(unix);
-		return get(unix, buf, cache);
+		return computeTime(unix, buf, cache);
 	}
 
 	public static int[] get1() {
-		return get(System.currentTimeMillis(), new int[TOTAL], null);
+		return computeTime(System.currentTimeMillis(), new int[TOTAL], null);
 	}
 
 	public static int[] get1(long unix) {
-		return get(unix, new int[TOTAL], null);
+		return computeTime(unix, new int[TOTAL], null);
 	}
 
-	public static int[] get(long date, int[] buf, long[] cache) {
+	private static int[] computeTime(long date, int[] buf, long[] cache) {
 		if (buf.length < 9) throw new ArrayIndexOutOfBoundsException(6);
 
 		date = His(date, buf);
@@ -101,8 +101,7 @@ public class ACalendar {
 
 		return buf;
 	}
-
-	public static long His(long date, int[] buf) {
+	private static long His(long date, int[] buf) {
 		if (date > 0) {
 			buf[MILLISECOND] = (int) (date % 1000);
 			date /= 1000;
@@ -131,8 +130,7 @@ public class ACalendar {
 
 		return date;
 	}
-
-	public static int yearSinceUnix(long date) {
+	private static int yearSinceUnix(long date) {
 		int years = 400 * (int) (date / 146097L);
 		int datei = (int) (date % 146097L);
 
@@ -188,17 +186,9 @@ public class ACalendar {
 		}
 	}
 
-	public static boolean isRenYear(int year) {
-		return (year & 3) == 0 && (year % 100 != 0 || year % 400 == 0);
-	}
-
-	public static long dayOfYear(int year, int month, int day) {
-		return day + (long) (SUMMED_DAYS[month] + (month > 2 && isRenYear(year) ? 1 : 0));
-	}
-
-	public static int dayOfWeek(long day) {
-		return (int) (day % 7L) + 1;
-	}
+	private static boolean isRenYear(int year) { return (year & 3) == 0 && (year % 100 != 0 || year % 400 == 0); }
+	private static long dayOfYear(int year, int month, int day) { return day + (long) (SUMMED_DAYS[month] + (month > 2 && isRenYear(year) ? 1 : 0)); }
+	private static int dayOfWeek(long day) { return (int) (day % 7L) + 1; }
 
 	/**
 	 * 1970 to 2030

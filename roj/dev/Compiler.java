@@ -1,15 +1,13 @@
 package roj.dev;
 
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
-import roj.asm.visitor.CodeWriter;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
-import roj.reflect.ClassDefiner;
+import roj.reflect.FastInit;
+import roj.reflect.Proxy;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.ui.CmdUtil;
@@ -26,7 +24,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * @author Roj234
@@ -168,76 +166,35 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 				}
 			}
 		}
-		Consumer<Object[]> c;
-		try {
-			c = Helpers.cast(delegationClass.newInstance());
-		} catch (InstantiationException | IllegalAccessException e) {
-			throw new RuntimeException(e);
-		}
-		c.accept(par);
-		return Helpers.cast(c);
+		return delegationClass.apply(par);
 	}
 
-	private static volatile Class<?> delegationClass;
-	private static Class<?> createDelegation() throws Exception {
-		Method m1 = StandardJavaFileManager.class.getMethod("getJavaFileForOutput", JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class);
+	private static volatile Function<Object[], StandardJavaFileManager> delegationClass;
+	private static Function<Object[], StandardJavaFileManager> createDelegation() throws Exception {
+		Method proxyGetOutput = StandardJavaFileManager.class.getMethod("getJavaFileForOutput", JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class);
 
 		ConstantData data = new ConstantData();
 		data.name("roj/dev/Compiler$SFMHelper");
-		String jfm = "javax/tools/StandardJavaFileManager";
-		data.interfaces().add(jfm);
-		data.interfaces().add("java/util/function/Consumer");
 
-		data.newField(0, "dg", new Type(jfm));
-		data.newField(0, "bo", new Type("java/util/List"));
-		data.newField(0, "aa", new Type("java/lang/String"));
+		int listId = data.newField(0, "bo", new Type("java/util/List"));
+		int nameId = data.newField(0, "aa", new Type("java/lang/String"));
 
-		CodeWriter c = data.newMethod(AccessFlag.PUBLIC | AccessFlag.FINAL, "accept", "(Ljava/lang/Object;)V");
-		c.visitSize(3, 3);
-
-		c.one(Opcodes.ALOAD_1);
-		c.clazz(Opcodes.CHECKCAST, "[Ljava/lang/Object;");
-		c.one(Opcodes.ASTORE_1);
-
-		for (int i = 0; i < 3; i++) {
-			c.one(Opcodes.ALOAD_0);
-			c.one(Opcodes.ALOAD_1);
-			c.ldc(i);
-			c.one(Opcodes.AALOAD);
-			c.clazz(Opcodes.CHECKCAST, data.fields.get(i).fieldType().owner);
-			c.field(Opcodes.PUTFIELD, data, i);
-		}
-
-		c.one(Opcodes.RETURN);
-
-		data.npConstructor();
-
-		for (Method m : StandardJavaFileManager.class.getMethods()) {
-			String desc = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
-			CodeWriter cw = data.newMethod(AccessFlag.PUBLIC | AccessFlag.FINAL, m.getName(), desc);
-			int s = TypeHelper.paramSize(desc)+1;
-			cw.visitSize(s,s);
-			cw.one(Opcodes.ALOAD_0);
-			cw.field(Opcodes.GETFIELD, data, 0);
-			List<Type> par = cw.mn.parameters();
-			for (int i = 0; i < par.size(); i++) {
-				cw.var(par.get(i).shiftedOpcode(Opcodes.ILOAD, false), i+1);
-			}
-			if (m.equals(m1)) {
+		Proxy.proxyClass(data, new Class<?>[] {StandardJavaFileManager.class}, (m, cw) -> {
+			if (m == proxyGetOutput) {
+				int s = TypeHelper.paramSize(cw.mn.rawDesc())+1;
 				cw.visitSize(s+2,s);
 				cw.one(Opcodes.ALOAD_0);
-				cw.field(Opcodes.GETFIELD, data, 1);
+				cw.field(Opcodes.GETFIELD, data, listId);
 				cw.one(Opcodes.ALOAD_0);
-				cw.field(Opcodes.GETFIELD, data, 2);
+				cw.field(Opcodes.GETFIELD, data, nameId);
 				cw.invoke(Opcodes.INVOKESTATIC, "roj/dev/Compiler", "proxyGetOutput", TypeHelper.class2asm(new Class<?>[]{StandardJavaFileManager.class, JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class, List.class, String.class}, JavaFileObject.class));
-			} else {
-				cw.invokeItf(jfm, cw.mn.name(), desc);
+				return true;
 			}
-			cw.one(cw.mn.returnType().shiftedOpcode(Opcodes.IRETURN, true));
-			cw.finish();
-		}
+			return false;
+		}, listId, nameId);
 
-		return ClassDefiner.INSTANCE.defineClassC("roj.dev.Compiler$SFMHelper", Parser.toByteArrayShared(data));
+		FastInit.prepare(data);
+		return Helpers.cast(FastInit.make(data));
 	}
 
 	public static JavaFileObject proxyGetOutput(StandardJavaFileManager delegation,

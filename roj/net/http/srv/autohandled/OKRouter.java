@@ -5,7 +5,7 @@ import roj.asm.cst.ConstantPool;
 import roj.asm.cst.CstString;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.anno.AnnValString;
+import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.SwitchEntry;
@@ -22,13 +22,15 @@ import roj.collect.TrieTree;
 import roj.config.CCJson;
 import roj.config.JSONParser;
 import roj.config.serial.CAdapter;
-import roj.config.serial.SerializerManager;
+import roj.config.serial.SerializerFactory;
+import roj.config.serial.SerializerFactoryFactory;
 import roj.mapper.ParamNameMapper;
 import roj.math.MutableInt;
 import roj.net.http.Action;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.srv.*;
 import roj.reflect.FastInit;
+import roj.util.TypedName;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -52,6 +54,7 @@ public class OKRouter implements Router {
 	private static final String COPYWITH_DESC = TypeHelper.class2asm(new Class<?>[] {int.class, Object.class}, Dispatcher.class);
 
 	private static final AtomicInteger seq = new AtomicInteger();
+	private static final TypedName<ASet> RouteAdapterKey = new TypedName<>("or:router");
 
 	// ASet or ASet[]
 	private final TrieTree<Object> route = new TrieTree<>();
@@ -115,7 +118,7 @@ public class OKRouter implements Router {
 			} else {
 				handlers.putInt(a, id++);
 				if (a.getString("value") == null)
-					a.put("value", new AnnValString(mn.name().replace("__", "/")));
+					a.put("value", AnnVal.valueOf(mn.name().replace("__", "/")));
 			}
 
 			Label self = cw.label();
@@ -175,6 +178,7 @@ public class OKRouter implements Router {
 			Annotation a1 = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Accepts");
 			if (a1 != null) a.put("accepts", a1.values.get("value"));
 		}
+		if (seg.def == null) throw new IllegalArgumentException(fn.concat("没有任何处理函数"));
 
 		Dispatcher ah = (Dispatcher) FastInit.make(hndInst);
 		for (int i = 0; i < handlers.size(); i++) {
@@ -410,8 +414,8 @@ public class OKRouter implements Router {
 		if (len == 0) {
 			set = getASet(route.get(""), req.action());
 		} else {
-			Find find = (Find) req.threadLocalCtx().get("or:fn");
-			if (find == null) req.threadLocalCtx().put("or:fn", find = new Find());
+			Find find = (Find) req.threadContext().get("or:fn");
+			if (find == null) req.threadContext().put("or:fn", find = new Find());
 
 			find.action = req.action();
 			find.maxLen = len;
@@ -424,7 +428,7 @@ public class OKRouter implements Router {
 
 		if (set == null || ((1 << req.action()) & set.accepts) == 0) return;
 
-		req.ctx().put("or:router", set);
+		req.connection().attachment(RouteAdapterKey, set);
 		if (set.prec != null) {
 			Object ret = set.prec.invoke(req, req.handler(), cfg);
 			if (ret instanceof Response) {
@@ -435,7 +439,7 @@ public class OKRouter implements Router {
 
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws IOException {
-		ASet set = (ASet) req.ctx().remove("or:router");
+		ASet set = req.connection().attachment(RouteAdapterKey, null);
 		if (set == null) return StringResponse.httpErr(403);
 
 		Object ret = set.req.invoke(req, rh, null);
@@ -445,14 +449,14 @@ public class OKRouter implements Router {
 	}
 
 	private static final class LazyAdapter {
-		static final SerializerManager ADAPTER_FACTORY = new SerializerManager();
+		static final SerializerFactory ADAPTER_FACTORY = SerializerFactoryFactory.create();
 	}
 
 	public static Object _JAdapt(Request req, String type) throws IllegalRequestException {
 		if (req.postBuffer() == null) throw new IllegalRequestException(400, "Not post");
 
-		CCJson jsonp = (CCJson) req.threadLocalCtx().get("or:jsonp");
-		if (jsonp == null) req.threadLocalCtx().put("or:jsonp", jsonp = new CCJson());
+		CCJson jsonp = (CCJson) req.threadContext().get("or:jsonp");
+		if (jsonp == null) req.threadContext().put("or:jsonp", jsonp = new CCJson());
 
 		CAdapter<?> adapter = LazyAdapter.ADAPTER_FACTORY.adapter(Signature.parseGeneric(type));
 		try {

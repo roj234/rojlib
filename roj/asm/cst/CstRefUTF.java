@@ -9,15 +9,10 @@ import roj.util.DynByteBuf;
 public abstract class CstRefUTF extends Constant {
 	private CstUTF value;
 
-	CstRefUTF(CstUTF v) {
-		this.value = v;
-	}
-
+	CstRefUTF(CstUTF v) { this.value = v; }
 	CstRefUTF() {}
 
-	public CstUTF getValue() {
-		return value;
-	}
+	public CstUTF name() { return value; }
 
 	public final void setValue(CstUTF value) {
 		if (value == null)
@@ -31,7 +26,7 @@ public abstract class CstRefUTF extends Constant {
 	}
 
 	public final String toString() {
-		return super.toString() + " 引用["+value.getIndex()+"] " + value.getString();
+		return super.toString() + " 引用["+value.getIndex()+"] " + value.str();
 	}
 
 	public final int hashCode() {
@@ -45,7 +40,7 @@ public abstract class CstRefUTF extends Constant {
 	public final boolean equals0(CstRefUTF o) {
 		if (o == this) return true;
 		if (o.getClass() != getClass()) return false;
-		return value.getString().equals(o.value.getString());
+		return value.str().equals(o.value.str());
 	}
 
 	@Override

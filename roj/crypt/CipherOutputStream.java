@@ -23,21 +23,21 @@ public class CipherOutputStream extends FilterOutputStream {
 	private final ByteList o;
 	private BufferPool pool;
 
-	protected final CipheR c;
+	protected final RCipherSpi c;
 	protected final int block;
 
-	public CipherOutputStream(OutputStream out, CipheR c) {
+	public CipherOutputStream(OutputStream out, RCipherSpi c) {
 		super(out);
 		this.c = c;
 
-		if (c.getBlockSize() != 0) {
+		if (c.engineGetBlockSize() != 0) {
 			int len = BUFFER_SIZE;
-			while (c.getCryptSize(len) > BUFFER_SIZE)
-				len -= c.getBlockSize();
+			while (c.engineGetOutputSize(len) > BUFFER_SIZE)
+				len -= c.engineGetBlockSize();
 
 			pool = BufferPool.localPool();
 			o = (ByteList) pool.buffer(false, len);
-			i.setW(o.array(),o.arrayOffset(),o.capacity());
+			i.set(o.array(),o.arrayOffset(),o.capacity());
 			block = len;
 		} else {
 			o = new ByteList.Slice();
@@ -54,12 +54,10 @@ public class CipherOutputStream extends FilterOutputStream {
 		if (out == null) throw new IOException("Stream closed");
 
 		try {
-			ByteList.Slice ib = i;
 			ByteList ob = o;
 
 			if (block == 0) {
-				ib.setW(b, off, len).wIndex(len);
-				c.crypt(ib, ((ByteList.Slice)ob).setW(b, off, len));
+				c.crypt(i.setR(b, off, len), ((ByteList.Slice)ob).set(b, off, len));
 				out.write(b, off, len);
 				return;
 			}
@@ -84,6 +82,8 @@ public class CipherOutputStream extends FilterOutputStream {
 	}
 
 	public void flush() throws IOException {
+		if (block == 0) return;
+
 		ByteList.Slice ib = i;
 		ByteList ob = o;
 		ib.clear();
@@ -98,7 +98,7 @@ public class CipherOutputStream extends FilterOutputStream {
 	public synchronized void close() throws IOException {
 		if (out == null) return;
 		try (OutputStream out = this.out) {
-			if (o.isReadable()) {
+			if (block != 0 && o.isReadable()) {
 				flush();
 				try {
 					finalBlock(o);
@@ -119,7 +119,7 @@ public class CipherOutputStream extends FilterOutputStream {
 	}
 
 	protected void finalBlock(ByteList o) throws Exception {
-		int blockSize = c.getBlockSize();
+		int blockSize = c.engineGetBlockSize();
 		if (blockSize > 0) {
 			int off = o.wIndex();
 			int end = (off+blockSize-1)/blockSize*blockSize;
@@ -130,15 +130,13 @@ public class CipherOutputStream extends FilterOutputStream {
 			// zero padding
 			byte[] buf = o.array();
 			while (off < end) buf[off++] = 0;
-
-			flush();
-
-			if (o.isReadable()) throw new IOException("data remain:"+o.dump());
-		} else {
-			// filter mode: may grab some byte and process, left remain unchanged
-			i.clear();
-			c.crypt(o, i);
-			o.writeToStream(out);
 		}
+
+		// filter mode: may grab some byte and process, left remain unchanged
+		i.clear();
+		c.cryptFinal(o, i);
+		i.writeToStream(out);
+
+		if (o.isReadable()) throw new IOException("data remain:"+o.dump());
 	}
 }
