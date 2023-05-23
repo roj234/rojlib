@@ -385,6 +385,7 @@ public class MyBitSet implements Iterable<Integer> {
 		i = (i & 0x0f0f0f0f0f0f0f0fL) << 4 | (i >>> 4) & 0x0f0f0f0f0f0f0f0fL;
 		return i;
 	}
+	public int byteLength() { return (max+8) / 8; }
 
 	public class FItr implements IntIterator {
 		int stage = INITIAL;

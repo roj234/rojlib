@@ -16,7 +16,8 @@ import static roj.reflect.FieldAccessor.u;
  * @since 2021/5/29 20:45
  */
 public class DirectByteList extends DynByteBuf {
-	static final boolean BE_CPU = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
+	private static final boolean BE_CPU = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
+	private static final boolean SAFER_BUT_NOT_TOTALLY_SAFE_TS_EXPAND = true;
 
 	NativeMemory nm;
 	volatile long address;
@@ -90,24 +91,28 @@ public class DirectByteList extends DynByteBuf {
 
 	public void ensureCapacity(int required) {
 		if (length < required) {
-			if (nm == null) throw new BufferOverflowException();
+			if (nm == null) throw new IndexOutOfBoundsException("cannot hold "+required+"bytes in this buffer("+length+")");
 
 			required = length == 0 ? Math.max(required, 1024) : ((required * 3) >>> 1) + 1;
-			if (!nm.expandInline(required)) {
+			if (SAFER_BUT_NOT_TOTALLY_SAFE_TS_EXPAND) {
 				int len = wIndex;
 				wIndex = 0;
-				long prevAddr = this.address;
-				address = 0;
+				NativeMemory prevNM = nm;
+				long prevAddr = address;
 
 				NativeMemory mem = new NativeMemory();
 				long addr = mem.allocate(required);
-				copyToArray(prevAddr, null, 0, addr, Math.min(required, len));
+				u.copyMemory(prevAddr, addr, Math.min(required, len));
 
 				if (wIndex != 0) throw new ConcurrentModificationException();
 				wIndex = len;
 
 				address = addr;
 				nm = mem;
+
+				prevNM.release();
+			} else {
+				address = nm.resize(required);
 			}
 			length = required;
 		}
@@ -409,7 +414,7 @@ public class DirectByteList extends DynByteBuf {
 		long addr = testWI(i, len)+address;
 
 		ArrayCache cache = ArrayCache.getDefaultCache();
-		char[] ob = cache.getCharArray(Math.max(len/2,128), false);
+		char[] ob = cache.getCharArray(len, false);
 		int j = 0;
 		while (len-- > 0) ob[j++] = (char)u.getByte(addr++);
 

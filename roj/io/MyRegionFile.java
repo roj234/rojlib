@@ -88,7 +88,6 @@ public class MyRegionFile implements AutoCloseable {
 
 		int headerBytes = fileCap << 2;
 		ByteList tmp = IOUtil.getSharedByteBuf();
-		tmp.ensureCapacity(headerBytes);
 
 		raf.seek(0L);
 		raf.read(tmp, headerBytes);

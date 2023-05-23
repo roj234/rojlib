@@ -19,8 +19,8 @@ public class ToXEntry implements CVisitor {
 		XML_ATTR_KEY = 5,
 		XML_ATTR_VAL = 6;
 
-	private final List<XElement> stack = new SimpleList<>();
-	private XElement stackBottom = new XHeader();
+	private final List<Element> stack = new SimpleList<>();
+	private Element stackBottom = new Document();
 
 	private String key;
 
@@ -31,7 +31,7 @@ public class ToXEntry implements CVisitor {
 
 	public final void value(String str) {
 		switch (state) {
-			case XML_CHILD: stackBottom.add(new XText(str)); break;
+			case XML_CHILD: stackBottom.add(new Text(str)); break;
 			case XML_NAME:
 				state = XML_ATTR;
 				if (stack.size() >= maxDepth) throw new IllegalStateException("exceeds max depth " + maxDepth);
@@ -48,7 +48,7 @@ public class ToXEntry implements CVisitor {
 	public final void valueNull() { add(CNull.NULL); }
 	private void add(CEntry v) {
 		if (state == XML_CHILD) {
-			stackBottom.add(new XText(v.asString()));
+			stackBottom.add(new Text(v.asString()));
 			return;
 		}
 
@@ -62,7 +62,7 @@ public class ToXEntry implements CVisitor {
 	public final void valueList() {
 		switch (state) {
 			case XML_ATTR:
-				if (stackBottom instanceof XHeader) {
+				if (stackBottom instanceof Document) {
 					state = XML_NAME;
 					break;
 				}
@@ -83,7 +83,7 @@ public class ToXEntry implements CVisitor {
 	public final void pop() {
 		switch (state) {
 			case XML_ATTR_KEY:
-				if (stackBottom instanceof XHeader) {
+				if (stackBottom instanceof Document) {
 					state = XML_CHILD;
 					break;
 				}
@@ -94,7 +94,7 @@ public class ToXEntry implements CVisitor {
 					state = -1; // END
 					break;
 				}
-				XElement child = stackBottom;
+				Element child = stackBottom;
 				stackBottom = stack.remove(stack.size()-1);
 				beforePop(child, stackBottom);
 				state = XML_CHILD;
@@ -106,23 +106,23 @@ public class ToXEntry implements CVisitor {
 	@Override
 	public void vsopt(String k, Object v) {
 		switch (k) {
-			case "xml:headless": ((XHeader)stackBottom).headless(); break;
+			case "xml:headless": ((Document)stackBottom).headless(); break;
 			case "xml:short_tag": stackBottom.shortTag = (boolean) v; break;
 			case "xml:cdata":
-				List<XEntry> children = stackBottom.childrenForRead();
-				((XText)children.get(children.size()-1)).CDATA_flag = (boolean) v ? XText.ALWAYS_ENCODE : XText.NEVER_ENCODE;
+				List<Node> children = stackBottom.children();
+				((Text)children.get(children.size()-1)).nodeType = (boolean) v ? Node.CDATA : Node.TEXT;
 			break;
 		}
 	}
 
-	protected XElement createElement(String str) { return new XElement(str); }
-	protected void beforePop(XElement child, XElement parent) {}
+	protected Element createElement(String str) { return new Element(str); }
+	protected void beforePop(Element child, Element parent) {}
 
-	public final XElement get() { return stackBottom; }
+	public final Element get() { return stackBottom; }
 
 	public final ToXEntry reset() {
 		stack.clear();
-		stackBottom = new XHeader();
+		stackBottom = new Document();
 		state = XML_BEGIN;
 		key = null;
 		return this;

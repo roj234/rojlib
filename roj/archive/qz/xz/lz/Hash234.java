@@ -11,7 +11,9 @@
 package roj.archive.qz.xz.lz;
 
 import roj.crypt.CRCAny;
-import roj.util.ArrayCache;
+import roj.util.NativeMemory;
+
+import static roj.reflect.FieldAccessor.u;
 
 final class Hash234 {
 	private static final int HASH_2_SIZE = 1 << 10;
@@ -20,16 +22,11 @@ final class Hash234 {
 	private static final int HASH_3_SIZE = 1 << 16;
 	private static final int HASH_3_MASK = HASH_3_SIZE - 1;
 
-	private final int hash4Size;
-	private final int hash4Mask;
+	private final int hash4Size, hash4Mask;
 
-	private final int[] hash2Table;
-	private final int[] hash3Table;
-	private final int[] hash4Table;
-
-	private int hash2Value = 0;
-	private int hash3Value = 0;
-	private int hash4Value = 0;
+	private final NativeMemory hashTable;
+	private final long hash2Table, hash3Table, hash4Table;
+	private int hash2Value, hash3Value, hash4Value;
 
 	static int getHash4Size(int dictSize) {
 		int h = dictSize - 1;
@@ -49,20 +46,17 @@ final class Hash234 {
 		return (HASH_2_SIZE + HASH_3_SIZE + getHash4Size(dictSize)) / (1024 / 4) + 4;
 	}
 
-	Hash234(int dictSize, ArrayCache arrayCache) {
-		hash2Table = arrayCache.getIntArray(HASH_2_SIZE, true);
-		hash3Table = arrayCache.getIntArray(HASH_3_SIZE, true);
-
+	Hash234(int dictSize) {
 		hash4Size = getHash4Size(dictSize);
-		hash4Table = arrayCache.getIntArray(hash4Size, true);
-		hash4Mask = hash4Size - 1;
+		hash4Mask = hash4Size-1;
+
+		hashTable = new NativeMemory(true);
+		hash2Table = hashTable.allocate((HASH_2_SIZE + HASH_3_SIZE + hash4Size) << 2);
+		hash3Table = hash2Table + (HASH_2_SIZE<<2);
+		hash4Table = hash3Table + (HASH_3_SIZE<<2);
 	}
 
-	void putArraysToCache(ArrayCache arrayCache) {
-		arrayCache.putArray(hash4Table);
-		arrayCache.putArray(hash3Table);
-		arrayCache.putArray(hash2Table);
-	}
+	void release() { hashTable.release(); }
 
 	static final int[] crcTable = CRCAny.CRC_32.getTable();
 	void calcHashes(long buf, int off) {
@@ -76,22 +70,14 @@ final class Hash234 {
 		hash4Value = temp & hash4Mask;
 	}
 
-	int getHash2Pos() {
-		return hash2Table[hash2Value];
-	}
-
-	int getHash3Pos() {
-		return hash3Table[hash3Value];
-	}
-
-	int getHash4Pos() {
-		return hash4Table[hash4Value];
-	}
+	int getHash2Pos() { return u.getInt(hash2Table+(hash2Value<<2)); }
+	int getHash3Pos() { return u.getInt(hash3Table+(hash3Value<<2)); }
+	int getHash4Pos() { return u.getInt(hash4Table+(hash4Value<<2)); }
 
 	void updateTables(int pos) {
-		hash2Table[hash2Value] = pos;
-		hash3Table[hash3Value] = pos;
-		hash4Table[hash4Value] = pos;
+		u.putInt(hash2Table+(hash2Value<<2), pos);
+		u.putInt(hash3Table+(hash3Value<<2), pos);
+		u.putInt(hash4Table+(hash4Value<<2), pos);
 	}
 
 	void normalize(int normalizationOffset) {

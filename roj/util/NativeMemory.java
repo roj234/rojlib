@@ -94,16 +94,14 @@ public class NativeMemory {
 	public static int getOffset(ByteBuffer buf) { return hlp.getOffset(buf); }
 	public static long getAddress(ByteBuffer buf) { return hlp.getAddress(buf); }
 
-	public NativeMemory() {
+	public NativeMemory() { this(false); }
+	public NativeMemory(int size) { this(false); allocate(size); }
+	public NativeMemory(boolean zeroFilled) {
+		unmanaged = new Unmanaged(zeroFilled);
 		hlp.newCleaner(this, unmanaged);
 	}
 
-	public NativeMemory(int size) {
-		this();
-		allocate(size);
-	}
-
-	private final Unmanaged unmanaged = new Unmanaged();
+	private final Unmanaged unmanaged;
 	private final ReentrantLock lock = new ReentrantLock();
 
 	public long address() {
@@ -113,7 +111,7 @@ public class NativeMemory {
 		return unmanaged.length;
 	}
 
-	public long allocate(int cap) {
+	public synchronized long allocate(int cap) {
 		lock.lock();
 		try {
 			return unmanaged.malloc(cap, false);
@@ -139,15 +137,14 @@ public class NativeMemory {
 		}
 	}
 
-	public boolean expandInline(int required) {
-		return false;
-	}
-
 	static final class Unmanaged implements Runnable {
 		private static final boolean doAlign = "true".equals(System.getProperty("sun.nio.PageAlignDirectMemory"));
 
+		private final boolean clear;
 		private long base, length;
 		private int except;
+
+		Unmanaged(boolean b) {clear = b;}
 
 		long address() {
 			long base = this.base;
@@ -190,7 +187,7 @@ public class NativeMemory {
 				throw x;
 			}
 
-			if (size > length) {
+			if (size > length && clear) {
 				u.setMemory(base + length, cap - length, (byte) 0);
 			}
 
@@ -209,8 +206,6 @@ public class NativeMemory {
 		}
 
 		@Override
-		public void run() {
-			release();
-		}
+		public void run() { release(); }
 	}
 }

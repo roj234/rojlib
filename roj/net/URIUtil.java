@@ -5,6 +5,7 @@ import roj.io.IOUtil;
 import roj.reflect.FieldAccessor;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.text.UTF8MB4;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -46,7 +47,7 @@ public class URIUtil {
 
 							if (src.charAt(i+1) == 'u') {
 								if (tmp.wIndex() > 0) {
-									ByteList.decodeUTF(tmp.wIndex(), sb, tmp);
+									UTF8MB4.CODER.decodeFixedIn(tmp, tmp.wIndex(), sb);
 									tmp.clear();
 								}
 
@@ -68,7 +69,7 @@ public class URIUtil {
 						}
 
 						if (tmp.wIndex() > 0) {
-							ByteList.decodeUTF(tmp.wIndex(), sb, tmp);
+							UTF8MB4.CODER.decodeFixedIn(tmp, tmp.wIndex(), sb);
 							tmp.clear();
 						}
 
@@ -133,5 +134,22 @@ public class URIUtil {
 			Helpers.athrow(e);
 		}
 		return ob;
+	}
+
+	public static String encodeFilePath(CharSequence src) {
+		return encodeFilePath(IOUtil.ddLayeredCharBuf(), src).toStringAndFree();
+	}
+	private static final MyBitSet invalid = MyBitSet.from("\\/:*?\"<>|");
+	public static <T extends Appendable> T encodeFilePath(T sb, CharSequence src) {
+		try {
+			for (int i = 0; i < src.length(); i++) {
+				char c = src.charAt(i);
+				if (!invalid.contains(c)) sb.append(c);
+				else sb.append("%").append(Integer.toString(c, 16));
+			}
+		} catch (IOException e) {
+			Helpers.athrow(e);
+		}
+		return sb;
 	}
 }

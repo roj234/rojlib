@@ -2,32 +2,44 @@ package roj.crypt;
 
 import java.util.Random;
 
+import static roj.reflect.FieldAccessor.u;
+
 /**
  * @implNote MT19937 is not thread safe
  * @author Roj234
  * @since 2022/11/14 0014 22:21
  */
 public class MT19937 extends Random {
+	private static long offset;
+	static {
+		try {
+			offset = u.objectFieldOffset(Random.class.getDeclaredField("seed"));
+		} catch (NoSuchFieldException ignored) {}
+	}
+
 	private int i;
-	private int[] MT;
+	private final int[] MT = new int[624];
+	private long _seed;
 
-	public MT19937() {
-		super();
-	}
-
-	public MT19937(long seed) {
-		super(seed);
-	}
+	public MT19937() { setSeed(_seed); }
+	public MT19937(long seed) { super(0); setSeed(seed); }
 
 	@Override
 	public void setSeed(long seed) {
 		// Random will invoke setSeed() before this class initialize
-		if (MT == null) MT = new int[624];
+		if (MT == null) {
+			_seed = seed;
+			if (offset > 0) u.putObject(this, offset, null);
+			return;
+		}
 
 		MT[0] = (int) (seed ^ (seed >>> 32));
 		for(int i = 1; i < 624; i++)
 			MT[i] = 1812433253 * (MT[i-1] ^ (MT[i-1] >>> 30)) + i;
 		this.i = 0;
+
+		// clear hasNextGaussian
+		super.setSeed(seed);
 	}
 
 	private void nextIter() {

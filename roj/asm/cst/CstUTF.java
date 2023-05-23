@@ -1,6 +1,8 @@
 package roj.asm.cst;
 
-import roj.io.IOUtil;
+import roj.text.CharList;
+import roj.text.UTF8MB4;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 /**
@@ -16,7 +18,12 @@ public final class CstUTF extends Constant {
 	CstUTF(Object b) { data = b; }
 
 	public String str() {
-		if (data instanceof byte[]) data = IOUtil.SharedCoder.get().decode(((byte[]) data));
+		if (data instanceof byte[]) {
+			ByteList buf = ByteList.wrap((byte[]) data);
+			CharList out = new CharList();
+			UTF8MB4.CODER.decodeFixedIn(buf, buf.length(), out);
+			data = out.toStringAndFree();
+		}
 		return data.toString();
 	}
 

@@ -9,10 +9,13 @@ import roj.config.serial.CVisitor;
 import roj.config.serial.ToEntry;
 import roj.config.serial.ToXEntry;
 import roj.config.word.Word;
+import roj.net.http.HttpUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.function.Predicate;
 
 import static roj.config.JSONParser.*;
@@ -48,10 +51,10 @@ public class XMLParser extends Parser<CList> {
 	public static final int FORCE_XML_HEADER = 1, LENIENT = 2, HTML = 8, PROCESS_ENTITY = 16;
 	private static final MyHashSet<String> HTML_SHORT_TAGS = new MyHashSet<>(TextUtil.split("!doctype|br|img|link|input|source|track|param", '|'));
 
-	public static XHeader parses(CharSequence string) throws ParseException {
+	public static Document parses(CharSequence string) throws ParseException {
 		return new XMLParser().parseToXml(string, LENIENT);
 	}
-	public static XHeader parses(CharSequence string, int flag) throws ParseException {
+	public static Document parses(CharSequence string, int flag) throws ParseException {
 		return new XMLParser().parseToXml(string, flag);
 	}
 
@@ -61,10 +64,16 @@ public class XMLParser extends Parser<CList> {
 	@Override
 	public final String format() { return "XML"; }
 
-	public XHeader parseToXml(CharSequence text, int flag) throws ParseException {
+	public Document parseToXml(CharSequence text, int flag) throws ParseException {
 		ToXEntry entry = new ToXEntry();
 		parse(entry, text, flag);
-		return (XHeader) entry.get();
+		return (Document) entry.get();
+	}
+
+	public Document parseToXml(File file, int flag) throws ParseException, IOException {
+		ToXEntry entry = new ToXEntry();
+		parseRaw(entry, file, flag);
+		return (Document) entry.get();
 	}
 
 	@Override
@@ -365,8 +374,12 @@ public class XMLParser extends Parser<CList> {
 	private int checkCommentOrCDATA(int i, boolean quick) throws ParseException {
 		CharSequence in = input;
 		if (TextUtil.regionMatches("!--", 0, in, i)) { // <!--
-			int j = TextUtil.gIndexOf(in, "-->", i +3, in.length());
+			int j = TextUtil.gIndexOf(in, "-->", i+3, in.length());
 			if (j < 0) throw err("在注释结束前遇到了文件尾");
+			if (comment != null) {
+				comment.clear();
+				cc.comment(comment.append(in, i+3, j).toString());
+			}
 			index = j+3;
 			return -1;
 		} else if (TextUtil.regionMatches("![CDATA[", 0, in, i)) { // CDATA
@@ -382,14 +395,7 @@ public class XMLParser extends Parser<CList> {
 		return 0;
 	}
 
-	protected void handleAmp(CharSequence seq, CharList out) throws ParseException {
-		throw err("未实现");
-		//&lt;	<	小于
-		//&gt;	>	大于
-		//&amp;	&	和号
-		//&apos;	'	单引号
-		//&quot;	"	引号
-	}
+	protected void handleAmp(CharSequence seq, CharList out) throws ParseException { HttpUtil.htmlspecial_decode_all(out, seq); }
 
 	@Override
 	protected final Word onInvalidNumber(char value, int i, String reason) throws ParseException { return readLiteral(); }

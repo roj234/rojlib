@@ -75,7 +75,7 @@ public class CharList implements CharSequence, Appender {
 	protected int len;
 
 	public CharList() { list = ArrayCache.CHARS; }
-	public CharList(int len) { list = new char[len]; }
+	public CharList(int len) { list = USE_CACHE ? ArrayCache.getDefaultCache().getCharArray(len, false) : new char[len]; }
 	public CharList(char[] array) {
 		list = array;
 		len = array.length;
@@ -118,15 +118,13 @@ public class CharList implements CharSequence, Appender {
 
 	public void ensureCapacity(int required) {
 		if (required > list.length) {
-			int newLen = Math.max(((required * 3) >> 1), 32);
-
 			char[] newList;
 			if (USE_CACHE) {
 				ArrayCache cache = ArrayCache.getDefaultCache();
 				cache.putArray(list);
-				newList = cache.getCharArray(newLen, false);
+				newList = cache.getCharArray(Math.max(MathUtils.getMin2PowerOf(required), 256), false);
 			} else {
-				newList = new char[newLen];
+				newList = new char[Math.max(((required * 3) >> 1), 32)];
 			}
 
 			if (len > 0) System.arraycopy(list, 0, newList, 0, Math.min(len, list.length));
@@ -161,6 +159,27 @@ public class CharList implements CharSequence, Appender {
 
 	// region search
 	public final boolean contains(CharSequence s) { return indexOf(s, 0) >= 0; }
+	public final boolean containsAny(TrieTree<MutableInt> map, boolean stopOnFirst) {
+		int pos = 0;
+
+		MyHashMap.Entry<MutableInt, MutableInt> entry = new MyHashMap.Entry<>(new MutableInt(), null);
+		while (pos < len) {
+			map.longestIn(this, pos, len, entry);
+
+			int len = entry.getKey().getValue();
+			if (len < 0) {
+				pos++;
+				continue;
+			}
+
+			if (stopOnFirst) return true;
+
+			entry.getValue().increment();
+			pos += len;
+		}
+
+		return false;
+	}
 	public final int indexOf(CharSequence s) { return indexOf(s, 0); }
 	public final int indexOf(CharSequence s, int from) { return match(s, from, len-s.length()+1); }
 	public final boolean startsWith(CharSequence s) { return s.length() == 0 || match(s, 0, 1) >= 0; }
@@ -559,7 +578,7 @@ public class CharList implements CharSequence, Appender {
 
 	public static final class Slice implements CharSequence {
 		public final char[] list;
-		public final int off, len;
+		private final int off, len;
 
 		public Slice(char[] list, int start, int end) {
 			this.list = list;
@@ -567,6 +586,7 @@ public class CharList implements CharSequence, Appender {
 			this.len = end-start;
 		}
 
+		public int arrayOffset() { return off; }
 		public int length() { return len; }
 		public char charAt(int i) {
 			if (i >= len) throw new StringIndexOutOfBoundsException("off="+i+",len="+len);

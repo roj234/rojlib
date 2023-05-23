@@ -7,8 +7,8 @@ import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.config.XMLParser;
 import roj.config.data.CEntry;
-import roj.config.data.XElement;
-import roj.config.data.XEntry;
+import roj.config.data.Element;
+import roj.config.data.Node;
 import roj.config.serial.ToXEntry;
 import roj.config.word.ITokenizer;
 import roj.io.FastFailException;
@@ -30,19 +30,19 @@ import java.util.function.Consumer;
  * @since 2022/12/10 0010 12:02
  */
 public abstract class XlsxReader {
-	private static final class XDummy extends XElement {
-		public XDummy() { super(""); }
+	private static final class Dummy extends Element {
+		public Dummy() { super(""); }
 
 		public void attr(String k, CEntry v) {}
-		public void add(@Nonnull XEntry entry) {}
+		public void add(@Nonnull Node node) {}
 	}
-	private static final XDummy DUMMY = new XDummy();
-	private static final XElement FAKE = new XDummy();
+	private static final Dummy DUMMY = new Dummy();
+	private static final Element FAKE = new Dummy();
 
 	// 奇技淫巧（狗头
 	private final XMLParser xml = new XMLParser();
-	private final Map<String, XElement> replaceNodes = new MyHashMap<>();
-	private Consumer<XElement> consumer;
+	private final Map<String, Element> replaceNodes = new MyHashMap<>();
+	private Consumer<Element> consumer;
 
 	// row-col
 	private final SimpleList<String> sharedStrings = new SimpleList<>();
@@ -52,16 +52,16 @@ public abstract class XlsxReader {
 
 	public XlsxReader() {
 		// 共享字符串表
-		replaceNodes.put("sst", new XElement("sst"));
+		replaceNodes.put("sst", new Element("sst"));
 		replaceNodes.put("si", FAKE);
-		replaceNodes.put("t", new XElement("t"));
+		replaceNodes.put("t", new Element("t"));
 
 		// 工作表
-		replaceNodes.put("worksheet", new XElement("worksheet"));
+		replaceNodes.put("worksheet", new Element("worksheet"));
 		replaceNodes.put("sheetData", FAKE);
 		replaceNodes.put("row", FAKE);
-		replaceNodes.put("c", new XElement("c"));
-		replaceNodes.put("v", new XElement("v"));
+		replaceNodes.put("c", new Element("c"));
+		replaceNodes.put("v", new Element("v"));
 
 		sharedStrings.capacityType = 2;
 	}
@@ -78,10 +78,10 @@ public abstract class XlsxReader {
 
 			readWith(zf, ze, entry -> {
 				if (sharedStrings.isEmpty()) sharedStrings.ensureCapacity(replaceNodes.get("sst").attr("count").asInteger());
-				sharedStrings.add(entry.valueAsString());
+				sharedStrings.add(entry.textContent());
 			});
 
-			Consumer<XElement> rowHandler = xe -> {
+			Consumer<Element> rowHandler = xe -> {
 				if (xe.tag.equals("c")) {
 					if (processCell(xe)) emptyRow = false;
 				} else {
@@ -112,12 +112,12 @@ public abstract class XlsxReader {
 					rowHandler.accept(entry);
 					if (entry.tag.equals("c")) return;
 
-					XElement worksheet = replaceNodes.get("worksheet");
+					Element worksheet = replaceNodes.get("worksheet");
 
-					XElement el = worksheet.getFirstTag("sheetPr");
+					Element el = worksheet.getElementByTagName("sheetPr");
 					String name = el == null ? null : el.attr("codeName").asString();
 
-					el = worksheet.getFirstTag("dimension");
+					el = worksheet.getElementByTagName("dimension");
 					String dim = el == null ? null : el.attr("ref").asString();
 
 					onSheetChange(finalSheet, name, dim);
@@ -132,7 +132,7 @@ public abstract class XlsxReader {
 		}
 	}
 
-	private boolean processCell(XEntry cell) {
+	private boolean processCell(Node cell) {
 		splitPos(cell.attr("r").asString(), cellPos);
 		int pos = cellPos[1];
 		if (cell.size() == 0) {
@@ -141,7 +141,7 @@ public abstract class XlsxReader {
 		}
 
 		String type = cell.attr("t").asString();
-		String value = cell.child(0).child(0).asString();
+		String value = cell.child(0).child(0).textContent();
 		switch (type) {
 			// string
 			case "s": value = sharedStrings.get(Integer.parseInt(value)); break;
@@ -181,17 +181,17 @@ public abstract class XlsxReader {
 		xy[1] = yPos;
 	}
 
-	private void readWith(ZipArchive zip, ZEntry entry, Consumer<XElement> c) throws IOException,ParseException {
+	private void readWith(ZipArchive zip, ZEntry entry, Consumer<Element> c) throws IOException,ParseException {
 		consumer = c;
 
 		try (InputStream in = zip.getInputStream(entry)) {
-			xml.parseRaw(in, new ToXEntry() {
+			xml.parseRaw(new ToXEntry() {
 				@Override
-				protected XElement createElement(String str) {
-					XElement el = replaceNodes.get(str);
+				protected Element createElement(String str) {
+					Element el = replaceNodes.get(str);
 					if (el == null) {
 						System.out.println("non-recyclable children " + str);
-						return new XElement(str);
+						return new Element(str);
 					}
 
 					el.clear();
@@ -200,10 +200,10 @@ public abstract class XlsxReader {
 				}
 
 				@Override
-				protected void beforePop(XElement child, XElement parent) {
+				protected void beforePop(Element child, Element parent) {
 					if (parent == FAKE) consumer.accept(child);
 				}
-			}, 0);
+			}, in, 0);
 		}
 	}
 }

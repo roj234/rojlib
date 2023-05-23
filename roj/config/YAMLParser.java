@@ -30,7 +30,7 @@ public class YAMLParser extends Parser<CEntry> {
 
 	private static final TrieTree<Word> YAML_TOKENS = new TrieTree<>();
 	// - for timestamp
-	private static final MyBitSet YAML_LENDS = new MyBitSet(), YAML_LENDS_NUM = MyBitSet.from("\r\n"), JSON_KEY = MyBitSet.from("\r\n[]{},:");
+	private static final MyBitSet YAML_LENDS = new MyBitSet(), YAML_LENDS_NUM = MyBitSet.from("\r\n"), TMP1 = MyBitSet.from("\r\n:");
 	private static final Int2IntMap YAML_C2C = new Int2IntMap(), YAML_C2C_NN = new Int2IntMap();
 
 	static {
@@ -217,21 +217,17 @@ public class YAMLParser extends Parser<CEntry> {
 			}
 			case left_m_bracket:
 				this.flag |= LITERAL_KEY;
-				this.literalEnd = JSON_KEY;
 				try {
 					return JSONParser.list(this, new CList(), flag|LITERAL_KEY);
 				} finally {
 					this.flag ^= LITERAL_KEY;
-					this.literalEnd = YAML_LENDS;
 				}
 			case left_l_bracket:
 				this.flag |= LITERAL_KEY;
-				this.literalEnd = JSON_KEY;
 				try {
 					return JSONParser.map(this, flag|LITERAL_KEY);
 				} finally {
 					this.flag ^= LITERAL_KEY;
-					this.literalEnd = YAML_LENDS;
 				}
 			case multiline: case multiline_clump: return CString.valueOf(cnt);
 			case Word.STRING:
@@ -426,6 +422,8 @@ public class YAMLParser extends Parser<CEntry> {
 	@SuppressWarnings("fallthrough")
 	@Override
 	protected final boolean isValidCombo(int off, Word word) {
+		if ((flag & LITERAL_KEY) != 0) return true;
+
 		switch (word.type()) {
 			case TRUE: case FALSE: case NULL:
 				if (!whiteSpaceUntilNextLine(index+off)) return false;
@@ -479,7 +477,10 @@ public class YAMLParser extends Parser<CEntry> {
 		return readLiteral();
 	}
 
-	protected final Word readLiteral() {
+	protected final Word readLiteral() throws ParseException {
+		// {a:b}
+		if ((flag & LITERAL_KEY) != 0) return super.readLiteral();
+
 		CharSequence in = input;
 		int i = index;
 
@@ -487,15 +488,13 @@ public class YAMLParser extends Parser<CEntry> {
 
 		while (i < in.length()) {
 			char c = in.charAt(i);
-			if (JSON_KEY.contains(c)) {
+			if (TMP1.contains(c)) {
 				if (c == '\r' || c == '\n') break;
 
 				if (c == ':') {
 					if (i + 1 >= in.length() || WHITESPACE.contains(in.charAt(i + 1))) {
 						break;
 					}
-				} else if ((flag & LITERAL_KEY) != 0) {
-					break;
 				}
 			}
 

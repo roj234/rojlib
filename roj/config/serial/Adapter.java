@@ -22,9 +22,21 @@ abstract class Adapter {
 	void read(AdaptContext ctx, Object o) {
 		throw new IllegalArgumentException(ctx.curr+"未预料的类型:"+(o==null?null:TypeHelper.class2asm(o.getClass())));
 	}
-	boolean read(AdaptContext ctx, byte[] o) { return false; }
-	boolean read(AdaptContext ctx, int[] o) { return false; }
-	boolean read(AdaptContext ctx, long[] o) { return false; }
+	void read(AdaptContext ctx, byte[] o) {
+		list(ctx,o.length);
+		for (byte b : o) read(ctx,b);
+		ctx.pop();
+	}
+	void read(AdaptContext ctx, int[] o) {
+		list(ctx,o.length);
+		for (int b : o) read(ctx,b);
+		ctx.pop();
+	}
+	void read(AdaptContext ctx, long[] o) {
+		list(ctx,o.length);
+		for (long b : o) read(ctx,b);
+		ctx.pop();
+	}
 
 	void map(AdaptContext ctx, int size) {une(ctx);}
 	void list(AdaptContext ctx, int size) {une(ctx);}

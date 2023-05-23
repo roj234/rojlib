@@ -8,10 +8,8 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.task.AsyncTask;
-import roj.config.data.CEntry;
-import roj.config.data.CList;
-import roj.config.data.CMapping;
-import roj.config.data.Type;
+import roj.concurrent.timing.Scheduled;
+import roj.config.data.*;
 import roj.config.word.Tokenizer;
 import roj.dev.ByteListOutput;
 import roj.dev.Compiler;
@@ -40,7 +38,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -58,6 +55,7 @@ import static roj.mod.Shared.*;
  */
 public final class FMDMain {
 	static boolean isCLI, noGUI;
+	static Scheduled shinyTask;
 
 	@SuppressWarnings("fallthrough")
 	public static void main(String[] args) throws IOException, InterruptedException {
@@ -67,7 +65,7 @@ public final class FMDMain {
 				CmdUtil.rainbow("FMD 更快的mod开发环境 " + VERSION + " By Roj234");
 				System.out.println();
 
-				PeriodicTask.executeTimer(() -> {
+				shinyTask = PeriodicTask.executeTimer(() -> {
 					synchronized (CmdUtil.originalOut) {
 						CmdUtil.cursorBackup();
 						CmdUtil.cursorUp(8000);
@@ -76,7 +74,7 @@ public final class FMDMain {
 						CmdUtil.sonic("https://www.github.com/roj234/rojlib");
 						CmdUtil.cursorRestore();
 					}
-				}, 100, 100, 100);
+				}, 150, 9999);
 
 				System.out.println();
 				CmdUtil.info("可用指令: build, run, project, edit, ref, at, reobf, deobf, gc, reload, auto");
@@ -111,6 +109,10 @@ public final class FMDMain {
 					e.printStackTrace();
 				}
 			}
+		}
+
+		if (shinyTask != null) {
+			shinyTask.cancel();
 		}
 
 		long startTime = System.currentTimeMillis();
@@ -496,17 +498,14 @@ public final class FMDMain {
 			int port = 0xFFFF & CONFIG.getInteger("重载端口");
 			if (port == 0) port = 4485;
 
-			CEntry jvm = mc_conf.get("jvmArg");
-			System.out.println(jvm.toJSONb());
-			if (jvm.getType() == Type.STRING) {
-				CList list = new CList(2);
-				list.add(jvm.asString());
-				list.add("-javaagent:" + new File(BASE, "util/FMD-agent.jar").getAbsolutePath() + "=" + port);
-
-				mc_conf.put("jvmArg", list);
-
-				if (DEBUG) CmdUtil.info("重载工具已在端口 " + port + " 上启动");
+			if (!mc_conf.containsKey("__hr_patched")) {
+				String par = " -javaagent:" + new File(BASE, "util/FMD-agent.jar").getAbsolutePath() + "=" + port;
+				CEntry jvm = mc_conf.get("jvmArg");
+				((CString) jvm).value = ((CString) jvm).value.concat(par);
+				mc_conf.put("__hr_patched", 1);
 			}
+
+			if (DEBUG) CmdUtil.info("重载工具已在端口 " + port + " 上启动");
 		}
 
 		MCLauncher.clearLogs(null);
@@ -650,19 +649,17 @@ public final class FMDMain {
 					return -1;
 				}
 
+				// bug: 如果是启动后第一次更新资源，并不会填充resources
 				try (ZipOutput zo1 = updateDst(p, jarFile)) {
 					zo1.begin(false);
 
-					AsyncTask<Void> task = p.getResourceTask(1);
-					Project.resourceFilter.reset(stamp, FileFilter.F_RES_TIME);
-					task.execute();
-					task.get();
-				} catch (Throwable e) {
-					CmdUtil.warning("资源写入失败", e);
-					return -1;
+					p.getResourceTask(stamp).execute();
 				}
+
+				if ((flag & 3) == 0) CmdUtil.info("更新了资源(若有)");
+			} else {
+				if ((flag & 3) == 0) CmdUtil.info("无源文件");
 			}
-			if ((flag & 3) == 0) CmdUtil.info("无源文件");
 			try {
 				executeCommand(p, BASE);
 			} catch (IOException e) {
@@ -720,8 +717,7 @@ public final class FMDMain {
 
 		// region 更新资源文件
 
-		AsyncTask<Void> writeRes = p.getResourceTask(increment ? 1 : 0);
-		Project.resourceFilter.reset(stamp, canIncrementWrite ? FileFilter.F_RES_TIME : FileFilter.F_RES);
+		AsyncTask<Void> writeRes = p.getResourceTask(canIncrementWrite?stamp:-1);
 		Task.pushTask(writeRes);
 
 		// endregion
@@ -770,9 +766,6 @@ public final class FMDMain {
 
 				list.set(i, new Context(out.getName(), out.getOutput()));
 			}
-
-			writeRes = p.getResourceTask(2);
-			Task.pushTask(writeRes);
 
 			int compiledCount = list.size();
 
@@ -851,13 +844,6 @@ public final class FMDMain {
 
 			// endregion
 			// region 写入映射结果
-
-			try {
-				// 等待资源写入
-				writeRes.get();
-			} catch (ExecutionException | InterruptedException e) {
-				CmdUtil.warning("资源写入失败", e);
-			}
 
 			if (increment) {
 				List<ConstantData> modified = Helpers.cast(args.get("$$HR$$"));

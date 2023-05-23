@@ -46,7 +46,7 @@ public class AutoRedirect extends Timeout implements ChannelHandler {
 					throw new FastFailException("AutoRedirect:重定向过多");
 				}
 
-				redirectPending = new URL(location);
+				redirectPending = new URL(req.url(), location);
 				return;
 			}
 		}

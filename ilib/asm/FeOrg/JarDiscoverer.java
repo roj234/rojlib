@@ -8,10 +8,13 @@ import roj.asm.nixim.Nixim;
 
 import net.minecraftforge.fml.common.*;
 import net.minecraftforge.fml.common.discovery.ASMDataTable;
+import net.minecraftforge.fml.common.discovery.ContainerType;
 import net.minecraftforge.fml.common.discovery.ITypeDiscoverer;
 import net.minecraftforge.fml.common.discovery.ModCandidate;
 import net.minecraftforge.fml.common.discovery.asm.ASMModParser;
+import net.minecraftforge.fml.relauncher.CoreModManager;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Enumeration;
@@ -25,16 +28,24 @@ final class JarDiscoverer extends net.minecraftforge.fml.common.discovery.JarDis
 	@Copy(staticInitializer = "init", targetIsFinal = true)
 	private static Matcher cfMatcher;
 	@Copy
-	private static boolean inited;
+	private static byte inited;
 	private static void init() {
 		cfMatcher = ITypeDiscoverer.classFile.matcher("");
 		Loader.EVENT_BUS.add("preInit", new JarDiscoverer());
 	}
 	@Copy
-	public void run() { inited = true; }
+	public void run() { inited |= 1; }
 
 	@Inject("/")
 	public List<ModContainer> discover(ModCandidate candidate, ASMDataTable table) {
+		if ((inited&2) == 0) {
+			inited |= 2;
+			for (String mod : CoreModManager.getIgnoredMods()) {
+				discover(new ModCandidate(new File("*|NUL>CLASSPATHROOT"), new File("mods", mod), ContainerType.JAR), table);
+			}
+			inited |= 4;
+		}
+
 		List<ModContainer> found = Lists.newArrayList();
 
 		try (ZipFile jar = new ZipFile(candidate.getModContainer())) {
@@ -52,7 +63,7 @@ final class JarDiscoverer extends net.minecraftforge.fml.common.discovery.JarDis
 			FMLLog.log.warn("文件 {} 无法读取", candidate.getModContainer().getName(), e);
 		}
 
-		if (!inited) Loader.handleASMData(table);
+		if ((1&inited) == 0) Loader.handleASMData(table);
 		else FMLLog.bigWarning("在preInit之后加载mod: " + candidate.getModContainer());
 
 		return found;
@@ -86,7 +97,9 @@ final class JarDiscoverer extends net.minecraftforge.fml.common.discovery.JarDis
 						c.setClassVersion(mp.getClassVersion());
 					}
 
-					candidate.addClassEntry(name);
+					// LoliASM workaround
+					if ((inited&4) != 0)
+						candidate.addClassEntry(name);
 				} catch (LoaderException e) {
 					FMLLog.log.error("无法加载 " + candidate.getModContainer().getName() + "#!" + name + " - 也许文件损坏了", e);
 					jar.close();

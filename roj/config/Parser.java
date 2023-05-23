@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static roj.config.JSONParser.*;
@@ -61,7 +62,7 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 		throw new UnsupportedOperationException("Not implemented");
 	}
 
-	public <CV extends CVisitor> CV parse(CV cv, CharSequence text, int flag) throws ParseException {
+	public <C extends CVisitor> C parse(C cv, CharSequence text, int flag) throws ParseException {
 		parse(text,flag).forEachChild(cv);
 		return cv;
 	}
@@ -76,12 +77,12 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 	public final T parseRaw(File file, int flag) throws IOException, ParseException {
 		try (StreamReader in = new StreamReader(file, charset)) {
 			return parse(in, flag);
-		} catch (ParseException e) {
-			if (NativeLibrary.IN_DEV) return parse(IOUtil.readString(file), flag);
+		} catch (Exception e) {
+			if (NativeLibrary.IN_DEV) parse(IOUtil.readString(file), flag);
 			throw e;
 		}
 	}
-	public final <CV extends CVisitor> CV parseRaw(File file, CV cv, int flag) throws IOException, ParseException {
+	public final <C extends CVisitor> C parseRaw(C cv, File file, int flag) throws IOException, ParseException {
 		try (StreamReader text = new StreamReader(file, charset)) {
 			return parse(cv, text, flag);
 		}
@@ -94,7 +95,7 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 			return parse(text, flag);
 		}
 	}
-	public final <CV extends CVisitor> CV parseRaw(InputStream in, CV cv, int flag) throws IOException, ParseException {
+	public final <C extends CVisitor> C parseRaw(C cv, InputStream in, int flag) throws IOException, ParseException {
 		try (StreamReader text = new StreamReader(in, charset)) {
 			return parse(cv, text, flag);
 		}
@@ -135,13 +136,13 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 	}
 
 	public final String toString(CEntry entry) { return toString(entry, 0); }
-	public final String toString(CEntry entry, int flag) { return append(entry, flag, IOUtil.getSharedCharBuf()).toString(); }
+	public final String toString(CEntry entry, int flag) { return append(entry, flag, IOUtil.ddLayeredCharBuf()).toStringAndFree(); }
 	public CharList append(CEntry entry, int flag, CharList sb) { throw new UnsupportedOperationException(); }
 
 	public final void serialize(CEntry entry, DynByteBuf out) throws IOException { serialize(entry, 0, out); }
 	public final void serialize(CEntry entry, OutputStream out) throws IOException { serialize(entry, 0, out); }
 	public void serialize(CEntry entry, int flag, OutputStream out) throws IOException {
-		StreamWriter os = new StreamWriter(out, charset);
+		StreamWriter os = new StreamWriter(out, charset == null ? StandardCharsets.UTF_8 : charset);
 		try {
 			append(entry, flag, os);
 		} finally {

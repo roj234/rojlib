@@ -15,18 +15,13 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @version 1.0
  * @since 2020/10/28 23:14
  */
 public final class AsmShared {
 	private static final ThreadLocal<AsmShared> BUFFERS = ThreadLocal.withInitial(AsmShared::new);
 
-	public static AsmShared local() {
-		return BUFFERS.get();
-	}
-	public static ByteList getBuf() {
-		return BUFFERS.get().current();
-	}
+	public static AsmShared local() { return BUFFERS.get(); }
+	public static ByteList getBuf() { return BUFFERS.get().current(); }
 
 	private final CodeWriter cw = new CodeWriter();
 	public CodeWriter cw() {
@@ -62,33 +57,23 @@ public final class AsmShared {
 		throw new IllegalStateException("Not standard DynByteBuf: " + src.getClass().getName());
 	}
 
-	ByteList[] buffers = new ByteList[LEVEL_MAX];
-	int level;
-
-	static final int LEVEL_MAX = 6;
-
-	private AsmShared() {
-		for (int i = 0; i < LEVEL_MAX; i++) {
-			buffers[i] = new ByteList();
-		}
-	}
+	private final ByteList rootBuffer = new ByteList(4096);
+	private int level;
 
 	ByteList current() {
-		if (level == LEVEL_MAX) return new ByteList(4096);
-		ByteList bl = buffers[level];
-		bl.ensureCapacity(4096);
-		bl.clear();
-		return bl;
+		if (level == 0) {
+			rootBuffer.clear();
+			return rootBuffer;
+		}
+
+		// uses ArrayCache now!
+		ByteList b = new ByteList();
+		b.ensureCapacity(4096);
+		return b;
 	}
 
-	public boolean setLevel(boolean add) {
-		if (add) {
-			if (level >= LEVEL_MAX) return false;
-			level++;
-		} else {
-			if (level == 0) return false;
-			level--;
-		}
-		return true;
+	public void setLevel(boolean add) {
+		if (add) level++;
+		else level--;
 	}
 }

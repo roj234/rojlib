@@ -71,7 +71,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	public synchronized void _free() {
 		clear();
 		byte[] b = list;
-		setArray(ArrayCache.BYTES);
+		list = ArrayCache.BYTES;
 		ArrayCache.getDefaultCache().putArray(b);
 	}
 
@@ -95,6 +95,8 @@ public class ByteList extends DynByteBuf implements Appendable {
 	public void ensureCapacity(int required) {
 		if (required > list.length) {
 			int newLen = list.length == 0 ? Math.max(required, 256) : ((required * 3) >>> 1) + 1;
+			if (newLen == 1073741823 || newLen > maxCapacity()) newLen = maxCapacity();
+			if (newLen <= list.length) throw new IndexOutOfBoundsException("cannot hold "+required+"bytes in this buffer("+list.length+")");
 
 			byte[] newList;
 			if (USE_CACHE) {
@@ -121,7 +123,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	@Override
 	final int testWI(int i, int req) {
-		if (i + req > wIndex) throw new ArrayIndexOutOfBoundsException("pos="+i+",len="+req+",cap="+wIndex);
+		if (i < 0 || i + req > wIndex) throw new ArrayIndexOutOfBoundsException("pos="+i+",len="+req+",cap="+wIndex);
 		return i + arrayOffset();
 	}
 
@@ -132,28 +134,26 @@ public class ByteList extends DynByteBuf implements Appendable {
 	}
 
 	public final ByteList readStreamFully(InputStream in, boolean close) throws IOException {
-		int i = in.available();
-		if (i <= 1) i = 127;
-		ensureCapacity(wIndex + i + 1);
+		while (true) {
+			if (wIndex == capacity())
+				ensureCapacity(wIndex + Math.max(1, in.available()));
 
-		int real;
-		do {
-			real = in.read(this.list, arrayOffset() + wIndex, capacity() - wIndex);
-			if (real < 0) break;
-			wIndex += real;
-			ensureCapacity(wIndex + 1);
-		} while (true);
+			int r = in.read(list, arrayOffset()+wIndex, capacity()-wIndex);
+			if (r < 0) break;
+			wIndex += r;
+		}
+
 		if (close) in.close();
 		return this;
 	}
 
 	public final int readStream(InputStream in, int max) throws IOException {
-		ensureCapacity(wIndex + max);
 		int read = wIndex;
-		while (true) {
-			int r = in.read(list, arrayOffset() + wIndex, max);
-			if (r <= 0) break;
+		while (max > 0) {
+			if (wIndex == capacity()) ensureCapacity(wIndex+max);
 
+			int r = in.read(list, arrayOffset()+wIndex, Math.min(capacity()-wIndex, max));
+			if (r < 0) break;
 			wIndex += r;
 			max -= r;
 		}
@@ -768,7 +768,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 		@Override
 		public void ensureCapacity(int required) {
-			if (required > len) throw new ReadOnlyBufferException();
+			if (required > len) throw new IndexOutOfBoundsException("cannot hold "+required+"bytes in this buffer("+len+")");
 		}
 
 		@Override

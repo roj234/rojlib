@@ -36,11 +36,11 @@ public final class NBTParser implements BinaryParser {
 	}
 
 	@Override
-	public <T extends CVisitor> T parseRaw(InputStream in, T cc, int flag) throws IOException {
+	public <T extends CVisitor> T parseRaw(T cc, InputStream in, int flag) throws IOException {
 		root(cc, (DataInput) (in instanceof DataInput ? in : new DataInputStream(in)), flag);
 		return cc;
 	}
-	public <T extends CVisitor> T parseRaw(DynByteBuf buf, T cc, int flag) throws IOException {
+	public <T extends CVisitor> T parseRaw(T cc, DynByteBuf buf, int flag) throws IOException {
 		root(cc, buf, flag);
 		return cc;
 	}

@@ -19,6 +19,25 @@ import java.util.function.IntUnaryOperator;
  * @since 2022/5/19 1:44
  */
 public abstract class DynByteBuf extends OutputStream implements CharSequence, DataInput, DataOutput {
+	public final class BufferInputStream extends InputStream {
+		public DynByteBuf buffer() { return DynByteBuf.this; }
+
+		public int read() {
+			if (!isReadable()) return -1;
+			return get()&0xFF;
+		}
+
+		public int read(@Nonnull byte[] arr, int off, int len) {
+			if (!isReadable()) return -1;
+			len = Math.min(readableBytes(), len);
+			DynByteBuf.this.read(arr, off, len);
+			return len;
+		}
+
+		public long skip(long len) { return skipBytes((int) len); }
+		public int available() { return readableBytes(); }
+	}
+
 	public static DynByteBuf fromNio(ByteBuffer buf, int capacity) {
 		byte[] array = NativeMemory.getArray(buf);
 		DynByteBuf b;
@@ -109,32 +128,17 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 	int moveRI(int i) {
 		int t = rIndex;
 		int e = t+i;
-		if (e > wIndex) throw new IndexOutOfBoundsException("mov=" + i + ",rIdx=" + rIndex + ",wIdx=" + wIndex);
+		if (e > wIndex) throw new IndexOutOfBoundsException("pos="+rIndex+",len="+i+",cap="+wIndex);
 		rIndex = e;
 		return t;
 	}
 
 	int testWI(int i, int req) {
-		if (i + req > wIndex) throw new IndexOutOfBoundsException("mov=" + req + ",rIdx=" + i + ",wIdx=" + wIndex);
+		if (i<0||i+req>wIndex) throw new IndexOutOfBoundsException("pos="+i+",len="+req+",cap="+wIndex);
 		return i;
 	}
 
-	public final InputStream asInputStream() {
-		return new InputStream() {
-			public int read() {
-				if (!isReadable()) return -1;
-				return get()&0xFF;
-			}
-			public int read(@Nonnull byte[] arr, int off, int len) {
-				if (!isReadable()) return -1;
-				len = Math.min(readableBytes(), len);
-				DynByteBuf.this.read(arr, off, len);
-				return len;
-			}
-			public long skip(long len) { return skipBytes((int) len); }
-			public int available() { return readableBytes(); }
-		};
-	}
+	public final InputStream asInputStream() { return new BufferInputStream(); }
 
 	// region DataInput
 	@Override
@@ -346,7 +350,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 	public static int byteCountZhCn(CharSequence s) { return GB18030.CODER.byteCount(s); }
 	public final DynByteBuf putZhCn(CharSequence s) {int len = byteCountZhCn(s); return putVUInt(len).putZhCnData0(s, len); }
 	public final DynByteBuf putZhCnData(CharSequence s) { GB18030.CODER.encodeFixedIn(s, this); return this; }
-	public final DynByteBuf putZhCnData0(CharSequence s, int len) { GB18030.CODER.encodePreAlloc(s, this, len); return this; }
+	public final DynByteBuf putZhCnData0(CharSequence s, int len) { ensureWritable(len); GB18030.CODER.encodePreAlloc(s, this, len); return this; }
 
 	public abstract DynByteBuf put(ByteBuffer buf);
 

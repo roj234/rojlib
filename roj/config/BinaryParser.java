@@ -17,11 +17,11 @@ public interface BinaryParser {
 		return parseRaw(file, 0);
 	}
 	default CEntry parseRaw(File file, int flag) throws IOException, ParseException {
-		return parseRaw(file, new ToEntry(), flag).get();
+		return parseRaw(new ToEntry(), file, flag).get();
 	}
-	default <T extends CVisitor> T parseRaw(File file, T cc, int flag) throws IOException, ParseException {
+	default <T extends CVisitor> T parseRaw(T cc, File file, int flag) throws IOException, ParseException {
 		try (FileInputStream in = new FileInputStream(file)) {
-			return parseRaw(in, cc, flag);
+			return parseRaw(cc, in, flag);
 		}
 	}
 
@@ -29,19 +29,19 @@ public interface BinaryParser {
 		return parseRaw(buf, 0);
 	}
 	default CEntry parseRaw(DynByteBuf buf, int flag) throws IOException, ParseException {
-		return parseRaw(buf, new ToEntry(), flag).get();
+		return parseRaw(new ToEntry(), buf, flag).get();
 	}
-	default <T extends CVisitor> T parseRaw(DynByteBuf buf, T cc, int flag) throws IOException, ParseException {
-		return parseRaw(buf.asInputStream(), cc, flag);
+	default <T extends CVisitor> T parseRaw(T cc, DynByteBuf buf, int flag) throws IOException, ParseException {
+		return parseRaw(cc, buf.asInputStream(), flag);
 	}
 
 	default CEntry parseRaw(InputStream in) throws IOException, ParseException {
 		return parseRaw(in, 0);
 	}
 	default CEntry parseRaw(InputStream in, int flag) throws IOException, ParseException {
-		return parseRaw(in, new ToEntry(), flag).get();
+		return parseRaw(new ToEntry(), in, flag).get();
 	}
-	<T extends CVisitor> T parseRaw(InputStream in, T cc, int flag) throws IOException, ParseException;
+	<T extends CVisitor> T parseRaw(T cc, InputStream in, int flag) throws IOException, ParseException;
 
 	void serialize(CEntry entry, DynByteBuf out) throws IOException;
 	default void serialize(CEntry entry, OutputStream out) throws IOException {

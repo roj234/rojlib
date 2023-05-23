@@ -1,5 +1,6 @@
 package roj.net.ch;
 
+import roj.io.FastFailException;
 import roj.io.buf.BufferPool;
 import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
@@ -18,7 +19,7 @@ import static roj.util.ByteList.EMPTY;
  * @author Roj233
  * @since 2022/5/18 0:00
  */
-final class TcpChImpl extends MyChannel {
+class TcpChImpl extends MyChannel {
 	private static volatile H TcpUtil;
 	private interface H {
 		default boolean isInputOpen(SocketChannel sc) {
@@ -144,7 +145,7 @@ final class TcpChImpl extends MyChannel {
 			try {
 				r = sc.read(nioBuffer);
 			} catch (IOException e) {
-				if (TcpUtil.isOutputOpen(sc)) throw e;
+				if (TcpUtil.isOutputOpen(sc)) throw new FastFailException(e.getMessage());
 				close();
 				return;
 			}

@@ -44,6 +44,7 @@ public class SimpleBPool implements BPool {
 			for (int i = direct.size()-1; i >= 0; i--) {
 				NativeMemory nm = direct.get(i);
 				if (nm.length() >= cap) {
+					direct.remove(i);
 					cb.set(nm, nm.address(), (int) nm.length());
 					return true;
 				}
@@ -55,6 +56,7 @@ public class SimpleBPool implements BPool {
 			for (int i = heap.size()-1; i >= 0; i--) {
 				byte[] bb = heap.get(i);
 				if (bb.length >= cap) {
+					heap.remove(i);
 					cb.set(bb,0,bb.length);
 					return true;
 				}
@@ -64,39 +66,25 @@ public class SimpleBPool implements BPool {
 			cb.set(bb,0,bb.length);
 		}
 
-		return false;
+		return true;
 	}
 
 	@Override
 	public boolean reserve(DynByteBuf buf) {
 		if (buf.isDirect()) {
-			NativeMemory memory = ((DirectByteList) buf).memory();
-
 			BSLowHeap<NativeMemory> h = direct;
-			if (h.size() < maxCount) {
-				h.add(memory);
-				return true;
-			} else {
-				if (h.get(h.size()-1).length() < buf.capacity()) {
-					h.remove(h.size()-1).release();
-					h.add(memory);
-					return true;
-				}
+			h.add(((DirectByteList) buf).memory());
+			while (h.size() > maxCount) {
+				h.remove(h.size()-1).release();
 			}
 		} else {
 			BSLowHeap<byte[]> h = heap;
-			if (h.size() < maxCount) {
-				h.add(buf.array());
-				return true;
-			} else {
-				if (h.get(h.size() - 1).length < buf.capacity()) {
-					ArrayCache.getDefaultCache().putArray(h.remove(h.size()-1));
-					h.add(buf.array());
-					return true;
-				}
+			h.add(buf.array());
+			while (h.size() > maxCount) {
+				ArrayCache.getDefaultCache().putArray(h.remove(h.size()-1));
 			}
 		}
 
-		return false;
+		return true;
 	}
 }

@@ -290,8 +290,12 @@ public final class Request extends Headers {
 		throw new IllegalRequestException(401, StringResponse.httpErr(401));
 	}
 
+	public static void checkNull(Object v, String name) throws IllegalRequestException {
+		if (v == null) throw new IllegalRequestException(403, name);
+	}
+
 	public String toString() {
-		StringBuilder sb = new StringBuilder().append(Action.toString(action)).append(' ').append(host()).append(path).append(" HTTP/1.1\n");
+		StringBuilder sb = new StringBuilder().append(Action.toString(action)).append(" /").append(path).append(" HTTP/1.1\n");
 		encode(sb);
 		return sb.toString();
 	}

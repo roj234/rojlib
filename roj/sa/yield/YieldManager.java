@@ -8,7 +8,6 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.Method;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.AttrCode;
-import roj.asm.tree.attr.AttrLineNumber;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.*;
 import roj.asm.type.Type;
@@ -19,11 +18,8 @@ import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
-import roj.ui.EasyProgressBar;
-import roj.util.ByteList;
 import roj.util.VarMapper;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 
@@ -34,17 +30,7 @@ import static roj.asm.Opcodes.*;
  * @since 2023/4/20 0020 16:35
  */
 public class YieldManager {
-	public static void main(String[] args) throws IOException {
-		ByteList o = ByteList.wrap(IOUtil.readRes("roj/mod/FMDMain.class"));
-		if (true) {
-			EasyProgressBar b = new EasyProgressBar("Speed");
-			b.setUnit("B");
-			while (true) {
-				Parser.parse(o);
-				b.update(0.5d, o.length());
-			}
-		}
-
+	public static void main(String[] args) throws Exception {
 		ConstantData data = Parser.parseConstants(IOUtil.readRes("roj/sa/yield/YieldTest.class"));
 		MethodNode mn = data.methods.get(data.getMethod("looper"));
 		ConstantData register = createRegister(data, mn);
@@ -292,7 +278,7 @@ public class YieldManager {
 				list.add(i+2, NPInsnNode.of(RETURN));
 			}
 		}
-		AttrLineNumber.debugBci(code);
+		//AttrLineNumber.debugBci(code);
 
 		return reg;
 	}

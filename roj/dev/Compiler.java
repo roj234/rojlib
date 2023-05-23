@@ -180,7 +180,7 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 		int nameId = data.newField(0, "aa", new Type("java/lang/String"));
 
 		Proxy.proxyClass(data, new Class<?>[] {StandardJavaFileManager.class}, (m, cw) -> {
-			if (m == proxyGetOutput) {
+			if (m.equals(proxyGetOutput)) {
 				int s = TypeHelper.paramSize(cw.mn.rawDesc())+1;
 				cw.visitSize(s+2,s);
 				cw.one(Opcodes.ALOAD_0);

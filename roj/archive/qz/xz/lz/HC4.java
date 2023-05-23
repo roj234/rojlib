@@ -12,14 +12,11 @@ package roj.archive.qz.xz.lz;
 
 import roj.util.ArrayCache;
 
-final class HC4 extends LZEncoder {
-	private final Hash234 hash;
-	private final int[] chain;
-	private final int depthLimit;
+import static roj.reflect.FieldAccessor.u;
 
-	private final int cyclicSize;
-	private int cyclicPos = -1;
-	private int lzPos;
+final class HC4 extends LZEncoder {
+	private final long chain;
+	private final int depthLimit;
 
 	/**
 	 * Gets approximate memory usage of the match finder as kibibytes.
@@ -35,23 +32,11 @@ final class HC4 extends LZEncoder {
 	HC4(int dictSize, int beforeSizeMin, int readAheadMax, int niceLen, int matchLenMax, int depthLimit, ArrayCache arrayCache) {
 		super(dictSize, beforeSizeMin, readAheadMax, niceLen, matchLenMax, arrayCache);
 
-		hash = new Hash234(dictSize, arrayCache);
-
-		// +1 because we need dictSize bytes of history + the current byte.
-		cyclicSize = dictSize + 1;
-		chain = arrayCache.getIntArray(cyclicSize, false);
-		lzPos = cyclicSize;
-
+		chain = mem.allocate(cyclicSize<<2);
 		// Use a default depth limit if no other value was specified.
 		// The default is just something based on experimentation;
 		// it's nothing magic.
 		this.depthLimit = (depthLimit > 0) ? depthLimit : 4 + niceLen / 4;
-	}
-
-	public void putArraysToCache(ArrayCache pool) {
-		pool.putArray(chain);
-		hash.putArraysToCache(pool);
-		super.putArraysToCache(pool);
 	}
 
 	/**
@@ -96,7 +81,7 @@ final class HC4 extends LZEncoder {
 		int currentMatch = hash.getHash4Pos();
 		hash.updateTables(lzPos);
 
-		chain[cyclicPos] = currentMatch;
+		u.putInt(chain+(cyclicPos<<2), currentMatch);
 
 		int lenBest = 0;
 
@@ -146,7 +131,7 @@ final class HC4 extends LZEncoder {
 			// dictionary size.
 			if (depth-- == 0 || delta >= cyclicSize) return;
 
-			currentMatch = chain[cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)];
+			currentMatch = u.getInt(chain+((cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0))<<2));
 
 			// Test the first byte and the first new byte that would give us
 			// a match that is at least one byte longer than lenBest. This
@@ -179,7 +164,7 @@ final class HC4 extends LZEncoder {
 			if (movePos() != 0) {
 				// Update the hash chain and hash tables.
 				hash.calcHashes(buf, readPos);
-				chain[cyclicPos] = hash.getHash4Pos();
+				u.putInt(chain+(cyclicPos<<2), hash.getHash4Pos());
 				hash.updateTables(lzPos);
 			}
 		}

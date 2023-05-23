@@ -3,6 +3,7 @@ package roj.io;
 import roj.collect.SimpleList;
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.Waitable;
+import roj.math.MutableLong;
 import roj.net.http.HttpRequest;
 import roj.text.CharList;
 import roj.text.StreamReader;
@@ -157,7 +158,6 @@ public final class IOUtil {
 
 	public static void copyStream(InputStream in, OutputStream out) throws IOException {
 		ByteList b = getSharedByteBuf();
-		b.ensureCapacity(1024);
 		byte[] data = b.list;
 
 		while (true) {
@@ -329,14 +329,15 @@ public final class IOUtil {
 		return cl.append('.').append(ext);
 	}
 
-	public static String extensionName(String text) {
-		text = text.substring(Math.max(text.lastIndexOf('/'), text.lastIndexOf('\\'))+1);
-		return text.substring(text.lastIndexOf('.')+1);
+	public static String extensionName(String path) {
+		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
+		return path.substring(path.lastIndexOf('.')+1);
 	}
 
-	public static String noExtName(String text) {
-		text = text.substring(Math.max(text.lastIndexOf('/'), text.lastIndexOf('\\'))+1);
-		return text.substring(0, text.lastIndexOf('.'));
+	public static String noExtName(String path) {
+		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
+		int i = path.lastIndexOf('.');
+		return i < 0 ? path : path.substring(0, i);
 	}
 
 	public static String fileName(String text) {
@@ -376,5 +377,52 @@ public final class IOUtil {
 
 		@Override
 		public void cancel() {}
+	}
+
+	public static long movePath(File from, File to, boolean move) throws IOException {
+		MutableLong state = new MutableLong();
+		int len = from.getAbsolutePath().length()+1;
+		to.mkdirs();
+		Files.walkFileTree(from.toPath(), new SimpleFileVisitor<Path>() {
+			@Override
+			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+				String relpath = dir.toString();
+				if (relpath.length() > len) {
+					relpath = relpath.substring(len);
+					if (!new File(to, relpath).mkdir()) {
+						state.value |= Long.MIN_VALUE;
+						return FileVisitResult.TERMINATE;
+					} else {
+						state.value += 1L << 20;
+					}
+				}
+				return FileVisitResult.CONTINUE;
+			}
+
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+				File from = file.toFile();
+				File target = new File(to, file.toString().substring(len));
+				if (move) {
+					if (from.renameTo(target)) {
+						state.value++;
+					} else {
+						state.value |= Long.MIN_VALUE;
+						return FileVisitResult.TERMINATE;
+					}
+				} else {
+					copyFile(from, target);
+					state.value++;
+				}
+				return FileVisitResult.CONTINUE;
+			}
+
+			@Override
+			public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
+				if (move) dir.toFile().delete();
+				return FileVisitResult.CONTINUE;
+			}
+		});
+		return state.value;
 	}
 }

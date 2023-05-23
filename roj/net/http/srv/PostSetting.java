@@ -11,4 +11,5 @@ public interface PostSetting {
 	 */
 	void postAccept(long maxLen, int extraTime);
 	void postHandler(HPostHandler ph);
+	boolean postAccepted();
 }

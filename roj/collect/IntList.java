@@ -134,20 +134,25 @@ public class IntList implements Iterable<Integer> {
 		list[i] = e;
 	}
 
-	public boolean remove(int i) {
+	public int remove(int i) {
 		if (i >= 0 && i < size) {
+			int val = list[i];
 			if (size - 1 - i >= 0) {
 				System.arraycopy(list, i + 1, list, i, size - 1 - i);
 			}
 			size--;
-			return true;
+			return val;
 		}
 		throw new ArrayIndexOutOfBoundsException(i);
 	}
 
-	public void removeByValue(int e) {
+	public boolean removeByValue(int e) {
 		int i = indexOf(e);
-		if (i >= 0) remove(i);
+		if (i >= 0) {
+			remove(i);
+			return true;
+		}
+		return false;
 	}
 
 	public int indexOf(int key) {

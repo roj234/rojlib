@@ -2,17 +2,15 @@ package ilib.client.music;
 
 import ilib.ClientProxy;
 import roj.collect.SimpleList;
-import roj.io.BoxFile;
 import roj.io.IOUtil;
-import roj.io.source.FileSource;
 import roj.io.source.MemorySource;
 import roj.io.source.Source;
 import roj.net.URIUtil;
+import roj.net.http.HttpRequest;
 import roj.sound.SoundUtil;
 import roj.sound.util.FilePlayer;
 import roj.sound.util.JavaAudio;
 import roj.text.LineReader;
-import roj.util.ByteList;
 import roj.util.Helpers;
 
 import net.minecraft.client.settings.GameSettings;
@@ -24,6 +22,7 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Collections;
 
 /**
@@ -92,7 +91,7 @@ public class MusicPlayer extends FilePlayer {
 				throw new MalformedURLException("Unknown format " + lyric);
 			}
 
-			int timeIdx = lyric.indexOf(":", 1);
+			int timeIdx = lyric.indexOf(':', 1);
 
 			try {
 				int time = Integer.parseInt(lyric.substring(1, timeIdx)) * 60000 + (int) (Float.parseFloat(lyric.substring(1 + timeIdx, j)) * 1000);
@@ -105,26 +104,16 @@ public class MusicPlayer extends FilePlayer {
 		return lrcs;
 	}
 
-	private static BoxFile cache;
-
 	public static void playUrl(String url) throws IOException {
-		if (cache == null) {
-			cache = new BoxFile(new File("il_music.bin"));
-		}
-
-		if (cache.contains(url)) {
-			play(new FileSource(new File("mi_music.cache"), cache.getOffset(url)));
-		} else {
-			new Thread(() -> {
-				try {
-					ByteList dst = IOUtil.downloadFileToMemory(url);
-					cache.put(url, dst);
-					play(new MemorySource(dst));
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			}).start();
-		}
+		HttpRequest.nts().url(new URL(url)).execute().await((shc) -> {
+			if (!shc.isSuccess()) return;
+			try {
+				System.out.println("download " + url + " ok");
+				play(new MemorySource(shc.bytes()));
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		});
 	}
 
 	public static void play(Source source) {

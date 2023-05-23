@@ -19,8 +19,7 @@ public class ChineseInputStream extends PushbackInputStream {
 		super(in);
 		try (ChineseCharsetDetector cd = new ChineseCharsetDetector(in)) {
 			charset = cd.detect();
-
-			setBuffer(cd.buffer(), 0, cd.length());
+			setBuffer(cd.buffer(), cd.offset(), cd.limit()-cd.offset());
 		}
 	}
 

@@ -18,16 +18,8 @@ public class MemorySource extends Source {
 	private int cap;
 
 	public MemorySource() { list = new ByteList(); }
-
-	public MemorySource(byte[] arr) {
-		list = ByteList.wrap(arr);
-		cap = arr.length;
-	}
-
-	public MemorySource(DynByteBuf bytes) {
-		list = bytes;
-		cap = bytes.wIndex();
-	}
+	public MemorySource(byte[] arr) { list = ByteList.wrap(arr); cap = arr.length; }
+	public MemorySource(DynByteBuf bytes) { list = bytes; cap = bytes.readableBytes(); }
 
 	public int read() { return list.isReadable() ? list.readUnsignedByte() : -1; }
 	public int read(byte[] b, int off, int len) {
@@ -39,12 +31,14 @@ public class MemorySource extends Source {
 	public void write(byte[] b, int off, int len) throws IOException {
 		list.wIndex(list.rIndex);
 		list.put(b, off, len);
-		cap = Math.max(list.wIndex(), cap);
+		cap = Math.max(list.rIndex = list.wIndex(), cap);
+		list.wIndex(cap);
 	}
 	public void write(DynByteBuf data) throws IOException {
 		list.wIndex(list.rIndex);
 		list.put(data);
-		cap = Math.max(list.wIndex(), cap);
+		cap = Math.max(list.rIndex = list.wIndex(), cap);
+		list.wIndex(cap);
 	}
 
 	public void seek(long pos) { list.rIndex = (int) pos; }
@@ -53,6 +47,7 @@ public class MemorySource extends Source {
 	public void setLength(long length) throws IOException {
 		if (length < 0 || length > Integer.MAX_VALUE - 16) throw new IOException();
 		list.ensureCapacity(cap = (int) length);
+		list.wIndex(cap);
 	}
 	public long length() { return cap; }
 
@@ -74,7 +69,7 @@ public class MemorySource extends Source {
 	public boolean isBuffered() { return true; }
 
 	public DynByteBuf asReadonly() { return list.slice(0, cap); }
-	public DynByteBuf buffer() { /*list.wIndex(list.rIndex); list.rIndex = 0;*/return list; }
+	public DynByteBuf buffer() { list.wIndex(cap); list.rIndex = 0; return list; }
 
 	@Override
 	public String toString() {

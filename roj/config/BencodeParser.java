@@ -41,7 +41,7 @@ public final class BencodeParser implements BinaryParser {
 	}
 
 	@Override
-	public <T extends CVisitor> T parseRaw(InputStream in, T cc, int flag) throws IOException, ParseException {
+	public <T extends CVisitor> T parseRaw(T cc, InputStream in, int flag) throws IOException, ParseException {
 		this.in = in;
 		this.cc = cc;
 		try {

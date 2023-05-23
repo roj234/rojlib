@@ -24,6 +24,10 @@ public interface ICodeWriter {
 
 	void newArray(byte type);
 	void multiArray(String clz, int dimension);
+	default void clazz(byte code, Type clz) {
+		if (clz.isPrimitive()) throw new IllegalArgumentException(clz.toString());
+		clazz(code, clz.getActualClass());
+	}
 	void clazz(byte code, String clz);
 	void increase(int id, int count);
 	void ldc(Constant c);

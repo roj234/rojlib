@@ -46,8 +46,15 @@ public class StreamWriter extends CharList implements Appender, AutoCloseable, F
 		this(out,charset,BufferPool.localPool());
 	}
 	public StreamWriter(Closeable out, Charset cs, BufferPool pool) {
-		this.list = ArrayCache.getDefaultCache().getCharArray(512, false);
-		this.out = out;
+		if (out instanceof DynByteBuf) {
+			type = 2;
+		} else if (out instanceof OutputStream) {
+			type = 0;
+		} else if (out instanceof WritableByteChannel) {
+			type = 1;
+		} else {
+			throw new IllegalArgumentException("无法确定 " + out.getClass().getName() + " 的类型");
+		}
 
 		if (StandardCharsets.UTF_8 == cs) {
 			ucs = UTF8MB4.CODER;
@@ -66,15 +73,8 @@ public class StreamWriter extends CharList implements Appender, AutoCloseable, F
 		ob = buf1.nioBuffer();
 		ob.clear();
 
-		if (out instanceof DynByteBuf) {
-			type = 2;
-		} else if (out instanceof OutputStream) {
-			type = 0;
-		} else if (out instanceof WritableByteChannel) {
-			type = 1;
-		} else {
-			throw new IllegalArgumentException("无法确定 " + out.getClass().getName() + " 的类型");
-		}
+		this.list = ArrayCache.getDefaultCache().getCharArray(512, false);
+		this.out = out;
 	}
 
 	@Override
@@ -180,6 +180,7 @@ public class StreamWriter extends CharList implements Appender, AutoCloseable, F
 				}
 			}
 
+			len = 0;
 			return;
 		}
 

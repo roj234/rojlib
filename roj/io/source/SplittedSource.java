@@ -1,5 +1,6 @@
 package roj.io.source;
 
+import roj.collect.LFUCache;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -7,11 +8,9 @@ import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import java.io.DataInput;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.zip.ZipException;
+import java.util.Map;
 
 /**
  * @author Roj234
@@ -26,41 +25,54 @@ public class SplittedSource extends Source {
 	private final int fragmentSize;
 	private final long fragmentSizeL;
 
-	private final SimpleList<Source> ref;
+	private final SimpleList<Object> ref;
+	private final LFUCache<Integer,FileSource> cache;
 
 	private SplittedSource(Source[] sources, long fragSize) {
 		path = null;
 		name = null;
+		cache = null;
 
 		fragmentSizeL = fragSize;
 		fragmentSize = (int) Math.min(Integer.MAX_VALUE, fragSize);
 
-		ref = SimpleList.asModifiableList(sources);
+		ref = SimpleList.asModifiableList((Object[]) sources);
 		s = sources[0];
 	}
 	private SplittedSource(File file, long fragSize) throws IOException {
 		path = file.getParentFile();
 		name = file.getName();
+		cache = new LFUCache<>(4, 1);
+		cache.setEvictListener((no, source) -> {
+			try { source.close(); } catch (IOException ignored) {}
+		});
 
 		fragmentSizeL = fragSize;
 		fragmentSize = (int) Math.min(Integer.MAX_VALUE, fragSize);
 
 		ref = new SimpleList<>();
-		frag = -1;
-		next();
+
+		for (int i = 0; i < 999; i++) {
+			t.clear();
+			TextUtil.pad(t.append(name).append('.'), ref.size()+1, 3);
+
+			File splitFile = new File(path, t.toString());
+			if (!splitFile.isFile()) break;
+
+			ref.add(splitFile);
+		}
+
+		// create new
+		if (ref.isEmpty()) {
+			frag = -1;
+			next();
+		} else {
+			s = getSource(0);
+		}
 	}
 
 	public SplittedSource(FileSource src, int size) throws IOException {
-		path = src.getSource().getParentFile();
-		String name = src.getSource().getName();
-		if (!name.endsWith(".001")) throw new ZipException("文件的扩展名必须为001");
-		this.name = IOUtil.noExtName(name);
-
-		fragmentSizeL = size;
-		fragmentSize = size;
-
-		ref = new SimpleList<>();
-		ref.add(s = src);
+		this(new File(src.getSource().getParentFile(), IOUtil.noExtName(src.getSource().getName())), size);
 	}
 
 	public static SplittedSource fixedSize(File file, long size) throws IOException {
@@ -110,7 +122,7 @@ public class SplittedSource extends Source {
 	private final CharList t = new CharList();
 	private void next() throws IOException {
 		if (ref.size() > frag + 1) {
-			s = ref.get(++frag);
+			s = getSource(++frag);
 			s.seek(0);
 			return;
 		}
@@ -121,12 +133,18 @@ public class SplittedSource extends Source {
 
 		t.clear();
 		TextUtil.pad(t.append(name).append('.'), ref.size()+1, 3);
-		s = new FileSource(new File(path, t.toString()));
-		ref.add(s);
+		ref.add(new File(path, t.toString()));
+		s = getSource(ref.size()-1);
 		frag++;
 	}
 
-	protected void getNextSource() {}
+	private Source getSource(int i) throws IOException {
+		if (cache == null) return (Source) ref.get(i);
+
+		FileSource s = cache.get(i);
+		if (s == null) cache.put(i, s = new FileSource((File) ref.get(i)));
+		return s;
+	}
 
 	public void write(byte[] b, int off, int len) throws IOException {
 		write(IOUtil.SharedCoder.get().wrap(b, off, len));
@@ -163,7 +181,7 @@ public class SplittedSource extends Source {
 	}
 
 	public void seek(long pos) throws IOException {
-		s = ref.get(frag = (int) (pos / fragmentSizeL));
+		s = getSource(frag = (int) (pos / fragmentSizeL));
 		s.seek(pos % fragmentSizeL);
 	}
 	public long position() throws IOException {
@@ -175,37 +193,51 @@ public class SplittedSource extends Source {
 
 		int frags = (int) (length/fragmentSizeL) + 1;
 		for (int i = ref.size()-1; i >= frags; i--) {
-			FileSource s = (FileSource) ref.remove(i);
+			Source s = cache.remove(i);
+			if (s != null) {
+				s.setLength(0);
+				s.close();
+			}
 
-			s.close();
-			s.getSource().delete();
+			((File)ref.remove(i)).delete();
 		}
+
+		getSource(frags-1).setLength(length%fragmentSizeL);
 	}
 	public long length() throws IOException {
-		return (ref.size()-1)*fragmentSizeL + ref.get(ref.size()-1).length();
+		return (ref.size()-1)*fragmentSizeL + getSource(ref.size()-1).length();
 	}
-
-	public DataInput asDataInput() { noImpl(); return null; }
-	public InputStream asInputStream() { noImpl(); return null; }
 
 	public void close() throws IOException {
 		Throwable e1 = null;
-		for (int i = 0; i < ref.size(); i++) {
-			try {
-				Source src = ref.get(i);
-				if (path != null && i != ref.size() - 1) src.setLength(fragmentSizeL);
-				src.close();
-			} catch (Throwable e) {
-				e1 = e;
+		if (cache == null) {
+			for (int i = 0; i < ref.size(); i++) {
+				try {
+					((Source) ref.get(i)).close();
+				} catch (Throwable e) { e1 = e; }
 			}
+		} else {
+			for (int i = 0; i < ref.size(); i++) {
+				try {
+					File src = (File) ref.get(i);
+					if (i != ref.size()-1 && src.length() != fragmentSizeL) getSource(i).setLength(fragmentSizeL);
+				} catch (Throwable e) { e1 = e; }
+			}
+			for (Map.Entry<Integer, FileSource> entry : cache.entrySet()) {
+				try {
+					entry.getValue().close();
+				} catch (Throwable e) { e1 = e; }
+			}
+			cache.clear();
 		}
 		ref.clear();
 
 		if (e1 != null) Helpers.athrow(e1);
 	}
 
-	public Source threadSafeCopy() {
-		throw new UnsupportedOperationException("咳咳，抱歉，懒得做了");
+	public Source threadSafeCopy() throws IOException {
+		ensureFileSource();
+		return new ReadonlySource(new SplittedSource(new File(path, name), fragmentSizeL));
 	}
 
 	public void moveSelf(long from, long to, long length) {

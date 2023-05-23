@@ -12,6 +12,7 @@ import roj.asm.tree.insn.SwitchEntry;
 import roj.asm.type.*;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttrHelper;
+import roj.asm.util.ExceptionEntryCWP;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.SwitchSegment;
@@ -58,8 +59,11 @@ public class OKRouter implements Router {
 
 	// ASet or ASet[]
 	private final TrieTree<Object> route = new TrieTree<>();
+	private boolean handleError = true;
 
 	public OKRouter() {}
+
+	public void setHandleError(boolean b) { handleError = b; }
 
 	public final Router register(Object o) {
 		ConstantData hndInst = new ConstantData();
@@ -71,38 +75,44 @@ public class OKRouter implements Router {
 		hndInst.newField(0, "$handler", TypeHelper.class2asm(o.getClass()));
 
 		CodeWriter cw = hndInst.newMethod(AccessFlag.PUBLIC, "copyWith", COPYWITH_DESC);
-		cw.visitSize(3, 3);
-		cw.newObject(hndInst.name);
+		cw.visitSize(2, 3);
 
-		cw.one(DUP);
+		cw.newObject(hndInst.name);
+		cw.one(ASTORE_0);
+
+		cw.one(ALOAD_0);
 		cw.one(ILOAD_1);
 		cw.field(PUTFIELD, hndInst, 0);
 
-		cw.one(DUP);
+		cw.one(ALOAD_0);
 		cw.one(ALOAD_2);
 		cw.clazz(CHECKCAST, o.getClass().getName().replace('.', '/'));
 		cw.field(PUTFIELD, hndInst, 1);
 
+		cw.one(ALOAD_0);
 		cw.one(ARETURN);
 		cw.finish();
 
 		cw = hndInst.newMethod(AccessFlag.PUBLIC, "invoke", INVOKE_DESC);
 		cw.visitSize(5, 4);
+
 		cw.one(ALOAD_0);
 		cw.field(GETFIELD, hndInst, 1);
-		cw.one(ALOAD_1);
-		cw.one(ALOAD_2);
+
 		cw.one(ALOAD_0);
 		cw.field(GETFIELD, hndInst, 0);
+
 		SwitchSegment seg = CodeWriter.newSwitch(TABLESWITCH);
 		cw.switches(seg);
 
 		int id = 0;
 		IntMap<Annotation> handlers = new IntMap<>();
-		ToIntMap<String> validator = new ToIntMap<>();
+		ToIntMap<String> interceptors = new ToIntMap<>();
 
 		String fn = o.getClass().getName().replace('.', '/').concat(".class");
 		ConstantData data = Parser.parseConstants(o.getClass());
+
+		List<ExceptionEntryCWP> exhandlers = new SimpleList<>();
 
 		SimpleList<MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
@@ -110,15 +120,19 @@ public class OKRouter implements Router {
 
 			List<Annotation> list = AttrHelper.getAnnotations(data.cp, mn, false);
 			Annotation a = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Route");
+			Annotation a2 = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Interceptor");
 			if (a == null) {
-				a = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Validator");
-				if (a == null) continue;
+				if (a2 == null) continue;
+				List<AnnVal> value = a2.getArray("value");
+				if (value.size() > 1) throw new IllegalArgumentException("Interceptor的values长度只能为0或1");
 
-				validator.putInt(a.getString("value", mn.name()), id++);
+				interceptors.putInt(value.isEmpty()?mn.name():value.get(0).asString(), id++);
+				a = a2;
 			} else {
 				handlers.putInt(a, id++);
 				if (a.getString("value") == null)
 					a.put("value", AnnVal.valueOf(mn.name().replace("__", "/")));
+				if (a2 != null) a.put("interceptor", a2.values.get("value"));
 			}
 
 			Label self = cw.label();
@@ -129,41 +143,35 @@ public class OKRouter implements Router {
 			noBody:{
 				int begin = 2;
 
-				hasBody:
-				if (par.size() <= 2) {
-					if (par.isEmpty()) {
-						cw.one(POP2);
-
-						break noBody;
-					}
+				hasBody: {
+					if (par.isEmpty()) break noBody;
 
 					if (!REQ.equals(par.get(0).owner)) {
-						cw.one(POP2);
-
 						begin = 0;
 						break hasBody;
 					}
 
 					if (par.size() == 1) {
-						cw.one(POP);
+						cw.one(ALOAD_1);
 						break noBody;
 					}
 
 					if(!RESP.equals(par.get(1).owner)) {
-						cw.one(POP);
-
+						cw.one(ALOAD_1);
 						begin = 1;
 						break hasBody;
 					}
 
-					break noBody;
+					cw.one(ALOAD_1);
+					cw.one(ALOAD_2);
+					if (par.size() <= 2) break noBody;
 				}
 
-				if (a.clazz.endsWith("Validator")) {
+				if (a.clazz.endsWith("Interceptor")) {
 					cw.one(ALOAD_3);
 					cw.clazz(CHECKCAST, PostSetting.class.getName().replace('.', '/'));
 				} else {
-					provideBodyPars(cw, data.cp, mn, begin);
+					provideBodyPars(cw, data.cp, mn, begin, exhandlers);
 				}
 			}
 
@@ -180,20 +188,58 @@ public class OKRouter implements Router {
 		}
 		if (seg.def == null) throw new IllegalArgumentException(fn.concat("没有任何处理函数"));
 
+		if (handleError) {
+			for (ExceptionEntryCWP eh : exhandlers) {
+				cw.label(eh.handler);
+				cw.one(ASTORE_0);
+
+				cw.ldc("参数'"+eh.type+"'解析失败: ");
+				cw.one(ALOAD_0);
+				cw.invoke(INVOKEVIRTUAL, "java/lang/Object", "toString", "()Ljava/lang/String;");
+				cw.invoke(INVOKEVIRTUAL, "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;");
+
+				cw.one(ASTORE_0);
+
+				cw.clazz(NEW, "roj/net/http/IllegalRequestException");
+				cw.one(DUP);
+				cw.ldc(400);
+				cw.one(ALOAD_0);
+				cw.invoke(INVOKESPECIAL, "roj/net/http/IllegalRequestException", "<init>", "(ILjava/lang/String;)V");
+				cw.one(ATHROW);
+			}
+			cw.visitExceptions();
+			for (ExceptionEntryCWP eh : exhandlers) {
+				cw.visitException(eh.start,eh.end,eh.handler,null);
+			}
+			cw.finish();
+		}
+
 		Dispatcher ah = (Dispatcher) FastInit.make(hndInst);
-		for (int i = 0; i < handlers.size(); i++) {
-			Annotation a = handlers.get(i);
+		for (IntMap.Entry<Annotation> entry : handlers.selfEntrySet()) {
+			int i = entry.getIntKey();
+			Annotation a = entry.getValue();
 			ASet set = new ASet();
 
 			set.accepts = a.getInt("accepts", -1);
 			set.req = ah.copyWith(i, o);
 
-			String vname = a.getString("validator", "");
-			if (!vname.equals("")) {
-				int vid = validator.getOrDefault(vname, -1);
-				if (vid < 0) throw new IllegalArgumentException("未找到验证器/"+a);
-				set.prec = ah.copyWith(vid, o);
+			List<Dispatcher> precs = Collections.emptyList();
+			List<AnnVal> vname = a.getArray("interceptor");
+			if (!vname.isEmpty()) {
+				for (int j = 0; j < vname.size(); j++) {
+					int vid = interceptors.getOrDefault(vname.get(j).asString(), -1);
+					if (vid < 0) throw new IllegalArgumentException("未找到"+a+"引用的拦截器"+vname.get(j));
+
+					Dispatcher prec = ah.copyWith(vid, o);
+					if (precs.size() == 0) {
+						precs = Collections.singletonList(prec);
+					} else {
+						if (precs.size() == 1) precs = new SimpleList<>(precs);
+						precs.add(prec);
+					}
+				}
 			}
+			set.prec = precs.toArray(new Dispatcher[precs.size()]);
 
 			String type = a.getEnumValue("type", "ASIS");
 			set.prefix = type.equals("PREFIX");
@@ -234,7 +280,7 @@ public class OKRouter implements Router {
 		return this;
 	}
 
-	private void provideBodyPars(CodeWriter c, ConstantPool cp, MethodNode m, int begin) {
+	private void provideBodyPars(CodeWriter c, ConstantPool cp, MethodNode m, int begin, List<ExceptionEntryCWP> tries) {
 		List<Type> parTypes = m.parameters();
 
 		Annotation body = AttrHelper.getAnnotation(AttrHelper.getAnnotations(cp, m, false), "roj/net/http/srv/autohandled/Body");
@@ -255,6 +301,8 @@ public class OKRouter implements Router {
 		String from = body.getEnumValue("value", "INHERIT");
 		if (from.equals("INHERIT")) throw new IllegalArgumentException(body + "不能使用INHERIT");
 		bw.from = from;
+		bw.nonnull = body.getBoolean("nonnull", false);
+		bw.tries = tries;
 
 		for (; begin < parTypes.size(); begin++) {
 			bw.process(cp,
@@ -275,6 +323,8 @@ public class OKRouter implements Router {
 		int bodyKind;
 		CodeWriter cw;
 		String from;
+		boolean nonnull;
+		List<ExceptionEntryCWP> tries;
 
 		private static final Annotation DEFAULT = new Annotation();
 
@@ -285,7 +335,7 @@ public class OKRouter implements Router {
 			if (from1.equals("INHERIT")) from1 = from;
 			int fromSlot = 0;
 
-			if (name == null && field.getString("value") == null && !from1.equals("JSON"))
+			if (name == null && (name = field.getString("value")) == null && !from1.equals("JSON"))
 				throw new IllegalArgumentException("编译时是否保存了方法参数名称？");
 
 			CodeWriter c = cw;
@@ -328,32 +378,41 @@ public class OKRouter implements Router {
 						bodyKind |= 4;
 
 						if (type.getActualType() != Type.CLASS) throw new IllegalArgumentException("那你用JSON类型有什么意义？");
-						if (name != null) throw new IllegalArgumentException("那你用JSON类型有什么意义？");
 
 						c.one(ALOAD_1);
 						c.ldc(new CstString(genType==null?type.toDesc():genType.toDesc()));
-						c.invoke(INVOKESTATIC, SELF, "_JAdapt", "("+REQ+"Ljava/lang/String;)Ljava/lang/Object;");
+						c.invoke(INVOKESTATIC, SELF, "_JAdapt", "(L"+REQ+";Ljava/lang/String;)Ljava/lang/Object;");
+						c.clazz(CHECKCAST, type);
+						return;
 					} else {
-						throw new IllegalArgumentException("JSON类型仅能出现一次(反序列化啊,你还要闹哪样)");
+						throw new IllegalArgumentException("JSON类型仅能出现一次(这是反序列化请求体啊)");
 					}
-					break;
 			}
 			if ((bodyKind & 6) == 6) throw new IllegalArgumentException("不能同时使用POST_KV和JSON");
-			if (name == null) return;
 
 			if (fromSlot == 0) throw new IllegalStateException("不支持的类型/"+from1);
 
 			c.var(ALOAD, fromSlot);
-			c.ldc(new CstString(field.getString("value", name)));
+			c.ldc(name);
 			c.invokeItf("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
 
+			ExceptionEntryCWP entry = new ExceptionEntryCWP();
+			entry.start = cw.label();
+			entry.handler = new Label();
+			entry.type = type+" "+name;
+
+			addExHandler:
+			{
 			if (type.owner != null || type.array() > 0) {
 				if (type.owner != null) {
 					if (type.owner.equals("java/lang/String") ||
-						type.owner.equals("java/lang/CharSequence") ||
-						type.owner.equals("java/lang/Object")) {
-						cw.clazz(CHECKCAST, type.owner);
-						return;
+						type.owner.equals("java/lang/CharSequence")) {
+						if (field.getBoolean("nonnull", nonnull)) {
+							cw.invoke(INVOKEVIRTUAL, "java/lang/Object", "toString", "()Ljava/lang/String;");
+						} else {
+							cw.clazz(CHECKCAST, type.owner);
+						}
+						break addExHandler;
 					}
 				}
 				throw new IllegalArgumentException("不知道如何将String转换为"+type);
@@ -366,14 +425,18 @@ public class OKRouter implements Router {
 				cw.one(I2C);
 				Label label = new Label();
 				cw.jump(IF_icmpeq, label);
-				cw.newObject("java/lang/NumberFormatException");
+				cw.newObject("roj/io/FastFailException");
 				cw.one(ATHROW);
 				cw.label(label);
 			} else {
 				name = Type.toString(type.type);
 				name = Character.toUpperCase(name.charAt(0))+name.substring(1);
-				cw.invoke(INVOKESTATIC, "java/lang/"+name, "parse"+(name.equals("Integer")?"Int":name), "(Ljava/lang/String;)"+(char)type.type);
+				cw.clazz(CHECKCAST, "java/lang/String");
+				cw.invoke(INVOKESTATIC, "java/lang/"+(name.equals("Int")?"Integer":name), "parse"+name, "(Ljava/lang/String;)"+(char)type.type);
 			}
+			}
+			entry.end = cw.label();
+			tries.add(entry);
 		}
 
 		private static String firstType(Generic generic) {
@@ -397,7 +460,8 @@ public class OKRouter implements Router {
 
 	private static final class ASet {
 		int accepts;
-		Dispatcher req, prec;
+		Dispatcher req;
+		Dispatcher[] prec;
 		boolean prefix;
 	}
 	private static ASet getASet(Object o, int action) {
@@ -412,7 +476,8 @@ public class OKRouter implements Router {
 
 		ASet set;
 		if (len == 0) {
-			set = getASet(route.get(""), req.action());
+			Object o = route.get("");
+			set = o == null ? null : getASet(o, req.action());
 		} else {
 			Find find = (Find) req.threadContext().get("or:fn");
 			if (find == null) req.threadContext().put("or:fn", find = new Find());
@@ -426,21 +491,23 @@ public class OKRouter implements Router {
 			set = find.result;
 		}
 
-		if (set == null || ((1 << req.action()) & set.accepts) == 0) return;
+		if (set == null || ((1 << req.action()) & set.accepts) == 0) throw new IllegalRequestException(403, "no router matches url");
 
 		req.connection().attachment(RouteAdapterKey, set);
-		if (set.prec != null) {
-			Object ret = set.prec.invoke(req, req.handler(), cfg);
-			if (ret instanceof Response) {
-				throw new IllegalRequestException(200, ((Response) ret));
+		for (Dispatcher prec : set.prec) {
+			Object ret = prec.invoke(req, req.handler(), cfg);
+			if (ret != null) {
+				if (ret instanceof Response) throw new IllegalRequestException(200, ((Response) ret));
+				throw new IllegalRequestException(200, ret.toString());
 			}
 		}
+
+		if (cfg != null && !cfg.postAccepted()) Router.super.checkHeader(req, cfg);
 	}
 
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws IOException {
 		ASet set = req.connection().attachment(RouteAdapterKey, null);
-		if (set == null) return StringResponse.httpErr(403);
 
 		Object ret = set.req.invoke(req, rh, null);
 		if (ret instanceof Response) return (Response) ret;
@@ -461,10 +528,10 @@ public class OKRouter implements Router {
 		CAdapter<?> adapter = LazyAdapter.ADAPTER_FACTORY.adapter(Signature.parseGeneric(type));
 		try {
 			adapter.reset();
-			jsonp.parseRaw(req.postBuffer(), adapter, JSONParser.LITERAL_KEY);
+			jsonp.parseRaw(adapter, req.postBuffer(), JSONParser.LITERAL_KEY);
 			return adapter.result();
 		} catch (Exception e) {
-			throw new IllegalRequestException(400, "JSON数据无效", e);
+			throw new IllegalRequestException(400, e.getMessage() == null ? "JSON数据无效" : e.getMessage(), e);
 		}
 	}
 

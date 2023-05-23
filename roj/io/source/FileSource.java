@@ -1,10 +1,12 @@
 package roj.io.source;
 
 import roj.io.IOUtil;
-import roj.io.SourceInputStream;
 import roj.util.DynByteBuf;
 
-import java.io.*;
+import java.io.DataInput;
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 
 /**
@@ -89,19 +91,7 @@ public class FileSource extends Source {
 		file = new RandomAccessFile(source, "rw");
 	}
 
-	public DataInput asDataInput() {
-		return file;
-	}
-	public DataOutput asDataOutput() {
-		return file;
-	}
-	public InputStream asInputStream() {
-		try {
-			return new SourceInputStream(this, file.length() - offset);
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
+	public DataInput asDataInput() { return file; }
 
 	@Override
 	public Source threadSafeCopy() throws IOException {

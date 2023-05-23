@@ -213,9 +213,6 @@ public class ZipArchive implements ArchiveFile {
 	// endregion
 	// region Load
 
-	/**
-	 * Reload this zip file from disk, discarding any unsaved changes
-	 */
 	public final void reload() throws IOException {
 		entries.clear();
 		modified.clear();
@@ -427,9 +424,9 @@ public class ZipArchive implements ArchiveFile {
 									// top + header + offset (usize)
 									r.seek(entry.startPos() + 4 + 14);
 									// C(ompressed)Size
-									r.asDataOutput().writeInt(Integer.reverseBytes(inf.getTotalIn()));
+									r.writeInt(Integer.reverseBytes(inf.getTotalIn()));
 									// U(ncompressed)Size
-									r.asDataOutput().writeInt(Integer.reverseBytes(inf.getTotalOut()));
+									r.writeInt(Integer.reverseBytes(inf.getTotalOut()));
 								}
 							}
 
@@ -861,8 +858,10 @@ public class ZipArchive implements ArchiveFile {
 			// prepare
 			crc.reset();
 
+			if (mf.data instanceof Supplier) mf.data = ((Supplier<?>) mf.data).get();
+
 			if (!(mf.data instanceof InputStream)) {
-				ByteList data = (ByteList) (mf.data instanceof Supplier ? ((Supplier<?>) mf.data).get() : mf.data);
+				ByteList data = (ByteList) mf.data;
 
 				crc.update(data.list, data.arrayOffset() + data.rIndex, data.readableBytes());
 				e.CRC32 = (int) crc.getValue();
@@ -929,7 +928,7 @@ public class ZipArchive implements ArchiveFile {
 				// backward, 文件就是这点好
 				r.seek(offset + 18);
 				// 不用管ZIP64，这可是 byte[] 啊
-				r.asDataOutput().writeInt(Integer.reverseBytes((int) e.cSize));
+				r.writeInt(Integer.reverseBytes((int) e.cSize));
 				r.seek(curr);
 			} else {
 				SafeInputStream in = new SafeInputStream((InputStream) mf.data);
@@ -1027,21 +1026,20 @@ public class ZipArchive implements ArchiveFile {
 					throw new ZipException("Zip64预测失败，对于'可能'超过4GB大小的文件,请设置它的large标志位或令in.available返回Integer.MAX_VALUE");
 
 				r.seek(offset);
-				DataOutput dot = r.asDataOutput();
 				if ((e.mzfFlag & MZ_NOCRC) == 0) {
-					dot.writeInt(Integer.reverseBytes((int) crc.getValue()));
+					r.writeInt(Integer.reverseBytes((int) crc.getValue()));
 					e.CRC32 = (int) crc.getValue();
 				} else {
-					dot.writeInt(0);
+					r.writeInt(0);
 				}
 				if (!mf.large()) {
-					dot.writeInt(Integer.reverseBytes((int) e.cSize));
-					dot.writeInt(Integer.reverseBytes((int) e.uSize));
+					r.writeInt(Integer.reverseBytes((int) e.cSize));
+					r.writeInt(Integer.reverseBytes((int) e.uSize));
 				} else {
 					// update ZIP64
 					r.seek(offset+20+e.nameBytes.length);
-					dot.writeLong(Long.reverseBytes(e.uSize));
-					dot.writeLong(Long.reverseBytes(e.cSize));
+					r.writeLong(Long.reverseBytes(e.uSize));
+					r.writeLong(Long.reverseBytes(e.cSize));
 				}
 
 				r.seek(curr);

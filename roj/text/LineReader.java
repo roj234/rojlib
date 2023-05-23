@@ -28,11 +28,6 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 		this.str = new StreamReader(in);
 		this.keepEmpty = !cleanEmpty;
 	}
-	public LineReader(InputStream in, Charset cs, boolean cleanEmpty, boolean reusable) throws IOException {
-		this.str = new StreamReader(in);
-		this.keepEmpty = !cleanEmpty;
-		this.reuse = reusable;
-	}
 
 	public LineReader(CharSequence string) {
 		this(string, true);

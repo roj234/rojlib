@@ -12,12 +12,13 @@ import roj.util.DynByteBuf;
 public final class Poly1305 extends BufferedDigest implements MessageAuthenticCode {
 	private static final MutableBigInteger P = new MutableBigInteger(0x3, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFb);
 
-	final int[] iBuf = new int[5];
+	private final MutableBigInteger
+		R = new MutableBigInteger(new int[4]),
+		S = new MutableBigInteger(new int[4]),
+		Tmp = new MutableBigInteger(new int[10]);
+	private MutableBigInteger Acc = new MutableBigInteger(new int[9]);
 
-	private MutableBigInteger Acc = new MutableBigInteger();
-	private final MutableBigInteger R = new MutableBigInteger(), S = new MutableBigInteger(), Tmp = new MutableBigInteger();
-
-	public Poly1305() { super("Poly1305", 16); }
+	public Poly1305() { super("Poly1305", 16); setSignKey(new byte[]{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,39,30,31,32}); }
 
 	@Override
 	protected int engineGetDigestLength() { return 16; }
@@ -34,7 +35,6 @@ public final class Poly1305 extends BufferedDigest implements MessageAuthenticCo
 		ByteList b = IOUtil.SharedCoder.get().wrap(key);
 
 		T = R.getArray0();
-		if (T.length < 4) T = new int[4];
 		T[3] = b.readIntLE();
 		T[2] = b.readIntLE();
 		T[1] = b.readIntLE();
@@ -42,7 +42,6 @@ public final class Poly1305 extends BufferedDigest implements MessageAuthenticCo
 		R.setValue(T, 4);
 
 		T = S.getArray0();
-		if (T.length < 4) T = new int[4];;
 		T[3] = b.readIntLE();
 		T[2] = b.readIntLE();
 		T[1] = b.readIntLE();
@@ -52,22 +51,20 @@ public final class Poly1305 extends BufferedDigest implements MessageAuthenticCo
 
 	@Override
 	protected void engineUpdateBlock(DynByteBuf in) {
-		int[] TI = iBuf;
+		MutableBigInteger T = Tmp, A = Acc;
+
+		int[] TI = T.getArray0();
 		TI[4] = in.readIntLE();
 		TI[3] = in.readIntLE();
 		TI[2] = in.readIntLE();
 		TI[1] = in.readIntLE();
 		TI[0] = 0x01;
-
-		MutableBigInteger T = Tmp, A = Acc;
+		T.setValue(TI, 5);
 
 		// if the multiplication is performed as a separate operation from the
 		// modulus, the result will sometimes be under 2^256 and sometimes be
 		// above 2^256.
-		int[] bak = T.getArray0();
-		T.setValue(TI, 5);
 		A.add(T);
-		T.setArray0(bak);
 		A.multiply(R, T);
 		// this is a 'naive' implement... constant-time operation required
 		Acc = T.divide(P, A, true);

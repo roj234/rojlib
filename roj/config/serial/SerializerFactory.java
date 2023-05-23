@@ -15,6 +15,7 @@ import roj.asm.tree.attr.AttrUTF;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.SwitchEntry;
 import roj.asm.type.*;
+import roj.asm.util.AttrHelper;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.LongByeBye;
@@ -70,13 +71,15 @@ public final class SerializerFactory {
 		final Type output;
 		final MethodNode reader, writer;
 		final Object ref;
+		final boolean user;
 
-		public AsType(String name, MethodNode writer, MethodNode reader, Object o) {
+		public AsType(String name, MethodNode writer, MethodNode reader, Object o, boolean user_writer) {
 			this.name = name;
 			this.ref = o;
 			this.reader = reader;
 			this.writer = writer;
-			this.output = writer.returnType();
+			this.output = reader.parameters().get(0);
+			this.user = user_writer;
 		}
 
 		public String klass() { return reader.ownerClass(); }
@@ -84,7 +87,8 @@ public final class SerializerFactory {
 
 	public static final int
 		GENERATE = 1, CHECK_INTERFACE = 2, CHECK_PARENT = 4,
-		DYNAMIC = 8, IGNORE_UNKNOWN = 16, NO_CONSTRUCTOR = 32;
+		DYNAMIC = 8, IGNORE_UNKNOWN = 16, NO_CONSTRUCTOR = 32,
+		WRITE_OBJECT = 64;
 	public int flag;
 	public ToIntFunction<Class<?>> flagGetter;
 	private int flagFor(Class<?> className) {
@@ -171,23 +175,25 @@ public final class SerializerFactory {
 					ser = user(data, writer, reader);
 					GENERATED.put(name, ser);
 				}
+				ser = (Adapter) ((GenAdapter)ser).clone();
 			} finally {
 				lock.unlock();
 			}
 		}
 
-		ser = ((GenAdapter) ser).copy(this, o);
-
 		synchronized (localRegistry) {
 			localRegistry.put(cls.getName().replace('.', '/'), ser);
 		}
+
+		((GenAdapter) ser).secondaryInit(this, o);
+
 		return this;
 	}
-	public SerializerFactory registerAsType(String type, Class<?> cls, Object o) {
-		ConstantData data = Parser.parse(o.getClass());
-		if (data == null) throw new IllegalArgumentException("无法获取"+o+"的类文件");
+	public SerializerFactory registerAsType(String name, Class<?> targetType, Object inst) {
+		ConstantData data = Parser.parse(inst.getClass());
+		if (data == null) throw new IllegalArgumentException("无法获取"+inst+"的类文件");
 
-		Type clsType = TypeHelper.class2type(cls);
+		Type clsType = TypeHelper.class2type(targetType);
 		MethodNode writer = null, reader = null;
 		for (MethodNode mn : data.methods) {
 			List<Type> par = mn.parameters();
@@ -207,7 +213,35 @@ public final class SerializerFactory {
 		if (writer == null) throw new IllegalArgumentException("没找到writer");
 
 		synchronized (asTypes) {
-			asTypes.put(type, new AsType(type, writer, reader, o));
+			AsType old = asTypes.putIfAbsent(name, new AsType(name, writer, reader, inst, false));
+			if (old != null) throw new IllegalArgumentException(name+"已存在");
+		}
+		return this;
+	}
+	public SerializerFactory registerAsType(String name, Class<?> targetType, Object inst, String writerName, String readerName) {
+		ConstantData data = Parser.parse(inst.getClass());
+		if (data == null) throw new IllegalArgumentException("无法获取"+inst+"的类文件");
+
+		MethodNode w = data.methods.get(data.getMethod(writerName)),
+			r = data.methods.get(data.getMethod(readerName));
+
+		boolean user_writer = false;
+		sp: {
+			List<Type> wp = w.parameters(), rp = r.parameters();
+			if (wp.get(0).equals(r.returnType()) && rp.get(0).equals(TypeHelper.class2type(targetType))) {
+				if (rp.get(0).equals(w.returnType())) break sp;
+				if (wp.size() == 2 && "roj/config/serial/CVisitor".equals(wp.get(1).owner)) {
+					if (!wp.get(0).isPrimitive()) throw new IllegalArgumentException("object output not support user");
+					user_writer = true;
+					break sp;
+				}
+			}
+			throw new IllegalStateException("R/W param not mirrored");
+		}
+
+		synchronized (asTypes) {
+			AsType old = asTypes.putIfAbsent(name, new AsType(name, w, r, inst, user_writer));
+			if (old != null) throw new IllegalArgumentException(name+"已存在");
 		}
 		return this;
 	}
@@ -301,6 +335,7 @@ public final class SerializerFactory {
 				if ((flag & CHECK_INTERFACE) != 0) {
 					for (Class<?> itf : c.getInterfaces()) {
 						sb.clear();
+						// noinspection all
 						ser = localRegistry.get(sb.append(itf.getName()).replace('.', '/'));
 						if (ser != null) break findExist;
 					}
@@ -311,6 +346,7 @@ public final class SerializerFactory {
 
 				if ((flag & CHECK_PARENT) != 0) {
 					sb.clear();
+					// noinspection all
 					ser = localRegistry.get(sb.append(c.getName()).replace('.', '/'));
 					if (ser != null) break findExist;
 				}
@@ -329,6 +365,8 @@ public final class SerializerFactory {
 		if ((flag & GENERATE) == 0) throw new IllegalArgumentException("未找到"+name+"的序列化器");
 
 		if (isInvalid(type)) {
+			if ((flag & (DYNAMIC|WRITE_OBJECT)) != 0) return localRegistry.get(";Obj");
+
 			if (checking) return null;
 			throw new IllegalArgumentException(name+"无法被序列化");
 		}
@@ -358,11 +396,15 @@ public final class SerializerFactory {
 		}
 
 		if (ser instanceof GenAdapter) {
-			ser = ((GenAdapter) ser).copy(this, null);
+			ser = (Adapter) ((GenAdapter)ser).clone();
 		}
 
 		synchronized (localRegistry) {
 			localRegistry.put(name, ser);
+		}
+
+		if (ser instanceof GenAdapter) {
+			((GenAdapter) ser).secondaryInit(this, null);
 		}
 
 		return ser;
@@ -409,8 +451,8 @@ public final class SerializerFactory {
 		}
 	}
 
-	private void copyArrayRef(ConstantData c, char type) {
-		CodeWriter cw = c.newMethod(PUBLIC|FINAL, "read", "(Lroj/config/serial/AdaptContext;["+type+")Z");
+	private static void copyArrayRef(ConstantData c, char type) {
+		CodeWriter cw = c.newMethod(PUBLIC|FINAL, "read", "(Lroj/config/serial/AdaptContext;["+type+")V");
 		cw.visitSize(2,3);
 		cw.one(ALOAD_1);
 		cw.one(ALOAD_2);
@@ -418,11 +460,10 @@ public final class SerializerFactory {
 		cw.one(ALOAD_1);
 		cw.one(ICONST_1);
 		cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/serial/AdaptContext", "popd", "(Z)V");
-		cw.one(ICONST_1);
-		cw.one(IRETURN);
+		cw.one(RETURN);
 	}
 
-	private void addUpgrader(ConstantData c, byte code) {
+	private static void addUpgrader(ConstantData c, byte code) {
 		String orig = OpcodeUtil.toString0(code);
 		String id = orig.replace('L', 'J');
 
@@ -537,6 +578,7 @@ public final class SerializerFactory {
 	// region object serializer
 	private static final byte DIRECT_IF_OVERRIDE = SerializerFactoryFactory.injected ? INVOKESPECIAL : INVOKEVIRTUAL;
 	private Adapter klass(Class<?> o, int flag) {
+		if ((o.getModifiers()&PUBLIC) == 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
 		ConstantData data = Parser.parse(o);
 		if (data == null) throw new IllegalArgumentException("无法获取"+o.getName()+"的类文件");
 		if (data.fields.size() == 0) throw new IllegalArgumentException("这"+o.getName()+"味道不对啊,怎么一个字段都没有");
@@ -626,8 +668,15 @@ public final class SerializerFactory {
 
 		int fieldId = 0;
 
+		boolean defaultOptional = false;
 		int optional = 0;
 		optionalEx = null;
+
+		Annotations tmp1 = data.parsedAttr(data.cp, Attribute.ClAnnotations);
+		if (tmp1 != null) {
+			Annotation opt = AttrHelper.getAnnotation(tmp1.annotations, "roj/config/serial/Optional");
+			if (opt != null) defaultOptional = opt.getBoolean("value", true);
+		}
 
 		SimpleList<FieldNode> fields = data.fields;
 		for (int i = 0; i < fields.size(); i++) {
@@ -641,7 +690,7 @@ public final class SerializerFactory {
 
 			String name = f.name();
 			MethodNode get = null, set = null;
-			boolean optional1 = false;
+			boolean optional1 = defaultOptional;
 			AsType as = null;
 
 			Annotations attr = f.parsedAttr(data.cp, Attribute.ClAnnotations);
@@ -667,18 +716,21 @@ public final class SerializerFactory {
 							break;
 						}
 						case "roj/config/serial/Optional":
-							if (fieldId < 32) {
-								optional |= 1 << fieldId;
-							} else {
-								if (optionalEx == null) optionalEx = new MyBitSet();
-								optionalEx.add(fieldId-32);
-							}
-							optional1 = true;
+							optional1 = anno.getBoolean("value", true);
 							break;
 						case "roj/config/serial/As":
 							as = asTypes.get(anno.getString("value"));
 							if (as == null) throw new IllegalArgumentException("Unknown as " + anno);
 					}
+				}
+			}
+
+			if (optional1) {
+				if (fieldId < 32) {
+					optional |= 1 << fieldId;
+				} else {
+					if (optionalEx == null) optionalEx = new MyBitSet();
+					optionalEx.add(fieldId-32);
 				}
 			}
 
@@ -760,14 +812,16 @@ public final class SerializerFactory {
 
 		if (as != null) {
 			asId = c.getField("as$"+as.klass());
-			if (asId < 0) asId = c.newField(PRIVATE, "as$"+as.klass(), "L"+as.klass()+";");
+			if (asId < 0) {
+				asId = c.newField(PRIVATE, "as$"+as.klass(), "L"+as.klass()+";");
 
-			copy.one(ALOAD_0);
-			copy.one(ALOAD_1);
-			copy.ldc(new CstString(as.name));
-			copy.invoke(DIRECT_IF_OVERRIDE, "roj/config/serial/SerializerFactory", "getAsType", "(Ljava/lang/String;)Ljava/lang/Object;");
-			copy.clazz(CHECKCAST, as.klass());
-			copy.field(PUTFIELD, c, asId);
+				copy.one(ALOAD_0);
+				copy.one(ALOAD_1);
+				copy.ldc(new CstString(as.name));
+				copy.invoke(DIRECT_IF_OVERRIDE, "roj/config/serial/SerializerFactory", "getAsType", "(Ljava/lang/String;)Ljava/lang/Object;");
+				copy.clazz(CHECKCAST, as.klass());
+				copy.field(PUTFIELD, c, asId);
+			}
 
 			cw.one(ALOAD_0);
 			cw.field(GETFIELD, c, asId);
@@ -780,35 +834,46 @@ public final class SerializerFactory {
 			cw.one(ICONST_0);
 			cw.invoke(DIRECT_IF_OVERRIDE, "java/lang/String", "charAt", "(I)C");
 		} else {
-			cw.var(myCode, 2);
-			if (actualType == Type.CLASS) {
-				String type1 = type.getActualClass();
-				if (type1.equals("java/lang/String")) {
-					cw.invoke(INVOKESTATIC, "java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;");
-				} else {
-					cw.clazz(CHECKCAST, type1);
+			if (myCode == -1) {
+				cw.var(ALOAD, 2);
+				cw.invoke(INVOKESTATIC, "java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;");
+				switch (actualType) {
+					case Type.INT: cw.invoke(INVOKESTATIC, "java/lang/Integer", "parseInt", "(Ljava/lang/String;)I"); break;
+					case Type.DOUBLE: cw.invoke(INVOKESTATIC, "java/lang/Double", "parseDouble", "(Ljava/lang/String;)D"); cw.visitSizeMax(4,0); break;
+					case Type.LONG: cw.invoke(INVOKESTATIC, "java/lang/Long", "parseLong", "(Ljava/lang/String;)J"); cw.visitSizeMax(4,0); break;
+					case Type.FLOAT: cw.invoke(INVOKESTATIC, "java/lang/Float", "parseFloat", "(Ljava/lang/String;)F"); break;
+				}
+			} else {
+				cw.var(myCode, 2);
+				if (actualType == Type.CLASS) {
+					String type1 = type.getActualClass();
+					if (type1.equals("java/lang/String")) {
+						cw.invoke(INVOKESTATIC, "java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;");
+					} else {
+						cw.clazz(CHECKCAST, type1);
+					}
 				}
 			}
 		}
 
-		if (as != null) {
-			cw.invoke(INVOKEVIRTUAL, as.reader);
-		}
-
-		if (methodType != actualType) {
+		if (methodType != actualType && myCode != -1) {
 			switch (actualType) {
 				case Type.FLOAT: cw.one(D2F); break;
-				case Type.LONG: cw.one(I2L); break;
+				case Type.LONG: cw.one(I2L); cw.visitSizeMax(4,0); break;
 			}
 		}
+
+		if (as != null) cw.invoke(INVOKEVIRTUAL, as.reader);
+
 		if (set == null) cw.field(PUTFIELD, data.name, fn.name(), fn.rawDesc());
 		else cw.invoke(INVOKEVIRTUAL, set);
 
 		cw.one(RETURN);
-		// 这里改改可以实现short char之类的——不过int2这些没有损失/也不会很慢(吧)
 		switch (methodType) {
 			case Type.FLOAT: methodType = Type.DOUBLE; myCode = DLOAD; continue;
-			case Type.LONG: methodType = Type.INT; myCode = ILOAD; continue;
+			case Type.LONG: methodType = Type.INT; myCode = ILOAD; cw.visitSizeMax(4,0); continue;
+			// parseInt | parseFloat
+			case Type.DOUBLE: case Type.INT: methodType = Type.CLASS; myCode = -1; continue;
 		}
 		break;
 		}
@@ -839,6 +904,7 @@ public final class SerializerFactory {
 		write.invokeItf("roj/config/serial/CVisitor", "key", "(Ljava/lang/String;)V");
 
 		cw = keyCw;
+		block:
 		if (actualType == Type.CLASS && !"java/lang/String".equals(type.owner)) {
 			int id;
 			String serType = type.owner == null ? type.toDesc() : type.owner;
@@ -863,6 +929,7 @@ public final class SerializerFactory {
 			cw.field(GETFIELD, c, id);
 			cw.one(ALOAD_1);
 			if (as != null) {
+				assert !as.user;
 				cw.visitSizeMax(4,0);
 				cw.one(ALOAD_0);
 				cw.field(GETFIELD, c, asId);
@@ -889,10 +956,12 @@ public final class SerializerFactory {
 			keySwitch.targets.add(new SwitchEntry(fieldId, keyPrimitive));
 
 			cw = write;
-			cw.one(ALOAD_1);
 			if (as != null) {
+				if (!as.user) cw.one(ALOAD_1);
 				cw.one(ALOAD_0);
 				cw.field(GETFIELD, c, asId);
+			} else {
+				cw.one(ALOAD_1);
 			}
 			cw.one(ALOAD_2);
 
@@ -900,7 +969,9 @@ public final class SerializerFactory {
 			else cw.invoke(INVOKEVIRTUAL, get);
 
 			if (as != null) {
+				if (as.user) cw.one(ALOAD_1);
 				cw.invoke(INVOKEVIRTUAL, as.writer);
+				if (as.user) break block;
 			}
 
 			String c = "java/lang/String".equals(type.owner) ? "Ljava/lang/String;" : Type.toDesc(actualType);
@@ -980,11 +1051,12 @@ public final class SerializerFactory {
 	private final ToIntMap<String> serializerId = new ToIntMap<>();
 
 	private int ser(String type, String generic) {
-		int id = serializerId.getOrDefault(type,-1);
+		String _name = generic == null ? type : type.concat(generic);
+		int id = serializerId.getOrDefault(_name,-1);
 		if (id >= 0) return id;
 
 		id = c.newField(PRIVATE, "ser$"+c.fields.size(), "Lroj/config/serial/Adapter;");
-		serializerId.putInt(type,id);
+		serializerId.putInt(_name,id);
 
 		copy.one(ALOAD_0);
 		copy.one(ALOAD_1);
@@ -1004,12 +1076,11 @@ public final class SerializerFactory {
 		c.name("roj/config/serial/GA$"+classId++);
 		c.parent("roj/config/serial/Adapter");
 		c.interfaces.add(new CstClass("roj/config/serial/GenAdapter"));
+		c.cloneable();
 		FastInit.prepare(c);
 
-		copy = c.newMethod(PUBLIC, "copy", "(Lroj/config/serial/SerializerFactory;Ljava/lang/Object;)Lroj/config/serial/Adapter;");
+		copy = c.newMethod(PUBLIC, "secondaryInit", "(Lroj/config/serial/SerializerFactory;Ljava/lang/Object;)V");
 		copy.visitSize(4, 3);
-		copy.newObject(c.name);
-		copy.one(ASTORE_0);
 	}
 	private Adapter build() {
 		ConstantData c1 = c;
@@ -1018,8 +1089,7 @@ public final class SerializerFactory {
 		readMethods.clear();
 		serializerId.clear();
 
-		copy.one(ALOAD_0);
-		copy.one(ARETURN);
+		copy.one(RETURN);
 		copy.finish();
 		copy = null;
 

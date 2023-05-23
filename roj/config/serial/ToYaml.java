@@ -30,13 +30,26 @@ public class ToYaml extends ToSomeString {
 		return this;
 	}
 
+	public ToYaml timezone(TimeZone tz) {
+		cal = new ACalendar(tz);
+		return this;
+	}
+
 	private boolean topLevel, multiline;
 
 	protected final void listIndent() {}
-	protected final void listNext() { indent(depth); sb.append("- "); }
+	protected final void listNext() { indent(depth); sb.append("-"); }
 
 	protected final void mapNext() {}
 	protected final void endLevel() {}
+
+	@Override
+	protected void preValue(boolean hasNext) {
+		super.preValue(hasNext);
+		if ((flag&(LIST|MAP)) != 0) {
+			if (!hasNext) sb.append(' ');
+		}
+	}
 
 	@Override
 	protected void indent(int x) {
@@ -59,38 +72,38 @@ public class ToYaml extends ToSomeString {
 	private ACalendar cal;
 	@Override
 	public final void valueDate(long value) {
-		preValue();
+		preValue(false);
 		if (cal == null) cal = new ACalendar(TimeZone.getTimeZone("UTC"));
-		cal.formatDate("Y-m-d", value, sb);
+		cal.format("Y-m-d", value, sb);
 	}
 	@Override
 	public final void valueTimestamp(long value) {
-		preValue();
+		preValue(false);
 		if (cal == null) cal = new ACalendar(TimeZone.getTimeZone("UTC"));
-		cal.formatDate("Y-m-dTH:i:s.xZ", value, sb);
+		cal.toISOString(sb, value);
 	}
 
 	@Override
-	protected final void valString(String key) {
-		int check = YAMLParser.literalSafe(key);
+	protected final void valString(String val) {
+		int check = YAMLParser.literalSafe(val);
 		noFound:
 		if (check<0) {
-			sb.append(key);
+			sb.append(val);
 			return;
 		} else if (multiline&&check>0) {
 			found:
 			if (check != 1) {
-				for (int i = 0; i < key.length(); i++) {
-					char c = key.charAt(i);
+				for (int i = 0; i < val.length(); i++) {
+					char c = val.charAt(i);
 					if (WHITESPACE.contains(c)) {
 						if (c == '\n') break found;
 						check = 3;
-					} else if (c == ':' && i > 0 && (i+1 >= key.length() || WHITESPACE.contains(key.charAt(i+1)))) break noFound;
+					}
 				}
 				break noFound;
 			}
 
-			sb.append(key.charAt(key.length()-1) == '\n'?"|+":"|-");
+			sb.append(val.charAt(val.length()-1) == '\n'?"|+":"|-");
 
 			boolean first;
 			if (check == 3) {
@@ -109,16 +122,18 @@ public class ToYaml extends ToSomeString {
 					if (len > 0) first = false;
 
 					sb.append('\n');
-					int x = depth;
-					while (x-- > 0) sb.append(indent);
+					if (val.charAt(i) != '\n') {
+						int x = depth;
+						while (x-- > 0) sb.append(indent);
+					}
 				}
 				len = sb.length();
-				i = TextUtil.gAppendToNextCRLF(key, i, sb);
-			} while (i < key.length());
+				i = TextUtil.gAppendToNextCRLF(val, i, sb);
+			} while (i < val.length());
 			return;
 		}
 
-		ITokenizer.addSlashes(sb.append('"'), key).append('"');
+		ITokenizer.addSlashes(sb.append('"'), val).append('"');
 	}
 
 	@Override
@@ -127,7 +142,7 @@ public class ToYaml extends ToSomeString {
 	@Override
 	public final void key0(String key) {
 		indent(depth);
-		(YAMLParser.literalSafe(key)<0 ? sb.append(key) : ITokenizer.addSlashes(sb.append('"'), key).append('"')).append(": ");
+		(YAMLParser.literalSafe(key)<0 ? sb.append(key) : ITokenizer.addSlashes(sb.append('"'), key).append('"')).append(":");
 	}
 
 	@Override

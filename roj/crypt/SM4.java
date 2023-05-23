@@ -12,6 +12,8 @@ import java.security.InvalidKeyException;
 import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
 
+import static java.lang.Integer.rotateLeft;
+
 /**
  * 国密SM4 - 对称加解密
  */
@@ -73,15 +75,13 @@ public final class SM4 extends RCipherSpi {
 
 	private static int sm4_Lt(int ia) {
 		int b = morph(ia);
-		return b ^ IRL(b, 2) ^ IRL(b, 10) ^ IRL(b, 18) ^ IRL(b, 24);
+		return b ^ rotateLeft(b, 2) ^ rotateLeft(b, 10) ^ rotateLeft(b, 18) ^ rotateLeft(b, 24);
 	}
 	private static int sm4_iRK(int ia) {
 		int b = morph(ia);
-		return b ^ IRL(b, 13) ^ IRL(b, 23);
+		return b ^ rotateLeft(b, 13) ^ rotateLeft(b, 23);
 	}
 	private static int morph(int i) {
 		return ((SBOX[(i>>24)&0xFF]&0xFF)<<24) | ((SBOX[(i>>16)&0xFF]&0xFF)<<16) | ((SBOX[(i>>8)&0xFF]&0xFF)<<8) | (SBOX[i&0xFF]&0xFF);
 	}
-
-	private static int IRL(int n, int bit) { return (n << bit) | (n >>> -bit); }
 }

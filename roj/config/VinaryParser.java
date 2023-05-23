@@ -82,7 +82,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 	}
 
 	@Override
-	public <T extends CVisitor> T parseRaw(InputStream in, T cc, int flag) throws IOException {
+	public <T extends CVisitor> T parseRaw(T cc, InputStream in, int flag) throws IOException {
 		decodeTab.clear();
 		this.cc = cc;
 		try {
@@ -94,7 +94,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 	}
 
 	@Override
-	public <T extends CVisitor> T parseRaw(DynByteBuf buf, T cc, int flag) throws IOException {
+	public <T extends CVisitor> T parseRaw(T cc, DynByteBuf buf, int flag) throws IOException {
 		decodeTab.clear();
 		this.cc = cc;
 		try {

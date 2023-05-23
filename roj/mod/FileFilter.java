@@ -1,16 +1,15 @@
 package roj.mod;
 
 import roj.config.JSONParser;
-import roj.config.ParseException;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.Type;
 import roj.io.PushbackInputStream;
 import roj.text.StreamReader;
+import roj.util.ArrayCache;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
@@ -19,19 +18,17 @@ import static roj.mod.Shared.BASE;
 import static roj.mod.Shared.CONFIG;
 
 /**
- * Class Timer
- *
  * @author Roj233
  * @since 2021/7/11 14:23
  */
-class FileFilter implements Predicate<File> {
+public class FileFilter implements Predicate<File> {
 	public static final int F_RES_TIME = 0, F_SRC_ANNO = 1, F_SRC_TIME = 2, F_RES = 3;
 
 	public static final FileFilter INST = new FileFilter();
 
 	FileFilter() {}
 
-	static final byte[] buffer = new byte[CONFIG.getInteger("AT查找缓冲区大小")];
+	static final int buffer = CONFIG.getInteger("AT查找缓冲区大小");
 	static final List<CmtATEntry> cmtEntries = new ArrayList<>();
 
 	private long stamp;
@@ -67,50 +64,46 @@ class FileFilter implements Predicate<File> {
 	// region OpenAny Finder
 
 	public static boolean checkATComments(File file) {
-		if (buffer.length == 0) return false;
-		try (FileInputStream in = new FileInputStream(file)) {
-			int len = in.read(buffer);
-			for (int i = 0; i < len; i++) {
-				if (buffer[i] == '/' && regionMatches(buffer, i, COMMENT_BEGIN)) {
-					PushbackInputStream in1 = new PushbackInputStream(in);
-					in1.setBuffer(buffer, i + COMMENT_BEGIN.length(), len);
-					StreamReader sr = new StreamReader(in1) {
-						@Override
-						protected int fill(char[] buf, int off, int len) throws IOException {
-							len = super.fill(buf, off, len);
-							if (len <= 0) return len;
+		if (buffer == 0) return false;
 
-							for (int i = 0; i < len; i++) {
-								if (buf[off++] == '\n') {
-									eof = -2;
-									return i;
-								}
-							}
-							return len;
-						}
-					};
-					CList list = JSONParser.parses(sr, JSONParser.NO_DUPLICATE_KEY | JSONParser.NO_EOF | JSONParser.UNESCAPED_SINGLE_QUOTE).asList();
-					for (int j = 0; j < list.size(); j++) {
-						CEntry e1 = list.get(j);
-						if (e1.getType() != Type.LIST) j = list.size();
-						CList list1 = e1.getType() == Type.LIST ? e1.asList() : list;
-						CmtATEntry entry = new CmtATEntry();
-						entry.clazz = list1.get(0).asString();
-						entry.value = list1.get(1).asList().asStringList();
-						entry.compile = list1.size() > 2 && list1.get(2).asBool();
+		byte[] b = ArrayCache.getDefaultCache().getByteArray(buffer, false);
+		try (FileInputStream in = new FileInputStream(file)) {
+			int len = in.read(b);
+
+			for (int i = 0; i < len; i++) {
+				if (b[i] != '/' || !regionMatches(b, i, COMMENT_BEGIN)) continue;
+
+				PushbackInputStream in1 = new PushbackInputStream(in);
+				in1.setBuffer(b, i+COMMENT_BEGIN.length(), len);
+
+				CList list;
+				try (StreamReader sr = new StreamReader(in1, Shared.project.charset)) {
+				 	list = new JSONParser().parse(sr, JSONParser.NO_DUPLICATE_KEY | JSONParser.NO_EOF | JSONParser.UNESCAPED_SINGLE_QUOTE).asList();
+				}
+
+				for (int j = 0; j < list.size(); j++) {
+					CEntry e1 = list.get(j);
+					if (e1.getType() != Type.LIST) j = list.size();
+					CList list1 = e1.getType() == Type.LIST ? e1.asList() : list;
+
+					CmtATEntry entry = new CmtATEntry();
+					entry.clazz = list1.get(0).asString();
+					entry.value = list1.get(1).asList().asStringList();
+					entry.compile = list1.size() > 2 && list1.get(2).asBool();
+
+					synchronized (cmtEntries) {
 						cmtEntries.add(entry);
 					}
-					return true;
 				}
+				return true;
 			}
-		} catch (IOException | ParseException e) {
-			System.out.println("文件: " + file.getPath().substring(BASE.getAbsolutePath().length()));
-			if (e instanceof ParseException) {
-				System.out.println(e);
-			} else {
-				e.printStackTrace();
-			}
+		} catch (Exception e) {
+			System.out.println("文件: " + file.getPath().substring(BASE.getAbsolutePath().length()+1));
+			e.printStackTrace();
+		} finally {
+			ArrayCache.getDefaultCache().putArray(b);
 		}
+
 		return false;
 	}
 

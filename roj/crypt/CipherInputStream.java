@@ -7,7 +7,6 @@ import roj.util.Helpers;
 import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.GeneralSecurityException;
 
 /**
  * @author Roj234
@@ -20,8 +19,7 @@ public class CipherInputStream extends InputStream {
 	private byte[] b1;
 
 	private final ByteList.Slice i = new ByteList.Slice();
-	private final ByteList o;
-	private BufferPool pool;
+	private ByteList o;
 
 	protected final RCipherSpi c;
 	private int cw,cr;
@@ -29,13 +27,9 @@ public class CipherInputStream extends InputStream {
 	public CipherInputStream(InputStream in, RCipherSpi c) {
 		this.in = in;
 		this.c = c;
-		if (c.engineGetBlockSize() != 0) {
-			this.pool = BufferPool.localPool();
-			this.o = (ByteList) pool.buffer(false, CipherOutputStream.BUFFER_SIZE);
-			this.i.set(o.array(), o.arrayOffset(), o.capacity());
-		} else {
-			this.o = new ByteList.Slice();
-		}
+
+		this.o = (ByteList) BufferPool.localPool().buffer(false, CipherOutputStream.BUFFER_SIZE);
+		this.i.set(o.array(), o.arrayOffset(), o.capacity());
 	}
 
 	@Override
@@ -47,20 +41,6 @@ public class CipherInputStream extends InputStream {
 	@Override
 	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
 		if (eof) return -1;
-
-		if (c.engineGetBlockSize() == 0) {
-			len = in.read(b, off, len);
-			if (len > 0) {
-				try {
-					c.crypt(i.setR(b, off, len), ((ByteList.Slice)o).set(b, off, len));
-				} catch (GeneralSecurityException e) {
-					throw new IOException(e);
-				}
-			} else if (len < 0) {
-				eof = true;
-			}
-			return len;
-		}
 
 		int myLen = len;
 		try {
@@ -114,7 +94,7 @@ public class CipherInputStream extends InputStream {
 	@Override
 	public int available() throws IOException {
 		if (eof) return o.isReadable()?o.readableBytes():-1;
-		else return o.readableBytes()+1;
+		else return o.readableBytes()+in.available();
 	}
 
 	@Override
@@ -123,10 +103,8 @@ public class CipherInputStream extends InputStream {
 			in.close();
 		} finally {
 			synchronized (this) {
-				if (pool != null) {
-					pool.reserve(o);
-					pool = null;
-				}
+				o.close();
+				o = null;
 			}
 		}
 	}

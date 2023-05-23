@@ -1,14 +1,13 @@
 package roj.concurrent;
 
 import org.jetbrains.annotations.Async;
+import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.collect.RingBuffer;
 import roj.concurrent.task.ITask;
 import roj.util.Helpers;
 
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -45,8 +44,9 @@ public class TaskPool implements TaskHandler {
 	private static long RUNNING_OFFSET, PARKING_OFFSET;
 
 	final ReentrantLock lock = new ReentrantLock();
-	final Condition noFull = lock.newCondition(), noEmpty = lock.newCondition();
+	final Condition noFull = lock.newCondition();
 	final RingBuffer<ITask> tasks;
+	final TransferQueue<ITask> fastPath = new LinkedTransferQueue<>();
 
 	public TaskPool(int coreThreads, int maxThreads, int newThreshold, int rejectThreshold, int stopTimeout, MyThreadFactory factory) {
 		this.core = coreThreads;
@@ -63,7 +63,6 @@ public class TaskPool implements TaskHandler {
 		this.max = maxThreads;
 		if (coreThreads > maxThreads) throw new IllegalArgumentException("coreThreads > maxThreads");
 		this.newThr = newThreshold;
-		if (newThreshold < 0) throw new IllegalArgumentException("newThreshold < 1");
 		this.idleTime = stopTimeout;
 		if (stopTimeout < 100) throw new IllegalArgumentException("stopTimeout < 100");
 		this.factory = new PrefixFactory(namePrefix);
@@ -79,7 +78,7 @@ public class TaskPool implements TaskHandler {
 
 	public static TaskPool CpuMassive() { return CpuMassiveHolder.P; }
 	private static final class CpuMassiveHolder {
-		static final TaskPool P = new TaskPool(1, Runtime.getRuntime().availableProcessors(), 1, 60000, "Cpu任务-");
+		static final TaskPool P = new TaskPool(1, Runtime.getRuntime().availableProcessors(), 0, 60000, "Cpu任务-");
 	}
 
 	public static TaskPool ParallelPool() {
@@ -93,17 +92,26 @@ public class TaskPool implements TaskHandler {
 
 		int len = running;
 		if (len <= 0) {
-			if (len < 0) {
-				throw new RejectedExecutionException("TaskPool was shutdown.");
-			}
+			if (len < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
 
 			newWorker();
-		} else {
-			int size = tasks.size();
+		}
 
-			if (len < core && size > 0) {
-				newWorker();
-			} else if (len < max && size >= newThr) {
+		// 等待立即结束的短时任务
+		try {
+			if (fastPath.tryTransfer(task, 10, TimeUnit.MICROSECONDS)) return;
+		} catch (InterruptedException ignored) {}
+
+		if (task.isCancelled()) return;
+
+		len = running;
+		if (len < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
+		else {
+			if (len < core ||
+				len < max &&
+					(newThr == 0 ||
+					(newThr < 0 ? tasks.size()/len : tasks.size()) > Math.abs(newThr))
+			) {
 				newWorker();
 			}
 		}
@@ -118,7 +126,6 @@ public class TaskPool implements TaskHandler {
 				}
 			} else {
 				tasks.ringAddLast(task);
-				noEmpty.signal();
 			}
 		} finally {
 			lock.unlock();
@@ -156,38 +163,40 @@ public class TaskPool implements TaskHandler {
 
 			timeout = false;
 			try {
-				lock.lock();
-				try {
-					while (tasks.isEmpty()) {
-						int r;
-						do {
-							r = parking;
-						} while (!u.compareAndSwapInt(this, PARKING_OFFSET, r, r+1));
-						synchronized (TaskPool.this) {
-							notifyAll();
+				if (!tasks.isEmpty()) {
+					lock.lock();
+					try {
+						while (!tasks.isEmpty()) {
+							ITask task = tasks.removeFirst();
+							if (!task.isCancelled()) return task;
 						}
-
-						try {
-							if (!noEmpty.await(idleTime, TimeUnit.MILLISECONDS)) {
-								timeout = true;
-								continue main;
-							}
-						} finally {
-							do {
-								r = parking;
-							} while (!u.compareAndSwapInt(this, PARKING_OFFSET, r, r-1));
-							synchronized (TaskPool.this) {
-								notifyAll();
-							}
-						}
+					} finally {
+						noFull.signalAll();
+						lock.unlock();
 					}
+				}
 
-					do {
-						ITask task = tasks.removeFirst();
-						if (!task.isCancelled()) return task;
-					} while (!tasks.isEmpty());
+				int r;
+				do {
+					r = parking;
+				} while (!u.compareAndSwapInt(this, PARKING_OFFSET, r, r+1));
+
+				synchronized (this) { notifyAll(); }
+
+				try {
+					// original noEmpty.await
+					Object task = fastPath.poll(idleTime, TimeUnit.MILLISECONDS);
+					if (task == null || task == IntMap.UNDEFINED) {
+						timeout = true;
+					} else {
+						// noinspection all
+						ITask tt = (ITask) task;
+						if (!tt.isCancelled()) return tt;
+					}
 				} finally {
-					lock.unlock();
+					do {
+						r = parking;
+					} while (!u.compareAndSwapInt(this, PARKING_OFFSET, r, r-1));
 				}
 			} catch (InterruptedException ignored) {}
 		}
@@ -216,11 +225,14 @@ public class TaskPool implements TaskHandler {
 		}
 	}
 	public static void waitPolicy(TaskPool pool, ITask task) {
-		pool.noFull.awaitUninterruptibly();
-		if (pool.running < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
+		while (pool.tasks.remaining() == 0) {
+			pool.noFull.awaitUninterruptibly();
+			if (pool.running < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
 
-		pool.tasks.ringAddLast(task);
-		pool.noEmpty.signal();
+			if (!pool.fastPath.tryTransfer(task)) {
+				pool.tasks.ringAddLast(task);
+			}
+		}
 	}
 	public static void newThreadPolicy(TaskPool pool, ITask task) { new ImmediateExecutor(task).start(); }
 
@@ -242,7 +254,7 @@ public class TaskPool implements TaskHandler {
 
 		tasks.clear();
 
-		noEmpty.signalAll();
+		while (fastPath.tryTransfer(Helpers.cast(IntMap.UNDEFINED)));
 		noFull.signalAll();
 
 		lock.unlock();
@@ -265,7 +277,9 @@ public class TaskPool implements TaskHandler {
 			while ((!tasks.isEmpty() || running != parking) && running > 0) {
 				try {
 					wait(0);
-				} catch (InterruptedException ignored) {}
+				} catch (InterruptedException e) {
+					break;
+				}
 			}
 		}
 	}
@@ -277,7 +291,9 @@ public class TaskPool implements TaskHandler {
 				if (dt < 0) return false;
 				try {
 					wait(dt);
-				} catch (InterruptedException ignored) {}
+				} catch (InterruptedException e) {
+					break;
+				}
 			}
 		}
 		return true;

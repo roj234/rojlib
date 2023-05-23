@@ -18,14 +18,21 @@ import java.util.function.IntConsumer;
  */
 public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable {
 	private byte[] b;
-	private int pushback, off, len;
+	private int off, lim, bOff, bLen = 1024;
 
 	private Closeable in;
 	private byte type;
 
 	public ChineseCharsetDetector(Closeable in) { input(in); }
 	public ChineseCharsetDetector input(Closeable in) {
-		this.len = 1024;
+		if ((type & 0x40) != 0) {
+			b = null;
+			bOff = 0;
+			bLen = 1024;
+		}
+
+		off = lim = 0;
+
 		this.in = in;
 		if (in instanceof ReadableByteChannel) {
 			type = 1;
@@ -34,13 +41,14 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 		} else if (in instanceof DynByteBuf) {
 			type = 0x42;
 			DynByteBuf i = ((DynByteBuf) in);
+
 			if (i.hasArray()) {
 				b = i.array();
-				off = i.arrayOffset()+i.rIndex;
-				len = i.readableBytes();
+				bOff = i.arrayOffset()+i.rIndex;
+				bLen = i.readableBytes();
 			}
 		} else {
-			throw new IllegalArgumentException("暂不支持"+ in.getClass().getName());
+			throw new IllegalArgumentException("暂不支持"+in.getClass().getName());
 		}
 		return this;
 	}
@@ -49,8 +57,8 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 		close();
 		if ((type & 0x40) == 0) {
 			this.b = b;
-			this.off = off;
-			this.len = len;
+			this.bOff = off;
+			this.bLen = len;
 		}
 		return this;
 	}
@@ -58,37 +66,38 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 	public ChineseCharsetDetector limit(int capacity) {
 		close();
 		if (b != null) throw new IllegalArgumentException("Not auto buffer");
-		this.len = capacity;
+		this.bLen = capacity;
 		return this;
 	}
 
 	public String detect() throws IOException {
 		if (b == null) {
-			b = ArrayCache.getDefaultCache().getByteArray(len, false);
+			b = ArrayCache.getDefaultCache().getByteArray(bLen, false);
 			type |= 0x80;
 		}
 
-		int len = readUpto(b, 0,4);
+		int len = lim = readUpto(b, bOff, 4);
 		if (len < 2) return "US-ASCII";
 
 		if (len < 4) {
 			// avoid UTF-32 issue
-			if (len < 3) b[off+2] = 1;
-			b[off+3] = 1;
+			if (len < 3) b[bOff+2] = 1;
+			b[bOff+3] = 1;
 		}
 
 		String bomCharset = detectBOM(b);
 		if (bomCharset != null) return bomCharset;
 
-		len += readUpto(b, len, this.len-len);
-		pushback = len;
+		len += readUpto(b, bOff+len, bLen-len);
+		off = 0;
+		lim = len;
 
 		score = 0;
-		UTF8MB4.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len, this);
+		UTF8MB4.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+bOff, len, this);
 		int utf8_score = score;
 
 		score = 0;
-		GB18030.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len, this);
+		GB18030.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+bOff, len, this);
 		int gb18030_score = score;
 
 		// ASCII时相同
@@ -98,34 +107,34 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 		throw new IOException("无法确定编码,utf8_score="+utf8_score+",gbk_score="+gb18030_score);
 	}
 	private String detectBOM(byte[] b) {
-		int o = off;
+		int o = bOff;
 		switch (b[o] & 0xFF) {
 			case 0x00:
 				if ((b[o+1] == (byte) 0x00) && (b[o+2] == (byte) 0xFE) && (b[o+3] == (byte) 0xFF)) {
-					pushback = 0;
+					off = 4;
 					return "UTF-32BE";
 				}
 				break;
 			case 0xFF:
 				if (b[o+1] == (byte) 0xFE) {
 					if ((b[o+2] == (byte) 0x00) && (b[o+3] == (byte) 0x00)) {
-						pushback = 0;
+						off = 4;
 						return "UTF-32LE";
 					} else {
-						pushback = 2;
+						off = 2;
 						return "UTF-16LE";
 					}
 				}
 				break;
 			case 0xEF:
 				if ((b[o+1] == (byte) 0xBB) && (b[o+2] == (byte) 0xBF)) {
-					pushback = 1;
+					off = 3;
 					return "UTF-8";
 				}
 				break;
 			case 0xFE:
 				if ((b[o+1] == (byte) 0xFF)) {
-					pushback = 2;
+					off = 2;
 					return "UTF-16BE";
 				}
 				break;
@@ -172,7 +181,8 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 	}
 
 	public byte[] buffer() { type &= ~0x80; return (type & 0x40) != 0 ? null : b; }
-	public int length() { return (type & 0x40) != 0 ? 0 :pushback; }
+	public int offset() { return off; }
+	public int limit() { return lim; }
 
 	@Override
 	public void close() {

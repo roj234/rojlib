@@ -20,6 +20,7 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -90,11 +91,6 @@ public final class Project extends FileConfig {
 		try {
 			if (binJar.length() == 0) if (!binJar.createNewFile() || !binJar.setLastModified(0)) CmdUtil.warning("无法初始化StampFileTime");
 			this.binFile = new ZipOutput(binJar);
-
-			// 已用单例锁替代
-			// FileLock lock = FileChannel.open(binJar.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE)
-			//                            .tryLock(0, Long.MAX_VALUE, true);
-			//if(null == lock) CmdUtil.warning("无法获取StampFile独占锁");
 		} catch (Throwable e) {
 			CmdUtil.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 " + binJar.getAbsolutePath(), e);
 			LockSupport.parkNanos(3_000_000_000L);
@@ -178,12 +174,42 @@ public final class Project extends FileConfig {
 		}
 	}
 
-	public AsyncTask<Void> getResourceTask(int i) {
-		if (i == 0) resources.clear();
+	public AsyncTask<Void> getResourceTask(long stamp) {
+
 		return new AsyncTask<Void>() {
 			@Override
 			protected Void invoke() {
-				if (i == 2) {
+				int len = resPath.getAbsolutePath().length();
+
+				if (stamp != -1L) {
+					MyHashSet<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
+					if (!resources.isEmpty() && !set.contains(null)) {
+						synchronized (set) {
+							for (String s : set) {
+								String relPath = s.substring(len + 1).replace('\\', '/');
+								resources.put(relPath, s);
+
+								try {
+									dstFile.setS(relPath, () -> {
+										try {return new FileInputStream(s);
+										} catch (FileNotFoundException e) {Helpers.athrow(e);}
+										return null;
+									});
+								} catch (IOException e) {
+									CmdUtil.warning("资源文件", e);
+								}
+							}
+							set.clear();
+						}
+					} else {
+						resourceFilter.reset(stamp, FileFilter.F_RES_TIME);
+						loadFromFilter(len);
+					}
+				} else {
+					resourceFilter.reset(stamp, FileFilter.F_RES);
+					resources.clear();
+					loadFromFilter(len);
+
 					for (Map.Entry<String, String> entry : resources.entrySet()) {
 						try {
 							dstFile.set(entry.getKey(), new FileInputStream(entry.getValue()));
@@ -191,35 +217,22 @@ public final class Project extends FileConfig {
 							CmdUtil.warning("资源文件", e);
 						}
 					}
-					return null;
 				}
 
 				loadMapper();
-
-				int len = resPath.getAbsolutePath().length();
-				MyHashSet<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
-				if (!resources.isEmpty() && !set.contains(null)) {
-					synchronized (set) {
-						for (String s : set) {
-							String relPath = s.substring(len + 1).replace('\\', '/');
-							resources.put(relPath, s);
-						}
-						set.clear();
-					}
-				} else {
-					resources.clear();
-
-					List<File> files = IOUtil.findAllFiles(resPath, resourceFilter);
-					for (int i = 0; i < files.size(); i++) {
-						String s = files.get(i).getAbsolutePath();
-						String relPath = s.substring(len + 1).replace('\\', '/');
-
-						resources.put(relPath, s);
-					}
-				}
 				return null;
 			}
 		};
+	}
+
+	private void loadFromFilter(int len) {
+		List<File> files = IOUtil.findAllFiles(resPath, resourceFilter);
+		for (int i = 0; i < files.size(); i++) {
+			String s = files.get(i).getAbsolutePath();
+			String relPath = s.substring(len + 1).replace('\\', '/');
+
+			resources.put(relPath, s);
+		}
 	}
 
 	public void registerWatcher() {

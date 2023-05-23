@@ -1,11 +1,10 @@
 package roj.net.http.srv;
 
 import roj.collect.MyHashMap;
-import roj.crypt.Base64;
-import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.Headers;
+import roj.net.http.IllegalRequestException;
 import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.text.LineReader;
@@ -13,6 +12,7 @@ import roj.text.TextUtil;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -80,15 +80,19 @@ public class FileResponse implements Response {
 
 	private String splitter;
 
-	public static FileResponse cached(Request req) {
+	FileResponse() {}
+
+	public static Response response(Request req, FileInfo info) {
 		Map<String, Object> map = req.threadContext();
 
-		FileResponse resp = (FileResponse) map.get("FileResp");
-		if (resp == null) map.put("FileResp", resp = new FileResponse());
-		return resp.file == null ? resp : new FileResponse();
+		FileResponse resp = (FileResponse) map.get("h11:send_file");
+		if (resp == null) map.put("h11:send_file", resp = new FileResponse());
+		if (resp.file != null) resp = new FileResponse();
+
+		return resp.init(req, info);
 	}
 
-	public Response init(Request req, FileInfo info) {
+	private Response init(Request req, FileInfo info) {
 		def = 0;
 		file = info;
 
@@ -192,45 +196,63 @@ public class FileResponse implements Response {
 			s = ranges.get(i);
 			int j = s.indexOf('-');
 			if (j == 0) {
-				data[(i << 1)] = Long.parseLong(s.substring(1));
-				data[(i << 1) + 1] = len-1;
+				data[(i << 1)] = 0;
+				data[(i << 1) + 1] = parseLong(s.substring(1), len);
 			} else {
 				// start, end
-				long o = data[i << 1] = Long.parseLong(s.substring(0, j));
-				data[(i << 1) + 1] = j == s.length() - 1 ? len - 1 : Long.parseLong(s.substring(j + 1));
+				long o = data[i << 1] = parseLong(s.substring(0, j), len);
+				data[(i << 1) + 1] = j == s.length() - 1 ? len - 1 : parseLong(s.substring(j + 1), len);
 			}
 
-			total += data[(i<<1)+1] - data[i<<1] + 1;
+			long seglen = data[(i << 1) + 1] - data[i << 1] + 1;
+			if (seglen < 0) Helpers.athrow(new IllegalRequestException(416, (Response) null));
+			total += seglen;
 		}
 
-		req.handler.header("Content-Length", Long.toString(total));
 		if (data.length == 2) {
-			req.handler.header("Content-Range", "bytes " + data[0] + '-' + data[1] + '/' + len);
+			req.responseHeader.put("content-range", "bytes " + data[0] + '-' + data[1] + '/' + len);
+			req.responseHeader.put("content-length", Long.toString(total));
 		} else if (data.length > 2) {
 			ByteList rnd = ByteList.allocate(16);
 			ThreadLocalRandom.current().nextBytes(rnd.list);
 			rnd.wIndex(rnd.capacity());
 
-			CharList b = IOUtil.getSharedCharBuf().append("--MultipartBoundary--");
-			Base64.encode(rnd, b, Base64.B64_URL_SAFE).append("----");
+			CharList b = new CharList().append("multipart/byteranges; boundary=\"BARFOO");
+			TextUtil.bytes2hex(rnd.list,0,16,b).append("\"");
 
-			req.handler.header("Content-Type", "multipart/byteranges; boundary="+b);
+			req.responseHeader.put("content-type", b.toString());
 
-			splitter = b.insert(0, "--").toString();
+			// 看了一眼标准，第一个可以不加\r\n，不过无所谓
+			b.replace(28, 32, "\r\n--");
+			splitter = b.toString(28, b.length()-1);
+			b._free();
+
+			req.handler.chunked();
 		}
 
 		return plus(206, req);
+	}
+
+	private static long parseLong(String num, long max) {
+		aa: {
+			if (TextUtil.isNumber(num) != 0) break aa;
+			long s = Long.parseLong(num);
+			if (s < 0 || s >= max) break aa;
+			return s;
+		}
+		Helpers.athrow(new IllegalRequestException(416, (Response) null));
+		return 0;
 	}
 
 	private Response plus(int r, Request req) {
 		ResponseHeader h = req.handler;
 		h.code(r).date();
 		if (r != 304) {
-			h.header("Last-Modified", HttpServer11.TSO.get().toRFC(file.lastModified()));
+			h.header("last-modified", HttpServer11.TSO.get().toRFC(file.lastModified()));
 			if (r == 206) return this;
 
-			if (file.getETag() != null) h.header("ETag", file.getETag());
-			if (def != 2 && (file.stats() & (1<<(2+def))) != 0) h.header("Accept-Ranges", "bytes");
+			if (file.getETag() != null) h.header("etag", file.getETag());
+			if (def != 2 && (file.stats() & (1<<(2+def))) != 0) h.header("accept-ranges", "bytes");
 		}
 		return null;
 	}
@@ -244,10 +266,15 @@ public class FileResponse implements Response {
 		if (ranges.length == 0) {
 			in = file.get(def, 0);
 			remain = file.length(def);
-			if (this.def != 2) h.put("Content-Length", Long.toString(remain));
+			if (this.def != 2) h.put("content-length", Long.toString(remain));
 		} else {
-			in = file.get(def, ranges[0]);
-			remain = ranges[1]-ranges[0]+1;
+			if (ranges.length > 2) {
+				off = -2;
+				remain = 0;
+			} else {
+				in = file.get(def, ranges[0]);
+				remain = ranges[1]-ranges[0]+1;
+			}
 		}
 
 		file.prepare(srv, h);
@@ -258,11 +285,17 @@ public class FileResponse implements Response {
 		if (remain < 0) return false;
 
 		if (remain == 0) {
-			in.close();
+			if (in != null) in.close();
+			off += 2;
 
 			if (ranges.length > 2) {
-				DynByteBuf t = rh.ch().allocate(true, splitter.length()+2).putAscii(splitter);
+				DynByteBuf t = rh.ch().allocate(true, splitter.length()+128).putAscii(splitter);
 				if (off == ranges.length) t.putAscii("--");
+				t.putAscii("\r\n");
+
+				if (off < ranges.length) {
+					t.putAscii("content-range: byte "+ranges[off]+"-"+ranges[off+1]+"/"+file.length(def==1)+"\r\n\r\n");
+				}
 
 				try {
 					rh.write(t);
@@ -270,13 +303,13 @@ public class FileResponse implements Response {
 					rh.ch().reserve(t);
 				}
 			}
-			if (off == ranges.length) {
+
+			if (off >= ranges.length) {
 				remain = -1;
 				in = null;
 				return false;
 			}
 
-			off += 2;
 			in = file.get(def == 1, ranges[off]);
 			remain = ranges[off+1] - ranges[off] + 1;
 		}

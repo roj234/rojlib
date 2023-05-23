@@ -5,8 +5,8 @@ import roj.concurrent.TaskExecutor;
 import roj.concurrent.task.AsyncTask;
 import roj.config.ParseException;
 import roj.config.XMLParser;
-import roj.config.data.XElement;
-import roj.config.data.XEntry;
+import roj.config.data.Element;
+import roj.config.data.Node;
 import roj.io.IOUtil;
 import roj.net.http.Headers;
 import roj.net.http.HttpHead;
@@ -227,13 +227,13 @@ public final class UPnPDevice {
 		String loc1 = loc;
 
 		List<Service> services = device.services = new ArrayList<>();
-		XElement xml = XMLParser.parses(query.execute().str());
-		List<XElement> xmlServices = xml.getAllByTagName("service");
+		Element xml = XMLParser.parses(query.execute().str());
+		List<Element> xmlServices = xml.getElementsByTagName("service");
 		for (int i = 0; i < xmlServices.size(); i++) {
-			XElement xServ = xmlServices.get(i);
+			Element xServ = xmlServices.get(i);
 			Service srv = new Service();
-			srv.serviceType = xServ.childByTag("serviceType").child(0).asString();
-			srv.serviceId = xServ.childByTag("serviceId").child(0).asString();
+			srv.serviceType = xServ.element("serviceType").textContent();
+			srv.serviceId = xServ.element("serviceId").textContent();
 
 			srv.controlURL = getURL(loc1, "controlURL", xServ);
 			srv.eventSubURL = getURL(loc1, "eventSubURL", xServ);
@@ -243,12 +243,12 @@ public final class UPnPDevice {
 		}
 
 		Map<String, String> deviceInfo = new MyHashMap<>(8);
-		List<XEntry> xDevice = xml.getXS("root.device").get(0).asElement().children();
+		List<Node> xDevice = xml.querySelector(".root.device").children();
 		for (int i = 0; i < xDevice.size(); i++) {
-			XEntry xDesc = xDevice.get(i);
+			Node xDesc = xDevice.get(i);
 			if (xDesc.size() > 0) {
-				if (xDesc.child(0).isString()) {
-					deviceInfo.put(xDesc.asElement().tag, xDesc.child(0).asString().trim());
+				if (xDesc.child(0).nodeType() == Node.ELEMENT) {
+					deviceInfo.put(xDesc.asElement().tag, xDesc.child(0).textContent().trim());
 				}
 			}
 		}
@@ -256,8 +256,8 @@ public final class UPnPDevice {
 		return null;
 	}
 
-	private static String getURL(String base, String name, XElement xml) {
-		String url = xml.childByTag(name).child(0).asString();
+	private static String getURL(String base, String name, Element xml) {
+		String url = xml.element(name).textContent();
 		return !url.startsWith("/") ? base + "/" + url : base + url;
 	}
 
@@ -306,9 +306,9 @@ public final class UPnPDevice {
 				.header("Content-Length", String.valueOf(data.wIndex()))
 				.body(new ByteList(data.toByteArray()));
 
-			XElement header = XMLParser.parses(query.execute().bytes(), XMLParser.LENIENT);
+			Element header = XMLParser.parses(query.execute().bytes(), XMLParser.LENIENT);
 
-			XElement elm = header.child(0).child(0).child(0).asElement();
+			Element elm = header.child(0).child(0).child(0).asElement();
 			if (!elm.tag.startsWith(action, 2)) {
 				if (!elm.tag.equals("s:Fault")) {
 					throw new IOException("无效响应类型 " + elm.tag);
@@ -321,9 +321,9 @@ public final class UPnPDevice {
 					//            <errorDescription>Action Failed</errorDescription>
 					//        </UPnPError>
 					//    </detail>
-					List<XEntry> child = elm.children();
+					List<Node> child = elm.children();
 					for (int i = 0; i < child.size(); i++) {
-						XElement xKey = child.get(i).asElement();
+						Element xKey = child.get(i).asElement();
 						if (xKey.tag.equals("detail")) {
 							child = xKey.child(0).children();
 							break;
@@ -331,18 +331,18 @@ public final class UPnPDevice {
 					}
 					Map<String, String> ret = new MyHashMap<>(child.size());
 					for (int i = 0; i < child.size(); i++) {
-						XElement xKey = child.get(i).asElement();
-						ret.put(xKey.tag, xKey.child(0).asString().trim());
+						Element xKey = child.get(i).asElement();
+						ret.put(xKey.tag, xKey.child(0).textContent().trim());
 					}
 					return ret;
 				}
 			}
 
-			List<XEntry> child = elm.children();
+			List<Node> child = elm.children();
 			Map<String, String> ret = new MyHashMap<>(child.size());
 			for (int i = 0; i < child.size(); i++) {
-				XElement xKey = child.get(i).asElement();
-				ret.put(xKey.tag, xKey.size() == 0 ? "" : xKey.child(0).asString().trim());
+				Element xKey = child.get(i).asElement();
+				ret.put(xKey.tag, xKey.size() == 0 ? "" : xKey.child(0).textContent().trim());
 			}
 			return ret;
 		}

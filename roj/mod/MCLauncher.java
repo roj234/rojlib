@@ -1137,7 +1137,7 @@ public class MCLauncher extends JFrame {
 		if (java.isEmpty()) java = "java";
 		SimpleList<String> args = new SimpleList<>();
 		args.add(java);
-		replace(mc_conf.get("jvmArg").asList().get(0), env, args);
+		replace(mc_conf.getString("jvmArg"), env, args);
 		args.add(mc_conf.getString("mainClass"));
 
 		String playerName = mc_conf.getString("player_name");
@@ -1174,7 +1174,7 @@ public class MCLauncher extends JFrame {
 		mcEnv.put("version_name", "FMDv" + VERSION);
 		mcEnv.put("auth_player_name", authName);
 		mcEnv.put("user_properties", "{}");
-		replace(mc_conf.get("mcArg"), mcEnv, args);
+		replace(mc_conf.getString("mcArg"), mcEnv, args);
 
 		CmdUtil.info("启动客户端...");
 
@@ -1182,9 +1182,9 @@ public class MCLauncher extends JFrame {
 	}
 
 	private static final Tokenizer l = new Tokenizer().literalEnd(" \r\n\t\f").defaultC2C(0);
-	private static void replace(CEntry arg, Map<String, String> env, SimpleList<String> args) {
+	private static void replace(String arg, Map<String, String> env, SimpleList<String> args) {
 		CharList sb = new CharList();
-		Template.replaceOnce(env, arg.asString(), sb);
+		Template.replaceOnce(env, arg, sb);
 		try {
 			l.init(sb);
 			while (l.hasNext()) {
@@ -1534,11 +1534,11 @@ public class MCLauncher extends JFrame {
 		if (!libFile.isFile()) {
 			if (mirror != null) {
 				final CMapping downloads = data.containsKey("downloads") ? data.get("downloads").asMap() : data;
-				Runnable cb = nt ? () -> {
-					extractNatives(data, libFile, nativePath);
-				} : name.endsWith("log4j-core") ? () -> {
-					fixLog4j(libFile);
-				} : null;
+				Runnable cb = nt
+					? () -> extractNatives(data, libFile, nativePath)
+					: name.endsWith("log4j-core")
+						? () -> fixLog4j(libFile)
+						: null;
 				downloadLibrary(downloads, mirror, libFile, task, cb, classifiers, file);
 				if (nt) return;
 			} else {

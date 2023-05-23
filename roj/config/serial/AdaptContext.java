@@ -92,24 +92,9 @@ final class AdaptContext implements CAdapter<Object> {
 		if (fieldId == -2) popd(true);
 		else curr.read(this, (Object) null);
 	}
-	public final void value(byte[] ba) {
-		if (curr.read(this,ba)) return;
-		valueList(ba.length);
-		for (byte b : ba) curr.read(this,b);
-		pop();
-	}
-	public final void value(int[] ia) {
-		if (curr.read(this,ia)) return;
-		valueList(ia.length);
-		for (int b : ia) curr.read(this,b);
-		pop();
-	}
-	public final void value(long[] la) {
-		if (curr.read(this,la)) return;
-		valueList(la.length);
-		for (long b : la) curr.read(this,b);
-		pop();
-	}
+	public final void value(byte[] ba) {curr.read(this,ba);}
+	public final void value(int[] ia) {curr.read(this,ia);}
+	public final void value(long[] la) {curr.read(this,la);}
 
 	public final void valueMap() {curr.map(this,-1);}
 	public final void valueMap(int size) {curr.map(this,size);}
@@ -210,10 +195,15 @@ final class AdaptContext implements CAdapter<Object> {
 	private SimpleList<SimpleList<Object>> lists;
 	final SimpleList<Object> objBuffer() {
 		if (lists == null) lists = new SimpleList<>();
-		else if (!lists.isEmpty()) return lists.remove(lists.size()-1);
+		else if (!lists.isEmpty()) {
+			SimpleList<Object> b = lists.pop();
+			b.clear();
+			return b;
+		}
 		return new SimpleList<>();
 	}
 	final void releaseBuffer(SimpleList<?> list) {
+		list.clear();
 		lists.add(Helpers.cast(list));
 	}
 

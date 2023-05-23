@@ -124,7 +124,7 @@ public class TextUtil {
 				sb.append(number / 1000).append('.');
 				int v = (int) (number % 1000 / 10);
 				if (v < 10) sb.append('0');
-				return sb.append(v).append('M').toString();
+				return sb.append(v).append('K').toString();
 			}
 			return String.valueOf(number);
 		}
@@ -745,6 +745,10 @@ public class TextUtil {
 
 	public static List<String> split(CharSequence str, CharSequence splitter) {
 		return split(new SimpleList<>(), str, splitter, Integer.MAX_VALUE, false);
+	}
+
+	public static List<String> splitKeepEmpty(CharSequence str, CharSequence splitter) {
+		return split(new SimpleList<>(), str, splitter, Integer.MAX_VALUE, true);
 	}
 
 	public static List<String> split(List<String> list, CharSequence str, CharSequence splitter) {

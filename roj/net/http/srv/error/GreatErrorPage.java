@@ -43,7 +43,7 @@ public class GreatErrorPage {
 		MyHashMap<String, String> data = new MyHashMap<>();
 
 		data.put("site", req.host());
-		data.put("desc", e.getMessage().replace("\n", "<br />"));
+		data.put("desc", String.valueOf(e.getMessage()).replace("\n", "<br />"));
 
 		sb.clear();
 		parse_class(sb.append("["), e.getClass().getName()).append("] at ");

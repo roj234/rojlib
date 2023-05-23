@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 
 /**
  * @author Roj234
@@ -45,6 +46,8 @@ public class SyncHttpClient implements ChannelHandler {
 	private ChannelHandler async;
 	private Throwable ex;
 
+	private Consumer<SyncHttpClient> callback;
+
 	private List<Map.Entry<HttpRequest, SyncHttpClient>> _queue = Collections.emptyList();
 
 	@Override
@@ -55,9 +58,12 @@ public class SyncHttpClient implements ChannelHandler {
 
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
-		state = HEAD;
 		head = ((HttpRequest) findHandler(ctx).handler()).response();
-		synchronized (this) { notifyAll(); }
+		synchronized (this) {
+			state = HEAD;
+			notifyAll();
+		}
+		if (callback != null) callback.accept(this);
 
 		ctx.channelOpened();
 	}
@@ -125,6 +131,11 @@ public class SyncHttpClient implements ChannelHandler {
 				} else {
 					state = FAIL;
 					if (ex == null) ex = new Exception();
+
+					// 手动调用queue才可能在SUCCESS前
+					for (int i = 0; i < _queue.size(); i++) {
+						_queue.get(i).getValue().finish(ctx, false);
+					}
 				}
 			}
 			notifyAll();
@@ -133,21 +144,37 @@ public class SyncHttpClient implements ChannelHandler {
 		lock.lock();
 		hasData.signalAll();
 		lock.unlock();
+
+		if (callback != null) callback.accept(this);
 	}
 
 	public SyncHttpClient queue(HttpRequest request, SyncHttpClient client) {
-		if (o == null || !o.isOpen() || !o.isInputOpen() || !o.isOutputOpen()) return null;
+		ChannelCtx ctx = o;
+		if (ctx == null) return null;
 
-		synchronized (this) {
-			if (state < FAIL) {
-				if (_queue.isEmpty()) _queue = new SimpleList<>(4);
-				if (_queue.size() >= 4) return null;
-				_queue.add(new AbstractMap.SimpleImmutableEntry<>(request, client));
-				return this;
+		boolean locked = ctx.channel().lock().tryLock();
+		try {
+			if (!ctx.isOpen() || !ctx.isInputOpen() || !ctx.isOutputOpen()) return null;
+
+			synchronized (this) {
+				if (state < FAIL) {
+					if (_queue.isEmpty()) _queue = new SimpleList<>(4);
+					if (_queue.size() >= 4) return null;
+					_queue.add(new AbstractMap.SimpleImmutableEntry<>(request, client));
+					return this;
+				}
 			}
+
+			if (!locked) {
+				ctx.channel().lock().lock();
+				locked = true;
+			}
+
+			execute(request, client);
+		} finally {
+			if (locked) ctx.channel().lock().unlock();
 		}
 
-		execute(request, client);
 		return client;
 	}
 
@@ -172,6 +199,8 @@ public class SyncHttpClient implements ChannelHandler {
 		is = null;
 		o = null;
 		ex = null;
+		async = null;
+		callback = null;
 	}
 
 	public HttpHead head() throws IOException {
@@ -306,6 +335,13 @@ public class SyncHttpClient implements ChannelHandler {
 	public void waitFor() throws InterruptedException {
 		synchronized (this) {
 			while(state < FAIL) wait();
+		}
+	}
+
+	public void await(Consumer<SyncHttpClient> o) throws IOException {
+		synchronized (this) {
+			if (state == FAIL) throw new IOException("请求失败", ex);
+			callback = o;
 		}
 	}
 

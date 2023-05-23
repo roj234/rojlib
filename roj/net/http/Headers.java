@@ -5,7 +5,6 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.OperationDone;
-import roj.config.ParseException;
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.net.URIUtil;
@@ -157,12 +156,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	private static String Sub(CharSequence c, int s, int e) throws MalformedURLException { return URIUtil.decodeURI(c.subSequence(s, e)); }
 
 	public Headers() {}
-	public Headers(CharSequence data) throws ParseException {
-		for (String line : new LineReader(data, true)) {
-			int pos = line.indexOf(':');
-			put(line.substring(0, pos), line.substring(pos + 1).trim());
-		}
-	}
+	public Headers(CharSequence data) { putAllS(data); }
 	public Headers(Map<CharSequence, String> data) {
 		putAll(data);
 	}
@@ -235,6 +229,12 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 				if (++i == len) return false;
 			}
+		}
+	}
+	public void putAllS(CharSequence data) {
+		for (String line : new LineReader(data, true)) {
+			int pos = line.indexOf(':');
+			put(line.substring(0, pos), line.substring(pos+1).trim());
 		}
 	}
 

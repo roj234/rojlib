@@ -65,9 +65,9 @@ public abstract class ToSomeString implements CVisitor {
 		}
 	}
 
-	public final void value(int l) { preValue(); sb.append(l); }
+	public final void value(int l) { preValue(false); sb.append(l); }
 	public final void value(String s) {
-		preValue();
+		preValue(false);
 		if (s == null) valNull();
 		else valString(s);
 	}
@@ -75,10 +75,10 @@ public abstract class ToSomeString implements CVisitor {
 		ITokenizer.addSlashes(sb.append('"'), l).append('"');
 	}
 
-	public final void value(long l) { preValue(); sb.append(l); }
-	public final void value(double l) { preValue(); sb.append(l); }
-	public final void value(boolean l) { preValue(); sb.append(l); }
-	public final void valueNull() { preValue(); valNull(); }
+	public final void value(long l) { preValue(false); sb.append(l); }
+	public final void value(double l) { preValue(false); sb.append(l); }
+	public final void value(boolean l) { preValue(false); sb.append(l); }
+	public final void valueNull() { preValue(false); valNull(); }
 	protected void valNull() {
 		sb.append("null");
 	}
@@ -89,7 +89,7 @@ public abstract class ToSomeString implements CVisitor {
 		comment = s;
 	}
 
-	protected final void preValue() {
+	protected void preValue(boolean hasNext) {
 		int f = flag;
 		if ((f & END) != 0) throw new IllegalStateException("早前遇到了Terminator");
 		if ((f & LIST) != 0) {
@@ -100,7 +100,7 @@ public abstract class ToSomeString implements CVisitor {
 	}
 
 	protected final void push(int type) {
-		preValue();
+		preValue(true);
 
 		// 4bits
 		int i = depth / 8;

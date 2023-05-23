@@ -62,7 +62,7 @@ public class ConfigMaster {
 		ser.reset();
 
 		if (c.p != null) c.p.charset = cs;
-		c.bp.parseRaw(file,ser,0);
+		c.bp.parseRaw(ser, file, 0);
 
 		if (!ser.finished()) throw new IllegalStateException("数据结构有误");
 		return ser.result();

@@ -79,11 +79,11 @@ public class Websocketd extends WebsocketManager implements Router {
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws IOException {
 		switch (req.path()) {
-			case "/bundle.min.css":
+			case "bundle.min.css":
 				return new StringResponse(res("bundle.min.css"), "text/css");
-			case "/bundle.min.js":
+			case "bundle.min.js":
 				return new StringResponse(res("bundle.min.js"), "text/javascript");
-			case "/":
+			case "":
 				if ("websocket".equals(req.getField("Upgrade"))) {
 					return switchToWebsocket(req, rh);
 				}

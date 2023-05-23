@@ -1,6 +1,7 @@
 package roj.text;
 
 import roj.util.ArrayCache;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -36,7 +37,7 @@ public abstract class UnsafeCharset {
 	public final int encodePreAlloc(CharSequence s, int off, int end, DynByteBuf out, int byteCount) {
 		int ow = out.wIndex();
 		off = encodeLoop(s, off, end, out, byteCount, 0);
-		if (off != end) throw new IllegalArgumentException("预算的长度有误,并非"+byteCount);
+		if (off != end) throw new IllegalArgumentException(!out.isWritable()?"缓冲区满":"预算的长度有误,并非"+byteCount);
 		return (out.wIndex()-ow)-byteCount;
 	}
 
@@ -55,6 +56,20 @@ public abstract class UnsafeCharset {
 	 * @return off
 	 */
 	public final int encodeLoop(Object s, int off, int end, DynByteBuf out, int outMax, int minSpace) {
+		if (!out.hasBuffer()) {
+			ByteList bb = new ByteList();
+			bb.ensureCapacity(1024);
+
+			while (off < end) {
+				bb.clear();
+				off = encodeLoop(s,off,end,bb,bb.capacity(),0);
+				out.put(bb);
+			}
+
+			bb._free();
+			return off;
+		}
+
 		char[] arr;
 		Class<?> k = s.getClass();
 		found: {
@@ -72,7 +87,7 @@ public abstract class UnsafeCharset {
 			} else if (k == CharList.Slice.class) {
 				CharList.Slice sb = (CharList.Slice) s;
 				arr = sb.list;
-				off += sb.off;
+				off += sb.arrayOffset();
 				break found;
 			} else if (k == char[].class) {
 				arr = (char[]) s;
@@ -202,7 +217,7 @@ public abstract class UnsafeCharset {
 				long x = unsafeDecode(in.array(),in._unsafeAddr(),in.rIndex,len,arr,off,uw);
 
 				in.rIndex = (int) (x >>> 32);
-				int delta = uw - (int) x;
+				int delta = (int) x - off;
 				outMax -= delta;
 
 				switch (kind) {
@@ -247,7 +262,7 @@ public abstract class UnsafeCharset {
 	 */
 	public abstract long unsafeEncode(char[] in_ref, int in_off, int i_end, Object out_ref, long out_off, int out_len);
 	/**
-	 * @return 高32位: 新pos, 低32位: 新outMax
+	 * @return 高32位: 新pos, 低32位: 新off
 	 */
 	public abstract long unsafeDecode(Object ref, long base, int pos, int end, char[] out, int off, int outMax);
 

@@ -15,4 +15,6 @@ public interface PooledBuffer {
 	BPool pool();
 	void pool(BPool pool);
 	void close();
+
+	void release();
 }

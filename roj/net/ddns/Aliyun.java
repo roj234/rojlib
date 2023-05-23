@@ -56,7 +56,7 @@ public class Aliyun implements DDNSService {
 		byte[] nonce = new byte[16];
 		rnd.nextBytes(nonce);
 		queries.put("SignatureNonce", IOUtil.SharedCoder.get().encodeHex(nonce));
-		queries.put("Timestamp", new ACalendar(null).formatDate("Y-m-dTH:i:sP", System.currentTimeMillis()).toString());
+		queries.put("Timestamp", new ACalendar(null).format("Y-m-dTH:i:sP", System.currentTimeMillis()).toString());
 
 		//计算签名
 		String signature = makeSign(queries, AccessKeySecret);

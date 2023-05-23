@@ -2,6 +2,7 @@ package roj.archive.qz;
 
 import roj.archive.ArchiveEntry;
 import roj.text.ACalendar;
+import roj.text.CharList;
 
 import java.io.File;
 import java.io.IOException;
@@ -81,13 +82,15 @@ public class QZEntry implements ArchiveEntry {
     public final void setName(String s) { name = s; }
 
     public final long getSize() { return uSize; }
-    public final long getCompressedSize() { return block == null ? 0 : block.fileCount == 1 ? block.size : -1; }
+    public final long getCompressedSize() { return block == null ? 0 : block.fileCount == 1 ? block.size() : -1; }
 
     public final long getAccessTime() { return winTime2JavaTime(accessTime); }
     public final long getCreationTime() { return winTime2JavaTime(createTime); }
     public final long getModificationTime() {  return winTime2JavaTime(modifyTime); }
     public final int getAttributes() { return attributes; }
     public final boolean hasAttributes() { return (flag&ATTR) != 0; }
+    public final boolean isDirectory() { return (flag&DIRECTORY) != 0; }
+    public final boolean isAntiItem() { return (flag & ANTI) != 0; }
 
     public final void setAccessTime(long t) {
         accessTime = java2WinTime(t);
@@ -106,44 +109,47 @@ public class QZEntry implements ArchiveEntry {
         attributes = attr;
         flag |= ATTR;
     }
-
-    public final boolean isDirectory() { return (flag&DIRECTORY) != 0; }
-    public final void markDirectory() { flag |= DIRECTORY; }
-
-    public boolean isAntiItem() { return (flag & ANTI) != 0; }
-    public void deleteOnExtract() { flag |= ANTI; }
+    public final void setIsDirectory(boolean directory) {
+        if (directory) flag |= DIRECTORY;
+        else flag &= ~DIRECTORY;
+    }
+    public final void setAntiItem(boolean anti) {
+        if (anti) flag |= ANTI;
+        else flag &= ~ANTI;
+    }
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("QZEntry{'").append(name).append('\'');
+        CharList sb = new CharList("{\n  ");
 
-        if (uSize == 0) {
-            sb.append(", ");
+        if ((flag & ANTI) != 0) sb.append("删除");
 
-            if ((flag & ANTI) != 0) sb.append("删除");
+        if ((flag & DIRECTORY) != 0) sb.append("文件夹");
+        else if (uSize == 0 && (flag & ANTI) == 0) sb.append("空文件");
+        else sb.append("文件");
+        sb.append(": '").append(name).append('\'');
 
-            if ((flag & DIRECTORY) != 0) sb.append("文件夹");
-            else if ((flag & ANTI) == 0) sb.append("空文件");
-        }
-        if ((flag & AT) != 0) sb.append(", AT=").append(ACalendar.toLocalTimeString(getAccessTime()));
-        if ((flag & CT) != 0) sb.append(", CT=").append(ACalendar.toLocalTimeString(getCreationTime()));
-        if ((flag & MT) != 0) sb.append(", MT=").append(ACalendar.toLocalTimeString(getModificationTime()));
-        if ((flag & ATTR) != 0) appendWindowsAttribute(sb.append(", ATTR="));
-        if ((flag & CRC) != 0) sb.append(", CRC32=").append(Integer.toHexString(crc32));
+        if ((flag & AT) != 0) sb.append("\n  访问: ").append(ACalendar.toLocalTimeString(getAccessTime()));
+        if ((flag & CT) != 0) sb.append("\n  创建: ").append(ACalendar.toLocalTimeString(getCreationTime()));
+        if ((flag & MT) != 0) sb.append("\n  修改: ").append(ACalendar.toLocalTimeString(getModificationTime()));
+        if ((flag & ATTR) != 0) appendWindowsAttribute(sb.append("\n  属性: "));
+        if ((flag & CRC) != 0) sb.append("\n  校验: ").append(Integer.toHexString(crc32));
 
         if (uSize > 0) {
-            sb.append(", ").append(uSize).append('B')
-              .append(", in=").append(block);
+            sb.append("\n  大小: ").append(uSize).append('B')
+              .append("\n  位置:").append(block);
             if (offset != 0) sb.append('+').append(offset);
         }
         return sb.append('}').toString();
     }
 
-    private void appendWindowsAttribute(StringBuilder sb) {
-        if ((attributes& 1) != 0) sb.append("readonly, ");
-        if ((attributes& 2) != 0) sb.append("hidden, ");
-        if ((attributes& 4) != 0) sb.append("system, ");
-        if ((attributes&32) != 0) sb.append("archive, ");
+    private void appendWindowsAttribute(CharList sb) {
+        int len = sb.length();
+        if ((attributes&   1) != 0) sb.append("只读|");
+        if ((attributes&   2) != 0) sb.append("隐藏|");
+        if ((attributes&   4) != 0) sb.append("系统|");
+        if ((attributes&  32) != 0) sb.append("存档|");
+        if ((attributes&1024) != 0) sb.append("链接|");
+        if (sb.length() > len) sb.setLength(sb.length()-1);
     }
 }
