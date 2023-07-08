@@ -53,7 +53,7 @@ public class ChinaNumeric {
 
 	public static long parse(char[] cbuf) { return parse(cbuf, 0, cbuf.length); }
 	public static long parse(char[] cbuf, int off, int end) {
-		while (off < end && cbuf[off] == '零') off++;
+		while (off < end && NUMBER_MAP.getOrDefaultInt(off, -1) == 0) off++;
 
 		fail: {
 

@@ -1,6 +1,5 @@
 package roj.config;
 
-import roj.NativeLibrary;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.config.data.CEntry;
@@ -77,14 +76,15 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 	public final T parseRaw(File file, int flag) throws IOException, ParseException {
 		try (StreamReader in = new StreamReader(file, charset)) {
 			return parse(in, flag);
-		} catch (Exception e) {
-			if (NativeLibrary.IN_DEV) parse(IOUtil.readString(file), flag);
-			throw e;
+		} catch (ParseException e) {
+			throw new ParseException(IOUtil.readString(file), e.getMessage(), e.getIndex(), e.getCause());
 		}
 	}
 	public final <C extends CVisitor> C parseRaw(C cv, File file, int flag) throws IOException, ParseException {
 		try (StreamReader text = new StreamReader(file, charset)) {
 			return parse(cv, text, flag);
+		} catch (ParseException e) {
+			throw new ParseException(IOUtil.readString(file), e.getMessage(), e.getIndex(), e.getCause());
 		}
 	}
 	public final T parseRaw(DynByteBuf buf, int flag) throws IOException, ParseException {

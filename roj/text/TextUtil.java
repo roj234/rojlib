@@ -160,7 +160,7 @@ public class TextUtil {
 	 * byte to hex
 	 */
 	public static char b2h(int a) {
-		return (char) (a < 10 ? 48 + a : (a < 16 ? 55 + a : '!'));
+		return (char) (a < 10 ? 48 + a : (a < 16 ? 87 + a : '!'));
 	}
 
 	/**
@@ -188,7 +188,7 @@ public class TextUtil {
 	}
 
 	public static String bytes2hex(byte[] b) {
-		return bytes2hex(b, 0, b.length, new CharList()).toString();
+		return bytes2hex(b, 0, b.length, new CharList()).toStringAndFree();
 	}
 
 	public static CharList bytes2hex(byte[] b, int off, int len, CharList sb) {
@@ -276,78 +276,6 @@ public class TextUtil {
 			p = 10*p;
 		}
 		return 19;
-	}
-
-	public static final char[] CHINA_NUMERIC = new char[] {'零', '一', '二', '三', '四', '五', '六', '七', '八', '九'};
-	static final char[] CHINA_NUMERIC_POSITION = new char[] {'十', '百', '千'};
-	static final char[] CHINA_NUMERIC_LEV = new char[] {'万', '亿'};
-	public static StringBuilder toChinaString(StringBuilder sb, long number) {
-		int pos = sb.length();
-		if (number == 0) return sb.append(CHINA_NUMERIC[0]);
-		if (number < 0) {
-			sb.append('负');
-			number = -number;
-		}
-		while (number > 0) {
-			int curs = (int) (number % 10);
-			number = (number - curs) / 10;
-			sb.append(CHINA_NUMERIC[curs]);
-		} // Step 1 一二三四五六七八九
-		sb.reverse();
-
-		final int firstLength = 3; // 万
-
-		final char C_ZERO = CHINA_NUMERIC[0];
-
-		int j = 0;
-		boolean k = false;
-		for (int i = sb.length() - 1; i >= 1; i--) {
-			char c = sb.charAt(i - 1);
-			if (c != C_ZERO) {
-				char t = j == firstLength ? CHINA_NUMERIC_LEV[k ? 1 : 0] : CHINA_NUMERIC_POSITION[j];
-				sb.insert(i, t);
-			} else if (j == firstLength) {
-				sb.setCharAt(i, CHINA_NUMERIC_LEV[k ? 1 : 0]);
-			}
-			if ((j++) == CHINA_NUMERIC_POSITION.length) {
-				j = 0;
-				k = !k;
-			}
-		} // Step 2 六万七千八百九十一亿二千三百四十五万六千七百八十九
-
-		int zero = -1;
-		int van = 0;
-		for (int i = sb.length() - 1; i > 0; i--) {
-			char c = sb.charAt(i);
-			switch (c) {
-				case '零': {
-					if (zero == -1 || zero++ > 0) sb.deleteCharAt(i);
-				}
-				break;
-				// rem 亿万 因为是反过来的
-				case '万': {
-					van = 1;
-					if (zero != -1) zero++;
-				}
-				break;
-				case '亿': {
-					if (zero != -1) zero++;
-					if (van == 1) {
-						sb.deleteCharAt(i + 1);
-						van = 0;
-					}
-				}
-				break;
-				default:
-					zero = 0;
-					van = 0;
-			}
-		}
-
-		if (sb.length() > 2 && sb.length() > pos &&
-			sb.charAt(0) == CHINA_NUMERIC[1] && sb.charAt(1) == CHINA_NUMERIC_POSITION[0]) sb.deleteCharAt(pos);
-
-		return sb;
 	}
 
 	public static int parseInt(CharSequence s) throws NumberFormatException {

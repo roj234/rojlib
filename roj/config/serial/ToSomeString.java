@@ -110,7 +110,7 @@ public abstract class ToSomeString implements CVisitor {
 		if (LV.length <= i) {
 			stack = LV = Arrays.copyOf(LV, i+1);
 		}
-		LV[i] = (LV[i] & ~(15 << j)) | (flag << j);
+		LV[i] = (LV[i] & ~(15 << j)) | ((flag&15) << j);
 
 		flag = type;
 	}

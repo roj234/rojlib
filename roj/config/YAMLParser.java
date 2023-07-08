@@ -331,9 +331,10 @@ public class YAMLParser extends Parser<CEntry> {
 		for (int i = 1; i < text.length(); i++) {
 			c = text.charAt(i);
 			if (c == '\n') return 1;
+			if (c == '#') return 0;
 			if (i+1 >= text.length() || WHITESPACE.contains(text.charAt(i+1))) {
 				if (c == ':' || c == '-') {
-					return 0;
+					return TextUtil.gIndexOf(text, '\n') < 0 ? 0 : 1;
 				}
 			}
 		}

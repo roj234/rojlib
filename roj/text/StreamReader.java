@@ -173,7 +173,7 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 	}
 
 	private int bytesRead;
-	protected int fill(char[] buf, int off, int len) throws IOException {
+	final int fill(char[] buf, int off, int len) throws IOException {
 		if (len == 0) return 0;
 		if (eof == -2) return -1;
 
@@ -266,21 +266,63 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 
 	@Override
 	public int read() throws IOException {
+		if (off < len) return buf[off++];
+
 		int c = fill(buf, 0, 1);
 		if (c < 0) return c;
 		return buf[0];
 	}
 	@Override
-	public int read(@Nonnull char[] cbuf, int off, int len) throws IOException { return fill(cbuf, off, len); }
+	public int read(@Nonnull char[] cbuf, int off, int len) throws IOException {
+		int rem = this.len-this.off;
+		if (rem > 0) {
+			rem = Math.min(rem, len);
+			System.arraycopy(buf, this.off, cbuf, off, rem);
+			this.off += rem;
+			len -= rem;
+		}
+
+		return fill(cbuf, off, len);
+	}
 	@Override
 	public long skip(long n) throws IOException {
 		long n1 = n;
 		while (n > 0) {
-			int i = fill(buf, 0, buf.length);
+			int i = read(buf, 0, (int) Math.min(n, buf.length));
 			if (i < 0) break;
 			n -= i;
 		}
 		return n1-n;
+	}
+
+	public boolean readLine(CharList ob) throws IOException {
+		boolean append = false;
+		while (true) {
+			for (int i = off; i < len; i++) {
+				char c = buf[i];
+				if (c == '\r') {
+					int r = ++i == len ? read() : buf[i];
+					if (r < 0) break;
+					if (r != '\n') continue;
+
+					ob.append(buf, off, i-1);
+					off = i+1;
+					return true;
+				} else if (c == '\n') {
+					ob.append(buf, off, i);
+					off = i+1;
+					return true;
+				}
+			}
+			if (off < len) {
+				append = true;
+				ob.append(buf, off, len);
+			}
+
+			off = 0;
+			len = read(buf, 0, buf.length);
+			if (len < 0) return append;
+		}
 	}
 
 	@Override

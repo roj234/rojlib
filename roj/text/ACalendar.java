@@ -201,7 +201,7 @@ public class ACalendar {
 				case 'y': sb.append(fields[YEAR] % 100); break;
 				case 'd': TextUtil.pad(sb, fields[DAY], 2); break;
 				case 'j': sb.append(fields[DAY]); break;
-				case 'l': sb.append("星期").append(TextUtil.CHINA_NUMERIC[fields[DAY_OF_WEEK]]); break;
+				case 'l': sb.append("星期").append(ChinaNumeric.NUMBER[fields[DAY_OF_WEEK]]); break;
 				case 'W': sb.append(UTCWEEK[fields[DAY_OF_WEEK]-1]); break;
 				case 'w': sb.append(fields[DAY_OF_WEEK]-1); break;
 				case 'N': sb.append(fields[DAY_OF_WEEK]); break;

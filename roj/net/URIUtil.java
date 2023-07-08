@@ -42,7 +42,12 @@ public class URIUtil {
 				case '%':
 					try {
 						while (true) {
-							if (i+3 > len) break;
+							if (i+1 >= len) {
+								try {
+									sb.append(src.charAt(i++));
+								} catch (IndexOutOfBoundsException ignored) {}
+								break;
+							}
 							if (src.charAt(i) != '%') break;
 
 							if (src.charAt(i+1) == 'u') {
@@ -54,14 +59,16 @@ public class URIUtil {
 								if (i+6 > len) break;
 								try {
 									sb.append((char) TextUtil.parseInt(src, i+2, i+6, 16));
-								} catch (Exception e) {
+								} catch (NumberFormatException|IndexOutOfBoundsException e) {
+									i++;
 									break;
 								}
 								i += 6;
 							} else {
 								try {
 									tmp.put((byte) TextUtil.parseInt(src, i+1, i+3, 16));
-								} catch (Exception e) {
+								} catch (NumberFormatException|IndexOutOfBoundsException e) {
+									i++;
 									break;
 								}
 								i += 3;
@@ -73,13 +80,13 @@ public class URIUtil {
 							tmp.clear();
 						}
 
-						if (i >= len) return sb;
-						c = src.charAt(i);
+						System.out.println(i);
+						System.out.println(src);
+						continue;
 					} catch (Exception e) {
 						// not compatible with RFC 2396
 						throw new MalformedURLException("无法作为UTF8解析:" + e.getMessage());
 					}
-					break;
 			}
 
 			try {
@@ -136,10 +143,8 @@ public class URIUtil {
 		return ob;
 	}
 
-	public static String encodeFilePath(CharSequence src) {
-		return encodeFilePath(IOUtil.ddLayeredCharBuf(), src).toStringAndFree();
-	}
-	private static final MyBitSet invalid = MyBitSet.from("\\/:*?\"<>|");
+	public static String encodeFilePath(CharSequence src) { return encodeFilePath(IOUtil.ddLayeredCharBuf(), src).toStringAndFree(); }
+	private static final MyBitSet invalid = MyBitSet.from("\\/:*?\"<>|+");
 	public static <T extends Appendable> T encodeFilePath(T sb, CharSequence src) {
 		try {
 			for (int i = 0; i < src.length(); i++) {

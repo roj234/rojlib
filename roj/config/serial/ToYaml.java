@@ -41,7 +41,9 @@ public class ToYaml extends ToSomeString {
 	protected final void listNext() { indent(depth); sb.append("-"); }
 
 	protected final void mapNext() {}
-	protected final void endLevel() {}
+	protected final void endLevel() {
+		if ((flag&32) != 0) sb.append((flag & 12) == LIST ? " []" : " {}");
+	}
 
 	@Override
 	protected void preValue(boolean hasNext) {
@@ -66,8 +68,8 @@ public class ToYaml extends ToSomeString {
 		}
 	}
 
-	public final void valueMap() { push(MAP); }
-	public final void valueList() { push(LIST); listNext(); }
+	public final void valueMap() { push(MAP|32); }
+	public final void valueList() { push(LIST|NEXT|32); }
 
 	private ACalendar cal;
 	@Override

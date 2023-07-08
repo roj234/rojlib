@@ -157,10 +157,7 @@ public final class GB18030 extends UnsafeCharset {
 				}
 			} else {
 				// double
-				if (c2 == 127 || c2 == 255 || c2 < 64) {
-					if (this != THROW_ON_FAIL) out[off++] = INVALID;
-					else break malformed;
-				}
+				if (c2 == 127 || c2 == 255 || c2 < 64) break malformed;
 
 				int cp = (c-129) * (255-64) + (c2-64);
 				out[off++] = TABLE[cp];
@@ -168,7 +165,10 @@ public final class GB18030 extends UnsafeCharset {
 		}
 
 		return ((i-base) << 32) | off;}
-		throw new IllegalArgumentException((int) (i-base) + " 附近解码错误");
+
+		if (this == THROW_ON_FAIL) throw new IllegalArgumentException((int) (i-base) + " 附近解码错误");
+		out[off++] = INVALID;
+		return ((i-base) << 32) | off;
 	}
 
 	@Override
