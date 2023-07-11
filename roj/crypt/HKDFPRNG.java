@@ -45,7 +45,7 @@ public class HKDFPRNG extends SecureRandom {
 
 	@Override
 	public byte[] generateSeed(int numBytes) {
-		byte[] b = HMAC.HKDF_expand(kd, prk,info,numBytes);
+		byte[] b = HMAC.HKDF_expand(kd,prk,info,numBytes);
 		incr();
 		return b;
 	}

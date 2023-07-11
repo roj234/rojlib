@@ -18,7 +18,7 @@ public final class Poly1305 extends BufferedDigest implements MessageAuthenticCo
 		Tmp = new MutableBigInteger(new int[10]);
 	private MutableBigInteger Acc = new MutableBigInteger(new int[9]);
 
-	public Poly1305() { super("Poly1305", 16); setSignKey(new byte[]{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,39,30,31,32}); }
+	public Poly1305() { super("Poly1305", 16); }
 
 	@Override
 	protected int engineGetDigestLength() { return 16; }

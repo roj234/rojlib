@@ -169,7 +169,7 @@ public class QZArchive implements ArchiveFile {
 				throw new IOException("目录表偏移错误"+offset+'+'+length+",len="+r.length());
 			}
 
-			int crc = CRCAny.CRC_32.defVal();
+			int crc = CRCAny.CRC_32.INIT_VALUE;
 			crc = CRCAny.CRC_32.update(crc, buf.list, buf.arrayOffset()+12, 20);
 			crc = CRCAny.CRC_32.retVal(crc);
 			int myCrc = buf.readIntLE(8);
@@ -191,7 +191,7 @@ public class QZArchive implements ArchiveFile {
 			r.seek(32+offset);
 			buf = read((int) length);
 
-			crc = CRCAny.CRC_32.defVal();
+			crc = CRCAny.CRC_32.INIT_VALUE;
 			crc = CRCAny.CRC_32.update(crc, buf.list, buf.arrayOffset(), buf.wIndex());
 			crc = CRCAny.CRC_32.retVal(crc);
 			if (crc != myCrc) throw new IOException("文件表校验错误"+Integer.toHexString(crc)+"/"+Integer.toHexString(myCrc));

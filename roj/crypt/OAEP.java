@@ -4,7 +4,6 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.ShortBufferException;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Random;
 
 /**
@@ -14,15 +13,7 @@ import java.util.Random;
  * @since 2022/2/12 17:54
  */
 public final class OAEP {
-	static final MessageDigest COMM_H;
-
-	static {
-		try {
-			COMM_H = MessageDigest.getInstance("SHA-256");
-		} catch (NoSuchAlgorithmException e) {
-			throw new Error("Oops, not a standard java?");
-		}
-	}
+	static final int COMM_LEN = 32;
 
 	private final byte[] t, r;
 	private final MessageDigest G, H;
@@ -34,17 +25,13 @@ public final class OAEP {
 	 * @param n 非对称最大加密字节
 	 */
 	public OAEP(int n) {
-		int k0 = COMM_H.getDigestLength();
+		int k0 = COMM_LEN;
 		if (n < k0 << 1) n = k0 << 1;
 
 		this.t = new byte[n - k0];
 		this.r = new byte[k0];
-		try {
-			G = new PartialHashBlockChain((MessageDigest) COMM_H.clone(), n - k0);
-			H = (MessageDigest) COMM_H.clone();
-		} catch (CloneNotSupportedException e) {
-			throw new Error();
-		}
+		G = new Blake3(n - k0);
+		H = new Blake3(k0);
 	}
 
 	/**

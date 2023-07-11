@@ -188,6 +188,10 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 				off += delta;
 				len -= delta;
 				if (len == 0) break;
+
+				// notify
+				if (off > 0 && buf[off-1] == UnsafeCharset.INVALID) continue;
+
 				read(b);
 			}
 			if (eof < 0) eof = -2;

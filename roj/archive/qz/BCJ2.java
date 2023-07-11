@@ -155,8 +155,13 @@ public final class BCJ2 extends QZComplexCoder {
 		public void finish() throws IOException {
 			if (b != -2) {
 				tryEncode(ob, true);
+				ob.writeToStream(main);
 				ob._free();
 				rc.finish();
+				if (main instanceof Finishable) ((Finishable) main).finish();
+				if (call instanceof Finishable) ((Finishable) call).finish();
+				if (jump instanceof Finishable) ((Finishable) jump).finish();
+				if (rc.out instanceof Finishable) ((Finishable) rc.out).finish();
 				b = -2;
 			}
 		}

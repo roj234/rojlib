@@ -286,7 +286,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 
 	private void readUnicodePath(ByteList buf, int len, ZipArchive o) {
 		if(len >= 5) {
-			int crc = CRCAny.CRC_32.defVal();
+			int crc = CRCAny.CRC_32.INIT_VALUE;
 			crc = CRCAny.CRC_32.update(crc, nameBytes, 0, nameBytes.length);
 			crc = CRCAny.CRC_32.retVal(crc);
 
@@ -311,7 +311,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		int pos = buf.wIndex();
 		buf.wIndex(pos+2);
 
-		int crc = CRCAny.CRC_32.defVal();
+		int crc = CRCAny.CRC_32.INIT_VALUE;
 		crc = CRCAny.CRC_32.update(crc, nameBytes, 0, nameBytes.length);
 
 		buf.put((byte) 0)

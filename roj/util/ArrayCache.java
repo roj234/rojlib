@@ -105,14 +105,14 @@ public class ArrayCache {
 		putArray(byteCache, array, array.length);
 	}
 
-	public int[] getIntArray(int size, boolean fillWithZeros) {
+	public int[] getIntArray(int size, int fillWithZeros) {
 		int size1 = (size+CHIP_SIZE-1)& -CHIP_SIZE;
 
 		int[] array = getArray(intCache, size1);
 
 		if (array == null) array = new int[size1];
-		else if (fillWithZeros) {
-			for (int i = 0; i < size; i++)
+		else {
+			for (int i = 0; i < fillWithZeros; i++)
 				array[i] = 0;
 		}
 

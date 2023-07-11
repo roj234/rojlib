@@ -1,8 +1,5 @@
 package roj.crypt;
 
-import roj.io.IOUtil;
-import roj.util.ByteList;
-
 import java.util.zip.Checksum;
 
 /**
@@ -45,6 +42,7 @@ public class CRCAny implements Checksum {
 		final byte width;
 		final int poly, init, xor;
 		final boolean reverseIn, reverseOut;
+		public final int INIT_VALUE;
 
 		int[] table;
 
@@ -55,14 +53,7 @@ public class CRCAny implements Checksum {
 			this.xor = xor;
 			this.reverseIn = reverseIn;
 			this.reverseOut = reverseOut;
-		}
-
-		@Override
-		public String toString() {
-			ByteList buf = IOUtil.getSharedByteBuf();
-			getTable();
-			for (int i = 0; i < 256; i++) buf.putInt(table[i]);
-			return buf.toString();
+			INIT_VALUE = defVal();
 		}
 
 		public int[] getTable() {
@@ -113,7 +104,7 @@ public class CRCAny implements Checksum {
 			return out;
 		}
 
-		public int defVal() {
+		private int defVal() {
 			if (reverseIn) return reverse(width, init);
 			if (width > 8) return init;
 			return init << (8 - width);
@@ -180,26 +171,15 @@ public class CRCAny implements Checksum {
 
 	public CRCAny(CrcConfig cfg) {
 		this.cfg = cfg;
-		this.v = cfg.defVal();
+		this.v = cfg.INIT_VALUE;
 	}
 
 	@Override
-	public void update(int b) {
-		v = cfg.update(v, (byte) b);
-	}
-
+	public void update(int b) { v = cfg.update(v, (byte) b); }
 	@Override
-	public void update(byte[] b, int off, int len) {
-		v = cfg.update(v, b, off, len);
-	}
-
+	public void update(byte[] b, int off, int len) { v = cfg.update(v, b, off, len); }
 	@Override
-	public long getValue() {
-		return cfg.retVal(v) & 0xFFFFFFFFL;
-	}
-
+	public long getValue() { return cfg.retVal(v) & 0xFFFFFFFFL; }
 	@Override
-	public void reset() {
-		v = cfg.defVal();
-	}
+	public void reset() { v = cfg.INIT_VALUE; }
 }

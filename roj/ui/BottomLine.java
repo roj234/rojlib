@@ -91,7 +91,7 @@ public abstract class BottomLine implements AutoCloseable {
 		}
 	}
 
-	protected static final PrintStream sysOut, sysErr;
+	public static final PrintStream sysOut, sysErr;
 	protected static DelegatedPrintStream sysOutDeg;
 	private static final SimpleList<BottomLine> active = new SimpleList<>();
 

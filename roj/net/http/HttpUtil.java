@@ -34,16 +34,18 @@ public class HttpUtil {
 
 	public static String htmlspecial(CharSequence str) { return h(str).toStringAndFree(); }
 	public static String htmlspecial_decode(CharSequence str) { return hd(str).toStringAndFree(); }
-	public static String htmlspecial_decode_all(CharSequence str) { return hd2(str).toStringAndFree(); }
+	public static String htmlspecial_decode_all(CharSequence str) { return hd2(new CharList(str)).toStringAndFree(); }
 
 	public static CharList htmlspecial(CharList sb, CharSequence str) { return (CharList) h(str).appendToAndFree(sb); }
 	public static CharList htmlspecial_decode(CharList sb, CharSequence str) { return (CharList) hd(str).appendToAndFree(sb); }
-	public static CharList htmlspecial_decode_all(CharList sb, CharSequence str) { return (CharList) hd2(str).appendToAndFree(sb); }
+	public static CharList htmlspecial_decode_all(CharList sb, CharSequence str) { return (CharList) hd2(new CharList(str)).appendToAndFree(sb); }
+
+	public static CharList htmlspecial_decode_all_inline(CharList sb) { return hd2(sb); }
 
 	private static CharList h(CharSequence s) { return new CharList(s).replaceMulti(Encode); }
 	private static CharList hd(CharSequence s) { return new CharList(s).replaceMulti(Decode); }
-	private static CharList hd2(CharSequence s) {
-		CharList sb = new CharList(s).replaceMulti(LargeTable.Table);
+	private static CharList hd2(CharList sb) {
+		sb.replaceMulti(LargeTable.Table);
 		Matcher m = AmpBang.matcher(sb);
 
 		int pos = 0;
