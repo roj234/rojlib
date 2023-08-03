@@ -70,6 +70,7 @@ public final class CipherSuite {
 			register(PUB_X509_RSA, new JKeyFactory("RSA"));
 			register(PUB_X509_CERTIFICATE, new JCertificateFactory());
 			try {
+				ILProvider.register();
 				register(PUB_X509_EdDSA, new JKeyFactory("EdDSA"));
 			} catch (Exception ignored) {}
 

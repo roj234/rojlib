@@ -41,5 +41,5 @@ public class ObjectPool<T> {
 		return true;
 	}
 
-	protected T newInstance() { return creater.get(); }
+	protected T newInstance() { return creater == null ? null : creater.get(); }
 }
