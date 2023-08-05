@@ -330,11 +330,6 @@ public final class FMDMain {
 			if (ce.getType() == Type.MAP) loadATMap(ce.asMap(), true);
 		}
 
-		if (map.isEmpty()) {
-			CmdUtil.info("没有AT");
-			return 0;
-		}
-
 		try (ZipOutput zo = new ZipOutput(new File(BASE, "class/"+MC_BINARY+".jar"))) {
 			zo.setCompress(true);
 			zo.begin(false);

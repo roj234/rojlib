@@ -110,6 +110,9 @@ public final class OpcodeUtil {
 		return Cate[code&0xFF]&0xFF;
 	}
 
+	public static void assertCate(byte code, int i) { if (i != (i = category(code))) throw new IllegalArgumentException("参数错误,不支持的操作码类型/"+i+"/"+ toString0(code)); }
+	public static void assertTrait(byte code, int i) { if ((i & trait(code)) == 0) throw new IllegalArgumentException("参数错误,不支持的操作码特性/"+ trait(code)+"/"+ toString0(code)); }
+
 	static {
 		// @=零地址
 		String desc = "NOP| ACONST_NULL| ICONST_M1| ICONST_0| ICONST_1| ICONST_2| ICONST_3| ICONST_4| ICONST_5| "+

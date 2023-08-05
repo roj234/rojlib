@@ -822,4 +822,18 @@ public class TextUtil {
 		}
 		return tmp.toStringAndFree();
 	}
+
+	private static JPinyin pinyin;
+	public static JPinyin pinyin() {
+		if (pinyin == null) {
+			try {
+				pinyin = new JPinyin(IOUtil.readResUTF("META-INF/pinyin/char_t2s_yin.txt"),
+					IOUtil.readResUTF("META-INF/pinyin/word_s2t.txt"), IOUtil.readResUTF("META-INF/pinyin/word_t2s.txt"),
+					IOUtil.readResUTF("META-INF/pinyin/word_yin.txt"), -1);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		return pinyin;
+	}
 }

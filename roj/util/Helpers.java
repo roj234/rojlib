@@ -33,7 +33,8 @@ public class Helpers {
 
 	public static File getJarByClass(Class<?> clazz) {
 		String loc = clazz.getProtectionDomain().getCodeSource().getLocation().getPath();
-		loc = loc.substring("file:/".length(), loc.lastIndexOf('!'));
+		int i = loc.lastIndexOf('!');
+		loc = loc.substring(loc.startsWith("/")?1:0, i<0?loc.length():i);
 		try {
 			return new File(URIUtil.decodeURI(loc).toString());
 		} catch (MalformedURLException e) {

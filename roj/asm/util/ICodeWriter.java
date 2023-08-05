@@ -1,6 +1,5 @@
 package roj.asm.util;
 
-import roj.asm.OpcodeUtil;
 import roj.asm.cst.*;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
@@ -15,13 +14,6 @@ import static roj.asm.Opcodes.*;
  * @since 2023/4/19 0019 19:52
  */
 public interface ICodeWriter {
-	static void assertCate(byte code, int i) {
-		if (i != (i = OpcodeUtil.category(code))) throw new IllegalArgumentException("参数错误,不支持的操作码类型/"+i+"/"+OpcodeUtil.toString0(code));
-	}
-	static void assertTrait(byte code, int i) {
-		if ((i & OpcodeUtil.trait(code)) == 0) throw new IllegalArgumentException("参数错误,不支持的操作码特性/"+OpcodeUtil.trait(code)+"/"+OpcodeUtil.toString0(code));
-	}
-
 	void newArray(byte type);
 	void multiArray(String clz, int dimension);
 	default void clazz(byte code, Type clz) {

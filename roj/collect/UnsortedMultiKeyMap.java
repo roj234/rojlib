@@ -380,6 +380,7 @@ public class UnsortedMultiKeyMap<K, T, V> {
 	}
 
 	// 通过这个方法添加的恐怕很难删除
+	// 组合压缩，keys可以是base也可以是base[]按顺序连接，fn是到value的映射
 	public V computeIfAbsentMulti(Class<T> base, List<Object> keys, Function<List<Object>, V> fn) {
 		SimpleList<REntry<T, V>> curr = GOC_Multi(base, keys);
 

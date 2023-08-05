@@ -3,9 +3,9 @@ package roj.text.logging;
 import roj.collect.SimpleList;
 import roj.text.CharList;
 import roj.text.logging.c.*;
-import roj.text.logging.d.LDStream;
 import roj.text.logging.d.LogDestination;
 
+import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -36,7 +36,9 @@ public class LogContext {
 
 		name = "Default";
 
-		destination = LDStream.of(System.out);
+		destination = new LogDestination() {
+			public OutputStream getAndLock() { return System.out; }
+		};
 	}
 
 	public LogContext addComponent(LogComponent c) {

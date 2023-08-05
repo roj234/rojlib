@@ -15,7 +15,7 @@ public final class EdPoint implements Serializable {
 	static final ThreadLocal<TmpNum> NUMS = ThreadLocal.withInitial(TmpNum::new);
 	static final class TmpNum {
 		final EdInteger a = ZERO.mutable(), b = ZERO.mutable(), c = ZERO.mutable(), d = ZERO.mutable(), invert_safe = ZERO.mutable();
-		final EdPoint pa = p3(null, a.mutable(), a.mutable(), a.mutable(), a.mutable()).mutable(), pb = pa.mutable(), pc = pa.mutable();
+		final EdPoint pa = new EdPoint(), pb = pa.mutable(), pc = pa.mutable();
 
 		final byte[] ba = new byte[256], bb = new byte[256];
 

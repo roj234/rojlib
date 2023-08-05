@@ -10,9 +10,9 @@ import roj.collect.SimpleList;
 import javax.annotation.Nonnull;
 import java.util.ListIterator;
 
+import static roj.asm.OpcodeUtil.assertCate;
+import static roj.asm.OpcodeUtil.assertTrait;
 import static roj.asm.Opcodes.*;
-import static roj.asm.util.ICodeWriter.assertCate;
-import static roj.asm.util.ICodeWriter.assertTrait;
 
 /**
  * @author Roj234

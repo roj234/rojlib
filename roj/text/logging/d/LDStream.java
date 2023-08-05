@@ -11,9 +11,7 @@ public class LDStream implements LogDestination {
 	protected ReentrantLock lock;
 	protected OutputStream out;
 
-	public static LDStream of(OutputStream out) {
-		return new LDStream(out);
-	}
+	public static LDStream of(OutputStream out) { return new LDStream(out); }
 
 	public LDStream(OutputStream out) {
 		lock = new ReentrantLock(true);
@@ -27,7 +25,5 @@ public class LDStream implements LogDestination {
 	}
 
 	@Override
-	public void unlock() {
-		lock.unlock();
-	}
+	public void unlock() { lock.unlock(); }
 }
