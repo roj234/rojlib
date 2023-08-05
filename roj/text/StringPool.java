@@ -23,13 +23,13 @@ public class StringPool {
 		String[] array = new String[len];
 		this.ordered = Arrays.asList(array);
 		for (int i = 0; i < len; i++) {
-			array[i] = w.readZhCn();
+			array[i] = w.readVUIGB();
 		}
 	}
 
 	public DynByteBuf writePool(DynByteBuf w) {
 		w.putVUInt(ordered.size());
-		for (int i = 0; i < ordered.size(); i++) w.putZhCn(ordered.get(i));
+		for (int i = 0; i < ordered.size(); i++) w.putVUIGB(ordered.get(i));
 		return w;
 	}
 

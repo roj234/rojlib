@@ -15,11 +15,9 @@ public interface CompilerConfig {
 	int FINALLY_OPTIMIZE = 11;
 	int CONST = 12;
 	int SWITCHABLE = 13;
-	int PUBLIC_ENUM = 14;
-	int OPERATOR_OVERRIDE = 15;
-	int IMPORT_AS = 16;
-	int NEG_ACCESS_OVERRIDE = 17;
-	int INTERFACE_INACCESSIBLE_FIELD = 18;
+	int IMPORT_AS = 14;
+	int NEG_ACCESS_OVERRIDE = 15;
+	int INTERFACE_INACCESSIBLE_FIELD = 16;
 	// map.put({
 	// 		key: "key",
 	//      val: "val"

@@ -1,5 +1,6 @@
 package roj.collect;
 
+import roj.concurrent.FastThreadLocal;
 import roj.util.Helpers;
 
 import java.util.function.BiConsumer;
@@ -16,10 +17,6 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 	public static final class Entry<K, V> extends MyHashMap.Entry<K, V> {
 		Bucket owner;
 		Entry<K, V> lfuPrev, lfuNext;
-
-		public Entry(K k, V v) {
-			super(k, v);
-		}
 
 		public String cToString() {
 			return lfuNext == null ? String.valueOf(k) : k + ", " + lfuNext.cToString();
@@ -56,39 +53,32 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 		this.head.freq = 1;
 	}
 
-	@Override
-	protected final MyHashMap.Entry<K, V> createEntry(K id) {
-		return new Entry<>(id, null);
-	}
-
-	@Override
-	public final MyHashMap.Entry<K, V> getEntry(K id) {
-		MyHashMap.Entry<K, V> entry = super.getEntry(id);
-		if (entry != null && entry.v != UNDEFINED) access((Entry<K, V>) entry);
-		return entry;
-	}
-
-	@Override
-	protected final MyHashMap.Entry<K, V> getCachedEntry(K id) {
+	private static final FastThreadLocal<ObjectPool<AbstractEntry<?,?>>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(null, 99));
+	protected AbstractEntry<K, V> useEntry() {
 		if (size == maximumCapacity) evict(removeAtOnce);
 
-		Entry<K, V> entry = (Entry<K, V>) super.getCachedEntry(id);
+		Entry<K, V> entry = Helpers.cast(MY_OBJECT_POOL.get().get());
+
+		if (entry == null) entry = new Entry<>();
+		entry.k = Helpers.cast(UNDEFINED);
 		append(entry, head);
 		return entry;
 	}
-
-	@Override
-	protected final void putRemovedEntry(MyHashMap.Entry<K, V> entry) {
-		super.putRemovedEntry(entry);
-
+	@SuppressWarnings("unchecked")
+	protected void reserveEntry(AbstractEntry<?, ?> entry) {
 		Entry<K, V> ent = (Entry<K, V>) entry;
 		unlink(ent);
 		ent.owner = null;
 		ent.lfuPrev = ent.lfuNext = null;
+		entry.k = null;
+		entry.next = null;
+		entry.setValue(null);
+		MY_OBJECT_POOL.get().reserve(entry);
 	}
 
 	@Override
 	public final void clear() {
+		super.clear();
 		head.next = null;
 		head.entry = null;
 		wellDepth = 0;
@@ -126,6 +116,8 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 		return except-amount;
 	}
 
+	@Override
+	protected void onGet(AbstractEntry<K, V> entry) { access((Entry<K, V>) entry); }
 	public final void access(Entry<K, V> entry) {
 		Bucket b = entry.owner;
 
@@ -188,7 +180,7 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 
 	private void drain(Bucket o) {
 		o.prev.next = o.next;
-		o.next.prev = o.prev;
+		if (o.next != null) o.next.prev = o.prev;
 
 		if (wellDepth < 16) {
 			o.next = well;

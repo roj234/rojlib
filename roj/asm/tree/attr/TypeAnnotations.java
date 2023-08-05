@@ -17,16 +17,21 @@ import java.util.List;
 public final class TypeAnnotations extends Attribute {
 	public static final String VISIBLE_NAME = "RuntimeVisibleTypeAnnotations", INVISIBLE_NAME = "RuntimeInvisibleTypeAnnotations";
 
-	public TypeAnnotations(String name) {
-		super(name);
+	public TypeAnnotations(boolean visibleForRuntime) {
+		vis = visibleForRuntime;
+		annotations = new SimpleList<>();
 	}
 
 	public TypeAnnotations(String name, DynByteBuf r, ConstantPool pool) {
-		super(name);
+		vis = name.equals(VISIBLE_NAME);
 		annotations = parse(pool, r);
 	}
 
+	public final boolean vis;
 	public List<TypeAnno> annotations;
+
+	@Override
+	public String name() { return vis?VISIBLE_NAME:INVISIBLE_NAME; }
 
 	@Override
 	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
@@ -232,7 +237,7 @@ public final class TypeAnnotations extends Attribute {
 
 			anno.readTypePath(r);
 
-			anno.annotation = Annotation.deserialize(pool, r);
+			anno.annotation = Annotation.parse(pool, r);
 
 			annos.add(anno);
 		}

@@ -1,10 +1,14 @@
 package roj.mod.mapping;
 
 import roj.asm.cst.CstClass;
-import roj.asm.tree.*;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.FieldNode;
+import roj.asm.tree.MethodNode;
+import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.util.AttrHelper;
 import roj.asm.util.Context;
+import roj.asm.visitor.XAttrCode;
 import roj.collect.MyHashMap;
 import roj.util.Helpers;
 
@@ -50,17 +54,17 @@ public class ClassMerger {
 		ConstantData subData = sub.getData();
 		ConstantData mainData = main.getData();
 
-		List<? extends MoFNode> subMs = subData.methods;
-		List<? extends MoFNode> mainMs = mainData.methods;
+		List<MethodNode> subMs = subData.methods;
+		List<MethodNode> mainMs = mainData.methods;
 		outer:
 		for (int i = 0; i < subMs.size(); i++) {
-			MoFNode sm = subMs.get(i);
+			MethodNode sm = subMs.get(i);
 			for (int j = 0; j < mainMs.size(); j++) {
-				MoFNode mm = mainMs.get(j);
+				MethodNode mm = mainMs.get(j);
 				if (sm.name().equals(mm.name()) && sm.rawDesc().equals(mm.rawDesc())) {
-					Method Mm = mm instanceof Method ? (Method) mm : new Method(mainData, (RawMethod) mm);
+					MethodNode Mm = mm.parsed(mainData.cp);
 
-					Method v = detectPriority(mainData, Mm, subData, sm);
+					MethodNode v = detectPriority(mainData, Mm, subData, sm);
 					if (v != Mm) {
 						mainMs.set(j, Helpers.cast(v));
 					}
@@ -68,45 +72,41 @@ public class ClassMerger {
 				}
 			}
 			mergedMethod++;
-			mainMs.add(Helpers.cast(sm instanceof Method ? sm : new Method(subData, (RawMethod) sm)));
+			mainMs.add(sm.parsed(subData.cp));
 		}
 
-		List<? extends MoFNode> subFs = subData.fields;
-		List<? extends MoFNode> mainFs = mainData.fields;
+		List<FieldNode> subFs = subData.fields;
+		List<FieldNode> mainFs = mainData.fields;
 		outer:
 		for (int i = 0; i < subFs.size(); i++) {
-			MoFNode fs = subFs.get(i);
+			FieldNode fs = subFs.get(i);
 			for (int j = 0; j < mainFs.size(); j++) {
-				MoFNode fs2 = mainFs.get(j);
+				FieldNode fs2 = mainFs.get(j);
 				if (fs.name().equals(fs2.name()) && fs.rawDesc().equals(fs2.rawDesc())) {
 					continue outer;
 				}
 			}
 			mergedField++;
-			mainData.fields.add(Helpers.cast(fs instanceof Field ? fs : new Field(subData, (RawField) fs)));
+			mainData.fields.add(fs.parsed(subData.cp));
 		}
 
 		processInnerClasses(mainData, subData);
 		processItf(mainData, subData);
 	}
 
-	private Method detectPriority(ConstantData cstM, Method mainMethod, ConstantData cstS, MoFNode sub) {
-		Method subMethod = sub instanceof Method ? (Method) sub : new Method(cstS, (RawMethod) sub);
+	private MethodNode detectPriority(ConstantData cstM, MethodNode major, ConstantData cstS, MethodNode minor) {
+		XAttrCode cMinor = minor.parsedAttr(cstS.cp, Attribute.Code);
+		if (cMinor == null) return major;
+		XAttrCode cMajor = major.parsedAttr(cstM.cp, Attribute.Code);
+		if (cMajor == null) return minor;
 
-		if (subMethod.getCode() == null) return mainMethod;
-		if (mainMethod.getCode() == null) return subMethod;
-
-		if (mainMethod.getCode().instructions.size() != subMethod.getCode().instructions.size()) {
+		if (cMajor.instructions.byteLength() != cMinor.instructions.byteLength()) {
 			replaceMethod++;
-
 			//CmdUtil.warning("R/" + cstM.name + '.' + mainMethod.name() + mainMethod.rawDesc());
 		}
 
 		// 指令合并太草了
-		if (mainMethod.getCode().instructions.size() >= subMethod.getCode().instructions.size()) {
-			return mainMethod;
-		}
-		return subMethod;
+		return cMajor.instructions.byteLength() >= cMinor.instructions.byteLength() ? major : minor.parsed(cstS.cp);
 	}
 
 	private void processInnerClasses(ConstantData main, ConstantData sub) {

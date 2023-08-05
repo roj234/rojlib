@@ -9,20 +9,11 @@ import roj.util.DynByteBuf;
  * @since 2021/1/1 23:12
  */
 public final class AnnotationDefault extends Attribute {
-	public static final String NAME = "AnnotationDefault";
+	public AnnVal val;
 
-	public AnnotationDefault(DynByteBuf r, ConstantPool pool) {
-		super(NAME);
-		def = AnnVal.parse(pool, r);
-	}
+	public AnnotationDefault(DynByteBuf r, ConstantPool pool) { val = AnnVal.parse(pool, r); }
+	protected void toByteArray1(DynByteBuf w, ConstantPool pool) { val.toByteArray(pool, w); }
 
-	public AnnVal def;
-
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
-		def.toByteArray(pool, w);
-	}
-
-	public String toString() {
-		return "AnnotationDefault: " + def;
-	}
+	public final String name() { return "AnnotationDefault"; }
+	public String toString() { return name()+": "+val; }
 }

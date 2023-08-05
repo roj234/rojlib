@@ -1,6 +1,6 @@
 package roj.crypt;
 
-import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -27,7 +27,7 @@ public class FeedbackCipher extends RCipherSpi {
 
 	public final void engineSetMode(String s) throws NoSuchAlgorithmException {
 		switch (s.toUpperCase(Locale.ROOT)) {
-			case "ECB": type = MODE_ECB; return;
+			case "ECB": type = MODE_ECB; tmp = new ByteList(); return;
 			case "CBC": type = MODE_CBC; break;
 			case "PCBC":type = MODE_PCBC; break;
 			case "CTS": type = MODE_CTS; break;
@@ -73,7 +73,7 @@ public class FeedbackCipher extends RCipherSpi {
 	protected boolean decrypt;
 
 	public FeedbackCipher(RCipherSpi cip, int mode) {
-		if (!cip.isBaseCipher() || cip.engineGetBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
+		if (!cip.isBareBlockCipher() || cip.engineGetBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
 
 		this.cip = cip;
 		this.vec = new ByteList(cip.engineGetBlockSize());
@@ -84,7 +84,7 @@ public class FeedbackCipher extends RCipherSpi {
 		} catch (NoSuchAlgorithmException ignored) {}
 	}
 	public FeedbackCipher(RCipherSpi cip, String mode, String padding) throws NoSuchAlgorithmException, NoSuchPaddingException {
-		if (!cip.isBaseCipher() || cip.engineGetBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
+		if (!cip.isBareBlockCipher() || cip.engineGetBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
 
 		this.cip = cip;
 
@@ -147,9 +147,6 @@ public class FeedbackCipher extends RCipherSpi {
 		}
 		return in;
 	}
-
-	@Override
-	public boolean isBaseCipher() { return false; }
 
 	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
 		if (out.writableBytes() < engineGetOutputSize(in.readableBytes())) throw new ShortBufferException();
@@ -452,7 +449,7 @@ public class FeedbackCipher extends RCipherSpi {
 		} else {
 			Object ref = buf.array();
 			long addr = buf._unsafeAddr() + buf.wIndex();
-			while (padLen-- > 0) FieldAccessor.u.putByte(ref, addr++, num);
+			while (padLen-- > 0) ReflectionUtils.u.putByte(ref, addr++, num);
 
 			buf.wIndex(buf.wIndex() + (num&0xFF));
 		}
@@ -470,7 +467,7 @@ public class FeedbackCipher extends RCipherSpi {
 			Object ref = buf.array();
 			long addr = buf._unsafeAddr() + buf.wIndex() - 2;
 			while (num-- > 0) {
-				if ((FieldAccessor.u.getByte(ref, addr--)&0xFF) != padLen) {
+				if ((ReflectionUtils.u.getByte(ref, addr--)&0xFF) != padLen) {
 					throw new BadPaddingException();
 				}
 			}

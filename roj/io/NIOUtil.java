@@ -1,7 +1,9 @@
 package roj.io;
 
-import roj.io.misc.FDRW;
+import roj.io.misc.File_LLIO;
+import roj.io.misc.Net_LLIO;
 import roj.reflect.DirectAccessor;
+import roj.util.Helpers;
 import roj.util.NativeMemory;
 
 import java.io.Closeable;
@@ -9,6 +11,8 @@ import java.io.FileDescriptor;
 import java.io.IOException;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 
 /**
@@ -16,11 +20,18 @@ import java.nio.channels.SocketChannel;
  * @since 2020/12/6 14:15
  */
 public final class NIOUtil {
-	private static FDRW SCN;
+	private static Net_LLIO SCN, DCN;
+	private static File_LLIO FCN;
 	private static NUT UTIL;
 
-	public static FDRW tcpFdRW() {
+	public static Net_LLIO tcpFdRW() {
 		return SCN;
+	}
+	public static Net_LLIO udpFdRW() {
+		return DCN;
+	}
+	public static File_LLIO fileFdRW() {
+		return FCN;
 	}
 
 	private static Throwable e;
@@ -37,13 +48,10 @@ public final class NIOUtil {
 
 	private static void __init() throws IOException {
 		ByteBuffer b = ByteBuffer.allocateDirect(1);
-		Class<?> itf = b.getClass().getInterfaces()[0];
-
-		SocketChannel sc = SocketChannel.open();
-		sc.close();
 
 		DirectAccessor<NUT> da = DirectAccessor.builder(NUT.class).unchecked();
 		try {
+			Class<?> itf = b.getClass().getInterfaces()[0];
 			da.delegate_o(itf, new String[] {"attachment", "cleaner", "address"});
 		} catch (Throwable e1) {
 			if (e == null) e = e1;
@@ -53,18 +61,54 @@ public final class NIOUtil {
 		try {
 			da.access(FileDescriptor.class, "fd", "fdVal", "fdFd")
 			  .delegate(FileDescriptor.class, "closeAll", "fdClose");
-			da.access(sc.getClass(), new String[] {"nd","fd"}, new String[] {"sChNd","tcpFD"}, null);
 		} catch (Throwable e1) {
 			if (e == null) e = e1;
 			else e.addSuppressed(e1);
 		}
+		try {
+			SocketChannel sc = SocketChannel.open(); sc.close();
+			da.access(sc.getClass(), new String[] {"fd","nd"}, new String[] {"tcpFD","sChNd"}, null);
+		} catch (Throwable e1) {
+			if (e == null) e = e1;
+			else e.addSuppressed(e1);
+		}
+		try {
+			DatagramChannel dc = DatagramChannel.open(); dc.close();
+			da.access(dc.getClass(), new String[] {"nd"}, new String[] {"dChNd"}, null);
+		} catch (Throwable e1) {
+			if (e == null) e = e1;
+			else e.addSuppressed(e1);
+		}
+		FileChannel fc = null;
+		try {
+			fc = FileChannel.open(Helpers.getJarByClass(NIOUtil.class).toPath()); fc.close();
+			da.access(fc.getClass(), new String[] {"nd"}, new String[] {"fChNd"}, null);
+		} catch (Throwable e1) {
+			if (e == null) e = e1;
+			else e.addSuppressed(e1);
+		}
+
 		UTIL = da.build();
 		clean(b);
 
+		String[] ss1 = new String[] {"read", "readVector", "write", "writeVector"};
+		String[] ss2 = new String[] {"read0", "readv0", "write0", "writev0"};
 		try {
-			String[] ss1 = new String[] {"read", "readv", "write", "writev"};
-			String[] ss2 = new String[] {"read0", "readv0", "write0", "writev0"};
-			SCN = DirectAccessor.builder(FDRW.class).delegate(UTIL.sChNd().getClass(), ss2, ss1).build();
+			SCN = DirectAccessor.builder(Net_LLIO.class).delegate(UTIL.sChNd().getClass(), ss2, ss1).build();
+		} catch (Throwable e1) {
+			if (e == null) e = e1;
+			else e.addSuppressed(e1);
+		}
+		try {
+			DCN = DirectAccessor.builder(Net_LLIO.class).delegate(UTIL.dChNd().getClass(), ss2, ss1).build();
+		} catch (Throwable e1) {
+			if (e == null) e = e1;
+			else e.addSuppressed(e1);
+		}
+		try {
+			ss1 = new String[] {"read", "readVector", "readPositional", "write", "writeVector", "writePositional", "size"};
+			ss2 = new String[] {"read0", "readv0", "pread0", "write0", "writev0", "pwrite0", "size0"};
+			FCN = DirectAccessor.builder(File_LLIO.class).delegate(UTIL.fChNd(fc).getClass(), ss2, ss1).build();
 		} catch (Throwable e1) {
 			if (e == null) e = e1;
 			else e.addSuppressed(e1);
@@ -87,6 +131,8 @@ public final class NIOUtil {
 		void fdClose(FileDescriptor fd, Closeable releaser) throws IOException;
 
 		Object sChNd();
+		Object dChNd();
+		Object fChNd(Object fch);
 		FileDescriptor tcpFD(SocketChannel ch);
 
 		long address(Object buf);

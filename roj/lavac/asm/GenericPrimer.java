@@ -40,6 +40,15 @@ public class GenericPrimer extends Generic {
 		return false;
 	}
 
+	public boolean checkGenericArray() {
+		if (array() == 0 || children.isEmpty()) return false;
+		for (int i = 0; i < children.size(); i++) {
+			IType x = children.get(i);
+			if (x.genericType() != ANY_TYPE) return true;
+		}
+		return false;
+	}
+
 	public void resolveS2(CompileUnit file, String kind) {
 		// MyHashMap<K,V>.Entry<Z>
 		// MyHashMap.Entry<K,V>

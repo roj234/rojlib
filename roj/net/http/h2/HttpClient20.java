@@ -11,7 +11,7 @@ import roj.net.ch.handler.Timeout;
 import roj.net.http.HttpHead;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.NamespaceKey;
+import roj.util.Identifier;
 
 import javax.net.ssl.SSLException;
 import java.io.IOException;
@@ -22,7 +22,7 @@ import java.io.IOException;
  * @since 2022/10/7 0007 21:38
  */
 public class HttpClient20 implements ChannelHandler {
-	public static final NamespaceKey H2_GOAWAY = NamespaceKey.of("h2:go_away");
+	public static final Identifier H2_GOAWAY = Identifier.of("h2:go_away");
 
 	private static final boolean PROTOCOL_IGNORE = true;
 	public static final String MAGIC = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";

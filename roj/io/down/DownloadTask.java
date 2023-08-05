@@ -9,10 +9,7 @@ import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
-import roj.net.ch.Event;
-import roj.net.ch.MyChannel;
+import roj.net.ch.*;
 import roj.net.ch.handler.Timeout;
 import roj.net.http.AutoRedirect;
 import roj.net.http.HttpClient11;
@@ -146,7 +143,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 
 			client.connect(ch, IOUtil.timeout);
 
-			HttpRequest.POLLER.register(ch, null);
+			ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 		} catch (Exception e) {
 			ex = e;
 			done.compareAndSet(0, -3);

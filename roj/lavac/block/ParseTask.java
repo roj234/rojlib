@@ -1,131 +1,110 @@
 package roj.lavac.block;
 
-import roj.asm.Opcodes;
-import roj.asm.tree.Field;
+import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.AttrCode;
-import roj.asm.tree.insn.FieldInsnNode;
-import roj.asm.tree.insn.InvokeInsnNode;
 import roj.asm.util.AccessFlag;
 import roj.asm.visitor.CodeWriter;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.ParseException;
-import roj.config.word.Word;
-import roj.lavac.expr.ASTNode;
+import roj.lavac.asm.AnnotationPrimer;
+import roj.lavac.asm.MethodParamAnno;
 import roj.lavac.expr.ExprParser;
 import roj.lavac.parser.CompileLocalCache;
 import roj.lavac.parser.CompileUnit;
-import roj.lavac.parser.JavaLexer;
-import roj.lavac.parser.MethodPoetL;
+import roj.lavac.parser.MethodWriterL;
 
 import java.util.List;
 
-import static roj.lavac.parser.JavaLexer.*;
-
 public interface ParseTask {
-	static ParseTask FieldVal(int start, int end) {
-		return (u, p) -> {
-			JavaLexer wr = u.getLexer();
-			wr.index = start;
+	static ParseTask Field(CompileUnit ctx, FieldNode f) throws ParseException {
+		ExprParser ep = CompileLocalCache.get().ep;
+		ExprNode expr = ep.parse(ctx, ExprParser.STOP_COMMA | ExprParser.STOP_SEMICOLON);
+		System.out.println(expr);
 
-			ExprParser ep = CompileLocalCache.get().ep;
+		return () -> {
+			ExprNode resolve = expr.resolve();
 
-			CodeWriter m = u.getClinit();
-			MethodPoetL poet = u.ctx().createMethodPoet(u, m.mn);
-			Field owner = (Field) p;
-			if ((owner.access & AccessFlag.STATIC) != 0) {
+			CodeWriter m = ctx.getClinit();
+			MethodWriterL mp = ctx.ctx().createMethodPoet(ctx, m.mn);
+			if ((f.access & AccessFlag.STATIC) != 0) {
 
 			} else {
 
 			}
-			ASTNode expr = ep.read(u, 0, null);
-			expr.write(poet, false);
-
-			Word w = wr.next();
-			switch (w.type()) {
-				case semicolon:
-				case comma:
-					break;
-				default:
-					throw wr.err("unexpected:" + w.val());
-			}
-
+			resolve.write(mp, false);
 			// todo if is not static?
-			poet.node(new FieldInsnNode(Opcodes.PUTSTATIC, u.name, owner.name, owner.fieldType()));
+			//mp.node(new FieldInsnNode(Opcodes.PUTSTATIC, ctx.name, f.name, f.fieldType()));
+		};
+	}
+	static ParseTask Annotation(CompileUnit ctx, AnnotationPrimer annotation, String name) throws ParseException {
+		ExprParser ep = CompileLocalCache.get().ep;
+		ExprNode expr = ep.parse(ctx, ExprParser.STOP_COMMA | ExprParser.STOP_RSB);
+		System.out.println(expr);
+
+		return () -> {
+
 		};
 	}
 
-	static ParseTask EnumVal(int enumId, int start, int end) {
-		return (u, p) -> {
-			JavaLexer wr = u.getLexer();
-			wr.index = start;
 
-			ExprParser ep = CompileLocalCache.get().ep;
+	static ParseTask Enum(CompileUnit ctx, int ordinal, FieldNode f) throws ParseException {
+		ExprParser ep = CompileLocalCache.get().ep;
+		ExprNode expr = ep.parse(ctx, ExprParser.STOP_COMMA | ExprParser.STOP_SEMICOLON);
 
-			CodeWriter m = u.getClinit();
-			MethodPoetL poet = u.ctx().createMethodPoet(u, m.mn);
-			Field owner = (Field) p;
+		return () -> {
+			CodeWriter m = ctx.getClinit();
+			MethodWriterL mp = ctx.ctx().createMethodPoet(ctx, m.mn);
 
-			poet.new1(u.name).dup();
-			while (true) {
-				ASTNode expr = ep.read(u, 16, null);
-				expr.write(poet, false);
-
-				Word w = wr.next();
-                if (w.type() == right_s_bracket) {
-					break;
-				} else if (w.type() != comma || wr.index > end)
-					throw wr.err("unexpected:" + w.val());
-			}
-			poet.node(new InvokeInsnNode(Opcodes.INVOKESPECIAL, u.name, "<init>", u.ctx().findSuitableMethod(poet, u, "<init>", p)))
-				.node(new FieldInsnNode(Opcodes.PUTSTATIC, u.name, owner.name, owner.fieldType()));
+			//mp.new1(ctx.name).dup();
+			//mp.node(new InvokeInsnNode(Opcodes.INVOKESPECIAL, ctx.name, "<init>", ctx.ctx().findSuitableMethod(mp, ctx, "<init>", f)))
+			//	.node(new FieldInsnNode(Opcodes.PUTSTATIC, ctx.name, f.name, f.fieldType()));
 		};
 	}
 
 	// 对于格式良好的类文件，end用不到
-	static ParseTask Method(List<String> names, int start, int end) {
-		return (u, p) -> {
+	static ParseTask Method(CompileUnit ctx, MethodNode mn, List<String> names) throws ParseException {
+		return () -> {
 			BlockParser bp = CompileLocalCache.get().bp;
-			MethodNode mn = ((AttrCode) p).getOwner();
-			bp.init(u, start, mn);
+			//bp.init(u, start, mn);
 			bp.type = 0;
 
 			int off = (mn.modifier() & AccessFlag.STATIC) == 0 ? 1 : 0;
 			for (int i = 0; i < names.size(); i++) {
-				bp.variables.put(names.get(i), bp.mw.arg(i+off));
+				//bp.variables.put(names.get(i), bp.mw.arg(i+off));
 			}
 
 			bp.parse0();
 		};
 	}
 
-	static ParseTask StaticInit(int start, int end) {
-		return (u, p) -> {
-			BlockParser bp = CompileLocalCache.get().bp;
-			bp.init(u, start, ((AttrCode)p).getOwner());
-			bp.type = 1;
-			bp.parse0();
+	static ParseTask StaticInitBlock(CompileUnit ctx) throws ParseException {
+		BlockParser bp = CompileLocalCache.get().bp;
+		bp.init(ctx,0,null);
+		bp.type = 1;
+		bp.parse0();
+
+		return () -> {
 		};
 	}
 
-	static ParseTask GlobalInit(int start, int end) {
-		return (u, p) -> {
+	static ParseTask InstanceInitBlock(CompileUnit ctx) throws ParseException {
+		return () -> {
 			BlockParser bp = CompileLocalCache.get().bp;
-			bp.init(u, start, ((AttrCode)p).getOwner());
+			bp.init(ctx,0,null);
 			bp.type = 2;
 			bp.parse0();
 		};
 	}
 
-	// 注解的default
-	static ParseTask AnnotationConst(int start, int end) {
-		return (u, p) -> {
-			JavaLexer wr = u.getLexer();
-			wr.index = start;
+	static ParseTask MethodDefault(CompileUnit ctx, MethodParamAnno desc) throws ParseException {
+		return () -> {
 
-			ExprParser ep = CompileLocalCache.get().ep;
-			ASTNode expr = ep.read(u, 0, null);
 		};
 	}
 
-	void parse(CompileUnit unit, Object param) throws ParseException;
+	static ParseTask AnnotationDefault(CompileUnit unit, MethodNode method) throws ParseException {
+		return null;
+	}
+
+	void parse() throws ParseException;
 }

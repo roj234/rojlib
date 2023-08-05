@@ -28,7 +28,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 		Entry(char c, Entry entry) {
 			super(c);
 			this.entries = entry.entries;
-			this.length = entry.length;
+			this.mask = entry.mask;
 			this.size = entry.size;
 			this.isEnd = entry.isEnd;
 		}
@@ -50,9 +50,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 		}
 
 		@Override
-		boolean isValid() {
-			return isEnd;
-		}
+		public boolean isLeaf() { return isEnd; }
 	}
 
 	static final class PEntry extends Entry {
@@ -68,24 +66,14 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 			this.val = val;
 		}
 
-		CharSequence text() {
-			return val;
-		}
+		CharSequence text() { return val; }
+		@Override
+		void append(CharList sb) { sb.append(val); }
+		@Override
+		int length() { return val.length(); }
 
 		@Override
-		void append(CharList sb) {
-			sb.append(val);
-		}
-
-		@Override
-		int length() {
-			return val.length();
-		}
-
-		@Override
-		public String toString() {
-			return "PE{" + val + '}';
-		}
+		public String toString() { return "PE{" + val + '}'; }
 	}
 
 	/**
@@ -269,7 +257,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 		while (i >= 0) {
 			Entry curr = list.get(i);
 
-			if (curr.size > 1 || curr.isValid()) {
+			if (curr.size > 1 || curr.isLeaf()) {
 				curr.removeChild(prev);
 
 				if (curr.size == 1 && !curr.isEnd && i >= COMPRESS_START_DEPTH) {
@@ -298,7 +286,9 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 			prev = curr;
 			i--;
 		}
-		throw new AssertionError("Entry list chain size");
+
+		root.removeChild(entry);
+		return true;
 	}
 
 	@Override

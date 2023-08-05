@@ -106,16 +106,26 @@ public final class ZipOutput implements AutoCloseable {
 	}
 
 	public void end() throws IOException {
-		if (useZFW) {
-			if (all != null) {
-				all.finish();
-				all = null;
+		Exception e3 = null;
+		try {
+			if (useZFW) {
+				if (all != null) {
+					all.finish();
+					all = null;
+				}
+			} else if (some != null) {
+				some.store();
+				some.closeFile();
 			}
-		} else if (some != null) {
-			some.store();
-			some.closeFile();
+		} catch (Exception e) {
+			e3 = e;
+			try {
+				if (some != null) some.close();
+				if (all != null) all.close();
+			} catch (Exception e2) {}
 		}
 		work = false;
+		if (e3 != null) Helpers.athrow(e3);
 	}
 
 	public ZipArchive getMZF() throws IOException {

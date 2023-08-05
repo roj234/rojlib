@@ -8,6 +8,7 @@ import roj.asm.visitor.CodeWriter;
 import roj.util.ByteList;
 
 import static roj.asm.util.AccessFlag.PUBLIC;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -17,14 +18,20 @@ public final class FastInit {
 	private static final ThreadLocal<Object> Callback = new ThreadLocal<>();
 	public static void __(Object handle) { Callback.set(handle); }
 
-	public static Object make(ConstantData var) { return make(var, ClassDefiner.INSTANCE); }
-	public static Object make(ConstantData var, ClassDefiner l) {
+	public static Object make(ConstantData var) { return make(var, ClassDefiner.INSTANCE, true); }
+	public static Object make(ConstantData var, ClassDefiner l, boolean autoUnload) {
 		ByteList buf = Parser.toByteArrayShared(var);
 		String name = var.name().replace('/', '.');
 
 		try {
-			Class<?> klass = l.defineClassC(name, buf);
-			FieldAccessor.u.ensureClassInitialized(klass);
+			Class<?> klass = null;
+			try {
+				if (autoUnload && ReflectionUtils.JAVA_VERSION < 17) klass = u.defineAnonymousClass(FastInit.class, buf.toByteArray(), null);
+			} catch (Throwable ignored) {}
+			if (klass == null) klass = l.defineClassC(name, buf);
+
+			u.ensureClassInitialized(klass);
+
 			Object o = Callback.get();
 			if (null == o) throw new IllegalStateException("初始化失败: 你是否调用了prepare()来写入<clinit>?");
 			return o;

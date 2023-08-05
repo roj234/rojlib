@@ -26,25 +26,12 @@ public final class LZMA extends QZCoder {
 
     public LZMA2Options getOptions() {
         if (options != null) return options;
-
-        int pb = props / (9 * 5);
-        props -= pb * 9 * 5;
-        int lp = props / 9;
-        int lc = props - lp * 9;
-
-        return new LZMA2Options()
-            .setPb(pb)
-            .setLcLp(lc, lp)
-            .setDictSize(dictSize);
+        return new LZMA2Options().setPropByte(props).setDictSize(dictSize);
     }
-    public void setOptions(LZMA2Options options) {
-        this.options = options;
-    }
+    public void setOptions(LZMA2Options options) { this.options = options; }
 
     @Override
-    public OutputStream encode(OutputStream out) throws IOException {
-        return new LZMAOutputStream(out, options, false);
-    }
+    public OutputStream encode(OutputStream out) throws IOException { return new LZMAOutputStream(out, options, false); }
 
     @Override
     public InputStream decode(InputStream in, byte[] password, long uncompressedSize, int maxMemoryLimitInKb) throws IOException {
@@ -69,9 +56,7 @@ public final class LZMA extends QZCoder {
     }
 
     @Override
-    public String toString() {
-        return "LZMA:"+(options != null ? options : (31-Integer.numberOfLeadingZeros(dictSize)));
-    }
+    public String toString() { return "LZMA:"+(options != null ? options : (31-Integer.numberOfLeadingZeros(dictSize))); }
 
     void writeOptions(DynByteBuf buf) {
         if (options != null) {
@@ -80,10 +65,8 @@ public final class LZMA extends QZCoder {
             buf.put(props).putIntLE(dictSize);
         }
     }
-    void readOptions(DynByteBuf buf, int length) throws IOException {
+    void readOptions(DynByteBuf buf, int length) {
         props = buf.get();
         dictSize = buf.readIntLE();
-        if (dictSize > LZMAInputStream.DICT_SIZE_MAX)
-            throw new IOException("词典超过java的支持上限(2GB)");
     }
 }

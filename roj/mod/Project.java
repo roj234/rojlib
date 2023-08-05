@@ -11,11 +11,11 @@ import roj.config.data.CMapping;
 import roj.config.data.CString;
 import roj.dev.Compiler;
 import roj.io.IOUtil;
-import roj.mapper.ConstMapper;
+import roj.mapper.Mapper;
 import roj.mod.FileFilter.CmtATEntry;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -57,7 +57,7 @@ public final class Project extends FileConfig {
 	List<Project> dependencies;
 	final Compiler compiler;
 
-	ConstMapper.State state;
+	Mapper.State state;
 	String atConfigPathStr;
 	File srcPath, resPath, binJar;
 
@@ -89,10 +89,10 @@ public final class Project extends FileConfig {
 		this.compiler = new Compiler(null, null, ignores, srcPath.getAbsolutePath().replace(File.separatorChar, '/'));
 
 		try {
-			if (binJar.length() == 0) if (!binJar.createNewFile() || !binJar.setLastModified(0)) CmdUtil.warning("无法初始化StampFileTime");
+			if (binJar.length() == 0) if (!binJar.createNewFile() || !binJar.setLastModified(0)) CLIUtil.warning("无法初始化StampFileTime");
 			this.binFile = new ZipOutput(binJar);
 		} catch (Throwable e) {
-			CmdUtil.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 " + binJar.getAbsolutePath(), e);
+			CLIUtil.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 " + binJar.getAbsolutePath(), e);
 			LockSupport.parkNanos(3_000_000_000L);
 			System.exit(-2);
 		}
@@ -151,7 +151,7 @@ public final class Project extends FileConfig {
 		try {
 			charset = Charset.forName(cs);
 		} catch (UnsupportedCharsetException e) {
-			CmdUtil.warning(name + " 的字符集不存在");
+			CLIUtil.warning(name + " 的字符集不存在");
 		}
 
 		String atName = this.atName = map.putIfAbsent("atConfig", "");
@@ -163,7 +163,7 @@ public final class Project extends FileConfig {
 			for (int i = 0; i < required.size(); i++) {
 				File config = new File(BASE, "/config/" + required.get(i) + ".json");
 				if (!config.exists()) {
-					CmdUtil.warning(name + " 的前置" + required.get(i) + "未找到");
+					CLIUtil.warning(name + " 的前置" + required.get(i) + "未找到");
 				} else {
 					required.set(i, Helpers.cast(load(required.get(i))));
 				}
@@ -196,7 +196,7 @@ public final class Project extends FileConfig {
 										return null;
 									});
 								} catch (IOException e) {
-									CmdUtil.warning("资源文件", e);
+									CLIUtil.warning("资源文件", e);
 								}
 							}
 							set.clear();
@@ -214,7 +214,7 @@ public final class Project extends FileConfig {
 						try {
 							dstFile.set(entry.getKey(), new FileInputStream(entry.getValue()));
 						} catch (IOException e) {
-							CmdUtil.warning("资源文件", e);
+							CLIUtil.warning("资源文件", e);
 						}
 					}
 				}
@@ -239,7 +239,7 @@ public final class Project extends FileConfig {
 		try {
 			Shared.watcher.register(this);
 		} catch (IOException e) {
-			CmdUtil.warning("无法启动文件监控", e);
+			CLIUtil.warning("无法启动文件监控", e);
 		}
 	}
 

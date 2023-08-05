@@ -19,7 +19,7 @@ public final class AnnValClass extends AnnVal {
 	public byte type() { return ANNOTATION_CLASS; }
 
 	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) ANNOTATION_CLASS).putShort(cp.getUtfId(TypeHelper.getField(value))); }
-	public String toString() { return value + ".class"; }
+	public String toString() { return value.toString().concat(".class"); }
 
 	@Override
 	public boolean equals(Object o) {

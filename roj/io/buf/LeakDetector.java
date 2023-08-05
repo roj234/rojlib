@@ -1,8 +1,7 @@
 package roj.io.buf;
 
-import roj.collect.IntMap;
+import roj.collect.WeakHashSet;
 
-import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
@@ -11,12 +10,12 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author Roj234
  * @since 2023/2/10 0010 1:00
  */
-public final class LeakDetector {
+public final class LeakDetector extends WeakHashSet<Object> {
 	private static final int mode;
 
 	private static int counter = (int) System.currentTimeMillis();
 
-	private static final ReferenceQueue<Object> leaked = new ReferenceQueue<>();
+	private static final WeakHashSet<LeakDetector> ref = newWeakHashSet();
 	private static final ReentrantLock checkLock = new ReentrantLock();
 
 	static {
@@ -49,56 +48,55 @@ public final class LeakDetector {
 
 	public static void checkLeak() {
 		if (!checkLock.tryLock()) return;
-		while (true) {
-			LD ld = (LD) leaked.poll();
-			if (ld == null) break;
-			ld.check();
+		try {
+			for (LeakDetector ld : ref) ld.doEvict();
+		} finally {
+			checkLock.unlock();
 		}
-
-		checkLock.unlock();
 	}
 
-	private final IntMap<LD> tracked = new IntMap<>();
-
-	private LeakDetector() {}
+	private LeakDetector() {
+		checkLock.lock();
+		try {
+			ref.add(this);
+		} finally {
+			checkLock.unlock();
+		}
+	}
 
 	public void track(Object o) {
 		if (!shouldTrack(o)) return;
-		checkLeak();
-
-		LD prev = tracked.putInt(System.identityHashCode(o), new LD(o));
-		if (prev != null) prev.released = true;
-	}
-
-	public void untrack(Object o) {
-		LD ld = tracked.remove(System.identityHashCode(o));
-		if (ld != null) ld.released = true;
-
-		checkLeak();
+		findOrAdd(o, true);
 	}
 
 	private boolean shouldTrack(Object o) {
 		return mode == 2 || counter++ % 611 == 0;
 	}
 
-	static final class LD extends PhantomReference<Object> {
+	protected Entry createEntry(Object key, ReferenceQueue<Object> queue) { return new LD(key, queue); }
+	protected void entryRemoved(Entry entry, boolean byGC) {
+		LD ld = (LD) entry;
+
+		if (byGC) ld.report();
+		else ld.clear();
+	}
+
+	static final class LD extends WeakHashSet.Entry {
 		private final String thread, type;
 		private final Throwable trace;
-		boolean released;
 
-		public LD(Object ref) {
-			super(ref, leaked);
+		public LD(Object ref, ReferenceQueue<Object> queue) {
+			super(ref, queue);
+
 			thread = Thread.currentThread().getName();
-			type = ref.getClass().getSimpleName();
+			type = ref.getClass().getName();
 			trace = new Throwable("");
 		}
 
-		public void check() {
-			if (released) return;
-
+		public void report() {
 			System.err.println("===================== Resource LEAK =====================");
-			System.out.println("Thread: " + thread);
-			System.out.println("Type: " + type);
+			System.err.println("Thread: " + thread);
+			System.err.println("Type: " + type);
 			trace.printStackTrace();
 			System.err.println("===================== Resource LEAK =====================");
 		}

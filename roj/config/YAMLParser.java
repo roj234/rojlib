@@ -109,8 +109,8 @@ public class YAMLParser extends Parser<CEntry> {
 				w = next();
 			}
 
-			int off = getIndent();
-			if (w.type() != delim || off < firstIndent) {
+			int off;
+			if (w.type() != delim || (off = getIndent()) < firstIndent) {
 				retractWord();
 				break;
 			} else if (off != firstIndent) throw err("缩进有误:"+off+"/"+firstIndent);
@@ -583,7 +583,7 @@ public class YAMLParser extends Parser<CEntry> {
 			i = TextUtil.gAppendToNextCRLF(in, i, v);
 
 			findNextLine:
-			while (true) {
+			while (i < in.length()) {
 				int prevI = i;
 
 				int remainIndent = indent;
@@ -620,7 +620,7 @@ public class YAMLParser extends Parser<CEntry> {
 						clump |= 2;
 					}
 
-					if ((clump&1) != 0) {
+					if ((clump&9) != 0) {
 						clump ^= 1;
 						v.append(' ');
 					} else {

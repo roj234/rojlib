@@ -10,21 +10,17 @@
 
 package roj.archive.qz.xz.lzma;
 
+import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.rangecoder.RangeEncoder;
-import roj.util.ArrayCache;
 
 final class LZMAEncoderFast extends LZMAEncoder {
 	private static final int EXTRA_SIZE_BEFORE = 1;
 	private static final int EXTRA_SIZE_AFTER = MATCH_LEN_MAX - 1;
 
-	static int getMemoryUsage(int dictSize, int extraSizeBefore, int mf) {
-		return LZEncoder.getMemoryUsage(dictSize, Math.max(extraSizeBefore, EXTRA_SIZE_BEFORE), EXTRA_SIZE_AFTER, MATCH_LEN_MAX, mf);
-	}
-
-	LZMAEncoderFast(RangeEncoder rc, int lc, int lp, int pb, int dictSize, int extraSizeBefore, int niceLen, int mf, int depthLimit, ArrayCache arrayCache) {
-		super(rc, LZEncoder.getInstance(dictSize, Math.max(extraSizeBefore, EXTRA_SIZE_BEFORE), EXTRA_SIZE_AFTER, niceLen, MATCH_LEN_MAX, mf, depthLimit, arrayCache), lc, lp, pb, dictSize, niceLen);
-	}
+	static int getMemoryUsage_(LZMA2Options options, int extraSizeBefore) { return LZEncoder.getMemoryUsage(options, Math.max(extraSizeBefore, EXTRA_SIZE_BEFORE), EXTRA_SIZE_AFTER, MATCH_LEN_MAX); }
+	private static LZEncoder lz(LZMA2Options options, int extraSizeBefore) { return LZEncoder.getInstance(options, Math.max(extraSizeBefore, EXTRA_SIZE_BEFORE), EXTRA_SIZE_AFTER, MATCH_LEN_MAX); }
+	LZMAEncoderFast(RangeEncoder rc, LZMA2Options options, int extraSizeBefore) { super(rc, lz(options, extraSizeBefore), options); }
 
 	private boolean changePair(int smallDist, int bigDist) {
 		return smallDist < (bigDist >>> 7);

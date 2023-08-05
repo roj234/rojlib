@@ -5,7 +5,7 @@ import net.md_5.specialsource.provider.JarProvider;
 import roj.archive.zip.ZipFileWriter;
 import roj.collect.TrieTreeSet;
 import roj.io.IOUtil;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.ByteList;
 
 import java.io.BufferedReader;
@@ -55,8 +55,8 @@ class Helper1_16 {
 
 		double start = System.currentTimeMillis();
 
-		CmdUtil.info("开始启动SpecialSource");
-		CmdUtil.warning("由于未知原因, 一定会有补丁出错, 会影响你的开发，如果你觉得不爽请打forge");
+		CLIUtil.info("开始启动SpecialSource");
+		CLIUtil.warning("由于未知原因, 一定会有补丁出错, 会影响你的开发，如果你觉得不爽请打forge");
 
 		JarMapping jarMapping = new JarMapping();
 		BufferedReader reader = new BufferedReader(new InputStreamReader(zipFile.getInputStream(ze)));
@@ -80,7 +80,7 @@ class Helper1_16 {
 
 		double last = System.currentTimeMillis();
 
-		CmdUtil.success("SpecialSource映射成功! 用时: " + (last = ((last - start) / 1000d)) + "s");
-		CmdUtil.info("文件数: " + i + " 平均速度: " + (i / last) + " 文件/s");
+		CLIUtil.success("SpecialSource映射成功! 用时: " + (last = ((last - start) / 1000d)) + "s");
+		CLIUtil.info("文件数: " + i + " 平均速度: " + (i / last) + " 文件/s");
 	}
 }

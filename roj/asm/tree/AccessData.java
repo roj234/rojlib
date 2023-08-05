@@ -1,6 +1,5 @@
 package roj.asm.tree;
 
-import roj.asm.Parser;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -17,86 +16,53 @@ public final class AccessData implements IClass {
 	public List<MOF> methods, fields;
 	public char acc;
 
-	private final int cao;
+	private final int off;
 	private final byte[] byteCode;
 
-	public AccessData(byte[] byteCode, int cao, String name, String parent) {
+	public AccessData(byte[] byteCode, int off, String name, String parent) {
 		this.byteCode = byteCode;
-		this.cao = cao;
+		this.off = off;
 		this.name = name;
 		this.parent = parent;
 	}
 
 	@Override
-	public String name() {
-		return name;
-	}
-
+	public String name() { return name; }
 	@Override
-	public String parent() {
-		return parent;
-	}
-
+	public String parent() { return parent; }
 	@Override
-	public List<String> interfaces() {
-		return itf;
-	}
-
+	public List<String> interfaces() { return itf; }
 	@Override
-	public List<? extends MoFNode> methods() {
-		return methods;
-	}
-
+	public List<MOF> methods() { return methods; }
 	@Override
-	public List<? extends MoFNode> fields() {
-		return fields;
-	}
+	public List<MOF> fields() { return fields; }
 
-	@Override
-	public int type() {
-		return Parser.CTYPE_ACCESS;
-	}
-
-	public final class MOF implements MoFNode {
+	public final class MOF implements RawNode {
 		public final String name, desc;
 		/**
 		 * Read only
 		 */
 		public char acc;
-		private final int dao;
+		private final int off;
 
-		public MOF(String name, String desc, int dao) {
+		public MOF(String name, String desc, int off) {
 			this.name = name;
 			this.desc = desc;
-			this.dao = dao;
+			this.off = off;
 		}
 
+		@Override
+		public char modifier() { return acc; }
 		@Override
 		public void modifier(int flag) {
 			acc = (char) flag;
-			byteCode[dao] = (byte) (flag >>> 8);
-			byteCode[dao + 1] = (byte) flag;
+			byteCode[off] = (byte) (flag >>> 8);
+			byteCode[off+1] = (byte) flag;
 		}
-
 		@Override
-		public char modifier() {
-			return acc;
-		}
-
+		public String name() { return name; }
 		@Override
-		public String name() {
-			return name;
-		}
-
-		@Override
-		public String rawDesc() {
-			return desc;
-		}
-
-		@Override
-		public int type() {
-			return Parser.MFTYPE_LOD1;
-		}
+		public String rawDesc() { return desc; }
 
 		@Override
 		public String toString() {
@@ -104,23 +70,17 @@ public final class AccessData implements IClass {
 		}
 	}
 
-	public char modifier() {
-		return (char) ((byteCode[cao] & 0xff) << 8 | (byteCode[cao + 1] & 0xff));
-	}
+	public char modifier() { return acc; }
 	public void modifier(int flag) {
 		acc = (char) flag;
-		byteCode[cao] = (byte) (flag >>> 8);
-		byteCode[cao + 1] = (byte) flag;
+		byteCode[off] = (byte) (flag >>> 8);
+		byteCode[off+1] = (byte) flag;
 	}
 
 	@Override
-	public DynByteBuf getBytes(DynByteBuf buf) {
-		return buf.put(byteCode);
-	}
+	public DynByteBuf getBytes(DynByteBuf buf) { return buf.put(byteCode); }
 
-	public byte[] toByteArray() {
-		return this.byteCode;
-	}
+	public byte[] toByteArray() { return byteCode; }
 
 	@Override
 	public String toString() {

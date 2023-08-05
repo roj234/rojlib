@@ -9,27 +9,20 @@ import roj.util.DynByteBuf;
 public final class CstFloat extends Constant {
 	public float value;
 
-	public CstFloat(float value) {
-		this.value = value;
-	}
+	public CstFloat(float value) { this.value = value; }
+	@Override
+	void write(DynByteBuf w) { w.put(FLOAT).putFloat(value); }
+	@Override
+	public byte type() { return FLOAT; }
+
+	public final String toString() { return super.toString() + " : " + value; }
 
 	@Override
-	public final void write(DynByteBuf w) {
-		w.put(Constant.FLOAT).putFloat(value);
-	}
-
-	public final String toString() {
-		return super.toString() + " : " + value;
-	}
-
+	public String getEasyReadValue() { return Float.toString(value).concat("f"); }
 	@Override
-	public byte type() {
-		return Constant.FLOAT;
-	}
+	public String getEasyCompareValue() { return Float.toString(value); }
 
-	public final int hashCode() {
-		return Float.floatToRawIntBits(value);
-	}
+	public final int hashCode() { return Float.floatToRawIntBits(value); }
 
 	public final boolean equals(Object o) {
 		if (o == this) return true;

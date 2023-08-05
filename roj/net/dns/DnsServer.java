@@ -7,7 +7,6 @@ import roj.io.IOUtil;
 import roj.net.NetworkUtil;
 import roj.net.URIUtil;
 import roj.net.ch.*;
-import roj.net.ch.osi.ServerLaunch;
 import roj.net.http.Action;
 import roj.net.http.srv.Request;
 import roj.net.http.srv.ResponseHeader;
@@ -19,7 +18,7 @@ import roj.net.http.srv.autohandled.Route;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextUtil;
-import roj.util.BitWriter;
+import roj.util.BitBuffer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -56,15 +55,14 @@ public class DnsServer implements ChannelHandler {
 	public InetSocketAddress fakeDns;
 
 	public DnsServer(CMapping cfg, InetSocketAddress address) throws IOException {
-		SelectorLoop loop = ServerLaunch.udp().listen(new InetSocketAddress(cfg.getInteger("forwarderReceive")))
-										.initializator(new ForwardQueryHandler(this))
-										.threadMax(1).daemon(false)
-										.option(ServerSock.CHANNEL_RECEIVE_BUFFER, 10000)
-										.launch();
+		ServerLaunch.udp().listen(new InetSocketAddress(cfg.getInteger("forwarderReceive")))
+					.initializator(new ForwardQueryHandler(this))
+					.option(ServerLaunch.CHANNEL_RECEIVE_BUFFER, 10000)
+					.launch();
 
 		ServerLaunch.udp().listen(address).initializator((ch) -> {
 
-		}).option(ServerSock.CHANNEL_RECEIVE_BUFFER, 10000).loop(loop).launch();
+		}).option(ServerLaunch.CHANNEL_RECEIVE_BUFFER, 10000).launch();
 
 		waiting = new ConcurrentHashMap<>();
 		requestTimeout = cfg.getInteger("requestTimeout");
@@ -423,7 +421,7 @@ public class DnsServer implements ChannelHandler {
 
 		query.sessionId = (char) r.readUnsignedShort();
 
-		BitWriter br = new BitWriter(r);
+		BitBuffer br = new BitBuffer(r);
 		br.skipBits(1);
 		/**
 		 * 请求类型，
@@ -514,9 +512,9 @@ public class DnsServer implements ChannelHandler {
 				}
 			}
 
-			key.lock.readLock();
+			key.lock.readLock().lock();
 			Record.iterateFinder(cRecords, cRecords = new ArrayList<>(), dReq.qType, fn);
-			key.lock.readUnlock();
+			key.lock.readLock().unlock();
 
 			int ts = (int) (System.currentTimeMillis() / 1000);
 			for (int j = 0; j < cRecords.size(); j++) {
@@ -653,7 +651,7 @@ public class DnsServer implements ChannelHandler {
 		resp.senderIp = addr.addr;
 		resp.senderPort = addr.port;
 
-		BitWriter r = new BitWriter(r1);
+		BitBuffer r = new BitBuffer(r1);
 
 		r.skipBits(1); // QR
 		/**
@@ -912,10 +910,10 @@ public class DnsServer implements ChannelHandler {
 
 				if (msg == null) {
 					List<Record> records = resolved.computeIfAbsent(key, Helpers.fnArrayList());
-					key.lock.writeLock();
+					key.lock.writeLock().lock();
 					records.clear();
 					records.add(e);
-					key.lock.writeUnlock();
+					key.lock.writeLock().unlock();
 					msg = "操作完成";
 				}
 			}

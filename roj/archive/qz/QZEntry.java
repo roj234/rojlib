@@ -3,11 +3,7 @@ package roj.archive.qz;
 import roj.archive.ArchiveEntry;
 import roj.text.ACalendar;
 import roj.text.CharList;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.attribute.BasicFileAttributes;
+import roj.util.Helpers;
 
 import static roj.archive.zip.ZEntry.java2WinTime;
 import static roj.archive.zip.ZEntry.winTime2JavaTime;
@@ -16,7 +12,7 @@ import static roj.archive.zip.ZEntry.winTime2JavaTime;
  * @author Roj234
  * @since 2023/3/14 0014 7:56
  */
-public class QZEntry implements ArchiveEntry {
+public class QZEntry implements ArchiveEntry, Cloneable {
 	String name;
 
     byte flag;
@@ -41,39 +37,13 @@ public class QZEntry implements ArchiveEntry {
     public QZEntry(String name) {
         this.name = name;
     }
-    public QZEntry(File file) {
-        this(file, false);
-    }
-    public QZEntry(File file, boolean storeExtras) {
-        this.name = file.getName();
-        if (!file.exists()) {
-            flag |= ANTI;
-            return;
-        }
-
-        this.modifyTime = java2WinTime(file.lastModified());
-        this.uSize = file.length();
-        this.flag = (byte) (file.isDirectory()?DIRECTORY|MT:MT);
-        if (storeExtras) {
-            BasicFileAttributes view;
-            try {
-                view = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
-            } catch (IOException e) {
-                return;
-            }
-            if (view == null) return;
-
-            this.accessTime = java2WinTime(view.lastAccessTime().toMillis());
-            this.createTime = java2WinTime(view.creationTime().toMillis());
-            flag |= AT|CT;
-        }
+    public QZEntry(String name, long expectSize) {
+        this.name = name;
+        this.uSize = expectSize;
     }
 
-    void setSize(long size) {
-        uSize = size;
-    }
-
-    void setCrc(int crc) {
+    public void _setSize(long size) { uSize = size; }
+    public void _setCrc(int crc) {
         crc32 = crc;
         flag |= CRC;
     }
@@ -88,6 +58,9 @@ public class QZEntry implements ArchiveEntry {
     public final long getCreationTime() { return winTime2JavaTime(createTime); }
     public final long getModificationTime() {  return winTime2JavaTime(modifyTime); }
     public final int getAttributes() { return attributes; }
+    public final boolean hasAccessTime() { return (flag&AT) != 0; }
+    public final boolean hasCreationTime() { return (flag&CT) != 0; }
+    public final boolean hasModificationTime() { return (flag&MT) != 0; }
     public final boolean hasAttributes() { return (flag&ATTR) != 0; }
     public final boolean isDirectory() { return (flag&DIRECTORY) != 0; }
     public final boolean isAntiItem() { return (flag & ANTI) != 0; }
@@ -117,6 +90,11 @@ public class QZEntry implements ArchiveEntry {
         if (anti) flag |= ANTI;
         else flag &= ~ANTI;
     }
+
+    public WordBlock getBlock() { return block; }
+    public long getOffset() { return offset; }
+    public boolean hasCrc32() { return (flag&CRC) != 0; }
+    public int getCrc32() { return crc32; }
 
     @Override
     public String toString() {
@@ -151,5 +129,18 @@ public class QZEntry implements ArchiveEntry {
         if ((attributes&  32) != 0) sb.append("存档|");
         if ((attributes&1024) != 0) sb.append("链接|");
         if (sb.length() > len) sb.setLength(sb.length()-1);
+    }
+
+    @Override
+    public QZEntry clone() {
+        try {
+            QZEntry clone = (QZEntry) super.clone();
+            clone.block = null;
+            clone.offset = 0;
+            clone.next = null;
+            return clone;
+        } catch (Exception E) {
+            return Helpers.nonnull();
+        }
     }
 }

@@ -16,7 +16,7 @@ import roj.text.TextUtil;
  * @since 2020/10/3 19:20
  */
 public final class JavaLexer extends Tokenizer {
-	private static final String[] keywords = TextUtil.split1("for,while,do,continue,break,case,if,else,goto,return,switch," +
+	public static final String[] keywords = TextUtil.split1("for,while,do,continue,break,case,if,else,goto,return,switch," +
 		"this,new,true,false,null," +
 		"void,int,long,double,float,short,byte,char,boolean," +
 		"try,catch,finally,throw," +
@@ -25,7 +25,7 @@ public final class JavaLexer extends Tokenizer {
 		"class,interface,@interface,enum," +
 		"implements,extends,super," +
 		"package,import," +
-		"default,throws,record,const,var,as", ',');
+		"default,throws,record,const,var,as,instanceof", ',');
 	public static final short
 		FOR = 10, WHILE = 11, DO = 12, CONTINUE = 13, BREAK = 14, CASE = 15, IF = 16, ELSE = 17, GOTO = 18, RETURN = 19, SWITCH = 20,
 		THIS = 21, NEW = 22,
@@ -38,7 +38,7 @@ public final class JavaLexer extends Tokenizer {
 		CLASS = 50, INTERFACE = 51, AT_INTERFACE = 52, ENUM = 53,
 		IMPLEMENTS = 54, EXTENDS = 55, SUPER = 56,
 		PACKAGE = 57, IMPORT = 58,
-		DEFAULT = 59, THROWS = 60, RECORD = 61, CONST = 62, VAR = 63, AS = 64;
+		DEFAULT = 59, THROWS = 60, RECORD = 61, CONST = 62, VAR = 63, AS = 64, INSTANCEOF = 65;
 
 	public static final String[] operators = {
 		"{", "}",
@@ -73,6 +73,7 @@ public final class JavaLexer extends Tokenizer {
 		assign = 138, add_assign = 139, sub_assign = 140, mul_assign = 141, div_assign = 142, mod_assign = 143,
 		and_assign = 144, xor_assign = 145, or_assign = 146, lsh_assign = 147, rsh_assign = 148, rsh_unsigned_assign = 149,
 		preprocess_s = 150, preprocess_e = 151, at = 152, varargs = 153, method_referent = 154;
+	public static final short pow_assign = 999, optional_chaining = 998, spread = 997;
 
 	public static final int CAT_METHOD = 1, CAT_TYPE = 2, CAT_MODIFIER = 4, CAT_HEADER = 8, CAT_TYPE_TYPE = 16, CAT_GENERIC_EXT = 32;
 
@@ -234,6 +235,10 @@ public final class JavaLexer extends Tokenizer {
 	}
 
 	public long env;
+
+	public static boolean isBinaryOperator(short type) {
+		return false;
+	}
 
 	{
 		i18n = JSLexer.translate;

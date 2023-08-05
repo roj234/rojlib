@@ -7,16 +7,15 @@ import roj.io.IOUtil;
 import roj.io.session.SessionProvider;
 import roj.net.URIUtil;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.CtxEmbedded;
+import roj.net.ch.EmbeddedChannel;
 import roj.net.ch.MyChannel;
 import roj.net.http.Action;
 import roj.net.http.Cookie;
 import roj.net.http.Headers;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.auth.AuthScheme;
-import roj.security.SipHashMap;
 import roj.text.CharList;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -85,6 +84,8 @@ public final class Request extends Headers {
 		return paths;
 	}
 
+	public boolean isExpecting() { return "100-continue".equalsIgnoreCase(get("Expect")); }
+
 	// region request info
 	public Map<String, String> postFields() throws IllegalRequestException {
 		if (postFields instanceof ByteList) {
@@ -100,7 +101,7 @@ public final class Request extends Headers {
 						protected void onValue(ChannelCtx ctx, DynByteBuf buf) { map.put(name, buf.readUTF(buf.readableBytes())); }
 					};
 
-					CtxEmbedded ch = new CtxEmbedded();
+					EmbeddedChannel ch = EmbeddedChannel.createSingle();
 					ch.addLast("_", handler);
 					ch.fireChannelRead(pf);
 					handler.onSuccess();
@@ -127,7 +128,7 @@ public final class Request extends Headers {
 	}
 	public String postString() {
 		if (postFields instanceof ByteList) {
-			try (StreamReader sr = new StreamReader((ByteList) postFields, null)) {
+			try (TextReader sr = new TextReader((ByteList) postFields, null)) {
 				postFields = IOUtil.read(sr);
 			} catch (IOException e) {
 				return null;
@@ -138,7 +139,7 @@ public final class Request extends Headers {
 	public ByteList postBuffer() { return (ByteList) postFields; }
 	public HPostHandler postHandler() { return ((HPostHandler) postFields); }
 
-	public Map<String, String> getFields() throws IllegalRequestException {
+	public Map<String, String> GET_Fields() throws IllegalRequestException {
 		if (getFields instanceof CharSequence) {
 			try {
 				getFields = simpleValue((CharSequence) getFields, "&", true);
@@ -149,12 +150,12 @@ public final class Request extends Headers {
 		return Helpers.cast(getFields);
 	}
 
-	public String getFieldsRaw() {
+	public String GET_Fields_Raw() {
 		if (getFields == null) {
 			return null;
 		} else if (getFields instanceof String) {
 			return (String) getFields;
-		} else if (getFields == Collections.EMPTY_LIST) {
+		} else if (getFields == Collections.EMPTY_MAP) {
 			return "";
 		}
 		throw new IllegalStateException("Parsed");
@@ -162,8 +163,8 @@ public final class Request extends Headers {
 
 	public Map<String, String> fields() throws IllegalRequestException {
 		Map<String, String> map1 = postFields();
-		if (map1 == null) return getFields();
-		SipHashMap<String, String> map = new SipHashMap<>(getFields());
+		if (map1 == null) return GET_Fields();
+		MyHashMap<String, String> map = new MyHashMap<>(GET_Fields());
 		map.putAll(map1);
 		return map;
 	}
@@ -172,7 +173,7 @@ public final class Request extends Headers {
 		Map<String, String> map = postFields();
 		if (map != null && map.containsKey(key)) return map.get(key);
 
-		map = getFields();
+		map = GET_Fields();
 		if (map.containsKey(key)) return map.get(key);
 		return "";
 	}

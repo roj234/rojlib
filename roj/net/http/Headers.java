@@ -1,14 +1,11 @@
 package roj.net.http;
 
-import roj.collect.IntMap;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.*;
+import roj.concurrent.FastThreadLocal;
 import roj.concurrent.OperationDone;
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.net.URIUtil;
-import roj.security.SipHashMap;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextUtil;
@@ -62,7 +59,8 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	}
 
 	public static String getOneValue(CharSequence field, String key) {
-		E vo = new E(key);
+		E vo = new E();
+		vo.k = key;
 		try {
 			complexValue(field, vo, false);
 		} catch (OperationDone e) {
@@ -78,7 +76,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 	public static Map<String, String> simpleValue(CharSequence query, String delim, boolean throwOrSkip) throws MalformedURLException {
 		List<String> queries = TextUtil.split(query, delim);
-		SipHashMap<String, String> map = new SipHashMap<>(queries.size());
+		MyHashMap<String, String> map = new MyHashMap<>(queries.size());
 
 		for (int i = 0; i < queries.size(); i++) {
 			String s = queries.get(i);
@@ -184,8 +182,8 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 			String key = dedup.find(tmp).toString();
 
-			if (buf.get(++i) != ' ') throw new IllegalArgumentException("header+"+i+": 键未以': '结束");
-			++i;
+			// a:b也可行
+			if (buf.get(++i) == ' ') ++i;
 
 			tmp.clear();
 			int prevI = i;
@@ -278,7 +276,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 		CharList sb = IOUtil.ddLayeredCharBuf();
 		cookies.get(0).write(sb, true);
-		entry.v = sb.toString();
+		entry.setValue(sb.toString());
 
 		if (cookies.size() > 1) {
 			entry.all = new SimpleList<>(cookies.size()-1);
@@ -315,12 +313,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	// region just a simple multi-value lowercase map
 
 	private static final class E extends MyHashMap.Entry<CharSequence, String> implements BiConsumer<String, String> {
-		List<String> all;
-
-		public E(CharSequence k) {
-			super(k, null);
-			this.all = Collections.emptyList();
-		}
+		List<String> all = Collections.emptyList();
 
 		// awa, 省一个类, 我真无聊
 		public final void accept(String k, String v) {
@@ -330,8 +323,6 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			}
 		}
 	}
-
-	protected final Entry<CharSequence, String> createEntry(CharSequence key) { return new E(key); }
 
 	public final List<String> getAll(final String s) {
 		E e = (E) getEntry(s);
@@ -343,25 +334,6 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		return list;
 	}
 
-	@Override
-	protected final void putRemovedEntry(Entry<CharSequence, String> entry) {
-		E e = (E) entry;
-		e.all.clear();
-		super.putRemovedEntry(e);
-	}
-
-	public Entry<CharSequence, String> getEntry(CharSequence key) {
-		return super.getEntry(lower(key));
-	}
-	public Entry<CharSequence, String> getOrCreateEntry(CharSequence key) {
-		key = lower(key);
-		Entry<CharSequence, String> entry = super.getOrCreateEntry(key);
-		if (entry.v == IntMap.UNDEFINED) {
-			entry.k = dedup.find(key).toString();
-			checkKey(entry.k);
-		}
-		return entry;
-	}
 
 	public final String getAt(String key, int index) {
 		final E e = (E) getEntry(key);
@@ -375,11 +347,40 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		return 1+e.all.size();
 	}
 
+	// region lowerMap
+	public AbstractEntry<CharSequence, String> getEntry(CharSequence key) { return super.getEntry(lower(key)); }
+	public AbstractEntry<CharSequence, String> getOrCreateEntry(CharSequence key) { return super.getOrCreateEntry(lower(key)); }
+
+	private static final FastThreadLocal<ObjectPool<E>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(null, 128));
+
 	@Override
-	public final String put(CharSequence key, String value) {
-		checkVal(value);
-		return super.put(key, value);
+	protected AbstractEntry<CharSequence, String> useEntry() {
+		E entry = Helpers.cast(MY_OBJECT_POOL.get().get());
+
+		if (entry == null) entry = new E();
+		entry.k = entry.v = Helpers.cast(UNDEFINED);
+		return entry;
 	}
+	@Override
+	protected void reserveEntry(AbstractEntry<?, ?> entry) {
+		E e = (E) entry;
+		e.k = null;
+		e.v = null;
+		e.next = null;
+		e.all.clear();
+		MY_OBJECT_POOL.get().reserve(e);
+	}
+
+	@Override
+	protected void onPut(AbstractEntry<CharSequence, String> entry, String newV) {
+		checkVal(newV);
+
+		if (entry.getValue() == IntMap.UNDEFINED) {
+			entry.k = dedup.find(lower(entry.k)).toString();
+			checkKey(entry.k);
+		}
+	}
+	// endregion
 
 	public final void add(String key, String value) {
 		checkVal(value);
@@ -455,19 +456,18 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 	public final void encode(Appendable sb) {
 		try {
-			for (Map.Entry<CharSequence, String> entry : entrySet()) {
-				sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\r\n");
+			for (Iterator<Map.Entry<CharSequence, String>> it = entrySet().iterator(); it.hasNext(); ) {
+				E entry = (E) it.next();
+				h(sb, entry, entry.getValue());
 
-				E e = (E) entry;
-				List<String> all = e.all;
-				for (int i = 0; i < all.size(); i++) {
-					sb.append(entry.getKey()).append(": ").append(all.get(i)).append("\r\n");
-				}
+				List<String> all = entry.all;
+				for (int i = 0; i < all.size(); i++) h(sb, entry, all.get(i));
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
 	}
+	private static Appendable h(Appendable sb, E entry, String value) throws IOException { return sb.append(entry.getKey()).append(value.isEmpty()?":":": ").append(value).append("\r\n"); }
 
 	private static void checkKey(CharSequence key) {
 		for (int i = 0; i < key.length(); i++) {

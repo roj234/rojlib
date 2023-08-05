@@ -2,24 +2,23 @@ package roj.text;
 
 import java.util.function.IntConsumer;
 
-import static java.lang.Character.MAX_HIGH_SURROGATE;
-import static java.lang.Character.MIN_HIGH_SURROGATE;
-import static roj.reflect.FieldAccessor.u;
+import static java.lang.Character.*;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
  */
 public final class UTF8MB4 extends UnsafeCharset {
-	public static final UnsafeCharset CODER = new UTF8MB4();
+	public static final UnsafeCharset CODER = new UTF8MB4(), THROW_ON_FAIL = new UTF8MB4();
 
 	@Override
 	public String name() { return "UTF-8"; }
 
 	@Override
-	public long unsafeEncode(char[] s, int i, int len, Object ref, long addr, int max_len) {
+	public long unsafeEncode(char[] s, int i, int end, Object ref, long addr, int max_len) {
 		long max = addr+max_len;
 
-		while (i < len && addr < max) {
+		while (i < end && addr < max) {
 			int c = s[i];
 			if (c > 0x7F) break;
 			i++;
@@ -27,17 +26,14 @@ public final class UTF8MB4 extends UnsafeCharset {
 		}
 
 		int previ;
-		while (i < len && addr < max) {
+		while (i < end && addr < max) {
 			previ = i;
 
 			int c = s[i++];
-			if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-				if (i == len) {
-					if (i == s.length) throw new IllegalArgumentException("缺失surrogate pair");
+			if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
+				if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+				if (i == end) { i--; break; }
 
-					i--;
-					break;
-				}
 				c = TextUtil.codepoint(c,s[i++]);
 			}
 
@@ -56,7 +52,7 @@ public final class UTF8MB4 extends UnsafeCharset {
 					u.putByte(ref, addr++, (byte) (0x80 | ((c >> 12) & 0x3F)));
 				} else {
 					if (max-addr < 3) { i = previ; break; }
-					u.putByte(ref, addr++, (byte) (0xE0 | ((c >> 12) & 0x0F)));
+					u.putByte(ref, addr++, (byte) (0xE0 | (c >> 12)));
 				}
 				u.putByte(ref, addr++, (byte) (0x80 | ((c >> 6) & 0x3F)));
 				u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
@@ -94,73 +90,63 @@ public final class UTF8MB4 extends UnsafeCharset {
 					out[off++] = (char) c;
 					break;
 				case 12: case 13:
-					if (i >= max) {
-						i--;
-						break truncate;
-					}
+					if (i >= max) { i--; break truncate; }
 
 					c2 = u.getByte(ref, i++);
-					if ((c2 & 0xC0) != 0x80) { i -= 2; break malformed; }
+					if ((c2 & 0xC0) != 0x80) { i -= 1; break malformed; }
 
-					/*
-					110xxxx
-					     10xxxxxx */
-					out[off++] = (char) (c << 6 ^ c2 ^ 3968);
+					// 11 110xxx xx ^
+					// 11 111111 10xxxxxx
+					// 00 001111 10000000
+					out[off++] = (char) (c << 6 ^ c2 ^ 0b0000111110000000);
 					break;
 				case 14:
-					if (i+1 >= max) {
-						i--;
-						break truncate;
-					}
+					if (i+1 >= max) { i--; break truncate; }
 
 					c2 = u.getByte(ref, i++);
 					c3 = u.getByte(ref, i++);
-					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) { i -= 3; break malformed; }
+					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) { i -= 2; break malformed; }
 
-					/*
-					1110xxxx
-					      10xxxxxx
-					            10xxxxxx */
-					out[off++] = (char) (c << 12 ^ c2 << 6 ^ c3 ^ -123008);
+					// 1110 xx xx ^
+					//      11 10xxxx xx ^
+					//      11 111111 10xxxxxx ^
+					//      00 011111 10000000
+					out[off++] = (char) (c << 12 ^ c2 << 6 ^ c3 ^ 0b0001111110000000);
 					break;
 				case 15:
-					if (i+2 >= max) {
-						i--;
-						break truncate;
-					}
+					if (i+2 >= max) { i--; break truncate; }
 
 					c2 = u.getByte(ref, i++);
 					c3 = u.getByte(ref, i++);
 					c4 = u.getByte(ref, i++);
-					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80) {
-						i -= 4;
-						break malformed;
-					}
+					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80) { i -= 3; break malformed; }
 
-					/* 11110xxx
-					         10xxxxxx
-					               10xxxxxx
-					                     10xxxxxx */
-					c4 = c << 18 ^ c2 << 12 ^ c3 << 6 ^ c4 ^ 3678080;
-					assert c4 >= Character.MIN_SUPPLEMENTARY_CODE_POINT;
+					// 11110xxx
+					// 11111110xxxxxx
+					// 11111111111110xxxxxx
+					// 11111111111111111110xxxxxx
+					//     1110000001111110000000 (bound = 2^22-1 | 2097151)
+					c4 = c << 18 ^ c2 << 12 ^ c3 << 6 ^ c4 ^ 0b1110000001111110000000;
+					if (c4 < Character.MIN_SUPPLEMENTARY_CODE_POINT || c4 > Character.MAX_CODE_POINT) { i -= 3; break malformed; }
 
-					if (outMax-off < 2) { i -= 4; break; }
+					if (outMax-off < 2) { i -= 4; break truncate; }
 
 					out[off++] = Character.highSurrogate(c4);
 					out[off++] = Character.lowSurrogate(c4);
 					break;
-				default: i--; break malformed;
+				default: break malformed;
 			}
 		}
 
 		return ((i-base) << 32) | off;}
-		throw new IllegalArgumentException((int) (i-base) + " 附近解码错误");
+
+		if (this == THROW_ON_FAIL) throw new IllegalArgumentException((int) (i-base) + " 附近解码错误");
+		out[off++] = INVALID;
+		return ((i-base) << 32) | off;
 	}
 
 	@Override
-	public void unsafeValidate(Object ref, long i, int len, IntConsumer cs) {
-		long max = i+len;
-
+	public void unsafeValidate(Object ref, long i, long max, IntConsumer cs) {
 		int c, c2, c3, c4;
 		loop:
 		while (i < max) {
@@ -171,54 +157,32 @@ public final class UTF8MB4 extends UnsafeCharset {
 					cs.accept(c);
 					break;
 				case 12: case 13:
-					if (i >= max) {
-						cs.accept(TRUNCATED);
-						break loop;
-					}
+					if (i >= max) { cs.accept(TRUNCATED); break loop; }
 
 					c2 = u.getByte(ref, i++);
+					if ((c2 & 0xC0) != 0x80) { i -= 1; cs.accept(MALFORMED - 2); continue; }
 
-					if ((c2 & 0xC0) != 0x80) {
-						cs.accept(MALFORMED - 2);
-						i--;
-						continue;
-					}
-
-					cs.accept(((c & 0x1F) << 6) | (c2 & 0x3F));
+					cs.accept((char) (c << 6 ^ c2 ^ 0b1110011110000000));
 					break;
 				case 14:
-					if (i+1 >= max) {
-						cs.accept(TRUNCATED);
-						break loop;
-					}
+					if (i+1 >= max) { cs.accept(TRUNCATED); break loop; }
 
 					c2 = u.getByte(ref, i++);
 					c3 = u.getByte(ref, i++);
-					if (((c2^c3) & 0xC0) != 0) {
-						cs.accept(MALFORMED - 3);
-						i-=2;
-						continue;
-					}
+					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) { i -= 2; cs.accept(MALFORMED - 3); continue; }
 
-					cs.accept(((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | c3 & 0x3F);
+					cs.accept((char) (c << 12 ^ c2 << 6 ^ c3 ^ 0b0001111110000000));
 					break;
 				default: cs.accept(MALFORMED - 1); break;
 				case 15:
-					if (i+2 >= max) {
-						cs.accept(TRUNCATED);
-						break loop;
-					}
+					if (i+2 >= max) { cs.accept(TRUNCATED); break loop; }
 
 					c2 = u.getByte(ref, i++);
 					c3 = u.getByte(ref, i++);
 					c4 = u.getByte(ref, i++);
-					if (((c2^c3^c4) & 0xC0) != 0x80) {
-						cs.accept(MALFORMED - 4);
-						i-=3;
-						continue;
-					}
+					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80) { i -= 3; cs.accept(MALFORMED - 4); continue; }
 
-					c4 = ((c & 7) << 18) | ((c2 & 0x3F) << 12) | ((c3 & 0x3F) << 6) | c4 & 0x3F;
+					c4 = (c << 18 ^ c2 << 12 ^ c3 << 6 ^ c4 ^ 0b1110000001111110000000) & 2097151;
 					cs.accept(c4);
 					break;
 			}
@@ -230,8 +194,10 @@ public final class UTF8MB4 extends UnsafeCharset {
 		int end = i+len;
 		while (i < end) {
 			int c = s.charAt(i++);
-			if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-				if (i == end) throw new IllegalStateException("Trailing high surrogate \\u" + Integer.toHexString(c));
+			if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
+				if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+				if (i == end) throw new IllegalStateException("Trailing high surrogate \\U+"+Integer.toHexString(c));
+
 				c = TextUtil.codepoint(c,s.charAt(i++));
 				len--;
 			}

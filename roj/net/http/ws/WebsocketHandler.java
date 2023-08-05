@@ -1,6 +1,7 @@
 package roj.net.http.ws;
 
 import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.text.CharList;
@@ -14,7 +15,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -276,7 +277,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 								error(ERR_TOO_LARGE, "decompressed data > " + zo.capacity() + " bytes");
 								return;
 							}
-							zo = ctx.alloc().expand(zo, zo.capacity());
+							zo = BufferPool.expand(zo, zo.capacity());
 						}
 					} while (!inf.needsInput());
 				} catch (Exception e) {
@@ -488,7 +489,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 					$len -= 4;
 				}
 			} finally {
-				if (buf != null) ch.reserve(buf);
+				if (buf != null) BufferPool.reserve(buf);
 			}
 
 			data = ByteList.wrap(zb, 0, $len);
@@ -502,9 +503,9 @@ public abstract class WebsocketHandler implements ChannelHandler {
 		if ($len <= 125) {
 			out.put((byte) $len);
 		} else if ($len <= 65535) {
-			out.put((byte) 126).putShort($len);
+			out.put(126).putShort($len);
 		} else {
-			out.put((byte) 127).putLong($len);
+			out.put(127).putLong($len);
 		}
 
 		if ((flag & REMOTE_MASK) == 0) {
@@ -526,7 +527,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 		try {
 			ch.channelWrite(out);
 		} finally {
-			ch.reserve(out);
+			BufferPool.reserve(out);
 		}
 	}
 

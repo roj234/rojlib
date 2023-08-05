@@ -1,7 +1,9 @@
 package roj.asm.type;
 
 import roj.io.IOUtil;
+import roj.mapper.Mapping;
 import roj.text.CharList;
+import roj.text.logging.Level;
 import roj.util.Helpers;
 
 import java.util.List;
@@ -57,34 +59,37 @@ public class Generic extends IGeneric {
 	}
 
 	public void rename(UnaryOperator<String> fn) {
-		if (sub != null) {
-			recursionSubs(fn, sub, new CharList().append(owner), 1);
+		b: if (sub != null) {
+			CharList name = new CharList().append(owner);
+
+			IGeneric x = sub;
+			while (x != null) {
+				name.append('$').append(x.owner);
+				x = x.sub;
+			}
+
+			String t = name.toStringAndFree();
+			String newName = fn.apply(t);
+			if (t.equals(newName)) break b;
+
+			x = this;
+			int prevI = 0, i = 0;
+			while ((i = newName.indexOf('$', i)) > 0) {
+				if (x == null) throw new IllegalArgumentException("[GenericSub]: "+t+"("+this+") => "+newName+" has too may '$'");
+
+				x.owner = newName.substring(prevI, i);
+				x = x.sub;
+
+				prevI = ++i;
+			}
+			if (x != null) Mapping.LOGGER.log(Level.WARN, "[GenericSub]: {}({}) => {} has too less '$'", null, t, this, newName);
+		} else {
+			owner = fn.apply(owner);
 		}
-		owner = fn.apply(owner);
 
 		for (int i = 0; i < children.size(); i++) {
 			children.get(i).rename(fn);
 		}
-	}
-
-	private void recursionSubs(UnaryOperator<String> fn, GenericSub sub, CharList t, int dollar) {
-		t.append('$').append(sub.owner);
-
-		if (sub.sub != null) {
-			int len = t.length();
-			recursionSubs(fn, sub.sub, t, dollar+1);
-			t.setLength(len);
-		}
-
-		String rpl = fn.apply(t.toString());
-		if (t.equals(rpl)) return;
-
-		int i = 0;
-		while (dollar-- > 0) {
-			i = rpl.indexOf('$', i);
-			if (i < 0) throw new IllegalStateException("Non-static sub class renaming error: " + t + " => " + rpl);
-		}
-		sub.owner = rpl.substring(i+1);
 	}
 
 	public void toString(CharList sb) {
@@ -93,8 +98,7 @@ public class Generic extends IGeneric {
 			case EX_EXTENDS: sb.append("? extends "); break;
 		}
 
-		int start = owner.lastIndexOf('/') + 1;
-		sb.append(owner, start, owner.length());
+		TypeHelper.toStringOptionalPackage(sb, owner);
 
 		if (!children.isEmpty()) {
 			sb.append('<');

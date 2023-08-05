@@ -8,19 +8,15 @@ import roj.text.TextUtil;
 import javax.annotation.Nonnull;
 
 public final class Version {
-	public static final Version INFINITY = new Version("999999.999999.999999");
+	public static final Version INFINITY = new Version("6.6.6-Inf");
 
 	private String value;
 	private final IntList items;
 
-	public Version() {
-		this.items = new IntList();
-	}
-
+	public Version() { items = new IntList(); }
 	public Version(String version) {
-		this.items = new IntList();
-
-		this.parse(version, false);
+		items = new IntList();
+		parse(version, false);
 	}
 
 	public Version parse(String version, boolean ex) {
@@ -28,38 +24,37 @@ public final class Version {
 
 		CharList buf = new CharList(10);
 
-		filterNonNumber(buf, version, ex);
-		value = version = buf.toString();
+		int pos = filterNonNumber(buf, version, ex);
+		value = buf.append(version, pos, version.length()).toString();
 		buf.clear();
 
 		boolean dot = false;
 		for (int i = 0; i < version.length(); i++) {
 			char c = version.charAt(i);
 			if (c == '.') {
-				if (dot) {
-					// duplicate dot
-					throw new IllegalArgumentException("Invalid version " + version);
-				}
+				if (dot) throw new IllegalArgumentException("Invalid version " + version);
 				dot = true;
 			} else {
 				if (dot) {
-					// only 1 \r or \n
-					this.items.add(TextUtil.parseInt(buf));
+					items.add(TextUtil.parseInt(buf));
 					buf.clear();
 				}
+
 				buf.append(c);
 				dot = false;
 			}
 		}
-		if (buf.length() != 0) {
-			this.items.add(TextUtil.parseInt(buf));
+
+		if (buf.length() != 0 && TextUtil.isNumber(buf) == 0) {
+			items.add(TextUtil.parseInt(buf));
 		}
 
 		return this;
 	}
 
-	private static void filterNonNumber(CharList buf, String s, boolean thr) {
-		for (int i = 0; i < s.length(); i++) {
+	private static int filterNonNumber(CharList buf, String s, boolean thr) {
+		int i = 0;
+		for (; i < s.length(); i++) {
 			char c = s.charAt(i);
 			if (ITokenizer.NUMBER.contains(c) || c == '.') {
 				buf.append(c);
@@ -69,14 +64,13 @@ public final class Version {
 				break;
 			}
 		}
+		return i;
 	}
 
-	/**
-	 * 1 自己大于别人
-	 * 0 自己等于别人
-	 * -1 自己小于别人
-	 */
 	public int compareTo(@Nonnull Version o) {
+		if (this == INFINITY) return o == INFINITY ? 0 : 1;
+		if (o == INFINITY) return -1;
+
 		for (int i = 0; i < items.size(); i++) {
 			int self = items.get(i);
 			int other = o.items.size() <= i ? 0 : o.items.get(i);
@@ -86,7 +80,5 @@ public final class Version {
 		return 0;
 	}
 
-	public String toString() {
-		return this.value;
-	}
+	public String toString() { return value; }
 }

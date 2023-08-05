@@ -6,6 +6,7 @@ import roj.asm.cst.*;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.SimpleList;
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -17,26 +18,10 @@ import java.util.List;
  * @since 2021/6/18 9:51
  */
 public final class BootstrapMethods extends Attribute {
-	public BootstrapMethods() {
-		super("BootstrapMethods");
-		methods = new ArrayList<>();
-	}
-
+	public BootstrapMethods() { methods = new ArrayList<>(); }
 	public BootstrapMethods(DynByteBuf r, ConstantPool pool) {
-		super("BootstrapMethods");
-		methods = parse(r, pool);
-	}
-
-	public List<BootstrapMethod> methods;
-
-	@Override
-	public boolean isEmpty() {
-		return methods.isEmpty();
-	}
-
-	public static List<BootstrapMethod> parse(DynByteBuf r, ConstantPool pool) {
 		int len = r.readUnsignedShort();
-		List<BootstrapMethod> methods = new SimpleList<>(len);
+		List<Item> methods = this.methods = new SimpleList<>(len);
 		while (len-- > 0) {
 			CstMethodHandle handle = (CstMethodHandle) pool.get(r);
 			if (handle.kind != 6 && handle.kind != 8) throw new IllegalStateException("The reference_kind item of the CONSTANT_MethodHandle_info structure should have the value 6 or 8 (§5.4.3.5).");
@@ -61,72 +46,43 @@ public final class BootstrapMethods extends Attribute {
 				list.add(c);
 			}
 			CstRef ref = handle.getRef();
-			methods.add(new BootstrapMethod(ref.className(), ref.desc().name().str(), ref.desc().getType().str(), handle.kind, ref.type(), list));
+			methods.add(new Item(ref.className(), ref.desc().name().str(), ref.desc().getType().str(), handle.kind, ref.type(), list));
 		}
-
-		return methods;
 	}
 
-	/**
-	 * InvokeDynamic
-	 * <pre>
-	 *
-	 * If nativeName ==  1 (REF_getField), 2 (REF_getStatic), 3 (REF_putField), or 4 (REF_putStatic)
-	 *      ref = CONSTANT_Fieldref_info
-	 *
-	 * If nativeName ==  5 (REF_invokeVirtual) or 8 (REF_newInvokeSpecial),
-	 *      ref = CONSTANT_Methodref_info
-	 *
-	 * If nativeName == 6 (REF_invokeStatic) or 7 (REF_invokeSpecial),
-	 *      if(version number < 52)
-	 *          ref = CONSTANT_Methodref_info
-	 *      else
-	 *          ref = either a CONSTANT_Methodref_info or a CONSTANT_InterfaceMethodref_info
-	 *
-	 * If nativeName == 9 (REF_invokeInterface)
-	 *      ref = CONSTANT_InterfaceMethodref_info
-	 * </pre>
-	 */
+	public List<Item> methods;
+
+	@Override
+	public boolean isEmpty() { return methods.isEmpty(); }
+
 	public static final class Kind {
 		public static byte GETFIELD = 1, GETSTATIC = 2, PUTFIELD = 3, PUTSTATIC = 4, INVOKEVIRTUAL = 5, INVOKESTATIC = 6, INVOKESPECIAL = 7, NEW_INVOKESPECIAL = 8, INVOKEINTERFACE = 9;
 
 		public static boolean verifyType(byte kind, byte type) {
 			switch (kind) {
-				case 1:
-				case 2:
-				case 3:
-				case 4:
-					return type == Constant.FIELD;
-				case 5:
-				case 8:
-					return type == Constant.METHOD;
-				case 6:
-				case 7:
-					return type == Constant.METHOD || type == Constant.INTERFACE;
-				case 9:
-					return type == Constant.INTERFACE;
+				case 1: case 2: case 3: case 4: return type == Constant.FIELD;
+				case 5: case 8: return type == Constant.METHOD;
+				case 6: case 7: return type == Constant.METHOD || type == Constant.INTERFACE;
+				case 9: return type == Constant.INTERFACE;
 			}
 			return false;
 		}
 
-		static final byte[] toString = {Opcodes.GETFIELD, Opcodes.GETSTATIC, Opcodes.PUTFIELD, Opcodes.PUTSTATIC, Opcodes.INVOKEVIRTUAL, Opcodes.INVOKESTATIC, Opcodes.INVOKESPECIAL,
-										Opcodes.INVOKESPECIAL, Opcodes.INVOKEINTERFACE};
+		static final byte[] toString = {Opcodes.GETFIELD, Opcodes.GETSTATIC, Opcodes.PUTFIELD, Opcodes.PUTSTATIC, Opcodes.INVOKEVIRTUAL, Opcodes.INVOKESTATIC, Opcodes.INVOKESPECIAL, Opcodes.INVOKESPECIAL, Opcodes.INVOKEINTERFACE};
 
-		public static String toString(byte kind) {
-			return OpcodeUtil.toString0(toString[kind]);
-		}
+		public static String toString(byte kind) { return OpcodeUtil.toString0(toString[kind]); }
 
 		public static byte validate(int kind) {
-			if (kind < 1 || kind > 9) throw new IllegalArgumentException("Illegal kind " + kind + ". Must in [1-9]");
+			if (kind < 1 || kind > 9) throw new IllegalArgumentException("Illegal kind "+kind+ ", Must in [1,9]");
 			return (byte) kind;
 		}
 	}
 
-	public static final class BootstrapMethod implements Cloneable {
+	public static final class Item implements Cloneable {
 		/**
 		 * 仅比较
 		 */
-		public BootstrapMethod(String owner, String name, String desc, int kind) {
+		public Item(String owner, String name, String desc, int kind) {
 			this.owner = owner;
 			this.name = name;
 			this.rawDesc = desc;
@@ -134,7 +90,7 @@ public final class BootstrapMethods extends Attribute {
 			this.kind = Kind.validate(kind);
 		}
 
-		public BootstrapMethod(String owner, String name, String desc, byte kind, byte methodType, List<Constant> arguments) {
+		public Item(String owner, String name, String desc, byte kind, byte methodType, List<Constant> arguments) {
 			this.owner = owner;
 			this.name = name;
 			this.rawDesc = desc;
@@ -204,28 +160,42 @@ public final class BootstrapMethods extends Attribute {
 
 		public String toString() {
 			initPar();
-			StringBuilder sb = new StringBuilder("type=").append(Kind.toString(kind)).append("\n            Site: ").append(returnType).append(' ').append(owner).append('.').append(name).append('(');
+
+			CharList sb = new CharList()
+				.append("类型: ").append(Kind.toString(kind))
+				.append('\n').append(returnType).append(": ").append(owner).append('.').append(name).append('(');
 
 			if (params.size() > 3) {
-				for (int i = 3; i < params.size(); i++) {
-					sb.append(params.get(i)).append(", ");
+				int i = 3;
+				while (true) {
+					sb.append(params.get(i));
+					if (++i == params.size()) break;
+					sb.append(", ");
 				}
-				sb.delete(sb.length() - 2, sb.length());
 			}
-			sb.append(")\n            Desc: ");
+			sb.append(")\n方法参数: ");
 
-			List<String> list = new SimpleList<>(arguments.size());
-			for (int i = 0; i < arguments.size(); i++) {
-				list.add(arguments.get(i).getClass().getSimpleName().substring(3));
+			if (isInvokeMethod()) {
+				sb.append("(LambdaMetafactory)")
+				  .append("\n  形参: ").append(((CstMethodType) arguments.get(0)).name().str())
+				  .append("\n  实参: ").append(((CstMethodType) arguments.get(2)).name().str())
+				  .append("\n  kind: ").append(((CstMethodHandle) arguments.get(1)).kind)
+				  .append("\n  目标: ").append(((CstMethodHandle) arguments.get(1)).getRef());
+			} else {
+				List<String> list = new SimpleList<>(arguments.size());
+				for (int i = 0; i < arguments.size(); i++) {
+					list.add(arguments.get(i).getClass().getSimpleName().substring(3));
+				}
+				sb.append(list);
 			}
-			return sb.append(list).append('\n').toString();
+			return sb.append('\n').toStringAndFree();
 		}
 
 		static void checkInvariant(String desc) {
 			if (!desc.startsWith("(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/")) throw new IllegalArgumentException("Invalid descriptor: " + desc);
 		}
 
-		public boolean equals0(BootstrapMethod method) {
+		public boolean equals0(Item method) {
 			return method.kind == this.kind && method.owner.equals(this.owner) && method.name.equals(this.name) && method.rawDesc.equals(this.rawDesc);
 		}
 
@@ -244,10 +214,10 @@ public final class BootstrapMethods extends Attribute {
 		}
 
 		@Override
-		public BootstrapMethod clone() {
-			BootstrapMethod slf;
+		public Item clone() {
+			Item slf;
 			try {
-				slf = (BootstrapMethod) super.clone();
+				slf = (Item) super.clone();
 			} catch (CloneNotSupportedException e) {
 				return Helpers.nonnull();
 			}
@@ -273,10 +243,12 @@ public final class BootstrapMethods extends Attribute {
 		}
 	}
 
+	@Override
+	public String name() { return "BootstrapMethods"; }
 	public String toString() {
 		StringBuilder sb = new StringBuilder("BootstrapMethods: \n");
 		int i = 0;
-		for (BootstrapMethod method : methods) {
+		for (Item method : methods) {
 			sb.append("         #").append(i++).append(": ").append(method).append('\n');
 		}
 		sb.delete(sb.length() - 2, sb.length());

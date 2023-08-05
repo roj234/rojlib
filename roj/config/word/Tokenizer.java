@@ -40,6 +40,7 @@ public class Tokenizer extends ITokenizer {
 			map.putInt(k.charAt(i), begin++);
 		}
 	}
+	public static Tokenizer arguments() { return new Tokenizer().literalEnd(" \r\n\t\f").defaultC2C(0); }
 
 	protected I18n i18n = I18n.NULL;
 	protected TrieTree<Word> tokens;
@@ -166,8 +167,8 @@ public class Tokenizer extends ITokenizer {
 						if (w != null) return w;
 						i = index;
 						break;
-					case C_DYH: prevIndex = index = i; return readConstChar();
-					case C_SYH: prevIndex = index = i; return readConstString(c);
+					case C_DYH: prevIndex = (index = i) - 1; return readConstChar();
+					case C_SYH: prevIndex = (index = i) - 1; return readConstString(c);
 				}
 			}
 		} finally {

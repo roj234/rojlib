@@ -72,13 +72,13 @@ public class Proxy {
 				c.field(GETFIELD, data, fid);
 				List<Type> par = c.mn.parameters();
 				for (int i = 0; i < par.size(); i++) {
-					c.var(par.get(i).shiftedOpcode(ILOAD, false), i+1);
+					c.varLoad(par.get(i), i+1);
 				}
 
 				if (!overrider.apply(m, c)) {
 					c.invokeItf(itfStr, c.mn.name(), desc);
 				}
-				c.one(c.mn.returnType().shiftedOpcode(IRETURN, true));
+				c.return_(c.mn.returnType());
 				c.finish();
 			}
 		}

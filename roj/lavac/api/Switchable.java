@@ -6,11 +6,13 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 让这个类的实例可以被switch (注:会退化成二分法，但是O(log N) << O(N))
- * 标记的函数有且仅有一个, 参数为: static int x(Instance inst);
+ * 让这个类的实例可以被switch
+ * case必须是常量(public static final)
+ * 为了防止bug，不能在static{}中使用
+ * （实质是ToIntMap）
  * @author Roj234
  * @since 2022/10/23 0023 13:27
  */
-@Retention(RetentionPolicy.SOURCE)
-@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.CLASS)
+@Target(ElementType.TYPE)
 public @interface Switchable {}

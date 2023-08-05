@@ -2,6 +2,7 @@ package roj.config;
 
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.ui.CLIUtil;
 
 /**
  * Signals that an error has been reached unexpectedly
@@ -9,7 +10,7 @@ import roj.text.TextUtil;
  *
  * @see Exception
  */
-public final class ParseException extends Exception {
+public class ParseException extends Exception {
 	private static final long serialVersionUID = 3703218443322787635L;
 
 	/**
@@ -22,19 +23,17 @@ public final class ParseException extends Exception {
 	private CharSequence lineContent;
 	private CharList path;
 
-	public ParseException(CharSequence all, String reason, int index) {
-		this(all,reason,index,null);
+	public static ParseException noTrace(CharSequence all, String reason, int index) {
+		return new ParseException(all, reason, index) {
+			public Throwable fillInStackTrace() { return this; }
+		};
 	}
+
+	public ParseException(CharSequence all, String reason, int index) { this(all,reason,index,null); }
 	public ParseException(CharSequence all, String reason, int index, Throwable cause) {
 		super(filter(reason), cause, true, true);
 		this.index = index;
 		this.lineContent = all;
-	}
-
-	public ParseException(String reason, int index) {
-		super(reason, null, true, true);
-		this.index = index;
-		noDetail();
 	}
 
 	private static String filter(String reason) {
@@ -56,21 +55,10 @@ public final class ParseException extends Exception {
 		return reason;
 	}
 
-	public int getIndex() {
-		return index;
-	}
-
-	public int getLine() {
-		return line;
-	}
-
-	public int getLineOffset() {
-		return linePos;
-	}
-
-	public CharSequence getPath() {
-		return path;
-	}
+	public int getIndex() { return index; }
+	public int getLine() { return line; }
+	public int getLineOffset() { return linePos; }
+	public CharSequence getPath() { return path; }
 
 	public ParseException addPath(CharSequence pathSeq) {
 		if (path == null) path = new CharList();
@@ -156,31 +144,20 @@ public final class ParseException extends Exception {
 
 		String line = getLineContent();
 
-		CharList k = new CharList().append("解析错误:\r\n  Line ").append(this.line).append(": ");
+		CharList k = new CharList().append("解析错误:\n  Line ").append(this.line).append(": ");
 
-		if (line.length() > 512) {
+		if (linePos < 0 || linePos > line.length() || line.length() > 512) {
 			k.append("当前行偏移量 ").append(this.linePos);
 		} else {
-			k.append(line).append("\r\n");
-			int off = this.linePos + 10 + TextUtil.digitCount(this.line);
-			for (int i = 0; i < off; i++) {
-				k.append('-');
-			}
+			k.append(line).append("\n");
+			int off = 10 + TextUtil.digitCount(this.line) + CLIUtil.getStringWidth(line.substring(0, linePos));
+			for (int i = 0; i < off; i++) k.append('-');
 
-			for (int i = linePos; i >= 0; i--) {
-				char c = line.charAt(i);
-				if (c > 255) // 双字节我直接看做中文了, 再说吧
-					k.append('-');
-				else if(c == 9) // 制表符, cmd中显示4个
-					k.append("----");
-			}
 			k.append('^');
 		}
 
-		k.append("\r\n总偏移量: ").append(index);
-		if (path != null) {
-			k.append("\r\n对象位置: ").append(path);
-		}
-		return k.append("\r\n原因: ").append(msg).append("\r\n").toString();
+		k.append("\n总偏移量: ").append(index);
+		if (path != null) k.append("\n对象位置: ").append(path);
+		return k.append("\n原因: ").append(msg).append("\n").toString();
 	}
 }

@@ -2,9 +2,9 @@ package roj.mod;
 
 import roj.asm.type.TypeHelper;
 import roj.collect.*;
-import roj.mapper.ConstMapper;
+import roj.mapper.Mapper;
 import roj.mapper.util.Desc;
-import roj.ui.UIUtil;
+import roj.ui.GUIUtil;
 import roj.util.Helpers;
 
 import javax.swing.*;
@@ -34,7 +34,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 
 	public ReflectTool(boolean exit, String flag) {
 		super("反射工具");
-		UIUtil.setLogo(this, "FMD_logo.png");
+		GUIUtil.setLogo(this, "FMD_logo.png");
 
 		setDefaultCloseOperation(exit ? JFrame.EXIT_ON_CLOSE : JFrame.DISPOSE_ON_CLOSE);
 		addWindowListener(this);
@@ -89,7 +89,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 		pack();
 		setVisible(true);
 		setResizable(false);
-		setBounds(520, 260, 510, 500);
+		setSize(510, 500);
 		validate();
 
 		loadData(tip);
@@ -108,7 +108,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 	protected void loadData(JLabel label) {
 		if (fullClass.isEmpty()) {
 			Shared.loadMapper();
-			ConstMapper mapper = Shared.mapperFwd;
+			Mapper mapper = Shared.mapperFwd;
 			for (String s : mapper.getClassMap().keySet()) {
 				fullClass.add(s);
 				final String key = s.substring(s.lastIndexOf('/') + 1).toLowerCase();
@@ -167,7 +167,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 		String text = searchText.getText().trim().replace('.', '/');
 		Collection<String> entries;
 		if (text.startsWith("field_") || text.startsWith("func_")) {
-			ConstMapper mapper = Shared.mapperFwd;
+			Mapper mapper = Shared.mapperFwd;
 			entries = new ArrayList<>(2);
 			for (Map.Entry<Desc, String> entry : (text.startsWith("field_") ? mapper.getFieldMap() : mapper.getMethodMap()).entrySet()) {
 				if (entry.getValue().equals(text)) {
@@ -239,7 +239,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 			setLayout(null);
 			setAlwaysOnTop(true);
 
-			UIUtil.setLogo(this, "FMD_logo.png");
+			GUIUtil.setLogo(this, "FMD_logo.png");
 
 			setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 			addWindowListener(parent);

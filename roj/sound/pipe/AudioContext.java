@@ -1,7 +1,6 @@
 package roj.sound.pipe;
 
 import roj.collect.Graph;
-import roj.io.buf.BitmapBPool;
 import roj.util.DynByteBuf;
 
 /**
@@ -10,7 +9,6 @@ import roj.util.DynByteBuf;
  */
 public class AudioContext {
 	Graph<AudioPipeline> graph;
-	BitmapBPool pool = new BitmapBPool(262144, 512);
 	DynByteBuf buffer;
 
 	public void register(AudioPipeline pipeline) {

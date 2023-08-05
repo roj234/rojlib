@@ -3,87 +3,77 @@ package roj.ui;
 import org.jetbrains.annotations.ApiStatus.OverrideOnly;
 import roj.io.DummyOutputStream;
 import roj.text.CharList;
+import roj.text.GB18030;
 import roj.text.TextUtil;
+import roj.text.UTF8MB4;
 import roj.util.ByteList;
-import roj.util.ByteList.Slice;
 
 import javax.annotation.Nonnull;
-import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
 import java.nio.charset.Charset;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 
 /**
  * @author Roj234
  * @since 2021/5/29 20:45
  */
 public class DelegatedPrintStream extends PrintStream {
-	public static CharList exceptionToString(Throwable e) {
-		DelegatedPrintStream err = new DelegatedPrintStream(99999);
-		e.printStackTrace(err);
-		return err.sb;
-	}
-
 	protected CharList sb = new CharList();
+	protected ByteList bb = new ByteList();
 	protected final int MAX;
-	private CharsetDecoder cd;
 
 	public DelegatedPrintStream(int max) {
 		super(DummyOutputStream.INSTANCE);
 		MAX = max;
 	}
 
-	public synchronized final void write(int var1) {
-		if (var1 == '\n') newLine();
-		else {
-			sb.append((char) var1);
-			if (sb.length() > MAX) {
-				sb.delete(0);
-			}
+	@OverrideOnly
+	protected void newLine() { flushBytes(); sb.clear(); }
+	protected void partialLine() { if (bb.length() >= 128) flushBytes(); }
+	protected void flushBytes() {
+		Charset cs = Charset.defaultCharset();
+		if (GB18030.is(cs)) {
+			GB18030.CODER.decodeLoop(bb, bb.readableBytes(), sb, MAX, true);
+		} else {
+			UTF8MB4.CODER.decodeLoop(bb, bb.readableBytes(), sb, MAX, true);
 		}
 	}
 
-	public synchronized final void write(@Nonnull byte[] b, int off, int len) {
-		if (sb.length() + len > MAX) {
-			sb.delete(0, sb.length() + len - MAX);
+	public void flush() { flushBytes(); }
+	public boolean checkError() { return false; }
+
+	// region stub
+	public synchronized final void write(int v) {
+		if (v == '\n') {
+			newLine();
+			return;
 		}
 
-		int pOff = off;
+		bb.put(v);
+		partialLine();
+	}
+	public synchronized final void write(@Nonnull byte[] b, int i, int len) {
+		int prevI = i;
 		while (len-- > 0) {
-			if (b[off] == '\n') {
-				decode(b, pOff, off-pOff);
-				pOff = off+1;
+			if (b[i] == '\n') {
+				bb.put(b, prevI, i-prevI);
+				prevI = i+1;
+
 				newLine();
 			}
-			off++;
+			i++;
 		}
 
-		if (off > pOff) decode(b, pOff, off-pOff);
-	}
-
-	private void decode(byte[] b, int off, int len) {
-		Charset cs = Charset.defaultCharset();
-		if (cs == StandardCharsets.UTF_8) {
-			try {
-				ByteList.decodeUTF(-1, sb, new Slice(b, off, len));
-				return;
-			} catch (IOException ignored) {}
+		if (i > prevI) {
+			bb.put(b, prevI, i-prevI);
+			partialLine();
 		}
-
-		if (cd == null) cd = cs.newDecoder().onUnmappableCharacter(CodingErrorAction.REPLACE).onMalformedInput(CodingErrorAction.REPLACE);
-
-		ByteBuffer in = ByteBuffer.wrap(b, off, len);
-		sb.ensureCapacity((int) (sb.length() + cd.maxCharsPerByte() * len));
-		CharBuffer out = sb.toCharBuffer(); out.clear();
-		cd.decode(in, out, true);
-		out.flip(); sb.append(out);
 	}
 
-	private synchronized void write(CharSequence str) {
+	public final PrintStream append(CharSequence v, int s, int e) { append(v == null ? "null" : v.subSequence(s, e)); return this; }
+	public synchronized final PrintStream append(CharSequence str) { return append0(str, false); }
+	private PrintStream append0(CharSequence str, boolean newLine) {
+		flushBytes();
+
 		int i = 0;
 		while (true) {
 			i = TextUtil.gAppendToNextCRLF(str, i, sb);
@@ -94,118 +84,33 @@ public class DelegatedPrintStream extends PrintStream {
 			if (i < str.length()) newLine();
 			else break;
 		}
-	}
+		// gAppendToNextCRLF无法确定最后是不是\n (i+1 and str.length)
+		if (i > 0 && str.charAt(i-1) == '\n') newLine();
 
-	@OverrideOnly
-	protected synchronized void newLine() {
-		sb.clear();
-	}
-
-	public final void flush() {}
-	public final void close() {}
-	public final boolean checkError() {
-		return false;
-	}
-
-	public final PrintStream append(CharSequence var1, int var2, int var3) {
-		write(var1 == null ? "null" : var1.subSequence(var2, var3).toString());
+		if (newLine) newLine();
+		else partialLine();
 		return this;
 	}
 
-	public final void print(boolean var1) {
-		write(var1 ? "true" : "false");
-	}
+	public synchronized final void print(boolean v) { flushBytes(); sb.append(v); partialLine(); }
+	public synchronized final void print(char v) { flushBytes(); sb.append(v); partialLine(); }
+	public synchronized final void print(int v) { flushBytes(); sb.append(v); partialLine(); }
+	public synchronized final void print(long v) { flushBytes(); sb.append(v); partialLine(); }
+	public synchronized final void print(float v) { flushBytes(); sb.append(v); partialLine(); }
+	public synchronized final void print(double v) { flushBytes(); sb.append(v); partialLine(); }
+	public final void print(@Nonnull char[] v){ append(new CharList.Slice(v,0,v.length)); }
+	public final void print(String v) { append(v == null ? "null" : v); }
+	public final void print(Object v) { append(v == null ? "null" : v.toString()); }
 
-	public final void print(char var1) {
-		write(String.valueOf(var1));
-	}
-
-	public final void print(int var1) {
-		write(String.valueOf(var1));
-	}
-
-	public final void print(long var1) {
-		write(String.valueOf(var1));
-	}
-
-	public final void print(float var1) {
-		write(String.valueOf(var1));
-	}
-
-	public final void print(double var1) {
-		write(String.valueOf(var1));
-	}
-
-	public final void print(@Nonnull char[] var1) {
-		write(new CharList(var1));
-	}
-
-	public final void print(String var1) {
-		if (var1 == null) var1 = "null";
-		write(var1);
-	}
-
-	public final void print(Object var1) {
-		write(var1 instanceof CharSequence ? (CharSequence) var1 : String.valueOf(var1));
-	}
-
-	public final void println() {
-		newLine();
-	}
-
-	public final synchronized void println(boolean var1) {
-		print(var1);
-		newLine();
-	}
-
-	public final synchronized void println(char var1) {
-		print(var1);
-		newLine();
-	}
-
-	public final synchronized void println(int var1) {
-		print(var1);
-		newLine();
-	}
-
-	public final synchronized void println(long var1) {
-		print(var1);
-		newLine();
-	}
-
-	public final synchronized void println(float var1) {
-		print(var1);
-		newLine();
-	}
-
-	public final synchronized void println(double var1) {
-		print(var1);
-		newLine();
-	}
-
-	public final synchronized void println(@Nonnull char[] var1) {
-		print(var1);
-		newLine();
-	}
-
-	public final synchronized void println(String var1) {
-		print(var1);
-		newLine();
-	}
-
-	public final void println(Object var1) {
-		String var2 = String.valueOf(var1);
-		synchronized (this) {
-			print(var2);
-			newLine();
-		}
-	}
-
-	public CharList getChars() {
-		return sb;
-	}
-
-	public int getMax() {
-		return MAX;
-	}
+	public final synchronized void println() { newLine(); }
+	public final synchronized void println(boolean v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(char v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(int v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(long v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(float v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(double v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(@Nonnull char[] v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(String v) { append0(v == null ? "null" : v, true); }
+	public final synchronized void println(Object v) { append0(v == null ? "null" : v.toString(), true); }
+	// endregion
 }

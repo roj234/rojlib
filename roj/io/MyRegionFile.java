@@ -376,7 +376,7 @@ public class MyRegionFile implements AutoCloseable {
 
 		Out(int id, int type) {
 			this.id = id;
-			buf = pool.buffer(false, 1024).put(type);
+			buf = pool.allocate(false, 1024).put(type);
 		}
 
 		@Override
@@ -392,20 +392,20 @@ public class MyRegionFile implements AutoCloseable {
 		}
 
 		private synchronized void expand(int more) {
-			buf = pool.expand(buf, MathUtils.getMin2PowerOf(more));
+			buf = BufferPool.expand(buf, MathUtils.getMin2PowerOf(more));
 		}
 
 		public synchronized void close() throws IOException {
 			if (buf != null) {
 				MyRegionFile.this.write(id, buf);
-				pool.reserve(buf);
+				BufferPool.reserve(buf);
 				buf = null;
 			}
 		}
 
 		public synchronized final void fail() throws IOException {
 			if (buf != null) {
-				pool.reserve(buf);
+				BufferPool.reserve(buf);
 				buf = null;
 				close();
 			}
@@ -427,4 +427,6 @@ public class MyRegionFile implements AutoCloseable {
 			return man;
 		}
 	}
+
+	public int[] dataArray() { return offsets; }
 }

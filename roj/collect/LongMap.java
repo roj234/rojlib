@@ -10,7 +10,7 @@ import java.util.function.Supplier;
 import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.UNDEFINED;
 
-public class LongMap<V> extends AbstractMap<Long, V> implements MapLike<LongMap.Entry<V>> {
+public class LongMap<V> extends AbstractMap<Long, V> implements _Generic_Map<LongMap.Entry<V>> {
 	@SuppressWarnings("unchecked")
 	public void putAll(LongMap<V> map) {
 		if (map.entries == null) return;
@@ -30,7 +30,7 @@ public class LongMap<V> extends AbstractMap<Long, V> implements MapLike<LongMap.
 		return entry == null ? def : entry.v;
 	}
 
-	public static class Entry<V> implements MapLikeEntry<Entry<V>>, Map.Entry<Long, V> {
+	public static class Entry<V> implements _Generic_Entry<Entry<V>>, Map.Entry<Long, V> {
 		protected long k;
 		protected V v;
 
@@ -62,7 +62,7 @@ public class LongMap<V> extends AbstractMap<Long, V> implements MapLike<LongMap.
 		protected Entry<V> next;
 
 		@Override
-		public Entry<V> nextEntry() {
+		public Entry<V> __next() {
 			return next;
 		}
 	}
@@ -120,24 +120,13 @@ public class LongMap<V> extends AbstractMap<Long, V> implements MapLike<LongMap.
 		if (this.entries != null) resize();
 	}
 
-	public Set<Entry<V>> selfEntrySet() {
-		return new EntrySet<>(this);
-	}
 
-	@Nonnull
-	@Override
-	public Set<Map.Entry<Long, V>> entrySet() {
-		return Helpers.cast(new EntrySet<>(this));
-	}
+	public int size() { return size; }
 
-	public int size() {
-		return size;
-	}
-
-	@Override
-	public void removeEntry0(Entry<V> vEntry) {
-		remove(vEntry.k);
-	}
+	public Set<Map.Entry<Long, V>> entrySet() { return Helpers.cast(selfEntrySet()); }
+	public Set<Entry<V>> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public _Generic_Entry<?>[] __entries() { return entries; }
+	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
 
 	@Nonnull
 	public V computeIfAbsent(long k, @Nonnull Supplier<V> supplier) {
@@ -148,30 +137,11 @@ public class LongMap<V> extends AbstractMap<Long, V> implements MapLike<LongMap.
 		return v;
 	}
 
-	@Override
-	public V remove(Object key) {
-		return remove((long) key);
-	}
-
-	@Override
-	public V get(Object key) {
-		return get((long) key);
-	}
-
-	@Override
-	public boolean containsKey(Object key) {
-		return containsKey((long) key);
-	}
-
-	@Override
-	public V put(Long key, V value) {
-		return putLong(key, value);
-	}
-
-	@Override
-	public V getOrDefault(Object key, V def) {
-		return getOrDefault((long) key, def);
-	}
+	public V remove(Object key) { return remove((long) key); }
+	public V get(Object key) { return get((long) key); }
+	public boolean containsKey(Object key) { return containsKey((long) key); }
+	public V put(Long key, V value) { return putLong(key, value); }
+	public V getOrDefault(Object key, V def) { return getOrDefault((long) key, def); }
 
 	@SuppressWarnings("unchecked")
 	protected void resize() {
@@ -352,46 +322,6 @@ public class LongMap<V> extends AbstractMap<Long, V> implements MapLike<LongMap.
 					}
 				}
 			} else {Arrays.fill(entries, null);}
-		}
-	}
-
-	static final class EntrySet<V> extends AbstractSet<Entry<V>> {
-		private final LongMap<V> map;
-
-		private EntrySet(LongMap<V> map) {
-			this.map = map;
-		}
-
-		public final int size() {
-			return map.size();
-		}
-
-		public final void clear() {
-			map.clear();
-		}
-
-		public final Iterator<Entry<V>> iterator() {
-			return isEmpty() ? Collections.emptyIterator() : new EntryItr<>(map.entries, map);
-		}
-
-		public final boolean contains(Object o) {
-			if (!(o instanceof LongMap.Entry)) return false;
-			Entry<?> e = (Entry<?>) o;
-			long key = e.getLongKey();
-			Entry<?> comp = map.getEntry(key);
-			return comp != null && comp.v == e.v;
-		}
-
-		public final boolean remove(Object o) {
-			if (o instanceof Map.Entry) {
-				LongMap.Entry<?> e = (LongMap.Entry<?>) o;
-				return map.remove(e.k) != null;
-			}
-			return false;
-		}
-
-		public final Spliterator<LongMap.Entry<V>> spliterator() {
-			return Spliterators.spliterator(map.entries, 0);
 		}
 	}
 }

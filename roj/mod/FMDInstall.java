@@ -19,9 +19,9 @@ import roj.mod.fp.LegacyForge;
 import roj.mod.fp.WorkspaceBuilder;
 import roj.mod.mapping.MappingFormat;
 import roj.text.TextUtil;
-import roj.ui.CmdUtil;
-import roj.ui.EasyProgressBar;
-import roj.ui.UIUtil;
+import roj.ui.CLIUtil;
+import roj.ui.GUIUtil;
+import roj.ui.ProgressBar;
 import roj.util.ByteList;
 
 import javax.swing.*;
@@ -29,7 +29,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
-import static roj.mapper.ConstMapper.DONT_LOAD_PREFIX;
+import static roj.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.mod.MCLauncher.*;
 import static roj.mod.Shared.*;
 
@@ -46,14 +46,14 @@ public class FMDInstall {
 		CMapping cfgGen = CONFIG.get("通用").asMap();
 
 		File mcRoot = new File(cfgGen.getString("MC目录"));
-		if (!mcRoot.isDirectory()) mcRoot = UIUtil.readFile("MC目录(.minecraft)");
+		if (!mcRoot.isDirectory()) mcRoot = CLIUtil.readFile("MC目录(.minecraft)");
 		if (!new File(mcRoot, "/versions/").isDirectory()) mcRoot = new File(mcRoot, ".minecraft");
 
 		List<File> versions = MCLauncher.findVersions(new File(mcRoot, "/versions/"));
 
 		File mcJson = null;
 		if (versions.isEmpty()) {
-			CmdUtil.error("没有找到任何MC版本！请确认目录是否正确", true);
+			CLIUtil.error("没有找到任何MC版本！请确认目录是否正确", true);
 			return -1;
 		} else {
 			String versionJson = CONFIG.getString("MC版本JSON");
@@ -65,7 +65,7 @@ public class FMDInstall {
 					}
 				}
 			}
-			if (mcJson == null) mcJson = versions.get(UIUtil.selectOneFile(versions, "MC版本"));
+			if (mcJson == null) mcJson = versions.get(CLIUtil.selectOneFile(versions, "MC版本"));
 		}
 
 		return setupWorkspace(mcRoot, mcJson, new InputDelegate());
@@ -91,7 +91,7 @@ public class FMDInstall {
 		boolean is113orHigher = (boolean) result[4];
 
 		if (!json.getString("type").equals("release")) {
-			CmdUtil.error("不支持快照版本");
+			CLIUtil.error("不支持快照版本");
 			return -1;
 		}
 
@@ -140,13 +140,13 @@ public class FMDInstall {
 
 		// region clean previous mapping
 		File mcpSrgPath = MCP2SRG_PATH;
-		if (mcpSrgPath.isFile() && !mcpSrgPath.delete()) CmdUtil.warning("无法删除旧的映射数据");
+		if (mcpSrgPath.isFile() && !mcpSrgPath.delete()) CLIUtil.warning("无法删除旧的映射数据");
 		File cache0 = new File(BASE, "/util/mapCache.lzma");
-		if (cache0.isFile() && !cache0.delete()) CmdUtil.error("无法删除映射缓存 mapCache.lzma!", true);
+		if (cache0.isFile() && !cache0.delete()) CLIUtil.error("无法删除映射缓存 mapCache.lzma!", true);
 		ATHelper.getBackupFile().empty();
 		// endregion
 		if (System.getProperty("fmd.maponly") != null) {
-			CmdUtil.info("设置了fmd.maponly 仅生成映射表！");
+			CLIUtil.info("设置了fmd.maponly 仅生成映射表！");
 			MappingFormat.MapResult maps = fmt.map(cfg, TMP_DIR);
 			maps.tsrgCompile.saveMap(mcpSrgPath);
 			maps.tsrgDeobf.saveMap(new File(BASE, "deobf.map"));
@@ -164,7 +164,7 @@ public class FMDInstall {
 
 		if (!wb.awaitSuccess()) return -1;
 
-		CmdUtil.info("Persistent AT...");
+		CLIUtil.info("Persistent AT...");
 		FMDMain.preAT();
 		return 0;
 	}
@@ -177,12 +177,12 @@ public class FMDInstall {
 				return new Fabric();
 			}
 		}
-		CmdUtil.error("无法为当前版本找到合适的WorkspaceBuilder (您是否安装了模组加载器如forge?)");
+		CLIUtil.error("无法为当前版本找到合适的WorkspaceBuilder (您是否安装了模组加载器如forge?)");
 		return null;
 	}
 
 	private static void copyLibrary(File baseDir, Collection<String> lib, WorkspaceBuilder proc) throws IOException {
-		EasyProgressBar bar = new EasyProgressBar("复制库文件");
+		ProgressBar bar = new ProgressBar("复制库文件");
 		int finished = 0;
 		int total = lib.size();
 
@@ -194,14 +194,14 @@ public class FMDInstall {
 
 				File file = new File(baseDir, pkg);
 				if (!file.isFile()) {
-					CmdUtil.error("library不存在: " + pkg);
+					CLIUtil.error("library不存在: " + pkg);
 					continue;
 				}
 				if (proc.mergeLibraryHook(file, pkg)) continue;
 
 				final boolean _USE_PATCHY = false;
 				if (pkg.startsWith("com/mojang/patchy") && !_USE_PATCHY) {
-					if (DEBUG) CmdUtil.info("跳过Patchy " + pkg);
+					if (DEBUG) CLIUtil.info("跳过Patchy " + pkg);
 					continue;
 				}
 
@@ -213,7 +213,7 @@ public class FMDInstall {
 								if (!pkg.equals(prevPkg)) {
 									prevPkg = prevPkg.substring(prevPkg.lastIndexOf('/') + 1);
 									pkg = pkg.substring(pkg.lastIndexOf('/') + 1);
-									CmdUtil.warning("重复的 " + entry.getName() + " 在 " + prevPkg + " 和 " + pkg, true);
+									CLIUtil.warning("重复的 " + entry.getName() + " 在 " + prevPkg + " 和 " + pkg, true);
 								}
 							} else {
 								zfw.copy(mzf, entry);
@@ -226,10 +226,8 @@ public class FMDInstall {
 			}
 			bar.end("成功");
 		} catch (Exception e) {
-			bar.end("失败", CmdUtil.Color.RED);
+			bar.end("失败", CLIUtil.RED);
 			throw e;
-		} finally {
-			bar.dispose();
 		}
 	}
 
@@ -349,7 +347,7 @@ public class FMDInstall {
 	}
 
 	public static void main(String[] args) throws IOException {
-		UIUtil.systemLook();
+		GUIUtil.systemLook();
 		CONFIG.size();
 		changeVersion();
 		//quickInst(args.length == 0 ? null : args[0]);

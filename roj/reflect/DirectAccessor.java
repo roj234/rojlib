@@ -2,16 +2,14 @@ package roj.reflect;
 
 import roj.asm.cst.CstClass;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.insn.FieldInsnNode;
-import roj.asm.tree.insn.InsnList;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
-import roj.asm.util.InsnHelper;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
+import roj.mapper.util.Desc;
 import roj.text.CharList;
 import roj.util.ArrayCache;
 
@@ -67,7 +65,7 @@ public final class DirectAccessor<T> {
 
 	static final class Cache {
 		Class<?> clazz;
-		FieldInsnNode node;
+		Desc node;
 	}
 
 	private DirectAccessor(Class<T> deClass, String pkg, boolean checkDuplicate) {
@@ -154,7 +152,6 @@ public final class DirectAccessor<T> {
 		var.newField(PUBLIC, name, type1);
 
 		CodeWriter cw;
-		InsnList insn;
 
 		if ((methodFlag & 2) != 0) {
 			if ((methodFlag & 8) != 0) {
@@ -199,7 +196,7 @@ public final class DirectAccessor<T> {
 
 		Cache cache = new Cache();
 		cache.clazz = targetClass;
-		cache.node = new FieldInsnNode(GETFIELD, var.name, name, type1);
+		cache.node = new Desc(var.name, name, type1.toDesc());
 		caches.put(name, cache);
 
 		return this;
@@ -362,12 +359,11 @@ public final class DirectAccessor<T> {
 			int size = 1;
 			for (int j = 0; j < params.length; j++) {
 				Class<?> param = params[j];
-				String tag = InsnHelper.XPrefix(param);
-				cw.var(InsnHelper.X_LOAD(tag.charAt(0)), size++);
-				if (check && !param.isAssignableFrom(params2[j])) cw.clazz(CHECKCAST, param.getName().replace('.', '/'));
-				switch (tag) {
-					case "D":
-					case "L": size++;
+				Type type = TypeHelper.class2type(param);
+				cw.varLoad(type, size++);
+				if (check && !param.isAssignableFrom(params2[j])) cw.clazz(CHECKCAST, type.getActualClass());
+				switch (type.getActualType()) {
+					case 'D': case 'J': size++;
 				}
 			}
 
@@ -582,7 +578,7 @@ public final class DirectAccessor<T> {
 			if (isStatic == 0) {
 				if (useCache) {
 					cw.one(ALOAD_0);
-					cw.field(GETFIELD, cache.node.owner, cache.node.name, cache.node.rawType);
+					cw.field(GETFIELD, cache.node.owner, cache.node.name, cache.node.param);
 				} else {
 					cw.one(ALOAD_1);
 					if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
@@ -592,14 +588,13 @@ public final class DirectAccessor<T> {
 			int size = useCache || isStatic != 0 ? 0 : 1;
 			int j = size;
 			for (Class<?> param : params) {
-				String tag = InsnHelper.XPrefix(param);
-				cw.var(InsnHelper.X_LOAD(tag.charAt(0)), ++size);
-				if (check && !param.isPrimitive() && !param.isAssignableFrom(params2[j])) // 强制转换再做检查...
-					cw.clazz(CHECKCAST, param.getName().replace('.', '/'));
+				Type type = TypeHelper.class2type(param);
+				cw.varLoad(type, ++size);
+				if (check && !param.isAssignableFrom(params2[j])) // 强制转换再做检查...
+					cw.clazz(CHECKCAST, type.getActualClass());
 				j++;
-				switch (tag) {
-					case "D":
-					case "L": size++;
+				switch (type.getActualType()) {
+					case 'D': case 'J': size++;
 				}
 			}
 
@@ -613,7 +608,7 @@ public final class DirectAccessor<T> {
 				cw.invoke((flags != null && flags.contains(i) ? INVOKESPECIAL : INVOKEVIRTUAL), tName, tm.getName(), tDesc);
 			}
 
-			cw.one(InsnHelper.X_RETURN222(InsnHelper.XPrefix(tm.getReturnType())));
+			cw.return_(TypeHelper.class2type(tm.getReturnType()));
 			cw.finish();
 		}
 		return this;
@@ -746,7 +741,7 @@ public final class DirectAccessor<T> {
 					localSize = (char) (useCache ? 1 : 2);
 					if (useCache) {
 						cw.one(ALOAD_0);
-						cw.field(GETFIELD, cache.node.owner, cache.node.name, cache.node.rawType);
+						cw.field(GETFIELD, cache.node.owner, cache.node.name, cache.node.param);
 					} else {
 						cw.one(ALOAD_1);
 						if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
@@ -756,7 +751,7 @@ public final class DirectAccessor<T> {
 					localSize = 1;
 					cw.field(GETSTATIC, tName, field.getName(), fType);
 				}
-				cw.one(InsnHelper.X_RETURN222(fType));
+				cw.return_(fType);
 				cw.visitSize(type == Type.DOUBLE || type == Type.LONG ? 2 : 1, localSize);
 				cw.finish();
 			}
@@ -774,7 +769,7 @@ public final class DirectAccessor<T> {
 					localSize = (char) (stackSize + (useCache ? 0 : 1));
 					if (useCache) {
 						cw.one(ALOAD_0);
-						cw.field(GETFIELD, cache.node.owner, cache.node.name, cache.node.rawType);
+						cw.field(GETFIELD, cache.node.owner, cache.node.name, cache.node.param);
 					} else {
 						cw.one(ALOAD_1);
 						if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
@@ -782,7 +777,7 @@ public final class DirectAccessor<T> {
 				} else {
 					localSize = stackSize--;
 				}
-				cw.one(InsnHelper.X_LOAD_I222(fType.nativeName().charAt(0), isStatic || useCache ? 1 : 2));
+				cw.varLoad(fType, isStatic || useCache ? 1 : 2);
 				if (check && type == CLASS && !field.getType().isAssignableFrom(params2[isStatic || useCache ? 0 : 1]))
 					cw.clazz(CHECKCAST, fType.owner);
 				cw.field(isStatic ? PUTSTATIC : PUTFIELD, tName, field.getName(), fType);
@@ -816,12 +811,9 @@ public final class DirectAccessor<T> {
 		int size = 1;
 		for (int i = 0; i < params.size(); i++) {
 			Type param = params.get(i);
-			char x = param.nativeName().charAt(0);
-			cw.var(InsnHelper.X_LOAD(x), ++size);
-			switch (x) {
-				case 'D':
-				case 'L':
-					size++;
+			cw.varLoad(param, ++size);
+			switch (param.getActualType()) {
+				case 'D': case 'J': size++;
 			}
 		}
 
@@ -861,11 +853,9 @@ public final class DirectAccessor<T> {
 		int size = isStatic ? 0 : 1;
 		for (int i = 0; i < params.size(); i++) {
 			Type param = params.get(i);
-			char x = param.nativeName().charAt(0);
-			cw.var(InsnHelper.X_LOAD(x), ++size);
-			switch (x) {
-				case 'D':
-				case 'L': size++;
+			cw.varLoad(param, ++size);
+			switch (param.getActualType()) {
+				case 'D': case 'J': size++;
 			}
 		}
 
@@ -878,7 +868,7 @@ public final class DirectAccessor<T> {
 		} else {
 			cw.invoke(opcode, target, self.getName(), desc);
 		}
-		cw.one(InsnHelper.X_RETURN222(InsnHelper.XPrefix(self.getReturnType())));
+		cw.return_(TypeHelper.class2type(self.getReturnType()));
 		cw.finish();
 
 		if (sb != null) {
@@ -921,7 +911,7 @@ public final class DirectAccessor<T> {
 				cw.field(GETSTATIC, target, name, type);
 			}
 			cw.visitSize(stackSize, localSize);
-			cw.one(InsnHelper.X_RETURN222(type));
+			cw.return_(type);
 			cw.finish();
 		}
 
@@ -940,7 +930,7 @@ public final class DirectAccessor<T> {
 				localSize = stackSize--;
 			}
 			cw.visitSize(stackSize, localSize);
-			cw.one(InsnHelper.X_LOAD_I222(type.nativeName().charAt(0), isStatic ? 1 : 2));
+			cw.varLoad(type, isStatic ? 1 : 2);
 			cw.field(isStatic ? PUTSTATIC : PUTFIELD, target, name, type);
 			cw.one(RETURN);
 			cw.finish();

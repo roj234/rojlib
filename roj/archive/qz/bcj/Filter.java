@@ -34,7 +34,7 @@ public abstract class Filter extends RCipherSpi {
         out.wIndex(out.wIndex()+len);
     }
     protected void cryptFinal1(DynByteBuf in, DynByteBuf out) {
-        out.put(in);
+        out.wIndex(out.wIndex()+in.readableBytes());
         in.rIndex = in.wIndex();
     }
 

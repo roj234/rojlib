@@ -17,7 +17,8 @@ import java.util.function.BiConsumer;
  * @since 2021/8/18 13:36
  */
 public class BufferedSource extends Source implements BiConsumer<MutableInt,ByteList> {
-	public static final int PAGE = 4096;
+	private static final int PAGE = 4096;
+
 	private long pos, len;
 	private int sync;
 
@@ -40,7 +41,7 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 
 	public BufferedSource(Source s, int buffer, BufferPool pool, boolean dispatchClose) throws IOException {
 		this.s = s;
-		this.buffers = new LRUCache<>((buffer + 4095) >>> 12);
+		this.buffers = new LRUCache<>((buffer + (PAGE-1)) >>> 12);
 		this.buffers.setEvictListener(this);
 		this.pool = pool;
 		this.pos = s.position();
@@ -53,7 +54,7 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 		sl();
 
 		sync |= 1;
-		return pos >= len ? -1 : buffer(pos).getU(((int)pos++&4095));
+		return pos >= len ? -1 : buffer(pos).getU(((int)pos++&(PAGE-1)));
 	}
 
 	@Override
@@ -68,7 +69,7 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 		len = (int) Math.min(len, this.len-p);
 		if (len <= 0) return -1;
 
-		int plen = (int) p&4095;
+		int plen = (int) p&(PAGE-1);
 		int rLen = Math.min(len, PAGE-plen);
 		buffer(p).read(plen, b, off, rLen);
 		p += rLen;
@@ -155,9 +156,7 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 	}
 
 	@Override
-	public Source threadSafeCopy() throws IOException {
-		return s.threadSafeCopy();
-	}
+	public Source threadSafeCopy() throws IOException { return new BufferedSource(s.threadSafeCopy(), 4096, pool, close); }
 
 	public void moveSelf(long from, long to, long length) throws IOException {
 		invalidate(to, to + length);
@@ -170,10 +169,10 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 	}
 
 	public final void invalidate() {
-		for (Iterator<MyHashMap.Entry<MutableInt, ByteList>> it = buffers.entryIterator(); it.hasNext(); ) {
+		for (Iterator<MyHashMap.Entry<MutableInt, ByteList>> it = buffers.__iterator_javac_is_sb(); it.hasNext(); ) {
 			MyHashMap.Entry<MutableInt, ByteList> next = it.next();
 			try {
-				pool.reserve(next.v);
+				BufferPool.reserve(next.v);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -183,33 +182,40 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 
 	private void invalidate(long from, long to) {
 		int f = (int) (from>>>12);
-		int t = (int) ((to+4095)>>>12);
+		int t = (int) ((to+(PAGE-1))>>>12);
 		while (f < t) {
 			val.setValue(f++);
 			DynByteBuf buf = buffers.remove(val);
-			if (buf != null) pool.reserve(buf);
+			if (buf != null) BufferPool.reserve(buf);
 		}
 	}
 
 	private final MutableInt val = new MutableInt();
+	private MutableInt myNext;
 	private ByteList buffer(long pos) throws IOException {
 		val.setValue((int) (pos>>>12));
 		ByteList buf = buffers.get(val);
 		if (buf == null) {
-			s.seek(pos & ~4095);
+			s.seek(pos & -PAGE);
 			sync |= 1;
 
-			buf = (ByteList) pool.buffer(false, PAGE);
+			buf = (ByteList) pool.allocate(false, PAGE);
 			try {
 				int len = s.read(buf.list, buf.arrayOffset(), PAGE);
 				buf.wIndex(len);
 			} catch (Throwable e) {
-				pool.reserve(buf);
+				BufferPool.reserve(buf);
 				invalidate();
 				throw e;
 			}
 
-			buffers.put(new MutableInt(val), buf);
+			MutableInt next = myNext;
+			myNext = null;
+
+			if (next == null) next = new MutableInt(val);
+			else next.setValue(val);
+
+			buffers.put(next, buf);
 		}
 		return buf;
 	}
@@ -228,12 +234,11 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 	}
 
 	@Override
-	public String toString() {
-		return "BufferedSource@" + pool;
-	}
+	public String toString() { return "BufferedSource@" + pool; }
 
 	@Override
 	public void accept(MutableInt key,ByteList buffer) {
-		pool.reserve(buffer);
+		myNext = key;
+		BufferPool.reserve(buffer);
 	}
 }

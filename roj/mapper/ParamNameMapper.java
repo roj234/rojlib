@@ -102,7 +102,7 @@ public abstract class ParamNameMapper {
 							V entry = list.get(j);
 
 							String ref = mapType(entry.type.str());
-							if (ref != null) pool.setUTFValue(entry.type, ref);
+							if (ref != null) r.putShort(entry.typeOff, pool.getUtfId(ref));
 
 							String name = entry.name.str();
 							if (entry.start == 0 && parNames.size() > entry.slot) {
@@ -130,7 +130,7 @@ public abstract class ParamNameMapper {
 							V entry = list.get(j);
 
 							String ref = mapGeneric(entry.type.str());
-							if (ref != null) pool.setUTFValue(entry.type, ref);
+							if (ref != null) r.putShort(entry.typeOff, pool.getUtfId(ref));
 
 							String name = entry.name.str();
 							if (entry.start == 0 && parNames.size() > entry.slot) {
@@ -169,7 +169,7 @@ public abstract class ParamNameMapper {
 			int j = (m.modifier() & AccessFlag.STATIC) == 0 ? 1 : 0;
 
 			List<Type> parameters = m.parameters();
-			ByteList attr = IOUtil.getSharedByteBuf().put((byte) 0);
+			ByteList attr = IOUtil.getSharedByteBuf().put(0);
 
 			while (j < parNames.size()) {
 				if (i == parameters.size()) {
@@ -205,6 +205,7 @@ public abstract class ParamNameMapper {
 			v.end = r.readUnsignedShort();
 			v.nameOff = r.rIndex;
 			v.name = ((CstUTF) cp.get(r));
+			v.typeOff = r.rIndex;
 			v.type = ((CstUTF) cp.get(r));
 			v.slot = r.readUnsignedShort();
 			list.add(v);
@@ -214,7 +215,7 @@ public abstract class ParamNameMapper {
 
 	public static final class V {
 		public CstUTF name, type;
-		public int slot, nameOff;
+		public int slot, nameOff, typeOff;
 		public int start, end;
 
 		public final void write(DynByteBuf w) {

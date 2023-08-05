@@ -10,20 +10,11 @@
 
 package roj.archive.qz.xz.lz;
 
-import roj.util.ArrayCache;
-
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 final class BT4 extends LZEncoder {
-	private final long tree;
-	private final int depthLimit;
-
-	static int getMemoryUsage(int dictSize) { return Hash234.getMemoryUsage(dictSize) + dictSize / (1024 / 8) + 10; }
-
-	BT4(int dictSize, int beforeSizeMin, int readAheadMax, int niceLen, int matchLenMax, int depthLimit, ArrayCache arrayCache) {
-		super(dictSize, beforeSizeMin, readAheadMax, niceLen, matchLenMax, arrayCache);
-		tree = mem.allocate(cyclicSize<<3);
-		this.depthLimit = depthLimit > 0 ? depthLimit : 16 + niceLen / 2;
+	BT4(int dictSize, int beforeSizeMin, int readAheadMax, int niceLen, int matchLenMax, int depthLimit) {
+		super(dictSize, beforeSizeMin, readAheadMax, niceLen, matchLenMax, 3, depthLimit > 0 ? depthLimit : 16 + niceLen / 2);
 	}
 
 	private int movePos() {
@@ -33,7 +24,7 @@ final class BT4 extends LZEncoder {
 			if (++lzPos == Integer.MAX_VALUE) {
 				int normalizationOffset = Integer.MAX_VALUE - cyclicSize;
 				hash.normalize(normalizationOffset);
-				normalize(tree, cyclicSize*2, normalizationOffset);
+				normalize(base, cyclicSize*2, normalizationOffset);
 				lzPos -= normalizationOffset;
 			}
 
@@ -106,8 +97,8 @@ final class BT4 extends LZEncoder {
 
 		int depth = depthLimit;
 
-		long ptr0 = tree + (cyclicPos << 3) + 4;
-		long ptr1 = tree + (cyclicPos << 3);
+		long ptr0 = base + ((long) cyclicPos << 3) + 4;
+		long ptr1 = base + ((long) cyclicPos << 3);
 		int len0 = 0;
 		int len1 = 0;
 
@@ -123,7 +114,7 @@ final class BT4 extends LZEncoder {
 				return;
 			}
 
-			long pair = tree + ((cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) << 3);
+			long pair = base + (((long) cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) << 3);
 			int len = Math.min(len0, len1);
 
 			long pos = buf + readPos + len;
@@ -165,7 +156,7 @@ final class BT4 extends LZEncoder {
 	private void skip(int niceLenLimit, int currentMatch) {
 		int depth = depthLimit;
 
-		long ptr1 = tree + (cyclicPos << 3);
+		long ptr1 = base + ((long) cyclicPos << 3);
 		long ptr0 = ptr1 + 4;
 
 		int len0 = 0;
@@ -180,7 +171,7 @@ final class BT4 extends LZEncoder {
 				return;
 			}
 
-			long pair = tree + ((cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) << 3);
+			long pair = base + (((long) cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) << 3);
 			int len = Math.min(len0, len1);
 
 			if (u.getByte(buf + readPos + len - delta) == u.getByte(buf + readPos + len)) {

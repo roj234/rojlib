@@ -26,11 +26,11 @@ import java.util.concurrent.locks.ReentrantLock;
  * @since 2022/5/17 12:47
  */
 public abstract class MyChannel implements Selectable {
-	public static final NamespaceKey IN_EOF = new NamespaceKey("input_eof");
+	public static final Identifier IN_EOF = new Identifier("input_eof");
 
 	ChannelCtx pipelineHead, pipelineTail;
 
-	private Map<TypedName<?>, Object> attachments = Collections.emptyMap();
+	private Map<AttributeKey<?>, Object> attachments = Collections.emptyMap();
 
 	SelectionKey key = DummySelectionKey.INSTANCE;
 	AbstractSelectableChannel ch;
@@ -65,7 +65,7 @@ public abstract class MyChannel implements Selectable {
 			if (pipe.name.equals(name)) return pipe;
 			pipe = pipe.next;
 		}
-		return null;
+		return Helpers.maybeNull();
 	}
 	public final MyChannel addLast(String name, ChannelHandler pipe) {
 		ChannelCtx cp = handler(name);
@@ -268,11 +268,11 @@ public abstract class MyChannel implements Selectable {
 	}
 
 	@SuppressWarnings("unchecked")
-	public final <T> T attachment(TypedName<T> key) {
+	public final <T> T attachment(AttributeKey<T> key) {
 		return (T) attachments.get(key);
 	}
 	@SuppressWarnings("unchecked")
-	public synchronized final <T> T attachment(TypedName<T> key, T val) {
+	public synchronized final <T> T attachment(AttributeKey<T> key, T val) {
 		if (attachments.isEmpty()) attachments = new MyHashMap<>(4);
 		return (T) (val == null ? attachments.remove(key) : attachments.put(key, val));
 	}
@@ -296,7 +296,6 @@ public abstract class MyChannel implements Selectable {
 			}
 		}
 	}
-
 	public void readInactive() {
 		int ops = key.interestOps();
 		setFlagLock(flag | READ_INACTIVE);
@@ -304,6 +303,7 @@ public abstract class MyChannel implements Selectable {
 			key.interestOps(ops & ~SelectionKey.OP_READ);
 		}
 	}
+	public boolean readDisabled() { return (flag & READ_INACTIVE) != 0; }
 
 	public void pauseAndFlush() {
 		if (!pending.isEmpty()) {
@@ -317,8 +317,21 @@ public abstract class MyChannel implements Selectable {
 	}
 	// endregion
 
-	public void closeGracefully() throws IOException {
-		close();
+	public final void closeGracefully() throws IOException {
+		flush();
+		if (!pending.isEmpty()) {
+			pauseAndFlush();
+			if (handler("@@flush_callback") == null) {
+				addLast("@@flush_callback", new ChannelHandler() {
+					@Override
+					public void channelFlushed(ChannelCtx ctx) throws IOException {
+						ctx.channel().closeGracefully();
+					}
+				});
+			}
+		} else {
+			closeGracefully0();
+		}
 	}
 
 	public BufferPool alloc() {
@@ -387,9 +400,7 @@ public abstract class MyChannel implements Selectable {
 		}
 	}
 
-	public final boolean connect(SocketAddress address) throws IOException {
-		return connect(address, -1);
-	}
+	public final boolean connect(SocketAddress address) throws IOException { return connect(address, -1); }
 	public final boolean connect(SocketAddress address, int timeout) throws IOException {
 		if (!(address instanceof InetSocketAddress)) throw new UnsupportedOperationException("Not InetSocketAddress");
 		InetSocketAddress na = (InetSocketAddress) address;
@@ -474,8 +485,8 @@ public abstract class MyChannel implements Selectable {
 
 	// region Selectable
 	@Override
-	public void tick(int elapsed) throws IOException {
-		if (state >= CLOSED) return;
+	public void tick(int elapsed) throws Exception {
+		if (state >= CLOSE_PENDING) return;
 		if (state == CONNECT_PENDING && timeout != 0 && (timeout -= elapsed) < 0) {
 			if (finishConnect()) return;
 			close();
@@ -492,7 +503,7 @@ public abstract class MyChannel implements Selectable {
 			ChannelCtx pipe = pipelineHead;
 			while (pipe != null) {
 				pipe.handler.channelTick(pipe);
-				if (state >= CLOSED) break;
+				if (state >= CLOSE_PENDING) break;
 				pipe = pipe.next;
 			}
 		} finally {
@@ -523,7 +534,7 @@ public abstract class MyChannel implements Selectable {
 				if (ch != null) ch.close();
 
 				if (rb != null && rb.capacity() > 0) {
-					alloc().reserve(rb);
+					BufferPool.reserve(rb);
 					rb = null;
 				}
 			}
@@ -533,8 +544,8 @@ public abstract class MyChannel implements Selectable {
 	}
 
 	@Override
-	public final void selected(int readyOps) throws Exception {
-		if (state >= CLOSED) {
+	public final void selected(int readyOps) throws IOException {
+		if (state >= CLOSE_PENDING) {
 			key.cancel();
 			return;
 		}
@@ -588,6 +599,7 @@ public abstract class MyChannel implements Selectable {
 	// abstract
 	protected abstract boolean connect0(InetSocketAddress na) throws IOException;
 	protected abstract SocketAddress finishConnect0() throws IOException;
+	protected abstract void closeGracefully0() throws IOException;
 	protected abstract void disconnect0() throws IOException;
 
 	public abstract void flush() throws IOException;
@@ -619,7 +631,15 @@ public abstract class MyChannel implements Selectable {
 		if (ee != null) Helpers.athrow(ee);
 	}
 
-	protected final void fireWriteDone() throws IOException {
+	protected final void fireFlushing() throws IOException {
+		ChannelCtx pipe = pipelineTail;
+		while (pipe != null) {
+			pipe.handler.channelFlushing(pipe);
+			pipe = pipe.prev;
+		}
+	}
+
+	protected final void fireFlushed() throws IOException {
 		ChannelCtx pipe = pipelineHead;
 		while (pipe != null) {
 			pipe.handler.channelFlushed(pipe);
@@ -643,19 +663,17 @@ public abstract class MyChannel implements Selectable {
 		return nioBuf;
 	}
 
-	public final DynByteBuf i_getBuffer() {
-		return rb;
-	}
-
+	public final DynByteBuf i_getBuffer() { return rb; }
 	/**
 	 * 获取Channel用于其它用途
 	 */
-	public AbstractSelectableChannel i_outOfControl() {
+	public AbstractSelectableChannel i_outOfControl() throws IOException {
 		lock.lock();
 		try {
-			if (state > CLOSED) throw new IllegalStateException();
-			state = CLOSED;
-			return ch;
+			AbstractSelectableChannel c = ch;
+			ch = null;
+			close();
+			return c;
 		} finally {
 			lock.unlock();
 		}
@@ -669,7 +687,7 @@ public abstract class MyChannel implements Selectable {
 	}
 
 	public void invokeLater(Runnable r) {
-		TaskPool.CpuMassive().pushTask(() -> {
+		TaskPool.Common().pushTask(() -> {
 			lock.lock();
 			try {
 				r.run();

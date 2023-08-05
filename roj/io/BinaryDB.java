@@ -2,9 +2,7 @@ package roj.io;
 
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
-import roj.io.buf.BitmapBPool;
 import roj.io.buf.BufferPool;
-import roj.io.buf.SimpleBPool;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.util.ByteList;
@@ -44,9 +42,7 @@ public class BinaryDB {
 		this.base = base;
 		if (chunkBits <= 0 || chunkBits >= 28) throw new IllegalStateException();
 
-		BitmapBPool bp1 = new BitmapBPool(524288, 1024);
-		SimpleBPool bp2 = new SimpleBPool(512, 16777216, 20);
-		pool = new BufferPool(bp1, bp2);
+		pool = BufferPool.localPool();
 
 		File index = new File(base, "_.idx");
 		this.index = new RandomAccessFile(index, "rw");
@@ -172,7 +168,7 @@ public class BinaryDB {
 						public synchronized void close() throws IOException {
 							if (buf != null) {
 								file._write(id,p.file,buf,file.lock);
-								file.pool.reserve(buf);
+								BufferPool.reserve(buf);
 								buf = null;
 							}
 

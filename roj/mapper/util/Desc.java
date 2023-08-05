@@ -2,7 +2,7 @@ package roj.mapper.util;
 
 import roj.asm.cst.ConstantPool;
 import roj.asm.cst.CstRef;
-import roj.asm.tree.MoFNode;
+import roj.asm.tree.RawNode;
 import roj.asm.util.AccessFlag;
 import roj.util.DynByteBuf;
 
@@ -10,10 +10,8 @@ import roj.util.DynByteBuf;
  * 对象描述符
  *
  * @author Roj233
- * @version 2.8
- * @since ?
  */
-public class Desc implements MoFNode {
+public class Desc implements RawNode {
 	public static final char UNSET = AccessFlag.PUBLIC | AccessFlag.PRIVATE;
 
 	public String owner, name, param;
@@ -46,10 +44,23 @@ public class Desc implements MoFNode {
 		this.flags = (char) flags;
 	}
 
-	@Override
-	public String toString() {
-		return "{" + owner + '.' + name + (param.isEmpty()?"":' ' + param) + '}';
+	public static Desc fromJavapLike(String jpdesc) {
+		String owner, name, param;
+
+		int klass = jpdesc.lastIndexOf('.');
+		int pvrvm = jpdesc.indexOf('(');
+		if (pvrvm < 0) pvrvm = jpdesc.indexOf(' ');
+		if (pvrvm < 0) throw new IllegalStateException("Invalid javap desc: "+jpdesc);
+
+		owner = klass > 0 ? jpdesc.substring(0, klass).replace('.', '/') : "";
+		name = jpdesc.substring(klass+1, pvrvm);
+		param = jpdesc.substring(jpdesc.charAt(pvrvm)==' '?pvrvm+1:pvrvm);
+
+		return new Desc(owner, name, param);
 	}
+
+	@Override
+	public String toString() { return owner + '.' + name + (param.isEmpty()?"":(param.startsWith("(")?"":" ") + param); }
 
 	@Override
 	public boolean equals(Object o) {
@@ -70,8 +81,13 @@ public class Desc implements MoFNode {
 		return this;
 	}
 
-	public final Desc copy() {
-		return new Desc(owner, name, param, flags);
+	public final Desc copy() { return new Desc(owner, name, param, flags); }
+
+	public static boolean paramEqual(String a, String b) {
+		if (a.equals(b)) return true;
+		if (!a.startsWith("(") || !b.startsWith("(")) return false;
+		int i = a.lastIndexOf(')');
+		return i == b.lastIndexOf(')') && a.regionMatches(0, b, 0, i);
 	}
 
 	@Override
@@ -97,10 +113,5 @@ public class Desc implements MoFNode {
 	@Override
 	public final char modifier() {
 		return flags;
-	}
-
-	@Override
-	public final int type() {
-		return 5;
 	}
 }

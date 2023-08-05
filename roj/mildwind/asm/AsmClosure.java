@@ -134,14 +134,14 @@ public final class AsmClosure {
                     throw new IllegalStateException("is const");
                 }
             } else {
-                v.start = asm.getBci();
+                v.start = asm.bci();
                 //v.constval = ;
             }
 
-            v.end = asm.getBci();
+            v.end = asm.bci();
         }
 
-        asm._segment(new VarSegment(v, false));
+        asm.addSegment(new VarSegment(v, false));
         return -1;
     }
     public void get(String name) {
@@ -165,12 +165,12 @@ public final class AsmClosure {
                 activeVars.put(name, v = new Variable());
                 variables.add(v);
                 //asm.getTmpVar();
-                asm._segment(new VarSegment(v, false));
+                asm.addSegment(new VarSegment(v, true));
 
                 v.name = name;
                 v.isVar = true;
                 v.depth = depth;
-                v.end = asm.getBci();
+                v.end = asm.bci();
                 v.start = v.end-1;
                 break block;
             }
@@ -192,10 +192,10 @@ public final class AsmClosure {
                 //return;
             }
 
-            v.end = asm.getBci();
+            v.end = asm.bci();
         }
 
-        asm._segment(new VarSegment(v, true));
+        asm.addSegment(new VarSegment(v, true));
     }
 
     private Variable findParentVar(String name) {
@@ -245,7 +245,7 @@ public final class AsmClosure {
 
     public void setAsm(JsMethodWriter asm) {
         this.asm = asm;
-        asm._segment(hs = new HeaderSegment());
+        asm.addSegment(hs = new HeaderSegment());
     }
 
     final class HeaderSegment extends Segment {
@@ -260,10 +260,16 @@ public final class AsmClosure {
             for (int i = 0; i < ks.size(); i++) {
                 to.one(ALOAD_0);
                 to.field(GETFIELD, asm.data, vs.get(i));
-                to.var(ASTORE, ks.get(i).slot+3);
+                to.vars(ASTORE, ks.get(i).slot+3);
             }
-            length = to.bw.wIndex() - begin;
+            length = (char) (to.bw.wIndex() - begin);
             return true;
+        }
+
+        int length;
+        @Override
+        protected int length() {
+            return length;
         }
 
         public void add(Variable v, int fid) {
@@ -279,6 +285,7 @@ public final class AsmClosure {
     final class VarSegment extends Segment {
         final Variable ref;
         final boolean get;
+        int length;
 
         VarSegment(Variable ref, boolean get) {
             this.ref = ref;
@@ -300,15 +307,20 @@ public final class AsmClosure {
                     to.invoke(INVOKEVIRTUAL, "roj/mildwind/asm/JsFunctionCompiled", "gv", "(II)Lroj/mildwind/type/JsObject;");
                 }
             } else {
-                to.var(get?ALOAD:ASTORE, ref.slot+3);
+                to.vars(get?ALOAD:ASTORE, ref.slot+3);
             }
 
             begin = to.bw.wIndex() - begin;
             if (length != begin) {
-                length = begin;
+                length = (char) begin;
                 return true;
             }
             return false;
+        }
+
+        @Override
+        protected int length() {
+            return length;
         }
     }
 }

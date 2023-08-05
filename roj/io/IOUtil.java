@@ -6,7 +6,7 @@ import roj.concurrent.Waitable;
 import roj.math.MutableLong;
 import roj.net.http.HttpRequest;
 import roj.text.CharList;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.text.UTFCoder;
 import roj.util.ByteList;
@@ -88,7 +88,7 @@ public final class IOUtil {
 	}
 
 	public static String readAs(InputStream in, String encoding) throws UnsupportedCharsetException, IOException {
-		try (Reader r = new StreamReader(in, encoding)) {
+		try (Reader r = new TextReader(in, encoding)) {
 			return getSharedCharBuf().readFully(r).toString();
 		}
 	}
@@ -105,14 +105,14 @@ public final class IOUtil {
 	}
 
 	public static String readString(File file) throws IOException {
-		try (StreamReader sr = StreamReader.auto(file)) {
-			return new CharList().readFully(sr).toString();
+		try (TextReader sr = TextReader.auto(file)) {
+			return new CharList().readFully(sr).toStringAndFree();
 		}
 	}
 
 	public static String readString(InputStream in) throws IOException {
-		try (StreamReader sr = StreamReader.auto(in)) {
-			return new CharList().readFully(sr).toString();
+		try (TextReader sr = TextReader.auto(in)) {
+			return new CharList().readFully(sr).toStringAndFree();
 		}
 	}
 
@@ -168,10 +168,10 @@ public final class IOUtil {
 	}
 
 	public static List<File> findAllFiles(File file) {
-		return findAllFiles(file, new SimpleList<>(0,2), Helpers.alwaysTrue());
+		return findAllFiles(file, SimpleList.withCapacityType(0,2), Helpers.alwaysTrue());
 	}
 	public static List<File> findAllFiles(File file, Predicate<File> predicate) {
-		return findAllFiles(file, new SimpleList<>(0,2), predicate);
+		return findAllFiles(file, SimpleList.withCapacityType(0,2), predicate);
 	}
 	public static List<File> findAllFiles(File file, List<File> files, Predicate<File> predicate) {
 		try {
@@ -331,7 +331,8 @@ public final class IOUtil {
 
 	public static String extensionName(String path) {
 		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
-		return path.substring(path.lastIndexOf('.')+1);
+		int i = path.lastIndexOf('.');
+		return i < 0 ? "" : path.substring(i+1);
 	}
 
 	public static String noExtName(String path) {
@@ -347,16 +348,15 @@ public final class IOUtil {
 	}
 
 	public static String safePath(String path) {
-		CharList sb = getSharedCharBuf().append(path);
-		sb.trim()
-		  .replace('\\', '/')
-		  .replaceInReplaceResult("//", "/");
+		CharList sb = getSharedCharBuf();
 
-		if (sb.startsWith("../")) sb.delete(0, 3);
+		int altStream = path.lastIndexOf(':');
+		if (altStream > 1) path = path.substring(0, altStream);
 
-		return sb.replaceInReplaceResult("/../", "/")
+		return sb.append(path).trim()
+				 .replaceInReplaceResult("../", "/")
 				 .replaceInReplaceResult("//", "/")
-				 .toString(sb.charAt(0) == '/' ? 1 : 0, sb.length());
+				 .toString(sb.length() > 0 && sb.charAt(0) == '/' ? 1 : 0, sb.length());
 	}
 
 	// todo 支持HTTP2.0后移走
@@ -380,6 +380,13 @@ public final class IOUtil {
 	}
 
 	public static long movePath(File from, File to, boolean move) throws IOException {
+		if (!from.isDirectory()) {
+			if (move) return from.renameTo(to) ? 1 : 0;
+			copyFile(from, to);
+			return 1;
+		}
+		if (from.equals(to)) return 1;
+
 		MutableLong state = new MutableLong();
 		int len = from.getAbsolutePath().length()+1;
 		to.mkdirs();

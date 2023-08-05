@@ -2,7 +2,7 @@ package roj.mod.mapping;
 
 import roj.collect.MyHashMap;
 import roj.config.data.CMapping;
-import roj.mapper.ConstMapper;
+import roj.mapper.Mapper;
 import roj.mapper.Mapping;
 import roj.mapper.util.Desc;
 import roj.text.LineReader;
@@ -78,7 +78,7 @@ public final class MapLoader {
 				m4.loadMap(new LineReader(new FileInputStream(file)), false);
 				return m4;
 			case "BIN":
-				ConstMapper m5 = new ConstMapper();
+				Mapper m5 = new Mapper();
 				m5.readCache(0, file);
 				return m5;
 			default:

@@ -1,11 +1,6 @@
 package roj.asm.visitor;
 
 import roj.asm.frame.Var2;
-import roj.asm.tree.attr.AttrCode;
-import roj.asm.tree.insn.InsnNode;
-import roj.collect.IntMap;
-
-import java.util.Map;
 
 /**
  * @author Roj234
@@ -15,9 +10,7 @@ public final class Frame2 {
 	public static final int same = 0;
 	public static final int same_local_1_stack = 64;
 	public static final int same_local_1_stack_ex = 247;
-	public static final int chop = 248;
-	public static final int chop2 = 249;
-	public static final int chop3 = 250;
+	public static final int chop = 250, chop2 = 249, chop3 = 248;
 	public static final int same_ex = 251;
 	public static final int append = 252;
 	public static final int full = 255;
@@ -52,7 +45,7 @@ public final class Frame2 {
 			case 248:
 			case 249:
 			case 250:
-				return "chop " + (type - 247);
+				return "chop " + (251 - type);
 			case 251:
 				return "same_ex";
 			case 252:
@@ -67,48 +60,8 @@ public final class Frame2 {
 
 	public short type;
 	public int target;
-	public InsnNode target2;
+	public Label target3;
 	public Var2[] locals, stacks;
-
-	public final void addMonitorT(Map<InsnNode, Label> labels) {
-		if (locals != null) _TLoop(locals, labels);
-		if (stacks != null) _TLoop(stacks, labels);
-	}
-	private static void _TLoop(Var2[] stacks, Map<InsnNode, Label> labels) {
-		for (Var2 v : stacks) {
-			if (v.bci2 != null) {
-				v.bci2 = InsnNode.validate(v.bci2);
-				AttrCode.monitorNode(labels, v.bci2);
-			}
-		}
-	}
-
-	public final void addMonitorV(IntMap<Label> w) {
-		if (locals != null) {
-			for (Var2 v : locals) {
-				int bci = v.bci();
-				if (bci >= 0 && !w.containsKey(bci)) w.putInt(bci, new Label());
-			}
-		}
-		if (stacks != null) {
-			for (Var2 v : stacks) {
-				int bci = v.bci();
-				if (bci >= 0 && !w.containsKey(bci)) w.putInt(bci, new Label());
-			}
-		}
-	}
-	public boolean applyMonitorV(IntMap<Label> w) {
-		boolean b = false;
-		if (locals != null) {
-			for (Var2 v : locals)
-				if (v.bci() >= 0 && v.bci != (v.bci = w.get(v.bci).getValue())) b = true;
-		}
-		if (stacks != null) {
-			for (Var2 v : stacks)
-				if (v.bci() >= 0 && v.bci != (v.bci = w.get(v.bci).getValue())) b = true;
-		}
-		return b;
-	}
 
 	public static Frame2 fromVarietyType(int type) {
 		return new Frame2(toExactFrameType(type));
@@ -118,22 +71,10 @@ public final class Frame2 {
 		this.type = -1;
 	}
 
-	public Frame2(int type) {
-		this.type = (short) type;
-	}
-
-	public Frame2(int type, InsnNode node) {
-		this.type = (short) type;
-		this.target2 = node;
-	}
-
-	public Frame2(int type, int node) {
-		this.type = (short) type;
-		this.target = node;
-	}
+	public Frame2(int type) { this.type = (short) type; }
 
 	public int bci() {
-		return target2 == null ? target : InsnNode.validate(target2).bci;
+		return target3 == null ? target : target3.getValue();
 	}
 
 	public String toString() {

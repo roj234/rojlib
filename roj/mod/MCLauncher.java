@@ -5,9 +5,10 @@ import roj.archive.zip.ZipArchive;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.Method;
-import roj.asm.tree.attr.AttrCode;
-import roj.asm.tree.insn.InsnList;
+import roj.asm.tree.MethodNode;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.visitor.XAttrCode;
+import roj.asm.visitor.XInsnList;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -29,14 +30,13 @@ import roj.io.ChineseInputStream;
 import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
 import roj.io.down.ProgressGroupedMulti;
-import roj.io.down.ProgressMulti;
 import roj.math.Version;
 import roj.text.CharList;
 import roj.text.Template;
 import roj.text.TextUtil;
 import roj.text.UTFCoder;
-import roj.ui.CmdUtil;
-import roj.ui.UIUtil;
+import roj.ui.CLIUtil;
+import roj.ui.GUIUtil;
 import roj.util.ByteList;
 import roj.util.OS;
 
@@ -52,7 +52,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.*;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import java.util.jar.Manifest;
 import java.util.regex.Pattern;
@@ -73,7 +72,7 @@ public class MCLauncher extends JFrame {
 	static JFrame activeWindow;
 
 	public static void main(String[] args) {
-		UIUtil.systemLook();
+		GUIUtil.systemLook();
 		load();
 
 		File mcRoot = new File(CONFIG.getString("通用.MC目录"));
@@ -91,7 +90,7 @@ public class MCLauncher extends JFrame {
 
 	public MCLauncher() {
 		super("Roj234的启动器 " + VERSION);
-		UIUtil.setLogo(this, "MCL_logo.png");
+		GUIUtil.setLogo(this, "MCL_logo.png");
 
 		JButton button = new JButton("启动");
 		button.addActionListener(MCLauncher::runClient);
@@ -137,7 +136,7 @@ public class MCLauncher extends JFrame {
 		setLayout(new FlowLayout());
 		pack();
 		setBounds(0, 0, 320, 100);
-		UIUtil.center(this);
+		GUIUtil.center(this);
 		setResizable(true);
 		setVisible(true);
 	}
@@ -160,7 +159,7 @@ public class MCLauncher extends JFrame {
 		File crashes = new File(basePath, "crash-reports");
 		IOUtil.deletePath(crashes);
 
-		CmdUtil.warning("清除了没啥用的日志文件!");
+		CLIUtil.warning("清除了没啥用的日志文件!");
 	}
 
 	// region Select version
@@ -292,7 +291,7 @@ public class MCLauncher extends JFrame {
 		}
 
 		@Override
-		public boolean continueExecuting() {
+		public boolean repeating() {
 			return Task.taskPending() > 0;
 		}
 	}
@@ -329,10 +328,8 @@ public class MCLauncher extends JFrame {
 
 			CList versions;
 			try {
-				CharList out = new CharList(10000);
-				ByteList.decodeUTF(-1, out, IOUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer)));
-
-				versions = JSONParser.parses(out, JSONParser.INTERN).asList();
+				ByteList data = IOUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer));
+				versions = JSONParser.parses(data.readUTF(data.readableBytes(), IOUtil.getSharedCharBuf()), JSONParser.INTERN).asList();
 			} catch (ParseException | IOException e) {
 				error("获取数据出了点错...\n请查看控制台");
 				e.printStackTrace();
@@ -349,10 +346,8 @@ public class MCLauncher extends JFrame {
 		CList versions = cache_mc_versions;
 		if (versions == null) {
 			try {
-				CharList out = new CharList(100000);
-				ByteList.decodeUTF(-1, out, IOUtil.downloadFileToMemory(cfgLan.getString("mc版本manifest地址")));
-
-				cache_mc_versions = versions = JSONParser.parses(out, JSONParser.INTERN).asMap().get("versions").asList();
+				ByteList data = IOUtil.downloadFileToMemory(cfgLan.getString("mc版本manifest地址"));
+				cache_mc_versions = versions = JSONParser.parses(data.readUTF(data.readableBytes(), IOUtil.getSharedCharBuf()), JSONParser.INTERN).asMap().get("versions").asList();
 			} catch (ParseException | IOException e) {
 				error("获取数据出了点错...\n请查看控制台");
 				e.printStackTrace();
@@ -409,12 +404,12 @@ public class MCLauncher extends JFrame {
 			File asset = new File(assets, url);
 			if (!asset.isFile() || asset.length() != val.getInteger("size")) {
 				if (asset.isFile() && !asset.delete()) {
-					CmdUtil.error("无法删除错误文件 " + asset);
+					CLIUtil.error("无法删除错误文件 " + asset);
 					continue;
 				}
 				File pa = asset.getParentFile();
 				if (!pa.isDirectory() && !pa.mkdirs()) {
-					CmdUtil.error("无法创建文件 " + pa);
+					CLIUtil.error("无法创建文件 " + pa);
 					continue;
 				}
 
@@ -463,10 +458,10 @@ public class MCLauncher extends JFrame {
 		if (!doAssets) return true;
 
 		if (!cfgGen.getString("assets地址").isEmpty()) {
-			CmdUtil.info("补全assets...");
+			CLIUtil.info("补全assets...");
 			try {
 				int count = completeAssets(cfgGen.getBool("下载MC相关文件使用镜像") ? cfgGen.getString("镜像地址") : null, cfgGen.getString("assets地址"), mc_conf, jsonDesc);
-				CmdUtil.success("assets补全完毕, " + count);
+				CLIUtil.success("assets补全完毕, " + count);
 			} catch (IOException e) {
 				error("asset补全出了点错...\n请查看控制台");
 				e.printStackTrace();
@@ -540,7 +535,7 @@ public class MCLauncher extends JFrame {
 				}
 			}
 			String md5 = null;
-			if (found == null || !found.containsKey("hash")) {CmdUtil.warning("没有找到installer类别,无法校验文件MD5, raw: " + map.toJSON());} else md5 = found.getString("hash");
+			if (found == null || !found.containsKey("hash")) {CLIUtil.warning("没有找到installer类别,无法校验文件MD5, raw: " + map.toJSON());} else md5 = found.getString("hash");
 
 			File tmpFile = new File(TMP_DIR, tmp0.insert(0, "forge-").append("-installer.jar").toString());
 
@@ -606,7 +601,7 @@ public class MCLauncher extends JFrame {
 
 		if (instConf.containsKey("icon")) {
 			if (!instConf.getString("minecraft").equals(config.getString("mc_version"))) {
-				CmdUtil.warning("版本可能不匹配! " + instConf.getString("minecraft") + " - " + config.getString("mc_version"));
+				CLIUtil.warning("版本可能不匹配! " + instConf.getString("minecraft") + " - " + config.getString("mc_version"));
 			}
 
 			ZipEntry verJson = zf.getEntry(instConf.getString("json").substring(1));
@@ -628,11 +623,11 @@ public class MCLauncher extends JFrame {
 
 			File mcLibPath = new File(mcRoot, "/libraries/");
 			if (instConf.get("processors").asList().size() > 0 || "true".equals(System.getProperty("fmd.forceDownloadForgeExternalLibraries"))) {
-				CmdUtil.info("开始下载Forge安装所需jar...");
+				CLIUtil.info("开始下载Forge安装所需jar...");
 
 				File libraryPath = new File(TMP_DIR, "fg-" + ver + "-tmp-lib");
 				if (!libraryPath.isDirectory() && !libraryPath.mkdir()) {
-					CmdUtil.warning("无法创建临时目录 " + libraryPath.getAbsolutePath());
+					CLIUtil.warning("无法创建临时目录 " + libraryPath.getAbsolutePath());
 				}
 
 				DownMcFile manager = new DownMcFile();
@@ -685,7 +680,7 @@ public class MCLauncher extends JFrame {
 					} else if (s.startsWith("[")) {
 						v = new File(forced.contains(entry.getKey()) ? mcLibPath : libraryPath, IOUtil.mavenPath(s.substring(1, s.length() - 1)).toString()).getAbsolutePath();
 					} else {
-						CmdUtil.error("未知参数 " + s);
+						CLIUtil.error("未知参数 " + s);
 						continue;
 					}
 
@@ -697,7 +692,7 @@ public class MCLauncher extends JFrame {
 				map.put("ROOT", libraryPath.getAbsolutePath());
 				map.put("INSTALLER", fgInstaller.getAbsolutePath());
 
-				CmdUtil.info("Parallel: 导出安装器maven");
+				CLIUtil.info("Parallel: 导出安装器maven");
 				Enumeration<? extends ZipEntry> e = zf.entries();
 				while (e.hasMoreElements()) {
 					ZipEntry ze = e.nextElement();
@@ -707,7 +702,7 @@ public class MCLauncher extends JFrame {
 
 						File p = dest.getParentFile();
 						if (!p.isDirectory() && !p.mkdirs()) {
-							CmdUtil.warning("无法创建目录 ");
+							CLIUtil.warning("无法创建目录 ");
 						}
 
 						try (FileOutputStream fos = new FileOutputStream(dest)) {
@@ -721,8 +716,8 @@ public class MCLauncher extends JFrame {
 				zf.close();
 
 				waitFor(null);
-				CmdUtil.info("开始安装Forge...");
-				if (instConf.getInteger("spec") == 1) CmdUtil.error("太妙了！forge正在把我要下载的东西单线程重新下一遍！失败了别找我哦\n 按确定继续");
+				CLIUtil.info("开始安装Forge...");
+				if (instConf.getInteger("spec") == 1) CLIUtil.error("太妙了！forge正在把我要下载的东西单线程重新下一遍！失败了别找我哦\n 按确定继续");
 
 				new File(BASE, "forge_install.log").delete();
 
@@ -740,12 +735,12 @@ public class MCLauncher extends JFrame {
 							}
 						}
 						if (!cl) {
-							CmdUtil.info("服务端处理器: " + i + ", 跳过");
+							CLIUtil.info("服务端处理器: " + i + ", 跳过");
 						}
 					}
 					File path = new File(libraryPath, IOUtil.mavenPath(op.getString("jar")).toString());
 					if (!path.isFile()) {
-						CmdUtil.error("无法找到文件 " + path.getAbsolutePath());
+						CLIUtil.error("无法找到文件 " + path.getAbsolutePath());
 						return false;
 					}
 
@@ -761,7 +756,7 @@ public class MCLauncher extends JFrame {
 						Manifest manifest = new Manifest(zf1.getInputStream(ze));
 						mainCls = manifest.getMainAttributes().getValue("Main-Class");
 						if (mainCls == null || mainCls.isEmpty()) {
-							CmdUtil.error("没有Main-Class " + path.getAbsolutePath());
+							CLIUtil.error("没有Main-Class " + path.getAbsolutePath());
 							return false;
 						}
 					}
@@ -793,17 +788,17 @@ public class MCLauncher extends JFrame {
 						keys.add(s);
 					}
 
-					CmdUtil.info("运行: " + mainCls);
+					CLIUtil.info("运行: " + mainCls);
 
 					if (runProcess(keys, TMP_DIR, 6, new File(BASE, "forge_install.log")) != 0) {
-						CmdUtil.error("尝试清空tmp/fg-xx-xxx-tmp-lib文件夹");
+						CLIUtil.error("尝试清空tmp/fg-xx-xxx-tmp-lib文件夹");
 						return false;
 					}
 				}
 
-				CmdUtil.info("log: forge_install.log");
+				CLIUtil.info("log: forge_install.log");
 			} else {
-				CmdUtil.info("旧版模式: 导出安装器maven");
+				CLIUtil.info("旧版模式: 导出安装器maven");
 				Enumeration<? extends ZipEntry> e = zf.entries();
 				while (e.hasMoreElements()) {
 					ZipEntry ze = e.nextElement();
@@ -813,7 +808,7 @@ public class MCLauncher extends JFrame {
 
 						File p = dest.getParentFile();
 						if (!p.isDirectory() && !p.mkdirs()) {
-							CmdUtil.warning("无法创建目录");
+							CLIUtil.warning("无法创建目录");
 						}
 
 						try (FileOutputStream fos = new FileOutputStream(dest)) {
@@ -863,7 +858,7 @@ public class MCLauncher extends JFrame {
 			zf.close();
 		}
 
-		CmdUtil.success("安装完毕.");
+		CLIUtil.success("安装完毕.");
 		return true;
 	}
 
@@ -994,7 +989,7 @@ public class MCLauncher extends JFrame {
 			try {
 				ChineseInputStream bom = new ChineseInputStream(new FileInputStream(conf));
 				if (!bom.getCharset().equals("UTF8")) { // 检测到了则是 UTF-8
-					CmdUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getCharset());
+					CLIUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getCharset());
 				}
 
 				config = JSONParser.parses(IOUtil.readAs(bom, bom.getCharset())).asMap();
@@ -1038,7 +1033,7 @@ public class MCLauncher extends JFrame {
 
 		public Config() {
 			super("当前版本配置");
-			UIUtil.setLogo(this, "FMD_logo.png");
+			GUIUtil.setLogo(this, "FMD_logo.png");
 
 			setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
@@ -1176,12 +1171,12 @@ public class MCLauncher extends JFrame {
 		mcEnv.put("user_properties", "{}");
 		replace(mc_conf.getString("mcArg"), mcEnv, args);
 
-		CmdUtil.info("启动客户端...");
+		CLIUtil.info("启动客户端...");
 
 		return runProcess(args, new File(mc_conf.getString("root")), processFlags, consumer);
 	}
 
-	private static final Tokenizer l = new Tokenizer().literalEnd(" \r\n\t\f").defaultC2C(0);
+	private static final Tokenizer l = Tokenizer.arguments();
 	private static void replace(String arg, Map<String, String> env, SimpleList<String> args) {
 		CharList sb = new CharList();
 		Template.replaceOnce(env, arg, sb);
@@ -1245,11 +1240,11 @@ public class MCLauncher extends JFrame {
 
 		if (nativePath.isDirectory()) {
 			if (cleanNatives && !IOUtil.deletePath(nativePath)) {
-				CmdUtil.error("无法清空natives, 请手动删除");
+				CLIUtil.error("无法清空natives, 请手动删除");
 				return null;
 			}
 		} else if (!nativePath.mkdirs()) {
-			CmdUtil.error("无法创建natives");
+			CLIUtil.error("无法创建natives");
 			return null;
 		}
 
@@ -1317,7 +1312,7 @@ public class MCLauncher extends JFrame {
 		}
 
 		if (DEBUG && !versions.isEmpty()) {
-			CmdUtil.info("注: 跳过的依赖 " + versions.keySet());
+			CLIUtil.info("注: 跳过的依赖 " + versions.keySet());
 		}
 
 		imArgs.put("versions", versions);
@@ -1460,7 +1455,7 @@ public class MCLauncher extends JFrame {
 
 	private static void detectLibrary(CMapping data, Map<String, Version> versions, File libPath, File nativePath, Map<String, String> libraries, String mirror, DownMcFile task) {
 		if (!isRuleFit(data.get("rules").asList())) {
-			if (DEBUG) CmdUtil.info(data.getString("name") + " 不符合加载规则" + data.get("rules").toShortJSON());
+			if (DEBUG) CLIUtil.info(data.getString("name") + " 不符合加载规则" + data.get("rules").toShortJSON());
 			return;
 		}
 
@@ -1515,20 +1510,20 @@ public class MCLauncher extends JFrame {
 				case UNIX: t = "unix"; break;
 				case WINDOWS: t = "windows"; break;
 				case MAC_OS: t = "osx"; break;
-				default: CmdUtil.warning("未知系统版本 " + OS.CURRENT); return;
+				default: CLIUtil.warning("未知系统版本 " + OS.CURRENT); return;
 			}
 			sb.append('-').append(classifiers = natives.getString(t).replace("${arch}", OS.ARCH));
 		}
 
 		if (parts.size() > 3) {
-			if (nt) CmdUtil.warning("这是哪里来的第二个classifier? " + parts);
+			if (nt) CLIUtil.warning("这是哪里来的第二个classifier? " + parts);
 			sb.append('-').append(parts.get(3));
 		}
 
 		String file = sb.append('.').append(ext).toString();
 
 		if (DEBUG) {
-			CmdUtil.info("Name " + name + " File " + file);
+			CLIUtil.info("Name " + name + " File " + file);
 		}
 		File libFile = new File(libPath, file);
 		if (!libFile.isFile()) {
@@ -1542,7 +1537,7 @@ public class MCLauncher extends JFrame {
 				downloadLibrary(downloads, mirror, libFile, task, cb, classifiers, file);
 				if (nt) return;
 			} else {
-				if (DEBUG) CmdUtil.warning(libFile + " 不存在!");
+				if (DEBUG) CLIUtil.warning(libFile + " 不存在!");
 			}
 		} else if (nt) {
 			extractNatives(data, libFile, nativePath);
@@ -1553,7 +1548,7 @@ public class MCLauncher extends JFrame {
 		}
 
 		if (sameVersion) {
-			if (DEBUG) CmdUtil.warning(name + " 版本相同且不是Natives!");
+			if (DEBUG) CLIUtil.warning(name + " 版本相同且不是Natives!");
 			return;
 		}
 
@@ -1562,17 +1557,16 @@ public class MCLauncher extends JFrame {
 	}
 
 	private static void fixLog4j(File lib) {
-		try {
-			ZipArchive mzf = new ZipArchive(lib);
+		try (ZipArchive mzf = new ZipArchive(lib)) {
 			byte[] b = mzf.get("org/apache/logging/log4j/core/lookup/JndiLookup.class");
 			if (b != null) {
 				ConstantData data = Parser.parseConstants(b);
-				Method mn = data.getUpgradedMethod("lookup");
+				MethodNode mn = data.getMethodObj("lookup");
 
-				AttrCode code = mn.getCode();
-				InsnList insn = code.instructions;
-				if (insn.size() > 3) {
-					code.clear();
+				XAttrCode code = mn.parsedAttr(data.cp, Attribute.Code);
+				XInsnList insn = code.instructions;
+				if (insn.byteLength() > 3) {
+					insn.clear();
 
 					insn.ldc("JNDI功能已关闭");
 					insn.one(Opcodes.ARETURN);
@@ -1580,14 +1574,13 @@ public class MCLauncher extends JFrame {
 					code.localSize = 3;
 					mzf.put("org/apache/logging/log4j/core/lookup/JndiLookup.class", new ByteList(Parser.toByteArray(data)));
 					mzf.store();
-					CmdUtil.success("修补了Log4j2漏洞");
+					CLIUtil.success("修补了Log4j2漏洞");
 				} else {
-					CmdUtil.success("之前修补了Log4j2漏洞");
+					CLIUtil.success("之前修补了Log4j2漏洞");
 				}
 			}
-			mzf.close();
 		} catch (Throwable e) {
-			CmdUtil.warning("无法修补Log4j2漏洞: ", e);
+			CLIUtil.warning("无法修补Log4j2漏洞: ", e);
 		}
 	}
 
@@ -1601,7 +1594,7 @@ public class MCLauncher extends JFrame {
 		} else if (!map.containsKey("artifact")) { // mc
 			artifact = new CMapping();
 			if (!map.containsKey("url")) {
-				if (DEBUG) CmdUtil.warning(libFile + " 没有下载地址");
+				if (DEBUG) CLIUtil.warning(libFile + " 没有下载地址");
 				// artifact.put("url", MAIN_CONFIG.get("通用").asMap().getString("协议") + "libraries.minecraft.net/" + libFileName);
 			} else {
 				artifact.put("url", map.getString("url") + libFileName);
@@ -1692,10 +1685,10 @@ public class MCLauncher extends JFrame {
 			case DOUBLE:
 			case INTEGER:
 			case BOOL:
-				CmdUtil.warning("FMD发现了一个未知规则: '" + k + "' 请手动判断这个规则是否符合");
-				CmdUtil.warning(k + ": " + value.asString());
+				CLIUtil.warning("FMD发现了一个未知规则: '" + k + "' 请手动判断这个规则是否符合");
+				CLIUtil.warning(k + ": " + value.asString());
 				try {
-					return UIUtil.readBoolean("请输入T或F并按回车: ");
+					return CLIUtil.readBoolean("请输入T或F并按回车: ");
 				} catch (IOException e) {
 					throw new RuntimeException(e);
 				}
@@ -1729,11 +1722,11 @@ public class MCLauncher extends JFrame {
 						fos.write(IOUtil.read(zipFile.getInputStream(zipEntry)));
 					}
 				} else if (DEBUG) {
-					CmdUtil.info("排除文件 " + zipEntry);
+					CLIUtil.info("排除文件 " + zipEntry);
 				}
 			}
 		} catch (IOException e) {
-			CmdUtil.warning("Natives 无法读取!");
+			CLIUtil.warning("Natives 无法读取!");
 			e.printStackTrace();
 		}
 	}
@@ -1806,7 +1799,7 @@ public class MCLauncher extends JFrame {
 		String url = replaceMirror(map, mirror);
 
 		if (!target.exists()) {
-			CmdUtil.info("开始下载 " + url);
+			CLIUtil.info("开始下载 " + url);
 			DownMcFile man = new DownMcFile();
 			man.add(url, target, map.getString("sha1"), null);
 			man.invoke();
@@ -1828,7 +1821,7 @@ public class MCLauncher extends JFrame {
 
 	public static void downloadAndVerifyMD5(String url, String md5, File target) throws IOException {
 		if (!target.exists()) {
-			CmdUtil.info("开始下载 " + url);
+			CLIUtil.info("开始下载 " + url);
 			DownMcFile man = new DownMcFile("md5");
 			man.add(url, target, md5, null);
 			man.invoke();
@@ -1906,67 +1899,65 @@ public class MCLauncher extends JFrame {
 		}
 
 		@Override
-		public void execute() {
+		public Void invoke() throws IOException {
 			if (wait && System.currentTimeMillis() > except) {
 				int r = ifBreakWait();
 				if (r == -1) {
 					cancel(true);
-					return;
+					return null;
 				}
 				if (r == 1) {wait = false;} else refresh();
 				except = System.currentTimeMillis() + TIMEOUT_TIME;
 			}
 
 			int count = 0;
-			try {
-				for (int i = entries.size() - 1; i >= 0; i--) {
-					Entry e = entries.get(i);
-					if (e.future != null) {
-						if (e.future.isDone()) {
-							try {
-								e.future.waitFor();
-								e.future = null;
-								if (verifyFile(e)) {
-									if (e.callback != null) e.callback.run();
-									entries.remove(i);
-								}
-							} catch (Throwable ex) {
-								handleError(e, ex);
-							}
-						} else {
-							count++;
-						}
-					}
-				}
-
-				for (int i = entries.size() - 1; i >= 0; i--) {
-					Entry e = entries.get(i);
-					if (count < maxTask && e.future == null) {
-						count++;
-						if (e.retry > 3) {
-							CmdUtil.warning(e.url.substring(e.url.lastIndexOf('/') + 1) + " 失败三次, 取消");
-							entries.remove(i);
-							continue;
-						}
+			for (int i = entries.size() - 1; i >= 0; i--) {
+				Entry e = entries.get(i);
+				if (e.future != null) {
+					if (e.future.isDone()) {
 						try {
-							e.future = DownloadTask.downloadMTD(e.url, e.target, hdr.subProgress());
+							e.future.waitFor();
+							e.future = null;
+							if (verifyFile(e)) {
+								if (e.callback != null) e.callback.run();
+								entries.remove(i);
+							}
 						} catch (Throwable ex) {
 							handleError(e, ex);
 						}
+					} else {
+						count++;
 					}
 				}
+			}
+
+			for (int i = entries.size() - 1; i >= 0; i--) {
+				Entry e = entries.get(i);
+				if (count < maxTask && e.future == null) {
+					count++;
+					if (e.retry > 3) {
+						CLIUtil.warning(e.url.substring(e.url.lastIndexOf('/') + 1) + " 失败三次, 取消");
+						entries.remove(i);
+						continue;
+					}
+					try {
+						e.future = DownloadTask.downloadMTD(e.url, e.target, hdr.subProgress());
+					} catch (Throwable ex) {
+						handleError(e, ex);
+					}
+				}
+			}
+			try {
 				Thread.sleep(1);
-				if (!entries.isEmpty()) return;
-			} catch (Throwable e) {
-				exception = new ExecutionException(e);
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
 			}
-			synchronized (this) {
-				out = null;
-				notifyAll();
-			}
+			if (!entries.isEmpty()) return null;
+
+			return null;
 		}
 
-		@Override
+		/*@Override
 		public Void invoke() {
 			while (!entries.isEmpty()) {
 				Entry e = entries.remove(entries.size() - 1);
@@ -1989,7 +1980,7 @@ public class MCLauncher extends JFrame {
 				}
 			}
 			return null;
-		}
+		}*/
 
 		private boolean verifyFile(Entry e) throws IOException {
 			if (e.target.isFile()) {
@@ -2010,20 +2001,20 @@ public class MCLauncher extends JFrame {
 					String DIGEST = uc.encodeHex(DIG.digest());
 					if (!DIGEST.equalsIgnoreCase(e.digest)) {
 						if (DIGEST.equals(e.lastDigest)) {
-							CmdUtil.warning("二次SHA1相同,镜像问题? " + e.url);
+							CLIUtil.warning("二次SHA1相同,镜像问题? " + e.url);
 						} else {
 							e.lastDigest = DIGEST;
 							e.future = null;
 							e.retry++;
 
-							if (DEBUG) CmdUtil.warning("DIG For " + e.url + " : " + DIGEST);
+							if (DEBUG) CLIUtil.warning("DIG For " + e.url + " : " + DIGEST);
 							if (!e.target.delete()) {
-								CmdUtil.warning(e.target.getName() + "删除失败!");
+								CLIUtil.warning(e.target.getName() + "删除失败!");
 							}
 							return false;
 						}
 					} else {
-						CmdUtil.success(e.url.substring(e.url.lastIndexOf('/') + 1) + " 完毕. (" + entries.size() + "剩余)");
+						CLIUtil.success(e.url.substring(e.url.lastIndexOf('/') + 1) + " 完毕. (" + entries.size() + "剩余)");
 						return true;
 					}
 				}
@@ -2036,27 +2027,27 @@ public class MCLauncher extends JFrame {
 			e.future = null;
 
 			if (ex instanceof CancellationException) {
-				CmdUtil.warning("下载被取消");
+				CLIUtil.warning("下载被取消");
 				e.retry = 99;
 				return;
 			}
 
-			CmdUtil.error(e.url.substring(e.url.lastIndexOf('/') + 1) + " 下载失败.");
+			CLIUtil.error(e.url.substring(e.url.lastIndexOf('/') + 1) + " 下载失败.");
 			ex.printStackTrace();
 
 			e.retry++;
 		}
 
+		//TODO
 		@Override
 		public boolean cancel(boolean force) {
-			canceled = true;
 			refresh();
 			entries.clear();
 			return true;
 		}
 
 		@Override
-		public boolean continueExecuting() {
+		public boolean repeating() {
 			return !entries.isEmpty();
 		}
 	}
@@ -2086,7 +2077,7 @@ public class MCLauncher extends JFrame {
 			}
 			if (x) Thread.currentThread().interrupt();
 
-			CmdUtil.info("进程终止");
+			CLIUtil.info("进程终止");
 			return process.exitValue();
 		}
 		return 0;

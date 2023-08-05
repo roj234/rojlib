@@ -1,6 +1,6 @@
 package roj.security;
 
-import roj.util.BitWriter;
+import roj.util.BitBuffer;
 import roj.util.ByteList;
 
 import java.nio.charset.StandardCharsets;
@@ -40,8 +40,8 @@ public class ConvolutionalCoder {
 	int rate;                // e.g. 2, 3...
 	int order;               // e.g. 7, 9...
 	int numstates;     // 2**order
-	BitWriter bit_writer;
-	BitWriter bit_reader;
+	BitBuffer bit_writer;
+	BitBuffer bit_reader;
 
 	boolean has_init_decode;
 	char[] distances;
@@ -188,7 +188,7 @@ public class ConvolutionalCoder {
 			}
 		}
 
-		void history_buffer_traceback(int bestpath, int min_traceback_length, BitWriter output) {
+		void history_buffer_traceback(int bestpath, int min_traceback_length, BitBuffer output) {
 			int fetched_index = 0;
 			int highbit = this.highbit;
 			int index = this.index;
@@ -243,11 +243,11 @@ public class ConvolutionalCoder {
 			this.len -= fetched_index;
 		}
 
-		private void writeBitListReversed(BitWriter output, byte[] fetched, int index) {
+		private void writeBitListReversed(BitBuffer output, byte[] fetched, int index) {
 			// todo
 		}
 
-		void history_buffer_process_skip(char[] distances, BitWriter output, int skip) {
+		void history_buffer_process_skip(char[] distances, BitBuffer output, int skip) {
 			if (++index == cap) {
 				index = 0;
 			}
@@ -277,10 +277,10 @@ public class ConvolutionalCoder {
 				history_buffer_traceback(bestpath, min_traceback_length, output);
 			}
 		}
-		void history_buffer_process(char[]distances, BitWriter output) {
+		void history_buffer_process(char[]distances, BitBuffer output) {
 			history_buffer_process_skip(distances, output, 1);
 		}
-		void history_buffer_flush(BitWriter output) {
+		void history_buffer_flush(BitBuffer output) {
 			history_buffer_traceback(0, 0, output);
 		}
 
@@ -347,8 +347,8 @@ public class ConvolutionalCoder {
 	int encode(ByteList data, ByteList out) {
 		int encoded_len_bits = encoded_size(data.readableBytes());
 
-		bit_reader.reset(data);
-		bit_writer.reset(out);
+		bit_reader.init(data);
+		bit_writer.init(out);
 
 		int buf = 0;
 		int mask = (1 << order)-1;
@@ -621,7 +621,7 @@ public class ConvolutionalCoder {
 			_convolutional_decode_init(5 * order, 15 * order, renormalize_interval);
 		}
 
-		bit_writer.reset(out);
+		bit_writer.init(out);
 		int sets = num_encoded_bits / rate;
 
 		errors.error_buffer_reset();
@@ -645,7 +645,7 @@ public class ConvolutionalCoder {
 
 		int num_encoded_bytes =
 			(num_encoded_bits % 8 != 0) ? (num_encoded_bits / 8 + 1) : (num_encoded_bits / 8);
-		bit_reader.reset(encoded);
+		bit_reader.init(encoded);
 
 		return _convolutional_decode(num_encoded_bits, num_encoded_bytes, msg, null);
 	}

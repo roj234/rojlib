@@ -1,7 +1,6 @@
 package roj.sql;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.SQLException;
 
 /**
@@ -19,12 +18,6 @@ public abstract class DbConnector {
 	}
 
 	public abstract Connection createConnection() throws SQLException;
-
-	public void flush(DbStatement statement) throws SQLException {
-		PreparedStatement ps = statement.prepareStatement(getConnection());
-		ps.executeUpdate();
-		ps.close();
-	}
 
 	public void close() {
 		if (conn != null) {

@@ -157,6 +157,6 @@ public final class BencodeParser implements BinaryParser {
 	}
 
 	private ParseException err(String v) {
-		return new ParseException(v, 0);
+		return new ParseException("", v, 0);
 	}
 }

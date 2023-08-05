@@ -62,6 +62,5 @@ public final class XChaCha extends ChaCha {
 		// Put Remain Nonce
 		Src[14] = b.readIntLE();
 		Src[15] = b.readIntLE();
-		reset();
 	}
 }

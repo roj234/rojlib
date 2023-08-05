@@ -33,7 +33,9 @@ public class Helpers {
 
 	public static File getJarByClass(Class<?> clazz) {
 		String loc = clazz.getProtectionDomain().getCodeSource().getLocation().getPath();
-		loc = loc.substring("file:/".length(), loc.lastIndexOf('!'));
+		if (loc.startsWith("file:")) loc = loc.substring(5);
+		int i = loc.lastIndexOf('!');
+		loc = loc.substring(loc.startsWith("/")?1:0, i<0?loc.length():i);
 		try {
 			return new File(URIUtil.decodeURI(loc).toString());
 		} catch (MalformedURLException e) {
@@ -81,11 +83,13 @@ public class Helpers {
 		return subMap;
 	}
 
+	private static Object field;
 	@Nonnull
 	public static <T> T nonnull() {
 		// noinspection all
 		return null;
 	}
+	public static <T> T maybeNull() { return cast(field); }
 
 	public static final Predicate<?> alwaystrue = (a) -> true;
 	public static final Predicate<?> alwaysfalse = (a) -> false;

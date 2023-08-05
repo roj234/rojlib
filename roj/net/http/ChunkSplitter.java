@@ -7,7 +7,7 @@ import roj.net.ch.handler.PacketMerger;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.NamespaceKey;
+import roj.util.Identifier;
 
 import java.io.IOException;
 
@@ -18,8 +18,8 @@ import static roj.text.TextUtil.digits;
  * @since 2022/6/2 3:29
  */
 public class ChunkSplitter extends PacketMerger implements ChannelHandler {
-	public static final NamespaceKey CHUNK_IN_EOF = NamespaceKey.of("cs", "cin");
-	public static final NamespaceKey CHUNK_OUT_EOF = NamespaceKey.of("cs", "cout");
+	public static final Identifier CHUNK_IN_EOF = Identifier.of("cs", "cin");
+	public static final Identifier CHUNK_OUT_EOF = Identifier.of("cs", "cout");
 
 	private static final int IN_ENABLE = 1, OUT_ENABLE = 2, IN_EOF = 4;
 

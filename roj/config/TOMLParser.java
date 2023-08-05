@@ -318,7 +318,7 @@ public final class TOMLParser extends Parser<CMapping> {
 		while (i < in.length()) {
 			char c = in.charAt(i++);
 			if (slash) {
-				i = _removeSlash(input, c, v, i, end3);
+				i = _removeSlash(input, c, v, i);
 				slash = false;
 			} else {
 				if (end3 == c) {

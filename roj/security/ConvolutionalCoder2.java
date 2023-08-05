@@ -2,7 +2,7 @@ package roj.security;
 
 import roj.crypt.MT19937;
 import roj.util.ArrayGetter;
-import roj.util.BitWriter;
+import roj.util.BitBuffer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -108,10 +108,10 @@ public class ConvolutionalCoder2 {
 		return out;
 	}
 
-	private final BitWriter ib = new BitWriter(), ob = new BitWriter();
+	private final BitBuffer ib = new BitBuffer(), ob = new BitBuffer();
 
 	public void begin(DynByteBuf input, DynByteBuf output) {
-		ib.reset(input); ob.reset(output);
+		ib.init(input); ob.init(output);
 	}
 	public int getEncodedSize(int lengthBit) {
 		return lengthBit*outBits;

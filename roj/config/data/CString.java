@@ -110,7 +110,7 @@ public final class CString extends CEntry {
 
 	@Override
 	protected void toBinary(DynByteBuf w, VinaryParser struct) {
-		w.put((byte) Type.STRING.ordinal()).putZhCn(value);
+		w.put((byte) Type.STRING.ordinal()).putVUIGB(value);
 	}
 
 	@Override

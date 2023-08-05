@@ -29,9 +29,9 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 	private ConstantData data;
 	private Object in;
 	private ByteList buf;
-	private boolean clean;
+	private boolean absolutelyCompressed;
 
-	private final ArrayList<Constant>[] cstCache = Helpers.cast(new ArrayList<?>[4]);
+	private ArrayList<Constant>[] cstCache;
 
 	public Context(String name, Object o) {
 		this.name = name;
@@ -40,7 +40,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 	}
 
 	public ConstantData getData() {
-		clean = false;
+		absolutelyCompressed = false;
 		if (this.data == null) {
 			ByteList bytes;
 			if (in != null) {
@@ -54,11 +54,13 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 			try {
 				data = Parser.parseConstants(bytes);
 			} catch (Throwable e) {
-				final File file = new File(getFileName().replace('/', '.'));
+				File file = new File(getFileName().replace('/', '.').concat(".class"));
 				try (FileOutputStream fos = new FileOutputStream(file)) {
 					bytes.writeToStream(fos);
-				} catch (IOException ignored) {}
-				throw new IllegalArgumentException(name + " 读取失败", e);
+				} catch (Throwable ex) {
+					ex.printStackTrace();
+				}
+				throw new IllegalArgumentException(name + " 解析失败", e);
 			}
 			this.data = data;
 			getFileName();
@@ -87,26 +89,12 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 		throw new ClassCastException(o.getClass().getName());
 	}
 
-	public List<CstRef> getMethodConstants() {
-		cstInit();
-		return Helpers.cast(cstCache[ID_METHOD]);
-	}
+	public List<CstRef> getMethodConstants() { cstInit(); return Helpers.cast(cstCache[ID_METHOD]); }
+	public List<CstRef> getFieldConstants() { cstInit(); return Helpers.cast(cstCache[ID_FIELD]); }
+	public List<CstDynamic> getInvokeDynamic() { cstInit(); return Helpers.cast(cstCache[ID_INVOKE_DYN]); }
+	public List<CstClass> getClassConstants() { cstInit(); return Helpers.cast(cstCache[ID_CLASS]); }
 
-	public List<CstRef> getFieldConstants() {
-		cstInit();
-		return Helpers.cast(cstCache[ID_FIELD]);
-	}
-
-	public List<CstDynamic> getInvokeDynamic() {
-		cstInit();
-		return Helpers.cast(cstCache[ID_INVOKE_DYN]);
-	}
-
-	public List<CstClass> getClassConstants() {
-		cstInit();
-		return Helpers.cast(cstCache[ID_CLASS]);
-	}
-
+	public ByteList get() { return get(true); }
 	public ByteList get(boolean shared) {
 		if (this.buf == null) {
 			if (this.data != null) {
@@ -130,13 +118,8 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 		return this.buf;
 	}
 
-	public ByteList get() {
-		return get(true);
-	}
 
-	public boolean inRaw() {
-		return data == null;
-	}
+	public boolean inRaw() { return data == null; }
 
 	private void clearData() {
 		if (this.data != null) {
@@ -161,120 +144,69 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 	}
 
 	private void cstInit() {
-		if (cstCache[0] == null) {
-			cstCache[0] = new ArrayList<>();
-			cstCache[1] = new ArrayList<>();
-			cstCache[2] = new ArrayList<>();
-			cstCache[3] = new ArrayList<>();
+		if (cstCache == null) {
+			cstCache = Helpers.cast(new ArrayList<?>[] {
+				new ArrayList<>(),
+				new ArrayList<>(),
+				new ArrayList<>(),
+				new ArrayList<>()
+			});
 		}
+
 		if (cstCache[0].isEmpty()) {
-			boolean prev = clean;
+			boolean prev = absolutelyCompressed;
 			ConstantPool cw = getData().cp;
-			clean = prev;
+			absolutelyCompressed = prev;
 
 			cw.setAddListener(this);
 			List<Constant> csts = cw.array();
-			for (int i = 0; i < csts.size(); i++) {
-				accept(csts.get(i));
-			}
+			for (int i = 0; i < csts.size(); i++) accept(csts.get(i));
 			getFileName();
 		}
 	}
 
 	@Override
-	public void accept(Constant cst) {
-		if (cst == null) {
-			for (List<?> list : cstCache) {
-				list.clear();
-			}
+	public void accept(Constant c) {
+		if (c == null) {
+			for (List<?> list : cstCache) list.clear();
 			cstInit();
 			return;
 		}
-		switch (cst.type()) {
-			case Constant.INTERFACE:
-			case Constant.METHOD:
-				cstCache[ID_METHOD].add(cst);
-				break;
-			case Constant.CLASS:
-				cstCache[ID_CLASS].add(cst);
-				break;
-			case Constant.FIELD:
-				cstCache[ID_FIELD].add(cst);
-				break;
-			case Constant.INVOKE_DYNAMIC:
-				cstCache[ID_INVOKE_DYN].add(cst);
-				break;
+
+		switch (c.type()) {
+			case Constant.INTERFACE: case Constant.METHOD: cstCache[ID_METHOD].add(c); break;
+			case Constant.CLASS: cstCache[ID_CLASS].add(c); break;
+			case Constant.FIELD: cstCache[ID_FIELD].add(c); break;
+			case Constant.INVOKE_DYNAMIC: cstCache[ID_INVOKE_DYN].add(c); break;
 		}
 	}
 
 	public String getFileName() {
 		if (data == null) return name;
-		String n = data.name;
-
-		ch:
-		if (name.length() == n.length()-6) {
-			for (int i = n.length() - 7; i >= 0; i--) {
-				if (name.charAt(i) != n.charAt(i)) break ch;
-			}
-			return name;
-		}
-
-		return this.name = n.concat(".class");
+		return name = data.name.concat(".class");
 	}
 
 	public ByteList getCompressedShared() {
 		String fn = getFileName();
-		try {
-			if (!clean) {
-				if (data == null) {
-					data = Parser.parse(get());
-				} else {
-					Parser.withParsedAttribute(data);
-				}
-
-				clean = true;
-			}
-			return get(true);
-		} catch (Throwable t) {
-			try (FileOutputStream fos = new FileOutputStream(fn.replace('/', '_'))) {
-				get().writeToStream(fos);
-			} catch (Throwable ignored) {}
-			throw t;
+		if (!absolutelyCompressed) {
+			Parser.compress(getData());
+			absolutelyCompressed = true;
 		}
+		return get(true);
 	}
 
 	public void compress() {
-		if (data == null) {
-			data = Parser.parse(get(true));
-			set(ByteList.wrap(Parser.toByteArray(data)));
-		} else {
-			Parser.withParsedAttribute(data);
-			get(false);
-		}
-		clean = true;
+		if (absolutelyCompressed) return;
+
+		boolean targetIsByte = data == null;
+		Parser.compress(getData());
+		if (targetIsByte) set(ByteList.wrap(Parser.toByteArray(data)));
+		absolutelyCompressed = true;
 	}
 
 	// region 准备上下文
 
-	public static List<Context> fromStream(Map<String, InputStream> streams) throws IOException {
-		List<Context> ctx = new ArrayList<>(streams.size());
-
-		ByteList bl = new ByteList();
-		for (Map.Entry<String, InputStream> entry : streams.entrySet()) {
-			Context c = new Context(entry.getKey().replace('\\', '/'), bl.readStreamFully(entry.getValue()).toByteArray());
-			entry.getValue().close();
-			c.getData();
-			bl.clear();
-			ctx.add(c);
-		}
-
-		return ctx;
-	}
-
-	public static List<Context> fromZip(File input, Charset charset) throws IOException {
-		return fromZip(input, charset, Helpers.alwaysTrue());
-	}
-
+	public static List<Context> fromZip(File input, Charset charset) throws IOException { return fromZip(input, charset, Helpers.alwaysTrue()); }
 	public static List<Context> fromZip(File input, Charset charset, Predicate<String> filter) throws IOException {
 		ZipFile inputJar = new ZipFile(input, charset);
 

@@ -7,8 +7,6 @@ import roj.text.TextUtil;
 
 import java.util.TimeZone;
 
-import static roj.config.word.ITokenizer.WHITESPACE;
-
 /**
  * @author Roj233
  * @since 2022/2/19 19:14
@@ -87,55 +85,24 @@ public class ToYaml extends ToSomeString {
 
 	@Override
 	protected final void valString(String val) {
-		int check = YAMLParser.literalSafe(val);
-		noFound:
-		if (check<0) {
-			sb.append(val);
-			return;
-		} else if (multiline&&check>0) {
-			found:
-			if (check != 1) {
-				for (int i = 0; i < val.length(); i++) {
-					char c = val.charAt(i);
-					if (WHITESPACE.contains(c)) {
-						if (c == '\n') break found;
-						check = 3;
-					}
-				}
-				break noFound;
-			}
-
+		if (multiline && val.indexOf('\n') >= 0) {
 			sb.append(val.charAt(val.length()-1) == '\n'?"|+":"|-");
 
-			boolean first;
-			if (check == 3) {
-				sb.append('\n');
-				int x = depth;
-				while (x-- > 0) sb.append(indent);
-
-				first = false;
-			} else {
-				first = true;
-			}
-
-			int i = 0, len = -1;
+			int i = 0;
 			do {
-				if (len != sb.length() || first) {
-					if (len > 0) first = false;
-
-					sb.append('\n');
-					if (val.charAt(i) != '\n') {
-						int x = depth;
-						while (x-- > 0) sb.append(indent);
-					}
+				sb.append('\n');
+				if (i == 0 || val.charAt(i) != '\n') {
+					int x = depth;
+					while (x-- > 0) sb.append(indent);
 				}
-				len = sb.length();
+
 				i = TextUtil.gAppendToNextCRLF(val, i, sb);
 			} while (i < val.length());
 			return;
 		}
 
-		ITokenizer.addSlashes(sb.append('"'), val).append('"');
+		if (YAMLParser.literalSafe(val)<0) sb.append(val);
+		else super.valString(val);
 	}
 
 	@Override
@@ -144,7 +111,7 @@ public class ToYaml extends ToSomeString {
 	@Override
 	public final void key0(String key) {
 		indent(depth);
-		(YAMLParser.literalSafe(key)<0 ? sb.append(key) : ITokenizer.addSlashes(sb.append('"'), key).append('"')).append(":");
+		(YAMLParser.literalSafe(key)<0 ? sb.append(key) : ITokenizer.addSlashes(key, 0, sb.append('"'), '\'').append('"')).append(":");
 	}
 
 	@Override

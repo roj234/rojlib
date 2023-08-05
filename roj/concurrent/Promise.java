@@ -2,6 +2,10 @@ package roj.concurrent;
 
 import roj.util.Helpers;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -10,42 +14,38 @@ import java.util.function.Function;
  * @since 2022/10/7 0007 23:54
  */
 public interface Promise<T> {
-	static <T> Promise<T> new_(TaskHandler e, Consumer<PromiseValue> handler) {
-		return new PromiseImpl<>(e, handler);
-	}
+	static <T> Promise<T> sync(Consumer<PromiseCallback> handler) { return new PromiseImpl<>(null, handler); }
+	static <T> Promise<T> async(TaskHandler e, Consumer<PromiseCallback> handler) { return new PromiseImpl<>(e, handler); }
 	static <T> Promise<T> resolve(T t) {
 		PromiseImpl<T> p = new PromiseImpl<>();
 		p._state = FULFILLED;
-		p._result = t;
+		p._val = t;
 		return p;
 	}
 	static <T> Promise<T> reject(Object t) {
 		PromiseImpl<T> p = new PromiseImpl<>();
 		p._state = REJECTED;
-		p._result = t;
+		p._val = t;
 		return p;
 	}
-	static Promise<Object[]> all(TaskHandler e, Promise<?>... arr) {
-		if (arr.length == 0) throw new IllegalArgumentException();
+	static Promise<Object[]> all(TaskHandler e, Promise<?>... arr) { return all(e, Arrays.asList(arr)); }
+	static <T extends Promise<?>> Promise<Object[]> all(TaskHandler e, List<T> arr) {
+		if (arr.size() == 0) throw new IllegalArgumentException();
 
-		return new PromiseImpl<>(e, new Consumer<PromiseValue>() {
-			int remain = arr.length;
+		AtomicInteger remain = new AtomicInteger(arr.size());
+		Object[] result = new Object[arr.size()];
 
-			@Override
-			public void accept(PromiseValue op) {
-				Object[] result = new Object[arr.length];
-				for (int i = 0; i < arr.length; i++) {
+		PromiseImpl<Object[]> ret = new PromiseImpl<>(e, null);
+		for (int i = 0; i < arr.size(); i++) {
+			int no = i;
+			arr.get(i).then((v, o) -> {
+				result[no] = v;
 
-					int finalI = i;
-					arr[i].thenV((op1) -> {
-						result[finalI] = op1.get();
-						if (--remain == 0) {
-							op.resolve(result);
-						}
-					});
-				}
-			}
-		});
+				if (remain.decrementAndGet() == 0)
+					ret.resolve(result);
+			});
+		}
+		return ret;
 	}
 	@SafeVarargs
 	static <T> Promise<T> race(TaskHandler e, Promise<T>... arr) {
@@ -53,37 +53,27 @@ public interface Promise<T> {
 		if (arr.length == 1) return arr[0];
 
 		return new PromiseImpl<>(e, (op) -> {
-			Consumer<PromiseValue> h = (op1) -> op.resolve(op1.get());
-			for (Promise<T> p : arr) p.thenV(h);
+			BiConsumer<T, PromiseCallback> h = (v, o) -> op.resolve(v);
+			for (Promise<T> p : arr) p.then(h);
 		});
 	}
 
-	default Promise<Void> then(Runnable fn) {
-		return Helpers.cast(then((opr) -> fn.run(), null));
-	}
+	default Promise<Void> thenR(Runnable fn) { return Helpers.cast(then((v, o) -> fn.run(), null)); }
 	@SuppressWarnings("unchecked")
-	default <NEXT> Promise<NEXT> then(Function<T, NEXT> fn) {
-		return (Promise<NEXT>) then((opr) -> opr.resolve(fn.apply((T) opr.get())), null);
-	}
-	default Promise<Object> thenV(Consumer<PromiseValue> fn) {
-		return then(fn, null);
-	}
-	Promise<Object> then(Consumer<PromiseValue> fn, PromiseFailer fail);
-	Promise<T> catch_(PromiseFailer fn);
+	default <NEXT> Promise<Object> thenF(Function<T, NEXT> fn) { return then((v, o) -> o.resolve(fn.apply(v)), null); }
+
+	default Promise<Object> then(BiConsumer<T, PromiseCallback> fn) { return then(fn, null); }
+	Promise<Object> then(BiConsumer<T, PromiseCallback> fn, Consumer<Promise<?>> fail);
+	Promise<T> catch_(Consumer<Promise<?>> fn);
 	Promise<T> catch_ES(Function<?, ?> fn);
-	Promise<T> finally_(PromiseFailer fn);
+	Promise<T> finally_(Consumer<Promise<?>> fn);
 
-	int PENDING = 0, FULFILLED = 1, REJECTED = -1;
+	int PENDING = 0, FULFILLED = PromiseImpl.TASK_COMPLETE|PromiseImpl.TASK_SUCCESS, REJECTED = PromiseImpl.TASK_COMPLETE;
 	byte state();
-	Object get();
+	T get();
 
-	interface PromiseFailer {
-		void process(Object value) throws Exception;
-	}
-
-	interface PromiseValue {
-		Object get();
-		void resolve(Object t);
-		void reject(Object o);
+	interface PromiseCallback {
+		void resolve(Object result);
+		void reject(Object reason);
 	}
 }

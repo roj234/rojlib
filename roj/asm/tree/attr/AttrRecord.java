@@ -3,15 +3,13 @@ package roj.asm.tree.attr;
 import roj.asm.Parser;
 import roj.asm.cst.ConstantPool;
 import roj.asm.cst.CstUTF;
-import roj.asm.tree.FieldNode;
-import roj.asm.type.Type;
-import roj.asm.type.TypeHelper;
+import roj.asm.tree.RawNode;
 import roj.asm.util.AttributeList;
-import roj.collect.SimpleList;
+import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
-import roj.util.TypedName;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -19,27 +17,22 @@ import java.util.List;
  * @since 2021/1/1 23:12
  */
 public final class AttrRecord extends Attribute {
-	public AttrRecord() {
-		super("Record");
-	}
-
-	public AttrRecord(DynByteBuf r, ConstantPool pool) {
-		super("Record");
-
+	public AttrRecord() { variables = new ArrayList<>(); }
+	public AttrRecord(DynByteBuf r, ConstantPool cp) {
 		int len = r.readUnsignedShort();
-		variables = new SimpleList<>(len);
+		variables = new ArrayList<>(len);
 		while (len-- > 0) {
 			Val rd = new Val();
 			variables.add(rd);
 
-			rd.name = ((CstUTF) pool.get(r)).str();
-			rd.type = ((CstUTF) pool.get(r)).str();
+			rd.name = ((CstUTF) cp.get(r)).str();
+			rd.type = ((CstUTF) cp.get(r)).str();
 			int len1 = r.readUnsignedShort();
 			if (len1 > 0) {
 				rd.attributes = new AttributeList(len1);
 				while (len1-- > 0) {
-					String name0 = ((CstUTF) pool.get(r)).str();
-					rd.attributes.i_direct_add(new AttrUnknown(name0, r.slice(r.readInt())));
+					String name0 = ((CstUTF) cp.get(r)).str();
+					rd.attributes.i_direct_add(Parser.attr(rd, cp, name0, r.slice(r.readInt()), Parser.RECORD_ATTR));
 				}
 			}
 		}
@@ -48,9 +41,10 @@ public final class AttrRecord extends Attribute {
 	public List<Val> variables;
 
 	@Override
-	public boolean isEmpty() {
-		return variables.isEmpty();
-	}
+	public boolean isEmpty() { return variables.isEmpty(); }
+
+	@Override
+	public String name() { return "Record"; }
 
 	@Override
 	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
@@ -72,7 +66,7 @@ public final class AttrRecord extends Attribute {
 		return sb.deleteCharAt(sb.length() - 1).toString();
 	}
 
-	public static final class Val implements FieldNode {
+	public static final class Val implements RawNode {
 		public String name, type;
 
 		AttributeList attributes;
@@ -81,44 +75,17 @@ public final class AttrRecord extends Attribute {
 		// RuntimeVisibleTypeAnnotations, RuntimeInvisibleTypeAnnotations
 
 		@Override
-		public AttributeList attributes() {
-			return attributes == null ? attributes = new AttributeList() : attributes;
-		}
-
+		public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
 		@Nullable
 		@Override
-		public AttributeList attributesNullable() {
-			return attributes;
-		}
-
+		public AttributeList attributesNullable() { return attributes; }
 		@Override
-		public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedName<T> type) {
-			return Parser.parseAttribute(this,cp,type,attributes, Parser.RECORD_ATTR);
-		}
-
+		public <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Parser.RECORD_ATTR); }
 		@Override
-		public char modifier() {
-			throw new UnsupportedOperationException();
-		}
-
+		public char modifier() { throw new UnsupportedOperationException(); }
 		@Override
-		public int type() {
-			return Parser.RECORD_ATTR;
-		}
-
+		public String name() { return name; }
 		@Override
-		public Type fieldType() {
-			return TypeHelper.parseField(type);
-		}
-
-		@Override
-		public String name() {
-			return name;
-		}
-
-		@Override
-		public String rawDesc() {
-			return type;
-		}
+		public String rawDesc() { return type; }
 	}
 }

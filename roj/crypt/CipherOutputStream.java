@@ -20,8 +20,7 @@ public class CipherOutputStream extends FilterOutputStream {
 	private byte[] b1;
 
 	private final ByteList.Slice i = new ByteList.Slice();
-	private final ByteList o;
-	private BufferPool pool;
+	private ByteList o;
 
 	protected final RCipherSpi c;
 	protected final int block;
@@ -35,8 +34,7 @@ public class CipherOutputStream extends FilterOutputStream {
 			while (c.engineGetOutputSize(len) > BUFFER_SIZE)
 				len -= c.engineGetBlockSize();
 
-			pool = BufferPool.localPool();
-			o = (ByteList) pool.buffer(false, len);
+			o = (ByteList) BufferPool.buffer(false, len);
 			i.set(o.array(),o.arrayOffset(),o.capacity());
 			block = len;
 		} else {
@@ -84,7 +82,7 @@ public class CipherOutputStream extends FilterOutputStream {
 	public void flush() throws IOException {
 		if (block == 0) return;
 
-		ByteList.Slice ib = i;
+		ByteList ib = i;
 		ByteList ob = o;
 		ib.clear();
 		try {
@@ -111,21 +109,22 @@ public class CipherOutputStream extends FilterOutputStream {
 		} finally {
 			this.out = null;
 
-			if (pool != null) {
-				pool.reserve(o);
-				pool = null;
+			if (o != null) {
+				BufferPool.reserve(o);
+				o = null;
 			}
 		}
 	}
 
 	protected void finalBlock(ByteList o) throws Exception {
-		int blockSize = c.engineGetBlockSize();
+		int blockSize = c.engineGetBlockSize()-1;
 		if (blockSize > 0) {
 			int off = o.wIndex();
-			int end = (off+blockSize-1)/blockSize*blockSize;
+			int end = 0 == (off&blockSize) ? off : (off|blockSize)+1;
 
 			o.wIndex(end);
 			off += o.arrayOffset();
+			end += o.arrayOffset();
 
 			// zero padding
 			byte[] buf = o.array();

@@ -1,7 +1,13 @@
 
-# 2023/05/18 更新  
-  http改了一堆，用起来可方便了
+### 本项目存在大量无意留下的漏洞，仅供学习研究用途，如用作商业行为，不提供任何保证
 
+### (Module level) TODO LIST
+* [ ] yield
+* [ ] java compiler
+* [ ] javascript interpreter
+* [ ] data flow analyze for bytecode
+* [ ] retransform based advanced hot-reload
+* [ ] server-side template language for web server
 
 # 这里都有啥
 ## roj.archive
@@ -12,7 +18,7 @@
 * 分卷
 * 增量修改 —— 无需处理没修改的,比如给加密的压缩文件增加新文件
 * 仅读取CEN(更快)
-* Info-ZIP UnicodePath和高精度时间戳的支持 （只读）  
+* Info-ZIP UnicodePath和NTFS高精度时间戳(现已加入可写入豪华午餐)  
 
 `QZArchive/QZFileWriter`: 7z
 * 读写
@@ -20,43 +26,58 @@
 * 分卷
 * 固实
 * 压缩文件头
+* 并行压缩 / 解压
+* 全新* 的并行压缩方式！既支持文件级别的并行压缩，又支持单个文件的并行压缩（LZMA2 only）
 * 支持BCJ2等复杂coder
-* 追加修改(复制字块)
+* 追加修改(复制字块)  
+* 高性能（大量使用Unsafe，请注意线程安全）
 
+LZMA2Input/OutputStream均支持并行压缩和解压
+2023/12/22: 支持在压缩时动态修改prop byte(仅支持单线程下)
+
+注释：  
+ *: 比起上一版本  
+
+### 图片展示
+![roj.archive.ui.QZArchiverUI](images/archiver.png)
 
 ## roj.asm  
     自己做的ASM, 资料来自VM规范  
-内附：`roj.asm.Translator`, `roj.asm.util.Transformers`, `roj.asm.nixim.*`
-  
-根据信息详细程度分级，并实现统一接口:  
-`roj.asm.tree.IClass`, `rom.asm.tree.FieldNode`, `roj.asm.tree.MethodNode`
+    不支持的项目：
+      内容（方法内部的）注解
+      计算StackMapTable
+    性能、内存占用、易用性（至少对我来说）均优于ow的asm
 
-### 粗略信息 List<String> simpleData(ByteList buf)
-* 包含类名[0]，继承[1]，实现的接口[rest] 
+### Parser.forEachConstant(DynByteBuf buf, Consumer&lt;Constant&gt; c)
+* 【只读】处理每一个常量
 
-### 权限信息 AccessData parseAccess(byte[] buf)
-* +只读的方法和字段  
-* +修改类和其中元素的访问级
+### AccessData Parser.parseAccess(DynByteBuf buf, boolean modifiable)
+* 【只读】类、方法、字段、继承、接口、修饰符等
+* 【读写】类和其中元素的修饰符
 
-### 常量信息 ConstantData parseConstants(ByteList buf)  
-* +解析整个常量池，自此开始，信息不再是只读的了，  
-* +选择性解析方法, 简单的操作不需要解析Code属性，极大提高速度  
-示例见ConstMapper
+### ConstantData Parser.parseConstant(DynByteBuf buf)
+* 包含一个类的所有信息，和常量池  
+* 属性未解析，因为没有人会修改每一个方法  
+* * 比如如果你要修改方法的调用，可以直接改常量池  
+* * 如果你要修改方法的结构，可以用roj.asm.visitor.CodeWriter
+* * 如果上面两个都不符合你的需求，你才应该用roj.asm.visitor.XInsnList
+* 上面讲的还都是Code属性，如果要先检测有没有注解再决定如何操作呢
+* 使用`T roj.asm.tree.Attributed#parsedAttr(@Nullable ConstantPool cp, TypedName&lt;T&gt; name)`获取存在的属性（它是可读写的）
+* TypedName在`roj.asm.tree.Attribute`中列举了（或者你也可以new一个，它只是为了通过泛型规范Attribute的类型）
+* 使用`roj.asm.tree.CNode#parsed(ConstantPool cp)`解析一个方法或字段的所有属性
 
-### 完整信息 ConstantData parse(ByteList buf)  
-* 和ASM的tree模式差不多  
-  
-【完整信息】级的速度大概是比不上ASM  
-   但是***大部分ASM操作，都不要用到这一等级，常量信息完全够了***
-  
-此外，我现在还写了个Visitor模式 `roj.asm.visitor.CodeVisitor`  
-嗯...只支持Code属性  
-不过确实是快了不少  
-  
-然后还有Nixim:
- * 使用注解注入一个class，增加修改删除其中一些方法，或者让它实现接口  
-示例: roj.misc.NiximExample  
- * 暂不支持在方法中间插入  
+实例见`roj.mapper.Mapper`
+
+### ConstantData Parser.parse(DynByteBuf buf)
+* 同上，而后解析所有属性，最后清空常量池  
+
+### 还有Nixim:
+ * 使用注解注入一个class，修改其中一些方法，或者让它实现接口  
+ * 在头部、尾部、（使用SIJ模式）或中间插入你的代码
+ * 删除或替换方法
+ * 通过模糊匹配替换一个连续（不包含if、switch、循环）的代码段
+ * 替换常量的值，或将其的求值语句替换成一个函数
+ * 替换方法的调用
  * 灵感来自spongepowered:mixin  
   
 ## roj.collect  
@@ -74,133 +95,138 @@
 * 或者对于区间只是挨着的, 比如bundle中的某些小文件, 用来减少IO次数  
  详情看MutableZipFile  
  * `RingBuffer`
+
+## roj.concurrent
+Promise:
+```java
+		Promise.new_(TaskPool.CpuMassive(), (op) -> {
+			LockSupport.parkNanos(1000_000_000L);
+			op.resolve("a");
+		}).thenF((val) -> {
+			return val+"b";
+		}).thenF((val) -> {
+			return Promise.new_(TaskPool.CpuMassive(), (op) -> {
+				LockSupport.parkNanos(1000_000_000L);
+				op.resolve("c");
+			}).thenF((val2) -> {
+				return val.toString()+val2;
+			});
+		}).thenF((val) -> {
+			System.out.println(val);
+			return null;
+		});
+```
+其它：定时任务
   
 ## roj.config  
   JSON YAML TOML INI XML NBT Torrent(Bencode) CSV 解析器  
-全部使用统一数据结构 `roj.config.data.CEntry`
-#### 自动识别文本文件编码
 
-使用`CEntry.toJSON` toYAML toTOML toINI等还原到字符串  
+### 特点：
+* 自动识别编码（仅支持中英，默认开启可关闭）
+* 所有配置类型（除xml）使用统一结构 `roj.config.data.CEntry`
+* 提供访问者模式的读取 (仅支持JSON和YAML) 详见`roj.config.CCParser`
+* 访问者模式的写入：ToEntry ToJson ToNBT ToXEntry ToYaml... 详见(包)`roj.config.serial`
+* 支持dot-get: 形如`a.b[2].c` 详见`roj.config.data.CEntry#query`
+* XML的dot-get更高级 详见`roj.config.data.Node#querySelector`
+* 支持Xlsx和Csv的处理，它们在roj.excel包
+* 人性化的错误提示
+* 一种文件格式，叫做Vinary，通过保存Map类型中共有的Key以节约空间（虽然不如压缩）
 
-以及访问者模式的`CVisitor`,除了给CEntry用还可以给Parser用  
-CVisitor有下面这些  
-* ToEntry ToJson ToNBT ToXEntry ToYaml
+自动序列化`roj.config.serial.SerialFactory`
+* 不使用反射
+* 支持任意对象
+* 支持通过泛型推断目标类型
 
-XEntry(更节约内存和方便的储存XML)可以与CEntry互转  
-XEntry/CEntry均支持dot-get: `a.b[2].c`
-
-#### 另外还有XlsxParser, 以及CSV是只读的(格式如此简单也没必要)
-#### 序列化：  
-  使用ASM动态生成类，支持任意对象（不只实体类！）的序列化/反序列化  
-  支持数组，不用反射  
-  标记(flag):   
- * `GENERATE` = 1, 对未知的class自动生成序列化器  
- * `CHECK_INTERFACE` = 2, 检查实现的接口是否有序列化器  
- * `CHECK_PARENT` = 4, 检查父类是否有序列化器  
- * `DYNAMIC` = 8 动态模式 (不根据字段类型而根据序列化时的对象class来获取序列化器)
+标记(flag):
+* `GENERATE`        对未知的class自动生成序列化器
+* `CHECK_INTERFACE` 检查实现的接口是否有序列化器
+* `CHECK_PARENT`    检查父类是否有序列化器
+* `NO_CONSTRUCTOR`  不调用&lt;init&gt;
+* 动态模式: 根据对象的class来序列化
+* `ALLOW_DYNAMIC`   允许动态模式  仅应用到无法确定类型的字段
+* `PREFER_DYNAMIC`  优先动态模式  禁用泛型推断
+* `FORCE_DYNAMIC`   强制动态模式  对所有字段启用
 
 ```java
 
-import roj.config.serial.Name;
-import roj.config.serial.SerializerFactory;
-import roj.config.serial.SerializerFactoryFactory;
-import roj.config.serial.Via;
+import roj.config.ConfigMaster;
+import roj.config.serial.*;
+import roj.text.CharList;
 
+import java.io.File;
 import java.nio.charset.Charset;
 
 public class Test {
-  public static void main(String[] args) throws Exception {
-    // 为什么这么设计可以去看看SerializerFactoryFactory里面写了什么
-    SerializerFactory man = SerializerFactoryFactory.create();
-    // 自定义序列化方式(使用@As调用)
-    man.registerAsType("hex_color", int.class, new UserAdapter());
-    // 自定义序列化器
-    man.register(Charset.class, new UserAdapter());
+	public static void main(String[] args) throws Exception {
+		// 为什么这么设计可以去看看SerializerFactoryFactory里面写了什么
+		SerializerFactory man = Serializers.newSerializerFactory();
+		// 自定义序列化方式(使用@As调用)
+		Serializers.registerAsRGB(man);
+		// 自定义序列化器(不是一定要匿名类)
+		man.register(Charset.class, new Object() {
+			public String serializeMyObject(Charset cs) {return cs.name();}
 
-    CAdapter<Pojo> adapter = man.adapter(Pojo.class);
+			public Charset deserMyObj(String s) {return Charset.forName(s);}
+		});
 
-    Pojo p = new Pojo();
-    p.color = 0xAABBCC;
-    p.charset = StandardCharsets.UTF_8;
-    p.map = Collections.singletonMap("114514", Collections.singletonMap("1919810", 23333L));
+		CAdapter<Pojo> adapter = man.adapter(Pojo.class);
 
-    // 可以换成 ToJson / ToYaml
-    ToEntry ser = new ToEntry();
-    adapter.write(ser, p);
-    System.out.println(ser.get().toJSONb());
-    /**
-     {
-     "charset": "UTF-8",
-     "myColor": "#aabbcc",
-     "map": {
-     "114514": {
-     "1919810": 23333
-     }
-     }
-     }
-     */
+		Pojo p = new Pojo();
+		p.color = 0xAABBCC;
+		p.charset = StandardCharsets.UTF_8;
+		p.map = Collections.singletonMap("114514", Collections.singletonMap("1919810", 23333L));
 
-    // 使用CCJson,CCYaml从文本读取(不生成无用对象),或者CEntry
-    System.out.println(adapter.read(new CCJson(), ser.get().toJSONb(), 0));
-  }
+		// simple
+		ConfigMaster.write(p, "C:\\test.yml", "YAML", adapter);
+		p = ConfigMaster.adapt(adapter, new File("C:\\test.yml"));
 
-  public static class Pojo {
-    // 自定义序列化方式
-    @As("hex_color")
-    // 自定义序列化名称
-    @Name("myColor")
-    // 上面的AdapterOverride就是为了写private
-    private int color;
-    // 通过getter或setter来访问字段
-    @Via(get = "getCharset", set = "setCharset")
-    public Charset charset;
-    // 支持任意对象和多层泛型
-    // 字段类型为接口和抽象类时，会用ObjAny序列化对象，会使用==表示对象的class
-    // 如果你碰得到这种情况，最好还是手动序列化... 自动生成的序列化器并不会管父类的字段
-    public Map<String, Map<String, Object>> map;
+		// or CVisitor
+		ToJson ser = new ToJson();
+		adapter.write(ser, p);
+		CharList json = ser.getValue();
+		System.out.println(json);
 
-    //使用transient避免被序列化
-    private transient Object doNotSerializeMe;
+		System.out.println(adapter.read(new CCJson(), json, 0));
+	}
 
-    // 若有无参构造器则调用之，否则allocateInstance
-    public Pojo() {}
+	public static class Pojo {
+		// 自定义序列化方式
+		@As("rgb")
+		// 自定义序列化名称
+		@Name("myColor")
+		private int color;
+		// 通过getter或setter来访问字段
+		@Via(get = "getCharset", set = "setCharset")
+		public Charset charset;
+		// 支持任意对象和多层泛型
+		// 字段类型为接口和抽象类时，会用ObjAny序列化对象，会使用==表示对象的class
+		// 如果要保留这个Map的类型，那就（1）字段改成HashMap(具体)或者（2）开启DYNAMIC
+		public Map<String, Map<String, Object>> map;
 
-    public Charset getCharset() {
-      return charset;
-    }
+		//使用transient避免被序列化
+		private transient Object doNotSerializeMe;
 
-    public void setCharset(Charset charset) {
-      this.charset = charset;
-    }
+		// 若有无参构造器则调用之，否则allocateInstance
+		public Pojo() {}
 
-    @Override
-    public String toString() {
-      return "Pojo{" + "color=" + color + '}';
-    }
-  }
+		public Charset getCharset() {
+			return charset;
+		}
 
-  public static class UserAdapter {
-    String doWrite(int c) {
-      return "#" + Integer.toHexString(c);
-    }
+		public void setCharset(Charset charset) {
+			this.charset = charset;
+		}
 
-    int doRead(String o) {
-      return Integer.parseInt(o.substring(1), 16);
-    }
-
-    String serializeMyObject(Charset cs) {
-      return cs.name();
-    }
-
-    Charset deserMyObj(String s) {
-      return Charset.forName(s);
-    }
-  }
+		@Override
+		public String toString() {
+			return "Pojo{" + "color=" + color + '}';
+		}
+	}
 }
 
 
 ```
-#### 人性化的错误(仅适用于等宽字体,不适用于StreamReader)  
+#### 人性化的错误(仅适用于等宽字体)  
 ```  
 解析错误:  
   Line 39: "最大线程数": 96, , ,  
@@ -209,32 +235,34 @@ public class Test {
 对象位置: $.通用.  
 原因: 未预料的: ,  
   
-at roj.config.word.ITokenizer.err(AbstLexer.java:967)  
-at roj.config.word.ITokenizer.err(AbstLexer.java:963)  
+at roj.config.word.ITokenizer.err(ITokenizer.java:967)  
+at roj.config.word.ITokenizer.err(ITokenizer.java:963)  
 at roj.config.JSONParser.unexpected(JSONParser.java:232)  
 at roj.config.JSONParser.jsonObject(JSONParser.java:153)  
 at roj.config.JSONParser.jsonRead(JSONParser.java:217)  
 ......  
 ```
 
-#### 保存Map中共有的Key节约空间: `roj.config.VinaryParser`
-
-#### Usage
-    调用各parser的静态parses方法  
-new一个也行  
-`roj.config.ConfigMaster.parse`也行  
-继承它也行
-  
 ## roj.crypt  
-    几种加密/哈希算法，还有CFB等套在块密码上面的壳子  
-  `SM3` `SM4` `XChaCha20-Poly1305` `AES-256-GCM`  
-  `MT19937`  
-  `PBKDF2` `HMAC`  
+* SM3
+* SM4
+* XChaCha20-Poly1305
+* AES-GCM (adapted)
+* MT19937
+* PBKDF2
+* HMAC
+* Blake3
+* OAEP
+* DH
+* EdDSA (optimize)
+* `FeedbackCipher`
+* CRC4、5、6、7、8、16、32
 
 ## roj.dev
     热重载
-1. [x] 基于Instrument
-2. [ ] 基于VM模拟
+* 修改方法
+* 增加方法、字段 （JVM原生可不支持）
+* 删除方法、字段 （JVM也不支持）
 
 ## roj.exe
     PE文件格式(.exe .dll)和ELF文件格式(.so)的解析
@@ -254,17 +282,24 @@ new一个也行
 ## roj.lavac
     自己开发的javac, WIP  
 
+## roj.launcher
+    功能类似javaagent
+
 ## roj.mapper  
-  class映射(对方法/类改名)器 ConstMapper / CodeMapper  
+  class映射(对方法/类改名)器 Mapper  
    * 上面我说到ASM的ConstantData等级好就好在这里  
    * 它的速度是SpecialSource的十倍 _(2023/2/11更新:更快了)_  
 
-  class混淆器 `SimpleObfuscator`  
+  class混淆器 Obfuscator` 
    * 还支持反混淆，也就是把所有接受常量字符串的函数eval一遍  
-   * [x] 字符串
-   * [x] 字符串+StackTrace
+   * [ ] 字符串解密
+   * [ ] 字符串解密+堆栈
    * [ ] 流程分析(先保存至一个(本地)变量,也许很久之后再解密)
-  
+
+### 图片展示
+![roj.mapper.MapperUI](images/mapper v3.png)  
+![roj.mapper.ObfuscatorUI](images/ofbuscator.png)
+
 ## roj.math  
     各种向量啊矩阵啊并不是我写的，不过我感觉我现在也能写出来...  
   `VecIterators`: 两个算法  
@@ -295,7 +330,6 @@ new一个也行
 9.   `RaytraceCulling` 基于CPU光线追踪的方块剔除(WIP)
 10.   `PluginRenamer` 恢复被无良腐竹改了的插件名  
 11.   `SameServerFinder` 端口扫描  
-14.   `CleanWechat` 清除一定时间以前的文件
 15.   `Websocketed` 用Websocket执行任意脚本
   
 ## roj.mod
@@ -322,6 +356,9 @@ new一个也行
 * 更多使用方法请看mcbbs的发布贴: xxxx
 * 你还可以在这里下载编译好的版本
 
+### 图片展示
+![roj.mod.FMDMain](images/fmd.png)
+
 ## roj.net
     基于管线的网络请求
 
@@ -335,20 +372,19 @@ HTTP服务器, 客户端
 
 DNS服务器 
 
-内网穿透工具 AEClient / AEServer / AEHost`roj.net.cross`  
-* [ ] UPnP  
+内网穿透工具 AEClient / AEServer / AEHost`roj.plugins.cross`  
+* 带或不带中转服务器的端口转发程序
+* 客户端与服务器均能自签证书（用户ID）
+* 中转服务器模式下支持多个房间(主机)并行
+
+### 图片展示
+![roj.plugins.cross.AEGui](images/port transfer.png)
 
 MSS协议，My Secure Socket`roj.net.mss`  
   因为(jvav的)SSL不好用，自用的话还不如自己写一个协议  
-* [x] 加密方式协商  
-* [x] 前向安全  
-* [x] 1-RTT
-
-## roj.opengl  
-  前置: LWJGL  
-字体渲染器  
-可视化测试工具，math里的不少算法就用它测试，直观极了  
-快速的Stitcher
+* [x] 加密方式协商
+* [x] 前向安全
+* [x] 0-RTT
   
 ## roj.reflect
 `EnumHelper`,  动态增删枚举  
@@ -486,14 +522,20 @@ public static void sendTitle(AbstractPlayer player, String title) {
 
   `LineReader` 按行读取  
   `FastMatcher` 基于改进版BM算法的字符串寻找
-  
+  `CliConsole` 基于虚拟终端序列的终端模拟器
+
+### 图片展示 (/WIP)
+![roj.text.novel.NovelFrame](images/novel manager.png)
+
+
 ## roj.ui  
-    请搞到libcpp.dll或在ps中执行
-  `CmdUtil` 给控制台来点颜色看看！支持MC转义  
+    请在支持虚拟终端转义序列的Console中执行 （在windows上可能需要libcpp.dll）
+  `CLIUtil.Minecraft` 将Minecraft的小节号转义或JSON字符串原样映射到控制台中  
   `EasyProgressBar` 进度条
+  `DefaultConsole` 使用虚拟终端序列模拟的终端
   
 ## roj.util  
-  `DynByteBuf`，能扩展的ByteBuffer，也许Streamed，可作为Input/OutputStream, DataInput/Output
+  `DynByteBuf`，能扩展的ByteBuffer，也许Streamed，可作为Input/OutputStream, DataInput/Output  
   `ComboRandom`，多个种子的random  
   `GIFDecoder` 解码GIF文件  
   `VarMapperX` 变量ID分配器

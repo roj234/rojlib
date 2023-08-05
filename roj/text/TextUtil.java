@@ -1,20 +1,32 @@
 package roj.text;
 
 import roj.collect.*;
+import roj.config.word.ITokenizer;
+import roj.config.word.Tokenizer;
 import roj.io.IOUtil;
+import roj.util.ArrayCache;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.*;
 
 import static java.lang.Character.*;
+import static roj.ui.CLIUtil.getStringWidth;
 
 /**
  * @author Roj234
  * @since 2021/6/19 0:14
  */
 public class TextUtil {
+	public static Charset DefaultOutputCharset;
+	static {
+		String property = System.getProperty("roj.text.outputCharset", null);
+		DefaultOutputCharset = property == null ? Charset.defaultCharset() : Charset.forName(property);
+	}
+
 	public static final MyBitSet HEX = MyBitSet.from("0123456789ABCDEFabcdef");
 
 	public static Map<String, String> parseLang(CharSequence content) {
@@ -91,18 +103,51 @@ public class TextUtil {
 
 	/**
 	 * 这个字是中文吗
-	 *
-	 * @return True if is
 	 */
 	public static boolean isChinese(int c) {
-		return (c >= 0x4E00 && c <= 0x9FFF) // 4E00..9FFF
-			|| (c >= 0xF900 && c <= 0xFAFF) // F900..FAFF
-			|| (c >= 0x3400 && c <= 0x4DBF) // 3400..4DBF
-			|| (c >= 0x2000 && c <= 0x206F) // 2000..206F
-			|| (c >= 0x3000 && c <= 0x303F) // 3000..303F
-			|| (c >= 0xFF00 && c <= 0xFFEF); // FF00..FFEF
+		TrieEntry node = JPinyin.getPinyinWords().getRoot();
+		if (Character.isSupplementaryCodePoint(c)) {
+			node = node.getChild(Character.highSurrogate(c));
+			if (node == null) return false;
+			node = node.getChild(Character.lowSurrogate(c));
+		} else {
+			node = node.getChild((char) c);
+		}
+		return node != null && node.isLeaf();
 	}
 
+	public static String scaledNumber1024(double size) { return scaledNumber1024(IOUtil.getSharedCharBuf(), size).toString(); }
+	private static final String[] SCALE = {"B", "KB", "MB", "GB", "TB"};
+	public static CharList scaledNumber1024(CharList sb, double size) {
+		int i = 0;
+		while (size >= 1024) {
+			size /= 1024;
+			i++;
+		}
+
+		return sb.append(TextUtil.toFixed(size, i == 0 ? 0 : 2)).append(SCALE[i]);
+	}
+	public static double unscaledNumber1024(String seq) {
+		int offset = 1;
+		double multiplier = 1;
+
+		if (seq.endsWith("B")) offset = 2;
+		else if (seq.endsWith("b")) {
+			offset = 2;
+			multiplier = 8;
+		}
+
+		char c = seq.charAt(seq.length()-offset);
+		switch (c) {
+			default: return Double.parseDouble(seq.substring(0, seq.length()-offset+1));
+
+			case 'K': case 'k': multiplier *= 1024; break;
+			case 'M': case 'm': multiplier *= 1024 * 1024; break;
+			case 'G': case 'g': multiplier *= 1024 * 1024 * 1024; break;
+			case 'T': case 't': multiplier *= 1024L * 1024 * 1024 * 1024; break;
+		}
+		return Double.parseDouble(seq.substring(0, seq.length()-offset)) * multiplier;
+	}
 	public static String scaledNumber(long number) {
 		CharList sb = new CharList();
 
@@ -147,12 +192,10 @@ public class TextUtil {
 	}
 
 	/**
-	 * char to (ascii) number is represents
+	 * char to (ascii) number it represents
 	 */
 	public static int c2i(char c) {
-		if (c < 0x30 || c > 0x39) {
-			return -1;
-		}
+		if (c < 0x30 || c > 0x39) return -1;
 		return c-0x30;
 	}
 
@@ -181,7 +224,7 @@ public class TextUtil {
 
 		for (int i = 0; i < hex.length(); ) {
 			char c = hex.charAt(i++);
-			if (c == ' ' || c == '\r' || c == '\n') continue;
+			if (Tokenizer.WHITESPACE.contains(c)) continue;
 			bl.put((byte) ((h2b(c) << 4) | h2b(hex.charAt(i++))));
 		}
 		return bl;
@@ -204,6 +247,128 @@ public class TextUtil {
 		sb.setLength(j);
 		return sb;
 	}
+
+	public static int editDistance(CharSequence s1, CharSequence s2) {
+		int l1 = s1.length();
+		int l2 = s2.length();
+
+		if (l1 == 0) return l2;
+		if (l2 == 0) return l1;
+
+		int[] prevDistI = ArrayCache.getIntArray(l2+1, 0);
+
+		for (int i = 0; i < l1;) {
+			char sourceChar = s1.charAt(i++);
+
+			int previousDiagonal = prevDistI[0];
+			int previousColumn = prevDistI[0]++;
+
+			for (int j = 1; j <= l2; ++j) {
+				int prevDistIJ = prevDistI[j];
+
+				if (sourceChar == s2.charAt(j-1)) {
+					previousColumn = previousDiagonal;
+				} else {
+					if (previousDiagonal < previousColumn) previousColumn = previousDiagonal;
+					if (prevDistIJ < previousColumn) previousColumn = prevDistIJ;
+					previousColumn++;
+				}
+
+				previousDiagonal = prevDistIJ;
+				prevDistI[j] = previousColumn;
+			}
+		}
+
+		int editDist = prevDistI[l2];
+
+		ArrayCache.putArray(prevDistI);
+
+		return editDist;
+	}
+	//region WIP
+	//todo
+	public static final class Diff {
+		public static final byte SAME = 0, CHANGE = 1, INSERT = 2, DELETE = 3;
+		public final byte type;
+		public final int leftOff, rightOff, len;
+		public int advance;
+
+		public static Diff link(Diff a, Diff next) {
+			a.next = next;
+			next.prev = a;
+			return next;
+		}
+
+		private Diff(byte type, int leftOff, int rightOff, int len) {
+			this.type = type;
+			this.leftOff = leftOff;
+			this.rightOff = rightOff;
+			this.len = len;
+		}
+
+		public static Diff same(int leftOff, int rightOff, int len) { return new Diff(SAME, leftOff, rightOff, len); }
+		public static Diff change(int leftOff, int rightOff, int len) { return new Diff(CHANGE, leftOff, rightOff, len); }
+		public static Diff insert(int rightOff, int len) { return new Diff(INSERT, -1, rightOff, len); }
+		public static Diff delete(int leftOff, int len) { return new Diff(DELETE, leftOff, -1, len); }
+
+		Diff prev, next;
+	}
+
+	public List<Diff> getDiff(byte[] right) {
+		Diff head = Diff.insert(0,0), tail = head;
+
+
+
+		return toRealDiff(right, head.next);
+	}
+	private List<Diff> toRealDiff(byte[] right, Diff in) {
+		// todo merge nearby diff and insert SAME diff
+		SimpleList<Diff> list = new SimpleList<>();
+
+		return list;
+	}
+	public void toMarkdown(byte[] left, byte[] right, List<Diff> diffs, Appender sb) throws IOException {
+		Charset cs = Charset.forName("GB18030");
+
+		System.out.println(diffs.size());
+		long l = 0;
+		for (Diff diff : diffs) {
+			l += diff.len;
+		}
+		System.out.println(TextUtil.scaledNumber(l)+"B");
+
+		ByteList buf1 = new ByteList(), buf2 = new ByteList();
+		int type = Diff.SAME;
+		for (Diff diff : diffs) {
+			if (diff.type != type) {
+				finishBlock(sb, buf1, buf2, type, cs);
+				type = diff.type;
+			}
+
+			switch (diff.type) {
+				default: buf1.put(left, diff.leftOff, diff.len); break;
+				case Diff.CHANGE:
+					buf1.put(left, diff.leftOff, diff.len);
+					buf2.put(right, diff.rightOff, diff.len);
+					break;
+				case Diff.INSERT: buf1.put(right, diff.rightOff, diff.len); break;
+			}
+		}
+
+		finishBlock(sb, buf1, buf2, type, cs);
+	}
+	private static void finishBlock(Appender sb, ByteList buf1, ByteList buf2, int type, Charset cs) throws IOException {
+		switch (type) {
+			default: case Diff.SAME: sb.append(new String(buf1.list, 0, buf1.length(), cs)); break;
+			case Diff.CHANGE: sb.append("<i title=\"").append(ITokenizer.addSlashes(new String(buf1.list, 0, buf1.length(), cs))).append("\">")
+								.append(new String(buf2.list, 0, buf2.length(), cs)).append("</i>"); break;
+			case Diff.INSERT: sb.append("<b>").append(new String(buf1.list, 0, buf1.length(), cs)).append("</b>"); break;
+			case Diff.DELETE: sb.append("<del>").append(new String(buf1.list, 0, buf1.length(), cs)).append("</del>"); break;
+		}
+		buf1.clear();
+		buf2.clear();
+	}
+	// endregion
 
 	// region 数字相关
 
@@ -287,6 +452,11 @@ public class TextUtil {
 		return n ? -i : i;
 	}
 	public static int parseInt(CharSequence s, int i, int end, int radix) throws NumberFormatException {
+		long result = parseLong(s,i,end,radix);
+		if (result > 4294967295L || result < Integer.MIN_VALUE) throw new NumberFormatException("Value overflow " + result + " : " + s.subSequence(i,end));
+		return (int) result;
+	}
+	public static long parseLong(CharSequence s, int i, int end, int radix) throws NumberFormatException {
 		long result = 0;
 
 		if (end - i > 0) {
@@ -303,9 +473,7 @@ public class TextUtil {
 			throw new NumberFormatException("Len=0: " + s);
 		}
 
-		if (result > 4294967295L || result < Integer.MIN_VALUE) throw new NumberFormatException("Value overflow " + result + " : " + s.subSequence(i,end));
-
-		return (int) result;
+		return result;
 	}
 
 	public static boolean parseIntOptional(CharSequence s, int[] radixAndReturn) {
@@ -351,15 +519,6 @@ public class TextUtil {
 		return maxs[maxs.length - 1] - s.charAt(k-1) >= (negative?0:1);
 	}
 
-	public static void pad(CharList sb, int number, int min) {
-		for (int i = min - digitCount(number) - 1; i >= 0; i--) sb.append('0');
-		sb.append(number);
-	}
-	public static void pad(CharList sb, long number, int min) {
-		for (int i = min - digitCount(number) - 1; i >= 0; i--) sb.append('0');
-		sb.append(number);
-	}
-
 	public static String toFixed(double d) {
 		return toFixed(d, 5);
 	}
@@ -373,6 +532,7 @@ public class TextUtil {
 		if (sb.length() < ex) {
 			while (sb.length() < ex) sb.append('0');
 		} else {
+			if (fract == 0) ex--;
 			sb.setLength(ex);
 		}
 		return sb.toString();
@@ -723,88 +883,88 @@ public class TextUtil {
 
 	// endregion
 
-	public static <T extends Appendable> T prettyTable(T a, Object... parm) {
-		return prettyTable(a, " ", " ", " ", parm);
-	}
-	public static <T extends Appendable> T prettyTable(T a, String headSep, Object... parm) {
-		return prettyTable(a, headSep, headSep, " ", parm);
-	}
-	public static <T extends Appendable> T prettyTable(T a, String headSep, String sep, String pfx, Object... parm) {
-		if (headSep.length() != sep.length()) throw new IllegalArgumentException("headSep.length != sep.length");
-		List<List<String>> lines = new SimpleList<>();
-		List<String> val = new SimpleList<>();
-		IntList len1 = new IntList();
+	public static <T extends Appendable> T prettyTable(T sb, String linePrefix, Object data, String... separators) {
+		List<Object[]> table = new SimpleList<>();
+		List<String> row = new SimpleList<>();
+		List<List<String>> multiLineRef = new SimpleList<>();
+		IntList maxLens = new IntList();
 
-		for (Object o : parm) {
+		Object _EMPTY = new String();
+
+		List<Object> myList = data instanceof List ? Helpers.cast(data) : SimpleList.asModifiableList((Object[]) data);
+		for (Object o : myList) {
 			if (o == IntMap.UNDEFINED) {
-				lines.add(val);
-				val = new SimpleList<>();
+				table.add(row.toArray());
+				row.clear();
+
+				for (int i = 0; i < multiLineRef.size(); i++) {
+					table.add(multiLineRef.get(i).toArray());
+				}
+				multiLineRef.clear();
 				continue;
 			}
-			String s = String.valueOf(o);
-			val.add(s);
-			while (len1.size() < val.size()) len1.add(0);
 
-			int len = len1.get(val.size()-1);
-			int strlen = uiLen(s);
-			if (strlen > len) len1.set(val.size()-1, strlen);
+			String s = String.valueOf(o);
+			int sLen;
+			if (s.indexOf('\n') >= 0) {
+				List<String> _sLines = LineReader.slrParserV2(String.valueOf(o), false);
+				row.add(s = _sLines.get(0));
+				sLen = getStringWidth(s);
+
+				while (multiLineRef.size() < _sLines.size()-1) multiLineRef.add(new SimpleList<>());
+				for (int i = 1; i < _sLines.size(); i++) {
+					List<String> line = multiLineRef.get(i-1);
+					while (line.size() < row.size()) line.add("");
+					String str = _sLines.get(i);
+					line.set(row.size()-1, str);
+					sLen = Math.max(sLen, getStringWidth(str));
+				}
+			} else {
+				row.add(s);
+				sLen = getStringWidth(s);
+			}
+
+			while (maxLens.size() < row.size()) maxLens.add(0);
+
+			int len = maxLens.get(row.size()-1);
+			if (sLen > len) maxLens.set(row.size()-1, sLen);
 		}
-		lines.add(val);
+
+		table.add(row.toArray());
+		for (int i = 0; i < multiLineRef.size(); i++) {
+			table.add(multiLineRef.get(i).toArray());
+		}
+		multiLineRef.clear();
 
 		try {
-			for (int i = 0; i < lines.size(); i++) {
-				a.append('\n');
+			for (int i = 0; i < table.size(); i++) {
+				sb.append('\n');
 
-				List<String> line = lines.get(i);
-				if (!line.isEmpty()) {
-					a.append(pfx);
+				Object[] line = table.get(i);
+				if (line.length > 0) sb.append(linePrefix);
 
-					for (int j = 0; j < line.size()-1; j++) {
-						String s = line.get(j);
-						a.append(s);
-						int k = len1.get(j)-uiLen(s);
-						while (k-- > 0) a.append(' ');
-						a.append(i == 0 ? headSep : sep);
+				for (int j = 0; j < line.length;) {
+					String s = line[j].toString();
+					sb.append(s);
+
+					int myMaxLen = maxLens.get(j);
+					if (myMaxLen < 100) {
+						int k = myMaxLen - getStringWidth(s);
+						while (k-- > 0) sb.append(' ');
 					}
 
-					String s = line.get(line.size()-1);
-					a.append(s);
-					if (i == lines.size()-1) break;
-					int k = len1.get(line.size()-1)-uiLen(s);
-					while (k-- > 0) a.append(' ');
+					if (++j == line.length) break;
+					sb.append(separators.length == 0 ? " " : separators[j > separators.length ? separators.length-1 : j-1]);
 				}
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
-		return a;
-	}
-
-	private static int uiLen(String s) {
-		int len = 0;
-		for (int i = 0; i < s.length(); i++) {
-			char c = s.charAt(i);
-			if (c > 0xFF) len += 2;
-			else if (c == '\t') len += 4;
-			else len++;
-		}
-		return len;
-	}
-
-	public static boolean safeEquals(CharSequence a, CharSequence b) {
-		if (a.length() != b.length()) return false;
-		int r = 0;
-		for (int i = a.length() - 1; i >= 0; i--) {
-			r |= a.charAt(i) ^ b.charAt(i);
-		}
-		return r == 0;
-	}
-
-	public static String replaceAll(CharSequence str, CharSequence find, CharSequence replace) {
-		return IOUtil.getSharedCharBuf().append(str).replace(find, replace).toString();
+		return sb;
 	}
 
 	public static int codepoint(int h, int l) {
+		if (l < MIN_LOW_SURROGATE || l >= (MAX_LOW_SURROGATE + 1)) throw new IllegalStateException("invalid surrogate pair "+h+","+l);
 		return ((h << 10) + l) + (MIN_SUPPLEMENTARY_CODE_POINT
 			- (MIN_HIGH_SURROGATE << 10)
 			- MIN_LOW_SURROGATE);
@@ -822,4 +982,7 @@ public class TextUtil {
 		}
 		return tmp.toStringAndFree();
 	}
+
+	private static JPinyin pinyin;
+	public static JPinyin pinyin() { return pinyin == null ? pinyin = new JPinyin() : pinyin; }
 }

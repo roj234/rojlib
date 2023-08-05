@@ -21,6 +21,11 @@ final class MapSer extends Adapter {
 	MapSer(Adapter type, IntFunction<Map<String,?>> newMap) { this.valueType = type; this.newMap = newMap; }
 
 	@Override
+	public Adapter inheritBy(SerializerFactory factory, Class<?> type) {
+		return new MapSer(valueType, factory.dataContainer(type));
+	}
+
+	@Override
 	Adapter withGenericType(SerializerFactory man, List<IType> genericType) {
 		if (genericType.size() != 2) throw new IllegalArgumentException(genericType.toString());
 

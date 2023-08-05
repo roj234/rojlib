@@ -2,12 +2,15 @@ package roj.misc;
 
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
 import roj.net.NetworkUtil;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.osi.ServerLaunch;
+import roj.net.ch.ServerLaunch;
 import roj.net.http.srv.*;
 import roj.net.http.ws.WebsocketHandler;
 import roj.net.http.ws.WebsocketManager;
+import roj.text.TextUtil;
+import roj.text.UTF8MB4;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -17,7 +20,10 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
-import java.nio.charset.*;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.CoderResult;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -54,9 +60,9 @@ public class Websocketd extends WebsocketManager implements Router {
 
 		ServerLaunch hs = HttpServer11.simple(addr, 233, ws);
 		hs.launch();
-		ws.loop = hs.getLoop();
+		ws.loop = hs.loop();
 
-		System.out.println("监听 " + hs.address());
+		System.out.println("监听 " + hs.localAddress());
 	}
 
 	@Override
@@ -102,8 +108,6 @@ public class Websocketd extends WebsocketManager implements Router {
 		CharBuffer tmp1;
 		ByteBuffer tmp2, sndRem;
 
-		static final Charset system_cs = Charset.defaultCharset();
-
 		CmdWorker(List<String> cmd) throws IOException {
 			process = new ProcessBuilder().command(cmd).redirectErrorStream(true)
 				.redirectInput(ProcessBuilder.Redirect.PIPE)
@@ -111,9 +115,9 @@ public class Websocketd extends WebsocketManager implements Router {
 
 			tmp2 = ByteBuffer.allocate(1024);
 
-			if (system_cs != StandardCharsets.UTF_8) {
-				sysEnc = system_cs.newEncoder();
-				sysDec = system_cs.newDecoder();
+			if (TextUtil.DefaultOutputCharset != StandardCharsets.UTF_8) {
+				sysEnc = TextUtil.DefaultOutputCharset.newEncoder();
+				sysDec = TextUtil.DefaultOutputCharset.newDecoder();
 
 				tmp1 = CharBuffer.allocate(1024);
 				sndRem = ByteBuffer.allocate(8);
@@ -162,7 +166,7 @@ public class Websocketd extends WebsocketManager implements Router {
 
 							CoderResult r = sysDec.decode(inByte, tmpChar, false);
 							if (r.isError() || r.isMalformed() || r.isUnmappable()) {
-								error(ERR_UNEXPECTED, "charset decode error for " + system_cs);
+								error(ERR_UNEXPECTED, "charset decode error for " + TextUtil.DefaultOutputCharset);
 							}
 
 							if (tmpChar.position() == 0) {
@@ -213,7 +217,7 @@ public class Websocketd extends WebsocketManager implements Router {
 						out.write(tmp.array(), tmp.arrayOffset(), len);
 					}
 				} finally {
-					ch.reserve(tmp);
+					BufferPool.reserve(tmp);
 				}
 			} else {
 				// Conversation
@@ -223,14 +227,14 @@ public class Websocketd extends WebsocketManager implements Router {
 
 				while (in.isReadable()) {
 					tmp1.clear();
-					ByteList.decodeUTF(Math.min(in.readableBytes(), tmp1.capacity()), tmp1, in);
+					UTF8MB4.CODER.decodeFixedIn(in, Math.min(in.readableBytes(), tmp1.capacity()), tmp1);
 					tmp1.flip();
 
 					sndBuf.clear();
 
 					CoderResult r = sysEnc.encode(tmp1, sndBuf, false);
 					if (r.isError() || r.isMalformed() || r.isUnmappable()) {
-						error(ERR_UNEXPECTED, "charset encode error for " + system_cs);
+						error(ERR_UNEXPECTED, "charset encode error for " + TextUtil.DefaultOutputCharset);
 						return;
 					}
 

@@ -1,8 +1,8 @@
 package roj.archive.qz;
 
-import roj.archive.qz.xz.CorruptedInputException;
 import roj.archive.qz.xz.rangecoder.RangeDecoderFromStream;
 import roj.archive.qz.xz.rangecoder.RangeEncoderToStream;
+import roj.io.CorruptedInputException;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.util.ByteList;
@@ -21,18 +21,17 @@ import static roj.archive.qz.xz.rangecoder.RangeCoder.initProbs;
 public final class BCJ2 extends QZComplexCoder {
 	private final int segmentSize;
 
-	public BCJ2() {segmentSize = 64<<20;}
-	public BCJ2(int size) {segmentSize = size;}
+	public BCJ2() { segmentSize = 64<<20; }
+	public BCJ2(int size) { segmentSize = size; }
 
 	QZCoder factory() { return this; }
-
 	private static final byte[] id = {3,3,1,27};
-	byte[] id() { return id; }
+	public byte[] id() { return id; }
 
 	public int useCount() { return 4; }
 	public int provideCount() { return 1; }
 
-	public OutputStream[] complexEncode(OutputStream[] out) throws IOException {
+	public OutputStream[] complexEncode(OutputStream[] out) {
 		return new OutputStream[] { new Encoder(out[0], out[1], out[2], out[3]) };
 	}
 
@@ -71,7 +70,7 @@ public final class BCJ2 extends QZComplexCoder {
 			ob.put(b);
 
 			if (ob.wIndex() >= 128) {
-				tryEncode(ob, false);
+				tryEncode(ob);
 				ob.compact();
 			}
 		}
@@ -80,65 +79,72 @@ public final class BCJ2 extends QZComplexCoder {
 		public void write(@Nonnull byte[] b, int off, int len) throws IOException {
 			if (len == 0) return;
 
-			if (ob.isReadable()) {
-				ob.compact();
-				while (ob.isReadable()) {
-					ob.put(b[off++]);
-					tryEncode(ob, false);
-					if (--len == 0) return;
-				}
+			while (ob.isReadable()) {
+				ob.put(b[off++]);
+				tryEncode(ob);
+				if (--len == 0) return;
 			}
 
 			ByteList ob = IOUtil.SharedCoder.get().wrap(b, off, len);
-			tryEncode(ob, false);
+			tryEncode(ob);
 
 			if (ob.isReadable()) this.ob.put(ob);
 		}
 
-		private void tryEncode(ByteList ob, boolean finish) throws IOException {
+		private void tryEncode(ByteList ob) throws IOException {
 			int prev, b = this.b;
 			for (;;) {
-				for (;;) {
-					if (!ob.isReadable()) {
-						this.b = b;
-						return;
-					}
+				foundJump: {
+					int srcPos = ob.rIndex, srcLim = ob.wIndex();
 
-					prev = b;
-					b = ob.readUnsignedByte();
-					offset++;
+					while (srcPos < srcLim) {
+						prev = b;
+						b = ob.getU(srcPos++);
 
-					if ((b & 0xFE) == 0xE8 ||
-						prev == 0x0F && (b & 0xF0) == 0x80) {
-						if (ob.readableBytes() < 4) {
-							ob.rIndex--;
-							offset--;
-							this.b = prev;
-							return;
+						if ((b & 0xFE) == 0xE8 ||
+							prev == 0x0F && (b & 0xF0) == 0x80) {
+							if (srcLim - srcPos < 4) {
+								writeToMain(ob, srcPos-1);
+								this.b = prev;
+								return;
+							}
+
+							this.b = b;
+							writeToMain(ob, srcPos);
+							break foundJump;
 						}
-
-						main.write(b);
-						break;
 					}
-					main.write(b);
+
+					this.b = b;
+					writeToMain(ob, srcPos);
+					return;
 				}
 
-				this.b = b;
-
 				assert prev >= 0;
+
+				// 草了，为了省点跳转至于么？
+				// const unsigned c = ((v + 0x17) >> 6) & 1;
+				// CBcj2Prob *prob = p->probs + (unsigned)
+				//	(((0 - c) & (Byte) (v >> NUM_SHIFT_BITS)) + c + ((v >> 5) & 1));
 				int idx = (b == 0xE8 ? 2 + prev : (b == 0xE9 ? 1 : 0));
 
+				// Relative offset (relat)
 				int v = ob.readIntLE(ob.rIndex);
+
+				// 多线程实现方式不同，似乎没有v23.01提到的corner case
 				if ((fileSize == 0 || (offset+4+v)+MIN_VALUE < fileSize+MIN_VALUE)
 					&& ((v+relatLimit) >>> 1)+MIN_VALUE < relatLimit+MIN_VALUE) {
 					rc.encodeBit(probs, idx, 1);
 
+					// 吐槽同上
+					// const unsigned cj = (((v + 0x57) >> 6) & 1) + BCJ2_STREAM_CALL;
 					OutputStream out = (b == 0xE8) ? call : jump;
 
 					b = v >>> 24;
 					ob.rIndex += 4;
 
 					offset += 4;
+					// Absolute offset (absol)
 					v += offset;
 
 					out.write((v >>> 24));
@@ -150,14 +156,21 @@ public final class BCJ2 extends QZComplexCoder {
 				}
 			}
 		}
+		private void writeToMain(ByteList ob, int srcPos) throws IOException {
+			int len = srcPos - ob.rIndex;
+			main.write(ob.list, ob.arrayOffset()+ ob.rIndex, len);
+			ob.rIndex = srcPos;
+			offset += len;
+		}
 
 		@Override
-		public void finish() throws IOException {
+		public synchronized void finish() throws IOException {
 			if (b != -2) {
-				tryEncode(ob, true);
+				tryEncode(ob);
 				ob.writeToStream(main);
 				ob._free();
 				rc.finish();
+				rc.putArraysToCache();
 				if (main instanceof Finishable) ((Finishable) main).finish();
 				if (call instanceof Finishable) ((Finishable) call).finish();
 				if (jump instanceof Finishable) ((Finishable) jump).finish();
@@ -167,7 +180,7 @@ public final class BCJ2 extends QZComplexCoder {
 		}
 
 		@Override
-		public void close() throws IOException {
+		public synchronized void close() throws IOException {
 			try {
 				finish();
 			} finally {
@@ -257,7 +270,7 @@ public final class BCJ2 extends QZComplexCoder {
 			main.close();
 			call.close();
 			jump.close();
-			rc.inData.close();
+			rc.in.close();
 		}
 	}
 }

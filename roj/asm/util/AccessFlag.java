@@ -1,5 +1,6 @@
 package roj.asm.util;
 
+import roj.text.CharList;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -63,7 +64,8 @@ public class AccessFlag {
 	 * ACC_ENUM	        0x4000	Declared as an element of an enum.
 	 */
 	public static final String[] FIELD_ACC = new String[]{
-		"public", "private", "protected", "static", "final", null, "volatile", "transient", null, null, null, null, "synthetic", null, "enum"
+		"public", "private", "protected", "static", "final", null, "volatile", "transient", null, null, null, null, "synthetic", null,
+		"/*enum*/"
 	};
 
 	/**
@@ -75,10 +77,10 @@ public class AccessFlag {
 	 * ACC_SYNTHETIC	0x1000	Declared synthetic; not present in the source code.
 	 * ACC_ANNOTATION	0x2000	Declared as an annotation type.
 	 * ACC_ENUM	        0x4000	Declared as an enum type.
-	 * ACC_MODULE       0x8000  Declared as an module type;
+	 * ACC_MODULE       0x8000  Declared as a module type;
 	 */
 	public static final String[] CLASS_ACC = new String[]{
-		"public", null, null, null, "final", "class", null, null, null, "interface", "abstract", null, "synthetic", "annotation", "enum", "module"
+		"public", null, null, null, "final", "/*super*/", null, null, null, "interface", "abstract", null, "synthetic", "@interface", "enum", "module"
 	};
 
 	/**
@@ -116,7 +118,7 @@ public class AccessFlag {
 	public static final int TS_MODULE  = 5;
 
 	public static String toString(int flag, int type) {
-		return toString(flag, type, new StringBuilder()).toString();
+		return toString(flag, type, new CharList()).toStringAndFree();
 	}
 
 	public static <T extends Appendable> T toString(int flag, int type, T sb) {

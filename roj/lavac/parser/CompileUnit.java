@@ -2,7 +2,6 @@ package roj.lavac.parser;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.frame.MethodPoet;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.attr.*;
@@ -80,8 +79,7 @@ public final class CompileUnit extends ConstantData {
 	private MyHashSet<IType> toResolve_unc;
 
 	// code block task
-	private final MyHashMap<Attributed, ParseTask> exprTask = new MyHashMap<>();
-	private final List<ParseTask> initTask = new SimpleList<>(), clInitTask = new SimpleList<>();
+	private final List<ParseTask> lazyTasks = new SimpleList<>();
 	private final MyHashMap<Attributed, List<AnnotationPrimer>> annoTask = new MyHashMap<>();
 
 	private MyHashSet<String> allNodeNames;
@@ -97,7 +95,7 @@ public final class CompileUnit extends ConstantData {
 		this.in = in;
 		this.path = name;
 		this.ctx = ctx;
-		if (ctx.isSpecEnabled(CompilerConfig.SOURCE_FILE)) putAttr(AttrUTF.Source(name));
+		if (ctx.isSpecEnabled(CompilerConfig.SOURCE_FILE)) putAttr(new AttrString(AttrString.SOURCE,name));
 
 		importCls = new MyHashMap<>();
 		importPkg = new SimpleList<>();
@@ -112,7 +110,7 @@ public final class CompileUnit extends ConstantData {
 		this.ctx = parent.ctx;
 		this.path = parent.path;
 		if (ctx.isSpecEnabled(CompilerConfig.SOURCE_FILE))
-			putAttr(parent.attrByName(AttrUTF.SOURCE));
+			putAttr(parent.attrByName(Attribute.SourceFile.name));
 
 		_parent = parent;
 		access = 0;
@@ -213,7 +211,7 @@ public final class CompileUnit extends ConstantData {
 	}
 
 	private static List<InnerClasses.InnerClass> _innerClass(CompileUnit parent) {
-		InnerClasses c = (InnerClasses) parent.attrByName(InnerClasses.NAME);
+		InnerClasses c = parent.parsedAttr(parent.cp, Attribute.InnerClasses);
 		if (c == null) parent.putAttr(c = new InnerClasses());
 		return c.classes;
 	}
@@ -241,8 +239,6 @@ public final class CompileUnit extends ConstantData {
 	public CompileContext ctx() {
 		return ctx;
 	}
-
-	public MethodPoet mw;
 
 	// region 阶段0 读取文件和import
 
@@ -461,8 +457,8 @@ public final class CompileUnit extends ConstantData {
 
 				fieldIdx.add(w.pos());
 
-				Field f = new Field(AccessFlag.PUBLIC | AccessFlag.STATIC | AccessFlag.FINAL, name, selfType);
-				exprTask.put(f, ParseTask.EnumVal(fields.size(), wr.index, skipCode(wr, BRACKET_ENUM)));
+				FieldNode f = new FieldNode(AccessFlag.PUBLIC | AccessFlag.STATIC | AccessFlag.FINAL, name, selfType);
+				lazyTasks.add(ParseTask.Enum(this, fields.size(), f));
 				fields.add(f);
 
 				if (w.type() != comma) break;
@@ -508,20 +504,13 @@ public final class CompileUnit extends ConstantData {
 
 			switch (w.type()) {
 				case left_l_bracket: // static initializator
-					if ((acc & AccessFlag.STATIC) == 0) {
-						initTask.add(ParseTask.GlobalInit(wr.index, skipCode(wr, BRACKET_METHOD)));
-					} else {
-						clInitTask.add(ParseTask.StaticInit(wr.index, skipCode(wr, BRACKET_METHOD)));
-					}
-					continue;
-				case CLASS:
-				case INTERFACE:
-				case ENUM:
-				case AT_INTERFACE:
-				case RECORD:
+					lazyTasks.add((acc & AccessFlag.STATIC) == 0 ? ParseTask.InstanceInitBlock(this) : ParseTask.StaticInitBlock(this));
+				continue;
+				case CLASS: case INTERFACE: case ENUM:
+				case AT_INTERFACE: case RECORD:
 					wr.retractWord();
 					_newInner(this, acc);
-					continue;
+				continue;
 			}
 
 			String name;
@@ -562,7 +551,7 @@ public final class CompileUnit extends ConstantData {
 				methodIdx.add(w.pos());
 				if ((acc & NON_FIELD_ACC) != 0) fireDiagnostic(Diagnostic.Kind.ERROR, "illegal_modifier_compound");
 
-				Method method = new Method(acc, this, name, "()V");
+				MethodNode method = new MethodNode(acc, this.name, name, "()V");
 				method.setReturnType(type);
 				if (!annotations.isEmpty()) addAnnotation(method, new SimpleList<>(annotations));
 
@@ -609,7 +598,7 @@ public final class CompileUnit extends ConstantData {
 								fireDiagnostic(Diagnostic.Kind.ERROR, "dup_param_name");
 							paramNames.add(w.val());
 						} else {
-							throw wr.err("unexpected:" + w.val());
+							throw wr.err("unexpected:"+w.val());
 						}
 
 						if (acc1 != 0 || ctx.isSpecEnabled(CompilerConfig.KEEP_PARAMETER_NAME)) {
@@ -625,9 +614,7 @@ public final class CompileUnit extends ConstantData {
 							// 参数默认值
 							if (!ctx.isSpecEnabled(CompilerConfig.DEFAULT_VALUE))
 								fireDiagnostic(Diagnostic.Kind.ERROR, "disabled_spec:default_value");
-							int start = wr.index;
-							int end = skipCode(wr, BRACKET_ANNOTATION);
-							exprTask.put(paramNode, ParseTask.AnnotationConst(start, end));
+							lazyTasks.add(ParseTask.MethodDefault(this, paramNode));
 						}
 						switch (w.type()) {
 							case right_s_bracket:
@@ -644,7 +631,7 @@ public final class CompileUnit extends ConstantData {
 				SignaturePrimer sign = _signatureCommit((SignaturePrimer) signature, Signature.METHOD, method);
 				if (sign != null) method.putAttr(sign);
 
-				if (!names.add(method.name + method.rawDesc())) fireDiagnostic(Diagnostic.Kind.ERROR, "duplicate_method:" + method.name);
+				if (!names.add(method.name() + method.rawDesc())) fireDiagnostic(Diagnostic.Kind.ERROR, "duplicate_method:" + method.name());
 				method.access = (char) acc;
 				methods.add(method);
 
@@ -654,12 +641,12 @@ public final class CompileUnit extends ConstantData {
 						fireDiagnostic(Diagnostic.Kind.ERROR, "@interface should not have throws");
 					}
 
-					AttrStringList excList = new AttrStringList(AttrStringList.EXCEPTIONS, 1);
+					AttrClassList excList = new AttrClassList(AttrClassList.EXCEPTIONS);
 					method.putAttr(excList);
 
 					while (wr.hasNext()) {
 						IType type1 = _type(wr, tmp, TYPE_GENERIC);
-						excList.classes.add(type1.owner());
+						excList.value.add(type1.owner());
 						if (type1.genericType() != 0)
 							_signature().Throws.add(type1);
 
@@ -678,7 +665,7 @@ public final class CompileUnit extends ConstantData {
 					if ((access & AccessFlag.ANNOTATION) != 0) {
 						// 注解的default
 						if (w.type() == DEFAULT) {
-							exprTask.put(method, ParseTask.AnnotationConst(wr.index, skipCode(wr, BRACKET_EXPRESSION)));
+							lazyTasks.add(ParseTask.AnnotationDefault(this, method));
 							continue;
 						} else {
 							method.access |= AccessFlag.ABSTRACT;
@@ -689,8 +676,7 @@ public final class CompileUnit extends ConstantData {
 				} else {
 					if (w.type() != left_l_bracket) throw wr.err("必须包含方法体");
 
-					method.setCode(new AttrCode(method));
-					exprTask.put(method, ParseTask.Method(paramNames, wr.index, skipCode(wr, BRACKET_METHOD)));
+					lazyTasks.add(ParseTask.Method(this, method, paramNames));
 				}
 			} else { // field
 				if ((acc & NON_METHOD_ACC) != 0) fireDiagnostic(Diagnostic.Kind.ERROR, "illegal_modifier_compound");
@@ -702,8 +688,10 @@ public final class CompileUnit extends ConstantData {
 
 				sameTypeField:
 				do {
-					Field field = new Field(acc, name, type);
-					if (!names.add(field.name)) fireDiagnostic(Diagnostic.Kind.ERROR, "duplicate_field:" + field.name);
+					FieldNode field = new FieldNode(acc, name, type);
+					if (!names.add(field.name())) {
+						fireDiagnostic(Diagnostic.Kind.ERROR, "duplicate_field:" + field.name());
+					}
 					if (list != null) addAnnotation(field, list);
 					if (s != null) field.putAttr(s);
 
@@ -713,7 +701,7 @@ public final class CompileUnit extends ConstantData {
 					w = wr.next();
 					if (w.type() == assign) {
 						// have to execute task now
-						exprTask.put(field, ParseTask.FieldVal(wr.index, skipCode(wr, BRACKET_EXPRESSION)));
+						lazyTasks.add(ParseTask.Field(this, field));
 					}
 
 					switch (w.type()) {
@@ -834,7 +822,8 @@ public final class CompileUnit extends ConstantData {
 
 	public static final int TYPE_PRIMITIVE = 1, TYPE_OPTIONAL = 2, TYPE_AUTO = 4, TYPE_STAR = 8, TYPE_GENERIC = 16, TYPE_LEVEL2 = 32;
 	/**
-	 * 获取类型
+	 * 获取类 (a.b.c)
+	 * @param flags 0 | {@link #TYPE_STAR} allow * (in import)
 	 */
 	private static void _klass(JavaLexer wr, CharList sb, int flags) throws ParseException {
 		sb.clear();
@@ -865,6 +854,7 @@ public final class CompileUnit extends ConstantData {
 	}
 	/**
 	 * 获取类型
+	 * @param flags {@link #TYPE_PRIMITIVE} bit set
 	 */
 	private IType _type(JavaLexer wr, CharList sb, int flags) throws ParseException {
 		IType type;
@@ -872,11 +862,12 @@ public final class CompileUnit extends ConstantData {
 		Word w = wr.next();
 		int std = toType_1.getOrDefaultInt(w.type(), -1);
 		if (std >= 0) {
-			type = Type.std(std);
+			// fix arrayDim bugs
+			type = new Type(std, 0);
 		} else {
 			if (w.type() != LITERAL) {
 				if ((flags&TYPE_OPTIONAL) == 0) throw wr.err("empty_type"+w);
-				return null;
+				return Helpers.nonnull();
 			}
 
 			wr.retractWord();
@@ -919,8 +910,7 @@ public final class CompileUnit extends ConstantData {
 			if (w.type() == varargs) arrLen++;
 
 			if (arrLen > 0) {
-				if (type.genericType() == 0 && type.rawType().owner == null) type = new Type(((Type)type).type, arrLen);
-				else type.setArrayDim(arrLen);
+				type.setArrayDim(arrLen);
 			} else {
 				if (type.rawType().owner == null && (flags&TYPE_PRIMITIVE) == 0) throw wr.err("unexpected:"+w.val());
 			}
@@ -996,7 +986,8 @@ public final class CompileUnit extends ConstantData {
 
 	// todo 支持放int，但是处理还没有ok
 	private static final int GENERIC_INNER = 1, GENERIC_SUBCLASS = 2;
-	private IType _genericUse(CharList type, int flag) throws ParseException {
+	public final IType genericForExpr(boolean wildcardAllowed) throws ParseException { return _genericUse(null, wildcardAllowed?GENERIC_INNER:0); }
+	private IType _genericUse(CharSequence type, int flag) throws ParseException {
 		GenericPrimer g = new GenericPrimer();
 		IType result = null;
 
@@ -1025,9 +1016,11 @@ public final class CompileUnit extends ConstantData {
 				wr.retractWord();
 			}
 
-			Type type1 = (Type) _type(wr, IOUtil.getSharedCharBuf(), TYPE_PRIMITIVE);
-			if (type1.owner == null) result = type1;
-			else g.owner = type1.owner;
+			if ((flag & GENERIC_INNER) != 0) {
+				Type type1 = (Type) _type(wr, IOUtil.getSharedCharBuf(), TYPE_PRIMITIVE);
+				if (type1.owner == null) result = type1;
+				else g.owner = type1.owner;
+			}
 		}
 
 		Word w = wr.next();
@@ -1102,31 +1095,28 @@ public final class CompileUnit extends ConstantData {
 			}
 
 			while (wr.hasNext()) {
-				Word nameOpt = wr.next().copy();
-				w = wr.next();
-				if (w.type() != assign) {
-					// values
-					a.assertValueOnly = true;
-					a.newEntry("value", ParseTask.FieldVal(wr.index = nameOpt.pos(), skipCode(wr, BRACKET_ANNOTATION)));
-				} else {
-					if (a.assertValueOnly) throw wr.err("assert value only");
-					a.newEntry(nameOpt.val(), ParseTask.FieldVal(wr.index, skipCode(wr, BRACKET_ANNOTATION)));
-				}
+				int index = wr.indexForRet();
+				String val = wr.next().val();
 
 				w = wr.next();
+				if (w.type() != assign) {
+					wr.index = index;
+					// values
+					a.assertValueOnly = true;
+					a.newEntry("value", ParseTask.Annotation(this, a, "value"));
+				} else {
+					if (a.assertValueOnly) throw wr.err("assert value only");
+					a.newEntry(val, ParseTask.Annotation(this, a, val));
+				}
+
 				switch (w.type()) {
 					case right_s_bracket:
 						w = wr.next();
-						if (w.type() == at) {
-							continue readMore;
-						} else {
-							wr.retractWord();
-							return list;
-						}
-					case comma:
-						break;
-					default:
-						throw wr.err("unexpected:" + w.val());
+						if (w.type() == at) continue readMore;
+						wr.retractWord();
+						return list;
+					case comma: break;
+					default: throw wr.err("unexpected:" + w.val());
 				}
 			}
 		}
@@ -1144,11 +1134,12 @@ public final class CompileUnit extends ConstantData {
 
 	@SuppressWarnings("fallthrough")
 	private static int skipCode(JavaLexer wr, int type) throws ParseException {
-		int L = 0, M = 0, S = 0;
+		int L = 0, M = 0, S = 0, G = 0;
 		cyl:
 		while (wr.hasNext()) {
 			Word w = wr.next();
 			switch (w.type()) {
+				case lss: G++; break;
 				case left_l_bracket: L++; break;
 				case left_m_bracket: M++; break;
 				case left_s_bracket: S++; break;
@@ -1157,23 +1148,23 @@ public final class CompileUnit extends ConstantData {
 						if ((type&_E_LSB) != 0) break cyl;
 						throw wr.err("invalid_bracket:" + w.val());
 					}
-					break;
+				break;
 				case right_m_bracket: M--;
 					if (M < 0) throw wr.err("invalid_bracket:" + w.val());
-					break;
+				break;
 				case right_s_bracket: S--;
 					if (S < 0) {
-						if ((type&_E_SSB) != 0){
-							wr.retractWord();
-							break cyl;
-						}
+						if ((type&_E_SSB) != 0) break cyl;
 						throw wr.err("invalid_bracket:" + w.val());
 					}
-					break;
+				break;
+				case gtr: G--;
+					if (G < 0)throw wr.err("invalid_bracket:" + w.val());
+				break;
 				case semicolon: if ((type & _E_SEM) == 0) continue;
 				case comma: if (w.type() == comma && (type & _E_COM) == 0) continue;
 				case EOF:
-					if ((L|M|S) == 0) break cyl;
+					if ((L|M|S|G) == 0) break cyl;
 					if (w.type() == EOF) throw wr.err("unclosed_bracket");
 			}
 		}
@@ -1240,9 +1231,9 @@ public final class CompileUnit extends ConstantData {
 
 		allNodeNames = new MyHashSet<>(methods.size()+fields.size());
 
-		List<Field> fields = Helpers.cast(this.fields);
+		List<FieldNode> fields = Helpers.cast(this.fields);
 		for (int i = 0; i < fields.size(); i++) {
-			Field f = fields.get(i);
+			FieldNode f = fields.get(i);
 			if ((access & AccessFlag.INTERFACE) != 0) {
 				int acc = f.access;
 				if ((acc & (AccessFlag.PRIVATE|AccessFlag.PROTECTED)) != 0) {
@@ -1256,7 +1247,7 @@ public final class CompileUnit extends ConstantData {
 				f.access = (char) (AccessFlag.STATIC | acc);
 			}
 
-			allNodeNames.add(f.name);
+			allNodeNames.add(f.name());
 		}
 
 		boolean autoInit = (access & AccessFlag.INTERFACE) == 0;
@@ -1264,8 +1255,8 @@ public final class CompileUnit extends ConstantData {
 		for (int i = 0; i < methods.size(); i++) {
 			diagPos = methodIdx.get(i);
 
-			Method m = (Method) methods.get(i);
-			if (m.name.equals("<init>")) {
+			MethodNode m = methods.get(i);
+			if (m.name().equals("<init>")) {
 				autoInit = false;
 				if ((access & AccessFlag.ENUM) != 0) {
 					if ((m.access & (AccessFlag.PUBLIC | AccessFlag.PROTECTED)) != 0) {
@@ -1277,16 +1268,16 @@ public final class CompileUnit extends ConstantData {
 					continue;
 				}
 			}
-			allNodeNames.add(m.name+m.rawDesc());
+			allNodeNames.add(m.name() +m.rawDesc());
 
 			// todo: check interface method flags
 			if ((access & AccessFlag.INTERFACE) != 0 && (m.access & (AccessFlag.STATIC | AccessFlag.FINAL)) == AccessFlag.FINAL) {
 				fireDiagnostic(Diagnostic.Kind.ERROR, "final_interface_method");
 			}
 
-			AttrStringList list = (AttrStringList) m.attrByName("Exceptions");
+			AttrClassList list = (AttrClassList) m.attrByName("Exceptions");
 			if (list != null) {
-				List<String> classes = list.classes;
+				List<String> classes = list.value;
 				for (int j = 0; j < classes.size(); j++) {
 					IClass info = resolve(classes.get(j));
 					if (info == null) {
@@ -1376,9 +1367,9 @@ public final class CompileUnit extends ConstantData {
 			for (int i = 0; i < list.size(); i++) {
 				AnnotationPrimer a = list.get(i);
 
-				IClass type1 = resolve(a.clazz);
+				IClass type1 = resolve(a.type);
 				if (type1 == null) {
-					fireDiagnostic(Diagnostic.Kind.ERROR, "unable_resolve:ANNOTATION:" + a.clazz);
+					fireDiagnostic(Diagnostic.Kind.ERROR, "unable_resolve:ANNOTATION:" + a.type);
 				}
 				a.clazzInst = type1;
 
@@ -1392,14 +1383,14 @@ public final class CompileUnit extends ConstantData {
 						break;// discard
 					case AnnotationClass.CLASS:
 						if (inv == null) {
-							inv = new Annotations(Annotations.INVISIBLE);
+							inv = new Annotations(false);
 							entry.getKey().putAttr(inv);
 						}
 						inv.annotations.add(a);
 						break;
 					case AnnotationClass.RUNTIME:
 						if (vis == null) {
-							vis = new Annotations(Annotations.VISIBLE);
+							vis = new Annotations(true);
 							entry.getKey().putAttr(vis);
 						}
 						vis.annotations.add(a);
@@ -1511,11 +1502,11 @@ public final class CompileUnit extends ConstantData {
 				AnnotationPrimer a = list.get(i);
 				diagPos = a.idx;
 
-				List<? extends MoFNode> methods = a.clazzInst.methods();
+				List<? extends RawNode> methods = a.clazzInst.methods();
 				for (int j = 0; j < methods.size(); j++) {
 					MethodNode m = (MethodNode) methods.get(j);
 					if ((m.modifier() & AccessFlag.STATIC) != 0) continue;
-					if (m.attrByName(AnnotationDefault.NAME) == null) {
+					if (m.attrByName(Attribute.AnnotationDefault.name) == null) {
 						if (!a.values.containsKey(m.name())) {
 							missed.add(m.name());
 							continue;
@@ -1523,7 +1514,7 @@ public final class CompileUnit extends ConstantData {
 					}
 
 					ParseTask task = Helpers.cast(a.values.remove(m.name()));
-					if (task != null) task.parse(this, m.returnType());
+					if (task != null) task.parse();
 				}
 
 				ctx.invokePartialAnnotationProcessor(this, a, missed);
@@ -1540,42 +1531,16 @@ public final class CompileUnit extends ConstantData {
 		}
 		annoTask.clear();
 		// endregion
-		// region todo 表达式解析
+		// region 表达式解析
 
-		SignaturePrimer root = (SignaturePrimer) signature;
-		currentNode = root;
+		currentNode = (SignaturePrimer) signature;
 
-		if (!clInitTask.isEmpty()) {
-			CodeWriter clinit = getClinit();
-			for (int i = 0; i < clInitTask.size(); i++) {
-				clInitTask.get(i).parse(this, clinit);
-			}
-			clInitTask.clear();
+		// todo setCurrentNode, createGlobalInit
+		for (int i = 0; i < lazyTasks.size(); i++) {
+			lazyTasks.get(i).parse();
 		}
-
-		if (!initTask.isEmpty()) {
-			CodeWriter init = newMethod(AccessFlag.PUBLIC | AccessFlag.STATIC | AccessFlag.SYNTHETIC, "<init>", "()V");
-			for (int i = 0; i < initTask.size(); i++) {
-				initTask.get(i).parse(this, init);
-			}
-			// todo append to init last
-			initTask.clear();
-		}
-
-		for (Map.Entry<Attributed, ParseTask> entry : exprTask.entrySet()) {
-			Attributed k = entry.getKey();
-			if (k instanceof Method) {
-				SignaturePrimer s1 = (SignaturePrimer) k.attrByName("Signature");
-				currentNode = s1 == null ? root : s1;
-			} else {
-				currentNode = root;
-			}
-			entry.getValue().parse(this, k);
-		}
-		exprTask.clear();
-
+		lazyTasks.clear();
 		// endregion
-
 	}
 
 	// endregion
@@ -1588,7 +1553,7 @@ public final class CompileUnit extends ConstantData {
 		return wr == null ? "~IO 错误~" : wr.getText().toString();
 	}
 
-	private void fireDiagnostic(Diagnostic.Kind kind, String code) {
+	public final void fireDiagnostic(Diagnostic.Kind kind, String code) {
 		if (diagPos == -2) {
 			ctx.report(this, kind, -1, code);
 			return;
@@ -1629,5 +1594,13 @@ public final class CompileUnit extends ConstantData {
 	public CharSequence objectPath() throws ParseException {
 		_klass(wr, Cache.tmpList, 0);
 		return Cache.tmpList;
+	}
+
+	public JavaLexer lex() {
+		return wr;
+	}
+
+	public MethodNode parseLambda() {
+		return null;
 	}
 }

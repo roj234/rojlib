@@ -106,9 +106,6 @@ public class AdGuard {
 		 * Use main thread as DNS Server
 		 */
 		System.out.println("Welcome, to a cleaner world, " + System.getProperty("user.name", "user") + " !\n");
-		try {
-			roj.misc.CpFilter.registerShutdownHook();
-		} catch (Error ignored) {}
 
 		dns.launch();
 	}

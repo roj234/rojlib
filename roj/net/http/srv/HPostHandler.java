@@ -1,8 +1,8 @@
 package roj.net.http.srv;
 
+import roj.collect.MyHashMap;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
-import roj.security.SipHashMap;
 
 import java.io.IOException;
 import java.util.Map;
@@ -16,7 +16,7 @@ public abstract class HPostHandler implements ChannelHandler {
 
 	@Override
 	public void handlerAdded(ChannelCtx ctx) {
-		map = new SipHashMap<>();
+		map = new MyHashMap<>();
 	}
 
 	@Override

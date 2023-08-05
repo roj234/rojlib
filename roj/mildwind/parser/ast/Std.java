@@ -24,7 +24,7 @@ final class Std implements Expression {
 	@Override
 	public void write(JsMethodWriter tree, boolean noRet) {
 		if (noRet) throw new NotStatementException();
-		tree.var(Opcodes.ALOAD, type);
+		tree.vars(Opcodes.ALOAD, type);
 	}
 
 	@Override

@@ -27,7 +27,7 @@ public abstract class UnsafeCharset {
 
 		int ow = out.wIndex();
 		off = encodeLoop(s, off, end, out, space, 0);
-		assert off == end;
+		assert off == end : "off="+off+",end="+end;
 		assert out.wIndex() == ow+space;
 	}
 	public final int encodePreAlloc(CharSequence s, DynByteBuf out, int byteCount) { return encodePreAlloc(s, 0, s.length(), out, byteCount); }
@@ -70,6 +70,7 @@ public abstract class UnsafeCharset {
 			return off;
 		}
 
+		int off1 = 0;
 		char[] arr;
 		Class<?> k = s.getClass();
 		found: {
@@ -81,13 +82,17 @@ public abstract class UnsafeCharset {
 				CharBuffer sb = (CharBuffer) s;
 				if (sb.hasArray()) {
 					arr = sb.array();
-					off += sb.arrayOffset();
+					off1 = sb.arrayOffset();
+					off += off1;
+					end += off1;
 					break found;
 				}
 			} else if (k == CharList.Slice.class) {
 				CharList.Slice sb = (CharList.Slice) s;
 				arr = sb.list;
-				off += sb.arrayOffset();
+				off1 = sb.arrayOffset();
+				off += off1;
+				end += off1;
 				break found;
 			} else if (k == char[].class) {
 				arr = (char[]) s;
@@ -95,7 +100,7 @@ public abstract class UnsafeCharset {
 			}
 
 			if (s.getClass() == String.class) {
-				arr = ArrayCache.getDefaultCache().getCharArray(Math.min(end-off, 4096), false);
+				arr = ArrayCache.getCharArray(Math.min(end-off, 4096), false);
 				String ss = s.toString();
 				try {
 					while (true) {
@@ -111,7 +116,7 @@ public abstract class UnsafeCharset {
 						if (off == end || encoded < myLen) return off;
 					}
 				} finally {
-					ArrayCache.getDefaultCache().putArray(arr);
+					ArrayCache.putArray(arr);
 				}
 			}
 
@@ -120,7 +125,7 @@ public abstract class UnsafeCharset {
 				new Throwable("It is recommended to pre-copy your " + s.getClass().getName() + " to a CharBuffer or CharList").printStackTrace();
 			}
 
-			arr = ArrayCache.getDefaultCache().getCharArray(Math.min(end-off, 4096), false);
+			arr = ArrayCache.getCharArray(Math.min(end-off, 4096), false);
 			CharSequence cs = (CharSequence) s;
 			try {
 				while (true) {
@@ -136,11 +141,16 @@ public abstract class UnsafeCharset {
 					if (off == end || encoded < myLen) return off;
 				}
 			} finally {
-				ArrayCache.getDefaultCache().putArray(arr);
+				ArrayCache.putArray(arr);
 			}
 		}
 
 		while (true) {
+			if (out.unsafeWritableBytes() < minSpace) {
+				out.ensureWritable(out.unsafeWritableBytes() + minSpace);
+				if (!out.isWritable()) throw new IllegalArgumentException("没有足够的空间:"+out.unsafeWritableBytes());
+			}
+
 			int uw = Math.min(outMax, out.unsafeWritableBytes());
 			long x = unsafeEncode(arr, off, end, out.array(), out._unsafeAddr()+out.wIndex(), uw);
 
@@ -150,16 +160,9 @@ public abstract class UnsafeCharset {
 			out.wIndex(out.wIndex() + delta);
 
 			if (off == end || outMax == 0 || delta == 0) break;
-
-			if (out.unsafeWritableBytes() < minSpace) {
-				out.ensureWritable(out.unsafeWritableBytes() + minSpace);
-				if (!out.isWritable()) {
-					throw new IllegalArgumentException("没有足够的空间:"+out.unsafeWritableBytes());
-				}
-			}
 		}
 
-		return off;
+		return off-off1;
 	}
 
 	public final void decodeFixedIn(DynByteBuf in, int len, Appendable out) {
@@ -199,12 +202,12 @@ public abstract class UnsafeCharset {
 					off = sb.arrayOffset() + sb.position();
 					unsafeWritable = sb.remaining();
 					kind = 1;
-					if (outMax > unsafeWritable) throw new IllegalArgumentException();
+					if (unsafeWritable == 0 && outMax > 0) throw new IllegalArgumentException();
 					break found;
 				}
 			}
 
-			arr = ArrayCache.getDefaultCache().getCharArray(Math.min(outMax, 4096), false);
+			arr = ArrayCache.getCharArray(Math.min(outMax, 4096), false);
 			off = 0;
 			unsafeWritable = arr.length;
 			kind = 2;
@@ -229,6 +232,7 @@ public abstract class UnsafeCharset {
 					case 1:
 						off += delta;
 						((CharBuffer) out).position(off);
+						unsafeWritable -= delta;
 						break;
 					case 2:
 						out.append(new CharList.Slice(arr,0,delta));
@@ -236,22 +240,26 @@ public abstract class UnsafeCharset {
 				}
 
 				if (in.rIndex == len || outMax == 0) break;
-				if (delta == 0 && unsafeWritable > 0) { // truncate
-					if (!partial) throw new IllegalArgumentException("被截断");
-					break;
-				}
 
 				if (kind == 0 && unsafeWritable < 1024) {
 					CharList sb = (CharList) out;
 					sb.ensureCapacity(arr.length+1024);
 					arr = sb.list;
 					unsafeWritable = arr.length - off;
+				} else if (delta == 0) { // truncate
+					if (unsafeWritable > 0) {
+						if (!partial) throw new IllegalArgumentException("被截断");
+						throw new IllegalArgumentException("Unespected state");
+					} else {
+						//throw new IllegalArgumentException("UW < outMax "+outMax);
+					}
+					break;
 				}
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		} finally {
-			if (kind == 2) ArrayCache.getDefaultCache().putArray(arr);
+			if (kind == 2) ArrayCache.putArray(arr);
 		}
 
 		return outMax;
@@ -268,10 +276,10 @@ public abstract class UnsafeCharset {
 
 	public static final int TRUNCATED = -1, MALFORMED = -2;
 	public final void validate(DynByteBuf in, IntConsumer codepointAcceptor) {
-		unsafeValidate(in.array(),in._unsafeAddr()+in.rIndex,in.readableBytes(),codepointAcceptor);
+		unsafeValidate(in.array(),in._unsafeAddr()+in.rIndex,in._unsafeAddr()+in.wIndex(),codepointAcceptor);
 		in.rIndex = in.wIndex();
 	}
-	public abstract void unsafeValidate(Object ref, long base, int len, IntConsumer cs);
+	public abstract void unsafeValidate(Object ref, long base, long end, IntConsumer cs);
 
 	public final int byteCount(CharSequence s) { return byteCount(s, 0, s.length()); }
 	public abstract int byteCount(CharSequence s, int off, int len);

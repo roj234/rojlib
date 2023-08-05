@@ -5,19 +5,20 @@ import roj.collect.MyHashMap;
 import roj.collect.ObjectPool;
 import roj.collect.RingBuffer;
 import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
+import roj.net.ch.ServerLaunch;
 import roj.net.ch.handler.PacketMerger;
 import roj.net.ch.handler.StreamCompress;
-import roj.net.ch.osi.ServerLaunch;
 import roj.net.http.*;
 import roj.net.http.srv.error.GreatErrorPage;
 import roj.text.ACalendar;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
-import roj.util.NamespaceKey;
+import roj.util.Identifier;
 
 import javax.net.ssl.SSLException;
 import java.io.IOException;
@@ -63,8 +64,8 @@ public final class HttpServer11 extends PacketMerger implements
 	public static final ThreadLocal<Local> TSO = ThreadLocal.withInitial(Local::new);
 
 	public static ServerLaunch simple(InetSocketAddress addr, int backlog, Router router) throws IOException {
-		return ServerLaunch.tcp().threadPrefix("HTTP服务器").threadMax(4)
-						   .listen_(addr, backlog)
+		return ServerLaunch.tcp("HTTP服务器")
+						   .listen(addr, backlog)
 						   .option(StandardSocketOptions.SO_REUSEADDR, true)
 						   .initializator((ctx) -> ctx.addLast("h11@server", create(router)));
 	}
@@ -204,7 +205,7 @@ public final class HttpServer11 extends PacketMerger implements
 					success: {
 						String line = HttpHead.readCRLF(data);
 						if (line == null) return;
-						if (line.length() > 8192) throw new IllegalRequestException(Code.URI_TOO_LONG);
+						if (line.length() > 8192) throw new IllegalRequestException(HttpCode.URI_TOO_LONG);
 
 						failed: {
 							int i = line.indexOf(' ');
@@ -223,11 +224,11 @@ public final class HttpServer11 extends PacketMerger implements
 							version = line.substring(j+1);
 							if (version.startsWith("HTTP/")) break success;
 						}
-						throw new IllegalRequestException(Code.BAD_REQUEST, "无效请求头 " + line);
+						throw new IllegalRequestException(HttpCode.BAD_REQUEST, "无效请求头 " + line);
 					}
 
 					int act = Action.valueOf(method);
-					if (act < 0) throw new IllegalRequestException(Code.METHOD_NOT_ALLOWED, "无效请求类型 " + method);
+					if (act < 0) throw new IllegalRequestException(HttpCode.METHOD_NOT_ALLOWED, "无效请求类型 " + method);
 
 					Local local = TSO.get();
 					req = local.requests.get().init(act, path, query);
@@ -244,7 +245,7 @@ public final class HttpServer11 extends PacketMerger implements
 
 					if (!finish) return;
 				} catch (IllegalArgumentException e) {
-					throw new IllegalRequestException(Code.BAD_REQUEST, e.getMessage());
+					throw new IllegalRequestException(HttpCode.BAD_REQUEST, e.getMessage());
 				}
 
 				validateHeader(h);
@@ -267,12 +268,21 @@ public final class HttpServer11 extends PacketMerger implements
 				boolean chunk = "chunked".equalsIgnoreCase(encoding);
 
 				if (lenStr != null) {
-					if (exceptPostSize > postSize) throw new IllegalRequestException(Code.ENTITY_TOO_LARGE);
+					if (exceptPostSize > postSize) throw new IllegalRequestException(req.isExpecting() ? 417 : HttpCode.ENTITY_TOO_LARGE);
+					if (req.isExpecting()) {
+						try {
+							ByteList hdr = IOUtil.getSharedByteBuf();
+							ch.channelWrite(hdr.putAscii("HTTP/1.1 100 Continue\r\n\r\n"));
+						} catch (IOException e) {
+							Helpers.athrow(e);
+						}
+					}
+
 					preparePostBuffer(ctx, postSize = exceptPostSize);
 				} else if (chunk) {
 					preparePostBuffer(ctx, postSize);
 				} else {
-					throw new IllegalRequestException(Code.BAD_REQUEST, "不支持的传输编码"+encoding);
+					throw new IllegalRequestException(HttpCode.BAD_REQUEST, "不支持的传输编码"+encoding);
 				}
 
 				state = RECV_BODY;
@@ -288,7 +298,7 @@ public final class HttpServer11 extends PacketMerger implements
 				if (remain <= 0) {
 					if (!req.containsKey("content-length")) {
 						if (remain == 0) break _if;
-						die().code(Code.ENTITY_TOO_LARGE);
+						die().code(HttpCode.ENTITY_TOO_LARGE);
 					} else {
 						// 两个请求连在一起？
 						ctx.readInactive();
@@ -320,14 +330,15 @@ public final class HttpServer11 extends PacketMerger implements
 			default: ch.readInactive();
 		}
 	}
-	private void preparePostBuffer(ChannelCtx ctx, long len) {
+	private void preparePostBuffer(ChannelCtx ctx, long len) throws IOException {
 		// post accept
 		if (ph != null || state != RECV_BODY) return;
 
 		if (len > 8388608) throw new IllegalArgumentException("必须使用PostHandler");
 
 		if (len <= 65535) {
-			postBuffer = (ByteList) ctx.alloc().buffer(false, (int) len);
+			assert postBuffer == null;
+			postBuffer = (ByteList) ctx.allocate(false, (int) len);
 			flag |= EXT_POST_BUFFER;
 		} else {
 			// if "USE_CACHE" is on
@@ -359,7 +370,7 @@ public final class HttpServer11 extends PacketMerger implements
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		NamespaceKey id = event.id;
+		Identifier id = event.id;
 		if (id.equals(ChunkSplitter.CHUNK_IN_EOF)) {
 			if (state != RECV_BODY) return;
 
@@ -426,7 +437,9 @@ public final class HttpServer11 extends PacketMerger implements
 		} catch (Throwable e) {
 			onError(e);
 		}
-		sendHead();
+
+		// handlerRemoved() in response()
+		if (ch != null) sendHead();
 	}
 	private void onError(Throwable e) {
 		if (exceptPostSize != -2) {
@@ -468,7 +481,7 @@ public final class HttpServer11 extends PacketMerger implements
 		if (body == Response.EMPTY) body = null; // fast path
 
 		ByteList hdr = IOUtil.ddLayeredByteBuf();
-		hdr.putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put((byte) ' ').putAscii(Code.getDescription(code)).putAscii("\r\n");
+		hdr.putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put((byte) ' ').putAscii(HttpCode.getDescription(code)).putAscii("\r\n");
 
 		req.packToHeader();
 		Headers h = req.responseHeader;
@@ -511,7 +524,7 @@ public final class HttpServer11 extends PacketMerger implements
 			hdr.putShort(0x1f8b).putLong((long) Deflater.DEFLATED << 56);
 			out.handler().channelWrite(out, hdr);
 		}
-		hdr.close();
+		hdr._free();
 
 		time = System.currentTimeMillis() + router.writeTimeout(req, body);
 		state = body == null ? SEND_DONE : SEND_BODY;
@@ -529,32 +542,6 @@ public final class HttpServer11 extends PacketMerger implements
 		Local t = TSO.get();
 
 		if (state == HANG) t.hanging.remove(this);
-
-		if (req != null) {
-			req.free();
-			t.requests.reserve(req);
-			req = null;
-		}
-
-		ByteList pb = postBuffer;
-		postBuffer = null;
-		if (pb != null) {
-			if ((flag & EXT_POST_BUFFER) != 0) {
-				try {
-					pb.close();
-				} catch (IOException ignored) {}
-			} else if (close) {
-				pb._free();
-			}
-		}
-
-		code = 0;
-		flag &= (KEPT_ALIVE | GZIP_MODE);
-
-		if (def != null && close) def.end();
-
-		setChunk(ch, 0);
-		setCompr(ch, ENC_PLAIN, null);
 
 		Exception e = null;
 		if (body != null) {
@@ -575,6 +562,34 @@ public final class HttpServer11 extends PacketMerger implements
 			}
 			ph = null;
 		}
+
+		if (req != null) {
+			req.free();
+			t.requests.reserve(req);
+			req = null;
+		}
+
+		ByteList pb = postBuffer;
+		if (pb != null) {
+			if ((flag & EXT_POST_BUFFER) != 0) {
+				try {
+					pb.close();
+				} catch (IOException ignored) {}
+				postBuffer = null;
+			} else if (close) {
+				pb._free();
+				postBuffer = null;
+			}
+		}
+
+		code = 0;
+		flag &= (KEPT_ALIVE | GZIP_MODE);
+
+		if (def != null && close) def.end();
+
+		setChunk(ch, 0);
+		setCompr(ch, ENC_PLAIN, null);
+
 		try {
 			super.channelClosed(ch);
 		} catch (Exception e1) {
@@ -664,7 +679,7 @@ public final class HttpServer11 extends PacketMerger implements
 			}
 			return v;
 		} finally {
-			ch.reserve(buf);
+			BufferPool.reserve(buf);
 		}
 	}
 
@@ -680,7 +695,7 @@ public final class HttpServer11 extends PacketMerger implements
 				// noinspection all
 				ctx.handler().channelWrite(ctx, buf);
 			} finally {
-				ch.reserve(buf);
+				BufferPool.reserve(buf);
 			}
 		}
 		ch.postEvent(ChunkSplitter.CHUNK_OUT_EOF);
@@ -696,6 +711,8 @@ public final class HttpServer11 extends PacketMerger implements
 
 	@Override
 	public void handlerRemoved(ChannelCtx ctx) {
+		finish(true);
+
 		ch = null;
 		ctx.channel().remove("h11@compr");
 		ctx.channel().remove("h11@chunk");

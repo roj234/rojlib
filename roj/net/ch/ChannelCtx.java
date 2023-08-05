@@ -2,9 +2,9 @@ package roj.net.ch;
 
 import roj.collect.SimpleList;
 import roj.io.buf.BufferPool;
+import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
-import roj.util.NamespaceKey;
-import roj.util.TypedName;
+import roj.util.Identifier;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -43,10 +43,10 @@ public final class ChannelCtx {
 	public void readActive() { root.readActive(); }
 	public void readInactive() { root.readInactive(); }
 
-	public <T> T attachment(TypedName<T> key) {
+	public <T> T attachment(AttributeKey<T> key) {
 		return root.attachment(key);
 	}
-	public <T> T attachment(TypedName<T> key, T val) {
+	public <T> T attachment(AttributeKey<T> key, T val) {
 		return root.attachment(key, val);
 	}
 
@@ -63,15 +63,13 @@ public final class ChannelCtx {
 		if (next != null) next.handler.channelRead(next, data);
 	}
 
-	public Event postEvent(NamespaceKey key) throws IOException {
+	public Event postEvent(Identifier key) throws IOException {
 		Event event = new Event(key);
 		postEvent(event);
 		return event;
 	}
 
-	public void postEvent(Event event) throws IOException {
-		root.postEvent(event);
-	}
+	public void postEvent(Event event) throws IOException { root.postEvent(event); }
 
 	public void exceptionCaught(Throwable ex) throws Exception {
 		if (next != null) next.handler.exceptionCaught(next, ex);
@@ -97,22 +95,15 @@ public final class ChannelCtx {
 		}
 	}
 
-	public void close() throws IOException {
-		root.close();
-	}
+	public void close() throws IOException { root.close(); }
 
 	public BufferPool alloc() { return root.alloc(); }
 	public DynByteBuf allocate(boolean direct, int capacity) {
 		if (capacity < 0) throw new IllegalArgumentException(String.valueOf(capacity));
-		return alloc().buffer(direct, capacity);
-	}
-	public void reserve(DynByteBuf buffer) {
-		alloc().reserve(buffer);
+		return root.alloc().allocate(direct, capacity);
 	}
 
-	public ChannelHandler handler() {
-		return handler;
-	}
+	public ChannelHandler handler() { return handler; }
 
 	public void replaceSelf(ChannelHandler pipe) {
 		handler.handlerRemoved(this);
@@ -124,25 +115,17 @@ public final class ChannelCtx {
 		root.remove(this);
 	}
 
-	public ChannelCtx prev() {
-		return prev;
-	}
-	public ChannelCtx next() {
-		return next;
-	}
-
-	// region Utilities
-
-	public static void bite(ChannelCtx ctx, byte b) throws IOException {
-		DynByteBuf tmp = ctx.allocate(false, 1);
+	public void dispose() throws IOException {
+		ChannelHandler h = handler;
 		try {
-			ctx.channelWrite(tmp.put(b));
+			if (h != null) h.channelClosed(this);
 		} finally {
-			ctx.reserve(tmp);
+			root.remove(this);
 		}
 	}
 
-	// endregion
+	public ChannelCtx prev() { return prev; }
+	public ChannelCtx next() { return next; }
 
 	@Override
 	public String toString() { return name + "=" + handler; }

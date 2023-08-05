@@ -31,13 +31,17 @@ public final class DBA implements AutoCloseable {
 
 	final RingBuffer<String> logs;
 
-	private DBA parent;
+	private final DBA parent;
 
 	public static DBA getInstance() {
 		DBA dba = CMAP.get();
 		if (dba == null) CMAP.set(dba = new DBA());
 		dba.logs.clear();
 		return dba.reset();
+	}
+	public static void closeInstance() throws SQLException {
+		DBA inst = CMAP.get();
+		if (inst != null) inst.close();
 	}
 
 	static {
@@ -53,6 +57,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	private DBA() {
+		parent = this;
 		logs = new RingBuffer<>(10);
 	}
 	public DBA(DBA parent) {
@@ -242,7 +247,7 @@ public final class DBA implements AutoCloseable {
 		}
 		return this;
 	}
-	public boolean next_page() throws SQLException {
+	private boolean next_page() throws SQLException {
 		if (_fragOff >= _fragTot) return false;
 
 		CharList sb = makeSelect(false)
@@ -543,48 +548,47 @@ public final class DBA implements AutoCloseable {
 		if (table.length() == 0) throw new SQLException("table not defined");
 		if (rawField.isEmpty()) throw new SQLException("field not defined, or not for update");
 
-		Statement stm = connection().createStatement();
-		if (atomicInsert) transBegin();
+		List<?> values = manyValues.next();
 
 		CharList sb = IOUtil.ddLayeredCharBuf();
-		sb.append("INSERT INTO ").append(table).append(" (").append(field).append(") VALUES ");
+		sb.append("INSERT INTO ").append(table).append(" (").append(field).append(") VALUES (");
+		for (int i = 0; i < values.size();) {
+			sb.append('?');
+			if (++i == values.size()) break;
+			sb.append(',');
+		}
 
-		int headerLen = sb.length();
+		String sql = sb.append(')').toStringAndFree();
+		logs.ringAddLast(sql);
+
 		boolean success = false;
 		int successCount = 0;
-
-		int j = 0;
-		try {
+		try(PreparedStatement stm = connection().prepareStatement(sql)) {
 			while (true) {
-				List<?> values = manyValues.next();
-
-				sb.append('(');
-				int i = 0;
-				while (true) {
-					Object o = values.get(i);
-					if (o == null) sb.append("NULL");
-					else myescape(sb, o instanceof CharSequence ? (CharSequence) o : o.toString());
-					if (++i == values.size()) break;
-					sb.append(',');
+				for (int i = 0; i < values.size(); i++) {
+					Object x = values.get(i);
+					stm.setObject(i, values.get(i));
 				}
-				sb.append(')');
+				stm.addBatch();
 
-				if (sb.length() > 262144 || !manyValues.hasNext()) {
-					String sql = sb.toString();
-					logs.ringAddLast(sql);
-					successCount += defaultStm.executeUpdate(sql);
-					pullId(defaultStm);
-					sb.setLength(headerLen);
-					if (!manyValues.hasNext()) break;
-					continue;
-				}
-
-				sb.append(",\n");
+				if (!manyValues.hasNext()) break;
+				values = manyValues.next();
 			}
-		} finally {
-			sb._free();
-			defaultStm.close();
 
+			if (atomicInsert) transBegin();
+
+			int[] rs = stm.executeBatch();
+			success = true;
+			for (int v : rs) {
+				if (v == Statement.EXECUTE_FAILED) {
+					success = false;
+				} else {
+					successCount++;
+				}
+			}
+
+			pullId(stm);
+		} finally {
 			if (atomicInsert) transEnd(success);
 		}
 
@@ -633,7 +637,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	public Connection connection() throws SQLException {
-		if (parent != null) return parent.connection();
+		if (parent != this) return parent.connection();
 
 		if (connection == null) {
 			connection = pool.getConnection(1000);
@@ -709,5 +713,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	public String lastSql() { return logs.peekLast(); }
+
+	public DBA isolate() { return new DBA(parent); }
 	// endregion
 }

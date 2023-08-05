@@ -3,15 +3,15 @@ package roj.config.word;
 import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.concurrent.OperationDone;
-import roj.concurrent.Ref;
 import roj.config.ParseException;
 import roj.text.ACalendar;
 import roj.text.CharList;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static roj.config.word.Word.*;
 
@@ -48,7 +48,7 @@ public abstract class ITokenizer {
 		index = 0;
 		input = seq;
 		marker = -3;
-		aFlag = (byte) (seq instanceof StreamReader ? _AF_ROD : 0);
+		aFlag = (byte) (seq instanceof TextReader ? _AF_ROD : 0);
 		return this;
 	}
 
@@ -62,6 +62,8 @@ public abstract class ITokenizer {
 			index = prevIndex;
 		}
 	}
+
+	public int indexForRet() { return lastWordPos; }
 
 	public final Word next() throws ParseException {
 		if (marker == -1) {
@@ -85,7 +87,7 @@ public abstract class ITokenizer {
 	}
 
 	protected final void flushBefore(int i) {
-		if ((aFlag&_AF_ROD) != 0) ((StreamReader)input).releaseBefore(i);
+		if ((aFlag&_AF_ROD) != 0) ((TextReader)input).releaseBefore(i);
 	}
 
 	/**
@@ -121,14 +123,16 @@ public abstract class ITokenizer {
 		DESLASHES.putInt('/', -1);
 		DESLASHES.putInt('U', -2);
 		DESLASHES.putInt('u', -3);
-		//TRANS.putInt(-6, 'x');
 
 		// \ NEXTLINE
 		DESLASHES.putInt('\r', -4);
 		DESLASHES.putInt('\n', -5);
+
+		// \377 (oct)
+		for (int i = 0; i <= 7; i++) DESLASHES.putInt('0'+i, -6);
 	}
 
-	public static String addSlashes(CharSequence key) { return addSlashes(new StringBuilder(), key).toString(); }
+	public static String addSlashes(CharSequence key) { return addSlashes(new CharList(), key).toStringAndFree(); }
 	public static <T extends Appendable> T addSlashes(T to, CharSequence key) { return addSlashes(key, 0, to, '\0'); }
 	public static <T extends Appendable> T addSlashes(CharSequence key, int since, T to, char ignore) {
 		try {
@@ -141,12 +145,17 @@ public abstract class ITokenizer {
 				if (v > 0 && c != ignore) {
 					to.append(key, prevI, i).append('\\').append((char) v);
 					prevI = i+1;
-				} else if (c < 32 || c == 127) { // CharacterData is not open
-					String s = Integer.toHexString(c);
-					to.append(key, prevI, i).append("\\u");
-					int j = s.length();
-					while (j++ < 4) to.append('0');
-					to.append(s);
+				} else if (c < 32 || (c >= 127 && c <= 159)) { // CharacterData is not open
+					if (i+1 < key.length() && NUMBER.contains(key.charAt(i+1))) {
+						String s = Integer.toHexString(c);
+						to.append(key, prevI, i).append("\\u");
+						int j = s.length();
+						while (j++ < 4) to.append('0');
+						to.append(s);
+					} else {
+						String s = Integer.toOctalString(c);
+						to.append(key, prevI, i).append('\\').append(s);
+					}
 					prevI = i+1;
 				}
 			}
@@ -156,6 +165,14 @@ public abstract class ITokenizer {
 			Helpers.athrow(e);
 		}
 		return to;
+	}
+	public static boolean haveSlashes(CharSequence key, int since) {
+		for (int i = since; i < key.length(); i++) {
+			char c = key.charAt(i);
+			int v = ADDSLASHES.getOrDefaultInt(c, 0);
+			if (v != 0) return true;
+		}
+		return false;
 	}
 
 	public static String removeSlashes(CharSequence key) throws ParseException {
@@ -170,7 +187,7 @@ public abstract class ITokenizer {
 			while (i < in.length()) {
 				char c = in.charAt(i++);
 				if (slash) {
-					i = _removeSlash(in, c, output, i, '\0');
+					i = _removeSlash(in, c, output, i);
 					slash = false;
 				} else {
 					if (c == '\\') {
@@ -203,7 +220,7 @@ public abstract class ITokenizer {
 			if (slash) {
 				v.append(in, prevI, i-2);
 
-				i = _removeSlash(input, c, v, i, end);
+				i = _removeSlash(input, c, v, i);
 
 				prevI = i;
 				slash = false;
@@ -224,7 +241,7 @@ public abstract class ITokenizer {
 	}
 
 	@SuppressWarnings("fallthrough")
-	protected static int _removeSlash(CharSequence in, char c, Appendable out, int i, char end) {
+	protected static int _removeSlash(CharSequence in, char c, Appendable out, int i) throws ParseException {
 		try {
 			int v = DESLASHES.getOrDefaultInt(c, 0);
 			if (v == 0) {
@@ -238,23 +255,41 @@ public abstract class ITokenizer {
 			switch (v) {
 				case -1: out.append('/'); break;
 				case -2: // UXXXXXXXX
-					int UIndex = TextUtil.parseInt(in, i, i += 8, 16);
-					if (Character.charCount(UIndex) > 1) out.append(Character.highSurrogate(UIndex)).append(Character.lowSurrogate(UIndex));
-					else out.append((char) UIndex);
-					break;
+					try {
+						int UIndex = TextUtil.parseInt(in, i, i += 8, 16);
+						if (Character.charCount(UIndex) > 1) out.append(Character.highSurrogate(UIndex)).append(Character.lowSurrogate(UIndex));
+						else out.append((char) UIndex);
+					} catch (Exception e) {
+						throw new ParseException(in, "无效的\\UXXXXXXXX转义:"+e.getMessage(), i);
+					}
+				break;
 				case -3: // uXXXX
-					int uIndex = TextUtil.parseInt(in, i, i += 4, 16);
-					out.append((char) uIndex);
-					break;
+					try {
+						int uIndex = TextUtil.parseInt(in, i, i += 4, 16);
+						out.append((char) uIndex);
+					} catch (Exception e) {
+						throw new ParseException(in, "无效的\\uXXXX转义:"+e.getMessage(), i);
+					}
+				break;
 				case -4: out.append("\r"); if (in.charAt(i) == '\n') i++;
 				case -5: out.append("\n");
 					while (WHITESPACE.contains(in.charAt(i))) i++;
-					break;
-				case -6: // xXX
-					throw new IllegalArgumentException("uxx is not available");
-					//int xIndex = MathUtils.parseInt(in, i, i += 2, 16);
-					//out.append(new String(new byte[]{(byte) xIndex}, StandardCharsets.UTF_8));
-					//break;
+				break;
+				case -6: // oct (000 - 377)
+					char d = i == in.length() ? 0 : in.charAt(i);
+					int xi = c-'0';
+					if (d >= '0' && d <= '7') {
+						xi = (xi<<3) + d-'0';
+						i++;
+
+						char e = i >= in.length() ? 0 : in.charAt(i);
+						if (c <= '3' && e >= '0' && e <= '7') {
+							xi = (xi<<3) + e-'0';
+							i++;
+						}
+					}
+					out.append((char)xi);
+				break;
 
 			}
 		} catch (IOException e) {
@@ -447,12 +482,13 @@ public abstract class ITokenizer {
 		while (true) {
 			c = in.charAt(i);
 
-			// 检测位置有误(不在结尾)的 d f l 但是放过hex中的df
-			if ((flag & _NF_END) != 0) return onInvalidNumber(c, i, "期待[空白]");
-			if (!set.contains(c) && c != '_') {
-				// todo moved from #449
+				// 检测位置有误(不在结尾)的 d f l 但是放过hex中的df
+			if ((flag & _NF_END) != 0 ||
+				// 非法数字
+				(!set.contains(c) &&
+				c != '_')) {
 				if (literalEnd.contains(c)) break;
-				return onInvalidNumber(c, i, "非法的字符"+c);
+				return onInvalidNumber(c, i, set.contains(c)?"期待[空白]":"非法的字符"+c);
 			}
 
 			switch (c) {
@@ -524,7 +560,7 @@ public abstract class ITokenizer {
 		if ((flag & _NF_END) != 0) i++;
 
 		try {
-			String represent = neg ? "-".concat(v.toString()) : v.toString();
+			String represent = input.subSequence(index, i).toString();
 
 			Word w;
 			// retain SubType
@@ -610,12 +646,10 @@ public abstract class ITokenizer {
 		return neg ? -v : v;
 	}
 
-	//public static final Pattern ISO8601 = Pattern.compile("(\\d\\d\\d\\d)-(\\d{1,2})(?:-(\\d{1,2})(?:[Tt ](\\d{1,2}):(\\d{1,2}):(\\d{1,2})(?:\\.\\d+)?(?:[zZ]|[+\\-](\\d{1,2})(?::\\d{1,2})?)?)?)?");
-	//private Matcher iso8601Matcher;
-	protected final Word ISO8601Datetime(boolean must) throws ParseException {
-		Ref<String> error = Ref.from();
+	public final Word ISO8601Datetime(boolean must) throws ParseException {
 		final int i = index;
 		CharSequence in = input;
+		AtomicReference<String> error = new AtomicReference<>();
 
 		try {
 			char c;
@@ -679,7 +713,7 @@ public abstract class ITokenizer {
 		}
 	}
 
-	private void dateDelim(char c, int firstIndex, Ref<String> err) {
+	private void dateDelim(char c, int firstIndex, AtomicReference<String> err) {
 		int i = index;
 		if (input.charAt(i++) == c) index = i;
 		else {
@@ -688,7 +722,7 @@ public abstract class ITokenizer {
 		}
 	}
 
-	private int dateNum(int maxLen, int max, Ref<String> err) {
+	private int dateNum(int maxLen, int max, AtomicReference<String> err) {
 		int i = index;
 		CharSequence in = input;
 

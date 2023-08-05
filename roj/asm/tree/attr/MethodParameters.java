@@ -13,27 +13,17 @@ import roj.util.DynByteBuf;
 public final class MethodParameters extends Attribute {
 	public static final String NAME = "MethodParameters";
 
-	public MethodParameters() {
-		super(NAME);
-		flags = new SimpleList<>();
-	}
-
+	public MethodParameters() { flags = new SimpleList<>(); }
 	public MethodParameters(DynByteBuf r, ConstantPool pool) {
-		super(NAME);
-		flags = parse(r, pool);
-	}
-
-	public final SimpleList<MethodParam> flags;
-
-	public static SimpleList<MethodParam> parse(DynByteBuf r, ConstantPool pool) {
 		int len = r.readUnsignedByte();
-		SimpleList<MethodParam> params = new SimpleList<>(len);
+		SimpleList<MethodParam> params = this.flags = new SimpleList<>(len);
 		while (len-- > 0) {
 			String name = ((CstUTF) pool.get(r)).str();
 			params.add(new MethodParam(name, r.readChar()));
 		}
-		return params;
 	}
+
+	public final SimpleList<MethodParam> flags;
 
 	@Override
 	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
@@ -43,6 +33,9 @@ public final class MethodParameters extends Attribute {
 			w.putShort(pool.getUtfId(e.name)).putShort(e.flag);
 		}
 	}
+
+	@Override
+	public String name() { return NAME; }
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder("MethodParameters: \n");

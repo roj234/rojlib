@@ -1,11 +1,12 @@
 package roj.mildwind.parser;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
-import roj.asm.util.ExceptionEntryCWP;
+import roj.asm.util.TryCatchEntry;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.Segment;
 import roj.asm.visitor.SwitchSegment;
+import roj.collect.Hasher;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
@@ -24,7 +25,6 @@ import roj.mildwind.parser.ast.Expression;
 import roj.mildwind.type.JsFunction;
 import roj.mildwind.type.JsObject;
 import roj.mildwind.util.LabelInfo;
-import roj.mildwind.util.SwitchMap;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -464,7 +464,7 @@ public class KParser implements ParseContext {
 	private List<Label> jumpHooks;
 
 	private void _try() throws ParseException {
-		ExceptionEntryCWP entry = mw.exception();
+		TryCatchEntry entry = mw.exception();
 
 		Label prevRh = returnHook;
 		returnHook = new Label();
@@ -531,8 +531,8 @@ public class KParser implements ParseContext {
 		if (w.type() == FINALLY) {
 			int a = mw.getTmpVar();
 			int b = mw.getTmpVar();
-			mw.var(ASTORE, b);
-			mw.var(ISTORE, a);
+			mw.vars(ASTORE, b);
+			mw.vars(ISTORE, a);
 
 			except(left_l_bracket);
 			body();
@@ -540,9 +540,9 @@ public class KParser implements ParseContext {
 
 			Label rhLabel = new Label();
 			// todo switch and goto hook
-			mw.var(ILOAD, a);
+			mw.vars(ILOAD, a);
 			mw.jump(IFNE, rhLabel);
-			mw.var(ALOAD, b);
+			mw.vars(ALOAD, b);
 			mw.one(ARETURN); // returnHook
 			mw.label(rhLabel);
 			// 1: continueNext
@@ -878,7 +878,13 @@ public class KParser implements ParseContext {
 
 		except(left_l_bracket);
 
-		SwitchMap jumpInfo = new SwitchMap();
+		ToIntMap<JsObject> jumpInfo = new ToIntMap<>();
+		jumpInfo.setHasher(new Hasher<JsObject>() {
+			@Override
+			public int hashCode(@Nullable JsObject object) { return object.hashCode(); }
+			@Override
+			public boolean equals(JsObject from_argument, Object stored_in) { return from_argument.op_feq((JsObject) stored_in); }
+		});
 		Label end = new Label();
 
 		int id = mw.sync(jumpInfo);
@@ -888,7 +894,7 @@ public class KParser implements ParseContext {
 
 		id = 0;
 		SwitchSegment sw = new SwitchSegment(true);
-		mw._segment(sw);
+		mw.addSegment(sw);
 
 		byte prev = sectionFlag;
 		sectionFlag |= 4;
@@ -901,6 +907,11 @@ public class KParser implements ParseContext {
 			@Override
 			protected boolean put(CodeWriter to) {
 				return false;
+			}
+
+			@Override
+			protected int length() {
+				return 0;
 			}
 		};
 
@@ -937,7 +948,7 @@ public class KParser implements ParseContext {
 						}
 
 						sw.def = mw.label();
-						mw._segment(defSegment);
+						mw.addSegment(defSegment);
 						switchBlock();
 					continue;
 				}
@@ -960,7 +971,7 @@ public class KParser implements ParseContext {
 
 			int label = jumpInfo.getInt(cv);
 			// drop into case
-			if (label >= 0) sw.def = sw.targets.get(label).insnPos;
+			if (label >= 0) sw.def = sw.targets.get(label).pos;
 
 			sw.targets.clear();
 		}

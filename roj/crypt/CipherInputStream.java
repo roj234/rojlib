@@ -28,7 +28,7 @@ public class CipherInputStream extends InputStream {
 		this.in = in;
 		this.c = c;
 
-		this.o = (ByteList) BufferPool.localPool().buffer(false, CipherOutputStream.BUFFER_SIZE);
+		this.o = (ByteList) BufferPool.buffer(false, CipherOutputStream.BUFFER_SIZE);
 		this.i.set(o.array(), o.arrayOffset(), o.capacity());
 	}
 
@@ -79,7 +79,7 @@ public class CipherInputStream extends InputStream {
 				cr = o.rIndex;
 				cw = o.wIndex();
 
-				o.rIndex = 0;
+				o.rIndex = i.rIndex;
 				o.wIndex(i.wIndex());
 			}
 		} catch (Throwable e) {
@@ -103,7 +103,7 @@ public class CipherInputStream extends InputStream {
 			in.close();
 		} finally {
 			synchronized (this) {
-				o.close();
+				if (o != null) o.close();
 				o = null;
 			}
 		}

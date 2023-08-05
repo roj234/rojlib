@@ -13,19 +13,19 @@ import java.util.NoSuchElementException;
  * @author Roj234
  * @since 2021/5/27 0:12
  */
-public class LineReader implements Iterable<String>, Iterator<String>, AutoCloseable {
+public class LineReader implements Iterable<String>, Iterator<String>, AutoCloseable, LinedReader {
 	private final CharSequence str;
 	private boolean keepEmpty, reuse;
-	private int index, size = -1, lineNumber;
+	private int index;
+	private int lineNumber;
 
+	@Deprecated
 	public LineReader(InputStream in) throws IOException {
-		str = new StreamReader(in);
+		str = new TextReader(in);
 	}
-	public LineReader(InputStream in, Charset cs) throws IOException {
-		str = new StreamReader(in, cs);
-	}
+	@Deprecated
 	public LineReader(InputStream in, Charset cs, boolean cleanEmpty) throws IOException {
-		this.str = new StreamReader(in);
+		this.str = new TextReader(in, cs);
 		this.keepEmpty = !cleanEmpty;
 	}
 
@@ -35,7 +35,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 	public LineReader(CharSequence s, boolean cleanEmpty) {
 		this.str = s;
 		this.keepEmpty = !cleanEmpty;
-		this.reuse = !(s instanceof StreamReader);
+		this.reuse = !(s instanceof TextReader);
 	}
 
 	@SuppressWarnings("fallthrough")
@@ -63,9 +63,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 			i++;
 		}
 
-		if (prev < i || !clean) {
-			list.add(prev == i ? "" : keys.subSequence(prev, i).toString());
-		}
+		if (prev < i) list.add(keys.subSequence(prev, i).toString());
 
 		return list;
 	}
@@ -96,40 +94,6 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 		return --line == 0 ? prev == i ? "" : keys.subSequence(prev, i).toString() : null;
 	}
 
-	public int index() {
-		return this.index;
-	}
-
-	@SuppressWarnings("fallthrough")
-	public int size() {
-		if (size < 0) {
-			int r = 0, size = lineNumber, i = index, prev = 0;
-			CharSequence keys = this.str;
-			while (i < keys.length()) {
-				switch (keys.charAt(i)) {
-					case '\r':
-						if (i + 1 >= keys.length() || keys.charAt(i + 1) != '\n') {
-							break;
-						} else {
-							r = 1;
-							i++;
-						}
-					case '\n':
-						if (prev + r < i || keepEmpty) {
-							size++;
-						}
-						prev = i + 1;
-						r = 0;
-						break;
-				}
-				i++;
-			}
-
-			this.size = prev < i || keepEmpty ? size + 1 : size;
-		}
-		return size;
-	}
-
 	@Nonnull
 	@Override
 	public Iterator<String> iterator() {
@@ -142,6 +106,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 
 	static final String EOF = new String();
 	private String cur;
+	private boolean doSkip;
 
 	@Override
 	@SuppressWarnings("fallthrough")
@@ -150,14 +115,14 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 			return cur != EOF;
 		} else if (index >= str.length()) {
 			if (keepEmpty) lineNumber++;
-			size = lineNumber;
+			int size = lineNumber;
 			cur = EOF;
 			return false;
 		}
 
 		int r = 0, i = index;
 		CharSequence s = str;
-		if (!reuse) ((StreamReader) s).releaseBefore(i);
+		if (!reuse) ((TextReader) s).releaseBefore(i);
 		while (i < s.length()) {
 			switch (s.charAt(i)) {
 				case '\r':
@@ -169,7 +134,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 					}
 				case '\n':
 					if (i > index + r || keepEmpty) {
-						CharSequence seq = index == i ? "" : s.subSequence(index, i - r);
+						CharSequence seq = doSkip || index == i ? "" : s.subSequence(index, i - r);
 						index = i + 1;
 						lineNumber++;
 						cur = seq.toString();
@@ -183,7 +148,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 		}
 
 		if (i > index || keepEmpty) {
-			CharSequence seq = index == i ? "" : s.subSequence(index, i);
+			CharSequence seq = doSkip || index == i ? "" : s.subSequence(index, i);
 			index = i + 1;
 			cur = seq.toString();
 			return true;
@@ -192,6 +157,14 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 			cur = EOF;
 			return false;
 		}
+	}
+
+	public String readLine() { return hasNext() ? next() : null; }
+	public boolean readLine(CharList buf) throws IOException {
+		String s = readLine();
+		if (s == null) return false;
+		buf.append(s);
+		return true;
 	}
 
 	@Override
@@ -209,41 +182,15 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 	@SuppressWarnings("fallthrough")
 	public int skipLines(int oLines) {
 		int lines = oLines;
-		int r = 0, prev = index, i = index;
-		CharSequence s = str;
-		if (!reuse) ((StreamReader) s).releaseBefore(i);
-		while (i < s.length()) {
-			switch (s.charAt(i)) {
-				case '\r':
-					if (i >= s.length() || s.charAt(i + 1) != '\n') {
-						break;
-					} else {
-						r = 1;
-						i++;
-					}
-				case '\n':
-					if (i > prev + r || keepEmpty) {
-						lineNumber++;
-						if (--lines <= 0) {
-							index = i+1;
-							return oLines;
-						}
-						r = 0;
-					}
-					prev = i + 1;
-					break;
+		doSkip = true;
+		try {
+			while (hasNext() && oLines > 0) {
+				cur = null;
+				oLines--;
 			}
-			i++;
+		} finally {
+			doSkip = false;
 		}
-
-		if (i > prev || keepEmpty) {
-			lineNumber++;
-			if (--lines <= 0) {
-				index = i+1;
-				return oLines;
-			}
-		}
-		cur = EOF;
 		return oLines - lines;
 	}
 
@@ -253,6 +200,6 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 
 	@Override
 	public void close() throws IOException {
-		if (!reuse) ((StreamReader) str).close();
+		if (!reuse) ((TextReader) str).close();
 	}
 }

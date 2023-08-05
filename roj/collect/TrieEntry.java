@@ -1,6 +1,7 @@
 package roj.collect;
 
 import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -10,29 +11,27 @@ import java.util.Iterator;
  * @author Roj234
  * @since 2020/11/9 23:10
  */
-public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, MapLikeEntry<TrieEntry> {
+public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Generic_Entry<TrieEntry> {
 	final char c;
+	TrieEntry(char ch) { this.c = ch; }
 
 	private TrieEntry next;
 	@Override
-	public TrieEntry nextEntry() {
-		return next;
-	}
+	public TrieEntry __next() { return next; }
 
-	TrieEntry(char ch) {
-		this.c = ch;
-	}
+	// region child management
 
-	// region self management
+	TrieEntry[] entries;
+	int size, mask;
 
 	public final void putChild(TrieEntry te) {
-		if (size > length * 1.3f) {
-			length <<= 1;
+		if (size > (mask+1)) {
+			mask = ((mask+1)<<1) - 1;
 			resize();
 		}
 
 		char key = te.c;
-		if (entries == null) entries = new TrieEntry[length];
+		if (entries == null) entries = new TrieEntry[mask+1];
 		TrieEntry prev = null, entry = entries[idx(key)];
 		if (entry == null) {
 			entries[idx(key)] = te;
@@ -94,39 +93,17 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, MapLi
 
 	@Nonnull
 	@Override
-	public final Iterator<TrieEntry> iterator() {
-		return new EntryItr<>(entries, null);
+	public final Iterator<TrieEntry> iterator() { return new EntryItr<>(entries); }
+
+	public void faster() {
+		if (size > 1) {
+			mask = 32767;
+			resize();
+		}
 	}
-
-	// endregion
-
-	public abstract int copyFrom(TrieEntry node);
-
-	abstract boolean isValid();
-
-	CharSequence text() {
-		return null;
-	}
-
-	void append(CharList sb) {
-		sb.append(c);
-	}
-
-	int length() {
-		return 1;
-	}
-
-	@Override
-	public String toString() {
-		return "CE{" + c + "}";
-	}
-
-	TrieEntry[] entries;
-	int size;
-	int length = 1;
 
 	private void resize() {
-		TrieEntry[] newEntries = new TrieEntry[length];
+		TrieEntry[] newEntries = new TrieEntry[mask+1];
 		TrieEntry entry;
 		TrieEntry next;
 		int i = 0, j = entries.length;
@@ -145,9 +122,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, MapLi
 		this.entries = newEntries;
 	}
 
-	private int idx(int id) {
-		return (id ^ (id >> 8)) & (length - 1);
-	}
+	private int idx(int id) { return (id ^ (id >> 8)) & mask; }
 
 	private TrieEntry first(char k) {
 		if (entries == null) return null;
@@ -155,10 +130,22 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, MapLi
 	}
 
 	public final void clear() {
-		this.length = 1;
+		this.mask = 1;
 		this.entries = null;
 		this.size = 0;
 	}
+
+	// endregion
+	public abstract int copyFrom(TrieEntry node);
+
+	public abstract boolean isLeaf();
+
+	CharSequence text() { return null; }
+	void append(CharList sb) { sb.append(c); }
+	int length() { return 1; }
+
+	@Override
+	public String toString() { return "TE('"+(TextUtil.isPrintableAscii(c)?c:"\\"+Integer.toOctalString(c))+"',next="+next+")"; }
 
 	@Override
 	public TrieEntry clone() {
@@ -170,35 +157,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, MapLi
 		return entry;
 	}
 
-	static final class Val extends AbstractIterator<TrieEntry> {
-		TrieEntry map, entry;
-		int i;
-
-		public Val(TrieEntry map) {
-			this.map = map;
-			if (map.entries == null) stage = ENDED;
-		}
-
-		@Override
-		public boolean computeNext() {
-			TrieEntry[] entries = map.entries;
-			while (true) {
-				if (entry != null) {
-					result = entry;
-					entry = entry.next;
-					return true;
-				} else {
-					if (i < entries.length) {
-						this.entry = entries[i++];
-					} else {
-						return false;
-					}
-				}
-			}
-		}
-	}
-
-	static abstract class Itr<NEXT, ENTRY extends TrieEntry> extends AbstractIterator<NEXT> {
+	public static abstract class Itr<NEXT, ENTRY extends TrieEntry> extends AbstractIterator<NEXT> {
 		SimpleList<ENTRY> a = new SimpleList<>(), b = new SimpleList<>();
 		ENTRY ent;
 		int i;
@@ -231,7 +190,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, MapLi
 			while (true) {
 				ENTRY ent = a.get(i);
 				if (this.ent != ent) {
-					if (ent.isValid()) {
+					if (ent.isLeaf()) {
 						this.ent = ent;
 						updateKey_DFS();
 						return true;
@@ -260,7 +219,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, MapLi
 				if (a.size == 0) return false;
 
 				while (i < a.size) {
-					if ((ent = a.get(i++)).isValid()) return true;
+					if ((ent = a.get(i++)).isLeaf()) return true;
 				}
 				i = 0;
 
@@ -293,10 +252,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, MapLi
 	}
 
 	public static final class KeyItr extends Itr<CharSequence, TrieEntry> {
-		KeyItr(TrieEntry root) {
-			this(root, new CharList());
-		}
-
+		KeyItr(TrieEntry root) { this(root, new CharList()); }
 		KeyItr(TrieEntry root, CharList base) {
 			setupDepthFirst(root);
 			result = seq = base;
@@ -304,12 +260,8 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, MapLi
 		}
 
 		@Override
-		public boolean computeNext() {
-			return _computeNextDepthFirst();
-		}
+		public boolean computeNext() { return _computeNextDepthFirst(); }
 
-		public TrieEntry entry() {
-			return ent;
-		}
+		public TrieEntry entry() { return ent; }
 	}
 }

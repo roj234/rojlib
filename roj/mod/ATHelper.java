@@ -10,7 +10,7 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static roj.mapper.ConstMapper.DONT_LOAD_PREFIX;
+import static roj.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.mod.Shared.BASE;
 import static roj.mod.Shared.TMP_DIR;
 
@@ -109,7 +109,7 @@ final class ATHelper {
 
 				InputStream source = getBytecode(name);
 				if (source == null) {
-					CmdUtil.warning("无法找到 " + name);
+					CLIUtil.warning("无法找到 " + name);
 				} else {
 					ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(source));
 
@@ -120,7 +120,7 @@ final class ATHelper {
 
 					if (!forIDE) TransformUtil.trimCode(data);
 
-					Parser.withParsedAttribute(data);
+					data.parsed();
 					zo.set(name, () -> Parser.toByteArrayShared(data));
 				}
 			}

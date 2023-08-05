@@ -10,10 +10,12 @@
 
 package roj.archive.qz.xz.lz;
 
-import roj.archive.qz.xz.CorruptedInputException;
+import roj.io.CorruptedInputException;
+import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
+import sun.misc.Unsafe;
 
-import java.io.DataInputStream;
+import java.io.DataInput;
 import java.io.IOException;
 
 public final class LZDecoder {
@@ -26,9 +28,10 @@ public final class LZDecoder {
 	private int pendingLen = 0;
 	private int pendingDist = 0;
 
-	public LZDecoder(int dictSize, byte[] presetDict, ArrayCache arrayCache) {
+	public LZDecoder(int dictSize, byte[] presetDict) {
 		bufSize = dictSize;
-		buf = arrayCache.getByteArray(bufSize, false);
+		buf = ArrayCache.getByteArray(dictSize, false);
+		buf[dictSize-1] = 0x00;
 
 		if (presetDict != null) {
 			pos = Math.min(presetDict.length, dictSize);
@@ -38,9 +41,7 @@ public final class LZDecoder {
 		}
 	}
 
-	public void putArraysToCache(ArrayCache arrayCache) {
-		arrayCache.putArray(buf);
-	}
+	public void putArraysToCache() { ArrayCache.putArray(buf); }
 
 	public void reset() {
 		start = 0;
@@ -74,14 +75,14 @@ public final class LZDecoder {
 		return buf[offset] & 0xFF;
 	}
 
-	public void putByte(byte b) {
-		buf[pos++] = b;
+	public void putByte(int b) {
+		buf[pos++] = (byte) b;
 
 		if (full < pos) full = pos;
 	}
 
 	public void repeat(int dist, int len) throws IOException {
-		if (dist < 0 || dist >= full) throw new CorruptedInputException();
+		if (dist < 0 || dist >= full) throw new CorruptedInputException("invalid distance");
 
 		int left = Math.min(limit - pos, len);
 		pendingLen = len - left;
@@ -132,7 +133,7 @@ public final class LZDecoder {
 		if (pendingLen > 0) repeat(pendingDist, pendingLen);
 	}
 
-	public void copyUncompressed(DataInputStream inData, int len) throws IOException {
+	public void copyUncompressed(DataInput inData, int len) throws IOException {
 		int copySize = Math.min(bufSize - pos, len);
 		inData.readFully(buf, pos, copySize);
 		pos += copySize;
@@ -140,11 +141,13 @@ public final class LZDecoder {
 		if (full < pos) full = pos;
 	}
 
-	public int flush(byte[] out, int outOff) {
+	public int flush(byte[] out, int outOff) { return flush0(out, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+outOff); }
+	public int flush0(Object out, long outOff) {
 		int copySize = pos - start;
 		if (pos == bufSize) pos = 0;
 
-		System.arraycopy(buf, start, out, outOff, copySize);
+		ReflectionUtils.u.copyMemory(buf, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+start, out, outOff, copySize);
+		//System.arraycopy(buf, start, out, outOff, copySize);
 		start = pos;
 
 		return copySize;

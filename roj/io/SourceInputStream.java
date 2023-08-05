@@ -17,6 +17,11 @@ public class SourceInputStream extends InputStream {
 		this.doClose = src != null;
 		this.remain = length;
 	}
+	public SourceInputStream(Source src, long length, boolean doClose) {
+		this.src = src;
+		this.doClose = doClose;
+		this.remain = length;
+	}
 
 	public final Source src;
 	public long remain;

@@ -1,8 +1,9 @@
 package roj.net.http.srv;
 
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
-import roj.net.http.Code;
 import roj.net.http.Headers;
+import roj.net.http.HttpCode;
 import roj.net.http.IllegalRequestException;
 import roj.text.UTF8MB4;
 import roj.util.DynByteBuf;
@@ -30,20 +31,20 @@ public class StringResponse implements Response {
 	}
 
 	public static StringResponse httpErr(int code) {
-		String desc = code + " " + Code.getDescription(code);
+		String desc = code + " " + HttpCode.getDescription(code);
 		return new StringResponse("<title>" + desc + "</title><center><h1>" + desc + "</h1><hr/><div>"+HttpServer11.SERVER_NAME +"</div></center>", "text/html");
 	}
 
 	public static StringResponse forError(int code, Object e) {
 		if (code == 0) {
-			code = e instanceof IllegalRequestException ? ((IllegalRequestException) e).code : Code.INTERNAL_ERROR;
+			code = e instanceof IllegalRequestException ? ((IllegalRequestException) e).code : HttpCode.INTERNAL_ERROR;
 		}
 
 		StringWriter sw = new StringWriter();
 		sw.write("<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><title>");
-		sw.write(Code.getDescription(code));
+		sw.write(HttpCode.getDescription(code));
 		sw.write("</title></head><body><div><i><h2>出现了错误:</h2></i><p><h3>");
-		sw.write(Code.getDescription(code));
+		sw.write(HttpCode.getDescription(code));
 		sw.write("</h3><h3><font color='red'>");
 
 		if (e != null) {
@@ -83,7 +84,7 @@ public class StringResponse implements Response {
 	@Override
 	public void release(ChannelCtx ctx) throws IOException {
 		if (buf != null) {
-			ctx.reserve(buf);
+			BufferPool.reserve(buf);
 			buf = null;
 		}
 	}

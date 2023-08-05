@@ -1,74 +1,109 @@
 package roj.asm.visitor;
 
-import roj.collect.IntList;
-import roj.math.MutableInt;
-
+import javax.annotation.Nonnull;
 import java.util.Arrays;
 
 /**
  * @author Roj234
  * @since 2022/11/17 0017 12:53
  */
-public final class Label extends MutableInt {
-	int block, offset;
-	Throwable trace = new Throwable();
+public final class Label extends Number implements Comparable<Label>, ReadonlyLabel {
+	short block;
+	char offset;
+	char value;
 
 	public Label() { clear(); }
+	public Label(int raw) { setRaw(raw); }
+	public Label(ReadonlyLabel label) { set(label); }
 
-	public void clear() {
-		value = -1;
+	public final void set(ReadonlyLabel label) {
+		block = (short) label.getBlock();
+		offset = (char) label.getOffset();
+		value = (char) label.getValue();
+	}
+
+	final void dispose() { block = -3; }
+	final void setFirst(int off) {
+		block = 0;
+		value = offset = (char) off;
+	}
+	public final void setRaw(int off) {
+		block = (short) (off==0?0:-1);
+		offset = (char) off;
+		value = 0;
+	}
+	public final void clear() {
 		block = -2;
-		offset = -1;
+		value = offset = 0;
 	}
 
-	public void set(Label label) {
-		value = label.value;
-		block = label.block;
-		offset = label.offset;
-	}
+	public int intValue() { return value; }
+	public long longValue() { return value; }
+	public float floatValue() { return value; }
+	public double doubleValue() { return value; }
 
-	@Override
-	public int getValue() {
-		int v = super.getValue();
-		if (v < 0) throw new IllegalArgumentException("Not ready for serialize/"+this, trace);
-		return v;
-	}
-	public int getOptionalValue() {
-		return super.getValue();
-	}
+	public boolean isValid() { return block >= 0; }
+	public int getBlock() { return block; }
+	public int getOffset() { return block < 0 ? -1 : offset; }
+	public int getValue() { return block < -1 ? -1 : value; }
 
-	int findPos(IntList sum, int offset) {
-		int i = Arrays.binarySearch(sum.getRawArray(), 0, sum.size(), offset);
+	private static int findBlock(int[] lengths, int val, int len) {
+		int i = Arrays.binarySearch(lengths, 0, len, val);
 		if (i > 0) return i;
 		else if (i == 0) throw new IllegalArgumentException();
-		else return -(i+1) -1;
+		else return -i - 2;
 	}
 
-	boolean update(IntList sum) {
-		boolean changed = false;
+	boolean update(int[] sum, int len) {
+		int pos = value;
 		if (block < 0) {
-			block = findPos(sum, offset);
-			if (block >= sum.size()) {
-				throw new IllegalStateException("Offset "+offset+" exceeded bytecode boundary("+sum.get(sum.size()-1)+")");
-			}
+			if (block != -1) throw new IllegalStateException("label: "+this);
 
-			offset -= sum.get(block);
-			changed = true;
+			block = (short) findBlock(sum, offset, len);
+			if (block >= len) throw new IllegalStateException("Offset "+offset+" exceeded bytecode boundary("+sum[len-1]+")");
+
+			offset -= sum[block];
+			pos = -1;
 		}
 
-		int pos = super.getValue();
-		int off = offset + sum.get(block);
-		setValue(off);
-		return changed || pos != off;
-	}
-
-	void _first(int off) {
-		block = 0;
-		setValue(offset = off);
+		int off = value = (char) (offset + sum[block]);
+		return pos != off;
 	}
 
 	@Override
 	public String toString() {
-		return "([b" + block + " + " + offset + "] => " + super.getValue() + ')';
+		switch (block) {
+			case -3: return "<disposed>";
+			case -2: return "<unset>";
+			case -1: return (int)offset+" // <raw>";
+			default: return (int)value+" // [b"+block+" + "+(int)offset+"]";
+		}
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+
+		Label label = (Label) o;
+
+		assert isValid();
+		if (block != label.block) return false;
+		return offset == label.offset;
+	}
+
+	@Override
+	public int hashCode() {
+		assert isValid();
+		return (block << 16) ^ offset;
+	}
+
+	@Override
+	public int compareTo(@Nonnull Label o) {
+		if (!isValid() || !o.isValid()) throw new IllegalArgumentException(this+"|"+o);
+
+		if (block != o.block) return block > o.block ? 1 : -1;
+		if (offset != o.offset) return offset > o.offset ? 1 : -1;
+		return 0;
 	}
 }

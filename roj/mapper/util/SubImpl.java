@@ -1,18 +1,17 @@
 package roj.mapper.util;
 
-import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
+
+import java.util.List;
+import java.util.Set;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
- *
  * @author Roj233
  * @since 2021/7/21 2:42
  */
 public class SubImpl {
-	public final MyHashSet<String> owners = new MyHashSet<>();
+	public final List<Set<String>> owners = new SimpleList<>();
 	public Desc type;
-	public boolean immutable;
 
 	@Override
 	public boolean equals(Object o) {

@@ -10,7 +10,7 @@ import roj.mapper.util.Desc;
 import roj.math.Version;
 import roj.text.LineReader;
 import roj.text.TextUtil;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -114,7 +114,7 @@ public class MappingFormat {
 
 				int pos = line.indexOf(',');
 				if (pos < 0) {
-					CmdUtil.warning("override.cfg:"+slr.lineNumber()+": 非法的格式");
+					CLIUtil.warning("override.cfg:"+slr.lineNumber()+": 非法的格式");
 					continue;
 				}
 				overrides.put(line.substring(0,pos).trim(),line.substring(pos+1).trim());
@@ -149,7 +149,7 @@ public class MappingFormat {
 					System.out.println(maps.get(arg.get(1)).getMethodMap().entrySet().stream().limit(32).map(Object::toString).collect(Collectors.joining("\n ")));
 					break;
 				case "override": case "o":
-					CmdUtil.warning("Legacy Override标记已废除且不再有效果");
+					CLIUtil.warning("Legacy Override标记已废除且不再有效果");
 					break;
 				case "save": case "s":
 					// s map kind

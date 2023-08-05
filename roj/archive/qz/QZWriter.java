@@ -46,7 +46,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
     final CRC32 crc32 = new CRC32(), blockCrc32 = new CRC32();
 
-    boolean finished;
+    boolean finished, ignoreClose;
 
     private long solidSize;
 
@@ -66,6 +66,12 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     public ArchiveEntry createEntry(String fileName) { return new QZEntry(fileName); }
 
     public final void setCodec(QZCoder... methods) {
+        try {
+            closeWordBlock();
+        } catch (IOException e) {
+            throw new IllegalStateException("nextWordBlock() failed", e);
+        }
+
         assert methods.length <= 32;
         complexCoder = null;
 
@@ -169,8 +175,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         if (b == null) throw new NullPointerException("b");
         if (finished) throw new IOException("Stream closed");
 
-        closeEntry();
-        nextWordBlock();
+        closeWordBlock();
 
         if (s.hasChannel() & archive.r.hasChannel()) {
             FileChannel myCh = s.channel();
@@ -179,7 +184,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
             Source src = archive.r;
             src.seek(b.offset);
 
-            byte[] bb = ArrayCache.getDefaultCache().getByteArray(1024, false);
+            byte[] bb = ArrayCache.getByteArray(1024, false);
             long len = b.size();
             while (len > 0) {
                 int l = (int) Math.min(bb.length, len);
@@ -187,6 +192,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
                 s.write(bb, 0, l);
                 len -= l;
             }
+            ArrayCache.putArray(bb);
         }
 
         blocks.add(b);
@@ -195,11 +201,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         QZEntry entry = b.firstEntry;
         while (entry != null) {
             files.add(entry);
-
-            int flag = entry.flag;
-            if (entry.uSize == 0) countFlagEmpty(flag);
-            else countFlag(flag);
-
+            countFlag(entry.flag, 1);
             entry = entry.next;
         }
     }
@@ -209,7 +211,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         if (finished) throw new IOException("Stream closed");
 
         closeEntry();
-        countFlag(ent.flag & ~QZEntry.CRC);
+        countFlag(ent.flag & ~QZEntry.CRC, 1);
         currentEntry = ent;
     }
     public final void write(int b) throws IOException {
@@ -237,7 +239,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
         entry.uSize = entryUSize;
         if (entryUSize == 0) {
-            countFlagEmpty(entry.flag);
+            countFlagEmpty(entry.flag, 1);
             emptyFiles.add(entry);
             return;
         }
@@ -258,23 +260,23 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
         crc32.reset();
 
-        if (solidSize != 0 && b.uSize >= solidSize) nextWordBlock();
+        if (solidSize != 0 && b.uSize >= solidSize) closeWordBlock0();
 
         entryUSize = 0;
     }
 
-    private void countFlagEmpty(int flag) {
-        flagSum[0]++;
+    final void countFlagEmpty(int flag, int v) {
+        flagSum[0] += v;
 
-        if ((flag & QZEntry.DIRECTORY) == 0) flagSum[1]++;
-        if ((flag & QZEntry.ANTI     ) != 0) flagSum[2]++;
+        if ((flag & QZEntry.DIRECTORY) == 0) flagSum[1] += v;
+        if ((flag & QZEntry.ANTI     ) != 0) flagSum[2] += v;
     }
-    private void countFlag(int flag) {
-        if ((flag & QZEntry.CT       ) != 0) flagSum[3]++;
-        if ((flag & QZEntry.AT       ) != 0) flagSum[4]++;
-        if ((flag & QZEntry.MT       ) != 0) flagSum[5]++;
-        if ((flag & QZEntry.ATTR     ) != 0) flagSum[6]++;
-        if ((flag & QZEntry.CRC      ) != 0) flagSum[7]++;
+    final void countFlag(int flag, int v) {
+        if ((flag & QZEntry.CT  ) != 0) flagSum[3] += v;
+        if ((flag & QZEntry.AT  ) != 0) flagSum[4] += v;
+        if ((flag & QZEntry.MT  ) != 0) flagSum[5] += v;
+        if ((flag & QZEntry.ATTR) != 0) flagSum[6] += v;
+        if ((flag & QZEntry.CRC ) != 0) flagSum[7] += v;
     }
     private void countBlockFlag(WordBlock b) {
         if ((b.hasCrc & 1) != 0) flagSum[8]++;
@@ -288,11 +290,19 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         Arrays.fill(flagSum, 0);
 
         for (WordBlock b : blocks) countBlockFlag(b);
-        for (int i = 0; i < files.size(); i++) countFlag(files.get(i).flag);
-        for (int i = 0; i < emptyFiles.size(); i++) countFlagEmpty(emptyFiles.get(i).flag);
+        for (int i = 0; i < files.size(); i++) countFlag(files.get(i).flag, 1);
+        for (int i = 0; i < emptyFiles.size(); i++) {
+            byte flag = emptyFiles.get(i).flag;
+            countFlag(flag, 1);
+            countFlagEmpty(flag, 1);
+        }
     }
 
-    public final void nextWordBlock() throws IOException {
+    public final void closeWordBlock() throws IOException {
+        closeEntry();
+        closeWordBlock0();
+    }
+    final void closeWordBlock0() throws IOException {
         if (out == null) return;
 
         WordBlock b = blocks.get(blocks.size()-1);
@@ -326,11 +336,11 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         if (coders.length > 1)
             wb.outSizes = new long[coders.length-1];
 
-        OutputStream out = wb.new CRC(s);
+        OutputStream out = s;
         for (int i = 0; i < wb.coder.length; i++) {
-            QZCoder m = wb.coder[i];
-            if (i!=0) out = wb.new Counter(out, wb.coder.length-i-1);
+            out = wb.new Counter(out, i-1);
 
+            QZCoder m = wb.coder[i];
             out = m.encode(out);
         }
 
@@ -340,10 +350,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     @Override
     public void finish() throws IOException {
         if (finished) return;
-
-        closeEntry();
-        nextWordBlock();
-
+        closeWordBlock();
         finished = true;
     }
 
@@ -352,7 +359,10 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         try {
             finish();
         } finally {
-            s.close();
+            if (!ignoreClose) s.close();
         }
     }
+
+    public boolean isIgnoreClose() { return ignoreClose; }
+    public void setIgnoreClose(boolean ignoreClose) { this.ignoreClose = ignoreClose; }
 }

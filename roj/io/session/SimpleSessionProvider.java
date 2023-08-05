@@ -6,7 +6,7 @@ import roj.concurrent.SegmentReadWriteLock;
 import roj.config.NBTParser;
 import roj.config.serial.CAdapter;
 import roj.config.serial.SerializerFactory;
-import roj.config.serial.SerializerFactoryFactory;
+import roj.config.serial.Serializers;
 import roj.config.serial.ToNBT;
 import roj.io.IOUtil;
 import roj.io.source.BufferedSource;
@@ -32,9 +32,9 @@ import java.util.function.BiConsumer;
  * @since 2023/5/15 0015 14:13
  */
 public class SimpleSessionProvider extends SessionProvider implements BiConsumer<String,Map<String,Object>> {
-	private static final SerializerFactory factory = SerializerFactoryFactory.create(
-		SerializerFactory.GENERATE|SerializerFactory.IGNORE_UNKNOWN|
-		SerializerFactory.DYNAMIC|
+	private static final SerializerFactory factory = Serializers.newSerializerFactory(
+		SerializerFactory.GENERATE|
+		SerializerFactory.PREFER_DYNAMIC|
 		SerializerFactory.CHECK_INTERFACE|SerializerFactory.CHECK_PARENT);
 
 	private static final ThreadLocal<CAdapter<?>> local = new ThreadLocal<>();
@@ -77,7 +77,7 @@ public class SimpleSessionProvider extends SessionProvider implements BiConsumer
 	public void flush() {
 		if (concurrency < 0) return;
 
-		lock.acquire(0);
+		lock.lockAll();
 		try {
 			for (LRUCache<String, Map<String, Object>> cache : map) {
 				for (Map.Entry<String, Map<String, Object>> entry : cache.entrySet()) {
@@ -86,18 +86,18 @@ public class SimpleSessionProvider extends SessionProvider implements BiConsumer
 				cache.clear();
 			}
 		} finally {
-			lock.release(0);
+			lock.unlockAll();
 		}
 	}
 
 	public void relock() {
-		lock.acquire(0);
+		lock.lockAll();
 		try {
 			do {
 				multiplier = rnd.nextInt();
 			} while (multiplier == 0);
 		} finally {
-			lock.release(0);
+			lock.unlockAll();
 		}
 	}
 
@@ -107,12 +107,12 @@ public class SimpleSessionProvider extends SessionProvider implements BiConsumer
 
 		if (concurrency >= 0) {
 			int _lock_ = (multiplier*id.hashCode()) & concurrency;
-			lock.acquireShared(_lock_);
+			lock.tryLock(_lock_);
 			try {
 				Map<String,Object> cached = Helpers.cast(map[_lock_].get(id));
 				if (cached != null) return cached;
 			} finally {
-				lock.releaseShared(_lock_);
+				lock.unlock(_lock_);
 			}
 		}
 
@@ -136,12 +136,12 @@ public class SimpleSessionProvider extends SessionProvider implements BiConsumer
 
 		if (concurrency >= 0) {
 			int _lock_ = (multiplier*id.hashCode()) & concurrency;
-			lock.acquireShared(_lock_);
+			lock.tryLock(_lock_);
 			try {
 				map[_lock_].put(id, value);
 				// serialize handled by onEvict(accept) method
 			} finally {
-				lock.releaseShared(_lock_);
+				lock.unlock(_lock_);
 			}
 		} else {
 			accept(id, value);
@@ -181,12 +181,12 @@ public class SimpleSessionProvider extends SessionProvider implements BiConsumer
 
 		if (concurrency >= 0) {
 			int _lock_ = (multiplier*id.hashCode()) & concurrency;
-			lock.acquireShared(_lock_);
+			lock.tryLock(_lock_);
 			try {
 				boolean savedInMemory = null != map[_lock_].remove(id);
 				if (savedInMemory) return;
 			} finally {
-				lock.releaseShared(_lock_);
+				lock.unlock(_lock_);
 			}
 		}
 

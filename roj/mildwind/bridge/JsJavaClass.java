@@ -11,7 +11,7 @@ import roj.mildwind.util.ScriptException;
 
 import java.util.List;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234

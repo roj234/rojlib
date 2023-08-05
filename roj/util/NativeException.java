@@ -8,20 +8,5 @@ package roj.util;
  */
 public final class NativeException extends RuntimeException {
 	private static final long serialVersionUID = 0L;
-
-	public NativeException() {
-		super();
-	}
-
-	public NativeException(String msg, Throwable cause) {
-		super(msg, cause);
-	}
-
-	public NativeException(String msg) {
-		super(msg);
-	}
-
-	public NativeException(Throwable cause) {
-		super(cause);
-	}
+	public NativeException(String msg) { super(msg); }
 }

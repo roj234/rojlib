@@ -70,12 +70,9 @@ public final class CstNameAndType extends Constant {
 		this.name = name;
 	}
 
-	public final CstUTF getType() {
-		return type;
-	}
+	public final CstUTF getType() { return type; }
 	public final void setType(CstUTF type) {
-		if (type == null)
-			throw new NullPointerException("type");
+		if (type == null) throw new NullPointerException("type");
 		this.type = type;
 	}
 

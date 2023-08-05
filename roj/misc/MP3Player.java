@@ -1,22 +1,26 @@
 package roj.misc;
 
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
 import roj.io.IOUtil;
 import roj.sound.SoundUtil;
+import roj.sound.mp3.Header;
 import roj.sound.util.FilePlayer;
 import roj.sound.util.JavaAudio;
-import roj.ui.CmdUtil;
-import roj.ui.UIUtil;
+import roj.text.CharList;
+import roj.ui.CLIUtil;
+import roj.ui.ProgressBar;
+import roj.ui.terminal.Argument;
+import roj.ui.terminal.CommandConsole;
+import roj.ui.terminal.CommandImpl;
 import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 import static roj.sound.util.FilePlayer.*;
+import static roj.ui.terminal.CommandNode.argument;
+import static roj.ui.terminal.CommandNode.literal;
 
 /**
  * @author Roj233
@@ -30,9 +34,8 @@ public class MP3Player {
 			return;
 		}
 
-		List<File> files = IOUtil.findAllFiles(new File(args[0]), file -> file.getName().toLowerCase().endsWith(".mp3"));
-		FilePlayer play = new FilePlayer(files);
-		play.start();
+		CommandConsole c = new CommandConsole("\u001b[33mCLI-MP3\u001b[93m> ");
+		CLIUtil.setConsole(c);
 
 		if (args.length != 2 || !args[1].equals("-notip")) {
 			System.out.println("Command: ");
@@ -44,89 +47,114 @@ public class MP3Player {
 			System.out.println("           prev next info list");
 		}
 
-		Tokenizer tokenizer = new Tokenizer();
-		ArrayList<String> tmp = new ArrayList<>(4);
-		boolean muted = false;
+		List<File> files = IOUtil.findAllFiles(new File(args[0]), file -> file.getName().toLowerCase().endsWith(".mp3"));
+		FilePlayer play = new FilePlayer(files);
+		play.start();
 
-		o:
-		while (true) {
-			tokenizer.init(UIUtil.userInput("> "));
-			tmp.clear();
-			try {
-				while (tokenizer.hasNext()) {
-					Word w = tokenizer.readWord();
-					if (w.type() == Word.EOF) {
-						CmdUtil.error("指令有误 " + tmp);
-						continue o;
+		c.register(literal("single")
+			.then(argument("on", Argument.bool())
+				.executes(ctx -> {
+					if (ctx.argument("on", Boolean.class)) play.flags |= PLAY_SINGLE;
+					else play.flags &= ~PLAY_SINGLE;
+				})));
+		c.register(literal("repeat")
+			.then(argument("on", Argument.bool())
+				.executes(ctx -> {
+					if (ctx.argument("on", Boolean.class)) play.flags |= PLAY_REPEAT;
+					else play.flags &= ~PLAY_REPEAT;
+				})));
+		c.register(literal("shuffle")
+			.then(argument("on", Argument.bool())
+				.executes(ctx -> {
+					if (ctx.argument("on", Boolean.class)) ArrayUtil.shuffle(play.playList, play.rng);
+					else {
+						play.playList.clear();
+						play.playList.addAll(Helpers.cast(play.playListBackup));
 					}
-					tmp.add(w.val());
+				})));
+		c.register(literal("vol")
+			.then(argument("vol", Argument.real(0, 1))
+				.executes(ctx -> {
+					((JavaAudio) play.player.audio).setVolume(SoundUtil.dbSound(ctx.argument("vol", Double.class)));
+				})));
+		c.register(literal("prev")
+			.executes(ctx -> {
+				play.play(play.playIndex == 0 ? play.playList.size() - 1 : play.playIndex - 1);
+			}));
+		c.register(literal("next")
+			.executes(ctx -> {
+				play.play(play.playIndex == play.playList.size() - 1 ? 0 : play.playIndex + 1);
+			}));
+		c.register(literal("pause")
+			.executes(ctx -> {
+				play.player.pause();
+			}));
+		c.register(literal("stop")
+			.executes(ctx -> {
+				play.flags |= WAITING;
+				play.player.stop();
+			}));
+		c.register(literal("play")
+			.executes(ctx -> {
+				if (play.player.paused()) {
+					play.player.pause();
 				}
-				if (tmp.isEmpty()) continue;
-				switch (tmp.get(0)) {
-					case "single":
-						if (tmp.get(1).equals("on")) {play.flags |= PLAY_SINGLE;} else play.flags &= ~PLAY_SINGLE;
-						break;
-					case "repeat":
-						if (tmp.get(1).equals("on")) {play.flags |= PLAY_REPEAT;} else play.flags &= ~PLAY_REPEAT;
-						break;
-					case "shuffle":
-						if (tmp.get(1).equals("on")) {ArrayUtil.shuffle(play.playList, play.rng);} else {
-							play.playList.clear();
-							play.playList.addAll(Helpers.cast(play.playListBackup));
-						}
-						break;
-					case "cut":
-						play.play(Integer.parseInt(tmp.get(1)) - 1);
-						break;
-					case "goto":
-						if ((play.flags & WAITING) == 0) play.player.cut(Double.parseDouble(tmp.get(1)));
-						break;
-					case "prev":
-						play.play(play.playIndex == 0 ? play.playList.size() - 1 : play.playIndex - 1);
-						break;
-					case "next":
-						play.play(play.playIndex == play.playList.size() - 1 ? 0 : play.playIndex + 1);
-						break;
-					case "pause":
-						play.player.pause();
-						break;
-					case "stop":
-						play.flags |= WAITING;
-						play.player.stop();
-						break;
-					case "play":
-						if (play.player.paused()) {
-							play.player.pause();
-						}
-						play.mayNotify();
-						break;
-					case "info":
-						play.dumpInfo();
-						break;
-					case "speed":
-						System.out.println("WIP");
-						break;
-					case "vol":
-						((JavaAudio) play.player.audio).setVolume(SoundUtil.dbSound(Double.parseDouble(tmp.get(1))));
-						break;
-					case "mute":
-						((JavaAudio) play.player.audio).mute(muted = !muted);
-						break;
-					case "list":
-						System.out.println("===================================");
-						List<File> list = Helpers.cast(play.playList);
-						for (int i = 0; i < list.size(); i++) {
-							File f = list.get(i);
-							if (tmp.size() > 1 && !f.getName().contains(tmp.get(1))) continue;
-							System.out.println("  " + (i + 1) + ". " + f.getPath());
-						}
-						System.out.println("===================================");
-						break;
+				play.mayNotify();
+			}));
+		c.register(literal("info")
+			.executes(ctx -> {
+				play.dumpInfo();
+			}));
 
-				}
-			} catch (Throwable e) {
-				e.printStackTrace();
+		final boolean[] muted = {false};
+		c.register(literal("mute")
+			.executes(ctx -> {
+				((JavaAudio) play.player.audio).mute(muted[0] = !muted[0]);
+			}));
+		c.register(literal("cut")
+			.then(argument("id", Argument.number(0, play.playList.size()))
+				.executes(ctx -> {
+					play.play(ctx.argument("id", Integer.class));
+			})));
+
+		CommandImpl search1 = ctx -> {
+			String search = ctx.argument("search", String.class);
+			System.out.println("===================================");
+			List<File> list = Helpers.cast(play.playList);
+			for (int i = 0; i < list.size(); i++) {
+				File f = list.get(i);
+				if (search != null && !f.getName().contains(search)) continue;
+				System.out.println("  " + (i + 1) + ". " + f.getPath());
 			}
+			System.out.println("===================================");
+		};
+
+		c.register(literal("list").executes(search1).then(argument("search", Argument.string()).executes(search1)));
+
+		ProgressBar bar = new ProgressBar("播放进度") {
+			@Override
+			protected void render(CharList b) {
+				CLIUtil.renderBottomLine(b, true, 0);
+			}
+		};
+		bar.setUnit("f");
+		bar.updateForce(1);
+
+		int prevFrame = 0;
+		while (true) {
+			try {
+				Thread.sleep(500);
+			} catch (InterruptedException ignored) {}
+			Header header = play.player.getHeader();
+			float played = header.getFrames()*header.getFrameDuration();
+			int len = (int) ((File) play.playList.get(play.playIndex)).length();
+			float allTime = (float) len / header.getFrameSize() * header.getFrameDuration();
+			int f = header.getFrames();
+			bar.update(played/allTime, f-prevFrame);
+			prevFrame = f;
+			int intPlayed = (int) played;
+			int intAllTime = (int) allTime;
+			bar.setPrefix(intPlayed/60+":"+intPlayed%60+"/"+intAllTime/60+":"+intAllTime%60);
 		}
 	}
 }

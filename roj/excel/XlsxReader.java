@@ -45,7 +45,7 @@ public abstract class XlsxReader {
 	private Consumer<Element> consumer;
 
 	// row-col
-	private final SimpleList<String> sharedStrings = new SimpleList<>();
+	private final SimpleList<String> sharedStrings = SimpleList.withCapacityType(64, 2);
 	private final SimpleList<String> cells = new SimpleList<>();
 	private final int[] cellPos = new int[2];
 	private boolean emptyRow;
@@ -62,8 +62,6 @@ public abstract class XlsxReader {
 		replaceNodes.put("row", FAKE);
 		replaceNodes.put("c", new Element("c"));
 		replaceNodes.put("v", new Element("v"));
-
-		sharedStrings.capacityType = 2;
 	}
 
 	public void parse(File file, Charset charset) throws IOException, ParseException {
@@ -184,7 +182,7 @@ public abstract class XlsxReader {
 	private void readWith(ZipArchive zip, ZEntry entry, Consumer<Element> c) throws IOException,ParseException {
 		consumer = c;
 
-		try (InputStream in = zip.getInputStream(entry)) {
+		try (InputStream in = zip.getInput(entry)) {
 			xml.parseRaw(new ToXEntry() {
 				@Override
 				protected Element createElement(String str) {
