@@ -7,7 +7,6 @@ import roj.util.DynByteBuf;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 
 /**
  * @author solo6975
@@ -16,236 +15,51 @@ import java.nio.ByteBuffer;
 public class UTFCoder {
 	public final CharList charBuf = new CharList();
 	public final ByteList byteBuf = new ByteList();
+
 	private final ByteList.Slice shell = new ByteList.Slice();
+	public final ByteList.Slice shellB = new ByteList.Slice();
 
 	public final StringBuilder numberHelper = new StringBuilder(32);
 
-	public boolean keep;
-
-	private void readBuf(ByteBuffer buf, boolean eatData) {
-		ByteList b = byteBuf;
-		b.clear();
-		int rem = buf.remaining(), pos = buf.position();
-		b.ensureCapacity(rem);
-
-		buf.get(b.list, 0, rem);
-		if (!eatData) buf.position(pos);
-		b.wIndex(rem);
+	public byte[] encode(CharSequence str) {
+		ByteList b = byteBuf; b.clear();
+		return b.putUTFData(str).toByteArray();
 	}
 
-	public byte[] encode(CharSequence cs) {
-		ByteList b = this.byteBuf;
-		if (!keep) b.clear();
-		b.putUTFData(cs);
-		return b.toByteArray();
-	}
-
-	public byte[] encode() {
-		ByteList b = this.byteBuf;
-		if (!keep) b.clear();
-		b.putUTFData(charBuf);
-		charBuf.clear();
-		return b.toByteArray();
-	}
-
-	public ByteList encodeR() {
-		ByteList b = this.byteBuf;
-		if (!keep) b.clear();
-		b.putUTFData(charBuf);
-		charBuf.clear();
-		return b;
-	}
-
-	public ByteList encodeR(CharSequence cs) {
-		ByteList b = this.byteBuf;
-		if (!keep) b.clear();
-		b.putUTFData(cs);
-		return b;
-	}
-
-	public String decode() {
-		if (!keep) charBuf.clear();
-		try {
-			ByteList.decodeUTF(byteBuf.wIndex(), charBuf, byteBuf);
-		} catch (IOException ignored) {}
-		byteBuf.clear();
-		return charBuf.toString();
-	}
-
-	public String decode(DynByteBuf b) {
-		if (!keep) charBuf.clear();
-		try {
-			ByteList.decodeUTF(b.readableBytes(), charBuf, b);
-		} catch (IOException ignored) {}
-		return charBuf.toString();
-	}
-
-	public String decode(byte[] b) {
-		return decode(shell.setR(b,0,b.length));
-	}
-
-	public String decode(ByteBuffer buf, boolean eatData) {
-		readBuf(buf, eatData);
-		return decode();
-	}
-
-	public CharList decodeR() {
-		if (!keep) charBuf.clear();
-		try {
-			ByteList.decodeUTF(byteBuf.wIndex(), charBuf, byteBuf);
-		} catch (IOException ignored) {}
-		byteBuf.clear();
-		return charBuf;
-	}
-
+	public String decode(byte[] b) { return decodeR(b).toString(); }
+	public CharList decodeR(byte[] b) { return decodeR(shell.setR(b,0,b.length)); }
 	public CharList decodeR(DynByteBuf b) {
-		if (!keep) charBuf.clear();
-		try {
-			ByteList.decodeUTF(b.wIndex(), charBuf, b);
-		} catch (IOException ignored) {}
+		charBuf.clear();
+		UTF8MB4.CODER.decodeFixedIn(b, b.readableBytes(), charBuf);
 		return charBuf;
 	}
 
-	public CharList decodeR(ByteBuffer buf, boolean eatData) {
-		readBuf(buf, eatData);
-		return decodeR();
-	}
-
-	public byte[] decodeHex() {
-		ByteList b = byteBuf;
-		if (!keep) b.clear();
-		byte[] bb = TextUtil.hex2bytes(charBuf, b).toByteArray();
-		charBuf.clear();
-		return bb;
-	}
-
-	public byte[] decodeHex(CharSequence c) {
-		ByteList b = byteBuf;
-		if (!keep) b.clear();
-		return TextUtil.hex2bytes(c, b).toByteArray();
-	}
-
-	public ByteList decodeHexR() {
-		ByteList b = byteBuf;
-		if (!keep) b.clear();
-		TextUtil.hex2bytes(charBuf, b);
-		charBuf.clear();
-		return b;
-	}
-
-	public ByteList decodeHexR(CharSequence c) {
-		ByteList b = byteBuf;
-		if (!keep) b.clear();
-		TextUtil.hex2bytes(c, b);
-		return b;
-	}
-
-	public String encodeHex() {
-		if (!keep) charBuf.clear();
-		TextUtil.bytes2hex(byteBuf.list, 0, byteBuf.wIndex(), charBuf);
-		byteBuf.clear();
-		return charBuf.toString();
-	}
-
+	public String encodeHex(byte[] b) { return encodeHex(shell.setR(b,0,b.length)); }
 	public String encodeHex(ByteList b) {
-		if (!keep) charBuf.clear();
+		charBuf.clear();
 		TextUtil.bytes2hex(b.list, 0, b.wIndex(), charBuf);
 		return charBuf.toString();
 	}
 
-	public String encodeHex(byte[] b) {
-		return encodeHex(shell.setR(b,0,b.length));
+	public byte[] decodeHex(CharSequence c) {
+		ByteList b = byteBuf; b.clear();
+		return TextUtil.hex2bytes(c, b).toByteArray();
 	}
 
-	public CharList encodeHexR() {
-		if (!keep) charBuf.clear();
-		TextUtil.bytes2hex(byteBuf.list, 0, byteBuf.wIndex(), charBuf);
-		byteBuf.clear();
-		return charBuf;
-	}
-
-	public CharList encodeHexR(ByteList b) {
-		if (!keep) charBuf.clear();
-		TextUtil.bytes2hex(b.list, b.arrayOffset(), b.readableBytes(), charBuf);
-		return charBuf;
-	}
-
-	public byte[] decodeBase64() {
-		ByteList b = byteBuf;
-		if (!keep) b.clear();
-		byte[] bb = Base64.decode(charBuf, 0, charBuf.length(), b, Base64.B64_CHAR_REV).toByteArray();
+	public String encodeBase64(byte[] b) { return encodeBase64(shell.setR(b,0,b.length)); }
+	public String encodeBase64(DynByteBuf b) { return encodeBase64(b, Base64.B64_CHAR); }
+	public String encodeBase64(DynByteBuf b, byte[] chars) {
 		charBuf.clear();
-		return bb;
+		Base64.encode(b, charBuf, chars);
+		return charBuf.toString();
 	}
 
-	public byte[] decodeBase64(CharSequence c) {
-		ByteList b = byteBuf;
-		if (!keep) b.clear();
-		return Base64.decode(c, b).toByteArray();
-	}
-
-	public ByteList decodeBase64R() {
-		ByteList b = byteBuf;
-		if (!keep) b.clear();
-		Base64.decode(charBuf, 0, charBuf.length(), b, Base64.B64_CHAR_REV);
-		charBuf.clear();
-		return b;
-	}
-
-	public ByteList decodeBase64R(CharSequence c) {
-		ByteList b = byteBuf;
-		if (!keep) b.clear();
-		Base64.decode(c, 0, c.length(), b, Base64.B64_CHAR_REV);
-		return b;
-	}
-
+	public byte[] decodeBase64(CharSequence c) { return decodeBase64R(c).toByteArray(); }
+	public ByteList decodeBase64R(CharSequence c) { return decodeBase64R(c, Base64.B64_CHAR_REV); }
 	public ByteList decodeBase64R(CharSequence c, byte[] chars) {
-		ByteList b = byteBuf;
-		if (!keep) b.clear();
+		ByteList b = byteBuf; b.clear();
 		Base64.decode(c, 0, c.length(), b, chars);
 		return b;
-	}
-
-	public String encodeBase64() {
-		if (!keep) charBuf.clear();
-		Base64.encode(byteBuf, charBuf, Base64.B64_CHAR);
-		byteBuf.clear();
-		return charBuf.toString();
-	}
-
-	public String encodeBase64(DynByteBuf b) {
-		if (!keep) charBuf.clear();
-		Base64.encode(b, charBuf, Base64.B64_CHAR);
-		return charBuf.toString();
-	}
-
-	public String encodeBase64(DynByteBuf b, byte[] chars) {
-		if (!keep) charBuf.clear();
-		Base64.encode(b, charBuf, chars);
-		return charBuf.toString();
-	}
-
-	public String encodeBase64(byte[] b) {
-		return encodeBase64(shell.setR(b,0,b.length));
-	}
-
-	public CharList encodeBase64R() {
-		if (!keep) charBuf.clear();
-		Base64.encode(byteBuf, charBuf, Base64.B64_CHAR);
-		byteBuf.clear();
-		return charBuf;
-	}
-
-	public CharList encodeBase64R(DynByteBuf b) {
-		if (!keep) charBuf.clear();
-		Base64.encode(b, charBuf, Base64.B64_CHAR);
-		return charBuf;
-	}
-
-	public CharList encodeBase64R(DynByteBuf b, byte[] chars) {
-		if (!keep) charBuf.clear();
-		Base64.encode(b, charBuf, chars);
-		return charBuf;
 	}
 
 	public int encodeTo(OutputStream out) throws IOException {
@@ -303,6 +117,4 @@ public class UTFCoder {
 
 	public ByteList wrap(byte[] b) { return shell.setR(b,0,b.length); }
 	public ByteList wrap(byte[] b, int off, int len) { return shell.setR(b,off,len); }
-
-	public final ByteList.Slice shellB = new ByteList.Slice();
 }

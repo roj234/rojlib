@@ -6,7 +6,9 @@ import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.MyChannel;
-import roj.net.ch.osi.ServerLaunch;
+import roj.net.ch.ServerLaunch;
+import roj.net.ch.handler.Compress;
+import roj.net.ch.handler.VarintSplitter;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -18,9 +20,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * 热重载,支持一对多
- * 限制:
- * 1. 正在执行的函数, 下次调用才能起效
- * 2. 不能增加/修改/删除 方法/字段以及它们的类型/参数/访问级
+ * 限制: 正在执行的函数, 下次调用才能起效
  *
  * @author Roj233
  * @since 2022/2/21 15:09
@@ -35,32 +35,13 @@ public class HRRemote {
 		Client(MyChannel ctx) {this.ctx = ctx;}
 
 		@Override
-		public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
+		public void channelRead(ChannelCtx ctx, Object msg) {
 			DynByteBuf buf = (DynByteBuf) msg;
-			if (buf.readableBytes() < buf.get(buf.rIndex)) return;
-			buf.skipBytes(1);
-
-			switch (buf.readUnsignedByte()) {
-				case R_OK:
-					int succeed = buf.readUnsignedShort();
-					int all = buf.readUnsignedShort();
-					System.out.println("重载[O]: " + succeed + " / " + all);
-					break;
-				case R_ERR:
-					succeed = buf.readUnsignedShort();
-					all = buf.readUnsignedShort();
-					System.out.println("重载[X]: " + succeed + " / " + all);
-					break;
-				case R_SHUTDOWN:
-					ctx.close();
-					break;
-			}
+			System.out.println(ctx.remoteAddress()+": "+buf.readUTF());
 		}
 
 		@Override
-		public void channelClosed(ChannelCtx ctx) {
-			clients.remove(this);
-		}
+		public void channelClosed(ChannelCtx ctx) { clients.remove(this); }
 
 		@Override
 		public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
@@ -77,18 +58,22 @@ public class HRRemote {
 		if (modified.size() > 9999) throw new IllegalArgumentException("Too many classes modified");
 
 		ByteList tmp = IOUtil.getSharedByteBuf();
-		tmp.put(0x66).putShort(modified.size());
 		for (int i = 0; i < modified.size(); i++) {
 			IClass clz = modified.get(i);
-			tmp.putUTF(clz.name().replace('/', '.'));
-			ByteList shared = Parser.toByteArrayShared(clz);
-			tmp.putInt(shared.wIndex()).put(shared);
-		}
+			ByteList data = Parser.toByteArrayShared(clz);
 
-		ByteList array = ByteList.wrap(tmp.toByteArray());
+			tmp.clear();
+			send(tmp.put(0).put(data));
+		}
+		tmp.clear();
+		send(tmp.put(1));
+	}
+
+	private void send(DynByteBuf tmp) {
 		for (Client client : clients) {
 			try {
-				client.ctx.fireChannelWrite(array);
+				tmp.rIndex = 0;
+				client.ctx.fireChannelWrite(tmp);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -100,12 +85,14 @@ public class HRRemote {
 	public HRRemote(int port) throws IOException {
 		clients = new ConcurrentLinkedQueue<>();
 
-		ServerLaunch.tcp().threadMax(1).threadPrefix("热重载服务器")
-					.listen(InetAddress.getLoopbackAddress(), port)
+		ServerLaunch.tcp("热重载服务器")
+					.listen2(InetAddress.getLoopbackAddress(), port)
 					.option(StandardSocketOptions.SO_REUSEADDR, true)
 					.initializator((ctx) -> {
 						Client t = new Client(ctx);
-						ctx.addLast("handler", t);
+						ctx.addLast("Length", VarintSplitter.twoMbVLUI())
+						   .addLast("Compress", new Compress())
+						   .addLast("handler", t);
 						clients.add(t);
 					}).launch();
 	}

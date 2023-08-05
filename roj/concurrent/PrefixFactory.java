@@ -16,6 +16,6 @@ public class PrefixFactory implements TaskPool.MyThreadFactory {
 
 	@Override
 	public TaskPool.ExecutorImpl get(TaskPool pool) {
-		return pool.new ExecutorImpl(prefix + '-' + ordinal.getAndIncrement());
+		return pool.new ExecutorImpl(prefix+ordinal.getAndIncrement());
 	}
 }

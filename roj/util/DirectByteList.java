@@ -3,13 +3,16 @@ package roj.util;
 import roj.text.TextUtil;
 import sun.misc.Unsafe;
 
-import java.nio.*;
+import java.nio.BufferOverflowException;
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -130,7 +133,7 @@ public class DirectByteList extends DynByteBuf {
 	}
 
 	public final DirectByteList put(byte[] b, int off, int len) {
-		if (len < 0 || off < 0 || len > b.length - off) throw new ArrayIndexOutOfBoundsException();
+		ArrayUtil.checkRange(b, off, len);
 		if (len > 0) {
 			int off1 = moveWI(len);
 			copyFromArray(b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, address + off1, len);
@@ -311,13 +314,13 @@ public class DirectByteList extends DynByteBuf {
 	// region GETxxx
 
 	public final void read(byte[] b, int off, int len) {
-		if (len < 0 || off < 0 || len > b.length - off) throw new ArrayIndexOutOfBoundsException();
+		ArrayUtil.checkRange(b, off, len);
 		if (len > 0) {
 			copyToArray(address+moveRI(len), b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, len);
 		}
 	}
 	public final void read(int i, byte[] b, int off, int len) {
-		if (len < 0 || off < 0 || len > b.length - off) throw new ArrayIndexOutOfBoundsException();
+		ArrayUtil.checkRange(b, off, len);
 		if (len > 0) {
 			copyToArray(address+testWI(i, len), b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, len);
 		}
@@ -413,13 +416,12 @@ public class DirectByteList extends DynByteBuf {
 
 		long addr = testWI(i, len)+address;
 
-		ArrayCache cache = ArrayCache.getDefaultCache();
-		char[] ob = cache.getCharArray(len, false);
+		char[] ob = ArrayCache.getCharArray(len, false);
 		int j = 0;
 		while (len-- > 0) ob[j++] = (char)u.getByte(addr++);
 
 		String s = new String(ob, 0, j);
-		cache.putArray(ob);
+		ArrayCache.putArray(ob);
 		return s;
 	}
 
@@ -568,10 +570,7 @@ public class DirectByteList extends DynByteBuf {
 	}
 
 	public static class Slice extends DirectByteList {
-		public Slice() {
-			super(false);
-		}
-
+		public Slice() { super(false); }
 		public Slice(long addr, int len) {
 			super(false);
 			this.wIndex = len;
@@ -586,10 +585,12 @@ public class DirectByteList extends DynByteBuf {
 			nm = mem;
 			return this;
 		}
-
-		public void update(long addr, int len) {
-			address = addr;
-			length = len;
+		public void _expand(int len, boolean backward) {
+			if (backward) {
+				address -= len;
+				wIndex += len;
+			}
+			length += len;
 		}
 
 		public DirectByteList copy(DynByteBuf buf) {
@@ -603,23 +604,12 @@ public class DirectByteList extends DynByteBuf {
 		}
 
 		@Override
-		public int capacity() {
-			return length;
-		}
-
+		public int capacity() { return length; }
 		@Override
-		public int maxCapacity() {
-			return length;
-		}
-
+		public int maxCapacity() { return length; }
 		@Override
-		public void ensureCapacity(int required) {
-			if (required > length) throw new ReadOnlyBufferException();
-		}
-
+		public boolean immutableCapacity() { return true; }
 		@Override
-		public boolean immutableCapacity() {
-			return true;
-		}
+		public void ensureCapacity(int required) { if (required > length) throw new BufferOverflowException(); }
 	}
 }

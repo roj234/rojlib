@@ -3,6 +3,7 @@ package roj.archive.qz;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ChecksumInputStream;
+import roj.archive.SourceStreamCAS;
 import roj.collect.*;
 import roj.concurrent.TaskHandler;
 import roj.crypt.CRCAny;
@@ -14,6 +15,7 @@ import roj.io.source.BufferedSource;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.io.source.SplittedSource;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -28,6 +30,7 @@ import java.util.function.ObjLongConsumer;
 import java.util.zip.CRC32;
 
 import static roj.archive.qz.BlockId.*;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * 我去除了大部分C++的味道，但是保留了一部分，这样你才知道自己用的是Java
@@ -37,7 +40,9 @@ import static roj.archive.qz.BlockId.*;
  */
 public class QZArchive implements ArchiveFile {
 	Source r;
-	private final BufferPool pool;
+	private Source fpRead;
+	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(QZArchive.class, "fpRead");
+
 	private ByteList buf = ByteList.EMPTY;
 
 	WordBlock[] blocks;
@@ -48,37 +53,48 @@ public class QZArchive implements ArchiveFile {
 	private final byte[] password;
 	private int maxFileCount = 0xFFFFF, memoryLimitKb = 131072;
 
+	public QZArchive(String path) throws IOException { this(new File(path), null); }
 	public QZArchive(File file) throws IOException { this(file, null); }
 	public QZArchive(File file, String pass) throws IOException {
 		if (!file.isFile()) throw new FileNotFoundException(file.getName());
 
 		password = pass == null ? null : pass.getBytes(StandardCharsets.UTF_16LE);
-		pool = BufferPool.localPool();
 
 		r = new FileSource(file);
 		if (file.getName().endsWith(".001")) {
-			r = BufferedSource.autoClose(new SplittedSource((FileSource) r, (int) file.length()));
+			r = BufferedSource.autoClose(new SplittedSource((FileSource) r, file.length()));
 		}
 
-		reload();
+		try {
+			reload();
+		} catch (Throwable e) {
+			r.close();
+			throw e;
+		}
 	}
 
 	public QZArchive(Source s) throws IOException { this(s, null); }
 	public QZArchive(Source s, String pass) throws IOException {
 		password = pass == null ? null : pass.getBytes(StandardCharsets.UTF_16LE);
-		pool = BufferPool.localPool();
 
 		r = s;
 		r.seek(0);
 		reload();
 	}
-	public QZArchive(Source s, boolean recovery, int maxFileCount, byte[] pass, BufferPool pool) {
+	public QZArchive(Source s, boolean recovery, int maxFileCount, byte[] pass) {
 		r = s;
 		this.recovery = recovery;
 		this.password = pass;
-		this.pool = pool;
 		this.maxFileCount = maxFileCount;
 	}
+
+	private QZArchive(QZArchive archive) {
+		this.blocks = archive.blocks;
+		this.entries = archive.entries;
+		this.password = archive.password;
+		this.r = archive.r;
+	}
+	public QZArchive parallel() { return new QZArchive(this); }
 
 	// region File
 
@@ -94,8 +110,15 @@ public class QZArchive implements ArchiveFile {
 		closeSolidStream();
 
 		if (r != null) {
-			r.close();
+			Source r1 = r;
+			r1.close();
 			r = null;
+
+			Source s;
+			do {
+				s = fpRead;
+				if (s != null) s.close();
+			} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, s, r1));
 
 			if (password != null) Arrays.fill(password, (byte) 0);
 		}
@@ -238,9 +261,9 @@ public class QZArchive implements ArchiveFile {
 		}
 
 		if (id == kAdditionalStreamsInfo) {
-			//QzInfo additionalInfo = readStreamInfo();
-			//id = buf.readUnsignedByte();
-			fatalError();
+			QzInfo additionalInfo = readStreamInfo();
+			id = buf.readUnsignedByte();
+			throw new IOException("kAdditionalStreamsInfo=="+additionalInfo);
 		}
 
 		QzInfo si;
@@ -254,7 +277,7 @@ public class QZArchive implements ArchiveFile {
 		if (id != kFilesInfo) fatalError();
 
 		readFileMetas(si);
-		if (si.files != null && si.files.length > 0) {
+		if (si.files != null/* && si.files.length > 0*/) {
 			entries = si.files;
 			blocks = si.blocks;
 		}
@@ -276,11 +299,10 @@ public class QZArchive implements ArchiveFile {
 
 		buf.close();
 
-		try (InputStream in = getSolidStream("<header>", new BufferedSource(r, 1024, pool, false), b, null)) {
-			buf = (ByteList) pool.buffer(false, (int) b.uSize);
+		try (InputStream in = getSolidStream(b, password)) {
+			buf = (ByteList) BufferPool.buffer(false, (int) b.uSize);
 			int read = buf.readStream(in, (int) b.uSize);
 			if (read < b.uSize) throw new EOFException("数据流过早终止");
-			if (in.read() >= 0) error("unknown padding");
 		}
 	}
 
@@ -431,7 +453,7 @@ public class QZArchive implements ArchiveFile {
 				off += len;
 			}
 
-			if (off > r.length()) error("字块["+i+"](子流"+streamId+")越过文件边界");
+			if (off > r.length()) error("字块["+i+"](子流"+streamId+")越过文件边界("+off+" > "+r.length()+")");
 		}
 	}
 
@@ -665,12 +687,11 @@ public class QZArchive implements ArchiveFile {
 			IntMap.Entry<CoderInfo> entry = outputs.get(j);
 			if (entry != null) {
 				b.complexCoder = entry.getValue();
-				break;
+				return b;
 			}
 		}
 
-		assert b.complexCoder != null;
-		return b;
+		throw new IOException("no output specified");
 	}
 
 	private void readBlockFileMap(QzInfo si) throws IOException {
@@ -723,6 +744,7 @@ public class QZArchive implements ArchiveFile {
 				f.uSize = b.uSize - sum;
 
 				if (prev != null) prev.next = f;
+				else b.firstEntry = f;
 
 				if (f.uSize <= 0) error("block["+j+"]没有足够的数据:最后的解压大小为" + f.uSize);
 			}
@@ -740,7 +762,7 @@ public class QZArchive implements ArchiveFile {
 
 				b.firstEntry = f;
 
-				if ((b.hasCrc&1) != 0) f.setCrc(b.crc);
+				if ((b.hasCrc&1) != 0) f._setCrc(b.crc);
 			}
 		}
 
@@ -759,12 +781,12 @@ public class QZArchive implements ArchiveFile {
 
 			for (WordBlock b : si.blocks) {
 				if (b.fileCount == 1 && (b.hasCrc&1) != 0) {
-					si.files[fileId++].setCrc(b.crc);
+					si.files[fileId++]._setCrc(b.crc);
 				} else {
 					for (int i = b.fileCount; i > 0; i--) {
 						if (extraCrcs.contains(extraCrc++)) {
 							int crc = buf.readIntLE();
-							si.files[fileId++].setCrc(crc);
+							si.files[fileId++]._setCrc(crc);
 
 							if (b.fileCount == 1) {
 								b.hasCrc |= 1;
@@ -784,9 +806,9 @@ public class QZArchive implements ArchiveFile {
 	private ByteList read(int len) throws IOException {
 		ByteList b = buf;
 		if (b.capacity() < len) {
-			if (b.capacity() > 0) pool.reserve(b);
+			if (b.capacity() > 0) BufferPool.reserve(b);
 			buf = ByteList.EMPTY;
-			b = buf = (ByteList) pool.buffer(false, len);
+			b = buf = (ByteList) BufferPool.buffer(false, len);
 		} else {
 			b.clear();
 		}
@@ -830,7 +852,7 @@ public class QZArchive implements ArchiveFile {
 	// endregion
 
 	public MyHashMap<String, QZEntry> getEntries() {
-		if (byName.isEmpty() && entries != null) {
+		if (byName.isEmpty()) {
 			byName.ensureCapacity(entries.length);
 			for (QZEntry entry : entries) {
 				byName.put(entry.name, entry);
@@ -838,24 +860,14 @@ public class QZArchive implements ArchiveFile {
 		}
 		return byName;
 	}
-
-	public InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException {
-		return getStream((QZEntry) entry, password);
-	}
-
-	public QZEntry[] getEntriesByPresentOrder() {
-		return entries;
-	}
+	public QZEntry[] getEntriesByPresentOrder() { return entries; }
 
 	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback) { parallelDecompress(th, callback, password); }
 	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback, byte[] pass) {
 		if (blocks == null) return;
 		for (WordBlock b : blocks) {
 			th.pushTask(() -> {
-				Source r = this.r.threadSafeCopy();
-				Source src = r.isBuffered() ? r : new BufferedSource(r, 1024, pool, true);
-
-				try (InputStream in = getSolidStream("block" + b.offset, src, b, pass)) {
+				try (InputStream in = getSolidStream(b, pass)) {
 					// noinspection all
 					LimitInputStream lin = new LimitInputStream(in, 0, false);
 					QZEntry entry = b.firstEntry;
@@ -877,15 +889,15 @@ public class QZArchive implements ArchiveFile {
 		}
 	}
 
-	public InputStream getStream(String entry) throws IOException {
+	public InputStream getInput(String entry) throws IOException {
 		QZEntry file = getEntries().get(entry);
 		if (file == null) return null;
-		return getStream(file, null);
+		return getInput(file, null);
 	}
-	public InputStream getStream(QZEntry file) throws IOException {
-		return getStream(file, null);
-	}
-	public InputStream getStream(QZEntry file, byte[] pass) throws IOException {
+	public InputStream getInput(QZEntry file) throws IOException { return getInput(file, null); }
+	@Override
+	public InputStream getInput(ArchiveEntry entry, byte[] password) throws IOException { return getInput((QZEntry) entry, password); }
+	public InputStream getInput(QZEntry file, byte[] pass) throws IOException {
 		if (file.uSize == 0) return new SourceInputStream(null, 0);
 
 		// 顺序访问的处理
@@ -909,8 +921,7 @@ public class QZArchive implements ArchiveFile {
 
 		closeSolidStream();
 
-		Source r = this.r.threadSafeCopy();
-		InputStream in = blockInput = getSolidStream(file.name, r.isBuffered()?r:BufferedSource.autoClose(r), file.block, pass);
+		InputStream in = blockInput = getSolidStream(file.block, pass);
 		if (in.skip(file.offset) < file.offset) {
 			in.close();
 			throw new EOFException("数据流过早终止");
@@ -938,13 +949,24 @@ public class QZArchive implements ArchiveFile {
 		activeEntry = null;
 	}
 
-	private InputStream getSolidStream(String name, Source src, WordBlock b, byte[] pass) throws IOException {
+	public InputStream getWordBlockInputStream(WordBlock b, byte[] pass) throws IOException { return getSolidStream(b, pass); }
+	private InputStream getSolidStream(WordBlock b, byte[] pass) throws IOException {
 		if (pass == null) pass = password;
 
+		Source src;
+		do {
+			src = fpRead;
+			if (src == null) {
+				src = r.threadSafeCopy();
+				src = src.isBuffered()?src:BufferedSource.autoClose(src);
+				break;
+			}
+		} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, src, null));
 		src.seek(b.offset);
+
 		InputStream in;
 		if (b.complexCoder == null) {
-			in = new SourceInputStream(src, b.size);
+			in = new SourceStreamCAS(src, b.size, this, FPREAD_OFFSET);
 
 			QZCoder[] coders = b.coder;
 			for (int i = 0; i < coders.length; i++) {
@@ -958,7 +980,7 @@ public class QZArchive implements ArchiveFile {
 			long off = b.offset;
 			src.seek(off);
 			// noinspection all
-			streams[0] = new SourceInputStream(src, b.size);
+			streams[0] = new SourceStreamCAS(src, b.size, this, FPREAD_OFFSET);
 			off += b.size;
 
 			for (int i = 0; i < b.extraSizes.length;) {
@@ -988,5 +1010,10 @@ public class QZArchive implements ArchiveFile {
 		WordBlock[] blocks;
 
 		QZEntry[] files;
+
+		@Override
+		public String toString() {
+			return "QzInfo{" + "offset=" + offset + ", streamLen=" + Arrays.toString(streamLen) + ", blocks=" + Arrays.toString(blocks) + ", files=" + Arrays.toString(files) + '}';
+		}
 	}
 }

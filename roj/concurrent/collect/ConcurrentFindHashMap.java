@@ -27,37 +27,37 @@ public class ConcurrentFindHashMap<K, V> extends MyHashMap<K, V> implements Find
 	}
 
 	@Override
-	public MyHashMap.Entry<K, V> getEntry(K id) {
+	public AbstractEntry<K, V> getEntry(K key) {
 		try {
 			lock.readLock().lock();
-			return super.getEntry(id);
+			return super.getEntry(key);
 		} finally {
 			lock.readLock().unlock();
 		}
 	}
 
 	@Override
-	public MyHashMap.Entry<K, V> getOrCreateEntry(K id) {
+	public AbstractEntry<K, V> getOrCreateEntry(K key) {
 		try {
 			lock.writeLock().lock();
-			return super.getOrCreateEntry(id);
+			return super.getOrCreateEntry(key);
 		} finally {
 			lock.writeLock().unlock();
 		}
 	}
 
 	@Override
-	public boolean containsValue(Object value) {
+	public AbstractEntry<K, V> getValueEntry(Object value) {
 		try {
 			lock.readLock().lock();
-			return super.containsValue(value);
+			return super.getValueEntry(value);
 		} finally {
 			lock.readLock().unlock();
 		}
 	}
 
 	@Override
-	protected V remove0(Object k, Object v) {
+	protected AbstractEntry<K, V> remove0(Object k, Object v) {
 		try {
 			lock.writeLock().lock();
 			return super.remove0(k, v);

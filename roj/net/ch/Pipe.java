@@ -6,7 +6,7 @@ import roj.crypt.SM3;
 import roj.crypt.XChaCha;
 import roj.io.NIOUtil;
 import roj.io.buf.BufferPool;
-import roj.io.misc.FDRW;
+import roj.io.misc.Net_LLIO;
 import roj.util.DynByteBuf;
 
 import java.io.FileDescriptor;
@@ -52,10 +52,13 @@ public class Pipe implements Selectable {
 		return down == null || !down.isOpen();
 	}
 
-	public final void setUp(MyChannel ctx) {
+	public final void setUp(MyChannel ctx) throws IOException {
 		pendDown = ctx.i_getBuffer();
 		if (!pendDown.isReadable()) pendDown = null;
-		else cipher(pendDown, false);
+		else {
+			pendDown = pool().allocate(true, pendDown.readableBytes()).put(pendDown);
+			cipher(pendDown, true);
+		}
 		up = (SocketChannel) ctx.i_outOfControl();
 	}
 
@@ -63,10 +66,13 @@ public class Pipe implements Selectable {
 		return up;
 	}
 
-	public final void setDown(MyChannel ctx) {
+	public final void setDown(MyChannel ctx) throws IOException {
 		pendUp = ctx.i_getBuffer();
 		if (!pendUp.isReadable()) pendUp = null;
-		else cipher(pendUp, false);
+		else {
+			pendUp = pool().allocate(true, pendUp.readableBytes()).put(pendUp);
+			cipher(pendUp, false);
+		}
 		down = (SocketChannel) ctx.i_outOfControl();
 	}
 
@@ -75,8 +81,8 @@ public class Pipe implements Selectable {
 	}
 
 	public void reset() {
-		if (pendUp != null) pool().reserve(pendUp);
-		if (pendDown != null) pool().reserve(pendDown);
+		if (pendUp != null) BufferPool.reserve(pendUp);
+		if (pendDown != null) BufferPool.reserve(pendDown);
 		pendUp = pendDown = null;
 
 		idleTime = 0;
@@ -89,20 +95,22 @@ public class Pipe implements Selectable {
 		if (upKey != null && up.keyFor(sel) != upKey) upKey.cancel();
 		if (downKey != null && down.keyFor(sel) != downKey) downKey.cancel();
 
+		// remove old keys (in MyChannel)
+		sel.selectNow();
+
 		upKey = up.register(sel, pendUp == null ? SelectionKey.OP_READ : SelectionKey.OP_WRITE, att);
 		downKey = down.register(sel, pendDown == null ? SelectionKey.OP_READ : SelectionKey.OP_WRITE, att);
 	}
 
 	public void selected(int readyOps) throws IOException, GeneralSecurityException {
 		if (up == null || down == null) return;
-		BufferPool pool = pool();
 
 		int c;
 		if (pendUp != null) {
 			try {
 				c = write(up, pendUp);
 				if (!pendUp.isReadable()) {
-					pool.reserve(pendUp);
+					BufferPool.reserve(pendUp);
 					pendUp = null;
 
 					SelectionKey k = upKey;
@@ -125,7 +133,7 @@ public class Pipe implements Selectable {
 			try {
 				c = write(down, pendDown);
 				if (!pendDown.isReadable()) {
-					pool.reserve(pendDown);
+					BufferPool.reserve(pendDown);
 					pendDown = null;
 
 					SelectionKey k = downKey;
@@ -144,7 +152,8 @@ public class Pipe implements Selectable {
 			}
 		}
 
-		DynByteBuf tmp = pool.buffer(true, 1536);
+		BufferPool pool = pool();
+		DynByteBuf tmp = pool.allocate(true, 1536);
 
 		// region up=>down
 		if (pendDown == null) {
@@ -165,7 +174,7 @@ public class Pipe implements Selectable {
 
 			if (tmp.isReadable()) {
 				pendDown = tmp;
-				tmp = pool.buffer(true, 1536);
+				tmp = pool.allocate(true, 1536);
 
 				SelectionKey k = downKey;
 				if (k != null) k.interestOps(SelectionKey.OP_WRITE);
@@ -195,7 +204,7 @@ public class Pipe implements Selectable {
 			SelectionKey k = upKey;
 			if (k != null) k.interestOps(SelectionKey.OP_WRITE);
 		} else {
-			pool.reserve(tmp);
+			BufferPool.reserve(tmp);
 		}
 		// endregion
 	}
@@ -283,7 +292,7 @@ public class Pipe implements Selectable {
 
 		FileDescriptor fd = NIOUtil.tcpFD(ch);
 		int r;
-		FDRW util = NIOUtil.tcpFdRW();
+		Net_LLIO util = NIOUtil.tcpFdRW();
 		try {
 			do {
 				r = util.read(fd, dst.address() + dst.wIndex(), dst.capacity() - dst.wIndex());
@@ -304,7 +313,7 @@ public class Pipe implements Selectable {
 
 		FileDescriptor fd = NIOUtil.tcpFD(ch);
 		int w;
-		FDRW util = NIOUtil.tcpFdRW();
+		Net_LLIO util = NIOUtil.tcpFdRW();
 		try {
 			do {
 				w = util.write(fd, src.address() + src.rIndex, src.readableBytes());

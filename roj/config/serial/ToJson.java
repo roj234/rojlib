@@ -44,7 +44,7 @@ public class ToJson extends ToSomeString {
 
 	public final void key0(String key) {
 		indent(depth);
-		ITokenizer.addSlashes(sb.append('"'), key).append("\":");
+		ITokenizer.addSlashes(key, 0, sb.append('"'), '\'').append("\":");
 		if (indent.length > 0) sb.append(' ');
 	}
 }

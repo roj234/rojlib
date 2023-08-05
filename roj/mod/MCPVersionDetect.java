@@ -1,6 +1,6 @@
 package roj.mod;
 
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 
 import java.io.IOException;
 import java.util.Map;
@@ -52,7 +52,7 @@ public class MCPVersionDetect {
 	}
 
 	public static void doDetect(Map<String, Object> cfg, InputDelegate ui) throws IOException {
-		CmdUtil.warning("自动匹配数据库更新在2021年2月(由于用户太少),出错请反馈,或手动选择");
+		CLIUtil.warning("自动匹配数据库更新在2021年2月(由于用户太少),出错请反馈,或手动选择");
 
 		String version = cfg.get("version").toString();
 		String mcpVersion = detectVersion(version);
@@ -62,7 +62,7 @@ public class MCPVersionDetect {
 		}
 		String stable = getStableMCPVersion(mcpVersion);
 		if (stable == null || Shared.DEBUG) {
-			CmdUtil.info("stable-123 写为 !123 (稳定版)  snapshot-20201221 缩写为 20201221 (快照版) ");
+			CLIUtil.info("stable-123 写为 !123 (稳定版)  snapshot-20201221 缩写为 20201221 (快照版) ");
 
 			String subVersion = ui.getMCPVersion().trim();
 

@@ -201,6 +201,8 @@ public class CMapping extends CEntry {
 		CEntry entry = get(key);
 		return entry.isNumber() ? entry.asDouble() : 0;
 	}
+	public final CList getList(String key) { return get(key).asList(); }
+	public final CMapping getMap(String key) { return get(key).asMap(); }
 
 	public final CEntry get(String key) {
 		return get1(key, CNull.NULL);
@@ -459,7 +461,7 @@ public class CMapping extends CEntry {
 		w.put((byte) Type.MAP.ordinal()).putVUInt(map.size());
 		if (map.isEmpty()) return;
 		for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-			entry.getValue().toBinary(w.putZhCn(entry.getKey()), struct);
+			entry.getValue().toBinary(w.putVUIGB(entry.getKey()), struct);
 		}
 	}
 

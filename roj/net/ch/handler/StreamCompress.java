@@ -1,12 +1,13 @@
 package roj.net.ch.handler;
 
+import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.NamespaceKey;
+import roj.util.Identifier;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -15,7 +16,7 @@ import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 import java.util.zip.ZipException;
 
-import static roj.util.NamespaceKey.of;
+import static roj.util.Identifier.of;
 
 /**
  * 主要给Http用。
@@ -25,7 +26,7 @@ import static roj.util.NamespaceKey.of;
  */
 public class StreamCompress implements ChannelHandler {
 	public static final String ID = "sc";
-	public static final NamespaceKey
+	public static final Identifier
 		RESET_IN = of("sc:reset_in"), RESET_OUT = of("sc:reset_out"),
 		IN_EOF = of("sc:in_eof"), OUT_EOF = of("sc:out_eof");
 
@@ -92,8 +93,8 @@ public class StreamCompress implements ChannelHandler {
 				ctx.channelRead(out);
 			}
 		} finally {
-			if (tmp1 != null) ctx.reserve(tmp1);
-			ctx.reserve(out);
+			if (tmp1 != null) BufferPool.reserve(tmp1);
+			BufferPool.reserve(out);
 		}
 
 		if (inf.finished()) {
@@ -152,8 +153,8 @@ public class StreamCompress implements ChannelHandler {
 				ctx.channelWrite(out);
 			}
 		} finally {
-			if (tmp1 != null) ctx.reserve(tmp1);
-			ctx.reserve(out);
+			if (tmp1 != null) BufferPool.reserve(tmp1);
+			BufferPool.reserve(out);
 		}
 	}
 
@@ -165,7 +166,7 @@ public class StreamCompress implements ChannelHandler {
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		NamespaceKey id = event.id;
+		Identifier id = event.id;
 
 		if (!id.getNamespace().equals("sc")) return;
 		switch (id.getPath()) {

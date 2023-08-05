@@ -26,12 +26,12 @@ import java.util.Iterator;
  * @author solo6975
  * @since 2022/1/16 6:04
  */
-public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<Node> {
+public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterable<Node> {
 	public interface OctreeEntry {
 		Vec3i getPos();
 	}
 
-	public static final class Node implements MapLikeEntry<Node> {
+	public static final class Node implements _Generic_Entry<Node> {
 		int k;
 		Object v;
 		byte mask;
@@ -58,7 +58,7 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
 		}
 
 		@Override
-		public Node nextEntry() {
+		public Node __next() {
 			return next;
 		}
 	}
@@ -779,9 +779,9 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
 	 * 补充说明：此迭代器无任何显式的顺序
 	 */
 	@Nonnull
-	public Iterator<Node> iterator() {
-		return new EntryItr<>(nodes, this);
-	}
+	public Iterator<Node> iterator() { return new EntryItr<>(this); }
+	public _Generic_Entry<?>[] __entries() { return nodes; }
+	public void __remove(Node node) { throw new UnsupportedOperationException(); }
 
 	@Override
 	public String toString() {
@@ -794,4 +794,5 @@ public class Octree<V extends OctreeEntry> implements MapLike<Node>, Iterable<No
 		}
 		return sb.append('}').toString();
 	}
+
 }

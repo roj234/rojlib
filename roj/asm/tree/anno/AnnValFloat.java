@@ -21,7 +21,7 @@ public final class AnnValFloat extends AnnVal {
 	public byte type() { return Type.FLOAT; }
 
 	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) Type.FLOAT).putShort(cp.getFloatId(value)); }
-	public String toString() { return String.valueOf(value); }
+	public String toString() { return String.valueOf(value).concat("F"); }
 
 	@Override
 	public boolean equals(Object o) {

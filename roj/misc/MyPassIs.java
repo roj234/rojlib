@@ -8,8 +8,7 @@ import roj.config.exch.TByteArray;
 import roj.crypt.*;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.ui.CmdUtil;
-import roj.ui.UIUtil;
+import roj.ui.CLIUtil;
 import roj.util.ByteList;
 
 import javax.crypto.Cipher;
@@ -30,10 +29,10 @@ public class MyPassIs {
 		HMAC mac = new HMAC(MessageDigest.getInstance("SHA-256"));
 
 		System.out.print("请输入保护主密钥的主密码(不会显示):");
-		byte[] pass = IOUtil.SharedCoder.get().encode(new CharList(UIUtil.readPassword()));
+		byte[] pass = IOUtil.SharedCoder.get().encode(new CharList(CLIUtil.readPassword()));
 		pass = HMAC.HKDF_expand(mac, pass, 32);
 
-		CmdUtil.clearScreen();
+		CLIUtil.clearScreen();
 
 		ByteList buf = IOUtil.getSharedByteBuf();
 
@@ -65,9 +64,9 @@ public class MyPassIs {
 
 		main:
 		while (true) {
-			String category = UIUtil.userInput("[L列出,Q获取,其它网站名]:");
+			String category = CLIUtil.userInput("[L列出,Q获取,其它网站名]:");
 
-			CmdUtil.clearScreen();
+			CLIUtil.clearScreen();
 
 			if ("L".equals(category)) {
 				System.out.println(data.query("record").toYAMLb());
@@ -86,8 +85,8 @@ public class MyPassIs {
 				CMapping m = new CMapping();
 				while (true) {
 					try {
-						String cs = UIUtil.userInput("字符集[1数字a小写字母A大写字母@特殊符号]:");
-						length = Integer.parseInt(UIUtil.userInput("长度:"));
+						String cs = CLIUtil.userInput("字符集[1数字a小写字母A大写字母@特殊符号]:");
+						length = Integer.parseInt(CLIUtil.userInput("长度:"));
 						charset = buildCharset(cs);
 
 						m.put("c", cs);
@@ -105,7 +104,7 @@ public class MyPassIs {
 				length = m.getInteger("l");
 			}
 
-			String account = UIUtil.userInput("账号:");
+			String account = CLIUtil.userInput("账号:");
 			CMapping accounts = prev.asMap().getOrCreateMap("account");
 
 			int cnt = accounts.getInteger(account);
@@ -122,10 +121,10 @@ public class MyPassIs {
 				System.out.println(sb);
 
 				if (accounts.containsKey(account)) continue main;
-				String s = UIUtil.userInput("喜欢吗?回车选择,或任意字符再来一个:");
+				String s = CLIUtil.userInput("喜欢吗?回车选择,或任意字符再来一个:");
 				if (s.isEmpty()) break;
 
-				CmdUtil.clearScreen();
+				CLIUtil.clearScreen();
 				cnt++;
 			}
 

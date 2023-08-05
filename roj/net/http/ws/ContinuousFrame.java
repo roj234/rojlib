@@ -1,5 +1,6 @@
 package roj.net.http.ws;
 
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.util.DynByteBuf;
 
@@ -21,7 +22,7 @@ final class ContinuousFrame {
 
 	public void append(ChannelCtx ctx, DynByteBuf b) {
 		if (packet == null) packet = ctx.allocate(true, b.readableBytes());
-		else if (packet.writableBytes()<b.readableBytes()) packet = ctx.alloc().expand(packet, b.readableBytes());
+		else if (packet.writableBytes()<b.readableBytes()) packet = BufferPool.expand(packet, b.readableBytes());
 
 		packet.put(b);
 		length += b.readableBytes();
@@ -30,7 +31,7 @@ final class ContinuousFrame {
 
 	public void clear(ChannelCtx ctx) {
 		if (packet != null) {
-			ctx.reserve(packet);
+			BufferPool.reserve(packet);
 			packet = null;
 		}
 	}

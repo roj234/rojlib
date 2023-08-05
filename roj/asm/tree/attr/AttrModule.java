@@ -17,23 +17,15 @@ import java.util.List;
  */
 public final class AttrModule extends Attribute {
 	public AttrModule() {
-		super("Module");
+		this.self = new ModuleInfo();
+		this.requires = new ArrayList<>();
+		this.exports = new ArrayList<>();
+		this.opens = new ArrayList<>();
+		this.uses = new ArrayList<>();
+		this.providers = new ArrayList<>();
 	}
 
 	public AttrModule(DynByteBuf r, ConstantPool pool) {
-		super("Module");
-		parse(r, pool);
-	}
-
-	public ModuleInfo self;
-
-	public List<ModuleInfo> requires;
-	public List<ExportInfo> exports, opens;
-	// To tell the SPI that these classes should be loaded
-	public List<String> uses;
-	public List<Provider> providers;
-
-	public void parse(DynByteBuf r, ConstantPool pool) {
 		self = new ModuleInfo().read(r, pool);
 		int count = r.readUnsignedShort();
 		if (self.name.startsWith("java.base")) {
@@ -62,7 +54,7 @@ public final class AttrModule extends Attribute {
 		count = r.readUnsignedShort();
 		List<String> use = new ArrayList<>(count);
 		while (count-- > 0) {
-			use.add(pool.getName(r));
+			use.add(pool.getRefName(r));
 		}
 		this.uses = use;
 
@@ -73,6 +65,17 @@ public final class AttrModule extends Attribute {
 		}
 		this.providers = provide;
 	}
+
+	public ModuleInfo self;
+
+	public List<ModuleInfo> requires;
+	public List<ExportInfo> exports, opens;
+	// To tell the SPI that these classes should be loaded
+	public List<String> uses;
+	public List<Provider> providers;
+
+	@Override
+	public String name() { return "Module"; }
 
 	@Override
 	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
@@ -208,12 +211,12 @@ public final class AttrModule extends Attribute {
 		public Provider() {}
 
 		public Provider read(DynByteBuf r, ConstantPool pool) {
-			serviceName = pool.getName(r);
+			serviceName = pool.getRefName(r);
 			int len = r.readUnsignedShort();
 			if (len == 0) throw new IllegalArgumentException("Provider.length should not be 0");
 			implement = new SimpleList<>(len);
 			while (len-- > 0) {
-				implement.add(pool.getName(r));
+				implement.add(pool.getRefName(r));
 			}
 			return this;
 		}

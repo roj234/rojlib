@@ -10,6 +10,7 @@ import roj.mapper.Mapping;
 import roj.mapper.util.Desc;
 import roj.math.MutableBoolean;
 import roj.text.LineReader;
+import roj.text.LinedReader;
 import roj.text.TextUtil;
 
 import java.io.File;
@@ -35,7 +36,7 @@ public final class OjngMapping extends Mapping {
 		}
 	}
 
-	public void readMojangMap(String map, LineReader slr, List<String> tmp) throws FastFailException {
+	public void readMojangMap(String map, LinedReader slr, List<String> tmp) throws IOException {
 		MapUtil U = MapUtil.getInstance();
 
 		String[] currentClass = null;
@@ -47,7 +48,9 @@ public final class OjngMapping extends Mapping {
 		});
 
 		int i = 1;
-		for (String line : slr) {
+		while (true) {
+			String line = slr.readLine();
+			if (line == null) break;
 			if (line.length() == 0 || line.startsWith("#")) continue;
 			char c = line.charAt(0);
 			if (c == ' ') {

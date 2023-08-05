@@ -7,7 +7,7 @@ import roj.util.Int2IntFunction;
 import javax.annotation.Nonnull;
 import java.util.*;
 
-public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements MapLike<Int2IntMap.Entry>, Flippable<Integer, Integer> {
+public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Generic_Map<Int2IntMap.Entry>, Flippable<Integer, Integer> {
 	public void setNullId(int nullId) {
 		this.nullId = nullId;
 	}
@@ -20,7 +20,7 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements MapLi
 		protected Entry valueNext;
 
 		@Override
-		public Entry nextEntry() {
+		public Entry __next() {
 			return (Entry) next;
 		}
 	}
@@ -94,7 +94,7 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements MapLi
 			@Nonnull
 			public final Iterator<Map.Entry<Integer, Integer>> iterator() {
 				if (isEmpty()) {return Collections.emptyIterator();}
-				EntryItr<Int2IntMap.Entry> dlg = new EntryItr<>(map.entries, map);
+				EntryItr<Int2IntMap.Entry> dlg = new EntryItr<>(map);
 				return new AbstractIterator<Entry<Integer, Integer>>() {
 
 					@Override
@@ -169,28 +169,16 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements MapLi
 		return entry == null ? def : entry.v;
 	}
 
-	public Inverse flip() {
-		return this.inverse;
-	}
+	public Inverse flip() { return this.inverse; }
+	public int size() { return size; }
 
-	public boolean isEmpty() {
-		return size == 0;
-	}
-
-	public Set<Entry> selfEntrySet() {
-		return new EntrySet(this);
-	}
-	public Set<Map.Entry<Integer, Integer>> entrySet() {
-		return Helpers.cast(new EntrySet(this));
-	}
-	public int size() {
-		return size;
-	}
+	public Set<Entry> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public Set<Map.Entry<Integer, Integer>> entrySet() { return Helpers.cast(selfEntrySet()); }
 
 	@Override
-	public void removeEntry0(Int2IntMap.Entry vEntry) {
-		removeEntry((Entry) vEntry);
-	}
+	public _Generic_Entry<?>[] __entries() { return entries; }
+	@Override
+	public void __remove(Int2IntMap.Entry vEntry) { removeEntry((Entry) vEntry); }
 
 	public int computeIfAbsent(int k, @Nonnull Int2IntFunction supplier) {
 		Integer v = get(k);
@@ -242,7 +230,7 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements MapLi
 			for (; i < j; i++) {
 				entry = entries[i];
 				while (entry != null) {
-					next = entry.nextEntry();
+					next = entry.__next();
 					int newIndex = indexFor(entry.k);
 					Entry old = newEntries[newIndex];
 					newEntries[newIndex] = entry;
@@ -452,14 +440,14 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements MapLi
 		}
 
 		if (currentEntry == entry) {
-			entries[index] = currentEntry.nextEntry();
+			entries[index] = currentEntry.__next();
 			entry.next = null;
 			return true;
 		}
 
 		while (currentEntry.next != null) {
 			prevEntry = currentEntry;
-			currentEntry = currentEntry.nextEntry();
+			currentEntry = currentEntry.__next();
 			if (currentEntry == entry) {
 				prevEntry.next = entry.next;
 				entry.next = null;
@@ -520,7 +508,7 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements MapLi
 		} else {
 			while (currentEntry.next != null) {
 				if (currentEntry == entry) return;
-				currentEntry = currentEntry.nextEntry();
+				currentEntry = currentEntry.__next();
 			}
 			currentEntry.next = entry;
 		}
@@ -545,7 +533,7 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements MapLi
 		if (entry == null) return null;
 		while (entry != null) {
 			if (entry.k == id) return entry;
-			entry = entry.nextEntry();
+			entry = entry.__next();
 		}
 		return null;
 	}
@@ -558,7 +546,7 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements MapLi
 			return entry;
 		}
 		while (entry.next != null) {
-			entry = entry.nextEntry();
+			entry = entry.__next();
 		}
 		Entry subEntry = new Entry(id, v);
 		entry.next = subEntry;
@@ -581,46 +569,5 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements MapLi
 			entries[id] = entry = new Entry(id1, 0);
 		}
 		return entry;
-	}
-
-	static class EntrySet extends AbstractSet<Entry> {
-		private final Int2IntBiMap map;
-
-		public EntrySet(Int2IntBiMap map) {
-			this.map = map;
-		}
-
-		public final int size() {
-			return map.size();
-		}
-
-		public final void clear() {
-			map.clear();
-		}
-
-		@Nonnull
-		public final Iterator<Entry> iterator() {
-			return isEmpty() ? Collections.emptyIterator() : Helpers.cast(new EntryItr<>(map.entries, map));
-		}
-
-		public final boolean contains(Object o) {
-			if (!(o instanceof Entry)) return false;
-			Entry e = (Entry) o;
-			int key = e.getIntKey();
-			Entry comp = map.getKeyEntry(key);
-			return comp != null && comp.v == e.getIntValue();
-		}
-
-		public final boolean remove(Object o) {
-			if (o instanceof Map.Entry) {
-				Entry e = (Entry) o;
-				return map.remove(e.k) != null;
-			}
-			return false;
-		}
-
-		public final Spliterator<Entry> spliterator() {
-			return Spliterators.spliterator(iterator(), size(), 0);
-		}
 	}
 }

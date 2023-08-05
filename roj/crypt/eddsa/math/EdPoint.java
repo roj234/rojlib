@@ -15,7 +15,7 @@ public final class EdPoint implements Serializable {
 	static final ThreadLocal<TmpNum> NUMS = ThreadLocal.withInitial(TmpNum::new);
 	static final class TmpNum {
 		final EdInteger a = ZERO.mutable(), b = ZERO.mutable(), c = ZERO.mutable(), d = ZERO.mutable(), invert_safe = ZERO.mutable();
-		final EdPoint pa = p3(null, a.mutable(), a.mutable(), a.mutable(), a.mutable()).mutable(), pb = pa.mutable(), pc = pa.mutable();
+		final EdPoint pa = new EdPoint(), pb = pa.mutable(), pc = pa.mutable();
 
 		final byte[] ba = new byte[256], bb = new byte[256];
 
@@ -56,7 +56,7 @@ public final class EdPoint implements Serializable {
 		x = x.pow22523();
 		x = v3.mul(u).mul(x);
 		EdInteger vxx = x.mutable().square().mul(v);
-		EdInteger check = vxx.sub(u);
+		EdInteger check = vxx.mutable().sub(u);
 		if (check.isNonZero()) {
 			check = vxx.add(u);
 			if (check.isNonZero()) throw new IllegalArgumentException("invalid point");

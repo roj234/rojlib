@@ -1,5 +1,6 @@
 package roj.collect;
 
+import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -17,31 +18,9 @@ public class BSLowHeap<E> extends AbstractList<E> {
 	protected Object[] entries;
 	protected int size;
 
-	@SuppressWarnings("unchecked")
 	protected final int binarySearch(E key) {
 		key.getClass();
-
-		int low = 0;
-		int high = size - 1;
-
-		Object[] a = entries;
-
-		while (low <= high) {
-			int mid = (low + high) >>> 1;
-			int midVal = cmp.compare((E) a[mid], key);
-
-			if (midVal < 0) {
-				low = mid + 1;
-			} else if (midVal > 0) {
-				high = mid - 1;
-			} else {
-				return mid; // key found
-			}
-		}
-
-		// low ...
-
-		return -(low + 1);  // key not found.
+		return ArrayUtil.binarySearch(entries, 0, size, key, Helpers.cast(cmp));
 	}
 
 	public BSLowHeap(Comparator<E> cmp) {
@@ -78,25 +57,32 @@ public class BSLowHeap<E> extends AbstractList<E> {
 		throw new UnsupportedOperationException();
 	}
 
-	/* 入堆操作 */
-	public boolean add(E node) {
-		int nearest = binarySearch(node);
-		if (nearest >= 0) {
-			return false;
+	@SuppressWarnings("unchecked")
+	private E doAdd(E o, int doAdd) {
+		int i = binarySearch(o);
+		if (i >= 0) {
+			return doAdd == 1 ? null : (E) entries[i];
 		} else {
-			int i = -nearest - 1;
+			if (doAdd == 0) return null;
 
-			if (size == entries.length-1) {
-				ensureCapacity(size<<1);
-			}
+			i = -i - 1;
+
+			if (size == entries.length-1) ensureCapacity(size<<1);
 
 			Object[] arr = entries;
 			if (size - i > 0) System.arraycopy(arr, i, arr, i+1, size-i);
-			arr[i] = node;
+			arr[i] = o;
 			size++;
-			return true;
+			return o;
 		}
 	}
+
+	public E find(E e) {
+		E e1 = doAdd(e, 0);
+		return e1 == null ? e : e1;
+	}
+	public E intern(E e) { return doAdd(e, -1); }
+	public boolean add(E node) { return doAdd(node, 1) != null; }
 
 	@SuppressWarnings("unchecked")
 	public E remove(int idx) {

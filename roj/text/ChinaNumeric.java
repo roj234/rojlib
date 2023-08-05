@@ -53,10 +53,9 @@ public class ChinaNumeric {
 
 	public static long parse(char[] cbuf) { return parse(cbuf, 0, cbuf.length); }
 	public static long parse(char[] cbuf, int off, int end) {
-		while (off < end && NUMBER_MAP.getOrDefaultInt(off, -1) == 0) off++;
+		while (off < end && NUMBER_MAP.getOrDefaultInt(cbuf[off], -1) == 0) off++;
 
 		fail: {
-
 		switch (end-off) {
 			case 0: return 0;
 			case 1:
@@ -70,11 +69,14 @@ public class ChinaNumeric {
 				int iUnit = UNIT_MAP.getOrDefaultInt(unit, -1);
 
 				if (iNum < 0) break fail;
-				if (iUnit < 0) {
-					iUnit = NUMBER_MAP.getOrDefaultInt(unit, -1);
-					if (iNum == 10 && iUnit > 0) return 10+iUnit;// 十二
-					break fail;
+				if (iNum == 10) {
+					if (iUnit < 0) {
+						iUnit = NUMBER_MAP.getOrDefaultInt(unit, -1);
+						if (iUnit < 0) break fail;
+					}
+					return iUnit+10;
 				}
+
 				return iNum * iUnit;
 		}
 
@@ -169,6 +171,8 @@ public class ChinaNumeric {
 
 	public static void convertIntegral(char[] cbuf, int off, int len, Appendable out) {
 		try {
+			boolean small = len-off <= 2;
+
 			int zeroes = 0;
 			while (off < len) {
 				int pos = len - off - 1;
@@ -184,7 +188,8 @@ public class ChinaNumeric {
 						zeroes = 0;
 					}
 
-					out.append(NUMBER[c - '0']);
+					// 两位数的处理
+					if (!small || mag == 0 || MAGS[mag-1] != '十' || c != '1') out.append(NUMBER[c - '0']);
 					if (mag > 0) out.append(MAGS[mag-1]);
 				}
 

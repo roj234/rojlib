@@ -1,5 +1,6 @@
 package roj.net.ch.handler;
 
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.util.DynByteBuf;
@@ -97,11 +98,11 @@ public class Compress implements ChannelHandler {
 				out = null;
 			}
 		} finally {
-			if (tmp1 != null) ctx.reserve(tmp1);
+			if (tmp1 != null) BufferPool.reserve(tmp1);
 			if (out != null) {
 				if ((flag & F_PER_INPUT_RESET) != 0) inf.reset();
 
-				ctx.reserve(out);
+				BufferPool.reserve(out);
 			}
 		}
 	}
@@ -112,11 +113,11 @@ public class Compress implements ChannelHandler {
 
 		DynByteBuf out;
 		if (in.readableBytes() <= thr) {
-			out = ctx.alloc().expand(in, 1, false, false);
+			out = BufferPool.expand(in, 1, false, false);
 			try {
 				ctx.channelWrite(out.put(0, 0));
 			} finally {
-				if (out != in) ctx.reserve(out);
+				if (out != in) BufferPool.reserve(out);
 			}
 			return;
 		}
@@ -165,8 +166,8 @@ public class Compress implements ChannelHandler {
 		} finally {
 			if ((flag & F_PER_INPUT_RESET) != 0) def.reset();
 
-			if (tmp1 != null) ctx.reserve(tmp1);
-			ctx.reserve(out);
+			if (tmp1 != null) BufferPool.reserve(tmp1);
+			BufferPool.reserve(out);
 		}
 	}
 
@@ -177,7 +178,7 @@ public class Compress implements ChannelHandler {
 			inf.end();
 		}
 		if (merged != null) {
-			ctx.reserve(merged);
+			BufferPool.reserve(merged);
 			merged = null;
 		}
 	}

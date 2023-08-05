@@ -2,6 +2,7 @@ package roj.collect;
 
 import roj.util.Helpers;
 
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -11,54 +12,46 @@ import static roj.collect.AbstractIterator.*;
  * @author Roj234
  * @since 2020/8/14 17:06
  */
-public class MapItr<T extends MapLikeEntry<T>> {
+public class MapItr<T extends _Generic_Entry<T>> {
 	public T obj;
 	int stage = INITIAL;
 
-	public final boolean hasNext() {
+	public boolean hasNext() {
 		check();
 		return stage != ENDED;
 	}
 
 	public final T nextT() {
 		check();
-		if (stage == ENDED) {
-			throw new NoSuchElementException();
-		}
+		if (stage == ENDED) throw new NoSuchElementException();
 		stage = GOTTEN;
 		return obj;
 	}
 
 	private void check() {
 		if (stage <= GOTTEN) {
-			if (!computeNext()) {
-				stage = ENDED;
-			} else {
-				stage = CHECKED;
-			}
+			stage = computeNext() ? CHECKED : ENDED;
 		}
 	}
 
 	public final void remove() {
+		checkConcMod();
 		if (stage != GOTTEN) throw new IllegalStateException();
+		if (remover == null) throw new UnsupportedOperationException();
 		stage = INITIAL;
 
-		if (itr != null) {
-			itr.remove();
-		} else {
-			T t = obj;
-			check();
-			remover.removeEntry0(t);
-		}
+		T t = obj;
+		check();
+		remover.__remove(t);
 	}
 
 	private final T[] entries;
-	private MapLike<T> remover;
-	private Iterator<T> itr;
+	private final _Generic_Map<T> remover;
 	private int i;
+	private Iterator<T> itr;
 
 	public void reset() {
-		if (itr != null) throw new UnsupportedOperationException();
+		checkConcMod();
 		if (entries == null) stage = ENDED;
 		else {
 			obj = null;
@@ -67,21 +60,25 @@ public class MapItr<T extends MapLikeEntry<T>> {
 		}
 	}
 
-	public MapItr(MapLikeEntry<?>[] entries, MapLike<T> remover) {
+	MapItr(_Generic_Map<T> remover) {
+		this.entries = Helpers.cast(remover.__entries());
+		this.remover = remover;
+
+		if (entries == null) stage = ENDED;
+	}
+	MapItr(_Generic_Entry<?>[] entries) {
 		this.entries = Helpers.cast(entries);
-		if (remover != null) {
-			this.itr = remover.entryIterator();
-			this.remover = remover;
-		}
+		this.remover = null;
 
 		if (entries == null) stage = ENDED;
 	}
 
 	private boolean computeNext() {
-		if (itr != null) {
-			boolean flag = itr.hasNext();
-			if (flag) obj = itr.next();
-			return flag;
+		checkConcMod();
+
+		if (itr != null && itr.hasNext()) {
+			obj = itr.next();
+			return true;
 		}
 
 		while (true) {
@@ -89,12 +86,25 @@ public class MapItr<T extends MapLikeEntry<T>> {
 				while (true) {
 					if (i >= entries.length) return false;
 					obj = entries[i++];
-					if (obj != null) return true;
+					if (obj != null) {
+						itr = obj.__iterator();
+						if (itr != null) {
+							if (itr.hasNext()) {
+								obj = itr.next();
+							}
+						}
+
+						return true;
+					}
 				}
 			}
 
-			obj = obj.nextEntry();
+			obj = obj.__next();
 			if (obj != null) return true;
 		}
+	}
+
+	private void checkConcMod() {
+		if (remover != null && remover.__entries() != entries) throw new ConcurrentModificationException();
 	}
 }

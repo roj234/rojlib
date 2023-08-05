@@ -1,5 +1,6 @@
 package roj.text;
 
+import roj.collect.CharMap;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.io.IOUtil;
@@ -13,6 +14,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.CharBuffer;
 import java.util.Arrays;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,8 +23,6 @@ import java.util.regex.Pattern;
  * @since 2021/6/19 1:28
  */
 public class CharList implements CharSequence, Appender {
-	static final boolean USE_CACHE = true;
-
 	// region Number helper
 	static void getChars(long l, int charPos, char[] buf) {
 		long q;
@@ -75,14 +75,14 @@ public class CharList implements CharSequence, Appender {
 	protected int len;
 
 	public CharList() { list = ArrayCache.CHARS; }
-	public CharList(int len) { list = USE_CACHE ? ArrayCache.getDefaultCache().getCharArray(len, false) : new char[len]; }
+	public CharList(int len) { list = ArrayCache.getCharArray(len, false); }
 	public CharList(char[] array) {
 		list = array;
 		len = array.length;
 	}
 
 	public CharList(CharSequence s) {
-		this.list = ArrayCache.getDefaultCache().getCharArray(s.length(), false);
+		this.list = ArrayCache.getCharArray(s.length(), false);
 		append(s);
 	}
 
@@ -118,16 +118,9 @@ public class CharList implements CharSequence, Appender {
 
 	public void ensureCapacity(int required) {
 		if (required > list.length) {
-			char[] newList;
-			if (USE_CACHE) {
-				ArrayCache cache = ArrayCache.getDefaultCache();
-				cache.putArray(list);
-				newList = cache.getCharArray(Math.max(MathUtils.getMin2PowerOf(required), 256), false);
-			} else {
-				newList = new char[Math.max(((required * 3) >> 1), 32)];
-			}
-
+			char[] newList = ArrayCache.getCharArray(Math.max(MathUtils.getMin2PowerOf(required), 256), false);
 			if (len > 0) System.arraycopy(list, 0, newList, 0, Math.min(len, list.length));
+			ArrayCache.putArray(list);
 			list = newList;
 		}
 	}
@@ -137,7 +130,7 @@ public class CharList implements CharSequence, Appender {
 
 		char[] b = list;
 		list = ArrayCache.CHARS;
-		ArrayCache.getDefaultCache().putArray(b);
+		ArrayCache.putArray(b);
 	}
 
 	public String toStringAndFree() {
@@ -164,7 +157,7 @@ public class CharList implements CharSequence, Appender {
 
 		MyHashMap.Entry<MutableInt, MutableInt> entry = new MyHashMap.Entry<>(new MutableInt(), null);
 		while (pos < len) {
-			map.longestIn(this, pos, len, entry);
+			map.match(this, pos, len, entry);
 
 			int len = entry.getKey().getValue();
 			if (len < 0) {
@@ -181,20 +174,23 @@ public class CharList implements CharSequence, Appender {
 		return false;
 	}
 	public final int indexOf(CharSequence s) { return indexOf(s, 0); }
-	public final int indexOf(CharSequence s, int from) { return match(s, from, len-s.length()+1); }
-	public final boolean startsWith(CharSequence s) { return s.length() == 0 || match(s, 0, 1) >= 0; }
-	public final boolean endsWith(CharSequence s) { return s.length() == 0 || match(s, len-s.length(), len-s.length()+1) >= 0; }
+	public final int indexOf(CharSequence s, int from) { return doMatch(s, from, len-s.length()+1); }
+	public final boolean startsWith(CharSequence s) { return s.length() == 0 || doMatch(s, 0, 1) >= 0; }
+	public final boolean endsWith(CharSequence s) { return s.length() == 0 || doMatch(s, len-s.length(), len-s.length()+1) >= 0; }
 
-	private int match(CharSequence s, int start, int end) {
+	public final int match(CharSequence s, int start, int end) {
+		checkBounds(start, end, len);
+		return doMatch(s, start, end);
+	}
+	private int doMatch(CharSequence s, int start, int end) {
 		char[] b = list;
+		char c = s.charAt(0);
 		o:
 		for (; start < end; start++) {
-			if (b[start] == s.charAt(0)) {
-				for (int j = 1; j < s.length(); j++) {
-					if (b[start + j] != s.charAt(j)) {
+			if (b[start] == c) {
+				for (int j = 1; j < s.length(); j++)
+					if (b[start+j] != s.charAt(j))
 						continue o;
-					}
-				}
 				return start;
 			}
 		}
@@ -361,6 +357,64 @@ public class CharList implements CharSequence, Appender {
 
 	// endregion
 	// region insert
+	public final CharList padNumber(int val, int minLen) {
+		int count = TextUtil.digitCount(val);
+		if (count > minLen) return append(val);
+
+		if (val < 0) {
+			append('-');
+			val = -val;
+			count--;
+		}
+
+		return padEnd('0', minLen-count).append(val);
+	}
+	public final CharList padNumber(long val, int minLen) {
+		int count = TextUtil.digitCount(val);
+		if (count > minLen) return append(val);
+
+		if (val < 0) {
+			append('-');
+			val = -val;
+			count--;
+		}
+
+		return padEnd('0', minLen-count).append(val);
+	}
+
+	public final CharList padStart(char c, int count) { return pad(c, 0, count); }
+	public final CharList padStart(CharSequence str, int count) { return pad(str, 0, count); }
+	public final CharList padEnd(char c, int count) { return pad(c, len, count); }
+	public final CharList padEnd(CharSequence str, int count) { return pad(str, len, count); }
+	public final CharList pad(char c, int off, int count) {
+		if (count > 0) {
+			ensureCapacity(len+count);
+			System.arraycopy(list, off, list, off+count, len-off);
+			len += count;
+			count += off;
+			for (int i = off; i < count; i++) list[i] = c;
+		}
+
+		return this;
+	}
+	public final CharList pad(CharSequence str, int off, int count) {
+		if (str.length() < 1) throw new IllegalStateException("empty padding");
+		if (count > 0) {
+			ensureCapacity(len+count);
+			System.arraycopy(list, off, list, off+count, len-off);
+			len += count;
+			count += off;
+			while (true) {
+				for (int j = 0; j < str.length(); j++) {
+					list[off] = str.charAt(j);
+					if (++off == count) return this;
+				}
+			}
+		}
+
+		return this;
+	}
+
 	public final CharList insert(int pos, char c) {
 		ensureCapacity(len+1);
 		if (len > pos) System.arraycopy(list, pos, list, pos+1, len-pos);
@@ -420,6 +474,7 @@ public class CharList implements CharSequence, Appender {
 	public final CharList replace(char a, char b) { return replace(a, b, 0, len); }
 	public final CharList replace(char a, char b, int off, int len) {
 		checkBounds(off,off+len,this.len);
+		if (a == b) return this;
 		char[] c = list;
 		for (; off < len; off++)
 			if (c[off] == a) c[off] = b;
@@ -429,22 +484,23 @@ public class CharList implements CharSequence, Appender {
 	public final void replace(int start, int end, CharSequence s) {
 		checkBounds(start,end,len);
 
-		int l = end - start;
-		if (l > 0) {
-			if (l > s.length()) {
-				int delta = s.length() - l; // < 0
-				System.arraycopy(list, end, list, end + delta, this.len - end);
-				this.len += delta;
-				end = start + s.length();
-			} else if (l < s.length()) {
-				insert(end, s, l, s.length());
-			}
+		int delta = s.length() - (end - start);
+		if (delta != 0) {
+			if (delta > 0) ensureCapacity(len+delta);
+			if (end < len) System.arraycopy(list, end, list, end + delta, len - end);
+		}
 
+		if (s.getClass() == String.class) {
+			s.toString().getChars(0, s.length(), list, start);
+		} else if (s.getClass() == CharList.class) {
+			System.arraycopy(((CharList) s).list, 0, list, start, s.length());
+		} else {
 			char[] c = list;
 			int j = 0;
 			while (start < end)
 				c[start++] = s.charAt(j++);
 		}
+		len += delta;
 	}
 
 	/**
@@ -454,12 +510,10 @@ public class CharList implements CharSequence, Appender {
 	public final CharList replace(CharSequence str, CharSequence target) {
 		CharList out = null;
 
-		String targetArray = target.toString();
-
 		int prevI = 0, i = 0;
 		while ((i = indexOf(str, i)) != -1) {
-			if (prevI == 0) out = new CharList(len);
-			out.append(list, prevI, i).append(targetArray);
+			if (prevI == 0) out = createReplaceOutputList();
+			out.append(list, prevI, i).append(target);
 
 			i += str.length();
 			prevI = i;
@@ -468,13 +522,16 @@ public class CharList implements CharSequence, Appender {
 		if (prevI == 0) return this;
 		out.append(list, prevI, len);
 
-		ArrayCache.getDefaultCache().putArray(list);
+		ArrayCache.putArray(list);
 
 		list = out.list;
 		len = out.len;
 
 		return this;
 	}
+
+	private CharList createReplaceOutputList() { return new CharList(Math.max(MathUtils.getMin2PowerOf(len) >> 1, 256)); }
+
 	/**
 	 * 在替换结果中搜索
 	 * "aaaa".replaceInReplaceResult("aa","a") => "a"
@@ -492,43 +549,113 @@ public class CharList implements CharSequence, Appender {
 		return replaceMulti(map);
 	}
 	public final CharList replaceMulti(TrieTree<String> map) {
+		CharList out = null;
+		int prevI = 0, i = 0;
+
 		int pos = 0;
 
 		MyHashMap.Entry<MutableInt, String> entry = new MyHashMap.Entry<>(new MutableInt(), null);
 		while (pos < len) {
-			map.longestIn(this, pos, len, entry);
+			map.match(this, pos, len, entry);
 			int len = entry.getKey().getValue();
 			if (len < 0) {
 				pos++;
 				continue;
 			}
 
-			replace(pos, pos+len, entry.getValue());
-			pos += entry.getValue().length();
+			if (prevI == 0) out = createReplaceOutputList();
+			out.append(list, prevI, pos).append(entry.getValue());
+
+			pos += len;
+			prevI = pos;
 		}
+
+		if (prevI == 0) return this;
+		out.append(list, prevI, len);
+
+		ArrayCache.putArray(list);
+
+		list = out.list;
+		len = out.len;
 
 		return this;
 	}
-	public final void replaceEx(Pattern regexp, CharSequence literal) {
+	public final CharList replaceMulti(CharMap<String> map) {
+		CharList out = null;
+		int prevI = 0, i = 0;
+		int pos = 0;
+
+		while (pos < len) {
+			String rpl = map.get(list[pos]);
+			if (rpl == null) {
+				pos++;
+				continue;
+			}
+
+			if (prevI == 0) out = createReplaceOutputList();
+			out.append(list, prevI, pos).append(rpl);
+
+			pos++;
+			prevI = pos;
+		}
+
+		if (prevI == 0) return this;
+		out.append(list, prevI, len);
+
+		ArrayCache.putArray(list);
+
+		list = out.list;
+		len = out.len;
+
+		return this;
+	}
+	public final int preg_replace(Pattern regexp, CharSequence literal) {
 		CharList out = null;
 
 		Matcher m = regexp.matcher(this);
 
+		int count = 0;
 		int i = 0;
 		while (m.find(i)) {
-			if (i == 0) out = new CharList(this.len);
+			if (i == 0) out = createReplaceOutputList();
 			out.append(list, i, m.start()).append(literal);
 
 			i = m.end();
+			count++;
 		}
 
-		if (i == 0) return;
+		if (i == 0) return 0;
 		out.append(list, i, len);
 
-		ArrayCache.getDefaultCache().putArray(list);
+		ArrayCache.putArray(list);
 
 		list = out.list;
 		len = out.len;
+		return count;
+	}
+	public final int preg_replace_callback(Pattern regexp, Function<Matcher,CharSequence> callback) {
+		CharList out = null;
+
+		Matcher m = regexp.matcher(this);
+
+		int count = 0;
+		int i = 0;
+		while (m.find(i)) {
+			if (i == 0) out = createReplaceOutputList();
+			out.append(list, i, m.start()).append(callback.apply(m));
+
+			i = m.end();
+			count++;
+		}
+
+		if (i == 0) return 0;
+		out.append(list, i, len);
+
+		ArrayCache.putArray(list);
+
+		list = out.list;
+		len = out.len;
+		return count;
 	}
 	// endregion
 	public final CharSequence subSequence(int start, int end) {
@@ -650,7 +777,7 @@ public class CharList implements CharSequence, Appender {
 			}
 		} else {
 			String s = o.toString();
-			v2 = ArrayCache.getDefaultCache().getCharArray(512, false);
+			v2 = ArrayCache.getCharArray(512, false);
 			int off = 0;
 			while (off < lim) {
 				int end = Math.min(off+2, lim);
@@ -663,7 +790,7 @@ public class CharList implements CharSequence, Appender {
 					i++;
 				}
 			}
-			ArrayCache.getDefaultCache().putArray(v2);
+			ArrayCache.putArray(v2);
 		}
 		return len1 - len2;
 	}

@@ -12,6 +12,7 @@ import roj.util.DynByteBuf;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.AsynchronousCloseException;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
@@ -41,15 +42,18 @@ public class QZFileWriter extends QZWriter {
      * 反之，需要则设为true
      * 否则可能会出现该加密没加密或相反
      */
-    public void setCompressedHeader(int i) {
+    public void setCompressHeader(int i) {
         this.compressHeaderMin = i;
     }
 
     private List<ParallelWriter> parallelWriter;
     private ReentrantReadWriteLock parallelLock;
 
-    public synchronized QZWriter parallel() {
+    public synchronized QZWriter parallel() throws IOException {
         if (finished) throw new IllegalStateException("Stream closed");
+
+        closeEntry();
+        closeWordBlock();
 
         ParallelWriter pw = new ParallelWriter();
         if (parallelWriter == null) {
@@ -57,21 +61,15 @@ public class QZFileWriter extends QZWriter {
             parallelLock = new ReentrantReadWriteLock();
         }
         parallelWriter.add(pw);
-        parallelLock.readLock().lock();
+        boolean b = parallelLock.readLock().tryLock();
+        if (!b) throw new AsynchronousCloseException();
         return pw;
     }
 
-    private synchronized void retainParallel() throws IOException {
-        if (parallelWriter != null) {
-            parallelLock.writeLock().lock();
-            try {
-                for (int i = 0; i < parallelWriter.size(); i++) {
-                    parallelWriter.get(i).end();
-                }
-            } finally {
-                parallelLock.writeLock().unlock();
-            }
-        }
+    private void waitAsyncFinish() {
+        ReentrantReadWriteLock lock = parallelLock;
+        // will not unlock
+        if (lock != null) lock.writeLock().lock();
     }
 
     private class ParallelWriter extends QZWriter {
@@ -80,6 +78,7 @@ public class QZFileWriter extends QZWriter {
         @Override
         public void finish() throws IOException {
             if (finished) return;
+            super.finish();
 
             synchronized (QZFileWriter.this) {
                 if (QZFileWriter.this.parallelWriter.remove(this)) {
@@ -90,8 +89,6 @@ public class QZFileWriter extends QZWriter {
         }
 
         void end() throws IOException {
-            super.finish();
-
             QZFileWriter parent = QZFileWriter.this;
 
             MemorySource s = (MemorySource) this.s;
@@ -108,8 +105,7 @@ public class QZFileWriter extends QZWriter {
     }
 
     public void removeLastWordBlock() throws IOException {
-        closeEntry();
-        nextWordBlock();
+        closeWordBlock();
 
         WordBlock b = blocks.remove(blocks.size() - 1);
 
@@ -118,12 +114,7 @@ public class QZFileWriter extends QZWriter {
             QZEntry ent = files.get(i);
             if (ent.block != b) break;
 
-            int flag = ent.flag;
-            if ((flag & QZEntry.CT       ) != 0) flagSum[3]--;
-            if ((flag & QZEntry.AT       ) != 0) flagSum[4]--;
-            if ((flag & QZEntry.MT       ) != 0) flagSum[5]--;
-            if ((flag & QZEntry.ATTR     ) != 0) flagSum[6]--;
-            if ((flag & QZEntry.CRC      ) != 0) flagSum[7]--;
+            countFlag(ent.flag, -1);
         }
 
         files.removeRange(i+1, files.size());
@@ -138,12 +129,25 @@ public class QZFileWriter extends QZWriter {
         }
     }
 
+    public QZEntry removeEmptyFile(String name) {
+		for (int i = 0; i < emptyFiles.size(); i++) {
+			QZEntry entry = emptyFiles.get(i);
+			if (entry.getName().equals(name)) {
+                emptyFiles.remove(i);
+                countFlag(entry.flag, -1);
+                countFlagEmpty(entry.flag, -1);
+                return entry;
+			}
+		}
+        return null;
+    }
+
     private ByteList buf;
     public void finish() throws IOException {
         if (finished) return;
 
         super.finish();
-        retainParallel();
+        waitAsyncFinish();
 
         ByteList.WriteOut out = new ByteList.WriteOut(null) {
             public void flush() {
@@ -155,7 +159,7 @@ public class QZFileWriter extends QZWriter {
 
         long hstart = s.position();
         try {
-            if (compressHeaderMin == 0 || files.size()+emptyFiles.size() < compressHeaderMin) {
+            if (compressHeaderMin == -1 || files.size()+emptyFiles.size() < compressHeaderMin) {
                 blockCrc32.reset();
                 out.setOut(s);
                 writeHeader();
@@ -167,7 +171,7 @@ public class QZFileWriter extends QZWriter {
 
                 out.flush();
                 blocks.add(metadata);
-                nextWordBlock();
+                closeWordBlock0();
                 metadata.uSize = out.wIndex();
 
                 long pos1 = s.position();
@@ -189,6 +193,9 @@ public class QZFileWriter extends QZWriter {
                     this.out.close();
                     this.out = null;
                 }
+
+                out.setOut(null);
+                out.close();
             }
         }
 
@@ -232,7 +239,7 @@ public class QZFileWriter extends QZWriter {
             blocks.clear();
             files.clear();
             emptyFiles.clear();
-            flagSum[9] = 0;
+            flagSum[8] = flagSum[9] = 0;
         }
     }
 

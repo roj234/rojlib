@@ -2,12 +2,12 @@ package roj.archive.qz.xz;
 
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.lzma.LZMAEncoder;
+import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.io.DummyOutputStream;
 import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.util.ArrayCache;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,24 +15,21 @@ import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class LZMA2Options implements Cloneable {
-	public static final int BEST_SPEED = 1;
-	public static final int BEST_COMPRESSION = 9;
-	public static final int DEFAULT_COMPRESSION = 5;
+	public static final int BEST_SPEED = 1, BEST_COMPRESSION = 9, DEFAULT_COMPRESSION = 5;
 
 	public static final int DICT_SIZE_MIN = 4096;
 	/**
-	 * Maximum dictionary size for compression is 768 MiB.
+	 * Maximum dictionary size for compression is 1535 MiB.
 	 * <p>
 	 * The decompressor supports bigger dictionaries, up to almost 2 GiB.
-	 * With HC4 the encoder would support dictionaries bigger than 768 MiB.
-	 * The 768 MiB limit comes from the current implementation of BT4 where
+	 * With HC4 the encoder would support dictionaries bigger than 1535 MiB.
+	 * The 1535 MiB limit comes from the current implementation of BT4 where
 	 * we would otherwise hit the limits of signed ints in array indexing.
 	 * <p>
 	 * If you really need bigger dictionary for decompression,
 	 * use {@link LZMA2InputStream} directly.
 	 */
-	public static final int DICT_SIZE_MAX = 768 << 20;
-
+	public static final int DICT_SIZE_MAX = Integer.MAX_VALUE - 536879377;
 	/**
 	 * The default dictionary size is 8 MiB.
 	 */
@@ -42,17 +39,14 @@ public class LZMA2Options implements Cloneable {
 	 * Maximum value for lc + lp is 4.
 	 */
 	public static final int LC_LP_MAX = 4;
-
 	/**
 	 * The default number of literal context bits is 3.
 	 */
 	public static final int LC_DEFAULT = 3;
-
 	/**
 	 * The default number of literal position bits is 0.
 	 */
 	public static final int LP_DEFAULT = 0;
-
 	/**
 	 * Maximum value for pb is 4.
 	 */
@@ -68,13 +62,11 @@ public class LZMA2Options implements Cloneable {
 	 * The data is wrapped into a LZMA2 stream without compression.
 	 */
 	public static final int MODE_UNCOMPRESSED = 0;
-
 	/**
 	 * Compression mode: fast.
 	 * This is usually combined with a hash chain match finder.
 	 */
 	public static final int MODE_FAST = LZMAEncoder.MODE_FAST;
-
 	/**
 	 * Compression mode: normal.
 	 * This is usually combined with a binary tree match finder.
@@ -85,7 +77,6 @@ public class LZMA2Options implements Cloneable {
 	 * Minimum value for <code>niceLen</code> is 8.
 	 */
 	public static final int NICE_LEN_MIN = 8;
-
 	/**
 	 * Maximum value for <code>niceLen</code> is 273.
 	 */
@@ -95,33 +86,31 @@ public class LZMA2Options implements Cloneable {
 	 * Match finder: Hash Chain 2-3-4
 	 */
 	public static final int MF_HC4 = LZEncoder.MF_HC4;
-
 	/**
 	 * Match finder: Binary tree 2-3-4
 	 */
 	public static final int MF_BT4 = LZEncoder.MF_BT4;
+
+	public static final int ASYNC_BLOCK_SIZE_MIN = 1 << 20, ASYNC_BLOCK_SIZE_MAX = 1 << 28;
+	public static final byte ASYNC_DICT_NONE = 0, ASYNC_DICT_SET = 1, ASYNC_DICT_ASYNCSET = 2;
 
 	private static final int[] presetToDictSize = {1 << 18, 1 << 20, 1 << 21, 1 << 22, 1 << 22, 1 << 23, 1 << 23, 1 << 24, 1 << 25, 1 << 26};
 	private static final int[] presetToDepthLimit = {4, 8, 24, 48};
 
 	private int dictSize;
 	private byte[] presetDict = null;
-	private int lc;
-	private int lp;
-	private int pb;
+	private int lc, lp, pb;
 	private int mode;
 	private int niceLen;
 	private int mf;
 	private int depthLimit;
 
-	public LZMA2Options() {
-		this(DEFAULT_COMPRESSION);
-	}
+	private byte asyncAffinity, asyncDictMode;
+	private int asyncBlockSize;
+	private TaskHandler asyncExecutor;
 
-	public LZMA2Options(int preset) {
-		setPreset(preset);
-	}
-
+	public LZMA2Options() { this(DEFAULT_COMPRESSION); }
+	public LZMA2Options(int preset) { setPreset(preset); }
 	public LZMA2Options(int dictSize, int lc, int lp, int pb, int mode, int niceLen, int mf, int depthLimit) {
 		setDictSize(dictSize)
 			.setLcLp(lc, lp)
@@ -171,7 +160,7 @@ public class LZMA2Options implements Cloneable {
 	 * <p>
 	 * The dictionary (or history buffer) holds the most recently seen
 	 * uncompressed data. Bigger dictionary usually means better compression.
-	 * However, using a dictioanary bigger than the size of the uncompressed
+	 * However, using a dictionary bigger than the size of the uncompressed
 	 * data is waste of memory.
 	 * <p>
 	 * Any value in the range [DICT_SIZE_MIN, DICT_SIZE_MAX] is valid,
@@ -287,6 +276,16 @@ public class LZMA2Options implements Cloneable {
 	public int getPb() { return pb; }
 
 	public byte getPropByte() { return (byte) ((pb * 5 + lp) * 9 + lc); }
+	public LZMA2Options setPropByte(int propByte) {
+		int props = propByte & 0xFF;
+		if (props > (4 * 5 + 4) * 9 + 8) throw new IllegalArgumentException("Invalid LZMA properties byte");
+
+		pb = props / (9 * 5);
+		props -= pb * 9 * 5;
+		lp = props / 9;
+		lc = props - lp * 9;
+		return this;
+	}
 
 	/**
 	 * Sets the compression mode.
@@ -370,31 +369,39 @@ public class LZMA2Options implements Cloneable {
 	}
 	public int getDepthLimit() { return depthLimit; }
 
-	public int getEncoderMemoryUsage() {
-		return (mode == MODE_UNCOMPRESSED) ? UncompressedLZMA2OutputStream.getMemoryUsage() : LZMA2OutputStream.getMemoryUsage(this);
+	/**
+	 * <pre>启用对于单独压缩流的多线程压缩模式
+	 * <b>注意，对比{@link roj.archive.qz.QZFileWriter#parallel()}的不同文件并行模式,单压缩流并行会损失更多压缩率</b>
+	 * @param blockSize 任务按照该大小分块并行，设置为-1来自动选择(不推荐)
+	 * @param executor 线程池
+	 * @param affinity 最大并行任务数量 (1-255)
+	 * @param dictMode 任务的词典处理模式，设置为-1来自动选择(不推荐)
+	 * <pre>{@link #ASYNC_DICT_NONE} 每个块重置词典, 速度快, 压缩率差, 内存占用小 (7-zip的默认模式)
+	 * {@link #ASYNC_DICT_SET} 在write的调用线程上设置词典, 速度慢, 压缩率好, 内存占用中等
+	 * {@link #ASYNC_DICT_ASYNCSET} 在异步任务线程上设置词典, 速度中等, 压缩率好, 内存大
+	 */
+	public void setAsyncMode(int blockSize, TaskHandler executor, int affinity, int dictMode) {
+		if (blockSize != 0 && blockSize < ASYNC_BLOCK_SIZE_MIN || blockSize > ASYNC_BLOCK_SIZE_MAX) throw new IllegalArgumentException("无效的分块大小 "+blockSize);
+		if (affinity != 0 && affinity < 2 || affinity > 255) throw new IllegalArgumentException("无效的并行任务数量 "+affinity);
+		if (dictMode < 0 || dictMode > ASYNC_DICT_ASYNCSET) throw new IllegalArgumentException("无效的词典处理模式 "+dictMode);
+		asyncBlockSize = blockSize;
+		asyncExecutor = executor;
+		asyncAffinity = (byte) affinity;
+		asyncDictMode = (byte) dictMode;
 	}
+	public int getAsyncBlockSize() { return asyncBlockSize; }
+	public TaskHandler getAsyncExecutor() { return asyncExecutor; }
+	public int getAsyncAffinity() { return asyncAffinity; }
+	public byte getAsyncDictionaryMode() { return asyncDictMode; }
 
+	public int getEncoderMemoryUsage() { return mode == MODE_UNCOMPRESSED ? LZMA2StoredWriter.getMemoryUsage() : LZMA2Writer.getMemoryUsage(this); }
 	public OutputStream getOutputStream(OutputStream out) {
-		return getOutputStream(out, ArrayCache.getDefaultCache());
+		if (mode == MODE_UNCOMPRESSED) return new LZMA2StoredWriter(out);
+		return asyncAffinity > 0 ? new LZMA2ParallelWriter(out, this) : new LZMA2Writer(out, this);
 	}
 
-	public OutputStream getOutputStream(OutputStream out, ArrayCache arrayCache) {
-		if (mode == MODE_UNCOMPRESSED) return new UncompressedLZMA2OutputStream(out, arrayCache);
-
-		return new LZMA2OutputStream(out, this, arrayCache);
-	}
-
-	public int getDecoderMemoryUsage() {
-		return LZMA2InputStream.getMemoryUsage(dictSize);
-	}
-
-	public InputStream getInputStream(InputStream in) throws IOException {
-		return getInputStream(in, ArrayCache.getDefaultCache());
-	}
-
-	public InputStream getInputStream(InputStream in, ArrayCache arrayCache) throws IOException {
-		return new LZMA2InputStream(in, dictSize, presetDict, arrayCache);
-	}
+	public int getDecoderMemoryUsage() { return LZMA2InputStream.getMemoryUsage(dictSize); }
+	public InputStream getInputStream(InputStream in) throws IOException { return new LZMA2InputStream(in, dictSize, presetDict); }
 
 	public LZMA2Options clone() {
 		try {
@@ -405,55 +412,21 @@ public class LZMA2Options implements Cloneable {
 		}
 	}
 
-	public int findBestProps(byte[] data) {
-		int min = data.length;
-		int minLc = -1;
-		int minLp = -1;
-		int minPb = -1;
-
-		for (int lc = 0; lc <= 4; lc++) {
-			this.lc = lc;
-			for (int lp = 0; lp <= 4-lc; lp++) {
-				this.lp = lp;
-				for (int pb = 0; pb <= 4; pb++) {
-					this.pb = pb;
-
-					DummyOutputStream counter = new DummyOutputStream();
-					try (OutputStream os = getOutputStream(counter)) {
-						os.write(data);
-					} catch (Exception e) {
-						continue;
-					}
-
-					if (counter.wrote < min) {
-						minLc = lc;
-						minLp = lp;
-						minPb = pb;
-						min = counter.wrote;
-					}
-				}
-			}
-		}
-
-		this.lc = minLc;
-		this.lp = minLp;
-		this.pb = minPb;
-		return min;
-	}
-	public int findBestPropsAsync(byte[] data, TaskPool th) {
+	public int findBestProps(byte[] data) { return findBestProps(data, TaskPool.Common()); }
+	public int findBestProps(byte[] data, TaskPool th) {
 		AtomicReference<Object[]> ref = new AtomicReference<>();
-
 		for (int lc = 0; lc <= 4; lc++) {
 			for (int lp = 0; lp <= 4-lc; lp++) {
 				for (int pb = 0; pb <= 4; pb++) {
 					LZMA2Options copy = clone();
+					copy.dictSize = Math.max(Math.min(copy.dictSize, data.length), 4096);
 					copy.lc = lc;
 					copy.lp = lp;
 					copy.pb = pb;
 
 					th.pushTask(() -> {
 						DummyOutputStream counter = new DummyOutputStream();
-						try (OutputStream os = getOutputStream(counter)) {
+						try (OutputStream os = copy.getOutputStream(counter)) {
 							os.write(data);
 						} catch (Exception ignored) {}
 

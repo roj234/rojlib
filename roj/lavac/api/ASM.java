@@ -1,49 +1,21 @@
 package roj.lavac.api;
 
-import org.intellij.lang.annotations.MagicConstant;
-import roj.asm.Opcodes;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
- * ASM by call
- *
- * @author Roj233
- * @since 2021/9/2 21:53
+ * @author Roj234
+ * @since 2023/9/23 0023 19:21
  */
 public class ASM {
+	public static void asm(String asm) {}
+
 	/**
-	 * No parameter ASM
-	 *
-	 * @param opcode Opcode
+	 * 在该方法中，可以使用ASM
 	 */
-	public static native void simple(@MagicConstant(valuesFromClass = Opcodes.class) byte opcode);
-
-	public static native void simpleX(@MagicConstant(valuesFromClass = Opcodes.class) byte opcode, int p1);
-
-	public static native void simpleX2(@MagicConstant(valuesFromClass = Opcodes.class) byte opcode, int p1, int p2);
-
-	public static native Object load(Object from);
-
-	public static native Object load_by_index(int index);
-
-	public static native Object loadThis();
-
-	public static native void store_pop(Object target);
-
-	public static native void store(Object target, Object value);
-
-	public static native void store_by_index(int index, Object value);
-
-	public static native void keep_return_value(Object returnValue);
-
-	public static native void assert_stack(int stackSize);
-
-	public static native void assert_stack(int stackSize, String message);
-
-	public static native void assert_local(int localSize);
-
-	public static native void assert_local(int localSize, String message);
-
-	public static native void assert_local_type(int localIndex, Object type);
-
-	public static native void assert_local_type(int localIndex, Object type, String message);
+	@Retention(RetentionPolicy.SOURCE)
+	@Target({ElementType.TYPE, ElementType.METHOD, ElementType.CONSTRUCTOR})
+	public @interface User {}
 }

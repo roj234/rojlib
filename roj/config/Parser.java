@@ -8,8 +8,8 @@ import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.StreamReader;
-import roj.text.StreamWriter;
+import roj.text.TextReader;
+import roj.text.TextWriter;
 import roj.util.DynByteBuf;
 
 import java.io.File;
@@ -74,29 +74,31 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 	}
 
 	public final T parseRaw(File file, int flag) throws IOException, ParseException {
-		try (StreamReader in = new StreamReader(file, charset)) {
+		try (TextReader in = new TextReader(file, charset)) {
 			return parse(in, flag);
 		} catch (ParseException e) {
 			throw new ParseException(IOUtil.readString(file), e.getMessage(), e.getIndex(), e.getCause());
 		}
 	}
 	public final <C extends CVisitor> C parseRaw(C cv, File file, int flag) throws IOException, ParseException {
-		try (StreamReader text = new StreamReader(file, charset)) {
+		try (TextReader text = new TextReader(file, charset)) {
 			return parse(cv, text, flag);
 		} catch (ParseException e) {
-			throw new ParseException(IOUtil.readString(file), e.getMessage(), e.getIndex(), e.getCause());
+			ParseException exc = new ParseException(IOUtil.readString(file), e.getMessage(), e.getIndex(), e.getCause());
+			exc.setStackTrace(e.getStackTrace());
+			throw exc;
 		}
 	}
 	public final T parseRaw(DynByteBuf buf, int flag) throws IOException, ParseException {
 		return parseRaw(buf.asInputStream(), flag);
 	}
 	public final T parseRaw(InputStream in, int flag) throws IOException, ParseException {
-		try (StreamReader text = new StreamReader(in, charset)) {
+		try (TextReader text = new TextReader(in, charset)) {
 			return parse(text, flag);
 		}
 	}
 	public final <C extends CVisitor> C parseRaw(C cv, InputStream in, int flag) throws IOException, ParseException {
-		try (StreamReader text = new StreamReader(in, charset)) {
+		try (TextReader text = new TextReader(in, charset)) {
 			return parse(cv, text, flag);
 		}
 	}
@@ -141,8 +143,8 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 
 	public final void serialize(CEntry entry, DynByteBuf out) throws IOException { serialize(entry, 0, out); }
 	public final void serialize(CEntry entry, OutputStream out) throws IOException { serialize(entry, 0, out); }
-	public void serialize(CEntry entry, int flag, OutputStream out) throws IOException {
-		StreamWriter os = new StreamWriter(out, charset == null ? StandardCharsets.UTF_8 : charset);
+	public final void serialize(CEntry entry, int flag, OutputStream out) throws IOException {
+		TextWriter os = new TextWriter(out, charset == null ? StandardCharsets.UTF_8 : charset);
 		try {
 			append(entry, flag, os);
 		} finally {

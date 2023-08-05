@@ -3,11 +3,14 @@ package roj.collect;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
-import java.util.*;
+import java.util.AbstractMap;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Set;
 
 import static roj.collect.IntMap.MAX_NOT_USING;
 
-public class Int2IntMap extends AbstractMap<Integer, Integer> implements MapLike<Int2IntMap.Entry> {
+public class Int2IntMap extends AbstractMap<Integer, Integer> implements _Generic_Map<Int2IntMap.Entry> {
 	public int getOrDefaultInt(int key, int def) {
 		Entry entry = getEntry(key);
 		return entry == null ? def : entry.v;
@@ -31,7 +34,7 @@ public class Int2IntMap extends AbstractMap<Integer, Integer> implements MapLike
 		return oldV;
 	}
 
-	public static class Entry implements MapLikeEntry<Entry>, Map.Entry<Integer, Integer> {
+	public static class Entry implements _Generic_Entry<Entry>, Map.Entry<Integer, Integer> {
 		protected int k;
 		public int v;
 
@@ -79,7 +82,7 @@ public class Int2IntMap extends AbstractMap<Integer, Integer> implements MapLike
 		}
 
 		@Override
-		public Entry nextEntry() {
+		public Entry __next() {
 			return next;
 		}
 	}
@@ -106,46 +109,19 @@ public class Int2IntMap extends AbstractMap<Integer, Integer> implements MapLike
 		else mask = length - 1;
 	}
 
-	public Set<Entry> selfEntrySet() {
-		return new EntrySet(this);
-	}
-	public Set<Map.Entry<Integer, Integer>> entrySet() {
-		return Helpers.cast(new EntrySet(this));
-	}
+	public Set<Entry> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public Set<Map.Entry<Integer, Integer>> entrySet() { return Helpers.cast(selfEntrySet()); }
 
-	public int size() {
-		return size;
-	}
+	public int size() { return size; }
 
-	@Override
-	public Integer remove(Object key) {
-		return remove((int) key);
-	}
+	public Integer remove(Object key) { return remove((int) key); }
+	public Integer get(Object key) { return get((int) key); }
+	public boolean containsKey(Object key) { return containsKey((int) key); }
+	public Integer put(Integer key, Integer value) { return putInt(key, value); }
+	public Integer getOrDefault(Object key, Integer def) { return getOrDefaultInt((int) key, def); }
 
-	@Override
-	public Integer get(Object key) {
-		return get((int) key);
-	}
-
-	@Override
-	public boolean containsKey(Object key) {
-		return containsKey((int) key);
-	}
-
-	@Override
-	public Integer put(Integer key, Integer value) {
-		return putInt(key, value);
-	}
-
-	@Override
-	public Integer getOrDefault(Object key, Integer def) {
-		return getOrDefaultInt((int) key, def);
-	}
-
-	@Override
-	public void removeEntry0(Entry entry) {
-		remove(entry.k);
-	}
+	public _Generic_Entry<?>[] __entries() { return entries; }
+	public void __remove(Entry entry) { remove(entry.k); }
 
 	protected void resize() {
 		Entry[] newEntries = new Entry[length];
@@ -377,42 +353,6 @@ public class Int2IntMap extends AbstractMap<Integer, Integer> implements MapLike
 					}
 				}
 			} else {Arrays.fill(entries, null);}
-		}
-	}
-
-	static class EntrySet extends AbstractSet<Entry> {
-		private final Int2IntMap map;
-
-		private EntrySet(Int2IntMap map) {
-			this.map = map;
-		}
-
-		public final int size() {
-			return map.size();
-		}
-
-		public final void clear() {
-			map.clear();
-		}
-
-		public final Iterator<Entry> iterator() {
-			return isEmpty() ? Collections.emptyIterator() : new EntryItr<>(map.entries, map);
-		}
-
-		public final boolean contains(Object o) {
-			if (!(o instanceof Entry)) return false;
-			Entry e = (Entry) o;
-			int key = e.getIntKey();
-			Entry comp = map.getEntry(key);
-			return comp != null && comp.v == e.v;
-		}
-
-		public final boolean remove(Object o) {
-			if (o instanceof Map.Entry) {
-				Entry e = (Entry) o;
-				return map.remove(e.k) != null;
-			}
-			return false;
 		}
 	}
 }

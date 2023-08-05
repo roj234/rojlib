@@ -37,6 +37,9 @@ public final class CstDynamic extends Constant {
 		return super.toString() + " T#" + (int) tableIdx + ", //" + desc + "]";
 	}
 
+	@Override
+	public String getEasyReadValue() { return toString(); }
+
 	public final CstNameAndType desc() {
 		return desc;
 	}

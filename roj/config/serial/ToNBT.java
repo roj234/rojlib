@@ -163,4 +163,12 @@ public class ToNBT implements CVisitor {
 		sizeOffset = (int) (data >>> 28);
 		size = (int) data;
 	}
+
+	public final void reset() {
+		state = -1;
+		stateLen = 0;
+		size = 0;
+		sizeOffset = 0;
+		key = null;
+	}
 }

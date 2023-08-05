@@ -32,7 +32,7 @@ public class UnsortedMultiKeyMap<K, T, V> {
 
 	public static final class REntry<T, V> implements Iterable<REntry<T, V>> {
 		T k;
-		V v;
+		public V v;
 
 		REntry<T, V> next;
 
@@ -278,10 +278,8 @@ public class UnsortedMultiKeyMap<K, T, V> {
 		final MyHashSet<REntry<?,?>> traversed;
 
 		Finder(int cap) {
-			nodes = new SimpleList<>(16);
-			nodes.capacityType = 2;
-			nodes1 = new SimpleList<>(16);
-			nodes1.capacityType = 2;
+			nodes = SimpleList.withCapacityType(16, 2);
+			nodes1 = SimpleList.withCapacityType(16, 2);
 			routes = new IntList(16);
 			routes1 = new IntList(16);
 			tHolder = Helpers.cast(new SimpleList<?>[cap]);
@@ -380,6 +378,7 @@ public class UnsortedMultiKeyMap<K, T, V> {
 	}
 
 	// 通过这个方法添加的恐怕很难删除
+	// 组合压缩，keys可以是base也可以是base[]按顺序连接，fn是到value的映射
 	public V computeIfAbsentMulti(Class<T> base, List<Object> keys, Function<List<Object>, V> fn) {
 		SimpleList<REntry<T, V>> curr = GOC_Multi(base, keys);
 
@@ -535,7 +534,7 @@ public class UnsortedMultiKeyMap<K, T, V> {
 	public List<V> getMulti(List<K> s, int limit) {
 		return getMulti(s, limit, new SimpleList<>(), false);
 	}
-	public List<V> getMulti(List<K> s, int limit, List<V> dest) {
+	public Collection<V> getMulti(List<K> s, int limit, Collection<V> dest) {
 		return getMulti(s, limit, dest, false);
 	}
 	@SuppressWarnings("unchecked")

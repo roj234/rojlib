@@ -124,7 +124,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 
 				arr = new String[r.readVUInt()+1];
 				for (int i = 0; i < arr.length; i++) {
-					arr[i] = r.readZhCn();
+					arr[i] = r.readVUIGB();
 				}
 				decodeTab.add(arr);
 			} else if (rid == LONG) {
@@ -148,12 +148,12 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 				int size = r.readVUInt();
 				cc.valueMap(size);
 				while (size-- > 0) {
-					cc.key(r.readZhCn());
+					cc.key(r.readVUIGB());
 					element(r);
 				}
 				cc.pop();
 				break;
-			case STRING: cc.value(r.readZhCn()); break;
+			case STRING: cc.value(r.readVUIGB()); break;
 			case NULL: cc.valueNull(); break;
 			case BOOL: cc.value(r.readBoolean()); break;
 			case INTEGER: cc.value(r.readInt()); break;
@@ -196,7 +196,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 						int size = r.readVUInt();
 						cc.valueMap(size);
 						while (size-- > 0) {
-							cc.key(r.readZhCn());
+							cc.key(r.readVUIGB());
 							element(r);
 						}
 						cc.pop();
@@ -228,7 +228,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 				}
 				break;
 				case DOUBLE: while (cap-- > 0) cc.value(r.readDouble()); break;
-				case STRING: while (cap-- > 0) cc.value(r.readZhCn()); break;
+				case STRING: while (cap-- > 0) cc.value(r.readVUIGB()); break;
 				case Int1: {
 					if (asArray) {
 						byte[] data = new byte[cap];
@@ -310,7 +310,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 		if (size == 1) w.write(Type.VALUES.length);
 
 		w.putVUInt(len-1);
-		for (int i = 0; i < len; i++) w.putZhCn(m[i]);
+		for (int i = 0; i < len; i++) w.putVUIGB(m[i]);
 
 		return entry.names;
 	}

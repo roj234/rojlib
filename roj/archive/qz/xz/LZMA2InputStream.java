@@ -12,8 +12,10 @@ package roj.archive.qz.xz;
 
 import roj.archive.qz.xz.lz.LZDecoder;
 import roj.archive.qz.xz.lzma.LZMADecoder;
-import roj.archive.qz.xz.rangecoder.RangeDecoderFromBuffer;
-import roj.util.ArrayCache;
+import roj.archive.qz.xz.rangecoder.RangeDecoder;
+import roj.io.CorruptedInputException;
+import roj.util.ArrayUtil;
+import sun.misc.Unsafe;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -22,7 +24,7 @@ import java.io.InputStream;
 /**
  * Decompresses a raw LZMA2 stream (no XZ headers).
  */
-public class LZMA2InputStream extends InputStream {
+public final class LZMA2InputStream extends InputStream {
 	/**
 	 * Smallest valid LZMA2 dictionary size.
 	 * <p>
@@ -44,21 +46,14 @@ public class LZMA2InputStream extends InputStream {
 
 	private static final int COMPRESSED_SIZE_MAX = 1 << 16;
 
-	private final ArrayCache arrayCache;
 	private DataInputStream in;
 
 	private LZDecoder lz;
-	private RangeDecoderFromBuffer rc;
+	private RangeDecoder rc;
 	private LZMADecoder lzma;
 
-	private int uncompressedSize = 0;
-	private boolean isLZMAChunk = false;
-
-	private boolean needDictReset = true;
-	private boolean needProps = true;
-	private boolean endReached = false;
-
-	private byte[] b0;
+	private int uncompressedSize;
+	private byte state;
 
 	/**
 	 * @return approximate memory requirements as kibibytes (KiB)
@@ -67,7 +62,7 @@ public class LZMA2InputStream extends InputStream {
 		// The base state is around 30-40 KiB (probabilities etc.),
 		// range decoder needs COMPRESSED_SIZE_MAX bytes for buffering,
 		// and LZ decoder needs a dictionary buffer.
-		return 40 + COMPRESSED_SIZE_MAX / 1024 + getDictSize(dictSize) / 1024;
+		return 40 + (COMPRESSED_SIZE_MAX + getDictSize(dictSize)) / 1024;
 	}
 
 	private static int getDictSize(int dictSize) {
@@ -102,66 +97,64 @@ public class LZMA2InputStream extends InputStream {
 	 * in the range [<code>DICT_SIZE_MIN</code>,
 	 * <code>DICT_SIZE_MAX</code>]
 	 */
-	public LZMA2InputStream(InputStream in, int dictSize) {
-		this(in, dictSize, null);
-	}
+	public LZMA2InputStream(InputStream in, int dictSize) { this(in, dictSize, null); }
 	public LZMA2InputStream(InputStream in, int dictSize, byte[] presetDict) {
-		this(in, dictSize, presetDict, ArrayCache.getDefaultCache());
-	}
-	LZMA2InputStream(InputStream in, int dictSize, byte[] presetDict, ArrayCache arrayCache) {
 		// Check for null because otherwise null isn't detect
 		// in this constructor.
 		if (in == null) throw new NullPointerException();
 
-		this.arrayCache = arrayCache;
 		this.in = new DataInputStream(in);
-		this.rc = new RangeDecoderFromBuffer(COMPRESSED_SIZE_MAX, arrayCache);
-		this.lz = new LZDecoder(getDictSize(dictSize), presetDict, arrayCache);
+		this.rc = new RangeDecoder(COMPRESSED_SIZE_MAX);
+		this.lz = new LZDecoder(getDictSize(dictSize), presetDict);
 
-		if (presetDict != null && presetDict.length > 0) needDictReset = false;
+		if (presetDict != null && presetDict.length > 0) state = LZMA2Out.PROP_RESET;
+		else state = LZMA2Out.DICT_RESET;
 	}
 
+	private byte[] b0;
 	public int read() throws IOException {
 		if (b0 == null) b0 = new byte[1];
 		return read(b0, 0, 1) < 0 ? -1 : (b0[0] & 0xFF);
 	}
 
 	public int read(byte[] buf, int off, int len) throws IOException {
-		if (off < 0 || len < 0 || off + len < 0 || off + len > buf.length) throw new IndexOutOfBoundsException();
-		if (len == 0) return 0;
-
+		ArrayUtil.checkRange(buf, off, len);
+		return read0(buf, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
+	}
+	public int read(long addr, int len) throws IOException { return read0(null, addr, len); }
+	public int read0(Object buf, long addr, int len) throws IOException {
 		if (in == null) throw new IOException("Stream closed");
 
-		if (endReached) return -1;
+		if (state == -1) return -1;
 
 		try {
-			int size = 0;
+			int read = 0;
 
 			while (len > 0) {
-				if (uncompressedSize == 0) {
-					decodeChunkHeader();
-					if (endReached) return size == 0 ? -1 : size;
+				if (uncompressedSize <= 0) {
+					nextChunk();
+					if (state == -1) return read == 0 ? -1 : read;
 				}
 
 				int copySizeMax = Math.min(uncompressedSize, len);
 
-				if (!isLZMAChunk) {
-					lz.copyUncompressed(in, copySizeMax);
-				} else {
+				if (state == LZMA2Out.STATE_LZMA) {
 					lz.setLimit(copySizeMax);
 					lzma.decode();
+				} else {
+					lz.copyUncompressed(in, copySizeMax);
 				}
 
-				int copiedSize = lz.flush(buf, off);
-				off += copiedSize;
+				int copiedSize = lz.flush0(buf, addr);
+				addr += copiedSize;
 				len -= copiedSize;
-				size += copiedSize;
+				read += copiedSize;
 				uncompressedSize -= copiedSize;
 
-				if (uncompressedSize == 0) if (!rc.isFinished() || lz.hasPending()) throw new CorruptedInputException();
+				if (uncompressedSize == 0) if (!rc.isFinished() || lz.hasPending()) throw new CorruptedInputException("trailing compressed data");
 			}
 
-			return size;
+			return read;
 		} catch (Throwable e) {
 			try {
 				close();
@@ -170,79 +163,76 @@ public class LZMA2InputStream extends InputStream {
 		}
 	}
 
-	private void decodeChunkHeader() throws IOException {
+	@SuppressWarnings("fallthrough")
+	private void nextChunk() throws IOException {
 		int control = in.readUnsignedByte();
+		if (control <= 0x7F) {
+			switch (control) {
+				default: throw new CorruptedInputException("invalid control byte");
+				case 0: putArraysToCache(); state = -1; return; // End of data
+				case 1: lz.reset(); break; // uncompressed with dict reset
+				case 2: // uncompressed
+					if (state > LZMA2Out.STATE_RESET) throw new CorruptedInputException("excepting dict reset");
+			}
 
-		if (control == 0x00) {
-			endReached = true;
-			putArraysToCache();
+			state = LZMA2Out.STATE_RESET;
+			uncompressedSize = in.readUnsignedShort()+1;
 			return;
 		}
 
-		if (control >= 0xE0 || control == 0x01) {
-			needProps = true;
-			needDictReset = false;
-			lz.reset();
-		} else if (needDictReset) {
-			throw new CorruptedInputException();
-		}
+		uncompressedSize = ((control & 0x1F) << 16) + in.readUnsignedShort() + 1;
+		int cSize = in.readUnsignedShort()+1;
 
-		if (control >= 0x80) {
-			isLZMAChunk = true;
-
-			uncompressedSize = (control & 0x1F) << 16;
-			uncompressedSize += in.readUnsignedShort() + 1;
-
-			int compressedSize = in.readUnsignedShort() + 1;
-
-			if (control >= 0xC0) {
-				needProps = false;
-				decodeProps();
-
-			} else if (needProps) {
-				throw new CorruptedInputException();
-
-			} else if (control >= 0xA0) {
+		switch (control >>> 5) {
+			// LZMA, dict reset
+			case 7: lz.reset(); readProps(); break;
+			// LZMA, prop reset
+			case 6:
+				if (state == LZMA2Out.DICT_RESET) throw new CorruptedInputException("excepting dict reset");
+				readProps();
+			break;
+			// LZMA, state reset
+			case 5:
+				if (lzma == null) throw new CorruptedInputException("unexpected state reset");
 				lzma.reset();
-			}
-
-			rc.prepareInputBuffer(in, compressedSize);
-
-		} else if (control > 0x02) {
-			throw new CorruptedInputException();
-
-		} else {
-			isLZMAChunk = false;
-			uncompressedSize = in.readUnsignedShort() + 1;
+			break;
+			// LZMA
+			case 4:
+				if (lzma == null) throw new CorruptedInputException("unexpected LZMA state");
+			break;
 		}
+
+		state = LZMA2Out.STATE_LZMA;
+		rc.lzma2_manualFill(in, cSize);
 	}
 
-	private void decodeProps() throws IOException {
+	private void readProps() throws IOException {
 		int props = in.readUnsignedByte();
 
-		if (props > (4 * 5 + 4) * 9 + 8) throw new CorruptedInputException();
+		if (props > (4 * 5 + 4) * 9 + 8) throw new CorruptedInputException("Invalid LZMA properties byte");
 
 		int pb = props / (9 * 5);
 		props -= pb * 9 * 5;
 		int lp = props / 9;
 		int lc = props - lp * 9;
 
-		if (lc + lp > 4) throw new CorruptedInputException();
+		if (lc + lp > 4) throw new CorruptedInputException("Invalid LZMA properties byte");
 
-		lzma = new LZMADecoder(lz, rc, lc, lp, pb);
+		if (lzma == null) lzma = new LZMADecoder(lz, rc, lc, lp, pb);
+		else lzma.propReset(lc, lp, pb);
 	}
 
 	public int available() throws IOException {
 		if (in == null) throw new IOException("Stream closed");
-		return isLZMAChunk ? uncompressedSize : Math.min(uncompressedSize, in.available());
+		return state==LZMA2Out.STATE_LZMA ? uncompressedSize : Math.min(uncompressedSize, in.available());
 	}
 
 	private synchronized void putArraysToCache() {
 		if (lz != null) {
-			lz.putArraysToCache(arrayCache);
+			lz.putArraysToCache();
 			lz = null;
 
-			rc.putArraysToCache(arrayCache);
+			rc.putArraysToCache();
 			rc = null;
 		}
 	}

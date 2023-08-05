@@ -1,7 +1,6 @@
 package roj.util;
 
 import roj.collect.LFUCache;
-import roj.collect.RingBuffer;
 import roj.math.MutableInt;
 
 import java.lang.ref.Reference;
@@ -10,10 +9,9 @@ import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
-/**
- * CHANGE: 尽可能的归还数组
- */
 public class ArrayCache {
+	public static final boolean DEBUG_DISABLE_CACHE = false;
+
 	public static final byte[] BYTES = new byte[0];
 	public static final char[] CHARS = new char[0];
 	public static final int[] INTS = new int[0];
@@ -24,74 +22,100 @@ public class ArrayCache {
 	public static final Class<?>[] CLASSES = new Class<?>[0];
 
 	private static final ThreadLocal<ArrayCache> CACHE = new ThreadLocal<>();
-
-	public static ArrayCache getDefaultCache() {
+	private static final ArrayCache LARGE_ARRAY = new ArrayCache();
+	private static ArrayCache small() {
 		ArrayCache cache = CACHE.get();
 		if (cache == null) CACHE.set(cache = new ArrayCache());
 		return cache;
 	}
 
-	private static final int LARGE_ARRAY_SIZE = 524288;
+	private static final int LARGE_ARRAY_SIZE = 65536;
 	private static final int CHIP_SIZE = 256;
 	private static final int SIZES_MAX = 64;
 	private static final int ARRAYS_MAX = 9;
-	private static final int WARMUP_THRESHOLD = 4;
 
-	private final Map<MutableInt, RingBuffer<Reference<byte[]>>> byteCache = new LFUCache<>(SIZES_MAX, 1);
-	private final Map<MutableInt, RingBuffer<Reference<char[]>>> charCache = new LFUCache<>(SIZES_MAX, 1);
-	private final Map<MutableInt, RingBuffer<Reference<int[]>>> intCache = new LFUCache<>(SIZES_MAX, 1);
+	private final LFUCache<MutableInt, Object[]>
+		byteCache = new LFUCache<>(SIZES_MAX, 1),
+		charCache = new LFUCache<>(SIZES_MAX, 1),
+		intCache = new LFUCache<>(SIZES_MAX, 1);
+
 	private final ReentrantLock lock = new ReentrantLock();
 	private final MutableInt val = new MutableInt();
-	private int usage;
 
-	private <T> T getArray(Map<MutableInt, RingBuffer<Reference<T>>> cache, int size) {
-		if (size < CHIP_SIZE) return null;
-		if (usage < WARMUP_THRESHOLD && size < LARGE_ARRAY_SIZE) return null;
+	public ArrayCache() {}
+
+	private <T> T getArray(Map<MutableInt, Object[]> cache, int size) {
+		if (size < CHIP_SIZE || DEBUG_DISABLE_CACHE) return null;
 
 		lock.lock();
 		try {
 			val.setValue(size/CHIP_SIZE);
-			RingBuffer<Reference<T>> stack = cache.get(val);
+			Object[] stack = cache.get(val);
 			if (stack == null) return null;
 
-			T array;
-			do {
-				Reference<T> r = stack.pollLast();
-				if (r == null) return null;
+			MutableInt used_ref = (MutableInt) stack[0];
+			int bits = 1;
+			for (int i = 1; i < stack.length; i++, bits <<= 1) {
+				Reference<?> r = (Reference<?>) stack[i];
+				if (r == null) continue;
 
-				array = r.get();
-			} while (array == null);
-
-			return array;
+				Object t = r.get();
+				if (t != null) {
+					if ((used_ref.value & bits) == 0) {
+						used_ref.value |= bits;
+						return Helpers.cast(t);
+					} else {
+						// treat as if is null
+					}
+				} else {
+					stack[i] = null;
+				}
+			}
+			return null;
 		} finally {
 			lock.unlock();
 		}
 	}
-	private <T> void putArray(Map<MutableInt, RingBuffer<Reference<T>>> cache, T array, int size) {
-		if (size < CHIP_SIZE) return;
+	private void putArray(Map<MutableInt, Object[]> cache, Object array, int size) {
+		if (size < CHIP_SIZE || DEBUG_DISABLE_CACHE) return;
 
 		lock.lock();
 		try {
-			if (++usage < WARMUP_THRESHOLD && size < LARGE_ARRAY_SIZE) return;
-
 			val.setValue(size/CHIP_SIZE);
-			RingBuffer<Reference<T>> stack = cache.get(val);
+			Object[] stack = cache.get(val);
+			MutableInt used_ref;
 			if (stack == null) {
-				stack = new RingBuffer<>(ARRAYS_MAX);
-				cache.put(new MutableInt(val), stack);
+				cache.put(new MutableInt(val), stack = new Object[ARRAYS_MAX+1]);
+				stack[0] = used_ref = new MutableInt();
+			} else {
+				used_ref = (MutableInt) stack[0];
 			}
 
-			Reference<T> ref = stack.ringAddLast(stack.size() >= ARRAYS_MAX/3 || (size>=10485760 && stack.size()>0) ? new WeakReference<>(array) : new SoftReference<>(array));
-			if (ref != null) ref.clear();
+			int free = 0;
+			for (int i = 1; i < stack.length; i++) {
+				Reference<?> r = (Reference<?>) stack[i];
+				Object t = r == null ? null : r.get();
+				if (t == null && free == 0) free = i;
+				else if (t == array) {
+					used_ref.value &= ~(1<<(i-1));
+					return;
+				}
+			}
+
+			if (free > 0) {
+				stack[free] = --free == 0 ? new SoftReference<>(array) : new WeakReference<>(array);
+				used_ref.value &= ~(1<<free);
+			}
 		} finally {
 			lock.unlock();
 		}
 	}
 
-	public byte[] getByteArray(int size, boolean fillWithZeros) {
+	public static byte[] getByteArray(int size, boolean fillWithZeros) {
 		int size1 = (size+CHIP_SIZE-1)& -CHIP_SIZE;
 
-		byte[] array = getArray(byteCache, size1);
+		ArrayCache inst = size1 > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		byte[] array = inst.getArray(inst.byteCache, size1);
 
 		if (array == null) array = new byte[size1];
 		else if (fillWithZeros) {
@@ -101,14 +125,16 @@ public class ArrayCache {
 
 		return array;
 	}
-	public void putArray(byte[] array) {
-		putArray(byteCache, array, array.length);
+	public static void putArray(byte[] array) {
+		ArrayCache inst = array.length > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		inst.putArray(inst.byteCache, array, array.length);
 	}
 
-	public int[] getIntArray(int size, int fillWithZeros) {
+	public static int[] getIntArray(int size, int fillWithZeros) {
 		int size1 = (size+CHIP_SIZE-1)& -CHIP_SIZE;
 
-		int[] array = getArray(intCache, size1);
+		ArrayCache inst = size1 > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		int[] array = inst.getArray(inst.intCache, size1);
 
 		if (array == null) array = new int[size1];
 		else {
@@ -118,16 +144,18 @@ public class ArrayCache {
 
 		return array;
 	}
-	public void putArray(int[] array) {
-		putArray(intCache, array, array.length);
+	public static void putArray(int[] array) {
+		ArrayCache inst = array.length > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		inst.putArray(inst.intCache, array, array.length);
 	}
 
-	public char[] getCharArray(int size, boolean fillWithZeros) {
+	public static char[] getCharArray(int size, boolean fillWithZeros) {
 		// round up to CHIP_SIZE
 		// 分块... 反正get实际意义是... 长度至少为N的数组
 		int size1 = (size+CHIP_SIZE-1)& -CHIP_SIZE;
 
-		char[] array = getArray(charCache, size1);
+		ArrayCache inst = size1 > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		char[] array = inst.getArray(inst.charCache, size1);
 
 		if (array == null) array = new char[size1];
 		else if (fillWithZeros) {
@@ -137,7 +165,8 @@ public class ArrayCache {
 
 		return array;
 	}
-	public void putArray(char[] array) {
-		putArray(charCache, array, array.length);
+	public static void putArray(char[] array) {
+		ArrayCache inst = array.length > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		inst.putArray(inst.charCache, array, array.length);
 	}
 }

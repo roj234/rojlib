@@ -6,7 +6,7 @@ import roj.collect.SimpleList;
 import roj.config.data.*;
 import roj.config.word.Word;
 import roj.text.CharList;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -45,7 +45,7 @@ public final class CsvParser extends Parser<CList> {
 		forEachLine(file,c,0);
 	}
 	public void forEachLine(File file, Consumer<List<String>> c, int flag) throws IOException, ParseException {
-		try (StreamReader in = new StreamReader(file, charset)) {
+		try (TextReader in = new TextReader(file, charset)) {
 			forEachLine(in, c, flag);
 		}
 	}

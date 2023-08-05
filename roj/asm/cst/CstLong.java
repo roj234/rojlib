@@ -9,28 +9,20 @@ import roj.util.DynByteBuf;
 public final class CstLong extends Constant {
 	public long value;
 
-	public CstLong(long value) {
-		this.value = value;
-	}
+	public CstLong(long value) { this.value = value; }
+	@Override
+	void write(DynByteBuf w) { w.put(LONG).putLong(value); }
+	@Override
+	public byte type() { return LONG; }
+
+	public final String toString() { return super.toString() + " : " + value; }
 
 	@Override
-	public final void write(DynByteBuf w) {
-		w.put(Constant.LONG).putLong(value);
-	}
-
+	public String getEasyReadValue() { return Long.toString(value).concat("L"); }
 	@Override
-	public byte type() {
-		return Constant.LONG;
-	}
+	public String getEasyCompareValue() { return Long.toString(value); }
 
-	public final String toString() {
-		return super.toString() + " : " + value;
-	}
-
-	public final int hashCode() {
-		long l = value;
-		return (int) ~(l ^ (l >>> 32));
-	}
+	public final int hashCode() { long l = value; return (int) ~(l ^ (l >>> 32)); }
 
 	public final boolean equals(Object o) {
 		if (o == this) return true;

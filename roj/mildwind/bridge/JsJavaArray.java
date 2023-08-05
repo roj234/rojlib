@@ -1,6 +1,5 @@
 package roj.mildwind.bridge;
 
-import roj.config.word.NotStatementException;
 import roj.mildwind.JsContext;
 import roj.mildwind.type.JsBool;
 import roj.mildwind.type.JsNull;
@@ -12,8 +11,9 @@ import sun.misc.Unsafe;
 
 import java.lang.reflect.Array;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -112,14 +112,14 @@ public final class JsJavaArray implements JsObject {
 		return new Iterator<JsObject>() {
 			int i = 0;
 			public boolean hasNext() { return i < length; }
-			public JsObject next() { if (i >= length) throw new NotStatementException(); return JsContext.getInt(i++); }
+			public JsObject next() { if (i >= length) throw new NoSuchElementException(); return JsContext.getInt(i++); }
 		};
 	}
 	public Iterator<JsObject> _valItr() {
 		return new Iterator<JsObject>() {
 			int i = 0;
 			public boolean hasNext() { return i < length; }
-			public JsObject next() { if (i >= length) throw new NotStatementException(); return getByInt(i++); }
+			public JsObject next() { if (i >= length) throw new NoSuchElementException(); return getByInt(i++); }
 		};
 	}
 }

@@ -12,7 +12,7 @@ import roj.util.Helpers;
  * @author Roj234
  * @since 2023/3/19 0019 19:16
  */
-final class AdaptContext implements CAdapter<Object> {
+class AdaptContext implements CAdapter<Object> {
 	private final Adapter root;
 	Adapter curr;
 
@@ -77,9 +77,10 @@ final class AdaptContext implements CAdapter<Object> {
 	String serCtx;
 
 	public AdaptContext(Adapter root) {
-		this.root = root;
+		this.curr = this.root = root;
 		if (root.fieldCount() > 32) fieldStateEx = new MyBitSet(root.fieldCount()-32);
-		reset();
+
+		fieldId = -2;
 	}
 
 	public final void value(boolean l) {curr.read(this,l);}
@@ -114,7 +115,7 @@ final class AdaptContext implements CAdapter<Object> {
 		curr.pop(this);
 
 		int fst = curr.plusOptional(fieldState, fieldStateEx);
-		int remain = curr.fieldCount() - Integer.bitCount(fst) + (fieldStateEx == null ? 0 : fieldStateEx.size());
+		int remain = curr.fieldCount() - Integer.bitCount(fst) - (fieldStateEx == null ? 0 : fieldStateEx.size());
 
 		if (remain != 0) {
 			if (!(curr instanceof GenAdapter)) throw new IllegalStateException(curr+"缺少"+remain+"个字段");
@@ -122,10 +123,10 @@ final class AdaptContext implements CAdapter<Object> {
 			CharList sb = new CharList().append(curr).append("缺少这些字段:");
 			IntBiMap<String> fieldId = ((GenAdapter) curr).fieldNames();
 			for (int i = 0; i < curr.fieldCount(); i++) {
-				boolean has = i < 32 ? (fst & (1<<i)) != 0 : fieldStateEx.contains(i);
+				boolean has = i < 32 ? (fst & (1<<i)) != 0 : fieldStateEx.contains(i-32);
 				if (!has) sb.append(fieldId.get(i)).append(", ");
 			}
-			throw new IllegalStateException(sb.toString());
+			throw new IllegalStateException(sb.toStringAndFree());
 		}
 		popd(true);
 	}
@@ -159,15 +160,24 @@ final class AdaptContext implements CAdapter<Object> {
 
 		if (id < 32) {
 			int bit = 1<<id;
-			if ((fieldState&bit) != 0) throw new IllegalStateException("字段 "+id+" 已存在");
+			if ((fieldState&bit) != 0) throwDupField(id);
 			fieldState |= bit;
 		} else {
-			if (!fieldStateEx.add(id-32)) throw new IllegalStateException("字段 "+id+" 已存在");
+			if (!fieldStateEx.add(id-32)) throwDupField(id);
 		}
 	}
+	private void throwDupField(int id) {
+		if (!(curr instanceof GenAdapter)) throw new IllegalStateException("字段 "+id+" 已存在");
+		throw new IllegalStateException("字段 "+((GenAdapter) curr).fieldNames().get(id)+" 已存在");
+	}
+
 	public final void setKeyHook(int id) {
 		if (id < 0) throw new IllegalStateException("未知的字段ID");
-		if (fieldId != -1) throw new IllegalStateException("期待值而非名称");
+		if (fieldId != -1) {
+			if (!(curr instanceof GenAdapter)) throw new IllegalStateException("在设置字段 "+fieldId+" 时设置 "+id);
+			IntBiMap<String> map = ((GenAdapter) curr).fieldNames();
+			throw new IllegalStateException("在设置字段 "+map.get(fieldId)+" 时设置 "+map.get(id));
+		}
 		fieldId = id;
 	}
 	public final void pushHook(int id, Adapter d1) {
@@ -181,9 +191,12 @@ final class AdaptContext implements CAdapter<Object> {
 
 		stack = state.push(this);
 
+		replace(s);
+		s.push(this);
+	}
+	public final void replace(Adapter s) {
 		if (s.fieldCount() > 32) fieldStateEx = new MyBitSet(s.fieldCount()-32);
 		curr = s;
-		s.push(this);
 	}
 
 	private ByteList buf;
@@ -213,7 +226,7 @@ final class AdaptContext implements CAdapter<Object> {
 		return ref;
 	}
 	public final boolean finished() { return finished; }
-	public final void reset() {
+	public void reset() {
 		fieldId = -2;
 		fieldState = 0;
 		if (fieldStateEx != null) fieldStateEx.clear();
@@ -227,5 +240,5 @@ final class AdaptContext implements CAdapter<Object> {
 		curr = root;
 	}
 
-	public final void write(CVisitor c, Object o) { root.write(c, o); }
+	public void write(CVisitor c, Object o) { root.write(c, o); }
 }

@@ -3,39 +3,48 @@ package roj.util;
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.ui.CLIUtil;
 
+import java.awt.*;
+import java.awt.datatransfer.*;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
+import java.util.function.ToIntFunction;
+
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
  * @since 2020/10/15 0:43
  */
 public final class ArrayUtil {
-	public static String pack(int[] arr) {
+	public static void pack(int[] arr) {
 		ByteList tmp = IOUtil.getSharedByteBuf();
 		for (int i = 0; i < arr.length; i++) tmp.putInt(arr[i]);
-		return Base128(tmp);
+		Base128(tmp);
 	}
-	public static String pack(byte[] arr) { return Base128(ByteList.wrap(arr)); }
+	public static void pack(byte[] arr) { Base128(ByteList.wrap(arr)); }
 
-	private static String Base128(ByteList tmp) {
-		BitWriter br = new BitWriter(tmp);
-		CharList sb = IOUtil.getSharedCharBuf();
+	private static void Base128(ByteList tmp) {
+		BitBuffer br = new BitBuffer(tmp);
+		CharList sb = new CharList();
 		sb.ensureCapacity(tmp.readableBytes() * 8/7 + 1);
 		while (br.readableBits() >= 7) sb.append((char) (br.readBit(7)+1));
 		if (br.readableBits() > 0) sb.append((char) (br.readBit(br.readableBits())+1));
-		return ITokenizer.addSlashes(sb);
+
+		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(ITokenizer.addSlashes(sb, 0, new CharList().append('"'), '\'').append('"').toStringAndFree()), null);
+		CLIUtil.pause();
 	}
 
 	private static ByteList UnBase128(String s) {
 		int len = s.length() * 7/8;
 
 		ByteList tmp = ByteList.allocate(len,len);
-		BitWriter br = new BitWriter(tmp);
+		BitBuffer br = new BitBuffer(tmp);
 		for (int i = 0; i < s.length()-1; i++) br.writeBit(7, s.charAt(i)-1);
 
-		br.writeBit(8-br.bitIndex, s.charAt(s.length()-1)-1);
+		br.writeBit(8-br.bitPos, s.charAt(s.length()-1)-1);
 		br.endBitWrite();
 
 		return tmp;
@@ -86,6 +95,23 @@ public final class ArrayUtil {
 		return arr;
 	}
 
+	public static void shuffleArray(Object arr, long off, int len, int scale, Random random) {
+		long ptr = u.allocateMemory(scale);
+		if (ptr == 0) throw new OutOfMemoryError();
+
+		len *= scale;
+		try {
+			for (int i = 0; i < len; i += scale) {
+				u.copyMemory(arr, off+i, null, ptr, scale);
+				int j = random.nextInt(len)*scale;
+				u.copyMemory(arr, off+j, arr, off+i, scale);
+				u.copyMemory(null, ptr, arr, off+j, scale);
+			}
+		} finally {
+			u.freeMemory(ptr);
+		}
+	}
+
 	public static void shuffle(Object[] arr, Random random) {
 		for (int i = 0; i < arr.length; i++) {
 			Object a = arr[i];
@@ -106,11 +132,31 @@ public final class ArrayUtil {
 
 	public static boolean rangedEquals(byte[] b, int off1, int len1, byte[] b1, int off2, int len2) {
 		if (len1 != len2) return false;
-		len1 += off1;
-		while (off1 < len1) {
+		while (len1-- > 0) {
 			if (b[off1++] != b1[off2++]) return false;
 		}
 		return true;
+	}
+
+	public static int binarySearch(Object[] a, int low, int high, Object key, Comparator<Object> cmp) {
+		high--;
+
+		while (low <= high) {
+			int mid = (low + high) >>> 1;
+			int midVal = cmp.compare(a[mid], key);
+
+			if (midVal < 0) {
+				low = mid + 1;
+			} else if (midVal > 0) {
+				high = mid - 1;
+			} else {
+				return mid; // key found
+			}
+		}
+
+		// low ...
+
+		return -(low + 1);  // key not found.
 	}
 
 	public static String toString(Object[] list, int i, int length) {
@@ -133,5 +179,26 @@ public final class ArrayUtil {
 			hash = b[off++] + 31 * hash;
 		}
 		return hash;
+	}
+
+	public static <T extends Comparable<T>> int binarySearchList(List<T> list, T key) { return binarySearchList(list, 0, list.size(), key); }
+	public static <T extends Comparable<T>> int binarySearchList(List<T> list, int low, int high, T key) { return binarySearchEx(list, low, high, key::compareTo); }
+	public static <T> int binarySearchEx(List<T> list, ToIntFunction<T> comparator) { return binarySearchEx(list, 0, list.size(), comparator); }
+	public static <T> int binarySearchEx(List<T> list, int low, int high, ToIntFunction<T> comparator) {
+		high--;
+		while (low <= high) {
+			int mid = (low + high) >>> 1;
+			T midVal = list.get(mid);
+			int cmp = comparator.applyAsInt(midVal);
+			if (cmp < 0) low = mid + 1;
+			else if (cmp > 0) high = mid - 1;
+			else return mid;
+		}
+		return -(low + 1);
+	}
+
+	public static void checkRange(byte[] b, int off, int len) {
+		if ((off|len|(off+len)) < 0 || off + len > b.length)
+			throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+b.length);
 	}
 }

@@ -27,6 +27,12 @@ final class CollectionSer extends Adapter {
 	}
 
 	@Override
+	public Adapter inheritBy(SerializerFactory factory, Class<?> type) {
+		IntFunction<Collection<?>> subType = factory.dataContainer(type);
+		return subType == null ? this : new CollectionSer(valueType, set, subType);
+	}
+
+	@Override
 	Adapter withGenericType(SerializerFactory man, List<IType> genericType) {
 		if (genericType.size() != 1) throw new IllegalArgumentException(genericType.toString());
 		Adapter value = man.get(genericType.get(0));
@@ -38,7 +44,7 @@ final class CollectionSer extends Adapter {
 		ctx.fieldId = -1;
 		ctx.ref = newCollection != null ? newCollection.apply(size) :
 				size < 0 ?
-						set ? new MyHashSet<>() : new SimpleList<>(0,2) :
+						set ? new MyHashSet<>() : SimpleList.withCapacityType(0,2) :
 						set ? new MyHashSet<>(size) : new SimpleList<>(size);
 		ctx.push(valueType);
 	}

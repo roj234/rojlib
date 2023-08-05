@@ -28,48 +28,40 @@ public class MSSEngineClient extends MSSEngine {
 
 	@Override
 	public final void switches(int sw) {
-		final int AVAILABLE_SWITCHES = PSC_ONLY | ALLOW_0RTT | STREAM_DECRYPT;
+		final int AVAILABLE_SWITCHES = PSC_ONLY;
 		int i = sw & ~AVAILABLE_SWITCHES;
 		if (i != 0) throw new IllegalArgumentException("Illegal switch:"+i);
 
-		flag = (byte) i;
+		flag = (byte) sw;
 	}
 
 	// region inheritor modifiable
 
+	protected MSSSession session;
+	protected String serverName, alpn;
 	protected IntMap<MSSPublicKey> psc;
 
 	@Override
-	public void setPSC(IntMap<MSSPublicKey> keys) {
-		checkState();
-		this.psc = keys;
+	public void setPreSharedCertificate(IntMap<MSSPublicKey> certs) {
+		assertInitial();
+		this.psc = certs;
 	}
 
 	public MSSEngineClient session(MSSSession s) {
-		checkState();
+		assertInitial();
 		this.session = s;
 		return this;
 	}
-
-	protected String serverName, alpn;
-
+	public MSSSession getSession() { return session; }
 	public MSSEngineClient serverName(String s) {
-		checkState();
+		assertInitial();
 		this.serverName = s;
 		return this;
 	}
 	public MSSEngineClient alpn(String s) {
-		checkState();
+		assertInitial();
 		this.alpn = s;
 		return this;
-	}
-
-	private void checkState() {
-		if (stage != INITIAL) throw new IllegalStateException();
-	}
-
-	protected MSSPrivateKey getClientCertificate(int supported) {
-		return null;
 	}
 
 	// endregion
@@ -124,14 +116,10 @@ public class MSSEngineClient extends MSSEngine {
 
 				CharMap<DynByteBuf> ext = new CharMap<>();
 				if (session != null) {
-					initKeyDeriver(session.suite, session.key);
-					encoder = session.suite.ciphers.get();
-					try {
-						encoder.init(Cipher.ENCRYPT_MODE, deriveKey("preflight0", session.suite.ciphers.getKeySize()), null, getPRNG("preflight"));
-					} catch (GeneralSecurityException e) {
-						return error(e);
+					if (session.key != null) {
+						encoder = getSessionCipher(session, Cipher.ENCRYPT_MODE);
 					}
-					ext.put(Extension.session, session.id);
+					ext.put(Extension.session, new ByteList(session.id));
 				}
 				if (psc != null) {
 					ByteList tmp = ByteList.allocate(psc.size() << 2);
@@ -146,6 +134,7 @@ public class MSSEngineClient extends MSSEngine {
 				if (alpn != null) {
 					ext.put(Extension.application_layer_protocol, new ByteList().putUTFData(alpn));
 				}
+				processExtensions(null, ext, 0);
 				Extension.write(ext, ob.putInt(getSupportCertificateType()));
 
 				toWrite = allocateTmpBuffer(ob.readableBytes()).put(ob);
@@ -395,16 +384,23 @@ public class MSSEngineClient extends MSSEngine {
 		CharMap<DynByteBuf> extOut = new CharMap<>();
 
 		if (extIn.containsKey(Extension.certificate_request)) {
-			int supported = extIn.remove(Extension.certificate_request).readInt();
-			MSSPrivateKey key = getClientCertificate(supported);
+			// noinspection all
+			int formats = extIn.remove(Extension.certificate_request).readInt();
+
+			MSSPrivateKey key = getCertificate(extIn, formats); // supported
 			if (key == null) return error(NEGOTIATION_FAILED, "client_certificate");
 
-			byte[] data = key.publicKey();
-			extOut.put(Extension.certificate, ByteList.allocate(data.length+1).put((byte) key.format()).put(data));
+			Signature signer = key.signer(random);
+			signer.update(sharedKey); // challenge
+			byte[] sign = signer.sign();
+
+			byte[] publicKey = key.publicKey();
+			extOut.put(Extension.certificate, ByteList.allocate(publicKey.length+sign.length+2).put(sign.length).put(sign).put(key.format()).put(publicKey));
 		}
 
 		MSSPublicKey key;
 		if (extIn.containsKey(Extension.pre_shared_certificate)) {
+			// noinspection all
 			int id = extIn.remove(Extension.pre_shared_certificate).readUnsignedShort();
 			if (psc == null || !psc.containsKey(id)) return error(ILLEGAL_PARAM, "pre_shared_certificate");
 			key = psc.get(id);
@@ -446,9 +442,11 @@ public class MSSEngineClient extends MSSEngine {
 		}
 
 		DynByteBuf sessid = extIn.remove(Extension.session);
-		if ((flag & ALLOW_0RTT) != 0 && sessid != null) {
-			session = new MSSSession(deriveKey("session", suite.ciphers.getKeySize()), suite);
-			session.id = ByteList.wrap(sessid.toByteArray());
+		if (session != null && sessid != null) {
+			if (!sessid.equals(new ByteList(session.key)))
+				session = new MSSSession(sessid.toByteArray());
+			session.key = deriveKey("session", 64);
+			session.suite = suite;
 		}
 
 		if (!extOut.isEmpty()) {

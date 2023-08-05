@@ -6,9 +6,10 @@ import roj.reflect.ReflectionUtils;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj233
@@ -94,6 +95,12 @@ public class NativeMemory {
 	public static int getOffset(ByteBuffer buf) { return hlp.getOffset(buf); }
 	public static long getAddress(ByteBuffer buf) { return hlp.getAddress(buf); }
 
+	public static void reserveMemory(int length) { hlp.reserveMemory(length, length); }
+	public static void unreserveMemory(int length) { hlp.unreserveMemory(length, length); }
+
+	private static native long hpAlloc0(long capacity) throws NativeException;
+	private static native void hpFree0(long address) throws NativeException;
+
 	public NativeMemory() { this(false); }
 	public NativeMemory(int size) { this(false); allocate(size); }
 	public NativeMemory(boolean zeroFilled) {
@@ -104,14 +111,11 @@ public class NativeMemory {
 	private final Unmanaged unmanaged;
 	private final ReentrantLock lock = new ReentrantLock();
 
-	public long address() {
-		return unmanaged.address();
-	}
-	public long length() {
-		return unmanaged.length;
-	}
+	public long address() { return unmanaged.address(); }
+	public long length() { return unmanaged.length; }
+	public Lock lock() { return lock; }
 
-	public synchronized long allocate(int cap) {
+	public long allocate(long cap) {
 		lock.lock();
 		try {
 			return unmanaged.malloc(cap, false);
@@ -119,16 +123,16 @@ public class NativeMemory {
 			lock.unlock();
 		}
 	}
-	public void release() {
+	public boolean release() {
 		lock.lock();
 		try {
-			unmanaged.release();
+			return unmanaged.release();
 		} finally {
 			lock.unlock();
 		}
 	}
 	@Deprecated
-	public long resize(int cap) {
+	public long resize(long cap) {
 		lock.lock();
 		try {
 			return unmanaged.resize(cap);
@@ -138,8 +142,6 @@ public class NativeMemory {
 	}
 
 	static final class Unmanaged implements Runnable {
-		private static final boolean doAlign = "true".equals(System.getProperty("sun.nio.PageAlignDirectMemory"));
-
 		private final boolean clear;
 		private long base, length;
 		private int except;
@@ -155,15 +157,17 @@ public class NativeMemory {
 			return base;
 		}
 
-		void release() {
+		boolean release() {
 			if (base != 0) {
 				u.freeMemory(base);
 				hlp.unreserveMemory(length, except);
 				base = 0;
+				return true;
 			}
+			return false;
 		}
 
-		long resize(int cap) {
+		long resize(long cap) {
 			long s0 = length;
 			int s1 = except;
 			long addr = malloc(cap, true);
@@ -171,19 +175,22 @@ public class NativeMemory {
 			return addr;
 		}
 
-		long malloc(int cap, boolean resize) {
+		long malloc(long cap, boolean resize) {
+			if (cap < 0) throw new IllegalArgumentException("cap="+cap);
+			this.except = (int) cap;
+
 			if (base != 0 && !resize) release();
 
 			boolean pa = hlp.isDirectMemoryPageAligned();
 			int ps = hlp.pageSize();
-			long size = Math.max(1L, (long) cap + (pa ? ps : 0));
-			hlp.reserveMemory(size, cap);
+			long size = Math.max(1L, cap + (pa ? ps : 0));
+			hlp.reserveMemory(size, except);
 
 			long base;
 			try {
 				base = this.base == 0 ? u.allocateMemory(size) : u.reallocateMemory(this.base, size);
 			} catch (OutOfMemoryError x) {
-				hlp.unreserveMemory(size, cap);
+				hlp.unreserveMemory(size, except);
 				throw x;
 			}
 
@@ -201,7 +208,6 @@ public class NativeMemory {
 
 			this.base = base;
 			this.length = size;
-			this.except = cap;
 			return addr;
 		}
 

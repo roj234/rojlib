@@ -55,7 +55,7 @@ public abstract class AnnVal {
 					default: return new AnnValInt((char) type, ((CstInt) c).value);
 				}
 			case ENUM: return new AnnValEnum(((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str());
-			case ANNOTATION: return new AnnValAnnotation(Annotation.deserialize(pool, r));
+			case ANNOTATION: return new AnnValAnnotation(Annotation.parse(pool, r));
 			case ARRAY:
 				int len = r.readUnsignedShort();
 				List<AnnVal> annos = new ArrayList<>(len);

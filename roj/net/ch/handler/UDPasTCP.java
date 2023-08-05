@@ -65,7 +65,7 @@ public class UDPasTCP implements ChannelHandler {
 	}
 
 	@Override
-	public void channelTick(ChannelCtx ctx) throws IOException {
+	public void channelTick(ChannelCtx ctx) throws Exception {
 		for (Iterator<Ctx> itr = connections.values().iterator(); itr.hasNext(); ) {
 			Ctx c = itr.next();
 			c.tick(1);
@@ -75,7 +75,7 @@ public class UDPasTCP implements ChannelHandler {
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id == CtxEmbedded.EMBEDDED_CLOSE) {
+		if (event.id == EmbeddedChannel.EMBEDDED_CLOSE) {
 			connections.removeByValue((Ctx) event.getData());
 		}
 	}
@@ -207,7 +207,7 @@ public class UDPasTCP implements ChannelHandler {
 				if (data.isReadable()) {
 					pending.ringAddLast(bp.buffer(true, data.readableBytes()).put(data));
 				} else {
-					fireWriteDone();
+					fireFlushed();
 				}
 			} finally {
 				if (o != data) bp.reserve(data);
@@ -215,7 +215,7 @@ public class UDPasTCP implements ChannelHandler {
 		}
 
 		@Override
-		public void tick(int elapsed) throws IOException {
+		public void tick(int elapsed) throws Exception {
 			if (state >= CLOSED) return;
 			if (state == CONNECT_PENDING && timeout != 0 && System.currentTimeMillis() > timeout) {
 				close();
@@ -259,7 +259,7 @@ public class UDPasTCP implements ChannelHandler {
 
 				if (pending.isEmpty()) {
 					flag &= ~PAUSE_FOR_FLUSH;
-					fireWriteDone();
+					fireFlushed();
 				}
 			} finally {
 				lock.unlock();
@@ -296,7 +296,7 @@ public class UDPasTCP implements ChannelHandler {
 			super.closeHandler();
 		}
 		@Override
-		public void closeGracefully() throws IOException {
+		public void closeGracefully0() throws IOException {
 			if (state < LOCAL_CLOSE) {
 				if (state < OPEN) {
 					close();

@@ -1,121 +1,30 @@
 package roj.util;
 
-import roj.archive.qz.xz.CorruptedInputException;
-import roj.collect.Int2IntMap;
-import roj.io.buf.ByteRange;
+import roj.io.CorruptedInputException;
+import roj.io.buf.NativeArray;
 
 import java.io.IOException;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
  * @since 2023/8/2 0002 6:08
  */
 public class BsDiff {
-	public void bsdiff(byte[] oldData, byte[] newData, DynByteBuf patch) {
-		patch.putAscii("ENDSLEY/BSDIFF43").putIntLE(newData.length);
-		initSuffix(oldData);
-		bsdiff1(oldData, newData, patch);
-	}
+	public BsDiff() {}
+	public BsDiff(BsDiff prev) { sfx = prev.sfx; left = prev.left; }
 
-	public void bsdiff1(byte[] oldData, byte[] newData, DynByteBuf patch) {
-		int scan = 0;
-		int lastScan = 0;
-		int pos = 0;
-		int lastPos = 0;
-		int len = 0;
-		int lastOffset = 0;
-		while (scan < newData.length) {
-			int i;
-			int match = 0;
-			int scsc = scan += len;
-			while (scan < newData.length) {
-				Int2IntMap.Entry searchRet = search(scan, newData, oldData, 0, oldData.length);
-				pos = searchRet.getIntKey();
-				len = searchRet.getIntValue();
-				while (scsc < scan + len) {
-					if (scsc + lastOffset < oldData.length && oldData[scsc + lastOffset] == newData[scsc]) {
-						++match;
-					}
-					++scsc;
-				}
-				if (len == match && len != 0 || len > match + 8) break;
-				if (scan + lastOffset < oldData.length && oldData[scan + lastOffset] == newData[scan]) {
-					--match;
-				}
-				++scan;
-			}
-			if (len == match && scan != newData.length) continue;
-			int f = 0;
-			int F2 = 0;
-			int lenF = 0;
-			int i2 = 0;
-			while (i2 < scan - lastScan && i2 < oldData.length - lastPos) {
-				if (newData[lastScan + i2] == oldData[lastPos + i2]) {
-					++f;
-				}
-				if (2 * f - ++i2 <= 2 * F2 - lenF) continue;
-				F2 = f;
-				lenF = i2;
-			}
-			int b = 0;
-			int B = 0;
-			int lenB = 0;
-			if (scan < newData.length) {
-				for (int i3 = 1; i3 < scan - lastScan + 1 && i3 < pos + 1; ++i3) {
-					if (newData[scan - i3] == oldData[pos - i3]) {
-						++b;
-					}
-					if (2 * b - i3 <= 2 * B - lenB) continue;
-					B = b;
-					lenB = i3;
-				}
-			}
-			int overlap = -1;
-			if (lenF + lenB > scan - lastScan) {
-				overlap = lastScan + lenF - (scan - lenB);
-				int s = 0;
-				int S = 0;
-				int lenS = 0;
-				for (int i4 = 0; i4 < overlap; ++i4) {
-					if (oldData[lastPos + lenF - overlap + i4] == newData[lastScan + lenF - overlap + i4]) {
-						++s;
-					}
-					if (oldData[pos - lenB + i4] == newData[scan - lenB + i4]) {
-						--s;
-					}
-					if (s <= S) continue;
-					S = s;
-					lenS = i4;
-				}
-				lenF = lenF - overlap + lenS;
-				lenB -= lenS;
-			}
+	private byte[] left;
+	private int[] sfx;
 
-			patch.putIntLE(lenF)
-				 .putIntLE(scan - lastScan - lenF - lenB)
-				 .putIntLE(pos - lastPos - lenF - lenB);
+	public void setLeft(byte[] left) {
+		this.left = left;
+		int size = left.length;
 
-			ByteRange range = patch.byteRangeW(lenF);
-			for (i = 0; i < lenF; ++i) range.set(i, toPositive(oldData[lastPos + i]) - toPositive(newData[lastScan + i]));
-
-			if (overlap == -1) patch.put(newData, lastScan + lenF, scan - lastScan - lenF - lenB);
-
-			lastPos = pos - lenB;
-			lastScan = scan - lenB;
-			lastOffset = pos - scan;
-		}
-	}
-
-	private int[] sfx = null;
-
-	public void initSuffix(byte[] rawData) {
-		int size = rawData.length;
-
-		int[] bucket = ArrayCache.getDefaultCache().getIntArray(256, 256);
+		int[] bucket = ArrayCache.getIntArray(256, 256);
 		// count
-		for (int i = 0; i < rawData.length; i++) bucket[toPositive(rawData[i])]++;
+		for (int i = 0; i < left.length; i++) bucket[toPositive(left[i])]++;
 		// cumulative sum
 		for (int i = 1; i < bucket.length; i++) bucket[i] += bucket[i-1];
 		// move
@@ -124,7 +33,7 @@ public class BsDiff {
 
 		sfx = new int[size];
 		for (int i = 0; i < size; i++) {
-			int n = toPositive(rawData[i]);
+			int n = toPositive(left[i]);
 			int v = bucket[n]++;
 			sfx[v] = i;
 		}
@@ -137,10 +46,10 @@ public class BsDiff {
 		if (bucket[0] == 1) sfx[0] = -1;
 
 
-		int[] V = ArrayCache.getDefaultCache().getIntArray(size, 0);
-		for (int i = 0; i < size; ++i) V[i] = bucket[toPositive(rawData[i])] - 1;
+		int[] V = ArrayCache.getIntArray(size, 0);
+		for (int i = 0; i < size; ++i) V[i] = bucket[toPositive(left[i])] - 1;
 
-		ArrayCache.getDefaultCache().putArray(bucket);
+		ArrayCache.putArray(bucket);
 		bucket = null;
 
 		int h = 1;
@@ -165,13 +74,13 @@ public class BsDiff {
 			if (len > 0) sfx[size - len] = -len;
 
 			h <<= 1;
+			if (h < 0) break;
 		}
 
 		for (int i = 0; i < size; ++i) sfx[V[i]] = i;
 
-		ArrayCache.getDefaultCache().putArray(V);
+		ArrayCache.putArray(V);
 	}
-
 	private static void split(int[] I, int[] V, int start, int len, int h) {
 		int temp;
 		if (len < 16) {
@@ -253,43 +162,240 @@ public class BsDiff {
 
 		if (equalPos < start + len) split(I, V, equalPos, len - (equalPos - start), h);
 	}
+	private static int getV(int[] V, int pos) { return pos < V.length ? V[pos] : -1; }
 
-	private static int getV(int[] V, int pos) {
-		return pos < V.length ? V[pos] : -1;
+	// TODO this patch format is DESIGNED to be compressed
+	public void bsdiff(byte[] oldData, byte[] newData, DynByteBuf patch) {
+		patch.putAscii("ENDSLEY/BSDIFF43").putIntLE(newData.length);
+		setLeft(oldData);
+		genPatch(newData, patch);
 	}
 
-	public Int2IntMap.Entry search(int index, byte[] newData, byte[] oldData, int start, int end) {
-		if (end - start < 2) {
-			int len1 = matchLen(oldData, sfx[start], newData, index);
-			if (end != start && end < sfx.length) {
-				int len2 = matchLen(oldData, sfx[end], newData, index);
-				if (len2 >= len1) return new Int2IntMap.Entry(sfx[end], len2);
+	public void genPatch(byte[] right, DynByteBuf patch) {
+		byte[] left = this.left;
+		int leftLen = left.length, rightLen = right.length;
+
+		int scan = 0, lastScan = 0;
+		int pos = 0, lastPos = 0;
+		int len = 0, lastOffset = 0;
+		while (scan < rightLen) {
+			int match = 0;
+			int scsc = scan += len;
+			while (scan < rightLen) {
+				pos = search(right, scan, left, 0, leftLen);
+				len = this.len;
+				while (scsc < scan + len) {
+					if (scsc + lastOffset < leftLen && left[scsc + lastOffset] == right[scsc]) {
+						++match;
+					}
+					++scsc;
+				}
+				if (len == match && len != 0 || len > match + 8) break;
+				if (scan + lastOffset < leftLen && left[scan + lastOffset] == right[scan]) {
+					--match;
+				}
+				++scan;
+			}
+			if (len == match && scan != rightLen) continue;
+			int f = 0;
+			int F2 = 0;
+			int lenF = 0;
+			int i2 = 0;
+			while (i2 < scan - lastScan && i2 < leftLen - lastPos) {
+				if (right[lastScan + i2] == left[lastPos + i2]) {
+					++f;
+				}
+				if (2 * f - ++i2 <= 2 * F2 - lenF) continue;
+				F2 = f;
+				lenF = i2;
+			}
+			int b = 0;
+			int B = 0;
+			int lenB = 0;
+			if (scan < rightLen) {
+				for (int i3 = 1; i3 < scan - lastScan + 1 && i3 < pos + 1; ++i3) {
+					if (right[scan - i3] == left[pos - i3]) {
+						++b;
+					}
+					if (2 * b - i3 <= 2 * B - lenB) continue;
+					B = b;
+					lenB = i3;
+				}
+			}
+			int overlap = -1;
+			if (lenF + lenB > scan - lastScan) {
+				overlap = lastScan + lenF - (scan - lenB);
+				int s = 0;
+				int S = 0;
+				int lenS = 0;
+				for (int i4 = 0; i4 < overlap; ++i4) {
+					if (left[lastPos + lenF - overlap + i4] == right[lastScan + lenF - overlap + i4]) {
+						++s;
+					}
+					if (left[pos - lenB + i4] == right[scan - lenB + i4]) {
+						--s;
+					}
+					if (s <= S) continue;
+					S = s;
+					lenS = i4;
+				}
+				lenF = lenF - overlap + lenS;
+				lenB -= lenS;
 			}
 
-			return new Int2IntMap.Entry(sfx[start], len1);
-		} else {
-			int mid = (end - start) / 2 + start;
-			return arrayCompare(oldData, sfx[mid], newData, index, Math.min(oldData.length - sfx[mid], newData.length - index)) < 0 ?
-				search(index, newData, oldData, mid, end) :
-				search(index, newData, oldData, start, mid);
+			patch.putIntLE(lenF)
+				 .putIntLE(scan - lastScan - lenF - lenB)
+				 .putIntLE(pos - lastPos - lenF - lenB);
+
+			NativeArray range = patch.byteRangeW(lenF);
+			for (int i = 0; i < lenF; ++i) range.set(i, toPositive(left[lastPos + i]) - toPositive(right[lastScan + i]));
+
+			if (overlap == -1) patch.put(right, lastScan + lenF, scan - lastScan - lenF - lenB);
+
+			lastPos = pos-lenB;
+			lastScan = scan-lenB;
+			lastOffset = pos-scan;
 		}
 	}
+	public int getDiffLength(byte[] right, int maxDifference) {
+		int diffBytes = 0;
 
-	private static int arrayCompare(byte[] lData, int lStart, byte[] rData, int rStart, int size) {
-		int i = lStart;
+		byte[] left = this.left;
+		int leftLen = left.length, rightLen = right.length;
 
-		for(int j = rStart; i < lStart + size; i++, j++) {
-			// better: icmp -> tableswitch
-			if (lData[i] < rData[j]) return -1;
-			if (lData[i] > rData[j]) return 1;
+		int scan = 0, lastScan = 0;
+		int pos = 0, lastPos = 0;
+		int len = 0, lastOffset = 0;
+		while (scan < rightLen) {
+			int match = 0;
+			int scsc = scan += len;
+			while (scan < rightLen) {
+				pos = search(right, scan, left, 0, leftLen);
+				len = this.len;
+				while (scsc < scan + len) {
+					if (scsc + lastOffset < leftLen && left[scsc + lastOffset] == right[scsc]) {
+						++match;
+					}
+					++scsc;
+				}
+				if (len == match && len != 0 || len > match + 8) break;
+				if (scan + lastOffset < leftLen && left[scan + lastOffset] == right[scan]) {
+					--match;
+				}
+				++scan;
+			}
+			if (len == match && scan != rightLen) continue;
+			int f = 0;
+			int F2 = 0;
+			int lenF = 0;
+			int i2 = 0;
+			while (i2 < scan - lastScan && i2 < leftLen - lastPos) {
+				if (right[lastScan + i2] == left[lastPos + i2]) {
+					++f;
+				}
+				if (2 * f - ++i2 <= 2 * F2 - lenF) continue;
+				F2 = f;
+				lenF = i2;
+			}
+			int b = 0;
+			int B = 0;
+			int lenB = 0;
+			if (scan < rightLen) {
+				for (int i3 = 1; i3 < scan - lastScan + 1 && i3 < pos + 1; ++i3) {
+					if (right[scan - i3] == left[pos - i3]) {
+						++b;
+					}
+					if (2 * b - i3 <= 2 * B - lenB) continue;
+					B = b;
+					lenB = i3;
+				}
+			}
+			int overlap = -1;
+			if (lenF + lenB > scan - lastScan) {
+				overlap = lastScan + lenF - (scan - lenB);
+				int s = 0;
+				int S = 0;
+				int lenS = 0;
+				for (int i4 = 0; i4 < overlap; ++i4) {
+					if (left[lastPos + lenF - overlap + i4] == right[lastScan + lenF - overlap + i4]) {
+						++s;
+					}
+					if (left[pos - lenB + i4] == right[scan - lenB + i4]) {
+						--s;
+					}
+					if (s <= S) continue;
+					S = s;
+					lenS = i4;
+				}
+				lenF = lenF - overlap + lenS;
+				lenB -= lenS;
+			}
+
+			for (int i = 0; i < lenF; ++i) {
+				if (left[lastPos+i] != right[lastScan+i]) {
+					diffBytes++;
+				}
+			}
+
+			if (overlap == -1) diffBytes += scan - lastScan - lenF - lenB;
+
+			if (diffBytes > maxDifference) return -1;
+
+			lastPos = pos-lenB;
+			lastScan = scan-lenB;
+			lastOffset = pos-scan;
 		}
 
-		return 0;
+		return diffBytes;
 	}
 
+	private int len;
+	private int search(byte[] right, int rightOff, byte[] left, int leftOff, int leftEnd) {
+		loop:
+		while (true) {
+			int leftLen = leftEnd - leftOff;
+			if (leftLen < 2) {
+				int len1 = matchLen(left, sfx[leftOff], right, rightOff);
+				if (leftLen > 0 && leftEnd < sfx.length) {
+					int len2 = matchLen(left, sfx[leftEnd], right, rightOff);
+					if (len2 >= len1) {
+						len = len2;
+						return sfx[leftEnd];
+					}
+				}
+
+				len = len1;
+				return sfx[leftOff];
+			}
+
+			// 二分查找 log2(n)
+			int mid = leftLen/2 + leftOff;
+
+			int i = sfx[mid], j = rightOff;
+			int max = i + Math.min(left.length-i, right.length-rightOff);
+
+			while (i < max) {
+				if (left[i] < right[j]) {
+					// 小于
+					leftOff = mid;
+					continue loop;
+				}
+				if (left[i] > right[j]) break;
+
+				i++;
+				j++;
+			}
+
+			// 大于和等于
+			leftEnd = mid;
+		}
+	}
 	private static int matchLen(byte[] lData, int lStart, byte[] rData, int rStart) {
 		int i = lStart;
-		for(int j = rStart; i < lData.length && j < rData.length && lData[i] == rData[j]; i++, j++);
+		while (i < lData.length && rStart < rData.length && lData[i] == rData[rStart]) {
+			i++;
+			rStart++;
+		}
 		return i - lStart;
 	}
 
@@ -310,7 +416,7 @@ public class BsDiff {
 		while (patch.isReadable()) {
 			int diffLen = patch.readIntLE();
 			int extraLen = patch.readIntLE();
-			int offset = patch.readIntLE();
+			int advance = patch.readIntLE();
 
 			if (old.readableBytes() < diffLen) throw new IOException("in: no " + diffLen + " bytes readable");
 			if (patch.readableBytes() < diffLen+extraLen) throw new CorruptedInputException("patch: no " + diffLen + " bytes readable");
@@ -343,7 +449,7 @@ public class BsDiff {
 			patch.rIndex += extraLen;
 			wrote += extraLen;
 
-			old.rIndex += offset;
+			old.rIndex += advance;
 		}
 
 		return wrote;

@@ -1,7 +1,7 @@
 package roj.io.source;
 
 import roj.RequireTest;
-import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -23,7 +23,10 @@ public class MemorySource extends Source {
 
 	public int read() { return list.isReadable() ? list.readUnsignedByte() : -1; }
 	public int read(byte[] b, int off, int len) {
-		len = Math.min(len, list.readableBytes());
+		int i = list.readableBytes();
+		if (i <= 0) return -1;
+
+		len = Math.min(len, i);
 		list.read(b, off, len);
 		return len;
 	}
@@ -62,7 +65,7 @@ public class MemorySource extends Source {
 	@RequireTest("direct memory copying maybe not stable if region collisions")
 	public void moveSelf(long from, long to, long length) {
 		if ((from | to | length) < 0) throw new IllegalArgumentException();
-		FieldAccessor.u.copyMemory(list.array(), list._unsafeAddr()+from, list.array(), list._unsafeAddr()+to, length);
+		ReflectionUtils.u.copyMemory(list.array(), list._unsafeAddr()+from, list.array(), list._unsafeAddr()+to, length);
 	}
 
 	@Override
@@ -72,7 +75,5 @@ public class MemorySource extends Source {
 	public DynByteBuf buffer() { list.wIndex(cap); list.rIndex = 0; return list; }
 
 	@Override
-	public String toString() {
-		return "MemorySource@" + System.identityHashCode(list);
-	}
+	public String toString() { return "MemorySource@"+System.identityHashCode(list); }
 }

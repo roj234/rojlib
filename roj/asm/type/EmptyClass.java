@@ -12,20 +12,16 @@ final class EmptyClass implements IType {
 	private EmptyClass() {}
 
 	@Override
-	public byte genericType() {
-		return EMPTY_TYPE;
-	}
-
+	public byte genericType() { return EMPTY_TYPE; }
 	@Override
 	public void toDesc(CharList sb) {}
-
 	@Override
 	public void toString(CharList sb) {}
+	@Override
+	public String owner() { return "java/lang/Object"; }
 
 	@Override
-	public String owner() {
-		return "java/lang/Object";
-	}
+	public IType clone() { return I; }
 
 	@Override
 	public void checkPosition(int env, int pos) {
@@ -33,12 +29,7 @@ final class EmptyClass implements IType {
 	}
 
 	@Override
-	public int hashCode() {
-		return 114514191;
-	}
-
+	public int hashCode() { return 114514191; }
 	@Override
-	public String toString() {
-		return "<generic empty class placeholder>";
-	}
+	public String toString() { return "<generic empty class placeholder>"; }
 }

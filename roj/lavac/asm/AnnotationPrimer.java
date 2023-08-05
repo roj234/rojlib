@@ -12,7 +12,7 @@ public class AnnotationPrimer extends Annotation {
 	public IClass clazzInst;
 
 	public AnnotationPrimer(String type, int idx) {
-		this.clazz = type;
+		this.type = type;
 		this.values = new MyHashMap<>();
 		this.idx = idx - 1;
 	}

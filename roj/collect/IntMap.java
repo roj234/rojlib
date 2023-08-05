@@ -12,7 +12,7 @@ import java.util.function.Supplier;
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-public class IntMap<V> extends AbstractMap<Integer, V> implements MapLike<IntMap.Entry<V>>, IIntMap<V> {
+public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<IntMap.Entry<V>>, IIntMap<V> {
 	public static final Object UNDEFINED = new Object() {
 		public String toString() { return "roj.collect.UNDEFINED"; }
 		public boolean equals(Object obj) { return obj == UNDEFINED; }
@@ -39,7 +39,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements MapLike<IntMap
 		return entry == null ? def : entry.v;
 	}
 
-	public static class Entry<V> implements MapLikeEntry<Entry<V>>, Map.Entry<Integer, V> {
+	public static class Entry<V> implements _Generic_Entry<Entry<V>>, Map.Entry<Integer, V> {
 		protected int k;
 		protected V v;
 
@@ -71,13 +71,13 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements MapLike<IntMap
 		protected Entry<V> next;
 
 		@Override
-		public Entry<V> nextEntry() {
+		public Entry<V> __next() {
 			return next;
 		}
 
 		@Override
 		public String toString() {
-			return k + "=" + v + '\n';
+			return k + "=" + v;
 		}
 	}
 
@@ -134,60 +134,34 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements MapLike<IntMap
 		if (this.entries != null) resize();
 	}
 
-	public Set<Entry<V>> selfEntrySet() {
-		return new EntrySet<>(this);
-	}
-	public Set<Map.Entry<Integer, V>> entrySet() {
-		return Helpers.cast(new EntrySet<>(this));
-	}
-	public int size() {
-		return size;
-	}
+	public int size() { return size; }
 
-	@Override
-	public void removeEntry0(Entry<V> vEntry) {
-		remove(vEntry.k);
-	}
+	public Set<Entry<V>> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public Set<Map.Entry<Integer, V>> entrySet() { return Helpers.cast(selfEntrySet()); }
+
+	public _Generic_Entry<?>[] __entries() { return entries; }
+	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
 
 	public V computeIfAbsentInt(int k, @Nonnull IntFunction<V> fn) {
-		V v = get(k);
-		if (v == null && !containsKey(k)) {
-			putInt(k, v = fn.apply(k));
-		}
+		Entry<V> entry = getEntry(k);
+		V v;
+		if (entry == null) putInt(k, v = fn.apply(k));
+		else v = entry.v;
 		return v;
 	}
 	public V computeIfAbsentIntS(int k, @Nonnull Supplier<V> supplier) {
-		V v = get(k);
-		if (v == null && !containsKey(k)) {
-			putInt(k, v = supplier.get());
-		}
+		Entry<V> entry = getEntry(k);
+		V v;
+		if (entry == null) putInt(k, v = supplier.get());
+		else v = entry.v;
 		return v;
 	}
 
-	@Override
-	public V remove(Object key) {
-		return remove((int) key);
-	}
-
-	@Override
-	public V get(Object key) {
-		return get((int) key);
-	}
-
-	@Override
-	public boolean containsKey(Object key) {
-		return containsKey((int) key);
-	}
-
-	@Override
-	public V put(Integer key, V value) {
-		return putInt(key, value);
-	}
-
-	@Override
-	public V getOrDefault(Object key, V def) {
-		return getOrDefault((int) key, def);
-	}
+	public V remove(Object key) { return remove((int) key); }
+	public V get(Object key) { return get((int) key); }
+	public boolean containsKey(Object key) { return containsKey((int) key); }
+	public V put(Integer key, V value) { return putInt(key, value); }
+	public V getOrDefault(Object key, V def) { return getOrDefault((int) key, def); }
 
 	@SuppressWarnings("unchecked")
 	protected void resize() {
@@ -377,41 +351,5 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements MapLike<IntMap
 				}
 			}
 		} else Arrays.fill(entries, null);
-	}
-
-	static class EntrySet<V> extends AbstractSet<Entry<V>> {
-		private final IntMap<V> map;
-
-		private EntrySet(IntMap<V> map) {
-			this.map = map;
-		}
-
-		public final int size() {
-			return map.size();
-		}
-
-		public final void clear() {
-			map.clear();
-		}
-
-		public final Iterator<Entry<V>> iterator() {
-			return isEmpty() ? Collections.emptyIterator() : new EntryItr<>(map.entries, map);
-		}
-
-		public final boolean contains(Object o) {
-			if (!(o instanceof IntMap.Entry)) return false;
-			Entry<?> e = (Entry<?>) o;
-			int key = e.getIntKey();
-			Entry<?> comp = map.getEntry(key);
-			return comp != null && comp.v == e.v;
-		}
-
-		public final boolean remove(Object o) {
-			if (o instanceof Map.Entry) {
-				IntMap.Entry<?> e = (IntMap.Entry<?>) o;
-				return map.remove(e.k) != null;
-			}
-			return false;
-		}
 	}
 }

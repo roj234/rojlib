@@ -3,6 +3,7 @@ package roj.asm.type;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.util.Helpers;
 
 import java.util.Collections;
 import java.util.List;
@@ -32,5 +33,20 @@ public abstract class IGeneric implements IType {
 		CharList cl = IOUtil.getSharedCharBuf();
 		toString(cl);
 		return cl.toString();
+	}
+
+	@Override
+	public IGeneric clone() {
+		try {
+			IGeneric clone = (IGeneric) super.clone();
+			clone.sub = (GenericSub) sub.clone();
+			clone.children = new SimpleList<>(children.size());
+			for (int i = 0; i < children.size(); i++)
+				clone.children.add(children.get(i).clone());
+			return clone;
+		} catch (CloneNotSupportedException e) {
+			Helpers.athrow(e);
+			return Helpers.nonnull();
+		}
 	}
 }

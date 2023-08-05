@@ -2,7 +2,7 @@ package roj.mildwind.asm;
 
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.attr.AttrUTF;
+import roj.asm.tree.attr.AttrString;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.visitor.AttrCodeWriter;
@@ -36,7 +36,7 @@ public final class JsWriter {
 		data = new ConstantData();
 		data.name("roj/mildwind/asm/AST000");
 		data.parent("roj/mildwind/asm/JsFunctionCompiled");
-		data.putAttr(new AttrUTF("SourceFile", file));
+		data.putAttr(new AttrString("SourceFile", file));
 		data.newField(AccessFlag.PRIVATE, "methodId", "I");
 	}
 

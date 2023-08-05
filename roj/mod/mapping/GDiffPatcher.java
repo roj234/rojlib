@@ -7,7 +7,7 @@ import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.io.JarReaderStream;
 import roj.reflect.ReflectionUtils;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -134,7 +134,7 @@ public final class GDiffPatcher {
 	private void patchEMPTY(Map<String, List<Patch>> patches, List<Context> ctx) {
 		for (Map.Entry<String, List<Patch>> entry : patches.entrySet()) {
 			if (entry.getValue().get(0).exist) {
-				CmdUtil.warning("missing " + entry.getKey());
+				CLIUtil.warning("missing " + entry.getKey());
 				continue;
 			}
 			String name = entry.getKey();
@@ -152,7 +152,7 @@ public final class GDiffPatcher {
 		for (Patch patch : patches) {
 			if (!patch.exist) {
 				if (data.isReadable()) {
-					CmdUtil.warning("期待空的" + patch.source);
+					CLIUtil.warning("期待空的" + patch.source);
 					errorCount++;
 					data = new ByteList(0);
 				}
@@ -165,12 +165,12 @@ public final class GDiffPatcher {
 				adler32.reset();
 				if (patch.checksum != inputChecksum) {
 					errorCount++;
-					CmdUtil.warning("类 " + patch.source + " 的校验码不正确.");
+					CLIUtil.warning("类 " + patch.source + " 的校验码不正确.");
 					return null;
 				}
 			}
 			if (patch.patch.length == 0) {
-				CmdUtil.warning("E/不支持清空: " + patch);
+				CLIUtil.warning("E/不支持清空: " + patch);
 				ConstantData clazz = new ConstantData();
 				clazz.name(patch.source);
 				return new ByteList(Parser.toByteArray(clazz));
@@ -181,7 +181,7 @@ public final class GDiffPatcher {
 				patch(data, patch.patch, out);
 				return out;
 			} catch (Throwable e) {
-				CmdUtil.error(name + "打补丁失败", e);
+				CLIUtil.error(name + "打补丁失败", e);
 			}
 		}
 		return data;
@@ -225,7 +225,7 @@ public final class GDiffPatcher {
 						} else if (entry.getName().startsWith("binpatch/server")) {
 							serverPatches.computeIfAbsent(cp.source+".class", Helpers.fnArrayList()).add(cp);
 						} else {
-							CmdUtil.warning("未知名字 " + entry.getName());
+							CLIUtil.warning("未知名字 " + entry.getName());
 						}
 					} catch (IOException e) {
 						throw new RuntimeException(e);

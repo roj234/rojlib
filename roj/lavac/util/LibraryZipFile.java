@@ -6,15 +6,12 @@ import roj.asm.Parser;
 import roj.asm.tree.IClass;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Set;
-
-import static roj.collect.IntMap.UNDEFINED;
 
 /**
  * @author Roj234
@@ -51,8 +48,8 @@ public class LibraryZipFile implements Library {
 
 	@Override
 	public IClass get(CharSequence name) {
-		MyHashMap.Entry<String, IClass> entry = info.getEntry(Helpers.cast(name));
-		if (entry != null && entry.v != UNDEFINED) return entry.v;
+		MyHashMap.AbstractEntry<String, IClass> entry = info.getEntry(Helpers.cast(name));
+		if (entry != null) return entry.getValue();
 		synchronized (info) {
 			IClass v = apply(name);
 			info.put(name.toString(), v);
@@ -69,7 +66,7 @@ public class LibraryZipFile implements Library {
 		ZEntry file = zf.getEntries().get(s);
 		if (file == null) return null;
 		try {
-			ByteList data = zf.get(file, IOUtil.getSharedByteBuf());
+			ByteList data = ByteList.wrap(zf.get(file));
 			return Parser.parseConstants(data);
 		} catch (Exception e) {
 			e.printStackTrace();

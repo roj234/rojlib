@@ -9,23 +9,18 @@ import roj.util.DynByteBuf;
 public final class CstDouble extends Constant {
 	public double value;
 
-	public CstDouble(double value) {
-		this.value = value;
-	}
+	public CstDouble(double value) { this.value = value; }
+	@Override
+	void write(DynByteBuf w) { w.put(DOUBLE).putDouble(value); }
+	@Override
+	public byte type() { return DOUBLE; }
+
+	public String toString() { return super.toString() + " : " + value; }
 
 	@Override
-	public void write(DynByteBuf w) {
-		w.put(Constant.DOUBLE).putDouble(value);
-	}
-
+	public String getEasyReadValue() { return Double.toString(value).concat("d"); }
 	@Override
-	public byte type() {
-		return Constant.DOUBLE;
-	}
-
-	public String toString() {
-		return super.toString() + " : " + value;
-	}
+	public String getEasyCompareValue() { return Double.toString(value); }
 
 	public int hashCode() {
 		long l = Double.doubleToRawLongBits(value);

@@ -1,6 +1,6 @@
 package roj.net.dns;
 
-import roj.concurrent.SpinLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * @author Roj234
@@ -10,7 +10,7 @@ public final class RecordKey {
 	String url;
 	byte flag;
 
-	public SpinLock lock = new SpinLock();
+	public ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
 	public String getUrl() {
 		return url;

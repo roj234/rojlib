@@ -15,7 +15,7 @@ import roj.archive.qz.xz.lzma.LZMAEncoder;
 import roj.archive.qz.xz.rangecoder.RangeEncoderToStream;
 import roj.io.Finishable;
 import roj.math.MathUtils;
-import roj.util.ArrayCache;
+import roj.util.ArrayUtil;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -28,8 +28,6 @@ import java.io.OutputStream;
 public class LZMAOutputStream extends OutputStream implements Finishable {
 	private OutputStream out;
 
-	private final ArrayCache arrayCache;
-
 	private LZEncoder lz;
 	private final RangeEncoderToStream rc;
 	private LZMAEncoder lzma;
@@ -37,11 +35,11 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 	private final int props;
 	private final boolean useEndMarker;
 	private final long expectedUncompressedSize;
-	private long currentUncompressedSize = 0;
+	private long processed = 0;
 
 	private boolean finished = false;
 
-	private LZMAOutputStream(OutputStream out, LZMA2Options options, boolean useHeader, boolean useEndMarker, long expectedUncompressedSize, ArrayCache arrayCache) throws IOException {
+	public LZMAOutputStream(OutputStream out, LZMA2Options options, boolean useHeader, boolean useEndMarker, long expectedUncompressedSize) throws IOException {
 		if (out == null) throw new NullPointerException();
 
 		// -1 indicates unknown and >= 0 are for known sizes.
@@ -49,8 +47,6 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 
 		this.useEndMarker = useEndMarker;
 		this.expectedUncompressedSize = expectedUncompressedSize;
-
-		this.arrayCache = arrayCache;
 
 		this.out = out;
 		rc = new RangeEncoderToStream(out);
@@ -60,9 +56,7 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 			dictSize = MathUtils.getMin2PowerOf((int) expectedUncompressedSize);
 		}
 
-		lzma = LZMAEncoder.getInstance(rc, options.getLc(), options.getLp(), options.getPb(),
-			options.getMode(), dictSize, 0, options.getNiceLen(), options.getMatchFinder(), options.getDepthLimit(), arrayCache);
-
+		lzma = LZMAEncoder.getInstance(rc, options, 0);
 		lz = lzma.getLZEncoder();
 
 		byte[] presetDict = options.getPresetDict();
@@ -115,29 +109,7 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 	 * @throws IOException may be thrown from <code>out</code>
 	 */
 	public LZMAOutputStream(OutputStream out, LZMA2Options options, long inputSize) throws IOException {
-		this(out, options, inputSize, ArrayCache.getDefaultCache());
-	}
-
-	/**
-	 * Creates a new compressor for the legacy .lzma file format.
-	 * <p>
-	 * This is identical to
-	 * <code>LZMAOutputStream(OutputStream, LZMA2Options, long)</code>
-	 * except that this also takes the <code>arrayCache</code> argument.
-	 *
-	 * @param out output stream to which the compressed data
-	 * will be written
-	 * @param options LZMA compression options; the same class
-	 * is used here as is for LZMA2
-	 * @param inputSize uncompressed size of the data to be compressed;
-	 * use <code>-1</code> when unknown
-	 * @param arrayCache cache to be used for allocating large arrays
-	 *
-	 * @throws IOException may be thrown from <code>out</code>
-	 * @since 1.7
-	 */
-	public LZMAOutputStream(OutputStream out, LZMA2Options options, long inputSize, ArrayCache arrayCache) throws IOException {
-		this(out, options, true, inputSize == -1, inputSize, arrayCache);
+		this(out, options, true, inputSize == -1, inputSize);
 	}
 
 	/**
@@ -157,10 +129,7 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 	 * @throws IOException may be thrown from <code>out</code>
 	 */
 	public LZMAOutputStream(OutputStream out, LZMA2Options options, boolean useEndMarker) throws IOException {
-		this(out, options, useEndMarker, ArrayCache.getDefaultCache());
-	}
-	public LZMAOutputStream(OutputStream out, LZMA2Options options, boolean useEndMarker, ArrayCache arrayCache) throws IOException {
-		this(out, options, false, useEndMarker, -1, arrayCache);
+		this(out, options, false, useEndMarker, -1);
 	}
 
 	/**
@@ -168,18 +137,14 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 	 * This might be useful when handling file formats other than .lzma
 	 * that use the same encoding for the LZMA properties as .lzma does.
 	 */
-	public int getProps() {
-		return props;
-	}
+	public int getProps() { return props; }
 
 	/**
 	 * Gets the amount of uncompressed data written to the stream.
 	 * This is useful when creating raw LZMA streams without
 	 * the end of stream marker.
 	 */
-	public long getUncompressedSize() {
-		return currentUncompressedSize;
-	}
+	public long getUncompressedSize() { return processed; }
 
 	private final byte[] b1 = new byte[1];
 	public void write(int b) throws IOException {
@@ -188,14 +153,13 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 	}
 
 	public void write(byte[] buf, int off, int len) throws IOException {
-		if (off < 0 || len < 0 || off + len < 0 || off + len > buf.length) throw new IndexOutOfBoundsException();
-
+		ArrayUtil.checkRange(buf, off, len);
 		if (finished) throw new IOException("Stream finished or closed");
 
-		if (expectedUncompressedSize != -1 && expectedUncompressedSize - currentUncompressedSize < len)
-			throw new IOException("Expected uncompressed size (" + expectedUncompressedSize + " bytes) was exceeded");
+		if (expectedUncompressedSize != -1 && expectedUncompressedSize - processed < len)
+			throw new IOException("Expected uncompressed size ("+expectedUncompressedSize+" bytes) was exceeded");
 
-		currentUncompressedSize += len;
+		processed += len;
 
 		try {
 			while (len > 0) {
@@ -220,9 +184,9 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 		finished = true;
 
 		try {
-			if (expectedUncompressedSize != -1 && expectedUncompressedSize != currentUncompressedSize)
-				throw new IOException("Expected uncompressed size (" + expectedUncompressedSize + ") doesn't equal " +
-					"the number of bytes written to the stream (" + currentUncompressedSize + ")");
+			if (expectedUncompressedSize != -1 && expectedUncompressedSize != processed)
+				throw new IOException("Expected uncompressed size ("+expectedUncompressedSize+") doesn't equal " +
+					"the number of bytes written to the stream ("+processed+")");
 
 			lz.setFinishing();
 			lzma.encodeForLZMA1();
@@ -236,9 +200,10 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 			} catch (Throwable ignored) {}
 			throw e;
 		} finally {
-			lzma.putArraysToCache(arrayCache);
+			lzma.putArraysToCache();
 			lzma = null;
 			lz = null;
+			rc.putArraysToCache();
 		}
 	}
 

@@ -1,87 +1,57 @@
 package roj.text.logging;
 
 import roj.collect.SimpleList;
-import roj.text.CharList;
-import roj.text.logging.c.*;
+import roj.text.Template;
+import roj.text.logging.c.LCTime;
+import roj.text.logging.c.LogComponent;
 import roj.text.logging.d.LDStream;
 import roj.text.logging.d.LogDestination;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 /**
  * @author Roj233
  * @since 2022/6/1 5:09
  */
 public class LogContext {
-	private final List<LogComponent> components;
 	private String name;
+
+	private Template prefix;
+	private List<LogComponent> components;
+
 	private LogDestination destination;
 
+	Logger logger;
+
 	public LogContext(LogContext copy) {
+		prefix = copy.prefix;
 		components = new SimpleList<>(copy.components);
 		name = copy.name;
 		destination = copy.destination;
+		logger = null;
 	}
 
 	public LogContext() {
-		components = new SimpleList<>();
-		components.add(LCString.of("["));
-		components.add(LCTime.of("H:i:s"));
-		components.add(LCString.of("]["));
-		components.add(LCThreadName.INSTANCE);
-		components.add(LCString.of("/"));
-		components.add(LCMapValue.LEVEL);
-		components.add(LCString.of("]: "));
-
-		name = "Default";
-
+		name = "root";
+		prefix = Template.compile("[${0}][${THREAD}/${LEVEL}]: ");
+		components = Collections.singletonList(LCTime.of("H:i:s"));
 		destination = LDStream.of(System.out);
 	}
 
-	public LogContext addComponent(LogComponent c) {
-		components.add(c);
+	public List<LogComponent> getComponents() { return components; }
+	public Template getPrefix() { return prefix; }
+	public void setPrefix(Template t) { prefix = t; }
+
+	public LogContext format(String template, LogComponent... components) {
+		this.components = Arrays.asList(components);
+		this.prefix = Template.compile(template);
 		return this;
 	}
+	public LogContext name(String name) { this.name = name; return this; }
+	public String name() { return name; }
 
-	public List<LogComponent> getComponents() {
-		return components;
-	}
-
-	public LogContext name(String name) {
-		this.name = name;
-		return this;
-	}
-
-	public String name() {
-		return name;
-	}
-
-	public LogDestination destination() {
-		return destination;
-	}
-
-	public LogContext destination(LogDestination d) {
-		this.destination = d;
-		return this;
-	}
-
-	public Map<String, Object> getLocalMap() {
-		return LogHelper.LOCAL.get().localMap;
-	}
-
-	protected void fillIn(CharList tmp, Level level) {
-		Map<String, Object> m = getLocalMap();
-		m.put("LEVEL", level);
-		m.put("NAME", name);
-
-		List<LogComponent> c = components;
-		for (int i = 0; i < c.size(); i++) {
-			c.get(i).appendTo(this, m, tmp);
-		}
-	}
-
-	public CharSequence placeholderMissing() {
-		return "Missing";
-	}
+	public LogDestination destination() { return destination; }
+	public LogContext destination(LogDestination d) { destination = d; return this; }
 }

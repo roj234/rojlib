@@ -14,21 +14,28 @@ import java.util.List;
 public final class ParameterAnnotations extends Attribute {
 	public static final String VISIBLE = "RuntimeVisibleParameterAnnotations", INVISIBLE = "RuntimeInvisibleParameterAnnotations";
 
-	public ParameterAnnotations(String name) {
-		super(name);
+	public ParameterAnnotations(boolean visibleForRuntime) {
+		vis = visibleForRuntime;
+		annotations = new SimpleList<>();
 	}
 
 	public ParameterAnnotations(String name, DynByteBuf r, ConstantPool pool) {
-		super(name);
-		annotations = parse(pool, r);
+		vis = name.equals(VISIBLE);
+
+		int len = r.readUnsignedByte();
+		List<List<Annotation>> annos = this.annotations = new SimpleList<>(len);
+		while (len-- > 0) {
+			annos.add(Annotations.parse(pool, r));
+		}
 	}
 
+	public final boolean vis;
 	public List<List<Annotation>> annotations;
 
 	@Override
-	public boolean isEmpty() {
-		return annotations.isEmpty();
-	}
+	public boolean isEmpty() { return annotations.isEmpty(); }
+	@Override
+	public String name() { return vis?VISIBLE:INVISIBLE; }
 
 	@Override
 	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
@@ -40,15 +47,6 @@ public final class ParameterAnnotations extends Attribute {
 				list.get(j).toByteArray(pool, w);
 			}
 		}
-	}
-
-	public static List<List<Annotation>> parse(ConstantPool cp, DynByteBuf r) {
-		int len = r.readUnsignedByte();
-		List<List<Annotation>> annos = new SimpleList<>(len);
-		while (len-- > 0) {
-			annos.add(Annotations.parse(cp, r));
-		}
-		return annos;
 	}
 
 	public String toString() {

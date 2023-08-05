@@ -2,6 +2,7 @@ package roj.asm.type;
 
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.util.Helpers;
 
 import static roj.asm.type.Generic.EX_EXTENDS;
 import static roj.asm.type.Generic.EX_SUPER;
@@ -46,6 +47,16 @@ public final class TypeParam implements IType {
 	@Override
 	public String owner() {
 		return "/Type parameter '"  + name + "'/";
+	}
+
+	@Override
+	public TypeParam clone() {
+		try {
+			return (TypeParam) super.clone();
+		} catch (CloneNotSupportedException e) {
+			Helpers.athrow(e);
+			return Helpers.nonnull();
+		}
 	}
 
 	@Override

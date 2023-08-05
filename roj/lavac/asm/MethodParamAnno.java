@@ -1,11 +1,11 @@
 package roj.lavac.asm;
 
 import roj.asm.tree.Attributed;
-import roj.asm.tree.Method;
+import roj.asm.tree.MethodNode;
 import roj.asm.util.AttributeList;
 
 public class MethodParamAnno implements Attributed {
-	public MethodParamAnno(Method method, int idx, String name, int parNo) {
+	public MethodParamAnno(MethodNode method, int idx, String name, int parNo) {
 
 	}
 
@@ -15,12 +15,5 @@ public class MethodParamAnno implements Attributed {
 	}
 
 	@Override
-	public char modifier() {
-		return 0;
-	}
-
-	@Override
-	public int type() {
-		return -100;
-	}
+	public char modifier() { return 0; }
 }

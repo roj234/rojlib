@@ -5,7 +5,7 @@ import roj.config.XMLParser;
 import roj.config.data.Document;
 import roj.config.data.Element;
 import roj.config.data.Node;
-import roj.text.StreamWriter;
+import roj.text.TextWriter;
 
 import java.io.File;
 import java.io.IOException;
@@ -43,7 +43,7 @@ public final class IDEAHelper {
 			content.add(el);
 		}
 
-		try (StreamWriter sb = StreamWriter.to(imlPath)) {
+		try (TextWriter sb = TextWriter.to(imlPath)) {
 			xml.toCompatXML(sb);
 		}
 	}

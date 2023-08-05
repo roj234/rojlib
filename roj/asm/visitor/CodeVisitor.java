@@ -15,22 +15,14 @@ import static roj.asm.Opcodes.*;
  * @since 2021/8/16 19:07
  */
 public class CodeVisitor {
-	protected ConstantPool cp;
+	// 这个也可以删除，但有必要吗
 	protected int bci;
 
 	public CodeVisitor() {}
 
-	public final void visitAttributeBound(ConstantPool cp, DynByteBuf r) {
-		r.skipBytes(6);
-		visit(cp, r);
-	}
-
-	public final void visitCopied(ConstantPool cp, DynByteBuf buf) {
-		visit(cp, AsmShared.local().copy(buf));
-	}
+	public final void visitCopied(ConstantPool cp, DynByteBuf buf) { visit(cp, AsmShared.local().copy(buf)); }
 
 	public void visit(ConstantPool cp, DynByteBuf r) {
-		this.cp = cp;
 		visitSize(r.readUnsignedShort(), r.readUnsignedShort());
 
 		int len = r.readInt();
@@ -51,7 +43,7 @@ public class CodeVisitor {
 			int end = length + r.rIndex;
 			r.wIndex(end);
 			try {
-				visitAttribute(name, length, r);
+				visitAttribute(cp, name, length, r);
 				r.rIndex = end;
 			} finally {
 				r.wIndex(wend);
@@ -61,28 +53,18 @@ public class CodeVisitor {
 		visitEnd();
 	}
 
-	public void visitBytecode(ConstantPool cp, DynByteBuf r, int len) {
+	protected void visitBytecode(ConstantPool cp, DynByteBuf r, int len) {
 		int rBegin = r.rIndex;
 		len += rBegin;
 
 		byte prev = 0, code;
 		while (r.rIndex < len) {
 			bci = r.rIndex - rBegin;
-
-			_visitNodePre();
-
 			code = OpcodeUtil.byId(r.readByte());
 
 			boolean widen = prev == Opcodes.WIDE;
-			if (widen) {
-				switch (code) {
-					case RET: case IINC:
-					case ISTORE: case LSTORE: case FSTORE: case DSTORE: case ASTORE:
-					case ILOAD: case LLOAD: case FLOAD: case DLOAD: case ALOAD:
-						break;
-					default: throw new IllegalStateException("Unable to wide " + OpcodeUtil.toString0(code));
-				}
-			}
+			if (widen) OpcodeUtil.checkWide(code);
+			else _visitNodePre();
 
 			switch (code) {
 				case PUTFIELD:
@@ -121,19 +103,15 @@ public class CodeVisitor {
 				case IF_acmpne:
 				case IFNULL:
 				case IFNONNULL:
+				case JSR:
 					jump(code, r.readShort());
 					break;
 				case GOTO_W:
+				case JSR_W:
 					jump(code, r.readInt());
 					break;
 				case SIPUSH:
 					smallNum(code, r.readShort());
-					break;
-				case JSR:
-					jsr(r.readShort());
-					break;
-				case JSR_W:
-					jsr(r.readInt());
 					break;
 				case RET:
 					ret(widen ? r.readShort() : r.readByte());
@@ -153,10 +131,12 @@ public class CodeVisitor {
 					break;
 
 				case IINC:
-					increase(widen ? r.readUnsignedShort() : r.readUnsignedByte(), widen ? r.readShort() : r.readByte());
+					iinc(widen ? r.readUnsignedShort() : r.readUnsignedByte(), widen ? r.readShort() : r.readByte());
 					break;
 
-				case WIDE: break;
+				case WIDE:
+					if (prev == WIDE) throw new IllegalArgumentException("multi wide");
+					break;
 
 				case NEW:
 				case ANEWARRAY:
@@ -179,7 +159,7 @@ public class CodeVisitor {
 				case FLOAD:
 				case DLOAD:
 				case ALOAD:
-					var(code, widen ? r.readUnsignedShort() : r.readUnsignedByte());
+					vars(code, widen ? r.readUnsignedShort() : r.readUnsignedByte());
 					break;
 				case TABLESWITCH:
 					// align
@@ -199,16 +179,16 @@ public class CodeVisitor {
 
 	void _visitNodePre() {}
 
-	public void visitSize(int stackSize, int localSize) {}
+	protected void visitSize(int stackSize, int localSize) {}
 
 	protected final boolean decompressVar(byte code) {
 		String name = OpcodeUtil.toString0(code);
 		// xLOAD_y
-		if (name.length() == 7 && name.startsWith("LOAD_", 1)) {
-			var((byte) OpcodeUtil.getByName().getInt(name.substring(0,5)), name.charAt(6) - '0');
+		if (name.length() == 7 && name.startsWith("Load_", 1)) {
+			vars((byte) OpcodeUtil.getByName().getInt(name.substring(0,5)), name.charAt(6)-'0');
 			return true;
-		} else if (name.length() == 8 && name.startsWith("STORE_", 1)) {
-			var((byte) OpcodeUtil.getByName().getInt(name.substring(0,6)), name.charAt(7) - '0');
+		} else if (name.length() == 8 && name.startsWith("Store_", 1)) {
+			vars((byte) OpcodeUtil.getByName().getInt(name.substring(0,6)), name.charAt(7)-'0');
 			return true;
 		}
 
@@ -218,7 +198,7 @@ public class CodeVisitor {
 	protected void newArray(byte type) {}
 	protected void multiArray(CstClass clz, int dimension) {}
 	protected void clazz(byte code, CstClass clz) {}
-	protected void increase(int id, int count) {}
+	protected void iinc(int id, int count) {}
 	protected void ldc(byte code, Constant c) {}
 	protected void invokeDyn(CstDynamic dyn, int type) {}
 	protected void invokeItf(CstRefItf itf, short argc) {}
@@ -227,8 +207,7 @@ public class CodeVisitor {
 	protected void jump(byte code, int offset) {}
 	protected void one(byte code) {}
 	protected void smallNum(byte code, int value) {}
-	protected void var(byte code, int value) {}
-	protected void jsr(int value) {}
+	protected void vars(byte code, int value) {}
 	protected void ret(int value) {}
 	protected void tableSwitch(DynByteBuf r) {
 		r.rIndex += 4;
@@ -247,7 +226,7 @@ public class CodeVisitor {
 	protected void visitException(int start, int end, int handler, CstClass type) {}
 
 	public void visitAttributes() {}
-	protected void visitAttribute(String name, int len, DynByteBuf data) {}
+	protected void visitAttribute(ConstantPool cp, String name, int len, DynByteBuf data) {}
 
 	public void visitEnd() {}
 }

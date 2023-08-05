@@ -7,7 +7,7 @@ import roj.mapper.Mapping;
 import roj.mapper.util.Desc;
 import roj.text.LineReader;
 import roj.text.TextUtil;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -72,13 +72,13 @@ public final class MCPMapping extends Mapping {
 
 				tmp.clear();
 				if (TextUtil.split(tmp, line, ',').size() < 2) {
-					CmdUtil.warning(name+":"+slr.lineNumber()+": 未知标记: " + line);
+					CLIUtil.warning(name+":"+slr.lineNumber()+": 未知标记: " + line);
 					continue;
 				}
 
 				List<Desc> desc = map.get(tmp.get(0));
 				if (desc == null) {
-					if (printAll != Boolean.FALSE) CmdUtil.warning(name+":"+slr.lineNumber() + ": 不存在的Srg: " + tmp.get(0));
+					if (printAll != Boolean.FALSE) CLIUtil.warning(name+":"+slr.lineNumber() + ": 不存在的Srg: " + tmp.get(0));
 					if (printAll == null) printAll = false;
 				} else {
 					for (Desc d : desc) {
@@ -120,7 +120,7 @@ public final class MCPMapping extends Mapping {
 			TextUtil.split(tmp, key, '_');
 
 			if (tmp.size() < 3) {
-				CmdUtil.warning("格式非法 " + key);
+				CLIUtil.warning("格式非法 " + key);
 				continue;
 			}
 
@@ -143,7 +143,7 @@ public final class MCPMapping extends Mapping {
 			Set<Desc> data = methodData.get(tmp.get(1));
 			if (data == null) {
 				if (!tmp.get(1).startsWith("i")) {
-					if (printAll != Boolean.FALSE) CmdUtil.warning("参数不存在: " + tmp.get(1));
+					if (printAll != Boolean.FALSE) CLIUtil.warning("参数不存在: " + tmp.get(1));
 					if (printAll == null) printAll = false;
 				}
 				continue;

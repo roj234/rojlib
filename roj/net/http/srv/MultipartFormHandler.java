@@ -43,7 +43,7 @@ public class MultipartFormHandler extends HPostHandler {
 			matcher = new FastMatcher(boundary = "--".concat(strBound));
 			state = 0;
 		} else {
-			throw new IllegalArgumentException(contentType);
+			throw new IllegalArgumentException("contentType='"+contentType+"'");
 		}
 	}
 

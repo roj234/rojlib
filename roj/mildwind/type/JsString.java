@@ -78,7 +78,7 @@ public class JsString extends JsReferenceCounted {
 	}
 	public final JsObject op_neg() {
 		switch (_type()) {
-			case 0: default: JsContext.getDouble(Double.NaN);
+			case 0: default: return JsContext.getDouble(Double.NaN);
 			case 1: return JsContext.getInt(-Integer.parseInt(value));
 			case 2: return JsContext.getDouble(-Double.parseDouble(value));
 			case 3: return JsContext.getInt(0);

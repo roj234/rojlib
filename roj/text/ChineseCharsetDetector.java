@@ -18,145 +18,140 @@ import java.util.function.IntConsumer;
  */
 public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable {
 	private byte[] b;
-	private int off, lim, bOff, bLen = 1024;
+	private int skip, bLen;
 
 	private Closeable in;
 	private byte type;
 
 	public ChineseCharsetDetector(Closeable in) { input(in); }
 	public ChineseCharsetDetector input(Closeable in) {
-		if ((type & 0x40) != 0) {
-			b = null;
-			bOff = 0;
-			bLen = 1024;
-		}
-
-		off = lim = 0;
-
 		this.in = in;
 		if (in instanceof ReadableByteChannel) {
 			type = 1;
 		} else if (in instanceof InputStream) {
 			type = 0;
 		} else if (in instanceof DynByteBuf) {
-			type = 0x42;
-			DynByteBuf i = ((DynByteBuf) in);
-
-			if (i.hasArray()) {
-				b = i.array();
-				bOff = i.arrayOffset()+i.rIndex;
-				bLen = i.readableBytes();
-			}
+			type = 2;
 		} else {
 			throw new IllegalArgumentException("暂不支持"+in.getClass().getName());
 		}
 		return this;
 	}
 
-	public ChineseCharsetDetector buffer(byte[] b, int off, int len) {
-		close();
-		if ((type & 0x40) == 0) {
-			this.b = b;
-			this.bOff = off;
-			this.bLen = len;
-		}
-		return this;
-	}
-
-	public ChineseCharsetDetector limit(int capacity) {
-		close();
-		if (b != null) throw new IllegalArgumentException("Not auto buffer");
-		this.bLen = capacity;
-		return this;
-	}
-
 	public String detect() throws IOException {
 		if (b == null) {
-			b = ArrayCache.getDefaultCache().getByteArray(bLen, false);
-			type |= 0x80;
+			b = ArrayCache.getByteArray(4096, false);
+			type |= 0x40;
 		}
+		skip = 0;
+		bLen = 0;
 
-		int len = lim = readUpto(b, bOff, 4);
+		int len = readUpto(4);
 		if (len < 2) return "US-ASCII";
 
-		if (len < 4) {
-			// avoid UTF-32 issue
-			if (len < 3) b[bOff+2] = 1;
-			b[bOff+3] = 1;
-		}
+		// avoid UTF-32 issue
+		int a = len;
+		while (a < 4) b[a++] = 1;
 
 		String bomCharset = detectBOM(b);
-		if (bomCharset != null) return bomCharset;
+		if (bomCharset != null) {
+			System.arraycopy(b, skip, b, 0, bLen = len-skip);
+			return bomCharset;
+		}
+		bLen = len;
 
-		len += readUpto(b, bOff+len, bLen-len);
-		off = 0;
-		lim = len;
+		int utf8_score = 0, utf8_negate = 0;
+		int gb18030_score = 0, gb18030_negate = 0;
 
-		ps = ns = 0;
-		UTF8MB4.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+bOff, len, this);
-		int utf8_score = ps - 20*ns;
-		int utf8_negate = ns;
+		len = 0;
+		while (true) {
+			bLen += readUpto(b.length - bLen);
 
-		ps = ns = 0;
-		GB18030.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+bOff, len, this);
-		int gb18030_score = ps - 20*ns;
-		int gb18030_negate = ns;
+			ps = ns = 0;
+			UTF8MB4.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+len, Unsafe.ARRAY_BYTE_BASE_OFFSET+bLen, this);
+			utf8_score += ps - 5*ns;
+			utf8_negate += ns;
 
-		// ASCII时相同
-		if (utf8_score >= gb18030_score || utf8_negate*3 < gb18030_negate*2) return "UTF8";
-		else if (gb18030_score > 0 && gb18030_negate*3 < utf8_negate*2) return "GB18030";
+			ps = ns = 0;
+			GB18030.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+len, Unsafe.ARRAY_BYTE_BASE_OFFSET+bLen, this);
+			gb18030_score += ps - 5*ns;
+			gb18030_negate += ns;
+
+			if (Math.abs(utf8_score - gb18030_score) > 100) {
+				// ASCII时相同
+				if (utf8_score >= gb18030_score || utf8_negate * 3 < gb18030_negate * 2) return "UTF8";
+				else if (gb18030_score > 0 && gb18030_negate * 3 < utf8_negate * 2) return "GB18030";
+			}
+
+			if (len == bLen) break;
+			len = bLen;
+
+			if (bLen == b.length) {
+				if (bLen > 32767) break;
+
+				byte[] b1 = ArrayCache.getByteArray(b.length << 1, false);
+				System.arraycopy(b, 0, b1, 0, b.length);
+				ArrayCache.putArray(b);
+				b = b1;
+			}
+		}
+
+		// nearly impossible hit here when file is large
+		if (utf8_score >= gb18030_score || utf8_negate * 3 < gb18030_negate * 2) return "UTF8";
+		else if (gb18030_score > 0 && gb18030_negate * 3 < utf8_negate * 2) return "GB18030";
+
+		if (utf8_negate == gb18030_negate) return "UTF8";
 
 		throw new IOException("无法确定编码,utf8_score="+utf8_score+",gbk_score="+gb18030_score);
 	}
 	private String detectBOM(byte[] b) {
-		int o = bOff;
-		switch (b[o] & 0xFF) {
+		switch (b[0] & 0xFF) {
 			case 0x00:
-				if ((b[o+1] == (byte) 0x00) && (b[o+2] == (byte) 0xFE) && (b[o+3] == (byte) 0xFF)) {
-					off = 4;
+				if ((b[1] == (byte) 0x00) && (b[2] == (byte) 0xFE) && (b[3] == (byte) 0xFF)) {
+					skip = 4;
 					return "UTF-32BE";
 				}
 				break;
 			case 0xFF:
-				if (b[o+1] == (byte) 0xFE) {
-					if ((b[o+2] == (byte) 0x00) && (b[o+3] == (byte) 0x00)) {
-						off = 4;
+				if (b[1] == (byte) 0xFE) {
+					if ((b[2] == (byte) 0x00) && (b[3] == (byte) 0x00)) {
+						skip = 4;
 						return "UTF-32LE";
 					} else {
-						off = 2;
+						skip = 2;
 						return "UTF-16LE";
 					}
 				}
 				break;
 			case 0xEF:
-				if ((b[o+1] == (byte) 0xBB) && (b[o+2] == (byte) 0xBF)) {
-					off = 3;
+				if ((b[1] == (byte) 0xBB) && (b[2] == (byte) 0xBF)) {
+					skip = 3;
 					return "UTF-8";
 				}
 				break;
 			case 0xFE:
-				if ((b[o+1] == (byte) 0xFF)) {
-					off = 2;
+				if ((b[1] == (byte) 0xFF)) {
+					skip = 2;
 					return "UTF-16BE";
 				}
 				break;
 			case 0x84:
 				// ZWNBSP in GB18030
-				if (b[o+1] == (byte) 0x31 && (b[o+2] == (byte) 0x95) && (b[o+3] == (byte) 0x33)) {
-					off = 4;
+				if (b[1] == (byte) 0x31 && (b[2] == (byte) 0x95) && (b[3] == (byte) 0x33)) {
+					skip = 4;
 					return "GB18030";
 				}
 		}
 		return null;
 	}
-	private int readUpto(byte[] b, int off, int maxLen) throws IOException {
+	private int readUpto(int max) throws IOException {
 		switch (type & 3) {
 			default:
 			case 0: {
 				InputStream in = (InputStream) this.in;
 				int len = 0;
-				while (len < maxLen) {
-					int r = in.read(b, off+len, maxLen-len);
+				while (len < max) {
+					int r = in.read(b, bLen+len, max-len);
 					if (r < 0) break;
 					len += r;
 				}
@@ -164,34 +159,34 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 			}
 			case 1: {
 				ReadableByteChannel in = ((ReadableByteChannel) this.in);
-				ByteBuffer bb = ByteBuffer.wrap(b, off, maxLen);
+				ByteBuffer bb = ByteBuffer.wrap(b, bLen, max);
 				while (true) {
 					int r = in.read(bb);
 					if (r < 0 || !bb.hasRemaining()) break;
 				}
-				return bb.position()-off;
+				return bb.position()-bLen;
 			}
 			case 2: {
 				DynByteBuf in = (DynByteBuf) this.in;
-				maxLen = Math.min(in.readableBytes()-off, maxLen);
-				if (in.hasArray()) return maxLen;
+				max = Math.min(in.readableBytes()-bLen, max);
 
-				in.read(in.rIndex+off, b, off, maxLen);
-				return maxLen;
+				in.read(in.rIndex+bLen, b, bLen, max);
+				return max;
 			}
 		}
 	}
 
-	public byte[] buffer() { type &= ~0x80; return (type & 0x40) != 0 ? null : b; }
-	public int offset() { return off; }
-	public int limit() { return lim; }
+	public int skip() { return skip; }
+
+	public byte[] buffer() { type &= ~0x40; return b; }
+	public int limit() { return bLen; }
 
 	@Override
 	public void close() {
-		if (b != null && (type & 0x80) != 0) {
-			ArrayCache.getDefaultCache().putArray(b);
+		if ((type & 0x40) != 0) {
+			ArrayCache.putArray(b);
 			b = null;
-			type &= ~0x80;
+			type &= ~0x40;
 		}
 	}
 
@@ -202,8 +197,11 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 	@Override
 	public void accept(int c) {
 		if (c < 0) {
+			if (c != UnsafeCharset.TRUNCATED)
+				ns += 10;
+		} else if (c < 32) { // control
 			ns++;
-		} else if (常用字.contains(c)) {
+		} else if (常用字.contains(c) || c >= Character.MIN_SUPPLEMENTARY_CODE_POINT) { // 表情: 至少验证更严格
 			ps += 3;
 		} else if (次常用字.contains(c)) {
 			ps += 2;

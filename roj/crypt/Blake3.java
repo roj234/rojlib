@@ -30,7 +30,7 @@ public final class Blake3 extends BufferedDigest implements MessageAuthenticCode
     private int[] stack;
     private int stackSize, stackLength;
 
-    public Blake3(int var1) {
+    public Blake3(int keyLen) {
         super("Blake3", 64);
 
         this.Key = new int[8];
@@ -38,7 +38,7 @@ public final class Blake3 extends BufferedDigest implements MessageAuthenticCode
         this.Msg = new int[16];
         this.Pos = new byte[16];
 
-        this.keyLen = var1;
+        this.keyLen = keyLen;
 
         setKeyDefault();
 

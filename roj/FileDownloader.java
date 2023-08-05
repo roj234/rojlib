@@ -1,8 +1,7 @@
 package roj;
 
 import roj.io.down.DownloadTask;
-import roj.ui.CmdUtil;
-import roj.ui.UIUtil;
+import roj.ui.CLIUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -24,7 +23,7 @@ public final class FileDownloader {
 		int threadCount;
 		if (args.length < 3) {
 			System.out.print("线程数: ");
-			threadCount = UIUtil.getNumberInRange(0, 256);
+			threadCount = CLIUtil.getNumberInRange(0, 256);
 			if (threadCount == 0) {
 				threadCount = Runtime.getRuntime().availableProcessors() << 2;
 			}
@@ -43,8 +42,8 @@ public final class FileDownloader {
 				break;
 			} catch (Throwable e) {
 				if (e.getMessage() == null) e.printStackTrace();
-				else CmdUtil.warning("下载失败 " + saveTo.getName() + " - " + e.getLocalizedMessage());
-				CmdUtil.warning("重试 " + (3 - retry) + "/3");
+				else CLIUtil.warning("下载失败 " + saveTo.getName() + " - " + e.getLocalizedMessage());
+				CLIUtil.warning("重试 " + (3 - retry) + "/3");
 			}
 		} while (retry-- > 0);
 	}

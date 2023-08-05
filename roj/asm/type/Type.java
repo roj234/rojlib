@@ -1,5 +1,6 @@
 package roj.asm.type;
 
+import roj.asm.OpcodeUtil;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.Helpers;
@@ -12,7 +13,7 @@ import java.util.function.UnaryOperator;
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public final class Type implements IType {
+public final class Type implements IType, Cloneable {
 	public static final char ARRAY = '[', CLASS = 'L', VOID = 'V', BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT = 'S', INT = 'I', FLOAT = 'F', DOUBLE = 'D', LONG = 'J';
 
 	static final Object[][] MAP = new Object[26][];
@@ -102,19 +103,16 @@ public final class Type implements IType {
 
 	@Override
 	public void toString(CharList sb) {
-		sb.append(this.owner != null ? owner : toString(type));
+		if (owner != null) TypeHelper.toStringOptionalPackage(sb, owner);
+		else sb.append(toString(type));
 		for (int i = array&0xFF; i > 0; i--) sb.append("[]");
 	}
 
 	@Override
-	public byte genericType() {
-		return STANDARD_TYPE;
-	}
+	public byte genericType() { return STANDARD_TYPE; }
 
 	@Override
-	public Type rawType() {
-		return this;
-	}
+	public Type rawType() { return this; }
 
 	@Override
 	public String owner() { return owner; }
@@ -148,23 +146,21 @@ public final class Type implements IType {
 		return type == VOID ? 0 : (array == 0 && (type == LONG || type == DOUBLE)) ? 2 : 1;
 	}
 
-	public byte shiftedOpcode(int code, boolean allowVoid) {
-		if (type == VOID && !allowVoid) throw new IllegalStateException("VOID is not allowed");
-		return (byte) ((int) MAP[getActualType()-BYTE][3]+code);
+	public int getShift() { return (int) MAP[getActualType()-BYTE][3]; }
+	public byte shiftedOpcode(int code) {
+		int shift = getShift();
+		int data = OpcodeUtil.shift(code);
+		if (data >>> 8 <= shift) throw new IllegalStateException(this+" cannot shift "+OpcodeUtil.toString0(code));
+		return (byte) ((data&0xFF)+shift);
 	}
 
 	public String nativeName() {
 		return MAP[getActualType()-BYTE][4].toString();
 	}
-	public boolean isPrimitive() {
-		return array == 0 && type != CLASS;
-	}
-	public int getActualType() {
-		return array == 0 ? type : CLASS;
-	}
-	public String getActualClass() {
-		return array == 0 ? owner : toDesc();
-	}
+	public boolean isPrimitive() { return array == 0 && type != CLASS; }
+	public int getActualType() { return array == 0 ? type : CLASS; }
+	public String getActualClass() { return array == 0 ? owner : toDesc(); }
+	public String ownerForCstClass() { return getActualClass(); }
 
 	public String toString() {
 		CharList sb = IOUtil.getSharedCharBuf();
@@ -202,6 +198,16 @@ public final class Type implements IType {
 			case LONG: return long.class;
 		}
 		throw new IllegalArgumentException("?");
+	}
+
+	@Override
+	public Type clone() {
+		try {
+			return (Type) super.clone();
+		} catch (CloneNotSupportedException e) {
+			Helpers.athrow(e);
+			return Helpers.nonnull();
+		}
 	}
 
 	@Override

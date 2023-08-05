@@ -43,7 +43,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler {
 			}
 			tasks.poll();
 			try {
-				if (task.continueExecuting()) {
+				if (task.repeating()) {
 					tasks.add(task);
 				}
 			} catch (Throwable e) {

@@ -2,7 +2,6 @@ package roj.text.logging.c;
 
 import roj.text.ACalendar;
 import roj.text.CharList;
-import roj.text.logging.LogContext;
 
 import java.util.Map;
 
@@ -12,19 +11,13 @@ import java.util.Map;
  */
 public class LCTime implements LogComponent {
 	protected final String format;
-
-	public static LCTime of(String format) {
-		return new LCTime(format);
-	}
-
-	public LCTime(String format) {
-		this.format = format;
-	}
+	public static LCTime of(String format) { return new LCTime(format); }
+	public LCTime(String format) { this.format = format; }
 
 	@Override
-	public void appendTo(LogContext ctx, Map<String, Object> tmp, CharList cl) {
+	public void accept(Map<String, Object> tmp, CharList sb) {
 		ACalendar cal = (ACalendar) tmp.get("LCAL");
 		if (cal == null) tmp.put("LCAL", cal = new ACalendar());
-		cal.format(format, System.currentTimeMillis(), cl);
+		cal.format(format, System.currentTimeMillis(), sb);
 	}
 }

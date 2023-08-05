@@ -2,6 +2,7 @@ package roj.asm.tree.anno;
 
 import roj.asm.cst.ConstantPool;
 import roj.asm.type.Type;
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -28,15 +29,16 @@ public final class AnnValArray extends AnnVal {
 	}
 
 	public String toString() {
-		StringBuilder sb = new StringBuilder("{");
+		CharList sb = new CharList().append('{');
 		if (value.size() > 0) {
-			for (int i = 0; i < value.size(); i++) {
-				AnnVal val = value.get(i);
-				sb.append(val).append(", ");
+			int i = 0;
+			while (true) {
+				sb.append(value.get(i));
+				if (++i == value.size()) break;
+				sb.append(", ");
 			}
-			sb.delete(sb.length() - 2, sb.length());
 		}
-		return sb.append('}').toString();
+		return sb.append('}').toStringAndFree();
 	}
 
 	@Override

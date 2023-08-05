@@ -10,7 +10,7 @@ import java.util.function.IntFunction;
 import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.UNDEFINED;
 
-public final class CharMap<V> extends AbstractMap<Character, V> implements MapLike<CharMap.Entry<V>> {
+public final class CharMap<V> extends AbstractMap<Character, V> implements _Generic_Map<CharMap.Entry<V>> {
 	@SuppressWarnings("unchecked")
 	public void putAll(CharMap<V> map) {
 		if (map.entries == null) return;
@@ -35,7 +35,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements MapLi
 		}
 	}
 
-	public static class Entry<V> implements MapLikeEntry<Entry<V>>, Map.Entry<Character, V> {
+	public static class Entry<V> implements _Generic_Entry<Entry<V>>, Map.Entry<Character, V> {
 		char k;
 		Object v;
 
@@ -69,7 +69,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements MapLi
 		Entry<V> next;
 
 		@Override
-		public Entry<V> nextEntry() {
+		public Entry<V> __next() {
 			return next;
 		}
 	}
@@ -127,15 +127,11 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements MapLi
 		if (this.entries != null) resize();
 	}
 
-	public Set<Entry<V>> selfEntrySet() {
-		return new EntrySet<>(this);
-	}
+	public Set<Entry<V>> selfEntrySet() { return _Generic_EntrySet.create(this); }
 
 	@Nonnull
 	@Override
-	public Set<Map.Entry<Character, V>> entrySet() {
-		return Helpers.cast(selfEntrySet());
-	}
+	public Set<Map.Entry<Character, V>> entrySet() { return Helpers.cast(selfEntrySet()); }
 
 	@Override
 	public boolean containsKey(Object key) {
@@ -157,14 +153,12 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements MapLi
 		return remove((char) key);
 	}
 
-	public int size() {
-		return size;
-	}
+	public int size() { return size; }
 
 	@Override
-	public void removeEntry0(Entry<V> vEntry) {
-		remove(vEntry.k);
-	}
+	public _Generic_Entry<?>[] __entries() { return entries; }
+	@Override
+	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
 
 	@Nonnull
 	public V computeIfAbsent(char k, @Nonnull IntFunction<V> supplier) {
@@ -340,46 +334,6 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements MapLi
 					}
 				}
 			} else {Arrays.fill(entries, null);}
-		}
-	}
-
-	static final class EntrySet<V> extends AbstractSet<Entry<V>> {
-		private final CharMap<V> map;
-
-		private EntrySet(CharMap<V> map) {
-			this.map = map;
-		}
-
-		public final int size() {
-			return map.size();
-		}
-
-		public final void clear() {
-			map.clear();
-		}
-
-		public final Iterator<Entry<V>> iterator() {
-			return isEmpty() ? Collections.emptyIterator() : new EntryItr<>(map.entries, map);
-		}
-
-		public final boolean contains(Object o) {
-			if (!(o instanceof CharMap.Entry)) return false;
-			Entry<?> e = (Entry<?>) o;
-			char key = e.getChar();
-			Entry<?> comp = map.getEntry(key);
-			return comp != null && comp.v == e.v;
-		}
-
-		public final boolean remove(Object o) {
-			if (o instanceof Map.Entry) {
-				CharMap.Entry<?> e = (CharMap.Entry<?>) o;
-				return map.remove(e.k) != null;
-			}
-			return false;
-		}
-
-		public final Spliterator<CharMap.Entry<V>> spliterator() {
-			return Spliterators.spliterator(map.entries, 0);
 		}
 	}
 }

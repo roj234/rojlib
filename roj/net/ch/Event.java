@@ -1,19 +1,19 @@
 package roj.net.ch;
 
-import roj.util.NamespaceKey;
+import roj.util.Identifier;
 
 public class Event {
-	public final NamespaceKey id;
+	public final Identifier id;
 
 	public static final int RESULT_DEFAULT = 0, RESULT_ACCEPT = 1, RESULT_DENY = 2;
 	private byte state;
 	protected Object data;
 
-	public Event(NamespaceKey id) {
+	public Event(Identifier id) {
 		this(id, null);
 	}
 
-	public Event(NamespaceKey id, Object data) {
+	public Event(Identifier id, Object data) {
 		this.id = id;
 		this.data = data;
 	}

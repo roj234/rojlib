@@ -24,26 +24,26 @@ public interface IClass extends Attributed {
 	}
 	List<String> interfaces();
 
-	List<? extends MoFNode> methods();
-	List<? extends MoFNode> fields();
+	List<? extends RawNode> methods();
+	List<? extends RawNode> fields();
 
-	default int getMethod(CharSequence name, CharSequence desc) {
-		List<? extends MoFNode> methods = methods();
+	default int getMethod(String name, String desc) {
+		List<? extends RawNode> methods = methods();
 		for (int i = 0; i < methods.size(); i++) {
-			MoFNode ms = methods.get(i);
-			if (name.equals(ms.name()) && (desc == null || desc.equals(ms.rawDesc()))) {
+			RawNode ms = methods.get(i);
+			if (name.equals(ms.name()) && (desc == null || ms.rawDesc().equals(desc))) {
 				return i;
 			}
 		}
 		return -1;
 	}
-	default int getMethod(CharSequence name) {
+	default int getMethod(String name) {
 		return getMethod(name, null);
 	}
 	default int getField(CharSequence key) {
-		List<? extends MoFNode> fields = fields();
+		List<? extends RawNode> fields = fields();
 		for (int i = 0; i < fields.size(); i++) {
-			MoFNode fs = fields.get(i);
+			RawNode fs = fields.get(i);
 			if (key.equals(fs.name())) return i;
 		}
 		return -1;

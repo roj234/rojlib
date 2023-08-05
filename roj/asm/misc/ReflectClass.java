@@ -1,9 +1,7 @@
 package roj.asm.misc;
 
 import roj.asm.Parser;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.IClass;
-import roj.asm.tree.MoFNode;
+import roj.asm.tree.*;
 import roj.reflect.ReflectionUtils;
 
 import java.lang.reflect.Field;
@@ -19,7 +17,7 @@ import java.util.List;
 public class ReflectClass implements IClass {
 	public final Class<?> owner;
 	public final String className;
-	private List<MoFNode> methods, fields;
+	private List<RawNode> methods, fields;
 	private List<String> ci, cs;
 	private List<Class<?>> list1;
 
@@ -33,7 +31,7 @@ public class ReflectClass implements IClass {
 	}
 
 	@Deprecated
-	public ReflectClass(String owner, List<MoFNode> methods) {
+	public ReflectClass(String owner, List<RawNode> methods) {
 		this.owner = null;
 		this.className = owner;
 		this.methods = methods;
@@ -41,9 +39,7 @@ public class ReflectClass implements IClass {
 	}
 
 	@Override
-	public String name() {
-		return className;
-	}
+	public String name() { return className; }
 
 	@Override
 	public String parent() {
@@ -68,32 +64,27 @@ public class ReflectClass implements IClass {
 	}
 
 	@Override
-	public List<? extends MoFNode> methods() {
+	public List<? extends RawNode> methods() {
 		if (methods == null) {
 			Method[] ms = owner.getDeclaredMethods();
-			List<MoFNode> md = methods = Arrays.asList(new ReflectMNode[ms.length]);
+			List<RawNode> md = methods = Arrays.asList(new MethodNode[ms.length]);
 			for (int i = 0; i < ms.length; i++) {
-				md.set(i, new ReflectMNode(ms[i]));
+				md.set(i, new MethodNode(ms[i]));
 			}
 		}
 		return methods;
 	}
 
 	@Override
-	public List<? extends MoFNode> fields() {
+	public List<? extends RawNode> fields() {
 		if (fields == null) {
 			Field[] fs = owner.getDeclaredFields();
-			List<MoFNode> fd = fields = Arrays.asList(new ReflectFNode[fs.length]);
+			List<RawNode> fd = fields = Arrays.asList(new FieldNode[fs.length]);
 			for (int i = 0; i < fs.length; i++) {
-				fd.set(i, new ReflectFNode(fs[i]));
+				fd.set(i, new FieldNode(fs[i]));
 			}
 		}
 		return fields;
-	}
-
-	@Override
-	public int type() {
-		return Parser.CTYPE_REFLECT;
 	}
 
 	public List<String> i_superClassAll() {

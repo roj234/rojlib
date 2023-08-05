@@ -8,47 +8,6 @@ package roj.math;
  */
 public class Sort {
 	/**
-	 * 冒泡排序
-	 */
-	public static void bubbleSort(int[] arr) {
-		int len = arr.length, tmp;
-		for (int i = 0; i < len; i++) {
-			for (int j = i + 1; j < len; j++) {
-				// 非稳定
-				// 稳定：相等元素的顺序不变
-				if (arr[i] > (tmp = arr[j])) {
-					arr[j] = arr[i];
-					arr[i] = tmp;
-				}
-			}
-		}
-	}
-
-	/**
-	 * 选择排序 <br>
-	 * 与冒泡排序的区别：冒泡排序立即交换，选择排序延迟交换
-	 */
-	public static void selectSort(int[] arr) {
-		int len = arr.length;
-		int min, tmp;
-		for (int i = 0; i < len; i++) {
-			min = i;
-			for (int j = i + 1; j < len; j++) {
-				// 稳定
-				if (arr[min] > arr[j]) {
-					min = j;
-				}
-			}
-
-			if (min != i) {
-				tmp = arr[min];
-				arr[min] = arr[i];
-				arr[i] = tmp;
-			}
-		}
-	}
-
-	/**
 	 * 堆排序
 	 */
 	public static void heapSort(int[] arr) {

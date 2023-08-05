@@ -3,8 +3,8 @@ package roj.mod;
 import com.sun.nio.file.ExtendedWatchEventModifier;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.concurrent.timing.Scheduled;
-import roj.ui.CmdUtil;
+import roj.concurrent.timing.ScheduleTask;
+import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.util.concurrent.locks.LockSupport;
 
-import static roj.mapper.ConstMapper.DONT_LOAD_PREFIX;
+import static roj.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.mod.Shared.BASE;
 
 /**
@@ -61,7 +61,7 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 	private final Thread t;
 	private boolean pause;
 	private final String libPath;
-	private Scheduled reloadMapTask, reloadCfgTask;
+	private ScheduleTask reloadMapTask, reloadCfgTask;
 
 	private MyHashMap<String, X[]> listeners;
 
@@ -111,22 +111,22 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 							}
 						} else if (id.equals("config.json")) {
 							if (reloadCfgTask != null) reloadCfgTask.cancel();
-							reloadCfgTask = Shared.PeriodicTask.executeLater(Shared::loadConfig, 1000);
+							reloadCfgTask = Shared.PeriodicTask.delay(Shared::loadConfig, 1000);
 							break;
 						}
 					}
 				}
 				if (shouldReload) {
 					if (reloadMapTask != null) reloadMapTask.cancel();
-					reloadMapTask = Shared.PeriodicTask.executeLater(() -> {
-						CmdUtil.warning("清除映射表缓存");
+					reloadMapTask = Shared.PeriodicTask.delay(() -> {
+						CLIUtil.warning("清除映射表缓存");
 						Shared.mapperFwd.clear();
 						ATHelper.close();
 					}, 2000);
 				}
 
 				if (!key.reset()) {
-					CmdUtil.warning("这不应当发生");
+					CLIUtil.warning("这不应当发生");
 					key.cancel();
 				}
 				continue;
@@ -138,7 +138,7 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 				MyHashSet<String> s = csm.s;
 				switch (name) {
 					case "OVERFLOW": {
-						CmdUtil.error("[PW]Event overflow " + key.watchable());
+						CLIUtil.error("[PW]Event overflow " + key.watchable());
 						key.cancel();
 						break x;
 					}

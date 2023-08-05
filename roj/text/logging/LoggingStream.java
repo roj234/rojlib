@@ -10,22 +10,9 @@ public class LoggingStream extends DelegatedPrintStream {
 	private final Logger logger;
 
 	@Deprecated
-	public LoggingStream() {
-		this(Logger.getLogger("STDOUT"));
-	}
-
-	public LoggingStream(Logger logger) {
-		super(2000);
-		this.logger = logger;
-	}
-
-	public Logger getLogger() {
-		return logger;
-	}
+	public LoggingStream() { this(Logger.getLogger("STDOUT")); }
+	public LoggingStream(Logger l) { super(9999); logger = l; }
 
 	@Override
-	protected void newLine() {
-		logger.log(Level.INFO, sb, null);
-		sb.clear();
-	}
+	protected void newLine() { logger.log(Level.INFO, sb, null); sb.clear(); }
 }

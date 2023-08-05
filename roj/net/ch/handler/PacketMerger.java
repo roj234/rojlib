@@ -1,5 +1,6 @@
 package roj.net.ch.handler;
 
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.util.ByteList;
@@ -19,7 +20,7 @@ public abstract class PacketMerger implements ChannelHandler {
 		DynByteBuf m = merged;
 		if (m != null) {
 			int more = pkt.readableBytes()-m.writableBytes();
-			if (more > 0) m = ctx.alloc().expand(m, more);
+			if (more > 0) m = BufferPool.expand(m, more);
 			m.put(pkt);
 			pkt.rIndex = pkt.wIndex();
 			pkt = m;
@@ -43,7 +44,7 @@ public abstract class PacketMerger implements ChannelHandler {
 				}
 			}
 		} finally {
-			if (m != null) ctx.reserve(m);
+			if (m != null) BufferPool.reserve(m);
 		}
 	}
 
@@ -57,7 +58,7 @@ public abstract class PacketMerger implements ChannelHandler {
 	@Override
 	public void channelClosed(ChannelCtx ctx) throws IOException {
 		if (merged != null) {
-			ctx.reserve(merged);
+			BufferPool.reserve(merged);
 			merged = null;
 		}
 	}

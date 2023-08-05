@@ -10,6 +10,7 @@ import roj.io.buf.BufferPool;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import javax.crypto.Cipher;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 
@@ -38,7 +39,7 @@ public abstract class MSSEngine {
 		this.cipherSuites = ciphers;
 	}
 
-	public static final byte PSC_ONLY = 0x1, ALLOW_0RTT = 0x2, STREAM_DECRYPT = 0x4;
+	public static final byte PSC_ONLY = 0x1;
 	static final int WRITE_PENDING = 0x80;
 
 	byte flag, stage;
@@ -47,10 +48,20 @@ public abstract class MSSEngine {
 	RCipherSpi encoder, decoder;
 	byte[] sharedKey;
 
-	protected MSSSession session;
-
 	public abstract void switches(int sw);
 	public int switches() { return flag; }
+
+	protected MSSPrivateKey cert;
+	public MSSEngine setDefaultCert(MSSPrivateKey cert) {
+		assertInitial();
+		this.cert = cert;
+		return this;
+	}
+	protected MSSPrivateKey getCertificate(CharMap<DynByteBuf> ext, int formats) { return cert != null && ((1 << cert.format())&formats) != 0 ? cert : null; }
+
+	public abstract void setPreSharedCertificate(IntMap<MSSPublicKey> certs);
+
+	final void assertInitial() { if (stage != INITIAL) throw new IllegalStateException(); }
 
 	/**
 	 * 客户端模式
@@ -59,19 +70,13 @@ public abstract class MSSEngine {
 	public final boolean isHandshakeDone() { return stage >= HS_DONE; }
 	public final boolean isClosed() { return stage == HS_FAIL; }
 
-	public abstract void setPSC(IntMap<MSSPublicKey> keys);
-
-	protected int getSupportedKeyExchanges() {
-		return (1 << CipherSuite.KEX_DHE_ffdhe2048) | (1 << CipherSuite.KEX_ECDHE_secp384r1);
-	}
+	protected int getSupportedKeyExchanges() { return (1 << CipherSuite.KEX_DHE_ffdhe2048) | (1 << CipherSuite.KEX_ECDHE_secp384r1); }
 	protected KeyAgreement getKeyExchange(int type) {
 		if (type == -1) return CipherSuite.getKeyAgreement(CipherSuite.KEX_ECDHE_secp384r1);
 		return CipherSuite.getKeyAgreement(type);
 	}
 
-	protected int getSupportCertificateType() {
-		return CipherSuite.ALL_CERTIFICATE_TYPE;
-	}
+	protected int getSupportCertificateType() { return CipherSuite.ALL_CERTIFICATE_TYPE; }
 	protected Object checkCertificate(int type, DynByteBuf data) {
 		try {
 			MSSPublicKey key = CipherSuite.getPublicKeyFactory(type).decode(data.toByteArray());
@@ -82,7 +87,22 @@ public abstract class MSSEngine {
 		}
 	}
 
-	protected void processExtensions(CharMap<DynByteBuf> extIn, CharMap<DynByteBuf> extOut, int i) {}
+	protected void processExtensions(CharMap<DynByteBuf> extIn, CharMap<DynByteBuf> extOut, int stage) {}
+
+	protected final RCipherSpi getSessionCipher(MSSSession session, int mode) throws MSSException {
+		HMAC pfKd = new HMAC(session.suite.sign.get());
+		byte[] pfSk = session.key;
+
+		RCipherSpi cipher = session.suite.ciphers.get();
+		try {
+			cipher.init(Cipher.DECRYPT_MODE,
+				HMAC.HKDF_expand(pfKd, pfSk, new ByteList(2).putAscii("PF"), session.suite.ciphers.getKeySize()), null,
+				new HKDFPRNG(pfKd, pfSk, "PF"));
+		} catch (GeneralSecurityException e) {
+			error(e);
+		}
+		return cipher;
+	}
 
 	public static final byte[] EMPTY_32 = new byte[32];
 
@@ -90,21 +110,19 @@ public abstract class MSSEngine {
 		keyDeriver = new HMAC(suite.sign.get());
 		sharedKey = HMAC.HKDF_expand(keyDeriver, sharedKey_pre, ByteList.wrap(sharedKey), 64);
 	}
-	final byte[] deriveKey(String name, int len) {
+	public final byte[] deriveKey(String name, int len) {
 		DynByteBuf info = allocateTmpBuffer(ByteList.byteCountUTF8(name)+2).putUTF(name);
-		byte[] secret = HMAC.HKDF_expand(keyDeriver, sharedKey,info,len);
+		byte[] secret = HMAC.HKDF_expand(keyDeriver, sharedKey, info, len);
 		freeTmpBuffer(info);
 		return secret;
 	}
-	public final SecureRandom getPRNG(String name) {
-		return new HKDFPRNG(keyDeriver, sharedKey, name);
-	}
+	public final SecureRandom getPRNG(String name) { return new HKDFPRNG(keyDeriver, sharedKey, name); }
 
 	protected DynByteBuf allocateTmpBuffer(int capacity) {
-		return BufferPool.localPool().buffer(false, capacity);
+		return BufferPool.buffer(false, capacity);
 	}
 	protected void freeTmpBuffer(DynByteBuf buf) {
-		BufferPool.localPool().reserve(buf);
+		BufferPool.reserve(buf);
 	}
 
 	public final void close() {
@@ -290,9 +308,7 @@ public abstract class MSSEngine {
 	}
 
 	@Override
-	public String toString() {
-		return "MSSEngine{" + "flag=" + flag + ", stage=" + stage + ", session=" + session + '}';
-	}
+	public String toString() { return getClass().getSimpleName()+"{stage="+stage+"}"; }
 
 	static int error(int code, String reason) throws MSSException { throw new MSSException(code, reason, null); }
 	static int error(Throwable ex) throws MSSException { throw new MSSException(CIPHER_FAULT, "", ex); }

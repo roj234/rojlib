@@ -2,8 +2,11 @@ package roj.reflect;
 
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
+import roj.asm.util.AccessFlag;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.util.Helpers;
+import sun.misc.Unsafe;
 
 import javax.annotation.Nonnull;
 import java.lang.reflect.Field;
@@ -20,32 +23,23 @@ import static roj.asm.type.Type.CLASS;
  * @since 2021/6/17 19:51
  */
 public final class ReflectionUtils {
-	public static boolean OPENJ9;
+	public static final Unsafe u = getValue(null, Unsafe.class, "theUnsafe");
+	public static long fieldOffset(Class<?> type, String fieldName) {
+		try {
+			Field field = type.getDeclaredField(fieldName);
+			return (field.getModifiers() & AccessFlag.STATIC) == 0 ? u.objectFieldOffset(field) : u.staticFieldOffset(field);
+		} catch (Exception e) {
+			Helpers.athrow(e);
+			return 0;
+		}
+	}
 
+	public static boolean OPENJ9;
 	static {
 		try {
 			Class.forName("java.lang.J9VMInternals");
 			OPENJ9 = true;
-		} catch (ClassNotFoundException e) {
-			OPENJ9 = false;
-		}
-
-		/*if (getJavaVersion() > 8) {
-			try (InputStream in = ReflectionUtils.class.getResourceAsStream("roj/reflect/FieldAccessor.class")) {
-				ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(in));
-				for (Constant c : data.cp.array()) {
-					if (c.type() == Constant.CLASS) {
-						CstClass clz = (CstClass) c;
-						if (clz.getValue().getString().equals("sum/misc/Unsafe")) {
-							clz.getValue().setString(unsafeName);
-							break;
-						}
-					}
-				}
-			} catch (IOException e) {
-				throw new IllegalStateException("Failed to read jvav code for UFA", e);
-			}
-		}*/
+		} catch (ClassNotFoundException ignored) {}
 	}
 
 	public static final int JAVA_VERSION;
@@ -243,9 +237,7 @@ public final class ReflectionUtils {
 	public static String accessorName(Field field) {
 		char c = TypeHelper.class2asm(field.getType()).charAt(0);
 		switch (c) {
-			case ARRAY:
-			case CLASS:
-				return "Object";
+			case ARRAY: case CLASS: return "Object";
 			default:
 				StringBuilder s = new StringBuilder(Type.toString((byte) c));
 				s.setCharAt(0, Character.toUpperCase(s.charAt(0)));

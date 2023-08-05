@@ -24,8 +24,10 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 	//08: deflated
 	//14: LZMA
 	char method;
+
 	int modTime;
-	long precisionModTime;
+	long pModTime, pAccTime, pCreTime;
+
 	int CRC32;
 	long cSize, uSize;
 
@@ -45,7 +47,8 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		MZ_HASCEN= 2,
 		MZ_AESENC= 4,
 		MZ_NOCRC = 8,
-		MZ_LTIME = 16;
+		MZ_LTIME = 16,
+		MZ_UNIPATH = 32;
 
 	/** 数据起始 */
 	long offset;
@@ -86,16 +89,14 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		return (mzfFlag & MZ_NOCRC) != 0 ? 0 : CRC32;
 	}
 
-	public final long getModificationTime() {
-		return precisionModTime == 0 ? dos2JavaTime(modTime) : precisionModTime;
-	}
+	public final long getModificationTime() { return pModTime == 0 ? dos2JavaTime(modTime) : pModTime; }
 	public final void setModificationTime(long t) {
 		if (t == -1) {
 			modTime = 0;
-			precisionModTime = 0;
+			pModTime = 0;
 		} else {
 			modTime = java2DosTime(t);
-			precisionModTime = t;
+			pModTime = t;
 		}
 	}
 
@@ -142,6 +143,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 			int end = buf.rIndex + len;
 			switch (id) {
 				case 0x5455: // high precision timestamp
+					read5455ExtTime(buf, len);
 					break;
 				case 0x0001:
 					// LOC extra zip64 entry MUST include BOTH original
@@ -181,6 +183,10 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 			if ((mzfFlag & MZ_NOCRC) != 0) buf.putIntLE(extLenOff-14, 0);
 		}
 
+		if ((flags & GP_UTF) == 0 && (mzfFlag & MZ_UNIPATH) != 0) {
+			writeUnicodePath(buf);
+		}
+
 		buf.putShortLE(extLenOff, extraLenOfLOC = (char) (buf.wIndex() - extOff));
 	}
 	protected void customReadExtraLOC(int id, ByteList buf, int len) {}
@@ -192,19 +198,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 			int end = buf.rIndex + len;
 			switch (id) {
 				case 0x5455: // Extended timestamp
-					int flag = buf.readUnsignedByte();
-
-					long t = buf.readUIntLE()*1000;
-					if ((flag&1) != 0) {
-						precisionModTime = t;
-						mzfFlag |= MZ_LTIME;
-					}
-					if ((flag&2) != 0) {
-						// access time
-					}
-					if ((flag&4) != 0) {
-						// creation time
-					}
+					read5455ExtTime(buf, len);
 					break;
 				case 0x000A: // NTFS timestamp
 					buf.rIndex += 4;
@@ -212,12 +206,10 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 						int k = buf.readUShortLE();
 						DynByteBuf v = buf.slice(buf.readUShortLE());
 						if (k == 1) {
-							precisionModTime = winTime2JavaTime(v.readLongLE());
+							if (v.readableBytes() >= 8) pModTime = winTime2JavaTime(v.readLongLE());
+							if (v.readableBytes() >= 8) pAccTime = winTime2JavaTime(v.readLongLE());
+							if (v.readableBytes() >= 8) pCreTime = winTime2JavaTime(v.readLongLE());
 							mzfFlag |= MZ_LTIME;
-
-							// Mtime      8 bytes    File last modification time
-							// Atime      8 bytes    File last access time
-							// Ctime      8 bytes    File creation time
 						}
 					}
 					break;
@@ -277,6 +269,18 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 			buf.wIndex(buf.wIndex()-4);
 		}
 
+		if ((mzfFlag & MZ_LTIME) != 0) {
+			buf.putShortLE(0x000A).putShortLE(28)
+			   .putShortLE(1).putShortLE(24)
+			   .putLongLE(java2WinTime(pModTime))
+			   .putLongLE(java2WinTime(pAccTime))
+			   .putLongLE(java2WinTime(pCreTime));
+		}
+
+		if ((flags & GP_UTF) == 0 && (mzfFlag & MZ_UNIPATH) != 0) {
+			writeUnicodePath(buf);
+		}
+
 		if ((mzfFlag & MZ_AESENC) != 0) {
 			writeAES(buf);
 			if ((mzfFlag & MZ_NOCRC) != 0) buf.putIntLE(extLenOff-14, 0);
@@ -307,14 +311,14 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 			}
 		}
 	}
-	protected final void writeUnicodePath(ByteList buf) {
+	private void writeUnicodePath(ByteList buf) {
 		int pos = buf.wIndex();
 		buf.wIndex(pos+2);
 
 		int crc = CRCAny.CRC_32.INIT_VALUE;
 		crc = CRCAny.CRC_32.update(crc, nameBytes, 0, nameBytes.length);
 
-		buf.put((byte) 0)
+		buf.put(0)
 		   .putIntLE(CRCAny.CRC_32.retVal(crc))
 		   .putUTFData(name)
 		   .putShortLE(pos, buf.wIndex()-pos-2);
@@ -347,8 +351,27 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		buf.putShortLE(0x9901).putShortLE(7)
 		   .putShortLE((mzfFlag & MZ_NOCRC) != 0 ? 0x2 : 0x1)
 		   .putShortLE(0x4541) // vendor id, ASCII"AE"
-		   .put((byte) 0x3) // encryption strength: AES-256
+		   .put(0x3) // encryption strength: AES-256
 		   .putShortLE(method);
+	}
+
+	private void read5455ExtTime(ByteList buf, int len) {
+		int flag = buf.readUnsignedByte();
+
+		if (len >= 4 && (flag&1) != 0) {
+			pModTime = buf.readUIntLE()*1000;
+			mzfFlag |= MZ_LTIME;
+			len -= 4;
+		}
+		if (len >= 4 && (flag&2) != 0) {
+			pAccTime = buf.readUIntLE()*1000;
+			mzfFlag |= MZ_LTIME;
+			len -= 4;
+		}
+		if (len >= 4 && (flag&4) != 0) {
+			pCreTime = buf.readUIntLE()*1000;
+			mzfFlag |= MZ_LTIME;
+		}
 	}
 
 	final boolean merge(MyHashMap<String, ZEntry> entries, ZEntry file) throws ZipException {
@@ -429,7 +452,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 			", ea=" + externalAttr +
 			", gp=0b" + Integer.toBinaryString(flags) +
 			", name='" + name + '\'' +
-			", offset=" + startPos() + '}';
+			", offset=" + (nameBytes == null ? -1 : startPos()) + '}';
 	}
 
 	public static long dos2JavaTime(int dtime) {

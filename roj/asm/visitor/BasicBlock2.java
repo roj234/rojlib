@@ -7,6 +7,7 @@ import roj.collect.SimpleList;
 import roj.util.ArrayUtil;
 
 import java.util.Arrays;
+import java.util.stream.Collectors;
 
 /**
  * @author Roj234
@@ -114,7 +115,8 @@ public class BasicBlock2 {
 
 	@Override
 	public String toString() {
-		StringBuilder sb = new StringBuilder().append(desc).append(" at ").append(bci);
+		StringBuilder sb = new StringBuilder().append("#").append(bci);
+		sb.append("\n    To: ").append(successor.stream().map((x) -> "#"+x.bci).collect(Collectors.toList()));
 		if (inheritLocalMax > 0) sb.append("\n    LR").append(ArrayUtil.toString(inheritLocal, 0, inheritLocalMax));
 		if (localMax > 0) sb.append("\n    LW").append(ArrayUtil.toString(local, 0, localMax));
 		if (inheritStackSize > 0) sb.append("\n    US").append(ArrayUtil.toString(inheritStack, 0, inheritStackSize));

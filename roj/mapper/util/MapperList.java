@@ -3,89 +3,62 @@ package roj.mapper.util;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 
-import java.util.Collection;
-import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 /**
- * Mapper List
- *
  * @author Roj234
  * @since 2020/8/11 14:59
  */
 public final class MapperList extends SimpleList<String> {
-	private final ToIntMap<String> indexer;
+	private final ToIntMap<String> index;
+	public int selfIdx = -1;
 
-	public MapperList() {
-		this(16);
-	}
-
+	public MapperList() { this(8); }
 	public MapperList(int size) {
 		ensureCapacity(size);
-		indexer = new ToIntMap<>(size);
+		index = new ToIntMap<>(size);
 	}
 
-	@Override
-	public boolean remove(Object o) {
-		if (!indexer.isEmpty()) throw new UnsupportedOperationException();
-		return super.remove(o);
+	public int indexOf(Object o) { return index.getOrDefault(o, -1); }
+	public int lastIndexOf(Object o) { return index.getOrDefault(o, -1); }
+	public boolean contains(Object e) { return index.containsKey(e); }
+
+	public String remove(int index) { throw new UnsupportedOperationException(); }
+	public void clear() { throw new UnsupportedOperationException(); }
+
+	public void pack0() { selfIdx = size; }
+	public void index() {
+		index.clear();
+		index.ensureCapacity(size);
+		for (int i = 0; i < size; i++) index.putInt(list[i].toString(), i);
 	}
 
-	@Override
-	public int indexOf(Object o) {
-		return indexer.getOrDefault(o, -1);
-	}
+	public void batchAddFiltered(List<String> list) {
+		if (list.isEmpty()) return;
 
-	@Override
-	public int lastIndexOf(Object o) {
-		return indexer.getOrDefault(o, -1);
-	}
+		int len = list instanceof MapperList ? ((MapperList) list).selfIdx : list.size();
+		ensureCapacity(size+len);
 
-	@Override
-	public boolean contains(Object e) {
-		return indexer.containsKey(e);
-	}
+		for (int i = 0; i < len; i++) {
+			String s = list.get(i);
+			// ?
+			if (s == null) continue;
 
-	@Override
-	public void clear() {
-		if (!indexer.isEmpty()) throw new UnsupportedOperationException();
-		super.clear();
-	}
-
-	@Override
-	public boolean addAll(int index, Collection<? extends String> collection) {
-		if (collection.isEmpty()) return false;
-
-		ensureCapacity(size + collection.size());
-		if (size != index && size > 0) System.arraycopy(list, index, list, index + collection.size(), size - index);
-
-		Iterator<? extends String> it = collection.iterator();
-		for (int j = index; j < index + collection.size(); j++) {
-			String next = it.next();
-			if (indexOf(next) == -1) list[j] = next;
-		}
-		size += collection.size();
-		return true;
-	}
-
-	public void _init_() {
-		preClean();
-		trimToSize();
-	}
-
-	public void preClean() {
-		indexer.clear();
-		for (int i = 0; i < size; i++) {
-			Integer orig = indexer.putInt((String) list[i], i);
-			if (orig != null) {
-				super.remove((int) orig);
-			} else if (list[i] == null) {
-				size = i;
-				break;
-			} else {
-				continue;
+			if (index.putIntIfAbsent(s, size)) {
+				this.list[size++] = s;
 			}
-			i = 0;
-			indexer.clear();
 		}
+	}
+	public void batchRemoveFiltered(Map<String, String> filter) {
+		boolean mod = false;
+		for (int i = size-1; i >= 0; i--) {
+			if (!filter.containsKey(list[i].toString())) {
+				if (i < selfIdx) selfIdx--;
+				super.remove(i);
+				mod = true;
+			}
+		}
+		if (mod) index();
 	}
 }

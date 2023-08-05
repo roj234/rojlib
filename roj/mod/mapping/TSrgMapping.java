@@ -8,7 +8,7 @@ import roj.mapper.Mapping;
 import roj.mapper.util.Desc;
 import roj.text.LineReader;
 import roj.text.TextUtil;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
 import java.io.Closeable;
@@ -29,7 +29,7 @@ public final class TSrgMapping extends Mapping {
 		MCPConfig cfg = new MCPConfig(mapFile);
 		InputStream in = cfg.getData("mappings");
 		if (in == null) {
-			CmdUtil.warning("不是有效的MCP Config");
+			CLIUtil.warning("不是有效的MCP Config");
 			return false;
 		}
 
@@ -38,7 +38,7 @@ public final class TSrgMapping extends Mapping {
 		switch (cfg.version()) {
 			case 1: tsrgV1(slr, tmp); break;
 			case 2: case 3: tSrgV2(slr, tmp, paramMap); break;
-			default: CmdUtil.warning("不支持的版本 " + cfg.version());
+			default: CLIUtil.warning("不支持的版本 " + cfg.version());
 		}
 		cfg.close();
 		return true;
@@ -70,7 +70,7 @@ public final class TSrgMapping extends Mapping {
 				}
 			} else {
 				if (prevF == null) {
-					CmdUtil.error("#!config/joined.tsrg:" + slr.lineNumber() + ": 无效的元素开始.");
+					CLIUtil.error("#!config/joined.tsrg:" + slr.lineNumber() + ": 无效的元素开始.");
 					return false;
 				}
 
@@ -111,7 +111,7 @@ public final class TSrgMapping extends Mapping {
 				}
 			} else if (level == 1) {
 				if (prevF == null) {
-					CmdUtil.error("#!config/joined.tsrg:" + slr.lineNumber() + ": 无效的元素开始.");
+					CLIUtil.error("#!config/joined.tsrg:" + slr.lineNumber() + ": 无效的元素开始.");
 					return false;
 				}
 
@@ -126,11 +126,11 @@ public final class TSrgMapping extends Mapping {
 				}
 			} else {
 				if (method == null) {
-					CmdUtil.error("#!config/joined.tsrg:" + slr.lineNumber() + ": 无效的元素开始.");
+					CLIUtil.error("#!config/joined.tsrg:" + slr.lineNumber() + ": 无效的元素开始.");
 					return false;
 				}
 				if (tmp.get(0).equals("static")) {
-					CmdUtil.warning("TSrgMapping:134: " + tmp);
+					CLIUtil.warning("TSrgMapping:134: " + tmp);
 					continue;
 				}
 

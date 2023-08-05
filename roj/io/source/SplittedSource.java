@@ -4,7 +4,6 @@ import roj.collect.LFUCache;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -54,7 +53,7 @@ public class SplittedSource extends Source {
 
 		for (int i = 0; i < 999; i++) {
 			t.clear();
-			TextUtil.pad(t.append(name).append('.'), ref.size()+1, 3);
+			t.append(name).append('.').padNumber(ref.size()+1, 3);
 
 			File splitFile = new File(path, t.toString());
 			if (!splitFile.isFile()) break;
@@ -71,7 +70,7 @@ public class SplittedSource extends Source {
 		}
 	}
 
-	public SplittedSource(FileSource src, int size) throws IOException {
+	public SplittedSource(FileSource src, long size) throws IOException {
 		this(new File(src.getSource().getParentFile(), IOUtil.noExtName(src.getSource().getName())), size);
 	}
 
@@ -132,8 +131,14 @@ public class SplittedSource extends Source {
 		if (ref.size() >= 999) throw new IOException("文件分卷过多：999");
 
 		t.clear();
-		TextUtil.pad(t.append(name).append('.'), ref.size()+1, 3);
-		ref.add(new File(path, t.toString()));
+		t.append(name).append('.').padNumber(ref.size()+1, 3);
+		File file = new File(path, t.toString());
+		if (!file.isFile()) {
+			try {
+				IOUtil.allocSparseFile(file, fragmentSizeL);
+			} catch (IOException ignored) {}
+		}
+		ref.add(file);
 		s = getSource(ref.size()-1);
 		frag++;
 	}

@@ -3,6 +3,8 @@ package roj.archive.zip;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ChecksumInputStream;
+import roj.archive.SourceStreamCAS;
+import roj.archive.qz.QZArchive;
 import roj.collect.*;
 import roj.collect.RSegmentTree.Range;
 import roj.crypt.CipherInputStream;
@@ -15,6 +17,7 @@ import roj.io.source.BufferedSource;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.io.source.SplittedSource;
+import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -34,6 +37,7 @@ import java.util.zip.*;
 
 import static roj.archive.zip.ZEntry.MZ_HASCEN;
 import static roj.archive.zip.ZEntry.MZ_NOCRC;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * 支持分卷压缩文件
@@ -48,11 +52,15 @@ public class ZipArchive implements ArchiveFile {
 	public File file;
 
 	private Source r;
+	private Source fpRead;
+	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(QZArchive.class, "fpRead");
+
 	private final MyHashMap<String, ZEntry> entries;
 	private final MyHashSet<EntryMod> modified;
+
 	private final END end;
 
-	private final ByteList buffer;
+	private final ByteList buf;
 	private final Charset cs;
 
 	private CRC32 crc;
@@ -104,11 +112,11 @@ public class ZipArchive implements ArchiveFile {
 		ZIP_AES = 51;
 
 	public ZipArchive(String name) throws IOException {
-		this(new File(name), FLAG_KILL_EXT | FLAG_VERIFY | FLAG_BACKWARD_READ, 0, StandardCharsets.UTF_8);
+		this(new File(name), FLAG_KILL_EXT|FLAG_BACKWARD_READ, 0, StandardCharsets.UTF_8);
 	}
 
 	public ZipArchive(File file) throws IOException {
-		this(file, FLAG_KILL_EXT | FLAG_VERIFY | FLAG_BACKWARD_READ, 0, StandardCharsets.UTF_8);
+		this(file, FLAG_KILL_EXT|FLAG_BACKWARD_READ, 0, StandardCharsets.UTF_8);
 	}
 
 	public ZipArchive(File file, int flag) throws IOException {
@@ -124,7 +132,7 @@ public class ZipArchive implements ArchiveFile {
 		this.file = file;
 		r = new FileSource(file);
 		if (file.getName().endsWith(".001")) {
-			r = BufferedSource.autoClose(new SplittedSource((FileSource) r, (int) file.length()));
+			r = BufferedSource.autoClose(new SplittedSource((FileSource) r, file.length()));
 		}
 		r.seek(offset);
 
@@ -141,7 +149,7 @@ public class ZipArchive implements ArchiveFile {
 		entries = ((flag&FLAG_LINKED_MAP) != 0) ? new LinkedMyHashMap<>() : new MyHashMap<>();
 		modified = new MyHashSet<>();
 		end = new END();
-		buffer = new ByteList(1024);
+		buf = new ByteList(1024);
 		flags = (byte) flag;
 		this.cs = cs;
 	}
@@ -164,7 +172,7 @@ public class ZipArchive implements ArchiveFile {
 	 */
 	public void reopen() throws IOException {
 		if (file == null) throw new IOException("Source is not file");
-		if (buffer.list == null) throw new IOException("fully closed");
+		if (buf.list == null) throw new IOException("fully closed");
 		if (r == null) r = new FileSource(file);
 		if ((flags & (FLAG_VERIFY)) != 0) verify();
 	}
@@ -173,29 +181,32 @@ public class ZipArchive implements ArchiveFile {
 	 * closes associated RandomAccessFile, so the zip file can be modified by external programs
 	 */
 	public void closeFile() throws IOException {
-		if (file == null) throw new IOException("Source is not file");
-		if (r == null) return;
-		r.close();
-		r = null;
+		if (r != null) {
+			r.close();
+			r = null;
+		}
+
+		Source s;
+		do {
+			s = fpRead;
+		} while (s != null && !u.compareAndSwapObject(this, FPREAD_OFFSET, s, null));
+		if (s != null) s.close();
 	}
 
 	public final boolean isClosed() {
-		return buffer.list == null;
+		return buf.list == null;
 	}
 
 	@Override
 	public void close() throws IOException {
-		buffer.list = null;
+		buf.list = null;
 
 		if (deflater != null) {
 			deflater.end();
 			deflater = null;
 		}
 		modified.clear();
-		if (r != null) {
-			r.close();
-			r = null;
-		}
+		closeFile();
 	}
 
 	public void empty() throws IOException {
@@ -205,9 +216,9 @@ public class ZipArchive implements ArchiveFile {
 		end.cDirTotal = 0;
 
 		r.setLength(0);
-		buffer.clear();
-		writeEND(buffer, end, 0);
-		r.write(buffer);
+		buf.clear();
+		writeEND(buf, end, 0);
+		r.write(buf);
 	}
 
 	// endregion
@@ -223,10 +234,10 @@ public class ZipArchive implements ArchiveFile {
 			else readForward();
 		} catch (EOFException e) {
 			ZipException ze = (ZipException) new ZipException("Unexpected EOF at " + r.position()).initCause(e);
-			r.close();
+			closeFile();
 			throw ze;
 		} catch (IOException e) {
-			r.close();
+			closeFile();
 			throw e;
 		}
 
@@ -373,7 +384,7 @@ public class ZipArchive implements ArchiveFile {
 	}
 
 	private ByteList read(int len) throws IOException {
-		ByteList b = buffer; b.clear();
+		ByteList b = buf; b.clear();
 		b.ensureCapacity(len);
 		r.readFully(b.list, 0, len);
 		b.wIndex(len);
@@ -535,7 +546,7 @@ public class ZipArchive implements ArchiveFile {
 			}
 		}
 
-		if (fileHeader != entry.startPos()) {
+		if (fileHeader != entry.startPos() && (flags&FLAG_VERIFY) != 0) {
 			throw new ZipException(entry.name + " offset mismatch: req " + fileHeader + " computed " + entry.startPos());
 		}
 
@@ -589,8 +600,8 @@ public class ZipArchive implements ArchiveFile {
 		return entries;
 	}
 
-	public InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException {
-		return getStream((ZEntry) entry, password);
+	public InputStream getInput(ArchiveEntry entry, byte[] password) throws IOException {
+		return getInput((ZEntry) entry, password);
 	}
 
 	public END getEND() {
@@ -598,9 +609,20 @@ public class ZipArchive implements ArchiveFile {
 	}
 
 	public InputStream i_getRawData(ZEntry entry) throws IOException {
-		Source r = this.r.threadSafeCopy();
-		r.seek(entry.offset);
-		return new SourceInputStream(r, entry.cSize);
+		if (entry.nameBytes == null) throw new ZipException("Not entry load from file");
+
+		Source src;
+		do {
+			src = fpRead;
+			if (src == null) {
+				src = r.threadSafeCopy();
+				src = src.isBuffered()?src:BufferedSource.autoClose(src);
+				break;
+			}
+		} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, src, null));
+
+		src.seek(entry.offset);
+		return new SourceStreamCAS(src, entry.cSize, this, FPREAD_OFFSET);
 	}
 
 	// region Read
@@ -616,19 +638,18 @@ public class ZipArchive implements ArchiveFile {
 	}
 	public ByteList get(ZEntry file, ByteList buf) throws IOException {
 		buf.ensureCapacity((int) (buf.wIndex() + file.uSize));
-		buf.readStreamFully(getStream(file, null));
-		return buf;
+		return buf.readStreamFully(getInput(file, null));
 	}
 
-	public InputStream getStream(String entry) throws IOException {
+	public InputStream getInput(String entry) throws IOException {
 		ZEntry file = entries.get(entry);
 		if (file == null) return null;
-		return getStream(file, null);
+		return getInput(file, null);
 	}
 	public InputStream getStream(ZEntry file) throws IOException {
-		return getStream(file, null);
+		return getInput(file, null);
 	}
-	public InputStream getStream(ZEntry file, byte[] pass) throws IOException {
+	public InputStream getInput(ZEntry file, byte[] pass) throws IOException {
 		InputStream in = i_getRawData(file);
 
 		if (file.isEncrypted()) {
@@ -640,7 +661,7 @@ public class ZipArchive implements ArchiveFile {
 				in = new CipherInputStream(in, c);
 
 				// has ext, CRC cannot be computed before
-				int checkByte = (file.flags & GP_HAS_EXT) != 0 ? file.modTime >>> 8 : file.CRC32 >>> 24;
+				int checkByte = (file.flags & GP_HAS_EXT) != 0 ? 0xFF&(file.modTime >>> 8) : file.CRC32 >>> 24;
 				if (in.skip(11) < 11) throw new IOException("Early EOF");
 
 				int myCb = in.read();
@@ -818,7 +839,7 @@ public class ZipArchive implements ArchiveFile {
 
 		OutputStream out = r;
 
-		ByteList bw = buffer; bw.clear();
+		ByteList bw = buf; bw.clear();
 		bw.ensureCapacity(2048);
 
 		long precisionModTime = System.currentTimeMillis();
@@ -851,7 +872,7 @@ public class ZipArchive implements ArchiveFile {
 			e.offset = r.position() + 30 + e.nameBytes.length;
 			e.method = (char) (mf.flag & EntryMod.E_COMPRESS);
 			if ((mf.flag & EntryMod.E_ORIGINAL_TIME) == 0) {
-				e.precisionModTime = precisionModTime;
+				e.pModTime = precisionModTime;
 				e.modTime = modTime;
 			}
 

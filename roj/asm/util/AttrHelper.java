@@ -5,7 +5,11 @@ import roj.asm.misc.ReflectClass;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.*;
+import roj.asm.tree.attr.Annotations;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.attr.InnerClasses;
+import roj.asm.tree.attr.ParameterAnnotations;
+import roj.asm.visitor.XAttrCode;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Repeatable;
@@ -60,7 +64,7 @@ public class AttrHelper {
 		Modifiable mod = new Modifiable();
 		for (int i = 0; i < list.size(); i++) {
 			Annotation a = list.get(i);
-			switch (a.clazz) {
+			switch (a.type) {
 				case "java/lang/annotation/Retention":
 					if (!a.containsKey("value")) return null;
 					switch (a.getEnumValue("value", "RUNTIME")) {
@@ -98,11 +102,10 @@ public class AttrHelper {
 		return mod;
 	}
 
-	public static AttrCode getOrCreateCode(ConstantPool cp, MethodNode node) {
-		AttrCode a = node.parsedAttr(cp, Attribute.Code);
+	public static XAttrCode getOrCreateCode(ConstantPool cp, MethodNode node) {
+		XAttrCode a = node.parsedAttr(cp, Attribute.Code);
 		if (a != null) return a;
-		a = new AttrCode(node);
-		node.putAttr(a);
+		node.putAttr(a = new XAttrCode());
 		return a;
 	}
 
@@ -114,7 +117,7 @@ public class AttrHelper {
 	public static Annotation getAnnotation(List<Annotation> list, String name) {
 		if (list == null) return null;
 		for (int i = 0; i < list.size(); i++) {
-			if (list.get(i).clazz.equals(name)) return list.get(i);
+			if (list.get(i).type.equals(name)) return list.get(i);
 		}
 		return null;
 	}

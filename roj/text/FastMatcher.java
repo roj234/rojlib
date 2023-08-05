@@ -54,9 +54,9 @@ public class FastMatcher {
 		} else {
 			ag = IG;
 			int[] arr = new int[max-min+1];
-			for(int i = 0; i < arr.length; i++) arr[i] = (char) s.length();
+			for(int i = 0; i < arr.length; i++) arr[i] = s.length();
 			for(int i = 0; i < s.length() - 1; i++)
-				arr[s.charAt(i)-min] = (byte) (s.length() - i - 1);
+				arr[s.charAt(i)-min] = (s.length() - i - 1);
 			skip = arr;
 		}
 		this.dt = ag.get(skip, needle.charAt(n)-min);

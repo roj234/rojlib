@@ -62,7 +62,7 @@ public class PushbackInputStream extends FilterInputStream {
 				bOff = bLen = 0;
 				bufferEmpty();
 			}
-			return b;
+			return b&0xFF;
 		} else {
 			return in.read();
 		}

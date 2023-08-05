@@ -9,19 +9,13 @@ import roj.util.DynByteBuf;
  * @since 2021/5/29 17:16
  */
 public final class ConstantValue extends Attribute {
-	public ConstantValue(Constant c) {
-		super("ConstantValue");
-		this.c = c;
-	}
+	public ConstantValue(Constant c) { this.c = c; }
 
 	public Constant c;
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
-		w.putShort(pool.reset(c).getIndex());
-	}
-
-	public String toString() {
-		return "ConstantValue: " + c;
-	}
+	public String name() { return "ConstantValue"; }
+	@Override
+	protected void toByteArray1(DynByteBuf w, ConstantPool pool) { w.putShort(pool.reset(c).getIndex()); }
+	public String toString() { return "ConstantValue: " + c; }
 }

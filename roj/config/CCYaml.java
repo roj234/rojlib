@@ -61,8 +61,8 @@ public final class CCYaml extends YAMLParser implements CCParser {
 				w = next();
 			}
 
-			int off = getIndent();
-			if (w.type() != delim || off < firstIndent) {
+			int off;
+			if (w.type() != delim || (off = getIndent()) < firstIndent) {
 				retractWord();
 				break;
 			} else if (off != firstIndent) throw err("缩进有误:"+off+"/"+firstIndent);

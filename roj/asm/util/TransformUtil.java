@@ -4,13 +4,13 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.asm.Opcodes;
 import roj.asm.tree.*;
-import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.visitor.CodeWriter;
+import roj.asm.visitor.XAttrCode;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.util.ByteList;
@@ -35,7 +35,7 @@ public class TransformUtil {
 		boolean flag = false;
 		List<? extends MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
-			RawMethod ms = (RawMethod) methods.get(i);
+			MethodNode ms = methods.get(i);
 
 			if (ms.attrByName("Code") != null) {
 				trimCode(data, ms);
@@ -61,7 +61,7 @@ public class TransformUtil {
 			case DOUBLE: cw.one(Opcodes.DCONST_0); break;
 			case LONG: cw.one(Opcodes.LCONST_0); break;
 		}
-		cw.one(t.shiftedOpcode(IRETURN, true));
+		cw.one(t.shiftedOpcode(IRETURN));
 		cw.finish();
 
 		ms.putAttr(new AttrUnknown("Code", cw.bw));
@@ -101,9 +101,9 @@ public class TransformUtil {
 			}
 		}
 	}
-	private static void toPublic(Collection<String> toOpen, boolean starP, List<? extends MoFNode> nodes) {
+	private static void toPublic(Collection<String> toOpen, boolean starP, List<? extends RawNode> nodes) {
 		for (int i = 0; i < nodes.size(); i++) {
-			MoFNode node = nodes.get(i);
+			RawNode node = nodes.get(i);
 			if (toOpen != null && !toOpen.contains(node.name()) && !toOpen.contains(node.name()+'|'+node.rawDesc())) continue;
 
 			int flag = toPublic(node.modifier(), starP || toOpen != null);
@@ -141,12 +141,9 @@ public class TransformUtil {
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
 			filter(mn, method_allow);
-			Attribute attr = mn.attrByName("Code");
-			if (attr == null) continue;
 
-			AttrCode code = new AttrCode(mn, attr.getRawData(), data.cp);
-			mn.putAttr(code);
-			System.out.println(mn.attributes());
+			XAttrCode code = mn.parsedAttr(data.cp, Attribute.Code);
+			if (code == null) continue;
 
 			if (low) code.frames = null;
 

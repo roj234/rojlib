@@ -21,7 +21,7 @@ public final class AnnValDouble extends AnnVal {
 	public byte type() { return Type.DOUBLE; }
 
 	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) Type.DOUBLE).putShort(cp.getDoubleId(value)); }
-	public String toString() { return String.valueOf(value); }
+	public String toString() { return String.valueOf(value).concat("D"); }
 
 	@Override
 	public boolean equals(Object o) {

@@ -1,16 +1,14 @@
 package roj.text;
 
 import roj.archive.qz.xz.LZMAInputStream;
-import roj.io.ChineseInputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.function.IntConsumer;
 
-import static java.lang.Character.MAX_HIGH_SURROGATE;
-import static java.lang.Character.MIN_HIGH_SURROGATE;
-import static roj.reflect.FieldAccessor.u;
+import static java.lang.Character.*;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -27,7 +25,7 @@ public final class GB18030 extends UnsafeCharset {
 	private static final char[] REVERSE_TABLE = new char[65408];
 
 	static {
-		try (InputStream in = new LZMAInputStream(ChineseInputStream.class.getResourceAsStream("/META-INF/gb18030.lzma"))) {
+		try (InputStream in = new LZMAInputStream(GB18030.class.getResourceAsStream("/META-INF/china/gb18030.lzma"))) {
 			byte[] b = new byte[1024];
 			int off = 0;
 			while (true) {
@@ -63,32 +61,73 @@ public final class GB18030 extends UnsafeCharset {
 		return cs != null && cs == J_GB2312 || cs == J_GBK || cs == J_GB18030;
 	}
 
-	public int byteCount(CharSequence s, int i, int len) {
-		int end = i+len;
+	@Override
+	public long unsafeEncode(char[] s, int i, int end, Object ref, long addr, int outMax) {
 		while (i < end) {
-			int c = s.charAt(i++);
-			if (c <= 0x7F) continue;
+			int c = s[i];
+			if (c > 0x7F) break;
+			if (outMax == 0) return ((long) i << 32);
 
+			i++;
+			outMax--;
+
+			u.putByte(ref, addr++, (byte) c);
+		}
+
+		while (i < end) {
+			int c = s[i];
+
+			if (c <= 0x7F) {
+				if (outMax == 0) break;
+
+				i++;
+				outMax--;
+
+				u.putByte(ref, addr++, (byte) c);
+				continue;
+			}
+
+			int sum = 1;
 			int cp;
-			check: {
-				if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-					if (i == end) throw new IllegalStateException("Trailing high surrogate \\u" + Integer.toHexString(c));
-					c = TextUtil.codepoint(c,s.charAt(i++));
-					len--;
+			check:{
+				if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
+					if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+					if (i+1 == end) break;
 
+					c = TextUtil.codepoint(c, s[i+1]);
+					sum++;
 					if (c > 0xFFFF) {
 						cp = c + 123464 + TAB2;
 						break check;
 					}
 				}
 				cp = REVERSE_TABLE[c-128] - 1;
+				assert cp >= 0;
 			}
 
-			if (cp < TAB2) len++;
-			else len += 3;
+			if (cp < TAB2) { // two bytes
+				if (outMax < 2) break;
+				outMax -= 2;
+
+				u.putByte(ref, addr++, (byte) (129 + (cp / 191)));
+				u.putByte(ref, addr++, (byte) (cp % 191 + 64));
+			} else { // four bytes
+				if (outMax < 4) break;
+				outMax -= 4;
+
+				cp -= TAB2;
+
+				u.putByte(ref, addr++, (byte) (129 + cp / 12600));
+				cp %= 12600;
+				u.putByte(ref, addr++, (byte) (48 + cp / 1260));
+				cp %= 1260;
+				u.putByte(ref, addr++, (byte) (129 + cp / 10));
+				u.putByte(ref, addr++, (byte) (48 + cp % 10));
+			}
+			i += sum;
 		}
 
-		return len;
+		return ((long)i << 32) | outMax;
 	}
 
 	@Override
@@ -129,35 +168,43 @@ public final class GB18030 extends UnsafeCharset {
 			}
 
 			int c2 = u.getByte(ref,i++) & 255;
-			if (c2 < 48) break malformed;
-
 			if (c2 <= 57) {
+				if (c2 < 48) { i--; break malformed; }
+
 				if (max-i < 2) {
 					i -= 2;
 					break;
 				}
 
 				int c3 = u.getByte(ref,i++) & 255;
-				if (c3 == 128 || c3 == 255) break malformed;
-
 				int c4 = u.getByte(ref,i++) & 255;
-				if (c4 < 48 || c4 > 57) break malformed;
+
+				if (c3 == 128 || c3 == 255 || c4 < 48 || c4 > 57) { i -= 3; break malformed; }
 
 				int cp = (((c-129) * 10 + (c2-48)) * 126 + c3 - 129) * 10 + c4 - 48;
 
 				if (cp <= 39419) {
 					out[off++] = TABLE[TAB2+cp];
 				} else {
-					cp -= 123464 + Character.MIN_SUPPLEMENTARY_CODE_POINT;
-					if (cp < 0 || cp > 1048575) break malformed;
+					cp -= 123464;
+					if (cp < 0 || cp > Character.MAX_CODE_POINT) { i -= 3; break malformed; }
+
+					if (cp < Character.MIN_SUPPLEMENTARY_CODE_POINT) {
+						out[off++] = (char) cp;
+						continue;
+					}
+
 					if (outMax-off < 2) return (i-base) << 32;
 
-					out[off++] = (char)((cp>>>10) + Character.MIN_HIGH_SURROGATE);
-					out[off++] = (char)((cp&1023) + Character.MIN_LOW_SURROGATE);
+					out[off++] = Character.highSurrogate(cp);
+					out[off++] = Character.lowSurrogate(cp);
 				}
 			} else {
 				// double
-				if (c2 == 127 || c2 == 255 || c2 < 64) break malformed;
+				if (c2 == 127 || c2 == 255 || c2 < 64) {
+					i--;
+					break malformed;
+				}
 
 				int cp = (c-129) * (255-64) + (c2-64);
 				out[off++] = TABLE[cp];
@@ -172,8 +219,7 @@ public final class GB18030 extends UnsafeCharset {
 	}
 
 	@Override
-	public void unsafeValidate(Object ref, long i, int len, IntConsumer cs) {
-		long max = i+len;
+	public void unsafeValidate(Object ref, long i, long max, IntConsumer cs) {
 		int c;
 
 		while (i < max) {
@@ -228,24 +274,14 @@ public final class GB18030 extends UnsafeCharset {
 				if (cp <= 39419) {
 					cs.accept(TABLE[TAB2+cp]);
 				} else {
-					cp -= 123464 + Character.MIN_SUPPLEMENTARY_CODE_POINT;
-					if (cp < 0 || cp > 1048575) {
-						cs.accept(MALFORMED - 4);
-						i -= 3;
-						continue;
-					}
+					cp -= 123464;
+					if (cp < 0 || cp > Character.MAX_CODE_POINT) { i -= 3; cs.accept(MALFORMED - 4); continue; }
 
 					cs.accept(cp);
-					//out.append((char)((cp>>>10) + Character.MIN_HIGH_SURROGATE))
-					//   .append((char)((cp&1023) + Character.MIN_LOW_SURROGATE));
 				}
 			} else {
 				// double
-				if (c2 == 127 || c2 == 255 || c2 < 64) {
-					cs.accept(MALFORMED - 2);
-					i -= 1;
-					continue;
-				}
+				if (c2 == 127 || c2 == 255 || c2 < 64) { i -= 1; cs.accept(MALFORMED - 2); continue; }
 
 				int cp = (c-128) * (255-64) + (c2-64);
 				cs.accept(TABLE[cp]);
@@ -254,68 +290,33 @@ public final class GB18030 extends UnsafeCharset {
 	}
 
 	@Override
-	public long unsafeEncode(char[] s, int i, int end, Object ref, long addr, int outMax) {
+	public int byteCount(CharSequence s, int i, int len) {
+		int end = i+len;
 		while (i < end) {
-			int c = s[i];
-			if (c > 0x7F) break;
-			if (outMax == 0) return ((long) i << 32);
+			int c = s.charAt(i++);
+			if (c <= 0x7F) continue;
 
-			i++;
-			outMax--;
-
-			u.putByte(ref, addr++, (byte) c);
-		}
-
-		while (i < end) {
-			int c = s[i];
-
-			if (c <= 0x7F) {
-				if (outMax == 0) break;
-
-				i++;
-				outMax--;
-
-				u.putByte(ref, addr++, (byte) c);
-				continue;
-			}
-
-			int sum = 1;
 			int cp;
-			check:{
-				if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-					c = TextUtil.codepoint(c, s[i+1]);
-					sum++;
+			check: {
+				if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
+					if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+					if (i == end) throw new IllegalStateException("Trailing high surrogate \\U+"+Integer.toHexString(c));
+
+					c = TextUtil.codepoint(c,s.charAt(i++));
+					len--;
+
 					if (c > 0xFFFF) {
 						cp = c + 123464 + TAB2;
 						break check;
 					}
 				}
 				cp = REVERSE_TABLE[c-128] - 1;
-				if (cp < 0) throw new AssertionError();
 			}
 
-			if (cp < TAB2) { // two bytes
-				if (outMax < 2) break;
-				outMax -= 2;
-
-				u.putByte(ref, addr++, (byte) (129 + (cp / 191)));
-				u.putByte(ref, addr++, (byte) (cp % 191 + 64));
-			} else { // four bytes
-				if (outMax < 4) break;
-				outMax -= 4;
-
-				cp -= TAB2;
-
-				u.putByte(ref, addr++, (byte) (129 + cp / 12600));
-				cp %= 12600;
-				u.putByte(ref, addr++, (byte) (48 + cp / 1260));
-				cp %= 1260;
-				u.putByte(ref, addr++, (byte) (129 + cp / 10));
-				u.putByte(ref, addr++, (byte) (48 + cp % 10));
-			}
-			i += sum;
+			if (cp < TAB2) len++;
+			else len += 3;
 		}
 
-		return ((long)i << 32) | outMax;
+		return len;
 	}
 }

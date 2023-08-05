@@ -1,6 +1,9 @@
 package roj.mod;
 
-import roj.archive.zip.*;
+import roj.archive.zip.EntryMod;
+import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipOutput;
 import roj.asm.ATList;
 import roj.asm.tree.ConstantData;
 import roj.asm.util.Context;
@@ -8,44 +11,39 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.task.AsyncTask;
-import roj.concurrent.timing.Scheduled;
+import roj.concurrent.timing.ScheduleTask;
 import roj.config.data.*;
-import roj.config.word.Tokenizer;
 import roj.dev.ByteListOutput;
 import roj.dev.Compiler;
 import roj.io.IOUtil;
-import roj.mapper.CodeMapper;
-import roj.mapper.ConstMapper;
-import roj.mapper.ConstMapper.State;
 import roj.mapper.MapUtil;
-import roj.mapper.util.Desc;
-import roj.mapper.util.ResWriter;
+import roj.mapper.Mapper.State;
+import roj.mapper.MapperUI;
 import roj.mod.FileFilter.CmtATEntry;
 import roj.mod.MCLauncher.RunMinecraftTask;
 import roj.mod.plugin.PluginContext;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.ui.CmdUtil;
-import roj.ui.UIUtil;
+import roj.ui.CLIUtil;
+import roj.ui.GUIUtil;
+import roj.ui.terminal.Argument;
+import roj.ui.terminal.CommandConsole;
+import roj.ui.terminal.CommandImpl;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
 
-import static javax.swing.JOptionPane.*;
 import static roj.mod.Shared.*;
+import static roj.ui.terminal.CommandNode.argument;
+import static roj.ui.terminal.CommandNode.literal;
 
 /**
  * FMD Main class
@@ -54,263 +52,135 @@ import static roj.mod.Shared.*;
  * @since 2021/6/18 10:51
  */
 public final class FMDMain {
-	static boolean isCLI, noGUI;
-	static Scheduled shinyTask;
+	static boolean isCLI;
+	static ScheduleTask shinyTask;
+	public static CommandConsole console = new CommandConsole("") {
+		@Override
+		public boolean execute(String cmd, boolean print) {
+			if (shinyTask != null) shinyTask.cancel();
+			return super.execute(cmd, print);
+		}
+	};
 
 	@SuppressWarnings("fallthrough")
 	public static void main(String[] args) throws IOException, InterruptedException {
-		if (!isCLI) {
-			Shared.loadProject();
-			if (args.length == 0) {
-				CmdUtil.rainbow("FMD 更快的mod开发环境 " + VERSION + " By Roj234");
-				System.out.println();
+		Shared.loadProject();
+		CommandConsole c = console;
 
-				shinyTask = PeriodicTask.executeTimer(() -> {
-					synchronized (CmdUtil.originalOut) {
-						CmdUtil.cursorBackup();
-						CmdUtil.cursorUp(8000);
-						CmdUtil.cursorDownCol0(1);
-						CmdUtil.clearLine();
-						CmdUtil.sonic("https://www.github.com/roj234/rojlib");
-						CmdUtil.cursorRestore();
-					}
-				}, 150, 9999);
+		c.register(literal("build"));
+		c.register(literal("auto").then(argument("auto", Argument.bool()).executes(ctx -> AutoCompile.setEnabled(ctx.argument("auto", Boolean.class)))));
+		c.register(literal("reflect").executes(ctx -> ReflectTool.start(!isCLI)));
+		CommandImpl cDeobf = ctx -> {
+			String mode = ctx.argument("reverse", String.class, "mcp2srg");
 
-				System.out.println();
-				CmdUtil.info("可用指令: build, run, project, edit, ref, at, reobf, deobf, gc, reload, auto");
-				System.out.println();
+			GUIUtil.systemLook();
+			MapperUI f = new MapperUI();
+			f.setDefaultCloseOperation(isCLI ? JFrame.DISPOSE_ON_CLOSE : JFrame.EXIT_ON_CLOSE);
+			loadMapper();
+			f.setMapper(mode.equals("mcp2srg") ? mapperFwd : loadReverseMapper());
+			f.show();
+		};
+		c.register(literal("deobf").executes(cDeobf).then(argument("reverse", Argument.string("mcp2srg", "srg2mcp")).executes(cDeobf)));
+		c.register(literal("preAT").executes(ctx -> preAT()));
+		c.register(literal("kill").executes(ctx -> {
+			if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
+				MCLauncher.task.cancel(true);
 			}
+		}));
+		c.register(literal("gc").executes(ctx -> {
+			long used = Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory();
+			ATHelper.close();
+			System.runFinalization();
+			System.gc();
+			System.runFinalization();
+			System.out.println("释放了 " + TextUtil.scaledNumber(used-(Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory())) + "B内存.");
+		}));
+
+		c.register(literal("build").then(argument("flags", Argument.stringFlags("zl", "showErrorCode", "noupdate")).executes(ctx -> {
+			List<String> flags = Helpers.cast(ctx.argument("flags", List.class));
+			Map<String, Object> map = new MyHashMap<>();
+			for (String flag : flags) map.put(flag, "");
+			try {
+				build(map);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		})));
+		c.register(literal("run").then(argument("flags", Argument.stringFlags("zl", "showErrorCode", "noupdate")).executes(ctx -> {
+			List<String> flags = Helpers.cast(ctx.argument("flags", List.class));
+			Map<String, Object> map = new MyHashMap<>();
+			for (String flag : flags) map.put(flag, "");
+			try {
+				run(map);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		})));
+
+		Argument.ArgSetOf<File> dynamicProject = new Argument.ArgSetOf<File>(false, new MyHashMap<>()) {
+			@Override
+			protected void updateChoices() {
+				choice.clear();
+				IOUtil.findAllFiles(CONFIG_DIR, (f) -> {
+					String name = f.getName().toLowerCase();
+					if (name.endsWith(".json")) choice.put(name.substring(0, name.length()-5), f);
+					return false;
+				});
+			}
+		};
+		c.register(literal("create").then(argument("name", Argument.string()).executes(ctx -> {
+			String name = ctx.argument("name", String.class);
+			ConfigEditWindow.open(Project.load(name), null);
+		})));
+		c.register(literal("edit").then(argument("name", dynamicProject).executes(ctx -> {
+			File selected = ctx.argument("name", File.class);
+			Project conf = Project.load(selected.getName().substring(0, selected.getName().lastIndexOf('.')));
+			ConfigEditWindow.open(conf, null);
+		})));
+		c.register(literal("project").then(argument("name", dynamicProject).executes(ctx -> {
+			File selected = ctx.argument("name", File.class);
+			String name = selected.getName().substring(0, selected.getName().lastIndexOf('.'));
+			Shared.setProject(name);
+			CLIUtil.success("配置文件已选择: " + name);
+			c.setPrompt("\u001b[33mFMD\u001b[97m[\u001b[96m"+project.name+"\u001b[97m]\u001b[33m > ");
+		})));
+		c.register(literal("exit").executes(ctx -> System.exit(0)));
+
+		if (project == null) {
+			CLIUtil.warning("未加载项目配置文件! 请使用create <名称(modid)>创建配置、和/或使用project <名称(modid)>选择配置");
+		} else {
+			c.setPrompt("\u001b[33mFMD\u001b[97m[\u001b[96m"+project.name+"\u001b[97m]\u001b[33m > ");
 		}
 
 		if (args.length == 0) {
-			if (isCLI) {
-				System.out.println();
-				return;
-			}
-
 			isCLI = true;
 
-			Map<String, String> shortcuts = Helpers.cast(CONFIG.getOrCreateMap("CLI Shortcuts").unwrap());
+			CharList sb = IOUtil.getSharedCharBuf();
+			String slogan = "FMD 更快的mod开发环境 "+VERSION+" By Roj234";
+			System.out.println(slogan);
+			System.out.println("\u001b[96mhttps://www.github.com/roj234/rojlib");
 
-			SimpleList<String> tmp = new SimpleList<>();
-			Tokenizer t = new Tokenizer().defaultC2C(0);
-			while (true) {
-				String input = UIUtil.userInput("> ");
+			shinyTask = PeriodicTask.loop(() -> {
+				CharList sb1 = IOUtil.getSharedCharBuf().append("\u001b7\u001b[?25l\u001b[1;1H\u001b[2K");
+				CLIUtil.MinecraftColor.sonic(slogan, sb1);
+				sb1.append("\u001b8\u001b[?25h");
+				CLIUtil.sysOut.print(sb1);
+			}, 1000 / 60, 9999);
 
-				try {
-					t.init(shortcuts.getOrDefault(input, input));
-					tmp.clear();
-					while (t.hasNext()) {
-						tmp.add(t.next().val());
-					}
+			System.out.println();
+			CLIUtil.info("使用Tab补全指令、或按下F1查看帮助");
+			System.out.println();
 
-					main(tmp.toArray(new String[tmp.size()]));
-				} catch (Throwable e) {
-					e.printStackTrace();
-				}
-			}
+			CLIUtil.setConsole(c);
+
+			// only non-daemon thread
+			LockSupport.park();
+		} else {
+			c.executeCommand(TextUtil.join(Arrays.asList(args), " "));
 		}
-
-		if (shinyTask != null) {
-			shinyTask.cancel();
-		}
-
-		long startTime = System.currentTimeMillis();
-		int exitCode = 0;
-
-		switch (args[0]) {
-			case "sd": case "stackdeobf":
-				exitCode = stackDeobf();
-				break;
-			case "b": case "build":
-				exitCode = build(buildArgs(args));
-				break;
-			case "r": case "run":
-				exitCode = run(buildArgs(args));
-				break;
-			case "p": case "project":
-				exitCode = _project(args, project);
-				break;
-			case "e": case "edit":
-				exitCode = _edit(args);
-				break;
-			case "d": case "deobf":
-				exitCode = deobf(args, false);
-				break;
-			case "reobf":
-				exitCode = deobf(args, true);
-				break;
-			case "ref": case "reflect":
-				ReflectTool.start(!isCLI);
-				break;
-			case "at": case "preAT":
-				exitCode = preAT();
-				break;
-			case "a": case "auto":
-				assert isCLI;
-				if (args.length < 2) {
-					System.out.println("auto <true/false>");
-					break;
-				}
-				AutoCompile.setEnabled(Boolean.parseBoolean(args[1]));
-				break;
-			case "k": case "kill":
-				assert isCLI;
-				if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
-					MCLauncher.task.cancel(true);
-				}
-				break;
-			case "res": case "restart":
-				main(new String[] {"kill"});
-				main(new String[] {"run zl"});
-				break;
-			case "gc":
-				long used = Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory();
-				ATHelper.close();
-				System.runFinalization();
-				System.gc();
-				System.runFinalization();
-				System.out.println("释放了 " + TextUtil.scaledNumber(used-(Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory())) + "B内存.");
-				break;
-			default: CmdUtil.warning("参数错误");
-		}
-
-		if (isCLI) return;
-
-		long costTime = System.currentTimeMillis() - startTime;
-		CmdUtil.info("主线程运行时长" + (costTime / 1000d));
-
-		if (exitCode != 0) System.exit(exitCode);
 	}
 
-	private static final Pattern EXCEPTION_PATTERN = Pattern.compile("at ([a-zA-Z\\d\\-_.]+)\\(.+?(?::\\d+)?\\)");
-	private static int stackDeobf() throws IOException {
-		System.out.println("输入任意数据，并以END终止");
-
-		Shared.loadMapper();
-		CharList out = IOUtil.getSharedCharBuf();
-		while (true) {
-			String line = UIUtil.in.readLine();
-			if (line == null || line.equals("END")) break;
-
-			Matcher exc = EXCEPTION_PATTERN.matcher(line);
-			if (exc.matches()) {
-				String data = line.substring(exc.start(1), exc.end(1));
-
-				int i = data.lastIndexOf('.');
-				String clazz = data.substring(0, i).replace('.', '/');
-				String method = data.substring(i +1);
-
-				clazz = mapperFwd.getClassMap().flip().getOrDefault(clazz, clazz);
-				String methodA = method;
-				for (Map.Entry<Desc, String> entry : mapperFwd.getMethodMap().entrySet()) {
-					if (entry.getValue().equals(method)) {
-						Desc d = entry.getKey();
-						if (d.owner.equals(clazz)) {
-							methodA = d.name;
-							break;
-						} else {
-							methodA = d.name;
-						}
-					}
-				}
-
-				out.append(line, 0, exc.start(1)).append(clazz).append('.').append(methodA).append('\n');
-			} else {
-				out.append(line).append('\n');
-			}
-		}
-
-		System.out.print(out);
-		return 0;
-	}
-
-	private static void showAbout() {
-		ImageIcon icon = null;
-		try {
-			InputStream iin = FMDMain.class.getClassLoader().getResourceAsStream("qrcode.png");
-			if (iin != null) icon = new ImageIcon(ImageIO.read(iin));
-		} catch (IOException ignored) {}
-
-		JOptionPane.showMessageDialog(null,
-			"FMD - 快速mod开发环境 - 作者 Roj234\n" +
-				VERSION + "\n" +
-				"\n" +
-				"  优化处理流程,提高速度\n" +
-				"  修复部分bug\n", "扫码支持我", INFORMATION_MESSAGE, icon);
-	}
-
-	// 在运行名称集和开发名称集中转换
-	// 参数：[deobf a a的前置 a的前置的前置...]
-	public static int deobf(String[] args, boolean reverse) throws IOException {
-		List<File> files = new SimpleList<>();
-
-		for (int i = 1; i < args.length; i++) files.add(new File(args[i]));
-		if (files.isEmpty()) {
-			if (noGUI) {
-				files = Collections.singletonList(UIUtil.readFile("文件"));
-			} else {
-				JFileChooser fc = new JFileChooser(BASE);
-				fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
-
-				while (true) {
-					int status = fc.showOpenDialog(null);
-					if (status == JFileChooser.APPROVE_OPTION) {
-						files.add(fc.getSelectedFile());
-						if (JOptionPane.showConfirmDialog(null, "有前置吗?", "询问", YES_NO_OPTION) == NO_OPTION) {
-							break;
-						}
-					} else {
-						break;
-					}
-				}
-			}
-		}
-
-		loadMapper();
-		ConstMapper m = reverse ? mapperFwd : loadReverseMapper();
-		m.getExtendedSuperList().clear();
-
-		MyHashMap<String, byte[]> res = new MyHashMap<>(100);
-
-		for (int i = files.size() - 1; i >= 0; i--) {
-			File file = files.get(i);
-			List<Context> list = Context.fromZip(file, StandardCharsets.UTF_8, res);
-
-			String path = file.getAbsolutePath();
-			int index = path.lastIndexOf('.');
-			File out = index == -1 ? new File(path + "-结果") : new File(path.substring(0, index) + "-结果.jar");
-			ZipFileWriter zfw = new ZipFileWriter(out);
-
-			AsyncTask<Void> resTask = new AsyncTask<>(new ResWriter(zfw, res));
-			Task.pushTask(resTask);
-
-			m.remap(DEBUG, list);
-			m.getExtendedSuperList().add(m.snapshot(null));
-
-			if (doMapClassName) new CodeMapper(m).remap(DEBUG, list);
-
-			try {
-				resTask.get();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-
-			for (int j = 0; j < list.size(); j++) {
-				Context ctx = list.get(j);
-				zfw.writeNamed(ctx.getFileName(), ctx.get());
-			}
-			zfw.finish();
-
-			res.clear();
-		}
-
-		CmdUtil.success("操作成功完成");
-
-		return 0;
-	}
-
-	public static int preAT() throws IOException {
+	public static void preAT() {
 		// 关闭文件监控
 		watcher.removeAll();
 
@@ -321,18 +191,13 @@ public final class FMDMain {
 		readTextList((s) -> {
 			int i = s.indexOf(' ');
 			if (i < 0) {
-				CmdUtil.warning("Unknown entry " + s);
+				CLIUtil.warning("Unknown entry " + s);
 				return;
 			}
 			ATList.add(s.substring(0,i), s.substring(i+1));
 		}, "预AT.编译期");
 		for (CEntry ce : CONFIG.getDot("预AT.编译期+运行期").asMap().values()) {
 			if (ce.getType() == Type.MAP) loadATMap(ce.asMap(), true);
-		}
-
-		if (map.isEmpty()) {
-			CmdUtil.info("没有AT");
-			return 0;
 		}
 
 		try (ZipOutput zo = new ZipOutput(new File(BASE, "class/"+MC_BINARY+".jar"))) {
@@ -353,18 +218,19 @@ public final class FMDMain {
 				if (atBackup.getEntries().containsKey(mod.getName())) continue;
 
 				// 追加新的
-				atBackup.putStream(mod.getName(), mcBin.getStream(mod.getName()), true);
+				atBackup.putStream(mod.getName(), mcBin.getInput(mod.getName()), true);
 			}
 			for (String name : removable) atBackup.put(name, null);
 			atBackup.store();
 
 			// 应用修改
 			zo.end();
+		} catch (IOException e) {
+			e.printStackTrace();
+			return;
 		}
 
-		CmdUtil.success("操作成功完成");
-
-		return 0;
+		CLIUtil.success("操作成功完成");
 	}
 
 	// region PreAT.Util
@@ -404,58 +270,10 @@ public final class FMDMain {
 
 	// endregion
 
-	public static int _edit(String[] args) throws IOException {
-		List<File> files = getProjectJson(args);
-
-		File selected = files.get(UIUtil.selectOneFile(files, "配置文件"));
-
-		Project conf = Project.load(selected.getName().substring(0, selected.getName().lastIndexOf('.')));
-		ConfigEditWindow.open(conf, null);
-		return 0;
-	}
-
-	public static int _project(String[] args, Project p) throws IOException {
-		List<File> files = getProjectJson(args);
-
-		CmdUtil.info("当前的配置文件: " + (p == null ? "无" : p.getFile()));
-		System.out.println();
-
-		if (files.isEmpty()) {
-			CmdUtil.info("没有配置文件! 创建默认配置...");
-			String name = UIUtil.userInput("新模组的modid");
-			ConfigEditWindow.open(Project.load(name), null);
-			files.add(new File(CONFIG_DIR, name+".json"));
-		}
-
-		File selected = files.get(UIUtil.selectOneFile(files, "配置文件"));
-
-		Shared.setProject(selected.getName().substring(0, selected.getName().lastIndexOf('.')));
-		CmdUtil.success("配置文件已选择: " + selected);
-
-		return 0;
-	}
-
-	// region EditConfig.Util
-
-	private static List<File> getProjectJson(String[] args) {
-		List<File> files;
-		if (args.length > 1) {
-			files = Collections.singletonList(new File(CONFIG_DIR, args[1]+".json"));
-		} else {
-			files = IOUtil.findAllFiles(CONFIG_DIR, (f) -> {
-				String name = f.getName().toLowerCase();
-				return name.endsWith(".json");
-			});
-		}
-		return files;
-	}
-
-	// endregion
-
 	public static int run(Map<String, Object> args) throws IOException {
 		MCLauncher.load();
 		if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
-			if (UIUtil.readBoolean("是否结束游戏进程?")) {
+			if (CLIUtil.readBoolean("是否结束游戏进程?")) {
 				MCLauncher.task.cancel(true);
 				MCLauncher.task = null;
 			} else {
@@ -465,13 +283,13 @@ public final class FMDMain {
 
 		CMapping mc_conf = MCLauncher.config.get("mc_conf").asMap();
 		if (mc_conf.size() == 0) {
-			CmdUtil.error("启动配置不存在，请重新setup");
+			CLIUtil.error("启动配置不存在，请重新setup");
 			return -1;
 		}
 
 		File dest = new File(mc_conf.getString("root") + "/mods/");
 		if (!dest.isDirectory() && !dest.mkdirs()) {
-			CmdUtil.warning("无法创建mods文件夹");
+			CLIUtil.warning("无法创建mods文件夹");
 			return -1;
 		}
 
@@ -505,7 +323,7 @@ public final class FMDMain {
 				mc_conf.put("__hr_patched", 1);
 			}
 
-			if (DEBUG) CmdUtil.info("重载工具已在端口 " + port + " 上启动");
+			if (DEBUG) CLIUtil.info("重载工具已在端口 " + port + " 上启动");
 		}
 
 		MCLauncher.clearLogs(null);
@@ -535,7 +353,7 @@ public final class FMDMain {
 		List<ConstantData> modified = Helpers.cast(args.get("$$HR$$"));
 		if (modified != null && !modified.isEmpty()) {
 			hotReload.sendChanges(modified);
-			if (DEBUG) CmdUtil.success("发送重载请求");
+			if (DEBUG) CLIUtil.success("发送重载请求");
 		}
 
 		return v;
@@ -565,7 +383,7 @@ public final class FMDMain {
 		if ((flag & 2) == 0) {
 			for (Project proj : p.getAllDependencies()) {
 				if (compile(args, proj, jarDest, flag | 2) < 0) {
-					CmdUtil.info("前置编译失败");
+					CLIUtil.info("前置编译失败");
 					return -1;
 				}
 			}
@@ -578,7 +396,7 @@ public final class FMDMain {
 
 		File source = p.srcPath;
 		if (!source.isDirectory()) {
-			CmdUtil.warning("源码目录 " + source.getAbsolutePath() + " 不存在");
+			CLIUtil.warning("源码目录 " + source.getAbsolutePath() + " 不存在");
 			return -1;
 		}
 
@@ -623,7 +441,7 @@ public final class FMDMain {
 								return -1;
 							}
 
-							CmdUtil.warning("找到AT注解, 使用全量编译");
+							CLIUtil.warning("找到AT注解, 使用全量编译");
 							files = IOUtil.findAllFiles(source, FileFilter.INST.reset(0, FileFilter.F_SRC_ANNO));
 							increment = false;
 							break;
@@ -645,7 +463,7 @@ public final class FMDMain {
 			p.registerWatcher();
 			if (increment) {
 				if (!jarFile.isFile()) {
-					CmdUtil.warning("请手动全量编译");
+					CLIUtil.warning("请手动全量编译");
 					return -1;
 				}
 
@@ -656,14 +474,14 @@ public final class FMDMain {
 					p.getResourceTask(stamp).execute();
 				}
 
-				if ((flag & 3) == 0) CmdUtil.info("更新了资源(若有)");
+				if ((flag & 3) == 0) CLIUtil.info("更新了资源(若有)");
 			} else {
-				if ((flag & 3) == 0) CmdUtil.info("无源文件");
+				if ((flag & 3) == 0) CLIUtil.info("无源文件");
 			}
 			try {
 				executeCommand(p, BASE);
 			} catch (IOException e) {
-				CmdUtil.warning("无法执行指令", e);
+				CLIUtil.warning("无法执行指令", e);
 			}
 			return 0;
 		}
@@ -672,7 +490,7 @@ public final class FMDMain {
 
 		if (!FileFilter.cmtEntries.isEmpty()) {
 			if (p.atName.isEmpty()) {
-				CmdUtil.error(p.name + " 使用了AT注解,请设置AT配置的存放位置");
+				CLIUtil.error(p.name + " 使用了AT注解,请设置AT配置的存放位置");
 				return -1;
 			}
 
@@ -749,7 +567,7 @@ public final class FMDMain {
 			try {
 				writeRes.get();
 			} catch (Exception e) {
-				CmdUtil.warning("资源写入失败", e);
+				CLIUtil.warning("资源写入失败", e);
 			}
 
 			if (DEBUG) System.out.println("编译完成 " + (System.currentTimeMillis() - time));
@@ -761,7 +579,7 @@ public final class FMDMain {
 			for (int i = 0; i < outputs.size(); i++) {
 				ByteListOutput out = outputs.get(i);
 				if (resources.remove(out.getName()) != null) {
-					CmdUtil.warning("资源与类重复 " + out.getName());
+					CLIUtil.warning("资源与类重复 " + out.getName());
 				}
 
 				list.set(i, new Context(out.getName(), out.getOutput()));
@@ -773,7 +591,7 @@ public final class FMDMain {
 			try {
 				stampZip.begin(!increment);
 			} catch (Throwable e) {
-				CmdUtil.warning("压缩文件有错误,请尝试全量", e);
+				CLIUtil.warning("压缩文件有错误,请尝试全量", e);
 				return -1;
 			}
 
@@ -803,7 +621,7 @@ public final class FMDMain {
 					if (!isOpen) mzf.closeFile();
 				}
 			} catch (Throwable e) {
-				CmdUtil.warning("压缩文件有错误,请尝试全量", e);
+				CLIUtil.warning("压缩文件有错误,请尝试全量", e);
 			} finally {
 				stampZip.end();
 			}
@@ -819,21 +637,16 @@ public final class FMDMain {
 
 			// region 映射
 
-			List<State> depStates = mapperFwd.getExtendedSuperList();
-			depStates.clear();
-			for (int i = 0; i < dependencies.size(); i++) {
-				depStates.add(dependencies.get(i).state);
-			}
+			List<State> libs = mapperFwd.getSeperatedLibraries(); libs.clear();
+			for (int i = 0; i < dependencies.size(); i++) libs.add(dependencies.get(i).state);
 
 			if (canIncrementWrite) {
-				mapperFwd.state(p.state);
-				mapperFwd.remapIncrement(list);
+				libs.add(p.state);
+				mapperFwd.mapIncr(list);
 			} else {
-				mapperFwd.remap(false, list);
+				mapperFwd.map(list);
 			}
 			p.state = mapperFwd.snapshot(p.state);
-
-			if (doMapClassName) new CodeMapper(mapperFwd).remap(false, list);
 
 			pc = new PluginContext();
 			for (int i = 0; i < plugins.size(); i++) {
@@ -866,7 +679,7 @@ public final class FMDMain {
 					}
 				}
 			} catch (Throwable e) {
-				CmdUtil.error("write error", e);
+				CLIUtil.error("write error", e);
 				return -1;
 			} finally {
 				zo1.end();
@@ -874,9 +687,9 @@ public final class FMDMain {
 
 			// endregion
 
-			CmdUtil.success("编译成功! " + (System.currentTimeMillis() - time) + "ms");
+			CLIUtil.success("编译成功! " + (System.currentTimeMillis() - time) + "ms");
 
-			if (!p.binJar.setLastModified(args.containsKey("dbg-nots") ? stamp : time)) {
+			if (!args.containsKey("noupdate") && !p.binJar.setLastModified(time)) {
 				throw new IOException("设置时间戳失败!");
 			}
 
@@ -885,12 +698,11 @@ public final class FMDMain {
 			try {
 				executeCommand(p, BASE);
 			} catch (IOException e) {
-				CmdUtil.warning("无法执行指令", e);
+				CLIUtil.warning("无法执行指令", e);
 			}
 
 			return 1;
 		} else if (!args.containsKey("zl")) {
-			// todo test
 			AutoCompile.setEnabled(false);
 		}
 
@@ -914,7 +726,7 @@ public final class FMDMain {
 	private static boolean ensureWritable(File jarFile) {
 		int amount = 30 * 20;
 		while (jarFile.isFile() && !IOUtil.checkTotalWritePermission(jarFile) && amount > 0) {
-			if ((amount % 100) == 0) CmdUtil.warning("输出jar已被锁定, 请在30秒内解除对它的锁定，否则编译无法继续");
+			if ((amount % 100) == 0) CLIUtil.warning("输出jar已被锁定, 请在30秒内解除对它的锁定，否则编译无法继续");
 			LockSupport.parkNanos(50_000_000L);
 			amount--;
 		}
@@ -941,13 +753,13 @@ public final class FMDMain {
 				continue;
 			}
 			try (ZipFile zf = new ZipFile(file)) {
-				if (zf.size() == 0) CmdUtil.warning(file.getPath() + " 是空的");
+				if (zf.size() == 0) CLIUtil.warning(file.getPath() + " 是空的");
 			} catch (Throwable e) {
-				CmdUtil.error(file.getPath() + " 不是ZIP压缩文件", e);
+				CLIUtil.error(file.getPath() + " 不是ZIP压缩文件", e);
 				if (!file.renameTo(new File(file.getAbsolutePath() + ".err"))) {
 					throw new RuntimeException("未指定的I/O错误");
 				} else {
-					CmdUtil.info("文件已被自动重命名为.err");
+					CLIUtil.info("文件已被自动重命名为.err");
 				}
 			}
 
@@ -960,15 +772,6 @@ public final class FMDMain {
 
 	// endregion
 	// region Common
-	private static Map<String, Object> buildArgs(String[] args) {
-		// args: dbg-nots showErrorCode zl
-		MyHashMap<String, Object> ojbk = new MyHashMap<>(args.length);
-		for (String arg : args) {
-			ojbk.put(arg, null);
-		}
-		return ojbk;
-	}
-
 	public static void readTextList(Consumer<String> set, String key) {
 		CEntry m = CONFIG.getDot(key);
 		if (m.getType() == Type.LIST) {

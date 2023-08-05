@@ -13,34 +13,20 @@ import java.io.*;
  * @since 2023/3/17 0017 23:30
  */
 public interface BinaryParser {
-	default CEntry parseRaw(File file) throws IOException, ParseException {
-		return parseRaw(file, 0);
-	}
-	default CEntry parseRaw(File file, int flag) throws IOException, ParseException {
-		return parseRaw(new ToEntry(), file, flag).get();
-	}
+	default CEntry parseRaw(File file) throws IOException, ParseException { return parseRaw(file, 0); }
+	default CEntry parseRaw(File file, int flag) throws IOException, ParseException { return parseRaw(new ToEntry(), file, flag).get(); }
 	default <T extends CVisitor> T parseRaw(T cc, File file, int flag) throws IOException, ParseException {
-		try (FileInputStream in = new FileInputStream(file)) {
+		try (DataInputStream in = new DataInputStream(new FileInputStream(file))) {
 			return parseRaw(cc, in, flag);
 		}
 	}
 
-	default CEntry parseRaw(DynByteBuf buf) throws IOException, ParseException {
-		return parseRaw(buf, 0);
-	}
-	default CEntry parseRaw(DynByteBuf buf, int flag) throws IOException, ParseException {
-		return parseRaw(new ToEntry(), buf, flag).get();
-	}
-	default <T extends CVisitor> T parseRaw(T cc, DynByteBuf buf, int flag) throws IOException, ParseException {
-		return parseRaw(cc, buf.asInputStream(), flag);
-	}
+	default CEntry parseRaw(DynByteBuf buf) throws IOException, ParseException { return parseRaw(buf, 0); }
+	default CEntry parseRaw(DynByteBuf buf, int flag) throws IOException, ParseException { return parseRaw(new ToEntry(), buf, flag).get(); }
+	default <T extends CVisitor> T parseRaw(T cc, DynByteBuf buf, int flag) throws IOException, ParseException { return parseRaw(cc, buf.asInputStream(), flag); }
 
-	default CEntry parseRaw(InputStream in) throws IOException, ParseException {
-		return parseRaw(in, 0);
-	}
-	default CEntry parseRaw(InputStream in, int flag) throws IOException, ParseException {
-		return parseRaw(new ToEntry(), in, flag).get();
-	}
+	default CEntry parseRaw(InputStream in) throws IOException, ParseException { return parseRaw(in, 0); }
+	default CEntry parseRaw(InputStream in, int flag) throws IOException, ParseException { return parseRaw(new ToEntry(), in, flag).get(); }
 	<T extends CVisitor> T parseRaw(T cc, InputStream in, int flag) throws IOException, ParseException;
 
 	void serialize(CEntry entry, DynByteBuf out) throws IOException;

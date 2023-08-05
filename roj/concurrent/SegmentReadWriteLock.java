@@ -1,6 +1,10 @@
 package roj.concurrent;
 
+import javax.annotation.Nonnull;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.AbstractQueuedSynchronizer;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
 
 /**
  * @author Roj234
@@ -9,13 +13,58 @@ import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 public final class SegmentReadWriteLock extends AbstractQueuedSynchronizer {
 	private volatile boolean writeLockPending;
 
+	public void lockAll() { acquire(0); }
+	public boolean tryLockAll() { return tryAcquire(0); }
+	public void unlockAll() { release(0); }
 
-	public void lock() { acquire(0); }
-	public boolean tryLock() { return tryAcquire(0); }
-	public void unlock() { release(0); }
 	public void lock(int slot) { acquireShared(slot); }
 	public boolean tryLock(int slot) { return _tryLockShared(slot, 1) > 0; }
 	public void unlock(int slot) { releaseShared(slot); }
+
+	public Lock asWriteLock() { return new SubLock(-1); }
+	public Lock asReadLock(int slot) { return new SubLock(slot); }
+
+	final class SubLock implements Lock {
+		private final int slot;
+
+		SubLock(int slot) { this.slot = slot; }
+
+		@Override
+		public void lock() {
+			if (slot < 0) acquire(0);
+			else acquireShared(slot);
+		}
+
+		@Override
+		public void lockInterruptibly() throws InterruptedException {
+			if (slot < 0) acquireInterruptibly(0);
+			else acquireSharedInterruptibly(slot);
+		}
+
+		@Override
+		public boolean tryLock() {
+			if (slot < 0) return tryAcquire(0);
+			else return tryAcquireShared(slot) >= 0;
+		}
+
+		@Override
+		public boolean tryLock(long time, @Nonnull TimeUnit unit) throws InterruptedException {
+			if (slot < 0) return tryAcquireNanos(0, unit.toNanos(time));
+			else return tryAcquireSharedNanos(slot, unit.toNanos(time));
+		}
+
+		@Override
+		public void unlock() {
+			if (slot < 0) release(0);
+			else releaseShared(slot);
+		}
+
+		@Nonnull
+		@Override
+		public Condition newCondition() {
+			return SegmentReadWriteLock.this.newCondition();
+		}
+	}
 
 	// write lock
 	protected final boolean tryAcquire(int acquires) {
@@ -87,9 +136,7 @@ public final class SegmentReadWriteLock extends AbstractQueuedSynchronizer {
 		return getExclusiveOwnerThread() == Thread.currentThread();
 	}
 
-	public final ConditionObject newCondition() {
-		return new ConditionObject();
-	}
+	public final ConditionObject newCondition() { return new ConditionObject(); }
 
 	final Thread getOwner() {
 		// Must read state before owner to ensure memory consistency

@@ -9,13 +9,13 @@ import java.nio.channels.Selector;
  * @since 2022/1/24 11:55
  */
 public interface Selectable {
-	default void tick(int elapsed) throws IOException {}
+	default void tick(int elapsed) throws Exception {}
 
 	default boolean isClosedOn(SelectionKey key) {
 		return !key.isValid();
 	}
 
-	default void close() throws IOException {}
+	default void close() throws Exception {}
 
 	void selected(int readyOps) throws Exception;
 

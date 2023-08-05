@@ -6,8 +6,7 @@ import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.math.Version;
 import roj.mod.mapping.VersionRange;
-import roj.ui.CmdUtil;
-import roj.ui.UIUtil;
+import roj.ui.CLIUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,23 +43,23 @@ class InputDelegate {
 			}
 		}
 
-		CmdUtil.info("有多个 Mapping , 请选择(输入编号)");
+		CLIUtil.info("有多个 Mapping , 请选择(输入编号)");
 
 		for (int i = 0; i < list.size(); i++) {
 			String name = list.get(i).getString("title");
-			CmdUtil.fg(CmdUtil.Color.WHITE, (i & 1) == 1);
+			CLIUtil.fg(CLIUtil.WHITE, (i & 1) == 1);
 			System.out.println(i + ". " + name);
-			CmdUtil.reset();
+			CLIUtil.reset();
 		}
 
-		return list.get(UIUtil.getNumberInRange(0, list.size()));
+		return list.get(CLIUtil.getNumberInRange(0, list.size()));
 	}
 
 	String getMinecraftVersionForMCP() throws IOException {
-		return UIUtil.userInput("不知道MCP的版本号,使用" + version + "需修改请输入并按回车: ");
+		return CLIUtil.userInput("不知道MCP的版本号,使用" + version + "需修改请输入并按回车: ");
 	}
 
 	String getMCPVersion() throws IOException {
-		return UIUtil.userInput("MCP");
+		return CLIUtil.userInput("MCP");
 	}
 }

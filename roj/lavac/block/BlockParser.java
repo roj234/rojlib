@@ -3,26 +3,25 @@ package roj.lavac.block;
 import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.asm.Opcodes;
 import roj.asm.cst.Constant;
-import roj.asm.frame.MethodPoet.Variable;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.anno.AnnVal;
-import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrLavaSpec;
-import roj.asm.tree.insn.NPInsnNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.util.ExceptionEntryCWP;
+import roj.asm.type.TypeCast;
+import roj.asm.util.TryCatchEntry;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.SwitchSegment;
+import roj.asm.visitor.XAttrCode;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.ParseException;
 import roj.config.word.NotStatementException;
 import roj.config.word.Word;
 import roj.lavac.CompilerConfig;
-import roj.lavac.expr.ASTNode;
+import roj.lavac.asm.Variable;
 import roj.lavac.expr.Binary;
 import roj.lavac.expr.ExprParser;
 import roj.lavac.parser.*;
@@ -33,6 +32,7 @@ import javax.tools.Diagnostic;
 import java.util.Collections;
 import java.util.List;
 
+import static roj.asm.Opcodes.*;
 import static roj.lavac.parser.JavaLexer.*;
 
 /**
@@ -43,16 +43,16 @@ import static roj.lavac.parser.JavaLexer.*;
  */
 public class BlockParser {
 	JavaLexer wr;
-	MethodPoetL mw;
 	CompileContext ctx;
 	CompileUnit file;
+	MethodWriterL cw;
 	int type;
 
 	private final int depth;
 	private ExprParser ep;
 
-	public BlockParser(MethodPoetL ctx) {
-		this.mw = ctx;
+	public BlockParser(MethodWriterL ctx) {
+		this.cw = ctx;
 		this.depth = -1;
 		this.wr = new JavaLexer();
 	}
@@ -76,9 +76,8 @@ public class BlockParser {
 		this.variableAdded.clear();
 		this.sectionFlag = 0;
 
-		this.varId = 0;
-		this.returnHookNode = null;
-		this.returnHookNodeRef = 0;
+		this.returnHook = null;
+		this.returnHookUsed = 0;
 
 		this.labelAdded.clear();
 		this.labels.clear();
@@ -96,12 +95,12 @@ public class BlockParser {
 		wr = u.getLexer();
 		wr.index = start;
 		type = 0;
-		mw = new MethodPoetL(mn);
+		cw = new MethodWriterL(mn);
 	}
 
 	/// region 解析
 
-	public void parseStaticInit(CompileUnit file, AttrCode attr, int begin, int end) throws ParseException {
+	public void parseStaticInit(CompileUnit file, XAttrCode attr, int begin, int end) throws ParseException {
 		ctx = file.ctx();
 		this.file = file;
 		this.wr = file.getLexer();
@@ -109,7 +108,7 @@ public class BlockParser {
 		parse0();
 	}
 
-	public void parseGlobalInit(CompileUnit file, AttrCode attr, int begin, int end) throws ParseException {
+	public void parseGlobalInit(CompileUnit file, XAttrCode attr, int begin, int end) throws ParseException {
 		ctx = file.ctx();
 		this.file = file;
 		this.wr = file.getLexer();
@@ -117,7 +116,7 @@ public class BlockParser {
 		parse0();
 	}
 
-	public void parseMethod(CompileUnit file, AttrCode attr, List<String> names, int begin, int end) throws ParseException {
+	public void parseMethod(CompileUnit file, XAttrCode attr, List<String> names, int begin, int end) throws ParseException {
 		ctx = file.ctx();
 		this.file = file;
 		this.wr = file.getLexer();
@@ -237,52 +236,25 @@ public class BlockParser {
 						_onError(w, "not_statement");
 					}
 					return;
-				case CONTINUE:
-				case BREAK:
-					_break(w.type() == BREAK);
-					break;
-				case GOTO:
-					_goto();
-					break;
-				case SWITCH:
-					_switch();
-					break;
-				case RETURN:
-					_return();
-					break;
-				case FOR:
-					_for();
-					break;
-				case WHILE:
-					_while();
-					break;
+				case CONTINUE: case BREAK: _break(w.type() == BREAK); break;
+				case JavaLexer.GOTO: _goto(); break;
+				case SWITCH: _switch(); break;
+				case JavaLexer.RETURN: _return(); break;
+				case FOR: _for(); break;
+				case WHILE: _while(); break;
+				case THROW: _throw(); break;
+				case IF: _if(); break;
+				case DO: _doWhile(); break;
+				case TRY: _try(); break;
+				case SYNCHRONIZED: _sync(); break;
+				case semicolon: _onWarning(w, "statement.empty"); break;
+				case left_l_bracket: block(); except(right_l_bracket); break;
+
 				case Word.LITERAL:
 					if (exprDefineLabel(w))
 						// 不清理label
 						// label由变量定义块处理
 						return;
-					break;
-				case THROW:
-					_throw();
-					break;
-				case IF:
-					_if();
-					break;
-				case DO:
-					_do();
-					break;
-				case TRY:
-					_try();
-					break;
-				case SYNCHRONIZED:
-					_sync();
-					break;
-				case semicolon:
-					_onWarning(w, "statement.empty");
-					break;
-				case left_l_bracket:
-					block();
-					except(right_l_bracket);
 					break;
 				case INT:
 				case LONG:
@@ -297,9 +269,9 @@ public class BlockParser {
 					break;
 				default:
 					wr.retractWord();
-					ASTNode expr = ep.read(file, 0);
+					ExprNode expr = ep.parse(file, 0);
 					if (expr != null) {
-						expr.write(mw, true);
+						expr.write(cw, true);
 						except(semicolon);
 					}
 					break;
@@ -311,36 +283,48 @@ public class BlockParser {
 		labelBeforeLoop = null;
 	}
 
+	private Variable tmpVar(String desc, int type) {
+		return new Variable(desc, type==Type.CLASS?new Type("java/lang/Object"):Type.std(type));
+	}
+
 	private void _sync() throws ParseException {
 		except(left_s_bracket);
 
-		ASTNode expr = ep.read(file, 0);
+		ExprNode expr = ep.parse(file, ExprParser.STOP_RSB|ExprParser.SKIP_RSB);
 		if (expr == null) {
 			wr.retractWord();
 			_onError(wr.next(), "statement.empty");
 			return;
 		}
+		expr.write(cw, false);
 
-		Variable v0 = new Variable("s."+ varId++);
-		expr.write(mw, false);
+		Variable v0 = tmpVar("_synchronize_helper_", Type.CLASS);
 
-		except(right_s_bracket);
+		cw.one(DUP);
+		cw.store(v0);
+		cw.one(MONITORENTER);
 
-		Label bStr = mw.dup().store(v0).node(NPInsnNode.of(Opcodes.MONITORENTER)).label();
+		Label start = cw.label();
 
 		except(left_s_bracket);
 		block();
 		except(right_s_bracket);
 
-		Label bEnd = mw.label();
-		Label end = new Label();
+		Label end = cw.label();
+		Label realEnd = new Label();
 
-		Label proc = mw.goto1(end).label();
-		mw.load(v0).node(NPInsnNode.of(Opcodes.MONITOREXIT)).throw1();
+		cw.jump(Opcodes.GOTO, realEnd);
 
-		mw.addException(bStr,bEnd,proc,(String)null);
+		Label exception = cw.label();
+		cw.load(v0);
+		cw.one(MONITOREXIT);
+		cw.one(ATHROW);
 
-		mw.node(end).load(v0).node(NPInsnNode.of(Opcodes.MONITOREXIT));
+		cw.label(realEnd);
+		cw.load(v0);
+		cw.one(MONITOREXIT);
+
+		cw.addException(start,end,exception, TryCatchEntry.ANY);
 	}
 
 	/**
@@ -348,26 +332,31 @@ public class BlockParser {
 	 */
 	private void _return() throws ParseException {
 		Word w = wr.next();
-		if (depth == -1) {
-			_onError(w, "return.on_top");
-		}
+		if (depth == -1) _onError(w, "return.on_top");
+
+		ExprNode expr = null;
+		Type rt = cw.method.returnType();
 
 		if (w.type() != semicolon) {
 			wr.retractWord();
-			ASTNode expr = ep.read(file, 0);
-			if (expr == null) {
-				_onError(w, "return.unexpected");
-				return;
-			}
 
-			expr.write(mw, false);
+			expr = ep.parse(file, ExprParser.STOP_SEMICOLON);
+			assert expr != null;
+			expr.write(cw, false);
+
 			except(semicolon);
 		}
 
-		if (returnHookNode != null) {
-			mw.goto1(returnHookNode);
+		TypeCast result = cw.checkCast(expr == null ? Type.std(Type.VOID) : expr.type(), rt);
+		if (result.type < 0) {
+			// todo
+		}
+
+		if (returnHook != null) {
+			cw.jump(Opcodes.GOTO, returnHook);
+			returnHookUsed++;
 		} else {
-			mw.return1();
+			cw.one(rt.shiftedOpcode(IRETURN));
 		}
 
 		_assertBlockEnd();
@@ -383,11 +372,9 @@ public class BlockParser {
 	// endregion
 	// region 条件
 
-	private int varId;
-
 	// finally的return之前的hook
-	private Label returnHookNode;
-	private int returnHookNodeRef;
+	private Label returnHook;
+	private int returnHookUsed;
 
 	// 记录当前代码块增加的label, 以便超出作用域之后移除
 	private final SimpleList<List<String>> labelAdded = new SimpleList<>();
@@ -402,29 +389,27 @@ public class BlockParser {
 		if (labels.containsKey(val)) return false;
 		if (labelAdded.size() > 0) labelAdded.get(labelAdded.size()-1).add(val);
 
-		labels.put(val, labelBeforeLoop = new LabelInfo(mw.label()));
+		labels.put(val, labelBeforeLoop = new LabelInfo(cw.label()));
 		return true;
 	}
 
 	private void _try() throws ParseException {
-		except(left_l_bracket);
-
-		// todo auto-try
-		Label prevRh = returnHookNode;
-		int prevRef = returnHookNodeRef;
-		returnHookNode = new Label();
-		returnHookNodeRef = 0;
+		Label prevHook = returnHook;
+		int prevUse = returnHookUsed;
+		returnHook = new Label();
+		returnHookUsed = 0;
 
 		Label blockEnd = new Label();
 		Label tryBegin = new Label(), tryEnd = new Label();
-		mw.node(tryBegin);
 
+		cw.label(tryBegin);
+		except(left_l_bracket);
 		block();
-
-		boolean hasNormalEnd = mw.node(tryEnd).executable();
-		mw.goto1(blockEnd);
-
 		except(right_l_bracket);
+		cw.label(tryEnd);
+
+		boolean anyNormalFlow = cw.hasNormalEnd(tryEnd);
+		if (anyNormalFlow) cw.jump(Opcodes.GOTO, blockEnd);
 
 		// 1: <any> handler, 2: at least one non <any> handler, 4: autoClose
 		byte flag = 0;
@@ -432,146 +417,175 @@ public class BlockParser {
 		Word w;
 		while (true) {
 			w = wr.next();
-			if (w.type() == CATCH) {
-				if ((flag & 1) != 0) throw wr.err("duplicate:catch");
+			if (w.type() != CATCH) break;
 
-				ExceptionEntryCWP ex = mw.addException(tryBegin,tryEnd,new Label(),null);
+			if ((flag & 1) != 0) throw wr.err("duplicate:catch");
 
-				w = wr.next();
-				switch (w.type()) {
-					case left_s_bracket: // (
-						Type exType = file.resolveType(0).rawType();
-						if (ex.type.equals("java/lang/Throwable")) {
-							flag |= 1;
-						} else {
-							ex.type = exType.owner;
-						}
+			TryCatchEntry ex = cw.addException(tryBegin,tryEnd,null,null);
+			pushVar();
 
-						mw.enterCatcher(ex.type);
-
-						w = wr.next();
-						if (w.type() != Word.LITERAL) throw wr.err("unexpected:" + w);
-						if (variables.containsKey(w.val())) {
-							_onError(w, "variable.exist:"+w.val());
-						}
-						mw.store(new Variable(w.val(), exType));
-
-						except(right_s_bracket);
-						except(left_l_bracket);
-
-						flag |= 2;
-						break;
-					case left_l_bracket: // {
-						if (!ctx.isSpecEnabled(CompilerConfig.SHORT_CATCH))
-							throw wr.err("disabled_spec:short_catch");
-						if ((flag & 2) != 0) throw wr.err("spec.short_catch.has_other_branches");
-						mw.pop1();
+			w = wr.next();
+			switch (w.type()) {
+				case left_s_bracket: // (
+					Type exType = file.resolveType(0).rawType();
+					if (ex.type.equals("java/lang/Throwable")) {
 						flag |= 1;
-						break;
-					default:
-						_onError(w, "unexpected:" + w.val() + ':' + byId(left_s_bracket));
-						wr.retractWord();
-						return;
-				}
+					} else {
+						ex.type = exType.owner;
+					}
 
-				mw.node(ex.handler);
+					w = wr.next();
+					if (w.type() != Word.LITERAL) throw wr.err("unexpected:" + w);
+					if (variables.containsKey(w.val())) _onError(w, "variable.exist:"+w.val());
 
-				block();
-				except(right_l_bracket);
+					cw.store(new Variable(w.val(), exType));
 
-				if (mw.executable())
-					mw.goto1(blockEnd);
-			} else {
+					except(right_s_bracket);
+					except(left_l_bracket);
+
+					flag |= 2;
 				break;
+				case left_l_bracket: // {
+					if (!ctx.isSpecEnabled(CompilerConfig.SHORT_CATCH))
+						throw wr.err("disabled_spec:short_catch");
+					if ((flag & 2) != 0) throw wr.err("spec.short_catch.has_other_branches");
+					cw.one(POP);
+					flag |= 1;
+				break;
+				default:
+					_onError(w, "unexpected:"+w.val()+":( or {");
+					wr.retractWord();
+				return;
+			}
+
+			ex.handler = cw.label();
+
+			block();
+			except(right_l_bracket);
+
+			popVar();
+
+			if (cw.hasNormalEnd()) {
+				cw.jump(Opcodes.GOTO, blockEnd);
+				anyNormalFlow = true;
 			}
 		}
 
-		Label rh = returnHookNode;
-		int ref = returnHookNodeRef;
-		returnHookNode = prevRh;
-		returnHookNodeRef = prevRef;
+		Label hook = returnHook;
+		int used = returnHookUsed;
+		returnHook = prevHook;
+		returnHookUsed = prevUse;
 
 		if (w.type() == FINALLY) {
-			Label finHere = new Label();
-			mw.addException(tryBegin, blockEnd, finHere, ExceptionEntryCWP.ANY);
+			Label finally_handler = new Label();
+			Variable exception = tmpVar("exception", Type.CLASS);
 
-			varId++;
-			Variable exc = new Variable("e."+ varId, null);
+			cw.addException(tryBegin, cw.label(), finally_handler, TryCatchEntry.ANY);
 
 			except(left_l_bracket);
-			if (prevRh == null || !ctx.isSpecEnabled(CompilerConfig.FINALLY_OPTIMIZE)) {
-				int codePos = mw.insn.size();
+
+			if (prevHook == null || !ctx.isSpecEnabled(CompilerConfig.FINALLY_OPTIMIZE)) {
+				int bci = cw.bci();
+
+				// 副本的 3/3: 异常处理
+				int pos = wr.index;
+				cw.label(finally_handler);
+				cw.store(exception);
+				block();
+				if (cw.hasNormalEnd()) {
+					cw.load(exception);
+					cw.one(ATHROW);
+				}
+
+				// if (cw.bci() - bci > 511) throw wr.err("finally_optimize_required");
 
 				// 副本的 1/3: 正常执行(可选)
-				int idx = wr.index;
-				if (hasNormalEnd) {
+				if (anyNormalFlow) {
+					cw.label(blockEnd);
+					wr.index = pos;
 					block();
-					mw.goto1(blockEnd = new Label());
+					cw.jump(blockEnd = new Label());
 				}
 
 				// 副本的 2/3: return劫持
-				if (ref > 0) {
-					wr.index = idx;
-					mw.node(rh).store(exc);
+				if (used > 0) {
+					boolean isVoid = cw.method.returnType().type == VOID;
+					cw.label(hook);
+					if (!isVoid) cw.store(exception);
+					wr.index = pos;
 					block();
-					mw.load(exc).return1();
+					if (cw.hasNormalEnd()) {
+						if (!isVoid) cw.load(exception);
+						cw.one(cw.method.returnType().shiftedOpcode(IRETURN));
+					}
 				}
-
-				// 副本的 3/3: 异常处理
-				wr.index = idx;
-				mw.node(finHere).store(exc);
-				block();
-				if (mw.executable())
-					mw.throw1(exc);
-
-				if (mw.insn.size() - codePos > 1145)
-					throw wr.err("finally_optimize_required");
 			} else {
-				// 空间换空间
-				//int cate;
-				// 0 throw caught
-				// 1 return returns
-				// 2 什么也不做
-				//mixed ret;
-				//Throwable body;
-
-				Variable cate = new Variable("c."+ varId, mw.method.returnType());
-				Variable ret = new Variable("t."+ varId, mw.method.returnType());
-				Label body = new Label();
+				// finally优化
+				Variable category = tmpVar("finally优化|跳转自", Type.INT);
+				Variable return_value = cw.method.returnType().type == VOID ? null : tmpVar("finally优化|返回值", Type.CLASS);
+				Label real_finally_handler = new Label();
 
 				// 副本的 1/3: 正常执行(可选)
-				if (hasNormalEnd) {
-					mw.const1(0).store(cate)
-					  .const1(null).store(ret)
-					  .const1(null).store(exc)
-					  .goto1(body);
+				if (anyNormalFlow) {
+					cw.label(blockEnd);
+					cw.one(ICONST_0);
+					cw.store(category);
+					if (return_value != null) {
+						cw.one(ACONST_NULL);
+						cw.store(return_value);
+					}
+					cw.one(ACONST_NULL);
+					cw.store(exception);
+					cw.jump(real_finally_handler);
 				}
 
 				// 副本的 2/3: return劫持
-				if (returnHookNodeRef > 0) {
-					mw.node(rh).store(ret)
-					  .const1(1).store(cate)
-					  .const1(null).store(exc)
-					  .goto1(body);
+				if (used > 0) {
+					cw.label(hook);
+					if (return_value != null) {
+						cw.store(return_value);
+					}
+					cw.one(ICONST_1);
+					cw.store(category);
+					cw.one(ACONST_NULL);
+					cw.store(exception);
+					cw.jump(real_finally_handler);
 				}
 
-				// 副本的 3/3: 异常处理
-				mw.node(finHere).store(exc)
-				  .const1(2).store(cate)
-				  .const1(null).store(ret)
+				// 副本的 3/3: 异常
+				cw.label(finally_handler);
+				cw.store(exception);
+				cw.one(ICONST_M1);
+				cw.store(category);
+				if (return_value != null) {
+					cw.one(ACONST_NULL);
+					cw.store(return_value);
+				}
 
-				  .node(body);
+				cw.label(real_finally_handler);
 
 				block();
 
-				if (mw.executable()) {
-					Label return__ = new Label();
-					mw.load(cate)
-					  .jump(Opcodes.IFEQ, blockEnd)
-					  .load(cate).const1(1)
-					  .jump(Opcodes.IF_acmpeq, return__)
-					  .load(exc).throw1()
-					  .node(return__).load(ret).return1();
+				// finally可以执行完
+				if (cw.hasNormalEnd()) {
+					Label returnHook = new Label();
+
+					if (anyNormalFlow) {// = 0 : normal execution
+						cw.load(category);
+						cw.jump(IFEQ, blockEnd = new Label());
+					}
+					if (used > 0) {     // > 0 : return hook
+						cw.load(category);
+						cw.jump(IFGT, returnHook);
+					}
+					cw.load(exception);// < 0 : exception
+					cw.one(ATHROW);
+
+					if (used > 0) {
+						cw.label(returnHook);
+						if (return_value != null) cw.load(return_value);
+						cw.one(cw.method.returnType().shiftedOpcode(IRETURN));
+					}
 				}
 			}
 			except(right_l_bracket);
@@ -585,25 +599,22 @@ public class BlockParser {
 			}
 		}
 
-		mw.node(blockEnd);
+		cw.label(blockEnd);
 	}
 
 	/**
 	 * goto <x>
 	 */
 	private void _goto() throws ParseException {
-		Word w = wr.next();
-		if (w.type() == Word.LITERAL) {
-			LabelInfo info = labels.get(w.val());
-			if (info != null && info.head != null) {
-				mw.goto1(info.head);
-			} else {
-				_onError(w, "goto.unknown:" + w.val());
-			}
+		Word w = wr.except(Word.LITERAL);
+		LabelInfo info = labels.get(w.val());
+		if (info != null && info.head != null) {
+			cw.jump(info.head);
 		} else {
-			_onError(w, "goto.illegal_label");
+			_onError(w, "goto.illegal_label:"+w.val());
 		}
 		except(semicolon);
+		_assertBlockEnd();
 	}
 
 	/**
@@ -617,27 +628,23 @@ public class BlockParser {
 				if (info != null) {
 					Label node = isBreak ? info.onBreak : info.onContinue;
 					if (node != null) {
-						mw.goto1(node);
-						_assertBlockEnd();
-						except(semicolon);
-						return;
+						cw.jump(node);
+						break;
 					}
-				} else {
-					_onError(w, "goto.unknown" + w.val());
-					return;
 				}
+				_onError(w, "goto.illegal_label:"+w.val());
 				break;
 			case semicolon:
 				Label node = isBreak ? curBreak : curContinue;
 				if (node == null) {
 					_onError(w, "goto.not_label");
 				} else {
-					mw.goto1(node);
+					cw.jump(node);
 					_assertBlockEnd();
 				}
 				return;
 		}
-		_onError(w, "goto.illegal_label");
+		except(semicolon);
 		_assertBlockEnd();
 	}
 
@@ -648,15 +655,15 @@ public class BlockParser {
 		Word w = wr.next().copy();
 		wr.retractWord();
 
-		ASTNode expr = ep.read(file, 0);
+		ExprNode expr = ep.parse(file, ExprParser.STOP_SEMICOLON);
+		except(semicolon);
+
 		if (expr == null) {
 			_onError(w, "statement.empty");
 			return;
 		}
-		expr.write(mw, false);
-		mw.throw1();
-
-		except(semicolon);
+		expr.write(cw, false);
+		cw.one(ATHROW);
 
 		_assertBlockEnd();
 	}
@@ -715,16 +722,16 @@ public class BlockParser {
 
 		Label ifFalse = new Label();
 
-		ASTNode equ = parser.read(file, (checkBracket ? 16 : 0), ifFalse);
+		ExprNode equ = parser.parse(file, (checkBracket ? 16 : 0), ifFalse);
 		if (equ == null) {
 			_onError(wr.readWord(), "statement.empty.if");
 			return null;
 		}
 
-		equ.write(mw, false);
+		equ.write(cw, false);
 
 		if (!(equ instanceof Binary)) { // 简单表达式 => IS_TRUE, 复杂的话有，嗯，Binary todo 测试
-			mw.jump(Opcodes.IFEQ, ifFalse);
+			cw.jump(IFEQ, ifFalse);
 		}
 
 		except(end);
@@ -746,21 +753,22 @@ public class BlockParser {
 			// if false goto : false
 			//   ifTrue
 			// : false
-			mw.node(ifFalse);
+			cw.label(ifFalse);
 			return;
 		}
 
 		Label end = new Label();
 
 		word = wr.next();
-		mw.goto1(end).node(ifFalse);
+		cw.jump(end);
+		cw.label(ifFalse);
 		if (word.type() == left_l_bracket) {
 			block();
 			except(right_l_bracket);
 		} else {
 			statement(word);
 		}
-		mw.node(end);
+		cw.label(end);
 
 		// if (xx) {} else if() {}
 		//      is equals to
@@ -772,7 +780,7 @@ public class BlockParser {
 	 */
 	private void _for() throws ParseException {
 		Label continueTo = new Label();
-		mw.node(continueTo);
+		cw.label(continueTo);
 
 		except(left_s_bracket);
 
@@ -792,9 +800,9 @@ public class BlockParser {
 		Label breakTo = condition(false, semicolon);
 		if (breakTo == null) return;
 
-		List<ASTNode> execLast = new SimpleList<>();
+		List<ExprNode> execLast = new SimpleList<>();
 		do {
-			ASTNode expr = ep.read(file, (16 | 1024));
+			ExprNode expr = ep.parse(file, (16 | 1024));
 			if (expr == null) break;
 			execLast.add(expr);
 		} while (wr.next().type() == colon);
@@ -803,29 +811,29 @@ public class BlockParser {
 		except(right_s_bracket);
 
 		Label prevBrk = curBreak, prevCon = curContinue;
-		enterCycle(continueTo, breakTo);
+		enterLoop(continueTo, breakTo);
 		try {
 			body();
 		} finally {
-			endCycle(prevCon, prevBrk);
+			endLoop(prevCon, prevBrk);
 		}
 
 		if (!execLast.isEmpty()) {
-			mw.node(continueTo);
+			cw.label(continueTo);
 			for (int i = 0; i < execLast.size(); i++) {
-				execLast.get(i).write(mw, true);
+				execLast.get(i).write(cw, true);
 			}
-			mw.goto1(continueTo);
+			cw.jump(continueTo);
 		} else {
-			mw.goto1(continueTo);
+			cw.jump(continueTo);
 		}
 
-		mw.node(breakTo);
+		cw.label(breakTo);
 
 		if (createdVar) popVar();
 	}
 
-	private void enterCycle(Label continueTo, Label breakTo) {
+	private void enterLoop(Label continueTo, Label breakTo) {
 		LabelInfo info = labelBeforeLoop;
 		if (info != null) {
 			info.onBreak = breakTo;
@@ -839,7 +847,7 @@ public class BlockParser {
 		labelAdded.add(new SimpleList<>());
 	}
 
-	private void endCycle(Label prevContinueTo, Label prevBreakTo) {
+	private void endLoop(Label prevContinueTo, Label prevBreakTo) {
 		curContinue = prevContinueTo;
 		curBreak = prevBreakTo;
 		List<String> set = labelAdded.remove(labelAdded.size() - 1);
@@ -849,28 +857,28 @@ public class BlockParser {
 	/**
 	 * do-while循环
 	 */
-	private void _do() throws ParseException {
+	private void _doWhile() throws ParseException {
 		Label prevBrk = curBreak, prevCon = curContinue;
 
-		Label continueTo = new Label();
-		mw.node(continueTo);
-
+		Label continueTo = cw.label();
 		Label breakTo = new Label();
-		enterCycle(continueTo, breakTo);
 
+		enterLoop(continueTo, breakTo);
 		try {
-			body(); // do {]
+			body();
 		} finally {
-			endCycle(prevCon, prevBrk);
+			endLoop(prevCon, prevBrk);
 		}
 
 		except(WHILE);
-		Label breakTo1 = condition(true, right_s_bracket);
-		if (breakTo1 == null) return;
 
-		mw.goto1(continueTo).node(breakTo).node(breakTo1);
-
+		Label breakTo2 = condition(true, right_s_bracket);
+		if (breakTo2 == null) return;
 		except(semicolon);
+
+		cw.jump(continueTo);
+		cw.label(breakTo);
+		cw.label(breakTo2);
 	}
 
 	/**
@@ -879,21 +887,19 @@ public class BlockParser {
 	private void _while() throws ParseException {
 		Label prevBrk = curBreak, prevCon = curContinue;
 
-		Label continueTo = new Label();
-		mw.node(continueTo);
-
+		Label continueTo = cw.label();
 		Label breakTo = condition(true, right_s_bracket);
 		if (breakTo == null) return;
 
-		enterCycle(continueTo, breakTo);
-
+		enterLoop(continueTo, breakTo);
 		try {
 			body();
 		} finally {
-			endCycle(prevCon, prevBrk);
+			endLoop(prevCon, prevBrk);
 		}
 
-		mw.goto1(continueTo).node(breakTo);
+		cw.jump(continueTo);
+		cw.label(breakTo);
 	}
 
 	/**
@@ -902,21 +908,21 @@ public class BlockParser {
 	private void _switch() throws ParseException {
 		except(left_s_bracket);
 
-		ASTNode expr = ep.read(file, 256);
+		ExprNode expr = ep.parse(file, 256);
 		if (expr == null) throw wr.err("statement.empty.switch");
-		AnnVal cst = expr.isConstant() ? expr.asCst().val() : null;
+		Object cst = expr.isConstant() ? expr.constVal() : null;
 		if (cst != null) {
 			wr.retractWord();
 			_onWarning(wr.next(), "switch.constant");
 		}
-		expr.write(mw, false);
+		expr.write(cw, false);
 
 		except(left_l_bracket);
 
 		Label breakTo = new Label();
-		SwitchSegment node = new SwitchSegment(Opcodes.TABLESWITCH);
+		SwitchSegment node = new SwitchSegment(TABLESWITCH);
 
-		Type sType = expr.type();
+		Type sType = (Type) expr.type();
 		int kind = 0;
 		switch (sType.type) {
 			case CLASS:
@@ -952,8 +958,8 @@ public class BlockParser {
 		byte prev = sectionFlag;
 		sectionFlag |= 4;
 
-		List<AnnVal> labelsCur = Helpers.cast(CompileLocalCache.get().annotationTmp); labelsCur.clear();
-		MyHashSet<AnnVal> labels = Helpers.cast(CompileLocalCache.get().toResolve_unc); labels.clear();
+		List<Object> labelsCur = Helpers.cast(CompileLocalCache.get().annotationTmp); labelsCur.clear();
+		MyHashSet<Object> labels = Helpers.cast(CompileLocalCache.get().toResolve_unc); labels.clear();
 
 		o:
 		while (wr.hasNext()) {
@@ -963,17 +969,17 @@ public class BlockParser {
 					labelsCur.clear();
 					moreCase:
 					while (true) {
-						expr = ep.read(file, 512);
+						expr = ep.parse(file, 512);
 						if (expr == null) {
 							_onError(w, "case.empty");
 							sectionFlag = prev;
 							return;
 						}
 						// todo check twice
-						if (!(expr = expr.compress()).isConstant())
+						if (!(expr = expr.resolve()).isConstant())
 							_onError(w, "case.not_constant");
 
-						AnnVal cv = expr.asCst().val();
+						Object cv = expr.constVal();
 						if (!labels.add(cv)) _onError(w, "case.duplicate:" + cv);
 						labelsCur.add(cv);
 
@@ -989,9 +995,9 @@ public class BlockParser {
 					if (cst != null && !cst.equals(null)) {
 						// todo skip block
 					} else {
-						Label here = mw.label();
+						Label here = cw.label();
 						for (int i = 0; i < labelsCur.size(); i++) {
-							node.branch(labelsCur.get(i).asInt(), here);
+							node.branch((int) labelsCur.get(i), here);
 						}
 						switchBlock(breakTo);
 					}
@@ -1004,7 +1010,7 @@ public class BlockParser {
 						continue;
 					}
 
-					node.def = mw.label();
+					node.def = cw.label();
 					switchBlock(breakTo);
 					break;
 				case right_l_bracket:
@@ -1029,7 +1035,7 @@ public class BlockParser {
 			}
 
 			if (node.def == null) node.def = breakTo;
-			mw.node(breakTo);
+			cw.label(breakTo);
 
 			except(right_l_bracket);
 		}
@@ -1038,7 +1044,7 @@ public class BlockParser {
 	@SuppressWarnings("fallthrough")
 	private void switchBlock(Label endPoint) throws ParseException {
 		Label prevBrk = curBreak;
-		enterCycle(null, endPoint);
+		enterLoop(null, endPoint);
 		try {
 			o:
 			while (wr.hasNext()) {
@@ -1063,7 +1069,7 @@ public class BlockParser {
 				}
 			}
 		} finally {
-			endCycle(curContinue, prevBrk);
+			endLoop(curContinue, prevBrk);
 		}
 	}
 
@@ -1098,14 +1104,14 @@ public class BlockParser {
 					return;
 				}
 
-				ASTNode expr = ep.read(file, 0);
+				ExprNode expr = ep.parse(file, 0);
 				if (expr == null) {
 					_onError(w, "not_statement");
 					return;
 				}
 
-				expr.write(mw, false);
-				mw.store(variables.get(name));
+				expr.write(cw, false);
+				cw.store(variables.get(name));
 
 				w = wr.next();
 			}
@@ -1145,11 +1151,11 @@ public class BlockParser {
 		}
 
 		wr.index = pos;
-		ASTNode expr = ep.read(file, 0);
+		ExprNode expr = ep.parse(file, 0);
 		if (expr == null) {
 			_onError(errorInfo, "not_statement");
 		} else {
-			expr.write(mw, true);
+			expr.write(cw, true);
 		}
 
 		except(semicolon);

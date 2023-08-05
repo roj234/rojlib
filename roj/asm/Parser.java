@@ -5,13 +5,15 @@ import roj.asm.tree.*;
 import roj.asm.tree.attr.*;
 import roj.asm.type.Signature;
 import roj.asm.util.AttributeList;
+import roj.asm.visitor.CodeVisitor;
+import roj.asm.visitor.CodeWriter;
+import roj.asm.visitor.XAttrCode;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
+import roj.util.AttributeKey;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.TypedName;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -24,21 +26,6 @@ import java.util.function.Consumer;
  * @since 2021/5/29 17:16
  */
 public final class Parser {
-	public static final int CTYPE_ACCESS = 0;
-	public static final int CTYPE_PARSED = 1;
-	public static final int CTYPE_REFLECT = 2;
-
-	public static final int FTYPE_SIMPLE = 0;
-	public static final int FTYPE_FULL = 1;
-	public static final int FTYPE_REFLECT = 2;
-
-	public static final int MTYPE_SIMPLE = 3;
-	public static final int MTYPE_FULL = 4;
-	public static final int MTYPE_REFLECT = 5;
-
-	public static final int MFTYPE_LOD1 = 6;
-
-	public static final int CODE_ATTR = 7;
 	public static final int RECORD_ATTR = 8;
 
 	// region CLAZZ parse LOD 2
@@ -52,19 +39,15 @@ public final class Parser {
 		return null;
 	}
 
-	public static ConstantData parse(byte[] buf) {
-		return parse(new ByteList(buf));
-	}
-
-	@SuppressWarnings("fallthrough")
+	public static ConstantData parse(byte[] b) { return parse(new ByteList(b)); }
 	public static ConstantData parse(DynByteBuf buf) {
 		DynByteBuf r = AsmShared.local().copy(buf);
 
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
 
-		ConstantPool pool = new ConstantPool(r.readUnsignedShort());
-		pool.read(r, true);
+		ConstantPool pool = new ConstantPool();
+		pool.read(r, ConstantPool.CHAR_STRING);
 
 		ConstantData data = new ConstantData(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
 
@@ -78,7 +61,7 @@ public final class Parser {
 		SimpleList<FieldNode> fields = data.fields;
 		fields.ensureCapacity(len);
 		while (len-- > 0) {
-			Field field = new Field(r.readShort(), ((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str());
+			FieldNode field = new FieldNode(r.readShort(), ((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str());
 			fields.add(field);
 
 			attr(pool, r, field, Signature.FIELD);
@@ -88,10 +71,10 @@ public final class Parser {
 		SimpleList<MethodNode> methods = data.methods;
 		methods.ensureCapacity(len);
 		while (len-- > 0) {
-			Method method = new Method(r.readShort(), data, ((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str());
-			methods.add(method);
+			MethodNode m = new MethodNode(r.readShort(), data.name, ((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str());
+			methods.add(m);
 
-			attr(pool, r, method, Signature.METHOD);
+			attr(pool, r, m, Signature.METHOD);
 		}
 
 		attr(pool, r, data, Signature.CLASS);
@@ -124,43 +107,12 @@ public final class Parser {
 		}
 	}
 
-	public static void withParsedAttribute(ConstantData data) {
-		ConstantPool pool = data.cp;
-
-		SimpleList<FieldNode> fields = data.fields;
-		for (int i = 0; i < fields.size(); i++) {
-			FieldNode node = fields.get(i);
-			if (node instanceof RawField) {
-				fields.set(i, new Field(data, (RawField) node));
-			} else {
-				AttributeList list = node.attributesNullable();
-				if (list != null) parseAttributes(node,pool,list,Signature.FIELD);
-			}
-		}
-
-		SimpleList<MethodNode> methods = data.methods;
-		for (int i = 0; i < methods.size(); i++) {
-			MethodNode node = methods.get(i);
-			if (node instanceof RawMethod) {
-				methods.set(i, new Method(data, (RawMethod) node));
-			} else {
-				AttributeList list = node.attributesNullable();
-				if (list != null) parseAttributes(node,pool, list,Signature.METHOD);
-			}
-		}
-
-		AttributeList list = data.attributesNullable();
-		if (list != null) parseAttributes(data,pool, list,Signature.CLASS);
-
-		pool.clear();
-	}
-
 	public static void parseAttributes(Attributed node, ConstantPool cp, AttributeList list, int origin) {
 		AsmShared as = AsmShared.local();
 
 		for (int i = 0; i < list.size(); i++) {
 			Attribute attr = list.get(i);
-			if (attr.getClass() == AttrUnknown.class) {
+			if (attr.getClass() == AttrUnknown.class && attr.getRawData() != null) {
 				DynByteBuf data = as.copy(attr.getRawData());
 				attr = attr(node, cp, attr.name(), data, origin);
 				if (attr == null) continue;
@@ -169,10 +121,11 @@ public final class Parser {
 		}
 	}
 	@SuppressWarnings("unchecked")
-	public static <T extends Attribute> T parseAttribute(Attributed node, ConstantPool cp, TypedName<T> type, AttributeList list, int origin) {
+	public static <T extends Attribute> T parseAttribute(Attributed node, ConstantPool cp, AttributeKey<T> type, AttributeList list, int origin) {
 		Attribute attr = list == null ? null : (Attribute) list.getByName(type.name);
 		if (attr == null) return null;
 		if (attr.getClass() == AttrUnknown.class) {
+			if (cp == null) return null;
 			attr = attr(node, cp, type.name, AsmShared.local().copy(attr.getRawData()), origin);
 			if (attr == null) {
 				if (skipToStringParse) return null;
@@ -199,21 +152,21 @@ public final class Parser {
 				case "Synthetic": case "Deprecated": break;
 				// method only
 				case "MethodParameters": limit(origin,Signature.METHOD); return new MethodParameters(data, cp);
-				case "Exceptions": limit(origin,Signature.METHOD); return new AttrStringList(name, data, cp, 0);
+				case "Exceptions": limit(origin,Signature.METHOD); return new AttrClassList(name, data, cp);
 				case "AnnotationDefault": limit(origin,Signature.METHOD); return new AnnotationDefault(data, cp);
-				case "Code": limit(origin,Signature.METHOD); return new AttrCode((MethodNode) node, data, cp);
+				case "Code": limit(origin,Signature.METHOD); return new XAttrCode(data, cp, (MethodNode)node);
 				// field only
 				case "ConstantValue": limit(origin,Signature.FIELD); return new ConstantValue(cp.get(data));
 				// class only
 				case "Record": limit(origin,Signature.CLASS); return new AttrRecord(data, cp);
 				case "InnerClasses": limit(origin,Signature.CLASS); return new InnerClasses(data, cp);
 				case "Module": limit(origin,Signature.CLASS); return new AttrModule(data, cp);
-				case "ModulePackages": limit(origin,Signature.CLASS); return new AttrModulePackages(data, cp);
-				case "ModuleMainClass":
-				case "NestHost": limit(origin,Signature.CLASS); return new AttrClassRef(name, data, cp);
+				case "ModulePackages":
 				case "PermittedSubclasses":
-				case "NestMembers": limit(origin,Signature.CLASS); return new AttrStringList(name, data, cp, 0);
-				case "SourceFile": limit(origin,Signature.CLASS); return new AttrUTF(name, ((CstUTF) cp.get(data)).str());
+				case "NestMembers": limit(origin,Signature.CLASS); return new AttrClassList(name, data, cp);
+				case "ModuleMainClass":
+				case "NestHost": limit(origin,Signature.CLASS); return new AttrString(name, ((CstClass) cp.get(data)).name().str());
+				case "SourceFile": limit(origin,Signature.CLASS); return new AttrString(name, ((CstUTF) cp.get(data)).str());
 				case "BootstrapMethods": limit(origin,Signature.CLASS); return new BootstrapMethods(data, cp);
 				// 匿名类所属的方法
 				case "EnclosingMethod": limit(origin,Signature.CLASS); return new EnclosingMethod((CstClass) cp.get(data), (CstNameAndType) cp.get(data));
@@ -245,20 +198,15 @@ public final class Parser {
 		} catch (IOException ignored) {}
 		return null;
 	}
-
-	public static ConstantData parseConstants(byte[] buf) {
-		return parseConstants(new ByteList(buf));
-	}
-
-	@Nonnull
+	public static ConstantData parseConstants(byte[] buf) { return parseConstants(new ByteList(buf)); }
 	public static ConstantData parseConstants(DynByteBuf buf) {
 		DynByteBuf r = AsmShared.local().copy(buf);
 
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
 
-		ConstantPool pool = new ConstantPool(r.readUnsignedShort());
-		pool.read(r, false);
+		ConstantPool pool = new ConstantPool();
+		pool.read(r, ConstantPool.BYTE_STRING);
 
 		ConstantData data = new ConstantData(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
 
@@ -272,28 +220,27 @@ public final class Parser {
 		SimpleList<FieldNode> fields = data.fields;
 		fields.ensureCapacity(len);
 		while (len-- > 0) {
-			RawField field = new RawField(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
-			fields.add(field);
+			FieldNode f = new FieldNode(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
+			fields.add(f);
 
-			withUnparsedAttribute(pool, r, field);
+			attrUnparsed(pool, r, f);
 		}
 
 		len = r.readUnsignedShort();
 		SimpleList<MethodNode> methods = data.methods;
 		methods.ensureCapacity(len);
 		while (len-- > 0) {
-			RawMethod method = new RawMethod(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
-			method.cn(data.name);
-			methods.add(method);
+			MethodNode m = new MethodNode(r.readShort(), data.name, (CstUTF) pool.get(r), (CstUTF) pool.get(r));
+			methods.add(m);
 
-			withUnparsedAttribute(pool, r, method);
+			attrUnparsed(pool, r, m);
 		}
 
-		withUnparsedAttribute(pool, r, data);
+		attrUnparsed(pool, r, data);
 		return data;
 	}
 
-	private static void withUnparsedAttribute(ConstantPool pool, DynByteBuf r, Attributed node) {
+	private static void attrUnparsed(ConstantPool pool, DynByteBuf r, Attributed node) {
 		int len = r.readUnsignedShort();
 		if (len == 0) return;
 
@@ -301,38 +248,34 @@ public final class Parser {
 		list.ensureCapacity(len);
 		while (len-- > 0) {
 			CstUTF name = (CstUTF) pool.get(r);
-			list.i_direct_add(new AttrUnknown(name, r.slice(r.readInt())));
+			int length = r.readInt();
+			// ByteList$Slice consumes 40 bytes , byte[] array header consumes 24+length bytes
+			list.i_direct_add(new AttrUnknown(name, length == 0 ? null : length <= 16 ? r.readBytes(length) : r.slice(length)));
 		}
 	}
 
 	// endregion
 	// region ACCESS parse LOD 0
 
-	public static AccessData parseAccess(byte[] buf) {
-		return parseAcc0(buf, new ByteList(buf));
-	}
-
-	@Nonnull
-	public static AccessData parseAcc0(byte[] dst, DynByteBuf buf) {
+	public static AccessData parseAccess(DynByteBuf buf, boolean modifiable) {
 		DynByteBuf r = AsmShared.local().copy(buf);
 
-		if (r.readInt() != 0xcafebabe) {
-			throw new IllegalArgumentException("Illegal header");
-		}
+		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
+
 		r.rIndex += 4; // ver
 
 		ConstantPool pool = AsmShared.local().constPool();
-		pool.init(r.readUnsignedShort());
-		pool.readName(r);
+		pool.read(r, ConstantPool.ONLY_STRING);
 
 		int cfo = r.rIndex; // acc
-		r.rIndex += 2;
+		char acc = r.readChar();
 
-		AccessData data = new AccessData(dst, cfo, pool.getName(r), pool.getName(r));
+		AccessData data = new AccessData(modifiable?buf.toByteArray():null, cfo, pool.getRefName(r), pool.getRefName(r));
+		data.acc = acc;
 
 		int len = r.readUnsignedShort();
 		SimpleList<String> itf = new SimpleList<>(len);
-		while (len-- > 0) itf.add(pool.getName(r));
+		while (len-- > 0) itf.add(pool.getRefName(r));
 
 		data.itf = itf;
 
@@ -342,7 +285,7 @@ public final class Parser {
 			while (len-- > 0) {
 				int offset = r.rIndex;
 
-				char acc = r.readChar();
+				acc = r.readChar();
 
 				AccessData.MOF d = data.new MOF(((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str(), offset);
 				d.acc = acc;
@@ -373,21 +316,66 @@ public final class Parser {
 		r.rIndex += 4; // ver
 
 		ConstantPool cp = AsmShared.local().constPool();
-		cp.init(r.readUnsignedShort());
 		cp.setAddListener(c);
-		cp.read(r, false);
+		try {
+			cp.read(r, ConstantPool.CHAR_STRING);
+		} finally {
+			cp.setAddListener(null);
+			cp.clear();
+		}
 	}
 
 	// endregion
 
-	public static byte[] toByteArray(IClass c) {
-		return c.getBytes(AsmShared.getBuf()).toByteArray();
-	}
-	public static ByteList toByteArrayShared(IClass c) {
-		return (ByteList) c.getBytes(AsmShared.getBuf());
-	}
+	public static byte[] toByteArray(IClass c) { return c.getBytes(AsmShared.getBuf()).toByteArray(); }
+	public static ByteList toByteArrayShared(IClass c) { return (ByteList) c.getBytes(AsmShared.getBuf()); }
 
-	public static DynByteBuf reader(Attribute attr) {
-		return AsmShared.local().copy(attr.getRawData());
+	public static DynByteBuf reader(Attribute attr) { return AsmShared.local().copy(attr.getRawData()); }
+
+	public static void compress(ConstantData data) {
+		ConstantPool cpw = new ConstantPool(data.cp.array().size());
+		CodeVisitor smallerLdc = new CodeVisitor() {
+			protected void ldc(byte code, Constant c) { cpw.reset(c); }
+		};
+
+		SimpleList<MethodNode> methods = data.methods;
+		for (int i = 0; i < methods.size(); i++) {
+			Attribute code = methods.get(i).attrByName("Code");
+			if (code != null) smallerLdc.visit(data.cp, reader(code));
+		}
+
+		CodeWriter cw = new CodeWriter();
+		ByteList bw = new ByteList();
+		for (int i = 0; i < methods.size(); i++) {
+			MethodNode mn = methods.get(i);
+			Attribute code = mn.attrByName("Code");
+			if (code != null) {
+				cw.init(bw, cpw);
+				cw.mn = mn; // for UNINITIAL_THIS
+				cw.visit(data.cp, code.getRawData());
+				cw.finish();
+
+				byte[] array = bw.toByteArray();
+				// will not parse this
+				mn.putAttr(new Attribute() {
+					@Override
+					public String name() { return "Code"; }
+					@Override
+					public DynByteBuf getRawData() { return ByteList.wrap(array); }
+					@Override
+					public String toString() { return "Tmpcw"; }
+				});
+				bw.clear();
+			}
+		}
+
+		data.parsed();
+		data.cp = cpw;
+
+		for (int i = 0; i < methods.size(); i++) {
+			MethodNode mn = methods.get(i);
+			Attribute code = mn.attrByName("Code");
+			if (code != null) mn.putAttr(new AttrUnknown("Code", code.getRawData()));
+		}
 	}
 }

@@ -8,11 +8,10 @@ import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.insn.SwitchEntry;
 import roj.asm.type.*;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttrHelper;
-import roj.asm.util.ExceptionEntryCWP;
+import roj.asm.util.TryCatchEntry;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.SwitchSegment;
@@ -24,19 +23,20 @@ import roj.config.CCJson;
 import roj.config.JSONParser;
 import roj.config.serial.CAdapter;
 import roj.config.serial.SerializerFactory;
-import roj.config.serial.SerializerFactoryFactory;
+import roj.config.serial.Serializers;
 import roj.mapper.ParamNameMapper;
 import roj.math.MutableInt;
 import roj.net.http.Action;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.srv.*;
 import roj.reflect.FastInit;
-import roj.util.TypedName;
+import roj.util.AttributeKey;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 
@@ -55,15 +55,21 @@ public class OKRouter implements Router {
 	private static final String COPYWITH_DESC = TypeHelper.class2asm(new Class<?>[] {int.class, Object.class}, Dispatcher.class);
 
 	private static final AtomicInteger seq = new AtomicInteger();
-	private static final TypedName<ASet> RouteAdapterKey = new TypedName<>("or:router");
+	private static final AttributeKey<ASet> RouteAdapterKey = new AttributeKey<>("or:router");
 
 	// ASet or ASet[]
 	private final TrieTree<Object> route = new TrieTree<>();
 	private boolean handleError = true;
 
+	private List<Callable<Void>> prCallback = Collections.emptyList();
+
 	public OKRouter() {}
 
 	public void setHandleError(boolean b) { handleError = b; }
+	public void addPostRequestCallback(Callable<Void> callback) {
+		if (prCallback.isEmpty()) prCallback = new SimpleList<>();
+		prCallback.add(callback);
+	}
 
 	public final Router register(Object o) {
 		ConstantData hndInst = new ConstantData();
@@ -103,7 +109,7 @@ public class OKRouter implements Router {
 		cw.field(GETFIELD, hndInst, 0);
 
 		SwitchSegment seg = CodeWriter.newSwitch(TABLESWITCH);
-		cw.switches(seg);
+		cw.addSegment(seg);
 
 		int id = 0;
 		IntMap<Annotation> handlers = new IntMap<>();
@@ -112,7 +118,7 @@ public class OKRouter implements Router {
 		String fn = o.getClass().getName().replace('.', '/').concat(".class");
 		ConstantData data = Parser.parseConstants(o.getClass());
 
-		List<ExceptionEntryCWP> exhandlers = new SimpleList<>();
+		List<TryCatchEntry> exhandlers = new SimpleList<>();
 
 		SimpleList<MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
@@ -136,7 +142,7 @@ public class OKRouter implements Router {
 			}
 
 			Label self = cw.label();
-			seg.targets.add(new SwitchEntry(seg.targets.size(), self));
+			seg.branch(seg.targets.size(), self);
 			seg.def = self;
 			List<Type> par = mn.parameters();
 
@@ -167,7 +173,7 @@ public class OKRouter implements Router {
 					if (par.size() <= 2) break noBody;
 				}
 
-				if (a.clazz.endsWith("Interceptor")) {
+				if (a.type.endsWith("Interceptor")) {
 					cw.one(ALOAD_3);
 					cw.clazz(CHECKCAST, PostSetting.class.getName().replace('.', '/'));
 				} else {
@@ -189,7 +195,7 @@ public class OKRouter implements Router {
 		if (seg.def == null) throw new IllegalArgumentException(fn.concat("没有任何处理函数"));
 
 		if (handleError) {
-			for (ExceptionEntryCWP eh : exhandlers) {
+			for (TryCatchEntry eh : exhandlers) {
 				cw.label(eh.handler);
 				cw.one(ASTORE_0);
 
@@ -208,7 +214,7 @@ public class OKRouter implements Router {
 				cw.one(ATHROW);
 			}
 			cw.visitExceptions();
-			for (ExceptionEntryCWP eh : exhandlers) {
+			for (TryCatchEntry eh : exhandlers) {
 				cw.visitException(eh.start,eh.end,eh.handler,null);
 			}
 			cw.finish();
@@ -280,7 +286,7 @@ public class OKRouter implements Router {
 		return this;
 	}
 
-	private void provideBodyPars(CodeWriter c, ConstantPool cp, MethodNode m, int begin, List<ExceptionEntryCWP> tries) {
+	private void provideBodyPars(CodeWriter c, ConstantPool cp, MethodNode m, int begin, List<TryCatchEntry> tries) {
 		List<Type> parTypes = m.parameters();
 
 		Annotation body = AttrHelper.getAnnotation(AttrHelper.getAnnotations(cp, m, false), "roj/net/http/srv/autohandled/Body");
@@ -324,7 +330,7 @@ public class OKRouter implements Router {
 		CodeWriter cw;
 		String from;
 		boolean nonnull;
-		List<ExceptionEntryCWP> tries;
+		List<TryCatchEntry> tries;
 
 		private static final Annotation DEFAULT = new Annotation();
 
@@ -347,7 +353,7 @@ public class OKRouter implements Router {
 
 						c.one(ALOAD_1);
 						c.invoke(INVOKEVIRTUAL, REQ, "postFields", "()Ljava/util/Map;");
-						c.var(ASTORE, fromSlot = nextSlot);
+						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++ << 8;
 					}
 				break;
@@ -357,8 +363,8 @@ public class OKRouter implements Router {
 						bodyKind |= 1;
 
 						c.one(ALOAD_1);
-						c.invoke(INVOKEVIRTUAL, REQ, "getFields", "()Ljava/util/Map;");
-						c.var(ASTORE, fromSlot = nextSlot);
+						c.invoke(INVOKEVIRTUAL, REQ, "GET_Fields", "()Ljava/util/Map;");
+						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++;
 					}
 					break;
@@ -369,7 +375,7 @@ public class OKRouter implements Router {
 
 						c.one(ALOAD_1);
 						c.invoke(INVOKEVIRTUAL, REQ, "fields", "()Ljava/util/Map;");
-						c.var(ASTORE, fromSlot = nextSlot);
+						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++ << 16;
 					}
 					break;
@@ -392,11 +398,11 @@ public class OKRouter implements Router {
 
 			if (fromSlot == 0) throw new IllegalStateException("不支持的类型/"+from1);
 
-			c.var(ALOAD, fromSlot);
+			c.vars(ALOAD, fromSlot);
 			c.ldc(name);
 			c.invokeItf("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
 
-			ExceptionEntryCWP entry = new ExceptionEntryCWP();
+			TryCatchEntry entry = new TryCatchEntry();
 			entry.start = cw.label();
 			entry.handler = new Label();
 			entry.type = type+" "+name;
@@ -509,14 +515,25 @@ public class OKRouter implements Router {
 	public Response response(Request req, ResponseHeader rh) throws IOException {
 		ASet set = req.connection().attachment(RouteAdapterKey, null);
 
-		Object ret = set.req.invoke(req, rh, null);
+		Object ret;
+		try {
+			ret = set.req.invoke(req, rh, null);
+		} finally {
+			for (Callable<Void> c : prCallback) {
+				try {
+					c.call();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
 		if (ret instanceof Response) return (Response) ret;
 		if (ret == null) return null;
 		return new StringResponse(ret.toString());
 	}
 
 	private static final class LazyAdapter {
-		static final SerializerFactory ADAPTER_FACTORY = SerializerFactoryFactory.create();
+		static final SerializerFactory ADAPTER_FACTORY = Serializers.newSerializerFactory();
 	}
 
 	public static Object _JAdapt(Request req, String type) throws IllegalRequestException {

@@ -1,6 +1,7 @@
 package roj.net.ch.handler;
 
 import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.mss.MSSEngine;
 import roj.net.mss.MSSEngineClient;
@@ -53,10 +54,10 @@ public class MSSCipher extends PacketMerger {
 			do {
 				int req = engine.wrap(in, out);
 				if (req >= 0) ctx.channelWrite(out);
-				else out = ctx.alloc().expand(out,-req);
+				else out = BufferPool.expand(out,-req);
 			} while (in.isReadable());
 		} finally {
-			ctx.reserve(out);
+			BufferPool.reserve(out);
 		}
 	}
 
@@ -77,7 +78,7 @@ public class MSSCipher extends PacketMerger {
 			while (true) {
 				int req = engine.unwrap(in, out);
 				if (req > 0) {
-					out = ctx.alloc().expand(out, req);
+					out = BufferPool.expand(out, req);
 				} else if (req == 0) {
 					mergedRead(ctx, out);
 					out.clear();
@@ -88,7 +89,7 @@ public class MSSCipher extends PacketMerger {
 				}
 			}
 		} finally {
-			ctx.reserve(out);
+			BufferPool.reserve(out);
 		}
 	}
 
@@ -110,21 +111,22 @@ public class MSSCipher extends PacketMerger {
 					}
 					throw e;
 				}
-				switch (req) {
-					case MSSEngine.HS_OK:
-						if (tx.wIndex() > 0) {
-							ctx.channelWrite(tx);
-							tx.clear();
-						}
-						if (engine.isHandshakeDone()) return;
-						break;
-					case MSSEngine.HS_BUFFER_UNDERFLOW: return;
-					default: // overflow
-						tx = ctx.alloc().expand(tx,req);
+
+				// overflow
+				if (req == MSSEngine.HS_OK) {
+					if (tx.wIndex() > 0) {
+						ctx.channelWrite(tx);
+						tx.clear();
+					}
+					if (engine.isHandshakeDone()) return;
+				} else if (req < 0) {
+					return;
+				} else {
+					tx = BufferPool.expand(tx, req);
 				}
 			} while (true);
 		} finally {
-			ctx.reserve(tx);
+			BufferPool.reserve(tx);
 		}
 	}
 

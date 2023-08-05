@@ -3,15 +3,16 @@ package roj.ui;
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
+import javax.swing.text.JTextComponent;
 
 /**
  * @author Roj234
  * @since 2021/5/29 20:45
  */
 public final class TextAreaPrintStream extends DelegatedPrintStream {
-	private final JTextArea textArea;
+	private final JTextComponent textArea;
 
-	public TextAreaPrintStream(final JTextArea textArea, int max) {
+	public TextAreaPrintStream(final JTextComponent textArea, int max) {
 		super(max);
 		this.textArea = textArea;
 	}
@@ -23,9 +24,10 @@ public final class TextAreaPrintStream extends DelegatedPrintStream {
 			value = sb.append('\n').toString();
 			sb.clear();
 		}
+
 		SwingUtilities.invokeLater(() -> {
-			textArea.append(value);
-			Document doc = textArea.getDocument();
+			Document doc = GUIUtil.insert(textArea, value);
+
 			if (doc.getLength() > MAX) {
 				int diff = doc.getLength() - MAX;
 				try {

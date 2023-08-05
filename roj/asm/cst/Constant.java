@@ -1,6 +1,5 @@
 package roj.asm.cst;
 
-import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.util.DynByteBuf;
 
 /**
@@ -10,6 +9,7 @@ import roj.util.DynByteBuf;
 public abstract class Constant implements Cloneable {
 	public static final byte
 		UTF = 1,
+		_TOP_ = 2,
 		INT = 3,
 		FLOAT = 4,
 		LONG = 5,
@@ -26,7 +26,6 @@ public abstract class Constant implements Cloneable {
 		INVOKE_DYNAMIC = 18,
 		MODULE = 19,
 		PACKAGE = 20;
-	public static final byte _TOP_ = -1;
 
 	private static final String[] indexes = {
 		"UTF", null, "int", "float", "long", "double", "类", "String",
@@ -40,13 +39,14 @@ public abstract class Constant implements Cloneable {
 
 	Constant() {}
 
-	@Internal
 	abstract void write(DynByteBuf w);
 
 	public abstract boolean equals(Object o);
 	public abstract int hashCode();
 
 	public String toString() { return toString(type()) + "#" + (int) index; }
+	public String getEasyReadValue() { throw new UnsupportedOperationException(); }
+	public String getEasyCompareValue() { throw new UnsupportedOperationException(); }
 
 	final void setIndex(int i) {
 		this.index = (char) i;

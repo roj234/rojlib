@@ -7,16 +7,17 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.collect.TrieTree;
 import roj.collect.TrieTreeSet;
-import roj.mapper.CodeMapper;
-import roj.mapper.ConstMapper;
+import roj.concurrent.task.AsyncTask;
+import roj.mapper.Mapper;
 import roj.mapper.Mapping;
 import roj.mapper.util.Desc;
 import roj.mod.FMDInstall;
 import roj.mod.FMDMain;
+import roj.mod.Shared;
 import roj.mod.mapping.ClassMerger;
 import roj.mod.mapping.GDiffPatcher;
 import roj.mod.mapping.MappingFormat;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.ui.EasyProgressBar;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -28,11 +29,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ExecutionException;
 import java.util.zip.ZipFile;
 
 import static roj.mod.Shared.TMP_DIR;
-import static roj.mod.Shared.async;
 
 /**
  * @author Roj234
@@ -69,29 +69,20 @@ public final class LegacyForge extends WorkspaceBuilder {
 			throw new IllegalStateException("readBinPatch 失败", e);
 		}
 
-		AtomicInteger val = new AtomicInteger(), total = new AtomicInteger(100);
 		EasyProgressBar bar = new EasyProgressBar("Prepare");
 
 		List<Context>[] arr = Helpers.cast(new List<?>[4]);
 		arr[0] = new ArrayList<>();
 
-		Runnable prepareClient = () -> {
-			List<Context> list;
-			try {
-				list = Context.fromZip(file.get(0), StandardCharsets.UTF_8);
-			} catch (IOException e) {
-				error = 2;
-				throw new IllegalStateException("client 失败", e);
-			}
+		AsyncTask<List<Context>> prepareClient = new AsyncTask<>(() -> {
+			List<Context> list = Context.fromZip(file.get(0), StandardCharsets.UTF_8);
 
-			total.addAndGet(list.size());
-			for (int i = 0; i < list.size(); i++, bar.update((double) val.incrementAndGet()/total.get(), 1)) {
+			bar.addMax(list.size());
+			for (int i = 0; i < list.size(); i++, bar.addCurrent(1)) {
 				Context ctx = list.get(i);
 				ByteList result = patcher.patchClient(ctx.getFileName(), ctx.get());
 				if (result != null) {
-					synchronized (arr[0]) {
-						arr[0].add(new Context(ctx.getFileName(), ctx.get(false)));
-					}
+					synchronized (arr[0]) { arr[0].add(new Context(ctx.getFileName(), ctx.get(false))); }
 					ctx.set(result);
 				}
 				ctx.getData();
@@ -99,28 +90,20 @@ public final class LegacyForge extends WorkspaceBuilder {
 			patcher.patchClientEmpty(list);
 			System.out.println("prepareClient: done");
 
-			arr[1] = list;
-		};
-		Runnable prepareServer = () -> {
+			return list;
+		});
+		AsyncTask<List<Context>> prepareServer = new AsyncTask<>(() -> {
 			TrieTreeSet set = new TrieTreeSet();
 			FMDMain.readTextList(set::add, "忽略服务端jar中以以下文件名开头的文件");
 
-			List<Context> list;
-			try {
-				list = Context.fromZip(file.get(1), StandardCharsets.UTF_8, name -> !set.strStartsWithThis(name));
-			} catch (IOException e) {
-				error = 3;
-				throw new IllegalStateException("server 失败", e);
-			}
+			List<Context> list = Context.fromZip(file.get(1), StandardCharsets.UTF_8, name -> !set.strStartsWithThis(name));
 
-			total.addAndGet(list.size());
-			for (int i = 0; i < list.size(); i++, bar.update((double) val.incrementAndGet()/total.get(), 1)) {
+			bar.addMax(list.size());
+			for (int i = 0; i < list.size(); i++, bar.addCurrent(1)) {
 				Context ctx = list.get(i);
 				ByteList result = patcher.patchServer(ctx.getFileName(), ctx.get());
 				if (result != null) {
-					synchronized (arr[0]) {
-						arr[0].add(new Context(ctx.getFileName(), ctx.get(false)));
-					}
+					synchronized (arr[0]) { arr[0].add(new Context(ctx.getFileName(), ctx.get(false))); }
 					ctx.set(result);
 				}
 				ctx.getData();
@@ -128,73 +111,75 @@ public final class LegacyForge extends WorkspaceBuilder {
 			patcher.patchServerEmpty(list);
 			System.out.println("prepareServer: done");
 
-			arr[2] = list;
-		};
-		Runnable prepareMapping = () -> {
+			return list;
+		});
+		AsyncTask<List<Context>> prepareMapping = new AsyncTask<>(() -> {
 			try (ZipFile zf = new ZipFile(forgeJar)) {
 				Mapping forgeSrg = new Mapping();
 				forgeSrg.loadMap(new LZMAInputStream(zf.getInputStream(zf.getEntry("deobfuscation_data-"+mf_cfg.get("version")+".lzma"))), false);
 				mf_cfg.put("map.legacy_forge", forgeSrg);
-
-				arr[3] = Context.fromZip(forgeJar, StandardCharsets.UTF_8);
-			} catch (Exception e) {
-				error = 4;
-				throw new IllegalStateException("forgeJar 失败", e);
 			}
 
-			MappingFormat.MapResult maps;
-			try {
-				maps = mf.map(mf_cfg, TMP_DIR);
-				bar.update((double) val.addAndGet(100)/total.get(), 100);
+			bar.addMax(100);
+			List<Context> list = Context.fromZip(forgeJar, StandardCharsets.UTF_8);
 
-				mf = null;
-				mf_cfg = null;
+			MappingFormat.MapResult maps = mf.map(mf_cfg, TMP_DIR);
+			bar.addCurrent(100);
 
-				maps.tsrgCompile.saveMap(FMDInstall.MCP2SRG_PATH);
-				mapper.merge(maps.tsrgDeobf, true);
-				paramMap = maps.paramMap;
-				System.out.println("prepareMapping: done");
-			} catch (Exception e) {
-				error = 5;
-				throw new IllegalStateException("MappingFormat 失败", e);
-			}
-		};
+			mf = null;
+			mf_cfg = null;
 
-		async(prepareClient, prepareServer, prepareMapping);
+			maps.tsrgCompile.saveMap(FMDInstall.MCP2SRG_PATH);
+			mapper.merge(maps.tsrgDeobf, true);
+			paramMap = maps.paramMap;
+			System.out.println("prepareMapping: done");
 
-		if (patcher.errorCount != 0) CmdUtil.warning("补丁失败数量: " + patcher.errorCount);
+			return list;
+		});
+
+		Shared.Task.pushTask(prepareClient);
+		Shared.Task.pushTask(prepareServer);
+		Shared.Task.pushTask(prepareMapping);
+		try {
+			arr[1] = prepareClient.get();
+			arr[2] = prepareServer.get();
+			arr[3] = prepareMapping.get();
+		} catch (InterruptedException | ExecutionException e) {
+			e.getCause().printStackTrace();
+			bar.end("失败");
+			error = 1;
+			return;
+		}
+
+		if (patcher.errorCount != 0) CLIUtil.warning("补丁失败数量: " + patcher.errorCount);
 		patcher.reset();
 
 		bar.end("完成");
-		bar.dispose();
 
 		error = post_process(arr, mapper, paramMap) ? 0 : 6;
 	}
 
 	// arr[1] = client, arr[2] = server, arr[3] = forge
-	static boolean post_process(List<Context>[] arr, ConstMapper mapper, Map<Desc, List<String>> paramMap) {
+	static boolean post_process(List<Context>[] arr, Mapper mapper, Map<Desc, List<String>> paramMap) {
 		ClassMerger merger = new ClassMerger();
 
 		List<Context> merged = new SimpleList<>(merger.process(arr[1], arr[2]));
 		merged.addAll(arr[3]);
 
-		CmdUtil.info("SCB=" + merger.serverOnly + "/" + merger.clientOnly + "/" + merger.both +
+		CLIUtil.info("SCB=" + merger.serverOnly + "/" + merger.clientOnly + "/" + merger.both +
 			", FMR=" + merger.mergedField + "/" + merger.mergedMethod + "/" + merger.replaceMethod);
 
 		// arr[0]是未打补丁的文件
 		mapper.loadLibraries(Arrays.asList(arr[0], merged));
-
-		CodeMapper nameMapper = new CodeMapper(mapper);
-		nameMapper.setParamMap(paramMap);
+		mapper.setParamMap(paramMap);
 
 		long start = System.nanoTime();
-		mapper.remap(false, merged);
-		nameMapper.remap(false, merged);
+		mapper.map(merged);
 		long end = System.nanoTime();
 
 		merged.sort((o1, o2) -> o1.getFileName().compareTo(o2.getFileName()));
 
-		CmdUtil.info(merged.size()+"个文件在"+(end-start)/1000000+"ms内映射成功");
+		CLIUtil.info(merged.size()+"个文件在"+(end-start)/1000000+"ms内映射成功");
 
 		try (ZipFileWriter zfw = new ZipFileWriter(destination)) {
 			for (int i = 0; i < merged.size(); i++) {
@@ -205,15 +190,15 @@ public final class LegacyForge extends WorkspaceBuilder {
 				try {
 					list = ctx.getCompressedShared();
 				} catch (Throwable e) {
-					CmdUtil.warning(ctx.getFileName() + " 验证失败", e);
+					CLIUtil.warning(ctx.getFileName() + " 验证失败", e);
 					continue;
 				}
 				zfw.writeNamed(ctx.getFileName(), list);
 			}
 			merged.clear();
-			CmdUtil.info("writeFile done");
+			CLIUtil.info("writeFile done");
 		} catch (IOException e) {
-			CmdUtil.error("writeFile 失败", e);
+			CLIUtil.error("writeFile 失败", e);
 			return false;
 		}
 		return true;

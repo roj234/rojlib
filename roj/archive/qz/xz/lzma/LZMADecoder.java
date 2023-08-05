@@ -18,23 +18,12 @@ import java.io.IOException;
 public final class LZMADecoder extends LZMACoder {
 	private final LZDecoder lz;
 	private final RangeDecoder rc;
-	private final LiteralDecoder literalDecoder;
-	private final LengthDecoder matchLenDecoder = new LengthDecoder();
-	private final LengthDecoder repLenDecoder = new LengthDecoder();
 
 	public LZMADecoder(LZDecoder lz, RangeDecoder rc, int lc, int lp, int pb) {
-		super(pb);
+		super(lc, lp, pb);
 		this.lz = lz;
 		this.rc = rc;
-		this.literalDecoder = new LiteralDecoder(lc, lp);
 		reset();
-	}
-
-	public void reset() {
-		super.reset();
-		literalDecoder.reset();
-		matchLenDecoder.reset();
-		repLenDecoder.reset();
 	}
 
 	/**
@@ -43,9 +32,7 @@ public final class LZMADecoder extends LZMACoder {
 	 * function is needed only for LZMA1. LZMA2 doesn't use the end marker
 	 * in the LZMA layer.
 	 */
-	public boolean endMarkerDetected() {
-		return reps[0] == -1;
-	}
+	public boolean endMarkerDetected() { return reps[0] == -1; }
 
 	public void decode() throws IOException {
 		lz.repeatPending();
@@ -53,8 +40,9 @@ public final class LZMADecoder extends LZMACoder {
 		while (lz.hasSpace()) {
 			int posState = lz.getPos() & posMask;
 
-			if (rc.decodeBit(isMatch[state], posState) == 0) {
-				literalDecoder.decode();
+			if (rc.decodeBit(isMatch, posState + (state<<4)) == 0) {
+				int i = getSubcoderIndex(lz.getByte(0), lz.getPos());
+				decodeLiteral(literalProbs[i]);
 			} else {
 				int len = rc.decodeBit(isRep, state) == 0
 					? decodeMatch(posState)
@@ -67,7 +55,33 @@ public final class LZMADecoder extends LZMACoder {
 			}
 		}
 
-		rc.normalize();
+		rc.fill();
+	}
+
+	private void decodeLiteral(short[] probs) throws IOException {
+		int symbol;
+		if (state_isLiteral(state)) {
+			symbol = rc.decodeBitTree(probs, 0x100);
+		} else {
+			symbol = 1;
+
+			RangeDecoder rc = this.rc;
+			int matchByte = lz.getByte(reps[0]);
+			int offset = 0x100;
+			int matchBit;
+			int bit;
+
+			do {
+				matchByte <<= 1;
+				matchBit = matchByte & offset;
+				bit = rc.decodeBit(probs, offset + matchBit + symbol);
+				symbol = (symbol << 1) | bit;
+				offset &= (-bit) ^ ~matchBit;
+			} while (symbol < 0x100);
+		}
+
+		lz.putByte(symbol);
+		state = state_updateLiteral(state);
 	}
 
 	private int decodeMatch(int posState) throws IOException {
@@ -77,30 +91,41 @@ public final class LZMADecoder extends LZMACoder {
 		reps[2] = reps[1];
 		reps[1] = reps[0];
 
-		int len = matchLenDecoder.decode(posState);
+		int len = decodeMatchLen(posState);
 		int distSlot = rc.decodeBitTree(distSlots[getDistState(len)]);
 
 		if (distSlot < DIST_MODEL_START) {
 			reps[0] = distSlot;
 		} else {
 			int limit = (distSlot >> 1) - 1;
-			reps[0] = (2 | (distSlot & 1)) << limit;
+			int rep = (2 | (distSlot & 1)) << limit;
 
 			if (distSlot < DIST_MODEL_END) {
-				reps[0] |= rc.decodeReverseBitTree(distSpecial[distSlot - DIST_MODEL_START]);
+				rep |= rc.decodeReverseBitTree(distSpecial[distSlot - DIST_MODEL_START]);
 			} else {
-				reps[0] |= rc.decodeDirectBits(limit - ALIGN_BITS) << ALIGN_BITS;
-				reps[0] |= rc.decodeReverseBitTree(distAlign);
+				rep |= rc.decodeDirectBits(limit - ALIGN_BITS) << ALIGN_BITS;
+				rep |= rc.decodeReverseBitTree(distAlign);
 			}
+
+			reps[0] = rep;
 		}
 
 		return len;
 	}
+	private int decodeMatchLen(int posState) throws IOException {
+		RangeDecoder rc = this.rc;
+		if (rc.decodeBit(choice, 0) == 0) return rc.decodeBitTree(low[posState]) + MATCH_LEN_MIN;
+		if (rc.decodeBit(choice, 1) == 0) return rc.decodeBitTree(mid[posState]) + MATCH_LEN_MIN + LOW_SYMBOLS;
+		return rc.decodeBitTree(high) + MATCH_LEN_MIN + LOW_SYMBOLS + MID_SYMBOLS;
+	}
 
 	private int decodeRepMatch(int posState) throws IOException {
+		RangeDecoder rc = this.rc;
+		int state = this.state;
+
 		if (rc.decodeBit(isRep0, state) == 0) {
-			if (rc.decodeBit(isRep0Long[state], posState) == 0) {
-				state = state_updateShortRep(state);
+			if (rc.decodeBit(isRep0Long, posState + (state<<4)) == 0) {
+				this.state = state_updateShortRep(state);
 				return 1;
 			}
 		} else {
@@ -123,70 +148,14 @@ public final class LZMADecoder extends LZMACoder {
 			reps[0] = tmp;
 		}
 
-		state = state_updateLongRep(state);
+		this.state = state_updateLongRep(state);
 
-		return repLenDecoder.decode(posState);
+		return decodeRepeatLen(posState);
 	}
-
-
-	private class LiteralDecoder extends LiteralCoder {
-		private final LiteralSubdecoder[] subdecoders;
-
-		LiteralDecoder(int lc, int lp) {
-			super(lc, lp);
-
-			subdecoders = new LiteralSubdecoder[1 << (lc + lp)];
-			for (int i = 0; i < subdecoders.length; ++i)
-				subdecoders[i] = new LiteralSubdecoder();
-		}
-
-		void reset() {
-			for (LiteralSubdecoder x : subdecoders) x.reset();
-		}
-
-		void decode() throws IOException {
-			int i = getSubcoderIndex(lz.getByte(0), lz.getPos());
-			subdecoders[i].decode();
-		}
-
-
-		private class LiteralSubdecoder extends LiteralSubcoder {
-			void decode() throws IOException {
-				int symbol = 1;
-
-				if (state_isLiteral(state)) {
-					do {
-						symbol = (symbol << 1) | rc.decodeBit(probs, symbol);
-					} while (symbol < 0x100);
-
-				} else {
-					int matchByte = lz.getByte(reps[0]);
-					int offset = 0x100;
-					int matchBit;
-					int bit;
-
-					do {
-						matchByte <<= 1;
-						matchBit = matchByte & offset;
-						bit = rc.decodeBit(probs, offset + matchBit + symbol);
-						symbol = (symbol << 1) | bit;
-						offset &= (0 - bit) ^ ~matchBit;
-					} while (symbol < 0x100);
-				}
-
-				lz.putByte((byte) symbol);
-				state = state_updateLiteral(state);
-			}
-		}
-	}
-
-	private class LengthDecoder extends LengthCoder {
-		int decode(int posState) throws IOException {
-			if (rc.decodeBit(choice, 0) == 0) return rc.decodeBitTree(low[posState]) + MATCH_LEN_MIN;
-
-			if (rc.decodeBit(choice, 1) == 0) return rc.decodeBitTree(mid[posState]) + MATCH_LEN_MIN + LOW_SYMBOLS;
-
-			return rc.decodeBitTree(high) + MATCH_LEN_MIN + LOW_SYMBOLS + MID_SYMBOLS;
-		}
+	private int decodeRepeatLen(int posState) throws IOException {
+		RangeDecoder rc = this.rc;
+		if (rc.decodeBit(choice, 2) == 0) return rc.decodeBitTree(low[posMask+1+posState]) + MATCH_LEN_MIN;
+		if (rc.decodeBit(choice, 3) == 0) return rc.decodeBitTree(mid[posMask+1+posState]) + MATCH_LEN_MIN + LOW_SYMBOLS;
+		return rc.decodeBitTree(high2) + MATCH_LEN_MIN + LOW_SYMBOLS + MID_SYMBOLS;
 	}
 }

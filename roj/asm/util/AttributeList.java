@@ -17,9 +17,7 @@ public final class AttributeList extends SimpleList<Attribute> {
 	private Map<String, Attribute> byName;
 
 	public AttributeList() {}
-	public AttributeList(int cap) {
-		super(cap);
-	}
+	public AttributeList(int cap) { super(cap); }
 
 	public AttributeList(AttributeList l) {
 		super(l);

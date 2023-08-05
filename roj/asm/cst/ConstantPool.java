@@ -1,14 +1,18 @@
 package roj.asm.cst;
 
+import roj.asm.AsmShared;
 import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.util.List;
 import java.util.function.Consumer;
+
+import static roj.asm.cst.Constant.*;
 
 /**
  * @author Roj234
@@ -16,70 +20,59 @@ import java.util.function.Consumer;
  * @since 2021/5/29 17:16
  */
 public class ConstantPool {
-	private Object[] cst;
-	private SimpleList<Constant> constants;
-	private MyHashSet<Constant> refMap;
-	int length;
+	public static final int ONLY_STRING = -1, BYTE_STRING = 0, CHAR_STRING = 1;
+
+	private final SimpleList<Constant> constants;
+	private final MyHashSet<Constant> refMap;
+	private int length;
 
 	public ConstantPool() {
-		this.constants = new SimpleList<>(64);
-		this.refMap = new MyHashSet<>(64);
+		constants = new SimpleList<>();
+		refMap = new MyHashSet<>();
 	}
 
-	public ConstantPool(int len) {
-		len--;
-
-		this.cst = new Constant[len];
-		this.constants = new SimpleList<>();
-		this.constants.setRawArray(cst);
-		this.constants.i_setSize(len);
-		this.refMap = new MyHashSet<>(cst.length);
+	public ConstantPool(int size) {
+		constants = new SimpleList<>(size);
+		refMap = new MyHashSet<>(size);
 	}
 
-	public void init(int len) {
-		len--;
+	public void read(DynByteBuf r, int stringDecodeType) {
+		int len = r.readUnsignedShort()-1;
 
-		Object[] prevArr = constants.getRawArray();
-		if (prevArr != null && prevArr.length >= len) {
-			cst = prevArr;
-		} else {
-			cst = new Constant[len];
-			constants.setRawArray(cst);
-		}
+		constants.clear();
+		constants.ensureCapacity(len);
+		constants.i_setSize(len);
 
 		refMap.clear();
 		refMap.ensureCapacity(len);
 
-		constants.i_setSize(len);
-	}
+		Object[] csts = constants.getInternalArray();
 
-	public void read(DynByteBuf r, boolean utfNow) {
 		int begin = r.rIndex;
 
-		Object[] csts = this.cst;
-		int len = constants.size();
+		if (stringDecodeType == ONLY_STRING) {
+			readName(r, csts, len, listener);
+
+			length = r.rIndex - begin;
+			return;
+		}
+
+		boolean decodeUtf = stringDecodeType != BYTE_STRING;
 
 		int twoPass = -1;
 		int i = 0;
 		while (i < len) {
-			Constant c;
-			try {
-				c = readConstant(r, csts, i, utfNow);
-			} catch (ClassCastException e) {
-				int line = e.getStackTrace()[0].getLineNumber();
-				throw new IllegalStateException("常量池存在错误 line " + line + ": " + e.getMessage());
-			}
+			Constant c = readConstant(r, csts, i, decodeUtf);
 			if (c == null) c = (Constant) csts[i];
 
 			csts[i++] = c;
 			c.setIndex(i);
 			if (listener != null) listener.accept(c);
 			switch (c.type()) {
-				case Constant.LONG:
-				case Constant.DOUBLE:
+				case LONG: case DOUBLE:
 					csts[i++] = CstTop.TOP;
 					break;
-				case Constant.METHOD_HANDLE:
+				case METHOD_HANDLE:
 					if (twoPass < 0) twoPass = i-1;
 					break;
 			}
@@ -89,86 +82,67 @@ public class ConstantPool {
 			i = twoPass;
 			while (i < len) {
 				Constant c = (Constant) csts[i++];
-				if (c.type() == Constant.METHOD_HANDLE) {
+				if (c.type() == METHOD_HANDLE) {
 					CstMethodHandle mh = (CstMethodHandle) c;
 					mh.setRef((CstRef) csts[mh.getRefIndex()-1]);
 				}
 			}
 		}
 
-		this.length = r.rIndex - begin;
-		this.cst = null;
+		length = r.rIndex - begin;
 	}
 
-	public void readName(DynByteBuf r) {
-		Object[] csts = this.cst;
-		int len = constants.size();
-
+	private static void readName(DynByteBuf r, Object[] csts, int len, Consumer<Constant> listener) {
 		int i = 0;
 		while (i < len) {
-			Constant c;
-			next:
-			try {
-				switch (r.get(r.rIndex)) {
-					case Constant.UTF:
-					case Constant.CLASS:
-						c = readConstant(r, csts, i, false);
-						break next;
-					case Constant.INT:
-					case Constant.FLOAT:
-					case Constant.NAME_AND_TYPE:
-					case Constant.FIELD:
-					case Constant.METHOD:
-					case Constant.INTERFACE:
-					case Constant.DYNAMIC:
-					case Constant.INVOKE_DYNAMIC:
-						r.rIndex += 5;
-						i++;
-						break;
-					case Constant.LONG:
-					case Constant.DOUBLE:
-						r.rIndex += 9;
-						i += 2;
-						break;
-					case Constant.METHOD_TYPE:
-					case Constant.MODULE:
-					case Constant.PACKAGE:
-					case Constant.STRING:
-						r.rIndex += 3;
-						i++;
-						break;
-					case Constant.METHOD_HANDLE:
-						r.rIndex += 4;
-						i++;
-						break;
-					default: throw new IllegalStateException("Unknown " + r);
-				}
-				continue;
-			} catch (ClassCastException e) {
-				int line = e.getStackTrace()[0].getLineNumber();
-				throw new IllegalStateException("常量池存在错误 line " + line + ": " + e.getMessage());
-			}
-			if (c == null) c = (Constant) csts[i];
+			switch (r.get(r.rIndex)) {
+				case UTF: case CLASS:
+					Constant c = readConstant(r, csts, i, false);
+					if (c == null) c = (Constant) csts[i];
+					if (listener != null) listener.accept(c);
 
-			csts[i++] = c;
-			c.setIndex(i);
-			if (listener != null) listener.accept(c);
-			switch (c.type()) {
-				case Constant.LONG:
-				case Constant.DOUBLE:
+					csts[i++] = c;
+					c.setIndex(i);
+					break;
+				case INT: case FLOAT:
+				case NAME_AND_TYPE:
+				case FIELD: case METHOD: case INTERFACE:
+				case DYNAMIC:
+				case INVOKE_DYNAMIC:
+					r.rIndex += 5;
 					i++;
 					break;
+				case LONG: case DOUBLE:
+					r.rIndex += 9;
+					i += 2;
+					break;
+				case METHOD_TYPE:
+				case MODULE:
+				case PACKAGE:
+				case STRING:
+					r.rIndex += 3;
+					i++;
+					break;
+				case METHOD_HANDLE:
+					r.rIndex += 4;
+					i++;
+					break;
+				default: throw new IllegalStateException("Unknown constant since "+r.dump());
 			}
 		}
-
-		this.cst = null;
 	}
 
-	static Constant readConstant(DynByteBuf r, Object[] arr, int i, boolean parseUTF) {
+	private static Constant readConstant(DynByteBuf r, Object[] arr, int i, boolean parseUTF) {
 		int b = r.readUnsignedByte();
 		switch (b) {
-			case Constant.UTF: {
-				Object data = parseUTF ? r.readUTF() : r.readBytes(r.readUnsignedShort());
+			case UTF: {
+				Object data;
+				if (parseUTF) data = r.readUTF();
+				else {
+					int len = r.readUnsignedShort();
+					data = len <= 16 ? r.readBytes(len) : r.slice(len);
+				}
+
 				if (arr[i] != null) {
 					try {
 						((CstUTF) arr[i]).data = data;
@@ -179,16 +153,16 @@ public class ConstantPool {
 				}
 				return new CstUTF(data);
 			}
-			case Constant.INT: return new CstInt(r.readInt());
-			case Constant.FLOAT: return new CstFloat(r.readFloat());
-			case Constant.LONG: return new CstLong(r.readLong());
-			case Constant.DOUBLE: return new CstDouble(r.readDouble());
+			case INT: return new CstInt(r.readInt());
+			case FLOAT: return new CstFloat(r.readFloat());
+			case LONG: return new CstLong(r.readLong());
+			case DOUBLE: return new CstDouble(r.readDouble());
 
-			case Constant.METHOD_TYPE:
-			case Constant.MODULE:
-			case Constant.PACKAGE:
-			case Constant.CLASS:
-			case Constant.STRING: {
+			case METHOD_TYPE:
+			case MODULE:
+			case PACKAGE:
+			case CLASS:
+			case STRING: {
 				int id = r.readUnsignedShort()-1;
 				CstUTF utf;
 				if (arr[id] == null) arr[id] = utf = new CstUTF();
@@ -204,14 +178,14 @@ public class ConstantPool {
 				}
 
 				switch (b) {
-					case Constant.METHOD_TYPE: return new CstMethodType(utf);
-					case Constant.MODULE: return new CstModule(utf);
-					case Constant.PACKAGE: return new CstPackage(utf);
-					case Constant.CLASS: return new CstClass(utf);
+					case METHOD_TYPE: return new CstMethodType(utf);
+					case MODULE: return new CstModule(utf);
+					case PACKAGE: return new CstPackage(utf);
+					case CLASS: return new CstClass(utf);
 					default: return new CstString(utf);
 				}
 			}
-			case Constant.NAME_AND_TYPE: {
+			case NAME_AND_TYPE: {
 				int id = r.readUnsignedShort()-1;
 				CstUTF name;
 				if (arr[id] == null) arr[id] = name = new CstUTF();
@@ -235,9 +209,9 @@ public class ConstantPool {
 
 				return new CstNameAndType(name, type);
 			}
-			case Constant.FIELD:
-			case Constant.METHOD:
-			case Constant.INTERFACE: {
+			case FIELD:
+			case METHOD:
+			case INTERFACE: {
 				int id = r.readUnsignedShort()-1;
 				CstClass clz;
 				if (arr[id] == null) arr[id] = clz = new CstClass();
@@ -249,59 +223,53 @@ public class ConstantPool {
 				else nat = (CstNameAndType) arr[id];
 
 				switch (b) {
-					case Constant.FIELD: return new CstRefField(clz, nat);
-					case Constant.METHOD: return new CstRefMethod(clz, nat);
+					case FIELD: return new CstRefField(clz, nat);
+					case METHOD: return new CstRefMethod(clz, nat);
 					default: return new CstRefItf(clz, nat);
 				}
 			}
-			case Constant.DYNAMIC:
-			case Constant.INVOKE_DYNAMIC: {
+			case DYNAMIC:
+			case INVOKE_DYNAMIC: {
 				int id = r.readUnsignedShort(r.rIndex + 2)-1;
 				CstNameAndType desc;
 				if (arr[id] == null) arr[id] = desc = new CstNameAndType();
 				else desc = (CstNameAndType) arr[id];
 
-				CstDynamic dyn = new CstDynamic(b == Constant.INVOKE_DYNAMIC, r.readUnsignedShort(), desc);
+				CstDynamic dyn = new CstDynamic(b == INVOKE_DYNAMIC, r.readUnsignedShort(), desc);
 				r.rIndex += 2;
 				return dyn;
 			}
-			case Constant.METHOD_HANDLE: return new CstMethodHandle(r.readByte(), r.readUnsignedShort());
+			case METHOD_HANDLE: return new CstMethodHandle(r.readByte(), r.readUnsignedShort());
 			default: throw new IllegalArgumentException("无效的常量类型 " + b);
 		}
 	}
+	private static void typeError(int i, int b, Object o) { throw new IllegalArgumentException("pool["+i+"]的常量类型不匹配: 期待: "+Constant.toString(b)+" 得到: "+o); }
 
-	private static void typeError(int i, int b, Object o) {
-		throw new IllegalArgumentException("pool["+i+"]的常量类型不匹配: 期待: " + Constant.toString(b) + " 得到: " + o);
-	}
-
-	public List<Constant> array() { return constants; }
-	public Constant array(int i) { return i-- == 0 ? null : constants.get(i); }
-	public Constant get(DynByteBuf r) {
-		int id = r.readUnsignedShort();
-		return id-- == 0 ? null : constants.get(id);
-	}
-	public String getName(DynByteBuf r) {
+	public final List<Constant> array() { return constants; }
+	public final Constant array(int i) { return i-- == 0 ? Helpers.maybeNull() : constants.get(i); }
+	public final Constant get(DynByteBuf r) { return array(r.readUnsignedShort()); }
+	public String getRefName(DynByteBuf r) {
 		int id = r.readUnsignedShort()-1;
-		return id < 0 ? null : ((CstClass) constants.get(id)).name().str();
+		return id < 0 ? null : ((CstRefUTF) constants.get(id)).name().str();
 	}
 
-	private final CstTop fp = new CstTop();
+	private final CstTop fp = AsmShared.local().fp;
 
 	private void initRefMap() {
 		if (!refMap.isEmpty()) return;
-		Object[] cst = constants.getRawArray();
+		Object[] cst = constants.getInternalArray();
 		for (int i = 0; i < constants.size(); i++) {
 			Constant c = (Constant) cst[i];
 			if (c == CstTop.TOP) continue;
-			if (c != (c = refMap.intern(c))) {
-				c.setIndex(c.getIndex());
-			}
+
+			Constant c1 = refMap.intern(c);
+			if (c != c1) c.setIndex(c1.getIndex());
 		}
 	}
 
 	public void setUTFValue(CstUTF c, String str) {
 		int id = c.getIndex()-1;
-		if (id < 0 || id >= constants.size() || constants.getRawArray()[id] != c) {
+		if (id < 0 || id >= constants.size() || constants.getInternalArray()[id] != c) {
 			throw new IllegalArgumentException(c + "不在该常量池中");
 		}
 
@@ -330,22 +298,22 @@ public class ConstantPool {
 		constants.add(c);
 
 		switch (c.type()) {
-			case Constant.UTF: length += 3 + DynByteBuf.byteCountDioUTF(((CstUTF) c).str()); break;
-			case Constant.INT: case Constant.FLOAT:
-			case Constant.NAME_AND_TYPE: case Constant.INVOKE_DYNAMIC:
-			case Constant.METHOD: case Constant.FIELD: case Constant.INTERFACE:
+			case UTF: length += 3 + DynByteBuf.byteCountDioUTF(((CstUTF) c).str()); break;
+			case INT: case FLOAT:
+			case NAME_AND_TYPE: case INVOKE_DYNAMIC:
+			case METHOD: case FIELD: case INTERFACE:
 				length += 5; break;
-			case Constant.LONG: case Constant.DOUBLE:
+			case LONG: case DOUBLE:
 				length += 9;
 				constants.add(CstTop.TOP);
 				break;
-			case Constant.METHOD_TYPE:
-			case Constant.STRING: case Constant.CLASS:
-			case Constant.MODULE: case Constant.PACKAGE:
+			case METHOD_TYPE:
+			case STRING: case CLASS:
+			case MODULE: case PACKAGE:
 				length += 3;
 				break;
-			case Constant.METHOD_HANDLE: length += 4; break;
-			case Constant._TOP_: break;
+			case METHOD_HANDLE: length += 4; break;
+			case _TOP_: break;
 			default: throw new IllegalStateException("Unknown type " + c.type());
 		}
 
@@ -387,7 +355,7 @@ public class ConstantPool {
 	public CstClass getClazz(String name) {
 		CstUTF uName = getUtf(name);
 
-		Object ref = refMap.find(fp.set(Constant.CLASS, uName));
+		Object ref = refMap.find(fp.set(CLASS, uName));
 		if (ref == fp) {
 			CstClass t = new CstClass();
 			t.setValue(uName);
@@ -403,7 +371,7 @@ public class ConstantPool {
 		CstClass clazz = getClazz(owner);
 		CstNameAndType nat = getDesc(name, desc);
 
-		Object ref = refMap.find(fp.set(Constant.METHOD, clazz, nat));
+		Object ref = refMap.find(fp.set(METHOD, clazz, nat));
 		if (ref == fp) {
 			CstRefMethod t = new CstRefMethod();
 			t.clazz(clazz);
@@ -420,7 +388,7 @@ public class ConstantPool {
 		CstClass clazz = getClazz(owner);
 		CstNameAndType nat = getDesc(name, desc);
 
-		Object ref = refMap.find(fp.set(Constant.FIELD, clazz, nat));
+		Object ref = refMap.find(fp.set(FIELD, clazz, nat));
 		if (ref == fp) {
 			CstRefField t = new CstRefField();
 			t.clazz(clazz);
@@ -437,7 +405,7 @@ public class ConstantPool {
 		CstClass clazz = getClazz(owner);
 		CstNameAndType nat = getDesc(name, desc);
 
-		Object ref = refMap.find(fp.set(Constant.INTERFACE, clazz, nat));
+		Object ref = refMap.find(fp.set(INTERFACE, clazz, nat));
 		if (ref == fp) {
 			CstRefItf t = new CstRefItf();
 			t.clazz(clazz);
@@ -452,16 +420,17 @@ public class ConstantPool {
 
 	private CstRef getRefByType(String owner, String name, String desc, byte type) {
 		switch (type) {
-			case Constant.FIELD: return getFieldRef(owner, name, desc);
-			case Constant.METHOD: return getMethodRef(owner, name, desc);
+			case FIELD: return getFieldRef(owner, name, desc);
+			case METHOD: return getMethodRef(owner, name, desc);
 			default: // no default branch
-			case Constant.INTERFACE: return getItfRef(owner, name, desc);
+			case INTERFACE: return getItfRef(owner, name, desc);
 		}
 	}
 
 	public CstMethodHandle getMethodHandle(String owner, String name, String desc, byte kind, byte type) {
 		CstRef ref = getRefByType(owner, name, desc, type);
 
+		//fp.set(kind, ref);
 		CstMethodHandle handle = new CstMethodHandle(kind, -1);
 		handle.setRef(ref);
 
@@ -492,7 +461,7 @@ public class ConstantPool {
 	public CstPackage getPackage(String owner) {
 		CstUTF name = getUtf(owner);
 
-		Object ref = refMap.find(fp.set(Constant.PACKAGE, name));
+		Object ref = refMap.find(fp.set(PACKAGE, name));
 		if (ref == fp) {
 			CstPackage t = new CstPackage();
 			t.setValue(name);
@@ -507,7 +476,7 @@ public class ConstantPool {
 	public CstModule getModule(String owner) {
 		CstUTF name = getUtf(owner);
 
-		Object ref = refMap.find(fp.set(Constant.MODULE, name));
+		Object ref = refMap.find(fp.set(MODULE, name));
 		if (ref == fp) {
 			CstModule t = new CstModule();
 			t.setValue(name);
@@ -548,56 +517,57 @@ public class ConstantPool {
 		return ref.getIndex();
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({"unchecked", "fallthrough"})
 	public <T extends Constant> T reset(T c) {
-		if (c == null) throw new NullPointerException("Check null before reset()!");
+		//assert c != null;
 		switch (c.type()) {
-			case Constant.DYNAMIC:
-			case Constant.INVOKE_DYNAMIC: {
+			case DYNAMIC:
+			case INVOKE_DYNAMIC: {
 				CstDynamic dyn = (CstDynamic) c;
 				dyn.setDesc(reset(dyn.desc()));
 			}
 			break;
-			case Constant.CLASS:
-			case Constant.STRING:
-			case Constant.METHOD_TYPE:
-			case Constant.MODULE:
-			case Constant.PACKAGE: {
+			case CLASS:
+			case STRING:
+			case METHOD_TYPE:
+			case MODULE:
+			case PACKAGE: {
 				CstRefUTF ref = (CstRefUTF) c;
 				ref.setValue(reset(ref.name()));
 			}
 			break;
-			case Constant.METHOD_HANDLE: {
+			case METHOD_HANDLE: {
 				CstMethodHandle ref = ((CstMethodHandle) c);
 				ref.setRef(reset(ref.getRef()));
 			}
 			break;
-			case Constant.METHOD:
-			case Constant.INTERFACE:
-			case Constant.FIELD: {
+			case METHOD:
+			case INTERFACE:
+			case FIELD: {
 				CstRef ref = (CstRef) c;
 				ref.clazz(reset(ref.clazz()));
 				ref.desc(reset(ref.desc()));
 			}
 			break;
-			case Constant.NAME_AND_TYPE: {
+			case NAME_AND_TYPE: {
 				CstNameAndType nat = (CstNameAndType) c;
 				nat.name(reset(nat.name()));
 				nat.setType(reset(nat.getType()));
 			}
 			break;
-			case Constant.INT:
-			case Constant.DOUBLE:
-			case Constant.FLOAT:
-			case Constant.LONG:
-			case Constant.UTF:
+			case UTF:
+				((CstUTF) c).str();
+			case INT:
+			case DOUBLE:
+			case FLOAT:
+			case LONG:
 				// No need to do anything, just append it
 				break;
 			default: throw new IllegalArgumentException("Unsupported type: " + c.type());
 		}
 
 		int id = c.getIndex()-1;
-		if (id >= 0 && id < constants.size() && constants.getRawArray()[id] == c) {
+		if (id >= 0 && id < constants.size() && constants.getInternalArray()[id] == c) {
 			return c;
 		}
 
@@ -605,17 +575,14 @@ public class ConstantPool {
 		T t = (T) refMap.find(c);
 		if (t != c) return t;
 
+		// TODO thread safe implement
 		addConstant(c);
 		return c;
 	}
 
-	public void lightCopy(ConstantPool pool) {
-		this.constants = pool.constants;
-		this.cst = pool.cst;
-		this.refMap = pool.refMap;
-		this.length = pool.length;
-
-		if (listener != null) listener.accept(null);
+	public int byteLength() {
+		if (length == 0) throw new IllegalStateException("This pool is not ready to write");
+		return length;
 	}
 
 	public void write(DynByteBuf w) {
@@ -641,24 +608,32 @@ public class ConstantPool {
 			array[i++] = s1.equals("TOP")?"/":c.toString().substring(k);
 			array[i++] = IntMap.UNDEFINED;
 		}
-		return TextUtil.prettyTable(new StringBuilder("constants[" + constants.size() + "]=["), " ", " ", "    ", array).append("]").toString();
+		return TextUtil.prettyTable(new StringBuilder("constants[" + constants.size() + "]=["), "    ", array, " ", " ").append("]").toString();
 	}
 
 	public void clear() {
-		this.constants.clear();
-		this.refMap.clear();
-		this.length = 0;
+		constants.clear();
+		refMap.clear();
+		length = 0;
 		if (listener != null) listener.accept(null);
 	}
 
 	Consumer<Constant> listener;
+	public void setAddListener(Consumer<Constant> x) { listener = x; }
 
-	public void setAddListener(Consumer<Constant> listener) {
-		this.listener = listener;
-	}
+	public void replace(int i, Constant c) {
+		if (constants.get(i) == CstTop.TOP) throw new IllegalArgumentException("cannot replace top ("+i+")");
 
-	public int byteLength() {
-		if (length == 0) throw new IllegalStateException("This pool is not ready to write");
-		return length;
+		boolean isDualElement = i + 1 < constants.size() && constants.get(i + 1) == CstTop.TOP;
+		boolean isDualElement2 = c.type() == LONG || c.type() == DOUBLE;
+		if (isDualElement^isDualElement2) throw new IllegalArgumentException("cannot change element size ("+i+")");
+
+		Constant prev = constants.set(i, c);
+		c.setIndex(prev.getIndex());
+
+		if (!refMap.isEmpty()) {
+			refMap.remove(prev);
+			refMap.add(c);
+		}
 	}
 }

@@ -206,6 +206,18 @@ public abstract class MathUtils {
 		return (n < 0) ? 1 : n + 1;
 	}
 
+	public static long getMin2PowerOf(long n) {
+		if (n >= 4611686018427387904L) return 4611686018427387904L;
+		n--;
+		n |= n >>> 1;
+		n |= n >>> 2;
+		n |= n >>> 4;
+		n |= n >>> 8;
+		n |= n >>> 16;
+		n |= n >>> 32;
+		return (n < 0) ? 1 : n + 1;
+	}
+
 	public static float cos(float value) {
 		return (float) sin(HALF_PI + value);
 	}

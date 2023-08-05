@@ -10,7 +10,7 @@ import java.util.function.ToIntFunction;
 
 import static roj.collect.IntMap.UNDEFINED;
 
-public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntMap.Entry<V>>, ToIntFunction<V>, IIntMap<V> {
+public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<IntMap.Entry<V>>, ToIntFunction<V>, IIntMap<V> {
 	public void setNullId(int nullId) {
 		this.nullId = nullId;
 	}
@@ -31,7 +31,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 			throw new UnsupportedOperationException();
 		}
 
-		public Entry<V> nextEntry() {
+		public Entry<V> __next() {
 			return (Entry<V>) next;
 		}
 	}
@@ -79,12 +79,8 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 		return entry == null ? def : entry.k;
 	}
 
-	public Set<Map.Entry<Integer, V>> entrySet() {
-		return Helpers.cast(new EntrySet<>(this));
-	}
-	public Set<Entry<V>> selfEntrySet() {
-		return new EntrySet<>(this);
-	}
+	public Set<Entry<V>> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public Set<Map.Entry<Integer, V>> entrySet() { return Helpers.cast(selfEntrySet()); }
 
 	@SuppressWarnings("unchecked")
 	public void putAll(IntBiMap<V> map) {
@@ -111,9 +107,10 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 	}
 
 	@Override
-	public void removeEntry0(IntMap.Entry<V> vEntry) {
-		removeEntry((Entry<V>) vEntry);
-	}
+	public _Generic_Entry<?>[] __entries() { return entries; }
+
+	@Override
+	public void __remove(IntMap.Entry<V> vEntry) { removeEntry((Entry<V>) vEntry); }
 
 	@Nonnull
 	public V computeIfAbsentInt(int k, @Nonnull IntFunction<V> supplier) {
@@ -137,7 +134,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 			for (; i < j; i++) {
 				entry = (Entry<V>) entries[i];
 				while (entry != null) {
-					next = entry.nextEntry();
+					next = entry.__next();
 					int newIndex = indexFor(entry.k);
 					Entry<V> old = (Entry<V>) newEntries[newIndex];
 					newEntries[newIndex] = entry;
@@ -336,7 +333,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder("IntBiMap").append('{');
-		for (Entry<V> entry : new EntrySet<>(this)) {
+		for (Entry<V> entry : selfEntrySet()) {
 			sb.append(entry.getIntKey()).append('=').append(entry.getValue()).append(',');
 		}
 		if (!isEmpty()) {
@@ -375,14 +372,14 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 		}
 
 		if (currentEntry == entry) {
-			entries[index] = currentEntry.nextEntry();
+			entries[index] = currentEntry.__next();
 			entry.next = null;
 			return true;
 		}
 
 		while (currentEntry.next != null) {
 			prevEntry = currentEntry;
-			currentEntry = currentEntry.nextEntry();
+			currentEntry = currentEntry.__next();
 			if (currentEntry == entry) {
 				prevEntry.next = entry.next;
 				entry.next = null;
@@ -446,7 +443,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 		} else {
 			while (currentEntry.next != null) {
 				if (currentEntry == entry) return;
-				currentEntry = currentEntry.nextEntry();
+				currentEntry = currentEntry.__next();
 			}
 			currentEntry.next = entry;
 		}
@@ -473,7 +470,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 		if (entry == null) return null;
 		while (entry != null) {
 			if (entry.k == id) return entry;
-			entry = entry.nextEntry();
+			entry = entry.__next();
 		}
 		return null;
 	}
@@ -486,7 +483,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 			return entry;
 		}
 		while (entry.next != null) {
-			entry = entry.nextEntry();
+			entry = entry.__next();
 		}
 		Entry<V> subEntry = new Entry<>(id, v);
 		entry.next = subEntry;
@@ -510,46 +507,5 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements MapLike<IntM
 			entries[id1] = entry = new Entry<>(id, (V) UNDEFINED);
 		}
 		return entry;
-	}
-
-	static final class EntrySet<V> extends AbstractSet<Entry<V>> {
-		private final IntBiMap<V> map;
-
-		public EntrySet(IntBiMap<V> map) {
-			this.map = map;
-		}
-
-		public final int size() {
-			return map.size();
-		}
-
-		public final void clear() {
-			map.clear();
-		}
-
-		@Nonnull
-		public final Iterator<Entry<V>> iterator() {
-			return isEmpty() ? Collections.emptyIterator() : Helpers.cast(new EntryItr<>(map.entries, map));
-		}
-
-		public final boolean contains(Object o) {
-			if (!(o instanceof Entry)) return false;
-			Entry<?> e = (Entry<?>) o;
-			int key = e.getIntKey();
-			Entry<?> comp = map.getKeyEntry(key);
-			return comp != null && comp.v == e.getValue();
-		}
-
-		public final boolean remove(Object o) {
-			if (o instanceof Map.Entry) {
-				Entry<?> e = (Entry<?>) o;
-				return map.remove(e.k) != null;
-			}
-			return false;
-		}
-
-		public final Spliterator<Entry<V>> spliterator() {
-			return Spliterators.spliterator(iterator(), size(), 0);
-		}
 	}
 }

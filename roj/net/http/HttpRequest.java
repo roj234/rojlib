@@ -4,6 +4,7 @@ import roj.NativeLibrary;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
 import roj.net.URIUtil;
 import roj.net.ch.*;
 import roj.net.ch.handler.JSslClient;
@@ -68,8 +69,8 @@ public abstract class HttpRequest {
 	public final String method() { return action; }
 
 	public final HttpRequest header(CharSequence k, String v) { headers.put(k, v); return this; }
-	public final HttpRequest headers(Map<String, String> map) { headers.putAll(map); return this; }
-	public final HttpRequest headers(Map<String, String> map, boolean clear) {
+	public final HttpRequest headers(Map<? extends CharSequence, String> map) { headers.putAll(map); return this; }
+	public final HttpRequest headers(Map<? extends CharSequence, String> map, boolean clear) {
 		if (clear) headers.clear();
 		headers.putAll(map);
 		return this;
@@ -111,7 +112,7 @@ public abstract class HttpRequest {
 	public final HttpRequest url(String protocol, String site, String path, String query) {
 		this.protocol = protocol.toLowerCase();
 		this.site = site;
-		if (!path.startsWith("/")) throw new IllegalArgumentException("path must start with /");
+		if (!path.startsWith("/")) path = "/".concat(path);
 		this.path = path;
 		this.query = query;
 
@@ -175,7 +176,7 @@ public abstract class HttpRequest {
 			}
 			ch.connect(_address, timeout);
 
-			POLLER.register(ch, null);
+			ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 		}
 	}
 
@@ -190,7 +191,7 @@ public abstract class HttpRequest {
 		ch.addLast("h11@timer", new Timeout(timeout, 1000))
 		  .addLast("h11@merger", client);
 		connect(ch, timeout);
-		POLLER.register(ch, null);
+		ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 		return client;
 	}
 
@@ -301,8 +302,9 @@ public abstract class HttpRequest {
 					if (!buf.isWritable()) return null;
 					ctx.channelWrite(buf);
 				} finally {
-					ctx.reserve(buf);
+					BufferPool.reserve(buf);
 				}
+				return body;
 			}
 		}
 		return null;
@@ -335,7 +337,7 @@ public abstract class HttpRequest {
 	}
 	public abstract HttpRequest clone();
 
-	public static final NamespaceKey DOWNLOAD_EOF = NamespaceKey.of("hc","data_eof");
+	public static final Identifier DOWNLOAD_EOF = Identifier.of("hc","data_eof");
 
 	protected Object _body;
 	protected byte state;
@@ -345,14 +347,12 @@ public abstract class HttpRequest {
 
 	public static HttpRequest nts() { return new HttpClient11(); }
 
-	public static final SelectorLoop POLLER = new SelectorLoop(null, "NIO请求池", 0, 4, 60000, 100);
-
 	public static int POOLED_KEEPALIVE_TIMEOUT = 60000;
 	private static final Function<InetSocketAddress, Pool> fn = (x) -> new Pool(8);
 	private static final Map<InetSocketAddress, Pool> pool = new ConcurrentHashMap<>();
 
 	private static final class Pool extends RingBuffer<MyChannel> implements ChannelHandler {
-		static final TypedName<AtomicLong> SLEEP = new TypedName<>("_sleep");
+		static final AttributeKey<AtomicLong> SLEEP = new AttributeKey<>("_sleep");
 
 		final ReentrantLock lock = new ReentrantLock();
 		final Condition available = lock.newCondition();
@@ -444,7 +444,7 @@ public abstract class HttpRequest {
 							  .addLast("h11@merger", client);
 							request.connect(ch, timeout);
 							ch.addFirst("h11@pool", this);
-							POLLER.register(ch, null);
+							ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 						} catch (Throwable e) {
 							freeConnectionSlot.getAndIncrement();
 							throw e;
