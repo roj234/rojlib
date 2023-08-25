@@ -17,10 +17,8 @@ import java.nio.charset.*;
 import java.nio.file.StandardOpenOption;
 
 /**
- * 现在，你不必将整个文件读取到内存中
  * @author Roj234
  * @since 2022/12/11 0011 9:12
- * // 注释：实测未知原因asInputStream比DynByteBuf更快.
  */
 public class StreamReader extends Reader implements CharSequence, Closeable, Finishable {
 	private char[] buf;
@@ -32,7 +30,7 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 
 	private final CharsetDecoder cd;
 	private final UnsafeCharset ucs;
-	private final ByteBuffer ib;
+	private ByteBuffer ib;
 	private CharBuffer ob;
 
 	public static StreamReader auto(File file) throws IOException { return new StreamReader(file, null); }
@@ -64,10 +62,7 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 			buf.clear();
 
 			lock = buf;
-
 			ib = buf.nioBuffer();
-			ib.flip();
-			ib.limit(0);
 
 			if (in instanceof InputStream) {
 				type = 0;
@@ -80,16 +75,23 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 
 		if (charset == null) {
 			try (ChineseCharsetDetector cd = new ChineseCharsetDetector(in)) {
-				if (type == 0) cd.buffer(ib.array(),ib.arrayOffset(),ib.capacity());
-				else if (type == 1) cd.limit(ib.capacity());
-
 				charset = Charset.forName(cd.detect());
 
-				if (type == 0) ib.limit(cd.limit()).position(cd.offset());
-				else if (type == 1) {
-					ib.clear(); ib.put(cd.buffer(), cd.offset(), cd.limit()-cd.offset()).flip();
-					ArrayCache.getDefaultCache().putArray(cd.buffer());
-				} else ib.position(cd.offset());
+				if (type == 2) {
+					ib.position(ib.position() + cd.skip());
+				} else {
+					if (ib.capacity() < cd.limit()) {
+						pool.reserve((DynByteBuf) lock);
+						DynByteBuf buf = pool.buffer(ib.isDirect(), cd.limit());
+
+						lock = buf;
+						ib = buf.nioBuffer();
+					}
+
+					ib.clear();
+					ib.put(cd.buffer(), 0, cd.limit());
+					ib.flip();
+				}
 			} catch (Throwable e) {
 				in.close();
 				throw e;
@@ -221,25 +223,27 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 	}
 
 	private void read(ByteBuffer b) throws IOException {
-		b.compact();
 		int r;
 		switch (type) {
 			case 0:
+				b.compact();
 				r = ((InputStream) in).read(b.array(), b.arrayOffset() + b.position(), b.remaining());
 				if (r >= 0) {
 					b.position(b.position() + r);
 					bytesRead += r;
 				} else eof = -1;
+				b.flip();
 				break;
 			case 1:
+				b.compact();
 				r = ((ReadableByteChannel) in).read(b);
 				if (r >= 0) bytesRead += r;
 				else eof = -1;
+				b.flip();
 				break;
 			case 2:
 			default: eof = -1; break;
 		}
-		b.flip();
 	}
 
 	public final void releaseBefore(int pos) {

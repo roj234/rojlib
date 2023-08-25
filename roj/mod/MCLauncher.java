@@ -1181,7 +1181,7 @@ public class MCLauncher extends JFrame {
 		return runProcess(args, new File(mc_conf.getString("root")), processFlags, consumer);
 	}
 
-	private static final Tokenizer l = new Tokenizer().literalEnd(" \r\n\t\f").defaultC2C(0);
+	private static final Tokenizer l = Tokenizer.arguments();
 	private static void replace(String arg, Map<String, String> env, SimpleList<String> args) {
 		CharList sb = new CharList();
 		Template.replaceOnce(env, arg, sb);

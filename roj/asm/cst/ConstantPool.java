@@ -56,6 +56,9 @@ public class ConstantPool {
 	public void read(DynByteBuf r, boolean utfNow) {
 		int begin = r.rIndex;
 
+		// java9 byte string
+		//utfNow |= ReflectionUtils.JAVA_VERSION > 8;
+
 		Object[] csts = this.cst;
 		int len = constants.size();
 

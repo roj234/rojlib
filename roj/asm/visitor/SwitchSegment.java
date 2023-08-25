@@ -20,7 +20,7 @@ public final class SwitchSegment extends Segment {
 	private byte code;
 	int bci;
 
-	boolean opt;
+	public boolean opt;
 
 	SwitchSegment(int code, Label def, List<SwitchEntry> targets, int origPos) {
 		this.code = (byte) code;
@@ -68,6 +68,7 @@ public final class SwitchSegment extends Segment {
 		List<SwitchEntry> m = targets;
 		if (def == null) throw new NullPointerException("default分支");
 		if (code == TABLESWITCH) {
+			if (m.isEmpty()) throw new NullPointerException("switch没有分支");
 			int lo = m.get(0).key;
 			int hi = m.get(m.size() - 1).key;
 

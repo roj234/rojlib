@@ -108,6 +108,98 @@ public class BsDiff {
 		}
 	}
 
+	public int bscompare(byte[] oldData, byte[] newData) {
+		int diffBytes = 0;
+
+		int scan = 0;
+		int lastScan = 0;
+		int pos = 0;
+		int lastPos = 0;
+		int len = 0;
+		int lastOffset = 0;
+		while (scan < newData.length) {
+			int i;
+			int match = 0;
+			int scsc = scan += len;
+			while (scan < newData.length) {
+				Int2IntMap.Entry searchRet = search(scan, newData, oldData, 0, oldData.length);
+				pos = searchRet.getIntKey();
+				len = searchRet.getIntValue();
+				while (scsc < scan + len) {
+					if (scsc + lastOffset < oldData.length && oldData[scsc + lastOffset] == newData[scsc]) {
+						++match;
+					}
+					++scsc;
+				}
+				if (len == match && len != 0 || len > match + 8) break;
+				if (scan + lastOffset < oldData.length && oldData[scan + lastOffset] == newData[scan]) {
+					--match;
+				}
+				++scan;
+			}
+			if (len == match && scan != newData.length) continue;
+			int f = 0;
+			int F2 = 0;
+			int lenF = 0;
+			int i2 = 0;
+			while (i2 < scan - lastScan && i2 < oldData.length - lastPos) {
+				if (newData[lastScan + i2] == oldData[lastPos + i2]) {
+					++f;
+				}
+				if (2 * f - ++i2 <= 2 * F2 - lenF) continue;
+				F2 = f;
+				lenF = i2;
+			}
+			int b = 0;
+			int B = 0;
+			int lenB = 0;
+			if (scan < newData.length) {
+				for (int i3 = 1; i3 < scan - lastScan + 1 && i3 < pos + 1; ++i3) {
+					if (newData[scan - i3] == oldData[pos - i3]) {
+						++b;
+					}
+					if (2 * b - i3 <= 2 * B - lenB) continue;
+					B = b;
+					lenB = i3;
+				}
+			}
+			int overlap = -1;
+			if (lenF + lenB > scan - lastScan) {
+				overlap = lastScan + lenF - (scan - lenB);
+				int s = 0;
+				int S = 0;
+				int lenS = 0;
+				for (int i4 = 0; i4 < overlap; ++i4) {
+					if (oldData[lastPos + lenF - overlap + i4] == newData[lastScan + lenF - overlap + i4]) {
+						++s;
+					}
+					if (oldData[pos - lenB + i4] == newData[scan - lenB + i4]) {
+						--s;
+					}
+					if (s <= S) continue;
+					S = s;
+					lenS = i4;
+				}
+				lenF = lenF - overlap + lenS;
+				lenB -= lenS;
+			}
+
+			for (i = 0; i < lenF; ++i) {
+				if (oldData[lastPos + i] != newData[lastScan + i]) {
+					diffBytes++;
+				}
+			}
+
+			if (overlap == -1) diffBytes += scan - lastScan - lenF - lenB;
+
+			lastPos = pos - lenB;
+			lastScan = scan - lenB;
+			lastOffset = pos - scan;
+		}
+
+		return diffBytes;
+	}
+
 	private int[] sfx = null;
 
 	public void initSuffix(byte[] rawData) {

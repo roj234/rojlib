@@ -47,15 +47,10 @@ public class ClassWrapper implements Function<String, Class<?>> {
 		));
 	}
 
-	public void registerTransformer(String name) {
-		try {
-			ITransformer transformer = (ITransformer) PARENT.loadClass(name).newInstance();
-			transformers.add(transformer);
-			if (nameTransformer == null && transformer instanceof INameTransformer)
-				nameTransformer = (INameTransformer) transformer;
-		} catch (Exception e) {
-			LOGGER.log(Level.ERROR, "A critical problem occurred registering transformer {}", e, name);
-		}
+	public void registerTransformer(ITransformer transformer) {
+		transformers.add(transformer);
+		if (nameTransformer == null && transformer instanceof INameTransformer)
+			nameTransformer = (INameTransformer) transformer;
 	}
 
 	@Override

@@ -1,20 +1,23 @@
-package roj.misc;
+package roj.text.novel;
 
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.collect.TrieTree;
 import roj.concurrent.TaskPool;
+import roj.config.data.CList;
+import roj.config.data.CMapping;
+import roj.config.serial.ToYaml;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.GB18030;
 import roj.text.StreamReader;
-import roj.ui.BottomLine;
 import roj.ui.EasyProgressBar;
 import roj.util.BsDiff;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -30,7 +33,7 @@ import java.util.function.Function;
 public class TextDuplicateCheck {
 	IntMap<List<File>> files = new IntMap<>();
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 		replacement = new TrieTree<>();
 		replacement.put("\r", "");
 		replacement.put("\n", "");
@@ -38,6 +41,8 @@ public class TextDuplicateCheck {
 		replacement.put(" ", "");
 		replacement.put("　", "");
 
+		ty = (ToYaml) new ToYaml().to(new FileOutputStream(new File("D:\\Desktop\\similar.yml")));
+		ty.valueList();
 		TextDuplicateCheck inst = new TextDuplicateCheck();
 		File f = new File(args[0]);
 		pathLen = f.getAbsolutePath().length()+1;
@@ -45,6 +50,7 @@ public class TextDuplicateCheck {
 			inst.add(file);
 		}
 		inst.diff();
+		ty.finish();
 		bar.end("fin.");
 	}
 
@@ -57,6 +63,7 @@ public class TextDuplicateCheck {
 	static long tot;
 	static int pathLen;
 	static TrieTree<String> replacement;
+	static ToYaml ty;
 
 	public void diff() {
 		ConcurrentHashMap<File, byte[]> cached = new ConcurrentHashMap<>();
@@ -80,6 +87,7 @@ public class TextDuplicateCheck {
 				if (ob.wIndex() > 16384) ob.wIndex(16384);
 				return ob.toByteArray();
 			} catch (IOException e) {
+				System.out.println("error is " + file.getName());
 				e.printStackTrace();
 				return new byte[1];
 			} finally {
@@ -106,7 +114,6 @@ public class TextDuplicateCheck {
 
 			TaskPool.CpuMassive().pushTask(() -> {
 				BsDiff diff = new BsDiff();
-				ByteList patch = new ByteList(4096);
 				List<IntMap.Entry<File>> sorter = new SimpleList<>();
 
 				for (int j = begin; j < ok.size(); j++) {
@@ -125,40 +132,37 @@ public class TextDuplicateCheck {
 						if (tc.length() < boundMin || tc.length() > boundMax) continue;
 
 						Set<File> seta = checked.computeIfAbsent(tc, Helpers.fnMyHashSet());
+						synchronized (seta) { if (!seta.add(me)) continue; }
 						Set<File> setb = checked.computeIfAbsent(me, Helpers.fnMyHashSet());
-						synchronized (seta) {
-							synchronized (setb) {
-								if (!seta.add(me) || !setb.add(tc)) continue;
-							}
-						}
+						synchronized (setb) { if (!setb.add(tc)) continue; }
 
 						byte[] dataB = cached.computeIfAbsent(tc, fileLoader);
 
-						patch.clear();
-						diff.bsdiff1(dataA, dataB, patch);
-						int len = 0;
-						for (int l = 0; l < patch.length(); l++) {
-							byte b = patch.list[l];
-							if (b != 0) len++;
-						}
-						if (len < Math.min(dataA.length, dataB.length) / 3) {
+						int len = diff.bscompare(dataA, dataB);
+						//if (len < 8192)
+						if (len < Math.min(dataA.length, dataB.length) / 2) {
 							sorter.add(new IntMap.Entry<>(len, ok.get(k)));
 						}
 					}
 
 					if (sorter.size() > 0) {
 						sorter.sort((o1, o2) -> Integer.compare(o1.getIntKey(), o2.getIntKey()));
-						CharList tmp = new CharList().append("================================\n");
-						tmp.append("差异自 " + me.getAbsolutePath().substring(pathLen) + "("+ me.length()+" bytes)\n");
-						for (int k = 0; k < Math.min(5, sorter.size()); k++) {
+						CMapping diffMap = new CMapping();
+						diffMap.put("file", me.getAbsolutePath().substring(pathLen));
+						diffMap.put("size", me.length());
+						CList minor = new CList();
+						for (int k = 0; k < sorter.size(); k++) {
 							IntMap.Entry<File> e = sorter.get(k);
-							tmp.append((k+1)+". " + e.getValue().getAbsolutePath().substring(pathLen) + "("+e.getValue().length()+" bytes): " + e.getIntKey()+"\n");
+							CMapping map1 = new CMapping();
+							minor.add(map1);
+							map1.put("file", e.getValue().getAbsolutePath().substring(pathLen));
+							map1.put("size", e.getValue().length());
+							map1.put("diff", e.getIntKey());
 						}
-						if (sorter.size() > 5) {
-							tmp.append("和 " + (sorter.size()-5) + " 更多项目\n");
+						diffMap.put("diff", minor);
+						synchronized (ty) {
+							diffMap.forEachChild(ty);
 						}
-						tmp.append("================================");
-						BottomLine.sysErr.println(tmp.toStringAndFree());
 					}
 
 					fin.add(ok.size()-1);
