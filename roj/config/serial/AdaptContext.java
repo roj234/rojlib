@@ -12,7 +12,7 @@ import roj.util.Helpers;
  * @author Roj234
  * @since 2023/3/19 0019 19:16
  */
-final class AdaptContext implements CAdapter<Object> {
+class AdaptContext implements CAdapter<Object> {
 	private final Adapter root;
 	Adapter curr;
 
@@ -77,9 +77,10 @@ final class AdaptContext implements CAdapter<Object> {
 	String serCtx;
 
 	public AdaptContext(Adapter root) {
-		this.root = root;
+		this.curr = this.root = root;
 		if (root.fieldCount() > 32) fieldStateEx = new MyBitSet(root.fieldCount()-32);
-		reset();
+
+		fieldId = -2;
 	}
 
 	public final void value(boolean l) {curr.read(this,l);}
@@ -213,7 +214,7 @@ final class AdaptContext implements CAdapter<Object> {
 		return ref;
 	}
 	public final boolean finished() { return finished; }
-	public final void reset() {
+	public void reset() {
 		fieldId = -2;
 		fieldState = 0;
 		if (fieldStateEx != null) fieldStateEx.clear();
@@ -227,5 +228,5 @@ final class AdaptContext implements CAdapter<Object> {
 		curr = root;
 	}
 
-	public final void write(CVisitor c, Object o) { root.write(c, o); }
+	public void write(CVisitor c, Object o) { root.write(c, o); }
 }

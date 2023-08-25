@@ -7,6 +7,26 @@ import java.util.List;
  * @since 2022/1/11 17:45
  */
 final class ObjAny extends Adapter {
+	private static final String ID_PREVOBJECT = "#REF";
+	private static final String ID_PREVOBJECT_ID = "_";
+	private static final class PrevObject extends Adapter {
+		static final PrevObject INSTANCE = new PrevObject();
+
+		void key(AdaptContext ctx, String key) {
+			if (!key.equals(ID_PREVOBJECT_ID)) throw new IllegalArgumentException("Excepting ID_PREVOBJECT_ID");
+			ctx.setKeyHook(0);
+		}
+
+		void read(AdaptContext ctx, int no) {
+			if (!(ctx instanceof AdaptContextEx) || no < 0 || no >= ((AdaptContextEx) ctx).objectsR.size()) {
+				throw new IllegalArgumentException("PREVOBJECT_ID("+no+") exceeds bound");
+			} else {
+				ctx.ref = ((AdaptContextEx) ctx).objectsR.get(no);
+				ctx.popd(true);
+			}
+		}
+	}
+
 	final SerializerFactory gen;
 
 	ObjAny(SerializerFactory type) {
@@ -42,6 +62,12 @@ final class ObjAny extends Adapter {
 
 		assert ctx.fieldId == 0;
 
+		if (o.equals(ID_PREVOBJECT)) {
+			ctx.curr = PrevObject.INSTANCE;
+			ctx.fieldId = -1;
+			return;
+		}
+
 		Adapter ser;
 		try {
 			ser = gen.getByName(o.toString());
@@ -51,6 +77,9 @@ final class ObjAny extends Adapter {
 		ctx.curr = ser;
 		ctx.fieldId = -2;
 		ser.map(ctx, -1);
+
+		if (ctx instanceof AdaptContextEx)
+			((AdaptContextEx) ctx).objectsR.add(ctx.ref);
 	}
 
 	void write(CVisitor c, Object o) {
@@ -62,8 +91,17 @@ final class ObjAny extends Adapter {
 			if (ser.valueIsMap()) {
 				c.valueMap(ser.fieldCount()+1);
 				c.key("==");
-				c.value(o.getClass().getName());
-				ser.writeMap(c, o);
+
+				AdaptContextEx dyn = AdaptContextEx.LOCAL_OBJS.get();
+				if (dyn != null && !dyn.objectW.putIntIfAbsent(o, dyn.objectW.size())) {
+					c.value(ID_PREVOBJECT);
+					c.key(ID_PREVOBJECT_ID);
+					c.value(dyn.objectW.getInt(o));
+				} else {
+					c.value(o.getClass().getName());
+					ser.writeMap(c, o);
+				}
+
 				c.pop();
 			} else {
 				ser.write(c, o);

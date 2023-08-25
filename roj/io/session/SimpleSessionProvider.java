@@ -33,8 +33,8 @@ import java.util.function.BiConsumer;
  */
 public class SimpleSessionProvider extends SessionProvider implements BiConsumer<String,Map<String,Object>> {
 	private static final SerializerFactory factory = SerializerFactoryFactory.create(
-		SerializerFactory.GENERATE|SerializerFactory.IGNORE_UNKNOWN|
-		SerializerFactory.DYNAMIC|
+		SerializerFactory.GENERATE|
+		SerializerFactory.PREFER_DYNAMIC|
 		SerializerFactory.CHECK_INTERFACE|SerializerFactory.CHECK_PARENT);
 
 	private static final ThreadLocal<CAdapter<?>> local = new ThreadLocal<>();

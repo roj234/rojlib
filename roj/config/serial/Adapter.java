@@ -48,7 +48,7 @@ abstract class Adapter {
 
 	int fieldCount() { return 1; }
 	int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return fieldState; }
-	boolean valueIsMap() { return getClass().getName().contains("GenSer"); }
+	boolean valueIsMap() { return getClass().getName().contains("GA$"); }
 
 	void write(CVisitor c, Object o) {
 		if (o == null) c.valueNull();

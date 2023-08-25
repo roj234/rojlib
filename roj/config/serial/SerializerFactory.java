@@ -42,7 +42,7 @@ import static roj.asm.util.AccessFlag.*;
 
 /**
  * @author Roj233
- * @version 2.0
+ * @version 2.1
  * @since 2022/1/11 17:49
  */
 public final class SerializerFactory {
@@ -85,10 +85,15 @@ public final class SerializerFactory {
 		public String klass() { return reader.ownerClass(); }
 	}
 
+	private static final int PREFER_DYNAMIC_INTERNAL = 32, FORCE_DYNAMIC_INTERNAL = 64, APPLY_DYNAMIC_INTERNAL = 128;
 	public static final int
-		GENERATE = 1, CHECK_INTERFACE = 2, CHECK_PARENT = 4,
-		DYNAMIC = 8, IGNORE_UNKNOWN = 16, NO_CONSTRUCTOR = 32,
-		WRITE_OBJECT = 64;
+		GENERATE = 1,
+		CHECK_INTERFACE = 2, CHECK_PARENT = 4,
+		NO_CONSTRUCTOR = 8,
+		ALLOW_DYNAMIC = 16,
+		PREFER_DYNAMIC = ALLOW_DYNAMIC|PREFER_DYNAMIC_INTERNAL,
+		FORCE_DYNAMIC = PREFER_DYNAMIC|FORCE_DYNAMIC_INTERNAL;
+
 	public int flag;
 	public ToIntFunction<Class<?>> flagGetter;
 	private int flagFor(Class<?> className) {
@@ -99,7 +104,7 @@ public final class SerializerFactory {
 	public CEntry serialize(Object o) {
 		if (o == null) return CNull.NULL;
 		ToEntry c = new ToEntry();
-		adapter(o.getClass()).write(c, Helpers.cast(o));
+		adapter(Object.class).write(c, Helpers.cast(o));
 		return c.get();
 	}
 
@@ -246,25 +251,23 @@ public final class SerializerFactory {
 		return this;
 	}
 
-	@SuppressWarnings("unchecked")
-	public <T> CAdapter<T> adapter(Class<T> type) {
-		return (CAdapter<T>) new AdaptContext(make(null, type, null, false));
-	}
+	public <T> CAdapter<T> adapter(Class<T> type) { return context(make(null, type, null, false)); }
 	public CAdapter<?> adapter(IType generic) {
 		Adapter root = get(generic);
 		if (root == null) return null;
-		return new AdaptContext(root);
+		return context(root);
 	}
 	public <T> CAdapter<List<T>> listOf(Class<T> content) {
 		Adapter root = get(Generic.parameterized(List.class, content));
 		assert root != null;
-		return Helpers.cast(new AdaptContext(root));
+		return context(root);
 	}
 	public <T> CAdapter<Map<String, T>> mapOf(Class<T> content) {
 		Adapter root = get(Generic.parameterized(Map.class, String.class, content));
 		assert root != null;
-		return Helpers.cast(new AdaptContext(root));
+		return context(root);
 	}
+	private <T> CAdapter<T> context(Adapter root) { return Helpers.cast((flag&FORCE_DYNAMIC_INTERNAL) == 0 ? new AdaptContext(root) : new AdaptContextEx(root)); }
 
 	final Object getAsType(String as) {
 		AsType a = asTypes.get(as);
@@ -275,7 +278,7 @@ public final class SerializerFactory {
 	final Adapter get(Class<?> type, String generic) {
 		IType genericType = null;
 
-		if ((flagFor(type) & DYNAMIC) != 0) {
+		if ((flagFor(type) & PREFER_DYNAMIC_INTERNAL) != 0) {
 			generic = null;
 		} else if (generic != null) {
 			genericType = Signature.parse(generic, Signature.FIELD).values.get(0);
@@ -295,7 +298,7 @@ public final class SerializerFactory {
 			return null;
 		}
 
-		if (type == generic || (flagFor(klass) & DYNAMIC) != 0) {
+		if (type == generic || (flagFor(klass) & PREFER_DYNAMIC_INTERNAL) != 0) {
 			return make(null, klass, null, true);
 		} else {
 			return make(generic.toDesc(), klass, (Generic) generic, true);
@@ -310,6 +313,8 @@ public final class SerializerFactory {
 	}
 
 	private Adapter make(String name, Class<?> type, Generic generic, boolean checking) {
+		if ((flag & APPLY_DYNAMIC_INTERNAL) != 0) return localRegistry.get(";Obj");
+
 		Adapter ser = localRegistry.get(name!=null?name:(name=type.getName().replace('.', '/')));
 		if (ser != null) return ser;
 
@@ -362,13 +367,14 @@ public final class SerializerFactory {
 			return ser;
 		}
 
+		// 是否要移到377行？
 		if ((flag & GENERATE) == 0) throw new IllegalArgumentException("未找到"+name+"的序列化器");
 
 		if (isInvalid(type)) {
-			if ((flag & (DYNAMIC|WRITE_OBJECT)) != 0) return localRegistry.get(";Obj");
+			if ((flag & ALLOW_DYNAMIC) != 0) return localRegistry.get(";Obj");
 
 			if (checking) return null;
-			throw new IllegalArgumentException(name+"无法被序列化");
+			throw new IllegalArgumentException(name+"无法被序列化(ALLOW_DYNAMIC)");
 		}
 
 		generate:
@@ -404,7 +410,16 @@ public final class SerializerFactory {
 		}
 
 		if (ser instanceof GenAdapter) {
-			((GenAdapter) ser).secondaryInit(this, null);
+			int prev = this.flag;
+			if ((flag & FORCE_DYNAMIC_INTERNAL) != 0) {
+				this.flag = prev | APPLY_DYNAMIC_INTERNAL;
+			}
+
+			try {
+				((GenAdapter) ser).secondaryInit(this, null);
+			} finally {
+				this.flag = prev;
+			}
 		}
 
 		return ser;
@@ -587,6 +602,8 @@ public final class SerializerFactory {
 		if (_init < 0 || (data.methods.get(_init).modifier() & PUBLIC) == 0) {
 			if (!SerializerFactoryFactory.injected)
 				throw new IllegalArgumentException("Adapter没有激活,不能跳过无参构造器生成对象"+o.getName());
+			if ((flag & NO_CONSTRUCTOR) == 0)
+				throw new IllegalArgumentException("不允许跳过构造器(NO_CONSTRUCTOR)");
 			_init = -1;
 		}
 
@@ -622,21 +639,14 @@ public final class SerializerFactory {
 
 		keyPrimitive = null;
 		keySwitch = new SwitchSegment(TABLESWITCH);
+		keySwitch.opt = true;
 		cw.switches(keySwitch);
 		keySwitch.def = cw.label();
 
-		if ((flag & IGNORE_UNKNOWN) == 0) {
-			cw.clazz(NEW, "java/lang/NoSuchFieldException");
-			cw.one(DUP);
-			cw.one(ALOAD_2);
-			cw.invoke(INVOKESPECIAL, "java/lang/NoSuchFieldException", "<init>", "(Ljava/lang/String;)V");
-			cw.one(ATHROW);
-		} else {
-			cw.one(ALOAD_1);
-			cw.field(GETSTATIC, "roj/config/serial/SkipSer", "INST", "Lroj/config/serial/Adapter;");
-			cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/serial/AdaptContext", "push", "(Lroj/config/serial/Adapter;)V");
-			cw.one(RETURN);
-		}
+		cw.one(ALOAD_1);
+		cw.field(GETSTATIC, "roj/config/serial/SkipSer", "INST", "Lroj/config/serial/Adapter;");
+		cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/serial/AdaptContext", "push", "(Lroj/config/serial/Adapter;)V");
+		cw.one(RETURN);
 
 		// endregion
 		// region write()
@@ -1044,8 +1054,6 @@ public final class SerializerFactory {
 		c.field(PUTFIELD, "roj/config/serial/AdaptContext", "fieldId", "I");
 	}
 
-	private static int classId;
-
 	private ConstantData c;
 	private CodeWriter copy, write;
 	private final ToIntMap<String> serializerId = new ToIntMap<>();
@@ -1073,7 +1081,7 @@ public final class SerializerFactory {
 	private void begin() {
 		c = new ConstantData();
 		c.access = PUBLIC|SUPER|FINAL;
-		c.name("roj/config/serial/GA$"+classId++);
+		c.name("roj/config/serial/GA$"+GENERATED.size());
 		c.parent("roj/config/serial/Adapter");
 		c.interfaces.add(new CstClass("roj/config/serial/GenAdapter"));
 		c.cloneable();
