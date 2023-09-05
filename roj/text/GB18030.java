@@ -129,19 +129,24 @@ public final class GB18030 extends UnsafeCharset {
 			}
 
 			int c2 = u.getByte(ref,i++) & 255;
-			if (c2 < 48) break malformed;
-
 			if (c2 <= 57) {
+				if (c2 < 48) {
+					i--;
+					break malformed;
+				}
+
 				if (max-i < 2) {
 					i -= 2;
 					break;
 				}
 
 				int c3 = u.getByte(ref,i++) & 255;
-				if (c3 == 128 || c3 == 255) break malformed;
-
 				int c4 = u.getByte(ref,i++) & 255;
-				if (c4 < 48 || c4 > 57) break malformed;
+
+				if (c3 == 128 || c3 == 255 || c4 < 48 || c4 > 57) {
+					i -= 3;
+					break malformed;
+				}
 
 				int cp = (((c-129) * 10 + (c2-48)) * 126 + c3 - 129) * 10 + c4 - 48;
 
@@ -149,7 +154,10 @@ public final class GB18030 extends UnsafeCharset {
 					out[off++] = TABLE[TAB2+cp];
 				} else {
 					cp -= 123464 + Character.MIN_SUPPLEMENTARY_CODE_POINT;
-					if (cp < 0 || cp > 1048575) break malformed;
+					if (cp < 0 || cp > 1048575) {
+						i -= 3;
+						break malformed;
+					}
 					if (outMax-off < 2) return (i-base) << 32;
 
 					out[off++] = (char)((cp>>>10) + Character.MIN_HIGH_SURROGATE);
@@ -157,7 +165,10 @@ public final class GB18030 extends UnsafeCharset {
 				}
 			} else {
 				// double
-				if (c2 == 127 || c2 == 255 || c2 < 64) break malformed;
+				if (c2 == 127 || c2 == 255 || c2 < 64) {
+					i--;
+					break malformed;
+				}
 
 				int cp = (c-129) * (255-64) + (c2-64);
 				out[off++] = TABLE[cp];

@@ -1,5 +1,6 @@
 package roj.net.http;
 
+import org.jetbrains.annotations.UnmodifiableView;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
@@ -33,7 +34,6 @@ public class SyncHttpClient implements ChannelHandler {
 
 	private HttpHead head;
 	private DynByteBuf data;
-	private DynByteBuf isbuf;
 	private InputStream is;
 
 	private final ReentrantLock lock = new ReentrantLock(true);
@@ -43,7 +43,7 @@ public class SyncHttpClient implements ChannelHandler {
 	private volatile byte state;
 
 	private ChannelCtx o;
-	private ChannelHandler async;
+	private boolean async;
 	private Throwable ex;
 
 	private Consumer<SyncHttpClient> callback;
@@ -82,14 +82,11 @@ public class SyncHttpClient implements ChannelHandler {
 		DynByteBuf in = (DynByteBuf) msg;
 		if (!in.isReadable()) return;
 
-		if (async != null) {
-			ctx.channelRead(in);
-			return;
-		}
 
 		lock.lock();
 		try {
 			data.compact().put(in);
+			if (async) ctx.channelRead(data);
 			hasData.signalAll();
 		} finally {
 			lock.unlock();
@@ -199,10 +196,11 @@ public class SyncHttpClient implements ChannelHandler {
 		is = null;
 		o = null;
 		ex = null;
-		async = null;
+		async = false;
 		callback = null;
 	}
 
+	@UnmodifiableView
 	public HttpHead head() throws IOException {
 		try {
 			synchronized (this) {
@@ -218,7 +216,20 @@ public class SyncHttpClient implements ChannelHandler {
 	public boolean isSuccess() { return state == SUCCESS; }
 	public boolean isDone() { return state >= FAIL; }
 
-	public ByteList bytes() throws IOException { getData(); return (ByteList) data; }
+	public synchronized ByteList bytes() throws IOException {
+		if (async) throw new IllegalStateException("async handler active");
+		if (is != null) throw new IllegalStateException("stream active");
+
+		try {
+			waitFor();
+		} catch (InterruptedException e) {
+			disconnect();
+			throw new ClosedByInterruptException();
+		}
+
+		if (state == FAIL) throw new IOException("请求失败", ex);
+		return (ByteList) data;
+	}
 	public String utf() throws IOException { return str(StandardCharsets.UTF_8); }
 	public String str() throws IOException {
 		HttpHead head = head();
@@ -230,52 +241,25 @@ public class SyncHttpClient implements ChannelHandler {
 			return IOUtil.read(sr);
 		}
 	}
-	public void async(ChannelHandler h) throws IOException {
+	public synchronized void async(ChannelHandler h) throws IOException {
+		if (is != null) throw new IllegalStateException("stream active");
+		if (state == FAIL) throw new IOException("请求失败", ex);
+
+		o.channel().remove("async_handler");
 		o.channel().addLast("async_handler", h);
 		ChannelCtx ctx = o.channel().handler("async_handler");
 
-		synchronized (this) {
-			if (state == FAIL) throw new IOException("请求失败", ex);
-
-			lock.lock();
-			try {
-				if (isbuf != null) {
-					h.channelRead(ctx, isbuf);
-					if (isbuf.isReadable()) throw new IllegalArgumentException("异步处理器必须一次处理(或缓存)所有输入");
-					isbuf.clear();
-				}
-				h.channelRead(ctx, data);
-				if (data.isReadable()) throw new IllegalArgumentException("异步处理器必须一次处理(或缓存)所有输入");
-			} finally {
-				lock.unlock();
-			}
-		}
-
-		async = h;
-	}
-	private void getData() throws IOException {
-		if (async != null) throw new IllegalStateException("async handler active");
-		if (is != null) throw new IllegalStateException("stream active");
-
+		lock.lock();
 		try {
-			waitFor();
-		} catch (InterruptedException e) {
-			disconnect();
-			throw new ClosedByInterruptException();
+			h.channelRead(ctx, data);
+		} finally {
+			lock.unlock();
 		}
-
-		if (state == FAIL) throw new IOException("请求失败", ex);
-
-		if (async != null) throw new IllegalStateException("async handler active");
-		if (is != null) throw new IllegalStateException("stream active");
 	}
 	public synchronized InputStream stream() throws IOException {
-		if (async != null) throw new IllegalStateException("async handler active");
-		if (state >= FAIL) return data.asInputStream();
-
 		if (is != null) return is;
 
-		isbuf = new ByteList();
+		if (async) throw new IllegalStateException("async handler active");
 		return is = new InputStream() {
 			byte[] sb;
 
@@ -293,12 +277,6 @@ public class SyncHttpClient implements ChannelHandler {
 				if (len < 0 || off < 0 || len > b.length - off) throw new ArrayIndexOutOfBoundsException();
 				if (len == 0) return 0;
 
-				if (isbuf.isReadable()) {
-					int v = Math.min(isbuf.readableBytes(), len);
-					isbuf.read(b, off, v);
-					return v;
-				}
-
 				lock.lock();
 				try {
 					while (!data.isReadable()) {
@@ -309,12 +287,6 @@ public class SyncHttpClient implements ChannelHandler {
 
 					int v = Math.min(data.readableBytes(), len);
 					data.read(b, off, v);
-
-					if (data.isReadable()) {
-						isbuf.clear();
-						isbuf.put(data, Math.min(data.readableBytes(), 1024));
-					}
-
 					return v;
 				} finally {
 					lock.unlock();
@@ -322,8 +294,8 @@ public class SyncHttpClient implements ChannelHandler {
 			}
 
 			@Override
-			public int available() throws IOException {
-				int len = isbuf.readableBytes() + data.readableBytes();
+			public int available() {
+				int len = data.readableBytes();
 				return len == 0 && state >= FAIL ? -1 : len;
 			}
 
@@ -332,17 +304,13 @@ public class SyncHttpClient implements ChannelHandler {
 		};
 	}
 
-	public void waitFor() throws InterruptedException {
-		synchronized (this) {
-			while(state < FAIL) wait();
-		}
+	public synchronized void waitFor() throws InterruptedException {
+		while(state < FAIL) wait();
 	}
 
-	public void await(Consumer<SyncHttpClient> o) throws IOException {
-		synchronized (this) {
-			if (state == FAIL) throw new IOException("请求失败", ex);
-			callback = o;
-		}
+	public synchronized void await(Consumer<SyncHttpClient> o) throws IOException {
+		if (state == FAIL) throw new IOException("请求失败", ex);
+		callback = o;
 	}
 
 	public void disconnect() throws IOException {

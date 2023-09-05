@@ -49,7 +49,15 @@ import java.util.function.Predicate;
  */
 public class ConstMapper extends Mapping {
 	public static final String DONT_LOAD_PREFIX = "[x]";
-	public static final int FLAG_STATIC_MAP = 1, FLAG_CHECK_SUB_IMPL = 2, TRIM_DUPLICATE = 4, FLAG_CHECK_ANNOTATION = 8;
+	public static final int
+		/** 任意methodMap和fieldMap的owner均能在classMap中找到 */
+		FLAG_FULL_CLASS_MAP = 1,
+		/** (Obfuscator用) 删除冲突的mapping（子类实现的接口覆盖父类方法） */
+		FLAG_FIX_SUBIMPL = 2,
+		/** (Obfuscator用) 删除冲突的mapping（方法继承） */
+		FLAG_FIX_INHERIT = 4,
+		/** 启用注解伪继承 */
+		FLAG_ANNOTATION_INHERIT = 8;
 
 	// 'CMPC': Const Remapper Cache
 	private static final int FILE_HEADER = 0x634d5063;
@@ -69,7 +77,7 @@ public class ConstMapper extends Mapping {
 	FindSet<Desc> selfSkipped;
 	Map<String, List<String>> selfSupers;
 
-	public byte flag = FLAG_STATIC_MAP;
+	public byte flag = FLAG_FULL_CLASS_MAP;
 	private final List<State> extendedSuperList = new SimpleList<>();
 
 	public ConstMapper() {
@@ -206,7 +214,7 @@ public class ConstMapper extends Mapping {
 				}
 
 				initSelfSuperMap();
-				if ((flag & FLAG_CHECK_SUB_IMPL) != 0) S15_ignoreSubImpl(arr);
+				if ((flag & FLAG_FIX_SUBIMPL) != 0) S15_ignoreSubImpl(arr);
 
 				for (int i = 0; i < arr.size(); i++) {
 					S2_mapSelf(curr = arr.get(i));
@@ -236,7 +244,7 @@ public class ConstMapper extends Mapping {
 			MapUtil.async(this::S1_parse, splatted);
 
 			initSelfSuperMap();
-			if ((flag & FLAG_CHECK_SUB_IMPL) != 0) S15_ignoreSubImpl(arr);
+			if ((flag & FLAG_FIX_SUBIMPL) != 0) S15_ignoreSubImpl(arr);
 
 			MapUtil.async(this::S2_mapSelf, splatted);
 			MapUtil.async(this::S3_mapConstant, splatted);
@@ -263,7 +271,7 @@ public class ConstMapper extends Mapping {
 			Predicate<Desc> rem = key -> modified.contains(key.owner);
 			selfMethods.keySet().removeIf(rem);
 			selfSkipped.removeIf(rem);
-			if ((flag & FLAG_CHECK_SUB_IMPL) != 0) S15_ignoreSubImpl(arr);
+			if ((flag & FLAG_FIX_SUBIMPL) != 0) S15_ignoreSubImpl(arr);
 
 			initSelfSuperMap();
 
@@ -296,7 +304,7 @@ public class ConstMapper extends Mapping {
 		if (!"java/lang/Object".equals(data.parent)) {
 			list.add(data.parent);
 
-			if ((flag & FLAG_CHECK_ANNOTATION) != 0) {
+			if ((flag & FLAG_ANNOTATION_INHERIT) != 0) {
 				Attribute attr = data.attrByName(Attribute.ClAnnotations.name);
 				if (attr != null) {
 					Annotations a = (Annotations) Parser.attr(data, data.cp, Attribute.ClAnnotations.name, Parser.reader(attr), Signature.CLASS);
@@ -324,39 +332,45 @@ public class ConstMapper extends Mapping {
 		List<Desc> filled = new ArrayList<>();
 		MyHashMap<String, IClass> methods = new MyHashMap<>(ctxs.size());
 
-		MyHashSet<SubImpl> subs = MapUtil.getInstance().gatherSubImplements(ctxs, this, methods);
+		Set<SubImpl> subs = MapUtil.getInstance().findSubImplements(ctxs, this, methods);
 
-		for (SubImpl impl : subs) {
-			String targetName = null, foundClass = null;
-			Desc desc = impl.type;
-			for (String owner : impl.owners) {
-				desc.owner = owner;
-				String name1 = methodMap.get(desc);
-				if (name1 != null) {
-					if (targetName == null) {
-						foundClass = owner;
-						targetName = name1;
-					} else if (!targetName.equals(name1)) {
-						throw new IllegalStateException("SubImpl映射失败: 同参方法映射后名称不同");
+		for (SubImpl method : subs) {
+			Desc desc = method.type.copy();
+
+			for (Set<String> classList : method.owners) {
+				if (classList.contains(null)) throw new IllegalArgumentException("SubImpl映射失败: 不可变: " + classList + " of " + method.type);
+
+				String mapName = null, mapClass = null;
+				for (String owner : classList) {
+					desc.owner = owner;
+
+					String name = methodMap.get(desc);
+					if (name != null) {
+						if (mapName == null) {
+							mapClass = owner;
+							mapName = name;
+						} else if (!mapName.equals(name)) {
+							throw new IllegalStateException("SubImpl映射失败: 映射名称不同: " + classList + " of " + method.type);
+						}
 					}
 				}
-			}
-			if (targetName != null) {
-				for (String owner : impl.owners) {
-					if (owner.equals(foundClass)) continue;
+
+				assert mapName != null;
+				for (String owner : classList) {
+					if (owner.equals(mapClass)) continue;
 					desc.owner = owner;
-					if (!methods.containsKey(owner)) throw new IllegalArgumentException("SubImpl映射失败: 至多有一个Impl属于库/依赖\n" + "违反者: " + impl);
-					if (null == methodMap.putIfAbsent(desc, targetName)) {
+
+					if (null == methodMap.putIfAbsent(desc, mapName)) {
 						filled.add(desc);
 						List<? extends MoFNode> methods1 = methods.get(desc.owner).methods();
-						for (int i = 0; i < methods1.size(); i++) {
-							MoFNode m = methods1.get(i);
-							if (desc.param.equals(m.rawDesc()) && desc.name.equals(m.name())) {
-								desc.flags = m.modifier();
-								break;
+						block: {
+							for (int i = 0; i < methods1.size(); i++) {
+								MoFNode m = methods1.get(i);
+								if (desc.param.equals(m.rawDesc()) && desc.name.equals(m.name())) {
+									desc.flags = m.modifier();
+									break block;
+								}
 							}
-						}
-						if (desc.flags == Desc.UNSET) {
 							throw new IllegalArgumentException("SubImpl映射失败: \n" + "无法适配权限\n" + "目标: " + desc);
 						}
 						desc = desc.copy();
@@ -651,7 +665,7 @@ public class ConstMapper extends Mapping {
 			}
 		}
 
-		makeInheritMap(libSupers, (flag & FLAG_STATIC_MAP) != 0 ? classMap : null);
+		makeInheritMap(libSupers, (flag & FLAG_FULL_CLASS_MAP) != 0 ? classMap : null);
 
 		// 下面这段的目的：用户类可能继承了映射中的方法
 		// 并对这些方法做了修改，使得继承这些用户类的方法不能再映射
@@ -673,12 +687,11 @@ public class ConstMapper extends Mapping {
 		for (IClass data : cb.classes) {
 			List<String> parents = libSupers.get(data.name());
 			if (parents == null) continue;
-			//boolean d = data.className().endsWith("x");
 
 			List<? extends MoFNode> methods = data.methods();
 			List<? extends MoFNode> fields = data.fields();
 			for (int i = 0; i < parents.size(); i++) {
-				if (!classMap.containsKey(parents.get(i))) continue;
+				if ((flag & FLAG_FULL_CLASS_MAP) != 0 && !classMap.containsKey(parents.get(i))) continue;
 
 				m.owner = parents.get(i);
 				for (int j = 0; j < methods.size(); j++) {
@@ -690,12 +703,9 @@ public class ConstMapper extends Mapping {
 					Map.Entry<Desc, String> entry = methodMap.find(m);
 					test:
 					if (entry != null) {
-						//if (d) System.out.println("found " + m + " => " + entry.getValue());
 						Desc md = entry.getKey();
 						if (md.flags == Desc.UNSET) throw new IllegalStateException("缺少元素 " + md);
 						if ((md.flags & (AccessFlag.FINAL | AccessFlag.STATIC)) != 0 || 0 != (method.modifier() & (AccessFlag.PRIVATE | AccessFlag.STATIC))) {
-
-							//if (d) System.out.println("fall 1: " + method.accessFlag() + "\n" + md.flags);
 							// 第一类第二类
 							m.owner = data.name();
 							libSkipped.add(m);
@@ -704,10 +714,8 @@ public class ConstMapper extends Mapping {
 							m = new Desc(parents.get(i), "");
 							break test;
 						} else if (0 == (md.flags & (AccessFlag.PROTECTED | AccessFlag.PUBLIC))) {
-							//if (d) System.out.println("fall 2");
 							// 第三类
 							if (!MapUtil.arePackagesSame(data.name(), m.owner)) {
-								//if (d) System.out.println("fall 3");
 								m.owner = data.name();
 								libSkipped.add(m);
 								visited.add(j);
@@ -716,8 +724,7 @@ public class ConstMapper extends Mapping {
 								break test;
 							}
 						}
-						if ((flag & TRIM_DUPLICATE) != 0) {
-							//if (d) System.out.println("fall 4");
+						if ((flag & FLAG_FIX_INHERIT) != 0) {
 							m.owner = data.name();
 							methodMap.remove(m);
 							m.owner = parents.get(i);
@@ -729,9 +736,7 @@ public class ConstMapper extends Mapping {
 					if (visited.contains(j + methods.size())) continue;
 					MoFNode field = fields.get(j);
 					m.name = field.name();
-					if (checkFieldType) {
-						m.param = field.rawDesc();
-					}
+					if (checkFieldType) m.param = field.rawDesc();
 
 					if (fieldMap.containsKey(m)) {
 						m.owner = data.name();
@@ -846,7 +851,7 @@ public class ConstMapper extends Mapping {
 		universe.putAll(this.selfSupers); // replace lib class
 		this.selfSupers = universe;
 
-		makeInheritMap(universe, (flag & (FLAG_STATIC_MAP | FLAG_CHECK_SUB_IMPL)) == FLAG_STATIC_MAP ? classMap : null);
+		makeInheritMap(universe, (flag & (FLAG_FULL_CLASS_MAP | FLAG_FIX_SUBIMPL)) == FLAG_FULL_CLASS_MAP ? classMap : null);
 	}
 
 	public final void initSelf(int size) {
@@ -936,12 +941,12 @@ public class ConstMapper extends Mapping {
 				// 构建lib一极继承表
 				if (!list.isEmpty()) {
 					libSupers.put(data.name(), list);
-					if ((flag & TRIM_DUPLICATE) != 0 || !classMap.containsKey(data.name())) classes.add(data);
+					if ((flag & FLAG_FIX_INHERIT) != 0 || !classMap.containsKey(data.name())) classes.add(data);
 				}
 			}
 
 			// 更新访问权限
-			if (!classMap.containsKey(data.name())) return;
+			if ((flag & FLAG_FULL_CLASS_MAP) != 0 && !classMap.containsKey(data.name())) return;
 
 			Desc d = desc;
 			d.owner = data.name();

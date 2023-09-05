@@ -154,7 +154,7 @@ public final class Request extends Headers {
 			return null;
 		} else if (getFields instanceof String) {
 			return (String) getFields;
-		} else if (getFields == Collections.EMPTY_LIST) {
+		} else if (getFields == Collections.EMPTY_MAP) {
 			return "";
 		}
 		throw new IllegalStateException("Parsed");

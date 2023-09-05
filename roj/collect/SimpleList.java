@@ -70,9 +70,17 @@ public class SimpleList<E> extends AbstractList<E> implements RandomAccess {
 		}
 		int i = 0;
 		while (i < size) {
-			if (key.equals(list[i])) {
+			if (key.equals(list[i]))
 				return i;
-			}
+			i++;
+		}
+		return -1;
+	}
+
+	public int indexOf(Object key, int i) {
+		while (i < size) {
+			if (key.equals(list[i]))
+				return i;
 			i++;
 		}
 		return -1;

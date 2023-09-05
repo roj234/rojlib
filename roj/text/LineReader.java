@@ -13,10 +13,12 @@ import java.util.NoSuchElementException;
  * @author Roj234
  * @since 2021/5/27 0:12
  */
-public class LineReader implements Iterable<String>, Iterator<String>, AutoCloseable {
+@Deprecated
+public class LineReader implements Iterable<String>, Iterator<String>, AutoCloseable, LinedReader {
 	private final CharSequence str;
 	private boolean keepEmpty, reuse;
-	private int index, size = -1, lineNumber;
+	private int index;
+	private int lineNumber;
 
 	public LineReader(InputStream in) throws IOException {
 		str = new StreamReader(in);
@@ -96,40 +98,6 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 		return --line == 0 ? prev == i ? "" : keys.subSequence(prev, i).toString() : null;
 	}
 
-	public int index() {
-		return this.index;
-	}
-
-	@SuppressWarnings("fallthrough")
-	public int size() {
-		if (size < 0) {
-			int r = 0, size = lineNumber, i = index, prev = 0;
-			CharSequence keys = this.str;
-			while (i < keys.length()) {
-				switch (keys.charAt(i)) {
-					case '\r':
-						if (i + 1 >= keys.length() || keys.charAt(i + 1) != '\n') {
-							break;
-						} else {
-							r = 1;
-							i++;
-						}
-					case '\n':
-						if (prev + r < i || keepEmpty) {
-							size++;
-						}
-						prev = i + 1;
-						r = 0;
-						break;
-				}
-				i++;
-			}
-
-			this.size = prev < i || keepEmpty ? size + 1 : size;
-		}
-		return size;
-	}
-
 	@Nonnull
 	@Override
 	public Iterator<String> iterator() {
@@ -150,7 +118,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 			return cur != EOF;
 		} else if (index >= str.length()) {
 			if (keepEmpty) lineNumber++;
-			size = lineNumber;
+			int size = lineNumber;
 			cur = EOF;
 			return false;
 		}
@@ -194,6 +162,14 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 		}
 	}
 
+	public String readLine() { return hasNext() ? next() : null; }
+	public boolean readLine(CharList buf) throws IOException {
+		String s = readLine();
+		if (s == null) return false;
+		buf.append(s);
+		return true;
+	}
+
 	@Override
 	public String next() {
 		hasNext();
@@ -206,7 +182,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 		}
 	}
 
-	@SuppressWarnings("fallthrough")
+	@Deprecated
 	public int skipLines(int oLines) {
 		int lines = oLines;
 		int r = 0, prev = index, i = index;

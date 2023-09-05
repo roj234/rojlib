@@ -57,7 +57,7 @@ public class QZArchive implements ArchiveFile {
 
 		r = new FileSource(file);
 		if (file.getName().endsWith(".001")) {
-			r = BufferedSource.autoClose(new SplittedSource((FileSource) r, (int) file.length()));
+			r = BufferedSource.autoClose(new SplittedSource((FileSource) r, file.length()));
 		}
 
 		reload();
@@ -665,12 +665,11 @@ public class QZArchive implements ArchiveFile {
 			IntMap.Entry<CoderInfo> entry = outputs.get(j);
 			if (entry != null) {
 				b.complexCoder = entry.getValue();
-				break;
+				return b;
 			}
 		}
 
-		assert b.complexCoder != null;
-		return b;
+		throw new IOException("no output specified");
 	}
 
 	private void readBlockFileMap(QzInfo si) throws IOException {

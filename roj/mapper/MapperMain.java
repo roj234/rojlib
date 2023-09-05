@@ -38,7 +38,8 @@ public class MapperMain {
 					"      remapClass  => 重映射类名\n" +
 					"      charset     => 文件编码\n" +
 					"      reverse     => 反转映射\n" +
-					"      singleThread=> 单线程");
+					"      singleThread=> 单线程\n" +
+					"      flag        => flag");
 		}
 		File input = new File(args[0]);
 
@@ -78,6 +79,9 @@ public class MapperMain {
 					break;
 				case "charset":
 					charset = Charset.forName(args[++i]);
+					break;
+				case "flag":
+					remapper.flag = (byte) Integer.parseInt(args[++i]);
 					break;
 				default:
 					throw new IllegalArgumentException("Unknown " + args[i]);

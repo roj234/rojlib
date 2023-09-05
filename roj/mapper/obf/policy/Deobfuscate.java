@@ -29,6 +29,8 @@ public final class Deobfuscate extends SimpleNamer {
 
 	@Override
 	public String obfName(Set<String> noDuplicate, Desc desc, Random rand) {
+		if (desc.name.equals("main")) return null;
+
 		return desc.param.charAt(0) == '(' ? ("method_" + a++) : ("field_" + b++);
 	}
 }

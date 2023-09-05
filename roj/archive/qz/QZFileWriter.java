@@ -80,6 +80,7 @@ public class QZFileWriter extends QZWriter {
         @Override
         public void finish() throws IOException {
             if (finished) return;
+            super.finish();
 
             synchronized (QZFileWriter.this) {
                 if (QZFileWriter.this.parallelWriter.remove(this)) {
@@ -90,8 +91,6 @@ public class QZFileWriter extends QZWriter {
         }
 
         void end() throws IOException {
-            super.finish();
-
             QZFileWriter parent = QZFileWriter.this;
 
             MemorySource s = (MemorySource) this.s;

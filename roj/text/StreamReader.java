@@ -20,7 +20,7 @@ import java.nio.file.StandardOpenOption;
  * @author Roj234
  * @since 2022/12/11 0011 9:12
  */
-public class StreamReader extends Reader implements CharSequence, Closeable, Finishable {
+public class StreamReader extends Reader implements CharSequence, Closeable, Finishable, LinedReader {
 	private char[] buf;
 	private int off, maxOff, len;
 	protected byte eof;
@@ -190,9 +190,6 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 				off += delta;
 				len -= delta;
 				if (len == 0) break;
-
-				// notify
-				if (off > 0 && buf[off-1] == UnsafeCharset.INVALID) continue;
 
 				read(b);
 			}

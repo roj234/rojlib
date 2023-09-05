@@ -36,7 +36,7 @@ public final class Field implements FieldNode {
 	public Field(ConstantData data, RawField field) {
 		this(field.access, field.name.str(), field.type.str());
 
-		AttributeList al = field.attributesNullable();
+		AttributeList al = field.attributes;
 		if (al != null && !al.isEmpty()) {
 			attributes = new AttributeList(al);
 			Parser.parseAttributes(this, data.cp, attributes, Signature.FIELD);

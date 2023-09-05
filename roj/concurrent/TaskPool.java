@@ -86,8 +86,7 @@ public class TaskPool implements TaskHandler {
 	}
 
 	@Override
-	@Async.Schedule
-	public void pushTask(ITask task) {
+	public void pushTask(@Async.Schedule ITask task) {
 		if (task.isCancelled()) return;
 
 		int len = running;
@@ -337,6 +336,7 @@ public class TaskPool implements TaskHandler {
 
 				try {
 					if (!task.isCancelled()) {
+						executeIdea(task);
 						task.execute();
 						if (task.continueExecuting()) pushTask(task);
 					}
@@ -347,5 +347,7 @@ public class TaskPool implements TaskHandler {
 
 			synchronized (threads) { threads.remove(this); }
 		}
+
+		private final void executeIdea(@Async.Execute ITask task) {}
 	}
 }

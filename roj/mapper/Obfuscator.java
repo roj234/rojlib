@@ -23,7 +23,7 @@ import java.util.*;
  * @since 2021/7/18 18:33
  */
 public abstract class Obfuscator {
-	public static final String TREMINATE_THIS_CLASS = new String();
+	public static final String TERMINATE_THIS_CLASS = new String();
 
 	public static final int ADD_SYNTHETIC = 1, ADD_PUBLIC = 2, REMOVE_SYNTHETIC = 4;
 
@@ -35,7 +35,7 @@ public abstract class Obfuscator {
 
 	public Obfuscator() {
 		m1 = new ConstMapper(true);
-		m1.flag = ConstMapper.TRIM_DUPLICATE | ConstMapper.FLAG_CHECK_SUB_IMPL;
+		m1.flag = ConstMapper.FLAG_FIX_INHERIT | ConstMapper.FLAG_FIX_SUBIMPL;
 		m2 = new CodeMapper(m1);
 	}
 
@@ -165,30 +165,48 @@ public abstract class Obfuscator {
 
 			FindMap<Desc, String> methodMap = t.getMethodMap();
 			if (!methodMap.isEmpty()) {
-				MyHashSet<SubImpl> subs = MapUtil.getInstance().gatherSubImplements(arr, t, named);
-				for (SubImpl impl : subs) {
-					Desc finder = impl.type;
-					Iterator<String> itr = impl.owners.iterator();
+				Set<SubImpl> subs = MapUtil.getInstance().findSubImplements(arr, t, named);
 
-					// 不是外面的方法
-					if (!impl.immutable) {
-						String firstName;
-						do {
-							finder.owner = itr.next(); // findFirst
-							firstName = methodMap.get(finder);
-						} while (itr.hasNext() && firstName == null);
+				for (SubImpl method : subs) {
+					Desc desc = method.type.copy();
 
-						if (firstName != null) {
-							itr = impl.owners.iterator();
-							while (itr.hasNext()) {
-								finder.owner = itr.next();
-								methodMap.replace(finder, firstName);
+					for (Set<String> classList : method.owners) {
+						if (classList.remove(null)) {
+							for (String owner : classList) {
+								desc.owner = owner;
+								methodMap.remove(desc);
+							}
+							continue;
+						}
+
+						String mapName = null, mapClass = null;
+						for (String owner : classList) {
+							desc.owner = owner;
+
+							String name = methodMap.get(desc);
+							if (name != null) {
+								mapClass = owner;
+								mapName = name;
+								break;
 							}
 						}
-					} else {
-						while (itr.hasNext()) {
-							finder.owner = itr.next();
-							methodMap.remove(finder);
+
+						for (String owner : classList) {
+							if (owner.equals(mapClass)) continue;
+							desc.owner = owner;
+
+							if (!mapName.equals(methodMap.put(desc, mapName))) {
+								List<? extends MoFNode> methods1 = named.get(desc.owner).methods();
+								for (int i = 0; i < methods1.size(); i++) {
+									MoFNode m = methods1.get(i);
+									if (desc.param.equals(m.rawDesc()) && desc.name.equals(m.name())) {
+										desc.flags = m.modifier();
+										break;
+									}
+								}
+
+								desc = desc.copy();
+							}
 						}
 					}
 				}
@@ -226,7 +244,7 @@ public abstract class Obfuscator {
 		data.normalize();
 
 		String dest = obfClass(data);
-		if (dest == TREMINATE_THIS_CLASS) return;
+		if (dest == TERMINATE_THIS_CLASS) return;
 
 		ConstMapper t = this.m1;
 		if (dest != null && t.classMap.putIfAbsent(data.name, dest) != null) {

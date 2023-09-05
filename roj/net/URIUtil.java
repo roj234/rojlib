@@ -80,8 +80,6 @@ public class URIUtil {
 							tmp.clear();
 						}
 
-						System.out.println(i);
-						System.out.println(src);
 						continue;
 					} catch (Exception e) {
 						// not compatible with RFC 2396

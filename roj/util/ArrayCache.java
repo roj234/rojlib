@@ -35,18 +35,15 @@ public class ArrayCache {
 	private static final int CHIP_SIZE = 256;
 	private static final int SIZES_MAX = 64;
 	private static final int ARRAYS_MAX = 9;
-	private static final int WARMUP_THRESHOLD = 4;
 
 	private final Map<MutableInt, RingBuffer<Reference<byte[]>>> byteCache = new LFUCache<>(SIZES_MAX, 1);
 	private final Map<MutableInt, RingBuffer<Reference<char[]>>> charCache = new LFUCache<>(SIZES_MAX, 1);
 	private final Map<MutableInt, RingBuffer<Reference<int[]>>> intCache = new LFUCache<>(SIZES_MAX, 1);
 	private final ReentrantLock lock = new ReentrantLock();
 	private final MutableInt val = new MutableInt();
-	private int usage;
 
 	private <T> T getArray(Map<MutableInt, RingBuffer<Reference<T>>> cache, int size) {
 		if (size < CHIP_SIZE) return null;
-		if (usage < WARMUP_THRESHOLD && size < LARGE_ARRAY_SIZE) return null;
 
 		lock.lock();
 		try {
@@ -72,8 +69,6 @@ public class ArrayCache {
 
 		lock.lock();
 		try {
-			if (++usage < WARMUP_THRESHOLD && size < LARGE_ARRAY_SIZE) return;
-
 			val.setValue(size/CHIP_SIZE);
 			RingBuffer<Reference<T>> stack = cache.get(val);
 			if (stack == null) {

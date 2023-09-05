@@ -242,7 +242,7 @@ public final class DBA implements AutoCloseable {
 		}
 		return this;
 	}
-	public boolean next_page() throws SQLException {
+	private boolean next_page() throws SQLException {
 		if (_fragOff >= _fragTot) return false;
 
 		CharList sb = makeSelect(false)

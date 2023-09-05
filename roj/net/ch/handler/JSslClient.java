@@ -17,6 +17,7 @@ import java.security.NoSuchAlgorithmException;
  * @author Roj233
  * @since 2022/5/17 13:11
  */
+@Deprecated
 public class JSslClient extends PacketMerger {
 	private SSLEngine engine;
 	private SSLEngineResult.HandshakeStatus status;

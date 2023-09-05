@@ -141,7 +141,7 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 
 	public final void serialize(CEntry entry, DynByteBuf out) throws IOException { serialize(entry, 0, out); }
 	public final void serialize(CEntry entry, OutputStream out) throws IOException { serialize(entry, 0, out); }
-	public void serialize(CEntry entry, int flag, OutputStream out) throws IOException {
+	public final void serialize(CEntry entry, int flag, OutputStream out) throws IOException {
 		StreamWriter os = new StreamWriter(out, charset == null ? StandardCharsets.UTF_8 : charset);
 		try {
 			append(entry, flag, os);

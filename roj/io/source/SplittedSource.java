@@ -71,7 +71,7 @@ public class SplittedSource extends Source {
 		}
 	}
 
-	public SplittedSource(FileSource src, int size) throws IOException {
+	public SplittedSource(FileSource src, long size) throws IOException {
 		this(new File(src.getSource().getParentFile(), IOUtil.noExtName(src.getSource().getName())), size);
 	}
 

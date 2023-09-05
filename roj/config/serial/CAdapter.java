@@ -23,4 +23,10 @@ public interface CAdapter<T> extends CVisitor {
 	void reset();
 
 	void write(CVisitor c, T t);
+
+	default T deepcopy(T t) {
+		reset();
+		write(this, t);
+		return result();
+	}
 }

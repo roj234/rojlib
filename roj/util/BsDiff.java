@@ -1,7 +1,6 @@
 package roj.util;
 
 import roj.archive.qz.xz.CorruptedInputException;
-import roj.collect.Int2IntMap;
 import roj.io.buf.ByteRange;
 
 import java.io.IOException;
@@ -13,6 +12,9 @@ import static roj.reflect.FieldAccessor.u;
  * @since 2023/8/2 0002 6:08
  */
 public class BsDiff {
+	public BsDiff() {}
+	public BsDiff(BsDiff prev) { sfx = prev.sfx; }
+
 	public void bsdiff(byte[] oldData, byte[] newData, DynByteBuf patch) {
 		patch.putAscii("ENDSLEY/BSDIFF43").putIntLE(newData.length);
 		initSuffix(oldData);
@@ -31,9 +33,8 @@ public class BsDiff {
 			int match = 0;
 			int scsc = scan += len;
 			while (scan < newData.length) {
-				Int2IntMap.Entry searchRet = search(scan, newData, oldData, 0, oldData.length);
-				pos = searchRet.getIntKey();
-				len = searchRet.getIntValue();
+				pos = search(scan, newData, oldData, 0, oldData.length);
+				len = this.len;
 				while (scsc < scan + len) {
 					if (scsc + lastOffset < oldData.length && oldData[scsc + lastOffset] == newData[scsc]) {
 						++match;
@@ -108,7 +109,7 @@ public class BsDiff {
 		}
 	}
 
-	public int bscompare(byte[] oldData, byte[] newData) {
+	public int bscompare(byte[] oldData, byte[] newData, int limit) {
 		int diffBytes = 0;
 
 		int scan = 0;
@@ -122,9 +123,8 @@ public class BsDiff {
 			int match = 0;
 			int scsc = scan += len;
 			while (scan < newData.length) {
-				Int2IntMap.Entry searchRet = search(scan, newData, oldData, 0, oldData.length);
-				pos = searchRet.getIntKey();
-				len = searchRet.getIntValue();
+				pos = search(scan, newData, oldData, 0, oldData.length);
+				len = this.len;
 				while (scsc < scan + len) {
 					if (scsc + lastOffset < oldData.length && oldData[scsc + lastOffset] == newData[scsc]) {
 						++match;
@@ -192,6 +192,8 @@ public class BsDiff {
 
 			if (overlap == -1) diffBytes += scan - lastScan - lenF - lenB;
 
+			if (diffBytes > limit) return -1;
+
 			lastPos = pos - lenB;
 			lastScan = scan - lenB;
 			lastOffset = pos - scan;
@@ -257,6 +259,7 @@ public class BsDiff {
 			if (len > 0) sfx[size - len] = -len;
 
 			h <<= 1;
+			if (h < 0) break;
 		}
 
 		for (int i = 0; i < size; ++i) sfx[V[i]] = i;
@@ -350,15 +353,20 @@ public class BsDiff {
 		return pos < V.length ? V[pos] : -1;
 	}
 
-	public Int2IntMap.Entry search(int index, byte[] newData, byte[] oldData, int start, int end) {
+	private int len;
+	public int search(int index, byte[] newData, byte[] oldData, int start, int end) {
 		if (end - start < 2) {
 			int len1 = matchLen(oldData, sfx[start], newData, index);
 			if (end != start && end < sfx.length) {
 				int len2 = matchLen(oldData, sfx[end], newData, index);
-				if (len2 >= len1) return new Int2IntMap.Entry(sfx[end], len2);
+				if (len2 >= len1) {
+					len = len2;
+					return sfx[end];
+				}
 			}
 
-			return new Int2IntMap.Entry(sfx[start], len1);
+			len = len1;
+			return sfx[start];
 		} else {
 			int mid = (end - start) / 2 + start;
 			return arrayCompare(oldData, sfx[mid], newData, index, Math.min(oldData.length - sfx[mid], newData.length - index)) < 0 ?

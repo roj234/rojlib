@@ -1,7 +1,10 @@
-package roj.text;
+package roj.text.novel;
 
 import roj.collect.*;
 import roj.io.IOUtil;
+import roj.text.CharList;
+import roj.text.ChinaNumeric;
+import roj.text.StreamReader;
 
 import java.io.File;
 import java.io.IOException;
@@ -168,6 +171,7 @@ public class Chapter {
 					tree.add(new RSegmentTree.Wrap<>(chaps, chaps.get(0).start, chaps.get(chaps.size()-1).start +1));
 			}
 
+			// todo: checkDisOrder
 			MyHashSet<Object> added = new IdentitySet<>();
 			List<Chapter> chaps = new SimpleList<>();
 			for (RSegmentTree.Region region : tree) {
@@ -186,7 +190,7 @@ public class Chapter {
 			if (added.size() > 1) chaps.sort((o1, o2) -> Long.compare(o1.start, o2.start));
 
 			if (chaps.size() > prevSize) {
-				if (!chapterByDepth.isEmpty() && chaps.get(0).start+4000 < chapterByDepth.get(chapterByDepth.size()-1).get(0).start) {
+				if (!chapterByDepth.isEmpty() && chaps.get(0).start+2000 < chapterByDepth.get(chapterByDepth.size()-1).get(0).start) {
 					chapterByDepth.remove(chapterByDepth.size()-1);
 				}
 

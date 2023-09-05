@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.CharBuffer;
 import java.util.Arrays;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -454,12 +455,10 @@ public class CharList implements CharSequence, Appender {
 	public final CharList replace(CharSequence str, CharSequence target) {
 		CharList out = null;
 
-		String targetArray = target.toString();
-
 		int prevI = 0, i = 0;
 		while ((i = indexOf(str, i)) != -1) {
 			if (prevI == 0) out = new CharList(len);
-			out.append(list, prevI, i).append(targetArray);
+			out.append(list, prevI, i).append(target);
 
 			i += str.length();
 			prevI = i;
@@ -492,6 +491,9 @@ public class CharList implements CharSequence, Appender {
 		return replaceMulti(map);
 	}
 	public final CharList replaceMulti(TrieTree<String> map) {
+		CharList out = null;
+		int prevI = 0, i = 0;
+
 		int pos = 0;
 
 		MyHashMap.Entry<MutableInt, String> entry = new MyHashMap.Entry<>(new MutableInt(), null);
@@ -503,13 +505,24 @@ public class CharList implements CharSequence, Appender {
 				continue;
 			}
 
-			replace(pos, pos+len, entry.getValue());
-			pos += entry.getValue().length();
+			if (prevI == 0) out = new CharList(this.len);
+			out.append(list, prevI, pos).append(entry.getValue());
+
+			pos += len;
+			prevI = pos;
 		}
+
+		if (prevI == 0) return this;
+		out.append(list, prevI, len);
+
+		ArrayCache.getDefaultCache().putArray(list);
+
+		list = out.list;
+		len = out.len;
 
 		return this;
 	}
-	public final void replaceEx(Pattern regexp, CharSequence literal) {
+	public final void preg_replace(Pattern regexp, CharSequence literal) {
 		CharList out = null;
 
 		Matcher m = regexp.matcher(this);
@@ -518,6 +531,27 @@ public class CharList implements CharSequence, Appender {
 		while (m.find(i)) {
 			if (i == 0) out = new CharList(this.len);
 			out.append(list, i, m.start()).append(literal);
+
+			i = m.end();
+		}
+
+		if (i == 0) return;
+		out.append(list, i, len);
+
+		ArrayCache.getDefaultCache().putArray(list);
+
+		list = out.list;
+		len = out.len;
+	}
+	public final void preg_replace_callback(Pattern regexp, Function<Matcher,CharSequence> callback) {
+		CharList out = null;
+
+		Matcher m = regexp.matcher(this);
+
+		int i = 0;
+		while (m.find(i)) {
+			if (i == 0) out = new CharList(this.len);
+			out.append(list, i, m.start()).append(callback.apply(m));
 
 			i = m.end();
 		}

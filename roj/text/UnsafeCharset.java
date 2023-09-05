@@ -82,12 +82,14 @@ public abstract class UnsafeCharset {
 				if (sb.hasArray()) {
 					arr = sb.array();
 					off += sb.arrayOffset();
+					end += sb.arrayOffset();
 					break found;
 				}
 			} else if (k == CharList.Slice.class) {
 				CharList.Slice sb = (CharList.Slice) s;
 				arr = sb.list;
 				off += sb.arrayOffset();
+				end += sb.arrayOffset();
 				break found;
 			} else if (k == char[].class) {
 				arr = (char[]) s;

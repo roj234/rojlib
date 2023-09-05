@@ -2,9 +2,11 @@ package roj.config;
 
 import roj.config.data.CEntry;
 import roj.config.serial.CAdapter;
+import roj.config.serial.ToEntry;
 import roj.io.IOUtil;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Locale;
@@ -78,5 +80,18 @@ public class ConfigMaster {
 
 	public static ConfigMaster create(File file) throws IOException, ParseException {
 		return new ConfigMaster(IOUtil.extensionName(file.getName()));
+	}
+
+	public static void write(CEntry obj, String file, String type) throws IOException {
+		try (FileOutputStream out = new FileOutputStream(file)) {
+			new ConfigMaster(type).binParser().serialize(obj, out);
+		}
+	}
+
+	// todo optimize for already implemented CVisitor
+	public static <T> void write(T obj, String file, String type, CAdapter<? super T> serializer) throws IOException {
+		ToEntry tmp = new ToEntry();
+		serializer.write(tmp, obj);
+		write(tmp.get(), file, type);
 	}
 }

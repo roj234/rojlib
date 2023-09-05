@@ -50,7 +50,8 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 		if (len < 2) return "US-ASCII";
 
 		// avoid UTF-32 issue
-		while (len < 4) b[len++] = 1;
+		int a = len;
+		while (a < 4) b[a++] = 1;
 
 		String bomCharset = detectBOM(b);
 		if (bomCharset != null) {
@@ -64,7 +65,6 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 
 		while (true) {
 			len = readUpto(b.length - bLen);
-			if (len <= 0) break;
 
 			ps = ns = 0;
 			UTF8MB4.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+bLen, len, this);
@@ -77,6 +77,13 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 			gb18030_negate += ns;
 
 			bLen += len;
+
+			// ASCII时相同
+			if (utf8_score >= gb18030_score || utf8_negate * 3 < gb18030_negate * 2) return "UTF8";
+			else if (gb18030_score > 0 && gb18030_negate * 3 < utf8_negate * 2) return "GB18030";
+
+			if (len == 0) break;
+
 			if (bLen == b.length) {
 				ArrayCache ac = ArrayCache.getDefaultCache();
 				byte[] b1 = ac.getByteArray(b.length << 1, false);
@@ -84,10 +91,6 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 				ac.putArray(b);
 				b = b1;
 			}
-
-			// ASCII时相同
-			if (utf8_score >= gb18030_score || utf8_negate*3 < gb18030_negate*2) return "UTF8";
-			else if (gb18030_score > 0 && gb18030_negate*3 < utf8_negate*2) return "GB18030";
 		}
 
 		throw new IOException("无法确定编码,utf8_score="+utf8_score+",gbk_score="+gb18030_score);

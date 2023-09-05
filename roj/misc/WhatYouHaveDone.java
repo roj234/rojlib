@@ -3,11 +3,10 @@ package roj.misc;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.io.IOUtil;
-import roj.text.LineReader;
-import roj.text.UTFCoder;
+import roj.text.CharList;
+import roj.text.StreamReader;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.List;
 
@@ -20,16 +19,19 @@ public class WhatYouHaveDone {
 		File f = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\java");
 		int total = 0;
 
-		UTFCoder x = IOUtil.SharedCoder.get();
-		x.keep = false;
+		CharList sb = IOUtil.getSharedCharBuf();
 
 		System.out.println("正在计算...");
 		ToIntMap<String> map = new ToIntMap<>();
 		for (File file : IOUtil.findAllFiles(f, file -> file.getName().endsWith(".java"))) {
-			x.byteBuf.clear();
-			x.byteBuf.readStreamFully(new FileInputStream(file));
-			// 是否计算空行
-			int size = new LineReader(x.decodeR(), true).size();
+			int size = 0;
+			try (StreamReader in = StreamReader.auto(file)) {
+				while (in.readLine(sb)) {
+					if (sb.length() > 0) size++;
+					sb.clear();
+				}
+			}
+
 			total += size;
 			map.putInt(file.getName(), size);
 		}

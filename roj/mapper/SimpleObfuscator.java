@@ -781,7 +781,7 @@ public final class SimpleObfuscator extends Obfuscator {
 	@Override
 	public String obfClass(IClass cls) {
 		String origin = cls.name();
-		if (packageExclusions.strStartsWithThis(origin) || classExclusions.contains(origin) || cls.modifier() == AccessFlag.MODULE) return TREMINATE_THIS_CLASS;
+		if (packageExclusions.strStartsWithThis(origin) || classExclusions.contains(origin) || cls.modifier() == AccessFlag.MODULE) return TERMINATE_THIS_CLASS;
 
 		tempF.clear();
 		tempM.clear();

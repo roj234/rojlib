@@ -228,28 +228,39 @@ public final class CodeMapper extends Mapping {
 		AsmShared ash = AsmShared.local();
 
 		Attribute a = list.attrByName("RuntimeVisibleAnnotations");
-		if (a != null) mapAnnotation(U, pool, ash.copy(a.getRawData()));
+		if (a != null) mapAnnotations(U, pool, ash.copy(a.getRawData()));
 		a = list.attrByName("RuntimeInvisibleAnnotations");
-		if (a != null) mapAnnotation(U, pool, ash.copy(a.getRawData()));
+		if (a != null) mapAnnotations(U, pool, ash.copy(a.getRawData()));
+	}
+
+	private void mapAnnotations(MapUtil U, ConstantPool pool, DynByteBuf r) {
+		int len = r.readUnsignedShort();
+		while (len-- > 0) mapAnnotation(U, pool, r);
 	}
 
 	private void mapAnnotation(MapUtil U, ConstantPool pool, DynByteBuf r) {
-		int len = r.readChar();
+		CstUTF owner = (CstUTF) pool.get(r);
+		String newOwner = U.mapFieldType(classMap, owner.str());
+		if (newOwner != null) r.putShort(r.rIndex-2, pool.getUtfId(newOwner));
+
+		String owner_name = owner.str().substring(1, owner.str().length()-1);
+		int len = r.readUnsignedShort();
 		while (len-- > 0) {
-			CstUTF owner = (CstUTF) pool.get(r);
-			String newOwner = U.mapFieldType(classMap, owner.str());
-			if (newOwner != null) {
-				r.putShort(r.rIndex-2, pool.getUtfId(newOwner));
+			String name = ((CstUTF) pool.get(r)).str();
+
+			// assert is annotation class...
+			for (Map.Entry<Desc, String> entry : methodMap.entrySet()) {
+				if (entry.getKey().name.equals(name) && entry.getKey().owner.equals(owner_name)) {
+					r.putShort(r.rIndex-2, pool.getUtfId(entry.getValue()));
+					break;
+				}
 			}
-			int valCnt = r.readUnsignedShort();
-			while (valCnt-- > 0) {
-				r.rIndex += 2;
-				mapAnnotationNode(U, pool, r);
-			}
+
+			mapAnnotationNode(U, pool, r);
 		}
 	}
 
-	private void mapAnnotationNode(MapUtil U, ConstantPool cp, DynByteBuf r) {
+	private void mapAnnotationNode(MapUtil U, ConstantPool pool, DynByteBuf r) {
 		switch (r.readUnsignedByte()) {
 			case BOOLEAN:
 			case BYTE:
@@ -263,57 +274,52 @@ public final class CodeMapper extends Mapping {
 				r.rIndex += 2;
 				break;
 			case ANNOTATION_CLASS: {
-				CstUTF owner = (CstUTF) cp.get(r);
+				CstUTF owner = (CstUTF) pool.get(r);
 				String newOwner = U.mapFieldType(classMap, owner.str());
 				if (newOwner != null) {
-					r.putShort(r.rIndex-2, cp.getUtfId(newOwner));
+					r.putShort(r.rIndex-2, pool.getUtfId(newOwner));
 				}
 			}
 			break;
 			case ENUM: {
-				CstUTF owner = (CstUTF) cp.get(r);
-				CstUTF name = (CstUTF) cp.get(r);
-
-				if (checkFieldType) {
-					System.out.println("[Warn]checkFieldType is not compatible with @Interface.Enum type");
+				CstUTF owner = (CstUTF) pool.get(r);
+				String newOwner = U.mapFieldType(classMap, owner.str());
+				if (newOwner != null) {
+					System.out.println("[ANN] C " + owner.str() + " => " + newOwner);
+					r.putShort(r.rIndex-2, pool.getUtfId(newOwner));
+					//pool.setUTFValue(owner, 'L'+newOwner+';');
 				}
+
+				CstUTF enum_name = (CstUTF) pool.get(r);
 
 				Desc fd = U.sharedDC;
-				String prevOwner = fd.owner;
-
-				fd.owner = owner.str();
-				fd.name = name.str();
+				// old name
+				fd.owner = owner.str().substring(1,owner.str().length()-1);
+				fd.name = enum_name.str();
 				fd.param = "";
 
-				String newName = fieldMap.get(fd);
-				if (newName != null) {
-					System.out.println("[ANN] E " + fd + " => " + newName);
-					r.putShort(r.rIndex - 2, cp.getUtfId(newName));
-				}
-				String newOwner = classMap.get(fd.owner);
-				if (newOwner != null) {
-					System.out.println("[ANN] E " + owner.str() + " => " + newOwner);
-					cp.setUTFValue(owner, newOwner);
+				String newFieldName = fieldMap.get(fd);
+
+				if (checkFieldType) {
+					for (Map.Entry<Desc, String> entry : fieldMap.entrySet()) {
+						if (entry.getKey().name.equals(fd.name) && entry.getKey().owner.equals(fd.owner)) {
+							if (newFieldName != null) throw new RuntimeException("Duplicate field name in same (enum) class "+fd);
+							newFieldName = entry.getValue();
+						}
+					}
 				}
 
-				fd.owner = prevOwner;
-			}
-			break;
-			case ANNOTATION: {
-				r.rIndex += 2;
-				int len = r.readUnsignedShort();
-				while (len-- > 0) {
-					r.rIndex += 2;
-					mapAnnotationNode(U, cp, r);
+				if (newFieldName != null) {
+					System.out.println("[ANN] F " + fd + " => " + newFieldName);
+					r.putShort(r.rIndex-2, pool.getUtfId(newFieldName));
 				}
 			}
 			break;
+			case ANNOTATION: mapAnnotation(U, pool, r); break;
 			case ARRAY:
 				int len = r.readUnsignedShort();
-				while (len-- > 0) {
-					mapAnnotationNode(U, cp, r);
-				}
-				break;
+				while (len-- > 0) mapAnnotationNode(U, pool, r);
+			break;
 		}
 	}
 
@@ -350,13 +356,13 @@ public final class CodeMapper extends Mapping {
 
 		List<? extends MethodNode> methods1 = data.methods;
 		Desc md = U.sharedDC;
-		md.owner = data.name;
 		for (i = 0; i < methods1.size(); i++) {
 			RawMethod method = (RawMethod) methods1.get(i);
 
 			/**
 			 * Method Name
 			 */
+			md.owner = data.name;
 			md.name = method.name.str();
 			md.param = method.type.str();
 
@@ -379,7 +385,6 @@ public final class CodeMapper extends Mapping {
 			mapAnnotations(U, data.cp, method);
 		}
 
-		md.owner = data.name;
 		md.param = "";
 		List<? extends FieldNode> fields = data.fields;
 		for (i = 0; i < fields.size(); i++) {
@@ -388,6 +393,7 @@ public final class CodeMapper extends Mapping {
 			/**
 			 * Field Name
 			 */
+			md.owner = data.name;
 			md.name = field.name.str();
 			if (checkFieldType) md.param = field.type.str();
 

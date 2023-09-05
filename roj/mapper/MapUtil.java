@@ -23,10 +23,7 @@ import roj.util.Helpers;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
@@ -83,121 +80,128 @@ public final class MapUtil {
 	/**
 	 * 父类的方法被子类实现的接口使用
 	 */
-	public MyHashSet<SubImpl> gatherSubImplements(List<Context> ctx, ConstMapper mapper, Map<String, IClass> methods) {
-		if (methods.isEmpty()) {
+	public Set<SubImpl> findSubImplements(List<Context> ctx, ConstMapper mapper, Map<String, IClass> classInfo) {
+		if (classInfo.isEmpty()) {
 			for (int i = 0; i < ctx.size(); i++) {
 				ConstantData data = ctx.get(i).getData();
-				methods.put(data.name, data);
+				classInfo.put(data.name, data);
 			}
 		}
 
 		Map<String, List<Desc>> mapperMethods = null;
 
 		MyHashSet<SubImpl> dest = new MyHashSet<>();
-		SubImpl s_test = new SubImpl();
 
-		MyHashSet<NameAndType> duplicate = new MyHashSet<>();
-		NameAndType natCheck = new NameAndType();
+		SubImpl sTest = new SubImpl();
+		NameAndType nTest = new NameAndType();
+
+		SimpleList<NameAndType> interfaceMethods = new SimpleList<>();
 
 		for (int k = 0; k < ctx.size(); k++) {
 			ConstantData data = ctx.get(k).getData();
 			if ((data.modifier() & (AccessFlag.INTERFACE | AccessFlag.ANNOTATION | AccessFlag.MODULE)) != 0) continue;
+			List<CstClass> itfs = data.interfaces;
+			if (itfs.isEmpty()) continue;
 
-			List<String> superClasses = superClasses(data.parent, mapper.selfSupers);
-			c:
-			if (superClasses.isEmpty()) {
-				if (data.interfaces.isEmpty()) continue;
-			} else {
-				List<CstClass> itfs = data.interfaces;
-				for (int i = 0; i < itfs.size(); i++) {
-					CstClass itf = itfs.get(i);
-					String name = itf.name().str();
-					if (!superClasses.contains(name)) {
-						break c;
+			interfaceMethods.clear();
+			List<String> parents = superClasses(data.parent, mapper.selfSupers);
+			for (int i = 0; i < itfs.size(); i++) {
+				String name = itfs.get(i).name().str();
+				if (!parents.contains(name)) {
+					// 接口方法
+					IClass clz = classInfo.get(name);
+					if (clz == null) {
+						clz = reflectClassInfo(name);
+						if (clz == null) {
+							if (mapperMethods == null) {
+								mapperMethods = new MyHashMap<>();
+								for (Desc key : mapper.methodMap.keySet()) {
+									mapperMethods.computeIfAbsent(key.owner, Helpers.fnArrayList()).add(key);
+								}
+							}
+							classInfo.put(name, clz = new ReflectClass(name, Helpers.cast(mapperMethods.getOrDefault(name, Collections.emptyList()))));
+						}
+					}
+
+					for (MoFNode node : clz.methods()) {
+						NameAndType key = new NameAndType();
+						key.owner = clz.name();
+						key.name = node.name();
+						key.param = node.rawDesc();
+						interfaceMethods.add(key);
 					}
 				}
-
-				continue;
 			}
+			if (interfaceMethods.isEmpty()) continue;
 
-			superClasses = superClasses(data.name, mapper.selfSupers);
-			for (int i = 0; i < superClasses.size(); i++) {
-				String parent = superClasses.get(i);
+			for (int i = 0; i < parents.size(); i++) {
+				String parent = parents.get(i);
 
-				List<? extends MoFNode> nodes;
-				// 获取所有的方法
-				// 首先尝试从self获取
-				IClass clz = methods.get(parent);
+				IClass clz = classInfo.get(parent);
 				if (clz == null) {
-					// 其次尝试用反射加载rt
 					clz = reflectClassInfo(parent);
-					if (clz != null) {
-						nodes = clz.methods();
-					} else {
-						// 最后尝试从mapper libraries获取 (因为可能不全)
+					if (clz == null) {
 						if (mapperMethods == null) {
 							mapperMethods = new MyHashMap<>();
 							for (Desc key : mapper.methodMap.keySet()) {
 								mapperMethods.computeIfAbsent(key.owner, Helpers.fnArrayList()).add(key);
 							}
 						}
-						nodes = mapperMethods.getOrDefault(parent, Collections.emptyList());
-						methods.put(parent, new ReflectClass(parent, Helpers.cast(nodes)));
-						if (nodes.isEmpty()) continue;
+						classInfo.put(parent, clz = new ReflectClass(parent, Helpers.cast(mapperMethods.getOrDefault(parent, Collections.emptyList()))));
 					}
-				} else {
-					nodes = clz.methods();
 				}
 
+				List<? extends MoFNode> nodes = clz.methods();
 				for (int j = 0; j < nodes.size(); j++) {
 					MoFNode method = nodes.get(j);
-					if ((method.modifier() & AccessFlag.PRIVATE) != 0) continue;
-					if ((natCheck.name = method.name()).startsWith("<")) continue;
-					natCheck.param = method.rawDesc();
+					// 感谢接口函数必须public，省的抄一遍ConstMapper的代码
+					// todo 这里的static不确定()
+					if ((method.modifier() & (AccessFlag.PUBLIC|AccessFlag.STATIC)) != AccessFlag.PUBLIC) continue;
+					if ((nTest.name = method.name()).startsWith("<")) continue;
+					nTest.param = method.rawDesc();
 
-					NameAndType get = duplicate.find(natCheck);
-					if (get != natCheck) {
-						// 父类存在方法
-
-						// 若存在继承关系，不是接口
-						if (mapper.selfSupers.getOrDefault(get.owner, Collections.emptyList()).contains(parent)) {
-							// 跳过当前class
-							continue;
+					int id = -1;
+					while ((id = interfaceMethods.indexOf(nTest, id+1)) >= 0) {
+						Desc issuer = interfaceMethods.get(id);
+						sharedDC.owner = issuer.owner;
+						sharedDC.name = issuer.name;
+						sharedDC.param = issuer.param;
+						if (!mapper.methodMap.containsKey(sharedDC)) {
+							sharedDC.owner = parent;
+							if (!mapper.methodMap.containsKey(sharedDC)) continue;
 						}
 
-						// 把新的复制，然后测试能不能找到存在的SI-NAT
-						s_test.type = new Desc(data.name, get.name, get.param);
-						SubImpl s_get = dest.intern(s_test);
-						s_get.owners.add(parent);
+						sTest.type = issuer;
+						SubImpl s_get = dest.intern(sTest);
+						if (s_get == sTest) sTest = new SubImpl();
+
+						Set<String> set = null;
+						for (Set<String> set1 : s_get.owners) {
+							if (set1.contains(parent) || set1.contains(issuer.owner)) {
+								set = set1;
+								break;
+							}
+						}
+						if (set == null) {
+							set = new MyHashSet<>(2);
+							s_get.owners.add(set);
+						}
+						set.add(parent);
+						set.add(issuer.owner);
 
 						// native不能
-						if ((method.modifier() & AccessFlag.NATIVE) != 0) s_get.immutable = true;
+						if ((method.modifier() & AccessFlag.NATIVE) != 0) set.add(null);
 						// 至少有一个类不是要处理的类: 不能混淆
-						if (!methods.containsKey(parent)) s_get.immutable = true;
-
-						// 不存在
-						if (s_get == s_test) {
-							// 新的，所以nat没加里面
-							s_test.owners.add(get.owner);
-
-							s_test = new SubImpl();
-						}
-						// 存在, 啥事没有
-					} else {
-						// 没有，新增的
-						// 补上空缺的owner字段, 上面要用
-						NameAndType nat = natCheck.copy(parent);
-
-						duplicate.add(nat);
+						IClass ref = classInfo.get(parent);
+						if (ref == null || ref instanceof ReflectClass) set.add(null);
 					}
 				}
 			}
-			duplicate.clear();
 		}
 
 		// 加上一步工序, 删除找得到的“找不到的”class
-		for (String key : methods.keySet()) {
-			classInfo.remove(key, FAILED);
+		for (String key : classInfo.keySet()) {
+			this.classInfo.remove(key, FAILED);
 		}
 
 		return dest;

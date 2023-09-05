@@ -380,6 +380,13 @@ public final class IOUtil {
 	}
 
 	public static long movePath(File from, File to, boolean move) throws IOException {
+		if (!from.isDirectory()) {
+			if (move) return from.renameTo(to) ? 1 : 0;
+			copyFile(from, to);
+			return 1;
+		}
+		if (from.equals(to)) return 1;
+
 		MutableLong state = new MutableLong();
 		int len = from.getAbsolutePath().length()+1;
 		to.mkdirs();

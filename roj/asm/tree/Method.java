@@ -40,7 +40,7 @@ public final class Method implements MethodNode {
 		this.name = method.name.str();
 		this.rawDesc = method.type.str();
 
-		AttributeList al = method.attributesNullable();
+		AttributeList al = method.attributes;
 		if (al != null && !al.isEmpty()) {
 			attributes = new AttributeList(al);
 			Parser.parseAttributes(this, data.cp, attributes, Signature.METHOD);

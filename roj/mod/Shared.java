@@ -282,7 +282,7 @@ public final class Shared {
 			}
 
 			if (CONFIG.getBool("子类实现")) {
-				mapperFwd.flag |= ConstMapper.FLAG_CHECK_SUB_IMPL;
+				mapperFwd.flag |= ConstMapper.FLAG_FIX_SUBIMPL;
 			}
 		}
 

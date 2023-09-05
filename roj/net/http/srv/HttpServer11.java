@@ -426,7 +426,9 @@ public final class HttpServer11 extends PacketMerger implements
 		} catch (Throwable e) {
 			onError(e);
 		}
-		sendHead();
+
+		// handlerRemoved() in response()
+		if (ch != null) sendHead();
 	}
 	private void onError(Throwable e) {
 		if (exceptPostSize != -2) {
@@ -530,6 +532,26 @@ public final class HttpServer11 extends PacketMerger implements
 
 		if (state == HANG) t.hanging.remove(this);
 
+		Exception e = null;
+		if (body != null) {
+			try {
+				body.release(ch);
+			} catch (Exception e1) {
+				e = e1;
+			}
+			body = null;
+		}
+		if (ph != null) {
+			ch.channel().remove("h11@body_handler");
+			try {
+				ph.onComplete();
+			} catch (Exception e1) {
+				if (e == null) e = e1;
+				else e.addSuppressed(e1);
+			}
+			ph = null;
+		}
+
 		if (req != null) {
 			req.free();
 			t.requests.reserve(req);
@@ -556,25 +578,6 @@ public final class HttpServer11 extends PacketMerger implements
 		setChunk(ch, 0);
 		setCompr(ch, ENC_PLAIN, null);
 
-		Exception e = null;
-		if (body != null) {
-			try {
-				body.release(ch);
-			} catch (Exception e1) {
-				e = e1;
-			}
-			body = null;
-		}
-		if (ph != null) {
-			ch.channel().remove("h11@body_handler");
-			try {
-				ph.onComplete();
-			} catch (Exception e1) {
-				if (e == null) e = e1;
-				else e.addSuppressed(e1);
-			}
-			ph = null;
-		}
 		try {
 			super.channelClosed(ch);
 		} catch (Exception e1) {
@@ -696,6 +699,8 @@ public final class HttpServer11 extends PacketMerger implements
 
 	@Override
 	public void handlerRemoved(ChannelCtx ctx) {
+		finish(true);
+
 		ch = null;
 		ctx.channel().remove("h11@compr");
 		ctx.channel().remove("h11@chunk");

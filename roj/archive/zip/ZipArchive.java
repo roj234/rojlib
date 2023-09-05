@@ -124,7 +124,7 @@ public class ZipArchive implements ArchiveFile {
 		this.file = file;
 		r = new FileSource(file);
 		if (file.getName().endsWith(".001")) {
-			r = BufferedSource.autoClose(new SplittedSource((FileSource) r, (int) file.length()));
+			r = BufferedSource.autoClose(new SplittedSource((FileSource) r, file.length()));
 		}
 		r.seek(offset);
 

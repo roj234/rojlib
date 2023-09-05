@@ -10,13 +10,12 @@ import roj.net.NetworkUtil;
 import roj.text.LineReader;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
-import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -76,19 +75,18 @@ public final class MultiFileDownloader {
 
 	private static void parseFileNames(File base, String name) throws IOException {
 		File file = new File(name);
-		LineReader slr = new LineReader(new FileInputStream(file), StandardCharsets.UTF_8, false);
+		List<String> urls = LineReader.slrParserV2(IOUtil.readUTF(base), false);
 
 		if (progress != null) {
 			progress.bar().setName(file.getName());
-			progress.setTotal(slr.size());
+			progress.setTotal(urls.size());
 		}
 
-		for (String s : slr) {
+		for (int i = 0; i < urls.size(); i++) {
+			String s = urls.get(i);
 			s = s.trim();
 			if (!s.isEmpty() && !s.startsWith("#")) {
-				if (!s.startsWith("http")) {
-					throw new IllegalArgumentException(name + "第" + slr.lineNumber() + "行不是有效的链接!");
-				}
+				if (!s.startsWith("http")) throw new IllegalArgumentException(name + "第" + (i+1) + "行不是有效的http链接!");
 				download(base, s);
 			}
 		}
