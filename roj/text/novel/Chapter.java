@@ -4,23 +4,28 @@ import roj.collect.*;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.ChinaNumeric;
+import roj.text.LinedReader;
 import roj.text.StreamReader;
 
+import javax.swing.tree.MutableTreeNode;
+import javax.swing.tree.TreeNode;
 import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.List;
 
 /**
  * @author Roj234
  * @since 2023/6/26 0026 21:29
  */
-public class Chapter {
+public class Chapter implements MutableTreeNode {
 	private static final MyBitSet CP_WHITESPACE = MyBitSet.from("\t 　=");
 	private static final MyBitSet CP_DELIM = MyBitSet.from("·、．.");
 	private static final Int2IntMap CP_KIND = new Int2IntMap();
 	private static final Int2IntMap CP_NUMBER = new Int2IntMap();
-	private static final TrieTreeSet CP_SPECIAL = new TrieTreeSet("番外", "完本感言", "序", "内容简介", "简介", "引子", "作品相关", "尾声", "目录");
+	private static final TrieTreeSet CP_SPECIAL = new TrieTreeSet("番外", "完本感言", "序", "内容简介", "简介", "引子", "楔子", "作品相关", "尾声", "目录", "结局");
 	static {
 		CP_NUMBER.putAll(ChinaNumeric.NUMBER_MAP);
 		CP_NUMBER.putInt('十', -2);
@@ -49,19 +54,21 @@ public class Chapter {
 			return cbd.isEmpty() ? Collections.emptyList() : groupChapter(cbd, 0);
 		}
 	}
-	public static List<List<Chapter>> parse(StreamReader in) throws IOException {
+	public static List<List<Chapter>> parse(LinedReader in) throws IOException {
 		IntMap<List<Chapter>> chapters = new IntMap<>();
 
 		CharList buf = IOUtil.getSharedCharBuf();
 
-		long offset = 0;
-		Chapter chap = null;
+		int offset = 0;
+		Chapter chap = new Chapter();
+		chap.name = "Prologue";
+		chapters.putInt(0, Collections.singletonList(chap));
 
 		line:
 		while (true) {
 			buf.clear();
 			if (!in.readLine(buf)) break;
-			offset += buf.length();
+			offset += buf.length()+1;
 
 			int off = 0;
 			int len = buf.length();
@@ -77,8 +84,10 @@ public class Chapter {
 			block:
 			if (CP_SPECIAL.strStartsWithThis(buf, off, len)) {
 				if (buf.indexOf("序", off) == off && off+1 < len) break block;
-				if (buf.indexOf("番外", off) == off && off+2 < len) break block;
-				if (chap != null && buf.startsWith("尾声") && checkTOC(chap, 99999)) continue;
+				if (buf.indexOf("番外", off) == off && off+20 < len) break block;
+
+				if (buf.startsWith("尾声") && checkTOC(chap, 99999)) continue;
+				chap.end = offset-buf.length()-1;
 
 				chap = new Chapter();
 				chap.start = offset;
@@ -137,10 +146,8 @@ public class Chapter {
 				continue;
 			}
 
-			if (chap != null) {
-				if (checkTOC(chap, no)) continue;
-				chap.end = offset-buf.length();
-			}
+			if (checkTOC(chap, no)) continue;
+			chap.end = offset-buf.length()-1;
 
 			chap = new Chapter();
 			chap.start = offset;
@@ -156,6 +163,7 @@ public class Chapter {
 
 			chapters.computeIfAbsentIntS((chap.type << 16) | state, SimpleList::new).add(chap);
 		}
+		chap.end = offset-1;
 
 		List<List<Chapter>> chapterByDepth = new SimpleList<>();
 
@@ -191,7 +199,8 @@ public class Chapter {
 
 			if (chaps.size() > prevSize) {
 				if (!chapterByDepth.isEmpty() && chaps.get(0).start+2000 < chapterByDepth.get(chapterByDepth.size()-1).get(0).start) {
-					chapterByDepth.remove(chapterByDepth.size()-1);
+					List<Chapter> remove = chapterByDepth.remove(chapterByDepth.size()-1);
+					System.out.println(remove);
 				}
 
 				chapterByDepth.add(chaps);
@@ -212,7 +221,7 @@ public class Chapter {
 		}
 		return false;
 	}
-	private static long parseChapterNo(char[] cbuf, int off, int len) {
+	public static long parseChapterNo(char[] cbuf, int off, int len) {
 		long out = 0;
 
 		int i = off;
@@ -230,7 +239,7 @@ public class Chapter {
 
 		return out;
 	}
-	private static List<Chapter> groupChapter(List<List<Chapter>> chapters, int pos) {
+	public static List<Chapter> groupChapter(List<List<Chapter>> chapters, int pos) {
 		if (pos >= chapters.size()-1) return chapters.get(chapters.size()-1);
 		groupChapter(chapters, pos+1);
 
@@ -269,22 +278,81 @@ public class Chapter {
 		return -(low + 1);  // key not found.
 	}
 
-	public long start, end;
+	public int start, end;
 	public int type;
 
 	public String name;
 	public long no;
 
+	public transient Chapter parent;
 	public List<Chapter> subChapter;
 
+	public CharList data;
+
+	public String fullName, displayName;
+
 	public String toString() {
-		String name = "第" + no + (char)type + "【" + this.name + "】";
+		String name = displayName!=null ? displayName : "第" + no + (char)type + "【" + this.name + "】";
+
+		name += " | 长度 " + (data == null ? end-start : data.length()) + " | 序号 " + no;
 		if (subChapter != null) {
-			if (subChapter.isEmpty()) subChapter.add(new Chapter());
-			name += " containing "+subChapter.size()+" "+(char)subChapter.get(0).type+"s";
-		} else {
-			name += " on " + start;
+			if (subChapter.isEmpty()) name += " +0";
+			else name += " +"+subChapter.size()+(char)subChapter.get(0).type;
 		}
+
 		return name;
+	}
+
+	public Chapter getParent() { return parent; }
+	public void setParent(MutableTreeNode newParent) { this.parent = (Chapter) newParent; }
+	public void removeFromParent() { parent.subChapter.remove(this); parent = null; }
+
+	public void setParents() {
+		if (subChapter == null) return;
+		for (int i = 0; i < subChapter.size(); i++) {
+			Chapter c = subChapter.get(i);
+			c.parent = this;
+			c.setParents();
+		}
+	}
+
+	public Chapter getChildAt(int i) { return subChapter.get(i); }
+	public int getChildCount() { return subChapter == null ? 0 : subChapter.size(); }
+
+	public int getIndex(TreeNode node) { return subChapter == null ? -1 : subChapter.indexOf(node); }
+
+	public boolean getAllowsChildren() { return subChapter != null; }
+
+	public boolean isLeaf() { return subChapter == null || subChapter.isEmpty(); }
+	public Enumeration<?> children() { return subChapter == null ? Collections.emptyEnumeration() : Collections.enumeration(subChapter); }
+
+	public void insert(MutableTreeNode child, int index) {
+		if (subChapter == null) subChapter = new SimpleList<>();
+		Chapter c = (Chapter) child;
+		c.parent = this;
+		subChapter.add(index, c);
+	}
+
+	public void remove(int index) { subChapter.remove(index); }
+	public void remove(MutableTreeNode node) { subChapter.remove(node); }
+
+	public void setUserObject(Object object) { throw new UnsupportedOperationException(); }
+
+	public int sumChildrenCount() {
+		if (getChildCount() == 0) return 1;
+		int val = 1;
+		for (int i = 0; i < subChapter.size(); i++) {
+			val += subChapter.get(i).sumChildrenCount();
+		}
+		return val;
+	}
+
+	public void flat(Collection<Chapter> out) {
+		out.add(this);
+		if (getChildCount() > 0) {
+			for (int i = 0; i < subChapter.size(); i++) {
+				subChapter.get(i).flat(out);
+			}
+		}
 	}
 }
