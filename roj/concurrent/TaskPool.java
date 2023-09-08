@@ -336,8 +336,7 @@ public class TaskPool implements TaskHandler {
 
 				try {
 					if (!task.isCancelled()) {
-						executeIdea(task);
-						task.execute();
+						executeForDebug(task);
 						if (task.continueExecuting()) pushTask(task);
 					}
 				} catch (Throwable e) {
@@ -348,6 +347,6 @@ public class TaskPool implements TaskHandler {
 			synchronized (threads) { threads.remove(this); }
 		}
 
-		private final void executeIdea(@Async.Execute ITask task) {}
+		private void executeForDebug(@Async.Execute ITask task) throws Exception { task.execute(); }
 	}
 }

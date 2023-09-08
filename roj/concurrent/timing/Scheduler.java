@@ -1,5 +1,6 @@
 package roj.concurrent.timing;
 
+import org.jetbrains.annotations.Async;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskHandler;
@@ -122,8 +123,7 @@ public class Scheduler implements Runnable {
 					} else remain.add(task);
 				} else dirty = true;
 
-				if (executor != null && !task.forceOnScheduler()) executor.pushTask(task);
-				else task.execute();
+				executeForDebug(task);
 
 				if (timeout) {
 					synchronized (tasks) {
@@ -154,6 +154,11 @@ public class Scheduler implements Runnable {
 		if (tasks.isEmpty()) return -1;
 		long run = tasks.peek().nextRun - System.currentTimeMillis();
 		return run < 0 ? 0 : run;
+	}
+
+	private void executeForDebug(@Async.Execute Scheduled task) throws Exception {
+		if (executor != null && !task.forceOnScheduler()) executor.pushTask(task);
+		else task.execute();
 	}
 
 	public void runNewThread(String name) {
@@ -224,7 +229,7 @@ public class Scheduler implements Runnable {
 	public Scheduled executeTimer(ITask task, int intervalMs, int count) { return add(new ScheduledTask(task, 0, intervalMs, count)); }
 	public Scheduled executeTimer(ITask task, int intervalMs, int count, int delayMs) { return add(new ScheduledTask(task, delayMs, intervalMs, count)); }
 
-	public Scheduled add(Scheduled t) {
+	public Scheduled add(@Async.Schedule Scheduled t) {
 		if (worker == null) throw new IllegalStateException("定时器已关闭");
 		t.owner = this;
 		t.next = null;
@@ -239,7 +244,7 @@ public class Scheduler implements Runnable {
 			if ((++j & 15) == 0) LockSupport.parkNanos(1);
 		}
 
-		if (t.nextRun < head.nextRun)
+		if (t.nextRun < head.nextRun || head.nextRun < 0)
 			LockSupport.unpark(worker);
 		return t;
 	}

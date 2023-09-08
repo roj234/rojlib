@@ -74,6 +74,28 @@
 * 或者对于区间只是挨着的, 比如bundle中的某些小文件, 用来减少IO次数  
  详情看MutableZipFile  
  * `RingBuffer`
+
+## roj.concurrent
+Promise:
+```java
+		Promise.new_(TaskPool.CpuMassive(), (op) -> {
+			LockSupport.parkNanos(1000_000_000L);
+			op.resolve("a");
+		}).thenF((val) -> {
+			return val+"b";
+		}).thenF((val) -> {
+			return Promise.new_(TaskPool.CpuMassive(), (op) -> {
+				LockSupport.parkNanos(1000_000_000L);
+				op.resolve("c");
+			}).thenF((val2) -> {
+				return val.toString()+val2;
+			});
+		}).thenF((val) -> {
+			System.out.println(val);
+			return null;
+		});
+```
+其它：定时任务
   
 ## roj.config  
   JSON YAML TOML INI XML NBT Torrent(Bencode) CSV 解析器  
@@ -93,11 +115,15 @@ XEntry/CEntry均支持dot-get: `a.b[2].c`
 #### 序列化：  
   使用ASM动态生成类，支持任意对象（不只实体类！）的序列化/反序列化  
   支持数组，不用反射  
-  标记(flag):   
- * `GENERATE` = 1, 对未知的class自动生成序列化器  
- * `CHECK_INTERFACE` = 2, 检查实现的接口是否有序列化器  
- * `CHECK_PARENT` = 4, 检查父类是否有序列化器  
- * `DYNAMIC` = 8 动态模式 (不根据字段类型而根据序列化时的对象class来获取序列化器)
+  标记(flag):
+ * `GENERATE`        对未知的class自动生成序列化器  
+ * `CHECK_INTERFACE` 检查实现的接口是否有序列化器  
+ * `CHECK_PARENT`    检查父类是否有序列化器
+ * `NO_CONSTRUCTOR`  不调用&lt;init&gt;
+ * 动态模式: 根据对象的class来序列化
+ * `ALLOW_DYNAMIC`   允许动态模式  仅应用到无法确定类型的字段
+ * `PREFER_DYNAMIC`  优先动态模式  禁用泛型推断
+ * `FORCE_DYNAMIC`   强制动态模式  对所有字段启用
 
 ```java
 
@@ -156,7 +182,7 @@ public class Test {
     public Charset charset;
     // 支持任意对象和多层泛型
     // 字段类型为接口和抽象类时，会用ObjAny序列化对象，会使用==表示对象的class
-    // 如果你碰得到这种情况，最好还是手动序列化... 自动生成的序列化器并不会管父类的字段
+    // 如果要保留这个Map的类型，那就（1）字段改成HashMap或者（2）开启DYNAMIC
     public Map<String, Map<String, Object>> map;
 
     //使用transient避免被序列化
@@ -224,7 +250,7 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 new一个也行  
 `roj.config.ConfigMaster.parse`也行  
 继承它也行
-  
+
 ## roj.crypt  
     几种加密/哈希算法，还有CFB等套在块密码上面的壳子  
   `SM3` `SM4` `XChaCha20-Poly1305` `AES-256-GCM`  

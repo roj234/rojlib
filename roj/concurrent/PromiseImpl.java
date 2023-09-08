@@ -4,239 +4,265 @@ import roj.collect.IntMap;
 import roj.concurrent.task.ITask;
 import roj.util.Helpers;
 
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+
+import static roj.reflect.FieldAccessor.u;
 
 /**
  * @author Roj234
  * @since 2022/10/8 0008 0:08
  */
-final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseValue {
-	 PromiseImpl(TaskHandler executor, Consumer<PromiseValue> handler) {
-		this.executor = executor;
-		if (executor == null) {
-			_execute(this, handler);
-			return;
+final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback {
+	PromiseImpl() {}
+	PromiseImpl(TaskHandler pool, Consumer<PromiseCallback> cb) {
+		this.executor = pool;
+		if (pool == null) head(cb);
+		else pool.pushTask(() -> head(cb));
+	}
+	private void head(Consumer<PromiseCallback> handler) {
+		try {
+			handler.accept(this);
+			if ((_state&TASK_COMPLETE) == 0) resolve(null);
+		} catch (Throwable e) {
+			reject(e);
 		}
 
-		executor.pushTask(() -> _execute(PromiseImpl.this, handler));
+		_apply();
 	}
 
-	PromiseImpl() {}
 
-	static final int CALLED = 1, INVOKED = 2, INVOKED_FINALLY = 4;
-	byte _state, _subState;
+	private static long state_offset;
+	static {
+		try {
+			state_offset = u.objectFieldOffset(PromiseImpl.class.getDeclaredField("_state"));
+		} catch (NoSuchFieldException ignored) {}
+	}
 
-	private Consumer<PromiseValue> _handler;
-	private Function<?,?> _fail;
-	private PromiseFailer _finally;
-	Object _result;
+	static final int
+		TASK_COMPLETE = 1, TASK_SUCCESS = 2,
+		WAIT = 4, CALLBACK = 8,
+		INVOKE_HANDLER = 16, INVOKE_FINALLY = 32;
+	volatile int _state;
 
-	private PromiseImpl<?> listener, next;
+	private BiConsumer<?, PromiseCallback> handler_success;
+	private Function<?,?> handler_fail;
+	private Consumer<Promise<?>> handler_finally;
+
+	Object _val;
+
+	private PromiseImpl<?> next;
 	private TaskHandler executor;
 
 	@Override
-	public Promise<Object> then(Consumer<PromiseValue> fn, PromiseFailer fail) {
-		if (_handler != null) throw new IllegalStateException("Then already set");
-		_handler = fn;
-
+	public Promise<Object> then(BiConsumer<T, PromiseCallback> fn, Consumer<Promise<?>> fail) {
 		PromiseImpl<Object> p = new PromiseImpl<>();
 		p.executor = executor;
-		next = p;
 
-		if (_state == FULFILLED) _apply();
-		else if (fail != null) p.catch_(fail);
+		synchronized (this) {
+			if (next != null) throw new IllegalStateException("Then already set");
+			handler_success = fn;
+			next = p;
+		}
+
+		if (fail != null) catch_(fail);
+		if ((_state & TASK_COMPLETE) != 0) _apply();
 
 		return p;
 	}
 
 	@Override
-	public Promise<T> catch_(PromiseFailer fn) {
-		if (_fail != null) throw new IllegalStateException("Fail already set");
-		_fail = (o) -> {
-			try {
-				fn.process(o);
-			} catch (Exception e) {
-				Helpers.athrow(e);
-			}
+	public Promise<T> catch_(Consumer<Promise<?>> fn) {
+		return catch_ES((o) -> {
+			fn.accept(this);
 			return IntMap.UNDEFINED;
-		};
-		if (_state == REJECTED) _apply();
-
-		return this;
+		});
 	}
-
 	@Override
 	public Promise<T> catch_ES(Function<?, ?> fn) {
-		if (_fail != null) throw new IllegalStateException("Fail already set");
-		_fail = fn;
-		if (_state == REJECTED) _apply();
+		synchronized (this) {
+			if (handler_fail != null) throw new IllegalStateException("Fail already set");
+			handler_fail = fn;
+		}
+
+		if ((_state & TASK_COMPLETE) != 0) _apply();
 		return this;
 	}
-
 	@Override
-	public Promise<T> finally_(PromiseFailer fn) {
-		if (_finally != null) throw new IllegalStateException("Finally already set");
-		_finally = fn;
-		if (_state != PENDING) _apply();
+	public Promise<T> finally_(Consumer<Promise<?>> fn) {
+		synchronized (this) {
+			if (handler_finally != null) throw new IllegalStateException("Finally already set");
+			handler_finally = fn;
+		}
 
+		if (_state != PENDING && invokeOnce(INVOKE_FINALLY)) fn.accept(this);
 		return this;
 	}
 
-	private synchronized void _apply() {
-		notifyAll();
+	private void _apply() {
+		int state = 0;
 
-		boolean shouldInvoke = false;
+		if (invokeOnce(INVOKE_HANDLER)) {
+			if ((_state&TASK_SUCCESS) != 0) {
+				if (handler_success == null) {
+					if ((_state&CALLBACK) != 0 && u.compareAndSwapInt(next, state_offset, WAIT, _state)) {
+						next._val = _val;
+						next._apply();
+						removeFlag(CALLBACK);
+						next = null;
+					}
 
-		check:
-		if ((_subState&INVOKED) == 0) {
-			if (_state == FULFILLED) {
-				if (_handler == null) break check;
-
-				if (executor == null) {
-					shouldInvoke = true;
+					removeFlag(INVOKE_HANDLER);
 				} else {
-					executor.pushTask(this);
+					state = 1;
 				}
 			} else {
-				Object _result = this._result;
+				Object val = _val;
 				PromiseImpl<?> p = this;
+				state = 2;
+
+				// 如果和你想的不一样... see MDN
 				while (p != null) {
 					fail:
-					if (p._fail != null) {
+					if (p.handler_fail != null) {
 						try {
-							Function<Object,Object> fn = Helpers.cast(p._fail);
-							Object ret = fn.apply(_result);
+							Function<Object,Object> fn = Helpers.cast(p.handler_fail);
+							Object ret = fn.apply(val);
+							state = 0;
 							if (ret == IntMap.UNDEFINED) break fail;
 
-							// 如果 fn 抛出一个错误或返回失败的 Promise... see MDN
-							p._subState = PENDING;
+							// todo concurrent bug?
+							p._state &= CALLBACK;
 							p.resolve(ret);
 							p._apply();
-
-							_subState |= INVOKED;
+							if (p == this) return;
 							break;
-						} catch (Exception e) {
-							_result = e;
+						} catch (Throwable e) {
+							val = e;
 						}
 					}
 
-					p.reject(_result);
+					p.reject(val);
 					p = p.next;
 				}
 			}
 		}
 
-		if ((_subState&INVOKED_FINALLY) == 0) {
-			PromiseImpl<?> p = this;
-			if (p._finally != null) {
-				try {
-					p._finally.process(_result);
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-				_subState |= INVOKED_FINALLY;
+		if (handler_finally != null && invokeOnce(INVOKE_FINALLY)) {
+			try {
+				handler_finally.accept(this);
+			} catch (Throwable e) {
+				e.printStackTrace();
 			}
 		}
 
-		if (shouldInvoke) execute();
+		if (state == 1) {
+			if (executor == null) execute();
+			else executor.pushTask(this);
+		}
+
+		if (state == 2) {
+			Object v = _val;
+			throw new RuntimeException("Uncaught in "+this, v instanceof Throwable ? (Throwable) v : null);
+		}
 	}
 
-	static void _execute(PromiseImpl<?> p, Consumer<PromiseValue> handler) {
-		try {
-			handler.accept(p);
-			if (p._subState == PENDING) {
-				p.resolve(null);
-			}
-		} catch (Throwable e) {
-			p.reject(e);
+	private boolean invokeOnce(int flag) {
+		while (true) {
+			int st = _state;
+			if ((st&flag) != 0) return false;
+			if (u.compareAndSwapInt(this, state_offset, st, st|flag)) return true;
 		}
-
-		if (p._state != PENDING) p._apply();
+	}
+	private void removeFlag(int flag) {
+		while (true) {
+			int st = _state;
+			if ((st&flag) == 0) return;
+			if (u.compareAndSwapInt(this, state_offset, st, st^flag)) return;
+		}
 	}
 
 	@Override
 	public void execute() {
-		synchronized (next) {
-			_execute(next, _handler);
+		PromiseImpl<?> p = next;
+		try {
+			handler_success.accept(Helpers.cast(_val), p);
+			if (p._state == PENDING) p.resolve(null);
+		} catch (Throwable e) {
+			p.reject(e);
 		}
+
+		// async
+		if ((p._state & TASK_COMPLETE) != 0) p._apply();
 	}
 
+	// region PromiseValue
 	@Override
-	public boolean isCancelled() {
-		return _subState != 0;
-	}
-
-	@Override
-	public void resolve(Object t) {
-		if (_subState != PENDING) return;
-		_subState = CALLED;
-
-		if1:
-		if (t instanceof PromiseImpl) {
-			PromiseImpl<?> p1 = (PromiseImpl<?>) t;
-			synchronized (p1) {
-				if (p1._state == PENDING) {
-					if (p1.listener != null) throw new IllegalStateException("then already bound");
-					p1.listener = this;
-					break if1;
+	public void resolve(Object result) {
+		if (result instanceof PromiseImpl) {
+			int s = _state&CALLBACK;
+			if (u.compareAndSwapInt(this, state_offset, s, s|WAIT)) {
+				PromiseImpl<?> c = (PromiseImpl<?>) result;
+				while (true) {
+					int val = c._state;
+					assert (val & WAIT) == 0;
+					if (val == PENDING) {
+						if (u.compareAndSwapInt(result, state_offset, PENDING, CALLBACK)) {
+							synchronized (c) {
+								if (c.next != null) {
+									_state = TASK_COMPLETE;
+									_val = new IllegalStateException("Then already set");
+									break;
+								}
+								c.next = this;
+							}
+							break;
+						}
+					} else if ((val & CALLBACK) != 0) {
+						_state = TASK_COMPLETE;
+						_val = new IllegalStateException("bound to other Promise");
+						break;
+					} else if ((val & TASK_COMPLETE) != 0) {
+						_state = c._state;
+						_val = c._val;
+						break;
+					}
 				}
 			}
 
-			_state = p1._state;
-			_result = p1._result;
-		} else {
-			_state = FULFILLED;
-			_result = t;
+			return;
 		}
 
-		invokeListener();
+		promiseFinish(TASK_COMPLETE|TASK_SUCCESS, result);
 	}
-
 	@Override
-	public void reject(Object o) {
-		if (_subState != PENDING) return;
-		_state = REJECTED;
-		_result = o;
-		_subState = CALLED;
+	public void reject(Object reason) { promiseFinish(TASK_COMPLETE, reason == null ? new RuntimeException() : reason); }
 
-		invokeListener();
-	}
+	private void promiseFinish(int target, Object o) {
+		int s = _state&CALLBACK;
+		if (u.compareAndSwapInt(this, state_offset, s, s|target)) _val = o; }
+	// endregion
 
-	private void invokeListener() {
-		if (listener != null) {
-			listener._state = _state;
-			listener._subState = CALLED;
-			listener._result = _result;
-			executor.pushTask(listener);
-		}
-	}
-
-	public byte state() {
-		return _state;
-	}
-
-	public Object get() {
-		if (_state == PENDING) throw new IllegalStateException();
-		return _result;
+	public byte state() { return (byte) (_state&3); }
+	@SuppressWarnings("unchecked")
+	public T get() {
+		if ((_state&TASK_SUCCESS) == 0) throw new IllegalStateException();
+		return (T) _val;
 	}
 
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		sb.append("Promise@").append(Integer.toHexString(hashCode())).append('{');
-		if (_handler == null) {
-			sb.append("<wait_for_handler>");
+		if ((_state&TASK_COMPLETE) == 0) {
+			if ((_state&WAIT) != 0) sb.append("<pending for another promise>");
+			else sb.append("<pending>");
 		} else {
-			if (_state == 0) {
-				sb.append("<pending>");
-			} else {
-				sb.append("<").append(_state == FULFILLED ? "fulfilled" : "rejected").append(">, value: ").append(_result);
-			}
+			sb.append('<').append(state() == FULFILLED ? "fulfilled" : "rejected").append(": ").append(_val).append('>');
 		}
-		if (next != null) {
-			sb.append(", Nx=").append(next);
-		}
+		if ((_state&CALLBACK) != 0) sb.append(", callback=").append(next);
+		if (handler_success == null) sb.append(", tail");
 		return sb.append("}").toString();
 	}
 }
