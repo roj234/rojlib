@@ -16,7 +16,7 @@ import roj.net.http.IllegalRequestException;
 import roj.net.http.auth.AuthScheme;
 import roj.security.SipHashMap;
 import roj.text.CharList;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -127,7 +127,7 @@ public final class Request extends Headers {
 	}
 	public String postString() {
 		if (postFields instanceof ByteList) {
-			try (StreamReader sr = new StreamReader((ByteList) postFields, null)) {
+			try (TextReader sr = new TextReader((ByteList) postFields, null)) {
 				postFields = IOUtil.read(sr);
 			} catch (IOException e) {
 				return null;

@@ -5,7 +5,7 @@ import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.Type;
 import roj.io.PushbackInputStream;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 import roj.util.ArrayCache;
 
 import java.io.File;
@@ -77,7 +77,7 @@ public class FileFilter implements Predicate<File> {
 				in1.setBuffer(b, i+COMMENT_BEGIN.length(), len);
 
 				CList list;
-				try (StreamReader sr = new StreamReader(in1, Shared.project.charset)) {
+				try (TextReader sr = new TextReader(in1, Shared.project.charset)) {
 				 	list = new JSONParser().parse(sr, JSONParser.NO_DUPLICATE_KEY | JSONParser.NO_EOF | JSONParser.UNESCAPED_SINGLE_QUOTE).asList();
 				}
 

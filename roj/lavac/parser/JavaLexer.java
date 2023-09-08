@@ -16,7 +16,7 @@ import roj.text.TextUtil;
  * @since 2020/10/3 19:20
  */
 public final class JavaLexer extends Tokenizer {
-	private static final String[] keywords = TextUtil.split1("for,while,do,continue,break,case,if,else,goto,return,switch," +
+	public static final String[] keywords = TextUtil.split1("for,while,do,continue,break,case,if,else,goto,return,switch," +
 		"this,new,true,false,null," +
 		"void,int,long,double,float,short,byte,char,boolean," +
 		"try,catch,finally,throw," +

@@ -7,8 +7,8 @@ import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.util.AttrHelper;
 import roj.asm.util.Context;
-import roj.mapper.ConstMapper;
 import roj.mapper.MapUtil;
+import roj.mapper.Mapper;
 import roj.mapper.util.Desc;
 import roj.mod.Shared;
 import roj.ui.CmdUtil;
@@ -99,7 +99,7 @@ public class NiximHandler implements Plugin {
 
 	private static String map(String dest, MoFNode node) {
 		Shared.loadMapper();
-		ConstMapper m = Shared.mapperFwd;
+		Mapper m = Shared.mapperFwd;
 
 		Desc desc = MapUtil.getInstance().sharedDC;
 		desc.owner = dest;
@@ -115,7 +115,7 @@ public class NiximHandler implements Plugin {
 			if (name != null) return name;
 			System.err.println("failed check " + desc);
 
-			if (m.getSelfSkipped().contains(desc)) break;
+			if (m.getStopAnchor().contains(desc)) break;
 
 			if (i == parents.size()) break;
 			desc.owner = parents.get(i++);

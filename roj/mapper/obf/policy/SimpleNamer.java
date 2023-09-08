@@ -12,66 +12,65 @@ import java.util.Set;
  * @author Roj233
  * @since 2021/7/18 19:45
  */
-public abstract class SimpleNamer implements NamingFunction {
-	boolean keepPackage;
+public abstract class SimpleNamer implements NameObfuscator {
+	private boolean keepPackage;
+	private final CharList buf = new CharList();
+
+	public int maxRetryAttempts = 10;
+	private NameObfuscator fallback;
 
 	public SimpleNamer setKeepPackage(boolean keepPackage) {
 		this.keepPackage = keepPackage;
 		return this;
 	}
 
-	CharList buf = new CharList();
-
-	protected String obfClass0(String origName, Random rand) {
-		buf.clear();
-		if (keepPackage) {
-			int i = origName.lastIndexOf('/');
-			if (i != -1) {
-				buf.append(origName, 0, i + 1);
-			}
-		}
-
-		return obfName0(rand);
-	}
-
-	protected abstract String obfName0(Random rand);
-
-	protected int maxRetryAttempts = 10;
-	protected NamingFunction fallback;
-
-	public SimpleNamer setFallback(NamingFunction fallback) {
+	public SimpleNamer setFallback(NameObfuscator fallback) {
 		this.fallback = fallback;
 		return this;
 	}
 
 	@Override
-	public String obfClass(String origName, Set<String> noDuplicate, Random rand) {
+	public String obfClass(String name, Set<String> existNames, Random rnd) {
+		buf.clear();
+
+		int pos = -1;
+		if (keepPackage) {
+			pos = name.lastIndexOf('/');
+			if (pos >= 0) pos++;
+		}
+
 		int i = maxRetryAttempts;
-		String s;
-		while (!noDuplicate.add(s = obfClass0(origName, rand))) if (i-- == 0) {
-			if (fallback == null) {
-				throw new IllegalArgumentException("Unable to find a not duplicate name after " + maxRetryAttempts + " retry attempts for " + origName);
-			} else {
-				return fallback.obfClass(origName, noDuplicate, rand);
+		while (true) {
+			buf.clear();
+			if (pos > 0) buf.append(name, 0, pos);
+			if (!generateName(rnd, buf, 0)) return null;
+
+			String nn = buf.toString();
+			if (!existNames.contains(nn)) return nn;
+
+			if (i-- == 0) {
+				if (fallback == null) return null;
+				return fallback.obfClass(name, existNames, rnd);
 			}
 		}
-		return s;
 	}
 
 	@Override
-	public String obfName(Set<String> noDuplicate, Desc param, Random rand) {
+	public String obfName(Set<String> existNames, Desc d, Random rnd) {
 		int i = maxRetryAttempts;
-		String s;
 		while (true) {
-			s = obfName0(rand);
-			if (s == null || noDuplicate.add(s + param.param)) return s;
+			buf.clear();
+			if (!generateName(rnd, buf, d.param.startsWith("(")?1:2)) return null;
+
+			String nn = buf.toString();
+			if (existNames.add(nn.concat(d.param))) return nn;
+
 			if (i-- == 0) {
-				if (fallback == null) {
-					throw new IllegalArgumentException("Unable to find a not duplicate name after " + maxRetryAttempts + " retry attempts for " + param);
-				} else {
-					return fallback.obfName(noDuplicate, param, rand);
-				}
+				if (fallback == null) return null;
+				return fallback.obfName(existNames, d, rnd);
 			}
 		}
 	}
+
+	protected abstract boolean generateName(Random rnd, CharList sb, int type);
 }

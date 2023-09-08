@@ -14,10 +14,9 @@ import roj.config.word.Tokenizer;
 import roj.dev.ByteListOutput;
 import roj.dev.Compiler;
 import roj.io.IOUtil;
-import roj.mapper.CodeMapper;
-import roj.mapper.ConstMapper;
-import roj.mapper.ConstMapper.State;
 import roj.mapper.MapUtil;
+import roj.mapper.Mapper;
+import roj.mapper.Mapper.State;
 import roj.mapper.util.Desc;
 import roj.mapper.util.ResWriter;
 import roj.mod.FileFilter.CmtATEntry;
@@ -268,8 +267,8 @@ public final class FMDMain {
 		}
 
 		loadMapper();
-		ConstMapper m = reverse ? mapperFwd : loadReverseMapper();
-		m.getExtendedSuperList().clear();
+		Mapper m = reverse ? mapperFwd : loadReverseMapper();
+		m.getSeperatedLibraries().clear();
 
 		MyHashMap<String, byte[]> res = new MyHashMap<>(100);
 
@@ -285,10 +284,8 @@ public final class FMDMain {
 			AsyncTask<Void> resTask = new AsyncTask<>(new ResWriter(zfw, res));
 			Task.pushTask(resTask);
 
-			m.remap(DEBUG, list);
-			m.getExtendedSuperList().add(m.snapshot(null));
-
-			if (doMapClassName) new CodeMapper(m).remap(DEBUG, list);
+			m.map(DEBUG, list);
+			m.getSeperatedLibraries().add(m.snapshot());
 
 			try {
 				resTask.get();
@@ -814,21 +811,16 @@ public final class FMDMain {
 
 			// region 映射
 
-			List<State> depStates = mapperFwd.getExtendedSuperList();
-			depStates.clear();
-			for (int i = 0; i < dependencies.size(); i++) {
-				depStates.add(dependencies.get(i).state);
-			}
+			List<State> libs = mapperFwd.getSeperatedLibraries(); libs.clear();
+			for (int i = 0; i < dependencies.size(); i++) libs.add(dependencies.get(i).state);
 
 			if (canIncrementWrite) {
-				mapperFwd.state(p.state);
-				mapperFwd.remapIncrement(list);
+				libs.add(p.state);
+				mapperFwd.mapIncr(list);
 			} else {
-				mapperFwd.remap(false, list);
+				mapperFwd.map(false, list);
 			}
 			p.state = mapperFwd.snapshot(p.state);
-
-			if (doMapClassName) new CodeMapper(mapperFwd).remap(false, list);
 
 			pc = new PluginContext();
 			for (int i = 0; i < plugins.size(); i++) {

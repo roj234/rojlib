@@ -4,18 +4,12 @@ import org.jetbrains.annotations.ApiStatus.OverrideOnly;
 import roj.io.DummyOutputStream;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.util.ByteList;
-import roj.util.ByteList.Slice;
 
 import javax.annotation.Nonnull;
-import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 
 /**
  * @author Roj234
@@ -65,23 +59,7 @@ public class DelegatedPrintStream extends PrintStream {
 		if (off > pOff) decode(b, pOff, off-pOff);
 	}
 
-	private void decode(byte[] b, int off, int len) {
-		Charset cs = Charset.defaultCharset();
-		if (cs == StandardCharsets.UTF_8) {
-			try {
-				ByteList.decodeUTF(-1, sb, new Slice(b, off, len));
-				return;
-			} catch (IOException ignored) {}
-		}
-
-		if (cd == null) cd = cs.newDecoder().onUnmappableCharacter(CodingErrorAction.REPLACE).onMalformedInput(CodingErrorAction.REPLACE);
-
-		ByteBuffer in = ByteBuffer.wrap(b, off, len);
-		sb.ensureCapacity((int) (sb.length() + cd.maxCharsPerByte() * len));
-		CharBuffer out = sb.toCharBuffer(); out.clear();
-		cd.decode(in, out, true);
-		out.flip(); sb.append(out);
-	}
+	private void decode(byte[] b, int off, int len) { sb.append(Charset.defaultCharset().decode(ByteBuffer.wrap(b, off, len))); }
 
 	private synchronized void write(CharSequence str) {
 		int i = 0;

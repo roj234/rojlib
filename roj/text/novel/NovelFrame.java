@@ -16,7 +16,6 @@ import roj.io.IOUtil;
 import roj.text.*;
 import roj.ui.*;
 import roj.util.BsDiff;
-import roj.util.Helpers;
 
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
@@ -25,8 +24,6 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 import java.awt.*;
-import java.awt.datatransfer.*;
-import java.awt.dnd.*;
 import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
@@ -85,24 +82,7 @@ public class NovelFrame extends JFrame {
 		changeHelper.addEventListener(presetRegexpInp, this::onPresetRegexpChange);
 		changeHelper.addEventListener(alignRegexp, this::alignRegexpKeyTyped);
 
-		DropTarget dt = new DropTarget(this, new DropTargetAdapter() {
-			@Override
-			public void drop(DropTargetDropEvent dtde) {
-				dtde.acceptDrop(3);
-				Transferable t = dtde.getTransferable();
-				for (DataFlavor flavor : t.getTransferDataFlavors()) {
-					if (flavor.getMimeType().startsWith("application/x-java-file-list")) {
-						try {
-							List<File> data = Helpers.cast(t.getTransferData(flavor));
-							novelPath.setText(data.get(0).getAbsolutePath());
-							read_novel(null);
-						} catch (Exception e) {
-							e.printStackTrace();
-						}
-					}
-				}
-			}
-		});
+		UIUtil.dropFilePath(novelPath, (e) -> { read_novel(null); }, false);
 
 		PresetRegexp regexp = new PresetRegexp();
 		regexp.name = "";
@@ -180,7 +160,7 @@ public class NovelFrame extends JFrame {
 	}
 
 	private void read_novel(ActionEvent e) {
-		try (StreamReader sr = StreamReader.auto(new File(novelPath.getText()))) {
+		try (TextReader sr = TextReader.auto(new File(novelPath.getText()))) {
 			novel_in.clear();
 			novel_in.readFully(sr).replace("\r\n", "\n").replace('\r', '\n');
 			if (removeHalfEmpty.isSelected()) novel_in.replace("\n\n", "\n");
@@ -200,7 +180,7 @@ public class NovelFrame extends JFrame {
 	private void write_novel(ActionEvent e) {
 		File file = new File(novelPath.getText());
 		long time = file.lastModified();
-		try (StreamWriter out = StreamWriter.to(file, Charset.forName("GB18030"))) {
+		try (TextWriter out = TextWriter.to(file, Charset.forName("GB18030"))) {
 			out.append(novel_out);
 		} catch (IOException ex) {
 			errout.setText("");

@@ -10,10 +10,11 @@ import static roj.reflect.FieldAccessor.u;
  * @since 2022/11/14 0014 22:21
  */
 public class MT19937 extends Random {
-	private static long offset;
+	private static long offset, offset2;
 	static {
 		try {
 			offset = u.objectFieldOffset(Random.class.getDeclaredField("seed"));
+			offset2 = u.objectFieldOffset(Random.class.getDeclaredField("haveNextNextGaussian"));
 		} catch (NoSuchFieldException ignored) {}
 	}
 
@@ -39,7 +40,8 @@ public class MT19937 extends Random {
 		this.i = 0;
 
 		// clear hasNextGaussian
-		super.setSeed(seed);
+		if (offset2 > 0) u.putBoolean(this, offset2, false);
+		else super.setSeed(seed);
 	}
 
 	private void nextIter() {

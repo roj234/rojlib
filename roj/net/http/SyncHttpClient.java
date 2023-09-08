@@ -6,7 +6,7 @@ import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.NamespaceKey;
@@ -237,7 +237,7 @@ public class SyncHttpClient implements ChannelHandler {
 		return str(charset == null ? null : Charset.forName(charset));
 	}
 	public String str(Charset charset) throws IOException {
-		try (StreamReader sr = new StreamReader(stream(), charset)) {
+		try (TextReader sr = new TextReader(stream(), charset)) {
 			return IOUtil.read(sr);
 		}
 	}

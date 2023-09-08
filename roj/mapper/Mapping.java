@@ -6,9 +6,14 @@ import roj.mapper.util.Desc;
 import roj.mapper.util.MapperList;
 import roj.math.MutableInt;
 import roj.text.CharList;
-import roj.text.LineReader;
+import roj.text.LinedReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
+import roj.text.logging.Level;
+import roj.text.logging.Logger;
+import roj.util.Helpers;
 
+import javax.annotation.Nullable;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -20,6 +25,9 @@ import java.util.*;
  * @since 2020/8/28 19:18
  */
 public class Mapping {
+	public static final Logger LOGGER = Logger.getLogger("Mapper");
+	static { LOGGER.setLevel(Level.ERROR); }
+
 	protected Flippable<String, String> classMap;
 	protected FindMap<Desc, String> fieldMap, methodMap;
 	protected TrieTree<String> packageMap;
@@ -54,105 +62,109 @@ public class Mapping {
 	}
 
 	public final void loadMap(File path, boolean reverse) {
-		try {
-			loadMap(new LineReader(new FileInputStream(path), StandardCharsets.UTF_8), reverse);
+		try (TextReader in = TextReader.auto(path)) {
+			loadMap(in, reverse);
 		} catch (IOException e) {
 			throw new RuntimeException("Unable to read mapping file", e);
 		}
 	}
 	public final void loadMap(InputStream in, boolean reverse) {
-		try {
-			loadMap(new LineReader(in), reverse);
+		try (TextReader in2 = TextReader.auto(in)) {
+			loadMap(in2, reverse);
 		} catch (IOException e) {
 			throw new RuntimeException("Unable to read mapping file", e);
 		}
 	}
 	@SuppressWarnings("fallthrough")
-	public final void loadMap(LineReader slr, boolean reverse) {
-		try {
-			ArrayList<String> q = new ArrayList<>();
-			String last0 = null, last1 = null;
+	public final void loadMap(LinedReader slr, boolean reverse) {
+		ArrayList<String> q = new ArrayList<>();
+		String last0 = null, last1 = null;
 
-			for (String s : slr) {
-				int i = s.indexOf(':');
-				String key = s.substring(0, i);
-
-				q.clear();
-				TextUtil.split(q, s.substring(i + 1), ' ');
-
-				int id, id2;
-				switch (key) {
-					case "PK": // package
-						if (!q.get(0).equals(q.get(1))) {
-							if (packageMap == null) packageMap = new TrieTree<>();
-
-							if (reverse) {
-								packageMap.put(q.get(1), q.get(0));
-							} else {
-								packageMap.put(q.get(0), q.get(1));
-							}
-						}
-						break;
-					case "CL": // class
-						if (q.get(1).equals("~")) q.set(1, q.get(0));
-
-						if (reverse) {
-							classMap.put(q.get(1), q.get(0));
-						} else {
-							classMap.put(q.get(0), q.get(1));
-						}
-						last0 = q.get(0);
-						last1 = q.get(1);
-						break;
-					case "FD":
-						id = q.get(0).lastIndexOf('/');
-						id2 = q.get(1).lastIndexOf('/');
-
-						if (reverse) {
-							fieldMap.put(new Desc(q.get(1).substring(0, id2), q.get(1).substring(id2 + 1)), q.get(0).substring(id + 1));
-						} else {
-							fieldMap.put(new Desc(q.get(0).substring(0, id), q.get(0).substring(id + 1)), q.get(1).substring(id2 + 1));
-						}
-						break;
-					case "MD":
-						id = q.get(0).lastIndexOf('/');
-						id2 = q.get(2).lastIndexOf('/');
-
-						if (reverse) {
-							methodMap.put(new Desc(q.get(2).substring(0, id2), q.get(2).substring(id2 + 1), q.get(3)), q.get(0).substring(id + 1));
-						} else {
-							methodMap.put(new Desc(q.get(0).substring(0, id), q.get(0).substring(id + 1), q.get(1)), q.get(2).substring(id2 + 1));
-						}
-						break;
-					case "FL":
-						// FL b c
-						if (last0 == null) throw new IllegalArgumentException("last[0] == null at line " + slr.lineNumber());
-
-						if (q.size() == 2) {
-							if (checkFieldType) throw new IllegalArgumentException("FL(2) is not supported when checkFieldType=true");
-							if (reverse) {
-								fieldMap.put(new Desc(last1, q.get(1)), q.get(0));
-							} else {
-								fieldMap.put(new Desc(last0, q.get(0)), q.get(1));
-							}
-							break;
-						}
-					case "ML":
-						if (last0 == null) throw new IllegalArgumentException("last[0] == null at line " + slr.lineNumber());
-
-						FindMap<Desc, String> dst = key.equals("ML") ? methodMap : fieldMap;
-						if (reverse) {
-							dst.put(new Desc(last1, q.get(2), q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
-						} else {
-							dst.put(new Desc(last0, q.get(0), q.get(1)), q.get(2));
-						}
-						break;
-					default:
-						System.err.println("Unsupported type: " + s);
-				}
+		while (true) {
+			String s;
+			try {
+				s = slr.readLine();
+			} catch (Exception e) {
+				Helpers.athrow(e);
+				return;
 			}
-		} catch (Exception e) {
-			throw new RuntimeException("Unable to read srg file", e);
+			if (s == null) break;
+
+			int i = s.indexOf(':');
+			String key = s.substring(0, i);
+
+			q.clear();
+			TextUtil.split(q, s.substring(i + 1), ' ');
+
+			int id, id2;
+			switch (key) {
+				case "PK": // package
+					if (!q.get(0).equals(q.get(1))) {
+						if (packageMap == null) packageMap = new TrieTree<>();
+
+						if (reverse) {
+							packageMap.put(q.get(1), q.get(0));
+						} else {
+							packageMap.put(q.get(0), q.get(1));
+						}
+					}
+					break;
+				case "CL": // class
+					if (q.get(1).equals("~")) q.set(1, q.get(0));
+
+					if (reverse) classMap.put(q.get(1), q.get(0));
+					else classMap.put(q.get(0), q.get(1));
+					last0 = q.get(0);
+					last1 = q.get(1);
+					break;
+				case "FD":
+					id = q.get(0).lastIndexOf('/');
+					id2 = q.get(1).lastIndexOf('/');
+
+					if (reverse) {
+						fieldMap.put(new Desc(q.get(1).substring(0, id2), q.get(1).substring(id2 + 1)), q.get(0).substring(id + 1));
+					} else {
+						fieldMap.put(new Desc(q.get(0).substring(0, id), q.get(0).substring(id + 1)), q.get(1).substring(id2 + 1));
+					}
+					break;
+				case "MD":
+					id = q.get(0).lastIndexOf('/');
+					id2 = q.get(2).lastIndexOf('/');
+
+					if (reverse) {
+						methodMap.put(new Desc(q.get(2).substring(0, id2), q.get(2).substring(id2 + 1), q.get(3)), q.get(0).substring(id + 1));
+					} else {
+						methodMap.put(new Desc(q.get(0).substring(0, id), q.get(0).substring(id + 1), q.get(1)), q.get(2).substring(id2 + 1));
+					}
+					break;
+				case "FL":
+					if (q.size() == 2) {
+						if (checkFieldType) throw new IllegalArgumentException("FL(2) is not supported when checkFieldType=true");
+						if (reverse) {
+							fieldMap.put(new Desc(last1, q.get(1)), q.get(0));
+						} else {
+							fieldMap.put(new Desc(last0, q.get(0)), q.get(1));
+						}
+					} else if (q.size() == 4) {
+						FindMap<Desc, String> dst = fieldMap;
+						if (reverse) {
+							dst.put(new Desc(last1, q.get(2), !checkFieldType ? "" : q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
+						} else {
+							dst.put(new Desc(last0, q.get(0), !checkFieldType ? "" : q.get(1)), q.get(2));
+						}
+					}
+					break;
+				case "ML":
+					FindMap<Desc, String> dst = methodMap;
+					if (reverse) {
+						dst.put(new Desc(last1, q.get(2), q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
+					} else {
+						dst.put(new Desc(last0, q.get(0), q.get(1)), q.get(2));
+					}
+					break;
+				default:
+					System.err.println("Unsupported type: " + s);
+			}
 		}
 	}
 
@@ -220,64 +232,41 @@ public class Mapping {
 		}
 	}
 
-	public static void makeInheritMap(Map<String, List<String>> superMap, Map<String, String> filter) {
-		MapperList parents = new MapperList();
+	public static void makeInheritMap(Map<String, List<String>> superMap, @Nullable Map<String, String> filter) {
+		MapperList self = new MapperList();
 
-		SimpleList<String> self = new SimpleList<>();
-		SimpleList<String> next = new SimpleList<>();
-
-		// 从一级继承构建所有继承, note: 是所有输入
 		for (Iterator<Map.Entry<String, List<String>>> itr = superMap.entrySet().iterator(); itr.hasNext(); ) {
 			Map.Entry<String, List<String>> entry = itr.next();
 			if (entry.getValue().getClass() == MapperList.class) continue; // done
 
-			String name = entry.getKey();
+			self.batchAddFiltered(entry.getValue());
+			self.pack0();
 
-			self.addAll(entry.getValue());
-
-			int cycle = 0;
 			/**
 			 * excepted order:
 			 *     fatherclass fatheritf grandclass granditf, etc...
 			 */
+			int i = 0;
 			do {
-				if (cycle++ > 30) throw new IllegalStateException("Probably circular reference for " + name + " " + parents);
-				parents.addAll(self);
-				if ((cycle & 3) == 0) parents.preClean();
-				for (int i = 0; i < self.size(); i++) {
-					String s = self.get(i);
-					Collection<String> tmp;
-					if ((tmp = superMap.get(s)) != null) {
-						if (tmp.getClass() != MapperList.class) {
-							next.addAll(tmp);
-							if (cycle > 15 && tmp.contains(s)) throw new IllegalStateException("Circular reference in " + s);
-						} else {
-							parents.addAll(tmp);
-						}
-					}
-					if (cycle > 15 && next.contains(s)) throw new IllegalStateException("Circular reference in " + s);
+				int nextPos = self.size();
+				while (i < nextPos) {
+					List<String> tmp = superMap.get(self.get(i++));
+					if (tmp != null) self.batchAddFiltered(tmp);
 				}
-				SimpleList<String> tmp1 = self;
-				self = next;
-				next = tmp1;
-				next.clear();
-			} while (!self.isEmpty());
+			} while (i < self.size());
 
 			if (filter != null) {
-				for (int i = parents.size() - 1; i >= 0; i--) {
-					if (!filter.containsKey(parents.get(i))) {
-						parents.remove(i); // 删除不存在映射的爹
-					}
+				self.batchRemoveFiltered(filter);
+				if (self.isEmpty()) {
+					itr.remove();
+					continue;
 				}
 			}
 
-			if (!parents.isEmpty()) { // 若不是空的，则更新一个
-				parents._init_();
-				entry.setValue(parents);
-				parents = new MapperList();
-			} else {
-				itr.remove();
-			}
+			self.trimToSize();
+			entry.setValue(self);
+
+			self = new MapperList();
 		}
 	}
 
@@ -371,36 +360,38 @@ public class Mapping {
 		if (from.checkFieldType != checkFieldType) throw new IllegalStateException("checkFieldType are not same");
 		MapUtil U = MapUtil.getInstance();
 
-		Desc md = U.sharedDC;
-		md.param = "";
+		Desc d = U.sharedDC;
+		d.param = "";
 		for (Iterator<Map.Entry<Desc, String>> itr = fieldMap.entrySet().iterator(); itr.hasNext(); ) {
 			Map.Entry<Desc, String> entry = itr.next();
-			Desc descriptor = entry.getKey();
-			md.owner = U.mapClassName(classMap, descriptor.owner);
-			md.name = entry.getValue();
+			Desc fd = entry.getKey();
+			String nn = U.mapClassName(classMap, fd.owner);
+			d.owner = nn != null ? nn : fd.owner;
+			d.name = entry.getValue();
 			if (checkFieldType) {
-				String param = U.mapFieldType(classMap, md.param = descriptor.param);
-				if (param != null) md.param = param;
+				String param = U.mapFieldType(classMap, d.param = fd.param);
+				if (param != null) d.param = param;
 			}
 
 			if (keepNotfound) {
-				entry.setValue(from.fieldMap.getOrDefault(md, entry.getValue()));
+				entry.setValue(from.fieldMap.getOrDefault(d, entry.getValue()));
 			} else {
-				String v = from.fieldMap.get(md);
+				String v = from.fieldMap.get(d);
 				if (v == null) itr.remove();
 				else entry.setValue(v);
 			}
 		}
 		for (Iterator<Map.Entry<Desc, String>> itr = methodMap.entrySet().iterator(); itr.hasNext(); ) {
 			Map.Entry<Desc, String> entry = itr.next();
-			Desc descriptor = entry.getKey();
-			md.owner = U.mapClassName(classMap, descriptor.owner);
-			md.name = entry.getValue();
-			md.param = U.mapMethodParam(classMap, descriptor.param);
+			Desc md = entry.getKey();
+			String nn = U.mapClassName(classMap, md.owner);
+			d.owner = nn != null ? nn : md.owner;
+			d.name = entry.getValue();
+			d.param = U.mapMethodParam(classMap, md.param);
 			if (keepNotfound) {
-				entry.setValue(from.methodMap.getOrDefault(md, entry.getValue()));
+				entry.setValue(from.methodMap.getOrDefault(d, entry.getValue()));
 			} else {
-				String v = from.methodMap.get(md);
+				String v = from.methodMap.get(d);
 				if (v == null) itr.remove();
 				else entry.setValue(v);
 			}

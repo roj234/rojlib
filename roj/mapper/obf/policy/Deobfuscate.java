@@ -1,36 +1,34 @@
 package roj.mapper.obf.policy;
 
 import roj.mapper.util.Desc;
+import roj.text.CharList;
 
 import java.util.Random;
 import java.util.Set;
 
 /**
- * Confusing chars
- *
  * @author Roj233
  * @since 2021/7/18 19:29
  */
-public final class Deobfuscate extends SimpleNamer {
+public final class Deobfuscate implements NameObfuscator {
 	public int a, b;
+	CharList buf = new CharList();
 
 	public Deobfuscate() {}
 
 	@Override
-	public String obfClass(String origName, Set<String> noDuplicate, Random rand) {
-		if (origName.length() - origName.lastIndexOf('/') > 4) return null;
-		return obfClass0(origName, rand);
+	public String obfClass(String name, Set<String> existNames, Random rnd) {
+		int pos = name.lastIndexOf('/');
+		if (pos >= 0) pos++;
+
+		buf.clear();
+		return buf.append(name, 0, pos).append("class_").append(a++).append('_').toString();
 	}
 
 	@Override
-	public String obfName0(Random rand) {
-		return buf.append("Klass_").append(String.valueOf(a++)).toString();
-	}
+	public String obfName(Set<String> existNames, Desc d, Random rnd) {
+		if (d.name.equals("main")) return null;
 
-	@Override
-	public String obfName(Set<String> noDuplicate, Desc desc, Random rand) {
-		if (desc.name.equals("main")) return null;
-
-		return desc.param.charAt(0) == '(' ? ("method_" + a++) : ("field_" + b++);
+		return (d.param.charAt(0) == '(' ? ("method_" + a++) : ("field_" + b++)) + "_";
 	}
 }

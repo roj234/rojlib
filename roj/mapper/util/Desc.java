@@ -47,9 +47,7 @@ public class Desc implements MoFNode {
 	}
 
 	@Override
-	public String toString() {
-		return "{" + owner + '.' + name + (param.isEmpty()?"":' ' + param) + '}';
-	}
+	public String toString() { return owner + '.' + name + (param.isEmpty()?"":(param.startsWith("(")?"":" ") + param); }
 
 	@Override
 	public boolean equals(Object o) {

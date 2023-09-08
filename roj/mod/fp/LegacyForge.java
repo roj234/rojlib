@@ -7,8 +7,7 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.collect.TrieTree;
 import roj.collect.TrieTreeSet;
-import roj.mapper.CodeMapper;
-import roj.mapper.ConstMapper;
+import roj.mapper.Mapper;
 import roj.mapper.Mapping;
 import roj.mapper.util.Desc;
 import roj.mod.FMDInstall;
@@ -172,7 +171,7 @@ public final class LegacyForge extends WorkspaceBuilder {
 	}
 
 	// arr[1] = client, arr[2] = server, arr[3] = forge
-	static boolean post_process(List<Context>[] arr, ConstMapper mapper, Map<Desc, List<String>> paramMap) {
+	static boolean post_process(List<Context>[] arr, Mapper mapper, Map<Desc, List<String>> paramMap) {
 		ClassMerger merger = new ClassMerger();
 
 		List<Context> merged = new SimpleList<>(merger.process(arr[1], arr[2]));
@@ -183,13 +182,10 @@ public final class LegacyForge extends WorkspaceBuilder {
 
 		// arr[0]是未打补丁的文件
 		mapper.loadLibraries(Arrays.asList(arr[0], merged));
-
-		CodeMapper nameMapper = new CodeMapper(mapper);
-		nameMapper.setParamMap(paramMap);
+		mapper.setParamMap(paramMap);
 
 		long start = System.nanoTime();
-		mapper.remap(false, merged);
-		nameMapper.remap(false, merged);
+		mapper.map(false, merged);
 		long end = System.nanoTime();
 
 		merged.sort((o1, o2) -> o1.getFileName().compareTo(o2.getFileName()));

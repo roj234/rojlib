@@ -46,18 +46,28 @@ public final class Bootstrap {
 		EntryPoint entryPoint = (EntryPoint) Bootstrap.class.getClassLoader();
 		for (URL url : GetOtherJars()) entryPoint.addURL(url);
 
-		String target = args[0];
 		Set<String> tweakerNames = new LinkedHashSet<>();
 
 		int i;
-		for (i = 1; i < args.length;) {
-			String arg = args[i++];
-			if ("--".equals(arg)) break;
-			if (!tweakerNames.add(arg)) LOGGER.log(Level.WARN, "Tweaker {} already exist", null, arg);
+		for (i = 0; i < args.length-1; i++) {
+			String arg = args[i];
+			if (arg.charAt(0) != '-') break;
+			switch (arg) {
+				case "-t":
+				case "--tweaker":
+					arg = args[++i];
+					if (!tweakerNames.add(arg)) LOGGER.log(Level.WARN, "Tweaker '{}' 已存在", null, arg);
+				break;
+				default:
+					LOGGER.log(Level.FATAL, "Unknown argument {}", null, arg);
+				break;
+			}
 		}
 		if (tweakerNames.isEmpty()) tweakerNames.add("roj.launcher.RojLibTweaker");
 
-		arguments = new String[args.length - i];
+		String target = args[i++];
+
+		arguments = new String[args.length-i];
 		System.arraycopy(args, i, arguments, 0, arguments.length);
 
 		ConstantData L = new ConstantData();
@@ -70,12 +80,11 @@ public final class Bootstrap {
 		c.field(GETSTATIC, "roj/launcher/Bootstrap", "arguments", "[Ljava/lang/String;");
 		c.one(ASTORE_0);
 
-		boolean first = true;
 		for (String name : tweakerNames) {
 			classLoader.addClassLoaderExclusion(name.substring(0, name.lastIndexOf('.')+1));
 
 			c.field(GETSTATIC, "roj/launcher/Bootstrap", "LOGGER", "Lroj/text/logging/Logger;");
-			c.ldc("Loading tweaker class '"+name+"'");
+			c.ldc("加载Tweaker '"+name+"'");
 			c.invokeV("roj/text/logging/Logger", "info", "(Ljava/lang/String;)V");
 
 			c.newObject(name.replace('.', '/'));
@@ -96,11 +105,6 @@ public final class Bootstrap {
 			c.one(ALOAD_1);
 			c.invokeItf("java/util/List", "add", "(Ljava/lang/Object;)Z");
 			c.one(POP);
-
-			if (first) {
-				LOGGER.info("First tweaker is {}", name);
-				first = false;
-			}
 		}
 
 		c.newObject(L.name);
@@ -111,7 +115,7 @@ public final class Bootstrap {
 		c = L.newMethod(AccessFlag.PUBLIC, "run", "()V");
 		c.visitSize(2, 1);
 		c.field(GETSTATIC, "roj/launcher/Bootstrap", "LOGGER", "Lroj/text/logging/Logger;");
-		c.ldc("Launching wrapped '"+target+"'");
+		c.ldc("启动 '"+target+"'");
 		c.invokeV("roj/text/logging/Logger", "info", "(Ljava/lang/String;)V");
 		c.invokeS("roj/launcher/Bootstrap", "getArg", "()[Ljava/lang/String;");
 		c.invokeS(target.replace('.', '/'), "main", "([Ljava/lang/String;)V");
@@ -141,7 +145,7 @@ public final class Bootstrap {
 				}
 			}
 		}
-		throw new IllegalArgumentException("Cannot process " + loader.getClass().getName());
+		throw new IllegalArgumentException("不支持的ClassLoader " + loader.getClass().getName());
 	}
 	private interface H {
 		Object getUCP(Object o);

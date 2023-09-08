@@ -1,6 +1,5 @@
 package roj.ui;
 
-import javax.annotation.Nonnull;
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
@@ -27,7 +26,7 @@ public final class TextAreaPrintStream extends DelegatedPrintStream {
 		}
 
 		SwingUtilities.invokeLater(() -> {
-			Document doc = insert(textArea, value);
+			Document doc = UIUtil.insert(textArea, value);
 
 			if (doc.getLength() > MAX) {
 				int diff = doc.getLength() - MAX;
@@ -36,14 +35,5 @@ public final class TextAreaPrintStream extends DelegatedPrintStream {
 				} catch (BadLocationException ignored) {}
 			}
 		});
-	}
-
-	@Nonnull
-	public static Document insert(JTextComponent component, String value) {
-		Document doc = component.getDocument();
-		try {
-			doc.insertString(doc.getLength(), value, null);
-		} catch (BadLocationException e) {}
-		return doc;
 	}
 }

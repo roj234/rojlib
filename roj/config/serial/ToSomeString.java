@@ -2,8 +2,8 @@ package roj.config.serial;
 
 import roj.config.word.ITokenizer;
 import roj.text.CharList;
-import roj.text.StreamWriter;
 import roj.text.TextUtil;
+import roj.text.TextWriter;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -31,7 +31,7 @@ public abstract class ToSomeString implements CVisitor {
 		return to(out, StandardCharsets.UTF_8);
 	}
 	public ToSomeString to(OutputStream out, Charset charset) {
-		sb = new StreamWriter(out, charset).append(sb);
+		sb = new TextWriter(out, charset).append(sb);
 		return this;
 	}
 
@@ -158,15 +158,15 @@ public abstract class ToSomeString implements CVisitor {
 	}
 
 	public final void finish() throws IOException {
-		if (sb instanceof StreamWriter) {
+		if (sb instanceof TextWriter) {
 			while (depth > 0) pop();
-			((StreamWriter) sb).finish();
+			((TextWriter) sb).finish();
 		}
 	}
 	public final void close() throws IOException {
-		if (sb instanceof StreamWriter) {
+		if (sb instanceof TextWriter) {
 			finish();
-			((StreamWriter) sb).close();
+			((TextWriter) sb).close();
 		}
 	}
 }

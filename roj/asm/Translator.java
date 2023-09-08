@@ -6,13 +6,15 @@ import roj.asm.cst.Constant;
 import roj.asm.cst.CstString;
 import roj.asm.tree.ConstantData;
 import roj.collect.IntMap;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.config.ParseException;
 import roj.config.word.ITokenizer;
+import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 import roj.util.ByteList;
 
 import java.io.*;
@@ -53,54 +55,23 @@ public class Translator {
 	}
 
 	private static void parse(String[] args) throws IOException, ParseException {
-		ITokenizer wr = new ITokenizer() {
-			@Override
-			public Word readWord() throws ParseException {
-				int i = index;
-				CharSequence in = input;
-
-				while (i < in.length()) {
-					int c = in.charAt(i++);
-					switch (c) {
-						case '\'': case '"':
-							index = i;
-							return readConstString((char) c);
-						case '/':
-							index = i;
-							Word w = javaComment(found);
-							if (w != null) return w;
-							break;
-						case '=': case ':':
-							index = i;
-							return formClip((short) c, String.valueOf((char) c));
-						default: {
-							if (!WHITESPACE.contains(c)) {
-								index = i-1;
-								if (NUMBER.contains(c)) {
-									return readDigit(false);
-								} else {
-									return readLiteral();
-								}
-							}
-						}
-					}
-				}
-				index = i;
-				return eof();
-			}
-		}.init(new StreamReader(new FileInputStream(args[args.length-1])));
+		Tokenizer wr = new Tokenizer();
+		wr.tokenIds(Tokenizer.generate(": 11\n= 12"))
+		  .literalEnd(MyBitSet.from(":="))
+		  .defaultC2C(Tokenizer.JAVA_COMMENT|Tokenizer.PARSE_NUMBER)
+		  .init(TextReader.auto(new File(args[args.length-1])));
 
 		Word w = wr.except(Word.STRING, "Class Name");
 		while (wr.hasNext()) {
 			String name = w.val();
-			wr.except(':', ":");
+			wr.except(11, ":");
 
 			IntMap<String> map = new IntMap<>();
 
 			w = wr.except(Word.INTEGER, "CST String Id");
 			while (wr.hasNext()) {
 				int pos = w.asInt();
-				wr.except('=', "=");
+				wr.except(12, "=");
 				w = wr.except(Word.STRING, "Quoted I18n value");
 				map.putInt(pos, w.val());
 

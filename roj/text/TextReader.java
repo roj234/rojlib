@@ -20,7 +20,7 @@ import java.nio.file.StandardOpenOption;
  * @author Roj234
  * @since 2022/12/11 0011 9:12
  */
-public class StreamReader extends Reader implements CharSequence, Closeable, Finishable, LinedReader {
+public class TextReader extends Reader implements CharSequence, Closeable, Finishable, LinedReader {
 	private char[] buf;
 	private int off, maxOff, len;
 	protected byte eof;
@@ -33,18 +33,18 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 	private ByteBuffer ib;
 	private CharBuffer ob;
 
-	public static StreamReader auto(File file) throws IOException { return new StreamReader(file, null); }
-	public static StreamReader auto(InputStream in) throws IOException { return new StreamReader(in); }
+	public static TextReader auto(File file) throws IOException { return new TextReader(file, null); }
+	public static TextReader auto(InputStream in) throws IOException { return new TextReader(in); }
 
-	public StreamReader(InputStream in) throws IOException { this(in, (Charset) null); }
-	public StreamReader(InputStream in, String charset) throws IOException { this(in, Charset.forName(charset)); }
+	public TextReader(InputStream in) throws IOException { this(in, (Charset) null); }
+	public TextReader(InputStream in, String charset) throws IOException { this(in, Charset.forName(charset)); }
 
-	public StreamReader(File in, Charset charset) throws IOException {
+	public TextReader(File in, Charset charset) throws IOException {
 		this(FileChannel.open(in.toPath(), StandardOpenOption.READ), charset, 4096, BufferPool.localPool());
 	}
 
-	public StreamReader(Closeable in, Charset charset) throws IOException { this(in, charset, 4096, BufferPool.localPool()); }
-	public StreamReader(Closeable in, Charset charset, int buffer, BufferPool pool) throws IOException {
+	public TextReader(Closeable in, Charset charset) throws IOException { this(in, charset, 4096, BufferPool.localPool()); }
+	public TextReader(Closeable in, Charset charset, int buffer, BufferPool pool) throws IOException {
 		this.in = in;
 
 		buf = ArrayCache.getDefaultCache().getCharArray(128, false);
@@ -112,7 +112,7 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 
 	public String charset() { return ucs == null ? cd.charset().name() : ucs.name(); }
 
-	public final StreamReader throwOnFail() {
+	public final TextReader throwOnFail() {
 		cd.onMalformedInput(CodingErrorAction.REPORT);
 		return this;
 	}
@@ -131,10 +131,6 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 		fillBuffer(end);
 		return new CharList.Slice(buf, start-off, end-off);
 	}
-	public final String subSequence_String(int start, int end) {
-		fillBuffer(end);
-		return new String(buf, start-off, end-start);
-	}
 
 	private void fillBuffer(int i) {
 		i -= off;
@@ -151,14 +147,7 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 			toRead = Math.max(toRead, buf.length/2 - len);
 			if (toRead < 32) toRead = 32;
 
-			if (buf.length < len+toRead) {
-				ArrayCache ac = ArrayCache.getDefaultCache();
-				char[] newBuf = ac.getCharArray(MathUtils.getMin2PowerOf(len+toRead), false);
-				System.arraycopy(buf, 0, newBuf, 0, len);
-				ac.putArray(buf);
-				buf = newBuf;
-				ob = null;
-			}
+			if (buf.length < len+toRead) grow(toRead);
 
 			try {
 				while (toRead > 0) {
@@ -173,6 +162,14 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 			}
 		}
 	}
+	private void grow(int toRead) {
+		ArrayCache ac = ArrayCache.getDefaultCache();
+		char[] newBuf = ac.getCharArray(MathUtils.getMin2PowerOf(len+toRead), false);
+		System.arraycopy(buf, 0, newBuf, 0, len);
+		ac.putArray(buf);
+		buf = newBuf;
+		ob = null;
+	}
 
 	private int bytesRead;
 	final int fill(char[] buf, int off, int len) throws IOException {
@@ -182,19 +179,19 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 		ByteBuffer b = ib;
 		if (ucs != null) {
 			DynByteBuf ba = (DynByteBuf) lock;
-			int prevLen = len;
-			while (eof==0) {
-				long x = ucs.unsafeDecode(ba.array(),ba._unsafeAddr(),b.position(),b.limit(), buf, off, len);
+			len += off;
+			int prevOff = off;
+			while (true) {
+				long x = ucs.unsafeDecode(ba.array(),ba._unsafeAddr(),b.position(),b.limit(),buf,off,len-off);
 				b.position((int) (x >>> 32));
-				int delta = (int) x - off;
-				off += delta;
-				len -= delta;
-				if (len == 0) break;
+				off = (int) x;
+
+				if (len-off <= 1 || (eof < 0 && !b.hasRemaining())) break;
 
 				read(b);
 			}
 			if (eof < 0) eof = -2;
-			return prevLen == len ? -1 : prevLen - len;
+			return prevOff == off ? -1 : off - prevOff;
 		}
 
 		CharBuffer ob = this.ob;
@@ -273,25 +270,54 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 	public int read() throws IOException {
 		if (off < len) return buf[off++];
 
-		int c = fill(buf, 0, 1);
+		int c = fill(buf, 0, buf.length);
 		if (c < 0) return c;
+
+		off = 1;
+		len = c;
+
 		return buf[0];
 	}
 	@Override
-	public int read(@Nonnull char[] cbuf, int off, int len) throws IOException {
-		int rem = this.len-this.off;
-		if (rem > 0) {
-			rem = Math.min(rem, len);
-			System.arraycopy(buf, this.off, cbuf, off, rem);
-			this.off += rem;
-			len -= rem;
+	public int read(@Nonnull char[] cbuf, int coff, int clen) throws IOException {
+		int remain = clen;
+
+		int blen = len-off;
+		if (blen > 0) {
+			if (clen < blen) blen = clen;
+
+			System.arraycopy(buf, off, cbuf, coff, blen);
+			off += blen;
+
+			coff += blen;
+			remain -= blen;
 		}
 
-		return fill(cbuf, off, len);
+		if (remain == 0) return clen;
+		if (remain < buf.length) {
+			int r = fill(buf, 0, buf.length);
+			if (r <= 0) return r;
+			this.off = 0;
+			this.len = Math.max(r - clen, 0);
+			System.arraycopy(buf, 0, cbuf, coff, r);
+			return clen;
+		}
+
+		return fill(cbuf, coff, remain) + clen-remain;
 	}
 	@Override
 	public long skip(long n) throws IOException {
 		long n1 = n;
+
+		int blen = len-off;
+		if (n < blen) {
+			off += n;
+			return n;
+		} else {
+			n -= blen;
+			off = len = 0;
+		}
+
 		while (n > 0) {
 			int i = read(buf, 0, (int) Math.min(n, buf.length));
 			if (i < 0) break;
@@ -306,9 +332,13 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 			for (int i = off; i < len; i++) {
 				char c = buf[i];
 				if (c == '\r') {
-					int r = ++i == len ? read() : buf[i];
-					if (r < 0) break;
-					if (r != '\n') continue;
+					if (++i == len) {
+						int r = fill(buf, len, 2);
+						if (r > 0) len += r;
+						else break;
+					}
+
+					if (buf[i] != '\n') { i--; continue; }
 
 					ob.append(buf, off, i-1);
 					off = i+1;
@@ -325,9 +355,17 @@ public class StreamReader extends Reader implements CharSequence, Closeable, Fin
 			}
 
 			off = 0;
-			len = read(buf, 0, buf.length);
-			if (len < 0) return append;
+			len = fill(buf, 0, buf.length-2);
+			if (len <= 0) return append;
 		}
+	}
+
+	private int markPos;
+	public void mark(int lim) { maxOff = off + lim; markPos = off; }
+	//public boolean markSupported() { return true; }
+	public void reset() throws IOException {
+		if (maxOff < 0) throw new IOException("mark cleared");
+		off = markPos;
 	}
 
 	@Override

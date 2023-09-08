@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.util.concurrent.locks.LockSupport;
 
-import static roj.mapper.ConstMapper.DONT_LOAD_PREFIX;
+import static roj.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.mod.Shared.BASE;
 
 /**

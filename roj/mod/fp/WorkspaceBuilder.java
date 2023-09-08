@@ -4,7 +4,7 @@ import roj.archive.zip.ZipArchive;
 import roj.collect.IntMap;
 import roj.collect.TrieTree;
 import roj.concurrent.task.ITask;
-import roj.mapper.ConstMapper;
+import roj.mapper.Mapper;
 import roj.mod.Shared;
 import roj.mod.mapping.MappingFormat;
 import roj.ui.CmdUtil;
@@ -34,7 +34,7 @@ public abstract class WorkspaceBuilder implements ITask {
 	public MappingFormat mf;
 	public Map<String, Object> mf_cfg;
 
-	ConstMapper mapper = new ConstMapper();
+	Mapper mapper = new Mapper();
 
 	volatile int error = 114514;
 

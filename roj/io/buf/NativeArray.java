@@ -8,14 +8,14 @@ import static roj.reflect.FieldAccessor.u;
  * @author Roj234
  * @since 2023/8/3 0003 3:44
  */
-public final class ByteRange {
+public final class NativeArray {
 	private static final boolean DEBUG = false;
 
 	private final Object ref;
 	private final long addr;
 	private final int len;
 
-	public ByteRange(Object ref, long addr, int len) {
+	public NativeArray(Object ref, long addr, int len) {
 		this.ref = ref;
 		this.addr = addr;
 		this.len = len;
@@ -48,6 +48,8 @@ public final class ByteRange {
 		if (DEBUG) checkRange(i+len);
 		u.copyMemory(addr, this.addr+i, len);
 	}
+
+	public int length() { return len; }
 
 	private void checkRange(int i) {
 		if (i < 0 || i > len) throw new ArrayIndexOutOfBoundsException("off="+i+",len="+len);

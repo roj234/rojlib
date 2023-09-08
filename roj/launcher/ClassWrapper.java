@@ -2,8 +2,10 @@ package roj.launcher;
 
 import roj.archive.zip.ZipArchive;
 import roj.asm.AsmShared;
+import roj.asm.tree.ConstantData;
 import roj.asm.util.Context;
 import roj.collect.TrieTreeSet;
+import roj.io.IOUtil;
 import roj.text.logging.Level;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -39,18 +41,31 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	public ClassWrapper() {
 		transformExcept.addAll(Arrays.asList(
 			"roj.asm.",
+			"roj.collect.",
 			"javax.",
 			"argo.",
 			"org.objectweb.asm.",
 			"com.google.common.",
 			"org.bouncycastle."
 		));
+
+		try {
+			// preload transforming classes
+			ConstantData data = new Context("_classwrapper_", IOUtil.readRes("roj/launcher/ClassWrapper.class")).getData();
+		} catch (Exception e) {
+			LOGGER.log(Level.ERROR, "预加载转换器相关类时出现异常", e);
+		}
 	}
 
-	public void registerTransformer(ITransformer transformer) {
-		transformers.add(transformer);
-		if (nameTransformer == null && transformer instanceof INameTransformer)
-			nameTransformer = (INameTransformer) transformer;
+	public void registerTransformer(ITransformer tr) {
+		transformers.add(tr);
+		LOGGER.log(Level.DEBUG, "注册类转换器 '{}'", null, tr.getClass().getName());
+		if (tr instanceof INameTransformer) {
+			if (nameTransformer == null) {
+				nameTransformer = (INameTransformer) tr;
+				LOGGER.log(Level.DEBUG, "注册类名映射 '{}'", null, tr.getClass().getName());
+			}
+		}
 	}
 
 	@Override
@@ -70,7 +85,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 			throw new ClassNotFoundException(name);
 		}
 
-		if (loadExcept.strStartsWithThis(name)) return PARENT.loadClass(name);
+		if (loadExcept.strStartsWithThis(name)) return PARENT.getClass().getClassLoader().loadClass(name);
 
 		String oldName, newName;
 		if (nameTransformer == null) {
@@ -103,7 +118,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 						buf.readStreamFully(conn.getInputStream());
 						cs = PARENT.getCodeSource(url, oldName, conn);
 					} catch (IOException e) {
-						LOGGER.log(Level.ERROR, "exception reading {}", e, name);
+						LOGGER.log(Level.ERROR, "读取类'{}'时发生异常", e, name);
 						throw e;
 					}
 				} else {
@@ -120,7 +135,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 						}
 					}
 				} catch (IOException e) {
-					LOGGER.log(Level.ERROR, "exception reading {}", e, name);
+					LOGGER.log(Level.ERROR, "读取类'{}'时发生异常", e, name);
 					throw e;
 				}
 				throw new IOException("no file");
@@ -149,7 +164,12 @@ public class ClassWrapper implements Function<String, Class<?>> {
 			try {
 				changed |= ts.get(i).transform(transformedName, ctx);
 			} catch (Throwable e) {
-				ctx.getData().dump();
+				LOGGER.log(Level.FATAL, "转换类'{}'时发生异常", e, name);
+				try {
+					ctx.getData().dump();
+				} catch (Throwable e1) {
+					LOGGER.log(Level.FATAL, "保存'{}'的内容用于调试时发生异常", e1, name);
+				}
 				throw e;
 			}
 		}

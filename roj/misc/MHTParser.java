@@ -2,22 +2,20 @@ package roj.misc;
 
 import roj.crypt.Base64;
 import roj.io.IOUtil;
+import roj.io.buf.NativeArray;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.CtxEmbedded;
 import roj.net.http.Headers;
 import roj.net.http.srv.MultipartFormHandler;
-import roj.text.StreamReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.channels.FileChannel;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.StandardOpenOption;
 
 /**
@@ -78,17 +76,15 @@ public class MHTParser extends MultipartFormHandler {
 	@Override
 	protected void onValue(ChannelCtx ctx, DynByteBuf buf) throws IOException {
 		ByteList buf1 = IOUtil.getSharedByteBuf();
-		if (enc == 1) Base64.decode(new StreamReader(new InputStream() {
-			@Override
-			public int read() {
-				for(;;) {
-					if (!buf.isReadable()) return -1;
-					int i = buf.readUnsignedByte();
-					// filter \r\n
-					if (i >= 32) return i;
-				}
+		if (enc == 1) {
+			ByteList tmp = new ByteList();
+			NativeArray range = buf.byteRangeR(buf.readableBytes());
+			for (int i = 0; i < range.length(); i++) {
+				byte b = range.get(i);
+				if ((b&0xFF) >= 32) tmp.put(b);
 			}
-		}, StandardCharsets.US_ASCII), buf1);
+			Base64.decode(tmp, buf1);
+		}
 		else if (enc == 0) QuotedPrintable.decode(buf, buf1);
 		out.write(buf1.nioBuffer());
 	}

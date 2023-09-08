@@ -68,8 +68,8 @@ public abstract class HttpRequest {
 	public final String method() { return action; }
 
 	public final HttpRequest header(CharSequence k, String v) { headers.put(k, v); return this; }
-	public final HttpRequest headers(Map<String, String> map) { headers.putAll(map); return this; }
-	public final HttpRequest headers(Map<String, String> map, boolean clear) {
+	public final HttpRequest headers(Map<? extends CharSequence, String> map) { headers.putAll(map); return this; }
+	public final HttpRequest headers(Map<? extends CharSequence, String> map, boolean clear) {
 		if (clear) headers.clear();
 		headers.putAll(map);
 		return this;
@@ -111,7 +111,7 @@ public abstract class HttpRequest {
 	public final HttpRequest url(String protocol, String site, String path, String query) {
 		this.protocol = protocol.toLowerCase();
 		this.site = site;
-		if (!path.startsWith("/")) throw new IllegalArgumentException("path must start with /");
+		if (!path.startsWith("/")) path = "/".concat(path);
 		this.path = path;
 		this.query = query;
 

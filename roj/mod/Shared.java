@@ -12,7 +12,7 @@ import roj.dev.HRRemote;
 import roj.io.ChineseInputStream;
 import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
-import roj.mapper.ConstMapper;
+import roj.mapper.Mapper;
 import roj.mapper.util.Desc;
 import roj.misc.CpFilter;
 import roj.mod.plugin.Plugin;
@@ -139,9 +139,8 @@ public final class Shared {
 		}
 	}
 
-	public static final ConstMapper mapperFwd = new ConstMapper();
-	static boolean doMapClassName;
-	private static ConstMapper mapperRev;
+	public static final Mapper mapperFwd = new Mapper();
+	private static Mapper mapperRev;
 
 	public static void loadMapper() {
 		if (mapperFwd.getClassMap().isEmpty()) {
@@ -159,15 +158,15 @@ public final class Shared {
 					} catch (Exception e) {
 						CmdUtil.error("正向映射表加载失败", e);
 					}
-					doMapClassName = mapperFwd.classNameChanged();
+					mapperFwd.classNameChanged();
 				}
 			}
 		}
 	}
-	public static ConstMapper loadReverseMapper() {
+	public static Mapper loadReverseMapper() {
 		if (mapperRev == null) {
 			loadMapper();
-			mapperRev = new ConstMapper(mapperFwd);
+			mapperRev = new Mapper(mapperFwd);
 			mapperRev.reverseSelf();
 		}
 		return mapperRev;
@@ -179,7 +178,7 @@ public final class Shared {
 		if (srg2mcp.isEmpty()) {
 			loadMapper();
 
-			ConstMapper fwd = mapperFwd;
+			Mapper fwd = mapperFwd;
 			for (Map.Entry<Desc, String> entry : fwd.getFieldMap().entrySet()) {
 				srg2mcp.put(entry.getValue(), entry.getKey().name);
 			}
@@ -282,7 +281,7 @@ public final class Shared {
 			}
 
 			if (CONFIG.getBool("子类实现")) {
-				mapperFwd.flag |= ConstMapper.FLAG_FIX_SUBIMPL;
+				mapperFwd.flag |= Mapper.FLAG_FIX_SUBIMPL;
 			}
 		}
 

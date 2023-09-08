@@ -5,7 +5,7 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.ChinaNumeric;
 import roj.text.LinedReader;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 
 import javax.swing.tree.MutableTreeNode;
 import javax.swing.tree.TreeNode;
@@ -49,7 +49,7 @@ public class Chapter implements MutableTreeNode {
 	}
 
 	public static List<Chapter> parse(File file) throws IOException {
-		try (StreamReader sr = StreamReader.auto(file)) {
+		try (TextReader sr = TextReader.auto(file)) {
 			List<List<Chapter>> cbd = parse(sr);
 			return cbd.isEmpty() ? Collections.emptyList() : groupChapter(cbd, 0);
 		}

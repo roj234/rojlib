@@ -6,6 +6,8 @@ import roj.io.IOUtil;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * @author Roj234
@@ -90,17 +92,33 @@ public final class Template {
 		return tmpl;
 	}
 
-	public CharList replace(Map<String, String> env, CharList out) {
+	/**
+	 * replace via string name
+	 * @param env Map&lt;String, {@link Consumer&lt;CharList&gt;}|{@link CharSequence}&gt;
+	 * @return sb
+	 */
+	@SuppressWarnings("unchecked")
+	public CharList replace(Map<String, ?> env, CharList sb) {
 		int i = 0;
 		for (int j = 0; j < pos.length; j++) {
-			String val = env.get(names[j]);
-			if (val == null && !env.containsKey(names[j])) throw new IllegalArgumentException("参数 '" + names[j] + "' 缺失");
-			out.append(data, i, i += pos[j]).append(val);
+			Object val = env.get(names[j]);
+			if (val == null) throw new IllegalArgumentException("参数 '" + names[j] + "' 缺失");
+
+			sb.append(data, i, i += pos[j]);
+
+			if (val instanceof BiConsumer) ((BiConsumer<Object, CharList>) val).accept(env, sb);
+			else sb.append(val);
 		}
-		return out.append(data, i, data.length);
+		return sb.append(data, i, data.length);
 	}
 
-	public CharList replace(List<String> env, CharList out) {
+	/**
+	 * replace via integral name
+	 * @param env List&lt;{@link Consumer&lt;CharList&gt;}|{@link CharSequence}&gt;
+	 * @return sb
+	 */
+	@SuppressWarnings("unchecked")
+	public CharList replace(List<?> env, CharList sb) {
 		try {
 			if (intNames == null) makeIntName();
 		} catch (NumberFormatException e) {
@@ -111,11 +129,16 @@ public final class Template {
 		for (int j = 0; j < pos.length; j++) {
 			int name = intNames[j];
 			if (name >= env.size()) throw new IllegalArgumentException("参数 '" + names[j] + "' 缺失");
-			String val = env.get(name);
+
+			Object val = env.get(name);
 			if (val == null) throw new IllegalArgumentException("参数 '" + names[j] + "' 缺失");
-			out.append(data, i, i += pos[j]).append(val);
+
+			sb.append(data, i, i += pos[j]);
+
+			if (val instanceof BiConsumer) ((BiConsumer<Object, CharList>) val).accept(env, sb);
+			else sb.append(val);
 		}
-		return out.append(data, i, data.length);
+		return sb.append(data, i, data.length);
 	}
 
 	private void makeIntName() {

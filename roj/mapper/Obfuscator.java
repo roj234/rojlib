@@ -25,18 +25,16 @@ import java.util.*;
 public abstract class Obfuscator {
 	public static final String TERMINATE_THIS_CLASS = new String();
 
-	public static final int ADD_SYNTHETIC = 1, ADD_PUBLIC = 2, REMOVE_SYNTHETIC = 4;
+	public static final int ADD_SYNTHETIC = 1, AUTO_ACCESSIBLE = 2, REMOVE_SYNTHETIC = 4;
 
-	ConstMapper m1;
-	CodeMapper m2;
+	Mapper m1;
 
 	protected int flags;
 	private Map<String, IClass> named;
 
 	public Obfuscator() {
-		m1 = new ConstMapper(true);
-		m1.flag = ConstMapper.FLAG_FIX_INHERIT | ConstMapper.FLAG_FIX_SUBIMPL;
-		m2 = new CodeMapper(m1);
+		m1 = new Mapper(true);
+		m1.flag = Mapper.FLAG_FIX_INHERIT | Mapper.FLAG_FIX_SUBIMPL;
 	}
 
 	public void clear() {
@@ -49,7 +47,7 @@ public abstract class Obfuscator {
 	}
 
 	public void reset() {
-		ConstMapper t = m1;
+		Mapper t = m1;
 		t.classMap.clear();
 		t.methodMap.clear();
 		t.fieldMap.clear();
@@ -57,7 +55,7 @@ public abstract class Obfuscator {
 	}
 
 	public void obfuscate(List<Context> arr) {
-		ConstMapper t = m1;
+		Mapper m = m1;
 
 		if (named == null) named = new MyHashMap<>(arr.size());
 		for (int i = 0; i < arr.size(); i++) {
@@ -67,25 +65,19 @@ public abstract class Obfuscator {
 
 		Context cur = null;
 		try {
-			t.initSelf(arr.size());
+			m.initSelf(arr.size());
+			for (int i = 0; i < arr.size(); i++) m.S1_parse(cur = arr.get(i));
 
-			for (int i = 0; i < arr.size(); i++) {
-				t.S1_parse(cur = arr.get(i));
-			}
-
-			t.initSelfSuperMap();
-
-			for (int i = 0; i < arr.size(); i++) {
-				prepare(cur = arr.get(i));
-			}
+			m.initSelfSuperMap();
+			for (int i = 0; i < arr.size(); i++) prepare(cur = arr.get(i));
 
 			// 删去冲突项
-			t.loadLibraries(Collections.singletonList(arr));
+			m.loadLibraries(Collections.singletonList(arr));
 
 			// 反转字段映射
 			MapUtil U = MapUtil.getInstance();
-			MyHashSet<Desc> fMapReverse = new MyHashSet<>(t.fieldMap.size());
-			for (Map.Entry<Desc, String> entry : t.fieldMap.entrySet()) {
+			MyHashSet<Desc> fMapReverse = new MyHashSet<>(m.fieldMap.size());
+			for (Map.Entry<Desc, String> entry : m.fieldMap.entrySet()) {
 				Desc desc = entry.getKey();
 				Desc target = new Desc(desc.owner, entry.getValue(), desc.param, desc.flags);
 				fMapReverse.add(target);
@@ -99,7 +91,7 @@ public abstract class Obfuscator {
 				for (int i = 0; i < pending.size(); i++) {
 					cur = pending.get(i);
 					ConstantData data = cur.getData();
-					List<String> parents = t.selfSupers.get(data.name);
+					List<String> parents = m.selfSupers.get(data.name);
 					if (parents == null) continue;
 
 					List<? extends FieldNode> fields = data.fields;
@@ -110,7 +102,7 @@ public abstract class Obfuscator {
 						d.param = field.rawDesc();
 
 						// no map
-						String name = t.fieldMap.get(d);
+						String name = m.fieldMap.get(d);
 						if (null == name) continue;
 						d.name = name;
 
@@ -137,7 +129,7 @@ public abstract class Obfuscator {
 								fMapReverse.remove(d);
 								if (name == null) {
 									d.name = field.name();
-									t.fieldMap.remove(d);
+									m.fieldMap.remove(d);
 								} else {
 									d.name = name;
 									// add / check duplicate
@@ -148,7 +140,7 @@ public abstract class Obfuscator {
 
 									d.name = field.name();
 									// change mapping
-									t.fieldMap.put(d, name);
+									m.fieldMap.put(d, name);
 
 									// push next
 									if (!next.contains(cur)) next.add(cur);
@@ -163,9 +155,9 @@ public abstract class Obfuscator {
 				pending = next;
 			} while (!pending.isEmpty());
 
-			FindMap<Desc, String> methodMap = t.getMethodMap();
+			FindMap<Desc, String> methodMap = m.getMethodMap();
 			if (!methodMap.isEmpty()) {
-				Set<SubImpl> subs = MapUtil.getInstance().findSubImplements(arr, t, named);
+				Set<SubImpl> subs = MapUtil.getInstance().findSubImplements(arr, m, named);
 
 				for (SubImpl method : subs) {
 					Desc desc = method.type.copy();
@@ -198,9 +190,9 @@ public abstract class Obfuscator {
 							if (!mapName.equals(methodMap.put(desc, mapName))) {
 								List<? extends MoFNode> methods1 = named.get(desc.owner).methods();
 								for (int i = 0; i < methods1.size(); i++) {
-									MoFNode m = methods1.get(i);
-									if (desc.param.equals(m.rawDesc()) && desc.name.equals(m.name())) {
-										desc.flags = m.modifier();
+									MoFNode mn = methods1.get(i);
+									if (desc.param.equals(mn.rawDesc()) && desc.name.equals(mn.name())) {
+										desc.flags = mn.modifier();
 										break;
 									}
 								}
@@ -212,26 +204,13 @@ public abstract class Obfuscator {
 				}
 			}
 
-			for (int i = 0; i < arr.size(); i++) {
-				t.S2_mapSelf(cur = arr.get(i));
-			}
-
-			for (int i = 0; i < arr.size(); i++) {
-				t.S3_mapConstant(cur = arr.get(i));
-			}
+			for (int i = 0; i < arr.size(); i++) m.S2_mapSelf(cur = arr.get(i), false);
+			for (int i = 0; i < arr.size(); i++) m.S3_mapConstant(cur = arr.get(i));
 
 			beforeMapCode(arr);
 
-			CodeMapper cm = m2;
-
-			for (int i = 0; i < arr.size(); i++) {
-				cm.processOne(cur = arr.get(i));
-			}
-
-			for (int i = 0; i < arr.size(); i++) {
-				cur = arr.get(i);
-				cur.compress();
-			}
+			for (int i = 0; i < arr.size(); i++) m.S4_mapClassName(cur = arr.get(i));
+			for (int i = 0; i < arr.size(); i++) (cur = arr.get(i)).compress();
 
 			afterMapCode(arr);
 		} catch (Throwable e) {
@@ -239,19 +218,16 @@ public abstract class Obfuscator {
 		}
 	}
 
-	protected void prepare(Context c) {
+	private void prepare(Context c) {
 		ConstantData data = c.getData();
 		data.normalize();
 
 		String dest = obfClass(data);
 		if (dest == TERMINATE_THIS_CLASS) return;
 
-		ConstMapper t = this.m1;
-		if (dest != null && t.classMap.putIfAbsent(data.name, dest) != null) {
+		Mapper m = m1;
+		if (dest != null && m.classMap.putIfAbsent(data.name, dest) != null) {
 			System.out.println("重复的class name " + data.name);
-		}
-		if ((flags & ADD_PUBLIC) != 0) {
-			data.access |= AccessFlag.PUBLIC;
 		}
 
 		prepareInheritCheck(data.name);
@@ -265,10 +241,6 @@ public abstract class Obfuscator {
 			} else if ((flags & REMOVE_SYNTHETIC) != 0) {
 				acc &= ~AccessFlag.SYNTHETIC;
 			}
-			if ((flags & ADD_PUBLIC) != 0 && (acc & AccessFlag.PRIVATE) == 0) {
-				acc &= ~AccessFlag.PROTECTED;
-				acc |= AccessFlag.PUBLIC;
-			}
 			method.access = (char) acc;
 
 			if ((desc.name = method.name.str()).charAt(0) == '<') continue; // clinit, init
@@ -280,7 +252,7 @@ public abstract class Obfuscator {
 
 			String ms = obfMethodName(data, desc);
 			if (ms != null) {
-				t.methodMap.putIfAbsent(desc, ms);
+				m.methodMap.putIfAbsent(desc, ms);
 				desc = new Desc(data.name, "", "");
 			}
 		}
@@ -294,10 +266,6 @@ public abstract class Obfuscator {
 			} else if ((flags & REMOVE_SYNTHETIC) != 0) {
 				acc &= ~AccessFlag.SYNTHETIC;
 			}
-			if ((flags & ADD_PUBLIC) != 0 && (acc & AccessFlag.PRIVATE) == 0) {
-				acc &= ~AccessFlag.PROTECTED;
-				acc |= AccessFlag.PUBLIC;
-			}
 			field.access = (char) acc;
 
 			desc.name = field.name.str();
@@ -306,14 +274,14 @@ public abstract class Obfuscator {
 
 			String fs = obfFieldName(data, desc);
 			if (fs != null) {
-				t.fieldMap.putIfAbsent(desc, fs);
+				m.fieldMap.putIfAbsent(desc, fs);
 				desc = new Desc(data.name, "", "");
 			}
 		}
 	}
 
+	// 好像不是必须的了？
 	private final List<String> iCheckTmp = new ArrayList<>();
-
 	private void prepareInheritCheck(String owner) {
 		List<String> tmp = iCheckTmp;
 		tmp.clear();
@@ -327,10 +295,7 @@ public abstract class Obfuscator {
 			}
 		}
 	}
-
-	private boolean isInherited(Desc k) {
-		return iCheckTmp.isEmpty() ? MapUtil.checkObjectInherit(k) : MapUtil.getInstance().isInherited(k, iCheckTmp, true);
-	}
+	private boolean isInherited(Desc k) { return iCheckTmp.isEmpty() ? MapUtil.checkObjectInherit(k) : MapUtil.getInstance().isInherited(k, iCheckTmp, true); }
 
 	public void writeObfuscationMap(File file) throws IOException {
 		m1.saveMap(file);
@@ -355,12 +320,9 @@ public abstract class Obfuscator {
 	}
 
 	protected void beforeMapCode(List<Context> arr) {}
-
 	protected void afterMapCode(List<Context> arr) {}
 
 	public abstract String obfClass(IClass cls);
-
 	public abstract String obfMethodName(IClass cls, Desc entry);
-
 	public abstract String obfFieldName(IClass cls, Desc entry);
 }

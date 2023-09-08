@@ -63,26 +63,30 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 		int utf8_score = 0, utf8_negate = 0;
 		int gb18030_score = 0, gb18030_negate = 0;
 
+		len = 0;
 		while (true) {
-			len = readUpto(b.length - bLen);
+			bLen += readUpto(b.length - bLen);
 
 			ps = ns = 0;
-			UTF8MB4.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+bLen, len, this);
-			utf8_score += ps - 20*ns;
+			UTF8MB4.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+len, Unsafe.ARRAY_BYTE_BASE_OFFSET+bLen, this);
+			utf8_score += ps - 5*ns;
 			utf8_negate += ns;
 
 			ps = ns = 0;
-			GB18030.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+bLen, len, this);
-			gb18030_score += ps - 20*ns;
+			GB18030.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+len, Unsafe.ARRAY_BYTE_BASE_OFFSET+bLen, this);
+			gb18030_score += ps - 5*ns;
 			gb18030_negate += ns;
 
-			bLen += len;
+			// todo check UTF16
 
-			// ASCII时相同
-			if (utf8_score >= gb18030_score || utf8_negate * 3 < gb18030_negate * 2) return "UTF8";
-			else if (gb18030_score > 0 && gb18030_negate * 3 < utf8_negate * 2) return "GB18030";
+			if (Math.abs(utf8_score - gb18030_score) > 100) {
+				// ASCII时相同
+				if (utf8_score >= gb18030_score || utf8_negate * 3 < gb18030_negate * 2) return "UTF8";
+				else if (gb18030_score > 0 && gb18030_negate * 3 < utf8_negate * 2) return "GB18030";
+			}
 
-			if (len == 0) break;
+			if (len == bLen) break;
+			len = bLen;
 
 			if (bLen == b.length) {
 				ArrayCache ac = ArrayCache.getDefaultCache();
@@ -92,6 +96,10 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 				b = b1;
 			}
 		}
+
+		// nearly impossible hit here when file is large
+		if (utf8_score >= gb18030_score || utf8_negate * 3 < gb18030_negate * 2) return "UTF8";
+		else if (gb18030_score > 0 && gb18030_negate * 3 < utf8_negate * 2) return "GB18030";
 
 		throw new IOException("无法确定编码,utf8_score="+utf8_score+",gbk_score="+gb18030_score);
 	}
@@ -188,8 +196,11 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 	@Override
 	public void accept(int c) {
 		if (c < 0) {
+			if (c != UnsafeCharset.TRUNCATED)
+				ns += 10;
+		} else if (c < 32) { // control
 			ns++;
-		} else if (常用字.contains(c)) {
+		} else if (常用字.contains(c) || c >= Character.MIN_SUPPLEMENTARY_CODE_POINT) { // 表情: 至少验证更严格
 			ps += 3;
 		} else if (次常用字.contains(c)) {
 			ps += 2;

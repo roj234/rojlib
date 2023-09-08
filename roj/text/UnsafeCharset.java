@@ -270,10 +270,10 @@ public abstract class UnsafeCharset {
 
 	public static final int TRUNCATED = -1, MALFORMED = -2;
 	public final void validate(DynByteBuf in, IntConsumer codepointAcceptor) {
-		unsafeValidate(in.array(),in._unsafeAddr()+in.rIndex,in.readableBytes(),codepointAcceptor);
+		unsafeValidate(in.array(),in._unsafeAddr()+in.rIndex,in._unsafeAddr()+in.wIndex(),codepointAcceptor);
 		in.rIndex = in.wIndex();
 	}
-	public abstract void unsafeValidate(Object ref, long base, int len, IntConsumer cs);
+	public abstract void unsafeValidate(Object ref, long base, long end, IntConsumer cs);
 
 	public final int byteCount(CharSequence s) { return byteCount(s, 0, s.length()); }
 	public abstract int byteCount(CharSequence s, int off, int len);

@@ -7,7 +7,7 @@ import roj.concurrent.Ref;
 import roj.config.ParseException;
 import roj.text.ACalendar;
 import roj.text.CharList;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
@@ -48,7 +48,7 @@ public abstract class ITokenizer {
 		index = 0;
 		input = seq;
 		marker = -3;
-		aFlag = (byte) (seq instanceof StreamReader ? _AF_ROD : 0);
+		aFlag = (byte) (seq instanceof TextReader ? _AF_ROD : 0);
 		return this;
 	}
 
@@ -85,7 +85,7 @@ public abstract class ITokenizer {
 	}
 
 	protected final void flushBefore(int i) {
-		if ((aFlag&_AF_ROD) != 0) ((StreamReader)input).releaseBefore(i);
+		if ((aFlag&_AF_ROD) != 0) ((TextReader)input).releaseBefore(i);
 	}
 
 	/**

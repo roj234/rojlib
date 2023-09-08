@@ -11,7 +11,7 @@ import roj.config.data.CMapping;
 import roj.config.data.CString;
 import roj.dev.Compiler;
 import roj.io.IOUtil;
-import roj.mapper.ConstMapper;
+import roj.mapper.Mapper;
 import roj.mod.FileFilter.CmtATEntry;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -57,7 +57,7 @@ public final class Project extends FileConfig {
 	List<Project> dependencies;
 	final Compiler compiler;
 
-	ConstMapper.State state;
+	Mapper.State state;
 	String atConfigPathStr;
 	File srcPath, resPath, binJar;
 

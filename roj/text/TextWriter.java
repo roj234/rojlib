@@ -21,7 +21,7 @@ import java.nio.file.StandardOpenOption;
  * @author Roj234
  * @since 2023/3/18 0018 0:11
  */
-public class StreamWriter extends CharList implements Appender, AutoCloseable, Finishable {
+public class TextWriter extends CharList implements Appender, AutoCloseable, Finishable {
 	private final Closeable out;
 	private final byte type;
 
@@ -33,19 +33,19 @@ public class StreamWriter extends CharList implements Appender, AutoCloseable, F
 	private BufferPool pool;
 	private final DynByteBuf buf1;
 
-	public static StreamWriter to(File file) throws IOException { return to(file, StandardCharsets.UTF_8); }
-	public static StreamWriter to(File file, Charset cs) throws IOException {
-		return new StreamWriter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING), cs);
+	public static TextWriter to(File file) throws IOException { return to(file, StandardCharsets.UTF_8); }
+	public static TextWriter to(File file, Charset cs) throws IOException {
+		return new TextWriter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING), cs);
 	}
-	public static StreamWriter append(File file) throws IOException { return append(file, StandardCharsets.UTF_8); }
-	public static StreamWriter append(File file, Charset cs) throws IOException {
-		return new StreamWriter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.APPEND), cs);
+	public static TextWriter append(File file) throws IOException { return append(file, StandardCharsets.UTF_8); }
+	public static TextWriter append(File file, Charset cs) throws IOException {
+		return new TextWriter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.APPEND), cs);
 	}
 
-	public StreamWriter(Closeable out, Charset charset) {
+	public TextWriter(Closeable out, Charset charset) {
 		this(out,charset,BufferPool.localPool());
 	}
-	public StreamWriter(Closeable out, Charset cs, BufferPool pool) {
+	public TextWriter(Closeable out, Charset cs, BufferPool pool) {
 		if (out instanceof DynByteBuf) {
 			type = 2;
 		} else if (out instanceof OutputStream) {
@@ -55,6 +55,8 @@ public class StreamWriter extends CharList implements Appender, AutoCloseable, F
 		} else {
 			throw new IllegalArgumentException("无法确定 " + out.getClass().getName() + " 的类型");
 		}
+
+		if (cs == null) cs = TextUtil.DefaultOutputCharset;
 
 		if (StandardCharsets.UTF_8 == cs) {
 			ucs = UTF8MB4.CODER;

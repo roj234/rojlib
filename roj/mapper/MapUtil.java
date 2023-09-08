@@ -1,7 +1,5 @@
 package roj.mapper;
 
-import roj.archive.zip.ZipFileWriter;
-import roj.asm.cst.CstClass;
 import roj.asm.misc.ReflectClass;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
@@ -9,21 +7,22 @@ import roj.asm.tree.IClass;
 import roj.asm.tree.MoFNode;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
 import roj.asm.util.Context;
 import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
-import roj.mapper.util.*;
+import roj.mapper.util.Desc;
+import roj.mapper.util.Worker;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.File;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
@@ -41,7 +40,7 @@ public final class MapUtil {
 	private MapUtil() {}
 
 	public final Desc sharedDC = new Desc("", "", "");
-	public boolean checkSubClass = true;
+	public boolean checkSubClass = false;
 
 	static final ReflectClass FAILED = new ReflectClass(MapUtil.class);
 	final MyHashMap<String, ReflectClass> classInfo = new MyHashMap<>();
@@ -52,7 +51,7 @@ public final class MapUtil {
 
 	public static MapUtil getInstance() {
 		MapUtil util = ThreadBasedCache.get();
-		util.checkSubClass = true;
+		util.checkSubClass = false;
 		return util;
 	}
 
@@ -77,134 +76,13 @@ public final class MapUtil {
 		return superItf;
 	}
 
-	/**
-	 * 父类的方法被子类实现的接口使用
-	 */
-	public Set<SubImpl> findSubImplements(List<Context> ctx, ConstMapper mapper, Map<String, IClass> classInfo) {
-		if (classInfo.isEmpty()) {
-			for (int i = 0; i < ctx.size(); i++) {
-				ConstantData data = ctx.get(i).getData();
-				classInfo.put(data.name, data);
-			}
+	public static MyHashMap<String, IClass> createNamedMap(List<Context> ctxs) {
+		MyHashMap<String, IClass> classInfo = new MyHashMap<>(ctxs.size());
+		for (int i = 0; i < ctxs.size(); i++) {
+			ConstantData data = ctxs.get(i).getData();
+			classInfo.put(data.name, data);
 		}
-
-		Map<String, List<Desc>> mapperMethods = null;
-
-		MyHashSet<SubImpl> dest = new MyHashSet<>();
-
-		SubImpl sTest = new SubImpl();
-		NameAndType nTest = new NameAndType();
-
-		SimpleList<NameAndType> interfaceMethods = new SimpleList<>();
-
-		for (int k = 0; k < ctx.size(); k++) {
-			ConstantData data = ctx.get(k).getData();
-			if ((data.modifier() & (AccessFlag.INTERFACE | AccessFlag.ANNOTATION | AccessFlag.MODULE)) != 0) continue;
-			List<CstClass> itfs = data.interfaces;
-			if (itfs.isEmpty()) continue;
-
-			interfaceMethods.clear();
-			List<String> parents = superClasses(data.parent, mapper.selfSupers);
-			for (int i = 0; i < itfs.size(); i++) {
-				String name = itfs.get(i).name().str();
-				if (!parents.contains(name)) {
-					// 接口方法
-					IClass clz = classInfo.get(name);
-					if (clz == null) {
-						clz = reflectClassInfo(name);
-						if (clz == null) {
-							if (mapperMethods == null) {
-								mapperMethods = new MyHashMap<>();
-								for (Desc key : mapper.methodMap.keySet()) {
-									mapperMethods.computeIfAbsent(key.owner, Helpers.fnArrayList()).add(key);
-								}
-							}
-							classInfo.put(name, clz = new ReflectClass(name, Helpers.cast(mapperMethods.getOrDefault(name, Collections.emptyList()))));
-						}
-					}
-
-					for (MoFNode node : clz.methods()) {
-						NameAndType key = new NameAndType();
-						key.owner = clz.name();
-						key.name = node.name();
-						key.param = node.rawDesc();
-						interfaceMethods.add(key);
-					}
-				}
-			}
-			if (interfaceMethods.isEmpty()) continue;
-
-			for (int i = 0; i < parents.size(); i++) {
-				String parent = parents.get(i);
-
-				IClass clz = classInfo.get(parent);
-				if (clz == null) {
-					clz = reflectClassInfo(parent);
-					if (clz == null) {
-						if (mapperMethods == null) {
-							mapperMethods = new MyHashMap<>();
-							for (Desc key : mapper.methodMap.keySet()) {
-								mapperMethods.computeIfAbsent(key.owner, Helpers.fnArrayList()).add(key);
-							}
-						}
-						classInfo.put(parent, clz = new ReflectClass(parent, Helpers.cast(mapperMethods.getOrDefault(parent, Collections.emptyList()))));
-					}
-				}
-
-				List<? extends MoFNode> nodes = clz.methods();
-				for (int j = 0; j < nodes.size(); j++) {
-					MoFNode method = nodes.get(j);
-					// 感谢接口函数必须public，省的抄一遍ConstMapper的代码
-					// todo 这里的static不确定()
-					if ((method.modifier() & (AccessFlag.PUBLIC|AccessFlag.STATIC)) != AccessFlag.PUBLIC) continue;
-					if ((nTest.name = method.name()).startsWith("<")) continue;
-					nTest.param = method.rawDesc();
-
-					int id = -1;
-					while ((id = interfaceMethods.indexOf(nTest, id+1)) >= 0) {
-						Desc issuer = interfaceMethods.get(id);
-						sharedDC.owner = issuer.owner;
-						sharedDC.name = issuer.name;
-						sharedDC.param = issuer.param;
-						if (!mapper.methodMap.containsKey(sharedDC)) {
-							sharedDC.owner = parent;
-							if (!mapper.methodMap.containsKey(sharedDC)) continue;
-						}
-
-						sTest.type = issuer;
-						SubImpl s_get = dest.intern(sTest);
-						if (s_get == sTest) sTest = new SubImpl();
-
-						Set<String> set = null;
-						for (Set<String> set1 : s_get.owners) {
-							if (set1.contains(parent) || set1.contains(issuer.owner)) {
-								set = set1;
-								break;
-							}
-						}
-						if (set == null) {
-							set = new MyHashSet<>(2);
-							s_get.owners.add(set);
-						}
-						set.add(parent);
-						set.add(issuer.owner);
-
-						// native不能
-						if ((method.modifier() & AccessFlag.NATIVE) != 0) set.add(null);
-						// 至少有一个类不是要处理的类: 不能混淆
-						IClass ref = classInfo.get(parent);
-						if (ref == null || ref instanceof ReflectClass) set.add(null);
-					}
-				}
-			}
-		}
-
-		// 加上一步工序, 删除找得到的“找不到的”class
-		for (String key : classInfo.keySet()) {
-			this.classInfo.remove(key, FAILED);
-		}
-
-		return dest;
+		return classInfo;
 	}
 
 	public ReflectClass reflectClassInfo(CharSequence k) {
@@ -231,8 +109,6 @@ public final class MapUtil {
 		ReflectClass me = reflectClassInfo(k);
 		return me == null ? null : me.allParentsWithSelf();
 	}
-
-	public static final List<String> OBJECT_INHERIT = Collections.singletonList("java/lang/Object");
 
 	// 使用反射查找实现类，避免RT太大不好解析
 	public boolean isInherited(Desc k, List<String> toTest, boolean def) {
@@ -443,20 +319,11 @@ public final class MapUtil {
 
 	// endregion
 
-	public static Thread writeResourceAsync(@Nonnull ZipFileWriter zfw, @Nonnull Map<String, ?> resources) {
-		Thread writer = new Thread(new ResWriter(zfw, resources), "Resource Writer");
-		writer.setDaemon(true);
-		writer.start();
-		return writer;
-	}
-
-	public static TaskPool POOL = TaskPool.CpuMassive();
-
 	static void async(Consumer<Context> action, List<List<Context>> ctxs) {
 		ArrayList<Worker> wait = new ArrayList<>(ctxs.size());
 		for (int i = 0; i < ctxs.size(); i++) {
 			Worker w = new Worker(ctxs.get(i), action);
-			POOL.pushTask(w);
+			TaskPool.CpuMassive().pushTask(w);
 			wait.add(w);
 		}
 
@@ -472,79 +339,44 @@ public final class MapUtil {
 
 	// region 映射各种名字
 
-	public String mapClassName(Map<String, String> classMap, String name) {
-		// should indexOf(';') ?
-		String nn = mapClassName(classMap, name, false, 0, name.length());
-		return nn == null ? name : nn;
-	}
-
+	public String mapClassName(Map<String, String> classMap, CharSequence name) { return mapClassName(classMap, name, 0, name.length()); }
 	@Nullable
-	public String mapOwner(Map<? extends CharSequence, String> map, CharSequence name, boolean file) {
-		return mapClassName(map, name, file, 0, name.length());
-	}
+	private String mapClassName(Map<? extends CharSequence, String> map, CharSequence name, int s, int e) {
+		CharList sb = sharedCL; sb.clear();
 
-	@Nullable
-	private String mapClassName(Map<? extends CharSequence, String> map, CharSequence name, boolean file, int s, int e) {
-		if (e == 0) return "";
+		String nn;
+		if ((nn = map.get(sb.append(name, s, e))) != null) return nn;
 
-		CharList cl = sharedCL;
-		cl.clear();
+		// This is for array class
+		if (name.charAt(s) == '[') {
+			int arrLv = s;
+			while (name.charAt(s) == '[') s++;
 
-		String b;
-		if ((b = map.get(cl.append(name, s, e - (file ? 6 : 0)))) != null) {
-			return file ? (b + ".class") : b;
-		}
+			boolean endSemi = name.charAt(e-1) == ';';
+			if (endSemi != (name.charAt(s) == 'L'))
+				throw new IllegalArgumentException("Unknown array state: " + name.subSequence(s,e));
 
-		boolean endSemi = name.charAt(e - 1) == ';';
-		switch (name.charAt(s)) {
-			// This is for [Field type]
-			case 'L':
-				if (endSemi) {
-					if (file) throw new IllegalArgumentException("Unk cls " + name.subSequence(s + 1, e - 1));
-					String result = mapClassName(map, name, false, s + 1, e - 1);
-					cl.clear();
-					return result == null ? null : cl.append('L').append(result).append(';').toString();
-				} // class name starts with L
-				break;
-			// This is for [Field type, Class type]
-			case '[':
-				if (file) throw new IllegalArgumentException("Unk arr " + name.subSequence(s, e));
+			if (endSemi) {
+				String result = mapClassName(map, name, s+1, e-1);
+				if (result == null) return null;
 
-				int arrLv = s;
-				while (name.charAt(s) == '[') {
-					s++;
+				sb.clear();
+				return sb.append(name, arrLv, s+1).append(result).append(';').toString();
+			}
+		} else if (checkSubClass) {
+			int dollar = e;
+			while ((dollar = TextUtil.gLastIndexOf(name, "$", dollar-1, s)) >= 0) {
+				sb.clear();
+				if ((nn = map.get(sb.append(name, s, dollar))) != null) {
+					sb.clear();
+					System.out.println("sub class " + sb.append(nn).append(name, dollar, e));
+					sb.clear();
+					return sb.append(nn).append(name, dollar, e).toString();
 				}
-				arrLv = s - arrLv;
-
-				if (name.charAt(s) == 'L') {
-					if (endSemi) {
-						String result = mapClassName(map, name, false, s + 1, e - 1);
-						if (result == null) return null;
-
-						cl.clear();
-						for (int i = 0; i < arrLv; i++) {
-							cl.append('[');
-						}
-						return cl.append('L').append(result).append(';').toString();
-					} else {
-						throw new IllegalArgumentException("Unk arr 1 " + name);
-					}
-				} else if (endSemi) // primitive array ?
-					throw new IllegalArgumentException("Unk arr 2 " + name);
-				break;
-		}
-
-		if (checkSubClass) {
-			int dollar = TextUtil.gIndexOf(name, "$", s, e);
-
-			cl.clear();
-			if (dollar != -1 && (b = map.get(cl.append(name, s, dollar))) != null) {
-				cl.clear();
-				return cl.append(b).append(name, dollar, e).toString();
 			}
 		}
 
-		return file ? name.subSequence(s, e).toString() : null;
+		return null;
 	}
 
 	public String mapMethodParam(Map<String, String> classMap, String md) {
@@ -556,39 +388,38 @@ public final class MapUtil {
 		CharList out = sharedCL2;
 		out.clear();
 
-		for (int i = 0; i < md.length(); ) {
-			char c = md.charAt(i++);
-			out.append(c);
-			if (c == 'L') {
-				int j = md.indexOf(';', i);
-				if (j == -1) throw new IllegalStateException("Illegal descriptor");
+		int prevI = 0, i = 0;
+		while ((i = md.indexOf('L', i)+1) > 0) {
+			int j = md.indexOf(';', i);
+			if (j < 0) throw new IllegalStateException("Illegal desc " + md);
 
-				String s = mapClassName(classMap, md, false, i, j);
-				if (s != null) {
-					changed = true;
-					out.append(s);
-				} else {
-					out.append(md, i, j);
-				}
-				i = j;
+			String s = mapClassName(classMap, md, i, j);
+			if (s == null) out.append(md, prevI, j);
+			else {
+				changed = true;
+				out.append(md, prevI, i).append(s);
 			}
+
+			out.append(';');
+			prevI = i = j+1;
 		}
-		return changed ? out.toString() : md;
+		return changed ? out.append(md, prevI, md.length()).toString() : md;
 	}
 
 	public String mapFieldType(Map<String, String> classMap, String fd) {
 		// min = La;
 		if (fd.length() < 3) return null;
 
-		char first = fd.charAt(0);
-		// 数组
-		if (first == Type.ARRAY) {
-			first = fd.charAt(fd.lastIndexOf(Type.ARRAY) + 1);
-		}
-		// 不是object类型
-		if (first != Type.CLASS) return null;
+		int off = 0;
+		char type = fd.charAt(0);
+		if (type == Type.ARRAY) type = fd.charAt(off = (fd.lastIndexOf(Type.ARRAY) + 1));
+		if (type != Type.CLASS) return null;
 
-		return mapClassName(classMap, fd, false, 0, fd.length());
+		String nn = mapClassName(classMap, fd, off+1, fd.length()-1);
+		if (nn == null) return null;
+
+		sharedCL.clear();
+		return sharedCL.append(fd, 0, off+1).append(nn).append(';').toString();
 	}
 
 	// endregion
@@ -600,7 +431,7 @@ public final class MapUtil {
 			File f = (File) list.get(i);
 			if (f.getName().endsWith(".jar") || f.getName().endsWith(".zip")) {
 				hash = 31 * hash + f.getName().hashCode();
-				hash = 31 * hash + (f.length() & 262143);
+				hash = 31 * hash + (f.length() * 262143);
 				hash ^= f.lastModified();
 			}
 		}

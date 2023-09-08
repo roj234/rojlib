@@ -21,13 +21,13 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 	private int lineNumber;
 
 	public LineReader(InputStream in) throws IOException {
-		str = new StreamReader(in);
+		str = new TextReader(in);
 	}
 	public LineReader(InputStream in, Charset cs) throws IOException {
-		str = new StreamReader(in, cs);
+		str = new TextReader(in, cs);
 	}
 	public LineReader(InputStream in, Charset cs, boolean cleanEmpty) throws IOException {
-		this.str = new StreamReader(in);
+		this.str = new TextReader(in);
 		this.keepEmpty = !cleanEmpty;
 	}
 
@@ -37,7 +37,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 	public LineReader(CharSequence s, boolean cleanEmpty) {
 		this.str = s;
 		this.keepEmpty = !cleanEmpty;
-		this.reuse = !(s instanceof StreamReader);
+		this.reuse = !(s instanceof TextReader);
 	}
 
 	@SuppressWarnings("fallthrough")
@@ -125,7 +125,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 
 		int r = 0, i = index;
 		CharSequence s = str;
-		if (!reuse) ((StreamReader) s).releaseBefore(i);
+		if (!reuse) ((TextReader) s).releaseBefore(i);
 		while (i < s.length()) {
 			switch (s.charAt(i)) {
 				case '\r':
@@ -187,7 +187,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 		int lines = oLines;
 		int r = 0, prev = index, i = index;
 		CharSequence s = str;
-		if (!reuse) ((StreamReader) s).releaseBefore(i);
+		if (!reuse) ((TextReader) s).releaseBefore(i);
 		while (i < s.length()) {
 			switch (s.charAt(i)) {
 				case '\r':
@@ -229,6 +229,6 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 
 	@Override
 	public void close() throws IOException {
-		if (!reuse) ((StreamReader) str).close();
+		if (!reuse) ((TextReader) str).close();
 	}
 }

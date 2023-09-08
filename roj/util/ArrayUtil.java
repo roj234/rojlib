@@ -7,6 +7,8 @@ import roj.text.CharList;
 import java.util.List;
 import java.util.Random;
 
+import static roj.reflect.FieldAccessor.u;
+
 /**
  * @author Roj234
  * @since 2020/10/15 0:43
@@ -84,6 +86,23 @@ public final class ArrayUtil {
 			arr.set(length - i, a);
 		}
 		return arr;
+	}
+
+	public static void shuffleArray(Object arr, long off, int len, int scale, Random random) {
+		long ptr = u.allocateMemory(scale);
+		if (ptr == 0) throw new OutOfMemoryError();
+
+		len *= scale;
+		try {
+			for (int i = 0; i < len; i += scale) {
+				u.copyMemory(arr, off+i, null, ptr, scale);
+				int j = random.nextInt(len)*scale;
+				u.copyMemory(arr, off+j, arr, off+i, scale);
+				u.copyMemory(null, ptr, arr, off+j, scale);
+			}
+		} finally {
+			u.freeMemory(ptr);
+		}
 	}
 
 	public static void shuffle(Object[] arr, Random random) {

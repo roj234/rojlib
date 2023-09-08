@@ -215,8 +215,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 			return;
 		}
 		switch (cst.type()) {
-			case Constant.INTERFACE:
-			case Constant.METHOD:
+			case Constant.INTERFACE: case Constant.METHOD:
 				cstCache[ID_METHOD].add(cst);
 				break;
 			case Constant.CLASS:
@@ -233,17 +232,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 
 	public String getFileName() {
 		if (data == null) return name;
-		String n = data.name;
-
-		ch:
-		if (name.length() == n.length()-6) {
-			for (int i = n.length() - 7; i >= 0; i--) {
-				if (name.charAt(i) != n.charAt(i)) break ch;
-			}
-			return name;
-		}
-
-		return this.name = n.concat(".class");
+		return name = data.name.concat(".class");
 	}
 
 	public ByteList getCompressedShared() {

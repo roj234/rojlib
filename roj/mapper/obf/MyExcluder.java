@@ -71,8 +71,12 @@ public class MyExcluder extends CodeVisitor {
 	@Override
 	public void invoke(byte code, CstRef method) {
 		String name = method.className();
-		if (code == Opcodes.INVOKESTATIC && name.startsWith("java/util/concurrent/atomic/Atomic") && name.endsWith("FieldUpdater") && bci == ldcPos + 3) {
-			excludes.add(new Desc(ldcVal2, ldcVal1));
+		if (code == Opcodes.INVOKESTATIC) {
+			if (name.startsWith("java/util/concurrent/atomic/Atomic") && name.endsWith("FieldUpdater") && bci == ldcPos + 3) {
+				excludes.add(new Desc(ldcVal2, ldcVal1));
+			//} else if (name.equals("roj/reflect/DirectAccessor") && bci == ldcPos) {
+
+			}
 		}
 	}
 }

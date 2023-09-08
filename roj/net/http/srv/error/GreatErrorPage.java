@@ -7,9 +7,8 @@ import roj.net.http.srv.Request;
 import roj.net.http.srv.Response;
 import roj.net.http.srv.StringResponse;
 import roj.text.CharList;
-import roj.text.LineReader;
-import roj.text.StreamReader;
 import roj.text.Template;
+import roj.text.TextReader;
 
 import java.io.File;
 import java.io.IOException;
@@ -78,13 +77,13 @@ public class GreatErrorPage {
 	}
 
 	private static boolean make_line_info(CharList sb, StackTraceElement el, int id) throws IOException {
-		LineReader s;
+		TextReader s;
 		String cn = el.getClassName().replace('.', '/');
 		File baseDir = new File(CODEBASE), f;
 		while (true) {
 			f = new File(baseDir, cn.concat(".java"));
 			if (f.isFile()) {
-				s = new LineReader(StreamReader.auto(f), false);
+				s = TextReader.auto(f);
 				break;
 			}
 
@@ -97,11 +96,16 @@ public class GreatErrorPage {
 
 		int begin = Math.max(1, el.getLineNumber()-LINES);
 		sb.append("<pre class=\"prettyprint lang-java\"><ol start=").append(begin).append('>');
-		for (String line : s) {
-			if (s.lineNumber() < begin) continue;
-			else if (s.lineNumber() > el.getLineNumber()+LINES) break;
+		int lineNum = 0;
+		while (true) {
+			String line = s.readLine();
+			if (line == null) break;
 
-			if (s.lineNumber() == el.getLineNumber()) sb.append("<li class=\"line-error\">");
+			lineNum++;
+			if (lineNum < begin) continue;
+			if (lineNum > el.getLineNumber()+LINES) break;
+
+			if (lineNum == el.getLineNumber()) sb.append("<li class=\"line-error\">");
 			else sb.append("<li>");
 
 			HttpUtil.htmlspecial(sb, line).append("</li>");

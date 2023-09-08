@@ -1,7 +1,7 @@
 package roj.util;
 
 import roj.io.IOUtil;
-import roj.io.buf.ByteRange;
+import roj.io.buf.NativeArray;
 import roj.text.CharList;
 import roj.text.GB18030;
 import roj.text.UTF8MB4;
@@ -118,11 +118,11 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 
 	public abstract void ensureCapacity(int capacity);
 
-	public final ByteRange byteRangeR(int len) { return byteRange(moveRI(len), len); }
-	public final ByteRange byteRangeW(int len) { return byteRange(moveWI(len), len); }
-	public final ByteRange byteRange(int off, int len) {
+	public final NativeArray byteRangeR(int len) { return byteRange(moveRI(len), len); }
+	public final NativeArray byteRangeW(int len) { return byteRange(moveWI(len), len); }
+	public final NativeArray byteRange(int off, int len) {
 		if (off<0 || len < 0 || off+len < 0 || off+len > wIndex) throw new IndexOutOfBoundsException("pos="+off+",len="+len+",cap="+wIndex);
-		return new ByteRange(array(), _unsafeAddr()+off, len);
+		return new NativeArray(array(), _unsafeAddr()+off, len);
 	}
 
 	int moveWI(int i) {

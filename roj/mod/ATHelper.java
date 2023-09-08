@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static roj.mapper.ConstMapper.DONT_LOAD_PREFIX;
+import static roj.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.mod.Shared.BASE;
 import static roj.mod.Shared.TMP_DIR;
 

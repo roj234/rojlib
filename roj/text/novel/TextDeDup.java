@@ -12,7 +12,7 @@ import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.EasyProgressBar;
 import roj.ui.UIUtil;
@@ -63,7 +63,7 @@ public class TextDeDup {
 
 		private static byte[] read(File file) throws IOException {
 			CharList sb = IOUtil.getSharedCharBuf();
-			try (StreamReader in = StreamReader.auto(file)) {
+			try (TextReader in = TextReader.auto(file)) {
 				sb.readFully(in, true);
 				sb.replaceMulti(replacement);
 				byte[] out = new byte[sb.length()*2];
@@ -188,7 +188,7 @@ public class TextDeDup {
 		ConcurrentHashMap<File, byte[]> cached = new ConcurrentHashMap<>();
 		Function<File, byte[]> fileLoader = file -> {
 			CharList sb = new CharList(PRE_COMPARE);
-			try (StreamReader in = StreamReader.auto(file)) {
+			try (TextReader in = TextReader.auto(file)) {
 				int len = PRE_COMPARE;
 				int off = 0;
 				while (len > 0) {

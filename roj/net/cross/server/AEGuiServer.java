@@ -18,7 +18,6 @@ import roj.text.logging.d.LogDestination;
 import javax.swing.*;
 import java.io.File;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -103,23 +102,28 @@ public class AEGuiServer {
 
 		if (webPort != -1) runServer(webPort, server.man.getLoop());
 
-		LogContext ctx = Logger.getDefaultContext();
+		LogContext ctx = Logger.getRootContext();
 		LogDestination prev = log ? ctx.destination() : null;
 		ctx.destination(new LogDestination() {
 			@Override
-			public OutputStream getAndLock() {
-				return prev == null ? null : prev.getAndLock();
+			public Appendable getAndLock() {
+				Appendable op = prev == null ? null : prev.getAndLock();
+
+				return new Appendable() {
+					public Appendable append(char c) { return null; }
+					public Appendable append(CharSequence csq, int start, int end) { return null; }
+
+					@Override
+					public Appendable append(CharSequence csq) throws IOException {
+						if (op != null) op.append(csq);
+						logBuffer.ringAddLast(csq.toString());
+						return this;
+					}
+				};
 			}
 
 			@Override
-			public void unlock() {
-				if (prev != null) prev.unlock();
-			}
-
-			@Override
-			public void newLine(CharSequence cs) {
-				logBuffer.ringAddLast(cs.toString());
-			}
+			public void unlockAndFlush() throws IOException { if (prev != null) prev.unlockAndFlush(); }
 		});
 
 		PrintStream out = Util.out = new LoggingStream();

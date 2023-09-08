@@ -5,6 +5,7 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 
 public class InheritableRuleset {
+	public static final int IMPORTANT = 0x80000000;
 	private final ToIntMap<CharSequence> map = new ToIntMap<>();
 	private final String delimiter;
 
@@ -13,7 +14,7 @@ public class InheritableRuleset {
 
 	public void set(String level, int value, boolean important, boolean inheritable) {
 		assert value >= 0;
-		if (important) value |= 0x80000000;
+		if (important) value |= IMPORTANT;
 		if (inheritable) map.putInt(level.concat(delimiter), value);
 		map.putInt(level, value);
 	}
@@ -33,14 +34,14 @@ public class InheritableRuleset {
 			ent = map.getEntry(sb);
 			if (ent == null) continue;
 
-			if ((ent.v & 0x80000000) == 0) {
+			if ((ent.v & IMPORTANT) == 0) {
 				if (!hasVal) {
-					def = ent.v & 0x7fffffff;
+					def = ent.v & ~IMPORTANT;
 					hasVal = true;
 				}
 			} else {
 				// important
-				def = ent.v & 0x7fffffff;
+				def = ent.v & ~IMPORTANT;
 				break;
 			}
 		}

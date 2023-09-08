@@ -1,13 +1,21 @@
 package roj.ui;
 
 import roj.text.TextUtil;
+import roj.util.Helpers;
 
+import javax.annotation.Nonnull;
 import javax.imageio.ImageIO;
 import javax.swing.*;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
+import javax.swing.text.JTextComponent;
 import java.awt.*;
+import java.awt.datatransfer.*;
+import java.awt.dnd.*;
 import java.io.*;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -150,6 +158,46 @@ public final class UIUtil {
 		}
 	}
 
+	@Nonnull
+	public static DropTarget dropFilePath(JTextComponent comp, Consumer<File> callback, boolean append) {
+		return new DropTarget(comp, new DropTargetAdapter() {
+			@Override
+			public void drop(DropTargetDropEvent dtde) {
+				dtde.acceptDrop(3);
+				Transferable t = dtde.getTransferable();
+				for (DataFlavor flavor : t.getTransferDataFlavors()) {
+					if (flavor.getMimeType().startsWith("application/x-java-file-list")) {
+						try {
+							List<File> data = Helpers.cast(t.getTransferData(flavor));
+							if (append) {
+								for (File file : data) {
+									insert(comp, file.getAbsolutePath().concat("\n"));
+									if (callback != null) callback.accept(file);
+								}
+							} else {
+								String path = data.get(0).getAbsolutePath();
+								comp.setText(path);
+								if (callback != null) callback.accept(data.get(0));
+							}
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
+					}
+				}
+			}
+		});
+	}
+
+	@Nonnull
+	public static Document insert(JTextComponent component, String value) {
+		Document doc = component.getDocument();
+		try {
+			doc.insertString(doc.getLength(), value, null);
+		} catch (BadLocationException e) {}
+		return doc;
+	}
+
+	@Deprecated
 	public static void center(Window frame) {
 		Dimension dim = Toolkit.getDefaultToolkit().getScreenSize();
 		Rectangle bounds = frame.getBounds();

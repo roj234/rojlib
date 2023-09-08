@@ -29,7 +29,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
-import static roj.mapper.ConstMapper.DONT_LOAD_PREFIX;
+import static roj.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.mod.MCLauncher.*;
 import static roj.mod.Shared.*;
 

@@ -6,7 +6,7 @@ import roj.concurrent.Waitable;
 import roj.math.MutableLong;
 import roj.net.http.HttpRequest;
 import roj.text.CharList;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.text.UTFCoder;
 import roj.util.ByteList;
@@ -88,7 +88,7 @@ public final class IOUtil {
 	}
 
 	public static String readAs(InputStream in, String encoding) throws UnsupportedCharsetException, IOException {
-		try (Reader r = new StreamReader(in, encoding)) {
+		try (Reader r = new TextReader(in, encoding)) {
 			return getSharedCharBuf().readFully(r).toString();
 		}
 	}
@@ -105,13 +105,13 @@ public final class IOUtil {
 	}
 
 	public static String readString(File file) throws IOException {
-		try (StreamReader sr = StreamReader.auto(file)) {
+		try (TextReader sr = TextReader.auto(file)) {
 			return new CharList().readFully(sr).toString();
 		}
 	}
 
 	public static String readString(InputStream in) throws IOException {
-		try (StreamReader sr = StreamReader.auto(in)) {
+		try (TextReader sr = TextReader.auto(in)) {
 			return new CharList().readFully(sr).toString();
 		}
 	}

@@ -130,10 +130,7 @@ public final class GB18030 extends UnsafeCharset {
 
 			int c2 = u.getByte(ref,i++) & 255;
 			if (c2 <= 57) {
-				if (c2 < 48) {
-					i--;
-					break malformed;
-				}
+				if (c2 < 48) { i--; break malformed; }
 
 				if (max-i < 2) {
 					i -= 2;
@@ -143,25 +140,25 @@ public final class GB18030 extends UnsafeCharset {
 				int c3 = u.getByte(ref,i++) & 255;
 				int c4 = u.getByte(ref,i++) & 255;
 
-				if (c3 == 128 || c3 == 255 || c4 < 48 || c4 > 57) {
-					i -= 3;
-					break malformed;
-				}
+				if (c3 == 128 || c3 == 255 || c4 < 48 || c4 > 57) { i -= 3; break malformed; }
 
 				int cp = (((c-129) * 10 + (c2-48)) * 126 + c3 - 129) * 10 + c4 - 48;
 
 				if (cp <= 39419) {
 					out[off++] = TABLE[TAB2+cp];
 				} else {
-					cp -= 123464 + Character.MIN_SUPPLEMENTARY_CODE_POINT;
-					if (cp < 0 || cp > 1048575) {
-						i -= 3;
-						break malformed;
+					cp -= 123464;
+					if (cp < 0 || cp > Character.MAX_CODE_POINT) { i -= 3; break malformed; }
+
+					if (cp < Character.MIN_SUPPLEMENTARY_CODE_POINT) {
+						out[off++] = (char) cp;
+						continue;
 					}
+
 					if (outMax-off < 2) return (i-base) << 32;
 
-					out[off++] = (char)((cp>>>10) + Character.MIN_HIGH_SURROGATE);
-					out[off++] = (char)((cp&1023) + Character.MIN_LOW_SURROGATE);
+					out[off++] = Character.highSurrogate(cp);
+					out[off++] = Character.lowSurrogate(cp);
 				}
 			} else {
 				// double
@@ -183,8 +180,7 @@ public final class GB18030 extends UnsafeCharset {
 	}
 
 	@Override
-	public void unsafeValidate(Object ref, long i, int len, IntConsumer cs) {
-		long max = i+len;
+	public void unsafeValidate(Object ref, long i, long max, IntConsumer cs) {
 		int c;
 
 		while (i < max) {
@@ -239,24 +235,14 @@ public final class GB18030 extends UnsafeCharset {
 				if (cp <= 39419) {
 					cs.accept(TABLE[TAB2+cp]);
 				} else {
-					cp -= 123464 + Character.MIN_SUPPLEMENTARY_CODE_POINT;
-					if (cp < 0 || cp > 1048575) {
-						cs.accept(MALFORMED - 4);
-						i -= 3;
-						continue;
-					}
+					cp -= 123464;
+					if (cp < 0 || cp > Character.MAX_CODE_POINT) { i -= 3; cs.accept(MALFORMED - 4); continue; }
 
 					cs.accept(cp);
-					//out.append((char)((cp>>>10) + Character.MIN_HIGH_SURROGATE))
-					//   .append((char)((cp&1023) + Character.MIN_LOW_SURROGATE));
 				}
 			} else {
 				// double
-				if (c2 == 127 || c2 == 255 || c2 < 64) {
-					cs.accept(MALFORMED - 2);
-					i -= 1;
-					continue;
-				}
+				if (c2 == 127 || c2 == 255 || c2 < 64) { i -= 1; cs.accept(MALFORMED - 2); continue; }
 
 				int cp = (c-128) * (255-64) + (c2-64);
 				cs.accept(TABLE[cp]);

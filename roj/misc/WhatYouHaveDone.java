@@ -4,7 +4,7 @@ import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.StreamReader;
+import roj.text.TextReader;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,7 +25,7 @@ public class WhatYouHaveDone {
 		ToIntMap<String> map = new ToIntMap<>();
 		for (File file : IOUtil.findAllFiles(f, file -> file.getName().endsWith(".java"))) {
 			int size = 0;
-			try (StreamReader in = StreamReader.auto(file)) {
+			try (TextReader in = TextReader.auto(file)) {
 				while (in.readLine(sb)) {
 					if (sb.length() > 0) size++;
 					sb.clear();

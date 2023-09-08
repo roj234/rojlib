@@ -543,48 +543,47 @@ public final class DBA implements AutoCloseable {
 		if (table.length() == 0) throw new SQLException("table not defined");
 		if (rawField.isEmpty()) throw new SQLException("field not defined, or not for update");
 
-		Statement stm = connection().createStatement();
-		if (atomicInsert) transBegin();
+		List<?> values = manyValues.next();
 
 		CharList sb = IOUtil.ddLayeredCharBuf();
-		sb.append("INSERT INTO ").append(table).append(" (").append(field).append(") VALUES ");
+		sb.append("INSERT INTO ").append(table).append(" (").append(field).append(") VALUES (");
+		for (int i = 0; i < values.size();) {
+			sb.append('?');
+			if (++i == values.size()) break;
+			sb.append(',');
+		}
 
-		int headerLen = sb.length();
+		String sql = sb.append(')').toStringAndFree();
+		logs.ringAddLast(sql);
+
 		boolean success = false;
 		int successCount = 0;
-
-		int j = 0;
-		try {
+		try(PreparedStatement stm = connection().prepareStatement(sql)) {
 			while (true) {
-				List<?> values = manyValues.next();
-
-				sb.append('(');
-				int i = 0;
-				while (true) {
-					Object o = values.get(i);
-					if (o == null) sb.append("NULL");
-					else myescape(sb, o instanceof CharSequence ? (CharSequence) o : o.toString());
-					if (++i == values.size()) break;
-					sb.append(',');
+				for (int i = 0; i < values.size(); i++) {
+					Object x = values.get(i);
+					stm.setObject(i, values.get(i));
 				}
-				sb.append(')');
+				stm.addBatch();
 
-				if (sb.length() > 262144 || !manyValues.hasNext()) {
-					String sql = sb.toString();
-					logs.ringAddLast(sql);
-					successCount += defaultStm.executeUpdate(sql);
-					pullId(defaultStm);
-					sb.setLength(headerLen);
-					if (!manyValues.hasNext()) break;
-					continue;
-				}
-
-				sb.append(",\n");
+				if (!manyValues.hasNext()) break;
+				values = manyValues.next();
 			}
-		} finally {
-			sb._free();
-			defaultStm.close();
 
+			if (atomicInsert) transBegin();
+
+			int[] rs = stm.executeBatch();
+			success = true;
+			for (int v : rs) {
+				if (v == Statement.EXECUTE_FAILED) {
+					success = false;
+				} else {
+					successCount++;
+				}
+			}
+
+			pullId(stm);
+		} finally {
 			if (atomicInsert) transEnd(success);
 		}
 

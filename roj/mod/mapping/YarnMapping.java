@@ -5,6 +5,7 @@ import roj.io.IOUtil;
 import roj.mapper.Mapping;
 import roj.mapper.util.Desc;
 import roj.text.LineReader;
+import roj.text.LinedReader;
 import roj.text.TextUtil;
 import roj.text.UTFCoder;
 import roj.ui.CmdUtil;
@@ -41,7 +42,7 @@ public final class YarnMapping extends Mapping {
 		boolean any = false;
 		try (ZipFile zf = new ZipFile(file)) {
 			Enumeration<? extends ZipEntry> e = zf.entries();
-			String fp = "yarn-" + version + "/mappings/";
+			String fp = version == null ? "yarn-" : "yarn-"+version+"/mappings/";
 
 			while (e.hasMoreElements()) {
 				ZipEntry ze = e.nextElement();
@@ -128,12 +129,14 @@ public final class YarnMapping extends Mapping {
 		}
 	}
 
-	public void readIntermediaryMap(String name, LineReader slr, List<String> tmp) {
+	public void readIntermediaryMap(String name, LinedReader slr, List<String> tmp) throws IOException {
 		int i = 2;
 
-		slr.skipLines(1);
-		while (slr.hasNext()) {
-			String line = slr.next();
+		slr.readLine();
+		while (true) {
+			String line = slr.readLine();
+			if (line == null) break;
+
 			line = line.trim();
 			if (line.length() == 0 || line.startsWith("#")) continue;
 

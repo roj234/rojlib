@@ -3,16 +3,12 @@ package roj.text.logging;
 import roj.collect.MyHashMap;
 import roj.text.CharList;
 import roj.text.CharWriter;
-import roj.text.UTFCoder;
 import roj.text.logging.d.LogDestination;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
-import java.io.OutputStream;
+import java.io.PrintStream;
 import java.io.PrintWriter;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.*;
+import java.util.List;
 
 /**
  * @author Roj233
@@ -21,138 +17,91 @@ import java.nio.charset.*;
 final class LogHelper extends PrintWriter {
 	static final ThreadLocal<LogHelper> LOCAL = ThreadLocal.withInitial(LogHelper::new);
 
-	private static class ExcWriter extends CharWriter {
-		LogHelper o;
+	private static final class ExcWriter extends CharWriter {
+		private LogHelper o;
+		public final void flush() throws IOException { o.myOut.append(sb); sb.setLength(o.prefix); }
+		final void init(LogHelper h) { o = h; sb = h.sb; }
+	}
 
-		@Override
-		public void write(@Nonnull String str) throws IOException {
-			super.write(str);
-			if (str.equals(System.lineSeparator())) {
-				LogHelper o1 = o;
-				if (o1.os != null) {
-					if (o1.encoder == null) {
-						o1.uc.encodeTo(sb, o1.os);
-					} else {
-						o1.encodeCE(sb);
-					}
-				}
-				o1.dest.newLine(sb);
-				sb.setLength(o1.base);
-			}
-		}
+	static final class MyMap extends MyHashMap<String, Object> {
+		List<?> components;
 
-		public void init(LogHelper helper) {
-			o = helper;
-			sb = helper.uc.charBuf;
+		public Object get(Object key) {
+			String s = key.toString();
+			if (s.charAt(0) >= '0' && s.charAt(0) <= '9') return components.get(Integer.parseInt(s));
+			else return super.get(s);
 		}
 	}
 
-	final MyHashMap<String, Object> localMap = new MyHashMap<>();
-	final UTFCoder uc = new UTFCoder();
+	final MyMap tmpCtx = new MyMap();
 	final Object[] holder = new Object[10];
 
-	private LogDestination dest;
-	private OutputStream os;
+	int prefix;
+	Appendable myOut;
 
-	private final CharsetEncoder encoder;
-	private CharBuffer ic;
-	private final ByteBuffer ob;
-
-	private int base;
+	final CharList sb = new CharList(256);
 
 	public LogHelper() {
-		super(new ExcWriter());
+		super(new ExcWriter(), true);
 		((ExcWriter) out).init(this);
-		uc.byteBuf.ensureCapacity(1024);
-		ob = uc.byteBuf.nioBuffer();
-		Charset cs = Charset.defaultCharset();
-		if (cs == StandardCharsets.UTF_8) encoder = null;
-		else encoder = cs.newEncoder().onUnmappableCharacter(CodingErrorAction.REPLACE).onMalformedInput(CodingErrorAction.REPORT);
 	}
 
-	void doLog(LogContext ctx, Level level, CharSequence msg, Throwable ex, Object[] data, int length) {
-		CharList tmp = uc.charBuf;
-		tmp.clear();
-		ctx.fillIn(tmp, level);
+	final void doLog(LogContext ctx, Level level, CharSequence msg, Throwable ex, Object[] args, int argc) {
+		MyMap m = tmpCtx;
+		m.put("THREAD", Thread.currentThread().getName());
+		m.put("LEVEL", level.name());
+		m.put("NAME", ctx.name());
+		m.components = ctx.getComponents();
 
-		int len = tmp.length();
+		CharList sb = this.sb; sb.clear();
+		ctx.getPrefix().replace(m, sb);
+
+		int pref = sb.length();
+
+		LogDestination dst = ctx.destination();
 		try {
-			dest = ctx.destination();
-			os = dest.getAndLock();
+			Appendable ao = dst.getAndLock();
 			if (msg != null) {
-				if (length > 0) placePlaceHolder(tmp, msg, data, length, ctx.placeholderMissing());
-				else tmp.append(msg);
-				tmp.append(System.lineSeparator());
-				if (os != null) {
-					if (encoder == null) {
-						uc.encodeTo(tmp, os);
-					} else {
-						encodeCE(tmp);
-					}
-				}
-				dest.newLine(tmp);
-				tmp.setLength(len);
+				if (argc > 0) replaceArg(sb, msg.toString(), args, argc);
+				else sb.append(msg);
+				sb.append(System.lineSeparator());
+				ao.append(sb);
+				sb.setLength(pref);
 			}
 
 			if (ex != null) {
-				this.base = len;
+				prefix = pref;
+				myOut = ao;
 				ex.printStackTrace(this);
 			}
 
-			dest.unlock();
-			dest = null;
-		} catch (Exception e1) {
-			dest.unlock();
+			dst.unlockAndFlush();
+		} catch (Exception e) {
+			try { dst.unlockAndFlush(); } catch (Exception ignored) {}
 
-			this.base = len;
 			try {
-				uc.encodeTo("LogDestination " + dest.toString() + " has thrown an exception during logging\n", Logger.StdErr);
-				e1.printStackTrace(Logger.StdErr);
-			} catch (IOException ignored) {
-			} finally {
-				try {
-					os.close();
-				} catch (IOException ignored) {}
-			}
+				PrintStream prevErr = System.err;
+				prevErr.println("LogDestination [" + dst.getClass().getName() + "] has thrown an exception during logging");
+				e.printStackTrace(prevErr);
+			} catch (Exception ignored) {}
 		} finally {
-			os = null;
+			myOut = null;
 		}
 	}
 
-	void encodeCE(CharList tmp) throws IOException {
-		CharBuffer ic = this.ic;
-		if (ic == null || ic.array() != tmp.list) {
-			ic = tmp.toCharBuffer();
-		} else {
-			ic.limit(tmp.length()).position(0);
-		}
-
-		ByteBuffer ob = this.ob;
-		do {
-			ob.clear();
-			CoderResult cr = encoder.encode(ic, ob, true);
-			if (cr.isError()) break;
-			os.write(ob.array(), 0, ob.position());
-		} while (ic.hasRemaining());
-	}
-
-	static void placePlaceHolder(CharList tmp, CharSequence msg, Object[] data, int length, CharSequence missing) {
+	private static void replaceArg(CharList sb, String msg, Object[] args, int argc) {
 		int j = 0;
 		int prev = 0;
 		for (int i = 0; i < msg.length(); ) {
 			char c = msg.charAt(i++);
 			if (c == '{' && i < msg.length() && msg.charAt(i++) == '}') {
-				// put in bulk
-				tmp.append(msg, prev, i - 2);
+				sb.append(msg, prev, i-2);
 				prev = i;
 
-				if (j < length) {
-					tmp.append(data[j++]);
-				} else {
-					tmp.append(missing);
-				}
+				if (j < argc) sb.append(args[j++]);
+				else sb.append("{}");
 			}
 		}
-		tmp.append(msg, prev, msg.length());
+		sb.append(msg, prev, msg.length());
 	}
 }

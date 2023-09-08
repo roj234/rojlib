@@ -6,6 +6,7 @@ import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.*;
 
 import static java.lang.Character.*;
@@ -15,6 +16,8 @@ import static java.lang.Character.*;
  * @since 2021/6/19 0:14
  */
 public class TextUtil {
+	public static Charset DefaultOutputCharset = Charset.defaultCharset();
+
 	public static final MyBitSet HEX = MyBitSet.from("0123456789ABCDEFabcdef");
 
 	public static Map<String, String> parseLang(CharSequence content) {
