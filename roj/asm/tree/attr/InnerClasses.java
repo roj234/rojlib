@@ -8,6 +8,8 @@ import roj.asm.util.AccessFlag;
 import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Objects;
 
@@ -79,10 +81,13 @@ public final class InnerClasses extends Attribute {
 	}
 
 	public static class InnerClass {
-		public String self, parent, name;
+		@Nonnull
+		public String self;
+		@Nullable
+		public String parent, name;
 		public char flags;
 
-		public InnerClass(String self, String parent, String name, int flags) {
+		public InnerClass(@Nonnull String self, @Nullable String parent, @Nullable String name, int flags) {
 			this.self = self;
 			this.parent = parent;
 			this.name = name;
@@ -91,7 +96,7 @@ public final class InnerClasses extends Attribute {
 
 		public static InnerClass innerClass(String name, int flags) {
 			int i = name.lastIndexOf('$');
-			return new InnerClass(name, name.substring(i), name.substring(i + 1), flags);
+			return new InnerClass(name, name.substring(i), name.substring(i+1), flags);
 		}
 
 		public static InnerClass anonymous(String name, int flags) {
@@ -100,7 +105,7 @@ public final class InnerClasses extends Attribute {
 
 		public static InnerClass reference(String from, IClass referent) {
 			int i = referent.name().lastIndexOf('$');
-			return new InnerClass(referent.name(), from, referent.name().substring(i + 1), referent.modifier());
+			return new InnerClass(referent.name(), from, referent.name().substring(i+1), referent.modifier());
 		}
 
 		public String toString() {
@@ -109,7 +114,7 @@ public final class InnerClasses extends Attribute {
 			if (parent == null && name == null) {
 				sb.append("<anonymous>");
 			} else {
-				sb.append(parent.substring(parent.lastIndexOf('/') + 1)).append('.').append(name);
+				sb.append(parent.substring(parent.lastIndexOf('/')+1)).append('.').append(name);
 			}
 
 			if (name == null || name.indexOf('$') >= 0) {

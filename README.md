@@ -1,7 +1,8 @@
 
-# 2023/09/09 更新  
+# 2023/09/09 更新  搞了很多界面  
 ![roj.mapper.MapperUI](images\mapper v3.png)  
 ![roj.concurrent.Promise](images\promise.png)  
+![roj.mapper.ObfuscatorUI](images\ofbuscator.png)  
 ![roj.text.novel.NovelFrame](images\novel manager.png)
 
 
@@ -43,7 +44,7 @@
 ### 常量信息 ConstantData parseConstants(ByteList buf)  
 * +解析整个常量池，自此开始，信息不再是只读的了，  
 * +选择性解析方法, 简单的操作不需要解析Code属性，极大提高速度  
-示例见ConstMapper
+示例见roj.mapper.Mapper
 
 ### 完整信息 ConstantData parse(ByteList buf)  
 * 和ASM的tree模式差不多  
@@ -129,21 +130,24 @@ XEntry/CEntry均支持dot-get: `a.b[2].c`
 
 ```java
 
-import roj.config.serial.Name;
-import roj.config.serial.SerializerFactory;
-import roj.config.serial.SerializerFactoryFactory;
-import roj.config.serial.Via;
+import roj.config.ConfigMaster;
+import roj.config.serial.*;
+import roj.text.CharList;
 
+import java.io.File;
 import java.nio.charset.Charset;
 
 public class Test {
   public static void main(String[] args) throws Exception {
     // 为什么这么设计可以去看看SerializerFactoryFactory里面写了什么
-    SerializerFactory man = SerializerFactoryFactory.create();
+    SerializerFactory man = SerializerUtils.newSerializerFactory();
     // 自定义序列化方式(使用@As调用)
-    man.registerAsType("hex_color", int.class, new UserAdapter());
-    // 自定义序列化器
-    man.register(Charset.class, new UserAdapter());
+    SerializerUtils.registerAsRGB(man);
+    // 自定义序列化器(不是一定要匿名类)
+    man.register(Charset.class, new Object() {
+      public String serializeMyObject(Charset cs) { return cs.name(); }
+      public Charset deserMyObj(String s) { return Charset.forName(s); }
+    });
 
     CAdapter<Pojo> adapter = man.adapter(Pojo.class);
 
@@ -152,39 +156,31 @@ public class Test {
     p.charset = StandardCharsets.UTF_8;
     p.map = Collections.singletonMap("114514", Collections.singletonMap("1919810", 23333L));
 
-    // 可以换成 ToJson / ToYaml
-    ToEntry ser = new ToEntry();
-    adapter.write(ser, p);
-    System.out.println(ser.get().toJSONb());
-    /**
-     {
-     "charset": "UTF-8",
-     "myColor": "#aabbcc",
-     "map": {
-     "114514": {
-     "1919810": 23333
-     }
-     }
-     }
-     */
+    // simple
+    ConfigMaster.write(p, "C:\\test.yml", "YAML", adapter);
+    p = ConfigMaster.adapt(adapter, new File("C:\\test.yml"));
 
-    // 使用CCJson,CCYaml从文本读取(不生成无用对象),或者CEntry
-    System.out.println(adapter.read(new CCJson(), ser.get().toJSONb(), 0));
+    // or CVisitor
+    ToJson ser = new ToJson();
+    adapter.write(ser, p);
+    CharList json = ser.getValue();
+    System.out.println(json);
+
+    System.out.println(adapter.read(new CCJson(), json, 0));
   }
 
   public static class Pojo {
     // 自定义序列化方式
-    @As("hex_color")
+    @As("rgb")
     // 自定义序列化名称
     @Name("myColor")
-    // 上面的AdapterOverride就是为了写private
     private int color;
     // 通过getter或setter来访问字段
     @Via(get = "getCharset", set = "setCharset")
     public Charset charset;
     // 支持任意对象和多层泛型
     // 字段类型为接口和抽象类时，会用ObjAny序列化对象，会使用==表示对象的class
-    // 如果要保留这个Map的类型，那就（1）字段改成HashMap或者（2）开启DYNAMIC
+    // 如果要保留这个Map的类型，那就（1）字段改成HashMap(具体)或者（2）开启DYNAMIC
     public Map<String, Map<String, Object>> map;
 
     //使用transient避免被序列化
@@ -206,24 +202,6 @@ public class Test {
       return "Pojo{" + "color=" + color + '}';
     }
   }
-
-  public static class UserAdapter {
-    String doWrite(int c) {
-      return "#" + Integer.toHexString(c);
-    }
-
-    int doRead(String o) {
-      return Integer.parseInt(o.substring(1), 16);
-    }
-
-    String serializeMyObject(Charset cs) {
-      return cs.name();
-    }
-
-    Charset deserMyObj(String s) {
-      return Charset.forName(s);
-    }
-  }
 }
 
 
@@ -237,8 +215,8 @@ public class Test {
 对象位置: $.通用.  
 原因: 未预料的: ,  
   
-at roj.config.word.ITokenizer.err(AbstLexer.java:967)  
-at roj.config.word.ITokenizer.err(AbstLexer.java:963)  
+at roj.config.word.ITokenizer.err(ITokenizer.java:967)  
+at roj.config.word.ITokenizer.err(ITokenizer.java:963)  
 at roj.config.JSONParser.unexpected(JSONParser.java:232)  
 at roj.config.JSONParser.jsonObject(JSONParser.java:153)  
 at roj.config.JSONParser.jsonRead(JSONParser.java:217)  
@@ -283,14 +261,14 @@ new一个也行
     自己开发的javac, WIP  
 
 ## roj.mapper  
-  class映射(对方法/类改名)器 ConstMapper / CodeMapper  
+  class映射(对方法/类改名)器 Mapper  
    * 上面我说到ASM的ConstantData等级好就好在这里  
    * 它的速度是SpecialSource的十倍 _(2023/2/11更新:更快了)_  
 
-  class混淆器 `SimpleObfuscator`  
+  class混淆器 Obfuscator` 
    * 还支持反混淆，也就是把所有接受常量字符串的函数eval一遍  
-   * [x] 字符串
-   * [x] 字符串+StackTrace
+   * [ ] 字符串解密
+   * [ ] 字符串解密+堆栈
    * [ ] 流程分析(先保存至一个(本地)变量,也许很久之后再解密)
   
 ## roj.math  
@@ -521,7 +499,7 @@ public static void sendTitle(AbstractPlayer player, String title) {
   `EasyProgressBar` 进度条
   
 ## roj.util  
-  `DynByteBuf`，能扩展的ByteBuffer，也许Streamed，可作为Input/OutputStream, DataInput/Output
+  `DynByteBuf`，能扩展的ByteBuffer，也许Streamed，可作为Input/OutputStream, DataInput/Output  
   `ComboRandom`，多个种子的random  
   `GIFDecoder` 解码GIF文件  
   `VarMapperX` 变量ID分配器

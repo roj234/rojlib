@@ -561,19 +561,6 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		root.clear();
 	}
 
-	public Iterator<Entry<V>> mapItr() {
-		return new Itr<Entry<V>, Entry<V>>() {
-			{setupDepthFirst(root);}
-
-			@Override
-			public boolean computeNext() {
-				boolean v = _computeNextDepthFirst();
-				if (v) result = ent;
-				return v;
-			}
-		};
-	}
-
 	/**
 	 * @see #forEach(BiConsumer)
 	 */

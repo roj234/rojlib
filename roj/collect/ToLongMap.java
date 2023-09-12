@@ -14,7 +14,7 @@ import static roj.collect.IntMap.UNDEFINED;
  * @author Roj234
  * @since 2021/6/18 11:6
  */
-public class ToLongMap<K> extends AbstractMap<K, Long> implements MapLike<ToLongMap.Entry<K>>, ToLongFunction<K> {
+public class ToLongMap<K> extends AbstractMap<K, Long> implements _Generic_Map<ToLongMap.Entry<K>>, ToLongFunction<K> {
 	@Override
 	public long applyAsLong(K value) {
 		return getOrDefault(value, -1L);
@@ -29,11 +29,7 @@ public class ToLongMap<K> extends AbstractMap<K, Long> implements MapLike<ToLong
 		return entry == null ? l : entry.v;
 	}
 
-	public Set<Entry<K>> selfEntrySet() {
-		return new EntrySet<>(this);
-	}
-
-	public static class Entry<K> implements MapLikeEntry<Entry<K>>, Map.Entry<K, Long> {
+	public static class Entry<K> implements _Generic_Entry<Entry<K>>, Map.Entry<K, Long> {
 		public K k;
 		public long v;
 
@@ -71,7 +67,7 @@ public class ToLongMap<K> extends AbstractMap<K, Long> implements MapLike<ToLong
 		public Entry<K> next;
 
 		@Override
-		public Entry<K> nextEntry() {
+		public Entry<K> __next() {
 			return next;
 		}
 
@@ -114,19 +110,12 @@ public class ToLongMap<K> extends AbstractMap<K, Long> implements MapLike<ToLong
 		if (this.entries != null) resize();
 	}
 
-	@Nonnull
-	public Set<Map.Entry<K, Long>> entrySet() {
-		return Helpers.cast(new EntrySet<>(this));
-	}
+	public int size() { return size; }
 
-	public int size() {
-		return size;
-	}
-
-	@Override
-	public void removeEntry0(Entry<K> entry) {
-		remove(entry.k);
-	}
+	public Set<Map.Entry<K, Long>> entrySet() { return Helpers.cast(selfEntrySet()); }
+	public Set<Entry<K>> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public _Generic_Entry<?>[] __entries() { return entries; }
+	public void __remove(Entry<K> entry) { remove(entry.k); }
 
 	@SuppressWarnings("unchecked")
 	public void putAll(@Nonnull Map<? extends K, ? extends Long> otherMap) {
@@ -353,48 +342,6 @@ public class ToLongMap<K> extends AbstractMap<K, Long> implements MapLike<ToLong
 					}
 				}
 			} else {Arrays.fill(entries, null);}
-		}
-	}
-
-	static class EntrySet<K> extends AbstractSet<Entry<K>> {
-		private final ToLongMap<K> map;
-
-		public EntrySet(ToLongMap<K> map) {
-			this.map = map;
-		}
-
-		public final int size() {
-			return map.size();
-		}
-
-		public final void clear() {
-			map.clear();
-		}
-
-		@Nonnull
-		public final Iterator<Entry<K>> iterator() {
-			return isEmpty() ? Collections.emptyIterator() : Helpers.cast(new EntryItr<>(map.entries, map));
-		}
-
-		@SuppressWarnings("unchecked")
-		public final boolean contains(Object o) {
-			if (!(o instanceof ToLongMap.Entry)) return false;
-			ToLongMap.Entry<?> e = (ToLongMap.Entry<?>) o;
-			Object key = e.getKey();
-			ToLongMap.Entry<?> comp = map.getEntry((K) key);
-			return comp != null && comp.v == e.v;
-		}
-
-		public final boolean remove(Object o) {
-			if (o instanceof ToLongMap.Entry) {
-				ToLongMap.Entry<?> e = (ToLongMap.Entry<?>) o;
-				return map.remove(e.k) != null;
-			}
-			return false;
-		}
-
-		public final Spliterator<Entry<K>> spliterator() {
-			return Spliterators.spliterator(iterator(), size(), 0);
 		}
 	}
 }

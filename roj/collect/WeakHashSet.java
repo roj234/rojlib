@@ -1,6 +1,7 @@
 package roj.collect;
 
 import roj.math.MathUtils;
+import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.lang.ref.ReferenceQueue;
@@ -12,147 +13,149 @@ import java.util.Iterator;
 
 /**
  * @author Roj234
- * @since 2021/5/16 14:34
+ * @since 2021/5/27 0:8
  */
-public class WeakHashSet<K> extends AbstractSet<K> implements MapLike<WeakHashSet.Entry> {
+public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _Generic_Map<WeakHashSet.Entry> {
 	public static <T> WeakHashSet<T> newWeakHashSet() {
 		return new WeakHashSet<>();
 	}
 
-	private final ReferenceQueue<Object> queue = new ReferenceQueue<>();
+	protected final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 
-	protected static class Entry extends WeakReference<Object> implements MapLikeEntry<Entry> {
-		public Entry(Object referent, ReferenceQueue<Object> queue) { super(referent, queue); }
-		int hash;
+	public static class Entry extends WeakReference<Object> implements _Generic_Entry<Entry> {
+		public Entry(Object key, ReferenceQueue<Object> queue) {
+			super(key, queue);
+			this.hash = System.identityHashCode(key);
+		}
+
+		protected final int hash;
+
 		Entry next;
-
-		@Override
-		public Entry nextEntry() { return next; }
+		public final Entry __next() { return next; }
 	}
 
 	protected Entry[] entries;
 	protected int size = 0;
 
-	int length = 2;
+	int mask = 1;
 
-	public WeakHashSet() {
-		this(16);
-	}
+	public WeakHashSet() { this(16); }
+	public WeakHashSet(int size) { ensureCapacity(size); }
 
-	/**
-	 * @param size 初始化大小
-	 */
-	public WeakHashSet(int size) {
-		ensureCapacity(size);
-	}
-
-	public void ensureCapacity(int size) {
-		if (size <= 0) throw new NegativeArraySizeException(String.valueOf(size));
-		if (size < length) return;
-		length = MathUtils.getMin2PowerOf(size);
+	public final void ensureCapacity(int size) {
+		if (size < 0) throw new NegativeArraySizeException(String.valueOf(size));
+		if (size <= mask) return;
+		mask = MathUtils.getMin2PowerOf(size)-1;
 
 		if (entries != null) resize();
 	}
 
-	private static class SetItr<K> extends MapItr<Entry> implements Iterator<K> {
-		public SetItr(WeakHashSet<K> map) {
-			super(map.entries, map);
-		}
-
+	private static final class SetItr<K> extends MapItr<Entry> implements Iterator<K> {
+		SetItr(WeakHashSet<K> set) { super(set); }
 		@Override
 		@SuppressWarnings("unchecked")
-		public K next() {
-			return (K) nextT().get();
-		}
+		public K next() { return (K) nextT().get(); }
 	}
 
 	@Override
-	public int size() {
-		doEvict();
-		return size;
-	}
+	public int size() { doEvict(); return size; }
 
-	@Override
-	public void removeEntry0(Entry entry) {
-		remove(entry.get());
-	}
+	public final _Generic_Entry<?>[] __entries() { return entries; }
+	public final void __remove(Entry entry) { remove(entry.get()); }
 
 	public void resize() {
-		Entry[] newEntries = new Entry[length];
-		Entry entry;
-		Entry next;
+		Entry[] newEntries = new Entry[mask+1];
+
+		Entry entry, next;
 		int i = 0, j = entries.length;
 		for (; i < j; i++) {
 			entry = entries[i];
 			entries[i] = null;
+
 			while (entry != null) {
 				next = entry.next;
+
 				if (entry.get() != null) {
-					int newKey = entry.hash & (length - 1);
+					int newKey = entry.hash&mask;
 					Entry old = newEntries[newKey];
 					newEntries[newKey] = entry;
-					entry.next = old;
+					entry.next = Helpers.cast(old);
+				} else {
+					size--;
 				}
+
 				entry = next;
 			}
 		}
 
-		this.entries = newEntries;
+		entries = newEntries;
 	}
 
 	@Override
-	public boolean add(K key) {
-		if (key == null) return false;
+	public final boolean add(K key) { return findOrAdd(key, true).get() == key; }
+	@Override
+	@SuppressWarnings("unchecked")
+	public final boolean contains(Object o) { return findOrAdd((K) o, false) != null; }
+	@Override
+	@SuppressWarnings("unchecked")
+	public final K find(K k) {
+		Entry entry = findOrAdd(k, false);
+		return entry == null ? k : (K) entry.get();
+	}
+	@Override
+	@SuppressWarnings("unchecked")
+	public final K intern(K k) { return (K) findOrAdd(k, true).get(); }
+
+	protected final Entry findOrAdd(K key, boolean doAdd) {
+		if (key == null) throw new NullPointerException("key");
 
 		doEvict();
 
-		int hash = hashCode(key);
-		if (entries == null) entries = new Entry[length];
-
-		int index = hash & (length - 1);
-		Entry entry = entries[index];
-
-		if (entry == null) {
-			(entries[index] = new Entry(key, queue)).hash = hash;
-			size++;
-			return true;
-		}
-
-		while (true) {
-			if (equals(entry, key)) return false;
-
-			if (entry.next == null) break;
-			entry = entry.next;
-		}
-
-		if (size > length * 0.8f) {
-			length <<= 1;
+		if (entries == null) entries = new Entry[mask+1];
+		else if (size > mask * 0.8f) {
+			mask = ((mask+1) << 1) - 1;
 			resize();
 		}
 
-		(entry.next = new Entry(key, queue)).hash = hash;
+		int hash = System.identityHashCode(key);
+
+		Entry prev = entries[mask&hash];
+		if (prev != null) {
+			while (true) {
+				if (prev.get() == key) return prev;
+
+				if (prev.next == null) break;
+				prev = prev.next;
+			}
+		}
+
+		if (!doAdd) return null;
+
+		Entry entry = createEntry(key, queue);
+
+		if (prev == null) entries[mask&hash] = entry;
+		else prev.next = entry;
+
 		size++;
-		return true;
+		return entry;
 	}
 
-	protected int hashCode(Object key) { return key.hashCode(); }
-	protected boolean equals(Entry a, Object b) { Object o = a.get(); return o != null && o.equals(b); }
-
 	@Override
-	public boolean remove(Object key) {
-		if (key == null) return false;
+	public final boolean remove(Object key) {
+		if (key == null || entries == null) return false;
 
 		doEvict();
 
-		if (entries == null) return false;
-		int index = hashCode(key) & (length-1);
+		int index = System.identityHashCode(key)&mask;
 		Entry curr = entries[index];
 		Entry prev = null;
 		while (curr != null) {
-			if (equals(curr, key)) {
+			if (curr.get() == key) {
 				if (prev == null) entries[index] = null;
 				else prev.next = curr.next;
+				size--;
 
+				entryRemoved(curr, false);
 				return true;
 			}
 			prev = curr;
@@ -162,54 +165,41 @@ public class WeakHashSet<K> extends AbstractSet<K> implements MapLike<WeakHashSe
 		return false;
 	}
 
-	@Override
-	public boolean contains(Object key) {
-		if (key == null || entries == null) return false;
-
-		doEvict();
-
-		Entry entry = entries[hashCode(key) & (length-1)];
-		while (entry != null) {
-			if (equals(entry, key)) return true;
-			entry = entry.next;
-		}
-		return false;
-	}
-
 	@Nonnull
-	@Override
-	public Iterator<K> iterator() {
-		return isEmpty() ? Collections.emptyIterator() : new SetItr<>(this);
-	}
+	public Iterator<K> iterator() { doEvict(); return isEmpty() ? Collections.emptyIterator() : new SetItr<>(this); }
 
 	public void doEvict() {
-		Entry remove;
+		Entry entry;
+		outer:
+		while ((entry = (Entry) queue.poll()) != null) {
+			entryRemoved(entry, true);
 
-		o:
-		while ((remove = (Entry) queue.poll()) != null) {
 			if (entries == null) continue;
 
-			// get prev
-			Entry curr = entries[remove.hash & (length-1)];
+			Entry curr = entries[entry.hash&mask];
 			Entry prev = null;
-			while (curr != remove) {
-				if (curr == null) continue o;
-
+			while (curr != entry) {
+				if (curr == null) continue outer;
 				prev = curr;
 				curr = curr.next;
 			}
 
-			if (prev == null) entries[remove.hash & (length-1)] = null;
-			else prev.next = remove.next;
+			if (prev == null) entries[entry.hash&mask] = null;
+			else prev.next = Helpers.cast(curr.next);
 			size--;
 		}
 	}
 
 	@Override
 	public void clear() {
+		doEvict();
+
 		size = 0;
 		if (entries != null) Arrays.fill(entries, null);
 
-		while (queue.poll() != null) ;
+		doEvict();
 	}
+
+	protected Entry createEntry(K key, ReferenceQueue<Object> queue) { return new Entry(key, queue); }
+	protected void entryRemoved(Entry entry, boolean byGC) {}
 }

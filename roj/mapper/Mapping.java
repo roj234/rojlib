@@ -5,17 +5,15 @@ import roj.io.IOUtil;
 import roj.mapper.util.Desc;
 import roj.mapper.util.MapperList;
 import roj.math.MutableInt;
-import roj.text.CharList;
-import roj.text.LinedReader;
-import roj.text.TextReader;
-import roj.text.TextUtil;
+import roj.text.*;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
 import javax.annotation.Nullable;
-import java.io.*;
-import java.nio.charset.StandardCharsets;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.*;
 
 /**
@@ -102,11 +100,8 @@ public class Mapping {
 					if (!q.get(0).equals(q.get(1))) {
 						if (packageMap == null) packageMap = new TrieTree<>();
 
-						if (reverse) {
-							packageMap.put(q.get(1), q.get(0));
-						} else {
-							packageMap.put(q.get(0), q.get(1));
-						}
+						if (reverse) packageMap.put(q.get(1), q.get(0));
+						else packageMap.put(q.get(0), q.get(1));
 					}
 					break;
 				case "CL": // class
@@ -137,31 +132,27 @@ public class Mapping {
 						methodMap.put(new Desc(q.get(0).substring(0, id), q.get(0).substring(id + 1), q.get(1)), q.get(2).substring(id2 + 1));
 					}
 					break;
-				case "FL":
-					if (q.size() == 2) {
-						if (checkFieldType) throw new IllegalArgumentException("FL(2) is not supported when checkFieldType=true");
-						if (reverse) {
-							fieldMap.put(new Desc(last1, q.get(1)), q.get(0));
-						} else {
-							fieldMap.put(new Desc(last0, q.get(0)), q.get(1));
-						}
-					} else if (q.size() == 4) {
-						FindMap<Desc, String> dst = fieldMap;
-						if (reverse) {
-							dst.put(new Desc(last1, q.get(2), !checkFieldType ? "" : q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
-						} else {
-							dst.put(new Desc(last0, q.get(0), !checkFieldType ? "" : q.get(1)), q.get(2));
-						}
+				case "FL": case "F":
+					FindMap<Desc, String> fm = fieldMap;
+					switch (q.size()) {
+						case 2:
+							if (checkFieldType) throw new IllegalArgumentException("FL(2) is not supported when checkFieldType=true");
+							if (reverse) fm.put(new Desc(last1, q.get(1)), q.get(0));
+							else fm.put(new Desc(last0, q.get(0)), q.get(1));
+						break;
+						case 3: q.add("~");
+						case 4:
+							if (reverse) fm.put(new Desc(last1, q.get(2), !checkFieldType ? "" : q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
+							else fm.put(new Desc(last0, q.get(0), !checkFieldType ? "" : q.get(1)), q.get(2));
+						break;
 					}
 					break;
-				case "ML":
-					FindMap<Desc, String> dst = methodMap;
-					if (reverse) {
-						dst.put(new Desc(last1, q.get(2), q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
-					} else {
-						dst.put(new Desc(last0, q.get(0), q.get(1)), q.get(2));
-					}
-					break;
+				case "ML": case "M":
+					FindMap<Desc, String> mm = methodMap;
+					if (q.size() == 3) q.add("~");
+					if (reverse) mm.put(new Desc(last1, q.get(2), q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
+					else mm.put(new Desc(last0, q.get(0), q.get(1)), q.get(2));
+				break;
 				default:
 					System.err.println("Unsupported type: " + s);
 			}
@@ -169,9 +160,7 @@ public class Mapping {
 	}
 
 	public void saveMap(File file) throws IOException {
-		try (OutputStreamWriter ob = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {
-			saveMap(ob);
-		}
+		try (TextWriter ob = TextWriter.to(file)) { saveMap(ob); }
 	}
 	public void saveMap(Appendable ob) throws IOException {
 		staticSaveMap(classMap, methodMap.entrySet(), fieldMap.entrySet(), checkFieldType, ob);
@@ -184,43 +173,43 @@ public class Mapping {
 
 		MapUtil U = MapUtil.getInstance();
 		for (Map.Entry<Desc, String> entry : fieldMap) {
-			Desc desc = entry.getKey();
+			Desc d = entry.getKey();
 
-			String cn = desc.owner;
-			CharList cl = classFos.get(cn);
-			if (cl == null) {
-				classFos.put(cn, cl = new CharList(100));
-			}
-			String param = U.mapFieldType(classMap, desc.param);
+			String cn = d.owner;
+			CharList sb = classFos.get(cn);
+			if (sb == null) classFos.put(cn, sb = new CharList(100));
+
+			String param = U.mapFieldType(classMap, d.param);
 
 			String v = entry.getValue();
 			// don't write unchanged field
-			if (v.equals(desc.name) && param == null) continue;
+			if (v.equals(d.name) && param == null) continue;
 
 			if (checkFieldType) {
-				cl.append("FL: ").append(desc.name).append(' ').append(desc.param).append(' ')
-				  .append(v.equals(desc.name) ? "~" : v).append(' ').append(param == null || param.equals(desc.param) ? "~" : param).append('\n');
+				sb.append("F: ").append(d.name).append(' ').append(d.param).append(' ').append(v);
+				if (param != null) sb.append(' ').append(param);
+				sb.append('\n');
 			} else {
-				cl.append("FL: ").append(desc.name).append(' ').append(v).append('\n');
+				sb.append("F: ").append(d.name).append(' ').append(v).append('\n');
 			}
 		}
 
 		for (Map.Entry<Desc, String> entry : methodMap) {
-			Desc desc = entry.getKey();
+			Desc d = entry.getKey();
 
-			String cn = desc.owner;
-			CharList cl = classFos.get(cn);
-			if (cl == null) {
-				classFos.put(cn, cl = new CharList(100));
-			}
-			String param = U.mapMethodParam(classMap, desc.param);
+			String cn = d.owner;
+			CharList sb = classFos.get(cn);
+			if (sb == null) classFos.put(cn, sb = new CharList(100));
+
+			String param = U.mapMethodParam(classMap, d.param);
 
 			String v = entry.getValue();
 			// don't write unchanged method
-			if (v.equals(desc.name) && param.equals(desc.param)) continue;
+			if (v.equals(d.name) && param.equals(d.param)) continue;
 
-			cl.append("ML: ").append(desc.name).append(' ').append(desc.param).append(' ')
-			  .append(entry.getValue()).append(' ').append(param.equals(desc.param) ? "~" : param).append('\n');
+			sb.append("M: ").append(d.name).append(' ').append(d.param).append(' ').append(entry.getValue());
+			if (!param.equals(d.param)) sb.append(' ').append(param);
+			sb.append('\n');
 		}
 
 		for (Map.Entry<String, String> entry : classMap.entrySet()) {
@@ -278,7 +267,7 @@ public class Mapping {
 	}
 
 	public void applyPackageRename() {
-		if (packageMap == null) return;
+		if (packageMap == null || packageMap.isEmpty()) return;
 
 		for (Iterator<Map.Entry<String, String>> itr = classMap.entrySet().iterator(); itr.hasNext(); ) {
 			Map.Entry<String, String> entry = itr.next();
@@ -294,9 +283,6 @@ public class Mapping {
 		packageMap.clear();
 	}
 
-	/**
-	 * SrgMap data
-	 */
 	public final Flippable<String, String> getClassMap() {
 		return classMap;
 	}

@@ -87,7 +87,7 @@ public class TextDeDup {
 		basePath = new File(args[1]);
 		pathLen = basePath.getAbsolutePath().length()+1;
 
-		sf = SerializerFactoryFactory.create();
+		sf = SerializerUtils.newSerializerFactory();
 		sf.register(File.class, new Object() {
 			public String ser(File f) { return f.getAbsolutePath().substring(pathLen); }
 			public File des(String s) { return new File(basePath, s); }

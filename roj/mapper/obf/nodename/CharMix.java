@@ -1,4 +1,4 @@
-package roj.mapper.obf.policy;
+package roj.mapper.obf.nodename;
 
 import roj.text.CharList;
 
@@ -34,7 +34,7 @@ public final class CharMix extends SimpleNamer {
 		CharMix mix = new CharMix();
 		mix.min = min;
 		mix.max = max;
-		mix.chars = "-一—﹍﹎＿-_ˉ—".toCharArray();
+		mix.chars = "ˉ-—一﹍﹎＿_".toCharArray();
 		return mix;
 	}
 

@@ -5,12 +5,6 @@ import roj.asm.cst.Constant;
 import roj.asm.cst.CstClass;
 import roj.asm.cst.CstRef;
 import roj.asm.cst.CstString;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.IClass;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.AttrUnknown;
-import roj.asm.util.AccessFlag;
-import roj.asm.util.Context;
 import roj.asm.visitor.CodeVisitor;
 import roj.collect.SimpleList;
 import roj.mapper.util.Desc;
@@ -19,64 +13,51 @@ import java.util.List;
 
 /**
  * 排除常见的不能混淆的情况
+ * TODO: StackAnalyzer
  *
  * @author Roj233
  * @since 2022/2/20 22:18
  */
 public class MyExcluder extends CodeVisitor {
-	public static boolean isClassExclusive(IClass clz, Desc desc) {
-		if (0 != (clz.modifier() & AccessFlag.ENUM)) {
-			if (desc.name.equals("values")) return desc.param.startsWith("()");
-			if (desc.name.equals("valueOf")) return desc.param.startsWith("(Ljava/lang/String;)");
-			if (desc.name.equals("VALUES")) return desc.param.startsWith("L");
-		}
-		return false;
-	}
+	public List<Desc> excludes = new SimpleList<>();
 
-	public static List<Desc> checkAtomics(List<Context> arr) {
-		MyExcluder cv = new MyExcluder();
-		for (int i = 0; i < arr.size(); i++) {
-			ConstantData data = arr.get(i).getData();
-			List<? extends MethodNode> methods = data.methods;
-
-			for (int j = 0; j < methods.size(); j++) {
-				AttrUnknown code = (AttrUnknown) methods.get(j).attrByName("Code");
-				if (code == null) continue;
-				cv.visitCopied(data.cp, code.getRawData());
-			}
-		}
-		return cv.excludes;
-	}
-
-	List<Desc> excludes = new SimpleList<>();
-	String ldcVal1, ldcVal2;
-	int ldcPos;
-	int stack;
+	private final List<String> ldc = new SimpleList<>();
+	private int ldcPos;
 
 	@Override
 	public void ldc(byte code, Constant c) {
 		switch (c.type()) {
 			case Constant.STRING:
+				ldc.add(((CstString) c).name().str());
 				ldcPos = bci;
-				ldcVal1 = ((CstString) c).name().str();
-				stack = 2;
-				break;
+			break;
 			case Constant.CLASS:
-				if (stack-- > 0) return;
-				ldcVal2 = ((CstClass) c).name().str();
-				break;
+				ldc.add(((CstClass) c).name().str());
+				ldcPos = bci;
+			break;
 		}
 	}
 
 	@Override
 	public void invoke(byte code, CstRef method) {
-		String name = method.className();
-		if (code == Opcodes.INVOKESTATIC) {
-			if (name.startsWith("java/util/concurrent/atomic/Atomic") && name.endsWith("FieldUpdater") && bci == ldcPos + 3) {
-				excludes.add(new Desc(ldcVal2, ldcVal1));
-			//} else if (name.equals("roj/reflect/DirectAccessor") && bci == ldcPos) {
+		String owner = method.className();
+		String name = method.descName();
+		String param = method.descType();
 
+		if (bci - ldcPos <= 3 && ldc.size() > 0) {
+			if (code == Opcodes.INVOKESTATIC) {
+				if (owner.startsWith("java/util/concurrent/atomic/Atomic") && owner.endsWith("FieldUpdater") && ldc.size() >= 2) {
+					excludes.add(new Desc(ldc.get(ldc.size()-(owner.endsWith("ReferenceFieldUpdater") ? 3 : 2)), ldc.get(ldc.size()-1), "", 1));
+				} else if (owner.equals("java/lang/Class") && name.equals("forName")) {
+					excludes.add(new Desc(ldc.get(ldc.size()-1).replace('.', '/'), "", "", 2));
+				} else if (owner.equals("roj/reflect/DirectAccessor") && name.equals("builder")) {
+					excludes.add(new Desc(ldc.get(ldc.size()-1), "", "", 3));
+				}
+			} else if (owner.equals("java/lang/Class") && name.startsWith("get") && (name.endsWith("Field") || name.endsWith("Method")) && ldc.size() >= 2) {
+				excludes.add(new Desc(ldc.get(0), ldc.get(1), "", 4));
 			}
 		}
+
+		ldc.clear();
 	}
 }

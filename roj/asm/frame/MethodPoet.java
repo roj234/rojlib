@@ -9,7 +9,6 @@ import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.insn.*;
 import roj.asm.type.LocalVariable;
 import roj.asm.type.Type;
-import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.InsnHelper;
 import roj.asm.visitor.CodeWriter;
@@ -461,7 +460,7 @@ public class MethodPoet extends Interpreter {
 			case -1:
 				throw new IllegalStateException();
 			case -2:
-				return cast(t.array() > 0 ? TypeHelper.getField(t) : t.owner);
+				return cast(t.getActualClass());
 			case DOUBLE:
 			case FLOAT:
 			case LONG:

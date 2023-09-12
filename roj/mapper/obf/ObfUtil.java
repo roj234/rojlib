@@ -131,6 +131,16 @@ public class ObfUtil {
 		return new String(array);
 	}
 
+	// todo:
+	private static String newTextEncodeMethod(String text, String className, String methodName, int lineNumber) {
+		return "";
+	}
+	// 如果你能执行函数，那上面和下面的安全性也差不多
+	// 但是int做key就不好通过（通用的）invoke指令过滤找到
+	// 而且弄点运行时常量还可以进一步阻止解码
+	private static String newTextDecodeMethod(int stringId) {
+		return "";
+	}
 	/*
 	要想了解什么是控制流平坦化(control flow flatten)，可以找论文"obfuscating c++ programs via control flow flattening"了解。
 	基本思想是让所有的基本块都有共同的前驱块，而该前驱块进行基本块的分发，分发用switch语句，依赖于switch变量进行分发。

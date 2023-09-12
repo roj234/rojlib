@@ -1,13 +1,13 @@
 package roj.mapper;
 
 import roj.collect.ToIntMap;
-import roj.io.IOUtil;
 import roj.text.CharList;
 
 public class InheritableRuleset {
 	public static final int IMPORTANT = 0x80000000;
 	private final ToIntMap<CharSequence> map = new ToIntMap<>();
 	private final String delimiter;
+	private final CharList sb = new CharList();
 
 	public InheritableRuleset() { this("|"); }
 	public InheritableRuleset(String delimiter) {this.delimiter = delimiter;}
@@ -23,13 +23,14 @@ public class InheritableRuleset {
 		ToIntMap.Entry<CharSequence> ent = map.getEntry(level);
 		if (ent != null) return ent.v;
 
-		CharList sb = IOUtil.ddLayeredCharBuf().append(level);
+		this.sb.clear();
+		CharList sb = this.sb.append(level);
 		boolean hasVal = false;
 
 		while (true) {
-			int i = sb.lastIndexOf(delimiter);
+			int i = sb.lastIndexOf(delimiter, sb.length()-2);
 			if (i < 0) break;
-			sb.setLength(i);
+			sb.setLength(i+1);
 
 			ent = map.getEntry(sb);
 			if (ent == null) continue;
@@ -46,7 +47,6 @@ public class InheritableRuleset {
 			}
 		}
 
-		sb._free();
 		return def;
 	}
 }

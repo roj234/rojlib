@@ -14,6 +14,7 @@ import roj.mod.mapping.OjngMapping;
 import roj.mod.mapping.TSrgMapping;
 import roj.mod.mapping.YarnMapping;
 import roj.text.TextReader;
+import roj.ui.DoubleClickHelper;
 import roj.ui.UIUtil;
 import roj.util.Helpers;
 
@@ -31,6 +32,7 @@ import java.util.Random;
  */
 public class MappingUI extends JFrame {
 	private static final DefaultListModel<String> previewList = new DefaultListModel<>();
+
 	private static int alertShown;
 	private static final DefaultListModel<NamedMapping> mappings = new DefaultListModel<>();
 	private static final class NamedMapping {
@@ -45,11 +47,8 @@ public class MappingUI extends JFrame {
 
 
 	private void uiLoad(ActionEvent e) {
-		File input = new File(uiPath.getText());
-		if (uiPath.getText().isEmpty() || !input.isFile()) {
-			JOptionPane.showMessageDialog(this, "输入不存在", "IO错误", JOptionPane.ERROR_MESSAGE);
-			return;
-		}
+		File input = UIUtil.fileLoadFrom("注：先选择类型再点击加载！" + uiMappingType.getSelectedItem().toString(), this);
+		if (input == null) return;
 
 		try {
 			load(input);
@@ -106,7 +105,6 @@ public class MappingUI extends JFrame {
 			break;
 		}
 
-		uiPath.setText("");
 		NamedMapping name = getNamedMapping();
 		name.mapping = m;
 		mappings.addElement(name);
@@ -182,15 +180,11 @@ public class MappingUI extends JFrame {
 	}
 
 	private void uiSave(ActionEvent e) {
-		JFileChooser jfc = new JFileChooser(new File("."));
-		jfc.setDialogType(JFileChooser.SAVE_DIALOG);
-		jfc.setDialogTitle("选择保存位置");
-
-		int status = jfc.showOpenDialog(this);
-		if (status != JFileChooser.APPROVE_OPTION) return;
+		File file = UIUtil.fileSaveTo("保存映射表", "mapping.map", MappingUI.this);
+		if (file == null) return;
 
 		try {
-			uiMappingList.getSelectedValue().mapping.saveMap(jfc.getSelectedFile());
+			uiMappingList.getSelectedValue().mapping.saveMap(file);
 		} catch (IOException ex) {
 			ex.printStackTrace();
 		}
@@ -198,8 +192,6 @@ public class MappingUI extends JFrame {
 
 	public MappingUI() {
 		initComponents();
-
-		UIUtil.dropFilePath(uiPath, null, false);
 
 		DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
 		model.addElement("srg/xsrg");
@@ -226,25 +218,10 @@ public class MappingUI extends JFrame {
 			uiSave.setEnabled(one);
 		});
 
-		uiMappingList.addMouseListener(new MouseAdapter() {
-			long prevClick;
-			int prevId;
-
-			@Override
-			public void mousePressed(MouseEvent e) {
-				int[] pp = uiMappingList.getSelectedIndices();
-				if (pp.length != 1) return;
-
-				if (pp[0] == prevId && System.currentTimeMillis() - prevClick < 300) {
-					uiDel2.setVisible(false);
-					preview(uiMappingList.getSelectedValue());
-					return;
-				}
-
-				prevId = pp[0];
-				prevClick = System.currentTimeMillis();
-			}
-		});
+		uiMappingList.addMouseListener(new DoubleClickHelper(uiMappingList, 300, (e) -> {
+			uiDel2.setVisible(false);
+			preview(uiMappingList.getSelectedValue());
+		}));
 
 		dlgPreview.addWindowListener(new WindowAdapter() {
 			@Override
@@ -289,8 +266,6 @@ public class MappingUI extends JFrame {
 			}
 		}
 
-		setEnabled(false);
-		dlgPreview.pack();
 		dlgPreview.show();
 	}
 
@@ -298,7 +273,6 @@ public class MappingUI extends JFrame {
 		UIUtil.systemLook();
 		MappingUI f = new MappingUI();
 
-		f.pack();
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		f.show();
 	}
@@ -307,12 +281,10 @@ public class MappingUI extends JFrame {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
 		JScrollPane scrollPane1 = new JScrollPane();
 		uiMappingList = new JList<>();
-		uiPath = new JTextField();
+		uiName = new JTextField();
 		uiMappingType = new JComboBox<>();
 		JLabel label1 = new JLabel();
 		JButton uiLoad = new JButton();
-		uiName = new JTextField();
-		JLabel label2 = new JLabel();
 		uiDel = new JButton();
 		uiFlip = new JButton();
 		uiMerge = new JButton();
@@ -335,14 +307,14 @@ public class MappingUI extends JFrame {
 			scrollPane1.setViewportView(uiMappingList);
 		}
 		contentPane.add(scrollPane1);
-		scrollPane1.setBounds(15, 55, 310, 255);
-		contentPane.add(uiPath);
-		uiPath.setBounds(45, 5, 180, uiPath.getPreferredSize().height);
+		scrollPane1.setBounds(10, 35, 320, 275);
+		contentPane.add(uiName);
+		uiName.setBounds(35, 5, 100, uiName.getPreferredSize().height);
 		contentPane.add(uiMappingType);
-		uiMappingType.setBounds(224, 5, 75, uiMappingType.getPreferredSize().height);
+		uiMappingType.setBounds(134, 5, 90, uiMappingType.getPreferredSize().height);
 
 		//---- label1 ----
-		label1.setText("\u6587\u4ef6\u540d");
+		label1.setText("\u540d\u79f0");
 		contentPane.add(label1);
 		label1.setBounds(new Rectangle(new Point(6, 8), label1.getPreferredSize()));
 
@@ -351,17 +323,7 @@ public class MappingUI extends JFrame {
 		uiLoad.setMargin(new Insets(2, 4, 2, 4));
 		uiLoad.addActionListener(e -> uiLoad(e));
 		contentPane.add(uiLoad);
-		uiLoad.setBounds(new Rectangle(new Point(297, 4), uiLoad.getPreferredSize()));
-
-		//---- uiName ----
-		uiName.setToolTipText("\u4e0b\u65b9\u6240\u6709\u64cd\u4f5c\u5747\u7528\u5230\u6b64\u5904\u540d\u5b57\u8bbe\u5b9a");
-		contentPane.add(uiName);
-		uiName.setBounds(115, 30, 110, uiName.getPreferredSize().height);
-
-		//---- label2 ----
-		label2.setText("\u540d\u79f0");
-		contentPane.add(label2);
-		label2.setBounds(new Rectangle(new Point(90, 33), label2.getPreferredSize()));
+		uiLoad.setBounds(new Rectangle(new Point(222, 4), uiLoad.getPreferredSize()));
 
 		//---- uiDel ----
 		uiDel.setText("del");
@@ -369,7 +331,7 @@ public class MappingUI extends JFrame {
 		uiDel.setEnabled(false);
 		uiDel.addActionListener(e -> uiDel(e));
 		contentPane.add(uiDel);
-		uiDel.setBounds(new Rectangle(new Point(30, 320), uiDel.getPreferredSize()));
+		uiDel.setBounds(new Rectangle(new Point(30, 318), uiDel.getPreferredSize()));
 
 		//---- uiFlip ----
 		uiFlip.setText("flip");
@@ -377,7 +339,7 @@ public class MappingUI extends JFrame {
 		uiFlip.setEnabled(false);
 		uiFlip.addActionListener(e -> uiFlip(e));
 		contentPane.add(uiFlip);
-		uiFlip.setBounds(new Rectangle(new Point(60, 320), uiFlip.getPreferredSize()));
+		uiFlip.setBounds(new Rectangle(new Point(60, 318), uiFlip.getPreferredSize()));
 
 		//---- uiMerge ----
 		uiMerge.setText("merge");
@@ -385,7 +347,7 @@ public class MappingUI extends JFrame {
 		uiMerge.setEnabled(false);
 		uiMerge.addActionListener(e -> uiMerge(e));
 		contentPane.add(uiMerge);
-		uiMerge.setBounds(new Rectangle(new Point(96, 320), uiMerge.getPreferredSize()));
+		uiMerge.setBounds(new Rectangle(new Point(96, 318), uiMerge.getPreferredSize()));
 
 		//---- uiExtend ----
 		uiExtend.setText("extend");
@@ -393,7 +355,7 @@ public class MappingUI extends JFrame {
 		uiExtend.setEnabled(false);
 		uiExtend.addActionListener(e -> uiExtend(e));
 		contentPane.add(uiExtend);
-		uiExtend.setBounds(new Rectangle(new Point(138, 320), uiExtend.getPreferredSize()));
+		uiExtend.setBounds(new Rectangle(new Point(138, 318), uiExtend.getPreferredSize()));
 
 		//---- uiSave ----
 		uiSave.setText("save");
@@ -401,7 +363,7 @@ public class MappingUI extends JFrame {
 		uiSave.setEnabled(false);
 		uiSave.addActionListener(e -> uiSave(e));
 		contentPane.add(uiSave);
-		uiSave.setBounds(new Rectangle(new Point(222, 320), uiSave.getPreferredSize()));
+		uiSave.setBounds(new Rectangle(new Point(222, 318), uiSave.getPreferredSize()));
 
 		//---- uiCopy ----
 		uiCopy.setText("copy");
@@ -409,9 +371,9 @@ public class MappingUI extends JFrame {
 		uiCopy.setEnabled(false);
 		uiCopy.addActionListener(e -> uiCopy(e));
 		contentPane.add(uiCopy);
-		uiCopy.setBounds(new Rectangle(new Point(186, 320), uiCopy.getPreferredSize()));
+		uiCopy.setBounds(new Rectangle(new Point(186, 318), uiCopy.getPreferredSize()));
 
-		contentPane.setPreferredSize(new Dimension(345, 350));
+		contentPane.setPreferredSize(new Dimension(345, 345));
 		pack();
 		setLocationRelativeTo(getOwner());
 
@@ -446,9 +408,8 @@ public class MappingUI extends JFrame {
 
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
 	private JList<NamedMapping> uiMappingList;
-	private JTextField uiPath;
-	private JComboBox<String> uiMappingType;
 	private JTextField uiName;
+	private JComboBox<String> uiMappingType;
 	private JButton uiDel;
 	private JButton uiFlip;
 	private JButton uiMerge;

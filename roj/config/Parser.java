@@ -84,7 +84,9 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 		try (TextReader text = new TextReader(file, charset)) {
 			return parse(cv, text, flag);
 		} catch (ParseException e) {
-			throw new ParseException(IOUtil.readString(file), e.getMessage(), e.getIndex(), e.getCause());
+			ParseException exc = new ParseException(IOUtil.readString(file), e.getMessage(), e.getIndex(), e.getCause());
+			exc.setStackTrace(e.getStackTrace());
+			throw exc;
 		}
 	}
 	public final T parseRaw(DynByteBuf buf, int flag) throws IOException, ParseException {

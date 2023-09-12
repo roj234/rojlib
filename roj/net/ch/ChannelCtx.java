@@ -69,9 +69,7 @@ public final class ChannelCtx {
 		return event;
 	}
 
-	public void postEvent(Event event) throws IOException {
-		root.postEvent(event);
-	}
+	public void postEvent(Event event) throws IOException { root.postEvent(event); }
 
 	public void exceptionCaught(Throwable ex) throws Exception {
 		if (next != null) next.handler.exceptionCaught(next, ex);
@@ -97,22 +95,16 @@ public final class ChannelCtx {
 		}
 	}
 
-	public void close() throws IOException {
-		root.close();
-	}
+	public void close() throws IOException { root.close(); }
 
 	public BufferPool alloc() { return root.alloc(); }
 	public DynByteBuf allocate(boolean direct, int capacity) {
 		if (capacity < 0) throw new IllegalArgumentException(String.valueOf(capacity));
 		return alloc().buffer(direct, capacity);
 	}
-	public void reserve(DynByteBuf buffer) {
-		alloc().reserve(buffer);
-	}
+	public void reserve(DynByteBuf buffer) { alloc().reserve(buffer); }
 
-	public ChannelHandler handler() {
-		return handler;
-	}
+	public ChannelHandler handler() { return handler; }
 
 	public void replaceSelf(ChannelHandler pipe) {
 		handler.handlerRemoved(this);
@@ -122,6 +114,15 @@ public final class ChannelCtx {
 
 	public void removeSelf() {
 		root.remove(this);
+	}
+
+	public void dispose() throws IOException {
+		ChannelHandler h = handler;
+		try {
+			if (h != null) h.channelClosed(this);
+		} finally {
+			root.remove(this);
+		}
 	}
 
 	public ChannelCtx prev() {

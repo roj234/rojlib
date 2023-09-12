@@ -23,7 +23,7 @@ public final class NativeArray {
 
 	public byte get(int i) {
 		if (DEBUG) checkRange(i);
-		return u.getByte(ref, addr);
+		return u.getByte(ref, addr+i);
 	}
 
 	public void set(int i, int v) {

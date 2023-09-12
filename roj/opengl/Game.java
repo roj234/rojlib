@@ -17,7 +17,6 @@ import roj.opengl.util.Util;
 import roj.opengl.util.VboUtil;
 import roj.opengl.vertex.VertexBuilder;
 import roj.opengl.vertex.VertexFormat;
-import roj.reflect.TraceUtil;
 import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -522,7 +521,7 @@ public abstract class Game {
 	protected void checkGLError(String msg) {
 		int id = glGetError();
 		if (id != 0) {
-			StackTraceElement[] es = TraceUtil.getTraces(new Throwable());
+			StackTraceElement[] es = new Throwable().getStackTrace();
 			String name = GLU.gluErrorString(id);
 			String err = msg + ": " + name + ": " + es[es.length - 2];
 			if (!glErrors.contains(err)) {

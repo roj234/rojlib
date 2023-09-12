@@ -121,11 +121,13 @@ public abstract class ITokenizer {
 		DESLASHES.putInt('/', -1);
 		DESLASHES.putInt('U', -2);
 		DESLASHES.putInt('u', -3);
-		//TRANS.putInt(-6, 'x');
 
 		// \ NEXTLINE
 		DESLASHES.putInt('\r', -4);
 		DESLASHES.putInt('\n', -5);
+
+		// \377 (oct)
+		for (int i = 0; i <= 7; i++) DESLASHES.putInt('0'+i, -6);
 	}
 
 	public static String addSlashes(CharSequence key) { return addSlashes(new StringBuilder(), key).toString(); }
@@ -241,20 +243,24 @@ public abstract class ITokenizer {
 					int UIndex = TextUtil.parseInt(in, i, i += 8, 16);
 					if (Character.charCount(UIndex) > 1) out.append(Character.highSurrogate(UIndex)).append(Character.lowSurrogate(UIndex));
 					else out.append((char) UIndex);
-					break;
+				break;
 				case -3: // uXXXX
 					int uIndex = TextUtil.parseInt(in, i, i += 4, 16);
 					out.append((char) uIndex);
-					break;
+				break;
 				case -4: out.append("\r"); if (in.charAt(i) == '\n') i++;
 				case -5: out.append("\n");
 					while (WHITESPACE.contains(in.charAt(i))) i++;
-					break;
-				case -6: // xXX
-					throw new IllegalArgumentException("uxx is not available");
-					//int xIndex = MathUtils.parseInt(in, i, i += 2, 16);
-					//out.append(new String(new byte[]{(byte) xIndex}, StandardCharsets.UTF_8));
-					//break;
+				break;
+				case -6: // oct (000 - 377)
+					char d = in.charAt(i);
+					char e = in.charAt(i+1);
+					int xi = c-'0';
+					if (d >= '0' && d <= '7') xi = (xi<<3) + d-'0';
+					if (c <= '3' && e >= '0' && e <= '7') xi = (xi<<3) + e-'0';
+					System.out.println("oct:"+c+d+e+"=>"+xi);
+					out.append((char)xi);
+				break;
 
 			}
 		} catch (IOException e) {
@@ -447,12 +453,13 @@ public abstract class ITokenizer {
 		while (true) {
 			c = in.charAt(i);
 
-			// 检测位置有误(不在结尾)的 d f l 但是放过hex中的df
-			if ((flag & _NF_END) != 0) return onInvalidNumber(c, i, "期待[空白]");
-			if (!set.contains(c) && c != '_') {
-				// todo moved from #449
+				// 检测位置有误(不在结尾)的 d f l 但是放过hex中的df
+			if ((flag & _NF_END) != 0 ||
+				// 非法数字
+				(!set.contains(c) &&
+				c != '_')) {
 				if (literalEnd.contains(c)) break;
-				return onInvalidNumber(c, i, "非法的字符"+c);
+				return onInvalidNumber(c, i, set.contains(c)?"期待[空白]":"非法的字符"+c);
 			}
 
 			switch (c) {

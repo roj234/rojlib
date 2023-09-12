@@ -1,5 +1,6 @@
 package roj.asm.frame;
 
+import roj.asm.cst.Constant;
 import roj.asm.tree.insn.InsnNode;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
@@ -21,6 +22,7 @@ public final class Var2 {
 	public int bci = -1;
 	public InsnNode bci2;
 	public Set<String> limitation;
+	public Constant value;
 
 	public static final Var2
 		TOP = new Var2(VarType.TOP),

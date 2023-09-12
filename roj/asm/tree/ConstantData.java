@@ -74,97 +74,50 @@ public class ConstantData implements IClass {
 		 */
 		boolean module = (access & AccessFlag.MODULE) != 0;
 		if (module) {
-			if (access != AccessFlag.MODULE) {
-				throw new IllegalArgumentException("Module should only have 'module' flag");
-			}
-			if (!interfaces.isEmpty()) {
-				throw new IllegalArgumentException("Module should not have interfaces");
-			}
-			if (!fields.isEmpty()) {
-				throw new IllegalArgumentException("Module should not have fields");
-			}
-			if (!methods.isEmpty()) {
-				throw new IllegalArgumentException("Module should not have methods");
-			}
+			if (access != AccessFlag.MODULE) throw new IllegalArgumentException("Module should only have 'module' flag");
+			if (!interfaces.isEmpty()) throw new IllegalArgumentException("Module should not have interfaces");
+			if (!fields.isEmpty()) throw new IllegalArgumentException("Module should not have fields");
+			if (!methods.isEmpty()) throw new IllegalArgumentException("Module should not have methods");
 		}
 
-		if (parent == null && !"java/lang/Object".equals(name) && !module) {
-			throw new IllegalArgumentException("No father found " + name);
-		}
+		if (parent == null && !"java/lang/Object".equals(name) && !module)
+			throw new IllegalArgumentException("parent is null in " + name);
 
-		int permDesc = 0;
-		int typeDesc = 0;
-		int fn = -1;
-
-		for (int i = 0; i < 16; i++) {
-			int v = 1 << i;
-			if ((access & v) != 0) {
-				switch (v) {
-					case PUBLIC:
-					case PROTECTED:
-						permDesc++;
-						break;
-					case INTERFACE:
-					case ENUM:
-						typeDesc++;
-						break;
-					case FINAL:
-						if (fn == 0) {
-							throw new IllegalArgumentException("Final and Abstract");
-						}
-						fn = 1;
-						break;
-					case ABSTRACT:
-						if (fn == 1) {
-							throw new IllegalArgumentException("Final and Abstract");
-						}
-						fn = 0;
-						break;
-					case ANNOTATION:
-					case SUPER:
-					case SYNTHETIC:
-					case STRICTFP:
-					case BRIDGE:
-						break;
-					case MODULE:
-						if (access == MODULE) break;
-					default:
-						throw new IllegalArgumentException("Unsupported access flag " + v + "/" + (int) access);
-				}
-			}
-		}
+		int acc = access;
+		if (Integer.bitCount(acc&(PUBLIC|PROTECTED|PRIVATE)) > 1)
+			throw new IllegalArgumentException("无效的描述符组合(Acc) "+this);
+		if (Integer.bitCount(acc&(FINAL|ABSTRACT)) > 1)
+			throw new IllegalArgumentException("无效的描述符组合(Fin) "+this);
+		if (Integer.bitCount(acc&(INTERFACE|ENUM)) > 1)
+			throw new IllegalArgumentException("无效的描述符组合(Itf) "+this);
 
 		int v = access & (ANNOTATION | INTERFACE);
-		if (v == ANNOTATION) throw new IllegalArgumentException("Not valid @interface " + access);
-
-		if (permDesc > 1) {
-			throw new IllegalArgumentException("ACCPermission too much " + access);
-		}
-
-		if (typeDesc > 1) {
-			throw new IllegalArgumentException("ACCType too much " + access);
-		}
+		if (v == ANNOTATION)
+			throw new IllegalArgumentException("无效的描述符组合(ANN) "+this);
 
 		MyHashSet<String> descs = new MyHashSet<>();
-		for (int j = 0; j < methods.size(); j++) {
-			MoFNode method = methods.get(j);
-			if (!descs.add(method.name() + '|' + method.rawDesc())) {
-				throw new IllegalArgumentException("Duplicate method " + method.name() + method.rawDesc());
-			}
-		}
+		fastValidate(Helpers.cast(methods), descs);
 		descs.clear();
+		fastValidate(Helpers.cast(fields), descs);
+	}
 
-		for (int j = 0; j < fields.size(); j++) {
-			MoFNode field = fields.get(j);
-			if (!descs.add(field.name() + '|' + field.rawDesc())) {
-				throw new IllegalArgumentException("Duplicate field " + field.name() + field.rawDesc());
-			}
+	private void fastValidate(SimpleList<MoFNode> nodes, MyHashSet<String> out) {
+		for (int i = 0; i < nodes.size(); i++) {
+			MoFNode n = nodes.get(i);
+			if (!out.add(n.name().concat(n.rawDesc())))
+				throw new IllegalArgumentException("重复的方法或字段 "+n);
+
+			int acc = n.modifier();
+			if (Integer.bitCount(acc&(PUBLIC|PROTECTED|PRIVATE)) > 1)
+				throw new IllegalArgumentException("无效的描述符组合(Acc) "+n);
+			if ((acc&ABSTRACT) != 0 && Integer.bitCount(acc&(FINAL|NATIVE|STATIC)) > 0)
+				throw new IllegalArgumentException("无效的描述符组合(Fin) "+n);
 		}
 	}
 
 	public ConstantData() {
 		this.cp = new ConstantPool();
-		this.name = null;
+		this.name = Helpers.nonnull();
 		this.parent = "java/lang/Object";
 		this.access = AccessFlag.PUBLIC | AccessFlag.SUPER;
 		this.version = 49 << 16;

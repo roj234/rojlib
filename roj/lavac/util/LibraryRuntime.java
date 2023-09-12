@@ -19,6 +19,7 @@ import static roj.collect.IntMap.UNDEFINED;
  */
 public class LibraryRuntime implements Library {
 	public static final Library INSTANCE = new LibraryRuntime();
+	private LibraryRuntime() {}
 
 	private final MyHashMap<String, IClass> info = new MyHashMap<>();
 
@@ -48,7 +49,7 @@ public class LibraryRuntime implements Library {
 
 	public IClass apply(CharSequence s) {
 		try {
-			String cn = new CharList().append(s).append(".class").toString();
+			String cn = new CharList().append(s).append(".class").toStringAndFree();
 			InputStream in = LibraryRuntime.class.getClassLoader().getResourceAsStream(cn);
 			if (in == null) return null;
 			return Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(in).toByteArray());

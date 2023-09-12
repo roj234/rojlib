@@ -1,4 +1,4 @@
-package roj.mapper.obf.policy;
+package roj.mapper.obf.nodename;
 
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;

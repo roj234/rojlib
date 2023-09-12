@@ -72,7 +72,7 @@ public abstract class ToSomeString implements CVisitor {
 		else valString(s);
 	}
 	protected void valString(String l) {
-		ITokenizer.addSlashes(sb.append('"'), l).append('"');
+		ITokenizer.addSlashes(l, 0, sb.append('"'), '\'').append('"');
 	}
 
 	public final void value(long l) { preValue(false); sb.append(l); }

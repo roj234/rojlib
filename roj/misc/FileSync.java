@@ -4,17 +4,22 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.config.YAMLParser;
 import roj.config.data.CMapping;
+import roj.crypt.ILProvider;
 import roj.crypt.KeyFile;
 import roj.io.IOUtil;
 import roj.math.MutableLong;
 import roj.net.NetworkUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
-import roj.net.ch.handler.*;
+import roj.net.ch.handler.Compress;
+import roj.net.ch.handler.MSSCipher;
+import roj.net.ch.handler.Timeout;
+import roj.net.ch.handler.VarintSplitter;
 import roj.net.ch.osi.ClientLaunch;
 import roj.net.ch.osi.ServerLaunch;
 import roj.net.mss.JPrivateKey;
 import roj.net.mss.SimpleEngineFactory;
+import roj.net.proto_obf.ProtoObf;
 import roj.text.ACalendar;
 import roj.text.logging.Logger;
 import roj.text.logging.LoggingStream;
@@ -72,7 +77,7 @@ public class FileSync implements ChannelHandler {
 		for (String dirname : subDirs) {
 			File dir = new File(base, dirname);
 
-			IOUtil.findAllFiles(base, file -> {
+			IOUtil.findAllFiles(dir, file -> {
 				long t = file.lastModified();
 				if (lastMod.value < t) lastMod.value = t;
 
@@ -101,19 +106,20 @@ public class FileSync implements ChannelHandler {
 		boolean obf = config.getBool("obfuscate");
 
 		if (config.getBool("server")) {
-			System.out.println("生成RSA密钥对");
+			System.out.println("生成EdDSA证书");
 
-			KeyPair rsa1 = KeyFile.getInstance("RSA").getKeyPair(new File("rsa.key"), new File("rsa.pem"), "114514".getBytes());
+			ILProvider.register();
+			KeyPair kp = KeyFile.getInstance("EdDSA").getKeyPair(new File("fs.key"), new File("fs.pem"), "114514".getBytes());
 
-			SimpleEngineFactory factory = SimpleEngineFactory.server().key(new JPrivateKey(rsa1));
+			SimpleEngineFactory factory = SimpleEngineFactory.server().key(new JPrivateKey(kp));
 
 			InetSocketAddress addr = NetworkUtil.getListenAddress(config.getString("address"));
 
 			System.out.println("服务器已启动");
 			ServerLaunch.tcp().initializator(ch -> {
 				ch.addLast("DDOS", new AntiDDoSHelper());
-				if (obf) ch.addLast("Protocol_Fake", new Obfuscate());
-				if (tls) ch.addLast("MSS", new MSSCipher(factory.get()));
+				if (obf) ProtoObf.install(ch, factory.get());
+				else if (tls) ch.addLast("MSS", new MSSCipher(factory.get()));
 				ch.addLast("Splitter", VarintSplitter.twoMbVLUI())
 				  .addLast("Compress", new Compress())
 				  .addLast("Timeout", new Timeout(10000,2000))
@@ -128,8 +134,8 @@ public class FileSync implements ChannelHandler {
 
 			InetSocketAddress addr = NetworkUtil.getConnectAddress(config.getString("address"));
 			ClientLaunch.tcp().initializator(ch -> {
-				if (obf) ch.addLast("Protocol_Fake", new Obfuscate());
-				if (tls) ch.addLast("MSS", new MSSCipher());
+				if (obf) ProtoObf.install(ch);
+				else if (tls) ch.addLast("MSS", new MSSCipher());
 				ch.addLast("Splitter", VarintSplitter.twoMbVLUI())
 				  .addLast("Compress", new Compress())
 				  .addLast("Timeout", new Timeout(10000,2000))
@@ -148,36 +154,34 @@ public class FileSync implements ChannelHandler {
 		}
 
 		long client_timestamp = buf.readLong();
-		if (client_timestamp < timestamp) {
-			//
-		}
 
-		ByteList out = new ByteList().put(1);
+		ByteList out = IOUtil.getSharedByteBuf().put(1);
 
 		System.out.println("收到客户端数据 " + ctx.remoteAddress() + ", len="+buf.readableBytes());
 		int 多=0,改=0;
 
 		MyHashSet<String> set = new MyHashSet<>(hashes.keySet());
 		while (buf.isReadable()) {
-			int len = buf.readVUInt();
-			String name = buf.readUTF(len);
+			int pos = buf.rIndex;
+			String name = buf.readVUIUTF();
 
 			set.remove(name);
 			byte[] hash = hashes.get(name);
 			if (hash == null) {
-				out.putVUInt(len).put(buf, buf.rIndex-len, len) // name
-				   .put(1);
+				out.put(buf, pos, buf.rIndex-pos).put(1);
 				多++;
 			} else if (!new ByteList(hash).equals(buf.slice(HASH_LENGTH))) {
-				out.putVUInt(len).put(buf, buf.rIndex-len, len)
-				   .put(0).put(getFileData(name))
-				   .put(hash);
+				out.put(buf, pos, buf.rIndex-HASH_LENGTH-pos).put(0);
 				改++;
+
+				File file = new File(baseDir, name);
+				out.putVUInt((int) file.length());
+				out.readStreamFully(new FileInputStream(file)).put(hash);
 			} else {
 				continue;
 			}
 
-			if (out.readableBytes() > 1048576) {
+			if (out.readableBytes() > 32767) {
 				ctx.channelWrite(out);
 				out.clear();
 				out.put(1);
@@ -187,11 +191,13 @@ public class FileSync implements ChannelHandler {
 
 		for (String name : set) {
 			out.putVUIUTF(name).put(0);
-			byte[] data = getFileData(name);
-			out.putVUInt(data.length).put(data)
+
+			File file = new File(baseDir, name);
+			out.putVUInt((int) file.length());
+			out.readStreamFully(new FileInputStream(file))
 			   .put(hashes.get(name));
 
-			if (out.readableBytes() > 1048576) {
+			if (out.readableBytes() > 32767) {
 				ctx.channelWrite(out);
 				out.clear();
 				out.put(1);
@@ -208,10 +214,6 @@ public class FileSync implements ChannelHandler {
 
 		ctx.flush();
 		ctx.channel().closeGracefully();
-	}
-
-	private byte[] getFileData(String name) throws IOException {
-		return IOUtil.read(new File(baseDir,name));
 	}
 
 	public static class AntiDDoSHelper implements ChannelHandler {

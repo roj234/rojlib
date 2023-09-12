@@ -90,15 +90,13 @@ public abstract class MSSEngine {
 		keyDeriver = new HMAC(suite.sign.get());
 		sharedKey = HMAC.HKDF_expand(keyDeriver, sharedKey_pre, ByteList.wrap(sharedKey), 64);
 	}
-	final byte[] deriveKey(String name, int len) {
+	public final byte[] deriveKey(String name, int len) {
 		DynByteBuf info = allocateTmpBuffer(ByteList.byteCountUTF8(name)+2).putUTF(name);
-		byte[] secret = HMAC.HKDF_expand(keyDeriver, sharedKey,info,len);
+		byte[] secret = HMAC.HKDF_expand(keyDeriver, sharedKey, info, len);
 		freeTmpBuffer(info);
 		return secret;
 	}
-	public final SecureRandom getPRNG(String name) {
-		return new HKDFPRNG(keyDeriver, sharedKey, name);
-	}
+	public final SecureRandom getPRNG(String name) { return new HKDFPRNG(keyDeriver, sharedKey, name); }
 
 	protected DynByteBuf allocateTmpBuffer(int capacity) {
 		return BufferPool.localPool().buffer(false, capacity);

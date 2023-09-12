@@ -112,15 +112,11 @@ class UdpChImpl extends MyChannel {
 	}
 
 	@Override
-	protected SocketAddress finishConnect0() throws IOException {
-		return dc.getRemoteAddress();
-	}
-
+	protected SocketAddress finishConnect0() throws IOException { return dc.getRemoteAddress(); }
 	@Override
-	protected void disconnect0() throws IOException {
-		dc.close();
-		ch = dc = DatagramChannel.open();
-	}
+	protected void closeGracefully0() throws IOException { close(); }
+	@Override
+	protected void disconnect0() throws IOException { dc.close(); ch = dc = DatagramChannel.open(); }
 
 	@Override
 	public SocketAddress remoteAddress() {
@@ -132,7 +128,9 @@ class UdpChImpl extends MyChannel {
 	}
 
 	public void flush() throws IOException {
-		if (pending.isEmpty()||state>=CLOSED) return;
+		if (state >= CLOSED) return;
+		fireFlushing();
+		if (pending.isEmpty()) return;
 
 		BufferPool bp = alloc();
 		lock.lock();
@@ -153,7 +151,7 @@ class UdpChImpl extends MyChannel {
 				flag &= ~PAUSE_FOR_FLUSH;
 				key.interestOps(SelectionKey.OP_READ);
 
-				fireWriteDone();
+				fireFlushed();
 			}
 		} finally {
 			lock.unlock();
@@ -206,7 +204,7 @@ class UdpChImpl extends MyChannel {
 				Object o1 = pending.ringAddLast(new DatagramPkt(p, bp.buffer(true, buf.readableBytes()).put(buf)));
 				if (o1 != null) throw new IOException("上层发送缓冲区过载");
 			} else {
-				fireWriteDone();
+				fireFlushed();
 			}
 		} finally {
 			if (p.buf != buf) bp.reserve(buf);

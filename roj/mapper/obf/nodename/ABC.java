@@ -1,4 +1,4 @@
-package roj.mapper.obf.policy;
+package roj.mapper.obf.nodename;
 
 import roj.collect.ToIntMap;
 import roj.mapper.util.Desc;
@@ -11,13 +11,13 @@ import java.util.Set;
  * @author Roj233
  * @since 2021/7/18 19:29
  */
-public final class CharMixOrdered implements NameObfuscator {
+public final class ABC implements NameObfuscator {
 	private int npClassId;
 	private final ToIntMap<String> counter = new ToIntMap<>();
 	private final char[] chars;
 
-	public CharMixOrdered() { this(ABC); }
-	public CharMixOrdered(char[] c) { chars = c; }
+	public ABC() { this(ABC); }
+	public ABC(char[] c) { chars = c; }
 
 	public static final char[] ABC = new char[] {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E',
 										  'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
@@ -26,7 +26,7 @@ public final class CharMixOrdered implements NameObfuscator {
 	private boolean keepPackage;
 
 	@Override
-	public CharMixOrdered setKeepPackage(boolean keepPackage) {
+	public ABC setKeepPackage(boolean keepPackage) {
 		this.keepPackage = keepPackage;
 		return this;
 	}

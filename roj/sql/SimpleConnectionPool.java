@@ -163,7 +163,7 @@ public class SimpleConnectionPool {
 
 	final boolean _isClosed() { return connId.get() == null; }
 	final void _reserve(Connection conn) {
-		if (ld != null) ld.untrack(conn);
+		if (ld != null) ld.remove(conn);
 
 		Object[] id = connId.get();
 		if (id == null) return;

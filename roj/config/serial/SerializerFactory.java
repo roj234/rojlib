@@ -25,11 +25,14 @@ import roj.config.data.CEntry;
 import roj.config.data.CNull;
 import roj.io.IOUtil;
 import roj.reflect.FastInit;
+import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -41,8 +44,13 @@ import static roj.asm.Opcodes.*;
 import static roj.asm.util.AccessFlag.*;
 
 /**
+ * 需要注意的是，这个实现并没有考虑到安全性，
+ * ie. 一旦一个类的序列化器被生成，它的As-type和安全性设置永远是第一次生成时的状态
+ * 要避免这个问题，请将{@link SerializerFactory#GENERATED}改为private final (删去static)
+ * 这可能会造成class资源的浪费，权衡。
+ *
  * @author Roj233
- * @version 2.1
+ * @version 2.2
  * @since 2022/1/11 17:49
  */
 public final class SerializerFactory {
@@ -92,7 +100,8 @@ public final class SerializerFactory {
 		NO_CONSTRUCTOR = 8,
 		ALLOW_DYNAMIC = 16,
 		PREFER_DYNAMIC = ALLOW_DYNAMIC|PREFER_DYNAMIC_INTERNAL,
-		FORCE_DYNAMIC = PREFER_DYNAMIC|FORCE_DYNAMIC_INTERNAL;
+		FORCE_DYNAMIC = PREFER_DYNAMIC|FORCE_DYNAMIC_INTERNAL,
+		SAFE = 256;
 
 	public int flag;
 	public ToIntFunction<Class<?>> flagGetter;
@@ -146,16 +155,21 @@ public final class SerializerFactory {
 		return this;
 	}
 
-	public SerializerFactory register(Class<?> cls, Object o) {
-		if (cls.isPrimitive() || cls == String.class) throw new IllegalStateException("你覆盖啥呢(input不能是基本类型)");
+	/**
+	 * 同下，除了自动选择W/R
+	 * @see SerializerFactory#register(Class, Object, String, String)
+	 */
+	public SerializerFactory register(Class<?> type, Object adapter) {
+		if (type.isPrimitive() || type == String.class) throw new IllegalStateException("type不能是基本类型或字符串");
 
-		String name = "U|"+cls.getName().replace('.', '/');
+		// A: auto
+		String name = "U|A|"+type.getName()+"|"+adapter.getClass().getName();
 		Adapter ser = GENERATED.get(name);
 		if (ser == null) {
-			ConstantData data = Parser.parse(o.getClass());
-			if (data == null) throw new IllegalArgumentException("无法获取"+o+"的类文件");
+			ConstantData data = Parser.parse(adapter.getClass());
+			if (data == null) throw new IllegalArgumentException("无法获取"+adapter+"的类文件");
 
-			Type clsType = TypeHelper.class2type(cls);
+			Type clsType = TypeHelper.class2type(type);
 			MethodNode writer = null, reader = null;
 			for (MethodNode mn : data.methods) {
 				List<Type> par = mn.parameters();
@@ -180,23 +194,81 @@ public final class SerializerFactory {
 					ser = user(data, writer, reader);
 					GENERATED.put(name, ser);
 				}
-				ser = (Adapter) ((GenAdapter)ser).clone();
 			} finally {
 				lock.unlock();
 			}
 		}
+		ser = (Adapter) ((GenAdapter)ser).clone();
 
 		synchronized (localRegistry) {
-			localRegistry.put(cls.getName().replace('.', '/'), ser);
+			localRegistry.put(type.getName().replace('.', '/'), ser);
 		}
 
-		((GenAdapter) ser).secondaryInit(this, o);
+		((GenAdapter) ser).secondaryInit(this, adapter);
 
 		return this;
 	}
-	public SerializerFactory registerAsType(String name, Class<?> targetType, Object inst) {
-		ConstantData data = Parser.parse(inst.getClass());
-		if (data == null) throw new IllegalArgumentException("无法获取"+inst+"的类文件");
+	/**
+	 * 注册该类型的适配器，在序列化时会转换成另一种类型(方法返回值) <BR>
+	 * 和SerializerFactory绑定
+	 * @param type 类型
+	 * @param adapter 转换器实例，不支持.class
+	 */
+	public SerializerFactory register(Class<?> type, Object adapter, String writeMethod, String readMethod) {
+		if (type.isPrimitive() || type == String.class) throw new IllegalStateException("type不能是基本类型或字符串");
+
+		ConstantData data = Parser.parse(adapter.getClass());
+		if (data == null) throw new IllegalArgumentException("无法获取"+adapter+"的类文件");
+
+		int wid = data.getMethod(writeMethod), rid = data.getMethod(readMethod);
+		MethodNode w = data.methods.get(wid), r = data.methods.get(rid);
+
+		String name = "U|"+wid+"|"+rid+"|"+type.getName()+"|"+adapter.getClass().getName();
+		Adapter ser = GENERATED.get(name);
+		if (ser == null) {
+			Type clsType = TypeHelper.class2type(type);
+			for (MethodNode mn : data.methods) {
+				List<Type> par = mn.parameters();
+				if (par.size() != 1) continue;
+
+				Type ret = mn.returnType();
+				if (par.get(0).equals(clsType) && ret.type != Type.VOID) {
+					if (mn == w) wid = -1;
+				} else if (ret.equals(clsType)) {
+					if (mn == r) rid = -1;
+				}
+			}
+
+			if (rid >= 0) throw new IllegalArgumentException("reader不符合要求");
+			if (wid >= 0) throw new IllegalArgumentException("writer不符合要求");
+
+			lock.lock();
+			try {
+				if ((ser = GENERATED.get(name)) == null) {
+					ser = user(data, w, r);
+					GENERATED.put(name, ser);
+				}
+			} finally {
+				lock.unlock();
+			}
+		}
+		ser = (Adapter) ((GenAdapter)ser).clone();
+
+		synchronized (localRegistry) {
+			localRegistry.put(type.getName().replace('.', '/'), ser);
+		}
+
+		((GenAdapter) ser).secondaryInit(this, adapter);
+
+		return this;
+	}
+	/**
+	 * 同下，除了自动寻找下面doc中第一种例子的方法
+	 * @see SerializerFactory#registerAsAdapter(String, Class, Object, String, String)
+	 */
+	public SerializerFactory registerAsAdapter(String name, Class<?> targetType, Object adapter) {
+		ConstantData data = Parser.parse(adapter.getClass());
+		if (data == null) throw new IllegalArgumentException("无法获取"+adapter+"的类文件");
 
 		Type clsType = TypeHelper.class2type(targetType);
 		MethodNode writer = null, reader = null;
@@ -218,24 +290,36 @@ public final class SerializerFactory {
 		if (writer == null) throw new IllegalArgumentException("没找到writer");
 
 		synchronized (asTypes) {
-			AsType old = asTypes.putIfAbsent(name, new AsType(name, writer, reader, inst, false));
+			AsType old = asTypes.putIfAbsent(name, new AsType(name, writer, reader, adapter, false));
 			if (old != null) throw new IllegalArgumentException(name+"已存在");
 		}
 		return this;
 	}
-	public SerializerFactory registerAsType(String name, Class<?> targetType, Object inst, String writerName, String readerName) {
-		ConstantData data = Parser.parse(inst.getClass());
-		if (data == null) throw new IllegalArgumentException("无法获取"+inst+"的类文件");
+	/**
+	 * 注册@{@link As}目标的转换器 <BR>
+	 * 和SerializerFactory绑定 <pre>
+	 * 转换方法两种方式参考:
+	 *   {@link SerializerUtils#writeHex(byte[])}
+	 *   {@link SerializerUtils#writeISO(long, CVisitor)}
+	 * @param name 注解的value
+	 * @param targetType 转换到的目标的类
+	 * @param adapter 转换器实例，不支持.class
+	 * @param writeMethod 转换方法名称(原类型 -> targetType)
+	 * @param readMethod 反转换方法名称(targetType -> 原类型)
+	 */
+	public SerializerFactory registerAsAdapter(String name, Class<?> targetType, Object adapter, String writeMethod, String readMethod) {
+		ConstantData data = Parser.parse(adapter.getClass());
+		if (data == null) throw new IllegalArgumentException("无法获取"+adapter+"的类文件");
 
-		MethodNode w = data.methods.get(data.getMethod(writerName)),
-			r = data.methods.get(data.getMethod(readerName));
+		MethodNode w = data.methods.get(data.getMethod(writeMethod)),
+			r = data.methods.get(data.getMethod(readMethod));
 
 		boolean user_writer = false;
 		sp: {
 			List<Type> wp = w.parameters(), rp = r.parameters();
 			if (wp.get(0).equals(r.returnType()) && rp.get(0).equals(TypeHelper.class2type(targetType))) {
 				if (rp.get(0).equals(w.returnType())) break sp;
-				if (wp.size() == 2 && "roj/config/serial/CVisitor".equals(wp.get(1).owner)) {
+				if (wp.size() == 2 && "roj/config/serial/CVisitor".equals(wp.get(1).getActualClass())) {
 					if (!wp.get(0).isPrimitive()) throw new IllegalArgumentException("object output not support user");
 					user_writer = true;
 					break sp;
@@ -245,7 +329,7 @@ public final class SerializerFactory {
 		}
 
 		synchronized (asTypes) {
-			AsType old = asTypes.putIfAbsent(name, new AsType(name, w, r, inst, user_writer));
+			AsType old = asTypes.putIfAbsent(name, new AsType(name, w, r, adapter, user_writer));
 			if (old != null) throw new IllegalArgumentException(name+"已存在");
 		}
 		return this;
@@ -591,20 +675,19 @@ public final class SerializerFactory {
 	}
 
 	// region object serializer
-	private static final byte DIRECT_IF_OVERRIDE = SerializerFactoryFactory.injected ? INVOKESPECIAL : INVOKEVIRTUAL;
+	private static final byte DIRECT_IF_OVERRIDE = SerializerUtils.injected ? INVOKESPECIAL : INVOKEVIRTUAL;
 	private Adapter klass(Class<?> o, int flag) {
-		if ((o.getModifiers()&PUBLIC) == 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
+		if ((o.getModifiers()&PUBLIC) == 0 && (flag&SAFE) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
 		ConstantData data = Parser.parse(o);
 		if (data == null) throw new IllegalArgumentException("无法获取"+o.getName()+"的类文件");
 		if (data.fields.size() == 0) throw new IllegalArgumentException("这"+o.getName()+"味道不对啊,怎么一个字段都没有");
 
 		int _init = data.getMethod("<init>", "()V");
-		if (_init < 0 || (data.methods.get(_init).modifier() & PUBLIC) == 0) {
-			if (!SerializerFactoryFactory.injected)
-				throw new IllegalArgumentException("Adapter没有激活,不能跳过无参构造器生成对象"+o.getName());
-			if ((flag & NO_CONSTRUCTOR) == 0)
-				throw new IllegalArgumentException("不允许跳过构造器(NO_CONSTRUCTOR)");
-			_init = -1;
+		if (_init < 0) {
+			if ((flag & NO_CONSTRUCTOR) == 0) throw new IllegalArgumentException("不允许跳过构造器(NO_CONSTRUCTOR)" + o.getName());
+		} else if ((data.methods.get(_init).modifier() & PUBLIC) == 0) {
+			if (!SerializerUtils.injected) throw new IllegalArgumentException("Adapter没有激活,不能跳过无参构造器生成对象" + o.getName());
+			if ((flag & SAFE) != 0) throw new IllegalArgumentException("UNSAFE: "+o.getName()+".<init>");
 		}
 
 		begin();
@@ -692,11 +775,11 @@ public final class SerializerFactory {
 		for (int i = 0; i < fields.size(); i++) {
 			FieldNode f = fields.get(i);
 			if ((f.modifier() & (TRANSIENT|STATIC)) != 0) continue;
-			if ((f.modifier() & FINAL) != 0) {
-				throw new IllegalArgumentException("无法修改"+f);
-			} else if ((f.modifier() & PUBLIC) == 0) {
-				if (!SerializerFactoryFactory.injected) throw new IllegalArgumentException("Adapter未激活,不能访问非public的"+f);
-			}
+
+			int unsafe;
+			if ((f.modifier() & PUBLIC) == 0) unsafe = 3; // 1|2
+			else if ((f.modifier() & FINAL) != 0) unsafe = 5; // 1|4
+			else unsafe = 0;
 
 			String name = f.name();
 			MethodNode get = null, set = null;
@@ -716,12 +799,14 @@ public final class SerializerFactory {
 								int id = data.getMethod(sid, "()".concat(f.rawDesc()));
 								if (id < 0) throw new IllegalArgumentException("无法找到get方法" + anno);
 								get = data.methods.get(id);
+								unsafe &= 5;
 							}
 							sid = anno.getString("set");
 							if (sid != null) {
-								int id = data.getMethod(sid, "(" + f.rawDesc() + ")V");
+								int id = data.getMethod(sid, "("+f.rawDesc()+")V");
 								if (id < 0) throw new IllegalArgumentException("无法找到set方法" + anno);
 								set = data.methods.get(id);
+								unsafe &= 2;
 							}
 							break;
 						}
@@ -744,7 +829,21 @@ public final class SerializerFactory {
 				}
 			}
 
-			value(fieldId, data, f, name, get, set, optional1, as);
+			if (unsafe != 0 ||
+				set != null && (set.modifier()&PUBLIC) == 0 ||
+				get != null && (get.modifier()&PUBLIC) == 0) {
+				if ((flag & SAFE) != 0)
+					throw new RuntimeException("无权访问"+data.name+"."+f+" ("+unsafe+")\n" +
+					"解决方案:\n" +
+					" 1. 开启UNSAFE模式\n" +
+					" 2. 定义setter/getter\n" +
+					" 3. 为字段或s/g添加public");
+				if (!SerializerUtils.injected)
+					throw new RuntimeException("无权访问"+data.name+"."+f+" ("+unsafe+")\n" +
+						"解决方案: 换用支持的JVM");
+			}
+
+			value(fieldId, data, f, name, get, set, optional1, as, (unsafe&4) != 0 ? o : null);
 			fieldIds.putInt(fieldId, name);
 
 			fieldId++;
@@ -791,7 +890,8 @@ public final class SerializerFactory {
 	}
 	private void value(int fieldId, ConstantData data, FieldNode fn,
 					   String actualName, MethodNode get, MethodNode set,
-					   boolean optional1, AsType as) {
+					   boolean optional1, AsType as,
+					   Class<?> unsafePut) {
 		Type type = as != null ? as.output : fn.fieldType();
 		int actualType = type.getActualType();
 		int methodType;
@@ -875,8 +975,21 @@ public final class SerializerFactory {
 
 		if (as != null) cw.invoke(INVOKEVIRTUAL, as.reader);
 
-		if (set == null) cw.field(PUTFIELD, data.name, fn.name(), fn.rawDesc());
-		else cw.invoke(INVOKEVIRTUAL, set);
+		if (set == null) {
+			if (unsafePut != null) {
+				cw.one(POP); // on-stack is local[2]
+				cw.field(GETSTATIC, "roj/reflect/FieldAccessor", "u", "Lsun/misc/Unsafe;");
+				cw.one(SWAP); // local[1].ref.cast
+				cw.one(ALOAD_2);
+				try {
+					Field field = unsafePut.getDeclaredField(fn.name());
+					cw.ldc(FieldAccessor.u.objectFieldOffset(field));
+					cw.invoke(DIRECT_IF_OVERRIDE, "sun/misc/Unsafe", "put"+ReflectionUtils.accessorName(field), "(Ljava/lang/Object;J"+(fn.fieldType().isPrimitive() ? fn.fieldType().toString() : "Ljava/lang/Object;")+")V");
+				} catch (NoSuchFieldException e) { Helpers.athrow(e); }
+			} else {
+				cw.field(PUTFIELD, data.name, fn.name(), fn.rawDesc());
+			}
+		} else cw.invoke(INVOKEVIRTUAL, set);
 
 		cw.one(RETURN);
 		switch (methodType) {
@@ -915,9 +1028,9 @@ public final class SerializerFactory {
 
 		cw = keyCw;
 		block:
-		if (actualType == Type.CLASS && !"java/lang/String".equals(type.owner)) {
+		if (actualType == Type.CLASS && !"java/lang/String".equals(type.getActualClass())) {
 			int id;
-			String serType = type.owner == null ? type.toDesc() : type.owner;
+			String serType = type.getActualClass();
 			Signature serSig = fn.parsedAttr(data.cp, Attribute.SIGNATURE);
 			if (serSig != null) {
 				id = ser(serType, serSig.toDesc());
@@ -984,7 +1097,7 @@ public final class SerializerFactory {
 				if (as.user) break block;
 			}
 
-			String c = "java/lang/String".equals(type.owner) ? "Ljava/lang/String;" : Type.toDesc(actualType);
+			String c = "java/lang/String".equals(type.getActualClass()) ? "Ljava/lang/String;" : Type.toDesc(actualType);
 
 			cw.invokeItf("roj/config/serial/CVisitor", "value", "("+c+")V");
 		}

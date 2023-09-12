@@ -58,7 +58,7 @@ public class HRRemote {
 		}
 
 		@Override
-		public void channelClosed(ChannelCtx ctx) {
+		public void channelClosed(ChannelCtx ctx) throws IOException {
 			clients.remove(this);
 		}
 

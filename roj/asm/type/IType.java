@@ -15,7 +15,7 @@ public interface IType {
 	default String toDesc() {
 		CharList sb = new CharList();
 		toDesc(sb);
-		return sb.toString();
+		return sb.toStringAndFree();
 	}
 	void toDesc(CharList sb);
 	void toString(CharList sb);

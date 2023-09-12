@@ -185,7 +185,7 @@ public final class LegacyForge extends WorkspaceBuilder {
 		mapper.setParamMap(paramMap);
 
 		long start = System.nanoTime();
-		mapper.map(false, merged);
+		mapper.map(merged);
 		long end = System.nanoTime();
 
 		merged.sort((o1, o2) -> o1.getFileName().compareTo(o2.getFileName()));

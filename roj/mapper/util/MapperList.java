@@ -30,6 +30,7 @@ public final class MapperList extends SimpleList<String> {
 	public void pack0() { selfIdx = size; }
 	public void index() {
 		index.clear();
+		index.ensureCapacity(size);
 		for (int i = 0; i < size; i++) index.putInt(list[i].toString(), i);
 	}
 

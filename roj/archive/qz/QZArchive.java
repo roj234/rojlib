@@ -3,6 +3,8 @@ package roj.archive.qz;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ChecksumInputStream;
+import roj.archive.SourceStreamCAS;
+import roj.archive.zip.ZipArchive;
 import roj.collect.*;
 import roj.concurrent.TaskHandler;
 import roj.crypt.CRCAny;
@@ -28,6 +30,7 @@ import java.util.function.ObjLongConsumer;
 import java.util.zip.CRC32;
 
 import static roj.archive.qz.BlockId.*;
+import static roj.reflect.FieldAccessor.u;
 
 /**
  * 我去除了大部分C++的味道，但是保留了一部分，这样你才知道自己用的是Java
@@ -37,6 +40,13 @@ import static roj.archive.qz.BlockId.*;
  */
 public class QZArchive implements ArchiveFile {
 	Source r;
+	private Source fpRead;
+	private static long FPREAD_OFFSET;
+	static {
+		try {
+			FPREAD_OFFSET = u.objectFieldOffset(ZipArchive.class.getDeclaredField("fpRead"));
+		} catch (NoSuchFieldException ignored) {}
+	}
 	private final BufferPool pool;
 	private ByteList buf = ByteList.EMPTY;
 
@@ -96,6 +106,12 @@ public class QZArchive implements ArchiveFile {
 		if (r != null) {
 			r.close();
 			r = null;
+
+			Source s;
+			do {
+				s = fpRead;
+			} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, s, null));
+			if (s != null) s.close();
 
 			if (password != null) Arrays.fill(password, (byte) 0);
 		}
@@ -276,7 +292,7 @@ public class QZArchive implements ArchiveFile {
 
 		buf.close();
 
-		try (InputStream in = getSolidStream("<header>", new BufferedSource(r, 1024, pool, false), b, null)) {
+		try (InputStream in = getSolidStream("<header>", b, null)) {
 			buf = (ByteList) pool.buffer(false, (int) b.uSize);
 			int read = buf.readStream(in, (int) b.uSize);
 			if (read < b.uSize) throw new EOFException("数据流过早终止");
@@ -851,10 +867,7 @@ public class QZArchive implements ArchiveFile {
 		if (blocks == null) return;
 		for (WordBlock b : blocks) {
 			th.pushTask(() -> {
-				Source r = this.r.threadSafeCopy();
-				Source src = r.isBuffered() ? r : new BufferedSource(r, 1024, pool, true);
-
-				try (InputStream in = getSolidStream("block" + b.offset, src, b, pass)) {
+				try (InputStream in = getSolidStream("block"+b.offset, b, pass)) {
 					// noinspection all
 					LimitInputStream lin = new LimitInputStream(in, 0, false);
 					QZEntry entry = b.firstEntry;
@@ -908,8 +921,7 @@ public class QZArchive implements ArchiveFile {
 
 		closeSolidStream();
 
-		Source r = this.r.threadSafeCopy();
-		InputStream in = blockInput = getSolidStream(file.name, r.isBuffered()?r:BufferedSource.autoClose(r), file.block, pass);
+		InputStream in = blockInput = getSolidStream(file.name, file.block, pass);
 		if (in.skip(file.offset) < file.offset) {
 			in.close();
 			throw new EOFException("数据流过早终止");
@@ -937,13 +949,23 @@ public class QZArchive implements ArchiveFile {
 		activeEntry = null;
 	}
 
-	private InputStream getSolidStream(String name, Source src, WordBlock b, byte[] pass) throws IOException {
+	private InputStream getSolidStream(String name, WordBlock b, byte[] pass) throws IOException {
 		if (pass == null) pass = password;
 
+		Source src;
+		do {
+			src = fpRead;
+			if (src == null) {
+				src = r.threadSafeCopy();
+				src = src.isBuffered()?src:BufferedSource.autoClose(src);
+				break;
+			}
+		} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, src, null));
 		src.seek(b.offset);
+
 		InputStream in;
 		if (b.complexCoder == null) {
-			in = new SourceInputStream(src, b.size);
+			in = new SourceStreamCAS(src, b.size, this, FPREAD_OFFSET);
 
 			QZCoder[] coders = b.coder;
 			for (int i = 0; i < coders.length; i++) {
@@ -957,7 +979,7 @@ public class QZArchive implements ArchiveFile {
 			long off = b.offset;
 			src.seek(off);
 			// noinspection all
-			streams[0] = new SourceInputStream(src, b.size);
+			streams[0] = new SourceStreamCAS(src, b.size, this, FPREAD_OFFSET);
 			off += b.size;
 
 			for (int i = 0; i < b.extraSizes.length;) {

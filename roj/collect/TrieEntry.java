@@ -10,12 +10,12 @@ import java.util.Iterator;
  * @author Roj234
  * @since 2020/11/9 23:10
  */
-public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, MapLikeEntry<TrieEntry> {
+public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Generic_Entry<TrieEntry> {
 	final char c;
 
 	private TrieEntry next;
 	@Override
-	public TrieEntry nextEntry() {
+	public TrieEntry __next() {
 		return next;
 	}
 
@@ -94,9 +94,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, MapLi
 
 	@Nonnull
 	@Override
-	public final Iterator<TrieEntry> iterator() {
-		return new EntryItr<>(entries, null);
-	}
+	public final Iterator<TrieEntry> iterator() { return new EntryItr<>(entries); }
 
 	// endregion
 

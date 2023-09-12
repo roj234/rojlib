@@ -4,13 +4,16 @@ import roj.math.MathUtils;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
-import java.util.*;
+import java.util.AbstractMap;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.ToIntFunction;
 
 import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.UNDEFINED;
 
-public class ToIntMap<K> extends AbstractMap<K, Integer> implements MapLike<ToIntMap.Entry<K>>, ToIntFunction<K>, IIntMap<K> {
+public class ToIntMap<K> extends AbstractMap<K, Integer> implements _Generic_Map<ToIntMap.Entry<K>>, ToIntFunction<K>, IIntMap<K> {
 	@Override
 	public int applyAsInt(K value) {
 		return getOrDefault(value, -1);
@@ -38,7 +41,7 @@ public class ToIntMap<K> extends AbstractMap<K, Integer> implements MapLike<ToIn
 		return entry.v += i;
 	}
 
-	public static class Entry<K> implements MapLikeEntry<Entry<K>>, Map.Entry<K, Integer> {
+	public static class Entry<K> implements _Generic_Entry<Entry<K>>, Map.Entry<K, Integer> {
 		public K k;
 		public int v;
 
@@ -76,7 +79,7 @@ public class ToIntMap<K> extends AbstractMap<K, Integer> implements MapLike<ToIn
 		public Entry<K> next;
 
 		@Override
-		public Entry<K> nextEntry() {
+		public Entry<K> __next() {
 			return next;
 		}
 
@@ -119,23 +122,12 @@ public class ToIntMap<K> extends AbstractMap<K, Integer> implements MapLike<ToIn
 		if (this.entries != null) resize();
 	}
 
-	public EntrySet<K> selfEntrySet() {
-		return new EntrySet<>(this);
-	}
+	public int size() { return size; }
 
-	@Nonnull
-	public Set<Map.Entry<K, Integer>> entrySet() {
-		return Helpers.cast(new EntrySet<>(this));
-	}
-
-	public int size() {
-		return size;
-	}
-
-	@Override
-	public void removeEntry0(Entry<K> entry) {
-		remove(entry.k);
-	}
+	public Set<Map.Entry<K, Integer>> entrySet() { return Helpers.cast(selfEntrySet()); }
+	public Set<Entry<K>> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public _Generic_Entry<?>[] __entries() { return entries; }
+	public void __remove(Entry<K> entry) { remove(entry.k); }
 
 	@SuppressWarnings("unchecked")
 	public void putAll(@Nonnull Map<? extends K, ? extends Integer> otherMap) {
@@ -379,48 +371,6 @@ public class ToIntMap<K> extends AbstractMap<K, Integer> implements MapLike<ToIn
 					}
 				}
 			} else {Arrays.fill(entries, null);}
-		}
-	}
-
-	public static class EntrySet<K> extends AbstractSet<Entry<K>> {
-		private final ToIntMap<K> map;
-
-		public EntrySet(ToIntMap<K> map) {
-			this.map = map;
-		}
-
-		public final int size() {
-			return map.size();
-		}
-
-		public final void clear() {
-			map.clear();
-		}
-
-		@Nonnull
-		public final Iterator<Entry<K>> iterator() {
-			return isEmpty() ? Collections.emptyIterator() : Helpers.cast(new EntryItr<>(map.entries, map));
-		}
-
-		@SuppressWarnings("unchecked")
-		public final boolean contains(Object o) {
-			if (!(o instanceof ToIntMap.Entry)) return false;
-			ToIntMap.Entry<?> e = (ToIntMap.Entry<?>) o;
-			Object key = e.getKey();
-			ToIntMap.Entry<?> comp = map.getEntry((K) key);
-			return comp != null && comp.v == e.v;
-		}
-
-		public final boolean remove(Object o) {
-			if (o instanceof ToIntMap.Entry) {
-				ToIntMap.Entry<?> e = (ToIntMap.Entry<?>) o;
-				return map.remove(e.k) != null;
-			}
-			return false;
-		}
-
-		public final Spliterator<Entry<K>> spliterator() {
-			return Spliterators.spliterator(iterator(), size(), 0);
 		}
 	}
 }

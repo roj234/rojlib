@@ -10,7 +10,7 @@ import java.util.*;
  * @author Roj234
  * @since 2021/6/18 10:35
  */
-public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V>, MapLike<MyHashMap.Entry<K, V>>, FindMap<K, V> {
+public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V>, _Generic_Map<MyHashMap.Entry<K, V>>, FindMap<K, V> {
 	public static class Entry<K, V> extends MyHashMap.Entry<K, V> {
 		protected Entry(K k, V v) {
 			super(k, v);
@@ -23,7 +23,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		protected Entry<K, V> valueNext;
 
 		@Override
-		public Entry<K, V> nextEntry() {
+		public Entry<K, V> __next() {
 			return (Entry<K, V>) next;
 		}
 	}
@@ -127,7 +127,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 
 					@Override
 					protected void remove(Entry<V, K> obj) {
-						map.removeEntry0(Helpers.cast(t));
+						map.__remove(Helpers.cast(t));
 					}
 				};
 			}
@@ -200,9 +200,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 	}
 
 	@Nonnull
-	public Set<Map.Entry<K, V>> entrySet() {
-		return new EntrySet<>(this);
-	}
+	public Set<Map.Entry<K, V>> entrySet() { return _Generic_EntrySet.create(this); }
 
 	public int size() {
 		return size;
@@ -221,7 +219,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 			for (; i < j; i++) {
 				entry = (Entry<K, V>) kTab[i];
 				while (entry != null) {
-					next = entry.nextEntry();
+					next = entry.__next();
 					int newIndex = indexFor(entry.k)&mask1;
 					Entry<K, V> old = (Entry<K, V>) kTab1[newIndex];
 					kTab1[newIndex] = entry;
@@ -387,9 +385,10 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		Arrays.fill(vTab, null);
 	}
 
-	public void removeEntry0(MyHashMap.Entry<K, V> entry) {
-		removeEntry((Entry<K, V>) entry);
-	}
+	@Override
+	public _Generic_Entry<?>[] __entries() { return kTab; }
+	public void __remove(MyHashMap.Entry<K, V> entry) { removeEntry((Entry<K, V>) entry); }
+
 	protected void removeEntry(Entry<K, V> toRemove) {
 		removeKeyEntry(toRemove, toRemove.k);
 		removeValueEntry(toRemove, toRemove.v);
@@ -407,14 +406,14 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		}
 
 		if (curr == entry) {
-			kTab[h] = curr.nextEntry();
+			kTab[h] = curr.__next();
 			entry.next = null;
 			return true;
 		}
 
 		while (curr.next != null) {
 			Entry<K, V> prev = curr;
-			curr = curr.nextEntry();
+			curr = curr.__next();
 			if (curr == entry) {
 				prev.next = entry.next;
 				entry.next = null;
@@ -461,7 +460,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		} else {
 			while (curr.next != null) {
 				if (curr == entry) return;
-				curr = curr.nextEntry();
+				curr = curr.__next();
 			}
 			curr.next = entry;
 		}
@@ -491,7 +490,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 			if (Objects.equals(k, entry.k)) {
 				return entry;
 			}
-			entry = entry.nextEntry();
+			entry = entry.__next();
 		}
 		return null;
 	}
@@ -514,43 +513,5 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		putKeyEntry(entry);
 		putValueEntry(entry);
 		size++;
-	}
-
-	static class EntrySet<K, V> extends AbstractSet<Map.Entry<K, V>> {
-		private final HashBiMap<K, V> map;
-
-		public EntrySet(HashBiMap<K, V> map) {
-			this.map = map;
-		}
-
-		public final int size() {
-			return map.size();
-		}
-
-		public final void clear() {
-			map.clear();
-		}
-
-		@Nonnull
-		public final Iterator<Map.Entry<K, V>> iterator() {
-			return isEmpty() ? Collections.emptyIterator() : Helpers.cast(new EntryItr<>(map.kTab, map));
-		}
-
-		@SuppressWarnings("unchecked")
-		public final boolean contains(Object o) {
-			if (!(o instanceof Map.Entry)) return false;
-			Map.Entry<?, ?> e = (Map.Entry<?, ?>) o;
-			Object key = e.getKey();
-			Entry<?, ?> comp = map.getKeyEntry((K) key);
-			return comp != null && comp.v == e.getValue();
-		}
-
-		public final boolean remove(Object o) {
-			if (o instanceof Map.Entry) {
-				Entry<?, ?> e = (Entry<?, ?>) o;
-				return map.remove(e.k) != null;
-			}
-			return false;
-		}
 	}
 }

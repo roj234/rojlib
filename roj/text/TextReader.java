@@ -298,8 +298,8 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 			int r = fill(buf, 0, buf.length);
 			if (r <= 0) return r;
 			this.off = 0;
-			this.len = Math.max(r - clen, 0);
-			System.arraycopy(buf, 0, cbuf, coff, r);
+			this.len = Math.max(r - remain, 0);
+			System.arraycopy(buf, 0, cbuf, coff, remain);
 			return clen;
 		}
 

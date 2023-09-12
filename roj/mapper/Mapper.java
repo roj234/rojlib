@@ -41,8 +41,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
-import static roj.asm.tree.anno.AnnVal.*;
+import static roj.asm.tree.anno.AnnVal.ANNOTATION_CLASS;
 import static roj.asm.type.Type.ARRAY;
+import static roj.asm.util.AccessFlag.*;
 
 /**
  * @author Roj234
@@ -54,19 +55,27 @@ public class Mapper extends Mapping {
 	public static final int
 		/** 任意methodMap和fieldMap的owner均能在classMap中找到 */
 		FLAG_FULL_CLASS_MAP = 1,
-		/** (Obfuscator用) 删除冲突的mapping（子类实现的接口覆盖父类方法） */
-		FLAG_FIX_SUBIMPL = 2,
 		/** (Obfuscator用) 删除冲突的mapping（方法继承） */
 		FLAG_FIX_INHERIT = 4,
+		/** (Obfuscator用) 删除冲突的mapping（子类实现的接口覆盖父类方法） */
+		MF_FIX_SUBIMPL = 2,
 		/** 启用注解伪继承 */
-		FLAG_ANNOTATION_INHERIT = 8,
+		MF_ANNOTATION_INHERIT = 8,
 		/** 类名有变动 */
-		FLAG_CLASS_CHANGED = 16;
+		MF_RENAME_CLASS = 16,
+		/** 单线程 */
+		MF_SINGLE_THREAD = 32,
+		/** 修复class改名造成的访问问题 */
+		MF_FIX_ACCESS = 64;
 
 	// 'CMPC': Const Remapper Cache
 	private static final int FILE_HEADER = 0x634d5063;
 	private static final int ASYNC_THRESHOLD = 200;
 	private static final boolean DEBUG = false;
+	// 注意事项
+	// 1. 返回值的重载通过bridge method实现，JVM就是傻逼，当然也可以让你实现骚操作
+	// 2. stopAnchor
+	// 3. fixAccess inheritor
 
 	private final UnaryOperator<String> GENERIC_TYPE_MAPPER = (old) -> {
 		String now = MapUtil.getInstance().mapClassName(classMap, old);
@@ -246,73 +255,74 @@ public class Mapper extends Mapping {
 	/**
 	 * 全量
 	 */
-	public void map(boolean singleThread, List<Context> ctxs) {
-		if (singleThread || ctxs.size() <= ASYNC_THRESHOLD) {
-			initSelf(ctxs.size());
-
-			Context ctx = null;
-			try {
-				for (int i = 0; i < ctxs.size(); i++) S1_parse(ctx = ctxs.get(i));
-
-				initSelfSuperMap();
-				if ((flag & FLAG_FIX_SUBIMPL) != 0) S15_fixSubImpl(ctxs, false);
-
-				for (int i = 0; i < ctxs.size(); i++) S2_mapSelf(ctx = ctxs.get(i), false);
-				for (int i = 0; i < ctxs.size(); i++) S3_mapConstant(ctx = ctxs.get(i));
-				if ((flag & FLAG_CLASS_CHANGED) != 0) for (int i = 0; i < ctxs.size(); i++) S4_mapClassName(ctx = ctxs.get(i));
-			} catch (Throwable e) {
-				throw new RuntimeException("At parsing " + ctx, e);
-			}
-		} else {
-			stopAnchor = new ConcurrentFindHashSet<>(libStopAnchor);
-			selfSupers = new ConcurrentHashMap<>(ctxs.size());
-			selfInherited = new ConcurrentFindHashMap<>();
-
-			List<List<Context>> tasks = new ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);
-
-			int i = 0;
-			while (i < ctxs.size()) {
-				int len = Math.min(ctxs.size()-i, ASYNC_THRESHOLD);
-				tasks.add(ctxs.subList(i, i+len));
-				i += len;
-			}
-
-			MapUtil.async(this::S1_parse, tasks);
-
-			initSelfSuperMap();
-			if ((flag & FLAG_FIX_SUBIMPL) != 0) S15_fixSubImpl(ctxs, false);
-
-			MapUtil.async((ctx) -> S2_mapSelf(ctx, false), tasks);
-			MapUtil.async(this::S3_mapConstant, tasks);
-			if ((flag & FLAG_CLASS_CHANGED) != 0) MapUtil.async(this::S4_mapClassName, tasks);
+	public void map(List<Context> ctxs) {
+		if ((flag&MF_SINGLE_THREAD)!=0 || ctxs.size() <= ASYNC_THRESHOLD) {
+			_map(ctxs, true);
+			return;
 		}
+
+		stopAnchor = new ConcurrentFindHashSet<>(libStopAnchor);
+		selfSupers = new ConcurrentHashMap<>(ctxs.size());
+		selfInherited = new ConcurrentFindHashMap<>();
+
+		List<List<Context>> tasks = new ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);
+
+		int i = 0;
+		while (i < ctxs.size()) {
+			int len = Math.min(ctxs.size()-i, ASYNC_THRESHOLD);
+			tasks.add(ctxs.subList(i, i+len));
+			i += len;
+		}
+
+		MapUtil.async(this::S1_parse, tasks);
+
+		initSelfSuperMap();
+
+		S2_begin(ctxs);
+
+		if ((flag&MF_FIX_ACCESS) != 0) S2_1_FixAccess(ctxs, false);
+		if ((flag&MF_FIX_SUBIMPL) != 0) S2_3_FixSubImpl(ctxs, false);
+
+		S2_end();
+
+		MapUtil.async((ctx) -> S3_mapSelf(ctx, false), tasks);
+		MapUtil.async(this::S4_mapConstant, tasks);
+		if ((flag& MF_RENAME_CLASS) != 0) MapUtil.async(this::S5_mapClassName, tasks);
 	}
 
 	/**
 	 * 增量
 	 */
-	public void mapIncr(List<Context> ctxs) {
-		if (selfSupers == null) initSelf(ctxs.size());
+	public void mapIncr(List<Context> ctxs) { _map(ctxs, false); }
+
+	private void _map(List<Context> ctxs, boolean full) {
+		if (selfSupers == null || full) initSelf(ctxs.size());
 
 		Context ctx = null;
 		try {
-			MyHashSet<String> modified = new MyHashSet<>();
+			MyHashSet<String> modified = full?null:new MyHashSet<>();
 			for (int i = 0; i < ctxs.size(); i++) {
 				S1_parse(ctx = ctxs.get(i));
-				modified.add(ctx.getData().name);
+				if (!full) modified.add(ctx.getData().name);
 			}
 
 			initSelfSuperMap();
+			if (!full) {
+				Predicate<Desc> rem = key -> modified.contains(key.owner);
+				selfInherited.keySet().removeIf(rem);
+				stopAnchor.removeIf(rem);
+			}
 
-			Predicate<Desc> rem = key -> modified.contains(key.owner);
-			selfInherited.keySet().removeIf(rem);
-			stopAnchor.removeIf(rem);
+			S2_begin(ctxs);
 
-			if ((flag & FLAG_FIX_SUBIMPL) != 0) S15_fixSubImpl(ctxs, false);
+			if ((flag&MF_FIX_ACCESS) != 0) S2_1_FixAccess(ctxs, false);
+			if ((flag&MF_FIX_SUBIMPL) != 0) S2_3_FixSubImpl(ctxs, false);
 
-			for (int i = 0; i < ctxs.size(); i++) S2_mapSelf(ctx = ctxs.get(i), false);
-			for (int i = 0; i < ctxs.size(); i++) S3_mapConstant(ctx = ctxs.get(i));
-			if ((flag & FLAG_CLASS_CHANGED) != 0) for (int i = 0; i < ctxs.size(); i++) S4_mapClassName(ctx = ctxs.get(i));
+			S2_end();
+
+			for (int i = 0; i < ctxs.size(); i++) S3_mapSelf(ctx = ctxs.get(i), false);
+			for (int i = 0; i < ctxs.size(); i++) S4_mapConstant(ctx = ctxs.get(i));
+			if ((flag&MF_RENAME_CLASS) != 0) for (int i = 0; i < ctxs.size(); i++) S5_mapClassName(ctx = ctxs.get(i));
 		} catch (Throwable e) {
 			throw new RuntimeException("At parsing " + ctx, e);
 		}
@@ -328,13 +338,13 @@ public class Mapper extends Mapping {
 		List<CstClass> itfs = data.interfaces;
 
 		int size = itfs.size() + ("java/lang/Object".equals(data.parent) ? 0 : 1);
-		if (size == 0 && (flag & FLAG_ANNOTATION_INHERIT) == 0) return;
+		if (size == 0 && (flag&MF_ANNOTATION_INHERIT) == 0) return;
 
 		ArrayList<String> list = new ArrayList<>(size);
 		if (!"java/lang/Object".equals(data.parent)) list.add(data.parent);
 		for (int i = 0; i < itfs.size(); i++) list.add(itfs.get(i).name().str());
 
-		if ((flag & FLAG_ANNOTATION_INHERIT) != 0) {
+		if ((flag&MF_ANNOTATION_INHERIT) != 0) {
 			Annotations a = data.parsedAttr(data.cp, Attribute.ClAnnotations);
 			if (a != null) {
 				Annotation found = AttrHelper.getAnnotation(a.annotations, "roj/mapper/Inherited");
@@ -350,15 +360,294 @@ public class Mapper extends Mapping {
 		selfSupers.put(data.name, list);
 	}
 
-	/**
-	 * Step 1.5 (Optional) 修复父类的方法被子类实现的接口使用时的映射冲突
-	 * @return added to methodMap
-	 */
-	public final List<Desc> S15_fixSubImpl(List<Context> ctxs, boolean mapIsMutable) {
-		List<Desc> added = new SimpleList<>();
-		MyHashMap<String, IClass> methods = MapUtil.createNamedMap(ctxs);
+	private MyHashMap<String, IClass> s2_tmp_byName;
+	private MyHashMap<String, List<Desc>> s2_tmp_methods;
+	public final void S2_begin(List<Context> ctxs) {
+		s2_tmp_byName = MapUtil.createNamedMap(ctxs);
+		s2_tmp_methods = new MyHashMap<>();
+	}
 
-		for (SubImpl method : collectSubImpl(ctxs, methods)) {
+	/**
+	 * Step 2.1 (Optional) Fix access bug when changing package
+	 * @param downgradeToo downgrade access level also (no supported yet)
+	 */
+	public final void S2_1_FixAccess(List<Context> ctxs, boolean downgradeToo) {
+		MyHashSet<Desc> upgraded = new MyHashSet<>();
+		MyHashSet<Object> processed = new MyHashSet<>();
+
+		for (int i = 0; i < ctxs.size(); i++) {
+			Context ctx = ctxs.get(i);
+
+			String selfName = ctx.getData().name;
+			String selfNewName = classMap.getOrDefault(selfName, selfName);
+
+			List<CstClass> cref = ctx.getClassConstants();
+			for (int j = 0; j < cref.size(); j++) {
+				String name = cref.get(j).name().str();
+				if (name.equals(selfName)) continue;
+
+				if (processed.contains(name)) continue;
+
+				IClass cn = s2_tmp_byName.get(name);
+				//SIG:reflectClassInfo
+				if (cn == null) continue;
+
+				if ((cn.modifier()&PUBLIC) != 0) continue;
+
+				String newName = classMap.getOrDefault(name, name);
+				if (!MapUtil.arePackagesSame(selfNewName, newName)) {
+					cn.modifier(cn.modifier()|PUBLIC);
+					processed.add(name);
+
+					LOGGER.log(Level.TRACE, "[FAcc-C] 提升了 {} 引用的 {} (+public)", null, selfName, name);
+				}
+			}
+
+			checkAccess(ctx.getMethodConstants(), true, processed, selfName, selfNewName, upgraded);
+			checkAccess(ctx.getFieldConstants(), false, processed, selfName, selfNewName, upgraded);
+
+			SimpleList<MethodNode> methods = ctx.getData().methods;
+			for (int j = 0; j < methods.size(); j++) {
+				MethodNode mn = methods.get(j);
+				// inheritable package-private method
+				if ((mn.modifier() & (PUBLIC|PROTECTED|PRIVATE|STATIC|FINAL)) == 0) {
+					upgraded.add(new Desc(mn.ownerClass(), mn.name(), mn.rawDesc(), 6));
+				}
+			}
+		}
+
+		Desc d = MapUtil.getInstance().sharedDC;
+		List<String> exist = new SimpleList<>();
+		for (int i = 0; i < ctxs.size(); i++) {
+			ConstantData data = ctxs.get(i).getData();
+
+			List<String> parents = selfSupers.get(data.name);
+			if (parents == null) continue;
+
+			exist.clear();
+			for (int j = 0; j < parents.size(); j++) {
+				String parent = parents.get(j);
+				if (s2_tmp_byName.containsKey(parent)) exist.add(parent);
+			}
+			if (exist.isEmpty()) continue;
+
+			SimpleList<MethodNode> methods = data.methods;
+			for (int j = 0; j < methods.size(); j++) {
+				MethodNode mn = methods.get(j);
+
+				d.owner = data.name;
+				d.name = mn.name();
+				d.param = mn.rawDesc();
+				if (d.name.startsWith("<")) continue;
+
+				int k = 0;
+				while (true) {
+					Desc d1 = upgraded.find(d);
+					if (d1 != d) {
+						char acc = mn.modifier();
+						boolean isProtected = (d1.flags&PUBLIC) == 0;
+						boolean isInherited = d1.flags == 6;
+						if (isProtected) {
+							if ((acc&(PUBLIC|PROTECTED)) == 0) {
+								mn.modifier(acc|PROTECTED);
+								LOGGER.log(Level.TRACE, "[FAcc-I] 提升了 {} 继承的 {} (+protected)", null, data.name, d);
+							}
+						} else {
+							if ((acc&PUBLIC) == 0) {
+								mn.modifier(acc & ~PROTECTED | PUBLIC);
+								LOGGER.log(Level.TRACE, "[FAcc-I] 提升了 {} 继承的 {} (+public)", null, data.name, d);
+							}
+						}
+
+						if (isInherited) {
+							IClass ctx = s2_tmp_byName.get(d1.owner);
+							MoFNode m = ctx.methods().get(ctx.getMethod(d1.name, d1.param));
+							if ((m.modifier()&5) == 0) m.modifier(m.modifier()|PROTECTED);
+							d1.flags = 0;
+						}
+					}
+
+					if (stopAnchor.contains(d)) break;
+
+					if (k == exist.size()) break;
+					d.owner = exist.get(k++);
+				}
+			}
+		}
+	}
+	private void checkAccess(List<CstRef> ref, boolean method,
+							 MyHashSet<Object> processed,
+							 String selfName, String selfNewName,
+							 MyHashSet<Desc> upgraded) {
+		Desc d = MapUtil.getInstance().sharedDC;
+		nextNode:
+		for (int j = 0; j < ref.size(); j++) {
+			if (processed.contains(ref.get(j))) continue;
+			d.read(ref.get(j));
+
+			MoFNode node;
+
+			int k = 0;
+			List<String> parents = selfSupers.getOrDefault(d.owner, Collections.emptyList());
+
+			found:
+			while (true) {
+				//SIG:reflectClassInfo | getMethodInfo
+				IClass aa = s2_tmp_byName.get(d.owner);
+				if (aa != null) {
+					List<MoFNode> methods = Helpers.cast(method?aa.methods():aa.fields());
+					for (int i1 = 0; i1 < methods.size(); i1++) {
+						node = methods.get(i1);
+						if (node.rawDesc().equals(d.param) && node.name().equals(d.name)) {
+							break found;
+						}
+					}
+				}
+
+				if (stopAnchor.contains(d) || k == parents.size()) {
+					processed.add(ref.get(j));
+					continue nextNode;
+				}
+
+				d.owner = parents.get(k++);
+			}
+
+			char acc = node.modifier();
+			if ((acc & PUBLIC) != 0) {
+				processed.add(ref.get(j));
+				continue; // public
+			}
+
+			String newName = classMap.getOrDefault(d.owner, d.owner);
+			if (MapUtil.arePackagesSame(newName, selfNewName)) continue; // package-private
+
+			//SIG:不检测class: protected的判断太麻烦了，还要检测是不是aload_0
+			boolean protectedEnough = selfName.equals(ref.get(j).className());
+			if ((acc & PROTECTED) == 0 || !protectedEnough) {
+				LOGGER.log(Level.TRACE, "[FAcc-N] 提升了 {} 引用的 {} (+{})", null, selfName, d, protectedEnough ? "protected" : "public");
+				if (protectedEnough) {
+					node.modifier(acc|PROTECTED);
+				} else {
+					processed.add(ref.get(j));
+					node.modifier(acc & ~PROTECTED | PUBLIC);
+				}
+
+				if (method && (acc & (STATIC|FINAL)) == 0) {
+					d.flags = node.modifier();
+					upgraded.add(d.copy());
+				}
+			}
+		}
+	}
+
+	/**
+	 * Step 2.2 (Optional) Fix mapping on inheritance chain result in same name method <br>
+	 * The mapping must be modifiable
+	 */
+	public final boolean S2_2_FixInheritConflict(List<Context> ctxs) {
+		MyHashMap<NameAndType, Set<NameAndType>> sameNameNodes = new MyHashMap<>();
+		MyHashSet<String> checked = new MyHashSet<>();
+
+		boolean success = true;
+		for (Context ctx : ctxs) {
+			ConstantData data = ctx.getData();
+			if (!checked.add(data.name)) continue;
+
+			tryMap(null, data.name, data.fields, sameNameNodes, fieldMap);
+			tryMap(null, data.name, data.methods, sameNameNodes, methodMap);
+
+			List<String> parents = selfSupers.getOrDefault(data.name, Collections.emptyList());
+			for (String parent : parents) {
+				checked.add(parent);
+				tryMap(data.name, parent, getMethodInfoEx(parent), sameNameNodes, methodMap);
+			}
+
+			for (Map.Entry<NameAndType, Set<NameAndType>> entry : sameNameNodes.entrySet()) {
+				if (entry.getValue().size() <= 1) continue;
+
+				success = false;
+				LOGGER.log(Level.WARN, "[InheritConflict]: {} => {}", null, entry.getValue(), entry.getKey().name);
+
+				boolean remove = false;
+				for (NameAndType desc : entry.getValue()) {
+					if (desc.flags == 0) {
+						// unmappable
+						remove = true;
+						break;
+					}
+				}
+
+				for (NameAndType desc : entry.getValue()) {
+					if (remove) methodMap.remove(desc.copy());
+					remove = true;
+				}
+			}
+			sameNameNodes.clear();
+		}
+		return success;
+	}
+	private void tryMap(String inheritTo,
+						String owner, List<?> list,
+						MyHashMap<NameAndType, Set<NameAndType>> descs,
+						FindMap<Desc, String> map) {
+		List<String> parents = selfSupers.getOrDefault(owner, Collections.emptyList());
+		Desc d = MapUtil.getInstance().sharedDC;
+		for (int i = 0; i < list.size(); i++) {
+			MoFNode m = (MoFNode) list.get(i);
+
+			d.owner = owner;
+			d.name = m.name();
+			d.param = m.rawDesc();
+			d.flags = 0;
+
+			if (inheritTo != null) {
+				char acc = m.modifier();
+				if ((acc & (AccessFlag.PRIVATE)) != 0) continue;
+				if ((acc & (AccessFlag.PUBLIC|AccessFlag.PROTECTED)) == 0 && !MapUtil.arePackagesSame(inheritTo, owner)) continue;
+			}
+
+			int j = 0;
+			while (true) {
+				Map.Entry<Desc, String> entry = map.find(d);
+				if (entry != null) {
+					d.name = entry.getValue();
+					d.flags = 1;
+					break;
+				}
+
+				if (j == parents.size()) break;
+				d.owner = parents.get(j++);
+
+				if (stopAnchor.contains(d)) {
+					//SIG:DEBUG
+					LOGGER.log(Level.DEBUG, "[debug] stop on {}", null, d);
+					break;
+				}
+			}
+
+			NameAndType key = new NameAndType();
+			key.name = d.name;
+			key.param = d.param;
+
+			NameAndType val = new NameAndType();
+			val.owner = d.owner;
+			val.name = m.name();
+			val.param = key.param;
+			val.flags = d.flags;
+			descs.computeIfAbsent(key, Helpers.fnMyHashSet()).add(val);
+		}
+	}
+
+	/**
+	 * Step 2.3 (Optional) 修复父类的方法被子类实现的接口使用时的映射冲突 <BR>
+	 *     <p>"Implements method in <i>some interface</i> via subclass"</p>
+	 * @param mapIsMutable allow to remove mapping
+	 * @return added mapping
+	 */
+	public final List<Desc> S2_3_FixSubImpl(List<Context> ctxs, boolean mapIsMutable) {
+		List<Desc> added = new SimpleList<>();
+
+		for (SubImpl method : collectSubImpl(ctxs)) {
 			Desc desc = method.type.copy();
 
 			for (Set<String> classList : method.owners) {
@@ -397,7 +686,7 @@ public class Mapper extends Mapping {
 					if (!mapName.equals(methodMap.put(desc, mapName))) {
 						added.add(desc);
 
-						ConstantData data = (ConstantData) methods.get(desc.owner);
+						ConstantData data = (ConstantData) s2_tmp_byName.get(desc.owner);
 						int i = data.getMethod(desc.name, desc.param);
 						if (i < 0) throw new IllegalStateException("缺少元素(not in context...): " + desc);
 						desc.flags = data.methods.get(i).modifier();
@@ -409,10 +698,8 @@ public class Mapper extends Mapping {
 		}
 		return added;
 	}
-	private Set<SubImpl> collectSubImpl(List<Context> ctx, Map<String, IClass> classInfo) {
+	private Set<SubImpl> collectSubImpl(List<Context> ctx) {
 		MapUtil U = MapUtil.getInstance();
-
-		Map<String, List<Desc>> mapperMethods = new MyHashMap<>();
 
 		MyHashSet<SubImpl> out = new MyHashSet<>();
 
@@ -424,7 +711,7 @@ public class Mapper extends Mapping {
 
 		for (int i = 0; i < ctx.size(); i++) {
 			ConstantData data = ctx.get(i).getData();
-			if ((data.modifier() & (AccessFlag.INTERFACE|AccessFlag.ANNOTATION|AccessFlag.MODULE)) != 0) continue;
+			if ((data.modifier() & (INTERFACE|AccessFlag.ANNOTATION| MODULE)) != 0) continue;
 
 			List<CstClass> itfs = data.interfaces;
 			if (itfs.isEmpty()) continue;
@@ -434,11 +721,11 @@ public class Mapper extends Mapping {
 			for (int j = 0; j < itfs.size(); j++) {
 				String name = itfs.get(j).name().str();
 				if (!parents.contains(name)) {
-					List<MoFNode> nodes = getMethodInfoEx(name, classInfo, mapperMethods);
+					List<MoFNode> nodes = getMethodInfoEx(name);
 
 					for (int k = 0; k < nodes.size(); k++) {
 						MoFNode node = nodes.get(k);
-						if ((node.modifier() & (AccessFlag.PRIVATE|AccessFlag.STATIC)) == 0) continue;
+						if ((node.modifier() & (PRIVATE| STATIC)) != 0) continue;
 
 						NameAndType key = new NameAndType();
 						key.owner = name;
@@ -453,10 +740,10 @@ public class Mapper extends Mapping {
 			int j = 0;
 			String parent = data.parent;
 			while (true) {
-				List<MoFNode> nodes = getMethodInfoEx(parent, classInfo, mapperMethods);
+				List<MoFNode> nodes = getMethodInfoEx(parent);
 				for (int k = 0; k < nodes.size(); k++) {
 					MoFNode node = nodes.get(k);
-					if ((node.modifier() & (AccessFlag.PUBLIC|AccessFlag.STATIC)) != AccessFlag.PUBLIC) continue;
+					if ((node.modifier() & (PUBLIC| STATIC)) != PUBLIC) continue;
 
 					if ((nTest.name = node.name()).startsWith("<")) continue;
 					nTest.param = node.rawDesc();
@@ -493,9 +780,9 @@ public class Mapper extends Mapping {
 						set.add(issuer.owner);
 
 						// native不能
-						if ((node.modifier() & AccessFlag.NATIVE) != 0) set.add(null);
+						if ((node.modifier() & NATIVE) != 0) set.add(null);
 						// 至少有一个类不是要处理的类: 不能混淆
-						if (!classInfo.containsKey(parent) || !classInfo.containsKey(issuer.owner)) set.add(null);
+						if (!s2_tmp_byName.containsKey(parent) || !s2_tmp_byName.containsKey(issuer.owner)) set.add(null);
 					}
 				}
 
@@ -507,117 +794,30 @@ public class Mapper extends Mapping {
 		return out;
 	}
 	@Nonnull
-	private List<MoFNode> getMethodInfoEx(String name, Map<String, IClass> classInfo, Map<String, List<Desc>> mappingMethods) {
-		IClass c = classInfo.get(name);
+	private List<MoFNode> getMethodInfoEx(String name) {
+		IClass c = s2_tmp_byName.get(name);
 		if (c == null) c = MapUtil.getInstance().reflectClassInfo(name);
 		if (c != null) return Helpers.cast(c.methods());
 
-		if (mappingMethods.isEmpty()) {
+		if (s2_tmp_methods.isEmpty()) {
 			for (Desc key : methodMap.keySet()) {
-				mappingMethods.computeIfAbsent(key.owner, Helpers.fnArrayList()).add(key);
+				s2_tmp_methods.computeIfAbsent(key.owner, Helpers.fnArrayList()).add(key);
 			}
 		}
-		return Helpers.cast(mappingMethods.getOrDefault(name, Collections.emptyList()));
+		List<Desc> list = s2_tmp_methods.getOrDefault(name, Collections.emptyList());
+		for (int i = 0; i < list.size(); i++) {
+			Desc desc = list.get(i);
+			if (desc.flags == Desc.UNSET) throw new IllegalStateException("缺少元素: "+desc);
+		}
+		return Helpers.cast(list);
 	}
 
-	/**
-	 * Step 1.5 (Optional) Fix access bug when changing package
-	 */
-	public final void S15_fixAccess(List<Context> ctxs, boolean alsoShort) {
-		MyHashMap<String, Context> packageMoved = new MyHashMap<>();
-		for (int i = 0; i < ctxs.size(); i++) {
-			String name = ctxs.get(i).getData().name;
-			String newPkg = classMap.getOrDefault(name, name);
-			if (!MapUtil.arePackagesSame(name, newPkg))
-				packageMoved.put(name, ctxs.get(i));
-		}
-
-		Desc d = new Desc();
-		Map<Desc, List<String>> ref = new MyHashMap<>();
-
-		// build ref map
-		for (int i = 0; i < ctxs.size(); i++) {
-			Context ctx = ctxs.get(i);
-			String cn = ctx.getData().name;
-
-			for (CstRef mref : ctx.getMethodConstants()) {
-				d.read(mref);
-				d.flags = 0;
-				if (!packageMoved.containsKey(d.owner) || d.owner.equals(cn)) continue;
-
-				List<String> list = ref.computeIfAbsent(d, Helpers.fnArrayList());
-				if (list.isEmpty()) d = d.copy();
-
-				list.add(cn);
-			}
-			// TODO static inherit issue
-			for (CstRef fref : ctx.getFieldConstants()) {
-				d.read(fref);
-				d.flags = 1;
-				if (!packageMoved.containsKey(d.owner) || d.owner.equals(cn)) continue;
-				if (!checkFieldType) d.param = "";
-
-				List<String> list = ref.computeIfAbsent(d, Helpers.fnArrayList());
-				if (list.isEmpty()) d = d.copy();
-
-				list.add(cn);
-			}
-		}
-
-		for (Map.Entry<Desc, List<String>> entry : ref.entrySet()) {
-			Desc key = entry.getKey();
-
-			// package-private
-			int field_access = 0;
-			String newPkg = classMap.get(key.owner);
-			for (String refClass : entry.getValue()) {
-				if (!MapUtil.arePackagesSame(newPkg, classMap.getOrDefault(refClass,refClass))) {
-					if (!selfSupers.getOrDefault(refClass, Collections.emptyList()).contains(key.owner)) {
-						field_access = 2; // public
-						break;
-					}
-
-					field_access = 1; // protected
-				}
-			}
-
-			if (field_access > 0) {
-				ConstantData data = packageMoved.get(key.owner).getData();
-				MoFNode node;
-				if (key.flags == 0) {
-					int method = data.getMethod(key.name, key.param);
-					// maybe super method
-					if (method < 0) {
-						node = null;
-					}else
-					node = data.methods.get(method);
-				} else if (!checkFieldType) node = data.fields.get(data.getField(key.name));
-				else {
-					node = null;
-					for (MoFNode n : data.fields) {
-						if (n.rawDesc().equals(key.param) && n.name().equals(key.name)) {
-							node = n;
-							break;
-						}
-					}
-				}
-
-				if (node == null) {
-					System.out.println("cannot find " + key);
-					continue;
-				}
-				int mod = node.modifier();
-				if (field_access == 2) mod = mod & ~AccessFlag.PROTECTED | AccessFlag.PUBLIC;
-				else mod |= AccessFlag.PROTECTED;
-				node.modifier(mod);
-			}
-		}
-	}
+	public final void S2_end() { s2_tmp_byName = null; s2_tmp_methods = null; }
 
 	/**
-	 * Step 2 Self method/field name (and type in record)
+	 * Step 3 Self method/field name (and type in record)
 	 */
-	public final void S2_mapSelf(Context ctx, boolean simulate) {
+	public final void S3_mapSelf(Context ctx, boolean simulate) {
 		ConstantData data = ctx.getData();
 		data.normalize();
 
@@ -648,22 +848,24 @@ public class Mapper extends Mapping {
 					boolean childrenCannotInherit = false;
 
 					// 无法被继承
-					if (0 != (acc & (AccessFlag.STATIC|AccessFlag.PRIVATE|AccessFlag.FINAL))) {
+					if (0 != (acc & (STATIC| PRIVATE| FINAL))) {
 						// j == 0 <==> d.owner == data.name (library only)
 						if (j > 0 || simulate) break add_stop_anchor;
 						// 自己的方法
 						childrenCannotInherit = true;
-					} else if (0 == (acc & (AccessFlag.PUBLIC|AccessFlag.PROTECTED)) &&
+					} else if (0 == (acc & (PUBLIC| PROTECTED)) &&
 								!MapUtil.arePackagesSame(data.name, d.owner)) {
 						// package-private
 						break add_stop_anchor;
 					}
 
 					String newName = entry.getValue();
-					if (!simulate) m.name = data.cp.getUtf(newName);
-					d.owner = data.name;
-					// fast-path ONLY
-					selfInherited.put(d.copy(), newName);
+					if (!simulate) {
+						m.name = data.cp.getUtf(newName);
+						d.owner = data.name;
+						// fast-path ONLY
+						selfInherited.put(d.copy(), newName);
+					}
 
 					if (childrenCannotInherit) break add_stop_anchor;
 
@@ -678,6 +880,7 @@ public class Mapper extends Mapping {
 		}
 
 		d.param = "";
+
 		List<? extends MoFNode> fields = data.fields;
 		for (int i = 0; i < fields.size(); i++) {
 			RawField f = (RawField) fields.get(i);
@@ -735,9 +938,9 @@ public class Mapper extends Mapping {
 	}
 
 	/**
-	 * Step 3: Reference
+	 * Step 4: Reference
 	 */
-	public final void S3_mapConstant(Context ctx) {
+	public final void S4_mapConstant(Context ctx) {
 		ConstantData data = ctx.getData();
 
 		BootstrapMethods bs = null;
@@ -800,7 +1003,8 @@ public class Mapper extends Mapping {
 	}
 	/** method/field reference */
 	private void mapRef(ConstantData data, CstRef ref, boolean method) {
-		Desc d = MapUtil.getInstance().sharedDC.read(ref);
+		Desc d = MapUtil.getInstance().sharedDC;
+		d.read(ref);
 
 		if (method) {
 			// FP: init / clinit
@@ -842,9 +1046,9 @@ public class Mapper extends Mapping {
 	}
 
 	/**
-	 * Step 4: (Optional) Dedicated class name and annotation 'value' name
+	 * Step 5: (Optional) Dedicated class name and annotation 'value' name
 	 */
-	public final void S4_mapClassName(Context ctx) {
+	public final void S5_mapClassName(Context ctx) {
 		MapUtil U = MapUtil.getInstance();
 		ConstantData data = ctx.getData();
 
@@ -865,26 +1069,25 @@ public class Mapper extends Mapping {
 		CharList sb = IOUtil.getSharedCharBuf();
 		for (int j = 0; j < classes.size(); j++) {
 			InnerClasses.InnerClass clz = classes.get(j);
-			if (clz.name != null && clz.parent != null) {
+			if (clz.parent != null) {
 				sb.clear();
 				String name = U.mapClassName(classMap, sb.append(clz.parent).append('$').append(clz.name));
 				if (name != null) {
 					int i = name.lastIndexOf('$');
-					if (i == -1) {
-						LOGGER.log(Level.WARN, "[InnerClass]: {}${} => {}", null, clz.parent, clz.name, name);
+					if (i <= 0 || i == name.length()-1) {
+						LOGGER.log(Level.DEBUG, "[InnerClass]: {}${} => {}", null, clz.parent, clz.name, name);
 						clz.name = name;
-						name = U.mapClassName(classMap, clz.parent);
-						if (name != null) clz.parent = name;
 					} else {
-						clz.name = name.substring(i + 1);
-						clz.parent = name.substring(0, i);
+						clz.name = name.substring(i+1);
 					}
 				}
+
+				name = U.mapClassName(classMap, clz.parent);
+				if (name != null) clz.parent = name;
 			}
-			if (clz.self != null) {
-				String name = U.mapClassName(classMap, clz.self);
-				if (name != null) clz.self = name;
-			}
+
+			String name = U.mapClassName(classMap, clz.self);
+			if (name != null) clz.self = name;
 		}
 	}
 	/** Annotation type and field key */
@@ -932,13 +1135,10 @@ public class Mapper extends Mapping {
 				}
 			}
 			break;
-			case ENUM: {
+			case AnnVal.ENUM: {
 				CstUTF owner = (CstUTF) cp.get(r);
 				String newOwner = U.mapFieldType(classMap, owner.str());
-				if (newOwner != null) {
-					LOGGER.log(Level.INFO, "[Annotation-Enum]: {} => {}", null, owner.str(), newOwner);
-					r.putShort(r.rIndex-2, cp.getUtfId(newOwner));
-				}
+				if (newOwner != null) r.putShort(r.rIndex-2, cp.getUtfId(newOwner));
 
 				CstUTF enum_name = (CstUTF) cp.get(r);
 
@@ -964,7 +1164,7 @@ public class Mapper extends Mapping {
 				}
 			}
 			break;
-			case ANNOTATION: mapAnnotation(U, cp, r); break;
+			case AnnVal.ANNOTATION: mapAnnotation(U, cp, r); break;
 			case ARRAY:
 				int len = r.readUnsignedShort();
 				while (len-- > 0) mapAnnotationNode(U, cp, r);
@@ -1053,30 +1253,22 @@ public class Mapper extends Mapping {
 		}
 	}
 	// endregion
-	// region 读取libraries
+	// region libraries
 
 	public final void loadLibraries(File folder) {
-		if (!folder.isDirectory()) {
-			Helpers.athrow(new NotDirectoryException(folder.getAbsolutePath()));
-		}
-
+		if (!folder.isDirectory()) Helpers.athrow(new NotDirectoryException(folder.getAbsolutePath()));
 		loadLibraries(IOUtil.findAllFiles(folder));
 	}
 
-	public void loadLibraries(List<?> files) { loadLibraries(files, false); }
-	public void loadLibraries(List<?> files, boolean isInput) {
+	public void loadLibraries(List<?> files) {
 		SimpleList<Context> classes = new SimpleList<>();
 		Desc m = MapUtil.getInstance().sharedDC;
 
 		Map<String, List<String>> prevSS = selfSupers;
-		FindMap<Desc, String> prevSI = selfInherited;
 		FindSet<Desc> prevSA = stopAnchor;
 
-		if (!isInput) {
-			selfSupers = libSupers;
-			selfInherited = new MyHashMap<>();
-			stopAnchor = libStopAnchor;
-		}
+		selfSupers = libSupers;
+		stopAnchor = libStopAnchor;
 
 		for (int i = 0; i < files.size(); i++) {
 			Object o = files.get(i);
@@ -1109,51 +1301,10 @@ public class Mapper extends Mapping {
 		makeInheritMap(libSupers, (flag & FLAG_FULL_CLASS_MAP) != 0 ? classMap : null);
 
 		// compute stop anchors
-		for (int i = 0; i < classes.size(); i++) S2_mapSelf(classes.get(i), true);
-
-		for (Desc d : selfInherited.keySet()) {
-			List<String> parents = libSupers.get(d.owner);
-			if (parents == null) continue;
-
-			m.name = d.name;
-			m.param = d.param;
-
-			Map.Entry<Desc, String> prev = null, entry;
-			for (int i = parents.size()-1; i >= -1; i--) {
-				m.owner = i < 0 ? d.owner : parents.get(i);
-
-				entry = methodMap.find(m);
-				if (entry != null) {
-					if (prev == null) {
-						prev = entry;
-					} else if (prev.getValue().equals(entry.getValue())) {
-						if ((flag&FLAG_FIX_INHERIT) != 0) methodMap.remove(m);
-					} else {
-						if ((flag&FLAG_FIX_INHERIT) == 0) LOGGER.log(Level.WARN, "[LoadLibrary]: 映射继承冲突: [{}|{}].{}{}", null, m.owner, d.owner, m.name, m.param);
-						methodMap.remove(m);
-					}
-				}
-
-				if (libStopAnchor.contains(m)) prev = null;
-			}
-		}
+		for (int i = 0; i < classes.size(); i++) S3_mapSelf(classes.get(i), true);
 
 		selfSupers = prevSS;
-		selfInherited = prevSI;
 		stopAnchor = prevSA;
-
-		MyHashSet<Desc> unmatched = new MyHashSet<>();
-		for (Desc desc : methodMap.keySet())
-			if (desc.flags == Desc.UNSET)
-				unmatched.add(desc);
-		for (Desc desc : fieldMap.keySet())
-			if (desc.flags == Desc.UNSET)
-				unmatched.add(desc);
-
-		if (!unmatched.isEmpty()) {
-			LOGGER.log(Level.WARN, "[LoadLibrary]: 缺少元素({}): {}...", null, unmatched.size(), (DEBUG?unmatched:unmatched.iterator().next()));
-			// Stage2如果用到了这些元素会报错
-		}
 	}
 	private void readLibFile(Context ctx, List<Context> classes, Desc d) {
 		classes.add(ctx);
@@ -1177,6 +1328,60 @@ public class Mapper extends Mapping {
 			Map.Entry<Desc, String> entry = flags.find(d);
 			if (entry != null) entry.getKey().flags = n.modifier();
 		}
+	}
+
+	/**
+	 * 加载完所有的库之后调用此函数来完成Mapper的准备 <br>
+	 * 不调用此方法进行映射的行为是<i>未定义</i>的
+	 */
+	public Mapper packup() {
+		if (classNameChanged()) flag |= MF_RENAME_CLASS;
+		else flag &= ~MF_RENAME_CLASS;
+
+		Desc m = MapUtil.getInstance().sharedDC;
+
+		// check inherit & overloads
+		for (Desc d : new SimpleList<>(methodMap.keySet())) {
+			List<String> parents = libSupers.get(d.owner);
+			if (parents == null) continue;
+
+			m.name = d.name;
+			m.param = d.param;
+
+			Map.Entry<Desc, String> prev = null, entry;
+			for (int i = parents.size()-1; i >= -1; i--) {
+				m.owner = i < 0 ? d.owner : parents.get(i);
+
+				entry = methodMap.find(m);
+				if (entry != null) {
+					if (prev == null) {
+						prev = entry;
+					} else if (prev.getValue().equals(entry.getValue())) {
+						if ((flag&FLAG_FIX_INHERIT) != 0) methodMap.remove(m);
+					} else {
+						if ((flag&FLAG_FIX_INHERIT) == 0) LOGGER.log(Level.WARN, "[Packup]: 映射继承冲突: [{}|{}].{}{}", null, m.owner, d.owner, m.name, m.param);
+						methodMap.remove(m);
+					}
+				}
+
+				if (libStopAnchor.contains(m)) prev = null;
+			}
+		}
+
+		MyHashSet<Desc> unmatched = new MyHashSet<>();
+		for (Desc desc : methodMap.keySet())
+			if (desc.flags == Desc.UNSET)
+				unmatched.add(desc);
+		for (Desc desc : fieldMap.keySet())
+			if (desc.flags == Desc.UNSET)
+				unmatched.add(desc);
+
+		if (!unmatched.isEmpty()) {
+			LOGGER.log(Level.WARN, "[Packup]: 缺少元素({}): {}...", null, unmatched.size(), (DEBUG?unmatched:unmatched.iterator().next()));
+			// Stage2如果用到了这些元素会报错
+		}
+
+		return this;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -1228,6 +1433,7 @@ public class Mapper extends Mapping {
 			if (libPath instanceof File) loadLibraries((File) libPath);
 			else loadLibraries((List<Object>) libPath);
 		}
+		packup();
 		if (cacheFile != null) saveCache(hash, cacheFile);
 	}
 
@@ -1238,14 +1444,6 @@ public class Mapper extends Mapping {
 	 */
 	static void setRefName(ConstantData data, CstRef ref, String newName) {
 		ref.desc(data.cp.getDesc(newName, ref.desc().getType().str()));
-	}
-
-	@Override
-	public boolean classNameChanged() {
-		boolean b = super.classNameChanged();
-		if (b) flag |= FLAG_CLASS_CHANGED;
-		else flag &= ~ FLAG_CLASS_CHANGED;
-		return b;
 	}
 
 	public void clear() {
@@ -1266,7 +1464,7 @@ public class Mapper extends Mapping {
 		universe.putAll(selfSupers); // replace lib class
 		selfSupers = universe;
 
-		makeInheritMap(universe, (flag & (FLAG_FULL_CLASS_MAP | FLAG_FIX_SUBIMPL)) == FLAG_FULL_CLASS_MAP ? classMap : null);
+		makeInheritMap(universe, (flag & (FLAG_FULL_CLASS_MAP | MF_FIX_SUBIMPL)) == FLAG_FULL_CLASS_MAP ? classMap : null);
 	}
 
 	public final void initSelf(int size) {
@@ -1309,5 +1507,39 @@ public class Mapper extends Mapping {
 		final MyHashMap<String, List<String>> parents = new MyHashMap<>();
 		final MyHashSet<Desc> stopAnchor = new IdentitySet<>();
 		final MyHashMap<Desc, String> inheritor = new MyHashMap<>();
+	}
+
+	public void debugRelative(String owner, String name) {
+		LOGGER.log(Level.FATAL, "=== relative information for {} ===", null, owner);
+		LOGGER.log(Level.FATAL, "==== class map ====", null);
+		LOGGER.log(Level.FATAL, "  {} => {}", null, owner, classMap.get(owner));
+		List<String> parents = selfSupers.getOrDefault(owner, Collections.emptyList());
+		for (int i = 0; i < parents.size(); i++) {
+			LOGGER.log(Level.FATAL, "  {} => {}", null, parents.get(i), classMap.get(parents.get(i)));
+		}
+		LOGGER.log(Level.FATAL, "==== node map ====", null);
+		LOGGER.log(Level.FATAL, "F: final; D: direct owner; I: inherited; S: stop anchor (but still listed)", null);
+		for (Map.Entry<Desc, String> entry : methodMap.entrySet()) {
+			Desc d = entry.getKey();
+			if (name != null && !d.name.equals(name)) continue;
+
+			String type;
+			String o = d.owner;
+			if (o.equals(owner)) type = "D";
+			else {
+				int i = parents.indexOf(o);
+				if (i < 0) continue;
+				type = "I";
+
+				d = d.copy();
+				while (i-- > 0) {
+					d.owner = parents.get(i);
+					if (stopAnchor.contains(d)) type = "S";
+				}
+			}
+			if (stopAnchor.contains(d)) type = "F";
+
+			LOGGER.log(Level.FATAL, "  [{}] {} => {}", null, type, entry.getKey(), entry.getValue());
+		}
 	}
 }

@@ -10,11 +10,14 @@ import roj.collect.SimpleList;
 import roj.concurrent.OperationDone;
 import roj.concurrent.Ref;
 import roj.concurrent.TaskPool;
-import roj.concurrent.timing.Scheduled;
+import roj.concurrent.timing.ScheduledTask;
 import roj.concurrent.timing.Scheduler;
 import roj.io.IOUtil;
 import roj.text.*;
-import roj.ui.*;
+import roj.ui.DragReorderHelper;
+import roj.ui.OnChangeHelper;
+import roj.ui.TextAreaPrintStream;
+import roj.ui.UIUtil;
 import roj.util.BsDiff;
 
 import javax.swing.*;
@@ -51,12 +54,10 @@ public class NovelFrame extends JFrame {
 
 		initComponents();
 		cPresetRegexp.setModel(presetRegexps);
-		changeHelper = new TextChangeEventHelper(this);
+		changeHelper = new OnChangeHelper(this);
 		changeHelper.addRoot(advancedMenu);
 		changeHelper.addRoot(chapterParamWin);
 		chapterDragHelper = new DragReorderHelper(cascadeChapterUI, draggedItem);
-		CloseOnEsc.apply(advancedMenu);
-		CloseOnEsc.apply(chapterParamWin);
 
 		cascadeChapterUI.addMouseListener(new MouseAdapter() {
 			long prevClick;
@@ -99,7 +100,7 @@ public class NovelFrame extends JFrame {
 		chapterManager = (DefaultTreeModel) cascadeChapterUI.getModel();
 	}
 
-	private final TextChangeEventHelper changeHelper;
+	private final OnChangeHelper changeHelper;
 	private final DragReorderHelper chapterDragHelper;
 	private final DefaultTreeModel chapterManager;
 
@@ -294,7 +295,7 @@ public class NovelFrame extends JFrame {
 				chapters = Chapter.parse(new LineReader(novel_in, false));
 			} catch (IOException ignored) {}
 
-			root.subChapter = Chapter.groupChapter(chapters, 0);
+			root.children = Chapter.groupChapter(chapters, 0);
 			root.name = "Auto " + ACalendar.toLocalTimeString(System.currentTimeMillis());
 
 			// fix: missing chapters
@@ -309,12 +310,12 @@ public class NovelFrame extends JFrame {
 				fin.name = "Appendix";
 				fin.start = end;
 				fin.end = novel_in.length();
-				chapterManager.insertNodeInto(fin, root, root.subChapter.size());
+				chapterManager.insertNodeInto(fin, root, root.children.size());
 			}
 		} else {
 			Matcher m = novel_regexp.matcher(novel_in);
 
-			List<Chapter> chapters = root.subChapter = new SimpleList<>();
+			List<Chapter> chapters = root.children = new SimpleList<>();
 
 			Chapter c = root;
 			c.no = -1;
@@ -352,7 +353,7 @@ public class NovelFrame extends JFrame {
 
 		root.setParents();
 		chapterManager.setRoot(root);
-		errout.setText("mode: "+root.name+"\nchapter count: "+root.sumChildrenCount());
+		errout.setText("mode: "+root.name+"\nchapter count: "+root.sumChildCount());
 
 		cascadeChapterUI.setRootVisible(true);
 		btnAlign.setEnabled(true);
@@ -528,7 +529,7 @@ public class NovelFrame extends JFrame {
 			TaskPool pool = TaskPool.CpuMassive();
 			SimpleList<IntMap.Entry<String>> list = new SimpleList<>();
 
-			Ref<Scheduled> task = Ref.from();
+			Ref<ScheduledTask> task = Ref.from();
 			task.set(Scheduler.getDefaultScheduler().executeTimer(() -> {
 				progress.setValue((int) ((double)finished.sum() / total * 10000));
 				progressStr.setText(finished + "/" + total);

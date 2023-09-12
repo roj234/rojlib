@@ -34,13 +34,12 @@ import java.util.function.Consumer;
  */
 public final class MapUtil {
 	private static final ThreadLocal<MapUtil> ThreadBasedCache = ThreadLocal.withInitial(MapUtil::new);
-
-	public static final int CPU = Runtime.getRuntime().availableProcessors();
+	public static boolean defaultCheckSubClass = false;
 
 	private MapUtil() {}
 
-	public final Desc sharedDC = new Desc("", "", "");
-	public boolean checkSubClass = false;
+	public final Desc sharedDC = new Desc();
+	public boolean checkSubClass;
 
 	static final ReflectClass FAILED = new ReflectClass(MapUtil.class);
 	final MyHashMap<String, ReflectClass> classInfo = new MyHashMap<>();
@@ -50,9 +49,9 @@ public final class MapUtil {
 	public final SimpleList<?> sharedAL = new SimpleList<>();
 
 	public static MapUtil getInstance() {
-		MapUtil util = ThreadBasedCache.get();
-		util.checkSubClass = false;
-		return util;
+		MapUtil u = ThreadBasedCache.get();
+		u.checkSubClass = defaultCheckSubClass;
+		return u;
 	}
 
 	// region 各种可继承性的判断

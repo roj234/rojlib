@@ -73,7 +73,7 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 	}
 
 	@Override
-	public Iterator<Entry<K, V>> entryIterator() {
+	public Iterator<Entry<K, V>> __iterator() {
 		return new EntryItr();
 	}
 

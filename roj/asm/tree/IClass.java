@@ -27,17 +27,17 @@ public interface IClass extends Attributed {
 	List<? extends MoFNode> methods();
 	List<? extends MoFNode> fields();
 
-	default int getMethod(CharSequence name, CharSequence desc) {
+	default int getMethod(String name, String desc) {
 		List<? extends MoFNode> methods = methods();
 		for (int i = 0; i < methods.size(); i++) {
 			MoFNode ms = methods.get(i);
-			if (name.equals(ms.name()) && (desc == null || desc.equals(ms.rawDesc()))) {
+			if (name.equals(ms.name()) && (desc == null || ms.rawDesc().equals(desc))) {
 				return i;
 			}
 		}
 		return -1;
 	}
-	default int getMethod(CharSequence name) {
+	default int getMethod(String name) {
 		return getMethod(name, null);
 	}
 	default int getField(CharSequence key) {

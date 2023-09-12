@@ -1,7 +1,9 @@
 package roj.ui;
 
+import roj.io.IOUtil;
 import roj.text.TextUtil;
 import roj.util.Helpers;
+import roj.util.OS;
 
 import javax.annotation.Nonnull;
 import javax.imageio.ImageIO;
@@ -159,7 +161,7 @@ public final class UIUtil {
 	}
 
 	@Nonnull
-	public static DropTarget dropFilePath(JTextComponent comp, Consumer<File> callback, boolean append) {
+	public static DropTarget dropFilePath(Component comp, Consumer<File> callback, boolean append) {
 		return new DropTarget(comp, new DropTargetAdapter() {
 			@Override
 			public void drop(DropTargetDropEvent dtde) {
@@ -171,12 +173,14 @@ public final class UIUtil {
 							List<File> data = Helpers.cast(t.getTransferData(flavor));
 							if (append) {
 								for (File file : data) {
-									insert(comp, file.getAbsolutePath().concat("\n"));
+									if (comp instanceof JTextComponent)
+										insert((JTextComponent) comp, file.getAbsolutePath().concat("\n"));
 									if (callback != null) callback.accept(file);
 								}
 							} else {
 								String path = data.get(0).getAbsolutePath();
-								comp.setText(path);
+								if (comp instanceof JTextComponent)
+									((JTextComponent) comp).setText(path);
 								if (callback != null) callback.accept(data.get(0));
 							}
 						} catch (Exception e) {
@@ -195,6 +199,92 @@ public final class UIUtil {
 			doc.insertString(doc.getLength(), value, null);
 		} catch (BadLocationException e) {}
 		return doc;
+	}
+
+	private static File lastPath = new File(".");
+	public static File fileSaveTo(String title, String defaultFileName) { return fileSaveTo(title, defaultFileName, null, false); }
+	public static File fileSaveTo(String title, String defaultFileName, Component pos) { return fileSaveTo(title, defaultFileName, pos, false); }
+	public static File fileSaveTo(String title, String defaultFileName, Component pos, boolean folder) {
+		JFileChooser jfc = getFileChooser();
+		jfc.setDialogTitle(title);
+		jfc.setFileSelectionMode(folder?JFileChooser.DIRECTORIES_ONLY:JFileChooser.FILES_ONLY);
+		jfc.setSelectedFile(new File(lastPath, defaultFileName));
+
+		int status = jfc.showSaveDialog(pos);
+		if (status != JFileChooser.APPROVE_OPTION) return null;
+		lastPath = jfc.getCurrentDirectory();
+
+		return jfc.getSelectedFile();
+	}
+
+	public static File fileLoadFrom(String title) { return fileLoadFrom(title, null, JFileChooser.FILES_ONLY); }
+	public static File fileLoadFrom(String title, Component pos) { return fileLoadFrom(title, pos, JFileChooser.FILES_ONLY); }
+	public static File fileLoadFrom(String title, Component pos, int mode) {
+		JFileChooser jfc = getFileChooser();
+		jfc.setDialogTitle(title);
+		jfc.setFileSelectionMode(mode);
+
+		int status = jfc.showOpenDialog(pos);
+		if (status != JFileChooser.APPROVE_OPTION) return null;
+		lastPath = jfc.getCurrentDirectory();
+
+		return jfc.getSelectedFile();
+	}
+	public static File[] filesLoadFrom(String title, Component pos, int mode) {
+		JFileChooser jfc = getFileChooser();
+		jfc.setDialogTitle(title);
+		jfc.setMultiSelectionEnabled(true);
+		jfc.setFileSelectionMode(mode);
+
+		int status = jfc.showOpenDialog(pos);
+		if (status != JFileChooser.APPROVE_OPTION) return null;
+		lastPath = jfc.getCurrentDirectory();
+
+		return jfc.getSelectedFiles();
+	}
+
+	private static JFileChooser getFileChooser() {
+		return new JFileChooser(lastPath) {
+			@Override
+			protected JDialog createDialog(Component parent) throws HeadlessException {
+				JDialog dialog = super.createDialog(parent);
+				myadd(dialog);
+				return dialog;
+			}
+
+			private void myadd(Component comp) {
+				// shit
+				if (comp.getClass().getName().contains("FilePane")) {
+					dropFilePath(comp, (x) -> {
+						File path = getCurrentDirectory();
+						File target = new File(path, x.getName());
+						try {
+							// C:\
+							if (OS.CURRENT == OS.WINDOWS && x.getAbsolutePath().startsWith(path.getAbsolutePath().substring(0, 3))) {
+								x.renameTo(target);
+							} else {
+								IOUtil.copyFile(x, target);
+							}
+						} catch (Exception e) {
+							e.printStackTrace();
+						} finally {
+							rescanCurrentDirectory();
+						}
+					}, true);
+				} else if (comp instanceof JTextComponent) {
+					dropFilePath(comp, this::setSelectedFile, false);
+				}
+
+				if (comp instanceof Container) {
+					Container c = (Container) comp;
+					synchronized (c.getTreeLock()) {
+						for (int i = 0; i < c.getComponentCount(); i++) {
+							myadd(c.getComponent(i));
+						}
+					}
+				}
+			}
+		};
 	}
 
 	@Deprecated

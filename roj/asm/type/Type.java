@@ -156,15 +156,10 @@ public final class Type implements IType {
 	public String nativeName() {
 		return MAP[getActualType()-BYTE][4].toString();
 	}
-	public boolean isPrimitive() {
-		return array == 0 && type != CLASS;
-	}
-	public int getActualType() {
-		return array == 0 ? type : CLASS;
-	}
-	public String getActualClass() {
-		return array == 0 ? owner : toDesc();
-	}
+	public boolean isPrimitive() { return array == 0 && type != CLASS; }
+	public int getActualType() { return array == 0 ? type : CLASS; }
+	public String getActualClass() { return array == 0 ? owner : toDesc(); }
+	public String ownerForCstClass() { return getActualClass(); }
 
 	public String toString() {
 		CharList sb = IOUtil.getSharedCharBuf();

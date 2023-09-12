@@ -103,7 +103,7 @@ public class CipherInputStream extends InputStream {
 			in.close();
 		} finally {
 			synchronized (this) {
-				o.close();
+				if (o != null) o.close();
 				o = null;
 			}
 		}

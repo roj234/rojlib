@@ -8,7 +8,7 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.task.AsyncTask;
-import roj.concurrent.timing.Scheduled;
+import roj.concurrent.timing.ScheduledTask;
 import roj.config.data.*;
 import roj.config.word.Tokenizer;
 import roj.dev.ByteListOutput;
@@ -54,7 +54,7 @@ import static roj.mod.Shared.*;
  */
 public final class FMDMain {
 	static boolean isCLI, noGUI;
-	static Scheduled shinyTask;
+	static ScheduledTask shinyTask;
 
 	@SuppressWarnings("fallthrough")
 	public static void main(String[] args) throws IOException, InterruptedException {
@@ -284,7 +284,7 @@ public final class FMDMain {
 			AsyncTask<Void> resTask = new AsyncTask<>(new ResWriter(zfw, res));
 			Task.pushTask(resTask);
 
-			m.map(DEBUG, list);
+			m.map(list);
 			m.getSeperatedLibraries().add(m.snapshot());
 
 			try {
@@ -818,7 +818,7 @@ public final class FMDMain {
 				libs.add(p.state);
 				mapperFwd.mapIncr(list);
 			} else {
-				mapperFwd.map(false, list);
+				mapperFwd.map(list);
 			}
 			p.state = mapperFwd.snapshot(p.state);
 

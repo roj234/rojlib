@@ -317,8 +317,21 @@ public abstract class MyChannel implements Selectable {
 	}
 	// endregion
 
-	public void closeGracefully() throws IOException {
-		close();
+	public final void closeGracefully() throws IOException {
+		flush();
+		if (!pending.isEmpty()) {
+			pauseAndFlush();
+			if (handler("@@flush_callback") == null) {
+				addLast("@@flush_callback", new ChannelHandler() {
+					@Override
+					public void channelFlushed(ChannelCtx ctx) throws IOException {
+						ctx.channel().closeGracefully();
+					}
+				});
+			}
+		} else {
+			closeGracefully0();
+		}
 	}
 
 	public BufferPool alloc() {
@@ -387,9 +400,7 @@ public abstract class MyChannel implements Selectable {
 		}
 	}
 
-	public final boolean connect(SocketAddress address) throws IOException {
-		return connect(address, -1);
-	}
+	public final boolean connect(SocketAddress address) throws IOException { return connect(address, -1); }
 	public final boolean connect(SocketAddress address, int timeout) throws IOException {
 		if (!(address instanceof InetSocketAddress)) throw new UnsupportedOperationException("Not InetSocketAddress");
 		InetSocketAddress na = (InetSocketAddress) address;
@@ -474,7 +485,7 @@ public abstract class MyChannel implements Selectable {
 
 	// region Selectable
 	@Override
-	public void tick(int elapsed) throws IOException {
+	public void tick(int elapsed) throws Exception {
 		if (state >= CLOSED) return;
 		if (state == CONNECT_PENDING && timeout != 0 && (timeout -= elapsed) < 0) {
 			if (finishConnect()) return;
@@ -533,7 +544,7 @@ public abstract class MyChannel implements Selectable {
 	}
 
 	@Override
-	public final void selected(int readyOps) throws Exception {
+	public final void selected(int readyOps) throws IOException {
 		if (state >= CLOSED) {
 			key.cancel();
 			return;
@@ -588,6 +599,7 @@ public abstract class MyChannel implements Selectable {
 	// abstract
 	protected abstract boolean connect0(InetSocketAddress na) throws IOException;
 	protected abstract SocketAddress finishConnect0() throws IOException;
+	protected abstract void closeGracefully0() throws IOException;
 	protected abstract void disconnect0() throws IOException;
 
 	public abstract void flush() throws IOException;
@@ -619,7 +631,15 @@ public abstract class MyChannel implements Selectable {
 		if (ee != null) Helpers.athrow(ee);
 	}
 
-	protected final void fireWriteDone() throws IOException {
+	protected final void fireFlushing() throws IOException {
+		ChannelCtx pipe = pipelineTail;
+		while (pipe != null) {
+			pipe.handler.channelFlushing(pipe);
+			pipe = pipe.prev;
+		}
+	}
+
+	protected final void fireFlushed() throws IOException {
 		ChannelCtx pipe = pipelineHead;
 		while (pipe != null) {
 			pipe.handler.channelFlushed(pipe);

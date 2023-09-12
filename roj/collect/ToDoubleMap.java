@@ -13,9 +13,8 @@ import static roj.collect.IntMap.UNDEFINED;
 /**
  * @author Roj234
  * @since 2021/5/31 1:21
- * 基于Hash-like机制实现的较高速Map
  */
-public class ToDoubleMap<K> extends AbstractMap<K, Double> implements MapLike<ToDoubleMap.Entry<K>>, ToDoubleFunction<K> {
+public class ToDoubleMap<K> extends AbstractMap<K, Double> implements _Generic_Map<ToDoubleMap.Entry<K>>, ToDoubleFunction<K> {
 	@Override
 	public double applyAsDouble(K value) {
 		return getDouble(value);
@@ -30,11 +29,7 @@ public class ToDoubleMap<K> extends AbstractMap<K, Double> implements MapLike<To
 		return entry == null ? l : entry.v;
 	}
 
-	public Set<Entry<K>> selfEntrySet() {
-		return new EntrySet<>(this);
-	}
-
-	public static class Entry<K> implements MapLikeEntry<Entry<K>>, Map.Entry<K, Double> {
+	public static class Entry<K> implements _Generic_Entry<Entry<K>>, Map.Entry<K, Double> {
 		public K k;
 		public double v;
 
@@ -72,7 +67,7 @@ public class ToDoubleMap<K> extends AbstractMap<K, Double> implements MapLike<To
 		public Entry<K> next;
 
 		@Override
-		public Entry<K> nextEntry() {
+		public Entry<K> __next() {
 			return next;
 		}
 
@@ -115,19 +110,15 @@ public class ToDoubleMap<K> extends AbstractMap<K, Double> implements MapLike<To
 		if (this.entries != null) resize();
 	}
 
-	@Nonnull
-	public Set<Map.Entry<K, Double>> entrySet() {
-		return Helpers.cast(new EntrySet<>(this));
-	}
-
 	public int size() {
 		return size;
 	}
 
-	@Override
-	public void removeEntry0(Entry<K> entry) {
-		remove(entry.k);
-	}
+	@Nonnull
+	public Set<Map.Entry<K, Double>> entrySet() { return Helpers.cast(selfEntrySet()); }
+	public Set<Entry<K>> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public _Generic_Entry<?>[] __entries() { return entries; }
+	public void __remove(Entry<K> entry) { remove(entry.k); }
 
 	@SuppressWarnings("unchecked")
 	public void putAll(@Nonnull Map<? extends K, ? extends Double> otherMap) {
@@ -354,48 +345,6 @@ public class ToDoubleMap<K> extends AbstractMap<K, Double> implements MapLike<To
 					}
 				}
 			} else {Arrays.fill(entries, null);}
-		}
-	}
-
-	static class EntrySet<K> extends AbstractSet<Entry<K>> {
-		private final ToDoubleMap<K> map;
-
-		public EntrySet(ToDoubleMap<K> map) {
-			this.map = map;
-		}
-
-		public final int size() {
-			return map.size();
-		}
-
-		public final void clear() {
-			map.clear();
-		}
-
-		@Nonnull
-		public final Iterator<Entry<K>> iterator() {
-			return isEmpty() ? Collections.emptyIterator() : Helpers.cast(new EntryItr<>(map.entries, map));
-		}
-
-		@SuppressWarnings("unchecked")
-		public final boolean contains(Object o) {
-			if (!(o instanceof ToDoubleMap.Entry)) return false;
-			ToDoubleMap.Entry<?> e = (ToDoubleMap.Entry<?>) o;
-			Object key = e.getKey();
-			ToDoubleMap.Entry<?> comp = map.getEntry((K) key);
-			return comp != null && comp.v == e.v;
-		}
-
-		public final boolean remove(Object o) {
-			if (o instanceof ToDoubleMap.Entry) {
-				ToDoubleMap.Entry<?> e = (ToDoubleMap.Entry<?>) o;
-				return map.remove(e.k) != null;
-			}
-			return false;
-		}
-
-		public final Spliterator<Entry<K>> spliterator() {
-			return Spliterators.spliterator(iterator(), size(), 0);
 		}
 	}
 }

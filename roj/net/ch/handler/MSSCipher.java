@@ -110,17 +110,18 @@ public class MSSCipher extends PacketMerger {
 					}
 					throw e;
 				}
-				switch (req) {
-					case MSSEngine.HS_OK:
-						if (tx.wIndex() > 0) {
-							ctx.channelWrite(tx);
-							tx.clear();
-						}
-						if (engine.isHandshakeDone()) return;
-						break;
-					case MSSEngine.HS_BUFFER_UNDERFLOW: return;
-					default: // overflow
-						tx = ctx.alloc().expand(tx,req);
+
+				// overflow
+				if (req == MSSEngine.HS_OK) {
+					if (tx.wIndex() > 0) {
+						ctx.channelWrite(tx);
+						tx.clear();
+					}
+					if (engine.isHandshakeDone()) return;
+				} else if (req < 0) {
+					return;
+				} else {
+					tx = ctx.alloc().expand(tx, req);
 				}
 			} while (true);
 		} finally {

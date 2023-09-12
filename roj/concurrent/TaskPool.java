@@ -25,7 +25,7 @@ public class TaskPool implements TaskHandler {
 		void onReject(TaskPool pool, ITask task);
 	}
 
-	private final MyHashSet<ExecutorImpl> threads = new MyHashSet<>();
+	final MyHashSet<ExecutorImpl> threads = new MyHashSet<>();
 	private final MyThreadFactory factory;
 	private RejectPolicy policy;
 

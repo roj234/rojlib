@@ -8,7 +8,10 @@ import roj.crypt.KeyFile;
 import roj.io.IOUtil;
 import roj.net.ch.*;
 import roj.net.ch.Pipe.CipherPipe;
-import roj.net.ch.handler.*;
+import roj.net.ch.handler.Compress;
+import roj.net.ch.handler.MSSCipher;
+import roj.net.ch.handler.Timeout;
+import roj.net.ch.handler.VarintSplitter;
 import roj.net.mss.JKey;
 import roj.net.mss.MSSEngine;
 import roj.net.mss.SimpleEngineFactory;
@@ -225,7 +228,6 @@ abstract class IAEClient extends FastLocalThread implements Shutdownable, Channe
 	final void asyncPipeLogin(long pipeId, byte[] ciphers, Consumer<Pipe> callback) throws IOException {
 		MyChannel ctx = MyChannel.openTCP()
 								 .addLast("cipher", new MSSCipher(factory.get()))
-								.addLast("d1", new DebugPrint("pipe_late"))
 								 .addLast("splitter", new VarintSplitter(3))
 								 .addLast("compress", new Compress(127, 127, 0, -1))
 								 .addLast("timeout", new Timeout(2000, 2000))

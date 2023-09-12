@@ -10,8 +10,6 @@ import roj.util.DynByteBuf;
  * 对象描述符
  *
  * @author Roj233
- * @version 2.8
- * @since ?
  */
 public class Desc implements MoFNode {
 	public static final char UNSET = AccessFlag.PUBLIC | AccessFlag.PRIVATE;
@@ -68,8 +66,13 @@ public class Desc implements MoFNode {
 		return this;
 	}
 
-	public final Desc copy() {
-		return new Desc(owner, name, param, flags);
+	public final Desc copy() { return new Desc(owner, name, param, flags); }
+
+	public static boolean paramEqual(String a, String b) {
+		if (a.equals(b)) return true;
+		if (!a.startsWith("(") || !b.startsWith("(")) return false;
+		int i = a.lastIndexOf(')');
+		return i == b.lastIndexOf(')') && a.regionMatches(0, b, 0, i);
 	}
 
 	@Override

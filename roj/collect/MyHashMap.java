@@ -18,8 +18,8 @@ import static roj.collect.IntMap.UNDEFINED;
  * @since 2021/6/18 11:5
  * 基于Hash-like机制实现的较高速Map
  */
-public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, MapLike<MyHashMap.Entry<K, V>> {
-	public static class Entry<K, V> implements Map.Entry<K, V>, MapLikeEntry<Entry<K, V>> {
+public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _Generic_Map<MyHashMap.Entry<K, V>> {
+	public static class Entry<K, V> implements Map.Entry<K, V>, _Generic_Entry<Entry<K, V>> {
 		public K k;
 		public V v;
 
@@ -46,7 +46,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		public Entry<K, V> next;
 
 		@Override
-		public Entry<K, V> nextEntry() {
+		public Entry<K, V> __next() {
 			return next;
 		}
 
@@ -91,26 +91,13 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		else this.mask = length-1;
 	}
 
-	public Map.Entry<K, V> find(K k) {
-		return getEntry(k);
-	}
+	public Map.Entry<K, V> find(K k) { return getEntry(k); }
 
-	@Nonnull
-	public Set<Map.Entry<K, V>> entrySet() {
-		return new EntrySet<>(this);
-	}
+	public int size() { return size; }
 
-	public int size() {
-		return size;
-	}
-
-	@Override
-	public void removeEntry0(Entry<K, V> entry) {
-		remove(entry.k);
-	}
-
-	void afterPut(Entry<K, V> entry) {
-	}
+	public Set<Map.Entry<K, V>> entrySet() { return _Generic_EntrySet.create(this); }
+	public _Generic_Entry<?>[] __entries() { return entries; }
+	public void __remove(Entry<K, V> entry) { remove(entry.k); }
 
 	@SuppressWarnings("unchecked")
 	public void putAll(MyHashMap<K, V> otherMap) {
@@ -169,11 +156,9 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		else super.putAll(map);
 	}
 
-	void afterAccess(Entry<K, V> entry, V now) {
-	}
-
-	void afterRemove(Entry<K, V> entry) {
-	}
+	void afterPut(Entry<K, V> entry) {}
+	void afterAccess(Entry<K, V> entry, V now) {}
+	void afterRemove(Entry<K, V> entry) {}
 
 	public V remove(Object o) {
 		return remove0(o, UNDEFINED);
@@ -240,9 +225,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 
 	@SuppressWarnings("unchecked")
 	public boolean containsKey(Object i) {
-		Entry<K, V> entry = getEntry((K) i);
-
-		return entry != null;
+		return getEntry((K) i) != null;
 	}
 
 	public Entry<K, V> getEntry(K id) {
@@ -348,44 +331,6 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 				}
 			}
 		} else Arrays.fill(entries, null);
-	}
-
-	static class EntrySet<K, V> extends AbstractSet<Map.Entry<K, V>> {
-		private final MyHashMap<K, V> map;
-
-		public EntrySet(MyHashMap<K, V> map) {
-			this.map = map;
-		}
-
-		public final int size() {
-			return map.size();
-		}
-
-		public final void clear() {
-			map.clear();
-		}
-
-		@Nonnull
-		public final Iterator<Map.Entry<K, V>> iterator() {
-			return isEmpty() ? Collections.emptyIterator() : Helpers.cast(new EntryItr<>(map.entries, map));
-		}
-
-		@SuppressWarnings("unchecked")
-		public final boolean contains(Object o) {
-			if (!(o instanceof MyHashMap.Entry)) return false;
-			MyHashMap.Entry<?, ?> e = (MyHashMap.Entry<?, ?>) o;
-			Object key = e.getKey();
-			MyHashMap.Entry<?, ?> comp = map.getEntry((K) key);
-			return comp != null && comp.v == e.v;
-		}
-
-		public final boolean remove(Object o) {
-			if (o instanceof Map.Entry) {
-				MyHashMap.Entry<?, ?> e = (MyHashMap.Entry<?, ?>) o;
-				return map.remove(e.k) != null;
-			}
-			return false;
-		}
 	}
 
 	@Override

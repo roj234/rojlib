@@ -6,7 +6,6 @@ import roj.collect.SimpleList;
 import roj.config.NBTParser;
 import roj.config.TOMLParser;
 import roj.config.VinaryParser;
-import roj.config.Wrapping;
 import roj.config.serial.CVisitor;
 import roj.config.word.ITokenizer;
 import roj.text.CharList;
@@ -34,13 +33,6 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	@SuppressWarnings("unchecked")
 	public CList(List<? extends CEntry> list) {
 		this.list = (List<CEntry>) list;
-	}
-
-	@Deprecated
-	public static CList of(Object... arr) {
-		CList list1 = new CList(arr.length);
-		for (Object o : arr) list1.add(Wrapping.wrap(o));
-		return list1;
 	}
 
 	public final boolean isEmpty() {

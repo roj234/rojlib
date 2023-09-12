@@ -2,7 +2,6 @@ package roj.collect;
 
 import roj.util.Helpers;
 
-import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 import static roj.collect.AbstractIterator.*;
@@ -11,7 +10,7 @@ import static roj.collect.AbstractIterator.*;
  * @author Roj234
  * @since 2020/8/14 17:06
  */
-public class MapItr<T extends MapLikeEntry<T>> {
+public class MapItr<T extends _Generic_Entry<T>> {
 	public T obj;
 	int stage = INITIAL;
 
@@ -41,24 +40,19 @@ public class MapItr<T extends MapLikeEntry<T>> {
 
 	public final void remove() {
 		if (stage != GOTTEN) throw new IllegalStateException();
+		if (remover == null) throw new UnsupportedOperationException();
 		stage = INITIAL;
 
-		if (itr != null) {
-			itr.remove();
-		} else {
-			T t = obj;
-			check();
-			remover.removeEntry0(t);
-		}
+		T t = obj;
+		check();
+		remover.__remove(t);
 	}
 
 	private final T[] entries;
-	private MapLike<T> remover;
-	private Iterator<T> itr;
+	private final _Generic_Map<T> remover;
 	private int i;
 
 	public void reset() {
-		if (itr != null) throw new UnsupportedOperationException();
 		if (entries == null) stage = ENDED;
 		else {
 			obj = null;
@@ -67,23 +61,20 @@ public class MapItr<T extends MapLikeEntry<T>> {
 		}
 	}
 
-	public MapItr(MapLikeEntry<?>[] entries, MapLike<T> remover) {
+	public MapItr(_Generic_Map<T> remover) {
+		this.entries = Helpers.cast(remover.__entries());
+		this.remover = remover;
+
+		if (entries == null) stage = ENDED;
+	}
+	public MapItr(_Generic_Entry<?>[] entries) {
 		this.entries = Helpers.cast(entries);
-		if (remover != null) {
-			this.itr = remover.entryIterator();
-			this.remover = remover;
-		}
+		this.remover = null;
 
 		if (entries == null) stage = ENDED;
 	}
 
 	private boolean computeNext() {
-		if (itr != null) {
-			boolean flag = itr.hasNext();
-			if (flag) obj = itr.next();
-			return flag;
-		}
-
 		while (true) {
 			if (obj == null) {
 				while (true) {
@@ -93,7 +84,7 @@ public class MapItr<T extends MapLikeEntry<T>> {
 				}
 			}
 
-			obj = obj.nextEntry();
+			obj = obj.__next();
 			if (obj != null) return true;
 		}
 	}

@@ -1,4 +1,4 @@
-package roj.mapper.obf.policy;
+package roj.mapper.obf.nodename;
 
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;

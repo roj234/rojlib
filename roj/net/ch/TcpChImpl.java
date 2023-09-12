@@ -82,29 +82,18 @@ class TcpChImpl extends MyChannel {
 	}
 
 	@Override
-	public void closeGracefully() throws IOException {
-		sc.shutdownOutput();
-	}
-
+	protected boolean connect0(InetSocketAddress na) throws IOException { return sc.connect(na); }
 	@Override
-	protected boolean connect0(InetSocketAddress na) throws IOException {
-		return sc.connect(na);
-	}
-
+	protected SocketAddress finishConnect0() throws IOException { return sc.finishConnect() ? sc.getRemoteAddress() : null; }
 	@Override
-	protected SocketAddress finishConnect0() throws IOException {
-		return sc.finishConnect() ? sc.getRemoteAddress() : null;
-	}
-
+	protected void closeGracefully0() throws IOException { sc.shutdownOutput(); }
 	@Override
-	protected void disconnect0() throws IOException {
-		sc.close();
-		ch = sc = SocketChannel.open();
-		rb.clear();
-	}
+	protected void disconnect0() throws IOException { sc.close(); ch = sc = SocketChannel.open(); rb.clear(); }
 
 	public void flush() throws IOException {
-		if (pending.isEmpty() || state >= CLOSED) return;
+		if (state >= CLOSED) return;
+		fireFlushing();
+		if (pending.isEmpty()) return;
 
 		BufferPool bp = alloc();
 		lock.lock();
@@ -124,7 +113,7 @@ class TcpChImpl extends MyChannel {
 			if (pending.isEmpty()) {
 				flag &= ~PAUSE_FOR_FLUSH;
 				key.interestOps(SelectionKey.OP_READ);
-				fireWriteDone();
+				fireFlushed();
 			}
 		} finally {
 			lock.unlock();
@@ -180,7 +169,7 @@ class TcpChImpl extends MyChannel {
 				Object o1 = pending.ringAddLast(bp.buffer(true, buf.readableBytes()).put(buf));
 				if (o1 != null) throw new IOException("上层发送缓冲区过载");
 			} else {
-				fireWriteDone();
+				fireFlushed();
 			}
 		} finally {
 			if (o != buf) bp.reserve(buf);

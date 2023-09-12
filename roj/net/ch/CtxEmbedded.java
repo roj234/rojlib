@@ -71,6 +71,8 @@ public class CtxEmbedded extends MyChannel {
 	@Override
 	protected SocketAddress finishConnect0() throws IOException { throw new IOException("Channel is embedded"); }
 	@Override
+	protected void closeGracefully0() throws IOException { close(); }
+	@Override
 	protected void disconnect0() throws IOException { throw new IOException("Channel is embedded"); }
 
 	public void flush() throws IOException { if (owner != null) owner.flush(); }

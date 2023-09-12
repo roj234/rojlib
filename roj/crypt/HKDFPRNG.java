@@ -22,7 +22,7 @@ public class HKDFPRNG extends SecureRandom {
 	}
 
 	public void generate(Object pointer, int off, int len) {
-		HMAC.HKDF_expand(kd, prk,info,len,pointer,off);
+		HMAC.HKDF_expand(kd,prk,info,len,pointer,off);
 		incr();
 	}
 

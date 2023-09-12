@@ -25,6 +25,15 @@ public class MT19937 extends Random {
 	public MT19937() { setSeed(_seed); }
 	public MT19937(long seed) { super(0); setSeed(seed); }
 
+	public final void nextBytes(byte[] bytes, int i, int len) {
+		while (i < len) {
+			for (int rnd = nextInt(),
+				 n = Math.min(len - i, Integer.SIZE/Byte.SIZE);
+				 n-- > 0; rnd >>= Byte.SIZE)
+				bytes[i++] = (byte)rnd;
+		}
+	}
+
 	@Override
 	public void setSeed(long seed) {
 		// Random will invoke setSeed() before this class initialize

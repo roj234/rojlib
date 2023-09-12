@@ -158,7 +158,6 @@ public final class Shared {
 					} catch (Exception e) {
 						CmdUtil.error("正向映射表加载失败", e);
 					}
-					mapperFwd.classNameChanged();
 				}
 			}
 		}
@@ -281,7 +280,7 @@ public final class Shared {
 			}
 
 			if (CONFIG.getBool("子类实现")) {
-				mapperFwd.flag |= Mapper.FLAG_FIX_SUBIMPL;
+				mapperFwd.flag |= Mapper.MF_FIX_SUBIMPL;
 			}
 		}
 

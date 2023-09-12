@@ -113,7 +113,7 @@ public class BufferPool {
 
 		lock.lock();
 		try {
-			if (ldt != null) ldt.untrack(buf);
+			if (ldt != null) ldt.remove(buf);
 
 			if (!pool.reserve(buf)) {
 				if (pool == UNPOOLED) UNPOOLED_MAX.addAndGet(buf.capacity());
@@ -142,10 +142,10 @@ public class BufferPool {
 
 		lock.lock();
 		try {
-			BPool pool = ((PooledBuffer) buf).pool();
-			if (pool == null) throwUnpooled(buf);
-
-			if (pool.expand(buf, more, addAtEnd)) return buf;
+			BPool pool = buf instanceof PooledBuffer ? ((PooledBuffer) buf).pool() : null;
+			if (pool == null) {
+				if (reserveOld) throwUnpooled(buf);
+			} else if (pool.expand(buf, more, addAtEnd)) return buf;
 
 			DynByteBuf newBuf = buffer(buf.isDirect(), buf.capacity()+more);
 			if (!addAtEnd) newBuf.wIndex(more);

@@ -6,7 +6,6 @@ import roj.asm.Parser;
 import roj.asm.tree.IClass;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -69,7 +68,7 @@ public class LibraryZipFile implements Library {
 		ZEntry file = zf.getEntries().get(s);
 		if (file == null) return null;
 		try {
-			ByteList data = zf.get(file, IOUtil.getSharedByteBuf());
+			ByteList data = ByteList.wrap(zf.get(file));
 			return Parser.parseConstants(data);
 		} catch (Exception e) {
 			e.printStackTrace();
