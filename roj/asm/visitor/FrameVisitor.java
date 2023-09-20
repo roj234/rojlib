@@ -356,9 +356,10 @@ public class FrameVisitor {
 				case LASTORE: arrayStore("[J", LONG); break;
 				case DASTORE: arrayStore("[D", DOUBLE); break;
 				case AASTORE:
-					pop("java/lang/Object");
+					Var2 ref1 = pop("java/lang/Object");
 					pop(INT);
-					pop("[Ljava/lang/Object;");
+					Var2 ref2 = pop("[Ljava/lang/Object;");
+					//ref1.merge(new Var2(ref2.owner.substring(1)));
 					break;
 				case ARRAYLENGTH: pop("["); push(INT); break;
 

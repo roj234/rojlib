@@ -1,7 +1,5 @@
 package roj.lavac.expr;
 
-import roj.asm.tree.anno.AnnValArray;
-import roj.asm.tree.anno.AnnValInt;
 import roj.asm.type.Type;
 import roj.config.word.NotStatementException;
 import roj.lavac.parser.MethodPoetL;
@@ -15,9 +13,9 @@ import javax.annotation.Nonnull;
  * @since 2022/2/27 20:09
  */
 public final class ArrayGet implements LoadExpression {
-	ASTNode array, index;
+	Expression array, index;
 
-	public ArrayGet(ASTNode array, ASTNode index) {
+	public ArrayGet(Expression array, Expression index) {
 		this.array = array;
 		this.index = index;
 	}
@@ -33,11 +31,11 @@ public final class ArrayGet implements LoadExpression {
 
 	@Nonnull
 	@Override
-	public ASTNode compress() {
+	public Expression compress() {
 		array = array.compress();
 		index = index.compress();
 		if (array.isConstant() && index.isConstant()) {
-			return new LDC(((AnnValArray) array.asCst().val()).value.get(((AnnValInt) index.asCst().val()).value));
+			return new Constant(type(), ((Object[])array.constVal())[((Number)index.constVal()).intValue()]);
 		}
 		return this;
 	}
@@ -48,7 +46,9 @@ public final class ArrayGet implements LoadExpression {
 	}
 
 	private static Type componentType(Type t) {
-		return t.owner != null ? new Type(t.owner, t.array()-1) : t.array() == 1 ? Type.std(t.type) : new Type(t.type, t.array()-1);
+		Type type = t.clone();
+		type.setArrayDim(type.array()-1);
+		return type;
 	}
 
 	@Override
@@ -57,7 +57,7 @@ public final class ArrayGet implements LoadExpression {
 	}
 
 	@Override
-	public boolean isEqual(ASTNode left) {
+	public boolean isEqual(Expression left) {
 		if (this == left) return true;
 		if (!(left instanceof ArrayGet)) return false;
 		ArrayGet get = (ArrayGet) left;

@@ -703,7 +703,11 @@ public final class CompileUnit extends ConstantData {
 				sameTypeField:
 				do {
 					Field field = new Field(acc, name, type);
-					if (!names.add(field.name)) fireDiagnostic(Diagnostic.Kind.ERROR, "duplicate_field:" + field.name);
+					if (!names.add(field.name)) {
+						System.out.println("current fields: " + names);
+						wr.err("").printStackTrace();
+						fireDiagnostic(Diagnostic.Kind.ERROR, "duplicate_field:" + field.name);
+					}
 					if (list != null) addAnnotation(field, list);
 					if (s != null) field.putAttr(s);
 
@@ -834,7 +838,8 @@ public final class CompileUnit extends ConstantData {
 
 	public static final int TYPE_PRIMITIVE = 1, TYPE_OPTIONAL = 2, TYPE_AUTO = 4, TYPE_STAR = 8, TYPE_GENERIC = 16, TYPE_LEVEL2 = 32;
 	/**
-	 * 获取类型
+	 * 获取类 (a.b.c)
+	 * @param flags 0 | {@link #TYPE_STAR} allow * (in import)
 	 */
 	private static void _klass(JavaLexer wr, CharList sb, int flags) throws ParseException {
 		sb.clear();
@@ -865,6 +870,7 @@ public final class CompileUnit extends ConstantData {
 	}
 	/**
 	 * 获取类型
+	 * @param flags {@link #TYPE_PRIMITIVE} bit set
 	 */
 	private IType _type(JavaLexer wr, CharList sb, int flags) throws ParseException {
 		IType type;
@@ -876,7 +882,7 @@ public final class CompileUnit extends ConstantData {
 		} else {
 			if (w.type() != LITERAL) {
 				if ((flags&TYPE_OPTIONAL) == 0) throw wr.err("empty_type"+w);
-				return null;
+				return Helpers.nonnull();
 			}
 
 			wr.retractWord();
@@ -1102,31 +1108,27 @@ public final class CompileUnit extends ConstantData {
 			}
 
 			while (wr.hasNext()) {
-				Word nameOpt = wr.next().copy();
+				int index = wr.index;
+				String val = wr.next().val();
+
 				w = wr.next();
 				if (w.type() != assign) {
 					// values
 					a.assertValueOnly = true;
-					a.newEntry("value", ParseTask.FieldVal(wr.index = nameOpt.pos(), skipCode(wr, BRACKET_ANNOTATION)));
+					a.newEntry("value", ParseTask.FieldVal(wr.index = index, skipCode(wr, BRACKET_ANNOTATION)));
 				} else {
 					if (a.assertValueOnly) throw wr.err("assert value only");
-					a.newEntry(nameOpt.val(), ParseTask.FieldVal(wr.index, skipCode(wr, BRACKET_ANNOTATION)));
+					a.newEntry(val, ParseTask.FieldVal(wr.index, skipCode(wr, BRACKET_ANNOTATION)));
 				}
 
-				w = wr.next();
 				switch (w.type()) {
 					case right_s_bracket:
 						w = wr.next();
-						if (w.type() == at) {
-							continue readMore;
-						} else {
-							wr.retractWord();
-							return list;
-						}
-					case comma:
-						break;
-					default:
-						throw wr.err("unexpected:" + w.val());
+						if (w.type() == at) continue readMore;
+						wr.retractWord();
+						return list;
+					case comma: break;
+					default: throw wr.err("unexpected:" + w.val());
 				}
 			}
 		}
@@ -1144,11 +1146,12 @@ public final class CompileUnit extends ConstantData {
 
 	@SuppressWarnings("fallthrough")
 	private static int skipCode(JavaLexer wr, int type) throws ParseException {
-		int L = 0, M = 0, S = 0;
+		int L = 0, M = 0, S = 0, G = 0;
 		cyl:
 		while (wr.hasNext()) {
 			Word w = wr.next();
 			switch (w.type()) {
+				case lss: G++; break;
 				case left_l_bracket: L++; break;
 				case left_m_bracket: M++; break;
 				case left_s_bracket: S++; break;
@@ -1157,23 +1160,23 @@ public final class CompileUnit extends ConstantData {
 						if ((type&_E_LSB) != 0) break cyl;
 						throw wr.err("invalid_bracket:" + w.val());
 					}
-					break;
+				break;
 				case right_m_bracket: M--;
 					if (M < 0) throw wr.err("invalid_bracket:" + w.val());
-					break;
+				break;
 				case right_s_bracket: S--;
 					if (S < 0) {
-						if ((type&_E_SSB) != 0){
-							wr.retractWord();
-							break cyl;
-						}
+						if ((type&_E_SSB) != 0) break cyl;
 						throw wr.err("invalid_bracket:" + w.val());
 					}
-					break;
+				break;
+				case gtr: G--;
+					if (G < 0)throw wr.err("invalid_bracket:" + w.val());
+				break;
 				case semicolon: if ((type & _E_SEM) == 0) continue;
 				case comma: if (w.type() == comma && (type & _E_COM) == 0) continue;
 				case EOF:
-					if ((L|M|S) == 0) break cyl;
+					if ((L|M|S|G) == 0) break cyl;
 					if (w.type() == EOF) throw wr.err("unclosed_bracket");
 			}
 		}
@@ -1629,5 +1632,13 @@ public final class CompileUnit extends ConstantData {
 	public CharSequence objectPath() throws ParseException {
 		_klass(wr, Cache.tmpList, 0);
 		return Cache.tmpList;
+	}
+
+	public JavaLexer lex() {
+		return wr;
+	}
+
+	public MethodNode parseLambda() {
+		return null;
 	}
 }

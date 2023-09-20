@@ -10,7 +10,7 @@ import roj.lavac.parser.MethodPoetL;
  * @since 2022/2/24 19:55
  */
 public final class InstanceOf extends Cast {
-	public InstanceOf(Type type, ASTNode right) {
+	public InstanceOf(Type type, Expression right) {
 		super(type, right);
 	}
 

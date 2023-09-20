@@ -2,6 +2,7 @@ package roj.lavac.expr;
 
 import roj.asm.tree.insn.LabelInsnNode;
 import roj.asm.type.Type;
+import roj.asm.visitor.Label;
 import roj.config.word.NotStatementException;
 import roj.lavac.parser.MethodPoetL;
 
@@ -15,12 +16,12 @@ import static roj.lavac.parser.JavaLexer.*;
  * @author Roj233
  * @since 2022/2/24 19:56
  */
-public final class Binary implements ASTNode {
+public final class Binary implements Expression {
 	final short operator;
-	ASTNode left, right;
+	Expression left, right;
 	LabelInsnNode target;
 
-	public Binary(short operator, ASTNode left, ASTNode right) {
+	public Binary(short operator, Expression left, Expression right) {
 		switch (operator) {
 			default:
 				throw new IllegalArgumentException("Unsupported operator " + byId(operator));
@@ -87,7 +88,7 @@ public final class Binary implements ASTNode {
 
 	@Nonnull
 	@Override
-	public ASTNode compress() {
+	public Expression compress() {
 		return this;
 	}
 
@@ -102,14 +103,14 @@ public final class Binary implements ASTNode {
 	}
 
 	@Override
-	public boolean isEqual(ASTNode left) {
+	public boolean isEqual(Expression left) {
 		if (this == left) return true;
 		if (!(left instanceof Binary)) return false;
 		Binary b = (Binary) left;
 		return b.left.isEqual(left) && b.right.isEqual(right) && b.operator == operator;
 	}
 
-	public void setTarget(LabelInsnNode ifFalse) {
+	public void setTarget(Label ifFalse) {
 
 	}
 }

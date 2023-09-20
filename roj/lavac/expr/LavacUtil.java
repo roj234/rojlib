@@ -3,6 +3,7 @@ package roj.lavac.expr;
 import roj.asm.Opcodes;
 import roj.asm.tree.MoFNode;
 import roj.asm.type.Type;
+import roj.asm.type.TypeCast;
 import roj.lavac.parser.CompileContext;
 
 /**
@@ -145,6 +146,7 @@ public final class LavacUtil {
 	 * other: can and write opcodes
 	 */
 	public static int primitiveCast(Type from, Type to) {
+		TypeCast.canUpCastTo(from, to, null, null);
 		byte fc = from.type;
 		byte tc = to.type;
 

@@ -18,17 +18,17 @@ import javax.annotation.Nonnull;
  * @since 2022/2/27 20:27
  */
 public final class Field implements LoadExpression {
-	ASTNode parent;
+	Expression parent;
 	Desc field;
 
-	public Field(ASTNode parent, Desc field) {
+	public Field(Expression parent, String name, int flag) {
 		this.parent = parent;
 		this.field = field;
 	}
 
 	@Nonnull
 	@Override
-	public ASTNode compress() {
+	public Expression compress() {
 		parent = parent.compress();
 		assert !parent.isConstant();
 		return this;
@@ -40,7 +40,7 @@ public final class Field implements LoadExpression {
 	}
 
 	@Override
-	public boolean isEqual(ASTNode left) {
+	public boolean isEqual(Expression left) {
 		if (this == left) return true;
 		if (!(left instanceof Field)) return false;
 		Field field = (Field) left;

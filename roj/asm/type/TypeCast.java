@@ -26,7 +26,7 @@ import static roj.asm.type.Type.*;
  * @author Roj234
  * @since 2023/5/18 0018 11:11
  */
-public final class CastHelper {
+public final class TypeCast {
 	// 对泛型只会返回0或1, 然后返回的是最小(差)的结果, 通过控制下面数字的顺序
 	public static final int RAWTYPES = 0, UPCAST = 1, NUMBER_UPCAST = 2, BOXING = 3, UNBOXING = 4;
 	public static final int E_CAST = -1, E_OBJ2INT = -2, E_INT2OBJ = -3, E_GEN_PARAM_COUNT = -4, E_NODATA = -5, E_NEVER = -6;
@@ -35,7 +35,7 @@ public final class CastHelper {
 	public String error;
 	public byte opcode;
 
-	private CastHelper(int i, byte opc) {
+	private TypeCast(int i, byte opc) {
 		type = i;
 		opcode = opc;
 
@@ -57,10 +57,10 @@ public final class CastHelper {
 		error = s;
 	}
 
-	private static CastHelper RESULT(int i) { return new CastHelper(i, (byte) 0); }
-	private static CastHelper RESULT(int i, byte b) { return new CastHelper(i, b); }
+	private static TypeCast RESULT(int i) { return new TypeCast(i, (byte) 0); }
+	private static TypeCast RESULT(int i, byte b) { return new TypeCast(i, b); }
 
-	private static final LFUCache<CharSequence, CastHelper> ClassConvertCache = new LFUCache<>(999);
+	private static final LFUCache<CharSequence, TypeCast> ClassConvertCache = new LFUCache<>(999);
 	private static final Int2IntMap DataCap;
 	static {
 		DataCap = new Int2IntMap(8);
@@ -73,13 +73,13 @@ public final class CastHelper {
 		DataCap.putInt(DOUBLE, 7);
 	}
 
-	public static CastHelper canUpCastTo(IType from, IType to,
-										 Function<CharSequence, IClass> klassEnv, Function<CharSequence, List<IType>> genericEnv) {
+	public static TypeCast canUpCastTo(IType from, IType to,
+									   Function<CharSequence, IClass> klassEnv, Function<CharSequence, List<IType>> genericEnv) {
 		return canUpCastTo(from, to, klassEnv, genericEnv, -1);
 	}
-	public static CastHelper canUpCastTo(IType from, IType to,
-										 Function<CharSequence, IClass> klassEnv, Function<CharSequence, List<IType>> genericEnv,
-										 int in_generic) {
+	public static TypeCast canUpCastTo(IType from, IType to,
+									   Function<CharSequence, IClass> klassEnv, Function<CharSequence, List<IType>> genericEnv,
+									   int in_generic) {
 
 		if (from.equals(to)) return RESULT(UPCAST);
 
@@ -115,13 +115,13 @@ public final class CastHelper {
 				break;
 		}
 
-		CastHelper res = null;
+		TypeCast res = null;
 		for (int i = 0; i < from_list.size(); i++) {
 			IType f = from_list.get(i);
 			for (int j = 0; j < to_list.size(); j++) {
 				IType t = to_list.get(j);
 
-				CastHelper v = canUpCastTo(f.rawType(),t.rawType(),klassEnv,t instanceof Generic ? ((Generic) t).extendType : in_generic);
+				TypeCast v = canUpCastTo(f.rawType(),t.rawType(),klassEnv,t instanceof Generic ? ((Generic) t).extendType : in_generic);
 				if (res == null || v.type < res.type) res = v;
 
 				if (f.genericType() == GENERIC_TYPE) {
@@ -190,8 +190,8 @@ public final class CastHelper {
 		return gg1;
 	}
 
-	public static CastHelper canUpCastTo(Type from, Type to,
-										 Function<CharSequence, IClass> klassEnv, int inheritType) {
+	public static TypeCast canUpCastTo(Type from, Type to,
+									   Function<CharSequence, IClass> klassEnv, int inheritType) {
 		if (from.equals(to)) return RESULT(UPCAST);
 
 		if (from.isPrimitive()) {
@@ -276,7 +276,7 @@ public final class CastHelper {
 		}
 
 		CharList key = IOUtil.ddLayeredCharBuf().append(from.owner).append(';').append(to.owner);
-		CastHelper v = ClassConvertCache.get(key);
+		TypeCast v = ClassConvertCache.get(key);
 		if (v == null) {
 			v = checkInheritable(from, to, klassEnv);
 			ClassConvertCache.put(key.toStringAndFree(), v);
@@ -285,7 +285,7 @@ public final class CastHelper {
 		}
 		return v;
 	}
-	private static CastHelper checkInheritable(Type from, Type to, Function<CharSequence, IClass> klassEnv) {
+	private static TypeCast checkInheritable(Type from, Type to, Function<CharSequence, IClass> klassEnv) {
 		IClass fromClass = klassEnv.apply(from.owner);
 		IClass toClass = klassEnv.apply(to.owner);
 
@@ -332,15 +332,15 @@ public final class CastHelper {
 		return false;
 	}
 
-	private static CastHelper canUpCastToEx(Generic from, Generic to,
-											Function<CharSequence, IClass> klassEnv, Function<CharSequence, List<IType>> genericEnv) {
+	private static TypeCast canUpCastToEx(Generic from, Generic to,
+										  Function<CharSequence, IClass> klassEnv, Function<CharSequence, List<IType>> genericEnv) {
 		List<IType> fc = from.children;
 		List<IType> tc = to.children;
 		if (fc.size() != tc.size()) return RESULT(E_GEN_PARAM_COUNT);
 
-		CastHelper res = null;
+		TypeCast res = null;
 		for (int i = 0; i < fc.size(); i++) {
-			CastHelper v = canUpCastTo(fc.get(i), tc.get(i), klassEnv, genericEnv, EX_EXTENDS);
+			TypeCast v = canUpCastTo(fc.get(i), tc.get(i), klassEnv, genericEnv, EX_EXTENDS);
 			if (res == null || v.type < res.type) res = v;
 		}
 		return res;

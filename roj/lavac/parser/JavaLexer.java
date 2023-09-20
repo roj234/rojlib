@@ -73,6 +73,7 @@ public final class JavaLexer extends Tokenizer {
 		assign = 138, add_assign = 139, sub_assign = 140, mul_assign = 141, div_assign = 142, mod_assign = 143,
 		and_assign = 144, xor_assign = 145, or_assign = 146, lsh_assign = 147, rsh_assign = 148, rsh_unsigned_assign = 149,
 		preprocess_s = 150, preprocess_e = 151, at = 152, varargs = 153, method_referent = 154;
+	public static final short pow_assign = 999, optional_chaining = 998, spread = 997;
 
 	public static final int CAT_METHOD = 1, CAT_TYPE = 2, CAT_MODIFIER = 4, CAT_HEADER = 8, CAT_TYPE_TYPE = 16, CAT_GENERIC_EXT = 32;
 
@@ -234,6 +235,10 @@ public final class JavaLexer extends Tokenizer {
 	}
 
 	public long env;
+
+	public static boolean isBinaryOperator(short type) {
+		return false;
+	}
 
 	{
 		i18n = JSLexer.translate;

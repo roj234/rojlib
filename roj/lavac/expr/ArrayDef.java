@@ -1,13 +1,10 @@
 package roj.lavac.expr;
 
-import roj.asm.tree.anno.AnnVal;
-import roj.asm.tree.anno.AnnValArray;
 import roj.asm.type.Type;
 import roj.config.word.NotStatementException;
 import roj.lavac.parser.MethodPoetL;
 
 import javax.annotation.Nonnull;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -16,31 +13,31 @@ import java.util.List;
  * @author Roj233
  * @since 2022/2/27 19:43
  */
-public final class ArrayDef implements ASTNode {
+public final class ArrayDef implements Expression {
 	Type type;
-	List<ASTNode> expr;
+	List<Expression> expr;
 
-	public ArrayDef(List<ASTNode> args) {
+	public ArrayDef(List<Expression> args) {
 		this.type = type;
 		this.expr = args;
 	}
 
 	@Override
-	public boolean isEqual(ASTNode left) {
+	public boolean isEqual(Expression left) {
 		if (this == left) return true;
 		if (left == null || getClass() != left.getClass()) return false;
 		ArrayDef define = (ArrayDef) left;
 		return arrayEq(expr, define.expr);
 	}
 
-	static boolean arrayEq(List<ASTNode> as, List<ASTNode> bs) {
+	static boolean arrayEq(List<Expression> as, List<Expression> bs) {
 		if (as.size() != bs.size()) return false;
 
 		if (as.isEmpty()) return true;
 
 		for (int i = 0; i < as.size(); i++) {
-			ASTNode a = as.get(i);
-			ASTNode b = bs.get(i);
+			Expression a = as.get(i);
+			Expression b = bs.get(i);
 			if (a == null) {
 				if (b != null) return false;
 			} else if (!a.isEqual(b)) return false;
@@ -50,16 +47,15 @@ public final class ArrayDef implements ASTNode {
 
 	@Nonnull
 	@Override
-	public ASTNode compress() {
+	public Expression compress() {
 		for (int i = 0; i < expr.size(); i++) {
 			if (!expr.get(i).isConstant()) return this;
 		}
-		List<AnnVal> arrayEntry = Arrays.asList(new AnnVal[expr.size()]);
+		Object[] arrayEntry = new Object[expr.size()];
 		for (int i = 0; i < expr.size(); i++) {
-			arrayEntry.set(i, expr.get(i).asCst().val());
+			arrayEntry[i] = expr.get(i).constVal();
 		}
-		AnnValArray val = new AnnValArray(arrayEntry);
-		return new LDC(val);
+		return new Constant(type, arrayEntry);
 	}
 
 	@Override
@@ -73,7 +69,7 @@ public final class ArrayDef implements ASTNode {
 
 		tree.const1(expr.size()).newArray(type);
 		for (int i = 0; i < expr.size(); i++) {
-			ASTNode expr = this.expr.get(i);
+			Expression expr = this.expr.get(i);
 			if (expr != null) {
 				tree.dup().const1(i);
 				expr.write(tree, false);

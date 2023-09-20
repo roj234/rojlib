@@ -10,11 +10,11 @@ import roj.lavac.parser.MethodPoetL;
  * @author Roj234
  * @since 2022/2/24 19:48
  */
-public class Cast implements ASTNode {
+public class Cast implements Expression {
 	Type type;
-	ASTNode right;
+	Expression right;
 
-	public Cast(Type type, ASTNode right) {
+	public Cast(Type type, Expression right) {
 		this.type = type;
 		this.right = right;
 	}
@@ -34,7 +34,7 @@ public class Cast implements ASTNode {
 	}
 
 	@Override
-	public boolean isEqual(ASTNode o) {
+	public boolean isEqual(Expression o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 

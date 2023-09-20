@@ -10,8 +10,8 @@ import roj.asm.util.AccessFlag;
 import roj.asm.visitor.CodeWriter;
 import roj.config.ParseException;
 import roj.config.word.Word;
-import roj.lavac.expr.ASTNode;
 import roj.lavac.expr.ExprParser;
+import roj.lavac.expr.Expression;
 import roj.lavac.parser.CompileLocalCache;
 import roj.lavac.parser.CompileUnit;
 import roj.lavac.parser.JavaLexer;
@@ -37,7 +37,7 @@ public interface ParseTask {
 			} else {
 
 			}
-			ASTNode expr = ep.read(u, 0, null);
+			Expression expr = ep.read(u, 0, null);
 			expr.write(poet, false);
 
 			Word w = wr.next();
@@ -67,7 +67,7 @@ public interface ParseTask {
 
 			poet.new1(u.name).dup();
 			while (true) {
-				ASTNode expr = ep.read(u, 16, null);
+				Expression expr = ep.read(u, 16, null);
 				expr.write(poet, false);
 
 				Word w = wr.next();
@@ -123,7 +123,7 @@ public interface ParseTask {
 			wr.index = start;
 
 			ExprParser ep = CompileLocalCache.get().ep;
-			ASTNode expr = ep.read(u, 0, null);
+			Expression expr = ep.read(u, 0, null);
 		};
 	}
 

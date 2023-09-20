@@ -8,7 +8,8 @@ import roj.lavac.parser.MethodPoetL;
  * @author Roj234
  * @since 2023/1/30 0030 14:08
  */
-public class This implements ASTNode {
+public class This implements Expression {
+	public static final This INST = new This();
 	public This() {
 		
 	}
@@ -24,7 +25,7 @@ public class This implements ASTNode {
 	}
 
 	@Override
-	public boolean isEqual(ASTNode left) {
+	public boolean isEqual(Expression left) {
 		return false;
 	}
 }

@@ -10,25 +10,22 @@ import javax.annotation.Nonnull;
  * @author Roj233
  * @since 2022/2/24 19:16
  */
-public interface ASTNode {
+public interface Expression {
 	void write(MethodPoetL tree, boolean noRet) throws NotStatementException;
 
 	@Nonnull
-	default ASTNode compress() {
+	default Expression compress() {
 		return this;
 	}
 
 	Type type();
 
-	default boolean isConstant() {
-		return false;
-	}
-
-	default LDC asCst() {
+	default boolean isConstant() { return false; }
+	default Object constVal() {
 		throw new IllegalArgumentException("This (" + this + ") - " + getClass().getName() + " is not a constant.");
 	}
 
-	boolean isEqual(ASTNode left);
+	boolean isEqual(Expression left);
 
 	/**
 	 * 特殊操作处理

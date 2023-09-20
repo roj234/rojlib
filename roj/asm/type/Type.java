@@ -12,7 +12,7 @@ import java.util.function.UnaryOperator;
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public final class Type implements IType {
+public final class Type implements IType, Cloneable {
 	public static final char ARRAY = '[', CLASS = 'L', VOID = 'V', BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT = 'S', INT = 'I', FLOAT = 'F', DOUBLE = 'D', LONG = 'J';
 
 	static final Object[][] MAP = new Object[26][];
@@ -197,6 +197,16 @@ public final class Type implements IType {
 			case LONG: return long.class;
 		}
 		throw new IllegalArgumentException("?");
+	}
+
+	@Override
+	public Type clone() {
+		try {
+			return (Type) super.clone();
+		} catch (CloneNotSupportedException e) {
+			Helpers.athrow(e);
+			return Helpers.nonnull();
+		}
 	}
 
 	@Override
