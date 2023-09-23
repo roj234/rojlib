@@ -346,7 +346,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		K k;
 		for (Entry<?, ?> entry : entries) {
 			while (entry != null) {
-				if (entry.v != UNDEFINED && predicate.test(k = (K) entry.k)) {
+				if (predicate.test(k = (K) entry.k)) {
 					entry = entry.next;
 					remove(k);
 					continue;
@@ -359,7 +359,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	@Override
 	public boolean replace(K key, V oldValue, V newValue) {
 		Entry<K, V> entry = getEntry(key);
-		if (entry == null || entry.v == UNDEFINED) return false;
+		if (entry == null) return false;
 		if (Objects.equals(oldValue, entry.v)) {
 			afterAccess(entry, newValue);
 			entry.v = newValue;
@@ -408,8 +408,8 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	@Override
 	public V computeIfAbsent(K key, @Nonnull Function<? super K, ? extends V> mappingFunction) {
 		Entry<K, V> entry = getEntry(key);
-		if (entry != null && entry.v != UNDEFINED) return entry.v;
-		if (entry == null) entry = getOrCreateEntry(key);
+		if (entry != null) return entry.v;
+		entry = getOrCreateEntry(key);
 		if (entry.v == UNDEFINED) {
 			size++;
 			afterPut(entry);
@@ -420,7 +420,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	@Override
 	public V computeIfPresent(K key, @Nonnull BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
 		Entry<K, V> entry = getEntry(key);
-		if (entry == null || entry.v == UNDEFINED) return null;
+		if (entry == null) return null;
 		if (entry.v == null) return null; // default implement guarantee
 		V newV = remappingFunction.apply(key, entry.v);
 		if (newV == null) {
@@ -435,8 +435,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	@SuppressWarnings("unchecked")
 	public V getOrDefault(Object key, V defaultValue) {
 		Entry<K, V> entry = getEntry((K) key);
-		if (entry == null || entry.v == UNDEFINED) return defaultValue;
-		return entry.v;
+		return entry == null ? defaultValue : entry.v;
 	}
 
 	@Override
@@ -457,8 +456,6 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		if (entry == null) return null;
 
 		V v = entry.v;
-		if (v == UNDEFINED) v = null;
-
 		entry.v = val;
 		return v;
 	}

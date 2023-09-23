@@ -1,6 +1,8 @@
 package roj.asm.tree.anno;
 
 import roj.asm.cst.ConstantPool;
+import roj.asm.type.TypeHelper;
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 
 /**
@@ -21,7 +23,11 @@ public final class AnnValEnum extends AnnVal {
 	public byte type() { return ENUM; }
 
 	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) ENUM).putShort(cp.getUtfId("L" + clazz + ';')).putShort(cp.getUtfId(value)); }
-	public String toString() { return String.valueOf(clazz) + '.' + value; }
+	public String toString() {
+		CharList sb = new CharList();
+		TypeHelper.toStringOptionalPackage(sb, clazz);
+		return sb.replace('/', '.').append('.').append(value).toStringAndFree();
+	}
 
 	@Override
 	public boolean equals(Object o) {

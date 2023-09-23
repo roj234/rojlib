@@ -22,41 +22,19 @@ import java.util.function.Consumer;
 public class CList extends CEntry implements Iterable<CEntry> {
 	protected List<CEntry> list;
 
-	public CList() {
-		this(new SimpleList<>(0,2));
-	}
-
-	public CList(int size) {
-		this.list = new SimpleList<>(size);
-	}
-
+	public CList() { this(SimpleList.withCapacityType(0,2)); }
+	public CList(int size) { list = new SimpleList<>(size); }
 	@SuppressWarnings("unchecked")
-	public CList(List<? extends CEntry> list) {
-		this.list = (List<CEntry>) list;
-	}
+	public CList(List<? extends CEntry> list) { this.list = (List<CEntry>) list; }
 
-	public final boolean isEmpty() {
-		return list.isEmpty();
-	}
-
-	public final int size() {
-		return list.size();
-	}
-
+	public final boolean isEmpty() { return list.isEmpty(); }
+	public final int size() { return list.size(); }
 	@Nonnull
-	public Iterator<CEntry> iterator() {
-		return list.iterator();
-	}
-
+	public Iterator<CEntry> iterator() { return list.iterator(); }
 	@Override
-	public void forEach(Consumer<? super CEntry> action) {
-		list.forEach(action);
-	}
-
+	public void forEach(Consumer<? super CEntry> action) { list.forEach(action); }
 	@Override
-	public Spliterator<CEntry> spliterator() {
-		return list.spliterator();
-	}
+	public Spliterator<CEntry> spliterator() { return list.spliterator(); }
 
 	public final CList add(CEntry entry) {
 		list.add(entry == null ? CNull.NULL : entry);
@@ -107,6 +85,8 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		CEntry entry = list.get(i);
 		return entry.isNumber() ? entry.asDouble() : 0;
 	}
+	public CList getList(int i) { return list.get(i).asList(); }
+	public CMapping getMap(int i) { return list.get(i).asMap(); }
 
 	public CEntry remove(int i) {
 		return list.remove(i);

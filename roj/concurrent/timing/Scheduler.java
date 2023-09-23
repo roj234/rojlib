@@ -27,7 +27,7 @@ public class Scheduler implements Runnable {
 		if (defaultScheduler == null) {
 			synchronized (Scheduler.class) {
 				if (defaultScheduler != null) return defaultScheduler;
-				defaultScheduler = new Scheduler(TaskPool.CpuMassive());
+				defaultScheduler = new Scheduler(TaskPool.Common());
 				defaultScheduler.runNewThread("定时任务调度器");
 			}
 		}
@@ -62,8 +62,7 @@ public class Scheduler implements Runnable {
 		this(executor, 1);
 	}
 	public Scheduler(@Nullable TaskHandler executor, int maxHelperThreadCount) {
-		this.remain = new SimpleList<>();
-		this.remain.capacityType = 2;
+		this.remain = SimpleList.withCapacityType(16, 2);
 		this.timer = new PriorityQueue<>(CPR);
 		this.head = this.tail = new ScheduledTask(null, 0,0,1) { public void execute() {} };
 		this.head.nextRun = Long.MAX_VALUE;
@@ -118,7 +117,8 @@ public class Scheduler implements Runnable {
 			try {
 				boolean timeout = false;
 				if (task.schedule(startTime)) {
-					if (maxSubSchedulers > 0 && task != head && time - task.nextRun > 10) {
+					// 15.625ms
+					if (maxSubSchedulers > 0 && task != head && time - task.nextRun > 16) {
 						dirty = timeout = true;
 					} else remain.add(task);
 				} else dirty = true;

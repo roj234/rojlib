@@ -4,28 +4,23 @@ import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
-import roj.concurrent.DualBuffered;
-import roj.concurrent.TaskPool;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.config.serial.ToJson;
 import roj.config.word.ITokenizer;
-import roj.crypt.Base64;
+import roj.crypt.HMAC;
 import roj.crypt.SM3;
 import roj.io.IOUtil;
-import roj.io.buf.BufferPool;
 import roj.math.MutableInt;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.osi.ServerLaunch;
-import roj.net.http.Action;
-import roj.net.http.Headers;
 import roj.net.http.HttpUtil;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.srv.*;
+import roj.net.http.srv.autohandled.*;
 import roj.net.http.ws.WebsocketHandler;
 import roj.net.http.ws.WebsocketManager;
 import roj.text.ACalendar;
-import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.UTFCoder;
 import roj.text.logging.LoggingStream;
@@ -34,15 +29,17 @@ import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import javax.annotation.Nullable;
-import javax.imageio.ImageIO;
-import java.awt.image.*;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.security.SecureRandom;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author solo6975
@@ -50,13 +47,12 @@ import java.util.*;
  */
 public class Server extends WebsocketManager implements Router, Context {
 	static final SecureRandom rnd = new SecureRandom();
-	byte[] secKey;
+	final byte[] secKey = new byte[16];
 
 	public Server() {
 		Set<String> prot = getValidProtocol();
 		prot.clear();
 		prot.add("WSChat");
-		secKey = new byte[16];
 		rnd.nextBytes(secKey);
 	}
 
@@ -67,31 +63,17 @@ public class Server extends WebsocketManager implements Router, Context {
 		return w;
 	}
 
-	static File headDir, attDir, imgDir;
+	static File attDir;
 	static ChatDAO dao;
 	static IntMap<AbstractUser> userMap = new IntMap<>();
-
-	static final TaskPool POOL = new TaskPool(1, 4, 1, 60000, "Pool1-");
-
-	static TimeCounter sharedCounter = new TimeCounter(60000);
 
 	public static void main(String[] args) throws IOException {
 		File path = new File("mychat");
 		dao = new ChatDAO(path);
 
-		headDir = new File(path, "head");
-		if (!headDir.isDirectory() && !headDir.mkdirs()) {
-			throw new IOException("Failed to create head directory");
-		}
-
 		attDir = new File(path, "att");
 		if (!attDir.isDirectory() && !attDir.mkdirs()) {
 			throw new IOException("Failed to create attachment directory");
-		}
-
-		imgDir = new File(path, "img");
-		if (!imgDir.isDirectory() && !imgDir.mkdirs()) {
-			throw new IOException("Failed to create image directory");
 		}
 
 		FileResponse.loadMimeMap(IOUtil.readUTF(new File("mychat/mime.ini")));
@@ -158,53 +140,17 @@ public class Server extends WebsocketManager implements Router, Context {
 
 	@Override
 	public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
+		router.checkHeader(req, cfg);
 		if (cfg != null) {
-			cfg.postAccept(postMaxLength(req), 1000);
-		}
-	}
-
-	public long postMaxLength(Request req) {
-		switch (req.path()) {
-			case "/user/login":
-			case "/user/reg":
-			case "/user/captcha":
-				return 512;
-		}
-		int uid = verifyHash(req);
-		if (uid < 0) {
-			jsonErrorPre(req, "请登录");
-			return 0;
-		}
-
-		if (req.path().startsWith("/att/upload/") || req.path().startsWith("/img/upload/")) {
-			User u = (User) userMap.get(uid);
-			if (u.largeConn.incrementAndGet() > 4) {
-				u.largeConn.decrementAndGet();
-				jsonErrorPre(req, "系统繁忙");
-				return 0;
-			}
-
-			int fileCount = TextUtil.parseInt(req.path().substring(12));
-			boolean img = req.path().startsWith("/img/");
-			req.handler().postHandler(new UploadHandler(req, fileCount, uid, img));
-			return img ? 4194304 : 16777216;
-		}
-
-		switch (req.path()) {
-			case "/user/set_info":
-				return 131072;
-			case "/space/add":
-				return 65536;
-			case "/friend/add":
-				return 1024;
-			default:
-				return 128;
+			if (!cfg.postAccepted()) cfg.postAccept(131072, 200);
 		}
 	}
 
 	private static void jsonErrorPre(Request req, String str) {
 		req.handler().die().code(200).headers("Access-Control-Allow-Origin: *").body(jsonErr(str));
 	}
+
+	OKRouter router = (OKRouter) new OKRouter().register(this);
 
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws Exception {
@@ -222,146 +168,7 @@ public class Server extends WebsocketManager implements Router, Context {
 
 		// Strict-Transport-Security: max-age=1000; includeSubDomains
 
-		// IM
-		if ("websocket".equals(req.getField("Upgrade"))) {
-			int id = verifyHash(req.path().substring(1), rh);
-			if (id < 0) return rh.code(403).returnNull();
-
-			req.threadContext().put("id", id);
-			return switchToWebsocket(req, rh);
-		}
-
-		List<String> lst = getRestfulUrl(req);
-		if (lst.isEmpty()) return rh.code(403).returnNull();
-
-		int uid = verifyHash(req);
-
-		Response v = null;
-		switch (lst.get(0)) {
-			case "":
-				return new StringResponse("MyChat Server");
-			case "friend":
-				if (lst.size() < 2) break;
-				if (uid < 0) break;
-
-				v = friendOp(req, lst);
-				break;
-			case "user":
-				if (lst.size() < 2) break;
-
-				v = userOp(req, lst, uid);
-				break;
-			case "space":
-				if (lst.size() < 2) break;
-
-				v = spaceOp(req, lst, uid);
-				break;
-			case "ping":
-				v = new StringResponse("pong");
-				break;
-			// standard image
-			case "img": {
-				if (lst.size() < 2) break;
-
-				User u = (User) userMap.get(uid);
-
-				if (lst.get(1).equals("upload")) {
-					u.largeConn.decrementAndGet();
-					v = doUpload(req);
-					break;
-				}
-
-				TimeCounter tc = u == null ? sharedCounter : u.imgCounter;
-
-				// 每秒10个请求
-				if (tc.plus() > 10) {
-					v = jsonErr("系统繁忙");
-					break;
-				}
-
-				File file = new File(imgDir, pathFilter(req.path().substring(5)));
-				if (!file.isFile()) return rh.code(404).returns(StringResponse.httpErr(404));
-
-				v = new HttpFile(file).response(req, rh);
-				//使用 'Vary: Origin' 告知浏览器根据Origin的变化重新匹配缓存
-				rh.headers("Access-Control-Allow-Origin: *");
-				return v;
-			}
-			// head image
-			case "head": {
-				File img = new File(headDir, pathFilter(req.path().substring(6)));
-				if (!img.isFile()) img = new File(headDir, "default");
-				if (!img.isFile()) throw new IllegalArgumentException("错误: 没有默认头像");
-				v = new HttpFile(img).response(req, rh);
-				rh.headers("Access-Control-Allow-Origin: *");
-				return v;
-			}
-			// attachment
-			case "att": {
-				if (lst.size() < 2) break;
-
-				User u = (User) userMap.get(uid);
-
-				if (lst.get(1).equals("upload")) {
-					if (u == null) break;
-					u.largeConn.decrementAndGet();
-					v = doUpload(req);
-					break;
-				} else if (lst.get(1).equals("token")) {
-					if (u == null) break;
-					// bit2: attachment, expire: 30 minutes
-					return new StringResponse("{\"ok\":1,\"code\":\"" + token(u, 1, 180000) + "\"}");
-				}
-
-				if (lst.size() < 4) break;
-
-				// /att/[attachment name]/[expire time]/[hash]
-
-				File file = new File(attDir, lst.get(1));
-				if (!file.isFile()) return rh.code(404).returns(StringResponse.httpErr(404));
-
-				if (req.action() == Action.DELETE) {
-					UTFCoder uc = IOUtil.SharedCoder.get();
-					ByteList bb = uc.decodeBase64R(file.getName());
-					if (bb.wIndex() < 4 || bb.readInt(bb.wIndex() - 4) != uid) {v = jsonErr("没有权限");} else {
-						int i = 10;
-						while (!file.delete()) {
-							if (i-- == 0) {
-								v = jsonErr("删除失败");
-								break;
-							}
-						}
-						if (v == null) v = new StringResponse("{\"ok\":1}");
-					}
-					break;
-				}
-
-				// 每秒5个请求 / 最高4个分块
-				if (u.largeConn.get() > 4 || (u.attachCounter.plus() > 5 && file.length() > 2048)) {
-					v = jsonErr("系统繁忙,请稍后再试");
-					//Retry-After: 120
-					break;
-				}
-				u.largeConn.getAndIncrement();
-				req.handler().finishHandler((rh1) -> {
-					u.largeConn.decrementAndGet();
-					return false;
-				});
-				v = new HttpFile(file).response(req, rh);
-				if (!req.getField("Origin").isEmpty()) rh.headers("Access-Control-Allow-Origin: *");
-				return v;
-			}
-			case "html":
-				req.subDirectory(1);
-				return chatHtml.response(req, rh);
-		}
-
-		if (v != null) {
-			if (!req.getField("Origin").isEmpty()) rh.code(200).headers("Access-Control-Allow-Origin: *");
-			return v;
-		}
-
-		return rh.code(403).returns(StringResponse.httpErr(403));
+		return router.response(req, rh);
 	}
 
 	private static String pathFilter(String path) {
@@ -372,9 +179,92 @@ public class Server extends WebsocketManager implements Router, Context {
 		return path;
 	}
 
-	private static Response doUpload(Request req) {
+	@Interceptor
+	public String logon(Request req, ResponseHeader rh, PostSetting ps) {
+		String token = req.getField("MCTK");
+
+		int i = token.indexOf('-');
+		if (i > 0) {
+			String userId = token.substring(0, i);
+			if (0 == TextUtil.isNumber(userId)) {
+				int userIdInt = TextUtil.parseInt(userId);
+				User user = dao.getUser(userIdInt);
+				if (user != null && verifyToken(user, 1, token.substring(i+1))) {
+					return null;
+				}
+			}
+		}
+
+		return rh.code(403).returns("请登录");
+	}
+
+	@Interceptor
+	public Object parallelLimit(Request req, ResponseHeader rh, PostSetting ps) {
+		User u = (User) req.threadContext().get("USER");
+
+		// 每秒5个请求 / 最高4个并行上传|下载
+		if (u.parallelUD.get() < 0 || u.attachCounter.sum() > 5) {
+			rh.code(503).header("Retry-After", "60");
+			return jsonErr("系统繁忙,请稍后再试");
+		}
+
+		u.parallelUD.getAndDecrement();
+		rh.finishHandler((__) -> {
+			u.parallelUD.getAndIncrement();
+			return false;
+		});
+
+		return null;
+	}
+
+	@Route
+	public String ping() { return "pong"; }
+
+	@Route(value = "file/", type = Route.Type.PREFIX)
+	@Accepts(Accepts.GET)
+	@Interceptor({"login","parallelLimit"})
+	public Response getFile(Request req, ResponseHeader rh) {
+		String safePath = IOUtil.safePath(req.subDirectory(1).path());
+		File file = new File(attDir, safePath);
+		if (!file.isFile()) return rh.code(404).returnNull();
+		return new DiskFileInfo(file).response(req, rh);
+	}
+
+	@Route(value = "file/", type = Route.Type.PREFIX)
+	@Accepts(Accepts.DELETE)
+	@Interceptor("logon")
+	public Object deleteFile(Request req) {
+		User u = (User) req.threadContext().get("USER");
+
+		String safePath = IOUtil.safePath(req.subDirectory(1).path());
+		DynByteBuf bb = IOUtil.SharedCoder.get().decodeBase64R(safePath);
+		if (bb.readInt() != u.id) {
+			return jsonErr("没有权限");
+		} else {
+			File file = new File("attachment/" + safePath);
+			if (file.isFile() && file.delete()) return "{\"ok\":1}";
+			else return jsonErr("删除失败");
+		}
+	}
+
+	@Interceptor
+	public void fileUpload(Request req, ResponseHeader rh, PostSetting ps) {
+		User u = (User) req.threadContext().get("USER");
+
+		List<String> restful = req.directories();
+
+		boolean img = restful.get(1).contains("img");
+		int count = TextUtil.parseInt(restful.get(2));
+
+		ps.postAccept(img ? 4194304 : 16777216, 10000);
+		ps.postHandler(new UploadHandler(req, count, u.id, img));
+	}
+
+	@Route(value = "file/", type = Route.Type.PREFIX)
+	@Accepts(Accepts.POST)
+	@Interceptor({"logon","parallelLimit","fileUpload"})
+	public String postFile(Request req) {
 		UploadHandler ph = (UploadHandler) req.postHandler();
-		if (ph == null) return null;
 
 		ToJson ser = new ToJson();
 		ser.valueList();
@@ -396,154 +286,195 @@ public class Server extends WebsocketManager implements Router, Context {
 
 			ser.pop();
 		}
-		return new StringResponse(ser.getValue());
+		return ser.getValue().toStringAndFree();
 	}
 
-	private Response userOp(Request req, List<String> lst, int uid) throws Exception {
-		switch (lst.get(1)) {
-			case "info":
-				if (uid < 0) return jsonErr("请登录");
+	@Route
+	@Interceptor("logon")
+	@Accepts(Accepts.GET)
+	public Response im(Request req, ResponseHeader rh) { return switchToWebsocket(req, rh); }
 
-				CMapping m = new CMapping();
-				m.put("user", userMap.get(uid).put());
-				m.put("protocol", "WSChat");
-				m.put("address", "ws://127.0.0.1:1999/" + req.getField("MCTK"));
-				m.put("ok", 1);
-				return new StringResponse(m.toShortJSONb());
-			case "set_info":
-				if (uid < 0) return jsonErr("请登录");
+	// region user : register login head_image logout set_info
+	@Route
+	@Accepts(Accepts.POST)
+	@Body(From.POST_KV)
+	public Response user__register(String name, String pass) {
+		if (name == null || pass == null) return jsonErr("缺参数");
 
-				Map<String, ?> x = req.postFields();
-				String newpass = x.getOrDefault("newpass", Helpers.cast("")).toString();
-				ChatDAO.Result rs = dao.changePassword(uid, x.get("pass").toString(), newpass.isEmpty() ? null : newpass);
-				if (rs.error != null) return jsonErr(rs.error);
-
-				ByteList face = (ByteList) x.get("face");
-				if (face != null) {
-					try {
-						BufferedImage image = ImageIO.read(face.asInputStream());
-						if (image != null) ImageIO.write(image, "PNG", new File(headDir, Integer.toString(uid)));
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-				}
-				if (!x.containsKey("flag") || !x.containsKey("desc") || !x.containsKey("name")) return jsonErr("缺数据!");
-				User u = (User) userMap.get(uid);
-				u.username = x.get("name").toString();
-				u.desc = x.get("desc").toString();
-				u.flag2 = TextUtil.parseInt(x.get("flag").toString());
-				u.onDataChanged(this);
-
-				rs = dao.setUserData(u);
-				return rs.error == null ? new StringResponse("{\"ok\":1}") : jsonErr(rs.error);
-			case "code":
-				return new StringResponse("{\"ok\":1,\"code\":\"" + token(null, 1, 300000) + "\"}");
-			case "login":
-				Map<String, String> posts = req.postFields();
-				if (posts == null) return jsonErr("数据错误");
-
-				String name = posts.get("name");
-				String pass = posts.get("pass");
-				String challenge = posts.get("chag");
-				String code = posts.get("code");
-				rs = dao.login(name, pass, challenge);
-				if (rs.error != null) {
-					return jsonErr(rs.error);
-				}
-				u = (User) userMap.get(rs.uid);
-
-				if (u.worker != null) {
-					u.worker.sendExternalLogout("您已在异地登录, 如果这不是您的操作...<br />" + "但是我们没有开发账号冻结机制... <br />" + "目的IP地址: " + req.handler().ch.remoteAddress() + "<br />" + "UA: " + req.getField(
-						"User-Agent") + "<br />" + "时间: " + new ACalendar().formatDate("Y-m-d H:i:s.x", System.currentTimeMillis()));
-				}
-
-				rnd.nextBytes(u.salt);
-				String hash = hash(u, req.handler());
-				return new StringResponse("{\"ok\":1,\"token\":\"" + rs.uid + '-' + hash + "\"}");
-			case "logout":
-				if (uid >= 0) {
-					u = (User) userMap.get(uid);
-					u.salt[0]++;
-					try {
-						if (u.worker != null) u.worker.ch.close();
-					} catch (Throwable ignored) {}
-				}
-				return new StringResponse("{\"ok\":1}");
-			case "reg":
-				posts = req.postFields();
-				if (posts == null) return jsonErr("数据错误");
-
-				name = posts.get("name");
-				pass = posts.get("pass");
-				rs = dao.register(name, pass);
-				if (rs.error == null) {
-					return new StringResponse("{\"ok\":1}");
-				} else {
-					return jsonErr(rs.error);
-				}
-			default:
-				return null;
+		ChatDAO.Result rs = dao.register(name, pass);
+		if (rs.error == null) {
+			return new StringResponse("{\"ok\":1}");
+		} else {
+			return jsonErr(rs.error);
 		}
 	}
 
-	private final DualBuffered<List<SpaceEntry>, RingBuffer<SpaceEntry>> spaceAtThisTime = new DualBuffered<List<SpaceEntry>, RingBuffer<SpaceEntry>>(new SimpleList<>(), new RingBuffer<>(100, false)) {
-		@Override
-		protected void move() {
-			List<SpaceEntry> w = this.w;
-			RingBuffer<SpaceEntry> r = this.r;
+	@Route
+	@Accepts(Accepts.POST)
+	@Body(From.POST_KV)
+	public Object user__login(Request req, String name, String hash, String salt) {
+		if (name == null || hash == null || salt == null) return jsonErr("缺参数");
+		if (!verifyToken(null, 1, salt)) return "";
 
-			for (int i = 0; i < w.size(); i++) {
-				r.ringAddLast(w.get(i));
+		User u = dao.getUserByName(name);
+		if (!u.exist()) return jsonErr("用户名或密码错误");
+		if (System.currentTimeMillis() < u.timeout) return jsonErr("密码错误次数过多,请在"+ACalendar.toLocalTimeString(u.timeout)+"后重试");
+
+		HMAC hmac = (HMAC) initLocal().get("HASH");
+		hmac.setSignKey(IOUtil.SharedCoder.get().decodeBase64(salt));
+		hmac.update(u.pass);
+
+		int eq = 0;
+		ByteList in = IOUtil.SharedCoder.get().decodeBase64R(hash);
+		for (byte digest : hmac.digestShared())
+			eq |= in.get()^digest;
+
+		if (eq != 0) {
+			// >= : async
+			if (++u.passError >= 3) u.timeout = System.currentTimeMillis() + 60000;
+			return jsonErr("用户名或密码错误");
+		}
+
+		synchronized (u) {
+			if (u.worker != null) {
+				u.worker.sendExternalLogout(
+					"您已在他处登录<br />" +
+						"IP: " + req.handler().ch.remoteAddress() + "<br />" +
+						"UA: " + req.getField("User-Agent") + "<br />" +
+						"时间: " + ACalendar.toLocalTimeString(System.currentTimeMillis()) + "<br />" +
+						"密码错误次数: " + u.passError);
 			}
-			w.clear();
+
+			u.passError = 0;
+			u.timeout = 0;
+			rnd.nextBytes(u.tokenSalt);
+
+			CMapping m = new CMapping();
+			m.put("user", u.put());
+			m.put("protocol", "WSChat");
+			m.put("address", "ws://127.0.0.1:1999/im/");
+			m.put("token", createToken(u, -1, 86400000));
+			m.put("ok", true);
+			return new StringResponse(m.toShortJSONb());
 		}
-	};
+	}
 
-	private Response spaceOp(Request req, List<String> lst, int uid) throws IOException {
-		Map<String, String> $_REQUEST = req.fields();
-		switch (lst.get(1)) {
-			case "list":
-				int[] num = (int[]) req.threadContext().get("IA");
-				num[0] = 10;
+	@Route
+	@Accepts(Accepts.GET)
+	public String user__challenge() { return createToken(null, 1, 300000); }
 
-				int uid1;
-				if (lst.size() > 2) {
-					if (!TextUtil.parseIntOptional(lst.get(2), num)) return jsonErr("参数错误");
-					uid1 = num[0];
-				} else {
-					uid1 = -1;
-				}
+	@Route
+	@Accepts(Accepts.GET)
+	public Response user__head(Request req, ResponseHeader rh) {
+		File img = new File(attDir, pathFilter(req.path().substring(9)));
+		if (!img.isFile()) img = new File(attDir, "head_default");
 
-				num[0] = 10;
-				if (!TextUtil.parseIntOptional($_REQUEST.get("off"), num)) return jsonErr("参数错误");
-				int off1 = num[0];
+		rh.headers("Access-Control-Allow-Origin: *");
+		return new DiskFileInfo(img).response(req, rh);
+	}
 
-				num[0] = 10;
-				if (!TextUtil.parseIntOptional($_REQUEST.get("len"), num)) return jsonErr("参数错误");
-				int len1 = num[0];
+	@Route
+	@Interceptor("logon")
+	@Accepts(Accepts.GET)
+	public String user__logout(Request req) {
+		User u = (User) req.threadContext().get("USER");
 
-				req.handler().chunked();
-				return new ChunkedSpaceResp(off1, len1, uid1);
-			case "add":
-				if (uid < 0) return jsonErr("请登录");
+		u.tokenSalt[0]++;
+		try {
+			if (u.worker != null) u.worker.ch.close();
+		} catch (Throwable ignored) {}
 
-				SpaceEntry entry = new SpaceEntry();
-				entry.text = $_REQUEST.get("text");
-				entry.time = System.currentTimeMillis();
-				entry.uid = uid;
-				entry.id = 1;
+		return "{\"ok\":1}";
+	}
 
-				List<SpaceEntry> entries = spaceAtThisTime.forWrite();
-				entries.add(entry);
-				spaceAtThisTime.writeFinish();
+	@Route
+	@Interceptor("logon")
+	@Accepts(Accepts.POST)
+	public Object user__set_info(Request req) throws IllegalRequestException {
+		User u = (User) req.threadContext().get("USER");
 
-				return new StringResponse("{\"ok\":1}");
-			case "del":
-				// post: id
-				return jsonErr("暂不支持");
-			default:
-				return null;
+		Map<String, String> x = req.postFields();
+		String newpass = x.getOrDefault("newpass", Helpers.cast(""));
+		ChatDAO.Result rs = dao.changePassword(u.id, x.get("pass"), newpass.isEmpty() ? null : newpass);
+		if (rs.error != null) return jsonErr(rs.error);
+
+		/*ByteList face = (ByteList) x.get("face");
+		if (face != null) {
+			try {
+				BufferedImage image = ImageIO.read(face.asInputStream());
+				if (image != null) ImageIO.write(image, "PNG", new File(headDir, Integer.toString(uid)));
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}*/
+		if (!x.containsKey("flag") || !x.containsKey("desc") || !x.containsKey("name")) return jsonErr("缺数据!");
+
+		u.username = x.get("name");
+		u.desc = x.get("desc");
+		u.flag2 = TextUtil.parseInt(x.get("flag"));
+		u.onDataChanged(this);
+
+		rs = dao.setUserData(u);
+		return rs.error == null ? new StringResponse("{\"ok\":1}") : jsonErr(rs.error);
+	}
+	// endregion
+
+	@Route
+	@Interceptor("logon")
+	@Accepts(Accepts.GET)
+	@Body(From.POST_KV)
+	public Object space(Request req, String off, String len) throws IllegalRequestException {
+		User u = (User) req.threadContext().get("USER");
+
+		int[] num = (int[]) req.threadContext().get("IA");
+		num[0] = 10;
+
+		int uid1;
+		List<String> restful = req.directories();
+		if (restful.size() > 1) {
+			if (!TextUtil.parseIntOptional(restful.get(1), num)) return jsonErr("参数错误");
+			uid1 = num[0];
+		} else {
+			uid1 = -1;
 		}
+
+		num[0] = 10;
+		if (!TextUtil.parseIntOptional(off, num)) return jsonErr("参数错误");
+		int off1 = num[0];
+
+		num[0] = 10;
+		if (!TextUtil.parseIntOptional(len, num)) return jsonErr("参数错误");
+		int len1 = num[0];
+
+		req.handler().chunked();
+		// todo DBA
+		return "not impl";
+	}
+
+	@Route
+	@Interceptor("logon")
+	@Accepts(Accepts.POST)
+	@Body(From.POST_KV)
+	public String  space__add(Request req, String text) {
+		User u = (User) req.threadContext().get("USER");
+
+		SpaceEntry entry = new SpaceEntry();
+		entry.text = text;
+		entry.time = System.currentTimeMillis();
+		entry.uid = u.id;
+		entry.id = 1;
+
+
+		return "{\"ok\":1}";
+	}
+
+	@Route
+	@Interceptor("logon")
+	@Accepts(Accepts.POST)
+	public Object space__del(Request req, String id) {
+		User u = (User) req.threadContext().get("USER");
+
+		return jsonErr("未实现");
 	}
 
 	private Response friendOp(Request request, List<String> lst) {
@@ -589,107 +520,45 @@ public class Server extends WebsocketManager implements Router, Context {
 		return new StringResponse("{\"ok\":0,\"err\":\"" + ITokenizer.addSlashes(s) + "\"}", "application/json");
 	}
 
+	private static final AtomicLong seqNum = new AtomicLong();
 	private boolean verifyToken(User u, int action, String token) {
-		UTFCoder uc = IOUtil.SharedCoder.get();
-		ByteList bb = uc.decodeBase64R(token);
+		ByteList bb = IOUtil.SharedCoder.get().decodeBase64R(token);
 		// action not same
 		if ((action & bb.readInt()) == 0) return false;
 		// expired
 		if (System.currentTimeMillis() > bb.readLong()) return false;
+		// 重放攻击
+		if ((u == null ? seqNum.get() : u.tokenSeq) > bb.readLong()) return false;
 
-		SM3 sm3 = (SM3) initLocal().get("SM3");
-		sm3.reset();
+		HMAC hmac = (HMAC) initLocal().get("HASH");
+		hmac.setSignKey(u == null ? secKey : u.tokenSalt);
+		hmac.update(bb.list, 0, bb.wIndex());
 
-		byte[] secKey = u == null ? this.secKey : u.salt;
-		byte[] d0 = bb.list;
-		for (int i = 0; i < 10; i++) {
-			sm3.update(secKey);
-			sm3.update(d0, 0, 20);
-		}
-
-		int ne = 0;
-		byte[] d1 = sm3.digest();
-		for (int i = 0; i < 32; i++) {
-			ne |= d1[i] ^ d0[20 + i];
-		}
-		return ne == 0;
+		int eq = 0;
+		for (byte digest : hmac.digestShared())
+			eq |= digest ^ bb.get();
+		return eq == 0;
 	}
-
-	// action(usage) | timestamp | random | hash
-	private String token(User u, int action, int expire) {
+	// usage | timestamp | seqNum | hash
+	private String createToken(User u, int usage, long expire) {
 		UTFCoder uc = IOUtil.SharedCoder.get();
-		ByteList bb = uc.byteBuf;
-		bb.clear();
-		bb.putInt(action).putLong(expire < 0 ? -expire : System.currentTimeMillis() + expire).putLong(rnd.nextLong());
+		ByteList bb = uc.byteBuf; bb.clear();
+		bb.putInt(usage).putLong(expire < 0 ? -expire : System.currentTimeMillis() + expire).putLong(u == null ? seqNum.getAndIncrement() : u.tokenSeq++);
 
-		SM3 sm3 = (SM3) initLocal().get("SM3");
-		sm3.reset();
-
-		byte[] secKey = u == null ? this.secKey : u.salt;
-		for (int i = 0; i < 10; i++) {
-			sm3.update(secKey);
-			sm3.update(bb.list, 0, 20);
-		}
-
-		return uc.encodeBase64(bb.put(sm3.digest()));
-	}
-
-	private static int verifyHash(Request req) {
-		return verifyHash(req.getField("MCTK"), req.handler());
-	}
-
-	private static int verifyHash(String hash, ResponseHeader rh) {
-		if (hash.isEmpty()) return -1;
-		int i = hash.indexOf('-');
-		Map<String, Object> L = initLocal();
-
-		int[] num = (int[]) L.get("IA");
-		num[0] = 10;
-
-		return i > 0 && TextUtil.parseIntOptional(hash.substring(0, i), num) && userMap.get(num[0]) instanceof User && TextUtil.safeEquals(hash((User) userMap.get(num[0]), rh),
-																																			hash.substring(i + 1)) ? num[0] : -1;
-	}
-
-	private static String hash(User u, ResponseHeader rh) {
-		UTFCoder uc = IOUtil.SharedCoder.get();
-
-		Map<String, Object> L = initLocal();
-
-		SM3 sm3 = (SM3) L.get("SM3");
-		sm3.reset();
-
-		sm3.update(u.salt);
-
-		ByteList b = uc.encodeR(u.name);
-		sm3.update(b.list, 0, b.wIndex());
-
-		sm3.update(u.salt);
-
-		return uc.encodeBase64(uc.wrap(sm3.digest()), Base64.B64_URL_SAFE);
-	}
-
-	private static String challengeCode() {
-		return "";
+		HMAC hmac = (HMAC) initLocal().get("HASH");
+		hmac.setSignKey(u == null ? secKey : u.tokenSalt);
+		hmac.update(bb.list, 0, bb.wIndex());
+		return uc.encodeBase64(bb.put(hmac.digestShared()));
 	}
 
 	private static MyHashMap<String, Object> initLocal() {
 		MyHashMap<String, Object> L = HttpServer11.TSO.get().ctx;
 		if (!L.containsKey("LST")) {
-			L.put("SM3", new SM3());
+			L.put("HASH", new HMAC(new SM3()));
 			L.put("IA", new int[1]);
 			L.put("LST", new SimpleList<>());
 		}
 		return L;
-	}
-
-	private static List<String> getRestfulUrl(Request req) {
-		Map<String, Object> ctx = initLocal();
-
-		List<String> lst = Helpers.cast(ctx.get("LST"));
-		lst.clear();
-
-		TextUtil.split(lst, req.path().substring(1), '/', 10, true);
-		return lst;
 	}
 
 	// endregion
@@ -802,76 +671,6 @@ public class Server extends WebsocketManager implements Router, Context {
 
 	@Override
 	public AbstractUser getUser(int id) {
-		return userMap.get(id);
-	}
-
-	private class ChunkedSpaceResp implements Response {
-		ToJson ser;
-		DynByteBuf tmp;
-		Iterator<SpaceEntry> itr;
-
-		public ChunkedSpaceResp(int off1, int len1, int uid1) {
-			ser = new ToJson();
-			off = off1;
-			len = len1;
-			uid = uid1;
-		}
-
-		@Override
-		public void prepare(ResponseHeader srv, Headers h) {
-			BufferPool bp = srv.ch().alloc();
-			ser.reset();
-			ser.valueList();
-			tmp = bp.buffer(true, 1024);
-			itr = spaceAtThisTime.forRead().descendingIterator();
-		}
-
-		@Override
-		public boolean send(ResponseWriter rh) throws IOException {
-			if (rh.ch().isPendingSend()) {
-				rh.ch().flush();
-				return true;
-			}
-
-			while (itr.hasNext()) {
-				SpaceEntry entry = itr.next();
-				if (uid >= 0 && entry.uid != uid) continue;
-				if (off-- > 0) continue;
-				if (len-- == 0) break;
-
-				entry.serialize(ser);
-
-				CharList sb = ser.getHalfValue();
-				if (writeString(rh, sb)) return true;
-			}
-
-			if (writeString(rh, ser.getValue())) return true;
-			rh.write(tmp);
-			return tmp.isReadable();
-		}
-
-		private boolean writeString(ResponseWriter rh, CharList sb) throws IOException {
-			int len = DynByteBuf.byteCountUTF8(sb);
-			if (len > tmp.writableBytes()) {
-				rh.write(tmp);
-				tmp.clear();
-				if (rh.ch().isPendingSend()) return true;
-			}
-
-			if (len > tmp.capacity())
-				tmp = rh.ch().alloc().expand(tmp, len-tmp.capacity());
-
-			tmp.putUTFData(sb);
-			sb.clear();
-			return false;
-		}
-
-		@Override
-		public void release(ChannelCtx ctx) throws IOException {
-			spaceAtThisTime.readFinish();
-			ctx.reserve(tmp);
-		}
-
-		int off, len, uid;
+		return dao.getUser(id);
 	}
 }

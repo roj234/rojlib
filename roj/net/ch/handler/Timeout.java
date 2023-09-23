@@ -18,6 +18,7 @@ public class Timeout implements ChannelHandler {
 	public int writeTimeout, readTimeout, pending;
 	public long lastRead, lastWrite;
 
+	public Timeout(int r) { this(r, 0); }
 	public Timeout(int r, int w) {
 		lastRead = System.currentTimeMillis();
 		readTimeout = r;

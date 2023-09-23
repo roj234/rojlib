@@ -11,9 +11,8 @@ import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.Annotations;
-import roj.asm.tree.attr.AttrUTF;
+import roj.asm.tree.attr.AttrString;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.insn.SwitchEntry;
 import roj.asm.type.*;
 import roj.asm.util.AttrHelper;
 import roj.asm.visitor.CodeWriter;
@@ -28,6 +27,7 @@ import roj.reflect.FastInit;
 import roj.reflect.FieldAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -444,6 +444,7 @@ public final class SerializerFactory {
 		}
 
 		if (ser != null) {
+			ser = ser.inheritBy(this, type);
 			if (generic != null) ser = ser.withGenericType(this, generic.children);
 			synchronized (localRegistry) {
 				localRegistry.put(name, ser);
@@ -540,7 +541,7 @@ public final class SerializerFactory {
 				case Type.BYTE: copyArrayRef(c, Type.BYTE); break;
 			}
 
-			c.putAttr(new AttrUTF("SourceFile", "Adapter@"+asmType));
+			c.putAttr(new AttrString("SourceFile", "Adapter@"+asmType));
 			c.name("roj/config/serial/PAS$"+asmType);
 
 			FastInit.prepare(c);
@@ -587,7 +588,7 @@ public final class SerializerFactory {
 		cw.visitSize(1,1);
 		String toString = "UserAdapter@"+writer.ownerClass();
 		cw.ldc(new CstString(toString));
-		c.putAttr(new AttrUTF("SourceFile", toString));
+		c.putAttr(new AttrString("SourceFile", toString));
 		cw.one(ARETURN);
 		cw.finish();
 		// endregion
@@ -627,7 +628,7 @@ public final class SerializerFactory {
 		cw.one(ALOAD_1);
 		cw.one(ALOAD_0);
 		cw.field(GETFIELD, c, ua);
-		cw.var(type.shiftedOpcode(ILOAD, false), 2);
+		cw.varLoad(type, 2);
 		if (klassOut != null) cw.clazz(CHECKCAST, klassOut);
 		cw.invoke(INVOKEVIRTUAL, reader);
 		cw.field(PUTFIELD, "roj/config/serial/AdaptContext", "ref", "Ljava/lang/Object;");
@@ -649,7 +650,7 @@ public final class SerializerFactory {
 		cw.one(ALOAD_2);
 		cw.clazz(CHECKCAST, klassIn);
 		cw.invoke(INVOKEVIRTUAL, writer);
-		cw.var(type.shiftedOpcode(ISTORE, false), 2);
+		cw.varStore(type, 2);
 
 		if (ser >= 0) {
 			cw.one(ALOAD_0);
@@ -659,7 +660,7 @@ public final class SerializerFactory {
 			cw.invoke(INVOKEVIRTUAL, "roj/config/serial/Adapter", "write", "(Lroj/config/serial/CVisitor;Ljava/lang/Object;)V");
 		} else {
 			cw.one(ALOAD_1);
-			cw.var(type.shiftedOpcode(ILOAD, false), 2);
+			cw.varLoad(type, 2);
 			cw.invokeItf("roj/config/serial/CVisitor", "value", "("+type.toDesc()+")V");
 		}
 
@@ -696,7 +697,7 @@ public final class SerializerFactory {
 		cw.visitSize(1,1);
 		String toString = "Adapter@"+o.getName();
 		cw.ldc(new CstString(toString));
-		c.putAttr(new AttrUTF("SourceFile", toString));
+		c.putAttr(new AttrString("SourceFile", toString));
 		cw.one(ARETURN);
 		cw.finish();
 		// endregion
@@ -723,7 +724,7 @@ public final class SerializerFactory {
 		keyPrimitive = null;
 		keySwitch = new SwitchSegment(TABLESWITCH);
 		keySwitch.opt = true;
-		cw.switches(keySwitch);
+		cw.addSegment(keySwitch);
 		keySwitch.def = cw.label();
 
 		cw.one(ALOAD_1);
@@ -907,18 +908,18 @@ public final class SerializerFactory {
 		CodeWriter cw;
 		int asId = -1;
 
-		byte myCode = type.shiftedOpcode(ILOAD, false);
+		byte myCode = type.shiftedOpcode(ILOAD);
 		while (true) {
 		Tmp2 t = readMethods.get(methodType);
 		if (t == null) t = createReadMethod(data, methodType);
 
 		cw = t.cw;
-		t.seg.targets.add(new SwitchEntry(fieldId, cw.label()));
+		t.seg.branch(fieldId, cw.label());
 
 		cw.one(ALOAD_1);
 		cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/serial/AdaptContext", "setFieldHook", "()V");
 
-		cw.var(ALOAD, t.pos);
+		cw.vars(ALOAD, t.pos);
 
 		if (as != null) {
 			asId = c.getField("as$"+as.klass());
@@ -945,7 +946,7 @@ public final class SerializerFactory {
 			cw.invoke(DIRECT_IF_OVERRIDE, "java/lang/String", "charAt", "(I)C");
 		} else {
 			if (myCode == -1) {
-				cw.var(ALOAD, 2);
+				cw.vars(ALOAD, 2);
 				cw.invoke(INVOKESTATIC, "java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;");
 				switch (actualType) {
 					case Type.INT: cw.invoke(INVOKESTATIC, "java/lang/Integer", "parseInt", "(Ljava/lang/String;)I"); break;
@@ -954,7 +955,7 @@ public final class SerializerFactory {
 					case Type.FLOAT: cw.invoke(INVOKESTATIC, "java/lang/Float", "parseFloat", "(Ljava/lang/String;)F"); break;
 				}
 			} else {
-				cw.var(myCode, 2);
+				cw.vars(myCode, 2);
 				if (actualType == Type.CLASS) {
 					String type1 = type.getActualClass();
 					if (type1.equals("java/lang/String")) {
@@ -1038,7 +1039,7 @@ public final class SerializerFactory {
 				id = ser(serType, null);
 			}
 
-			keySwitch.targets.add(new SwitchEntry(fieldId, cw.label()));
+			keySwitch.branch(fieldId, cw.label());
 			cw.one(ALOAD_1);
 			cw.one(ILOAD_3);
 			cw.one(ALOAD_0);
@@ -1076,7 +1077,7 @@ public final class SerializerFactory {
 
 				cw.one(RETURN);
 			}
-			keySwitch.targets.add(new SwitchEntry(fieldId, keyPrimitive));
+			keySwitch.branch(fieldId, keyPrimitive);
 
 			cw = write;
 			if (as != null) {
@@ -1129,11 +1130,11 @@ public final class SerializerFactory {
 		cw.one(ALOAD_1);
 		cw.field(GETFIELD, "roj/config/serial/AdaptContext", "ref", "Ljava/lang/Object;");
 		cw.clazz(CHECKCAST, data.name);
-		cw.var(ASTORE, t.pos = (byte) (size+2));
+		cw.vars(ASTORE, t.pos = (byte) (size+2));
 
 		cw.one(ALOAD_1);
 		cw.field(GETFIELD, "roj/config/serial/AdaptContext", "fieldId", "I");
-		cw.switches(t.seg);
+		cw.addSegment(t.seg);
 
 		cw.label(t.seg.def);
 		cw.clazz(NEW, "java/lang/IllegalStateException");
@@ -1215,5 +1216,77 @@ public final class SerializerFactory {
 		copy = null;
 
 		return (Adapter) FastInit.make(c1);
+	}
+
+	private static final MyHashMap<String, IntFunction<?>> DATA_CONTAINER = new MyHashMap<>();
+	public <T> IntFunction<T> dataContainer(Class<?> type) {
+		IntFunction<?> fn = DATA_CONTAINER.get(type.getName());
+		if (fn == null && !DATA_CONTAINER.containsKey(type.getName()))  {
+			synchronized (DATA_CONTAINER) {
+				fn = DATA_CONTAINER.get(type.getName());
+				if (fn == null) {
+					boolean hasNP = false, hasSized = false;
+					try {
+						type.getDeclaredConstructor(int.class);
+						hasSized = true;
+					} catch (NoSuchMethodException ignored) {}
+					try {
+						type.getDeclaredConstructor(ArrayCache.CLASSES);
+						hasNP = true;
+					} catch (NoSuchMethodException ignored) {}
+
+					if (!(hasNP|hasSized)) {
+						DATA_CONTAINER.put(type.getName(), null);
+						return null;
+					}
+
+					ConstantData c = new ConstantData();
+					c.name("roj/config/serial/DataContainer$");
+					c.addInterface("java/util/function/IntFunction");
+					FastInit.prepare(c);
+
+					CodeWriter cw = c.newMethod(PUBLIC|FINAL, "apply", "(I)Ljava/lang/Object;");
+
+					String asmName = TypeHelper.class2asm(type);
+					if (hasNP) {
+						if (hasSized) {
+							cw.visitSize(3, 2);
+							Label label = new Label();
+							cw.one(ILOAD_1);
+							cw.jump(IFLT, label);
+							cw.clazz(NEW, asmName);
+							cw.one(DUP);
+							cw.one(ILOAD_1);
+							cw.invokeD(asmName, "<init>", "(I)V");
+							cw.one(ARETURN);
+							cw.label(label);
+						}
+						cw.visitSizeMax(2, 2);
+						cw.newObject(asmName);
+					} else {
+						cw.visitSize(3, 2);
+						Label label = new Label();
+
+						cw.one(ILOAD_1);
+						cw.jump(IFGE, label);
+
+						cw.ldc(16);
+						cw.one(ISTORE_1);
+						cw.label(label);
+
+						cw.clazz(NEW, asmName);
+						cw.one(DUP);
+						cw.one(ILOAD_1);
+						cw.invokeD(asmName, "<init>", "(I)V");
+					}
+
+					cw.one(ARETURN);
+					fn = (IntFunction<?>) FastInit.make(c);
+					DATA_CONTAINER.put(type.getName(), fn);
+				}
+			}
+		}
+
+		return Helpers.cast(fn);
 	}
 }

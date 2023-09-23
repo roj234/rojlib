@@ -1,5 +1,8 @@
 package roj.io.buf;
 
+import roj.util.ByteList;
+import roj.util.DirectByteList;
+import roj.util.DynByteBuf;
 import sun.misc.Unsafe;
 
 import static roj.reflect.FieldAccessor.u;
@@ -51,7 +54,7 @@ public final class NativeArray {
 
 	public int length() { return len; }
 
-	private void checkRange(int i) {
-		if (i < 0 || i > len) throw new ArrayIndexOutOfBoundsException("off="+i+",len="+len);
-	}
+	private void checkRange(int i) { if (i < 0 || i > len) throw new ArrayIndexOutOfBoundsException("off="+i+",len="+len); }
+
+	public DynByteBuf buffer() { return ref == null ? DirectByteList.wrap(addr, len) : ByteList.wrap((byte[]) ref, (int) (addr-Unsafe.ARRAY_BYTE_BASE_OFFSET), len); }
 }

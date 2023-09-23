@@ -427,4 +427,6 @@ public class MyRegionFile implements AutoCloseable {
 			return man;
 		}
 	}
+
+	public int[] dataArray() { return offsets; }
 }

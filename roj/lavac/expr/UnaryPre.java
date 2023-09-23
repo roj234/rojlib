@@ -1,8 +1,9 @@
 package roj.lavac.expr;
 
+import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.config.word.NotStatementException;
-import roj.lavac.parser.MethodPoetL;
+import roj.lavac.parser.MethodWriterL;
 
 import javax.annotation.Nonnull;
 
@@ -14,22 +15,13 @@ import static roj.lavac.parser.JavaLexer.*;
  */
 public class UnaryPre implements Expression {
 	private final short op;
-	private Expression right;
+	Expression right;
 
-	public UnaryPre(short op) {
-		switch (op) {
-			default: throw new IllegalArgumentException("Unsupported operator " + op);
-			case logic_not:
-			case rev:
-			case inc: case dec:
-			case add: case sub:
-		}
-		this.op = op;
-	}
+	public UnaryPre(short op) { this.op = op; }
 
 	@Override
 	@SuppressWarnings("fallthrough")
-	public Type type() {
+	public IType type() {
 		switch (op) {
 			case logic_not: default: return Type.std(Type.BOOLEAN);
 			case rev:
@@ -39,14 +31,14 @@ public class UnaryPre implements Expression {
 	}
 
 	@Override
-	public void write(MethodPoetL tree, boolean noRet) {
+	public void write(MethodWriterL cw, boolean noRet) {
 		switch (op) {
-			case inc: case dec: Assign.writeIncrement((LoadExpression) right, tree, noRet, false, op == inc ? 1 : -1, right.type()); return;
+			case inc: case dec: Assign.writeIncrement((LoadExpression) right, cw, noRet, false, op == inc ? 1 : -1, right.type().rawType()); return;
 		}
 
 		if (noRet) throw new NotStatementException();
 
-		right.write(tree, false);
+		right.write(cw, false);
 
 		switch (op) {
 			case logic_not: default:
@@ -63,40 +55,40 @@ public class UnaryPre implements Expression {
 	}
 
 	@Override
-	public boolean isConstant() { return op != inc && op != dec && right.isConstant(); }
+	public final boolean isConstant() { return op != inc && op != dec && right.isConstant(); }
 	@Override
-	public Object constVal() {
-		Expression v = compress();
+	public final Object constVal() {
+		Expression v = resolve();
 		return v == this ? Expression.super.constVal() : v.constVal();
 	}
 
 	@Nonnull
 	@Override
-	public Expression compress() {
+	public Expression resolve() {
 		if (right == null) throw new IllegalArgumentException("Missing right");
 
 		// todo.
 
 		// inc/dec不能对常量使用, 所以不用管了
-		if (!(right = right.compress()).isConstant()) return this;
+		if (!(right = right.resolve()).isConstant()) return this;
 
 		// todo
 		return this;
 	}
 
 	@Override
-	public boolean isEqual(Expression left) {
+	public boolean equals(Object left) {
 		if (this == left) return true;
 		if (!(left instanceof UnaryPre)) return false;
 		UnaryPre left1 = (UnaryPre) left;
-		return left1.right.isEqual(right) && left1.op == op;
+		return left1.right.equals(right) && left1.op == op;
 	}
 
 	@Override
 	public String toString() { return byId(op) + ' ' + right; }
 
 	public String setRight(Expression right) {
-		if (right == null) return "upf: right is null";
+		if (right == null) return "unary.missing_operand";
 
 		if (!(right instanceof LoadExpression)) {
 			switch (op) {

@@ -1,6 +1,7 @@
 package roj.net.mychat;
 
 import roj.concurrent.FastThreadLocal;
+import roj.concurrent.TaskPool;
 import roj.concurrent.task.AsyncTask;
 import roj.crypt.Base64;
 import roj.crypt.SM3;
@@ -114,7 +115,7 @@ public class UploadHandler extends MultipartFormHandler {
 			bb.wIndex(16);
 			bb.putInt(uid);
 
-			file = new File(image ? Server.imgDir : Server.attDir, uc.encodeBase64(bb, Base64.B64_URL_SAFE));
+			file = new File(Server.attDir, uc.encodeBase64(bb, Base64.B64_URL_SAFE));
 		} while (file.isFile());
 		return file;
 	}
@@ -169,7 +170,7 @@ public class UploadHandler extends MultipartFormHandler {
 
 				String hashFileName = uc.encodeBase64(tmp, Base64.B64_URL_SAFE);
 
-				File old = new File(image ? Server.imgDir : Server.attDir, hashFileName);
+				File old = new File(Server.attDir, hashFileName);
 				File cur = files[i];
 				if (old.isFile()) {
 					if (old.length() == cur.length()) {
@@ -241,7 +242,7 @@ public class UploadHandler extends MultipartFormHandler {
 				}
 
 				// todo stream
-				Server.POOL.pushTask(new ConvertImage(r, ins, fmt, files[i]));
+				TaskPool.Common().pushTask(new ConvertImage(r, ins, fmt, files[i]));
 			} catch (Throwable e) {
 				e.printStackTrace();
 				if (errors == null) errors = new String[files.length];

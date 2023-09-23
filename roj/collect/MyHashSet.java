@@ -86,6 +86,8 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 
 	@SuppressWarnings("unchecked")
 	public K intern(K k) {
+		if (k == null) return null;
+
 		if (size > mask * LOAD_FACTOR) {
 			resize((mask+1) << 1);
 		}
@@ -109,7 +111,7 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 			Object obj = entries[i];
 			while (obj instanceof Entry) {
 				entry = (Entry) obj;
-				int newKey = indexFor((K) entry.k)&len;
+				int newKey = hashFor((K) entry.k)&len;
 
 				obj = entry.next;
 
@@ -118,7 +120,7 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 				entry.next = old;
 			}
 			if (obj == null) continue;
-			int newKey = indexFor((K) obj)&len;
+			int newKey = hashFor((K) obj)&len;
 			Object old = newEntries[newKey];
 			if (old == null) {
 				newEntries[newKey] = obj;
@@ -190,12 +192,11 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 			}
 			return false;
 		}
-		if (entries == null) {
-			return false;
-		}
+		if (entries == null) return false;
+
 		K id = (K) o;
 
-		int i = indexFor(id)&mask;
+		int i = hashFor(id)&mask;
 		Entry prev = null;
 		Object obj = entries[i];
 
@@ -222,32 +223,30 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 		return true;
 	}
 
-	protected boolean eq(K id, Object k) {
-		return id == null ? k == null : id.equals(k);
-	}
+	protected boolean eq(K input, Object entry) { return input.equals(entry); }
 
-	@SuppressWarnings("unchecked")
 	public boolean contains(Object o) {
 		if (o == null) return hasNull;
-		return find1((K) o) != UNDEFINED;
+		return find1(o) != UNDEFINED;
 	}
 
 	@SuppressWarnings("unchecked")
 	public Object find1(Object id) {
 		if (entries == null) return UNDEFINED;
+		if (id == null) return null;
 
-		Object obj = entries[indexFor((K) id)&mask];
+		Object obj = entries[hashFor((K) id)&mask];
 		while (obj instanceof Entry) {
 			Entry prev = (Entry) obj;
 			if (eq((K) id, prev.k)) return prev.k;
 			obj = prev.next;
 		}
-		if (eq((K) id, obj)) return obj;
+		if (obj != null && eq((K) id, obj)) return obj;
 		return UNDEFINED;
 	}
 
 	protected Object add1(K id) {
-		int i = indexFor(id)&mask;
+		int i = hashFor(id)&mask;
 		if (entries == null) {
 			entries = new Object[mask+1];
 			entries[i] = id;
@@ -276,7 +275,7 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 		return UNDEFINED;
 	}
 
-	protected int indexFor(K id) {
+	protected int hashFor(K id) {
 		int v = id.hashCode() * -1640531527;
 		return (v ^ (v >>> 16));
 	}
@@ -304,10 +303,12 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 	}
 
 	final class SetItr extends AbstractIterator<K> {
+		private final Object[] prevList;
 		private Object entry;
 		private int i;
 
 		public SetItr() {
+			prevList = entries;
 			reset();
 		}
 
@@ -321,6 +322,7 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 		@Override
 		@SuppressWarnings("unchecked")
 		public boolean computeNext() {
+			checkConcMod();
 			while (true) {
 				if (entry != null) {
 					if (entry instanceof Entry) {
@@ -345,7 +347,37 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 
 		@Override
 		protected void remove(K obj) {
-			MyHashSet.this.remove(obj);
+			if (obj == null) {
+				hasNull = false;
+			} else {
+				checkConcMod();
+
+				Entry prev = null;
+				Object ent = entries[i-1];
+
+				chk: {
+					while (ent instanceof Entry) {
+						Entry curr = (Entry) ent;
+						if (curr.k == obj) break chk;
+						prev = curr;
+						ent = prev.next;
+					}
+
+					if (ent == null || obj != ent) {
+						throw new ConcurrentModificationException();
+					}
+				}
+
+				Object next = ent instanceof Entry ? ((Entry) ent).next : null;
+				if (prev != null) prev.next = next;
+				else entries[i-1] = next;
+			}
+
+			size--;
+		}
+
+		private void checkConcMod() {
+			if (prevList != entries) throw new ConcurrentModificationException();
 		}
 	}
 }

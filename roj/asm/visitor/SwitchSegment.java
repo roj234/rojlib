@@ -4,6 +4,10 @@ import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.tree.insn.SwitchEntry;
 import roj.collect.BSLowHeap;
+import roj.collect.IntMap;
+import roj.collect.SimpleList;
+import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -15,21 +19,23 @@ import static roj.asm.Opcodes.*;
  * @since 2022/11/17 0017 12:53
  */
 public final class SwitchSegment extends Segment {
+	byte code;
+	private char length;
+
 	public Label def;
 	public List<SwitchEntry> targets;
-	private byte code;
-	int bci;
 
 	public boolean opt;
+
+	int fv_bci;
 
 	SwitchSegment(int code, Label def, List<SwitchEntry> targets, int origPos) {
 		this.code = (byte) code;
 		this.def = def;
 		this.targets = targets;
-		targets.sort(null);
 
 		int pad = (4 - ((origPos + 1) & 3)) & 3;
-		this.length = code == Opcodes.TABLESWITCH ? 1 + pad + 4 + 8 + (targets.size() << 2) : 1 + pad + 8 + (targets.size() << 3);
+		this.length = (char) (code == Opcodes.TABLESWITCH ? 1 + pad + 4 + 8 + (targets.size() << 2) : 1 + pad + 8 + (targets.size() << 3));
 	}
 
 	public SwitchSegment() { this(false); }
@@ -40,26 +46,26 @@ public final class SwitchSegment extends Segment {
 		this.length = 1;
 	}
 
-	public void branch(int number, Label label) {
-		targets.add(new SwitchEntry(number, label));
-	}
+	public void branch(int number, Label label) { targets.add(new SwitchEntry(number, label)); }
 
 	@Override
 	public boolean put(CodeWriter to) {
-		if (code == 0) computeCode();
+		targets.sort(null);
+
+		if (code == 0) findBestCode();
 		if (targets.isEmpty() && opt) {
 			to.bw.put(Opcodes.POP);
+			int len = length;
 			JumpSegment seg = new JumpSegment(GOTO, def);
-			seg.length = length;
-			boolean b = seg.put(to);
-			length = seg.length;
-			return b;
+			seg.put(to);
+			length = (char) seg.length();
+			return len != length;
 		}
 
 		DynByteBuf o = to.bw;
 		int begin = o.wIndex();
 
-		int self = bci = to.bci;
+		int self = fv_bci = to.bci;
 		o.put(code);
 
 		int pad = (4 - ((self+1) & 3)) & 3;
@@ -69,8 +75,8 @@ public final class SwitchSegment extends Segment {
 		if (def == null) throw new NullPointerException("default分支");
 		if (code == TABLESWITCH) {
 			if (m.isEmpty()) throw new NullPointerException("switch没有分支");
-			int lo = m.get(0).key;
-			int hi = m.get(m.size() - 1).key;
+			int lo = m.get(0).val;
+			int hi = m.get(m.size() - 1).val;
 
 			o.putInt(def.getValue() - self).putInt(lo).putInt(hi);
 			for (int i = 0; i < m.size(); i++) o.putInt(m.get(i).getBci() - self);
@@ -78,27 +84,29 @@ public final class SwitchSegment extends Segment {
 			o.putInt(def.getValue() - self).putInt(m.size());
 			for (int i = 0; i < m.size(); i++) {
 				SwitchEntry se = m.get(i);
-				o.putInt(se.key).putInt(se.getBci() - self);
+				o.putInt(se.val).putInt(se.getBci() - self);
 			}
 		}
 
 		begin = o.wIndex() - begin;
 		if (length != begin) {
-			length = begin;
+			length = (char) begin;
 			return true;
 		}
 		return false;
 	}
+	@Override
+	protected int length() { return length; }
 
-	private void computeCode() {
+	private void findBestCode() {
 		List<SwitchEntry> m = targets;
 		if (m.isEmpty()) {
 			code = LOOKUPSWITCH;
 			return;
 		}
 
-		int lo = m.get(0).key;
-		int hi = m.get(m.size()-1).key;
+		int lo = m.get(0).val;
+		int hi = m.get(m.size()-1).val;
 
 		float delta = (hi - lo) * 1.5f;
 		if (delta > m.size()) {
@@ -109,11 +117,43 @@ public final class SwitchSegment extends Segment {
 		} else {
 			code = LOOKUPSWITCH;
 		}
+	}
 
+	@Override
+	Segment move(AbstractCodeWriter list, int blockMoved, int mode) {
+		if (mode==XInsnList.REP_CLONE) {
+			SwitchSegment next = new SwitchSegment();
+			for (int i = 0; i < targets.size(); i++) {
+				SwitchEntry entry = targets.get(i);
+				Label label = copyLabel(entry.pos, list, blockMoved, XInsnList.REP_CLONE);
+				entry = new SwitchEntry(entry.val, label);
+				next.targets.add(entry);
+			}
+			next.def = copyLabel(def, list, blockMoved, XInsnList.REP_CLONE);
+			return next;
+		}
+
+		for (int i = 0; i < targets.size(); i++) {
+			copyLabel(targets.get(i).pos, list, blockMoved, mode);
+		}
+		copyLabel(def, list, blockMoved, mode);
+		return this;
 	}
 
 	@Override
 	public String toString() {
-		return "switch(" + OpcodeUtil.toString0(code) + ',' + length + ')';
+		CharList sb = new CharList().append(OpcodeUtil.toString0(code)).append("{");
+		SimpleList<Object> a = SimpleList.asModifiableList("value","target",IntMap.UNDEFINED);
+		for (SwitchEntry target : targets) {
+			a.add(target.val);
+			a.add(target.pos.getValue());
+			a.add(IntMap.UNDEFINED);
+		}
+		a.add("default");
+		a.add(def.getValue());
+		a.add(IntMap.UNDEFINED);
+
+		TextUtil.prettyTable(sb, "  ", a.toArray(), "  ");
+		return sb.append('}').toStringAndFree();
 	}
 }

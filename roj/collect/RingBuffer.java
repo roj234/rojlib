@@ -1,8 +1,8 @@
 package roj.collect;
 
 import roj.math.MathUtils;
+import roj.text.TextUtil;
 import roj.util.ArrayCache;
-import roj.util.ArrayUtil;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -478,19 +478,23 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 
 	@Override
 	public String toString() {
-		StringBuilder sb = new StringBuilder().append("RingBuffer{\n  ");
-		sb.append("size=").append(size).append('\n');
-		for (int i = 0; i < array.length; i++) {
-			sb.append(i).append(' ');
-		}
-		sb.append("\n  ");
-		for (int i = 0; i < head; i++) {
-			sb.append("  ");
-		}
-		sb.append("S\n  ");
-		for (int i = 0; i < tail; i++) {
-			sb.append("  ");
-		}
-		return sb.append("E\n  ").append(ArrayUtil.toString(array, 0, array.length)).toString();
+		StringBuilder sb = new StringBuilder().append("RingBuffer{\n  size=").append(size).append(",length=").append(array.length);
+
+		SimpleList<Object> data = new SimpleList<>();
+
+		for (int i = 0; i < array.length; i++) data.add(i);
+		data.add(IntMap.UNDEFINED);
+
+		for (int i = 0; i < head; i++) data.add(" ");
+		data.add("H");
+		data.add(IntMap.UNDEFINED);
+
+		for (int i = 0; i < tail; i++) data.add(" ");
+		data.add("T");
+		data.add(IntMap.UNDEFINED);
+
+		data.addAll(array);
+		TextUtil.prettyTable(sb, "  ", data.toArray(), " ", " ");
+		return sb.append("\n}").toString();
 	}
 }

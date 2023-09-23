@@ -2,7 +2,6 @@ package roj.net.mychat;
 
 import roj.collect.*;
 import roj.config.serial.ToSomeString;
-import roj.io.BoxFile;
 import roj.util.ByteList;
 
 import java.util.PrimitiveIterator.OfInt;
@@ -14,13 +13,19 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class User extends AbstractUser {
 	public String username;
-	public byte[] salt = new byte[16];
-	public long since, amount;
+
+	public byte[] pass;
+	public int passError;
+	public long timeout;
+
+	public final byte[] tokenSalt = new byte[16];
+	public long tokenSeq;
 
 	// 存储最近的N条未接收消息
 	public RingBuffer<Message> c2c = new RingBuffer<>(100, false);
 
 	// friends由friendsGroup反序列化时顺便填充
+	// todo Viewing
 	private final MyHashMap<String, IntSet> friendsGroup = new MyHashMap<>();
 	public IntSet friends = new IntSet(), joinedGroups = new IntSet(), manageGroups = new IntSet();
 
@@ -29,23 +34,16 @@ public class User extends AbstractUser {
 	public int flag2;
 
 	public TimeCounter attachCounter = new TimeCounter(60000);
-	public AtomicInteger largeConn = new AtomicInteger();
-	public TimeCounter imgCounter = new TimeCounter(30000);
+	public AtomicInteger parallelUD = new AtomicInteger(4);
 
 	// 对于其他用户的标志
 	private final Int2IntMap userProp = new Int2IntMap();
 	private final IntMap<String> pendingAdd = new IntMap<>();
 
-	private BoxFile history;
-
 	public volatile WSChat worker;
 
 	public User() {
-		//try {
-		//    this.history = new BoxFile(new File(user.name + ".db"));
-		//} catch (IOException e) {
-		//    e.printStackTrace();
-		//}
+
 	}
 
 	public void onLogon(Context c, WSChat w) {
@@ -208,4 +206,8 @@ public class User extends AbstractUser {
 
 	@Override
 	public void addMoreInfo(IntSet known) {}
+
+	public boolean exist() {
+		return pass != null;
+	}
 }

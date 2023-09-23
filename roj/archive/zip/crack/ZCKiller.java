@@ -7,7 +7,7 @@ import roj.collect.SimpleList;
 import roj.concurrent.TaskHandler;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
-import roj.ui.EasyProgressBar;
+import roj.ui.ProgressBar;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -100,7 +100,7 @@ public final class ZCKiller implements Macros {
 	boolean interrupt;
 	LongAdder finished = new LongAdder();
 	int total;
-	EasyProgressBar bar;
+	ProgressBar bar;
 
 	List<Cipher> solutions = new SimpleList<>();
 
@@ -115,19 +115,19 @@ public final class ZCKiller implements Macros {
 	}
 
 	public List<Cipher> find(TaskHandler th) {
-		bar = new EasyProgressBar("进度");
+		bar = new ProgressBar("进度");
 
-		bar.setPercentStr("Z-创建");
+		bar.setPrefix("Z-创建");
 		bar.updateForce(0);
 
 		Zreduction zr = new Zreduction(keystream);
 		if(keystream.length > Solver.MIN_CONTIGUOUS_PLAIN_LENGTH) {
-			bar.setPercentStr("Z-筛选");
+			bar.setPrefix("Z-筛选");
 			bar.updateForce(0);
 			zr.filter();
 		}
 
-		bar.setPercentStr("Z-生成");
+		bar.setPrefix("Z-生成");
 		bar.updateForce(0);
 		zr.generate();
 
@@ -139,7 +139,7 @@ public final class ZCKiller implements Macros {
 
 		finished.reset();
 		total = candidates.size();
-		bar.setPercentStr(null);
+		bar.setPrefix(null);
 
 		log();
 
@@ -167,7 +167,7 @@ public final class ZCKiller implements Macros {
 				try {
 					Thread.sleep(200);
 				} catch (InterruptedException ignored) {}
-				bar.setPercentStr(sum + " / " + total);
+				bar.setPrefix(sum + " / " + total);
 				bar.update(((double) sum / total), (int) delta);
 				if (interrupt) return;
 			} while (sum < total);

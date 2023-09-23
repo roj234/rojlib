@@ -52,10 +52,13 @@ public class Pipe implements Selectable {
 		return down == null || !down.isOpen();
 	}
 
-	public final void setUp(MyChannel ctx) {
+	public final void setUp(MyChannel ctx) throws IOException {
 		pendDown = ctx.i_getBuffer();
 		if (!pendDown.isReadable()) pendDown = null;
-		else cipher(pendDown, false);
+		else {
+			pendDown = pool().buffer(true, pendDown.readableBytes()).put(pendDown);
+			cipher(pendDown, true);
+		}
 		up = (SocketChannel) ctx.i_outOfControl();
 	}
 
@@ -63,10 +66,13 @@ public class Pipe implements Selectable {
 		return up;
 	}
 
-	public final void setDown(MyChannel ctx) {
+	public final void setDown(MyChannel ctx) throws IOException {
 		pendUp = ctx.i_getBuffer();
 		if (!pendUp.isReadable()) pendUp = null;
-		else cipher(pendUp, false);
+		else {
+			pendUp = pool().buffer(true, pendUp.readableBytes()).put(pendUp);
+			cipher(pendUp, false);
+		}
 		down = (SocketChannel) ctx.i_outOfControl();
 	}
 
@@ -88,6 +94,9 @@ public class Pipe implements Selectable {
 
 		if (upKey != null && up.keyFor(sel) != upKey) upKey.cancel();
 		if (downKey != null && down.keyFor(sel) != downKey) downKey.cancel();
+
+		// remove old keys (in MyChannel)
+		sel.selectNow();
 
 		upKey = up.register(sel, pendUp == null ? SelectionKey.OP_READ : SelectionKey.OP_WRITE, att);
 		downKey = down.register(sel, pendDown == null ? SelectionKey.OP_READ : SelectionKey.OP_WRITE, att);

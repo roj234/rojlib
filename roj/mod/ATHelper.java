@@ -120,7 +120,7 @@ final class ATHelper {
 
 					if (!forIDE) TransformUtil.trimCode(data);
 
-					Parser.withParsedAttribute(data);
+					data.parsed();
 					zo.set(name, () -> Parser.toByteArrayShared(data));
 				}
 			}

@@ -12,24 +12,24 @@ import java.util.List;
  * @since 2021/1/1 23:12
  */
 public final class Annotations extends Attribute {
-	public static final String VISIBLE = "RuntimeVisibleAnnotations", INVISIBLE = "RuntimeInvisibleAnnotations";
-
-	public Annotations(String name) {
-		super(name);
+	public Annotations(boolean visibleForRuntime) {
+		vis = visibleForRuntime;
 		annotations = new SimpleList<>();
 	}
 
 	public Annotations(String name, DynByteBuf r, ConstantPool pool) {
-		super(name);
+		vis = name.equals("RuntimeVisibleAnnotations");
 		annotations = parse(pool, r);
 	}
 
+	public final boolean vis;
 	public List<Annotation> annotations;
 
 	@Override
-	public boolean isEmpty() {
-		return annotations.isEmpty();
-	}
+	public boolean isEmpty() { return annotations.isEmpty(); }
+
+	@Override
+	public String name() { return vis?"RuntimeVisibleAnnotations":"RuntimeInvisibleAnnotations"; }
 
 	@Override
 	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
@@ -42,7 +42,7 @@ public final class Annotations extends Attribute {
 	public static List<Annotation> parse(ConstantPool pool, DynByteBuf r) {
 		int len = r.readUnsignedShort();
 		List<Annotation> annos = new SimpleList<>(len);
-		while (len-- > 0) annos.add(Annotation.deserialize(pool, r));
+		while (len-- > 0) annos.add(Annotation.parse(pool, r));
 		return annos;
 	}
 

@@ -85,6 +85,8 @@ public final class Request extends Headers {
 		return paths;
 	}
 
+	public boolean isExpecting() { return "100-continue".equalsIgnoreCase(get("Expect")); }
+
 	// region request info
 	public Map<String, String> postFields() throws IllegalRequestException {
 		if (postFields instanceof ByteList) {
@@ -100,7 +102,7 @@ public final class Request extends Headers {
 						protected void onValue(ChannelCtx ctx, DynByteBuf buf) { map.put(name, buf.readUTF(buf.readableBytes())); }
 					};
 
-					CtxEmbedded ch = new CtxEmbedded();
+					CtxEmbedded ch = CtxEmbedded.createSingle();
 					ch.addLast("_", handler);
 					ch.fireChannelRead(pf);
 					handler.onSuccess();

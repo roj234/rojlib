@@ -73,7 +73,7 @@ public class FeedbackCipher extends RCipherSpi {
 	protected boolean decrypt;
 
 	public FeedbackCipher(RCipherSpi cip, int mode) {
-		if (!cip.isBaseCipher() || cip.engineGetBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
+		if (!cip.isBareBlockCipher() || cip.engineGetBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
 
 		this.cip = cip;
 		this.vec = new ByteList(cip.engineGetBlockSize());
@@ -84,7 +84,7 @@ public class FeedbackCipher extends RCipherSpi {
 		} catch (NoSuchAlgorithmException ignored) {}
 	}
 	public FeedbackCipher(RCipherSpi cip, String mode, String padding) throws NoSuchAlgorithmException, NoSuchPaddingException {
-		if (!cip.isBaseCipher() || cip.engineGetBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
+		if (!cip.isBareBlockCipher() || cip.engineGetBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
 
 		this.cip = cip;
 
@@ -147,9 +147,6 @@ public class FeedbackCipher extends RCipherSpi {
 		}
 		return in;
 	}
-
-	@Override
-	public boolean isBaseCipher() { return false; }
 
 	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
 		if (out.writableBytes() < engineGetOutputSize(in.readableBytes())) throw new ShortBufferException();

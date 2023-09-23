@@ -65,9 +65,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 			i++;
 		}
 
-		if (prev < i || !clean) {
-			list.add(prev == i ? "" : keys.subSequence(prev, i).toString());
-		}
+		if (prev < i) list.add(keys.subSequence(prev, i).toString());
 
 		return list;
 	}

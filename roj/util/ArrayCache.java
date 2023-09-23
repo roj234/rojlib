@@ -1,7 +1,6 @@
 package roj.util;
 
 import roj.collect.LFUCache;
-import roj.collect.RingBuffer;
 import roj.math.MutableInt;
 
 import java.lang.ref.Reference;
@@ -10,9 +9,6 @@ import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
-/**
- * CHANGE: 尽可能的归还数组
- */
 public class ArrayCache {
 	public static final byte[] BYTES = new byte[0];
 	public static final char[] CHARS = new char[0];
@@ -24,7 +20,6 @@ public class ArrayCache {
 	public static final Class<?>[] CLASSES = new Class<?>[0];
 
 	private static final ThreadLocal<ArrayCache> CACHE = new ThreadLocal<>();
-
 	public static ArrayCache getDefaultCache() {
 		ArrayCache cache = CACHE.get();
 		if (cache == null) CACHE.set(cache = new ArrayCache());
@@ -36,48 +31,54 @@ public class ArrayCache {
 	private static final int SIZES_MAX = 64;
 	private static final int ARRAYS_MAX = 9;
 
-	private final Map<MutableInt, RingBuffer<Reference<byte[]>>> byteCache = new LFUCache<>(SIZES_MAX, 1);
-	private final Map<MutableInt, RingBuffer<Reference<char[]>>> charCache = new LFUCache<>(SIZES_MAX, 1);
-	private final Map<MutableInt, RingBuffer<Reference<int[]>>> intCache = new LFUCache<>(SIZES_MAX, 1);
+	private final LFUCache<MutableInt, Reference<byte[]>[]> byteCache = new LFUCache<>(SIZES_MAX, 1);
+	private final LFUCache<MutableInt, Reference<char[]>[]> charCache = new LFUCache<>(SIZES_MAX, 1);
+	private final LFUCache<MutableInt, Reference<int[]>[]> intCache = new LFUCache<>(SIZES_MAX, 1);
 	private final ReentrantLock lock = new ReentrantLock();
 	private final MutableInt val = new MutableInt();
 
-	private <T> T getArray(Map<MutableInt, RingBuffer<Reference<T>>> cache, int size) {
+	public ArrayCache() {}
+
+	private <T> T getArray(Map<MutableInt, Reference<T>[]> cache, int size) {
 		if (size < CHIP_SIZE) return null;
 
 		lock.lock();
 		try {
 			val.setValue(size/CHIP_SIZE);
-			RingBuffer<Reference<T>> stack = cache.get(val);
+			Reference<T>[] stack = cache.get(val);
 			if (stack == null) return null;
 
-			T array;
-			do {
-				Reference<T> r = stack.pollLast();
-				if (r == null) return null;
+			for (int i = 0; i < stack.length; i++) {
+				Reference<T> r = stack[i];
+				if (r == null) continue;
 
-				array = r.get();
-			} while (array == null);
-
-			return array;
+				stack[i] = null;
+				T t = r.get();
+				if (t != null) return t;
+			}
+			return null;
 		} finally {
 			lock.unlock();
 		}
 	}
-	private <T> void putArray(Map<MutableInt, RingBuffer<Reference<T>>> cache, T array, int size) {
+	private <T> void putArray(Map<MutableInt, Reference<T>[]> cache, T array, int size) {
 		if (size < CHIP_SIZE) return;
 
 		lock.lock();
 		try {
 			val.setValue(size/CHIP_SIZE);
-			RingBuffer<Reference<T>> stack = cache.get(val);
+			Reference<T>[] stack = cache.get(val);
 			if (stack == null) {
-				stack = new RingBuffer<>(ARRAYS_MAX);
-				cache.put(new MutableInt(val), stack);
+				cache.put(new MutableInt(val), stack = Helpers.cast(new Reference<?>[8]));
 			}
 
-			Reference<T> ref = stack.ringAddLast(stack.size() >= ARRAYS_MAX/3 || (size>=10485760 && stack.size()>0) ? new WeakReference<>(array) : new SoftReference<>(array));
-			if (ref != null) ref.clear();
+			for (int i = 0; i < stack.length; i++) {
+				Reference<T> r = stack[i];
+				if (r == null || r.get() == null) {
+					stack[i] = i == 0 ? new SoftReference<>(array) : new WeakReference<>(array);
+					break;
+				}
+			}
 		} finally {
 			lock.unlock();
 		}

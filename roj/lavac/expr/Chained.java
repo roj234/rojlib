@@ -1,7 +1,7 @@
 package roj.lavac.expr;
 
-import roj.asm.type.Type;
-import roj.lavac.parser.MethodPoetL;
+import roj.asm.type.IType;
+import roj.lavac.parser.MethodWriterL;
 import roj.text.CharList;
 
 import javax.annotation.Nonnull;
@@ -18,34 +18,24 @@ final class Chained implements Expression {
 	public Chained() { par = new ArrayList<>(); }
 
 	@Override
-	public boolean isEqual(Expression left) {
-		if (this == left) return true;
-		if (!(left instanceof Chained)) return false;
-		Chained method = (Chained) left;
-		return ArrayDef.arrayEq(par, method.par);
-	}
-
-	@Override
-	public void write(MethodPoetL tree, boolean noRet) {
-		int t;
-		Expression last = par.get(t = par.size() - 1);
-		for (int i = 0; i < t; i++) {
-			par.get(i).write(tree, true);
-		}
-		last.write(tree, false);
-	}
+	public IType type() { return par.get(par.size()-1).type(); }
 
 	@Nonnull
 	@Override
-	public Expression compress() {
-		for (int i = 0; i < par.size(); i++) {
-			par.set(i, par.get(i).compress());
-		}
+	public Expression resolve() {
+		for (int i = 0; i < par.size(); i++) par.set(i, par.get(i).resolve());
 		return par.size() == 1 ? par.get(0) : this;
 	}
 
 	@Override
-	public Type type() { return par.get(par.size()-1).type(); }
+	public void write(MethodWriterL cw, boolean noRet) {
+		int t = par.size()-1;
+		Expression last = par.get(t);
+		for (int i = 0; i < t; i++) par.get(i).write(cw, true);
+		last.write(cw, false);
+	}
+
+	public void append(Expression expr) { par.add(expr); }
 
 	@Override
 	public String toString() {
@@ -57,5 +47,16 @@ final class Chained implements Expression {
 		return sb.toStringAndFree();
 	}
 
-	public void append(Expression expr) { par.add(expr); }
+	@Override
+	public boolean equals(Object left) {
+		if (this == left) return true;
+		if (!(left instanceof Chained)) return false;
+		Chained method = (Chained) left;
+		return par.equals(method.par);
+	}
+
+	@Override
+	public int hashCode() {
+		return par.hashCode();
+	}
 }

@@ -4,7 +4,10 @@ import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cst.*;
 import roj.asm.misc.ReflectClass;
-import roj.asm.tree.*;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.FieldNode;
+import roj.asm.tree.IClass;
+import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.insn.*;
@@ -205,7 +208,7 @@ public class Obfuscator {
 		prepareInheritCheck(from);
 		List<? extends MethodNode> methods = (exclusion&EX_METHOD)!=0 ? Collections.emptyList() : data.methods;
 		for (int i = 0; i < methods.size(); i++) {
-			RawMethod method = (RawMethod) methods.get(i);
+			MethodNode method = (MethodNode) methods.get(i);
 			int acc = method.access;
 			if ((flags & ADD_SYNTHETIC) != 0) {
 				acc |= AccessFlag.SYNTHETIC;
@@ -214,8 +217,8 @@ public class Obfuscator {
 			}
 			method.access = (char) acc;
 
-			if ((d.name = method.name.str()).charAt(0) == '<') continue; // clinit, init
-			d.param = method.type.str();
+			if ((d.name = method.name()).charAt(0) == '<') continue; // clinit, init
+			d.param = method.rawDesc();
 			if (0 == (acc & (AccessFlag.STATIC | AccessFlag.PRIVATE))) {
 				if (isInherited(d)) continue;
 			}
@@ -230,7 +233,7 @@ public class Obfuscator {
 
 		List<? extends FieldNode> fields = (exclusion&EX_FIELD)!=0 ? Collections.emptyList() : data.fields;
 		for (int i = 0; i < fields.size(); i++) {
-			RawField field = (RawField) fields.get(i);
+			FieldNode field = (FieldNode) fields.get(i);
 			int acc = field.access;
 			if ((flags & ADD_SYNTHETIC) != 0) {
 				acc |= AccessFlag.SYNTHETIC;
@@ -239,8 +242,8 @@ public class Obfuscator {
 			}
 			field.access = (char) acc;
 
-			d.name = field.name.str();
-			d.param = field.type.str();
+			d.name = field.name();
+			d.param = field.rawDesc();
 			d.flags = (char) acc;
 
 			sb.clear();
@@ -303,8 +306,8 @@ public class Obfuscator {
 			cls.name("roj/reflect/gen" + Math.abs(System.nanoTime() % 9999999));
 			cls.addInterface("roj/mapper/Obfuscator$Decoder");
 
-			Method method = new Method(data, (RawMethod) mn);
-			method.name = "_decode_";
+			MethodNode method = mn.copy().parsed(data.cp);
+			method.name("_decode_");
 			cls.methods.add(method);
 
 			InsnList ins = method.getCode().instructions;
@@ -326,7 +329,7 @@ public class Obfuscator {
 
 			List<Type> par = mn.parameters();
 			c.visitSize(Math.max(2, par.size()), 2);
-			c.unpackArray(1, 0, par.toArray(new Type[par.size()]));
+			c.unpackArray(1, 0, par);
 			c.invoke(Opcodes.INVOKESTATIC, method);
 			c.one(Opcodes.ARETURN);
 
@@ -406,7 +409,7 @@ public class Obfuscator {
 
 		for (int i = 0; i < arr.size(); i++) {
 			ConstantData data = arr.get(i).getData();
-			List<? extends MethodNode> methods = data.methods;
+			List<MethodNode> methods = data.methods;
 
 			next:
 			for (int j = 0; j < methods.size(); j++) {

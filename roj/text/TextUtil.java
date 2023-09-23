@@ -146,7 +146,7 @@ public class TextUtil {
 	}
 
 	public static boolean isPrintableAscii(int j) {
-		return j > 31 && j < 127;
+		return j > 31 && j < 127 || j > 160;
 	}
 
 	/**
@@ -726,72 +726,94 @@ public class TextUtil {
 
 	// endregion
 
-	public static <T extends Appendable> T prettyTable(T a, Object... parm) {
-		return prettyTable(a, " ", " ", " ", parm);
-	}
-	public static <T extends Appendable> T prettyTable(T a, String headSep, Object... parm) {
-		return prettyTable(a, headSep, headSep, " ", parm);
-	}
-	public static <T extends Appendable> T prettyTable(T a, String headSep, String sep, String pfx, Object... parm) {
-		if (headSep.length() != sep.length()) throw new IllegalArgumentException("headSep.length != sep.length");
-		List<List<String>> lines = new SimpleList<>();
-		List<String> val = new SimpleList<>();
-		IntList len1 = new IntList();
+	public static <T extends Appendable> T prettyTable(T sb, String linePrefix, Object data, String... separators) {
+		List<Object[]> table = new SimpleList<>();
+		List<String> row = new SimpleList<>();
+		List<List<String>> multiLineRef = new SimpleList<>();
+		IntList maxLens = new IntList();
 
-		for (Object o : parm) {
+		Object _EMPTY = new String();
+
+		List<Object> myList = data instanceof List ? Helpers.cast(data) : SimpleList.asModifiableList((Object[]) data);
+		for (Object o : myList) {
 			if (o == IntMap.UNDEFINED) {
-				lines.add(val);
-				val = new SimpleList<>();
+				table.add(row.toArray());
+				row.clear();
+
+				for (int i = 0; i < multiLineRef.size(); i++) {
+					table.add(multiLineRef.get(i).toArray());
+				}
+				multiLineRef.clear();
 				continue;
 			}
-			String s = String.valueOf(o);
-			val.add(s);
-			while (len1.size() < val.size()) len1.add(0);
 
-			int len = len1.get(val.size()-1);
-			int strlen = uiLen(s);
-			if (strlen > len) len1.set(val.size()-1, strlen);
+			String s = String.valueOf(o);
+			int sLen;
+			if (s.indexOf('\n') >= 0) {
+				List<String> _sLines = LineReader.slrParserV2(String.valueOf(o), false);
+				row.add(s = _sLines.get(0));
+				sLen = uiLen(s);
+
+				while (multiLineRef.size() < _sLines.size()-1) multiLineRef.add(new SimpleList<>());
+				for (int i = 1; i < _sLines.size(); i++) {
+					List<String> line = multiLineRef.get(i-1);
+					while (line.size() < row.size()) line.add("");
+					String str = _sLines.get(i);
+					line.set(row.size()-1, str);
+					sLen = Math.max(sLen, uiLen(str));
+				}
+			} else {
+				row.add(s);
+				sLen = uiLen(s);
+			}
+
+			while (maxLens.size() < row.size()) maxLens.add(0);
+
+			int len = maxLens.get(row.size()-1);
+			if (sLen > len) maxLens.set(row.size()-1, sLen);
 		}
-		lines.add(val);
+
+		table.add(row.toArray());
+		for (int i = 0; i < multiLineRef.size(); i++) {
+			table.add(multiLineRef.get(i).toArray());
+		}
+		multiLineRef.clear();
 
 		try {
-			for (int i = 0; i < lines.size(); i++) {
-				a.append('\n');
+			for (int i = 0; i < table.size(); i++) {
+				sb.append('\n');
 
-				List<String> line = lines.get(i);
-				if (!line.isEmpty()) {
-					a.append(pfx);
+				Object[] line = table.get(i);
+				if (line.length > 0) sb.append(linePrefix);
 
-					for (int j = 0; j < line.size()-1; j++) {
-						String s = line.get(j);
-						a.append(s);
-						int k = len1.get(j)-uiLen(s);
-						while (k-- > 0) a.append(' ');
-						a.append(i == 0 ? headSep : sep);
-					}
+				for (int j = 0; j < line.length;) {
+					String s = line[j].toString();
+					sb.append(s);
 
-					String s = line.get(line.size()-1);
-					a.append(s);
-					if (i == lines.size()-1) break;
-					int k = len1.get(line.size()-1)-uiLen(s);
-					while (k-- > 0) a.append(' ');
+					int k = maxLens.get(j)-uiLen(s);
+					while (k-- > 0) sb.append(' ');
+
+					if (++j == line.length) break;
+					sb.append(separators.length == 0 ? " " : separators[j > separators.length ? separators.length-1 : j-1]);
 				}
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
-		return a;
+		return sb;
 	}
 
 	private static int uiLen(String s) {
-		int len = 0;
+		int len = 0, maxLen = 0;
 		for (int i = 0; i < s.length(); i++) {
 			char c = s.charAt(i);
-			if (c > 0xFF) len += 2;
+			if (c == '\r') {}
+			else if(c == '\n') { maxLen = Math.max(maxLen, len); len = 0; }
+			else if (c > 0xFF) len += 2;
 			else if (c == '\t') len += 4;
 			else len++;
 		}
-		return len;
+		return Math.max(maxLen, len);
 	}
 
 	public static boolean safeEquals(CharSequence a, CharSequence b) {

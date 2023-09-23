@@ -2,7 +2,7 @@ package roj.lavac.expr;
 
 import roj.asm.type.Type;
 import roj.lavac.parser.JavaLexer;
-import roj.lavac.parser.MethodPoetL;
+import roj.lavac.parser.MethodWriterL;
 
 /**
  * 临时操作符1 - 保存运算符
@@ -24,11 +24,11 @@ final class BinaryOpr implements Expression {
 	private BinaryOpr(int op) { this.op = (short) op; }
 
 	@Override
-	public void write(MethodPoetL tree, boolean noRet) { throw new UnsupportedOperationException(); }
+	public void write(MethodWriterL cw, boolean noRet) { throw new UnsupportedOperationException(); }
 	@Override
 	public Type type() { return null; }
 	@Override
-	public boolean isEqual(Expression left) { return this == left; }
+	public boolean equals(Object left) { return this == left; }
 
 	@Override
 	public String toString() { return "<binary operator '"+JavaLexer.byId(op)+"';'>"; }

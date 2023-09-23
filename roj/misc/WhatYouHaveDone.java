@@ -30,6 +30,9 @@ public class WhatYouHaveDone {
 					if (sb.length() > 0) size++;
 					sb.clear();
 				}
+			} catch (IOException e) {
+				System.out.println(file);
+				e.printStackTrace();
 			}
 
 			total += size;

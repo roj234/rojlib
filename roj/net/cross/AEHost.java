@@ -1,238 +1,202 @@
 package roj.net.cross;
 
 import roj.collect.IntMap;
-import roj.concurrent.PacketBuffer;
+import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.net.NetworkUtil;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
-import roj.net.ch.MyChannel;
-import roj.net.ch.Pipe;
+import roj.net.ch.*;
+import roj.net.ch.osi.ClientLaunch;
+import roj.net.cross.server.AEServer;
+import roj.text.CharList;
+import roj.text.TextUtil;
+import roj.text.logging.Level;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.function.Consumer;
-
-import static roj.net.cross.Util.*;
 
 /**
- * AbyssalEye Host
- *
  * @author Roj233
- * @version 0.4.0
- * @since 2021/9/12 0:57
+ * @version 2.0.3
+ * @since 2023/11/02 9:23
  */
 public class AEHost extends IAEClient {
-	static final int MAX_CHANNEL_COUNT = 100;
-
-	IntMap<Client> clients;
+	IntMap<Client> clients = new IntMap<>();
 	char[] portMap;
-	public String motd;
 
-	PacketBuffer packets;
-
-	public AEHost(SocketAddress server, String id, String token) {
-		super(server, id, token);
-		this.clients = new IntMap<>();
-		this.portMap = new char[1];
-		this.packets = new PacketBuffer(10);
-	}
-
-	public void kickSome(int... clientIds) {
-		ByteList tmp = ByteList.allocate(clientIds.length * 5);
-		for (int i : clientIds) {
-			tmp.put((byte) PS_KICK_CLIENT).putInt(i);
-		}
-		packets.offer(tmp);
-	}
-
-	@Override
-	public void channelOpened(ChannelCtx ctx) throws IOException {
-		Arrays.fill(free = Helpers.cast(new List<?>[portMap.length]), Collections.emptyList());
-		ctx.channelOpened();
-	}
+	public AEHost(SelectorLoop loop) {super(loop);}
 
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
-		received = true;
+		onlyOneMissed = true;
 
 		DynByteBuf rb = (DynByteBuf) msg;
 		int ridx = rb.rIndex;
-		switch (rb.get() & 0xFF) {
-			case P_FAIL:
-				print("上次的操作失败了");
-				break;
-			case P_HEARTBEAT:
-				break;
-			case P_LOGOUT:
-				logout(ctx);
-				return;
-			case P_CHANNEL_RESET:
-				int id = rb.readInt();
-				Pipe pair = socketsById.get(id);
-				if (pair != null) {
-					reset(pair);
-				} else {
-					print("无效的重置 #" + id);
-				}
-
-				rb.rIndex = ridx;
-				ctx.channelWrite(rb);
-				break;
-			case P_CHANNEL_CLOSE:
-				int src = rb.readInt();
+		switch (rb.readUnsignedByte()) {
+			case P___HEARTBEAT: rb.readLong(); break;
+			case P___LOGOUT: ctx.close(); break;
+			case P___CHAT_DATA:
+				System.out.println("");
+			break;
+			case P___NOTHING:
+				int id;
+				Pipe pair;
+			break;
+			case P___CHANNEL_CLOSED:
 				id = rb.readInt();
-				pair = socketsById.remove(id);
+				pair = pipes.remove(id);
 				if (pair != null) {
 					pair.close();
-					print((src < 0 ? "服务端" : "客户端") + "关闭了频道 #" + Integer.toHexString(id));
+					String msg1 = rb.readZhCn();
+					LOGGER.info("被动关闭了频道 #{}: {}", id, msg1);
 				}
-				break;
-			case P_CHANNEL_RESULT:
-				int portId = rb.get() & 0xFF;
+			break;
+			case PHH_CLIENT_REQUEST_CHANNEL:
+				int portId = rb.readUnsignedByte();
 
-				byte[] ciphers = new byte[64];
-				rnd.nextBytes(ciphers);
-				rb.read(ciphers, 0, 32);
+				byte[] key = new byte[64];
+				rnd.nextBytes(key);
+				rb.read(key, 0, 32);
 
 				int clientId = rb.readInt();
+				int pipeId = rb.readInt();
 
-				if (socketsById.size() >= MAX_CHANNEL_COUNT || !clients.containsKey(clientId)) {
-					String reason = clients.containsKey(clientId) ? "这边开启的频道过多(" + MAX_CHANNEL_COUNT + ")" : "未知的客户端";
-					print("客户端 #" + clientId + " 开启频道被阻止: " + reason);
+				ByteList b = new ByteList(); // AEServer.server on local mode also uses IOUtil.getSharedByteBuf()
+				if (pipes.size() >= HOST_MAX_PIPES || !clients.containsKey(clientId)) {
+					String reason = clients.containsKey(clientId) ? "Host开启的管道过多("+HOST_MAX_PIPES+")" : "未知的客户端";
+					LOGGER.info("客户端 #{} 开启管道被阻止: {}", clientId, reason);
 
-					ByteList tmp = IOUtil.getSharedByteBuf();
-					tmp.put(P_CHANNEL_OPEN_FAIL).putInt(clientId).putVUIUTF(reason);
-					ctx.channelWrite(tmp);
+					ctx.channelWrite(b.put(PHS_CHANNEL_DENY).putInt(pipeId).putZhCn(reason));
 				} else {
-					asyncPipeLogin(rb.readLong(), ciphers, pipe -> {
-						SpAttach att = (SpAttach) pipe.att;
-						att.portId = (byte) portId;
-						att.clientId = clientId;
+					ctx.channelWrite(b.put(PHS_CHANNEL_ALLOW).putInt(pipeId).put(key, 32, 32));
 
-						ByteList tmp1 = IOUtil.getSharedByteBuf().put((byte) PS_CHANNEL_OPEN).putInt(att.clientId).put(ciphers, 32, 32);
+					PipeInfoClient att = new PipeInfoClient(clientId, pipeId, portId);
+					asyncPipeLogin(pipeId, key, pipe -> {
+						pipe.att = att;
+
+						LOGGER.info("开启管道 {}", att);
 
 						try {
-							packets.offer(tmp1);
-							reset(pipe);
-						} catch (IOException e) {
+							ClientLaunch c = ClientLaunch.tcp().loop(loop).timeout(800).connect(InetAddress.getLoopbackAddress(), portMap[att.portId]);
+							c.channel().addLast("@@", new ChannelHandler() {
+								boolean opened;
+
+								@Override
+								public void channelOpened(ChannelCtx ctx) throws IOException {
+									opened = true;
+									try {
+										pipe.setDown(ctx.channel());
+										loop.register(pipe, null);
+										synchronized (pipes) { pipes.putInt(att.pipeId, pipe); }
+									} catch (Throwable e) {
+										opened = false;
+										throw e;
+									}
+
+									LOGGER.debug("连接本地成功 {}", att);
+								}
+
+								@Override
+								public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
+									ex.printStackTrace();
+									ctx.close();
+									channelClosed(ctx);
+								}
+
+								@Override
+								public void channelClosed(ChannelCtx ctx) throws IOException {
+									if (!opened) {
+										LOGGER.debug("连接本地失败 {}", att);
+										pipe.close();
+									}
+								}
+							});
+
+							c.launch();
+						} catch (Exception e) {
 							e.printStackTrace();
 						}
 					});
 				}
-
-				break;
-			case PH_CLIENT_LOGIN:
+			break;
+			case PHH_CLIENT_LOGIN:
 				clientId = rb.readInt();
-				char port = rb.readChar();
-				byte[] ip = new byte[rb.get() & 0xFF];
-				rb.read(ip);
-				String address = NetworkUtil.bytes2ip(ip) + ':' + (int) port;
-				clients.putInt(clientId, new Client(address));
-				print("客户端 #" + clientId + " 上线了, 它来自 " + address);
-				break;
-			case PH_CLIENT_LOGOUT:
+
+				byte[] digest = rb.readBytes(rb.readUnsignedByte());
+				String name = rb.readZhCn();
+				String ip = NetworkUtil.bytes2ip(rb.readBytes(rb.readableBytes()));
+
+				Client client = new Client(digest, name, ip);
+				clients.putInt(clientId, client);
+
+				LOGGER.info("客户端 #{} ({}) 上线了.", clientId, client);
+			break;
+			case PHH_CLIENT_LOGOUT:
 				clientId = rb.readInt();
-				if (clients.remove(clientId) != null) {
-					print("客户端 #" + clientId + " 下线了.");
+				client = clients.remove(clientId);
+				if (client != null) {
+					LOGGER.info("客户端 #{} ({}) 下线了.", clientId, client);
 				}
-				break;
-			case P_EMBEDDED_DATA:
-				break;
-			default:
-				onError(rb, null);
-				ctx.close();
-				break;
-		}
-	}
-
-	@Override
-	public void channelTick(ChannelCtx ctx) throws IOException {
-		super.channelTick(ctx);
-
-		if (!packets.isEmpty()) {
-			DynByteBuf b = ctx.allocate(true, 2048);
-			try {
-				ctx.channelWrite(packets.take(b));
-			} finally {
-				ctx.reserve(b);
-			}
-		}
-	}
-
-	private void reset(Pipe pipe) throws IOException {
-		SpAttach att = (SpAttach) pipe.att;
-		if (DEBUG) print(att + " reset.");
-
-		MyChannel c = MyChannel.openTCP();
-
-		Consumer<Object> err = (v) -> {
-			try {
-				c.close();
-			} catch (IOException ignored) {}
-			try {
-				pipe.close();
-			} catch (IOException ignored) {}
-			print("管道错误 #" + att.channelId + " of " + att.clientId);
-		};
-
-		try {
-			initSocketPref(c);
-			c.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), portMap[att.portId]), 300);
-			c.addLast("connect_handler", new ChannelHandler() {
-				@Override
-				public void channelOpened(ChannelCtx ctx) throws IOException {
-					pipe.setDown(ctx.channel());
-					loop.register(pipe, null);
-				}
-			});
-
-			loop.register(c, Helpers.cast(err));
-		} catch (Throwable e) {
-			err.accept(null);
-			e.printStackTrace();
-		}
-	}
-
-	@Override
-	protected void prepareLogin(MyChannel ctx) {
-		byte[] idBytes = id.getBytes(StandardCharsets.UTF_8);
-		byte[] tokenBytes = token.getBytes(StandardCharsets.UTF_8);
-		byte[] motdBytes = motd.getBytes(StandardCharsets.UTF_8);
-
-		ByteList tmp = IOUtil.getSharedByteBuf();
-		tmp.put((byte) idBytes.length).put((byte) tokenBytes.length).put((byte) motdBytes.length).put((byte) portMap.length).put(idBytes).put(tokenBytes).put(motdBytes);
-		for (char c : portMap) {
-			tmp.writeChar(c);
+			break;
+			default: unknownPacket(ctx, rb); break;
 		}
 
-		ctx.addLast("auth", new AEAuthenticator(tmp.toByteArray(), PS_LOGIN_H)).addLast("auth_after", new ChannelHandler() {
-			@Override
-			public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
-				DynByteBuf rb = (DynByteBuf) msg;
-				print("MOTD: " + rb.readUTF(rb.get() & 0xFF));
-				ctx.removeSelf();
-			}
-		});
+		if (!LOGGER.getLevel().canLog(Level.DEBUG)) rb.rIndex = rb.wIndex();
 	}
 
-	public void setPortMap(char... chars) {
-		this.portMap = chars;
+	public void init(ClientLaunch ctx, String roomToken, String motd, char[] portMap) throws IOException {
+		MyChannel ch;
+		if (AEServer.server != null) {
+			CtxEmbedded[] pair = CtxEmbedded.createPair();
+			AEServer.server.addLocalConnection(pair[0]);
+			ch = pair[1];
+		} else {
+			server = ctx.address();
+			ch = ctx.channel();
+			prepareLogin(ch);
+		}
+
+		handlers = ch;
+		this.portMap = portMap;
+
+		ByteList b = IOUtil.getSharedByteBuf();
+		sendLoginPacket(ch, b.put(PHS_LOGIN).putZhCn(roomToken).putZhCn(motd).put(portMap.length).putChars(new CharList(portMap)));
+	}
+
+	final void handleLoginPacket(ChannelCtx ctx, DynByteBuf rb) throws IOException {
+		if (rb.get() != PHH_LOGON) {
+			unknownPacket(ctx, rb);
+			return;
+		}
+
+		String roomToken1 = rb.readZhCn();
+		LOGGER.info("roomToken1: {}", roomToken1);
+
+		ctx.channelOpened();
+		ctx.removeSelf();
+		login = true;
+	}
+
+	public void kickSome(int... clientIds) {
+		ByteList b = IOUtil.getSharedByteBuf().put(PHS_OPERATION);
+		for (int i : clientIds) b.put(0).putInt(i);
+		writeAsync(b);
 	}
 
 	public static final class Client {
-		public final String addr;
-		public final long connect = System.currentTimeMillis();
+		public final byte[] hash;
+		public final String name, addr;
+		public final long time = System.currentTimeMillis();
 
-		Client(String addr) {this.addr = addr;}
+		Client(byte[] hash, String y, String x) { this.hash = hash; name = y; addr = x; }
+
+		@Override
+		public String toString() {
+			return "昵称:\""+ITokenizer.addSlashes(name)+"\" 指纹:"+TextUtil.bytes2hex(hash)+" IP:"+addr;
+		}
 	}
+
+	// region html
+	// endregion
 }

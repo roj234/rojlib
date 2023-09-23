@@ -1,8 +1,8 @@
 package roj.lavac.expr;
 
-import roj.asm.type.Type;
+import roj.asm.type.IType;
 import roj.config.word.NotStatementException;
-import roj.lavac.parser.MethodPoetL;
+import roj.lavac.parser.MethodWriterL;
 
 /**
  * 强制类型转换
@@ -10,37 +10,40 @@ import roj.lavac.parser.MethodPoetL;
  * @author Roj234
  * @since 2022/2/24 19:48
  */
-public class Cast implements Expression {
-	Type type;
-	Expression right;
+public class Cast extends UnaryPre {
+	IType type;
 
-	public Cast(Type type, Expression right) {
+	public Cast(IType type) {
+		super((short) 0);
 		this.type = type;
-		this.right = right;
 	}
 
 	@Override
-	public void write(MethodPoetL tree, boolean noRet) throws NotStatementException {
-		right.write(tree, false);
-		if (!tree.ctx.canInstanceOf(tree.stackTop().owner, type.owner, 0)) {
-			throw new IllegalStateException("Unable cast " + tree.stackTop().owner + " to " + type.owner);
-		}
-		tree.cast(type);
+	public void write(MethodWriterL cw, boolean noRet) throws NotStatementException {
+		right.write(cw, false);
+		// todo
 	}
 
 	@Override
-	public Type type() {
-		return type;
-	}
+	public IType type() { return type; }
 
 	@Override
-	public boolean isEqual(Expression o) {
+	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 
 		Cast cast = (Cast) o;
 
 		if (!type.equals(cast.type)) return false;
-		return right.isEqual(cast.right);
+		return right.equals(cast.right);
+	}
+
+	@Override
+	public String toString() { return "("+type+") "+right; }
+
+	@Override
+	public String setRight(Expression right) {
+		this.right = right;
+		return null;
 	}
 }

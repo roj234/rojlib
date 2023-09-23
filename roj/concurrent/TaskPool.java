@@ -76,14 +76,15 @@ public class TaskPool implements TaskHandler {
 		this(coreThreads, maxThreads, threshold, 60000, "pool-" + poolId.getAndIncrement() + "-by" + Thread.currentThread().getId() + "-");
 	}
 
-	public static TaskPool CpuMassive() { return CpuMassiveHolder.P; }
-	private static final class CpuMassiveHolder {
+	public static TaskPool Common() { return CommonHolder.P; }
+	private static final class CommonHolder {
 		static final TaskPool P = new TaskPool(1, Runtime.getRuntime().availableProcessors(), 0, 60000, "Cpu任务-");
 	}
 
 	public static TaskPool ParallelPool() {
 		return new TaskPool(0, Runtime.getRuntime().availableProcessors()+1, 128);
 	}
+	public static TaskPool MaxSize(int rejectThreshold, String prefix) { return new TaskPool(0, Runtime.getRuntime().availableProcessors(), 0, rejectThreshold, 60000, new PrefixFactory(prefix)); }
 
 	@Override
 	public void pushTask(@Async.Schedule ITask task) {
@@ -134,7 +135,6 @@ public class TaskPool implements TaskHandler {
 	private ITask pollTask() {
 		boolean timeout = false;
 
-		main:
 		for(;;) {
 			// shutdown
 			if (running < 0) {
@@ -224,13 +224,15 @@ public class TaskPool implements TaskHandler {
 		}
 	}
 	public static void waitPolicy(TaskPool pool, ITask task) {
-		while (pool.tasks.remaining() == 0) {
+		while (true) {
+			if (pool.fastPath.tryTransfer(task)) break;
+			if (pool.tasks.remaining() > 0) {
+				pool.tasks.ringAddLast(task);
+				break;
+			}
+
 			pool.noFull.awaitUninterruptibly();
 			if (pool.running < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
-
-			if (!pool.fastPath.tryTransfer(task)) {
-				pool.tasks.ringAddLast(task);
-			}
 		}
 	}
 	public static void newThreadPolicy(TaskPool pool, ITask task) { new ImmediateExecutor(task).start(); }

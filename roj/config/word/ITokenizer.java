@@ -130,7 +130,7 @@ public abstract class ITokenizer {
 		for (int i = 0; i <= 7; i++) DESLASHES.putInt('0'+i, -6);
 	}
 
-	public static String addSlashes(CharSequence key) { return addSlashes(new StringBuilder(), key).toString(); }
+	public static String addSlashes(CharSequence key) { return addSlashes(new CharList(), key).toStringAndFree(); }
 	public static <T extends Appendable> T addSlashes(T to, CharSequence key) { return addSlashes(key, 0, to, '\0'); }
 	public static <T extends Appendable> T addSlashes(CharSequence key, int since, T to, char ignore) {
 		try {
@@ -143,12 +143,17 @@ public abstract class ITokenizer {
 				if (v > 0 && c != ignore) {
 					to.append(key, prevI, i).append('\\').append((char) v);
 					prevI = i+1;
-				} else if (c < 32 || c == 127) { // CharacterData is not open
-					String s = Integer.toHexString(c);
-					to.append(key, prevI, i).append("\\u");
-					int j = s.length();
-					while (j++ < 4) to.append('0');
-					to.append(s);
+				} else if (c < 32 || (c >= 127 && c <= 159)) { // CharacterData is not open
+					if (i+1 < key.length() && NUMBER.contains(key.charAt(i+1))) {
+						String s = Integer.toHexString(c);
+						to.append(key, prevI, i).append("\\u");
+						int j = s.length();
+						while (j++ < 4) to.append('0');
+						to.append(s);
+					} else {
+						String s = Integer.toOctalString(c);
+						to.append(key, prevI, i).append('\\').append(s);
+					}
 					prevI = i+1;
 				}
 			}
@@ -172,7 +177,7 @@ public abstract class ITokenizer {
 			while (i < in.length()) {
 				char c = in.charAt(i++);
 				if (slash) {
-					i = _removeSlash(in, c, output, i, '\0');
+					i = _removeSlash(in, c, output, i);
 					slash = false;
 				} else {
 					if (c == '\\') {
@@ -205,7 +210,7 @@ public abstract class ITokenizer {
 			if (slash) {
 				v.append(in, prevI, i-2);
 
-				i = _removeSlash(input, c, v, i, end);
+				i = _removeSlash(input, c, v, i);
 
 				prevI = i;
 				slash = false;
@@ -226,7 +231,7 @@ public abstract class ITokenizer {
 	}
 
 	@SuppressWarnings("fallthrough")
-	protected static int _removeSlash(CharSequence in, char c, Appendable out, int i, char end) {
+	protected static int _removeSlash(CharSequence in, char c, Appendable out, int i) {
 		try {
 			int v = DESLASHES.getOrDefaultInt(c, 0);
 			if (v == 0) {
@@ -253,12 +258,18 @@ public abstract class ITokenizer {
 					while (WHITESPACE.contains(in.charAt(i))) i++;
 				break;
 				case -6: // oct (000 - 377)
-					char d = in.charAt(i);
-					char e = in.charAt(i+1);
+					char d = i == in.length() ? 0 : in.charAt(i);
 					int xi = c-'0';
-					if (d >= '0' && d <= '7') xi = (xi<<3) + d-'0';
-					if (c <= '3' && e >= '0' && e <= '7') xi = (xi<<3) + e-'0';
-					System.out.println("oct:"+c+d+e+"=>"+xi);
+					if (d >= '0' && d <= '7') {
+						xi = (xi<<3) + d-'0';
+						i++;
+
+						char e = i >= in.length() ? 0 : in.charAt(i);
+						if (c <= '3' && e >= '0' && e <= '7') {
+							xi = (xi<<3) + e-'0';
+							i++;
+						}
+					}
 					out.append((char)xi);
 				break;
 
@@ -617,12 +628,10 @@ public abstract class ITokenizer {
 		return neg ? -v : v;
 	}
 
-	//public static final Pattern ISO8601 = Pattern.compile("(\\d\\d\\d\\d)-(\\d{1,2})(?:-(\\d{1,2})(?:[Tt ](\\d{1,2}):(\\d{1,2}):(\\d{1,2})(?:\\.\\d+)?(?:[zZ]|[+\\-](\\d{1,2})(?::\\d{1,2})?)?)?)?");
-	//private Matcher iso8601Matcher;
-	protected final Word ISO8601Datetime(boolean must) throws ParseException {
-		Ref<String> error = Ref.from();
+	public final Word ISO8601Datetime(boolean must) throws ParseException {
 		final int i = index;
 		CharSequence in = input;
+		Ref<String> error = Ref.from();
 
 		try {
 			char c;

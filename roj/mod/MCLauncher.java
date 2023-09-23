@@ -5,9 +5,10 @@ import roj.archive.zip.ZipArchive;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.Method;
-import roj.asm.tree.attr.AttrCode;
-import roj.asm.tree.insn.InsnList;
+import roj.asm.tree.MethodNode;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.visitor.XAttrCode;
+import roj.asm.visitor.XInsnList;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -1562,17 +1563,16 @@ public class MCLauncher extends JFrame {
 	}
 
 	private static void fixLog4j(File lib) {
-		try {
-			ZipArchive mzf = new ZipArchive(lib);
+		try (ZipArchive mzf = new ZipArchive(lib)) {
 			byte[] b = mzf.get("org/apache/logging/log4j/core/lookup/JndiLookup.class");
 			if (b != null) {
 				ConstantData data = Parser.parseConstants(b);
-				Method mn = data.getUpgradedMethod("lookup");
+				MethodNode mn = data.getMethodObj("lookup");
 
-				AttrCode code = mn.getCode();
-				InsnList insn = code.instructions;
-				if (insn.size() > 3) {
-					code.clear();
+				XAttrCode code = mn.parsedAttr(data.cp, Attribute.Code);
+				XInsnList insn = code.instructions;
+				if (insn.byteLength() > 3) {
+					insn.clear();
 
 					insn.ldc("JNDI功能已关闭");
 					insn.one(Opcodes.ARETURN);
@@ -1585,7 +1585,6 @@ public class MCLauncher extends JFrame {
 					CmdUtil.success("之前修补了Log4j2漏洞");
 				}
 			}
-			mzf.close();
 		} catch (Throwable e) {
 			CmdUtil.warning("无法修补Log4j2漏洞: ", e);
 		}

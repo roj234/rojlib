@@ -2,6 +2,7 @@ package roj.collect;
 
 import roj.util.Helpers;
 
+import java.util.ConcurrentModificationException;
 import java.util.NoSuchElementException;
 
 import static roj.collect.AbstractIterator.*;
@@ -21,24 +22,19 @@ public class MapItr<T extends _Generic_Entry<T>> {
 
 	public final T nextT() {
 		check();
-		if (stage == ENDED) {
-			throw new NoSuchElementException();
-		}
+		if (stage == ENDED) throw new NoSuchElementException();
 		stage = GOTTEN;
 		return obj;
 	}
 
 	private void check() {
 		if (stage <= GOTTEN) {
-			if (!computeNext()) {
-				stage = ENDED;
-			} else {
-				stage = CHECKED;
-			}
+			stage = computeNext() ? CHECKED : ENDED;
 		}
 	}
 
 	public final void remove() {
+		checkConcMod();
 		if (stage != GOTTEN) throw new IllegalStateException();
 		if (remover == null) throw new UnsupportedOperationException();
 		stage = INITIAL;
@@ -53,6 +49,7 @@ public class MapItr<T extends _Generic_Entry<T>> {
 	private int i;
 
 	public void reset() {
+		checkConcMod();
 		if (entries == null) stage = ENDED;
 		else {
 			obj = null;
@@ -75,6 +72,7 @@ public class MapItr<T extends _Generic_Entry<T>> {
 	}
 
 	private boolean computeNext() {
+		checkConcMod();
 		while (true) {
 			if (obj == null) {
 				while (true) {
@@ -87,5 +85,9 @@ public class MapItr<T extends _Generic_Entry<T>> {
 			obj = obj.__next();
 			if (obj != null) return true;
 		}
+	}
+
+	private void checkConcMod() {
+		if (remover != null && remover.__entries() != entries) throw new ConcurrentModificationException();
 	}
 }

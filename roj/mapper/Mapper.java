@@ -406,12 +406,13 @@ public class Mapper extends Mapping {
 			checkAccess(ctx.getMethodConstants(), true, processed, selfName, selfNewName, upgraded);
 			checkAccess(ctx.getFieldConstants(), false, processed, selfName, selfNewName, upgraded);
 
-			SimpleList<MethodNode> methods = ctx.getData().methods;
+			ConstantData data = ctx.getData();
+			SimpleList<MethodNode> methods = data.methods;
 			for (int j = 0; j < methods.size(); j++) {
 				MethodNode mn = methods.get(j);
 				// inheritable package-private method
 				if ((mn.modifier() & (PUBLIC|PROTECTED|PRIVATE|STATIC|FINAL)) == 0) {
-					upgraded.add(new Desc(mn.ownerClass(), mn.name(), mn.rawDesc(), 6));
+					upgraded.add(new Desc(data.name, mn.name(), mn.rawDesc(), 6));
 				}
 			}
 		}
@@ -461,7 +462,7 @@ public class Mapper extends Mapping {
 
 						if (isInherited) {
 							IClass ctx = s2_tmp_byName.get(d1.owner);
-							MoFNode m = ctx.methods().get(ctx.getMethod(d1.name, d1.param));
+							RawNode m = ctx.methods().get(ctx.getMethod(d1.name, d1.param));
 							if ((m.modifier()&5) == 0) m.modifier(m.modifier()|PROTECTED);
 							d1.flags = 0;
 						}
@@ -485,7 +486,7 @@ public class Mapper extends Mapping {
 			if (processed.contains(ref.get(j))) continue;
 			d.read(ref.get(j));
 
-			MoFNode node;
+			RawNode node;
 
 			int k = 0;
 			List<String> parents = selfSupers.getOrDefault(d.owner, Collections.emptyList());
@@ -495,7 +496,7 @@ public class Mapper extends Mapping {
 				//SIG:reflectClassInfo | getMethodInfo
 				IClass aa = s2_tmp_byName.get(d.owner);
 				if (aa != null) {
-					List<MoFNode> methods = Helpers.cast(method?aa.methods():aa.fields());
+					List<RawNode> methods = Helpers.cast(method?aa.methods():aa.fields());
 					for (int i1 = 0; i1 < methods.size(); i1++) {
 						node = methods.get(i1);
 						if (node.rawDesc().equals(d.param) && node.name().equals(d.name)) {
@@ -593,7 +594,7 @@ public class Mapper extends Mapping {
 		List<String> parents = selfSupers.getOrDefault(owner, Collections.emptyList());
 		Desc d = MapUtil.getInstance().sharedDC;
 		for (int i = 0; i < list.size(); i++) {
-			MoFNode m = (MoFNode) list.get(i);
+			RawNode m = (RawNode) list.get(i);
 
 			d.owner = owner;
 			d.name = m.name();
@@ -721,10 +722,10 @@ public class Mapper extends Mapping {
 			for (int j = 0; j < itfs.size(); j++) {
 				String name = itfs.get(j).name().str();
 				if (!parents.contains(name)) {
-					List<MoFNode> nodes = getMethodInfoEx(name);
+					List<RawNode> nodes = getMethodInfoEx(name);
 
 					for (int k = 0; k < nodes.size(); k++) {
-						MoFNode node = nodes.get(k);
+						RawNode node = nodes.get(k);
 						if ((node.modifier() & (PRIVATE| STATIC)) != 0) continue;
 
 						NameAndType key = new NameAndType();
@@ -740,9 +741,9 @@ public class Mapper extends Mapping {
 			int j = 0;
 			String parent = data.parent;
 			while (true) {
-				List<MoFNode> nodes = getMethodInfoEx(parent);
+				List<RawNode> nodes = getMethodInfoEx(parent);
 				for (int k = 0; k < nodes.size(); k++) {
-					MoFNode node = nodes.get(k);
+					RawNode node = nodes.get(k);
 					if ((node.modifier() & (PUBLIC| STATIC)) != PUBLIC) continue;
 
 					if ((nTest.name = node.name()).startsWith("<")) continue;
@@ -794,7 +795,7 @@ public class Mapper extends Mapping {
 		return out;
 	}
 	@Nonnull
-	private List<MoFNode> getMethodInfoEx(String name) {
+	private List<RawNode> getMethodInfoEx(String name) {
 		IClass c = s2_tmp_byName.get(name);
 		if (c == null) c = MapUtil.getInstance().reflectClassInfo(name);
 		if (c != null) return Helpers.cast(c.methods());
@@ -819,19 +820,19 @@ public class Mapper extends Mapping {
 	 */
 	public final void S3_mapSelf(Context ctx, boolean simulate) {
 		ConstantData data = ctx.getData();
-		data.normalize();
+		data.unparsed();
 
 		List<String> parents = selfSupers.getOrDefault(data.name, Collections.emptyList());
 
 		Desc d = MapUtil.getInstance().sharedDC;
 
-		List<? extends MethodNode> methods = data.methods;
+		List<MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
-			RawMethod m = (RawMethod) methods.get(i);
+			MethodNode m = methods.get(i);
 
 			d.owner = data.name;
-			d.name = m.name.str();
-			d.param = m.type.str();
+			d.name = m.name();
+			d.param = m.rawDesc();
 
 			int j = 0;
 			while (true) {
@@ -861,7 +862,7 @@ public class Mapper extends Mapping {
 
 					String newName = entry.getValue();
 					if (!simulate) {
-						m.name = data.cp.getUtf(newName);
+						m.name(newName);
 						d.owner = data.name;
 						// fast-path ONLY
 						selfInherited.put(d.copy(), newName);
@@ -881,13 +882,13 @@ public class Mapper extends Mapping {
 
 		d.param = "";
 
-		List<? extends MoFNode> fields = data.fields;
+		List<? extends RawNode> fields = data.fields;
 		for (int i = 0; i < fields.size(); i++) {
-			RawField f = (RawField) fields.get(i);
+			FieldNode f = (FieldNode) fields.get(i);
 
 			d.owner = data.name;
-			d.name = f.name.str();
-			if (checkFieldType) d.param = f.type.str();
+			d.name = f.name();
+			if (checkFieldType) d.param = f.rawDesc();
 
 			int j = 0;
 			while (true) {
@@ -899,7 +900,7 @@ public class Mapper extends Mapping {
 						stopAnchor.add(d.copy());
 						LOGGER.log(Level.TRACE, "[F-S][{}]: {}.{} {}", null, data.name, d.owner, d.name, d.param);
 					} else {
-						if (!simulate) f.name = data.cp.getUtf(newName);
+						if (!simulate) f.name(newName);
 					}
 					break;
 				}
@@ -968,7 +969,7 @@ public class Mapper extends Mapping {
 		if (dyn.tableIdx >= bs.methods.size())
 			throw new IllegalArgumentException("BootstrapMethod id 不存在: " + (int) dyn.tableIdx + " at class " + data.name);
 
-		BootstrapMethods.BootstrapMethod ibm = bs.methods.get(dyn.tableIdx);
+		BootstrapMethods.Item ibm = bs.methods.get(dyn.tableIdx);
 		if (!ibm.isInvokeMethod()) return;
 
 		Desc d = MapUtil.getInstance().sharedDC;
@@ -1057,7 +1058,7 @@ public class Mapper extends Mapping {
 		mapNodeAndAttrAndParam(U, data);
 		mapAnnotations(U, data.cp, data);
 
-		data.normalize(); // serialize to cp
+		data.unparsed(); // serialize to cp
 		mapConstant(U, data.cp);
 		mapClassAndSuper(U, data);
 	}
@@ -1185,14 +1186,14 @@ public class Mapper extends Mapping {
 	private void mapNodeAndAttrAndParam(MapUtil U, ConstantData data) {
 		String oldCls, newCls;
 
-		List<RawNode> nodes = Helpers.cast(data.fields);
+		List<CNode> nodes = Helpers.cast(data.fields);
 		for (int i = 0; i < nodes.size(); i++) {
-			RawNode field = nodes.get(i);
+			CNode field = nodes.get(i);
 
-			oldCls = field.type.str();
+			oldCls = field.rawDesc();
 			newCls = U.mapFieldType(classMap, oldCls);
 
-			if (newCls != null) field.type = data.cp.getUtf(newCls);
+			if (newCls != null) field.rawDesc(newCls);
 
 			mapSignature(data.cp, field);
 			mapAnnotations(U, data.cp, field);
@@ -1200,12 +1201,12 @@ public class Mapper extends Mapping {
 
 		nodes = Helpers.cast(data.methods);
 		for (int i = 0; i < nodes.size(); i++) {
-			RawNode method = nodes.get(i);
+			CNode method = nodes.get(i);
 
-			oldCls = method.type.str();
+			oldCls = method.rawDesc();
 			newCls = U.mapMethodParam(classMap, oldCls);
 
-			if (!oldCls.equals(newCls)) method.type = data.cp.getUtf(newCls);
+			if (!oldCls.equals(newCls)) method.rawDesc(newCls);
 
 			mapSignature(data.cp, method);
 			mapAnnotations(U, data.cp, method);
@@ -1319,9 +1320,9 @@ public class Mapper extends Mapping {
 		d.param = "";
 		findAndReplace(fieldMap, d, data.fields(), checkFieldType);
 	}
-	private void findAndReplace(FindMap<Desc, String> flags, Desc d, List<? extends MoFNode> nodes, boolean par) {
+	private void findAndReplace(FindMap<Desc, String> flags, Desc d, List<? extends RawNode> nodes, boolean par) {
 		for (int i = 0; i < nodes.size(); i++) {
-			MoFNode n = nodes.get(i);
+			RawNode n = nodes.get(i);
 			d.name = n.name();
 			if (par) d.param = n.rawDesc();
 

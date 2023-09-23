@@ -76,7 +76,7 @@ class UdpChImpl extends MyChannel {
 		} finally {
 			lock.unlock();
 		}
-		key = ch.register(sel, ops, att);
+		key = dc.register(sel, ops, att);
 	}
 
 	@Override
@@ -166,7 +166,7 @@ class UdpChImpl extends MyChannel {
 	}
 
 	protected void read() throws IOException {
-		while (state == OPENED) {
+		while (state == OPENED && dc.isOpen()) {
 			BufferPool bp = alloc();
 			DynByteBuf buf = bp.buffer(true, buffer);
 

@@ -1,5 +1,6 @@
 package roj.text;
 
+import roj.collect.CharMap;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.io.IOUtil;
@@ -165,7 +166,7 @@ public class CharList implements CharSequence, Appender {
 
 		MyHashMap.Entry<MutableInt, MutableInt> entry = new MyHashMap.Entry<>(new MutableInt(), null);
 		while (pos < len) {
-			map.longestIn(this, pos, len, entry);
+			map.match(this, pos, len, entry);
 
 			int len = entry.getKey().getValue();
 			if (len < 0) {
@@ -430,22 +431,23 @@ public class CharList implements CharSequence, Appender {
 	public final void replace(int start, int end, CharSequence s) {
 		checkBounds(start,end,len);
 
-		int l = end - start;
-		if (l > 0) {
-			if (l > s.length()) {
-				int delta = s.length() - l; // < 0
-				System.arraycopy(list, end, list, end + delta, this.len - end);
-				this.len += delta;
-				end = start + s.length();
-			} else if (l < s.length()) {
-				insert(end, s, l, s.length());
-			}
+		int delta = s.length() - (end - start);
+		if (delta != 0) {
+			if (delta > 0) ensureCapacity(len+delta);
+			if (end < len) System.arraycopy(list, end, list, end + delta, len - end);
+		}
 
+		if (s.getClass() == String.class) {
+			s.toString().getChars(0, s.length(), list, start);
+		} else if (s.getClass() == CharList.class) {
+			System.arraycopy(((CharList) s).list, 0, list, start, s.length());
+		} else {
 			char[] c = list;
 			int j = 0;
 			while (start < end)
 				c[start++] = s.charAt(j++);
 		}
+		len += delta;
 	}
 
 	/**
@@ -457,7 +459,7 @@ public class CharList implements CharSequence, Appender {
 
 		int prevI = 0, i = 0;
 		while ((i = indexOf(str, i)) != -1) {
-			if (prevI == 0) out = new CharList(len);
+			if (prevI == 0) out = createReplaceOutputList();
 			out.append(list, prevI, i).append(target);
 
 			i += str.length();
@@ -474,6 +476,9 @@ public class CharList implements CharSequence, Appender {
 
 		return this;
 	}
+
+	private CharList createReplaceOutputList() { return new CharList(Math.max(MathUtils.getMin2PowerOf(len) >> 1, 256)); }
+
 	/**
 	 * 在替换结果中搜索
 	 * "aaaa".replaceInReplaceResult("aa","a") => "a"
@@ -498,17 +503,46 @@ public class CharList implements CharSequence, Appender {
 
 		MyHashMap.Entry<MutableInt, String> entry = new MyHashMap.Entry<>(new MutableInt(), null);
 		while (pos < len) {
-			map.longestIn(this, pos, len, entry);
+			map.match(this, pos, len, entry);
 			int len = entry.getKey().getValue();
 			if (len < 0) {
 				pos++;
 				continue;
 			}
 
-			if (prevI == 0) out = new CharList(this.len);
+			if (prevI == 0) out = createReplaceOutputList();
 			out.append(list, prevI, pos).append(entry.getValue());
 
 			pos += len;
+			prevI = pos;
+		}
+
+		if (prevI == 0) return this;
+		out.append(list, prevI, len);
+
+		ArrayCache.getDefaultCache().putArray(list);
+
+		list = out.list;
+		len = out.len;
+
+		return this;
+	}
+	public final CharList replaceMulti(CharMap<String> map) {
+		CharList out = null;
+		int prevI = 0, i = 0;
+		int pos = 0;
+
+		while (pos < len) {
+			String rpl = map.get(list[pos]);
+			if (rpl == null) {
+				pos++;
+				continue;
+			}
+
+			if (prevI == 0) out = createReplaceOutputList();
+			out.append(list, prevI, pos).append(rpl);
+
+			pos++;
 			prevI = pos;
 		}
 
@@ -529,7 +563,7 @@ public class CharList implements CharSequence, Appender {
 
 		int i = 0;
 		while (m.find(i)) {
-			if (i == 0) out = new CharList(this.len);
+			if (i == 0) out = createReplaceOutputList();
 			out.append(list, i, m.start()).append(literal);
 
 			i = m.end();
@@ -550,7 +584,7 @@ public class CharList implements CharSequence, Appender {
 
 		int i = 0;
 		while (m.find(i)) {
-			if (i == 0) out = new CharList(this.len);
+			if (i == 0) out = createReplaceOutputList();
 			out.append(list, i, m.start()).append(callback.apply(m));
 
 			i = m.end();

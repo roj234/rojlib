@@ -1,16 +1,19 @@
 package roj.lavac.expr;
 
-import roj.asm.tree.insn.LabelInsnNode;
+import roj.asm.type.IType;
 import roj.asm.visitor.Label;
 import roj.collect.Int2IntMap;
+import roj.collect.SimpleList;
 import roj.concurrent.OperationDone;
 import roj.config.ParseException;
 import roj.config.word.Word;
+import roj.lavac.asm.GenericPrimer;
 import roj.lavac.parser.CompileUnit;
 import roj.lavac.parser.JavaLexer;
 import roj.util.Helpers;
 
 import javax.annotation.Nullable;
+import javax.tools.Diagnostic;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -43,21 +46,6 @@ public final class ExprParser {
 		this.depth = depth;
 	}
 
-	/**
-	 * @see #read(CompileUnit, short, LabelInsnNode)
-	 */
-	@Nullable
-	public Expression read(CompileUnit ctx, int exprFlag) throws ParseException {
-		return parse(ctx, exprFlag, null);
-	}
-
-	@SuppressWarnings("fallthrough")
-	@Nullable
-	public Expression read(CompileUnit ctx, int exprFlag, Label ifFalse) throws ParseException {
-		return parse(ctx, exprFlag, ifFalse);
-	}
-
-
 	public static final int
 		STOP_COMMA = 1, SKIP_COMMA = 2,
 		STOP_SEMICOLON = 4,
@@ -65,15 +53,15 @@ public final class ExprParser {
 		STOP_RSB = 16, SKIP_RSB = 32,
 		STOP_RLB = 64,
 		STOP_RMB = 128, SKIP_RMB = 256,
-		ALLOW_SPREAD = 512;
+		ALLOW_SPREAD = 512,
+		_ENV_INVOKE_AFTER = 1024,
+		_ENV_INVOKE = 2048;
 	static final int OP_NEW = 1, OP_DEL = 2, OP_OPTIONAL = 4;
 
-	/**
-	 * ASTNode parser(表达式解析器) <BR>
-	 *
-	 * @throws ParseException if error occurs.
-	 */
-	private Expression parse(CompileUnit ctx, int flag, Label ifFalse) throws ParseException {
+	@Nullable
+	public Expression parse(CompileUnit ctx, int exprFlag) throws ParseException { return parse(ctx, exprFlag, null); }
+	@SuppressWarnings("fallthrough")
+	public Expression parse(CompileUnit ctx, int flag, Label ifFalse) throws ParseException {
 		ArrayList<Expression> tmp = words;
 		if (!tmp.isEmpty() || !ordered.isEmpty() || !sort.isEmpty()) // 使用中
 			return next().parse(ctx, flag, null);
@@ -93,20 +81,96 @@ public final class ExprParser {
 				//	return new Spread(parse(ctx, flag, ifFalse));
 				case inc: case dec: up = new UnaryPre(w.type()); tmp.add(up); break;
 				//case DELETE: opFlag |= OP_DEL; break;
-				case NEW: opFlag |= OP_NEW; break;
+				case NEW:
+					// double[]的部分不受支持
+					// new <double[]>test<int[]>(new int[0], (Object) assign2op((short) 2));
+					// test.<int[]>b();
+					// String[] a = new test<int[]>(null, null).<String[]>a(new int[3]);
+					IType newType = ctx.resolveType(CompileUnit.TYPE_GENERIC|CompileUnit.TYPE_LEVEL2);
+
+					w = wr.next();
+
+					// String[][] array = new String[][0] {};
+					// 从零开始，有数字则继续，至[]结束，往后均为null
+					// 若有容量，则不能手动指定内容
+					if (w.type() == left_m_bracket) {
+						List<Expression> args = Helpers.cast(sort); args.clear();
+						int array = 1;
+						arrayDef: {
+							while (true) {
+								w = wr.next();
+								if (w.type() == right_m_bracket) break; // END OF COUNTED DEFINITION
+
+								wr.retractWord();
+								args.add(parse(ctx, STOP_RMB|SKIP_RMB, null));
+
+								w = wr.next();
+								if (w.type() == left_m_bracket) array++;
+								else break arrayDef; // END OF ARRAY DEFINITION
+							}
+
+							while (true) {
+								w = wr.next();
+								if (w.type() != left_m_bracket) {
+									wr.retractWord();
+									break;
+								}
+								wr.except(right_m_bracket);
+								array++;
+							}
+						}
+
+						newType.setArrayDim(array);
+						if (((GenericPrimer) newType).checkGenericArray()) {
+							ctx.fireDiagnostic(Diagnostic.Kind.ERROR, "creation of generic array");
+						}
+
+						if (!args.isEmpty()) {
+							cur = new ArrayDef(newType, new SimpleList<>(args), true);
+						} else {
+							wr.except(left_l_bracket);
+							while (true) {
+								w = wr.next();
+								if (w.type() == right_l_bracket) break;
+
+								wr.retractWord();
+								args.add(parse(ctx, STOP_RLB|STOP_COMMA|SKIP_COMMA, null));
+							}
+
+							cur = new ArrayDef(newType, new SimpleList<>(args), false);
+						}
+						args.clear();
+					} else if (w.type() == left_s_bracket) {
+						Method m = _invoke(ctx, wr, null);
+						m._type = newType;
+						cur = m;
+					} else {
+						if (w.type() == semicolon) {
+							// 语法糖: new n => 无参数调用
+							Method m = new Method(null, Collections.emptyList());
+							m = _invoke(ctx, wr, null);
+							m._type = newType;
+							cur = m;
+						} else {
+							throw wr.err("unexpected state");
+						}
+						wr.retractWord();
+					}
+				break;
 				default: wr.retractWord(); break;
 			}
 			// endregion
 			// region 能出现多次的"前缀操作" (+a, -a, !a, ~a) 和 只能出现一次的"值加载" (string|int|double|'this'|'arguments'|array_define|object_define|'('|function)
-			while (true) {
+			if (cur == null) while (true) {
 				w = wr.next();
 				switch (w.type()) {
-					case add: case sub: case logic_not: case rev:
+					case add: case sub: case logic_not: case rev: {
 						UnaryPre a = new UnaryPre(w.type());
 						if (up == null) tmp.add(a);
 						else up.setRight(a);
 						up = a;
-						continue;
+					}
+					continue;
 					// constant
 					case Word.CHARACTER: case Word.STRING:
 					case Word.INTEGER: case Word.LONG:
@@ -116,36 +180,50 @@ public final class ExprParser {
 					break;
 					// this
 					case THIS: cur = This.INST; break;
-					// define
-					case left_l_bracket: 
-						// invoke_after_env:
-						// new Object(xxx) {}
-						// invoke_env:
-						// a.b({xxx: yyy})
-						// array_env:
-						// new xxx[] {......}
-						// TODO 
-						break;
-					case left_m_bracket:
-						// for java, no use now (only arrayGet)
+					// define (unknown array)
+					case left_l_bracket:
+						if ((flag & _ENV_INVOKE_AFTER) != 0) {
+							// invoke_after_env:
+							// new Object(xxx) {}
+						}
+						if ((flag & _ENV_INVOKE) != 0) {
+							// invoke_env:
+							// a.b({xxx: yyy})
+						}
+						// todo direct map definition
 						break;
 					case left_s_bracket:
-						// cast_env: (via Flag, report type)
-						// (T) x
-						// lambda_env:
-						// (x,y,z) -> ...
-						// TODO: raw_lambda_env:
-						// x -> ...
 						int pos = wr.index;
 
-						cur = parse(ctx, STOP_RSB|SKIP_RSB, null);
-						if (cur == null) throw wr.err("empty.bracket");
+						notLambda: {
+							List<String> ids = Helpers.cast(sort); ids.clear();
+							while (true) {
+								w = wr.next();
+								if (w.type() != Word.LITERAL) {
+									if (w.type() == right_s_bracket && wr.next().type() == lambda) break;
+									break notLambda;
+								}
+								ids.add(w.val());
+							}
 
+							handleLambda(ctx, wr, ids);
+						}
+						wr.index = pos;
+
+						IType castTarget = ctx.resolveType(CompileUnit.TYPE_GENERIC);
+						Cast a = new Cast(castTarget);
+						if (up == null) tmp.add(a);
+						else up.setRight(a);
+						up = a;
+					break;
+					case Word.LITERAL:
+						pos = wr.index;
+						String id = w.val();
 						if (wr.next().type() == lambda) {
+							// raw_lambda_env:
+							// x -> ...
 							wr.index = pos;
-							// todo invokedynamic
-							cur = Constant.valueOf(ctx.parseLambda());
-							System.out.println(cur);
+							handleLambda(ctx, wr, Collections.singletonList(id));
 						} else {
 							wr.retractWord();
 						}
@@ -156,12 +234,22 @@ public final class ExprParser {
 				break;
 			}
 			// endregion
-			// todo instanceof属于哪种
 			// region 能出现多次的"值加载" (variable|field|array_get|invoke)
+
+			GenericPrimer fnGeneric = null;
 			boolean curIsObj = cur != null;
 			while (true) {
 				w = wr.next();
 				switch (w.type()) {
+					case lss:
+						if (curIsObj || fnGeneric != null) throw wr.err("unexpected state");
+						fnGeneric = (GenericPrimer) ctx.genericForExpr(false);
+
+						// Helpers.<Helpers>nonnull().<int[]>nonnull();
+
+						cur = _dot(cur, wr.except(Word.LITERAL).val(), (opFlag&OP_OPTIONAL));
+						cur = _invoke(ctx, wr, cur);
+					continue;
 					case left_m_bracket: { // a[b]
 						if (!curIsObj) ue(ctx, w.val(), "type.literal");
 						Expression index = parse(ctx, STOP_RMB|SKIP_RMB, null);
@@ -175,30 +263,14 @@ public final class ExprParser {
 						if (w.type() == optional_chaining) opFlag |= OP_OPTIONAL;
 						else opFlag &= ~OP_OPTIONAL;
 					continue;
-						// a.b
-					case Word.LITERAL:
+					case Word.LITERAL: // a.b
 						if (curIsObj) ue(ctx, w.val(), ".");
 						curIsObj = true;
-						cur = new Field(cur, w.val(), (opFlag&OP_OPTIONAL));
+						cur = _dot(cur, w.val(), (opFlag&OP_OPTIONAL));
 					continue;
 					case left_s_bracket: // a(b...)
 						if (!curIsObj) ue(ctx, w.val(), "type.literal");
-						List<Expression> args = Helpers.cast(sort);
-						args.clear();
-
-						while (true) {
-							Expression expr = parse(ctx, STOP_RSB|STOP_COMMA|SKIP_COMMA|ALLOW_SPREAD, null);
-							if (expr == null) {
-								wr.except(right_s_bracket, ")");
-								break;
-							}
-							args.add(expr);
-						}
-
-						cur = new Method(cur, args.isEmpty() ? Collections.emptyList() : new ArrayList<>(args), (opFlag&OP_NEW) != 0);
-						args.clear();
-
-						opFlag &= ~(OP_NEW);
+						cur = _invoke(ctx, wr, cur);
 					continue;
 					default: wr.retractWord(); break;
 				}
@@ -208,19 +280,9 @@ public final class ExprParser {
 
 			// set
 			if (up != null) {
-				if ((opFlag & (OP_DEL|OP_NEW)) != 0) throw wr.err("not_supported:"+opFlag);
-				if (cur == null) throw wr.err("missing_operand:"+up);
-
 				String code = up.setRight(cur);
 				if (code != null) throw wr.err(code);
 				cur = tmp.get(tmp.size()-1);
-			}
-
-			if ((opFlag & OP_NEW) != 0) {
-				// 语法糖: new n => 无参数调用
-				// new 和unary prefix不能共存。
-				if (cur == null) throw wr.err("missing_operand:new");
-				cur = new Method(cur, Collections.emptyList(), true);
 			}
 
 			// region 赋值运算符 | 后缀自增/自减
@@ -235,7 +297,6 @@ public final class ExprParser {
 				case lsh_assign: case rsh_assign: case rsh_unsigned_assign: {
 					// 没写单独的不继承Load的Expr，检查opFlag好了
 					if ((opFlag&(OP_NEW|OP_DEL))!=0) throw wr.err("invalid_left_value");
-					if (up != null) throw wr.err("invalid_left_value");
 					if (!(cur instanceof LoadExpression)) throw wr.err("invalid_left_value");
 
 					short vtype = w.type();
@@ -253,7 +314,7 @@ public final class ExprParser {
 				case dec:
 					if (!(cur instanceof LoadExpression)) throw wr.err("expecting_variable:"+w.val());
 					cur = new UnaryPost(w.type(), cur);
-					break;
+				break;
 				default: wr.retractWord(); break;
 			}
 			// endregion
@@ -341,19 +402,27 @@ public final class ExprParser {
 				}
 
 				cur = new Binary(((BinaryOpr) op).op, l, r);
-				tmp.set(v-1, cur.compress());
+				tmp.set(v-1, cur.resolve());
 			}
 
 			((Binary) cur).setTarget(ifFalse);
-			cur = cur.compress();
+			cur = cur.resolve();
 
 			tokens.clear();
 			sort.clear();
 		} else {
-			cur = tmp.isEmpty() ? null : tmp.get(0).compress();
+			cur = tmp.isEmpty() ? null : tmp.get(0).resolve();
 		}
 
 		tmp.clear();
+
+		// 优先级也不低
+		// if ("5"+3 instanceof String ? "5"+3 instanceof String : "5"+3 instanceof String);
+		if (w.type() == INSTANCEOF) {
+			// no generic
+			IType targetType = ctx.resolveType(0);
+			cur = new InstanceOf(targetType.rawType(), cur);
+		}
 
 		if (w.type() == comma && (flag&STOP_COMMA) == 0) {
 			Chained cd = new Chained();
@@ -394,10 +463,32 @@ public final class ExprParser {
 			wr.except(colon, ":");
 			Expression right = parse(ctx, flag, null);
 			if (right == null) ue(ctx, "empty.trinary");
-			cur = new TripleIf(cur, middle, right);
+			cur = new Trinary(cur, middle, right);
 		}
 
 		return cur;
+	}
+
+	private static DotGet _dot(Expression e, String name, int flag) { return e instanceof DotGet ? ((DotGet) e).add(name, flag) : new DotGet(e, name, flag); }
+	private Method _invoke(CompileUnit ctx, JavaLexer wr, Expression e) throws ParseException {
+		List<Expression> args = Helpers.cast(sort); args.clear();
+
+		while (true) {
+			Expression expr = parse(ctx, STOP_RSB|STOP_COMMA|SKIP_COMMA|ALLOW_SPREAD|_ENV_INVOKE, null);
+			if (expr == null) {
+				wr.except(right_s_bracket, ")");
+				break;
+			}
+			args.add(expr);
+		}
+
+		Method m = new Method(e, args.isEmpty() ? Collections.emptyList() : new SimpleList<>(args));
+		args.clear();
+		return m;
+	}
+
+	private void handleLambda(CompileUnit ctx, JavaLexer wr, List<String> id) {
+
 	}
 
 	public void reset() {

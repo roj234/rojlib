@@ -24,49 +24,44 @@ public final class CstTop extends Constant {
 	}
 
 	@Override
-	public void write(DynByteBuf w) {
-		// no-op so that needn't filter in ConstantPool#write
-		if (type != _TOP_) throw new IllegalStateException("Unexpected stored in");
+	void write(DynByteBuf w) {
+		// no-op so needn't 'check&skip' in ConstantPool#write
+		if (type != _TOP_) throw new IllegalStateException();
 	}
 
-	public CstTop set(CharSequence s) {
+	final CstTop set(CharSequence s) {
 		strVal = s;
 		type = UTF;
 		hash = 1 + s.hashCode();
 		return this;
 	}
-
-	public CstTop set(int i) {
+	final CstTop set(int i) {
 		intVal = i;
 		type = INT;
 		hash = ~i;
 		return this;
 	}
-
-	public CstTop set(float data) {
+	final CstTop set(float data) {
 		int i = Float.floatToRawIntBits(data);
 		intVal = i;
 		type = FLOAT;
 		hash = i;
 		return this;
 	}
-
-	public CstTop set(long l) {
+	final CstTop set(long l) {
 		longVal = l;
 		type = LONG;
 		hash = (int) ~(l ^ (l >>> 32));
 		return this;
 	}
-
-	public CstTop set(double d) {
+	final CstTop set(double d) {
 		long l = Double.doubleToRawLongBits(d);
 		longVal = l;
 		type = DOUBLE;
 		hash = (int) (l ^ (l >>> 32));
 		return this;
 	}
-
-	public CstTop set(CstUTF name, CstUTF type) {
+	final CstTop set(CstUTF name, CstUTF type) {
 		this.type = NAME_AND_TYPE;
 
 		strVal = name.str();
@@ -74,8 +69,7 @@ public final class CstTop extends Constant {
 		hash = 31 * name.hashCode() + type.hashCode();
 		return this;
 	}
-
-	public CstTop set(byte cat, CstUTF value) {
+	final CstTop set(byte cat, CstUTF value) {
 		type = cat;
 
 		strVal = value.str();
@@ -83,7 +77,7 @@ public final class CstTop extends Constant {
 		return this;
 	}
 
-	public CstTop set(byte cat, CstClass clazz, CstNameAndType desc) {
+	final CstTop set(byte cat, CstClass clazz, CstNameAndType desc) {
 		type = cat;
 
 		strVal = clazz.name().str();
@@ -92,8 +86,7 @@ public final class CstTop extends Constant {
 		hash = 31 * (31 * desc.hashCode() + clazz.name().hashCode()) + cat;
 		return this;
 	}
-
-	public CstTop set(int kind, CstRef ref) {
+	final CstTop set(int kind, CstRef ref) {
 		type = METHOD_HANDLE;
 
 		intVal = kind;
@@ -103,8 +96,7 @@ public final class CstTop extends Constant {
 		hash = ref.hashCode() << 3 | kind;
 		return this;
 	}
-
-	public CstTop set(byte cat, int table, CstNameAndType desc) {
+	final CstTop set(byte cat, int table, CstNameAndType desc) {
 		type = cat;
 
 		intVal = table;
@@ -115,7 +107,7 @@ public final class CstTop extends Constant {
 	}
 
 	@Override
-	public boolean equals(Object o) {
+	public final boolean equals(Object o) {
 		if (o == this) return true;
 		if (!(o instanceof Constant)) return false;
 
@@ -159,17 +151,9 @@ public final class CstTop extends Constant {
 	}
 
 	@Override
-	public int hashCode() {
-		return hash;
-	}
-
+	public final int hashCode() { return hash; }
 	@Override
-	public byte type() {
-		return Constant._TOP_;
-	}
-
+	public final byte type() { return Constant._TOP_; }
 	@Override
-	public final Constant clone() {
-		return this;
-	}
+	public final Constant clone() { return this == TOP ? this : super.clone();  }
 }

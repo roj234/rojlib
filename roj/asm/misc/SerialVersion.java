@@ -1,9 +1,9 @@
 package roj.asm.misc;
 
 import roj.asm.cst.CstLong;
-import roj.asm.tree.Field;
+import roj.asm.tree.FieldNode;
 import roj.asm.tree.IClass;
-import roj.asm.tree.MoFNode;
+import roj.asm.tree.RawNode;
 import roj.asm.tree.attr.ConstantValue;
 import roj.asm.type.Type;
 import roj.collect.BSLowHeap;
@@ -43,7 +43,7 @@ public class SerialVersion {
 		BSLowHeap<Item> methods = new BSLowHeap<>(ITEM_SORTER);
 
 		boolean clInit = false;
-		for (MoFNode node : cz.methods()) {
+		for (RawNode node : cz.methods()) {
 			String name = node.name();
 			if ("<clinit>".equals(name)) {
 				clInit = true;
@@ -71,7 +71,7 @@ public class SerialVersion {
 		}
 
 		BSLowHeap<Item> fields = new BSLowHeap<>(ITEM_SORTER);
-		for (MoFNode node : cz.fields()) {
+		for (RawNode node : cz.fields()) {
 			access = node.modifier();
 			if ((access & PRIVATE) == 0 || (access & (STATIC | TRANSIENT)) == 0) {
 				access &= (PUBLIC | PROTECTED | STATIC | FINAL | VOLATILE);
@@ -121,7 +121,7 @@ public class SerialVersion {
 			svuid = svuid << 8 | (long) (w.list[i] & 255);
 		}
 
-		Field fl = new Field(STATIC | FINAL, "serialVersionUID", Type.std(Type.LONG));
+		FieldNode fl = new FieldNode(STATIC | FINAL, "serialVersionUID", Type.std(Type.LONG));
 		fl.putAttr(new ConstantValue(new CstLong(svuid)));
 		cz.fields().add(Helpers.cast(fl));
 		return true;

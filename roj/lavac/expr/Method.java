@@ -1,8 +1,8 @@
 package roj.lavac.expr;
 
-import roj.asm.type.Type;
+import roj.asm.type.IType;
 import roj.config.word.NotStatementException;
-import roj.lavac.parser.MethodPoetL;
+import roj.lavac.parser.MethodWriterL;
 
 import java.util.List;
 
@@ -12,31 +12,30 @@ import java.util.List;
  * @author Roj233
  * @since 2020/10/13 22:17
  */
-public final class Method implements Expression {
+public class Method implements Expression {
 	Expression func;
 	List<Expression> args;
 
-	int flag;
-	static final byte NEW = 1, DYNAMIC = 2, SPREAD = 4;
+	IType _type;
 
-	public Method(Expression line, List<Expression> args, boolean isNew) {
+	public Method(Expression line, List<Expression> args) {
+		// todo check map definition
 		this.func = line;
 		this.args = args;
-		this.flag = isNew ? NEW : 0;
 	}
 
 	@Override
-	public void write(MethodPoetL tree, boolean noRet) throws NotStatementException {
+	public void write(MethodWriterL cw, boolean noRet) throws NotStatementException {
 
 	}
 
 	@Override
-	public Type type() {
-		return null;
+	public IType type() {
+		return _type == null ? func.type() : _type;
 	}
 
 	@Override
-	public boolean isEqual(Expression left) {
+	public boolean equals(Object left) {
 		return false;
 	}
 }

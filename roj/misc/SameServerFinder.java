@@ -16,7 +16,7 @@ import roj.net.ch.handler.VarintSplitter;
 import roj.net.ch.osi.ClientLaunch;
 import roj.text.CharList;
 import roj.ui.CmdUtil;
-import roj.ui.EasyProgressBar;
+import roj.ui.ProgressBar;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -37,7 +37,7 @@ public class SameServerFinder {
 
 	public static void main(String[] args) {
 		SelectorLoop loop = new SelectorLoop(null, "ServerFinder", 4);
-		EasyProgressBar bar = new EasyProgressBar("端口");
+		ProgressBar bar = new ProgressBar("端口");
 		bar.setUnit("");
 		if (args.length == 0) {
 			try {
@@ -58,7 +58,7 @@ public class SameServerFinder {
 			}
 			System.out.println("当前IP:"+Arrays.toString(ip));
 			for (int port = 1000; port < 65536; port++) {
-				bar.setPercentStr(Integer.toString(port));
+				bar.setPrefix(Integer.toString(port));
 				bar.update((port-1000)/64536f, 1);
 				try {
 					conn.acquire();

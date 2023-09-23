@@ -13,12 +13,5 @@ import java.lang.annotation.Target;
 @Target({ElementType.METHOD, ElementType.FIELD})
 public @interface Copy {
 	boolean map() default false;
-
-	boolean unique() default false;
-
 	String value() default "";
-
-	String staticInitializer() default "";
-
-	boolean targetIsFinal() default false;
 }

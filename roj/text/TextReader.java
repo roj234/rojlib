@@ -134,7 +134,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 
 	private void fillBuffer(int i) {
 		i -= off;
-		if (i < 0) throw new IllegalStateException("Buffer flushed at " + off + " and you're getting " + i);
+		if (i < 0) throw new IllegalStateException("Buffer flushed at ["+off+"+"+len+"] and you're getting " + (i+off));
 
 		int toRead = i-len;
 		if (toRead > 0 && eof==0) {
@@ -333,9 +333,9 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 				char c = buf[i];
 				if (c == '\r') {
 					if (++i == len) {
-						int r = fill(buf, len, 2);
-						if (r > 0) len += r;
-						else break;
+						// add before and continue;
+						off = i-2;
+						break;
 					}
 
 					if (buf[i] != '\n') { i--; continue; }
@@ -355,7 +355,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 			}
 
 			off = 0;
-			len = fill(buf, 0, buf.length-2);
+			len = fill(buf, 0, buf.length);
 			if (len <= 0) return append;
 		}
 	}

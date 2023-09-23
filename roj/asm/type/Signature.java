@@ -39,14 +39,12 @@ public class Signature extends Attribute {
 	public static IType placeholder() { return EmptyClass.I; }
 
 	public Signature(int type) {
-		super("Signature");
 		this.typeParams = Collections.emptyMap();
 		this.values = Collections.emptyList();
 		this.type = (byte) type;
 	}
 
 	public Signature(Map<String, List<IType>> typeParams, List<IType> value, boolean isMethod, List<IType> Throws) {
-		super("Signature");
 		this.typeParams = typeParams;
 		this.values = value;
 		this.type = (isMethod ? METHOD : (value.isEmpty() ? FIELD : CLASS));
@@ -124,6 +122,9 @@ public class Signature extends Attribute {
 
 		return sb.toString();
 	}
+
+	@Override
+	public String name() { return "Signature"; }
 
 	@Override
 	protected void toByteArray1(DynByteBuf w, ConstantPool cp) {

@@ -85,8 +85,8 @@ public final class VarintSplitter implements ChannelHandler {
 					ctx.channelRead(data);
 				} finally {
 					if (data.capacity() > 0) {
+						if (data.rIndex < pos) System.err.println("[Warn] Fixed packet("+len+") rests " + data.dump());
 						data.wIndex(lim);
-						if (data.rIndex < pos) System.err.println("not fully process packet, remains " + data.dump());
 						data.rIndex = pos;
 					}
 				}

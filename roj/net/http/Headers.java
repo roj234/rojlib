@@ -184,8 +184,8 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 			String key = dedup.find(tmp).toString();
 
-			if (buf.get(++i) != ' ') throw new IllegalArgumentException("header+"+i+": 键未以': '结束");
-			++i;
+			// a:b也可行
+			if (buf.get(++i) == ' ') ++i;
 
 			tmp.clear();
 			int prevI = i;
@@ -455,19 +455,18 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 	public final void encode(Appendable sb) {
 		try {
-			for (Map.Entry<CharSequence, String> entry : entrySet()) {
-				sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\r\n");
+			for (Iterator<Map.Entry<CharSequence, String>> it = entrySet().iterator(); it.hasNext(); ) {
+				E entry = (E) it.next();
+				h(sb, entry, entry.getValue());
 
-				E e = (E) entry;
-				List<String> all = e.all;
-				for (int i = 0; i < all.size(); i++) {
-					sb.append(entry.getKey()).append(": ").append(all.get(i)).append("\r\n");
-				}
+				List<String> all = entry.all;
+				for (int i = 0; i < all.size(); i++) h(sb, entry, all.get(i));
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
 	}
+	private static Appendable h(Appendable sb, E entry, String value) throws IOException { return sb.append(entry.getKey()).append(value.isEmpty()?":":": ").append(value).append("\r\n"); }
 
 	private static void checkKey(CharSequence key) {
 		for (int i = 0; i < key.length(); i++) {

@@ -36,7 +36,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 
 		Entry(char c, Entry<V> entry) {
 			super(c);
-			this.length = entry.length;
+			this.mask = entry.mask;
 			this.size = entry.size;
 			this.entries = entry.entries;
 			this.value = entry.value;
@@ -368,7 +368,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	}
 	public Map.Entry<MutableInt, V> longestMatches(CharSequence s, int i, int len) {
 		MyHashMap.Entry<MutableInt, V> entry = new MyHashMap.Entry<>(new MutableInt(), null);
-		longestIn(s,i,len,entry);
+		match(s,i,len,entry);
 		return entry.getKey().getValue() < 0 ? null : entry;
 	}
 	/**
@@ -380,11 +380,12 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	 * s="abcdef" 返回 6, feed: 6=B
 	 */
 	@SuppressWarnings("unchecked")
-	public int longestIn(CharSequence s, int i, int len, MyHashMap.Entry<MutableInt, V> feed) {
+	public int match(CharSequence s, int i, int len, MyHashMap.Entry<MutableInt, V> feed) {
 		feed.k.setValue(-1);
 
 		int d = 0;
 
+		//root.initFastMatcher();
 		Entry<V> entry = root;
 		while (i < len) {
 			entry = (Entry<V>) entry.getChild(s.charAt(i));

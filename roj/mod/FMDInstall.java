@@ -20,7 +20,7 @@ import roj.mod.fp.WorkspaceBuilder;
 import roj.mod.mapping.MappingFormat;
 import roj.text.TextUtil;
 import roj.ui.CmdUtil;
-import roj.ui.EasyProgressBar;
+import roj.ui.ProgressBar;
 import roj.ui.UIUtil;
 import roj.util.ByteList;
 
@@ -182,7 +182,7 @@ public class FMDInstall {
 	}
 
 	private static void copyLibrary(File baseDir, Collection<String> lib, WorkspaceBuilder proc) throws IOException {
-		EasyProgressBar bar = new EasyProgressBar("复制库文件");
+		ProgressBar bar = new ProgressBar("复制库文件");
 		int finished = 0;
 		int total = lib.size();
 

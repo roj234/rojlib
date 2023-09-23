@@ -1,5 +1,8 @@
 package roj.text;
 
+import roj.config.ParseException;
+import roj.config.word.ITokenizer;
+import roj.config.word.Tokenizer;
 import roj.io.IOUtil;
 
 import javax.annotation.Nullable;
@@ -10,6 +13,9 @@ import java.util.TimeZone;
  * @since 2021/6/16 2:48
  */
 public class ACalendar {
+	public static ACalendar GMT() { return new ACalendar(TimeZone.getTimeZone("GMT")); }
+	public static ACalendar Local() { return new ACalendar(TimeZone.getDefault()); }
+
 	public ACalendar copy() { return new ACalendar(zone); }
 
 	public static final int YEAR = 0, MONTH = 1, DAY = 2, HOUR = 3, MINUTE = 4, SECOND = 5, MILLISECOND = 6, DAY_OF_WEEK = 7, REN_YEAR = 8, TOTAL = 9;
@@ -272,9 +278,28 @@ public class ACalendar {
 		ACalendar cal = new ACalendar();
 		return cal.format("Y-m-d H:i:s.x", time, new CharList()).append(" (").append(cal.zone.getDisplayName()).append(')').toStringAndFree(); }
 
+	/**
+	 * parse ISO8601 timestamp
+	 * 使用这个函数是为了支持可选的前导零
+	 * @see roj.config.word.ITokenizer#ISO8601Datetime
+	 * @param seq "2020-07-14T07:59:08+08:00"
+	 * @return unix timestamp
+	 */
+	public static long parseISO8601Datetime(CharSequence seq) {
+		ITokenizer tokenizer = new Tokenizer();
+		try {
+			return tokenizer.init(seq).ISO8601Datetime(true).asLong();
+		} catch (ParseException e) {
+			throw new IllegalArgumentException(e.toString());
+		}
+	}
+	/**
+	 * parse RFC like timestamp
+	 * @param seq "Tue, 25 Feb 2022 21:48:10 GMT"
+	 * @return unix timestamp
+	 */
 	@SuppressWarnings("fallthrough")
 	public static long parseRFCDate(CharSequence seq) {
-		// Tue, 25 Feb 2022 21:48:10 GMT
 		String str = seq.subSequence(0, 3).toString();
 		String[] x = UTCWEEK;
 		int week = 0;

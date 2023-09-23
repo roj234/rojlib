@@ -4,7 +4,7 @@ import roj.asm.misc.ReflectClass;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.IClass;
-import roj.asm.tree.MoFNode;
+import roj.asm.tree.RawNode;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.Context;
@@ -190,7 +190,7 @@ public final class MapUtil {
 	}
 
 	public interface NodeResolver {
-		void getField(IClass owner, MoFNode node);
+		void getField(IClass owner, RawNode node);
 
 		void arrayLength();
 
@@ -227,7 +227,7 @@ public final class MapUtil {
 				while (i-- >= 1) {
 					Object o = list.get(i--);
 					if (o != null) {
-						resolver.getField((IClass) list.get(i), (MoFNode) o);
+						resolver.getField((IClass) list.get(i), (RawNode) o);
 					} else {
 						resolver.arrayLength();
 					}
@@ -322,7 +322,7 @@ public final class MapUtil {
 		ArrayList<Worker> wait = new ArrayList<>(ctxs.size());
 		for (int i = 0; i < ctxs.size(); i++) {
 			Worker w = new Worker(ctxs.get(i), action);
-			TaskPool.CpuMassive().pushTask(w);
+			TaskPool.Common().pushTask(w);
 			wait.add(w);
 		}
 

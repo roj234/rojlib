@@ -1,8 +1,9 @@
 package roj.asm.tree.attr;
 
 import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstUTF;
 import roj.asm.type.Signature;
+import roj.asm.visitor.XAttrCode;
+import roj.collect.IntBiMap;
 import roj.util.DynByteBuf;
 import roj.util.TypedName;
 
@@ -11,51 +12,46 @@ import roj.util.TypedName;
  * @since 2021/5/26 23:26
  */
 public abstract class Attribute {
+	public static final IntBiMap<String> NAMED_ID = new IntBiMap<>();
+	public static <T> TypedName<T> createAttributeName(String name) {
+		NAMED_ID.putInt(NAMED_ID.size(), name);
+		return new TypedName<>(name);
+	}
+
 	public static final TypedName<TypeAnnotations>
-		RtTypeAnnotations = new TypedName<>("RuntimeVisibleTypeAnnotations"),
-		ClTypeAnnotations = new TypedName<>("RuntimeInvisibleTypeAnnotations");
-
+		RtTypeAnnotations = createAttributeName("RuntimeVisibleTypeAnnotations"),
+		ClTypeAnnotations = createAttributeName("RuntimeInvisibleTypeAnnotations");
 	public static final TypedName<Annotations>
-		RtAnnotations = new TypedName<>("RuntimeVisibleAnnotations"),
-		ClAnnotations = new TypedName<>("RuntimeInvisibleAnnotations");
-
+		RtAnnotations = createAttributeName("RuntimeVisibleAnnotations"),
+		ClAnnotations = createAttributeName("RuntimeInvisibleAnnotations");
 	public static final TypedName<ParameterAnnotations>
-		RtParameterAnnotations = new TypedName<>("RuntimeVisibleParameterAnnotations"),
-		ClParameterAnnotations = new TypedName<>("RuntimeInvisibleParameterAnnotations");
-
-	public static final TypedName<Signature> SIGNATURE = new TypedName<>("Signature");
-
+		RtParameterAnnotations = createAttributeName("RuntimeVisibleParameterAnnotations"),
+		ClParameterAnnotations = createAttributeName("RuntimeInvisibleParameterAnnotations");
+	public static final TypedName<Signature> SIGNATURE = createAttributeName("Signature");
 	// class
-	public static final TypedName<AttrRecord> Record = new TypedName<>("Record");
-	public static final TypedName<InnerClasses> InnerClasses = new TypedName<>("InnerClasses");
-	public static final TypedName<AttrModule> Module = new TypedName<>("Module");
-	public static final TypedName<AttrModulePackages> ModulePackages = new TypedName<>("ModulePackages");
-	public static final TypedName<AttrClassRef> ModuleMainClass = new TypedName<>("ModuleMainClass");
-	public static final TypedName<AttrClassRef> NestHost = new TypedName<>("NestHost");
-	public static final TypedName<AttrStringList> PermittedSubclasses = new TypedName<>("PermittedSubclasses");
-	public static final TypedName<AttrStringList> NestMembers = new TypedName<>("NestMembers");
-	public static final TypedName<AttrUTF> SourceFile = new TypedName<>("SourceFile");
-	public static final TypedName<BootstrapMethods> BootstrapMethods = new TypedName<>("BootstrapMethods");
-	public static final TypedName<EnclosingMethod> EnclosingMethod = new TypedName<>("EnclosingMethod");
-
+	public static final TypedName<AttrRecord> Record = createAttributeName("Record");
+	public static final TypedName<InnerClasses> InnerClasses = createAttributeName("InnerClasses");
+	public static final TypedName<AttrModule> Module = createAttributeName("Module");
+	public static final TypedName<AttrClassList> ModulePackages = createAttributeName("ModulePackages");
+	public static final TypedName<AttrString> ModuleMainClass = createAttributeName("ModuleMainClass");
+	public static final TypedName<AttrString> NestHost = createAttributeName("NestHost");
+	public static final TypedName<AttrClassList> PermittedSubclasses = createAttributeName("PermittedSubclasses");
+	public static final TypedName<AttrClassList> NestMembers = createAttributeName("NestMembers");
+	public static final TypedName<AttrString> SourceFile = createAttributeName("SourceFile");
+	public static final TypedName<BootstrapMethods> BootstrapMethods = createAttributeName("BootstrapMethods");
+	public static final TypedName<EnclosingMethod> EnclosingMethod = createAttributeName("EnclosingMethod");
 	// method
-	public static final TypedName<AttrCode> Code = new TypedName<>("Code");
-	public static final TypedName<MethodParameters> MethodParameters = new TypedName<>("MethodParameters");
-	public static final TypedName<AttrStringList> Exceptions = new TypedName<>("Exceptions");
-	public static final TypedName<AnnotationDefault> AnnotationDefault = new TypedName<>("AnnotationDefault");
-
+	public static final TypedName<XAttrCode> Code = createAttributeName("Code");
+	public static final TypedName<MethodParameters> MethodParameters = createAttributeName("MethodParameters");
+	public static final TypedName<AttrClassList> Exceptions = createAttributeName("Exceptions");
+	public static final TypedName<AnnotationDefault> AnnotationDefault = createAttributeName("AnnotationDefault");
 	// field
-	public static final TypedName<ConstantValue> ConstantValue = new TypedName<>("ConstantValue");
+	public static final TypedName<ConstantValue> ConstantValue = createAttributeName("ConstantValue");
 
-
-
-	protected Attribute(String name) { this.name = name; }
-	Attribute(CstUTF name) { this.name = name; }
-	final Object name;
-	public String name() { return name.toString(); }
+	public abstract String name();
 
 	public void toByteArray(DynByteBuf w, ConstantPool pool) {
-		w.putShort(pool.getUtfId(name.toString())).putInt(0);
+		w.putShort(pool.getUtfId(name())).putInt(0);
 		int i = w.wIndex();
 		toByteArray1(w, pool);
 		w.putInt(i-4, w.wIndex()-i);

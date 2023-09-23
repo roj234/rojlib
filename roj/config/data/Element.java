@@ -80,9 +80,9 @@ public class Element extends Node {
 	@Override
 	public List<Node> _childNodes() {
 		if (!(children instanceof SimpleList)) {
-			SimpleList<Node> s = new SimpleList<>(children);
+			SimpleList<Node> s = SimpleList.withCapacityType(children.size(), 2);
+			s.addAll(children);
 			children = s;
-			s.capacityType = 2;
 		}
 		return children;
 	}

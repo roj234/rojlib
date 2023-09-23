@@ -5,7 +5,7 @@ import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.concurrent.task.ITask;
 import roj.io.FastFailException;
-import roj.ui.EasyProgressBar;
+import roj.ui.ProgressBar;
 import roj.util.ByteList;
 
 import java.util.List;
@@ -287,12 +287,11 @@ public class PlainPassRecover implements Macros, ITask {
 		int total;
 		boolean found, kill;
 		Thread thread;
-		EasyProgressBar ep = new EasyProgressBar("");
+		ProgressBar ep = new ProgressBar("");
 
 		Manager(Cipher keys, byte[] charset) {
 			super(keys, charset);
 			ep.setUnit("H");
-			ep.setBarInterval(200);
 		}
 
 		@Override
@@ -304,7 +303,7 @@ public class PlainPassRecover implements Macros, ITask {
 					sum += delta;
 					LockSupport.parkNanos(50_000_000);
 					if (found) break;
-					ep.setPercentStr(sum + "/" + total);
+					ep.setPrefix(sum + "/" + total);
 					ep.update(sum / (double)total, (int) delta);
 					if (Thread.interrupted()) {
 						sum = 0;

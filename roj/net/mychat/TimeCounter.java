@@ -14,7 +14,7 @@ public class TimeCounter {
 	}
 
 	// per second
-	public float plus() {
+	public float sum() {
 		long t = System.currentTimeMillis();
 		if (t - last > reset) {
 			count = 1;

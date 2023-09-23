@@ -17,19 +17,19 @@ import static roj.reflect.FieldAccessor.u;
 final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback {
 	PromiseImpl() {}
 	PromiseImpl(TaskHandler pool, Consumer<PromiseCallback> cb) {
-		this.executor = pool;
-		if (pool == null) head(cb);
-		else pool.pushTask(() -> head(cb));
+		executor = pool;
+		if (cb != null) {
+			if (pool == null) head(cb);
+			else pool.pushTask(() -> head(cb));
+		}
 	}
 	private void head(Consumer<PromiseCallback> handler) {
 		try {
 			handler.accept(this);
-			if ((_state&TASK_COMPLETE) == 0) resolve(null);
+			if (_state == PENDING) resolve(null);
 		} catch (Throwable e) {
 			reject(e);
 		}
-
-		_apply();
 	}
 
 
@@ -67,7 +67,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 		}
 
 		if (fail != null) catch_(fail);
-		if ((_state & TASK_COMPLETE) != 0) _apply();
+		else _apply();
 
 		return p;
 	}
@@ -86,7 +86,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 			handler_fail = fn;
 		}
 
-		if ((_state & TASK_COMPLETE) != 0) _apply();
+		_apply();
 		return this;
 	}
 	@Override
@@ -101,51 +101,52 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 	}
 
 	private void _apply() {
+		if ((_state&TASK_COMPLETE) == 0) return;
+
 		int state = 0;
 
-		if (invokeOnce(INVOKE_HANDLER)) {
-			if ((_state&TASK_SUCCESS) != 0) {
-				if (handler_success == null) {
-					if ((_state&CALLBACK) != 0 && u.compareAndSwapInt(next, state_offset, WAIT, _state)) {
+		if ((_state&TASK_SUCCESS) != 0) {
+			if (handler_success == null) {
+				if ((_state&CALLBACK) != 0 && u.compareAndSwapInt(next, state_offset, WAIT, _state)) {
+					removeFlag(CALLBACK);
+
+					synchronized (this) {
 						next._val = _val;
 						next._apply();
-						removeFlag(CALLBACK);
-						next = null;
+						//next = null;
 					}
-
-					removeFlag(INVOKE_HANDLER);
-				} else {
-					state = 1;
 				}
-			} else {
-				Object val = _val;
-				PromiseImpl<?> p = this;
-				state = 2;
+			} else if (invokeOnce(INVOKE_HANDLER)) {
+				state = 1;
+			}
+		} else if (invokeOnce(INVOKE_HANDLER)) {
+			Object val = _val;
+			PromiseImpl<?> p = this;
+			state = 2;
 
-				// 如果和你想的不一样... see MDN
-				while (p != null) {
-					fail:
-					if (p.handler_fail != null) {
-						try {
-							Function<Object,Object> fn = Helpers.cast(p.handler_fail);
-							Object ret = fn.apply(val);
-							state = 0;
-							if (ret == IntMap.UNDEFINED) break fail;
+			// 如果和你想的不一样... see MDN
+			while (p != null) {
+				fail:
+				if (p.handler_fail != null) {
+					try {
+						Function<Object,Object> fn = Helpers.cast(p.handler_fail);
+						Object ret = fn.apply(val);
+						state = 0;
+						if (ret == IntMap.UNDEFINED) break fail;
 
-							// todo concurrent bug?
-							p._state &= CALLBACK;
-							p.resolve(ret);
-							p._apply();
-							if (p == this) return;
-							break;
-						} catch (Throwable e) {
-							val = e;
-						}
+						// todo concurrent bug?
+						p._state &= CALLBACK;
+						p.resolve(ret);
+						p._apply();
+						if (p == this) return;
+						break;
+					} catch (Throwable e) {
+						val = e;
 					}
-
-					p.reject(val);
-					p = p.next;
 				}
+
+				p.reject(val);
+				p = p.next;
 			}
 		}
 
@@ -160,9 +161,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 		if (state == 1) {
 			if (executor == null) execute();
 			else executor.pushTask(this);
-		}
-
-		if (state == 2) {
+		} else if (state == 2) {
 			Object v = _val;
 			throw new RuntimeException("Uncaught in "+this, v instanceof Throwable ? (Throwable) v : null);
 		}
@@ -192,9 +191,6 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 		} catch (Throwable e) {
 			p.reject(e);
 		}
-
-		// async
-		if ((p._state & TASK_COMPLETE) != 0) p._apply();
 	}
 
 	// region PromiseValue
@@ -241,7 +237,9 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 
 	private void promiseFinish(int target, Object o) {
 		int s = _state&CALLBACK;
-		if (u.compareAndSwapInt(this, state_offset, s, s|target)) _val = o; }
+		if (u.compareAndSwapInt(this, state_offset, s, s|target)) _val = o;
+		_apply();
+	}
 	// endregion
 
 	public byte state() { return (byte) (_state&3); }

@@ -365,6 +365,10 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 	public abstract byte[] toByteArray();
 
 	public abstract void preInsert(int off, int len);
+	public final void remove(int from, int to) {
+		if (from >= to) throw new IllegalArgumentException("from >= to");
+		preInsert(from, from-to);
+	}
 
 	// endregion
 	// region GETxxx

@@ -1,7 +1,7 @@
 package roj.io.down;
 
 import roj.ui.CmdUtil;
-import roj.ui.EasyProgressBar;
+import roj.ui.ProgressBar;
 
 /**
  * @author Roj234
@@ -16,18 +16,16 @@ public class ProgressSimple implements IProgress {
 		bar.dispose();
 	}
 
-	protected EasyProgressBar bar;
+	protected ProgressBar bar;
 	boolean kill;
 
-	public EasyProgressBar bar() {
+	public ProgressBar bar() {
 		return bar;
 	}
 
 	public ProgressSimple() {
-		bar = new EasyProgressBar("下载进度");
+		bar = new ProgressBar("下载进度");
 		bar.setUnit("B");
-		bar.setBarInterval(500);
-		bar.setDataInterval(1000);
 	}
 
 	@Override

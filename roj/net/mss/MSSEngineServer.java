@@ -23,44 +23,43 @@ import static roj.net.mss.MSSEngineClient.HELLO_RETRY_REQUEST;
  * @author Roj233
  * @since 2021/12/22 12:21
  */
-public abstract class MSSEngineServer extends MSSEngine {
+public class MSSEngineServer extends MSSEngine {
 	public MSSEngineServer() {}
 	public MSSEngineServer(SecureRandom rnd) {super(rnd);}
 
-	public static final int VERIFY_CLIENT = 0x8;
+	public static final int VERIFY_CLIENT = 0x2;
 
 	@Override
 	public final void switches(int sw) {
-		final int AVAILABLE_SWITCHES = PSC_ONLY | ALLOW_0RTT | VERIFY_CLIENT | STREAM_DECRYPT;
+		final int AVAILABLE_SWITCHES = PSC_ONLY | VERIFY_CLIENT;
 		int i = sw & ~AVAILABLE_SWITCHES;
 		if (i != 0) throw new IllegalArgumentException("Illegal switch:"+i);
 
-		flag = (byte) i;
+		flag = (byte) sw;
 	}
 
 	// region inheritor modifiable
 
 	protected IntMap<MSSPrivateKey> preSharedCerts;
+	protected MSSSessionManager sessionManager;
 
-	public void setPSC(IntMap<MSSPublicKey> keys) {
-		if (stage != INITIAL) throw new IllegalStateException();
-		if (keys != null && !keys.isEmpty()) {
-			for (MSSPublicKey key : keys.values()) {
+	public void setPreSharedCertificate(IntMap<MSSPublicKey> certs) {
+		assertInitial();
+		if (certs != null && !certs.isEmpty()) {
+			for (MSSPublicKey key : certs.values()) {
 				if (!(key instanceof MSSPrivateKey))
 					throw new IllegalArgumentException("Should be private key pair");
 			}
 		}
-		preSharedCerts = Helpers.cast(keys);
+		preSharedCerts = Helpers.cast(certs);
 	}
 
-	protected MSSSession getSessionById(DynByteBuf id) {
-		return null;
-	}
-	protected DynByteBuf generateSessionId(MSSSession session) {
-		return null;
+	public void setSessionManager(MSSSessionManager sm) {
+		assertInitial();
+		sessionManager = sm;
 	}
 
-	protected abstract MSSPrivateKey getCertificate(CharMap<DynByteBuf> ext, int supportedFormat);
+	public MSSSessionManager getSessionManager() { return sessionManager; }
 
 	protected CharMap<CipherSuite> getCipherSuiteMap() {
 		CharMap<CipherSuite> map = new CharMap<>(cipherSuites.length);
@@ -72,9 +71,7 @@ public abstract class MSSEngineServer extends MSSEngine {
 
 	protected void onPreData(DynByteBuf o) throws MSSException {}
 
-	protected boolean clientShouldReply() {
-		return (flag & VERIFY_CLIENT) != 0;
-	}
+	protected boolean clientShouldReply() { return (flag & VERIFY_CLIENT) != 0; }
 
 	// endregion
 	// region Solid Handshake Progress
@@ -82,9 +79,7 @@ public abstract class MSSEngineServer extends MSSEngine {
 	private RCipherSpi preDecoder;
 
 	@Override
-	public final boolean isClientMode() {
-		return false;
-	}
+	public final boolean isClientMode() { return false; }
 
 	@Override
 	@SuppressWarnings("fallthrough")
@@ -112,7 +107,7 @@ public abstract class MSSEngineServer extends MSSEngine {
 		int lim = rx.wIndex();
 		int type = readPacket(rx);
 		if (type < 0) return type;
-		if (type == P_ALERT) handleError(rx);
+		int lim2 = rx.wIndex();
 
 		try {
 			switch (stage) {
@@ -130,7 +125,7 @@ public abstract class MSSEngineServer extends MSSEngine {
 		} catch (GeneralSecurityException e) {
 			return error(e);
 		} finally {
-			rx.rIndex = rx.wIndex();
+			rx.rIndex = lim2;
 			rx.wIndex(lim);
 		}
 		return HS_OK;
@@ -193,7 +188,7 @@ public abstract class MSSEngineServer extends MSSEngine {
 		CharMap<DynByteBuf> extIn = Extension.read(in);
 
 		// 0-RTT
-		if ((flag & ALLOW_0RTT) != 0) {
+		if (sessionManager != null) {
 
 		}
 
@@ -281,23 +276,22 @@ public abstract class MSSEngineServer extends MSSEngine {
 		CharMap<DynByteBuf> extIn = Extension.read(rx);
 
 		// 0-RTT
-		if ((flag & ALLOW_0RTT) != 0) {
-			DynByteBuf sid = extIn.remove(Extension.session);
-			MSSSession s = sid == null ? null : getSessionById(sid);
-			if (s == null) {
-				s = new MSSSession(deriveKey("session", suite.ciphers.getKeySize()), suite);
-				// 如果失败则丢弃0-RTT消息
-			} else {
-				initKeyDeriver(session.suite, session.key);
-				preDecoder = session.suite.ciphers.get();
-				try {
-					preDecoder.init(Cipher.DECRYPT_MODE, deriveKey("preflight0", session.suite.ciphers.getKeySize()), null, getPRNG("preflight"));
-				} catch (GeneralSecurityException e) {
-					return error(e);
-				}
+		zeroRtt:
+		if (sessionManager != null && extIn.containsKey(Extension.session)) {
+			DynByteBuf id = extIn.remove(Extension.session);
+			MSSSession sess = sessionManager.getOrCreateSession(extIn, id);
+
+			// 如果session不存在or新建则丢弃0-RTT消息
+			if (sess == null) break zeroRtt;
+
+			if (sess.key != null) {
+				preDecoder = getSessionCipher(sess, Cipher.DECRYPT_MODE);
 			}
 
-			extOut.put(Extension.session, generateSessionId(s));
+			sess.key = deriveKey("session", 64);
+			sess.suite = suite;
+
+			extOut.put(Extension.session, new ByteList(sess.id));
 		}
 
 		// Pre-shared certificate to decrease bandwidth consumption
@@ -319,8 +313,8 @@ public abstract class MSSEngineServer extends MSSEngine {
 		}
 
 		if (cert == null) {
-			cert = getCertificate(extIn,supported_certificate);
-			if (((1 << cert.format()) & supported_certificate) == 0) return error(NEGOTIATION_FAILED, "certificateType");
+			cert = getCertificate(extIn, supported_certificate);
+			if (cert == null) return error(NEGOTIATION_FAILED, "certificateType");
 
 			byte[] data = cert.publicKey();
 			extOut.put(Extension.certificate, ByteList.allocate(1+data.length).put((byte) cert.format()).put(data));
@@ -328,6 +322,8 @@ public abstract class MSSEngineServer extends MSSEngine {
 
 		if ((flag & VERIFY_CLIENT) != 0)
 			extOut.put(Extension.certificate_request, ByteList.allocate(4).putInt(getSupportCertificateType()));
+
+		processExtensions(extIn, extOut, 1);
 
 		// ID server_hello
 		// u1 version
@@ -415,12 +411,19 @@ public abstract class MSSEngineServer extends MSSEngine {
 
 		CharMap<DynByteBuf> extIn = Extension.read(rx);
 		if ((flag & VERIFY_CLIENT) != 0) {
-			DynByteBuf certificate = extIn.remove(Extension.certificate);
-			if (certificate == null) return error(ILLEGAL_PARAM, "certificate missing");
+			DynByteBuf buf = extIn.remove(Extension.certificate);
+			if (buf == null) return error(ILLEGAL_PARAM, "certificate missing");
 
-			Object o = checkCertificate(certificate.readUnsignedByte(), certificate);
+			byte[] sign = buf.readBytes(buf.readUnsignedByte());
+
+			Object o = checkCertificate(buf.readUnsignedByte(), buf);
 			if (o instanceof Throwable) return error((Throwable) o);
+
+			Signature verifier = ((MSSPublicKey) o).verifier();
+			verifier.update(sharedKey);
+			if (!verifier.verify(sign)) return error(CIPHER_FAULT, "invalid certificate");
 		}
+		processExtensions(extIn, null, 3);
 
 		stage = HS_DONE;
 		return HS_OK;

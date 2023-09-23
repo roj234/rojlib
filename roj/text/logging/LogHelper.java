@@ -34,7 +34,7 @@ final class LogHelper extends PrintWriter {
 	}
 
 	final MyMap tmpCtx = new MyMap();
-	final Object[] holder = new Object[10];
+	final Object[] holder = new Object[4];
 
 	int prefix;
 	Appendable myOut;

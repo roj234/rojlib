@@ -353,7 +353,6 @@ public class ToIntMap<K> extends AbstractMap<K, Integer> implements _Generic_Map
 	}
 
 	@SuppressWarnings("unchecked")
-	@Deprecated
 	public Integer get(Object id) {
 		Entry<K> entry = getEntry((K) id);
 		return entry == null ? null : entry.v;

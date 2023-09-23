@@ -72,7 +72,7 @@ public class ObfuscatorUI extends JFrame {
 		ZipFileWriter zfw = new ZipFileWriter(new File(uiOutputPath.getText()), false);
 
 		AsyncTask<Void> writer = new AsyncTask<>(new ResWriter(zfw, resource));
-		TaskPool.CpuMassive().pushTask(writer);
+		TaskPool.Common().pushTask(writer);
 
 		Profiler.endStartSection("exclusion");
 
@@ -118,7 +118,7 @@ public class ObfuscatorUI extends JFrame {
 
 	private void run(ActionEvent e) {
 		uiRun.setEnabled(false);
-		TaskPool.CpuMassive().pushTask(() -> {
+		TaskPool.Common().pushTask(() -> {
 			try {
 				run0();
 			} finally {
@@ -167,13 +167,13 @@ public class ObfuscatorUI extends JFrame {
 		uiLoadPackage.addActionListener((e) -> {
 			File in = new File(uiInputPath.getText());
 			uiLoadPackage.setEnabled(false);
-			TaskPool.CpuMassive().pushTask(() -> {
+			TaskPool.Common().pushTask(() -> {
 				MyHashSet<String> packages = new MyHashSet<>();
 				try (ZipArchive za = new ZipArchive(in)) {
 					for (ZEntry value : za.getEntries().values()) {
 						String name = value.getName();
 						if (name.endsWith(".class")) {
-							String className = Parser.parseAcc0(null, IOUtil.getSharedByteBuf().readStreamFully(za.getInputStream(value))).name;
+							String className = Parser.parseAccess(IOUtil.getSharedByteBuf().readStreamFully(za.getInputStream(value)), false).name;
 							String exceptClassName = name.substring(0, name.length()-6);
 
 							if (className.equals(exceptClassName)) {
@@ -269,7 +269,7 @@ public class ObfuscatorUI extends JFrame {
 		uiExcStart.addActionListener((e) -> {
 			uiExcStart.setEnabled(false);
 			uiPackageSelected.setModel(new DefaultListModel<>());
-			TaskPool.CpuMassive().pushTask(() -> {
+			TaskPool.Common().pushTask(() -> {
 				uiExcStart.setEnabled(true);
 				int flag = 0;
 				if (uiExcEnum.isSelected()) flag |= 1;

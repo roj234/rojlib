@@ -41,7 +41,6 @@ public class XTSCipher extends RCipherSpi {
 	}
 
 	public int engineGetBlockSize() { return cip.engineGetBlockSize(); }
-	public boolean isBaseCipher() { return false; }
 	public String getAlgorithm() { return "XTS"; }
 
 	@Override

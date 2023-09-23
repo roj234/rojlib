@@ -502,9 +502,9 @@ public abstract class WebsocketHandler implements ChannelHandler {
 		if ($len <= 125) {
 			out.put((byte) $len);
 		} else if ($len <= 65535) {
-			out.put((byte) 126).putShort($len);
+			out.put(126).putShort($len);
 		} else {
-			out.put((byte) 127).putLong($len);
+			out.put(127).putLong($len);
 		}
 
 		if ((flag & REMOTE_MASK) == 0) {

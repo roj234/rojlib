@@ -14,6 +14,10 @@ public class FastModDev_UI extends JFrame {
 	public FastModDev_UI() {
 		initComponents();
 	}
+	
+	static class MappingEntry {
+		
+	}
 
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
@@ -55,11 +59,11 @@ public class FastModDev_UI extends JFrame {
 		uiObfState = new JLabel();
 		dlgRefTool = new JDialog();
 		uiRefSearch = new JTextField();
-		uiRefSearchType = new JComboBox();
+		uiRefSearchType = new JComboBox<>();
 		JScrollPane scrollPane3 = new JScrollPane();
-		uiRefResult = new JList();
+		uiRefResult = new JList<>();
 		uiRefCopy = new JCheckBox();
-		uiRefCopyType = new JComboBox();
+		uiRefCopyType = new JComboBox<>();
 
 		//======== this ========
 		setTitle("FastModDev 2.3.0 By Roj234");
@@ -297,9 +301,9 @@ public class FastModDev_UI extends JFrame {
 	private JLabel uiObfState;
 	private JDialog dlgRefTool;
 	private JTextField uiRefSearch;
-	private JComboBox uiRefSearchType;
-	private JList uiRefResult;
+	private JComboBox<String> uiRefSearchType;
+	private JList<MappingEntry> uiRefResult;
 	private JCheckBox uiRefCopy;
-	private JComboBox uiRefCopyType;
+	private JComboBox<String> uiRefCopyType;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

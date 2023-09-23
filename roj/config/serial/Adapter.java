@@ -13,6 +13,9 @@ import java.util.List;
  */
 abstract class Adapter {
 	Adapter withGenericType(SerializerFactory man, List<IType> genericType) { return this; }
+	public Adapter inheritBy(SerializerFactory factory, Class<?> type) {
+		return this;
+	}
 
 	void read(AdaptContext ctx, boolean l) {read(ctx, (Object)l);}
 	void read(AdaptContext ctx, int l) {read(ctx, (Object)l);}

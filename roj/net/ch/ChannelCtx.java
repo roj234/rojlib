@@ -125,25 +125,8 @@ public final class ChannelCtx {
 		}
 	}
 
-	public ChannelCtx prev() {
-		return prev;
-	}
-	public ChannelCtx next() {
-		return next;
-	}
-
-	// region Utilities
-
-	public static void bite(ChannelCtx ctx, byte b) throws IOException {
-		DynByteBuf tmp = ctx.allocate(false, 1);
-		try {
-			ctx.channelWrite(tmp.put(b));
-		} finally {
-			ctx.reserve(tmp);
-		}
-	}
-
-	// endregion
+	public ChannelCtx prev() { return prev; }
+	public ChannelCtx next() { return next; }
 
 	@Override
 	public String toString() { return name + "=" + handler; }

@@ -9,7 +9,7 @@ import roj.concurrent.TaskPool;
 import roj.crypt.CipherInputStream;
 import roj.io.IOUtil;
 import roj.text.TextUtil;
-import roj.ui.EasyProgressBar;
+import roj.ui.ProgressBar;
 import roj.util.ByteList;
 
 import java.io.*;
@@ -27,7 +27,7 @@ import java.util.zip.ZipEntry;
  * @since 2022/11/12 0012 18:12
  */
 public class Main {
-	static TaskPool pool = TaskPool.CpuMassive();
+	static TaskPool pool = TaskPool.Common();
 
 	public static void main(String[] args) throws Exception {
 		// ADOBE_JPEG:  0 "FFD8 FFEE 000E 4164 6F62 6500 64C0 0000" -2 "FFD9"
@@ -36,7 +36,7 @@ public class Main {
 			System.out.println("ZCKiller 0.0.2\n"
 				+ "用法: 文件/文件夹 模式\n"
 				+ "\n"
-				+ "模式=C <偏移 明文...>\n"
+				+ "模式=C 文件 <偏移 明文...>\n"
 				+ "	用Biham和Kocher的算法对ZipCrypto进行明文攻击.\n"
 				+ "	在 <文件夹> 中所有加密且使用了Store算法的zip文件\n"
 				+ "	并生成同名.key保存密码\n"
@@ -89,20 +89,13 @@ public class Main {
 	}
 
 	private static void tryFindPass(String[] args, File file, int argOff) throws IOException {
-		System.err.println("文件: " + file);
-
 		ZipArchive mzf = new ZipArchive(file, 0, 0, Charset.defaultCharset());
-		ZEntry entry = findBestFile(mzf);
-		if (entry == null) {
-			mzf.close();
+		ZEntry entry = mzf.getEntries().get(args[argOff++]);
+		if (entry == null || !entry.isEncrypted() || entry.getEncryptType() != ZipArchive.CRYPT_ZIP2) {
+			System.out.println("没找到或不符合要求:"+args[argOff-1]);
 			return;
 		}
-		if (entry.getMethod() != 0) {
-			mzf.close();
-			System.err.println("没有ZC+Store，无法破解("+entry.getMethod()+")");
-			return;
-		}
-		System.out.println("Using: " + entry.getName());
+		System.err.println("文件: " + file+"#!"+entry.getName());
 
 		IntMap<byte[]> plains = new IntMap<>();
 		for (int i = argOff; i < args.length; i++) {
@@ -149,10 +142,10 @@ public class Main {
 		int[] state = {r.readInt(), r.readInt(), r.readInt()};
 		Inflater inf = new Inflater(true);
 
-		EasyProgressBar ep = new EasyProgressBar("重新压缩");
+		ProgressBar ep = new ProgressBar("重新压缩");
 		ep.setUnit("");
 
-		ZipArchive zip = new ZipArchive(f, 0, 0, Charset.defaultCharset()); zip.close();
+		ZipArchive zip = new ZipArchive(f, 0, 0, Charset.defaultCharset());
 		try (ZipFileWriter dst = new ZipFileWriter(new File(f.getAbsolutePath() + ".crk.zip"), false)) {
 			int i = 0;
 			int size = zip.getEntries().size();
@@ -175,23 +168,6 @@ public class Main {
 		}
 		ep.updateForce(1);
 		ep.dispose();
-	}
-
-	private static ZEntry findBestFile(ZipArchive mzf) {
-		ZEntry lowestFile = null;
-		long lowestSize = Long.MAX_VALUE;
-		int store = 8;
-		for (ZEntry file : mzf.getEntries().values()) {
-			if (file.getEncryptType() != ZipArchive.CRYPT_ZIP2) continue;
-			if (file.getMethod() <= store) {
-				if (file.getMethod() < store || file.getCompressedSize() < lowestSize) {
-					lowestFile = file;
-					lowestSize = file.getCompressedSize();
-					store = file.getMethod();
-				}
-			}
-		}
-		return lowestFile;
 	}
 
 	private static byte[] getExample(byte[] cipher, int[] key) throws IOException {

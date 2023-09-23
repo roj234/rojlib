@@ -68,11 +68,11 @@ public class CompileContext implements CompilerConfig {
 		return MapUtil.getInstance().instanceOf(Helpers.cast(ctx), toTest, inst, itfFlag);
 	}
 
-	public MethodPoetL createMethodPoet(CompileUnit unit, MethodNode node) {
-		return new MethodPoetL(node);
+	public MethodWriterL createMethodPoet(CompileUnit unit, MethodNode node) {
+		return new MethodWriterL(node);
 	}
 
-	public String findSuitableMethod(MethodPoetL stack, IClass type, String name, Object context) throws ParseException {
+	public String findSuitableMethod(MethodWriterL stack, IClass type, String name, Object context) throws ParseException {
 		return null;
 	}
 

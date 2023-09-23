@@ -20,21 +20,13 @@ import java.util.Objects;
 public final class InnerClasses extends Attribute {
 	public static final String NAME = "InnerClasses";
 
-	public InnerClasses() {
-		super(NAME);
-		classes = new SimpleList<>();
-	}
+	public InnerClasses() { classes = new SimpleList<>(); }
 
 	public InnerClasses(DynByteBuf r, ConstantPool pool) {
-		super(NAME);
-		classes = parse(r, pool);
-	}
-
-	public static List<InnerClass> parse(DynByteBuf r, ConstantPool pool) {
 		//** If a class file has a version number that is 51.0 or above, outer_class_info_index must be 0 if inner_name_index is 0.
 		int count = r.readUnsignedShort();
 
-		List<InnerClass> classes = new SimpleList<>(count);
+		List<InnerClass> classes = this.classes = new SimpleList<>(count);
 
 		while (count-- > 0) {
 			String selfName = ((CstClass) pool.get(r)).name().str();
@@ -49,16 +41,15 @@ public final class InnerClasses extends Attribute {
 
 			classes.add(new InnerClass(selfName, outerName, name, r.readChar()));
 		}
-
-		return classes;
 	}
 
 	public List<InnerClass> classes;
 
 	@Override
-	public boolean isEmpty() {
-		return classes.isEmpty();
-	}
+	public boolean isEmpty() { return classes.isEmpty(); }
+
+	@Override
+	public String name() { return NAME; }
 
 	@Override
 	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {

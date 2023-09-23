@@ -56,7 +56,7 @@ public final class EdPoint implements Serializable {
 		x = x.pow22523();
 		x = v3.mul(u).mul(x);
 		EdInteger vxx = x.mutable().square().mul(v);
-		EdInteger check = vxx.sub(u);
+		EdInteger check = vxx.mutable().sub(u);
 		if (check.isNonZero()) {
 			check = vxx.add(u);
 			if (check.isNonZero()) throw new IllegalArgumentException("invalid point");

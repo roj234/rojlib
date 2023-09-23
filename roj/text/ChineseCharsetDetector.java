@@ -77,8 +77,6 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 			gb18030_score += ps - 5*ns;
 			gb18030_negate += ns;
 
-			// todo check UTF16
-
 			if (Math.abs(utf8_score - gb18030_score) > 100) {
 				// ASCII时相同
 				if (utf8_score >= gb18030_score || utf8_negate * 3 < gb18030_negate * 2) return "UTF8";
@@ -89,6 +87,8 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 			len = bLen;
 
 			if (bLen == b.length) {
+				if (bLen > 32767) break;
+
 				ArrayCache ac = ArrayCache.getDefaultCache();
 				byte[] b1 = ac.getByteArray(b.length << 1, false);
 				System.arraycopy(b, 0, b1, 0, b.length);
@@ -100,6 +100,8 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 		// nearly impossible hit here when file is large
 		if (utf8_score >= gb18030_score || utf8_negate * 3 < gb18030_negate * 2) return "UTF8";
 		else if (gb18030_score > 0 && gb18030_negate * 3 < utf8_negate * 2) return "GB18030";
+
+		if (utf8_negate == gb18030_negate) return "UTF8";
 
 		throw new IOException("无法确定编码,utf8_score="+utf8_score+",gbk_score="+gb18030_score);
 	}

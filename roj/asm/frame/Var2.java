@@ -1,10 +1,10 @@
 package roj.asm.frame;
 
 import roj.asm.cst.Constant;
-import roj.asm.tree.insn.InsnNode;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.visitor.FrameVisitor;
+import roj.asm.visitor.Label;
 import roj.collect.MyHashSet;
 
 import java.util.Objects;
@@ -19,8 +19,8 @@ public final class Var2 {
 
 	public byte type;
 	public String owner;
-	public int bci = -1;
-	public InsnNode bci2;
+	public int bci;
+	public Label monitor_bci;
 	public Set<String> limitation;
 	public Constant value;
 
@@ -58,13 +58,14 @@ public final class Var2 {
 		this.owner = Objects.requireNonNull(owner, "owner");
 	}
 
-	public Var2(InsnNode init_bci) {
+	public Var2(Label init_bci) {
 		this.type = VarType.UNINITIAL;
-		this.bci2 = init_bci;
+		this.monitor_bci = init_bci;
 	}
 
+
 	public int bci() {
-		return bci2 == null ? bci : InsnNode.validate(bci2).bci;
+		return monitor_bci == null ? bci : monitor_bci.getValue();
 	}
 
 	public void merge(Var2 o) {
@@ -170,7 +171,7 @@ public final class Var2 {
 
 	public String toString() {
 		if (type == VarType.UNINITIAL) {
-			return "【在 " + bci2 + " | " + bci() + " 初始化】";
+			return "【在 " + bci + " | " + monitor_bci + " 初始化】";
 		} else if (type == VarType.REFERENCE) {
 			return owner;
 		} else {
@@ -179,9 +180,11 @@ public final class Var2 {
 	}
 
 	public Var2 copy() {
+		if (type <= 5) return this;
+
 		Var2 c = new Var2(type);
 		c.bci = bci;
-		c.bci2 = bci2;
+		c.monitor_bci = monitor_bci;
 		c.owner = owner;
 		if (limitation != null)
 			c.limitation = new MyHashSet<>(limitation);

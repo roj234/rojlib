@@ -35,14 +35,19 @@ public class Chapter extends TreeNodeImpl<Chapter> {
 		CP_KIND.putInt('节', 4);
 		CP_KIND.putInt('節', 4);
 		CP_KIND.putInt('回', 4);
+		CP_KIND.putInt('\u0004', 4);
 
-		CP_KIND.putInt('章', 3);
-		CP_KIND.putInt('幕', 3);
+		CP_KIND.putInt('\u0003', 3);
 
-		CP_KIND.putInt('集', 2);
-		CP_KIND.putInt('部', 2);
-		CP_KIND.putInt('篇', 2);
-		CP_KIND.putInt('卷', 2);
+		CP_KIND.putInt('章', 2);
+		CP_KIND.putInt('幕', 2);
+		CP_KIND.putInt('\u0002', 2);
+
+		CP_KIND.putInt('集', 1);
+		CP_KIND.putInt('部', 1);
+		CP_KIND.putInt('篇', 1);
+		CP_KIND.putInt('卷', 1);
+		CP_KIND.putInt('\u0001', 1);
 	}
 
 	public static List<Chapter> parse(File file) throws IOException {
@@ -121,7 +126,7 @@ public class Chapter extends TreeNodeImpl<Chapter> {
 						continue;
 					} else {
 						flag |= 4;
-						buf.set(off1, '章');
+						buf.set(off1, '\u0003');
 					}
 				} else {
 					flag |= 8;

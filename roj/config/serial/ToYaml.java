@@ -101,6 +101,7 @@ public class ToYaml extends ToSomeString {
 					while (x-- > 0) sb.append(indent);
 
 					first = false;
+					break;
 				}
 			}
 
@@ -118,6 +119,7 @@ public class ToYaml extends ToSomeString {
 				len = sb.length();
 				i = TextUtil.gAppendToNextCRLF(val, i, sb);
 			} while (i < val.length());
+			return;
 		}
 
 		if (YAMLParser.literalSafe(val)<0) sb.append(val);

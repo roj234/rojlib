@@ -12,12 +12,7 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
 public @interface Nixim {
-	String value();
-
+	String value(); // target
 	boolean copyItf() default false;
-
-	int flag() default 0;
-
-	int KEEP_BRIDGE = 1;
-	int COPY_ACCESSOR = 2;
+	int flags() default 0; // no usage now
 }

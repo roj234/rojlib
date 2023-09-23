@@ -142,7 +142,7 @@ public class MapperUI extends JFrame {
 			task = new AsyncTask<>(new ResWriter(zfw, resource));
 			this.off = off;
 			this.len = len;
-			TaskPool.CpuMassive().pushTask(task);
+			TaskPool.Common().pushTask(task);
 		}
 
 		public void finish(List<Context> byName) throws Exception {
@@ -200,7 +200,7 @@ public class MapperUI extends JFrame {
 
 		uiInit.addActionListener((e) -> {
 			uiInit.setEnabled(false);
-			TaskPool.CpuMassive().pushTask(() -> {
+			TaskPool.Common().pushTask(() -> {
 				try {
 					init();
 				} finally {
@@ -210,7 +210,7 @@ public class MapperUI extends JFrame {
 		});
 		uiMap.addActionListener((e) -> {
 			uiMap.setEnabled(false);
-			TaskPool.CpuMassive().pushTask(() -> {
+			TaskPool.Common().pushTask(() -> {
 				try {
 					map();
 				} finally {
@@ -229,7 +229,7 @@ public class MapperUI extends JFrame {
 		});
 		uiLoadLines.addActionListener((e) -> {
 			uiLoadLines.setEnabled(false);
-			TaskPool.CpuMassive().pushTask(() -> {
+			TaskPool.Common().pushTask(() -> {
 				try {
 					loadLines();
 				} finally {

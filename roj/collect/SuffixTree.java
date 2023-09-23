@@ -25,8 +25,8 @@ public final class SuffixTree<V> extends TrieTree<V> {
 	}
 
 	@Override
-	public int longestIn(CharSequence s, int i, int len, MyHashMap.Entry<MutableInt, V> feed) {
-		return super.longestIn(ReverseOf.reverseOf(s, i, len), i, len, feed);
+	public int match(CharSequence s, int i, int len, MyHashMap.Entry<MutableInt, V> feed) {
+		return super.match(ReverseOf.reverseOf(s, i, len), i, len, feed);
 	}
 
 	@Override

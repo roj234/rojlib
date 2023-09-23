@@ -170,7 +170,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 				} catch (Throwable e1) {
 					LOGGER.log(Level.FATAL, "保存'{}'的内容用于调试时发生异常", e1, name);
 				}
-				throw e;
+				Helpers.athrow(e);
 			}
 		}
 		if (changed) {

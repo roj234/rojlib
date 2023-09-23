@@ -63,7 +63,7 @@ public final class WordBlock {
 			k[i+1] = s;
 		}
 
-		TextUtil.prettyTable(sb, "    ", " => ", "  ", k);
+		TextUtil.prettyTable(sb, "  ", k, "    ", " => ");
 	}
 
 	public final class Counter extends FilterOutputStream {

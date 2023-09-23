@@ -4,8 +4,6 @@ import roj.util.Helpers;
 
 import java.util.function.BiConsumer;
 
-import static roj.collect.IntMap.UNDEFINED;
-
 /**
  * A Least Frequency Used cache implement in O(1) time complexity
  *
@@ -64,7 +62,7 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 	@Override
 	public final MyHashMap.Entry<K, V> getEntry(K id) {
 		MyHashMap.Entry<K, V> entry = super.getEntry(id);
-		if (entry != null && entry.v != UNDEFINED) access((Entry<K, V>) entry);
+		if (entry != null) access((Entry<K, V>) entry);
 		return entry;
 	}
 
@@ -188,7 +186,7 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 
 	private void drain(Bucket o) {
 		o.prev.next = o.next;
-		o.next.prev = o.prev;
+		if (o.next != null) o.next.prev = o.prev;
 
 		if (wellDepth < 16) {
 			o.next = well;

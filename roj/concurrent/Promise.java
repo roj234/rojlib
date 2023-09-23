@@ -2,6 +2,8 @@ package roj.concurrent;
 
 import roj.util.Helpers;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -26,22 +28,24 @@ public interface Promise<T> {
 		p._val = t;
 		return p;
 	}
-	static Promise<Object[]> all(TaskHandler e, Promise<?>... arr) {
-		if (arr.length == 0) throw new IllegalArgumentException();
+	static Promise<Object[]> all(TaskHandler e, Promise<?>... arr) { return all(e, Arrays.asList(arr)); }
+	static <T extends Promise<?>> Promise<Object[]> all(TaskHandler e, List<T> arr) {
+		if (arr.size() == 0) throw new IllegalArgumentException();
 
-		AtomicInteger remain = new AtomicInteger(arr.length);
-		return new PromiseImpl<>(e, op -> {
-			Object[] result = new Object[arr.length];
-			for (int i = 0; i < arr.length; i++) {
-				int no = i;
-				arr[i].then((v, o) -> {
-					result[no] = v;
+		AtomicInteger remain = new AtomicInteger(arr.size());
+		Object[] result = new Object[arr.size()];
 
-					if (remain.decrementAndGet() == 0)
-						op.resolve(result);
-				});
-			}
-		});
+		PromiseImpl<Object[]> ret = new PromiseImpl<>(e, null);
+		for (int i = 0; i < arr.size(); i++) {
+			int no = i;
+			arr.get(i).then((v, o) -> {
+				result[no] = v;
+
+				if (remain.decrementAndGet() == 0)
+					ret.resolve(result);
+			});
+		}
+		return ret;
 	}
 	@SafeVarargs
 	static <T> Promise<T> race(TaskHandler e, Promise<T>... arr) {

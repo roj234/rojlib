@@ -1,14 +1,12 @@
 package roj.mildwind.asm;
 
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.Method;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.AttrLineNumber;
+import roj.asm.tree.attr.LineNumberTable;
 import roj.asm.util.AccessFlag;
-import roj.asm.util.ExceptionEntryCWP;
+import roj.asm.util.TryCatchEntry;
 import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
-import roj.asm.visitor.Label;
 import roj.asm.visitor.Segment;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
@@ -31,8 +29,8 @@ public final class JsMethodWriter extends CodeWriter implements LineHandler {
 	public ConstantData data;
 	JsWriter klass;
 
-	AttrLineNumber lines = new AttrLineNumber();
-	List<ExceptionEntryCWP> exceptions = new SimpleList<>();
+	LineNumberTable lines = new LineNumberTable();
+	List<TryCatchEntry> exceptions = new SimpleList<>();
 	MyBitSet varid = new MyBitSet();
 
 	public JsFunctionCompiled compile() {
@@ -64,12 +62,12 @@ public final class JsMethodWriter extends CodeWriter implements LineHandler {
 		init();
 	}
 	private void init() {
-		MethodNode mn = new Method(AccessFlag.PRIVATE|AccessFlag.FINAL, data.name, chain, "(Lroj/mildwind/type/JsObject;Lroj/mildwind/api/Arguments;)Lroj/mildwind/type/JsObject;");
+		MethodNode mn = new MethodNode(AccessFlag.PRIVATE|AccessFlag.FINAL, data.name, chain, "(Lroj/mildwind/type/JsObject;Lroj/mildwind/api/Arguments;)Lroj/mildwind/type/JsObject;");
 		mn.putAttr(new AttrCodeWriter(data.cp, mn, this));
 		data.methods.add(mn);
 		visitSizeMax(99,99);
 
-		ExceptionEntryCWP e = new ExceptionEntryCWP();
+		TryCatchEntry e = new TryCatchEntry();
 		//exceptions.add(e);
 		//e.type = "roj/mildwind/util/TCOException";
 		//e.start = new Label();
@@ -81,18 +79,15 @@ public final class JsMethodWriter extends CodeWriter implements LineHandler {
 	public static JsMethodWriter builder(String file) { return new JsMethodWriter(file); }
 	public static JsMethodWriter builder(JsMethodWriter parent) { return new JsMethodWriter(parent); }
 
-	public void funcName(String name) { this.mn.name(data.cp, chain+'.'+name); }
+	public void funcName(String name) { this.mn.name(chain+'.'+name); }
 
 	@Override
 	public void handleLineNumber(int line) {
-		Label node = label();
-		AttrLineNumber.LineNumber e = new AttrLineNumber.LineNumber(null, line);
-		lines.list.add(e);
-		e.alternative = node;
+		lines.list.add(new LineNumberTable.Item(label(), line));
 	}
 
-	public ExceptionEntryCWP exception() {
-		ExceptionEntryCWP entry = new ExceptionEntryCWP();
+	public TryCatchEntry exception() {
+		TryCatchEntry entry = new TryCatchEntry();
 		exceptions.add(entry);
 		return entry;
 	}
@@ -109,7 +104,7 @@ public final class JsMethodWriter extends CodeWriter implements LineHandler {
 		one(ARETURN);
 		visitSizeMax(999,999);
 		visitExceptions();
-		for (ExceptionEntryCWP exception : exceptions) {
+		for (TryCatchEntry exception : exceptions) {
 			visitException(exception.start,exception.end,exception.handler,exception.type);
 		}
 		visitAttributes();
@@ -121,7 +116,7 @@ public final class JsMethodWriter extends CodeWriter implements LineHandler {
 	public String toString() { return "<ast serializer for '"+data.name+"', current method '"+mn.name()+"', constructor '"+data+"'>"; }
 
 	public static class TCOSegment extends Segment {
-		public TCOSegment(ExceptionEntryCWP e) {
+		public TCOSegment(TryCatchEntry e) {
 
 		}
 

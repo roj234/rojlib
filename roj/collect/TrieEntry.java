@@ -1,6 +1,7 @@
 package roj.collect;
 
 import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -26,13 +27,13 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	// region self management
 
 	public final void putChild(TrieEntry te) {
-		if (size > length * 1.3f) {
-			length <<= 1;
+		if (size > (mask+1)) {
+			mask = ((mask+1)<<1) - 1;
 			resize();
 		}
 
 		char key = te.c;
-		if (entries == null) entries = new TrieEntry[length];
+		if (entries == null) entries = new TrieEntry[mask+1];
 		TrieEntry prev = null, entry = entries[idx(key)];
 		if (entry == null) {
 			entries[idx(key)] = te;
@@ -115,16 +116,20 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	}
 
 	@Override
-	public String toString() {
-		return "CE{" + c + "}";
-	}
+	public String toString() { return "TE('"+(TextUtil.isPrintableAscii(c)?c:"\\"+Integer.toOctalString(c))+"',next="+next+")"; }
 
 	TrieEntry[] entries;
-	int size;
-	int length = 1;
+	int size, mask;
+
+	public void faster() {
+		if (size > 1) {
+			mask = 32767;
+			resize();
+		}
+	}
 
 	private void resize() {
-		TrieEntry[] newEntries = new TrieEntry[length];
+		TrieEntry[] newEntries = new TrieEntry[mask+1];
 		TrieEntry entry;
 		TrieEntry next;
 		int i = 0, j = entries.length;
@@ -143,9 +148,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 		this.entries = newEntries;
 	}
 
-	private int idx(int id) {
-		return (id ^ (id >> 8)) & (length - 1);
-	}
+	private int idx(int id) { return (id ^ (id >> 8)) & mask; }
 
 	private TrieEntry first(char k) {
 		if (entries == null) return null;
@@ -153,7 +156,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	}
 
 	public final void clear() {
-		this.length = 1;
+		this.mask = 1;
 		this.entries = null;
 		this.size = 0;
 	}

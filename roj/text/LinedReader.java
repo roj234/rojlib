@@ -1,9 +1,13 @@
 package roj.text;
 
+import roj.collect.AbstractIterator;
+import roj.collect.SimpleList;
 import roj.io.IOUtil;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.List;
 
 /**
  * @author Roj234
@@ -16,4 +20,27 @@ public interface LinedReader extends Closeable {
 		return ok ? s.toString() : null;
 	}
 	boolean readLine(CharList buf) throws IOException;
+
+	default List<String> readLines() throws IOException {
+		List<String> list = new SimpleList<>();
+		CharList sb = IOUtil.getSharedCharBuf();
+		while (readLine(sb)) {
+			list.add(sb.toString());
+			sb.clear();
+		}
+		return list;
+	}
+
+	default Iterator<String> iterator() {
+		return new AbstractIterator<String>() {
+			@Override
+			protected boolean computeNext() {
+				try {
+					return (result = readLine()) != null;
+				} catch (IOException e) {
+					return false;
+				}
+			}
+		};
+	}
 }

@@ -3,6 +3,7 @@ package roj.ui;
 import roj.collect.SimpleList;
 import roj.util.Helpers;
 
+import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
@@ -123,9 +124,16 @@ public class OnChangeHelper extends MouseAdapter implements FocusListener, KeyLi
 	public void keyTyped(KeyEvent e) {}
 	@Override
 	public void keyPressed(KeyEvent e) {
-		if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+		boolean isEnter = e.getKeyCode() == KeyEvent.VK_ENTER &&
+			(e.getComponent() instanceof JTextField || e.getComponent() instanceof JPasswordField);
+
+		if (e.getKeyCode() == KeyEvent.VK_ESCAPE || isEnter) {
 			Component c = e.getComponent();
 			if (!(c instanceof Window)) {
+				if (isEnter) {
+					State s = handlers.get(c);
+					if (s != null) s.dispatch(c);
+				}
 				c.dispatchEvent(new FocusEvent(c, FocusEvent.FOCUS_LOST));
 			} else {
 				c.hide();

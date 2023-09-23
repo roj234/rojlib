@@ -169,7 +169,7 @@ public abstract class ParamNameMapper {
 			int j = (m.modifier() & AccessFlag.STATIC) == 0 ? 1 : 0;
 
 			List<Type> parameters = m.parameters();
-			ByteList attr = IOUtil.getSharedByteBuf().put((byte) 0);
+			ByteList attr = IOUtil.getSharedByteBuf().put(0);
 
 			while (j < parNames.size()) {
 				if (i == parameters.size()) {

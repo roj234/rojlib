@@ -62,6 +62,6 @@ public final class SerializerUtils {
 	public final String writeChars(char[] t) { return new String(t); }
 	public final char[] readChars(String t) { return t.toCharArray(); }
 
-	public static SerializerFactory newSerializerFactory() { return newSerializerFactory(GENERATE|CHECK_INTERFACE|CHECK_PARENT); }
+	public static SerializerFactory newSerializerFactory() { return newSerializerFactory(GENERATE|CHECK_INTERFACE|CHECK_PARENT|ALLOW_DYNAMIC); }
 	public static SerializerFactory newSerializerFactory(int flag) { return new SerializerFactory(flag); }
 }

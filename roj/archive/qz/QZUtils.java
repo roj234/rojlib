@@ -4,7 +4,7 @@ import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.io.IOUtil;
 import roj.math.MutableLong;
-import roj.ui.EasyProgressBar;
+import roj.ui.ProgressBar;
 import roj.util.Helpers;
 
 import java.io.*;
@@ -17,7 +17,7 @@ import java.util.function.BiConsumer;
  * @since 2023/5/26 0026 19:17
  */
 public class QZUtils {
-	public static void parallelCompressWithProgress(QZFileWriter fw, TaskPool pool, File baseDir, List<File> files, int blockSize, EasyProgressBar bar) throws IOException {
+	public static void parallelCompressWithProgress(QZFileWriter fw, TaskPool pool, File baseDir, List<File> files, int blockSize, ProgressBar bar) throws IOException {
 		MutableLong total = new MutableLong();
 		LongAdder delta = new LongAdder();
 

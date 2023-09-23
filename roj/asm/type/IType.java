@@ -8,7 +8,7 @@ import java.util.function.UnaryOperator;
  * @author solo6975
  * @since 2021/9/4 19:03
  */
-public interface IType {
+public interface IType extends Cloneable {
 	byte STANDARD_TYPE = 0, GENERIC_TYPE = 1, TYPE_PARAMETER_TYPE = 2, EMPTY_TYPE = 3, GENERIC_SUBCLASS_TYPE = 4, ANY_TYPE = 5;
 	byte genericType();
 
@@ -31,4 +31,6 @@ public interface IType {
 	default void owner(String owner) { throw new UnsupportedOperationException(); }
 
 	default void rename(UnaryOperator<String> fn) {}
+
+	IType clone();
 }

@@ -22,7 +22,7 @@ public final class ClientLaunch {
 
 	private final MyChannel sock;
 	private InetSocketAddress addr;
-	private int connectTimeout;
+	private int connectTimeout = 2000;
 
 	private Consumer<MyChannel> initializator;
 
@@ -94,34 +94,31 @@ public final class ClientLaunch {
 		this.addr = new InetSocketAddress(url.getHost(), url.getPort()<0?url.getDefaultPort():url.getPort());
 		return this;
 	}
-
 	public ClientLaunch connect(SocketAddress addr) {
 		this.addr = (InetSocketAddress) addr;
 		return this;
 	}
-
 	public ClientLaunch connect(InetAddress addr, int port) {
 		this.addr = new InetSocketAddress(addr, port);
 		return this;
 	}
+	public InetSocketAddress address() { return addr; }
 
-	public ClientLaunch timeout(int timeout) {
-		this.connectTimeout = timeout;
-		return this;
-	}
+	public ClientLaunch timeout(int x) { connectTimeout = x; return this; }
 
+	public MyChannel channel() { return sock; }
 	public ClientLaunch initializator(Consumer<MyChannel> i) {
 		this.initializator = i;
 		return this;
 	}
 
 	public SelectorLoop launch() throws IOException {
-		if (initializator == null) throw new IllegalStateException("initializator == null");
 
 		boolean selfLoop = loop == null;
 		if (selfLoop) loop = new SelectorLoop(owner, threadPrefix, threadInit, threadMin, threadMax, threadTimeout, threadThreshold, daemon);
 
-		initializator.accept(sock);
+		if (initializator != null) initializator.accept(sock);
+		else if (channel().handlers().isEmpty()) throw new IllegalStateException("initializator == null and not handlers added");
 
 		if (sock.isTCP()) {
 			if (addr == null) throw new BindException("No address specified");

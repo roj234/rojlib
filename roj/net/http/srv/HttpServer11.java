@@ -204,7 +204,7 @@ public final class HttpServer11 extends PacketMerger implements
 					success: {
 						String line = HttpHead.readCRLF(data);
 						if (line == null) return;
-						if (line.length() > 8192) throw new IllegalRequestException(Code.URI_TOO_LONG);
+						if (line.length() > 8192) throw new IllegalRequestException(HttpCode.URI_TOO_LONG);
 
 						failed: {
 							int i = line.indexOf(' ');
@@ -223,11 +223,11 @@ public final class HttpServer11 extends PacketMerger implements
 							version = line.substring(j+1);
 							if (version.startsWith("HTTP/")) break success;
 						}
-						throw new IllegalRequestException(Code.BAD_REQUEST, "无效请求头 " + line);
+						throw new IllegalRequestException(HttpCode.BAD_REQUEST, "无效请求头 " + line);
 					}
 
 					int act = Action.valueOf(method);
-					if (act < 0) throw new IllegalRequestException(Code.METHOD_NOT_ALLOWED, "无效请求类型 " + method);
+					if (act < 0) throw new IllegalRequestException(HttpCode.METHOD_NOT_ALLOWED, "无效请求类型 " + method);
 
 					Local local = TSO.get();
 					req = local.requests.get().init(act, path, query);
@@ -244,7 +244,7 @@ public final class HttpServer11 extends PacketMerger implements
 
 					if (!finish) return;
 				} catch (IllegalArgumentException e) {
-					throw new IllegalRequestException(Code.BAD_REQUEST, e.getMessage());
+					throw new IllegalRequestException(HttpCode.BAD_REQUEST, e.getMessage());
 				}
 
 				validateHeader(h);
@@ -267,12 +267,21 @@ public final class HttpServer11 extends PacketMerger implements
 				boolean chunk = "chunked".equalsIgnoreCase(encoding);
 
 				if (lenStr != null) {
-					if (exceptPostSize > postSize) throw new IllegalRequestException(Code.ENTITY_TOO_LARGE);
+					if (exceptPostSize > postSize) throw new IllegalRequestException(req.isExpecting() ? 417 : HttpCode.ENTITY_TOO_LARGE);
+					if (req.isExpecting()) {
+						try {
+							ByteList hdr = IOUtil.getSharedByteBuf();
+							ch.channelWrite(hdr.putAscii("HTTP/1.1 100 Continue\r\n\r\n"));
+						} catch (IOException e) {
+							Helpers.athrow(e);
+						}
+					}
+
 					preparePostBuffer(ctx, postSize = exceptPostSize);
 				} else if (chunk) {
 					preparePostBuffer(ctx, postSize);
 				} else {
-					throw new IllegalRequestException(Code.BAD_REQUEST, "不支持的传输编码"+encoding);
+					throw new IllegalRequestException(HttpCode.BAD_REQUEST, "不支持的传输编码"+encoding);
 				}
 
 				state = RECV_BODY;
@@ -288,7 +297,7 @@ public final class HttpServer11 extends PacketMerger implements
 				if (remain <= 0) {
 					if (!req.containsKey("content-length")) {
 						if (remain == 0) break _if;
-						die().code(Code.ENTITY_TOO_LARGE);
+						die().code(HttpCode.ENTITY_TOO_LARGE);
 					} else {
 						// 两个请求连在一起？
 						ctx.readInactive();
@@ -470,7 +479,7 @@ public final class HttpServer11 extends PacketMerger implements
 		if (body == Response.EMPTY) body = null; // fast path
 
 		ByteList hdr = IOUtil.ddLayeredByteBuf();
-		hdr.putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put((byte) ' ').putAscii(Code.getDescription(code)).putAscii("\r\n");
+		hdr.putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put((byte) ' ').putAscii(HttpCode.getDescription(code)).putAscii("\r\n");
 
 		req.packToHeader();
 		Headers h = req.responseHeader;
@@ -513,7 +522,7 @@ public final class HttpServer11 extends PacketMerger implements
 			hdr.putShort(0x1f8b).putLong((long) Deflater.DEFLATED << 56);
 			out.handler().channelWrite(out, hdr);
 		}
-		hdr.close();
+		hdr._free();
 
 		time = System.currentTimeMillis() + router.writeTimeout(req, body);
 		state = body == null ? SEND_DONE : SEND_BODY;

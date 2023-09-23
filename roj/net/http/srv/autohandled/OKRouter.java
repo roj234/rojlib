@@ -8,11 +8,10 @@ import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.insn.SwitchEntry;
 import roj.asm.type.*;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttrHelper;
-import roj.asm.util.ExceptionEntryCWP;
+import roj.asm.util.TryCatchEntry;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.SwitchSegment;
@@ -103,7 +102,7 @@ public class OKRouter implements Router {
 		cw.field(GETFIELD, hndInst, 0);
 
 		SwitchSegment seg = CodeWriter.newSwitch(TABLESWITCH);
-		cw.switches(seg);
+		cw.addSegment(seg);
 
 		int id = 0;
 		IntMap<Annotation> handlers = new IntMap<>();
@@ -112,7 +111,7 @@ public class OKRouter implements Router {
 		String fn = o.getClass().getName().replace('.', '/').concat(".class");
 		ConstantData data = Parser.parseConstants(o.getClass());
 
-		List<ExceptionEntryCWP> exhandlers = new SimpleList<>();
+		List<TryCatchEntry> exhandlers = new SimpleList<>();
 
 		SimpleList<MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
@@ -136,7 +135,7 @@ public class OKRouter implements Router {
 			}
 
 			Label self = cw.label();
-			seg.targets.add(new SwitchEntry(seg.targets.size(), self));
+			seg.branch(seg.targets.size(), self);
 			seg.def = self;
 			List<Type> par = mn.parameters();
 
@@ -189,7 +188,7 @@ public class OKRouter implements Router {
 		if (seg.def == null) throw new IllegalArgumentException(fn.concat("没有任何处理函数"));
 
 		if (handleError) {
-			for (ExceptionEntryCWP eh : exhandlers) {
+			for (TryCatchEntry eh : exhandlers) {
 				cw.label(eh.handler);
 				cw.one(ASTORE_0);
 
@@ -208,7 +207,7 @@ public class OKRouter implements Router {
 				cw.one(ATHROW);
 			}
 			cw.visitExceptions();
-			for (ExceptionEntryCWP eh : exhandlers) {
+			for (TryCatchEntry eh : exhandlers) {
 				cw.visitException(eh.start,eh.end,eh.handler,null);
 			}
 			cw.finish();
@@ -280,7 +279,7 @@ public class OKRouter implements Router {
 		return this;
 	}
 
-	private void provideBodyPars(CodeWriter c, ConstantPool cp, MethodNode m, int begin, List<ExceptionEntryCWP> tries) {
+	private void provideBodyPars(CodeWriter c, ConstantPool cp, MethodNode m, int begin, List<TryCatchEntry> tries) {
 		List<Type> parTypes = m.parameters();
 
 		Annotation body = AttrHelper.getAnnotation(AttrHelper.getAnnotations(cp, m, false), "roj/net/http/srv/autohandled/Body");
@@ -324,7 +323,7 @@ public class OKRouter implements Router {
 		CodeWriter cw;
 		String from;
 		boolean nonnull;
-		List<ExceptionEntryCWP> tries;
+		List<TryCatchEntry> tries;
 
 		private static final Annotation DEFAULT = new Annotation();
 
@@ -347,7 +346,7 @@ public class OKRouter implements Router {
 
 						c.one(ALOAD_1);
 						c.invoke(INVOKEVIRTUAL, REQ, "postFields", "()Ljava/util/Map;");
-						c.var(ASTORE, fromSlot = nextSlot);
+						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++ << 8;
 					}
 				break;
@@ -358,7 +357,7 @@ public class OKRouter implements Router {
 
 						c.one(ALOAD_1);
 						c.invoke(INVOKEVIRTUAL, REQ, "getFields", "()Ljava/util/Map;");
-						c.var(ASTORE, fromSlot = nextSlot);
+						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++;
 					}
 					break;
@@ -369,7 +368,7 @@ public class OKRouter implements Router {
 
 						c.one(ALOAD_1);
 						c.invoke(INVOKEVIRTUAL, REQ, "fields", "()Ljava/util/Map;");
-						c.var(ASTORE, fromSlot = nextSlot);
+						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++ << 16;
 					}
 					break;
@@ -392,11 +391,11 @@ public class OKRouter implements Router {
 
 			if (fromSlot == 0) throw new IllegalStateException("不支持的类型/"+from1);
 
-			c.var(ALOAD, fromSlot);
+			c.vars(ALOAD, fromSlot);
 			c.ldc(name);
 			c.invokeItf("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
 
-			ExceptionEntryCWP entry = new ExceptionEntryCWP();
+			TryCatchEntry entry = new TryCatchEntry();
 			entry.start = cw.label();
 			entry.handler = new Label();
 			entry.type = type+" "+name;

@@ -1,85 +1,133 @@
 package roj.net.cross.server;
 
-import roj.collect.IntMap;
-import roj.concurrent.PacketBuffer;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.net.ch.*;
-import roj.net.ch.handler.MSSCipher;
-import roj.net.ch.handler.Timeout;
-import roj.net.ch.handler.VarintSplitter;
-import roj.net.cross.AEClient;
+import roj.net.ch.ChannelCtx;
+import roj.net.ch.ChannelHandler;
+import roj.net.ch.Pipe;
+import roj.text.logging.Level;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.NamespaceKey;
-import roj.util.TypedName;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.nio.channels.SelectionKey;
-import java.util.Iterator;
 
-import static roj.net.cross.Util.PH_CLIENT_LOGOUT;
-import static roj.net.cross.Util.print;
 import static roj.net.cross.server.AEServer.server;
 
 /**
  * @author Roj233
  * @since 2022/1/24 3:21
  */
-public final class Client implements ChannelHandler {
-	public static final TypedName<Client> CLIENT = new TypedName<>("CLIENT");
-
-	ChannelCtx handler;
-	Room room;
+final class Client extends Connection implements ChannelHandler {
+	Host room;
 	int clientId;
 
-	// region 统计数据 (可以删除)
-	public final long creation;
-	public long lastPacket;
+	public int getClientId() { return clientId; }
+	public Host getRoom() { return room; }
 
-	public int getClientId() {
-		return clientId;
-	}
-
-	public Room getRoom() {
-		return room;
-	}
-	// endregion
-
-	// 状态量
-	private Stated state;
-	long timer, pingTimer;
-	int waitForReset = -1;
-	UPnPPinger task;
+	Client() {}
 
 	@Override
-	public String toString() {
-		StringBuilder sb = new StringBuilder();
-		String s = handler.remoteAddress().toString();
-		sb.append("[").append(s.startsWith("/") ? s.substring(1) : s).append("]");
-		if (room != null) {
-			sb.append(" \"").append(room.id).append("\"#").append(clientId);
+	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
+		lastPacket = System.currentTimeMillis();
+
+		DynByteBuf rb = (DynByteBuf) msg;
+		switch (rb.readUnsignedByte()) {
+			case P___HEARTBEAT: break;
+			case P___LOGOUT: ctx.channel().close(); return;
+			case P___CHAT_DATA:
+				System.out.println("P_CHAT_DATA暂无用途");
+			break;
+			case P___NOTHING:
+				int id;
+				PipeInfo pi;
+			break;
+			case P_S_PING:
+				byte[] ip = rb.readBytes(rb.readUnsignedByte());
+				char port = rb.readChar();
+
+				Pinger task = ping(ip, port);
+				if (task == null) {
+					rb = IOUtil.getSharedByteBuf();
+					ctx.channelWrite(rb.put(P_S_PING).put(-3));
+				}
+			break;
+			case P_S_PONG: pong(rb); break;
+			case PCS_REQUEST_CHANNEL:
+				id = rb.readInt();
+				Object pipe = generatePipe(id);
+				ByteList b = IOUtil.getSharedByteBuf();
+
+				if (pipe.getClass() == String.class) {
+					LOGGER.info("[{}] 无法创建管道: {}", this, pipe);
+					ctx.channelWrite(b.put(PCC_CHANNEL_DENY).putInt(id).putVUIUTF(pipe.toString()));
+					break;
+				}
+
+				room.writeAsync(b.put(PHH_CLIENT_REQUEST_CHANNEL).put(rb).putInt(clientId).putInt((int) pipe));
+				rb.rIndex += 33;
+			break;
+			default: unknownPacket(ctx, rb); return;
 		}
-		return sb.append(": ").toString();
+
+		if (!LOGGER.getLevel().canLog(Level.DEBUG)) rb.rIndex = rb.wIndex();
+		sendHeartbeat(ctx);
 	}
 
-	Client() {
-		this.creation = System.currentTimeMillis() / 1000;
+	@Override
+	public void channelClosed(ChannelCtx ctx) {
+		if (server.shutdown) return;
+
+		if (room != null) {
+			synchronized (room.clients) { room.clients.remove(clientId); }
+
+			DynByteBuf b = IOUtil.getSharedByteBuf();
+			room.writeAsync(b.put(PHH_CLIENT_LOGOUT).putInt(clientId));
+		}
+
+		LOGGER.info("[{}] 连接中止", this);
+	}
+
+	Object generatePipe(int sessionId) {
+		if (server.pipes.size() > SERVER_MAX_PIPES) return "服务器合计等待打开的管道过多";
+		if (pipes.size() > CLIENT_MAX_PIPES) return "你打开的管道过多";
+		if (room.pipes.size() > HOST_MAX_PIPES) return "Host打开的管道过多";
+
+		PipeInfo group = new PipeInfo();
+		group.pipe = new Pipe();
+		group.sessionId = sessionId;
+		group.timeout = System.currentTimeMillis() + CLIENT_TIMEOUT;
+
+		int a, b;
+		do {
+			a = server.rnd.nextInt();
+		} while (server.pipes.putIfAbsent(a, group) != null);
+		group.hostId = a;
+		group.host = room;
+
+		do {
+			b = server.rnd.nextInt();
+		} while (a == b || server.pipes.putIfAbsent(b, group) != null);
+		group.clientId = b;
+		group.client = this;
+
+		// 仅供统计和reset用
+		synchronized (pipes) { pipes.putInt(group.clientId, group); }
+		synchronized (room.pipes) { room.pipes.putInt(group.hostId, group); }
+
+		return group.hostId;
 	}
 
 	public CMapping serialize() {
 		CMapping json = new CMapping();
 		json.put("id", clientId);
 		json.put("ip", handler.remoteAddress().toString());
-		Stated state = this.state;
-		json.put("state", state == null ? "CLOSED" : state.getClass().getSimpleName());
+		json.put("state", "<not implemented>");
 		json.put("time", creation);
 		long up = 0, down = 0;
 		if (!pipes.isEmpty()) {
 			synchronized (pipes) {
-				for (PipeGroup pg : pipes.values()) {
-					Pipe pr = pg.pairRef;
+				for (PipeInfo pg : pipes.values()) {
+					Pipe pr = pg.pipe;
 					if (pr == null) continue;
 					up += pr.uploaded;
 					down += pr.downloaded;
@@ -91,160 +139,5 @@ public final class Client implements ChannelHandler {
 		json.put("heart", lastPacket / 1000);
 		json.put("pipe", pipes.size());
 		return json;
-	}
-
-	static final int MAX_PACKET = 10020;
-
-	@Override
-	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		NamespaceKey id = event.id;
-		if (id == Timeout.WRITE_TIMEOUT) {
-			print(this + " WRITE_TIMEOUT");
-			ctx.close();
-		} else if (id == Timeout.READ_TIMEOUT) {
-			print(this + " READ_TIMEOUT");
-		}
-	}
-
-	@Override
-	public void channelTick(ChannelCtx ctx) throws IOException {
-		if (clientId == 0 && !pipes.isEmpty()) {
-			long time = System.currentTimeMillis();
-			// 嗯...差不多可以，只要脸不太黑...
-			if ((time & 127) == 0) {
-				synchronized (pipes) {
-					for (Iterator<PipeGroup> itr = pipes.values().iterator(); itr.hasNext(); ) {
-						PipeGroup pair = itr.next();
-						if (pair.pairRef == null || pair.pairRef.idleTime > AEServer.PIPE_TIMEOUT) {
-							itr.remove();
-							pair.close(-2);
-						}
-					}
-				}
-			}
-		}
-
-		if (!packets.isEmpty()) {
-			DynByteBuf b = ctx.allocate(true, 2048);
-			try {
-				ctx.channelWrite(packets.take(b));
-			} finally {
-				ctx.reserve(b);
-			}
-		}
-	}
-
-	@Override
-	public void channelClosed(ChannelCtx ctx) throws IOException {
-		if (server.shutdown) return;
-
-		if (room != null) {
-			if (room.master == this) {
-				room.master = null;
-				server.rooms.remove(room.id);
-				room.close();
-				System.err.println("close room");
-			} else {
-				synchronized (room.clients) {
-					room.clients.remove(clientId);
-				}
-				System.err.println("dispatch client logout");
-				Client mw = room.master;
-				if (mw != null) {
-					DynByteBuf tmp = IOUtil.getSharedByteBuf();
-					mw.sync(tmp.put((byte) PH_CLIENT_LOGOUT).putInt(clientId));
-				}
-			}
-		}
-		server.remain.getAndIncrement();
-		print(this + "连接中止");
-	}
-
-	private final PacketBuffer packets = new PacketBuffer(10);
-
-	public void sync(DynByteBuf rb) {
-		if (rb.readableBytes() > MAX_PACKET) throw new IllegalArgumentException("Packet too big");
-		packets.offer(rb);
-	}
-
-	final IntMap<PipeGroup> pipes = new IntMap<>();
-	PipeGroup pending;
-
-	String generatePipe(int[] tmp) {
-		if (pending != null) return "管道 #" + pending.id + " 处于等待状态";
-		if (clientId == 0) return "只有客户端才能请求管道";
-		if (server.pipes.size() > 100) return "服务器等待打开的管道过多";
-		if (pipes.size() > AEClient.MAX_CHANNEL_COUNT) return "你打开的管道过多";
-		server.pipeTimeoutHandler();
-
-		PipeGroup group = pending = new PipeGroup();
-		group.downOwner = this;
-		group.id = server.pipeId++;
-		do {
-			group.upPass = server.rnd.nextInt();
-		} while (group.upPass == 0);
-		do {
-			group.downPass = server.rnd.nextInt();
-		} while (group.downPass == 0 || group.downPass == group.upPass);
-		group.pairRef = new Pipe();
-		group.pairRef.att = group;
-		group.timeout = System.currentTimeMillis() + 5000;
-
-		tmp[0] = group.id;
-		tmp[1] = group.upPass;
-
-		synchronized (pipes) {
-			pipes.putInt(group.id, group);
-		}
-		synchronized (room.master.pipes) {
-			room.master.pipes.putInt(group.id, group);
-		}
-		server.pipes.put(group.id, group);
-
-		return null;
-	}
-
-	public void closePipe(int pipeId) {
-		PipeGroup group;
-		synchronized (pipes) {
-			group = pipes.remove(pipeId);
-		}
-		if (group != null) {
-			try {
-				group.close(clientId == 0 ? 0 : 1);
-			} catch (IOException ignored) {}
-		}
-	}
-
-	public PipeGroup getPipe(int pipeId) {
-		return pipes.get(pipeId);
-	}
-
-	UPnPPinger ping(byte[] ip, char port, long sec) {
-		if (System.currentTimeMillis() - pingTimer < 10000) {
-			return null;
-		}
-		pingTimer = System.currentTimeMillis();
-
-		try {
-			UPnPPinger pinger = task = new UPnPPinger(sec);
-			MyChannel ctx = MyChannel.openTCP()
-									 .addLast("cipher", new MSSCipher())
-									 .addLast("splitter", new VarintSplitter(3))
-									 .addLast("timeout", new Timeout(5000, 5000))
-									 .addLast("UPNP Handler", pinger);
-			ctx.connect(new InetSocketAddress(InetAddress.getByAddress(ip), port));
-			server.man.getLoop().register(ctx, null, SelectionKey.OP_CONNECT);
-		} catch (Exception e) {
-			e.printStackTrace();
-			task = null;
-		}
-
-		return task;
-	}
-
-	@Override
-	public void handlerAdded(ChannelCtx ctx) {
-		this.handler = ctx;
 	}
 }

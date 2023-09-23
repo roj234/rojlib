@@ -65,7 +65,7 @@ public abstract class MyChannel implements Selectable {
 			if (pipe.name.equals(name)) return pipe;
 			pipe = pipe.next;
 		}
-		return null;
+		return Helpers.maybeNull();
 	}
 	public final MyChannel addLast(String name, ChannelHandler pipe) {
 		ChannelCtx cp = handler(name);
@@ -296,7 +296,6 @@ public abstract class MyChannel implements Selectable {
 			}
 		}
 	}
-
 	public void readInactive() {
 		int ops = key.interestOps();
 		setFlagLock(flag | READ_INACTIVE);
@@ -304,6 +303,7 @@ public abstract class MyChannel implements Selectable {
 			key.interestOps(ops & ~SelectionKey.OP_READ);
 		}
 	}
+	public boolean readDisabled() { return (flag & READ_INACTIVE) != 0; }
 
 	public void pauseAndFlush() {
 		if (!pending.isEmpty()) {
@@ -486,7 +486,7 @@ public abstract class MyChannel implements Selectable {
 	// region Selectable
 	@Override
 	public void tick(int elapsed) throws Exception {
-		if (state >= CLOSED) return;
+		if (state >= CLOSE_PENDING) return;
 		if (state == CONNECT_PENDING && timeout != 0 && (timeout -= elapsed) < 0) {
 			if (finishConnect()) return;
 			close();
@@ -503,7 +503,7 @@ public abstract class MyChannel implements Selectable {
 			ChannelCtx pipe = pipelineHead;
 			while (pipe != null) {
 				pipe.handler.channelTick(pipe);
-				if (state >= CLOSED) break;
+				if (state >= CLOSE_PENDING) break;
 				pipe = pipe.next;
 			}
 		} finally {
@@ -545,7 +545,7 @@ public abstract class MyChannel implements Selectable {
 
 	@Override
 	public final void selected(int readyOps) throws IOException {
-		if (state >= CLOSED) {
+		if (state >= CLOSE_PENDING) {
 			key.cancel();
 			return;
 		}
@@ -663,19 +663,17 @@ public abstract class MyChannel implements Selectable {
 		return nioBuf;
 	}
 
-	public final DynByteBuf i_getBuffer() {
-		return rb;
-	}
-
+	public final DynByteBuf i_getBuffer() { return rb; }
 	/**
 	 * 获取Channel用于其它用途
 	 */
-	public AbstractSelectableChannel i_outOfControl() {
+	public AbstractSelectableChannel i_outOfControl() throws IOException {
 		lock.lock();
 		try {
-			if (state > CLOSED) throw new IllegalStateException();
-			state = CLOSED;
-			return ch;
+			AbstractSelectableChannel c = ch;
+			ch = null;
+			close();
+			return c;
 		} finally {
 			lock.unlock();
 		}
@@ -689,7 +687,7 @@ public abstract class MyChannel implements Selectable {
 	}
 
 	public void invokeLater(Runnable r) {
-		TaskPool.CpuMassive().pushTask(() -> {
+		TaskPool.Common().pushTask(() -> {
 			lock.lock();
 			try {
 				r.run();

@@ -13,15 +13,12 @@ import static roj.collect.AbstractIterator.*;
  * @since 2021/5/11 23:9
  */
 public class MyBitSet implements Iterable<Integer> {
-	protected long[] set;
-	protected int cap;
-	protected int max = -1;
-	protected int size;
+	private long[] set;
+	private int cap;
+	private int max = -1;
+	private int size;
 
-	public MyBitSet() {
-		this(1);
-	}
-
+	public MyBitSet() { this(1); }
 	public MyBitSet(int size) {
 		this.set = new long[(size >> 6) + 1];
 		this.cap = set.length << 6;
@@ -87,27 +84,67 @@ public class MyBitSet implements Iterable<Integer> {
 	public final int first() { return nextTrue(0); }
 	public final int last() { return max; }
 
-	public final MyBitSet addAll(MyBitSet ibs) {
-		if (ibs.max < 0) return this;
-		// 100% true ...
-		expand(ibs.max);
-		max = Math.max(max, ibs.max);
-		int ml = (ibs.max >>> 6) + 1;
-		int ds = ibs.size;
-		for (int i = 0; i < ml; i++) {
-			long s = ibs.set[i], os = set[i] & s;
-
-			while (os != 0) {
-				if ((os & 1) != 0) { // both have
-					ds--;
-				}
-				os >>>= 1;
-			}
-
-			set[i] |= s;
+	public final MyBitSet and(MyBitSet o) {
+		if (o.max < 0) {
+			clear();
+			return this;
 		}
 
-		size += ds;
+		max = Math.min(max, o.max);
+
+		int myLen = (max >>> 6) + 1;
+		int len = (o.max >>> 6) + 1;
+
+		int addSize = o.size;
+
+		for (int i = 0; i < myLen; i++) {
+			if (i >= len) {
+				set[i] = 0;
+			} else {
+				long num = o.set[i]&set[i];
+				addSize += Long.bitCount(num);
+				set[i] = num;
+			}
+		}
+
+		size = addSize;
+		return this;
+	}
+	public final MyBitSet or(MyBitSet o) {
+		if (o.max < 0) return this;
+
+		expand(o.max);
+		max = Math.max(max, o.max);
+
+		int len = (o.max >>> 6) + 1;
+		int addSize = 0;
+
+		for (int i = 0; i < len; i++) {
+			long num = o.set[i]|set[i];
+			addSize += Long.bitCount(num);
+			set[i] = num;
+		}
+
+		size = addSize;
+		return this;
+	}
+	public final MyBitSet xor(MyBitSet o) {
+		if (o.max < 0) return this;
+
+		expand(o.max);
+		int theMax = Math.max(max, o.max);
+
+		int len = (o.max >>> 6) + 1;
+		int addSize = 0;
+
+		for (int i = 0; i < len; i++) {
+			long num = o.set[i]^set[i];
+			addSize += Long.bitCount(num);
+			set[i] = num;
+		}
+
+		max = prevTrue(theMax);
+		size = addSize;
 		return this;
 	}
 
@@ -294,6 +331,50 @@ public class MyBitSet implements Iterable<Integer> {
 		max = len;
 	}
 
+	public final void shiftLeft(int i) {
+		if (i < 0) {
+			shiftRight(-i);
+			return;
+		}
+
+		expand(max+i);
+		int block = i>>6;
+		int shift = i&63;
+		int shift1 = 64-shift;
+
+		for (int j = max>>>6; j > 0; j--) set[j+block] = set[j] << shift | set[j-1] >>> shift1;
+		set[block] = set[0] << shift;
+		while (block > 0) set[--block] = 0;
+
+		max += i;
+	}
+	public final void shiftRight(int i) {
+		if (i < 0) {
+			shiftLeft(-i);
+			return;
+		}
+
+		if (i > max) {
+			clear();
+			return;
+		}
+
+		int block = i>>6;
+		int shift = i&63;
+		int shift1 = 64-shift;
+
+		int end = max >>> 6;
+		if (shift1 == 64) {
+			for (int j = block; j < end; j++) set[j-block] = set[j] >>> shift;
+		} else {
+			for (int j = block; j < end; j++) set[j-block] = set[j+1] << shift1 | set[j] >>> shift;
+		}
+		set[end-block] = set[end] >>> shift;
+		for (int j = end; j > end-block; j--) set[j] = 0;
+
+		max -= i;
+	}
+
 	public final MyBitSet copy() {
 		MyBitSet copied = new MyBitSet(cap);
 		System.arraycopy(set, 0, copied.set, 0, set.length);
@@ -314,21 +395,26 @@ public class MyBitSet implements Iterable<Integer> {
 
 		char[] str = new char[max+3];
 		str[0] = '{';
-		int aa = 1;
+		int j = 1;
 
-		int len = (max+64) >>> 6;
-		long mask = (1L << ((max+1)&63)) - 1;
-		while (len-- > 0) {
-			long v = set[len];
-
+		int end = max >>> 6;
+		for (int i = 0; i < end; i++) {
+			long v = set[i];
+			long mask = 1;
 			while (mask != 0) {
-				str[aa++] = (v&mask) == 0 ? '0' : '1';
-				mask >>>= 1;
+				str[j++] = (v&mask) == 0 ? '0' : '1';
+				mask <<= 1;
 			}
-			mask = Long.MAX_VALUE;
 		}
 
-		str[aa] = '}';
+		long v = set[end];
+		long mask = 1;
+		for (int i = max-end*64; i >= 0; i--) {
+			str[j++] = (v&mask) == 0 ? '0' : '1';
+			mask <<= 1;
+		}
+
+		str[j] = '}';
 		return new String(str);
 	}
 
@@ -448,5 +534,12 @@ public class MyBitSet implements Iterable<Integer> {
 
 	public final long[] array() {
 		return set;
+	}
+
+	public int[] toIntArray() {
+		int[] data = new int[size];
+		int i = 0;
+		for (IntIterator itr = iterator(); itr.hasNext(); ) data[i++] = itr.nextInt();
+		return data;
 	}
 }

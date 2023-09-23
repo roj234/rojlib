@@ -13,10 +13,13 @@ import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.visitor.AttrCodeWriter;
+import roj.asm.visitor.CodeVisitor;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.reflect.FieldAccessor;
+import roj.text.CharList;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.TypedName;
@@ -95,15 +98,21 @@ public class ConstantData implements IClass {
 		if (v == ANNOTATION)
 			throw new IllegalArgumentException("无效的描述符组合(ANN) "+this);
 
+		// 如果设置了 ACC_INTERFACE 标志，还必须设置 ACC_ABSTRACT 标志，并且不得设置 ACC_FINAL、ACC_SUPER、ACC_ENUM 和 ACC_MODULE 标志。
+		// 如果不设置 ACC_INTERFACE 标志，则可以设置表 4.1-B 中除 ACC_ANNOTATION 和 ACC_MODULE 以外的任何其他标志。
+		// 但是，这样的类文件不能同时设置 ACC_FINAL 和 ACC_ABSTRACT 标志（JLS §8.1.1.2）。
+		if (v != 0 && (access & (ABSTRACT|SUPER|ENUM)) != ABSTRACT)
+			throw new IllegalArgumentException("无效的描述符组合(Itf) "+this);
+
 		MyHashSet<String> descs = new MyHashSet<>();
 		fastValidate(Helpers.cast(methods), descs);
 		descs.clear();
 		fastValidate(Helpers.cast(fields), descs);
 	}
 
-	private void fastValidate(SimpleList<MoFNode> nodes, MyHashSet<String> out) {
+	private void fastValidate(SimpleList<RawNode> nodes, MyHashSet<String> out) {
 		for (int i = 0; i < nodes.size(); i++) {
-			MoFNode n = nodes.get(i);
+			RawNode n = nodes.get(i);
 			if (!out.add(n.name().concat(n.rawDesc())))
 				throw new IllegalArgumentException("重复的方法或字段 "+n);
 
@@ -146,6 +155,27 @@ public class ConstantData implements IClass {
 	public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
 	public AttributeList attributesNullable() { return attributes; }
 
+	public void methodIter_tmpName_(String name, String desc, CodeVisitor cv) {
+		int i = getMethod(name, desc);
+		if (i >= 0) {
+			MethodNode mn = methods.get(i);
+			AttrUnknown code = (AttrUnknown) mn.attrByName("Code");
+			if (code == null) return;
+
+			if (cv instanceof CodeWriter) {
+				ByteList b = new ByteList();
+				((CodeWriter) cv).init(b, cp, mn, (byte) 0);
+				cv.visit(cp, Parser.reader(code));
+				((CodeWriter) cv).finish();
+				code.setRawData(b);
+			} else {
+				cv.visit(cp, Parser.reader(code));
+			}
+		} else {
+
+		}
+	}
+
 	@Override
 	public ConstantPool cp() {
 		return cp;
@@ -165,13 +195,13 @@ public class ConstantData implements IClass {
 			w.putShort(cw.reset(interfaces.get(i)).getIndex());
 		}
 
-		List<? extends FieldNode> fields = this.fields;
+		List<FieldNode> fields = this.fields;
 		w.putShort(fields.size());
 		for (int i = 0, l = fields.size(); i < l; i++) {
 			fields.get(i).toByteArray(w, cw);
 		}
 
-		List<? extends MethodNode> methods = this.methods;
+		List<MethodNode> methods = this.methods;
 		w.putShort(methods.size());
 		for (int i = 0, l = methods.size(); i < l; i++) {
 			methods.get(i).toByteArray(w, cw);
@@ -193,70 +223,79 @@ public class ConstantData implements IClass {
 		return w;
 	}
 
-	public void normalize() {
-		List<? extends MethodNode> methods = this.methods;
-		for (int i = 0; i < methods.size(); i++) {
-			if (methods.get(i) instanceof Method) {
-				methods.set(i, Helpers.cast(((Method) methods.get(i)).i_downgrade(cp)));
-			}
-		}
-		List<? extends MoFNode> fields = this.fields;
-		for (int i = 0; i < fields.size(); i++) {
-			if (fields.get(i) instanceof Field) {
-				fields.set(i, Helpers.cast(((Field) fields.get(i)).i_downgrade(cp)));
-			}
-		}
+	public final void parsed() {
+		List<MethodNode> mm = methods;
+		for (int i = 0; i < mm.size(); i++) mm.get(i).parsed(cp);
+		List<FieldNode> ff = fields;
+		for (int i = 0; i < ff.size(); i++) ff.get(i).parsed(cp);
 
-		AttributeList attrs = attributes;
-		if (attrs != null) {
+		AttributeList list = attributes;
+		if (list != null) Parser.parseAttributes(this,cp,list,Signature.CLASS);
+
+		cp.clear();
+	}
+	public final void unparsed() {
+		List<MethodNode> mm = methods;
+		for (int i = 0; i < mm.size(); i++) mm.get(i).unparsed(cp);
+		List<FieldNode> ff = fields;
+		for (int i = 0; i < ff.size(); i++) ff.get(i).unparsed(cp);
+
+		AttributeList list = attributes;
+		if (list != null) {
 			DynByteBuf w = AsmShared.getBuf();
-			for (int i = 0; i < attrs.size(); i++) {
-				attrs.set(i, AttrUnknown.downgrade(cp, w, attrs.get(i)));
-			}
+			for (int i = 0; i < list.size(); i++) list.set(i, AttrUnknown.downgrade(cp, w, list.get(i)));
 		}
 	}
 
 	@Override
 	public String toString() {
-		StringBuilder sb = new StringBuilder(1000);
+		CharList sb = new CharList(1000);
 
 		Attribute a = parsedAttr(cp, Attribute.RtAnnotations);
-		if (a != null) sb.append(a);
+		if (a != null) sb.append(a).append('\n');
 		a = parsedAttr(cp, Attribute.ClAnnotations);
-		if (a != null) sb.append(a);
+		if (a != null) sb.append(a).append('\n');
 
-		AccessFlag.toString(access, AccessFlag.TS_CLASS, sb);
-		sb.append(name.substring(name.lastIndexOf('/')+1));
+		int acc = access;
+		if ((acc&ANNOTATION) != 0) acc &= ~(ABSTRACT|INTERFACE);
+		else if ((acc&INTERFACE) != 0) acc &= ~(ABSTRACT);
+
+		AccessFlag.toString(acc, AccessFlag.TS_CLASS, sb);
+		if ((acc&(ENUM|INTERFACE|MODULE|ANNOTATION)) == 0) sb.append("class ");
+
+		TypeHelper.toStringOptionalPackage(sb, name);
 		a = parsedAttr(cp, Attribute.SIGNATURE);
 		if (a != null) {
 			sb.append(a);
 		} else {
-			if (!"java/lang/Object".equals(parent) && parent != null) sb.append(" extends ").append(parent);
+			if (!"java/lang/Object".equals(parent) && parent != null) {
+				TypeHelper.toStringOptionalPackage(sb.append(" extends "), parent);
+			}
 			if (interfaces.size() > 0) {
 				sb.append(" implements ");
-				for (CstClass c : interfaces) {
-					String i = c.name().str();
-					sb.append(i.substring(i.lastIndexOf('/')+1)).append(", ");
+				for (int j = 0; j < interfaces.size(); j++) {
+					String i = interfaces.get(j).name().str();
+					TypeHelper.toStringOptionalPackage(sb, i);
+					if (++j == interfaces.size()) break;
+					sb.append(", ");
 				}
-				sb.delete(sb.length() - 2, sb.length());
 			}
 		}
+		sb.append(" {\n");
 		if (!fields.isEmpty()) {
-			sb.append("\n\n");
+			sb.append('\n');
 			for (int i = 0; i < fields.size(); i++) {
 				sb.append(fields.get(i)).append("\n");
 			}
-			sb.deleteCharAt(sb.length() - 1);
 		}
 		if (!methods.isEmpty()) {
-			sb.append("\n\n");
+			sb.append('\n');
 			for (int i = 0; i < methods.size(); i++) {
-				sb.append(methods.get(i)).append("\n");
+				methods.get(i).toString(sb, this).append('\n');
 			}
-			sb.deleteCharAt(sb.length() - 1);
 		}
 
-		return sb.append("\n").toString();
+		return sb.append('}').toStringAndFree();
 	}
 
 	public final String name() { return nameCst.name().str(); }
@@ -266,10 +305,8 @@ public class ConstantData implements IClass {
 	public final char modifier() { return access; }
 
 	public final List<String> interfaces() { return itfView == null ? itfView = new ItfView() : itfView; }
-	public final List<? extends MoFNode> methods() { return methods; }
-	public final List<? extends MoFNode> fields() { return fields; }
-
-	public final int type() { return Parser.CTYPE_PARSED; }
+	public final List<MethodNode> methods() { return methods; }
+	public final List<FieldNode> fields() { return fields; }
 
 	public final void dump() {
 		try (FileOutputStream fos = new FileOutputStream(name.replace('/', '.') + ".class")) {
@@ -279,28 +316,10 @@ public class ConstantData implements IClass {
 		}
 	}
 
-	public final Method getUpgradedMethod(int i) {
-		MoFNode ms = methods.get(i);
-		if (ms instanceof Method) return (Method) ms;
-		Method m = new Method(this, (RawMethod) ms);
-		methods.set(i, Helpers.cast(m));
-		return m;
-	}
-	public final Method getUpgradedMethod(String name) {
-		return getUpgradedMethod(name, null);
-	}
-	public final Method getUpgradedMethod(String name, String desc) {
-		List<? extends MoFNode> methods = this.methods;
-		for (int i = 0; i < methods.size(); i++) {
-			MoFNode ms = methods.get(i);
-			if (ms.name().equals(name) && (desc == null || ms.rawDesc().equals(desc))) {
-				if (ms instanceof Method) return (Method) ms;
-				Method m = new Method(this, (RawMethod) ms);
-				methods.set(i, Helpers.cast(m));
-				return m;
-			}
-		}
-		return null;
+	public final MethodNode getMethodObj(String name) { return getMethodObj(name, null); }
+	public final MethodNode getMethodObj(String name, String desc) {
+		int i = getMethod(name, desc);
+		return i < 0 ? null : methods.get(i);
 	}
 
 	@Override
@@ -310,12 +329,7 @@ public class ConstantData implements IClass {
 		if (nameCst == null) nameCst = cp.getClazz(name);
 		else {
 			for (int i = 0; i < methods.size(); i++) {
-				MethodNode mn = methods.get(i);
-				if (mn instanceof RawMethod) {
-					((RawMethod) mn).cn(name);
-				} else {
-					((Method) mn).owner = name;
-				}
+				methods.get(i).owner = name;
 			}
 			cp.setUTFValue(nameCst.name(), name);
 		}
@@ -329,40 +343,40 @@ public class ConstantData implements IClass {
 		FieldAccessor.u.putObject(this, P, name);
 	}
 
-	public final int newField(int acc, String name, Type clazz) {
-		return newField(acc,name, TypeHelper.getField(clazz));
+	public final int newField(int acc, String name, Type type) {
+		FieldNode f = new FieldNode(acc, name, type);
+		int i = fields.size();
+		fields.add(f);
+		return i;
 	}
 	public final int newField(int acc, String name, String type) {
-		RawField f0 = new RawField(acc, cp.getUtf(name), cp.getUtf(type));
-		int id = fields.size();
-		fields.add(Helpers.cast(f0));
-		return id;
+		FieldNode f = new FieldNode(acc, name, type);
+		int i = fields.size();
+		fields.add(f);
+		return i;
 	}
 
 	public final CodeWriter newMethod(int acc, String name, String desc) {
-		RawMethod m0 = new RawMethod(acc, cp.getUtf(name), cp.getUtf(desc));
-		m0.cn(this.name);
-		methods.add(Helpers.cast(m0));
+		MethodNode m = new MethodNode(acc, this.name, name, desc);
+		methods.add(m);
 		if ((acc & (ABSTRACT|NATIVE)) != 0) return Helpers.nonnull();
-		AttrCodeWriter cw = new AttrCodeWriter(cp, m0);
-		m0.putAttr(cw);
+		AttrCodeWriter cw = new AttrCodeWriter(cp, m);
+		m.putAttr(cw);
 		return cw.cw;
 	}
 
 	public void npConstructor() {
 		if (getMethod("<init>", "()V") >= 0) return;
 
-		CodeWriter cw = newMethod(AccessFlag.PUBLIC, "<init>", "()V");
-		cw.visitSize(1, 1);
-		cw.one(ALOAD_0);
-		cw.invoke(INVOKESPECIAL, parent, "<init>", "()V");
-		cw.one(RETURN);
-		cw.finish();
+		CodeWriter c = newMethod(AccessFlag.PUBLIC, "<init>", "()V");
+		c.visitSize(1, 1);
+		c.one(ALOAD_0);
+		c.invoke(INVOKESPECIAL, parent, "<init>", "()V");
+		c.one(RETURN);
+		c.finish();
 	}
 
-	public final void cloneable() {
-		cloneable(false);
-	}
+	public final void cloneable() { cloneable(false); }
 	public final void cloneable(boolean invokeSuper) {
 		for (int i = 0; i < interfaces.size(); i++) {
 			if (interfaces.get(i).name().str().equals("java/lang/Cloneable")) return;
@@ -382,25 +396,13 @@ public class ConstantData implements IClass {
 
 	private class ItfView extends AbstractList<String> {
 		@Override
-		public String get(int index) {
-			return interfaces.get(index).name().str();
-		}
-
+		public String get(int index) { return interfaces.get(index).name().str(); }
 		@Override
-		public String set(int index, String obj) {
-			CstClass prev = interfaces.set(index, cp.getClazz(obj));
-			return prev.name().str();
-		}
-
+		public String set(int index, String obj) { return interfaces.set(index, cp.getClazz(obj)).name().str(); }
 		@Override
-		public void add(int index, String element) {
-			interfaces.add(index, cp.getClazz(element));
-		}
-
+		public void add(int index, String element) { interfaces.add(index, cp.getClazz(element)); }
 		@Override
-		public String remove(int index) {
-			return interfaces.remove(index).name().str();
-		}
+		public String remove(int index) { return interfaces.remove(index).name().str(); }
 
 		@Override
 		public boolean remove(Object o) {
@@ -411,10 +413,7 @@ public class ConstantData implements IClass {
 		}
 
 		@Override
-		public boolean contains(Object o) {
-			return indexOf(o) >= 0;
-		}
-
+		public boolean contains(Object o) { return indexOf(o) >= 0; }
 		@Override
 		public int indexOf(Object o) {
 			for (int i = 0; i < interfaces.size(); i++) {
@@ -426,14 +425,9 @@ public class ConstantData implements IClass {
 		}
 
 		@Override
-		public void clear() {
-			interfaces.clear();
-		}
-
+		public void clear() { interfaces.clear(); }
 		@Override
-		public int size() {
-			return interfaces.size();
-		}
+		public int size() { return interfaces.size(); }
 	}
 
 	public final void addInterface(String s) {

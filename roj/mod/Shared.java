@@ -57,7 +57,7 @@ public final class Shared {
 	}
 
 	public static final Scheduler PeriodicTask = Scheduler.getDefaultScheduler();
-	public static final TaskPool Task = TaskPool.CpuMassive();
+	public static final TaskPool Task = TaskPool.Common();
 
 	public static void async(Runnable... run) {
 		Thread[] t = new Thread[run.length];

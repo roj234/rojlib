@@ -16,130 +16,106 @@ import static roj.asm.type.Type.*;
  * @since 2021/6/18 9:51
  */
 public final class TypeHelper {
-	/**
-	 * 转换方法asm type字符串为对象
-	 */
+	/** 这个字段几乎影响全局的toString中类名是否移除包名 */
+	public static boolean TYPE_TOSTRING_NO_PACKAGE = true;
+	public static void toStringOptionalPackage(CharList sb, String type) {
+		if (TYPE_TOSTRING_NO_PACKAGE) {
+			int start = type.lastIndexOf('/')+1;
+			sb.append(type, start, type.length());
+		} else {
+			sb.append(type);
+		}
+	}
+
 	public static List<Type> parseMethod(String desc) {
 		List<Type> params = new SimpleList<>();
 		parseMethod(desc, params);
 		return params;
 	}
 
+	// 支持field，因为 1 > -1 and -1+1 == 0 (see line 53)
 	@SuppressWarnings("fallthrough")
 	public static void parseMethod(String desc, List<Type> params) {
 		int index = desc.indexOf(')');
 
 		CharList tmp = IOUtil.getSharedCharBuf();
 
-		boolean ref = false;
 		int arr = 0;
 		for (int i = 1; i < index; i++) {
 			char c = desc.charAt(i);
 			switch (c) {
-				case ';':
-					if (!ref) {
-						throw new IllegalArgumentException(desc);
-					} else {
-						params.add(new Type(tmp.toString(), arr));
-						tmp.clear();
-						arr = 0;
-						ref = false;
-					}
-					break;
 				case '[':
 					arr++;
-					break;
+				break;
 				case 'L':
-					if (!ref) {
-						ref = true;
-						break;
-					}
+					int j = desc.indexOf(';', i+1);
+					if (j < 0) throw new IllegalArgumentException("class end missing: "+desc);
+					params.add(new Type(desc.substring(i+1, j), arr));
+					i = j;
+				break;
 				default:
-					if (ref) {
-						tmp.append(c);
-					} else {
-						if (!isValid(c)) throw new IllegalArgumentException(desc);
-						params.add(arr == 0 ? std(c) : new Type(c, arr));
-						arr = 0;
-					}
-					break;
+					if (!isValid(c)) throw new IllegalArgumentException(desc);
+					params.add(arr == 0 ? std(c) : new Type(c, arr));
+					arr = 0;
+				break;
 			}
 		}
 
-		Type returns = parse(desc, index + 1);
+		Type returns = parse(desc, index+1);
 		params.add(returns);
 	}
 
 	/**
 	 * 方法参数所占空间
 	 *
-	 * @see roj.asm.util.ICodeWriter#invokeItf(String, String, String)
+	 * @see roj.asm.visitor.AbstractCodeWriter#invokeItf(String, String, String)
 	 */
 	public static int paramSize(String desc) {
-		int cnt = 0;
+		int size = 0;
 		int end = desc.indexOf(')');
 
-		int clz = 0;
 		for (int i = 1; i < end; i++) {
 			char c = desc.charAt(i);
 			switch (c) {
-				case ';':
-					if ((clz & 1) == 0) {
-						throw new IllegalArgumentException(desc);
-					} else {
-						cnt++;
-						clz = 0;
-					}
-					break;
-				case '[':
-					clz |= 2;
-					break;
-				case 'L':
-					clz |= 1;
-					break;
+				case ARRAY: break;
+				case CLASS:
+					i = desc.indexOf(';', i+1);
+					if (i <= 0) throw new IllegalArgumentException("class end missing: "+desc);
+					size++;
+				break;
+				case DOUBLE: case LONG:
+					if (desc.charAt(i-1) == '[') size++;
+					else size += 2;
+				break;
 				default:
-					if ((clz & 1) == 0) {
-						if ((clz & 2) == 0 && (c == DOUBLE || c == LONG)) {
-							cnt += 2;
-						} else {
-							cnt++;
-						}
-						clz = 0;
-					}
-					break;
+					if (!isValid(c)) throw new IllegalArgumentException("unknown character '"+c+"' in "+desc);
+					size++;
+				break;
 			}
 		}
-		return cnt;
+		return size;
 	}
 
-	/**
-	 * 方法返回类型
-	 */
-	public static Type parseReturn(String str) {
-		int index = str.indexOf(')');
+	public static Type parseReturn(String desc) {
+		int index = desc.indexOf(')');
 		if (index < 0) throw new IllegalArgumentException("不是方法描述");
-		return parse(str, index + 1);
+		return parse(desc, index+1);
 	}
 
-	/**
-	 * 转换字段asm type字符串为对象
-	 */
-	public static Type parseField(String s) {
-		return parse(s, 0);
-	}
+	public static Type parseField(String desc) { return parse(desc, 0); }
 
-	private static Type parse(String s, int off) {
-		char c0 = s.charAt(off);
+	private static Type parse(String desc, int off) {
+		char c0 = desc.charAt(off);
 		switch (c0) {
 			case ARRAY:
-				int pos = s.lastIndexOf('[')+1;
-				Type t = parse(s, pos);
+				int pos = desc.lastIndexOf('[')+1;
+				Type t = parse(desc, pos);
 				if (t.owner == null) t = new Type(t.type, pos - off);
 				else t.setArrayDim(pos - off);
 				return t;
 			case CLASS:
-				if (!s.endsWith(";")) throw new IllegalArgumentException("'类'类型 '" + s + "' 未以';'结束");
-				return new Type(s.substring(off+1, s.length()-1));
+				if (!desc.endsWith(";")) throw new IllegalArgumentException("'类'类型 '" + desc + "' 未以';'结束");
+				return new Type(desc.substring(off+1, desc.length()-1));
 			default: return std(c0);
 		}
 	}
@@ -148,8 +124,8 @@ public final class TypeHelper {
 	 * 转换字段type为字符串
 	 * @see Type#toDesc()
 	 */
-	public static String getField(Type type) {
-		if (type.owner == null && type.array() == 0) return toDesc(type.type);
+	public static String getField(IType type) {
+		if (type instanceof Type && ((Type) type).isPrimitive()) return toDesc(((Type) type).type);
 
 		CharList sb = IOUtil.getSharedCharBuf();
 		type.toDesc(sb);
@@ -233,7 +209,7 @@ public final class TypeHelper {
 	 *
 	 * @param types [String, double, void]
 	 * @param methodName <init>
-	 * @param trimPackage 删除包名
+	 * @param trimPackage 删除包名(删除了就不能转换回去了！)
 	 *
 	 * @return void <init>(java.lang.String, double)
 	 */
@@ -300,22 +276,9 @@ public final class TypeHelper {
 			sb.append('[');
 		}
 
-		switch (sb1.toString()) {
-			case "int": return sb.append(INT);
-			case "short": return sb.append(SHORT);
-			case "double": return sb.append(DOUBLE);
-			case "long": return sb.append(LONG);
-			case "float": return sb.append(FLOAT);
-			case "char": return sb.append(CHAR);
-			case "byte": return sb.append(BYTE);
-			case "boolean": return sb.append(BOOLEAN);
-			case "void": return sb.append(VOID);
-		}
-		for (int i = 0; i < sb1.length(); i++) {
-			if (sb1.charAt(i) == '.') sb1.set(i, '/');
-		}
-		sb.append('L').append(sb1);
-		return sb.append(';');
-	}
+		Object[] arr = PD.get(sb1);
+		if (arr != null) return sb.append(arr[0]);
 
+		return sb.append('L').append(sb1.replace('.', '/')).append(';');
+	}
 }

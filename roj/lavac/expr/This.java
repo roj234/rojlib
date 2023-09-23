@@ -2,7 +2,7 @@ package roj.lavac.expr;
 
 import roj.asm.type.Type;
 import roj.config.word.NotStatementException;
-import roj.lavac.parser.MethodPoetL;
+import roj.lavac.parser.MethodWriterL;
 
 /**
  * @author Roj234
@@ -10,12 +10,10 @@ import roj.lavac.parser.MethodPoetL;
  */
 public class This implements Expression {
 	public static final This INST = new This();
-	public This() {
-		
-	}
+	public This() {}
 
 	@Override
-	public void write(MethodPoetL tree, boolean noRet) throws NotStatementException {
+	public void write(MethodWriterL cw, boolean noRet) throws NotStatementException {
 
 	}
 
@@ -25,7 +23,7 @@ public class This implements Expression {
 	}
 
 	@Override
-	public boolean isEqual(Expression left) {
+	public boolean equals(Object left) {
 		return false;
 	}
 }

@@ -82,11 +82,13 @@ public class Helpers {
 		return subMap;
 	}
 
+	private static Object field;
 	@Nonnull
 	public static <T> T nonnull() {
 		// noinspection all
 		return null;
 	}
+	public static <T> T maybeNull() { return cast(field); }
 
 	public static final Predicate<?> alwaystrue = (a) -> true;
 	public static final Predicate<?> alwaysfalse = (a) -> false;

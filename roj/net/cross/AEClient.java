@@ -1,229 +1,171 @@
 package roj.net.cross;
 
+import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.net.ch.*;
+import roj.net.ch.osi.ClientLaunch;
+import roj.text.TextUtil;
+import roj.text.logging.Level;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.SocketAddress;
 import java.net.StandardSocketOptions;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 
-import static roj.net.cross.Util.*;
-
 /**
- * AbyssalEye Client
- *
- * @author Roj233
- * @since 2021/8/18 0:09
+ * @version 2.0.3
+ * @since 2023/11/02 9:23
  */
 public class AEClient extends IAEClient {
-	public static final int MAX_CHANNEL_COUNT = 6;
-
 	public char[] portMap;
 	public int clientId;
+	public String roomMotd;
 
 	protected Listener[] servers;
 
-	final ConcurrentLinkedQueue<Object> asyncTick, asyncRead;
+	final ConcurrentHashMap<Integer, GetPipe> tasks = new ConcurrentHashMap<>();
+	final ConcurrentLinkedQueue<GetPipe> asyncRead = new ConcurrentLinkedQueue<>();
 
-	public AEClient(SocketAddress server, String id, String token) {
-		super(server, id, token);
-		this.asyncTick = new ConcurrentLinkedQueue<>();
-		this.asyncRead = new ConcurrentLinkedQueue<>();
-	}
+	public AEClient(SelectorLoop loop) {super(loop);}
 
-	public final void awaitLogin() throws InterruptedException {
-		if (free != null) return;
-		synchronized (this) {
-			wait();
-		}
-	}
-
-	protected void notifyLogon() {
-		synchronized (this) {
-			notifyAll();
-		}
-	}
-
-	public final void notifyPortMapModified() throws IOException {
-		if (free == null) throw new IOException("Client closed");
-
-		for (int j = 0; j < servers.length; j++) {
-			Listener cn = servers[j];
-			char port = portMap[j];
-			if (cn != null) {
-				if (port != cn.port) {
+	public final int portMapChanged() {
+		for (int i = 0; i < servers.length; i++) {
+			Listener s = servers[i];
+			char port = portMap[i];
+			if (s != null) {
+				if (port != s.port) {
 					try {
-						cn.socket.close();
+						s.socket.close();
 					} catch (IOException ignored) {}
-					servers[j] = null;
+					servers[i] = null;
+				} else {
+					continue;
 				}
 			}
-			if (servers[j] == null && port > 0) {
-				servers[j] = new Listener(port, j);
+
+			if (port > 0) {
 				try {
-					servers[j].start(loop);
-				} catch (Exception e) {
-					e.printStackTrace();
+					servers[i] = new Listener(port, i, loop);
+				} catch (IOException e) {
+					return i;
 				}
 			}
 		}
+
+		return -1;
 	}
 
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
-		received = true;
+		onlyOneMissed = true;
 
 		DynByteBuf rb = (DynByteBuf) msg;
-		switch (rb.get() & 0xFF) {
-			case P_FAIL:
-				print("上次的操作失败了");
-				break;
-			case P_HEARTBEAT:
-				break;
-			case P_LOGOUT:
-				logout(ctx);
-				break;
-			case P_CHANNEL_CLOSE:
-				int src = rb.readInt();
-				int id = rb.readInt();
+		switch (rb.readUnsignedByte()) {
+			case P___HEARTBEAT: rb.readLong(); break;
+			case P___LOGOUT: ctx.close(); break;
+			case P___CHAT_DATA:
+				System.out.println("");
+			break;
+			case P___NOTHING:
+				int id;
+				Pipe pair;
+			break;
+			case P___CHANNEL_CLOSED:
+				id = rb.readInt();
+				String msg1 = rb.readZhCn();
 
-				Pipe pair = socketsById.remove(id);
-				if (pair == null) break;
+				pair = pipes.remove(id);
+				if (pair != null) {
+					pair.close();
+					LOGGER.info("被关闭了管道 {}: {}", pair.att, msg1);
+				}
+			break; // PCS_REQUEST_CHANNEL
+			case PCC_CHANNEL_ALLOW:
+				id = rb.readInt(); // session id
+				GetPipe task = tasks.remove(id);
+				if (task == null) {
+					LOGGER.warn("无效的管道 #{}", id);
+					// 没法管，反正服务端也会关闭
+					break;
+				}
 
-				pair.close();
+				rb.read(task.key, 32, 32);
+				task.pipeId = id = rb.readInt();
+				asyncPipeLogin(id, task.key, task);
+			break;
+			case PCC_CHANNEL_DENY:
+				task = tasks.remove(rb.readInt());
+				if (task == null) break;
 
-				List<Pipe> pairs = free[((SpAttach) pair.att).portId];
-				if (!pairs.isEmpty()) pairs.remove(pair);
-
-				print((src < 0 ? "服务端" : "房主") + "关闭了频道 #" + id);
-				break;
-			case P_CHANNEL_OPEN_FAIL:
-				GetPipe task = (GetPipe) asyncRead.poll();
-				if (task == null || task.cipher == null) throw new IOException("错误的状态");
-
-				src = rb.readInt();
-				task.fail((src < 0 ? "服务端" : "房主") + "拒绝开启频道: " + rb.readVUIUTF());
-				break;
-			case P_CHANNEL_RESULT:
-				task = (GetPipe) asyncRead.poll();
-				if (task == null || task.cipher == null) throw new IOException("错误的状态");
-
-				rb.read(task.cipher, 32, 32);
-				long pipe = rb.readLong();
-				print("申请了频道 #" + (pipe >>> 32));
-				asyncPipeLogin(pipe, task.cipher, task);
-				break;
-			case P_CHANNEL_RESET:
-				print("服务端返回重置完毕");
-				break;
-			case P_EMBEDDED_DATA:
-				break;
-			default:
-				onError(rb, null);
-				ctx.close();
-				break;
+				task.fail("拒绝开启管道: "+rb.readZhCn());
+			break;
+			default: unknownPacket(ctx, rb); break;
 		}
+
+		if (!LOGGER.getLevel().canLog(Level.DEBUG)) rb.rIndex = rb.wIndex();
 	}
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws IOException {
-		if (portMap == null) return;
-
 		super.channelTick(ctx);
 
-		ByteList tmp = IOUtil.getSharedByteBuf();
-		Object o = asyncTick.poll();
-		checkInterrupt:
-		if (o instanceof Pipe) {
-			// release
-			Pipe pipe = (Pipe) o;
-			SpAttach att = (SpAttach) pipe.att;
-			List<Pipe> pairs = free[att.portId];
-			if (pairs == Collections.EMPTY_LIST) pairs = free[att.portId] = new ArrayList<>(3);
-			pairs.add(pipe);
-		} else if (o instanceof GetPipe) {
-			GetPipe gp = (GetPipe) o;
-			if (socketsById.size() > MAX_CHANNEL_COUNT) {
-				gp.fail("打开的频道过多(" + MAX_CHANNEL_COUNT + ")");
-				break checkInterrupt;
-			}
+		GetPipe o = asyncRead.poll();
+		if (o != null) {
+			int session;
+			do {
+				session = rnd.nextInt();
+			} while (tasks.putIfAbsent(session, o) != null);
+			o.sessionId = session;
 
-			asyncRead.offer(gp);
-
-			List<Pipe> pairs = free[gp.portId];
-			if (pairs.isEmpty()) {
-				byte[] cipher = gp.cipher = new byte[64];
-				rnd.nextBytes(cipher);
-
-				tmp.put((byte) PS_REQUEST_CHANNEL).put((byte) gp.portId).put(cipher, 0, 32);
-				break checkInterrupt;
-			}
-
-			Pipe target = pairs.remove(pairs.size() - 1);
-			SpAttach att = (SpAttach) target.att;
-
-			if (DEBUG) print("复用 #" + att);
-			// 通知对面重新连接下
-			tmp.put((byte) P_CHANNEL_RESET).putInt(att.channelId);
-
-			gp.accept(target);
-		}
-
-		if (tmp.wIndex() > 0) {
-			ctx.channelWrite(tmp);
+			ByteList b = IOUtil.getSharedByteBuf();
+			b.put(PCS_REQUEST_CHANNEL).putInt(session).put(o.portId).put(o.key, 0, 32);
+			ctx.channelWrite(b);
 		}
 	}
 
-	@Override
-	protected void prepareLogin(MyChannel ctx) {
-		byte[] idBytes = id.getBytes(StandardCharsets.UTF_8);
-		byte[] tokenBytes = token.getBytes(StandardCharsets.UTF_8);
+	public void init(ClientLaunch ctx, String nickname, String roomToken) {
+		server = ctx.address();
+		handlers = ctx.channel();
+		prepareLogin(ctx.channel());
 
-		ByteList tmp = IOUtil.getSharedByteBuf();
-		tmp.put((byte) idBytes.length).put((byte) tokenBytes.length).put(idBytes).put(tokenBytes);
+		ByteList b = IOUtil.getSharedByteBuf();
+		sendLoginPacket(ctx.channel(), b.put(PCS_LOGIN).putZhCn(roomToken).putZhCn(nickname));
+	}
 
-		ctx.addLast("auth", new AEAuthenticator(tmp.toByteArray(), PS_LOGIN_C)).addLast("auth_after", new ChannelHandler() {
-			@Override
-			public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
-				DynByteBuf rb = (DynByteBuf) msg;
-				int infoLen = rb.get() & 0xFF;
-				int motdLen = rb.get() & 0xFF;
-				int portLen = rb.get() & 0xFF;
+	void handleLoginPacket(ChannelCtx ctx, DynByteBuf rb) throws IOException {
+		if (rb.get() != PCC_LOGON) {
+			unknownPacket(ctx, rb);
+			return;
+		}
 
-				int clientId = rb.readInt();
+		int clientId = rb.readInt();
+		byte[] roomUserId = rb.readBytes(rb.readUnsignedByte());
+		String roomMotd = rb.readZhCn();
+		int portLen = rb.readUnsignedByte();
 
-				print("服务器MOTD: " + rb.readUTF(infoLen));
-				print("房间MOTD: " + rb.readUTF(motdLen));
-				print("客户端ID: " + clientId);
+		LOGGER.info("房间指纹: {}", TextUtil.bytes2hex(roomUserId));
+		if (!roomMotd.isEmpty()) LOGGER.info("房间MOTD: \"{}\"", ITokenizer.addSlashes(roomMotd));
+		LOGGER.info("客户端ID: {}", clientId);
 
-				if (portLen > 32) throw new IllegalArgumentException("系统限制: 端口映射数量 < 32");
-				char[] ports = new char[portLen];
-				for (int i = 0; i < portLen; i++) {
-					ports[i] = rb.readChar();
-				}
+		if (portLen > MAX_PORTS) throw new IllegalArgumentException("系统限制: 端口映射数量 < 32");
+		char[] ports = new char[portLen];
+		for (int i = 0; i < portLen; i++) ports[i] = rb.readChar();
 
-				ctx.removeSelf();
+		byte[] directAddr = rb.readBoolean() ? rb.readBytes(rb.readableBytes()) : null;
 
-				AEClient.this.portMap = ports;
-				AEClient.this.clientId = clientId;
-				AEClient.this.free = Helpers.cast(new List<?>[ports.length]);
-				Arrays.fill(free, Collections.emptyList());
-				AEClient.this.servers = new Listener[ports.length];
+		this.portMap = ports;
+		this.clientId = clientId;
+		this.roomMotd = roomMotd;
+		this.servers = new Listener[ports.length];
 
-				notifyLogon();
-			}
-		});
+		ctx.channelOpened();
+		ctx.removeSelf();
+		login = true;
 	}
 
 	@Override
@@ -245,13 +187,11 @@ public class AEClient extends IAEClient {
 		final int portId;
 		final char port;
 
-		public Listener(char port, int portId) throws IOException {
-			socket = ServerSock.openTCP().bind(InetAddress.getLoopbackAddress(), port, 100).setOption(StandardSocketOptions.SO_REUSEADDR, true);
+		public Listener(char port, int portId, SelectorLoop loop) throws IOException {
 			this.portId = portId;
 			this.port = port;
-		}
 
-		public void start(SelectorLoop loop) throws IOException {
+			socket = ServerSock.openTCP().bind(InetAddress.getLoopbackAddress(), port, 100).setOption(StandardSocketOptions.SO_REUSEADDR, true);
 			socket.register(loop, this);
 		}
 
@@ -259,47 +199,69 @@ public class AEClient extends IAEClient {
 		public void accept(MyChannel ch) {
 			try {
 				initSocketPref(ch);
-				asyncTick.offer(new GetPipe(portId, ch));
+
+				if (pipes.size() > CLIENT_MAX_PIPES) {
+					failed(ch, "打开的管道过多("+CLIENT_MAX_PIPES+")");
+					return;
+				}
+
+				GetPipe gp = new GetPipe(portId, ch);
+				rnd.nextBytes(gp.key);
+				asyncRead.add(gp);
+
+				ch.readInactive();
+				ch.addLast("_null_", gp);
 			} catch (IOException e) {
 				Helpers.athrow(e);
 			}
 		}
+
+		void failed(MyChannel ch, String error) throws IOException {
+			ch.fireChannelWrite(IOUtil.getSharedByteBuf().putAscii("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n").putUTFData(error));
+			ch.close();
+			LOGGER.error("新连接创建失败: {}", error);
+		}
 	}
 
-	final class GetPipe implements Consumer<Pipe> {
-		final int portId;
-		final MyChannel ch;
-		byte[] cipher;
+	final class GetPipe implements Consumer<Pipe>, ChannelHandler {
+		final byte[] key = new byte[64];
+		final MyChannel income;
 
-		GetPipe(int id, MyChannel ch) {
-			portId = id;
-			this.ch = ch;
+		int portId, sessionId, pipeId;
+
+		public GetPipe(int portId, MyChannel income) {
+			this.portId = portId;
+			this.income = income;
 		}
 
-		public void accept(Pipe pair) {
+		long times = 1000;
+		@Override
+		public void channelTick(ChannelCtx ctx) throws Exception {
+			if (--times == 0) fail("等待超时(1000)");
+		}
+
+		@Override
+		public void accept(Pipe pipe) {
+			income.readActive();
+
+			pipes.putInt(pipeId, pipe);
+			pipe.att = new PipeInfoClient(clientId, pipeId, portId);
+
 			try {
-				pair.setDown(ch);
-				loop.register(pair, (Consumer<Pipe>) (pipe) -> {
-					if (pipe.isUpstreamEof()) {
-						System.out.println("管道结束 " + pipe.att);
-						return;
-					}
-					try {
-						asyncTick.offer(pipe);
-					} catch (Throwable e) {
-						System.out.println("管道回收失败 " + pipe.att);
-						e.printStackTrace();
-					}
-				});
-			} catch (Exception e) {
-				try {
-					ch.close();
-				} catch (IOException ignored) {}
+				pipe.setDown(income);
+				loop.register(pipe, null);
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
-		}
 
-		public void fail(String s) {
-			System.out.println("GetPipe() failed with " + s);
+			LOGGER.info("开启管道 {}", pipe.att);
+		}
+		public void fail(String s) throws IOException {
+			tasks.remove(sessionId);
+			servers[portId].failed(income, s);
 		}
 	}
+
+	// region html
+	// endregion
 }

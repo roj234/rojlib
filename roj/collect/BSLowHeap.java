@@ -78,25 +78,32 @@ public class BSLowHeap<E> extends AbstractList<E> {
 		throw new UnsupportedOperationException();
 	}
 
-	/* 入堆操作 */
-	public boolean add(E node) {
-		int nearest = binarySearch(node);
-		if (nearest >= 0) {
-			return false;
+	@SuppressWarnings("unchecked")
+	private E doAdd(E o, int doAdd) {
+		int i = binarySearch(o);
+		if (i >= 0) {
+			return doAdd == 1 ? null : (E) entries[i];
 		} else {
-			int i = -nearest - 1;
+			if (doAdd == 0) return null;
 
-			if (size == entries.length-1) {
-				ensureCapacity(size<<1);
-			}
+			i = -i - 1;
+
+			if (size == entries.length-1) ensureCapacity(size<<1);
 
 			Object[] arr = entries;
 			if (size - i > 0) System.arraycopy(arr, i, arr, i+1, size-i);
-			arr[i] = node;
+			arr[i] = o;
 			size++;
-			return true;
+			return o;
 		}
 	}
+
+	public E find(E e) {
+		E e1 = doAdd(e, 0);
+		return e1 == null ? e : e1;
+	}
+	public E intern(E e) { return doAdd(e, -1); }
+	public boolean add(E node) { return doAdd(node, 1) != null; }
 
 	@SuppressWarnings("unchecked")
 	public E remove(int idx) {

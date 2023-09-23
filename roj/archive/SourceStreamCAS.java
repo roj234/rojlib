@@ -12,7 +12,7 @@ import static roj.reflect.FieldAccessor.u;
  * @since 2023/9/14 0014 14:01
  */
 public final class SourceStreamCAS extends SourceInputStream {
-	private final Object ref;
+	private Object ref;
 	private final long off;
 
 	public SourceStreamCAS(Source in, long len, Object ref, long off) {
@@ -22,10 +22,12 @@ public final class SourceStreamCAS extends SourceInputStream {
 	}
 
 	@Override
-	public void close() throws IOException {
-		if (!u.compareAndSwapObject(ref, off, null, src)) {
+	public synchronized void close() throws IOException {
+		if (ref != null && !u.compareAndSwapObject(ref, off, null, src)) {
 			super.close();
 		}
+
+		ref = null;
 		remain = 0;
 	}
 }

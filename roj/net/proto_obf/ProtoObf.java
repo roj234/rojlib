@@ -1,6 +1,8 @@
 package roj.net.proto_obf;
 
-import roj.crypt.*;
+import roj.crypt.ChaCha_Poly1305;
+import roj.crypt.MT19937;
+import roj.crypt.RCipherSpi;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.MyChannel;
@@ -14,7 +16,6 @@ import roj.util.Helpers;
 import javax.crypto.Cipher;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 
 /**
  * @author Roj234
@@ -29,36 +30,19 @@ public class ProtoObf extends LengthFake {
 		  .addLast("_proto_tls_", new MSSCipher(engine))
 		  .addLast("_proto_enc_", new ProtoObf(rnd));
 	}
-	public static void installWithPSK(MyChannel ch, byte[] psk, boolean isClient) {
-		ProtoObf protoObf = new ProtoObf(new MT19937());
-		try {
-			protoObf.initPSK(psk, isClient);
-		} catch (GeneralSecurityException e) {
-			Helpers.athrow(e);
-		}
-		ch.addLast("_proto_enc_", protoObf);
-	}
-
-	private boolean inited;
 
 	private final RCipherSpi
 		c_in = ChaCha_Poly1305.XChaCha1305(),
 		c_out = ChaCha_Poly1305.XChaCha1305();
 
 	private final ByteList c_len = new ByteList(5);
-	private boolean fakeEnable, fakeSending;
+	private boolean inited, fakeEnable, fakeSending;
 	private int fakeTimer;
 
 	public ProtoObf(MT19937 rnd) { super(rnd); }
 
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
-		if (inited) {
-			fakeEnable = true;
-			ctx.channelOpened();
-			return;
-		}
-
 		MSSEngine engine = ((MSSCipher) ctx.prev().handler()).getEngine();
 
 		try {
@@ -77,27 +61,7 @@ public class ProtoObf extends LengthFake {
 		ctx.prev().dispose(); // _proto_obf_
 		ctx.prev().dispose(); // _proto_len_
 		ctx.channelOpened();
-		fakeEnable = inited = true;
-	}
-
-	private void initPSK(byte[] psk, boolean client) throws GeneralSecurityException {
-		HMAC hmac = new HMAC(MessageDigest.getInstance("SHA-512"));
-
-
-		byte[] b_key = HMAC.HKDF_expand(hmac, psk, IOUtil.getSharedByteBuf().putAscii("byebye"), 32),
-			   a_key = HMAC.HKDF_expand(hmac, psk, IOUtil.getSharedByteBuf().putAscii("hello"), 32);
-		HKDFPRNG b_rng = new HKDFPRNG(hmac, psk, "_proto_byebye"),
-			     a_rng = new HKDFPRNG(hmac, psk, "_proto_hello");
-
-		if (client) {
-			c_in.init(Cipher.DECRYPT_MODE, a_key, null, a_rng);
-			c_out.init(Cipher.ENCRYPT_MODE, b_key, null, b_rng);
-		} else {
-			c_in.init(Cipher.DECRYPT_MODE, b_key, null, b_rng);
-			c_out.init(Cipher.ENCRYPT_MODE, a_key, null, a_rng);
-		}
-
-		inited = true;
+		inited = fakeEnable = true;
 	}
 
 	@Override
@@ -131,6 +95,8 @@ public class ProtoObf extends LengthFake {
 		fakeEnable = false;
 		super.channelFlushing(ctx);
 	}
+	@Override
+	public void channelFlushed(ChannelCtx ctx) { fakeEnable = inited; }
 
 	@Override
 	void readPacket(ChannelCtx ctx, DynByteBuf in) throws IOException {

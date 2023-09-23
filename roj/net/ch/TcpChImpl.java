@@ -123,7 +123,7 @@ class TcpChImpl extends MyChannel {
 	@Override
 	protected void read() throws IOException {
 		DynByteBuf buf = rb;
-		while (ch.isOpen() && state == OPENED) {
+		while (state == OPENED && sc.isOpen()) {
 			if (!buf.isWritable()) {
 				if (buf == EMPTY) rb = buf = alloc().buffer(true, buffer);
 				else rb = buf = alloc().expand(buf, buf.capacity());

@@ -20,7 +20,6 @@ public class Group extends AbstractUser {
 
 	private final MyHashSet<User> online = new MyHashSet<>();
 
-	private final IntMap<String> userNames = new IntMap<>();
 	private final Int2IntMap userProps = new Int2IntMap();
 
 	private final SpinLock lock = new SpinLock();
@@ -110,12 +109,12 @@ public class Group extends AbstractUser {
 		}
 
 		if (initialSendUserInfo) {
-			b.put((byte) 1);
+			b.put(1);
 			for (int i = 0; i < users.size(); i++) {
 				users.get(i).put(b);
 			}
 		} else {
-			b.put((byte) 0);
+			b.put(0);
 			for (int i = 0; i < users.size(); i++) {
 				b.putInt(users.get(i).id);
 			}

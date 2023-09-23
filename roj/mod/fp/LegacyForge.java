@@ -16,7 +16,7 @@ import roj.mod.mapping.ClassMerger;
 import roj.mod.mapping.GDiffPatcher;
 import roj.mod.mapping.MappingFormat;
 import roj.ui.CmdUtil;
-import roj.ui.EasyProgressBar;
+import roj.ui.ProgressBar;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -69,7 +69,7 @@ public final class LegacyForge extends WorkspaceBuilder {
 		}
 
 		AtomicInteger val = new AtomicInteger(), total = new AtomicInteger(100);
-		EasyProgressBar bar = new EasyProgressBar("Prepare");
+		ProgressBar bar = new ProgressBar("Prepare");
 
 		List<Context>[] arr = Helpers.cast(new List<?>[4]);
 		arr[0] = new ArrayList<>();

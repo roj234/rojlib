@@ -1,4 +1,7 @@
 
+## 本项目存在大量或无意或有意留下的漏洞，仅做学习研究用途
+## 您已经看过该提示！
+
 # 2023/09/09 更新  搞了很多界面  
 ![roj.mapper.MapperUI](images\mapper v3.png)  
 ![roj.concurrent.Promise](images\promise.png)  
@@ -29,34 +32,35 @@
 
 ## roj.asm  
     自己做的ASM, 资料来自VM规范  
-内附：`roj.asm.Translator`, `roj.asm.util.Transformers`, `roj.asm.nixim.*`
-  
-根据信息详细程度分级，并实现统一接口:  
-`roj.asm.tree.IClass`, `rom.asm.tree.FieldNode`, `roj.asm.tree.MethodNode`
+    不支持的项目：
+      内容（方法内部的）注解
+      StackMapTable
+    性能、内存占用、易用性（至少对我来说）均优于ow的asm
 
-### 粗略信息 List<String> simpleData(ByteList buf)
-* 包含类名[0]，继承[1]，实现的接口[rest] 
+### Parser.forEachConstant(DynByteBuf buf, Consumer&lt;Constant&gt; c)
+* 【只读】处理每一个常量
 
-### 权限信息 AccessData parseAccess(byte[] buf)
-* +只读的方法和字段  
-* +修改类和其中元素的访问级
+### AccessData Parser.parseAccess(DynByteBuf buf, boolean modifiable)
+* 【只读】类、方法、字段、继承、接口、修饰符等
+* 【读写】类和其中元素的修饰符
 
-### 常量信息 ConstantData parseConstants(ByteList buf)  
-* +解析整个常量池，自此开始，信息不再是只读的了，  
-* +选择性解析方法, 简单的操作不需要解析Code属性，极大提高速度  
-示例见roj.mapper.Mapper
+### ConstantData Parser.parseConstant(DynByteBuf buf)
+* 包含一个类的所有信息，和常量池  
+* 属性未解析，因为没有人会修改每一个方法  
+* * 比如如果你要修改方法的调用，可以直接改常量池  
+* * 如果你要修改方法的结构，可以用roj.asm.visitor.CodeWriter
+* * 如果上面两个都不符合你的需求，你才应该用roj.asm.visitor.XInsnList
+* 上面讲的还都是Code属性，如果要先检测有没有注解再决定如何操作呢
+* 使用`T roj.asm.tree.Attributed#parsedAttr(@Nullable ConstantPool cp, TypedName&lt;T&gt; name)`获取存在的属性（它是可读写的）
+* TypedName在`roj.asm.tree.Attribute`中列举了（或者你也可以new一个，它只是为了通过泛型规范Attribute的类型）
+* 使用`roj.asm.tree.CNode#parsed(ConstantPool cp)`解析一个方法或字段的所有属性
 
-### 完整信息 ConstantData parse(ByteList buf)  
-* 和ASM的tree模式差不多  
-  
-【完整信息】级的速度大概是比不上ASM  
-   但是***大部分ASM操作，都不要用到这一等级，常量信息完全够了***
-  
-此外，我现在还写了个Visitor模式 `roj.asm.visitor.CodeVisitor`  
-嗯...只支持Code属性  
-不过确实是快了不少  
-  
-然后还有Nixim:
+实例见`roj.mapper.Mapper`
+
+### ConstantData Parser.parse(DynByteBuf buf)
+* 同上，而后解析所有属性，最后清空常量池  
+
+### 还有Nixim:
  * 使用注解注入一个class，增加修改删除其中一些方法，或者让它实现接口  
 示例: roj.misc.NiximExample  
  * 暂不支持在方法中间插入  
@@ -102,31 +106,32 @@ Promise:
   
 ## roj.config  
   JSON YAML TOML INI XML NBT Torrent(Bencode) CSV 解析器  
-全部使用统一数据结构 `roj.config.data.CEntry`
-#### 自动识别文本文件编码
 
-使用`CEntry.toJSON` toYAML toTOML toINI等还原到字符串  
+### 特点：
+* 自动识别编码（仅支持中英，默认开启可关闭）
+* 所有配置类型（除xml）使用统一结构 `roj.config.data.CEntry`
+* 提供访问者模式的读取 (仅支持JSON和YAML) 详见`roj.config.CCParser`
+* 访问者模式的写入：ToEntry ToJson ToNBT ToXEntry ToYaml... 详见(包)`roj.config.serial`
+* 支持dot-get: 形如`a.b[2].c` 详见`roj.config.data.CEntry#query`
+* XML的dot-get更高级 详见`roj.config.data.Node#querySelector`
+* 支持Xlsx和Csv的处理，它们在roj.excel包
+* 人性化的错误提示
+* 一种文件格式，叫做Vinary，通过保存Map类型中共有的Key以节约空间（虽然不如压缩）
 
-以及访问者模式的`CVisitor`,除了给CEntry用还可以给Parser用  
-CVisitor有下面这些  
-* ToEntry ToJson ToNBT ToXEntry ToYaml
+自动序列化`roj.config.serial.SerialFactory`
+* 不使用反射
+* 支持任意对象
+* 支持通过泛型推断目标类型
 
-XEntry(更节约内存和方便的储存XML)可以与CEntry互转  
-XEntry/CEntry均支持dot-get: `a.b[2].c`
-
-#### 另外还有XlsxParser, 以及CSV是只读的(格式如此简单也没必要)
-#### 序列化：  
-  使用ASM动态生成类，支持任意对象（不只实体类！）的序列化/反序列化  
-  支持数组，不用反射  
-  标记(flag):
- * `GENERATE`        对未知的class自动生成序列化器  
- * `CHECK_INTERFACE` 检查实现的接口是否有序列化器  
- * `CHECK_PARENT`    检查父类是否有序列化器
- * `NO_CONSTRUCTOR`  不调用&lt;init&gt;
- * 动态模式: 根据对象的class来序列化
- * `ALLOW_DYNAMIC`   允许动态模式  仅应用到无法确定类型的字段
- * `PREFER_DYNAMIC`  优先动态模式  禁用泛型推断
- * `FORCE_DYNAMIC`   强制动态模式  对所有字段启用
+标记(flag):
+* `GENERATE`        对未知的class自动生成序列化器
+* `CHECK_INTERFACE` 检查实现的接口是否有序列化器
+* `CHECK_PARENT`    检查父类是否有序列化器
+* `NO_CONSTRUCTOR`  不调用&lt;init&gt;
+* 动态模式: 根据对象的class来序列化
+* `ALLOW_DYNAMIC`   允许动态模式  仅应用到无法确定类型的字段
+* `PREFER_DYNAMIC`  优先动态模式  禁用泛型推断
+* `FORCE_DYNAMIC`   强制动态模式  对所有字段启用
 
 ```java
 
@@ -206,7 +211,7 @@ public class Test {
 
 
 ```
-#### 人性化的错误(仅适用于等宽字体,不适用于StreamReader)  
+#### 人性化的错误(仅适用于等宽字体)  
 ```  
 解析错误:  
   Line 39: "最大线程数": 96, , ,  
@@ -223,24 +228,26 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 ......  
 ```
 
-#### 保存Map中共有的Key节约空间: `roj.config.VinaryParser`
-
-#### Usage
-    调用各parser的静态parses方法  
-new一个也行  
-`roj.config.ConfigMaster.parse`也行  
-继承它也行
-
 ## roj.crypt  
-    几种加密/哈希算法，还有CFB等套在块密码上面的壳子  
-  `SM3` `SM4` `XChaCha20-Poly1305` `AES-256-GCM`  
-  `MT19937`  
-  `PBKDF2` `HMAC`  
+* SM3
+* SM4
+* XChaCha20-Poly1305
+* AES-GCM (adapted)
+* MT19937
+* PBKDF2
+* HMAC
+* Blake3
+* OAEP
+* DH
+* EdDSA (optimize)
+* `FeedbackCipher`
+* CRC4、5、6、7、8、16、32
 
 ## roj.dev
     热重载
-1. [x] 基于Instrument
-2. [ ] 基于VM模拟
+* 修改方法
+* 增加方法、字段 （JVM原生可不支持）
+* 删除方法、字段 （JVM也不支持）
 
 ## roj.exe
     PE文件格式(.exe .dll)和ELF文件格式(.so)的解析

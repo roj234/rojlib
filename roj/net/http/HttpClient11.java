@@ -158,8 +158,17 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 
 				len = response.getContentLengthLong();
 				state = PROCESSING;
+
+				boolean is1xx = response.getCode() >= 100 && response.getCode() < 200;
+
 				ctx.channelOpened();
 				if (state != PROCESSING) return;
+
+				if (is1xx) {
+					response = null;
+					state = RECV_HEAD;
+					return;
+				}
 
 				if (method().equals("HEAD")) {
 					state = IDLE;

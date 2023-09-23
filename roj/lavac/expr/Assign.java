@@ -1,57 +1,57 @@
 package roj.lavac.expr;
 
+import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.visitor.CodeWriter;
-import roj.asm.visitor.Segment;
-import roj.lavac.parser.MethodPoetL;
+import roj.lavac.parser.MethodWriterL;
 
 /**
  * @author Roj234
  * @since 2023/9/18 0018 9:07
  */
-public class Assign extends Segment implements Expression {
-	LoadExpression left;
-	Expression right;
+class Assign implements Expression {
+	private LoadExpression left;
+	private Expression right;
 
-
-	static void writeIncrement(LoadExpression expr, MethodPoetL tree, boolean noRet, boolean returnBefore, Object data, Type dataType) {
-
-	}
-
-
-	public Assign(LoadExpression left, Expression right) {
+	Assign(LoadExpression left, Expression right) {
 		this.left = left;
 		this.right = right;
 	}
 
-	public Type type() { return right.type(); }
+	// javac is left.type()
+	// I fixed this annoying 'feature'
+	public IType type() { return right.type(); }
 
-	@Override
-	protected boolean put(CodeWriter to) {
-		left.resolve();
-		return false;
-	}
-
-	@Override
-	@SuppressWarnings("fallthrough")
-	public void write(MethodPoetL tree, boolean noRet) {
-		// todo
-	}
-
-	public Expression compress() {
-		left = (LoadExpression) left.compress();
-		right = right.compress();
+	public Expression resolve() {
+		left = (LoadExpression) left.resolve();
+		right = right.resolve();
 		return this;
 	}
 
 	@Override
-	public boolean isEqual(Expression left) {
-		if (this == left) return true;
-		if (!(left instanceof Assign)) return false;
-		Assign assign = (Assign) left;
-		return assign.left.isEqual(left) && assign.right.isEqual(right);
+	@SuppressWarnings("fallthrough")
+	public void write(MethodWriterL cw, boolean noRet) {
+		// todo
+	}
+
+	static void writeIncrement(LoadExpression expr, MethodWriterL tree, boolean noRet, boolean returnBefore, Object data, Type dataType) {
+
 	}
 
 	@Override
 	public String toString() { return left+" = "+right; }
+
+	@Override
+	public boolean equals(Object left) {
+		if (this == left) return true;
+		if (!(left instanceof Assign)) return false;
+		Assign assign = (Assign) left;
+		return assign.left.equals(left) && assign.right.equals(right);
+	}
+
+	@Override
+	public int hashCode() {
+		int result = left.hashCode();
+		result = 31 * result + right.hashCode();
+		return result;
+	}
 }

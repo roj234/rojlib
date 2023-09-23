@@ -106,13 +106,13 @@ public final class IOUtil {
 
 	public static String readString(File file) throws IOException {
 		try (TextReader sr = TextReader.auto(file)) {
-			return new CharList().readFully(sr).toString();
+			return new CharList().readFully(sr).toStringAndFree();
 		}
 	}
 
 	public static String readString(InputStream in) throws IOException {
 		try (TextReader sr = TextReader.auto(in)) {
-			return new CharList().readFully(sr).toString();
+			return new CharList().readFully(sr).toStringAndFree();
 		}
 	}
 
@@ -168,10 +168,10 @@ public final class IOUtil {
 	}
 
 	public static List<File> findAllFiles(File file) {
-		return findAllFiles(file, new SimpleList<>(0,2), Helpers.alwaysTrue());
+		return findAllFiles(file, SimpleList.withCapacityType(0,2), Helpers.alwaysTrue());
 	}
 	public static List<File> findAllFiles(File file, Predicate<File> predicate) {
-		return findAllFiles(file, new SimpleList<>(0,2), predicate);
+		return findAllFiles(file, SimpleList.withCapacityType(0,2), predicate);
 	}
 	public static List<File> findAllFiles(File file, List<File> files, Predicate<File> predicate) {
 		try {

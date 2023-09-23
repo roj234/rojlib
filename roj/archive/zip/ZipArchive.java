@@ -662,7 +662,7 @@ public class ZipArchive implements ArchiveFile {
 				in = new CipherInputStream(in, c);
 
 				// has ext, CRC cannot be computed before
-				int checkByte = (file.flags & GP_HAS_EXT) != 0 ? file.modTime >>> 8 : file.CRC32 >>> 24;
+				int checkByte = (file.flags & GP_HAS_EXT) != 0 ? 0xFF&(file.modTime >>> 8) : file.CRC32 >>> 24;
 				if (in.skip(11) < 11) throw new IOException("Early EOF");
 
 				int myCb = in.read();

@@ -7,6 +7,7 @@ import roj.collect.Int2IntMap;
 import roj.collect.LFUCache;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
+import roj.lavac.parser.MethodWriterL;
 import roj.text.CharList;
 
 import java.util.Collections;
@@ -55,6 +56,10 @@ public final class TypeCast {
 			case E_GEN_PARAM_COUNT: s = "泛型参数不同"; break;
 		}
 		error = s;
+	}
+
+	public void cast(MethodWriterL cw) {
+		if (type < 0) throw new RuntimeException("<left> "+error+" <right>");
 	}
 
 	private static TypeCast RESULT(int i) { return new TypeCast(i, (byte) 0); }

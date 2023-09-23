@@ -21,7 +21,7 @@ public final class AnnValLong extends AnnVal {
 	public byte type() { return Type.LONG; }
 
 	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) Type.LONG).putShort(cp.getLongId(value)); }
-	public String toString() { return String.valueOf(value); }
+	public String toString() { return String.valueOf(value).concat("L"); }
 
 	@Override
 	public boolean equals(Object o) {

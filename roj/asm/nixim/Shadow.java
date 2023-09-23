@@ -12,8 +12,6 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.FIELD, ElementType.METHOD})
 public @interface Shadow {
-	FinalType access() default FinalType.NORMAL;
-
 	/**
 	 * 如果留空，需要配FMD使用
 	 *
@@ -22,11 +20,7 @@ public @interface Shadow {
 	String value() default "";
 
 	/**
-	 * @return field class name, default: @Nixim.target
+	 * @return field owner, default: @Nixim.target
 	 */
 	String owner() default "";
-
-	enum FinalType {
-		DEFINAL, FINAL, NORMAL
-	}
 }

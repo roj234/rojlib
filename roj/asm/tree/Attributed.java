@@ -32,9 +32,5 @@ public interface Attributed {
 	default AttributeList attributesNullable() {return null;}
 
 	char modifier();
-	default void modifier(int flag) {
-		throw new UnsupportedOperationException(getClass().getName());
-	}
-
-	int type();
+	default void modifier(int flag) { throw new UnsupportedOperationException(getClass().getName()); }
 }

@@ -3,9 +3,13 @@ package roj.util;
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.ui.UIUtil;
 
+import java.awt.*;
+import java.awt.datatransfer.*;
 import java.util.List;
 import java.util.Random;
+import java.util.function.ToIntFunction;
 
 import static roj.reflect.FieldAccessor.u;
 
@@ -14,20 +18,22 @@ import static roj.reflect.FieldAccessor.u;
  * @since 2020/10/15 0:43
  */
 public final class ArrayUtil {
-	public static String pack(int[] arr) {
+	public static void pack(int[] arr) {
 		ByteList tmp = IOUtil.getSharedByteBuf();
 		for (int i = 0; i < arr.length; i++) tmp.putInt(arr[i]);
-		return Base128(tmp);
+		Base128(tmp);
 	}
-	public static String pack(byte[] arr) { return Base128(ByteList.wrap(arr)); }
+	public static void pack(byte[] arr) { Base128(ByteList.wrap(arr)); }
 
-	private static String Base128(ByteList tmp) {
+	private static void Base128(ByteList tmp) {
 		BitWriter br = new BitWriter(tmp);
 		CharList sb = IOUtil.getSharedCharBuf();
 		sb.ensureCapacity(tmp.readableBytes() * 8/7 + 1);
 		while (br.readableBits() >= 7) sb.append((char) (br.readBit(7)+1));
 		if (br.readableBits() > 0) sb.append((char) (br.readBit(br.readableBits())+1));
-		return ITokenizer.addSlashes(sb);
+
+		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(ITokenizer.addSlashes(sb, 0, new CharList(), '\'').toStringAndFree()), null);
+		UIUtil.pause();
 	}
 
 	private static ByteList UnBase128(String s) {
@@ -125,8 +131,7 @@ public final class ArrayUtil {
 
 	public static boolean rangedEquals(byte[] b, int off1, int len1, byte[] b1, int off2, int len2) {
 		if (len1 != len2) return false;
-		len1 += off1;
-		while (off1 < len1) {
+		while (len1-- > 0) {
 			if (b[off1++] != b1[off2++]) return false;
 		}
 		return true;
@@ -152,5 +157,21 @@ public final class ArrayUtil {
 			hash = b[off++] + 31 * hash;
 		}
 		return hash;
+	}
+
+	public static <T extends Comparable<T>> int binarySearchList(List<T> list, T key) { return binarySearchList(list, 0, list.size(), key); }
+	public static <T extends Comparable<T>> int binarySearchList(List<T> list, int low, int high, T key) { return binarySearchEx(list, low, high, key::compareTo); }
+	public static <T> int binarySearchEx(List<T> list, ToIntFunction<T> comparator) { return binarySearchEx(list, 0, list.size(), comparator); }
+	public static <T> int binarySearchEx(List<T> list, int low, int high, ToIntFunction<T> comparator) {
+		high--;
+		while (low <= high) {
+			int mid = (low + high) >>> 1;
+			T midVal = list.get(mid);
+			int cmp = comparator.applyAsInt(midVal);
+			if (cmp < 0) low = mid + 1;
+			else if (cmp > 0) high = mid - 1;
+			else return mid;
+		}
+		return -(low + 1);
 	}
 }

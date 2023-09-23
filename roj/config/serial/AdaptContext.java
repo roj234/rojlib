@@ -126,7 +126,7 @@ class AdaptContext implements CAdapter<Object> {
 				boolean has = i < 32 ? (fst & (1<<i)) != 0 : fieldStateEx.contains(i);
 				if (!has) sb.append(fieldId.get(i)).append(", ");
 			}
-			throw new IllegalStateException(sb.toString());
+			throw new IllegalStateException(sb.toStringAndFree());
 		}
 		popd(true);
 	}
@@ -160,15 +160,24 @@ class AdaptContext implements CAdapter<Object> {
 
 		if (id < 32) {
 			int bit = 1<<id;
-			if ((fieldState&bit) != 0) throw new IllegalStateException("字段 "+id+" 已存在");
+			if ((fieldState&bit) != 0) throwDupField(id);
 			fieldState |= bit;
 		} else {
-			if (!fieldStateEx.add(id-32)) throw new IllegalStateException("字段 "+id+" 已存在");
+			if (!fieldStateEx.add(id-32)) throwDupField(id);
 		}
 	}
+	private void throwDupField(int id) {
+		if (!(curr instanceof GenAdapter)) throw new IllegalStateException("字段 "+id+" 已存在");
+		throw new IllegalStateException("字段 "+((GenAdapter) curr).fieldNames().get(id)+" 已存在");
+	}
+
 	public final void setKeyHook(int id) {
 		if (id < 0) throw new IllegalStateException("未知的字段ID");
-		if (fieldId != -1) throw new IllegalStateException("期待值而非名称");
+		if (fieldId != -1) {
+			if (!(curr instanceof GenAdapter)) throw new IllegalStateException("在设置字段 "+fieldId+" 时设置 "+id);
+			IntBiMap<String> map = ((GenAdapter) curr).fieldNames();
+			throw new IllegalStateException("在设置字段 "+map.get(fieldId)+" 时设置 "+map.get(id));
+		}
 		fieldId = id;
 	}
 	public final void pushHook(int id, Adapter d1) {

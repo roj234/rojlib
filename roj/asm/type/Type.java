@@ -1,5 +1,6 @@
 package roj.asm.type;
 
+import roj.asm.OpcodeUtil;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.Helpers;
@@ -102,19 +103,16 @@ public final class Type implements IType, Cloneable {
 
 	@Override
 	public void toString(CharList sb) {
-		sb.append(this.owner != null ? owner : toString(type));
+		if (owner != null) TypeHelper.toStringOptionalPackage(sb, owner);
+		else sb.append(toString(type));
 		for (int i = array&0xFF; i > 0; i--) sb.append("[]");
 	}
 
 	@Override
-	public byte genericType() {
-		return STANDARD_TYPE;
-	}
+	public byte genericType() { return STANDARD_TYPE; }
 
 	@Override
-	public Type rawType() {
-		return this;
-	}
+	public Type rawType() { return this; }
 
 	@Override
 	public String owner() { return owner; }
@@ -148,9 +146,12 @@ public final class Type implements IType, Cloneable {
 		return type == VOID ? 0 : (array == 0 && (type == LONG || type == DOUBLE)) ? 2 : 1;
 	}
 
-	public byte shiftedOpcode(int code, boolean allowVoid) {
-		if (type == VOID && !allowVoid) throw new IllegalStateException("VOID is not allowed");
-		return (byte) ((int) MAP[getActualType()-BYTE][3]+code);
+	public int getShift() { return (int) MAP[getActualType()-BYTE][3]; }
+	public byte shiftedOpcode(int code) {
+		int shift = getShift();
+		int data = OpcodeUtil.shift(code);
+		if (data >>> 8 <= shift) throw new IllegalStateException(this+" cannot shift "+OpcodeUtil.toString0(code));
+		return (byte) ((data&0xFF)+shift);
 	}
 
 	public String nativeName() {

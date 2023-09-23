@@ -4,6 +4,7 @@ import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cst.Constant;
+import roj.asm.cst.ConstantPool;
 import roj.asm.cst.CstClass;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.ConstantData;
@@ -61,31 +62,31 @@ public class LongByeBye extends CodeWriter {
 		SimpleList<MethodNode> methods = d.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
-			mn.rawDesc(d.cp, replaceDesc(mn.rawDesc(), methodType));
+			mn.rawDesc(replaceDesc(mn.rawDesc(), methodType));
 
 			Attribute buf = mn.attrByName("Code");
 			if (buf != null) {
 				tmp.clear();
 				init(tmp, d.cp);
 				visitCopied(d.cp, buf.getRawData());
-				mn.putAttr(new AttrUnknown("Code", ByteList.wrap(tmp.toByteArray())));
+				mn.putAttr(new AttrUnknown("Code", tmp.toByteArray()));
 			}
 		}
 
 		SimpleList<FieldNode> fields = d.fields;
 		for (int i = 0; i < fields.size(); i++) {
 			FieldNode fn = fields.get(i);
-			fn.rawDesc(d.cp, replaceDesc(fn.rawDesc(), internalType));
+			fn.rawDesc(replaceDesc(fn.rawDesc(), internalType));
 		}
 		return d;
 	}
 
 	@Override
 	public void newArray(byte arrayType) {
-		byte b = InsnHelper.PrimitiveArray2Type(arrayType);
+		byte b = InsnHelper.FromPrimitiveArrayId(arrayType);
 		if (b == templateType) {
 			if (internalType.isPrimitive()) {
-				arrayType = InsnHelper.Type2PrimitiveArray(internalType.type);
+				arrayType = InsnHelper.ToPrimitiveArrayId(internalType.type);
 			} else {
 				super.clazz(Opcodes.ANEWARRAY, internalType.getActualClass());
 				return;
@@ -125,11 +126,6 @@ public class LongByeBye extends CodeWriter {
 		sb.replace(Character.toUpperCase(frn.charAt(0))+frn.substring(1),Character.toUpperCase(ton.charAt(0))+ton.substring(1));
 		sb.replace(frn.toUpperCase(), ton.toUpperCase());
 		return sb.toString();
-	}
-
-	@Override
-	public void ldc(Constant c) {
-		super.ldc(c);
 	}
 
 	private String replaceArrayClass(String clz) {
@@ -180,11 +176,11 @@ public class LongByeBye extends CodeWriter {
 	}
 
 	public void one(byte code) { super.one(replaceCode(code)); }
-	public void var(byte code, int value) { super.var(replaceCode(code), value); }
+	public void vars(byte code, int value) { super.vars(replaceCode(code), value); }
 
 	@Override
-	protected void visitAttribute(String name, int len, DynByteBuf b) {
+	protected void visitAttribute(ConstantPool cp, String name, int len, DynByteBuf b) {
 		if (!name.equals("LineNumberTable")) return;
-		super.visitAttribute(name, len, b);
+		super.visitAttribute(cp, name, len, b);
 	}
 }

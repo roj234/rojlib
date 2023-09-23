@@ -1,7 +1,7 @@
 package roj.util;
 
 import roj.io.buf.BufferPool;
-import roj.lavac.api.PreCompile;
+import roj.lavac.api.Constant;
 import roj.text.TextUtil;
 import roj.text.UTF8MB4;
 import sun.misc.Unsafe;
@@ -58,10 +58,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	}
 
 	public ByteList() { list = ArrayCache.BYTES; }
-	public ByteList(int len) {
-		// todo
-		list = /*USE_CACHE ? ArrayCache.getDefaultCache().getByteArray(len, false) : */new byte[len];
-	}
+	public ByteList(int len) { list = new byte[len]; }
 
 	public ByteList(byte[] array) {
 		list = array;
@@ -370,12 +367,14 @@ public class ByteList extends DynByteBuf implements Appendable {
 	@Override
 	public void preInsert(int off, int len) {
 		byte[] tmp = list;
-		if (tmp.length < wIndex + len) {
+		if (tmp.length < wIndex+len) {
 			if (immutableCapacity()) throw new BufferOverflowException();
-			tmp = new byte[wIndex + len];
+			tmp = ArrayCache.getDefaultCache().getByteArray(wIndex+len, false);
 		}
+
 		if (wIndex != off) {
 			if (list != tmp) System.arraycopy(list, 0, tmp, 0, off);
+
 			System.arraycopy(list, off, tmp, off+len, wIndex-off);
 		}
 		wIndex += len;
@@ -585,9 +584,9 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	// endregion
 
-	@PreCompile
+	@Constant
 	public static int FOURCC(CharSequence x) { return ((x.charAt(0) & 0xFF) << 24) | ((x.charAt(1) & 0xFF) << 16) | ((x.charAt(2) & 0xFF) << 8) | ((x.charAt(3) & 0xFF)); }
-	@PreCompile
+	@Constant
 	public static String UNFOURCC(int fc) { return new String(new char[]{(char) (fc >>> 24), (char) ((fc >>> 16) & 0xFF), (char) ((fc >>> 8) & 0xFF), (char) (fc & 0xFF)}); }
 
 	@Deprecated
@@ -624,7 +623,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		if (this == o) return true;
 		if (!(o instanceof ByteList)) return false;
 		ByteList ot = (ByteList) o;
-		return ArrayUtil.rangedEquals(list, arrayOffset() + rIndex, wIndex, ot.list, ot.arrayOffset() + ot.rIndex, ot.wIndex);
+		return ArrayUtil.rangedEquals(list, arrayOffset() + rIndex, readableBytes(), ot.list, ot.arrayOffset() + ot.rIndex, ot.readableBytes());
 	}
 
 	@Override

@@ -1,10 +1,8 @@
 package roj.net.mss;
 
-import roj.collect.CharMap;
 import roj.collect.IntMap;
 import roj.crypt.KeyFile;
 import roj.net.SecureUtil;
-import roj.util.DynByteBuf;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.X509KeyManager;
@@ -76,14 +74,9 @@ public final class SimpleEngineFactory implements Supplier<MSSEngine> {
 
 	@Override
 	public MSSEngine get() {
-		MSSEngine s = client ? new MSSEngineClient() : new MSSEngineServer() {
-			@Override
-			protected MSSPrivateKey getCertificate(CharMap<DynByteBuf> ext, int supportedFormat) {
-				return pair;
-			}
-		};
-		s.switches(switches);
-		s.setPSC(psc);
+		MSSEngine s = client ? new MSSEngineClient() : new MSSEngineServer();
+		s.setDefaultCert(pair).switches(switches);
+		s.setPreSharedCertificate(psc);
 		return s;
 	}
 

@@ -98,8 +98,7 @@ public class Generic extends IGeneric {
 			case EX_EXTENDS: sb.append("? extends "); break;
 		}
 
-		int start = owner.lastIndexOf('/') + 1;
-		sb.append(owner, start, owner.length());
+		TypeHelper.toStringOptionalPackage(sb, owner);
 
 		if (!children.isEmpty()) {
 			sb.append('<');

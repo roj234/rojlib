@@ -28,7 +28,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 		Entry(char c, Entry entry) {
 			super(c);
 			this.entries = entry.entries;
-			this.length = entry.length;
+			this.mask = entry.mask;
 			this.size = entry.size;
 			this.isEnd = entry.isEnd;
 		}

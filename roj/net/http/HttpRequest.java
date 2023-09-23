@@ -303,6 +303,7 @@ public abstract class HttpRequest {
 				} finally {
 					ctx.reserve(buf);
 				}
+				return body;
 			}
 		}
 		return null;

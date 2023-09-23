@@ -18,24 +18,39 @@ public final class CstUTF extends Constant {
 	CstUTF(Object b) { data = b; }
 
 	public String str() {
-		if (data instanceof byte[]) {
-			ByteList buf = ByteList.wrap((byte[]) data);
+		block: {
+			DynByteBuf in;
+			if (data.getClass() == byte[].class) {
+				in = ByteList.wrap((byte[]) data);
+			} else if (data instanceof DynByteBuf) {
+				in = (DynByteBuf) data;
+			} else {
+				break block;
+			}
+
 			CharList out = new CharList();
-			UTF8MB4.CODER.decodeFixedIn(buf, buf.length(), out);
+			UTF8MB4.CODER.decodeFixedIn(in, in.readableBytes(), out);
 			data = out.toStringAndFree();
 		}
+
 		return data.toString();
 	}
 
 	@Override
 	public void write(DynByteBuf w) {
 		w.put(Constant.UTF);
-		if (data instanceof byte[]) w.putShort(((byte[]) data).length).write(((byte[]) data));
-		else w.writeUTF(data.toString());
+		if (data.getClass() == byte[].class) {
+			byte[] b = (byte[]) data;
+			w.putShort(b.length).write(b);
+		} else if (data instanceof DynByteBuf) {
+			DynByteBuf b = (DynByteBuf) data;
+			w.putShort(b.readableBytes()).put(b);
+		} else w.writeUTF(data.toString());
 	}
 
 	int _length() {
-		if (data instanceof byte[]) return ((byte[]) data).length;
+		if (data.getClass() == byte[].class) return ((byte[]) data).length;
+		if (data instanceof DynByteBuf) return ((DynByteBuf) data).readableBytes();
 		return DynByteBuf.byteCountDioUTF(data.toString());
 	}
 

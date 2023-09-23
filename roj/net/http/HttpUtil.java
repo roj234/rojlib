@@ -109,7 +109,7 @@ public class HttpUtil {
 		"&lArr;⇐\n" + "&larr;←\n" + "&laquo;«\n" + "&lambda;λ\n" + "&lsquo;‘\n" + "&lsaquo;‹\n" + "&lceil;⌈\n" +
 		"&lt;<\n" + "&ldquo;“\n" + "&le;≤\n" + "&lfloor;⌊\n" + "&lowast;∗\n" + "&loz;◊\n" + "&mdash;—\n" +
 		"&middot;·\n" + "&minus;−\n" + "&micro;µ\n" + "&macr;¯\n" + "&mu;μ\n" + "&nabla;∇\n" + "&ni;∋\n" +
-		"&nbsp; \n" + "&nsub;⊄\n" + "&ntilde;ñ\n" + "&ndash;–\n" + "&nu;ν\n" + "&nearr;↗\n" + "&ne;≠\n" +
+		"&nbsp; \n" + "&nsub;⊄\n" + "&ntilde;ñ\n" + "&ndash;–\n" + "&nu;ν\n" + "&nearr;↗\n" + "&ne;≠\n" + //  
 		"&not;¬\n" + "&notin;∉\n" + "&nwarr;↖\n" + "&oplus;⊕\n" + "&oacute;ó\n" + "&ordf;ª\n" + "&ordm;º\n" +
 		"&or;∨\n" + "&ocirc;ô\n" + "&oslash;ø\n" + "&otilde;õ\n" + "&otimes;⊗\n" + "&oline;‾\n" + "&ouml;ö\n" +
 		"&omicron;ο\n" + "&omega;ω\n" + "&ograve;ò\n" + "&phi;φ\n" + "&pi;π\n" + "&piv;ϖ\n" + "&para;¶\n" +

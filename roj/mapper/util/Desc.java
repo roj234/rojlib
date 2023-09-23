@@ -2,7 +2,7 @@ package roj.mapper.util;
 
 import roj.asm.cst.ConstantPool;
 import roj.asm.cst.CstRef;
-import roj.asm.tree.MoFNode;
+import roj.asm.tree.RawNode;
 import roj.asm.util.AccessFlag;
 import roj.util.DynByteBuf;
 
@@ -11,7 +11,7 @@ import roj.util.DynByteBuf;
  *
  * @author Roj233
  */
-public class Desc implements MoFNode {
+public class Desc implements RawNode {
 	public static final char UNSET = AccessFlag.PUBLIC | AccessFlag.PRIVATE;
 
 	public String owner, name, param;
@@ -42,6 +42,21 @@ public class Desc implements MoFNode {
 		this.name = name;
 		this.param = param;
 		this.flags = (char) flags;
+	}
+
+	public static Desc fromJavapLike(String jpdesc) {
+		String owner, name, param;
+
+		int klass = jpdesc.lastIndexOf('.');
+		int pvrvm = jpdesc.indexOf('(');
+		if (pvrvm < 0) pvrvm = jpdesc.indexOf(' ');
+		if (pvrvm < 0) throw new IllegalStateException("Invalid javap desc: "+jpdesc);
+
+		owner = klass > 0 ? jpdesc.substring(0, klass).replace('.', '/') : "";
+		name = jpdesc.substring(klass+1, pvrvm);
+		param = jpdesc.substring(jpdesc.charAt(pvrvm)==' '?pvrvm+1:pvrvm);
+
+		return new Desc(owner, name, param);
 	}
 
 	@Override
@@ -98,10 +113,5 @@ public class Desc implements MoFNode {
 	@Override
 	public final char modifier() {
 		return flags;
-	}
-
-	@Override
-	public final int type() {
-		return 5;
 	}
 }

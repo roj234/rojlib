@@ -10,16 +10,14 @@ import java.util.List;
  * @since 2022/10/22 0022 15:48
  */
 public class AttrLavaSpec extends Attribute {
-	protected AttrLavaSpec(DynByteBuf buf, ConstantPool pool) {
-		super("LavaSpec");
-	}
+	protected AttrLavaSpec(DynByteBuf buf, ConstantPool pool) {}
 
 	// method
 	List<String> defaultValue;
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
-
+	public String name() {
+		return "LavaSpec";
 	}
 
 	@Override

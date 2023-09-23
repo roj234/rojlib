@@ -3,10 +3,7 @@ package roj.concurrent;
 import roj.collect.SimpleList;
 import roj.util.Helpers;
 
-import java.lang.ref.Reference;
-import java.lang.ref.ReferenceQueue;
-import java.lang.ref.SoftReference;
-import java.lang.ref.WeakReference;
+import java.lang.ref.*;
 import java.util.List;
 import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
@@ -41,18 +38,33 @@ public class GCHook extends FastLocalThread {
 //		}
 //	}
 
+	private static final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 	static {
 		GCHook cl = new GCHook();
+		cl.setPriority(10);
 		cl.setDaemon(true);
 		cl.setName("GC Status Hook");
 		cl.start();
 	}
 
-	public static void register(IntConsumer cb, int type) {
+	static final class AutoRemove extends PhantomReference<Object> {
+		IntConsumer ref;
+		public AutoRemove(Object target, IntConsumer ref) {
+			super(target, queue);
+			this.ref = ref;
+		}
+	}
+
+	public static void register(IntConsumer cb, int type) { register(cb, null, type); }
+	public static void register(IntConsumer cb, Object removeIfGC, int type) {
 		lock.lock();
-		if ((type & SMALL_GC) != 0) weakCallbacks.add(cb);
-		if ((type & FULL_GC) != 0) softCallbacks.add(cb);
-		lock.unlock();
+		try {
+			if ((type & SMALL_GC) != 0 && !weakCallbacks.contains(cb)) weakCallbacks.add(cb);
+			if ((type & FULL_GC) != 0 && !softCallbacks.contains(cb)) softCallbacks.add(cb);
+			if (removeIfGC != null) new AutoRemove(removeIfGC, cb);
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	public static void unregister(IntConsumer cb) {
@@ -67,7 +79,6 @@ public class GCHook extends FastLocalThread {
 
 	@Override
 	public void run() {
-		ReferenceQueue<Object> queue = new ReferenceQueue<>();
 		Reference<Object> s, w;
 
 		s = new SoftReference<>(o(), queue);
@@ -75,7 +86,8 @@ public class GCHook extends FastLocalThread {
 
 		while (true) {
 			try {
-				queue.remove();
+				Reference<?> r = queue.remove();
+				if (r instanceof AutoRemove) unregister(((AutoRemove) r).ref);
 			} catch (InterruptedException e) {
 				Helpers.athrow(e);
 				continue;

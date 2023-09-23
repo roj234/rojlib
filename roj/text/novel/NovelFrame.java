@@ -121,7 +121,7 @@ public class NovelFrame extends JFrame {
 
 	List<Chapter> chapters;
 
-	static final MyBitSet myWhiteSpace = MyBitSet.from("\t 　 \uFEFF\u200B");
+	static final MyBitSet myWhiteSpace = MyBitSet.from("\r\n\t 　 \uFEFF\u200B");
 
 	private Chapter firstActiveChapter(boolean nonnullWhenMultiply) {
 		TreePath[] paths = cascadeChapterUI.getSelectionPaths();
@@ -243,6 +243,7 @@ public class NovelFrame extends JFrame {
 
 			int st, len;
 			char[] val;
+			boolean noWhitespace = true;
 			if (c.data != null) {
 				st = 0;
 				len = c.data.length();
@@ -254,6 +255,7 @@ public class NovelFrame extends JFrame {
 			}
 			while ((st < len) && myWhiteSpace.contains(val[st])) {
 				st++;
+				noWhitespace = false;
 			}
 			while ((st < len) && myWhiteSpace.contains(val[len - 1])) {
 				len--;
@@ -265,8 +267,9 @@ public class NovelFrame extends JFrame {
 					continue;
 				}
 
-				if (prefixSpaceOnly.isSelected() && !Character.isWhitespace(line.charAt(0))) {
+				if (prefixSpaceOnly.isSelected() && noWhitespace && !Character.isWhitespace(line.charAt(0))) {
 					novel_out.append(line).append('\n');
+					noWhitespace = false;
 					continue;
 				}
 
@@ -526,7 +529,7 @@ public class NovelFrame extends JFrame {
 			((Chapter) chapterManager.getRoot()).flat(chapters);
 			long total = (chapters.size() - 1) * chapters.size() / 2;
 
-			TaskPool pool = TaskPool.CpuMassive();
+			TaskPool pool = TaskPool.Common();
 			SimpleList<IntMap.Entry<String>> list = new SimpleList<>();
 
 			Ref<ScheduledTask> task = Ref.from();
@@ -547,7 +550,7 @@ public class NovelFrame extends JFrame {
 				byte[] ba = IOUtil.SharedCoder.get().encode(ca.data != null ? ca.data : novel_in.subSequence(ca.start, ca.end));
 
 				BsDiff diff = new BsDiff();
-				diff.initSuffix(ba);
+				diff.setLeft(ba);
 
 				for (int j = i+1; j < chapters.size(); j++) {
 					Chapter cb = chapters.get(j);
@@ -555,7 +558,7 @@ public class NovelFrame extends JFrame {
 					pool.pushTask(() -> {
 						byte[] bb = IOUtil.SharedCoder.get().encode(cb.data != null ? cb.data : novel_in.subSequence(cb.start, cb.end));
 						int siz = Math.min(ba.length, bb.length);
-						int dd = new BsDiff(diff).bscompare(ba, bb, siz / 2);
+						int dd = new BsDiff(diff).getDiffLength(bb, siz / 2);
 						if (dd >= 0) {
 							synchronized (list) {
 								list.add(new IntMap.Entry<>((int) ((double)(siz-dd) / siz * 10000), ca.fullName + "|" + cb.fullName));
@@ -1033,7 +1036,7 @@ public class NovelFrame extends JFrame {
 			{
 
 				//---- presetRegexpInp ----
-				presetRegexpInp.setText("\u6807\u51c6\u5316|1|3\n(?:\u6b63\u6587\\s)?\u7b2c([\u2015\uff0d\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19 ]{1,12})([\u7ae0\u96c6\u90e8\u5377\u7bc7]|\u56de(?<=[^\u5408])|\u8282(?<=[^\u8bfe]))(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1");
+				presetRegexpInp.setText("\u5e38\u7528|1|3\n(?:\u6b63\u6587\\s*)?\u7b2c(?:\\s+)?([\u2015\uff0d\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19 ]{1,12})(?:\\s+)?([\u7ae0\u5377])[ \u3000\\t]*(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1");
 				scrollPane3.setViewportView(presetRegexpInp);
 			}
 			advancedMenuContentPane.add(scrollPane3);

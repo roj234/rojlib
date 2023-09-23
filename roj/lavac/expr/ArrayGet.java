@@ -1,8 +1,10 @@
 package roj.lavac.expr;
 
+import roj.asm.OpcodeUtil;
+import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.config.word.NotStatementException;
-import roj.lavac.parser.MethodPoetL;
+import roj.lavac.parser.MethodWriterL;
 
 import javax.annotation.Nonnull;
 
@@ -12,28 +14,22 @@ import javax.annotation.Nonnull;
  * @author Roj233
  * @since 2022/2/27 20:09
  */
-public final class ArrayGet implements LoadExpression {
-	Expression array, index;
+final class ArrayGet implements LoadExpression {
+	private Expression array, index;
 
-	public ArrayGet(Expression array, Expression index) {
+	ArrayGet(Expression array, Expression index) {
 		this.array = array;
 		this.index = index;
 	}
 
 	@Override
-	public void write(MethodPoetL tree, boolean noRet) {
-		if (noRet) throw new NotStatementException();
-
-		array.write(tree, false);
-		index.write(tree, false);
-		tree.arrayLoad();
-	}
+	public IType type() { return componentType(array.type()); }
 
 	@Nonnull
 	@Override
-	public Expression compress() {
-		array = array.compress();
-		index = index.compress();
+	public Expression resolve() {
+		array = array.resolve();
+		index = index.resolve();
 		if (array.isConstant() && index.isConstant()) {
 			return new Constant(type(), ((Object[])array.constVal())[((Number)index.constVal()).intValue()]);
 		}
@@ -41,37 +37,44 @@ public final class ArrayGet implements LoadExpression {
 	}
 
 	@Override
-	public Type type() {
-		return componentType(array.type());
+	public void write(MethodWriterL cw, boolean noRet) {
+		if (noRet) throw new NotStatementException();
+
+		array.write(cw, false);
+		index.write(cw, false);
+		cw.checkCast(index.type(), Type.std(Type.INT)).cast(cw);
+
+		byte storeType = (byte) OpcodeUtil.getByName().getInt(type().rawType().nativeName()+"ALOAD");
+		cw.one(storeType);
 	}
 
-	private static Type componentType(Type t) {
-		Type type = t.clone();
+	@Override
+	public void writeLoad(MethodWriterL tree) {
+		this.array.write(tree, false);
+		this.index.write(tree, false);
+	}
+
+	private static IType componentType(IType t) {
+		IType type = t.clone();
 		type.setArrayDim(type.array()-1);
 		return type;
 	}
 
 	@Override
-	public String toString() {
-		return array.toString() + '[' + index.toString() + ']';
-	}
+	public String toString() { return array.toString()+'['+index+']'; }
 
 	@Override
-	public boolean isEqual(Expression left) {
+	public boolean equals(Object left) {
 		if (this == left) return true;
 		if (!(left instanceof ArrayGet)) return false;
 		ArrayGet get = (ArrayGet) left;
-		return get.array.isEqual(array) && get.index.isEqual(index);
+		return get.array.equals(array) && get.index.equals(index);
 	}
 
 	@Override
-	public void write2(MethodPoetL tree) {
-		this.array.write(tree, false);
-		this.index.write(tree, false);
-	}
-
-	@Override
-	public byte loadType() {
-		return ARRAY;
+	public int hashCode() {
+		int result = array.hashCode();
+		result = 31 * result + index.hashCode();
+		return result;
 	}
 }

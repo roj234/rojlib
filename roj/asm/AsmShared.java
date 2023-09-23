@@ -1,17 +1,14 @@
 package roj.asm;
 
 import roj.asm.cst.ConstantPool;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.insn.InsnNode;
+import roj.asm.cst.CstTop;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.collect.IntMap;
-import roj.collect.MyHashMap;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DirectByteList;
 import roj.util.DynByteBuf;
-
-import java.util.Map;
 
 /**
  * @author Roj234
@@ -24,23 +21,47 @@ public final class AsmShared {
 	public static ByteList getBuf() { return BUFFERS.get().current(); }
 
 	private final CodeWriter cw = new CodeWriter();
-	public CodeWriter cw() {
-		return cw;
-	}
-	private final Map<InsnNode, Label> cwl = new MyHashMap<>();
-	public Map<InsnNode, Label> _Map(int len) {
-		cwl.clear();
-		return cwl;
-	}
+	public CodeWriter cw() { return cw; }
 
-	private final IntMap<InsnNode> pcm = new IntMap<>();
-	public IntMap<InsnNode> _IntMap(MethodNode node) {
+	private IntMap<Label> pcm = new IntMap<>();
+	public IntMap<Label> getBciMap() {
 		pcm.clear();
 		return pcm;
 	}
 
-	private final ConstantPool pool = new ConstantPool();
+	private byte[] xInsn_sharedSegmentData = new byte[256];
+	private int xInsn_sharedSegmentUsed = 0;
+	public byte[] getArray(int length) {
+		int avail = xInsn_sharedSegmentData.length - xInsn_sharedSegmentUsed;
+		if (avail < length) {
+			if (length > 127) return new byte[length];
+
+			xInsn_sharedSegmentData = ArrayCache.getDefaultCache().getByteArray(256,false);
+			xInsn_sharedSegmentUsed = 0;
+		}
+		return xInsn_sharedSegmentData;
+	}
+	public int getOffset(byte[] array, int length) {
+		if (array != xInsn_sharedSegmentData) return 0;
+
+		int x = xInsn_sharedSegmentUsed;
+		xInsn_sharedSegmentUsed = x+length;
+		return x;
+	}
+
+	public boolean xInsn_isReading;
+	public final int[] xInsn_sharedRefPos = new int[512];
+	public final Object[] xInsn_sharedRefVal = new Object[512];
+	public final Object[] xInsn_sharedSegments = new Object[256];
+	public int[] getIntArray_(int len) {
+		if (xInsn_sharedRefPos.length < len) return ArrayCache.getDefaultCache().getIntArray(len,0);
+		return xInsn_sharedRefPos;
+	}
+
+	public final CstTop fp = new CstTop();
+	private ConstantPool pool;
 	public ConstantPool constPool() {
+		if (pool == null) pool = new ConstantPool();
 		pool.setAddListener(null);
 		pool.clear();
 		return pool;

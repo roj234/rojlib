@@ -103,7 +103,8 @@ class TcpServerSock extends ServerSock implements Selectable {
 					super.closeHandler();
 
 					maxActiveConnection.getAndIncrement();
-					TcpServerSock.this.key.interestOps(SelectionKey.OP_ACCEPT);
+					SelectionKey key1 = TcpServerSock.this.key;
+					if (key1.isValid() && key1.interestOps() == 0) key1.interestOps(SelectionKey.OP_ACCEPT);
 				}
 			};
 

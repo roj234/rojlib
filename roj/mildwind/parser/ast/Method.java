@@ -50,25 +50,25 @@ final class Method implements Expression {
 
 				get.array.write(tree, false);
 				int id = tree.getTmpVar();
-				tree.var(ASTORE, id);
-				tree.var(ALOAD, id);
+				tree.vars(ASTORE, id);
+				tree.vars(ALOAD, id);
 
 				get.index.write(tree, false);
 				get.writeExecute(tree, false);
 
-				tree.var(ALOAD, id); // this (array)
+				tree.vars(ALOAD, id); // this (array)
 				tree.delTmpVar(id);
 			} else {
 				Field get = (Field) func;
 
 				get.writeLoad(tree);
 				int id = tree.getTmpVar();
-				tree.var(ASTORE, id);
-				tree.var(ALOAD, id);
+				tree.vars(ASTORE, id);
+				tree.vars(ALOAD, id);
 
 				get.writeExecute(tree, false);
 
-				tree.var(ALOAD, id); // this (object ref)
+				tree.vars(ALOAD, id); // this (object ref)
 				tree.delTmpVar(id);
 			}
 		} else { // new
