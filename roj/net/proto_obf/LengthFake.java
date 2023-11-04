@@ -1,7 +1,6 @@
 package roj.net.proto_obf;
 
 import roj.collect.RingBuffer;
-import roj.crypt.MT19937;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.handler.PacketMerger;
@@ -10,6 +9,7 @@ import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
+import java.util.Random;
 
 /**
  * 伪装数据包长度
@@ -17,11 +17,11 @@ import java.io.IOException;
  * @since 2023/9/15 0015 22:04
  */
 public class LengthFake extends PacketMerger implements ChannelHandler {
-	final MT19937 rnd;
+	final Random rnd;
 	final RingBuffer<DynByteBuf> buffers = new RingBuffer<>(5, 999);
 	int delay;
 
-	public LengthFake(MT19937 rnd) { this.rnd = rnd; }
+	public LengthFake(Random rnd) { this.rnd = rnd; }
 
 	@Override
 	public final void channelWrite(ChannelCtx ctx, Object msg) throws IOException {
@@ -29,7 +29,7 @@ public class LengthFake extends PacketMerger implements ChannelHandler {
 		DynByteBuf tmp = ctx.allocate(true, 1024);
 		try {
 			while (b.isReadable()) {
-				int len = _length(b);
+				int len = _length(b.readableBytes());
 
 				tmp.clear();
 				if (tmp.capacity() < len+4) tmp = ctx.alloc().expand(tmp, len+4-tmp.capacity());
@@ -38,7 +38,7 @@ public class LengthFake extends PacketMerger implements ChannelHandler {
 				if (len > b.readableBytes()) {
 					int noiseLen = len - b.readableBytes();
 					byte[] array = ArrayCache.getDefaultCache().getByteArray(noiseLen, false);
-					rnd.nextBytes(array, 0, noiseLen);
+					nextBytes(rnd, array, 0, noiseLen);
 
 					tmp = writePacket(ctx, tmp, b, b.readableBytes());
 					tmp.put(array, 0, Math.min(noiseLen, tmp.writableBytes()));
@@ -50,18 +50,27 @@ public class LengthFake extends PacketMerger implements ChannelHandler {
 
 				len = tmp.readableBytes()-4;
 				int bl = VarintSplitter.getVarIntLength(len);
-				tmp.wIndex(4-bl);tmp.putVUInt(len).rIndex = 4-bl;
-				tmp.wIndex(len+4);
+				tmp.wIndex(tmp.rIndex = 4-bl);
+				tmp.putVUInt(len).wIndex(len+4);
 
 				if (delay == 0) {
 					ctx.channelWrite(tmp);
-					delay = _delay(b);
+					delay = _delay(len);
 				} else {
 					buffers.ringAddLast(ctx.allocate(true, tmp.readableBytes()).put(tmp));
 				}
 			}
 		} finally {
 			ctx.reserve(tmp);
+		}
+	}
+
+	static void nextBytes(Random r, byte[] bytes, int i, int len) {
+		while (i < len) {
+			for (int rnd = r.nextInt(),
+				 n = Math.min(len - i, Integer.SIZE/Byte.SIZE);
+				 n-- > 0; rnd >>= Byte.SIZE)
+				bytes[i++] = (byte)rnd;
 		}
 	}
 
@@ -107,7 +116,7 @@ public class LengthFake extends PacketMerger implements ChannelHandler {
 				buf = buffers.peekFirst();
 				if (buf == null) break;
 
-				delay = _delay(buf);
+				delay = _delay(buf.readableBytes());
 			} while (delay == 0);
 		}
 	}
@@ -129,6 +138,8 @@ public class LengthFake extends PacketMerger implements ChannelHandler {
 	}
 
 	@Override
+	public void channelClosed(ChannelCtx ctx) throws IOException { channelFlushing(ctx); }
+	@Override
 	public void handlerRemoved(ChannelCtx ctx) { channelFlushing(ctx); }
 
 	void readPacket(ChannelCtx ctx, DynByteBuf in) throws IOException { ctx.channelRead(in); }
@@ -139,17 +150,17 @@ public class LengthFake extends PacketMerger implements ChannelHandler {
 	}
 
 	/** 随机长度 */
-	int _length(DynByteBuf buf) {
+	int _length(int buf) {
 		float p = rnd.nextFloat();
-		if (buf.readableBytes() < p*50) return buf.readableBytes();
-		return rnd.nextInt(buf.readableBytes()+1);
+		if (buf < p*50) return buf;
+		return rnd.nextInt(buf+1);
 	}
 
 	/** 随机延迟 */
-	int _delay(DynByteBuf buf) {
+	int _delay(int buf) {
 		float p = rnd.nextFloat();
 		if (p < 0.3f) return 0;
 		if (p < 0.8f) return rnd.nextInt(30);
-		return rnd.nextInt((int) (1+p/100f*buf.readableBytes()));
+		return rnd.nextInt(1+(int) (p*buf));
 	}
 }

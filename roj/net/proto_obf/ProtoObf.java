@@ -39,6 +39,10 @@ public class ProtoObf extends LengthFake {
 	private boolean inited, fakeEnable, fakeSending;
 	private int fakeTimer;
 
+	private static final int MASK0 = 31;
+	private final int[] packetSize = new int[MASK0+1];
+	private int cPtr;
+
 	public ProtoObf(MT19937 rnd) { super(rnd); }
 
 	@Override
@@ -66,25 +70,30 @@ public class ProtoObf extends LengthFake {
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws Exception {
-		if (!fakeEnable) return;
-
 		super.channelTick(ctx);
-		if (buffers.isEmpty()) {
+
+		if (fakeEnable && buffers.isEmpty()) {
 			// 虚假回包
 			if (--fakeTimer == 0) {
-				fakeSending = true;
+				int len = _length(-1);
 
+				fakeSending = true;
 				try {
-					int len = rnd.nextInt(2000);
 					ByteList b = IOUtil.getSharedByteBuf(); b.wIndex(len);
-					rnd.nextBytes(b.list, 0, len);
+					nextBytes(rnd, b.list, 0, len);
 					super.channelWrite(ctx, b);
 				} finally {
 					fakeSending = false;
 				}
 			}
 
-			if (fakeTimer < 0) fakeTimer = rnd.nextInt(1000);
+			if (fakeTimer == -1) {
+				float p = rnd.nextFloat();
+				if (p < 0.11f) fakeTimer = _delay(-1);
+				if (p < 0.33f) fakeTimer = 1000+rnd.nextInt(60000);
+				if (p < 0.66f) fakeTimer = rnd.nextInt(3000);
+				else fakeTimer = -2;
+			}
 		} else {
 			fakeTimer = 0;
 		}
@@ -100,6 +109,8 @@ public class ProtoObf extends LengthFake {
 
 	@Override
 	void readPacket(ChannelCtx ctx, DynByteBuf in) throws IOException {
+		if (fakeTimer == -2) fakeTimer = -1;
+
 		DynByteBuf out = ctx.allocate(true, 5);
 		int pos = in.wIndex(); in.wIndex(in.rIndex+21);
 		try {
@@ -124,13 +135,14 @@ public class ProtoObf extends LengthFake {
 	DynByteBuf writePacket(ChannelCtx ctx, DynByteBuf out, DynByteBuf in, int len) throws IOException {
 		if (out.writableBytes() < len+21) out = ctx.alloc().expand(out, len+21-out.writableBytes());
 
+		// 偶数为真实包
+		int flag = rnd.nextInt(256) & ~1;
+
+		if (fakeSending) flag++;
+		else if (fakeTimer > 0) fakeTimer += rnd.nextInt(3000);
+
 		try {
 			c_len.clear();
-
-			// 偶数为真实包
-			int flag = rnd.nextInt(256) & ~1;
-			if (fakeSending) flag++;
-
 			c_out.crypt(c_len.put(flag).putInt(len), out);
 			c_out.cryptFinal(in.slice(len), out);
 		} catch (GeneralSecurityException e) {
@@ -141,11 +153,25 @@ public class ProtoObf extends LengthFake {
 	}
 
 	// 随机长度
-	protected int _length(DynByteBuf buf) {
+	int _length(int buf) {
+		if (buf > 0) {
+			if (fakeTimer == -2) fakeTimer = -1;
+			packetSize[cPtr++ & MASK0] = buf;
+		} else {
+			buf = packetSize[cPtr & MASK0];
+			if (buf == 0) buf = 1+rnd.nextInt(4095);
+		}
+
+		int sample = packetSize[rnd.nextInt((cPtr & ~MASK0) == 0 ? cPtr+1 : MASK0)]+1;
+		sample = rnd.nextInt(sample)+rnd.nextInt(sample);
+
 		float p = rnd.nextFloat();
-		if (p < 0.1f || buf.readableBytes() < p*100) return buf.readableBytes();
-		if (p < 0.7f) return rnd.nextInt(buf.readableBytes()+1);
-		if (p < 0.9f) return rnd.nextInt(buf.readableBytes()+1)+rnd.nextInt(buf.readableBytes()+1);
-		return rnd.nextInt(4096);
+		if (p < 0.1f) return buf;
+		if (p > 0.3f && p < 0.7f) return (int) (rnd.nextInt(buf)*p+sample*(1-p));
+
+		buf++;
+
+		if (p < 0.9f) return rnd.nextInt(buf);
+		return rnd.nextInt(buf)+rnd.nextInt(buf);
 	}
 }

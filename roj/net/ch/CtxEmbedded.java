@@ -46,6 +46,7 @@ public class CtxEmbedded extends MyChannel {
 				long time = System.currentTimeMillis();
 				int delta = (int) (time-prevTick);
 				if (delta > 0) {
+					prevTick = time;
 					for (Iterator<CtxEmbedded> itr = ch.iterator(); itr.hasNext(); ) {
 						CtxEmbedded ctx = itr.next();
 
