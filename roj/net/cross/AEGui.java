@@ -11,7 +11,8 @@ import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.crypt.eddsa.EdKeyGenerator;
+import roj.crypt.ILProvider;
+import roj.crypt.KeyType;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.math.MutableInt;
@@ -34,6 +35,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -49,6 +51,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 	static IAEClient client;
 	static final SelectorLoop loop = new SelectorLoop(null, "AE 网络IO", 1, 30000, 1);
 
+	static KeyType keyType;
 	static KeyPair userCert;
 	static byte[] userId;
 
@@ -82,7 +85,9 @@ public class AEGui extends JFrame implements ChannelHandler {
 	}
 
 	public static void main(String[] args) throws IOException, ParseException {
+		ILProvider.register();
 		UIUtil.systemLook();
+		keyType = KeyType.getInstance("EdDSA");
 		AEGui f = new AEGui();
 
 		if (!NIOUtil.available()) {
@@ -223,33 +228,49 @@ public class AEGui extends JFrame implements ChannelHandler {
 		});
 		// Host+Direct server
 		uiKeyGen.addActionListener(e -> {
-			EdKeyGenerator kg = new EdKeyGenerator();
-			userCert = kg.generateKeyPair();
-			try {
-				MessageDigest sha = MessageDigest.getInstance("SHA-1");
-				String digest = TextUtil.bytes2hex(userId = sha.digest(userCert.getPublic().getEncoded()));
-				uiKeyDigest.setText("指纹: "+digest);
-				uiKeyDigest.setToolTipText(digest);
-			} catch (NoSuchAlgorithmException ignored) {}
-			uiKeySL.setText("保存");
+			userCert = keyType.generateKey();
+			setUserCert();
 		});
 		uiKeySL.addActionListener(e -> {
-			if (uiKeySL.getText().equals("读取")) {
+			if (uiKeySL.getText().startsWith("读取")) {
 				File file = UIUtil.fileLoadFrom("选择密钥文件", uiConnect);
-				//KeyFile.getInstance("EdDSA")
+				String pass = JOptionPane.showInputDialog(uiConnect, "请输入保存时设置的密码", "输入密码", JOptionPane.QUESTION_MESSAGE);
+				try {
+					userCert = keyType.loadKey(pass.getBytes(StandardCharsets.UTF_8), file);
+					if (userCert == null) uiKeySL.setText("读取失败");
+					else setUserCert();
+				} catch (Exception e1) {
+					uiKeySL.setText("读取失败");
+					e1.printStackTrace();
+				}
 			} else {
 				File file = UIUtil.fileSaveTo("选择密钥文件", "key.bin", uiConnect);
+				String pass = JOptionPane.showInputDialog(uiConnect, "您必须设置密码来保护私钥", "设置密码", JOptionPane.INFORMATION_MESSAGE);
+				try {
+					keyType.saveKey(userCert, pass.getBytes(StandardCharsets.UTF_8), file);
+					uiKeySL.setEnabled(false);
+					uiKeySL.setText("保存");
+				} catch (Exception e1) {
+					uiKeySL.setText("保存失败");
+					e1.printStackTrace();
+				}
 			}
 		});
 
 		uiLogin.addActionListener(e -> {
-			if (userCert == null) return;
+			if (userCert == null) {
+				JOptionPane.showMessageDialog(uiConnect, "请生成或读取用户ID！");
+				return;
+			}
 			uiKeyGen.setEnabled(false);
 
 			boolean first = client == null;
 
 			if (uiCreateRoom.isSelected()) {
-				if (model.size() == 0) return;
+				if (model.size() == 0) {
+					JOptionPane.showMessageDialog(uiConnect, "请在弹出的窗口中设置端口！");
+					return;
+				}
 				client = new AEHost(loop);
 			} else {
 				client = new AEClient(loop);
@@ -355,11 +376,28 @@ public class AEGui extends JFrame implements ChannelHandler {
 
 		uiWeb.addActionListener(e -> {
 			try {
-				runServer(15001);
+				JOptionPane.showMessageDialog(this, "但是还不能用！ port=1500");
+				runServer(1500);
 			} catch (IOException ex) {
 				ex.printStackTrace();
 			}
 		});
+		try {
+			runServer(1500);
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
+	}
+
+	private void setUserCert() {
+		try {
+			uiKeyGen.setEnabled(false);
+			uiKeySL.setText("保存");
+			MessageDigest sha = MessageDigest.getInstance("SHA-1");
+			String digest = TextUtil.bytes2hex(userId = sha.digest(userCert.getPublic().getEncoded()));
+			uiKeyDigest.setText(digest);
+			uiKeyDigest.setToolTipText(digest);
+		} catch (NoSuchAlgorithmException ignored) {}
 	}
 
 	private static final MyHashMap<String, String> res = new MyHashMap<>();
@@ -372,12 +410,9 @@ public class AEGui extends JFrame implements ChannelHandler {
 		HttpServer11.simple(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64, (request, rh) -> {
 			AEHost host = (AEHost) client;
 			switch (request.path()) {
-				case "bundle.min.css":
-					return new StringResponse(res("bundle.min.css"), "text/css");
-				case "bundle.min.js":
-					return new StringResponse(res("bundle.min.js"), "text/javascript");
-				case "":
-					return new StringResponse(res("client_owner.html"), "text/html");
+				case "bundle.min.css": return new StringResponse(res("bundle.min.css"), "text/css");
+				case "bundle.min.js": return new StringResponse(res("bundle.min.js"), "text/javascript");
+				case "": return new StringResponse(res("client_owner.html"), "text/html");
 				case "user_list":
 					CList lx = new CList();
 					for (IntMap.Entry<AEHost.Client> entry : host.clients.selfEntrySet()) {
@@ -533,6 +568,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 
 			//---- uiLogin ----
 			uiLogin.setMargin(new Insets(2, 2, 2, 2));
+			uiLogin.setEnabled(false);
 			uiConnectContentPane.add(uiLogin);
 			uiLogin.setBounds(10, 100, 175, 23);
 			uiConnectContentPane.add(uiRoom);
@@ -545,13 +581,13 @@ public class AEGui extends JFrame implements ChannelHandler {
 			label1.setBounds(new Rectangle(new Point(5, 8), label1.getPreferredSize()));
 
 			//---- label2 ----
-			label2.setText("\u623f\u95f4\u7801");
+			label2.setText("\u623f  \u95f4");
 			label2.setLabelFor(uiRoom);
 			uiConnectContentPane.add(label2);
 			label2.setBounds(new Rectangle(new Point(5, 34), label2.getPreferredSize()));
 
 			//---- label3 ----
-			label3.setText("\u7528\u6237\u540d");
+			label3.setText("\u6635  \u79f0");
 			label3.setLabelFor(uiUser);
 			uiConnectContentPane.add(label3);
 			label3.setBounds(new Rectangle(new Point(5, 58), label3.getPreferredSize()));
@@ -570,21 +606,21 @@ public class AEGui extends JFrame implements ChannelHandler {
 			uiDirectServer.setBounds(new Rectangle(new Point(72, 78), uiDirectServer.getPreferredSize()));
 
 			//---- uiKeyDigest ----
-			uiKeyDigest.setText("\u7528\u6237\u7801");
+			uiKeyDigest.setText("\u7528\u6237ID");
 			uiConnectContentPane.add(uiKeyDigest);
 			uiKeyDigest.setBounds(5, 130, 190, uiKeyDigest.getPreferredSize().height);
 
 			//---- uiKeyGen ----
 			uiKeyGen.setText("\u751f\u6210");
-			uiKeyGen.setMargin(new Insets(1, 10, 1, 10));
+			uiKeyGen.setMargin(new Insets(1, 0, 1, 0));
 			uiConnectContentPane.add(uiKeyGen);
-			uiKeyGen.setBounds(new Rectangle(new Point(2, 145), uiKeyGen.getPreferredSize()));
+			uiKeyGen.setBounds(2, 145, 60, uiKeyGen.getPreferredSize().height);
 
 			//---- uiKeySL ----
 			uiKeySL.setText("\u8bfb\u53d6");
-			uiKeySL.setMargin(new Insets(1, 10, 1, 10));
+			uiKeySL.setMargin(new Insets(1, 0, 1, 0));
 			uiConnectContentPane.add(uiKeySL);
-			uiKeySL.setBounds(new Rectangle(new Point(145, 145), uiKeySL.getPreferredSize()));
+			uiKeySL.setBounds(135, 145, 60, uiKeySL.getPreferredSize().height);
 
 			uiConnectContentPane.setPreferredSize(new Dimension(200, 170));
 			uiConnect.pack();

@@ -3,10 +3,11 @@
 ## 您已经看过该提示！
 
 # 2023/09/09 更新  搞了很多界面  
-![roj.mapper.MapperUI](images\mapper v3.png)  
-![roj.concurrent.Promise](images\promise.png)  
-![roj.mapper.ObfuscatorUI](images\ofbuscator.png)  
-![roj.text.novel.NovelFrame](images\novel manager.png)
+![roj.mapper.MapperUI](images/mapper v3.png)  
+![roj.concurrent.Promise](images/promise.png)  
+![roj.mapper.ObfuscatorUI](images/ofbuscator.png)  
+![roj.text.novel.NovelFrame](images/novel manager.png)
+![roj.net.cross.AEGui](images/port transfer.png)
 
 
 # 这里都有啥
@@ -61,9 +62,12 @@
 * 同上，而后解析所有属性，最后清空常量池  
 
 ### 还有Nixim:
- * 使用注解注入一个class，增加修改删除其中一些方法，或者让它实现接口  
-示例: roj.misc.NiximExample  
- * 暂不支持在方法中间插入  
+ * 使用注解注入一个class，修改其中一些方法，或者让它实现接口  
+ * 在头部、尾部、（使用SIJ模式）或中间插入你的代码
+ * 删除或替换方法
+ * 通过模糊匹配替换一个连续（不包含if、switch、循环）的代码段
+ * 替换常量的值，或将其的求值语句替换成一个函数
+ * 替换方法的调用
  * 灵感来自spongepowered:mixin  
   
 ## roj.collect  
@@ -349,13 +353,15 @@ HTTP服务器, 客户端
 DNS服务器 
 
 内网穿透工具 AEClient / AEServer / AEHost`roj.net.cross`  
-* [ ] UPnP  
+* 带或不带中转服务器的端口转发程序
+* 客户端与服务器均能自签证书（用户ID）
+* 中转服务器模式下支持多个房间(主机)并行
 
 MSS协议，My Secure Socket`roj.net.mss`  
   因为(jvav的)SSL不好用，自用的话还不如自己写一个协议  
-* [x] 加密方式协商  
-* [x] 前向安全  
-* [x] 1-RTT
+* [x] 加密方式协商
+* [x] 前向安全
+* [x] 0-RTT
 
 ## roj.opengl  
   前置: LWJGL  

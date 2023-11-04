@@ -1,7 +1,7 @@
 package roj.net.mss;
 
 import roj.collect.IntMap;
-import roj.crypt.KeyFile;
+import roj.crypt.KeyType;
 import roj.net.SecureUtil;
 
 import javax.net.ssl.KeyManager;
@@ -58,7 +58,7 @@ public final class SimpleEngineFactory implements Supplier<MSSEngine> {
 	public SimpleEngineFactory pscOnly(File file, String format) {
 		if (!client) throw new IllegalArgumentException("Client mode only");
 		if (file.isFile()) {
-			KeyFile kf = KeyFile.getInstance(format);
+			KeyType kf = KeyType.getInstance(format);
 			try {
 				PublicKey pk = kf.getPublic(file);
 				if (pk != null) {

@@ -5,7 +5,7 @@ import roj.collect.MyHashSet;
 import roj.config.YAMLParser;
 import roj.config.data.CMapping;
 import roj.crypt.ILProvider;
-import roj.crypt.KeyFile;
+import roj.crypt.KeyType;
 import roj.io.IOUtil;
 import roj.math.MutableLong;
 import roj.net.NetworkUtil;
@@ -109,7 +109,7 @@ public class FileSync implements ChannelHandler {
 			System.out.println("生成EdDSA证书");
 
 			ILProvider.register();
-			KeyPair kp = KeyFile.getInstance("EdDSA").getKeyPair(new File("fs.key"), new File("fs.pem"), "114514".getBytes());
+			KeyPair kp = KeyType.getInstance("EdDSA").getKeyPair(new File("fs.key"), new File("fs.pem"), "114514".getBytes());
 
 			SimpleEngineFactory factory = SimpleEngineFactory.server().key(new JPrivateKey(kp));
 

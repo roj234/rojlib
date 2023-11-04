@@ -138,6 +138,7 @@ new FormModel {
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiLogin"
 				"margin": new java.awt.Insets( 2, 2, 2, 2 )
+				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 10
 				"y": 100
@@ -164,7 +165,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label2"
-				"text": "房间码"
+				"text": "房  间"
 				"labelFor": new FormReference( "uiRoom" )
 				auxiliary() {
 					"JavaCodeGenerator.variableLocal": true
@@ -175,7 +176,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label3"
-				"text": "用户名"
+				"text": "昵  称"
 				"labelFor": new FormReference( "uiUser" )
 				auxiliary() {
 					"JavaCodeGenerator.variableLocal": true
@@ -208,7 +209,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "uiKeyDigest"
-				"text": "用户码"
+				"text": "用户ID"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 5
 				"y": 130
@@ -217,18 +218,20 @@ new FormModel {
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiKeyGen"
 				"text": "生成"
-				"margin": new java.awt.Insets( 1, 10, 1, 10 )
+				"margin": new java.awt.Insets( 1, 0, 1, 0 )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 2
 				"y": 145
+				"width": 60
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiKeySL"
 				"text": "读取"
-				"margin": new java.awt.Insets( 1, 10, 1, 10 )
+				"margin": new java.awt.Insets( 1, 0, 1, 0 )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 145
+				"x": 135
 				"y": 145
+				"width": 60
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 310, 0 )

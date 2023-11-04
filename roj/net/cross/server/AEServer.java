@@ -6,7 +6,7 @@ import roj.collect.RingBuffer;
 import roj.concurrent.Shutdownable;
 import roj.concurrent.timing.ScheduledTask;
 import roj.concurrent.timing.Scheduler;
-import roj.crypt.KeyFile;
+import roj.crypt.KeyType;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.net.NetworkUtil;
@@ -59,7 +59,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 		}
 
 		byte[] keyPass = null;
-		String port = null, motd = "任务：拯救世界(1/1)";
+		String port = null;
 		int webPort = -1;
 		for (int i = 0; i < args.length; i++) {
 			switch (args[i]) {
@@ -76,13 +76,13 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 		}
 
 		if (keyPass == null) {
-			System.out.println("自40版本起不再支持非加密模式,请设定一个密码(-keypass)以生成加密的key");
+			System.out.println("请设定一个密码(-keypass)以加密key");
 			return;
 		}
 
 		InetSocketAddress addr = NetworkUtil.getListenAddress(port);
 
-		KeyPair pair = KeyFile.getInstance("RSA").setKeySize(2048).getKeyPair(new File("ae_server.key"), new File("ae_client.key"), keyPass);
+		KeyPair pair = KeyType.getInstance("EdDSA").getKeyPair(new File("ae_server.key"), new File("ae_public.key"), keyPass);
 		if (pair == null) {
 			System.out.println("无法解密密钥");
 			return;
