@@ -14,7 +14,7 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class BufferPool {
 	private static final ThreadLocal<BufferPool> DEFAULT = ThreadLocal.withInitial(() -> {
-		BitmapBPool bp1 = new BitmapBPool(524288, 512);
+		PagedBPool bp1 = new PagedBPool(524288);
 		SimpleBPool bp2 = new SimpleBPool(512, 524288, 16);
 		return new BufferPool(bp1,bp2);
 	});
@@ -22,6 +22,11 @@ public class BufferPool {
 
 	private final class PooledDirectBuf extends DirectByteList.Slice implements PooledBuffer {
 		private volatile BPool pool;
+		private int meta;
+		@Override
+		public int getMetadata() { return meta; }
+		@Override
+		public void setMetadata(int m) { meta = m; }
 		@Override
 		public BPool pool() { return pool; }
 		@Override
@@ -33,6 +38,11 @@ public class BufferPool {
 	}
 	private final class PooledHeapBuf extends ByteList.Slice implements PooledBuffer {
 		private volatile BPool pool;
+		private int meta;
+		@Override
+		public int getMetadata() { return meta; }
+		@Override
+		public void setMetadata(int m) { meta = m; }
 		@Override
 		public BPool pool() { return pool; }
 		@Override

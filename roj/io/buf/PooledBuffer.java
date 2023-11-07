@@ -12,6 +12,9 @@ public interface PooledBuffer {
 	default Object set(NativeMemory ref, long address, int length) { throw new UnsupportedOperationException("not direct buffer"); }
 	default Object set(byte[] array, int offset, int length) { throw new UnsupportedOperationException("not heap buffer"); }
 
+	int getMetadata();
+	void setMetadata(int metadata);
+
 	BPool pool();
 	void pool(BPool pool);
 	void close();

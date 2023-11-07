@@ -16,7 +16,6 @@ import java.sql.SQLException;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 /**
@@ -30,8 +29,6 @@ public class SimpleConnectionPool {
 
 	private final Connection[] pool;
 	private final long[] stale;
-
-	private final AtomicInteger availBitset = new AtomicInteger();
 
 	private final LeakDetector ld = LeakDetector.create();
 
@@ -55,7 +52,7 @@ public class SimpleConnectionPool {
 		SQLException e1 = null;
 		for (int i = 0; i < stale.length; i++) {
 			if (stale[i] < maxBefore) {
-				lock.acquireShared(i);
+				lock.tryLock(i);
 				try {
 					if (stale[i] < maxBefore) {
 						Connection conn = pool[i];
@@ -70,7 +67,7 @@ public class SimpleConnectionPool {
 						pool[i] = null;
 					}
 				} finally {
-					lock.releaseShared(i);
+					lock.unlock(i);
 				}
 			}
 		}
@@ -185,6 +182,6 @@ public class SimpleConnectionPool {
 			}
 		}
 
-		lock.releaseShared((int) id[0]);
+		lock.unlock((int) id[0]);
 	}
 }

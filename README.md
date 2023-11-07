@@ -2,7 +2,7 @@
 ## 本项目存在大量或无意或有意留下的漏洞，仅做学习研究用途
 ## 您已经看过该提示！
 
-# 2023/09/09 更新  搞了很多界面  
+# 2023/11/08 更新  搞了很多界面  
 ![roj.mapper.MapperUI](images/mapper v3.png)  
 ![roj.concurrent.Promise](images/promise.png)  
 ![roj.mapper.ObfuscatorUI](images/ofbuscator.png)  
@@ -19,7 +19,7 @@
 * 分卷
 * 增量修改 —— 无需处理没修改的,比如给加密的压缩文件增加新文件
 * 仅读取CEN(更快)
-* Info-ZIP UnicodePath和高精度时间戳的支持 （只读）  
+* Info-ZIP UnicodePath和NTFS高精度时间戳(现已加入可写入豪华午餐)  
 
 `QZArchive/QZFileWriter`: 7z
 * 读写
@@ -27,6 +27,7 @@
 * 分卷
 * 固实
 * 压缩文件头
+* 并行压缩 / 解压 (和7-ZIP for windows的实现方式不同)
 * 支持BCJ2等复杂coder
 * 追加修改(复制字块)
 
