@@ -56,9 +56,13 @@ public final class SwitchSegment extends Segment {
 		if (targets.isEmpty() && opt) {
 			to.bw.put(Opcodes.POP);
 			int len = length;
-			JumpSegment seg = new JumpSegment(GOTO, def);
-			seg.put(to);
-			length = (char) seg.length();
+			if (def == null) {
+				length = 0;
+			} else {
+				JumpSegment seg = new JumpSegment(GOTO, def);
+				seg.put(to);
+				length = (char) seg.length();
+			}
 			return len != length;
 		}
 

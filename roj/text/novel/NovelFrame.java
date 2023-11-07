@@ -239,11 +239,10 @@ public class NovelFrame extends JFrame {
 
 		for (int i = 0; i < chapters.size(); i++) {
 			Chapter c = chapters.get(i);
-			if (i > 0) novel_out.append("\n\n").append(replacedName != null ? replacedName.get(i-1) : c.fullName).append('\n');
+			if (i > 0) novel_out.append("\n\n").append(replacedName != null ? replacedName.get(i-1) : c.fullName == null ? c.displayName : c.fullName).append('\n');
 
 			int st, len;
 			char[] val;
-			boolean noWhitespace = true;
 			if (c.data != null) {
 				st = 0;
 				len = c.data.length();
@@ -255,21 +254,14 @@ public class NovelFrame extends JFrame {
 			}
 			while ((st < len) && myWhiteSpace.contains(val[st])) {
 				st++;
-				noWhitespace = false;
 			}
 			while ((st < len) && myWhiteSpace.contains(val[len - 1])) {
 				len--;
 			}
 
 			for (String line : new LineReader(new CharList.Slice(val, st, len), false)) {
-				if (line.isEmpty()) {
-					novel_out.append('\n');
-					continue;
-				}
-
-				if (prefixSpaceOnly.isSelected() && noWhitespace && !Character.isWhitespace(line.charAt(0))) {
+				if (line.isEmpty() || prefixSpaceOnly.isSelected() && !Character.isWhitespace(line.charAt(0))) {
 					novel_out.append(line).append('\n');
-					noWhitespace = false;
 					continue;
 				}
 

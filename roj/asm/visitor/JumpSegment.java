@@ -18,6 +18,7 @@ final class JumpSegment extends Segment {
 	JumpSegment(byte code, Label target) {
 		this.code = code;
 		this.target = target;
+		assert target != null;
 	}
 
 	@Override

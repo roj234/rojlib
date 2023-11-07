@@ -603,8 +603,8 @@ public class ZipArchive implements ArchiveFile {
 		return entries;
 	}
 
-	public InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException {
-		return getStream((ZEntry) entry, password);
+	public InputStream getInput(ArchiveEntry entry, byte[] password) throws IOException {
+		return getInput((ZEntry) entry, password);
 	}
 
 	public END getEND() {
@@ -639,18 +639,18 @@ public class ZipArchive implements ArchiveFile {
 	}
 	public ByteList get(ZEntry file, ByteList buf) throws IOException {
 		buf.ensureCapacity((int) (buf.wIndex() + file.uSize));
-		return buf.readStreamFully(getStream(file, null));
+		return buf.readStreamFully(getInput(file, null));
 	}
 
-	public InputStream getStream(String entry) throws IOException {
+	public InputStream getInput(String entry) throws IOException {
 		ZEntry file = entries.get(entry);
 		if (file == null) return null;
-		return getStream(file, null);
+		return getInput(file, null);
 	}
 	public InputStream getStream(ZEntry file) throws IOException {
-		return getStream(file, null);
+		return getInput(file, null);
 	}
-	public InputStream getStream(ZEntry file, byte[] pass) throws IOException {
+	public InputStream getInput(ZEntry file, byte[] pass) throws IOException {
 		InputStream in = i_getRawData(file);
 
 		if (file.isEncrypted()) {
@@ -873,7 +873,7 @@ public class ZipArchive implements ArchiveFile {
 			e.offset = r.position() + 30 + e.nameBytes.length;
 			e.method = (char) (mf.flag & EntryMod.E_COMPRESS);
 			if ((mf.flag & EntryMod.E_ORIGINAL_TIME) == 0) {
-				e.precisionModTime = precisionModTime;
+				e.pModTime = precisionModTime;
 				e.modTime = modTime;
 			}
 

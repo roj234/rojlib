@@ -66,9 +66,9 @@ public final class HRFieldStorage extends PhantomReference<Object> {
 	public final long getJ(int i) { return u.getLong(p_fields,(long) i); }
 	public final Object getA(int i) { return o_fields[i]; }
 
-	public final void setI(int i, int v) { p_fields[i] = v; }
-	public final void setF(int i, float v) { u.putFloat(p_fields,(long) i,v); }
-	public final void setD(int i, double v) { u.putDouble(p_fields,(long) i,v); }
-	public final void setJ(int i, long v) { u.putLong(p_fields,(long) i,v); }
-	public final void setA(int i, Object v) { o_fields[i] = v; }
+	public final void set(int i, int v) { p_fields[i] = v; }
+	public final void set(int i, float v) { u.putFloat(p_fields,(long) i,v); }
+	public final void set(int i, double v) { u.putDouble(p_fields,(long) i,v); }
+	public final void set(int i, long v) { u.putLong(p_fields,(long) i,v); }
+	public final void set(int i, Object v) { o_fields[i] = v; }
 }

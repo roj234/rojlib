@@ -292,7 +292,7 @@ public class QZArchive implements ArchiveFile {
 
 		buf.close();
 
-		try (InputStream in = getSolidStream("<header>", b, null)) {
+		try (InputStream in = getSolidStream(b, null)) {
 			buf = (ByteList) pool.buffer(false, (int) b.uSize);
 			int read = buf.readStream(in, (int) b.uSize);
 			if (read < b.uSize) throw new EOFException("数据流过早终止");
@@ -854,10 +854,6 @@ public class QZArchive implements ArchiveFile {
 		return byName;
 	}
 
-	public InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException {
-		return getStream((QZEntry) entry, password);
-	}
-
 	public QZEntry[] getEntriesByPresentOrder() {
 		return entries;
 	}
@@ -867,7 +863,7 @@ public class QZArchive implements ArchiveFile {
 		if (blocks == null) return;
 		for (WordBlock b : blocks) {
 			th.pushTask(() -> {
-				try (InputStream in = getSolidStream("block"+b.offset, b, pass)) {
+				try (InputStream in = getSolidStream(b, pass)) {
 					// noinspection all
 					LimitInputStream lin = new LimitInputStream(in, 0, false);
 					QZEntry entry = b.firstEntry;
@@ -889,15 +885,15 @@ public class QZArchive implements ArchiveFile {
 		}
 	}
 
-	public InputStream getStream(String entry) throws IOException {
+	public InputStream getInput(String entry) throws IOException {
 		QZEntry file = getEntries().get(entry);
 		if (file == null) return null;
-		return getStream(file, null);
+		return getInput(file, null);
 	}
-	public InputStream getStream(QZEntry file) throws IOException {
-		return getStream(file, null);
-	}
-	public InputStream getStream(QZEntry file, byte[] pass) throws IOException {
+	public InputStream getInput(QZEntry file) throws IOException { return getInput(file, null); }
+	@Override
+	public InputStream getInput(ArchiveEntry entry, byte[] password) throws IOException { return getInput((QZEntry) entry, password); }
+	public InputStream getInput(QZEntry file, byte[] pass) throws IOException {
 		if (file.uSize == 0) return new SourceInputStream(null, 0);
 
 		// 顺序访问的处理
@@ -921,7 +917,7 @@ public class QZArchive implements ArchiveFile {
 
 		closeSolidStream();
 
-		InputStream in = blockInput = getSolidStream(file.name, file.block, pass);
+		InputStream in = blockInput = getSolidStream(file.block, pass);
 		if (in.skip(file.offset) < file.offset) {
 			in.close();
 			throw new EOFException("数据流过早终止");
@@ -949,7 +945,8 @@ public class QZArchive implements ArchiveFile {
 		activeEntry = null;
 	}
 
-	private InputStream getSolidStream(String name, WordBlock b, byte[] pass) throws IOException {
+	public InputStream getWordBlockInputStream(WordBlock b, byte[] pass) throws IOException { return getSolidStream(b, pass); }
+	private InputStream getSolidStream(WordBlock b, byte[] pass) throws IOException {
 		if (pass == null) pass = password;
 
 		Source src;

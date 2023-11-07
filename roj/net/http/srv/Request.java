@@ -140,7 +140,7 @@ public final class Request extends Headers {
 	public ByteList postBuffer() { return (ByteList) postFields; }
 	public HPostHandler postHandler() { return ((HPostHandler) postFields); }
 
-	public Map<String, String> getFields() throws IllegalRequestException {
+	public Map<String, String> GET_Fields() throws IllegalRequestException {
 		if (getFields instanceof CharSequence) {
 			try {
 				getFields = simpleValue((CharSequence) getFields, "&", true);
@@ -151,7 +151,7 @@ public final class Request extends Headers {
 		return Helpers.cast(getFields);
 	}
 
-	public String getFieldsRaw() {
+	public String GET_Fields_Raw() {
 		if (getFields == null) {
 			return null;
 		} else if (getFields instanceof String) {
@@ -164,8 +164,8 @@ public final class Request extends Headers {
 
 	public Map<String, String> fields() throws IllegalRequestException {
 		Map<String, String> map1 = postFields();
-		if (map1 == null) return getFields();
-		SipHashMap<String, String> map = new SipHashMap<>(getFields());
+		if (map1 == null) return GET_Fields();
+		SipHashMap<String, String> map = new SipHashMap<>(GET_Fields());
 		map.putAll(map1);
 		return map;
 	}
@@ -174,7 +174,7 @@ public final class Request extends Headers {
 		Map<String, String> map = postFields();
 		if (map != null && map.containsKey(key)) return map.get(key);
 
-		map = getFields();
+		map = GET_Fields();
 		if (map.containsKey(key)) return map.get(key);
 		return "";
 	}

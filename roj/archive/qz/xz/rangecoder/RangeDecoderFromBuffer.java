@@ -10,7 +10,7 @@
 
 package roj.archive.qz.xz.rangecoder;
 
-import roj.archive.qz.xz.CorruptedInputException;
+import roj.io.CorruptedInputException;
 import roj.util.ArrayCache;
 
 import java.io.DataInputStream;

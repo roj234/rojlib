@@ -1,6 +1,7 @@
 package roj.text;
 
 import roj.collect.*;
+import roj.config.word.Tokenizer;
 import roj.io.IOUtil;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -106,6 +107,16 @@ public class TextUtil {
 			|| (c >= 0xFF00 && c <= 0xFFEF); // FF00..FFEF
 	}
 
+	private static final String[] SCALE = {"B", "KB", "MB", "GB", "TB"};
+	public static CharList scaledNumber1024(CharList sb, double size) {
+		int i = 0;
+		while (size >= 1024) {
+			size /= 1024;
+			i++;
+		}
+
+		return sb.append(TextUtil.toFixed(size, i == 0 ? 0 : 2)).append(SCALE[i]);
+	}
 	public static String scaledNumber(long number) {
 		CharList sb = new CharList();
 
@@ -146,16 +157,14 @@ public class TextUtil {
 	}
 
 	public static boolean isPrintableAscii(int j) {
-		return j > 31 && j < 127 || j > 160;
+		return j > 31 && j < 127;
 	}
 
 	/**
-	 * char to (ascii) number is represents
+	 * char to (ascii) number it represents
 	 */
 	public static int c2i(char c) {
-		if (c < 0x30 || c > 0x39) {
-			return -1;
-		}
+		if (c < 0x30 || c > 0x39) return -1;
 		return c-0x30;
 	}
 
@@ -184,7 +193,7 @@ public class TextUtil {
 
 		for (int i = 0; i < hex.length(); ) {
 			char c = hex.charAt(i++);
-			if (c == ' ' || c == '\r' || c == '\n') continue;
+			if (Tokenizer.WHITESPACE.contains(c)) continue;
 			bl.put((byte) ((h2b(c) << 4) | h2b(hex.charAt(i++))));
 		}
 		return bl;
@@ -354,15 +363,6 @@ public class TextUtil {
 		return maxs[maxs.length - 1] - s.charAt(k-1) >= (negative?0:1);
 	}
 
-	public static void pad(CharList sb, int number, int min) {
-		for (int i = min - digitCount(number) - 1; i >= 0; i--) sb.append('0');
-		sb.append(number);
-	}
-	public static void pad(CharList sb, long number, int min) {
-		for (int i = min - digitCount(number) - 1; i >= 0; i--) sb.append('0');
-		sb.append(number);
-	}
-
 	public static String toFixed(double d) {
 		return toFixed(d, 5);
 	}
@@ -376,6 +376,7 @@ public class TextUtil {
 		if (sb.length() < ex) {
 			while (sb.length() < ex) sb.append('0');
 		} else {
+			if (fract == 0) ex--;
 			sb.setLength(ex);
 		}
 		return sb.toString();
@@ -814,19 +815,6 @@ public class TextUtil {
 			else len++;
 		}
 		return Math.max(maxLen, len);
-	}
-
-	public static boolean safeEquals(CharSequence a, CharSequence b) {
-		if (a.length() != b.length()) return false;
-		int r = 0;
-		for (int i = a.length() - 1; i >= 0; i--) {
-			r |= a.charAt(i) ^ b.charAt(i);
-		}
-		return r == 0;
-	}
-
-	public static String replaceAll(CharSequence str, CharSequence find, CharSequence replace) {
-		return IOUtil.getSharedCharBuf().append(str).replace(find, replace).toString();
 	}
 
 	public static int codepoint(int h, int l) {

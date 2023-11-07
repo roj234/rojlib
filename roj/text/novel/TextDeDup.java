@@ -50,7 +50,7 @@ public class TextDeDup {
 
 		@Override
 		public void execute() throws Exception {
-			if (diff != 0) return;
+			if (size != 0) return;
 
 			BsDiff d = new BsDiff();
 			byte[] data = read(left);
@@ -155,7 +155,7 @@ public class TextDeDup {
 						fileCache.put(file, out);
 
 						updateProgress(1);
-					} catch (IOException e) {
+					} catch (Exception e) {
 						System.out.println("error is " + file.getName());
 						e.printStackTrace();
 					}
@@ -192,7 +192,7 @@ public class TextDeDup {
 			}
 
 			asyn2.awaitFinish();
-			diffs.sort((o1, o2) -> Double.compare((double) o1.diff / o1.size, (double) o2.diff / o2.size));
+			diffs.sort((o1, o2) -> Integer.compare(o1.diff, o2.diff));
 			for (int i = diffs.size()-1; i > 0; i--) {
 				if (diffs.get(i).equals(diffs.get(i-1))) diffs.remove(i);
 			}

@@ -50,8 +50,8 @@ public final class MapperList extends SimpleList<String> {
 	public void batchRemoveFiltered(Map<String, String> filter) {
 		boolean mod = false;
 		for (int i = size-1; i >= 0; i--) {
-			if (i < selfIdx) selfIdx--;
 			if (!filter.containsKey(list[i].toString())) {
+				if (i < selfIdx) selfIdx--;
 				super.remove(i);
 				mod = true;
 			}

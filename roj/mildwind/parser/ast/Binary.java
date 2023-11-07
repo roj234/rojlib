@@ -57,17 +57,15 @@ public final class Binary implements Expression {
 			case nullish_coalescing:
 			case logic_and: case logic_or:
 				int id = tree.getTmpVar();
-				tree.vars(ASTORE, id);
-
-				tree.vars(ALOAD, id);
+				if (!noRet) tree.one(DUP);
 				if (op == nullish_coalescing) tree.clazz(INSTANCEOF, "roj/mildwind/type/JsNull");
 				else tree.invokeV("roj/mildwind/type/JsObject", "asBool", "()I");
 
 				Label end = new Label();
 				tree.jump(op != logic_or ? IFEQ : IFNE, end);
 
-				tree.one(POP);
-				right.write(tree, false);
+				if (!noRet) tree.one(POP);
+				right.write(tree, noRet);
 
 				tree.label(end);
 				return;

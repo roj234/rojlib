@@ -90,6 +90,14 @@ public class CodeWriter extends AbstractCodeWriter {
 			bw.putShort(tmpLenOffset-6, localSize);
 		}
 	}
+	public int getStackSize() {
+		if (state != 1) throw new IllegalStateException();
+		return bw.readShort(tmpLenOffset-8);
+	}
+	public int getLocalSize() {
+		if (state != 1) throw new IllegalStateException();
+		return bw.readShort(tmpLenOffset-6);
+	}
 
 	protected void visitBytecode(ConstantPool cp, DynByteBuf r, int len) {
 		int rPos = r.rIndex;
@@ -137,7 +145,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	protected void begin() {}
 
-	protected void preVisitAttribute(ConstantPool cp, String name, DynByteBuf r, IntMap<Label> concerned, int len1) {
+	protected void preVisitAttribute(ConstantPool cp, String name, DynByteBuf r, IntMap<Label> concerned, int bci) {
 		switch (name) {
 			case "LineNumberTable":
 				int len = r.readUnsignedShort();
@@ -154,7 +162,7 @@ public class CodeWriter extends AbstractCodeWriter {
 					int start = r.readUnsignedShort();
 					int end = start + r.readUnsignedShort();
 					concerned.putInt(start, newLabel());
-					if (end < len1) concerned.putInt(end, newLabel());
+					if (end < bci) concerned.putInt(end, newLabel());
 					r.rIndex += 6;
 					len--;
 				}
@@ -383,8 +391,9 @@ public class CodeWriter extends AbstractCodeWriter {
 				while (len1-- > 0) {
 					int start = b.readUnsignedShort();
 					int end = start+b.readUnsignedShort();
+					Label oldEnd = bciR2W.get(end);
 					b.putShort(b.rIndex-4, start = bciR2W.get(start).getValue())
-					 .putShort(b.rIndex-2, (end>=bci?bci:bciR2W.get(end).getValue()) - start);
+					 .putShort(b.rIndex-2, (oldEnd == null ? bci:oldEnd.getValue()) - start);
 					if (cp != cpw) {
 						b.putShort(b.rIndex, cpw.reset(cp.get(b)).getIndex());
 						b.putShort(b.rIndex, cpw.reset(cp.get(b)).getIndex());

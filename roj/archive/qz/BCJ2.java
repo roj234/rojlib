@@ -1,8 +1,8 @@
 package roj.archive.qz;
 
-import roj.archive.qz.xz.CorruptedInputException;
 import roj.archive.qz.xz.rangecoder.RangeDecoderFromStream;
 import roj.archive.qz.xz.rangecoder.RangeEncoderToStream;
+import roj.io.CorruptedInputException;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.util.ByteList;

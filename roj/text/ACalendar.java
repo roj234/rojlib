@@ -205,14 +205,14 @@ public class ACalendar {
 				case 'L': sb.append(fields[REN_YEAR]); break;
 				case 'Y': sb.append(fields[YEAR]); break;
 				case 'y': sb.append(fields[YEAR] % 100); break;
-				case 'd': TextUtil.pad(sb, fields[DAY], 2); break;
+				case 'd': sb.padNumber(fields[DAY], 2); break;
 				case 'j': sb.append(fields[DAY]); break;
 				case 'l': sb.append("星期").append(ChinaNumeric.NUMBER[fields[DAY_OF_WEEK]]); break;
 				case 'W': sb.append(UTCWEEK[fields[DAY_OF_WEEK]-1]); break;
 				case 'w': sb.append(fields[DAY_OF_WEEK]-1); break;
 				case 'N': sb.append(fields[DAY_OF_WEEK]); break;
-				case 'm': TextUtil.pad(sb, fields[MONTH], 2); break;
-				case 'x': TextUtil.pad(sb, fields[MILLISECOND], 3); break;
+				case 'm': sb.padNumber(fields[MONTH], 2); break;
+				case 'x': sb.padNumber(fields[MILLISECOND], 3); break;
 				case 'n': sb.append(fields[MONTH]); break;
 				case 't': // 本月有几天
 					int mth = fields[MONTH];
@@ -231,11 +231,11 @@ public class ACalendar {
 				case 'G': sb.append(fields[HOUR]); break;
 				case 'h':
 					h = fields[HOUR] % 12;
-					TextUtil.pad(sb, h == 0 ? 12 : h, 2);
+					sb.padNumber(h == 0 ? 12 : h, 2);
 					break;
-				case 'H': TextUtil.pad(sb, fields[HOUR], 2); break;
-				case 'i': TextUtil.pad(sb, fields[MINUTE], 2); break;
-				case 's': TextUtil.pad(sb, fields[SECOND], 2); break;
+				case 'H': sb.padNumber(fields[HOUR], 2); break;
+				case 'i': sb.padNumber(fields[MINUTE], 2); break;
+				case 's': sb.padNumber(fields[SECOND], 2); break;
 				case 'O': // timezone offset 2
 					if (tzoff(stamp, sb) < 0) sb.append("GMT");
 					break;
@@ -263,8 +263,8 @@ public class ACalendar {
 
 		offset /= 60000;
 
-		TextUtil.pad(sb, Math.abs(offset / 60), 2);
-		TextUtil.pad(sb, offset % 60, 2);
+		sb.padNumber(Math.abs(offset / 60), 2);
+		sb.padNumber(offset % 60, 2);
 		return pos;
 	}
 

@@ -347,16 +347,11 @@ public final class IOUtil {
 	}
 
 	public static String safePath(String path) {
-		CharList sb = getSharedCharBuf().append(path);
-		sb.trim()
-		  .replace('\\', '/')
-		  .replaceInReplaceResult("//", "/");
-
-		if (sb.startsWith("../")) sb.delete(0, 3);
-
-		return sb.replaceInReplaceResult("/../", "/")
+		CharList sb = getSharedCharBuf();
+		return sb.append(path).trim()
+				 .replaceInReplaceResult("../", "/")
 				 .replaceInReplaceResult("//", "/")
-				 .toString(sb.charAt(0) == '/' ? 1 : 0, sb.length());
+				 .toString(sb.length() > 0 && sb.charAt(0) == '/' ? 1 : 0, sb.length());
 	}
 
 	// todo 支持HTTP2.0后移走

@@ -127,7 +127,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 			} else {
 				try {
 					for (int i = 0; i < zipArchives.size(); i++) {
-						InputStream in = zipArchives.get(i).getStream(name);
+						InputStream in = zipArchives.get(i).getInput(name);
 						if (in != null) {
 							buf.readStreamFully(in);
 							cs = null;

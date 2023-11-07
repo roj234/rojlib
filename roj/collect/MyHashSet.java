@@ -303,17 +303,15 @@ public class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 	}
 
 	final class SetItr extends AbstractIterator<K> {
-		private final Object[] prevList;
+		private Object[] prevList;
 		private Object entry;
 		private int i;
 
-		public SetItr() {
-			prevList = entries;
-			reset();
-		}
+		public SetItr() { reset(); }
 
 		@Override
 		public void reset() {
+			prevList = entries;
 			i = 0;
 			entry = null;
 			stage = hasNull ? CHECKED : INITIAL;

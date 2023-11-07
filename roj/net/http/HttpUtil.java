@@ -34,17 +34,17 @@ public class HttpUtil {
 
 	public static String htmlspecial(CharSequence str) { return h(str).toStringAndFree(); }
 	public static String htmlspecial_decode(CharSequence str) { return hd(str).toStringAndFree(); }
-	public static String htmlspecial_decode_all(CharSequence str) { return hd2(new CharList(str)).toStringAndFree(); }
+	public static String htmlspecial_decode_all(CharSequence str) { return HtmlSpecialDecodeFull(new CharList(str)).toStringAndFree(); }
 
 	public static CharList htmlspecial(CharList sb, CharSequence str) { return (CharList) h(str).appendToAndFree(sb); }
 	public static CharList htmlspecial_decode(CharList sb, CharSequence str) { return (CharList) hd(str).appendToAndFree(sb); }
-	public static CharList htmlspecial_decode_all(CharList sb, CharSequence str) { return (CharList) hd2(new CharList(str)).appendToAndFree(sb); }
+	public static CharList htmlspecial_decode_all(CharList sb, CharSequence str) { return (CharList) HtmlSpecialDecodeFull(new CharList(str)).appendToAndFree(sb); }
 
-	public static CharList htmlspecial_decode_all_inline(CharList sb) { return hd2(sb); }
+	public static CharList htmlspecial_decode_all_inline(CharList sb) { return HtmlSpecialDecodeFull(sb); }
 
-	private static CharList h(CharSequence s) { return new CharList(s).replaceMulti(Encode); }
-	private static CharList hd(CharSequence s) { return new CharList(s).replaceMulti(Decode); }
-	private static CharList hd2(CharList sb) {
+	private static CharList h(CharSequence s) { return new CharList(s).replaceMulti(HtmlSpecialEncode); }
+	private static CharList hd(CharSequence s) { return new CharList(s).replaceMulti(HtmlSpecialDecode); }
+	public static CharList HtmlSpecialDecodeFull(CharList sb) {
 		sb.replaceMulti(LargeTable.Table);
 		Matcher m = AmpBang.matcher(sb);
 
@@ -72,13 +72,12 @@ public class HttpUtil {
 	}
 
 	private static final Pattern AmpBang = Pattern.compile("&#([0-9]{1,8});");
-	private static final TrieTree<String> Encode = new TrieTree<>();
-	private static final TrieTree<String> Decode = new TrieTree<>();
+	public static final TrieTree<String> HtmlSpecialEncode = new TrieTree<>(), HtmlSpecialDecode = new TrieTree<>();
 	static {
 		String[] T_encode = {"&amp;", "&lt;", "&gt;", "&quot;", "&apos;"}, T_decode = {"&", "<", ">", "\"", "'"};
 		for (int i = 0; i < T_encode.length; i++) {
-			Encode.put(T_decode[i], T_encode[i]);
-			Decode.put(T_encode[i], T_decode[i]);
+			HtmlSpecialEncode.put(T_decode[i], T_encode[i]);
+			HtmlSpecialDecode.put(T_encode[i], T_decode[i]);
 		}
 	}
 	static class LargeTable {

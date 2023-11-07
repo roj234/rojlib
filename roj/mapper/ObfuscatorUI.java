@@ -173,7 +173,7 @@ public class ObfuscatorUI extends JFrame {
 					for (ZEntry value : za.getEntries().values()) {
 						String name = value.getName();
 						if (name.endsWith(".class")) {
-							String className = Parser.parseAccess(IOUtil.getSharedByteBuf().readStreamFully(za.getInputStream(value)), false).name;
+							String className = Parser.parseAccess(IOUtil.getSharedByteBuf().readStreamFully(za.getInput(value)), false).name;
 							String exceptClassName = name.substring(0, name.length()-6);
 
 							if (className.equals(exceptClassName)) {
@@ -286,7 +286,7 @@ public class ObfuscatorUI extends JFrame {
 					for (ZEntry value : za.getEntries().values()) {
 						String name = value.getName();
 						if (name.endsWith(".class")) {
-							ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(za.getInputStream(value)));
+							ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(za.getInput(value)));
 
 							if (name.substring(0, name.length()-6).equals(data.name)) {
 								checkExclusion(data, flag);

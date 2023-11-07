@@ -363,6 +363,64 @@ public class CharList implements CharSequence, Appender {
 
 	// endregion
 	// region insert
+	public final CharList padNumber(int val, int minLen) {
+		int count = TextUtil.digitCount(val);
+		if (count > minLen) return append(val);
+
+		if (val < 0) {
+			append('-');
+			val = -val;
+			count--;
+		}
+
+		return padEnd('0', minLen-count).append(val);
+	}
+	public final CharList padNumber(long val, int minLen) {
+		int count = TextUtil.digitCount(val);
+		if (count > minLen) return append(val);
+
+		if (val < 0) {
+			append('-');
+			val = -val;
+			count--;
+		}
+
+		return padEnd('0', minLen-count).append(val);
+	}
+
+	public final CharList padStart(char c, int count) { return pad(c, 0, count); }
+	public final CharList padStart(CharSequence str, int count) { return pad(str, 0, count); }
+	public final CharList padEnd(char c, int count) { return pad(c, len, count); }
+	public final CharList padEnd(CharSequence str, int count) { return pad(str, len, count); }
+	public final CharList pad(char c, int off, int count) {
+		if (count > 0) {
+			ensureCapacity(len+count);
+			System.arraycopy(list, off, list, off+count, len-off);
+			len += count;
+			count += off;
+			for (int i = off; i < count; i++) list[i] = c;
+		}
+
+		return this;
+	}
+	public final CharList pad(CharSequence str, int off, int count) {
+		if (str.length() < 1) throw new IllegalStateException("empty padding");
+		if (count > 0) {
+			ensureCapacity(len+count);
+			System.arraycopy(list, off, list, off+count, len-off);
+			len += count;
+			count += off;
+			while (true) {
+				for (int j = 0; j < str.length(); j++) {
+					list[off] = str.charAt(j);
+					if (++off == count) return this;
+				}
+			}
+		}
+
+		return this;
+	}
+
 	public final CharList insert(int pos, char c) {
 		ensureCapacity(len+1);
 		if (len > pos) System.arraycopy(list, pos, list, pos+1, len-pos);
@@ -422,6 +480,7 @@ public class CharList implements CharSequence, Appender {
 	public final CharList replace(char a, char b) { return replace(a, b, 0, len); }
 	public final CharList replace(char a, char b, int off, int len) {
 		checkBounds(off,off+len,this.len);
+		if (a == b) return this;
 		char[] c = list;
 		for (; off < len; off++)
 			if (c[off] == a) c[off] = b;

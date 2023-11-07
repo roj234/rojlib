@@ -17,8 +17,6 @@ public interface ArchiveFile extends Closeable {
 	void reload() throws IOException;
 
 	Map<String, ? extends ArchiveEntry> getEntries();
-	default InputStream getInputStream(ArchiveEntry entry) throws IOException {
-		return getInputStream(entry, null);
-	}
-	InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException;
+	default InputStream getInput(ArchiveEntry entry) throws IOException { return getInput(entry, null); }
+	InputStream getInput(ArchiveEntry entry, byte[] password) throws IOException;
 }

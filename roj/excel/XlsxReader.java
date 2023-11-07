@@ -182,7 +182,7 @@ public abstract class XlsxReader {
 	private void readWith(ZipArchive zip, ZEntry entry, Consumer<Element> c) throws IOException,ParseException {
 		consumer = c;
 
-		try (InputStream in = zip.getInputStream(entry)) {
+		try (InputStream in = zip.getInput(entry)) {
 			xml.parseRaw(new ToXEntry() {
 				@Override
 				protected Element createElement(String str) {

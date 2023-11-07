@@ -345,7 +345,7 @@ public final class FMDMain {
 				if (atBackup.getEntries().containsKey(mod.getName())) continue;
 
 				// 追加新的
-				atBackup.putStream(mod.getName(), mcBin.getStream(mod.getName()), true);
+				atBackup.putStream(mod.getName(), mcBin.getInput(mod.getName()), true);
 			}
 			for (String name : removable) atBackup.put(name, null);
 			atBackup.store();

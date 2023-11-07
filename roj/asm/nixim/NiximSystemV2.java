@@ -61,7 +61,7 @@ public class NiximSystemV2 implements ITransformer {
 		try (ZipArchive toNixim = new ZipArchive(target)) {
 			for (Map.Entry<String, NiximData> entry : nx.registry.entrySet()) {
 				String file = entry.getKey().replace('.', '/')+".class";
-				InputStream in = toNixim.getStream(file);
+				InputStream in = toNixim.getInput(file);
 				if (in == null) {
 					System.err.println("nixim target "+file+" not found");
 					continue;

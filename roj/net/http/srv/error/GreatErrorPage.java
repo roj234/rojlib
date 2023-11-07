@@ -96,10 +96,11 @@ public class GreatErrorPage {
 
 		int begin = Math.max(1, el.getLineNumber()-LINES);
 		sb.append("<pre class=\"prettyprint lang-java\"><ol start=").append(begin).append('>');
+		CharList sb2 = new CharList();
 		int lineNum = 0;
 		while (true) {
-			String line = s.readLine();
-			if (line == null) break;
+			sb2.clear();
+			if (!s.readLine(sb2)) break;
 
 			lineNum++;
 			if (lineNum < begin) continue;
@@ -108,16 +109,16 @@ public class GreatErrorPage {
 			if (lineNum == el.getLineNumber()) sb.append("<li class=\"line-error\">");
 			else sb.append("<li>");
 
-			HttpUtil.htmlspecial(sb, line).append("</li>");
+			sb.append(sb2.replaceMulti(HttpUtil.HtmlSpecialEncode)).append("</li>");
 		}
 		sb.append("</ol></pre>");
-		return true;
+		return lineNum >= el.getLineNumber();
 	}
 
 	private static void relation_data(Request req, CharList sb, MyHashMap<String, String> data) {
 		Map<String, ?> map;
 		try {
-			map = req.getFields();
+			map = req.GET_Fields();
 		} catch (Exception ex) {
 			map = null;
 		}

@@ -22,7 +22,7 @@ public class LRUCache<K, V> extends LinkedMyHashMap<K, V> implements Cache<K,V> 
 
 	@Override
 	public Entry<K, V> getOrCreateEntry(K id) {
-		if (size > maximumCapacity) evict(size-maximumCapacity);
+		if (maximumCapacity > 0 && size > maximumCapacity) evict(removeAtOnce);
 		return super.getOrCreateEntry(id);
 	}
 

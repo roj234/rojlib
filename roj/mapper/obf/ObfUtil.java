@@ -27,10 +27,10 @@ public class ObfUtil {
 	static {
 		try {
 			ConstantData total = Parser.parse(IOUtil.readRes("roj/mapper/obf/ObfUtil.class"));
-			MethodNode txa = total.getUpgradedMethod("TextXORA");
+			MethodNode txa = total.getMethodObj("TextXORA").parsed(total.cp);
 			//txa.code.attributes.clear();
 			textXOR_A = txa;
-			MethodNode txb = total.getUpgradedMethod("TextXORB_dec");
+			MethodNode txb = total.getMethodObj("TextXORB_dec").parsed(total.cp);
 			//txb.code.attributes.clear();
 			textXOR_B = txb;
 		} catch (IOException e) {

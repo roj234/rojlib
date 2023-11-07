@@ -7,8 +7,6 @@ import roj.text.TextUtil;
 
 import java.util.TimeZone;
 
-import static roj.config.word.ITokenizer.WHITESPACE;
-
 /**
  * @author Roj233
  * @since 2022/2/19 19:14
@@ -90,33 +88,14 @@ public class ToYaml extends ToSomeString {
 		if (multiline && val.indexOf('\n') >= 0) {
 			sb.append(val.charAt(val.length()-1) == '\n'?"|+":"|-");
 
-			boolean first = true;
-			for (int i = 0; i < val.length(); i++) {
-				char c = val.charAt(i);
-				if (WHITESPACE.contains(c)) {
-					if (c == '\n') break;
-
-					sb.append('\n');
+			int i = 0;
+			do {
+				sb.append('\n');
+				if (i == 0 || val.charAt(i) != '\n') {
 					int x = depth;
 					while (x-- > 0) sb.append(indent);
-
-					first = false;
-					break;
 				}
-			}
 
-			int i = 0, len = -1;
-			do {
-				if (len != sb.length() || first) {
-					if (len > 0) first = false;
-
-					sb.append('\n');
-					if (val.charAt(i) != '\n') {
-						int x = depth;
-						while (x-- > 0) sb.append(indent);
-					}
-				}
-				len = sb.length();
 				i = TextUtil.gAppendToNextCRLF(val, i, sb);
 			} while (i < val.length());
 			return;
