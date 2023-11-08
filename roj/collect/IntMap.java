@@ -77,7 +77,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 
 		@Override
 		public String toString() {
-			return k + "=" + v + '\n';
+			return k + "=" + v;
 		}
 	}
 

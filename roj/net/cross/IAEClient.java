@@ -9,7 +9,6 @@ import roj.net.ch.Pipe.CipherPipe;
 import roj.net.ch.handler.MSSCipher;
 import roj.net.ch.handler.Timeout;
 import roj.net.ch.handler.VarintSplitter;
-import roj.net.ch.osi.ClientLaunch;
 import roj.net.cross.server.AEServer;
 import roj.net.mss.SimpleEngineFactory;
 import roj.util.ByteList;

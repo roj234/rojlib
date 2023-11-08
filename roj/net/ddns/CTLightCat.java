@@ -58,9 +58,9 @@ public class CTLightCat extends IpGetter {
 		if (System.currentTimeMillis() - refreshTime > 60000) refreshAccessToken();
 
 		SyncHttpClient shc = HttpRequest.nts()
-										.url(new URL("http://"+catUrl+"/cgi-bin/luci/admin/settings/gwinfo?get=part"))
-										.header("Cookie", "sysauth="+accessToken)
-										.executePooled();
+			.url(new URL("http://"+catUrl+"/cgi-bin/luci/admin/settings/gwinfo?get=part"))
+			.header("Cookie", "sysauth="+accessToken)
+			.executePooled();
 
 		CMapping url = new JSONParser().parseRaw(shc.stream()).asMap();
 

@@ -104,7 +104,7 @@ public abstract class Connection extends Constants {
 				.addLast("timeout", new Timeout(2000, 100))
 				.addLast("pinger", task);
 			ctx.connect(new InetSocketAddress(InetAddress.getByAddress(ip), port));
-			server.launch.getLoop().register(ctx, null, SelectionKey.OP_CONNECT);
+			server.launch.loop().register(ctx, null, SelectionKey.OP_CONNECT);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

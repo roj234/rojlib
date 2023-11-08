@@ -252,18 +252,21 @@ public class NovelFrame extends JFrame {
 				len = c.end;
 				val = novel_in.list;
 			}
+			boolean haveTrimmedFirstLine = false;
 			while ((st < len) && myWhiteSpace.contains(val[st])) {
 				st++;
+				haveTrimmedFirstLine = true;
 			}
 			while ((st < len) && myWhiteSpace.contains(val[len - 1])) {
 				len--;
 			}
 
 			for (String line : new LineReader(new CharList.Slice(val, st, len), false)) {
-				if (line.isEmpty() || prefixSpaceOnly.isSelected() && !Character.isWhitespace(line.charAt(0))) {
+				if (!haveTrimmedFirstLine && (line.isEmpty() || prefixSpaceOnly.isSelected() && !Character.isWhitespace(line.charAt(0)))) {
 					novel_out.append(line).append('\n');
 					continue;
 				}
+				haveTrimmedFirstLine = false;
 
 				st = 0;
 				len = line.length();
@@ -274,7 +277,8 @@ public class NovelFrame extends JFrame {
 					len--;
 				}
 
-				novel_out.append("　　").append(line, st, len).append('\n');
+				if (st == len) novel_out.append('\n');
+				else novel_out.append("　　").append(line, st, len).append('\n');
 			}
 		}
 		errout.setText("chars:"+ novel_out.length()+"\n"+novel_out);

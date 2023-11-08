@@ -175,7 +175,7 @@ public abstract class HttpRequest {
 			}
 			ch.connect(_address, timeout);
 
-			POLLER.register(ch, null);
+			ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 		}
 	}
 
@@ -190,7 +190,7 @@ public abstract class HttpRequest {
 		ch.addLast("h11@timer", new Timeout(timeout, 1000))
 		  .addLast("h11@merger", client);
 		connect(ch, timeout);
-		POLLER.register(ch, null);
+		ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 		return client;
 	}
 
@@ -346,8 +346,6 @@ public abstract class HttpRequest {
 
 	public static HttpRequest nts() { return new HttpClient11(); }
 
-	public static final SelectorLoop POLLER = new SelectorLoop(null, "NIO请求池", 0, 4, 60000, 100);
-
 	public static int POOLED_KEEPALIVE_TIMEOUT = 60000;
 	private static final Function<InetSocketAddress, Pool> fn = (x) -> new Pool(8);
 	private static final Map<InetSocketAddress, Pool> pool = new ConcurrentHashMap<>();
@@ -445,7 +443,7 @@ public abstract class HttpRequest {
 							  .addLast("h11@merger", client);
 							request.connect(ch, timeout);
 							ch.addFirst("h11@pool", this);
-							POLLER.register(ch, null);
+							ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 						} catch (Throwable e) {
 							freeConnectionSlot.getAndIncrement();
 							throw e;

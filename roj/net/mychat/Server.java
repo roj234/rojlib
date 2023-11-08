@@ -13,7 +13,7 @@ import roj.crypt.SM3;
 import roj.io.IOUtil;
 import roj.math.MutableInt;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.osi.ServerLaunch;
+import roj.net.ch.ServerLaunch;
 import roj.net.http.HttpUtil;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.srv.*;
@@ -118,10 +118,10 @@ public class Server extends WebsocketManager implements Router, Context {
 
 		Server man = new Server();
 		ServerLaunch server = HttpServer11.simple(new InetSocketAddress(InetAddress.getLoopbackAddress(), 1999), 233, man);
-		man.loop = server.getLoop();
+		man.loop = server.loop();
 		server.launch();
 
-		System.out.println("监听 " + server.address());
+		System.out.println("监听 " + server.localAddress());
 	}
 
 	static final ZipRouter chatHtml;

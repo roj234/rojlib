@@ -32,7 +32,7 @@ public class UnsortedMultiKeyMap<K, T, V> {
 
 	public static final class REntry<T, V> implements Iterable<REntry<T, V>> {
 		T k;
-		V v;
+		public V v;
 
 		REntry<T, V> next;
 
@@ -534,7 +534,7 @@ public class UnsortedMultiKeyMap<K, T, V> {
 	public List<V> getMulti(List<K> s, int limit) {
 		return getMulti(s, limit, new SimpleList<>(), false);
 	}
-	public List<V> getMulti(List<K> s, int limit, List<V> dest) {
+	public Collection<V> getMulti(List<K> s, int limit, Collection<V> dest) {
 		return getMulti(s, limit, dest, false);
 	}
 	@SuppressWarnings("unchecked")

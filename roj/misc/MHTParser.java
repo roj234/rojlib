@@ -4,7 +4,7 @@ import roj.crypt.Base64;
 import roj.io.IOUtil;
 import roj.io.buf.NativeArray;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.CtxEmbedded;
+import roj.net.ch.EmbeddedChannel;
 import roj.net.http.Headers;
 import roj.net.http.srv.MultipartFormHandler;
 import roj.text.TextUtil;
@@ -33,7 +33,7 @@ public class MHTParser extends MultipartFormHandler {
 		MHTParser parser = new MHTParser();
 		parser.init(type);
 
-		CtxEmbedded ch = CtxEmbedded.createSingle();
+		EmbeddedChannel ch = EmbeddedChannel.createSingle();
 		ch.addLast("_", parser);
 		ch.fireChannelRead(buf);
 		parser.onSuccess();

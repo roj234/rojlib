@@ -1,11 +1,11 @@
-package roj.opengl.vertex;
+package roj.render.vertex;
 
 import roj.io.NIOUtil;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-import static roj.opengl.vertex.VertexFormat.*;
+import static roj.render.vertex.VertexFormat.*;
 
 /**
  * Vertex Builder

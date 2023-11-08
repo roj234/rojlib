@@ -461,7 +461,7 @@ public class CMapping extends CEntry {
 		w.put((byte) Type.MAP.ordinal()).putVUInt(map.size());
 		if (map.isEmpty()) return;
 		for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-			entry.getValue().toBinary(w.putZhCn(entry.getKey()), struct);
+			entry.getValue().toBinary(w.putVUIGB(entry.getKey()), struct);
 		}
 	}
 

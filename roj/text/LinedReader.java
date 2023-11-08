@@ -22,13 +22,17 @@ public interface LinedReader extends Closeable {
 	boolean readLine(CharList buf) throws IOException;
 
 	default List<String> readLines() throws IOException {
-		List<String> list = new SimpleList<>();
-		CharList sb = IOUtil.getSharedCharBuf();
-		while (readLine(sb)) {
-			list.add(sb.toString());
-			sb.clear();
+		try {
+			List<String> list = new SimpleList<>();
+			CharList sb = IOUtil.getSharedCharBuf();
+			while (readLine(sb)) {
+				list.add(sb.toString());
+				sb.clear();
+			}
+			return list;
+		} finally {
+			close();
 		}
-		return list;
 	}
 
 	default Iterator<String> iterator() {

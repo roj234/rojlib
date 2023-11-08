@@ -11,12 +11,12 @@ import roj.math.MutableLong;
 import roj.net.NetworkUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
+import roj.net.ch.ClientLaunch;
+import roj.net.ch.ServerLaunch;
 import roj.net.ch.handler.Compress;
 import roj.net.ch.handler.MSSCipher;
 import roj.net.ch.handler.Timeout;
 import roj.net.ch.handler.VarintSplitter;
-import roj.net.ch.osi.ClientLaunch;
-import roj.net.ch.osi.ServerLaunch;
 import roj.net.mss.JPrivateKey;
 import roj.net.mss.SimpleEngineFactory;
 import roj.net.proto_obf.ProtoObf;
@@ -116,7 +116,7 @@ public class FileSync implements ChannelHandler {
 			InetSocketAddress addr = NetworkUtil.getListenAddress(config.getString("address"));
 
 			System.out.println("服务器已启动");
-			ServerLaunch.tcp().initializator(ch -> {
+			ServerLaunch.tcp("FileSync").initializator(ch -> {
 				ch.addLast("DDOS", new AntiDDoSHelper());
 				if (obf) ProtoObf.install(ch, factory.get());
 				else if (tls) ch.addLast("MSS", new MSSCipher(factory.get()));
@@ -124,7 +124,7 @@ public class FileSync implements ChannelHandler {
 				  .addLast("Compress", new Compress())
 				  .addLast("Timeout", new Timeout(10000,2000))
 				  .addLast("Handler", new FileSync());
-			}).listen(addr).threadPrefix("CAS").launch();
+			}).listen(addr).launch();
 		} else {
 			System.out.println("运行在客户端模式");
 			Client.allow_extension = config.getOrCreateList("allow_extensions").asStringSet();
@@ -133,14 +133,14 @@ public class FileSync implements ChannelHandler {
 			}
 
 			InetSocketAddress addr = NetworkUtil.getConnectAddress(config.getString("address"));
-			ClientLaunch.tcp().initializator(ch -> {
+			ClientLaunch.tcp("CAS").initializator(ch -> {
 				if (obf) ProtoObf.install(ch);
 				else if (tls) ch.addLast("MSS", new MSSCipher());
 				ch.addLast("Splitter", VarintSplitter.twoMbVLUI())
 				  .addLast("Compress", new Compress())
 				  .addLast("Timeout", new Timeout(10000,2000))
 				  .addLast("Handler", new Client());
-			}).connect(addr).daemon(false).threadPrefix("CAS").launch();
+			}).connect(addr).daemon(false).launch();
 		}
 	}
 

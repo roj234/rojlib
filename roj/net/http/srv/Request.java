@@ -7,7 +7,7 @@ import roj.io.IOUtil;
 import roj.io.session.SessionProvider;
 import roj.net.URIUtil;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.CtxEmbedded;
+import roj.net.ch.EmbeddedChannel;
 import roj.net.ch.MyChannel;
 import roj.net.http.Action;
 import roj.net.http.Cookie;
@@ -102,7 +102,7 @@ public final class Request extends Headers {
 						protected void onValue(ChannelCtx ctx, DynByteBuf buf) { map.put(name, buf.readUTF(buf.readableBytes())); }
 					};
 
-					CtxEmbedded ch = CtxEmbedded.createSingle();
+					EmbeddedChannel ch = EmbeddedChannel.createSingle();
 					ch.addLast("_", handler);
 					ch.fireChannelRead(pf);
 					handler.onSuccess();

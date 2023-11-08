@@ -3,11 +3,11 @@ package roj.misc;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.net.NetworkUtil;
+import roj.net.ch.ClientLaunch;
 import roj.net.ch.SelectorLoop;
+import roj.net.ch.ServerLaunch;
 import roj.net.ch.handler.DirectProxy;
 import roj.net.ch.handler.Timeout;
-import roj.net.ch.osi.ClientLaunch;
-import roj.net.ch.osi.ServerLaunch;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.srv.*;
 import roj.net.http.srv.autohandled.Body;
@@ -30,7 +30,7 @@ import java.security.KeyPairGenerator;
  * @since 2022/10/11 0011 18:10
  */
 public class HFTP implements Router {
-	static SelectorLoop loop;
+	static SelectorLoop loop = new SelectorLoop(null, "", 2);
 
 	public static void main(String[] args) throws Exception {
 		if (args.length < 1) {
@@ -40,7 +40,7 @@ public class HFTP implements Router {
 
 		if(args[0].equalsIgnoreCase("c")) {
 			InetSocketAddress addr = NetworkUtil.getConnectAddress(args[1]);
-			loop = ServerLaunch.tcp().listen(null, 8086).initializator((ctx) -> {
+			ServerLaunch.tcp().listen2(null, 8086).initializator((ctx) -> {
 				ctx.readInactive();
 				DirectProxy proxy = new DirectProxy(ctx, true);
 
@@ -62,7 +62,7 @@ public class HFTP implements Router {
 
 			HFTP router = new HFTP();
 
-			ServerLaunch.tcp().listen(null, Integer.parseInt(args[1])).initializator((ctx) -> {
+			ServerLaunch.tcp().listen2(null, Integer.parseInt(args[1])).initializator((ctx) -> {
 				ctx/*.addLast("MSS", new MSSCipher(factory.newEngine()))*/
 				   .addLast("Http", HttpServer11.create(router));
 			}).launch();
@@ -103,6 +103,7 @@ public class HFTP implements Router {
 		try {
 			new FileOutputStream(file).close();
 		} catch (IOException ignored) {}
+		System.exit(0);
 	}
 
 	@Route

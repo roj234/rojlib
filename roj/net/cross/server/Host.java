@@ -128,7 +128,7 @@ final class Host extends Connection implements ChannelHandler {
 				int len = rb.readableBytes();
 				if (len > MAX_MOTD) len = MAX_MOTD;
 				motd = rb.readBytes(len);
-				motdString = new ByteList(motd).readZhCn(motd.length);
+				motdString = new ByteList(motd).readGB(motd.length);
 			break;
 			default: unknownPacket(ctx, rb); return;
 		}

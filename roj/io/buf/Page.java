@@ -4,7 +4,6 @@ import roj.collect.IntList;
 import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.ui.UIUtil;
 import roj.util.TimSortForEveryone;
 import sun.misc.Unsafe;
 
@@ -27,35 +26,6 @@ public class Page {
 	@FunctionalInterface
 	public interface MemoryMover { void moveMemory(long oldPos, long newPos, long len); }
 
-	public static void main(String[] args) throws Exception {
-		long memory = u.allocateMemory(331157);
-		Page page = Page.create(331157);
-
-		while (true) {
-			String s = UIUtil.in.readLine();
-			switch (s.charAt(0)) {
-				case 'a':
-					int size = Integer.parseInt(s.substring(1)) + 8;
-					long addr = page.alloc(size);
-					if (addr < 0) {
-						System.out.println("allocation failed");
-						break;
-					}
-					u.putLong(addr + memory, size);
-					addr += 8;
-					System.out.println("addr="+addr+",size="+size);
-				break;
-				case 'f': free(page, null, memory, Integer.parseInt(s.substring(1))); break;
-				case 'p': System.out.println(page); break;
-			}
-		}
-	}
-	public static void free(Page root, Object ref, long base, long offset) {
-		long metadataBase = base+(offset -= 8);
-		long length = u.getLong(metadataBase);
-		root.free(offset, length);
-	}
-
 	// 不要用非Public的方法
 	public static Page create(long memory) {
 		int targetDepth = Long.numberOfTrailingZeros(MathUtils.getMin2PowerOf(memory)) - LONG_SHIFT;
@@ -65,17 +35,21 @@ public class Page {
 		return new PageEx(i,  memory, false);
 	}
 
-	final byte SHIFT;
-	final long MASK;
-	final byte childId;
+	// 节约内存
+	// Bitset: 8byte / 512B
+	// Page:  22byte / 512B :: 12 + 8 + 1 + 1
+	static final long[] MASKS = new long[64];
+	static {
+		for (int i = 0; i < 64; i++)
+			MASKS[i] = (1L << i) - 1;
+	}
+
+	final byte SHIFT, childId;
 
 	long bitmap;
-	long free;
 
 	Page(int shift, int childId) {
 		this.SHIFT = (byte) shift;
-		this.MASK = (1L << shift) - 1;
-		this.free = 1L << (shift+6);
 		this.childId = (byte) childId;
 	}
 
@@ -109,52 +83,57 @@ public class Page {
 		assert off == align(off) : "un-aligned offset "+off;
 		mfree(off, align(len));
 	}
-	public final boolean allocBefore(long rOff, long rLen, long more) { return malloc(align(rOff-more), align(more)); }
-	public final boolean allocAfter(long rOff, long rLen, long more) { return malloc(align(rOff+rLen), align(more)); }
+	public final boolean allocBefore(long off, long len, long more) {
+		assert off == align(off) : "un-aligned offset "+off;
+		return malloc(align(off-more), align(more));
+	}
+	public final boolean allocAfter(long off, long len, long more) {
+		assert off == align(off) : "un-aligned offset "+off;
+		long realLen = align(len);
+
+		more -= (realLen-len);
+		if (more <= 0) return true;
+
+		return malloc(off+realLen, align(more));
+	}
 
 	long malloc(long len) {
-		if (free < len) return -1;
-
-		int blocks = (int) ((len+MASK) >>> SHIFT);
+		int blocks = (int) ((len+MASKS[SHIFT]) >>> SHIFT);
+		assert blocks <= 64;
 		long flag = blocks == 64 ? -1L : (1L << blocks)-1;
 
-		int offset = 0, maxOffset = 64-blocks;
+		int offset = 0;
 		while ((bitmap & flag) != 0) {
-			if (offset == maxOffset) return -1;
+			if (offset+blocks > 63) return -1;
 			flag <<= 1;
 			offset++;
 		}
 
 		bitmap |= flag;
-		free -= len;
 		return offset << SHIFT;
 	}
 	boolean malloc(long off, long len) {
-		if (free < len) return false;
-
 		int bitFrom = (int) (off >>> SHIFT);
-		int bitTo = (int) ((off+len+MASK) >>> SHIFT);
+		int bitTo = (int) ((off+len+MASKS[SHIFT]) >>> SHIFT);
 
 		long flag = BIT(bitFrom, bitTo);
 		if ((bitmap&flag) != 0) return false;
 
 		bitmap |= flag;
-		free -= len;
 		return true;
 	}
 	void mfree(long off, long len) {
 		int bitFrom = (int) (off >>> SHIFT);
-		int bitTo = (int) ((off+len+MASK) >>> SHIFT);
+		int bitTo = (int) ((off+len+MASKS[SHIFT]) >>> SHIFT);
 
 		long flag = BIT(bitFrom, bitTo);
 		assert ((bitmap)&flag) == flag : Long.toBinaryString(bitmap)+" & ~BIT["+bitFrom+", "+bitTo+"): space not allocated";
 
 		bitmap ^= flag;
-		free += len;
 	}
 
-	public final long usedSpace() { return totalSpace() - free; }
-	public final long freeSpace() { return free; }
+	public long usedSpace() { return Long.bitCount(bitmap) << SHIFT; }
+	public long freeSpace() { return (64-Long.bitCount(bitmap)) << SHIFT; }
 	public long totalSpace() { return 1L << (SHIFT+6); }
 
 	long headEmpty() { return Long.numberOfTrailingZeros(bitmap) << SHIFT; }
@@ -193,6 +172,7 @@ public class Page {
 	}
 	static long getLong(IntList l, int i) { return u.getLong(l.getRawArray(), (long)Unsafe.ARRAY_INT_BASE_OFFSET+4*i); }
 
+	// 60bytes
 	static final class PageEx extends Page {
 		private long splitBitmap;
 
@@ -206,14 +186,16 @@ public class Page {
 
 		// 管理TOP节点的真实大小
 		private final byte bmpCap;
+		private long free;
 
 		PageEx(int shift, long free, boolean _distinguish) {
 			super(shift, -1);
 			this.free = free;
-			this.bmpCap = (byte) ((free+MASK) >>> shift);
+			this.bmpCap = (byte) ((free+MASKS[SHIFT]) >>> shift);
 		}
 		private PageEx(int shift, int childId) {
 			super(shift, childId);
+			free = 1L << (shift+6);
 			bmpCap = 64;
 		}
 
@@ -271,12 +253,16 @@ public class Page {
 			if (block > 0) { // 大于1个完整的块
 				lockPrefix(); // splitBitmap |= BIT[0,bitCount] , mergeSplit也有检查
 
+				assert block <= 64;
 				long flag = block == 64 ? -1L : (1L << block)-1;
 
 				int offset = 0, maxOffset = 64-block;
+				// ensure goc(offset+block) <= 63
+				if ((size&MASKS[SHIFT]) != 0) maxOffset--;
+
 				while (true) {
 					if ((bitmap&flag) == 0 && removeEmpties(flag)) {
-						long subSize = size&MASK;
+						long subSize = size&MASKS[SHIFT];
 						if (subSize == 0) break;
 
 						// 最后一个可以是不完整的, 但是连续长度要足够
@@ -305,8 +291,8 @@ public class Page {
 					free -= size;
 					return len;
 				} else if (len > 0) {
-					long remain = prefix&MASK;
-					if (remain > 0 && size <= MASK-remain) {
+					long remain = prefix&MASKS[SHIFT];
+					if (remain > 0 && size <= MASKS[SHIFT]-remain) {
 						prefix = align(len+size);
 						free -= size;
 						return len;
@@ -356,12 +342,12 @@ public class Page {
 			int bitFrom = (int) (off >>> SHIFT),
 				bitTo = (int) ((off+len) >>> SHIFT);
 
-			if ((prefix+MASK) >>> SHIFT > bitFrom) return false;
+			if ((prefix+MASKS[SHIFT]) >>> SHIFT > bitFrom) return false;
 
 			if (bitFrom == bitTo) {
-				assert len < MASK;
+				assert len < MASKS[SHIFT];
 
-				if (goc(bitFrom).malloc(off&MASK, len)) {
+				if (goc(bitFrom).malloc(off&MASKS[SHIFT], len)) {
 					free -= len;
 					return true;
 				}
@@ -369,20 +355,20 @@ public class Page {
 			}
 
 			lockPrefix();
-			// bitFrom is inclusive (bitFrom = off+MASK >>> SHIFT也许更好理解？)
-			long ext = off&MASK;
+			// bitFrom is inclusive (bitFrom = off+MASKS[SHIFT] >>> SHIFT也许更好理解？)
+			long ext = off&MASKS[SHIFT];
 
 			long flag = BIT(ext != 0 ? bitFrom+1 : bitFrom, bitTo);
 			if ((bitmap&flag) != 0 || !removeEmpties(flag)) return false;
 
-			// assert len >= MASK, so this is smaller
-			if (ext > 0 && !goc(bitFrom).malloc(ext, MASK+1 - ext)) // BEFORE
+			// assert len >= MASKS[SHIFT], so this is smaller
+			if (ext > 0 && !goc(bitFrom).malloc(ext, MASKS[SHIFT]+1 - ext)) // BEFORE
 				return false;
 
-			long ext2 = (off+len)&MASK;
+			long ext2 = (off+len)&MASKS[SHIFT];
 			if (ext2 > 0 && !goc(bitTo).malloc(0, ext2)) { // AFTER
 				// ATOMIC
-				if (ext > 0) goc(bitFrom).free(ext, MASK+1 - ext);
+				if (ext > 0) goc(bitFrom).free(ext, MASKS[SHIFT]+1 - ext);
 				return false;
 			}
 
@@ -405,19 +391,19 @@ public class Page {
 				bitTo = (int) ((off+len) >>> SHIFT);
 
 			if (bitFrom == bitTo) {
-				assert len < MASK;
-				goc(bitFrom).mfree(off&MASK, len);
+				assert len < MASKS[SHIFT];
+				goc(bitFrom).mfree(off&MASKS[SHIFT], len);
 				return;
 			}
 
 			long flag = BIT(bitFrom, bitTo);
 			assert ((bitmap|splitBitmap) & flag) == flag : Long.toBinaryString(bitmap)+" & ~BIT["+bitFrom+", "+bitTo+"): space not allocated";
 
-			long ext = off&MASK;
-			// assert len >= MASK, so this is smaller
-			if (ext > 0) goc(bitFrom).mfree(ext, MASK+1 - ext); // BEFORE
+			long ext = off&MASKS[SHIFT];
+			// assert len >= MASKS[SHIFT], so this is smaller
+			if (ext > 0) goc(bitFrom).mfree(ext, MASKS[SHIFT]+1 - ext); // BEFORE
 
-			ext = (off+len)&MASK;
+			ext = (off+len)&MASKS[SHIFT];
 			if (ext > 0) goc(bitTo).mfree(0, ext); // AFTER
 
 			bitmap &= ~flag;
@@ -471,6 +457,8 @@ public class Page {
 		// 注意：按照语义，上面两个方法应该调用这个方法，但是它们不可能在TOP节点被调用，所以不改动
 		// 如果改成public，就要做一些修改了
 		private int bitmapCapacity() { return bmpCap; }
+		public final long usedSpace() { return totalSpace() - free; }
+		public final long freeSpace() { return free; }
 		public final long totalSpace() { return (1L << SHIFT) * bitmapCapacity(); }
 
 		public final void compress(MemoryMover m) {
@@ -536,13 +524,13 @@ public class Page {
 			return -(low + 1);
 		}
 		private Page goc(int blockId) {
-			assert blockId <= 63;
+			assert blockId <= 63 : blockId+" > 63";
 			int i = get(blockId);
 			if (i >= 0) return child[i];
 
 			i = -i - 1;
 
-			if (childCount == child.length) child = Arrays.copyOf(child, childCount+10);
+			if (childCount == child.length) child = Arrays.copyOf(child, childCount+8);
 
 			if (childCount > i) System.arraycopy(child, i, child, i+1, childCount-i);
 			childCount++;
@@ -555,7 +543,7 @@ public class Page {
 			// auto split (目前只有一种可能: free when simple=DISABLED)
 			if ((bitmap & myId) != 0) {
 				bitmap ^= myId;
-				p.malloc(p.free);
+				p.malloc(p.freeSpace());
 			}
 			splitBitmap |= myId;
 
@@ -567,14 +555,15 @@ public class Page {
 
 			int i = Long.numberOfTrailingZeros(bits);
 			if (prefix > 0) {
-				int bitCount = (int) ((prefix+MASK) >>> SHIFT);
+				int bitCount = (int) ((prefix+MASKS[SHIFT]) >>> SHIFT);
 				if (i <= bitCount) return false;
 			}
 
 			i = get(i);
-			int len = i + Long.bitCount(bits);
-			while (i < len) {
-				if (!removeIfEmpty(i++)) return false;
+			int len = Long.bitCount(bits);
+			while (len > 0) {
+				if (!removeIfEmpty(i)) return false;
+				len--;
 			}
 			return true;
 		}
@@ -591,7 +580,7 @@ public class Page {
 
 		private void lockPrefix() {
 			if (prefixLocked) return;
-			int bitCount = (int) ((prefix+MASK) >>> SHIFT);
+			int bitCount = (int) ((prefix+MASKS[SHIFT]) >>> SHIFT);
 			if (bitCount > 0) {
 				assert splitBitmap == 0;
 				splitBitmap = (1L << bitCount) - 1;
@@ -602,13 +591,14 @@ public class Page {
 			prefixLocked = true;
 			if (prefix == 0) return;
 
-			int bitCount = (int) ((prefix+MASK) >>> SHIFT);
+			int bitCount = (int) ((prefix+MASKS[SHIFT]) >>> SHIFT);
 			if (child.length == 0) child = new Page[bitCount];
 			long len = prefix;
 			for (int i = 0; i < bitCount; i++) {
 				Page p = goc(i);
-				long decr = Math.min(p.free, len);
-				p.malloc(decr);
+				long decr = Math.min(p.freeSpace(), len);
+				boolean ok = p.malloc(0, decr);
+				assert ok;
 				len -= decr;
 			}
 			assert len == 0;

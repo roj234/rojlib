@@ -36,6 +36,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 
@@ -60,9 +61,15 @@ public class OKRouter implements Router {
 	private final TrieTree<Object> route = new TrieTree<>();
 	private boolean handleError = true;
 
+	private List<Callable<Void>> prCallback = Collections.emptyList();
+
 	public OKRouter() {}
 
 	public void setHandleError(boolean b) { handleError = b; }
+	public void addPostRequestCallback(Callable<Void> callback) {
+		if (prCallback.isEmpty()) prCallback = new SimpleList<>();
+		prCallback.add(callback);
+	}
 
 	public final Router register(Object o) {
 		ConstantData hndInst = new ConstantData();
@@ -356,7 +363,7 @@ public class OKRouter implements Router {
 						bodyKind |= 1;
 
 						c.one(ALOAD_1);
-						c.invoke(INVOKEVIRTUAL, REQ, "getFields", "()Ljava/util/Map;");
+						c.invoke(INVOKEVIRTUAL, REQ, "GET_Fields", "()Ljava/util/Map;");
 						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++;
 					}
@@ -508,7 +515,18 @@ public class OKRouter implements Router {
 	public Response response(Request req, ResponseHeader rh) throws IOException {
 		ASet set = req.connection().attachment(RouteAdapterKey, null);
 
-		Object ret = set.req.invoke(req, rh, null);
+		Object ret;
+		try {
+			ret = set.req.invoke(req, rh, null);
+		} finally {
+			for (Callable<Void> c : prCallback) {
+				try {
+					c.call();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
 		if (ret instanceof Response) return (Response) ret;
 		if (ret == null) return null;
 		return new StringResponse(ret.toString());

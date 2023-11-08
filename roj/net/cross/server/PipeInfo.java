@@ -42,13 +42,13 @@ public final class PipeInfo implements Consumer<Pipe> {
 
 		if (from != client) {
 			synchronized (client.pipes) { client.pipes.remove(clientId); }
-			client.writeAsync(b.put(P___CHANNEL_CLOSED).putInt(clientId).putZhCn(reason));
+			client.writeAsync(b.put(P___CHANNEL_CLOSED).putInt(clientId).putVUIGB(reason));
 			b.clear();
 		}
 
 		if (from != host) {
 			synchronized (host.pipes) { host.pipes.remove(hostId); }
-			host.writeAsync(b.put(P___CHANNEL_CLOSED).putInt(hostId).putZhCn(reason));
+			host.writeAsync(b.put(P___CHANNEL_CLOSED).putInt(hostId).putVUIGB(reason));
 		}
 
 		p.close();

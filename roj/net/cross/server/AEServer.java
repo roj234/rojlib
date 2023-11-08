@@ -14,7 +14,6 @@ import roj.net.ch.*;
 import roj.net.ch.handler.MSSCipher;
 import roj.net.ch.handler.Timeout;
 import roj.net.ch.handler.VarintSplitter;
-import roj.net.ch.osi.ServerLaunch;
 import roj.net.cross.Constants;
 import roj.net.mss.JPrivateKey;
 import roj.net.mss.MSSEngineServer;
@@ -96,10 +95,10 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 			return;
 		}
 
-		server.launch.getLoop().setDaemon(false);
+		server.launch.loop().setDaemon(false);
 		server.start();
 
-		if (webPort != -1) runServer(webPort, server.launch.getLoop());
+		if (webPort != -1) runServer(webPort, server.launch.loop());
 
 		PrintStream o = System.out;
 
@@ -213,14 +212,14 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 	public AEServer(InetSocketAddress addr, int conn, JPrivateKey key) throws IOException {
 		server = this;
 
-		this.launch = ServerLaunch.tcp().listen_(addr, conn).option(StandardSocketOptions.SO_REUSEADDR, true).initializator(this);
-		if (conn > 0) launch.option(ServerSock.TCP_MAX_ALIVE_CONNECTION, conn);
+		this.launch = ServerLaunch.tcp().listen(addr, conn).option(StandardSocketOptions.SO_REUSEADDR, true).initializator(this);
+		if (conn > 0) launch.option(ServerLaunch.TCP_MAX_ALIVE_CONNECTION, conn);
 
 		this.key = key;
 		this.rnd = new SecureRandom();
 	}
 
-	public void addLocalConnection(CtxEmbedded ch) throws IOException {
+	public void addLocalConnection(EmbeddedChannel ch) throws IOException {
 		ch.addLast("state", Handshake.HANDSHAKE);
 		ch.open();
 	}
@@ -300,7 +299,10 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 		} catch (IOException ignored) {}
 		task.cancel();
 
-		for (Host room : rooms.values()) room.kickAll(PS_ERROR_SHUTDOWN);
+		for (Host room : rooms.values()) {
+			room.kickAll(PS_ERROR_SHUTDOWN);
+			room.kickWithMessage(PS_ERROR_SHUTDOWN);
+		}
 
 		LockSupport.parkNanos(1000_000);
 		shutdown = true;

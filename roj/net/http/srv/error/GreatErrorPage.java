@@ -98,19 +98,24 @@ public class GreatErrorPage {
 		sb.append("<pre class=\"prettyprint lang-java\"><ol start=").append(begin).append('>');
 		CharList sb2 = new CharList();
 		int lineNum = 0;
-		while (true) {
-			sb2.clear();
-			if (!s.readLine(sb2)) break;
+		try {
+			while (true) {
+				sb2.clear();
+				if (!s.readLine(sb2)) break;
 
-			lineNum++;
-			if (lineNum < begin) continue;
-			if (lineNum > el.getLineNumber()+LINES) break;
+				lineNum++;
+				if (lineNum < begin) continue;
+				if (lineNum > el.getLineNumber()+LINES) break;
 
-			if (lineNum == el.getLineNumber()) sb.append("<li class=\"line-error\">");
-			else sb.append("<li>");
+				if (lineNum == el.getLineNumber()) sb.append("<li class=\"line-error\">");
+				else sb.append("<li>");
 
-			sb.append(sb2.replaceMulti(HttpUtil.HtmlSpecialEncode)).append("</li>");
+				sb.append(sb2.replaceMulti(HttpUtil.HtmlSpecialEncode)).append("</li>");
+			}
+		} finally {
+			s.close();
 		}
+
 		sb.append("</ol></pre>");
 		return lineNum >= el.getLineNumber();
 	}

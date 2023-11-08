@@ -5,7 +5,6 @@ import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.net.NetworkUtil;
 import roj.net.ch.*;
-import roj.net.ch.osi.ClientLaunch;
 import roj.net.cross.server.AEServer;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -48,7 +47,7 @@ public class AEHost extends IAEClient {
 				pair = pipes.remove(id);
 				if (pair != null) {
 					pair.close();
-					String msg1 = rb.readZhCn();
+					String msg1 = rb.readVUIGB();
 					LOGGER.info("被动关闭了频道 #{}: {}", id, msg1);
 				}
 			break;
@@ -67,7 +66,7 @@ public class AEHost extends IAEClient {
 					String reason = clients.containsKey(clientId) ? "Host开启的管道过多("+HOST_MAX_PIPES+")" : "未知的客户端";
 					LOGGER.info("客户端 #{} 开启管道被阻止: {}", clientId, reason);
 
-					ctx.channelWrite(b.put(PHS_CHANNEL_DENY).putInt(pipeId).putZhCn(reason));
+					ctx.channelWrite(b.put(PHS_CHANNEL_DENY).putInt(pipeId).putVUIGB(reason));
 				} else {
 					ctx.channelWrite(b.put(PHS_CHANNEL_ALLOW).putInt(pipeId).put(key, 32, 32));
 
@@ -124,7 +123,7 @@ public class AEHost extends IAEClient {
 				clientId = rb.readInt();
 
 				byte[] digest = rb.readBytes(rb.readUnsignedByte());
-				String name = rb.readZhCn();
+				String name = rb.readVUIGB();
 				String ip = NetworkUtil.bytes2ip(rb.readBytes(rb.readableBytes()));
 
 				Client client = new Client(digest, name, ip);
@@ -148,7 +147,7 @@ public class AEHost extends IAEClient {
 	public void init(ClientLaunch ctx, String roomToken, String motd, char[] portMap) throws IOException {
 		MyChannel ch;
 		if (AEServer.server != null) {
-			CtxEmbedded[] pair = CtxEmbedded.createPair();
+			EmbeddedChannel[] pair = EmbeddedChannel.createPair();
 			AEServer.server.addLocalConnection(pair[0]);
 			ch = pair[1];
 		} else {
@@ -161,7 +160,7 @@ public class AEHost extends IAEClient {
 		this.portMap = portMap;
 
 		ByteList b = IOUtil.getSharedByteBuf();
-		sendLoginPacket(ch, b.put(PHS_LOGIN).putZhCn(roomToken).putZhCn(motd).put(portMap.length).putChars(new CharList(portMap)));
+		sendLoginPacket(ch, b.put(PHS_LOGIN).putVUIGB(roomToken).putVUIGB(motd).put(portMap.length).putChars(new CharList(portMap)));
 	}
 
 	final void handleLoginPacket(ChannelCtx ctx, DynByteBuf rb) throws IOException {
@@ -170,7 +169,7 @@ public class AEHost extends IAEClient {
 			return;
 		}
 
-		String roomToken1 = rb.readZhCn();
+		String roomToken1 = rb.readVUIGB();
 		LOGGER.info("roomToken1: {}", roomToken1);
 
 		ctx.channelOpened();

@@ -4,7 +4,7 @@ import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.net.NetworkUtil;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.osi.ServerLaunch;
+import roj.net.ch.ServerLaunch;
 import roj.net.http.srv.*;
 import roj.net.http.ws.WebsocketHandler;
 import roj.net.http.ws.WebsocketManager;
@@ -58,9 +58,9 @@ public class Websocketd extends WebsocketManager implements Router {
 
 		ServerLaunch hs = HttpServer11.simple(addr, 233, ws);
 		hs.launch();
-		ws.loop = hs.getLoop();
+		ws.loop = hs.loop();
 
-		System.out.println("监听 " + hs.address());
+		System.out.println("监听 " + hs.localAddress());
 	}
 
 	@Override

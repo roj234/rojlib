@@ -122,7 +122,7 @@ public class SipHash extends BufferedDigest {
 
 	public long digest(CharSequence msg) {
 		engineReset();
-		engineUpdateBlock(IOUtil.getSharedByteBuf().putZhCn(msg).put(padding));
+		engineUpdateBlock(IOUtil.getSharedByteBuf().putVUIGB(msg).put(padding));
 		return hash();
 	}
 }

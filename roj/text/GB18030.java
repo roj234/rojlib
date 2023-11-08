@@ -27,7 +27,7 @@ public final class GB18030 extends UnsafeCharset {
 	private static final char[] REVERSE_TABLE = new char[65408];
 
 	static {
-		try (InputStream in = new LZMAInputStream(ChineseInputStream.class.getResourceAsStream("/META-INF/gb18030.lzma"))) {
+		try (InputStream in = new LZMAInputStream(ChineseInputStream.class.getResourceAsStream("/META-INF/china/gb18030.lzma"))) {
 			byte[] b = new byte[1024];
 			int off = 0;
 			while (true) {
@@ -288,7 +288,7 @@ public final class GB18030 extends UnsafeCharset {
 					}
 				}
 				cp = REVERSE_TABLE[c-128] - 1;
-				if (cp < 0) throw new AssertionError();
+				assert cp >= 0;
 			}
 
 			if (cp < TAB2) { // two bytes

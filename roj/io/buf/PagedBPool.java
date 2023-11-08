@@ -27,7 +27,7 @@ public class PagedBPool implements BPool {
 	}
 
 	@Override
-	public String toString() { return "PagedBPool{D={"+dUsed+"}, H={"+hUsed+"}}"; }
+	public String toString() { return "PagedBPool{D="+dUsed+", H="+hUsed+"}"; }
 
 	@Override
 	public boolean allocate(boolean direct, int cap, PooledBuffer pb) {
@@ -37,7 +37,7 @@ public class PagedBPool implements BPool {
 		if (off < 0) return false;
 
 		off += RESERVED_FOR_EXPAND;
-		// 预留空间方便往前扩展(通常都是数据包长度不是么) 一个字节存还有多少字节能用, 所以只有 RESERVED_FOR_EXPAND-1 个字节能用
+		// 预留空间方便往前扩展(通常都是数据包长度不是么)
 		pb.setMetadata(RESERVED_FOR_EXPAND);
 
 		if (direct) {
@@ -64,7 +64,7 @@ public class PagedBPool implements BPool {
 	}
 
 	@Override
-	public boolean expand(DynByteBuf buf, int more, boolean addAtEnd) {
+	public boolean expand(DynByteBuf buf, final int more, boolean addAtEnd) {
 		PooledBuffer pb = (PooledBuffer) buf;
 		// 零拷贝
 		failed:
@@ -73,11 +73,12 @@ public class PagedBPool implements BPool {
 
 			DirectByteList.Slice b = (DirectByteList.Slice) buf;
 			if (addAtEnd) {
-				if (!dUsed.allocAfter(addr - directAddr, b.capacity(), more)) break failed;
+				if (!dUsed.allocAfter(addr - directAddr - pb.getMetadata(), b.capacity(), more)) break failed;
 				b.update(addr, b.capacity()+more);
 			} else {
 				if (pb.getMetadata() >= more) pb.setMetadata(pb.getMetadata() - more);
-				else if (!dUsed.allocBefore(addr - directAddr, b.capacity(), more)) break failed;
+				else if (!dUsed.allocBefore(addr - directAddr - pb.getMetadata(), b.capacity(), more)) break failed;
+				// 为了少写点代码，就不更新metadata了
 
 				b.update(addr-more, b.capacity()+more);
 				b.rIndex += more;
@@ -87,11 +88,11 @@ public class PagedBPool implements BPool {
 		} else {
 			ByteList.Slice b = (ByteList.Slice) buf;
 			if (addAtEnd) {
-				if (!hUsed.allocAfter(b.arrayOffset(), b.capacity(), more)) break failed;
+				if (!hUsed.allocAfter(b.arrayOffset() - pb.getMetadata(), b.capacity(), more)) break failed;
 				b.update(b.arrayOffset(), b.capacity()+more);
 			} else {
 				if (pb.getMetadata() >= more) pb.setMetadata(pb.getMetadata() - more);
-				else if (!hUsed.allocBefore(b.arrayOffset(), b.capacity(), more)) break failed;
+				else if (!hUsed.allocBefore(b.arrayOffset() - pb.getMetadata(), b.capacity(), more)) break failed;
 
 				b.update(b.arrayOffset()-more, b.capacity()+more);
 				b.wIndex(b.wIndex()+more);

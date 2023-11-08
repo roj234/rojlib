@@ -183,11 +183,15 @@ public class CharList implements CharSequence, Appender {
 		return false;
 	}
 	public final int indexOf(CharSequence s) { return indexOf(s, 0); }
-	public final int indexOf(CharSequence s, int from) { return match(s, from, len-s.length()+1); }
-	public final boolean startsWith(CharSequence s) { return s.length() == 0 || match(s, 0, 1) >= 0; }
-	public final boolean endsWith(CharSequence s) { return s.length() == 0 || match(s, len-s.length(), len-s.length()+1) >= 0; }
+	public final int indexOf(CharSequence s, int from) { return doMatch(s, from, len-s.length()+1); }
+	public final boolean startsWith(CharSequence s) { return s.length() == 0 || doMatch(s, 0, 1) >= 0; }
+	public final boolean endsWith(CharSequence s) { return s.length() == 0 || doMatch(s, len-s.length(), len-s.length()+1) >= 0; }
 
-	private int match(CharSequence s, int start, int end) {
+	public final int match(CharSequence s, int start, int end) {
+		checkBounds(start, end, len);
+		return doMatch(s, start, end);
+	}
+	private int doMatch(CharSequence s, int start, int end) {
 		char[] b = list;
 		o:
 		for (; start < end; start++) {

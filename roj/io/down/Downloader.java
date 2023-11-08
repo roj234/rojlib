@@ -3,10 +3,7 @@ package roj.io.down;
 import roj.concurrent.task.ITask;
 import roj.io.IOUtil;
 import roj.io.source.Source;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
-import roj.net.ch.Event;
-import roj.net.ch.MyChannel;
+import roj.net.ch.*;
 import roj.net.http.HttpHead;
 import roj.net.http.HttpRequest;
 import roj.util.DynByteBuf;
@@ -195,7 +192,7 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 			ctx.addLast("Downloader", this);
 
 			client.connect(ctx, IOUtil.timeout);
-			HttpRequest.POLLER.register(ctx, null);
+			ServerLaunch.DEFAULT_LOOPER.register(ctx, null);
 		} catch (Exception e) {
 			e.printStackTrace();
 			close();

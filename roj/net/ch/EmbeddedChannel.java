@@ -18,7 +18,7 @@ import java.util.concurrent.locks.LockSupport;
  * @author Roj233
  * @since 2022/8/25 23:10
  */
-public class CtxEmbedded extends MyChannel {
+public class EmbeddedChannel extends MyChannel {
 	public static final NamespaceKey EMBEDDED_CLOSE = NamespaceKey.of("embedded:close");
 	private static final SocketAddress address = new SocketAddress() {
 		@Override
@@ -28,8 +28,8 @@ public class CtxEmbedded extends MyChannel {
 	};
 
 	public static class Ticker extends Thread {
-		private final SimpleList<CtxEmbedded> addPending = new SimpleList<>();
-		private final MyHashSet<CtxEmbedded> ch = new MyHashSet<>();
+		private final SimpleList<EmbeddedChannel> addPending = new SimpleList<>();
+		private final MyHashSet<EmbeddedChannel> ch = new MyHashSet<>();
 		private volatile boolean shutdown, notify;
 
 		@Override
@@ -47,8 +47,8 @@ public class CtxEmbedded extends MyChannel {
 				int delta = (int) (time-prevTick);
 				if (delta > 0) {
 					prevTick = time;
-					for (Iterator<CtxEmbedded> itr = ch.iterator(); itr.hasNext(); ) {
-						CtxEmbedded ctx = itr.next();
+					for (Iterator<EmbeddedChannel> itr = ch.iterator(); itr.hasNext(); ) {
+						EmbeddedChannel ctx = itr.next();
 
 						if (ctx.state >= CLOSE_PENDING) {
 							itr.remove();
@@ -73,7 +73,7 @@ public class CtxEmbedded extends MyChannel {
 			}
 		}
 
-		final void tick(CtxEmbedded e) {
+		final void tick(EmbeddedChannel e) {
 			synchronized (addPending) { addPending.add(e); }
 			notify = true;
 			LockSupport.unpark(this);
@@ -92,17 +92,17 @@ public class CtxEmbedded extends MyChannel {
 
 
 	byte closeFlag;
-	CtxEmbedded pair;
+	EmbeddedChannel pair;
 	Exception ex;
 
-	public CtxEmbedded getPair() { return pair; }
+	public EmbeddedChannel getPair() { return pair; }
 
-	CtxEmbedded() {}
+	EmbeddedChannel() {}
 
-	public static CtxEmbedded createSingle() { return new CtxEmbedded(); }
-	public static CtxEmbedded[] createPair() { return createPair(getDefaultTicker()); }
-	public static CtxEmbedded[] createPair(Ticker sched) {
-		CtxEmbedded left = new CtxEmbedded(), right = new CtxEmbedded();
+	public static EmbeddedChannel createSingle() { return new EmbeddedChannel(); }
+	public static EmbeddedChannel[] createPair() { return createPair(getDefaultTicker()); }
+	public static EmbeddedChannel[] createPair(Ticker sched) {
+		EmbeddedChannel left = new EmbeddedChannel(), right = new EmbeddedChannel();
 		left.pair = right;
 		right.pair = left;
 
@@ -111,7 +111,7 @@ public class CtxEmbedded extends MyChannel {
 			sched.tick(right);
 		}
 
-		return new CtxEmbedded[] {left, right};
+		return new EmbeddedChannel[] {left, right};
 	}
 
 	// region simple overrides

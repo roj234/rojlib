@@ -8,9 +8,9 @@ import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
+import roj.net.ch.ServerLaunch;
 import roj.net.ch.handler.PacketMerger;
 import roj.net.ch.handler.StreamCompress;
-import roj.net.ch.osi.ServerLaunch;
 import roj.net.http.*;
 import roj.net.http.srv.error.GreatErrorPage;
 import roj.text.ACalendar;
@@ -63,8 +63,8 @@ public final class HttpServer11 extends PacketMerger implements
 	public static final ThreadLocal<Local> TSO = ThreadLocal.withInitial(Local::new);
 
 	public static ServerLaunch simple(InetSocketAddress addr, int backlog, Router router) throws IOException {
-		return ServerLaunch.tcp().threadPrefix("HTTP服务器").threadMax(4)
-						   .listen_(addr, backlog)
+		return ServerLaunch.tcp("HTTP服务器")
+						   .listen(addr, backlog)
 						   .option(StandardSocketOptions.SO_REUSEADDR, true)
 						   .initializator((ctx) -> ctx.addLast("h11@server", create(router)));
 	}
@@ -329,13 +329,14 @@ public final class HttpServer11 extends PacketMerger implements
 			default: ch.readInactive();
 		}
 	}
-	private void preparePostBuffer(ChannelCtx ctx, long len) {
+	private void preparePostBuffer(ChannelCtx ctx, long len) throws IOException {
 		// post accept
 		if (ph != null || state != RECV_BODY) return;
 
 		if (len > 8388608) throw new IllegalArgumentException("必须使用PostHandler");
 
 		if (len <= 65535) {
+			assert postBuffer == null;
 			postBuffer = (ByteList) ctx.alloc().buffer(false, (int) len);
 			flag |= EXT_POST_BUFFER;
 		} else {
@@ -568,14 +569,15 @@ public final class HttpServer11 extends PacketMerger implements
 		}
 
 		ByteList pb = postBuffer;
-		postBuffer = null;
 		if (pb != null) {
 			if ((flag & EXT_POST_BUFFER) != 0) {
 				try {
 					pb.close();
 				} catch (IOException ignored) {}
+				postBuffer = null;
 			} else if (close) {
 				pb._free();
+				postBuffer = null;
 			}
 		}
 

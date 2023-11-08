@@ -406,43 +406,9 @@ public class LZMA2Options implements Cloneable {
 	}
 
 	public int findBestProps(byte[] data) {
-		int min = data.length;
-		int minLc = -1;
-		int minLp = -1;
-		int minPb = -1;
-
-		for (int lc = 0; lc <= 4; lc++) {
-			this.lc = lc;
-			for (int lp = 0; lp <= 4-lc; lp++) {
-				this.lp = lp;
-				for (int pb = 0; pb <= 4; pb++) {
-					this.pb = pb;
-
-					DummyOutputStream counter = new DummyOutputStream();
-					try (OutputStream os = getOutputStream(counter)) {
-						os.write(data);
-					} catch (Exception e) {
-						continue;
-					}
-
-					if (counter.wrote < min) {
-						minLc = lc;
-						minLp = lp;
-						minPb = pb;
-						min = counter.wrote;
-					}
-				}
-			}
-		}
-
-		this.lc = minLc;
-		this.lp = minLp;
-		this.pb = minPb;
-		return min;
-	}
-	public int findBestPropsAsync(byte[] data, TaskPool th) {
 		AtomicReference<Object[]> ref = new AtomicReference<>();
 
+		TaskPool th = TaskPool.Common();
 		for (int lc = 0; lc <= 4; lc++) {
 			for (int lp = 0; lp <= 4-lc; lp++) {
 				for (int pb = 0; pb <= 4; pb++) {
@@ -453,7 +419,7 @@ public class LZMA2Options implements Cloneable {
 
 					th.pushTask(() -> {
 						DummyOutputStream counter = new DummyOutputStream();
-						try (OutputStream os = getOutputStream(counter)) {
+						try (OutputStream os = copy.getOutputStream(counter)) {
 							os.write(data);
 						} catch (Exception ignored) {}
 

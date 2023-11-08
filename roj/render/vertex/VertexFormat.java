@@ -1,4 +1,4 @@
-package roj.opengl.vertex;
+package roj.render.vertex;
 
 import org.lwjgl.opengl.GL11;
 

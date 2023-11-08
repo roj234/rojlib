@@ -818,6 +818,7 @@ public class TextUtil {
 	}
 
 	public static int codepoint(int h, int l) {
+		if (l < MIN_LOW_SURROGATE || l >= (MAX_LOW_SURROGATE + 1)) throw new IllegalStateException("invalid surrogate pair "+h+","+l);
 		return ((h << 10) + l) + (MIN_SUPPLEMENTARY_CODE_POINT
 			- (MIN_HIGH_SURROGATE << 10)
 			- MIN_LOW_SURROGATE);
@@ -839,13 +840,7 @@ public class TextUtil {
 	private static JPinyin pinyin;
 	public static JPinyin pinyin() {
 		if (pinyin == null) {
-			try {
-				pinyin = new JPinyin(IOUtil.readResUTF("META-INF/pinyin/char_t2s_yin.txt"),
-					IOUtil.readResUTF("META-INF/pinyin/word_s2t.txt"), IOUtil.readResUTF("META-INF/pinyin/word_t2s.txt"),
-					IOUtil.readResUTF("META-INF/pinyin/word_yin.txt"), -1);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+			pinyin = new JPinyin(-1);
 		}
 		return pinyin;
 	}

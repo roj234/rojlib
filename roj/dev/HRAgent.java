@@ -5,9 +5,9 @@ import roj.dev.hr.HRContext;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
+import roj.net.ch.ClientLaunch;
 import roj.net.ch.handler.Compress;
 import roj.net.ch.handler.VarintSplitter;
-import roj.net.ch.osi.ClientLaunch;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -47,11 +47,11 @@ public class HRAgent implements ChannelHandler {
 		}
 
 		int port = agentArgs == null || agentArgs.isEmpty() ? HRRemote.DEFAULT_PORT : Integer.parseInt(agentArgs);
-		ClientLaunch.tcp().initializator(ch -> {
+		ClientLaunch.tcp("RojLib HotReload Agent V2").initializator(ch -> {
 			ch.addLast("Length", VarintSplitter.twoMbVLUI())
 			  .addLast("Compress", new Compress())
 			  .addLast("Handler", new HRAgent());
-		}).connect(InetAddress.getLoopbackAddress(), port).threadPrefix("RojLib HotReload Agent V2").launch();
+		}).connect(InetAddress.getLoopbackAddress(), port).launch();
 	}
 
 	@Override

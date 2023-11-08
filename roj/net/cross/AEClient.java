@@ -3,7 +3,6 @@ package roj.net.cross;
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.net.ch.*;
-import roj.net.ch.osi.ClientLaunch;
 import roj.text.TextUtil;
 import roj.text.logging.Level;
 import roj.util.ByteList;
@@ -77,7 +76,7 @@ public class AEClient extends IAEClient {
 			break;
 			case P___CHANNEL_CLOSED:
 				id = rb.readInt();
-				String msg1 = rb.readZhCn();
+				String msg1 = rb.readVUIGB();
 
 				pair = pipes.remove(id);
 				if (pair != null) {
@@ -102,7 +101,7 @@ public class AEClient extends IAEClient {
 				task = tasks.remove(rb.readInt());
 				if (task == null) break;
 
-				task.fail("拒绝开启管道: "+rb.readZhCn());
+				task.fail("拒绝开启管道: "+rb.readVUIGB());
 			break;
 			default: unknownPacket(ctx, rb); break;
 		}
@@ -134,7 +133,7 @@ public class AEClient extends IAEClient {
 		prepareLogin(ctx.channel());
 
 		ByteList b = IOUtil.getSharedByteBuf();
-		sendLoginPacket(ctx.channel(), b.put(PCS_LOGIN).putZhCn(roomToken).putZhCn(nickname));
+		sendLoginPacket(ctx.channel(), b.put(PCS_LOGIN).putVUIGB(roomToken).putVUIGB(nickname));
 	}
 
 	void handleLoginPacket(ChannelCtx ctx, DynByteBuf rb) throws IOException {
@@ -145,7 +144,7 @@ public class AEClient extends IAEClient {
 
 		int clientId = rb.readInt();
 		byte[] roomUserId = rb.readBytes(rb.readUnsignedByte());
-		String roomMotd = rb.readZhCn();
+		String roomMotd = rb.readVUIGB();
 		int portLen = rb.readUnsignedByte();
 
 		LOGGER.info("房间指纹: {}", TextUtil.bytes2hex(roomUserId));
@@ -183,7 +182,7 @@ public class AEClient extends IAEClient {
 	}
 
 	final class Listener implements Consumer<MyChannel> {
-		final ServerSock socket;
+		final ServerLaunch socket;
 		final int portId;
 		final char port;
 
@@ -191,8 +190,10 @@ public class AEClient extends IAEClient {
 			this.portId = portId;
 			this.port = port;
 
-			socket = ServerSock.openTCP().bind(InetAddress.getLoopbackAddress(), port, 100).setOption(StandardSocketOptions.SO_REUSEADDR, true);
-			socket.register(loop, this);
+			socket = ServerLaunch
+				.tcp().listen2(InetAddress.getLoopbackAddress(), port, 100)
+				.option(StandardSocketOptions.SO_REUSEADDR, true)
+				.loop(loop).initializator(this).launch();
 		}
 
 		@Override

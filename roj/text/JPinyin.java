@@ -1,308 +1,208 @@
 package roj.text;
 
-import roj.collect.*;
+import roj.archive.qz.xz.LZMAInputStream;
+import roj.collect.Int2IntMap;
+import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
+import roj.collect.TrieTree;
+import roj.config.word.ITokenizer;
+import roj.io.IOUtil;
 import roj.math.MutableInt;
+import roj.util.ByteList;
 
-import javax.annotation.Nullable;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
-import java.util.PrimitiveIterator;
 
 /**
  * @author Roj234
  * @since 2020/9/30 20:51
  */
 public class JPinyin {
-	public static final boolean DEBUG = false;
+	private static final TrieTree<Integer> WordsFrequency = new TrieTree<>();
+	public static List<String> splitWord(String input) {
+		loadMPDict();
+		int i = 0, len = input.length();
+		List<String> out = new SimpleList<>();
+		while (i < len) {
+			Map.Entry<MutableInt, Integer> spec = WordsFrequency.longestMatches(input, i, len), prob, prob2 = null;
+			if (spec != null) {
+				int to = i+spec.getKey().getValue();
+				int probIdx = i, probIdx2 = 0;
+				for (int j = to+2; j >= i+1; j--) {
+					prob = WordsFrequency.longestMatches(input, j, len);
+					if (prob == null) continue;
 
-	protected final IntMap<String> charYin;
-	protected final TrieTree<String> wordYin, wordS2T, wordT2S;
-	protected final Int2IntBiMap T2S;
+					boolean b = WordsFrequency.containsKey(input, i, j);
 
-	/**
-	 * @param pinyinFile 简繁汉字拼音文件
-	 * @param wordS2T 简转繁词表
-	 * @param wordT2S 繁转简词表
-	 * @param wordYin 词语特殊读音表
-	 * @param flag 1标上声调 0标上数字 -1去掉声调
-	 */
-	public JPinyin(String pinyinFile, @Nullable String wordS2T, @Nullable String wordT2S, @Nullable String wordYin, int flag) {
-		this.wordYin = new TrieTree<>();
-		this.wordS2T = new TrieTree<>();
-		this.wordT2S = new TrieTree<>();
-		this.charYin = new IntMap<>();
-		this.T2S = wordS2T != null || wordT2S != null ? new Int2IntBiMap() : null;
-
-		parse(pinyinFile, wordS2T, wordT2S, wordYin, (byte) flag);
-	}
-
-	private void parse(String pinyin, String wordS2T, String wordT2S, String wordYin, byte flag) {
-		List<String> list0 = new SimpleList<>(10);
-		List<String> list1 = new SimpleList<>(5);
-
-		IntList notYin = DEBUG ? new IntList() : null;
-
-		for (String s : new LineReader(pinyin, true)) {
-			if (s.startsWith("#")) continue;
-			TextUtil.split(list1, s, '=');
-
-			final int cp = list1.get(0).codePointAt(0);
-
-			if (list1.size() < 2) {
-				if (DEBUG) notYin.add(cp);
-				charYin.putInt(cp, "[?Y]");
-			} else {
-				TextUtil.split(list0, list1.get(1), ',');
-				//for(String s3 : list2) {
-				String s3 = list0.get(0);
-				switch (flag) {
-					case -1:
-						s3 = s3.substring(0, s3.length() - 1);
-						break;
-					case 1:
-						s3 = toUnicode(s3);
-						break;
-				}
-				charYin.putInt(cp, s3);
-				//}
-				list0.clear();
-
-				if (list1.size() > 2 && (wordS2T != null || wordT2S != null)) {
-					String TridChar = list1.get(2);
-					T2S.putInt(TridChar.codePointAt(0), cp);
-				}
-			}
-			list1.clear();
-		}
-
-		if (DEBUG && !notYin.isEmpty()) {
-			StringBuilder sb = new StringBuilder((notYin.size() * 3) >> 1).append("没有注音的字: ");
-			for (PrimitiveIterator.OfInt itr = notYin.iterator(); itr.hasNext(); ) {
-				sb.appendCodePoint(itr.nextInt()).append(',');
-			}
-			System.err.println(sb.deleteCharAt(sb.length() - 1));
-		}
-
-		if (wordT2S != null) {
-			list0.clear();
-			TextUtil.split(list0, wordT2S, '\n');
-
-			for (String s : list0) {
-				if (s.startsWith("#")) continue;
-				TextUtil.split(list1, s, '=');
-
-				String from = list1.get(0);
-				String to = list1.get(1);
-				this.wordT2S.put(from, to);
-
-				list1.clear();
-			}
-		}
-
-		if (wordS2T != null) {
-			list0.clear();
-			TextUtil.split(list0, wordS2T, '\n');
-
-			for (String s : list0) {
-				if (s.startsWith("#")) continue;
-				TextUtil.split(list1, s, '=');
-
-				String from = list1.get(0);
-				String to = list1.get(1);
-				this.wordS2T.put(from, to);
-
-				list1.clear();
-			}
-		}
-
-		if (wordYin != null) {
-			list0.clear();
-			TextUtil.split(list0, wordYin, '\n');
-
-			for (String s : list0) {
-				if (s.startsWith("#")) continue;
-				TextUtil.split(list1, s, '=');
-
-				String from = list1.get(0);
-				String to = list1.get(1);
-
-				switch (flag) {
-					case -1:
-						to = to.substring(0, to.length() - 1);
-						break;
-					case 1:
-						to = toUnicode(to);
-						break;
-				}
-				this.wordYin.put(from, to);
-
-				list1.clear();
-			}
-		}
-	}
-
-	private static String toUnicode(String s) {
-		boolean matches = true;
-		int c = s.charAt(s.length() - 1);
-		if (c < 0x30 || c > 0x39) {matches = false;} else {
-			for (int i = 0, l = s.length() - 1; i < l; i++) {
-				c = s.charAt(i);
-				if (c < 97 || c > 122) {
-					matches = false;
-					break;
-				}
-			}
-		}
-
-		if (matches) {
-			String vowel = null;
-
-			int i = s.indexOf('a');
-			if (i != -1) {
-				vowel = "āáăàa";
-			} else if ((i = s.indexOf('e')) != -1) {
-				vowel = "ēéĕèe";
-			} else if ((i = s.indexOf("ou")) != -1) {
-				vowel = "ōóŏòo";
-			} else {
-				out:
-				for (i = s.length() - 1; i >= 0; i--) {
-					switch (s.charAt(i)) {
-						case 'a':
-							vowel = "āáăàa";
-							break out;
-						case 'e':
-							vowel = "ēéĕèe";
-							break out;
-						case 'i':
-							vowel = "īíĭìi";
-							break out;
-						case 'o':
-							vowel = "ōóŏòo";
-							break out;
-						case 'u':
-							vowel = "ūúŭùu";
-							break out;
-						case 'v':
-							vowel = "ǖǘǚǜü";
-							break out;
+					if (j < to && prob.getValue() > spec.getValue() && prob.getKey().getValue() >= spec.getKey().getValue()) {
+						spec = prob;
+						probIdx = j;
+					} else if (b && j+prob.getKey().getValue() >= to) {
+						spec = prob2 = prob;
+						probIdx = probIdx2 = j;
 					}
 				}
-				if (i < 0) {
-					return s;
+
+				if (prob2 != null) {
+					spec = prob2;
+					probIdx = probIdx2;
 				}
+
+				if (probIdx > i) out.add(input.substring(i, probIdx));
+				out.add(input.substring(probIdx, probIdx+=spec.getKey().getValue()));
+				i = probIdx;
+			} else {
+				out.add(String.valueOf(input.charAt(i++)));
 			}
-
-			char vowelChar = vowel.charAt(TextUtil.c2i(s.charAt(s.length() - 1)) - 1);
-
-			return new CharList(s.length()).append(s, 0, i).append(vowelChar).append(s, i + 1, s.length() - 1).replace('v', 'ü').toString();
-		} else {
-			// only replace v with ü (umlat) character
-			return s.replace('v', 'ü');
+		}
+		return out;
+	}
+	private static void loadMPDict() {
+		if (!WordsFrequency.isEmpty()) return;
+		// https://github.com/yanyiwu/cppjieba
+		try (InputStream in = new LZMAInputStream(JPinyin.class.getResourceAsStream("/META-INF/china/mp_dict.lzma"))) {
+			ByteList bb = new ByteList().readStreamFully(in);
+			int priority = 0;
+			while (bb.isReadable()) {
+				int len = bb.readInt();
+				for (int i = 0; i < len; i++) {
+					String key = bb.readVUIGB();
+					WordsFrequency.put(key, priority);
+				}
+				priority++;
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 
-	public String toPinyin(String s) {
-		StringBuilder sb = new StringBuilder(s.length() * 3);
+	private static char[] StringPool;
+	// also can use a modified version of ToIntMap<String>
+	private static final TrieTree<Integer> PinyinWords = new TrieTree<>();
+	private static final Int2IntMap FastSwitch = new Int2IntMap(8);
+	static {
+		// https://github.com/mozillazg/pinyin-data
+		try (InputStream in = new LZMAInputStream(JPinyin.class.getResourceAsStream("/META-INF/china/pinyin.lzma"))) {
+			ByteList bb = new ByteList().readStreamFully(in);
 
-		operate(s, sb, 24);
+			int cpLen = bb.readVUInt();
+			CharList out = new CharList(cpLen);
+			GB18030.CODER.decodeFixedIn(bb,cpLen, out);
+			StringPool = out.toCharArray();
 
-		return sb.toString();
+			CharList sb = IOUtil.getSharedCharBuf();
+			int len = bb.readInt();
+			while (len-- > 0) {
+				int codepoint = bb.readVUInt();
+				int yinLen = bb.readVUInt();
+				sb.clear();
+				PinyinWords.put(sb.appendCodePoint(codepoint).toString(), yinLen);
+			}
+
+			len = bb.readInt();
+			while (len-- > 0) {
+				int ww = bb.readVUInt();
+				String word = new String(StringPool,ww >>> 5, ww & 31);
+				int yinLen = bb.readVUInt();
+				PinyinWords.put(word, yinLen);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		PinyinWords.compact();
+
+		FastSwitch.put('a', 0);
+		FastSwitch.put('e', 1);
+		FastSwitch.put('i', 2);
+		FastSwitch.put('o', 3);
+		FastSwitch.put('u', 4);
+		FastSwitch.put('v', 5);
 	}
 
-	/**
-	 * @param flag 8 : ignore, 24 : keep, default: use [?]
-	 */
-	public StringBuilder toPinyin(String s, StringBuilder sb, int flag) {
-		operate(s, sb, flag & ~3);
+	public JPinyin(int flag) {}
+	public JPinyin() {}
+
+	public static final int PINYIN_FIRST_LETTER = 0;
+	public static final int PINYIN_TONE = 1;
+	public static final int PINYIN_TONE_NUMBER = 2;
+	public static final int PINYIN_NONE = 3;
+	public static final int PINYIN_DUOYINZI = 4;
+
+	public String toPinyin(CharSequence s) { return toPinyin(s, "", IOUtil.getSharedCharBuf(), PINYIN_NONE).toString(); }
+	public String toPinyin(CharSequence s, int mode) { return toPinyin(s, " ", IOUtil.getSharedCharBuf(), mode).toString(); }
+	public CharList toPinyin(CharSequence str, String splitter, CharList sb, int mode) {
+		int i = 0, len = str.length();
+		if (len == 0) return sb;
+
+		MyHashMap.Entry<MutableInt, Integer> entry = new MyHashMap.Entry<>(new MutableInt(), null);
+
+		boolean hasSplitter = false;
+		while (i < len) {
+			PinyinWords.match(str, i, len, entry);
+
+			int matchLen = entry.getKey().getValue();
+			if (matchLen > 0) {
+				if (!hasSplitter) sb.append(splitter);
+				addTone(sb, entry.getValue(), matchLen > 1 ? mode|PINYIN_DUOYINZI : mode, splitter);
+				hasSplitter = true;
+				i += matchLen;
+			} else {
+				sb.append(str.charAt(i++));
+				hasSplitter = false;
+			}
+		}
+		if (hasSplitter) sb.setLength(sb.length() - splitter.length());
 		return sb;
 	}
-
-	protected final void operate(String src, StringBuilder dst, int type) {
-		final int length = src.length();
-		int i = 0;
-
-		while (i < length) {
-			char c1 = src.charAt(i);
-			if (!Character.isHighSurrogate(c1)) {
-				i = accept(src, dst, c1, i, type);
-			} else {
-				char c2 = src.charAt(i + 1);
-				if (Character.isLowSurrogate(c2)) {
-					i = accept(src, dst, Character.toCodePoint(c1, c2), ++i, type);
-				} else {
-					i = accept(src, dst, c1, i, type);
-				}
+	private static void addTone(CharList sb, int cpState, int mode, String splitter) {
+		int off = cpState >>> 5;
+		int len = off + (cpState & 31);
+		while (off < len) {
+			int j = findNextNumber(off);
+			switch (mode&3) {
+				case PINYIN_TONE: addTone(sb, off, j); break;
+				case PINYIN_FIRST_LETTER: sb.append(StringPool[off]); break;
+				default: case PINYIN_TONE_NUMBER: sb.append(StringPool, off, j+1); break;
+				case PINYIN_NONE: sb.append(StringPool, off, j); break;
 			}
+			off = j+1;
+			sb.append(splitter);
+			if ((mode&PINYIN_DUOYINZI) == 0) break;
 		}
 	}
-
-	protected final int accept(String src, StringBuilder dst, int cp, int off, int cat) {
-		Map.Entry<MutableInt, String> specification;
-		switch (cat & 7) {
-			case 0: { // simplified to pinyin
-
-				specification = this.wordYin.longestMatches(src, off, src.length());
-				if (specification != null) {
-					dst.append(specification.getValue());
-					return off + specification.getKey().getValue();
-				} else {
-					if ((cat & 8) != 0) {
-						String v = charYin.get(cp);
-						if (v != null) {dst.append(v);} else if ((cat & 16) != 0) {
-							dst.appendCodePoint(cp);
-						}
-					} else {
-						dst.append(charYin.getOrDefault(cp, "[?]"));
-					}
-				}
-			}
-			break;
-			case 1: { // simplified to traditional
-				specification = this.wordS2T.longestMatches(src, off, src.length());
-				if (specification != null) {
-					dst.append(specification.getValue());
-					return off + specification.getKey().getValue();
-				} else {
-					dst.appendCodePoint(this.T2S.getByValueOrDefault(cp, cp));
-				}
-			}
-			break;
-			case 2: { // traditional to simplified
-				specification = this.wordT2S.longestMatches(src, off, src.length());
-				if (specification != null) {
-					dst.append(specification.getValue());
-					return off + specification.getKey().getValue();
-				} else {
-					dst.appendCodePoint(this.T2S.getOrDefaultInt(cp, cp));
-				}
-			}
-			break;
+	private static int findNextNumber(int i) {
+		while (true) {
+			if (ITokenizer.NUMBER.contains(StringPool[i])) return i;
+			i++;
 		}
-		return off + 1;
 	}
+	private static void addTone(CharList sb, int from, int to) {
+		String vowels = null;
 
-	public String toTraditionalChinese(String s) {
-		StringBuilder sb = new StringBuilder(s.length());
+		int offset = sb.length()-from;
+		sb.append(StringPool, from, to);
 
-		operate(s, sb, 1);
+		findProperVowel:
+		for (int i = from; i < to; i++) {
+			// 从前往后查找第一个a,e或ou
+			// 若不存在则从后往前查找i,o,u,v
+			switch (FastSwitch.getOrDefaultInt(StringPool[i], -1)) {
+				case 0: vowels = "aāáăà"; from = i; break findProperVowel;
+				case 1: vowels = "eēéĕè"; from = i; break findProperVowel;
+				case 2: vowels = "iīíĭì"; from = i; break;
+				case 3: vowels = "oōóŏò"; from = i; if (StringPool[i+1] == 'u') break findProperVowel; break;
+				case 4: vowels = "uūúŭù"; from = i; break;
+				case 5: vowels = "üǖǘǚǜ"; from = i; sb.set(offset+i, 'ü'); break;
+			}
+		}
+		// replace v
+		for (int j = from; j < to; j++) {
+			if (StringPool[j] == 'v') sb.set(offset+j, 'ü');
+		}
 
-		return sb.toString();
-	}
-
-	public void toTraditionalChinese(String s, StringBuilder sb) {
-		operate(s, sb, 1);
-	}
-
-	public String toSimplifiedChinese(String s) {
-		StringBuilder sb = new StringBuilder(s.length());
-
-		operate(s, sb, 2);
-
-		return sb.toString();
-	}
-
-	public void toSimplifiedChinese(String s, StringBuilder sb) {
-		operate(s, sb, 2);
+		assert vowels != null : "invalid StringPool";
+		char vowel = vowels.charAt(StringPool[to]-'0');
+		sb.set(offset+from, vowel);
 	}
 }

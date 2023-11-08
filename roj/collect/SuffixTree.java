@@ -50,8 +50,8 @@ public final class SuffixTree<V> extends TrieTree<V> {
 	}
 
 	@Override
-	V remove(CharSequence s, int i, int len, Object tc) {
-		return super.remove(ReverseOf.reverseOf(s, i, len), i, len, tc);
+	public V remove(CharSequence s, int i, int len, Object except) {
+		return super.remove(ReverseOf.reverseOf(s, i, len), i, len, except);
 	}
 
 }

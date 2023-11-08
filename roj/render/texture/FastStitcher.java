@@ -1,4 +1,4 @@
-package roj.opengl.texture;
+package roj.render.texture;
 
 import roj.collect.BSLowHeap;
 import roj.collect.SimpleList;

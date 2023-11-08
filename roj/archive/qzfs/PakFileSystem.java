@@ -46,7 +46,12 @@ public class PakFileSystem {
 			for (QZEntry entry : archive.getEntriesByPresentOrder()) {
 				if (entry.isAntiItem()) files.remove(entry.getName());
 				else {
-					files.put(entry.getName(), new PakPath(this, entry.getName(), entry));
+					PakPath path;
+					File file = new File(alsoReadFrom, entry.getName());
+					if (file.exists()) path = new PakPath(this, entry.getName(), file);
+					else path = new PakPath(this, entry.getName(), entry);
+
+					files.put(entry.getName(), path);
 				}
 			}
 		}
@@ -106,7 +111,8 @@ public class PakFileSystem {
 	}
 
 	void markMetadataDirty(QZEntry entry, short archiveIndex) {
-
+		// not implemented yet
+		throw new UnsupportedOperationException();
 	}
 
 	public boolean createPath(PakPath dest, boolean directory) throws IOException {
@@ -191,19 +197,23 @@ public class PakFileSystem {
 		if (!pathname.startsWith("/")) return Collections.emptyList();
 		int len = pathname.length();
 
-		List<PakPath> paths = new SimpleList<>();
+		SimpleList<PakPath> paths = new SimpleList<>();
 		for (Map.Entry<String, PakPath> entry : files.entrySet()) {
 			String name = entry.getKey();
 			if (name.length() > len && name.startsWith(pathname) && name.indexOf('/', len) == -1)
 				paths.add(entry.getValue());
 		}
-		if (path.ref.getClass() == File.class) {
+
+		File file = new File(alsoReadFrom, path.getPath());
+		if (file.isDirectory()) {
 			int len1 = alsoReadFrom.getAbsolutePath().length();
-			((File) path.ref).listFiles(f -> {
+			file.listFiles(f -> {
 				String pa = f.getAbsolutePath().substring(len1).replace('\\', '/');
 				PakPath path1 = new PakPath(this, pa, f);
-				files.put(pa, path1);
-				paths.add(path1);
+				PakPath prev = files.put(pa, path1);
+
+				if (prev != null) paths.set(paths.lastIndexOf(prev), path1);
+				else paths.add(path1);
 				return false;
 			});
 		}

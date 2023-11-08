@@ -64,15 +64,15 @@ final class Handshake extends Constants {
 					group.pipe.getUp().getRemoteAddress(), Integer.toHexString(group.clientId));
 			}
 			if (group.host_wait != null) group.host_wait.accept(group.pipe);
-			else server.launch.getLoop().register(group.pipe, group);
+			else server.launch.loop().register(group.pipe, group);
 
 			group.connected = 7;
 		}
 	}
 
 	private void doClientLogin(ChannelCtx ctx, DynByteBuf rb) throws IOException {
-		String roomToken = rb.readZhCn();
-		String nickName = rb.readZhCn();
+		String roomToken = rb.readVUIGB();
+		String nickName = rb.readVUIGB();
 		byte[] userId = getUserId(ctx);
 
 		Object o = server.clientLogin(userId, roomToken);
@@ -107,7 +107,7 @@ final class Handshake extends Constants {
 		b.clear();
 
 		InetSocketAddress addr = (InetSocketAddress) ctx.remoteAddress();
-		b.put(PHH_CLIENT_LOGIN).putInt(c.clientId).put(userId.length).put(userId).putZhCn(nickName).put(addr.getAddress().getAddress());
+		b.put(PHH_CLIENT_LOGIN).putInt(c.clientId).put(userId.length).put(userId).putVUIGB(nickName).put(addr.getAddress().getAddress());
 
 		c.room.writeAsync(b);
 
@@ -116,7 +116,7 @@ final class Handshake extends Constants {
 	}
 
 	private void doHostLogin(ChannelCtx ctx, DynByteBuf rb) throws IOException {
-		String roomToken = rb.readZhCn();
+		String roomToken = rb.readVUIGB();
 		byte[] userId = getUserId(ctx);
 
 		int len = rb.readVUInt();
@@ -148,12 +148,12 @@ final class Handshake extends Constants {
 		room.digest = userId;
 
 		room.motd = motd;
-		room.motdString = new ByteList(motd).readZhCn(motd.length);
+		room.motdString = new ByteList(motd).readGB(motd.length);
 		room.portMap = port;
 
 		ByteList b = IOUtil.getSharedByteBuf();
 		b.put(PHH_LOGON)
-		 .putZhCn(room.token);
+		 .putVUIGB(room.token);
 		ctx.channelWrite(b);
 
 		CharList sb = IOUtil.getSharedCharBuf();

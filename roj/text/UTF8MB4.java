@@ -56,7 +56,7 @@ public final class UTF8MB4 extends UnsafeCharset {
 					u.putByte(ref, addr++, (byte) (0x80 | ((c >> 12) & 0x3F)));
 				} else {
 					if (max-addr < 3) { i = previ; break; }
-					u.putByte(ref, addr++, (byte) (0xE0 | ((c >> 12) & 0x0F)));
+					u.putByte(ref, addr++, (byte) (0xE0 | (c >> 12)));
 				}
 				u.putByte(ref, addr++, (byte) (0x80 | ((c >> 6) & 0x3F)));
 				u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
@@ -99,10 +99,10 @@ public final class UTF8MB4 extends UnsafeCharset {
 					c2 = u.getByte(ref, i++);
 					if ((c2 & 0xC0) != 0x80) { i -= 1; break malformed; }
 
-					//   0110xxxx ^
-					// 1111111110xxxxxx
-					// 1110011110000000
-					out[off++] = (char) (c << 6 ^ c2 ^ 0b1110011110000000);
+					// 11 110xxx xx ^
+					// 11 111111 10xxxxxx
+					// 00 001111 10000000
+					out[off++] = (char) (c << 6 ^ c2 ^ 0b0000111110000000);
 					break;
 				case 14:
 					if (i+1 >= max) { i--; break truncate; }
@@ -111,10 +111,10 @@ public final class UTF8MB4 extends UnsafeCharset {
 					c3 = u.getByte(ref, i++);
 					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) { i -= 2; break malformed; }
 
-					// 1110xxxx ^
-					//     1110xxxxxx ^
-					//     1111111110xxxxxx ^
-					//     0001111110000000
+					// 1110 xx xx ^
+					//      11 10xxxx xx ^
+					//      11 111111 10xxxxxx ^
+					//      00 011111 10000000
 					out[off++] = (char) (c << 12 ^ c2 << 6 ^ c3 ^ 0b0001111110000000);
 					break;
 				case 15:
@@ -130,13 +130,8 @@ public final class UTF8MB4 extends UnsafeCharset {
 					// 11111111111110xxxxxx
 					// 11111111111111111110xxxxxx
 					//     1110000001111110000000 (bound = 2^22-1 | 2097151)
-					c4 = (c << 18 ^ c2 << 12 ^ c3 << 6 ^ c4 ^ 0b1110000001111110000000) & 2097151;
-					if (c4 > Character.MAX_CODE_POINT) { i -= 3; break malformed; }
-
-					if (c4 < Character.MIN_SUPPLEMENTARY_CODE_POINT) {
-						out[off++] = (char) c4;
-						break;
-					}
+					c4 = c << 18 ^ c2 << 12 ^ c3 << 6 ^ c4 ^ 0b1110000001111110000000;
+					if (c4 < Character.MIN_SUPPLEMENTARY_CODE_POINT || c4 > Character.MAX_CODE_POINT) { i -= 3; break malformed; }
 
 					if (outMax-off < 2) { i -= 4; break truncate; }
 

@@ -75,7 +75,7 @@ public class UDPasTCP implements ChannelHandler {
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id == CtxEmbedded.EMBEDDED_CLOSE) {
+		if (event.id == EmbeddedChannel.EMBEDDED_CLOSE) {
 			connections.removeByValue((Ctx) event.getData());
 		}
 	}

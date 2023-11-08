@@ -13,19 +13,17 @@ import java.util.NoSuchElementException;
  * @author Roj234
  * @since 2021/5/27 0:12
  */
-@Deprecated
 public class LineReader implements Iterable<String>, Iterator<String>, AutoCloseable, LinedReader {
 	private final CharSequence str;
 	private boolean keepEmpty, reuse;
 	private int index;
 	private int lineNumber;
 
+	@Deprecated
 	public LineReader(InputStream in) throws IOException {
 		str = new TextReader(in);
 	}
-	public LineReader(InputStream in, Charset cs) throws IOException {
-		str = new TextReader(in, cs);
-	}
+	@Deprecated
 	public LineReader(InputStream in, Charset cs, boolean cleanEmpty) throws IOException {
 		this.str = new TextReader(in);
 		this.keepEmpty = !cleanEmpty;

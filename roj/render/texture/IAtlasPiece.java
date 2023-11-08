@@ -1,4 +1,4 @@
-package roj.opengl.texture;
+package roj.render.texture;
 
 /**
  * @author Roj234

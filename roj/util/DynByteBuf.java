@@ -353,12 +353,12 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 	public final DynByteBuf putVarIntUTF(CharSequence s) { int len = byteCountUTF8(s); putVarLong(this, len); return putUTFData0(s, len); }
 	public final DynByteBuf putVUIUTF(CharSequence s) { int len = byteCountUTF8(s); return putVUInt(len).putUTFData0(s, len); }
 	public DynByteBuf putUTFData(CharSequence s) { UTF8MB4.CODER.encodeFixedIn(s, this); return this; }
-	public final DynByteBuf putUTFData0(CharSequence s, int len) { UTF8MB4.CODER.encodePreAlloc(s, this, len); return this; }
+	public final DynByteBuf putUTFData0(CharSequence s, int len) { ensureWritable(len); UTF8MB4.CODER.encodePreAlloc(s, this, len); return this; }
 
-	public static int byteCountZhCn(CharSequence s) { return GB18030.CODER.byteCount(s); }
-	public final DynByteBuf putZhCn(CharSequence s) {int len = byteCountZhCn(s); return putVUInt(len).putZhCnData0(s, len); }
-	public final DynByteBuf putZhCnData(CharSequence s) { GB18030.CODER.encodeFixedIn(s, this); return this; }
-	public final DynByteBuf putZhCnData0(CharSequence s, int len) { ensureWritable(len); GB18030.CODER.encodePreAlloc(s, this, len); return this; }
+	public static int byteCountGB(CharSequence s) { return GB18030.CODER.byteCount(s); }
+	public final DynByteBuf putVUIGB(CharSequence s) { int len = byteCountGB(s); return putVUInt(len).putGBData0(s, len); }
+	public final DynByteBuf putGBData(CharSequence s) { GB18030.CODER.encodeFixedIn(s, this); return this; }
+	public final DynByteBuf putGBData0(CharSequence s, int len) { ensureWritable(len); GB18030.CODER.encodePreAlloc(s, this, len); return this; }
 
 	public abstract DynByteBuf put(ByteBuffer buf);
 
@@ -518,15 +518,22 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 	public final String readUTF(int len) {
 		if (len < 0) throw new IllegalArgumentException("length="+len);
 		if (len == 0) return "";
+		testWI(rIndex,len);
 		CharList sb = IOUtil.getSharedCharBuf();
 		UTF8MB4.CODER.decodeFixedIn(this,len,sb);
 		return sb.toString();
 	}
 
-	public final String readZhCn() { return readZhCn(readVUInt()); }
-	public final String readZhCn(int len) {
+	public final String readVUIGB() { return readGB(readVUInt()); }
+	public final String readVUIGB(int max) {
+		int l = readVUInt();
+		if (l > max) throw new IllegalArgumentException("Maximum " + max + " got " + l);
+		return readGB(l);
+	}
+	public final String readGB(int len) {
 		if (len < 0) throw new IllegalArgumentException("length="+len);
 		if (len == 0) return "";
+		testWI(rIndex,len);
 		CharList sb = IOUtil.getSharedCharBuf();
 		GB18030.CODER.decodeFixedIn(this,len,sb);
 		return sb.toString();

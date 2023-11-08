@@ -329,16 +329,30 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 	public boolean readLine(CharList ob) throws IOException {
 		boolean append = false;
 		while (true) {
-			for (int i = off; i < len; i++) {
+			for (int i = off; i < len;) {
 				char c = buf[i];
 				if (c == '\r') {
 					if (++i == len) {
-						// add before and continue;
-						off = i-2;
-						break;
+						append = true;
+						ob.append(buf, off, len-1);
+
+						len = fill(buf, 0, buf.length);
+						if (len <= 0) {
+							ob.append('\r');
+							return true;
+						}
+
+						if (buf[0] == '\n') {
+							off = 1;
+							return true;
+						}
+
+						ob.append('\r');
+						off = i = 0;
+						continue;
 					}
 
-					if (buf[i] != '\n') { i--; continue; }
+					if (buf[i] != '\n') { continue; }
 
 					ob.append(buf, off, i-1);
 					off = i+1;
@@ -348,6 +362,8 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 					off = i+1;
 					return true;
 				}
+
+				i++;
 			}
 			if (off < len) {
 				append = true;

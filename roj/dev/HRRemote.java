@@ -6,9 +6,9 @@ import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.MyChannel;
+import roj.net.ch.ServerLaunch;
 import roj.net.ch.handler.Compress;
 import roj.net.ch.handler.VarintSplitter;
-import roj.net.ch.osi.ServerLaunch;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -85,8 +85,8 @@ public class HRRemote {
 	public HRRemote(int port) throws IOException {
 		clients = new ConcurrentLinkedQueue<>();
 
-		ServerLaunch.tcp().threadMax(1).threadPrefix("热重载服务器")
-					.listen(InetAddress.getLoopbackAddress(), port)
+		ServerLaunch.tcp("热重载服务器")
+					.listen2(InetAddress.getLoopbackAddress(), port)
 					.option(StandardSocketOptions.SO_REUSEADDR, true)
 					.initializator((ctx) -> {
 						Client t = new Client(ctx);

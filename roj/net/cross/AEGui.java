@@ -18,7 +18,6 @@ import roj.io.NIOUtil;
 import roj.math.MutableInt;
 import roj.net.NetworkUtil;
 import roj.net.ch.*;
-import roj.net.ch.osi.ClientLaunch;
 import roj.net.cross.server.AEServer;
 import roj.net.http.srv.HttpServer11;
 import roj.net.http.srv.StringResponse;
@@ -222,7 +221,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 
 			evt.addEventListener(uiCustomMotd, e1 -> {
 				if (client != null && !client.shutdown) {
-					client.writeAsync(IOUtil.getSharedByteBuf().put(PHS_UPDATE_MOTD).putZhCnData(uiCustomMotd.getText()));
+					client.writeAsync(IOUtil.getSharedByteBuf().put(PHS_UPDATE_MOTD).putGBData(uiCustomMotd.getText()));
 				}
 			});
 		});
@@ -342,7 +341,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 					}
 
 					if (uiDirectServer.isSelected()) {
-						CtxEmbedded[] pair = CtxEmbedded.createPair();
+						EmbeddedChannel[] pair = EmbeddedChannel.createPair();
 
 						AEServer server = new AEServer(launch.address(), 512, key);
 						server.launch.loop(loop);

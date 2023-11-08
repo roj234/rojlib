@@ -31,13 +31,17 @@ public final class DBA implements AutoCloseable {
 
 	final RingBuffer<String> logs;
 
-	private DBA parent;
+	private final DBA parent;
 
 	public static DBA getInstance() {
 		DBA dba = CMAP.get();
 		if (dba == null) CMAP.set(dba = new DBA());
 		dba.logs.clear();
 		return dba.reset();
+	}
+	public static void closeInstance() throws SQLException {
+		DBA inst = CMAP.get();
+		if (inst != null) inst.close();
 	}
 
 	static {
@@ -53,6 +57,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	private DBA() {
+		parent = this;
 		logs = new RingBuffer<>(10);
 	}
 	public DBA(DBA parent) {
@@ -632,7 +637,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	public Connection connection() throws SQLException {
-		if (parent != null) return parent.connection();
+		if (parent != this) return parent.connection();
 
 		if (connection == null) {
 			connection = pool.getConnection(1000);
@@ -708,5 +713,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	public String lastSql() { return logs.peekLast(); }
+
+	public DBA isolate() { return new DBA(parent); }
 	// endregion
 }
