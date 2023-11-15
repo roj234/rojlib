@@ -363,12 +363,6 @@ MSS协议，My Secure Socket`roj.net.mss`
 * [x] 加密方式协商
 * [x] 前向安全
 * [x] 0-RTT
-
-## roj.opengl  
-  前置: LWJGL  
-字体渲染器  
-可视化测试工具，math里的不少算法就用它测试，直观极了  
-快速的Stitcher
   
 ## roj.reflect
 `EnumHelper`,  动态增删枚举  

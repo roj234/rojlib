@@ -2,13 +2,14 @@ package roj.concurrent;
 
 import roj.collect.IntMap;
 import roj.concurrent.task.ITask;
+import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
 
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -33,12 +34,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 	}
 
 
-	private static long state_offset;
-	static {
-		try {
-			state_offset = u.objectFieldOffset(PromiseImpl.class.getDeclaredField("_state"));
-		} catch (NoSuchFieldException ignored) {}
-	}
+	private static final long state_offset = ReflectionUtils.fieldOffset(PromiseImpl.class, "_state");
 
 	static final int
 		TASK_COMPLETE = 1, TASK_SUCCESS = 2,

@@ -8,7 +8,7 @@ import roj.asm.visitor.CodeWriter;
 import roj.util.ByteList;
 
 import static roj.asm.util.AccessFlag.PUBLIC;
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234

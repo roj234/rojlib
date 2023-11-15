@@ -5,7 +5,7 @@ import roj.util.Helpers;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Predicate;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234

@@ -13,7 +13,7 @@ package roj.archive.qz.xz.lz;
 import roj.crypt.CRCAny;
 import roj.util.NativeMemory;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 final class Hash234 {
 	private static final int HASH_2_SIZE = 1 << 10;

@@ -5,6 +5,7 @@ import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.collect.RingBuffer;
 import roj.concurrent.task.ITask;
+import roj.text.logging.Logger;
 import roj.util.Helpers;
 
 import java.util.concurrent.*;
@@ -12,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 public class TaskPool implements TaskHandler {
 	@FunctionalInterface
@@ -28,6 +29,7 @@ public class TaskPool implements TaskHandler {
 	final MyHashSet<ExecutorImpl> threads = new MyHashSet<>();
 	private final MyThreadFactory factory;
 	private RejectPolicy policy;
+	private Thread.UncaughtExceptionHandler exceptionHandler;
 
 	final int core, max, newThr, idleTime;
 	private volatile int running, parking;
@@ -324,11 +326,6 @@ public class TaskPool implements TaskHandler {
 			setName(name);
 			setDaemon(true);
 		}
-		protected ExecutorImpl(ThreadGroup tg, String name) {
-			super(tg, name);
-			setName(name);
-			setDaemon(true);
-		}
 
 		@Override
 		public void run() {
@@ -342,7 +339,8 @@ public class TaskPool implements TaskHandler {
 						if (task.continueExecuting()) pushTask(task);
 					}
 				} catch (Throwable e) {
-					e.printStackTrace();
+					if (exceptionHandler != null) exceptionHandler.uncaughtException(this, e);
+					else Logger.getLogger("TaskPool@"+TaskPool.this.hashCode()).error(e);
 				}
 			}
 

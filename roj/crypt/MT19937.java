@@ -2,7 +2,7 @@ package roj.crypt;
 
 import java.util.Random;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @implNote MT19937 is not thread safe

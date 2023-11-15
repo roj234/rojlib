@@ -2,7 +2,7 @@ package roj.crypt;
 
 import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
-import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -137,7 +137,7 @@ public class HMAC extends MessageDigest implements MessageAuthenticCode {
 			if (info != null) mac.update(info);
 			mac.update((byte) i++);
 
-			FieldAccessor.u.copyMemory(mac.digestShared(), Unsafe.ARRAY_BYTE_BASE_OFFSET, ref, address+off, Math.min(io.length, L-off));
+			ReflectionUtils.u.copyMemory(mac.digestShared(), Unsafe.ARRAY_BYTE_BASE_OFFSET, ref, address+off, Math.min(io.length, L-off));
 
 			off += io.length;
 		}

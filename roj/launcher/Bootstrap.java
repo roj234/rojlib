@@ -7,7 +7,6 @@ import roj.asm.visitor.CodeWriter;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.reflect.DirectAccessor;
-import roj.reflect.FieldAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
@@ -124,7 +123,7 @@ public final class Bootstrap {
 
 		ByteList list = Parser.toByteArrayShared(L);
 		Class<?> loaderClass = entryPoint.defineClassB(L.name.replace('/', '.'), list.list, 0, list.wIndex());
-		FieldAccessor.u.ensureClassInitialized(loaderClass);
+		ReflectionUtils.u.ensureClassInitialized(loaderClass);
 
 		EntryPoint.actualLoader = classLoader;
 	}

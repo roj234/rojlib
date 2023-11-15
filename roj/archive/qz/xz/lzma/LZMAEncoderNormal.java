@@ -16,7 +16,7 @@ import roj.util.ArrayCache;
 import roj.util.NativeMemory;
 import sun.misc.Unsafe;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 final class LZMAEncoderNormal extends LZMAEncoder {
 	private static final int OPTS = 4096;

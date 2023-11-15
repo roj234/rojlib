@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj233

@@ -24,7 +24,6 @@ import roj.config.data.CEntry;
 import roj.config.data.CNull;
 import roj.io.IOUtil;
 import roj.reflect.FastInit;
-import roj.reflect.FieldAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.util.ArrayCache;
@@ -984,7 +983,7 @@ public final class SerializerFactory {
 				cw.one(ALOAD_2);
 				try {
 					Field field = unsafePut.getDeclaredField(fn.name());
-					cw.ldc(FieldAccessor.u.objectFieldOffset(field));
+					cw.ldc(ReflectionUtils.u.objectFieldOffset(field));
 					cw.invoke(DIRECT_IF_OVERRIDE, "sun/misc/Unsafe", "put"+ReflectionUtils.accessorName(field), "(Ljava/lang/Object;J"+(fn.fieldType().isPrimitive() ? fn.fieldType().toString() : "Ljava/lang/Object;")+")V");
 				} catch (NoSuchFieldException e) { Helpers.athrow(e); }
 			} else {

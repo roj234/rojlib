@@ -4,7 +4,7 @@ import java.util.function.IntConsumer;
 
 import static java.lang.Character.MAX_HIGH_SURROGATE;
 import static java.lang.Character.MIN_HIGH_SURROGATE;
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234

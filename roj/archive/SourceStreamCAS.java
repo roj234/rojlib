@@ -5,7 +5,7 @@ import roj.io.source.Source;
 
 import java.io.IOException;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234

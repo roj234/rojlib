@@ -6,7 +6,7 @@ import sun.misc.Unsafe;
 
 import java.util.concurrent.locks.Lock;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234

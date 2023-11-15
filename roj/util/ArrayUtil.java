@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.ToIntFunction;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234

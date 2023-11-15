@@ -1,9 +1,9 @@
 package roj.util;
 
-import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
 import sun.misc.Unsafe;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -11,7 +11,7 @@ import static roj.reflect.FieldAccessor.u;
  */
 public class TimSortForEveryone {
 	public interface MyComparator {
-		Unsafe u = FieldAccessor.u;
+		Unsafe u = ReflectionUtils.u;
 		int compare(Object refA, long posA, long posB);
 	}
 

@@ -1,9 +1,9 @@
 package roj.reflect;
 
-import sun.misc.Unsafe;
-
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * 抽象字段访问者
@@ -12,8 +12,6 @@ import java.lang.reflect.Modifier;
  * @since 2020/10/17 18:24
  */
 public final class FieldAccessor {
-	public static final Unsafe u = ReflectionUtils.getValue(null, Unsafe.class, "theUnsafe");
-
 	private static final String[] arr = "BOOL,BYTE,SHORT,CHAR,INT,LONG,FLOAT,DOUBLE,OBJECT".split(",");
 
 	public final Field field;

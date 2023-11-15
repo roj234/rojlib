@@ -7,7 +7,7 @@ import roj.mildwind.type.JsBool;
 import roj.mildwind.type.JsNull;
 import roj.mildwind.type.JsObject;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234

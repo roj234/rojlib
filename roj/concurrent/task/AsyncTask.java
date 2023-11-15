@@ -1,19 +1,25 @@
 package roj.concurrent.task;
 
 import org.jetbrains.annotations.ApiStatus;
+import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 import java.util.concurrent.*;
+
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
  * @since 2020/8/19 1:01
  */
 public class AsyncTask<T> implements Future<T>, ITask {
-	protected volatile T out = Helpers.cast(this);
-	protected boolean canceled, executing;
-	protected ExecutionException exception;
+	protected volatile T out;
+
+	private static final int INITIAL = 0, RUNNING = 1, COMPLETED = 2, FAILED = 3, CANCELLED = 4;
+	private static final long u_stateOffset = ReflectionUtils.fieldOffset(AsyncTask.class, "state");
+	private volatile int state;
+
 	protected Callable<T> supplier;
 
 	public static AsyncTask<Void> fromVoid(Runnable runnable) {
@@ -23,104 +29,68 @@ public class AsyncTask<T> implements Future<T>, ITask {
 		});
 	}
 
-	public AsyncTask(Callable<T> supplier) {
-		this.supplier = supplier;
-	}
-
-	@SuppressWarnings("unchecked")
-	protected AsyncTask() {
-		out = (T) this;
-	}
+	public AsyncTask(Callable<T> c) { this.supplier = c; }
+	protected AsyncTask() {}
 
 	@Override
 	public boolean cancel(boolean mayInterruptIfRunning) {
-		if (executing) {
-			return false;
-		} else {
-			canceled = true;
-			out = null;
-			synchronized (this) {
-				notifyAll();
-			}
+		if (u.compareAndSwapInt(this, u_stateOffset, INITIAL, RUNNING)) {
+			state = CANCELLED;
+			synchronized (this) { notifyAll(); }
 			return true;
 		}
+		return isCancelled();
 	}
+	@Override
+	public boolean isCancelled() { return state == CANCELLED; }
 
 	@Override
-	public boolean isCancelled() {
-		return canceled;
-	}
+	public final void execute() {
+		if (!u.compareAndSwapInt(this, u_stateOffset, INITIAL, RUNNING)) return;
 
-	@Override
-	public void execute() {
-		executing = true;
 		try {
-			this.out = invoke();
+			out = invoke();
+			state = COMPLETED;
 		} catch (Throwable e) {
-			exception = new ExecutionException(e);
+			out = Helpers.cast(e);
+			state = FAILED;
 		}
-		executing = false;
 
-		synchronized (this) {
-			notifyAll();
-		}
+		synchronized (this) { notifyAll(); }
 	}
 
 	@ApiStatus.OverrideOnly
-	protected T invoke() throws Exception {
-		return supplier.call();
-	}
+	protected T invoke() throws Exception { return supplier.call(); }
 
-	public boolean isDone() {
-		return canceled || out != this || exception != null;
-	}
+	public boolean isDone() { return state > RUNNING; }
 
 	@Override
 	public T get() throws InterruptedException, ExecutionException {
-		if (this.canceled) {
-			throw new CancellationException();
-		}
-
-		if (this.exception != null) throw exception;
-		synchronized (this) {
-			if (out == this) {
-				this.wait();
+		while (true) {
+			switch (state) {
+				case INITIAL:
+				case RUNNING: synchronized (this) { while (!isDone()) wait(); }
+				break;
+				case CANCELLED: throw new CancellationException();
+				case FAILED: throw new ExecutionException((Throwable) out);
+				case COMPLETED: return out;
 			}
 		}
-
-		if (this.canceled) {
-			throw new CancellationException();
-		}
-
-		if (this.exception != null) throw exception;
-
-		return out;
 	}
 
 	@Override
 	public T get(long timeout, @Nonnull TimeUnit unit) throws InterruptedException, TimeoutException, ExecutionException {
-		if (this.canceled) {
-			throw new CancellationException();
-		}
-
-		if (this.exception != null) throw exception;
-		synchronized (this) {
-			if (out == this) {
-				this.wait(TimeUnit.MILLISECONDS.convert(timeout, unit));
+		while (true) {
+			switch (state) {
+				case INITIAL:
+				case RUNNING:
+					synchronized (this) { wait(unit.toMillis(timeout)); }
+					if (!isDone()) throw new TimeoutException();
+				break;
+				case CANCELLED: throw new CancellationException();
+				case FAILED: throw new ExecutionException((Throwable) out);
+				case COMPLETED: return out;
 			}
 		}
-
-		if (this.canceled) {
-			throw new CancellationException();
-		}
-
-		synchronized (this) {
-			if (this.exception != null) throw exception;
-			if (out == this) {
-				throw new TimeoutException();
-			}
-		}
-
-		return out;
 	}
 }

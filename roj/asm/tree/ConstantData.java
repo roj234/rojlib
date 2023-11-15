@@ -17,7 +17,7 @@ import roj.asm.visitor.CodeVisitor;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -36,15 +36,9 @@ import static roj.asm.util.AccessFlag.*;
  * @since 2021/5/30 19:59
  */
 public class ConstantData implements IClass {
-	private static final long N, P;
-	static {
-		try {
-			N = FieldAccessor.u.objectFieldOffset(ConstantData.class.getDeclaredField("name"));
-			P = FieldAccessor.u.objectFieldOffset(ConstantData.class.getDeclaredField("parent"));
-		} catch (NoSuchFieldException e) {
-			throw new RuntimeException(e);
-		}
-	}
+	private static final long
+		N = ReflectionUtils.fieldOffset(ConstantData.class, "name"),
+		P = ReflectionUtils.fieldOffset(ConstantData.class, "parent");
 
 	public int version;
 
@@ -334,13 +328,13 @@ public class ConstantData implements IClass {
 			cp.setUTFValue(nameCst.name(), name);
 		}
 
-		FieldAccessor.u.putObject(this, N, name);
+		ReflectionUtils.u.putObject(this, N, name);
 	}
 	@Override
 	public final void parent(String name) {
 		parentCst = name == null ? null : cp.getClazz(name);
 
-		FieldAccessor.u.putObject(this, P, name);
+		ReflectionUtils.u.putObject(this, P, name);
 	}
 
 	public final int newField(int acc, String name, Type type) {

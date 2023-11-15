@@ -12,7 +12,7 @@ package roj.archive.qz.xz.lz;
 
 import roj.util.ArrayCache;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 final class BT4 extends LZEncoder {
 	private final long tree;

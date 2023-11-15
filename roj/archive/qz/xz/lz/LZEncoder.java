@@ -17,7 +17,7 @@ import sun.misc.Unsafe;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 public abstract class LZEncoder {
 	public static final int MF_HC4 = 0x04;

@@ -15,7 +15,7 @@ import java.nio.ReadOnlyBufferException;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234

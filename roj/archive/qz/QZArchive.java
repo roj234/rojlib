@@ -4,7 +4,6 @@ import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ChecksumInputStream;
 import roj.archive.SourceStreamCAS;
-import roj.archive.zip.ZipArchive;
 import roj.collect.*;
 import roj.concurrent.TaskHandler;
 import roj.crypt.CRCAny;
@@ -16,6 +15,7 @@ import roj.io.source.BufferedSource;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.io.source.SplittedSource;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -30,7 +30,7 @@ import java.util.function.ObjLongConsumer;
 import java.util.zip.CRC32;
 
 import static roj.archive.qz.BlockId.*;
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * 我去除了大部分C++的味道，但是保留了一部分，这样你才知道自己用的是Java
@@ -41,12 +41,7 @@ import static roj.reflect.FieldAccessor.u;
 public class QZArchive implements ArchiveFile {
 	Source r;
 	private Source fpRead;
-	private static long FPREAD_OFFSET;
-	static {
-		try {
-			FPREAD_OFFSET = u.objectFieldOffset(ZipArchive.class.getDeclaredField("fpRead"));
-		} catch (NoSuchFieldException ignored) {}
-	}
+	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(QZArchive.class, "fpRead");
 	private final BufferPool pool;
 	private ByteList buf = ByteList.EMPTY;
 

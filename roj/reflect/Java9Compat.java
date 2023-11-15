@@ -90,7 +90,7 @@ public final class Java9Compat {
 		Class<?> 乌拉;
 		j17:
 		if (ReflectionUtils.JAVA_VERSION < 17) {
-			乌拉 = FieldAccessor.u.defineAnonymousClass(jdkInternal, Parser.toByteArray(data), null);
+			乌拉 = ReflectionUtils.u.defineAnonymousClass(jdkInternal, Parser.toByteArray(data), null);
 		} else {
 			byte[] bytes = Parser.toByteArray(data);
 			try {
@@ -111,7 +111,7 @@ public final class Java9Compat {
 				return;
 			}
 		}
-		FieldAccessor.u.ensureClassInitialized(乌拉);
+		ReflectionUtils.u.ensureClassInitialized(乌拉);
 
 		System.out.println("[Java9Compat]"+乌拉.getName()+"注入成功");
 
@@ -231,7 +231,7 @@ public final class Java9Compat {
 
 		ByteList buf = Parser.toByteArrayShared(data);
 		Class<?> cls = definer.apply(new Object[] {data.name.replace('/', '.'), buf.list, 0, buf.wIndex(), null, null});
-		FieldAccessor.u.ensureClassInitialized(cls);
+		ReflectionUtils.u.ensureClassInitialized(cls);
 
 		System.out.println("[Java9Compat]OpenModule加载成功");
 

@@ -4,7 +4,7 @@ import roj.collect.Int2IntMap;
 
 import java.lang.ref.PhantomReference;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
