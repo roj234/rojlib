@@ -1,4 +1,4 @@
-JFDML JFormDesigner: "8.1.1.0.298" Java: "11.0.15" encoding: "UTF-8"
+JFDML JFormDesigner: "8.1.1.0.298" Java: "17.0.9" encoding: "UTF-8"
 
 new FormModel {
 	contentType: "form/swing"
@@ -85,8 +85,9 @@ new FormModel {
 				name: "uiAT"
 				"text": "重新AT"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 575
+				"x": 570
 				"y": 105
+				"width": 80
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiKill"
@@ -114,6 +115,14 @@ new FormModel {
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 30
 				"y": 185
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "button1"
+				"text": "关于"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 570
+				"y": 130
+				"width": 80
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 0, 0 )
@@ -220,85 +229,6 @@ new FormModel {
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 370, 475 )
 			"size": new java.awt.Dimension( 235, 160 )
-		} )
-		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
-			"autoSize": false
-		} ) {
-			name: "dlgObf"
-			"title": "手动映射"
-			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
-				name: "scrollPane2"
-				auxiliary() {
-					"JavaCodeGenerator.variableLocal": true
-				}
-				add( new FormComponent( "javax.swing.JTextArea" ) {
-					name: "uiObfLibPath"
-				} )
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 5
-				"y": 50
-				"width": 345
-				"height": 210
-			} )
-			add( new FormComponent( "javax.swing.JButton" ) {
-				name: "uiObfToSrg"
-				"text": "到SRG"
-				"margin": new java.awt.Insets( 2, 4, 2, 4 )
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 47
-				"y": 265
-			} )
-			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "uiObfDoLib"
-				"text": "仅处理选中项（未选中的作为依赖）"
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 130
-				"y": 265
-			} )
-			add( new FormComponent( "javax.swing.JLabel" ) {
-				name: "label3"
-				"text": "输入       每行一个文件"
-				auxiliary() {
-					"JavaCodeGenerator.variableLocal": true
-				}
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 5
-				"y": 30
-			} )
-			add( new FormComponent( "javax.swing.JTextField" ) {
-				name: "uiObfInput"
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 70
-				"y": 5
-				"width": 280
-			} )
-			add( new FormComponent( "javax.swing.JLabel" ) {
-				name: "label4"
-				"text": "输出文件夹"
-				auxiliary() {
-					"JavaCodeGenerator.variableLocal": true
-				}
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 5
-				"y": 8
-			} )
-			add( new FormComponent( "javax.swing.JButton" ) {
-				name: "uiObfFromSrg"
-				"text": "从SRG"
-				"margin": new java.awt.Insets( 2, 4, 2, 4 )
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 5
-				"y": 265
-			} )
-			add( new FormComponent( "javax.swing.JLabel" ) {
-				name: "uiObfState"
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 150
-				"y": 30
-			} )
-		}, new FormLayoutConstraints( null ) {
-			"location": new java.awt.Point( 0, 475 )
-			"size": new java.awt.Dimension( 355, 295 )
 		} )
 		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
 			"autoSize": false

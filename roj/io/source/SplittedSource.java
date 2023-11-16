@@ -35,7 +35,7 @@ public class SplittedSource extends Source {
 		fragmentSizeL = fragSize;
 		fragmentSize = (int) Math.min(Integer.MAX_VALUE, fragSize);
 
-		ref = SimpleList.asModifiableList(sources);
+		ref = SimpleList.asModifiableList((Object[]) sources);
 		s = sources[0];
 	}
 	private SplittedSource(File file, long fragSize) throws IOException {

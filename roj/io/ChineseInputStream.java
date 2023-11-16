@@ -29,7 +29,7 @@ public class ChineseInputStream extends PushbackInputStream {
 	@Override
 	protected void bufferEmpty() {
 		if (sharedBuffer) {
-			ArrayCache.getDefaultCache().putArray(buffer);
+			ArrayCache.putArray(buffer);
 			buffer = null;
 			sharedBuffer = false;
 		}

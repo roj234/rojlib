@@ -119,10 +119,10 @@ public abstract class MSSEngine {
 	public final SecureRandom getPRNG(String name) { return new HKDFPRNG(keyDeriver, sharedKey, name); }
 
 	protected DynByteBuf allocateTmpBuffer(int capacity) {
-		return BufferPool.localPool().buffer(false, capacity);
+		return BufferPool.buffer(false, capacity);
 	}
 	protected void freeTmpBuffer(DynByteBuf buf) {
-		BufferPool.localPool().reserve(buf);
+		BufferPool.reserve(buf);
 	}
 
 	public final void close() {

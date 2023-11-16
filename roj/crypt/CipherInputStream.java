@@ -28,7 +28,7 @@ public class CipherInputStream extends InputStream {
 		this.in = in;
 		this.c = c;
 
-		this.o = (ByteList) BufferPool.localPool().buffer(false, CipherOutputStream.BUFFER_SIZE);
+		this.o = (ByteList) BufferPool.buffer(false, CipherOutputStream.BUFFER_SIZE);
 		this.i.set(o.array(), o.arrayOffset(), o.capacity());
 	}
 

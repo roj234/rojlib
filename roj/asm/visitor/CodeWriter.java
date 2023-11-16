@@ -64,6 +64,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		state = 1;
 	}
 	public void initFrames(MethodNode owner, int flags) {
+		this.mn = owner;
 		if (flags != 0) {
 			fv = new FrameVisitor();
 			fv.init(owner);
@@ -123,7 +124,7 @@ public class CodeWriter extends AbstractCodeWriter {
 			int end = r.readInt() + r.rIndex;
 			r.wIndex(end);
 			try {
-				preVisitAttribute(cp, name, r, bciR2W, len);
+				preVisitAttribute(cp, name, r, len);
 				r.rIndex = end;
 			} finally {
 				r.wIndex(wend);
@@ -136,6 +137,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 		begin();
 		super.visitBytecode(cp, r, len);
+		validateBciRef();
 	}
 	@Override
 	final void _visitNodePre() {
@@ -145,12 +147,12 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	protected void begin() {}
 
-	protected void preVisitAttribute(ConstantPool cp, String name, DynByteBuf r, IntMap<Label> concerned, int bci) {
+	protected void preVisitAttribute(ConstantPool cp, String name, DynByteBuf r, int bci) {
 		switch (name) {
 			case "LineNumberTable":
 				int len = r.readUnsignedShort();
 				while (len > 0) {
-					concerned.putInt(r.readUnsignedShort(), newLabel());
+					_monitor(r.readUnsignedShort());
 					r.rIndex += 2;
 					len--;
 				}
@@ -161,15 +163,15 @@ public class CodeWriter extends AbstractCodeWriter {
 				while (len > 0) {
 					int start = r.readUnsignedShort();
 					int end = start + r.readUnsignedShort();
-					concerned.putInt(start, newLabel());
-					if (end < bci) concerned.putInt(end, newLabel());
+					_monitor(start);
+					if (end < bci) _monitor(end);
 					r.rIndex += 6;
 					len--;
 				}
 				break;
 			case "StackMapTable":
 				if (interpretFlags == 0) {
-					FrameVisitor.readFrames(frames = new SimpleList<>(r.readUnsignedShort(r.rIndex)), r, cp, this, mn, 0xffff, 0xffff);
+					FrameVisitor.readFrames(frames = new SimpleList<>(r.readUnsignedShort(r.rIndex)), r, cp, this, mn.ownerClass(), 0xffff, 0xffff);
 				}
 				break;
 		}

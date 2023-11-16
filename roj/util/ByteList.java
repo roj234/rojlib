@@ -3,7 +3,6 @@ package roj.util;
 import roj.io.buf.BufferPool;
 import roj.lavac.api.Constant;
 import roj.text.TextUtil;
-import roj.text.UTF8MB4;
 import sun.misc.Unsafe;
 
 import java.io.IOException;
@@ -69,7 +68,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		clear();
 		byte[] b = list;
 		list = ArrayCache.BYTES;
-		ArrayCache.getDefaultCache().putArray(b);
+		ArrayCache.putArray(b);
 	}
 
 	public int capacity() { return list.length; }
@@ -97,9 +96,8 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 			byte[] newList;
 			if (USE_CACHE) {
-				ArrayCache cache = ArrayCache.getDefaultCache();
-				cache.putArray(list);
-				newList = cache.getByteArray(newLen, false);
+				ArrayCache.putArray(list);
+				newList = ArrayCache.getByteArray(newLen, false);
 			} else {
 				newList = new byte[newLen];
 			}
@@ -369,7 +367,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		byte[] tmp = list;
 		if (tmp.length < wIndex+len) {
 			if (immutableCapacity()) throw new BufferOverflowException();
-			tmp = ArrayCache.getDefaultCache().getByteArray(wIndex+len, false);
+			tmp = ArrayCache.getByteArray(wIndex+len, false);
 		}
 
 		if (wIndex != off) {
@@ -385,26 +383,18 @@ public class ByteList extends DynByteBuf implements Appendable {
 	// region GETxxx
 
 	public final void read(byte[] b, int off, int len) {
-		if (len < 0 || off < 0 || len > b.length - off) throw new ArrayIndexOutOfBoundsException();
-		if (len > 0) {
-			System.arraycopy(list, moveRI(len) + arrayOffset(), b, off, len);
-		}
+		ArrayUtil.checkRange(b, off, len);
+		if (len > 0) System.arraycopy(list, moveRI(len) + arrayOffset(), b, off, len);
 	}
 
 	public final void read(int i, byte[] b, int off, int len) {
-		if (len < 0 || off < 0 || len > b.length - off) throw new ArrayIndexOutOfBoundsException();
-		if (len > 0) {
-			System.arraycopy(list, testWI(i, len), b, off, len);
-		}
+		ArrayUtil.checkRange(b, off, len);
+		if (len > 0) System.arraycopy(list, testWI(i, len), b, off, len);
 	}
 
-	public final byte get(int i) {
-		return list[testWI(i, 1)];
-	}
+	public final byte get(int i) { return list[testWI(i, 1)]; }
 	@Override
-	public final byte readByte() {
-		return list[moveRI(1) + arrayOffset()];
-	}
+	public final byte readByte() { return list[moveRI(1) + arrayOffset()]; }
 
 	public final int readUnsignedShort(int i) {
 		i = testWI(i, 2);
@@ -589,15 +579,6 @@ public class ByteList extends DynByteBuf implements Appendable {
 	@Constant
 	public static String UNFOURCC(int fc) { return new String(new char[]{(char) (fc >>> 24), (char) ((fc >>> 16) & 0xFF), (char) ((fc >>> 8) & 0xFF), (char) (fc & 0xFF)}); }
 
-	@Deprecated
-	public static void decodeUTF(int len, Appendable out, DynByteBuf in) throws IOException {
-		if (len <= 0) {
-			len = in.readableBytes();
-			if (len <= 0) return;
-		}
-		UTF8MB4.CODER.decodeFixedIn(in, len, out);
-	}
-
 	static void jutf8_encode_all(String s, Object ref, long addr) {
 		int i = 0, len = s.length();
 		while (i < len) {
@@ -636,15 +617,13 @@ public class ByteList extends DynByteBuf implements Appendable {
 		private OutputStream out;
 		private int fakeWriteIndex;
 
-		private BufferPool pool;
 		private DynByteBuf buf;
 
-		public WriteOut(OutputStream out) { this(out, 1024, BufferPool.localPool()); }
-		public WriteOut(OutputStream out, int buffer, BufferPool pool) {
+		public WriteOut(OutputStream out) { this(out, 1024); }
+		public WriteOut(OutputStream out, int buffer) {
 			super();
 			this.out = out;
-			this.pool = pool;
-			this.buf = pool.buffer(false, buffer);
+			this.buf = BufferPool.buffer(false, buffer);
 			this.list = buf.array();
 		}
 
@@ -670,7 +649,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 				flush();
 
 				if (wIndex+cap > buf.capacity()) {
-					buf = pool.expand(buf, cap);
+					buf = BufferPool.expand(buf, cap);
 					list = buf.array();
 				}
 			}
@@ -713,9 +692,8 @@ public class ByteList extends DynByteBuf implements Appendable {
 					}
 				}
 			} finally {
-				if (pool != null) {
-					pool.reserve(buf);
-					pool = null;
+				if (buf != null) {
+					BufferPool.reserve(buf);
 					buf = null;
 				}
 			}
@@ -733,6 +711,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 		public ByteList set(byte[] b, int off, int len) {
 			assert this != EMPTY;
+			ArrayUtil.checkRange(b, off, len);
 
 			wIndex = rIndex = 0;
 
@@ -740,8 +719,6 @@ public class ByteList extends DynByteBuf implements Appendable {
 			this.off = off;
 			this.len = len;
 
-			if (off+len > list.length || list.length-off < len || (off|len)<0)
-				throw new ArrayIndexOutOfBoundsException("pos="+off+",len="+len+",cap="+b.length);
 			return this;
 		}
 
@@ -750,39 +727,12 @@ public class ByteList extends DynByteBuf implements Appendable {
 			return this;
 		}
 
-		public void update(int offset, int length) {
-			off = offset;
-			len = length;
-		}
-
-		@Override
-		public int capacity() {
-			return len;
-		}
-
-		@Override
-		public int maxCapacity() {
-			return len;
-		}
-
-		@Override
-		public void ensureCapacity(int required) {
-			if (required > len) throw new IndexOutOfBoundsException("cannot hold "+required+"bytes in this buffer("+len+")");
-		}
-
-		@Override
-		public int arrayOffset() {
-			return off;
-		}
-
-		@Override
-		public ByteList setArray(byte[] array) {
-			throw new ReadOnlyBufferException();
-		}
-
-		@Override
-		public void preInsert(int off, int len) {
-			throw new ReadOnlyBufferException();
+		public void _expand(int len, boolean backward) {
+			if (backward) {
+				off -= len;
+				wIndex += len;
+			}
+			this.len += len;
 		}
 
 		public ByteList copy(DynByteBuf src) {
@@ -795,8 +745,22 @@ public class ByteList extends DynByteBuf implements Appendable {
 		}
 
 		@Override
-		public boolean immutableCapacity() {
-			return true;
+		public int capacity() { return len; }
+		@Override
+		public int maxCapacity() { return len; }
+		@Override
+		public boolean immutableCapacity() { return true; }
+		@Override
+		public void ensureCapacity(int required) {
+			if (required > len) throw new IndexOutOfBoundsException("cannot hold "+required+"bytes in this buffer("+len+")");
 		}
+
+		@Override
+		public int arrayOffset() { return off; }
+
+		@Override
+		public ByteList setArray(byte[] array) { throw new ReadOnlyBufferException(); }
+		@Override
+		public void preInsert(int off, int len) { throw new ReadOnlyBufferException(); }
 	}
 }

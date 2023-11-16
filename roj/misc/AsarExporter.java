@@ -10,7 +10,7 @@ import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.UTFCoder;
-import roj.ui.UIUtil;
+import roj.ui.CLIUtil;
 import roj.util.ByteList;
 
 import java.io.File;
@@ -41,7 +41,7 @@ public class AsarExporter {
 		}
 
 		UTFCoder uc = IOUtil.SharedCoder.get();
-		CMapping root = JSONParser.parses(uc.decodeR(uc.wrap(data))).asMap();
+		CMapping root = JSONParser.parses(uc.decodeR(data)).asMap();
 
 		TrieTree<PosInfo> tree = new TrieTree<>();
 
@@ -60,10 +60,10 @@ public class AsarExporter {
 		if (args.length > 2) {
 			System.err.println("我们会使用STDOUT输出文件列表");
 			System.err.println("准备好请按任意键");
-			UIUtil.userInput("");
+			CLIUtil.userInput("");
 			tree.forEach((k, v) -> System.err.println(k));
 			System.err.println("请写出从前缀树的哪个节点开始导出(可以为空)");
-			key = UIUtil.userInput("");
+			key = CLIUtil.userInput("");
 		} else {
 			key = "";
 		}

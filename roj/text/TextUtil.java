@@ -11,6 +11,7 @@ import java.nio.charset.Charset;
 import java.util.*;
 
 import static java.lang.Character.*;
+import static roj.ui.CLIUtil.getDisplayWidth;
 
 /**
  * @author Roj234
@@ -95,18 +96,10 @@ public class TextUtil {
 
 	/**
 	 * 这个字是中文吗
-	 *
-	 * @return True if is
 	 */
-	public static boolean isChinese(int c) {
-		return (c >= 0x4E00 && c <= 0x9FFF) // 4E00..9FFF
-			|| (c >= 0xF900 && c <= 0xFAFF) // F900..FAFF
-			|| (c >= 0x3400 && c <= 0x4DBF) // 3400..4DBF
-			|| (c >= 0x2000 && c <= 0x206F) // 2000..206F
-			|| (c >= 0x3000 && c <= 0x303F) // 3000..303F
-			|| (c >= 0xFF00 && c <= 0xFFEF); // FF00..FFEF
-	}
+	public static boolean isChinese(int c) { return JPinyin.getIsHanzi().contains(c); }
 
+	public static String scaledNumber1024(double size) { return scaledNumber1024(IOUtil.getSharedCharBuf(), size).toString(); }
 	private static final String[] SCALE = {"B", "KB", "MB", "GB", "TB"};
 	public static CharList scaledNumber1024(CharList sb, double size) {
 		int i = 0;
@@ -753,7 +746,7 @@ public class TextUtil {
 			if (s.indexOf('\n') >= 0) {
 				List<String> _sLines = LineReader.slrParserV2(String.valueOf(o), false);
 				row.add(s = _sLines.get(0));
-				sLen = uiLen(s);
+				sLen = getDisplayWidth(s);
 
 				while (multiLineRef.size() < _sLines.size()-1) multiLineRef.add(new SimpleList<>());
 				for (int i = 1; i < _sLines.size(); i++) {
@@ -761,11 +754,11 @@ public class TextUtil {
 					while (line.size() < row.size()) line.add("");
 					String str = _sLines.get(i);
 					line.set(row.size()-1, str);
-					sLen = Math.max(sLen, uiLen(str));
+					sLen = Math.max(sLen, getDisplayWidth(str));
 				}
 			} else {
 				row.add(s);
-				sLen = uiLen(s);
+				sLen = getDisplayWidth(s);
 			}
 
 			while (maxLens.size() < row.size()) maxLens.add(0);
@@ -791,7 +784,7 @@ public class TextUtil {
 					String s = line[j].toString();
 					sb.append(s);
 
-					int k = maxLens.get(j)-uiLen(s);
+					int k = maxLens.get(j)-getDisplayWidth(s);
 					while (k-- > 0) sb.append(' ');
 
 					if (++j == line.length) break;
@@ -802,19 +795,6 @@ public class TextUtil {
 			Helpers.athrow(e);
 		}
 		return sb;
-	}
-
-	private static int uiLen(String s) {
-		int len = 0, maxLen = 0;
-		for (int i = 0; i < s.length(); i++) {
-			char c = s.charAt(i);
-			if (c == '\r') {}
-			else if(c == '\n') { maxLen = Math.max(maxLen, len); len = 0; }
-			else if (c > 0xFF) len += 2;
-			else if (c == '\t') len += 4;
-			else len++;
-		}
-		return Math.max(maxLen, len);
 	}
 
 	public static int codepoint(int h, int l) {
@@ -837,11 +817,7 @@ public class TextUtil {
 		return tmp.toStringAndFree();
 	}
 
-	private static JPinyin pinyin;
-	public static JPinyin pinyin() {
-		if (pinyin == null) {
-			pinyin = new JPinyin(-1);
-		}
-		return pinyin;
-	}
+	private static JPinyin pinyin = new JPinyin();
+	@Deprecated
+	public static JPinyin pinyin() { return pinyin; }
 }

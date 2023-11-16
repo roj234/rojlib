@@ -1,7 +1,6 @@
 package roj.sound.pipe;
 
 import roj.collect.Graph;
-import roj.io.buf.PagedBPool;
 import roj.util.DynByteBuf;
 
 /**
@@ -10,7 +9,6 @@ import roj.util.DynByteBuf;
  */
 public class AudioContext {
 	Graph<AudioPipeline> graph;
-	PagedBPool pool = new PagedBPool(262144);
 	DynByteBuf buffer;
 
 	public void register(AudioPipeline pipeline) {

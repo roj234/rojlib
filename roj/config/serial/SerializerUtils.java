@@ -2,7 +2,6 @@ package roj.config.serial;
 
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
-import roj.crypt.Base64;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
@@ -49,8 +48,8 @@ public final class SerializerUtils {
 		return bb;
 	}
 
-	public final String writeBase64(byte[] arr) { return Base64.btoa(arr); }
-	public final byte[] readBase64(String s) { return Base64.atob(s); }
+	public final String writeBase64(byte[] arr) { return IOUtil.SharedCoder.get().encodeBase64(arr); }
+	public final byte[] readBase64(String s) { return IOUtil.SharedCoder.get().decodeBase64(s); }
 
 	public final String writeRGB(int color) { return "#".concat(Integer.toHexString(color&0xFFFFFF)); }
 	public final String writeRGBA(int color) { return "#".concat(Integer.toHexString(color)); }

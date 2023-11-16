@@ -25,14 +25,13 @@ public final class BCJ2 extends QZComplexCoder {
 	public BCJ2(int size) {segmentSize = size;}
 
 	QZCoder factory() { return this; }
-
 	private static final byte[] id = {3,3,1,27};
-	byte[] id() { return id; }
+	public byte[] id() { return id; }
 
 	public int useCount() { return 4; }
 	public int provideCount() { return 1; }
 
-	public OutputStream[] complexEncode(OutputStream[] out) throws IOException {
+	public OutputStream[] complexEncode(OutputStream[] out) {
 		return new OutputStream[] { new Encoder(out[0], out[1], out[2], out[3]) };
 	}
 
@@ -158,6 +157,7 @@ public final class BCJ2 extends QZComplexCoder {
 				ob.writeToStream(main);
 				ob._free();
 				rc.finish();
+				rc.putArraysToCache();
 				if (main instanceof Finishable) ((Finishable) main).finish();
 				if (call instanceof Finishable) ((Finishable) call).finish();
 				if (jump instanceof Finishable) ((Finishable) jump).finish();
@@ -257,7 +257,7 @@ public final class BCJ2 extends QZComplexCoder {
 			main.close();
 			call.close();
 			jump.close();
-			rc.inData.close();
+			rc.in.close();
 		}
 	}
 }

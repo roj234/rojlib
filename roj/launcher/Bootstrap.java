@@ -47,22 +47,31 @@ public final class Bootstrap {
 
 		Set<String> tweakerNames = new LinkedHashSet<>();
 
+		LOGGER.setLevel(Level.INFO);
 		int i;
-		for (i = 0; i < args.length-1; i++) {
+		for (i = 0; i < args.length-1;) {
 			String arg = args[i];
 			if (arg.charAt(0) != '-') break;
+			if (arg.equals("--")) { i++; break; }
 			switch (arg) {
+				case "-debug": LOGGER.setLevel(Level.ALL); break;
 				case "-t":
 				case "--tweaker":
 					arg = args[++i];
-					if (!tweakerNames.add(arg)) LOGGER.log(Level.WARN, "Tweaker '{}' 已存在", null, arg);
+					if (!tweakerNames.add(arg)) LOGGER.warn("Tweaker '{}' 已存在", arg);
 				break;
 				default:
-					LOGGER.log(Level.FATAL, "Unknown argument {}", null, arg);
+					LOGGER.error("无法识别的参数 {}", arg);
 				break;
 			}
+			i++;
 		}
 		if (tweakerNames.isEmpty()) tweakerNames.add("roj.launcher.RojLibTweaker");
+
+		if (i == args.length) {
+			LOGGER.fatal("缺少Launch target");
+			return;
+		}
 
 		String target = args[i++];
 
@@ -84,7 +93,7 @@ public final class Bootstrap {
 
 			c.field(GETSTATIC, "roj/launcher/Bootstrap", "LOGGER", "Lroj/text/logging/Logger;");
 			c.ldc("加载Tweaker '"+name+"'");
-			c.invokeV("roj/text/logging/Logger", "info", "(Ljava/lang/String;)V");
+			c.invokeV("roj/text/logging/Logger", "debug", "(Ljava/lang/String;)V");
 
 			c.newObject(name.replace('.', '/'));
 			c.one(ASTORE_1);

@@ -10,24 +10,16 @@
 
 package roj.archive.qz.xz.rangecoder;
 
-import java.io.IOException;
+import roj.util.ArrayCache;
 
-public abstract class RangeEncoder extends RangeCoder {
+import java.io.IOException;
+import java.io.OutputStream;
+
+public class RangeEncoder extends RangeCoder {
 	private static final int MOVE_REDUCING_BITS = 4;
 	private static final int BIT_PRICE_SHIFT_BITS = 4;
 
 	private static final int[] prices = new int[BIT_MODEL_TOTAL >>> MOVE_REDUCING_BITS];
-
-	private long low;
-	private int range;
-
-	// NOTE: int is OK for LZMA2 because a compressed chunk
-	// is not more than 64 KiB, but with LZMA1 there is no chunking
-	// so in theory cacheSize can grow very big. To be very safe,
-	// use long instead of int since this code is used for LZMA1 too.
-	long cacheSize;
-	private byte cache;
-
 	static {
 		for (int i = (1 << MOVE_REDUCING_BITS) / 2; i < BIT_MODEL_TOTAL; i += (1 << MOVE_REDUCING_BITS)) {
 			int w = i;
@@ -47,32 +39,50 @@ public abstract class RangeEncoder extends RangeCoder {
 		}
 	}
 
-	public void reset() {
+	private long low;
+	private int range;
+
+	private int cacheSize;
+	private byte cache;
+
+	final byte[] buf;
+	int bufPos;
+
+	public RangeEncoder(int bufSize) {
+		buf = ArrayCache.getByteArray(bufSize, false);
+		reset();
+	}
+
+	public final synchronized void putArraysToCache() {
+		if (cacheSize == -1) return;
+		ArrayCache.putArray(buf);
+		cacheSize = -1;
+	}
+
+	public final int lzma2_getPendingSize() { return bufPos + cacheSize + INIT_SIZE - 1; }
+	public final void lzma2_write(OutputStream out) throws IOException { out.write(buf, 0, bufPos); }
+
+	public final void reset() {
 		low = 0;
 		range = 0xFFFFFFFF;
 		cache = 0x00;
 		cacheSize = 1;
-	}
-
-	public int getPendingSize() {
-		// This function is only needed by users of RangeEncoderToBuffer,
-		// but providing a must-be-never-called version here makes
-		// LZMAEncoder simpler.
-		throw new Error();
+		bufPos = 0;
 	}
 
 	public int finish() throws IOException {
-		for (int i = 0; i < 5; ++i)
+		for (int i = 0; i < INIT_SIZE; ++i)
 			shiftLow();
 
-		// RangeEncoderToBuffer.finish() needs a return value to tell
-		// how big the finished buffer is. RangeEncoderToStream has no
-		// buffer and thus no return value is needed. Here we use a dummy
-		// value which can be overriden in RangeEncoderToBuffer.finish().
-		return -1;
+		// no RangeEncoderToBuffer anymore, a buffer is great for anyone
+		// however, LZMAOutputStream still don't use this
+		return bufPos;
 	}
 
-	abstract void writeByte(int b) throws IOException;
+	void flushNow() throws IOException {
+		// RangeEncoderToStream does flush
+		throw new ArrayIndexOutOfBoundsException("buffer overflow! "+buf.length);
+	}
 
 	private void shiftLow() throws IOException {
 		int lowHi = (int) (low >>> 32);
@@ -80,19 +90,34 @@ public abstract class RangeEncoder extends RangeCoder {
 		if (lowHi != 0 || low < 0xFF000000L) {
 			int temp = cache;
 
-			do {
-				writeByte(temp + lowHi);
+			byte[] buf = this.buf;
+			int bufPos = this.bufPos;
+
+			for (int i = cacheSize; i > 0; i--) {
+				buf[bufPos++] = (byte) (temp + lowHi);
+
+				if (bufPos == buf.length) {
+					flushNow();
+					bufPos = 0;
+				}
+
 				temp = 0xFF;
-			} while (--cacheSize != 0);
+			}
+			cacheSize = 0;
+
+			this.bufPos = bufPos;
 
 			cache = (byte) (low >>> 24);
 		}
 
 		++cacheSize;
+
+		assert cacheSize <= 5;
+		// low range = [000000 => 0xFEFFFFFFF]
 		low = (low & 0x00FFFFFF) << 8;
 	}
 
-	public void encodeBit(short[] probs, int index, int bit) throws IOException {
+	public final void encodeBit(short[] probs, int index, int bit) throws IOException {
 		int prob = probs[index];
 		int bound = (range >>> BIT_MODEL_TOTAL_BITS) * prob;
 
@@ -111,14 +136,13 @@ public abstract class RangeEncoder extends RangeCoder {
 			shiftLow();
 		}
 	}
-
 	public static int getBitPrice(int prob, int bit) {
 		// NOTE: Unlike in encodeBit(), here bit must be 0 or 1.
 		assert bit == 0 || bit == 1;
 		return prices[(prob ^ ((-bit) & (BIT_MODEL_TOTAL - 1))) >>> MOVE_REDUCING_BITS];
 	}
 
-	public void encodeBitTree(short[] probs, int symbol) throws IOException {
+	public final void encodeBitTree(short[] probs, int symbol) throws IOException {
 		int index = 1;
 		int mask = probs.length;
 
@@ -132,7 +156,6 @@ public abstract class RangeEncoder extends RangeCoder {
 
 		} while (mask != 1);
 	}
-
 	public static int getBitTreePrice(short[] probs, int symbol) {
 		int price = 0;
 		symbol |= probs.length;
@@ -146,7 +169,7 @@ public abstract class RangeEncoder extends RangeCoder {
 		return price;
 	}
 
-	public void encodeReverseBitTree(short[] probs, int symbol) throws IOException {
+	public final void encodeReverseBitTree(short[] probs, int symbol) throws IOException {
 		int index = 1;
 		symbol |= probs.length;
 
@@ -157,7 +180,6 @@ public abstract class RangeEncoder extends RangeCoder {
 			index = (index << 1) | bit;
 		} while (symbol != 1);
 	}
-
 	public static int getReverseBitTreePrice(short[] probs, int symbol) {
 		int price = 0;
 		int index = 1;
@@ -173,10 +195,10 @@ public abstract class RangeEncoder extends RangeCoder {
 		return price;
 	}
 
-	public void encodeDirectBits(int value, int count) throws IOException {
+	public final void encodeDirectBits(int value, int count) throws IOException {
 		do {
 			range >>>= 1;
-			low += range & (0 - ((value >>> --count) & 1));
+			low += range & -((value >>> --count) & 1);
 
 			if ((range & TOP_MASK) == 0) {
 				range <<= SHIFT_BITS;
@@ -184,8 +206,5 @@ public abstract class RangeEncoder extends RangeCoder {
 			}
 		} while (count != 0);
 	}
-
-	public static int getDirectBitsPrice(int count) {
-		return count << BIT_PRICE_SHIFT_BITS;
-	}
+	public static int getDirectBitsPrice(int count) { return count << BIT_PRICE_SHIFT_BITS; }
 }

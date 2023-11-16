@@ -5,6 +5,7 @@ import roj.collect.MyHashMap;
 import roj.collect.ObjectPool;
 import roj.collect.RingBuffer;
 import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
@@ -337,7 +338,7 @@ public final class HttpServer11 extends PacketMerger implements
 
 		if (len <= 65535) {
 			assert postBuffer == null;
-			postBuffer = (ByteList) ctx.alloc().buffer(false, (int) len);
+			postBuffer = (ByteList) ctx.allocate(false, (int) len);
 			flag |= EXT_POST_BUFFER;
 		} else {
 			// if "USE_CACHE" is on
@@ -678,7 +679,7 @@ public final class HttpServer11 extends PacketMerger implements
 			}
 			return v;
 		} finally {
-			ch.reserve(buf);
+			BufferPool.reserve(buf);
 		}
 	}
 
@@ -694,7 +695,7 @@ public final class HttpServer11 extends PacketMerger implements
 				// noinspection all
 				ctx.handler().channelWrite(ctx, buf);
 			} finally {
-				ch.reserve(buf);
+				BufferPool.reserve(buf);
 			}
 		}
 		ch.postEvent(ChunkSplitter.CHUNK_OUT_EOF);

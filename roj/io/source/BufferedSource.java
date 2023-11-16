@@ -172,7 +172,7 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 		for (Iterator<MyHashMap.Entry<MutableInt, ByteList>> it = buffers.__iterator(); it.hasNext(); ) {
 			MyHashMap.Entry<MutableInt, ByteList> next = it.next();
 			try {
-				pool.reserve(next.v);
+				BufferPool.reserve(next.v);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -186,7 +186,7 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 		while (f < t) {
 			val.setValue(f++);
 			DynByteBuf buf = buffers.remove(val);
-			if (buf != null) pool.reserve(buf);
+			if (buf != null) BufferPool.reserve(buf);
 		}
 	}
 
@@ -199,12 +199,12 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 			s.seek(pos & -PAGE);
 			sync |= 1;
 
-			buf = (ByteList) pool.buffer(false, PAGE);
+			buf = (ByteList) pool.allocate(false, PAGE);
 			try {
 				int len = s.read(buf.list, buf.arrayOffset(), PAGE);
 				buf.wIndex(len);
 			} catch (Throwable e) {
-				pool.reserve(buf);
+				BufferPool.reserve(buf);
 				invalidate();
 				throw e;
 			}
@@ -239,6 +239,6 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 	@Override
 	public void accept(MutableInt key,ByteList buffer) {
 		myNext = key;
-		pool.reserve(buffer);
+		BufferPool.reserve(buffer);
 	}
 }

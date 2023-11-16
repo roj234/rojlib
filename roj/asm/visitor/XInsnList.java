@@ -80,15 +80,11 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 		if (myIsReading) dd.xInsn_isReading = false;
 
 		ByteList ob = (ByteList) codeOb;
-		ArrayCache.getDefaultCache().putArray(ob.list);
+		ArrayCache.putArray(ob.list);
 		ob.setArray(ob.toByteArray());
 
 		updateLabelValues();
-
-		for (IntMap.Entry<Label> entry : bciR2W.selfEntrySet()) {
-			if (!entry.getValue().isValid()) throw new IllegalArgumentException("BCI #"+entry.getIntKey()+" 不存在");
-			assert entry.getValue().getValue() == entry.getIntKey();
-		}
+		validateBciRef();
 		bciR2W.clear();
 		bciR2W = null;
 	}
@@ -145,7 +141,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 							case 2: index = cp.getFieldRefId(d.owner, d.name, d.param); break;
 							case 3:
 								index = cp.getItfRefId(d.owner, d.name, d.param);
-								bb.putShort(offset+3, TypeHelper.paramSize(d.param));
+								bb.put(offset+3, 1+TypeHelper.paramSize(d.param));
 							break;
 						}
 					}
@@ -256,7 +252,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 	}
 	public final void invokeItf(String owner, String name, String desc) {
 		addRef(new Desc(owner, name, desc, 3<<14));
-		codeOb.put(INVOKEINTERFACE).putShort(0).putShortLE(1+TypeHelper.paramSize(desc));
+		codeOb.put(INVOKEINTERFACE).putInt(0);
 	}
 	public final void invoke(byte code, String owner, String name, String desc) {
 		// calling by user code

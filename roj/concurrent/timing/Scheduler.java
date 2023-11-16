@@ -6,10 +6,10 @@ import roj.collect.SimpleList;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
+import roj.reflect.ReflectionUtils;
 
 import java.util.Comparator;
 import java.util.Iterator;
-import java.util.List;
 import java.util.PriorityQueue;
 import java.util.concurrent.locks.LockSupport;
 
@@ -28,7 +28,7 @@ public class Scheduler implements Runnable {
 			synchronized (Scheduler.class) {
 				if (defaultScheduler != null) return defaultScheduler;
 				defaultScheduler = new Scheduler(TaskPool.Common());
-				defaultScheduler.runNewThread("定时任务调度器");
+				defaultScheduler.runNewThread("任务计划子进程");
 			}
 		}
 		return defaultScheduler;
@@ -41,12 +41,8 @@ public class Scheduler implements Runnable {
 		return v;
 	};
 
-	static {
-		try {
-			TAIL_OFFSET = u.objectFieldOffset(Scheduler.class.getDeclaredField("tail"));
-		} catch (NoSuchFieldException ignored) {}
-	}
-	private static long TAIL_OFFSET;
+	private static final long u_tail = ReflectionUtils.fieldOffset(Scheduler.class, "tail");
+	private static final long u_owner = ReflectionUtils.fieldOffset(ScheduledTask.class, "owner");
 	private volatile ScheduledTask head, tail;
 
 	private final SimpleList<ScheduledTask> remain;
@@ -55,56 +51,63 @@ public class Scheduler implements Runnable {
 	private volatile Thread worker;
 	private final TaskHandler executor;
 
-	private Scheduler parent, child;
-	private final int maxSubSchedulers;
+	private int timeout;
 
 	public Scheduler(@Nullable TaskHandler executor) {
-		this(executor, 1);
-	}
-	public Scheduler(@Nullable TaskHandler executor, int maxHelperThreadCount) {
 		this.remain = SimpleList.withCapacityType(16, 2);
 		this.timer = new PriorityQueue<>(CPR);
 		this.head = this.tail = new ScheduledTask(null, 0,0,1) { public void execute() {} };
-		this.head.nextRun = Long.MAX_VALUE;
+		this.head.nextRun = -1L;
 		this.executor = executor;
-		this.maxSubSchedulers = maxHelperThreadCount;
 	}
 
-	@Override
-	public void run() {
-		worker = Thread.currentThread();
-		while (worker != null) {
-			long waitMs = work();
-			if (waitMs < 0) {
-				if (parent != null) {
-					synchronized (parent.timer) {
-						if (head == tail) {
-							parent.child = null;
-							System.out.println("shutting down helper thread " + Thread.currentThread().getName());
-							break;
-						}
-					}
+	public void runNewThread(String name) {
+		Thread t = new Thread(this, name);
+		t.setDaemon(true);
+		t.start();
+		synchronized (this) {
+			if (worker == null) {
+				try {
+					wait(100);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
 				}
-				LockSupport.park();
-			} else {
-				LockSupport.parkNanos(waitMs * 1_000_000L);
 			}
 		}
 	}
 
-	private long work() {
-		loadNewlyAddedTask();
-		PriorityQueue<ScheduledTask> tasks = timer;
+	public void stop() {
+		LockSupport.unpark(worker);
+		worker = null;
+	}
 
+	@Override
+	public void run() {
+		Thread r = Thread.currentThread();
+		synchronized (this) {
+			if (worker != null) {
+				throw new IllegalStateException("already running on another thread!");
+			}
+			worker = r;
+		}
+
+		while (worker == r) {
+			long waitMs = work();
+			if (waitMs < 0) LockSupport.park();
+			else LockSupport.parkNanos(waitMs * 1_000_000L);
+		}
+	}
+
+	private long work() {
 		long time = System.currentTimeMillis();
 		long startTime = time;
 
-		boolean dirty = false;
-		Iterator<ScheduledTask> itr = tasks.iterator();
+		boolean taskRemoved = false;
+		Iterator<ScheduledTask> itr = timer.iterator();
 		while (itr.hasNext()) {
 			ScheduledTask task = itr.next();
 			if (task.nextRun < 0) {
-				dirty = true;
+				taskRemoved = true;
 				continue;
 			}
 
@@ -115,33 +118,25 @@ public class Scheduler implements Runnable {
 			}
 
 			try {
-				boolean timeout = false;
-				if (task.schedule(startTime)) {
+				if (task.scheduleNext(startTime)) {
 					// 15.625ms
-					if (maxSubSchedulers > 0 && task != head && time - task.nextRun > 16) {
-						dirty = timeout = true;
-					} else remain.add(task);
-				} else dirty = true;
+					if (task != head && time - task.nextRun > 16) {
+						timeout ++;
+					}
+
+					remain.add(task);
+				} else {
+					taskRemoved = true;
+				}
 
 				executeForDebug(task);
-
-				if (timeout) {
-					synchronized (tasks) {
-						if (child == null) {
-							child = new Scheduler(executor, maxSubSchedulers - 1);
-							child.parent = this;
-							child.runNewThread(Thread.currentThread().getName() + " - 副本");
-						}
-
-						child.add(task);
-					}
-				}
 			} catch (Throwable e) {
 				e.printStackTrace();
 			}
 		}
 
-		if (dirty) {
+		PriorityQueue<ScheduledTask> tasks = timer;
+		if (taskRemoved) {
 			while (itr.hasNext()) remain.add(itr.next());
 			tasks.clear();
 
@@ -149,7 +144,7 @@ public class Scheduler implements Runnable {
 		}
 		remain.clear();
 
-		loadNewlyAddedTask();
+		pollNewTasks();
 
 		if (tasks.isEmpty()) return -1;
 		long run = tasks.peek().nextRun - System.currentTimeMillis();
@@ -161,83 +156,41 @@ public class Scheduler implements Runnable {
 		else task.execute();
 	}
 
-	public void runNewThread(String name) {
-		Thread timer = new Thread(this);
-		timer.setName(name);
-		timer.setDaemon(true);
-		timer.start();
-		worker = timer;
-	}
-
-	public void stop() {
-		LockSupport.unpark(worker);
-		worker = null;
-	}
-
-	public List<ScheduledTask> getTasks() {
-		loadNewlyAddedTask();
-		SimpleList<ScheduledTask> s = new SimpleList<>(timer);
-		timer.clear();
-		return s;
-	}
-
-	private void loadNewlyAddedTask() {
+	private void pollNewTasks() {
 		long time = System.currentTimeMillis();
 
-		ScheduledTask prevTask = head;
-		ScheduledTask task = prevTask.next;
+		ScheduledTask prev = head, task = prev.next;
 
-		remain.clear();
 		while (task != null) {
-			if (task.nextRun > 0) {
-				if (time < task.nextRun) {
-					remain.add(task);
-				} else {
-					try {
-						if (task.schedule(time)) remain.add(task);
-
-						if (executor != null && !task.forceOnScheduler()) executor.pushTask(task);
-						else {
-							task.execute();
-							time = System.currentTimeMillis();
-						}
-					} catch (Throwable e) {
-						e.printStackTrace();
-					}
-				}
-
-			}
-
-			prevTask = task;
+			if (task.nextRun >= 0) timer.add(task);
+			prev = task;
 			task = task.next;
 		}
-		timer.addAll(remain);
-		remain.clear();
 
 		task = head;
-		while (task != prevTask) {
-			ScheduledTask task1 = task;
+		while (task != prev) {
+			ScheduledTask t = task;
 			task = task.next;
-			task1.next = null;
+			t.next = null;
 		}
 
-		head = prevTask;
+		head = prev;
 	}
 
-	public ScheduledTask executeLater(ITask task, int delayMs) { return add(new ScheduledTask(task, 0, delayMs, 1)); }
-	public ScheduledTask executeTimer(ITask task, int intervalMs) { return add(new ScheduledTask(task, intervalMs, 0, Integer.MAX_VALUE)); }
-	public ScheduledTask executeTimer(ITask task, int intervalMs, int count) { return add(new ScheduledTask(task, intervalMs, 0, count)); }
-	public ScheduledTask executeTimer(ITask task, int intervalMs, int count, int delayMs) { return add(new ScheduledTask(task, intervalMs, delayMs, count)); }
+	public ScheduledTask delay(ITask task, int delayMs) { return add(new ScheduledTask(task, 0, delayMs, 1)); }
+	public ScheduledTask loop(ITask task, int intervalMs) { return add(new ScheduledTask(task, intervalMs, 0, Integer.MAX_VALUE)); }
+	public ScheduledTask loop(ITask task, int intervalMs, int count) { return add(new ScheduledTask(task, intervalMs, 0, count)); }
+	public ScheduledTask loop(ITask task, int intervalMs, int count, int delayMs) { return add(new ScheduledTask(task, intervalMs, delayMs, count)); }
 
 	public ScheduledTask add(@Async.Schedule ScheduledTask t) {
 		if (worker == null) throw new IllegalStateException("定时器已关闭");
-		t.owner = this;
-		t.next = null;
+		if (!u.compareAndSwapObject(t, u_owner, null, this)) throw new IllegalArgumentException("任务已经注册");
+		assert t.next == null;
 
 		int j = 0;
 		while (true) {
 			ScheduledTask tail = this.tail;
-			if (u.compareAndSwapObject(this, TAIL_OFFSET, tail, t)) {
+			if (u.compareAndSwapObject(this, u_tail, tail, t)) {
 				tail.next = t;
 				break;
 			}

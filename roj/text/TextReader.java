@@ -47,7 +47,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 	public TextReader(Closeable in, Charset charset, int buffer, BufferPool pool) throws IOException {
 		this.in = in;
 
-		buf = ArrayCache.getDefaultCache().getCharArray(128, false);
+		buf = ArrayCache.getCharArray(128, false);
 
 		if (in instanceof DynByteBuf.BufferInputStream) {
 			in = ((DynByteBuf.BufferInputStream) in).buffer();
@@ -58,7 +58,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 			lock = in;
 			type = 2;
 		} else {
-			DynByteBuf buf = pool.buffer(!(in instanceof InputStream), buffer);
+			DynByteBuf buf = pool.allocate(!(in instanceof InputStream), buffer);
 			buf.clear();
 
 			lock = buf;
@@ -81,8 +81,8 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 					ib.position(ib.position() + cd.skip());
 				} else {
 					if (ib.capacity() < cd.limit()) {
-						pool.reserve((DynByteBuf) lock);
-						DynByteBuf buf = pool.buffer(ib.isDirect(), cd.limit());
+						BufferPool.reserve((DynByteBuf) lock);
+						DynByteBuf buf = pool.allocate(ib.isDirect(), cd.limit());
 
 						lock = buf;
 						ib = buf.nioBuffer();
@@ -163,10 +163,9 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 		}
 	}
 	private void grow(int toRead) {
-		ArrayCache ac = ArrayCache.getDefaultCache();
-		char[] newBuf = ac.getCharArray(MathUtils.getMin2PowerOf(len+toRead), false);
+		char[] newBuf = ArrayCache.getCharArray(MathUtils.getMin2PowerOf(len+toRead), false);
 		System.arraycopy(buf, 0, newBuf, 0, len);
-		ac.putArray(buf);
+		ArrayCache.putArray(buf);
 		buf = newBuf;
 		ob = null;
 	}
@@ -261,7 +260,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 		}
 
 		if (buf != null) {
-			ArrayCache.getDefaultCache().putArray(buf);
+			ArrayCache.putArray(buf);
 			buf = null;
 		}
 	}

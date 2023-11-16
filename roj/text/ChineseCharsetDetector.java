@@ -40,7 +40,7 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 
 	public String detect() throws IOException {
 		if (b == null) {
-			b = ArrayCache.getDefaultCache().getByteArray(4096, false);
+			b = ArrayCache.getByteArray(4096, false);
 			type |= 0x40;
 		}
 		skip = 0;
@@ -89,10 +89,9 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 			if (bLen == b.length) {
 				if (bLen > 32767) break;
 
-				ArrayCache ac = ArrayCache.getDefaultCache();
-				byte[] b1 = ac.getByteArray(b.length << 1, false);
+				byte[] b1 = ArrayCache.getByteArray(b.length << 1, false);
 				System.arraycopy(b, 0, b1, 0, b.length);
-				ac.putArray(b);
+				ArrayCache.putArray(b);
 				b = b1;
 			}
 		}
@@ -185,7 +184,7 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 	@Override
 	public void close() {
 		if ((type & 0x40) != 0) {
-			ArrayCache.getDefaultCache().putArray(b);
+			ArrayCache.putArray(b);
 			b = null;
 			type &= ~0x40;
 		}

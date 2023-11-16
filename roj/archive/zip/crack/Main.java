@@ -166,8 +166,7 @@ public class Main {
 				}
 			}
 		}
-		ep.updateForce(1);
-		ep.dispose();
+		ep.end("fin");
 	}
 
 	private static byte[] getExample(byte[] cipher, int[] key) throws IOException {

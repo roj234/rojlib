@@ -2,7 +2,7 @@ package roj.net;
 
 import roj.collect.MyBitSet;
 import roj.io.IOUtil;
-import roj.reflect.FieldAccessor;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.UTF8MB4;
@@ -129,7 +129,7 @@ public class URIUtil {
 			long end = off + ib.readableBytes();
 
 			while (off < end) {
-				int c = FieldAccessor.u.getByte(ref, off++)&0xFF;
+				int c = ReflectionUtils.u.getByte(ref, off++)&0xFF;
 				ib.rIndex++;
 
 				if (safe.contains(c)) ob.append((char) c);

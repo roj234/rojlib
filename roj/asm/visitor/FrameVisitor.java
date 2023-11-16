@@ -848,7 +848,7 @@ public class FrameVisitor {
 
 	// endregion
 	// region Frame writing
-	public static void readFrames(List<Frame2> fr, DynByteBuf r, ConstantPool cp, AbstractCodeWriter pc, MethodNode owner, int lMax, int sMax) {
+	public static void readFrames(List<Frame2> fr, DynByteBuf r, ConstantPool cp, AbstractCodeWriter pc, String owner, int lMax, int sMax) {
 		fr.clear();
 
 		int allOffset = -1;
@@ -907,12 +907,12 @@ public class FrameVisitor {
 			f.target3 = pc._monitor(allOffset);
 		}
 	}
-	private static Var2 getVar(ConstantPool pool, DynByteBuf r, AbstractCodeWriter pc, MethodNode owner) {
+	private static Var2 getVar(ConstantPool pool, DynByteBuf r, AbstractCodeWriter pc, String owner) {
 		byte type = r.readByte();
 		switch (type) {
 			case REFERENCE: return new Var2(type, pool.getRefName(r));
 			case UNINITIAL: return new Var2(pc._monitor(r.readUnsignedShort()));
-			case UNINITIAL_THIS: return new Var2(type, owner == null ? null : owner.ownerClass());
+			case UNINITIAL_THIS: return new Var2(type, owner);
 			default: return Var2.except(type, null);
 		}
 	}

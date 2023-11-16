@@ -1,5 +1,6 @@
 package roj.net.http.srv;
 
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.Headers;
 import roj.net.http.HttpCode;
@@ -83,7 +84,7 @@ public class StringResponse implements Response {
 	@Override
 	public void release(ChannelCtx ctx) throws IOException {
 		if (buf != null) {
-			ctx.reserve(buf);
+			BufferPool.reserve(buf);
 			buf = null;
 		}
 	}

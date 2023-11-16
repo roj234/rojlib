@@ -10,77 +10,89 @@
 
 package roj.archive.qz.xz.lzma;
 
-import roj.archive.qz.xz.rangecoder.RangeCoder;
+import static roj.archive.qz.xz.rangecoder.RangeCoder.initProbs;
 
 abstract class LZMACoder {
+	static final int LOW_SYMBOLS = 1 << 3, MID_SYMBOLS = 1 << 3, HIGH_SYMBOLS = 1 << 8;
+
 	static final int POS_STATES_MAX = 1 << 4;
 
 	static final int MATCH_LEN_MIN = 2;
-	static final int MATCH_LEN_MAX = MATCH_LEN_MIN + LengthCoder.LOW_SYMBOLS + LengthCoder.MID_SYMBOLS + LengthCoder.HIGH_SYMBOLS - 1;
+	static final int MATCH_LEN_MAX = MATCH_LEN_MIN + LOW_SYMBOLS + MID_SYMBOLS + HIGH_SYMBOLS - 1;
 
-	static final int DIST_STATES = 4;
-	static final int DIST_SLOTS = 1 << 6;
-	static final int DIST_MODEL_START = 4;
-	static final int DIST_MODEL_END = 14;
+	static final int DIST_STATES = 4, DIST_SLOTS = 1 << 6, DIST_MODEL_START = 4, DIST_MODEL_END = 14;
 	static final int FULL_DISTANCES = 1 << (DIST_MODEL_END / 2);
 
-	static final int ALIGN_BITS = 4;
-	static final int ALIGN_SIZE = 1 << ALIGN_BITS;
-	static final int ALIGN_MASK = ALIGN_SIZE - 1;
+	static final int ALIGN_BITS = 4, ALIGN_SIZE = 1 << ALIGN_BITS, ALIGN_MASK = ALIGN_SIZE - 1;
 
 	static final int REPS = 4;
 
 	final int posMask;
+	final int lc;
+	final int literalPosMask;
 
 	final int[] reps = new int[REPS];
 	int state;
 
-	final short[][] isMatch = new short[STATES][POS_STATES_MAX];
+	final short[] isMatch = new short[STATES * POS_STATES_MAX];
 	final short[] isRep = new short[STATES];
-	final short[] isRep0 = new short[STATES];
-	final short[] isRep1 = new short[STATES];
-	final short[] isRep2 = new short[STATES];
-	final short[][] isRep0Long = new short[STATES][POS_STATES_MAX];
+	final short[] isRep0 = new short[STATES], isRep1 = new short[STATES], isRep2 = new short[STATES];
+	final short[] isRep0Long = new short[STATES * POS_STATES_MAX];
 	final short[][] distSlots = new short[DIST_STATES][DIST_SLOTS];
 	final short[][] distSpecial = {new short[2], new short[2], new short[4], new short[4], new short[8], new short[8], new short[16], new short[16], new short[32], new short[32]};
 	final short[] distAlign = new short[ALIGN_SIZE];
 
-	static int getDistState(int len) {
-		return len < DIST_STATES + MATCH_LEN_MIN ? len - MATCH_LEN_MIN : DIST_STATES - 1;
+	static int getDistState(int len) { return len < DIST_STATES + MATCH_LEN_MIN ? len - MATCH_LEN_MIN : DIST_STATES - 1; }
+
+	final short[][] literalProbs;
+
+	final short[] choice = new short[2 << 1];
+	final short[][] low, mid;
+	final short[] high = new short[HIGH_SYMBOLS], high2 = new short[HIGH_SYMBOLS];
+
+	LZMACoder(int lc, int lp, int pb) {
+		posMask = (1<<pb) - 1;
+		this.lc = lc;
+		literalPosMask = (1<<lp) - 1;
+		literalProbs = new short[1 << (lc + lp)][0x300];
+
+		low = new short[2<<pb][LOW_SYMBOLS];
+		mid = new short[2<<pb][MID_SYMBOLS];
 	}
 
-	LZMACoder(int pb) {
-		posMask = (1 << pb) - 1;
+	final int getSubcoderIndex(int prevByte, int pos) {
+		int low = prevByte >> (8 - lc);
+		int high = (pos & literalPosMask) << lc;
+		return low + high;
 	}
 
-	void reset() {
+	public void reset() {
 		reps[0] = 0;
 		reps[1] = 0;
 		reps[2] = 0;
 		reps[3] = 0;
 		state = LIT_LIT;
 
-		for (int i = 0; i < isMatch.length; ++i)
-			RangeCoder.initProbs(isMatch[i]);
+		initProbs(isMatch);
+		initProbs(isRep);
+		initProbs(isRep0);
+		initProbs(isRep1);
+		initProbs(isRep2);
+		initProbs(isRep0Long);
+		for (short[] probs : distSlots) initProbs(probs);
+		for (short[] probs : distSpecial) initProbs(probs);
+		initProbs(distAlign);
 
-		RangeCoder.initProbs(isRep);
-		RangeCoder.initProbs(isRep0);
-		RangeCoder.initProbs(isRep1);
-		RangeCoder.initProbs(isRep2);
+		for (short[] probs : literalProbs) initProbs(probs);
 
-		for (int i = 0; i < isRep0Long.length; ++i)
-			RangeCoder.initProbs(isRep0Long[i]);
-
-		for (int i = 0; i < distSlots.length; ++i)
-			RangeCoder.initProbs(distSlots[i]);
-
-		for (int i = 0; i < distSpecial.length; ++i)
-			RangeCoder.initProbs(distSpecial[i]);
-
-		RangeCoder.initProbs(distAlign);
+		initProbs(choice);
+		for (short[] probs : low) initProbs(probs);
+		for (short[] probs : mid) initProbs(probs);
+		initProbs(high);
+		initProbs(high2);
 	}
 
-	// REGION STATE
+	// region STATE
 	static final int STATES = 12;
 	static final int LIT_STATES = 7;
 	static final int
@@ -106,53 +118,5 @@ abstract class LZMACoder {
 	static int state_updateLongRep(int state) { return state < LIT_STATES ? LIT_LONGREP : NONLIT_REP; }
 	static int state_updateShortRep(int state) { return state < LIT_STATES ? LIT_SHORTREP : NONLIT_REP; }
 	static boolean state_isLiteral(int state) { return state < LIT_STATES; }
-	// ENDREGION
-
-	static abstract class LiteralCoder {
-		private final int lc;
-		private final int literalPosMask;
-
-		LiteralCoder(int lc, int lp) {
-			this.lc = lc;
-			this.literalPosMask = (1 << lp) - 1;
-		}
-
-		final int getSubcoderIndex(int prevByte, int pos) {
-			int low = prevByte >> (8 - lc);
-			int high = (pos & literalPosMask) << lc;
-			return low + high;
-		}
-
-		static abstract class LiteralSubcoder {
-			final short[] probs = new short[0x300];
-
-			void reset() {
-				RangeCoder.initProbs(probs);
-			}
-		}
-	}
-
-
-	static abstract class LengthCoder {
-		static final int LOW_SYMBOLS = 1 << 3;
-		static final int MID_SYMBOLS = 1 << 3;
-		static final int HIGH_SYMBOLS = 1 << 8;
-
-		final short[] choice = new short[2];
-		final short[][] low = new short[POS_STATES_MAX][LOW_SYMBOLS];
-		final short[][] mid = new short[POS_STATES_MAX][MID_SYMBOLS];
-		final short[] high = new short[HIGH_SYMBOLS];
-
-		void reset() {
-			RangeCoder.initProbs(choice);
-
-			for (int i = 0; i < low.length; ++i)
-				RangeCoder.initProbs(low[i]);
-
-			for (int i = 0; i < low.length; ++i)
-				RangeCoder.initProbs(mid[i]);
-
-			RangeCoder.initProbs(high);
-		}
-	}
+	// endregion
 }

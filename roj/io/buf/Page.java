@@ -9,7 +9,7 @@ import sun.misc.Unsafe;
 
 import java.util.Arrays;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 import static roj.text.TextUtil.scaledNumber1024;
 
 /**
@@ -17,11 +17,11 @@ import static roj.text.TextUtil.scaledNumber1024;
  * @since 2023/11/7 0007 11:32
  */
 public class Page {
-	private static final byte LONG_SHIFT = 6;
-	private static final byte MINIMUM_SHIFT = 3;
-	private static final long MINIMUM_MASK = (1L << MINIMUM_SHIFT) - 1;
+	static final byte LONG_SHIFT = 6;
+	static final byte MINIMUM_SHIFT = 3;
+	static final long MINIMUM_MASK = (1L << MINIMUM_SHIFT) - 1;
 
-	private static final char BITMAP_FREE = 'o', BITMAP_USED = '1', BITMAP_SUBPAGE = 'S', BITMAP_PREFIX = 'p';
+	static final char BITMAP_FREE = 'o', BITMAP_USED = '1', BITMAP_SUBPAGE = 'S', BITMAP_PREFIX = 'p';
 
 	@FunctionalInterface
 	public interface MemoryMover { void moveMemory(long oldPos, long newPos, long len); }
@@ -74,27 +74,36 @@ public class Page {
 		return sb.append(']');
 	}
 
-	public final long alloc(long len) { return malloc(align(len)); }
+	public final long alloc(long len) {
+		validOffLen(0, len);
+		return malloc(align(len));
+	}
 	public final boolean alloc(long off, long len) {
-		assert off == align(off) : "un-aligned offset "+off;
+		validOffLen(off, len);
 		return malloc(off, align(len));
 	}
 	public final void free(long off, long len) {
-		assert off == align(off) : "un-aligned offset "+off;
+		validOffLen(off, len);
 		mfree(off, align(len));
 	}
 	public final boolean allocBefore(long off, long len, long more) {
-		assert off == align(off) : "un-aligned offset "+off;
+		validOffLen(off, len);
 		return malloc(align(off-more), align(more));
 	}
 	public final boolean allocAfter(long off, long len, long more) {
-		assert off == align(off) : "un-aligned offset "+off;
+		validOffLen(off, len);
 		long realLen = align(len);
 
 		more -= (realLen-len);
 		if (more <= 0) return true;
 
 		return malloc(off+realLen, align(more));
+	}
+
+	private static void validOffLen(long off, long len) {
+		assert off >= 0 : "off < 0: "+off;
+		assert off == align(off) : "un-aligned offset "+off;
+		assert len > 0 : "len <= 0: "+len;
 	}
 
 	long malloc(long len) {
@@ -141,8 +150,7 @@ public class Page {
 
 	public static long align(long n) { return 0 == (n&MINIMUM_MASK) ? n : (n|MINIMUM_MASK) + 1; }
 	public static long BIT(int bitFrom, int bitTo) {
-		assert bitTo <= 64 : "illegal parameter";
-		assert bitFrom < 64 && bitFrom <= bitTo : "illegal parameter";
+		assert bitTo <= 64 && bitFrom < 64 && bitFrom <= bitTo : "param=["+bitFrom+","+bitTo+']';
 
 		long bits = -1L << bitFrom;
 		return bitTo >= 64 ? bits : bits & ((1L << bitTo)-1);
@@ -256,21 +264,44 @@ public class Page {
 				assert block <= 64;
 				long flag = block == 64 ? -1L : (1L << block)-1;
 
-				int offset = 0, maxOffset = 64-block;
-				// ensure goc(offset+block) <= 63
-				if ((size&MASKS[SHIFT]) != 0) maxOffset--;
+				int offset = 0, maxOffset = bitmapCapacity()-block;
+				long subSize = size&MASKS[SHIFT];
 
 				while (true) {
-					if ((bitmap&flag) == 0 && removeEmpties(flag)) {
-						long subSize = size&MASKS[SHIFT];
-						if (subSize == 0) break;
+					if ((bitmap&flag) == 0) {
+						if (subSize == 0) {
+							if (removeEmpties(flag)) break;
+						} else if (removeEmpties(flag ^ Long.lowestOneBit(flag))) {
+							Page p;
+							x:
+							// 尝试不完整的分配
+							if (offset > 0) {
+								int i = get(offset - 1);
+								if (i < 0) break x;
 
-						// 最后一个可以是不完整的, 但是连续长度要足够
-						Page p = goc(offset+block);
-						if (p.headEmpty() >= subSize) {
-							boolean ok = p.malloc(0, subSize);
-							assert ok;
-							break;
+								p = child[i];
+								if (p.tailEmpty() >= subSize) {
+									long myOffset = p.tailEmpty();
+									boolean ok = p.malloc(p.totalSpace() - myOffset, myOffset);
+									assert ok;
+									// 向前移动 (这里必定为空,除非出Bug了...)
+									ok = goc(offset + block - 1).malloc(0, MASKS[SHIFT] - (myOffset - subSize));
+									assert ok;
+
+									subSize = myOffset;
+									break;
+								}
+							}
+							if (offset + block < bitmapCapacity()) {
+								p = goc(offset + block);
+								if (p.headEmpty() >= subSize) {
+									boolean ok = p.malloc(0, subSize);
+									assert ok;
+
+									subSize = 0;
+									break;
+								}
+							}
 						}
 					}
 
@@ -282,7 +313,7 @@ public class Page {
 				bitmap |= flag;
 				free -= size;
 				// 前对齐 以后可以尝试移动到SubPage结尾
-				return offset << SHIFT;
+				return ((long) offset << SHIFT) - subSize;
 			} else {
 				// 快速分配, remove时再拆分 (好消息：FIFO不会拆分)
 				long len = prefix;
@@ -307,15 +338,15 @@ public class Page {
 					// 跨区alloc(而且优先！)
 					off = p.tailEmpty();
 					if (off > 0 && (bitmap & (1L << p.childId)) == 0) {
-						if (i+1 < childCount && off + child[i+1].headEmpty() < size)
-							continue;
+						if (i+1 < childCount && off + child[i+1].headEmpty() < size) continue;
+						else if (p.childId == bitmapCapacity()-1) break;
 
 						long off1 = p.totalSpace() - off;
 						boolean ok = p.malloc(off1, off);
-						assert ok : "tailEmpty() error";
+						assert ok : "tailEmpty() error: " + p +" returns "+off+" bytes tail empty but cannot allocate";
 
-						ok = goc(p.childId +1).malloc(0, size-off);
-						assert ok : "headEmpty() error";
+						ok = goc(p.childId+1).malloc(0, size-off);
+						assert ok : "tailEmpty() error: " + goc(p.childId+1) +" returns "+off+" bytes head empty but cannot allocate";
 
 						return success(size, p, off1);
 					}
@@ -326,6 +357,7 @@ public class Page {
 				if (space != 0) {
 					// later 切断【最短】的连续空间 ?
 					int id = Long.numberOfTrailingZeros(Long.lowestOneBit(space));
+					if (id >= bitmapCapacity()) return -2;
 					Page p = goc(id);
 					boolean ok = p.malloc(0, size);
 					assert ok;
@@ -340,7 +372,7 @@ public class Page {
 			if (free < len) return false;
 
 			int bitFrom = (int) (off >>> SHIFT),
-				bitTo = (int) ((off+len) >>> SHIFT);
+				bitTo = (int) ((off+len-1) >>> SHIFT);
 
 			if ((prefix+MASKS[SHIFT]) >>> SHIFT > bitFrom) return false;
 
@@ -358,7 +390,7 @@ public class Page {
 			// bitFrom is inclusive (bitFrom = off+MASKS[SHIFT] >>> SHIFT也许更好理解？)
 			long ext = off&MASKS[SHIFT];
 
-			long flag = BIT(ext != 0 ? bitFrom+1 : bitFrom, bitTo);
+			long flag = BIT(ext != 0 ? bitFrom+1 : bitFrom, ++bitTo);
 			if ((bitmap&flag) != 0 || !removeEmpties(flag)) return false;
 
 			// assert len >= MASKS[SHIFT], so this is smaller
@@ -507,6 +539,7 @@ public class Page {
 			return (p.childId << SHIFT) + off;
 		}
 		private int get(int blockId) {
+			assert blockId >= 0 && blockId <= 63 : blockId+" not in [0,63]";
 			if (childCount == 64) return blockId;
 
 			int low = 0;
@@ -524,7 +557,6 @@ public class Page {
 			return -(low + 1);
 		}
 		private Page goc(int blockId) {
-			assert blockId <= 63 : blockId+" > 63";
 			int i = get(blockId);
 			if (i >= 0) return child[i];
 

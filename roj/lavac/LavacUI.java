@@ -11,7 +11,7 @@ import roj.io.IOUtil;
 import roj.lavac.parser.CompileContext;
 import roj.lavac.parser.CompileUnit;
 import roj.lavac.util.LibraryZipFile;
-import roj.ui.UIUtil;
+import roj.ui.GUIUtil;
 
 import javax.swing.*;
 import java.awt.*;
@@ -29,7 +29,7 @@ public class LavacUI extends JFrame {
 	List<CompileUnit> javas = new SimpleList<>();
 
 	public static void main(String[] args) throws Exception {
-		UIUtil.systemLook();
+		GUIUtil.systemLook();
 		LavacUI f = new LavacUI();
 
 		f.setDefaultCloseOperation(EXIT_ON_CLOSE);

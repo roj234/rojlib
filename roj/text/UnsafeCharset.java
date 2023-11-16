@@ -97,7 +97,7 @@ public abstract class UnsafeCharset {
 			}
 
 			if (s.getClass() == String.class) {
-				arr = ArrayCache.getDefaultCache().getCharArray(Math.min(end-off, 4096), false);
+				arr = ArrayCache.getCharArray(Math.min(end-off, 4096), false);
 				String ss = s.toString();
 				try {
 					while (true) {
@@ -113,7 +113,7 @@ public abstract class UnsafeCharset {
 						if (off == end || encoded < myLen) return off;
 					}
 				} finally {
-					ArrayCache.getDefaultCache().putArray(arr);
+					ArrayCache.putArray(arr);
 				}
 			}
 
@@ -122,7 +122,7 @@ public abstract class UnsafeCharset {
 				new Throwable("It is recommended to pre-copy your " + s.getClass().getName() + " to a CharBuffer or CharList").printStackTrace();
 			}
 
-			arr = ArrayCache.getDefaultCache().getCharArray(Math.min(end-off, 4096), false);
+			arr = ArrayCache.getCharArray(Math.min(end-off, 4096), false);
 			CharSequence cs = (CharSequence) s;
 			try {
 				while (true) {
@@ -138,7 +138,7 @@ public abstract class UnsafeCharset {
 					if (off == end || encoded < myLen) return off;
 				}
 			} finally {
-				ArrayCache.getDefaultCache().putArray(arr);
+				ArrayCache.putArray(arr);
 			}
 		}
 
@@ -206,7 +206,7 @@ public abstract class UnsafeCharset {
 				}
 			}
 
-			arr = ArrayCache.getDefaultCache().getCharArray(Math.min(outMax, 4096), false);
+			arr = ArrayCache.getCharArray(Math.min(outMax, 4096), false);
 			off = 0;
 			unsafeWritable = arr.length;
 			kind = 2;
@@ -253,7 +253,7 @@ public abstract class UnsafeCharset {
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		} finally {
-			if (kind == 2) ArrayCache.getDefaultCache().putArray(arr);
+			if (kind == 2) ArrayCache.putArray(arr);
 		}
 
 		return outMax;

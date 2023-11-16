@@ -23,8 +23,6 @@ import java.util.regex.Pattern;
  * @since 2021/6/19 1:28
  */
 public class CharList implements CharSequence, Appender {
-	static final boolean USE_CACHE = true;
-
 	// region Number helper
 	static void getChars(long l, int charPos, char[] buf) {
 		long q;
@@ -77,14 +75,14 @@ public class CharList implements CharSequence, Appender {
 	protected int len;
 
 	public CharList() { list = ArrayCache.CHARS; }
-	public CharList(int len) { list = USE_CACHE ? ArrayCache.getDefaultCache().getCharArray(len, false) : new char[len]; }
+	public CharList(int len) { list = ArrayCache.getCharArray(len, false); }
 	public CharList(char[] array) {
 		list = array;
 		len = array.length;
 	}
 
 	public CharList(CharSequence s) {
-		this.list = ArrayCache.getDefaultCache().getCharArray(s.length(), false);
+		this.list = ArrayCache.getCharArray(s.length(), false);
 		append(s);
 	}
 
@@ -120,16 +118,9 @@ public class CharList implements CharSequence, Appender {
 
 	public void ensureCapacity(int required) {
 		if (required > list.length) {
-			char[] newList;
-			if (USE_CACHE) {
-				ArrayCache cache = ArrayCache.getDefaultCache();
-				cache.putArray(list);
-				newList = cache.getCharArray(Math.max(MathUtils.getMin2PowerOf(required), 256), false);
-			} else {
-				newList = new char[Math.max(((required * 3) >> 1), 32)];
-			}
-
+			char[] newList = ArrayCache.getCharArray(Math.max(MathUtils.getMin2PowerOf(required), 256), false);
 			if (len > 0) System.arraycopy(list, 0, newList, 0, Math.min(len, list.length));
+			ArrayCache.putArray(list);
 			list = newList;
 		}
 	}
@@ -139,7 +130,7 @@ public class CharList implements CharSequence, Appender {
 
 		char[] b = list;
 		list = ArrayCache.CHARS;
-		ArrayCache.getDefaultCache().putArray(b);
+		ArrayCache.putArray(b);
 	}
 
 	public String toStringAndFree() {
@@ -532,7 +523,7 @@ public class CharList implements CharSequence, Appender {
 		if (prevI == 0) return this;
 		out.append(list, prevI, len);
 
-		ArrayCache.getDefaultCache().putArray(list);
+		ArrayCache.putArray(list);
 
 		list = out.list;
 		len = out.len;
@@ -583,7 +574,7 @@ public class CharList implements CharSequence, Appender {
 		if (prevI == 0) return this;
 		out.append(list, prevI, len);
 
-		ArrayCache.getDefaultCache().putArray(list);
+		ArrayCache.putArray(list);
 
 		list = out.list;
 		len = out.len;
@@ -612,7 +603,7 @@ public class CharList implements CharSequence, Appender {
 		if (prevI == 0) return this;
 		out.append(list, prevI, len);
 
-		ArrayCache.getDefaultCache().putArray(list);
+		ArrayCache.putArray(list);
 
 		list = out.list;
 		len = out.len;
@@ -635,7 +626,7 @@ public class CharList implements CharSequence, Appender {
 		if (i == 0) return;
 		out.append(list, i, len);
 
-		ArrayCache.getDefaultCache().putArray(list);
+		ArrayCache.putArray(list);
 
 		list = out.list;
 		len = out.len;
@@ -656,7 +647,7 @@ public class CharList implements CharSequence, Appender {
 		if (i == 0) return;
 		out.append(list, i, len);
 
-		ArrayCache.getDefaultCache().putArray(list);
+		ArrayCache.putArray(list);
 
 		list = out.list;
 		len = out.len;
@@ -781,7 +772,7 @@ public class CharList implements CharSequence, Appender {
 			}
 		} else {
 			String s = o.toString();
-			v2 = ArrayCache.getDefaultCache().getCharArray(512, false);
+			v2 = ArrayCache.getCharArray(512, false);
 			int off = 0;
 			while (off < lim) {
 				int end = Math.min(off+2, lim);
@@ -794,7 +785,7 @@ public class CharList implements CharSequence, Appender {
 					i++;
 				}
 			}
-			ArrayCache.getDefaultCache().putArray(v2);
+			ArrayCache.putArray(v2);
 		}
 		return len1 - len2;
 	}

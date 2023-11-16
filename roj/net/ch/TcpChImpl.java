@@ -107,7 +107,7 @@ class TcpChImpl extends MyChannel {
 				if (buf.isReadable()) break;
 
 				pending.pollFirst();
-				bp.reserve(buf);
+				BufferPool.reserve(buf);
 			} while (true);
 
 			if (pending.isEmpty()) {
@@ -125,8 +125,8 @@ class TcpChImpl extends MyChannel {
 		DynByteBuf buf = rb;
 		while (state == OPENED && sc.isOpen()) {
 			if (!buf.isWritable()) {
-				if (buf == EMPTY) rb = buf = alloc().buffer(true, buffer);
-				else rb = buf = alloc().expand(buf, buf.capacity());
+				if (buf == EMPTY) rb = buf = alloc().allocate(true, buffer);
+				else rb = buf = BufferPool.expand(buf, buf.capacity());
 			}
 
 			ByteBuffer nioBuffer = syncNioRead(buf);
@@ -158,7 +158,7 @@ class TcpChImpl extends MyChannel {
 		BufferPool bp = alloc();
 
 		DynByteBuf buf = (DynByteBuf) o;
-		if (!buf.isDirect()) buf = bp.buffer(true, buf.readableBytes()).put(buf);
+		if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes()).put(buf);
 
 		try {
 			write0(buf);
@@ -166,13 +166,13 @@ class TcpChImpl extends MyChannel {
 			if (buf.isReadable()) {
 				if (pending.isEmpty()) key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
 
-				Object o1 = pending.ringAddLast(bp.buffer(true, buf.readableBytes()).put(buf));
+				Object o1 = pending.ringAddLast(bp.allocate(true, buf.readableBytes()).put(buf));
 				if (o1 != null) throw new IOException("上层发送缓冲区过载");
 			} else {
 				fireFlushed();
 			}
 		} finally {
-			if (o != buf) bp.reserve(buf);
+			if (o != buf) BufferPool.reserve(buf);
 
 			buf = (DynByteBuf) o;
 			buf.rIndex = buf.wIndex();

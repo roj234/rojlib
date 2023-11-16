@@ -6,7 +6,7 @@ import roj.io.IOUtil;
 import roj.net.URIUtil;
 import roj.net.http.HttpRequest;
 import roj.net.http.SyncHttpClient;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.ByteList;
 
 import java.net.InetAddress;
@@ -35,9 +35,9 @@ public class CTLightCat extends IpGetter {
 				if (accessToken != null) return true;
 			}
 
-			CmdUtil.warning("[getAddress]无法获取AccessToken 是否密码错误？: " + shc.head());
+			CLIUtil.warning("[getAddress]无法获取AccessToken 是否密码错误？: " + shc.head());
 		} catch (Exception e) {
-			CmdUtil.error("getAddress", e);
+			CLIUtil.error("getAddress", e);
 		}
 		return false;
 	}

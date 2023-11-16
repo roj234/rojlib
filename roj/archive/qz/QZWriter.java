@@ -179,7 +179,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
             Source src = archive.r;
             src.seek(b.offset);
 
-            byte[] bb = ArrayCache.getDefaultCache().getByteArray(1024, false);
+            byte[] bb = ArrayCache.getByteArray(1024, false);
             long len = b.size();
             while (len > 0) {
                 int l = (int) Math.min(bb.length, len);

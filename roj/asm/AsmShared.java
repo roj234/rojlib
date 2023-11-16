@@ -36,7 +36,7 @@ public final class AsmShared {
 		if (avail < length) {
 			if (length > 127) return new byte[length];
 
-			xInsn_sharedSegmentData = ArrayCache.getDefaultCache().getByteArray(256,false);
+			xInsn_sharedSegmentData = ArrayCache.getByteArray(256,false);
 			xInsn_sharedSegmentUsed = 0;
 		}
 		return xInsn_sharedSegmentData;
@@ -54,7 +54,7 @@ public final class AsmShared {
 	public final Object[] xInsn_sharedRefVal = new Object[512];
 	public final Object[] xInsn_sharedSegments = new Object[256];
 	public int[] getIntArray_(int len) {
-		if (xInsn_sharedRefPos.length < len) return ArrayCache.getDefaultCache().getIntArray(len,0);
+		if (xInsn_sharedRefPos.length < len) return ArrayCache.getIntArray(len,0);
 		return xInsn_sharedRefPos;
 	}
 

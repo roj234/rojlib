@@ -1,6 +1,9 @@
 package roj.concurrent.timing;
 
 import roj.concurrent.task.ITask;
+import roj.reflect.ReflectionUtils;
+
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -12,7 +15,8 @@ public class ScheduledTask implements ITask {
 	Scheduler owner;
 	volatile ScheduledTask next;
 
-	long nextRun;
+	private static final long u_nextRun = ReflectionUtils.fieldOffset(ScheduledTask.class, "nextRun");
+	volatile long nextRun;
 
 	private final int interval;
 	private int count;
@@ -34,11 +38,15 @@ public class ScheduledTask implements ITask {
 	}
 	protected boolean forceOnScheduler() { return sync; }
 
-	public final int getRemainCount() { return count; }
-	public final long getNextRun() { return nextRun; }
+	public final int getExecutionCountLeft() { return count; }
+	public final long getNextRunTime() { return nextRun; }
 
-	public synchronized final void cancel() { nextRun = -2; }
-	public synchronized boolean cancel(boolean force) { nextRun = -2; return true; }
+	public final void cancel() { cancel(false); }
+	public final boolean cancel(boolean force) {
+		boolean cancelled = isCancelled();
+		nextRun = -2;
+		return cancelled;
+	}
 	public final boolean isCancelled() { return nextRun == -2; }
 
 	public void execute() throws Exception {
@@ -50,15 +58,22 @@ public class ScheduledTask implements ITask {
 		}
 	}
 
-	protected synchronized boolean schedule(long time) {
-		if (nextRun < 0) return false;
+	protected boolean scheduleNext(long currentTime) {
+		while (true) {
+			long t = nextRun;
+			if (t < 0) return false;
 
-		if (--count == 0) {
-			nextRun = -1;
-			return false;
-		} else {
-			nextRun = time + interval;
-			return true;
+			if (count == 1) { // FINAL
+				if (u.compareAndSwapLong(this, u_nextRun, t, -1)) {
+					count--;
+					return false;
+				}
+			} else {
+				if (u.compareAndSwapLong(this, u_nextRun, t, currentTime + interval)) {
+					count--;
+					return true;
+				}
+			}
 		}
 	}
 }

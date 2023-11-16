@@ -2,24 +2,23 @@ package roj.mod;
 
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.concurrent.FastLocalThread;
 import roj.concurrent.TaskPool;
 import roj.concurrent.timing.Scheduler;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.dev.HRRemote;
-import roj.io.ChineseInputStream;
+import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
 import roj.mapper.Mapper;
 import roj.mapper.util.Desc;
 import roj.misc.CpFilter;
 import roj.mod.plugin.Plugin;
-import roj.ui.CmdUtil;
+import roj.text.TextReader;
+import roj.ui.CLIUtil;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -27,6 +26,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static roj.config.JSONParser.*;
 
 /**
  * FMD Shared Data / Utility Methods
@@ -37,7 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class Shared {
 	public static final boolean DEBUG;
 	public static final String MC_BINARY = "forgeMcBin";
-	public static final String VERSION = "2.1.0";
+	public static final String VERSION = "2.1.2";
 
 	public static final File BASE, TMP_DIR, CONFIG_DIR;
 
@@ -51,44 +52,24 @@ public final class Shared {
 			try {
 				hotReload = new HRRemote(port);
 			} catch (IOException e) {
-				CmdUtil.warning("重载工具无法绑定端口", e);
+				CLIUtil.warning("重载工具无法绑定端口", e);
 			}
 		}
 	}
 
 	public static final Scheduler PeriodicTask = Scheduler.getDefaultScheduler();
 	public static final TaskPool Task = TaskPool.Common();
-
-	public static void async(Runnable... run) {
-		Thread[] t = new Thread[run.length];
-		for (int i = 0; i < run.length; i++) {
-			Thread o = t[i] = new FastLocalThread(run[i]);
-			o.setDaemon(true);
-			o.start();
-		}
-		for (Thread thread : t) {
-			try {
-				thread.join();
-			} catch (InterruptedException ignored) {}
-		}
-	}
-
 	public static CMapping CONFIG;
 
 	static void loadConfig() {
 		File file = new File(BASE, "config.json");
-		try {
-			ChineseInputStream bom = new ChineseInputStream(new FileInputStream(file));
-			if (!bom.getCharset().equals("UTF8")) { // 检测到了则是 UTF-8
-				CmdUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getCharset());
-			}
-
-			CONFIG = JSONParser.parses(IOUtil.readAs(bom, bom.getCharset()), 7).asMap();
+		try (TextReader tr = TextReader.auto(file)) {
+			CONFIG = JSONParser.parses(tr, NO_DUPLICATE_KEY|LITERAL_KEY|UNESCAPED_SINGLE_QUOTE|LENIENT_COMMA).asMap();
 			CONFIG.dot(true);
 		} catch (ParseException | ClassCastException e) {
-			CmdUtil.error(file.getAbsolutePath() + " 有语法错误! 请修正!", e);
+			CLIUtil.error("config.json 有语法错误! 请修正!", e);
 		} catch (IOException e) {
-			CmdUtil.error(file.getAbsolutePath() + " 读取失败!", e);
+			CLIUtil.error("config.json 读取失败!", e);
 		}
 	}
 
@@ -99,7 +80,7 @@ public final class Shared {
 		try (FileOutputStream fos = new FileOutputStream(new File(BASE, "config/index"))) {
 			fos.write(name.getBytes(StandardCharsets.UTF_8));
 		} catch (IOException e) {
-			CmdUtil.error("配置保存", e);
+			CLIUtil.error("配置保存", e);
 		}
 
 		if (project != (project = Project.load(name)))
@@ -116,7 +97,7 @@ public final class Shared {
 					cf = IOUtil.readUTF(index);
 					proj = new File(BASE, "/config/"+cf+".json");
 				} catch (IOException e) {
-					CmdUtil.warning("无法读取 " + index);
+					CLIUtil.warning("无法读取 " + index);
 				}
 			}
 
@@ -124,7 +105,7 @@ public final class Shared {
 				try {
 					project = Project.load(cf);
 				} catch (Throwable e) {
-					CmdUtil.warning("配置读取失败", e);
+					CLIUtil.warning("配置读取失败", e);
 					proj = null;
 				}
 			}
@@ -148,15 +129,14 @@ public final class Shared {
 				if (mapperFwd.getClassMap().isEmpty()) {
 					File map = new File(BASE, "/util/mcp-srg.srg");
 					if (!map.isFile()) {
-						CmdUtil.error("正向映射表 " + map + " 不存在,建议重新安装");
+						CLIUtil.error("混淆映射表"+map+"不存在,建议重新安装");
 						return;
 					}
 					mapperRev = null;
 					try {
 						mapperFwd.initEnv(map, new File(BASE, "/class/"), new File(BASE, "/util/mapCache.lzma"), false);
-						if (DEBUG) CmdUtil.success("正向映射表已加载");
 					} catch (Exception e) {
-						CmdUtil.error("正向映射表加载失败", e);
+						CLIUtil.error("混淆映射表加载失败", e);
 					}
 				}
 			}
@@ -193,25 +173,22 @@ public final class Shared {
 	public static void _lock() {
 		if (ProcessLock != null) {
 			if (!ThreadLock.compareAndSet(0, 1)) {
-				throw new IllegalStateException("无法获取单例锁");
+				throw new FastFailException("无法获取线程锁");
 			}
 		} else {
 			try {
 				ProcessLock = new ServerSocket(CONFIG.getInteger("单例锁端口"));
 			} catch (Throwable e) {
-				throw new IllegalStateException("无法获取单例锁", e);
+				throw new FastFailException("无法获取单例锁: "+e.getMessage());
 			}
 			ThreadLock = new AtomicInteger();
 		}
 	}
 	public static void _unlock() {
-		if (ThreadLock != null) {
-			ThreadLock.set(0);
-		}
+		if (ThreadLock != null) ThreadLock.set(0);
 	}
 
 	static List<Plugin> plugins;
-
 	static {
 		String basePath = System.getProperty("fmd.base_path", "");
 		BASE = new File(basePath).getAbsoluteFile();
@@ -224,19 +201,19 @@ public final class Shared {
 		TMP_DIR = new File(BASE, "tmp");
 
 		if (!TMP_DIR.isDirectory() && !TMP_DIR.mkdir()) {
-			CmdUtil.error("无法创建临时文件夹: " + TMP_DIR.getAbsolutePath());
+			CLIUtil.error("无法创建临时文件夹: " + TMP_DIR.getAbsolutePath());
 			System.exit(-2);
 		}
 
 		File classDir = new File(BASE, "class");
 		if (!launchOnly && !classDir.isDirectory() && !classDir.mkdir()) {
-			CmdUtil.error("无法创建库文件夹: " + classDir.getAbsolutePath());
+			CLIUtil.error("无法创建库文件夹: " + classDir.getAbsolutePath());
 			System.exit(-2);
 		}
 
 		CONFIG_DIR = new File(BASE, "config");
 		if (!launchOnly && !CONFIG_DIR.isDirectory() && !CONFIG_DIR.mkdirs()) {
-			CmdUtil.error("无法创建配置文件夹: " + CONFIG_DIR.getAbsolutePath());
+			CLIUtil.error("无法创建配置文件夹: " + CONFIG_DIR.getAbsolutePath());
 			System.exit(-2);
 		}
 
@@ -260,7 +237,7 @@ public final class Shared {
 				try {
 					w = new FileWatcher();
 				} catch (IOException e) {
-					CmdUtil.warning("无法启动文件监控", e);
+					CLIUtil.warning("无法启动文件监控", e);
 				}
 
 				AutoCompile.Debounce = CONFIG.getInteger("自动编译防抖");

@@ -20,8 +20,7 @@ import java.io.OutputStream;
 import static roj.reflect.ReflectionUtils.u;
 
 public abstract class LZEncoder {
-	public static final int MF_HC4 = 0x04;
-	public static final int MF_BT4 = 0x14;
+	public static final int MF_HC4 = 0, MF_BT4 = 1;
 
 	/**
 	 * Number of bytes to keep available before the current byte
@@ -39,9 +38,10 @@ public abstract class LZEncoder {
 
 	final int matchLenMax;
 	final int niceLen;
+	final int depthLimit;
 
-	final long buf;
-	final int bufSize; // To avoid buf.length with an array-cached buf.
+	final long buf, base;
+	private final int bufSize; // To avoid buf.length with an array-cached buf.
 
 	public final int[] mlen, mdist;
 	public int mcount;
@@ -53,7 +53,7 @@ public abstract class LZEncoder {
 	private int pendingSize = 0;
 
 	final Hash234 hash;
-	final NativeMemory mem, memBuf;
+	private final NativeMemory nm;
 
 	final int cyclicSize;
 	int cyclicPos = -1;
@@ -73,24 +73,18 @@ public abstract class LZEncoder {
 	 * Gets the size of the LZ window buffer that needs to be allocated.
 	 */
 	private static int getBufSize(int dictSize, int extraSizeBefore, int extraSizeAfter, int matchLenMax) {
-		int keepSizeBefore = extraSizeBefore + dictSize;
-		int keepSizeAfter = extraSizeAfter + matchLenMax;
+		int blockSize = extraSizeBefore + extraSizeAfter + matchLenMax;
+		// 这个不影响结果，但是影响压缩速度...嗯，大概是减少复制内存的次数？
 		int reserveSize = Math.min(dictSize / 2 + (256 << 10), 512 << 20);
-		return keepSizeBefore + keepSizeAfter + reserveSize;
+		return dictSize+blockSize+reserveSize;
 	}
 
-	/**
-	 * Gets approximate memory usage of the LZEncoder base structure and
-	 * the match finder as kibibytes.
-	 */
-	public static int getMemoryUsage(int dictSize, int extraSizeBefore, int extraSizeAfter, int matchLenMax, int mf) {
-		// Buffer size + a little extra
-		int m = getBufSize(dictSize, extraSizeBefore, extraSizeAfter, matchLenMax) / 1024 + 10;
-		switch (mf) {
-			case MF_HC4: return m + HC4.getMemoryUsage(dictSize);
-			case MF_BT4: return m + BT4.getMemoryUsage(dictSize);
-			default: throw new IllegalArgumentException();
-		}
+	public static int getMemoryUsageKb(int dictSize, int extraSizeBefore, int extraSizeAfter, int matchLenMax, int mf) {
+		long m = 0;
+		m += getBufSize(dictSize, extraSizeBefore, extraSizeAfter, matchLenMax);
+		m += Hash234.getMemoryUsage(dictSize);
+		m += mf == MF_HC4 ? (dictSize + 1) << 2 : (dictSize + 1) << 3;
+		return (int) (m / 1024) + 3;
 	}
 
 	/**
@@ -110,33 +104,30 @@ public abstract class LZEncoder {
 	 * @param mf match finder ID
 	 * @param depthLimit match finder search depth limit
 	 */
-	public static LZEncoder getInstance(int dictSize, int extraSizeBefore, int extraSizeAfter, int niceLen, int matchLenMax, int mf, int depthLimit, ArrayCache arrayCache) {
-		switch (mf) {
-			case MF_HC4: return new HC4(dictSize, extraSizeBefore, extraSizeAfter, niceLen, matchLenMax, depthLimit, arrayCache);
-			case MF_BT4: return new BT4(dictSize, extraSizeBefore, extraSizeAfter, niceLen, matchLenMax, depthLimit, arrayCache);
-		}
-		throw new IllegalArgumentException();
+	public static LZEncoder getInstance(int dictSize, int extraSizeBefore, int extraSizeAfter, int niceLen, int matchLenMax, int mf, int depthLimit) {
+		if (mf == MF_HC4) return new HC4(dictSize, extraSizeBefore, extraSizeAfter, niceLen, matchLenMax, depthLimit);
+		else return new BT4(dictSize, extraSizeBefore, extraSizeAfter, niceLen, matchLenMax, depthLimit);
 	}
 
 	/**
 	 * Creates a new LZEncoder. See <code>getInstance</code>.
 	 */
-	LZEncoder(int dictSize, int extraSizeBefore, int extraSizeAfter, int niceLen, int matchLenMax, ArrayCache pool) {
+	LZEncoder(int dictSize, int extraSizeBefore, int extraSizeAfter, int niceLen, int matchLenMax, int mem2Shift, int depthLimit) {
 		bufSize = getBufSize(dictSize, extraSizeBefore, extraSizeAfter, matchLenMax);
-		memBuf = new NativeMemory();
-		buf = memBuf.allocate(bufSize);
+		nm = new NativeMemory();
 
 		// Subtracting 1 because the shortest match that this match
 		// finder can find is 2 bytes, so there's no need to reserve
 		// space for one-byte matches.
-		mdist = pool.getIntArray(niceLen-1, 0);
-		mlen = pool.getIntArray(niceLen-1, 0);
+		mdist = ArrayCache.getIntArray(niceLen-1, 0);
+		mlen = ArrayCache.getIntArray(niceLen-1, 0);
 
 		keepSizeBefore = extraSizeBefore + dictSize;
 		keepSizeAfter = extraSizeAfter + matchLenMax;
 
 		this.matchLenMax = matchLenMax;
 		this.niceLen = niceLen;
+		this.depthLimit = depthLimit;
 
 		hash = new Hash234(dictSize);
 
@@ -144,16 +135,30 @@ public abstract class LZEncoder {
 		cyclicSize = dictSize + 1;
 		lzPos = cyclicSize;
 
-		mem = new NativeMemory();
+		buf = nm.allocate(((long) cyclicSize << mem2Shift) + bufSize);
+		base = buf+bufSize;
 	}
 
-	public final void release(ArrayCache pool) {
-		pool.putArray(mdist);
-		pool.putArray(mlen);
+	public synchronized final void release() {
+		if (nm.address() == 0) return;
+
+		ArrayCache.putArray(mdist);
+		ArrayCache.putArray(mlen);
 
 		hash.release();
-		mem.release();
-		memBuf.release();
+		nm.release();
+	}
+
+	public final void reuse() {
+		mcount = 0;
+		readPos = readLimit = -1;
+		finishing = false;
+		writePos = pendingSize = 0;
+
+		cyclicPos = -1;
+		lzPos = cyclicSize;
+
+		hash.reuse();
 	}
 
 	/**
@@ -162,18 +167,19 @@ public abstract class LZEncoder {
 	 * before any data has been encoded.
 	 */
 	public final void setPresetDict(int dictSize, byte[] presetDict) {
+		if (presetDict != null) setPresetDict(dictSize, presetDict, 0, presetDict.length);
+	}
+	public final void setPresetDict(int dictSize, byte[] dict, int off, int len) {
 		assert !isStarted();
 		assert writePos == 0;
 
-		if (presetDict != null) {
-			// If the preset dictionary buffer is bigger than the dictionary
-			// size, copy only the tail of the preset dictionary.
-			int copySize = Math.min(presetDict.length, dictSize);
-			int offset = presetDict.length - copySize;
-			u.copyMemory(presetDict, Unsafe.ARRAY_BYTE_BASE_OFFSET+offset, null, buf, copySize);
-			writePos += copySize;
-			skip(copySize);
-		}
+		// If the preset dictionary buffer is bigger than the dictionary
+		// size, copy only the tail of the preset dictionary.
+		int copySize = Math.min(len, dictSize);
+		int offset = off + len - copySize;
+		u.copyMemory(dict, Unsafe.ARRAY_BYTE_BASE_OFFSET+offset, null, buf, copySize);
+		writePos += copySize;
+		skip(copySize);
 	}
 
 	/**
@@ -203,7 +209,7 @@ public abstract class LZEncoder {
 		if (readPos >= bufSize - keepSizeAfter) moveWindow();
 
 		// Try to fill the dictionary buffer. If it becomes full,
-		// some of the input bytes may be left unused.
+		// some input bytes may be left unused.
 		if (len > bufSize - writePos) len = bufSize - writePos;
 
 		u.copyMemory(in, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, null, buf+writePos, len);
@@ -274,10 +280,10 @@ public abstract class LZEncoder {
 	public final boolean hasEnoughData(int alreadyReadLen) { return readPos - alreadyReadLen < readLimit; }
 
 	public final void copyUncompressed(OutputStream out, int backward, int len) throws IOException {
-		byte[] arr = ArrayCache.getDefaultCache().getByteArray(len, false);
+		byte[] arr = ArrayCache.getByteArray(len, false);
 		u.copyMemory(null, buf+readPos+1-backward, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET, len);
 		out.write(arr,0,len);
-		ArrayCache.getDefaultCache().putArray(arr);
+		ArrayCache.putArray(arr);
 	}
 
 	/**

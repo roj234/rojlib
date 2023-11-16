@@ -8,16 +8,15 @@ import roj.collect.IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.concurrent.OperationDone;
-import roj.concurrent.Ref;
 import roj.concurrent.TaskPool;
 import roj.concurrent.timing.ScheduledTask;
 import roj.concurrent.timing.Scheduler;
 import roj.io.IOUtil;
 import roj.text.*;
 import roj.ui.DragReorderHelper;
+import roj.ui.GUIUtil;
 import roj.ui.OnChangeHelper;
 import roj.ui.TextAreaPrintStream;
-import roj.ui.UIUtil;
 import roj.util.BsDiff;
 
 import javax.swing.*;
@@ -32,6 +31,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -41,7 +41,7 @@ import java.util.regex.Pattern;
  */
 public class NovelFrame extends JFrame {
 	public static void main(String[] args) {
-		UIUtil.systemLook();
+		GUIUtil.systemLook();
 		NovelFrame f = new NovelFrame();
 
 		f.pack();
@@ -83,7 +83,7 @@ public class NovelFrame extends JFrame {
 		changeHelper.addEventListener(presetRegexpInp, this::onPresetRegexpChange);
 		changeHelper.addEventListener(alignRegexp, this::alignRegexpKeyTyped);
 
-		UIUtil.dropFilePath(novelPath, (e) -> { read_novel(null); }, false);
+		GUIUtil.dropFilePath(novelPath, (e) -> { read_novel(null); }, false);
 
 		PresetRegexp regexp = new PresetRegexp();
 		regexp.name = "";
@@ -528,8 +528,8 @@ public class NovelFrame extends JFrame {
 			TaskPool pool = TaskPool.Common();
 			SimpleList<IntMap.Entry<String>> list = new SimpleList<>();
 
-			Ref<ScheduledTask> task = Ref.from();
-			task.set(Scheduler.getDefaultScheduler().executeTimer(() -> {
+			AtomicReference<ScheduledTask> task = new AtomicReference<>();
+			task.set(Scheduler.getDefaultScheduler().loop(() -> {
 				progress.setValue((int) ((double)finished.sum() / total * 10000));
 				progressStr.setText(finished + "/" + total);
 				if (finished.sum() == total) {

@@ -534,7 +534,7 @@ public abstract class MyChannel implements Selectable {
 				if (ch != null) ch.close();
 
 				if (rb != null && rb.capacity() > 0) {
-					alloc().reserve(rb);
+					BufferPool.reserve(rb);
 					rb = null;
 				}
 			}

@@ -130,7 +130,7 @@ public class ObfuscatorUI extends JFrame {
 	}
 
 	public static void main(String[] args) throws Exception {
-		UIUtil.systemLook();
+		GUIUtil.systemLook();
 		ObfuscatorUI f = new ObfuscatorUI();
 
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -142,9 +142,9 @@ public class ObfuscatorUI extends JFrame {
 	public ObfuscatorUI() {
 		initComponents();
 
-		UIUtil.dropFilePath(uiInputPath, (f) -> uiOutputPath.setText(new File(f.getName()).getAbsolutePath()), false);
-		UIUtil.dropFilePath(uiOutputPath, null, false);
-		UIUtil.dropFilePath(uiLibPath, null, true);
+		GUIUtil.dropFilePath(uiInputPath, (f) -> uiOutputPath.setText(new File(f.getName()).getAbsolutePath()), false);
+		GUIUtil.dropFilePath(uiOutputPath, null, false);
+		GUIUtil.dropFilePath(uiLibPath, null, true);
 
 		createObfTypes(uiClassObf, (x) -> {
 			obf.clazz = x;
@@ -337,7 +337,7 @@ public class ObfuscatorUI extends JFrame {
 		});
 
 		uiSaveCfg.addActionListener((e) -> {
-			File file = UIUtil.fileSaveTo("保存混淆器配置", "obfuscator.yml", ObfuscatorUI.this);
+			File file = GUIUtil.fileSaveTo("保存混淆器配置", "obfuscator.yml", ObfuscatorUI.this);
 			if (file == null) return;
 
 			try {
@@ -347,7 +347,7 @@ public class ObfuscatorUI extends JFrame {
 			}
 		});
 		uiLoadCfg.addActionListener((e) -> {
-			File file = UIUtil.fileLoadFrom("加载混淆器配置", ObfuscatorUI.this);
+			File file = GUIUtil.fileLoadFrom("加载混淆器配置", ObfuscatorUI.this);
 			if (file == null) return;
 
 			try {
@@ -357,7 +357,7 @@ public class ObfuscatorUI extends JFrame {
 			}
 		});
 		uiSaveMap.addActionListener((e) -> {
-			File file = UIUtil.fileSaveTo("保存映射表", "obfuscator.map", ObfuscatorUI.this);
+			File file = GUIUtil.fileSaveTo("保存映射表", "obfuscator.map", ObfuscatorUI.this);
 			if (file == null) return;
 
 			try {
@@ -367,7 +367,7 @@ public class ObfuscatorUI extends JFrame {
 			}
 		});
 		uiSaveLines.addActionListener((e) -> {
-			File file = UIUtil.fileSaveTo("保存行号表", "lines.log", ObfuscatorUI.this);
+			File file = GUIUtil.fileSaveTo("保存行号表", "lines.log", ObfuscatorUI.this);
 			if (file == null) return;
 
 			try (TextWriter fos = TextWriter.to(file)) {
@@ -544,7 +544,7 @@ public class ObfuscatorUI extends JFrame {
 		addObf(" abc", ABC::new);
 		addObf("- 自文件 -", 我是分隔符);
 		addObf(" 每行一个名称", () -> {
-			File file = UIUtil.fileLoadFrom("选择字符串文件");
+			File file = GUIUtil.fileLoadFrom("选择字符串文件");
 			if (file == null) return null;
 
 			try {

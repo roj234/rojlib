@@ -7,7 +7,7 @@ import roj.concurrent.task.ITask;
 import roj.mapper.Mapper;
 import roj.mod.Shared;
 import roj.mod.mapping.MappingFormat;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -49,7 +49,7 @@ public abstract class WorkspaceBuilder implements ITask {
 			m.setAccessible(true);
 			addURL = m;
 		} catch (NoSuchMethodException e) {
-			CmdUtil.error("Failed to get addURL method!", e);
+			CLIUtil.error("Failed to get addURL method!", e);
 		}
 	}
 	static boolean loadClass(String clazz, File jar) {
@@ -65,7 +65,7 @@ public abstract class WorkspaceBuilder implements ITask {
 				}
 				Class.forName(clazz);
 			} catch (Throwable e) {
-				CmdUtil.error(clazz+"加载失败", e);
+				CLIUtil.error(clazz+"加载失败", e);
 				return false;
 			}
 		}
@@ -78,7 +78,7 @@ public abstract class WorkspaceBuilder implements ITask {
 			run();
 		} catch (Throwable e) {
 			error = -1;
-			CmdUtil.error("未处理的异常", e);
+			CLIUtil.error("未处理的异常", e);
 		} finally {
 			synchronized (this) {
 				notifyAll();
@@ -114,7 +114,7 @@ public abstract class WorkspaceBuilder implements ITask {
 			}
 			Shared.Task.awaitFinish();
 		}
-		if (error != 0) CmdUtil.warning("错误码 "+error);
+		if (error != 0) CLIUtil.warning("错误码 "+error);
 		return error == 0;
 	}
 
@@ -127,7 +127,7 @@ public abstract class WorkspaceBuilder implements ITask {
 			}
 			mz.store();
 		} catch (IOException e) {
-			CmdUtil.warning("删除package-info失败", e);
+			CLIUtil.warning("删除package-info失败", e);
 		}
 	}
 }

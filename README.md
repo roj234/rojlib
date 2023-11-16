@@ -27,16 +27,20 @@
 * 分卷
 * 固实
 * 压缩文件头
-* 并行压缩 / 解压 (和7-ZIP for windows的实现方式不同)
+* 并行压缩 / 解压
+* 全新* 的并行压缩方式！既支持文件级别的并行压缩，又支持单个文件的并行压缩（LZMA2 only）
 * 支持BCJ2等复杂coder
-* 追加修改(复制字块)
+* 追加修改(复制字块)  
+* 高性能（大量使用Unsafe，请注意线程安全）
 
+注释：  
+ *: 比起上一版本  
 
 ## roj.asm  
     自己做的ASM, 资料来自VM规范  
     不支持的项目：
       内容（方法内部的）注解
-      StackMapTable
+      计算StackMapTable
     性能、内存占用、易用性（至少对我来说）均优于ow的asm
 
 ### Parser.forEachConstant(DynByteBuf buf, Consumer&lt;Constant&gt; c)
@@ -272,6 +276,9 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 ## roj.lavac
     自己开发的javac, WIP  
 
+## roj.launcher
+    功能类似javaagent
+
 ## roj.mapper  
   class映射(对方法/类改名)器 Mapper  
    * 上面我说到ASM的ConstantData等级好就好在这里  
@@ -313,7 +320,6 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 9.   `RaytraceCulling` 基于CPU光线追踪的方块剔除(WIP)
 10.   `PluginRenamer` 恢复被无良腐竹改了的插件名  
 11.   `SameServerFinder` 端口扫描  
-14.   `CleanWechat` 清除一定时间以前的文件
 15.   `Websocketed` 用Websocket执行任意脚本
   
 ## roj.mod
@@ -500,6 +506,7 @@ public static void sendTitle(AbstractPlayer player, String title) {
 
   `LineReader` 按行读取  
   `FastMatcher` 基于改进版BM算法的字符串寻找
+  `CliConsole` 基于虚拟终端序列的终端模拟器
   
 ## roj.ui  
     请搞到libcpp.dll或在ps中执行

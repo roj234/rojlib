@@ -19,7 +19,6 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
-import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.TypedName;
@@ -149,31 +148,20 @@ public class ConstantData implements IClass {
 	public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
 	public AttributeList attributesNullable() { return attributes; }
 
-	public void methodIter_tmpName_(String name, String desc, CodeVisitor cv) {
+	public void forEachCode(CodeVisitor cv, String name, String desc) {
 		int i = getMethod(name, desc);
-		if (i >= 0) {
-			MethodNode mn = methods.get(i);
-			AttrUnknown code = (AttrUnknown) mn.attrByName("Code");
-			if (code == null) return;
+		if (i < 0) throw new IllegalArgumentException("No such method");
 
-			if (cv instanceof CodeWriter) {
-				ByteList b = new ByteList();
-				((CodeWriter) cv).init(b, cp, mn, (byte) 0);
-				cv.visit(cp, Parser.reader(code));
-				((CodeWriter) cv).finish();
-				code.setRawData(b);
-			} else {
-				cv.visit(cp, Parser.reader(code));
-			}
-		} else {
-
-		}
+		methods.get(i).forEachCode(cv, cp);
+	}
+	public void forEachCode(CodeVisitor cv) {
+		List<MethodNode> methods = this.methods;
+		for (int j = 0; j < methods.size(); j++)
+			methods.get(j).forEachCode(cv, cp);
 	}
 
 	@Override
-	public ConstantPool cp() {
-		return cp;
-	}
+	public ConstantPool cp() { return cp; }
 
 	@Override
 	public DynByteBuf getBytes(DynByteBuf w) {

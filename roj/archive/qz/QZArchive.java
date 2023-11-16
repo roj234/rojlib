@@ -42,7 +42,7 @@ public class QZArchive implements ArchiveFile {
 	Source r;
 	private Source fpRead;
 	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(QZArchive.class, "fpRead");
-	private final BufferPool pool;
+
 	private ByteList buf = ByteList.EMPTY;
 
 	WordBlock[] blocks;
@@ -58,7 +58,6 @@ public class QZArchive implements ArchiveFile {
 		if (!file.isFile()) throw new FileNotFoundException(file.getName());
 
 		password = pass == null ? null : pass.getBytes(StandardCharsets.UTF_16LE);
-		pool = BufferPool.localPool();
 
 		r = new FileSource(file);
 		if (file.getName().endsWith(".001")) {
@@ -71,17 +70,15 @@ public class QZArchive implements ArchiveFile {
 	public QZArchive(Source s) throws IOException { this(s, null); }
 	public QZArchive(Source s, String pass) throws IOException {
 		password = pass == null ? null : pass.getBytes(StandardCharsets.UTF_16LE);
-		pool = BufferPool.localPool();
 
 		r = s;
 		r.seek(0);
 		reload();
 	}
-	public QZArchive(Source s, boolean recovery, int maxFileCount, byte[] pass, BufferPool pool) {
+	public QZArchive(Source s, boolean recovery, int maxFileCount, byte[] pass) {
 		r = s;
 		this.recovery = recovery;
 		this.password = pass;
-		this.pool = pool;
 		this.maxFileCount = maxFileCount;
 	}
 
@@ -209,7 +206,7 @@ public class QZArchive implements ArchiveFile {
 
 			readFileTable();
 		} finally {
-			buf.close();
+			BufferPool.reserve(buf);
 		}
 	}
 	private void recoverFT() throws IOException {
@@ -288,7 +285,7 @@ public class QZArchive implements ArchiveFile {
 		buf.close();
 
 		try (InputStream in = getSolidStream(b, null)) {
-			buf = (ByteList) pool.buffer(false, (int) b.uSize);
+			buf = (ByteList) BufferPool.buffer(false, (int) b.uSize);
 			int read = buf.readStream(in, (int) b.uSize);
 			if (read < b.uSize) throw new EOFException("数据流过早终止");
 			if (in.read() >= 0) error("unknown padding");
@@ -794,9 +791,9 @@ public class QZArchive implements ArchiveFile {
 	private ByteList read(int len) throws IOException {
 		ByteList b = buf;
 		if (b.capacity() < len) {
-			if (b.capacity() > 0) pool.reserve(b);
+			if (b.capacity() > 0) BufferPool.reserve(b);
 			buf = ByteList.EMPTY;
-			b = buf = (ByteList) pool.buffer(false, len);
+			b = buf = (ByteList) BufferPool.buffer(false, len);
 		} else {
 			b.clear();
 		}

@@ -7,7 +7,7 @@ import roj.config.YAMLParser;
 import roj.config.data.CEntry;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 
 import java.io.File;
 import java.net.Inet4Address;
@@ -67,7 +67,7 @@ public class DDNSClient implements Runnable {
 			try {
 				address = ip.getAddress(hasV6);
 			} catch (Exception e) {
-				CmdUtil.warning("无法获取IP", e);
+				CLIUtil.warning("无法获取IP", e);
 				continue;
 			}
 

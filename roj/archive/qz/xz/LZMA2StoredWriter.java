@@ -11,13 +11,12 @@ package roj.archive.qz.xz;
 
 import roj.io.Finishable;
 import roj.util.ArrayCache;
+import roj.util.ArrayUtil;
 
 import java.io.IOException;
 import java.io.OutputStream;
 
-class UncompressedLZMA2OutputStream extends OutputStream implements Finishable {
-	private final ArrayCache arrayCache;
-
+class LZMA2StoredWriter extends OutputStream implements Finishable {
 	private OutputStream out;
 
 	private final byte[] uncompBuf;
@@ -31,18 +30,11 @@ class UncompressedLZMA2OutputStream extends OutputStream implements Finishable {
 		return 70;
 	}
 
-	UncompressedLZMA2OutputStream(OutputStream out, ArrayCache arrayCache) {
+	LZMA2StoredWriter(OutputStream out) {
 		if (out == null) throw new NullPointerException();
-
 		this.out = out;
-
-		// We only allocate one array from the cache. We will call
-		// putArray directly in writeEndMarker and thus we don't use
-		// ResettableArrayCache here.
-		this.arrayCache = arrayCache;
-		uncompBuf = arrayCache.getByteArray(LZMA2OutputStream.COMPRESSED_SIZE_MAX, false);
+		uncompBuf = ArrayCache.getByteArray(LZMA2Writer.COMPRESSED_SIZE_MAX, false);
 	}
-
 
 	private byte[] b0;
 	public void write(int b) throws IOException {
@@ -52,18 +44,17 @@ class UncompressedLZMA2OutputStream extends OutputStream implements Finishable {
 	}
 
 	public void write(byte[] buf, int off, int len) throws IOException {
-		if (off < 0 || len < 0 || off + len < 0 || off + len > buf.length) throw new IndexOutOfBoundsException();
-
+		ArrayUtil.checkRange(buf, off, len);
 		if (finished) throw new IOException("Stream finished or closed");
 
 		try {
 			while (len > 0) {
-				int copySize = Math.min(LZMA2OutputStream.COMPRESSED_SIZE_MAX - uncompPos, len);
+				int copySize = Math.min(LZMA2Writer.COMPRESSED_SIZE_MAX - uncompPos, len);
 				System.arraycopy(buf, off, uncompBuf, uncompPos, copySize);
 				len -= copySize;
 				uncompPos += copySize;
 
-				if (uncompPos == LZMA2OutputStream.COMPRESSED_SIZE_MAX) writeChunk();
+				if (uncompPos == LZMA2Writer.COMPRESSED_SIZE_MAX) writeChunk();
 			}
 		} catch (Throwable e) {
 			try {
@@ -89,10 +80,9 @@ class UncompressedLZMA2OutputStream extends OutputStream implements Finishable {
 
 		try {
 			if (uncompPos > 0) writeChunk();
-
 			out.write(0x00);
 		} finally {
-			arrayCache.putArray(uncompBuf);
+			ArrayCache.putArray(uncompBuf);
 		}
 	}
 

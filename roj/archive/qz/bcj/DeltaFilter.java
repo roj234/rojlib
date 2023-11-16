@@ -11,7 +11,7 @@ public class DeltaFilter extends Filter {
     static final int DISTANCE_MASK = DISTANCE_MAX - 1;
 
     final int distance;
-    final byte[] history = ArrayCache.getDefaultCache().getByteArray(DISTANCE_MAX, true);
+    final byte[] history = ArrayCache.getByteArray(DISTANCE_MAX, true);
 
     public DeltaFilter(boolean encoder, int distance) {
         super(encoder);

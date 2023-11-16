@@ -59,12 +59,15 @@ public class ClassWrapper implements Function<String, Class<?>> {
 
 	public void registerTransformer(ITransformer tr) {
 		transformers.add(tr);
-		LOGGER.log(Level.DEBUG, "注册类转换器 '{}'", null, tr.getClass().getName());
 		if (tr instanceof INameTransformer) {
 			if (nameTransformer == null) {
 				nameTransformer = (INameTransformer) tr;
-				LOGGER.log(Level.DEBUG, "注册类名映射 '{}'", null, tr.getClass().getName());
+				LOGGER.trace("注册类名映射 '{}'", tr.getClass().getName());
+			} else {
+				LOGGER.debug("类名映射 '{}' 因为已存在 '{}' 而被跳过", tr.getClass().getName(), nameTransformer.getClass().getName());
 			}
+		} else {
+			LOGGER.trace("注册类转换器 '{}'", tr.getClass().getName());
 		}
 	}
 
@@ -122,7 +125,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 						throw e;
 					}
 				} else {
-					throw new IOException("no file");
+					throw new IOException("no "+name);
 				}
 			} else {
 				try {
@@ -156,23 +159,27 @@ public class ClassWrapper implements Function<String, Class<?>> {
 		}
 	}
 
+	private int reentrant = -1;
 	private void transform(String name, String transformedName, ByteList list) {
 		Context ctx = new Context(name, list);
 		boolean changed = false;
 		List<ITransformer> ts = transformers;
+		if (reentrant >= 0) LOGGER.warn("类转换器'{}'可能造成了循环调用", ts.get(reentrant).getClass().getName());
 		for (int i = 0; i < ts.size(); i++) {
+			reentrant = i;
 			try {
 				changed |= ts.get(i).transform(transformedName, ctx);
 			} catch (Throwable e) {
-				LOGGER.log(Level.FATAL, "转换类'{}'时发生异常", e, name);
+				LOGGER.fatal("转换类'{}'时发生异常", e, name);
 				try {
 					ctx.getData().dump();
 				} catch (Throwable e1) {
-					LOGGER.log(Level.FATAL, "保存'{}'的内容用于调试时发生异常", e1, name);
+					LOGGER.fatal("保存'{}'的内容用于调试时发生异常", e1, name);
 				}
 				Helpers.athrow(e);
 			}
 		}
+		reentrant = -1;
 		if (changed) {
 			list.clear();
 			list.put(ctx.get());

@@ -1,10 +1,7 @@
 package roj.text;
 
 import roj.archive.qz.xz.LZMAInputStream;
-import roj.collect.Int2IntMap;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
-import roj.collect.TrieTree;
+import roj.collect.*;
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.math.MutableInt;
@@ -77,6 +74,7 @@ public class JPinyin {
 		}
 	}
 
+	private static final MyBitSet IsHanzi = new MyBitSet(0xFFFF);
 	private static char[] StringPool;
 	// also can use a modified version of ToIntMap<String>
 	private static final TrieTree<Integer> PinyinWords = new TrieTree<>();
@@ -95,6 +93,7 @@ public class JPinyin {
 			int len = bb.readInt();
 			while (len-- > 0) {
 				int codepoint = bb.readVUInt();
+				if (codepoint <= 0xFFFF) IsHanzi.add(codepoint);
 				int yinLen = bb.readVUInt();
 				sb.clear();
 				PinyinWords.put(sb.appendCodePoint(codepoint).toString(), yinLen);
@@ -120,7 +119,9 @@ public class JPinyin {
 		FastSwitch.put('v', 5);
 	}
 
-	public JPinyin(int flag) {}
+	public static MyBitSet getIsHanzi() { return IsHanzi; }
+
+	private final MyHashMap.Entry<MutableInt, Integer> entry = new MyHashMap.Entry<>(new MutableInt(), null);
 	public JPinyin() {}
 
 	public static final int PINYIN_FIRST_LETTER = 0;
@@ -134,8 +135,6 @@ public class JPinyin {
 	public CharList toPinyin(CharSequence str, String splitter, CharList sb, int mode) {
 		int i = 0, len = str.length();
 		if (len == 0) return sb;
-
-		MyHashMap.Entry<MutableInt, Integer> entry = new MyHashMap.Entry<>(new MutableInt(), null);
 
 		boolean hasSplitter = false;
 		while (i < len) {

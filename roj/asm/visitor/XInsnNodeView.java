@@ -387,6 +387,7 @@ public final class XInsnNodeView {
 		owner.replaceRange(end, end, list, mode);
 	}
 
+	@SuppressWarnings("fallthrough")
 	public boolean isSimilarTo(XInsnNodeView b, InsnHelper context) {
 		if (normalize(code) == normalize(b.code)) {
 			switch (_DATA[code&0xFF]&0xF) {

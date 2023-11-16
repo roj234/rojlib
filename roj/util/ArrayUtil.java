@@ -3,7 +3,7 @@ package roj.util;
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.ui.UIUtil;
+import roj.ui.CLIUtil;
 
 import java.awt.*;
 import java.awt.datatransfer.*;
@@ -33,7 +33,7 @@ public final class ArrayUtil {
 		if (br.readableBits() > 0) sb.append((char) (br.readBit(br.readableBits())+1));
 
 		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(ITokenizer.addSlashes(sb, 0, new CharList(), '\'').toStringAndFree()), null);
-		UIUtil.pause();
+		CLIUtil.pause();
 	}
 
 	private static ByteList UnBase128(String s) {
@@ -173,5 +173,10 @@ public final class ArrayUtil {
 			else return mid;
 		}
 		return -(low + 1);
+	}
+
+	public static void checkRange(byte[] b, int off, int len) {
+		if ((off|len|(off+len)) < 0 || off + len > b.length)
+			throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+b.length);
 	}
 }

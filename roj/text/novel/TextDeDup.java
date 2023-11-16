@@ -16,8 +16,8 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
+import roj.ui.CLIUtil;
 import roj.ui.ProgressBar;
-import roj.ui.UIUtil;
 import roj.util.ArrayCache;
 import roj.util.BsDiff;
 import roj.util.Helpers;
@@ -135,7 +135,7 @@ public class TextDeDup {
 			for (int i = 0; i < allFiles.size(); i++) {
 				File file = allFiles.get(i);
 				asyn2.pushTask(() -> {
-					char[] data = ArrayCache.getDefaultCache().getCharArray(SIZE_BUFFER, false);
+					char[] data = ArrayCache.getCharArray(SIZE_BUFFER, false);
 					CharList sb = new CharList(data);
 					try (TextReader in = TextReader.auto(file)) {
 						int lenBefore = in.read(data);
@@ -159,7 +159,7 @@ public class TextDeDup {
 						System.out.println("error is " + file.getName());
 						e.printStackTrace();
 					}
-					ArrayCache.getDefaultCache().putArray(data);
+					ArrayCache.putArray(data);
 				});
 			}
 			asyn2.awaitFinish();
@@ -220,7 +220,7 @@ public class TextDeDup {
 				new ProcessBuilder().command("D:\\Everything\\Everything.exe", "-s", "<"+Tokenizer.addSlashes(IOUtil.noExtName(d.left.getName())) + ">|<" + Tokenizer.addSlashes(IOUtil.noExtName(d.right.getName()))+'>').start();
 				int exit = new ProcessBuilder().command(args2).start().waitFor();
 
-				if (exit == 0) UIUtil.userInput("请按任意键继续");
+				if (exit == 0) CLIUtil.userInput("请按任意键继续");
 
 				System.out.println("exit code:"+exit);
 				System.out.println();

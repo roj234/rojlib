@@ -30,8 +30,7 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 	private final ByteBuffer ob;
 	private CharBuffer ib;
 
-	private BufferPool pool;
-	private final DynByteBuf buf1;
+	private DynByteBuf buf1;
 
 	public static TextWriter to(File file) throws IOException { return to(file, StandardCharsets.UTF_8); }
 	public static TextWriter to(File file, Charset cs) throws IOException {
@@ -69,13 +68,12 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 			ce = cs.newEncoder().onUnmappableCharacter(CodingErrorAction.REPORT);
 		}
 
-		this.pool = pool;
-		buf1 = pool.buffer(!(out instanceof OutputStream), 1024);
+		buf1 = pool.allocate(!(out instanceof OutputStream), 1024);
 
 		ob = buf1.nioBuffer();
 		ob.clear();
 
-		this.list = ArrayCache.getDefaultCache().getCharArray(512, false);
+		this.list = ArrayCache.getCharArray(512, false);
 		this.out = out;
 	}
 
@@ -91,10 +89,9 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 			}
 
 			if (list.length-len < cap) {
-				ArrayCache ac = ArrayCache.getDefaultCache();
-				char[] newArray = ac.getCharArray(cap, false);
+				char[] newArray = ArrayCache.getCharArray(cap, false);
 				System.arraycopy(list, 0, newArray, 0, len);
-				ac.putArray(list);
+				ArrayCache.putArray(list);
 				list = newArray;
 				ib = null;
 			}
@@ -227,12 +224,12 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 				encode(true, ib == null ? CharBuffer.wrap(ArrayCache.CHARS) : ib);
 			}
 
-			if (pool != null) {
-				pool.reserve(buf1);
-				pool = null;
+			if (buf1 != null) {
+				BufferPool.reserve(buf1);
+				buf1 = null;
 			}
 
-			ArrayCache.getDefaultCache().putArray(list);
+			ArrayCache.putArray(list);
 			list = null;
 		}
 	}

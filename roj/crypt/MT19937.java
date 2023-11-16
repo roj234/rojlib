@@ -1,5 +1,7 @@
 package roj.crypt;
 
+import roj.reflect.ReflectionUtils;
+
 import java.util.Random;
 
 import static roj.reflect.ReflectionUtils.u;
@@ -10,13 +12,8 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2022/11/14 0014 22:21
  */
 public class MT19937 extends Random {
-	private static long offset, offset2;
-	static {
-		try {
-			offset = u.objectFieldOffset(Random.class.getDeclaredField("seed"));
-			offset2 = u.objectFieldOffset(Random.class.getDeclaredField("haveNextNextGaussian"));
-		} catch (NoSuchFieldException ignored) {}
-	}
+	private static final long u_seed = ReflectionUtils.fieldOffset(Random.class, "seed"),
+		u_nextGaussian = ReflectionUtils.fieldOffset(Random.class, "haveNextNextGaussian");
 
 	private int i;
 	private final int[] MT = new int[624];
@@ -39,7 +36,7 @@ public class MT19937 extends Random {
 		// Random will invoke setSeed() before this class initialize
 		if (MT == null) {
 			_seed = seed;
-			if (offset > 0) u.putObject(this, offset, null);
+			if (u_seed > 0) u.putObject(this, u_seed, null);
 			return;
 		}
 
@@ -49,7 +46,7 @@ public class MT19937 extends Random {
 		this.i = 0;
 
 		// clear hasNextGaussian
-		if (offset2 > 0) u.putBoolean(this, offset2, false);
+		if (u_nextGaussian > 0) u.putBoolean(this, u_nextGaussian, false);
 		else super.setSeed(seed);
 	}
 

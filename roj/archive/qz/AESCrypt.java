@@ -110,9 +110,7 @@ public final class AESCrypt extends QZCoder {
     }
 
     @Override
-    public String toString() {
-        return "7zAES:"+cyclePower;
-    }
+    public String toString() { return "7zAES:"+cyclePower;  }
 
     byte cyclePower;
     byte[] salt;

@@ -144,7 +144,7 @@ class UdpChImpl extends MyChannel {
 				if (p.buf.isReadable()) break;
 
 				pending.pollFirst();
-				bp.reserve(p.buf);
+				BufferPool.reserve(p.buf);
 			} while (true);
 
 			if (pending.isEmpty()) {
@@ -168,7 +168,7 @@ class UdpChImpl extends MyChannel {
 	protected void read() throws IOException {
 		while (state == OPENED && dc.isOpen()) {
 			BufferPool bp = alloc();
-			DynByteBuf buf = bp.buffer(true, buffer);
+			DynByteBuf buf = bp.allocate(true, buffer);
 
 			ByteBuffer nioBuffer = syncNioRead(buf);
 			InetSocketAddress r = (InetSocketAddress) dc.receive(nioBuffer);
@@ -182,7 +182,7 @@ class UdpChImpl extends MyChannel {
 				first.port = r.getPort();
 				fireChannelRead(first);
 			} finally {
-				bp.reserve(buf);
+				BufferPool.reserve(buf);
 			}
 		}
 	}
@@ -193,7 +193,7 @@ class UdpChImpl extends MyChannel {
 		DatagramPkt p = (DatagramPkt) o;
 		DynByteBuf buf = p.buf;
 		if (buf.readableBytes() > UDP_MAX_SIZE) throw new IOException("packet too large");
-		if (!buf.isDirect()) buf = bp.buffer(true, buf.readableBytes()).put(buf);
+		if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes()).put(buf);
 
 		try {
 			write1(p, buf);
@@ -201,13 +201,13 @@ class UdpChImpl extends MyChannel {
 			if (buf.isReadable()) {
 				if (pending.isEmpty()) key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
 
-				Object o1 = pending.ringAddLast(new DatagramPkt(p, bp.buffer(true, buf.readableBytes()).put(buf)));
+				Object o1 = pending.ringAddLast(new DatagramPkt(p, bp.allocate(true, buf.readableBytes()).put(buf)));
 				if (o1 != null) throw new IOException("上层发送缓冲区过载");
 			} else {
 				fireFlushed();
 			}
 		} finally {
-			if (p.buf != buf) bp.reserve(buf);
+			if (p.buf != buf) BufferPool.reserve(buf);
 
 			buf = p.buf;
 			buf.rIndex = buf.wIndex();

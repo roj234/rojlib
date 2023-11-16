@@ -330,7 +330,6 @@ public class PlainPassRecover implements Macros, ITask {
 		byte[] kill() {
 			kill = true;
 			ep.end("完成");
-			ep.dispose();
 			if (thread != null) thread.interrupt();
 			return found ? pass.toByteArray() : null;
 		}

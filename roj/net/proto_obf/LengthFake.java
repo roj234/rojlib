@@ -1,6 +1,7 @@
 package roj.net.proto_obf;
 
 import roj.collect.RingBuffer;
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.handler.PacketMerger;
@@ -32,18 +33,18 @@ public class LengthFake extends PacketMerger implements ChannelHandler {
 				int len = _length(b.readableBytes());
 
 				tmp.clear();
-				if (tmp.capacity() < len+4) tmp = ctx.alloc().expand(tmp, len+4-tmp.capacity());
+				if (tmp.capacity() < len+4) tmp = BufferPool.expand(tmp, len+4-tmp.capacity());
 				tmp.putInt(0);
 
 				if (len > b.readableBytes()) {
 					int noiseLen = len - b.readableBytes();
-					byte[] array = ArrayCache.getDefaultCache().getByteArray(noiseLen, false);
+					byte[] array = ArrayCache.getByteArray(noiseLen, false);
 					nextBytes(rnd, array, 0, noiseLen);
 
 					tmp = writePacket(ctx, tmp, b, b.readableBytes());
 					tmp.put(array, 0, Math.min(noiseLen, tmp.writableBytes()));
 
-					ArrayCache.getDefaultCache().putArray(array);
+					ArrayCache.putArray(array);
 				} else {
 					tmp = writePacket(ctx, tmp, b, len);
 				}
@@ -61,7 +62,7 @@ public class LengthFake extends PacketMerger implements ChannelHandler {
 				}
 			}
 		} finally {
-			ctx.reserve(tmp);
+			BufferPool.reserve(tmp);
 		}
 	}
 
@@ -110,7 +111,7 @@ public class LengthFake extends PacketMerger implements ChannelHandler {
 				try {
 					ctx.channelWrite(buf);
 				} finally {
-					ctx.reserve(buf);
+					BufferPool.reserve(buf);
 				}
 
 				buf = buffers.peekFirst();
@@ -132,7 +133,7 @@ public class LengthFake extends PacketMerger implements ChannelHandler {
 				e.printStackTrace();
 				doWrite = false;
 			} finally {
-				ctx.reserve(buf);
+				BufferPool.reserve(buf);
 			}
 		}
 	}

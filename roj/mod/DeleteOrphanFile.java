@@ -11,8 +11,7 @@ import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.misc.CpFilter;
 import roj.text.CharList;
-import roj.ui.CmdUtil;
-import roj.ui.UIUtil;
+import roj.ui.CLIUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -24,14 +23,14 @@ public class DeleteOrphanFile {
 		} catch (Error ignored) {}
 
 		System.out.println("(assets)资源目录");
-		String assets = UIUtil.userInput("");
+		String assets = CLIUtil.userInput("");
 		System.out.println("(libraries)库目录");
-		String libraries = UIUtil.userInput("");
+		String libraries = CLIUtil.userInput("");
 
 		SimpleList<File> versions = new SimpleList<>();
 		while (true) {
 			System.out.println("(versions)版本目录,可以添加多个,如果没有了请按回车");
-			String v = UIUtil.userInput("");
+			String v = CLIUtil.userInput("");
 			if (v.isEmpty()) break;
 			versions.add(new File(v));
 		}
@@ -52,13 +51,13 @@ public class DeleteOrphanFile {
 			File versions = versionss.get(i);
 			File[] files = versions.listFiles();
 			if (files == null) {
-				CmdUtil.warning(versions + " 不是有效的版本文件夹夹");
+				CLIUtil.warning(versions + " 不是有效的版本文件夹夹");
 				continue;
 			}
 			for (File version : files) {
 				File versionJson = new File(version, version.getName() + ".json");
 				if (!versionJson.isFile()) {
-					CmdUtil.warning(versions + " 不是有效的版本文件夹");
+					CLIUtil.warning(versions + " 不是有效的版本文件夹");
 					continue;
 				}
 
@@ -66,7 +65,7 @@ public class DeleteOrphanFile {
 				try {
 					json = JSONParser.parses(IOUtil.readUTF(versionJson)).asMap();
 				} catch (ParseException e) {
-					CmdUtil.warning(versionJson + " 不是有效的版本JSON");
+					CLIUtil.warning(versionJson + " 不是有效的版本JSON");
 					continue;
 				}
 				json.dot(true);
@@ -91,7 +90,7 @@ public class DeleteOrphanFile {
 		for (String assetId : assetIds) {
 			File file = new File(assets, "indexes/" + assetId + ".json");
 			if (!file.isFile()) {
-				CmdUtil.warning(file + " 不是有效的资源索引");
+				CLIUtil.warning(file + " 不是有效的资源索引");
 				continue;
 			}
 
@@ -99,7 +98,7 @@ public class DeleteOrphanFile {
 			try {
 				json = JSONParser.parses(IOUtil.readUTF(file)).asMap().getOrCreateMap("objects");
 			} catch (ParseException e) {
-				CmdUtil.warning(file + " 不是有效的资源索引");
+				CLIUtil.warning(file + " 不是有效的资源索引");
 				continue;
 			}
 			for (CEntry value : json.values()) {
@@ -113,7 +112,7 @@ public class DeleteOrphanFile {
 		c:
 		while (true) {
 			System.out.println("按回车执行删除,按L查看文件列表");
-			String selection = UIUtil.userInput("");
+			String selection = CLIUtil.userInput("");
 			switch (selection) {
 				case "":
 					break c;

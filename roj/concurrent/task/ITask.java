@@ -5,16 +5,10 @@ package roj.concurrent.task;
  * @since 2021/4/21 22:51
  */
 public interface ITask {
-	default boolean isCancelled() {
-		return false;
-	}
-	default boolean cancel(boolean force) {
-		return false;
-	}
+	default boolean isCancelled() { return false; }
+	default boolean cancel(boolean force) { return false; }
 
 	void execute() throws Exception;
 
-	default boolean continueExecuting() {
-		return false;
-	}
+	default boolean repeating() { return false; }
 }

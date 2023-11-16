@@ -1,4 +1,4 @@
-JFDML JFormDesigner: "8.1.1.0.298" Java: "11.0.15" encoding: "UTF-8"
+JFDML JFormDesigner: "8.1.1.0.298" Java: "17.0.9" encoding: "UTF-8"
 
 new FormModel {
 	contentType: "form/swing"
@@ -7,7 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "Roj234 Jar Mapper 3.1"
+			"title": "Roj234 Jar Mapper 3.1.1"
 			"resizable": false
 			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
 				name: "scrollPane1"
@@ -16,7 +16,7 @@ new FormModel {
 				}
 				add( new FormComponent( "javax.swing.JTextArea" ) {
 					name: "uiLibraries"
-					"text": "# 1. 如果报错“缺少元素”，勾上“输入的类在映射表中”重试\n#    输入不变时，只有第一次映射需要勾（这样可加快速度）\n# 2. 【关心字段类型】需要映射表保存了字段类型\n# 3. 红色复选框需要重新加载生效\n# 4. 输入和输出可以是文件夹来批处理所有文件\n# 5. 如果输出是文件夹，无论如何都会覆盖文件\n# 6. 输入、输出和库文件支持拖动\n# 7. 输入字符集不用过于担心，我的ZipArchive比sun写的好"
+					"text": "# 1. 如果报错“缺少元素”，勾上“输入的类在映射表中”重试\n#    输入不变时，只有第一次映射需要勾（这样可加快速度）\n# 2. 【关心字段类型】需要映射表保存了字段类型\n# 3. 红色复选框需要重新加载生效\n# 4. 输入和输出可以是文件夹来批处理所有文件\n# 5. 如果输出是文件夹，覆盖文件不会有提示\n# 6. 输入、输出和库文件支持拖动\n# 7. 输入点击可以变大，swing真难用\n# 8. 仅处理文件夹中的jar和zip文件"
 				} )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 4
@@ -24,13 +24,17 @@ new FormModel {
 				"width": 380
 				"height": 210
 			} )
-			add( new FormComponent( "javax.swing.JTextField" ) {
-				name: "uiInputPath"
-				"toolTipText": "也可以是文件夹"
+			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
+				name: "scrollPane2"
+				add( new FormComponent( "javax.swing.JTextArea" ) {
+					name: "uiInputPath"
+					"toolTipText": "也可以是文件夹"
+				} )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 30
 				"y": 5
 				"width": 215
+				"height": 19
 			} )
 			add( new FormComponent( "javax.swing.JTextField" ) {
 				name: "uiOutputPath"
@@ -113,7 +117,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "uiMFlag32"
-				"text": "多线程"
+				"text": "并行"
 				"selected": true
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 255
@@ -187,8 +191,8 @@ new FormModel {
 				name: "uiMapTrace"
 				"text": "StackTrace映射"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 255
-				"y": 105
+				"x": 260
+				"y": 116
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 0, 0 )

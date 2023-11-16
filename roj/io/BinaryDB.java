@@ -168,7 +168,7 @@ public class BinaryDB {
 						public synchronized void close() throws IOException {
 							if (buf != null) {
 								file._write(id,p.file,buf,file.lock);
-								file.pool.reserve(buf);
+								BufferPool.reserve(buf);
 								buf = null;
 							}
 

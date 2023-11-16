@@ -52,7 +52,7 @@ public class DragReorderHelper extends MouseAdapter {
 			if (next != insertAfter) {
 				if (expandTask != null) expandTask.cancel();
 				if (next != null && next != clicked && ((TreeNode) next.getLastPathComponent()).getChildCount() > 0) {
-					expandTask = Scheduler.getDefaultScheduler().executeLater(() -> {
+					expandTask = Scheduler.getDefaultScheduler().delay(() -> {
 						list.expandPath(next);
 					}, 800);
 				}

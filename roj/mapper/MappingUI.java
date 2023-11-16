@@ -15,7 +15,7 @@ import roj.mod.mapping.TSrgMapping;
 import roj.mod.mapping.YarnMapping;
 import roj.text.TextReader;
 import roj.ui.DoubleClickHelper;
-import roj.ui.UIUtil;
+import roj.ui.GUIUtil;
 import roj.util.Helpers;
 
 import javax.swing.*;
@@ -47,7 +47,7 @@ public class MappingUI extends JFrame {
 
 
 	private void uiLoad(ActionEvent e) {
-		File input = UIUtil.fileLoadFrom("注：先选择类型再点击加载！" + uiMappingType.getSelectedItem().toString(), this);
+		File input = GUIUtil.fileLoadFrom("注：先选择类型再点击加载！" + uiMappingType.getSelectedItem().toString(), this);
 		if (input == null) return;
 
 		try {
@@ -180,7 +180,7 @@ public class MappingUI extends JFrame {
 	}
 
 	private void uiSave(ActionEvent e) {
-		File file = UIUtil.fileSaveTo("保存映射表", "mapping.map", MappingUI.this);
+		File file = GUIUtil.fileSaveTo("保存映射表", "mapping.map", MappingUI.this);
 		if (file == null) return;
 
 		try {
@@ -270,7 +270,7 @@ public class MappingUI extends JFrame {
 	}
 
 	public static void main(String[] args) throws Exception {
-		UIUtil.systemLook();
+		GUIUtil.systemLook();
 		MappingUI f = new MappingUI();
 
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);

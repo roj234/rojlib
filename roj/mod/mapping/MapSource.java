@@ -7,7 +7,7 @@ import roj.io.down.DownloadTask;
 import roj.io.down.ProgressMulti;
 import roj.mod.MCLauncher;
 import roj.text.CharList;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -35,7 +35,7 @@ public interface MapSource {
 				};
 			case "FILE":
 				File file = new File(cfg.getString("file"));
-				if (!file.isFile()) CmdUtil.warning("file类型要求的文件不存在. " + cfg.getString("file"));
+				if (!file.isFile()) CLIUtil.warning("file类型要求的文件不存在. " + cfg.getString("file"));
 				return (cfg1, tmp) -> file;
 			case "URL":
 				String url = cfg.getString("url");
@@ -90,7 +90,7 @@ public interface MapSource {
 							DownloadTask.QUERY.pushTask(task);
 							task.waitFor();
 						} catch (Exception e) {
-							CmdUtil.warning("下载失败,重试", e);
+							CLIUtil.warning("下载失败,重试", e);
 							continue;
 						}
 						break;

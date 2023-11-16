@@ -189,7 +189,7 @@ public class ZipArchive implements ArchiveFile {
 		Source s;
 		do {
 			s = fpRead;
-		} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, s, null));
+		} while (s != null && !u.compareAndSwapObject(this, FPREAD_OFFSET, s, null));
 		if (s != null) s.close();
 	}
 

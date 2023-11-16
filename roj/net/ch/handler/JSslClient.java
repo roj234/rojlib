@@ -1,5 +1,6 @@
 package roj.net.ch.handler;
 
+import roj.io.buf.BufferPool;
 import roj.net.NetworkUtil;
 import roj.net.ch.ChannelCtx;
 import roj.util.ByteList;
@@ -78,7 +79,7 @@ public class JSslClient extends PacketMerger {
 				switch (req.getStatus()) {
 					case BUFFER_UNDERFLOW: return req;
 					case BUFFER_OVERFLOW:
-						out = (ByteList) ctx.alloc().expand(out, out.capacity());
+						out = (ByteList) BufferPool.expand(out, out.capacity());
 						maxSnd = out.capacity();
 						buf = out.nioBuffer();
 						break;
@@ -96,7 +97,7 @@ public class JSslClient extends PacketMerger {
 				}
 			}
 		} finally {
-			ctx.reserve(out);
+			BufferPool.reserve(out);
 		}
 	}
 
@@ -133,7 +134,7 @@ public class JSslClient extends PacketMerger {
 				switch (req.getStatus()) {
 					case BUFFER_UNDERFLOW: return req;
 					case BUFFER_OVERFLOW:
-						out = (ByteList) ctx.alloc().expand(out, out.capacity());
+						out = (ByteList) BufferPool.expand(out, out.capacity());
 						maxRcv = out.capacity();
 						tmp[0] = out.nioBuffer();
 						break;
@@ -152,7 +153,7 @@ public class JSslClient extends PacketMerger {
 				}
 			}
 		} finally {
-			ctx.reserve(out);
+			BufferPool.reserve(out);
 		}
 	}
 

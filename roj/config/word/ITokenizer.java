@@ -3,7 +3,6 @@ package roj.config.word;
 import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.concurrent.OperationDone;
-import roj.concurrent.Ref;
 import roj.config.ParseException;
 import roj.text.ACalendar;
 import roj.text.CharList;
@@ -12,6 +11,7 @@ import roj.text.TextUtil;
 import roj.util.Helpers;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static roj.config.word.Word.*;
 
@@ -198,7 +198,7 @@ public abstract class ITokenizer {
 	@SuppressWarnings("fallthrough")
 	protected final CharList readSlashString(char end, boolean zhuanyi) throws ParseException {
 		CharSequence in = input;
-		int i = index;
+		int i = index+1;
 
 		CharList v = found; v.clear();
 
@@ -231,7 +231,7 @@ public abstract class ITokenizer {
 	}
 
 	@SuppressWarnings("fallthrough")
-	protected static int _removeSlash(CharSequence in, char c, Appendable out, int i) {
+	protected static int _removeSlash(CharSequence in, char c, Appendable out, int i) throws ParseException {
 		try {
 			int v = DESLASHES.getOrDefaultInt(c, 0);
 			if (v == 0) {
@@ -245,13 +245,21 @@ public abstract class ITokenizer {
 			switch (v) {
 				case -1: out.append('/'); break;
 				case -2: // UXXXXXXXX
-					int UIndex = TextUtil.parseInt(in, i, i += 8, 16);
-					if (Character.charCount(UIndex) > 1) out.append(Character.highSurrogate(UIndex)).append(Character.lowSurrogate(UIndex));
-					else out.append((char) UIndex);
+					try {
+						int UIndex = TextUtil.parseInt(in, i, i += 8, 16);
+						if (Character.charCount(UIndex) > 1) out.append(Character.highSurrogate(UIndex)).append(Character.lowSurrogate(UIndex));
+						else out.append((char) UIndex);
+					} catch (Exception e) {
+						throw new ParseException(in, "无效的\\UXXXXXXXX转义:"+e.getMessage(), i);
+					}
 				break;
 				case -3: // uXXXX
-					int uIndex = TextUtil.parseInt(in, i, i += 4, 16);
-					out.append((char) uIndex);
+					try {
+						int uIndex = TextUtil.parseInt(in, i, i += 4, 16);
+						out.append((char) uIndex);
+					} catch (Exception e) {
+						throw new ParseException(in, "无效的\\uXXXX转义:"+e.getMessage(), i);
+					}
 				break;
 				case -4: out.append("\r"); if (in.charAt(i) == '\n') i++;
 				case -5: out.append("\n");
@@ -542,7 +550,7 @@ public abstract class ITokenizer {
 		if ((flag & _NF_END) != 0) i++;
 
 		try {
-			String represent = neg ? "-".concat(v.toString()) : v.toString();
+			String represent = input.subSequence(index, i).toString();
 
 			Word w;
 			// retain SubType
@@ -631,7 +639,7 @@ public abstract class ITokenizer {
 	public final Word ISO8601Datetime(boolean must) throws ParseException {
 		final int i = index;
 		CharSequence in = input;
-		Ref<String> error = Ref.from();
+		AtomicReference<String> error = new AtomicReference<>();
 
 		try {
 			char c;
@@ -695,7 +703,7 @@ public abstract class ITokenizer {
 		}
 	}
 
-	private void dateDelim(char c, int firstIndex, Ref<String> err) {
+	private void dateDelim(char c, int firstIndex, AtomicReference<String> err) {
 		int i = index;
 		if (input.charAt(i++) == c) index = i;
 		else {
@@ -704,7 +712,7 @@ public abstract class ITokenizer {
 		}
 	}
 
-	private int dateNum(int maxLen, int max, Ref<String> err) {
+	private int dateNum(int maxLen, int max, AtomicReference<String> err) {
 		int i = index;
 		CharSequence in = input;
 

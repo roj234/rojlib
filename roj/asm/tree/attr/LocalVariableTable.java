@@ -89,7 +89,7 @@ public final class LocalVariableTable extends Attribute implements CodeAttribute
 			a.add(v.type);
 			a.add(v.slot);
 			a.add(v.start.getValue());
-			a.add(v.end==null?"<函数结束>":(int)v.end.getValue());
+			a.add(v.end==null?"<函数结束>":v.end.getValue());
 			a.add(IntMap.UNDEFINED);
 		}
 		return TextUtil.prettyTable(sb, "    ", a.toArray(), "  ", "  ").toString();

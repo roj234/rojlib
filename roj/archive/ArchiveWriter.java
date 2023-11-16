@@ -23,15 +23,12 @@ public interface ArchiveWriter extends Closeable {
 		beginEntry(entry);
 		if (!data.hasArray()) {
 			BufferPool pool = BufferPool.localPool();
-			ByteList arrayBuf = (ByteList) pool.buffer(false,Math.min(data.readableBytes(),1024));
-			try {
+			try (ByteList bb = (ByteList) BufferPool.buffer(false,Math.min(data.readableBytes(),1024))) {
 				while (data.isReadable()) {
-					arrayBuf.put(data, Math.min(data.readableBytes(),1024));
-					write(arrayBuf.array(),arrayBuf.relativeArrayOffset(),arrayBuf.readableBytes());
-					arrayBuf.clear();
+					bb.put(data, Math.min(data.readableBytes(),1024));
+					write(bb.array(),bb.relativeArrayOffset(),bb.readableBytes());
+					bb.clear();
 				}
-			} finally {
-				pool.reserve(arrayBuf);
 			}
 		} else {
 			write(data.array(),data.relativeArrayOffset(),data.readableBytes());

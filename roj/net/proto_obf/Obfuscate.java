@@ -1,6 +1,7 @@
 package roj.net.proto_obf;
 
 import roj.crypt.CRCAny;
+import roj.io.buf.BufferPool;
 import roj.io.buf.NativeArray;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
@@ -44,7 +45,7 @@ public final class Obfuscate extends PacketMerger implements ChannelHandler {
 		if (cByte == -1) {
 			cByte = new Random().nextInt(256);
 
-			buf = ctx.alloc().expand(buf, 1, false, false).put(0, 0);
+			buf = BufferPool.expand(buf, 1, false, false).put(0, 0);
 		}
 
 		NativeArray arr = buf.byteRange(buf.rIndex, buf.readableBytes());
@@ -60,7 +61,7 @@ public final class Obfuscate extends PacketMerger implements ChannelHandler {
 		try {
 			ctx.channelWrite(buf);
 		} finally {
-			if (msg != buf) ctx.reserve(buf);
+			if (msg != buf) BufferPool.reserve(buf);
 		}
 	}
 }

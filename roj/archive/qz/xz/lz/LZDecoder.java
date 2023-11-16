@@ -26,9 +26,9 @@ public final class LZDecoder {
 	private int pendingLen = 0;
 	private int pendingDist = 0;
 
-	public LZDecoder(int dictSize, byte[] presetDict, ArrayCache arrayCache) {
+	public LZDecoder(int dictSize, byte[] presetDict) {
 		bufSize = dictSize;
-		buf = arrayCache.getByteArray(bufSize, false);
+		buf = ArrayCache.getByteArray(dictSize, false);
 
 		if (presetDict != null) {
 			pos = Math.min(presetDict.length, dictSize);
@@ -38,9 +38,7 @@ public final class LZDecoder {
 		}
 	}
 
-	public void putArraysToCache(ArrayCache arrayCache) {
-		arrayCache.putArray(buf);
-	}
+	public void putArraysToCache() { ArrayCache.putArray(buf); }
 
 	public void reset() {
 		start = 0;
@@ -74,14 +72,14 @@ public final class LZDecoder {
 		return buf[offset] & 0xFF;
 	}
 
-	public void putByte(byte b) {
-		buf[pos++] = b;
+	public void putByte(int b) {
+		buf[pos++] = (byte) b;
 
 		if (full < pos) full = pos;
 	}
 
 	public void repeat(int dist, int len) throws IOException {
-		if (dist < 0 || dist >= full) throw new CorruptedInputException();
+		if (dist < 0 || dist >= full) throw new CorruptedInputException("invalid distance");
 
 		int left = Math.min(limit - pos, len);
 		pendingLen = len - left;

@@ -35,6 +35,7 @@ public class FastModDev_UI extends JFrame {
 		uiKill = new JButton();
 		JLabel label1 = new JLabel();
 		JLabel label2 = new JLabel();
+		button1 = new JButton();
 		dlgEditProject = new JDialog();
 		JLabel label5 = new JLabel();
 		textField1 = new JTextField();
@@ -47,16 +48,6 @@ public class FastModDev_UI extends JFrame {
 		spinner1 = new JSpinner();
 		button8 = new JButton();
 		JLabel label9 = new JLabel();
-		dlgObf = new JDialog();
-		JScrollPane scrollPane2 = new JScrollPane();
-		uiObfLibPath = new JTextArea();
-		uiObfToSrg = new JButton();
-		uiObfDoLib = new JCheckBox();
-		JLabel label3 = new JLabel();
-		uiObfInput = new JTextField();
-		JLabel label4 = new JLabel();
-		uiObfFromSrg = new JButton();
-		uiObfState = new JLabel();
 		dlgRefTool = new JDialog();
 		uiRefSearch = new JTextField();
 		uiRefSearchType = new JComboBox<>();
@@ -120,7 +111,7 @@ public class FastModDev_UI extends JFrame {
 		//---- uiAT ----
 		uiAT.setText("\u91cd\u65b0AT");
 		contentPane.add(uiAT);
-		uiAT.setBounds(new Rectangle(new Point(575, 105), uiAT.getPreferredSize()));
+		uiAT.setBounds(570, 105, 80, uiAT.getPreferredSize().height);
 
 		//---- uiKill ----
 		uiKill.setText("\u5173\u95ed\u5ba2\u6237\u7aef");
@@ -136,6 +127,11 @@ public class FastModDev_UI extends JFrame {
 		label2.setText("\u6e38\u620f\u65e5\u5fd7");
 		contentPane.add(label2);
 		label2.setBounds(new Rectangle(new Point(30, 185), label2.getPreferredSize()));
+
+		//---- button1 ----
+		button1.setText("\u5173\u4e8e");
+		contentPane.add(button1);
+		button1.setBounds(570, 130, 80, button1.getPreferredSize().height);
 
 		contentPane.setPreferredSize(new Dimension(660, 465));
 		pack();
@@ -193,55 +189,6 @@ public class FastModDev_UI extends JFrame {
 			dlgEditProject.setLocationRelativeTo(dlgEditProject.getOwner());
 		}
 
-		//======== dlgObf ========
-		{
-			dlgObf.setTitle("\u624b\u52a8\u6620\u5c04");
-			Container dlgObfContentPane = dlgObf.getContentPane();
-			dlgObfContentPane.setLayout(null);
-
-			//======== scrollPane2 ========
-			{
-				scrollPane2.setViewportView(uiObfLibPath);
-			}
-			dlgObfContentPane.add(scrollPane2);
-			scrollPane2.setBounds(5, 50, 345, 210);
-
-			//---- uiObfToSrg ----
-			uiObfToSrg.setText("\u5230SRG");
-			uiObfToSrg.setMargin(new Insets(2, 4, 2, 4));
-			dlgObfContentPane.add(uiObfToSrg);
-			uiObfToSrg.setBounds(new Rectangle(new Point(47, 265), uiObfToSrg.getPreferredSize()));
-
-			//---- uiObfDoLib ----
-			uiObfDoLib.setText("\u4ec5\u5904\u7406\u9009\u4e2d\u9879\uff08\u672a\u9009\u4e2d\u7684\u4f5c\u4e3a\u4f9d\u8d56\uff09");
-			dlgObfContentPane.add(uiObfDoLib);
-			uiObfDoLib.setBounds(new Rectangle(new Point(130, 265), uiObfDoLib.getPreferredSize()));
-
-			//---- label3 ----
-			label3.setText("\u8f93\u5165       \u6bcf\u884c\u4e00\u4e2a\u6587\u4ef6");
-			dlgObfContentPane.add(label3);
-			label3.setBounds(new Rectangle(new Point(5, 30), label3.getPreferredSize()));
-			dlgObfContentPane.add(uiObfInput);
-			uiObfInput.setBounds(70, 5, 280, uiObfInput.getPreferredSize().height);
-
-			//---- label4 ----
-			label4.setText("\u8f93\u51fa\u6587\u4ef6\u5939");
-			dlgObfContentPane.add(label4);
-			label4.setBounds(new Rectangle(new Point(5, 8), label4.getPreferredSize()));
-
-			//---- uiObfFromSrg ----
-			uiObfFromSrg.setText("\u4eceSRG");
-			uiObfFromSrg.setMargin(new Insets(2, 4, 2, 4));
-			dlgObfContentPane.add(uiObfFromSrg);
-			uiObfFromSrg.setBounds(new Rectangle(new Point(5, 265), uiObfFromSrg.getPreferredSize()));
-			dlgObfContentPane.add(uiObfState);
-			uiObfState.setBounds(new Rectangle(new Point(150, 30), uiObfState.getPreferredSize()));
-
-			dlgObfContentPane.setPreferredSize(new Dimension(355, 295));
-			dlgObf.pack();
-			dlgObf.setLocationRelativeTo(dlgObf.getOwner());
-		}
-
 		//======== dlgRefTool ========
 		{
 			dlgRefTool.setTitle("\u6620\u5c04\u8868\u67e5\u8be2");
@@ -285,6 +232,7 @@ public class FastModDev_UI extends JFrame {
 	private JButton uiProject;
 	private JButton uiAT;
 	private JButton uiKill;
+	private JButton button1;
 	private JDialog dlgEditProject;
 	private JTextField textField1;
 	private JTextField textField2;
@@ -292,13 +240,6 @@ public class FastModDev_UI extends JFrame {
 	private JTextField textField4;
 	private JSpinner spinner1;
 	private JButton button8;
-	private JDialog dlgObf;
-	private JTextArea uiObfLibPath;
-	private JButton uiObfToSrg;
-	private JCheckBox uiObfDoLib;
-	private JTextField uiObfInput;
-	private JButton uiObfFromSrg;
-	private JLabel uiObfState;
 	private JDialog dlgRefTool;
 	private JTextField uiRefSearch;
 	private JComboBox<String> uiRefSearchType;

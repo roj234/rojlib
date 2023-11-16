@@ -5,7 +5,7 @@ import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.text.BitMapper;
 import roj.text.CharList;
-import roj.ui.UIUtil;
+import roj.ui.CLIUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -68,7 +68,7 @@ public class TinyCoder {
 			}
 		} else {
 			while (true) {
-				String in = UIUtil.in.readLine();
+				String in = CLIUtil.in.readLine();
 				if (in == null) return;
 
 				in = (st & ENCODE) != 0 ? c.encode(in) : c.decode(in);

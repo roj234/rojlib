@@ -17,7 +17,7 @@ import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.UTFCoder;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
 import java.net.InetAddress;
@@ -258,7 +258,7 @@ public class Aliyun implements DDNSService {
 			SyncHttpClient shc = HttpRequest.nts().url(makeUrl(par)).executePooled();
 			CMapping cfg = _parse(shc);
 		} catch (Exception e) {
-			CmdUtil.error("请求参数: " + par, e);
+			CLIUtil.error("请求参数: " + par, e);
 		}
 	}
 
@@ -273,7 +273,7 @@ public class Aliyun implements DDNSService {
 		try {
 			CMapping cfg = _parse(pooledRequest(makeUrl(par)));
 		} catch (Exception e) {
-			CmdUtil.error("请求参数: " + par, e);
+			CLIUtil.error("请求参数: " + par, e);
 		}
 	}
 

@@ -20,13 +20,14 @@ public class ArrayCache {
 	public static final Class<?>[] CLASSES = new Class<?>[0];
 
 	private static final ThreadLocal<ArrayCache> CACHE = new ThreadLocal<>();
-	public static ArrayCache getDefaultCache() {
+	private static final ArrayCache LARGE_ARRAY = new ArrayCache();
+	private static ArrayCache small() {
 		ArrayCache cache = CACHE.get();
 		if (cache == null) CACHE.set(cache = new ArrayCache());
 		return cache;
 	}
 
-	private static final int LARGE_ARRAY_SIZE = 524288;
+	private static final int LARGE_ARRAY_SIZE = 65536;
 	private static final int CHIP_SIZE = 256;
 	private static final int SIZES_MAX = 64;
 	private static final int ARRAYS_MAX = 9;
@@ -69,14 +70,21 @@ public class ArrayCache {
 			val.setValue(size/CHIP_SIZE);
 			Reference<T>[] stack = cache.get(val);
 			if (stack == null) {
-				cache.put(new MutableInt(val), stack = Helpers.cast(new Reference<?>[8]));
+				cache.put(new MutableInt(val), stack = Helpers.cast(new Reference<?>[ARRAYS_MAX]));
 			}
 
+			boolean placedIn = false;
 			for (int i = 0; i < stack.length; i++) {
 				Reference<T> r = stack[i];
 				if (r == null || r.get() == null) {
-					stack[i] = i == 0 ? new SoftReference<>(array) : new WeakReference<>(array);
-					break;
+					if (!placedIn) {
+						stack[i] = i == 0 ? new SoftReference<>(array) : new WeakReference<>(array);
+						placedIn = true;
+					}
+				} else if (r.get() == array) {
+					if (!placedIn) break;
+
+					stack[i] = null;
 				}
 			}
 		} finally {
@@ -84,10 +92,11 @@ public class ArrayCache {
 		}
 	}
 
-	public byte[] getByteArray(int size, boolean fillWithZeros) {
+	public static byte[] getByteArray(int size, boolean fillWithZeros) {
 		int size1 = (size+CHIP_SIZE-1)& -CHIP_SIZE;
 
-		byte[] array = getArray(byteCache, size1);
+		ArrayCache inst = size1 > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		byte[] array = inst.getArray(inst.byteCache, size1);
 
 		if (array == null) array = new byte[size1];
 		else if (fillWithZeros) {
@@ -97,14 +106,16 @@ public class ArrayCache {
 
 		return array;
 	}
-	public void putArray(byte[] array) {
-		putArray(byteCache, array, array.length);
+	public static void putArray(byte[] array) {
+		ArrayCache inst = array.length > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		inst.putArray(inst.byteCache, array, array.length);
 	}
 
-	public int[] getIntArray(int size, int fillWithZeros) {
+	public static int[] getIntArray(int size, int fillWithZeros) {
 		int size1 = (size+CHIP_SIZE-1)& -CHIP_SIZE;
 
-		int[] array = getArray(intCache, size1);
+		ArrayCache inst = size1 > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		int[] array = inst.getArray(inst.intCache, size1);
 
 		if (array == null) array = new int[size1];
 		else {
@@ -114,16 +125,18 @@ public class ArrayCache {
 
 		return array;
 	}
-	public void putArray(int[] array) {
-		putArray(intCache, array, array.length);
+	public static void putArray(int[] array) {
+		ArrayCache inst = array.length > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		inst.putArray(inst.intCache, array, array.length);
 	}
 
-	public char[] getCharArray(int size, boolean fillWithZeros) {
+	public static char[] getCharArray(int size, boolean fillWithZeros) {
 		// round up to CHIP_SIZE
 		// 分块... 反正get实际意义是... 长度至少为N的数组
 		int size1 = (size+CHIP_SIZE-1)& -CHIP_SIZE;
 
-		char[] array = getArray(charCache, size1);
+		ArrayCache inst = size1 > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		char[] array = inst.getArray(inst.charCache, size1);
 
 		if (array == null) array = new char[size1];
 		else if (fillWithZeros) {
@@ -133,7 +146,8 @@ public class ArrayCache {
 
 		return array;
 	}
-	public void putArray(char[] array) {
-		putArray(charCache, array, array.length);
+	public static void putArray(char[] array) {
+		ArrayCache inst = array.length > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
+		inst.putArray(inst.charCache, array, array.length);
 	}
 }

@@ -18,17 +18,19 @@ import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextReader;
 import roj.text.TextUtil;
+import roj.ui.GUIUtil;
 import roj.ui.OnChangeHelper;
-import roj.ui.UIUtil;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /**
@@ -37,7 +39,7 @@ import java.util.regex.Pattern;
 public class MapperUI extends JFrame {
 	private static final Mapper MAPPER = new Mapper();
 	private void init() {
-		File file = UIUtil.fileLoadFrom("选择映射表(Srg / XSrg)", this);
+		File file = GUIUtil.fileLoadFrom("选择映射表(Srg / XSrg)", this);
 		if (file == null) return;
 
 		MAPPER.clear();
@@ -59,7 +61,7 @@ public class MapperUI extends JFrame {
 			} else if (f.isFile()) {
 				lib.add(f);
 			} else {
-				lib.addAll(IOUtil.findAllFiles(f));
+				lib.addAll(IOUtil.findAllFiles(f, jarFilter()));
 			}
 		}
 
@@ -69,15 +71,27 @@ public class MapperUI extends JFrame {
 		uiMap.setEnabled(true);
 	}
 	private void map() throws Exception {
-		File input = new File(uiInputPath.getText());
+		List<File> input = new SimpleList<>();
+
+		for (String path : new LineReader(uiInputPath.getText())) {
+			File file = new File(path);
+			if (file.isFile()) input.add(file);
+			else if (file.isDirectory()) IOUtil.findAllFiles(file, input, jarFilter());
+			else {
+				input = null;
+				break;
+			}
+		}
+
+		if (uiInputPath.getText().isEmpty() || input == null) {
+			JOptionPane.showMessageDialog(this, "未找到某些输入文件", "IO错误", JOptionPane.ERROR_MESSAGE);
+			return;
+		}
+
 		File output = new File(uiOutputPath.getText());
 		Charset charset = Charset.forName(uiCharset.getText());
 
-		if (uiInputPath.getText().isEmpty() || !input.exists()) {
-			JOptionPane.showMessageDialog(this, "输入不存在", "IO错误", JOptionPane.ERROR_MESSAGE);
-			return;
-		}
-		if (uiOutputPath.getText().isEmpty() || (input.isDirectory() && !output.isDirectory() && !output.mkdirs())) {
+		if (uiOutputPath.getText().isEmpty() || (input.size() > 0 && !output.isDirectory() && !output.mkdirs())) {
 			JOptionPane.showMessageDialog(this, "输出不是文件夹且无法创建", "IO错误", JOptionPane.ERROR_MESSAGE);
 			return;
 		}
@@ -98,27 +112,19 @@ public class MapperUI extends JFrame {
 
 		long begin = System.currentTimeMillis();
 
-
-		List<X> files = new SimpleList<>();
+		List<MapTask> files = new SimpleList<>();
 		List<Context> ctxs;
 
 		Map<String, byte[]> resource;
 		try {
-			if (input.isDirectory()) {
-				ctxs = new SimpleList<>();
-				for (File file : input.listFiles()) {
-					resource = new MyHashMap<>();
-					List<Context> arr = Context.fromZip(file, charset, resource);
-					files.add(new X(new File(output, file.getName()), ctxs.size(), arr.size(), resource));
-
-					if (uiMapUsers.isSelected()) MAPPER.loadLibraries(Collections.singletonList(file));
-					ctxs.addAll(arr);
-				}
-			} else {
+			ctxs = new SimpleList<>();
+			for (File file : input) {
 				resource = new MyHashMap<>();
-				if (uiMapUsers.isSelected()) MAPPER.loadLibraries(Collections.singletonList(input));
-				ctxs = Context.fromZip(input, charset, resource);
-				files.add(new X(output, 0, ctxs.size(), resource));
+				List<Context> arr = Context.fromZip(file, charset, resource);
+				files.add(new MapTask(new File(output, file.getName()), ctxs.size(), arr.size(), resource));
+
+				if (uiMapUsers.isSelected()) MAPPER.loadLibraries(Collections.singletonList(file));
+				ctxs.addAll(arr);
 			}
 			uiMapUsers.setSelected(false);
 
@@ -127,17 +133,17 @@ public class MapperUI extends JFrame {
 			for (int i = 0; i < files.size(); i++)
 				files.get(i).finish(ctxs);
 		} finally {
-			for (X x : files) x.zfw.close();
+			for (MapTask x : files) x.zfw.close();
 		}
 
 		System.out.println(System.currentTimeMillis()-begin);
 	}
-	private static final class X {
+	private static final class MapTask {
 		ZipFileWriter zfw;
 		AsyncTask<Void> task;
 		int off, len;
 
-		X(File out, int off, int len, Map<String, byte[]> resource) throws IOException {
+		MapTask(File out, int off, int len, Map<String, byte[]> resource) throws IOException {
 			zfw = new ZipFileWriter(out);
 			task = new AsyncTask<>(new ResWriter(zfw, resource));
 			this.off = off;
@@ -154,11 +160,18 @@ public class MapperUI extends JFrame {
 			zfw.finish();
 		}
 	}
+	private static Predicate<File> jarFilter() {
+		return fn -> {
+			String ext = IOUtil.extensionName(fn.getName().toLowerCase());
+			return ext.equals("jar") || ext.equals("zip");
+		};
+	}
+
 
 	private static final Pattern STACKTRACE = Pattern.compile("at (.+)\\.(.+)\\((?:(.+)\\.java|Unknown Source)(?::(\\d+))?\\)");
 	private static final MyHashMap<Desc, Int2IntMap> LINES = new MyHashMap<>();
 	private void loadLines() {
-		File file = UIUtil.fileLoadFrom("选择行号表", this);
+		File file = GUIUtil.fileLoadFrom("选择行号表", dlgMapTrace);
 		if (file == null) return;
 
 		LINES.clear();
@@ -181,7 +194,7 @@ public class MapperUI extends JFrame {
 	}
 
 	public static void main(String[] args) throws Exception {
-		UIUtil.systemLook();
+		GUIUtil.systemLook();
 		MapperUI f = new MapperUI();
 
 		f.setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -191,9 +204,9 @@ public class MapperUI extends JFrame {
 	private MappingUI mappingUI;
 	public MapperUI() {
 		initComponents();
-		UIUtil.dropFilePath(uiInputPath, (f) -> uiOutputPath.setText(new File(f.getName()).getAbsolutePath()), false);
-		UIUtil.dropFilePath(uiOutputPath, null, false);
-		UIUtil.dropFilePath(uiLibraries, null, true);
+		GUIUtil.dropFilePath(uiInputPath, (f) -> uiOutputPath.setText(new File(f.getName()).getAbsolutePath()), false);
+		GUIUtil.dropFilePath(uiOutputPath, null, false);
+		GUIUtil.dropFilePath(uiLibraries, null, true);
 
 		OnChangeHelper helper = new OnChangeHelper(this);
 		helper.addRoot(dlgMapTrace);
@@ -265,13 +278,20 @@ public class MapperUI extends JFrame {
 		/*helper.addEventListener(uiStackTrace, (c) -> {
 			uiDeobfStackTrace.setEnabled(c.getDocument().getLength() > 0);
 		});*/
+		uiInputPath.addFocusListener(new FocusListener() {
+			@Override
+			public void focusGained(FocusEvent e) { scrollPane2.setSize(scrollPane2.getWidth(), 155); }
+			@Override
+			public void focusLost(FocusEvent e) { scrollPane2.setSize(scrollPane2.getWidth(), 19); }
+		});
 	}
 
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
 		JScrollPane scrollPane1 = new JScrollPane();
 		uiLibraries = new JTextArea();
-		uiInputPath = new JTextField();
+		scrollPane2 = new JScrollPane();
+		uiInputPath = new JTextArea();
 		uiOutputPath = new JTextField();
 		JLabel label1 = new JLabel();
 		JLabel label2 = new JLabel();
@@ -298,7 +318,7 @@ public class MapperUI extends JFrame {
 		uiStackTrace = new JTextArea();
 
 		//======== this ========
-		setTitle("Roj234 Jar Mapper 3.1");
+		setTitle("Roj234 Jar Mapper 3.1.1");
 		setResizable(false);
 		Container contentPane = getContentPane();
 		contentPane.setLayout(null);
@@ -307,16 +327,21 @@ public class MapperUI extends JFrame {
 		{
 
 			//---- uiLibraries ----
-			uiLibraries.setText("# 1. \u5982\u679c\u62a5\u9519\u201c\u7f3a\u5c11\u5143\u7d20\u201d\uff0c\u52fe\u4e0a\u201c\u8f93\u5165\u7684\u7c7b\u5728\u6620\u5c04\u8868\u4e2d\u201d\u91cd\u8bd5\n#    \u8f93\u5165\u4e0d\u53d8\u65f6\uff0c\u53ea\u6709\u7b2c\u4e00\u6b21\u6620\u5c04\u9700\u8981\u52fe\uff08\u8fd9\u6837\u53ef\u52a0\u5feb\u901f\u5ea6\uff09\n# 2. \u3010\u5173\u5fc3\u5b57\u6bb5\u7c7b\u578b\u3011\u9700\u8981\u6620\u5c04\u8868\u4fdd\u5b58\u4e86\u5b57\u6bb5\u7c7b\u578b\n# 3. \u7ea2\u8272\u590d\u9009\u6846\u9700\u8981\u91cd\u65b0\u52a0\u8f7d\u751f\u6548\n# 4. \u8f93\u5165\u548c\u8f93\u51fa\u53ef\u4ee5\u662f\u6587\u4ef6\u5939\u6765\u6279\u5904\u7406\u6240\u6709\u6587\u4ef6\n# 5. \u5982\u679c\u8f93\u51fa\u662f\u6587\u4ef6\u5939\uff0c\u65e0\u8bba\u5982\u4f55\u90fd\u4f1a\u8986\u76d6\u6587\u4ef6\n# 6. \u8f93\u5165\u3001\u8f93\u51fa\u548c\u5e93\u6587\u4ef6\u652f\u6301\u62d6\u52a8\n# 7. \u8f93\u5165\u5b57\u7b26\u96c6\u4e0d\u7528\u8fc7\u4e8e\u62c5\u5fc3\uff0c\u6211\u7684ZipArchive\u6bd4sun\u5199\u7684\u597d");
+			uiLibraries.setText("# 1. \u5982\u679c\u62a5\u9519\u201c\u7f3a\u5c11\u5143\u7d20\u201d\uff0c\u52fe\u4e0a\u201c\u8f93\u5165\u7684\u7c7b\u5728\u6620\u5c04\u8868\u4e2d\u201d\u91cd\u8bd5\n#    \u8f93\u5165\u4e0d\u53d8\u65f6\uff0c\u53ea\u6709\u7b2c\u4e00\u6b21\u6620\u5c04\u9700\u8981\u52fe\uff08\u8fd9\u6837\u53ef\u52a0\u5feb\u901f\u5ea6\uff09\n# 2. \u3010\u5173\u5fc3\u5b57\u6bb5\u7c7b\u578b\u3011\u9700\u8981\u6620\u5c04\u8868\u4fdd\u5b58\u4e86\u5b57\u6bb5\u7c7b\u578b\n# 3. \u7ea2\u8272\u590d\u9009\u6846\u9700\u8981\u91cd\u65b0\u52a0\u8f7d\u751f\u6548\n# 4. \u8f93\u5165\u548c\u8f93\u51fa\u53ef\u4ee5\u662f\u6587\u4ef6\u5939\u6765\u6279\u5904\u7406\u6240\u6709\u6587\u4ef6\n# 5. \u5982\u679c\u8f93\u51fa\u662f\u6587\u4ef6\u5939\uff0c\u8986\u76d6\u6587\u4ef6\u4e0d\u4f1a\u6709\u63d0\u793a\n# 6. \u8f93\u5165\u3001\u8f93\u51fa\u548c\u5e93\u6587\u4ef6\u652f\u6301\u62d6\u52a8\n# 7. \u8f93\u5165\u70b9\u51fb\u53ef\u4ee5\u53d8\u5927\uff0cswing\u771f\u96be\u7528\n# 8. \u4ec5\u5904\u7406\u6587\u4ef6\u5939\u4e2d\u7684jar\u548czip\u6587\u4ef6");
 			scrollPane1.setViewportView(uiLibraries);
 		}
 		contentPane.add(scrollPane1);
 		scrollPane1.setBounds(4, 160, 380, 210);
 
-		//---- uiInputPath ----
-		uiInputPath.setToolTipText("\u4e5f\u53ef\u4ee5\u662f\u6587\u4ef6\u5939");
-		contentPane.add(uiInputPath);
-		uiInputPath.setBounds(30, 5, 215, uiInputPath.getPreferredSize().height);
+		//======== scrollPane2 ========
+		{
+
+			//---- uiInputPath ----
+			uiInputPath.setToolTipText("\u4e5f\u53ef\u4ee5\u662f\u6587\u4ef6\u5939");
+			scrollPane2.setViewportView(uiInputPath);
+		}
+		contentPane.add(scrollPane2);
+		scrollPane2.setBounds(30, 5, 215, 19);
 		contentPane.add(uiOutputPath);
 		uiOutputPath.setBounds(30, 30, 215, uiOutputPath.getPreferredSize().height);
 
@@ -370,7 +395,7 @@ public class MapperUI extends JFrame {
 		uiMFlag8.setBounds(new Rectangle(new Point(255, 75), uiMFlag8.getPreferredSize()));
 
 		//---- uiMFlag32 ----
-		uiMFlag32.setText("\u591a\u7ebf\u7a0b");
+		uiMFlag32.setText("\u5e76\u884c");
 		uiMFlag32.setSelected(true);
 		contentPane.add(uiMFlag32);
 		uiMFlag32.setBounds(new Rectangle(new Point(255, 55), uiMFlag32.getPreferredSize()));
@@ -423,7 +448,7 @@ public class MapperUI extends JFrame {
 		//---- uiMapTrace ----
 		uiMapTrace.setText("StackTrace\u6620\u5c04");
 		contentPane.add(uiMapTrace);
-		uiMapTrace.setBounds(new Rectangle(new Point(255, 105), uiMapTrace.getPreferredSize()));
+		uiMapTrace.setBounds(new Rectangle(new Point(260, 116), uiMapTrace.getPreferredSize()));
 
 		contentPane.setPreferredSize(new Dimension(390, 375));
 		pack();
@@ -464,7 +489,8 @@ public class MapperUI extends JFrame {
 
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
 	private JTextArea uiLibraries;
-	private JTextField uiInputPath;
+	private JScrollPane scrollPane2;
+	private JTextArea uiInputPath;
 	private JTextField uiOutputPath;
 	private JTextField uiCharset;
 	private JCheckBox uiInvert;

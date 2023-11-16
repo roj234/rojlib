@@ -165,6 +165,7 @@ public class InsnHelper {
 
 	public boolean isNodeSimilar(XInsnNodeView a, XInsnNodeView b) { return a.isSimilarTo(b, this); }
 
+	@SuppressWarnings("fallthrough")
 	public void mapVarId(XInsnList from) {
 		Int2IntMap map = varIdReplace;
 		for (XInsnNodeView node : from) {

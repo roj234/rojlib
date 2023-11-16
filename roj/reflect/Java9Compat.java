@@ -102,7 +102,7 @@ public final class Java9Compat {
 			} catch (Exception e) {
 				if (NativeLibrary.loaded) {
 					try {
-						乌拉 = nDefineClass(data.name, bytes, 0, bytes.length, null, null);
+						乌拉 = defineClass0(data.name, null, bytes, bytes.length);
 						break j17;
 					} catch (Throwable ignored) {}
 				}
@@ -118,7 +118,7 @@ public final class Java9Compat {
 		Java9DefineClass = Helpers.cast(System.getProperties().remove("_ILJ9DC_"));
 	}
 
-	private static native Class<?> nDefineClass(String name, byte[] b, int off, int len, ProtectionDomain pd, String source);
+	private static native Class<?> defineClass0(String name, ClassLoader cl, byte[] b, int len);
 
 	private static Class<?> Java9OpenMagic;
 	public synchronized static String HackMagicAccessor() {

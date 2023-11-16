@@ -4,6 +4,7 @@ import roj.NativeLibrary;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
 import roj.net.URIUtil;
 import roj.net.ch.*;
 import roj.net.ch.handler.JSslClient;
@@ -301,7 +302,7 @@ public abstract class HttpRequest {
 					if (!buf.isWritable()) return null;
 					ctx.channelWrite(buf);
 				} finally {
-					ctx.reserve(buf);
+					BufferPool.reserve(buf);
 				}
 				return body;
 			}

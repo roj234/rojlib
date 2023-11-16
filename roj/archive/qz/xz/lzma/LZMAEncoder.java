@@ -12,14 +12,14 @@ package roj.archive.qz.xz.lzma;
 
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.rangecoder.RangeEncoder;
-import roj.util.ArrayCache;
 
 import java.io.IOException;
 import java.util.Arrays;
 
+import static roj.archive.qz.xz.rangecoder.RangeEncoder.*;
+
 public abstract class LZMAEncoder extends LZMACoder {
-	public static final int MODE_FAST = 1;
-	public static final int MODE_NORMAL = 2;
+	public static final int MODE_FAST = 1, MODE_NORMAL = 2;
 
 	/**
 	 * LZMA2 chunk is considered full when its uncompressed size exceeds
@@ -49,9 +49,6 @@ public abstract class LZMAEncoder extends LZMACoder {
 
 	private final RangeEncoder rc;
 	final LZEncoder lz;
-	final LiteralEncoder literalEncoder;
-	final LengthEncoder matchLenEncoder;
-	final LengthEncoder repLenEncoder;
 	final int niceLen;
 
 	private int distPriceCount = 0;
@@ -66,25 +63,29 @@ public abstract class LZMAEncoder extends LZMACoder {
 	int readAhead = -1;
 	private int uncompressedSize = 0;
 
+	/**
+	 * The prices are updated after at least
+	 * <code>PRICE_UPDATE_INTERVAL</code> many lengths
+	 * have been encoded with the same posState.
+	 */
+	private static final int PRICE_UPDATE_INTERVAL = 32;
+
+	private final int[] counters;
+	private final int[][] prices;
+
 	public static int getMemoryUsage(int mode, int dictSize, int extraSizeBefore, int mf) {
-		int m = 80;
-		switch (mode) {
-			case MODE_FAST: m += LZMAEncoderFast.getMemoryUsage(dictSize, extraSizeBefore, mf); break;
-			case MODE_NORMAL: m += LZMAEncoderNormal.getMemoryUsage(dictSize, extraSizeBefore, mf); break;
-			default: throw new IllegalArgumentException();
-		}
+		int m = 22;
+		if (mode == MODE_FAST) m += LZMAEncoderFast.getMemoryUsage(dictSize, extraSizeBefore, mf);
+		else m += LZMAEncoderNormal.getMemoryUsage(dictSize, extraSizeBefore, mf);
 		return m;
 	}
 
-	public static LZMAEncoder getInstance(RangeEncoder rc, int lc, int lp, int pb, int mode, int dictSize, int extraSizeBefore, int niceLen, int mf, int depthLimit, ArrayCache arrayCache) {
-		switch (mode) {
-			case MODE_FAST: return new LZMAEncoderFast(rc, lc, lp, pb, dictSize, extraSizeBefore, niceLen, mf, depthLimit, arrayCache);
-			case MODE_NORMAL: return new LZMAEncoderNormal(rc, lc, lp, pb, dictSize, extraSizeBefore, niceLen, mf, depthLimit, arrayCache);
-		}
-		throw new IllegalArgumentException();
+	public static LZMAEncoder getInstance(RangeEncoder rc, int lc, int lp, int pb, int mode, int dictSize, int extraSizeBefore, int niceLen, int mf, int depthLimit) {
+		if (mode == MODE_FAST) return new LZMAEncoderFast(rc, lc, lp, pb, dictSize, extraSizeBefore, niceLen, mf, depthLimit);
+		else return new LZMAEncoderNormal(rc, lc, lp, pb, dictSize, extraSizeBefore, niceLen, mf, depthLimit);
 	}
 
-	public void putArraysToCache(ArrayCache ac) { lz.release(ac); }
+	public void putArraysToCache() { lz.release(); }
 
 	/**
 	 * Gets an integer [0, 63] matching the highest two bits of an integer.
@@ -142,14 +143,19 @@ public abstract class LZMAEncoder extends LZMACoder {
 	abstract int getNextSymbol();
 
 	LZMAEncoder(RangeEncoder rc, LZEncoder lz, int lc, int lp, int pb, int dictSize, int niceLen) {
-		super(pb);
+		super(lc, lp, pb);
 		this.rc = rc;
 		this.lz = lz;
 		this.niceLen = niceLen;
 
-		literalEncoder = new LiteralEncoder(lc, lp);
-		matchLenEncoder = new LengthEncoder(pb, niceLen);
-		repLenEncoder = new LengthEncoder(pb, niceLen);
+		int ii = 2 << pb;
+		counters = new int[ii];
+
+		// Always allocate at least LOW_SYMBOLS + MID_SYMBOLS because
+		// it makes updatePrices slightly simpler. The prices aren't
+		// usually needed anyway if niceLen < 18.
+		int lenSymbols = Math.max(niceLen - MATCH_LEN_MIN + 1, LOW_SYMBOLS + MID_SYMBOLS);
+		prices = new int[ii][lenSymbols];
 
 		distSlotPricesSize = getDistSlot(dictSize - 1) + 1;
 		distSlotPrices = new int[DIST_STATES*distSlotPricesSize];
@@ -157,15 +163,15 @@ public abstract class LZMAEncoder extends LZMACoder {
 		reset();
 	}
 
-	public LZEncoder getLZEncoder() {
-		return lz;
-	}
+	public LZEncoder getLZEncoder() { return lz; }
 
 	public void reset() {
 		super.reset();
-		literalEncoder.reset();
-		matchLenEncoder.reset();
-		repLenEncoder.reset();
+
+		// Reset counters to zero to force price update before
+		// the prices are needed.
+		Arrays.fill(counters, 0);
+
 		distPriceCount = 0;
 		alignPriceCount = 0;
 
@@ -193,7 +199,7 @@ public abstract class LZMAEncoder extends LZMACoder {
 		// Distance is a 32-bit unsigned integer in LZMA.
 		// With Java's signed int, UINT32_MAX becomes -1.
 		int posState = (lz.getPos() - readAhead) & posMask;
-		rc.encodeBit(isMatch[state], posState, 1);
+		rc.encodeBit(isMatch, posState + (state<<4), 1);
 		rc.encodeBit(isRep, state, 0);
 		encodeMatch(-1, MATCH_LEN_MIN, posState);
 	}
@@ -208,9 +214,9 @@ public abstract class LZMAEncoder extends LZMACoder {
 		try {
 			if (!lz.isStarted() && !encodeInit()) return false;
 
-			while (uncompressedSize <= LZMA2_UNCOMPRESSED_LIMIT && rc.getPendingSize() <= LZMA2_COMPRESSED_LIMIT) if (!encodeSymbol()) return false;
+			while (uncompressedSize <= LZMA2_UNCOMPRESSED_LIMIT && rc.lzma2_getPendingSize() <= LZMA2_COMPRESSED_LIMIT) if (!encodeSymbol()) return false;
 		} catch (IOException e) {
-			throw new Error();
+			assert false;
 		}
 
 		return true;
@@ -224,8 +230,14 @@ public abstract class LZMAEncoder extends LZMACoder {
 		// a preset dictionary. This code isn't run if using
 		// a preset dictionary.
 		skip(1);
-		rc.encodeBit(isMatch[state], 0, 0);
-		literalEncoder.encodeInit();
+		rc.encodeBit(isMatch, (state << 4), 0);
+		//LITERAL_INIT
+		// When encoding the first byte of the stream, there is
+		// no previous byte in the dictionary so the encode function
+		// wouldn't work.
+		assert readAhead >= 0;
+		encodeLiteral(literalProbs[0]);
+		//LITERAL_INIT
 
 		--readAhead;
 		assert readAhead == -1;
@@ -244,14 +256,19 @@ public abstract class LZMAEncoder extends LZMACoder {
 		assert readAhead >= 0;
 		int posState = (lz.getPos() - readAhead) & posMask;
 
+		int state = this.state;
 		if (back == -1) {
 			// Literal i.e. eight-bit byte
 			assert len == 1;
-			rc.encodeBit(isMatch[state], posState, 0);
-			literalEncoder.encode();
+			rc.encodeBit(isMatch, posState + (state<<4), 0);
+			//LITERAL_ENCODE
+			assert readAhead >= 0;
+			int i = getSubcoderIndex(lz.getByte(1 + readAhead), lz.getPos() - readAhead);
+			encodeLiteral(literalProbs[i]);
+			//LITERAL_ENCODE
 		} else {
 			// Some type of match
-			rc.encodeBit(isMatch[state], posState, 1);
+			rc.encodeBit(isMatch, posState + (state<<4), 1);
 			if (back < REPS) {
 				// Repeated match i.e. the same distance
 				// has been used earlier.
@@ -272,9 +289,44 @@ public abstract class LZMAEncoder extends LZMACoder {
 		return true;
 	}
 
+	private void encodeLiteral(short[] probs) throws IOException {
+		int symbol = lz.getByte(readAhead) | 0x100;
+
+		if (state_isLiteral(state)) {
+			int subencoderIndex;
+			int bit;
+
+			do {
+				subencoderIndex = symbol >>> 8;
+				bit = (symbol >>> 7) & 1;
+				rc.encodeBit(probs, subencoderIndex, bit);
+				symbol <<= 1;
+			} while (symbol < 0x10000);
+
+		} else {
+			int matchByte = lz.getByte(reps[0] + 1 + readAhead);
+			int offset = 0x100;
+			int subencoderIndex;
+			int matchBit;
+			int bit;
+
+			do {
+				matchByte <<= 1;
+				matchBit = matchByte & offset;
+				subencoderIndex = offset + matchBit + (symbol >>> 8);
+				bit = (symbol >>> 7) & 1;
+				rc.encodeBit(probs, subencoderIndex, bit);
+				symbol <<= 1;
+				offset &= ~(matchByte ^ symbol);
+			} while (symbol < 0x10000);
+		}
+
+		state = state_updateLiteral(state);
+	}
+
 	private void encodeMatch(int dist, int len, int posState) throws IOException {
 		state = state_updateMatch(state);
-		matchLenEncoder.encode(len, posState);
+		encodeLength(len, posState, 0);
 
 		int distSlot = getDistSlot(dist);
 		rc.encodeBitTree(distSlots[getDistState(len)], distSlot);
@@ -302,9 +354,12 @@ public abstract class LZMAEncoder extends LZMACoder {
 	}
 
 	private void encodeRepMatch(int rep, int len, int posState) throws IOException {
+		RangeEncoder rc = this.rc;
+		int state = this.state;
+
 		if (rep == 0) {
 			rc.encodeBit(isRep0, state, 0);
-			rc.encodeBit(isRep0Long[state], posState, len == 1 ? 0 : 1);
+			rc.encodeBit(isRep0Long, posState + (state<<4), len == 1 ? 0 : 1);
 		} else {
 			int dist = reps[rep];
 			rc.encodeBit(isRep0, state, 1);
@@ -316,7 +371,6 @@ public abstract class LZMAEncoder extends LZMACoder {
 				rc.encodeBit(isRep2, state, rep - 2);
 
 				if (rep == 3) reps[3] = reps[2];
-
 				reps[2] = reps[1];
 			}
 
@@ -325,10 +379,10 @@ public abstract class LZMAEncoder extends LZMACoder {
 		}
 
 		if (len == 1) {
-			state = state_updateShortRep(state);
+			this.state = state_updateShortRep(state);
 		} else {
-			repLenEncoder.encode(len, posState);
-			state = state_updateLongRep(state);
+			encodeLength(len, posState, 2);
+			this.state = state_updateLongRep(state);
 		}
 	}
 
@@ -343,22 +397,68 @@ public abstract class LZMAEncoder extends LZMACoder {
 		lz.skip(len);
 	}
 
-	final int getAnyMatchPrice(int state, int posState) { return RangeEncoder.getBitPrice(isMatch[state][posState], 1); }
-	final int getNormalMatchPrice(int anyMatchPrice, int state) { return anyMatchPrice + RangeEncoder.getBitPrice(isRep[state], 0); }
-	final int getAnyRepPrice(int anyMatchPrice, int state) { return anyMatchPrice + RangeEncoder.getBitPrice(isRep[state], 1); }
-	final int getShortRepPrice(int anyRepPrice, int state, int posState) { return anyRepPrice + RangeEncoder.getBitPrice(isRep0[state], 0) + RangeEncoder.getBitPrice(isRep0Long[state][posState], 0); }
+	final int getAnyMatchPrice(int state, int posState) { return getBitPrice(isMatch[posState + (state<<4)], 1); }
+	final int getNormalMatchPrice(int anyMatchPrice, int state) { return anyMatchPrice + getBitPrice(isRep[state], 0); }
+	final int getAnyRepPrice(int anyMatchPrice, int state) { return anyMatchPrice + getBitPrice(isRep[state], 1); }
+	final int getShortRepPrice(int anyRepPrice, int state, int posState) { return anyRepPrice + getBitPrice(isRep0[state], 0) + getBitPrice(isRep0Long[posState + (state<<4)], 0); }
 
 	final int getLongRepPrice(int anyRepPrice, int rep, int state, int posState) {
 		int price = anyRepPrice;
 
 		if (rep == 0) {
-			price += RangeEncoder.getBitPrice(isRep0[state], 0) + RangeEncoder.getBitPrice(isRep0Long[state][posState], 1);
+			price += getBitPrice(isRep0[state], 0) + getBitPrice(isRep0Long[posState + (state<<4)], 1);
 		} else {
-			price += RangeEncoder.getBitPrice(isRep0[state], 1);
+			price += getBitPrice(isRep0[state], 1);
 
-			if (rep == 1) price += RangeEncoder.getBitPrice(isRep1[state], 0);
-			else price += RangeEncoder.getBitPrice(isRep1[state], 1) + RangeEncoder.getBitPrice(isRep2[state], rep - 2);
+			if (rep == 1) price += getBitPrice(isRep1[state], 0);
+			else price += getBitPrice(isRep1[state], 1) + getBitPrice(isRep2[state], rep - 2);
 		}
+
+		return price;
+	}
+
+	final int getLiteralPrice(int curByte, int matchByte, int prevByte, int pos, int state) {
+		int price = getBitPrice(isMatch[(pos & posMask) + (state<<4)], 0);
+
+		int i = getSubcoderIndex(prevByte, pos);
+		price += state_isLiteral(state) ? _getLiteralPrice(literalProbs[i], curByte) : _getLiteralPriceMatched(literalProbs[i], curByte, matchByte);
+
+		return price;
+	}
+	private static int _getLiteralPrice(short[] probs, int symbol) {
+		int price = 0;
+		int subencoderIndex;
+		int bit;
+
+		symbol |= 0x100;
+
+		do {
+			subencoderIndex = symbol >>> 8;
+			bit = (symbol >>> 7) & 1;
+			price += getBitPrice(probs[subencoderIndex], bit);
+			symbol <<= 1;
+		} while (symbol < (0x100 << 8));
+
+		return price;
+	}
+	private static int _getLiteralPriceMatched(short[] probs, int symbol, int matchByte) {
+		int price = 0;
+		int offset = 0x100;
+		int subencoderIndex;
+		int matchBit;
+		int bit;
+
+		symbol |= 0x100;
+
+		do {
+			matchByte <<= 1;
+			matchBit = matchByte & offset;
+			subencoderIndex = offset + matchBit + (symbol >>> 8);
+			bit = (symbol >>> 7) & 1;
+			price += getBitPrice(probs[subencoderIndex], bit);
+			symbol <<= 1;
+			offset &= ~(matchByte ^ symbol);
+		} while (symbol < (0x100 << 8));
 
 		return price;
 	}
@@ -367,11 +467,11 @@ public abstract class LZMAEncoder extends LZMACoder {
 		int anyMatchPrice = getAnyMatchPrice(state, posState);
 		int anyRepPrice = getAnyRepPrice(anyMatchPrice, state);
 		int longRepPrice = getLongRepPrice(anyRepPrice, rep, state, posState);
-		return longRepPrice + repLenEncoder.getPrice(len, posState);
+		return longRepPrice + getRepeatPrice(len, posState);
 	}
 
 	final int getMatchAndLenPrice(int normalMatchPrice, int dist, int len, int posState) {
-		int price = normalMatchPrice + matchLenEncoder.getPrice(len, posState);
+		int price = normalMatchPrice + getMatchPrice(len, posState);
 		int distState = getDistState(len);
 
 		if (dist < FULL_DISTANCES) {
@@ -393,11 +493,11 @@ public abstract class LZMAEncoder extends LZMACoder {
 			int i = state*distSlotPricesSize;
 
 			for (int slot = 0; slot < distSlotPricesSize; ++slot)
-				distSlotPrices[i+slot] = RangeEncoder.getBitTreePrice(distSlots[state], slot);
+				distSlotPrices[i+slot] = getBitTreePrice(distSlots[state], slot);
 
 			for (int slot = DIST_MODEL_END; slot < distSlotPricesSize; ++slot) {
 				int count = (slot >>> 1) - 1 - ALIGN_BITS;
-				distSlotPrices[i+slot] += RangeEncoder.getDirectBitsPrice(count);
+				distSlotPrices[i+slot] += getDirectBitsPrice(count);
 			}
 
 			System.arraycopy(distSlotPrices, i, fullDistPrices, state*FULL_DISTANCES, DIST_MODEL_START);
@@ -411,7 +511,7 @@ public abstract class LZMAEncoder extends LZMACoder {
 			int limit = distSpecial[slot - DIST_MODEL_START].length;
 			for (int i = 0; i < limit; ++i) {
 				int distReduced = dist - base;
-				int price = RangeEncoder.getReverseBitTreePrice(distSpecial[slot - DIST_MODEL_START], distReduced);
+				int price = getReverseBitTreePrice(distSpecial[slot - DIST_MODEL_START], distReduced);
 
 				for (int state = 0; state < DIST_STATES; ++state)
 					fullDistPrices[state*FULL_DISTANCES+dist] = distSlotPrices[state*distSlotPricesSize+slot] + price;
@@ -423,13 +523,6 @@ public abstract class LZMAEncoder extends LZMACoder {
 		assert dist == FULL_DISTANCES;
 	}
 
-	private void updateAlignPrices() {
-		alignPriceCount = ALIGN_PRICE_UPDATE_INTERVAL;
-
-		for (int i = 0; i < ALIGN_SIZE; ++i)
-			alignPrices[i] = RangeEncoder.getReverseBitTreePrice(distAlign, i);
-	}
-
 	/**
 	 * Updates the lookup tables used for calculating match distance
 	 * and length prices. The updating is skipped for performance reasons
@@ -438,210 +531,76 @@ public abstract class LZMAEncoder extends LZMACoder {
 	final void updatePrices() {
 		if (distPriceCount <= 0) updateDistPrices();
 
-		if (alignPriceCount <= 0) updateAlignPrices();
+		if (alignPriceCount <= 0) {
+			alignPriceCount = ALIGN_PRICE_UPDATE_INTERVAL;
 
-		matchLenEncoder.updatePrices();
-		repLenEncoder.updatePrices();
-	}
-
-	final class LiteralEncoder extends LiteralCoder {
-		private final LiteralSubencoder[] subencoders;
-
-		LiteralEncoder(int lc, int lp) {
-			super(lc, lp);
-
-			subencoders = new LiteralSubencoder[1 << (lc + lp)];
-			for (int i = 0; i < subencoders.length; ++i)
-				subencoders[i] = new LiteralSubencoder();
+			for (int i = 0; i < ALIGN_SIZE; ++i)
+				alignPrices[i] = getReverseBitTreePrice(distAlign, i);
 		}
 
-		final void reset() {
-			for (LiteralSubencoder n : subencoders) n.reset();
-		}
-
-		final void encodeInit() throws IOException {
-			// When encoding the first byte of the stream, there is
-			// no previous byte in the dictionary so the encode function
-			// wouldn't work.
-			assert readAhead >= 0;
-			subencoders[0].encode();
-		}
-
-		final void encode() throws IOException {
-			assert readAhead >= 0;
-			int i = getSubcoderIndex(lz.getByte(1 + readAhead), lz.getPos() - readAhead);
-			subencoders[i].encode();
-		}
-
-		final int getPrice(int curByte, int matchByte, int prevByte, int pos, int state) {
-			int price = RangeEncoder.getBitPrice(isMatch[state][pos & posMask], 0);
-
-			int i = getSubcoderIndex(prevByte, pos);
-			price += state_isLiteral(state) ? subencoders[i].getNormalPrice(curByte) : subencoders[i].getMatchedPrice(curByte, matchByte);
-
-			return price;
-		}
-
-		private class LiteralSubencoder extends LiteralSubcoder {
-			void encode() throws IOException {
-				int symbol = lz.getByte(readAhead) | 0x100;
-
-				if (state_isLiteral(state)) {
-					int subencoderIndex;
-					int bit;
-
-					do {
-						subencoderIndex = symbol >>> 8;
-						bit = (symbol >>> 7) & 1;
-						rc.encodeBit(probs, subencoderIndex, bit);
-						symbol <<= 1;
-					} while (symbol < 0x10000);
-
-				} else {
-					int matchByte = lz.getByte(reps[0] + 1 + readAhead);
-					int offset = 0x100;
-					int subencoderIndex;
-					int matchBit;
-					int bit;
-
-					do {
-						matchByte <<= 1;
-						matchBit = matchByte & offset;
-						subencoderIndex = offset + matchBit + (symbol >>> 8);
-						bit = (symbol >>> 7) & 1;
-						rc.encodeBit(probs, subencoderIndex, bit);
-						symbol <<= 1;
-						offset &= ~(matchByte ^ symbol);
-					} while (symbol < 0x10000);
-				}
-
-				state = state_updateLiteral(state);
+		int i = 0;
+		for (; i <= posMask; i++) {
+			if (counters[i] <= 0) {
+				counters[i] = PRICE_UPDATE_INTERVAL;
+				updateLengthPrices(i, 0);
 			}
-
-			final int getNormalPrice(int symbol) {
-				int price = 0;
-				int subencoderIndex;
-				int bit;
-
-				symbol |= 0x100;
-
-				do {
-					subencoderIndex = symbol >>> 8;
-					bit = (symbol >>> 7) & 1;
-					price += RangeEncoder.getBitPrice(probs[subencoderIndex], bit);
-					symbol <<= 1;
-				} while (symbol < (0x100 << 8));
-
-				return price;
-			}
-
-			final int getMatchedPrice(int symbol, int matchByte) {
-				int price = 0;
-				int offset = 0x100;
-				int subencoderIndex;
-				int matchBit;
-				int bit;
-
-				symbol |= 0x100;
-
-				do {
-					matchByte <<= 1;
-					matchBit = matchByte & offset;
-					subencoderIndex = offset + matchBit + (symbol >>> 8);
-					bit = (symbol >>> 7) & 1;
-					price += RangeEncoder.getBitPrice(probs[subencoderIndex], bit);
-					symbol <<= 1;
-					offset &= ~(matchByte ^ symbol);
-				} while (symbol < (0x100 << 8));
-
-				return price;
+		}
+		for (; i < counters.length; i++) {
+			if (counters[i] <= 0) {
+				counters[i] = PRICE_UPDATE_INTERVAL;
+				updateLengthPrices(i, 2);
 			}
 		}
 	}
+	private void updateLengthPrices(int i_pos, int i_off) {
+		int[] price = prices[i_pos];
+		short[] high1 = i_off == 0 ? high : high2;
 
+		int choice0Price = getBitPrice(choice[i_off], 0);
 
-	final class LengthEncoder extends LengthCoder {
-		/**
-		 * The prices are updated after at least
-		 * <code>PRICE_UPDATE_INTERVAL</code> many lengths
-		 * have been encoded with the same posState.
-		 */
-		private static final int PRICE_UPDATE_INTERVAL = 32; // FIXME?
+		int i = 0;
+		for (; i < LOW_SYMBOLS; ++i)
+			price[i] = choice0Price + getBitTreePrice(low[i_pos], i);
 
-		private final int[] counters;
-		private final int[][] prices;
+		choice0Price = getBitPrice(choice[i_off], 1);
 
-		LengthEncoder(int pb, int niceLen) {
-			int posStates = 1 << pb;
-			counters = new int[posStates];
+		int choice1Price = getBitPrice(choice[++i_off], 0);
+		for (; i < LOW_SYMBOLS + MID_SYMBOLS; ++i)
+			price[i] = choice0Price + choice1Price + getBitTreePrice(mid[i_pos], i - LOW_SYMBOLS);
 
-			// Always allocate at least LOW_SYMBOLS + MID_SYMBOLS because
-			// it makes updatePrices slightly simpler. The prices aren't
-			// usually needed anyway if niceLen < 18.
-			int lenSymbols = Math.max(niceLen - MATCH_LEN_MIN + 1, LOW_SYMBOLS + MID_SYMBOLS);
-			prices = new int[posStates][lenSymbols];
-		}
+		choice1Price = getBitPrice(choice[i_off], 1);
 
-		final void reset() {
-			super.reset();
+		for (; i < price.length; ++i)
+			price[i] = choice0Price + choice1Price + getBitTreePrice(high1, i - LOW_SYMBOLS - MID_SYMBOLS);
+	}
 
-			// Reset counters to zero to force price update before
-			// the prices are needed.
-			Arrays.fill(counters, 0);
-		}
+	private void encodeLength(int len, int posState, int length_type) throws IOException {
+		len -= MATCH_LEN_MIN;
 
-		final void encode(int len, int posState) throws IOException {
-			len -= MATCH_LEN_MIN;
+		if (length_type > 0) posState += posMask+1;
 
-			if (len < LOW_SYMBOLS) {
-				rc.encodeBit(choice, 0, 0);
-				rc.encodeBitTree(low[posState], len);
+		RangeEncoder rc = this.rc;
+		if (len < LOW_SYMBOLS) {
+			rc.encodeBit(choice, length_type, 0);
+			rc.encodeBitTree(low[posState], len);
+		} else {
+			rc.encodeBit(choice, length_type, 1);
+			len -= LOW_SYMBOLS;
+
+			length_type++;
+
+			if (len < MID_SYMBOLS) {
+				rc.encodeBit(choice, length_type, 0);
+				rc.encodeBitTree(mid[posState], len);
 			} else {
-				rc.encodeBit(choice, 0, 1);
-				len -= LOW_SYMBOLS;
-
-				if (len < MID_SYMBOLS) {
-					rc.encodeBit(choice, 1, 0);
-					rc.encodeBitTree(mid[posState], len);
-				} else {
-					rc.encodeBit(choice, 1, 1);
-					rc.encodeBitTree(high, len - MID_SYMBOLS);
-				}
-			}
-
-			--counters[posState];
-		}
-
-		final int getPrice(int len, int posState) {
-			return prices[posState][len - MATCH_LEN_MIN];
-		}
-
-		final void updatePrices() {
-			for (int posState = 0; posState < counters.length; ++posState) {
-				if (counters[posState] <= 0) {
-					counters[posState] = PRICE_UPDATE_INTERVAL;
-					updatePrices(posState);
-				}
+				rc.encodeBit(choice, length_type, 1);
+				rc.encodeBitTree(length_type == 1 ? high : high2, len - MID_SYMBOLS);
 			}
 		}
 
-		private void updatePrices(int posState) {
-			int choice0Price = RangeEncoder.getBitPrice(choice[0], 0);
-
-			int i = 0;
-			for (; i < LOW_SYMBOLS; ++i)
-				prices[posState][i] = choice0Price + RangeEncoder.getBitTreePrice(low[posState], i);
-
-			choice0Price = RangeEncoder.getBitPrice(choice[0], 1);
-			int choice1Price = RangeEncoder.getBitPrice(choice[1], 0);
-
-			for (; i < LOW_SYMBOLS + MID_SYMBOLS; ++i)
-				prices[posState][i] = choice0Price + choice1Price + RangeEncoder.getBitTreePrice(mid[posState], i - LOW_SYMBOLS);
-
-			choice1Price = RangeEncoder.getBitPrice(choice[1], 1);
-
-			for (; i < prices[posState].length; ++i)
-				prices[posState][i] = choice0Price + choice1Price + RangeEncoder.getBitTreePrice(high, i - LOW_SYMBOLS - MID_SYMBOLS);
-		}
+		--counters[posState];
 	}
+
+	final int getMatchPrice(int len, int posState) { return prices[posState][len - MATCH_LEN_MIN]; }
+	final int getRepeatPrice(int len, int posState) { return getMatchPrice(len, posState+posMask+1); }
 }

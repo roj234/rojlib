@@ -1,9 +1,7 @@
 package roj.misc;
 
-import roj.collect.ToIntMap;
 import roj.config.JSONParser;
 import roj.config.ParseException;
-import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.net.NetworkUtil;
@@ -11,9 +9,8 @@ import roj.net.ch.*;
 import roj.net.ch.handler.Timeout;
 import roj.net.ch.handler.VarintSplitter;
 import roj.text.CharList;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.ui.ProgressBar;
-import roj.ui.UIUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -23,6 +20,8 @@ import java.util.Arrays;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
+
+import static roj.ui.CLIUtil.MinecraftColor.minecraftJsonStyleToString;
 
 /**
  * @author Roj234
@@ -37,7 +36,7 @@ public class SameServerFinder {
 		bar.setUnit("");
 		if (args.length == 0) {
 			try {
-				ClientLaunch.tcp().timeout(1000).connect(NetworkUtil.getConnectAddress(UIUtil.userInput("ip"))).loop(loop).initializator(new PingTask()).launch();
+				ClientLaunch.tcp().timeout(1000).connect(NetworkUtil.getConnectAddress(CLIUtil.userInput("ip"))).loop(loop).initializator(new PingTask()).launch();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -70,9 +69,7 @@ public class SameServerFinder {
 	public static class PingTask implements Consumer<MyChannel>, ChannelHandler {
 		private int state;
 
-		public PingTask() {
-
-		}
+		public PingTask() {}
 
 		@Override
 		public void accept(MyChannel ch) {
@@ -108,7 +105,7 @@ public class SameServerFinder {
 			try {
 				DynByteBuf buf = ((DynByteBuf) msg);
 				if (buf.readByte() != 0) {
-					CmdUtil.error("Unexpected packet: " + buf.slice(0, Math.min(buf.readableBytes(), 16)));
+					CLIUtil.error("Unexpected packet: " + buf.slice(0, Math.min(buf.readableBytes(), 16)));
 					return;
 				}
 
@@ -119,9 +116,9 @@ public class SameServerFinder {
 					e.printStackTrace();
 					return;
 				}
-				String desc = minecraftStyle2String(json.getOrCreateMap("description")).toString();
-				CharList ccc = IOUtil.getSharedCharBuf().append(desc);
-				CmdUtil.Color.minecraftColor(ccc);
+
+				CharList ccc = IOUtil.getSharedCharBuf();
+				minecraftJsonStyleToString(json.getOrCreateMap("description")).writeAnsi(ccc);
 				System.out.println(ctx.remoteAddress()+"/"+json.getDot("players.online")+"/"+json.getDot("players.max"));
 				System.out.println(ccc);
 
@@ -129,114 +126,6 @@ public class SameServerFinder {
 			} finally {
 				ctx.close();
 			}
-		}
-
-		static ToIntMap<String> mapa = new ToIntMap<>();
-		static {
-			makeMap("BLACK", '0',
-				"DARK_BLUE", '1',
-				"DARK_GREEN", '2',
-				"DARK_AQUA", '3',
-				"DARK_RED", '4',
-				"DARK_PURPLE", '5',
-				"GOLD", '6',
-				"GRAY", '7',
-				"DARK_GRAY", '8',
-				"BLUE", '9',
-				"GREEN", 'a',
-				"AQUA", 'b',
-				"RED", 'c',
-				"LIGHT_PURPLE", 'd',
-				"YELLOW", 'e',
-				"WHITE", 'f');
-		}
-		private static void makeMap(Object... arr) {
-			for (int i = 0; i < arr.length;) {
-				String k = arr[i++].toString().toLowerCase();
-				char v = (char) arr[i++];
-				mapa.putInt(k, v);
-			}
-		}
-
-		private static StringBuilder minecraftStyle2String(CMapping map) {
-			StringBuilder sb = new StringBuilder();
-			minecraftStyle2String(map, sb, 0);
-			return sb;
-		}
-		private static int minecraftStyle2String(CMapping map, StringBuilder sb, int state) {
-			int colorCode = mapa.getInt(map.getString("color"));
-			if (colorCode != 0) {
-				state = state & 0xFFFFFF | (colorCode << 24);
-				applyStyle(state, sb);
-			}
-			if (map.containsKey("italic")) {
-				if (map.getBool("italic")) {
-					state |= 1;
-					sb.append("\u00a7o");
-				} else {
-					state &= ~1;
-					sb.append("\u00a7r");
-					applyStyle(state, sb);
-				}
-			}
-			if (map.containsKey("bold")) {
-				if (map.getBool("bold")) {
-					state |= 2;
-					sb.append("\u00a7l");
-				} else {
-					state &= ~2;
-					sb.append("\u00a7r");
-					applyStyle(state, sb);
-				}
-			}
-			if (map.containsKey("underlined")) {
-				if (map.getBool("underlined")) {
-					state |= 4;
-					sb.append("\u00a7n");
-				} else {
-					state &= ~4;
-					sb.append("\u00a7r");
-					applyStyle(state, sb);
-				}
-			}
-			if (map.containsKey("strikethrough")) {
-				if (map.getBool("strikethrough")) {
-					state |= 8;
-					sb.append("\u00a7m");
-				} else {
-					state &= ~8;
-					sb.append("\u00a7r");
-					applyStyle(state, sb);
-				}
-			}
-			if (map.containsKey("obfuscated")) {
-				if (map.getBool("obfuscated")) {
-					state |= 16;
-					sb.append("\u00a7k");
-				} else {
-					state &= ~16;
-					sb.append("\u00a7r");
-					applyStyle(state, sb);
-				}
-			}
-			sb.append(map.getString("text"));
-			if (map.containsKey("extra")) {
-				CList list = map.get("extra").asList();
-				for (int i = 0; i < list.size(); i++) {
-					state = minecraftStyle2String(list.get(i).asMap(), sb, state);
-				}
-			}
-			return state;
-		}
-
-		private static void applyStyle(int state, StringBuilder sb) {
-			int color = state >>> 24;
-			if (color != 0) sb.append('\u00a7').append((char)color);
-			if ((state & 2) != 0) sb.append("\u00a7l");
-			if ((state & 8) != 0) sb.append("\u00a7m");
-			if ((state & 4) != 0) sb.append("\u00a7n");
-			if ((state & 1) != 0) sb.append("\u00a7o");
-			if ((state & 16) != 0) sb.append("\u00a7k");
 		}
 
 		@Override

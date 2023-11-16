@@ -10,7 +10,7 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -109,7 +109,7 @@ final class ATHelper {
 
 				InputStream source = getBytecode(name);
 				if (source == null) {
-					CmdUtil.warning("无法找到 " + name);
+					CLIUtil.warning("无法找到 " + name);
 				} else {
 					ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(source));
 

@@ -5,7 +5,7 @@ import roj.util.DirectByteList;
 import roj.util.DynByteBuf;
 import sun.misc.Unsafe;
 
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234

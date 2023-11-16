@@ -276,7 +276,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 
 	public void start() throws IOException {
 		launch.launch();
-		task = Scheduler.getDefaultScheduler().executeTimer(() -> {
+		task = Scheduler.getDefaultScheduler().loop(() -> {
 			long time = System.currentTimeMillis();
 			for (Iterator<PipeInfo> itr = pipes.values().iterator(); itr.hasNext(); ) {
 				PipeInfo pi = itr.next();

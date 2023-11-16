@@ -1,6 +1,7 @@
 package roj.net.http.srv;
 
 import roj.collect.MyHashMap;
+import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.Headers;
@@ -300,7 +301,7 @@ public class FileResponse implements Response {
 				try {
 					rh.write(t);
 				} finally {
-					rh.ch().reserve(t);
+					BufferPool.reserve(t);
 				}
 			}
 

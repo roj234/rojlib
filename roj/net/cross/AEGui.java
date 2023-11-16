@@ -23,8 +23,8 @@ import roj.net.http.srv.HttpServer11;
 import roj.net.http.srv.StringResponse;
 import roj.net.mss.JPrivateKey;
 import roj.text.TextUtil;
+import roj.ui.GUIUtil;
 import roj.ui.OnChangeHelper;
-import roj.ui.UIUtil;
 
 import javax.swing.*;
 import java.awt.*;
@@ -85,7 +85,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 
 	public static void main(String[] args) throws IOException, ParseException {
 		ILProvider.register();
-		UIUtil.systemLook();
+		GUIUtil.systemLook();
 		keyType = KeyType.getInstance("EdDSA");
 		AEGui f = new AEGui();
 
@@ -232,7 +232,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 		});
 		uiKeySL.addActionListener(e -> {
 			if (uiKeySL.getText().startsWith("读取")) {
-				File file = UIUtil.fileLoadFrom("选择密钥文件", uiConnect);
+				File file = GUIUtil.fileLoadFrom("选择密钥文件", uiConnect);
 				String pass = JOptionPane.showInputDialog(uiConnect, "请输入保存时设置的密码", "输入密码", JOptionPane.QUESTION_MESSAGE);
 				try {
 					userCert = keyType.loadKey(pass.getBytes(StandardCharsets.UTF_8), file);
@@ -243,7 +243,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 					e1.printStackTrace();
 				}
 			} else {
-				File file = UIUtil.fileSaveTo("选择密钥文件", "key.bin", uiConnect);
+				File file = GUIUtil.fileSaveTo("选择密钥文件", "key.bin", uiConnect);
 				String pass = JOptionPane.showInputDialog(uiConnect, "您必须设置密码来保护私钥", "设置密码", JOptionPane.INFORMATION_MESSAGE);
 				try {
 					keyType.saveKey(userCert, pass.getBytes(StandardCharsets.UTF_8), file);

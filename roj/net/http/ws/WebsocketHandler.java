@@ -1,6 +1,7 @@
 package roj.net.http.ws;
 
 import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.text.CharList;
@@ -276,7 +277,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 								error(ERR_TOO_LARGE, "decompressed data > " + zo.capacity() + " bytes");
 								return;
 							}
-							zo = ctx.alloc().expand(zo, zo.capacity());
+							zo = BufferPool.expand(zo, zo.capacity());
 						}
 					} while (!inf.needsInput());
 				} catch (Exception e) {
@@ -488,7 +489,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 					$len -= 4;
 				}
 			} finally {
-				if (buf != null) ch.reserve(buf);
+				if (buf != null) BufferPool.reserve(buf);
 			}
 
 			data = ByteList.wrap(zb, 0, $len);
@@ -526,7 +527,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 		try {
 			ch.channelWrite(out);
 		} finally {
-			ch.reserve(out);
+			BufferPool.reserve(out);
 		}
 	}
 

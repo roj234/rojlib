@@ -24,8 +24,8 @@ public final class Delta extends QZCoder {
 	public OutputStream encode(OutputStream out) { return new CipherOutputStream(out, new DeltaFilter(true, distance)); }
 	public InputStream decode(InputStream in, byte[] p, long u, int m) { return new CipherInputStream(in, new DeltaFilter(false, distance)); }
 
+	public String toString() { return "delta:"+distance; }
+
 	void readOptions(DynByteBuf buf, int length) { if (length > 0) distance = (short) (buf.readUnsignedByte()+1); }
 	void writeOptions(DynByteBuf buf) { if (distance > 1) buf.put(distance-1); }
-
-	public String toString() { return "delta:"+distance; }
 }

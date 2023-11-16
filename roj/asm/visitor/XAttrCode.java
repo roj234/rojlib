@@ -83,7 +83,7 @@ public class XAttrCode extends Attribute implements Attributed {
 							attributes.i_direct_add(new LocalVariableTable(name, instructions, cp, r, codeLength));
 						break;
 						case "StackMapTable":
-							FrameVisitor.readFrames(frames = new SimpleList<>(), r, cp, instructions, mn, localSize, stackSize);
+							FrameVisitor.readFrames(frames = new SimpleList<>(), r, cp, instructions, mn.ownerClass(), localSize, stackSize);
 						break;
 						case "RuntimeInvisibleTypeAnnotations": case "RuntimeVisibleTypeAnnotations":
 							attributes.i_direct_add(new TypeAnnotations(name, r, cp));

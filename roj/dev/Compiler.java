@@ -10,13 +10,15 @@ import roj.reflect.FastInit;
 import roj.reflect.Proxy;
 import roj.text.CharList;
 import roj.text.LineReader;
-import roj.ui.CmdUtil;
-import roj.util.ByteList;
+import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
 import javax.annotation.processing.Processor;
 import javax.tools.*;
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -33,13 +35,11 @@ import java.util.function.Function;
 public class Compiler implements DiagnosticListener<JavaFileObject> {
 	private static boolean showErrorCode;
 
+	@Deprecated
 	private static final JavaCompiler compiler;
-	private static final String command;
-
 	static {
-		command = System.getProperty("roj.dev.Compiler.externalCompileCommand");
 		compiler = ToolProvider.getSystemJavaCompiler();
-		if (compiler == null && command == null) throw new InternalError("请安装JDK");
+		if (compiler == null) throw new InternalError("请安装JDK");
 	}
 
 	public static void showErrorCode(boolean show) {
@@ -83,52 +83,7 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 		errors = 0;
 		buf.clear();
 
-		if (command != null) {
-			CmdUtil.warning("使用外置编译器...部分功能无法使用");
-			File output = new File(".external_compiler_output");
-			try {
-				SimpleList<String> copyof = new SimpleList<>(options.size()+files.size());
-				copyof.add(command);
-				copyof.addAll(options);
-				copyof.add("-d");
-				copyof.add(output.getAbsolutePath());
-				copyof.add("-encoding");
-				copyof.add("UTF8");
-				for (File file1 : files) {
-					copyof.add(file1.getAbsolutePath());
-				}
-
-				Process proc = new ProcessBuilder().command(copyof).start();
-				proc.waitFor();
-
-				int i = output.getAbsolutePath().length()+1;
-				List<File> files1 = IOUtil.findAllFiles(output);
-				compiled = new SimpleList<>(files1.size());
-				for (File file1 : files1) {
-					compiled.add(new ByteListOutput("", "") {
-						@Override
-						public String getName() {
-							return file1.getAbsolutePath().substring(i);
-						}
-
-						@Override
-						public ByteList getOutput() {
-							try {
-								return ByteList.wrap(IOUtil.getSharedByteBuf().readStreamFully(new FileInputStream(file1)).toByteArray());
-							} catch (IOException e) {
-								e.printStackTrace();
-								return null;
-							}
-						}
-					});
-				}
-				return proc.exitValue() == 0;
-			} catch (Exception e) {
-				e.printStackTrace();
-				return false;
-			}
-		}
-
+		// TODO use Lavac
 		StandardJavaFileManager fm = compiler.getStandardFileManager(this, Locale.getDefault(), StandardCharsets.UTF_8);
 		fm = createOrUseDelegation(fm, compiled = new SimpleList<>(), basePath);
 
@@ -144,16 +99,17 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 			this.report(new MyDiagnostic("用户类文件中的class读取失败", Diagnostic.Kind.ERROR));
 		}
 
-		CmdUtil.bg(result ? CmdUtil.Color.BLUE : CmdUtil.Color.RED, false);
-		CmdUtil.fg(CmdUtil.Color.WHITE, true);
+		CLIUtil.bg(result ? CLIUtil.BLUE : CLIUtil.RED, false);
+		CLIUtil.fg(CLIUtil.WHITE, true);
 		System.out.println(buf);
 
 		if (errors > 0) out.println(errors + " 个 错误");
 		if (warnings > 0) out.println(warnings + " 个 警告");
-		CmdUtil.reset();
+		CLIUtil.reset();
 		return result;
 	}
 
+	@Deprecated
 	private static StandardJavaFileManager createOrUseDelegation(Object...par) {
 		if (delegationClass == null) {
 			synchronized (Compiler.class) {
@@ -169,7 +125,9 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 		return delegationClass.apply(par);
 	}
 
+	@Deprecated
 	private static volatile Function<Object[], StandardJavaFileManager> delegationClass;
+	@Deprecated
 	private static Function<Object[], StandardJavaFileManager> createDelegation() throws Exception {
 		Method proxyGetOutput = StandardJavaFileManager.class.getMethod("getJavaFileForOutput", JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class);
 
@@ -197,6 +155,7 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 		return Helpers.cast(FastInit.make(data));
 	}
 
+	@Deprecated
 	public static JavaFileObject proxyGetOutput(StandardJavaFileManager delegation,
 												JavaFileManager.Location location, String className,
 												JavaFileObject.Kind kind, FileObject sibling,

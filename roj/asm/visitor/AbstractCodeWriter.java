@@ -33,6 +33,11 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	final IdentitySet<Label> labels = new IdentitySet<>();
 
 	IntMap<Label> bciR2W;
+	final void validateBciRef() {
+		for (IntMap.Entry<Label> entry : bciR2W.selfEntrySet()) {
+			if (!entry.getValue().isValid()) throw new IllegalArgumentException("BCI #"+entry.getIntKey()+" 不存在");
+		}
+	}
 
 	// region visitor
 	protected final void multiArray(CstClass clz, int dimension) { multiArray(clz.name().str(), dimension); }

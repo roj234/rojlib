@@ -42,6 +42,9 @@ public final class MapperList extends SimpleList<String> {
 
 		for (int i = 0; i < len; i++) {
 			String s = list.get(i);
+			// ?
+			if (s == null) continue;
+
 			if (index.putIntIfAbsent(s, size)) {
 				this.list[size++] = s;
 			}

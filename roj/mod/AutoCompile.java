@@ -3,7 +3,7 @@ package roj.mod;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 
 import java.util.List;
 import java.util.concurrent.locks.LockSupport;
@@ -120,9 +120,9 @@ final class AutoCompile extends Thread {
 			try {
 				selfTrigger = true;
 				FMDMain.build(ojbk);
-				if (DEBUG) CmdUtil.success("[AC] Done");
+				if (DEBUG) CLIUtil.success("[AC] Done");
 			} catch (Throwable e) {
-				CmdUtil.error("自动编译出错", e);
+				CLIUtil.error("自动编译出错", e);
 				enable = false;
 			}
 			selfTrigger = false;

@@ -1,5 +1,6 @@
 package roj.net.ch.handler;
 
+import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
@@ -92,8 +93,8 @@ public class StreamCompress implements ChannelHandler {
 				ctx.channelRead(out);
 			}
 		} finally {
-			if (tmp1 != null) ctx.reserve(tmp1);
-			ctx.reserve(out);
+			if (tmp1 != null) BufferPool.reserve(tmp1);
+			BufferPool.reserve(out);
 		}
 
 		if (inf.finished()) {
@@ -152,8 +153,8 @@ public class StreamCompress implements ChannelHandler {
 				ctx.channelWrite(out);
 			}
 		} finally {
-			if (tmp1 != null) ctx.reserve(tmp1);
-			ctx.reserve(out);
+			if (tmp1 != null) BufferPool.reserve(tmp1);
+			BufferPool.reserve(out);
 		}
 	}
 

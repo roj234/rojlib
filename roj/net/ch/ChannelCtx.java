@@ -100,9 +100,8 @@ public final class ChannelCtx {
 	public BufferPool alloc() { return root.alloc(); }
 	public DynByteBuf allocate(boolean direct, int capacity) {
 		if (capacity < 0) throw new IllegalArgumentException(String.valueOf(capacity));
-		return alloc().buffer(direct, capacity);
+		return root.alloc().allocate(direct, capacity);
 	}
-	public void reserve(DynByteBuf buffer) { alloc().reserve(buffer); }
 
 	public ChannelHandler handler() { return handler; }
 

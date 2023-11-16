@@ -262,6 +262,27 @@ public class MyBitSet implements Iterable<Integer> {
 		return i;
 	}
 
+	public final int countRange(int from, int to) {
+		if (from < 0 || to < 0) throw new IllegalArgumentException("from/to="+from+"/"+to);
+		to = Math.min(to-1, max);
+
+		int val = 0;
+
+		int i = from>>>6;
+		long v = set[i];
+		while (from <= to) {
+			long x = 1L << (from & 63);
+			if ((v & x) != 0) {
+				v ^= x;
+				val++;
+			}
+
+			if ((++from & 63) == 0) v = set[++i];
+		}
+
+		return val;
+	}
+
 	// both inclusive
 	private int setRange(int from, int to, boolean clr) {
 		int s = size;

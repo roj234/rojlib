@@ -143,17 +143,17 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
 
 	public V computeIfAbsentInt(int k, @Nonnull IntFunction<V> fn) {
-		V v = get(k);
-		if (v == null && !containsKey(k)) {
-			putInt(k, v = fn.apply(k));
-		}
+		Entry<V> entry = getEntry(k);
+		V v;
+		if (entry == null) putInt(k, v = fn.apply(k));
+		else v = entry.v;
 		return v;
 	}
 	public V computeIfAbsentIntS(int k, @Nonnull Supplier<V> supplier) {
-		V v = get(k);
-		if (v == null && !containsKey(k)) {
-			putInt(k, v = supplier.get());
-		}
+		Entry<V> entry = getEntry(k);
+		V v;
+		if (entry == null) putInt(k, v = supplier.get());
+		else v = entry.v;
 		return v;
 	}
 

@@ -10,7 +10,7 @@ import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.mod.MCLauncher;
 import roj.text.CharList;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.util.ByteList;
 
 import javax.annotation.Nonnull;
@@ -80,7 +80,7 @@ public final class Forge extends WorkspaceBuilder {
 			String instUrl = CONFIG.getString("ForgeMaven仓库地址") + forgeInst;
 			MCLauncher.downloadAndVerifyMD5(instUrl, forgeInstaller = new File(TMP_DIR, forgeInst.substring(forgeInst.lastIndexOf('/') + 1)));
 		} catch (IOException e) {
-			CmdUtil.warning("文件下载失败, 请检查网络", e);
+			CLIUtil.warning("文件下载失败, 请检查网络", e);
 			System.exit(-4);
 			return;
 		}

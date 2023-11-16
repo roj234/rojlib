@@ -11,7 +11,7 @@ import roj.mapper.MapUtil;
 import roj.mapper.Mapper;
 import roj.mapper.util.Desc;
 import roj.mod.Shared;
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 
 import java.util.Collections;
 import java.util.List;
@@ -67,7 +67,7 @@ public class NiximHandler implements Plugin {
 							}
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							CmdUtil.warning("无法为对象找到签名: " + data.name + " " + node);
+							CLIUtil.warning("无法为对象找到签名: " + data.name + " " + node);
 						}
 					}
 					break;
@@ -77,7 +77,7 @@ public class NiximHandler implements Plugin {
 						if (name != null) {
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							CmdUtil.warning("无法为对象找到签名: " + data.name + " " + node);
+							CLIUtil.warning("无法为对象找到签名: " + data.name + " " + node);
 						}
 					}
 					break;
@@ -88,7 +88,7 @@ public class NiximHandler implements Plugin {
 						if (name != null) {
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							CmdUtil.warning("无法为对象找到签名: " + data.name + " " + node);
+							CLIUtil.warning("无法为对象找到签名: " + data.name + " " + node);
 						}
 					}
 					break;

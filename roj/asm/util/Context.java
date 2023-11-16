@@ -4,10 +4,6 @@ import roj.asm.Parser;
 import roj.asm.cst.*;
 import roj.asm.misc.AttrCodeCompressor;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.AttrUnknown;
-import roj.asm.visitor.CodeVisitor;
-import roj.asm.visitor.CodeWriter;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -98,26 +94,6 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 	public List<CstRef> getFieldConstants() { cstInit(); return Helpers.cast(cstCache[ID_FIELD]); }
 	public List<CstDynamic> getInvokeDynamic() { cstInit(); return Helpers.cast(cstCache[ID_INVOKE_DYN]); }
 	public List<CstClass> getClassConstants() { cstInit(); return Helpers.cast(cstCache[ID_CLASS]); }
-
-	public void forEachMethod(CodeVisitor cv) {
-		ConstantData data = getData();
-
-		List<MethodNode> methods = data.methods;
-		for (int j = 0; j < methods.size(); j++) {
-			MethodNode mn = methods.get(j);
-			AttrUnknown code = (AttrUnknown) mn.attrByName("Code");
-			if (code == null) continue;
-			if (cv instanceof CodeWriter) {
-				ByteList b = new ByteList();
-				((CodeWriter) cv).init(b, data.cp, mn, (byte) 0);
-				cv.visit(data.cp, Parser.reader(code));
-				((CodeWriter) cv).finish();
-				code.setRawData(b);
-			} else {
-				cv.visit(data.cp, Parser.reader(code));
-			}
-		}
-	}
 
 	public ByteList get() { return get(true); }
 	public ByteList get(boolean shared) {

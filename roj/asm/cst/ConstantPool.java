@@ -7,6 +7,7 @@ import roj.collect.SimpleList;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -245,7 +246,7 @@ public class ConstantPool {
 	private static void typeError(int i, int b, Object o) { throw new IllegalArgumentException("pool["+i+"]的常量类型不匹配: 期待: "+Constant.toString(b)+" 得到: "+o); }
 
 	public final List<Constant> array() { return constants; }
-	public final Constant array(int i) { return i-- == 0 ? null : constants.get(i); }
+	public final Constant array(int i) { return i-- == 0 ? Helpers.maybeNull() : constants.get(i); }
 	public final Constant get(DynByteBuf r) { return array(r.readUnsignedShort()); }
 	public String getRefName(DynByteBuf r) {
 		int id = r.readUnsignedShort()-1;
@@ -262,7 +263,7 @@ public class ConstantPool {
 			if (c == CstTop.TOP) continue;
 
 			Constant c1 = refMap.intern(c);
-			if (c != c1) c1.setIndex(c.getIndex());
+			if (c != c1) c.setIndex(c1.getIndex());
 		}
 	}
 
@@ -554,11 +555,12 @@ public class ConstantPool {
 				nat.setType(reset(nat.getType()));
 			}
 			break;
+			case UTF:
+				((CstUTF) c).str();
 			case INT:
 			case DOUBLE:
 			case FLOAT:
 			case LONG:
-			case UTF:
 				// No need to do anything, just append it
 				break;
 			default: throw new IllegalArgumentException("Unsupported type: " + c.type());

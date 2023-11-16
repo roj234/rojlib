@@ -106,6 +106,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 
 	static final String EOF = new String();
 	private String cur;
+	private boolean doSkip;
 
 	@Override
 	@SuppressWarnings("fallthrough")
@@ -133,7 +134,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 					}
 				case '\n':
 					if (i > index + r || keepEmpty) {
-						CharSequence seq = index == i ? "" : s.subSequence(index, i - r);
+						CharSequence seq = doSkip || index == i ? "" : s.subSequence(index, i - r);
 						index = i + 1;
 						lineNumber++;
 						cur = seq.toString();
@@ -147,7 +148,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 		}
 
 		if (i > index || keepEmpty) {
-			CharSequence seq = index == i ? "" : s.subSequence(index, i);
+			CharSequence seq = doSkip || index == i ? "" : s.subSequence(index, i);
 			index = i + 1;
 			cur = seq.toString();
 			return true;
@@ -178,44 +179,18 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 		}
 	}
 
-	@Deprecated
+	@SuppressWarnings("fallthrough")
 	public int skipLines(int oLines) {
 		int lines = oLines;
-		int r = 0, prev = index, i = index;
-		CharSequence s = str;
-		if (!reuse) ((TextReader) s).releaseBefore(i);
-		while (i < s.length()) {
-			switch (s.charAt(i)) {
-				case '\r':
-					if (i >= s.length() || s.charAt(i + 1) != '\n') {
-						break;
-					} else {
-						r = 1;
-						i++;
-					}
-				case '\n':
-					if (i > prev + r || keepEmpty) {
-						lineNumber++;
-						if (--lines <= 0) {
-							index = i+1;
-							return oLines;
-						}
-						r = 0;
-					}
-					prev = i + 1;
-					break;
+		doSkip = true;
+		try {
+			while (hasNext() && oLines > 0) {
+				cur = null;
+				oLines--;
 			}
-			i++;
+		} finally {
+			doSkip = false;
 		}
-
-		if (i > prev || keepEmpty) {
-			lineNumber++;
-			if (--lines <= 0) {
-				index = i+1;
-				return oLines;
-			}
-		}
-		cur = EOF;
 		return oLines - lines;
 	}
 

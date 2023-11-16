@@ -8,5 +8,5 @@ import java.util.List;
  */
 public interface ITweaker {
 	String[] initialize(String[] args, ClassWrapper loader);
-	void addArguments(List<String> args);
+	default void addArguments(List<String> args) {}
 }

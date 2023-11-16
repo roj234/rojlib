@@ -29,6 +29,9 @@ public class EasyProgressBar extends ProgressBar {
 		setPrefix(sum+"/"+tot);
 		int s = (int) (getEta(tot-sum) / 1000);
 		setPostfix("ETA: "+s/3600+":"+s/60%60+":"+s%60);
-		update((double)sum/tot, count);
+
+		double pct = (double) sum / tot;
+		update(pct, count);
+		if (pct >= 1) updateForce(pct);
 	}
 }

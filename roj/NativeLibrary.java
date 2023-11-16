@@ -19,7 +19,7 @@ public class NativeLibrary {
 	static {
 		boolean t;
 		try {
-			File devFile = new File("D:\\mc\\cpp\\bin\\libcpp.dll");
+			File devFile = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\java\\libcpp\\bin\\libcpp.dll");
 			if (devFile.isFile()) {
 				System.load(devFile.getAbsolutePath());
 				t = true;
@@ -54,7 +54,7 @@ public class NativeLibrary {
 		} catch (UnsatisfiedLinkError ex) {
 			if (ex.getMessage().contains("Can't find dependent libraries")) throw ex;
 		}
-		File tempFile = new File(tmp, lib + "-" + Long.toHexString(Math.abs(System.nanoTime())) + appendix);
+		File tempFile = new File(tmp, lib+"-"+Long.toHexString(Math.abs(System.nanoTime()))+appendix);
 		byte[] buf = new byte[4096];
 		try (FileOutputStream out = new FileOutputStream(tempFile)) {
 			do {
@@ -69,15 +69,4 @@ public class NativeLibrary {
 	}
 
 	private static native void init();
-
-	public static native boolean UI_enableWindowsANSI();
-	public static native int UI_STDINUnicodeSingleChar();
-	public static native void UI_setWindow(long hwnd);
-	public static native int UI_toggleWindowBackground();
-	public static native void UI_setWindowTransparency(int transparency);
-
-	public static native long NET_socketOpen(int type);
-	public static native int NET_socketSend(long ptr, long address, int length, Object other);
-	public static native int NET_socketRecv(long ptr, long address, int length, Object other);
-	public static native void NET_socketClose(long ptr);
 }

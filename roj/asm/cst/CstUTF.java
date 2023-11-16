@@ -29,7 +29,9 @@ public final class CstUTF extends Constant {
 			}
 
 			CharList out = new CharList();
+			int rPos = in.rIndex;
 			UTF8MB4.CODER.decodeFixedIn(in, in.readableBytes(), out);
+			in.rIndex = rPos;
 			data = out.toStringAndFree();
 		}
 
@@ -58,6 +60,9 @@ public final class CstUTF extends Constant {
 
 	@Override
 	public byte type() { return Constant.UTF; }
+
+	@Override
+	public Constant clone() { str(); return super.clone(); }
 
 	public int hashCode() { return 1 + str().hashCode(); }
 

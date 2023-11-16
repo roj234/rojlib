@@ -5,6 +5,7 @@ import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.collect.RingBuffer;
 import roj.concurrent.task.ITask;
+import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
@@ -33,22 +34,16 @@ public class TaskPool implements TaskHandler {
 
 	final int core, max, newThr, idleTime;
 	private volatile int running, parking;
-	private long prevStop;
+	private volatile long prevStop;
 
-	static {
-		try {
-			RUNNING_OFFSET = u.objectFieldOffset(TaskPool.class.getDeclaredField("running"));
-			PARKING_OFFSET = u.objectFieldOffset(TaskPool.class.getDeclaredField("parking"));
-		} catch (NoSuchFieldException e) {
-			e.printStackTrace();
-		}
-	}
-	private static long RUNNING_OFFSET, PARKING_OFFSET;
+	private static final long
+		RUNNING_OFFSET = ReflectionUtils.fieldOffset(TaskPool.class, "running"),
+		PARKING_OFFSET = ReflectionUtils.fieldOffset(TaskPool.class, "parking");
 
 	final ReentrantLock lock = new ReentrantLock();
 	final Condition noFull = lock.newCondition();
 	final RingBuffer<ITask> tasks;
-	final TransferQueue<ITask> fastPath = new LinkedTransferQueue<>();
+	final TransferQueue<Object> fastPath = new LinkedTransferQueue<>();
 
 	public TaskPool(int coreThreads, int maxThreads, int newThreshold, int rejectThreshold, int stopTimeout, MyThreadFactory factory) {
 		this.core = coreThreads;
@@ -75,7 +70,7 @@ public class TaskPool implements TaskHandler {
 	private static final AtomicInteger poolId = new AtomicInteger();
 
 	public TaskPool(int coreThreads, int maxThreads, int threshold) {
-		this(coreThreads, maxThreads, threshold, 60000, "pool-" + poolId.getAndIncrement() + "-by" + Thread.currentThread().getId() + "-");
+		this(coreThreads, maxThreads, threshold, 60000, "pool-"+poolId.getAndIncrement()+"-by"+Thread.currentThread().getId() + "-");
 	}
 
 	public static TaskPool Common() { return CommonHolder.P; }
@@ -93,30 +88,20 @@ public class TaskPool implements TaskHandler {
 		if (task.isCancelled()) return;
 
 		int len = running;
-		if (len <= 0) {
-			if (len < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
-
-			newWorker();
+		if (len < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
+		else {
+			if (len == 0 ||
+				len < core ||
+				len < max &&
+					(newThr == 0 ||
+					(newThr < 0 ? tasks.size()/len : tasks.size()) > Math.abs(newThr))
+			) newWorker();
 		}
 
 		// 等待立即结束的短时任务
 		try {
 			if (fastPath.tryTransfer(task, 10, TimeUnit.MICROSECONDS)) return;
 		} catch (InterruptedException ignored) {}
-
-		if (task.isCancelled()) return;
-
-		len = running;
-		if (len < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
-		else {
-			if (len < core ||
-				len < max &&
-					(newThr == 0 ||
-					(newThr < 0 ? tasks.size()/len : tasks.size()) > Math.abs(newThr))
-			) {
-				newWorker();
-			}
-		}
 
 		lock.lock();
 		try {
@@ -190,7 +175,6 @@ public class TaskPool implements TaskHandler {
 					if (task == null || task == IntMap.UNDEFINED) {
 						timeout = true;
 					} else {
-						// noinspection all
 						ITask tt = (ITask) task;
 						if (!tt.isCancelled()) return tt;
 					}
@@ -204,6 +188,8 @@ public class TaskPool implements TaskHandler {
 	}
 
 	private void newWorker() {
+		prevStop = System.currentTimeMillis();
+
 		int r = running;
 		if (u.compareAndSwapInt(this, RUNNING_OFFSET, r, r+1)) {
 			ExecutorImpl t = factory.get(this);
@@ -237,7 +223,6 @@ public class TaskPool implements TaskHandler {
 			if (pool.running < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
 		}
 	}
-	public static void newThreadPolicy(TaskPool pool, ITask task) { new ImmediateExecutor(task).start(); }
 
 	@Override
 	public void clearTasks() {
@@ -257,7 +242,7 @@ public class TaskPool implements TaskHandler {
 
 		tasks.clear();
 
-		while (fastPath.tryTransfer(Helpers.cast(IntMap.UNDEFINED)));
+		while (fastPath.tryTransfer(IntMap.UNDEFINED));
 		noFull.signalAll();
 
 		lock.unlock();
@@ -310,14 +295,7 @@ public class TaskPool implements TaskHandler {
 
 	@Override
 	public String toString() {
-		return "TaskPool{" + ", range=[" + core + ',' + max + "], lock=" + lock + '}';
-	}
-
-	public static void yield() {
-		Thread t = Thread.currentThread();
-		if (t instanceof ExecutorImpl) {
-			// todo
-		}
+		return "TaskPool{" + ", range=[" + core + ',' + max + "], lock="+lock+'}';
 	}
 
 	public class ExecutorImpl extends FastLocalThread {
@@ -336,7 +314,7 @@ public class TaskPool implements TaskHandler {
 				try {
 					if (!task.isCancelled()) {
 						executeForDebug(task);
-						if (task.continueExecuting()) pushTask(task);
+						if (task.repeating()) pushTask(task);
 					}
 				} catch (Throwable e) {
 					if (exceptionHandler != null) exceptionHandler.uncaughtException(this, e);

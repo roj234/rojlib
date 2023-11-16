@@ -20,8 +20,7 @@ public class CipherOutputStream extends FilterOutputStream {
 	private byte[] b1;
 
 	private final ByteList.Slice i = new ByteList.Slice();
-	private final ByteList o;
-	private BufferPool pool;
+	private ByteList o;
 
 	protected final RCipherSpi c;
 	protected final int block;
@@ -35,8 +34,7 @@ public class CipherOutputStream extends FilterOutputStream {
 			while (c.engineGetOutputSize(len) > BUFFER_SIZE)
 				len -= c.engineGetBlockSize();
 
-			pool = BufferPool.localPool();
-			o = (ByteList) pool.buffer(false, len);
+			o = (ByteList) BufferPool.buffer(false, len);
 			i.set(o.array(),o.arrayOffset(),o.capacity());
 			block = len;
 		} else {
@@ -111,9 +109,9 @@ public class CipherOutputStream extends FilterOutputStream {
 		} finally {
 			this.out = null;
 
-			if (pool != null) {
-				pool.reserve(o);
-				pool = null;
+			if (o != null) {
+				BufferPool.reserve(o);
+				o = null;
 			}
 		}
 	}

@@ -523,6 +523,14 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 		UTF8MB4.CODER.decodeFixedIn(this,len,sb);
 		return sb.toString();
 	}
+	public final <T extends Appendable> T readUTF(int len, T target) {
+		if (len < 0) throw new IllegalArgumentException("length="+len);
+		if (len > 0) {
+			testWI(rIndex,len);
+			UTF8MB4.CODER.decodeFixedIn(this,len,target);
+		}
+		return target;
+	}
 
 	public final String readVUIGB() { return readGB(readVUInt()); }
 	public final String readVUIGB(int max) {
@@ -537,6 +545,14 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 		CharList sb = IOUtil.getSharedCharBuf();
 		GB18030.CODER.decodeFixedIn(this,len,sb);
 		return sb.toString();
+	}
+	public final <T extends Appendable> T readGB(int len, T target) {
+		if (len < 0) throw new IllegalArgumentException("length="+len);
+		if (len > 0) {
+			testWI(rIndex,len);
+			GB18030.CODER.decodeFixedIn(this,len,target);
+		}
+		return target;
 	}
 
 	public abstract String readLine();

@@ -1,13 +1,16 @@
 package roj.text.logging;
 
+import roj.asm.type.TypeHelper;
 import roj.collect.MyHashMap;
 import roj.text.CharList;
 import roj.text.CharWriter;
 import roj.text.logging.d.LogDestination;
+import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -98,10 +101,33 @@ final class LogHelper extends PrintWriter {
 				sb.append(msg, prev, i-2);
 				prev = i;
 
-				if (j < argc) sb.append(args[j++]);
+				if (j < argc) toString(sb, args[j++]);
 				else sb.append("{}");
 			}
 		}
 		sb.append(msg, prev, msg.length());
+	}
+
+	private static void toString(CharList sb, Object arg) {
+		if (arg.getClass().getComponentType() != null) {
+			switch (TypeHelper.parseField(TypeHelper.class2asm(arg.getClass())).getActualClass()) {
+				case "[I": sb.append(Arrays.toString((int[]) arg)); return;
+				case "[J": sb.append(Arrays.toString((long[]) arg)); return;
+				case "[F": sb.append(Arrays.toString((float[]) arg)); return;
+				case "[D": sb.append(Arrays.toString((double[]) arg)); return;
+				case "[B": sb.append(Arrays.toString((byte[]) arg)); return;
+				case "[Z": sb.append(Arrays.toString((boolean[]) arg)); return;
+				case "[C": sb.append(Arrays.toString((char[]) arg)); return;
+				case "[S": sb.append(Arrays.toString((short[]) arg)); return;
+				default: sb.append(Arrays.deepToString((Object[]) arg)); return;
+			}
+		}
+
+		if (arg instanceof DynByteBuf) {
+			sb.append(((DynByteBuf) arg).dump());
+			return;
+		}
+
+		sb.append(arg);
 	}
 }

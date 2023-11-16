@@ -2,6 +2,7 @@ package roj.misc;
 
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
 import roj.net.NetworkUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ServerLaunch;
@@ -9,6 +10,7 @@ import roj.net.http.srv.*;
 import roj.net.http.ws.WebsocketHandler;
 import roj.net.http.ws.WebsocketManager;
 import roj.text.TextUtil;
+import roj.text.UTF8MB4;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -215,7 +217,7 @@ public class Websocketd extends WebsocketManager implements Router {
 						out.write(tmp.array(), tmp.arrayOffset(), len);
 					}
 				} finally {
-					ch.reserve(tmp);
+					BufferPool.reserve(tmp);
 				}
 			} else {
 				// Conversation
@@ -225,7 +227,7 @@ public class Websocketd extends WebsocketManager implements Router {
 
 				while (in.isReadable()) {
 					tmp1.clear();
-					ByteList.decodeUTF(Math.min(in.readableBytes(), tmp1.capacity()), tmp1, in);
+					UTF8MB4.CODER.decodeFixedIn(in, Math.min(in.readableBytes(), tmp1.capacity()), tmp1);
 					tmp1.flip();
 
 					sndBuf.clear();

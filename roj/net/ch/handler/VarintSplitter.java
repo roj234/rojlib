@@ -1,5 +1,6 @@
 package roj.net.ch.handler;
 
+import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.util.DynByteBuf;
@@ -53,7 +54,7 @@ public final class VarintSplitter implements ChannelHandler {
 		int len = getVarIntLength(r);
 		if (len > maxLengthBytes) throw new IllegalArgumentException("packet too large " + r);
 
-		DynByteBuf buf = ctx.alloc().expand(data, len, false, false);
+		DynByteBuf buf = BufferPool.expand(data, len, false, false);
 
 		int i = buf.wIndex();
 		buf.wIndex(0);
@@ -66,7 +67,7 @@ public final class VarintSplitter implements ChannelHandler {
 		try {
 			ctx.channelWrite(buf);
 		} finally {
-			if (data != buf) ctx.reserve(buf);
+			if (data != buf) BufferPool.reserve(buf);
 		}
 	}
 

@@ -112,11 +112,12 @@ public final class SwitchSegment extends Segment {
 		int lo = m.get(0).val;
 		int hi = m.get(m.size()-1).val;
 
-		float delta = (hi - lo) * 1.5f;
-		if (delta > m.size()) {
+		long tableSwitchSpaceCost = 4 * ((long) hi - lo + 1) + 12;
+		int lookupSwitchSpaceCost = 4 + 8 * m.size();
+		if (tableSwitchSpaceCost <= lookupSwitchSpaceCost) {
 			code = TABLESWITCH;
-			for (int i = lo; i < hi; i++) {
-				m.add(new SwitchEntry(i, def));
+			if (m.size() < hi-lo+1) {
+				for (int i = lo; i <= hi; i++) m.add(new SwitchEntry(i, def));
 			}
 		} else {
 			code = LOOKUPSWITCH;

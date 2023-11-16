@@ -126,8 +126,7 @@ final class CoderInfo {
 
 		void drain(OutputStream s) throws IOException {
 			if (os == null) {
-				ArrayCache c = ArrayCache.getDefaultCache();
-				byte[] b = c.getByteArray(1024, false);
+				byte[] b = ArrayCache.getByteArray(1024, false);
 				try {
 					while (true) {
 						int len = Math.min(b.length, oa.readableBytes());
@@ -137,7 +136,7 @@ final class CoderInfo {
 					}
 				} finally {
 					oa._free();
-					c.putArray(b);
+					ArrayCache.putArray(b);
 				}
 			}
 		}

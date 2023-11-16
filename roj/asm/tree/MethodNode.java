@@ -12,9 +12,12 @@ import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
+import roj.asm.visitor.CodeVisitor;
+import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.XAttrCode;
 import roj.text.CharList;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.TypedName;
 
@@ -73,6 +76,26 @@ public final class MethodNode extends CNode {
 			attributes.set(i, AttrUnknown.downgrade(cp, w, attributes.get(i)));
 		}
 		return this;
+	}
+
+	public boolean forEachCode(CodeVisitor cv, ConstantPool cp) {
+		Attribute code = attrByName("Code");
+		if (code == null) return false;
+		if (!(code instanceof AttrUnknown)) {
+			code = AttrUnknown.downgrade(cp, new ByteList(), code);
+			putAttr(code);
+		}
+
+		if (cv instanceof CodeWriter) {
+			ByteList b = new ByteList();
+			((CodeWriter) cv).init(b, cp, this, (byte) 0);
+			cv.visit(cp, Parser.reader(code));
+			((CodeWriter) cv).finish();
+			((AttrUnknown) code).setRawData(b);
+		} else {
+			cv.visit(cp, Parser.reader(code));
+		}
+		return true;
 	}
 
 	@Override

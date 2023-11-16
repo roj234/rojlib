@@ -1,6 +1,6 @@
 package roj.io.down;
 
-import roj.ui.CmdUtil;
+import roj.ui.CLIUtil;
 import roj.ui.ProgressBar;
 
 /**
@@ -13,7 +13,6 @@ public class ProgressSimple implements IProgress {
 	public void onFinish(Downloader dn) {
 		bar.setName(dn.owner.file.getName());
 		bar.end("下载完成");
-		bar.dispose();
 	}
 
 	protected ProgressBar bar;
@@ -35,8 +34,7 @@ public class ProgressSimple implements IProgress {
 
 	@Override
 	public void shutdown() {
-		bar.end("下载失败", CmdUtil.Color.RED);
-		bar.dispose();
+		bar.end("下载失败", CLIUtil.RED);
 		kill = true;
 	}
 
