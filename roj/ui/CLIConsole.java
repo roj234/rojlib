@@ -19,6 +19,7 @@ import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.Charset;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 
 import static java.awt.event.KeyEvent.*;
@@ -55,7 +56,7 @@ public final class CLIConsole extends InputStream implements Runnable {
 
 		synchronized (t) {
 			try {
-				t.join(20);
+				t.wait(20);
 			} catch (InterruptedException e) {
 				return false;
 			}
@@ -76,9 +77,12 @@ public final class CLIConsole extends InputStream implements Runnable {
 		return true;
 	}
 
+	public static boolean hasBottomLine(CharList line) { return LINES.contains(line); }
+
 	private CLIConsole() {}
 
 	// region PipeInputStream
+	private static final AtomicInteger IN_READ = new AtomicInteger();
 	private static final int RING_BUFFER_CAPACITY = 4096;
 	private final byte[] Pipe = new byte[RING_BUFFER_CAPACITY];
 	private int rPtr, wPtr;
@@ -94,9 +98,16 @@ public final class CLIConsole extends InputStream implements Runnable {
 	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
 		ArrayUtil.checkRange(b, off, len);
 		if (len == 0) return 0;
-		synchronized (this) {
-			while (true) {
+
+		while (true) {
+			synchronized (this) {
 				if (rPtr == wPtr) {
+					synchronized (IN_READ) {
+						IN_READ.incrementAndGet();
+						IN_READ.notify();
+						IN_READ.decrementAndGet();
+					}
+
 					try {
 						wait();
 					} catch (InterruptedException e) {
@@ -271,10 +282,26 @@ public final class CLIConsole extends InputStream implements Runnable {
 			Helpers.athrow(e);
 		}
 
+		synchronized (this) { notify(); }
+		inited = 2;
+		synchronized (CLIConsole.class) { if (console == null) enableDirectInput(false); }
+
 		ByteList.Slice shellB = IOUtil.SharedCoder.get().shellB;
 		byte[] buf = new byte[260];
 
 		while (true) {
+			if (console == null) {
+				synchronized (IN_READ) {
+					if (IN_READ.get() == 0 || rPtr != wPtr) {
+						try {
+							IN_READ.wait();
+						} catch (InterruptedException e) {
+							break;
+						}
+					}
+				}
+			}
+
 			int r;
 			try {
 				r = sysIn.read(buf, 0, 256);
@@ -301,10 +328,19 @@ public final class CLIConsole extends InputStream implements Runnable {
 	}
 
 	private static Console console;
-	public static synchronized void setConsole(Console c) {
-		if (console != null) console.unregistered();
-		console = c;
-		if (c != null) c.registered();
+	public static void setConsole(Console c) {
+		synchronized (CLIConsole.class) {
+			if (console != null) console.unregistered();
+			console = c;
+		}
+
+		if (c != null) {
+			CLIUtil.enableDirectInput(true);
+			c.registered();
+			synchronized (IN_READ) { IN_READ.notify(); }
+		} else {
+			CLIUtil.enableDirectInput(false);
+		}
 	}
 	public static Console getConsole() { return console; }
 
@@ -398,8 +434,8 @@ public final class CLIConsole extends InputStream implements Runnable {
 							if (b >= 'A' && b <= 'Z') break;
 						}
 
-						matchLen = j-i-1;
-						escEnter(inBuf.setR(buf, i+2, matchLen));
+						matchLen = j-i+1;
+						escEnter(inBuf.setR(buf, i+2, j-i-1));
 
 						inBuf.setR(buf, off, len);
 						break found;
@@ -411,7 +447,7 @@ public final class CLIConsole extends InputStream implements Runnable {
 			i += matchLen;
 		}
 
-		if (console == null) pipe(buf, off, len);
+		if (console == null && inited == 2) pipe(buf, off, len);
 	}
 	private void keyEnter(int keyCode, boolean isVirtual) {
 		Console line = console;

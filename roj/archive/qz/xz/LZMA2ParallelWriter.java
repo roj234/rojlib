@@ -1,13 +1,3 @@
-/*
- * LZMA2OutputStream
- *
- * Authors: Lasse Collin <lasse.collin@tukaani.org>
- *          Igor Pavlov <http://7-zip.org/>
- *
- * This file has been put into the public domain.
- * You can do whatever you want with this file.
- */
-
 package roj.archive.qz.xz;
 
 import roj.collect.IntMap;
@@ -19,10 +9,13 @@ import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.ClosedByInterruptException;
+
+import static roj.archive.qz.xz.LZMA2Options.*;
 
 class LZMA2ParallelWriter extends OutputStream implements Finishable {
 	private volatile byte closed;
@@ -43,7 +36,7 @@ class LZMA2ParallelWriter extends OutputStream implements Finishable {
 	private int taskFree, taskId;
 
 	private final Object taskLock = new Object();
-	private final boolean asyncSetDictionary;
+	private final byte dictionaryMode;
 
 	final class SubEncoder extends LZMA2Out implements ITask {
 		int id;
@@ -51,14 +44,19 @@ class LZMA2ParallelWriter extends OutputStream implements Finishable {
 
 		SubEncoder() {
 			super(options);
-			in = ArrayCache.getByteArray(bufLen - (asyncSetDictionary ? 0 : options.getDictSize()), false);
-			// 不会溢出，wrap length 就当成assert好了
+
+			// 6 / 65536 ~= 1 / 10000
+			int mySize = bufLen;
+			if (dictionaryMode == ASYNC_DICT_SET) mySize -= options.getDictSize();
+			in = ArrayCache.getByteArray(Math.max(Math.round(mySize * 1.0002f), mySize), false);
 			out = ByteList.wrapWrite(in, 0, in.length);
+
 		}
 
+		@SuppressWarnings("fallthrough")
 		public final void execute() throws Exception {
 			int off, len;
-			if (asyncSetDictionary) {
+			if (dictionaryMode == ASYNC_DICT_ASYNCSET) {
 				off = options.getDictSize();
 				len = pendingSize -= off;
 			} else {
@@ -75,9 +73,11 @@ class LZMA2ParallelWriter extends OutputStream implements Finishable {
 					state = DICT_RESET;
 				}
 			} else {
-				state = STATE_RESET;
-
-				if (asyncSetDictionary) lz.setPresetDict(off, in, 0, off);
+				switch (dictionaryMode) {
+					case ASYNC_DICT_NONE: state = DICT_RESET; break;
+					case ASYNC_DICT_ASYNCSET: lz.setPresetDict(off, in, 0, off);
+					case ASYNC_DICT_SET: state = STATE_RESET; break;
+				}
 			}
 
 			try {
@@ -130,25 +130,28 @@ class LZMA2ParallelWriter extends OutputStream implements Finishable {
 		int blockSize = options.getAsyncBlockSize();
 		if (blockSize == 0) {
 			final int kMinSize = 1 << 20, kMaxSize = 1 << 28;
-			blockSize = dictSize << 2; // if overflow < 0, will go #225
+			blockSize = dictSize << 2;
 
 			if (blockSize < kMinSize) blockSize = kMinSize;
 			else if (blockSize > kMaxSize) blockSize = kMaxSize;
-			if (blockSize < dictSize) blockSize = dictSize;
+			else if (blockSize < dictSize) blockSize = dictSize;
 
 			blockSize += (kMinSize-1);
 			blockSize &= -kMinSize;
 		}
 
+		int dictionaryMode = options.getAsyncDictionaryMode();
+		if (dictionaryMode == -1) dictionaryMode = options.getMatchFinder() != LZMA2Options.MF_HC4 ? dictSize > 67108864 ? ASYNC_DICT_NONE : ASYNC_DICT_ASYNCSET : ASYNC_DICT_SET;
+		if (dictionaryMode == ASYNC_DICT_NONE) dictSize = 0;
+
 		this.options = options;
+		this.dictionaryMode = (byte) dictionaryMode;
 
 		this.bufPos = dictSize; // 前部留空
 		this.bufLen = dictSize + blockSize;
 		this.buf = ArrayCache.getByteArray(bufLen, false);
 		this.taskExecutor = options.getAsyncExecutor();
 		this.taskFree = options.getAsyncAffinity();
-
-		this.asyncSetDictionary = options.getMatchFinder() != LZMA2Options.MF_HC4;
 	}
 
 	private byte[] b0;
@@ -158,13 +161,13 @@ class LZMA2ParallelWriter extends OutputStream implements Finishable {
 		write(b0, 0, 1);
 	}
 
-	public void write(byte[] buf, int off, int len) throws IOException {
+	public void write(@Nonnull byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
 		if (closed != 0) throw new IOException("Stream finished or closed");
 
 		while (len > 0) {
 			int copyLen = Math.min(bufLen - bufPos, len);
-			System.arraycopy(buf, off, this.buf, bufPos, len);
+			System.arraycopy(buf, off, this.buf, bufPos, copyLen);
 
 			bufPos += copyLen;
 			off += copyLen;
@@ -192,7 +195,7 @@ class LZMA2ParallelWriter extends OutputStream implements Finishable {
 			} else {
 				synchronized (taskLock) {
 					while (tasksFree.isEmpty()) {
-						if (closed >= 2) throw new AsynchronousCloseException();
+						if ((closed&2) != 0) throw new AsynchronousCloseException();
 
 						try {
 							taskLock.wait();
@@ -212,18 +215,20 @@ class LZMA2ParallelWriter extends OutputStream implements Finishable {
 		int dictSize = options.getDictSize();
 
 		task.id = taskId++;
-		if (asyncSetDictionary) {
-			System.arraycopy(buf, 0, task.in, 0, task.pendingSize = bufLen);
+		if (dictionaryMode == ASYNC_DICT_ASYNCSET) {
+			System.arraycopy(buf, 0, task.in, 0, task.pendingSize = bufPos);
 		} else {
-			System.arraycopy(buf, dictSize, task.in, 0, task.pendingSize = bufLen - dictSize);
-			if (task.id > 0) task.setDictionary(buf, 0, dictSize);
+			if (dictionaryMode == ASYNC_DICT_NONE) dictSize = 0;
+			else if (task.id > 0) task.setDictionary(buf, 0, dictSize);
+
+			System.arraycopy(buf, dictSize, task.in, 0, task.pendingSize = bufPos - dictSize);
 		}
 
 		taskExecutor.pushTask(task);
 		synchronized (taskLock) { taskRunning++; }
 
 		// move dictionary to head
-		System.arraycopy(buf, bufLen - dictSize, buf, 0, dictSize);
+		System.arraycopy(buf, bufPos - dictSize, buf, 0, dictSize);
 		bufPos = dictSize;
 	}
 
@@ -234,12 +239,12 @@ class LZMA2ParallelWriter extends OutputStream implements Finishable {
 			if (doneId == task.id) {
 				try {
 					task.write();
-					if (closed != 0) task.release();
+					if ((closed&2) != 0) task.release();
 					else tasksFree.add(task);
 
 					while ((task = tasksDone.remove(++doneId)) != null) {
 						task.write();
-						if (closed != 0) task.release();
+						if ((closed&2) != 0) task.release();
 						else tasksFree.add(task);
 					}
 				} finally {
@@ -260,7 +265,7 @@ class LZMA2ParallelWriter extends OutputStream implements Finishable {
 			closed |= 1;
 		}
 
-		if (bufPos > options.getDictSize()) submitTask();
+		if (bufPos > (dictionaryMode == ASYNC_DICT_NONE ? 0 : options.getDictSize())) submitTask();
 
 		synchronized (this) { closed |= 2; }
 

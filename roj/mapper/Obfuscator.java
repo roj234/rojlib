@@ -8,16 +8,14 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrUnknown;
-import roj.asm.tree.insn.*;
+import roj.asm.tree.attr.Attribute;
 import roj.asm.type.*;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.asm.util.Context;
 import roj.asm.util.InsnHelper;
-import roj.asm.visitor.CodeVisitor;
-import roj.asm.visitor.CodeWriter;
+import roj.asm.visitor.*;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -310,16 +308,15 @@ public class Obfuscator {
 			method.name("_decode_");
 			cls.methods.add(method);
 
-			InsnList ins = method.getCode().instructions;
-			for (int k = 0; k < ins.size(); k++) {
-				InsnNode node = ins.get(k);
-				if (node.nodeType() == InsnNode.T_INVOKE) {
-					InvokeInsnNode cin = (InvokeInsnNode) node;
-					if (cin.name.equals("getStackTrace") && cin.desc.equals("[Ljava/lang/StackTraceElement;")) {
-						cin.code = Opcodes.INVOKESTATIC;
-						cin.owner = "roj/mapper/Obfuscator";
-						cin.name = "_syncGetStackTrace";
-						ins.add(k, NPInsnNode.of(Opcodes.POP));
+			XInsnList ins = method.parsedAttr(data.cp, Attribute.Code).instructions;
+			for (XInsnNodeView node : ins) {
+				if (node.opcode() == Opcodes.INVOKEVIRTUAL) {
+					Desc desc = node.desc();
+					if (desc.name.equals("getStackTrace") && desc.param.equals("[Ljava/lang/StackTraceElement;")) {
+						XInsnNodeView.InsnMod mod = node.replace();
+						mod.list.one(Opcodes.POP);
+						mod.list.invoke(Opcodes.INVOKESTATIC, "_syncGetStackTrace", "roj/mapper/Obfuscator", desc.param);
+						mod.commit();
 						System.out.println("找到stack trace 调用！");
 					}
 				}
@@ -374,7 +371,7 @@ public class Obfuscator {
 			}
 		}
 
-		public String tryDecode(InvokeInsnNode iin, MethodNode caller, CstUTF utf) {
+		public String tryDecode(Desc iin, MethodNode caller, CstUTF utf) {
 			if (caller != null) {
 				// 如果用到了line的话那只好自己再弄啦，也就是麻烦一点，多读取一些属性的事
 				syncStackTrace[0] = new StackTraceElement(iin.owner.replace('/', '.'), iin.name, "SourceFile", -1);
@@ -382,7 +379,7 @@ public class Obfuscator {
 			}
 			tmp.owner = iin.owner;
 			tmp.name = iin.name;
-			tmp.param = iin.awslDesc();
+			tmp.param = iin.param;
 			Decoder dec = decoders.get(tmp);
 			if (dec != null) {
 				try {
@@ -474,7 +471,7 @@ public class Obfuscator {
 				AttrUnknown code0 = (AttrUnknown) m.attrByName("Code");
 				if (code0 == null) continue;
 
-				AttrCode code = new AttrCode(m, Parser.reader(code0), data.cp);
+				XAttrCode code = new XAttrCode(Parser.reader(code0), data.cp, m);
 				try {
 					//if (intr.interpret(code)) {
 					//	code.instructions.removeAll(intr.toDelete);
@@ -486,17 +483,16 @@ public class Obfuscator {
 				}
 
 
-				InsnList insn = code.instructions;
-				for (int k = 0; k < insn.size() - 1; k++) {
-					InsnNode node = insn.get(k);
-					if (node.nodeType() == InsnNode.T_LDC) {
-						LdcInsnNode ldc = (LdcInsnNode) node;
-						if (ldc.c.type() == Constant.STRING) {
-							InsnNode next = insn.get(k + 1);
-							if (next.nodeType() == InsnNode.T_INVOKE) {
-								InvokeInsnNode iin = (InvokeInsnNode) next;
-								if (iin.code == Opcodes.INVOKESTATIC && iin.awslDesc().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
-									CstUTF utf = ((CstString) ldc.c).name();
+				XInsnList insn = code.instructions;
+				for (XInsnNodeView node : insn) {
+					Constant cst = node.constantOrNull();
+					if (cst != null) {
+						if (cst.type() == Constant.STRING) {
+							XInsnNodeView next = node.next();
+							Desc desc1 = next.descOrNull();
+							if (desc1 != null) {
+								if (next.opcode() == Opcodes.INVOKESTATIC && desc1.param.equals("(Ljava/lang/String;)Ljava/lang/String;")) {
+									CstUTF utf = ((CstString) cst).name();
 									//if (!intr.done.contains(utf.getString())) {
 									String value = null;
 									if (value != null) {
@@ -507,7 +503,7 @@ public class Obfuscator {
 									}
 									//}
 									m.putAttr(code);
-									insn.remove(++k)._i_replace(ldc);
+									next.replace().commit();
 								}
 							}
 						}
@@ -737,11 +733,11 @@ public class Obfuscator {
 
 		return sign;
 	}
-	private Type genPrim() { return Type.std(InsnHelper.PrimitiveArray2Type(rand.nextInt(8)+4)); }
+	private Type genPrim() { return Type.std(InsnHelper.FromPrimitiveArrayId(rand.nextInt(8)+4)); }
 	private Type genRef() { return new Type(genClassName(1), rand.nextFloat() > 0.7f ? rand.nextInt(10) : 0); }
 	private String genClassName(float factor) {
 		float f = rand.nextFloat()*factor;
-		if (f > 0.9) return Type.toString(InsnHelper.PrimitiveArray2Type(rand.nextInt(8)+4));
+		if (f > 0.9) return Type.toString(InsnHelper.FromPrimitiveArrayId(rand.nextInt(8)+4));
 		if (f < 0.5) return Long.toUnsignedString(rand.nextLong(), 36);
 
 		int parts = rand.nextInt(3);

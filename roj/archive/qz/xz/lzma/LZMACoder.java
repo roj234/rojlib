@@ -36,6 +36,7 @@ abstract class LZMACoder {
 
 	final short[] isMatch = new short[STATES * POS_STATES_MAX];
 	final short[] isRep = new short[STATES];
+	//final short[] isRepBit = new short[STATES*4];
 	final short[] isRep0 = new short[STATES], isRep1 = new short[STATES], isRep2 = new short[STATES];
 	final short[] isRep0Long = new short[STATES * POS_STATES_MAX];
 	final short[][] distSlots = new short[DIST_STATES][DIST_SLOTS];

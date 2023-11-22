@@ -18,7 +18,6 @@ import java.util.function.Function;
 import static roj.collect.IntMap.UNDEFINED;
 
 /**
- * Enhance: 改成byte[]存储数据（用VIVIC），当然如果用Java9就没有必要了
  * @author Roj234
  * @since 2021/2/21 10:39
  */
@@ -239,19 +238,10 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	}
 
 	@Override
-	public int size() {
-		return size;
-	}
-
+	public int size() { return size; }
 	@Override
-	public V put(CharSequence key, V e) {
-		return put(key, 0, key.length(), e);
-	}
-
-	public V put(CharSequence key, int len, V e) {
-		return put(key, 0, len, e);
-	}
-
+	public V put(CharSequence key, V e) { return put(key, 0, key.length(), e); }
+	public V put(CharSequence key, int len, V e) { return put(key, 0, len, e); }
 	public V put(CharSequence key, int off, int len, V e) {
 		Entry<V> entry = entryForPut(key, off, len);
 		V v = entry.value;
@@ -277,17 +267,10 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		CharSequence s = (CharSequence) k;
 		return remove(s, 0, s.length(), UNDEFINED);
 	}
-
-	public V remove(CharSequence s, int len) {
-		return remove(s, 0, len, UNDEFINED);
-	}
-
-	public V remove(CharSequence s, int i, int len) {
-		return remove(s, i, len, UNDEFINED);
-	}
-
+	public V remove(CharSequence s, int len) { return remove(s, 0, len, UNDEFINED); }
+	public V remove(CharSequence s, int i, int len) { return remove(s, i, len, UNDEFINED); }
 	@SuppressWarnings("unchecked")
-	V remove(CharSequence s, int i, int len, Object tc) {
+	public V remove(CharSequence s, int i, int len, Object except) {
 		if (len - i < 0) throw new IllegalArgumentException("Δlength < 0");
 
 		SimpleList<Entry<V>> list = new SimpleList<>();
@@ -307,7 +290,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 			} else i++;
 		}
 		if (entry.value == UNDEFINED) return null;
-		if (!Objects.equals(entry.value, tc) && tc != UNDEFINED) return null;
+		if (!Objects.equals(entry.value, except) && except != UNDEFINED) return null;
 
 		size--;
 
@@ -351,7 +334,9 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 			prev = curr;
 			i--;
 		}
-		throw new AssertionError("Entry list chain size");
+
+		root.removeChild(entry);
+		return entry.value;
 	}
 
 	@Override
@@ -359,13 +344,9 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		final CharSequence s = (CharSequence) i;
 		return containsKey(s, 0, s.length());
 	}
-	public boolean containsKey(CharSequence s, int off, int len) {
-		return getEntry(s, off, len) != null;
-	}
+	public boolean containsKey(CharSequence s, int off, int len) { return getEntry(s, off, len) != null; }
 
-	public Map.Entry<MutableInt, V> longestMatches(CharSequence s) {
-		return longestMatches(s, 0, s.length());
-	}
+	public Map.Entry<MutableInt, V> longestMatches(CharSequence s) { return longestMatches(s, 0, s.length()); }
 	public Map.Entry<MutableInt, V> longestMatches(CharSequence s, int i, int len) {
 		MyHashMap.Entry<MutableInt, V> entry = new MyHashMap.Entry<>(new MutableInt(), null);
 		match(s,i,len,entry);
@@ -440,9 +421,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		return d;
 	}
 
-	public List<V> valueMatches(CharSequence s, int limit) {
-		return valueMatches(s, 0, s.length(), limit);
-	}
+	public List<V> valueMatches(CharSequence s, int limit) { return valueMatches(s, 0, s.length(), limit); }
 	@SuppressWarnings("unchecked")
 	public List<V> valueMatches(CharSequence s, int i, int len, int limit) {
 		KeyItr itr = matches(s, i, len);
@@ -458,9 +437,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		return values;
 	}
 
-	public List<Map.Entry<String, V>> entryMatches(CharSequence s, int limit) {
-		return entryMatches(s, 0, s.length(), limit);
-	}
+	public List<Map.Entry<String, V>> entryMatches(CharSequence s, int limit) { return entryMatches(s, 0, s.length(), limit); }
 	@SuppressWarnings("unchecked")
 	public List<Map.Entry<String, V>> entryMatches(CharSequence s, int i, int len, int limit) {
 		KeyItr itr = matches(s, i, len);
@@ -476,10 +453,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		return entries;
 	}
 
-	public KeyItr matchesIterator(CharSequence s) {
-		return matchesIterator(s, 0, s.length());
-	}
-
+	public KeyItr matchesIterator(CharSequence s) { return matchesIterator(s, 0, s.length()); }
 	/**
 	 * <pre>
 	 *   TrieEntry.KeyItr itr = map.matchesIterator(name);
@@ -529,12 +503,8 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	/**
 	 * s.startsWith(any value in map)
 	 */
-	public final boolean startsWith_R(CharSequence s) {
-		return startsWith_R(s, 0, s.length());
-	}
-	public boolean startsWith_R(CharSequence s, int i, int len) {
-		return null != getEntry1(s, i, len, FIRST_NON_NULL);
-	}
+	public final boolean startsWith_R(CharSequence s) { return startsWith_R(s, 0, s.length()); }
+	public boolean startsWith_R(CharSequence s, int i, int len) { return null != getEntry1(s, i, len, FIRST_NON_NULL); }
 
 	@Override
 	public final V get(Object id) {
@@ -592,10 +562,11 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		if (parent.value != UNDEFINED) {
 			consumer.accept(sb.toString(), parent.value);
 		}
+		int length = sb.length();
 		for (TrieEntry entry : parent) {
 			entry.append(sb);
 			recursionEntry((Entry<V>) entry, consumer, sb);
-			sb.setLength(sb.length() - entry.length());
+			sb.setLength(length);
 		}
 	}
 

@@ -89,7 +89,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 		pack();
 		setVisible(true);
 		setResizable(false);
-		setBounds(520, 260, 510, 500);
+		setSize(510, 500);
 		validate();
 
 		loadData(tip);

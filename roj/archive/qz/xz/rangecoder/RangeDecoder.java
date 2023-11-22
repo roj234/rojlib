@@ -13,7 +13,7 @@ package roj.archive.qz.xz.rangecoder;
 import roj.io.CorruptedInputException;
 import roj.util.ArrayCache;
 
-import java.io.DataInputStream;
+import java.io.DataInput;
 import java.io.IOException;
 
 public class RangeDecoder extends RangeCoder {
@@ -32,7 +32,7 @@ public class RangeDecoder extends RangeCoder {
 
 	public final void putArraysToCache() { ArrayCache.putArray(buf); }
 
-	public void lzma2_manualFill(DataInputStream in, int len) throws IOException {
+	public void lzma2_manualFill(DataInput in, int len) throws IOException {
 		if (len < INIT_SIZE) throw new CorruptedInputException();
 
 		if (in.readUnsignedByte() != 0x00) throw new CorruptedInputException();

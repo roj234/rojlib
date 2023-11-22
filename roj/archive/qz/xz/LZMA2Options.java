@@ -91,6 +91,8 @@ public class LZMA2Options implements Cloneable {
 	 */
 	public static final int MF_BT4 = LZEncoder.MF_BT4;
 
+	public static final byte ASYNC_DICT_NONE = 0, ASYNC_DICT_SET = 1, ASYNC_DICT_ASYNCSET = 2;
+
 	private static final int[] presetToDictSize = {1 << 18, 1 << 20, 1 << 21, 1 << 22, 1 << 22, 1 << 23, 1 << 23, 1 << 24, 1 << 25, 1 << 26};
 	private static final int[] presetToDepthLimit = {4, 8, 24, 48};
 
@@ -102,7 +104,7 @@ public class LZMA2Options implements Cloneable {
 	private int mf;
 	private int depthLimit;
 
-	private byte asyncAffinity;
+	private byte asyncAffinity, asyncDictMode;
 	private int asyncBlockSize;
 	private TaskHandler asyncExecutor;
 
@@ -367,21 +369,29 @@ public class LZMA2Options implements Cloneable {
 	public int getDepthLimit() { return depthLimit; }
 
 	/**
-	 * 启用对于单独压缩流的多线程压缩模式
-	 * @param blockSize 任务按照该数值分块并行
+	 * <pre>启用对于单独压缩流的多线程压缩模式
+	 * <b>注意，对比{@link roj.archive.qz.QZFileWriter#parallel()}的不同文件并行模式,单压缩流并行无论如何都会损失压缩率</b>
+	 * @param blockSize 任务按照该大小分块并行，设置为-1来自动选择(不推荐)
 	 * @param executor 线程池
 	 * @param affinity 最大并行任务数量 (1-255)
+	 * @param dictMode 任务的词典处理模式，设置为-1来自动选择(不推荐)
+	 * <pre>{@link #ASYNC_DICT_NONE} 每个块重置词典, 速度快, 压缩率差, 内存占用小 (7-zip的默认模式)
+	 * {@link #ASYNC_DICT_SET} 在write的调用线程上设置词典, 速度慢, 压缩率好, 内存占用中等
+	 * {@link #ASYNC_DICT_ASYNCSET} 在异步任务线程上设置词典, 速度中等, 压缩率好, 内存大
 	 */
-	public void setAsyncMode(int blockSize, TaskHandler executor, int affinity) {
-		if ((blockSize < dictSize || blockSize > 1 << 28) && blockSize != 0) throw new IllegalArgumentException("无效的分块大小 "+blockSize);
+	public void setAsyncMode(int blockSize, TaskHandler executor, int affinity, int dictMode) {
+		if (blockSize < 0 || blockSize > 1 << 28) throw new IllegalArgumentException("无效的分块大小 "+blockSize);
 		if (affinity != 0 && affinity < 2 || affinity > 255) throw new IllegalArgumentException("无效的并行任务数量 "+affinity);
+		if (dictMode < 0 || dictMode > ASYNC_DICT_ASYNCSET) throw new IllegalArgumentException("无效的词典处理模式 "+dictMode);
 		asyncBlockSize = blockSize;
 		asyncExecutor = executor;
 		asyncAffinity = (byte) affinity;
+		asyncDictMode = (byte) dictMode;
 	}
 	public int getAsyncBlockSize() { return asyncBlockSize; }
 	public TaskHandler getAsyncExecutor() { return asyncExecutor; }
 	public int getAsyncAffinity() { return asyncAffinity; }
+	public byte getAsyncDictionaryMode() { return asyncDictMode; }
 
 	public int getEncoderMemoryUsage() { return mode == MODE_UNCOMPRESSED ? LZMA2StoredWriter.getMemoryUsage() : LZMA2Writer.getMemoryUsage(this); }
 	public OutputStream getOutputStream(OutputStream out) {

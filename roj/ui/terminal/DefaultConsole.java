@@ -59,10 +59,12 @@ public class DefaultConsole implements Console {
 	}
 	public void setPrompt(String prompt) {
 		this.prompt.clear();
-		this.prompt.append(prompt);
+		this.prompt.append("\u001b[0m").append(prompt);
 
-		prefixLen = prompt.length();
+		prefixLen = prompt.length()+4;
 		prefixCLen = CLIUtil.getDisplayWidth(prompt);
+
+		if (CLIConsole.hasBottomLine(this.prompt)) doRender();
 	}
 	public void setDefaultHighlight(String postfix) { staticHighlight = postfix; }
 	public void setCursorMoveBound(int cmb) { cursorMoveBound = cmb; }
@@ -293,6 +295,10 @@ public class DefaultConsole implements Console {
 				break;
 				case VK_TAB:
 					if (input.length() > MAX_INPUT) { beep(); return; }
+					/*if (tabs.size() > 1) {
+						setComplete((tabId+1) % tabs.size());
+						break;
+					}*/
 					if (endCompletion(true)) break;
 					complete(input, cursor, tabs);
 					if (tabs.size() > 0) setComplete(0);
@@ -320,6 +326,14 @@ public class DefaultConsole implements Console {
 		return string.replace('\t', ' ');
 	}
 
+	protected final void printCommand() {
+		String pp = prompt.toString();
+
+		prompt.setLength(prefixLen);
+		prompt.append("\u001b[0m");
+
+		System.out.println(pp);
+	}
 	protected final void doRender() {
 		if (autoHighlight && tabCursor < 0 && highlight == null) {
 			lastInput = input.toString();
@@ -357,11 +371,15 @@ public class DefaultConsole implements Console {
 
 		// POST: write
 		if (scrollLeft > 0) {
-			prompt.append("\u001b[1;5;41;97m+").append("\u001b[0m"); // + before, 红底白字加粗闪烁
+			prompt.append("\u001b[5;41;97m+").append("\u001b[0m"); // + before, 红底白字闪烁
 			relCursor++;
 		}
 
 		int end = limitWidth(scrollLeft, maxWidth);
+		if (scrollLeft > end) {
+			System.err.println("[DefaultConsole]Invalid ANSI sequence detected.");
+			scrollLeft = 0;
+		}
 		prompt.append(staticHighlight).append(input, scrollLeft, end);
 
 		if (end < input.length()) prompt.append("\u001b[1;5;41;97m+"); // + after
@@ -427,9 +445,7 @@ public class DefaultConsole implements Console {
 					"早期版本：c<16 => 0, c<255 => 1, else => 2\n" +
 					"然而：https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters\n" +
 					"\n" +
-					"按F12听我给你的歌……\n" +
-					"\n" +
-					"这是一串很长写不下的字",
+					"做什么都不简单。。。还很邪道",
 				"F1: 查看帮助\n" +
 					"F2: 切换Ctrl+C功能\n" +
 					"F3: 开关语法高亮\n" +
@@ -444,7 +460,7 @@ public class DefaultConsole implements Console {
 					"ENTER: 确认补全或执行指令\n" +
 					"↑: 上一条历史或补全候选\n" +
 					"↓: 下一条历史或补全候选, 或回到当前输入\n" +
-					"Tab: 在当前位置补全代码，按第二次确认" }
+					"Tab: 在当前位置补全代码" }
 		});
 	}
 	protected AnsiString highlight(String input) { return null; }

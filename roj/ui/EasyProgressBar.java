@@ -12,6 +12,7 @@ public class EasyProgressBar extends ProgressBar {
 	final AtomicLong max = new AtomicLong();
 
 	public EasyProgressBar(String name) { super(name); }
+	public EasyProgressBar(String name, String unit) { super(name); setUnit(unit); }
 
 	public void reset() {
 		fin.reset();

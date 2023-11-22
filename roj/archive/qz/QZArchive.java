@@ -53,6 +53,7 @@ public class QZArchive implements ArchiveFile {
 	private final byte[] password;
 	private int maxFileCount = 0xFFFFF, memoryLimitKb = 131072;
 
+	public QZArchive(String path) throws IOException { this(new File(path), null); }
 	public QZArchive(File file) throws IOException { this(file, null); }
 	public QZArchive(File file, String pass) throws IOException {
 		if (!file.isFile()) throw new FileNotFoundException(file.getName());

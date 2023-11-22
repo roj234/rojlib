@@ -298,7 +298,9 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 			prev = curr;
 			i--;
 		}
-		throw new AssertionError("Entry list chain size");
+
+		root.removeChild(entry);
+		return true;
 	}
 
 	@Override

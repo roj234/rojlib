@@ -150,14 +150,17 @@ public class CLIUtil {
 		}
 
 		public static final char[] rainbow = new char[] {'c', '6', 'e', 'a', 'b', '9', 'd'};
-		public static final char[] sonic = new char[] {'9', '9', '9', '9', 'f', '9', 'f', 'f', '9', 'f',
+		public static final char[] sonic = new char[] {'7', '7', '7', '7', '7', '7', '7', '7', '7', '7',
+													   '9', '9', '9', '9', 'f', '9', 'f', 'f', '9', 'f',
 													   'f', '9', 'b', 'f', '7', '7', '7', '7', '7', '7',
+													   '7', '7', '7', '7', '7', '7', '7', '7', '7', '7',
+													   '7', '7', '7', '7', '7', '7', '7', '7', '7', '7',
+													   '7', '7', '7', '7', '7', '7', '7', '7', '7', '7',
+													   '7', '7', '7', '7', '7', '7', '7', '7', '7', '7',
 													   '7', '7', '7', '7', '7', '7', '7', '7', '7', '7'};
 
-		public static void minecraftTooltip(char[] codex, String str, float speed, CharList sb) {
-			int x = codex.length * str.length();
-			int time = (((int) (System.currentTimeMillis()/33))&Integer.MAX_VALUE) % x;
-			int si = (int) (time * speed);
+		public static void minecraftTooltip(char[] codex, String str, float charTimeSec, CharList sb) {
+			int si = (int) (((int) System.currentTimeMillis() & Integer.MAX_VALUE) / (charTimeSec*1000) % codex.length);
 			for (int i = 0; i < str.length(); i++) {
 				sb.append("\u001B[;").append(MC_COLOR[TextUtil.h2b(codex[si++ % codex.length])]).append('m').append(str.charAt(i));
 			}
@@ -166,12 +169,12 @@ public class CLIUtil {
 
 		public static void rainbow(String s, CharList sb) {
 			if (!ANSI) sb.append(s);
-			else minecraftTooltip(rainbow, s, 0.75f, sb);
+			else minecraftTooltip(rainbow, s, 0.05f, sb);
 		}
 
 		public static void sonic(String s, CharList sb) {
 			if (!ANSI) sb.append(s);
-			else minecraftTooltip(sonic, s, 0.75f, sb);
+			else minecraftTooltip(sonic, s, 0.07f, sb);
 		}
 	}
 
@@ -205,16 +208,31 @@ public class CLIUtil {
 		if (OS.CURRENT == OS.WINDOWS) {
 			if (NativeLibrary.loaded) {
 				try {
-					setConsoleMode0(STDIN, MODE_SET, 0);
 					setConsoleMode0(STDOUT, MODE_SET, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT);
-					setConsoleMode0(STDIN, MODE_SET, ENABLE_VIRTUAL_TERMINAL_INPUT);
 				} catch (NativeException e) {
-					System.err.println("Failed to initialize VirtualTerminal: " + e.getMessage());
+					System.err.println("Failed to initialize VT output: " + e.getMessage());
 				}
 			}
 		}
 
+		enableDirectInput(true);
 		return CLIConsole.initialize();
+	}
+	static void enableDirectInput(boolean enable) {
+		if (OS.CURRENT == OS.WINDOWS) {
+			if (NativeLibrary.loaded) {
+				try {
+					if (enable) {
+						setConsoleMode0(STDIN, MODE_SET, 0);
+						setConsoleMode0(STDIN, MODE_SET, ENABLE_VIRTUAL_TERMINAL_INPUT);
+					} else {
+						setConsoleMode0(STDIN, MODE_SET, ENABLE_PROCESSED_INPUT|ENABLE_ECHO_INPUT|ENABLE_LINE_INPUT);
+					}
+				} catch (NativeException e) {
+					System.err.println("Failed to initialize VT input: " + e.getMessage());
+				}
+			}
+		}
 	}
 	private static native int setConsoleMode0(int target, int mode, int flag) throws NativeException;
 
@@ -222,40 +240,41 @@ public class CLIUtil {
 		setConsoleMode0(STDIN, MODE_ADD, ENABLE_QUICK_EDIT_MODE|ENABLE_EXTENDED_FLAGS);
 	}
 
-	public static void printColor(PrintStream o, String string, int fg, boolean reset, boolean println, boolean light) {
-		if (ANSI) o.print("\u001B[;" + (fg + (light ? 60 : 0)) + 'm');
+	public static void printColor(String string, int fg, boolean reset, boolean println, boolean light) {
+		PrintStream o = System.out;
+		if (ANSI) o.print("\u001B[;"+(fg+(light?60:0))+'m');
 		if (println) o.println(string); else o.print(string);
 		if (ANSI &reset) o.print("\u001B[0m");
 	}
 
-	public static void reset() { if (ANSI) sysOut.print("\u001B[0m"); }
-	public static void clearScreen() { if (ANSI) sysOut.print("\u001b[1;1H\u001b[2J"); }
+	public static void reset() { if (ANSI) System.out.print("\u001B[0m"); }
+	public static void clearScreen() { if (ANSI) System.out.print("\u001b[1;1H\u001b[2J"); }
 
-	public static void bg(int bg, boolean hl) { if (ANSI) sysOut.print("\u001B[" + (bg + (hl ? 70 : 10)) + 'm'); }
-	public static void fg(int fg, boolean hl) { if (ANSI) sysOut.print("\u001B[" + (fg + (hl ? 60 : 0)) + 'm'); }
+	public static void bg(int bg, boolean hl) { if (ANSI) System.out.print("\u001B[" + (bg + (hl ? 70 : 10)) + 'm'); }
+	public static void fg(int fg, boolean hl) { if (ANSI) System.out.print("\u001B[" + (fg + (hl ? 60 : 0)) + 'm'); }
 
 	public static void info(String string) {
 		info(string, true);
 	}
 	public static void info(String string, boolean println) {
-		printColor(sysOut, string, WHITE, true, println, true);
+		printColor(string, WHITE, true, println, true);
 	}
 
 	public static void success(String string) {
 		success(string, true);
 	}
 	public static void success(String string, boolean println) {
-		printColor(sysOut, string, GREEN, true, println, true);
+		printColor(string, GREEN, true, println, true);
 	}
 
 	public static void warning(String string) {
 		warning(string, true);
 	}
 	public static void warning(String string, boolean println) {
-		printColor(sysOut, string, YELLOW, true, println, true);
+		printColor(string, YELLOW, true, println, true);
 	}
 	public static void warning(String string, Throwable err) {
-		printColor(sysOut, string, YELLOW, false, true, true);
+		printColor(string, YELLOW, false, true, true);
 		err.printStackTrace(sysOut);
 		reset();
 	}
@@ -264,10 +283,10 @@ public class CLIUtil {
 		error(string, true);
 	}
 	public static void error(String string, boolean println) {
-		printColor(sysOut, string, RED, true, println, true);
+		printColor(string, RED, true, println, true);
 	}
 	public static void error(String string, Throwable err) {
-		printColor(sysOut, string, RED, false, true, true);
+		printColor(string, RED, false, true, true);
 		err.printStackTrace(sysOut);
 		reset();
 	}

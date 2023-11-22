@@ -41,7 +41,7 @@ public class QZFileWriter extends QZWriter {
      * 反之，需要则设为true
      * 否则可能会出现该加密没加密或相反
      */
-    public void setCompressedHeader(int i) {
+    public void setCompressHeader(int i) {
         this.compressHeaderMin = i;
     }
 
@@ -154,7 +154,7 @@ public class QZFileWriter extends QZWriter {
 
         long hstart = s.position();
         try {
-            if (compressHeaderMin == 0 || files.size()+emptyFiles.size() < compressHeaderMin) {
+            if (compressHeaderMin == -1 || files.size()+emptyFiles.size() < compressHeaderMin) {
                 blockCrc32.reset();
                 out.setOut(s);
                 writeHeader();

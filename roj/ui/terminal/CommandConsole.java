@@ -31,7 +31,7 @@ import java.util.List;
 public class CommandConsole extends DefaultConsole {
 	public CommandConsole(String prompt) { super(prompt); }
 
-	protected final ArgumentContext ctx = new ArgumentContext();
+	protected final ArgumentContext ctx = new ArgumentContext(TaskPool.Common());
 	protected Tokenizer wr = new Tokenizer();
 	private List<Word> parse(String cmd) {
 		List<Word> words = new SimpleList<>();
@@ -113,28 +113,28 @@ public class CommandConsole extends DefaultConsole {
 
 	@Override
 	protected final boolean evaluate(String cmd) {
-		System.out.println(prompt);
+		boolean success = execute(cmd);
+		if (success) printCommand();
+		return success;
+	}
 
+	public boolean execute(String cmd) {
 		List<Word> words = parse(cmd);
 		if (words == null) return false;
 
-		TaskPool pool = TaskPool.Common();
-		pool.pushTask(() -> {
-			ParseException pe = null;
-			for (int i = 0; i < nodes.size(); i++) {
-				CommandNode node = nodes.get(i);
-				ctx.init(cmd, words);
-				try {
-					if (node.apply(ctx, null)) return;
-				} catch (ParseException e) {
-					pe = e;
-				}
+		ParseException pe = null;
+		for (int i = 0; i < nodes.size(); i++) {
+			CommandNode node = nodes.get(i);
+			ctx.init(cmd, words);
+			try {
+				if (node.apply(ctx, null)) return true;
+			} catch (ParseException e) {
+				pe = e;
 			}
-			if (pe != null) pe.printStackTrace();
-			else System.out.println("指令未匹配任何参数组合,从左至右最多的部分匹配是:"+ctx.getMaxI());
-		});
+		}
+		if (pe != null) pe.printStackTrace();
+		else System.out.println("指令未匹配任何参数组合,从左至右最多的部分匹配是:"+ctx.getMaxI());
 
 		return true;
 	}
-
 }

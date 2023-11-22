@@ -139,14 +139,13 @@ public abstract class LZEncoder {
 		base = buf+bufSize;
 	}
 
-	public synchronized final void release() {
-		if (nm.address() == 0) return;
+	public final void release() {
+		if (nm.release()) {
+			ArrayCache.putArray(mdist);
+			ArrayCache.putArray(mlen);
 
-		ArrayCache.putArray(mdist);
-		ArrayCache.putArray(mlen);
-
-		hash.release();
-		nm.release();
+			hash.release();
+		}
 	}
 
 	public final void reuse() {

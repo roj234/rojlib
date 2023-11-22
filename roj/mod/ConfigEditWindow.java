@@ -112,13 +112,13 @@ final class ConfigEditWindow extends JFrame {
 		panel.add(close);
 
 		panel.setLayout(null);
-		panel.setBounds(400, 200, 300, 190);
+		panel.setSize(300, 190);
 		add(panel);
 
 		pack();
 		setVisible(true);
 		setResizable(false);
-		setBounds(400, 200, 300, 190);
+		setSize(300, 190);
 		validate();
 	}
 

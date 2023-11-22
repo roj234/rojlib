@@ -13,7 +13,7 @@ package roj.archive.qz.xz.lz;
 import roj.io.CorruptedInputException;
 import roj.util.ArrayCache;
 
-import java.io.DataInputStream;
+import java.io.DataInput;
 import java.io.IOException;
 
 public final class LZDecoder {
@@ -29,6 +29,7 @@ public final class LZDecoder {
 	public LZDecoder(int dictSize, byte[] presetDict) {
 		bufSize = dictSize;
 		buf = ArrayCache.getByteArray(dictSize, false);
+		buf[dictSize-1] = 0x00;
 
 		if (presetDict != null) {
 			pos = Math.min(presetDict.length, dictSize);
@@ -130,7 +131,7 @@ public final class LZDecoder {
 		if (pendingLen > 0) repeat(pendingDist, pendingLen);
 	}
 
-	public void copyUncompressed(DataInputStream inData, int len) throws IOException {
+	public void copyUncompressed(DataInput inData, int len) throws IOException {
 		int copySize = Math.min(bufSize - pos, len);
 		inData.readFully(buf, pos, copySize);
 		pos += copySize;

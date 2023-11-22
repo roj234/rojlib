@@ -42,7 +42,7 @@ public abstract class CommandNode {
 
 		if (ctx.peekWord() == null) {
 			if (impl != null) {
-				if (completions == null) impl.accept(ctx);
+				if (completions == null) ctx.wrapExecute(impl);
 				return true;
 			}
 		}

@@ -2,9 +2,9 @@ package roj.ui.terminal;
 
 import roj.collect.IntList;
 import roj.collect.MyHashMap;
+import roj.concurrent.TaskPool;
 import roj.config.ParseException;
 import roj.config.word.Word;
-import roj.ui.CLIConsole;
 
 import java.util.List;
 
@@ -12,7 +12,9 @@ import java.util.List;
  * @author Roj234
  * @since 2023/11/20 0020 15:05
  */
-public class ArgumentContext implements CommandContext {
+public class ArgumentContext {
+	private final TaskPool executor;
+
 	private String context;
 	private List<Word> words;
 	private int i, maxI;
@@ -20,6 +22,8 @@ public class ArgumentContext implements CommandContext {
 	private final IntList stack = new IntList();
 
 	private final MyHashMap<String, Object> map = new MyHashMap<>();
+
+	public ArgumentContext(TaskPool executor) { this.executor = executor; }
 
 	public void init(String context, List<Word> words) {
 		this.context = context;
@@ -76,6 +80,8 @@ public class ArgumentContext implements CommandContext {
 	public boolean runsOut() { return runsOut; }
 	public int getMaxI() { return maxI; }
 
-	@Override
-	public void writeToSystemIn(byte[] b, int off, int len) { CLIConsole.writeToSystemIn(b, off, len); }
+	public void wrapExecute(CommandImpl command) {
+		CommandContext ctx = new CommandContext(map);
+		executor.pushTask(() -> command.accept(ctx));
+	}
 }

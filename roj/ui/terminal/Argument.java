@@ -1,7 +1,9 @@
 package roj.ui.terminal;
 
 import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
 import roj.config.ParseException;
+import roj.config.word.Word;
 import roj.reflect.EnumHelper;
 import roj.ui.AnsiString;
 import roj.ui.CLIUtil;
@@ -73,30 +75,69 @@ public interface Argument<T> {
 	static Argument<String> string(String... selection) {
 		MyHashMap<String, String> map = new MyHashMap<>(selection.length);
 		for (String s : selection) map.put(s,s);
-		return setOf(map);
+		return setOf(map, false);
 	}
-	static <T extends Enum<T>> Argument<T> enumeration(Class<T> type) { return setOf(Helpers.cast(EnumHelper.cDirAcc.enumConstantDirectory(type))); }
-	static <T> Argument<T> setOf(Map<String, T> map) {
-		return new Argument<T>() {
-			@Override
-			public T parse(ArgumentContext ctx, boolean complete) throws ParseException {
+	static Argument<List<String>> stringFlags(String... flags) {
+		MyHashMap<String, String> map = new MyHashMap<>(flags.length);
+		for (String s : flags) map.put(s,s);
+		return Helpers.cast(setOf(map, true));
+	}
+	static <T extends Enum<T>> Argument<T> enumeration(Class<T> type) { return setOf(Helpers.cast(EnumHelper.cDirAcc.enumConstantDirectory(type)), false); }
+	static <T> Argument<T> setOf(Map<String, T> map, boolean multi) { return new ArgSetOf<>(multi, map); }
+	class ArgSetOf<T> implements Argument<T> {
+		private final boolean multi;
+		protected final Map<String, T> choice;
+
+		public ArgSetOf(boolean multi, Map<String, T> choice) {
+			this.multi = multi;
+			this.choice = choice;
+		}
+
+		@Override
+		public T parse(ArgumentContext ctx, boolean complete) throws ParseException {
+			updateChoices();
+			if (multi) {
+				List<T> arr = new SimpleList<>();
+				while (true) {
+					Word w = ctx.peekWord();
+					if (w == null || !choice.containsKey(w.val())) {
+						if (complete) {
+							ctx.nextString();
+							return null;
+						}
+
+						return Helpers.cast(arr);
+					}
+					arr.add(choice.get(ctx.nextString()));
+				}
+			} else {
 				String val = ctx.nextString();
-				T result = map.get(val);
-				if (result == null) throw ctx.error("枚举不存在");
+				T result = choice.get(val);
+				if (result == null) throw ctx.error("选择不存在");
 				return result;
 			}
+		}
 
-			@Override
-			public void complete(ArgumentContext ctx, List<Completion> completions) throws ParseException {
-				String val = ctx.nextString();
-				for (String name : map.keySet()) {
-					if (name.startsWith(val)) completions.add(new Completion(name));
+		@Override
+		public void complete(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+			if (multi) {
+				while (true) {
+					Word w = ctx.peekWord();
+					if (w == null) return; // only first argument give example
+					else if (!choice.containsKey(w.val())) break;
 				}
 			}
 
-			@Override
-			public void example(List<Completion> completions) { for (String name : map.keySet()) completions.add(new Completion(name)); }
-		};
+			String val = ctx.nextString();
+			for (String name : choice.keySet()) {
+				if (name.startsWith(val)) completions.add(new Completion(name.substring(val.length())));
+			}
+		}
+
+		@Override
+		public void example(List<Completion> completions) { updateChoices(); for (String name : choice.keySet()) completions.add(new Completion(name)); }
+
+		protected void updateChoices() {}
 	}
 	static Argument<Integer> number(int min, int max) {
 		return (ctx, b) -> {
@@ -127,8 +168,8 @@ public interface Argument<T> {
 			@Override
 			public void complete(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 				String s = ctx.nextUnquotedString();
-				if ("true".startsWith(s)) completions.add(new Completion("true"));
-				if ("false".startsWith(s)) completions.add(new Completion("false"));
+				if ("true".startsWith(s)) completions.add(new Completion("true".substring(s.length())));
+				if ("false".startsWith(s)) completions.add(new Completion("false".substring(s.length())));
 			}
 
 			@Override

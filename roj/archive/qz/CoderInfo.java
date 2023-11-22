@@ -258,6 +258,7 @@ final class CoderInfo {
 		// write lengthMap
 		for (int block : blocks) buf.putVUInt(block);
 
+		if (b.outSizes.length == 0) return;
 		// 最外面写的是uSize,但是实际的streamId是0
 		long uSize = b.uSize;
 		long _out = b.outSizes[b.outSizes.length-1];

@@ -123,10 +123,10 @@ public class NativeMemory {
 			lock.unlock();
 		}
 	}
-	public void release() {
+	public boolean release() {
 		lock.lock();
 		try {
-			unmanaged.release();
+			return unmanaged.release();
 		} finally {
 			lock.unlock();
 		}
@@ -157,12 +157,14 @@ public class NativeMemory {
 			return base;
 		}
 
-		void release() {
+		boolean release() {
 			if (base != 0) {
 				u.freeMemory(base);
 				hlp.unreserveMemory(length, except);
 				base = 0;
+				return true;
 			}
+			return false;
 		}
 
 		long resize(long cap) {

@@ -37,11 +37,18 @@ import java.util.regex.Pattern;
  * @author Roj234
  */
 public class MapperUI extends JFrame {
-	private static final Mapper MAPPER = new Mapper();
-	private void init() {
-		File file = GUIUtil.fileLoadFrom("选择映射表(Srg / XSrg)", this);
-		if (file == null) return;
-
+	private static Mapper MAPPER = new Mapper();
+	public void setMapper(Mapper m) {
+		MAPPER = m;
+		uiInit.setEnabled(false);
+		uiCreateMap.setEnabled(false);
+		uiCheckFieldType.setVisible(false);
+		uiFlag1.setVisible(false);
+		uiFlag4.setVisible(false);
+		uiInvert.setVisible(false);
+		uiMap.setEnabled(true);
+	}
+	public void load(File file) {
 		MAPPER.clear();
 		MAPPER.checkFieldType = uiCheckFieldType.isSelected();
 		MAPPER.loadMap(file, uiInvert.isSelected());
@@ -101,38 +108,42 @@ public class MapperUI extends JFrame {
 			}
 		}
 
-		if (uiMFlag2.isSelected()) MAPPER.flag |= Mapper.MF_FIX_SUBIMPL;
-		else MAPPER.flag &= ~Mapper.MF_FIX_SUBIMPL;
-		if (uiMFlag8.isSelected()) MAPPER.flag |= Mapper.MF_FIX_ACCESS;
-		else MAPPER.flag &= ~Mapper.MF_FIX_ACCESS;
-		if (uiMFlag32.isSelected()) MAPPER.flag &= ~Mapper.MF_SINGLE_THREAD;
-		else MAPPER.flag |= Mapper.MF_SINGLE_THREAD;
-		if (uiMFlag64.isSelected()) MAPPER.flag |= Mapper.MF_FIX_ACCESS;
-		else MAPPER.flag &= ~Mapper.MF_FIX_ACCESS;
+		Mapper m = MAPPER;
+
+		if (uiMFlag2.isSelected()) m.flag |= Mapper.MF_FIX_SUBIMPL;
+		else m.flag &= ~Mapper.MF_FIX_SUBIMPL;
+		if (uiMFlag8.isSelected()) m.flag |= Mapper.MF_FIX_ACCESS;
+		else m.flag &= ~Mapper.MF_FIX_ACCESS;
+		if (uiMFlag32.isSelected()) m.flag &= ~Mapper.MF_SINGLE_THREAD;
+		else m.flag |= Mapper.MF_SINGLE_THREAD;
+		if (uiMFlag64.isSelected()) m.flag |= Mapper.MF_FIX_ACCESS;
+		else m.flag &= ~Mapper.MF_FIX_ACCESS;
 
 		long begin = System.currentTimeMillis();
 
-		List<MapTask> files = new SimpleList<>();
-		List<Context> ctxs;
+		m.getSeperatedLibraries().clear();
 
-		Map<String, byte[]> resource;
+		List<MapTask> files = new SimpleList<>();
+		List<Context> ctxs = new SimpleList<>();
 		try {
-			ctxs = new SimpleList<>();
 			for (File file : input) {
-				resource = new MyHashMap<>();
+				Map<String, byte[]> resource = new MyHashMap<>();
 				List<Context> arr = Context.fromZip(file, charset, resource);
 				files.add(new MapTask(new File(output, file.getName()), ctxs.size(), arr.size(), resource));
 
-				if (uiMapUsers.isSelected()) MAPPER.loadLibraries(Collections.singletonList(file));
+				if (uiMapUsers.isSelected()) m.loadLibraries(Collections.singletonList(file));
+				m.map(arr);
+				m.getSeperatedLibraries().add(m.snapshot());
+
 				ctxs.addAll(arr);
 			}
 			uiMapUsers.setSelected(false);
 
-			MAPPER.map(ctxs);
 
 			for (int i = 0; i < files.size(); i++)
 				files.get(i).finish(ctxs);
 		} finally {
+			m.getSeperatedLibraries().clear();
 			for (MapTask x : files) x.zfw.close();
 		}
 
@@ -215,7 +226,8 @@ public class MapperUI extends JFrame {
 			uiInit.setEnabled(false);
 			TaskPool.Common().pushTask(() -> {
 				try {
-					init();
+					File file = GUIUtil.fileLoadFrom("选择映射表(Srg / XSrg)", this);
+					if (file != null) load(file);
 				} finally {
 					uiInit.setEnabled(true);
 				}
@@ -327,7 +339,7 @@ public class MapperUI extends JFrame {
 		{
 
 			//---- uiLibraries ----
-			uiLibraries.setText("# 1. \u5982\u679c\u62a5\u9519\u201c\u7f3a\u5c11\u5143\u7d20\u201d\uff0c\u52fe\u4e0a\u201c\u8f93\u5165\u7684\u7c7b\u5728\u6620\u5c04\u8868\u4e2d\u201d\u91cd\u8bd5\n#    \u8f93\u5165\u4e0d\u53d8\u65f6\uff0c\u53ea\u6709\u7b2c\u4e00\u6b21\u6620\u5c04\u9700\u8981\u52fe\uff08\u8fd9\u6837\u53ef\u52a0\u5feb\u901f\u5ea6\uff09\n# 2. \u3010\u5173\u5fc3\u5b57\u6bb5\u7c7b\u578b\u3011\u9700\u8981\u6620\u5c04\u8868\u4fdd\u5b58\u4e86\u5b57\u6bb5\u7c7b\u578b\n# 3. \u7ea2\u8272\u590d\u9009\u6846\u9700\u8981\u91cd\u65b0\u52a0\u8f7d\u751f\u6548\n# 4. \u8f93\u5165\u548c\u8f93\u51fa\u53ef\u4ee5\u662f\u6587\u4ef6\u5939\u6765\u6279\u5904\u7406\u6240\u6709\u6587\u4ef6\n# 5. \u5982\u679c\u8f93\u51fa\u662f\u6587\u4ef6\u5939\uff0c\u8986\u76d6\u6587\u4ef6\u4e0d\u4f1a\u6709\u63d0\u793a\n# 6. \u8f93\u5165\u3001\u8f93\u51fa\u548c\u5e93\u6587\u4ef6\u652f\u6301\u62d6\u52a8\n# 7. \u8f93\u5165\u70b9\u51fb\u53ef\u4ee5\u53d8\u5927\uff0cswing\u771f\u96be\u7528\n# 8. \u4ec5\u5904\u7406\u6587\u4ef6\u5939\u4e2d\u7684jar\u548czip\u6587\u4ef6");
+			uiLibraries.setText("# 1. \u5982\u679c\u62a5\u9519\u201c\u7f3a\u5c11\u5143\u7d20\u201d\uff0c\u52fe\u4e0a\u201c\u8f93\u5165\u7684\u7c7b\u5728\u6620\u5c04\u8868\u4e2d\u201d\u91cd\u8bd5\n#    \u8f93\u5165\u4e0d\u53d8\u65f6\uff0c\u53ea\u6709\u7b2c\u4e00\u6b21\u6620\u5c04\u9700\u8981\u52fe\uff08\u8fd9\u6837\u53ef\u52a0\u5feb\u901f\u5ea6\uff09\n# 2. \u7ea2\u8272\u590d\u9009\u6846\u91cd\u65b0\u52a0\u8f7d\u751f\u6548\u3001\u3010\u5173\u5fc3\u5b57\u6bb5\u7c7b\u578b\u3011\u9700\u8981\u6620\u5c04\u8868\u652f\u6301\n# 3. \u8f93\u5165\u548c\u8f93\u51fa\u53ef\u4ee5\u662f\u6587\u4ef6\u5939\u6765\u6279\u5904\u7406\u6240\u6709\u6587\u4ef6\n# 4. \u5982\u679c\u8f93\u51fa\u662f\u6587\u4ef6\u5939\uff0c\u8986\u76d6\u6587\u4ef6\u4e0d\u4f1a\u6709\u63d0\u793a\n# 5. \u8f93\u5165\u3001\u8f93\u51fa\u548c\u5e93\u6587\u4ef6\u652f\u6301\u62d6\u52a8\n# 6. \u8f93\u5165\u70b9\u51fb\u53ef\u4ee5\u53d8\u5927\uff08swing\u771f\u96be\u7528\uff09\u4ee5\u8f93\u5165\u591a\u884c\u6587\u4ef6\n#    \u591a\u884c\u6587\u4ef6\u6bd4\u8d77\u6587\u4ef6\u5939\u4f18\u70b9\u662f\u53ef\u4ee5\u786e\u5b9a\u5904\u7406\u987a\u5e8f\n# 7. \u4ec5\u5904\u7406\u6587\u4ef6\u5939\u4e2d\u7684jar\u548czip\u6587\u4ef6");
 			scrollPane1.setViewportView(uiLibraries);
 		}
 		contentPane.add(scrollPane1);

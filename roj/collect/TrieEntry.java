@@ -13,18 +13,16 @@ import java.util.Iterator;
  */
 public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Generic_Entry<TrieEntry> {
 	final char c;
+	TrieEntry(char ch) { this.c = ch; }
 
 	private TrieEntry next;
 	@Override
-	public TrieEntry __next() {
-		return next;
-	}
+	public TrieEntry __next() { return next; }
 
-	TrieEntry(char ch) {
-		this.c = ch;
-	}
+	// region child management
 
-	// region self management
+	TrieEntry[] entries;
+	int size, mask;
 
 	public final void putChild(TrieEntry te) {
 		if (size > (mask+1)) {
@@ -97,30 +95,6 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	@Override
 	public final Iterator<TrieEntry> iterator() { return new EntryItr<>(entries); }
 
-	// endregion
-
-	public abstract int copyFrom(TrieEntry node);
-
-	abstract boolean isValid();
-
-	CharSequence text() {
-		return null;
-	}
-
-	void append(CharList sb) {
-		sb.append(c);
-	}
-
-	int length() {
-		return 1;
-	}
-
-	@Override
-	public String toString() { return "TE('"+(TextUtil.isPrintableAscii(c)?c:"\\"+Integer.toOctalString(c))+"',next="+next+")"; }
-
-	TrieEntry[] entries;
-	int size, mask;
-
 	public void faster() {
 		if (size > 1) {
 			mask = 32767;
@@ -161,6 +135,18 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 		this.size = 0;
 	}
 
+	// endregion
+	public abstract int copyFrom(TrieEntry node);
+
+	abstract boolean isValid();
+
+	CharSequence text() { return null; }
+	void append(CharList sb) { sb.append(c); }
+	int length() { return 1; }
+
+	@Override
+	public String toString() { return "TE('"+(TextUtil.isPrintableAscii(c)?c:"\\"+Integer.toOctalString(c))+"',next="+next+")"; }
+
 	@Override
 	public TrieEntry clone() {
 		TrieEntry entry = null;
@@ -171,35 +157,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 		return entry;
 	}
 
-	static final class Val extends AbstractIterator<TrieEntry> {
-		TrieEntry map, entry;
-		int i;
-
-		public Val(TrieEntry map) {
-			this.map = map;
-			if (map.entries == null) stage = ENDED;
-		}
-
-		@Override
-		public boolean computeNext() {
-			TrieEntry[] entries = map.entries;
-			while (true) {
-				if (entry != null) {
-					result = entry;
-					entry = entry.next;
-					return true;
-				} else {
-					if (i < entries.length) {
-						this.entry = entries[i++];
-					} else {
-						return false;
-					}
-				}
-			}
-		}
-	}
-
-	static abstract class Itr<NEXT, ENTRY extends TrieEntry> extends AbstractIterator<NEXT> {
+	public static abstract class Itr<NEXT, ENTRY extends TrieEntry> extends AbstractIterator<NEXT> {
 		SimpleList<ENTRY> a = new SimpleList<>(), b = new SimpleList<>();
 		ENTRY ent;
 		int i;
@@ -294,10 +252,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	}
 
 	public static final class KeyItr extends Itr<CharSequence, TrieEntry> {
-		KeyItr(TrieEntry root) {
-			this(root, new CharList());
-		}
-
+		KeyItr(TrieEntry root) { this(root, new CharList()); }
 		KeyItr(TrieEntry root, CharList base) {
 			setupDepthFirst(root);
 			result = seq = base;
@@ -305,12 +260,8 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 		}
 
 		@Override
-		public boolean computeNext() {
-			return _computeNextDepthFirst();
-		}
+		public boolean computeNext() { return _computeNextDepthFirst(); }
 
-		public TrieEntry entry() {
-			return ent;
-		}
+		public TrieEntry entry() { return ent; }
 	}
 }

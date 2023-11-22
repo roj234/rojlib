@@ -2,6 +2,7 @@ package roj.archive.qz;
 
 import roj.archive.qz.xz.LZMA2InputStream;
 import roj.archive.qz.xz.LZMA2Options;
+import roj.archive.qz.xz.LZMA2ParallelReader;
 import roj.archive.qz.xz.MemoryLimitException;
 import roj.util.DynByteBuf;
 
@@ -10,6 +11,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 public final class LZMA2 extends QZCoder {
+    public static boolean experimental_async_decompress;
+
     public LZMA2() { options = new LZMA2Options(); }
     public LZMA2(int level) { options = new LZMA2Options(level); }
     public LZMA2(LZMA2Options options) { this.options = options; }
@@ -35,7 +38,7 @@ public final class LZMA2 extends QZCoder {
         int memoryUsage = LZMA2InputStream.getMemoryUsage(dictSize);
         if (memoryUsage > maxMemoryLimitInKb) throw new MemoryLimitException(memoryUsage, maxMemoryLimitInKb);
 
-        return new LZMA2InputStream(in, dictSize);
+        return experimental_async_decompress ? new LZMA2ParallelReader(in, dictSize) : new LZMA2InputStream(in, dictSize);
     }
     private int getDictSize() { return options==null?this.dictSize:options.getDictSize(); }
 

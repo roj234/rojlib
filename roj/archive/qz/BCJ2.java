@@ -79,13 +79,10 @@ public final class BCJ2 extends QZComplexCoder {
 		public void write(@Nonnull byte[] b, int off, int len) throws IOException {
 			if (len == 0) return;
 
-			if (ob.isReadable()) {
-				ob.compact();
-				while (ob.isReadable()) {
-					ob.put(b[off++]);
-					tryEncode(ob, false);
-					if (--len == 0) return;
-				}
+			while (ob.isReadable()) {
+				ob.put(b[off++]);
+				tryEncode(ob, false);
+				if (--len == 0) return;
 			}
 
 			ByteList ob = IOUtil.SharedCoder.get().wrap(b, off, len);
@@ -97,47 +94,71 @@ public final class BCJ2 extends QZComplexCoder {
 		private void tryEncode(ByteList ob, boolean finish) throws IOException {
 			int prev, b = this.b;
 			for (;;) {
-				for (;;) {
-					if (!ob.isReadable()) {
-						this.b = b;
-						return;
-					}
+				foundJump: {
+					int srcPos = ob.rIndex, srcLim = ob.wIndex();
 
-					prev = b;
-					b = ob.readUnsignedByte();
-					offset++;
+					while (srcPos < srcLim) {
+						prev = b;
+						b = ob.getU(srcPos++);
 
-					if ((b & 0xFE) == 0xE8 ||
-						prev == 0x0F && (b & 0xF0) == 0x80) {
-						if (ob.readableBytes() < 4) {
-							ob.rIndex--;
-							offset--;
-							this.b = prev;
-							return;
+						if ((b & 0xFE) == 0xE8 ||
+							prev == 0x0F && (b & 0xF0) == 0x80) {
+
+							this.b = b;
+
+							int len = srcPos - ob.rIndex;
+							main.write(ob.list, ob.arrayOffset()+ob.rIndex, len);
+							ob.rIndex = srcPos;
+
+							offset += len;
+
+							if (ob.readableBytes() < 4) {
+								ob.rIndex--;
+								this.b = prev;
+								return;
+							}
+
+							break foundJump;
 						}
-
-						main.write(b);
-						break;
 					}
-					main.write(b);
+
+					this.b = b;
+
+					int len = srcPos - ob.rIndex;
+					main.write(ob.list, ob.arrayOffset()+ob.rIndex, len);
+					ob.rIndex = srcPos;
+
+					offset += len;
+					return;
 				}
 
 				this.b = b;
 
 				assert prev >= 0;
+
+				// 草了，为了省点跳转至于么？
+				// const unsigned c = ((v + 0x17) >> 6) & 1;
+				// CBcj2Prob *prob = p->probs + (unsigned)
+				//	(((0 - c) & (Byte) (v >> NUM_SHIFT_BITS)) + c + ((v >> 5) & 1));
 				int idx = (b == 0xE8 ? 2 + prev : (b == 0xE9 ? 1 : 0));
 
+				// Relative offset (relat)
 				int v = ob.readIntLE(ob.rIndex);
+
+				// 多线程实现方式不同，似乎没有v23.01提到的corner case
 				if ((fileSize == 0 || (offset+4+v)+MIN_VALUE < fileSize+MIN_VALUE)
 					&& ((v+relatLimit) >>> 1)+MIN_VALUE < relatLimit+MIN_VALUE) {
 					rc.encodeBit(probs, idx, 1);
 
+					// 吐槽同上
+					// const unsigned cj = (((v + 0x57) >> 6) & 1) + BCJ2_STREAM_CALL;
 					OutputStream out = (b == 0xE8) ? call : jump;
 
 					b = v >>> 24;
 					ob.rIndex += 4;
 
 					offset += 4;
+					// Absolute offset (absol)
 					v += offset;
 
 					out.write((v >>> 24));
@@ -151,7 +172,7 @@ public final class BCJ2 extends QZComplexCoder {
 		}
 
 		@Override
-		public void finish() throws IOException {
+		public synchronized void finish() throws IOException {
 			if (b != -2) {
 				tryEncode(ob, true);
 				ob.writeToStream(main);
@@ -167,7 +188,7 @@ public final class BCJ2 extends QZComplexCoder {
 		}
 
 		@Override
-		public void close() throws IOException {
+		public synchronized void close() throws IOException {
 			try {
 				finish();
 			} finally {

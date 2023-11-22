@@ -3,6 +3,7 @@ package roj.archive.qz;
 import roj.collect.IntMap;
 import roj.text.TextUtil;
 import roj.util.ArrayCache;
+import roj.util.ArrayUtil;
 
 import java.io.FilterOutputStream;
 import java.io.IOException;
@@ -84,7 +85,7 @@ public final class WordBlock {
 			if (len > 0) {
 				out.write(b, off, len);
 				inc(len);
-			}
+			} else if (len < 0) ArrayUtil.checkRange(b, off, len);
 		}
 
 		private void inc(int len) { outSizes[id] += len; }
@@ -103,7 +104,7 @@ public final class WordBlock {
 			if (len > 0) {
 				out.write(b, off, len);
 				size += len;
-			}
+			} else if (len < 0) ArrayUtil.checkRange(b, off, len);
 		}
 
 		@Override

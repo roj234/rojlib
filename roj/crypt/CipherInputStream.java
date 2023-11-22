@@ -79,7 +79,7 @@ public class CipherInputStream extends InputStream {
 				cr = o.rIndex;
 				cw = o.wIndex();
 
-				o.rIndex = 0;
+				o.rIndex = i.rIndex;
 				o.wIndex(i.wIndex());
 			}
 		} catch (Throwable e) {

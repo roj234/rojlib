@@ -517,7 +517,7 @@ public class ConstantPool {
 		return ref.getIndex();
 	}
 
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings({"unchecked", "fallthrough"})
 	public <T extends Constant> T reset(T c) {
 		//assert c != null;
 		switch (c.type()) {

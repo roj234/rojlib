@@ -44,6 +44,7 @@ public class AnsiString {
 		return sb;
 	}
 	public String toString() { return writeRaw(IOUtil.getSharedCharBuf()).toString(); }
+	public String toAnsiString() { return writeAnsi(IOUtil.getSharedCharBuf()).toString(); }
 
 	public void flat(List<AnsiString> str) {
 		str.add(this);

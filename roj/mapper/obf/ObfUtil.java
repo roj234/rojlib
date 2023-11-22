@@ -1,15 +1,9 @@
 package roj.mapper.obf;
 
-import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.insn.InsnList;
-import roj.asm.tree.insn.LabelInsnNode;
-import roj.asm.tree.insn.NPInsnNode;
-import roj.asm.tree.insn.SwitchInsnNode;
 import roj.asm.util.Context;
-import roj.asm.util.InsnHelper;
 import roj.collect.ToIntMap;
 import roj.io.IOUtil;
 
@@ -271,20 +265,6 @@ public class ObfUtil {
 	private static void flatControlFlow0(MethodNode method, List<?> codeBlocks, Random rnd, int flag) {
 		// 首先，把所有变量的slot+1， 0位置用作switch的index
 		// 然后插入代码
-		InsnList prepend = new InsnList();
-		prepend.add(new NPInsnNode(Opcodes.ICONST_0));
-		prepend.add(new NPInsnNode(Opcodes.ISTORE_0));
-		SwitchInsnNode switcher = new SwitchInsnNode(Opcodes.LOOKUPSWITCH);
-		LabelInsnNode label = new LabelInsnNode();
-		prepend.add(label);
-		prepend.add(switcher);
-		InsnList insn = method.getCode().instructions;
-		for (int i = 0; i < insn.size(); i++) {
-			if (InsnHelper.getVarId(insn.get(i)) >= 0) {
-				throw new UnsupportedOperationException("todo!");
-			}
-		}
-		insn.addAll(0, prepend);
 
 	}
 }

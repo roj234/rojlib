@@ -268,6 +268,7 @@ public class Page {
 				long subSize = size&MASKS[SHIFT];
 
 				while (true) {
+					notFound11:
 					if ((bitmap&flag) == 0) {
 						if (subSize == 0) {
 							if (removeEmpties(flag)) break;
@@ -275,8 +276,8 @@ public class Page {
 							Page p;
 							x:
 							// 尝试不完整的分配
-							if (offset > 0) {
-								int i = get(offset - 1);
+							if (!removeEmpties(Long.lowestOneBit(flag))) {
+								int i = get(offset);
 								if (i < 0) break x;
 
 								p = child[i];
@@ -285,11 +286,14 @@ public class Page {
 									boolean ok = p.malloc(p.totalSpace() - myOffset, myOffset);
 									assert ok;
 									// 向前移动 (这里必定为空,除非出Bug了...)
-									ok = goc(offset + block - 1).malloc(0, MASKS[SHIFT] - (myOffset - subSize));
+									ok = goc(offset + block).malloc(0, MASKS[SHIFT] - (myOffset - subSize));
 									assert ok;
 
-									subSize = myOffset;
+									subSize = p.totalSpace()-myOffset;
 									break;
+								} else {
+									// failed, next iter
+									break notFound11;
 								}
 							}
 							if (offset + block < bitmapCapacity()) {
@@ -310,10 +314,11 @@ public class Page {
 					offset ++;
 				}
 
+				assert (bitmap&flag) == 0;
 				bitmap |= flag;
 				free -= size;
 				// 前对齐 以后可以尝试移动到SubPage结尾
-				return ((long) offset << SHIFT) - subSize;
+				return ((long) offset << SHIFT) + subSize;
 			} else {
 				// 快速分配, remove时再拆分 (好消息：FIFO不会拆分)
 				long len = prefix;

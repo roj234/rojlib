@@ -106,15 +106,6 @@ public final class Shared {
 					project = Project.load(cf);
 				} catch (Throwable e) {
 					CLIUtil.warning("配置读取失败", e);
-					proj = null;
-				}
-			}
-
-			if (proj == null) {
-				try {
-					FMDMain._project(new String[] {"p"}, null);
-				} catch (IOException e) {
-					e.printStackTrace();
 				}
 			}
 		}

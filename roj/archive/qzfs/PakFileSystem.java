@@ -1,9 +1,8 @@
 package roj.archive.qzfs;
 
-import roj.archive.qz.QZArchive;
-import roj.archive.qz.QZEntry;
-import roj.archive.qz.QZFileWriter;
-import roj.archive.qz.QZWriter;
+import roj.archive.qz.*;
+import roj.archive.qz.xz.LZMA2Options;
+import roj.collect.IntMap;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
@@ -26,7 +25,7 @@ import java.util.regex.Pattern;
  */
 public class PakFileSystem {
 	private List<QZArchive> archives;
-	private List<QZFileWriter> metadataOverride = Collections.emptyList();
+	private final IntMap<QZFileWriter> metadataOverride = new IntMap<>();
 	private final Map<String, PakPath> files = new MyHashMap<>();
 
 	private final File alsoReadFrom;
@@ -82,7 +81,7 @@ public class PakFileSystem {
 
 	public boolean isOpen() { return archives != Collections.EMPTY_LIST; }
 	public void close() throws IOException {
-		for (QZFileWriter writer : metadataOverride) writer.close();
+		for (QZFileWriter writer : metadataOverride.values()) writer.close();
 		patch.close();
 
 		for (QZArchive archive : archives) archive.close();
@@ -111,8 +110,16 @@ public class PakFileSystem {
 	}
 
 	void markMetadataDirty(QZEntry entry, short archiveIndex) {
-		// not implemented yet
-		throw new UnsupportedOperationException();
+		QZFileWriter qzfw = metadataOverride.get(archiveIndex);
+		if (qzfw == null) {
+			try {
+				metadataOverride.putInt(archiveIndex, qzfw = archives.get(archiveIndex).append());
+			} catch (IOException e) {
+				return;
+			}
+			qzfw.setCodec(new LZMA2(new LZMA2Options(6).setDictSize(262144)));
+			qzfw.setCompressHeader(1);
+		}
 	}
 
 	public boolean createPath(PakPath dest, boolean directory) throws IOException {

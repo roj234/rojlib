@@ -93,7 +93,7 @@ public class LZMAInputStream extends InputStream {
 		return 10 + getDictSize(dictSize) / 1024 + ((2 * 0x300) << (lc + lp)) / 1024;
 	}
 
-	private static int getDictSize(int dictSize) {
+	static int getDictSize(int dictSize) {
 		if (dictSize < 0 || dictSize > DICT_SIZE_MAX) throw new IllegalArgumentException("LZMA dictionary is too big for this implementation");
 
 		// For performance reasons, use a 4 KiB dictionary if something
