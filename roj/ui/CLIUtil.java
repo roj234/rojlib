@@ -213,6 +213,7 @@ public class CLIUtil {
 					setConsoleMode0(STDOUT, MODE_SET, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT);
 				} catch (NativeException e) {
 					System.err.println("Failed to initialize VT output: " + e.getMessage());
+					return false;
 				}
 			}
 		}

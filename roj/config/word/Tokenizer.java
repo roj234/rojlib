@@ -167,8 +167,8 @@ public class Tokenizer extends ITokenizer {
 						if (w != null) return w;
 						i = index;
 						break;
-					case C_DYH: prevIndex = index = i-1; return readConstChar();
-					case C_SYH: prevIndex = index = i-1; return readConstString(c);
+					case C_DYH: prevIndex = (index = i) - 1; return readConstChar();
+					case C_SYH: prevIndex = (index = i) - 1; return readConstString(c);
 				}
 			}
 		} finally {

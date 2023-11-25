@@ -57,9 +57,9 @@ public final class FMDMain {
 	static ScheduledTask shinyTask;
 	public static CommandConsole console = new CommandConsole("") {
 		@Override
-		public boolean execute(String cmd) {
+		public boolean executeCommand(String cmd) {
 			if (shinyTask != null) shinyTask.cancel();
-			return super.execute(cmd);
+			return super.executeCommand(cmd);
 		}
 	};
 
@@ -76,7 +76,7 @@ public final class FMDMain {
 
 			GUIUtil.systemLook();
 			MapperUI f = new MapperUI();
-			f.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+			f.setDefaultCloseOperation(isCLI ? JFrame.DISPOSE_ON_CLOSE : JFrame.EXIT_ON_CLOSE);
 			loadMapper();
 			f.setMapper(mode.equals("mcp2srg") ? mapperFwd : loadReverseMapper());
 			f.show();
@@ -145,6 +145,7 @@ public final class FMDMain {
 			CLIUtil.success("配置文件已选择: " + name);
 			c.setPrompt("\u001b[33mFMD\u001b[97m[\u001b[96m"+project.name+"\u001b[97m]\u001b[33m > ");
 		})));
+		c.register(literal("exit").executes(ctx -> System.exit(0)));
 
 		if (project == null) {
 			CLIUtil.warning("未加载项目配置文件! 请使用create <名称(modid)>创建配置、和/或使用project <名称(modid)>选择配置");
@@ -173,9 +174,10 @@ public final class FMDMain {
 
 			CLIConsole.setConsole(c);
 
+			// only non-daemon thread
 			LockSupport.park();
 		} else {
-			c.execute(TextUtil.join(Arrays.asList(args), " "));
+			c.executeCommand(TextUtil.join(Arrays.asList(args), " "));
 		}
 	}
 

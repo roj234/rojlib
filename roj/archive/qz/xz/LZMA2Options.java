@@ -411,14 +411,14 @@ public class LZMA2Options implements Cloneable {
 		}
 	}
 
-	public int findBestProps(byte[] data) {
+	public int findBestProps(byte[] data) { return findBestProps(data, TaskPool.Common()); }
+	public int findBestProps(byte[] data, TaskPool th) {
 		AtomicReference<Object[]> ref = new AtomicReference<>();
-
-		TaskPool th = TaskPool.Common();
 		for (int lc = 0; lc <= 4; lc++) {
 			for (int lp = 0; lp <= 4-lc; lp++) {
 				for (int pb = 0; pb <= 4; pb++) {
 					LZMA2Options copy = clone();
+					copy.dictSize = Math.max(Math.min(copy.dictSize, data.length), 4096);
 					copy.lc = lc;
 					copy.lp = lp;
 					copy.pb = pb;

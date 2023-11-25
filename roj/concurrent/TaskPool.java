@@ -88,20 +88,20 @@ public class TaskPool implements TaskHandler {
 		if (task.isCancelled()) return;
 
 		int len = running;
-		if (len < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
-		else {
-			if (len == 0 ||
-				len < core ||
-				len < max &&
-					(newThr == 0 ||
-					(newThr < 0 ? tasks.size()/len : tasks.size()) > Math.abs(newThr))
-			) newWorker();
-		}
+		// move throw into newWorker()
+		if (len <= 0) newWorker();
 
 		// 等待立即结束的短时任务
 		try {
 			if (fastPath.tryTransfer(task, 10, TimeUnit.MICROSECONDS)) return;
 		} catch (InterruptedException ignored) {}
+
+		len = running;
+		if (len < core ||
+			len < max &&
+				(newThr == 0 ||
+					(newThr < 0 ? tasks.size()/len : tasks.size()) > Math.abs(newThr))
+		) newWorker();
 
 		lock.lock();
 		try {
@@ -143,6 +143,8 @@ public class TaskPool implements TaskHandler {
 				int r = running;
 				if (u.compareAndSwapInt(this, RUNNING_OFFSET, r, r-1)) {
 					prevStop = System.currentTimeMillis();
+
+					synchronized (this) { notifyAll(); }
 					return null;
 				}
 			}
@@ -188,10 +190,11 @@ public class TaskPool implements TaskHandler {
 	}
 
 	private void newWorker() {
-		prevStop = System.currentTimeMillis();
-
 		int r = running;
+		if (r < 0) throw new IllegalStateException("TaskPool was shutdown.");
 		if (u.compareAndSwapInt(this, RUNNING_OFFSET, r, r+1)) {
+			prevStop = System.currentTimeMillis();
+
 			ExecutorImpl t = factory.get(this);
 			synchronized (threads) { threads.add(t); }
 			t.start();
@@ -240,6 +243,8 @@ public class TaskPool implements TaskHandler {
 			r = running;
 		} while (!u.compareAndSwapInt(this, RUNNING_OFFSET, r, -r-1));
 
+		synchronized (this) { notifyAll(); }
+
 		tasks.clear();
 
 		while (fastPath.tryTransfer(IntMap.UNDEFINED));
@@ -262,9 +267,9 @@ public class TaskPool implements TaskHandler {
 
 	public void awaitFinish() {
 		synchronized (this) {
-			while ((!tasks.isEmpty() || running != parking) && running > 0) {
+			while (parking < running) {
 				try {
-					wait(0);
+					wait(1);
 				} catch (InterruptedException e) {
 					break;
 				}
@@ -274,7 +279,7 @@ public class TaskPool implements TaskHandler {
 	public boolean awaitFinish(long timeout)  {
 		long time = System.currentTimeMillis() + timeout;
 		synchronized (this) {
-			while ((!tasks.isEmpty() || running != parking) && running > 0) {
+			while (parking < running) {
 				long dt = time - System.currentTimeMillis();
 				if (dt < 0) return false;
 				try {

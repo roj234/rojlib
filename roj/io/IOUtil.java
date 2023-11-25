@@ -331,7 +331,8 @@ public final class IOUtil {
 
 	public static String extensionName(String path) {
 		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
-		return path.substring(path.lastIndexOf('.')+1);
+		int i = path.lastIndexOf('.');
+		return i < 0 ? "" : path.substring(i+1);
 	}
 
 	public static String noExtName(String path) {

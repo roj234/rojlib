@@ -12,6 +12,7 @@ import roj.util.DynByteBuf;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.AsynchronousCloseException;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
@@ -48,8 +49,11 @@ public class QZFileWriter extends QZWriter {
     private List<ParallelWriter> parallelWriter;
     private ReentrantReadWriteLock parallelLock;
 
-    public synchronized QZWriter parallel() {
+    public synchronized QZWriter parallel() throws IOException {
         if (finished) throw new IllegalStateException("Stream closed");
+
+        closeEntry();
+        nextWordBlock();
 
         ParallelWriter pw = new ParallelWriter();
         if (parallelWriter == null) {
@@ -57,21 +61,15 @@ public class QZFileWriter extends QZWriter {
             parallelLock = new ReentrantReadWriteLock();
         }
         parallelWriter.add(pw);
-        parallelLock.readLock().lock();
+        boolean b = parallelLock.readLock().tryLock();
+        if (!b) throw new AsynchronousCloseException();
         return pw;
     }
 
-    private synchronized void retainParallel() throws IOException {
-        if (parallelWriter != null) {
-            parallelLock.writeLock().lock();
-            try {
-                for (int i = 0; i < parallelWriter.size(); i++) {
-                    parallelWriter.get(i).end();
-                }
-            } finally {
-                parallelLock.writeLock().unlock();
-            }
-        }
+    private void waitAsyncFinish() {
+        ReentrantReadWriteLock lock = parallelLock;
+        // will not unlock
+        if (lock != null) lock.writeLock().lock();
     }
 
     private class ParallelWriter extends QZWriter {
@@ -142,7 +140,7 @@ public class QZFileWriter extends QZWriter {
         if (finished) return;
 
         super.finish();
-        retainParallel();
+        waitAsyncFinish();
 
         ByteList.WriteOut out = new ByteList.WriteOut(null) {
             public void flush() {
@@ -231,7 +229,7 @@ public class QZFileWriter extends QZWriter {
             blocks.clear();
             files.clear();
             emptyFiles.clear();
-            flagSum[9] = 0;
+            flagSum[8] = flagSum[9] = 0;
         }
     }
 

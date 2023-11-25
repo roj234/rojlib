@@ -13,7 +13,7 @@ import java.util.List;
  * @since 2023/11/20 0020 15:05
  */
 public class ArgumentContext {
-	private final TaskPool executor;
+	public TaskPool executor;
 
 	private String context;
 	private List<Word> words;
@@ -82,6 +82,13 @@ public class ArgumentContext {
 
 	public void wrapExecute(CommandImpl command) {
 		CommandContext ctx = new CommandContext(map);
-		executor.pushTask(() -> command.accept(ctx));
+		if (executor != null) executor.pushTask(() -> command.accept(ctx));
+		else {
+			try {
+				command.accept(ctx);
+			} catch (ParseException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 }

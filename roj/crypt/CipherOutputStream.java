@@ -117,13 +117,14 @@ public class CipherOutputStream extends FilterOutputStream {
 	}
 
 	protected void finalBlock(ByteList o) throws Exception {
-		int blockSize = c.engineGetBlockSize();
+		int blockSize = c.engineGetBlockSize()-1;
 		if (blockSize > 0) {
 			int off = o.wIndex();
-			int end = (off+blockSize-1)/blockSize*blockSize;
+			int end = 0 == (off&blockSize) ? off : (off|blockSize)+1;
 
 			o.wIndex(end);
 			off += o.arrayOffset();
+			end += o.arrayOffset();
 
 			// zero padding
 			byte[] buf = o.array();

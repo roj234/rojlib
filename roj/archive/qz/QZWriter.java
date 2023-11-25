@@ -187,6 +187,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
                 s.write(bb, 0, l);
                 len -= l;
             }
+            ArrayCache.putArray(bb);
         }
 
         blocks.add(b);
@@ -195,11 +196,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         QZEntry entry = b.firstEntry;
         while (entry != null) {
             files.add(entry);
-
-            int flag = entry.flag;
-            if (entry.uSize == 0) countFlagEmpty(flag);
-            else countFlag(flag);
-
+            countFlag(entry.flag);
             entry = entry.next;
         }
     }
@@ -289,7 +286,11 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
         for (WordBlock b : blocks) countBlockFlag(b);
         for (int i = 0; i < files.size(); i++) countFlag(files.get(i).flag);
-        for (int i = 0; i < emptyFiles.size(); i++) countFlagEmpty(emptyFiles.get(i).flag);
+        for (int i = 0; i < emptyFiles.size(); i++) {
+            byte flag = emptyFiles.get(i).flag;
+            countFlag(flag);
+            countFlagEmpty(flag);
+        }
     }
 
     public final void nextWordBlock() throws IOException {

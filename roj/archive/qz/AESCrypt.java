@@ -47,7 +47,7 @@ public final class AESCrypt extends QZCoder {
     byte[] id() { return ID; }
 
     public OutputStream encode(OutputStream out) throws IOException {
-        if (lastKey == null) throw new IOException("没有密码");
+        if (lastKey == null) throw new IOException("缺少密码");
 
         FeedbackCipher cip = new FeedbackCipher(new AES(dec, false), FeedbackCipher.MODE_CBC);
         try {
@@ -58,7 +58,7 @@ public final class AESCrypt extends QZCoder {
         return new CipherOutputStream(out, cip);
     }
     public InputStream decode(InputStream in, byte[] key, long uncompressedSize, int maxMemoryLimitInKb) throws IOException {
-        if (key == null) throw new IOException("没有密码");
+        if (key == null) throw new IOException("缺少密码");
         init(key);
 
         FeedbackCipher cip = new FeedbackCipher(dec, FeedbackCipher.MODE_CBC);
@@ -138,7 +138,7 @@ public final class AESCrypt extends QZCoder {
         info |= 0x400F; // iv=16
 
         int s = salt.length;
-        if ((s&1) != 0) {
+        if (s == 16) {
             info |= 0x8000;
             s--;
         }

@@ -103,17 +103,16 @@ public final class CLIConsole extends InputStream implements Runnable {
 		while (true) {
 			synchronized (this) {
 				if (rPtr == wPtr) {
-					synchronized (IN_READ) {
-						IN_READ.incrementAndGet();
-						IN_READ.notify();
-						IN_READ.decrementAndGet();
-					}
+					IN_READ.incrementAndGet();
+					synchronized (IN_READ) { IN_READ.notify(); }
 
 					try {
 						wait();
 					} catch (InterruptedException e) {
 						throw new ClosedByInterruptException();
 					}
+
+					IN_READ.decrementAndGet();
 				}
 
 				int read = Math.min(len, available());
@@ -155,6 +154,7 @@ public final class CLIConsole extends InputStream implements Runnable {
 	private static final UnsafeCharset CE = GB18030.is(Charset.defaultCharset()) ? GB18030.CODER : UTF8MB4.CODER;
 	private static final ByteList SEQ = new ByteList(256);
 	private static final SimpleList<CharList> LINES = new SimpleList<>();
+	private static int LineCursor;
 
 	public static void renderBottomLine(CharList b) { renderBottomLine(b, false, 0); }
 	/**
@@ -193,7 +193,7 @@ public final class CLIConsole extends InputStream implements Runnable {
 						}
 					} else {
 						CE.encodeFixedIn(b, bb);
-						bb.putAscii("\u001b["+cursor+"G");
+						bb.putAscii("\u001b["+(LineCursor = cursor)+"G");
 					}
 				} else {
 					bb.put('\n');
@@ -206,7 +206,7 @@ public final class CLIConsole extends InputStream implements Runnable {
 				CE.encodeFixedIn(b, bb);
 				bb.putAscii("\u001b[0K");
 				if (pos > 0) bb.putAscii("\u001b8");
-				else bb.putAscii("\u001b["+cursor+"G");
+				else bb.putAscii("\u001b["+(LineCursor = cursor)+"G");
 			}
 
 			writeSeq(bb.putAscii("\u001b[?25h"));
@@ -247,9 +247,14 @@ public final class CLIConsole extends InputStream implements Runnable {
 				if (!LINES.isEmpty()) {
 					int i = LINES.size()-1;
 					while (true) {
-						CE.encodeFixedIn(LINES.get(i), bb);
+						try {
+							CE.encodeFixedIn(LINES.get(i), bb);
+						} catch (Throwable ignored) {}
 						bb.putAscii("\u001b[0K");
-						if (i-- == 0) break;
+						if (i-- == 0) {
+							if (LineCursor > 0) bb.putAscii("\u001b["+LineCursor+"G");
+							break;
+						}
 						bb.put('\n');
 					}
 					bb.putAscii("\u001b[?25h");

@@ -117,8 +117,16 @@ public class CommandConsole extends DefaultConsole {
 		if (success) printCommand();
 		return success;
 	}
-
-	public boolean execute(String cmd) {
+	public boolean executeCommand(String cmd) {
+		TaskPool executor = ctx.executor;
+		ctx.executor = null;
+		try {
+			return execute(cmd);
+		} finally {
+			ctx.executor = executor;
+		}
+	}
+	private boolean execute(String cmd) {
 		List<Word> words = parse(cmd);
 		if (words == null) return false;
 

@@ -200,7 +200,7 @@ public abstract class ITokenizer {
 	@SuppressWarnings("fallthrough")
 	protected final CharList readSlashString(char end, boolean zhuanyi) throws ParseException {
 		CharSequence in = input;
-		int i = index+1;
+		int i = index;
 
 		CharList v = found; v.clear();
 

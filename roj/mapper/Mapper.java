@@ -70,7 +70,7 @@ public class Mapper extends Mapping {
 
 	// 'CMPC': Const Remapper Cache
 	private static final int FILE_HEADER = 0x634d5063;
-	private static final int ASYNC_THRESHOLD = 200;
+	private static final int ASYNC_THRESHOLD = 1000;
 	private static final boolean DEBUG = false;
 	// 注意事项
 	// 1. 返回值的重载通过bridge method实现，JVM就是傻逼，当然也可以让你实现骚操作

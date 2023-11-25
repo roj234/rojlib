@@ -27,7 +27,7 @@ public class FeedbackCipher extends RCipherSpi {
 
 	public final void engineSetMode(String s) throws NoSuchAlgorithmException {
 		switch (s.toUpperCase(Locale.ROOT)) {
-			case "ECB": type = MODE_ECB; return;
+			case "ECB": type = MODE_ECB; tmp = new ByteList(); return;
 			case "CBC": type = MODE_CBC; break;
 			case "PCBC":type = MODE_PCBC; break;
 			case "CTS": type = MODE_CTS; break;

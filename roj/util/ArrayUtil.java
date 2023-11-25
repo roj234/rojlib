@@ -27,12 +27,12 @@ public final class ArrayUtil {
 
 	private static void Base128(ByteList tmp) {
 		BitWriter br = new BitWriter(tmp);
-		CharList sb = IOUtil.getSharedCharBuf();
+		CharList sb = new CharList();
 		sb.ensureCapacity(tmp.readableBytes() * 8/7 + 1);
 		while (br.readableBits() >= 7) sb.append((char) (br.readBit(7)+1));
 		if (br.readableBits() > 0) sb.append((char) (br.readBit(br.readableBits())+1));
 
-		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(ITokenizer.addSlashes(sb, 0, new CharList(), '\'').toStringAndFree()), null);
+		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(ITokenizer.addSlashes(sb, 0, new CharList().append('"'), '\'').append('"').toStringAndFree()), null);
 		CLIUtil.pause();
 	}
 
