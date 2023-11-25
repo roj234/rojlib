@@ -902,6 +902,11 @@ public class KParser implements ParseContext {
 			protected boolean put(CodeWriter to) {
 				return false;
 			}
+
+			@Override
+			protected int length() {
+				return 0;
+			}
 		};
 
 		try {

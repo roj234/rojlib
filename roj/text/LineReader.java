@@ -25,7 +25,7 @@ public class LineReader implements Iterable<String>, Iterator<String>, AutoClose
 	}
 	@Deprecated
 	public LineReader(InputStream in, Charset cs, boolean cleanEmpty) throws IOException {
-		this.str = new TextReader(in);
+		this.str = new TextReader(in, cs);
 		this.keepEmpty = !cleanEmpty;
 	}
 

@@ -2,6 +2,7 @@ package roj.lavac.expr;
 
 import roj.asm.type.Type;
 import roj.collect.SimpleList;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.word.NotStatementException;
 import roj.lavac.parser.CompileUnit;
 import roj.lavac.parser.MethodWriterL;
@@ -17,13 +18,13 @@ import javax.annotation.Nullable;
  * @author Roj233
  * @since 2022/2/27 20:27
  */
-public class DotGet implements LoadExpression {
+public class DotGet implements LoadNode {
 	@Nullable
-	Expression parent;
+	ExprNode parent;
 	SimpleList<String> names;
 	CompileUnit ctx;
 
-	public DotGet(@Nullable Expression parent, String name, int flag) {
+	public DotGet(@Nullable ExprNode parent, String name, int flag) {
 		this.parent = parent;
 		this.names = new SimpleList<>(4);
 		this.names.add(name);
@@ -36,9 +37,11 @@ public class DotGet implements LoadExpression {
 
 	@Nonnull
 	@Override
-	public Expression resolve() {
-		parent = parent.resolve();
-		assert !parent.isConstant();
+	public ExprNode resolve() {
+		if (parent != null) {
+			parent = parent.resolve();
+			assert !parent.isConstant();
+		}
 		return this;
 	}
 
@@ -67,13 +70,13 @@ public class DotGet implements LoadExpression {
 	}
 
 	@Override
-	public boolean equals(Object o) {
+	public boolean equalTo(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 
 		DotGet get = (DotGet) o;
 
-		if (parent != null ? !parent.equals(get.parent) : get.parent != null) return false;
+		if (parent != null ? !parent.equalTo(get.parent) : get.parent != null) return false;
 		return names.equals(get.names);
 	}
 

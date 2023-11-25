@@ -74,6 +74,7 @@ public class LavacUI extends JFrame {
 						javas.remove(i);
 				}
 				for (i = 0; i < javas.size(); i++) {
+					System.out.println(javas.get(i).name);
 					javas.get(i).S1_Struct();
 				}
 			} catch (IOException | ParseException ex) {

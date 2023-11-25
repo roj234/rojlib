@@ -1,6 +1,7 @@
 package roj.lavac.expr;
 
 import roj.asm.type.Type;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.word.NotStatementException;
 import roj.lavac.parser.MethodWriterL;
 
@@ -8,7 +9,7 @@ import roj.lavac.parser.MethodWriterL;
  * @author Roj234
  * @since 2023/1/30 0030 14:08
  */
-public class This implements Expression {
+public class This implements ExprNode {
 	public static final This INST = new This();
 	public This() {}
 
@@ -23,7 +24,7 @@ public class This implements Expression {
 	}
 
 	@Override
-	public boolean equals(Object left) {
+	public boolean equalTo(Object left) {
 		return false;
 	}
 }

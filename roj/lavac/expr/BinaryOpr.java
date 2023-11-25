@@ -1,6 +1,7 @@
 package roj.lavac.expr;
 
 import roj.asm.type.Type;
+import roj.compiler.ast.expr.ExprNode;
 import roj.lavac.parser.JavaLexer;
 import roj.lavac.parser.MethodWriterL;
 
@@ -10,7 +11,7 @@ import roj.lavac.parser.MethodWriterL;
  * @author Roj233
  * @since 2020/10/13 22:17
  */
-final class BinaryOpr implements Expression {
+final class BinaryOpr implements ExprNode {
 	final short op;
 
 	static BinaryOpr get(short op) { return SYMBOLS[op-JavaLexer.logic_and]; }
@@ -28,7 +29,7 @@ final class BinaryOpr implements Expression {
 	@Override
 	public Type type() { return null; }
 	@Override
-	public boolean equals(Object left) { return this == left; }
+	public boolean equalTo(Object left) { return this == left; }
 
 	@Override
 	public String toString() { return "<binary operator '"+JavaLexer.byId(op)+"';'>"; }

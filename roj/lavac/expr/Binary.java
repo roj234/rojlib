@@ -2,6 +2,7 @@ package roj.lavac.expr;
 
 import roj.asm.type.Type;
 import roj.asm.visitor.Label;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.word.NotStatementException;
 import roj.lavac.parser.MethodWriterL;
 
@@ -16,12 +17,12 @@ import static roj.lavac.parser.JavaLexer.logic_or;
  * @author Roj233
  * @since 2022/2/24 19:56
  */
-public class Binary implements Expression {
+public class Binary implements ExprNode {
 	final short operator;
-	Expression left, right;
+	ExprNode left, right;
 	Label target;
 
-	Binary(short operator, Expression left, Expression right) {
+	Binary(short operator, ExprNode left, ExprNode right) {
 		this.operator = operator;
 		this.left = left;
 		this.right = right;
@@ -63,7 +64,7 @@ public class Binary implements Expression {
 
 	@Nonnull
 	@Override
-	public Expression resolve() {
+	public ExprNode resolve() {
 		return this;
 	}
 
@@ -78,11 +79,11 @@ public class Binary implements Expression {
 	}
 
 	@Override
-	public boolean equals(Object left) {
+	public boolean equalTo(Object left) {
 		if (this == left) return true;
 		if (!(left instanceof Binary)) return false;
 		Binary b = (Binary) left;
-		return b.left.equals(left) && b.right.equals(right) && b.operator == operator;
+		return b.left.equalTo(left) && b.right.equalTo(right) && b.operator == operator;
 	}
 
 	public void setTarget(Label ifFalse) {

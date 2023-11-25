@@ -3,6 +3,7 @@ package roj.lavac.expr;
 import roj.asm.OpcodeUtil;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.word.NotStatementException;
 import roj.lavac.parser.MethodWriterL;
 
@@ -14,10 +15,10 @@ import javax.annotation.Nonnull;
  * @author Roj233
  * @since 2022/2/27 20:09
  */
-final class ArrayGet implements LoadExpression {
-	private Expression array, index;
+final class ArrayGet implements LoadNode {
+	private ExprNode array, index;
 
-	ArrayGet(Expression array, Expression index) {
+	ArrayGet(ExprNode array, ExprNode index) {
 		this.array = array;
 		this.index = index;
 	}
@@ -27,7 +28,7 @@ final class ArrayGet implements LoadExpression {
 
 	@Nonnull
 	@Override
-	public Expression resolve() {
+	public ExprNode resolve() {
 		array = array.resolve();
 		index = index.resolve();
 		if (array.isConstant() && index.isConstant()) {
@@ -64,11 +65,11 @@ final class ArrayGet implements LoadExpression {
 	public String toString() { return array.toString()+'['+index+']'; }
 
 	@Override
-	public boolean equals(Object left) {
+	public boolean equalTo(Object left) {
 		if (this == left) return true;
 		if (!(left instanceof ArrayGet)) return false;
 		ArrayGet get = (ArrayGet) left;
-		return get.array.equals(array) && get.index.equals(index);
+		return get.array.equalTo(array) && get.index.equalTo(index);
 	}
 
 	@Override

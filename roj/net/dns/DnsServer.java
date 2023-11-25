@@ -7,7 +7,6 @@ import roj.io.IOUtil;
 import roj.net.NetworkUtil;
 import roj.net.URIUtil;
 import roj.net.ch.*;
-import roj.net.ch.osi.ServerLaunch;
 import roj.net.http.Action;
 import roj.net.http.srv.Request;
 import roj.net.http.srv.ResponseHeader;
@@ -56,15 +55,14 @@ public class DnsServer implements ChannelHandler {
 	public InetSocketAddress fakeDns;
 
 	public DnsServer(CMapping cfg, InetSocketAddress address) throws IOException {
-		SelectorLoop loop = ServerLaunch.udp().listen(new InetSocketAddress(cfg.getInteger("forwarderReceive")))
-										.initializator(new ForwardQueryHandler(this))
-										.threadMax(1).daemon(false)
-										.option(ServerSock.CHANNEL_RECEIVE_BUFFER, 10000)
-										.launch();
+		ServerLaunch.udp().listen(new InetSocketAddress(cfg.getInteger("forwarderReceive")))
+					.initializator(new ForwardQueryHandler(this))
+					.option(ServerLaunch.CHANNEL_RECEIVE_BUFFER, 10000)
+					.launch();
 
 		ServerLaunch.udp().listen(address).initializator((ch) -> {
 
-		}).option(ServerSock.CHANNEL_RECEIVE_BUFFER, 10000).loop(loop).launch();
+		}).option(ServerLaunch.CHANNEL_RECEIVE_BUFFER, 10000).launch();
 
 		waiting = new ConcurrentHashMap<>();
 		requestTimeout = cfg.getInteger("requestTimeout");
@@ -514,9 +512,9 @@ public class DnsServer implements ChannelHandler {
 				}
 			}
 
-			key.lock.readLock();
+			key.lock.readLock().lock();
 			Record.iterateFinder(cRecords, cRecords = new ArrayList<>(), dReq.qType, fn);
-			key.lock.readUnlock();
+			key.lock.readLock().unlock();
 
 			int ts = (int) (System.currentTimeMillis() / 1000);
 			for (int j = 0; j < cRecords.size(); j++) {
@@ -912,10 +910,10 @@ public class DnsServer implements ChannelHandler {
 
 				if (msg == null) {
 					List<Record> records = resolved.computeIfAbsent(key, Helpers.fnArrayList());
-					key.lock.writeLock();
+					key.lock.writeLock().lock();
 					records.clear();
 					records.add(e);
-					key.lock.writeUnlock();
+					key.lock.writeLock().unlock();
 					msg = "操作完成";
 				}
 			}

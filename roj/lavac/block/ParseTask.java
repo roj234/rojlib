@@ -4,11 +4,11 @@ import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;
 import roj.asm.util.AccessFlag;
 import roj.asm.visitor.CodeWriter;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.ParseException;
 import roj.lavac.asm.AnnotationPrimer;
 import roj.lavac.asm.MethodParamAnno;
 import roj.lavac.expr.ExprParser;
-import roj.lavac.expr.Expression;
 import roj.lavac.parser.CompileLocalCache;
 import roj.lavac.parser.CompileUnit;
 import roj.lavac.parser.MethodWriterL;
@@ -18,10 +18,11 @@ import java.util.List;
 public interface ParseTask {
 	static ParseTask Field(CompileUnit ctx, FieldNode f) throws ParseException {
 		ExprParser ep = CompileLocalCache.get().ep;
-		Expression expr = ep.parse(ctx, ExprParser.STOP_COMMA | ExprParser.STOP_SEMICOLON);
+		ExprNode expr = ep.parse(ctx, ExprParser.STOP_COMMA | ExprParser.STOP_SEMICOLON);
+		System.out.println(expr);
 
 		return () -> {
-			Expression resolve = expr.resolve();
+			ExprNode resolve = expr.resolve();
 
 			CodeWriter m = ctx.getClinit();
 			MethodWriterL mp = ctx.ctx().createMethodPoet(ctx, m.mn);
@@ -37,7 +38,8 @@ public interface ParseTask {
 	}
 	static ParseTask Annotation(CompileUnit ctx, AnnotationPrimer annotation, String name) throws ParseException {
 		ExprParser ep = CompileLocalCache.get().ep;
-		Expression expr = ep.parse(ctx, ExprParser.STOP_COMMA | ExprParser.STOP_RSB);
+		ExprNode expr = ep.parse(ctx, ExprParser.STOP_COMMA | ExprParser.STOP_RSB);
+		System.out.println(expr);
 
 		return () -> {
 
@@ -47,7 +49,7 @@ public interface ParseTask {
 
 	static ParseTask Enum(CompileUnit ctx, int ordinal, FieldNode f) throws ParseException {
 		ExprParser ep = CompileLocalCache.get().ep;
-		Expression expr = ep.parse(ctx, ExprParser.STOP_COMMA | ExprParser.STOP_SEMICOLON);
+		ExprNode expr = ep.parse(ctx, ExprParser.STOP_COMMA | ExprParser.STOP_SEMICOLON);
 
 		return () -> {
 			CodeWriter m = ctx.getClinit();

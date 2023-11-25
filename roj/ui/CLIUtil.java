@@ -205,10 +205,12 @@ public class CLIUtil {
 		in =  new BufferedReader(new InputStreamReader(System.in));
 	}
 	private static boolean initialize() {
+		if (Boolean.getBoolean("roj.disableAnsi")) return false;
+
 		if (OS.CURRENT == OS.WINDOWS) {
 			if (NativeLibrary.loaded) {
 				try {
-					setConsoleMode0(STDOUT, MODE_SET, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT);
+					setConsoleMode0(STDOUT, MODE_SET, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT);
 				} catch (NativeException e) {
 					System.err.println("Failed to initialize VT output: " + e.getMessage());
 				}
@@ -275,7 +277,7 @@ public class CLIUtil {
 	}
 	public static void warning(String string, Throwable err) {
 		printColor(string, YELLOW, false, true, true);
-		err.printStackTrace(sysOut);
+		err.printStackTrace();
 		reset();
 	}
 
@@ -287,7 +289,7 @@ public class CLIUtil {
 	}
 	public static void error(String string, Throwable err) {
 		printColor(string, RED, false, true, true);
-		err.printStackTrace(sysOut);
+		err.printStackTrace();
 		reset();
 	}
 

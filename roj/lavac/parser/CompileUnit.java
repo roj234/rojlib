@@ -1095,11 +1095,12 @@ public final class CompileUnit extends ConstantData {
 			}
 
 			while (wr.hasNext()) {
-				int index = wr.index;
+				int index = wr.indexForRet();
 				String val = wr.next().val();
 
 				w = wr.next();
 				if (w.type() != assign) {
+					wr.index = index;
 					// values
 					a.assertValueOnly = true;
 					a.newEntry("value", ParseTask.Annotation(this, a, "value"));

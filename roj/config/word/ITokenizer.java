@@ -63,6 +63,8 @@ public abstract class ITokenizer {
 		}
 	}
 
+	public int indexForRet() { return lastWordPos; }
+
 	public final Word next() throws ParseException {
 		if (marker == -1) {
 			marker = -2;

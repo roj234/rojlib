@@ -3,6 +3,7 @@ package roj.lavac.expr;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.word.NotStatementException;
 import roj.lavac.parser.MethodWriterL;
 
@@ -10,11 +11,11 @@ import roj.lavac.parser.MethodWriterL;
  * @author Roj234
  * @since 2022/2/24 19:55
  */
-class InstanceOf implements Expression {
+class InstanceOf implements ExprNode {
 	private final Type type;
-	private final Expression left;
+	private final ExprNode left;
 
-	public InstanceOf(Type type, Expression left) {
+	public InstanceOf(Type type, ExprNode left) {
 		this.type = type;
 		this.left = left;
 	}
@@ -23,7 +24,7 @@ class InstanceOf implements Expression {
 	public IType type() { return Type.std(Type.BOOLEAN); }
 
 	@Override
-	public Expression resolve() {
+	public ExprNode resolve() {
 		if (!left.isConstant()) return this;
 		try {
 			// todo MapUtil -> better solution
@@ -41,14 +42,14 @@ class InstanceOf implements Expression {
 	}
 
 	@Override
-	public boolean equals(Object o) {
+	public boolean equalTo(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 
 		InstanceOf of = (InstanceOf) o;
 
 		if (!type.equals(of.type)) return false;
-		return left.equals(of.left);
+		return left.equalTo(of.left);
 	}
 
 	@Override

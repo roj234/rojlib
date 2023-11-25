@@ -21,7 +21,6 @@ import roj.ui.ProgressBar;
 import roj.util.ArrayCache;
 import roj.util.BsDiff;
 import roj.util.Helpers;
-import roj.util.NativeMemory;
 import sun.misc.Unsafe;
 
 import java.io.File;
@@ -92,8 +91,6 @@ public class TextDeDup {
 		}
 	}
 
-	static int[] ref;
-	static NativeMemory block = new NativeMemory(true);
 	public static void main(String[] args) throws Exception {
 		if (args.length < 2) {
 			System.out.println("TextDeDuplicate <mode> <path> <list>\n" +

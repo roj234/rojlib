@@ -109,7 +109,6 @@ public class JPinyin {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		PinyinWords.compact();
 
 		FastSwitch.put('a', 0);
 		FastSwitch.put('e', 1);

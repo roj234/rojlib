@@ -35,6 +35,7 @@ public interface LinedReader extends Closeable {
 		}
 	}
 
+	default Iterable<String> lines() { return this::iterator; }
 	default Iterator<String> iterator() {
 		return new AbstractIterator<String>() {
 			@Override

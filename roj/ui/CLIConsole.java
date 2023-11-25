@@ -65,6 +65,7 @@ public final class CLIConsole extends InputStream implements Runnable {
 		if (inited == 0) {
 			inited = -1;
 			System.err.println("不是控制台。 注:谁教教我怎么检测STDIN有没有东西,要能跨平台的");
+			enableDirectInput(false);
 			return false;
 		}
 

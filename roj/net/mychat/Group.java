@@ -1,11 +1,11 @@
 package roj.net.mychat;
 
 import roj.collect.*;
-import roj.concurrent.SpinLock;
 import roj.config.serial.ToSomeString;
 import roj.util.ByteList;
 
 import java.util.List;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * @author Roj234
@@ -22,7 +22,7 @@ public class Group extends AbstractUser {
 
 	private final Int2IntMap userProps = new Int2IntMap();
 
-	private final SpinLock lock = new SpinLock();
+	private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
 	public int owner;
 	public final IntSet operators = new IntSet();
@@ -32,7 +32,7 @@ public class Group extends AbstractUser {
 		onlineHook(b);
 		if (online.isEmpty()) return;
 
-		lock.readLock();
+		lock.readLock().lock();
 		try {
 			Message newJoin = new Message(id, "[Tr]group_join|" + b.id + "[/Tr]");
 			for (User entry : online) {
@@ -41,7 +41,7 @@ public class Group extends AbstractUser {
 				w.sendMessage(this, newJoin, true);
 			}
 		} finally {
-			lock.readUnlock();
+			lock.readLock().unlock();
 		}
 	}
 
@@ -50,7 +50,7 @@ public class Group extends AbstractUser {
 		offlineHook(b);
 		if (online.isEmpty()) return;
 
-		lock.readLock();
+		lock.readLock().lock();
 		try {
 			Message exit = new Message(id, "[Tr]group_exit|" + b.id + "|" + reason + "[/Tr]");
 			for (User entry : online) {
@@ -59,13 +59,13 @@ public class Group extends AbstractUser {
 				w.sendMessage(this, exit, true);
 			}
 		} finally {
-			lock.readUnlock();
+			lock.readLock().unlock();
 		}
 	}
 
 	public void postMessage(Context c, Message m, boolean sys) {
 		history.ringAddLast(m);
-		lock.readLock();
+		lock.readLock().lock();
 		try {
 			for (User entry : online) {
 				WSChat w = entry.worker;
@@ -73,26 +73,26 @@ public class Group extends AbstractUser {
 				w.sendMessage(this, m, sys);
 			}
 		} finally {
-			lock.readUnlock();
+			lock.readLock().unlock();
 		}
 	}
 
 	public void onlineHook(User entry) {
 		if (entry.worker == null) return;
-		lock.writeLock();
+		lock.writeLock().lock();
 		try {
 			online.add(entry);
 		} finally {
-			lock.writeUnlock();
+			lock.writeLock().unlock();
 		}
 	}
 
 	public void offlineHook(User entry) {
-		lock.writeLock();
+		lock.writeLock().lock();
 		try {
 			online.remove(entry);
 		} finally {
-			lock.writeUnlock();
+			lock.writeLock().unlock();
 		}
 	}
 

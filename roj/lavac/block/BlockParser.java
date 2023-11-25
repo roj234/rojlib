@@ -16,6 +16,7 @@ import roj.asm.visitor.SwitchSegment;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.ParseException;
 import roj.config.word.NotStatementException;
 import roj.config.word.Word;
@@ -23,7 +24,6 @@ import roj.lavac.CompilerConfig;
 import roj.lavac.asm.Variable;
 import roj.lavac.expr.Binary;
 import roj.lavac.expr.ExprParser;
-import roj.lavac.expr.Expression;
 import roj.lavac.parser.*;
 import roj.util.Helpers;
 
@@ -269,7 +269,7 @@ public class BlockParser {
 					break;
 				default:
 					wr.retractWord();
-					Expression expr = ep.parse(file, 0);
+					ExprNode expr = ep.parse(file, 0);
 					if (expr != null) {
 						expr.write(cw, true);
 						except(semicolon);
@@ -290,7 +290,7 @@ public class BlockParser {
 	private void _sync() throws ParseException {
 		except(left_s_bracket);
 
-		Expression expr = ep.parse(file, ExprParser.STOP_RSB|ExprParser.SKIP_RSB);
+		ExprNode expr = ep.parse(file, ExprParser.STOP_RSB|ExprParser.SKIP_RSB);
 		if (expr == null) {
 			wr.retractWord();
 			_onError(wr.next(), "statement.empty");
@@ -334,7 +334,7 @@ public class BlockParser {
 		Word w = wr.next();
 		if (depth == -1) _onError(w, "return.on_top");
 
-		Expression expr = null;
+		ExprNode expr = null;
 		Type rt = cw.method.returnType();
 
 		if (w.type() != semicolon) {
@@ -655,7 +655,7 @@ public class BlockParser {
 		Word w = wr.next().copy();
 		wr.retractWord();
 
-		Expression expr = ep.parse(file, ExprParser.STOP_SEMICOLON);
+		ExprNode expr = ep.parse(file, ExprParser.STOP_SEMICOLON);
 		except(semicolon);
 
 		if (expr == null) {
@@ -722,7 +722,7 @@ public class BlockParser {
 
 		Label ifFalse = new Label();
 
-		Expression equ = parser.parse(file, (checkBracket ? 16 : 0), ifFalse);
+		ExprNode equ = parser.parse(file, (checkBracket ? 16 : 0), ifFalse);
 		if (equ == null) {
 			_onError(wr.readWord(), "statement.empty.if");
 			return null;
@@ -800,9 +800,9 @@ public class BlockParser {
 		Label breakTo = condition(false, semicolon);
 		if (breakTo == null) return;
 
-		List<Expression> execLast = new SimpleList<>();
+		List<ExprNode> execLast = new SimpleList<>();
 		do {
-			Expression expr = ep.parse(file, (16 | 1024));
+			ExprNode expr = ep.parse(file, (16 | 1024));
 			if (expr == null) break;
 			execLast.add(expr);
 		} while (wr.next().type() == colon);
@@ -908,7 +908,7 @@ public class BlockParser {
 	private void _switch() throws ParseException {
 		except(left_s_bracket);
 
-		Expression expr = ep.parse(file, 256);
+		ExprNode expr = ep.parse(file, 256);
 		if (expr == null) throw wr.err("statement.empty.switch");
 		Object cst = expr.isConstant() ? expr.constVal() : null;
 		if (cst != null) {
@@ -1104,7 +1104,7 @@ public class BlockParser {
 					return;
 				}
 
-				Expression expr = ep.parse(file, 0);
+				ExprNode expr = ep.parse(file, 0);
 				if (expr == null) {
 					_onError(w, "not_statement");
 					return;
@@ -1151,7 +1151,7 @@ public class BlockParser {
 		}
 
 		wr.index = pos;
-		Expression expr = ep.parse(file, 0);
+		ExprNode expr = ep.parse(file, 0);
 		if (expr == null) {
 			_onError(errorInfo, "not_statement");
 		} else {

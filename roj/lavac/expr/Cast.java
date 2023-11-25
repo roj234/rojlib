@@ -1,6 +1,7 @@
 package roj.lavac.expr;
 
 import roj.asm.type.IType;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.word.NotStatementException;
 import roj.lavac.parser.MethodWriterL;
 
@@ -28,21 +29,21 @@ public class Cast extends UnaryPre {
 	public IType type() { return type; }
 
 	@Override
-	public boolean equals(Object o) {
+	public boolean equalTo(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 
 		Cast cast = (Cast) o;
 
 		if (!type.equals(cast.type)) return false;
-		return right.equals(cast.right);
+		return right.equalTo(cast.right);
 	}
 
 	@Override
 	public String toString() { return "("+type+") "+right; }
 
 	@Override
-	public String setRight(Expression right) {
+	public String setRight(ExprNode right) {
 		this.right = right;
 		return null;
 	}

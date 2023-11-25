@@ -1,6 +1,7 @@
 package roj.lavac.expr;
 
 import roj.asm.type.IType;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.word.NotStatementException;
 import roj.lavac.parser.MethodWriterL;
 
@@ -12,13 +13,13 @@ import java.util.List;
  * @author Roj233
  * @since 2020/10/13 22:17
  */
-public class Method implements Expression {
-	Expression func;
-	List<Expression> args;
+public class Method implements ExprNode {
+	ExprNode func;
+	List<ExprNode> args;
 
 	IType _type;
 
-	public Method(Expression line, List<Expression> args) {
+	public Method(ExprNode line, List<ExprNode> args) {
 		// todo check map definition
 		this.func = line;
 		this.args = args;
@@ -35,7 +36,7 @@ public class Method implements Expression {
 	}
 
 	@Override
-	public boolean equals(Object left) {
+	public boolean equalTo(Object left) {
 		return false;
 	}
 }

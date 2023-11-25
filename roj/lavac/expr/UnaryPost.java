@@ -1,6 +1,7 @@
 package roj.lavac.expr;
 
 import roj.asm.type.IType;
+import roj.compiler.ast.expr.ExprNode;
 import roj.lavac.parser.JavaLexer;
 import roj.lavac.parser.MethodWriterL;
 
@@ -8,13 +9,13 @@ import roj.lavac.parser.MethodWriterL;
  * @author Roj234
  * @since 2023/9/18 0018 9:06
  */
-final class UnaryPost implements Expression {
+final class UnaryPost implements ExprNode {
 	private final short op;
-	private final LoadExpression left;
+	private final LoadNode left;
 
-	UnaryPost(short op, Expression left) {
+	UnaryPost(short op, ExprNode left) {
 		this.op = op;
-		this.left = (LoadExpression) left;
+		this.left = (LoadNode) left;
 	}
 
 	@Override
@@ -29,7 +30,7 @@ final class UnaryPost implements Expression {
 	public String toString() { return left + JavaLexer.byId(op); }
 
 	@Override
-	public boolean equals(Object left) {
+	public boolean equalTo(Object left) {
 		if (this == left) return true;
 		if (!(left instanceof UnaryPost)) return false;
 		UnaryPost right = (UnaryPost) left;

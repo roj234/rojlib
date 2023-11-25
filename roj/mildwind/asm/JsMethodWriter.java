@@ -102,13 +102,14 @@ public final class JsMethodWriter extends CodeWriter implements LineHandler {
 	public void end() {
 		field(GETSTATIC, "roj/mildwind/type/JsNull", "UNDEFINED", "Lroj/mildwind/type/JsNull;");
 		one(ARETURN);
-		visitSizeMax(999,999);
+		visitSizeMax(99,99);
 		visitExceptions();
 		for (TryCatchEntry exception : exceptions) {
 			visitException(exception.start,exception.end,exception.handler,exception.type);
 		}
 		visitAttributes();
-		visitAttribute(lines);
+		//System.out.println(lines);
+		//visitAttribute(lines);
 		finish();
 	}
 
@@ -123,6 +124,11 @@ public final class JsMethodWriter extends CodeWriter implements LineHandler {
 		@Override
 		protected boolean put(CodeWriter to) {
 			return false;
+		}
+
+		@Override
+		protected int length() {
+			return 0;
 		}
 	}
 	public void useTCO() {

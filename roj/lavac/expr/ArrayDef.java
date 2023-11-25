@@ -5,6 +5,7 @@ import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.util.InsnHelper;
+import roj.compiler.ast.expr.ExprNode;
 import roj.config.word.NotStatementException;
 import roj.lavac.parser.MethodWriterL;
 import roj.text.CharList;
@@ -18,12 +19,12 @@ import java.util.List;
  * @author Roj233
  * @since 2022/2/27 19:43
  */
-final class ArrayDef implements Expression {
+final class ArrayDef implements ExprNode {
 	private final IType type;
-	private final List<Expression> expr;
+	private final List<ExprNode> expr;
 	private final boolean size;
 
-	ArrayDef(IType type, List<Expression> args, boolean size) {
+	ArrayDef(IType type, List<ExprNode> args, boolean size) {
 		this.type = type;
 		this.expr = args;
 		this.size = size;
@@ -34,7 +35,7 @@ final class ArrayDef implements Expression {
 
 	@Nonnull
 	@Override
-	public Expression resolve() {
+	public ExprNode resolve() {
 		for (int i = 0; i < expr.size(); i++) {
 			if (!expr.get(i).isConstant()) return this;
 		}
@@ -105,7 +106,7 @@ final class ArrayDef implements Expression {
 	}
 
 	@Override
-	public boolean equals(Object left) {
+	public boolean equalTo(Object left) {
 		if (this == left) return true;
 		if (left == null || getClass() != left.getClass()) return false;
 		return expr.equals(((ArrayDef) left).expr);

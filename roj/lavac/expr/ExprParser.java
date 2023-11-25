@@ -4,6 +4,7 @@ import roj.asm.type.IType;
 import roj.asm.visitor.Label;
 import roj.collect.Int2IntMap;
 import roj.collect.SimpleList;
+import roj.compiler.ast.expr.ExprNode;
 import roj.concurrent.OperationDone;
 import roj.config.ParseException;
 import roj.config.word.Word;
@@ -26,7 +27,7 @@ import static roj.lavac.parser.JavaLexer.*;
  * @since 2023/09/18 7:56
  */
 public final class ExprParser {
-	private final ArrayList<Expression> words = new ArrayList<>();
+	private final ArrayList<ExprNode> words = new ArrayList<>();
 	private final Int2IntMap ordered = new Int2IntMap();
 	private final ArrayList<Int2IntMap.Entry> sort = new ArrayList<>();
 
@@ -59,20 +60,24 @@ public final class ExprParser {
 	static final int OP_NEW = 1, OP_DEL = 2, OP_OPTIONAL = 4;
 
 	@Nullable
-	public Expression parse(CompileUnit ctx, int exprFlag) throws ParseException { return parse(ctx, exprFlag, null); }
+	public ExprNode parse(CompileUnit ctx, int exprFlag) throws ParseException { return parse(ctx, exprFlag, null); }
 	@SuppressWarnings("fallthrough")
-	public Expression parse(CompileUnit ctx, int flag, Label ifFalse) throws ParseException {
-		ArrayList<Expression> tmp = words;
+	public ExprNode parse(CompileUnit ctx, int flag, Label ifFalse) throws ParseException {
+		ArrayList<ExprNode> tmp = words;
 		if (!tmp.isEmpty() || !ordered.isEmpty() || !sort.isEmpty()) // 使用中
 			return next().parse(ctx, flag, null);
 
 		JavaLexer wr = ctx.lex();
 
 		Word w = wr.next();
+		int prevId = -1;
 		while (true) {
+			if (prevId == wr.index) throw wr.err("死循环");
+			prevId = wr.index;
+
 			int opFlag = 0;
 			UnaryPre up = null;
-			Expression cur = null;
+			ExprNode cur = null;
 
 			// region 只能出现一次的"前缀操作" (++a, --a, ...a, delete a, new a)
 			switch (w.type()) {
@@ -94,7 +99,7 @@ public final class ExprParser {
 					// 从零开始，有数字则继续，至[]结束，往后均为null
 					// 若有容量，则不能手动指定内容
 					if (w.type() == left_m_bracket) {
-						List<Expression> args = Helpers.cast(sort); args.clear();
+						List<ExprNode> args = Helpers.cast(sort); args.clear();
 						int array = 1;
 						arrayDef: {
 							while (true) {
@@ -144,6 +149,7 @@ public final class ExprParser {
 						Method m = _invoke(ctx, wr, null);
 						m._type = newType;
 						cur = m;
+						// todo: NewAnonymousClass
 					} else {
 						if (w.type() == semicolon) {
 							// 语法糖: new n => 无参数调用
@@ -191,6 +197,7 @@ public final class ExprParser {
 							// a.b({xxx: yyy})
 						}
 						// todo direct map definition
+						flag |= STOP_RLB;
 						break;
 					case left_s_bracket:
 						int pos = wr.index;
@@ -217,7 +224,7 @@ public final class ExprParser {
 						up = a;
 					break;
 					case Word.LITERAL:
-						pos = wr.index;
+						pos = wr.indexForRet();
 						String id = w.val();
 						if (wr.next().type() == lambda) {
 							// raw_lambda_env:
@@ -225,7 +232,7 @@ public final class ExprParser {
 							wr.index = pos;
 							handleLambda(ctx, wr, Collections.singletonList(id));
 						} else {
-							wr.retractWord();
+							wr.index = pos;
 						}
 						break;
 					case lambda: throw OperationDone.INSTANCE;
@@ -252,8 +259,8 @@ public final class ExprParser {
 					continue;
 					case left_m_bracket: { // a[b]
 						if (!curIsObj) ue(ctx, w.val(), "type.literal");
-						Expression index = parse(ctx, STOP_RMB|SKIP_RMB, null);
-						if (index == null) ue(ctx, "empty.array_index");
+						ExprNode index = parse(ctx, STOP_RMB|SKIP_RMB, null);
+						if (index == null) ue(ctx, "empty.array_index"); // TODO this maybe a array class ref
 						cur = new ArrayGet(cur, index);
 					}
 					continue;
@@ -263,6 +270,7 @@ public final class ExprParser {
 						if (w.type() == optional_chaining) opFlag |= OP_OPTIONAL;
 						else opFlag &= ~OP_OPTIONAL;
 					continue;
+					case CLASS:
 					case Word.LITERAL: // a.b
 						if (curIsObj) ue(ctx, w.val(), ".");
 						curIsObj = true;
@@ -276,6 +284,8 @@ public final class ExprParser {
 				}
 				break;
 			}
+			assert curIsObj;
+			System.out.println(w);
 			// endregion
 
 			// set
@@ -297,22 +307,22 @@ public final class ExprParser {
 				case lsh_assign: case rsh_assign: case rsh_unsigned_assign: {
 					// 没写单独的不继承Load的Expr，检查opFlag好了
 					if ((opFlag&(OP_NEW|OP_DEL))!=0) throw wr.err("invalid_left_value");
-					if (!(cur instanceof LoadExpression)) throw wr.err("invalid_left_value");
+					if (!(cur instanceof LoadNode)) throw wr.err("invalid_left_value");
 
 					short vtype = w.type();
 
 					// Mark assign
 					// cur.var_op(ctx, 2);
 
-					Expression right = parse(ctx, flag|STOP_COMMA, null);
+					ExprNode right = parse(ctx, flag|STOP_COMMA, null);
 					if (right == null) throw wr.err("empty.right_value");
 
-					cur = new Assign((LoadExpression) cur, vtype == assign ? right : new Binary(assign2op(vtype), cur, right));
+					cur = new Assign((LoadNode) cur, vtype == assign ? right : new Binary(assign2op(vtype), cur, right));
 				}
 				break;
 				case inc:
 				case dec:
-					if (!(cur instanceof LoadExpression)) throw wr.err("expecting_variable:"+w.val());
+					if (!(cur instanceof LoadNode)) throw wr.err("expecting_variable:"+w.val());
 					cur = new UnaryPost(w.type(), cur);
 				break;
 				default: wr.retractWord(); break;
@@ -373,7 +383,7 @@ public final class ExprParser {
 
 		Int2IntMap tokens = ordered;
 
-		Expression cur = null;
+		ExprNode cur = null;
 		if (!tokens.isEmpty()) {
 			List<Int2IntMap.Entry> sort = this.sort;
 
@@ -393,7 +403,7 @@ public final class ExprParser {
 
 				int v = sort.get(i).getIntKey();
 
-				Expression l = tmp.get(v-1), op, r;
+				ExprNode l = tmp.get(v-1), op, r;
 				try {
 					op = tmp.remove(v);
 					r = tmp.remove(v);
@@ -432,7 +442,7 @@ public final class ExprParser {
 			boolean hasComma = false;
 
 			while (true) {
-				Expression expr = parse(ctx, flag|STOP_COMMA, null);
+				ExprNode expr = parse(ctx, flag|STOP_COMMA, null);
 				if (expr != null) {
 					hasComma = false;
 					cd.append(expr);
@@ -458,10 +468,10 @@ public final class ExprParser {
 		// 这也是终结. 但是优先级最高
 		if (w.type() == ask) {
 			if (cur == null) ue(ctx, w.val(), "type.object");
-			Expression middle = parse(ctx, flag|STOP_COLON, null);
+			ExprNode middle = parse(ctx, flag|STOP_COLON, null);
 			if (middle == null) ue(ctx, "empty.trinary");
 			wr.except(colon, ":");
-			Expression right = parse(ctx, flag, null);
+			ExprNode right = parse(ctx, flag, null);
 			if (right == null) ue(ctx, "empty.trinary");
 			cur = new Trinary(cur, middle, right);
 		}
@@ -469,12 +479,12 @@ public final class ExprParser {
 		return cur;
 	}
 
-	private static DotGet _dot(Expression e, String name, int flag) { return e instanceof DotGet ? ((DotGet) e).add(name, flag) : new DotGet(e, name, flag); }
-	private Method _invoke(CompileUnit ctx, JavaLexer wr, Expression e) throws ParseException {
-		List<Expression> args = Helpers.cast(sort); args.clear();
+	private static DotGet _dot(ExprNode e, String name, int flag) { return e instanceof DotGet ? ((DotGet) e).add(name, flag) : new DotGet(e, name, flag); }
+	private Method _invoke(CompileUnit ctx, JavaLexer wr, ExprNode e) throws ParseException {
+		List<ExprNode> args = Helpers.cast(sort); args.clear();
 
 		while (true) {
-			Expression expr = parse(ctx, STOP_RSB|STOP_COMMA|SKIP_COMMA|ALLOW_SPREAD|_ENV_INVOKE, null);
+			ExprNode expr = parse(ctx, STOP_RSB|STOP_COMMA|SKIP_COMMA|ALLOW_SPREAD|_ENV_INVOKE, null);
 			if (expr == null) {
 				wr.except(right_s_bracket, ")");
 				break;

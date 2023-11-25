@@ -2,17 +2,18 @@ package roj.lavac.expr;
 
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.ast.expr.ExprNode;
 import roj.lavac.parser.MethodWriterL;
 
 /**
  * @author Roj234
  * @since 2023/9/18 0018 9:07
  */
-class Assign implements Expression {
-	private LoadExpression left;
-	private Expression right;
+class Assign implements ExprNode {
+	private LoadNode left;
+	private ExprNode right;
 
-	Assign(LoadExpression left, Expression right) {
+	Assign(LoadNode left, ExprNode right) {
 		this.left = left;
 		this.right = right;
 	}
@@ -21,8 +22,8 @@ class Assign implements Expression {
 	// I fixed this annoying 'feature'
 	public IType type() { return right.type(); }
 
-	public Expression resolve() {
-		left = (LoadExpression) left.resolve();
+	public ExprNode resolve() {
+		left = (LoadNode) left.resolve();
 		right = right.resolve();
 		return this;
 	}
@@ -33,7 +34,7 @@ class Assign implements Expression {
 		// todo
 	}
 
-	static void writeIncrement(LoadExpression expr, MethodWriterL tree, boolean noRet, boolean returnBefore, Object data, Type dataType) {
+	static void writeIncrement(LoadNode expr, MethodWriterL tree, boolean noRet, boolean returnBefore, Object data, Type dataType) {
 
 	}
 
@@ -41,11 +42,11 @@ class Assign implements Expression {
 	public String toString() { return left+" = "+right; }
 
 	@Override
-	public boolean equals(Object left) {
+	public boolean equalTo(Object left) {
 		if (this == left) return true;
 		if (!(left instanceof Assign)) return false;
 		Assign assign = (Assign) left;
-		return assign.left.equals(left) && assign.right.equals(right);
+		return assign.left.equals(left) && assign.right.equalTo(right);
 	}
 
 	@Override

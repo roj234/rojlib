@@ -165,7 +165,7 @@ public final class AsmClosure {
                 activeVars.put(name, v = new Variable());
                 variables.add(v);
                 //asm.getTmpVar();
-                asm.addSegment(new VarSegment(v, false));
+                asm.addSegment(new VarSegment(v, true));
 
                 v.name = name;
                 v.isVar = true;
@@ -266,6 +266,12 @@ public final class AsmClosure {
             return true;
         }
 
+        int length;
+        @Override
+        protected int length() {
+            return length;
+        }
+
         public void add(Variable v, int fid) {
             if (ks == null) {
                 ks = new SimpleList<>();
@@ -279,6 +285,7 @@ public final class AsmClosure {
     final class VarSegment extends Segment {
         final Variable ref;
         final boolean get;
+        int length;
 
         VarSegment(Variable ref, boolean get) {
             this.ref = ref;
@@ -309,6 +316,11 @@ public final class AsmClosure {
                 return true;
             }
             return false;
+        }
+
+        @Override
+        protected int length() {
+            return length;
         }
     }
 }
