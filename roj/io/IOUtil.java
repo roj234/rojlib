@@ -349,6 +349,10 @@ public final class IOUtil {
 
 	public static String safePath(String path) {
 		CharList sb = getSharedCharBuf();
+
+		int altStream = path.lastIndexOf(':');
+		if (altStream > 1) path = path.substring(0, altStream);
+
 		return sb.append(path).trim()
 				 .replaceInReplaceResult("../", "/")
 				 .replaceInReplaceResult("//", "/")

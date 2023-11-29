@@ -21,6 +21,7 @@ public class ProgressBar implements AutoCloseable {
 	private String name, unit, prefix, postfix;
 	private int barInterval, dataWindow;
 	private long barUpdate, dataUpdate, eta;
+	private boolean hideBar, hideSpeed;
 
 	private long delta;
 
@@ -37,6 +38,8 @@ public class ProgressBar implements AutoCloseable {
 	public void setPostfix(String s) { this.postfix = s; }
 	public void setBarInterval(int bi) { this.barInterval = bi; }
 	public void setDataWindow(int dw) { this.dataWindow = dw; }
+	public void setHideBar(boolean b) { this.hideBar = b; }
+	public void setHideSpeed(boolean hideSpeed) { this.hideSpeed = hideSpeed; }
 	public double getEta(long remainUnit) { return remainUnit <= 0 ? 0 : remainUnit / speedPerMs(); }
 	public double speedPerMs() { return dataUpdate == 0 ? 1 : (double) delta / (System.currentTimeMillis() - dataUpdate); }
 
@@ -62,43 +65,47 @@ public class ProgressBar implements AutoCloseable {
 	private static final int PROGRESS_SIZE = 50;
 	private static final int BITE = 100 / PROGRESS_SIZE;
 
-	public void updateForce(double percent) {
+	public synchronized void updateForce(double percent) {
 		if (percent < 0) percent = 0;
 		else if (percent > 1) percent = 1;
 		// NaN
 		else if (percent != percent) percent = 0;
 
 		percent *= 100;
-		int tx = (int) percent / BITE;
-		double unitDelta = speedPerMs() * 1000;
-		String timeUnit = "s";
-		if (unitDelta < 1) {
-			unitDelta *= 60;
-			timeUnit = "m";
-		}
-		if (unitDelta < 1) {
-			unitDelta *= 60;
-			timeUnit = "h";
-		}
-		if (unitDelta < 1) {
-			unitDelta *= 24;
-			timeUnit = "d";
-		}
 
 		batch.clear();
-		CharList b = (name == null ? batch : batch
-			.append("\u001b[2K").append(name).append(": "))
-			.append("\u001B[").append(CLIUtil.CYAN + 60).append('m');
+		CharList b = (name == null ? batch : batch.append("\u001b[0m").append(name).append(": ")).append("\u001B[96m");
+
 		if (prefix == null) b.append(TextUtil.toFixedLength(percent, 4)).append("%");
 		else b.append(prefix);
-		b.append("\u001B[").append(CLIUtil.WHITE + 60).append('m')
-		 .append("├")
-		 .append(TextUtil.repeat(tx, '█'))
-		 .append(TextUtil.repeat(PROGRESS_SIZE - tx, '─'))
-		 .append("┤")
-		 .append("\u001B[").append(CLIUtil.YELLOW + 60).append('m');
 
-		b.append(" ").append(unitDelta < 1000 ? TextUtil.toFixed(unitDelta, 2) : TextUtil.scaledNumber(Math.round(unitDelta))).append(unit).append('/').append(timeUnit);
+		if (!hideBar) {
+			int tx = (int) percent / BITE;
+			b.append("\u001B[97m├")
+			 .append(TextUtil.repeat(tx, '█'))
+			 .append(TextUtil.repeat(PROGRESS_SIZE - tx, '─'))
+			 .append("┤\u001B[93m");
+		}
+
+		if (!hideSpeed) {
+			double unitDelta = speedPerMs() * 1000;
+			String timeUnit = "s";
+			if (unitDelta < 1) {
+				unitDelta *= 60;
+				timeUnit = "m";
+			}
+			if (unitDelta < 1) {
+				unitDelta *= 60;
+				timeUnit = "h";
+			}
+			if (unitDelta < 1) {
+				unitDelta *= 24;
+				timeUnit = "d";
+			}
+
+			b.append(" ").append(unitDelta < 1000 ? TextUtil.toFixed(unitDelta, 2) : TextUtil.scaledNumber(Math.round(unitDelta))).append(unit).append('/').append(timeUnit);
+		}
+
 		if (postfix != null) b.append(' ').append(postfix);
 		b.append("\u001B[0m");
 

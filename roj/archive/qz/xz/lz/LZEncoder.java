@@ -10,6 +10,7 @@
 
 package roj.archive.qz.xz.lz;
 
+import roj.archive.qz.xz.LZMA2Options;
 import roj.util.ArrayCache;
 import roj.util.NativeMemory;
 import sun.misc.Unsafe;
@@ -79,11 +80,13 @@ public abstract class LZEncoder {
 		return dictSize+blockSize+reserveSize;
 	}
 
-	public static int getMemoryUsageKb(int dictSize, int extraSizeBefore, int extraSizeAfter, int matchLenMax, int mf) {
+	public static int getMemoryUsage(LZMA2Options options, int extraSizeBefore, int extraSizeAfter, int matchLenMax) {
+		int dictSize = options.getDictSize();
+
 		long m = 0;
 		m += getBufSize(dictSize, extraSizeBefore, extraSizeAfter, matchLenMax);
-		m += Hash234.getMemoryUsage(dictSize);
-		m += mf == MF_HC4 ? (dictSize + 1) << 2 : (dictSize + 1) << 3;
+		m += Hash234.getMemoryUsage(dictSize); // unit is byte
+		m += options.getMatchFinder() == MF_HC4 ? ((long) dictSize + 1) << 2 : ((long) dictSize + 1) << 3;
 		return (int) (m / 1024) + 3;
 	}
 
@@ -91,21 +94,19 @@ public abstract class LZEncoder {
 	 * Creates a new LZEncoder.
 	 * <p>
 	 *
-	 * @param dictSize dictionary size
 	 * @param extraSizeBefore number of bytes to keep available in the
 	 * history in addition to dictSize
 	 * @param extraSizeAfter number of bytes that must be available
 	 * after current position + matchLenMax
-	 * @param niceLen if a match of at least <code>niceLen</code>
-	 * bytes is found, be happy with it and don't
-	 * stop looking for longer matches
 	 * @param matchLenMax don't test for matches longer than
 	 * <code>matchLenMax</code> bytes
-	 * @param mf match finder ID
-	 * @param depthLimit match finder search depth limit
 	 */
-	public static LZEncoder getInstance(int dictSize, int extraSizeBefore, int extraSizeAfter, int niceLen, int matchLenMax, int mf, int depthLimit) {
-		if (mf == MF_HC4) return new HC4(dictSize, extraSizeBefore, extraSizeAfter, niceLen, matchLenMax, depthLimit);
+	public static LZEncoder getInstance(LZMA2Options options, int extraSizeBefore, int extraSizeAfter, int matchLenMax) {
+		int dictSize = options.getDictSize();
+		int niceLen = options.getNiceLen();
+		int depthLimit = options.getDepthLimit();
+
+		if (options.getMatchFinder() == MF_HC4) return new HC4(dictSize, extraSizeBefore, extraSizeAfter, niceLen, matchLenMax, depthLimit);
 		else return new BT4(dictSize, extraSizeBefore, extraSizeAfter, niceLen, matchLenMax, depthLimit);
 	}
 

@@ -38,6 +38,11 @@ public class OnChangeHelper extends MouseAdapter implements FocusListener, KeyLi
 
 	private Component focused;
 	private final IdentityHashMap<Component, State> handlers = new IdentityHashMap<>();
+	private boolean enabled = true;
+
+	public void setEnabled(boolean b) {
+		enabled = b;
+	}
 
 	private class State extends MouseAdapter implements DocumentListener {
 		final Component self;
@@ -47,6 +52,7 @@ public class OnChangeHelper extends MouseAdapter implements FocusListener, KeyLi
 		private State(Component self) {this.self = self;}
 
 		public void dispatch(Component o) {
+			if (!enabled) return;
 			if (!changed) return;
 			changed = false;
 

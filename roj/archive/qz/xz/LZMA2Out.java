@@ -29,21 +29,15 @@ class LZMA2Out extends OutputStream {
 
 	final byte[] chunkMeta = new byte[6];
 
-	private static int getExtraSizeBefore(int dictSize) { return COMPRESSED_SIZE_MAX > dictSize ? COMPRESSED_SIZE_MAX - dictSize : 0; }
 	static int getMemoryUsage(LZMA2Options options) {
 		// 64 KiB buffer for the range encoder + a little extra + LZMAEncoder
-		int dictSize = options.getDictSize();
-		int extraSizeBefore = getExtraSizeBefore(dictSize);
-		return 70 + LZMAEncoder.getMemoryUsage(options.getMode(), dictSize, extraSizeBefore, options.getMatchFinder());
+		return 70 + LZMAEncoder.getMemoryUsage(options, COMPRESSED_SIZE_MAX);
 	}
-
 	LZMA2Out(LZMA2Options options) {
 		rc = new RangeEncoder(COMPRESSED_SIZE_MAX);
 
 		int dictSize = options.getDictSize();
-		int extraSizeBefore = getExtraSizeBefore(dictSize);
-		lzma = LZMAEncoder.getInstance(rc, options.getLc(), options.getLp(), options.getPb(), options.getMode(),
-			dictSize, extraSizeBefore, options.getNiceLen(), options.getMatchFinder(), options.getDepthLimit());
+		lzma = LZMAEncoder.getInstance(rc, options, COMPRESSED_SIZE_MAX);
 
 		lz = lzma.getLZEncoder();
 

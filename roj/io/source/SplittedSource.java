@@ -132,7 +132,13 @@ public class SplittedSource extends Source {
 
 		t.clear();
 		t.append(name).append('.').padNumber(ref.size()+1, 3);
-		ref.add(new File(path, t.toString()));
+		File file = new File(path, t.toString());
+		if (!file.isFile()) {
+			try {
+				IOUtil.allocSparseFile(file, fragmentSizeL);
+			} catch (IOException ignored) {}
+		}
+		ref.add(file);
 		s = getSource(ref.size()-1);
 		frag++;
 	}

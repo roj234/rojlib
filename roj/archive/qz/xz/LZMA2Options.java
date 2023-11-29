@@ -91,6 +91,7 @@ public class LZMA2Options implements Cloneable {
 	 */
 	public static final int MF_BT4 = LZEncoder.MF_BT4;
 
+	public static final int ASYNC_BLOCK_SIZE_MIN = 1 << 20, ASYNC_BLOCK_SIZE_MAX = 1 << 28;
 	public static final byte ASYNC_DICT_NONE = 0, ASYNC_DICT_SET = 1, ASYNC_DICT_ASYNCSET = 2;
 
 	private static final int[] presetToDictSize = {1 << 18, 1 << 20, 1 << 21, 1 << 22, 1 << 22, 1 << 23, 1 << 23, 1 << 24, 1 << 25, 1 << 26};
@@ -370,7 +371,7 @@ public class LZMA2Options implements Cloneable {
 
 	/**
 	 * <pre>启用对于单独压缩流的多线程压缩模式
-	 * <b>注意，对比{@link roj.archive.qz.QZFileWriter#parallel()}的不同文件并行模式,单压缩流并行无论如何都会损失压缩率</b>
+	 * <b>注意，对比{@link roj.archive.qz.QZFileWriter#parallel()}的不同文件并行模式,单压缩流并行会损失更多压缩率</b>
 	 * @param blockSize 任务按照该大小分块并行，设置为-1来自动选择(不推荐)
 	 * @param executor 线程池
 	 * @param affinity 最大并行任务数量 (1-255)
@@ -380,7 +381,7 @@ public class LZMA2Options implements Cloneable {
 	 * {@link #ASYNC_DICT_ASYNCSET} 在异步任务线程上设置词典, 速度中等, 压缩率好, 内存大
 	 */
 	public void setAsyncMode(int blockSize, TaskHandler executor, int affinity, int dictMode) {
-		if (blockSize < 0 || blockSize > 1 << 28) throw new IllegalArgumentException("无效的分块大小 "+blockSize);
+		if (blockSize != 0 && blockSize < ASYNC_BLOCK_SIZE_MIN || blockSize > ASYNC_BLOCK_SIZE_MAX) throw new IllegalArgumentException("无效的分块大小 "+blockSize);
 		if (affinity != 0 && affinity < 2 || affinity > 255) throw new IllegalArgumentException("无效的并行任务数量 "+affinity);
 		if (dictMode < 0 || dictMode > ASYNC_DICT_ASYNCSET) throw new IllegalArgumentException("无效的词典处理模式 "+dictMode);
 		asyncBlockSize = blockSize;

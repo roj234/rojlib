@@ -28,8 +28,6 @@ final class Hash234 {
 	private final long hash2Table, hash3Table, hash4Table;
 	private int hash2Value, hash3Value, hash4Value;
 
-	static int getMemoryUsage(int dictSize) { return (int) (((long) HASH_2_SIZE + HASH_3_SIZE + getHash4Size(dictSize)) / (1024 / 4) + 1); }
-
 	private static int getHash4Size(int dictSize) {
 		int h = dictSize - 1;
 		h |= h >>> 1;
@@ -43,6 +41,8 @@ final class Hash234 {
 		return h + 1;
 	}
 
+	// unit is bytes
+	static long getMemoryUsage(int dictSize) { return (((long) HASH_2_SIZE + HASH_3_SIZE + getHash4Size(dictSize)) << 2) + 68; }
 	Hash234(int dictSize) {
 		hash4Size = getHash4Size(dictSize);
 		hash4Mask = hash4Size-1;

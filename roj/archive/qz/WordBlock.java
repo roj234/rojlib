@@ -31,12 +31,16 @@ public final class WordBlock {
 
 	Object tmp;
 
-	long size() {
+	public long size() {
 		long s = size;
 		for (int i = 0; i < extraSizes.length; i++)
 			s += extraSizes[i];
 		return s;
 	}
+
+	public int getFileCount() { return fileCount; }
+	public QZEntry getFirstEntry() { return firstEntry; }
+	public long getuSize() { return uSize; }
 
 	@Override
 	public String toString() {
@@ -52,17 +56,17 @@ public final class WordBlock {
 		return sb.append("\n}").toString();
 	}
 
+	// ENHANCE: A graph view for complex coder
 	private void linearCoder(StringBuilder sb, Object[] coders) {
 		Object[] k = new Object[((coders.length+1)<<1)+1];
 		k[0] = "Raw";
 		k[coders.length+1] = IntMap.UNDEFINED;
-		k[coders.length+2] = Long.toString(size());
-		k[k.length-1] = Long.toString(uSize);
 		for (int i = 0; i < coders.length;i++) {
 			String s = coders[i].toString();
-			if (i > 0) k[coders.length+2+i] = Long.toString(outSizes[outSizes.length-i]);
+			k[coders.length+2+i] = Long.toString(i == 0 ? size : outSizes[i-1]);
 			k[i+1] = s;
 		}
+		k[k.length-1] = Long.toString(uSize);
 
 		TextUtil.prettyTable(sb, "  ", k, "    ", " => ");
 	}
@@ -88,28 +92,11 @@ public final class WordBlock {
 			} else if (len < 0) ArrayUtil.checkRange(b, off, len);
 		}
 
-		private void inc(int len) { outSizes[id] += len; }
-	}
-
-	public final class CRC extends FilterOutputStream {
-		public CRC(OutputStream out) { super(out); }
-
-		@Override
-		public void write(int b) throws IOException {
-			out.write(b);
-			size++;
-		}
-		@Override
-		public void write(byte[] b, int off, int len) throws IOException {
-			if (len > 0) {
-				out.write(b, off, len);
-				size += len;
-			} else if (len < 0) ArrayUtil.checkRange(b, off, len);
-		}
+		private void inc(int len) { if (id >= 0) outSizes[id] += len; else size += len; }
 
 		@Override
 		public void close() throws IOException {
-			// do not dispatch
+			if (id >= 0) out.close();
 		}
 	}
 }

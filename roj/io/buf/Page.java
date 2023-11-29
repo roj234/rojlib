@@ -75,35 +75,45 @@ public class Page {
 	}
 
 	public final long alloc(long len) {
-		validOffLen(0, len);
-		return malloc(align(len));
+		assert validOffLen(0, len);
+		long s = malloc(align(len));
+		assert validate();
+		return s;
 	}
 	public final boolean alloc(long off, long len) {
-		validOffLen(off, len);
-		return malloc(off, align(len));
+		assert validOffLen(off, len);
+		boolean ok = malloc(off, align(len));
+		assert validate();
+		return ok;
 	}
 	public final void free(long off, long len) {
-		validOffLen(off, len);
+		assert validOffLen(off, len);
 		mfree(off, align(len));
+		assert validate();
 	}
 	public final boolean allocBefore(long off, long len, long more) {
-		validOffLen(off, len);
-		return malloc(align(off-more), align(more));
+		assert validOffLen(off, len);
+		boolean ok = malloc(align(off - more), align(more));
+		validate();
+		return ok;
 	}
 	public final boolean allocAfter(long off, long len, long more) {
-		validOffLen(off, len);
+		assert validOffLen(off, len);
 		long realLen = align(len);
 
 		more -= (realLen-len);
 		if (more <= 0) return true;
 
-		return malloc(off+realLen, align(more));
+		boolean ok = malloc(off + realLen, align(more));
+		assert validate();
+		return ok;
 	}
 
-	private static void validOffLen(long off, long len) {
-		assert off >= 0 : "off < 0: "+off;
-		assert off == align(off) : "un-aligned offset "+off;
-		assert len > 0 : "len <= 0: "+len;
+	private static boolean validOffLen(long off, long len) {
+		if (off < 0) throw new AssertionError("off < 0: " + off);
+		if (off != align(off)) throw new AssertionError("un-aligned offset " + off);
+		if (len <= 0) throw new AssertionError("len <= 0: " + len);
+		return true;
 	}
 
 	long malloc(long len) {
@@ -147,6 +157,8 @@ public class Page {
 
 	long headEmpty() { return Long.numberOfTrailingZeros(bitmap) << SHIFT; }
 	long tailEmpty() { return Long.numberOfLeadingZeros(bitmap) << SHIFT; }
+
+	boolean validate() { return true; }
 
 	public static long align(long n) { return 0 == (n&MINIMUM_MASK) ? n : (n|MINIMUM_MASK) + 1; }
 	public static long BIT(int bitFrom, int bitTo) {
@@ -233,7 +245,7 @@ public class Page {
 					long m = splitBitmap;
 					int i = cap-1;
 					while (m != 0) {
-						if ((m & 1) != 0) bin.set(i, get(cap-1-i) >= 0 ? BITMAP_SUBPAGE : BITMAP_PREFIX);
+						if ((m & 1) != 0) bin.set(i, bin.charAt(i) == BITMAP_USED ? 'E' : get(cap-1-i) >= 0 ? BITMAP_SUBPAGE : BITMAP_PREFIX);
 
 						i--;
 						m >>>= 1;
@@ -278,23 +290,19 @@ public class Page {
 							// 尝试不完整的分配
 							if (!removeEmpties(Long.lowestOneBit(flag))) {
 								int i = get(offset);
-								if (i < 0) break x;
+								// failed, next iter
+								if (i < 0 || (p = child[i]).tailEmpty() < subSize) break notFound11;
 
-								p = child[i];
-								if (p.tailEmpty() >= subSize) {
-									long myOffset = p.tailEmpty();
-									boolean ok = p.malloc(p.totalSpace() - myOffset, myOffset);
-									assert ok;
-									// 向前移动 (这里必定为空,除非出Bug了...)
-									ok = goc(offset + block).malloc(0, MASKS[SHIFT] - (myOffset - subSize));
-									assert ok;
+								long myOffset = p.tailEmpty();
+								boolean ok = p.malloc(p.totalSpace() - myOffset, myOffset);
+								assert ok;
+								// 向前移动 (这里必定为空,除非出Bug了...)
+								ok = goc(offset + block).malloc(0, MASKS[SHIFT] + 1 - (myOffset - subSize));
+								assert ok;
 
-									subSize = p.totalSpace()-myOffset;
-									break;
-								} else {
-									// failed, next iter
-									break notFound11;
-								}
+								subSize = p.totalSpace()-myOffset;
+								flag ^= Long.lowestOneBit(flag);
+								break;
 							}
 							if (offset + block < bitmapCapacity()) {
 								p = goc(offset + block);
@@ -392,20 +400,19 @@ public class Page {
 			}
 
 			lockPrefix();
-			// bitFrom is inclusive (bitFrom = off+MASKS[SHIFT] >>> SHIFT也许更好理解？)
-			long ext = off&MASKS[SHIFT];
+			long before = off&MASKS[SHIFT], after = (off+len)&MASKS[SHIFT];
 
-			long flag = BIT(ext != 0 ? bitFrom+1 : bitFrom, ++bitTo);
+			// bitFrom is inclusive (bitFrom = off+MASKS[SHIFT] >>> SHIFT也许更好理解？)
+			long flag = BIT(before != 0 ? bitFrom+1 : bitFrom, after != 0 ? bitTo : bitTo+1);
 			if ((bitmap&flag) != 0 || !removeEmpties(flag)) return false;
 
 			// assert len >= MASKS[SHIFT], so this is smaller
-			if (ext > 0 && !goc(bitFrom).malloc(ext, MASKS[SHIFT]+1 - ext)) // BEFORE
+			if (before != 0 && !goc(bitFrom).malloc(before, MASKS[SHIFT]+1 - before)) // BEFORE
 				return false;
 
-			long ext2 = (off+len)&MASKS[SHIFT];
-			if (ext2 > 0 && !goc(bitTo).malloc(0, ext2)) { // AFTER
+			if (after != 0 && !goc(bitTo).malloc(0, after)) { // AFTER
 				// ATOMIC
-				if (ext > 0) goc(bitFrom).free(ext, MASKS[SHIFT]+1 - ext);
+				if (before > 0) goc(bitFrom).free(before, MASKS[SHIFT]+1 - before);
 				return false;
 			}
 
@@ -464,8 +471,9 @@ public class Page {
 				int b = Long.numberOfTrailingZeros(split);
 				if (b > a) return a << SHIFT;
 
-				// get(b) >= 0 because prefix == 0
-				if (!removeIfEmpty(get(b)))
+				// get(b) < 0 but why
+				int id = get(b);
+				if (id >= 0 && !removeIfEmpty(id))
 					return (b << SHIFT) + goc(b).headEmpty();
 
 				split ^= 1L << b;
@@ -497,6 +505,34 @@ public class Page {
 		public final long usedSpace() { return totalSpace() - free; }
 		public final long freeSpace() { return free; }
 		public final long totalSpace() { return (1L << SHIFT) * bitmapCapacity(); }
+
+		final boolean validate() {
+			long myFree = (bitmapCapacity()-Long.bitCount(bitmap)) * (1L<<SHIFT);
+
+			myFree -= prefix;
+
+			if (splitBitmap != 0) {
+				int bitCount = (int) ((prefix + MASKS[SHIFT]) >>> SHIFT);
+
+				if (childCount + bitCount != Long.bitCount(splitBitmap)) throw new AssertionError(childCount+"+"+bitCount+" != Long.bitCount("+splitBitmap+")");
+				if ((bitmap & splitBitmap) != 0) throw new AssertionError(bitmap+" & "+splitBitmap+" != 0");
+
+				for (int i = 0; i < childCount; i++) {
+					Page page = child[i];
+					try {
+						page.validate();
+					} catch (AssertionError e) {
+						AssertionError error = new AssertionError("child["+page.childId+"] validate() failed: ("+e.getMessage()+")"+this);
+						error.setStackTrace(e.getStackTrace());
+						throw error;
+					}
+					myFree -= page.usedSpace();
+				}
+			}
+
+			if (free != myFree) throw new AssertionError("Excepting free bytes="+myFree+" but actual="+free);
+			return true;
+		}
 
 		public final void compress(MemoryMover m) {
 			IntList data = new IntList();

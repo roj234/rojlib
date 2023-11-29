@@ -1,4 +1,4 @@
-package roj.misc;
+package roj.unpkg;
 
 import roj.collect.TrieTree;
 import roj.config.JSONParser;
@@ -23,12 +23,13 @@ import java.util.Map;
  * @author solo6975
  * @since 2022/3/24 18:52
  */
-public class AsarExporter {
+public class Asar {
 	public static void main(String[] args) throws IOException, ParseException {
 		if (args.length < 2) {
-			System.out.println("AsarExporter <file> <store> [manual]");
+			System.out.println("AsarExporter <string:asar> <string:保存目录> [bool:手动过滤内容]");
 			return;
 		}
+
 		System.out.println("ASAR exporter 1.0 by Roj234");
 		RandomAccessFile f = new RandomAccessFile(args[0], "r");
 		if (0x04000000 != f.readInt()) throw new IOException("Not ASAR header (04000000)");
@@ -36,9 +37,7 @@ public class AsarExporter {
 		int jsonLen = Integer.reverseBytes(f.readInt());
 		byte[] data = new byte[jsonLen];
 		f.readFully(data);
-		if (f.read() != 0) {
-			throw new IOException("EOF index not found");
-		}
+		if (f.read() != 0) throw new IOException("EOF flag excepted");
 
 		UTFCoder uc = IOUtil.SharedCoder.get();
 		CMapping root = JSONParser.parses(uc.decodeR(data)).asMap();
@@ -46,8 +45,7 @@ public class AsarExporter {
 		TrieTree<PosInfo> tree = new TrieTree<>();
 
 		MutableInt dir = new MutableInt();
-		CharList tmp = uc.charBuf;
-		tmp.clear();
+		CharList tmp = uc.charBuf; tmp.clear();
 		recursionTree(tmp, root, tree, dir);
 
 		System.out.println("总文件数目: " + tree.size() + ", 总文件大小: " + TextUtil.scaledNumber(f.length() - 16 - jsonLen) + "B, 目录数: " + dir.getValue());
@@ -111,16 +109,6 @@ public class AsarExporter {
 				// use string to store long value...
 				tree.put(parents.toString(), new PosInfo(val.get("offset").asLong(), val.getInteger("size")));
 			}
-		}
-	}
-
-	static final class PosInfo {
-		final long offset;
-		final int length;
-
-		PosInfo(long offset, int length) {
-			this.offset = offset;
-			this.length = length;
 		}
 	}
 }

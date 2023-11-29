@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class ArrayCache {
+	public static final boolean DEBUG_DISABLE_CACHE = false;
+
 	public static final byte[] BYTES = new byte[0];
 	public static final char[] CHARS = new char[0];
 	public static final int[] INTS = new int[0];
@@ -41,7 +43,7 @@ public class ArrayCache {
 	public ArrayCache() {}
 
 	private <T> T getArray(Map<MutableInt, Reference<T>[]> cache, int size) {
-		if (size < CHIP_SIZE) return null;
+		if (size < CHIP_SIZE || DEBUG_DISABLE_CACHE) return null;
 
 		lock.lock();
 		try {
@@ -63,7 +65,7 @@ public class ArrayCache {
 		}
 	}
 	private <T> void putArray(Map<MutableInt, Reference<T>[]> cache, T array, int size) {
-		if (size < CHIP_SIZE) return;
+		if (size < CHIP_SIZE || DEBUG_DISABLE_CACHE) return;
 
 		lock.lock();
 		try {

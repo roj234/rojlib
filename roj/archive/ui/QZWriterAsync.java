@@ -1,5 +1,8 @@
-package roj.archive.qz;
+package roj.archive.ui;
 
+import roj.archive.qz.QZCoder;
+import roj.archive.qz.QZFileWriter;
+import roj.archive.qz.QZWriter;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 
@@ -11,6 +14,7 @@ import java.util.function.BiConsumer;
  * @author Roj234
  * @since 2023/6/4 0004 3:54
  */
+@Deprecated
 public class QZWriterAsync {
 	private final QZFileWriter writer;
 	private final TaskPool pool;

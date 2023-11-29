@@ -12,6 +12,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static roj.reflect.ReflectionUtils.fieldOffset;
 import static roj.reflect.ReflectionUtils.u;
+import static roj.util.ArrayCache.DEBUG_DISABLE_CACHE;
 
 /**
  * @author Roj233
@@ -28,7 +29,7 @@ public final class BufferPool {
 		private static final long u_pool = fieldOffset(PooledDirectBuf.class, "pool");
 		private volatile Object pool;
 		@Override
-		public Object pool(Object p1) { return BufferPool.casPool(this, u_pool, p1); }
+		public Object pool(Object p1) { return u.getAndSetObject(this, u_pool, p1); }
 
 		private Page page;
 		@Override
@@ -51,7 +52,7 @@ public final class BufferPool {
 		private static final long u_pool = fieldOffset(PooledHeapBuf.class, "pool");
 		private volatile Object pool;
 		@Override
-		public Object pool(Object p1) { return BufferPool.casPool(this, u_pool, p1); }
+		public Object pool(Object p1) { return u.getAndSetObject(this, u_pool, p1); }
 
 		private Page page;
 		@Override
@@ -69,12 +70,6 @@ public final class BufferPool {
 		public void close() { if (pool != null) BufferPool.reserve(this); }
 		@Override
 		public void release() { set(ArrayCache.BYTES,0,0); }
-	}
-	static Object casPool(Object o, long off, Object val) {
-		while (true) {
-			Object prev = u.getObjectVolatile(o, off);
-			if (u.compareAndSwapObject(o, off, prev, val)) return prev;
-		}
 	}
 
 	private static final ThreadLocal<BufferPool> DEFAULT = ThreadLocal.withInitial(BufferPool::new);
@@ -125,6 +120,7 @@ public final class BufferPool {
 
 	public static DynByteBuf buffer(boolean direct, int cap) { return localPool().allocate(direct, cap); }
 	public DynByteBuf allocate(boolean direct, int cap) {
+		if (DEBUG_DISABLE_CACHE) return direct ? DirectByteList.allocateDirect(cap) : ByteList.allocate(cap);
 		if (cap < 0) throw new IllegalArgumentException("size < 0");
 
 		PooledBuffer buf;
@@ -343,6 +339,7 @@ public final class BufferPool {
 	public static boolean isPooled(DynByteBuf buf) { return buf instanceof PooledBuffer; }
 
 	public static void reserve(DynByteBuf buf) {
+		if (DEBUG_DISABLE_CACHE) return;
 		Object pool = ((PooledBuffer) buf).pool(null);
 
 		if (pool == null) throwUnpooled(buf);
@@ -444,7 +441,7 @@ public final class BufferPool {
 			// 禁止异步reserve
 			pool = ((PooledBuffer) buf).pool(null);
 			if (pool == null) throwUnpooled(buf);
-			else if (pool != _UNPOOLED && tryZeroCopy(buf, more, addAtEnd, (BufferPool) pool, (PooledBuffer) buf)) {
+			else if (pool != _UNPOOLED && !DEBUG_DISABLE_CACHE && tryZeroCopy(buf, more, addAtEnd, (BufferPool) pool, (PooledBuffer) buf)) {
 				((PooledBuffer) buf).pool(pool);
 				return buf;
 			}
@@ -490,7 +487,7 @@ public final class BufferPool {
 		if (addAtEnd) {
 			lock.lock();
 			try {
-				if (!page.allocAfter(offset - pb.getMetadata(), b.capacity(), more)) return false;
+				if (!page.allocAfter(offset - pb.getMetadata(), b.capacity() + pb.getMetadata(), more)) return false;
 			} finally {
 				lock.unlock();
 			}
@@ -500,7 +497,7 @@ public final class BufferPool {
 			else {
 				lock.lock();
 				try {
-					if (!page.allocBefore(offset - pb.getMetadata(), b.capacity(), more)) return false;
+					if (!page.allocBefore(offset - pb.getMetadata(), b.capacity() + pb.getMetadata(), more)) return false;
 				} finally {
 					lock.unlock();
 				}

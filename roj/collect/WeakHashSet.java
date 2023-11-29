@@ -51,10 +51,23 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _Gener
 	}
 
 	private static final class SetItr<K> extends MapItr<Entry> implements Iterator<K> {
+		K myValue;
+
 		SetItr(WeakHashSet<K> set) { super(set); }
+
 		@Override
 		@SuppressWarnings("unchecked")
-		public K next() { return (K) nextT().get(); }
+		public boolean hasNext() {
+			while (true) {
+				boolean b = super.hasNext();
+				if (!b) return false;
+				if ((myValue = (K) obj.get()) != null) return true;
+				nextT();
+			}
+		}
+
+		@Override
+		public K next() { nextT(); return myValue; }
 	}
 
 	@Override

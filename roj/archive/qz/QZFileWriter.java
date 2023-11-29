@@ -53,7 +53,7 @@ public class QZFileWriter extends QZWriter {
         if (finished) throw new IllegalStateException("Stream closed");
 
         closeEntry();
-        nextWordBlock();
+        closeWordBlock();
 
         ParallelWriter pw = new ParallelWriter();
         if (parallelWriter == null) {
@@ -105,8 +105,7 @@ public class QZFileWriter extends QZWriter {
     }
 
     public void removeLastWordBlock() throws IOException {
-        closeEntry();
-        nextWordBlock();
+        closeWordBlock();
 
         WordBlock b = blocks.remove(blocks.size() - 1);
 
@@ -164,7 +163,7 @@ public class QZFileWriter extends QZWriter {
 
                 out.flush();
                 blocks.add(metadata);
-                nextWordBlock();
+                closeWordBlock0();
                 metadata.uSize = out.wIndex();
 
                 long pos1 = s.position();
@@ -186,6 +185,9 @@ public class QZFileWriter extends QZWriter {
                     this.out.close();
                     this.out = null;
                 }
+
+                out.setOut(null);
+                out.close();
             }
         }
 

@@ -18,15 +18,15 @@ import java.security.SecureRandom;
  * @author Roj234
  * @since 2023/3/15 15:32
  */
-public final class AESCrypt extends QZCoder {
-    public AESCrypt(String pass) {
+public final class QzAES extends QZCoder {
+    public QzAES(String pass) {
         // 7z uses 19 by default (似乎也不能改)
         this(pass, 16, 0);
     }
-    public AESCrypt(String pass, int cyclePower, int saltLength) {
+    public QzAES(String pass, int cyclePower, int saltLength) {
         this(pass.getBytes(StandardCharsets.UTF_16LE), cyclePower, saltLength);
     }
-    public AESCrypt(byte[] pass, int cyclePower, int saltLength) {
+    public QzAES(byte[] pass, int cyclePower, int saltLength) {
         if (cyclePower < 1 || cyclePower > 63) throw new IllegalStateException("别闹");
         if (saltLength < 0 || saltLength > 16) throw new IllegalStateException("salt length [0,16]");
 
@@ -40,9 +40,9 @@ public final class AESCrypt extends QZCoder {
 
         init(pass);
     }
-    AESCrypt() {}
+    QzAES() {}
 
-    QZCoder factory() { return new AESCrypt(); }
+    QZCoder factory() { return new QzAES(); }
     private static final byte[] ID = {6,-15,7,1};
     byte[] id() { return ID; }
 

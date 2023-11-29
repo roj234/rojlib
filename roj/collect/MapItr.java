@@ -15,7 +15,7 @@ public class MapItr<T extends _Generic_Entry<T>> {
 	public T obj;
 	int stage = INITIAL;
 
-	public final boolean hasNext() {
+	public boolean hasNext() {
 		check();
 		return stage != ENDED;
 	}
@@ -58,13 +58,13 @@ public class MapItr<T extends _Generic_Entry<T>> {
 		}
 	}
 
-	public MapItr(_Generic_Map<T> remover) {
+	MapItr(_Generic_Map<T> remover) {
 		this.entries = Helpers.cast(remover.__entries());
 		this.remover = remover;
 
 		if (entries == null) stage = ENDED;
 	}
-	public MapItr(_Generic_Entry<?>[] entries) {
+	MapItr(_Generic_Entry<?>[] entries) {
 		this.entries = Helpers.cast(entries);
 		this.remover = null;
 

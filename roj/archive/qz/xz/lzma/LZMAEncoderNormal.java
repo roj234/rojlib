@@ -10,6 +10,7 @@
 
 package roj.archive.qz.xz.lzma;
 
+import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.rangecoder.RangeEncoder;
 import roj.util.NativeMemory;
@@ -39,12 +40,10 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 	private final int[] repLens = new int[REPS];
 	private int nextState;
 
-	static int getMemoryUsage(int dictSize, int extraSizeBefore, int mf) {
-		return LZEncoder.getMemoryUsageKb(dictSize, Math.max(extraSizeBefore, OPTS), OPTS, MATCH_LEN_MAX, mf) + OPTS * OPT_STRUCT_SIZE / 1024;
-	}
-
-	LZMAEncoderNormal(RangeEncoder rc, int lc, int lp, int pb, int dictSize, int extraSizeBefore, int niceLen, int mf, int depthLimit) {
-		super(rc, LZEncoder.getInstance(dictSize, Math.max(extraSizeBefore, OPTS), OPTS, niceLen, MATCH_LEN_MAX, mf, depthLimit), lc, lp, pb, dictSize, niceLen);
+	static int getMemoryUsage_(LZMA2Options options, int extraSizeBefore) { return LZEncoder.getMemoryUsage(options, Math.max(extraSizeBefore, OPTS), OPTS, MATCH_LEN_MAX) + OPTS * OPT_STRUCT_SIZE / 1024; }
+	private static LZEncoder lz(LZMA2Options options, int extraSizeBefore) { return LZEncoder.getInstance(options, Math.max(extraSizeBefore, OPTS), OPTS, MATCH_LEN_MAX); }
+	LZMAEncoderNormal(RangeEncoder rc, LZMA2Options options, int extraSizeBefore) {
+		super(rc, lz(options, extraSizeBefore), options);
 		mem = new NativeMemory();
 		opts = mem.allocate(OPTS*OPT_STRUCT_SIZE);
 	}

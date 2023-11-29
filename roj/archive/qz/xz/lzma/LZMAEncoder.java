@@ -10,6 +10,7 @@
 
 package roj.archive.qz.xz.lzma;
 
+import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.rangecoder.RangeEncoder;
 
@@ -73,16 +74,16 @@ public abstract class LZMAEncoder extends LZMACoder {
 	private final int[] counters;
 	private final int[][] prices;
 
-	public static int getMemoryUsage(int mode, int dictSize, int extraSizeBefore, int mf) {
+	public static int getMemoryUsage(LZMA2Options options, int extraSizeBefore) {
 		int m = 22;
-		if (mode == MODE_FAST) m += LZMAEncoderFast.getMemoryUsage(dictSize, extraSizeBefore, mf);
-		else m += LZMAEncoderNormal.getMemoryUsage(dictSize, extraSizeBefore, mf);
+		if (options.getMode() == MODE_FAST) m += LZMAEncoderFast.getMemoryUsage_(options, extraSizeBefore);
+		else m += LZMAEncoderNormal.getMemoryUsage_(options, extraSizeBefore);
 		return m;
 	}
-
-	public static LZMAEncoder getInstance(RangeEncoder rc, int lc, int lp, int pb, int mode, int dictSize, int extraSizeBefore, int niceLen, int mf, int depthLimit) {
-		if (mode == MODE_FAST) return new LZMAEncoderFast(rc, lc, lp, pb, dictSize, extraSizeBefore, niceLen, mf, depthLimit);
-		else return new LZMAEncoderNormal(rc, lc, lp, pb, dictSize, extraSizeBefore, niceLen, mf, depthLimit);
+	public static LZMAEncoder getInstance(RangeEncoder rc, LZMA2Options options, int minKeepBefore) {
+		minKeepBefore -= options.getDictSize();
+		if (options.getMode() == MODE_FAST) return new LZMAEncoderFast(rc, options, minKeepBefore);
+		else return new LZMAEncoderNormal(rc, options, minKeepBefore);
 	}
 
 	public void putArraysToCache() { lz.release(); }
@@ -142,13 +143,13 @@ public abstract class LZMAEncoder extends LZMACoder {
 	 */
 	abstract int getNextSymbol();
 
-	LZMAEncoder(RangeEncoder rc, LZEncoder lz, int lc, int lp, int pb, int dictSize, int niceLen) {
-		super(lc, lp, pb);
+	LZMAEncoder(RangeEncoder rc, LZEncoder lz, LZMA2Options options) {
+		super(options.getLc(), options.getLp(), options.getPb());
 		this.rc = rc;
 		this.lz = lz;
-		this.niceLen = niceLen;
+		this.niceLen = options.getNiceLen();
 
-		int ii = 2 << pb;
+		int ii = 2 << options.getPb();
 		counters = new int[ii];
 
 		// Always allocate at least LOW_SYMBOLS + MID_SYMBOLS because
@@ -157,7 +158,7 @@ public abstract class LZMAEncoder extends LZMACoder {
 		int lenSymbols = Math.max(niceLen - MATCH_LEN_MIN + 1, LOW_SYMBOLS + MID_SYMBOLS);
 		prices = new int[ii][lenSymbols];
 
-		distSlotPricesSize = getDistSlot(dictSize - 1) + 1;
+		distSlotPricesSize = getDistSlot(options.getDictSize()-1) + 1;
 		distSlotPrices = new int[DIST_STATES*distSlotPricesSize];
 
 		reset();

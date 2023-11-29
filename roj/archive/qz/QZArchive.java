@@ -65,7 +65,12 @@ public class QZArchive implements ArchiveFile {
 			r = BufferedSource.autoClose(new SplittedSource((FileSource) r, file.length()));
 		}
 
-		reload();
+		try {
+			reload();
+		} catch (Throwable e) {
+			r.close();
+			throw e;
+		}
 	}
 
 	public QZArchive(Source s) throws IOException { this(s, null); }
@@ -83,6 +88,14 @@ public class QZArchive implements ArchiveFile {
 		this.maxFileCount = maxFileCount;
 	}
 
+	private QZArchive(QZArchive archive) {
+		this.blocks = archive.blocks;
+		this.entries = archive.entries;
+		this.password = archive.password;
+		this.r = archive.r;
+	}
+	public QZArchive parallel() { return new QZArchive(this); }
+
 	// region File
 
 	public void setMemoryLimitKb(int v) { memoryLimitKb = v; }
@@ -97,14 +110,15 @@ public class QZArchive implements ArchiveFile {
 		closeSolidStream();
 
 		if (r != null) {
-			r.close();
+			Source r1 = r;
+			r1.close();
 			r = null;
 
 			Source s;
 			do {
 				s = fpRead;
-			} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, s, null));
-			if (s != null) s.close();
+				if (s != null) s.close();
+			} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, s, r1));
 
 			if (password != null) Arrays.fill(password, (byte) 0);
 		}
@@ -207,7 +221,7 @@ public class QZArchive implements ArchiveFile {
 
 			readFileTable();
 		} finally {
-			BufferPool.reserve(buf);
+			buf.close();
 		}
 	}
 	private void recoverFT() throws IOException {
@@ -247,9 +261,9 @@ public class QZArchive implements ArchiveFile {
 		}
 
 		if (id == kAdditionalStreamsInfo) {
-			//QzInfo additionalInfo = readStreamInfo();
-			//id = buf.readUnsignedByte();
-			fatalError();
+			QzInfo additionalInfo = readStreamInfo();
+			id = buf.readUnsignedByte();
+			throw new IOException("kAdditionalStreamsInfo=="+additionalInfo);
 		}
 
 		QzInfo si;
@@ -263,7 +277,7 @@ public class QZArchive implements ArchiveFile {
 		if (id != kFilesInfo) fatalError();
 
 		readFileMetas(si);
-		if (si.files != null && si.files.length > 0) {
+		if (si.files != null/* && si.files.length > 0*/) {
 			entries = si.files;
 			blocks = si.blocks;
 		}
@@ -285,11 +299,10 @@ public class QZArchive implements ArchiveFile {
 
 		buf.close();
 
-		try (InputStream in = getSolidStream(b, null)) {
+		try (InputStream in = getSolidStream(b, password)) {
 			buf = (ByteList) BufferPool.buffer(false, (int) b.uSize);
 			int read = buf.readStream(in, (int) b.uSize);
 			if (read < b.uSize) throw new EOFException("数据流过早终止");
-			if (in.read() >= 0) error("unknown padding");
 		}
 	}
 
@@ -440,7 +453,7 @@ public class QZArchive implements ArchiveFile {
 				off += len;
 			}
 
-			if (off > r.length()) error("字块["+i+"](子流"+streamId+")越过文件边界");
+			if (off > r.length()) error("字块["+i+"](子流"+streamId+")越过文件边界("+off+" > "+r.length()+")");
 		}
 	}
 
@@ -731,6 +744,7 @@ public class QZArchive implements ArchiveFile {
 				f.uSize = b.uSize - sum;
 
 				if (prev != null) prev.next = f;
+				else b.firstEntry = f;
 
 				if (f.uSize <= 0) error("block["+j+"]没有足够的数据:最后的解压大小为" + f.uSize);
 			}
@@ -838,7 +852,7 @@ public class QZArchive implements ArchiveFile {
 	// endregion
 
 	public MyHashMap<String, QZEntry> getEntries() {
-		if (byName.isEmpty() && entries != null) {
+		if (byName.isEmpty()) {
 			byName.ensureCapacity(entries.length);
 			for (QZEntry entry : entries) {
 				byName.put(entry.name, entry);
@@ -846,10 +860,7 @@ public class QZArchive implements ArchiveFile {
 		}
 		return byName;
 	}
-
-	public QZEntry[] getEntriesByPresentOrder() {
-		return entries;
-	}
+	public QZEntry[] getEntriesByPresentOrder() { return entries; }
 
 	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback) { parallelDecompress(th, callback, password); }
 	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback, byte[] pass) {
@@ -999,5 +1010,10 @@ public class QZArchive implements ArchiveFile {
 		WordBlock[] blocks;
 
 		QZEntry[] files;
+
+		@Override
+		public String toString() {
+			return "QzInfo{" + "offset=" + offset + ", streamLen=" + Arrays.toString(streamLen) + ", blocks=" + Arrays.toString(blocks) + ", files=" + Arrays.toString(files) + '}';
+		}
 	}
 }

@@ -82,7 +82,7 @@ public class CipherOutputStream extends FilterOutputStream {
 	public void flush() throws IOException {
 		if (block == 0) return;
 
-		ByteList.Slice ib = i;
+		ByteList ib = i;
 		ByteList ob = o;
 		ib.clear();
 		try {

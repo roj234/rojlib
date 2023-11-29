@@ -23,7 +23,10 @@ public class MemorySource extends Source {
 
 	public int read() { return list.isReadable() ? list.readUnsignedByte() : -1; }
 	public int read(byte[] b, int off, int len) {
-		len = Math.min(len, list.readableBytes());
+		int i = list.readableBytes();
+		if (i <= 0) return -1;
+
+		len = Math.min(len, i);
 		list.read(b, off, len);
 		return len;
 	}
@@ -72,7 +75,5 @@ public class MemorySource extends Source {
 	public DynByteBuf buffer() { list.wIndex(cap); list.rIndex = 0; return list; }
 
 	@Override
-	public String toString() {
-		return "MemorySource@" + System.identityHashCode(list);
-	}
+	public String toString() { return "MemorySource@"+System.identityHashCode(list); }
 }

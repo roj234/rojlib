@@ -93,7 +93,7 @@ public final class CLIConsole extends InputStream implements Runnable {
 	public int read() throws IOException {
 		byte[] b = b1;
 		if (b == null) b = b1 = new byte[1];
-		return read(b) > 0 ? b[0] : -1;
+		return read(b) > 0 ? b[0]&0xFF : -1;
 	}
 	@Override
 	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
@@ -237,7 +237,8 @@ public final class CLIConsole extends InputStream implements Runnable {
 		protected void newLine() {
 			synchronized (sysOut) {
 				if (!LINES.isEmpty()) {
-					sysOut.print("\u001b[?25l\n\u001b["+LINES.size()+"F\u001b[0K");
+					//TODO TEST
+					sysOut.print("\u001b[?25l\u001b[0K\n\u001b["+LINES.size()+"F\u001b[0K");
 				}
 
 				flushBytes();

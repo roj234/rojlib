@@ -66,6 +66,12 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     public ArchiveEntry createEntry(String fileName) { return new QZEntry(fileName); }
 
     public final void setCodec(QZCoder... methods) {
+        try {
+            closeWordBlock();
+        } catch (IOException e) {
+            throw new IllegalStateException("nextWordBlock() failed", e);
+        }
+
         assert methods.length <= 32;
         complexCoder = null;
 
@@ -169,8 +175,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         if (b == null) throw new NullPointerException("b");
         if (finished) throw new IOException("Stream closed");
 
-        closeEntry();
-        nextWordBlock();
+        closeWordBlock();
 
         if (s.hasChannel() & archive.r.hasChannel()) {
             FileChannel myCh = s.channel();
@@ -255,7 +260,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
         crc32.reset();
 
-        if (solidSize != 0 && b.uSize >= solidSize) nextWordBlock();
+        if (solidSize != 0 && b.uSize >= solidSize) closeWordBlock0();
 
         entryUSize = 0;
     }
@@ -293,7 +298,11 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         }
     }
 
-    public final void nextWordBlock() throws IOException {
+    public final void closeWordBlock() throws IOException {
+        closeEntry();
+        closeWordBlock0();
+    }
+    final void closeWordBlock0() throws IOException {
         if (out == null) return;
 
         WordBlock b = blocks.get(blocks.size()-1);
@@ -327,11 +336,11 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         if (coders.length > 1)
             wb.outSizes = new long[coders.length-1];
 
-        OutputStream out = wb.new CRC(s);
+        OutputStream out = s;
         for (int i = 0; i < wb.coder.length; i++) {
-            QZCoder m = wb.coder[i];
-            if (i!=0) out = wb.new Counter(out, wb.coder.length-i-1);
+            out = wb.new Counter(out, i-1);
 
+            QZCoder m = wb.coder[i];
             out = m.encode(out);
         }
 
@@ -341,10 +350,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     @Override
     public void finish() throws IOException {
         if (finished) return;
-
-        closeEntry();
-        nextWordBlock();
-
+        closeWordBlock();
         finished = true;
     }
 

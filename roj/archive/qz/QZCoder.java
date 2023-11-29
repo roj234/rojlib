@@ -35,7 +35,7 @@ public abstract class QZCoder {
 			synchronized (coders) {
 				if (coders.isEmpty()) {
 					reg(Copy.INSTANCE);
-					reg(new AESCrypt());
+					reg(new QzAES());
 					reg(new Deflate(Deflater.DEFAULT_COMPRESSION));
 					reg(new LZMA(true));
 					reg(new LZMA2(true));

@@ -1,14 +1,13 @@
 
-## 本项目存在大量或无意或有意留下的漏洞，仅做学习研究用途
-## 您已经看过该提示！
+### 本项目存在大量无意留下的漏洞，仅供学习研究用途，如用作商业行为，不提供任何保证
 
-# 2023/11/08 更新  搞了很多界面  
-![roj.mapper.MapperUI](images/mapper v3.png)  
-![roj.concurrent.Promise](images/promise.png)  
-![roj.mapper.ObfuscatorUI](images/ofbuscator.png)  
-![roj.text.novel.NovelFrame](images/novel manager.png)
-![roj.net.cross.AEGui](images/port transfer.png)
-
+### (Module level) TODO LIST
+* [ ] yield
+* [ ] java compiler
+* [ ] javascript interpreter
+* [ ] data flow analyze for bytecode
+* [ ] retransform based advanced hot-reload
+* [ ] server-side template language for web server
 
 # 这里都有啥
 ## roj.archive
@@ -35,6 +34,9 @@
 
 注释：  
  *: 比起上一版本  
+
+### 图片展示
+![roj.archive.ui.QZArchiverUI](images/archiver.png)
 
 ## roj.asm  
     自己做的ASM, 资料来自VM规范  
@@ -289,7 +291,11 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
    * [ ] 字符串解密
    * [ ] 字符串解密+堆栈
    * [ ] 流程分析(先保存至一个(本地)变量,也许很久之后再解密)
-  
+
+### 图片展示
+![roj.mapper.MapperUI](images/mapper v3.png)  
+![roj.mapper.ObfuscatorUI](images/ofbuscator.png)
+
 ## roj.math  
     各种向量啊矩阵啊并不是我写的，不过我感觉我现在也能写出来...  
   `VecIterators`: 两个算法  
@@ -346,6 +352,9 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 * 更多使用方法请看mcbbs的发布贴: xxxx
 * 你还可以在这里下载编译好的版本
 
+### 图片展示
+![roj.mod.FMDMain](images/fmd.png)
+
 ## roj.net
     基于管线的网络请求
 
@@ -363,6 +372,9 @@ DNS服务器
 * 带或不带中转服务器的端口转发程序
 * 客户端与服务器均能自签证书（用户ID）
 * 中转服务器模式下支持多个房间(主机)并行
+
+### 图片展示
+![roj.net.cross.AEGui](images/port transfer.png)
 
 MSS协议，My Secure Socket`roj.net.mss`  
   因为(jvav的)SSL不好用，自用的话还不如自己写一个协议  
@@ -507,11 +519,16 @@ public static void sendTitle(AbstractPlayer player, String title) {
   `LineReader` 按行读取  
   `FastMatcher` 基于改进版BM算法的字符串寻找
   `CliConsole` 基于虚拟终端序列的终端模拟器
-  
+
+### 图片展示 (/WIP)
+![roj.text.novel.NovelFrame](images/novel manager.png)
+
+
 ## roj.ui  
-    请搞到libcpp.dll或在ps中执行
-  `CmdUtil` 给控制台来点颜色看看！支持MC转义  
+    请在支持虚拟终端转义序列的Console中执行 （在windows上可能需要libcpp.dll）
+  `CLIUtil.Minecraft` 将Minecraft的小节号转义或JSON字符串原样映射到控制台中  
   `EasyProgressBar` 进度条
+  `DefaultConsole` 使用虚拟终端序列模拟的终端
   
 ## roj.util  
   `DynByteBuf`，能扩展的ByteBuffer，也许Streamed，可作为Input/OutputStream, DataInput/Output  

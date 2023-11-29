@@ -78,9 +78,8 @@ public class TaskPool implements TaskHandler {
 		static final TaskPool P = new TaskPool(1, Runtime.getRuntime().availableProcessors(), 0, 60000, "Cpu任务-");
 	}
 
-	public static TaskPool ParallelPool() {
-		return new TaskPool(0, Runtime.getRuntime().availableProcessors()+1, 128);
-	}
+	public static TaskPool MaxThread(int threadCount, String prefix) { return new TaskPool(0, threadCount, 1, 16, 60000, new PrefixFactory(prefix)); }
+	public static TaskPool MaxThread(int threadCount, MyThreadFactory factory) { return new TaskPool(0, threadCount, 1, 16, 60000, factory); }
 	public static TaskPool MaxSize(int rejectThreshold, String prefix) { return new TaskPool(0, Runtime.getRuntime().availableProcessors(), 0, rejectThreshold, 60000, new PrefixFactory(prefix)); }
 
 	@Override
@@ -304,8 +303,8 @@ public class TaskPool implements TaskHandler {
 	}
 
 	public class ExecutorImpl extends FastLocalThread {
-		protected ExecutorImpl() { setDaemon(true); }
-		protected ExecutorImpl(String name) {
+		public ExecutorImpl() { setDaemon(true); }
+		public ExecutorImpl(String name) {
 			setName(name);
 			setDaemon(true);
 		}

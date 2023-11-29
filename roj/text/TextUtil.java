@@ -110,6 +110,27 @@ public class TextUtil {
 
 		return sb.append(TextUtil.toFixed(size, i == 0 ? 0 : 2)).append(SCALE[i]);
 	}
+	public static double unscaledNumber1024(String seq) {
+		int offset = 1;
+		double multiplier = 1;
+
+		if (seq.endsWith("B")) offset = 2;
+		else if (seq.endsWith("b")) {
+			offset = 2;
+			multiplier = 8;
+		}
+
+		char c = seq.charAt(seq.length()-offset);
+		switch (c) {
+			default: return Double.parseDouble(seq.substring(0, seq.length()-offset+1));
+
+			case 'K': case 'k': multiplier *= 1024; break;
+			case 'M': case 'm': multiplier *= 1024 * 1024; break;
+			case 'G': case 'g': multiplier *= 1024 * 1024 * 1024; break;
+			case 'T': case 't': multiplier *= 1024L * 1024 * 1024 * 1024; break;
+		}
+		return Double.parseDouble(seq.substring(0, seq.length()-offset)) * multiplier;
+	}
 	public static String scaledNumber(long number) {
 		CharList sb = new CharList();
 
@@ -292,6 +313,11 @@ public class TextUtil {
 		return n ? -i : i;
 	}
 	public static int parseInt(CharSequence s, int i, int end, int radix) throws NumberFormatException {
+		long result = parseLong(s,i,end,radix);
+		if (result > 4294967295L || result < Integer.MIN_VALUE) throw new NumberFormatException("Value overflow " + result + " : " + s.subSequence(i,end));
+		return (int) result;
+	}
+	public static long parseLong(CharSequence s, int i, int end, int radix) throws NumberFormatException {
 		long result = 0;
 
 		if (end - i > 0) {
@@ -308,9 +334,7 @@ public class TextUtil {
 			throw new NumberFormatException("Len=0: " + s);
 		}
 
-		if (result > 4294967295L || result < Integer.MIN_VALUE) throw new NumberFormatException("Value overflow " + result + " : " + s.subSequence(i,end));
-
-		return (int) result;
+		return result;
 	}
 
 	public static boolean parseIntOptional(CharSequence s, int[] radixAndReturn) {
@@ -817,7 +841,6 @@ public class TextUtil {
 		return tmp.toStringAndFree();
 	}
 
-	private static JPinyin pinyin = new JPinyin();
-	@Deprecated
-	public static JPinyin pinyin() { return pinyin; }
+	private static JPinyin pinyin;
+	public static JPinyin pinyin() { return pinyin == null ? pinyin = new JPinyin() : pinyin; }
 }
