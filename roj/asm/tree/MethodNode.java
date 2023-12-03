@@ -167,7 +167,7 @@ public final class MethodNode extends CNode {
 				LocalVariableTable lvt = code != null ? (LocalVariableTable) code.attrByName("LocalVariableTable") : null;
 				Label ZERO_READONLY = new Label(0);
 
-				int slot = 0;
+				int slot = (access&AccessFlag.STATIC) == 0 ? 1 : 0;
 				for (int j = 0;;) {
 					IType type = sig != null && sig.values.size() > j ? sig.values.get(j) : in.get(j);
 
@@ -185,7 +185,7 @@ public final class MethodNode extends CNode {
 					if (name != null) sb.append(' ').append(name);
 					if (++j == in.size()) break;
 					sb.append(", ");
-					slot += type.rawType().length();
+					slot += type.genericType() == IType.TYPE_PARAMETER_TYPE ? 1 : type.rawType().length();
 				}
 			}
 			sb.append(')');

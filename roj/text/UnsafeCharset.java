@@ -27,7 +27,7 @@ public abstract class UnsafeCharset {
 
 		int ow = out.wIndex();
 		off = encodeLoop(s, off, end, out, space, 0);
-		assert off == end;
+		assert off == end : "off="+off+",end="+end;
 		assert out.wIndex() == ow+space;
 	}
 	public final int encodePreAlloc(CharSequence s, DynByteBuf out, int byteCount) { return encodePreAlloc(s, 0, s.length(), out, byteCount); }
@@ -70,6 +70,7 @@ public abstract class UnsafeCharset {
 			return off;
 		}
 
+		int off1 = 0;
 		char[] arr;
 		Class<?> k = s.getClass();
 		found: {
@@ -81,15 +82,17 @@ public abstract class UnsafeCharset {
 				CharBuffer sb = (CharBuffer) s;
 				if (sb.hasArray()) {
 					arr = sb.array();
-					off += sb.arrayOffset();
-					end += sb.arrayOffset();
+					off1 = sb.arrayOffset();
+					off += off1;
+					end += off1;
 					break found;
 				}
 			} else if (k == CharList.Slice.class) {
 				CharList.Slice sb = (CharList.Slice) s;
 				arr = sb.list;
-				off += sb.arrayOffset();
-				end += sb.arrayOffset();
+				off1 = sb.arrayOffset();
+				off += off1;
+				end += off1;
 				break found;
 			} else if (k == char[].class) {
 				arr = (char[]) s;
@@ -161,7 +164,7 @@ public abstract class UnsafeCharset {
 			}
 		}
 
-		return off;
+		return off-off1;
 	}
 
 	public final void decodeFixedIn(DynByteBuf in, int len, Appendable out) {

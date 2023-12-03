@@ -50,7 +50,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	}
 	protected final void invoke(byte code, CstRef method) {
 		CstNameAndType desc = method.desc();
-		invoke(code, method.className(), desc.name().str(), desc.getType().str());
+		invoke(code, method.className(), desc.name().str(), desc.getType().str(), method.type() == Constant.INTERFACE);
 	}
 	protected final void field(byte code, CstRefField field) {
 		CstNameAndType desc = field.desc();
@@ -97,7 +97,8 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	public void newArray(byte type) { codeOb.put(NEWARRAY).put(type); }
 	public abstract void multiArray(String clz, int dimension);
 
-	public abstract void invoke(byte code, String owner, String name, String desc);
+	public final void invoke(byte code, String owner, String name, String desc) { invoke(code, owner, name, desc, false); }
+	public abstract void invoke(byte code, String owner, String name, String desc, boolean isInterfaceMethod);
 	public abstract void invokeItf(String owner, String name, String desc);
 	public abstract void invokeDyn(int idx, String name, String desc, int type);
 

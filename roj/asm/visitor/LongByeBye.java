@@ -98,7 +98,7 @@ public class LongByeBye extends CodeWriter {
 	public void multiArray(String clz, int dimension) { super.multiArray(replaceArrayClass(clz), dimension); }
 	public void clazz(byte code, String clz) { super.clazz(code, replaceArrayClass(clz)); }
 	public void field(byte code, String owner, String name, String type) { super.field(code, owner, name, replaceDesc(type, internalType)); }
-	public void invoke(byte code, String owner, String name, String desc) {
+	public void invoke(byte code, String owner, String name, String desc, boolean isInterfaceMethod) {
 		if (owner.equals(curr.name)) {
 			desc = replaceDesc(desc, internalType);
 		} else {
@@ -108,7 +108,7 @@ public class LongByeBye extends CodeWriter {
 			}
 			desc = desc1;
 		}
-		super.invoke(code, owner, name, desc);
+		super.invoke(code, owner, name, desc, isInterfaceMethod);
 	}
 	public void invokeItf(String owner, String name, String desc) {
 		String desc1 = replaceDesc(desc, callingType);

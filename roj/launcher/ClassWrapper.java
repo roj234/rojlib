@@ -41,7 +41,6 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	public ClassWrapper() {
 		transformExcept.addAll(Arrays.asList(
 			"roj.asm.",
-			"roj.collect.",
 			"javax.",
 			"argo.",
 			"org.objectweb.asm.",

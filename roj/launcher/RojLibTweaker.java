@@ -12,9 +12,9 @@ public class RojLibTweaker implements ITweaker {
 	String[] args1;
 
 	@Override
-	public String[] initialize(String[] args, ClassWrapper loader) {
+	public String[] initialize(String[] args, ClassWrapper w) {
 		args1 = args;
-		loader.registerTransformer(new ReflectionHook());
+		w.registerTransformer(new ReflectionHook());
 		return args;
 	}
 

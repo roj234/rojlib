@@ -16,9 +16,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Method;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -30,8 +28,8 @@ public abstract class MethodHook extends NonReentrant implements ITransformer {
 	@Target(ElementType.METHOD)
 	protected @interface RealDesc { String[] value(); boolean callFrom() default false; }
 
-	protected Map<String, List<String>> inheritMap = Collections.emptyMap();
-	protected final MyHashMap<Desc, List<Object>> methodMap = new MyHashMap<>();
+	//protected Map<String, List<String>> inheritMap = Collections.emptyMap();
+	protected final MyHashMap<Desc, Desc> methodMap = new MyHashMap<>();
 
 	public MethodHook() { super(null); addDefaultHook(); }
 	protected void addDefaultHook() {
@@ -58,9 +56,7 @@ public abstract class MethodHook extends NonReentrant implements ITransformer {
 					if (altDesc.callFrom()) toDesc.flags |= 2;
 					for (String s : altDesc.value()) {
 						Desc key = Desc.fromJavapLike(s);
-						String owner = key.owner;
-						key.owner = "";
-						methodMap.computeIfAbsent(key, fn).add(owner);
+						methodMap.put(key, toDesc);
 					}
 				} else {
 					if (toDesc.flags == 0) {
@@ -68,11 +64,11 @@ public abstract class MethodHook extends NonReentrant implements ITransformer {
 						String owner = param.remove(0).owner();
 
 						Desc key = toDesc.copy();
-						key.owner = "";
+						key.owner = owner;
 						key.name = key.name.substring(5);
 						key.param = TypeHelper.getMethod(param);
 
-						methodMap.computeIfAbsent(key, fn).add(owner);
+						methodMap.put(key, toDesc);
 					} else {
 						throw new IllegalArgumentException("无法获取静态注入类,请使用@RealDesc:"+m);
 					}
@@ -88,26 +84,21 @@ public abstract class MethodHook extends NonReentrant implements ITransformer {
 
 		ctx.getData().forEachCode(new CodeWriter() {
 			@Override
-			public void invoke(byte code, String owner, String name, String param) {
+			public void invoke(byte code, String owner, String name, String param, boolean isInterfaceMethod) {
 				d.owner = "";
 				d.name = name;
 				d.param = param;
-				List<Object> replace = methodMap.get(d);
-				if (replace != null) {
-					Desc to = (Desc) replace.get(0);
-					List<String> parents = (to.flags & 1) != 0 ? Collections.emptyList() : inheritMap.getOrDefault(owner, Collections.emptyList());
-					for (int i = 1; i < replace.size(); i++) {
-						Object o = replace.get(i);
-						if (o.equals(owner) || parents.contains(o)) {
-							if ((to.flags&2) != 0) super.ldc(new CstClass(self));
-							super.invoke(Opcodes.INVOKESTATIC, to.owner, to.name, to.param);
-							d.flags = 1;
-							return;
-						}
-					}
+				Desc to = methodMap.get(d);
+				if (to != null) {
+					//List<String> parents = (to.flags&1) != 0 ? Collections.emptyList() : inheritMap.getOrDefault(owner, Collections.emptyList());
+
+					if ((to.flags&2) != 0) super.ldc(new CstClass(self));
+					super.invoke(Opcodes.INVOKESTATIC, to.owner, to.name, to.param, false);
+
+					d.flags = 1;
 				}
 
-				super.invoke(code, owner, name, param);
+				super.invoke(code, owner, name, param, isInterfaceMethod);
 			}
 		});
 

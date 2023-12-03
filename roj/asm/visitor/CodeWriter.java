@@ -190,7 +190,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	public void invokeDyn(int idx, String name, String desc, int type) { codeOb.put(INVOKEDYNAMIC).putShort(cpw.getInvokeDynId(idx, name, desc)).putShort(type); }
 	public void invokeItf(String owner, String name, String desc) { codeOb.put(INVOKEINTERFACE).putShort(cpw.getItfRefId(owner, name, desc)).putShortLE(1+TypeHelper.paramSize(desc)); }
-	public void invoke(byte code, String owner, String name, String desc) {
+	public void invoke(byte code, String owner, String name, String desc, boolean isInterfaceMethod) {
 		// calling by user code
 		if (code == INVOKEINTERFACE) {
 			invokeItf(owner, name, desc);
@@ -198,7 +198,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		}
 
 		assertCate(code,OpcodeUtil.CATE_METHOD);
-		codeOb.put(code).putShort(cpw.getMethodRefId(owner, name, desc));
+		codeOb.put(code).putShort(isInterfaceMethod ? cpw.getItfRefId(owner, name, desc) : cpw.getMethodRefId(owner, name, desc));
 	}
 	public void field(byte code, String owner, String name, String type) { assertCate(code,OpcodeUtil.CATE_FIELD); codeOb.put(code).putShort(cpw.getFieldRefId(owner, name, type)); }
 

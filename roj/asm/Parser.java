@@ -266,9 +266,10 @@ public final class Parser {
 		pool.read(r, ConstantPool.ONLY_STRING);
 
 		int cfo = r.rIndex; // acc
-		r.rIndex += 2;
+		char acc = r.readChar();
 
 		AccessData data = new AccessData(modifiable?buf.toByteArray():null, cfo, pool.getRefName(r), pool.getRefName(r));
+		data.acc = acc;
 
 		int len = r.readUnsignedShort();
 		SimpleList<String> itf = new SimpleList<>(len);
@@ -282,7 +283,7 @@ public final class Parser {
 			while (len-- > 0) {
 				int offset = r.rIndex;
 
-				char acc = r.readChar();
+				acc = r.readChar();
 
 				AccessData.MOF d = data.new MOF(((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str(), offset);
 				d.acc = acc;

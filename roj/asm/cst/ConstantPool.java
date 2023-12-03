@@ -620,4 +620,20 @@ public class ConstantPool {
 
 	Consumer<Constant> listener;
 	public void setAddListener(Consumer<Constant> x) { listener = x; }
+
+	public void replace(int i, Constant c) {
+		if (constants.get(i) == CstTop.TOP) throw new IllegalArgumentException("cannot replace top ("+i+")");
+
+		boolean isDualElement = i + 1 < constants.size() && constants.get(i + 1) == CstTop.TOP;
+		boolean isDualElement2 = c.type() == LONG || c.type() == DOUBLE;
+		if (isDualElement^isDualElement2) throw new IllegalArgumentException("cannot change element size ("+i+")");
+
+		Constant prev = constants.set(i, c);
+		c.setIndex(prev.getIndex());
+
+		if (!refMap.isEmpty()) {
+			refMap.remove(prev);
+			refMap.add(c);
+		}
+	}
 }

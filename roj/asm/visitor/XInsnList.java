@@ -117,6 +117,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 
 	// endregion
 
+	@SuppressWarnings("fallthrough")
 	public void write(CodeWriter cw) {
 		ConstantPool cp = cw.cpw;
 		for (int i = 0; i < refLen; i++) {
@@ -136,13 +137,11 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 					if (d.owner == null) index = cp.getInvokeDynId(d.flags, d.name, d.param);
 					else {
 						switch (d.flags >>> 14) {
-							default: throw new IllegalStateException("unknown flag " + d.flags);
-							case 1: index = cp.getMethodRefId(d.owner, d.name, d.param); break;
-							case 2: index = cp.getFieldRefId(d.owner, d.name, d.param); break;
-							case 3:
-								index = cp.getItfRefId(d.owner, d.name, d.param);
-								bb.put(offset+3, 1+TypeHelper.paramSize(d.param));
-							break;
+							default: throw new IllegalStateException("unknown flag "+d.flags);
+							case 0: index = cp.getMethodRefId(d.owner, d.name, d.param); break;
+							case 1: index = cp.getFieldRefId(d.owner, d.name, d.param); break;
+							case 2: bb.put(offset+3, 1+TypeHelper.paramSize(d.param));
+							case 3: index = cp.getItfRefId(d.owner, d.name, d.param); break;
 						}
 					}
 				break;
@@ -251,10 +250,10 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 		codeOb.put(INVOKEDYNAMIC).putShort(0).putShort(type);
 	}
 	public final void invokeItf(String owner, String name, String desc) {
-		addRef(new Desc(owner, name, desc, 3<<14));
+		addRef(new Desc(owner, name, desc, 2<<14));
 		codeOb.put(INVOKEINTERFACE).putInt(0);
 	}
-	public final void invoke(byte code, String owner, String name, String desc) {
+	public final void invoke(byte code, String owner, String name, String desc, boolean isInterfaceMethod) {
 		// calling by user code
 		if (code == INVOKEINTERFACE) {
 			invokeItf(owner, name, desc);
@@ -262,12 +261,12 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 		}
 
 		assertCate(code,OpcodeUtil.CATE_METHOD);
-		addRef(new Desc(owner, name, desc, 1<<14));
+		addRef(new Desc(owner, name, desc, isInterfaceMethod ? 3<<14 : 0));
 		codeOb.put(code).putShort(0);
 	}
 	public void field(byte code, String owner, String name, String type) {
 		assertCate(code,OpcodeUtil.CATE_FIELD);
-		addRef(new Desc(owner, name, type, 2<<14));
+		addRef(new Desc(owner, name, type, 1<<14));
 		codeOb.put(code).putShort(0);
 	}
 

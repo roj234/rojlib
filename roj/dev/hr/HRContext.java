@@ -8,8 +8,8 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;
 import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
-import roj.asm.util.Context;
 import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.SwitchSegment;
@@ -18,6 +18,7 @@ import roj.mapper.MapUtil;
 import roj.mapper.util.Desc;
 import roj.reflect.DirectAccessor;
 import roj.util.ByteList;
+import roj.util.DynByteBuf;
 import roj.util.NativeMemory;
 import sun.misc.Unsafe;
 
@@ -29,7 +30,7 @@ import java.util.List;
 import java.util.Map;
 
 import static roj.asm.Opcodes.*;
-import static roj.reflect.FieldAccessor.u;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -39,7 +40,7 @@ public final class HRContext extends ClassLoader {
 	public HRContext(ClassLoader parent) { super(parent); }
 
 	Map<String, Structure> structure = new MyHashMap<>();
-	Map<String, Structure> dirty = new MyHashMap<>();
+	public Map<String, Structure> dirty = new MyHashMap<>();
 
 	public void update(ConstantData data) {
 		Desc d = MapUtil.getInstance().sharedDC;
@@ -73,13 +74,15 @@ public final class HRContext extends ClassLoader {
 			checkFieldMove(data, s, true, d, x);
 
 			createFieldStorage(data, s);
+			dirty.put(s.codeName, s);
+			s.dirty = -1;
 			return;
 		}
 
 		MyBitSet newAdd = new MyBitSet();
 		MyHashSet<Desc> removed = new MyHashSet<>(s.allMethods);
 
-		// todo only modifier change?
+		// todo 从编译器入手可能是更好的选择
 		SimpleList<MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode n = methods.get(i);
@@ -107,9 +110,11 @@ public final class HRContext extends ClassLoader {
 				m.putAttr(cw1);
 
 				CodeWriter c = cw1.cw;
+				c.visitSize(3, TypeHelper.paramSize(m.rawDesc()));
 				c.clazz(NEW, "java/lang/NoSuchMethodError");
+				c.one(DUP);
 				c.ldc("该方法已被移除");
-				c.invoke(INVOKESPECIAL, "java/lang/NoSuchMethodError", "<init>", "(Ljava/lang/String;)V");
+				c.invokeD("java/lang/NoSuchMethodError", "<init>", "(Ljava/lang/String;)V");
 				c.one(ATHROW);
 				c.finish();
 			}
@@ -128,17 +133,31 @@ public final class HRContext extends ClassLoader {
 	}
 	private void createFieldStorage(ConstantData data, Structure s) {
 		data.fields.clear();
-		if ((s.o_size| s.p_size) != 0) {
-			data.newField(AccessFlag.PUBLIC, "fs_i", "Lroj/dev/hr/HRFieldStorage;");
+		if ((s.o_size|s.p_size) != 0) {
+			int id = data.newField(AccessFlag.PUBLIC|AccessFlag.FINAL, "fs_i", "Lroj/dev/hr/HRFieldStorage;");
+			for (MethodNode mn : data.methods) {
+				if (mn.name().equals("<init>")) {
+					mn.forEachCode(new CodeWriter() {
+						@Override
+						protected void begin() {
+							one(ALOAD_0);
+							one(ALOAD_0);
+							invokeS("roj/dev/hr/HRFieldStorage", "create", "(Ljava/lang/Object;)Lroj/dev/hr/HRFieldStorage;");
+							field(PUTFIELD, data, id);
+						}
+					}, data.cp);
+				}
+			}
 		}
-		if ((s.o_size_static| s.p_size_static) != 0) {
+		if ((s.o_size_static|s.p_size_static) != 0) {
 			data.newField(AccessFlag.PUBLIC|AccessFlag.STATIC|AccessFlag.FINAL, "fs_s", "Lroj/dev/hr/HRFieldStorage;");
-			data.methodIter_tmpName_("<clinit>", "()V", new CodeWriter() {
+			data.forEachCode(new CodeWriter() {
 				@Override
 				protected void begin() {
-
+					ldc(new CstClass(data.name));
+					invokeS("roj/dev/hr/HRFieldStorage", "create", "(Ljava/lang/Class;)Lroj/dev/hr/HRFieldStorage;");
 				}
-			});
+			}, "<clinit>", "()V");
 		}
 	}
 	private void checkFieldMove(ConstantData data, Structure s, boolean _static,
@@ -223,11 +242,13 @@ public final class HRContext extends ClassLoader {
 
 				Class<?> type = byName.get(s.methodImpl.name.replace('/', '.'));
 				byte[] code = Parser.toByteArray(s.methodImpl);
+				s.methodImpl.dump();
 				if (type != null) toTransform.add(new ClassDefinition(type, code));
 				else defineClass(null,code,0,code.length);
 
 				type = byName.get(s.codeName);
 				code = Parser.toByteArray(s.code);
+				s.code.dump();
 				if (type != null) toTransform.add(new ClassDefinition(type, code));
 				else defineClass(null,code,0,code.length);
 			}
@@ -240,10 +261,12 @@ public final class HRContext extends ClassLoader {
 
 	private void transform(ConstantData data) {
 		Desc d = new Desc();
-		new Context("", data).forEachMethod(new CodeWriter() {
-			@Override
-			public void invoke(byte code, String owner, String name, String desc) {
+		data.forEachCode(new CodeWriter() {
+			int tmpId = -1;
 
+			@Override
+			public void invoke(byte code, String owner, String name, String desc, boolean isInterfaceMethod) {
+				super.invoke(code, owner, name, desc, isInterfaceMethod);
 			}
 
 			@Override
@@ -255,11 +278,52 @@ public final class HRContext extends ClassLoader {
 					d.param = type;
 
 					int id = s.fieldIndex.getOrDefault(d, -1);
+					if (id != 0) {
+						String opName = OpcodeUtil.toString0(code);
+
+						if (opName.startsWith("Put")) {
+							if (tmpId < 0) {
+								int size = getLocalSize();
+								visitSize(getStackSize(), size+1);
+								tmpId = size;
+								if (type.charAt(0) == 'J' || type.charAt(0) == 'L') {
+									visitSize(getStackSize(), tmpId+2);
+								}
+							}
+							varStore(TypeHelper.parseField(type), tmpId);
+						}
+
+						if (opName.endsWith("Static")) {
+							super.field(GETSTATIC, owner, "fs_s", "Lroj/dev/hr/HRFieldStorage;");
+							ldc(id);
+						} else {
+							one(ALOAD_0);
+							super.field(GETFIELD, owner, "fs_i", "Lroj/dev/hr/HRFieldStorage;");
+							ldc(id);
+						}
+
+						boolean OBJ = type.startsWith("[") || type.startsWith("L");
+
+						if (opName.startsWith("Get")) {
+							invokeV("roj/dev/hr/HRFieldStorage", "get"+(OBJ?"L":type), "(I)"+(OBJ?"Ljava/lang/Object;":type));
+							if (OBJ) clazz(CHECKCAST, type);
+						} else {
+							varLoad(TypeHelper.parseField(type), tmpId);
+							invokeV("roj/dev/hr/HRFieldStorage", "set", "(I"+(OBJ?"Ljava/lang/Object;":type)+")V");
+						}
+
+					}
 
 					return;
 				}
 
 				super.field(code, owner, name, type);
+			}
+
+			@Override
+			protected void visitAttribute(ConstantPool cp, String name, int len, DynByteBuf b) {
+				if (true) return;
+				super.visitAttribute(cp, name, len, b);
 			}
 		});
 	}
@@ -292,7 +356,7 @@ public final class HRContext extends ClassLoader {
 		cWrap.field(GETFIELD, "roj/dev/hr/HRContext$Stack", "o_arr", "[Ljava/lang/Object;");
 		cWrap.one(ASTORE_3);
 
-		cWrap.switches(seg);
+		cWrap.addSegment(seg);
 
 		SimpleList<MethodNode> nodes = data.methods;
 		for (int i = 0; i < nodes.size(); i++) {
@@ -329,15 +393,15 @@ public final class HRContext extends ClassLoader {
 			}
 
 			cDisp.invoke(INVOKESTATIC, "roj/dev/hr/HRContext", "stack", "()Lroj/dev/hr/HRContext$Stack;");
-			cDisp.var(ASTORE, maxSize);
+			cDisp.vars(ASTORE, maxSize);
 
-			cDisp.var(ALOAD, maxSize);
+			cDisp.vars(ALOAD, maxSize);
 			cDisp.field(GETFIELD, "roj/dev/hr/HRContext$Stack", "o_arr", "[Ljava/lang/Object;");
-			cDisp.var(ASTORE, maxSize+1);
+			cDisp.vars(ASTORE, maxSize+1);
 
-			cDisp.var(ALOAD, maxSize);
+			cDisp.vars(ALOAD, maxSize);
 			cDisp.field(GETFIELD, "roj/dev/hr/HRContext$Stack", "p_arr", "J");
-			cDisp.var(LSTORE, maxSize+2);
+			cDisp.vars(LSTORE, maxSize+2);
 
 			cDisp.visitSize(3, maxSize+4);
 
@@ -347,10 +411,10 @@ public final class HRContext extends ClassLoader {
 
 				if (type.isPrimitive()) {
 					cDisp.field(GETSTATIC, "roj/dev/hr/HRContext", "UNSAFE_REF", "Lsun/misc/Unsafe;");
-					cDisp.var(LLOAD, maxSize+2);
+					cDisp.vars(LLOAD, maxSize+2);
 					cDisp.ldc((long) pid);
 					cDisp.one(LADD);
-					cDisp.var(type.shiftedOpcode(ILOAD, false), size);
+					cDisp.vars(type.shiftedOpcode(ILOAD), size);
 					cDisp.invoke(INVOKESPECIAL, "sun/misc/Unsafe", "set"+upper(type.toString()), "(J"+type.toDesc()+")V");
 
 					cDisp.visitSizeMax(5, 0);
@@ -365,8 +429,8 @@ public final class HRContext extends ClassLoader {
 
 					pid++;
 				} else {
-					cDisp.var(ALOAD, maxSize+1);
-					cDisp.var(ALOAD, size);
+					cDisp.vars(ALOAD, maxSize+1);
+					cDisp.vars(ALOAD, size);
 					cDisp.ldc(oid);
 					cDisp.one(AASTORE);
 
@@ -383,7 +447,7 @@ public final class HRContext extends ClassLoader {
 				size += type.length();
 			}
 
-			cDisp.var(ALOAD, maxSize);
+			cDisp.vars(ALOAD, maxSize);
 			cDisp.ldc(new CstClass(data.name));
 			cDisp.ldc(methodId);
 			cDisp.invoke(INVOKESTATIC, "roj/dev/hr/HRContext", "invoke", "(Lroj/dev/hr/HRContext$Stack;Ljava/lang/Class;I)V");
@@ -394,8 +458,8 @@ public final class HRContext extends ClassLoader {
 				cDisp.one(RETURN);
 				cWrap.one(RETURN);
 			} else {
-				cDisp.var(ALOAD, maxSize);
-				cDisp.one(type.shiftedOpcode(IRETURN, false));
+				cDisp.vars(ALOAD, maxSize);
+				cDisp.one(type.shiftedOpcode(IRETURN));
 
 				int b = OpcodeUtil.getByName().getInt(type.nativeName()+"STORE_0");
 				// lengthunknown's swapground
@@ -415,6 +479,7 @@ public final class HRContext extends ClassLoader {
 			methodId++;
 		}
 
+		cWrap.one(RETURN);
 		impl.dump();
 	}
 	private static String upper(String s) {
