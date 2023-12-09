@@ -126,7 +126,7 @@ public class CommandConsole extends DefaultConsole {
 			ctx.executor = executor;
 		}
 	}
-	private boolean execute(String cmd) {
+	protected boolean execute(String cmd) {
 		List<Word> words = parse(cmd);
 		if (words == null) return false;
 

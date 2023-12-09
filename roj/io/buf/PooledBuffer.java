@@ -15,8 +15,8 @@ interface PooledBuffer {
 	Page page();
 	void page(Page p);
 
-	int getMetadata();
-	void setMetadata(int metadata);
+	int getKeepBefore();
+	void setKeepBefore(int keepBefore);
 
 	void _expand(int len, boolean backward);
 

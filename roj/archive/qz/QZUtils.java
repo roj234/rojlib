@@ -1,82 +1,60 @@
 package roj.archive.qz;
 
-import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
-import roj.io.IOUtil;
-import roj.math.MutableLong;
-import roj.ui.ProgressBar;
+import roj.io.FastFailException;
+import roj.ui.EasyProgressBar;
+import roj.util.ArrayCache;
 import roj.util.Helpers;
 
-import java.io.*;
-import java.util.List;
-import java.util.concurrent.atomic.LongAdder;
-import java.util.function.BiConsumer;
+import java.io.File;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author Roj234
  * @since 2023/5/26 0026 19:17
  */
 public class QZUtils {
-	public static void parallelCompressWithProgress(QZFileWriter fw, TaskPool pool, File baseDir, List<File> files, int blockSize, ProgressBar bar) throws IOException {
-		MutableLong total = new MutableLong();
-		LongAdder delta = new LongAdder();
+	public static void verify7z(File file, TaskPool pool) throws Exception {
+		EasyProgressBar bar = new EasyProgressBar("验证压缩文件");
+		bar.setUnit("B");
 
-		BiConsumer<InputStream, OutputStream> copyStream = bar == null ? null : (in, out) -> {
-			byte[] data = IOUtil.getSharedByteBuf().list;
-			try {
-				while (true) {
-					int len = in.read(data);
-					if (len < 0) break;
-					out.write(data, 0, len);
-
-					bar.update(delta.sum() / (double)total.value, len);
-					delta.add(len);
-				}
-			} catch (IOException e) {
-				Helpers.athrow(e);
+		AtomicReference<Throwable> failed = new AtomicReference<>();
+		try (QZArchive archive = new QZArchive(file)) {
+			for (QZEntry entry : archive.getEntriesByPresentOrder()) {
+				bar.addMax(entry.getSize());
 			}
-		};
 
-		int baseLen = baseDir == null ? -1 : baseDir.getAbsolutePath().length()+1;
-		long sum = 0;
-		List<File> list = new SimpleList<>();
+			archive.parallelDecompress(pool, (entry, in) -> {
+				byte[] arr = ArrayCache.getByteArray(40960, false);
+				try {
+					while (true) {
+						int r = in.read(arr);
+						if (r < 0) break;
 
-		for (int i = 0; i < files.size(); i++) {
-			if (sum >= blockSize) {
-				File[] arr = list.toArray(new File[0]);
-				pool.pushTask(() -> {
-					try (QZWriter w = fw.parallel()) {
-						w.setSolidSize(0);
-						for (File file : arr) {
-							w.beginEntry(new QZEntry(baseLen < 0 ? file.getName() : file.getAbsolutePath().substring(baseLen)));
-							try (FileInputStream in = new FileInputStream(file)) {
-								if (bar == null) IOUtil.copyStream(in, w);
-								else copyStream.accept(in, w);
-							}
-							w.closeEntry();
-						}
+						if (failed.get() != null) throw new FastFailException("-other thread failed-");
+						bar.addCurrent(r);
 					}
-				});
-				sum = 0;
-				list.clear();
-			}
-
-			File f = files.get(i);
-			sum += f.length();
-			list.add(f);
-		}
-
-		pool.awaitFinish();
-
-		try (QZWriter w = fw) {
-			for (File file : list) {
-				w.beginEntry(new QZEntry(file.getName()));
-				try (FileInputStream in = new FileInputStream(file)) {
-					if (bar == null) IOUtil.copyStream(in, w);
-					else copyStream.accept(in, w);
+				} catch (FastFailException e) {
+					throw e;
+				} catch (Throwable e) {
+					failed.set(e);
+					throw new FastFailException("-验证失败-");
+				} finally {
+					ArrayCache.putArray(arr);
 				}
-				w.closeEntry();
-			}
+			}, null);
+
+			pool.awaitFinish();
+		} catch (Exception e) {
+			failed.set(e);
 		}
+
+		Throwable exception = failed.getAndSet(null);
+		if (exception != null) {
+			bar.end("验证失败");
+			Helpers.athrow(exception);
+		}
+
+		bar.end("验证成功");
 	}
 }

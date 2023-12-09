@@ -5,6 +5,10 @@ import roj.concurrent.SegmentReadWriteLock;
 import roj.util.*;
 import sun.misc.Unsafe;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
@@ -23,7 +27,15 @@ public final class BufferPool {
 	private static final int TL_DIRECT_INITIAL = 65536, TL_DIRECT_MAX = 262144, TL_DIRECT_INCR = 65536;
 
 	private static final int GLOBAL_HEAP_SIZE = 1048576, GLOBAL_DIRECT_SIZE = 4194304;
-	private static final int UNPOOLED_SIZE = 10485760, RESERVED_FOR_EXPAND = 16;
+	private static final int UNPOOLED_SIZE = 10485760, DEFAULT_KEEP_BEFORE = 16;
+
+	// NOT FINISHED
+	@Retention(RetentionPolicy.CLASS)
+	@Target(ElementType.LOCAL_VARIABLE)
+	public @interface AutoKeepBefore {
+		int max() default 16;
+		int slideAvgWindow() default 0;
+	}
 
 	private static final class PooledDirectBuf extends DirectByteList.Slice implements PooledBuffer {
 		private static final long u_pool = fieldOffset(PooledDirectBuf.class, "pool");
@@ -39,9 +51,9 @@ public final class BufferPool {
 
 		private int meta;
 		@Override
-		public int getMetadata() { return meta; }
+		public int getKeepBefore() { return meta; }
 		@Override
-		public void setMetadata(int m) { meta = m; }
+		public void setKeepBefore(int keepBefore) { meta = keepBefore; }
 
 		@Override
 		public void close() { if (pool != null) BufferPool.reserve(this); }
@@ -62,9 +74,9 @@ public final class BufferPool {
 
 		private int meta;
 		@Override
-		public int getMetadata() { return meta; }
+		public int getKeepBefore() { return meta; }
 		@Override
-		public void setMetadata(int m) { meta = m; }
+		public void setKeepBefore(int keepBefore) { meta = keepBefore; }
 
 		@Override
 		public void close() { if (pool != null) BufferPool.reserve(this); }
@@ -119,15 +131,19 @@ public final class BufferPool {
 	}
 
 	public static DynByteBuf buffer(boolean direct, int cap) { return localPool().allocate(direct, cap); }
-	public DynByteBuf allocate(boolean direct, int cap) {
+	public DynByteBuf allocate(boolean direct, int cap) { return allocate(direct, cap, DEFAULT_KEEP_BEFORE); }
+	public DynByteBuf allocate(boolean direct, int cap, int keepBefore) {
 		if (DEBUG_DISABLE_CACHE) return direct ? DirectByteList.allocateDirect(cap) : ByteList.allocate(cap);
 		if (cap < 0) throw new IllegalArgumentException("size < 0");
 
+		cap += keepBefore;
+
 		PooledBuffer buf;
-		boolean large = useGlobal && cap + RESERVED_FOR_EXPAND >= (direct ? directIncr : heapIncr) / 2;
+		boolean large = useGlobal && cap >= (direct ? directIncr : heapIncr) / 2;
 		if (direct) {
 			buf = getShell(directShell, u_directShellLen);
 			if (buf == null) buf = new PooledDirectBuf();
+			buf.setKeepBefore(keepBefore);
 
 			if (allocDirect(large, cap, buf)) {
 				buf.pool(this);
@@ -137,6 +153,7 @@ public final class BufferPool {
 		} else {
 			buf = getShell(heapShell, u_heapShellLen);
 			if (buf == null) buf = new PooledHeapBuf();
+			buf.setKeepBefore(keepBefore);
 
 			if (allocHeap(large, cap, buf)) {
 				buf.pool(this);
@@ -152,10 +169,10 @@ public final class BufferPool {
 
 		if (direct) {
 			NativeMemory mem = new NativeMemory(cap);
-			buf.set(mem, mem.address(), cap);
+			buf.set(mem, mem.address()+keepBefore, cap-keepBefore);
 		} else {
 			byte[] b = ArrayCache.getByteArray(cap, false);
-			buf.set(b, 0, b.length);
+			buf.set(b, keepBefore, b.length-keepBefore);
 		}
 		buf.pool(_UNPOOLED);
 
@@ -194,8 +211,6 @@ public final class BufferPool {
 			}
 		}
 
-		sh.setMetadata(RESERVED_FOR_EXPAND);
-
 		int off;
 		if (!large) while (true) {
 			Page p = pDirect;
@@ -204,14 +219,14 @@ public final class BufferPool {
 			int slot = System.identityHashCode(p);
 			lock.lock(slot);
 			try {
-				off = (int) p.alloc(cap+RESERVED_FOR_EXPAND);
+				off = (int) p.alloc(cap);
 			} finally {
 				lock.unlock(slot);
 			}
 
 			if (off >= 0) {
 				NativeMemory nm = directRef;
-				sh.set(nm, directAddr+off+RESERVED_FOR_EXPAND, cap);
+				sh.set(nm, directAddr+off+sh.getKeepBefore(), cap-sh.getKeepBefore());
 
 				// ensure we got the address associated with that stamp
 				if (nm == stamp) {
@@ -252,9 +267,9 @@ public final class BufferPool {
 				}
 			}
 
-			off = (int) pgDirect.alloc(cap+RESERVED_FOR_EXPAND);
+			off = (int) pgDirect.alloc(cap);
 			if (off >= 0) {
-				sh.set(null, gDirect+off+RESERVED_FOR_EXPAND, cap);
+				sh.set(null, gDirect+off+sh.getKeepBefore(), cap-sh.getKeepBefore());
 				return true;
 			}
 		} finally {
@@ -275,8 +290,6 @@ public final class BufferPool {
 			}
 		}
 
-		sh.setMetadata(RESERVED_FOR_EXPAND);
-
 		int off;
 		if (!large) while (true) {
 			Page p = pHeap;
@@ -285,14 +298,14 @@ public final class BufferPool {
 			int slot = System.identityHashCode(p);
 			lock.lock(slot);
 			try {
-				off = (int) p.alloc(cap+RESERVED_FOR_EXPAND);
+				off = (int) p.alloc(cap);
 			} finally {
 				lock.unlock(slot);
 			}
 
 			if (off >= 0) {
 				byte[] b = heap;
-				sh.set(b, off+RESERVED_FOR_EXPAND, cap);
+				sh.set(b, off+sh.getKeepBefore(), cap-sh.getKeepBefore());
 
 				// ensure we got the address associated with that stamp
 				if (b == stamp) {
@@ -324,9 +337,9 @@ public final class BufferPool {
 		try {
 			if (gHeap == null) gHeap = new byte[GLOBAL_HEAP_SIZE];
 
-			off = (int) pgHeap.alloc(cap+RESERVED_FOR_EXPAND);
+			off = (int) pgHeap.alloc(cap);
 			if (off >= 0) {
-				sh.set(gHeap, off+RESERVED_FOR_EXPAND, cap);
+				sh.set(gHeap, off+sh.getKeepBefore(), cap-sh.getKeepBefore());
 				return true;
 			}
 		} finally {
@@ -344,18 +357,19 @@ public final class BufferPool {
 
 		if (pool == null) throwUnpooled(buf);
 		else if (pool != _UNPOOLED) ((BufferPool) pool).reserve0(buf);
+		else {
+			UNPOOLED_REMAIN.addAndGet(buf.capacity() + ((PooledBuffer) buf).getKeepBefore());
 
-		UNPOOLED_REMAIN.addAndGet(buf.capacity());
-
-		if (buf.isDirect()) ((DirectByteList) buf)._free();
-		else ((ByteList) buf)._free();
+			if (buf.isDirect()) ((DirectByteList) buf)._free();
+			else ((ByteList) buf)._free();
+		}
 	}
 	private void reserve0(DynByteBuf buf) {
 		if (ldt != null) ldt.remove(buf);
 
 		PooledBuffer pb = (PooledBuffer) buf;
 
-		int prefix = pb.getMetadata();
+		int prefix = pb.getKeepBefore();
 		if (buf.isDirect()) {
 			long m = buf.address();
 			NativeMemory nm = ((DirectByteList) buf).memory();
@@ -441,7 +455,7 @@ public final class BufferPool {
 			// 禁止异步reserve
 			pool = ((PooledBuffer) buf).pool(null);
 			if (pool == null) throwUnpooled(buf);
-			else if (pool != _UNPOOLED && !DEBUG_DISABLE_CACHE && tryZeroCopy(buf, more, addAtEnd, (BufferPool) pool, (PooledBuffer) buf)) {
+			else if(!DEBUG_DISABLE_CACHE && pool == _UNPOOLED ? tryZeroCopy(buf, more, addAtEnd, (BufferPool) pool, (PooledBuffer) buf) : tryZeroCopyExt(more, addAtEnd, (PooledBuffer) buf)) {
 				((PooledBuffer) buf).pool(pool);
 				return buf;
 			}
@@ -487,17 +501,17 @@ public final class BufferPool {
 		if (addAtEnd) {
 			lock.lock();
 			try {
-				if (!page.allocAfter(offset - pb.getMetadata(), b.capacity() + pb.getMetadata(), more)) return false;
+				if (!page.allocAfter(offset - pb.getKeepBefore(), b.capacity() + pb.getKeepBefore(), more)) return false;
 			} finally {
 				lock.unlock();
 			}
 			pb._expand(more, false);
 		} else {
-			if (pb.getMetadata() >= more) pb.setMetadata(pb.getMetadata() - more);
+			if (pb.getKeepBefore() >= more) pb.setKeepBefore(pb.getKeepBefore() - more);
 			else {
 				lock.lock();
 				try {
-					if (!page.allocBefore(offset - pb.getMetadata(), b.capacity() + pb.getMetadata(), more)) return false;
+					if (!page.allocBefore(offset - pb.getKeepBefore(), b.capacity() + pb.getKeepBefore(), more)) return false;
 				} finally {
 					lock.unlock();
 				}
@@ -505,6 +519,12 @@ public final class BufferPool {
 
 			pb._expand(more, true);
 		}
+		return true;
+	}
+	private static boolean tryZeroCopyExt(int more, boolean addAtEnd, PooledBuffer pb) {
+		if (addAtEnd || pb.getKeepBefore() < more) return false;
+		pb.setKeepBefore(pb.getKeepBefore() - more);
+		pb._expand(more, true);
 		return true;
 	}
 }

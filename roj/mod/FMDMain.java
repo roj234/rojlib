@@ -57,9 +57,9 @@ public final class FMDMain {
 	static ScheduledTask shinyTask;
 	public static CommandConsole console = new CommandConsole("") {
 		@Override
-		public boolean executeCommand(String cmd) {
+		public boolean execute(String cmd) {
 			if (shinyTask != null) shinyTask.cancel();
-			return super.executeCommand(cmd);
+			return super.execute(cmd);
 		}
 	};
 

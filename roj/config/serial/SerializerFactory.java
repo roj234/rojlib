@@ -920,10 +920,12 @@ public final class SerializerFactory {
 
 		cw.vars(ALOAD, t.pos);
 
+
 		if (as != null) {
-			asId = c.getField("as$"+as.klass());
+			String asName = "as$"+as.klass().replace('/', '`');
+			asId = c.getField(asName);
 			if (asId < 0) {
-				asId = c.newField(PRIVATE, "as$"+as.klass(), "L"+as.klass()+";");
+				asId = c.newField(PRIVATE, asName, "L"+as.klass()+";");
 
 				copy.one(ALOAD_0);
 				copy.one(ALOAD_1);

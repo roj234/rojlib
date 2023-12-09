@@ -34,60 +34,77 @@ public class ArrayCache {
 	private static final int SIZES_MAX = 64;
 	private static final int ARRAYS_MAX = 9;
 
-	private final LFUCache<MutableInt, Reference<byte[]>[]> byteCache = new LFUCache<>(SIZES_MAX, 1);
-	private final LFUCache<MutableInt, Reference<char[]>[]> charCache = new LFUCache<>(SIZES_MAX, 1);
-	private final LFUCache<MutableInt, Reference<int[]>[]> intCache = new LFUCache<>(SIZES_MAX, 1);
+	private final LFUCache<MutableInt, Object[]>
+		byteCache = new LFUCache<>(SIZES_MAX, 1),
+		charCache = new LFUCache<>(SIZES_MAX, 1),
+		intCache = new LFUCache<>(SIZES_MAX, 1);
+
 	private final ReentrantLock lock = new ReentrantLock();
 	private final MutableInt val = new MutableInt();
 
 	public ArrayCache() {}
 
-	private <T> T getArray(Map<MutableInt, Reference<T>[]> cache, int size) {
+	private <T> T getArray(Map<MutableInt, Object[]> cache, int size) {
 		if (size < CHIP_SIZE || DEBUG_DISABLE_CACHE) return null;
 
 		lock.lock();
 		try {
 			val.setValue(size/CHIP_SIZE);
-			Reference<T>[] stack = cache.get(val);
+			Object[] stack = cache.get(val);
 			if (stack == null) return null;
 
-			for (int i = 0; i < stack.length; i++) {
-				Reference<T> r = stack[i];
+			MutableInt used_ref = (MutableInt) stack[0];
+			int bits = 1;
+			for (int i = 1; i < stack.length; i++, bits <<= 1) {
+				Reference<?> r = (Reference<?>) stack[i];
 				if (r == null) continue;
 
-				stack[i] = null;
-				T t = r.get();
-				if (t != null) return t;
+				Object t = r.get();
+				if (t != null) {
+					if ((used_ref.value & bits) == 0) {
+						used_ref.value |= bits;
+						return Helpers.cast(t);
+					} else {
+						// treat as if is null
+					}
+				} else {
+					stack[i] = null;
+				}
 			}
 			return null;
 		} finally {
 			lock.unlock();
 		}
 	}
-	private <T> void putArray(Map<MutableInt, Reference<T>[]> cache, T array, int size) {
+	private void putArray(Map<MutableInt, Object[]> cache, Object array, int size) {
 		if (size < CHIP_SIZE || DEBUG_DISABLE_CACHE) return;
 
 		lock.lock();
 		try {
 			val.setValue(size/CHIP_SIZE);
-			Reference<T>[] stack = cache.get(val);
+			Object[] stack = cache.get(val);
+			MutableInt used_ref;
 			if (stack == null) {
-				cache.put(new MutableInt(val), stack = Helpers.cast(new Reference<?>[ARRAYS_MAX]));
+				cache.put(new MutableInt(val), stack = new Object[ARRAYS_MAX+1]);
+				stack[0] = used_ref = new MutableInt();
+			} else {
+				used_ref = (MutableInt) stack[0];
 			}
 
-			boolean placedIn = false;
-			for (int i = 0; i < stack.length; i++) {
-				Reference<T> r = stack[i];
-				if (r == null || r.get() == null) {
-					if (!placedIn) {
-						stack[i] = i == 0 ? new SoftReference<>(array) : new WeakReference<>(array);
-						placedIn = true;
-					}
-				} else if (r.get() == array) {
-					if (!placedIn) break;
-
-					stack[i] = null;
+			int free = 0;
+			for (int i = 1; i < stack.length; i++) {
+				Reference<?> r = (Reference<?>) stack[i];
+				Object t = r == null ? null : r.get();
+				if (t == null && free == 0) free = i;
+				else if (t == array) {
+					used_ref.value &= ~(1<<(i-1));
+					return;
 				}
+			}
+
+			if (free > 0) {
+				stack[free] = --free == 0 ? new SoftReference<>(array) : new WeakReference<>(array);
+				used_ref.value &= ~(1<<free);
 			}
 		} finally {
 			lock.unlock();

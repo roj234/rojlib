@@ -18,7 +18,8 @@ public class ProgressBar implements AutoCloseable {
 		barUpdate = dataUpdate = 0;
 	}
 
-	private String name, unit, prefix, postfix;
+	protected String unit;
+	private String name, prefix, postfix;
 	private int barInterval, dataWindow;
 	private long barUpdate, dataUpdate, eta;
 	private boolean hideBar, hideSpeed;
