@@ -13,7 +13,6 @@ import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
 import roj.mapper.Mapper;
 import roj.mapper.util.Desc;
-import roj.misc.CpFilter;
 import roj.mod.plugin.Plugin;
 import roj.text.TextReader;
 import roj.ui.CLIUtil;
@@ -209,11 +208,6 @@ public final class Shared {
 		}
 
 		DEBUG = CONFIG.getBool("调试模式");
-		if (DEBUG) {
-			try {
-				CpFilter.registerShutdownHook();
-			} catch (NoClassDefFoundError ignored) {}
-		}
 
 		CMapping cfgGen = CONFIG.get("通用").asMap();
 		int threads = cfgGen.getInteger("最大线程数");

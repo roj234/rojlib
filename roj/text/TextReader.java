@@ -132,6 +132,12 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 		return new CharList.Slice(buf, start-off, end-off);
 	}
 
+	private boolean unbuffered;
+	public TextReader unbuffered() {
+		unbuffered = true;
+		return this;
+	}
+
 	private void fillBuffer(int i) {
 		i -= off;
 		if (i < 0) throw new IllegalStateException("Buffer flushed at ["+off+"+"+len+"] and you're getting " + (i+off));
@@ -144,8 +150,10 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 				System.arraycopy(buf, moveBefore, buf, 0, len -= moveBefore);
 			}
 
-			toRead = Math.max(toRead, buf.length/2 - len);
-			if (toRead < 32) toRead = 32;
+			if (!unbuffered) {
+				toRead = Math.max(toRead, buf.length/2 - len);
+				if (toRead < 32) toRead = 32;
+			}
 
 			if (buf.length < len+toRead) grow(toRead);
 

@@ -17,7 +17,7 @@ import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
-import roj.ui.ProgressBar;
+import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
 import roj.util.BsDiff;
 import roj.util.Helpers;
@@ -30,7 +30,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.LongAdder;
 
 import static roj.reflect.ReflectionUtils.u;
 
@@ -115,7 +114,7 @@ public class TextDeDup {
 		replacement.put('\t', "");
 		replacement.put(' ', "");
 		replacement.put('　', "");
-		asyn2.setRejectPolicy(TaskPool::waitPolicy);
+		asyn2.setRejectPolicy(TaskPool::executePolicy);
 
 		if (args[0].equals("find")) {
 			cfg = new ToYaml().to(new FileOutputStream(args[2]));
@@ -128,7 +127,7 @@ public class TextDeDup {
 			bar.setUnit("File");
 
 			List<File> allFiles = IOUtil.findAllFiles(basePath, file -> file.getName().endsWith(".txt"));
-			tot = allFiles.size();
+			bar.addMax(allFiles.size());
 			for (int i = 0; i < allFiles.size(); i++) {
 				File file = allFiles.get(i);
 				asyn2.pushTask(() -> {
@@ -151,7 +150,7 @@ public class TextDeDup {
 						u.copyMemory(sb.list, Unsafe.ARRAY_CHAR_BASE_OFFSET, out, Unsafe.ARRAY_BYTE_BASE_OFFSET, out.length);
 						fileCache.put(file, out);
 
-						updateProgress(1);
+						bar.addCurrent(1);
 					} catch (Exception e) {
 						System.out.println("error is " + file.getName());
 						e.printStackTrace();
@@ -162,7 +161,7 @@ public class TextDeDup {
 			asyn2.awaitFinish();
 			bar.end("loaded");
 
-			tot = 0;
+			bar.reset();
 			bar.setName("Compare");
 			bar.setUnit("C");
 			diff(files, fileCache);
@@ -230,16 +229,14 @@ public class TextDeDup {
 		}
 	}
 
-	static final int BOUND = 100000, SIZE_BUFFER = 65536, COMPARE_BUFFER = 8192;
+	static final int BOUND = 500000, SIZE_BUFFER = 10000, COMPARE_BUFFER = 8192;
 	static final double DIFF_MAX = 1/3d;
 
 	private static File basePath;
 	private static int pathLen;
-	private static TaskPool asyn2 = TaskPool.MaxSize(100, "TDD worker");
+	private static TaskPool asyn2 = TaskPool.MaxSize(9999, "TDD worker");
 
-	static ProgressBar bar = new ProgressBar("进度");
-	static LongAdder fin = new LongAdder();
-	static long tot;
+	static EasyProgressBar bar = new EasyProgressBar("进度");
 
 	private static CharMap<String> replacement;
 	private static ToSomeString cfg;
@@ -272,7 +269,7 @@ public class TextDeDup {
 			List<File> self = files.get(i);
 
 			int cmpCount = self.size() * prev.size() + (self.size() - 1) * self.size() / 2;
-			tot += cmpCount;
+			bar.addMax(cmpCount);
 
 			int finalI = i;
 			asyn1.pushTask(() -> {
@@ -287,8 +284,8 @@ public class TextDeDup {
 				for (int j = 0; j < self.size(); j++) {
 					File me = self.get(j);
 
-					BsDiff diff = new BsDiff();
 					byte[] dataA = fileCache.get(me);
+					BsDiff diff = new BsDiff();
 					diff.setLeft(dataA);
 
 					int finalJ = j;
@@ -299,7 +296,9 @@ public class TextDeDup {
 							File tc = prev.get(k);
 
 							byte[] dataB = fileCache.get(tc);
-							int byteDiff = diff.getDiffLength(dataB, (int) (Math.min(dataA.length, dataB.length) * DIFF_MAX));
+							int maxHeadDiff = (int) (Math.min(dataA.length, dataB.length) * DIFF_MAX);
+
+							int byteDiff = diff.getDiffLength(dataB, maxHeadDiff);
 							if (byteDiff >= 0) {
 								Diff diff1 = new Diff();
 								diff1.left = me;
@@ -313,7 +312,9 @@ public class TextDeDup {
 							File tc = self.get(k);
 
 							byte[] dataB = fileCache.get(tc);
-							int byteDiff = diff.getDiffLength(dataB, (int) (Math.min(dataA.length, dataB.length) * DIFF_MAX));
+							int maxHeadDiff = (int) (Math.min(dataA.length, dataB.length) * DIFF_MAX);
+
+							int byteDiff = diff.getDiffLength(dataB, maxHeadDiff);
 							if (byteDiff >= 0) {
 								Diff diff1 = new Diff();
 								diff1.left = me;
@@ -333,7 +334,7 @@ public class TextDeDup {
 						}
 
 						int count = prev.size() + self.size() - finalJ - 1;
-						updateProgress(count);
+						bar.addCurrent(count);
 
 						x.resolve(null);
 					}));
@@ -365,15 +366,5 @@ public class TextDeDup {
 		} catch (InterruptedException ignored) {}
 		asyn2.awaitFinish();
 		asyn2.shutdown();
-	}
-
-	private static void updateProgress(int count) {
-		fin.add(count);
-
-		long sum = fin.sum();
-		bar.setPrefix(sum+"/"+tot);
-		int s = (int) (bar.getEta(tot-sum) / 1000);
-		bar.setPostfix("ETA: "+s/3600+":"+s/60%60+":"+s%60);
-		bar.update((double)sum/tot, count);
 	}
 }

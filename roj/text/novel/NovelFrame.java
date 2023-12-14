@@ -7,6 +7,7 @@ package roj.text.novel;
 import roj.collect.IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
+import roj.collect.ToIntMap;
 import roj.concurrent.OperationDone;
 import roj.concurrent.TaskPool;
 import roj.concurrent.timing.ScheduledTask;
@@ -204,35 +205,22 @@ public class NovelFrame extends JFrame {
 		}
 
 		SimpleList<String> replacedName = null;
+		ToIntMap<String> myChapterNo = new ToIntMap<>();
 		if (renameChapter.isSelected()) {
 			replacedName = new SimpleList<>();
 			for (int i = 1; i < chapters.size(); i++) {
 				Chapter c = chapters.get(i);
+				if (c.flagOverride) {
+					replacedName.add(c.displayName);
+					continue;
+				}
+
 				Matcher m = novel_regexp.matcher(c.fullName);
 				boolean ok = m.matches();
 				assert ok;
 
 				CharList tmp = new CharList(alignReplaceTo.getText());
-				for (int j = 0; j <= m.groupCount(); j++) {
-					String str = m.group(j);
-					if (j == chapterId_group) {
-						switch (chapterNameType.getSelectedItem().toString()) {
-							case "不处理数字":
-								break;
-							case "阿拉伯数字":
-								char[] cb = str.toCharArray();
-								str = Long.toString(Chapter.parseChapterNo(cb, 0, cb.length));
-								break;
-							case "中国数字":
-								cb = str.toCharArray();
-								str = ChinaNumeric.toString(Chapter.parseChapterNo(cb, 0, cb.length));
-								break;
-						}
-					} else if (j == chapterName_group) {
-						str = mytrim(str);
-					}
-					tmp.replace("$"+j, str);
-				}
+				computeChapterName(m, myChapterNo, c, tmp);
 				replacedName.add(tmp.toStringAndFree());
 			}
 		}
@@ -284,6 +272,42 @@ public class NovelFrame extends JFrame {
 		errout.setText("chars:"+ novel_out.length()+"\n"+novel_out);
 		btnWrite.setEnabled(true);
 		novel_out.replace("\n", "\r\n");
+	}
+
+	private void computeChapterName(Matcher m, ToIntMap<String> myChapterNo, Chapter c, CharList tmp) {
+		for (int j = 0; j <= m.groupCount(); j++) {
+			if (j == chapterId_group) {
+			} else if (j == chapterName_group) {
+			} else if (j != 0) {
+				String str = m.group(j);
+				c.type ^= str.hashCode();
+			}
+		}
+
+		for (int j = 0; j <= m.groupCount(); j++) {
+			String str = m.group(j);
+			if (j == chapterId_group) {
+				if (checkBox1.isSelected()) {
+					str = Integer.toString(myChapterNo.increase(String.valueOf(c.type), 1));
+					System.out.println("type="+c.type);
+				}
+
+				switch (chapterNameType.getSelectedIndex()) {
+					case 0: break;
+					case 1:
+						char[] cb = str.toCharArray();
+						str = Long.toString(Chapter.parseChapterNo(cb, 0, cb.length));
+						break;
+					case 2:
+						cb = str.toCharArray();
+						str = ChinaNumeric.toString(Chapter.parseChapterNo(cb, 0, cb.length));
+						break;
+				}
+			} else if (j == chapterName_group) {
+				str = mytrim(str);
+			}
+			tmp.replace("$"+j, str);
+		}
 	}
 
 	private void test_chapter(ActionEvent e) {
@@ -647,6 +671,7 @@ public class NovelFrame extends JFrame {
 			c.no = (int)cpwChapNo.getValue();
 			c.displayName = cpwOutName.getText();
 			chapterManager.nodeChanged(c);
+			c.flagOverride = true;
 		}
 	}
 
@@ -708,6 +733,7 @@ public class NovelFrame extends JFrame {
 		cascadeChapterUI = new JTree();
 		btnInsertMode = new JCheckBox();
 		button5 = new JButton();
+		checkBox1 = new JCheckBox();
 		advancedMenu = new JDialog();
 		JLabel label5 = new JLabel();
 		JLabel label6 = new JLabel();
@@ -990,6 +1016,11 @@ public class NovelFrame extends JFrame {
 		contentPane.add(button5);
 		button5.setBounds(new Rectangle(new Point(110, 525), button5.getPreferredSize()));
 
+		//---- checkBox1 ----
+		checkBox1.setText("\u91cd\u65b0\u547d\u540d");
+		contentPane.add(checkBox1);
+		checkBox1.setBounds(new Rectangle(new Point(215, 580), checkBox1.getPreferredSize()));
+
 		contentPane.setPreferredSize(new Dimension(945, 670));
 		pack();
 		setLocationRelativeTo(getOwner());
@@ -1161,6 +1192,7 @@ public class NovelFrame extends JFrame {
 	private JTree cascadeChapterUI;
 	private JCheckBox btnInsertMode;
 	private JButton button5;
+	private JCheckBox checkBox1;
 	private JDialog advancedMenu;
 	private JSpinner chapIdGroupInp;
 	private JSpinner chapNameGroupInp;

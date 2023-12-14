@@ -9,7 +9,6 @@ import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.misc.CpFilter;
 import roj.text.CharList;
 import roj.ui.CLIUtil;
 
@@ -18,10 +17,6 @@ import java.io.IOException;
 
 public class DeleteOrphanFile {
 	public static void main(String[] args) throws IOException {
-		try {
-			CpFilter.registerShutdownHook();
-		} catch (Error ignored) {}
-
 		System.out.println("(assets)资源目录");
 		String assets = CLIUtil.userInput("");
 		System.out.println("(libraries)库目录");
