@@ -27,9 +27,9 @@ abstract class LZMACoder {
 
 	static final int REPS = 4;
 
-	final int posMask;
-	final int lc;
-	final int literalPosMask;
+	int posMask;
+	int lc;
+	int literalPosMask;
 
 	final int[] reps = new int[REPS];
 	int state;
@@ -45,18 +45,20 @@ abstract class LZMACoder {
 
 	static int getDistState(int len) { return len < DIST_STATES + MATCH_LEN_MIN ? len - MATCH_LEN_MIN : DIST_STATES - 1; }
 
-	final short[][] literalProbs;
+	short[][] literalProbs;
 
 	final short[] choice = new short[2 << 1];
-	final short[][] low, mid;
+	short[][] low, mid;
 	final short[] high = new short[HIGH_SYMBOLS], high2 = new short[HIGH_SYMBOLS];
 
-	LZMACoder(int lc, int lp, int pb) {
-		posMask = (1<<pb) - 1;
+	LZMACoder(int lc, int lp, int pb) { setProp0(lc, lp, pb); }
+	public void propReset(int lc, int lp, int pb) { setProp0(lc, lp, pb); reset(); }
+	private void setProp0(int lc, int lp, int pb) {
 		this.lc = lc;
-		literalPosMask = (1<<lp) - 1;
 		literalProbs = new short[1 << (lc + lp)][0x300];
+		literalPosMask = (1<<lp) - 1;
 
+		posMask = (1<<pb) - 1;
 		low = new short[2<<pb][LOW_SYMBOLS];
 		mid = new short[2<<pb][MID_SYMBOLS];
 	}

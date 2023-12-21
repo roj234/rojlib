@@ -138,7 +138,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	// endregion
 	public abstract int copyFrom(TrieEntry node);
 
-	abstract boolean isValid();
+	public abstract boolean isLeaf();
 
 	CharSequence text() { return null; }
 	void append(CharList sb) { sb.append(c); }
@@ -190,7 +190,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 			while (true) {
 				ENTRY ent = a.get(i);
 				if (this.ent != ent) {
-					if (ent.isValid()) {
+					if (ent.isLeaf()) {
 						this.ent = ent;
 						updateKey_DFS();
 						return true;
@@ -219,7 +219,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 				if (a.size == 0) return false;
 
 				while (i < a.size) {
-					if ((ent = a.get(i++)).isValid()) return true;
+					if ((ent = a.get(i++)).isLeaf()) return true;
 				}
 				i = 0;
 

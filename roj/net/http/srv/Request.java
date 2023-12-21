@@ -14,7 +14,6 @@ import roj.net.http.Cookie;
 import roj.net.http.Headers;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.auth.AuthScheme;
-import roj.security.SipHashMap;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -165,7 +164,7 @@ public final class Request extends Headers {
 	public Map<String, String> fields() throws IllegalRequestException {
 		Map<String, String> map1 = postFields();
 		if (map1 == null) return GET_Fields();
-		SipHashMap<String, String> map = new SipHashMap<>(GET_Fields());
+		MyHashMap<String, String> map = new MyHashMap<>(GET_Fields());
 		map.putAll(map1);
 		return map;
 	}

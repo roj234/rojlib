@@ -1,5 +1,6 @@
 package roj.collect;
 
+import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
@@ -17,31 +18,9 @@ public class BSLowHeap<E> extends AbstractList<E> {
 	protected Object[] entries;
 	protected int size;
 
-	@SuppressWarnings("unchecked")
 	protected final int binarySearch(E key) {
 		key.getClass();
-
-		int low = 0;
-		int high = size - 1;
-
-		Object[] a = entries;
-
-		while (low <= high) {
-			int mid = (low + high) >>> 1;
-			int midVal = cmp.compare((E) a[mid], key);
-
-			if (midVal < 0) {
-				low = mid + 1;
-			} else if (midVal > 0) {
-				high = mid - 1;
-			} else {
-				return mid; // key found
-			}
-		}
-
-		// low ...
-
-		return -(low + 1);  // key not found.
+		return ArrayUtil.binarySearch(entries, 0, size, key, Helpers.cast(cmp));
 	}
 
 	public BSLowHeap(Comparator<E> cmp) {

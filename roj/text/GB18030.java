@@ -1,15 +1,13 @@
 package roj.text;
 
 import roj.archive.qz.xz.LZMAInputStream;
-import roj.io.ChineseInputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.function.IntConsumer;
 
-import static java.lang.Character.MAX_HIGH_SURROGATE;
-import static java.lang.Character.MIN_HIGH_SURROGATE;
+import static java.lang.Character.*;
 import static roj.reflect.ReflectionUtils.u;
 
 /**
@@ -27,7 +25,7 @@ public final class GB18030 extends UnsafeCharset {
 	private static final char[] REVERSE_TABLE = new char[65408];
 
 	static {
-		try (InputStream in = new LZMAInputStream(ChineseInputStream.class.getResourceAsStream("/META-INF/china/gb18030.lzma"))) {
+		try (InputStream in = new LZMAInputStream(GB18030.class.getResourceAsStream("/META-INF/china/gb18030.lzma"))) {
 			byte[] b = new byte[1024];
 			int off = 0;
 			while (true) {
@@ -63,32 +61,73 @@ public final class GB18030 extends UnsafeCharset {
 		return cs != null && cs == J_GB2312 || cs == J_GBK || cs == J_GB18030;
 	}
 
-	public int byteCount(CharSequence s, int i, int len) {
-		int end = i+len;
+	@Override
+	public long unsafeEncode(char[] s, int i, int end, Object ref, long addr, int outMax) {
 		while (i < end) {
-			int c = s.charAt(i++);
-			if (c <= 0x7F) continue;
+			int c = s[i];
+			if (c > 0x7F) break;
+			if (outMax == 0) return ((long) i << 32);
 
+			i++;
+			outMax--;
+
+			u.putByte(ref, addr++, (byte) c);
+		}
+
+		while (i < end) {
+			int c = s[i];
+
+			if (c <= 0x7F) {
+				if (outMax == 0) break;
+
+				i++;
+				outMax--;
+
+				u.putByte(ref, addr++, (byte) c);
+				continue;
+			}
+
+			int sum = 1;
 			int cp;
-			check: {
-				if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-					if (i == end) throw new IllegalStateException("Trailing high surrogate \\u" + Integer.toHexString(c));
-					c = TextUtil.codepoint(c,s.charAt(i++));
-					len--;
+			check:{
+				if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
+					if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+					if (i+1 == end) break;
 
+					c = TextUtil.codepoint(c, s[i+1]);
+					sum++;
 					if (c > 0xFFFF) {
 						cp = c + 123464 + TAB2;
 						break check;
 					}
 				}
 				cp = REVERSE_TABLE[c-128] - 1;
+				assert cp >= 0;
 			}
 
-			if (cp < TAB2) len++;
-			else len += 3;
+			if (cp < TAB2) { // two bytes
+				if (outMax < 2) break;
+				outMax -= 2;
+
+				u.putByte(ref, addr++, (byte) (129 + (cp / 191)));
+				u.putByte(ref, addr++, (byte) (cp % 191 + 64));
+			} else { // four bytes
+				if (outMax < 4) break;
+				outMax -= 4;
+
+				cp -= TAB2;
+
+				u.putByte(ref, addr++, (byte) (129 + cp / 12600));
+				cp %= 12600;
+				u.putByte(ref, addr++, (byte) (48 + cp / 1260));
+				cp %= 1260;
+				u.putByte(ref, addr++, (byte) (129 + cp / 10));
+				u.putByte(ref, addr++, (byte) (48 + cp % 10));
+			}
+			i += sum;
 		}
 
-		return len;
+		return ((long)i << 32) | outMax;
 	}
 
 	@Override
@@ -251,68 +290,33 @@ public final class GB18030 extends UnsafeCharset {
 	}
 
 	@Override
-	public long unsafeEncode(char[] s, int i, int end, Object ref, long addr, int outMax) {
+	public int byteCount(CharSequence s, int i, int len) {
+		int end = i+len;
 		while (i < end) {
-			int c = s[i];
-			if (c > 0x7F) break;
-			if (outMax == 0) return ((long) i << 32);
+			int c = s.charAt(i++);
+			if (c <= 0x7F) continue;
 
-			i++;
-			outMax--;
-
-			u.putByte(ref, addr++, (byte) c);
-		}
-
-		while (i < end) {
-			int c = s[i];
-
-			if (c <= 0x7F) {
-				if (outMax == 0) break;
-
-				i++;
-				outMax--;
-
-				u.putByte(ref, addr++, (byte) c);
-				continue;
-			}
-
-			int sum = 1;
 			int cp;
-			check:{
-				if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-					c = TextUtil.codepoint(c, s[i+1]);
-					sum++;
+			check: {
+				if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
+					if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+					if (i == end) throw new IllegalStateException("Trailing high surrogate \\U+"+Integer.toHexString(c));
+
+					c = TextUtil.codepoint(c,s.charAt(i++));
+					len--;
+
 					if (c > 0xFFFF) {
 						cp = c + 123464 + TAB2;
 						break check;
 					}
 				}
 				cp = REVERSE_TABLE[c-128] - 1;
-				assert cp >= 0;
 			}
 
-			if (cp < TAB2) { // two bytes
-				if (outMax < 2) break;
-				outMax -= 2;
-
-				u.putByte(ref, addr++, (byte) (129 + (cp / 191)));
-				u.putByte(ref, addr++, (byte) (cp % 191 + 64));
-			} else { // four bytes
-				if (outMax < 4) break;
-				outMax -= 4;
-
-				cp -= TAB2;
-
-				u.putByte(ref, addr++, (byte) (129 + cp / 12600));
-				cp %= 12600;
-				u.putByte(ref, addr++, (byte) (48 + cp / 1260));
-				cp %= 1260;
-				u.putByte(ref, addr++, (byte) (129 + cp / 10));
-				u.putByte(ref, addr++, (byte) (48 + cp % 10));
-			}
-			i += sum;
+			if (cp < TAB2) len++;
+			else len += 3;
 		}
 
-		return ((long)i << 32) | outMax;
+		return len;
 	}
 }

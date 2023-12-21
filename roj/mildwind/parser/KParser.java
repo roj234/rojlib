@@ -6,6 +6,7 @@ import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.Segment;
 import roj.asm.visitor.SwitchSegment;
+import roj.collect.Hasher;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
@@ -24,7 +25,6 @@ import roj.mildwind.parser.ast.Expression;
 import roj.mildwind.type.JsFunction;
 import roj.mildwind.type.JsObject;
 import roj.mildwind.util.LabelInfo;
-import roj.mildwind.util.SwitchMap;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -878,7 +878,13 @@ public class KParser implements ParseContext {
 
 		except(left_l_bracket);
 
-		SwitchMap jumpInfo = new SwitchMap();
+		ToIntMap<JsObject> jumpInfo = new ToIntMap<>();
+		jumpInfo.setHasher(new Hasher<JsObject>() {
+			@Override
+			public int hashCode(@Nullable JsObject object) { return object.hashCode(); }
+			@Override
+			public boolean equals(JsObject from_argument, Object stored_in) { return from_argument.op_feq((JsObject) stored_in); }
+		});
 		Label end = new Label();
 
 		int id = mw.sync(jumpInfo);

@@ -114,12 +114,7 @@ public class QZFileWriter extends QZWriter {
             QZEntry ent = files.get(i);
             if (ent.block != b) break;
 
-            int flag = ent.flag;
-            if ((flag & QZEntry.CT       ) != 0) flagSum[3]--;
-            if ((flag & QZEntry.AT       ) != 0) flagSum[4]--;
-            if ((flag & QZEntry.MT       ) != 0) flagSum[5]--;
-            if ((flag & QZEntry.ATTR     ) != 0) flagSum[6]--;
-            if ((flag & QZEntry.CRC      ) != 0) flagSum[7]--;
+            countFlag(ent.flag, -1);
         }
 
         files.removeRange(i+1, files.size());
@@ -132,6 +127,19 @@ public class QZFileWriter extends QZWriter {
             b = blocks.get(blocks.size()-1);
             s.seek(b.offset+b.size());
         }
+    }
+
+    public QZEntry removeEmptyFile(String name) {
+		for (int i = 0; i < emptyFiles.size(); i++) {
+			QZEntry entry = emptyFiles.get(i);
+			if (entry.getName().equals(name)) {
+                emptyFiles.remove(i);
+                countFlag(entry.flag, -1);
+                countFlagEmpty(entry.flag, -1);
+                return entry;
+			}
+		}
+        return null;
     }
 
     private ByteList buf;

@@ -3,6 +3,7 @@ package roj.collect;
 import roj.util.Helpers;
 
 import java.util.ConcurrentModificationException;
+import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 import static roj.collect.AbstractIterator.*;
@@ -47,6 +48,7 @@ public class MapItr<T extends _Generic_Entry<T>> {
 	private final T[] entries;
 	private final _Generic_Map<T> remover;
 	private int i;
+	private Iterator<T> itr;
 
 	public void reset() {
 		checkConcMod();
@@ -73,12 +75,27 @@ public class MapItr<T extends _Generic_Entry<T>> {
 
 	private boolean computeNext() {
 		checkConcMod();
+
+		if (itr != null && itr.hasNext()) {
+			obj = itr.next();
+			return true;
+		}
+
 		while (true) {
 			if (obj == null) {
 				while (true) {
 					if (i >= entries.length) return false;
 					obj = entries[i++];
-					if (obj != null) return true;
+					if (obj != null) {
+						itr = obj.__iterator();
+						if (itr != null) {
+							if (itr.hasNext()) {
+								obj = itr.next();
+							}
+						}
+
+						return true;
+					}
 				}
 			}
 

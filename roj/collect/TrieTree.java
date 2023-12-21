@@ -42,9 +42,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		}
 
 		@Override
-		boolean isValid() {
-			return value != UNDEFINED;
-		}
+		public boolean isLeaf() { return value != UNDEFINED; }
 
 		@SuppressWarnings("unchecked")
 		public int copyFrom(TrieEntry x) {
@@ -89,24 +87,16 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 			this.val = val;
 		}
 
-		CharSequence text() {
-			return val;
-		}
+		CharSequence text() { return val; }
 
 		@Override
-		void append(CharList sb) {
-			sb.append(val);
-		}
+		void append(CharList sb) { sb.append(val); }
 
 		@Override
-		int length() {
-			return val.length();
-		}
+		int length() { return val.length(); }
 
 		@Override
-		public String toString() {
-			return "PE{" + val + '}';
-		}
+		public String toString() { return "PE{"+val+'}'; }
 	}
 
 	Entry<V> root = new Entry<>((char) 0);
@@ -302,7 +292,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 
 			// 清除单线连接:
 			// root <== a <== b <== cd <== efg
-			if (curr.size > 1 || curr.isValid()) {
+			if (curr.size > 1 || curr.isLeaf()) {
 				curr.removeChild(prev);
 
 				// 压缩剩余的entry

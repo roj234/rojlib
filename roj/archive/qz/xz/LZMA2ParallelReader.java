@@ -8,6 +8,7 @@ import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
 import roj.io.CorruptedInputException;
+import roj.reflect.ReflectionUtils;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 
@@ -30,7 +31,7 @@ public class LZMA2ParallelReader extends InputStream {
 	private int taskRunning, doneId;
 
 	private final SimpleList<SubDecoder> tasksFree = new SimpleList<>();
-	private int taskFree = 8, taskId;
+	private int taskFree, taskId;
 
 	private final Object taskLock = new Object();
 
@@ -235,6 +236,8 @@ public class LZMA2ParallelReader extends InputStream {
 		this.dictSize = dictSize;
 		this.presetDict = presetDict;
 		this.taskExecutor = taskExecutor;
+		this.taskFree = affinity;
+		ReflectionUtils.u.storeFence();
 		taskExecutor.pushTask(() -> { while (!noMoreInput) nextChunk(); });
 	}
 

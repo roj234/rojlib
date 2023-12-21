@@ -1548,7 +1548,7 @@ public class NiximSystemV2 implements ITransformer {
 		private boolean isConstructor;
 
 		InjectState state;
-		IdentitySet<MethodNode> copied = new IdentitySet<>();
+		MyHashSet<MethodNode> copied = new MyHashSet<>(Hasher.identity());
 
 		private MethodNode mn;
 

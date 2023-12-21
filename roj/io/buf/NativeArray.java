@@ -36,7 +36,7 @@ public final class NativeArray {
 
 	public void copyTo(int i, byte[] b, int off, int len) {
 		if (DEBUG) checkRange(i+len);
-		u.copyMemory(ref, addr+i, b, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
+		u.copyMemory(ref, addr+i, b, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
 	}
 	public void copyTo(int i, long addr, int len) {
 		if (DEBUG) checkRange(i+len);
@@ -45,7 +45,7 @@ public final class NativeArray {
 
 	public void copyFrom(int i, byte[] b, int off, int len) {
 		if (DEBUG) checkRange(i+len);
-		u.copyMemory(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+i, ref, addr+i, len);
+		u.copyMemory(b, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+i, ref, addr+i, len);
 	}
 	public void copyFrom(int i, long addr, int len) {
 		if (DEBUG) checkRange(i+len);

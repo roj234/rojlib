@@ -169,7 +169,7 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 	}
 
 	public final void invalidate() {
-		for (Iterator<MyHashMap.Entry<MutableInt, ByteList>> it = buffers.__iterator(); it.hasNext(); ) {
+		for (Iterator<MyHashMap.Entry<MutableInt, ByteList>> it = buffers.__iterator_javac_is_sb(); it.hasNext(); ) {
 			MyHashMap.Entry<MutableInt, ByteList> next = it.next();
 			try {
 				BufferPool.reserve(next.v);

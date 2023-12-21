@@ -11,7 +11,7 @@ import java.io.OutputStream;
  * @author Roj234
  * @since 2023/11/17 0017 2:10
  */
-class LZMA2Out extends OutputStream {
+abstract class LZMA2Out extends OutputStream {
 	static final int COMPRESSED_SIZE_MAX = 64 << 10;
 
 	OutputStream out;
@@ -20,7 +20,7 @@ class LZMA2Out extends OutputStream {
 	RangeEncoder rc;
 	LZMAEncoder lzma;
 
-	private final byte props; // Cannot change props on the fly for now.
+	byte props;
 
 	byte state;
 	static final byte STATE_LZMA = 0, STATE_RESET = 1, PROP_RESET = 2, DICT_RESET = 3;

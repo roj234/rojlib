@@ -74,7 +74,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	public int capacity() { return list.length; }
 	public int maxCapacity() { return 2147000000; }
 	public final boolean isDirect() { return false; }
-	public long _unsafeAddr() { return Unsafe.ARRAY_BYTE_BASE_OFFSET+arrayOffset(); }
+	public long _unsafeAddr() { return (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+arrayOffset(); }
 	public boolean hasArray() { return true; }
 	public byte[] array() { return list; }
 	public int arrayOffset() { return 0; }
@@ -618,16 +618,19 @@ public class ByteList extends DynByteBuf implements Appendable {
 		private int fakeWriteIndex;
 
 		private DynByteBuf buf;
+		private boolean dispatchClose;
 
-		public WriteOut(OutputStream out) { this(out, 1024); }
-		public WriteOut(OutputStream out, int buffer) {
-			super();
+		public WriteOut(OutputStream out) { this(out, true); }
+		public WriteOut(OutputStream out, boolean dispatchClose) { this(out, 1024, dispatchClose); }
+		public WriteOut(OutputStream out, int buffer, boolean dispatchClose) {
 			this.out = out;
 			this.buf = BufferPool.buffer(false, buffer);
 			this.list = buf.array();
+			this.dispatchClose = dispatchClose;
 		}
 
-		public final void setOut(OutputStream out) { this.out = out; }
+		public final void setOut(OutputStream out) { this.out = out; fakeWriteIndex = 0; clear(); }
+		public final void setDispatchClose(boolean dispatchClose) { this.dispatchClose = dispatchClose; }
 
 		@Override
 		public int wIndex() {
@@ -687,7 +690,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 					try {
 						flush();
 					} finally {
-						out.close();
+						if (dispatchClose) out.close();
 						out = null;
 					}
 				}

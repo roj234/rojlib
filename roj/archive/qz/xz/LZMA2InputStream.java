@@ -15,6 +15,7 @@ import roj.archive.qz.xz.lzma.LZMADecoder;
 import roj.archive.qz.xz.rangecoder.RangeDecoder;
 import roj.io.CorruptedInputException;
 import roj.util.ArrayUtil;
+import sun.misc.Unsafe;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -23,7 +24,7 @@ import java.io.InputStream;
 /**
  * Decompresses a raw LZMA2 stream (no XZ headers).
  */
-public class LZMA2InputStream extends InputStream {
+public final class LZMA2InputStream extends InputStream {
 	/**
 	 * Smallest valid LZMA2 dictionary size.
 	 * <p>
@@ -118,8 +119,10 @@ public class LZMA2InputStream extends InputStream {
 
 	public int read(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
-		if (len == 0) return 0;
-
+		return read0(buf, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
+	}
+	public int read(long addr, int len) throws IOException { return read0(null, addr, len); }
+	public int read0(Object buf, long addr, int len) throws IOException {
 		if (in == null) throw new IOException("Stream closed");
 
 		if (state == -1) return -1;
@@ -142,8 +145,8 @@ public class LZMA2InputStream extends InputStream {
 					lz.copyUncompressed(in, copySizeMax);
 				}
 
-				int copiedSize = lz.flush(buf, off);
-				off += copiedSize;
+				int copiedSize = lz.flush0(buf, addr);
+				addr += copiedSize;
 				len -= copiedSize;
 				read += copiedSize;
 				uncompressedSize -= copiedSize;
@@ -215,7 +218,8 @@ public class LZMA2InputStream extends InputStream {
 
 		if (lc + lp > 4) throw new CorruptedInputException("Invalid LZMA properties byte");
 
-		lzma = new LZMADecoder(lz, rc, lc, lp, pb);
+		if (lzma == null) lzma = new LZMADecoder(lz, rc, lc, lp, pb);
+		else lzma.propReset(lc, lp, pb);
 	}
 
 	public int available() throws IOException {

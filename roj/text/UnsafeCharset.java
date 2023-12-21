@@ -146,6 +146,11 @@ public abstract class UnsafeCharset {
 		}
 
 		while (true) {
+			if (out.unsafeWritableBytes() < minSpace) {
+				out.ensureWritable(out.unsafeWritableBytes() + minSpace);
+				if (!out.isWritable()) throw new IllegalArgumentException("没有足够的空间:"+out.unsafeWritableBytes());
+			}
+
 			int uw = Math.min(outMax, out.unsafeWritableBytes());
 			long x = unsafeEncode(arr, off, end, out.array(), out._unsafeAddr()+out.wIndex(), uw);
 
@@ -155,13 +160,6 @@ public abstract class UnsafeCharset {
 			out.wIndex(out.wIndex() + delta);
 
 			if (off == end || outMax == 0 || delta == 0) break;
-
-			if (out.unsafeWritableBytes() < minSpace) {
-				out.ensureWritable(out.unsafeWritableBytes() + minSpace);
-				if (!out.isWritable()) {
-					throw new IllegalArgumentException("没有足够的空间:"+out.unsafeWritableBytes());
-				}
-			}
 		}
 
 		return off-off1;
@@ -204,7 +202,7 @@ public abstract class UnsafeCharset {
 					off = sb.arrayOffset() + sb.position();
 					unsafeWritable = sb.remaining();
 					kind = 1;
-					if (outMax > unsafeWritable) throw new IllegalArgumentException();
+					if (unsafeWritable == 0 && outMax > 0) throw new IllegalArgumentException();
 					break found;
 				}
 			}

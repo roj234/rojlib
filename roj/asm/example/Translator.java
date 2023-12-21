@@ -1,7 +1,8 @@
-package roj.asm;
+package roj.asm.example;
 
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
+import roj.asm.Parser;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstString;
 import roj.asm.tree.ConstantData;

@@ -1,7 +1,12 @@
 package roj.collect;
 
+import roj.concurrent.FastThreadLocal;
+import roj.util.Helpers;
+
 import java.util.Iterator;
 import java.util.function.BiConsumer;
+
+import static roj.collect.IntMap.UNDEFINED;
 
 /**
  * @author Roj234
@@ -12,9 +17,6 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 
 	public static class LinkedEntry<K, V> extends MyHashMap.Entry<K, V> {
 		public LinkedEntry<K, V> p, n;
-		protected LinkedEntry(K k, V v) {
-			super(k, v);
-		}
 	}
 
 	public LinkedEntry<K, V> firstEntry() {
@@ -59,10 +61,6 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 
 	LinkedEntry<K, V> head, tail;
 
-	protected Entry<K, V> createEntry(K id) {
-		return new LinkedEntry<>(id, null);
-	}
-
 	public void setAccessOrder(boolean accessOrder) {
 		this.accessOrder = accessOrder;
 	}
@@ -73,9 +71,13 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 	}
 
 	@Override
-	public Iterator<Entry<K, V>> __iterator() {
-		return new EntryItr();
+	public Iterator<AbstractEntry<K, V>> __iterator() {
+		return Helpers.cast(new EntryItr());
 	}
+	public Iterator<Entry<K, V>> __iterator_javac_is_sb() {
+		return Helpers.cast(new EntryItr());
+	}
+
 
 	@Override
 	public void forEach(BiConsumer<? super K, ? super V> action) {
@@ -113,7 +115,7 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 	}
 
 	@Override
-	void afterPut(Entry<K, V> entry) {
+	protected void onPut(AbstractEntry<K, V> entry, V newV) {
 		LinkedEntry<K, V> myEntry = (LinkedEntry<K, V>) entry;
 		if (head == null) head = myEntry;
 
@@ -123,7 +125,7 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 	}
 
 	@Override
-	void afterRemove(Entry<K, V> entry) {
+	protected void onDel(AbstractEntry<K, V> entry) {
 		LinkedEntry<K, V> myEntry = (LinkedEntry<K, V>) entry;
 
 		if (myEntry.n == null) tail = myEntry.p;
@@ -136,15 +138,33 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 	}
 
 	@Override
-	void afterAccess(Entry<K, V> entry, V now) {
+	protected void onGet(AbstractEntry<K, V> entry) {
 		if (accessOrder) {
-			afterRemove(entry);
-			afterPut(entry);
+			onDel(entry);
+			onPut(entry, null);
 		}
 	}
 
 	public void clear() {
 		super.clear();
 		tail = head = null;
+	}
+
+	private static final FastThreadLocal<ObjectPool<AbstractEntry<?,?>>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(null, 128));
+	protected AbstractEntry<K, V> useEntry() {
+		AbstractEntry<K, V> entry = Helpers.cast(MY_OBJECT_POOL.get().get());
+
+		if (entry == null) entry = new LinkedEntry<>();
+		entry.k = Helpers.cast(UNDEFINED);
+		return entry;
+	}
+	protected void reserveEntry(AbstractEntry<?, ?> entry) {
+		LinkedEntry<?, ?> entry1 = (LinkedEntry<?, ?>) entry;
+		entry1.k = null;
+		entry1.v = null;
+		entry1.p = null;
+		entry1.n = null;
+		entry1.next = null;
+		MY_OBJECT_POOL.get().reserve(entry1);
 	}
 }

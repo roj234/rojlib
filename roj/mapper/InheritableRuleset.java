@@ -20,7 +20,7 @@ public class InheritableRuleset {
 	}
 
 	public int get(CharSequence level, int def) {
-		ToIntMap.Entry<CharSequence> ent = map.getEntry(level);
+		ToIntMap.Entry<CharSequence> ent = (ToIntMap.Entry<CharSequence>) map.getEntry(level);
 		if (ent != null) return ent.v;
 
 		this.sb.clear();
@@ -32,7 +32,7 @@ public class InheritableRuleset {
 			if (i < 0) break;
 			sb.setLength(i+1);
 
-			ent = map.getEntry(sb);
+			ent = (ToIntMap.Entry<CharSequence>) map.getEntry(sb);
 			if (ent == null) continue;
 
 			if ((ent.v & IMPORTANT) == 0) {

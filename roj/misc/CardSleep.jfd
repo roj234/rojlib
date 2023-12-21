@@ -34,6 +34,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JSpinner" ) {
 				name: "uiPowerLimit"
+				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 275
 				"y": 15
@@ -51,6 +52,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JSpinner" ) {
 				name: "uiTempLimit"
+				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 275
 				"y": 40
@@ -68,6 +70,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JSpinner" ) {
 				name: "uiMaxCore"
+				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 275
 				"y": 65
@@ -85,6 +88,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JComboBox" ) {
 				name: "uiMaxMem"
+				"enabled": false
 				auxiliary() {
 					"JavaCodeGenerator.typeParameters": "CMBoxValue"
 				}
@@ -109,13 +113,14 @@ new FormModel {
 				}
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 200
-				"y": 188
+				"y": 163
 			} )
 			add( new FormComponent( "javax.swing.JSpinner" ) {
 				name: "uiMinCore"
+				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 275
-				"y": 185
+				"y": 160
 				"width": 100
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
@@ -126,16 +131,17 @@ new FormModel {
 				}
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 200
-				"y": 213
+				"y": 188
 			} )
 			add( new FormComponent( "javax.swing.JComboBox" ) {
 				name: "uiMinMem"
+				"enabled": false
 				auxiliary() {
 					"JavaCodeGenerator.typeParameters": "CMBoxValue"
 				}
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 275
-				"y": 210
+				"y": 185
 				"width": 100
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
@@ -146,13 +152,13 @@ new FormModel {
 				}
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 195
-				"y": 239
+				"y": 214
 			} )
 			add( new FormComponent( "javax.swing.JSpinner" ) {
 				name: "uiCheckInterval"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 275
-				"y": 235
+				"y": 210
 				"width": 100
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
@@ -260,6 +266,7 @@ new FormModel {
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "uiST_Core"
 				"text": "管理核心"
+				"selected": true
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 25
 				"y": 235
@@ -267,6 +274,7 @@ new FormModel {
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "uiST_Memory"
 				"text": "管理显存"
+				"selected": true
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 105
 				"y": 235
@@ -275,6 +283,7 @@ new FormModel {
 				name: "uiST_Toggle"
 				"text": "开始"
 				"margin": new java.awt.Insets( 2, 10, 2, 10 )
+				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 325
 				"y": 335
@@ -282,6 +291,7 @@ new FormModel {
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "uiST_paint"
 				"text": "绘图"
+				"selected": true
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 275
 				"y": 335
@@ -343,6 +353,31 @@ new FormModel {
 				"x": 5
 				"y": 340
 				"width": 270
+			} )
+			add( new FormComponent( "javax.swing.JSpinner" ) {
+				name: "uiST_DecrCount"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 275
+				"y": 235
+				"width": 100
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label14"
+				"text": "降频连续计数"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 200
+				"y": 239
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiMakeUsageCsv"
+				"text": "csv freq/usage"
+				"enabled": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 205
+				"y": 115
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 280, 255 )

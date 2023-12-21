@@ -1,13 +1,20 @@
 package roj.text;
 
+import roj.archive.qz.xz.LZMA2InputStream;
 import roj.archive.qz.xz.LZMAInputStream;
-import roj.collect.*;
+import roj.collect.Int2IntMap;
+import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
+import roj.collect.TrieTree;
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.math.MutableInt;
 import roj.util.ByteList;
+import roj.util.DirectByteList;
 
+import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.CharBuffer;
 import java.util.List;
 import java.util.Map;
 
@@ -74,38 +81,43 @@ public class JPinyin {
 		}
 	}
 
-	private static final MyBitSet IsHanzi = new MyBitSet(0xFFFF);
 	private static char[] StringPool;
-	// also can use a modified version of ToIntMap<String>
+	private static int CPBits, CPMask;
 	private static final TrieTree<Integer> PinyinWords = new TrieTree<>();
 	private static final Int2IntMap FastSwitch = new Int2IntMap(8);
 	static {
 		// https://github.com/mozillazg/pinyin-data
-		try (InputStream in = new LZMAInputStream(JPinyin.class.getResourceAsStream("/META-INF/china/pinyin.lzma"))) {
-			ByteList bb = new ByteList().readStreamFully(in);
+		try (LZMA2InputStream in = new LZMA2InputStream(new FileInputStream("D:\\Desktop\\pinyin.lzma2"), 524288)) {
+			int DATALEN = 1298611;
+			DirectByteList bb = DirectByteList.allocateDirect(DATALEN);
+			int i = in.read(bb.address(), DATALEN);
+			bb.wIndex(i);
+			assert i == DATALEN;
 
-			int cpLen = bb.readVUInt();
-			CharList out = new CharList(cpLen);
-			GB18030.CODER.decodeFixedIn(bb,cpLen, out);
-			StringPool = out.toCharArray();
+			int zcpLenByte = bb.readVUInt(), zcpLen = bb.readVUInt();
+			int ycpLenByte = bb.readVUInt(), ycpLen = bb.readVUInt(), mapSize = bb.readVUInt();
+			int zbits = bb.readUnsignedByte(), ybits = bb.readUnsignedByte();
+
+			int mask = (1 << zbits) - 1;
+			CharBuffer zcp = CharBuffer.allocate(zcpLen);
+			GB18030.CODER.decodeFixedIn(bb,zcpLenByte,zcp);
+			char[] cp = zcp.array();
+
+			CPBits = ybits;
+			CPMask = (1 << ybits) - 1;
+			CharBuffer ycp = CharBuffer.allocate(ycpLen);
+			GB18030.CODER.decodeFixedIn(bb,ycpLenByte,ycp);
+			StringPool = ycp.array();
 
 			CharList sb = IOUtil.getSharedCharBuf();
-			int len = bb.readInt();
-			while (len-- > 0) {
-				int codepoint = bb.readVUInt();
-				if (codepoint <= 0xFFFF) IsHanzi.add(codepoint);
-				int yinLen = bb.readVUInt();
-				sb.clear();
-				PinyinWords.put(sb.appendCodePoint(codepoint).toString(), yinLen);
+			while (mapSize-- > 0) {
+				int zref = bb.readInt();
+				int yref = bb.readInt();
+				String key = new String(cp, zref >>> zbits, zref & mask);
+				PinyinWords.put(key, yref);
 			}
 
-			len = bb.readInt();
-			while (len-- > 0) {
-				int ww = bb.readVUInt();
-				String word = new String(StringPool,ww >>> 5, ww & 31);
-				int yinLen = bb.readVUInt();
-				PinyinWords.put(word, yinLen);
-			}
+			bb._free();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -118,7 +130,7 @@ public class JPinyin {
 		FastSwitch.put('v', 5);
 	}
 
-	public static MyBitSet getIsHanzi() { return IsHanzi; }
+	public static TrieTree<Integer> getPinyinWords() { return PinyinWords; }
 
 	private final MyHashMap.Entry<MutableInt, Integer> entry = new MyHashMap.Entry<>(new MutableInt(), null);
 	public JPinyin() {}
@@ -154,8 +166,8 @@ public class JPinyin {
 		return sb;
 	}
 	private static void addTone(CharList sb, int cpState, int mode, String splitter) {
-		int off = cpState >>> 5;
-		int len = off + (cpState & 31);
+		int off = cpState >>> CPBits;
+		int len = off + (cpState & CPMask);
 		while (off < len) {
 			int j = findNextNumber(off);
 			switch (mode&3) {

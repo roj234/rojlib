@@ -7,8 +7,9 @@ import roj.asm.tree.RawNode;
 import roj.asm.tree.insn.SwitchEntry;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.collect.IdentitySet;
+import roj.collect.Hasher;
 import roj.collect.IntMap;
+import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.mapper.util.Desc;
 import roj.util.DynByteBuf;
@@ -30,7 +31,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	DynByteBuf codeOb;
 	List<Segment> segments = new SimpleList<>();
 
-	final IdentitySet<Label> labels = new IdentitySet<>();
+	final MyHashSet<Label> labels = new MyHashSet<>(Hasher.identity());
 
 	IntMap<Label> bciR2W;
 	final void validateBciRef() {

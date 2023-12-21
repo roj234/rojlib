@@ -7,6 +7,7 @@ import roj.ui.CLIUtil;
 
 import java.awt.*;
 import java.awt.datatransfer.*;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 import java.util.function.ToIntFunction;
@@ -135,6 +136,27 @@ public final class ArrayUtil {
 			if (b[off1++] != b1[off2++]) return false;
 		}
 		return true;
+	}
+
+	public static int binarySearch(Object[] a, int low, int high, Object key, Comparator<Object> cmp) {
+		high--;
+
+		while (low <= high) {
+			int mid = (low + high) >>> 1;
+			int midVal = cmp.compare(a[mid], key);
+
+			if (midVal < 0) {
+				low = mid + 1;
+			} else if (midVal > 0) {
+				high = mid - 1;
+			} else {
+				return mid; // key found
+			}
+		}
+
+		// low ...
+
+		return -(low + 1);  // key not found.
 	}
 
 	public static String toString(Object[] list, int i, int length) {

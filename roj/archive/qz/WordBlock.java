@@ -38,6 +38,7 @@ public final class WordBlock {
 		return s;
 	}
 
+	public long getOffset() { return offset; }
 	public int getFileCount() { return fileCount; }
 	public QZEntry getFirstEntry() { return firstEntry; }
 	public long getuSize() { return uSize; }

@@ -177,7 +177,7 @@ public abstract class LZEncoder {
 		// size, copy only the tail of the preset dictionary.
 		int copySize = Math.min(len, dictSize);
 		int offset = off + len - copySize;
-		u.copyMemory(dict, Unsafe.ARRAY_BYTE_BASE_OFFSET+offset, null, buf, copySize);
+		u.copyMemory(dict, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+offset, null, buf, copySize);
 		writePos += copySize;
 		skip(copySize);
 	}
@@ -199,10 +199,12 @@ public abstract class LZEncoder {
 		writePos -= moveOffset;
 	}
 
+	public final int fillWindow(byte[] in, int off, int len) { return fillWindow0(in, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len); }
+	public final int fillWindow(long addr, int len) { return fillWindow0(null, addr, len); }
 	/**
 	 * Copies new data into the LZEncoder's buffer.
 	 */
-	public final int fillWindow(byte[] in, int off, int len) {
+	public final int fillWindow0(Object in, long off, int len) {
 		assert !finishing;
 
 		// Move the sliding window if needed.
@@ -212,7 +214,7 @@ public abstract class LZEncoder {
 		// some input bytes may be left unused.
 		if (len > bufSize - writePos) len = bufSize - writePos;
 
-		u.copyMemory(in, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, null, buf+writePos, len);
+		u.copyMemory(in, off, null, buf+writePos, len);
 		writePos += len;
 
 		// Set the new readLimit but only if there's enough data to allow

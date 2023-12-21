@@ -23,6 +23,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Vector;
 import java.util.function.Consumer;
@@ -163,9 +164,6 @@ public class CardSleep extends JFrame {
 	public CardSleep() {
 		initComponents();
 		new OnChangeHelper(this);
-		for (Component c : getContentPane().getComponents()) {
-			if (c instanceof JButton || c instanceof JCheckBox || c instanceof JComboBox || c instanceof JSpinner) c.setEnabled(false);
-		}
 
 		DefaultListModel<GraphicCard> cards = new DefaultListModel<>();
 		query(strings -> cards.addElement(new GraphicCard(strings)), "--query-gpu=gpu_uuid,name,pci.bus_id,pcie.link.gen.max,pcie.link.width.max,temperature.gpu.tlimit,power.min_limit,power.max_limit,clocks.max.graphics,clocks.max.memory");
@@ -210,7 +208,7 @@ public class CardSleep extends JFrame {
 			}
 
 			uiMinMem.setModel(new DefaultComboBoxModel<>(memFreqList));
-			uiMinMem.setSelectedIndex(memFreqList.size()-1);
+			uiMinMem.setSelectedIndex(1);
 			uiMinMem.setEnabled(true);
 			uiMaxMem.setModel(new DefaultComboBoxModel<>(memFreqList));
 			uiMaxMem.setSelectedIndex(memFreqList.size()-1);
@@ -221,25 +219,19 @@ public class CardSleep extends JFrame {
 
 			CoreFreqSpinner model = new CoreFreqSpinner(coreFreqList);
 			uiMinCore.setModel(model);
-			model.setValue(800);
+			model.setValue(600);
 
 			uiMinCore.setEnabled(true);
 			uiMaxCore.setModel(new CoreFreqSpinner(coreFreqList));
 			uiMaxCore.setEnabled(true);
 
-			uiCheckInterval.setEnabled(true);
-
 			uiApplyStaticCfg.setEnabled(true);
-
-			uiST_Core.setEnabled(true);
-			uiST_Memory.setEnabled(true);
-			uiST_paint.setEnabled(true);
 			uiST_Toggle.setEnabled(true);
 
 			JOptionPane.showMessageDialog(CardSleep.this, "选择了："+card.longDesc);
 		}));
 
-		uiCheckInterval.setModel(new SpinnerNumberModel(100,20,1500,1));
+		uiCheckInterval.setModel(new SpinnerNumberModel(150,20,1500,1));
 		uiApplyStaticCfg.addActionListener(e -> {
 			List<String> args = Arrays.asList(new String[3]);
 			args.set(0, "nvidia-smi");
@@ -293,12 +285,13 @@ public class CardSleep extends JFrame {
 		pane.remove(uiGraphMem);
 		pane.add(graphMem);
 
-		uiST_TargetCore.setModel(createMyModel(75));
-		uiST_TargetCoreUB.setModel(createMyModel(90));
-		uiST_TargetCoreLB.setModel(createMyModel(50));
-		uiST_TargetMem.setModel(createMyModel(50));
-		uiST_TargetMemUB.setModel(createMyModel(66));
-		uiST_TargetMemLB.setModel(createMyModel(33));
+		uiST_DecrCount.setModel(new SpinnerNumberModel(7, 1, 50, 1));
+		uiST_TargetCore.setModel(createMyModel(77));
+		uiST_TargetCoreUB.setModel(createMyModel(88));
+		uiST_TargetCoreLB.setModel(createMyModel(70));
+		uiST_TargetMem.setModel(createMyModel(40));
+		uiST_TargetMemUB.setModel(createMyModel(55));
+		uiST_TargetMemLB.setModel(createMyModel(25));
 		uiST_Toggle.addActionListener(e -> {
 			Process p = monitor;
 			if (p != null) {
@@ -360,24 +353,17 @@ public class CardSleep extends JFrame {
 										throw ex;
 									}
 
+									coreRecords.ringAddLast((cfreq << 7) | cusage);
+									memRecords.ringAddLast((mfreq << 7) | musage);
+
 									block:
 									if (uiST_Core.isSelected()) {
 										int cUsageUB = ((int) uiST_TargetCoreUB.getValue());
 										int cUsageLB = ((int) uiST_TargetCoreLB.getValue());
 										int bestFreq = cusage * cfreq / ((int) uiST_TargetCore.getValue());
-										if (cusage > cUsageUB) {
-											bestFreq = alignFreq(bestFreq, myCard.coreFreq);
+										if (cusage < cUsageLB) {
+											if (++prevFreq[2] < ((int) uiST_DecrCount.getValue())) break block;
 
-											int maxCore = (int) uiMaxCore.getValue();
-											if (bestFreq > maxCore) bestFreq = maxCore;
-
-											int bestUsage = cusage * cfreq / bestFreq;
-											if (bestUsage < cUsageLB) break block;
-
-											if (setClock(true, bestFreq, true)) {
-												uiST_State.setText("↑ Core "+cfreq+"MHz@"+cusage+"% => "+bestFreq+"MHz@"+ bestUsage +"%");
-											}
-										} else if (cusage < cUsageLB) {
 											bestFreq = alignFreq(bestFreq, myCard.coreFreq);
 											int bestUsage = cusage * cfreq / bestFreq;
 											if (bestUsage > cUsageUB) break block;
@@ -392,7 +378,21 @@ public class CardSleep extends JFrame {
 													uiST_State.setText("↓ Core "+cfreq+"MHz@"+cusage+"% => "+bestFreq+"MHz@"+ bestUsage +"%");
 												}
 											}
+										} else {
+											prevFreq[2] = 0;
+											if (cusage > cUsageUB) {
+												bestFreq = alignFreq(bestFreq, myCard.coreFreq);
 
+												int maxCore = (int) uiMaxCore.getValue();
+												if (bestFreq > maxCore) bestFreq = maxCore;
+
+												int bestUsage = cusage * cfreq / bestFreq;
+												if (bestUsage < cUsageLB) break block;
+
+												if (setClock(true, bestFreq, true)) {
+													uiST_State.setText("↑ Core "+cfreq+"MHz@"+cusage+"% => "+bestFreq+"MHz@"+ bestUsage +"%");
+												}
+											}
 										}
 									}
 
@@ -400,22 +400,14 @@ public class CardSleep extends JFrame {
 									if (uiST_Memory.isSelected()) {
 										int mUsageUB = ((int) uiST_TargetMemUB.getValue());
 										int mUsageLB = ((int) uiST_TargetMemLB.getValue());
-										int bestFreq = musage * mfreq / ((int) uiST_TargetMem.getValue());
-										if (musage > mUsageUB) {
-											bestFreq = alignFreq(bestFreq, myCard.memFreq);
-											int maxMem = ((CMBoxValue) uiMaxMem.getSelectedItem()).value;
-											if (bestFreq > maxMem) bestFreq = maxMem;
+										int bestFreq = musage * mfreq / (int) uiST_TargetMem.getValue();
+										if (musage < mUsageLB) {
+											if (++prevFreq[3] < ((int) uiST_DecrCount.getValue())) break block;
 
-											int bestUsage = musage * mfreq / bestFreq;
-											//if (bestUsage < mUsageLB) break block;
-
-											if (setClock(false, bestFreq, true)) {
-												uiST_State.setText("↑ Mem "+mfreq+"MHz@"+musage+"% => "+bestFreq+"MHz@"+bestUsage+"%");
-											}
-										} else if (musage < mUsageLB) {
 											bestFreq = alignFreq(bestFreq, myCard.memFreq);
 
-											int bestUsage = musage * mfreq / bestFreq;
+											// y = 7.3435x-0.154R2 = 0.7056
+											int bestUsage = (int) (musage * mfreq / bestFreq * Math.pow(7.3435*mfreq, -0.154));
 											if (bestUsage > mUsageUB) break block;
 
 											int minAutoFreq = ((CMBoxValue) uiMinMem.getSelectedItem()).value;
@@ -428,19 +420,53 @@ public class CardSleep extends JFrame {
 													uiST_State.setText("↓ Mem "+mfreq+"MHz@"+musage+"% => "+bestFreq+"MHz@"+bestUsage+"%");
 												}
 											}
+										} else {
+											prevFreq[3] = 0;
+											if (musage > mUsageUB) {
+												bestFreq = alignFreq(bestFreq, myCard.memFreq);
+												int maxMem = ((CMBoxValue) uiMaxMem.getSelectedItem()).value;
+												if (bestFreq > maxMem) bestFreq = maxMem;
+
+												int bestUsage = musage * mfreq / bestFreq;
+												//if (bestUsage < mUsageLB) break block;
+
+												if (setClock(false, bestFreq, true)) {
+													uiST_State.setText("↑ Mem "+mfreq+"MHz@"+musage+"% => "+bestFreq+"MHz@"+bestUsage+"%");
+												}
+											}
 										}
 									}
 
-									coreRecords.ringAddLast((cfreq << 7) | cusage);
-									memRecords.ringAddLast((mfreq << 7) | musage);
+									block:
+									if (uiMakeUsageCsv.isSelected()) {
+										int freq = myCard.coreFreq[prevFreq[5]];
+										float avgUsage;
+
+										if (++prevFreq[4] == 5) {
+											avgUsage = slidingAvg(coreRecords, 5);
+											if (avgUsage < 100) break block;
+										} else if (prevFreq[4] == 50) {
+											prevFreq[4] = 0;
+											avgUsage = slidingAvg(coreRecords, 50);
+										} else break block;
+
+										System.out.println(freq+","+avgUsage);
+										if (prevFreq[5] == myCard.coreFreq.length-1) {
+											setClock(true, 0, true);
+											setClock(false, 0, true);
+											uiST_Toggle.doClick();
+											return;
+										}
+										setClock(true, myCard.coreFreq[++prevFreq[5]], true);
+									}
 
 									if (System.currentTimeMillis() - prevUpdate > 500) {
 										uiST_InstantInfo.setText("Core:"+cfreq+"MHz@"+cusage+"%  Mem:"+mfreq+"MHz@"+musage+"%  Temp="+lines.get(4)+"℃ Pwr="+lines.get(5)+"W");
 										if (uiST_paint.isSelected()) {
-											prevUpdate = System.currentTimeMillis();
 											graphCore.repaint();
 											graphMem.repaint();
 										}
+										prevUpdate = System.currentTimeMillis();
 									}
 								});
 
@@ -462,9 +488,43 @@ public class CardSleep extends JFrame {
 				System.out.println("进程已终止:"+p1.exitValue());
 			});
 		});
+
+		uiMakeUsageCsv.addActionListener(e -> {
+			uiST_Core.setSelected(false);
+			uiST_Memory.setSelected(false);
+			uiMakeUsageCsv.setEnabled(false);
+			setClock(false, 99999, true);
+			setClock(true, myCard.coreFreq[0], false);
+			System.out.println("freq,usage");
+		});
 	}
 
-	private static final int[] prevFreq = new int[2];
+	private static float slidingAvg(RingBuffer<Integer> rb, int len) {
+		Iterator<Integer> itr = rb.descendingIterator();
+		if (!itr.hasNext()) return Float.NaN;
+		int val = itr.next();
+
+		int freqSlot = val >>> 7;
+		int sum = val & 127;
+
+		for (int j = 1; j < len; j++) {
+			if (!itr.hasNext()) {
+				len = j;
+				break;
+			}
+
+			val = itr.next();
+			if (val >>> 7 != freqSlot) {
+				len = j;
+				break;
+			}
+
+			sum += val & 127;
+		}
+		return (float) sum / len;
+	}
+
+	private static final int[] prevFreq = new int[6];
 	private static boolean setClock(boolean isGraphicClock, int frequency, boolean isLocked) {
 		if (frequency == prevFreq[isGraphicClock ? 1 : 0]) return false;
 		prevFreq[isGraphicClock ? 1 : 0] = frequency;
@@ -559,6 +619,9 @@ public class CardSleep extends JFrame {
 		JLabel label15 = new JLabel();
 		JLabel label16 = new JLabel();
 		uiST_State = new JLabel();
+		uiST_DecrCount = new JSpinner();
+		JLabel label14 = new JLabel();
+		uiMakeUsageCsv = new JCheckBox();
 
 		//======== this ========
 		setTitle("CardSleep 1.1");
@@ -576,6 +639,9 @@ public class CardSleep extends JFrame {
 		label3.setText("\u529f\u8017\u5899 (W)");
 		contentPane.add(label3);
 		label3.setBounds(new Rectangle(new Point(210, 18), label3.getPreferredSize()));
+
+		//---- uiPowerLimit ----
+		uiPowerLimit.setEnabled(false);
 		contentPane.add(uiPowerLimit);
 		uiPowerLimit.setBounds(275, 15, 100, uiPowerLimit.getPreferredSize().height);
 
@@ -583,6 +649,9 @@ public class CardSleep extends JFrame {
 		label4.setText("\u6e29\u5ea6\u5899 (\u2103)");
 		contentPane.add(label4);
 		label4.setBounds(new Rectangle(new Point(205, 44), label4.getPreferredSize()));
+
+		//---- uiTempLimit ----
+		uiTempLimit.setEnabled(false);
 		contentPane.add(uiTempLimit);
 		uiTempLimit.setBounds(275, 40, 100, uiTempLimit.getPreferredSize().height);
 
@@ -590,6 +659,9 @@ public class CardSleep extends JFrame {
 		label5.setText("\u6700\u5927\u6838\u5fc3\u9891\u7387");
 		contentPane.add(label5);
 		label5.setBounds(new Rectangle(new Point(200, 67), label5.getPreferredSize()));
+
+		//---- uiMaxCore ----
+		uiMaxCore.setEnabled(false);
 		contentPane.add(uiMaxCore);
 		uiMaxCore.setBounds(275, 65, 100, uiMaxCore.getPreferredSize().height);
 
@@ -597,6 +669,9 @@ public class CardSleep extends JFrame {
 		label6.setText("\u6700\u5927\u663e\u5b58\u9891\u7387");
 		contentPane.add(label6);
 		label6.setBounds(new Rectangle(new Point(200, 92), label6.getPreferredSize()));
+
+		//---- uiMaxMem ----
+		uiMaxMem.setEnabled(false);
 		contentPane.add(uiMaxMem);
 		uiMaxMem.setBounds(275, 90, 100, uiMaxMem.getPreferredSize().height);
 
@@ -609,23 +684,29 @@ public class CardSleep extends JFrame {
 		//---- label1 ----
 		label1.setText("\u7a81\u53d1\u6838\u5fc3\u9891\u7387");
 		contentPane.add(label1);
-		label1.setBounds(new Rectangle(new Point(200, 188), label1.getPreferredSize()));
+		label1.setBounds(new Rectangle(new Point(200, 163), label1.getPreferredSize()));
+
+		//---- uiMinCore ----
+		uiMinCore.setEnabled(false);
 		contentPane.add(uiMinCore);
-		uiMinCore.setBounds(275, 185, 100, uiMinCore.getPreferredSize().height);
+		uiMinCore.setBounds(275, 160, 100, uiMinCore.getPreferredSize().height);
 
 		//---- label2 ----
 		label2.setText("\u7a81\u53d1\u663e\u5b58\u9891\u7387");
 		contentPane.add(label2);
-		label2.setBounds(new Rectangle(new Point(200, 213), label2.getPreferredSize()));
+		label2.setBounds(new Rectangle(new Point(200, 188), label2.getPreferredSize()));
+
+		//---- uiMinMem ----
+		uiMinMem.setEnabled(false);
 		contentPane.add(uiMinMem);
-		uiMinMem.setBounds(275, 210, 100, uiMinMem.getPreferredSize().height);
+		uiMinMem.setBounds(275, 185, 100, uiMinMem.getPreferredSize().height);
 
 		//---- label7 ----
 		label7.setText("\u68c0\u6d4b\u8f6e\u8be2 (ms)");
 		contentPane.add(label7);
-		label7.setBounds(new Rectangle(new Point(195, 239), label7.getPreferredSize()));
+		label7.setBounds(new Rectangle(new Point(195, 214), label7.getPreferredSize()));
 		contentPane.add(uiCheckInterval);
-		uiCheckInterval.setBounds(275, 235, 100, uiCheckInterval.getPreferredSize().height);
+		uiCheckInterval.setBounds(275, 210, 100, uiCheckInterval.getPreferredSize().height);
 
 		//---- label9 ----
 		label9.setText("\u6838\u5fc3\u5360\u7528\u9884\u671f");
@@ -671,22 +752,26 @@ public class CardSleep extends JFrame {
 
 		//---- uiST_Core ----
 		uiST_Core.setText("\u7ba1\u7406\u6838\u5fc3");
+		uiST_Core.setSelected(true);
 		contentPane.add(uiST_Core);
 		uiST_Core.setBounds(new Rectangle(new Point(25, 235), uiST_Core.getPreferredSize()));
 
 		//---- uiST_Memory ----
 		uiST_Memory.setText("\u7ba1\u7406\u663e\u5b58");
+		uiST_Memory.setSelected(true);
 		contentPane.add(uiST_Memory);
 		uiST_Memory.setBounds(new Rectangle(new Point(105, 235), uiST_Memory.getPreferredSize()));
 
 		//---- uiST_Toggle ----
 		uiST_Toggle.setText("\u5f00\u59cb");
 		uiST_Toggle.setMargin(new Insets(2, 10, 2, 10));
+		uiST_Toggle.setEnabled(false);
 		contentPane.add(uiST_Toggle);
 		uiST_Toggle.setBounds(new Rectangle(new Point(325, 335), uiST_Toggle.getPreferredSize()));
 
 		//---- uiST_paint ----
 		uiST_paint.setText("\u7ed8\u56fe");
+		uiST_paint.setSelected(true);
 		contentPane.add(uiST_paint);
 		uiST_paint.setBounds(new Rectangle(new Point(275, 335), uiST_paint.getPreferredSize()));
 
@@ -723,6 +808,19 @@ public class CardSleep extends JFrame {
 		uiST_State.setText("state");
 		contentPane.add(uiST_State);
 		uiST_State.setBounds(5, 340, 270, uiST_State.getPreferredSize().height);
+		contentPane.add(uiST_DecrCount);
+		uiST_DecrCount.setBounds(275, 235, 100, uiST_DecrCount.getPreferredSize().height);
+
+		//---- label14 ----
+		label14.setText("\u964d\u9891\u8fde\u7eed\u8ba1\u6570");
+		contentPane.add(label14);
+		label14.setBounds(new Rectangle(new Point(200, 239), label14.getPreferredSize()));
+
+		//---- uiMakeUsageCsv ----
+		uiMakeUsageCsv.setText("csv freq/usage");
+		uiMakeUsageCsv.setEnabled(false);
+		contentPane.add(uiMakeUsageCsv);
+		uiMakeUsageCsv.setBounds(new Rectangle(new Point(205, 115), uiMakeUsageCsv.getPreferredSize()));
 
 		contentPane.setPreferredSize(new Dimension(395, 630));
 		pack();
@@ -755,5 +853,7 @@ public class CardSleep extends JFrame {
 	private JPanel uiGraphCore;
 	private JPanel uiGraphMem;
 	private JLabel uiST_State;
+	private JSpinner uiST_DecrCount;
+	private JCheckBox uiMakeUsageCsv;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

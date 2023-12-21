@@ -182,7 +182,7 @@ public class Chapter extends TreeNodeImpl<Chapter> {
 			}
 
 			// todo: checkDisOrder
-			MyHashSet<Object> added = new IdentitySet<>();
+			MyHashSet<Object> added = new MyHashSet<>(Hasher.identity());
 			List<Chapter> chaps = new SimpleList<>();
 			for (RSegmentTree.Region region : tree) {
 				List<RSegmentTree.Wrap<List<Chapter>>> value = region.value();
@@ -289,6 +289,7 @@ public class Chapter extends TreeNodeImpl<Chapter> {
 	public CharList data;
 
 	public String fullName, displayName;
+	public boolean flagOverride;
 
 	public String toString() {
 		String name = displayName!=null ? displayName : "第" + no + (char)type + "【" + this.name + "】";

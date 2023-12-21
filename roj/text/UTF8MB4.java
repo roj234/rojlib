@@ -2,8 +2,7 @@ package roj.text;
 
 import java.util.function.IntConsumer;
 
-import static java.lang.Character.MAX_HIGH_SURROGATE;
-import static java.lang.Character.MIN_HIGH_SURROGATE;
+import static java.lang.Character.*;
 import static roj.reflect.ReflectionUtils.u;
 
 /**
@@ -16,10 +15,10 @@ public final class UTF8MB4 extends UnsafeCharset {
 	public String name() { return "UTF-8"; }
 
 	@Override
-	public long unsafeEncode(char[] s, int i, int len, Object ref, long addr, int max_len) {
+	public long unsafeEncode(char[] s, int i, int end, Object ref, long addr, int max_len) {
 		long max = addr+max_len;
 
-		while (i < len && addr < max) {
+		while (i < end && addr < max) {
 			int c = s[i];
 			if (c > 0x7F) break;
 			i++;
@@ -27,17 +26,14 @@ public final class UTF8MB4 extends UnsafeCharset {
 		}
 
 		int previ;
-		while (i < len && addr < max) {
+		while (i < end && addr < max) {
 			previ = i;
 
 			int c = s[i++];
-			if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-				if (i == len) {
-					if (i == s.length) throw new IllegalArgumentException("缺失surrogate pair");
+			if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
+				if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+				if (i == end) { i--; break; }
 
-					i--;
-					break;
-				}
 				c = TextUtil.codepoint(c,s[i++]);
 			}
 
@@ -198,8 +194,10 @@ public final class UTF8MB4 extends UnsafeCharset {
 		int end = i+len;
 		while (i < end) {
 			int c = s.charAt(i++);
-			if (c >= MIN_HIGH_SURROGATE && c <= MAX_HIGH_SURROGATE) {
-				if (i == end) throw new IllegalStateException("Trailing high surrogate \\u" + Integer.toHexString(c));
+			if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
+				if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+				if (i == end) throw new IllegalStateException("Trailing high surrogate \\U+"+Integer.toHexString(c));
+
 				c = TextUtil.codepoint(c,s.charAt(i++));
 				len--;
 			}

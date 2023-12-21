@@ -1506,7 +1506,7 @@ public class Mapper extends Mapping {
 
 	public static final class State {
 		final MyHashMap<String, List<String>> parents = new MyHashMap<>();
-		final MyHashSet<Desc> stopAnchor = new IdentitySet<>();
+		final MyHashSet<Desc> stopAnchor = new MyHashSet<>(Hasher.identity());
 		final MyHashMap<Desc, String> inheritor = new MyHashMap<>();
 	}
 

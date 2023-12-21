@@ -13,8 +13,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Set;
 
-import static roj.collect.IntMap.UNDEFINED;
-
 /**
  * @author Roj234
  * @since 2022/9/16 0016 21:52
@@ -50,8 +48,8 @@ public class LibraryZipFile implements Library {
 
 	@Override
 	public IClass get(CharSequence name) {
-		MyHashMap.Entry<String, IClass> entry = info.getEntry(Helpers.cast(name));
-		if (entry != null && entry.v != UNDEFINED) return entry.v;
+		MyHashMap.AbstractEntry<String, IClass> entry = info.getEntry(Helpers.cast(name));
+		if (entry != null) return entry.getValue();
 		synchronized (info) {
 			IClass v = apply(name);
 			info.put(name.toString(), v);

@@ -29,10 +29,11 @@ final class LogHelper extends PrintWriter {
 	static final class MyMap extends MyHashMap<String, Object> {
 		List<?> components;
 
-		public Object get(Object key) {
+		@Override
+		public Object getOrDefault(Object key, Object def) {
 			String s = key.toString();
 			if (s.charAt(0) >= '0' && s.charAt(0) <= '9') return components.get(Integer.parseInt(s));
-			else return super.get(s);
+			else return super.getOrDefault(s, def);
 		}
 	}
 

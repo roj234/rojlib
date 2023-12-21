@@ -1,0 +1,104 @@
+JFDML JFormDesigner: "8.1.1.0.298" Java: "17.0.9" encoding: "UTF-8"
+
+new FormModel {
+	contentType: "form/swing"
+	root: new FormRoot {
+		add( new FormWindow( "javax.swing.JFrame", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
+			"autoSize": false
+		} ) {
+			name: "this"
+			"title": "FindClass"
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "uiSearch"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 25
+				"width": 280
+			} )
+			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
+				name: "scrollPane1"
+				add( new FormComponent( "javax.swing.JTextPane" ) {
+					name: "uiResult"
+				} )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 165
+				"width": 375
+				"height": 235
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label1"
+				"text": "search (regexp IF START WITH !)"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 5
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiDeclOnly"
+				"text": "Declaration only"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 255
+				"y": 80
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiSerClass"
+				"text": "class"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 55
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiSerNode"
+				"text": "element (field or method)"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 65
+				"y": 55
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiSerString"
+				"text": "string"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 80
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiSerConstant"
+				"text": "constant (number)"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 70
+				"y": 80
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "checkBox5"
+				"text": "text"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 105
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "checkBox6"
+				"text": "text"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 65
+				"y": 105
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiOpen"
+				"text": "Open"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 305
+				"y": 20
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label2"
+				"text": "found"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 150
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 85, 5 )
+			"size": new java.awt.Dimension( 400, 440 )
+		} )
+	}
+}

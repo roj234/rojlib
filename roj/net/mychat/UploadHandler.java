@@ -268,11 +268,10 @@ public class UploadHandler extends MultipartFormHandler {
 
 		@Override
 		protected Void invoke() throws Exception {
-			Object[] dh = FastThreadLocal.getDataHolder(img.seqNum());
-
-			BufferedImage dst = (BufferedImage) dh[img.seqNum()];
+			BufferedImage dst = img.get();
 			if (dst == null || dst.getWidth() < v$r.getWidth(0) || dst.getHeight() < v$r.getHeight(0)) {
-				dh[img.seqNum()] = dst = new BufferedImage(v$r.getWidth(0), v$r.getHeight(0), BufferedImage.TYPE_3BYTE_BGR);
+				dst = new BufferedImage(v$r.getWidth(0), v$r.getHeight(0), BufferedImage.TYPE_3BYTE_BGR);
+				img.set(dst);
 			}
 			dst = dst.getSubimage(0, 0, v$r.getWidth(0), v$r.getHeight(0));
 

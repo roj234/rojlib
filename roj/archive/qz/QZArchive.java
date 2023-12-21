@@ -762,7 +762,7 @@ public class QZArchive implements ArchiveFile {
 
 				b.firstEntry = f;
 
-				if ((b.hasCrc&1) != 0) f.setCrc(b.crc);
+				if ((b.hasCrc&1) != 0) f._setCrc(b.crc);
 			}
 		}
 
@@ -781,12 +781,12 @@ public class QZArchive implements ArchiveFile {
 
 			for (WordBlock b : si.blocks) {
 				if (b.fileCount == 1 && (b.hasCrc&1) != 0) {
-					si.files[fileId++].setCrc(b.crc);
+					si.files[fileId++]._setCrc(b.crc);
 				} else {
 					for (int i = b.fileCount; i > 0; i--) {
 						if (extraCrcs.contains(extraCrc++)) {
 							int crc = buf.readIntLE();
-							si.files[fileId++].setCrc(crc);
+							si.files[fileId++]._setCrc(crc);
 
 							if (b.fileCount == 1) {
 								b.hasCrc |= 1;

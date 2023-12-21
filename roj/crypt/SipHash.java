@@ -1,6 +1,5 @@
-package roj.security;
+package roj.crypt;
 
-import roj.crypt.BufferedDigest;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -17,7 +16,7 @@ public class SipHash extends BufferedDigest {
 
 	private static final byte[] padding = new byte[7];
 
-	protected SipHash() { super("Sip", 8); }
+	public SipHash() { super("Sip", 8); }
 
 	public void setKeyDefault() {
 		SecureRandom rnd = new SecureRandom();

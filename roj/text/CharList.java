@@ -184,14 +184,13 @@ public class CharList implements CharSequence, Appender {
 	}
 	private int doMatch(CharSequence s, int start, int end) {
 		char[] b = list;
+		char c = s.charAt(0);
 		o:
 		for (; start < end; start++) {
-			if (b[start] == s.charAt(0)) {
-				for (int j = 1; j < s.length(); j++) {
-					if (b[start + j] != s.charAt(j)) {
+			if (b[start] == c) {
+				for (int j = 1; j < s.length(); j++)
+					if (b[start+j] != s.charAt(j))
 						continue o;
-					}
-				}
 				return start;
 			}
 		}
@@ -610,47 +609,53 @@ public class CharList implements CharSequence, Appender {
 
 		return this;
 	}
-	public final void preg_replace(Pattern regexp, CharSequence literal) {
+	public final int preg_replace(Pattern regexp, CharSequence literal) {
 		CharList out = null;
 
 		Matcher m = regexp.matcher(this);
 
+		int count = 0;
 		int i = 0;
 		while (m.find(i)) {
 			if (i == 0) out = createReplaceOutputList();
 			out.append(list, i, m.start()).append(literal);
 
 			i = m.end();
+			count++;
 		}
 
-		if (i == 0) return;
+		if (i == 0) return 0;
 		out.append(list, i, len);
 
 		ArrayCache.putArray(list);
 
 		list = out.list;
 		len = out.len;
+		return count;
 	}
-	public final void preg_replace_callback(Pattern regexp, Function<Matcher,CharSequence> callback) {
+	public final int preg_replace_callback(Pattern regexp, Function<Matcher,CharSequence> callback) {
 		CharList out = null;
 
 		Matcher m = regexp.matcher(this);
 
+		int count = 0;
 		int i = 0;
 		while (m.find(i)) {
 			if (i == 0) out = createReplaceOutputList();
 			out.append(list, i, m.start()).append(callback.apply(m));
 
 			i = m.end();
+			count++;
 		}
 
-		if (i == 0) return;
+		if (i == 0) return 0;
 		out.append(list, i, len);
 
 		ArrayCache.putArray(list);
 
 		list = out.list;
 		len = out.len;
+		return count;
 	}
 	// endregion
 	public final CharSequence subSequence(int start, int end) {

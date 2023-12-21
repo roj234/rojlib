@@ -97,7 +97,17 @@ public class TextUtil {
 	/**
 	 * 这个字是中文吗
 	 */
-	public static boolean isChinese(int c) { return JPinyin.getIsHanzi().contains(c); }
+	public static boolean isChinese(int c) {
+		TrieEntry node = JPinyin.getPinyinWords().getRoot();
+		if (Character.isSupplementaryCodePoint(c)) {
+			node = node.getChild(Character.highSurrogate(c));
+			if (node == null) return false;
+			node = node.getChild(Character.lowSurrogate(c));
+		} else {
+			node = node.getChild((char) c);
+		}
+		return node != null && node.isLeaf();
+	}
 
 	public static String scaledNumber1024(double size) { return scaledNumber1024(IOUtil.getSharedCharBuf(), size).toString(); }
 	private static final String[] SCALE = {"B", "KB", "MB", "GB", "TB"};

@@ -34,7 +34,7 @@ public class ObjectPool<T> {
 		if (size == max) return false;
 		if (size == array.length) {
 			Object[] o = new Object[Math.min(max,array.length+10)];
-			System.arraycopy(array,0,o,0,o.length);
+			System.arraycopy(array,0,o,0,size);
 			array = o;
 		}
 		array[size++] = t;

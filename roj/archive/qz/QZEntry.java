@@ -42,8 +42,8 @@ public class QZEntry implements ArchiveEntry, Cloneable {
         this.uSize = expectSize;
     }
 
-    void setSize(long size) { uSize = size; }
-    void setCrc(int crc) {
+    public void _setSize(long size) { uSize = size; }
+    public void _setCrc(int crc) {
         crc32 = crc;
         flag |= CRC;
     }

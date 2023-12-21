@@ -71,8 +71,8 @@ public abstract class LZMAEncoder extends LZMACoder {
 	 */
 	private static final int PRICE_UPDATE_INTERVAL = 32;
 
-	private final int[] counters;
-	private final int[][] prices;
+	private int[] counters;
+	private int[][] prices;
 
 	public static int getMemoryUsage(LZMA2Options options, int extraSizeBefore) {
 		int m = 22;
@@ -162,6 +162,15 @@ public abstract class LZMAEncoder extends LZMACoder {
 		distSlotPrices = new int[DIST_STATES*distSlotPricesSize];
 
 		reset();
+	}
+
+	public void propReset(int lc, int lp, int pb) {
+		int ii = 2 << pb;
+		counters = new int[ii];
+		int lenSymbols = Math.max(niceLen - MATCH_LEN_MIN + 1, LOW_SYMBOLS + MID_SYMBOLS);
+		prices = new int[ii][lenSymbols];
+
+		super.propReset(lc, lp, pb);
 	}
 
 	public LZEncoder getLZEncoder() { return lz; }
