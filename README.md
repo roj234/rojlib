@@ -96,15 +96,15 @@
 ## roj.concurrent
 Promise:
 ```java
-		Promise.new_(TaskPool.CpuMassive(), (op) -> {
+	Promise.new_(TaskPool.CpuMassive(), (op) -> {
+		LockSupport.parkNanos(1000_000_000L);
+		op.resolve("a");
+	}).thenF((val) -> {
+		return val+"b";
+	}).thenF((val) -> {
+		return Promise.new_(TaskPool.CpuMassive(), (op) -> {
 			LockSupport.parkNanos(1000_000_000L);
-			op.resolve("a");
-		}).thenF((val) -> {
-			return val+"b";
-		}).thenF((val) -> {
-			return Promise.new_(TaskPool.CpuMassive(), (op) -> {
-				LockSupport.parkNanos(1000_000_000L);
-				op.resolve("c");
+			op.resolve("c");
 			}).thenF((val2) -> {
 				return val.toString()+val2;
 			});
