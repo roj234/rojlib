@@ -84,13 +84,15 @@ public class CardSleep extends JFrame {
 	private static GraphicCard myCard;
 	private static final class GraphicCard {
 		final String uuid, name, longDesc;
-		final int tMax;
+		int tMax;
 		final float pMin, pMax;
 		int[] coreFreq, memFreq, memFreqAssoc;
 		GraphicCard(List<String> desc) {
 			uuid = desc.get(0);
 			name = desc.get(1);
-			tMax = Integer.parseInt(desc.get(5));
+			try {
+				tMax = Integer.parseInt(desc.get(5));
+			} catch (Exception ignored) {}
 			pMin = Float.parseFloat(desc.get(6));
 			pMax = Float.parseFloat(desc.get(7));
 			longDesc = name+" ("+desc.get(2)+" PCIe "+desc.get(3)+".0x"+desc.get(4)+") \n" +

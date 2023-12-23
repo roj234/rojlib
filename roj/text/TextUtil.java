@@ -818,8 +818,11 @@ public class TextUtil {
 					String s = line[j].toString();
 					sb.append(s);
 
-					int k = maxLens.get(j)-getDisplayWidth(s);
-					while (k-- > 0) sb.append(' ');
+					int myMaxLen = maxLens.get(j);
+					if (myMaxLen < 100) {
+						int k = myMaxLen -getDisplayWidth(s);
+						while (k-- > 0) sb.append(' ');
+					}
 
 					if (++j == line.length) break;
 					sb.append(separators.length == 0 ? " " : separators[j > separators.length ? separators.length-1 : j-1]);

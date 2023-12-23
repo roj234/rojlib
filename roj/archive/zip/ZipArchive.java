@@ -546,7 +546,7 @@ public class ZipArchive implements ArchiveFile {
 			}
 		}
 
-		if (fileHeader != entry.startPos()) {
+		if (fileHeader != entry.startPos() && (flags&FLAG_VERIFY) != 0) {
 			throw new ZipException(entry.name + " offset mismatch: req " + fileHeader + " computed " + entry.startPos());
 		}
 
@@ -609,6 +609,8 @@ public class ZipArchive implements ArchiveFile {
 	}
 
 	public InputStream i_getRawData(ZEntry entry) throws IOException {
+		if (entry.nameBytes == null) throw new ZipException("Not entry load from file");
+
 		Source src;
 		do {
 			src = fpRead;

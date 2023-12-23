@@ -9,13 +9,14 @@ import roj.archive.zip.ZipArchive;
 import roj.asm.Parser;
 import roj.asm.cst.Constant;
 import roj.asm.cst.CstRef;
-import roj.asm.tree.Attributed;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.MethodNode;
+import roj.asm.tree.*;
+import roj.asm.tree.anno.Annotation;
+import roj.asm.tree.attr.Annotations;
+import roj.asm.tree.attr.Attribute;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
+import roj.mapper.util.Desc;
 import roj.text.CharList;
 import roj.ui.GUIUtil;
 
@@ -40,20 +41,26 @@ public class FindClass extends JFrame {
 	}
 
 	private void search() {
+		model.clear();
+
+		if (uiSearch.getText().isEmpty()) {
+			model.addElement("请输入搜索词");
+			return;
+		}
+
 		Pattern p = uiSearch.getText().startsWith("!") ? Pattern.compile(uiSearch.getText().substring(1)) : Pattern.compile(uiSearch.getText(), Pattern.LITERAL);
 		Predicate<CharSequence> filter = (id) -> p.matcher(id).find();
 
-		MyHashSet<Attributed> out = new MyHashSet<>();
+		MyHashSet<Object> out = new MyHashSet<>();
 		if (uiSerClass.isSelected()) {
 			for (ConstantData data : ref) {
-				if (filter.test(data.name)) {
-					out.add(data);
-				}
+				if (filter.test(data.name)) out.add(data.name);
+
 				if (!uiDeclOnly.isSelected()) {
 					for (Constant c : data.cp.array()) {
 						if (c.type() == Constant.CLASS) {
 							if (filter.test(c.getEasyCompareValue())) {
-								out.add(data);
+								out.add("REF: "+data.name);
 								break;
 							}
 						}
@@ -68,7 +75,7 @@ public class FindClass extends JFrame {
 					sb.clear();
 					sb.append(data.name).append('.').append(n.name()).append(n.rawDesc());
 					if (filter.test(sb)) {
-						out.add(data);
+						out.add("M: "+new Desc(data.name, n.name(), n.rawDesc()));
 						break;
 					}
 				}
@@ -76,7 +83,7 @@ public class FindClass extends JFrame {
 					sb.clear();
 					sb.append(data.name).append('.').append(n.name()).append(' ').append(n.rawDesc());
 					if (filter.test(sb)) {
-						out.add(data);
+						out.add("F: "+new Desc(data.name, n.name(), n.rawDesc()));
 						break;
 					}
 				}
@@ -91,7 +98,7 @@ public class FindClass extends JFrame {
 						if (!s.startsWith("(")) sb.append(' ');
 						sb.append(s);
 						if (filter.test(sb)) {
-							out.add(data);
+							out.add("REF: "+data.name);
 							break;
 						}
 					}
@@ -103,7 +110,7 @@ public class FindClass extends JFrame {
 				for (Constant c : data.cp.array()) {
 					if (c.type() == Constant.STRING) {
 						if (filter.test(c.getEasyCompareValue())) {
-							out.add(data);
+							out.add(data.name);
 							break;
 						}
 					}
@@ -115,22 +122,54 @@ public class FindClass extends JFrame {
 				for (Constant c : data.cp.array()) {
 					if (c.type() >= 3 && c.type() <= 6) {
 						if (filter.test(c.getEasyCompareValue())) {
-							out.add(data);
+							out.add(data.name);
 							break;
 						}
 					}
 				}
 			}
 		}
-
-		sb.clear();
-		for (Attributed node : out) {
-			sb.append(((ConstantData)node).name).append(' ');
+		if (uiserAnnotation.isSelected()) {
+			for (ConstantData data : ref) {
+				Annotations aa = data.parsedAttr(data.cp, Attribute.RtAnnotations);
+				checkAnnotation(filter, aa, out, data, data);
+				Annotations bb = data.parsedAttr(data.cp, Attribute.ClAnnotations);
+				checkAnnotation(filter, bb, out, data, data);
+				for (MethodNode method : data.methods) {
+					aa = method.parsedAttr(data.cp, Attribute.RtAnnotations);
+					checkAnnotation(filter, aa, out, method, data);
+					bb = method.parsedAttr(data.cp, Attribute.ClAnnotations);
+					checkAnnotation(filter, bb, out, method, data);
+				}
+				for (FieldNode method : data.fields) {
+					aa = method.parsedAttr(data.cp, Attribute.RtAnnotations);
+					checkAnnotation(filter, aa, out, method, data);
+					bb = method.parsedAttr(data.cp, Attribute.ClAnnotations);
+					checkAnnotation(filter, bb, out, method, data);
+				}
+			}
 		}
-		uiResult.setText(sb.toString());
+
+		for (Object node : out) model.addElement(node);
+	}
+
+	private void checkAnnotation(Predicate<CharSequence> filter, Annotations a, MyHashSet<Object> out, Attributed node, ConstantData data) {
+		if (a == null) return;
+		for (Annotation annotation : a.annotations) {
+			if (filter.test(annotation.clazz)) {
+				if (node instanceof ConstantData) {
+					ConstantData node1 = (ConstantData) node;
+					out.add(node1.name);
+				} else {
+					RawNode n = (RawNode) node;
+					out.add((n instanceof FieldNode ? "F: ":"M: ")+new Desc(data.name, n.name(), n.rawDesc()));
+				}
+			}
+		}
 	}
 
 	private void open(File file) {
+		ref.clear();
 		try (ZipArchive za = new ZipArchive(file)) {
 			for (ZEntry value : za.getEntries().values()) {
 				if (value.getName().toLowerCase().endsWith(".class")) {
@@ -145,6 +184,7 @@ public class FindClass extends JFrame {
 	}
 
 	private final SimpleList<ConstantData> ref = new SimpleList<>();
+	private final DefaultListModel<Object> model = new DefaultListModel<>();
 	public FindClass() {
 		initComponents();
 		GUIUtil.dropFilePath(this, this::open, false);
@@ -158,23 +198,23 @@ public class FindClass extends JFrame {
 		uiSearch.addKeyListener(new KeyAdapter() {
 			public void keyTyped(KeyEvent e) { search(); }
 		});
+		uiResult.setModel(model);
 	}
 
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
 		uiSearch = new JTextField();
-		scrollPane1 = new JScrollPane();
-		uiResult = new JTextPane();
-		label1 = new JLabel();
+		JScrollPane scrollPane1 = new JScrollPane();
+		uiResult = new JList<>();
+		JLabel label1 = new JLabel();
 		uiDeclOnly = new JCheckBox();
 		uiSerClass = new JCheckBox();
 		uiSerNode = new JCheckBox();
 		uiSerString = new JCheckBox();
 		uiSerConstant = new JCheckBox();
-		checkBox5 = new JCheckBox();
-		checkBox6 = new JCheckBox();
 		uiOpen = new JButton();
-		label2 = new JLabel();
+		JLabel label2 = new JLabel();
+		uiserAnnotation = new JCheckBox();
 
 		//======== this ========
 		setTitle("FindClass");
@@ -188,7 +228,7 @@ public class FindClass extends JFrame {
 			scrollPane1.setViewportView(uiResult);
 		}
 		contentPane.add(scrollPane1);
-		scrollPane1.setBounds(10, 165, 375, 235);
+		scrollPane1.setBounds(10, 105, 375, 235);
 
 		//---- label1 ----
 		label1.setText("search (regexp IF START WITH !)");
@@ -198,47 +238,42 @@ public class FindClass extends JFrame {
 		//---- uiDeclOnly ----
 		uiDeclOnly.setText("Declaration only");
 		contentPane.add(uiDeclOnly);
-		uiDeclOnly.setBounds(new Rectangle(new Point(255, 80), uiDeclOnly.getPreferredSize()));
+		uiDeclOnly.setBounds(new Rectangle(new Point(270, 45), uiDeclOnly.getPreferredSize()));
 
 		//---- uiSerClass ----
 		uiSerClass.setText("class");
 		contentPane.add(uiSerClass);
-		uiSerClass.setBounds(new Rectangle(new Point(10, 55), uiSerClass.getPreferredSize()));
+		uiSerClass.setBounds(new Rectangle(new Point(5, 45), uiSerClass.getPreferredSize()));
 
 		//---- uiSerNode ----
 		uiSerNode.setText("element (field or method)");
 		contentPane.add(uiSerNode);
-		uiSerNode.setBounds(new Rectangle(new Point(65, 55), uiSerNode.getPreferredSize()));
+		uiSerNode.setBounds(new Rectangle(new Point(60, 45), uiSerNode.getPreferredSize()));
 
 		//---- uiSerString ----
 		uiSerString.setText("string");
 		contentPane.add(uiSerString);
-		uiSerString.setBounds(new Rectangle(new Point(10, 80), uiSerString.getPreferredSize()));
+		uiSerString.setBounds(new Rectangle(new Point(5, 65), uiSerString.getPreferredSize()));
 
 		//---- uiSerConstant ----
 		uiSerConstant.setText("constant (number)");
 		contentPane.add(uiSerConstant);
-		uiSerConstant.setBounds(new Rectangle(new Point(70, 80), uiSerConstant.getPreferredSize()));
-
-		//---- checkBox5 ----
-		checkBox5.setText("text");
-		contentPane.add(checkBox5);
-		checkBox5.setBounds(new Rectangle(new Point(10, 105), checkBox5.getPreferredSize()));
-
-		//---- checkBox6 ----
-		checkBox6.setText("text");
-		contentPane.add(checkBox6);
-		checkBox6.setBounds(new Rectangle(new Point(65, 105), checkBox6.getPreferredSize()));
+		uiSerConstant.setBounds(new Rectangle(new Point(65, 65), uiSerConstant.getPreferredSize()));
 
 		//---- uiOpen ----
 		uiOpen.setText("Open");
 		contentPane.add(uiOpen);
-		uiOpen.setBounds(new Rectangle(new Point(305, 20), uiOpen.getPreferredSize()));
+		uiOpen.setBounds(new Rectangle(new Point(315, 10), uiOpen.getPreferredSize()));
 
 		//---- label2 ----
 		label2.setText("found");
 		contentPane.add(label2);
-		label2.setBounds(new Rectangle(new Point(10, 150), label2.getPreferredSize()));
+		label2.setBounds(new Rectangle(new Point(5, 90), label2.getPreferredSize()));
+
+		//---- uiserAnnotation ----
+		uiserAnnotation.setText("annotation");
+		contentPane.add(uiserAnnotation);
+		uiserAnnotation.setBounds(new Rectangle(new Point(190, 65), uiserAnnotation.getPreferredSize()));
 
 		contentPane.setPreferredSize(new Dimension(400, 440));
 		pack();
@@ -248,17 +283,13 @@ public class FindClass extends JFrame {
 
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
 	private JTextField uiSearch;
-	private JScrollPane scrollPane1;
-	private JTextPane uiResult;
-	private JLabel label1;
+	private JList<Object> uiResult;
 	private JCheckBox uiDeclOnly;
 	private JCheckBox uiSerClass;
 	private JCheckBox uiSerNode;
 	private JCheckBox uiSerString;
 	private JCheckBox uiSerConstant;
-	private JCheckBox checkBox5;
-	private JCheckBox checkBox6;
 	private JButton uiOpen;
-	private JLabel label2;
+	private JCheckBox uiserAnnotation;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

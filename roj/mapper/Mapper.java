@@ -287,7 +287,10 @@ public class Mapper extends Mapping {
 
 		MapUtil.async((ctx) -> S3_mapSelf(ctx, false), tasks);
 		MapUtil.async(this::S4_mapConstant, tasks);
-		if ((flag& MF_RENAME_CLASS) != 0) MapUtil.async(this::S5_mapClassName, tasks);
+		if ((flag&MF_RENAME_CLASS) != 0) {
+			MapUtil.async(this::S5_mapClassName, tasks);
+			MapUtil.async(this::S5_1_resetDebugInfo, tasks);
+		}
 	}
 
 	/**
@@ -322,7 +325,12 @@ public class Mapper extends Mapping {
 
 			for (int i = 0; i < ctxs.size(); i++) S3_mapSelf(ctx = ctxs.get(i), false);
 			for (int i = 0; i < ctxs.size(); i++) S4_mapConstant(ctx = ctxs.get(i));
-			if ((flag&MF_RENAME_CLASS) != 0) for (int i = 0; i < ctxs.size(); i++) S5_mapClassName(ctx = ctxs.get(i));
+			if ((flag&MF_RENAME_CLASS) != 0) {
+				for (int i = 0; i < ctxs.size(); i++) {
+					S5_mapClassName(ctx = ctxs.get(i));
+					S5_1_resetDebugInfo(ctx);
+				}
+			}
 		} catch (Throwable e) {
 			throw new RuntimeException("At parsing " + ctx, e);
 		}
@@ -514,7 +522,7 @@ public class Mapper extends Mapping {
 			}
 
 			char acc = node.modifier();
-			if ((acc & PUBLIC) != 0) {
+			if ((acc & (PUBLIC|PRIVATE)) != 0) {
 				processed.add(ref.get(j));
 				continue; // public
 			}
@@ -1251,6 +1259,15 @@ public class Mapper extends Mapping {
 				}
 				break;
 			}
+		}
+	}
+
+	public final void S5_1_resetDebugInfo(Context ctx) {
+		ConstantData data = ctx.getData();
+		AttrString sourceFile = data.parsedAttr(data.cp, Attribute.SourceFile);
+		if (sourceFile != null) {
+			String name = data.name;
+			sourceFile.value = name.substring(Math.max(name.lastIndexOf('/'), name.lastIndexOf('$'))+1).concat(".java");
 		}
 	}
 	// endregion

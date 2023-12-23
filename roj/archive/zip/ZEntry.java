@@ -452,7 +452,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 			", ea=" + externalAttr +
 			", gp=0b" + Integer.toBinaryString(flags) +
 			", name='" + name + '\'' +
-			", offset=" + startPos() + '}';
+			", offset=" + (nameBytes == null ? -1 : startPos()) + '}';
 	}
 
 	public static long dos2JavaTime(int dtime) {

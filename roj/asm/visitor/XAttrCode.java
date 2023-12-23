@@ -192,7 +192,9 @@ public class XAttrCode extends Attribute implements Attributed {
 			if ((OpcodeUtil.flag(node.opcode())&16) == 0) {
 				sb2.clear();
 				try {
-					a.add(node.myToString(sb2, true).toString());
+					String string = node.myToString(sb2, true).toString();
+					if (string.length() > 255) string = string.substring(0, 240).concat("<字符过长...>");
+					a.add(string);
 				} catch (IllegalStateException e) {
 					a.add("<参数错误>");
 				} catch (Exception e) {

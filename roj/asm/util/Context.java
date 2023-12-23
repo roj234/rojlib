@@ -2,7 +2,6 @@ package roj.asm.util;
 
 import roj.asm.Parser;
 import roj.asm.cst.*;
-import roj.asm.misc.AttrCodeCompressor;
 import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
 import roj.util.ByteList;
@@ -190,7 +189,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 	public ByteList getCompressedShared() {
 		String fn = getFileName();
 		if (!absolutelyCompressed) {
-			AttrCodeCompressor.compress(getData());
+			Parser.compress(getData());
 			absolutelyCompressed = true;
 		}
 		return get(true);
@@ -200,7 +199,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 		if (absolutelyCompressed) return;
 
 		boolean targetIsByte = data == null;
-		AttrCodeCompressor.compress(getData());
+		Parser.compress(getData());
 		if (targetIsByte) set(ByteList.wrap(Parser.toByteArray(data)));
 		absolutelyCompressed = true;
 	}

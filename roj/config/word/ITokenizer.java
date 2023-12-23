@@ -166,6 +166,14 @@ public abstract class ITokenizer {
 		}
 		return to;
 	}
+	public static boolean haveSlashes(CharSequence key, int since) {
+		for (int i = since; i < key.length(); i++) {
+			char c = key.charAt(i);
+			int v = ADDSLASHES.getOrDefaultInt(c, 0);
+			if (v != 0) return true;
+		}
+		return false;
+	}
 
 	public static String removeSlashes(CharSequence key) throws ParseException {
 		return removeSlashes(key, new StringBuilder()).toString();

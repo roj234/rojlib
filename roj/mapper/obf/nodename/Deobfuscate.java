@@ -13,13 +13,18 @@ import java.util.Set;
 public final class Deobfuscate implements NameObfuscator {
 	public int a, b;
 	CharList buf = new CharList();
+	boolean keep = true;
 
 	public Deobfuscate() {}
 
 	@Override
+	public NameObfuscator setKeepPackage(boolean keepPackage) { keep = keepPackage; return this; }
+
+	@Override
 	public String obfClass(String name, Set<String> existNames, Random rnd) {
-		int pos = name.lastIndexOf('/');
+		int pos = keep ? name.lastIndexOf('/') : -1;
 		if (pos >= 0) pos++;
+		else pos = 0;
 
 		buf.clear();
 		return buf.append(name, 0, pos).append("class_").append(a++).append('_').toString();

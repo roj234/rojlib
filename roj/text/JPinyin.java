@@ -12,7 +12,6 @@ import roj.math.MutableInt;
 import roj.util.ByteList;
 import roj.util.DirectByteList;
 
-import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.CharBuffer;
 import java.util.List;
@@ -87,7 +86,7 @@ public class JPinyin {
 	private static final Int2IntMap FastSwitch = new Int2IntMap(8);
 	static {
 		// https://github.com/mozillazg/pinyin-data
-		try (LZMA2InputStream in = new LZMA2InputStream(new FileInputStream("D:\\Desktop\\pinyin.lzma2"), 524288)) {
+		try (LZMA2InputStream in = new LZMA2InputStream(JPinyin.class.getResourceAsStream("/META-INF/china/pinyin.lzma2"), 524288)) {
 			int DATALEN = 1298611;
 			DirectByteList bb = DirectByteList.allocateDirect(DATALEN);
 			int i = in.read(bb.address(), DATALEN);

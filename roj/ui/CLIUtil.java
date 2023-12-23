@@ -240,7 +240,7 @@ public class CLIUtil {
 	private static native int setConsoleMode0(int target, int mode, int flag) throws NativeException;
 
 	public static void enableQuickEditMode() {
-		setConsoleMode0(STDIN, MODE_ADD, ENABLE_QUICK_EDIT_MODE|ENABLE_EXTENDED_FLAGS);
+		if (NativeLibrary.loaded) setConsoleMode0(STDIN, MODE_ADD, ENABLE_QUICK_EDIT_MODE|ENABLE_EXTENDED_FLAGS);
 	}
 
 	public static void printColor(String string, int fg, boolean reset, boolean println, boolean light) {

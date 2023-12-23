@@ -2,6 +2,7 @@ package roj.asm.type;
 
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -21,7 +22,11 @@ public final class TypeHelper {
 	public static void toStringOptionalPackage(CharList sb, String type) {
 		if (TYPE_TOSTRING_NO_PACKAGE) {
 			int start = type.lastIndexOf('/')+1;
-			sb.append(type, start, type.length());
+			if (ITokenizer.haveSlashes(type, start)) {
+				ITokenizer.addSlashes(type, start, sb.append('"'), '\0').append('"');
+			} else {
+				sb.append(type, start, type.length());
+			}
 		} else {
 			sb.append(type);
 		}

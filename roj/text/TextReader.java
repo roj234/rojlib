@@ -14,6 +14,7 @@ import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.charset.*;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
 /**
@@ -34,13 +35,15 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 	private CharBuffer ob;
 
 	public static TextReader auto(File file) throws IOException { return new TextReader(file, null); }
+	public static TextReader auto(Path file) throws IOException { return new TextReader(file, null); }
 	public static TextReader auto(InputStream in) throws IOException { return new TextReader(in); }
 
 	public TextReader(InputStream in) throws IOException { this(in, (Charset) null); }
 	public TextReader(InputStream in, String charset) throws IOException { this(in, Charset.forName(charset)); }
 
-	public TextReader(File in, Charset charset) throws IOException {
-		this(FileChannel.open(in.toPath(), StandardOpenOption.READ), charset, 4096, BufferPool.localPool());
+	public TextReader(File in, Charset charset) throws IOException { this(in.toPath(), charset); }
+	public TextReader(Path in, Charset charset) throws IOException {
+		this(FileChannel.open(in, StandardOpenOption.READ), charset, 4096, BufferPool.localPool());
 	}
 
 	public TextReader(Closeable in, Charset charset) throws IOException { this(in, charset, 4096, BufferPool.localPool()); }

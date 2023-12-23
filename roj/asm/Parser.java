@@ -5,6 +5,8 @@ import roj.asm.tree.*;
 import roj.asm.tree.attr.*;
 import roj.asm.type.Signature;
 import roj.asm.util.AttributeList;
+import roj.asm.visitor.CodeVisitor;
+import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.XAttrCode;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
@@ -134,7 +136,7 @@ public final class Parser {
 		return (T) attr;
 	}
 	private static boolean skipToStringParse;
-	private static Attribute attr(Attributed node, ConstantPool cp, String name, DynByteBuf data, int origin) {
+	public static Attribute attr(Attributed node, ConstantPool cp, String name, DynByteBuf data, int origin) {
 		if (skipToStringParse) return null;
 
 		int len = data.rIndex;
@@ -329,4 +331,51 @@ public final class Parser {
 	public static ByteList toByteArrayShared(IClass c) { return (ByteList) c.getBytes(AsmShared.getBuf()); }
 
 	public static DynByteBuf reader(Attribute attr) { return AsmShared.local().copy(attr.getRawData()); }
+
+	public static void compress(ConstantData data) {
+		ConstantPool cpw = new ConstantPool(data.cp.array().size());
+		CodeVisitor smallerLdc = new CodeVisitor() {
+			protected void ldc(byte code, Constant c) { cpw.reset(c); }
+		};
+
+		SimpleList<MethodNode> methods = data.methods;
+		for (int i = 0; i < methods.size(); i++) {
+			Attribute code = methods.get(i).attrByName("Code");
+			if (code != null) smallerLdc.visit(data.cp, reader(code));
+		}
+
+		CodeWriter cw = new CodeWriter();
+		ByteList bw = new ByteList();
+		for (int i = 0; i < methods.size(); i++) {
+			MethodNode mn = methods.get(i);
+			Attribute code = mn.attrByName("Code");
+			if (code != null) {
+				cw.init(bw, cpw);
+				cw.mn = mn; // for UNINITIAL_THIS
+				cw.visit(data.cp, code.getRawData());
+				cw.finish();
+
+				byte[] array = bw.toByteArray();
+				// will not parse this
+				mn.putAttr(new Attribute() {
+					@Override
+					public String name() { return "Code"; }
+					@Override
+					public DynByteBuf getRawData() { return ByteList.wrap(array); }
+					@Override
+					public String toString() { return "Tmpcw"; }
+				});
+				bw.clear();
+			}
+		}
+
+		data.parsed();
+		data.cp = cpw;
+
+		for (int i = 0; i < methods.size(); i++) {
+			MethodNode mn = methods.get(i);
+			Attribute code = mn.attrByName("Code");
+			if (code != null) mn.putAttr(new AttrUnknown("Code", code.getRawData()));
+		}
+	}
 }

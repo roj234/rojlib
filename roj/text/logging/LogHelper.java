@@ -110,6 +110,11 @@ final class LogHelper extends PrintWriter {
 	}
 
 	private static void toString(CharList sb, Object arg) {
+		if (arg == null) {
+			sb.append("null");
+			return;
+		}
+
 		if (arg.getClass().getComponentType() != null) {
 			switch (TypeHelper.parseField(TypeHelper.class2asm(arg.getClass())).getActualClass()) {
 				case "[I": sb.append(Arrays.toString((int[]) arg)); return;

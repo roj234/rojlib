@@ -59,7 +59,8 @@ public class Obfuscator {
 		KILL_FRAME = 512,
 
 		KEEP_LINES = 1024,
-		OBF_STRING = 2048;
+		OBF_STRING = 2048,
+		REMOVE_ANNOTATION = 4096;
 
 	public static final int EX_CLASS = 1, EX_FIELD = 2, EX_METHOD = 4;
 
@@ -153,6 +154,10 @@ public class Obfuscator {
 			for (int i = 0; i < arr.size(); i++) m.S5_mapClassName(cur = arr.get(i));
 			Profiler.endStartSection("compress");
 			for (int i = 0; i < arr.size(); i++) (cur = arr.get(i)).compress();
+			for (int i = 0; i < arr.size(); i++) {
+				System.out.println("print 1");
+				System.out.println(arr.get(i).getData());
+			}
 
 			if ((flags & FAKE_SIGN) != 0) {
 				Profiler.endStartSection("mangleSignature");
@@ -169,7 +174,7 @@ public class Obfuscator {
 			}
 
 			Profiler.endStartSection("afterMapCode");
-			decryptString(arr);
+			//decryptString(arr);
 			Profiler.endSection();
 		} catch (Throwable e) {
 			m.debugRelative(cur.getData().name, null);
@@ -185,11 +190,6 @@ public class Obfuscator {
 		int exclusion = exclusions.get(from, 0);
 		if (data.modifier() == AccessFlag.MODULE) return;
 
-		if (from.endsWith("MapperUI")) {
-			m.classMap.put("roj/mapper/MapperUI", "roj/FixedMapperUI");
-			return;
-		}
-
 		tempF.clear(); tempM.clear();
 
 		String to = clazz == null || (exclusion&EX_CLASS)!=0 ? from : clazz.obfClass(from, m.classMap.flip().keySet(), rand);
@@ -200,13 +200,13 @@ public class Obfuscator {
 		}
 
 		Desc d = MapUtil.getInstance().sharedDC;
-		d.name = from;
+		d.owner = from;
 		CharList sb = IOUtil.getSharedCharBuf();
 
 		prepareInheritCheck(from);
 		List<? extends MethodNode> methods = (exclusion&EX_METHOD)!=0 ? Collections.emptyList() : data.methods;
 		for (int i = 0; i < methods.size(); i++) {
-			MethodNode method = (MethodNode) methods.get(i);
+			MethodNode method = methods.get(i);
 			int acc = method.access;
 			if ((flags & ADD_SYNTHETIC) != 0) {
 				acc |= AccessFlag.SYNTHETIC;
@@ -231,7 +231,7 @@ public class Obfuscator {
 
 		List<? extends FieldNode> fields = (exclusion&EX_FIELD)!=0 ? Collections.emptyList() : data.fields;
 		for (int i = 0; i < fields.size(); i++) {
-			FieldNode field = (FieldNode) fields.get(i);
+			FieldNode field = fields.get(i);
 			int acc = field.access;
 			if ((flags & ADD_SYNTHETIC) != 0) {
 				acc |= AccessFlag.SYNTHETIC;
@@ -420,6 +420,7 @@ public class Obfuscator {
 						if (!param.isPrimitive() && !"java/lang/String".equals(param.owner)) continue next;
 					}
 
+					mn.unparsed(data.cp);
 					AttrUnknown code0 = (AttrUnknown) mn.attrByName("Code");
 					try {
 						filter.visit(data.cp, Parser.reader(code0));
@@ -528,22 +529,30 @@ public class Obfuscator {
 		}
 	}
 
-	static void removeOptionalAttribute(ConstantData data) {
+	void removeOptionalAttribute(ConstantData data) {
 		AttributeList al = data.attributesNullable();
 		if (al == null) return;
 
+		//flags |= REMOVE_ANNOTATION;
 		al.removeByName("InnerClasses");
 		al.removeByName("Signature");
 		al.removeByName("SourceFile");
+		if ((flags & REMOVE_ANNOTATION) != 0) al.removeByName("RuntimeInvisibleAnnotations");
 		List<? extends MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			AttributeList al1 = methods.get(i).attributesNullable();
-			if (al1 != null) al1.removeByName("Signature");
+			if (al1 != null) {
+				al1.removeByName("Signature");
+				if ((flags & REMOVE_ANNOTATION) != 0) al1.removeByName("RuntimeInvisibleAnnotations");
+			}
 		}
 		List<? extends FieldNode> fields = data.fields;
 		for (int i = 0; i < fields.size(); i++) {
 			AttributeList al1 = fields.get(i).attributesNullable();
-			if (al1 != null) al1.removeByName("Signature");
+			if (al1 != null) {
+				al1.removeByName("Signature");
+				if ((flags & REMOVE_ANNOTATION) != 0) al1.removeByName("RuntimeInvisibleAnnotations");
+			}
 		}
 	}
 
@@ -556,6 +565,8 @@ public class Obfuscator {
 		List<? extends MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode m = methods.get(i);
+			m.unparsed(data.cp);
+
 			AttrUnknown au = (AttrUnknown) m.attrByName("Code");
 			if (au == null) continue;
 

@@ -18,21 +18,21 @@ import java.util.List;
  */
 public final class AttrRecord extends Attribute {
 	public AttrRecord() { variables = new ArrayList<>(); }
-	public AttrRecord(DynByteBuf r, ConstantPool pool) {
+	public AttrRecord(DynByteBuf r, ConstantPool cp) {
 		int len = r.readUnsignedShort();
 		variables = new ArrayList<>(len);
 		while (len-- > 0) {
 			Val rd = new Val();
 			variables.add(rd);
 
-			rd.name = ((CstUTF) pool.get(r)).str();
-			rd.type = ((CstUTF) pool.get(r)).str();
+			rd.name = ((CstUTF) cp.get(r)).str();
+			rd.type = ((CstUTF) cp.get(r)).str();
 			int len1 = r.readUnsignedShort();
 			if (len1 > 0) {
 				rd.attributes = new AttributeList(len1);
 				while (len1-- > 0) {
-					String name0 = ((CstUTF) pool.get(r)).str();
-					rd.attributes.i_direct_add(new AttrUnknown(name0, r.slice(r.readInt())));
+					String name0 = ((CstUTF) cp.get(r)).str();
+					rd.attributes.i_direct_add(Parser.attr(rd, cp, name0, r.slice(r.readInt()), Parser.RECORD_ATTR));
 				}
 			}
 		}

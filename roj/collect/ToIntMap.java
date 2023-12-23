@@ -12,6 +12,12 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 	public static final class Entry<K> extends AbstractEntry<K, Integer> {
 		public int v;
 
+		public Entry() {}
+		public Entry(K key, int val) {
+			this.k = key;
+			this.v = val;
+		}
+
 		@Override
 		public Integer getValue() { return v; }
 		@Override

@@ -98,7 +98,7 @@ public class MapperUI extends JFrame {
 		File output = new File(uiOutputPath.getText());
 		Charset charset = Charset.forName(uiCharset.getText());
 
-		if (uiOutputPath.getText().isEmpty() || (input.size() > 0 && !output.isDirectory() && !output.mkdirs())) {
+		if (uiOutputPath.getText().isEmpty() || (input.size() > 1 && !output.isDirectory() && !output.mkdirs())) {
 			JOptionPane.showMessageDialog(this, "输出不是文件夹且无法创建", "IO错误", JOptionPane.ERROR_MESSAGE);
 			return;
 		}
@@ -129,7 +129,7 @@ public class MapperUI extends JFrame {
 			for (File file : input) {
 				Map<String, byte[]> resource = new MyHashMap<>();
 				List<Context> arr = Context.fromZip(file, charset, resource);
-				files.add(new MapTask(new File(output, file.getName()), ctxs.size(), arr.size(), resource));
+				files.add(new MapTask(input.size() == 1 && !output.isDirectory() ? output : new File(output, file.getName()), ctxs.size(), arr.size(), resource));
 
 				if (uiMapUsers.isSelected()) m.loadLibraries(Collections.singletonList(file));
 				m.map(arr);

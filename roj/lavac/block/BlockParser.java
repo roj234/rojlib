@@ -5,7 +5,6 @@ import roj.asm.Opcodes;
 import roj.asm.cst.Constant;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.AttrCode;
 import roj.asm.tree.attr.AttrLavaSpec;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -13,6 +12,7 @@ import roj.asm.type.TypeCast;
 import roj.asm.util.TryCatchEntry;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.SwitchSegment;
+import roj.asm.visitor.XAttrCode;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -100,7 +100,7 @@ public class BlockParser {
 
 	/// region 解析
 
-	public void parseStaticInit(CompileUnit file, AttrCode attr, int begin, int end) throws ParseException {
+	public void parseStaticInit(CompileUnit file, XAttrCode attr, int begin, int end) throws ParseException {
 		ctx = file.ctx();
 		this.file = file;
 		this.wr = file.getLexer();
@@ -108,7 +108,7 @@ public class BlockParser {
 		parse0();
 	}
 
-	public void parseGlobalInit(CompileUnit file, AttrCode attr, int begin, int end) throws ParseException {
+	public void parseGlobalInit(CompileUnit file, XAttrCode attr, int begin, int end) throws ParseException {
 		ctx = file.ctx();
 		this.file = file;
 		this.wr = file.getLexer();
@@ -116,7 +116,7 @@ public class BlockParser {
 		parse0();
 	}
 
-	public void parseMethod(CompileUnit file, AttrCode attr, List<String> names, int begin, int end) throws ParseException {
+	public void parseMethod(CompileUnit file, XAttrCode attr, List<String> names, int begin, int end) throws ParseException {
 		ctx = file.ctx();
 		this.file = file;
 		this.wr = file.getLexer();
