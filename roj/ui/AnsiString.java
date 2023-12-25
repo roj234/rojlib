@@ -79,12 +79,12 @@ public class AnsiString {
 		return out;
 	}
 	public AnsiString writeLimited(CharList sb, MutableInt maxWidth, boolean ansi) {
-		int width = CLIUtil.getDisplayWidth(value);
+		int width = CLIUtil.getStringWidth(value);
 		if (width > maxWidth.value) {
 			int i = 0;
 			width = 0;
 			while (i < value.length()) {
-				int w = CLIConsole.getCharLength(value.charAt(i));
+				int w = CLIUtil.getCharWidth(value.charAt(i));
 				if (width+w > maxWidth.value) {
 					sb.append(value, 0, i);
 					return new AnsiString(this, value.substring(i));

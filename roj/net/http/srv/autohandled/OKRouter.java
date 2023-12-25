@@ -23,7 +23,7 @@ import roj.config.CCJson;
 import roj.config.JSONParser;
 import roj.config.serial.CAdapter;
 import roj.config.serial.SerializerFactory;
-import roj.config.serial.SerializerUtils;
+import roj.config.serial.Serializers;
 import roj.mapper.ParamNameMapper;
 import roj.math.MutableInt;
 import roj.net.http.Action;
@@ -533,7 +533,7 @@ public class OKRouter implements Router {
 	}
 
 	private static final class LazyAdapter {
-		static final SerializerFactory ADAPTER_FACTORY = SerializerUtils.newSerializerFactory();
+		static final SerializerFactory ADAPTER_FACTORY = Serializers.newSerializerFactory();
 	}
 
 	public static Object _JAdapt(Request req, String type) throws IllegalRequestException {

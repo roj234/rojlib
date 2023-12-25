@@ -231,22 +231,34 @@ public class UpdatePinyinData {
 	private static CharList delTone(CharList sb) {
 		sb.replace('ü', 'v');
 		int rpc=0;
-		rpc=sb.preg_replace(Pattern.compile("[àèìòùǜǹ]"), "");
+		rpc=sb.preg_replace_callback(Pattern.compile("[àèìòùǜǹ]"), m -> {
+			int i = m.pattern().pattern().indexOf(m.group(0));
+			return String.valueOf("[aeioun]".charAt(i));
+		});
 		if (rpc != 0) {
 			sb.append('4');
 			return sb;
 		}
-		rpc=sb.preg_replace(Pattern.compile("[ǎăĕěĭǐŏǒŭǔǚň]"), "");
+		rpc=sb.preg_replace_callback(Pattern.compile("[ǎăĕěĭǐŏǒŭǔǚň]"), m -> {
+			int i = m.pattern().pattern().indexOf(m.group(0));
+			return String.valueOf("[aaeeiioouuun]".charAt(i));
+		});
 		if (rpc != 0) {
 			sb.append('3');
 			return sb;
 		}
-		rpc=sb.preg_replace(Pattern.compile("[áéíóúǘń]"), "");
+		rpc=sb.preg_replace_callback(Pattern.compile("[áéíóúǘń]"), m -> {
+			int i = m.pattern().pattern().indexOf(m.group(0));
+			return String.valueOf("[aeiouun]".charAt(i));
+		});
 		if (rpc != 0) {
 			sb.append('2');
 			return sb;
 		}
-		rpc=sb.preg_replace(Pattern.compile("[āēīōūǖ]"), "");
+		rpc=sb.preg_replace_callback(Pattern.compile("[āēīōūǖ]"), m -> {
+			int i = m.pattern().pattern().indexOf(m.group(0));
+			return String.valueOf("[aeiouu]".charAt(i));
+		});
 		if (rpc != 0) {
 			sb.append('1');
 			return sb;

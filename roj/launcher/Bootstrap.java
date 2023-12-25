@@ -130,6 +130,12 @@ public final class Bootstrap {
 		c.one(RETURN);
 		c.finish();
 
+		// necessary
+		Level level = LOGGER.getLevel();
+		LOGGER.setLevel(Level.ALL);
+		LOGGER.info("欢迎使用Roj234通用类转换包装器1.1");
+		LOGGER.setLevel(level);
+
 		ByteList list = Parser.toByteArrayShared(L);
 		Class<?> loaderClass = entryPoint.defineClassB(L.name.replace('/', '.'), list.list, 0, list.wIndex());
 		ReflectionUtils.u.ensureClassInitialized(loaderClass);

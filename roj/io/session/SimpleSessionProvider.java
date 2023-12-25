@@ -6,7 +6,7 @@ import roj.concurrent.SegmentReadWriteLock;
 import roj.config.NBTParser;
 import roj.config.serial.CAdapter;
 import roj.config.serial.SerializerFactory;
-import roj.config.serial.SerializerUtils;
+import roj.config.serial.Serializers;
 import roj.config.serial.ToNBT;
 import roj.io.IOUtil;
 import roj.io.source.BufferedSource;
@@ -32,7 +32,7 @@ import java.util.function.BiConsumer;
  * @since 2023/5/15 0015 14:13
  */
 public class SimpleSessionProvider extends SessionProvider implements BiConsumer<String,Map<String,Object>> {
-	private static final SerializerFactory factory = SerializerUtils.newSerializerFactory(
+	private static final SerializerFactory factory = Serializers.newSerializerFactory(
 		SerializerFactory.GENERATE|
 		SerializerFactory.PREFER_DYNAMIC|
 		SerializerFactory.CHECK_INTERFACE|SerializerFactory.CHECK_PARENT);

@@ -1,7 +1,7 @@
 package roj.ui.terminal;
 
 import roj.collect.MyHashMap;
-import roj.ui.CLIConsole;
+import roj.ui.CLIUtil;
 
 import java.util.Map;
 
@@ -19,5 +19,5 @@ public class CommandContext {
 		return argument == null ? defValue : argument;
 	}
 
-	public void writeToSystemIn(byte[] b, int off, int len) { CLIConsole.writeToSystemIn(b, off, len); }
+	public void writeToSystemIn(byte[] b, int off, int len) { CLIUtil.writeToSystemIn(b, off, len); }
 }

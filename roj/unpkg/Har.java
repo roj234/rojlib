@@ -7,7 +7,7 @@ import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.config.serial.Optional;
 import roj.config.serial.SerializerFactory;
-import roj.config.serial.SerializerUtils;
+import roj.config.serial.Serializers;
 import roj.crypt.Base64;
 import roj.util.ByteList;
 
@@ -32,7 +32,7 @@ public class Har {
 		}
 
 		File base = new File(args[1]);
-		SerializerFactory factory = SerializerUtils.newSerializerFactory();
+		SerializerFactory factory = Serializers.newSerializerFactory();
 		PojoHar har = ConfigMaster.adapt(factory.adapter(PojoHar.class), new File(args[0])).log;
 		System.out.println("Version " + har.version + " Created by " + har.creator);
 		ByteList tmp = new ByteList();

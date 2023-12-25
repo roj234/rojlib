@@ -2,6 +2,7 @@ package roj.ui.terminal;
 
 import roj.collect.SimpleList;
 import roj.config.ParseException;
+import roj.text.CharList;
 
 import java.util.List;
 
@@ -15,6 +16,21 @@ public abstract class CommandNode {
 
 	public static CommandNode literal(String name) { return new LiteralNode(name); }
 	public static CommandNode argument(String name, Argument<?> argument) { return new ArgumentNode(name, argument); }
+
+	public CharList dump(CharList sb, int depth) {
+		if (impl == null) {
+			if (children.size() == 1) return children.get(0).dump(sb.append(' '), depth);
+		} else if (children.isEmpty()) {
+			return sb.append('\n');
+		}
+
+		sb.append(":\n");
+		if (impl != null) sb.padEnd(' ', depth).append("<Execute>\n");
+		for (CommandNode child : children) {
+			child.dump(sb.padEnd(' ', depth), depth+2).append('\n');
+		}
+		return sb;
+	}
 
 	public CommandNode executes(CommandImpl e) {
 		if (impl != null) throw new IllegalStateException("Already have executor");
@@ -61,6 +77,12 @@ public abstract class CommandNode {
 		LiteralNode(String name) { literal = name; }
 
 		@Override
+		public CharList dump(CharList sb, int depth) {
+			sb.append('\'').append(literal).append('\'');
+			return super.dump(sb, depth);
+		}
+
+		@Override
 		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 			if (ctx.isEOF()) {
 				if (completions != null) completions.add(new Completion(literal));
@@ -80,6 +102,12 @@ public abstract class CommandNode {
 		private final String name;
 		private final Argument<?> argument;
 		ArgumentNode(String name, Argument<?> argument) { this.name = name; this.argument = argument; }
+
+		@Override
+		public CharList dump(CharList sb, int depth) {
+			sb.append(name).append(':').append(argument.getClass().getSimpleName());
+			return super.dump(sb, depth);
+		}
 
 		@Override
 		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {

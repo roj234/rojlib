@@ -74,7 +74,7 @@ final class ObjAny extends Adapter {
 		} catch (Throwable e) {
 			throw new IllegalStateException("无法找到类 " + o, e);
 		}
-		ctx.curr = ser;
+		ctx.replace(ser);
 		ctx.fieldId = -2;
 		ser.map(ctx, -1);
 

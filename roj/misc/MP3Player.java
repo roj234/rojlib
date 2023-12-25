@@ -6,7 +6,7 @@ import roj.sound.mp3.Header;
 import roj.sound.util.FilePlayer;
 import roj.sound.util.JavaAudio;
 import roj.text.CharList;
-import roj.ui.CLIConsole;
+import roj.ui.CLIUtil;
 import roj.ui.ProgressBar;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
@@ -35,7 +35,7 @@ public class MP3Player {
 		}
 
 		CommandConsole c = new CommandConsole("\u001b[33mCLI-MP3\u001b[93m> ");
-		CLIConsole.setConsole(c);
+		CLIUtil.setConsole(c);
 
 		if (args.length != 2 || !args[1].equals("-notip")) {
 			System.out.println("Command: ");
@@ -134,7 +134,7 @@ public class MP3Player {
 		ProgressBar bar = new ProgressBar("播放进度") {
 			@Override
 			protected void render(CharList b) {
-				CLIConsole.renderBottomLine(b, true, 0);
+				CLIUtil.renderBottomLine(b, true, 0);
 			}
 		};
 		bar.setUnit("f");

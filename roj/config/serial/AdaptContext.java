@@ -115,7 +115,7 @@ class AdaptContext implements CAdapter<Object> {
 		curr.pop(this);
 
 		int fst = curr.plusOptional(fieldState, fieldStateEx);
-		int remain = curr.fieldCount() - Integer.bitCount(fst) + (fieldStateEx == null ? 0 : fieldStateEx.size());
+		int remain = curr.fieldCount() - Integer.bitCount(fst) - (fieldStateEx == null ? 0 : fieldStateEx.size());
 
 		if (remain != 0) {
 			if (!(curr instanceof GenAdapter)) throw new IllegalStateException(curr+"缺少"+remain+"个字段");
@@ -123,7 +123,7 @@ class AdaptContext implements CAdapter<Object> {
 			CharList sb = new CharList().append(curr).append("缺少这些字段:");
 			IntBiMap<String> fieldId = ((GenAdapter) curr).fieldNames();
 			for (int i = 0; i < curr.fieldCount(); i++) {
-				boolean has = i < 32 ? (fst & (1<<i)) != 0 : fieldStateEx.contains(i);
+				boolean has = i < 32 ? (fst & (1<<i)) != 0 : fieldStateEx.contains(i-32);
 				if (!has) sb.append(fieldId.get(i)).append(", ");
 			}
 			throw new IllegalStateException(sb.toStringAndFree());
@@ -191,9 +191,12 @@ class AdaptContext implements CAdapter<Object> {
 
 		stack = state.push(this);
 
+		replace(s);
+		s.push(this);
+	}
+	public final void replace(Adapter s) {
 		if (s.fieldCount() > 32) fieldStateEx = new MyBitSet(s.fieldCount()-32);
 		curr = s;
-		s.push(this);
 	}
 
 	private ByteList buf;

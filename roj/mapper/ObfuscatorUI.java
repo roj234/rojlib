@@ -22,7 +22,7 @@ import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.serial.Optional;
 import roj.config.serial.SerializerFactory;
-import roj.config.serial.SerializerUtils;
+import roj.config.serial.Serializers;
 import roj.io.IOUtil;
 import roj.mapper.obf.MyExcluder;
 import roj.mapper.obf.nodename.*;
@@ -576,8 +576,8 @@ public class ObfuscatorUI extends JFrame {
 		ExclusionEntry[] exclusions;
 	}
 	private void saveYml(String file) throws IOException {
-		SerializerFactory f = SerializerUtils.newSerializerFactory(SerializerFactory.GENERATE | SerializerFactory.ALLOW_DYNAMIC | SerializerFactory.NO_CONSTRUCTOR);
-		SerializerUtils.serializeCharArrayToString(f);
+		SerializerFactory f = Serializers.newSerializerFactory(SerializerFactory.GENERATE | SerializerFactory.ALLOW_DYNAMIC | SerializerFactory.NO_CONSTRUCTOR);
+		Serializers.serializeCharArrayToString(f);
 		SaveTo o = new SaveTo();
 		o.flag = uiFlag.getNumber().intValue();
 		o.seed = (int) uiSeed.getValue();
@@ -592,8 +592,8 @@ public class ObfuscatorUI extends JFrame {
 		ConfigMaster.write(o, file, "YAML", f.adapter(SaveTo.class));
 	}
 	private void readYml(File file) throws IOException, ParseException {
-		SerializerFactory f = SerializerUtils.newSerializerFactory(SerializerFactory.GENERATE | SerializerFactory.ALLOW_DYNAMIC | SerializerFactory.NO_CONSTRUCTOR);
-		SerializerUtils.serializeCharArrayToString(f);
+		SerializerFactory f = Serializers.newSerializerFactory(SerializerFactory.GENERATE | SerializerFactory.ALLOW_DYNAMIC | SerializerFactory.NO_CONSTRUCTOR);
+		Serializers.serializeCharArrayToString(f);
 		SaveTo o = ConfigMaster.adapt(f.adapter(SaveTo.class), file);
 		uiFlag.setValue(o.flag);
 		uiSeed.setValue(o.seed);

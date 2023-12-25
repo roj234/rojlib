@@ -32,6 +32,7 @@ import roj.util.Helpers;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -95,12 +96,14 @@ public final class SerializerFactory {
 	private static final int PREFER_DYNAMIC_INTERNAL = 32, FORCE_DYNAMIC_INTERNAL = 64, APPLY_DYNAMIC_INTERNAL = 128;
 	public static final int
 		GENERATE = 1,
-		CHECK_INTERFACE = 2, CHECK_PARENT = 4,
+		CHECK_INTERFACE = 2,
+		CHECK_PARENT = 4,
 		NO_CONSTRUCTOR = 8,
 		ALLOW_DYNAMIC = 16,
 		PREFER_DYNAMIC = ALLOW_DYNAMIC|PREFER_DYNAMIC_INTERNAL,
 		FORCE_DYNAMIC = PREFER_DYNAMIC|FORCE_DYNAMIC_INTERNAL,
-		SAFE = 256;
+		SAFE = 256,
+		SERIALIZE_PARENT = 512;
 
 	public int flag;
 	public ToIntFunction<Class<?>> flagGetter;
@@ -151,6 +154,41 @@ public final class SerializerFactory {
 		synchronized (localRegistry) {
 			localRegistry.put(cls.getName().replace('.', '/'), ser);
 		}
+		return this;
+	}
+
+	public SerializerFactory auto(Class<?>... type) {
+		for (Class<?> cl : type) auto(cl);
+		return this;
+	}
+	public SerializerFactory auto(Class<?> type) {
+		String name = type.getName().replace('.', '/');
+		Adapter ser;
+
+		generate:
+		if (!GENERATED.containsKey(name)) {
+			lock.lock();
+			try {
+				if (GENERATED.containsKey(name)) break generate;
+
+				if (type.isEnum()) {
+					ser = new EnumSer(type);
+				} else if (type.getComponentType() != null) {
+					ser = array(type);
+				} else {
+					ser = klass(type, flag);
+				}
+
+				GENERATED.put(name, ser);
+			} finally {
+				lock.unlock();
+			}
+
+			if (ser instanceof GenAdapter) {
+				((GenAdapter) ser).init(new IntBiMap<>(fieldIds), optionalEx);
+			}
+		}
+
 		return this;
 	}
 
@@ -298,8 +336,8 @@ public final class SerializerFactory {
 	 * 注册@{@link As}目标的转换器 <BR>
 	 * 和SerializerFactory绑定 <pre>
 	 * 转换方法两种方式参考:
-	 *   {@link SerializerUtils#writeHex(byte[])}
-	 *   {@link SerializerUtils#writeISO(long, CVisitor)}
+	 *   {@link Serializers#writeHex(byte[])}
+	 *   {@link Serializers#writeISO(long, CVisitor)}
 	 * @param name 注解的value
 	 * @param targetType 转换到的目标的类
 	 * @param adapter 转换器实例，不支持.class
@@ -652,11 +690,7 @@ public final class SerializerFactory {
 		cw.varStore(type, 2);
 
 		if (ser >= 0) {
-			cw.one(ALOAD_0);
-			cw.field(GETFIELD, c, ser);
-			cw.one(ALOAD_1);
-			cw.one(ALOAD_2);
-			cw.invoke(INVOKEVIRTUAL, "roj/config/serial/Adapter", "write", "(Lroj/config/serial/CVisitor;Ljava/lang/Object;)V");
+			invokeParent(cw, ALOAD);
 		} else {
 			cw.one(ALOAD_1);
 			cw.varLoad(type, 2);
@@ -675,22 +709,53 @@ public final class SerializerFactory {
 	}
 
 	// region object serializer
-	private static final byte DIRECT_IF_OVERRIDE = SerializerUtils.injected ? INVOKESPECIAL : INVOKEVIRTUAL;
+	private static final byte DIRECT_IF_OVERRIDE = Serializers.injected ? INVOKESPECIAL : INVOKEVIRTUAL;
 	private Adapter klass(Class<?> o, int flag) {
+		int t = GENERATE|CHECK_PARENT|SERIALIZE_PARENT;
+		if ((flag&t) == t) throw new IllegalArgumentException("GENERATE CHECK_PARENT SERIALIZE_PARENT 不能同时为真");
+
 		if ((o.getModifiers()&PUBLIC) == 0 && (flag&SAFE) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
 		ConstantData data = Parser.parse(o);
 		if (data == null) throw new IllegalArgumentException("无法获取"+o.getName()+"的类文件");
-		if (data.fields.size() == 0) throw new IllegalArgumentException("这"+o.getName()+"味道不对啊,怎么一个字段都没有");
 
 		int _init = data.getMethod("<init>", "()V");
 		if (_init < 0) {
 			if ((flag & NO_CONSTRUCTOR) == 0) throw new IllegalArgumentException("不允许跳过构造器(NO_CONSTRUCTOR)" + o.getName());
 		} else if ((data.methods.get(_init).modifier() & PUBLIC) == 0) {
-			if (!SerializerUtils.injected) throw new IllegalArgumentException("Adapter没有激活,不能跳过无参构造器生成对象" + o.getName());
+			if (!Serializers.injected) throw new IllegalArgumentException("UnsafeAdapter没有激活,不能跳过无参构造器生成对象" + o.getName());
 			if ((flag & SAFE) != 0) throw new IllegalArgumentException("UNSAFE: "+o.getName()+".<init>");
 		}
 
-		begin();
+		fieldIds.clear();
+		parentExist.clear();
+		Adapter parentSerInst;
+		if ((flag & SERIALIZE_PARENT) != 0 && !data.parent.equals("java/lang/Object")) {
+			parentSerInst = make(data.parent, o.getSuperclass(), null, true);
+			assert parentSerInst instanceof GenAdapter : "parentSer is not GenAdapter " + parentSerInst;
+
+			begin();
+			parentSer = ser(data.parent, null);
+			IntBiMap<String> oldFieldIds = ((GenAdapter) parentSerInst).fieldNames();
+			fieldIds.putAll(oldFieldIds);
+			for (FieldNode field : data.fields) {
+				if (oldFieldIds.containsValue(field.name()))
+					throw new IllegalArgumentException("重复的字段名称:"+field+", 位于"+data.name+",先前位于（或它的父类）:"+data.parent);
+			}
+
+			for (Method mn : parentSerInst.getClass().getDeclaredMethods()) {
+				if (mn.getName().equals("read")) {
+					int type = TypeHelper.class2type(mn.getParameterTypes()[1]).getActualType();
+					parentExist.add(type);
+				}
+			}
+		} else {
+			parentSer = -1;
+			parentSerInst = null;
+			begin();
+		}
+
+		if (data.fields.size() == 0 && fieldIds.size() == 0) throw new IllegalArgumentException("这"+o.getName()+"味道不对啊,怎么一个字段都没有");
+
 		// region toString
 		CodeWriter cw = c.newMethod(PUBLIC|FINAL, "toString", "()Ljava/lang/String;");
 		cw.visitSize(1,1);
@@ -701,7 +766,6 @@ public final class SerializerFactory {
 		cw.finish();
 		// endregion
 		int fieldIdKey = c.newField(PRIVATE|STATIC, "ser$fieldIds", "Lroj/collect/IntBiMap;");
-		fieldIds.clear();
 		// region fieldId
 		cw = c.newMethod(PUBLIC|FINAL, "fieldNames", "()Lroj/collect/IntBiMap;");
 		cw.visitSize(1,1);
@@ -726,9 +790,13 @@ public final class SerializerFactory {
 		cw.addSegment(keySwitch);
 		keySwitch.def = cw.label();
 
-		cw.one(ALOAD_1);
-		cw.field(GETSTATIC, "roj/config/serial/SkipSer", "INST", "Lroj/config/serial/Adapter;");
-		cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/serial/AdaptContext", "push", "(Lroj/config/serial/Adapter;)V");
+		if (parentSer >= 0) {
+			invokeParent(cw, ALOAD);
+		} else {
+			cw.one(ALOAD_1);
+			cw.field(GETSTATIC, "roj/config/serial/SkipSer", "INST", "Lroj/config/serial/Adapter;");
+			cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/serial/AdaptContext", "push", "(Lroj/config/serial/Adapter;)V");
+		}
 		cw.one(RETURN);
 
 		// endregion
@@ -739,9 +807,13 @@ public final class SerializerFactory {
 		write.one(ALOAD_2);
 		write.clazz(CHECKCAST, data.name);
 		write.one(ASTORE_2);
+
+		if (parentSer >= 0) invokeParent(write, ALOAD);
 		// endregion
 
-		CstInt count = new CstInt(0);
+		int fieldId = parentSer < 0 ? 0 : parentSerInst.fieldCount();
+
+		CstInt count = new CstInt(fieldId);
 		// region map()
 		cw = c.newMethod(PUBLIC|FINAL, "map", "(Lroj/config/serial/AdaptContext;I)V");
 		cw.visitSize(3,3);
@@ -758,8 +830,6 @@ public final class SerializerFactory {
 		cw.ldc(count);
 		cw.one(IRETURN);
 		// endregion
-
-		int fieldId = 0;
 
 		boolean defaultOptional = false;
 		int optional = 0;
@@ -838,7 +908,7 @@ public final class SerializerFactory {
 					" 1. 开启UNSAFE模式\n" +
 					" 2. 定义setter/getter\n" +
 					" 3. 为字段或s/g添加public");
-				if (!SerializerUtils.injected)
+				if (!Serializers.injected)
 					throw new RuntimeException("无权访问"+data.name+"."+f+" ("+unsafe+")\n" +
 						"解决方案: 换用支持的JVM");
 			}
@@ -864,6 +934,10 @@ public final class SerializerFactory {
 			// region optional
 			cw = c.newMethod(PUBLIC|FINAL, "plusOptional", "(ILroj/collect/MyBitSet;)I");
 			cw.visitSize(2,3);
+			if (parentSer >= 0) {
+				invokeParent(cw, ILOAD);
+				cw.one(ISTORE_1);
+			}
 			if (optionalEx != null) {
 				int fid = c.newField(PRIVATE|STATIC, "ser$optEx", "Lroj/collect/MyBitSet;");
 				cw.one(ALOAD_2);
@@ -883,11 +957,26 @@ public final class SerializerFactory {
 			// endregion
 		}
 
+		for (IntIterator itr = parentExist.iterator(); itr.hasNext(); ) {
+			createReadMethod(data, itr.nextInt());
+		}
+
 		init.one(RETURN);
 		init.finish();
 
 		return build();
 	}
+
+	private int parentSer;
+	private final MyBitSet parentExist = new MyBitSet();
+	private void invokeParent(CodeWriter cw, byte opcode) {
+		cw.one(ALOAD_0);
+		cw.field(GETFIELD, c, parentSer);
+		cw.vars(opcode, 1);
+		cw.one(ALOAD_2);
+		cw.invoke(INVOKEVIRTUAL, "roj/config/serial/Adapter", cw.mn.name(), cw.mn.rawDesc());
+	}
+
 	private void value(int fieldId, ConstantData data, FieldNode fn,
 					   String actualName, MethodNode get, MethodNode set,
 					   boolean optional1, AsType as,
@@ -1138,13 +1227,18 @@ public final class SerializerFactory {
 		cw.addSegment(t.seg);
 
 		cw.label(t.seg.def);
-		cw.clazz(NEW, "java/lang/IllegalStateException");
-		cw.one(DUP);
-		cw.one(ALOAD_1);
-		cw.field(GETFIELD, "roj/config/serial/AdaptContext", "fieldId", "I");
-		cw.invoke(INVOKESTATIC, "java/lang/Integer", "toString", "(I)Ljava/lang/String;");
-		cw.invoke(INVOKESPECIAL, "java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V");
-		cw.one(ATHROW);
+		if (parentExist.remove(methodType)) {
+			invokeParent(cw, TypeHelper.parseMethod(desc).get(1).shiftedOpcode(ILOAD));
+			cw.one(RETURN);
+		} else {
+			cw.clazz(NEW, "java/lang/IllegalStateException");
+			cw.one(DUP);
+			cw.one(ALOAD_1);
+			cw.field(GETFIELD, "roj/config/serial/AdaptContext", "fieldId", "I");
+			cw.invoke(INVOKESTATIC, "java/lang/Integer", "toString", "(I)Ljava/lang/String;");
+			cw.invoke(INVOKESPECIAL, "java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V");
+			cw.one(ATHROW);
+		}
 		return t;
 	}
 

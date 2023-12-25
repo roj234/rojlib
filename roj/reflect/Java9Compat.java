@@ -87,10 +87,10 @@ public final class Java9Compat {
 		w.one(ARETURN);
 		w.finish();
 
-		Class<?> 乌拉;
+		Class<?> type;
 		j17:
 		if (ReflectionUtils.JAVA_VERSION < 17) {
-			乌拉 = ReflectionUtils.u.defineAnonymousClass(jdkInternal, Parser.toByteArray(data), null);
+			type = ReflectionUtils.u.defineAnonymousClass(jdkInternal, Parser.toByteArray(data), null);
 		} else {
 			byte[] bytes = Parser.toByteArray(data);
 			try {
@@ -98,11 +98,11 @@ public final class Java9Compat {
 				Method m = ClassLoader.class.getDeclaredMethod("defineClass1", ClassLoader.class, String.class, byte[].class, int.class, int.class, ProtectionDomain.class, String.class);
 
 				m.setAccessible(true);
-				乌拉 = (Class<?>) m.invoke(null, null, data.name, bytes, 0, bytes.length, null, null);
+				type = (Class<?>) m.invoke(null, null, data.name, bytes, 0, bytes.length, null, null);
 			} catch (Exception e) {
 				if (NativeLibrary.loaded) {
 					try {
-						乌拉 = defineClass0(data.name, null, bytes, bytes.length);
+						type = defineClass0(data.name, null, bytes, bytes.length);
 						break j17;
 					} catch (Throwable ignored) {}
 				}
@@ -111,9 +111,7 @@ public final class Java9Compat {
 				return;
 			}
 		}
-		ReflectionUtils.u.ensureClassInitialized(乌拉);
-
-		System.out.println("[Java9Compat]"+乌拉.getName()+"注入成功");
+		ReflectionUtils.u.ensureClassInitialized(type);
 
 		Java9DefineClass = Helpers.cast(System.getProperties().remove("_ILJ9DC_"));
 	}
@@ -127,23 +125,21 @@ public final class Java9Compat {
 		final String name = "java/util/IL🐎";
 
 		if (Java9OpenMagic == null) {
-			ConstantData 马 = new ConstantData();
-			马.name(name);
-			马.parent("jdk/internal/reflect/MagicAccessorImpl");
+			ConstantData data = new ConstantData();
+			data.name(name);
+			data.parent("jdk/internal/reflect/MagicAccessorImpl");
 
-			CodeWriter cw = 马.newMethod(AccessFlag.PUBLIC|AccessFlag.STATIC, "<clinit>", "()V");
+			CodeWriter cw = data.newMethod(AccessFlag.PUBLIC|AccessFlag.STATIC, "<clinit>", "()V");
 			cw.visitSize(1, 0);
 			cw.one(RETURN);
 			cw.finish();
 
-			马.npConstructor();
+			data.npConstructor();
 
-			ByteList buf = Parser.toByteArrayShared(马);
+			ByteList buf = Parser.toByteArrayShared(data);
 			Java9OpenMagic = DefineClassHandle().apply(new Object[]{
-				马.name.replace('/', '.'), buf.list, 0, buf.wIndex(), null, null
+				data.name.replace('/', '.'), buf.list, 0, buf.wIndex(), null, null
 			});
-
-			System.out.println("[Java9Compat]"+Java9OpenMagic.getName());
 		}
 
 		return name;

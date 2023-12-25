@@ -32,7 +32,7 @@ public class CLIBoxRenderer {
 		NPR = npr.toCharArray();
 	}
 
-	public void render(String[][] table) { render(CLIConsole.windowWidth, table); }
+	public void render(String[][] table) { render(CLIUtil.windowWidth, table); }
 	public void render(int _width, String[][] table) {
 		sb.clear();
 
@@ -44,7 +44,7 @@ public class CLIBoxRenderer {
 			String[] box = table[i];
 			int off = i==0?1:0;
 			for (int j = off; j < box.length; j++) {
-				int w = CLIUtil.getDisplayWidth(box[j]);
+				int w = CLIUtil.getStringWidth(box[j]);
 				boxWidth[j-off] = Math.max(boxWidth[j-off], w);
 			}
 		}
@@ -97,7 +97,7 @@ public class CLIBoxRenderer {
 			for (int i = 0; i < boxOffset.size(); i++) {
 				String str = i >= line.size() ? "" : line.get(i);
 				sb.append(NPR[VERITAL_SEPARATOR]).append(NPR[SPACE]).append(str);
-				int width = CLIUtil.getDisplayWidth(str);
+				int width = CLIUtil.getStringWidth(str);
 				vOffset += width+2;
 				while (width < boxWidth[i]) {
 					sb.append(NPR[SPACE]);
@@ -108,7 +108,7 @@ public class CLIBoxRenderer {
 		}
 	}
 	private void writeTop(String head) {
-		int width = CLIUtil.getDisplayWidth(head)+3;
+		int width = CLIUtil.getStringWidth(head)+3;
 		int half = (realWidth-width)/2;
 		int vOffset = 1;
 

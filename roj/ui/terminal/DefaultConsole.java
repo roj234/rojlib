@@ -10,7 +10,10 @@ import roj.text.CharList;
 import roj.text.GB18030;
 import roj.text.UTF8MB4;
 import roj.text.UnsafeCharset;
-import roj.ui.*;
+import roj.ui.AnsiString;
+import roj.ui.CLIBoxRenderer;
+import roj.ui.CLIUtil;
+import roj.ui.Console;
 import roj.util.ByteList;
 
 import java.awt.*;
@@ -21,8 +24,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 
 import static java.awt.event.KeyEvent.*;
-import static roj.ui.CLIConsole.VK_CTRL;
 import static roj.ui.CLIUtil.ANSI_ESCAPE;
+import static roj.ui.CLIUtil.VK_CTRL;
 
 /**
  * @author Roj234
@@ -62,9 +65,9 @@ public class DefaultConsole implements Console {
 		this.prompt.append("\u001b[0m").append(prompt);
 
 		prefixLen = prompt.length()+4;
-		prefixCLen = CLIUtil.getDisplayWidth(prompt);
+		prefixCLen = CLIUtil.getStringWidth(prompt);
 
-		if (CLIConsole.hasBottomLine(this.prompt)) doRender();
+		if (CLIUtil.hasBottomLine(this.prompt)) doRender();
 	}
 	public void setDefaultHighlight(String postfix) { staticHighlight = postfix; }
 	public void setCursorMoveBound(int cmb) { cursorMoveBound = cmb; }
@@ -73,7 +76,7 @@ public class DefaultConsole implements Console {
 		CLIUtil.enableQuickEditMode();
 		doRender();
 	}
-	public void unregistered() { CLIConsole.removeBottomLine(prompt, true); }
+	public void unregistered() { CLIUtil.removeBottomLine(prompt, true); }
 
 	private void checkAnsi() {
 		invisible.clear();
@@ -93,7 +96,7 @@ public class DefaultConsole implements Console {
 
 		Completion s = tabs.get(id);
 		if (s.description != null) {
-			s.description.writeLimited(tooltip(), new MutableInt(CLIConsole.windowWidth), true);
+			s.description.writeLimited(tooltip(), new MutableInt(CLIUtil.windowWidth), true);
 			displayTooltip(5000);
 		} else {
 			displayTooltip(-1);
@@ -385,10 +388,10 @@ public class DefaultConsole implements Console {
 		if (end < input.length()) prompt.append("\u001b[1;5;41;97m+"); // + after
 		prompt.append("\u001b[0m");
 
-		CLIConsole.renderBottomLine(prompt, true, prefixCLen+relCursor+1);
+		CLIUtil.renderBottomLine(prompt, true, prefixCLen+relCursor+1);
 	}
 	private int computeMaxWidth() {
-		int maxWidth = CLIConsole.windowWidth-prefixCLen;
+		int maxWidth = CLIUtil.windowWidth-prefixCLen;
 		if (scrollLeft > 0) maxWidth--;
 		if (limitWidth(scrollLeft, maxWidth) < input.length()) maxWidth--;
 		return maxWidth;
@@ -399,7 +402,7 @@ public class DefaultConsole implements Console {
 		int width = 0;
 		for (int i = 0; i < input.length(); i++) {
 			if (!invisible.contains(i)) {
-				width += CLIConsole.getCharLength(input.charAt(i));
+				width += CLIUtil.getCharWidth(input.charAt(i));
 				if (--visLen == 0) break;
 			} else if (countInvisible) {
 				if (--visLen == 0) break;
@@ -413,7 +416,7 @@ public class DefaultConsole implements Console {
 		int width = 0;
 		for (; i < input.length(); i++) {
 			if (!invisible.contains(i)) {
-				width += CLIConsole.getCharLength(input.charAt(i));
+				width += CLIUtil.getCharWidth(input.charAt(i));
 				if (width >= maxWidth) return i;
 			}
 		}
@@ -427,11 +430,11 @@ public class DefaultConsole implements Console {
 	protected final void displayTooltip(int timeout) {
 		if (removeTooltip != null) removeTooltip.cancel();
 		if (timeout < 0) {
-			CLIConsole.removeBottomLine(tooltip, true);
+			CLIUtil.removeBottomLine(tooltip, true);
 			return;
 		}
 
-		CLIConsole.renderBottomLine(tooltip, true, 0);
+		CLIUtil.renderBottomLine(tooltip, true, 0);
 		removeTooltip = Scheduler.getDefaultScheduler().delay(() -> displayTooltip(-1), timeout);
 	}
 

@@ -88,12 +88,12 @@ public class DelegatedPrintStream extends PrintStream {
 		return this;
 	}
 
-	public synchronized final void print(boolean v) { flushBytes(); sb.append(v); flush(); }
-	public synchronized final void print(char v) { flushBytes(); sb.append(v); flush(); }
-	public synchronized final void print(int v) { flushBytes(); sb.append(v); flush(); }
-	public synchronized final void print(long v) { flushBytes(); sb.append(v); flush(); }
-	public synchronized final void print(float v) { flushBytes(); sb.append(v); flush(); }
-	public synchronized final void print(double v) { flushBytes(); sb.append(v); flush(); }
+	public synchronized final void print(boolean v) { flushBytes(); sb.append(v); partialLine(); }
+	public synchronized final void print(char v) { flushBytes(); sb.append(v); partialLine(); }
+	public synchronized final void print(int v) { flushBytes(); sb.append(v); partialLine(); }
+	public synchronized final void print(long v) { flushBytes(); sb.append(v); partialLine(); }
+	public synchronized final void print(float v) { flushBytes(); sb.append(v); partialLine(); }
+	public synchronized final void print(double v) { flushBytes(); sb.append(v); partialLine(); }
 	public final void print(@Nonnull char[] v){ append(new CharList.Slice(v,0,v.length)); }
 	public final void print(String v) { append(v == null ? "null" : v); }
 	public final void print(Object v) { append(v == null ? "null" : v.toString()); }

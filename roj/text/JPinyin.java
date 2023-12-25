@@ -87,7 +87,7 @@ public class JPinyin {
 	static {
 		// https://github.com/mozillazg/pinyin-data
 		try (LZMA2InputStream in = new LZMA2InputStream(JPinyin.class.getResourceAsStream("/META-INF/china/pinyin.lzma2"), 524288)) {
-			int DATALEN = 1298611;
+			int DATALEN = 1432238;
 			DirectByteList bb = DirectByteList.allocateDirect(DATALEN);
 			int i = in.read(bb.address(), DATALEN);
 			bb.wIndex(i);

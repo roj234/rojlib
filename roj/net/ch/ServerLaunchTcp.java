@@ -18,7 +18,7 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 	private final ServerSocketChannel tcp;
 	private SelectionKey key;
 
-	private int rcvBuf;
+	private int rcvBuf = 1536;
 	private AtomicInteger maxConn;
 
 	ServerLaunchTcp() throws IOException {

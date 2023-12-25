@@ -24,7 +24,6 @@ import roj.mod.MCLauncher.RunMinecraftTask;
 import roj.mod.plugin.PluginContext;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.ui.CLIConsole;
 import roj.ui.CLIUtil;
 import roj.ui.GUIUtil;
 import roj.ui.terminal.Argument;
@@ -172,7 +171,7 @@ public final class FMDMain {
 			CLIUtil.info("使用Tab补全指令、或按下F1查看帮助");
 			System.out.println();
 
-			CLIConsole.setConsole(c);
+			CLIUtil.setConsole(c);
 
 			// only non-daemon thread
 			LockSupport.park();

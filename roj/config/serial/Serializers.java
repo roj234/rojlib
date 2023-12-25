@@ -1,5 +1,6 @@
 package roj.config.serial;
 
+import org.intellij.lang.annotations.MagicConstant;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
@@ -15,7 +16,7 @@ import static roj.config.serial.SerializerFactory.*;
  * @author Roj234
  * @since 2023/3/24 0024 12:45
  */
-public final class SerializerUtils {
+public final class Serializers {
 	static boolean injected;
 	static {
 		try {
@@ -26,7 +27,7 @@ public final class SerializerUtils {
 		} catch (Throwable ignored) {}
 	}
 
-	private static final SerializerUtils INSTANCE = new SerializerUtils();
+	private static final Serializers INSTANCE = new Serializers();
 
 	public static void registerAsHex(SerializerFactory factory) { factory.registerAsAdapter("hex",byte[].class,INSTANCE,"writeHex","readHex"); }
 	public static void registerAsBase64(SerializerFactory factory) { factory.registerAsAdapter("base64",byte[].class,INSTANCE,"writeBase64","readBase64"); }
@@ -36,7 +37,7 @@ public final class SerializerUtils {
 
 	public static void serializeCharArrayToString(SerializerFactory factory) { factory.register(char[].class,INSTANCE,"writeChars","readChars"); }
 
-	private SerializerUtils() {}
+	private Serializers() {}
 
 	public final String writeHex(byte[] arr) {
 		return TextUtil.bytes2hex(arr,0,arr.length, new CharList()).toStringAndFree();
@@ -62,5 +63,5 @@ public final class SerializerUtils {
 	public final char[] readChars(String t) { return t.toCharArray(); }
 
 	public static SerializerFactory newSerializerFactory() { return newSerializerFactory(GENERATE|CHECK_INTERFACE|CHECK_PARENT|ALLOW_DYNAMIC); }
-	public static SerializerFactory newSerializerFactory(int flag) { return new SerializerFactory(flag); }
+	public static SerializerFactory newSerializerFactory(@MagicConstant(flags = {GENERATE,CHECK_INTERFACE, CHECK_PARENT, NO_CONSTRUCTOR, ALLOW_DYNAMIC, PREFER_DYNAMIC, FORCE_DYNAMIC, SAFE, SERIALIZE_PARENT }) int flag) { return new SerializerFactory(flag); }
 }

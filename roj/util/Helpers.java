@@ -33,6 +33,7 @@ public class Helpers {
 
 	public static File getJarByClass(Class<?> clazz) {
 		String loc = clazz.getProtectionDomain().getCodeSource().getLocation().getPath();
+		if (loc.startsWith("file:")) loc = loc.substring(5);
 		int i = loc.lastIndexOf('!');
 		loc = loc.substring(loc.startsWith("/")?1:0, i<0?loc.length():i);
 		try {

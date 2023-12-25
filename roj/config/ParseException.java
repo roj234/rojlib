@@ -150,7 +150,7 @@ public class ParseException extends Exception {
 			k.append("当前行偏移量 ").append(this.linePos);
 		} else {
 			k.append(line).append("\n");
-			int off = 10 + TextUtil.digitCount(this.line) + CLIUtil.getDisplayWidth(line.substring(0, linePos));
+			int off = 10 + TextUtil.digitCount(this.line) + CLIUtil.getStringWidth(line.substring(0, linePos));
 			for (int i = 0; i < off; i++) k.append('-');
 
 			k.append('^');

@@ -157,70 +157,71 @@ import java.io.File;
 import java.nio.charset.Charset;
 
 public class Test {
-  public static void main(String[] args) throws Exception {
-    // 为什么这么设计可以去看看SerializerFactoryFactory里面写了什么
-    SerializerFactory man = SerializerUtils.newSerializerFactory();
-    // 自定义序列化方式(使用@As调用)
-    SerializerUtils.registerAsRGB(man);
-    // 自定义序列化器(不是一定要匿名类)
-    man.register(Charset.class, new Object() {
-      public String serializeMyObject(Charset cs) { return cs.name(); }
-      public Charset deserMyObj(String s) { return Charset.forName(s); }
-    });
+	public static void main(String[] args) throws Exception {
+		// 为什么这么设计可以去看看SerializerFactoryFactory里面写了什么
+		SerializerFactory man = Serializers.newSerializerFactory();
+		// 自定义序列化方式(使用@As调用)
+		Serializers.registerAsRGB(man);
+		// 自定义序列化器(不是一定要匿名类)
+		man.register(Charset.class, new Object() {
+			public String serializeMyObject(Charset cs) {return cs.name();}
 
-    CAdapter<Pojo> adapter = man.adapter(Pojo.class);
+			public Charset deserMyObj(String s) {return Charset.forName(s);}
+		});
 
-    Pojo p = new Pojo();
-    p.color = 0xAABBCC;
-    p.charset = StandardCharsets.UTF_8;
-    p.map = Collections.singletonMap("114514", Collections.singletonMap("1919810", 23333L));
+		CAdapter<Pojo> adapter = man.adapter(Pojo.class);
 
-    // simple
-    ConfigMaster.write(p, "C:\\test.yml", "YAML", adapter);
-    p = ConfigMaster.adapt(adapter, new File("C:\\test.yml"));
+		Pojo p = new Pojo();
+		p.color = 0xAABBCC;
+		p.charset = StandardCharsets.UTF_8;
+		p.map = Collections.singletonMap("114514", Collections.singletonMap("1919810", 23333L));
 
-    // or CVisitor
-    ToJson ser = new ToJson();
-    adapter.write(ser, p);
-    CharList json = ser.getValue();
-    System.out.println(json);
+		// simple
+		ConfigMaster.write(p, "C:\\test.yml", "YAML", adapter);
+		p = ConfigMaster.adapt(adapter, new File("C:\\test.yml"));
 
-    System.out.println(adapter.read(new CCJson(), json, 0));
-  }
+		// or CVisitor
+		ToJson ser = new ToJson();
+		adapter.write(ser, p);
+		CharList json = ser.getValue();
+		System.out.println(json);
 
-  public static class Pojo {
-    // 自定义序列化方式
-    @As("rgb")
-    // 自定义序列化名称
-    @Name("myColor")
-    private int color;
-    // 通过getter或setter来访问字段
-    @Via(get = "getCharset", set = "setCharset")
-    public Charset charset;
-    // 支持任意对象和多层泛型
-    // 字段类型为接口和抽象类时，会用ObjAny序列化对象，会使用==表示对象的class
-    // 如果要保留这个Map的类型，那就（1）字段改成HashMap(具体)或者（2）开启DYNAMIC
-    public Map<String, Map<String, Object>> map;
+		System.out.println(adapter.read(new CCJson(), json, 0));
+	}
 
-    //使用transient避免被序列化
-    private transient Object doNotSerializeMe;
+	public static class Pojo {
+		// 自定义序列化方式
+		@As("rgb")
+		// 自定义序列化名称
+		@Name("myColor")
+		private int color;
+		// 通过getter或setter来访问字段
+		@Via(get = "getCharset", set = "setCharset")
+		public Charset charset;
+		// 支持任意对象和多层泛型
+		// 字段类型为接口和抽象类时，会用ObjAny序列化对象，会使用==表示对象的class
+		// 如果要保留这个Map的类型，那就（1）字段改成HashMap(具体)或者（2）开启DYNAMIC
+		public Map<String, Map<String, Object>> map;
 
-    // 若有无参构造器则调用之，否则allocateInstance
-    public Pojo() {}
+		//使用transient避免被序列化
+		private transient Object doNotSerializeMe;
 
-    public Charset getCharset() {
-      return charset;
-    }
+		// 若有无参构造器则调用之，否则allocateInstance
+		public Pojo() {}
 
-    public void setCharset(Charset charset) {
-      this.charset = charset;
-    }
+		public Charset getCharset() {
+			return charset;
+		}
 
-    @Override
-    public String toString() {
-      return "Pojo{" + "color=" + color + '}';
-    }
-  }
+		public void setCharset(Charset charset) {
+			this.charset = charset;
+		}
+
+		@Override
+		public String toString() {
+			return "Pojo{" + "color=" + color + '}';
+		}
+	}
 }
 
 

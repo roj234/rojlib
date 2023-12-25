@@ -8,13 +8,11 @@ import roj.text.TextUtil;
  * @since 2022/11/19 0019 3:33
  */
 public class ProgressBar implements AutoCloseable {
-	static { CLIUtil.ensureInited(); }
-
 	protected final CharList batch = new CharList();
 
-	protected void render(CharList b) { CLIConsole.renderBottomLine(batch); }
+	protected void render(CharList b) { CLIUtil.renderBottomLine(batch); }
 	protected void dispose(boolean clearText) {
-		CLIConsole.removeBottomLine(batch, clearText);
+		CLIUtil.removeBottomLine(batch, clearText);
 		barUpdate = dataUpdate = 0;
 	}
 

@@ -145,4 +145,12 @@ public class CommandConsole extends DefaultConsole {
 
 		return true;
 	}
+
+	public void dumpNodes() {
+		CharList sb = new CharList();
+		for (CommandNode node : nodes) {
+			node.dump(sb, 0);
+		}
+		System.out.println(sb);
+	}
 }

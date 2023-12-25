@@ -335,6 +335,9 @@ public class Page {
 					free -= size;
 					return len;
 				} else if (len > 0) {
+					int bitCount = (int) ((prefix+MASKS[SHIFT]) >>> SHIFT);
+					assert !(childCount > 0 && child[0].childId < bitCount) : "invalid prefix state";
+
 					long remain = prefix&MASKS[SHIFT];
 					if (remain > 0 && size <= MASKS[SHIFT]-remain) {
 						prefix = align(len+size);
@@ -600,6 +603,8 @@ public class Page {
 		private Page goc(int blockId) {
 			int i = get(blockId);
 			if (i >= 0) return child[i];
+
+			lockPrefix();
 
 			i = -i - 1;
 
