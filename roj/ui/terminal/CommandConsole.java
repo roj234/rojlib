@@ -93,6 +93,16 @@ public class CommandConsole extends DefaultConsole {
 
 	protected List<CommandNode> nodes = new SimpleList<>();
 	public void register(CommandNode node) { nodes.add(node); }
+	public boolean unregister(String name) {
+		for (int i = nodes.size()-1; i >= 0; i--) {
+			CommandNode node = nodes.get(i);
+			if (node instanceof CommandNode.LiteralNode && ((CommandNode.LiteralNode) node).getName().equals(name)) {
+				nodes.remove(i);
+				return true;
+			}
+		}
+		return false;
+	}
 
 	@Override
 	protected void complete(CharList input, int cursor, List<Completion> out) {
@@ -113,20 +123,18 @@ public class CommandConsole extends DefaultConsole {
 
 	@Override
 	protected final boolean evaluate(String cmd) {
-		boolean success = execute(cmd);
-		if (success) printCommand();
-		return success;
+		return execute(cmd, true);
 	}
 	public boolean executeCommand(String cmd) {
 		TaskPool executor = ctx.executor;
 		ctx.executor = null;
 		try {
-			return execute(cmd);
+			return execute(cmd, false);
 		} finally {
 			ctx.executor = executor;
 		}
 	}
-	protected boolean execute(String cmd) {
+	protected boolean execute(String cmd, boolean print) {
 		List<Word> words = parse(cmd);
 		if (words == null) return false;
 
@@ -135,11 +143,19 @@ public class CommandConsole extends DefaultConsole {
 			CommandNode node = nodes.get(i);
 			ctx.init(cmd, words);
 			try {
-				if (node.apply(ctx, null)) return true;
+				// 保证printCommand先于异步任务执行
+				synchronized (ctx) {
+					if (node.apply(ctx, null)) {
+						if (print) printCommand();
+						return true;
+					}
+				}
 			} catch (ParseException e) {
 				pe = e;
 			}
 		}
+
+		if (print) printCommand();
 		if (pe != null) pe.printStackTrace();
 		else System.out.println("指令未匹配任何参数组合,从左至右最多的部分匹配是:"+ctx.getMaxI());
 

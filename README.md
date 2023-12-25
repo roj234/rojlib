@@ -372,13 +372,13 @@ HTTP服务器, 客户端
 
 DNS服务器 
 
-内网穿透工具 AEClient / AEServer / AEHost`roj.net.cross`  
+内网穿透工具 AEClient / AEServer / AEHost`roj.plugins.cross`  
 * 带或不带中转服务器的端口转发程序
 * 客户端与服务器均能自签证书（用户ID）
 * 中转服务器模式下支持多个房间(主机)并行
 
 ### 图片展示
-![roj.net.cross.AEGui](images/port transfer.png)
+![roj.plugins.cross.AEGui](images/port transfer.png)
 
 MSS协议，My Secure Socket`roj.net.mss`  
   因为(jvav的)SSL不好用，自用的话还不如自己写一个协议  

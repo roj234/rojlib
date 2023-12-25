@@ -5,7 +5,7 @@ import roj.collect.RingBuffer;
 import roj.crypt.Base64;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.util.BitWriter;
+import roj.util.BitBuffer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -158,7 +158,7 @@ public final class HPACK {
 		}
 	}
 
-	private final BitWriter bu;
+	private final BitBuffer bu;
 
 	private final Table encode_tbl;
 	private final Field checker;
@@ -169,7 +169,7 @@ public final class HPACK {
 	private final Table decode_tbl;
 
 	public HPACK() {
-		bu = new BitWriter();
+		bu = new BitBuffer();
 
 		encode_tbl = new Table(4096);
 		checker = new Field();
@@ -288,7 +288,7 @@ public final class HPACK {
 		if (len < str.length()) {
 			writeInt(128, 7, len, out);
 			out.ensureWritable(len);
-			huffmanEncode(str, bu.reset(out));
+			huffmanEncode(str, bu.init(out));
 		} else {
 			writeInt(0, 7, str.length(), out);
 			out.putAscii(str);
@@ -318,7 +318,7 @@ public final class HPACK {
 			int lim = in.wIndex();
 			in.wIndex(in.rIndex+length);
 			try {
-				return huffmanDecode(bu.reset(in));
+				return huffmanDecode(bu.init(in));
 			} finally {
 				in.wIndex(lim);
 			}
@@ -390,7 +390,7 @@ public final class HPACK {
 		ByteList list = ByteList.allocate(999);
 		Base64.decode(table, list);
 
-		BitWriter br = new BitWriter(list);
+		BitBuffer br = new BitBuffer(list);
 		for (int i = 0; i < 257; i++) {
 			int len = br.readBit(5);
 			int code = br.readBit(len);
@@ -418,16 +418,16 @@ public final class HPACK {
 		}
 	}
 
-	private static void huffmanEncode(CharSequence seq, BitWriter out) {
+	private static void huffmanEncode(CharSequence seq, BitBuffer out) {
 		for (int i = 0; i < seq.length(); i++) {
 			int id = seq.charAt(i);
 			out.writeBit(HUFFMAN_SYM_LEN[id], HUFFMAN_SYM[id]);
 		}
-		if (out.bitIndex > 0) {
-			long l = out.buf << (8 - out.bitIndex);
-			l |= (0xFF >>> out.bitIndex);
+		if (out.bitPos > 0) {
+			long l = out.ob << (8 - out.bitPos);
+			l |= (0xFF >>> out.bitPos);
 			out.list.put((byte) l);
-			out.bitIndex = 0;
+			out.bitPos = 0;
 		}
 	}
 	private static int huffmanLength(CharSequence seq) {
@@ -439,7 +439,7 @@ public final class HPACK {
 		return (int) (len >>> 3);
 	}
 
-	private static String huffmanDecode(BitWriter in) throws H2Error {
+	private static String huffmanDecode(BitBuffer in) throws H2Error {
 		CharList tmp = IOUtil.getSharedCharBuf();
 
 		out:
@@ -465,8 +465,8 @@ public final class HPACK {
 		}
 		in.retractBits(-in.readableBits());
 
-		int mask = (1 << in.bitIndex) - 1;
-		if (in.bitIndex>0 && (in.list.get(in.list.rIndex) & mask) != mask) {
+		int mask = (1 << in.bitPos) - 1;
+		if (in.bitPos >0 && (in.list.get(in.list.rIndex) & mask) != mask) {
 			throw new H2Error(HttpClient20.ERROR_COMPRESS, "Invalid padding");
 		}
 		in.endBitRead();

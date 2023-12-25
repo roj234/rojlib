@@ -337,7 +337,7 @@ public abstract class HttpRequest {
 	}
 	public abstract HttpRequest clone();
 
-	public static final NamespaceKey DOWNLOAD_EOF = NamespaceKey.of("hc","data_eof");
+	public static final Identifier DOWNLOAD_EOF = Identifier.of("hc","data_eof");
 
 	protected Object _body;
 	protected byte state;
@@ -352,7 +352,7 @@ public abstract class HttpRequest {
 	private static final Map<InetSocketAddress, Pool> pool = new ConcurrentHashMap<>();
 
 	private static final class Pool extends RingBuffer<MyChannel> implements ChannelHandler {
-		static final TypedName<AtomicLong> SLEEP = new TypedName<>("_sleep");
+		static final AttributeKey<AtomicLong> SLEEP = new AttributeKey<>("_sleep");
 
 		final ReentrantLock lock = new ReentrantLock();
 		final Condition available = lock.newCondition();

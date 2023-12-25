@@ -3,7 +3,7 @@ package roj.mod;
 import com.sun.nio.file.ExtendedWatchEventModifier;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.concurrent.timing.ScheduledTask;
+import roj.concurrent.timing.ScheduleTask;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
@@ -61,7 +61,7 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 	private final Thread t;
 	private boolean pause;
 	private final String libPath;
-	private ScheduledTask reloadMapTask, reloadCfgTask;
+	private ScheduleTask reloadMapTask, reloadCfgTask;
 
 	private MyHashMap<String, X[]> listeners;
 

@@ -26,11 +26,11 @@ import java.util.concurrent.locks.ReentrantLock;
  * @since 2022/5/17 12:47
  */
 public abstract class MyChannel implements Selectable {
-	public static final NamespaceKey IN_EOF = new NamespaceKey("input_eof");
+	public static final Identifier IN_EOF = new Identifier("input_eof");
 
 	ChannelCtx pipelineHead, pipelineTail;
 
-	private Map<TypedName<?>, Object> attachments = Collections.emptyMap();
+	private Map<AttributeKey<?>, Object> attachments = Collections.emptyMap();
 
 	SelectionKey key = DummySelectionKey.INSTANCE;
 	AbstractSelectableChannel ch;
@@ -268,11 +268,11 @@ public abstract class MyChannel implements Selectable {
 	}
 
 	@SuppressWarnings("unchecked")
-	public final <T> T attachment(TypedName<T> key) {
+	public final <T> T attachment(AttributeKey<T> key) {
 		return (T) attachments.get(key);
 	}
 	@SuppressWarnings("unchecked")
-	public synchronized final <T> T attachment(TypedName<T> key, T val) {
+	public synchronized final <T> T attachment(AttributeKey<T> key, T val) {
 		if (attachments.isEmpty()) attachments = new MyHashMap<>(4);
 		return (T) (val == null ? attachments.remove(key) : attachments.put(key, val));
 	}

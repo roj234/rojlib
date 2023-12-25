@@ -10,7 +10,7 @@ import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.concurrent.OperationDone;
 import roj.concurrent.TaskPool;
-import roj.concurrent.timing.ScheduledTask;
+import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
 import roj.io.IOUtil;
 import roj.text.*;
@@ -552,7 +552,7 @@ public class NovelFrame extends JFrame {
 			TaskPool pool = TaskPool.Common();
 			SimpleList<IntMap.Entry<String>> list = new SimpleList<>();
 
-			AtomicReference<ScheduledTask> task = new AtomicReference<>();
+			AtomicReference<ScheduleTask> task = new AtomicReference<>();
 			task.set(Scheduler.getDefaultScheduler().loop(() -> {
 				progress.setValue((int) ((double)finished.sum() / total * 10000));
 				progressStr.setText(finished + "/" + total);

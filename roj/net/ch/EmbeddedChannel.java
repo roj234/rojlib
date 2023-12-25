@@ -3,7 +3,7 @@ package roj.net.ch;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
-import roj.util.NamespaceKey;
+import roj.util.Identifier;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -19,7 +19,7 @@ import java.util.concurrent.locks.LockSupport;
  * @since 2022/8/25 23:10
  */
 public class EmbeddedChannel extends MyChannel {
-	public static final NamespaceKey EMBEDDED_CLOSE = NamespaceKey.of("embedded:close");
+	public static final Identifier EMBEDDED_CLOSE = Identifier.of("embedded:close");
 	private static final SocketAddress address = new SocketAddress() {
 		@Override
 		public String toString() {

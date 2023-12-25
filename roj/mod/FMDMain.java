@@ -11,7 +11,7 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.task.AsyncTask;
-import roj.concurrent.timing.ScheduledTask;
+import roj.concurrent.timing.ScheduleTask;
 import roj.config.data.*;
 import roj.dev.ByteListOutput;
 import roj.dev.Compiler;
@@ -53,12 +53,12 @@ import static roj.ui.terminal.CommandNode.literal;
  */
 public final class FMDMain {
 	static boolean isCLI;
-	static ScheduledTask shinyTask;
+	static ScheduleTask shinyTask;
 	public static CommandConsole console = new CommandConsole("") {
 		@Override
-		public boolean execute(String cmd) {
+		public boolean execute(String cmd, boolean print) {
 			if (shinyTask != null) shinyTask.cancel();
-			return super.execute(cmd);
+			return super.execute(cmd, print);
 		}
 	};
 

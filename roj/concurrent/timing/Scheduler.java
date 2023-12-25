@@ -34,7 +34,7 @@ public class Scheduler implements Runnable {
 		return defaultScheduler;
 	}
 
-	private static final Comparator<ScheduledTask> CPR = (o1, o2) -> {
+	private static final Comparator<ScheduleTask> CPR = (o1, o2) -> {
 		int v = Long.compare(o1.nextRun, o2.nextRun);
 		if (v == 0) v = Integer.compare(System.identityHashCode(o1), System.identityHashCode(o2));
 		if (v == 0) v = o1 == o2 ? 0 : -1;
@@ -42,11 +42,11 @@ public class Scheduler implements Runnable {
 	};
 
 	private static final long u_tail = ReflectionUtils.fieldOffset(Scheduler.class, "tail");
-	private static final long u_owner = ReflectionUtils.fieldOffset(ScheduledTask.class, "owner");
-	private volatile ScheduledTask head, tail;
+	private static final long u_owner = ReflectionUtils.fieldOffset(ScheduleTask.class, "owner");
+	private volatile ScheduleTask head, tail;
 
-	private final SimpleList<ScheduledTask> remain;
-	private final PriorityQueue<ScheduledTask> timer;
+	private final SimpleList<ScheduleTask> remain;
+	private final PriorityQueue<ScheduleTask> timer;
 
 	private volatile Thread worker;
 	private final TaskHandler executor;
@@ -56,7 +56,7 @@ public class Scheduler implements Runnable {
 	public Scheduler(@Nullable TaskHandler executor) {
 		this.remain = SimpleList.withCapacityType(16, 2);
 		this.timer = new PriorityQueue<>(CPR);
-		this.head = this.tail = new ScheduledTask(null, 0,0,1) { public void execute() {} };
+		this.head = this.tail = new ScheduleTask(null, 0,0,1) { public void execute() {} };
 		this.head.nextRun = -1L;
 		this.executor = executor;
 	}
@@ -103,9 +103,9 @@ public class Scheduler implements Runnable {
 		long startTime = time;
 
 		boolean taskRemoved = false;
-		Iterator<ScheduledTask> itr = timer.iterator();
+		Iterator<ScheduleTask> itr = timer.iterator();
 		while (itr.hasNext()) {
-			ScheduledTask task = itr.next();
+			ScheduleTask task = itr.next();
 			if (task.nextRun < 0) {
 				taskRemoved = true;
 				continue;
@@ -135,7 +135,7 @@ public class Scheduler implements Runnable {
 			}
 		}
 
-		PriorityQueue<ScheduledTask> tasks = timer;
+		PriorityQueue<ScheduleTask> tasks = timer;
 		if (taskRemoved) {
 			while (itr.hasNext()) remain.add(itr.next());
 			tasks.clear();
@@ -151,7 +151,7 @@ public class Scheduler implements Runnable {
 		return run < 0 ? 0 : run;
 	}
 
-	private void executeForDebug(@Async.Execute ScheduledTask task) throws Exception {
+	private void executeForDebug(@Async.Execute ScheduleTask task) throws Exception {
 		if (executor != null && !task.forceOnScheduler()) executor.pushTask(task);
 		else task.execute();
 	}
@@ -159,7 +159,7 @@ public class Scheduler implements Runnable {
 	private void pollNewTasks() {
 		long time = System.currentTimeMillis();
 
-		ScheduledTask prev = head, task = prev.next;
+		ScheduleTask prev = head, task = prev.next;
 
 		while (task != null) {
 			if (task.nextRun >= 0) timer.add(task);
@@ -169,7 +169,7 @@ public class Scheduler implements Runnable {
 
 		task = head;
 		while (task != prev) {
-			ScheduledTask t = task;
+			ScheduleTask t = task;
 			task = task.next;
 			t.next = null;
 		}
@@ -177,19 +177,19 @@ public class Scheduler implements Runnable {
 		head = prev;
 	}
 
-	public ScheduledTask delay(ITask task, int delayMs) { return add(new ScheduledTask(task, 0, delayMs, 1)); }
-	public ScheduledTask loop(ITask task, int intervalMs) { return add(new ScheduledTask(task, intervalMs, 0, Integer.MAX_VALUE)); }
-	public ScheduledTask loop(ITask task, int intervalMs, int count) { return add(new ScheduledTask(task, intervalMs, 0, count)); }
-	public ScheduledTask loop(ITask task, int intervalMs, int count, int delayMs) { return add(new ScheduledTask(task, intervalMs, delayMs, count)); }
+	public ScheduleTask delay(ITask task, int delayMs) { return add(new ScheduleTask(task, 0, delayMs, 1)); }
+	public ScheduleTask loop(ITask task, int intervalMs) { return add(new ScheduleTask(task, intervalMs, 0, Integer.MAX_VALUE)); }
+	public ScheduleTask loop(ITask task, int intervalMs, int count) { return add(new ScheduleTask(task, intervalMs, 0, count)); }
+	public ScheduleTask loop(ITask task, int intervalMs, int count, int delayMs) { return add(new ScheduleTask(task, intervalMs, delayMs, count)); }
 
-	public ScheduledTask add(@Async.Schedule ScheduledTask t) {
+	public ScheduleTask add(@Async.Schedule ScheduleTask t) {
 		if (worker == null) throw new IllegalStateException("定时器已关闭");
 		if (!u.compareAndSwapObject(t, u_owner, null, this)) throw new IllegalArgumentException("任务已经注册");
 		assert t.next == null;
 
 		int j = 0;
 		while (true) {
-			ScheduledTask tail = this.tail;
+			ScheduleTask tail = this.tail;
 			if (u.compareAndSwapObject(this, u_tail, tail, t)) {
 				tail.next = t;
 				break;

@@ -30,7 +30,7 @@ import roj.net.http.Action;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.srv.*;
 import roj.reflect.FastInit;
-import roj.util.TypedName;
+import roj.util.AttributeKey;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -55,7 +55,7 @@ public class OKRouter implements Router {
 	private static final String COPYWITH_DESC = TypeHelper.class2asm(new Class<?>[] {int.class, Object.class}, Dispatcher.class);
 
 	private static final AtomicInteger seq = new AtomicInteger();
-	private static final TypedName<ASet> RouteAdapterKey = new TypedName<>("or:router");
+	private static final AttributeKey<ASet> RouteAdapterKey = new AttributeKey<>("or:router");
 
 	// ASet or ASet[]
 	private final TrieTree<Object> route = new TrieTree<>();
@@ -173,7 +173,7 @@ public class OKRouter implements Router {
 					if (par.size() <= 2) break noBody;
 				}
 
-				if (a.clazz.endsWith("Interceptor")) {
+				if (a.type.endsWith("Interceptor")) {
 					cw.one(ALOAD_3);
 					cw.clazz(CHECKCAST, PostSetting.class.getName().replace('.', '/'));
 				} else {

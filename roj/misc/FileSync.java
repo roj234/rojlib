@@ -38,6 +38,8 @@ import java.util.Map;
 /**
  * @author Roj234
  * @since 2022/4/26 22:59
+ * @deprecated WorldRepo will replace it
+ * @see roj.minecraft.worlddiff.WorldRepo
  */
 public class FileSync implements ChannelHandler {
 	static File baseDir;

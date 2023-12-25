@@ -1,8 +1,11 @@
 package roj.text;
 
 import roj.collect.*;
+import roj.config.word.ITokenizer;
 import roj.config.word.Tokenizer;
 import roj.io.IOUtil;
+import roj.util.ArrayCache;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -11,14 +14,18 @@ import java.nio.charset.Charset;
 import java.util.*;
 
 import static java.lang.Character.*;
-import static roj.ui.CLIUtil.getDisplayWidth;
+import static roj.ui.CLIUtil.getStringWidth;
 
 /**
  * @author Roj234
  * @since 2021/6/19 0:14
  */
 public class TextUtil {
-	public static Charset DefaultOutputCharset = Charset.defaultCharset();
+	public static Charset DefaultOutputCharset;
+	static {
+		String property = System.getProperty("roj.text.outputCharset", null);
+		DefaultOutputCharset = property == null ? Charset.defaultCharset() : Charset.forName(property);
+	}
 
 	public static final MyBitSet HEX = MyBitSet.from("0123456789ABCDEFabcdef");
 
@@ -240,6 +247,128 @@ public class TextUtil {
 		sb.setLength(j);
 		return sb;
 	}
+
+	public static int editDistance(CharSequence s1, CharSequence s2) {
+		int l1 = s1.length();
+		int l2 = s2.length();
+
+		if (l1 == 0) return l2;
+		if (l2 == 0) return l1;
+
+		int[] prevDistI = ArrayCache.getIntArray(l2+1, 0);
+
+		for (int i = 0; i < l1;) {
+			char sourceChar = s1.charAt(i++);
+
+			int previousDiagonal = prevDistI[0];
+			int previousColumn = prevDistI[0]++;
+
+			for (int j = 1; j <= l2; ++j) {
+				int prevDistIJ = prevDistI[j];
+
+				if (sourceChar == s2.charAt(j-1)) {
+					previousColumn = previousDiagonal;
+				} else {
+					if (previousDiagonal < previousColumn) previousColumn = previousDiagonal;
+					if (prevDistIJ < previousColumn) previousColumn = prevDistIJ;
+					previousColumn++;
+				}
+
+				previousDiagonal = prevDistIJ;
+				prevDistI[j] = previousColumn;
+			}
+		}
+
+		int editDist = prevDistI[l2];
+
+		ArrayCache.putArray(prevDistI);
+
+		return editDist;
+	}
+	//region WIP
+	//todo
+	public static final class Diff {
+		public static final byte SAME = 0, CHANGE = 1, INSERT = 2, DELETE = 3;
+		public final byte type;
+		public final int leftOff, rightOff, len;
+		public int advance;
+
+		public static Diff link(Diff a, Diff next) {
+			a.next = next;
+			next.prev = a;
+			return next;
+		}
+
+		private Diff(byte type, int leftOff, int rightOff, int len) {
+			this.type = type;
+			this.leftOff = leftOff;
+			this.rightOff = rightOff;
+			this.len = len;
+		}
+
+		public static Diff same(int leftOff, int rightOff, int len) { return new Diff(SAME, leftOff, rightOff, len); }
+		public static Diff change(int leftOff, int rightOff, int len) { return new Diff(CHANGE, leftOff, rightOff, len); }
+		public static Diff insert(int rightOff, int len) { return new Diff(INSERT, -1, rightOff, len); }
+		public static Diff delete(int leftOff, int len) { return new Diff(DELETE, leftOff, -1, len); }
+
+		Diff prev, next;
+	}
+
+	public List<Diff> getDiff(byte[] right) {
+		Diff head = Diff.insert(0,0), tail = head;
+
+
+
+		return toRealDiff(right, head.next);
+	}
+	private List<Diff> toRealDiff(byte[] right, Diff in) {
+		// todo merge nearby diff and insert SAME diff
+		SimpleList<Diff> list = new SimpleList<>();
+
+		return list;
+	}
+	public void toMarkdown(byte[] left, byte[] right, List<Diff> diffs, Appender sb) throws IOException {
+		Charset cs = Charset.forName("GB18030");
+
+		System.out.println(diffs.size());
+		long l = 0;
+		for (Diff diff : diffs) {
+			l += diff.len;
+		}
+		System.out.println(TextUtil.scaledNumber(l)+"B");
+
+		ByteList buf1 = new ByteList(), buf2 = new ByteList();
+		int type = Diff.SAME;
+		for (Diff diff : diffs) {
+			if (diff.type != type) {
+				finishBlock(sb, buf1, buf2, type, cs);
+				type = diff.type;
+			}
+
+			switch (diff.type) {
+				default: buf1.put(left, diff.leftOff, diff.len); break;
+				case Diff.CHANGE:
+					buf1.put(left, diff.leftOff, diff.len);
+					buf2.put(right, diff.rightOff, diff.len);
+					break;
+				case Diff.INSERT: buf1.put(right, diff.rightOff, diff.len); break;
+			}
+		}
+
+		finishBlock(sb, buf1, buf2, type, cs);
+	}
+	private static void finishBlock(Appender sb, ByteList buf1, ByteList buf2, int type, Charset cs) throws IOException {
+		switch (type) {
+			default: case Diff.SAME: sb.append(new String(buf1.list, 0, buf1.length(), cs)); break;
+			case Diff.CHANGE: sb.append("<i title=\"").append(ITokenizer.addSlashes(new String(buf1.list, 0, buf1.length(), cs))).append("\">")
+								.append(new String(buf2.list, 0, buf2.length(), cs)).append("</i>"); break;
+			case Diff.INSERT: sb.append("<b>").append(new String(buf1.list, 0, buf1.length(), cs)).append("</b>"); break;
+			case Diff.DELETE: sb.append("<del>").append(new String(buf1.list, 0, buf1.length(), cs)).append("</del>"); break;
+		}
+		buf1.clear();
+		buf2.clear();
+	}
+	// endregion
 
 	// region 数字相关
 
@@ -780,7 +909,7 @@ public class TextUtil {
 			if (s.indexOf('\n') >= 0) {
 				List<String> _sLines = LineReader.slrParserV2(String.valueOf(o), false);
 				row.add(s = _sLines.get(0));
-				sLen = getDisplayWidth(s);
+				sLen = getStringWidth(s);
 
 				while (multiLineRef.size() < _sLines.size()-1) multiLineRef.add(new SimpleList<>());
 				for (int i = 1; i < _sLines.size(); i++) {
@@ -788,11 +917,11 @@ public class TextUtil {
 					while (line.size() < row.size()) line.add("");
 					String str = _sLines.get(i);
 					line.set(row.size()-1, str);
-					sLen = Math.max(sLen, getDisplayWidth(str));
+					sLen = Math.max(sLen, getStringWidth(str));
 				}
 			} else {
 				row.add(s);
-				sLen = getDisplayWidth(s);
+				sLen = getStringWidth(s);
 			}
 
 			while (maxLens.size() < row.size()) maxLens.add(0);
@@ -820,7 +949,7 @@ public class TextUtil {
 
 					int myMaxLen = maxLens.get(j);
 					if (myMaxLen < 100) {
-						int k = myMaxLen -getDisplayWidth(s);
+						int k = myMaxLen - getStringWidth(s);
 						while (k-- > 0) sb.append(' ');
 					}
 

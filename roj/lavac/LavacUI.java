@@ -5,7 +5,7 @@
 package roj.lavac;
 
 import roj.collect.SimpleList;
-import roj.concurrent.timing.ScheduledTask;
+import roj.concurrent.timing.ScheduleTask;
 import roj.config.ParseException;
 import roj.io.IOUtil;
 import roj.lavac.parser.CompileContext;
@@ -36,7 +36,7 @@ public class LavacUI extends JFrame {
 		f.show();
 	}
 
-	private ScheduledTask task;
+	private ScheduleTask task;
 	public LavacUI() {
 		initComponents();
 

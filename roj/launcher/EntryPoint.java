@@ -97,7 +97,7 @@ public final class EntryPoint extends URLClassLoader {
 	public static Runnable loaderInst;
 
 	public static void main(String[] args) throws Exception {
-		if (args.length == 0) args = new String[] {"roj.pluginsystem.CLIMain"};
+		if (args.length == 0) args = new String[] {"roj.platform.DefaultPluginSystem"};
 
 		URL myJar = EntryPoint.class.getProtectionDomain().getCodeSource().getLocation();
 		EntryPoint cl = new EntryPoint(new URL[] {myJar});

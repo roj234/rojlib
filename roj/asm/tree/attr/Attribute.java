@@ -4,8 +4,8 @@ import roj.asm.cst.ConstantPool;
 import roj.asm.type.Signature;
 import roj.asm.visitor.XAttrCode;
 import roj.collect.IntBiMap;
+import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
-import roj.util.TypedName;
 
 /**
  * @author Roj234
@@ -13,40 +13,40 @@ import roj.util.TypedName;
  */
 public abstract class Attribute {
 	public static final IntBiMap<String> NAMED_ID = new IntBiMap<>();
-	public static <T> TypedName<T> createAttributeName(String name) {
+	public static <T> AttributeKey<T> createAttributeName(String name) {
 		NAMED_ID.putInt(NAMED_ID.size(), name);
-		return new TypedName<>(name);
+		return new AttributeKey<>(name);
 	}
 
-	public static final TypedName<TypeAnnotations>
+	public static final AttributeKey<TypeAnnotations>
 		RtTypeAnnotations = createAttributeName("RuntimeVisibleTypeAnnotations"),
 		ClTypeAnnotations = createAttributeName("RuntimeInvisibleTypeAnnotations");
-	public static final TypedName<Annotations>
+	public static final AttributeKey<Annotations>
 		RtAnnotations = createAttributeName("RuntimeVisibleAnnotations"),
 		ClAnnotations = createAttributeName("RuntimeInvisibleAnnotations");
-	public static final TypedName<ParameterAnnotations>
+	public static final AttributeKey<ParameterAnnotations>
 		RtParameterAnnotations = createAttributeName("RuntimeVisibleParameterAnnotations"),
 		ClParameterAnnotations = createAttributeName("RuntimeInvisibleParameterAnnotations");
-	public static final TypedName<Signature> SIGNATURE = createAttributeName("Signature");
+	public static final AttributeKey<Signature> SIGNATURE = createAttributeName("Signature");
 	// class
-	public static final TypedName<AttrRecord> Record = createAttributeName("Record");
-	public static final TypedName<InnerClasses> InnerClasses = createAttributeName("InnerClasses");
-	public static final TypedName<AttrModule> Module = createAttributeName("Module");
-	public static final TypedName<AttrClassList> ModulePackages = createAttributeName("ModulePackages");
-	public static final TypedName<AttrString> ModuleMainClass = createAttributeName("ModuleMainClass");
-	public static final TypedName<AttrString> NestHost = createAttributeName("NestHost");
-	public static final TypedName<AttrClassList> PermittedSubclasses = createAttributeName("PermittedSubclasses");
-	public static final TypedName<AttrClassList> NestMembers = createAttributeName("NestMembers");
-	public static final TypedName<AttrString> SourceFile = createAttributeName("SourceFile");
-	public static final TypedName<BootstrapMethods> BootstrapMethods = createAttributeName("BootstrapMethods");
-	public static final TypedName<EnclosingMethod> EnclosingMethod = createAttributeName("EnclosingMethod");
+	public static final AttributeKey<AttrRecord> Record = createAttributeName("Record");
+	public static final AttributeKey<InnerClasses> InnerClasses = createAttributeName("InnerClasses");
+	public static final AttributeKey<AttrModule> Module = createAttributeName("Module");
+	public static final AttributeKey<AttrClassList> ModulePackages = createAttributeName("ModulePackages");
+	public static final AttributeKey<AttrString> ModuleMainClass = createAttributeName("ModuleMainClass");
+	public static final AttributeKey<AttrString> NestHost = createAttributeName("NestHost");
+	public static final AttributeKey<AttrClassList> PermittedSubclasses = createAttributeName("PermittedSubclasses");
+	public static final AttributeKey<AttrClassList> NestMembers = createAttributeName("NestMembers");
+	public static final AttributeKey<AttrString> SourceFile = createAttributeName("SourceFile");
+	public static final AttributeKey<BootstrapMethods> BootstrapMethods = createAttributeName("BootstrapMethods");
+	public static final AttributeKey<EnclosingMethod> EnclosingMethod = createAttributeName("EnclosingMethod");
 	// method
-	public static final TypedName<XAttrCode> Code = createAttributeName("Code");
-	public static final TypedName<MethodParameters> MethodParameters = createAttributeName("MethodParameters");
-	public static final TypedName<AttrClassList> Exceptions = createAttributeName("Exceptions");
-	public static final TypedName<AnnotationDefault> AnnotationDefault = createAttributeName("AnnotationDefault");
+	public static final AttributeKey<XAttrCode> Code = createAttributeName("Code");
+	public static final AttributeKey<MethodParameters> MethodParameters = createAttributeName("MethodParameters");
+	public static final AttributeKey<AttrClassList> Exceptions = createAttributeName("Exceptions");
+	public static final AttributeKey<AnnotationDefault> AnnotationDefault = createAttributeName("AnnotationDefault");
 	// field
-	public static final TypedName<ConstantValue> ConstantValue = createAttributeName("ConstantValue");
+	public static final AttributeKey<ConstantValue> ConstantValue = createAttributeName("ConstantValue");
 
 	public abstract String name();
 

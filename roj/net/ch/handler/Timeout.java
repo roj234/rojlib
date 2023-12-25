@@ -3,7 +3,7 @@ package roj.net.ch.handler;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
-import roj.util.NamespaceKey;
+import roj.util.Identifier;
 
 import java.io.IOException;
 
@@ -13,7 +13,7 @@ import java.io.IOException;
  */
 public class Timeout implements ChannelHandler {
 	public static final String ID = "timer";
-	public static final NamespaceKey READ_TIMEOUT = NamespaceKey.of(ID, "r"), WRITE_TIMEOUT = NamespaceKey.of(ID, "w");
+	public static final Identifier READ_TIMEOUT = Identifier.of(ID, "r"), WRITE_TIMEOUT = Identifier.of(ID, "w");
 
 	public int writeTimeout, readTimeout, pending;
 	public long lastRead, lastWrite;

@@ -10,9 +10,9 @@ import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.XAttrCode;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
+import roj.util.AttributeKey;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.TypedName;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -121,7 +121,7 @@ public final class Parser {
 		}
 	}
 	@SuppressWarnings("unchecked")
-	public static <T extends Attribute> T parseAttribute(Attributed node, ConstantPool cp, TypedName<T> type, AttributeList list, int origin) {
+	public static <T extends Attribute> T parseAttribute(Attributed node, ConstantPool cp, AttributeKey<T> type, AttributeList list, int origin) {
 		Attribute attr = list == null ? null : (Attribute) list.getByName(type.name);
 		if (attr == null) return null;
 		if (attr.getClass() == AttrUnknown.class) {

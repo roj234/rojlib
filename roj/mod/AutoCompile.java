@@ -3,7 +3,7 @@ package roj.mod;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.concurrent.timing.ScheduledTask;
+import roj.concurrent.timing.ScheduleTask;
 import roj.ui.CLIUtil;
 
 import java.util.List;
@@ -91,7 +91,7 @@ final class AutoCompile extends Thread {
 		}
 	}
 
-	private ScheduledTask debounceTask;
+	private ScheduleTask debounceTask;
 	private boolean checkAndCompile(Project p) {
 		MyHashSet<String> set = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
 		if (set.contains(null) || set.isEmpty()) {

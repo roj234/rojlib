@@ -49,36 +49,36 @@ public class TimSortForEveryone {
 
 		for (int i = left + 1; i <= right; i++) {
 			// int temp = arr[i];
-			u.copyMemory(ref, off+i*compSize, null, work, compSize);
+			u.copyMemory(ref, off+(long)i*compSize, null, work, compSize);
 
 			int j = i - 1;
-			while (j >= left && cmp.compare(ref, off+j*compSize, work) > 0) {
+			while (j >= left && cmp.compare(ref, off+(long)j*compSize, work) > 0) {
 				//arr[j + 1] = arr[j];
-				u.copyMemory(ref, off+j*compSize, ref, off+(j+1)*compSize, compSize);
+				u.copyMemory(ref, off+(long)j*compSize, ref, off+(long)(j+1)*compSize, compSize);
 				j--;
 			}
 
 			//arr[j + 1] = temp;
-			u.copyMemory(null, work, ref, off+(j+1)*compSize, compSize);
+			u.copyMemory(null, work, ref, off+(long)(j+1)*compSize, compSize);
 		}
 	}
 
 	// Merge function merges the sorted runs
 	private void merge(Object ref, long off, int l, int m, int r, int compSize, MyComparator cmp) {
-		long cap = compSize * (r-l);
+		long cap = compSize * (long)(r-l);
 		if (workLen < cap) {
 			work = work == 0 ? u.allocateMemory(cap) : u.reallocateMemory(work, cap);
 			workLen = cap;
 		}
 
-		off += l*compSize;
+		off += (long)l*compSize;
 
 		// |    left     X    |   right    |       ->   workLen
 		// ^Left         ^Mid              ^Right
 		u.copyMemory(ref, off, null, work, cap);
 
 		long i = work;
-		long j = work + m*compSize;
+		long j = work + (long)m*compSize;
 
 		long len1 = m - l + 1, len2 = r - m;
 

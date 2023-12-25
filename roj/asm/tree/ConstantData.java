@@ -19,9 +19,9 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
+import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
-import roj.util.TypedName;
 
 import java.io.FileOutputStream;
 import java.util.AbstractList;
@@ -141,7 +141,7 @@ public class ConstantData implements IClass {
 	}
 
 	@Override
-	public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedName<T> type) { return Parser.parseAttribute(this,this.cp,type,attributes,Signature.CLASS); }
+	public <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) { return Parser.parseAttribute(this,this.cp,type,attributes,Signature.CLASS); }
 	public Attribute attrByName(String name) {
 		return attributes == null ? null : (Attribute) attributes.getByName(name);
 	}

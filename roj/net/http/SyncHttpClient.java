@@ -9,7 +9,7 @@ import roj.net.ch.Event;
 import roj.text.TextReader;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.NamespaceKey;
+import roj.util.Identifier;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;
@@ -30,7 +30,7 @@ import java.util.function.Consumer;
  * @since 2022/10/15 0015 11:24
  */
 public class SyncHttpClient implements ChannelHandler {
-	public static final NamespaceKey SHC_CLOSE_CHECK = new NamespaceKey("shc:finish");
+	public static final Identifier SHC_CLOSE_CHECK = new Identifier("shc:finish");
 
 	private HttpHead head;
 	private DynByteBuf data;

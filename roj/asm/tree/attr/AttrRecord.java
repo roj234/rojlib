@@ -5,8 +5,8 @@ import roj.asm.cst.ConstantPool;
 import roj.asm.cst.CstUTF;
 import roj.asm.tree.RawNode;
 import roj.asm.util.AttributeList;
+import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
-import roj.util.TypedName;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -80,7 +80,7 @@ public final class AttrRecord extends Attribute {
 		@Override
 		public AttributeList attributesNullable() { return attributes; }
 		@Override
-		public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedName<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Parser.RECORD_ATTR); }
+		public <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Parser.RECORD_ATTR); }
 		@Override
 		public char modifier() { throw new UnsupportedOperationException(); }
 		@Override

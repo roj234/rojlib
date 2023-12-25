@@ -68,8 +68,7 @@ final class LogHelper extends PrintWriter {
 			if (msg != null) {
 				if (argc > 0) replaceArg(sb, msg.toString(), args, argc);
 				else sb.append(msg);
-				sb.append(System.lineSeparator());
-				ao.append(sb);
+				ao.append(sb.append('\n'));
 				sb.setLength(pref);
 			}
 

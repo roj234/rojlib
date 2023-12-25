@@ -3,7 +3,7 @@ package roj.asm.tree;
 import roj.asm.cst.ConstantPool;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.util.AttributeList;
-import roj.util.TypedName;
+import roj.util.AttributeKey;
 
 import javax.annotation.Nullable;
 
@@ -17,7 +17,7 @@ public interface Attributed {
 		return list == null ? null : (Attribute) list.getByName(name);
 	}
 
-	default <T extends Attribute> T parsedAttr(ConstantPool cp, TypedName<T> type) {
+	default <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) {
 		throw new UnsupportedOperationException("未实现");
 	}
 

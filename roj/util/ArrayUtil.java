@@ -27,7 +27,7 @@ public final class ArrayUtil {
 	public static void pack(byte[] arr) { Base128(ByteList.wrap(arr)); }
 
 	private static void Base128(ByteList tmp) {
-		BitWriter br = new BitWriter(tmp);
+		BitBuffer br = new BitBuffer(tmp);
 		CharList sb = new CharList();
 		sb.ensureCapacity(tmp.readableBytes() * 8/7 + 1);
 		while (br.readableBits() >= 7) sb.append((char) (br.readBit(7)+1));
@@ -41,10 +41,10 @@ public final class ArrayUtil {
 		int len = s.length() * 7/8;
 
 		ByteList tmp = ByteList.allocate(len,len);
-		BitWriter br = new BitWriter(tmp);
+		BitBuffer br = new BitBuffer(tmp);
 		for (int i = 0; i < s.length()-1; i++) br.writeBit(7, s.charAt(i)-1);
 
-		br.writeBit(8-br.bitIndex, s.charAt(s.length()-1)-1);
+		br.writeBit(8-br.bitPos, s.charAt(s.length()-1)-1);
 		br.endBitWrite();
 
 		return tmp;

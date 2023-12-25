@@ -82,7 +82,10 @@ public class ArgumentContext {
 
 	public void wrapExecute(CommandImpl command) {
 		CommandContext ctx = new CommandContext(map);
-		if (executor != null) executor.pushTask(() -> command.accept(ctx));
+		if (executor != null) executor.pushTask(() -> {
+			synchronized (this) {}
+			command.accept(ctx);
+		});
 		else {
 			try {
 				command.accept(ctx);

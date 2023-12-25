@@ -1,12 +1,12 @@
 package roj.mod.plugin;
 
-import roj.asm.nixim.NiximSystemV2;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.RawNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.util.AttrHelper;
 import roj.asm.util.Context;
+import roj.asmx.nixim.NiximSystemV2;
 import roj.mapper.MapUtil;
 import roj.mapper.Mapper;
 import roj.mapper.util.Desc;
@@ -55,7 +55,7 @@ public class NiximHandler implements Plugin {
 			if (list == null) continue;
 			for (int j = 0; j < list.size(); j++) {
 				Annotation anno = list.get(j);
-				if (anno.clazz.equals(NiximSystemV2.A_SHADOW)) {
+				if (anno.type.equals(NiximSystemV2.A_SHADOW)) {
 					String value = anno.getString("value", "");
 					if (value.isEmpty()) {
 						String prevOwner = anno.getString("owner", dest).replace('.', '/');
@@ -71,7 +71,7 @@ public class NiximHandler implements Plugin {
 						}
 					}
 					break;
-				} else if (anno.clazz.equals(NiximSystemV2.A_COPY)) {
+				} else if (anno.type.equals(NiximSystemV2.A_COPY)) {
 					if (anno.getBoolean("map", false)) {
 						String name = map(dest, node);
 						if (name != null) {
@@ -81,7 +81,7 @@ public class NiximHandler implements Plugin {
 						}
 					}
 					break;
-				} else if (anno.clazz.equals(NiximSystemV2.A_INJECT)) {
+				} else if (anno.type.equals(NiximSystemV2.A_INJECT)) {
 					String value = anno.getString("value", "");
 					if (value.isEmpty()) {
 						String name = map(dest, node);

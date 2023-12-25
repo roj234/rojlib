@@ -18,7 +18,7 @@ import roj.net.http.srv.autohandled.Route;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextUtil;
-import roj.util.BitWriter;
+import roj.util.BitBuffer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -421,7 +421,7 @@ public class DnsServer implements ChannelHandler {
 
 		query.sessionId = (char) r.readUnsignedShort();
 
-		BitWriter br = new BitWriter(r);
+		BitBuffer br = new BitBuffer(r);
 		br.skipBits(1);
 		/**
 		 * 请求类型，
@@ -651,7 +651,7 @@ public class DnsServer implements ChannelHandler {
 		resp.senderIp = addr.addr;
 		resp.senderPort = addr.port;
 
-		BitWriter r = new BitWriter(r1);
+		BitBuffer r = new BitBuffer(r1);
 
 		r.skipBits(1); // QR
 		/**

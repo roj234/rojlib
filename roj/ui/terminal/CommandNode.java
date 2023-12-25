@@ -18,6 +18,8 @@ public abstract class CommandNode {
 	public static CommandNode argument(String name, Argument<?> argument) { return new ArgumentNode(name, argument); }
 
 	public CharList dump(CharList sb, int depth) {
+		depth += 2;
+
 		if (impl == null) {
 			if (children.size() == 1) return children.get(0).dump(sb.append(' '), depth);
 		} else if (children.isEmpty()) {
@@ -27,7 +29,7 @@ public abstract class CommandNode {
 		sb.append(":\n");
 		if (impl != null) sb.padEnd(' ', depth).append("<Execute>\n");
 		for (CommandNode child : children) {
-			child.dump(sb.padEnd(' ', depth), depth+2).append('\n');
+			child.dump(sb.padEnd(' ', depth), depth).append('\n');
 		}
 		return sb;
 	}
@@ -73,25 +75,27 @@ public abstract class CommandNode {
 	}
 
 	static final class LiteralNode extends CommandNode {
-		private final String literal;
-		LiteralNode(String name) { literal = name; }
+		private final String name;
+		LiteralNode(String name) { this.name = name; }
+
+		public String getName() { return name; }
 
 		@Override
 		public CharList dump(CharList sb, int depth) {
-			sb.append('\'').append(literal).append('\'');
+			sb.append('\'').append(name).append('\'');
 			return super.dump(sb, depth);
 		}
 
 		@Override
 		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 			if (ctx.isEOF()) {
-				if (completions != null) completions.add(new Completion(literal));
+				if (completions != null) completions.add(new Completion(name));
 				return false;
 			}
 
 			String s = ctx.nextUnquotedString();
-			if (!s.equals(literal)) {
-				if (completions != null && literal.startsWith(s)) completions.add(new Completion(literal.substring(s.length())));
+			if (!s.equals(name)) {
+				if (completions != null && name.startsWith(s)) completions.add(new Completion(name.substring(s.length())));
 				return false;
 			}
 
@@ -105,7 +109,7 @@ public abstract class CommandNode {
 
 		@Override
 		public CharList dump(CharList sb, int depth) {
-			sb.append(name).append(':').append(argument.getClass().getSimpleName());
+			sb.append(name).append(':').append(argument.type());
 			return super.dump(sb, depth);
 		}
 

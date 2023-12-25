@@ -232,6 +232,7 @@ public abstract class UnsafeCharset {
 					case 1:
 						off += delta;
 						((CharBuffer) out).position(off);
+						unsafeWritable -= delta;
 						break;
 					case 2:
 						out.append(new CharList.Slice(arr,0,delta));
@@ -239,16 +240,20 @@ public abstract class UnsafeCharset {
 				}
 
 				if (in.rIndex == len || outMax == 0) break;
-				if (delta == 0 && unsafeWritable > 0) { // truncate
-					if (!partial) throw new IllegalArgumentException("被截断");
-					break;
-				}
 
 				if (kind == 0 && unsafeWritable < 1024) {
 					CharList sb = (CharList) out;
 					sb.ensureCapacity(arr.length+1024);
 					arr = sb.list;
 					unsafeWritable = arr.length - off;
+				} else if (delta == 0) { // truncate
+					if (unsafeWritable > 0) {
+						if (!partial) throw new IllegalArgumentException("被截断");
+						throw new IllegalArgumentException("Unespected state");
+					} else {
+						//throw new IllegalArgumentException("UW < outMax "+outMax);
+					}
+					break;
 				}
 			}
 		} catch (IOException e) {

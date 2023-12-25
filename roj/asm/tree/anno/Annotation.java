@@ -22,11 +22,11 @@ import java.util.Map;
  * @since 2021/6/18 9:51
  */
 public class Annotation {
-	public String clazz;
+	public String type;
 	public Map<String, AnnVal> values;
 
 	public Annotation(String type, Map<String, AnnVal> values) {
-		this.clazz = type.substring(1, type.length() - 1);
+		this.type = type.substring(1, type.length() - 1);
 		this.values = values;
 	}
 
@@ -158,7 +158,7 @@ public class Annotation {
 	}
 
 	public void toByteArray(ConstantPool pool, DynByteBuf w) {
-		CharList sb = IOUtil.ddLayeredCharBuf().append('L').append(clazz).append(';');
+		CharList sb = IOUtil.ddLayeredCharBuf().append('L').append(type).append(';');
 		w.putShort(pool.getUtfId(sb)).putShort(values.size());
 		sb._free();
 		for (Map.Entry<String, AnnVal> e : values.entrySet()) {
@@ -168,7 +168,7 @@ public class Annotation {
 
 	public String toString() {
 		CharList sb = new CharList().append('@');
-		TypeHelper.toStringOptionalPackage(sb, clazz);
+		TypeHelper.toStringOptionalPackage(sb, type);
 		if (!values.isEmpty()) {
 			sb.append('(');
 			if (values.size() == 1 && values.containsKey("value")) {

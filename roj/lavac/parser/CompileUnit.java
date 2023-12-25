@@ -1367,9 +1367,9 @@ public final class CompileUnit extends ConstantData {
 			for (int i = 0; i < list.size(); i++) {
 				AnnotationPrimer a = list.get(i);
 
-				IClass type1 = resolve(a.clazz);
+				IClass type1 = resolve(a.type);
 				if (type1 == null) {
-					fireDiagnostic(Diagnostic.Kind.ERROR, "unable_resolve:ANNOTATION:" + a.clazz);
+					fireDiagnostic(Diagnostic.Kind.ERROR, "unable_resolve:ANNOTATION:" + a.type);
 				}
 				a.clazzInst = type1;
 

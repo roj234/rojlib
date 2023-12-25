@@ -17,9 +17,9 @@ import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.XAttrCode;
 import roj.text.CharList;
+import roj.util.AttributeKey;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.TypedName;
 
 import java.util.List;
 import java.util.Objects;
@@ -99,7 +99,7 @@ public final class MethodNode extends CNode {
 	}
 
 	@Override
-	public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedName<T> type) { return Parser.parseAttribute(this, cp, type, attributes, Signature.METHOD); }
+	public <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) { return Parser.parseAttribute(this, cp, type, attributes, Signature.METHOD); }
 
 	@Deprecated
 	public String ownerClass() { return owner; }

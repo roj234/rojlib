@@ -19,6 +19,7 @@ import roj.ui.GUIUtil;
 import roj.ui.OnChangeHelper;
 import roj.util.ByteList;
 import roj.util.Helpers;
+import roj.util.VMUtil;
 
 import javax.swing.*;
 import javax.swing.event.ChangeListener;
@@ -275,7 +276,7 @@ public class QZArchiverUI extends JFrame {
 		// endregion
 		// region
 		uiThreads.setModel(new SpinnerNumberModel(Runtime.getRuntime().availableProcessors(), 1,256,1));
-		uiMemoryLimit.setText(toDigital(usableMemory()));
+		uiMemoryLimit.setText(toDigital(VMUtil.usableMemory()));
 
 		uiAutoSolidSize.addActionListener(e -> uiSolidSize.setEnabled(!uiAutoSolidSize.isSelected()));
 		uiBCJ.addActionListener(e -> uiBCJ2.setEnabled(uiBCJ.isSelected()));
@@ -333,7 +334,7 @@ public class QZArchiverUI extends JFrame {
 
 		String text = uiMemoryLimit.getText();
 		double memoryLimit;
-		if (text.isEmpty()) memoryLimit = (usableMemory() >>> 10);
+		if (text.isEmpty()) memoryLimit = (VMUtil.usableMemory() >>> 10);
 		else memoryLimit = TextUtil.unscaledNumber1024(text) / 1024;
 
 		// 应该再加上分块大小
@@ -344,9 +345,6 @@ public class QZArchiverUI extends JFrame {
 
 		return threads;
 	}
-
-	// TODO move to somewhere
-	public static long usableMemory() { Runtime r = Runtime.getRuntime(); return r.maxMemory() - r.totalMemory() + r.freeMemory(); }
 
 	private static String toDigital(double size) { return TextUtil.scaledNumber1024(size); }
 	private int fromDigital(String text) {

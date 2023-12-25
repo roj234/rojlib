@@ -12,6 +12,7 @@ import java.util.function.Consumer;
 /**
  * @author Roj234
  * @since 2022/11/29 0029 21:34
+ * @deprecated Write a better template language via lavac
  */
 public final class Template {
 	private char[] data;

@@ -861,7 +861,7 @@ public final class SerializerFactory {
 				List<Annotation> list = attr.annotations;
 				for (int j = 0; j < list.size(); j++) {
 					Annotation anno = list.get(j);
-					switch (anno.clazz) {
+					switch (anno.type) {
 						case "roj/config/serial/Name": name = anno.getString("value"); break;
 						case "roj/config/serial/Via": {
 							String sid = anno.getString("get");

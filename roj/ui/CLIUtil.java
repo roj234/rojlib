@@ -727,9 +727,16 @@ public final class CLIUtil implements Runnable {
 		AnsiOut(int max) { super(max); }
 
 		private synchronized void writeLine(boolean newLine) {
+			// wait for any displayable character
+			// 也许以后优化下
+			if (!newLine && getStringWidth(bb) == 0 && getStringWidth(sb) == 0) return;
+
 			synchronized (sysOut) {
 				if (!LINES.isEmpty()) {
-					SEQ.putAscii("\u001b[?25l\u001b[0K\n\u001b["+LINES.size()+"F\u001b[0K");
+					SEQ.putAscii("\u001b[?25l");
+					if (LINES.size() > 1) SEQ.putAscii("\u001b["+(LINES.size()-1)+"F");
+					else SEQ.putAscii("\u001b[1G");
+					SEQ.putAscii("\u001b[0K");
 				}
 
 				if (isEndOfLine != 0) SEQ.putAscii("\u001b[1F\u001b["+isEndOfLine+"C");
@@ -1006,6 +1013,7 @@ public final class CLIUtil implements Runnable {
 				}
 
 				if (isGetCursor == -1) {
+					// synchronized (IN_READ) { enableDirectInput(true); IN_READ.notify(); }
 					try {
 						lcb.wait(30);
 					} catch (InterruptedException e) {

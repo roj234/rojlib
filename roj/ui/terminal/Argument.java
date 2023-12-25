@@ -69,6 +69,9 @@ public interface Argument<T> {
 
 			@Override
 			public void example(List<Completion> completions) { completions.add(new Completion(new File("").getAbsolutePath())); }
+
+			@Override
+			public String type() { return folder == null ? "path" : folder ? "folder" : "file"; }
 		};
 	}
 	static Argument<String> string() { return (context, b) -> context.nextString(); }
@@ -137,22 +140,37 @@ public interface Argument<T> {
 		@Override
 		public void example(List<Completion> completions) { updateChoices(); for (String name : choice.keySet()) completions.add(new Completion(name)); }
 
+		@Override
+		public String type() { return "enumeration("+choice.size()+")"; }
+
 		protected void updateChoices() {}
 	}
 	static Argument<Integer> number(int min, int max) {
-		return (ctx, b) -> {
-			int val = ctx.nextInt();
-			if (val < min) throw ctx.error("整数过小(可用的范围是["+min+","+max+"])");
-			else if (val > max) throw ctx.error("整数过大(可用的范围是["+min+","+max+"])");
-			return val;
+		return new Argument<Integer>() {
+			@Override
+			public Integer parse(ArgumentContext ctx, boolean b) throws ParseException {
+				int val = ctx.nextInt();
+				if (val < min) throw ctx.error("整数过小(可用的范围是["+min+","+max+"])");
+				else if (val > max) throw ctx.error("整数过大(可用的范围是["+min+","+max+"])");
+				return val;
+			}
+
+			@Override
+			public String type() { return "int["+min+","+max+"]"; }
 		};
 	}
 	static Argument<Double> real(double min, double max) {
-		return (ctx, b) -> {
-			double val = ctx.nextDouble();
-			if (val < min) throw ctx.error("实数过小(可用的范围是["+min+","+max+"])");
-			else if (val > max) throw ctx.error("实数过大(可用的范围是["+min+","+max+"])");
-			return val;
+		return new Argument<Double>() {
+			@Override
+			public Double parse(ArgumentContext ctx, boolean b) throws ParseException {
+				double val = ctx.nextDouble();
+				if (val < min) throw ctx.error("实数过小(可用的范围是["+min+","+max+"])");
+				else if (val > max) throw ctx.error("实数过大(可用的范围是["+min+","+max+"])");
+				return val;
+			}
+
+			@Override
+			public String type() { return "double["+min+","+max+"]"; }
 		};
 	}
 	static Argument<Boolean> bool() {
@@ -177,10 +195,14 @@ public interface Argument<T> {
 				completions.add(new Completion("true"));
 				completions.add(new Completion("false"));
 			}
+
+			@Override
+			public String type() { return "bool"; }
 		};
 	}
 
 	T parse(ArgumentContext ctx, boolean complete) throws ParseException;
 	default void complete(ArgumentContext ctx, List<Completion> completions) throws ParseException {}
 	default void example(List<Completion> completions) {}
+	default String type() { return getClass().getSimpleName(); }
 }

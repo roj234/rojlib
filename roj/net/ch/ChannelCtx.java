@@ -2,9 +2,9 @@ package roj.net.ch;
 
 import roj.collect.SimpleList;
 import roj.io.buf.BufferPool;
+import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
-import roj.util.NamespaceKey;
-import roj.util.TypedName;
+import roj.util.Identifier;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -43,10 +43,10 @@ public final class ChannelCtx {
 	public void readActive() { root.readActive(); }
 	public void readInactive() { root.readInactive(); }
 
-	public <T> T attachment(TypedName<T> key) {
+	public <T> T attachment(AttributeKey<T> key) {
 		return root.attachment(key);
 	}
-	public <T> T attachment(TypedName<T> key, T val) {
+	public <T> T attachment(AttributeKey<T> key, T val) {
 		return root.attachment(key, val);
 	}
 
@@ -63,7 +63,7 @@ public final class ChannelCtx {
 		if (next != null) next.handler.channelRead(next, data);
 	}
 
-	public Event postEvent(NamespaceKey key) throws IOException {
+	public Event postEvent(Identifier key) throws IOException {
 		Event event = new Event(key);
 		postEvent(event);
 		return event;

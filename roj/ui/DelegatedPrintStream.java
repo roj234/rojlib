@@ -38,7 +38,7 @@ public class DelegatedPrintStream extends PrintStream {
 		}
 	}
 
-	public void flush() {}
+	public void flush() { flushBytes(); }
 	public boolean checkError() { return false; }
 
 	// region stub
@@ -70,7 +70,8 @@ public class DelegatedPrintStream extends PrintStream {
 	}
 
 	public final PrintStream append(CharSequence v, int s, int e) { append(v == null ? "null" : v.subSequence(s, e)); return this; }
-	public synchronized final PrintStream append(CharSequence str) {
+	public synchronized final PrintStream append(CharSequence str) { return append0(str, false); }
+	private PrintStream append0(CharSequence str, boolean newLine) {
 		flushBytes();
 
 		int i = 0;
@@ -83,8 +84,11 @@ public class DelegatedPrintStream extends PrintStream {
 			if (i < str.length()) newLine();
 			else break;
 		}
+		// gAppendToNextCRLF无法确定最后是不是\n (i+1 and str.length)
+		if (i > 0 && str.charAt(i-1) == '\n') newLine();
 
-		partialLine();
+		if (newLine) newLine();
+		else partialLine();
 		return this;
 	}
 
@@ -99,14 +103,14 @@ public class DelegatedPrintStream extends PrintStream {
 	public final void print(Object v) { append(v == null ? "null" : v.toString()); }
 
 	public final synchronized void println() { newLine(); }
-	public final synchronized void println(boolean v) { print(v); newLine(); }
-	public final synchronized void println(char v) { print(v); newLine(); }
-	public final synchronized void println(int v) { print(v); newLine(); }
-	public final synchronized void println(long v) { print(v); newLine(); }
-	public final synchronized void println(float v) { print(v); newLine(); }
-	public final synchronized void println(double v) { print(v); newLine(); }
-	public final synchronized void println(@Nonnull char[] v) { print(v); newLine(); }
-	public final synchronized void println(String v) { print(v); newLine(); }
-	public final synchronized void println(Object v) { print(v); newLine(); }
+	public final synchronized void println(boolean v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(char v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(int v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(long v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(float v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(double v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(@Nonnull char[] v) { flushBytes(); sb.append(v); newLine(); }
+	public final synchronized void println(String v) { append0(v == null ? "null" : v, true); }
+	public final synchronized void println(Object v) { append0(v == null ? "null" : v.toString(), true); }
 	// endregion
 }

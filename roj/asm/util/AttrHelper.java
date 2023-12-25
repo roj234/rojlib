@@ -64,7 +64,7 @@ public class AttrHelper {
 		Modifiable mod = new Modifiable();
 		for (int i = 0; i < list.size(); i++) {
 			Annotation a = list.get(i);
-			switch (a.clazz) {
+			switch (a.type) {
 				case "java/lang/annotation/Retention":
 					if (!a.containsKey("value")) return null;
 					switch (a.getEnumValue("value", "RUNTIME")) {
@@ -117,7 +117,7 @@ public class AttrHelper {
 	public static Annotation getAnnotation(List<Annotation> list, String name) {
 		if (list == null) return null;
 		for (int i = 0; i < list.size(); i++) {
-			if (list.get(i).clazz.equals(name)) return list.get(i);
+			if (list.get(i).type.equals(name)) return list.get(i);
 		}
 		return null;
 	}

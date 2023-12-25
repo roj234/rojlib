@@ -2,7 +2,7 @@ package roj.ui.terminal;
 
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
-import roj.concurrent.timing.ScheduledTask;
+import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
 import roj.io.IOUtil;
 import roj.math.MutableInt;
@@ -425,7 +425,7 @@ public class DefaultConsole implements Console {
 
 	private boolean autoHighlight = true, ctrlCForCopy, autoComplete, isAutoComplete;
 	private final CharList tooltip = new CharList();
-	private ScheduledTask removeTooltip;
+	private ScheduleTask removeTooltip;
 	protected final CharList tooltip() { tooltip.clear(); return tooltip; }
 	protected final void displayTooltip(int timeout) {
 		if (removeTooltip != null) removeTooltip.cancel();

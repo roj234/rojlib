@@ -18,7 +18,7 @@ import roj.text.ACalendar;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
-import roj.util.NamespaceKey;
+import roj.util.Identifier;
 
 import javax.net.ssl.SSLException;
 import java.io.IOException;
@@ -370,7 +370,7 @@ public final class HttpServer11 extends PacketMerger implements
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		NamespaceKey id = event.id;
+		Identifier id = event.id;
 		if (id.equals(ChunkSplitter.CHUNK_IN_EOF)) {
 			if (state != RECV_BODY) return;
 

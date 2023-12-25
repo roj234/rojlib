@@ -1,6 +1,6 @@
 package roj.ui;
 
-import roj.concurrent.timing.ScheduledTask;
+import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
 
 import javax.swing.*;
@@ -20,7 +20,7 @@ public class DragReorderHelper extends MouseAdapter {
 	private boolean dragging;
 	private final JLabel el;
 	private final JTree list;
-	private ScheduledTask expandTask;
+	private ScheduleTask expandTask;
 	public boolean insertMode;
 
 	public DragReorderHelper(JTree list, JLabel displayEl) {

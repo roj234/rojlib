@@ -13,8 +13,8 @@ import roj.asm.type.TypeHelper;
 import roj.asm.util.AccessFlag;
 import roj.asm.util.AttributeList;
 import roj.text.CharList;
+import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
-import roj.util.TypedName;
 
 import java.util.Objects;
 
@@ -59,7 +59,7 @@ public final class FieldNode extends CNode {
 		return this;
 	}
 
-	public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedName<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Signature.FIELD); }
+	public <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Signature.FIELD); }
 
 	public String rawDesc() { return desc.getClass() == CstUTF.class ? ((CstUTF) desc).str() : desc.getClass() == Type.class ? ((Type) desc).toDesc() : desc.toString(); }
 
