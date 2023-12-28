@@ -5,64 +5,47 @@ import roj.crypt.eddsa.math.EdPoint;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
-import sun.security.x509.X509Key;
 
+import java.nio.ByteBuffer;
 import java.security.*;
-import java.security.spec.InvalidKeySpecException;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 
-public final class EdSignature extends Signature {
-	public static final String SIGNATURE_ALGORITHM = "NONEwithEdDSA";
-
+public final class EdSignature extends Signature implements Cloneable {
 	private MessageDigest digest;
 	private EdKey key;
 	private DynByteBuf data = new ByteList();
-	private boolean externalBuffer;
+	private boolean externalBuffer, prehash;
 
-	public EdSignature() { super(SIGNATURE_ALGORITHM); }
-	public EdSignature(MessageDigest digest) {
-		this();
-		this.digest = digest;
+	public EdSignature() { super("EdDSA"); }
+
+	@Override
+	public Object clone() throws CloneNotSupportedException {
+		EdSignature sig = (EdSignature) super.clone();
+		sig.data = new ByteList();
+		return sig;
 	}
 
 	@Override
 	protected void engineInitVerify(PublicKey publicKey) throws InvalidKeyException {
-		if (publicKey instanceof X509Key) {
-			try {
-				publicKey = new EdPublicKey(new X509EncodedKeySpec(publicKey.getEncoded()));
-			} catch (InvalidKeySpecException ex) {
-				throw new InvalidKeyException("cannot handle X.509 EdDSA public key: " + publicKey.getAlgorithm());
-			}
-		}
-
-		if (publicKey instanceof EdPublicKey) {
-			key = (EdPublicKey) publicKey;
-		} else {
+		if (!(publicKey instanceof EdPublicKey))
 			throw new InvalidKeyException("cannot identify EdDSA public key: " + publicKey.getClass());
-		}
 
+		key = (EdPublicKey) publicKey;
 		reset();
 	}
 
 	@Override
 	protected void engineInitSign(PrivateKey privateKey) throws InvalidKeyException {
-		EdPrivateKey privKey;
-		if (privateKey instanceof EdPrivateKey) {
-			key = privKey = (EdPrivateKey) privateKey;
-		} else {
+		if (!(privateKey instanceof EdPrivateKey)) {
 			throw new InvalidKeyException("cannot identify EdDSA private key: " + privateKey.getClass());
 		}
 
+		key = (EdPrivateKey) privateKey;
 		reset();
-		digestInitSign(privKey);
-	}
-
-	private void digestInitSign(EdPrivateKey privKey) {
-		digest.update(privKey.getH(), 32, 32);
 	}
 
 	private void reset() {
+		prehash = key.getParams().isPrehash();
 		if (digest == null) {
 			try {
 				digest = MessageDigest.getInstance(key.getParams().getHashAlgorithm());
@@ -76,8 +59,9 @@ public final class EdSignature extends Signature {
 		if (!externalBuffer) data.clear();
 	}
 
-	protected final void engineUpdate(byte b) { data.put(b); }
-	protected final void engineUpdate(byte[] b, int off, int len) { data.put(b, off, len); }
+	protected final void engineUpdate(byte b) { if (prehash) digest.update(b); else data.put(b); }
+	protected final void engineUpdate(byte[] b, int off, int len) { if (prehash) digest.update(b, off, len); else data.put(b, off, len); }
+	protected final void engineUpdate(ByteBuffer input) { if (prehash) digest.update(input); else data.put(input); }
 
 	@Override
 	protected byte[] engineSign() {
@@ -85,22 +69,31 @@ public final class EdSignature extends Signature {
 			return x_engineSign();
 		} finally {
 			reset();
-			digestInitSign((EdPrivateKey) key);
 		}
 	}
 
 	private byte[] x_engineSign() {
-		digest.update(data.nioBuffer());
+		ByteBuffer buf = prehash ? ByteBuffer.wrap(digest.digest()) : data.nioBuffer();
+		EdPrivateKey edk = (EdPrivateKey) key;
+
+		edk.getParams().addCtx(digest);
+		digest.update(edk.getH(), 32, 32);
+		buf.mark();
+		digest.update(buf);
+
 		byte[] r = EdInteger.scalar_mod_inline(digest.digest());
 		EdPoint R = key.getParams().getB().scalarMultiplyShared(r);
 		byte[] Rbyte = R.toByteArray();
 
+		edk.getParams().addCtx(digest);
 		digest.update(Rbyte);
-		digest.update(((EdPrivateKey) key).getAbyte());
-		digest.update(data.nioBuffer());
+		digest.update(edk.getAbyte());
+		buf.reset();
+		digest.update(buf);
 
 		byte[] h = EdInteger.scalar_mod_inline(digest.digest());
-		byte[] a = ((EdPrivateKey) key).geta();
+		byte[] a = edk.getH();
+		// h,a,r均只使用了低32字节
 		byte[] S = EdInteger.scalar_mul_add_mod_inline(h, a, r);
 
 		byte[] out = new byte[64];
@@ -121,13 +114,17 @@ public final class EdSignature extends Signature {
 	private boolean x_engineVerify(byte[] sigBytes) throws SignatureException {
 		if (sigBytes.length != 64) throw new SignatureException("signature length is wrong");
 
+		EdPublicKey edk = (EdPublicKey) key;
+
+		edk.getParams().addCtx(digest);
 		digest.update(sigBytes, 0, 32);
-		digest.update(((EdPublicKey) key).getAbyte());
-		digest.update(data.nioBuffer());
+		digest.update(edk.getAbyte());
+		ByteBuffer buf = prehash ? ByteBuffer.wrap(digest.digest()) : data.nioBuffer();
+		digest.update(buf);
 
 		byte[] h = EdInteger.scalar_mod_inline(digest.digest());
 		byte[] S = Arrays.copyOfRange(sigBytes, 32, 64);
-		EdPoint R = key.getParams().getB().doubleScalarMultiplyShared(((EdPublicKey) key).getNegativeA(), h, S);
+		EdPoint R = key.getParams().getB().doubleScalarMultiplyShared(edk.getNegativeA(), h, S);
 		byte[] Rbyte = R.toByteArray();
 		for (int i = 0; i < Rbyte.length; ++i) {
 			if (Rbyte[i] != sigBytes[i]) return false;
@@ -145,6 +142,7 @@ public final class EdSignature extends Signature {
 		data = buf;
 		externalBuffer = true;
 		try{
+			if (prehash) update(buf.nioBuffer());
 			return sign();
 		} finally {
 			data = prev;
@@ -157,6 +155,7 @@ public final class EdSignature extends Signature {
 		data = buf;
 		externalBuffer = true;
 		try{
+			if (prehash) update(buf.nioBuffer());
 			return verify(sign);
 		} finally {
 			data = prev;
@@ -164,4 +163,3 @@ public final class EdSignature extends Signature {
 		}
 	}
 }
-

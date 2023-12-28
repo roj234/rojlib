@@ -3,6 +3,7 @@ package roj.net.http;
 import org.jetbrains.annotations.UnmodifiableView;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
+import roj.io.MBInputStream;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
@@ -260,18 +261,7 @@ public class SyncHttpClient implements ChannelHandler {
 		if (is != null) return is;
 
 		if (async) throw new IllegalStateException("async handler active");
-		return is = new InputStream() {
-			byte[] sb;
-
-			@Override
-			public int read() {
-				if (sb == null) sb = new byte[1];
-
-				int v = read(sb, 0, 1);
-				if (v < 0) return v;
-				return sb[0]&0xFF;
-			}
-
+		return is = new MBInputStream() {
 			@Override
 			public int read(byte[] b, int off, int len) {
 				if (len < 0 || off < 0 || len > b.length - off) throw new ArrayIndexOutOfBoundsException();

@@ -101,13 +101,13 @@ public class URIUtil {
 	public static final MyBitSet URI_COMPONENT_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!*()_-.'");
 
 	public static String encodeURI(CharSequence src) {
-		return encodeURI(IOUtil.ddLayeredCharBuf(), src).toStringAndFree();
+		return encodeURI(new CharList(), src).toStringAndFree();
 	}
 	public static String encodeURIComponent(CharSequence src) {
-		return encodeURIComponent(IOUtil.ddLayeredCharBuf(), src).toStringAndFree();
+		return encodeURIComponent(new CharList(), src).toStringAndFree();
 	}
 	public static <T extends Appendable> T encodeURI(T sb, CharSequence src) {
-		ByteList bb = IOUtil.ddLayeredByteBuf();
+		ByteList bb = new ByteList();
 		try {
 			return encodeURI(bb.putUTFData(src), sb, URI_SAFE);
 		} finally {
@@ -115,7 +115,7 @@ public class URIUtil {
 		}
 	}
 	public static <T extends Appendable> T encodeURIComponent(T sb, CharSequence src) {
-		ByteList bb = IOUtil.ddLayeredByteBuf();
+		ByteList bb = new ByteList();
 		try {
 			return encodeURI(bb.putUTFData(src), sb, URI_COMPONENT_SAFE);
 		} finally {
@@ -141,7 +141,7 @@ public class URIUtil {
 		return ob;
 	}
 
-	public static String encodeFilePath(CharSequence src) { return encodeFilePath(IOUtil.ddLayeredCharBuf(), src).toStringAndFree(); }
+	public static String encodeFilePath(CharSequence src) { return encodeFilePath(new CharList(), src).toStringAndFree(); }
 	private static final MyBitSet invalid = MyBitSet.from("\\/:*?\"<>|+");
 	public static <T extends Appendable> T encodeFilePath(T sb, CharSequence src) {
 		try {

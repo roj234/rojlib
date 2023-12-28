@@ -19,8 +19,12 @@ import roj.util.ByteList;
 import java.awt.*;
 import java.awt.datatransfer.*;
 import java.io.IOException;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.Charset;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 
 import static java.awt.event.KeyEvent.*;
@@ -35,6 +39,7 @@ public class DefaultConsole implements Console {
 	private static final int MAX_INPUT = 500;
 
 	protected final CharList prompt = new CharList(100);
+	private String realPrompt;
 
 	private String staticHighlight;
 	private AnsiString highlight;
@@ -56,11 +61,17 @@ public class DefaultConsole implements Console {
 	private final List<Completion> tabs = new SimpleList<>();
 	private int tabCursor = -1, tabId;
 
+	private boolean _history = true, _echo = true;
+	private List<Function<String, Boolean>> _async_callback = Collections.emptyList();
+
 	public DefaultConsole(String prompt) {
 		setPrompt(prompt);
 		staticHighlight = "\u001b[97m"; // light white
 	}
+
+	public String getPrompt() { return realPrompt; }
 	public void setPrompt(String prompt) {
+		this.realPrompt = prompt;
 		this.prompt.clear();
 		this.prompt.append("\u001b[0m").append(prompt);
 
@@ -243,18 +254,26 @@ public class DefaultConsole implements Console {
 					if (endCompletion(true)) break;
 
 					String cmd = input.toString();
-					if (!evaluate(cmd)) return;
+					if (!_async_callback.isEmpty()) {
+						Boolean b = _async_callback.get(0).apply(cmd);
+						if (b) _async_callback.remove(0);
+						else return;
+					} else if (!evaluate(cmd)) return;
 
 					input.clear();
 
-					history.remove(cmd);
-					while (history.size() > 255) history.remove(0);
-					history.add(cmd);
+					if (_history && !cmd.isEmpty()) {
+						history.remove(cmd);
+						while (history.size() > 255) history.remove(0);
+						history.add(cmd);
+					}
 
 					cursor = scrollLeft = 0;
 					afterInput();
 				break;
 				case VK_UP:
+					if (!_echo) return;
+
 					if (tabs.size() > 0) {
 						setComplete((tabId == 0 ? tabs.size() : tabId) - 1);
 						break;
@@ -271,6 +290,8 @@ public class DefaultConsole implements Console {
 					}
 				break;
 				case VK_DOWN:
+					if (!_echo) return;
+
 					if (tabs.size() > 0) {
 						setComplete((tabId+1) % tabs.size());
 						break;
@@ -289,15 +310,15 @@ public class DefaultConsole implements Console {
 					}
 				break;
 				case VK_LEFT:
-					if (cursor > 0) cursor--;
+					if (_echo && cursor > 0) cursor--;
 					else return;
 				break;
 				case VK_RIGHT:
-					if (cursor < input.length() - invisible.size()) cursor++;
+					if (_echo && cursor < input.length() - invisible.size()) cursor++;
 					else return;
 				break;
 				case VK_TAB:
-					if (input.length() > MAX_INPUT) { beep(); return; }
+					if (!_echo || input.length() > MAX_INPUT) { beep(); return; }
 					/*if (tabs.size() > 1) {
 						setComplete((tabId+1) % tabs.size());
 						break;
@@ -338,6 +359,12 @@ public class DefaultConsole implements Console {
 		System.out.println(pp);
 	}
 	protected final void doRender() {
+		if (!_echo) {
+			prompt.setLength(prefixLen);
+			CLIUtil.renderBottomLine(prompt, true, prefixCLen+1);
+			return;
+		}
+
 		if (autoHighlight && tabCursor < 0 && highlight == null) {
 			lastInput = input.toString();
 			highlight = highlight(lastInput);
@@ -380,7 +407,7 @@ public class DefaultConsole implements Console {
 
 		int end = limitWidth(scrollLeft, maxWidth);
 		if (scrollLeft > end) {
-			System.err.println("[DefaultConsole]Invalid ANSI sequence detected.");
+			if (CLIUtil.ANSI) System.err.println("[DefaultConsole]Invalid ANSI sequence detected.");
 			scrollLeft = 0;
 		}
 		prompt.append(staticHighlight).append(input, scrollLeft, end);
@@ -439,6 +466,23 @@ public class DefaultConsole implements Console {
 	}
 
 	protected boolean keyEnter_Pre(int key, boolean vk) { return false; }
+
+	public static final String KEY_SHORTCUT =
+		"F1: 查看帮助\n" +
+		"F2: 切换Ctrl+C功能\n" +
+		"F3: 开关语法高亮\n" +
+		"F4: 开关即时补全\n" +
+		"Ctrl+A: 全选\n" +
+		"Ctrl+B: 中断程序(F2)\n" +
+		"Ctrl+C: 中断程序或复制(F2)\n" +
+		"Ctrl+V: 粘贴\n" +
+		"↑: 上一条历史或补全候选\n" +
+		"↓: 下一条历史或补全候选, 或回到当前输入\n" +
+		"Ctrl+←: 光标移至开头\n" +
+		"Ctrl+→: 光标移至结尾\n" +
+		"Tab: 在当前位置补全代码\n" +
+		"ESC: 取消补全\n" +
+		"ENTER: 确认补全或执行指令";
 	protected void printHelp() {
 		CLIBoxRenderer.DEFAULT.render(new String[][]{
 			new String[] { "Roj234的终端模拟器 帮助", "简介", "快捷键" },
@@ -449,24 +493,34 @@ public class DefaultConsole implements Console {
 					"然而：https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters\n" +
 					"\n" +
 					"做什么都不简单。。。还很邪道",
-				"F1: 查看帮助\n" +
-					"F2: 切换Ctrl+C功能\n" +
-					"F3: 开关语法高亮\n" +
-					"F4: 开关即时补全\n" +
-					"Ctrl+A: 全选\n" +
-					"Ctrl+B: 中断程序(F2)\n" +
-					"Ctrl+C: 中断程序或复制(F2)\n" +
-					"Ctrl+V: 粘贴\n" +
-					"Ctrl+←: 光标移至开头\n" +
-					"Ctrl+→: 光标移至结尾\n" +
-					"ESC: 取消补全\n" +
-					"ENTER: 确认补全或执行指令\n" +
-					"↑: 上一条历史或补全候选\n" +
-					"↓: 下一条历史或补全候选, 或回到当前输入\n" +
-					"Tab: 在当前位置补全代码" }
+				KEY_SHORTCUT }
 		});
 	}
 	protected AnsiString highlight(String input) { return null; }
 	protected void complete(CharList input, int cursor, List<Completion> out) {}
 	protected boolean evaluate(String cmd) { return true; }
+
+	public void setEchoEnabled(boolean echo) { this._echo = echo; doRender(); }
+	public void setHistoryEnabled(boolean history) { this._history = history; }
+	public String readLine() throws IOException {
+		if (Thread.currentThread() == CLIUtil.getConsoleThread()) throw new IllegalStateException("cannot call readLine() on console thread");
+
+		if (_async_callback == Collections.EMPTY_LIST) _async_callback = new SimpleList<>();
+		AtomicReference<String> ref = new AtomicReference<>();
+		_async_callback.add(s -> {
+			ref.set(s);
+			synchronized (ref) { ref.notify(); }
+			return true;
+		});
+		synchronized (this) {
+			while (ref.get() == null) {
+				try {
+					ref.wait();
+				} catch (InterruptedException e) {
+					throw new ClosedByInterruptException();
+				}
+			}
+		}
+		return ref.get();
+	}
 }

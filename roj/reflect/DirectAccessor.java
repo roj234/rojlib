@@ -9,7 +9,6 @@ import roj.asm.visitor.CodeWriter;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
-import roj.mapper.util.Desc;
 import roj.text.CharList;
 import roj.util.ArrayCache;
 
@@ -38,41 +37,22 @@ public final class DirectAccessor<T> {
 	public static final String MAGIC_ACCESSOR_CLASS = ReflectionUtils.JAVA_VERSION <= 8 ?
 		"sun/reflect/MagicAccessorImpl" : Java9Compat.HackMagicAccessor();
 
-	public static final boolean DEBUG = false;
 	public static final MyBitSet EMPTY_BITS = new MyBitSet(0);
 
 	static final AtomicInteger NEXT_ID = new AtomicInteger();
 
-	//
 	private final MyHashMap<String, Method> methodByName;
-	private final Class<T> owner;
+	private final Class<T> itf;
 	private ConstantData var;
-
-	// Cached object
-	private final MyHashMap<String, Cache> caches;
-	private Cache cache;
 
 	// Cast check
 	private boolean check;
 
-	// Debug
-	private CharList sb;
-
-	// State machine mode
-	private Class<?> target;
-	private String[] from, to;
-	private List<Class<?>[]> fuzzy;
-
-	static final class Cache {
-		Class<?> clazz;
-		Desc node;
-	}
-
-	private DirectAccessor(Class<T> deClass, String pkg, boolean checkDuplicate) {
-		this.owner = deClass;
+	private DirectAccessor(Class<T> itf, boolean checkDuplicate) {
+		if (!itf.isInterface()) throw new IllegalArgumentException(itf.getName()+" must be a interface");
+		this.itf = itf;
 		this.check = true;
-		if (!deClass.isInterface()) throw new IllegalArgumentException(deClass.getName() + " must be a interface");
-		Method[] methods = deClass.getMethods();
+		Method[] methods = itf.getMethods();
 		this.methodByName = new MyHashMap<>(methods.length);
 		for (Method method : methods) {
 			if ((method.getModifiers() & AccessFlag.STATIC) != 0) continue;
@@ -81,15 +61,15 @@ public final class DirectAccessor<T> {
 			if (("toString".equals(method.getName()) || "clone".equals(method.getName())) && method.getParameterCount() == 0) continue;
 
 			if (methodByName.put(method.getName(), method) != null && checkDuplicate) {
-				throw new IllegalArgumentException("方法名重复: '" + method.getName() + "' in " + deClass.getName());
+				throw new IllegalArgumentException("方法名重复: '"+method.getName()+"' in "+itf.getName());
 			}
 		}
 		var = new ConstantData();
-		caches = new MyHashMap<>();
-		String clsName = pkg + "DAB$" + NEXT_ID.getAndIncrement();
-		makeHeader(clsName, deClass.getName().replace('.', '/'), var);
+
+		String itfClass = itf.getName().replace('.', '/');
+		String clsName = itfClass+"$DAC$"+NEXT_ID.getAndIncrement();
+		makeHeader(clsName, itfClass, var);
 		FastInit.prepare(var);
-		if (DEBUG) this.sb = new CharList().append("实现类: ").append(deClass.getName()).append("\n自身: ").append(var.name);
 	}
 
 	/**
@@ -100,10 +80,7 @@ public final class DirectAccessor<T> {
 	@SuppressWarnings("unchecked")
 	public final T build() {
 		if (var == null) throw new IllegalStateException("Already built");
-
-		writeDebugInfo();
 		methodByName.clear();
-
 		try {
 			return (T) FastInit.make(var);
 		} finally {
@@ -111,114 +88,11 @@ public final class DirectAccessor<T> {
 		}
 	}
 
-	public final DirectAccessor<T> cloneable() {
-		var.cloneable();
-		return this;
-	}
-
-	private void writeDebugInfo() {
-		if (sb != null) {
-			CodeWriter cw = var.newMethod(PUBLIC, "toString", "()Ljava/lang/String;");
-
-			cw.visitSize(1,1);
-			cw.ldc(sb.toString());
-			cw.one(ARETURN);
-			cw.finish();
-
-			sb = null;
-		}
-	}
-
-	/**
-	 * @see #makeCache(Class, String, int)
-	 */
-	public final DirectAccessor<T> makeCache(Class<?> targetClass) {
-		return makeCache(targetClass, "instance", 7);
-	}
-
-	/**
-	 * get,set,clear Instance via Instanced or other... <br>
-	 *
-	 * @param methodFlag 1: get 2:set 4:clear 8:check existence, plus them
-	 */
-	public final DirectAccessor<T> makeCache(Class<?> targetClass, String name, int methodFlag) {
-		if (caches.getEntry(name) != null) throw new IllegalStateException("Cache already set!");
-
-		char c = Character.toUpperCase(name.charAt(0));
-		String name1 = c == name.charAt(0) ? name : c + name.substring(1);
-
-		String type = targetClass.getName().replace('.', '/');
-		Type type1 = new Type(type);
-		var.newField(PUBLIC, name, type1);
-
-		CodeWriter cw;
-
-		if ((methodFlag & 2) != 0) {
-			if ((methodFlag & 8) != 0) {
-				checkExistence("set" + name1);
-			}
-			cw = var.newMethod(PUBLIC, "set" + name1, "(Ljava/lang/Object;)V");
-
-			cw.visitSize(2, 2);
-			cw.one(ALOAD_0);
-			cw.one(ALOAD_1);
-			if (check) cw.clazz(CHECKCAST, type);
-			cw.field(PUTFIELD, var.name, name, type1);
-			cw.one(RETURN);
-		}
-
-		if ((methodFlag & 4) != 0) {
-			if ((methodFlag & 8) != 0) {
-				checkExistence("clear" + name1);
-			}
-			cw = var.newMethod(PUBLIC, "clear" + name1, "()V");
-
-			cw.visitSize(2,1);
-
-			cw.one(ALOAD_0);
-			cw.one(ACONST_NULL);
-			cw.field(PUTFIELD, var.name, name, type1);
-			cw.one(RETURN);
-		}
-
-		if ((methodFlag & 1) != 0) {
-			if ((methodFlag & 8) != 0) {
-				checkExistence("get" + name1);
-			}
-			cw = var.newMethod(PUBLIC, "get" + name1, "()Ljava/lang/Object;");
-
-			cw.visitSize(1,1);
-
-			cw.one(ALOAD_0);
-			cw.field(GETFIELD, var.name, name, type1);
-			cw.one(ARETURN);
-		}
-
-		Cache cache = new Cache();
-		cache.clazz = targetClass;
-		cache.node = new Desc(var.name, name, type1.toDesc());
-		caches.put(name, cache);
-
-		return this;
-	}
-
-	private void checkExistence(String name) {
+	private Method checkExistence(String name) {
+		if (name == null) return null;
 		Method method = methodByName.remove(name);
-		if (method == null) {
-			throw new IllegalArgumentException(owner.getName() + '.' + name + " 不存在或已被占用!");
-		}
-	}
-
-	public final DirectAccessor<T> useCache() {
-		return useCache("instance");
-	}
-
-	public final DirectAccessor<T> useCache(String name) {
-		cache = caches.get(name);
-		if (cache == null && name != null) {
-			throw new IllegalArgumentException("Cache '" + name + "' not exist");
-		}
-		return this;
+		if (method == null) throw new IllegalArgumentException(itf.getName()+'.'+name+" 不存在或已使用!");
+		return method;
 	}
 
 	/**
@@ -277,18 +151,14 @@ public final class DirectAccessor<T> {
 		Method[] sMethods = new Method[names.length];
 		Constructor<?>[] tMethods = new Constructor<?>[names.length];
 
+		ILSecurityManager sm1 = ILSecurityManager.getSecurityManager();
 		Constructor<?>[] constructors = fuzzy == null ? null : target.getDeclaredConstructors();
 		for (int i = 0; i < names.length; i++) {
 			String name = names[i];
 			Method m = methodByName.get(name);
-			if (m == null) {
-				throw new IllegalArgumentException(owner.getName() + '.' + name + " 不存在或已被占用!");
-			}
-			if (!m.getReturnType().isAssignableFrom(target)) {
-				throw new IllegalArgumentException(owner.getName() + '.' + name + " 的返回值 (" + m.getReturnType().getName() + ") 不兼容 " + target.getName());
-			}
+			if (m == null) throw new IllegalArgumentException(itf.getName()+'.'+name+" 不存在或已使用!");
+			if (!m.getReturnType().isAssignableFrom(target)) throw new IllegalArgumentException(itf.getName()+'.'+name+" 的返回值 ("+m.getReturnType().getName()+") 不兼容 "+target.getName());
 			sMethods[i] = m;
-			Class<?> r = m.getReturnType();
 			Class<?>[] types = m.getParameterTypes();
 
 			try {
@@ -296,48 +166,34 @@ public final class DirectAccessor<T> {
 					// for exception
 					tMethods[i] = target.getDeclaredConstructor(fuzzy == null ? types : (types = fuzzy.get(i)));
 				} else {
-					for (int j = 0; j < types.length; j++) {
-						Class<?> type = types[j];
-						if (!type.isPrimitive() && type != Object.class) {
-							throw new IllegalArgumentException("无法为 " + owner.getName() + '.' + name + " 使用all-object: 第[" + (j + 1) + "]个参数既不是基本类型又不是Object");
-						}
-					}
-					if (!r.isPrimitive() && r != Object.class) throw new IllegalArgumentException("无法为 " + owner.getName() + '.' + name + " 使用all-object: 返回值既不是基本类型又不是Object");
-
-					objectToObject(types);
-					int found = 0;
+					// removed: 参数或返回值既不是基本类型又不是Object
+					// reason: just cast-able
+					toFuzzyMode(types);
+					boolean found = false;
 					outer:
 					for (Constructor<?> cr : constructors) {
 						if (cr.getParameterCount() == types.length) {
-							Class<?>[] constParams = objectToObject(cr.getParameterTypes());
-							for (int j = 0; j < constParams.length; j++) {
-								if (constParams[j] != types[j]) {
-									continue outer;
-								}
+							Class<?>[] types2 = toFuzzyMode(cr.getParameterTypes());
+							for (int j = 0; j < types2.length; j++) {
+								if (types2[j] != types[j]) continue outer;
 							}
-							if (found++ > 0) {
+							if (found) {
 								throw new IllegalArgumentException(
-									"无法为 " + owner.getName() + '.' + name + " 使用模糊模式: 对于指定非基本类型的数量和位置有多个符合的方法\n" +
-										"其一: " + TypeHelper.class2asm(tMethods[i].getParameterTypes(), void.class) +
-										"\n" + "其二: " + TypeHelper.class2asm(cr.getParameterTypes(), void.class));
+									"无法为 "+itf.getName()+'.'+name+" 使用模糊模式: 对于指定非基本类型的数量和位置有多个符合的方法\n"+
+										"其一: "+TypeHelper.class2asm(tMethods[i].getParameterTypes(), void.class)+"\n"+
+										"其二: "+TypeHelper.class2asm(cr.getParameterTypes(), void.class));
 							}
 							tMethods[i] = cr;
+							found = true;
 						}
 					}
-					if (found == 0) throw new NoSuchMethodException();
+					if (!found) throw new NoSuchMethodException();
 				}
+				if (sm1 != null && !sm1.checkConstruct(tMethods[i])) throw new NoSuchMethodException();
 			} catch (NoSuchMethodException e) {
-				throw new IllegalArgumentException("无法找到 " + target.getName() + " 的构造器, 参数: " + TypeHelper.class2asm(types, void.class));
+				throw new IllegalArgumentException("无法找到 "+target.getName()+" 的构造器, 参数: "+TypeHelper.class2asm(types, void.class));
 			}
 			methodByName.remove(name);
-		}
-		if (sb != null) {
-			sb.append("\n  构造器代理: ").append(target.getName()).append("\n  方法:\n    ");
-			for (int i = 0; i < tMethods.length; i++) {
-				Constructor<?> tm = tMethods[i];
-				sb.append(names[i]).append(" (").append(TypeHelper.class2asm(tm.getParameterTypes(), void.class)).append(")").append("\n    ");
-			}
-			sb.setLength(sb.length() - 5);
 		}
 
 		String tName = target.getName().replace('.', '/');
@@ -349,7 +205,7 @@ public final class DirectAccessor<T> {
 
 			Method sm = sMethods[i];
 			Class<?>[] params2 = sm.getParameterTypes();
-			String sDesc = objectDescriptors(params, sm.getReturnType(), fuzzy == null);
+			String sDesc = toAsmDesc(params, sm.getReturnType(), fuzzy == null);
 
 			CodeWriter cw = var.newMethod(PUBLIC, sm.getName(), sDesc);
 
@@ -381,18 +237,7 @@ public final class DirectAccessor<T> {
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate(Class<?> target, String name) {
-		String[] arr = new String[] {name};
-		return delegate(target, arr, EMPTY_BITS, arr, null);
-	}
-
-	/**
-	 * @see #delegate(Class, String[], MyBitSet, String[], List)
-	 */
-	public final DirectAccessor<T> delegate(Class<?> target, String name, String selfName) {
-		return delegate(target, new String[] {name}, EMPTY_BITS, new String[] {selfName}, null);
-	}
-
+	public final DirectAccessor<T> delegate(Class<?> target, String name) { String[] arr = new String[] {name}; return delegate(target, arr, EMPTY_BITS, arr, null); }
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
@@ -404,46 +249,41 @@ public final class DirectAccessor<T> {
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate(Class<?> target, String[] names, String[] selfNames) {
-		return delegate(target, names, EMPTY_BITS, selfNames, null);
+	public final DirectAccessor<T> delegate(Class<?> target, String name, String selfName) { return delegate(target, new String[] {name}, EMPTY_BITS, new String[] {selfName}, null); }
+	/**
+	 * @see #delegate(Class, String[], MyBitSet, String[], List)
+	 */
+	public final DirectAccessor<T> delegate(Class<?> target, String[] names, String[] selfNames) { return delegate(target, names, EMPTY_BITS, selfNames, null); }
+
+	/**
+	 * @see #delegate(Class, String[], MyBitSet, String[], List)
+	 */
+	public final DirectAccessor<T> delegate_o(Class<?> target, String name) { String[] arr = new String[] {name}; return delegate(target, arr, EMPTY_BITS, arr, Collections.emptyList()); }
+	/**
+	 * @see #delegate(Class, String[], MyBitSet, String[], List)
+	 */
+	public final DirectAccessor<T> delegate_o(Class<?> target, String... names) {
+		if (names.length == 0) throw new IllegalArgumentException("Wrong call");
+		return delegate(target, names, EMPTY_BITS, names, Collections.emptyList());
 	}
 
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate_o(Class<?> target, String name) {
-		String[] arr = new String[] {name};
-		return delegate(target, arr, EMPTY_BITS, arr, Collections.emptyList());
-	}
+	public final DirectAccessor<T> delegate_o(Class<?> target, String name, String selfName) { return delegate(target, new String[] {name}, EMPTY_BITS, new String[] {selfName}, Collections.emptyList()); }
 
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate_o(Class<?> target, String[] methodNames) {
-		return delegate(target, methodNames, EMPTY_BITS, methodNames, Collections.emptyList());
-	}
-
-	/**
-	 * @see #delegate(Class, String[], MyBitSet, String[], List)
-	 */
-	public final DirectAccessor<T> delegate_o(Class<?> target, String method, String self) {
-		return delegate(target, new String[] {method}, EMPTY_BITS, new String[] {self}, Collections.emptyList());
-	}
-
-	/**
-	 * @see #delegate(Class, String[], MyBitSet, String[], List)
-	 */
-	public final DirectAccessor<T> delegate_o(Class<?> target, String method, String self, Class<?>... param) {
+	public final DirectAccessor<T> delegate_o(Class<?> target, String name, String selfName, Class<?>... param) {
 		if (param.length == 0) throw new IllegalArgumentException("Wrong call");
-		return delegate(target, new String[] {method}, EMPTY_BITS, new String[] {self}, Collections.singletonList(param));
+		return delegate(target, new String[] {name}, EMPTY_BITS, new String[] {selfName}, Collections.singletonList(param));
 	}
 
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate_o(Class<?> target, String[] methodNames, String[] selfNames) {
-		return delegate(target, methodNames, EMPTY_BITS, selfNames, Collections.emptyList());
-	}
+	public final DirectAccessor<T> delegate_o(Class<?> target, String[] names, String[] selfNames) { return delegate(target, names, EMPTY_BITS, selfNames, Collections.emptyList()); }
 
 	/**
 	 * 把 selfMethodNames 中的方法标记为 target 的 methodNames 方法的调用者 <br>
@@ -458,39 +298,22 @@ public final class DirectAccessor<T> {
 	 */
 	public DirectAccessor<T> delegate(Class<?> target, String[] methodNames, @Nullable MyBitSet flags, String[] selfNames, List<Class<?>[]> fuzzyMode) throws IllegalArgumentException {
 		if (selfNames.length == 0) return this;
-		boolean useCache = cache != null;
-		if (useCache) {
-			if (!target.isAssignableFrom(cache.clazz)) {
-				throw new IllegalArgumentException("使用了缓存的对象 '" + cache.clazz.getName() + "', 但是 '" + target.getName() + "' 不能转换为缓存的类 '" + cache.clazz.getName() + "'.");
-			}
-		}
 
 		Method[] tMethods = new Method[selfNames.length];
 		Method[] sMethods = new Method[selfNames.length];
 
+		ILSecurityManager sm1 = ILSecurityManager.getSecurityManager();
 		List<Method> methods = ReflectionUtils.getMethods(target);
 		for (int i = 0; i < selfNames.length; i++) {
 			String name = selfNames[i];
 			Method method = methodByName.get(name);
-			if (method == null) {
-				throw new IllegalArgumentException(owner.getName() + '.' + name + " 不存在或已被占用!");
-			}
+			if (method == null) throw new IllegalArgumentException(itf.getName()+'.'+name+" 不存在或已使用!");
+
 			sMethods[i] = method;
 
 			Class<?>[] types = method.getParameterTypes();
-			if (fuzzyMode != null) {
-				for (int j = 0; j < types.length; j++) {
-					Class<?> type = types[j];
-					if (!type.isPrimitive() && type != Object.class) {
-						throw new IllegalArgumentException("无法为 " + owner.getName() + '.' + name + " 使用all-object: 第[" + (j + 1) + "]个参数既不是基本类型又不是Object");
-					}
-				}
-				if (!method.getReturnType().isPrimitive() && method.getReturnType() != Object.class) {
-					throw new IllegalArgumentException("无法为 " + owner.getName() + '.' + name + " 使用all-object: 返回值既不是基本类型又不是Object");
-				}
-			}
 
-			int off = useCache ? 0 : 1;
+			int off = 1;
 			String targetMethodName = methodNames[i];
 			try {
 				boolean fuzzy = false;
@@ -499,7 +322,7 @@ public final class DirectAccessor<T> {
 						types = fuzzyMode.get(i);
 						off = 0;
 					} else {
-						objectToObject(types);
+						toFuzzyMode(types);
 						fuzzy = true;
 					}
 				}
@@ -512,25 +335,24 @@ public final class DirectAccessor<T> {
 					int off1 = (m.getModifiers() & AccessFlag.STATIC) != 0 ? 0 : off;
 					if (m.getName().equals(targetMethodName) && m.getParameterCount() == types.length - off1) {
 						Class<?>[] types2 = m.getParameterTypes();
-						if (fuzzy) {
-							objectToObject(types2);
-						}
+						if (fuzzy) toFuzzyMode(types2);
+
 						for (int k = 0; k < types2.length; k++) {
-							if (types2[k] != types[k + off1]) {
+							if (types2[k] != types[k+off1]) {
 								continue outer;
 							}
 						}
 
 						types = method.getParameterTypes();
 						if (off1 == 1 && !types[0].isAssignableFrom(target)) {
-							throw new IllegalArgumentException("非缓存方法 " + owner.getName() + '.' + name + " 的第一个参数 (" + types[0].getName() + ") 不能转换为 " + target.getName());
+							throw new IllegalArgumentException(itf.getName()+'.'+name+" 的第一个参数 ("+types[0].getName()+") 不能转换为 "+target.getName());
 						}
 						if (found != -1) {
 							if (!Arrays.equals(m.getParameterTypes(), tMethods[i].getParameterTypes())) {
 								throw new IllegalArgumentException(
-									"无法为 " + owner.getName() + '.' + name + " 使用模糊模式: 对于指定非基本类型的数量和位置有多个符合的方法\n" + "其一: " + TypeHelper.class2asm(tMethods[i].getParameterTypes(),
-																																				  tMethods[i].getReturnType()) + "\n" + "其二: " + TypeHelper.class2asm(
-										m.getParameterTypes(), m.getReturnType()));
+									"无法为 "+itf.getName()+'.'+name+" 使用模糊模式: 对于指定非基本类型的数量和位置有多个符合的方法\n"+
+										"其一: "+TypeHelper.class2asm(tMethods[i].getParameterTypes(), tMethods[i].getReturnType())+"\n"+
+										"其二: "+TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType()));
 							} else {
 								// 继承，却改变了返回值的类型
 								// 同参同反不考虑
@@ -541,25 +363,16 @@ public final class DirectAccessor<T> {
 						tMethods[i] = m;
 					}
 				}
-				if (found == -1) throw new NoSuchMethodException();
+				if (found == -1 || sm1 != null && !sm1.checkInvoke(tMethods[i])) throw new NoSuchMethodException();
 				methods.remove(found);
 			} catch (NoSuchMethodException e) {
-				throw new IllegalArgumentException("无法找到指定的方法: " + target.getName() + '.' + targetMethodName + " 参数 " + TypeHelper.class2asm(types, method.getReturnType()));
+				throw new IllegalArgumentException("无法找到指定的方法: "+target.getName()+'.'+targetMethodName+" 参数 "+TypeHelper.class2asm(types, method.getReturnType()));
 			}
 
 			if (!method.getReturnType().isAssignableFrom(tMethods[i].getReturnType())) {
-				throw new IllegalArgumentException(owner.getName() + '.' + name + " 的返回值 (" + method.getReturnType().getName() + ") 不兼容 " + tMethods[i].getReturnType().getName());
+				throw new IllegalArgumentException(itf.getName()+'.'+name+" 的返回值 ("+method.getReturnType().getName()+") 不兼容 "+tMethods[i].getReturnType().getName());
 			}
 			methodByName.remove(name);
-		}
-
-		if (sb != null) {
-			sb.append("\n  方法代理: ").append(target.getName()).append("\n  方法:\n    ");
-			for (int i = 0; i < tMethods.length; i++) {
-				Method tm = tMethods[i];
-				sb.append(tm).append(" => ").append(selfNames[i]).append(" (").append(TypeHelper.class2asm(tm.getParameterTypes(), tm.getReturnType())).append(")").append("\n    ");
-			}
-			sb.setLength(sb.length() - 5);
 		}
 
 		String tName = target.getName().replace('.', '/');
@@ -571,21 +384,16 @@ public final class DirectAccessor<T> {
 
 			Method sm = sMethods[i];
 			Class<?>[] params2 = sm.getParameterTypes();
-			String sDesc = objectDescriptors(params2, sm.getReturnType(), fuzzyMode == null);
+			String sDesc = toAsmDesc(params2, sm.getReturnType(), fuzzyMode == null);
 			CodeWriter cw = var.newMethod(PUBLIC, selfNames[i], sDesc);
 
 			int isStatic = (tm.getModifiers() & AccessFlag.STATIC) != 0 ? 1 : 0;
 			if (isStatic == 0) {
-				if (useCache) {
-					cw.one(ALOAD_0);
-					cw.field(GETFIELD, cache.node.owner, cache.node.name, cache.node.param);
-				} else {
-					cw.one(ALOAD_1);
-					if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
-				}
+				cw.one(ALOAD_1);
+				if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
 			}
 
-			int size = useCache || isStatic != 0 ? 0 : 1;
+			int size = isStatic != 0 ? 0 : 1;
 			int j = size;
 			for (Class<?> param : params) {
 				Type type = TypeHelper.class2type(param);
@@ -624,23 +432,17 @@ public final class DirectAccessor<T> {
 	/**
 	 * @see #access(Class, String[], String[], String[])
 	 */
-	public final DirectAccessor<T> access(Class<?> target, String fieldName) {
-		return access(target, new String[] {fieldName});
-	}
+	public final DirectAccessor<T> access(Class<?> target, String fieldName) { return access(target, new String[] {fieldName}); }
 
 	/**
 	 * @see #access(Class, String[], String[], String[])
 	 */
-	public final DirectAccessor<T> access(Class<?> target, String[] fields) {
-		return access(target, fields, capitalize(fields, "get"), capitalize(fields, "set"));
-	}
+	public final DirectAccessor<T> access(Class<?> target, String[] fields) { return access(target, fields, capitalize(fields, "get"), capitalize(fields, "set")); }
 
 	/**
 	 * @see #access(Class, String[], String[], String[])
 	 */
-	public final DirectAccessor<T> access(Class<?> target, String field, String getter, String setter) {
-		return access(target, new String[] {field}, new String[] {getter}, new String[] {setter});
-	}
+	public final DirectAccessor<T> access(Class<?> target, String field, String getter, String setter) { return access(target, new String[] {field}, new String[] {getter}, new String[] {setter}); }
 
 	/**
 	 * 把 setter/getters 中的方法标记为 target 的 fields 的 setter / getter <br>
@@ -652,17 +454,12 @@ public final class DirectAccessor<T> {
 	 */
 	public DirectAccessor<T> access(Class<?> target, String[] fields, String[] getters, String[] setters) throws IllegalArgumentException {
 		if (fields.length == 0) return this;
-		boolean useCache = cache != null;
-		if (useCache) {
-			if (!target.isAssignableFrom(cache.clazz)) {
-				throw new IllegalArgumentException("使用了缓存的对象 '" + cache.clazz.getName() + "', 但是 '" + target.getName() + "' 不能转换为缓存的类 '" + cache.clazz.getName() + "'.");
-			}
-		}
 
 		Field[] fieldFs = new Field[fields.length];
 		Method[] setterMs = new Method[fields.length];
 		Method[] getterMs = new Method[fields.length];
 
+		ILSecurityManager sm1 = ILSecurityManager.getSecurityManager();
 		List<Field> allFields = ReflectionUtils.getFields(target);
 		for (int i = 0; i < fields.length; i++) {
 			String name = fields[i];
@@ -678,19 +475,17 @@ public final class DirectAccessor<T> {
 				}
 			}
 
-			if (found == -1) throw new IllegalArgumentException("无法找到字段 " + target.getName() + '.' + fields[i]);
+			if (found == -1 || sm1 != null && !sm1.checkAccess(allFields.get(found))) throw new IllegalArgumentException("无法找到字段 "+target.getName()+'.'+fields[i]);
 			fieldFs[i] = allFields.remove(found);
-			int off = useCache || (fieldFs[i].getModifiers() & AccessFlag.STATIC) != 0 ? 0 : 1;
+			int off = (fieldFs[i].getModifiers() & AccessFlag.STATIC) != 0 ? 0 : 1;
 
 			name = getters == null ? null : getters[i];
 			if (name != null) {
 				Method method = methodByName.get(name);
-				if (method == null) {
-					throw new IllegalArgumentException(owner.getName() + '.' + name + " 不存在或已被占用!");
-				}
-				if (method.getParameterCount() != off) throw new IllegalArgumentException(owner.getName() + '.' + name + " 是个 getter, " + "不应该有参数, got " + (method.getParameterCount() - off) + '!');
+				if (method == null) throw new IllegalArgumentException(itf.getName()+'.'+name+" 不存在或已使用!");
+				if (method.getParameterCount() != off) throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 getter, 不应该有参数, got "+(method.getParameterCount() - off)+'!');
 				if (!method.getReturnType().isAssignableFrom(fieldFs[i].getType())) {
-					throw new IllegalArgumentException(owner.getName() + '.' + name + " 是个 getter, " + "但是返回值不兼容 " + fieldFs[i].getType().getName() + " (" + method.getReturnType().getName() + ')');
+					throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 getter, 但是返回值不兼容 "+fieldFs[i].getType().getName()+" ("+method.getReturnType().getName()+')');
 				}
 				getterMs[i] = method;
 				methodByName.remove(name);
@@ -699,27 +494,15 @@ public final class DirectAccessor<T> {
 			name = setters == null ? null : setters[i];
 			if (name != null) {
 				Method method = methodByName.get(name);
-				if (method == null) {
-					throw new IllegalArgumentException(owner.getName() + '.' + name + " 不存在或已被占用!");
-				}
-				if (method.getParameterCount() != off + 1) throw new IllegalArgumentException(owner.getName() + '.' + name + " 是个 setter, " + "只因有1个参数, got " + method.getParameterCount() + '!');
+				if (method == null) throw new IllegalArgumentException(itf.getName()+'.'+name+" 不存在或已使用!");
+				if (method.getParameterCount() != off+1) throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 setter, 只因有1个参数, got "+method.getParameterCount()+'!');
 				if (!method.getParameterTypes()[off].isAssignableFrom(fieldFs[i].getType())) {
-					throw new IllegalArgumentException(
-						owner.getName() + '.' + name + " 是个 setter, " + "但是参数[" + (off + 1) + "]不兼容 " + fieldFs[i].getType().getName() + " (" + method.getReturnType().getName() + ')');
+					throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 setter, 但是参数["+(off+1)+"]不兼容 "+fieldFs[i].getType().getName()+" ("+method.getReturnType().getName()+')');
 				}
-				if (method.getReturnType() != void.class) throw new IllegalArgumentException(owner.getName() + '.' + name + " 是个 setter, " + "但是它的返回值不是void: " + method.getReturnType().getName());
+				if (method.getReturnType() != void.class) throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 setter, 但是它的返回值不是void: "+method.getReturnType().getName());
 				setterMs[i] = method;
 				methodByName.remove(name);
 			}
-		}
-
-		if (sb != null) {
-			sb.append("\n  字段代理: ").append(target.getName()).append("\n  方法:\n    ");
-			for (int i = 0; i < fieldFs.length; i++) {
-				Field tf = fieldFs[i];
-				sb.append(tf.getName()).append(' ').append(tf.getType().getName()).append(" => [").append(getterMs[i]).append(", ").append(setterMs[i]).append("\n    ");
-			}
-			sb.setLength(sb.length() - 5);
 		}
 
 		String tName = target.getName().replace('.', '/');
@@ -731,21 +514,16 @@ public final class DirectAccessor<T> {
 
 			Method getter = getterMs[i];
 			if (getter != null) {
-				Class<?>[] params2 = isStatic || useCache ? ArrayCache.CLASSES : getter.getParameterTypes();
+				Class<?>[] params2 = isStatic ? ArrayCache.CLASSES : getter.getParameterTypes();
 				CodeWriter cw = var.newMethod(PUBLIC, getter.getName(), TypeHelper.class2asm(params2, getter.getReturnType()));
 
 				byte type = fType.type;
 				int localSize;
 
 				if (!isStatic) {
-					localSize = (char) (useCache ? 1 : 2);
-					if (useCache) {
-						cw.one(ALOAD_0);
-						cw.field(GETFIELD, cache.node.owner, cache.node.name, cache.node.param);
-					} else {
-						cw.one(ALOAD_1);
-						if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
-					}
+					localSize = 2;
+					cw.one(ALOAD_1);
+					if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
 					cw.field(GETFIELD, tName, field.getName(), fType);
 				} else {
 					localSize = 1;
@@ -766,19 +544,14 @@ public final class DirectAccessor<T> {
 				int stackSize = (char) (type == Type.DOUBLE || type == Type.LONG ? 3 : 2);
 
 				if (!isStatic) {
-					localSize = (char) (stackSize + (useCache ? 0 : 1));
-					if (useCache) {
-						cw.one(ALOAD_0);
-						cw.field(GETFIELD, cache.node.owner, cache.node.name, cache.node.param);
-					} else {
-						cw.one(ALOAD_1);
-						if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
-					}
+					localSize = (char) (stackSize+1);
+					cw.one(ALOAD_1);
+					if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
 				} else {
 					localSize = stackSize--;
 				}
-				cw.varLoad(fType, isStatic || useCache ? 1 : 2);
-				if (check && type == CLASS && !field.getType().isAssignableFrom(params2[isStatic || useCache ? 0 : 1]))
+				cw.varLoad(fType, isStatic ? 1 : 2);
+				if (check && type == CLASS && !field.getType().isAssignableFrom(params2[isStatic ? 0 : 1]))
 					cw.clazz(CHECKCAST, fType.owner);
 				cw.field(isStatic ? PUTSTATIC : PUTFIELD, tName, field.getName(), fType);
 				cw.one(RETURN);
@@ -789,17 +562,12 @@ public final class DirectAccessor<T> {
 		return this;
 	}
 
-	public final DirectAccessor<T> i_construct(String target, String desc, String self) {
-		Method mm = methodByName.remove(self);
-		if (mm == null) {
-			throw new IllegalArgumentException(owner.getName() + '.' + self + " 不存在或已被占用!");
-		}
-
-		return i_construct(target, desc, mm);
-	}
-
+	public final DirectAccessor<T> i_construct(String target, String desc, String self) { return i_construct(target, desc, checkExistence(self)); }
 	public final DirectAccessor<T> i_construct(String target, String desc, Method self) {
 		target = target.replace('.', '/');
+
+		ILSecurityManager sm1 = ILSecurityManager.getSecurityManager();
+		if (sm1 != null) sm1.checkAccess(target, "<init>", desc);
 
 		CodeWriter cw = var.newMethod(PUBLIC, self.getName(), TypeHelper.class2asm(self.getParameterTypes(), self.getReturnType()));
 
@@ -823,23 +591,15 @@ public final class DirectAccessor<T> {
 		cw.one(ARETURN);
 		cw.finish();
 
-		if (sb != null) {
-			sb.append("\n  构造器代理[不安全]: ").append(target).append("\n  方法:\n    ").append(self.getName()).append(' ').append(desc);
-		}
-
 		return this;
 	}
 
-	public final DirectAccessor<T> i_delegate(String target, String name, String desc, String self, byte opcode) {
-		Method m = methodByName.remove(self);
-		if (m == null) {
-			throw new IllegalArgumentException(owner.getName() + '.' + self + " 不存在或已被占用!");
-		}
-		return i_delegate(target, name, desc, m, opcode);
-	}
-
+	public final DirectAccessor<T> i_delegate(String target, String name, String desc, String self, byte opcode) { return i_delegate(target, name, desc, checkExistence(self), opcode); }
 	public final DirectAccessor<T> i_delegate(String target, String name, String desc, Method self, byte opcode) {
 		target = target.replace('.', '/');
+
+		ILSecurityManager sm1 = ILSecurityManager.getSecurityManager();
+		if (sm1 != null) sm1.checkAccess(target, name, desc);
 
 		String sDesc = TypeHelper.class2asm(self.getParameterTypes(), self.getReturnType());
 
@@ -859,7 +619,7 @@ public final class DirectAccessor<T> {
 			}
 		}
 
-		cw.visitSize(Math.max(size + (isStatic ? 1 : 0), 1), size+1);
+		cw.visitSize(Math.max(size+(isStatic ? 1 : 0), 1), size+1);
 
 		if (isStatic) {
 			cw.invoke(INVOKESTATIC, target, self.getName(), desc);
@@ -871,28 +631,17 @@ public final class DirectAccessor<T> {
 		cw.return_(TypeHelper.class2type(self.getReturnType()));
 		cw.finish();
 
-		if (sb != null) {
-			sb.append("\n  方法代理[不安全]: ").append(target)
-			  .append("\n  方法:\n    ").append(name).append(' ').append(desc).append(" => ").append(self.getName()).append(' ').append(sDesc);
-		}
-
 		return this;
 	}
 
 	public final DirectAccessor<T> i_access(String target, String name, Type type, String getter, String setter, boolean isStatic) {
-		Method g = methodByName.remove(getter);
-		if (g == null && getter != null) {
-			throw new IllegalArgumentException(owner.getName() + '.' + getter + " 不存在或已被占用!");
-		}
-		Method s = methodByName.remove(setter);
-		if (s == null && setter != null) {
-			throw new IllegalArgumentException(owner.getName() + '.' + setter + " 不存在或已被占用!");
-		}
-		return i_access(target, name, type, g, s, isStatic);
+		return i_access(target, name, type, checkExistence(getter), checkExistence(setter), isStatic);
 	}
-
 	public final DirectAccessor<T> i_access(String target, String name, Type type, Method getter, Method setter, boolean isStatic) {
 		target = target.replace('.', '/');
+
+		ILSecurityManager sm1 = ILSecurityManager.getSecurityManager();
+		if (sm1 != null) sm1.checkAccess(target, name, type.toDesc());
 
 		if (getter != null) {
 			Class<?>[] params2 = isStatic ? ArrayCache.CLASSES : getter.getParameterTypes();
@@ -924,7 +673,7 @@ public final class DirectAccessor<T> {
 			int localSize;
 
 			if (!isStatic) {
-				localSize = (char) (stackSize + 1);
+				localSize = (char) (stackSize+1);
 				cw.one(ALOAD_1);
 			} else {
 				localSize = stackSize--;
@@ -936,75 +685,15 @@ public final class DirectAccessor<T> {
 			cw.finish();
 		}
 
-		if (sb != null) {
-			sb.append("\n  字段代理[不安全]: ").append(target).append("\n  方法:\n    ")
-			  .append(target).append(' ').append(type).append(" => [").append(getter == null ? "null" : getter.getName()).append(", ")
-			  .append(setter == null ? "null" : setter.getName()).append(']');
-		}
-
 		return this;
 	}
 
-	public static <V> DirectAccessor<V> builder(Class<V> impl) {
-		return new DirectAccessor<>(impl, "roj/reflect/", true);
-	}
-	public static <V> DirectAccessor<V> builderInternal(Class<V> impl) {
-		return new DirectAccessor<>(impl, "roj/reflect/", false);
-	}
+	public static <V> DirectAccessor<V> builder(Class<V> impl) { return new DirectAccessor<>(impl, true); }
+	public static <V> DirectAccessor<V> builderInternal(Class<V> impl) { return new DirectAccessor<>(impl, false); }
 
 	public final DirectAccessor<T> unchecked() {
 		check = false;
 		return this;
-	}
-
-	public final DirectAccessor<T> from(String... names) {
-		if (names.length == 0) throw new IllegalArgumentException("Wrong parameter count");
-		this.from = names;
-		return this;
-	}
-
-	public final DirectAccessor<T> in(Class<?> target) {
-		this.target = target;
-		this.to = null;
-		this.fuzzy = null;
-		return this;
-	}
-
-	public final DirectAccessor<T> to(String... names) {
-		if (names.length == 0) throw new IllegalArgumentException("Wrong parameter count");
-		this.to = names;
-		this.fuzzy = null;
-		return this;
-	}
-
-	public final DirectAccessor<T> withFuzzy(boolean fuzzy) {
-		this.fuzzy = fuzzy ? Collections.emptyList() : null;
-		return this;
-	}
-
-	public final DirectAccessor<T> withFuzzy(Class<?>... names) {
-		if (names.length == 0) throw new IllegalArgumentException("Wrong parameter count");
-		this.fuzzy = Collections.singletonList(names);
-		return this;
-	}
-
-	public final DirectAccessor<T> withFuzzy(List<Class<?>[]> names) {
-		this.fuzzy = names;
-		return this;
-	}
-
-	public final DirectAccessor<T> op(String op) {
-		if (target == null || from == null) throw new IllegalStateException("Missing arguments");
-		switch (op) {
-			case "access":
-				return access(target, to, capitalize(from, "get"), capitalize(from, "set"));
-			case "delegate":
-				return delegate(target, to, EMPTY_BITS, from, fuzzy);
-			case "construct":
-				return construct(target, from, fuzzy);
-			default:
-				throw new IllegalArgumentException("Invalid operation " + op);
-		}
 	}
 
 	/**
@@ -1022,10 +711,7 @@ public final class DirectAccessor<T> {
 		return dest;
 	}
 
-	/**
-	 * Header
-	 */
-	public static void makeHeader(String selfName, String invokerName, ConstantData clz) {
+	private static void makeHeader(String selfName, String invokerName, ConstantData clz) {
 		clz.version = 52 << 16;
 		clz.name(selfName.replace('.', '/'));
 
@@ -1034,17 +720,14 @@ public final class DirectAccessor<T> {
 		clz.access = AccessFlag.SUPER | PUBLIC;
 	}
 
-	/**
-	 * cast non-primitive to Object
-	 */
-	static Class<?>[] objectToObject(Class<?>[] params) {
+	private static Class<?>[] toFuzzyMode(Class<?>[] params) {
 		for (int i = 0; i < params.length; i++) {
 			if (!params[i].isPrimitive()) params[i] = Object.class;
 		}
 		return params;
 	}
 
-	static String objectDescriptors(Class<?>[] classes, Class<?> returns, boolean no_obj) {
+	private static String toAsmDesc(Class<?>[] classes, Class<?> returns, boolean no_obj) {
 		CharList sb = IOUtil.getSharedCharBuf().append('(');
 
 		for (Class<?> clazz : classes) {

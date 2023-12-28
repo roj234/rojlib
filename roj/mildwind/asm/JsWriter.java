@@ -27,7 +27,7 @@ public final class JsWriter {
 		data.dump();
 		ConstantData parse = Parser.parse(Parser.toByteArrayShared(data));
 		System.out.println(parse);
-		Class<?> klass = ClassDefiner.INSTANCE.defineClassC(data);
+		Class<?> klass = ClassDefiner.INSTANCE.defineClass(data);
 		klass.getMethods();
 		return null;
 	}

@@ -19,8 +19,6 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.UnsupportedCharsetException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -33,18 +31,18 @@ import java.util.function.Predicate;
 public final class IOUtil {
 	public static final FastThreadLocal<UTFCoder> SharedCoder = FastThreadLocal.withInitial(UTFCoder::new);
 
+	@Deprecated
 	public static ByteList ddLayeredByteBuf() {
 		ByteList bb = new ByteList();
 		bb.ensureCapacity(1024);
 		return bb;
 	}
+	@Deprecated
 	public static CharList ddLayeredCharBuf() {
 		CharList sb = new CharList();
 		sb.ensureCapacity(1024);
 		return sb;
 	}
-
-	// 上面给API用，下面给实际代码用
 
 	public static ByteList getSharedByteBuf() {
 		ByteList o = SharedCoder.get().byteBuf;
@@ -134,22 +132,6 @@ public final class IOUtil {
 			len -= r;
 			off += r;
 		}
-	}
-
-	public static final MessageDigest MD5, SHA1;
-	static {
-		MessageDigest MD, SH;
-		try {
-			MD = MessageDigest.getInstance("md5");
-			SH = MessageDigest.getInstance("sha1");
-		} catch (NoSuchAlgorithmException e) {
-			System.err.println("MD5/SHA1 Algorithm not found!");
-			System.exit(-2);
-			MD = null;
-			SH = null;
-		}
-		MD5 = MD;
-		SHA1 = SH;
 	}
 
 	public static void copyFile(File source, File target) throws IOException {

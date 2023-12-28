@@ -31,6 +31,7 @@ import roj.net.http.IllegalRequestException;
 import roj.net.http.srv.*;
 import roj.reflect.FastInit;
 import roj.util.AttributeKey;
+import roj.util.Helpers;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -71,7 +72,7 @@ public class OKRouter implements Router {
 		prCallback.add(callback);
 	}
 
-	public final Router register(Object o) {
+	public final OKRouter register(Object o) {
 		ConstantData hndInst = new ConstantData();
 		hndInst.name("roj/net/http/srv/autohandled/$Route$"+seq.incrementAndGet());
 		hndInst.interfaces().add("roj/net/http/srv/autohandled/OKRouter$Dispatcher");
@@ -284,6 +285,34 @@ public class OKRouter implements Router {
 		}
 
 		return this;
+	}
+	public final OKRouter registerSubpathRouter(String path, Router router) {
+		ASet aset = new ASet();
+		aset.accepts = -1;
+		aset.prefix = true;
+		aset.prec = new Dispatcher[] {
+			(req, srv, extra) -> {
+				try {
+					router.checkHeader(req, (PostSetting) extra);
+				} catch (Exception e) {
+					Helpers.athrow(e);
+				}
+				return null;
+			}
+		};
+		aset.req = (req, srv, extra) -> {
+			try {
+				return router.response(req, srv);
+			} catch (Exception e) {
+				Helpers.athrow(e);
+			}
+			return null;
+		};
+		route.put(path, aset);
+		return this;
+	}
+	public final boolean unregisterSubpathRouter(String path) {
+		return route.remove(path) != null;
 	}
 
 	private void provideBodyPars(CodeWriter c, ConstantPool cp, MethodNode m, int begin, List<TryCatchEntry> tries) {
@@ -554,6 +583,6 @@ public class OKRouter implements Router {
 
 	interface Dispatcher {
 		Object invoke(Request req, ResponseHeader srv, Object extra);
-		Dispatcher copyWith(int methodId, Object ref);
+		default Dispatcher copyWith(int methodId, Object ref) { return this; }
 	}
 }

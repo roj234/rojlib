@@ -143,7 +143,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 				throw new IOException("no file");
 			}
 
-			if (!transformExcept.strStartsWithThis(oldName)) transform(oldName, newName, buf);
+			if (!transformExcept.strStartsWithThis(oldName)) transform(name, newName.replace('.', '/'), buf);
 			clazz = PARENT.defineClassA(newName, buf.list, 0, buf.wIndex(), cs);
 
 			loadedClasses.put(oldName, clazz);
@@ -159,15 +159,17 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	}
 
 	private int reentrant = -1;
-	private void transform(String name, String transformedName, ByteList list) {
+	public final void transform(String name, String transformedName, ByteList list) {
 		Context ctx = new Context(name, list);
 		boolean changed = false;
 		List<ITransformer> ts = transformers;
-		if (reentrant >= 0) LOGGER.warn("类转换器'{}'可能造成了循环调用", ts.get(reentrant).getClass().getName());
+		int prev = reentrant;
 		for (int i = 0; i < ts.size(); i++) {
 			reentrant = i;
 			try {
-				changed |= ts.get(i).transform(transformedName, ctx);
+				boolean changed1 = ts.get(i).transform(transformedName, ctx);
+				if (changed1 && prev == i) LOGGER.warn("类转换器'{}'可能造成了循环调用", ts.get(i).getClass().getName());
+				changed |= changed1;
 			} catch (Throwable e) {
 				LOGGER.fatal("转换类'{}'时发生异常", e, name);
 				try {
@@ -178,7 +180,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 				Helpers.athrow(e);
 			}
 		}
-		reentrant = -1;
+		reentrant = prev;
 		if (changed) {
 			list.clear();
 			list.put(ctx.get());

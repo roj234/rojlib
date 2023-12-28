@@ -14,8 +14,9 @@ import roj.net.ch.*;
 import roj.net.ch.handler.MSSCipher;
 import roj.net.ch.handler.Timeout;
 import roj.net.ch.handler.VarintSplitter;
-import roj.net.mss.JPrivateKey;
 import roj.net.mss.MSSEngineServer;
+import roj.net.mss.MSSKeyPair;
+import roj.net.mss.MSSPublicKey;
 import roj.plugins.cross.Constants;
 import roj.ui.DelegatedPrintStream;
 import roj.util.DynByteBuf;
@@ -88,7 +89,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 		}
 
 		try {
-			server = new AEServer(addr, 1000, new JPrivateKey(pair));
+			server = new AEServer(addr, 1000, new MSSKeyPair(pair));
 		} catch (GeneralSecurityException | IOException e) {
 			System.out.println("Invalid certificate / IO Error");
 			e.printStackTrace();
@@ -205,15 +206,15 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 	final Random rnd;
 
 	public final ServerLaunch launch;
-	private final JPrivateKey key;
+	private final MSSKeyPair key;
 
 	ScheduleTask task;
 
-	public AEServer(InetSocketAddress addr, int conn, JPrivateKey key) throws IOException {
+	public AEServer(InetSocketAddress addr, int conn, MSSKeyPair key) throws IOException {
 		server = this;
 
 		this.launch = ServerLaunch.tcp().listen(addr, conn).option(StandardSocketOptions.SO_REUSEADDR, true).initializator(this);
-		if (conn > 0) launch.option(ServerLaunch.TCP_MAX_ALIVE_CONNECTION, conn);
+		if (conn > 0) launch.option(ServerLaunch.TCP_MAX_CONNECTION, conn);
 
 		this.key = key;
 		this.rnd = new SecureRandom();
@@ -304,7 +305,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 			room.kickWithMessage(PS_ERROR_SHUTDOWN);
 		}
 
-		LockSupport.parkNanos(1000_000);
+		LockSupport.parkNanos(1_000_000L);
 		shutdown = true;
 
 		System.out.println("服务器关闭");
@@ -314,13 +315,8 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 		byte[] userId;
 
 		@Override
-		protected Object checkCertificate(int type, DynByteBuf data) {
-			try {
-				userId = MessageDigest.getInstance("SHA-1").digest(data.toByteArray());
-			} catch (Throwable e) {
-				return e;
-			}
-
+		protected MSSPublicKey checkCertificate(int type, DynByteBuf data) throws GeneralSecurityException {
+			userId = MessageDigest.getInstance("SHA-1").digest(data.toByteArray());
 			return super.checkCertificate(type, data);
 		}
 	}

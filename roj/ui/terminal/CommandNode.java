@@ -4,6 +4,7 @@ import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.text.CharList;
 
+import javax.annotation.Nullable;
 import java.util.List;
 
 /**
@@ -14,6 +15,9 @@ public abstract class CommandNode {
 	private final List<CommandNode> children = new SimpleList<>();
 	private CommandImpl impl;
 
+	@Nullable
+	public String getName() { return null; }
+
 	public static CommandNode literal(String name) { return new LiteralNode(name); }
 	public static CommandNode argument(String name, Argument<?> argument) { return new ArgumentNode(name, argument); }
 
@@ -22,12 +26,13 @@ public abstract class CommandNode {
 
 		if (impl == null) {
 			if (children.size() == 1) return children.get(0).dump(sb.append(' '), depth);
+			else if (children.size() == 0) return sb.append("[无可执行]");
 		} else if (children.isEmpty()) {
 			return sb.append('\n');
 		}
 
 		sb.append(":\n");
-		if (impl != null) sb.padEnd(' ', depth).append("<Execute>\n");
+		if (impl != null) sb.padEnd(' ', depth).append("[无参数]\n");
 		for (CommandNode child : children) {
 			child.dump(sb.padEnd(' ', depth), depth).append('\n');
 		}
@@ -81,10 +86,7 @@ public abstract class CommandNode {
 		public String getName() { return name; }
 
 		@Override
-		public CharList dump(CharList sb, int depth) {
-			sb.append('\'').append(name).append('\'');
-			return super.dump(sb, depth);
-		}
+		public CharList dump(CharList sb, int depth) { return super.dump(sb.append(name), depth); }
 
 		@Override
 		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
@@ -109,8 +111,7 @@ public abstract class CommandNode {
 
 		@Override
 		public CharList dump(CharList sb, int depth) {
-			sb.append(name).append(':').append(argument.type());
-			return super.dump(sb, depth);
+			return super.dump(sb.append('<').append(name).append('>').append(':').append(argument.type()), depth);
 		}
 
 		@Override

@@ -204,15 +204,9 @@ public class CMapping extends CEntry {
 	public final CList getList(String key) { return get(key).asList(); }
 	public final CMapping getMap(String key) { return get(key).asMap(); }
 
-	public final CEntry get(String key) {
-		return get1(key, CNull.NULL);
-	}
-	public final CEntry getOrNull(String key) {
-		return get1(key, null);
-	}
-	public final CEntry getDot(String path) {
-		return query(path, 0, CNull.NULL, dot == null ? new CharList() : dot);
-	}
+	public final CEntry get(String key) { return get1(key, CNull.NULL); }
+	public final CEntry getOrNull(String key) { return get1(key, null); }
+	public final CEntry getDot(String path) { return query(path, 0, CNull.NULL, dot == null ? new CharList() : dot); }
 
 	private CEntry get1(String k, CEntry def) {
 		if (k == null) return def;

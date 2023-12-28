@@ -1,5 +1,6 @@
 package roj.platform;
 
+import roj.collect.TrieTreeSet;
 import roj.config.word.ITokenizer;
 import roj.io.source.Source;
 import roj.math.Version;
@@ -27,6 +28,12 @@ public class PluginDescriptor {
 	Plugin instance;
 	List<String> depend = Collections.emptyList(), loadAfter = Collections.emptyList(), loadBefore = Collections.emptyList();
 	transient PluginClassLoader pcl;
+	transient ClassLoader cl;
+
+	// 基于transformer的安全管理
+	TrieTreeSet reflectiveClass, extraPath;
+	boolean loadNative, dynamicLoadClass, accessUnsafe;
+	boolean skipCheck;
 
 	volatile int state;
 
@@ -49,6 +56,7 @@ public class PluginDescriptor {
 			case PluginManager.ENABLED: sb.append("ENABLED"); break;
 			case PluginManager.DISABLED: sb.append("DISABLED"); break;
 		}
+		sb.append(skipCheck);
 		return sb.toStringAndFree();
 	}
 }

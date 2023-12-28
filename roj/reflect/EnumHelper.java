@@ -71,8 +71,8 @@ public final class EnumHelper extends CodeVisitor {
 
 					long v = 0;
 					v |= (long)i << 24;
-					v |= nameId << 16;
-					v |= ordinalId << 8;
+					v |= (long) nameId << 16;
+					v |= (long) ordinalId << 8;
 					v |= param.size();
 					parPos.put(TypeHelper.getMethod(param), v);
 				}

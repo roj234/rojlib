@@ -1,6 +1,5 @@
 package roj.crypt.eddsa;
 
-import roj.crypt.eddsa.math.EdCurve;
 import roj.crypt.eddsa.math.EdPoint;
 
 import java.security.MessageDigest;
@@ -14,17 +13,17 @@ public class EdPrivateKey implements EdKey, PrivateKey {
 	static final int OID_OLD = 100, OID_ED25519 = 112;
 	private static final int OID_BYTE = 11, IDLEN_BYTE = 6;
 
-	private final byte[] seed, h, a;
+	private final byte[] seed, h;
 	private final EdPoint A;
 	private final byte[] Abyte;
 
-	private final EdDSAParameterSpec spec;
+	private final EdParameterSpec spec;
 
 	public EdPrivateKey(PKCS8EncodedKeySpec spec) throws InvalidKeySpecException {
-		this(EdPrivateKey.decode(spec.getEncoded()), EdCurve.ED_25519_CURVE_SPEC);
+		this(EdPrivateKey.decode(spec.getEncoded()), EdParameterSpec.ED25519_CURVE_SPEC);
 	}
 
-	public EdPrivateKey(byte[] seed, EdDSAParameterSpec spec) {
+	public EdPrivateKey(byte[] seed, EdParameterSpec spec) {
 		if (seed.length != 32) throw new IllegalArgumentException("seed length is wrong");
 
 		this.spec = spec;
@@ -38,27 +37,49 @@ public class EdPrivateKey implements EdKey, PrivateKey {
 		}
 
 		h = hash.digest(seed);
-		h[0] &= 0xF8;
-		h[31] &= 0x3F;
-		h[31] |= 0x40;
-		a = Arrays.copyOfRange(h, 0, 32);
-		A = spec.getB().scalarMultiply(a);
+		// is
+		// h[0] &= 0xF8;
+		// h[31] &= 0x3F;
+		// h[31] |= 0x40;
+		// for LC=2 and bits=255 and Type=EdDSA
+		prune(h, spec.getBits(), spec.getLogCofactor(), spec.getType());
+		A = spec.getB().scalarMultiply(h);
 		Abyte = A.toByteArray();
 	}
 
-	public EdPrivateKey(EdDSAParameterSpec spec, byte[] h) {
+	public EdPrivateKey(EdParameterSpec spec, byte[] h) {
 		if (h.length != 64) throw new IllegalArgumentException("hash length is wrong");
 
 		this.spec = spec;
 		this.seed = null;
 
 		this.h = h;
-		h[0] &= 0xF8;
-		h[31] &= 0x3F;
-		h[31] |= 0x40;
-		a = Arrays.copyOfRange(h, 0, 32);
-		A = spec.getB().scalarMultiply(a);
+		prune(h, spec.getBits(), spec.getLogCofactor(), spec.getType());
+		A = spec.getB().scalarMultiply(h);
 		Abyte = A.toByteArray();
+	}
+
+	private static void prune(byte[] k, int bits, int logCofactor, EdParameterSpec.Type type) {
+		int lastByteIndex = k.length/2 - 1;
+
+		boolean flag;
+		int highBits;
+		if (type == EdParameterSpec.Type.XDH) {
+			highBits = bits & 7;
+			if (highBits == 0) highBits = 8;
+
+			k[lastByteIndex] &= (1 << highBits) - 1;
+		} else {
+			int bitsDiff = k.length * 4 - bits;
+			highBits = 8 - bitsDiff;
+
+			k[lastByteIndex] &= (1 << highBits) - 1;
+		}
+
+		if (highBits == 0) k[lastByteIndex-1] |= 0x80;
+		else k[lastByteIndex] |= 1 << (highBits-1);
+
+		k[0] &= 0xFF << logCofactor;
 	}
 
 	private static byte[] decode(byte[] d) throws InvalidKeySpecException {
@@ -109,18 +130,14 @@ public class EdPrivateKey implements EdKey, PrivateKey {
 	}
 
 	@Override
-	public String getAlgorithm() {
-		return "EdDSA";
-	}
+	public String getAlgorithm() { return spec.getType().name(); }
 
 	@Override
-	public String getFormat() {
-		return "PKCS#8";
-	}
+	public String getFormat() { return seed == null ? null : "PKCS#8"; }
 
 	@Override
 	public byte[] getEncoded() {
-		if (!spec.equals(EdCurve.ED_25519_CURVE_SPEC)) return null;
+		if (!spec.equals(EdParameterSpec.ED25519_CURVE_SPEC)) return null;
 
 		if (seed == null) return null;
 
@@ -147,33 +164,22 @@ public class EdPrivateKey implements EdKey, PrivateKey {
 		return rv;
 	}
 
-	public byte[] getH() {
-		return h;
-	}
-	public byte[] geta() {
-		return a;
-	}
-	public EdPoint getA() {
-		return A;
-	}
-	public byte[] getAbyte() {
-		return Abyte;
-	}
+	public byte[] getSeed() { return seed; }
 
-	public int hashCode() {
-		return Arrays.hashCode(seed);
-	}
+	public byte[] getH() { return h; }
+
+	public EdPoint getA() { return A; }
+	public byte[] getAbyte() { return Abyte; }
+
+	@Override
+	public EdParameterSpec getParams() { return spec; }
+
+	public int hashCode() { return Arrays.hashCode(h); }
 
 	public boolean equals(Object o) {
 		if (o == this) return true;
 		if (!(o instanceof EdPrivateKey)) return false;
 		EdPrivateKey pk = (EdPrivateKey) o;
-		return Arrays.equals(seed, pk.seed) && spec.equals(pk.spec);
+		return Arrays.equals(h, pk.h) && spec.equals(pk.spec);
 	}
-
-	public byte[] getSeed() { return seed; }
-
-	@Override
-	public EdDSAParameterSpec getParams() { return spec; }
 }
-

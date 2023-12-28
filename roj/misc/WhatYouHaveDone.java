@@ -105,6 +105,8 @@ public class WhatYouHaveDone {
 					String ext = IOUtil.extensionName(name).toLowerCase();
 					switch (ext) {
 						case "java": case "go": case "c": case "cpp": case "h": case "hpp": case "js": case "jsx": case "ts": case "py":
+						case "php": case "asp": case "jsp": case "html": case "aspx": case "xhtml": case "htm": case "css":
+						case "less": case "scss": case "sass": case "vue": case "lua": case "kt": case "rs": case "mjs":
 							inst.accept(name, ext, file);
 							break;
 					}

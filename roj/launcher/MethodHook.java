@@ -10,6 +10,7 @@ import roj.asm.visitor.CodeWriter;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.mapper.util.Desc;
+import roj.text.CharList;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -23,27 +24,33 @@ import java.util.function.Function;
  * @author Roj234
  * @since 2023/8/4 0004 15:36
  */
-public abstract class MethodHook extends NonReentrant implements ITransformer {
+public abstract class MethodHook implements ITransformer {
 	@Retention(RetentionPolicy.RUNTIME)
 	@Target(ElementType.METHOD)
 	protected @interface RealDesc { String[] value(); boolean callFrom() default false; }
 
-	//protected Map<String, List<String>> inheritMap = Collections.emptyMap();
-	protected final MyHashMap<Desc, Desc> methodMap = new MyHashMap<>();
+	protected final MyHashMap<Desc, Desc> hooks = new MyHashMap<>();
 
-	public MethodHook() { super(null); addDefaultHook(); }
+	public MethodHook() { addDefaultHook(); }
 	protected void addDefaultHook() {
+		CharList sb = new CharList();
 		for (Method m : getClass().getDeclaredMethods()) {
 			if (m.getName().startsWith("hook_")) {
 				int flag = AccessFlag.STATIC | AccessFlag.PUBLIC;
 				if ((m.getModifiers()&flag) != flag) throw new IllegalArgumentException("hook方法必须公开静态:"+m);
 
+				sb.clear();
+				sb.append(m.getName());
+				int i = sb.indexOf("__");
+				if (i < 0) i = sb.lastIndexOf("_")+1;
+				else i += 2;
+
 				Desc toDesc = new Desc();
 				toDesc.owner = this.getClass().getName().replace('.', '/');
 				toDesc.name = m.getName();
 				toDesc.param = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
-				if (m.getName().startsWith("hook_static_")) toDesc.flags = 1;
-				else toDesc.flags = 0;
+				int i1 = sb.indexOf("static_");
+				toDesc.flags = (char) (i1>=0&&i1<=i ? 1 : 0);
 
 				Function<Desc, List<Object>> fn = (x) -> {
 					List<Object> list = new SimpleList<>();
@@ -51,24 +58,33 @@ public abstract class MethodHook extends NonReentrant implements ITransformer {
 					return list;
 				};
 
+				i1 = sb.indexOf("newInstance_");
+				if (i1>=0&&i1<=i) toDesc.flags |= 4;
+
 				RealDesc altDesc = m.getAnnotation(RealDesc.class);
 				if (altDesc != null) {
 					if (altDesc.callFrom()) toDesc.flags |= 2;
 					for (String s : altDesc.value()) {
 						Desc key = Desc.fromJavapLike(s);
-						methodMap.put(key, toDesc);
+						hooks.put(key, toDesc);
 					}
 				} else {
 					if (toDesc.flags == 0) {
 						List<Type> param = TypeHelper.parseMethod(toDesc.param);
 						String owner = param.remove(0).owner();
 
+						i1 = sb.indexOf("callFrom_");
+						if (i1>=0&&i1<=i) {
+							param.remove(param.size()-2);
+							toDesc.flags |= 2;
+						}
+
 						Desc key = toDesc.copy();
 						key.owner = owner;
-						key.name = key.name.substring(5);
+						key.name = sb.toString(i, sb.length());
 						key.param = TypeHelper.getMethod(param);
 
-						methodMap.put(key, toDesc);
+						hooks.put(key, toDesc);
 					} else {
 						throw new IllegalArgumentException("无法获取静态注入类,请使用@RealDesc:"+m);
 					}
@@ -78,27 +94,55 @@ public abstract class MethodHook extends NonReentrant implements ITransformer {
 	}
 
 	@Override
-	public boolean transformNonReentrant(String mappedName, Context ctx) {
+	public boolean transform(String mappedName, Context ctx) {
 		String self = ctx.getData().name;
 		Desc d = new Desc();
 
 		ctx.getData().forEachCode(new CodeWriter() {
+			int stackSize;
+			boolean hasLdc;
+
+			@Override
+			public void visitSize(int stackSize, int localSize) {
+				super.visitSize(stackSize, localSize);
+				this.stackSize = stackSize;
+				this.hasLdc = false;
+			}
+
+			@Override
+			public void field(byte code, String owner, String name, String type) {
+				if (!hook(owner, name, type))
+					super.field(code, owner, name, type);
+			}
+
 			@Override
 			public void invoke(byte code, String owner, String name, String param, boolean isInterfaceMethod) {
-				d.owner = "";
-				d.name = name;
-				d.param = param;
-				Desc to = methodMap.get(d);
-				if (to != null) {
-					//List<String> parents = (to.flags&1) != 0 ? Collections.emptyList() : inheritMap.getOrDefault(owner, Collections.emptyList());
+				if (!hook(owner, name, param))
+					super.invoke(code, owner, name, param, isInterfaceMethod);
+			}
 
-					if ((to.flags&2) != 0) super.ldc(new CstClass(self));
+			private boolean hook(String owner, String name, String type) {
+				d.owner = owner;
+				d.name = name;
+				d.param = type;
+				Desc to = hooks.get(d);
+				if (to != null) {
+					if ((to.flags & 2) != 0) {
+						super.ldc(new CstClass(self));
+						hasLdc = true;
+					}
 					super.invoke(Opcodes.INVOKESTATIC, to.owner, to.name, to.param, false);
 
 					d.flags = 1;
+					return (to.flags & 4) == 0;
 				}
+				return false;
+			}
 
-				super.invoke(code, owner, name, param, isInterfaceMethod);
+			@Override
+			public void visitExceptions() {
+				if (hasLdc) visitSizeMax(stackSize+1, 0);
+				super.visitExceptions();
 			}
 		});
 

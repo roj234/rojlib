@@ -27,14 +27,14 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 	}
 
 	public <T> ServerLaunch option(SocketOption<T> k, T v) throws IOException {
-		if (k == TCP_MAX_ALIVE_CONNECTION) maxConn = new AtomicInteger((Integer) v);
-		else if (k == CHANNEL_RECEIVE_BUFFER) rcvBuf = (Integer) v;
+		if (k == TCP_MAX_CONNECTION) maxConn = new AtomicInteger((Integer) v);
+		else if (k == TCP_RECEIVE_BUFFER) rcvBuf = (Integer) v;
 		else tcp.setOption(k, v);
 		return this;
 	}
 	public <T> T option(SocketOption<T> k) throws IOException {
-		if (k == TCP_MAX_ALIVE_CONNECTION) return Helpers.cast(maxConn == null ? -1 : maxConn.get());
-		else if (k == CHANNEL_RECEIVE_BUFFER) return Helpers.cast(rcvBuf);
+		if (k == TCP_MAX_CONNECTION) return Helpers.cast(maxConn == null ? -1 : maxConn.get());
+		else if (k == TCP_RECEIVE_BUFFER) return Helpers.cast(rcvBuf);
 		else return tcp.getOption(k);
 	}
 

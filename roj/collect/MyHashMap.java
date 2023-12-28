@@ -491,6 +491,11 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	}
 	@SuppressWarnings("unchecked")
 	public AbstractEntry<K, V> getOrCreateEntry(K key) {
+		if (size > length * loadFactor) {
+			length <<= 1;
+			resize();
+		}
+
 		AbstractEntry<K, V> entry = getEntryFirst(key, true);
 		if (entry.getClass() == Entry2.class) {
 			AbstractEntry<K, V> next = (AbstractEntry<K, V>) ((Entry2) entry).get(key);
@@ -515,12 +520,6 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 
 				AbstractEntry<K, V> next = useEntry();
 				entry.next = next;
-
-				if (size > length * loadFactor) {
-					length <<= 1;
-					resize();
-				}
-
 				return next;
 			}
 

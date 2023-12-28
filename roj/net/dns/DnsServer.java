@@ -57,12 +57,12 @@ public class DnsServer implements ChannelHandler {
 	public DnsServer(CMapping cfg, InetSocketAddress address) throws IOException {
 		ServerLaunch.udp().listen(new InetSocketAddress(cfg.getInteger("forwarderReceive")))
 					.initializator(new ForwardQueryHandler(this))
-					.option(ServerLaunch.CHANNEL_RECEIVE_BUFFER, 10000)
+					.option(ServerLaunch.TCP_RECEIVE_BUFFER, 10000)
 					.launch();
 
 		ServerLaunch.udp().listen(address).initializator((ch) -> {
 
-		}).option(ServerLaunch.CHANNEL_RECEIVE_BUFFER, 10000).launch();
+		}).option(ServerLaunch.TCP_RECEIVE_BUFFER, 10000).launch();
 
 		waiting = new ConcurrentHashMap<>();
 		requestTimeout = cfg.getInteger("requestTimeout");

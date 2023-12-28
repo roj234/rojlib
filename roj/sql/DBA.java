@@ -508,11 +508,15 @@ public final class DBA implements AutoCloseable {
 			sb.append(",");
 		}
 
+		return condition(sb);
+	}
+
+	private int condition(CharList sb) throws SQLException {
 		if (where.length() > 0) sb.append(" WHERE ").append(where);
 		if (order != null) sb.append(" ORDER BY ").append(order);
 		if (limit.length() > 0) {
 			if (limit.contains("OFFSET")) {
-				throw new SQLException("OFFSET 不能和 UPDATE 共用");
+				throw new SQLException("OFFSET 不能和 UPDATE 或 DELETE 共用");
 			}
 			sb.append(" LIMIT ").append(limit);
 		}
@@ -601,17 +605,7 @@ public final class DBA implements AutoCloseable {
 		CharList sb = IOUtil.ddLayeredCharBuf();
 		sb.append("DELETE FROM ").append(table);
 
-		if (where.length() > 0) sb.append(" WHERE ").append(where);
-		if (order != null) sb.append(" ORDER BY ").append(order);
-		if (limit.length() > 0) {
-			if (limit.contains("OFFSET")) {
-				throw new SQLException("OFFSET 不能和 UPDATE 共用");
-			}
-			sb.append(" LIMIT ").append(limit);
-		}
-
-		affected_ids.clear();
-		return CRUD(sb);
+		return condition(sb);
 	}
 
 	// region util

@@ -120,22 +120,7 @@ public class QZArchiver {
 			callback.accept(path);
 		} else {
 			prefix[0] = path.getAbsolutePath().length()+1;
-			Files.walkFileTree(path.toPath(), new SimpleFileVisitor<Path>() {
-				boolean next;
-				@Override
-				public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-					if (storeFolder) {
-						if (!next) next = true;
-						else emptyOrFolder.add(dir.toFile());
-					}
-					return FileVisitResult.CONTINUE;
-				}
-				@Override
-				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-					callback.accept(file.toFile());
-					return FileVisitResult.CONTINUE;
-				}
-			});
+			traverseFolder(path, callback, emptyOrFolder);
 		}
 
 		File out = new File(outputFolder, outputName.concat(splitSize == 0 ? "" : ".001"));
@@ -245,6 +230,28 @@ public class QZArchiver {
 		makeBlock(executable, chunkSize, coders, tmpa, tmpb);
 
 		return chunkSize;
+	}
+
+	/**
+	 * 自定义文件处理函数
+	 */
+	protected void traverseFolder(File path, Consumer<File> callback, List<File> emptyOrFolder) throws IOException {
+		Files.walkFileTree(path.toPath(), new SimpleFileVisitor<Path>() {
+			boolean next;
+			@Override
+			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+				if (storeFolder) {
+					if (!next) next = true;
+					else emptyOrFolder.add(dir.toFile());
+				}
+				return FileVisitResult.CONTINUE;
+			}
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+				callback.accept(file.toFile());
+				return FileVisitResult.CONTINUE;
+			}
+		});
 	}
 
 	private QZCoder[] getBcjCoder(QzAES qzAes, QZCoder lzma2) {
@@ -436,7 +443,7 @@ public class QZArchiver {
 
 			pool.pushTask(() -> {
 				try (QZArchive _in = oldArchive.parallel()) {
-					try (QZWriter _out = writer.parallel()) {
+					try (QZWriter _out = parallel(writer)) {
 						_out.setCodec(coders);
 
 						List<QZEntry> value = entry.getValue();
@@ -483,7 +490,7 @@ public class QZArchiver {
 
 		for (WordBlockAppend task : appends) {
 			pool.pushTask(() -> {
-				try (QZWriter writer1 = writer.parallel()) {
+				try (QZWriter writer1 = parallel(writer)) {
 					writeBlock(bar, task, writer1);
 				}
 				if (bar != null) bar.setName("3/4 压缩("+blockCompleted.incrementAndGet()+"/"+appends.size()+")");
@@ -513,6 +520,10 @@ public class QZArchiver {
 		writer.close();
 		if (bar != null) bar.end("压缩成功");
 		boolean b = tmp.renameTo(new File(outputFolder, outputName));
+	}
+
+	private QZWriter parallel(QZFileWriter qfw) throws IOException {
+		return cacheFolder == null ? qfw.parallel() : qfw.parallel(new FileSource(File.createTempFile("qzx-", ".bin", cacheFolder)));
 	}
 
 	private void writeBlock(EasyProgressBar bar, WordBlockAppend block, QZWriter writer) throws IOException {

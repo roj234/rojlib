@@ -422,16 +422,6 @@ MSS协议，My Secure Socket`roj.net.mss`
 由于你不能直接写出方法的参数的类，因为它们也会随着游戏版本改变，你需要使用模糊匹配(all-object)模式, 这个模式的有关信息可以在代码注释中找到  
 它的特点是所有非基本类型都需要表示为Object  
   
-DirectAccessor可以在内部保存0至多个对象,  
-`makeCache(Class<?> targetClass, String name, int methodFlag)`  
-* targetClass为对象的类  
-* methodFlag: 创建哪些方法:
-  * 1: getter  
-  * 2: setter  
-  * 4: clear  
-  * 8: 检测方法的存在  
-
-使用`useCache(String name)`选择使用这个缓存, null取消  
   
 ```java
 interface H {  

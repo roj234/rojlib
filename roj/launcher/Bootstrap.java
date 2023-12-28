@@ -24,10 +24,12 @@ import static roj.asm.Opcodes.*;
  * @since 2023/8/6 0006 0:13
  */
 public final class Bootstrap {
+	public static final ClassWrapper classLoader = new ClassWrapper();
+	static { EntryPoint.actualLoader = classLoader; }
+
 	public static final Logger LOGGER = Logger.getLogger("Launcher");
 	public static final Map<String, Object> blackboard = new MyHashMap<>();
 
-	public static final ClassWrapper classLoader = new ClassWrapper();
 	public static final List<ITweaker> tweakers = new SimpleList<>();
 
 	public static String[] arguments;
@@ -66,7 +68,7 @@ public final class Bootstrap {
 			}
 			i++;
 		}
-		if (tweakerNames.isEmpty()) tweakerNames.add("roj.launcher.RojLibTweaker");
+		if (tweakerNames.isEmpty()) LOGGER.debug("未定义任何Tweaker");
 
 		if (i == args.length) {
 			LOGGER.fatal("缺少Launch target");
@@ -89,7 +91,7 @@ public final class Bootstrap {
 		c.one(ASTORE_0);
 
 		for (String name : tweakerNames) {
-			classLoader.addClassLoaderExclusion(name.substring(0, name.lastIndexOf('.')+1));
+			classLoader.addTransformerExclusion(name.substring(0, name.lastIndexOf('.')+1));
 
 			c.field(GETSTATIC, "roj/launcher/Bootstrap", "LOGGER", "Lroj/text/logging/Logger;");
 			c.ldc("加载Tweaker '"+name+"'");
@@ -139,8 +141,6 @@ public final class Bootstrap {
 		ByteList list = Parser.toByteArrayShared(L);
 		Class<?> loaderClass = entryPoint.defineClassB(L.name.replace('/', '.'), list.list, 0, list.wIndex());
 		ReflectionUtils.u.ensureClassInitialized(loaderClass);
-
-		EntryPoint.actualLoader = classLoader;
 	}
 
 	private static URL[] GetOtherJars() {

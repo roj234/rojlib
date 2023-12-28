@@ -22,7 +22,7 @@ public final class Serializers {
 		try {
 			ConstantData c = Parser.parseConstants(IOUtil.readRes("roj/config/serial/Adapter.class"));
 			c.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
-			ClassDefiner.INSTANCE.defineClassC(c);
+			ClassDefiner.INSTANCE.defineClass(c);
 			injected = true;
 		} catch (Throwable ignored) {}
 	}

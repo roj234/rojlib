@@ -5,11 +5,9 @@
 package roj.archive.ui;
 
 import roj.archive.qz.QZArchive;
-import roj.archive.qz.QZEntry;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.concurrent.TaskPool;
 import roj.io.FastFailException;
-import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
 import roj.text.logging.Logger;
@@ -131,9 +129,7 @@ public class QZArchiverUI extends JFrame {
 				uiBegin.setEnabled(true);
 			}
 			try (QZArchive archive = new QZArchive(out, arc.password)) {
-				for (QZEntry entry : archive.getEntriesByPresentOrder()) {
-					IOUtil.read(archive.getInput(entry));
-				}
+				archive.selfTest();
 			}
 		});
 	}
@@ -284,10 +280,13 @@ public class QZArchiverUI extends JFrame {
 		ActionListener[] tip = new ActionListener[1];
 		tip[0] = e -> {
 			JOptionPane.showMessageDialog(this,
-				"1. 该选项会导致实际使用的内存超过【内存】输入框的限制\n" +
-					"    最高可超出【并行】*【词典大小+固实大小】\n" +
-					"2. 该选项会导致实际使用的线程超过【并行】输入框的限制\n" +
-					"3. 比起按文件固实,单压缩流并行会损失更多压缩率", "温馨提示", JOptionPane.WARNING_MESSAGE);
+				"1. 使用的内存超过【内存】输入框的限制\n" +
+					"    最大值：【内存】+【并行】*【词典大小+固实大小】\n" +
+					"2. 线程超过【并行】输入框的限制\n" +
+					"    最大值：并行的平方\n" +
+					"3. 进度条鬼畜\n" +
+					"4. 压缩率降低千分之0.3-1.5\n" +
+					"5. 建议在部分文件超过100MB,且【文件大小】的方差较大时开启该选项", "该选项会导致……", JOptionPane.WARNING_MESSAGE);
 			uiSplitTask.removeActionListener(tip[0]);
 		};
 		uiSplitTask.addActionListener(e -> uiSplitTaskType.setEnabled(uiSplitTask.isSelected()));

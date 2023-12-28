@@ -112,4 +112,3 @@ public final class EntryPoint extends URLClassLoader {
 		loaderInst.run();
 	}
 }
-

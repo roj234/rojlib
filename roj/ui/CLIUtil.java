@@ -5,6 +5,7 @@ import roj.collect.*;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
+import roj.io.MBInputStream;
 import roj.math.MutableInt;
 import roj.text.*;
 import roj.text.pattern.MyPattern;
@@ -66,6 +67,7 @@ public final class CLIUtil implements Runnable {
 	public static final PrintStream sysOut = System.out, sysErr = System.err;
 
 	public static final int BLACK = 30, BLUE = 34, GREEN = 32, CYAN = 36, RED = 31, PURPLE = 35, YELLOW = 33, WHITE = 37;
+	public static final int HIGHLIGHT = 60;
 
 	public static final class MinecraftColor {
 		private static final IntBiMap<String> MC_COLOR_JSON = new IntBiMap<>();
@@ -188,6 +190,12 @@ public final class CLIUtil implements Runnable {
 
 	private static final UnsafeCharset CE = GB18030.is(TextUtil.DefaultOutputCharset) ? GB18030.CODER : UTF8MB4.CODER;
 	private static final ByteList SEQ = new ByteList(256);
+
+	private static final CLIUtil instance = new CLIUtil();
+	private static Thread thread;
+
+	public static Thread getConsoleThread() { return thread; }
+
 	private static boolean initialize() {
 		if (Boolean.getBoolean("roj.disableAnsi")) return false;
 
@@ -212,11 +220,9 @@ public final class CLIUtil implements Runnable {
 			if (System.console() == null) return false;
 		}
 
-		CLIUtil con = new CLIUtil();
-		instance = con;
+		CLIUtil con = instance;
 
-		Thread t = new Thread(con);
-		t.setName("终端模拟器");
+		Thread t = new Thread(con, "终端模拟器");
 		t.setDaemon(true);
 		t.start();
 
@@ -244,23 +250,17 @@ public final class CLIUtil implements Runnable {
 		thread = t;
 
 		AnsiOut out = new AnsiOut(1024);
-
-		System.setIn(new InputStream() {
-			private byte[] b1;
-			public int read() throws IOException {
-				byte[] b = b1;
-				if (b == null) b = b1 = new byte[1];
-				return read(b) > 0 ? b[0]&0xFF : -1;
-			}
+		System.setOut(out);
+		System.setErr(out);
+		return true;
+	}
+	private static void pipeStdIn() {
+		System.setIn(new MBInputStream() {
 			@Override
 			public int read(@Nonnull byte[] b, int off, int len) throws IOException { return instance.read(b, off, len); }
 			@Override
 			public int available() { return instance.available(); }
 		});
-		System.setOut(out);
-		System.setErr(out);
-
-		return true;
 	}
 
 	static final int STDIN = 0, STDOUT = 1, STDERR = 2;
@@ -298,7 +298,7 @@ public final class CLIUtil implements Runnable {
 	}
 	private static native int setConsoleMode0(int target, int mode, int flag) throws NativeException;
 	public static void enableQuickEditMode() {
-		if (NativeLibrary.loaded) setConsoleMode0(STDIN, MODE_ADD, ENABLE_QUICK_EDIT_MODE|ENABLE_EXTENDED_FLAGS);
+		if (ANSI && NativeLibrary.loaded) setConsoleMode0(STDIN, MODE_ADD, ENABLE_QUICK_EDIT_MODE|ENABLE_EXTENDED_FLAGS);
 	}
 
 	public static void printColor(String string, int fg, boolean reset, boolean println, boolean light) {
@@ -505,7 +505,7 @@ public final class CLIUtil implements Runnable {
 		if (TextUtil.isChinese(c)) return 2;
 		if (TextUtil.isPrintableAscii(c)) return 1;
 
-		if (instance == null || CharLength == null) {
+		if (!ANSI || CharLength == null) {
 			if (c == '\t') return 4;
 			if (c <= 0xFF) return c < 16 ? 0 : 1;
 			return MyPattern.标点.contains(c) ? 2 : 1;
@@ -546,34 +546,36 @@ public final class CLIUtil implements Runnable {
 		}
 		return Math.max(maxLen, len);
 	}
-	// TODO ansi
 	public static List<String> splitByWidth(String str, int width) {
+		Matcher m = str.indexOf('\u001b') >= 0 ? ANSI_ESCAPE.matcher(str) : null;
+
 		List<String> out = new SimpleList<>();
 		int prevI = 0, tmpWidth = 0;
-		for (int i = 0; i < str.length(); i++) {
+		for (int i = 0; i < str.length(); ) {
 			char c = str.charAt(i);
 			if (c == '\n') {
 				out.add(str.substring(prevI, i));
-				prevI = i+1;
+				prevI = ++i;
 				tmpWidth = 0;
-				continue;
-			}
-
-			int w = getCharWidth(c);
-			if (tmpWidth+w > width) {
-				out.add(str.substring(prevI, i));
-				prevI = i;
-				tmpWidth = w;
+			} else if (c == '\u001b') {
+				if (m.find(i)) i = m.end();
+				else throw new RuntimeException("未识别的转义,请更新ANSI_ESCAPE PATTERN");
 			} else {
-				tmpWidth += w;
+				int w = getCharWidth(c);
+				if (tmpWidth+w > width) {
+					out.add(str.substring(prevI, i));
+					prevI = i;
+					tmpWidth = w;
+				} else {
+					tmpWidth += w;
+				}
+
+				i++;
 			}
 		}
 		if (prevI < str.length()) out.add(str.substring(prevI));
 		return out;
 	}
-
-	private static CLIUtil instance;
-	private static Thread thread;
 
 	private CLIUtil() {}
 
@@ -778,21 +780,23 @@ public final class CLIUtil implements Runnable {
 
 	private volatile int inited;
 	public void run() {
-		try {
-			System.out.print("\u001b[6n");
-			long time = System.currentTimeMillis();
-			System.in.read();
+		if (inited == 0) {
+			try {
+				System.out.print("\u001b[6n");
+				long time = System.currentTimeMillis();
+				System.in.read();
 
-			if (inited == 0) inited = 1;
-			else {
-				sysErr.println("对read()的调用返回。耗时："+(System.currentTimeMillis()-time)+"ms");
-				return;
+				if (inited == 0) inited = 1;
+				else {
+					sysErr.println("对read()的调用返回。耗时："+(System.currentTimeMillis()-time)+"ms");
+					return;
+				}
+
+				synchronized (this) { notify(); }
+				//checkResize();
+			} catch (Throwable e) {
+				Helpers.athrow(e);
 			}
-
-			synchronized (this) { notify(); }
-			//checkResize();
-		} catch (Throwable e) {
-			Helpers.athrow(e);
 		}
 
 		inited = 2;
@@ -828,7 +832,10 @@ public final class CLIUtil implements Runnable {
 			}
 
 			try {
-				processInput(buf, 0, r, shellB);
+				if (ANSI) processInput(buf, 0, r, shellB);
+				else
+					for (int i = 0; i < r; i++)
+						keyEnter(buf[i]&0xFF, buf[i] == '\n');
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -1047,6 +1054,14 @@ public final class CLIUtil implements Runnable {
 
 	static {
 		ANSI = initialize();
+		if (!ANSI) {
+			instance.inited = 1;
+
+			Thread t = thread = new Thread(instance, "TermEmu-Fallback");
+			t.setDaemon(true);
+			t.start();
+		}
+		pipeStdIn();
 		in = new BufferedReader(new InputStreamReader(System.in));
 	}
 }

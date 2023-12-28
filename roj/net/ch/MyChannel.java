@@ -52,8 +52,6 @@ public abstract class MyChannel implements Selectable {
 
 	public static MyChannel openTCP() throws IOException {return openTCP(2048);}
 	public static MyChannel openTCP(int buffer) throws IOException {return new TcpChImpl(buffer);}
-	public static MyChannel openUDP() throws IOException {return new UdpChImpl(1536);}
-	public static MyChannel openUDP(int buffer) throws IOException {return new UdpChImpl(buffer);}
 
 	// protected only used for UDPoverTCP
 	protected MyChannel() {}

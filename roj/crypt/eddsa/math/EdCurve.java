@@ -1,16 +1,9 @@
 package roj.crypt.eddsa.math;
 
-import roj.crypt.eddsa.EdDSAParameterSpec;
-import roj.io.IOUtil;
-
 import static roj.crypt.eddsa.math.EdInteger.ONE;
 import static roj.crypt.eddsa.math.EdInteger.ZERO;
 
 public final class EdCurve {
-    private static final EdCurve ed25519curve = new EdCurve(toByte("a3785913ca4deb75abd841414d0a700098e879777940c78c73fe6f2bee6c0352"), EdInteger.fromBytes(toByte("b0a00e4a271beec478e42fad0618432fa7d7fb3d99004d2b0bdfc14f8024832b")));
-    public static final EdDSAParameterSpec ED_25519_CURVE_SPEC = new EdDSAParameterSpec(ed25519curve, "SHA-512", ed25519curve.createPoint(toByte("5866666666666666666666666666666666666666666666666666666666666666"), true));
-	private static byte[] toByte(String s) { return IOUtil.SharedCoder.get().decodeHex(s); }
-
 	private final EdInteger d, d2;
 	private final EdInteger I;
 	public final EdPoint P2_ZERO, P3_ZERO;
@@ -41,4 +34,3 @@ public final class EdCurve {
 
 	public int getBits() { return 256; }
 }
-

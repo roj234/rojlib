@@ -7,6 +7,7 @@ import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.text.CharList;
 import roj.ui.AnsiString;
+import roj.ui.CLIBoxRenderer;
 import roj.ui.CLIUtil;
 
 import java.util.List;
@@ -14,9 +15,8 @@ import java.util.List;
 /**
  * 指令系统的使用方式完全借鉴自Minecraft
  * <pre> {@code
- * 		CliConsole.initialize();
  * 		CommandConsole c = new CommandConsole("\u001b[33m田所浩二@AIPC> ");
- * 		CliConsole.setConsole(c);
+ * 		CLIUtil.setConsole(c);
  *
  * 		c.register(literal("open")
  * 			.then(argument("file", Argument.file())
@@ -30,6 +30,33 @@ import java.util.List;
  */
 public class CommandConsole extends DefaultConsole {
 	public CommandConsole(String prompt) { super(prompt); }
+
+	protected List<CommandNode> nodes = new SimpleList<>();
+	public void register(CommandNode node) { nodes.add(node); }
+	public boolean unregister(String name) {
+		for (int i = nodes.size()-1; i >= 0; i--) {
+			CommandNode node = nodes.get(i);
+			if (name.equals(node.getName())) {
+				nodes.remove(i);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public CharList dumpNodes(CharList sb) {
+		for (CommandNode node : nodes)
+			node.dump(sb, 0);
+		return sb;
+	}
+
+	@Override
+	protected void printHelp() {
+		CLIBoxRenderer.DEFAULT.render(new String[][]{
+			new String[] { "Roj234的指令终端 帮助", "注册的指令", "快捷键" },
+			new String[] { dumpNodes(new CharList()).toStringAndFree(), KEY_SHORTCUT }
+		});
+	}
 
 	protected final ArgumentContext ctx = new ArgumentContext(TaskPool.Common());
 	protected Tokenizer wr = new Tokenizer();
@@ -86,22 +113,9 @@ public class CommandConsole extends DefaultConsole {
 			String v = val.toLowerCase();
 			if (v.startsWith("0b")) return CLIUtil.CYAN;
 			if (v.startsWith("0x")) return CLIUtil.YELLOW;
-			if (v.startsWith("0")) return CLIUtil.PURPLE+60;
+			if (v.startsWith("0")) return CLIUtil.PURPLE+CLIUtil.HIGHLIGHT;
 		}
-		return CLIUtil.CYAN+60;
-	}
-
-	protected List<CommandNode> nodes = new SimpleList<>();
-	public void register(CommandNode node) { nodes.add(node); }
-	public boolean unregister(String name) {
-		for (int i = nodes.size()-1; i >= 0; i--) {
-			CommandNode node = nodes.get(i);
-			if (node instanceof CommandNode.LiteralNode && ((CommandNode.LiteralNode) node).getName().equals(name)) {
-				nodes.remove(i);
-				return true;
-			}
-		}
-		return false;
+		return CLIUtil.CYAN+CLIUtil.HIGHLIGHT;
 	}
 
 	@Override
@@ -122,9 +136,7 @@ public class CommandConsole extends DefaultConsole {
 	}
 
 	@Override
-	protected final boolean evaluate(String cmd) {
-		return execute(cmd, true);
-	}
+	protected final boolean evaluate(String cmd) { return execute(cmd, true); }
 	public boolean executeCommand(String cmd) {
 		TaskPool executor = ctx.executor;
 		ctx.executor = null;
@@ -157,16 +169,8 @@ public class CommandConsole extends DefaultConsole {
 
 		if (print) printCommand();
 		if (pe != null) pe.printStackTrace();
-		else System.out.println("指令未匹配任何参数组合,从左至右最多的部分匹配是:"+ctx.getMaxI());
+		else System.out.println("输入未完整匹配任何指令,最多部分匹配到"+ctx.getMaxI());
 
 		return true;
-	}
-
-	public void dumpNodes() {
-		CharList sb = new CharList();
-		for (CommandNode node : nodes) {
-			node.dump(sb, 0);
-		}
-		System.out.println(sb);
 	}
 }

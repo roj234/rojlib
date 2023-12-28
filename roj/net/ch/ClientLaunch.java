@@ -23,9 +23,7 @@ public final class ClientLaunch {
 	private ClientLaunch(MyChannel ch) { this.ch = ch; }
 
 	public static ClientLaunch tcp() throws IOException { return new ClientLaunch(MyChannel.openTCP()); }
-	public static ClientLaunch udp() throws IOException { return new ClientLaunch(MyChannel.openUDP()); }
 	public static ClientLaunch tcp(String name) throws IOException { return new ClientLaunch(MyChannel.openTCP()); }
-	public static ClientLaunch udp(String name) throws IOException { return new ClientLaunch(MyChannel.openUDP()); }
 
 	public ClientLaunch daemon(boolean s) {
 		if (loop != null) throw new IllegalStateException();
@@ -64,18 +62,10 @@ public final class ClientLaunch {
 		if (initializator != null) initializator.accept(ch);
 		if (channel().handlers().isEmpty()) throw new IllegalStateException("no handler added");
 
-		if (ch.isTCP()) {
-			if (addr == null) throw new BindException("No address specified");
-			if (addr.getAddress() == null) throw new BindException("AnyLocalAddress() is not suitable for client!");
-			ch.connect(addr, connectTimeout);
-		} else {
-			if (addr != null) {
-				if (addr.getAddress() == null) throw new BindException("AnyLocalAddress() is not suitable for client!");
-				ch.connect(addr, connectTimeout);
-			} else {
-				ch.open();
-			}
-		}
+		assert ch.isTCP();
+		if (addr == null) throw new BindException("No address specified");
+		if (addr.getAddress() == null) throw new BindException("AnyLocalAddress() is not suitable for client!");
+		ch.connect(addr, connectTimeout);
 
 		loop().register(ch, null, SelectionKey.OP_CONNECT|SelectionKey.OP_READ);
 		return ch;

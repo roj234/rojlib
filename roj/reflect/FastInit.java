@@ -26,9 +26,17 @@ public final class FastInit {
 		try {
 			Class<?> klass = null;
 			try {
-				if (autoUnload && ReflectionUtils.JAVA_VERSION < 17) klass = u.defineAnonymousClass(FastInit.class, buf.toByteArray(), null);
+				if (autoUnload && ReflectionUtils.JAVA_VERSION < 17) {
+					byte[] b;
+
+					ILSecurityManager sm = ILSecurityManager.getSecurityManager();
+					if (sm != null) b = sm.checkDefineAnonymousClass(buf);
+					else b = buf.toByteArray();
+
+					klass = u.defineAnonymousClass(FastInit.class, b, null);
+				}
 			} catch (Throwable ignored) {}
-			if (klass == null) klass = l.defineClassC(name, buf);
+			if (klass == null) klass = l.defineClass(name, buf);
 
 			u.ensureClassInitialized(klass);
 
@@ -36,7 +44,6 @@ public final class FastInit {
 			if (null == o) throw new IllegalStateException("初始化失败: 你是否调用了prepare()来写入<clinit>?");
 			return o;
 		} catch (Throwable e) {
-			var.dump();
 			throw new IllegalStateException("初始化失败", e);
 		} finally {
 			Callback.remove();

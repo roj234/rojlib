@@ -1,7 +1,5 @@
 package roj.net.ch;
 
-import roj.util.Helpers;
-
 import java.io.IOException;
 import java.net.SocketOption;
 import java.nio.channels.DatagramChannel;
@@ -12,25 +10,23 @@ import java.nio.channels.SelectionKey;
  * @since 2022/10/11 20:03
  */
 final class ServerLaunchUdp extends ServerLaunch {
+	private final DatagramChannel uc;
 	private final UdpChImpl udp;
 
 	ServerLaunchUdp() throws IOException {
-		DatagramChannel uc = DatagramChannel.open();
-		uc.configureBlocking(false);
-		udp = new UdpChImpl(uc, 0);
+		uc = DatagramChannel.open();
+		udp = new UdpChImpl(uc);
 	}
 
-	public final <T> ServerLaunch option(SocketOption<T> k, T v) throws IOException {
-		if (k == CHANNEL_RECEIVE_BUFFER) udp.buffer = (Integer) v;
-		else udp.setOption(k, v);
-		return this;
-	}
-	public final <T> T option(SocketOption<T> k) throws IOException { return k == CHANNEL_RECEIVE_BUFFER ? Helpers.cast(udp.buffer) : udp.getOption(k); }
+	public final <T> ServerLaunch option(SocketOption<T> k, T v) throws IOException { udp.setOption(k, v); return this; }
+	public final <T> T option(SocketOption<T> k) throws IOException { return udp.getOption(k); }
 
 	@Override
 	public final ServerLaunch launch() throws IOException {
 		if (initializator == null) throw new IllegalStateException("no initializator");
 
+		uc.bind(addr);
+		udp.state = MyChannel.CONNECTED;
 		initializator.accept(udp);
 		udp.open();
 		loop().register(udp, null, SelectionKey.OP_READ);

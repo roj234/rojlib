@@ -130,8 +130,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 						state = 0;
 						if (ret == IntMap.UNDEFINED) break fail;
 
-						// todo concurrent bug?
-						p._state &= CALLBACK;
+						p.removeFlag(~CALLBACK);
 						p.resolve(ret);
 						p._apply();
 						if (p == this) return;

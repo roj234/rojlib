@@ -5,6 +5,7 @@ import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.config.word.Word;
 import roj.reflect.EnumHelper;
+import roj.text.TextUtil;
 import roj.ui.AnsiString;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
@@ -74,7 +75,12 @@ public interface Argument<T> {
 			public String type() { return folder == null ? "path" : folder ? "folder" : "file"; }
 		};
 	}
-	static Argument<String> string() { return (context, b) -> context.nextString(); }
+	static Argument<String> string() { return new Argument<String>() {
+		@Override
+		public String parse(ArgumentContext ctx, boolean complete) throws ParseException { return ctx.nextString(); }
+		@Override
+		public String type() { return "string"; }
+	}; }
 	static Argument<String> string(String... selection) {
 		MyHashMap<String, String> map = new MyHashMap<>(selection.length);
 		for (String s : selection) map.put(s,s);
@@ -123,11 +129,14 @@ public interface Argument<T> {
 
 		@Override
 		public void complete(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+			updateChoices();
 			if (multi) {
 				while (true) {
 					Word w = ctx.peekWord();
 					if (w == null) return; // only first argument give example
 					else if (!choice.containsKey(w.val())) break;
+
+					ctx.nextWord();
 				}
 			}
 
@@ -141,7 +150,7 @@ public interface Argument<T> {
 		public void example(List<Completion> completions) { updateChoices(); for (String name : choice.keySet()) completions.add(new Completion(name)); }
 
 		@Override
-		public String type() { return "enumeration("+choice.size()+")"; }
+		public String type() { updateChoices(); return (multi?"anyOf":"oneOf")+"('"+TextUtil.join(choice.keySet(), "', '")+"')"; }
 
 		protected void updateChoices() {}
 	}
@@ -170,7 +179,7 @@ public interface Argument<T> {
 			}
 
 			@Override
-			public String type() { return "double["+min+","+max+"]"; }
+			public String type() { return "real["+min+","+max+"]"; }
 		};
 	}
 	static Argument<Boolean> bool() {

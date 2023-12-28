@@ -17,8 +17,8 @@ import java.util.function.Consumer;
 public abstract class ServerLaunch implements Closeable {
 	public static final SelectorLoop DEFAULT_LOOPER = new SelectorLoop(null, "NIO请求池", 0, 4, 60000, 127);
 
-	public static final SocketOption<Integer> CHANNEL_RECEIVE_BUFFER = new MyOption<>("CHANNEL_RECEIVE_BUFFER", Integer.class);
-	public static final SocketOption<Integer> TCP_MAX_ALIVE_CONNECTION = new MyOption<>("TCP_MAX_ALIVE_CONNECTION", Integer.class);
+	public static final SocketOption<Integer> TCP_RECEIVE_BUFFER = new MyOption<>("TCP_RECEIVE_BUFFER", Integer.class);
+	public static final SocketOption<Integer> TCP_MAX_CONNECTION = new MyOption<>("TCP_MAX_CONNECTION", Integer.class);
 
 	SelectorLoop loop = DEFAULT_LOOPER;
 	InetSocketAddress addr;

@@ -14,6 +14,7 @@ import roj.archive.qz.xz.lz.LZDecoder;
 import roj.archive.qz.xz.lzma.LZMADecoder;
 import roj.archive.qz.xz.rangecoder.RangeDecoderFromStream;
 import roj.io.CorruptedInputException;
+import roj.io.MBInputStream;
 import roj.util.ArrayUtil;
 
 import java.io.EOFException;
@@ -27,7 +28,7 @@ import java.io.InputStream;
  *
  * @since 1.4
  */
-public class LZMAInputStream extends InputStream {
+public class LZMAInputStream extends MBInputStream {
 	/**
 	 * Largest dictionary size supported by this implementation.
 	 * <p>
@@ -284,15 +285,7 @@ public class LZMAInputStream extends InputStream {
 	 *
 	 * @since 1.9
 	 */
-	public void enableRelaxedEndCondition() {
-		relaxedEndCondition = true;
-	}
-
-	private byte[] b1;
-	public int read() throws IOException {
-		if (b1 == null) b1 = new byte[1];
-		return read(b1, 0, 1) < 0 ? -1 : (b1[0] & 0xFF);
-	}
+	public void enableRelaxedEndCondition() { relaxedEndCondition = true; }
 
 	public int read(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);

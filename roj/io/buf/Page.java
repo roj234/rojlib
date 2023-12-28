@@ -19,7 +19,7 @@ import static roj.text.TextUtil.scaledNumber1024;
 public class Page {
 	static final byte LONG_SHIFT = 6;
 	static final byte MINIMUM_SHIFT = 3;
-	static final long MINIMUM_MASK = (1L << MINIMUM_SHIFT) - 1;
+	public static final long MINIMUM_MASK = (1L << MINIMUM_SHIFT) - 1;
 
 	static final char BITMAP_FREE = 'o', BITMAP_USED = '1', BITMAP_SUBPAGE = 'S', BITMAP_PREFIX = 'p';
 
@@ -269,6 +269,24 @@ public class Page {
 		final long malloc(long size) {
 			if (free < size) return -1;
 
+			// 快速分配, remove时再拆分 (好消息：FIFO不会拆分)
+			long len = prefix;
+			if (!prefixLocked) {
+				prefix = align(len+size);
+				free -= size;
+				return len;
+			} else if (len > 0) {
+				int bitCount = (int) ((prefix+MASKS[SHIFT]) >>> SHIFT);
+				assert !(childCount > 0 && child[0].childId < bitCount) : "invalid prefix state";
+
+				long remain = prefix&MASKS[SHIFT];
+				if (remain > 0 && size <= MASKS[SHIFT]-remain) {
+					prefix = align(len+size);
+					free -= size;
+					return len;
+				}
+			}
+
 			int block = (int) (size >>> SHIFT);
 			if (block > 0) { // 大于1个完整的块
 				lockPrefix(); // splitBitmap |= BIT[0,bitCount] , mergeSplit也有检查
@@ -328,24 +346,6 @@ public class Page {
 				// 前对齐 以后可以尝试移动到SubPage结尾
 				return ((long) offset << SHIFT) + subSize;
 			} else {
-				// 快速分配, remove时再拆分 (好消息：FIFO不会拆分)
-				long len = prefix;
-				if (!prefixLocked) {
-					prefix = align(len+size);
-					free -= size;
-					return len;
-				} else if (len > 0) {
-					int bitCount = (int) ((prefix+MASKS[SHIFT]) >>> SHIFT);
-					assert !(childCount > 0 && child[0].childId < bitCount) : "invalid prefix state";
-
-					long remain = prefix&MASKS[SHIFT];
-					if (remain > 0 && size <= MASKS[SHIFT]-remain) {
-						prefix = align(len+size);
-						free -= size;
-						return len;
-					}
-				}
-
 				for (int i = 0; i < childCount; i++) {
 					Page p = child[i];
 					long off = p.malloc(size);

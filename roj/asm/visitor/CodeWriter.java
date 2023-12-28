@@ -409,14 +409,12 @@ public class CodeWriter extends AbstractCodeWriter {
 				if (hasFrames) return;
 				hasFrames = true;
 
-				//if (interpretFlags == 0) {
-					// todo modify on demand ?
-					pos = 0;
-					b = IOUtil.getSharedByteBuf().putShort(frames.size());
-					FrameVisitor.writeFrames(frames, b, cpw);
-					len = b.readableBytes();
-					frames = null;
-				//}
+				// must rewrite, bci change
+				pos = 0;
+				b = IOUtil.getSharedByteBuf().putShort(frames.size());
+				FrameVisitor.writeFrames(frames, b, cpw);
+				len = b.readableBytes();
+				frames = null;
 				break;
 		}
 		b.rIndex = pos;

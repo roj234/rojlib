@@ -139,7 +139,7 @@ public final class BufferPool {
 		cap += keepBefore;
 
 		PooledBuffer buf;
-		boolean large = useGlobal && cap >= (direct ? directIncr : heapIncr) / 2;
+		boolean large = useGlobal && cap >= (direct ? directIncr : heapIncr);
 		if (direct) {
 			buf = getShell(directShell, u_directShellLen);
 			if (buf == null) buf = new PooledDirectBuf();
@@ -427,7 +427,7 @@ public final class BufferPool {
 		if (len >= array.length) return;
 
 		for (int i = 0; i < array.length; i++) {
-			long o = Unsafe.ARRAY_OBJECT_BASE_OFFSET + i * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
+			long o = Unsafe.ARRAY_OBJECT_BASE_OFFSET + (long)i * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
 
 			Object b = u.getObjectVolatile(array, o);
 			if (b != null) continue;
@@ -445,7 +445,7 @@ public final class BufferPool {
 	public static DynByteBuf expand(DynByteBuf buf, int more) { return expand(buf, more, true, true); }
 	public static DynByteBuf expand(DynByteBuf buf, int more, boolean addAtEnd) { return expand(buf, more, addAtEnd, true); }
 	public static DynByteBuf expand(DynByteBuf buf, int more, boolean addAtEnd, boolean reserveOld) {
-		if (more < 0) throw new IllegalArgumentException("size < 0");
+		if (more < 0 && (!addAtEnd || !reserveOld)) throw new IllegalArgumentException("size < 0");
 
 		Object pool;
 		if (!(buf instanceof PooledBuffer)) {
@@ -455,13 +455,16 @@ public final class BufferPool {
 			// 禁止异步reserve
 			pool = ((PooledBuffer) buf).pool(null);
 			if (pool == null) throwUnpooled(buf);
-			else if(!DEBUG_DISABLE_CACHE && pool == _UNPOOLED ? tryZeroCopy(buf, more, addAtEnd, (BufferPool) pool, (PooledBuffer) buf) : tryZeroCopyExt(more, addAtEnd, (PooledBuffer) buf)) {
+			else if(DEBUG_DISABLE_CACHE || pool == _UNPOOLED
+					? tryZeroCopyExt(more, addAtEnd, (PooledBuffer) buf)
+					: tryZeroCopy(buf, more, addAtEnd, (BufferPool) pool, (PooledBuffer) buf)) {
 				((PooledBuffer) buf).pool(pool);
 				return buf;
 			}
 		}
 
 		if (pool != null) ((PooledBuffer) buf).pool(pool);
+		if (more < 0) return buf;
 
 		DynByteBuf newBuf = buffer(buf.isDirect(), buf.capacity()+more);
 		if (!addAtEnd) newBuf.wIndex(more);
@@ -501,7 +504,11 @@ public final class BufferPool {
 		if (addAtEnd) {
 			lock.lock();
 			try {
-				if (!page.allocAfter(offset - pb.getKeepBefore(), b.capacity() + pb.getKeepBefore(), more)) return false;
+				if (more < 0) {
+					more = (int) Page.align(more+Page.MINIMUM_MASK);
+					int off = (int) Page.align(offset + b.capacity()) + more;
+					page.free(off, -more);
+				} else if (!page.allocAfter(offset - pb.getKeepBefore(), b.capacity() + pb.getKeepBefore(), more)) return false;
 			} finally {
 				lock.unlock();
 			}

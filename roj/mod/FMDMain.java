@@ -67,7 +67,6 @@ public final class FMDMain {
 		Shared.loadProject();
 		CommandConsole c = console;
 
-		c.register(literal("build"));
 		c.register(literal("auto").then(argument("auto", Argument.bool()).executes(ctx -> AutoCompile.setEnabled(ctx.argument("auto", Boolean.class)))));
 		c.register(literal("reflect").executes(ctx -> ReflectTool.start(!isCLI)));
 		CommandImpl cDeobf = ctx -> {
@@ -160,16 +159,20 @@ public final class FMDMain {
 			System.out.println(slogan);
 			System.out.println("\u001b[96mhttps://www.github.com/roj234/rojlib");
 
-			shinyTask = PeriodicTask.loop(() -> {
-				CharList sb1 = IOUtil.getSharedCharBuf().append("\u001b7\u001b[?25l\u001b[1;1H\u001b[2K");
-				CLIUtil.MinecraftColor.sonic(slogan, sb1);
-				sb1.append("\u001b8\u001b[?25h");
-				CLIUtil.sysOut.print(sb1);
-			}, 1000 / 60, 9999);
+			if (CLIUtil.ANSI) {
+				shinyTask = PeriodicTask.loop(() -> {
+					CharList sb1 = IOUtil.getSharedCharBuf().append("\u001b7\u001b[?25l\u001b[1;1H\u001b[2K");
+					CLIUtil.MinecraftColor.sonic(slogan, sb1);
+					sb1.append("\u001b8\u001b[?25h");
+					CLIUtil.sysOut.print(sb1);
+				}, 1000 / 60, 9999);
 
-			System.out.println();
-			CLIUtil.info("使用Tab补全指令、或按下F1查看帮助");
-			System.out.println();
+				System.out.println();
+				CLIUtil.info("使用Tab补全指令、或按下F1查看帮助");
+				System.out.println();
+			} else {
+				System.out.println("建议使用支持ANSI转义序列的终端以获得更好的体验");
+			}
 
 			CLIUtil.setConsole(c);
 
@@ -557,7 +560,7 @@ public final class FMDMain {
 
 		// endregion
 
-		SimpleList<String> options = CONFIG.get("编译参数").asList().asStringList();
+		SimpleList<String> options = CONFIG.getList("编译参数").asStringList();
 		options.addAll("-cp", libBuf.toString(), "-encoding", p.charset.name());
 
 		Compiler.showErrorCode(args.containsKey("showErrorCode"));
