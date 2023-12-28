@@ -1,8 +1,7 @@
 package roj.asm.tree.attr;
 
-import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
-import roj.asm.cst.*;
+import roj.asm.cp.*;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.SimpleList;
@@ -70,7 +69,7 @@ public final class BootstrapMethods extends Attribute {
 
 		static final byte[] toString = {Opcodes.GETFIELD, Opcodes.GETSTATIC, Opcodes.PUTFIELD, Opcodes.PUTSTATIC, Opcodes.INVOKEVIRTUAL, Opcodes.INVOKESTATIC, Opcodes.INVOKESPECIAL, Opcodes.INVOKESPECIAL, Opcodes.INVOKEINTERFACE};
 
-		public static String toString(byte kind) { return OpcodeUtil.toString0(toString[kind]); }
+		public static String toString(byte kind) { return Opcodes.showOpcode(toString[kind]); }
 
 		public static byte validate(int kind) {
 			if (kind < 1 || kind > 9) throw new IllegalArgumentException("Illegal kind "+kind+ ", Must in [1,9]");

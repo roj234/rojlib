@@ -4,12 +4,12 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.RawNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
+import roj.asm.type.Desc;
 import roj.asm.util.AttrHelper;
+import roj.asm.util.ClassUtil;
 import roj.asm.util.Context;
+import roj.asmx.mapper.Mapper;
 import roj.asmx.nixim.NiximSystemV2;
-import roj.mapper.MapUtil;
-import roj.mapper.Mapper;
-import roj.mapper.util.Desc;
 import roj.mod.Shared;
 import roj.ui.CLIUtil;
 
@@ -61,7 +61,7 @@ public class NiximHandler implements Plugin {
 						String prevOwner = anno.getString("owner", dest).replace('.', '/');
 						String name = map(prevOwner, node);
 						if (name != null) {
-							String owner = MapUtil.getInstance().sharedDC.owner;
+							String owner = ClassUtil.getInstance().sharedDC.owner;
 							if (!prevOwner.equals(owner)) {
 								anno.put("owner", AnnVal.valueOf(owner));
 							}
@@ -101,7 +101,7 @@ public class NiximHandler implements Plugin {
 		Shared.loadMapper();
 		Mapper m = Shared.mapperFwd;
 
-		Desc desc = MapUtil.getInstance().sharedDC;
+		Desc desc = ClassUtil.getInstance().sharedDC;
 		desc.owner = dest;
 		desc.name = node.name();
 		desc.param = m.checkFieldType || node.rawDesc().startsWith("(") ? node.rawDesc() : "";

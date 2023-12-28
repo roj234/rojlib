@@ -7,16 +7,17 @@ import roj.config.word.Tokenizer;
 import roj.config.word.Word;
 import roj.text.CharList;
 import roj.ui.AnsiString;
+import roj.ui.CLIBoxRenderer;
 import roj.ui.CLIUtil;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 指令系统的使用方式完全借鉴自Minecraft
  * <pre> {@code
- * 		CliConsole.initialize();
  * 		CommandConsole c = new CommandConsole("\u001b[33m田所浩二@AIPC> ");
- * 		CliConsole.setConsole(c);
+ * 		CLIUtil.setConsole(c);
  *
  * 		c.register(literal("open")
  * 			.then(argument("file", Argument.file())
@@ -31,8 +32,39 @@ import java.util.List;
 public class CommandConsole extends DefaultConsole {
 	public CommandConsole(String prompt) { super(prompt); }
 
-	protected final ArgumentContext ctx = new ArgumentContext(TaskPool.Common());
-	protected Tokenizer wr = new Tokenizer();
+	protected final List<CommandNode> nodes = new SimpleList<>();
+	public CommandConsole register(CommandNode node) { nodes.add(node); return this; }
+	public boolean unregister(String name) {
+		for (int i = nodes.size()-1; i >= 0; i--) {
+			CommandNode node = nodes.get(i);
+			if (Objects.equals(name, node.getName())) {
+				nodes.remove(i);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public CharList dumpNodes(CharList sb, int depth) {
+		for (CommandNode node : nodes)
+			node.dump(sb.padEnd(' ', depth), depth);
+		return sb;
+	}
+
+	@Override
+	protected void printHelp() {
+		CLIBoxRenderer.DEFAULT.render(new String[][]{
+			new String[] { "Roj234的指令终端 帮助", "注册的指令", "快捷键" },
+			new String[] { dumpNodes(new CharList(), 0).toStringAndFree(), KEY_SHORTCUT }
+		});
+	}
+
+	public ArgumentContext ctx = new ArgumentContext(TaskPool.Common());
+	public boolean commandEcho = true;
+	protected final Tokenizer wr = new Tokenizer() {
+		@Override
+		protected Word onInvalidNumber(char value, int i, String reason) throws ParseException { return readLiteral(); }
+	};
 	private List<Word> parse(String cmd) {
 		List<Word> words = new SimpleList<>();
 
@@ -67,12 +99,12 @@ public class CommandConsole extends DefaultConsole {
 
 			if (w.pos() > prevI) root.append(new AnsiString(input.substring(prevI, w.pos())));
 			switch (w.type()) {
-				case Word.LITERAL: root.append(new AnsiString(w.val()).color16(CLIUtil.YELLOW+60)); break;
+				case Word.LITERAL: root.append(new AnsiString(w.val()).color16(CLIUtil.YELLOW+CLIUtil.HIGHLIGHT)); break;
 				case Word.CHARACTER: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(CLIUtil.GREEN)); break;
-				case Word.STRING: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(CLIUtil.GREEN+60)); break;
+				case Word.STRING: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(CLIUtil.GREEN+CLIUtil.HIGHLIGHT)); break;
 				case Word.INTEGER: case Word.LONG: root.append(new AnsiString(w.val()).color16(getNumberColor(w.val()))); break;
-				case Word.DOUBLE: case Word.FLOAT: root.append(new AnsiString(w.val()).color16(CLIUtil.BLUE+60)); break;
-				default: root.append(new AnsiString(w.val()).color16(CLIUtil.WHITE+60));
+				case Word.DOUBLE: case Word.FLOAT: root.append(new AnsiString(w.val()).color16(CLIUtil.BLUE+CLIUtil.HIGHLIGHT)); break;
+				default: root.append(new AnsiString(w.val()).color16(CLIUtil.WHITE+CLIUtil.HIGHLIGHT));
 			}
 
 			prevI = wr.index;
@@ -86,22 +118,9 @@ public class CommandConsole extends DefaultConsole {
 			String v = val.toLowerCase();
 			if (v.startsWith("0b")) return CLIUtil.CYAN;
 			if (v.startsWith("0x")) return CLIUtil.YELLOW;
-			if (v.startsWith("0")) return CLIUtil.PURPLE+60;
+			if (v.startsWith("0")) return CLIUtil.PURPLE+CLIUtil.HIGHLIGHT;
 		}
-		return CLIUtil.CYAN+60;
-	}
-
-	protected List<CommandNode> nodes = new SimpleList<>();
-	public void register(CommandNode node) { nodes.add(node); }
-	public boolean unregister(String name) {
-		for (int i = nodes.size()-1; i >= 0; i--) {
-			CommandNode node = nodes.get(i);
-			if (node instanceof CommandNode.LiteralNode && ((CommandNode.LiteralNode) node).getName().equals(name)) {
-				nodes.remove(i);
-				return true;
-			}
-		}
-		return false;
+		return CLIUtil.CYAN+CLIUtil.HIGHLIGHT;
 	}
 
 	@Override
@@ -122,9 +141,7 @@ public class CommandConsole extends DefaultConsole {
 	}
 
 	@Override
-	protected final boolean evaluate(String cmd) {
-		return execute(cmd, true);
-	}
+	protected final boolean evaluate(String cmd) { return execute(cmd, commandEcho); }
 	public boolean executeCommand(String cmd) {
 		TaskPool executor = ctx.executor;
 		ctx.executor = null;
@@ -135,9 +152,10 @@ public class CommandConsole extends DefaultConsole {
 		}
 	}
 	protected boolean execute(String cmd, boolean print) {
-		List<Word> words = parse(cmd);
+		List<Word> words = parse(cmd.trim());
 		if (words == null) return false;
 
+		int maxI = 0;
 		ParseException pe = null;
 		for (int i = 0; i < nodes.size(); i++) {
 			CommandNode node = nodes.get(i);
@@ -153,20 +171,13 @@ public class CommandConsole extends DefaultConsole {
 			} catch (ParseException e) {
 				pe = e;
 			}
+			maxI = Math.max(maxI, ctx.getMaxI());
 		}
 
 		if (print) printCommand();
 		if (pe != null) pe.printStackTrace();
-		else System.out.println("指令未匹配任何参数组合,从左至右最多的部分匹配是:"+ctx.getMaxI());
+		else System.out.println("输入未完整匹配任何指令,最多部分匹配到"+maxI);
 
 		return true;
-	}
-
-	public void dumpNodes() {
-		CharList sb = new CharList();
-		for (CommandNode node : nodes) {
-			node.dump(sb, 0);
-		}
-		System.out.println(sb);
 	}
 }

@@ -1,17 +1,14 @@
 package roj.asm.tree;
 
 import roj.asm.AsmShared;
+import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstUTF;
-import roj.asm.tree.attr.AttrUnknown;
-import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.attr.ConstantValue;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstUTF;
+import roj.asm.tree.attr.*;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
-import roj.asm.util.AttributeList;
 import roj.text.CharList;
 import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
@@ -69,22 +66,18 @@ public final class FieldNode extends CNode {
 	}
 	public void fieldType(Type type) { this.desc = Objects.requireNonNull(type); }
 
-	public String toString() { return toString(new CharList(), null).toStringAndFree(); }
-	public CharList toString(CharList sb, ConstantData owner) {
+	public String toString() { return toString(new CharList(), null, 4, false).toStringAndFree(); }
+	public CharList toString(CharList sb, ConstantData owner, int prefix, boolean writeSignature) {
 		ConstantPool cp = owner == null ? null : owner.cp;
 
-		Attribute a;
+		Annotations a;
 		a = parsedAttr(cp, Attribute.RtAnnotations);
-		if (a != null) sb.append(a).append('\n');
+		if (a != null) a.toString(sb, prefix).append('\n');
 		a = parsedAttr(cp, Attribute.ClAnnotations);
-		if (a != null) sb.append(a).append('\n');
+		if (a != null) a.toString(sb, prefix).append('\n');
 
-		Signature sig = parsedAttr(cp, Attribute.SIGNATURE);
-		int acc = access;
-		if (owner != null && (owner.access&AccessFlag.INTERFACE) != 0) {
-			// default is public static ?
-		}
-		AccessFlag.toString(acc, AccessFlag.TS_FIELD, sb).append(sig != null ? sig : fieldType()).append(' ').append(name());
+		Signature sig = writeSignature ? parsedAttr(cp, Attribute.SIGNATURE) : null;
+		Opcodes.showModifiers(access, Opcodes.ACC_SHOW_FIELD, sb.padEnd(' ', prefix)).append(sig != null ? sig : fieldType()).append(' ').append(name());
 
 		ConstantValue cv = parsedAttr(cp, Attribute.ConstantValue);
 		if (cv != null) sb.append(" = ").append(cv.c.getEasyReadValue());

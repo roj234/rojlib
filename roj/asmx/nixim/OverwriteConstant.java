@@ -1,7 +1,7 @@
 package roj.asmx.nixim;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.asm.cst.Constant;
+import roj.asm.cp.Constant;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

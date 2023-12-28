@@ -73,7 +73,12 @@ public final class Request extends Headers {
 	public Request resetPath() { path = initPath; return this; }
 
 	public Request subDirectory(int i) {
-		while (i-- > 0) path = path.substring(0, path.lastIndexOf('/'));
+		while (i-- > 0) path = path.substring(path.lastIndexOf('/')+1);
+		return this;
+	}
+	public Request subDirectory(String mypath) {
+		if (!path.startsWith(mypath) || mypath.endsWith("/")) throw new IllegalArgumentException();
+		path = path.substring(mypath.length()+1);
 		return this;
 	}
 

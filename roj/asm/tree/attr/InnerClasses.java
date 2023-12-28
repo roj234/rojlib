@@ -1,10 +1,10 @@
 package roj.asm.tree.attr;
 
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstClass;
-import roj.asm.cst.CstUTF;
+import roj.asm.Opcodes;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstClass;
+import roj.asm.cp.CstUTF;
 import roj.asm.tree.IClass;
-import roj.asm.util.AccessFlag;
 import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
 
@@ -101,7 +101,7 @@ public final class InnerClasses extends Attribute {
 
 		public String toString() {
 			StringBuilder sb = new StringBuilder();
-			AccessFlag.toString(flags, AccessFlag.TS_INNER, sb).append("class ");
+			Opcodes.showModifiers(flags, Opcodes.ACC_SHOW_INNERCLASS, sb).append("class ");
 			if (parent == null && name == null) {
 				sb.append("<anonymous>");
 			} else {

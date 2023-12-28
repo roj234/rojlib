@@ -2,6 +2,7 @@ package roj.mildwind.parser.ast;
 
 import roj.asm.Opcodes;
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsBool;
 import roj.mildwind.type.JsObject;
@@ -29,7 +30,7 @@ final class In implements Expression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) {
+	public JsObject compute(JsContext ctx) {
 		JsObject n = needle.compute(ctx);
 		JsObject h = haystack.compute(ctx);
 		return JsBool.valueOf(h.op_in(n)?1:0);

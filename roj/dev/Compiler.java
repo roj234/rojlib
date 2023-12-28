@@ -10,6 +10,7 @@ import roj.reflect.FastInit;
 import roj.reflect.Proxy;
 import roj.text.CharList;
 import roj.text.LineReader;
+import roj.ui.AnsiString;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
@@ -49,8 +50,7 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 	private final String basePath;
 	private final PrintStream out;
 	private final Set<String> skipErrors;
-	private final List<Processor> processor;
-	private int warnings, errors;
+	private int ignored, warnings, errors;
 	private final CharList buf;
 	private List<ByteListOutput> compiled;
 
@@ -67,7 +67,6 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 	}
 
 	public Compiler(List<Processor> processor, PrintStream out, Set<String> skipErrors, String basePath) {
-		this.processor = processor;
 		this.out = out == null ? System.out : out;
 		this.skipErrors = skipErrors == null ? Collections.emptySet() : skipErrors;
 		this.basePath = basePath;
@@ -79,6 +78,7 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 			return true;
 		}
 
+		ignored = 0;
 		warnings = 0;
 		errors = 0;
 		buf.clear();
@@ -90,8 +90,6 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 		Iterable<? extends JavaFileObject> unit = fm.getJavaFileObjectsFromFiles(files);
 		JavaCompiler.CompilationTask task = compiler.getTask(new OutputStreamWriter(out), fm, this, options, null, unit);
 
-		if (processor != null) task.setProcessors(processor);
-
 		boolean result = false;
 		try {
 			result = task.call();
@@ -99,13 +97,9 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 			this.report(new MyDiagnostic("用户类文件中的class读取失败", Diagnostic.Kind.ERROR));
 		}
 
-		CLIUtil.bg(result ? CLIUtil.BLUE : CLIUtil.RED, false);
-		CLIUtil.fg(CLIUtil.WHITE, true);
-		System.out.println(buf);
-
-		if (errors > 0) out.println(errors + " 个 错误");
-		if (warnings > 0) out.println(warnings + " 个 警告");
-		CLIUtil.reset();
+		if (errors > 0) buf.append('\n').append(errors).append(" 个 错误");
+		if (warnings > 0) buf.append('\n').append(warnings).append('/').append(warnings+ ignored).append(" 个 警告");
+		System.out.println(new AnsiString(buf).bgColor16(result ? CLIUtil.BLUE : CLIUtil.RED).color16(CLIUtil.WHITE + CLIUtil.HIGHLIGHT).toAnsiString());
 		return result;
 	}
 
@@ -174,13 +168,11 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 	}
 
 
-	public List<ByteListOutput> getCompiled() {
-		return compiled;
-	}
+	public List<ByteListOutput> getCompiled() { return compiled; }
 
 	@Override
 	public void report(Diagnostic<? extends JavaFileObject> diag) {
-		if (!skipErrors.contains(diag.getCode())) {
+		if (diag.getKind() == Diagnostic.Kind.ERROR || !skipErrors.contains(diag.getCode())) {
 			CharList sb = buf;
 			if (diag.getSource() != null) {
 				String file = diag.getSource().toUri().getPath();
@@ -189,11 +181,11 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 					off += basePath.length() + 1;
 				}
 				sb.append(file, off, file.length()).append(':');
-				if (diag.getLineNumber() >= 0) sb.append(diag.getLineNumber()).append(':');
+				if (diag.getLineNumber() > 0) sb.append(diag.getLineNumber()).append(':');
 				sb.append(' ');
 			}
 			sb.append(errorMsg(diag.getKind())).append(':').append(' ').append(diag.getMessage(Locale.CHINA)).append('\n');
-			if (diag.getLineNumber() >= 0) {
+			if (diag.getLineNumber() > 0) {
 				try {
 					sb.append(getNearCode(diag.getSource(), diag.getLineNumber())).append('\n');
 					for (int i = 0; i < diag.getColumnNumber(); i++) sb.append(' ');
@@ -204,6 +196,8 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 				sb.append('\n');
 			}
 			if (showErrorCode) out.println(diag.getCode());
+		} else {
+			ignored++;
 		}
 	}
 

@@ -1,7 +1,6 @@
 package roj.config.serial;
 
 import roj.collect.SimpleList;
-import roj.util.Helpers;
 
 import java.lang.reflect.Array;
 
@@ -22,7 +21,7 @@ final class ObjArr extends Adapter {
 	void pop(AdaptContext ctx) {
 		if (ctx.fieldId == -1) {
 			SimpleList<?> buf = (SimpleList<?>) ctx.ref;
-			ctx.ref = buf.toArray(Helpers.cast(Array.newInstance(type,buf.size())));
+			ctx.ref = buf.toArray((Object[]) Array.newInstance(type,buf.size()));
 			ctx.releaseBuffer(buf);
 		}
 	}

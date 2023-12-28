@@ -19,7 +19,7 @@ public class ProgressBar implements AutoCloseable {
 	protected String unit;
 	private String name, prefix, postfix;
 	private int barInterval, dataWindow;
-	private long barUpdate, dataUpdate, eta;
+	private long barUpdate, dataUpdate;
 	private boolean hideBar, hideSpeed;
 
 	private long delta;
@@ -75,14 +75,14 @@ public class ProgressBar implements AutoCloseable {
 		batch.clear();
 		CharList b = (name == null ? batch : batch.append("\u001b[0m").append(name).append(": ")).append("\u001B[96m");
 
-		if (prefix == null) b.append(TextUtil.toFixedLength(percent, 4)).append("%");
+		if (prefix == null) b.append(TextUtil.toFixedLength(percent, 4)).append('%');
 		else b.append(prefix);
 
 		if (!hideBar) {
 			int tx = (int) percent / BITE;
 			b.append("\u001B[97m├")
-			 .append(TextUtil.repeat(tx, '█'))
-			 .append(TextUtil.repeat(PROGRESS_SIZE - tx, '─'))
+			 .padEnd('█', tx)
+			 .padEnd('─', PROGRESS_SIZE - tx)
 			 .append("┤\u001B[93m");
 		}
 
@@ -102,7 +102,7 @@ public class ProgressBar implements AutoCloseable {
 				timeUnit = "d";
 			}
 
-			b.append(" ").append(unitDelta < 1000 ? TextUtil.toFixed(unitDelta, 2) : TextUtil.scaledNumber(Math.round(unitDelta))).append(unit).append('/').append(timeUnit);
+			b.append(' ').append(unitDelta < 1000 ? TextUtil.toFixed(unitDelta, 2) : TextUtil.scaledNumber(Math.round(unitDelta))).append(unit).append('/').append(timeUnit);
 		}
 
 		if (postfix != null) b.append(' ').append(postfix);
@@ -120,7 +120,7 @@ public class ProgressBar implements AutoCloseable {
 		batch.clear();
 		CharList b = batch
 			.append("\u001b[2K").append(name).append(": ")
-			.append("\u001B[").append(color + 60).append('m')
+			.append("\u001B[").append(color+CLIUtil.HIGHLIGHT).append('m')
 			.append(k)
 			.append("\u001B[0m");
 

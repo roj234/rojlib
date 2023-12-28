@@ -77,6 +77,9 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 	}
 
 	@Override
+	protected boolean supportAutoCollisionFix() { return false; }
+
+	@Override
 	public final void clear() {
 		super.clear();
 		head.next = null;

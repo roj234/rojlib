@@ -1,10 +1,10 @@
 package roj.mod.mapping;
 
+import roj.asm.type.Desc;
+import roj.asm.util.ClassUtil;
+import roj.asmx.mapper.Mapping;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
-import roj.mapper.MapUtil;
-import roj.mapper.Mapping;
-import roj.mapper.util.Desc;
 import roj.text.LineReader;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
@@ -108,7 +108,7 @@ public final class MCPMapping extends Mapping {
 	}
 
 	private void formatParamMap(Map<String, String> mcpParams, Map<Desc, List<String>> params, List<String> tmp, Map<String, List<Desc>> methods, Mapping srgName) {
-		MapUtil U = MapUtil.getInstance();
+		ClassUtil U = ClassUtil.getInstance();
 
 		Map<String, Set<Desc>> methodData = new MyHashMap<>(1000);
 

@@ -65,7 +65,7 @@ public final class HttpServer11 extends PacketMerger implements
 
 	public static ServerLaunch simple(InetSocketAddress addr, int backlog, Router router) throws IOException {
 		return ServerLaunch.tcp("HTTP服务器")
-						   .listen(addr, backlog)
+						   .bind(addr, backlog)
 						   .option(StandardSocketOptions.SO_REUSEADDR, true)
 						   .initializator((ctx) -> ctx.addLast("h11@server", create(router)));
 	}

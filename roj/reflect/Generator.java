@@ -26,8 +26,8 @@ public abstract class Generator<T> implements Iterator<T> {
 		data.dump();
 		register.dump();
 
-		ClassDefiner.INSTANCE.defineClassC(register);
-		ClassDefiner.INSTANCE.defineClassC(data);
+		ClassDefiner.INSTANCE.defineClass(register);
+		ClassDefiner.INSTANCE.defineClass(data);
 
 		runTest();
 	}

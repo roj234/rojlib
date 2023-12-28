@@ -1,6 +1,6 @@
 package roj.asm.frame;
 
-import roj.asm.cst.Constant;
+import roj.asm.cp.Constant;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.visitor.FrameVisitor;
@@ -118,10 +118,10 @@ public final class Var2 {
 		}
 
 		try {
-			String s = FrameVisitor.LOCAL.get().getCommonUnsuperClass(owner, o.owner);
+			String s = FrameVisitor.getCommonUnsuperClass(owner, o.owner);
 			if (s != null && o.limitation != null) {
 				for (String s1 : o.limitation) {
-					s = FrameVisitor.LOCAL.get().getCommonUnsuperClass(s, s1);
+					s = FrameVisitor.getCommonUnsuperClass(s, s1);
 					if (s == null) break;
 				}
 			}

@@ -1,12 +1,11 @@
 package roj.asm.visitor;
 
-import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.cst.Constant;
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstClass;
-import roj.asm.cst.CstUTF;
+import roj.asm.cp.Constant;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstClass;
+import roj.asm.cp.CstUTF;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;
@@ -163,12 +162,12 @@ public class LongByeBye extends CodeWriter {
 	}
 
 	private byte replaceCode(byte code) {
-		switch (OpcodeUtil.category(code)) {
-			case OpcodeUtil.CATE_MATH_CAST:
-			case OpcodeUtil.CATE_LOAD_STORE:
-			case OpcodeUtil.CATE_LOAD_STORE_LEN:
-			case OpcodeUtil.CATE_MATH:
-			case OpcodeUtil.CATE_ARRAY_SL:
+		switch (Opcodes.category(code)) {
+			case Opcodes.CATE_MATH_CAST:
+			case Opcodes.CATE_LOAD_STORE:
+			case Opcodes.CATE_LOAD_STORE_LEN:
+			case Opcodes.CATE_MATH:
+			case Opcodes.CATE_ARRAY_SL:
 				code = InsnHelper.changeCodeType(code, Type.std(templateType), internalType);
 				break;
 		}

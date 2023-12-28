@@ -2,9 +2,12 @@ package roj.platform;
 
 import roj.archive.zip.ZipArchive;
 import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
+import roj.collect.TrieTreeSet;
 import roj.config.YAMLParser;
 import roj.config.data.CMapping;
 import roj.io.CorruptedInputException;
+import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.math.Version;
@@ -21,12 +24,13 @@ import java.util.Iterator;
  * @since 2023/12/25 0025 16:08
  */
 public class PluginManager {
-	final MyHashMap<String, PluginDescriptor> plugins = new MyHashMap<>();
-	private final ClassLoader env = getClass().getClassLoader();
 	final Logger LOGGER = Logger.getLogger(getClass().getSimpleName());
+	final MyHashMap<String, PluginDescriptor> plugins = new MyHashMap<>();
+
+	private final ClassLoader env = getClass().getClassLoader();
 	private final File dataFolder;
 
-	public PluginManager(File dataFolder) {this.dataFolder = dataFolder;}
+	public PluginManager(File dataFolder) { this.dataFolder = dataFolder; }
 
 	protected boolean isCriticalPlugin(PluginDescriptor pd) {
 		return pd.fileName == null;
@@ -96,8 +100,8 @@ public class PluginManager {
 		}
 
 		LOGGER.info("正在加载插件 {}", pd);
-		pd.pcl = new PluginClassLoader(env, pd);
-		Class<?> klass = pd.pcl.findClass(pd.mainClass);
+		pd.cl = pd.pcl = new PluginClassLoader(env, pd);
+		Class<?> klass = pd.mainClass.startsWith("roj.") ? pd.pcl.loadClass(pd.mainClass) : pd.pcl.findClass(pd.mainClass);
 		pd.instance = (Plugin) klass.newInstance();
 		pd.instance.init(this, new File(dataFolder, pd.id), pd);
 		pd.instance.onLoad();
@@ -150,12 +154,24 @@ public class PluginManager {
 			pd.fileName = plugin.getName();
 			pd.source = new FileSource(plugin);
 			pd.id = config.getString("id");
+			if (pd.id.isEmpty()) throw new FastFailException("id未指定");
 			pd.version = new Version(config.getString("version", "1"));
 			pd.charset = Charset.forName(config.getString("charset", "UTF-8"));
-			pd.mainClass = config.getString("main");
+			pd.mainClass = config.getString("mainClass");
+			if (pd.mainClass.isEmpty()) throw new FastFailException("mainClass未指定");
+
 			pd.depend = config.getList("depend").asStringList();
 			pd.loadBefore = config.getList("loadBefore").asStringList();
 			pd.loadAfter = config.getList("loadAfter").asStringList();
+
+			SimpleList<String> path = config.getList("extraPath").asStringList();
+			pd.extraPath = new TrieTreeSet();
+			for (String s : path) pd.extraPath.add(new File(s).getAbsolutePath());
+
+			pd.reflectiveClass = new TrieTreeSet(config.getList("reflectivePackage").asStringList());
+			pd.dynamicLoadClass = config.getBool("dynamicLoadClass");
+			pd.loadNative = config.getBool("loadNative");
+
 			pd.desc = config.getString("desc");
 			pd.authors = config.getList("authors").asStringList();
 			pd.website = config.getString("website");
@@ -227,9 +243,19 @@ public class PluginManager {
 			}  catch (Throwable e) {
 				LOGGER.error("卸载插件 {} 出错", e, pd);
 			}
-			pd.pcl = null;
+			pd.cl = pd.pcl = null;
 		}
 
 		pd.state = UNLOAD;
+	}
+
+	public PluginDescriptor getPluginDescriptor(Class<?> clazz) {
+		if (clazz != null) {
+			ClassLoader cl = clazz.getClassLoader();
+			if (cl instanceof PluginClassLoader) return ((PluginClassLoader) cl).desc;
+			return getPlugin("Core");
+		}
+
+		throw new NullPointerException("clazz");
 	}
 }

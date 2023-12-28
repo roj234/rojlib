@@ -23,7 +23,7 @@ public abstract class JsConstructor extends JsFunction {
 		prototype = fn.prototype;
 	}
 
-	public JsObject prototype() { return prototype; }
+	public JsMap prototype() { return prototype; }
 
 	@Override
 	public JsObject get(String name) {

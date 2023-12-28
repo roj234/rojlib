@@ -1,9 +1,11 @@
 package roj.platform;
 
+import roj.collect.TrieTreeSet;
 import roj.config.word.ITokenizer;
 import roj.io.source.Source;
 import roj.math.Version;
 import roj.text.CharList;
+import roj.text.TextUtil;
 
 import java.nio.charset.Charset;
 import java.util.Collections;
@@ -27,6 +29,12 @@ public class PluginDescriptor {
 	Plugin instance;
 	List<String> depend = Collections.emptyList(), loadAfter = Collections.emptyList(), loadBefore = Collections.emptyList();
 	transient PluginClassLoader pcl;
+	transient ClassLoader cl;
+
+	// 基于transformer的安全管理
+	TrieTreeSet reflectiveClass, extraPath;
+	boolean loadNative, dynamicLoadClass, accessUnsafe;
+	boolean skipCheck;
 
 	volatile int state;
 
@@ -40,7 +48,7 @@ public class PluginDescriptor {
 		CharList sb = new CharList();
 		sb.append("插件 ").append(id).append(" v").append(version).append(" 作者 ").append(authors).append('\n');
 		if (!website.isEmpty()) sb.append("网址: ").append(website).append('\n');
-		if (!desc.isEmpty()) sb.append("简介:\n").append(desc).append('\n');
+		if (!desc.isEmpty()) sb.append("简介:\n  ").append(TextUtil.join(TextUtil.split(desc, '\n'), "\n  ")).append('\n');
 		sb.append("状态: ");
 		switch (state) {
 			case PluginManager.UNLOAD: sb.append("UNLOAD"); break;

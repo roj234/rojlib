@@ -32,11 +32,10 @@ public class Extension {
 		for (CharMap.Entry<DynByteBuf> entry : ext.selfEntrySet()) {
 			DynByteBuf b = entry.getValue();
 			buf.putShort(entry.getChar());
-			if (b == null) {
-				buf.putShort(0);
-			} else {
-				buf.putShort(b.readableBytes()).put(b);
-			}
+			if (b == null) buf.putShort(0);
+			else buf.putShort(b.readableBytes()).put(b);
+
+			MSSEngine.free(b);
 		}
 	}
 

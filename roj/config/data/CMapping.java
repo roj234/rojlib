@@ -189,30 +189,27 @@ public class CMapping extends CEntry {
 		CEntry entry = get(key);
 		return Type.STRING.isSimilar(entry.getType()) ? entry.asString() : def;
 	}
-	public final int getInteger(String key) {
+	public final int getInteger(String key) { return getInteger(key, 0); }
+	public final int getInteger(String key, int def) {
 		CEntry entry = get(key);
-		return entry.isNumber() ? entry.asInteger() : 0;
+		return entry.isNumber() ? entry.asInteger() : def;
 	}
-	public final long getLong(String key) {
+	public final long getLong(String key) { return getLong(key, 0); }
+	public final long getLong(String key, long def) {
 		CEntry entry = get(key);
-		return entry.isNumber() ? entry.asLong() : 0;
+		return entry.isNumber() ? entry.asLong() : def;
 	}
-	public final double getDouble(String key) {
+	public final double getDouble(String key) { return getDouble(key, 0); }
+	public final double getDouble(String key, double def) {
 		CEntry entry = get(key);
-		return entry.isNumber() ? entry.asDouble() : 0;
+		return entry.isNumber() ? entry.asDouble() : def;
 	}
 	public final CList getList(String key) { return get(key).asList(); }
 	public final CMapping getMap(String key) { return get(key).asMap(); }
 
-	public final CEntry get(String key) {
-		return get1(key, CNull.NULL);
-	}
-	public final CEntry getOrNull(String key) {
-		return get1(key, null);
-	}
-	public final CEntry getDot(String path) {
-		return query(path, 0, CNull.NULL, dot == null ? new CharList() : dot);
-	}
+	public final CEntry get(String key) { return get1(key, CNull.NULL); }
+	public final CEntry getOrNull(String key) { return get1(key, null); }
+	public final CEntry getDot(String path) { return query(path, 0, CNull.NULL, dot == null ? new CharList() : dot); }
 
 	private CEntry get1(String k, CEntry def) {
 		if (k == null) return def;

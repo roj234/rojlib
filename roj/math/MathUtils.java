@@ -15,48 +15,20 @@ public abstract class MathUtils {
 	public static final double TWO_PI = Math.PI * 2;
 	public static final double EPS_2 = 1e-14;
 
-	public static int sig(int num) {
-		return num == 0 ? 0 : num < 0 ? -1 : 1;
-	}
+	public static int sig(int num) { return Integer.compare(num, 0); }
 
-	public static <T> IntList discretization(Iterable<T> list, ToIntFunction<T> retriver) {
-		if (retriver == null) retriver = Helpers.cast((ToIntFunction<Number>) Number::intValue);
+	public static <T> IntList discretization(Iterable<T> list, ToIntFunction<T> retriever) {
+		if (retriever == null) retriever = Helpers.cast((ToIntFunction<Number>) Number::intValue);
 
 		IntList out = new IntList(list instanceof Collection ? ((Collection<T>) list).size() : 10);
 		Int2IntMap map = new Int2IntMap();
-		for (T t : list) out.add(map.putIntIfAbsent(retriver.applyAsInt(t), map.size()));
+		for (T t : list) out.add(map.putIntIfAbsent(retriever.applyAsInt(t), map.size()));
 		return out;
 	}
 
-	public static int clamp(int val, int min, int max) {
-		return val < min ? min : val > max ? max : val;
-	}
-	public static long clamp(long val, long min, long max) {
-		return val < min ? min : val > max ? max : val;
-	}
-	public static double clamp(double val, double min, double max) {
-		return val < min ? min : val > max ? max : val;
-	}
-
-	/**
-	 * 投影点
-	 *
-	 * @param v 还是容器
-	 */
-	public static Vec3d project(Vec3d point, Vec3d line, Vec3d v) {
-		v.set(point)
-		 // 1. Point和Line所在的平面的法线
-		 .cross(line)
-		 // 2. 与Line垂直和(法线垂直 => 平面内)的向量
-		 .cross(line);
-
-		double B = (line.x * point.y / line.y - point.x) / (v.x - line.x * v.y / line.y);
-		return (Vec3d) v.mul(B).add(point);
-	}
-
-	public static boolean nearEps(double d1, double d2, double diff) {
-		return Math.abs(d1 - d2) <= diff;
-	}
+	public static int clamp(int val, int min, int max) { return val < min ? min : val > max ? max : val; }
+	public static long clamp(long val, long min, long max) { return val < min ? min : val > max ? max : val; }
+	public static double clamp(double val, double min, double max) { return val < min ? min : val > max ? max : val; }
 
 	/**
 	 * @see #interpolate(double, double, double, double, double)
@@ -227,15 +199,7 @@ public abstract class MathUtils {
 	public static float sin(float value) {
 		return (float) sin((double) value);
 	}
-	/**
-	 * 使用切比雪夫多项式快速计算sin
-	 * <br>
-	 * 精度1e-6
-	 *
-	 * @param value radian
-	 *
-	 * @return sin value
-	 */
+	/** 精度1e-6 */
 	public static double sin(double value) {
 		if (value >= 0) {
 			if (value <= HALF_PI) {
@@ -291,7 +255,7 @@ public abstract class MathUtils {
         return x;
     }
 
-    /*public static double invSqrt(double x) {
+    private static double invSqrt(double x) {
         double halfX = 0.5f * x;
 
         long i = Double.doubleToRawLongBits(x);
@@ -304,7 +268,7 @@ public abstract class MathUtils {
         x = x * (1.5f - halfX * x * x);
 
         return x;
-    }*/
+    }
 
 	public static float sqrt(float x) {
 		if (x < 0) throw new IllegalArgumentException("Must be non-negative");
@@ -315,16 +279,14 @@ public abstract class MathUtils {
 	public static int average(int[] values) {
 		if (values == null || values.length == 0) return 0;
 		int sum = 0;
-		for (int v : values)
-			sum += v;
+		for (int v : values) sum += v;
 		return sum / values.length;
 	}
 
 	public static long average(long[] values) {
 		if (values == null || values.length == 0) return 0L;
 		long sum = 0L;
-		for (long v : values)
-			sum += v;
+		for (long v : values) sum += v;
 		return sum / values.length;
 	}
 
@@ -349,4 +311,35 @@ public abstract class MathUtils {
 		return min + rand.nextInt(max - min + 1);
 	}
 
+	public static int Log2(int value) { return value == 0 ? 0 : Integer.numberOfLeadingZeros(value)^31; }
+	public static int Log2(long value) { return value == 0 ? 0 : Long.numberOfLeadingZeros(value)^31; }
+
+	// 神奇的德布鲁因序列
+	// https://halfrost.com/go_s2_de_bruijn/
+
+	private static final byte[] DeBruijnLogTable = {
+		 0,  9,  1, 10, 13, 21,  2, 29,
+		11, 14, 16, 18, 22, 25,  3, 30,
+		 8, 12, 20, 28, 15, 17, 24,  7,
+		19, 27, 23,  6, 26,  5,  4, 31
+	};
+	private static int MyLog2(int value) {
+		value |= value >>>  1;
+		value |= value >>>  2;
+		value |= value >>>  4;
+		value |= value >>>  8;
+		value |= value >>> 16;
+
+		// fast and no branching 0 -> 0
+		return DeBruijnLogTable[(value * 0x07C4ACDD) >>> 27];
+	}
+	private static int MyLeadingZeroCount(int v) { return v == 0 ? 32 : MyLog2(v); }
+
+	private static final byte[] DeBruijnTrailingZeroTable = {
+		 0,  1, 28,  2, 29, 14, 24, 3,
+		30, 22, 20, 15, 25, 17,  4, 8,
+		31, 27, 13, 23, 21, 19, 16, 7,
+		26, 12, 18,  6, 11,  5, 10, 9
+	};
+	private static int MyTrailingZeroCount(int v) { return v == 0 ? 32 : DeBruijnTrailingZeroTable[((v & -v) * 0x077CB531) >>> 27]; }
 }

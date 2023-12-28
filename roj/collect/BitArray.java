@@ -1,5 +1,6 @@
 package roj.collect;
 
+import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 
 import java.util.Arrays;
@@ -189,8 +190,8 @@ public class BitArray {
 
 	public int[] getInternal() { return data; }
 	public int[] toIntArray() {
+		if (length == 0) return ArrayCache.INTS;
 		int[] out = new int[length];
-		if (length == 0) return out;
 
 		int i = 0, bitPos = 0;
 		long d = data[i]&0xFFFFFFFFL;

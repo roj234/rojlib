@@ -1,10 +1,9 @@
 package roj.asm.tree.attr;
 
 import roj.asm.Parser;
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstUTF;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstUTF;
 import roj.asm.tree.RawNode;
-import roj.asm.util.AttributeList;
 import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
 

@@ -7,7 +7,6 @@ import roj.mildwind.type.JsObject;
 import roj.mildwind.type.Type;
 import roj.mildwind.util.ScriptException;
 import roj.text.TextUtil;
-import sun.misc.Unsafe;
 
 import java.lang.reflect.Array;
 import java.util.Iterator;
@@ -30,21 +29,12 @@ public final class JsJavaArray implements JsObject {
 
 	public JsJavaArray(Object arr) {
 		this.arr = arr;
-		type = FieldInfo.simpleType(arr.getClass());
-		objectType = arr.getClass().getComponentType();
+		Class<?> arrayClass = arr.getClass();
+		type = FieldInfo.getType(arrayClass);
+		objectType = arrayClass.getComponentType();
+		base = u.arrayBaseOffset(arrayClass);
+		scale = u.arrayIndexScale(arrayClass);
 		length = Array.getLength(arr);
-
-		switch (type) {
-			case 0: base = Unsafe.ARRAY_BOOLEAN_BASE_OFFSET; scale = Unsafe.ARRAY_BOOLEAN_INDEX_SCALE; break;
-			case 1: base = Unsafe.ARRAY_BYTE_BASE_OFFSET;    scale = Unsafe.ARRAY_BYTE_INDEX_SCALE; break;
-			case 2: base = Unsafe.ARRAY_SHORT_BASE_OFFSET;   scale = Unsafe.ARRAY_SHORT_INDEX_SCALE; break;
-			case 3: base = Unsafe.ARRAY_CHAR_BASE_OFFSET;    scale = Unsafe.ARRAY_CHAR_INDEX_SCALE; break;
-			case 4: base = Unsafe.ARRAY_INT_BASE_OFFSET;     scale = Unsafe.ARRAY_INT_INDEX_SCALE; break;
-			case 5: base = Unsafe.ARRAY_LONG_BASE_OFFSET;    scale = Unsafe.ARRAY_LONG_INDEX_SCALE; break;
-			case 6: base = Unsafe.ARRAY_FLOAT_BASE_OFFSET;   scale = Unsafe.ARRAY_FLOAT_INDEX_SCALE; break;
-			case 7: base = Unsafe.ARRAY_DOUBLE_BASE_OFFSET;  scale = Unsafe.ARRAY_DOUBLE_INDEX_SCALE; break;
-			default:base = Unsafe.ARRAY_OBJECT_BASE_OFFSET;  scale = Unsafe.ARRAY_OBJECT_INDEX_SCALE; break;
-		}
 	}
 
 	public Type type() { return Type.ARRAY; }

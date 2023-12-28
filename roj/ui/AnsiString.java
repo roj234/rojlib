@@ -14,15 +14,15 @@ import java.util.List;
  * @since 2023/11/20 0020 1:35
  */
 public class AnsiString {
-	private final String value;
+	private final CharSequence value;
 	private int fgColor, bgColor;
 	private short flag;
 
 	private List<AnsiString> extra = Collections.emptyList();
 
-	public AnsiString(String value) { this.value = value; }
+	public AnsiString(CharSequence value) { this.value = value; }
 	public AnsiString(AnsiString copy) { this(copy, copy.value); }
-	public AnsiString(AnsiString copy, String altValue) {
+	public AnsiString(AnsiString copy, CharSequence altValue) {
 		this.value = altValue;
 		this.fgColor = copy.fgColor;
 		this.bgColor = copy.bgColor;
@@ -31,9 +31,20 @@ public class AnsiString {
 	}
 
 	public CharList writeAnsi(CharList sb) {
-		writeSGI(sb);
-		sb.append(value);
-		for (int i = 0; i < extra.size(); i++)
+		int i = 0;
+		while (true) {
+			writeSGI(sb);
+			i = TextUtil.gAppendToNextCRLF(value, i, sb);
+			if (i < value.length()) sb.append('\n');
+			else break;
+		}
+
+		if (i > 0 && value.charAt(i-1) == '\n') {
+			writeSGI(sb);
+			sb.append('\n');
+		}
+
+		for (i = 0; i < extra.size(); i++)
 			extra.get(i).writeAnsi(sb);
 		return sb;
 	}
@@ -56,26 +67,26 @@ public class AnsiString {
 		flat(flat);
 		List<AnsiString> out = new SimpleList<>();
 
-		int prevI = 0;
-		for (int i = 0; i < flat.size(); i++) {
-			String v = flat.get(i).value;
-			if (v.indexOf('\n') >= 0) {
-				List<String> lines = TextUtil.split(v, '\n');
-
-				List<AnsiString> extra = new SimpleList<>();
-				for (int j = prevI+1; j < i; j++) {
-					extra.add(new AnsiString(flat.get(j)));
-				}
-				extra.add(new AnsiString(flat.get(i), lines.get(0)));
-
-				AnsiString e = new AnsiString(flat.get(prevI));
-				out.add(e);
-				e.extra = extra;
-
-				for (int j = 0; j < lines.size(); j++)
-					out.add(new AnsiString(flat.get(i), lines.get(j)));
+		AnsiString currentLine = flat.get(0);
+		for (int i = 1; i < flat.size(); i++) {
+			CharSequence v = flat.get(i).value;
+			if (TextUtil.gIndexOf(v, '\n') < 0) {
+				currentLine.append(flat.get(i));
+				continue;
 			}
+
+			CharList sb = new CharList();
+			int j = 0;
+			do {
+				sb.clear();
+				j = TextUtil.gAppendToNextCRLF(v, j, sb);
+				out.add(currentLine = new AnsiString(flat.get(i), sb.append('\n').toString()));
+			} while (j < v.length());
+
+			if (v.charAt(j-1) == '\n') out.add(currentLine = new AnsiString(flat.get(i), ""));
 		}
+
+		out.add(currentLine);
 		return out;
 	}
 	public AnsiString writeLimited(CharList sb, MutableInt maxWidth, boolean ansi) {
@@ -87,7 +98,7 @@ public class AnsiString {
 				int w = CLIUtil.getCharWidth(value.charAt(i));
 				if (width+w > maxWidth.value) {
 					sb.append(value, 0, i);
-					return new AnsiString(this, value.substring(i));
+					return new AnsiString(this, value.subSequence(i, value.length()));
 				}
 			}
 		} else {

@@ -27,8 +27,6 @@ public class TextUtil {
 		DefaultOutputCharset = property == null ? Charset.defaultCharset() : Charset.forName(property);
 	}
 
-	public static final MyBitSet HEX = MyBitSet.from("0123456789ABCDEFabcdef");
-
 	public static Map<String, String> parseLang(CharSequence content) {
 		MyHashMap<String, String> map = new MyHashMap<>();
 		if (content == null) return map;
@@ -64,6 +62,8 @@ public class TextUtil {
 		return map;
 	}
 
+	public static final MyBitSet HEX = MyBitSet.from("0123456789ABCDEFabcdef");
+
 	public static String shuffle(String in) {
 		char[] arr = IOUtil.getSharedCharBuf().append(in).list;
 		Random r = new Random();
@@ -83,12 +83,9 @@ public class TextUtil {
 		return new String(arr, 0, name.length());
 	}
 
+	@Deprecated
 	public static CharList repeat(int num, char ch) {
-		if (num <= 0) return new CharList();
-		CharList sb = new CharList(num);
-		Arrays.fill(sb.list, ch);
-		sb.setLength(num);
-		return sb;
+		return new CharList().padEnd(ch, num);
 	}
 
 	// 8bits: ⣿ 每个点代表一位
@@ -195,8 +192,8 @@ public class TextUtil {
 	 * char to (ascii) number it represents
 	 */
 	public static int c2i(char c) {
-		if (c < 0x30 || c > 0x39) return -1;
-		return c-0x30;
+		if (c < '0' || c > '9') return -1;
+		return c-'0';
 	}
 
 	/**
@@ -519,13 +516,11 @@ public class TextUtil {
 		return maxs[maxs.length - 1] - s.charAt(k-1) >= (negative?0:1);
 	}
 
-	public static String toFixed(double d) {
-		return toFixed(d, 5);
-	}
-
+	public static String toFixed(double d) { return toFixed(d, 5); }
+	public static String toFixed(double d, int fract) { return toFixed(new StringBuilder(), d, fract).toString(); }
 	// 保留n位小数
-	public static String toFixed(double d, int fract) {
-		StringBuilder sb = new StringBuilder().append(d);
+	public static StringBuilder toFixed(StringBuilder sb, double d, int fract) {
+		sb.append(d);
 		int dot = sb.lastIndexOf(".");
 
 		int ex = dot+fract+1;
@@ -535,7 +530,7 @@ public class TextUtil {
 			if (fract == 0) ex--;
 			sb.setLength(ex);
 		}
-		return sb.toString();
+		return sb;
 	}
 
 	public static String toFixedLength(double d, int valid) {
@@ -553,73 +548,56 @@ public class TextUtil {
 	// endregion
 	// region Pretty print
 
-	public static String dumpBytes(byte[] b) {
-		return dumpBytes(new StringBuilder(), b, 0, b.length).toString();
-	}
-	public static String dumpBytes(byte[] b, int off, int len) {
-		return dumpBytes(new StringBuilder(), b, off, len).toString();
-	}
-	public static StringBuilder dumpBytes(StringBuilder sb, byte[] b, int off, int len) {
-		if (b.length - off < len) {
-			len = b.length - off;
-			if (len <= 0) {
-				off = 0;
-				len = b.length;
-			}
-		}
-		if (len <= 0) return sb;
-		int delta = off & 15;
-		if (delta != 0) {
-			_off(sb, off & ~15);
-			int x = delta;
-			while (x-- > 0) {
-				sb.append("  ");
-				if ((x & 1) != 0) sb.append(' ');
-			}
+	public static String dumpBytes(byte[] b) { return dumpBytes(new CharList(), b, 0, b.length).toStringAndFree(); }
+	public static String dumpBytes(byte[] b, int off, int len) { return dumpBytes(new CharList(), b, off, len).toStringAndFree(); }
+	public static CharList dumpBytes(CharList sb, byte[] b, int off, final int len) {
+		if (len <= off) return sb;
+
+		int prefix = Integer.toHexString(off+len-1).length();
+
+		int rem = off & 15;
+		if (rem != 0) {
+			_off(sb, off & ~15, prefix);
+			sb.padEnd(' ', (rem << 1) + (rem >> 1));
 		} else {
-			_off(sb, off);
+			_off(sb, off, prefix);
 		}
+
 		int d = 0;
 		while (true) {
 			sb.append(b2h((b[off] & 0xFF) >>> 4)).append(b2h(b[off++] & 0xf));
-			d++;
-			if (--len == 0) {
-				sb.append(" ");
 
-				int rem = 16 - d;
-				rem = (rem << 1) + (rem >> 1) + 1;
-				for (int i = 0; i < rem; i++) sb.append(" ");
+			if (off == len) {
+				rem = 16 + d - off;
+				sb.padEnd(' ', (rem << 1) + (rem >> 1) + 2);
 
-				off -= d;
-				while (d-- > 0) {
-					int j = b[off++] & 0xFF;
+				for (int i = d; i < off; i++) {
+					int j = b[i] & 0xFF;
 					sb.append(isPrintableAscii(j) ? (char) j : '.');
 				}
 				break;
 			}
-			if ((off & 1) == 0) sb.append(' ');
-			if ((off & 15) == 0) {
-				sb.append(" ");
-				off -= 16;
-				d = 0;
-				for (int i = 0; i < 16; i++) {
-					int j = b[off++] & 0xFF;
-					sb.append(delta-- > 0 ? ' ' : isPrintableAscii(j) ? (char) j : '.');
+
+			if ((off & 1) == 0) {
+				sb.append(' ');
+
+				if ((off & 15) == 0) {
+					sb.append(' ');
+					d = off;
+					for (int i = 16; i > 0; i--) {
+						int j = b[off-i] & 0xFF;
+						sb.append(rem-- > 0 ? ' ' : isPrintableAscii(j) ? (char) j : '.');
+					}
+					_off(sb, off, prefix);
 				}
-				_off(sb, off);
 			}
 		}
 
 		return sb;
 	}
-
-	private static void _off(StringBuilder sb, int v) {
-		sb.append("\n0x");
-		String s = Integer.toHexString(v);
-		for (int k = 7 - s.length(); k >= 0; k--) {
-			sb.append('0');
-		}
-		sb.append(s).append("  ");
+	private static void _off(CharList sb, int off, int prefix) {
+		String offStr = Integer.toHexString(off);
+		sb.append("\n0x").padEnd('0', prefix-offStr.length()).append(offStr).append("  ");
 	}
 
 	public static String deepToString(Object o) {
@@ -974,7 +952,7 @@ public class TextUtil {
 		Iterator<?> itr = split.iterator();
 		if (!itr.hasNext()) return "";
 
-		CharList tmp = IOUtil.ddLayeredCharBuf();
+		CharList tmp = new CharList();
 		while (true) {
 			tmp.append(itr.next());
 			if (!itr.hasNext()) break;

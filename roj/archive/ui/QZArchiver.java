@@ -1,5 +1,6 @@
 package roj.archive.ui;
 
+import roj.archive.ArchiveConstants;
 import roj.archive.qz.*;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.collect.HashBiMap;
@@ -49,7 +50,6 @@ public class QZArchiver {
 	public File input;
 	public boolean storeFolder, storeMT, storeCT, storeAT, storeAttr;
 	public int threads;
-	public long memoryLimit;
 	public boolean autoSolidSize;
 	public long solidSize, splitSize;
 	public boolean compressHeader;
@@ -73,7 +73,7 @@ public class QZArchiver {
 	private final List<QZEntry> empties = new SimpleList<>();
 	private boolean firstIsUncompressed;
 
-	private static final MyHashSet<String> UNCOMPRESSED = new MyHashSet<>("7z", "rar", "xz", "txz", "lzma", "bz2", "bzip2", "tbz", "tbz2", "gz", "gzip", "esd", "wim");
+	private static final MyHashSet<String> UNCOMPRESSED = ArchiveConstants.INCOMPRESSIBLE_FILE_EXT;
 	private static final MyHashSet<String> EXECUTABLE_X86 = new MyHashSet<>("exe", "dll", "sys", "so");
 
 	public long prepare() throws IOException {
@@ -120,22 +120,7 @@ public class QZArchiver {
 			callback.accept(path);
 		} else {
 			prefix[0] = path.getAbsolutePath().length()+1;
-			Files.walkFileTree(path.toPath(), new SimpleFileVisitor<Path>() {
-				boolean next;
-				@Override
-				public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-					if (storeFolder) {
-						if (!next) next = true;
-						else emptyOrFolder.add(dir.toFile());
-					}
-					return FileVisitResult.CONTINUE;
-				}
-				@Override
-				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-					callback.accept(file.toFile());
-					return FileVisitResult.CONTINUE;
-				}
-			});
+			traverseFolder(path, callback, emptyOrFolder);
 		}
 
 		File out = new File(outputFolder, outputName.concat(splitSize == 0 ? "" : ".001"));
@@ -247,6 +232,28 @@ public class QZArchiver {
 		return chunkSize;
 	}
 
+	/**
+	 * 自定义文件处理函数
+	 */
+	protected void traverseFolder(File path, Consumer<File> callback, List<File> emptyOrFolder) throws IOException {
+		Files.walkFileTree(path.toPath(), new SimpleFileVisitor<Path>() {
+			boolean next;
+			@Override
+			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+				if (storeFolder) {
+					if (!next) next = true;
+					else emptyOrFolder.add(dir.toFile());
+				}
+				return FileVisitResult.CONTINUE;
+			}
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+				callback.accept(file.toFile());
+				return FileVisitResult.CONTINUE;
+			}
+		});
+	}
+
 	private QZCoder[] getBcjCoder(QzAES qzAes, QZCoder lzma2) {
 		if (useBCJ2) {
 			// 需要全部加密么？
@@ -332,7 +339,7 @@ public class QZArchiver {
 	private void addBlock(QZCoder[] coders, List<Consumer<QZWriter>> tmpa, List<QZEntry> tmpb, long size) {
 		WordBlockAppend block = new WordBlockAppend();
 		block.coders = coders;
-		block.data = tmpa.toArray(Helpers.cast(new Consumer<?>[tmpa.size()]));
+		block.data = Helpers.cast(tmpa.toArray(new Consumer<?>[tmpa.size()]));
 		block.file = tmpb.toArray(new QZEntry[tmpb.size()]);
 		block.size = size;
 		appends.add(block);
@@ -435,8 +442,8 @@ public class QZArchiver {
 			}
 
 			pool.pushTask(() -> {
-				try (QZArchive _in = oldArchive.parallel()) {
-					try (QZWriter _out = writer.parallel()) {
+				try (QZReader _in = oldArchive.parallel()) {
+					try (QZWriter _out = parallel(writer)) {
 						_out.setCodec(coders);
 
 						List<QZEntry> value = entry.getValue();
@@ -483,7 +490,7 @@ public class QZArchiver {
 
 		for (WordBlockAppend task : appends) {
 			pool.pushTask(() -> {
-				try (QZWriter writer1 = writer.parallel()) {
+				try (QZWriter writer1 = parallel(writer)) {
 					writeBlock(bar, task, writer1);
 				}
 				if (bar != null) bar.setName("3/4 压缩("+blockCompleted.incrementAndGet()+"/"+appends.size()+")");
@@ -513,6 +520,10 @@ public class QZArchiver {
 		writer.close();
 		if (bar != null) bar.end("压缩成功");
 		boolean b = tmp.renameTo(new File(outputFolder, outputName));
+	}
+
+	private QZWriter parallel(QZFileWriter qfw) throws IOException {
+		return cacheFolder == null ? qfw.parallel() : qfw.parallel(new FileSource(File.createTempFile("qzx-", ".bin", cacheFolder)));
 	}
 
 	private void writeBlock(EasyProgressBar bar, WordBlockAppend block, QZWriter writer) throws IOException {

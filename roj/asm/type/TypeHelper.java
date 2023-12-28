@@ -32,13 +32,7 @@ public final class TypeHelper {
 		}
 	}
 
-	public static List<Type> parseMethod(String desc) {
-		List<Type> params = new SimpleList<>();
-		parseMethod(desc, params);
-		return params;
-	}
-
-	// 支持field，因为 1 > -1 and -1+1 == 0 (see line 53)
+	public static List<Type> parseMethod(String desc) { List<Type> p = new SimpleList<>(); parseMethod(desc, p); return p; }
 	@SuppressWarnings("fallthrough")
 	public static void parseMethod(String desc, List<Type> params) {
 		int index = desc.indexOf(')');
@@ -140,9 +134,7 @@ public final class TypeHelper {
 	/**
 	 * 转换方法type为字符串
 	 */
-	public static String getMethod(List<Type> list) {
-		return getMethod(list, null);
-	}
+	public static String getMethod(List<Type> list) { return getMethod(list, null); }
 	public static String getMethod(List<Type> list, String prev) {
 		CharList sb = IOUtil.getSharedCharBuf().append('(');
 
@@ -166,9 +158,7 @@ public final class TypeHelper {
 	/**
 	 * 转换class为字段的asm type
 	 */
-	public static String class2asm(Class<?> clazz) {
-		return class2asm(IOUtil.getSharedCharBuf(), clazz).toString();
-	}
+	public static String class2asm(Class<?> clazz) { return class2asm(IOUtil.getSharedCharBuf(), clazz).toString(); }
 	public static CharList class2asm(CharList sb, Class<?> clazz) {
 		Class<?> tmp;
 		while ((tmp = clazz.getComponentType()) != null) {
@@ -270,7 +260,6 @@ public final class TypeHelper {
 		}
 		return dehumanize0(out, sb.append(')')).toString();
 	}
-
 	private static CharList dehumanize0(CharSequence z, CharList sb) {
 		if (z.length() == 0) return sb;
 		CharList sb1 = new CharList().append(z);

@@ -3,7 +3,6 @@ package roj.reflect;
 import roj.asm.tree.ConstantData;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
 import roj.asm.visitor.CodeWriter;
 
 import java.lang.reflect.Method;
@@ -27,7 +26,7 @@ public class Proxy {
 		int fid = data.newField(0, "$proxy", new Type(itfStr));
 		data.npConstructor();
 
-		CodeWriter c = data.newMethod(AccessFlag.PUBLIC | AccessFlag.FINAL, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
+		CodeWriter c = data.newMethod(ACC_PUBLIC | ACC_FINAL, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
 		c.visitSize(3, 2);
 
 		c.one(ALOAD_1);
@@ -65,7 +64,7 @@ public class Proxy {
 				String desc = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
 				if (data.getMethod(m.getName(), desc) >= 0) continue;
 
-				CodeWriter c = data.newMethod(AccessFlag.PUBLIC | AccessFlag.FINAL, m.getName(), desc);
+				CodeWriter c = data.newMethod(ACC_PUBLIC | ACC_FINAL, m.getName(), desc);
 				int s = TypeHelper.paramSize(desc)+1;
 				c.visitSize(s,s);
 				c.one(ALOAD_0);

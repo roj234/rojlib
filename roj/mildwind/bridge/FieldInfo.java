@@ -1,11 +1,14 @@
 package roj.mildwind.bridge;
 
+import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.mildwind.JsContext;
 import roj.mildwind.type.JsBool;
 import roj.mildwind.type.JsNull;
 import roj.mildwind.type.JsObject;
+
+import java.lang.reflect.Field;
 
 import static roj.reflect.ReflectionUtils.u;
 
@@ -14,11 +17,17 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2023/6/22 0022 1:05
  */
 final class FieldInfo {
-	int type;
-	long off;
-	Class<?> objectType;
+	private final int type;
+	private final long off;
+	private final Class<?> objectType;
 
-	public static int simpleType(Class<?> klass) {
+	FieldInfo(Field field) {
+		this.objectType = field.getType();
+		this.off = (field.getModifiers()&Opcodes.ACC_STATIC) == 0 ? u.objectFieldOffset(field) : u.staticFieldOffset(field);
+		this.type = getType(objectType);
+	}
+
+	public static int getType(Class<?> klass) {
 		switch (TypeHelper.class2type(klass).type) {
 			case Type.BOOLEAN: return 0;
 			case Type.BYTE: return 1;
@@ -29,10 +38,10 @@ final class FieldInfo {
 			case Type.FLOAT: return 6;
 			case Type.DOUBLE: return 7;
 			default: // no default actually
-			case Type.CLASS: return klass.isAssignableFrom(CharSequence.class) ? 9 : 8;
+			case Type.CLASS: return klass.isAssignableFrom(CharSequence.class) ? 8 : 9;
 		}
 	}
-	
+
 	public final JsObject get(Object obj) {
 		switch (type) {
 			case 0: return u.getBoolean(obj, off) ? JsBool.TRUE : JsBool.FALSE;

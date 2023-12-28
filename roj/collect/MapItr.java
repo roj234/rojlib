@@ -12,7 +12,7 @@ import static roj.collect.AbstractIterator.*;
  * @author Roj234
  * @since 2020/8/14 17:06
  */
-public class MapItr<T extends _Generic_Entry<T>> {
+public class MapItr<T extends _Generic_Entry> {
 	public T obj;
 	int stage = INITIAL;
 
@@ -45,13 +45,13 @@ public class MapItr<T extends _Generic_Entry<T>> {
 		remover.__remove(t);
 	}
 
-	private final T[] entries;
+	private _Generic_Entry[] entries;
 	private final _Generic_Map<T> remover;
 	private int i;
 	private Iterator<T> itr;
 
 	public void reset() {
-		checkConcMod();
+		entries = Helpers.cast(remover.__entries());
 		if (entries == null) stage = ENDED;
 		else {
 			obj = null;
@@ -61,18 +61,19 @@ public class MapItr<T extends _Generic_Entry<T>> {
 	}
 
 	MapItr(_Generic_Map<T> remover) {
-		this.entries = Helpers.cast(remover.__entries());
+		this.entries = remover.__entries();
 		this.remover = remover;
 
 		if (entries == null) stage = ENDED;
 	}
-	MapItr(_Generic_Entry<?>[] entries) {
-		this.entries = Helpers.cast(entries);
+	MapItr(_Generic_Entry[] entries) {
+		this.entries = entries;
 		this.remover = null;
 
 		if (entries == null) stage = ENDED;
 	}
 
+	@SuppressWarnings("unchecked")
 	private boolean computeNext() {
 		checkConcMod();
 
@@ -85,9 +86,9 @@ public class MapItr<T extends _Generic_Entry<T>> {
 			if (obj == null) {
 				while (true) {
 					if (i >= entries.length) return false;
-					obj = entries[i++];
+					obj = (T) entries[i++];
 					if (obj != null) {
-						itr = obj.__iterator();
+						itr = (Iterator<T>) obj.__iterator();
 						if (itr != null) {
 							if (itr.hasNext()) {
 								obj = itr.next();
@@ -99,7 +100,7 @@ public class MapItr<T extends _Generic_Entry<T>> {
 				}
 			}
 
-			obj = obj.__next();
+			obj = (T) obj.__next();
 			if (obj != null) return true;
 		}
 	}

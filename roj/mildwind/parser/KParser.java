@@ -1,7 +1,7 @@
 package roj.mildwind.parser;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
-import roj.asm.util.TryCatchEntry;
+import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.Segment;
@@ -409,7 +409,7 @@ public class KParser implements ParseContext {
 		Word w = wr.next();
 		if (w.type() != Word.LITERAL) {
 			// no anonymous not in expr
-			fireError(w, "unexpected:" + w.val() + ":type.literal");
+			fireError(w, "unexpected:"+w.val()+":type.literal");
 			wr.retractWord();
 			return;
 		} else {

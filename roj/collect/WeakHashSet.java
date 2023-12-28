@@ -22,7 +22,7 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _Gener
 
 	protected final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 
-	public static class Entry extends WeakReference<Object> implements _Generic_Entry<Entry> {
+	public static class Entry extends WeakReference<Object> implements _Generic_Entry {
 		public Entry(Object key, ReferenceQueue<Object> queue) {
 			super(key, queue);
 			this.hash = System.identityHashCode(key);
@@ -73,7 +73,7 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _Gener
 	@Override
 	public int size() { doEvict(); return size; }
 
-	public final _Generic_Entry<?>[] __entries() { return entries; }
+	public final _Generic_Entry[] __entries() { return entries; }
 	public final void __remove(Entry entry) { remove(entry.get()); }
 
 	public void resize() {

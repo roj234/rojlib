@@ -28,8 +28,8 @@ final class Std implements Expression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) {
-		if (type == 1) return JsContext.context().root;
+	public JsObject compute(JsContext ctx) {
+		if (type == 1) return ctx.root;
 		return JsNull.UNDEFINED;
 	}
 

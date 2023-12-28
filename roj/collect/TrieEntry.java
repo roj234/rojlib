@@ -11,7 +11,7 @@ import java.util.Iterator;
  * @author Roj234
  * @since 2020/11/9 23:10
  */
-public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Generic_Entry<TrieEntry> {
+public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Generic_Entry {
 	final char c;
 	TrieEntry(char ch) { this.c = ch; }
 
@@ -93,7 +93,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 
 	@Nonnull
 	@Override
-	public final Iterator<TrieEntry> iterator() { return new EntryItr<>(entries); }
+	public final Iterator<TrieEntry> iterator() { return new _Generic_EntryItr<>(entries); }
 
 	public void faster() {
 		if (size > 1) {

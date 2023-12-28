@@ -1,6 +1,6 @@
 package roj.asmx.nixim;
 
-import roj.asm.util.AccessFlag;
+import roj.asm.Opcodes;
 
 /**
  * @author Roj234
@@ -47,7 +47,7 @@ public class Pcd {
 	@Override
 	public String toString() {
 		boolean m = desc.startsWith("(");
-		return AccessFlag.toString(mode&0xFF, m?AccessFlag.TS_METHOD:AccessFlag.TS_FIELD)+
+		return Opcodes.showModifiers(mode&0xFF, m? Opcodes.ACC_SHOW_METHOD : Opcodes.ACC_SHOW_FIELD)+
 			(m?"方法":"字段")+" 0x"+Integer.toHexString(mode&0xFF00)+
 			"["+name+(mapName!=null&&!mapName.equals(name)?(" => "+(mapOwner!=null?mapOwner+'.':"")+mapName):"")+"] "+desc;
 	}

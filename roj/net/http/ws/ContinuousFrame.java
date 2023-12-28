@@ -11,16 +11,14 @@ import roj.util.DynByteBuf;
 final class ContinuousFrame {
 	ContinuousFrame(int data) { this.data = (byte) data; }
 
-	public final byte data;
+	final byte data;
 	int fragments;
 	private DynByteBuf packet;
 	long length;
 
-	public int fragments() { return fragments; }
-	public long length() { return length; }
-	public DynByteBuf payload() { return packet; }
+	DynByteBuf payload() { return packet; }
 
-	public void append(ChannelCtx ctx, DynByteBuf b) {
+	void append(ChannelCtx ctx, DynByteBuf b) {
 		if (packet == null) packet = ctx.allocate(true, b.readableBytes());
 		else if (packet.writableBytes()<b.readableBytes()) packet = BufferPool.expand(packet, b.readableBytes());
 
@@ -29,15 +27,10 @@ final class ContinuousFrame {
 		fragments++;
 	}
 
-	public void clear(ChannelCtx ctx) {
+	void clear() {
 		if (packet != null) {
 			BufferPool.reserve(packet);
 			packet = null;
 		}
-	}
-
-	@Override
-	public String toString() {
-		return "Fragments{" + "data=" + data + ", fragments=" + fragments + ", length=" + length + '}';
 	}
 }

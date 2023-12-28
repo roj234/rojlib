@@ -1,11 +1,11 @@
 package roj.mod.mapping;
 
+import roj.asm.type.Desc;
+import roj.asmx.mapper.Mapping;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.mapper.Mapping;
-import roj.mapper.util.Desc;
 import roj.text.LineReader;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;

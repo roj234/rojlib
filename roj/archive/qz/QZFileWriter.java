@@ -7,14 +7,16 @@ import roj.io.source.FileSource;
 import roj.io.source.MemorySource;
 import roj.io.source.Source;
 import roj.math.MutableInt;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.channels.AsynchronousCloseException;
+import java.nio.file.Files;
 import java.util.List;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
 import java.util.function.IntFunction;
 
@@ -42,65 +44,75 @@ public class QZFileWriter extends QZWriter {
      * 反之，需要则设为true
      * 否则可能会出现该加密没加密或相反
      */
-    public void setCompressHeader(int i) {
-        this.compressHeaderMin = i;
-    }
+    public void setCompressHeader(int i) { compressHeaderMin = i; }
 
     private List<ParallelWriter> parallelWriter;
-    private ReentrantReadWriteLock parallelLock;
 
-    public synchronized QZWriter parallel() throws IOException {
-        if (finished) throw new IllegalStateException("Stream closed");
+    public final QZWriter parallel() throws IOException { return parallel(new MemorySource()); }
+    public synchronized QZWriter parallel(Source cache) throws IOException {
+        if (finished) throw new IOException("Stream closed");
 
-        closeEntry();
         closeWordBlock();
 
-        ParallelWriter pw = new ParallelWriter();
-        if (parallelWriter == null) {
+        if (parallelWriter == null)
             parallelWriter = new SimpleList<>();
-            parallelLock = new ReentrantReadWriteLock();
-        }
+
+        ParallelWriter pw = new ParallelWriter(cache);
         parallelWriter.add(pw);
-        boolean b = parallelLock.readLock().tryLock();
-        if (!b) throw new AsynchronousCloseException();
         return pw;
     }
 
-    private void waitAsyncFinish() {
-        ReentrantReadWriteLock lock = parallelLock;
-        // will not unlock
-        if (lock != null) lock.writeLock().lock();
+    private synchronized void waitAsyncFinish() {
+        while (!parallelWriter.isEmpty()) {
+            try {
+                parallelWriter.wait();
+            } catch (InterruptedException e) {
+                Helpers.athrow(e);
+            }
+        }
     }
 
     private class ParallelWriter extends QZWriter {
-        ParallelWriter() { super(new MemorySource(), QZFileWriter.this); }
+        ParallelWriter(Source s) { super(s, QZFileWriter.this); }
 
         @Override
         public void finish() throws IOException {
             if (finished) return;
             super.finish();
 
-            synchronized (QZFileWriter.this) {
-                if (QZFileWriter.this.parallelWriter.remove(this)) {
-                    end();
-                    parallelLock.readLock().unlock();
+            QZFileWriter that = QZFileWriter.this;
+            synchronized (that) {
+				if (!parallelWriter.remove(this)) throw new AsynchronousCloseException();
+
+                if (s instanceof MemorySource) {
+                    MemorySource s = (MemorySource) this.s;
+                    that.s.write(s.buffer());
+                    ((ByteList)s.buffer())._free();
+                } else {
+                    FileSource s = (FileSource) this.s;
+                    try {
+                        byte[] data = ArrayCache.getByteArray(4096, false);
+                        s.seek(0);
+                        while (true) {
+                            int r = s.read(data);
+                            if (r < 0) break;
+                            that.s.write(data, 0, r);
+                        }
+                    } finally {
+                        s.close();
+                        Files.deleteIfExists(s.getFile().toPath());
+                    }
                 }
-            }
-        }
 
-        void end() throws IOException {
-            QZFileWriter parent = QZFileWriter.this;
+				that.blocks.addAll(blocks);
+				that.files.addAll(files);
+				that.emptyFiles.addAll(emptyFiles);
 
-            MemorySource s = (MemorySource) this.s;
-            parent.s.write(s.buffer());
-            ((ByteList)s.buffer())._free();
+				int[] sum = that.flagSum;
+				for (int i = 0; i < sum.length; i++) sum[i] += flagSum[i];
 
-            parent.blocks.addAll(blocks);
-            parent.files.addAll(files);
-            parent.emptyFiles.addAll(emptyFiles);
-
-            int[] sum = parent.flagSum;
-            for (int i = 0; i < sum.length; i++) sum[i] += flagSum[i];
+				if (parallelWriter.isEmpty()) that.notifyAll();
+			}
         }
     }
 
@@ -255,19 +267,6 @@ public class QZFileWriter extends QZWriter {
             for (long len : b.extraSizes) buf.putVULong(len);
         }
 
-        //buf.write(kCRC);
-        //if (flagSum[8] == blocks.size()) {
-        //    buf.write(1);
-        //} else {
-        //    buf.write(0);
-        //    writeBits(i -> (blocks.get(i).hasCrc&2) != 0, blocks.size(), buf);
-        //}
-        //for (int i = 0; i < blocks.size(); i++) {
-        //    WordBlock b = blocks.get(i);
-        //    if ((b.hasCrc & 2) != 0)
-        //        buf.putIntLE(b.cCrc);
-        //}
-
         buf.write(kEnd);
     }
     private void writeWordBlocks() {
@@ -412,7 +411,8 @@ public class QZFileWriter extends QZWriter {
             buf.put(kEmptyStream).putVUInt(ob.wIndex()).put(ob);
 
             int byteLen = (count.value+7)/8;
-            if (flagSum[1] > 0) {
+            // equals to flagSum[n] > 0
+            if (emptyFile != null) {
                 int extra = byteLen-emptyFile.byteLength();
                 emptyFile.writeBits(buf.put(kEmptyFile).putVUInt(byteLen));
                 while (extra > 0) {
@@ -421,7 +421,7 @@ public class QZFileWriter extends QZWriter {
                 }
             }
 
-            if (flagSum[2] > 0) {
+            if (anti != null) {
                 int extra = byteLen-anti.byteLength();
                 anti.writeBits(buf.put(kAnti).putVUInt(byteLen));
                 while (extra > 0) {

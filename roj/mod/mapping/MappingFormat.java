@@ -1,12 +1,12 @@
 package roj.mod.mapping;
 
+import roj.asm.type.Desc;
+import roj.asm.util.ClassUtil;
+import roj.asmx.mapper.Mapping;
 import roj.collect.*;
 import roj.config.data.CEntry;
 import roj.config.data.CMapping;
 import roj.config.data.Type;
-import roj.mapper.MapUtil;
-import roj.mapper.Mapping;
-import roj.mapper.util.Desc;
 import roj.math.Version;
 import roj.text.LineReader;
 import roj.text.TextUtil;
@@ -230,7 +230,7 @@ public class MappingFormat {
 		for (Desc desc : iterated) ovr.remove(desc.name);
 	}
 	private static void OvrFKRV(Map<Object, String> ovr, Mapping m) {
-		MapUtil U = MapUtil.getInstance();
+		ClassUtil U = ClassUtil.getInstance();
 		Desc md = U.sharedDC;
 		Flippable<String, String> cm = m.getClassMap();
 
@@ -259,7 +259,7 @@ public class MappingFormat {
 	private static void MapParam(Map<Desc, List<String>> params, Mapping tsrgCompile) {
 		Map<String, String> klassRev = tsrgCompile.getClassMap().flip();
 
-		MapUtil u = MapUtil.getInstance();
+		ClassUtil u = ClassUtil.getInstance();
 		Desc md = u.sharedDC;
 
 		for (Map.Entry<Desc, String> entry : tsrgCompile.getMethodMap().entrySet()) {

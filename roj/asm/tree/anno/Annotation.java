@@ -1,7 +1,7 @@
 package roj.asm.tree.anno;
 
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstUTF;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstUTF;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.LinkedMyHashMap;

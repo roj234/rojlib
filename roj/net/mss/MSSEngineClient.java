@@ -2,6 +2,7 @@ package roj.net.mss;
 
 import roj.collect.CharMap;
 import roj.collect.IntMap;
+import roj.concurrent.OperationDone;
 import roj.crypt.HMAC;
 import roj.crypt.KeyAgreement;
 import roj.io.IOUtil;
@@ -12,7 +13,6 @@ import roj.util.DynByteBuf;
 import javax.crypto.Cipher;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
-import java.security.Signature;
 
 /**
  * MSS客户端
@@ -24,7 +24,7 @@ public class MSSEngineClient extends MSSEngine {
 	public MSSEngineClient() {}
 	public MSSEngineClient(SecureRandom rnd) {super(rnd);}
 
-	private static final int HAS_HELLO_RETRY = 0x8;
+	private static final byte HAS_HELLO_RETRY = 0x8;
 
 	@Override
 	public final void switches(int sw) {
@@ -82,7 +82,7 @@ public class MSSEngineClient extends MSSEngine {
 			tx.put(stage==INITIAL? H_CLIENT_HELLO : H_ENCRYPTED_EXTENSION).putMedium(toWrite.readableBytes()).put(toWrite);
 
 			if (stage != INITIAL) {
-				freeTmpBuffer(toWrite);
+				free(toWrite);
 				toWrite = null;
 				stage = HS_DONE;
 			}
@@ -122,7 +122,7 @@ public class MSSEngineClient extends MSSEngine {
 					ext.put(Extension.session, new ByteList(session.id));
 				}
 				if (psc != null) {
-					ByteList tmp = ByteList.allocate(psc.size() << 2);
+					DynByteBuf tmp = heapBuffer(psc.size() << 2);
 					for (IntMap.Entry<MSSPublicKey> entry : psc.selfEntrySet()) {
 						tmp.putInt(entry.getIntKey());
 					}
@@ -137,7 +137,7 @@ public class MSSEngineClient extends MSSEngine {
 				processExtensions(null, ext, 0);
 				Extension.write(ext, ob.putInt(getSupportCertificateType()));
 
-				toWrite = allocateTmpBuffer(ob.readableBytes()).put(ob);
+				toWrite = heapBuffer(ob.readableBytes()).put(ob);
 				stage = SERVER_HELLO;
 
 				int v = ensureWritable(tx, ob.length()+4);
@@ -178,14 +178,10 @@ public class MSSEngineClient extends MSSEngine {
 	//          finished(20),
 	//          key_update(24),
 	//          message_hash(254),
-	static final byte SSL_HANDSHAKE_CLIENT_HELLO = 1, SSL_HANDSHAKE_SERVER_HELLO = 2, SSL_HANDSHAKE_FINISHED = 20,
-		SSL_HANDSHAKE = 22, SSL_DATA = 23;
-	static final byte[] HELLO_RETRY_REQUEST = IOUtil.SharedCoder.get().decodeHex(
-		"CF21AD74E59A6111BE1D8C021E65B891C2A211167ABB8C5E079E09E2C8A8339C");
-	static final byte[] DOWNGRADE_12 = IOUtil.SharedCoder.get().decodeHex(
-		"444F574E47524401");
-	static final byte[] DOWNGRADE_11 = IOUtil.SharedCoder.get().decodeHex(
-		"444F574E47524400");
+	static final byte SSL_HANDSHAKE_CLIENT_HELLO = 1, SSL_HANDSHAKE_SERVER_HELLO = 2, SSL_HANDSHAKE_FINISHED = 20, SSL_HANDSHAKE = 22, SSL_DATA = 23;
+	static final byte[] HELLO_RETRY_REQUEST = IOUtil.SharedCoder.get().decodeHex("CF21AD74E59A6111BE1D8C021E65B891C2A211167ABB8C5E079E09E2C8A8339C");
+	static final byte[] DOWNGRADE_12 = IOUtil.SharedCoder.get().decodeHex("444F574E47524401");
+	static final byte[] DOWNGRADE_11 = IOUtil.SharedCoder.get().decodeHex("444F574E47524400");
 	byte[] serverCookie;
 	public final int handshakeSSL(DynByteBuf out, DynByteBuf in) throws MSSException {
 		// to be filled
@@ -240,7 +236,7 @@ public class MSSEngineClient extends MSSEngine {
 				processExtensions(null, ext, 100);
 				Extension.writeSSL(ext, ob);
 
-				toWrite = allocateTmpBuffer(ob.readableBytes()).put(ob);
+				toWrite = heapBuffer(ob.readableBytes()).put(ob);
 				stage = SERVER_HELLO;
 
 				int v = ensureWritable(out, ob.readableBytes()+4);
@@ -306,7 +302,7 @@ public class MSSEngineClient extends MSSEngine {
 		ffdhe2048 = 0x0100, ffdhe3072 = 0x0101, ffdhe4096 = 0x0102,
 		ffdhe6144 = 0x0103, ffdhe8192 = 0x0104;
 	}
-	
+
 	static class SslExtension {
 		static final char
 		server_name = 0,                             /* RFC 6066 */
@@ -367,35 +363,26 @@ public class MSSEngineClient extends MSSEngine {
 		initKeyDeriver(suite, keyExch.readPublic(rx.slice(rx.readUnsignedShort())));
 		keyExch = null;
 
-		encoder = suite.ciphers.get();
-		decoder = suite.ciphers.get();
+		encoder = suite.cipher.get();
+		decoder = suite.cipher.get();
 
-		encoder.init(Cipher.ENCRYPT_MODE, deriveKey("c2s0", suite.ciphers.getKeySize()), null, getPRNG("c2s"));
-		decoder.init(Cipher.DECRYPT_MODE, deriveKey("s2c0", suite.ciphers.getKeySize()), null, getPRNG("s2c"));
-
-		CharMap<DynByteBuf> extIn;
-		byte[] signRemote;
+		encoder.init(Cipher.ENCRYPT_MODE, deriveKey("c2s0", suite.cipher.getKeySize()), null, getPRNG("c2s"));
+		decoder.init(Cipher.DECRYPT_MODE, deriveKey("s2c0", suite.cipher.getKeySize()), null, getPRNG("s2c"));
 
 		decoder.cryptInline(rx, rx.readableBytes());
-		extIn = Extension.read(rx);
-		int pos = rx.rIndex;
-		signRemote = rx.readBytes(rx.readUnsignedShort());
-
+		CharMap<DynByteBuf> extIn = Extension.read(rx);
 		CharMap<DynByteBuf> extOut = new CharMap<>();
 
 		if (extIn.containsKey(Extension.certificate_request)) {
 			// noinspection all
 			int formats = extIn.remove(Extension.certificate_request).readInt();
 
-			MSSPrivateKey key = getCertificate(extIn, formats); // supported
+			MSSKeyPair key = getCertificate(extIn, formats); // supported
 			if (key == null) return error(NEGOTIATION_FAILED, "client_certificate");
 
-			Signature signer = key.signer(random);
-			signer.update(sharedKey); // challenge
-			byte[] sign = signer.sign();
-
-			byte[] publicKey = key.publicKey();
-			extOut.put(Extension.certificate, ByteList.allocate(publicKey.length+sign.length+2).put(sign.length).put(sign).put(key.format()).put(publicKey));
+			byte[] sign = CipherSuite.getKeyFormat(key.format()).sign(key, random, sharedKey);
+			byte[] publicKey = key.encode();
+			extOut.put(Extension.certificate, heapBuffer(publicKey.length+sign.length+3).putShort(sign.length).put(sign).put(key.format()).put(publicKey));
 		}
 
 		MSSPublicKey key;
@@ -410,10 +397,12 @@ public class MSSEngineClient extends MSSEngine {
 		} else {
 			if ((flag & PSC_ONLY) != 0) return error(NEGOTIATION_FAILED, "pre_shared_certificate");
 			DynByteBuf cert_data = extIn.remove(Extension.certificate);
-			if (cert_data == null) return error(ILLEGAL_PARAM, "certificate");
-			Object o = checkCertificate(cert_data.readUnsignedByte(), cert_data);
-			if (o instanceof Throwable) return error((Throwable) o);
-			key = (MSSPublicKey) o;
+			if (cert_data == null) return error(ILLEGAL_PARAM, "certificate_missing");
+
+			int type = cert_data.readUnsignedByte();
+			if ((getSupportCertificateType() & (1 << type)) == 0) return error(NEGOTIATION_FAILED, "unsupported_certificate_type");
+
+			key = checkCertificate(type, cert_data);
 		}
 		processExtensions(extIn, extOut, 2);
 
@@ -429,16 +418,16 @@ public class MSSEngineClient extends MSSEngine {
 		// client_hello
 		toWrite.rIndex = 5;
 		sign.update(toWrite);
-		freeTmpBuffer(toWrite);
+		free(toWrite);
 		toWrite = null;
 
-		sign.update(rx.slice(inBegin, pos-inBegin));
+		sign.update(rx.slice(inBegin, rx.rIndex-inBegin));
+		byte[] signRemote = rx.readBytes(rx.readUnsignedShort());
 		try {
-			Signature verifier = key.verifier();
-			verifier.update(sign.digestShared());
-			verifier.verify(signRemote);
-		} catch (GeneralSecurityException e) {
-			return error(ILLEGAL_PARAM, "signature");
+			if (!CipherSuite.getKeyFormat(key.format()).verify(key, sign.digestShared(), signRemote))
+				throw OperationDone.INSTANCE;
+		} catch (Exception e) {
+			return error(ILLEGAL_PARAM, "invalid signature");
 		}
 
 		DynByteBuf sessid = extIn.remove(Extension.session);
@@ -458,7 +447,7 @@ public class MSSEngineClient extends MSSEngine {
 			int v = ensureWritable(tx, ob.readableBytes()+4);
 			if (v != 0) {
 				flag |= WRITE_PENDING;
-				toWrite = allocateTmpBuffer(ob.readableBytes()).put(ob);
+				toWrite = heapBuffer(ob.readableBytes()).put(ob);
 				return v;
 			}
 			tx.put(H_ENCRYPTED_EXTENSION).putMedium(ob.readableBytes()).put(ob);

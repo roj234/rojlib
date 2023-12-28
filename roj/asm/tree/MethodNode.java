@@ -1,17 +1,16 @@
 package roj.asm.tree;
 
 import roj.asm.AsmShared;
+import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstUTF;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstUTF;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.attr.MethodParameters.MethodParam;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
-import roj.asm.util.AttributeList;
 import roj.asm.visitor.CodeVisitor;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
@@ -62,7 +61,7 @@ public final class MethodNode extends CNode {
 		if (attributes == null) return this;
 		Parser.parseAttributes(this, cp, attributes, Signature.METHOD);
 
-		if ((attrByName("Code") == null) == (0 == (access & (AccessFlag.ABSTRACT | AccessFlag.NATIVE)))) {
+		if ((attrByName("Code") == null) == (0 == (access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)))) {
 			System.err.println("Method.java:63: Non-abstract " + owner + '.' + name + desc + " missing Code.");
 		}
 
@@ -129,20 +128,21 @@ public final class MethodNode extends CNode {
 	public Type returnType() { return out == null ? out = TypeHelper.parseReturn(rawDesc()) : out; }
 	public void setReturnType(Type ret) { parameters(); out = ret; }
 
-	public String toString() { return toString(new CharList(), null).toStringAndFree(); }
-	public CharList toString(CharList sb, ConstantData owner) {
+	public String toString() { return toString(new CharList(), null, 0).toStringAndFree(); }
+	public CharList toString(CharList sb, ConstantData owner, int prefix) {
 		ConstantPool cp = owner == null ? null : owner.cp;
 
-		Attribute a;
+		Annotations a;
 
-		if (attrByName("Deprecated") != null) sb.append("@Deprecated").append('\n');
+		if (attrByName("Deprecated") != null) sb.padEnd(' ', prefix).append("@Deprecated").append('\n');
 		a = parsedAttr(cp, Attribute.RtAnnotations);
-		if (a != null) sb.append(a).append('\n');
+		if (a != null) a.toString(sb, prefix).append('\n');
 		a = parsedAttr(cp, Attribute.ClAnnotations);
-		if (a != null) sb.append(a).append('\n');
+		if (a != null) a.toString(sb, prefix).append('\n');
 
-		if ((access&AccessFlag.ABSTRACT) == 0 && owner != null && (owner.access&AccessFlag.INTERFACE) != 0) sb.append("default ");
-		AccessFlag.toString(access, AccessFlag.TS_METHOD, sb);
+		sb.padEnd(' ', prefix);
+		if ((access&Opcodes.ACC_ABSTRACT) == 0 && owner != null && (owner.access&Opcodes.ACC_INTERFACE) != 0) sb.append("default ");
+		Opcodes.showModifiers(access, Opcodes.ACC_SHOW_METHOD, sb);
 		if (attrByName("Synthetic") != null) sb.append("/*synthetic*/ ");
 
 		if (!name().equals("<clinit>")) {
@@ -167,7 +167,7 @@ public final class MethodNode extends CNode {
 				LocalVariableTable lvt = code != null ? (LocalVariableTable) code.attrByName("LocalVariableTable") : null;
 				Label ZERO_READONLY = new Label(0);
 
-				int slot = (access&AccessFlag.STATIC) == 0 ? 1 : 0;
+				int slot = (access&Opcodes.ACC_STATIC) == 0 ? 1 : 0;
 				for (int j = 0;;) {
 					IType type = sig != null && sig.values.size() > j ? sig.values.get(j) : in.get(j);
 
@@ -177,7 +177,7 @@ public final class MethodNode extends CNode {
 					String name = null;
 					if (name_a != null) {
 						name = name_a.name;
-						AccessFlag.toString(name_a.flag, AccessFlag.TS_PARAM, sb);
+						Opcodes.showModifiers(name_a.flag, Opcodes.ACC_SHOW_PARAM, sb);
 					}
 					if (name_b != null) name = name_b.name;
 
@@ -197,18 +197,59 @@ public final class MethodNode extends CNode {
 		if (exceptions != null) {
 			sb.append(" throws ");
 			List<String> classes = exceptions.value;
-			for (int i = 0; i < classes.size(); i++) {
+			if (!classes.isEmpty()) for (int i = 0;;) {
 				String clz = classes.get(i);
-				sb.append(clz.substring(clz.lastIndexOf('/') + 1)).append(", ");
+				TypeHelper.toStringOptionalPackage(sb, clz);
+				if (++i == classes.size()) break;
+				sb.append(", ");
 			}
-			sb.delete(sb.length() - 2, sb.length());
 		}
 
 		AnnotationDefault def = parsedAttr(cp, Attribute.AnnotationDefault);
 		if (def != null) sb.append(" default ").append(def.val);
 
-		Object code = parsedAttr(cp, Attribute.Code);
-		if (code != null) sb.append(" {\n").append(code).append('}');
+		XAttrCode code = parsedAttr(cp, Attribute.Code);
+		if (code != null) code.toString(sb.append(" {\n"), prefix+4).padEnd(' ', prefix).append("}\n");
+		else sb.append(';');
+		return sb;
+	}
+
+	public CharList toAsmLang(CharList sb, ConstantPool cp, int prefix) {
+		Annotations a;
+
+		if (attrByName("Deprecated") != null) sb.padEnd(' ', prefix).append(".attr Deprecated {}").append('\n');
+		if (attrByName("Synthetic") != null) sb.padEnd(' ', prefix).append(".attr Synthetic {}").append('\n');
+
+		a = parsedAttr(cp, Attribute.RtAnnotations);
+		if (a != null) a.toString(sb, prefix).append('\n');
+		a = parsedAttr(cp, Attribute.ClAnnotations);
+		if (a != null) a.toString(sb, prefix).append('\n');
+
+		Opcodes.showModifiers(access, Opcodes.ACC_SHOW_METHOD, sb.padEnd(' ', prefix));
+
+		if (!name().equals("<clinit>")) {
+			sb.append(name()).append(' ').append(rawDesc());
+
+			AttrClassList exceptions = parsedAttr(cp, Attribute.Exceptions);
+			if (exceptions != null) {
+				sb.append(" throws ");
+				List<String> classes = exceptions.value;
+				if (!classes.isEmpty()) for (int i = 0;;) {
+					String clz = classes.get(i);
+					sb.append(clz);
+					if (++i == classes.size()) break;
+					sb.append(", ");
+				}
+			}
+
+			AnnotationDefault def = parsedAttr(cp, Attribute.AnnotationDefault);
+			if (def != null) sb.append(" default ").append(def.val);
+		} else {
+			sb.setLength(sb.length()-1);
+		}
+
+		XAttrCode code = parsedAttr(cp, Attribute.Code);
+		if (code != null) code.toAsmLang(sb.append(" {"), prefix+4).append('\n').padEnd(' ', prefix).append("}");
 		else sb.append(';');
 		return sb;
 	}

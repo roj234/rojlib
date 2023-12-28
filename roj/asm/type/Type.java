@@ -1,6 +1,6 @@
 package roj.asm.type;
 
-import roj.asm.OpcodeUtil;
+import roj.asm.Opcodes;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.Helpers;
@@ -149,8 +149,8 @@ public final class Type implements IType, Cloneable {
 	public int getShift() { return (int) MAP[getActualType()-BYTE][3]; }
 	public byte shiftedOpcode(int code) {
 		int shift = getShift();
-		int data = OpcodeUtil.shift(code);
-		if (data >>> 8 <= shift) throw new IllegalStateException(this+" cannot shift "+OpcodeUtil.toString0(code));
+		int data = Opcodes.shift(code);
+		if (data >>> 8 <= shift) throw new IllegalStateException(this+" cannot shift "+ Opcodes.showOpcode(code));
 		return (byte) ((data&0xFF)+shift);
 	}
 
@@ -168,25 +168,22 @@ public final class Type implements IType, Cloneable {
 		return sb.toString();
 	}
 
-	public Class<?> toJavaClass() throws ClassNotFoundException {
-		if (type == CLASS || array != 0) {
-			String cn;
-			if (type == CLASS && array == 0) {
-				cn = owner.replace('/', '.');
-			} else {
-				CharList sb = IOUtil.getSharedCharBuf();
-				toDesc(sb);
-				cn = sb.replace('/', '.').toString();
-			}
+	public String getJavaClassName() {
+		if (isPrimitive()) return null;
 
-			try {
-				return Class.forName(cn, false, null);
-			} catch (Exception e) {
-				return Class.forName(cn, false, Type.class.getClassLoader());
-			}
+		String cn;
+		if (type == CLASS && array == 0) {
+			cn = owner.replace('/', '.');
+		} else {
+			CharList sb = IOUtil.getSharedCharBuf();
+			toDesc(sb);
+			cn = sb.replace('/', '.').toString();
 		}
 
-		switch (type) {
+		return cn;
+	}
+	public Class<?> toJavaClass() throws ClassNotFoundException {
+		switch (getActualType()) {
 			case VOID: return void.class;
 			case BOOLEAN: return boolean.class;
 			case BYTE: return byte.class;
@@ -196,8 +193,14 @@ public final class Type implements IType, Cloneable {
 			case FLOAT: return float.class;
 			case DOUBLE: return double.class;
 			case LONG: return long.class;
+			default:
+				String cn = getJavaClassName();
+				try {
+					return Class.forName(cn, false, null);
+				} catch (Exception e) {
+					return Class.forName(cn, false, Type.class.getClassLoader());
+				}
 		}
-		throw new IllegalArgumentException("?");
 	}
 
 	@Override

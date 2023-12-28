@@ -1,7 +1,7 @@
 package roj.asm.tree.attr;
 
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstUTF;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstUTF;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.TypeHelper;
@@ -10,6 +10,8 @@ import roj.asm.visitor.Label;
 import roj.asm.visitor.XInsnList;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
+import roj.io.IOUtil;
+import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
@@ -78,10 +80,9 @@ public final class LocalVariableTable extends Attribute implements CodeAttribute
 		return null;
 	}
 
-	public String toString() { return toString(null); }
-	public String toString(LocalVariableTable table) {
+	public String toString() { return toString(IOUtil.getSharedCharBuf(), null, 0).toString(); }
+	public CharList toString(CharList sb, LocalVariableTable table, int prefix) {
 		List<Object> a = SimpleList.asModifiableList("名称","类型","槽","从","至",IntMap.UNDEFINED);
-		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < list.size(); i++) {
 			Item v = list.get(i);
 			v = table != null ? table.getSimilar(v) : v;
@@ -92,7 +93,7 @@ public final class LocalVariableTable extends Attribute implements CodeAttribute
 			a.add(v.end==null?"<函数结束>":v.end.getValue());
 			a.add(IntMap.UNDEFINED);
 		}
-		return TextUtil.prettyTable(sb, "    ", a.toArray(), "  ", "  ").toString();
+		return TextUtil.prettyTable(sb, new CharList().padEnd(' ', prefix).toStringAndFree(), a.toArray(), "  ", "  ");
 	}
 	private Item getSimilar(Item lv) {
 		for (int i = 0; i < list.size(); i++) {

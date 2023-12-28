@@ -21,19 +21,12 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 	}
 
 	public static class Entry<V> extends IntMap.Entry<V> {
-		protected Entry(int k, V v) {
-			super(k, v);
-		}
+		protected Entry(int k, V v) { super(k, v); }
+
+		public V setValue(V now) { throw new UnsupportedOperationException(); }
 
 		protected Entry<V> valueNext;
-
-		public V setValue(V now) {
-			throw new UnsupportedOperationException();
-		}
-
-		public Entry<V> __next() {
-			return (Entry<V>) next;
-		}
+		public Entry<V> __next() { return (Entry<V>) next; }
 	}
 
 	protected Entry<?>[] entries, valueEntries;
@@ -102,12 +95,10 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 		else super.putAll(m);
 	}
 
-	public int size() {
-		return size;
-	}
+	public int size() { return size; }
 
 	@Override
-	public _Generic_Entry<?>[] __entries() { return entries; }
+	public _Generic_Entry[] __entries() { return entries; }
 
 	@Override
 	public void __remove(IntMap.Entry<V> vEntry) { removeEntry((Entry<V>) vEntry); }

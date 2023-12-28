@@ -1,13 +1,13 @@
 package roj.mod.mapping;
 
+import roj.asm.type.Desc;
 import roj.asm.type.TypeHelper;
+import roj.asm.util.ClassUtil;
+import roj.asmx.mapper.Mapping;
 import roj.collect.FilterList;
 import roj.collect.SimpleList;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
-import roj.mapper.MapUtil;
-import roj.mapper.Mapping;
-import roj.mapper.util.Desc;
 import roj.math.MutableBoolean;
 import roj.text.LineReader;
 import roj.text.LinedReader;
@@ -37,7 +37,7 @@ public final class OjngMapping extends Mapping {
 	}
 
 	public void readMojangMap(String map, LinedReader slr, List<String> tmp) throws IOException {
-		MapUtil U = MapUtil.getInstance();
+		ClassUtil U = ClassUtil.getInstance();
 
 		String[] currentClass = null;
 

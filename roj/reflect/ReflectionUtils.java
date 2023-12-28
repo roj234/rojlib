@@ -1,8 +1,9 @@
 package roj.reflect;
 
+import roj.ReferenceByPrecompiledClass;
+import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.util.Helpers;
@@ -11,7 +12,6 @@ import sun.misc.Unsafe;
 import javax.annotation.Nonnull;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -22,24 +22,30 @@ import static roj.asm.type.Type.CLASS;
  * @author Roj234
  * @since 2021/6/17 19:51
  */
+@ReferenceByPrecompiledClass
 public final class ReflectionUtils {
-	public static final Unsafe u = getValue(null, Unsafe.class, "theUnsafe");
+	@ReferenceByPrecompiledClass
+	public static final Unsafe u = getUnsafe();
+	private static Unsafe getUnsafe() {
+		try {
+			Field f = Unsafe.class.getDeclaredField("theUnsafe");
+			f.setAccessible(true);
+			return (Unsafe) f.get(null);
+		} catch (IllegalAccessException | NoSuchFieldException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
 	public static long fieldOffset(Class<?> type, String fieldName) {
 		try {
 			Field field = type.getDeclaredField(fieldName);
-			return (field.getModifiers() & AccessFlag.STATIC) == 0 ? u.objectFieldOffset(field) : u.staticFieldOffset(field);
+			ILSecurityManager sm = ILSecurityManager.getSecurityManager();
+			if (sm != null && !sm.checkAccess(field)) throw new SecurityException("access denied");
+			return (field.getModifiers() & Opcodes.ACC_STATIC) == 0 ? u.objectFieldOffset(field) : u.staticFieldOffset(field);
 		} catch (Exception e) {
 			Helpers.athrow(e);
 			return 0;
 		}
-	}
-
-	public static boolean OPENJ9;
-	static {
-		try {
-			Class.forName("java.lang.J9VMInternals");
-			OPENJ9 = true;
-		} catch (ClassNotFoundException ignored) {}
 	}
 
 	public static final int JAVA_VERSION;
@@ -50,34 +56,16 @@ public final class ReflectionUtils {
 	}
 
 	/**
-	 * 在obj中查找类型为targetClass的field
-	 *
-	 * @param clazz The class to find field
-	 * @param fieldClass The field class to find
-	 */
-	public static Field getFieldByType(Class<?> clazz, Class<?> fieldClass) {
-		for (Field f : getFields(clazz)) {
-			Class<?> tmp = f.getType();
-			while (tmp != Object.class && tmp != null) {
-				if (tmp == fieldClass) {
-					f.setAccessible(true);
-					return f;
-				}
-				tmp = tmp.getSuperclass();
-			}
-		}
-		return null;
-	}
-
-	/**
 	 * 获取current + 父类 所有Field
 	 */
 	public static List<Field> getFields(Class<?> clazz) {
 		SimpleList<Field> fields = new SimpleList<>();
 		while (clazz != null && clazz != Object.class) {
-			Collections.addAll(fields, clazz.getDeclaredFields());
+			fields.addAll(clazz.getDeclaredFields());
 			clazz = clazz.getSuperclass();
 		}
+		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
+		if (sm != null) sm.filterFields(fields);
 		return fields;
 	}
 
@@ -85,8 +73,12 @@ public final class ReflectionUtils {
 		while (clazz != null && clazz != Object.class) {
 			try {
 				Field field = clazz.getDeclaredField(name);
-				field.setAccessible(true);
-				return field;
+
+				ILSecurityManager sm = ILSecurityManager.getSecurityManager();
+				if (sm == null || sm.checkAccess(field)) {
+					field.setAccessible(true);
+					return field;
+				}
 			} catch (NoSuchFieldException ignored) {}
 			clazz = clazz.getSuperclass();
 		}
@@ -102,115 +94,20 @@ public final class ReflectionUtils {
 			methods.addAll(clazz.getDeclaredMethods());
 			clazz = clazz.getSuperclass();
 		}
+		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
+		if (sm != null) sm.filterMethods(methods);
 		return new SimpleList<>(methods);
 	}
 
-	/**
-	 * 获取字段值
-	 *
-	 * @param instance 实例
-	 * @param clazz 实例类
-	 * @param name name
-	 *
-	 * @return value
-	 */
-	@SuppressWarnings("unchecked")
-	public static <T> T getValue(Object instance, Class<?> clazz, String name) {
-		try {
-			return (T) getField(clazz, name).get(instance);
-		} catch (IllegalAccessException | NoSuchFieldException e) {
-			throw new RuntimeException(e);
+	public static Field checkFieldName(Class<?> type, String... names) throws NoSuchFieldException {
+		MyHashSet<String> set = new MyHashSet<>(names);
+		for (Field field : type.getDeclaredFields()) {
+			if (set.contains(field.getName())) return field;
 		}
+		throw new NoSuchFieldException(type.getName()+"中没有任一字段匹配提供的名称"+set);
 	}
 
-	/**
-	 * 获取本类字段值
-	 *
-	 * @param instance 实例
-	 * @param name name
-	 *
-	 * @return value
-	 */
-	public static <T> T getValue(Object instance, String name) {
-		return getValue(instance, instance.getClass(), name);
-	}
-
-	/**
-	 * 设置字段值
-	 *
-	 * @param instance 实例
-	 * @param name name
-	 * @param value new value
-	 */
-	public static void setValue(Object instance, @Nonnull Class<?> clazz, String name, Object value) throws NoSuchFieldException, IllegalAccessException {
-		getField(clazz, name).set(instance, value);
-	}
-
-	/**
-	 * 设置static final字段值
-	 *
-	 * @param clazz class
-	 * @param fieldName name
-	 * @param value new value
-	 */
-	public static void setFinal(Class<?> clazz, String fieldName, Object value) throws NoSuchFieldException {
-		setFinal(null, clazz, fieldName, value);
-	}
-
-	/**
-	 * 设置final字段值
-	 *
-	 * @param o instance of this
-	 * @param fieldName name
-	 * @param value new value
-	 */
-	public static void setFinal(@Nonnull Object o, String fieldName, Object value) throws NoSuchFieldException {
-		setFinal(o, getField(o.getClass(), fieldName), value);
-	}
-
-	/**
-	 * 设置final字段值
-	 *
-	 * @param o instance
-	 * @param clazz class
-	 * @param fieldName name
-	 * @param value new value
-	 */
-	public static void setFinal(Object o, Class<?> clazz, String fieldName, Object value) throws NoSuchFieldException {
-		setFinal(o, getField(clazz, fieldName), value);
-	}
-
-	/**
-	 * 设置final字段值
-	 *
-	 * @param field The field
-	 * @param value new value
-	 */
-	public static void setFinal(Field field, Object value) {
-		setFinal(null, field, value);
-	}
-
-	public static void setFinal(Object o, Field field, Object value) {
-		access(field).setObject(o, value);
-	}
-
-	public static FieldAccessor access(@Nonnull Field field) {
-		return new FieldAccessor(field);
-	}
-
-	public static List<Class<?>> getFathers(Object target) {
-		return getFathers(target instanceof Class ? (Class<?>) target : target.getClass());
-	}
-
-	public static List<Class<?>> getFathers(Class<?> clazz) {
-		List<Class<?>> classes = new ArrayList<>();
-		while (clazz != Object.class && clazz != null) {
-			classes.add(clazz);
-			Collections.addAll(classes, clazz.getInterfaces());
-			clazz = clazz.getSuperclass();
-		}
-		return classes;
-	}
+	public static FieldAccessor access(@Nonnull Field field) { return new FieldAccessor(field); }
 
 	public static List<Class<?>> getAllParentsWithSelfOrdered(Class<?> clazz) {
 		SimpleList<Class<?>> classes = new SimpleList<>();
@@ -242,6 +139,40 @@ public final class ReflectionUtils {
 				StringBuilder s = new StringBuilder(Type.toString((byte) c));
 				s.setCharAt(0, Character.toUpperCase(s.charAt(0)));
 				return s.toString();
+		}
+	}
+
+	private static boolean smRemoved = JAVA_VERSION > 17;
+	public static Class<?> getCallerClass(int backward) {
+		if (!smRemoved) {
+			try {
+				return Tracer.INSTANCE.getCallerClass(backward+1);
+			} catch (Exception e) {
+				smRemoved = true;
+			}
+		}
+
+		try {
+			StackTraceElement[] trace = new Throwable().getStackTrace();
+			return trace.length < backward ? null : Class.forName(trace[backward].getClassName());
+		} catch (ClassNotFoundException e) {
+			return null;
+		}
+	}
+	private static final class Tracer extends SecurityManager {
+		// avoid security manager creation warning
+		static final Tracer INSTANCE;
+		static {
+			try {
+				INSTANCE = (Tracer) u.allocateInstance(Tracer.class);
+			} catch (InstantiationException e) {
+				throw new RuntimeException(e);
+			}
+		}
+
+		public Class<?> getCallerClass(int backward) {
+			Class<?>[] ctx = super.getClassContext();
+			return ctx.length < backward ? null : ctx[backward];
 		}
 	}
 }

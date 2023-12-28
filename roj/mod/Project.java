@@ -1,9 +1,12 @@
 package roj.mod;
 
+import roj.archive.ArchiveConstants;
 import roj.archive.zip.ZipOutput;
+import roj.asmx.mapper.Mapper;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.concurrent.task.AsyncTask;
 import roj.config.FileConfig;
 import roj.config.data.CList;
@@ -11,8 +14,6 @@ import roj.config.data.CMapping;
 import roj.config.data.CString;
 import roj.dev.Compiler;
 import roj.io.IOUtil;
-import roj.mapper.Mapper;
-import roj.mod.FileFilter.CmtATEntry;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
@@ -20,7 +21,6 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -33,9 +33,6 @@ import java.util.regex.Pattern;
 import static roj.mod.Shared.*;
 
 /**
- * This file is a part of MI <br>
- * 版权没有, 仿冒不究,如有雷同,纯属活该 <br>
- *
  * @author Roj233
  * @since 2021/7/11 13:59
  */
@@ -59,21 +56,20 @@ public final class Project extends FileConfig {
 
 	Mapper.State state;
 	String atConfigPathStr;
-	File srcPath, resPath, binJar;
-
-	static final FileFilter resourceFilter = new FileFilter();
-	MyHashMap<String, String> resources = new MyHashMap<>(100);
+	final File srcPath, resPath, binJar;
+	private final int resPrefix;
 
 	ZipOutput dstFile, binFile;
-	Set<CmtATEntry> atEntryCache = new MyHashSet<>();
+	List<ATDesc> atEntryCache = new SimpleList<>();
 
 	private Project(String name) {
-		super(new File(BASE, "config/" + name + ".json"), false);
+		super(new File(BASE, "config/"+name+".json"), false);
 		this.name = name;
 
-		resPath = new File(BASE, "projects/" + name + "/resources");
-		srcPath = new File(BASE, "projects/" + name + "/java");
-		binJar = new File(BASE, "bin/" + name + "-dev.jar");
+		resPath = new File(BASE, "projects/"+name+"/resources");
+		srcPath = new File(BASE, "projects/"+name+"/java");
+		binJar = new File(BASE, "bin/"+name+"-dev.jar");
+		resPrefix = resPath.getAbsolutePath().length()+1;
 
 		// noinspection all
 		resPath.mkdirs();
@@ -92,7 +88,7 @@ public final class Project extends FileConfig {
 			if (binJar.length() == 0) if (!binJar.createNewFile() || !binJar.setLastModified(0)) CLIUtil.warning("无法初始化StampFileTime");
 			this.binFile = new ZipOutput(binJar);
 		} catch (Throwable e) {
-			CLIUtil.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 " + binJar.getAbsolutePath(), e);
+			CLIUtil.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 "+binJar.getAbsolutePath(), e);
 			LockSupport.parkNanos(3_000_000_000L);
 			System.exit(-2);
 		}
@@ -151,19 +147,18 @@ public final class Project extends FileConfig {
 		try {
 			charset = Charset.forName(cs);
 		} catch (UnsupportedCharsetException e) {
-			CLIUtil.warning(name + " 的字符集不存在");
+			CLIUtil.warning(name+" 的字符集 "+cs+" 不存在, 使用默认的UTF-8");
 		}
 
 		String atName = this.atName = map.putIfAbsent("atConfig", "");
-
-		atConfigPathStr = atName.length() > 0 ? resPath.getPath() + "/META-INF/" + atName + ".cfg" : null;
+		atConfigPathStr = atName.length() > 0 ? resPath.getPath() + "/META-INF/"+atName+".cfg" : null;
 
 		List<String> required = map.getOrCreateList("dependency").asStringList();
 		if (!required.isEmpty()) {
 			for (int i = 0; i < required.size(); i++) {
-				File config = new File(BASE, "/config/" + required.get(i) + ".json");
+				File config = new File(BASE, "/config/"+required.get(i)+".json");
 				if (!config.exists()) {
-					CLIUtil.warning(name + " 的前置" + required.get(i) + "未找到");
+					CLIUtil.warning(name+" 的前置"+required.get(i)+"未找到");
 				} else {
 					required.set(i, Helpers.cast(load(required.get(i))));
 				}
@@ -174,50 +169,31 @@ public final class Project extends FileConfig {
 		}
 	}
 
-	public AsyncTask<Void> getResourceTask(long stamp) {
-
-		return new AsyncTask<Void>() {
+	public AsyncTask<MyHashSet<String>> getResourceTask(boolean inc) {
+		return new AsyncTask<MyHashSet<String>>() {
 			@Override
-			protected Void invoke() {
-				int len = resPath.getAbsolutePath().length();
-
-				if (stamp != -1L) {
-					MyHashSet<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
-					if (!resources.isEmpty() && !set.contains(null)) {
-						synchronized (set) {
-							for (String s : set) {
-								String relPath = s.substring(len + 1).replace('\\', '/');
-								resources.put(relPath, s);
-
-								try {
-									dstFile.setS(relPath, () -> {
-										try {return new FileInputStream(s);
-										} catch (FileNotFoundException e) {Helpers.athrow(e);}
-										return null;
-									});
-								} catch (IOException e) {
-									CLIUtil.warning("资源文件", e);
-								}
+			protected MyHashSet<String> invoke() {
+				boolean prevCompress = dstFile.isCompress();
+				block: {
+					// 检测是否第一次运行 关机状态无法检测文件变化
+					if (state != null && inc) {
+						Set<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
+						if (!set.contains(null)) {
+							synchronized (set) {
+								for (String s : set) writeRes(s);
+								set.clear();
 							}
-							set.clear();
+							break block;
 						}
-					} else {
-						resourceFilter.reset(stamp, FileFilter.F_RES_TIME);
-						loadFromFilter(len);
 					}
-				} else {
-					resourceFilter.reset(stamp, FileFilter.F_RES);
-					resources.clear();
-					loadFromFilter(len);
 
-					for (Map.Entry<String, String> entry : resources.entrySet()) {
-						try {
-							dstFile.set(entry.getKey(), new FileInputStream(entry.getValue()));
-						} catch (IOException e) {
-							CLIUtil.warning("资源文件", e);
-						}
-					}
+					IOUtil.findAllFiles(resPath, file -> {
+						writeRes(file.getAbsolutePath());
+						return false;
+					});
 				}
+
+				dstFile.setCompress(prevCompress);
 
 				loadMapper();
 				return null;
@@ -225,13 +201,13 @@ public final class Project extends FileConfig {
 		};
 	}
 
-	private void loadFromFilter(int len) {
-		List<File> files = IOUtil.findAllFiles(resPath, resourceFilter);
-		for (int i = 0; i < files.size(); i++) {
-			String s = files.get(i).getAbsolutePath();
-			String relPath = s.substring(len + 1).replace('\\', '/');
-
-			resources.put(relPath, s);
+	final void writeRes(String s) {
+		String relPath = s.substring(resPrefix).replace('\\', '/');
+		dstFile.setCompress(!ArchiveConstants.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath).toLowerCase()));
+		try {
+			dstFile.set(relPath, new FileInputStream(s));
+		} catch (IOException e) {
+			CLIUtil.warning("资源文件", e);
 		}
 	}
 

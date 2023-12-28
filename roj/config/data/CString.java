@@ -19,6 +19,7 @@ import java.util.Objects;
 public final class CString extends CEntry {
 	public String value;
 
+	public static CString valueOf(String s) { return new CString(s); }
 	public CString(String string) {
 		// null check
 		this.value = string.toString();
@@ -26,44 +27,21 @@ public final class CString extends CEntry {
 
 	@Nonnull
 	@Override
-	public Type getType() {
-		return Type.STRING;
-	}
+	public Type getType() { return Type.STRING; }
 
 	@Override
-	protected boolean isNumber() {
-		return TextUtil.isNumber(value) >= 0;
-	}
-
-	public static CString valueOf(String s) {
-		return new CString(s);
-	}
-
+	protected boolean isNumber() { return TextUtil.isNumber(value) >= 0; }
 	@Nonnull
 	@Override
-	public String asString() {
-		return value;
-	}
-
+	public String asString() { return value; }
 	@Override
-	public double asDouble() {
-		return Double.parseDouble(value);
-	}
-
+	public double asDouble() { return Double.parseDouble(value); }
 	@Override
-	public int asInteger() {
-		return TextUtil.parseInt(value);
-	}
-
+	public int asInteger() { return TextUtil.isNumber(value) == 0 ? TextUtil.parseInt(value) : (int) asDouble(); }
 	@Override
-	public long asLong() {
-		return Long.parseLong(value);
-	}
-
+	public long asLong() { return TextUtil.isNumber(value) == 0 ? Long.parseLong(value) : (long) asDouble(); }
 	@Override
-	public boolean asBool() {
-		return Boolean.parseBoolean(value);
-	}
+	public boolean asBool() { return Boolean.parseBoolean(value); }
 
 	@Override
 	public boolean equals(Object o) {
@@ -74,52 +52,29 @@ public final class CString extends CEntry {
 	}
 
 	@Override
-	public int hashCode() {
-		return value == null ? 0 : value.hashCode();
-	}
+	public int hashCode() { return value == null ? 0 : value.hashCode(); }
 
 	@Override
-	public boolean isSimilar(CEntry o) {
-		return o.getType() == Type.STRING || (o.getType().isSimilar(Type.STRING) && o.asString().equals(value));
-	}
-
-	//@Override
-	protected CharList toXML(CharList sb, int depth) {
-		return value == null ? sb.append("null") : !value.startsWith("<![CDATA[") && value.indexOf('<') >= 0 ? sb.append("<![CDATA[").append(value).append("]]>") : sb.append(value);
-	}
+	public boolean isSimilar(CEntry o) { return o.getType() == Type.STRING || (o.getType().isSimilar(Type.STRING) && o.asString().equals(value)); }
 
 	@Override
-	public CharList toJSON(CharList sb, int depth) {
-		return value == null ? sb.append("null") : ITokenizer.addSlashes(sb.append('"'), value).append('"');
-	}
+	public CharList toJSON(CharList sb, int depth) { return value == null ? sb.append("null") : ITokenizer.addSlashes(sb.append('"'), value).append('"'); }
 
 	@Override
-	protected CharList toINI(CharList sb, int depth) {
-		return IniParser.literalSafe(value) ? sb.append(value) : ITokenizer.addSlashes(sb.append('"'), value).append('"');
-	}
+	protected CharList toINI(CharList sb, int depth) { return IniParser.literalSafe(value) ? sb.append(value) : ITokenizer.addSlashes(sb.append('"'), value).append('"'); }
 
 	@Override
-	public byte getNBTType() {
-		return NBTParser.STRING;
-	}
+	public byte getNBTType() { return NBTParser.STRING; }
 
 	@Override
-	public Object unwrap() {
-		return value;
-	}
+	public Object unwrap() { return value; }
 
 	@Override
-	protected void toBinary(DynByteBuf w, VinaryParser struct) {
-		w.put((byte) Type.STRING.ordinal()).putVUIGB(value);
-	}
+	protected void toBinary(DynByteBuf w, VinaryParser struct) { w.put((byte) Type.STRING.ordinal()).putVUIGB(value); }
 
 	@Override
-	public void toB_encode(DynByteBuf w) {
-		w.putAscii(Integer.toString(DynByteBuf.byteCountUTF8(value))).put((byte)':').putUTFData(value);
-	}
+	public void toB_encode(DynByteBuf w) { w.putAscii(Integer.toString(DynByteBuf.byteCountUTF8(value))).put((byte)':').putUTFData(value); }
 
 	@Override
-	public void forEachChild(CVisitor ser) {
-		ser.value(value);
-	}
+	public void forEachChild(CVisitor ser) { ser.value(value); }
 }

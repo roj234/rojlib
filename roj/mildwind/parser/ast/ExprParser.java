@@ -77,7 +77,7 @@ public final class ExprParser {
 					//expr.write(JsWriter.builder(""), false);
 					System.out.println();
 					System.out.println("表达式'"+expr+"'");
-					System.out.println(expr.compute(ctx.root));
+					System.out.println(expr.compute(ctx));
 					System.out.println();
 				}
 			} catch (Throwable e) {
@@ -435,7 +435,7 @@ public final class ExprParser {
 					for (int j = i; j < e; j++) {
 						Int2IntMap.Entry v = sort.get(j);
 						if (v.getIntKey() > lv) {
-							v.Internal_Set_Key(v.getIntKey()-2);
+							v._SetKey(v.getIntKey()-2);
 						}
 					}
 				}

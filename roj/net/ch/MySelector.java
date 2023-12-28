@@ -44,7 +44,7 @@ public final class MySelector extends SimpleList<SelectionKey> implements Set<Se
 										   .access(HashSet.class, "map", "getMap", null).build();
 					try {
 						if (ReflectionUtils.JAVA_VERSION > 8)
-							Java9Compat.ModuleOpener().accept(new Object[] {Java9Compat.getModule(HashSet.class), Java9Compat.getModule(MySelector.class)}, "sun.nio.ch");
+							Java9Compat.OpenModule(HashSet.class, "sun.nio.ch", MySelector.class);
 
 						setSelectedSet1 = ReflectionUtils.access(ReflectionUtils.getField(t.getClass(), "selectedKeys"));
 						setPublicSelectedSet1 = ReflectionUtils.access(ReflectionUtils.getField(t.getClass(), "publicSelectedKeys"));

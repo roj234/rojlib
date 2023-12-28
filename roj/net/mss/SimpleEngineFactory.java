@@ -28,14 +28,14 @@ public final class SimpleEngineFactory implements Supplier<MSSEngine> {
 	public SimpleEngineFactory(boolean client) {this.client = client;}
 
 	private final boolean client;
-	private MSSPrivateKey pair;
+	private MSSKeyPair pair;
 	private int switches;
 	private IntMap<MSSPublicKey> psc;
 
 	public SimpleEngineFactory key(KeyPair key) throws GeneralSecurityException {
-		return key(new JPrivateKey(key));
+		return key(new MSSKeyPair(key));
 	}
-	public SimpleEngineFactory key(MSSPrivateKey pair) {
+	public SimpleEngineFactory key(MSSKeyPair pair) {
 		this.pair = pair;
 		return this;
 	}
@@ -45,12 +45,9 @@ public final class SimpleEngineFactory implements Supplier<MSSEngine> {
 		return this;
 	}
 
-	public SimpleEngineFactory psc(int id, PublicKey key) {
-		return psc(id, new JKey(key));
-	}
+	public SimpleEngineFactory psc(int id, PublicKey key) { return psc(id, new MSSPublicKey(key)); }
 	public SimpleEngineFactory psc(int id, MSSPublicKey key) {
-		if (!client && !(key instanceof MSSPrivateKey))
-			throw new IllegalArgumentException("Server mode psc must be private key");
+		if (!client && !(key instanceof MSSKeyPair)) throw new IllegalArgumentException("Server mode psc must be private key");
 		if (psc == null) psc = new IntMap<>();
 		psc.putInt(id, key);
 		return this;
@@ -80,6 +77,7 @@ public final class SimpleEngineFactory implements Supplier<MSSEngine> {
 		return s;
 	}
 
+	@Deprecated
 	public static SimpleEngineFactory fromKeystore(InputStream ks, char[] pass, String keyType) throws IOException, GeneralSecurityException {
 		KeyManager[] kmf = SecureUtil.makeKeyManagers(ks, pass);
 
@@ -96,6 +94,6 @@ public final class SimpleEngineFactory implements Supplier<MSSEngine> {
 		}
 		if (pubKey == null) throw new UnrecoverableKeyException("No such key");
 
-		return server().key(new JPrivateKey(pubKey, privateKey));
+		return server().key(new MSSKeyPair(pubKey, privateKey));
 	}
 }

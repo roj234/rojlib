@@ -1,6 +1,7 @@
 package roj.mildwind.parser.ast;
 
 import roj.asm.Opcodes;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.parser.JSLexer;
 import roj.mildwind.type.JsObject;
@@ -151,7 +152,7 @@ final class Assign implements Expression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) {
+	public JsObject compute(JsContext ctx) {
 		JsObject v = right.compute(ctx);
 		left.computeAssign(ctx, v);
 		return v;

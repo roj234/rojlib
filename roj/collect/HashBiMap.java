@@ -376,7 +376,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 	}
 
 	@Override
-	public _Generic_Entry<?>[] __entries() { return kTab; }
+	public _Generic_Entry[] __entries() { return kTab; }
 	public void __remove(MyHashMap.AbstractEntry<K, V> entry) { removeEntry((Entry<K, V>) entry); }
 
 	protected void removeEntry(Entry<K, V> toRemove) {

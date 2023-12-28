@@ -86,7 +86,7 @@ public class HRRemote {
 		clients = new ConcurrentLinkedQueue<>();
 
 		ServerLaunch.tcp("热重载服务器")
-					.listen2(InetAddress.getLoopbackAddress(), port)
+					.bind2(InetAddress.getLoopbackAddress(), port)
 					.option(StandardSocketOptions.SO_REUSEADDR, true)
 					.initializator((ctx) -> {
 						Client t = new Client(ctx);

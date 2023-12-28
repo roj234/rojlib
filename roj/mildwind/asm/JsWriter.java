@@ -4,7 +4,6 @@ import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.attr.AttrString;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
 import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.ToIntMap;
@@ -27,7 +26,7 @@ public final class JsWriter {
 		data.dump();
 		ConstantData parse = Parser.parse(Parser.toByteArrayShared(data));
 		System.out.println(parse);
-		Class<?> klass = ClassDefiner.INSTANCE.defineClassC(data);
+		Class<?> klass = ClassDefiner.INSTANCE.defineClass(data);
 		klass.getMethods();
 		return null;
 	}
@@ -37,7 +36,7 @@ public final class JsWriter {
 		data.name("roj/mildwind/asm/AST000");
 		data.parent("roj/mildwind/asm/JsFunctionCompiled");
 		data.putAttr(new AttrString("SourceFile", file));
-		data.newField(AccessFlag.PRIVATE, "methodId", "I");
+		data.newField(ACC_PRIVATE, "methodId", "I");
 	}
 
 	private CodeWriter syncMethod;
@@ -49,12 +48,12 @@ public final class JsWriter {
 		if (i >= 0) return i;
 
 		String type = TypeHelper.class2asm(t.getClass());
-		int fieldId = data.newField(AccessFlag.PRIVATE|AccessFlag.STATIC, "sync`"+syncId+"`", type);
+		int fieldId = data.newField(ACC_PRIVATE | ACC_STATIC, "sync`"+syncId+"`", type);
 		if (syncMethod == null) {
 			int sync = data.getMethod("sync");
 			if (sync >= 0) syncMethod = ((AttrCodeWriter) data.methods.get(sync).attrByName("Code")).cw;
 			else {
-				syncMethod = data.newMethod(AccessFlag.PUBLIC|AccessFlag.FINAL, "sync", "([Ljava/lang/Object;)V");
+				syncMethod = data.newMethod(ACC_PUBLIC | ACC_FINAL, "sync", "([Ljava/lang/Object;)V");
 				syncMethod.visitSize(33, 22);
 				// todo add RETURN on end
 			}

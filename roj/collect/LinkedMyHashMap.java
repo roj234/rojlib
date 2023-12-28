@@ -19,6 +19,9 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 		public LinkedEntry<K, V> p, n;
 	}
 
+	@Override
+	protected boolean supportAutoCollisionFix() { return false; }
+
 	public LinkedEntry<K, V> firstEntry() {
 		return tail == head ? null : head;
 	}

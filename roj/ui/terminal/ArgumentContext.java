@@ -18,7 +18,6 @@ public class ArgumentContext {
 	private String context;
 	private List<Word> words;
 	private int i, maxI;
-	private boolean runsOut;
 	private final IntList stack = new IntList();
 
 	private final MyHashMap<String, Object> map = new MyHashMap<>();
@@ -60,13 +59,15 @@ public class ArgumentContext {
 	}
 	public Word nextWord() throws ParseException {
 		maxI = Math.max(maxI, i);
-		if (i == words.size()-1) runsOut = true;
-		else if (i >= words.size()) throw error("参数数量不足");
+		if (i >= words.size()) throw error("参数数量不足");
 		return words.get(i++);
 	}
 	public Word peekWord() { return peekWord(true); }
 	public Word peekWord(boolean EOFisNull) { return i >= words.size() ? null : words.get(i).type() == Word.EOF&&EOFisNull ? null : words.get(i); }
-	public boolean isEOF() { return i == words.size()-1 && words.get(i).type() == Word.EOF; }
+
+	public boolean hasEOF() { return words.get(words.size()-1).type() == Word.EOF; }
+	public boolean isEOF() { return i >= words.size()-1 && hasEOF(); }
+	public boolean isWordEdge() { return i >= words.size()-1 && !hasEOF(); }
 
 	public <T> T argument(String name, Class<T> type) { return type.cast(map.get(name)); }
 	public void putArgument(String name, Object value) { map.put(name, value); }
@@ -76,8 +77,6 @@ public class ArgumentContext {
 	public void pushStack() { stack.add(i); }
 	public void popStack() { i = stack.remove(stack.size()-1); }
 
-	public void clearRunsOut() { runsOut = false; }
-	public boolean runsOut() { return runsOut; }
 	public int getMaxI() { return maxI; }
 
 	public void wrapExecute(CommandImpl command) {
@@ -89,7 +88,7 @@ public class ArgumentContext {
 		else {
 			try {
 				command.accept(ctx);
-			} catch (ParseException e) {
+			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}

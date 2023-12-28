@@ -8,28 +8,28 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.config.JSONParser;
 import roj.config.ParseException;
-import roj.config.data.CEntry;
-import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.math.Version;
 import roj.mod.fp.Fabric;
-import roj.mod.fp.Forge;
 import roj.mod.fp.LegacyForge;
 import roj.mod.fp.WorkspaceBuilder;
 import roj.mod.mapping.MappingFormat;
-import roj.text.TextUtil;
+import roj.mod.mapping.VersionRange;
 import roj.ui.CLIUtil;
 import roj.ui.GUIUtil;
 import roj.ui.ProgressBar;
-import roj.util.ByteList;
 
 import javax.swing.*;
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.nio.file.Files;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
-import static roj.mapper.Mapper.DONT_LOAD_PREFIX;
+import static roj.asmx.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.mod.MCLauncher.*;
 import static roj.mod.Shared.*;
 
@@ -40,39 +40,47 @@ import static roj.mod.Shared.*;
  * @since 2021/5/31 21:17
  */
 public class FMDInstall {
-	private static int changeVersion() throws IOException {
+	public static final File MCP2SRG_PATH = new File(BASE, "util/mcp-srg.srg");
+
+	public static void main(String[] args) throws IOException {
+		GUIUtil.systemLook();
+		CONFIG.size();
 		Shared._lock();
 
-		CMapping cfgGen = CONFIG.get("通用").asMap();
-
-		File mcRoot = new File(cfgGen.getString("MC目录"));
-		if (!mcRoot.isDirectory()) mcRoot = CLIUtil.readFile("MC目录(.minecraft)");
-		if (!new File(mcRoot, "/versions/").isDirectory()) mcRoot = new File(mcRoot, ".minecraft");
-
+		File mcRoot = getMcRoot();
 		List<File> versions = MCLauncher.findVersions(new File(mcRoot, "/versions/"));
 
-		File mcJson = null;
 		if (versions.isEmpty()) {
-			CLIUtil.error("没有找到任何MC版本！请确认目录是否正确", true);
-			return -1;
-		} else {
-			String versionJson = CONFIG.getString("MC版本JSON");
-			if (!versionJson.isEmpty()) {
-				for (int i = 0; i < versions.size(); i++) {
-					File file = versions.get(i);
-					if (file.getName().equals(versionJson)) {
-						mcJson = file;
-					}
-				}
-			}
-			if (mcJson == null) mcJson = versions.get(CLIUtil.selectOneFile(versions, "MC版本"));
+			CLIUtil.error("没有找到任何版本！FMD需要在已安装的模组客户端上进行！", true);
+			return;
 		}
 
-		return setupWorkspace(mcRoot, mcJson, new InputDelegate());
+		File mcJson = versions.get(CLIUtil.readChosenFile(versions, "模组客户端"));
+
+		System.exit(setupWorkspace(mcRoot, mcJson));
+	}
+
+	private static File getMcRoot() {
+		String path = CONFIG.getString("通用.MC目录");
+		while (true) {
+			File mcRoot = new File(path, "versions");
+			String[] s = mcRoot.list();
+			if (s == null || s.length <= 0) return mcRoot;
+
+			File file = GUIUtil.fileLoadFrom("选择【.minecraft】文件夹", null, JFileChooser.DIRECTORIES_ONLY);
+
+			if (file == null) {
+				error("用户取消操作.");
+				return null;
+			}
+
+			path = file.getAbsolutePath();
+			CONFIG.put("通用.MC目录", path);
+		}
 	}
 
 	@SuppressWarnings("unchecked")
-	static int setupWorkspace(File mcRoot, File mcJson, InputDelegate gui) throws IOException {
+	static int setupWorkspace(File mcRoot, File mcJson) throws IOException {
 		watcher.terminate();
 
 		CMapping cfgGen = CONFIG.get("通用").asMap();
@@ -109,9 +117,8 @@ public class FMDInstall {
 		CMapping downloads = json.get("downloads").asMap();
 
 		boolean canDownloadOfficial = downloads.containsKey("client_mappings");
-		gui.init(new Version(mcVersion), json, wb.getId());
 
-		CMapping mfJson = gui.getSelectedMappingFormat();
+		CMapping mfJson = new FMDInstall().getSelectedMappingFormat(new Version(mcVersion), wb.getId());
 		MappingFormat fmt;
 		try {
 			CMapping global = new JSONParser().parseRaw(new File(BASE, "util/mapping/@common.json")).asMap();
@@ -136,19 +143,17 @@ public class FMDInstall {
 
 		File libraryRoot = new File(mcRoot, "/libraries/");
 
-		if (fmt.hasMCP()) MCPVersionDetect.doDetect(cfg, gui);
+		if (fmt.hasMCP()) MCPVersionDetect.doDetect(cfg);
 
 		// region clean previous mapping
-		File mcpSrgPath = MCP2SRG_PATH;
-		if (mcpSrgPath.isFile() && !mcpSrgPath.delete()) CLIUtil.warning("无法删除旧的映射数据");
-		File cache0 = new File(BASE, "/util/mapCache.lzma");
-		if (cache0.isFile() && !cache0.delete()) CLIUtil.error("无法删除映射缓存 mapCache.lzma!", true);
-		ATHelper.getBackupFile().empty();
+		Files.deleteIfExists(MCP2SRG_PATH.toPath());
+		Files.deleteIfExists(new File(BASE, "/util/mapCache.lzma").toPath());
+		Files.deleteIfExists(ATHelper.AT_BACKUP_LIB.toPath());
 		// endregion
 		if (System.getProperty("fmd.maponly") != null) {
 			CLIUtil.info("设置了fmd.maponly 仅生成映射表！");
 			MappingFormat.MapResult maps = fmt.map(cfg, TMP_DIR);
-			maps.tsrgCompile.saveMap(mcpSrgPath);
+			maps.tsrgCompile.saveMap(MCP2SRG_PATH);
 			maps.tsrgDeobf.saveMap(new File(BASE, "deobf.map"));
 		}
 
@@ -169,10 +174,37 @@ public class FMDInstall {
 		return 0;
 	}
 
+	private CMapping getSelectedMappingFormat(Version version, String id) throws IOException {
+		SimpleList<CMapping> list = new SimpleList<>();
+
+		File[] files = new File(BASE, "util/mapping").listFiles();
+		for (File file : files) {
+			if (file.getName().equals("@common.json")) continue;
+			try {
+				CMapping map = JSONParser.parses(IOUtil.readUTF(file)).asMap();
+				VersionRange range = VersionRange.parse(map.getString("version"));
+				if (range.suitable(version) && map.getString("type").equals(id)) list.add(map);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+
+		CLIUtil.info("有多个 Mapping , 请选择(输入编号)");
+
+		for (int i = 0; i < list.size(); i++) {
+			String name = list.get(i).getString("title");
+			CLIUtil.fg(CLIUtil.WHITE, (i & 1) == 1);
+			System.out.println(i + ". " + name);
+			CLIUtil.reset();
+		}
+
+		return list.get(CLIUtil.readInt(0, list.size()));
+	}
+
 	private static WorkspaceBuilder createBuilder(Collection<String> lib, boolean highVersion) {
 		for (String s : lib) {
 			if (s.contains("minecraftforge")) {
-				return highVersion ? new Forge() : new LegacyForge();
+				return highVersion ? null : new LegacyForge();
 			} else if (s.contains("fabricmc")) {
 				return new Fabric();
 			}
@@ -213,7 +245,7 @@ public class FMDInstall {
 								if (!pkg.equals(prevPkg)) {
 									prevPkg = prevPkg.substring(prevPkg.lastIndexOf('/') + 1);
 									pkg = pkg.substring(pkg.lastIndexOf('/') + 1);
-									CLIUtil.warning("重复的 " + entry.getName() + " 在 " + prevPkg + " 和 " + pkg, true);
+									CLIUtil.warning("重复的 "+entry.getName()+" 在 "+prevPkg+" 和 "+pkg, true);
 								}
 							} else {
 								zfw.copy(mzf, entry);
@@ -230,152 +262,4 @@ public class FMDInstall {
 			throw e;
 		}
 	}
-
-	private static void quickInst(String code) {
-		if (code == null) code = JOptionPane.showInputDialog(activeWindow, "请输入一键安装代码\n示例: '1.16.5|36.0.42||1'", "询问", JOptionPane.QUESTION_MESSAGE);
-		if (code == null) return;
-
-		List<String> list = TextUtil.split(new ArrayList<>(4), code, '|', 8, true);
-		if (list.size() < 4 || list.size() > 5) {
-			error("安装代码无效");
-			return;
-		}
-
-		MCLauncher.load();
-
-		File mcRoot = getMcRoot();
-		if (mcRoot == null) return;
-
-		CList versions = MCLauncher.getMcVersionList(CONFIG.get("启动器配置").asMap());
-		if (versions == null) return;
-
-		CMapping target = null;
-		for (CEntry entry : versions) {
-			CMapping des = entry.asMap();
-			if (des.getString("id").equals(list.get(0))) {
-				target = des;
-				break;
-			}
-		}
-
-		if (target == null) {
-			error("MC版本不存在");
-			return;
-		}
-
-		File mcJar = new File(mcRoot, "/versions/" + target.getString("id") + '/' + target.getString("id") + ".jar");
-		if (!mcJar.isFile()) MCLauncher.onClickInstall(target, false);
-
-		File mcJson = new File(mcRoot, "/versions/" + target.getString("id") + '/' + target.getString("id") + ".json");
-		if (!MCLauncher.installMinecraftClient(mcRoot, mcJson, false)) {
-			error("下载native失败");
-			return;
-		}
-
-		String mcVer = MCLauncher.config.getString("mc_version");
-
-		CMapping cfgLan = CONFIG.get("启动器配置").asMap();
-		try {
-			ByteList bl = IOUtil.downloadFileToMemory(cfgLan.getString("forge版本manifest地址").replace("<mc_ver>", mcVer));
-			versions = new JSONParser().parseRaw(bl).asList();
-		} catch (ParseException | IOException e) {
-			error("获取数据出了点错...\n请查看控制台");
-			e.printStackTrace();
-			return;
-		}
-
-		target = null;
-		for (CEntry entry : versions) {
-			CMapping des = entry.asMap();
-			if (des.getString("version").equals(list.get(1))) {
-				target = des;
-				break;
-			}
-		}
-
-		if (target == null) {
-			error("Forge版本不存在");
-			return;
-		}
-
-		mcJson = new File(mcRoot, "/versions/" + mcVer + "-forge-" + target.getString("version") + '/' + mcVer + "-forge-" + target.getString("version") + ".json");
-
-		if (!mcJson.isFile()) MCLauncher.onClickInstall(target, true);
-
-		if (!MCLauncher.installMinecraftClient(mcRoot, mcJson, false)) {
-			error("下载forge的native失败");
-			return;
-		}
-
-		doInstall(mcRoot, mcJson, list.subList(2, list.size()));
-	}
-
-	private static File getMcRoot() {
-		CMapping cfgGen = CONFIG.get("通用").asMap();
-		File mcRoot = new File(cfgGen.getString("MC目录"));
-		if (!mcRoot.isDirectory()) {
-			JFileChooser fileChooser = new JFileChooser(BASE);
-			fileChooser.setDialogTitle("选择MC安装位置");
-			fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-
-			int status = fileChooser.showOpenDialog(activeWindow);
-			//没有选打开按钮结果提示
-			if (status == JFileChooser.APPROVE_OPTION) {
-				CONFIG.get("通用").asMap().put("MC目录", fileChooser.getSelectedFile().getAbsolutePath());
-				return fileChooser.getSelectedFile();
-			} else {
-				error("用户取消操作.");
-				return null;
-			}
-		}
-		return mcRoot;
-	}
-
-	// todo notify install client first
-	private static void doInstall(File mcRoot, File mcJson, List<String> prefilledAnswers) {
-		try {
-			if (setupWorkspace(mcRoot, mcJson, new Automatic(prefilledAnswers)) != 0) {
-				error("安装工程中有错误发生, 请看控制台");
-			} else {
-				info("安装成功!");
-				System.exit(0);
-			}
-		} catch (Throwable e) {
-			e.printStackTrace();
-			error("安装工程中有异常错误发生, 请看控制台");
-		}
-	}
-
-	public static void main(String[] args) throws IOException {
-		GUIUtil.systemLook();
-		CONFIG.size();
-		changeVersion();
-		//quickInst(args.length == 0 ? null : args[0]);
-	}
-
-	// 1.12.2|forge|13.8.23.2783|mymapping|32
-	static final class Automatic extends InputDelegate {
-		final List<String> ans;
-
-		public Automatic(List<String> answer) {
-			ans = answer;
-		}
-
-		@Override
-		String getMCPVersion() throws IOException {
-			return super.getMCPVersion();
-		}
-
-		@Override
-		String getMinecraftVersionForMCP() throws IOException {
-			return super.getMinecraftVersionForMCP();
-		}
-
-		@Override
-		CMapping getSelectedMappingFormat() throws IOException {
-			return super.getSelectedMappingFormat();
-		}
-	}
-
-	public static final File MCP2SRG_PATH = new File(BASE, "util/mcp-srg.srg");
 }

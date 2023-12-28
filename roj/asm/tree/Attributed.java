@@ -1,8 +1,8 @@
 package roj.asm.tree;
 
-import roj.asm.cst.ConstantPool;
+import roj.asm.cp.ConstantPool;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.util.AttributeList;
+import roj.asm.tree.attr.AttributeList;
 import roj.util.AttributeKey;
 
 import javax.annotation.Nullable;

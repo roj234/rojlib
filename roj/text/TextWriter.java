@@ -163,6 +163,7 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 		ib.position(0).limit(len);
 
 		encode(false, ib);
+		flush_ce();
 	}
 
 	private void encode(boolean EOF, CharBuffer ib) throws IOException {
@@ -172,10 +173,13 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 			} else {
 				int i = 0;
 				while (i < ib.length()) {
-					buf1.clear();
-					i = ucs.encodeFixedOut(ib, i, ib.length(), buf1, buf1.capacity());
-					ob.position(buf1.wIndex());
-					flush_ce();
+					i = ucs.encodeFixedOut(ib, i, ib.length(), buf1, buf1.writableBytes());
+
+					if (buf1.writableBytes() < 8) {
+						ob.position(buf1.wIndex());
+						buf1.clear();
+						flush_ce();
+					}
 				}
 			}
 
@@ -187,13 +191,13 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 			CoderResult cr = ce.encode(ib, ob, false);
 			if (cr.isUnmappable()) throw new IOException(ce + " cannot encode");
 
-			flush_ce();
-
 			if (cr.isUnderflow()) {
 				ib.compact().flip();
 				len = ib.limit();
 				break;
 			}
+
+			if (cr.isOverflow()) flush_ce();
 		}
 
 		if (EOF) {

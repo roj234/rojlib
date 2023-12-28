@@ -1,7 +1,7 @@
 package roj.asm.visitor;
 
-import roj.asm.OpcodeUtil;
-import roj.asm.cst.Constant;
+import roj.asm.Opcodes;
+import roj.asm.cp.Constant;
 import roj.util.DynByteBuf;
 
 import static roj.asm.Opcodes.LDC;
@@ -40,7 +40,7 @@ final class LdcSegment extends Segment {
 	@Override
 	Segment move(AbstractCodeWriter list, int blockMoved, int mode) { return mode==XInsnList.REP_CLONE ?new LdcSegment(code,c.clone()):this; }
 	@Override
-	public String toString() { return OpcodeUtil.toString0(code)+"("+c.getEasyReadValue()+")"; }
+	public String toString() { return Opcodes.showOpcode(code)+"("+c.getEasyReadValue()+")"; }
 
 	@Override
 	public boolean equals(Object o) {

@@ -14,56 +14,60 @@ import java.nio.channels.FileChannel;
  * @since 2021/8/18 13:38
  */
 public class FileSource extends Source {
-	private final File source;
+	private final File file;
 	private final long offset;
-	private RandomAccessFile file;
+	private RandomAccessFile io;
+	private final boolean write;
 
 	public FileSource(String path) throws IOException { this(new File(path), 0); }
 	public FileSource(File file) throws IOException { this(file, 0); }
-	public FileSource(File file, long offset) throws IOException {
-		this.file = new RandomAccessFile(file, "rw");
-		this.source = file;
+	public FileSource(File file, long offset) throws IOException { this(file, offset, true); }
+	public FileSource(File file, boolean write) throws IOException { this(file, 0, write); }
+	public FileSource(File file, long offset, boolean write) throws IOException {
+		this.write = write;
+		this.file = file;
 		this.offset = offset;
-		this.file.seek(offset);
+		reopen();
 	}
 
-	public File getSource() { return source; }
+	public File getFile() { return file; }
 
-	public int read() throws IOException { return file.read(); }
-	public int read(byte[] b, int off, int len) throws IOException { return file.read(b, off, len); }
+	public int read() throws IOException { return io.read(); }
+	public int read(byte[] b, int off, int len) throws IOException { return io.read(b, off, len); }
 
-	public void write(int b) throws IOException { file.write(b); }
-	public void write(byte[] b, int off, int len) throws IOException { file.write(b, off, len); }
+	public void write(int b) throws IOException { io.write(b); }
+	public void write(byte[] b, int off, int len) throws IOException { io.write(b, off, len); }
 	public void write(DynByteBuf data) throws IOException {
-		if (data.hasArray()) file.write(data.array(), data.relativeArrayOffset(), data.readableBytes());
-		else file.getChannel().write(data.nioBuffer());
+		if (data.hasArray()) io.write(data.array(), data.relativeArrayOffset(), data.readableBytes());
+		else io.getChannel().write(data.nioBuffer());
 		//data.rIndex = data.wIndex();
 	}
 
-	public void seek(long pos) throws IOException { file.seek(pos+offset); }
-	public long position() throws IOException { return file.getFilePointer()-offset; }
+	public void seek(long pos) throws IOException { io.seek(pos+offset); }
+	public long position() throws IOException { return io.getFilePointer()-offset; }
 
 	public void setLength(long length) throws IOException {
 		if (length < 0) throw new IOException();
-		file.setLength(length+offset);
+		io.setLength(length+offset);
 	}
-	public long length() throws IOException { return file.length()-offset; }
+	public long length() throws IOException { return io.length()-offset; }
 
 	public boolean hasChannel() { return true; }
-	public FileChannel channel() { return file.getChannel(); }
+	public FileChannel channel() { return io.getChannel(); }
 
 	@Override
-	public void close() throws IOException { file.close(); }
+	public void close() throws IOException { io.close(); }
 	@Override
 	public void reopen() throws IOException {
-		if (file != null) file.close();
-		file = new RandomAccessFile(source, "rw");
+		if (io != null) io.close();
+		io = new RandomAccessFile(file, write ? "rw" : "r");
+		io.seek(offset);
 	}
 
-	public DataInput asDataInput() { return file; }
+	public DataInput asDataInput() { return io; }
 
 	@Override
-	public Source threadSafeCopy() throws IOException { return new FileSource(source, offset); }
+	public Source threadSafeCopy() throws IOException { return new FileSource(file, offset); }
 
 	@Override
 	public void moveSelf(long from, long to, long length) throws IOException {
@@ -71,5 +75,5 @@ public class FileSource extends Source {
 	}
 
 	@Override
-	public String toString() { return source.getPath(); }
+	public String toString() { return file.getPath(); }
 }

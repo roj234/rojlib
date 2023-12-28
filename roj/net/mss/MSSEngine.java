@@ -26,7 +26,7 @@ public abstract class MSSEngine {
 
 	final SecureRandom random;
 
-	static CipherSuite[] defaultCipherSuites = {CipherSuites.TLS_AES_128_GCM_SHA256,CipherSuites.TLS_AES_256_GCM_SHA384,CipherSuites.TLS_CHACHA20_POLY1305_SHA256};
+	static CipherSuite[] defaultCipherSuites = {CipherSuite.TLS_AES_128_GCM_SHA256, CipherSuite.TLS_AES_256_GCM_SHA384, CipherSuite.TLS_CHACHA20_POLY1305_SHA256};
 	CipherSuite[] cipherSuites = defaultCipherSuites;
 
 	public static void setDefaultCipherSuites(CipherSuite[] ciphers) {
@@ -40,7 +40,7 @@ public abstract class MSSEngine {
 	}
 
 	public static final byte PSC_ONLY = 0x1;
-	static final int WRITE_PENDING = 0x80;
+	static final byte WRITE_PENDING = (byte) 128;
 
 	byte flag, stage;
 
@@ -51,13 +51,13 @@ public abstract class MSSEngine {
 	public abstract void switches(int sw);
 	public int switches() { return flag; }
 
-	protected MSSPrivateKey cert;
-	public MSSEngine setDefaultCert(MSSPrivateKey cert) {
+	protected MSSKeyPair cert;
+	public MSSEngine setDefaultCert(MSSKeyPair cert) {
 		assertInitial();
 		this.cert = cert;
 		return this;
 	}
-	protected MSSPrivateKey getCertificate(CharMap<DynByteBuf> ext, int formats) { return cert != null && ((1 << cert.format())&formats) != 0 ? cert : null; }
+	protected MSSKeyPair getCertificate(CharMap<DynByteBuf> ext, int formats) { return cert != null && ((1 << cert.format())&formats) != 0 ? cert : null; }
 
 	public abstract void setPreSharedCertificate(IntMap<MSSPublicKey> certs);
 
@@ -70,21 +70,15 @@ public abstract class MSSEngine {
 	public final boolean isHandshakeDone() { return stage >= HS_DONE; }
 	public final boolean isClosed() { return stage == HS_FAIL; }
 
-	protected int getSupportedKeyExchanges() { return (1 << CipherSuite.KEX_DHE_ffdhe2048) | (1 << CipherSuite.KEX_ECDHE_secp384r1); }
+	protected int getSupportedKeyExchanges() { return CipherSuite.ALL_KEY_EXCHANGE_TYPE; }
 	protected KeyAgreement getKeyExchange(int type) {
 		if (type == -1) return CipherSuite.getKeyAgreement(CipherSuite.KEX_ECDHE_secp384r1);
 		return CipherSuite.getKeyAgreement(type);
 	}
 
-	protected int getSupportCertificateType() { return CipherSuite.ALL_CERTIFICATE_TYPE; }
-	protected Object checkCertificate(int type, DynByteBuf data) {
-		try {
-			MSSPublicKey key = CipherSuite.getPublicKeyFactory(type).decode(data.toByteArray());
-			if (key instanceof JCertificateKey) ((JCertificateKey) key).verify(JCertificateKey.getDefault());
-			return key;
-		} catch (Exception e) {
-			return e;
-		}
+	protected int getSupportCertificateType() { return CipherSuite.ALL_PUBLIC_KEY_TYPE; }
+	protected MSSPublicKey checkCertificate(int type, DynByteBuf data) throws GeneralSecurityException {
+		return CipherSuite.getKeyFormat(type).decode(data);
 	}
 
 	protected void processExtensions(CharMap<DynByteBuf> extIn, CharMap<DynByteBuf> extOut, int stage) {}
@@ -93,10 +87,10 @@ public abstract class MSSEngine {
 		HMAC pfKd = new HMAC(session.suite.sign.get());
 		byte[] pfSk = session.key;
 
-		RCipherSpi cipher = session.suite.ciphers.get();
+		RCipherSpi cipher = session.suite.cipher.get();
 		try {
 			cipher.init(Cipher.DECRYPT_MODE,
-				HMAC.HKDF_expand(pfKd, pfSk, new ByteList(2).putAscii("PF"), session.suite.ciphers.getKeySize()), null,
+				HMAC.HKDF_expand(pfKd, pfSk, new ByteList(2).putAscii("PF"), session.suite.cipher.getKeySize()), null,
 				new HKDFPRNG(pfKd, pfSk, "PF"));
 		} catch (GeneralSecurityException e) {
 			error(e);
@@ -111,26 +105,22 @@ public abstract class MSSEngine {
 		sharedKey = HMAC.HKDF_expand(keyDeriver, sharedKey_pre, ByteList.wrap(sharedKey), 64);
 	}
 	public final byte[] deriveKey(String name, int len) {
-		DynByteBuf info = allocateTmpBuffer(ByteList.byteCountUTF8(name)+2).putUTF(name);
+		DynByteBuf info = heapBuffer(ByteList.byteCountUTF8(name)+2).putUTF(name);
 		byte[] secret = HMAC.HKDF_expand(keyDeriver, sharedKey, info, len);
-		freeTmpBuffer(info);
+		free(info);
 		return secret;
 	}
 	public final SecureRandom getPRNG(String name) { return new HKDFPRNG(keyDeriver, sharedKey, name); }
 
-	protected DynByteBuf allocateTmpBuffer(int capacity) {
-		return BufferPool.buffer(false, capacity);
-	}
-	protected void freeTmpBuffer(DynByteBuf buf) {
-		BufferPool.reserve(buf);
-	}
+	protected DynByteBuf heapBuffer(int capacity) { return BufferPool.buffer(false, capacity); }
+	static void free(DynByteBuf buf) { if (BufferPool.isPooled(buf)) BufferPool.reserve(buf); }
 
 	public final void close() {
 		encoder = decoder = null;
 		sharedKey = null;
 		keyDeriver = null;
 		if (toWrite != null) {
-			freeTmpBuffer(toWrite);
+			free(toWrite);
 			toWrite = null;
 		}
 		stage = HS_FAIL;

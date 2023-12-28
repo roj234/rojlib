@@ -3,7 +3,7 @@ package roj.plugins.cross;
 import roj.collect.IntMap;
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
-import roj.net.NetworkUtil;
+import roj.net.NetUtil;
 import roj.net.ch.*;
 import roj.plugins.cross.server.AEServer;
 import roj.text.CharList;
@@ -124,7 +124,7 @@ public class AEHost extends IAEClient {
 
 				byte[] digest = rb.readBytes(rb.readUnsignedByte());
 				String name = rb.readVUIGB();
-				String ip = NetworkUtil.bytes2ip(rb.readBytes(rb.readableBytes()));
+				String ip = NetUtil.bytes2ip(rb.readBytes(rb.readableBytes()));
 
 				Client client = new Client(digest, name, ip);
 				clients.putInt(clientId, client);

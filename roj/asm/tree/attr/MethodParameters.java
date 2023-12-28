@@ -1,8 +1,8 @@
 package roj.asm.tree.attr;
 
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstUTF;
-import roj.asm.util.AccessFlag;
+import roj.asm.Opcodes;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstUTF;
 import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
 
@@ -42,7 +42,7 @@ public final class MethodParameters extends Attribute {
 		for (int i = 0; i < flags.size(); i++) {
 			MethodParam e = flags.get(i);
 			sb.append("    Name: ").append(e.name).append("\n    Access: ");
-			AccessFlag.toString(e.flag, AccessFlag.TS_PARAM, sb);
+			Opcodes.showModifiers(e.flag, Opcodes.ACC_SHOW_PARAM, sb);
 			sb.append('\n');
 		}
 		return sb.toString();

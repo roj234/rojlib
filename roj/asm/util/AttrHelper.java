@@ -1,7 +1,7 @@
 package roj.asm.util;
 
-import roj.asm.cst.ConstantPool;
-import roj.asm.misc.ReflectClass;
+import roj.asm.Opcodes;
+import roj.asm.cp.ConstantPool;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
@@ -25,7 +25,7 @@ import static roj.asm.tree.AnnotationClass.*;
  */
 public class AttrHelper {
 	public static AnnotationClass getAnnotationInfo(IClass clz) {
-		if ((clz.modifier() & AccessFlag.ANNOTATION) == 0) return null;
+		if ((clz.modifier() & Opcodes.ACC_ANNOTATION) == 0) return null;
 
 		if (clz instanceof ReflectClass) {
 			Class<?> o = ((ReflectClass) clz).owner;

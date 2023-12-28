@@ -6,7 +6,6 @@ import roj.crypt.SM3;
 import roj.crypt.XChaCha;
 import roj.io.NIOUtil;
 import roj.io.buf.BufferPool;
-import roj.io.misc.Net_LLIO;
 import roj.util.DynByteBuf;
 
 import java.io.FileDescriptor;
@@ -292,7 +291,7 @@ public class Pipe implements Selectable {
 
 		FileDescriptor fd = NIOUtil.tcpFD(ch);
 		int r;
-		Net_LLIO util = NIOUtil.tcpFdRW();
+		NIOUtil.LLIO util = NIOUtil.tcpFdRW();
 		try {
 			do {
 				r = util.read(fd, dst.address() + dst.wIndex(), dst.capacity() - dst.wIndex());
@@ -313,7 +312,7 @@ public class Pipe implements Selectable {
 
 		FileDescriptor fd = NIOUtil.tcpFD(ch);
 		int w;
-		Net_LLIO util = NIOUtil.tcpFdRW();
+		NIOUtil.LLIO util = NIOUtil.tcpFdRW();
 		try {
 			do {
 				w = util.write(fd, src.address() + src.rIndex, src.readableBytes());

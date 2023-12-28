@@ -4,6 +4,7 @@ import roj.asm.Opcodes;
 import roj.concurrent.OperationDone;
 import roj.config.word.NotStatementException;
 import roj.config.word.Word;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.parser.JSLexer;
 import roj.mildwind.type.*;
@@ -86,7 +87,7 @@ final class Constant implements Expression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) { return c; }
+	public JsObject compute(JsContext ctx) { return c; }
 
 	@Override
 	public String toString() { return c.toString(); }

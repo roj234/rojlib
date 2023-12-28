@@ -28,124 +28,108 @@ import java.util.Map;
  */
 public abstract class Node {
 	// region simple xpath-like selector language
-	private static final short lsb = 10, rsb = 11, dot = 12, lmb = 13, rmb = 14, any = 15, equ = 16, neq = 17, or = 18, comma = 19, sep = 20, sep2 = 21, attr = 22;
-
-	private static class XPath extends Tokenizer {
-		private static final MyBitSet TOKEN_CHAR = new MyBitSet();
-		private static final TrieTree<Word> TOKEN_ID = new TrieTree<>();
-		static { addSymbols(TOKEN_ID, TOKEN_CHAR, 10, TextUtil.split1("( ) / [ ] * = != | , ... // @", ' ')); addWhitespace(TOKEN_CHAR); }
-
-		{ literalEnd = TOKEN_CHAR; tokens = TOKEN_ID; }
-
-		private List<Object> in = new SimpleList<>(), out = new SimpleList<>();
-
-		final <T> List<T> in() { return Helpers.cast(in); }
-		final <T> List<T> out() { return Helpers.cast(out); }
-		final boolean swap() { List<Object> t = in; in = out; out = t; t.clear(); return in.isEmpty(); }
-	}
+	private static final short lsb = 10, rsb = 11, child = 12, any_child = 13, lmb = 14, rmb = 15, any = 16, equ = 17, neq = 18, or = 19, comma = 20, range = 21, attr = 22;
+	private static final MyBitSet XPATH_TOKEN_CHAR = new MyBitSet();
+	private static final TrieTree<Word> XPATH_TOKEN_ID = new TrieTree<>();
+	static { Tokenizer.addSymbols(XPATH_TOKEN_ID, XPATH_TOKEN_CHAR, 10, TextUtil.split1("( ) / // [ ] * = != | , ... @", ' ')); Tokenizer.addWhitespace(XPATH_TOKEN_CHAR); }
 
 	/**
 	 * /module/component[name="NewModuleRootManager"]/content
 	 * /my//data(2,5,66...99)/com[type="xyz" | 456, ntr != 233]/*
 	 */
-	public List<Node> querySelectorAll(String key) throws ParseException {
-		XPath wr = (XPath) new XPath().init(key);
-		wr.in.clear();
-		wr.in.add(this);
-		_query(wr);
-		return wr.out();
+	public List<Node> querySelectorAll(String key) {
+		Tokenizer x = new Tokenizer().defaultC2C(3).tokenIds(XPATH_TOKEN_ID).literalEnd(XPATH_TOKEN_CHAR).init(key);
+		try {
+			return _query(x, SimpleList.asModifiableList(this));
+		} catch (ParseException e) {
+			throw new IllegalArgumentException(key, e);
+		}
 	}
-	public Node querySelector(String key) throws ParseException {
-		XPath wr = (XPath) new XPath().init(key);
-		wr.in.clear();
-		wr.in.add(this);
-		_query(wr);
-		List<Node> out = wr.out();
+	public Node querySelector(String key) {
+		List<Node> out = querySelectorAll(key);
 		return out.isEmpty() ? null : out.get(0);
 	}
 
-	private static void _query(XPath wr) throws ParseException {
-		while (wr.hasNext()) {
-			Word w = wr.readWord();
+	private static List<Node> _query(Tokenizer wr, List<Node> in) throws ParseException {
+		List<Node> out = new SimpleList<>();
+		Word w = wr.next();
+		while (true) {
 			switch (w.type()) {
-				case dot: case sep2: wr.retractWord(); _tag(wr, wr.in(), wr.out()); break;
-				case lsb: _child(wr, wr.in(), wr.out()); break;
-				case lmb: _filter(wr, wr.in(), wr.out()); break;
+				case child: {
+					String val = wr.next().val();
+					for (int i = 0; i < in.size(); i++)
+						in.get(i).elements(val, Helpers.cast(out));
+				}
+				break;
+				case any_child: {
+					String val = wr.next().val();
+					for (int i = 0; i < in.size(); i++)
+						in.get(i).getElementsByTagName(val, Helpers.cast(out));
+				}
+				break;
+				case lsb:
+					while (true) {
+						int val = wr.except(Word.INTEGER, "index").asInt();
+						if (val < 0) val = in.size()+val;
+
+						w = wr.next();
+						if (w.type() == range) {
+							int to = wr.except(Word.INTEGER, "to_index").asInt();
+							if (to < 0) to = in.size()+to;
+							out.addAll(in.subList(val, to));
+							w = wr.next();
+						} else {
+							out.add(in.get(val));
+						}
+
+						if (w.type() == rsb) break;
+						if (w.type() != comma) wr.unexpected(w.val(), "index | comma | )");
+					}
+				break;
+				case lmb:
+					MyHashSet<Node> _out = new MyHashSet<>();
+
+					while (true) {
+						String key = wr.next().val();
+
+						w = wr.next();
+						int operator = w.type();
+						if (operator != equ && operator != neq) wr.unexpected(w.val(), "== | !=");
+
+						boolean bopr = operator == equ;
+
+						do {
+							CEntry of = XMLParser.of(wr.next());
+							for (int i = 0; i < in.size(); i++) {
+								if (of.isSimilar(in.get(i).attr(key)) == bopr) {
+									_out.add(in.get(i));
+								}
+							}
+
+							w = wr.next();
+						} while (w.type() == or);
+
+						if (w.type() == rmb) break;
+						if (w.type() != comma) wr.unexpected(w.val(), "comma | right_square_bracket");
+
+						in.clear();
+						in.addAll(_out);
+						_out.clear();
+					}
+
+					out.addAll(_out);
+				break;
 				default: wr.unexpected(w.val(), ". | ... | ( | [");
 			}
-			if (wr.swap()) break;
+
+			if (out.isEmpty() || (w = wr.next()).type() == Word.EOF) break;
+
+			List<Node> tmp = in;
+			in = out;
+			out = tmp;
+			out.clear();
 		}
-	}
-	private static void _tag(XPath wr, List<Node> in, List<Node> out) throws ParseException {
-		List<Node> tmp;
-		while (true) {
-			int sep = wr.next().type();
-			switch (sep) {
-				case dot:
-					String val = wr.next().val();
-					for (int i = 0; i < in.size(); i++) {
-						in.get(i).elements(val, Helpers.cast(out));
-					}
-					break;
-				case sep2:
-					val = wr.next().val();
-					for (int i = 0; i < in.size(); i++) {
-						in.get(i).getElementsByTagName(val, Helpers.cast(out));
-					}
-					break;
-				default:
-					wr.retractWord();
-					return;
-			}
-		}
-	}
-	private static void _child(XPath wr, List<Node> in, List<Node> out) throws ParseException {
-		while (true) {
-			int val = wr.except(Word.INTEGER, "index").asInt();
-			if (val < 0) val = in.size()+val;
-
-			Word w = wr.next();
-			if (w.type() == sep) {
-				int to = wr.except(Word.INTEGER, "to_index").asInt();
-				if (to < 0) to = in.size()+to;
-				out.addAll(in.subList(val, to));
-				w = wr.next();
-			} else {
-				out.add(in.get(val));
-			}
-
-			if (w.type() == rsb) return;
-			else if (w.type() != comma) wr.unexpected(w.val(), "index | comma | )");
-		}
-	}
-	private static void _filter(XPath wr, List<Node> in, List<Node> out) throws ParseException {
-		MyHashSet<Node> _out = new MyHashSet<>();
-
-		while (true) {
-			String key = wr.next().val();
-
-			Word w = wr.next();
-			int operator = w.type();
-			if (operator != equ && operator != neq) wr.unexpected(w.val(), "== | !=");
-
-			boolean bopr = operator == equ;
-
-			do {
-				CEntry of = XMLParser.of(wr.next());
-				for (int i = 0; i < in.size(); i++) {
-					if (of.isSimilar(in.get(i).attr(key)) == bopr) {
-						_out.add(in.get(i));
-					}
-				}
-
-				w = wr.next();
-			} while (w.type() == or);
-
-			if (w.type() == rmb) break;
-			if (w.type() != comma) wr.unexpected(w.val(), "comma | right_square_bracket");
-		}
-
-		out.addAll(_out);
+		return out;
 	}
 
 	// endregion
@@ -201,7 +185,7 @@ public abstract class Node {
 				return xml.asElement();
 			}
 		}
-		return null;
+		return Helpers.maybeNull();
 	}
 	public final List<Element> elements(String tag, List<Element> result) {
 		List<Node> children = children();

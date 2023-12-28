@@ -30,7 +30,7 @@ public class LongMap<V> extends AbstractMap<Long, V> implements _Generic_Map<Lon
 		return entry == null ? def : entry.v;
 	}
 
-	public static class Entry<V> implements _Generic_Entry<Entry<V>>, Map.Entry<Long, V> {
+	public static class Entry<V> implements _Generic_Entry, Map.Entry<Long, V> {
 		protected long k;
 		protected V v;
 
@@ -41,18 +41,10 @@ public class LongMap<V> extends AbstractMap<Long, V> implements _Generic_Map<Lon
 
 		@Override
 		@Deprecated
-		public Long getKey() {
-			return k;
-		}
+		public Long getKey() { return k; }
+		public long getLongKey() { return k; }
 
-		public long getLongKey() {
-			return k;
-		}
-
-		public V getValue() {
-			return v;
-		}
-
+		public V getValue() { return v; }
 		public V setValue(V now) {
 			V v = this.v;
 			this.v = now;
@@ -60,11 +52,8 @@ public class LongMap<V> extends AbstractMap<Long, V> implements _Generic_Map<Lon
 		}
 
 		protected Entry<V> next;
-
 		@Override
-		public Entry<V> __next() {
-			return next;
-		}
+		public Entry<V> __next() { return next; }
 	}
 
 	protected Entry<?>[] entries;
@@ -125,7 +114,7 @@ public class LongMap<V> extends AbstractMap<Long, V> implements _Generic_Map<Lon
 
 	public Set<Map.Entry<Long, V>> entrySet() { return Helpers.cast(selfEntrySet()); }
 	public Set<Entry<V>> selfEntrySet() { return _Generic_EntrySet.create(this); }
-	public _Generic_Entry<?>[] __entries() { return entries; }
+	public _Generic_Entry[] __entries() { return entries; }
 	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
 
 	@Nonnull

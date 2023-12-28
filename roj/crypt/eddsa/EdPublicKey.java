@@ -1,6 +1,5 @@
 package roj.crypt.eddsa;
 
-import roj.crypt.eddsa.math.EdCurve;
 import roj.crypt.eddsa.math.EdPoint;
 
 import java.security.PublicKey;
@@ -17,10 +16,10 @@ public class EdPublicKey implements EdKey, PublicKey {
 
 	private final EdPoint Aneg;
 	private final byte[] Abyte;
-	private final EdDSAParameterSpec spec;
+	private final EdParameterSpec spec;
 
 	public EdPublicKey(X509EncodedKeySpec spec) throws InvalidKeySpecException {
-		this(EdPublicKey.decode(spec.getEncoded()), EdCurve.ED_25519_CURVE_SPEC);
+		this(EdPublicKey.decode(spec.getEncoded()), EdParameterSpec.ED25519_CURVE_SPEC);
 	}
 
 	public EdPublicKey(EdPrivateKey priKey) {
@@ -29,14 +28,14 @@ public class EdPublicKey implements EdKey, PublicKey {
 		this.spec = priKey.getParams();
 	}
 
-	public EdPublicKey(byte[] pk, EdDSAParameterSpec spec) {
+	public EdPublicKey(byte[] pk, EdParameterSpec spec) {
 		if (pk.length != 32) throw new IllegalArgumentException("public-key length is wrong");
 		this.Aneg = new EdPoint(spec.getCurve(), pk).negate();
 		this.Abyte = pk;
 		this.spec = spec;
 	}
 
-	public EdPublicKey(EdPoint A, EdDSAParameterSpec spec) {
+	public EdPublicKey(EdPoint A, EdParameterSpec spec) {
 		this.Aneg = A.negate();
 		this.Abyte = A.toByteArray();
 		this.spec = spec;
@@ -92,7 +91,7 @@ public class EdPublicKey implements EdKey, PublicKey {
 
 	@Override
 	public byte[] getEncoded() {
-		if (!spec.equals(EdCurve.ED_25519_CURVE_SPEC)) return null;
+		if (!spec.equals(EdParameterSpec.ED25519_CURVE_SPEC)) return null;
 
 		int totlen = 12 + Abyte.length;
 		byte[] rv = new byte[totlen];
@@ -119,7 +118,7 @@ public class EdPublicKey implements EdKey, PublicKey {
 	}
 
 	@Override
-	public EdDSAParameterSpec getParams() { return spec; }
+	public EdParameterSpec getParams() { return spec; }
 
 	public int hashCode() { return Arrays.hashCode(Abyte); }
 
@@ -130,4 +129,3 @@ public class EdPublicKey implements EdKey, PublicKey {
 		return Arrays.equals(Abyte, pk.Abyte) && spec.equals(pk.spec);
 	}
 }
-

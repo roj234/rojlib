@@ -86,7 +86,23 @@ public class Vec3d extends Vector {
 	 * 在直线上的投影
 	 */
 	public Vec3d project(Vec3d line) {
-		return MathUtils.project(this, line, this);
+		return project(this, line, this);
+	}
+
+	/**
+	 * 投影点
+	 *
+	 * @param v 还是容器
+	 */
+	public static Vec3d project(Vec3d point, Vec3d line, Vec3d v) {
+		v.set(point)
+		 // 1. Point和Line所在的平面的法线
+		 .cross(line)
+		 // 2. 与Line垂直和(法线垂直 => 平面内)的向量
+		 .cross(line);
+
+		double B = (line.x * point.y / line.y - point.x) / (v.x - line.x * v.y / line.y);
+		return (Vec3d) v.mul(B).add(point);
 	}
 
 	public Vec2d projectXY() {

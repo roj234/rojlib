@@ -1,6 +1,7 @@
 package roj.mildwind.parser.ast;
 
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsBool;
 import roj.mildwind.type.JsObject;
@@ -23,7 +24,7 @@ final class AsBool implements Expression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) { return JsBool.valueOf(right.compute(ctx).asBool()); }
+	public JsObject compute(JsContext ctx) { return JsBool.valueOf(right.compute(ctx).asBool()); }
 
 	@Override
 	public Type type() { return Type.BOOL; }

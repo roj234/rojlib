@@ -216,14 +216,11 @@ public class TextDeDup {
 				new ProcessBuilder().command("D:\\Everything\\Everything.exe", "-s", "<"+Tokenizer.addSlashes(IOUtil.noExtName(d.left.getName())) + ">|<" + Tokenizer.addSlashes(IOUtil.noExtName(d.right.getName()))+'>').start();
 				int exit = new ProcessBuilder().command(args2).start().waitFor();
 
-				if (exit == 0) CLIUtil.userInput("请按任意键继续");
+				if (exit == 0) CLIUtil.readString("请按任意键继续");
 
 				System.out.println("exit code:"+exit);
 				System.out.println();
 			}
-		} else if (args[0].equals("conv")) {
-			NovelServer.load();
-			NovelServer.convert(new File(args[1]),new File("D:\\Desktop\\novel\\tst_out"),new File("D:\\Desktop\\star.csv"),0);
 		} else {
 			System.out.println("unknown command, see help");
 		}

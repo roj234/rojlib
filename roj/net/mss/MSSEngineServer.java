@@ -2,6 +2,7 @@ package roj.net.mss;
 
 import roj.collect.CharMap;
 import roj.collect.IntMap;
+import roj.concurrent.OperationDone;
 import roj.crypt.HMAC;
 import roj.crypt.KeyAgreement;
 import roj.crypt.RCipherSpi;
@@ -13,7 +14,6 @@ import roj.util.Helpers;
 import javax.crypto.Cipher;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
-import java.security.Signature;
 
 import static roj.net.mss.MSSEngineClient.HELLO_RETRY_REQUEST;
 
@@ -40,14 +40,14 @@ public class MSSEngineServer extends MSSEngine {
 
 	// region inheritor modifiable
 
-	protected IntMap<MSSPrivateKey> preSharedCerts;
+	protected IntMap<MSSKeyPair> preSharedCerts;
 	protected MSSSessionManager sessionManager;
 
 	public void setPreSharedCertificate(IntMap<MSSPublicKey> certs) {
 		assertInitial();
 		if (certs != null && !certs.isEmpty()) {
 			for (MSSPublicKey key : certs.values()) {
-				if (!(key instanceof MSSPrivateKey))
+				if (!(key instanceof MSSKeyPair))
 					throw new IllegalArgumentException("Should be private key pair");
 			}
 		}
@@ -91,7 +91,7 @@ public class MSSEngineServer extends MSSEngine {
 			if (v != 0) return v;
 
 			tx.put(H_SERVER_HELLO).putMedium(toWrite.readableBytes()).put(toWrite);
-			freeTmpBuffer(toWrite);
+			free(toWrite);
 			toWrite = null;
 
 			flag &= ~WRITE_PENDING;
@@ -139,7 +139,7 @@ public class MSSEngineServer extends MSSEngine {
 			if (v != 0) return v;
 
 			out.put(H_SERVER_HELLO).putMedium(toWrite.readableBytes()).put(toWrite);
-			freeTmpBuffer(toWrite);
+			free(toWrite);
 			toWrite = null;
 
 			flag &= ~WRITE_PENDING;
@@ -212,7 +212,7 @@ public class MSSEngineServer extends MSSEngine {
 		int v = ensureWritable(out, ob.length() + 4);
 		if (v != 0) {
 			flag |= WRITE_PENDING;
-			toWrite = allocateTmpBuffer(ob.length()).put(ob);
+			toWrite = heapBuffer(ob.length()).put(ob);
 			return v;
 		}
 
@@ -295,7 +295,7 @@ public class MSSEngineServer extends MSSEngine {
 		}
 
 		// Pre-shared certificate to decrease bandwidth consumption
-		MSSPrivateKey cert = null;
+		MSSKeyPair kp = null;
 		if (preSharedCerts != null) {
 			DynByteBuf psc = extIn.remove(Extension.pre_shared_certificate);
 			if (psc == null) {
@@ -303,25 +303,25 @@ public class MSSEngineServer extends MSSEngine {
 			} else {
 				int i;
 				while (psc.isReadable()) {
-					cert = preSharedCerts.get(i = psc.readInt());
-					if (cert != null) {
-						extOut.put(Extension.pre_shared_certificate, ByteList.allocate(4).putInt(i));
+					kp = preSharedCerts.get(i = psc.readInt());
+					if (kp != null) {
+						extOut.put(Extension.pre_shared_certificate, heapBuffer(4).putInt(i));
 						break;
 					}
 				}
 			}
 		}
 
-		if (cert == null) {
-			cert = getCertificate(extIn, supported_certificate);
-			if (cert == null) return error(NEGOTIATION_FAILED, "certificateType");
+		if (kp == null) {
+			kp = getCertificate(extIn, supported_certificate);
+			if (kp == null) return error(NEGOTIATION_FAILED, "certificateType");
 
-			byte[] data = cert.publicKey();
-			extOut.put(Extension.certificate, ByteList.allocate(1+data.length).put((byte) cert.format()).put(data));
+			byte[] data = kp.encode();
+			extOut.put(Extension.certificate, heapBuffer(1+data.length).put(kp.format()).put(data));
 		}
 
 		if ((flag & VERIFY_CLIENT) != 0)
-			extOut.put(Extension.certificate_request, ByteList.allocate(4).putInt(getSupportCertificateType()));
+			extOut.put(Extension.certificate_request, heapBuffer(4).putInt(getSupportCertificateType()));
 
 		processExtensions(extIn, extOut, 1);
 
@@ -352,33 +352,30 @@ public class MSSEngineServer extends MSSEngine {
 
 		// signature of not encrypted data
 		sign.update(ob);
-
-		Signature signer = cert.signer(random);
-		signer.update(sign.digestShared());
-		byte[] bb = signer.sign();
+		byte[] bb = CipherSuite.getKeyFormat(kp.format()).sign(kp, random, sign.digestShared());
 		ob.putShort(bb.length).put(bb);
 
 		stage = PREFLIGHT_END_WAIT;
-		encoder = suite.ciphers.get();
-		decoder = suite.ciphers.get();
+		encoder = suite.cipher.get();
+		decoder = suite.cipher.get();
 
-		encoder.init(Cipher.ENCRYPT_MODE, deriveKey("s2c0", suite.ciphers.getKeySize()), null, getPRNG("s2c"));
-		decoder.init(Cipher.DECRYPT_MODE, deriveKey("c2s0", suite.ciphers.getKeySize()), null, getPRNG("c2s"));
+		encoder.init(Cipher.ENCRYPT_MODE, deriveKey("s2c0", suite.cipher.getKeySize()), null, getPRNG("s2c"));
+		decoder.init(Cipher.DECRYPT_MODE, deriveKey("c2s0", suite.cipher.getKeySize()), null, getPRNG("c2s"));
 
 		ob.rIndex = pos;
-		DynByteBuf encb = allocateTmpBuffer(encoder.engineGetOutputSize(ob.readableBytes()));
+		DynByteBuf encb = heapBuffer(encoder.engineGetOutputSize(ob.readableBytes()));
 		try {
 			encoder.cryptFinal(ob, encb);
 			ob.wIndex(pos); ob.put(encb);
 			ob.rIndex = 0;
 		} finally {
-			freeTmpBuffer(encb);
+			free(encb);
 		}
 
 		int v = ensureWritable(tx, ob.length() + 4);
 		if (v != 0) {
 			flag |= WRITE_PENDING;
-			toWrite = allocateTmpBuffer(ob.length()).put(ob);
+			toWrite = heapBuffer(ob.length()).put(ob);
 			return v;
 		}
 
@@ -391,14 +388,14 @@ public class MSSEngineServer extends MSSEngine {
 	// opaque[*] encoded_data
 	private int handlePreflight(DynByteBuf tx, DynByteBuf rx) throws MSSException {
 		if (preDecoder != null) {
-			DynByteBuf o = allocateTmpBuffer(preDecoder.engineGetOutputSize(rx.readableBytes()));
+			DynByteBuf o = heapBuffer(preDecoder.engineGetOutputSize(rx.readableBytes()));
 			try {
 				preDecoder.cryptFinal(rx, o);
 				onPreData(o);
 			} catch (Exception e) {
 				return error(e);
 			} finally {
-				freeTmpBuffer(o);
+				free(o);
 			}
 		}
 		return HS_OK;
@@ -414,14 +411,17 @@ public class MSSEngineServer extends MSSEngine {
 			DynByteBuf buf = extIn.remove(Extension.certificate);
 			if (buf == null) return error(ILLEGAL_PARAM, "certificate missing");
 
-			byte[] sign = buf.readBytes(buf.readUnsignedByte());
+			byte[] sign = buf.readBytes(buf.readUnsignedShort());
 
-			Object o = checkCertificate(buf.readUnsignedByte(), buf);
-			if (o instanceof Throwable) return error((Throwable) o);
+			int type = buf.readUnsignedByte();
+			if ((getSupportCertificateType() & (1 << type)) == 0) return error(NEGOTIATION_FAILED, "unsupported_certificate_type");
 
-			Signature verifier = ((MSSPublicKey) o).verifier();
-			verifier.update(sharedKey);
-			if (!verifier.verify(sign)) return error(CIPHER_FAULT, "invalid certificate");
+			MSSPublicKey key = checkCertificate(type, buf);
+			try {
+				if (!CipherSuite.getKeyFormat(key.format()).verify(key, sharedKey, sign)) throw OperationDone.INSTANCE;
+			} catch (Exception e) {
+				return error(ILLEGAL_PARAM, "invalid signature");
+			}
 		}
 		processExtensions(extIn, null, 3);
 

@@ -2,6 +2,7 @@ package roj.mildwind.parser.ast;
 
 import roj.asm.Opcodes;
 import roj.asm.visitor.Label;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsObject;
 import roj.mildwind.type.Type;
@@ -44,7 +45,7 @@ final class TripleIf implements Expression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) { return val.compute(ctx).asBool() != 0 ? ok.compute(ctx) : fail.compute(ctx); }
+	public JsObject compute(JsContext ctx) { return val.compute(ctx).asBool() != 0 ? ok.compute(ctx) : fail.compute(ctx); }
 
 	@Nonnull
 	@Override

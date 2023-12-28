@@ -35,8 +35,8 @@ public abstract class HttpRequest {
 	public static int DEFAULT_TIMEOUT = 10000;
 	public static final Headers DEFAULT_HEADERS = new Headers();
 	static {
-		DEFAULT_HEADERS.put("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
-		DEFAULT_HEADERS.put("connection", "keep-alive");
+		DEFAULT_HEADERS.put("accept", "*/*");
+		//DEFAULT_HEADERS.put("connection", "keep-alive");
 		DEFAULT_HEADERS.put("user-agent", "Java/1.8.0_201");
 		DEFAULT_HEADERS.put("accept-encoding", "gzip, deflate");
 	}
@@ -186,6 +186,8 @@ public abstract class HttpRequest {
 
 	public final SyncHttpClient execute() throws IOException { return execute(DEFAULT_TIMEOUT); }
 	public final SyncHttpClient execute(int timeout) throws IOException {
+		headers.putIfAbsent("connection", "close");
+
 		MyChannel ch = MyChannel.openTCP();
 		SyncHttpClient client = new SyncHttpClient();
 		ch.addLast("h11@timer", new Timeout(timeout, 1000))
@@ -199,6 +201,8 @@ public abstract class HttpRequest {
 	public final SyncHttpClient executePooled(int timeout) throws IOException { return executePooled(timeout, 1); }
 	public final SyncHttpClient executePooled(int timeout, int maxRedirect) throws IOException { return executePooled(timeout, maxRedirect, 0); }
 	public final SyncHttpClient executePooled(int timeout, int maxRedirect, int maxRetry) throws IOException {
+		headers.putIfAbsent("connection", "keep-alive");
+
 		SyncHttpClient client = new SyncHttpClient();
 
 		Pool man = pool.computeIfAbsent(_getAddress(), fn);

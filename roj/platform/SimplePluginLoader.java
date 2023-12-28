@@ -1,8 +1,8 @@
 package roj.platform;
 
 import roj.asm.tree.anno.Annotation;
-import roj.asmx.annorepo.AnnotationInfo;
-import roj.asmx.annorepo.AnnotationRepo;
+import roj.asmx.more_annotations.AnnotationInfo;
+import roj.asmx.more_annotations.AnnotationRepo;
 import roj.collect.MyHashMap;
 import roj.math.Version;
 import roj.ui.terminal.Argument;
@@ -53,7 +53,7 @@ public class SimplePluginLoader extends Plugin {
 			int v = loadAnnotationPlugins(ctx.argument("file", File.class));
 			getLogger().info("找到了{}个",v);
 		})));
-		DefaultPluginSystem.CMD.register(literal("spl_load").then(argument("id", Argument.setOf(simplePlugins, false)).executes(ctx -> {
+		DefaultPluginSystem.CMD.register(literal("spl_load").then(argument("id", Argument.oneOf(simplePlugins)).executes(ctx -> {
 			PluginDescriptor pd = ctx.argument("id", PluginDescriptor.class);
 
 			getLogger().info("正在加载注解插件 {}", pd);

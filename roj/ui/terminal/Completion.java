@@ -9,8 +9,9 @@ import roj.ui.CLIUtil;
  */
 public final class Completion {
 	public AnsiString description, completion;
+	public boolean replaceBefore;
 
-	public Completion(String str) { completion = new AnsiString(str).bgColorRGB(0xFFFFF).color16((byte) (CLIUtil.BLACK+60)); }
+	public Completion(String str) { completion = new AnsiString(str).bgColorRGB(0xFFFFF).color16(CLIUtil.BLACK+CLIUtil.HIGHLIGHT); }
 	public Completion(AnsiString str) { completion = str; }
 	public Completion(AnsiString str, AnsiString desc) {
 		completion = str;

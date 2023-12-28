@@ -1,12 +1,12 @@
 package roj.mod;
 
 import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.timing.ScheduleTask;
 import roj.ui.CLIUtil;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.mod.Shared.DEBUG;
@@ -93,7 +93,7 @@ final class AutoCompile extends Thread {
 
 	private ScheduleTask debounceTask;
 	private boolean checkAndCompile(Project p) {
-		MyHashSet<String> set = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
+		Set<String> set = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
 		if (set.contains(null) || set.isEmpty()) {
 			if (set.contains(null)) if (DEBUG) System.out.println("[AC] 未注册监听器");
 			return false;
@@ -104,7 +104,7 @@ final class AutoCompile extends Thread {
 			tmp1.addAll(set);
 
 			debounceTask = PeriodicTask.delay(() -> {
-				MyHashSet<String> set2 = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
+				Set<String> set2 = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
 				tmp2.clear();
 				tmp2.addAll(set2);
 

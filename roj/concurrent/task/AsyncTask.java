@@ -78,31 +78,23 @@ public class AsyncTask<T> implements Future<T>, ITask {
 
 	@Override
 	public T get() throws InterruptedException, ExecutionException {
-		while (true) {
-			switch (state) {
-				case INITIAL:
-				case RUNNING: synchronized (this) { while (!isDone()) wait(); }
-				break;
-				case CANCELLED: throw new CancellationException();
-				case FAILED: throw new ExecutionException((Throwable) out);
-				case COMPLETED: return out;
-			}
-		}
+		synchronized (this) { while (!isDone()) wait(); }
+		return getOrThrow();
 	}
 
 	@Override
 	public T get(long timeout, @Nonnull TimeUnit unit) throws InterruptedException, TimeoutException, ExecutionException {
-		while (true) {
-			switch (state) {
-				case INITIAL:
-				case RUNNING:
-					synchronized (this) { wait(unit.toMillis(timeout)); }
-					if (!isDone()) throw new TimeoutException();
-				break;
-				case CANCELLED: throw new CancellationException();
-				case FAILED: throw new ExecutionException((Throwable) out);
-				case COMPLETED: return out;
-			}
+		synchronized (this) { if (!isDone()) wait(unit.toMillis(timeout)); }
+		if (!isDone()) throw new TimeoutException();
+		return getOrThrow();
+	}
+
+	private T getOrThrow() throws ExecutionException {
+		switch (state) {
+			default: throw new IllegalStateException("unknown state"+state);
+			case CANCELLED: throw new CancellationException();
+			case FAILED: throw new ExecutionException((Throwable) out);
+			case COMPLETED: return out;
 		}
 	}
 }

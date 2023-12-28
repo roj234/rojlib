@@ -1,9 +1,9 @@
 package roj.mod;
 
+import roj.asm.type.Desc;
 import roj.asm.type.TypeHelper;
+import roj.asmx.mapper.Mapper;
 import roj.collect.*;
-import roj.mapper.Mapper;
-import roj.mapper.util.Desc;
 import roj.ui.GUIUtil;
 import roj.util.Helpers;
 

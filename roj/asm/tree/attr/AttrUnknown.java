@@ -1,7 +1,7 @@
 package roj.asm.tree.attr;
 
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstUTF;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstUTF;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 

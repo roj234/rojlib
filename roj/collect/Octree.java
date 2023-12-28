@@ -31,36 +31,24 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 		Vec3i getPos();
 	}
 
-	public static final class Node implements _Generic_Entry<Node> {
+	public static final class Node implements _Generic_Entry {
 		int k;
 		Object v;
 		byte mask;
 
-		Node next;
-
 		Node(int k) {this.k = k;}
 
-		public int getKey() {
-			return k;
-		}
+		public int getKey() { return k; }
+		public Object getValue() { return v; }
 
-		public Object getValue() {
-			return v;
-		}
-
-		public int getMask() {
-			return mask & 0xFF;
-		}
+		public int getMask() { return mask & 0xFF; }
 
 		@Override
-		public String toString() {
-			return "0b" + Integer.toBinaryString(k) + " @ " + v;
-		}
+		public String toString() { return "0b"+Integer.toBinaryString(k)+" @ "+v; }
 
+		Node next;
 		@Override
-		public Node __next() {
-			return next;
-		}
+		public Node __next() { return next; }
 	}
 
 	// field顺序=index
@@ -779,8 +767,8 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 	 * 补充说明：此迭代器无任何显式的顺序
 	 */
 	@Nonnull
-	public Iterator<Node> iterator() { return new EntryItr<>(this); }
-	public _Generic_Entry<?>[] __entries() { return nodes; }
+	public Iterator<Node> iterator() { return new _Generic_EntryItr<>(this); }
+	public _Generic_Entry[] __entries() { return nodes; }
 	public void __remove(Node node) { throw new UnsupportedOperationException(); }
 
 	@Override

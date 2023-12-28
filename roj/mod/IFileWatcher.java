@@ -1,27 +1,19 @@
 package roj.mod;
 
-import roj.collect.MyHashSet;
-
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Set;
 
 /**
- * Abstract Project Watcher
- *
  * @author solo6975
  * @since 2021/7/28 20:34
  */
 class IFileWatcher {
-	public void removeAll() {}
-
 	public static final int ID_RES = 0, ID_SRC = 1;
 
-	public MyHashSet<String> getModified(Project proj, int id) {
-		MyHashSet<String> set = new MyHashSet<>(2);
-		set.add(null);
-		return set;
-	}
-
+	public Set<String> getModified(Project proj, int id) { return Collections.singleton(null); }
 	public void register(Project proj) throws IOException {}
 
+	public void removeAll() {}
 	public void terminate() {}
 }

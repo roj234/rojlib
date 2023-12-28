@@ -1,6 +1,6 @@
 package roj.asm.tree;
 
-import roj.asm.cst.ConstantPool;
+import roj.asm.cp.ConstantPool;
 import roj.util.DynByteBuf;
 
 /**

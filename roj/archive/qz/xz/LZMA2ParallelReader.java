@@ -8,6 +8,7 @@ import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
 import roj.io.CorruptedInputException;
+import roj.io.MBInputStream;
 import roj.reflect.ReflectionUtils;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
@@ -21,7 +22,7 @@ import java.nio.channels.ClosedByInterruptException;
 import static roj.archive.qz.xz.LZMA2Out.COMPRESSED_SIZE_MAX;
 import static roj.archive.qz.xz.LZMAInputStream.getDictSize;
 
-public class LZMA2ParallelReader extends InputStream {
+public class LZMA2ParallelReader extends MBInputStream {
 	private volatile boolean noMoreInput;
 
 	private final int dictSize;
@@ -239,12 +240,6 @@ public class LZMA2ParallelReader extends InputStream {
 		this.taskFree = affinity;
 		ReflectionUtils.u.storeFence();
 		taskExecutor.pushTask(() -> { while (!noMoreInput) nextChunk(); });
-	}
-
-	private byte[] b0;
-	public int read() throws IOException {
-		if (b0 == null) b0 = new byte[1];
-		return read(b0, 0, 1) < 0 ? -1 : (b0[0] & 0xFF);
 	}
 
 	public int read(byte[] buf, int off, int len) throws IOException {

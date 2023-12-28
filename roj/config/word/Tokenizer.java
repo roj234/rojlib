@@ -9,6 +9,8 @@ import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.BiFunction;
 
 /**
@@ -107,7 +109,7 @@ public class Tokenizer extends ITokenizer {
 	public static void addSymbols(TrieTree<Word> indexes, MyBitSet noLiterals, int begin, String... symbols) {
 		for (String kw : symbols) {
 			indexes.put(kw, new Word().init(begin++, 0, kw));
-			noLiterals.add(kw.charAt(0));
+			if (noLiterals != null) noLiterals.add(kw.charAt(0));
 		}
 	}
 	public static void markSpecial(TrieTree<Word> indexes, String... tokens) {
@@ -117,6 +119,17 @@ public class Tokenizer extends ITokenizer {
 	}
 	public static void addWhitespace(MyBitSet special) {
 		special.addAll(" \t\r\n\f");
+	}
+
+	public final List<Word> split(String seq) throws ParseException {
+		init(seq);
+		List<Word> list = new ArrayList<>();
+		while (true) {
+			Word w = next();
+			if (w.type() == Word.EOF) break;
+			list.add(w.copy());
+		}
+		return list;
 	}
 
 	public Tokenizer init(CharSequence seq) {

@@ -1,6 +1,5 @@
 package roj.config.data;
 
-import roj.collect.IntList;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.config.NBTParser;
@@ -122,43 +121,39 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		return stringList;
 	}
 
-	public final int[] asIntList() {
-		IntList numberList = new IntList(list.size());
-		for (CEntry entry : list) {
-			try {
-				int val = entry.asInteger();
-				numberList.add(val);
-			} catch (ClassCastException ignored) {
-			}
+	public final int[] toIntArray() {
+		int[] array = new int[list.size()];
+		for (int i = 0; i < list.size(); i++) {
+			CEntry entry = list.get(i);
+			array[i] = entry.isNumber() ? entry.asInteger() : 0;
 		}
-		return numberList.toArray();
+		return array;
 	}
 
-	public final void addAll(CList list) {
-		this.list.addAll(list.list);
+	public final byte[] toByteArray() {
+		byte[] array = new byte[list.size()];
+		for (int i = 0; i < list.size(); i++) {
+			CEntry entry = list.get(i);
+			array[i] = (byte) (entry.isNumber() ? entry.asInteger() : 0);
+		}
+		return array;
 	}
 
-	public final List<CEntry> raw() {
-		return list;
-	}
+	public final void addAll(CList list) { this.list.addAll(list.list); }
 
-	public final void clear() {
-		list.clear();
-	}
+	public final List<CEntry> raw() { return list; }
+
+	public final void clear() { list.clear(); }
 
 	@Nonnull
 	@Override
-	public final CList asList() {
-		return this;
-	}
+	public final CList asList() { return this; }
 
 	@Override
 	public final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }
 
 	@Override
-	public byte getNBTType() {
-		return NBTParser.LIST;
-	}
+	public byte getNBTType() { return NBTParser.LIST; }
 
 	@Override
 	public final CharList toINI(CharList sb, int depth) {

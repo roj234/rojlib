@@ -1,6 +1,7 @@
 package roj.mildwind.parser.ast;
 
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.parser.ParseContext;
 import roj.mildwind.type.JsObject;
@@ -36,8 +37,8 @@ final class Variable implements LoadExpression {
 	public void writeExecute(JsMethodWriter tree, boolean noRet) { throw new IllegalStateException("is variable"); }
 	public boolean setDeletion() { return false; }
 
-	public JsObject compute(JsObject ctx) { return ctx.get(name); }
-	public void computeAssign(JsObject ctx, JsObject val) { ctx.put(name, val); }
+	public JsObject compute(JsContext ctx) { return ctx.root.get(name); }
+	public void computeAssign(JsContext ctx, JsObject val) { ctx.root.put(name, val); }
 
 	@Override
 	@Deprecated

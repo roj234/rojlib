@@ -1,6 +1,6 @@
 package roj.asm.type;
 
-import roj.asm.cst.ConstantPool;
+import roj.asm.cp.ConstantPool;
 import roj.asm.tree.attr.Attribute;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.SimpleList;

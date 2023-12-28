@@ -4,6 +4,7 @@ import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.text.CharList;
 
+import javax.annotation.Nullable;
 import java.util.List;
 
 /**
@@ -14,6 +15,9 @@ public abstract class CommandNode {
 	private final List<CommandNode> children = new SimpleList<>();
 	private CommandImpl impl;
 
+	@Nullable
+	public String getName() { return null; }
+
 	public static CommandNode literal(String name) { return new LiteralNode(name); }
 	public static CommandNode argument(String name, Argument<?> argument) { return new ArgumentNode(name, argument); }
 
@@ -22,14 +26,15 @@ public abstract class CommandNode {
 
 		if (impl == null) {
 			if (children.size() == 1) return children.get(0).dump(sb.append(' '), depth);
+			else if (children.size() == 0) return sb.append("[无可执行]");
 		} else if (children.isEmpty()) {
 			return sb.append('\n');
 		}
 
 		sb.append(":\n");
-		if (impl != null) sb.padEnd(' ', depth).append("<Execute>\n");
+		if (impl != null) sb.padEnd(' ', depth).append("[无参数]\n");
 		for (CommandNode child : children) {
-			child.dump(sb.padEnd(' ', depth), depth).append('\n');
+			child.dump(sb.padEnd(' ', depth), depth);
 		}
 		return sb;
 	}
@@ -42,27 +47,24 @@ public abstract class CommandNode {
 
 	public abstract boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException;
 	final boolean doApply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
-		ParseException pe = null;
-		ctx.pushStack();
-		try {
-			for (int i = 0; i < children.size(); i++) {
-				try {
-					if (children.get(i).apply(ctx, completions)) {
-						return true;
-					}
-				} catch (ParseException e) {
-					pe = e;
-				}
-			}
-		} finally {
-			ctx.popStack();
-		}
-
 		if (ctx.peekWord() == null) {
-			if (impl != null) {
-				if (completions == null) ctx.wrapExecute(impl);
+			if (completions == null && impl != null) {
+				ctx.wrapExecute(impl);
 				return true;
 			}
+		}
+
+		ParseException pe = null;
+		for (int i = 0; i < children.size(); i++) {
+			ctx.pushStack();
+			try {
+				if (children.get(i).apply(ctx, completions)) {
+					return true;
+				}
+			} catch (ParseException e) {
+				pe = e;
+			}
+			ctx.popStack();
 		}
 
 		if (pe != null) throw pe;
@@ -81,10 +83,7 @@ public abstract class CommandNode {
 		public String getName() { return name; }
 
 		@Override
-		public CharList dump(CharList sb, int depth) {
-			sb.append('\'').append(name).append('\'');
-			return super.dump(sb, depth);
-		}
+		public CharList dump(CharList sb, int depth) { return super.dump(sb.append(name), depth); }
 
 		@Override
 		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
@@ -93,11 +92,12 @@ public abstract class CommandNode {
 				return false;
 			}
 
-			String s = ctx.nextUnquotedString();
+			String s = ctx.peekWord().val();
 			if (!s.equals(name)) {
-				if (completions != null && name.startsWith(s)) completions.add(new Completion(name.substring(s.length())));
+				if (completions != null && ctx.isWordEdge() && name.startsWith(s)) completions.add(new Completion(name.substring(s.length())));
 				return false;
 			}
+			ctx.nextUnquotedString();
 
 			return doApply(ctx, completions);
 		}
@@ -109,31 +109,35 @@ public abstract class CommandNode {
 
 		@Override
 		public CharList dump(CharList sb, int depth) {
-			sb.append(name).append(':').append(argument.type());
-			return super.dump(sb, depth);
+			return super.dump(sb.append('<').append(name).append('>').append(':').append(argument.type()), depth);
 		}
 
 		@Override
 		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 			if (ctx.isEOF()) {
 				if (completions != null) argument.example(completions);
+				else {
+					try {
+						Object o = argument.parse(ctx, null);
+						ctx.putArgument(name, o);
+						return doApply(ctx, null);
+					} catch (Exception e) {
+						return false;
+					}
+				}
 				return false;
 			}
 
-			boolean shouldPop = false;
+			boolean shouldPop = true;
 			ctx.pushStack();
-			ctx.clearRunsOut();
 			Object o;
 			block:
 			try {
-				o = argument.parse(ctx, completions!=null);
-				shouldPop = true;
+				o = argument.parse(ctx, completions);
 
 				if (o == null) {
-					if (ctx.runsOut()) {
-						ctx.popStack();
-						ctx.pushStack();
-						argument.complete(ctx, completions);
+					if (completions != null && ctx.isEOF()) {
+						argument.example(completions);
 					}
 					break block;
 				}
@@ -141,9 +145,9 @@ public abstract class CommandNode {
 				ctx.putArgument(name, o);
 			} catch (ParseException e) {
 				ctx.popStack();
+				shouldPop = false;
 
 				if (completions == null) throw e;
-				if (ctx.runsOut()) argument.complete(ctx, completions);
 			}
 
 			try {

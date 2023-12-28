@@ -2,6 +2,7 @@ package roj.mildwind.parser.ast;
 
 import roj.asm.visitor.Label;
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsBool;
 import roj.mildwind.type.JsNull;
@@ -188,7 +189,7 @@ public final class Binary implements Expression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) { return compute(left.compute(ctx), right.compute(ctx)); }
+	public JsObject compute(JsContext ctx) { return compute(left.compute(ctx), right.compute(ctx)); }
 
 	@Override
 	@SuppressWarnings("fallthrough")
