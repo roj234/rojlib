@@ -1,5 +1,7 @@
 package roj.mod;
 
+import roj.asm.type.Desc;
+import roj.asmx.mapper.Mapper;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
@@ -11,11 +13,9 @@ import roj.dev.HRRemote;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
-import roj.mapper.Mapper;
-import roj.mapper.util.Desc;
 import roj.mod.plugin.Plugin;
-import roj.text.TextReader;
 import roj.ui.CLIUtil;
+import roj.util.HighResolutionTimer;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -37,7 +37,7 @@ import static roj.config.JSONParser.*;
 public final class Shared {
 	public static final boolean DEBUG;
 	public static final String MC_BINARY = "forgeMcBin";
-	public static final String VERSION = "2.1.2";
+	public static final String VERSION = "2.3.0-alpha";
 
 	public static final File BASE, TMP_DIR, CONFIG_DIR;
 
@@ -62,8 +62,8 @@ public final class Shared {
 
 	static void loadConfig() {
 		File file = new File(BASE, "config.json");
-		try (TextReader tr = TextReader.auto(file)) {
-			CONFIG = JSONParser.parses(tr, NO_DUPLICATE_KEY|LITERAL_KEY|UNESCAPED_SINGLE_QUOTE|LENIENT_COMMA).asMap();
+		try {
+			CONFIG = new JSONParser().parseRaw(file, NO_DUPLICATE_KEY|LITERAL_KEY|UNESCAPED_SINGLE_QUOTE|LENIENT_COMMA).asMap();
 			CONFIG.dot(true);
 		} catch (ParseException | ClassCastException e) {
 			CLIUtil.error("config.json 有语法错误! 请修正!", e);
@@ -111,10 +111,11 @@ public final class Shared {
 	}
 
 	public static final Mapper mapperFwd = new Mapper();
+	public static boolean mappingIsClean;
 	private static Mapper mapperRev;
 
 	public static void loadMapper() {
-		if (mapperFwd.getClassMap().isEmpty()) {
+		if (!mappingIsClean) {
 			synchronized (mapperFwd) {
 				if (mapperFwd.getClassMap().isEmpty()) {
 					File map = new File(BASE, "/util/mcp-srg.srg");
@@ -128,6 +129,7 @@ public final class Shared {
 					} catch (Exception e) {
 						CLIUtil.error("混淆映射表加载失败", e);
 					}
+					mappingIsClean = true;
 				}
 			}
 		}
@@ -180,13 +182,13 @@ public final class Shared {
 
 	static List<Plugin> plugins;
 	static {
+		HighResolutionTimer.activate();
+
 		String basePath = System.getProperty("fmd.base_path", "");
 		BASE = new File(basePath).getAbsoluteFile();
 
 		loadConfig();
 		if (CONFIG == null) System.exit(-2);
-
-		boolean launchOnly = System.getProperty("fmd.launch_only") != null || CONFIG.getBool("启动器模式");
 
 		TMP_DIR = new File(BASE, "tmp");
 
@@ -196,13 +198,13 @@ public final class Shared {
 		}
 
 		File classDir = new File(BASE, "class");
-		if (!launchOnly && !classDir.isDirectory() && !classDir.mkdir()) {
+		if (!classDir.isDirectory() && !classDir.mkdir()) {
 			CLIUtil.error("无法创建库文件夹: " + classDir.getAbsolutePath());
 			System.exit(-2);
 		}
 
 		CONFIG_DIR = new File(BASE, "config");
-		if (!launchOnly && !CONFIG_DIR.isDirectory() && !CONFIG_DIR.mkdirs()) {
+		if (!CONFIG_DIR.isDirectory() && !CONFIG_DIR.mkdirs()) {
 			CLIUtil.error("无法创建配置文件夹: " + CONFIG_DIR.getAbsolutePath());
 			System.exit(-2);
 		}
@@ -217,36 +219,33 @@ public final class Shared {
 		IOUtil.timeout = cfgGen.getInteger("下载超时");
 
 		IFileWatcher w = null;
-		if (!launchOnly) {
-			if (CONFIG.getBool("文件修改监控")) {
-				try {
-					w = new FileWatcher();
-				} catch (IOException e) {
-					CLIUtil.warning("无法启动文件监控", e);
-				}
-
-				AutoCompile.Debounce = CONFIG.getInteger("自动编译防抖");
-				if (CONFIG.getBool("自动编译")) {
-					AutoCompile.setEnabled(true);
-				}
+		if (CONFIG.getBool("文件修改监控")) {
+			try {
+				w = new FileWatcher();
+			} catch (IOException e) {
+				CLIUtil.warning("无法启动文件监控", e);
 			}
 
-			plugins = new SimpleList<>();
-			for (String s : CONFIG.getOrCreateList("活动的插件").asStringList()) {
-				try {
-					Plugin o = (Plugin) Class.forName(s.replace('/', '.')).newInstance();
-					plugins.add(o);
-				} catch (Throwable e) {
-					e.printStackTrace();
-				}
+			AutoCompile.Debounce = CONFIG.getInteger("自动编译防抖");
+			if (CONFIG.getBool("自动编译")) {
+				AutoCompile.setEnabled(true);
 			}
+		}
+		if (w == null) w = new IFileWatcher();
+		watcher = w;
 
-			if (CONFIG.getBool("子类实现")) {
-				mapperFwd.flag |= Mapper.MF_FIX_SUBIMPL;
+		plugins = new SimpleList<>();
+		for (String s : CONFIG.getOrCreateList("活动的插件").asStringList()) {
+			try {
+				Plugin o = (Plugin) Class.forName(s.replace('/', '.')).newInstance();
+				plugins.add(o);
+			} catch (Throwable e) {
+				e.printStackTrace();
 			}
 		}
 
-		if (w == null) w = new IFileWatcher();
-		watcher = w;
+		if (CONFIG.getBool("子类实现")) {
+			mapperFwd.flag |= Mapper.MF_FIX_SUBIMPL;
+		}
 	}
 }

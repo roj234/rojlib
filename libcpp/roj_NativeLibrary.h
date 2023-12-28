@@ -11,6 +11,7 @@ JNIEXPORT jint JNICALL Java_roj_ui_CLIUtil_setConsoleMode0 (JNIEnv *, jclass, ji
 JNIEXPORT jclass JNICALL Java_roj_reflect_Java9Compat_defineClass0 (JNIEnv *, jclass, jstring, jobject, jbyteArray, jint);
 JNIEXPORT jlong JNICALL Java_roj_util_NativeMemory_hpAlloc0 (JNIEnv *, jclass, jlong);
 JNIEXPORT void JNICALL Java_roj_util_NativeMemory_hpFree0 (JNIEnv *, jclass, jlong);
+JNIEXPORT jint JNICALL Java_roj_io_NIOUtil_windowsOnlyReuseAddr (JNIEnv *, jclass, jint, jboolean);
 
 #ifdef __cplusplus
 }

@@ -5,6 +5,7 @@ import roj.asm.tree.Attributed;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.util.AttrHelper;
+import roj.asm.util.ClassUtil;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.config.ParseException;
@@ -12,7 +13,6 @@ import roj.lavac.CompilerConfig;
 import roj.lavac.asm.AnnotationPrimer;
 import roj.lavac.util.Library;
 import roj.lavac.util.LibraryRuntime;
-import roj.mapper.MapUtil;
 import roj.util.Helpers;
 
 import javax.tools.Diagnostic;
@@ -65,7 +65,7 @@ public class CompileContext implements CompilerConfig {
 	}
 
 	public boolean canInstanceOf(String toTest, String inst, int itfFlag) {
-		return MapUtil.getInstance().instanceOf(Helpers.cast(ctx), toTest, inst, itfFlag);
+		return ClassUtil.getInstance().instanceOf(Helpers.cast(ctx), toTest, inst, itfFlag);
 	}
 
 	public MethodWriterL createMethodPoet(CompileUnit unit, MethodNode node) {

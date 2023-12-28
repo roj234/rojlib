@@ -2,7 +2,7 @@ package roj.lavac.asm;
 
 import roj.asm.tree.Attributed;
 import roj.asm.tree.MethodNode;
-import roj.asm.util.AttributeList;
+import roj.asm.tree.attr.AttributeList;
 
 public class MethodParamAnno implements Attributed {
 	public MethodParamAnno(MethodNode method, int idx, String name, int parNo) {

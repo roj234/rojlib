@@ -6,7 +6,7 @@ import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
 import roj.io.down.ProgressGroupedMulti;
 import roj.io.down.ProgressMulti;
-import roj.net.NetworkUtil;
+import roj.net.NetUtil;
 import roj.text.LineReader;
 
 import java.io.File;
@@ -62,8 +62,8 @@ public final class MultiFileDownloader {
 		//			"Sec-Fetch-User: ?1\n" +
 		//			"Upgrade-Insecure-Requests: 1\n" +
 		//			"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36"));
-		NetworkUtil.setHostCachePolicy(true, 3600);
-		NetworkUtil.setHostCachePolicy(false, 120);
+		NetUtil.setHostCachePolicy(true, 3600);
+		NetUtil.setHostCachePolicy(false, 120);
 
 		File base = new File(args[i++]);
 		if (!base.isDirectory() && !base.mkdirs()) throw new FileNotFoundException("无法创建保存目录 " + args[0]);

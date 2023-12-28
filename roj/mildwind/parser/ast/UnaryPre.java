@@ -121,7 +121,7 @@ final class UnaryPre implements Expression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) {
+	public JsObject compute(JsContext ctx) {
 		JsObject v;
 		switch (op) {
 			case logic_not: return JsBool.valueOf(right.compute(ctx).asBool() == 0 ? 1 : 0);

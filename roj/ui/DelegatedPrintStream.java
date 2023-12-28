@@ -31,11 +31,7 @@ public class DelegatedPrintStream extends PrintStream {
 	protected void partialLine() { if (bb.length() >= 128) flushBytes(); }
 	protected void flushBytes() {
 		Charset cs = Charset.defaultCharset();
-		if (GB18030.is(cs)) {
-			GB18030.CODER.decodeLoop(bb, bb.readableBytes(), sb, MAX, true);
-		} else {
-			UTF8MB4.CODER.decodeLoop(bb, bb.readableBytes(), sb, MAX, true);
-		}
+		(GB18030.is(cs) ? GB18030.CODER : UTF8MB4.CODER).decodeLoop(bb, bb.readableBytes(), sb, MAX, true);
 	}
 
 	public void flush() { flushBytes(); }

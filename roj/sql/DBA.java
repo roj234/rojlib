@@ -116,7 +116,7 @@ public final class DBA implements AutoCloseable {
 			"notbetween"  ,  "NOT BETWEEN ?0 AND ?1",
 			"betweeni"    ,  "BETWEEN ?0 AND ?1",
 			"notbetweeni" ,  "NOT BETWEEN ?0 AND ?1",
-			"FT"          ,  "MATCH(`?0`) AGAINST(\"?1\" IN BOOLEAN MODE)"
+			"fulltext"    ,  "TBD"
 	);
 	private static Map<String, String> myWhere(String ... a) {
 		MyHashMap<String,String> map = new MyHashMap<>(a.length/2);
@@ -127,6 +127,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	public DBA where(String k) { where.clear(); where.append(k); return this; }
+	@Deprecated
 	public DBA where(int id) { return where("Id", Integer.toString(id)); }
 	public DBA where(String k, Object v) { return where(Collections.singletonMap(k,v), false, true); }
 	public DBA andWhere(String k, Object v) { return where(Collections.singletonMap(k,v), false, false); }
@@ -151,13 +152,19 @@ public final class DBA implements AutoCloseable {
 			String v = entry.getValue().toString();
 
 			int i = k.indexOf('|');
+			block:
 			if (i >= 0) {
-				where.append('`').append(k,0,i).append('`');
-
 				String m = k.substring(i+1);
+				if (m.equals("fulltext")) {
+					where.append("MATCH(`").append(k).append("`) AGAINST (");
+					myescape(where, v).append(" IN BOOLEAN MODE)");
+					break block;
+				}
+
 				String matcher = $myWhere.get(m);
 				if (matcher == null) throw new IllegalArgumentException("$myWhere: missing " + m);
 
+				where.append('`').append(k,0,i).append('`');
 				bb.clear(); bb.append(matcher);
 				if (matcher.contains("?1")) {
 					List<String> component = TextUtil.split(v, '|');
@@ -508,11 +515,15 @@ public final class DBA implements AutoCloseable {
 			sb.append(",");
 		}
 
+		return condition(sb);
+	}
+
+	private int condition(CharList sb) throws SQLException {
 		if (where.length() > 0) sb.append(" WHERE ").append(where);
 		if (order != null) sb.append(" ORDER BY ").append(order);
 		if (limit.length() > 0) {
 			if (limit.contains("OFFSET")) {
-				throw new SQLException("OFFSET 不能和 UPDATE 共用");
+				throw new SQLException("OFFSET 不能和 UPDATE 或 DELETE 共用");
 			}
 			sb.append(" LIMIT ").append(limit);
 		}
@@ -601,17 +612,7 @@ public final class DBA implements AutoCloseable {
 		CharList sb = IOUtil.ddLayeredCharBuf();
 		sb.append("DELETE FROM ").append(table);
 
-		if (where.length() > 0) sb.append(" WHERE ").append(where);
-		if (order != null) sb.append(" ORDER BY ").append(order);
-		if (limit.length() > 0) {
-			if (limit.contains("OFFSET")) {
-				throw new SQLException("OFFSET 不能和 UPDATE 共用");
-			}
-			sb.append(" LIMIT ").append(limit);
-		}
-
-		affected_ids.clear();
-		return CRUD(sb);
+		return condition(sb);
 	}
 
 	// region util

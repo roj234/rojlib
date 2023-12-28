@@ -2,6 +2,7 @@ package roj.mildwind.parser.ast;
 
 import roj.collect.MyHashSet;
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsBool;
 import roj.mildwind.type.JsObject;
@@ -64,11 +65,11 @@ final class Field implements LoadExpression {
 		}
 	}
 
-	public JsObject compute(JsObject ctx) {
+	public JsObject compute(JsContext ctx) {
 		JsObject v = parent.compute(ctx);
 		return (flag&OP_DEL) != 0 ? JsBool.valueOf(v.del(name)?1:0) : v.get(name);
 	}
-	public void computeAssign(JsObject ctx, JsObject val) {
+	public void computeAssign(JsContext ctx, JsObject val) {
 		parent.compute(ctx).put(name, val);
 	}
 

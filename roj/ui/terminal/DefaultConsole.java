@@ -24,8 +24,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 
 import static java.awt.event.KeyEvent.*;
-import static roj.ui.CLIUtil.ANSI_ESCAPE;
-import static roj.ui.CLIUtil.VK_CTRL;
+import static roj.ui.CLIUtil.*;
 
 /**
  * @author Roj234
@@ -35,6 +34,7 @@ public class DefaultConsole implements Console {
 	private static final int MAX_INPUT = 500;
 
 	protected final CharList prompt = new CharList(100);
+	private String realPrompt;
 
 	private String staticHighlight;
 	private AnsiString highlight;
@@ -56,11 +56,16 @@ public class DefaultConsole implements Console {
 	private final List<Completion> tabs = new SimpleList<>();
 	private int tabCursor = -1, tabId;
 
+	private boolean _history = true, _echo = true;
+
 	public DefaultConsole(String prompt) {
 		setPrompt(prompt);
 		staticHighlight = "\u001b[97m"; // light white
 	}
+
+	public String getPrompt() { return realPrompt; }
 	public void setPrompt(String prompt) {
+		this.realPrompt = prompt;
 		this.prompt.clear();
 		this.prompt.append("\u001b[0m").append(prompt);
 
@@ -94,9 +99,9 @@ public class DefaultConsole implements Console {
 			lastInput = input.toString();
 		}
 
-		Completion s = tabs.get(id);
-		if (s.description != null) {
-			s.description.writeLimited(tooltip(), new MutableInt(CLIUtil.windowWidth), true);
+		Completion c = tabs.get(id);
+		if (c.description != null) {
+			c.description.writeLimited(tooltip(), new MutableInt(CLIUtil.windowWidth), true);
 			displayTooltip(5000);
 		} else {
 			displayTooltip(-1);
@@ -104,10 +109,14 @@ public class DefaultConsole implements Console {
 
 		tabId = id;
 		input.clear();
-		input.append(lastInput);
-		input.insert(tabCursor, s.completion.writeAnsi(IOUtil.getSharedCharBuf()).append("\u001b[0m").append(staticHighlight));
-		if (!isAutoComplete)
-			cursor = tabCursor + s.completion.length();
+		if (c.replaceBefore) {
+			c.completion.writeAnsi(input);
+			if (!isAutoComplete) cursor = getStringWidth(input);
+		} else {
+			input.append(lastInput);
+			input.insert(tabCursor, c.completion.writeAnsi(IOUtil.getSharedCharBuf()).append("\u001b[0m").append(staticHighlight));
+			if (!isAutoComplete) cursor = tabCursor + c.completion.length();
+		}
 
 		checkAnsi();
 	}
@@ -128,11 +137,17 @@ public class DefaultConsole implements Console {
 
 		assert tabCursor >= 0;
 
-		AnsiString str = tabs.get(tabId).completion;
+		Completion c = tabs.get(tabId);
+		AnsiString str = c.completion;
 		if (insert) {
-			input.insert(tabCursor, str.toString());
-			if (isAutoComplete)
-				cursor = tabCursor + str.length();
+			if (c.replaceBefore) {
+				input.clear();
+				str.writeRaw(input);
+				if (isAutoComplete) cursor = getStringWidth(input);
+			} else {
+				input.insert(tabCursor, str.writeRaw(IOUtil.getSharedCharBuf()));
+				if (isAutoComplete) cursor = tabCursor + str.length();
+			}
 			afterInput();
 		} else {
 			if (cursor > tabCursor) {
@@ -247,14 +262,18 @@ public class DefaultConsole implements Console {
 
 					input.clear();
 
-					history.remove(cmd);
-					while (history.size() > 255) history.remove(0);
-					history.add(cmd);
+					if (_history && !cmd.isEmpty()) {
+						history.remove(cmd);
+						while (history.size() > 255) history.remove(0);
+						history.add(cmd);
+					}
 
 					cursor = scrollLeft = 0;
 					afterInput();
 				break;
 				case VK_UP:
+					if (!_echo) return;
+
 					if (tabs.size() > 0) {
 						setComplete((tabId == 0 ? tabs.size() : tabId) - 1);
 						break;
@@ -271,6 +290,8 @@ public class DefaultConsole implements Console {
 					}
 				break;
 				case VK_DOWN:
+					if (!_echo) return;
+
 					if (tabs.size() > 0) {
 						setComplete((tabId+1) % tabs.size());
 						break;
@@ -289,15 +310,15 @@ public class DefaultConsole implements Console {
 					}
 				break;
 				case VK_LEFT:
-					if (cursor > 0) cursor--;
+					if (_echo && cursor > 0) cursor--;
 					else return;
 				break;
 				case VK_RIGHT:
-					if (cursor < input.length() - invisible.size()) cursor++;
+					if (_echo && cursor < input.length() - invisible.size()) cursor++;
 					else return;
 				break;
 				case VK_TAB:
-					if (input.length() > MAX_INPUT) { beep(); return; }
+					if (!_echo || input.length() > MAX_INPUT) { beep(); return; }
 					/*if (tabs.size() > 1) {
 						setComplete((tabId+1) % tabs.size());
 						break;
@@ -321,7 +342,6 @@ public class DefaultConsole implements Console {
 
 		doRender();
 	}
-	private static void beep() { CLIUtil.sysOut.write(7); CLIUtil.sysOut.flush(); }
 
 	private static String filterText(String string) {
 		int i = string.lastIndexOf('\n');
@@ -337,7 +357,15 @@ public class DefaultConsole implements Console {
 
 		System.out.println(pp);
 	}
-	protected final void doRender() {
+	protected synchronized final void doRender() {
+		if (CLIUtil.getConsole() != this) return;
+
+		if (!_echo) {
+			prompt.setLength(prefixLen);
+			CLIUtil.renderBottomLine(prompt, true, prefixCLen+1);
+			return;
+		}
+
 		if (autoHighlight && tabCursor < 0 && highlight == null) {
 			lastInput = input.toString();
 			highlight = highlight(lastInput);
@@ -380,7 +408,7 @@ public class DefaultConsole implements Console {
 
 		int end = limitWidth(scrollLeft, maxWidth);
 		if (scrollLeft > end) {
-			System.err.println("[DefaultConsole]Invalid ANSI sequence detected.");
+			if (CLIUtil.ANSI) System.err.println("[DefaultConsole]Invalid ANSI sequence detected.");
 			scrollLeft = 0;
 		}
 		prompt.append(staticHighlight).append(input, scrollLeft, end);
@@ -439,6 +467,23 @@ public class DefaultConsole implements Console {
 	}
 
 	protected boolean keyEnter_Pre(int key, boolean vk) { return false; }
+
+	public static final String KEY_SHORTCUT =
+		"F1: 查看帮助\n" +
+		"F2: 切换Ctrl+C功能\n" +
+		"F3: 开关语法高亮\n" +
+		"F4: 开关即时补全\n" +
+		"Ctrl+A: 全选\n" +
+		"Ctrl+B: 中断程序(F2)\n" +
+		"Ctrl+C: 中断程序或复制(F2)\n" +
+		"Ctrl+V: 粘贴\n" +
+		"↑: 上一条历史或补全候选\n" +
+		"↓: 下一条历史或补全候选, 或回到当前输入\n" +
+		"Ctrl+←: 光标移至开头\n" +
+		"Ctrl+→: 光标移至结尾\n" +
+		"Tab: 在当前位置补全代码\n" +
+		"ESC: 取消补全\n" +
+		"ENTER: 确认补全或执行指令";
 	protected void printHelp() {
 		CLIBoxRenderer.DEFAULT.render(new String[][]{
 			new String[] { "Roj234的终端模拟器 帮助", "简介", "快捷键" },
@@ -449,24 +494,13 @@ public class DefaultConsole implements Console {
 					"然而：https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters\n" +
 					"\n" +
 					"做什么都不简单。。。还很邪道",
-				"F1: 查看帮助\n" +
-					"F2: 切换Ctrl+C功能\n" +
-					"F3: 开关语法高亮\n" +
-					"F4: 开关即时补全\n" +
-					"Ctrl+A: 全选\n" +
-					"Ctrl+B: 中断程序(F2)\n" +
-					"Ctrl+C: 中断程序或复制(F2)\n" +
-					"Ctrl+V: 粘贴\n" +
-					"Ctrl+←: 光标移至开头\n" +
-					"Ctrl+→: 光标移至结尾\n" +
-					"ESC: 取消补全\n" +
-					"ENTER: 确认补全或执行指令\n" +
-					"↑: 上一条历史或补全候选\n" +
-					"↓: 下一条历史或补全候选, 或回到当前输入\n" +
-					"Tab: 在当前位置补全代码" }
+				KEY_SHORTCUT }
 		});
 	}
 	protected AnsiString highlight(String input) { return null; }
 	protected void complete(CharList input, int cursor, List<Completion> out) {}
 	protected boolean evaluate(String cmd) { return true; }
+
+	public void setEchoEnabled(boolean echo) { this._echo = echo; doRender(); }
+	public void setHistoryEnabled(boolean history) { this._history = history; }
 }

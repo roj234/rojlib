@@ -1,10 +1,10 @@
 package roj.lavac.asm;
 
+import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
-import roj.asm.util.AccessFlag;
 import roj.asm.util.AttrHelper;
 import roj.lavac.parser.CompileUnit;
 
@@ -67,7 +67,7 @@ public class GenericPrimer extends Generic {
 
 			for (InnerClasses.InnerClass ic : list) {
 				if (ic.self.equals(owner)) {
-					if ((ic.flags & AccessFlag.STATIC) != 0) break findSubclass;
+					if ((ic.flags & Opcodes.ACC_STATIC) != 0) break findSubclass;
 					// I am inner class
 				}
 			}

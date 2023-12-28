@@ -2,6 +2,7 @@ package roj.mildwind.parser.ast;
 
 import roj.asm.Opcodes;
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsArray;
 import roj.mildwind.type.JsObject;
@@ -117,7 +118,7 @@ final class ArrayDef implements Expression {
 	}
 
 	@Override
-	public JsArray compute(JsObject ctx) {
+	public JsArray compute(JsContext ctx) {
 		JsArray v;
 		if (inst != null) {
 			v = (JsArray) inst.shallowCOWInstance();

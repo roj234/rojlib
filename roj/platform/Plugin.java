@@ -9,8 +9,10 @@ import roj.config.data.CMapping;
 import roj.config.serial.ToSomeString;
 import roj.config.serial.ToYaml;
 import roj.io.IOUtil;
+import roj.net.http.srv.Router;
 import roj.text.TextWriter;
 import roj.text.logging.Logger;
+import roj.ui.terminal.CommandNode;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -47,7 +49,7 @@ public abstract class Plugin {
 	}
 	protected final void reloadConfig() {
 		try {
-			Parser<?> parser = new ConfigMaster("config.yml").parser();
+			Parser<?> parser = new ConfigMaster("yml").parser();
 
 			config = parser.parseRaw(configFile).asMap();
 			InputStream defaults = getResource("config.yml");
@@ -100,7 +102,22 @@ public abstract class Plugin {
 		if (path == null) throw new IllegalArgumentException("Filename cannot be null");
 		return getClassLoader().getResourceAsStream(path);
 	}
-	protected final ClassLoader getClassLoader() { return desc.pcl; }
+	protected final ClassLoader getClassLoader() { return desc.pcl == null ? getClass().getClassLoader() : desc.pcl; }
+
+	protected final void registerRoute(String subpath, Router router) {
+		DefaultPluginSystem.initHttp().registerSubpathRouter(subpath, router);
+	}
+	protected final void unregisterRoute(String subpath) {
+		DefaultPluginSystem.initHttp().unregisterSubpathRouter(subpath);
+	}
+
+	protected final void registerCommand(CommandNode node) {
+		assert node.getName() != null;
+		DefaultPluginSystem.CMD.register(node);
+	}
+	protected final void unregisterCommand(String name) {
+		DefaultPluginSystem.CMD.unregister(name);
+	}
 
 	public final Scheduler getScheduler() { return Scheduler.getDefaultScheduler(); }
 	public final TaskPool getExecutor() { return TaskPool.Common(); }

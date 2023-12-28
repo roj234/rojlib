@@ -14,7 +14,9 @@ import roj.archive.qz.xz.lz.LZDecoder;
 import roj.archive.qz.xz.lzma.LZMADecoder;
 import roj.archive.qz.xz.rangecoder.RangeDecoderFromStream;
 import roj.io.CorruptedInputException;
+import roj.io.MBInputStream;
 import roj.util.ArrayUtil;
+import sun.misc.Unsafe;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -27,7 +29,7 @@ import java.io.InputStream;
  *
  * @since 1.4
  */
-public class LZMAInputStream extends InputStream {
+public class LZMAInputStream extends MBInputStream {
 	/**
 	 * Largest dictionary size supported by this implementation.
 	 * <p>
@@ -284,18 +286,14 @@ public class LZMAInputStream extends InputStream {
 	 *
 	 * @since 1.9
 	 */
-	public void enableRelaxedEndCondition() {
-		relaxedEndCondition = true;
-	}
-
-	private byte[] b1;
-	public int read() throws IOException {
-		if (b1 == null) b1 = new byte[1];
-		return read(b1, 0, 1) < 0 ? -1 : (b1[0] & 0xFF);
-	}
+	public void enableRelaxedEndCondition() { relaxedEndCondition = true; }
 
 	public int read(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
+		return read0(buf, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
+	}
+	public int read(long addr, int len) throws IOException { return read0(null, addr, len); }
+	public int read0(Object buf, long addr, int len) throws IOException {
 		if (len == 0) return 0;
 
 		if (in == null) throw new IOException("Stream closed");
@@ -334,8 +332,8 @@ public class LZMAInputStream extends InputStream {
 				}
 
 				// Copy from the dictionary to buf.
-				int copiedSize = lz.flush(buf, off);
-				off += copiedSize;
+				int copiedSize = lz.flush0(buf, addr);
+				addr += copiedSize;
 				len -= copiedSize;
 				size += copiedSize;
 
@@ -366,6 +364,19 @@ public class LZMAInputStream extends InputStream {
 			} catch (Throwable ignored) {}
 			throw e;
 		}
+	}
+
+	@Override
+	public long skip(long n) throws IOException {
+		long remain = n;
+
+		while (remain > 0) {
+			int r = read0(null, 0, (int)Math.min(Integer.MAX_VALUE, remain));
+			if (r < 0) break;
+			remain -= r;
+		}
+
+		return n - remain;
 	}
 
 	@Override

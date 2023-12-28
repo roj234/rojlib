@@ -384,7 +384,8 @@ public class Mat3d {
 	 * @return this matrix.
 	 */
 	public Mat3d invertGeneral() {
-		double[] tmp = new double[] {raw4 * raw8 - raw5 * raw7, raw2 * raw7 - raw1 * raw8, raw1 * raw5 - raw2 * raw4, raw5 * raw6 - raw3 * raw8, raw0 * raw8 - raw2 * raw6, raw2 * raw3 - raw0 * raw5,
+		double[] tmp = new double[] {raw4 * raw8 - raw5 * raw7, raw2 * raw7 - raw1 * raw8, raw1 * raw5 - raw2 * raw4,
+									 raw5 * raw6 - raw3 * raw8, raw0 * raw8 - raw2 * raw6, raw2 * raw3 - raw0 * raw5,
 									 raw3 * raw7 - raw4 * raw6, raw1 * raw6 - raw0 * raw7, raw0 * raw4 - raw1 * raw3};
 
 		double det = raw0 * tmp[0] + raw1 * (-tmp[3]) + raw2 * tmp[6];
@@ -600,10 +601,4 @@ public class Mat3d {
 	public int hashCode() {
 		return new Hasher().add(this.raw0).add(this.raw1).add(this.raw2).add(this.raw3).add(this.raw4).add(this.raw5).add(this.raw6).add(this.raw7).add(this.raw8).getHash();
 	}
-
-
-	/**
-	 * Identity matrix as array. Do not modify!
-	 */
-	private static final double[] identity = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
 }

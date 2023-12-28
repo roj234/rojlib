@@ -1,7 +1,7 @@
 package roj.asm;
 
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstTop;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstTop;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.collect.IntMap;
@@ -93,6 +93,7 @@ public final class AsmShared {
 		return b;
 	}
 
+	@Deprecated
 	public void setLevel(boolean add) {
 		if (add) level++;
 		else level--;

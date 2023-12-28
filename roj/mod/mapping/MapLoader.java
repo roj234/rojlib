@@ -1,10 +1,10 @@
 package roj.mod.mapping;
 
+import roj.asm.type.Desc;
+import roj.asmx.mapper.Mapper;
+import roj.asmx.mapper.Mapping;
 import roj.collect.MyHashMap;
 import roj.config.data.CMapping;
-import roj.mapper.Mapper;
-import roj.mapper.Mapping;
-import roj.mapper.util.Desc;
 import roj.text.LineReader;
 import roj.util.Helpers;
 

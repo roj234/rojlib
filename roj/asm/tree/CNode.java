@@ -1,11 +1,11 @@
 package roj.asm.tree;
 
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstNameAndType;
-import roj.asm.cst.CstUTF;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstNameAndType;
+import roj.asm.cp.CstUTF;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.util.AttributeList;
-import roj.mapper.util.Desc;
+import roj.asm.tree.attr.AttributeList;
+import roj.asm.type.Desc;
 import roj.util.DynByteBuf;
 
 /**

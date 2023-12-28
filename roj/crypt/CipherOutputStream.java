@@ -110,7 +110,8 @@ public class CipherOutputStream extends FilterOutputStream {
 			this.out = null;
 
 			if (o != null) {
-				BufferPool.reserve(o);
+				if (BufferPool.isPooled(o))
+					BufferPool.reserve(o);
 				o = null;
 			}
 		}

@@ -1,6 +1,7 @@
 package roj.mildwind.parser.ast;
 
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsBool;
 import roj.mildwind.type.JsObject;
@@ -27,7 +28,7 @@ final class Instanceof implements Expression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) {
+	public JsObject compute(JsContext ctx) {
 		JsObject n = obj.compute(ctx);
 		JsObject h = cls.compute(ctx);
 		return JsBool.valueOf(h.op_instanceof(n)?1:0);

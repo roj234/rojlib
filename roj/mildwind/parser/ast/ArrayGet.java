@@ -2,6 +2,7 @@ package roj.mildwind.parser.ast;
 
 import roj.asm.Opcodes;
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsObject;
 import roj.mildwind.type.Type;
@@ -77,14 +78,14 @@ final class ArrayGet implements LoadExpression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) {
+	public JsObject compute(JsContext ctx) {
 		JsObject arr = array.compute(ctx);
 		JsObject idx = index.compute(ctx);
 		return idx.type() == Type.INT ? arr.getByInt(idx.asInt()) : arr.get(idx.toString());
 	}
 
 	@Override
-	public void computeAssign(JsObject ctx, JsObject val) {
+	public void computeAssign(JsContext ctx, JsObject val) {
 		JsObject arr = array.compute(ctx);
 		JsObject idx = index.compute(ctx);
 

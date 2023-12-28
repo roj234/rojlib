@@ -1,10 +1,10 @@
 package roj.mildwind.asm;
 
+import roj.asm.Opcodes;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.LineNumberTable;
-import roj.asm.util.AccessFlag;
-import roj.asm.util.TryCatchEntry;
+import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Segment;
@@ -62,7 +62,7 @@ public final class JsMethodWriter extends CodeWriter implements LineHandler {
 		init();
 	}
 	private void init() {
-		MethodNode mn = new MethodNode(AccessFlag.PRIVATE|AccessFlag.FINAL, data.name, chain, "(Lroj/mildwind/type/JsObject;Lroj/mildwind/api/Arguments;)Lroj/mildwind/type/JsObject;");
+		MethodNode mn = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL, data.name, chain, "(Lroj/mildwind/type/JsObject;Lroj/mildwind/api/Arguments;)Lroj/mildwind/type/JsObject;");
 		mn.putAttr(new AttrCodeWriter(data.cp, mn, this));
 		data.methods.add(mn);
 		visitSizeMax(99,99);

@@ -21,12 +21,9 @@ public abstract class Source extends DataOutputStream implements Closeable {
 
 	public int read() throws IOException {
 		if (b1 == null) b1 = new byte[1];
-		int r = read(b1,0,1);
-		return r <= 0 ? -1 : b1[0]&0xFF;
+		return read(b1, 0, 1) > 0 ? b1[0]&0xFF : -1;
 	}
-	public final int read(byte[] b) throws IOException {
-		return read(b, 0, b.length);
-	}
+	public final int read(byte[] b) throws IOException { return read(b, 0, b.length); }
 	public abstract int read(byte[] b, int off, int len) throws IOException;
 	public final void read(ByteList buf, int len) throws IOException {
 		buf.ensureCapacity(buf.wIndex()+len);

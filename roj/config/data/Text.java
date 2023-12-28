@@ -12,7 +12,7 @@ public final class Text extends Node {
 	public String value;
 	public byte nodeType;
 
-	public Text(String text) { value = text; }
+	public Text(String text) { value = text; nodeType = TEXT; }
 	public Text(String text, byte type) { value = text; nodeType = type; }
 
 	public byte nodeType() { return nodeType; }

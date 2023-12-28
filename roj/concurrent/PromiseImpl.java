@@ -5,6 +5,11 @@ import roj.concurrent.task.ITask;
 import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
 
+import javax.annotation.Nonnull;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -130,8 +135,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 						state = 0;
 						if (ret == IntMap.UNDEFINED) break fail;
 
-						// todo concurrent bug?
-						p._state &= CALLBACK;
+						p.removeFlag(~CALLBACK);
 						p.resolve(ret);
 						p._apply();
 						if (p == this) return;
@@ -153,6 +157,8 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 				e.printStackTrace();
 			}
 		}
+
+		synchronized (this) { notifyAll(); }
 
 		if (state == 1) {
 			if (executor == null) execute();
@@ -239,11 +245,52 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 	// endregion
 
 	public byte state() { return (byte) (_state&3); }
+
+	@Override
 	@SuppressWarnings("unchecked")
-	public T get() {
+	public T getNow() {
 		if ((_state&TASK_SUCCESS) == 0) throw new IllegalStateException();
 		return (T) _val;
 	}
+	@Override
+	public T get() throws InterruptedException, ExecutionException {
+		synchronized (this) { while (!isDone()) wait(); }
+		return getOrThrow();
+	}
+
+	@Override
+	public T get(long timeout, @Nonnull TimeUnit unit) throws InterruptedException, TimeoutException, ExecutionException {
+		synchronized (this) { if (!isDone()) wait(unit.toMillis(timeout)); }
+		if (!isDone()) throw new TimeoutException();
+		return getOrThrow();
+	}
+
+	@SuppressWarnings("unchecked")
+	private T getOrThrow() throws ExecutionException {
+		switch (_state&(TASK_COMPLETE|TASK_SUCCESS)) {
+			default: throw new IllegalStateException("unknown state "+_state);
+			case TASK_COMPLETE:
+				if (_val instanceof CancellationException) throw (CancellationException) _val;
+				else if (_val instanceof Throwable) throw new ExecutionException((Throwable) _val);
+				else {
+					String s;
+					try { s = String.valueOf(_val); } catch (Throwable e) { s = e.getMessage(); }
+					throw new IllegalStateException("execution failed:"+s);
+				}
+			case TASK_COMPLETE|TASK_SUCCESS: return (T) _val;
+		}
+	}
+
+	@Override
+	public boolean cancel(boolean mayInterruptIfRunning) {
+		if (isDone()) return false;
+		reject(new CancellationException("user cancelled"));
+		return true;
+	}
+	@Override
+	public boolean isCancelled() { return (_state&(TASK_COMPLETE|TASK_SUCCESS)) == TASK_COMPLETE && _val instanceof CancellationException; }
+	@Override
+	public boolean isDone() { return (_state&TASK_COMPLETE) != 0; }
 
 	@Override
 	public String toString() {

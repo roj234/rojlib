@@ -1,5 +1,6 @@
 package roj.mildwind.parser.ast;
 
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsObject;
 import roj.mildwind.type.Type;
@@ -48,7 +49,7 @@ final class Chained implements Expression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) {
+	public JsObject compute(JsContext ctx) {
 		for (int i = 0; i < par.size()-1; i++) par.get(i).compute(ctx);
 		return par.get(par.size()-1).compute(ctx);
 	}

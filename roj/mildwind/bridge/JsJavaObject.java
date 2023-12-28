@@ -27,8 +27,8 @@ public final class JsJavaObject extends AbstractJsMap {
 	public String toString() { return obj.toString(); }
 	@SuppressWarnings("unchecked")
 	public <T> T asObject(Class<T> klass) {
-		if (!type.classType.isAssignableFrom(klass)) {
-			throw new ScriptException(type.classType.getName() + " cannot convert to " + klass.getName());
+		if (!type.type.isAssignableFrom(klass)) {
+			throw new ScriptException(type.type.getName() + " cannot convert to " + klass.getName());
 		}
 		return (T) obj;
 	}
@@ -39,15 +39,14 @@ public final class JsJavaObject extends AbstractJsMap {
 		if (name.equals("__proto__")) return type.prototype();
 
 		FieldInfo info = type.fields.get(name);
-		if (info == null) return type.prototype().get(name);
-		return info.get(obj);
+		if (info != null) return info.get(obj);
+		return type.prototype().get(name);
 	}
 	public void put(String name, JsObject value) {
 		if (name.equals("__proto__")) return;
 
 		FieldInfo info = type.fields.get(name);
-		if (info == null) return;
-		info.set(obj, value);
+		if (info != null) info.set(obj, value);
 	}
 	public boolean del(String name) { return !name.equals("__proto__") && !type.fields.containsKey(name) && !type.methods.containsKey(name); }
 

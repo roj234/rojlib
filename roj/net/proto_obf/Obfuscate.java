@@ -2,10 +2,10 @@ package roj.net.proto_obf;
 
 import roj.crypt.CRCAny;
 import roj.io.buf.BufferPool;
-import roj.io.buf.NativeArray;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.handler.PacketMerger;
+import roj.util.ArrayRef;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -26,10 +26,10 @@ public final class Obfuscate extends PacketMerger implements ChannelHandler {
 			sByte = CRCAny.CRC_32.update(sByte, 0);
 		}
 
-		NativeArray arr = buf.byteRange(buf.rIndex, buf.readableBytes());
+		ArrayRef arr = buf.byteRange(buf.rIndex, buf.readableBytes());
 
 		int cc = sByte;
-		for (int i = 0; i < arr.length(); i++) {
+		for (int i = 0; i < arr.length; i++) {
 			int v = arr.get(i) ^ cc;
 			arr.set(i, v);
 			cc = CRCAny.CRC_32.update(cc, v);
@@ -48,10 +48,10 @@ public final class Obfuscate extends PacketMerger implements ChannelHandler {
 			buf = BufferPool.expand(buf, 1, false, false).put(0, 0);
 		}
 
-		NativeArray arr = buf.byteRange(buf.rIndex, buf.readableBytes());
+		ArrayRef arr = buf.byteRange(buf.rIndex, buf.readableBytes());
 
 		int cc = cByte;
-		for (int i = 0; i < arr.length(); i++) {
+		for (int i = 0; i < arr.length; i++) {
 			int v = arr.get(i);
 			arr.set(i, v ^ cc);
 			cc = CRCAny.CRC_32.update(cc, v);

@@ -1,6 +1,6 @@
 package roj.text.logging;
 
-import roj.reflect.TraceUtil;
+import roj.reflect.ReflectionUtils;
 
 /**
  * @author Roj233
@@ -11,7 +11,7 @@ public final class Logger {
 	public static void setRootContext(LogContext c) { rootContext = c; }
 	public static LogContext getRootContext() { return rootContext; }
 
-	public static Logger getLogger() { return getLogger(TraceUtil.getCallerClass1().getSimpleName()); }
+	public static Logger getLogger() { return getLogger(ReflectionUtils.getCallerClass(2).getSimpleName()); }
 	public static Logger getLogger(String name) { return getLogger(new LogContext(rootContext).name(name)); }
 	public static Logger getLogger(LogContext ctx) { return ctx.logger == null ? ctx.logger = new Logger(ctx) : ctx.logger; }
 

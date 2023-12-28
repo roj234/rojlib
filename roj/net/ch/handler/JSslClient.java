@@ -1,7 +1,7 @@
 package roj.net.ch.handler;
 
 import roj.io.buf.BufferPool;
-import roj.net.NetworkUtil;
+import roj.net.NetUtil;
 import roj.net.ch.ChannelCtx;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -47,7 +47,7 @@ public class JSslClient extends PacketMerger {
 	public void channelOpened(ChannelCtx ctx) throws IOException {
 		engine.beginHandshake();
 		status = engine.getHandshakeStatus();
-		if (status != SSLEngineResult.HandshakeStatus.FINISHED) handshake(ctx, NetworkUtil.EMPTY);
+		if (status != SSLEngineResult.HandshakeStatus.FINISHED) handshake(ctx, NetUtil.EMPTY);
 	}
 
 	@Override
@@ -173,7 +173,7 @@ public class JSslClient extends PacketMerger {
 						default: throw new SSLException(r.getStatus() + " state during handshake");
 					}
 				case NEED_WRAP:
-					tmp[0] = NetworkUtil.EMPTY;
+					tmp[0] = NetUtil.EMPTY;
 					r = channelWrite0(ctx);
 
 					status = r.getHandshakeStatus();

@@ -4,7 +4,7 @@ import roj.collect.MyHashMap;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.net.NetworkUtil;
+import roj.net.NetUtil;
 import roj.net.URIUtil;
 import roj.net.ch.*;
 import roj.net.http.Action;
@@ -55,14 +55,14 @@ public class DnsServer implements ChannelHandler {
 	public InetSocketAddress fakeDns;
 
 	public DnsServer(CMapping cfg, InetSocketAddress address) throws IOException {
-		ServerLaunch.udp().listen(new InetSocketAddress(cfg.getInteger("forwarderReceive")))
+		ServerLaunch.udp().bind(new InetSocketAddress(cfg.getInteger("forwarderReceive")))
 					.initializator(new ForwardQueryHandler(this))
-					.option(ServerLaunch.CHANNEL_RECEIVE_BUFFER, 10000)
+					.option(ServerLaunch.TCP_RECEIVE_BUFFER, 10000)
 					.launch();
 
-		ServerLaunch.udp().listen(address).initializator((ch) -> {
+		ServerLaunch.udp().bind(address).initializator((ch) -> {
 
-		}).option(ServerLaunch.CHANNEL_RECEIVE_BUFFER, 10000).launch();
+		}).option(ServerLaunch.TCP_RECEIVE_BUFFER, 10000).launch();
 
 		waiting = new ConcurrentHashMap<>();
 		requestTimeout = cfg.getInteger("requestTimeout");
@@ -97,7 +97,7 @@ public class DnsServer implements ChannelHandler {
 			key.url = line.substring(i + 1);
 
 			Record record = new Record();
-			byte[] value = NetworkUtil.ip2bytes(line.substring(0, i));
+			byte[] value = NetUtil.ip2bytes(line.substring(0, i));
 			record.qType = value.length == 4 ? Q_A : Q_AAAA;
 			record.data = value;
 			record.TTL = Integer.MAX_VALUE;
@@ -179,7 +179,7 @@ public class DnsServer implements ChannelHandler {
 		private static String QDataToString(short qType, byte[] data) {
 			DynByteBuf r = new ByteList(data);
 			switch (qType) {
-				case Q_A: case Q_AAAA: return NetworkUtil.bytes2ip(data);
+				case Q_A: case Q_AAAA: return NetUtil.bytes2ip(data);
 				case Q_CNAME:
 				case Q_MB: case Q_MD: case Q_MF: case Q_MG: case Q_MR:
 				case Q_NS: case Q_PTR: {
@@ -240,7 +240,7 @@ public class DnsServer implements ChannelHandler {
 					return sb.toString();
 				}
 				case Q_WKS: {
-					CharList sb = new CharList(32).append("Address: ").append(NetworkUtil.bytes2ipv4(data, 0));
+					CharList sb = new CharList(32).append("Address: ").append(NetUtil.v4bytesIp(data, 0));
 					r.rIndex = 4;
 					return sb.append(", Proto: ").append(Integer.toString(r.readUnsignedByte())).append(", BitMap: <HIDDEN>, len = ").append(r.readableBytes()).toString();
 				}
@@ -888,7 +888,7 @@ public class DnsServer implements ChannelHandler {
 				short qType = (short) TextUtil.parseInt(type);
 				e.qType = qType;
 				if (qType == Q_A || qType == Q_AAAA) {
-					e.data = NetworkUtil.ip2bytes(cnt);
+					e.data = NetUtil.ip2bytes(cnt);
 				} else {
 					switch (qType) {
 						case Q_CNAME:

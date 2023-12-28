@@ -24,9 +24,8 @@ public final class ZipOutput implements AutoCloseable {
 		this.file = file;
 	}
 
-	public void setCompress(boolean compress) {
-		this.compress = compress;
-	}
+	public boolean isCompress() { return compress; }
+	public void setCompress(boolean compress) { this.compress = compress; }
 
 	public void begin(boolean allModifyMode) throws IOException {
 		if (work) end();
@@ -47,19 +46,13 @@ public final class ZipOutput implements AutoCloseable {
 	}
 
 	public void setComment(String comment) {
-		if (useZFW) {
-			all.setComment(comment);
-		} else {
-			some.getEND().setComment(comment);
-		}
+		if (useZFW) all.setComment(comment);
+		else some.getEND().setComment(comment);
 	}
 
 	public void set(String name, ByteList data) throws IOException {
-		if (useZFW) {
-			all.writeNamed(name, data, compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
-		} else {
-			some.put(name, data).flag |= compress ? 8 : 0;
-		}
+		if (useZFW) all.writeNamed(name, data, compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
+		else some.put(name, data).flag |= compress ? 8 : 0;
 	}
 
 	public void set(String name, Supplier<ByteList> data) throws IOException {
@@ -70,35 +63,23 @@ public final class ZipOutput implements AutoCloseable {
 		}
 	}
 
-	public void setS(String name, Supplier<InputStream> data) throws IOException {
-		if (useZFW) {
-			try (InputStream in = data.get()) {
-				set(name, in);
-			}
-		} else {
-			some.put(name, Helpers.cast(data), compress);
-		}
-	}
-
 	public void set(String name, InputStream in) throws IOException {
 		if (useZFW) {
 			ZEntry ze = new ZEntry(name);
 			ze.setMethod(compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
 			all.beginEntry(ze);
 
+			byte[] b = IOUtil.getSharedByteBuf().list;
+			int r;
 			try {
-				ByteList b = IOUtil.getSharedByteBuf();
-				b.ensureCapacity(4096);
-				byte[] list = b.list;
-				int cnt;
 				do {
-					cnt = in.read(list);
-					if (cnt < 0) break;
-					all.write(list, 0, cnt);
-				} while (cnt == list.length);
-				all.closeEntry();
+					r = in.read(b);
+					if (r < 0) break;
+					all.write(b, 0, r);
+				} while (r == b.length);
 			} finally {
 				in.close();
+				all.closeEntry();
 			}
 		} else {
 			some.putStream(name, in, compress);
@@ -122,7 +103,7 @@ public final class ZipOutput implements AutoCloseable {
 			try {
 				if (some != null) some.close();
 				if (all != null) all.close();
-			} catch (Exception e2) {}
+			} catch (Exception ignored) {}
 		}
 		work = false;
 		if (e3 != null) Helpers.athrow(e3);
@@ -132,9 +113,8 @@ public final class ZipOutput implements AutoCloseable {
 		if (some == null) {
 			return new ZipArchive(file, ZipArchive.FLAG_BACKWARD_READ);
 		} else {
-			if (!some.isOpen()) {
+			if (!some.isOpen())
 				some.reopen();
-			}
 		}
 		return some;
 	}

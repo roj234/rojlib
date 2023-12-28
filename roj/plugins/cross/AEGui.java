@@ -11,16 +11,15 @@ import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
-import roj.crypt.ILProvider;
 import roj.crypt.KeyType;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.math.MutableInt;
-import roj.net.NetworkUtil;
+import roj.net.NetUtil;
 import roj.net.ch.*;
 import roj.net.http.srv.HttpServer11;
 import roj.net.http.srv.StringResponse;
-import roj.net.mss.JPrivateKey;
+import roj.net.mss.MSSKeyPair;
 import roj.plugins.cross.server.AEServer;
 import roj.text.TextUtil;
 import roj.ui.GUIUtil;
@@ -84,7 +83,6 @@ public class AEGui extends JFrame implements ChannelHandler {
 	}
 
 	public static void main(String[] args) throws IOException, ParseException {
-		ILProvider.register();
 		GUIUtil.systemLook();
 		keyType = KeyType.getInstance("EdDSA");
 		AEGui f = new AEGui();
@@ -328,11 +326,13 @@ public class AEGui extends JFrame implements ChannelHandler {
 			uiLogin.setText("登录中");
 
 			try {
-				JPrivateKey key = new JPrivateKey(userCert);
+				MSSKeyPair key = new MSSKeyPair(userCert);
 				IAEClient.client_factory.key(key);
 
 				ClientLaunch launch = ClientLaunch.tcp();
-				launch.loop(loop).connect(NetworkUtil.getConnectAddress(uiServer.getText()));
+				InetSocketAddress address = NetUtil.parseConnectAddress(uiServer.getText());
+				System.out.println("正在连接"+address.getAddress()+", 端口"+address.getPort());
+				launch.loop(loop).connect(address);
 
 				if (client instanceof AEHost) {
 					char[] ports = new char[model.size()];
@@ -381,11 +381,6 @@ public class AEGui extends JFrame implements ChannelHandler {
 				ex.printStackTrace();
 			}
 		});
-		try {
-			runServer(1500);
-		} catch (IOException ex) {
-			ex.printStackTrace();
-		}
 	}
 
 	private void setUserCert() {

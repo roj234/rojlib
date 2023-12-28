@@ -1,10 +1,10 @@
 package roj.asm.tree.attr;
 
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstModule;
-import roj.asm.cst.CstPackage;
-import roj.asm.cst.CstUTF;
-import roj.asm.util.AccessFlag;
+import roj.asm.Opcodes;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstModule;
+import roj.asm.cp.CstPackage;
+import roj.asm.cp.CstUTF;
 import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
 
@@ -169,7 +169,7 @@ public final class AttrModule extends Attribute {
 
 		@Override
 		public String toString() {
-			return "Module " + '\'' + name + '\'' + " ver" + version + ", acc='" + AccessFlag.toString(access, AccessFlag.TS_MODULE) + '\'' + '}';
+			return "Module " + '\'' + name + '\'' + " ver" + version + ", acc='" + Opcodes.showModifiers(access, Opcodes.ACC_SHOW_MODULE) + '\'' + '}';
 		}
 	}
 
@@ -200,7 +200,7 @@ public final class AttrModule extends Attribute {
 
 		@Override
 		public String toString() {
-			return "Export '" + Package + '\'' + ", acc=" + AccessFlag.toString(access, AccessFlag.TS_MODULE) + ", accessibleClasses=" + accessible + '}';
+			return "Export '" + Package + '\'' + ", acc=" + Opcodes.showModifiers(access, Opcodes.ACC_SHOW_MODULE) + ", accessibleClasses=" + accessible + '}';
 		}
 	}
 

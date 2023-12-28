@@ -1,6 +1,5 @@
 package roj.lavac.expr;
 
-import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -61,7 +60,7 @@ final class ArrayDef implements ExprNode {
 
 			Type at = getType(cw, 1);
 
-			byte storeType = (byte) OpcodeUtil.getByName().getInt(at.nativeName()+"ASTORE");
+			byte storeType = (byte) Opcodes.opcodeByName().getInt(at.nativeName()+"ASTORE");
 			for (int i = 0; i < expr.size(); i++) {
 				cw.one(Opcodes.LDC);
 				cw.ldc(i);

@@ -356,7 +356,8 @@ public class ByteList extends DynByteBuf implements Appendable {
 		return this;
 	}
 
-	public byte[] toByteArray() {
+	// see DPSSecurityManager for why final
+	public final byte[] toByteArray() {
 		byte[] b = new byte[wIndex - rIndex];
 		System.arraycopy(list, arrayOffset() + rIndex, b, 0, b.length);
 		return b;

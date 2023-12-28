@@ -1,6 +1,7 @@
 package roj.mildwind.parser.ast;
 
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsObject;
 
@@ -18,7 +19,7 @@ interface LoadExpression extends Expression {
 	void writeLoad(JsMethodWriter tree);
 	void writeExecute(JsMethodWriter tree, boolean noRet) throws NotStatementException;
 
-	void computeAssign(JsObject ctx, JsObject val);
+	void computeAssign(JsContext ctx, JsObject val);
 
 	boolean setDeletion();
 }

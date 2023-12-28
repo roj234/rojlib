@@ -29,7 +29,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	static final int UNTREEIFY_THRESHOLD = 6;
 	static final int MIN_TREEIFY_CAPACITY = 64;
 
-	public static abstract class AbstractEntry<K, V> implements Map.Entry<K, V>, _Generic_Entry<AbstractEntry<K, V>> {
+	public static abstract class AbstractEntry<K, V> implements Map.Entry<K, V>, _Generic_Entry {
 		public K k;
 		public final K getKey() { return k; }
 
@@ -135,6 +135,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		void remove(AbstractEntry<?, ?> entry) {
 			Object[] arr = k;
 			int pos = lastPos;
+			assert arr[pos] == entry;
 
 			if (len-pos-1 > 0) System.arraycopy(arr, pos+1, arr, pos, len-pos-1);
 			arr[--len] = null;
@@ -158,10 +159,10 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	protected AbstractEntry<?, ?>[] entries;
 	protected int size = 0;
 
-	protected int length = 1, mask;
-	protected float loadFactor = 0.8f;
+	private int length = 1, mask;
+	private float loadFactor = 1f;
 
-	protected Hasher<K> hasher = Hasher.defaul();
+	private Hasher<K> hasher = Hasher.defaul();
 	public void setHasher(Hasher<K> hasher) {
 		this.hasher = hasher;
 	}
@@ -191,7 +192,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		else mask = length-1;
 	}
 
-	public _Generic_Entry<?>[] __entries() { return entries; }
+	public _Generic_Entry[] __entries() { return entries; }
 	public void __remove(AbstractEntry<K, V> entry) { remove(entry.k); }
 
 	@SuppressWarnings("unchecked")
@@ -416,13 +417,10 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	}
 	@SuppressWarnings("unchecked")
 	public final void putAll(MyHashMap<K, V> otherMap) {
-		AbstractEntry<?, ?>[] ent = otherMap.entries;
-		if (ent == null) return;
-		for (int i = 0; i < otherMap.length; i++) {
-			AbstractEntry<K, V> entry = (AbstractEntry<K, V>) ent[i];
-			if (entry == null) continue;
+		if (otherMap.entries == null) return;
+		for (AbstractEntry<?, ?> entry : otherMap.entries) {
 			while (entry != null) {
-				put(entry.k, entry.getValue());
+				put((K) entry.k, (V) entry.getValue());
 				entry = entry.next;
 			}
 		}
@@ -433,7 +431,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		if (size == 0 || entries == null) return;
 		size = 0;
 
-		for (int i = 0; i < length; i++) {
+		for (int i = entries.length - 1; i >= 0; i--) {
 			AbstractEntry<?, ?> entry = entries[i];
 			if (entry != null) {
 				reserveEntry(Helpers.cast(entry));
@@ -448,12 +446,10 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	@Override
 	@SuppressWarnings("unchecked")
 	public void forEach(BiConsumer<? super K, ? super V> action) {
-		AbstractEntry<?, ?>[] ent = entries;
-		if (ent == null) return;
-		for (int i = 0; i < length; i++) {
-			AbstractEntry<K, V> entry = (AbstractEntry<K, V>) ent[i];
+		if (entries == null) return;
+		for (AbstractEntry<?, ?> entry : entries) {
 			while (entry != null) {
-				action.accept(entry.k, entry.getValue());
+				action.accept((K)entry.k, (V)entry.getValue());
 				entry = entry.next;
 			}
 		}
@@ -491,6 +487,11 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	}
 	@SuppressWarnings("unchecked")
 	public AbstractEntry<K, V> getOrCreateEntry(K key) {
+		if (size > length * loadFactor) {
+			length <<= 1;
+			resize();
+		}
+
 		AbstractEntry<K, V> entry = getEntryFirst(key, true);
 		if (entry.getClass() == Entry2.class) {
 			AbstractEntry<K, V> next = (AbstractEntry<K, V>) ((Entry2) entry).get(key);
@@ -515,12 +516,6 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 
 				AbstractEntry<K, V> next = useEntry();
 				entry.next = next;
-
-				if (size > length * loadFactor) {
-					length <<= 1;
-					resize();
-				}
-
 				return next;
 			}
 
@@ -532,7 +527,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	private void treeify(K key, int loop) {
 		AbstractEntry<K, V> entry;
 		if (hasher != Hasher.defaul()) new Exception("Custom hasher "+hasher+"(A "+hasher.getClass().getName()+") generate many("+ loop +") hash collisions for "+ key.getClass().getName()).printStackTrace();
-		if (!supportAutoCollisionFix()) throw new FastFailException("Child class "+getClass().getName()+" did not support auto collision fix");
+		if (!supportAutoCollisionFix()) return;//throw new FastFailException("Child class "+getClass().getName()+" did not support auto collision fix");
 
 		if (USE_SIPHASH && key instanceof CharSequence) {
 			hasher = new Hasher<K>() {
@@ -596,7 +591,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		}
 	}
 
-	protected boolean supportAutoCollisionFix() { return getClass() == MyHashMap.class; }
+	protected boolean supportAutoCollisionFix() { return true; }
 
 	@SuppressWarnings("unchecked")
 	@Contract("_, true -> !null")

@@ -13,16 +13,11 @@ public class MCPVersionDetect {
 	private static String detectVersion(String version) {
 		switch (version) {
 			case "1.8.1": case "1.8.2": case "1.8.3":
-			case "1.8.4": case "1.8.6": case "1.8.7":
-				return "1.8";
-			case "1.9.1": case "1.9.2": case "1.9.3":
-				return "1.9";
-			case "1.10": case "1.10.1":
-				return "1.10.2";
-			case "1.11.1": case "1.11.2":
-				return "1.11";
-			case "1.12.1": case "1.12.2":
-				return "1.12";
+			case "1.8.4": case "1.8.6": case "1.8.7": return "1.8";
+			case "1.9.1": case "1.9.2": case "1.9.3": return "1.9";
+			case "1.10": case "1.10.1": return "1.10.2";
+			case "1.11.1": case "1.11.2": return "1.11";
+			case "1.12.1": case "1.12.2": return "1.12";
 		}
 		return version;
 	}
@@ -51,20 +46,20 @@ public class MCPVersionDetect {
 		return null;
 	}
 
-	public static void doDetect(Map<String, Object> cfg, InputDelegate ui) throws IOException {
+	public static void doDetect(Map<String, Object> cfg) throws IOException {
 		CLIUtil.warning("自动匹配数据库更新在2021年2月(由于用户太少),出错请反馈,或手动选择");
 
 		String version = cfg.get("version").toString();
 		String mcpVersion = detectVersion(version);
 		if (mcpVersion == version) {
-			String newMcp = ui.getMinecraftVersionForMCP().trim();
+			String newMcp = CLIUtil.readString("不知道MCP的版本号,使用"+version+"需修改请输入并按回车: ").trim();
 			if (newMcp.length() > 0) mcpVersion = newMcp;
 		}
 		String stable = getStableMCPVersion(mcpVersion);
 		if (stable == null || Shared.DEBUG) {
 			CLIUtil.info("stable-123 写为 !123 (稳定版)  snapshot-20201221 缩写为 20201221 (快照版) ");
 
-			String subVersion = ui.getMCPVersion().trim();
+			String subVersion = CLIUtil.readString("MCP").trim();
 
 			if (subVersion.startsWith("!")) {
 				cfg.put("var.mcp-kind", "stable");

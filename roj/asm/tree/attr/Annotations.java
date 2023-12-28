@@ -1,8 +1,10 @@
 package roj.asm.tree.attr;
 
-import roj.asm.cst.ConstantPool;
+import roj.asm.cp.ConstantPool;
 import roj.asm.tree.anno.Annotation;
 import roj.collect.SimpleList;
+import roj.io.IOUtil;
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -46,12 +48,14 @@ public final class Annotations extends Attribute {
 		return annos;
 	}
 
-	public String toString() {
-		if (annotations.isEmpty()) return "";
-		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < annotations.size(); i++) {
-			sb.append(annotations.get(i)).append('\n');
+	public final String toString() { return toString(IOUtil.getSharedCharBuf(), 0).toString(); }
+	public final CharList toString(CharList sb, int prefix) {
+		if (!annotations.isEmpty()) {
+			for (int i = 0; i < annotations.size(); i++) {
+				sb.padEnd(' ', prefix).append(annotations.get(i)).append('\n');
+			}
+			sb.setLength(sb.length()-1);
 		}
-		return sb.deleteCharAt(sb.length() - 1).toString();
+		return sb;
 	}
 }

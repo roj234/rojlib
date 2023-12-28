@@ -81,7 +81,7 @@ JNIEXPORT jclass JNICALL Java_roj_reflect_Java9Compat_defineClass0(JNIEnv *env, 
         return nullptr;
     }
 
-    auto realName = env->GetStringUTFChars(name, JNI_FALSE);
+    auto realName = name == nullptr ? nullptr : env->GetStringUTFChars(name, JNI_FALSE);
     auto realData = env->GetByteArrayElements(b, JNI_FALSE);
     return env->DefineClass(realName, cl, realData, len);
 }
@@ -102,4 +102,10 @@ JNIEXPORT jlong JNICALL Java_roj_util_NativeMemory_hpAlloc0(JNIEnv *env, jclass,
 
 JNIEXPORT void JNICALL Java_roj_util_NativeMemory_hpFree0(JNIEnv *, jclass, jlong address) {
     free(reinterpret_cast<void *>(address));
+}
+
+const char* ENABLE = "11";
+const char* DISABLE = "00";
+JNIEXPORT jint JNICALL Java_roj_io_NIOUtil_windowsOnlyReuseAddr (JNIEnv *env, jclass, jint fd, jboolean on) {
+    return setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, on ? ENABLE : DISABLE, sizeof(int));
 }

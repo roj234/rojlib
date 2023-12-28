@@ -1,6 +1,8 @@
 package roj.asm.visitor;
 
 import roj.asm.frame.Var2;
+import roj.io.IOUtil;
+import roj.text.CharList;
 
 /**
  * @author Roj234
@@ -40,20 +42,11 @@ public final class Frame2 {
 			// 0 - 63
 		}
 		switch (type) {
-			case 247:
-				return "same_local_1_stack_ex";
-			case 248:
-			case 249:
-			case 250:
-				return "chop " + (251 - type);
-			case 251:
-				return "same_ex";
-			case 252:
-			case 253:
-			case 254:
-				return "append " + (type - 251);
-			case 255:
-				return "full";
+			case 247: return "same_local_1_stack_ex";
+			case 248: case 249: case 250: return "chop "+(251-type);
+			case 251: return "same_ex";
+			case 252: case 253: case 254: return "append "+(type-251);
+			case 255: return "full";
 		}
 		return "unknown";
 	}
@@ -67,20 +60,18 @@ public final class Frame2 {
 		return new Frame2(toExactFrameType(type));
 	}
 
-	public Frame2() {
-		this.type = -1;
-	}
-
+	public Frame2() { this.type = -1; }
 	public Frame2(int type) { this.type = (short) type; }
 
 	public int bci() {
 		return target3 == null ? target : target3.getValue();
 	}
 
-	public String toString() {
-		StringBuilder sb = new StringBuilder("  ").append(getName(type)).append(" #").append(bci());
+	public String toString() { return toString(IOUtil.getSharedCharBuf(), 0).toString(); }
+	public CharList toString(CharList sb, int prefix) {
+		sb.padEnd(' ', prefix).append(getName(type)).append(" #").append(bci());
 		if (locals != null && locals.length > 0) {
-			sb.append("\n      Local: [");
+			sb.append('\n').padEnd(' ', prefix).append("Local: [");
 			int i = 0;
 			while (true) {
 				sb.append(locals[i++]);
@@ -90,7 +81,7 @@ public final class Frame2 {
 			sb.append(']');
 		}
 		if (stacks != null && stacks.length > 0) {
-			sb.append("\n      Stack: [");
+			sb.append('\n').padEnd(' ', prefix).append("Stack: [");
 			int i = 0;
 			while (true) {
 				sb.append(stacks[i++]);
@@ -99,7 +90,8 @@ public final class Frame2 {
 			}
 			sb.append(']');
 		}
-		return sb.append('\n').toString();
+		return sb.append('\n');
+
 	}
 
 	public void locals(Var2... arr) {

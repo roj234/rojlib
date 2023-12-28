@@ -19,13 +19,9 @@ public class NativeMemory {
 	private interface H {
 		int pageSize();
 
-		default void reserveMemory(long size, int cap) {
-			reserveMemory2(size, cap);
-		}
+		default void reserveMemory(long size, int cap) { reserveMemory2(size, cap); }
 		void reserveMemory2(long size, long cap);
-		default void unreserveMemory(long size, int cap) {
-			unreserveMemory2(size, cap);
-		}
+		default void unreserveMemory(long size, int cap) { unreserveMemory2(size, cap); }
 		void unreserveMemory2(long size, long cap);
 
 		default ByteBuffer newDirectBuffer(long addr, int cap, Object att) {
@@ -56,9 +52,7 @@ public class NativeMemory {
 	static {
 		try {
 			DirectAccessor<H> da = DirectAccessor.builder(H.class);
-			try {
-				da.access(ByteBuffer.class, new String[]{"hb","offset"});
-			} catch (Exception ignored) {}
+			da.access(ByteBuffer.class, new String[]{"hb","offset"});
 
 			boolean j17 = ReflectionUtils.JAVA_VERSION >= 17;
 			boolean j9 = ReflectionUtils.JAVA_VERSION >= 9;
@@ -77,23 +71,14 @@ public class NativeMemory {
 		}
 	}
 
-	public static ByteBuffer newDirectBuffer(long addr, int cap, Object att) {
-		return hlp.newDirectBuffer(addr, cap, att);
-	}
-	public static void setBufferCapacityAndAddress(ByteBuffer buf, long addr, int cap) {
-		hlp.setCapacity(buf, cap);
-		hlp.setAddress(buf, addr);
-	}
-	public static ByteBuffer newHeapBuffer(byte[] buf, int mark, int pos, int lim, int cap, int off) {
-		return hlp.newHeapBuffer(buf, mark, pos, lim, cap, off);
-	}
-	public static void cleanNativeMemory(Object cleaner) {
-		hlp.invokeClean(cleaner);
-	}
+	public static ByteBuffer newDirectBuffer(long addr, int cap, Object att) { return hlp.newDirectBuffer(addr, cap, att); }
+	public static long getAddress(ByteBuffer buf) { return hlp.getAddress(buf); }
+	public static void setBufferCapacityAndAddress(ByteBuffer buf, long addr, int cap) { assert buf.isDirect() : "buffer is not direct"; hlp.setCapacity(buf, cap); hlp.setAddress(buf, addr); }
+	public static void cleanNativeMemory(Object cleaner) { hlp.invokeClean(cleaner); }
 
+	public static ByteBuffer newHeapBuffer(byte[] buf, int mark, int pos, int lim, int cap, int off) { return hlp.newHeapBuffer(buf, mark, pos, lim, cap, off); }
 	public static byte[] getArray(ByteBuffer buf) { return hlp.getHb(buf); }
 	public static int getOffset(ByteBuffer buf) { return hlp.getOffset(buf); }
-	public static long getAddress(ByteBuffer buf) { return hlp.getAddress(buf); }
 
 	public static void reserveMemory(int length) { hlp.reserveMemory(length, length); }
 	public static void unreserveMemory(int length) { hlp.unreserveMemory(length, length); }
@@ -131,7 +116,6 @@ public class NativeMemory {
 			lock.unlock();
 		}
 	}
-	@Deprecated
 	public long resize(long cap) {
 		lock.lock();
 		try {
@@ -177,9 +161,9 @@ public class NativeMemory {
 
 		long malloc(long cap, boolean resize) {
 			if (cap < 0) throw new IllegalArgumentException("cap="+cap);
-			this.except = (int) cap;
-
 			if (base != 0 && !resize) release();
+
+			this.except = (int) cap;
 
 			boolean pa = hlp.isDirectMemoryPageAligned();
 			int ps = hlp.pageSize();

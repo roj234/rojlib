@@ -2,15 +2,15 @@ package roj.mod.fp;
 
 import roj.archive.qz.xz.LZMAInputStream;
 import roj.archive.zip.ZipFileWriter;
+import roj.asm.type.Desc;
 import roj.asm.util.Context;
+import roj.asmx.mapper.Mapper;
+import roj.asmx.mapper.Mapping;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.collect.TrieTree;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.task.AsyncTask;
-import roj.mapper.Mapper;
-import roj.mapper.Mapping;
-import roj.mapper.util.Desc;
 import roj.mod.FMDInstall;
 import roj.mod.FMDMain;
 import roj.mod.Shared;
@@ -24,7 +24,6 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -75,7 +74,7 @@ public final class LegacyForge extends WorkspaceBuilder {
 		arr[0] = new ArrayList<>();
 
 		AsyncTask<List<Context>> prepareClient = new AsyncTask<>(() -> {
-			List<Context> list = Context.fromZip(file.get(0), StandardCharsets.UTF_8);
+			List<Context> list = Context.fromZip(file.get(0));
 
 			bar.addMax(list.size());
 			for (int i = 0; i < list.size(); i++, bar.addCurrent(1)) {
@@ -96,7 +95,7 @@ public final class LegacyForge extends WorkspaceBuilder {
 			TrieTreeSet set = new TrieTreeSet();
 			FMDMain.readTextList(set::add, "忽略服务端jar中以以下文件名开头的文件");
 
-			List<Context> list = Context.fromZip(file.get(1), StandardCharsets.UTF_8, name -> !set.strStartsWithThis(name));
+			List<Context> list = Context.fromZip(file.get(1), name -> !set.strStartsWithThis(name));
 
 			bar.addMax(list.size());
 			for (int i = 0; i < list.size(); i++, bar.addCurrent(1)) {
@@ -121,7 +120,7 @@ public final class LegacyForge extends WorkspaceBuilder {
 			}
 
 			bar.addMax(100);
-			List<Context> list = Context.fromZip(forgeJar, StandardCharsets.UTF_8);
+			List<Context> list = Context.fromZip(forgeJar);
 
 			MappingFormat.MapResult maps = mf.map(mf_cfg, TMP_DIR);
 			bar.addCurrent(100);

@@ -1,6 +1,6 @@
 package roj.lavac.expr;
 
-import roj.asm.OpcodeUtil;
+import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.ast.expr.ExprNode;
@@ -45,7 +45,7 @@ final class ArrayGet implements LoadNode {
 		index.write(cw, false);
 		cw.checkCast(index.type(), Type.std(Type.INT)).cast(cw);
 
-		byte storeType = (byte) OpcodeUtil.getByName().getInt(type().rawType().nativeName()+"ALOAD");
+		byte storeType = (byte) Opcodes.opcodeByName().getInt(type().rawType().nativeName()+"ALOAD");
 		cw.one(storeType);
 	}
 

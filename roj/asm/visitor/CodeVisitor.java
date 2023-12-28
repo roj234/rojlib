@@ -1,9 +1,9 @@
 package roj.asm.visitor;
 
 import roj.asm.AsmShared;
-import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
-import roj.asm.cst.*;
+import roj.asm.cp.*;
+import roj.asm.util.InsnHelper;
 import roj.util.DynByteBuf;
 
 import static roj.asm.Opcodes.*;
@@ -15,7 +15,6 @@ import static roj.asm.Opcodes.*;
  * @since 2021/8/16 19:07
  */
 public class CodeVisitor {
-	// 这个也可以删除，但有必要吗
 	protected int bci;
 
 	public CodeVisitor() {}
@@ -60,10 +59,10 @@ public class CodeVisitor {
 		byte prev = 0, code;
 		while (r.rIndex < len) {
 			bci = r.rIndex - rBegin;
-			code = OpcodeUtil.byId(r.readByte());
+			code = Opcodes.validateOpcode(r.readByte());
 
 			boolean widen = prev == Opcodes.WIDE;
-			if (widen) OpcodeUtil.checkWide(code);
+			if (widen) InsnHelper.checkWide(code);
 			else _visitNodePre();
 
 			switch (code) {
@@ -182,13 +181,13 @@ public class CodeVisitor {
 	protected void visitSize(int stackSize, int localSize) {}
 
 	protected final boolean decompressVar(byte code) {
-		String name = OpcodeUtil.toString0(code);
+		String name = Opcodes.showOpcode(code);
 		// xLOAD_y
 		if (name.length() == 7 && name.startsWith("Load_", 1)) {
-			vars((byte) OpcodeUtil.getByName().getInt(name.substring(0,5)), name.charAt(6)-'0');
+			vars((byte) Opcodes.opcodeByName().getInt(name.substring(0,5)), name.charAt(6)-'0');
 			return true;
 		} else if (name.length() == 8 && name.startsWith("Store_", 1)) {
-			vars((byte) OpcodeUtil.getByName().getInt(name.substring(0,6)), name.charAt(7)-'0');
+			vars((byte) Opcodes.opcodeByName().getInt(name.substring(0,6)), name.charAt(7)-'0');
 			return true;
 		}
 

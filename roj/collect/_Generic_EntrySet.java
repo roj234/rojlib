@@ -22,7 +22,7 @@ final class _Generic_EntrySet extends AbstractSet<Object> {
 
 		_Generic_Map<?> m = (_Generic_Map<?>) map;
 		Iterator<?> itr = m.__iterator();
-		return Helpers.cast(itr != null ? itr : new EntryItr<>(m));
+		return Helpers.cast(itr != null ? itr : new _Generic_EntryItr<>(m));
 	}
 
 	public final boolean contains(Object o) {

@@ -1,11 +1,10 @@
 package roj.config.serial;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asm.OpcodeUtil;
 import roj.asm.Parser;
-import roj.asm.cst.CstClass;
-import roj.asm.cst.CstInt;
-import roj.asm.cst.CstString;
+import roj.asm.cp.CstClass;
+import roj.asm.cp.CstInt;
+import roj.asm.cp.CstString;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;
@@ -41,7 +40,6 @@ import java.util.function.IntFunction;
 import java.util.function.ToIntFunction;
 
 import static roj.asm.Opcodes.*;
-import static roj.asm.util.AccessFlag.*;
 
 /**
  * 需要注意的是，这个实现并没有考虑到安全性，
@@ -429,7 +427,7 @@ public final class SerializerFactory {
 
 	private static boolean isInvalid(Class<?> type) {
 		if (type.getComponentType() != null) return false;
-		if ((type.getModifiers() & (ABSTRACT|INTERFACE)) != 0) return true;
+		if ((type.getModifiers() & (ACC_ABSTRACT|ACC_INTERFACE)) != 0) return true;
 		return type == Object.class;
 	}
 
@@ -589,7 +587,7 @@ public final class SerializerFactory {
 	}
 
 	private static void copyArrayRef(ConstantData c, char type) {
-		CodeWriter cw = c.newMethod(PUBLIC|FINAL, "read", "(Lroj/config/serial/AdaptContext;["+type+")V");
+		CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "read", "(Lroj/config/serial/AdaptContext;["+type+")V");
 		cw.visitSize(2,3);
 		cw.one(ALOAD_1);
 		cw.one(ALOAD_2);
@@ -601,14 +599,14 @@ public final class SerializerFactory {
 	}
 
 	private static void addUpgrader(ConstantData c, byte code) {
-		String orig = OpcodeUtil.toString0(code);
+		String orig = showOpcode(code);
 		String id = orig.replace('L', 'J');
 
-		CodeWriter ir = c.newMethod(PUBLIC|FINAL, "read", "(Lroj/config/serial/AdaptContext;"+id.charAt(0)+")V");
+		CodeWriter ir = c.newMethod(ACC_PUBLIC|ACC_FINAL, "read", "(Lroj/config/serial/AdaptContext;"+id.charAt(0)+")V");
 		ir.visitSize(3,3);
 		ir.one(ALOAD_0);
 		ir.one(ALOAD_1);
-		ir.one((byte) OpcodeUtil.getByName().getInt(orig.charAt(0)+"LOAD_2"));
+		ir.one((byte) opcodeByName().getInt(orig.charAt(0)+"LOAD_2"));
 		ir.one(code);
 		ir.invoke(DIRECT_IF_OVERRIDE, c.name, "read", "(Lroj/config/serial/AdaptContext;"+id.charAt(2)+")V");
 		ir.one(RETURN);
@@ -621,7 +619,7 @@ public final class SerializerFactory {
 		begin();
 
 		// region toString
-		CodeWriter cw = c.newMethod(PUBLIC|FINAL, "toString", "()Ljava/lang/String;");
+		CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "toString", "()Ljava/lang/String;");
 		cw.visitSize(1,1);
 		String toString = "UserAdapter@"+writer.ownerClass();
 		cw.ldc(new CstString(toString));
@@ -632,7 +630,7 @@ public final class SerializerFactory {
 		Type type = writer.returnType();
 		String klassOut = type.getActualClass();
 
-		int ua = c.newField(PRIVATE, "userAdapter", "L"+data.name+";");
+		int ua = c.newField(ACC_PRIVATE, "userAdapter", "L"+data.name+";");
 		int ser;
 		if (klassOut != null && !klassOut.equals("java/lang/String")) {
 			String genSig;
@@ -647,11 +645,11 @@ public final class SerializerFactory {
 
 		// region read()
 		String methodType = type.getActualType() == Type.CLASS ? "Ljava/lang/Object;" : type.toDesc();
-		cw = c.newMethod(PUBLIC|FINAL, "read", "(Lroj/config/serial/AdaptContext;"+methodType+")V");
+		cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "read", "(Lroj/config/serial/AdaptContext;"+methodType+")V");
 		cw.visitSize(3,3);
 
 		if (ser >= 0) {
-			CodeWriter ps = c.newMethod(PUBLIC|FINAL, "push", "(Lroj/config/serial/AdaptContext;)V");
+			CodeWriter ps = c.newMethod(ACC_PUBLIC|ACC_FINAL, "push", "(Lroj/config/serial/AdaptContext;)V");
 			ps.visitSize(2,3);
 
 			ps.one(ALOAD_1);
@@ -679,7 +677,7 @@ public final class SerializerFactory {
 
 		// endregion
 		// region write()
-		cw = c.newMethod(PUBLIC|FINAL, "write", "(Lroj/config/serial/CVisitor;Ljava/lang/Object;)V");
+		cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "write", "(Lroj/config/serial/CVisitor;Ljava/lang/Object;)V");
 		cw.visitSizeMax(3,3);
 
 		cw.one(ALOAD_0);
@@ -714,14 +712,14 @@ public final class SerializerFactory {
 		int t = GENERATE|CHECK_PARENT|SERIALIZE_PARENT;
 		if ((flag&t) == t) throw new IllegalArgumentException("GENERATE CHECK_PARENT SERIALIZE_PARENT 不能同时为真");
 
-		if ((o.getModifiers()&PUBLIC) == 0 && (flag&SAFE) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
+		if ((o.getModifiers()& ACC_PUBLIC) == 0 && (flag&SAFE) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
 		ConstantData data = Parser.parse(o);
 		if (data == null) throw new IllegalArgumentException("无法获取"+o.getName()+"的类文件");
 
 		int _init = data.getMethod("<init>", "()V");
 		if (_init < 0) {
 			if ((flag & NO_CONSTRUCTOR) == 0) throw new IllegalArgumentException("不允许跳过构造器(NO_CONSTRUCTOR)" + o.getName());
-		} else if ((data.methods.get(_init).modifier() & PUBLIC) == 0) {
+		} else if ((data.methods.get(_init).modifier() & ACC_PUBLIC) == 0) {
 			if (!Serializers.injected) throw new IllegalArgumentException("UnsafeAdapter没有激活,不能跳过无参构造器生成对象" + o.getName());
 			if ((flag & SAFE) != 0) throw new IllegalArgumentException("UNSAFE: "+o.getName()+".<init>");
 		}
@@ -757,7 +755,7 @@ public final class SerializerFactory {
 		if (data.fields.size() == 0 && fieldIds.size() == 0) throw new IllegalArgumentException("这"+o.getName()+"味道不对啊,怎么一个字段都没有");
 
 		// region toString
-		CodeWriter cw = c.newMethod(PUBLIC|FINAL, "toString", "()Ljava/lang/String;");
+		CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "toString", "()Ljava/lang/String;");
 		cw.visitSize(1,1);
 		String toString = "Adapter@"+o.getName();
 		cw.ldc(new CstString(toString));
@@ -765,16 +763,16 @@ public final class SerializerFactory {
 		cw.one(ARETURN);
 		cw.finish();
 		// endregion
-		int fieldIdKey = c.newField(PRIVATE|STATIC, "ser$fieldIds", "Lroj/collect/IntBiMap;");
+		int fieldIdKey = c.newField(ACC_PRIVATE|ACC_STATIC, "ser$fieldIds", "Lroj/collect/IntBiMap;");
 		// region fieldId
-		cw = c.newMethod(PUBLIC|FINAL, "fieldNames", "()Lroj/collect/IntBiMap;");
+		cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "fieldNames", "()Lroj/collect/IntBiMap;");
 		cw.visitSize(1,1);
 		cw.field(GETSTATIC, c, fieldIdKey);
 		cw.one(ARETURN);
 		cw.finish();
 		// endregion
 		// region key函数
-		cw = keyCw = c.newMethod(PUBLIC|FINAL, "key", "(Lroj/config/serial/AdaptContext;Ljava/lang/String;)V");
+		cw = keyCw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "key", "(Lroj/config/serial/AdaptContext;Ljava/lang/String;)V");
 		cw.visitSize(3,4);
 
 		cw.field(GETSTATIC, c, fieldIdKey);
@@ -801,7 +799,7 @@ public final class SerializerFactory {
 
 		// endregion
 		// region write()
-		write = c.newMethod(PUBLIC|FINAL, "writeMap", "(Lroj/config/serial/CVisitor;Ljava/lang/Object;)V");
+		write = c.newMethod(ACC_PUBLIC|ACC_FINAL, "writeMap", "(Lroj/config/serial/CVisitor;Ljava/lang/Object;)V");
 		write.visitSizeMax(3,3);
 
 		write.one(ALOAD_2);
@@ -815,7 +813,7 @@ public final class SerializerFactory {
 
 		CstInt count = new CstInt(fieldId);
 		// region map()
-		cw = c.newMethod(PUBLIC|FINAL, "map", "(Lroj/config/serial/AdaptContext;I)V");
+		cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "map", "(Lroj/config/serial/AdaptContext;I)V");
 		cw.visitSize(3,3);
 		cw.one(ALOAD_1);
 		if (_init < 0) cw.clazz(NEW, data.name);
@@ -825,7 +823,7 @@ public final class SerializerFactory {
 		cw.one(RETURN);
 		// endregion
 		// region fieldCount()
-		cw = c.newMethod(PUBLIC|FINAL, "fieldCount", "()I");
+		cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "fieldCount", "()I");
 		cw.visitSize(1,1);
 		cw.ldc(count);
 		cw.one(IRETURN);
@@ -844,11 +842,11 @@ public final class SerializerFactory {
 		SimpleList<FieldNode> fields = data.fields;
 		for (int i = 0; i < fields.size(); i++) {
 			FieldNode f = fields.get(i);
-			if ((f.modifier() & (TRANSIENT|STATIC)) != 0) continue;
+			if ((f.modifier() & (ACC_TRANSIENT|ACC_STATIC)) != 0) continue;
 
 			int unsafe;
-			if ((f.modifier() & PUBLIC) == 0) unsafe = 3; // 1|2
-			else if ((f.modifier() & FINAL) != 0) unsafe = 5; // 1|4
+			if ((f.modifier() & ACC_PUBLIC) == 0) unsafe = 3; // 1|2
+			else if ((f.modifier() & ACC_FINAL) != 0) unsafe = 5; // 1|4
 			else unsafe = 0;
 
 			String name = f.name();
@@ -900,8 +898,8 @@ public final class SerializerFactory {
 			}
 
 			if (unsafe != 0 ||
-				set != null && (set.modifier()&PUBLIC) == 0 ||
-				get != null && (get.modifier()&PUBLIC) == 0) {
+				set != null && (set.modifier()& ACC_PUBLIC) == 0 ||
+				get != null && (get.modifier()& ACC_PUBLIC) == 0) {
 				if ((flag & SAFE) != 0)
 					throw new RuntimeException("无权访问"+data.name+"."+f+" ("+unsafe+")\n" +
 					"解决方案:\n" +
@@ -925,21 +923,21 @@ public final class SerializerFactory {
 		write.finish();
 		write = null;
 
-		CodeWriter init = c.newMethod(PUBLIC, "init", "(Lroj/collect/IntBiMap;Lroj/collect/MyBitSet;)V");
+		CodeWriter init = c.newMethod(ACC_PUBLIC, "init", "(Lroj/collect/IntBiMap;Lroj/collect/MyBitSet;)V");
 		init.visitSize(1, 3);
 		init.one(ALOAD_1);
 		init.field(PUTSTATIC, c, fieldIdKey);
 
 		if (optional != 0 || optionalEx != null) {
 			// region optional
-			cw = c.newMethod(PUBLIC|FINAL, "plusOptional", "(ILroj/collect/MyBitSet;)I");
+			cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "plusOptional", "(ILroj/collect/MyBitSet;)I");
 			cw.visitSize(2,3);
 			if (parentSer >= 0) {
 				invokeParent(cw, ILOAD);
 				cw.one(ISTORE_1);
 			}
 			if (optionalEx != null) {
-				int fid = c.newField(PRIVATE|STATIC, "ser$optEx", "Lroj/collect/MyBitSet;");
+				int fid = c.newField(ACC_PRIVATE|ACC_STATIC, "ser$optEx", "Lroj/collect/MyBitSet;");
 				cw.one(ALOAD_2);
 				cw.field(GETSTATIC, c, fid);
 				cw.invoke(DIRECT_IF_OVERRIDE, "roj/collect/MyBitSet", "addAll", "(Lroj/collect/MyBitSet;)Lroj/collect/MyBitSet;");
@@ -1014,7 +1012,7 @@ public final class SerializerFactory {
 			String asName = "as$"+as.klass().replace('/', '`');
 			asId = c.getField(asName);
 			if (asId < 0) {
-				asId = c.newField(PRIVATE, asName, "L"+as.klass()+";");
+				asId = c.newField(ACC_PRIVATE, asName, "L"+as.klass()+";");
 
 				copy.one(ALOAD_0);
 				copy.one(ALOAD_1);
@@ -1210,7 +1208,7 @@ public final class SerializerFactory {
 
 		Tmp2 t = new Tmp2();
 		readMethods.putInt(methodType,t);
-		CodeWriter cw = t.cw = c.newMethod(PUBLIC|FINAL, "read", desc);
+		CodeWriter cw = t.cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "read", desc);
 
 		t.seg = new SwitchSegment();
 		t.seg.def = new Label();
@@ -1272,7 +1270,7 @@ public final class SerializerFactory {
 		int id = serializerId.getOrDefault(_name,-1);
 		if (id >= 0) return id;
 
-		id = c.newField(PRIVATE, "ser$"+c.fields.size(), "Lroj/config/serial/Adapter;");
+		id = c.newField(ACC_PRIVATE, "ser$"+c.fields.size(), "Lroj/config/serial/Adapter;");
 		serializerId.putInt(_name,id);
 
 		copy.one(ALOAD_0);
@@ -1289,14 +1287,14 @@ public final class SerializerFactory {
 	}
 	private void begin() {
 		c = new ConstantData();
-		c.access = PUBLIC|SUPER|FINAL;
+		c.access = ACC_PUBLIC|ACC_SUPER|ACC_FINAL;
 		c.name("roj/config/serial/GA$"+GENERATED.size());
 		c.parent("roj/config/serial/Adapter");
 		c.interfaces.add(new CstClass("roj/config/serial/GenAdapter"));
 		c.cloneable();
 		FastInit.prepare(c);
 
-		copy = c.newMethod(PUBLIC, "secondaryInit", "(Lroj/config/serial/SerializerFactory;Ljava/lang/Object;)V");
+		copy = c.newMethod(ACC_PUBLIC, "secondaryInit", "(Lroj/config/serial/SerializerFactory;Ljava/lang/Object;)V");
 		copy.visitSize(4, 3);
 	}
 	private Adapter build() {
@@ -1340,7 +1338,7 @@ public final class SerializerFactory {
 					c.addInterface("java/util/function/IntFunction");
 					FastInit.prepare(c);
 
-					CodeWriter cw = c.newMethod(PUBLIC|FINAL, "apply", "(I)Ljava/lang/Object;");
+					CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "apply", "(I)Ljava/lang/Object;");
 
 					String asmName = TypeHelper.class2asm(type);
 					if (hasNP) {

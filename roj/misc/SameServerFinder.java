@@ -4,7 +4,7 @@ import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.net.NetworkUtil;
+import roj.net.NetUtil;
 import roj.net.ch.*;
 import roj.net.ch.handler.Timeout;
 import roj.net.ch.handler.VarintSplitter;
@@ -36,7 +36,7 @@ public class SameServerFinder {
 		bar.setUnit("");
 		if (args.length == 0) {
 			try {
-				ClientLaunch.tcp().timeout(1000).connect(NetworkUtil.getConnectAddress(CLIUtil.userInput("ip"))).loop(loop).initializator(new PingTask()).launch();
+				ClientLaunch.tcp().timeout(1000).connect(NetUtil.parseConnectAddress(CLIUtil.readString("ip"))).loop(loop).initializator(new PingTask()).launch();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}

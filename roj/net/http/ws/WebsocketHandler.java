@@ -83,7 +83,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 	private final byte[] mask = new byte[4];
 
 	// 分片接收缓冲
-	protected ContinuousFrame rcvFrag;
+	private ContinuousFrame rcvFrag;
 
 	// 最大数据长度
 	protected int maxData, maxDataOnce, compressSize;
@@ -295,7 +295,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 
 		if (rcvFrag != null) {
 			if ((flag & ACCEPT_PARTIAL_MSG) != 0) {
-				onPacket(0x80 | (head & 15), rb);
+				onPacket(0x80 | (rcvFrag.data&0xF), rb);
 				rcvFrag.fragments++;
 			} else {
 				rcvFrag.append(ctx, rb);
@@ -305,9 +305,9 @@ public abstract class WebsocketHandler implements ChannelHandler {
 
 				if ((head & 0x80) != 0) {
 					try {
-						onPacket(rcvFrag.data & 0xF, rcvFrag.payload());
+						onPacket(rcvFrag.data&0xF, rcvFrag.payload());
 					} finally {
-						rcvFrag.clear(ctx);
+						rcvFrag.clear();
 						rcvFrag = null;
 					}
 				}
@@ -409,7 +409,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 			// frame[1] ... frame[count - 1]: opcode=0
 			while (rem > fragmentSize) {
 				data.wIndex(data.rIndex + fragmentSize);
-				send0(0, data, comp);
+				send0(FRAME_CONTINUE, data, comp);
 				rem -= fragmentSize;
 			}
 

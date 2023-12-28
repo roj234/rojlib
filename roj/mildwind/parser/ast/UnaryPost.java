@@ -1,5 +1,6 @@
 package roj.mildwind.parser.ast;
 
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.parser.JSLexer;
 import roj.mildwind.type.JsObject;
@@ -29,7 +30,7 @@ final class UnaryPost implements Expression {
 	public void write(JsMethodWriter tree, boolean noRet) { Assign.writeIncrement(left, tree, noRet, true, op == JSLexer.inc ? 1 : -1, false); }
 
 	@Override
-	public JsObject compute(JsObject ctx) {
+	public JsObject compute(JsContext ctx) {
 		int dt = op == JSLexer.inc ? 1 : -1;
 		JsObject v = left.compute(ctx);
 		v._ref();

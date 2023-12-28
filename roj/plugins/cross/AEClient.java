@@ -191,7 +191,7 @@ public class AEClient extends IAEClient {
 			this.port = port;
 
 			socket = ServerLaunch
-				.tcp().listen2(InetAddress.getLoopbackAddress(), port, 100)
+				.tcp().bind2(InetAddress.getLoopbackAddress(), port, 100)
 				.option(StandardSocketOptions.SO_REUSEADDR, true)
 				.loop(loop).initializator(this).launch();
 		}

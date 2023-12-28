@@ -1,5 +1,6 @@
 package roj.crypt;
 
+import roj.io.MBInputStream;
 import roj.io.buf.BufferPool;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -12,11 +13,9 @@ import java.io.InputStream;
  * @author Roj234
  * @since 2022/11/12 0012 15:27
  */
-public class CipherInputStream extends InputStream {
+public class CipherInputStream extends MBInputStream {
 	protected InputStream in;
 	boolean eof;
-
-	private byte[] b1;
 
 	private final ByteList.Slice i = new ByteList.Slice();
 	private ByteList o;
@@ -30,12 +29,6 @@ public class CipherInputStream extends InputStream {
 
 		this.o = (ByteList) BufferPool.buffer(false, CipherOutputStream.BUFFER_SIZE);
 		this.i.set(o.array(), o.arrayOffset(), o.capacity());
-	}
-
-	@Override
-	public int read() throws IOException {
-		if (b1 == null) b1 = new byte[1];
-		return read(b1,0,1) > 0 ? b1[0]&0xFF : -1;
 	}
 
 	@Override

@@ -1,7 +1,14 @@
 package roj.asm.util;
 
+import roj.archive.ArchiveEntry;
+import roj.archive.ArchiveFile;
+import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipArchive;
 import roj.asm.Parser;
-import roj.asm.cst.*;
+import roj.asm.cp.Constant;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstClass;
+import roj.asm.cp.CstRef;
 import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
 import roj.util.ByteList;
@@ -11,19 +18,15 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 public final class Context implements Consumer<Constant>, Supplier<ByteList> {
-	static final int ID_METHOD = 0, ID_FIELD = 1, ID_CLASS = 2, ID_INVOKE_DYN = 3;
+	static final int ID_METHOD = 0, ID_FIELD = 1, ID_CLASS = 2;
 
 	private String name;
 	private ConstantData data;
@@ -31,6 +34,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 	private ByteList buf;
 	private boolean absolutelyCompressed;
 
+	@Deprecated
 	private ArrayList<Constant>[] cstCache;
 
 	public Context(String name, Object o) {
@@ -89,9 +93,11 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 		throw new ClassCastException(o.getClass().getName());
 	}
 
+	@Deprecated
 	public List<CstRef> getMethodConstants() { cstInit(); return Helpers.cast(cstCache[ID_METHOD]); }
+	@Deprecated
 	public List<CstRef> getFieldConstants() { cstInit(); return Helpers.cast(cstCache[ID_FIELD]); }
-	public List<CstDynamic> getInvokeDynamic() { cstInit(); return Helpers.cast(cstCache[ID_INVOKE_DYN]); }
+	@Deprecated
 	public List<CstClass> getClassConstants() { cstInit(); return Helpers.cast(cstCache[ID_CLASS]); }
 
 	public ByteList get() { return get(true); }
@@ -118,9 +124,6 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 		return this.buf;
 	}
 
-
-	public boolean inRaw() { return data == null; }
-
 	private void clearData() {
 		if (this.data != null) {
 			getFileName();
@@ -143,10 +146,10 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 		return "Ctx " + "'" + name + '\'';
 	}
 
+	@Deprecated
 	private void cstInit() {
 		if (cstCache == null) {
 			cstCache = Helpers.cast(new ArrayList<?>[] {
-				new ArrayList<>(),
 				new ArrayList<>(),
 				new ArrayList<>(),
 				new ArrayList<>()
@@ -166,6 +169,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 	}
 
 	@Override
+	@Deprecated
 	public void accept(Constant c) {
 		if (c == null) {
 			for (List<?> list : cstCache) list.clear();
@@ -177,7 +181,6 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 			case Constant.INTERFACE: case Constant.METHOD: cstCache[ID_METHOD].add(c); break;
 			case Constant.CLASS: cstCache[ID_CLASS].add(c); break;
 			case Constant.FIELD: cstCache[ID_FIELD].add(c); break;
-			case Constant.INVOKE_DYNAMIC: cstCache[ID_INVOKE_DYN].add(c); break;
 		}
 	}
 
@@ -187,11 +190,8 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 	}
 
 	public ByteList getCompressedShared() {
-		String fn = getFileName();
-		if (!absolutelyCompressed) {
-			Parser.compress(getData());
-			absolutelyCompressed = true;
-		}
+		getFileName();
+		compress();
 		return get(true);
 	}
 
@@ -204,69 +204,28 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 		absolutelyCompressed = true;
 	}
 
-	// region 准备上下文
-
-	public static List<Context> fromZip(File input, Charset charset) throws IOException { return fromZip(input, charset, Helpers.alwaysTrue()); }
-	public static List<Context> fromZip(File input, Charset charset, Predicate<String> filter) throws IOException {
-		ZipFile inputJar = new ZipFile(input, charset);
-
+	public static List<Context> fromZip(File input) throws IOException { return fromZip(input, null, Helpers.alwaysTrue()); }
+	public static List<Context> fromZip(File input, Predicate<String> filter) throws IOException { return fromZip(input, null, filter); }
+	public static List<Context> fromZip(File input, Map<ArchiveEntry, ArchiveFile> resource) throws IOException { return fromZip(input, resource, Helpers.alwaysTrue()); }
+	public static List<Context> fromZip(File input, Map<ArchiveEntry, ArchiveFile> resource, Predicate<String> filter) throws IOException {
 		List<Context> ctx = new ArrayList<>();
+		ByteList buf = new ByteList();
 
-		ByteList bl = new ByteList();
-		Enumeration<? extends ZipEntry> en = inputJar.entries();
-		while (en.hasMoreElements()) {
-			ZipEntry zn;
-			try {
-				zn = en.nextElement();
-			} catch (IllegalArgumentException e) {
-				throw new IllegalArgumentException("可能是编码错误! 请指定编码", e);
-			}
-			if (zn.isDirectory()) continue;
-			if (zn.getName().endsWith(".class") && filter.test(zn.getName())) {
-				InputStream in = inputJar.getInputStream(zn);
-				Context c = new Context(zn.getName().replace('\\', '/'), bl.readStreamFully(in).toByteArray());
-				in.close();
-				bl.clear();
-				ctx.add(c);
+		try (ZipArchive archive = new ZipArchive(input)) {
+			for (ZEntry value : archive.getEntries().values()) {
+				String name = value.getName();
+				if (name.endsWith("/")) continue;
+
+				if (name.endsWith(".class") && filter.test(name)) {
+					buf.clear();
+					ctx.add(new Context(name, archive.get(value, buf).toByteArray()));
+				} else if (resource != null) {
+					resource.put(value, archive);
+				}
 			}
 		}
-
-		inputJar.close();
+		buf._free();
 
 		return ctx;
 	}
-
-	public static List<Context> fromZip(File input, Charset charset, Map<String, byte[]> res) throws IOException {
-		ZipFile inputJar = new ZipFile(input, charset);
-
-		List<Context> ctx = new ArrayList<>();
-
-		ByteList bl = new ByteList();
-		Enumeration<? extends ZipEntry> en = inputJar.entries();
-		while (en.hasMoreElements()) {
-			ZipEntry zn;
-			try {
-				zn = en.nextElement();
-			} catch (IllegalArgumentException e) {
-				throw new IllegalArgumentException("可能是编码错误! 请指定编码", e);
-			}
-			if (zn.isDirectory()) continue;
-			InputStream in = inputJar.getInputStream(zn);
-			bl.readStreamFully(in);
-			in.close();
-			if (zn.getName().endsWith(".class")) {
-				Context c = new Context(zn.getName().replace('\\', '/'), bl.toByteArray());
-				ctx.add(c);
-			} else {
-				res.put(zn.getName(), bl.toByteArray());
-			}
-			bl.clear();
-		}
-
-		inputJar.close();
-
-		return ctx;
-	}
-
-	// endregion
 }

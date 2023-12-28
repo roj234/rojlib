@@ -146,7 +146,8 @@ public final class LZDecoder {
 		int copySize = pos - start;
 		if (pos == bufSize) pos = 0;
 
-		ReflectionUtils.u.copyMemory(buf, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+start, out, outOff, copySize);
+		if (outOff != 0) // object header size > 0
+			ReflectionUtils.u.copyMemory(buf, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+start, out, outOff, copySize);
 		//System.arraycopy(buf, start, out, outOff, copySize);
 		start = pos;
 

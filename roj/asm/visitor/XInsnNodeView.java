@@ -1,12 +1,13 @@
 package roj.asm.visitor;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.asm.OpcodeUtil;
-import roj.asm.cst.*;
+import roj.asm.Opcodes;
+import roj.asm.cp.*;
+import roj.asm.type.Desc;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.InsnHelper;
-import roj.mapper.util.Desc;
+import roj.collect.IntMap;
 import roj.text.CharList;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
@@ -14,7 +15,7 @@ import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
 
-import static roj.asm.OpcodeUtil.*;
+import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
@@ -70,11 +71,11 @@ public final class XInsnNodeView {
 			boolean wide = code == WIDE;
 			if (wide) {
 				code = r.get(i++);
-				OpcodeUtil.checkWide(code);
+				InsnHelper.checkWide(code);
 			}
 
 			byte data = _DATA[code&0xFF];
-			if (data == 0) throw new IllegalStateException("unknown opcode " + toString0(code));
+			if (data == 0) throw new IllegalStateException("unknown opcode " + showOpcode(code));
 
 			len = data>>>4;
 			assert len > 0;
@@ -113,7 +114,7 @@ public final class XInsnNodeView {
 		len = seg.length();
 	}
 
-	public final String opName() { return toString0(opcode()); }
+	public final String opName() { return showOpcode(opcode()); }
 	public final byte opcode() {
 		if (!pos.isValid()) throw new IllegalStateException("referent Node was removed");
 		return code;
@@ -123,7 +124,7 @@ public final class XInsnNodeView {
 
 		byte oldData = _DATA[code&0xFF];
 		byte data = _DATA[newCode&0xFF];
-		if (data != oldData) throw new IllegalStateException("只能修改类型与长度相同的: "+toString0(code)+" =X> "+toString0(newCode));
+		if (data != oldData) throw new IllegalStateException("只能修改类型与长度相同的: "+ showOpcode(code)+" =X> "+ showOpcode(newCode));
 
 		DynByteBuf data1 = getData();
 		if (data1.get(pos.offset) == WIDE) throw new UnsupportedOperationException("对wide的处理暂未实现");
@@ -223,6 +224,17 @@ public final class XInsnNodeView {
 			default:
 				invalidArg(code);
 		}
+	}
+
+	public final int getVarId() {
+		byte opcode = opcode();
+		switch (category(opcode)) {
+			case CATE_LOAD_STORE:
+				String name = Opcodes.showOpcode(opcode);
+				return name.charAt(name.length()-1)-'0';
+			case CATE_LOAD_STORE_LEN: return id();
+		}
+		return -1;
 	}
 
 	public final int getNumberExact() {
@@ -427,7 +439,7 @@ public final class XInsnNodeView {
 		if (pos.isValid()) sb.append("#").append((int)pos.value).append(' ');
 		else sb.append("#<invalid>: ");
 
-		sb.append(toString0(code)).append(' ');
+		sb.append(showOpcode(code)).append(' ');
 		return myToString(sb, false).toStringAndFree();
 	}
 
@@ -455,6 +467,32 @@ public final class XInsnNodeView {
 				else if (ref instanceof Constant) {
 					sb.append(((Constant) ref).getEasyReadValue());
 				} else if (ref != null) sb.append(parseOwner((String) ref, simple));
+			break;
+		}
+		return sb;
+	}
+
+	public CharList toAsmCode(CharList sb, IntMap<String> labels, int prefix) {
+		switch (_DATA[code&0xFF]&0xF) {
+			case 1: case 2:
+				Desc d = desc();
+				sb.append(d.owner).append(' ').append(d.name).append(' ').append(d.param);
+			break;
+			case 3:
+				d = desc();
+				sb.append(d.name).append(' ').append(d.param).append(" #").append((int)d.flags);
+			break;
+			case 5: case 6: case 8: case 9: sb.append(id); break;
+			case 7: sb.append(id).append(' ').append(number); break;
+			case 10: sb.append(ref.toString()).append(" ").append(id); break;
+			default:
+				if (ref instanceof LdcSegment) sb.append(((LdcSegment) ref).c.getEasyReadValue());
+				else if (ref instanceof JumpSegment) sb.append(labels.get(((JumpSegment) ref).target.getValue()));
+				else if (ref instanceof SwitchSegment) {
+					((SwitchSegment) ref).toString(sb, prefix);
+				} else if (ref instanceof Constant) {
+					sb.append(((Constant) ref).getEasyReadValue());
+				} else if (ref != null) sb.append(ref);
 			break;
 		}
 		return sb;
@@ -500,5 +538,5 @@ public final class XInsnNodeView {
 		list.codeOb.put(getData(), pos.offset, len);
 	}
 
-	private static <T> T invalidArg(byte code) { throw new UnsupportedOperationException(toString0(code)+"不支持该操作"); }
+	private static <T> T invalidArg(byte code) { throw new UnsupportedOperationException(showOpcode(code)+"不支持该操作"); }
 }

@@ -82,8 +82,10 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 		Entry<K> entry = (Entry<K>) getOrCreateEntry(key);
 		if (entry.k == UNDEFINED) {
 			entry.k = key;
-			entry.v = val;
+			size++;
+
 			onPut(entry, val);
+			entry.v = val;
 			return true;
 		}
 		return false;

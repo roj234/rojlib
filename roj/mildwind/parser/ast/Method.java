@@ -119,7 +119,7 @@ final class Method implements Expression {
 	}
 
 	@Override
-	public JsObject compute(JsObject ctx) {
+	public JsObject compute(JsContext ctx) {
 		ArgListInternal vals = JsContext.getArguments(args.size());
 		for (int i = 0; i < args.size(); i++) {
 			Expression arg = args.get(i);

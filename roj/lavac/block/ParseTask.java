@@ -1,8 +1,8 @@
 package roj.lavac.block;
 
+import roj.asm.Opcodes;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;
-import roj.asm.util.AccessFlag;
 import roj.asm.visitor.CodeWriter;
 import roj.compiler.ast.expr.ExprNode;
 import roj.config.ParseException;
@@ -26,7 +26,7 @@ public interface ParseTask {
 
 			CodeWriter m = ctx.getClinit();
 			MethodWriterL mp = ctx.ctx().createMethodPoet(ctx, m.mn);
-			if ((f.access & AccessFlag.STATIC) != 0) {
+			if ((f.access & Opcodes.ACC_STATIC) != 0) {
 
 			} else {
 
@@ -68,7 +68,7 @@ public interface ParseTask {
 			//bp.init(u, start, mn);
 			bp.type = 0;
 
-			int off = (mn.modifier() & AccessFlag.STATIC) == 0 ? 1 : 0;
+			int off = (mn.modifier() & Opcodes.ACC_STATIC) == 0 ? 1 : 0;
 			for (int i = 0; i < names.size(); i++) {
 				//bp.variables.put(names.get(i), bp.mw.arg(i+off));
 			}

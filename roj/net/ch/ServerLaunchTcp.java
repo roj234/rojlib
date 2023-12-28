@@ -3,6 +3,7 @@ package roj.net.ch;
 import roj.util.Helpers;
 
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.net.SocketOption;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -27,22 +28,23 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 	}
 
 	public <T> ServerLaunch option(SocketOption<T> k, T v) throws IOException {
-		if (k == TCP_MAX_ALIVE_CONNECTION) maxConn = new AtomicInteger((Integer) v);
-		else if (k == CHANNEL_RECEIVE_BUFFER) rcvBuf = (Integer) v;
+		if (k == TCP_MAX_CONNECTION) maxConn = new AtomicInteger((Integer) v);
+		else if (k == TCP_RECEIVE_BUFFER) rcvBuf = (Integer) v;
 		else tcp.setOption(k, v);
 		return this;
 	}
 	public <T> T option(SocketOption<T> k) throws IOException {
-		if (k == TCP_MAX_ALIVE_CONNECTION) return Helpers.cast(maxConn == null ? -1 : maxConn.get());
-		else if (k == CHANNEL_RECEIVE_BUFFER) return Helpers.cast(rcvBuf);
+		if (k == TCP_MAX_CONNECTION) return Helpers.cast(maxConn == null ? -1 : maxConn.get());
+		else if (k == TCP_RECEIVE_BUFFER) return Helpers.cast(rcvBuf);
 		else return tcp.getOption(k);
 	}
 
-	@Override
+	public ServerLaunch bind(SocketAddress a, int backlog) throws IOException { tcp.bind(a, backlog); return this; }
+	public SocketAddress localAddress() throws IOException { return tcp.getLocalAddress(); }
+
 	public ServerLaunch launch() throws IOException {
 		if (initializator == null) throw new IllegalStateException("no initializator");
 
-		tcp.bind(addr, backlog);
 		loop().register(this, null, SelectionKey.OP_ACCEPT);
 		return this;
 	}

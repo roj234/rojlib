@@ -1,11 +1,11 @@
 package roj.asm.visitor;
 
-import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
 import roj.asm.tree.insn.SwitchEntry;
 import roj.collect.BSLowHeap;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
@@ -146,9 +146,11 @@ public final class SwitchSegment extends Segment {
 	}
 
 	@Override
-	public String toString() {
-		CharList sb = new CharList().append(OpcodeUtil.toString0(code)).append("{");
-		SimpleList<Object> a = SimpleList.asModifiableList("value","target",IntMap.UNDEFINED);
+	public String toString() { return toString(IOUtil.getSharedCharBuf().append(Opcodes.showOpcode(code)).append(' '), 0).toString(); }
+
+	public CharList toString(CharList sb, int prefix) {
+		sb.append("{");
+		SimpleList<Object> a = new SimpleList<>();
 		for (SwitchEntry target : targets) {
 			a.add(target.val);
 			a.add(target.pos.getValue());
@@ -158,7 +160,7 @@ public final class SwitchSegment extends Segment {
 		a.add(def.getValue());
 		a.add(IntMap.UNDEFINED);
 
-		TextUtil.prettyTable(sb, "  ", a.toArray(), "  ");
-		return sb.append('}').toStringAndFree();
+		TextUtil.prettyTable(sb, new CharList().padEnd(' ', prefix+4).toStringAndFree(), a.toArray(), "  ");
+		return sb.padEnd(' ', prefix).append('}');
 	}
 }

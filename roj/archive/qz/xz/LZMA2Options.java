@@ -371,12 +371,12 @@ public class LZMA2Options implements Cloneable {
 
 	/**
 	 * <pre>启用对于单独压缩流的多线程压缩模式
-	 * <b>注意，对比{@link roj.archive.qz.QZFileWriter#parallel()}的不同文件并行模式,单压缩流并行会损失更多压缩率</b>
-	 * @param blockSize 任务按照该大小分块并行，设置为-1来自动选择(不推荐)
+	 * <b>注意，对比{@link roj.archive.qz.QZFileWriter#parallel()}的不同文件并行模式,单压缩流并行会损失千分之一左右压缩率</b>
+	 * @param blockSize 任务按照该大小分块并行，设置为-1来自动选择(不推荐自动选择)
 	 * @param executor 线程池
 	 * @param affinity 最大并行任务数量 (1-255)
-	 * @param dictMode 任务的词典处理模式，设置为-1来自动选择(不推荐)
-	 * <pre>{@link #ASYNC_DICT_NONE} 每个块重置词典, 速度快, 压缩率差, 内存占用小 (7-zip的默认模式)
+	 * @param dictMode 任务的词典处理模式，设置为-1来自动选择(不推荐自动选择)
+	 * <pre>{@link #ASYNC_DICT_NONE} 每个块重置词典, 速度快, 压缩率差, 内存占用小 (7-zip的默认模式) (支持并行解压)
 	 * {@link #ASYNC_DICT_SET} 在write的调用线程上设置词典, 速度慢, 压缩率好, 内存占用中等
 	 * {@link #ASYNC_DICT_ASYNCSET} 在异步任务线程上设置词典, 速度中等, 压缩率好, 内存大
 	 */

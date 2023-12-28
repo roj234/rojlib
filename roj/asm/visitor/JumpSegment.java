@@ -1,6 +1,6 @@
 package roj.asm.visitor;
 
-import roj.asm.OpcodeUtil;
+import roj.asm.Opcodes;
 import roj.util.DynByteBuf;
 
 import static roj.asm.Opcodes.*;
@@ -56,7 +56,7 @@ final class JumpSegment extends Segment {
 	}
 
 	@Override
-	public int length() { return OpcodeUtil.toString0(code).endsWith("_W")?5:3; }
+	public int length() { return Opcodes.showOpcode(code).endsWith("_W")?5:3; }
 
 	@Override
 	Segment move(AbstractCodeWriter list, int blockMoved, int mode) {
@@ -65,5 +65,5 @@ final class JumpSegment extends Segment {
 	}
 
 	@Override
-	public String toString() { return OpcodeUtil.toString0(code)+"(b"+target.getBlock()+" + "+target.getOffset()+")"; }
+	public String toString() { return Opcodes.showOpcode(code)+"(b"+target.getBlock()+" + "+target.getOffset()+")"; }
 }

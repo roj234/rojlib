@@ -247,12 +247,7 @@ public abstract class UnsafeCharset {
 					arr = sb.list;
 					unsafeWritable = arr.length - off;
 				} else if (delta == 0) { // truncate
-					if (unsafeWritable > 0) {
-						if (!partial) throw new IllegalArgumentException("被截断");
-						throw new IllegalArgumentException("Unespected state");
-					} else {
-						//throw new IllegalArgumentException("UW < outMax "+outMax);
-					}
+					if (unsafeWritable > 0 && !partial) throw new IllegalArgumentException("被截断");
 					break;
 				}
 			}
