@@ -31,7 +31,7 @@ import java.util.List;
 public class CommandConsole extends DefaultConsole {
 	public CommandConsole(String prompt) { super(prompt); }
 
-	protected List<CommandNode> nodes = new SimpleList<>();
+	protected final List<CommandNode> nodes = new SimpleList<>();
 	public void register(CommandNode node) { nodes.add(node); }
 	public boolean unregister(String name) {
 		for (int i = nodes.size()-1; i >= 0; i--) {
@@ -58,8 +58,8 @@ public class CommandConsole extends DefaultConsole {
 		});
 	}
 
-	protected final ArgumentContext ctx = new ArgumentContext(TaskPool.Common());
-	protected Tokenizer wr = new Tokenizer();
+	protected ArgumentContext ctx = new ArgumentContext(TaskPool.Common());
+	protected final Tokenizer wr = new Tokenizer();
 	private List<Word> parse(String cmd) {
 		List<Word> words = new SimpleList<>();
 
@@ -94,12 +94,12 @@ public class CommandConsole extends DefaultConsole {
 
 			if (w.pos() > prevI) root.append(new AnsiString(input.substring(prevI, w.pos())));
 			switch (w.type()) {
-				case Word.LITERAL: root.append(new AnsiString(w.val()).color16(CLIUtil.YELLOW+60)); break;
+				case Word.LITERAL: root.append(new AnsiString(w.val()).color16(CLIUtil.YELLOW+CLIUtil.HIGHLIGHT)); break;
 				case Word.CHARACTER: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(CLIUtil.GREEN)); break;
-				case Word.STRING: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(CLIUtil.GREEN+60)); break;
+				case Word.STRING: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(CLIUtil.GREEN+CLIUtil.HIGHLIGHT)); break;
 				case Word.INTEGER: case Word.LONG: root.append(new AnsiString(w.val()).color16(getNumberColor(w.val()))); break;
-				case Word.DOUBLE: case Word.FLOAT: root.append(new AnsiString(w.val()).color16(CLIUtil.BLUE+60)); break;
-				default: root.append(new AnsiString(w.val()).color16(CLIUtil.WHITE+60));
+				case Word.DOUBLE: case Word.FLOAT: root.append(new AnsiString(w.val()).color16(CLIUtil.BLUE+CLIUtil.HIGHLIGHT)); break;
+				default: root.append(new AnsiString(w.val()).color16(CLIUtil.WHITE+CLIUtil.HIGHLIGHT));
 			}
 
 			prevI = wr.index;
@@ -147,9 +147,10 @@ public class CommandConsole extends DefaultConsole {
 		}
 	}
 	protected boolean execute(String cmd, boolean print) {
-		List<Word> words = parse(cmd);
+		List<Word> words = parse(cmd.trim());
 		if (words == null) return false;
 
+		int maxI = 0;
 		ParseException pe = null;
 		for (int i = 0; i < nodes.size(); i++) {
 			CommandNode node = nodes.get(i);
@@ -165,11 +166,12 @@ public class CommandConsole extends DefaultConsole {
 			} catch (ParseException e) {
 				pe = e;
 			}
+			maxI = Math.max(maxI, ctx.getMaxI());
 		}
 
 		if (print) printCommand();
 		if (pe != null) pe.printStackTrace();
-		else System.out.println("输入未完整匹配任何指令,最多部分匹配到"+ctx.getMaxI());
+		else System.out.println("输入未完整匹配任何指令,最多部分匹配到"+maxI);
 
 		return true;
 	}

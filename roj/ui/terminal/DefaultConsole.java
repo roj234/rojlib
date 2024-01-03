@@ -28,8 +28,7 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 
 import static java.awt.event.KeyEvent.*;
-import static roj.ui.CLIUtil.ANSI_ESCAPE;
-import static roj.ui.CLIUtil.VK_CTRL;
+import static roj.ui.CLIUtil.*;
 
 /**
  * @author Roj234
@@ -105,9 +104,9 @@ public class DefaultConsole implements Console {
 			lastInput = input.toString();
 		}
 
-		Completion s = tabs.get(id);
-		if (s.description != null) {
-			s.description.writeLimited(tooltip(), new MutableInt(CLIUtil.windowWidth), true);
+		Completion c = tabs.get(id);
+		if (c.description != null) {
+			c.description.writeLimited(tooltip(), new MutableInt(CLIUtil.windowWidth), true);
 			displayTooltip(5000);
 		} else {
 			displayTooltip(-1);
@@ -115,10 +114,14 @@ public class DefaultConsole implements Console {
 
 		tabId = id;
 		input.clear();
-		input.append(lastInput);
-		input.insert(tabCursor, s.completion.writeAnsi(IOUtil.getSharedCharBuf()).append("\u001b[0m").append(staticHighlight));
-		if (!isAutoComplete)
-			cursor = tabCursor + s.completion.length();
+		if (c.replaceBefore) {
+			c.completion.writeAnsi(input);
+			if (!isAutoComplete) cursor = getStringWidth(input);
+		} else {
+			input.append(lastInput);
+			input.insert(tabCursor, c.completion.writeAnsi(IOUtil.getSharedCharBuf()).append("\u001b[0m").append(staticHighlight));
+			if (!isAutoComplete) cursor = tabCursor + c.completion.length();
+		}
 
 		checkAnsi();
 	}
@@ -139,11 +142,17 @@ public class DefaultConsole implements Console {
 
 		assert tabCursor >= 0;
 
-		AnsiString str = tabs.get(tabId).completion;
+		Completion c = tabs.get(tabId);
+		AnsiString str = c.completion;
 		if (insert) {
-			input.insert(tabCursor, str.toString());
-			if (isAutoComplete)
-				cursor = tabCursor + str.length();
+			if (c.replaceBefore) {
+				input.clear();
+				str.writeRaw(input);
+				if (isAutoComplete) cursor = getStringWidth(input);
+			} else {
+				input.insert(tabCursor, str.writeRaw(IOUtil.getSharedCharBuf()));
+				if (isAutoComplete) cursor = tabCursor + str.length();
+			}
 			afterInput();
 		} else {
 			if (cursor > tabCursor) {

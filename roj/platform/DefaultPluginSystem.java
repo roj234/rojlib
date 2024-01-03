@@ -50,7 +50,7 @@ public class DefaultPluginSystem {
 		Bootstrap.classLoader.registerTransformer(new DPSAutoObfuscate());
 
 		CMD.register(literal("load").then(argument("name", Argument.file()).executes(ctx -> PM.loadPlugin(ctx.argument("name", File.class)))));
-		CMD.register(literal("unload").then(argument("id", Argument.setOf(PM.plugins,  false)).executes(ctx -> PM.unloadPlugin(ctx.argument("id", PluginDescriptor.class).id))));
+		CMD.register(literal("unload").then(argument("id", Argument.oneOf(PM.plugins)).executes(ctx -> PM.unloadPlugin(ctx.argument("id", PluginDescriptor.class).id))));
 		CMD.register(literal("stop").executes(ctx -> {
 			shutdown();
 			System.exit(0);

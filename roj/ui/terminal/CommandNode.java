@@ -47,6 +47,13 @@ public abstract class CommandNode {
 
 	public abstract boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException;
 	final boolean doApply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+		if (ctx.peekWord() == null) {
+			if (completions == null && impl != null) {
+				ctx.wrapExecute(impl);
+				return true;
+			}
+		}
+
 		ParseException pe = null;
 		ctx.pushStack();
 		try {
@@ -61,13 +68,6 @@ public abstract class CommandNode {
 			}
 		} finally {
 			ctx.popStack();
-		}
-
-		if (ctx.peekWord() == null) {
-			if (impl != null) {
-				if (completions == null) ctx.wrapExecute(impl);
-				return true;
-			}
 		}
 
 		if (pe != null) throw pe;
@@ -97,7 +97,7 @@ public abstract class CommandNode {
 
 			String s = ctx.nextUnquotedString();
 			if (!s.equals(name)) {
-				if (completions != null && name.startsWith(s)) completions.add(new Completion(name.substring(s.length())));
+				if (completions != null && ctx.isWordEdge() && name.startsWith(s)) completions.add(new Completion(name.substring(s.length())));
 				return false;
 			}
 
@@ -121,20 +121,16 @@ public abstract class CommandNode {
 				return false;
 			}
 
-			boolean shouldPop = false;
+			boolean shouldPop = true;
 			ctx.pushStack();
-			ctx.clearRunsOut();
 			Object o;
 			block:
 			try {
-				o = argument.parse(ctx, completions!=null);
-				shouldPop = true;
+				o = argument.parse(ctx, completions);
 
 				if (o == null) {
-					if (ctx.runsOut()) {
-						ctx.popStack();
-						ctx.pushStack();
-						argument.complete(ctx, completions);
+					if (completions != null && ctx.isEOF()) {
+						argument.example(completions);
 					}
 					break block;
 				}
@@ -142,9 +138,9 @@ public abstract class CommandNode {
 				ctx.putArgument(name, o);
 			} catch (ParseException e) {
 				ctx.popStack();
+				shouldPop = false;
 
 				if (completions == null) throw e;
-				if (ctx.runsOut()) argument.complete(ctx, completions);
 			}
 
 			try {

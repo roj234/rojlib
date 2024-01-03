@@ -10,6 +10,7 @@ import roj.ui.AnsiString;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
@@ -23,49 +24,49 @@ public interface Argument<T> {
 	static Argument<File> file(Boolean folder) {
 		return new Argument<File>() {
 			@Override
-			public File parse(ArgumentContext ctx, boolean complete) throws ParseException {
-				File file = new File(ctx.nextString());
-				if (folder == null) {
-					if (!file.exists()) throw ctx.error("文件(夹)不存在");
-				} else if (folder) {
-					if (!file.isDirectory()) throw ctx.error("文件夹不存在");
-				} else {
-					if (!file.isFile()) throw ctx.error("文件不存在");
-				}
+			public File parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+				String pathStr = ctx.nextString();
+				File path = new File(pathStr);
 
-				if (file.isDirectory() && complete && ctx.peekWord() == null) return null;
-				return file;
-			}
+				if (completions != null && ctx.isWordEdge()) {
+					String match, prefix;
+					if (path.isDirectory()) {
+						match = "";
+						prefix = pathStr.endsWith(File.separator)?"":File.separator;
+					} else {
+						if (path.isFile()) return null;
+						path = path.getParentFile();
+						if (path == null) return null;
 
-			@Override
-			public void complete(ArgumentContext ctx, List<Completion> completions) throws ParseException {
-				File path = new File(ctx.nextString());
-				if (path.isFile()) return;
+						match = path.getName().toLowerCase();
+						prefix = "";
+					}
 
-				File parent;
-				String match;
-				if (path.isDirectory()) {
-					parent = path;
-					match = "";
-				} else {
-					parent = path.getParentFile();
-					match = path.getName().toLowerCase();
-					if (parent == null) return;
-				}
-
-				File[] list = parent.listFiles();
-				if (list == null) return;
-				for (File file : list) {
-					if (file.getName().toLowerCase().startsWith(match)) {
-						String name = file.getName().substring(match.length());
-						AnsiString desc = new AnsiString(file.getAbsolutePath());
-						if (file.isFile()) {
-							completions.add(new Completion(new AnsiString(name).color16(CLIUtil.CYAN), desc));
-						} else {
-							completions.add(new Completion(new AnsiString(name+File.separatorChar).color16(CLIUtil.YELLOW), desc));
+					File[] list = path.listFiles();
+					if (list == null) return null;
+					for (File file : list) {
+						if (file.getName().toLowerCase().startsWith(match)) {
+							String name = prefix.concat(file.getName().substring(match.length()));
+							AnsiString desc = new AnsiString(file.getAbsolutePath());
+							if (file.isFile()) {
+								if (folder != Boolean.TRUE) completions.add(new Completion(new AnsiString(name).color16(CLIUtil.CYAN), desc));
+							} else {
+								completions.add(new Completion(new AnsiString(name+File.separatorChar).color16(CLIUtil.YELLOW), desc));
+							}
 						}
 					}
+					return null;
 				}
+
+				if (folder == null) {
+					if (!path.exists()) throw ctx.error("文件(夹)不存在");
+				} else if (folder) {
+					if (!path.isDirectory()) throw ctx.error("文件夹不存在");
+				} else {
+					if (!path.isFile()) throw ctx.error("文件不存在");
+				}
+
+				return path;
 			}
 
 			@Override
@@ -77,44 +78,47 @@ public interface Argument<T> {
 	}
 	static Argument<String> string() { return new Argument<String>() {
 		@Override
-		public String parse(ArgumentContext ctx, boolean complete) throws ParseException { return ctx.nextString(); }
+		public String parse(ArgumentContext ctx, List<Completion> completions) throws ParseException { return ctx.nextString(); }
 		@Override
 		public String type() { return "string"; }
 	}; }
 	static Argument<String> string(String... selection) {
 		MyHashMap<String, String> map = new MyHashMap<>(selection.length);
 		for (String s : selection) map.put(s,s);
-		return setOf(map, false);
+		return oneOf(map);
 	}
 	static Argument<List<String>> stringFlags(String... flags) {
 		MyHashMap<String, String> map = new MyHashMap<>(flags.length);
 		for (String s : flags) map.put(s,s);
-		return Helpers.cast(setOf(map, true));
+		return Helpers.cast(anyOf(map));
 	}
-	static <T extends Enum<T>> Argument<T> enumeration(Class<T> type) { return setOf(Helpers.cast(EnumHelper.cDirAcc.enumConstantDirectory(type)), false); }
-	static <T> Argument<T> setOf(Map<String, T> map, boolean multi) { return new ArgSetOf<>(multi, map); }
+	static <T extends Enum<T>> Argument<T> enumeration(Class<T> type) { return oneOf(Helpers.cast(EnumHelper.cDirAcc.enumConstantDirectory(type))); }
+	static <T> Argument<T> oneOf(Map<String, T> map) { return new ArgSetOf<>(0, map); }
+	static <T> Argument<T> someOf(Map<String, T> map) { return new ArgSetOf<>(1, map); }
+	static <T> Argument<T> anyOf(Map<String, T> map) { return new ArgSetOf<>(2, map); }
 	class ArgSetOf<T> implements Argument<T> {
-		private final boolean multi;
+		private final byte mode;
 		protected final Map<String, T> choice;
 
-		public ArgSetOf(boolean multi, Map<String, T> choice) {
-			this.multi = multi;
+		public ArgSetOf(int mode, Map<String, T> choice) {
+			this.mode = (byte) mode;
 			this.choice = choice;
 		}
 
 		@Override
-		public T parse(ArgumentContext ctx, boolean complete) throws ParseException {
+		public T parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 			updateChoices();
-			if (multi) {
+			if (mode!=0) {
 				List<T> arr = new SimpleList<>();
 				while (true) {
 					Word w = ctx.peekWord();
 					if (w == null || !choice.containsKey(w.val())) {
-						if (complete) {
-							ctx.nextString();
+						if (completions != null) {
+							if (w != null && ctx.isWordEdge()) complete(w.val(), completions);
 							return null;
 						}
 
+						if (mode == 1 && arr.isEmpty()) throw ctx.error("该参数"+type()+"不能为空");
 						return Helpers.cast(arr);
 					}
 					arr.add(choice.get(ctx.nextString()));
@@ -122,25 +126,18 @@ public interface Argument<T> {
 			} else {
 				String val = ctx.nextString();
 				T result = choice.get(val);
-				if (result == null) throw ctx.error("选择不存在");
+				if (result == null) {
+					if (completions != null) {
+						complete(val, completions);
+						return null;
+					}
+					throw ctx.error("选择不存在");
+				}
 				return result;
 			}
 		}
 
-		@Override
-		public void complete(ArgumentContext ctx, List<Completion> completions) throws ParseException {
-			updateChoices();
-			if (multi) {
-				while (true) {
-					Word w = ctx.peekWord();
-					if (w == null) return; // only first argument give example
-					else if (!choice.containsKey(w.val())) break;
-
-					ctx.nextWord();
-				}
-			}
-
-			String val = ctx.nextString();
+		private void complete(String val, List<Completion> completions) {
 			for (String name : choice.keySet()) {
 				if (name.startsWith(val)) completions.add(new Completion(name.substring(val.length())));
 			}
@@ -150,14 +147,14 @@ public interface Argument<T> {
 		public void example(List<Completion> completions) { updateChoices(); for (String name : choice.keySet()) completions.add(new Completion(name)); }
 
 		@Override
-		public String type() { updateChoices(); return (multi?"anyOf":"oneOf")+"('"+TextUtil.join(choice.keySet(), "', '")+"')"; }
+		public String type() { updateChoices(); return (mode==2?"anyOf":mode==1?"someOf":"oneOf")+"('"+TextUtil.join(choice.keySet(), "', '")+"')"; }
 
 		protected void updateChoices() {}
 	}
 	static Argument<Integer> number(int min, int max) {
 		return new Argument<Integer>() {
 			@Override
-			public Integer parse(ArgumentContext ctx, boolean b) throws ParseException {
+			public Integer parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 				int val = ctx.nextInt();
 				if (val < min) throw ctx.error("整数过小(可用的范围是["+min+","+max+"])");
 				else if (val > max) throw ctx.error("整数过大(可用的范围是["+min+","+max+"])");
@@ -171,7 +168,7 @@ public interface Argument<T> {
 	static Argument<Double> real(double min, double max) {
 		return new Argument<Double>() {
 			@Override
-			public Double parse(ArgumentContext ctx, boolean b) throws ParseException {
+			public Double parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 				double val = ctx.nextDouble();
 				if (val < min) throw ctx.error("实数过小(可用的范围是["+min+","+max+"])");
 				else if (val > max) throw ctx.error("实数过大(可用的范围是["+min+","+max+"])");
@@ -185,18 +182,18 @@ public interface Argument<T> {
 	static Argument<Boolean> bool() {
 		return new Argument<Boolean>() {
 			@Override
-			public Boolean parse(ArgumentContext ctx, boolean complete) throws ParseException {
+			public Boolean parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 				String s = ctx.nextUnquotedString();
 				if (s.equals("true")) return true;
 				if (s.equals("false")) return false;
-				throw ctx.error(s+"不是有效的布尔值");
-			}
 
-			@Override
-			public void complete(ArgumentContext ctx, List<Completion> completions) throws ParseException {
-				String s = ctx.nextUnquotedString();
-				if ("true".startsWith(s)) completions.add(new Completion("true".substring(s.length())));
-				if ("false".startsWith(s)) completions.add(new Completion("false".substring(s.length())));
+				if (completions != null) {
+					if ("true".startsWith(s)) completions.add(new Completion("true".substring(s.length())));
+					if ("false".startsWith(s)) completions.add(new Completion("false".substring(s.length())));
+					return null;
+				}
+
+				throw ctx.error(s+"不是有效的布尔值");
 			}
 
 			@Override
@@ -210,8 +207,7 @@ public interface Argument<T> {
 		};
 	}
 
-	T parse(ArgumentContext ctx, boolean complete) throws ParseException;
-	default void complete(ArgumentContext ctx, List<Completion> completions) throws ParseException {}
+	T parse(ArgumentContext ctx, @Nullable List<Completion> completions) throws ParseException;
 	default void example(List<Completion> completions) {}
 	default String type() { return getClass().getSimpleName(); }
 }
