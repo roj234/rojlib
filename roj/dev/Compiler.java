@@ -168,9 +168,7 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 	}
 
 
-	public List<ByteListOutput> getCompiled() {
-		return compiled;
-	}
+	public List<ByteListOutput> getCompiled() { return compiled; }
 
 	@Override
 	public void report(Diagnostic<? extends JavaFileObject> diag) {

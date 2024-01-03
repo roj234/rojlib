@@ -17,22 +17,14 @@ public class ByteListOutput extends SimpleJavaFileObject {
 	private final ByteList output;
 
 	protected ByteListOutput(String className, String basePath) throws URISyntaxException {
-		super(new URI("file://" + URIUtil.encodeURIComponent(basePath) + className.replace('.', '/') + ".class"), Kind.CLASS);
+		super(new URI("file://"+URIUtil.encodeURIComponent(basePath)+className.replace('.', '/') + ".class"), Kind.CLASS);
 		this.output = new ByteList();
 		this.name = className.replace('.', '/') + ".class";
 	}
 
 	@Override
-	public String getName() {
-		return name;
-	}
-
+	public String getName() { return name; }
 	@Override
-	public OutputStream openOutputStream() {
-		return output;
-	}
-
-	public ByteList getOutput() {
-		return output;
-	}
+	public OutputStream openOutputStream() { return output; }
+	public ByteList getOutput() { return output; }
 }

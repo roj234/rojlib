@@ -9,11 +9,17 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchEvent;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
+import java.util.Set;
 import java.util.concurrent.locks.LockSupport;
 
+import static java.nio.file.StandardWatchEventKinds.*;
 import static roj.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.mod.Shared.BASE;
+import static roj.mod.Shared.DEBUG;
 
 /**
  * Project file change watcher
@@ -59,9 +65,9 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 	private final MyHashSet<X> actions;
 	private final WatchService watcher;
 	private final Thread t;
-	private boolean pause;
+	private volatile boolean pause;
 	private final String libPath;
-	private ScheduleTask reloadMapTask, reloadCfgTask;
+	private ScheduleTask reloadMapTask;
 
 	private MyHashMap<String, X[]> listeners;
 
@@ -72,10 +78,8 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 		via = new X();
 
 		File lib = new File(BASE, "/class/");
-		lib.toPath().register(watcher, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.OVERFLOW);
+		lib.toPath().register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW);
 		this.libPath = lib.getAbsolutePath();
-
-		BASE.toPath().register(watcher, StandardWatchEventKinds.ENTRY_MODIFY);
 
 		Thread t = this.t = new Thread(this);
 		t.setName("文件修改监控");
@@ -91,42 +95,37 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 				key = watcher.take();
 			} catch (InterruptedException e) {
 				pause = true;
-				LockSupport.park();
-				pause = false;
+				do {
+					LockSupport.park();
+				} while (pause);
 				continue;
 			}
 
 			via.key = key;
 			X csm = actions.find(via);
 			if (csm == via) {
-				boolean shouldReload = false;
 				for (WatchEvent<?> event : key.pollEvents()) {
-					String name = event.kind().name();
-					if (!name.equals("OVERFLOW")) {
+					if (!event.kind().name().equals("OVERFLOW")) {
 						String path = key.watchable().toString();
-						String id = event.context().toString().toLowerCase();
+						String name = event.context().toString().toLowerCase();
 						if (path.startsWith(libPath)) {
-							if (!id.startsWith(DONT_LOAD_PREFIX) && (id.endsWith(".zip") || id.endsWith(".jar"))) {
-								shouldReload = true;
+							if (!name.startsWith(DONT_LOAD_PREFIX) && (name.endsWith(".zip") || name.endsWith(".jar"))) {
+
+								if (reloadMapTask != null) reloadMapTask.cancel();
+								reloadMapTask = Shared.PeriodicTask.delay(() -> {
+									if (DEBUG) CLIUtil.warning("清除映射表缓存");
+									Shared.mapperFwd.clear();
+									ATHelper.close();
+								}, 2000);
+
+								break;
 							}
-						} else if (id.equals("config.json")) {
-							if (reloadCfgTask != null) reloadCfgTask.cancel();
-							reloadCfgTask = Shared.PeriodicTask.delay(Shared::loadConfig, 1000);
-							break;
 						}
 					}
 				}
-				if (shouldReload) {
-					if (reloadMapTask != null) reloadMapTask.cancel();
-					reloadMapTask = Shared.PeriodicTask.delay(() -> {
-						CLIUtil.warning("清除映射表缓存");
-						Shared.mapperFwd.clear();
-						ATHelper.close();
-					}, 2000);
-				}
 
 				if (!key.reset()) {
-					CLIUtil.warning("这不应当发生");
+					CLIUtil.warning("[watcher reset failed]这不应当发生");
 					key.cancel();
 				}
 				continue;
@@ -138,25 +137,18 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 				MyHashSet<String> s = csm.s;
 				switch (name) {
 					case "OVERFLOW": {
-						CLIUtil.error("[PW]Event overflow " + key.watchable());
+						CLIUtil.error("[PW]Event overflow "+key.watchable());
 						key.cancel();
 						break x;
 					}
 					case "ENTRY_MODIFY":
-					case "ENTRY_CREATE":
-					case "ENTRY_DELETE": {
-						String id = key.watchable().toString() + File.separatorChar + event.context();
+					case "ENTRY_CREATE": {
+						String id = key.watchable().toString()+File.separatorChar+event.context();
 						if (new File(id).isDirectory()) break;
 						if (csm.x == ID_SRC) {
 							if (!id.endsWith(".java")) break x;
 						}
-						synchronized (s) {
-							if (name.equals("ENTRY_DELETE")) {
-								s.remove(id);
-							} else {
-								s.add(id);
-							}
-						}
+						synchronized (s) { s.add(id); }
 						break;
 					}
 				}
@@ -191,7 +183,7 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 	}
 
 	@Override
-	public MyHashSet<String> getModified(Project proj, int id) {
+	public Set<String> getModified(Project proj, int id) {
 		if (listeners == null || !listeners.containsKey(proj.name)) return super.getModified(proj, id);
 		return listeners.get(proj.name)[id].s;
 	}
@@ -210,10 +202,8 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 		actions.clear();
 		listeners.clear();
 
-		do {
-			LockSupport.unpark(t);
-			LockSupport.parkNanos(1000L);
-		} while (pause);
+		pause = false;
+		LockSupport.unpark(t);
 	}
 
 	@Override
@@ -232,9 +222,8 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 		listeners.clear();
 		listeners = null;
 
-		while (pause) {
-			LockSupport.unpark(t);
-		}
+		pause = false;
+		LockSupport.unpark(t);
 	}
 
 	public void register(Project proj) throws IOException {
@@ -251,21 +240,15 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 				x.s.clear();
 		} else {
 			arr = new X[2];
-			WatchKey key = proj.resPath.toPath()
-									   .register(watcher, new WatchEvent.Kind<?>[] {StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY,
-																					StandardWatchEventKinds.OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
-			actions.add(arr[0] = new X(proj.name, key, 0));
-			key = proj.srcPath.toPath()
-							  .register(watcher, new WatchEvent.Kind<?>[] {StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY,
-																		   StandardWatchEventKinds.OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
-			actions.add(arr[1] = new X(proj.name, key, 1));
+			WatchKey key = proj.resPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
+			actions.add(arr[0] = new X(proj.name, key, ID_RES));
+			key = proj.srcPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
+			actions.add(arr[1] = new X(proj.name, key, ID_SRC));
 
 			listeners.put(proj.name, arr);
 		}
 
-		do {
-			LockSupport.unpark(t);
-			LockSupport.parkNanos(1000L);
-		} while (pause);
+		pause = false;
+		LockSupport.unpark(t);
 	}
 }

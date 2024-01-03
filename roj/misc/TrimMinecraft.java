@@ -1,4 +1,4 @@
-package roj.mod;
+package roj.misc;
 
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
@@ -14,8 +14,9 @@ import roj.ui.CLIUtil;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
-public class DeleteOrphanFile {
+public class TrimMinecraft {
 	public static void main(String[] args) throws IOException {
 		System.out.println("(assets)资源目录");
 		String assets = CLIUtil.userInput("");
@@ -46,21 +47,21 @@ public class DeleteOrphanFile {
 			File versions = versionss.get(i);
 			File[] files = versions.listFiles();
 			if (files == null) {
-				CLIUtil.warning(versions + " 不是有效的版本文件夹夹");
+				CLIUtil.warning(versions+" 不是有效的版本文件夹夹");
 				continue;
 			}
 			for (File version : files) {
-				File versionJson = new File(version, version.getName() + ".json");
+				File versionJson = new File(version, version.getName()+".json");
 				if (!versionJson.isFile()) {
-					CLIUtil.warning(versions + " 不是有效的版本文件夹");
+					CLIUtil.warning(versions+" 不是有效的版本文件夹");
 					continue;
 				}
 
 				CMapping json;
 				try {
-					json = JSONParser.parses(IOUtil.readUTF(versionJson)).asMap();
+					json = new JSONParser().charset(StandardCharsets.UTF_8).parseRaw(versionJson).asMap();
 				} catch (ParseException e) {
-					CLIUtil.warning(versionJson + " 不是有效的版本JSON");
+					CLIUtil.warning(versionJson+" 不是有效的版本JSON");
 					continue;
 				}
 				json.dot(true);
@@ -83,7 +84,7 @@ public class DeleteOrphanFile {
 		});
 
 		for (String assetId : assetIds) {
-			File file = new File(assets, "indexes/" + assetId + ".json");
+			File file = new File(assets, "indexes/"+assetId+".json");
 			if (!file.isFile()) {
 				CLIUtil.warning(file + " 不是有效的资源索引");
 				continue;
@@ -93,7 +94,7 @@ public class DeleteOrphanFile {
 			try {
 				json = JSONParser.parses(IOUtil.readUTF(file)).asMap().getOrCreateMap("objects");
 			} catch (ParseException e) {
-				CLIUtil.warning(file + " 不是有效的资源索引");
+				CLIUtil.warning(file+" 不是有效的资源索引");
 				continue;
 			}
 			for (CEntry value : json.values()) {
@@ -101,23 +102,18 @@ public class DeleteOrphanFile {
 			}
 		}
 
-		System.out.println(librariesToRemove.size() + " 个未被使用的库");
-		System.out.println(assetsToRemove.size() + " 个未被使用的资源");
+		System.out.println(librariesToRemove.size()+" 个未被使用的库");
+		System.out.println(assetsToRemove.size()+" 个未被使用的资源");
 
 		c:
 		while (true) {
 			System.out.println("按回车执行删除,按L查看文件列表");
 			String selection = CLIUtil.userInput("");
 			switch (selection) {
-				case "":
-					break c;
+				case "": break c;
 				case "L":
-					for (String key : assetsToRemove.keySet()) {
-						System.out.println("资源文件 " + key);
-					}
-					for (String key : librariesToRemove.keySet()) {
-						System.out.println("库文件 " + key);
-					}
+					for (String key : assetsToRemove.keySet()) System.out.println("资源文件 "+key);
+					for (String key : librariesToRemove.keySet()) System.out.println("库文件 "+key);
 					break;
 			}
 		}

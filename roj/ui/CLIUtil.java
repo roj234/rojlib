@@ -301,53 +301,37 @@ public final class CLIUtil implements Runnable {
 		if (ANSI && NativeLibrary.loaded) setConsoleMode0(STDIN, MODE_ADD, ENABLE_QUICK_EDIT_MODE|ENABLE_EXTENDED_FLAGS);
 	}
 
-	public static void printColor(String string, int fg, boolean reset, boolean println, boolean light) {
-		PrintStream o = System.out;
-		if (ANSI) o.print("\u001B[;"+(fg+(light?60:0))+'m');
-		if (println) o.println(string); else o.print(string);
-		if (ANSI &reset) o.print("\u001B[0m");
-	}
-
 	public static void reset() { if (ANSI) System.out.print("\u001B[0m"); }
 	public static void clearScreen() { if (ANSI) System.out.print("\u001b[1;1H\u001b[2J"); }
 
 	public static void bg(int bg, boolean hl) { if (ANSI) System.out.print("\u001B[" + (bg + (hl ? 70 : 10)) + 'm'); }
 	public static void fg(int fg, boolean hl) { if (ANSI) System.out.print("\u001B[" + (fg + (hl ? 60 : 0)) + 'm'); }
 
-	public static void info(String string) {
-		info(string, true);
-	}
-	public static void info(String string, boolean println) {
-		printColor(string, WHITE, true, println, true);
-	}
-
-	public static void success(String string) {
-		success(string, true);
-	}
-	public static void success(String string, boolean println) {
-		printColor(string, GREEN, true, println, true);
+	private static void color(String s, int fg, boolean reset, boolean println) {
+		PrintStream o = System.out;
+		if (ANSI) o.print("\u001B[;"+fg+'m');
+		if (println) o.println(s); else o.print(s);
+		if (ANSI&reset) o.print("\u001B[0m");
 	}
 
-	public static void warning(String string) {
-		warning(string, true);
-	}
-	public static void warning(String string, boolean println) {
-		printColor(string, YELLOW, true, println, true);
-	}
-	public static void warning(String string, Throwable err) {
-		printColor(string, YELLOW, false, true, true);
+	public static void info(String s) { info(s, true); }
+	public static void info(String s, boolean println) { color(s, WHITE+HIGHLIGHT, true, println); }
+
+	public static void success(String s) { success(s, true); }
+	public static void success(String s, boolean println) { color(s, GREEN+HIGHLIGHT, true, println); }
+
+	public static void warning(String s) { warning(s, true); }
+	public static void warning(String s, boolean println) { color(s, YELLOW+HIGHLIGHT, true, println); }
+	public static void warning(String s, Throwable err) {
+		color(s, YELLOW+HIGHLIGHT, false, true);
 		err.printStackTrace();
 		reset();
 	}
 
-	public static void error(String string) {
-		error(string, true);
-	}
-	public static void error(String string, boolean println) {
-		printColor(string, RED, true, println, true);
-	}
-	public static void error(String string, Throwable err) {
-		printColor(string, RED, false, true, true);
+	public static void error(String s) { error(s, true); }
+	public static void error(String s, boolean println) { color(s, RED+HIGHLIGHT, true, println); }
+	public static void error(String s, Throwable err) {
+		color(s, RED+HIGHLIGHT, false, true);
 		err.printStackTrace();
 		reset();
 	}

@@ -1,5 +1,6 @@
 package roj.archive.ui;
 
+import roj.archive.ArchiveConstants;
 import roj.archive.qz.*;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.collect.HashBiMap;
@@ -73,7 +74,7 @@ public class QZArchiver {
 	private final List<QZEntry> empties = new SimpleList<>();
 	private boolean firstIsUncompressed;
 
-	private static final MyHashSet<String> UNCOMPRESSED = new MyHashSet<>("7z", "rar", "xz", "txz", "lzma", "bz2", "bzip2", "tbz", "tbz2", "gz", "gzip", "esd", "wim");
+	private static final MyHashSet<String> UNCOMPRESSED = ArchiveConstants.INCOMPRESSIBLE_FILE_EXT;
 	private static final MyHashSet<String> EXECUTABLE_X86 = new MyHashSet<>("exe", "dll", "sys", "so");
 
 	public long prepare() throws IOException {

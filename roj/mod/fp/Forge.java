@@ -8,7 +8,6 @@ import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.mod.MCLauncher;
 import roj.text.CharList;
 import roj.ui.CLIUtil;
 import roj.util.ByteList;
@@ -78,8 +77,9 @@ public final class Forge extends WorkspaceBuilder {
 			forge.setLength(len);
 			String forgeInst = forge.append("-installer.jar").toString();
 			String instUrl = CONFIG.getString("ForgeMaven仓库地址") + forgeInst;
-			MCLauncher.downloadAndVerifyMD5(instUrl, forgeInstaller = new File(TMP_DIR, forgeInst.substring(forgeInst.lastIndexOf('/') + 1)));
-		} catch (IOException e) {
+			forgeInstaller = new File(TMP_DIR, forgeInst.substring(forgeInst.lastIndexOf('/') + 1));
+			//MCLauncher.downloadAndVerifyMD5(instUrl, );
+		} catch (Exception e) {
 			CLIUtil.warning("文件下载失败, 请检查网络", e);
 			System.exit(-4);
 			return;
@@ -140,68 +140,7 @@ public final class Forge extends WorkspaceBuilder {
 	public Forge() {}
 
 	public void run() {
-		/*File mcServer = file.get(1);
 
-		File tmp = new File(TMP_DIR, mcServer.getName() + "_Rmp.server");
-		tmp.deleteOnExit();
-
-		TrieTreeSet set = new TrieTreeSet();
-		FMDMain.readTextList(set::add, "忽略服务端jar中以以下文件名开头的文件");
-
-		try {
-			Helper1_16.remap116_SC(tmp, mcServer, mcpConfigFile, set);
-		} catch (Throwable e) {
-			if (e instanceof IOException) CmdUtil.warning("读取失败, " + mcServer.getAbsolutePath() + " or " + mcpConfigFile.getAbsolutePath(), e);
-			else CmdUtil.error("SpecialSource 错误", e);
-			return;
-		}
-
-		Patcher patcher = new Patcher();
-		patcher.setup113(serverLzmaInput, Collections.emptyMap()); // 读取服务端补丁，客户端打了
-		CmdUtil.info("补丁已加载");
-
-		ConstMapper rmp = new ConstMapper();
-		rmp.loadMap(new File(BASE, "/util/mcp-srg.srg"), true);
-		rmp.loadLibraries(Arrays.asList(mcJar, tmp));
-		CmdUtil.info("映射表已加载");
-
-		List<Context>[] ctxs;
-		try {
-			List<Context> servCtxs = Context.fromZip(tmp, StandardCharsets.UTF_8);
-
-			for (int i = 0; i < servCtxs.size(); i++) {
-				Context ctx = servCtxs.get(i);
-				ByteList result = patcher.patchServer(ctx.getFileName(), ctx.get()); // 服务端的文件已经映射，接下来是打补丁
-				if (result != null) ctx.set(result);
-			}
-
-			if (patcher.errorCount != 0) {CmdUtil.warning("补丁失败数量: " + patcher.errorCount);} else CmdUtil.success("补丁全部成功!");
-			patcher.reset();
-
-			List<Context> fgCtxs = Context.fromZip(forgeJar, StandardCharsets.UTF_8);
-
-			if (forgeUniv != null) { // forge-universal
-				fgCtxs.addAll(Context.fromZip(forgeUniv, StandardCharsets.UTF_8)); // 理论上不会有重复
-			}
-
-			List<Context> clientCtxs = readZipReplaced(StandardCharsets.UTF_8, mcJar, mcClearSrg);
-
-			if (DEBUG) {
-				CmdUtil.info("客户端文件数量: " + clientCtxs.size());
-				CmdUtil.info("服务端文件数量: " + servCtxs.size());
-				CmdUtil.info("Forge文件数量: " + fgCtxs.size());
-			}
-			ctxs = Helpers.cast(new List<?>[] {clientCtxs, servCtxs, fgCtxs});
-		} catch (IOException e) {
-			CmdUtil.error("IO", e);
-			return -1;
-		}
-
-		tmp.delete();
-
-		// arr[1] = client, arr[2] = server, arr[3] = forge
-		// should not hava duplicate class
-		error = LegacyForge.post_process(ctxs, mapper, paramMap) ? 0 : 6;*/
 	}
 
 	private static List<Context> readZipReplaced(Charset charset, File mcJar, File forgeReplaced) throws IOException {

@@ -192,13 +192,8 @@ public final class IOUtil {
 		}
 		return true;
 	}
-	public static boolean deleteFile(File file) {
-		try {
-			return Files.deleteIfExists(file.toPath());
-		} catch (IOException e) {
-			return false;
-		}
-	}
+	@Deprecated
+	public static boolean deleteFile(File file) { return file.delete(); }
 
 	public static void allocSparseFile(File file, long length) throws IOException {
 		// noinspection all

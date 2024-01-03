@@ -13,7 +13,7 @@ import java.util.Comparator;
  * @author Roj234
  * @since 2023/9/13 0013 16:51
  */
-public class Profiler {
+public final class Profiler {
 	private static final ThreadLocal<Profiler> LOCAL = new ThreadLocal<>();
 
 	private static final class Node extends TreeNodeImpl<Node> {
@@ -40,7 +40,7 @@ public class Profiler {
 	public Profiler(String name) { this.name = name; end(); }
 
 	private final String name;
-	private Node root, current;
+	private Node root, current, result;
 
 	public static void endStartSection(String name) { endSection(); startSection(name); }
 	public static void startSection(String name) {
@@ -59,8 +59,8 @@ public class Profiler {
 		p.current = p.current.parent;
 	}
 
-	public void begin() { LOCAL.set(this); HighResolutionTimer.activate(); }
-	public final Node end() {
+	public Profiler begin() { LOCAL.set(this); HighResolutionTimer.activate(); return this; }
+	public Profiler end() {
 		LOCAL.remove();
 		Node r = root;
 		while (current != r) {
@@ -71,11 +71,13 @@ public class Profiler {
 
 		if (r != null)
 			r.timeExit = r.getChildCount() == 0 ? r.timeEnter : r.children.get(r.children.size()-1).timeExit;
-		return r;
+		result = r;
+		return this;
 	}
 
 	public final void popup() {
-		Popup popup = new Popup(null, end());
+		if (LOCAL.get() == this) end();
+		Popup popup = new Popup(null, result);
 		popup.show();
 	}
 

@@ -19,13 +19,13 @@ import roj.io.IOUtil;
 import roj.mapper.MapUtil;
 import roj.mapper.Mapper.State;
 import roj.mapper.MapperUI;
-import roj.mod.FileFilter.CmtATEntry;
 import roj.mod.MCLauncher.RunMinecraftTask;
 import roj.mod.plugin.PluginContext;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
 import roj.ui.GUIUtil;
+import roj.ui.Profiler;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
 import roj.ui.terminal.CommandImpl;
@@ -99,10 +99,16 @@ public final class FMDMain {
 			List<String> flags = Helpers.cast(ctx.argument("flags", List.class));
 			Map<String, Object> map = new MyHashMap<>();
 			for (String flag : flags) map.put(flag, "");
+			Profiler p = DEBUG ? new Profiler("build").begin() : null;
 			try {
 				build(map);
 			} catch (IOException e) {
 				e.printStackTrace();
+			} finally {
+				if (p != null) {
+					p.end();
+					p.popup();
+				}
 			}
 		})));
 		c.register(literal("run").then(argument("flags", Argument.stringFlags("zl", "showErrorCode", "noupdate")).executes(ctx -> {
@@ -116,7 +122,7 @@ public final class FMDMain {
 			}
 		})));
 
-		Argument.ArgSetOf<File> dynamicProject = new Argument.ArgSetOf<File>(false, new MyHashMap<>()) {
+		Argument.ArgSetOf<File> dynamicProject = new Argument.ArgSetOf<File>(1, new MyHashMap<>()) {
 			@Override
 			protected void updateChoices() {
 				choice.clear();
@@ -209,25 +215,23 @@ public final class FMDMain {
 			ATHelper.transform(zo, map, true);
 
 			// 备份
-			ZipArchive atBackup = ATHelper.getBackupFile();
-			ZipArchive mcBin = zo.getMZF();
+			try (ZipArchive atBackup = new ZipArchive(ATHelper.AT_BACKUP_LIB)) {
+				ZipArchive mcBin = zo.getMZF();
 
-			MyHashSet<String> removable = new MyHashSet<>(atBackup.getEntries().keySet());
-			for (EntryMod mod : mcBin.getModified()) {
-				// 删除老的
-				removable.remove(mod.getName());
+				MyHashSet<String> removable = new MyHashSet<>(atBackup.getEntries().keySet());
+				for (EntryMod mod : mcBin.getModified()) {
+					// 删除老的
+					removable.remove(mod.getName());
 
-				// 已经包含
-				if (atBackup.getEntries().containsKey(mod.getName())) continue;
+					// 已经包含
+					if (atBackup.getEntries().containsKey(mod.getName())) continue;
 
-				// 追加新的
-				atBackup.putStream(mod.getName(), mcBin.getInput(mod.getName()), true);
+					// 追加新的
+					atBackup.putStream(mod.getName(), mcBin.getInput(mod.getName()), true);
+				}
+				for (String name : removable) atBackup.put(name, null);
+				atBackup.store();
 			}
-			for (String name : removable) atBackup.put(name, null);
-			atBackup.store();
-
-			// 应用修改
-			zo.end();
 		} catch (IOException e) {
 			e.printStackTrace();
 			return;
@@ -304,6 +308,7 @@ public final class FMDMain {
 		} finally {
 			Shared._unlock();
 			AutoCompile.afterCompile(v);
+			if (project.dstFile != null) project.dstFile.end();
 		}
 
 		if (v < 0) return v;
@@ -326,7 +331,7 @@ public final class FMDMain {
 				mc_conf.put("__hr_patched", 1);
 			}
 
-			if (DEBUG) CLIUtil.info("重载工具已在端口 " + port + " 上启动");
+			if (DEBUG) CLIUtil.info("重载工具已在端口 "+port+" 上启动");
 		}
 
 		MCLauncher.clearLogs(null);
@@ -335,8 +340,8 @@ public final class FMDMain {
 	}
 
 	private static void copy4run(File dest, Project p) throws IOException {
-		File src = new File(BASE, p.name + '-' + p.version + ".jar");
-		File dst = new File(dest, p.name + ".jar");
+		File src = new File(BASE, p.name+'-'+p.version+".jar");
+		File dst = new File(dest, p.name+".jar");
 		IOUtil.copyFile(src, dst);
 	}
 
@@ -351,6 +356,7 @@ public final class FMDMain {
 		} finally {
 			Shared._unlock();
 			AutoCompile.afterCompile(v);
+			if (project.dstFile != null) project.dstFile.end();
 		}
 
 		List<ConstantData> modified = Helpers.cast(args.get("$$HR$$"));
@@ -363,8 +369,8 @@ public final class FMDMain {
 	}
 
 	private static void executeCommand(Project proj, File base) throws IOException {
-		String jarName = proj.name + '-' + proj.version + ".jar";
-		String jarPath = base.getAbsolutePath() + '/' + jarName;
+		String jarName = proj.name+'-'+proj.version+".jar";
+		String jarPath = base.getAbsolutePath()+'/'+jarName;
 
 		CMapping cmd = CONFIG.get("编译成功后执行指令").asMap();
 		CList list = cmd.get("**").asList();
@@ -382,123 +388,92 @@ public final class FMDMain {
 	/**
 	 * @param flag Bit 1 : run (NoVersion) , Bit 2 : dependency mode
 	 */
-	private static int compile(Map<String, ?> args, Project p, File jarDest, int flag) throws IOException {
+	private static int compile(Map<String, ?> args, Project p, File dest, int flag) throws IOException {
 		if ((flag & 2) == 0) {
+			Profiler.startSection("dependProject");
 			for (Project proj : p.getAllDependencies()) {
-				if (compile(args, proj, jarDest, flag | 2) < 0) {
+				Profiler.startSection(proj.name);
+				if (compile(args, proj, dest, flag|2) < 0) {
 					CLIUtil.info("前置编译失败");
+					if (proj.dstFile != null) proj.dstFile.end();
 					return -1;
 				}
+				Profiler.endSection();
 			}
+			Profiler.endSection();
 		}
-
-		boolean increment = args.containsKey("zl");
-		long time = System.currentTimeMillis();
-
-		// region 检测代码更改
 
 		File source = p.srcPath;
 		if (!source.isDirectory()) {
-			CLIUtil.warning("源码目录 " + source.getAbsolutePath() + " 不存在");
+			CLIUtil.warning("源码目录 "+source.getAbsolutePath()+" 不存在");
 			return -1;
 		}
 
-		List<File> files = null;
-		if (increment) {
-			MyHashSet<String> set = watcher.getModified(p, FileWatcher.ID_SRC);
-			if (!set.contains(null)) {
-				files = new ArrayList<>(set.size());
-				synchronized (set) {
-					for (String s : set) {
-						files.add(new File(s));
+		File jarFile = new File(dest, p.name+'-'+p.version+".jar");
+		boolean increment = jarFile.isFile() && args.containsKey("zl");
+
+		Profiler.startSection("getSource");
+		// region 检测代码更改
+		long time = System.currentTimeMillis();
+
+		List<File> files;
+		block: {
+			if (increment) {
+				Set<String> set = watcher.getModified(p, FileWatcher.ID_SRC);
+				if (!set.contains(null)) {
+					files = new ArrayList<>(set.size());
+					synchronized (set) {
+						for (String path : set) files.add(new File(path));
+						if (DEBUG) System.out.println("watcher.getSrc(): "+set);
 					}
-					if (DEBUG) System.out.println("FileWatcher.getSrc(): " + set);
-					//set.clear();
+					break block;
 				}
 			}
+
+			long stamp = increment ? p.binJar.lastModified() : -1;
+			files = IOUtil.findAllFiles(source, file -> file.getName().toLowerCase().endsWith(".java") && file.lastModified() > stamp);
 		}
-
-		long stamp = p.binJar.lastModified();
-
-		if (files == null) {
-			files = IOUtil.findAllFiles(source, FileFilter.INST.reset(stamp, increment ? FileFilter.F_SRC_TIME : FileFilter.F_SRC_ANNO));
-			if (DEBUG) System.out.println("FileFilter.getSrc(): " + (files.size() < 100 ? files : files.subList(0, 100)));
-		}
-
-		if (DEBUG) System.out.println("检测更改 " + (System.currentTimeMillis() - time));
-
 		// endregion
-		// region 检测权限转换标记
-
-		if (increment) {
-			for (int i = 0; i < files.size(); i++) {
-				File file = files.get(i);
-				if (FileFilter.checkATComments(file)) {
-					List<CmtATEntry> ent = FileFilter.cmtEntries;
-					for (int j = 0; j < ent.size(); j++) {
-						if (!p.atEntryCache.contains(ent.get(j))) {
-							ent.clear();
-
-							if (args.containsKey("forcezl")) {
-								System.out.println("请手动全量编译");
-								return -1;
-							}
-
-							CLIUtil.warning("找到AT注解, 使用全量编译");
-							files = IOUtil.findAllFiles(source, FileFilter.INST.reset(0, FileFilter.F_SRC_ANNO));
-							increment = false;
-							break;
-						}
-					}
-					ent.clear();
-					if (!increment) break;
-				}
-			}
-		}
-
-		// endregion
-
-		File jarFile = new File(jarDest, p.name + '-' + p.version + ".jar");
-		if (!ensureWritable(jarFile)) return -1;
-
+		Profiler.endStartSection("ensureWritable <= getSource("+files.size()+")");
 		// region 无代码变动的处理
 		if (files.isEmpty()) {
+			Profiler.endStartSection("updateResource <= ensureWritable");
 			p.registerWatcher();
 			if (increment) {
-				if (!jarFile.isFile()) {
-					CLIUtil.warning("请手动全量编译");
-					return -1;
-				}
-
-				// bug: 如果是启动后第一次更新资源，并不会填充resources
 				try (ZipOutput zo1 = updateDst(p, jarFile)) {
 					zo1.begin(false);
-
-					p.getResourceTask(stamp).execute();
+					p.getResourceTask().execute();
 				}
 
 				if ((flag & 3) == 0) CLIUtil.info("更新了资源(若有)");
 			} else {
 				if ((flag & 3) == 0) CLIUtil.info("无源文件");
 			}
+
 			try {
 				executeCommand(p, BASE);
 			} catch (IOException e) {
 				CLIUtil.warning("无法执行指令", e);
 			}
+
+			Profiler.endSection();
 			return 0;
 		}
 		// endregion
-		// region 应用权限转换
+		Profiler.endStartSection("openWriter <= ensureWritable");
+		ZipOutput binWriter = updateDst(p, jarFile);
+		binWriter.begin(!increment);
+		binWriter.setComment("FMD "+VERSION+"\r\nBy Roj234 @ https://www.github.com/roj234/rojlib");
 
-		if (!FileFilter.cmtEntries.isEmpty()) {
+		AsyncTask<MyHashSet<String>> writeRes = p.getResourceTask();
+		Task.pushTask(writeRes);
+		Profiler.endStartSection("applyAT <= openWriter");
+		// region 应用权限转换
+		if (!p.atEntryCache.isEmpty()) {
 			if (p.atName.isEmpty()) {
-				CLIUtil.error(p.name + " 使用了AT注解,请设置AT配置的存放位置");
+				CLIUtil.error(p.name+" 使用了AT注解,请设置AT配置的存放位置");
 				return -1;
 			}
-
-			p.atEntryCache.clear();
-			p.atEntryCache.addAll(FileFilter.cmtEntries);
 
 			Map<String, Collection<String>> map = ATList.getMapping(); map.clear();
 			loadATMap(CONFIG.getDot("预AT.编译期+运行期").asMap().get(p.name).asMap(), false);
@@ -511,9 +486,9 @@ public final class FMDMain {
 			}
 			map.clear();
 
-			List<FileFilter.CmtATEntry> cmt = FileFilter.cmtEntries;
+			List<ATDesc> cmt = p.atEntryCache;
 			for (int i = 0; i < cmt.size(); i++) {
-				FileFilter.CmtATEntry entry = cmt.get(i);
+				ATDesc entry = cmt.get(i);
 				if (!entry.compile) {
 					for (String val : entry.value) {
 						atData.append("public-f ").append(entry.clazz).append(' ').append(val).append('\n');
@@ -526,31 +501,19 @@ public final class FMDMain {
 				IOUtil.SharedCoder.get().encodeTo(fos);
 			}
 
-			ATHelper.makeATJar(p.name, map);
+			// FIXME Use Lavac to resolve access transform
+			// ATHelper.makeATJar(p.name, map);
 		}
-
 		// endregion
-
-		boolean canIncrementWrite = increment & jarFile.isFile() & p.state != null;
-
-		ZipOutput zo1 = updateDst(p, jarFile);
-		zo1.begin(!canIncrementWrite);
-
-		// region 更新资源文件
-
-		AsyncTask<Void> writeRes = p.getResourceTask(canIncrementWrite?stamp:-1);
-		Task.pushTask(writeRes);
-
-		// endregion
-		// region 制备依赖
-
+		Profiler.endStartSection("makeCompileParam <= applyAT");
+		// region 制备编译参数
 		CharList libBuf = new CharList(200);
 
 		if (p.binJar.length() > 0 && increment) {
 			libBuf.append(p.binJar.getAbsolutePath()).append(File.pathSeparatorChar);
 		}
 
-		libBuf.append(ATHelper.getJarName(p.name).getAbsolutePath()).append(File.pathSeparatorChar);
+		//libBuf.append(ATHelper.getJarName(p.name).getAbsolutePath()).append(File.pathSeparatorChar);
 
 		List<Project> dependencies = p.getAllDependencies();
 		for (int i = 0; i < dependencies.size(); i++) {
@@ -558,158 +521,144 @@ public final class FMDMain {
 		}
 		libBuf.append(getLibClasses());
 
-		// endregion
-
 		SimpleList<String> options = CONFIG.getList("编译参数").asStringList();
 		options.addAll("-cp", libBuf.toString(), "-encoding", p.charset.name());
 
 		Compiler.showErrorCode(args.containsKey("showErrorCode"));
-		if (p.compiler.compile(options, files)) {
-			if (CONFIG.getBool("自动编译")) AutoCompile.setEnabled(true);
+		// endregion
 
-			try {
-				writeRes.get();
-			} catch (Exception e) {
-				CLIUtil.warning("资源写入失败", e);
-			}
+		Profiler.endStartSection("compile <= makeCompileParam");
+		if (!p.compiler.compile(options, files)) {
+			if (!args.containsKey("zl")) AutoCompile.setEnabled(false);
+			return -1;
+		}
 
-			if (DEBUG) System.out.println("编译完成 " + (System.currentTimeMillis() - time));
+		if (CONFIG.getBool("自动编译")) AutoCompile.setEnabled(true);
 
-			MyHashMap<String, String> resources = p.resources;
+		Profiler.endStartSection("writeDevJar <= compile");
 
-			List<ByteListOutput> outputs = p.compiler.getCompiled();
-			List<Context> list = Helpers.cast(outputs);
+		List<ByteListOutput> outputs = p.compiler.getCompiled();
+		int compiledCount = outputs.size();
+		List<Context> list = Helpers.cast(outputs);
+
+		ZipOutput devJar = p.binFile;
+		try {
+			devJar.begin(!increment);
+
 			for (int i = 0; i < outputs.size(); i++) {
 				ByteListOutput out = outputs.get(i);
-				if (resources.remove(out.getName()) != null) {
-					CLIUtil.warning("资源与类重复 " + out.getName());
-				}
-
+				devJar.set(out.getName(), out.getOutput());
 				list.set(i, new Context(out.getName(), out.getOutput()));
 			}
 
-			int compiledCount = list.size();
+			if (increment && p.state == null) {
+				increment = false;
 
-			ZipOutput stampZip = p.binFile;
-			try {
-				stampZip.begin(!increment);
-			} catch (Throwable e) {
-				CLIUtil.warning("压缩文件有错误,请尝试全量", e);
-				return -1;
-			}
+				Profiler.startSection("reloadState");
 
-			try {
-				for (int i = 0; i < list.size(); i++) {
-					Context out = list.get(i);
-					stampZip.set(out.getFileName(), out);
-				}
+				MyHashSet<String> changed = new MyHashSet<>(list.size());
+				for (int i = 0; i < list.size(); i++) changed.add(list.get(i).getFileName());
 
-				if (increment & !canIncrementWrite) {
-					MyHashSet<String> changed = new MyHashSet<>(list.size());
-					for (int i = 0; i < list.size(); i++) {
-						changed.add(list.get(i).getFileName());
-					}
-
-					ZipArchive mzf = stampZip.getMZF();
-					boolean isOpen = mzf.isOpen();
-					if (!isOpen) mzf.reopen();
-					ByteList buf = IOUtil.getSharedByteBuf();
-					for (ZEntry file : mzf.getEntries().values()) {
-						if (!changed.contains(file.getName())) {
-							Context ctx = new Context(file.getName(), mzf.get(file, buf).toByteArray());
-							list.add(ctx);
-							buf.clear();
-						}
-					}
-					if (!isOpen) mzf.closeFile();
-				}
-			} catch (Throwable e) {
-				CLIUtil.warning("压缩文件有错误,请尝试全量", e);
-			} finally {
-				stampZip.end();
-			}
-
-			if (DEBUG) System.out.println("代码处理完成 " + (System.currentTimeMillis() - time));
-
-			zo1.setComment("FMD " + VERSION + "\r\nBy Roj234 @ https://www.github.com/roj234/rojlib");
-
-			PluginContext pc = new PluginContext();
-			for (int i = 0; i < plugins.size(); i++) {
-				plugins.get(i).afterCompile(list, false, pc);
-			}
-
-			// region 映射
-
-			List<State> libs = mapperFwd.getSeperatedLibraries(); libs.clear();
-			for (int i = 0; i < dependencies.size(); i++) libs.add(dependencies.get(i).state);
-
-			if (canIncrementWrite) {
-				libs.add(p.state);
-				mapperFwd.mapIncr(list);
-			} else {
-				mapperFwd.map(list);
-			}
-			p.state = mapperFwd.snapshot(p.state);
-
-			pc = new PluginContext();
-			for (int i = 0; i < plugins.size(); i++) {
-				plugins.get(i).afterCompile(list, true, pc);
-			}
-
-			if (DEBUG) System.out.println("映射完成 " + (System.currentTimeMillis() - time));
-
-			// endregion
-			// region 写入映射结果
-
-			if (increment) {
-				List<ConstantData> modified = Helpers.cast(args.get("$$HR$$"));
-				if (modified != null) {
-					for (int i = 0; i < compiledCount; i++) {
-						modified.add(list.get(i).getData());
+				ZipArchive mzf = devJar.getMZF();
+				ByteList buf = IOUtil.getSharedByteBuf();
+				for (ZEntry file : mzf.getEntries().values()) {
+					if (!changed.contains(file.getName())) {
+						Context ctx = new Context(file.getName(), mzf.get(file, buf).toByteArray());
+						list.add(ctx);
+						buf.clear();
 					}
 				}
-			} else {
-				args.remove("$$HR$$");
+
+				Profiler.endSection();
 			}
-
-			try {
-				for (int i = 0; i < list.size(); i++) {
-					Context ctx = list.get(i);
-					if (CONFIG.getBool("压缩输出")) {
-						zo1.set(ctx.getFileName(), ctx::getCompressedShared);
-					} else {
-						zo1.set(ctx.getFileName(), ctx);
-					}
-				}
-			} catch (Throwable e) {
-				CLIUtil.error("write error", e);
-				return -1;
-			} finally {
-				zo1.end();
-			}
-
-			// endregion
-
-			CLIUtil.success("编译成功! " + (System.currentTimeMillis() - time) + "ms");
-
-			if (!args.containsKey("noupdate") && !p.binJar.setLastModified(time)) {
-				throw new IOException("设置时间戳失败!");
-			}
-
-			p.registerWatcher();
-
-			try {
-				executeCommand(p, BASE);
-			} catch (IOException e) {
-				CLIUtil.warning("无法执行指令", e);
-			}
-
-			return 1;
-		} else if (!args.containsKey("zl")) {
-			AutoCompile.setEnabled(false);
+		} catch (Throwable e) {
+			CLIUtil.warning("压缩文件有错误,请尝试全量", e);
+			return -1;
+		} finally {
+			devJar.end();
 		}
 
-		return -1;
+		Profiler.endStartSection("applyPlugin <= writeDevJar");
+
+		PluginContext pc = new PluginContext();
+		for (int i = 0; i < plugins.size(); i++) {
+			plugins.get(i).afterCompile(list, false, pc);
+		}
+
+		Profiler.endStartSection("waitResource <= applyPlugin");
+
+		try {
+			writeRes.get();
+		} catch (Exception e) {
+			CLIUtil.warning("资源写入失败", e);
+		}
+
+		Profiler.endStartSection("mapClass <= waitResource");
+		// region 映射
+
+		List<State> libs = mapperFwd.getSeperatedLibraries(); libs.clear();
+		for (int i = 0; i < dependencies.size(); i++) libs.add(dependencies.get(i).state);
+
+		if (increment) {
+			libs.add(p.state);
+			mapperFwd.mapIncr(list);
+		} else {
+			mapperFwd.map(list);
+		}
+		p.state = mapperFwd.snapshot(p.state);
+
+		pc = new PluginContext();
+		for (int i = 0; i < plugins.size(); i++) {
+			plugins.get(i).afterCompile(list, true, pc);
+		}
+
+		// endregion
+		Profiler.endStartSection("lockBinJar <= mapClass");
+		if (increment) {
+			List<ConstantData> modified = Helpers.cast(args.get("$$HR$$"));
+			if (modified != null) {
+				for (int i = 0; i < compiledCount; i++) {
+					modified.add(list.get(i).getData());
+				}
+			}
+		} else {
+			args.remove("$$HR$$");
+		}
+
+		// 锁定文件
+		if (!ensureWritable(jarFile)) return -1;
+
+		Profiler.endStartSection("writeBinJar <= lockBinJar");
+		// region 写入映射结果
+		try {
+
+			for (int i = 0; i < list.size(); i++) {
+				Context ctx = list.get(i);
+				binWriter.set(ctx.getFileName(), ctx::getCompressedShared);
+			}
+		} catch (Throwable e) {
+			CLIUtil.error("write error", e);
+			return -1;
+		} finally {
+			binWriter.end();
+		}
+		// endregion
+
+		CLIUtil.success("编译成功! "+(System.currentTimeMillis()-time)+"ms");
+		Profiler.endStartSection("executeCommand <= writeBinJar");
+
+		if (!args.containsKey("noupdate") && !p.binJar.setLastModified(time))
+			CLIUtil.warning("设置时间戳失败!");
+
+		p.registerWatcher();
+
+		try {
+			executeCommand(p, BASE);
+		} catch (IOException e) {
+			CLIUtil.warning("无法执行指令", e);
+		}
+
+		return 1;
 	}
 
 	// region Build.util
@@ -717,9 +666,7 @@ public final class FMDMain {
 	private static ZipOutput updateDst(Project p, File jarFile) throws IOException {
 		ZipOutput zo1 = p.dstFile;
 		if (zo1 == null || !zo1.file.getAbsolutePath().equals(jarFile.getAbsolutePath())) {
-			if (zo1 != null) {
-				zo1.close();
-			}
+			if (zo1 != null) zo1.close();
 			p.dstFile = zo1 = new ZipOutput(jarFile);
 			zo1.setCompress(true);
 		}
@@ -737,37 +684,38 @@ public final class FMDMain {
 	}
 
 	private static long lastLibHash;
-	private static CharList libClasses;
+	private static final CharList libClasses = new CharList();
 
-	private static CharList getLibClasses() {
-		File lib = new File(BASE, "/class/");
-		if (!lib.isDirectory()) return new CharList();
-
-		List<File> fs = Arrays.asList(lib.listFiles());
-
+	private static CharSequence getLibClasses() {
 		CharList sb = libClasses;
-		if (sb == null) libClasses = sb = new CharList();
-		else if (MapUtil.libHash(fs) == lastLibHash) return sb;
+
+		File lib = new File(BASE, "class");
+
+		File[] a = lib.listFiles();
+		if (a == null || a.length == 0) return "";
+		List<File> fs = Arrays.asList(a);
+
+		if (MapUtil.libHash(fs) == lastLibHash) return sb;
 		sb.clear();
 
 		for (int i = 0; i < fs.size(); i++) {
 			File file = fs.get(i);
-			if (!(file.getName().endsWith(".zip") || file.getName().endsWith(".jar")) || file.length() == 0) {
-				continue;
-			}
+			String ext = file.getName().toLowerCase();
+			if (!(ext.endsWith(".zip") || ext.endsWith(".jar")) || file.length() == 0) continue;
+
 			try (ZipFile zf = new ZipFile(file)) {
-				if (zf.size() == 0) CLIUtil.warning(file.getPath() + " 是空的");
+				if (zf.size() == 0) CLIUtil.warning(file.getPath()+" 是空的");
+				else sb.append(file.getAbsolutePath()).append(File.pathSeparatorChar);
 			} catch (Throwable e) {
-				CLIUtil.error(file.getPath() + " 不是ZIP压缩文件", e);
-				if (!file.renameTo(new File(file.getAbsolutePath() + ".err"))) {
+				CLIUtil.error(file.getPath()+ " 不是有效的jar", e);
+				if (!file.renameTo(new File(file.getAbsolutePath()+".err"))) {
 					throw new RuntimeException("未指定的I/O错误");
 				} else {
 					CLIUtil.info("文件已被自动重命名为.err");
 				}
 			}
-
-			sb.append(file.getAbsolutePath()).append(File.pathSeparatorChar);
 		}
+
 		lastLibHash = MapUtil.libHash(fs);
 		sb.setLength(sb.length()-1);
 		return sb;
