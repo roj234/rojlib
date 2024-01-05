@@ -1,8 +1,8 @@
 package roj.platform;
 
 import roj.asm.tree.anno.Annotation;
-import roj.asmx.annorepo.AnnotationInfo;
-import roj.asmx.annorepo.AnnotationRepo;
+import roj.asmx.more_annotations.AnnotationInfo;
+import roj.asmx.more_annotations.AnnotationRepo;
 import roj.collect.MyHashMap;
 import roj.math.Version;
 import roj.ui.terminal.Argument;

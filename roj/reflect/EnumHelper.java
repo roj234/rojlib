@@ -2,15 +2,14 @@ package roj.reflect;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.cst.CstClass;
-import roj.asm.cst.CstInt;
-import roj.asm.cst.CstRef;
+import roj.asm.cp.CstClass;
+import roj.asm.cp.CstInt;
+import roj.asm.cp.CstRef;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
 import roj.asm.util.InsnHelper;
 import roj.asm.visitor.CodeVisitor;
 import roj.asm.visitor.XAttrCode;
@@ -47,7 +46,7 @@ public final class EnumHelper extends CodeVisitor {
 	private int lvid;
 
 	public EnumHelper(ConstantData klass) {
-		if ((klass.access & AccessFlag.ENUM) == 0) throw new IllegalStateException("Not enum class: " + klass.name());
+		if ((klass.access & ACC_ENUM) == 0) throw new IllegalStateException("Not enum class: " + klass.name());
 
 		ref = klass;
 		klass.unparsed();

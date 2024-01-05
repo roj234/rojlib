@@ -1,8 +1,8 @@
 package roj.asm.tree.attr;
 
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstClass;
-import roj.asm.cst.CstNameAndType;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstClass;
+import roj.asm.cp.CstNameAndType;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.util.DynByteBuf;

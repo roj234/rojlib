@@ -1,20 +1,18 @@
 package roj.asm.visitor;
 
-import roj.asm.OpcodeUtil;
 import roj.asm.Opcodes;
-import roj.asm.cst.*;
+import roj.asm.cp.*;
 import roj.asm.frame.Var2;
 import roj.asm.frame.VarType;
-import roj.asm.misc.ReflectClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
+import roj.asm.util.ClassUtil;
 import roj.asm.util.InsnHelper;
+import roj.asm.util.ReflectClass;
 import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.mapper.MapUtil;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 
@@ -58,13 +56,13 @@ public class FrameVisitor {
 		current = add(0, "beginning");
 
 		boolean _init_ = owner.name().equals("<init>");
-		if (0 == (owner.modifier() & AccessFlag.STATIC)) { // this
+		if (0 == (owner.modifier() & ACC_STATIC)) { // this
 			set(0, new Var2(_init_ ? UNINITIAL_THIS : REFERENCE, owner.ownerClass()));
 		} else if (_init_) {
 			throw new IllegalArgumentException("static <init> method");
 		}
 
-		int j = 0 == (owner.modifier()&AccessFlag.STATIC) ? 1 : 0;
+		int j = 0 == (owner.modifier()& ACC_STATIC) ? 1 : 0;
 		List<Type> types = owner.parameters();
 		for (int i = 0; i < types.size(); i++) {
 			Var2 v = castType(types.get(i));
@@ -248,13 +246,13 @@ public class FrameVisitor {
 			}
 			if (eof) {
 				if (firstOnly) return;
-				throw new IllegalStateException("End-of-segment prediction failed from " + OpcodeUtil.toString0(prev) +
+				throw new IllegalStateException("End-of-segment prediction failed from " + Opcodes.showOpcode(prev) +
 					" at " + this.bci + "\nInside method: " + mn);
 			}
 
 			this.bci = bci;
 
-			code = OpcodeUtil.byId(r.readByte());
+			code = Opcodes.validateOpcode(r.readByte());
 
 			boolean widen = prev == Opcodes.WIDE;
 
@@ -804,12 +802,12 @@ public class FrameVisitor {
 	// endregion
 	// region Frame merge / compute
 
-	public String getCommonUnsuperClass(String type1, String type2) throws Exception {
-		ReflectClass r1 = MapUtil.getInstance().reflectClassInfo(type1.replace('/', '.'));
+	public static String getCommonUnsuperClass(String type1, String type2) throws Exception {
+		ReflectClass r1 = ClassUtil.reflectClassInfo(type1.replace('/', '.'));
 		if (r1 == null) throw new IllegalStateException("Unable to get " + type1);
 		Class<?> c1 = r1.owner;
 
-		ReflectClass r2 = MapUtil.getInstance().reflectClassInfo(type2.replace('/', '.'));
+		ReflectClass r2 = ClassUtil.reflectClassInfo(type2.replace('/', '.'));
 		if (r2 == null) throw new IllegalStateException("Unable to get " + type2);
 		Class<?> c2 = r2.owner;
 
@@ -821,12 +819,12 @@ public class FrameVisitor {
 
 		return null;
 	}
-	public String getCommonSuperClass(String type1, String type2) throws Exception {
-		ReflectClass r1 = MapUtil.getInstance().reflectClassInfo(type1.replace('/', '.'));
+	public static String getCommonSuperClass(String type1, String type2) throws Exception {
+		ReflectClass r1 = ClassUtil.reflectClassInfo(type1.replace('/', '.'));
 		if (r1 == null) throw new IllegalStateException("Unable to get " + type1);
 		Class<?> c1 = r1.owner;
 
-		ReflectClass r2 = MapUtil.getInstance().reflectClassInfo(type2.replace('/', '.'));
+		ReflectClass r2 = ClassUtil.reflectClassInfo(type2.replace('/', '.'));
 		if (r2 == null) throw new IllegalStateException("Unable to get " + type2);
 		Class<?> c2 = r2.owner;
 

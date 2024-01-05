@@ -50,6 +50,7 @@ public class Vec4d extends Vector {
 		return this;
 	}
 
+	// 四元数旋转
 	public static void main(String[] args) {
 		double v = Math.sqrt(2) / 2;
 

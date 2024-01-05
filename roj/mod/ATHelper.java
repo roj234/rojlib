@@ -20,7 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static roj.mapper.Mapper.DONT_LOAD_PREFIX;
+import static roj.asmx.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.mod.Shared.BASE;
 
 /**
@@ -31,8 +31,6 @@ import static roj.mod.Shared.BASE;
  */
 final class ATHelper {
 	public static final File AT_BACKUP_LIB = new File(BASE, "class/at_backup.zip_at");
-
-	public static void close() {}
 
 	public static void transform(ZipOutput zo, Map<String, Collection<String>> map, boolean forIDE) throws IOException {
 		Shared.loadSrg2Mcp();
@@ -87,7 +85,7 @@ final class ATHelper {
 					Collection<String> subclasses = subClasses.remove(name);
 					if (subclasses != null) TransformUtil.makeSubclassAccessible(data, subclasses);
 
-					if (!forIDE) TransformUtil.trimCode(data);
+					if (!forIDE) TransformUtil.apiOnly(data);
 
 					data.parsed();
 					zo.set(name, () -> Parser.toByteArrayShared(data));
@@ -105,4 +103,8 @@ final class ATHelper {
 			}
 		}
 	}
+
+	private static final Map<String, Collection<String>> map = new MyHashMap<>();
+	public static void add(String className, String fieldName) { map.computeIfAbsent(className, Helpers.fnMyHashSet()).add(fieldName); }
+	public static Map<String, Collection<String>> getMapping() { return map; }
 }

@@ -2,15 +2,15 @@ package roj.asm.visitor;
 
 import org.intellij.lang.annotations.MagicConstant;
 import roj.asm.AsmShared;
-import roj.asm.OpcodeUtil;
-import roj.asm.cst.Constant;
-import roj.asm.cst.ConstantPool;
+import roj.asm.Opcodes;
+import roj.asm.cp.Constant;
+import roj.asm.cp.ConstantPool;
+import roj.asm.type.Desc;
 import roj.asm.type.TypeHelper;
 import roj.collect.AbstractIterator;
 import roj.collect.IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
-import roj.mapper.util.Desc;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -19,7 +19,6 @@ import roj.util.Helpers;
 import javax.annotation.Nonnull;
 import java.util.*;
 
-import static roj.asm.OpcodeUtil.assertCate;
 import static roj.asm.Opcodes.*;
 
 /**
@@ -132,7 +131,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 
 			int index;
 			switch (c.getClass().getName()) {
-				case "roj.mapper.util.Desc":
+				case "roj.asm.type.Desc":
 					Desc d = (Desc) c;
 					if (d.owner == null) index = cp.getInvokeDynId(d.flags, d.name, d.param);
 					else {
@@ -244,7 +243,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 
 	// region instructions
 	public final void multiArray(String clz, int dimension) { addRef(clz); codeOb.put(MULTIANEWARRAY).putShort(0).put(dimension); }
-	public final void clazz(byte code, String clz) { assertCate(code,OpcodeUtil.CATE_CLASS); addRef(clz); codeOb.put(code).putShort(0); }
+	public final void clazz(byte code, String clz) { assertCate(code, Opcodes.CATE_CLASS); addRef(clz); codeOb.put(code).putShort(0); }
 	public final void invokeDyn(int idx, String name, String desc, int type) {
 		addRef(new Desc(null, name, desc, idx));
 		codeOb.put(INVOKEDYNAMIC).putShort(0).putShort(type);
@@ -260,12 +259,12 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 			return;
 		}
 
-		assertCate(code,OpcodeUtil.CATE_METHOD);
+		assertCate(code, Opcodes.CATE_METHOD);
 		addRef(new Desc(owner, name, desc, isInterfaceMethod ? 3<<14 : 0));
 		codeOb.put(code).putShort(0);
 	}
 	public void field(byte code, String owner, String name, String type) {
-		assertCate(code,OpcodeUtil.CATE_FIELD);
+		assertCate(code, Opcodes.CATE_FIELD);
 		addRef(new Desc(owner, name, type, 1<<14));
 		codeOb.put(code).putShort(0);
 	}

@@ -34,7 +34,7 @@ public abstract class CommandNode {
 		sb.append(":\n");
 		if (impl != null) sb.padEnd(' ', depth).append("[无参数]\n");
 		for (CommandNode child : children) {
-			child.dump(sb.padEnd(' ', depth), depth).append('\n');
+			child.dump(sb.padEnd(' ', depth), depth);
 		}
 		return sb;
 	}
@@ -55,18 +55,15 @@ public abstract class CommandNode {
 		}
 
 		ParseException pe = null;
-		ctx.pushStack();
-		try {
-			for (int i = 0; i < children.size(); i++) {
-				try {
-					if (children.get(i).apply(ctx, completions)) {
-						return true;
-					}
-				} catch (ParseException e) {
-					pe = e;
+		for (int i = 0; i < children.size(); i++) {
+			ctx.pushStack();
+			try {
+				if (children.get(i).apply(ctx, completions)) {
+					return true;
 				}
+			} catch (ParseException e) {
+				pe = e;
 			}
-		} finally {
 			ctx.popStack();
 		}
 
@@ -95,11 +92,12 @@ public abstract class CommandNode {
 				return false;
 			}
 
-			String s = ctx.nextUnquotedString();
+			String s = ctx.peekWord().val();
 			if (!s.equals(name)) {
 				if (completions != null && ctx.isWordEdge() && name.startsWith(s)) completions.add(new Completion(name.substring(s.length())));
 				return false;
 			}
+			ctx.nextUnquotedString();
 
 			return doApply(ctx, completions);
 		}
@@ -118,6 +116,15 @@ public abstract class CommandNode {
 		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 			if (ctx.isEOF()) {
 				if (completions != null) argument.example(completions);
+				else {
+					try {
+						Object o = argument.parse(ctx, null);
+						ctx.putArgument(name, o);
+						return doApply(ctx, null);
+					} catch (Exception e) {
+						return false;
+					}
+				}
 				return false;
 			}
 

@@ -1,6 +1,7 @@
 package roj.mildwind.parser.ast;
 
 import roj.asm.Opcodes;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsMap;
 import roj.mildwind.type.JsObject;
@@ -74,7 +75,7 @@ final class ObjectDef implements Expression {
 	public Expression compress() { return expr.isEmpty() ? Constant.valueOf(inst) : this; }
 
 	@Override
-	public JsObject compute(JsObject ctx) {
+	public JsObject compute(JsContext ctx) {
 		final JsMap v = (JsMap) inst.shallowCOWInstance();
 		if (!expr.isEmpty()) {
 			for (Map.Entry<Object, Expression> entry : expr.entrySet()) {

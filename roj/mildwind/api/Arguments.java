@@ -60,6 +60,7 @@ public class Arguments implements JsObject {
 	public JsArray getAfter(int id) { return id >= argv.size() ? new JsArray() : new JsArray(argv.subList(id, argv.size())); }
 
 	public JsObject length() { return JsContext.getInt(argv.size()); }
+	public int java_length() { return argv.size(); }
 
 	public StringBuilder toString0(StringBuilder sb, int depth) {
 		return sb.append("[arguments: ").append(argv.size()).append("]");

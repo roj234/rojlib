@@ -6,7 +6,7 @@ import java.util.Iterator;
  * @author Roj234
  * @since 2020/8/14 17:08
  */
-interface _Generic_Entry<T> {
-	T __next();
-	default Iterator<T> __iterator() { return null; }
+interface _Generic_Entry {
+	_Generic_Entry __next();
+	default Iterator<? extends _Generic_Entry> __iterator() { return null; }
 }

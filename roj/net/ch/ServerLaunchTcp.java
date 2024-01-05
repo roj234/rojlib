@@ -3,6 +3,7 @@ package roj.net.ch;
 import roj.util.Helpers;
 
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.net.SocketOption;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -38,11 +39,12 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 		else return tcp.getOption(k);
 	}
 
-	@Override
+	public ServerLaunch bind(SocketAddress a, int backlog) throws IOException { tcp.bind(a, backlog); return this; }
+	public SocketAddress localAddress() throws IOException { return tcp.getLocalAddress(); }
+
 	public ServerLaunch launch() throws IOException {
 		if (initializator == null) throw new IllegalStateException("no initializator");
 
-		tcp.bind(addr, backlog);
 		loop().register(this, null, SelectionKey.OP_ACCEPT);
 		return this;
 	}

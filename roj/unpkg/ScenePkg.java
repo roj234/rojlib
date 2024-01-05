@@ -54,10 +54,10 @@ public class ScenePkg {
 		if (args.length > 2) {
 			System.err.println("我们会使用STDOUT输出文件列表");
 			System.err.println("准备好请按任意键");
-			CLIUtil.userInput("");
+			CLIUtil.readString("");
 			tree.forEach((k, v) -> System.err.println(k));
 			System.err.println("请写出从前缀树的哪个节点开始导出(可以为空)");
-			key = CLIUtil.userInput("");
+			key = CLIUtil.readString("");
 		} else {
 			key = "";
 		}

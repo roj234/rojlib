@@ -1,9 +1,9 @@
 package roj.mod.mapping;
 
+import roj.asm.type.Desc;
+import roj.asmx.mapper.Mapping;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
-import roj.mapper.Mapping;
-import roj.mapper.util.Desc;
 import roj.text.LineReader;
 import roj.text.LinedReader;
 import roj.text.TextUtil;

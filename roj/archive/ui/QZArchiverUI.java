@@ -128,9 +128,7 @@ public class QZArchiverUI extends JFrame {
 				if (pool2 != null) pool2.shutdown();
 				uiBegin.setEnabled(true);
 			}
-			try (QZArchive archive = new QZArchive(out, arc.password)) {
-				archive.selfTest();
-			}
+			new QZArchive(out, arc.password).close();
 		});
 	}
 

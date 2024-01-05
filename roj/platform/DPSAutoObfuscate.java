@@ -1,12 +1,13 @@
 package roj.platform;
 
-import roj.asm.TransformException;
+import roj.asm.Opcodes;
 import roj.asm.tree.ConstantData;
-import roj.asm.util.AccessFlag;
 import roj.asm.util.Context;
-import roj.crypt.MT19937;
-import roj.launcher.ITransformer;
+import roj.asmx.ITransformer;
+import roj.asmx.TransformException;
 import roj.util.ArrayUtil;
+
+import java.security.SecureRandom;
 
 /**
  * @author Roj234
@@ -14,13 +15,13 @@ import roj.util.ArrayUtil;
  */
 public class DPSAutoObfuscate implements ITransformer {
 	@Override
-	public boolean transform(String mappedName, Context ctx) throws TransformException {
-		if (mappedName.equals("roj/platform/PluginDescriptor") || mappedName.equals("roj/platform/DPSSecurityManager")) {
+	public boolean transform(String name, Context ctx) throws TransformException {
+		if (name.equals("roj/platform/PluginDescriptor") || name.equals("roj/platform/DPSSecurityManager")) {
 			ConstantData da = ctx.getData();
-			MT19937 rnd = new MT19937();
-			for (int i = rnd.nextInt(4); i < 12; i++) da.newField(AccessFlag.PRIVATE, "f"+i, "Ljava/lang/Object;");
-			for (int i = 0; i < 16; i++) da.newField(AccessFlag.PRIVATE|AccessFlag.STATIC, "sf"+i, "Ljava/lang/Object;");
-			for (int i = rnd.nextInt(20)+12; i < 36; i++) da.newField(AccessFlag.PRIVATE, "f"+i, "B");
+			SecureRandom rnd = new SecureRandom();
+			for (int i = rnd.nextInt(4); i < 12; i++) da.newField(Opcodes.ACC_PRIVATE, "f"+i, "Ljava/lang/Object;");
+			for (int i = 0; i < 16; i++) da.newField(Opcodes.ACC_PRIVATE|Opcodes.ACC_STATIC, "sf"+i, "Ljava/lang/Object;");
+			for (int i = rnd.nextInt(20)+12; i < 36; i++) da.newField(Opcodes.ACC_PRIVATE, "f"+i, "B");
 			ArrayUtil.shuffle(da.fields, rnd);
 			return true;
 		}

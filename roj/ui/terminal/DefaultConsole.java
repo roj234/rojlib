@@ -19,12 +19,8 @@ import roj.util.ByteList;
 import java.awt.*;
 import java.awt.datatransfer.*;
 import java.io.IOException;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.Charset;
-import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.regex.Matcher;
 
 import static java.awt.event.KeyEvent.*;
@@ -61,7 +57,6 @@ public class DefaultConsole implements Console {
 	private int tabCursor = -1, tabId;
 
 	private boolean _history = true, _echo = true;
-	private List<Function<String, Boolean>> _async_callback = Collections.emptyList();
 
 	public DefaultConsole(String prompt) {
 		setPrompt(prompt);
@@ -263,11 +258,7 @@ public class DefaultConsole implements Console {
 					if (endCompletion(true)) break;
 
 					String cmd = input.toString();
-					if (!_async_callback.isEmpty()) {
-						Boolean b = _async_callback.get(0).apply(cmd);
-						if (b) _async_callback.remove(0);
-						else return;
-					} else if (!evaluate(cmd)) return;
+					if (!evaluate(cmd)) return;
 
 					input.clear();
 
@@ -351,7 +342,6 @@ public class DefaultConsole implements Console {
 
 		doRender();
 	}
-	private static void beep() { CLIUtil.sysOut.write(7); CLIUtil.sysOut.flush(); }
 
 	private static String filterText(String string) {
 		int i = string.lastIndexOf('\n');
@@ -367,7 +357,9 @@ public class DefaultConsole implements Console {
 
 		System.out.println(pp);
 	}
-	protected final void doRender() {
+	protected synchronized final void doRender() {
+		if (CLIUtil.getConsole() != this) return;
+
 		if (!_echo) {
 			prompt.setLength(prefixLen);
 			CLIUtil.renderBottomLine(prompt, true, prefixCLen+1);
@@ -511,25 +503,4 @@ public class DefaultConsole implements Console {
 
 	public void setEchoEnabled(boolean echo) { this._echo = echo; doRender(); }
 	public void setHistoryEnabled(boolean history) { this._history = history; }
-	public String readLine() throws IOException {
-		if (Thread.currentThread() == CLIUtil.getConsoleThread()) throw new IllegalStateException("cannot call readLine() on console thread");
-
-		if (_async_callback == Collections.EMPTY_LIST) _async_callback = new SimpleList<>();
-		AtomicReference<String> ref = new AtomicReference<>();
-		_async_callback.add(s -> {
-			ref.set(s);
-			synchronized (ref) { ref.notify(); }
-			return true;
-		});
-		synchronized (this) {
-			while (ref.get() == null) {
-				try {
-					ref.wait();
-				} catch (InterruptedException e) {
-					throw new ClosedByInterruptException();
-				}
-			}
-		}
-		return ref.get();
-	}
 }

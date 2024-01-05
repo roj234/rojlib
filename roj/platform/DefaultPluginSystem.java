@@ -1,16 +1,17 @@
 package roj.platform;
 
 import roj.asm.util.Context;
+import roj.asmx.ITransformer;
+import roj.asmx.launcher.Bootstrap;
 import roj.collect.SimpleList;
-import roj.io.NIOUtil;
-import roj.launcher.Bootstrap;
-import roj.launcher.ITransformer;
+import roj.config.ConfigMaster;
+import roj.config.ParseException;
+import roj.config.data.CMapping;
+import roj.io.IOUtil;
 import roj.math.Version;
 import roj.net.http.srv.HttpServer11;
 import roj.net.http.srv.autohandled.OKRouter;
-import roj.reflect.ClassDefiner;
 import roj.reflect.ILSecurityManager;
-import roj.text.CharList;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.ui.CLIUtil;
@@ -32,22 +33,30 @@ import static roj.ui.terminal.CommandNode.literal;
  * @author Roj234
  * @since 2023/12/25 0025 18:01
  */
-public class DefaultPluginSystem {
-	public static final CommandConsole CMD = new CommandConsole("RojLib> ");
-	public static final PluginManager PM;
-	static {
-		Logger.getRootContext().destination(() -> System.out);
-		File dataFolder = new File("plugins");
-		dataFolder.mkdir();
-		PM = new PluginManager(dataFolder);
-	}
+public final class DefaultPluginSystem extends PluginManager {
+	public static final CommandConsole CMD = new CommandConsole("DPS> ");
 
-	public static void main(String[] args) {
+	static DefaultPluginSystem PM;
+	public static DefaultPluginSystem getInstance() { return PM; }
+	private static CMapping CONFIG;
+
+	private DefaultPluginSystem(File dataFolder) { super(dataFolder); }
+
+	public static void main(String[] args) throws IOException, ParseException {
 		if (!CLIUtil.ANSI) {
 			System.err.println("Not CLI environment");
 			return;
 		}
 		Bootstrap.classLoader.registerTransformer(new DPSAutoObfuscate());
+
+		Logger.getRootContext().destination(() -> System.out);
+
+		File altConfig = new File("DPSCore.yml");
+		CONFIG = altConfig.isFile() ? ConfigMaster.parse(altConfig).asMap() : new CMapping();
+
+		File dataFolder = new File(CONFIG.getString("plugin_dir", "plugins"));
+		dataFolder.mkdirs();
+		PM = new DefaultPluginSystem(dataFolder);
 
 		CMD.register(literal("load").then(argument("name", Argument.file()).executes(ctx -> PM.loadPlugin(ctx.argument("name", File.class)))));
 		CMD.register(literal("unload").then(argument("id", Argument.oneOf(PM.plugins)).executes(ctx -> PM.unloadPlugin(ctx.argument("id", PluginDescriptor.class).id))));
@@ -56,15 +65,15 @@ public class DefaultPluginSystem {
 			System.exit(0);
 		}));
 		CMD.register(literal("help").executes(ctx -> {
-			System.out.println("已加载的插件:");
+			System.out.println("加载的插件:");
 			for (PluginDescriptor value : PM.plugins.values()) {
 				System.out.println("  "+value.getFullDesc().replace("\n", "\n  ")+"\n");
 			}
-			System.out.println("可用的指令:");
-			System.out.println(CMD.dumpNodes(new CharList()));
+			System.out.println("注册的指令:");
+			System.out.println(CMD.dumpNodes(IOUtil.getSharedCharBuf(), 2));
 		}));
 
-		PM.LOGGER.info("欢迎使用Roj234可重载的插件系统1.1");
+		PM.LOGGER.info("欢迎使用基础插件系统1.2");
 		Runtime.getRuntime().addShutdownHook(new Thread(DefaultPluginSystem::shutdown));
 
 		PluginDescriptor pd = new PluginDescriptor();
@@ -88,8 +97,6 @@ public class DefaultPluginSystem {
 
 		transformers.add(new DPSSecurityManager());
 		DPSSecurityManager.LOGGER.setLevel(Level.INFO);
-		NIOUtil.available();
-		ClassDefiner.INSTANCE = new DPSSecurityManager.SecureClassLoader();
 		ILSecurityManager.setSecurityManager(new DPSSecurityManager.SecureClassDefineIL());
 
 		PM.readPlugins();
@@ -105,11 +112,11 @@ public class DefaultPluginSystem {
 	}
 
 	private static OKRouter router;
-	public static OKRouter initHttp() {
+	static OKRouter initHttp() {
 		if (router == null) {
 			router = new OKRouter();
 			try {
-				HttpServer11.simple(new InetSocketAddress(12345), 512, router).launch();
+				HttpServer11.simple(new InetSocketAddress(CONFIG.getInteger("http_port", 12345)), 512, router).launch();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -118,8 +125,7 @@ public class DefaultPluginSystem {
 	}
 
 	private static final SimpleList<ITransformer> transformers = new SimpleList<>();
-	public static void transform(String name, ByteList buf) {
-		System.out.println("transform "+name);
+	static void transform(String name, ByteList buf) {
 		Context ctx = new Context(name, buf);
 		boolean changed = false;
 		for (int i = 0; i < transformers.size(); i++) {

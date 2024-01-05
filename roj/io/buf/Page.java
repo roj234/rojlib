@@ -17,8 +17,7 @@ import static roj.text.TextUtil.scaledNumber1024;
  * @since 2023/11/7 0007 11:32
  */
 public class Page {
-	static final byte LONG_SHIFT = 6;
-	static final byte MINIMUM_SHIFT = 3;
+	static final byte LONG_SHIFT = 6, MINIMUM_SHIFT = 3;
 	public static final long MINIMUM_MASK = (1L << MINIMUM_SHIFT) - 1;
 
 	static final char BITMAP_FREE = 'o', BITMAP_USED = '1', BITMAP_SUBPAGE = 'S', BITMAP_PREFIX = 'p';
@@ -27,31 +26,30 @@ public class Page {
 	public interface MemoryMover { void moveMemory(long oldPos, long newPos, long len); }
 
 	// 不要用非Public的方法
-	public static Page create(long memory) {
-		int targetDepth = Long.numberOfTrailingZeros(MathUtils.getMin2PowerOf(memory)) - LONG_SHIFT;
+	public static Page create(long capacity) {
+		if (capacity < 1 << (MINIMUM_SHIFT+LONG_SHIFT))
+			throw new IllegalArgumentException("Capacity("+capacity+") too small");
+
+		int targetDepth = Long.numberOfTrailingZeros(MathUtils.getMin2PowerOf(capacity)) - LONG_SHIFT;
 		int i = MINIMUM_SHIFT;
 		while (i < targetDepth) i += LONG_SHIFT;
 
-		return new PageEx(i,  memory, false);
+		return new PageEx(i,  capacity, false);
 	}
 
 	// 节约内存
 	// Bitset: 8byte / 512B
-	// Page:  22byte / 512B :: 12 + 8 + 1 + 1
+	// Page:  21byte / 512B :: 12 + 8 + 1
 	static final long[] MASKS = new long[64];
 	static {
 		for (int i = 0; i < 64; i++)
 			MASKS[i] = (1L << i) - 1;
 	}
 
-	final byte SHIFT, childId;
-
+	final byte childId;
 	long bitmap;
 
-	Page(int shift, int childId) {
-		this.SHIFT = (byte) shift;
-		this.childId = (byte) childId;
-	}
+	Page(int childId) { this.childId = (byte) childId; }
 
 	@Override
 	public final String toString() {
@@ -59,7 +57,7 @@ public class Page {
 		return toString(sb, 0).toStringAndFree();
 	}
 	CharList toString(CharList sb, int depth) {
-		sb.append("[ depth = ").append(SHIFT).append(" (min)\n");
+		sb.append("[ depth = "+MINIMUM_SHIFT+" (min)\n");
 
 		for (int i = 0; i < depth; i++) sb.append(' ');
 		scaledNumber1024(sb.append("  usage = "), usedSpace());
@@ -117,7 +115,7 @@ public class Page {
 	}
 
 	long malloc(long len) {
-		int blocks = (int) ((len+MASKS[SHIFT]) >>> SHIFT);
+		int blocks = (int) ((len+MASKS[MINIMUM_SHIFT]) >>> MINIMUM_SHIFT);
 		assert blocks <= 64;
 		long flag = blocks == 64 ? -1L : (1L << blocks)-1;
 
@@ -129,11 +127,11 @@ public class Page {
 		}
 
 		bitmap |= flag;
-		return offset << SHIFT;
+		return (long) offset << MINIMUM_SHIFT;
 	}
 	boolean malloc(long off, long len) {
-		int bitFrom = (int) (off >>> SHIFT);
-		int bitTo = (int) ((off+len+MASKS[SHIFT]) >>> SHIFT);
+		int bitFrom = (int) (off >>> MINIMUM_SHIFT);
+		int bitTo = (int) ((off+len+MASKS[MINIMUM_SHIFT]) >>> MINIMUM_SHIFT);
 
 		long flag = BIT(bitFrom, bitTo);
 		if ((bitmap&flag) != 0) return false;
@@ -142,8 +140,8 @@ public class Page {
 		return true;
 	}
 	void mfree(long off, long len) {
-		int bitFrom = (int) (off >>> SHIFT);
-		int bitTo = (int) ((off+len+MASKS[SHIFT]) >>> SHIFT);
+		int bitFrom = (int) (off >>> MINIMUM_SHIFT);
+		int bitTo = (int) ((off+len+MASKS[MINIMUM_SHIFT]) >>> MINIMUM_SHIFT);
 
 		long flag = BIT(bitFrom, bitTo);
 		assert ((bitmap)&flag) == flag : Long.toBinaryString(bitmap)+" & ~BIT["+bitFrom+", "+bitTo+"): space not allocated";
@@ -151,12 +149,12 @@ public class Page {
 		bitmap ^= flag;
 	}
 
-	public long usedSpace() { return Long.bitCount(bitmap) << SHIFT; }
-	public long freeSpace() { return (64-Long.bitCount(bitmap)) << SHIFT; }
-	public long totalSpace() { return 1L << (SHIFT+6); }
+	public long usedSpace() { return (long) Long.bitCount(bitmap) << MINIMUM_SHIFT; }
+	public long freeSpace() { return (long) (64 - Long.bitCount(bitmap)) << MINIMUM_SHIFT; }
+	public long totalSpace() { return 1L << (MINIMUM_SHIFT+LONG_SHIFT); }
 
-	long headEmpty() { return Long.numberOfTrailingZeros(bitmap) << SHIFT; }
-	long tailEmpty() { return Long.numberOfLeadingZeros(bitmap) << SHIFT; }
+	long headEmpty() { return (long) Long.numberOfTrailingZeros(bitmap) << MINIMUM_SHIFT; }
+	long tailEmpty() { return (long) Long.numberOfLeadingZeros(bitmap) << MINIMUM_SHIFT; }
 
 	boolean validate() { return true; }
 
@@ -175,25 +173,27 @@ public class Page {
 		long map = bitmap;
 		while (map != 0) {
 			if ((map & 1) != state) {
-				addLong(list, off + ((long)i << SHIFT));
+				addLong(list, off + ((long)i << MINIMUM_SHIFT));
 				state ^= 1;
 			}
 
 			map >>>= 1;
 			i++;
 		}
-		if (state == 1) addLong(list, off + ((long)i << SHIFT));
+		if (state == 1) addLong(list, off + ((long)i << MINIMUM_SHIFT));
 	}
 	static void addLong(IntList l, long v) {
 		int size = l.size();
 		l.ensureCapacity(2+size*2);
-		u.putLong(l.getRawArray(), (long)Unsafe.ARRAY_INT_BASE_OFFSET+4*size, v);
+		u.putLong(l.getRawArray(), Unsafe.ARRAY_INT_BASE_OFFSET+4L*size, v);
 		l.setSize(size+2);
 	}
-	static long getLong(IntList l, int i) { return u.getLong(l.getRawArray(), (long)Unsafe.ARRAY_INT_BASE_OFFSET+4*i); }
+	static long getLong(IntList l, int i) { return u.getLong(l.getRawArray(), Unsafe.ARRAY_INT_BASE_OFFSET+4L*i); }
 
 	// 60bytes
 	static final class PageEx extends Page {
+		final byte SHIFT;
+
 		private long splitBitmap;
 
 		private static final Page[] EMPTY_PAGES = new Page[0];
@@ -209,13 +209,15 @@ public class Page {
 		private long free;
 
 		PageEx(int shift, long free, boolean _distinguish) {
-			super(shift, -1);
+			super(-1);
+			this.SHIFT = (byte) shift;
 			this.free = free;
 			this.bmpCap = (byte) ((free+MASKS[SHIFT]) >>> shift);
 		}
 		private PageEx(int shift, int childId) {
-			super(shift, childId);
-			free = 1L << (shift+6);
+			super(childId);
+			SHIFT = (byte) shift;
+			free = 1L << (shift+LONG_SHIFT);
 			bmpCap = 64;
 		}
 
@@ -533,7 +535,9 @@ public class Page {
 				}
 			}
 
-			if (free != myFree) throw new AssertionError("Excepting free bytes="+myFree+" but actual="+free);
+			if (bitmapCapacity() == 64 && free != myFree) {
+				throw new AssertionError("Excepting free bytes="+myFree+" but actual="+free);
+			}
 			return true;
 		}
 
@@ -541,11 +545,11 @@ public class Page {
 			IntList data = new IntList();
 			getBlocks(0, data);
 
-			TimSortForEveryone.sort(data.getRawArray(), Unsafe.ARRAY_INT_BASE_OFFSET, 0, data.size()/4, 16, (refA, posA, posB) -> {
+			TimSortForEveryone.sort(0, data.size()/4, (refA, posA, posB) -> {
 				long a = u.getLong(refA, posA); // [offset, length]
 				long b = u.getLong(posB);
 				return Long.compare(a, b);
-			});
+			}, data.getRawArray(), Unsafe.ARRAY_INT_BASE_OFFSET, 16);
 
 			long off = 0;
 			for (int i = 0; i < data.size();) {
@@ -613,9 +617,9 @@ public class Page {
 			if (childCount > i) System.arraycopy(child, i, child, i+1, childCount-i);
 			childCount++;
 
-			int nextDepth = SHIFT-6;
+			int nextDepth = SHIFT-LONG_SHIFT;
 			assert nextDepth >= MINIMUM_SHIFT : "invalid tree depth "+nextDepth;
-			Page p = nextDepth > MINIMUM_SHIFT ? new PageEx(nextDepth, blockId) : new Page(nextDepth, blockId);
+			Page p = nextDepth > MINIMUM_SHIFT ? new PageEx(nextDepth, blockId) : new Page(blockId);
 
 			long myId = 1L << blockId;
 			// auto split (目前只有一种可能: free when simple=DISABLED)

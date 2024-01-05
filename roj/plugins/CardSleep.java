@@ -72,13 +72,13 @@ public class CardSleep extends JFrame {
 
 		@Override
 		protected void onDisable() {
-			instance.dispose();
-
 			Process p = monitor;
 			if (p != null) p.destroy();
 
 			monitorRead.shutdown();
 			monitorRead = null;
+
+			instance.dispose();
 			instance = null;
 		}
 	}
@@ -338,7 +338,7 @@ public class CardSleep extends JFrame {
 			SimpleList<String> args = new SimpleList<>();
 			args.add("nvidia-smi");
 			args.add("--query-gpu=utilization.gpu,clocks.current.graphics,utilization.memory,clocks.current.memory,temperature.gpu,power.draw.instant");
-			args.add("-i="+ myCard.uuid);
+			args.add("-i="+myCard.uuid);
 			args.add("--format=csv,noheader,nounits");
 			args.add("-lms="+uiCheckInterval.getValue());
 			ProcessBuilder pb = new ProcessBuilder().command(args).redirectOutput(ProcessBuilder.Redirect.PIPE);

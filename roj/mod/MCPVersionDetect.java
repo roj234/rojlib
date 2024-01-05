@@ -52,14 +52,14 @@ public class MCPVersionDetect {
 		String version = cfg.get("version").toString();
 		String mcpVersion = detectVersion(version);
 		if (mcpVersion == version) {
-			String newMcp = CLIUtil.userInput("不知道MCP的版本号,使用"+version+"需修改请输入并按回车: ").trim();
+			String newMcp = CLIUtil.readString("不知道MCP的版本号,使用"+version+"需修改请输入并按回车: ").trim();
 			if (newMcp.length() > 0) mcpVersion = newMcp;
 		}
 		String stable = getStableMCPVersion(mcpVersion);
 		if (stable == null || Shared.DEBUG) {
 			CLIUtil.info("stable-123 写为 !123 (稳定版)  snapshot-20201221 缩写为 20201221 (快照版) ");
 
-			String subVersion = CLIUtil.userInput("MCP").trim();
+			String subVersion = CLIUtil.readString("MCP").trim();
 
 			if (subVersion.startsWith("!")) {
 				cfg.put("var.mcp-kind", "stable");

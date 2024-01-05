@@ -56,6 +56,9 @@ public class ClassDefiner extends ClassLoader {
 	public Class<?> defineClass(String name, ByteList buf) throws ClassFormatError {
 		dumpClass(name, buf);
 
+		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
+		if (sm != null) buf = sm.checkDefineClass(name, buf);
+
 		int off = buf.arrayOffset()+buf.rIndex;
 		try{
 			if (def != null) {

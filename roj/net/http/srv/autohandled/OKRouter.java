@@ -1,20 +1,20 @@
 package roj.net.http.srv.autohandled;
 
 import roj.asm.Parser;
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstString;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstString;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.type.*;
-import roj.asm.util.AccessFlag;
 import roj.asm.util.AttrHelper;
-import roj.asm.util.TryCatchEntry;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.SwitchSegment;
+import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
@@ -24,7 +24,6 @@ import roj.config.JSONParser;
 import roj.config.serial.CAdapter;
 import roj.config.serial.SerializerFactory;
 import roj.config.serial.Serializers;
-import roj.mapper.ParamNameMapper;
 import roj.math.MutableInt;
 import roj.net.http.Action;
 import roj.net.http.IllegalRequestException;
@@ -81,7 +80,7 @@ public class OKRouter implements Router {
 		hndInst.newField(0, "$methodId", "I");
 		hndInst.newField(0, "$handler", TypeHelper.class2asm(o.getClass()));
 
-		CodeWriter cw = hndInst.newMethod(AccessFlag.PUBLIC, "copyWith", COPYWITH_DESC);
+		CodeWriter cw = hndInst.newMethod(ACC_PUBLIC, "copyWith", COPYWITH_DESC);
 		cw.visitSize(2, 3);
 
 		cw.newObject(hndInst.name);
@@ -100,7 +99,7 @@ public class OKRouter implements Router {
 		cw.one(ARETURN);
 		cw.finish();
 
-		cw = hndInst.newMethod(AccessFlag.PUBLIC, "invoke", INVOKE_DESC);
+		cw = hndInst.newMethod(ACC_PUBLIC, "invoke", INVOKE_DESC);
 		cw.visitSize(5, 4);
 
 		cw.one(ALOAD_0);
@@ -293,18 +292,22 @@ public class OKRouter implements Router {
 		aset.prec = new Dispatcher[] {
 			(req, srv, extra) -> {
 				try {
-					router.checkHeader(req, (PostSetting) extra);
+					router.checkHeader(req.subDirectory(path), (PostSetting) extra);
 				} catch (Exception e) {
 					Helpers.athrow(e);
+				} finally {
+					req.resetPath();
 				}
 				return null;
 			}
 		};
 		aset.req = (req, srv, extra) -> {
 			try {
-				return router.response(req, srv);
+				return router.response(req.subDirectory(path), srv);
 			} catch (Exception e) {
 				Helpers.athrow(e);
+			} finally {
+				req.resetPath();
 			}
 			return null;
 		};

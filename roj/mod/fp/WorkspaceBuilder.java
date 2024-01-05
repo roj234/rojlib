@@ -1,10 +1,10 @@
 package roj.mod.fp;
 
 import roj.archive.zip.ZipArchive;
+import roj.asmx.mapper.Mapper;
 import roj.collect.IntMap;
 import roj.collect.TrieTree;
 import roj.concurrent.task.ITask;
-import roj.mapper.Mapper;
 import roj.mod.Shared;
 import roj.mod.mapping.MappingFormat;
 import roj.ui.CLIUtil;

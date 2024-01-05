@@ -1,8 +1,9 @@
 package roj.reflect;
 
+import roj.ReferenceByPrecompiledClass;
+import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.util.Helpers;
@@ -21,7 +22,9 @@ import static roj.asm.type.Type.CLASS;
  * @author Roj234
  * @since 2021/6/17 19:51
  */
+@ReferenceByPrecompiledClass
 public final class ReflectionUtils {
+	@ReferenceByPrecompiledClass
 	public static final Unsafe u = getUnsafe();
 	private static Unsafe getUnsafe() {
 		try {
@@ -38,7 +41,7 @@ public final class ReflectionUtils {
 			Field field = type.getDeclaredField(fieldName);
 			ILSecurityManager sm = ILSecurityManager.getSecurityManager();
 			if (sm != null && !sm.checkAccess(field)) throw new SecurityException("access denied");
-			return (field.getModifiers() & AccessFlag.STATIC) == 0 ? u.objectFieldOffset(field) : u.staticFieldOffset(field);
+			return (field.getModifiers() & Opcodes.ACC_STATIC) == 0 ? u.objectFieldOffset(field) : u.staticFieldOffset(field);
 		} catch (Exception e) {
 			Helpers.athrow(e);
 			return 0;
@@ -136,6 +139,40 @@ public final class ReflectionUtils {
 				StringBuilder s = new StringBuilder(Type.toString((byte) c));
 				s.setCharAt(0, Character.toUpperCase(s.charAt(0)));
 				return s.toString();
+		}
+	}
+
+	private static boolean smRemoved = JAVA_VERSION > 17;
+	public static Class<?> getCallerClass(int backward) {
+		if (!smRemoved) {
+			try {
+				return Tracer.INSTANCE.getCallerClass(backward+1);
+			} catch (Exception e) {
+				smRemoved = true;
+			}
+		}
+
+		try {
+			StackTraceElement[] trace = new Throwable().getStackTrace();
+			return trace.length < backward ? null : Class.forName(trace[backward].getClassName());
+		} catch (ClassNotFoundException e) {
+			return null;
+		}
+	}
+	private static final class Tracer extends SecurityManager {
+		// avoid security manager creation warning
+		static final Tracer INSTANCE;
+		static {
+			try {
+				INSTANCE = (Tracer) u.allocateInstance(Tracer.class);
+			} catch (InstantiationException e) {
+				throw new RuntimeException(e);
+			}
+		}
+
+		public Class<?> getCallerClass(int backward) {
+			Class<?>[] ctx = super.getClassContext();
+			return ctx.length < backward ? null : ctx[backward];
 		}
 	}
 }

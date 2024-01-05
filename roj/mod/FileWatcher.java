@@ -17,9 +17,8 @@ import java.util.Set;
 import java.util.concurrent.locks.LockSupport;
 
 import static java.nio.file.StandardWatchEventKinds.*;
-import static roj.mapper.Mapper.DONT_LOAD_PREFIX;
+import static roj.asmx.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.mod.Shared.BASE;
-import static roj.mod.Shared.DEBUG;
 
 /**
  * Project file change watcher
@@ -110,14 +109,7 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 						String name = event.context().toString().toLowerCase();
 						if (path.startsWith(libPath)) {
 							if (!name.startsWith(DONT_LOAD_PREFIX) && (name.endsWith(".zip") || name.endsWith(".jar"))) {
-
-								if (reloadMapTask != null) reloadMapTask.cancel();
-								reloadMapTask = Shared.PeriodicTask.delay(() -> {
-									if (DEBUG) CLIUtil.warning("清除映射表缓存");
-									Shared.mapperFwd.clear();
-									ATHelper.close();
-								}, 2000);
-
+								Shared.mappingIsClean = false;
 								break;
 							}
 						}
@@ -142,13 +134,20 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 						break x;
 					}
 					case "ENTRY_MODIFY":
-					case "ENTRY_CREATE": {
-						String id = key.watchable().toString()+File.separatorChar+event.context();
+					case "ENTRY_CREATE":
+					case "ENTRY_DELETE": {
+						String id = key.watchable().toString() + File.separatorChar + event.context();
 						if (new File(id).isDirectory()) break;
 						if (csm.x == ID_SRC) {
 							if (!id.endsWith(".java")) break x;
 						}
-						synchronized (s) { s.add(id); }
+						synchronized (s) {
+							if (name.equals("ENTRY_DELETE")) {
+								s.remove(id);
+							} else {
+								s.add(id);
+							}
+						}
 						break;
 					}
 				}

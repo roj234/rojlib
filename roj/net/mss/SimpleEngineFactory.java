@@ -77,6 +77,7 @@ public final class SimpleEngineFactory implements Supplier<MSSEngine> {
 		return s;
 	}
 
+	@Deprecated
 	public static SimpleEngineFactory fromKeystore(InputStream ks, char[] pass, String keyType) throws IOException, GeneralSecurityException {
 		KeyManager[] kmf = SecureUtil.makeKeyManagers(ks, pass);
 

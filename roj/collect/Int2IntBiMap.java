@@ -13,19 +13,14 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Gene
 	}
 
 	public static class Entry extends Int2IntMap.Entry {
-		protected Entry(int k, int v) {
-			super(k, v);
-		}
+		protected Entry(int k, int v) { super(k, v); }
 
 		protected Entry valueNext;
-
 		@Override
-		public Entry __next() {
-			return (Entry) next;
-		}
+		public Entry __next() { return (Entry) next; }
 	}
 
-	static final class Inverse extends AbstractMap<Integer, Integer> implements Flippable<Integer, Integer> {
+	public static final class Inverse extends AbstractMap<Integer, Integer> implements Flippable<Integer, Integer> {
 		private final Int2IntBiMap parent;
 
 		private Inverse(Int2IntBiMap parent) {
@@ -94,7 +89,7 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Gene
 			@Nonnull
 			public final Iterator<Map.Entry<Integer, Integer>> iterator() {
 				if (isEmpty()) {return Collections.emptyIterator();}
-				EntryItr<Int2IntMap.Entry> dlg = new EntryItr<>(map);
+				_Generic_EntryItr<Int2IntMap.Entry> dlg = new _Generic_EntryItr<>(map);
 				return new AbstractIterator<Entry<Integer, Integer>>() {
 
 					@Override
@@ -176,7 +171,7 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Gene
 	public Set<Map.Entry<Integer, Integer>> entrySet() { return Helpers.cast(selfEntrySet()); }
 
 	@Override
-	public _Generic_Entry<?>[] __entries() { return entries; }
+	public _Generic_Entry[] __entries() { return entries; }
 	@Override
 	public void __remove(Int2IntMap.Entry vEntry) { removeEntry((Entry) vEntry); }
 

@@ -389,10 +389,10 @@ public class CharList implements CharSequence, Appender {
 	public final CharList pad(char c, int off, int count) {
 		if (count > 0) {
 			ensureCapacity(len+count);
-			System.arraycopy(list, off, list, off+count, len-off);
+			if (off != len) System.arraycopy(list, off, list, off+count, len-off);
 			len += count;
 			count += off;
-			for (int i = off; i < count; i++) list[i] = c;
+			while (off < count) list[off++] = c;
 		}
 
 		return this;

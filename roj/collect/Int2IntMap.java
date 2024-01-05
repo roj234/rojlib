@@ -34,7 +34,7 @@ public class Int2IntMap extends AbstractMap<Integer, Integer> implements _Generi
 		return oldV;
 	}
 
-	public static class Entry implements _Generic_Entry<Entry>, Map.Entry<Integer, Integer> {
+	public static class Entry implements _Generic_Entry, Map.Entry<Integer, Integer> {
 		protected int k;
 		public int v;
 
@@ -44,47 +44,28 @@ public class Int2IntMap extends AbstractMap<Integer, Integer> implements _Generi
 		}
 
 		@Deprecated
-		public Integer getKey() {
-			return k;
-		}
+		public Integer getKey() { return k; }
+		public int getIntKey() { return k; }
 		@Deprecated
-		public Integer getValue() {
-			return v;
-		}
+		public Integer getValue() { return v; }
 		@Deprecated
-		public Integer setValue(Integer value) {
-			return setIntValue(value);
-		}
+		public Integer setValue(Integer value) { return setIntValue(value); }
 
-		public int getIntKey() {
-			return k;
-		}
+		public void _SetKey(int k) { this.k = k; }
 
-		public int getIntValue() {
-			return v;
-		}
-
+		public int getIntValue() { return v; }
 		public int setIntValue(int i) {
 			int v = this.v;
 			this.v = i;
 			return v;
 		}
 
-		public void Internal_Set_Key(int k) {
-			this.k = k;
-		}
-
 		protected Entry next;
+		@Override
+		public Entry __next() { return next; }
 
 		@Override
-		public String toString() {
-			return "Entry{" + k + "=" + v + '}';
-		}
-
-		@Override
-		public Entry __next() {
-			return next;
-		}
+		public String toString() { return "Entry{"+k+'='+v+'}'; }
 	}
 
 	protected Entry[] entries;
@@ -120,7 +101,7 @@ public class Int2IntMap extends AbstractMap<Integer, Integer> implements _Generi
 	public Integer put(Integer key, Integer value) { return putInt(key, value); }
 	public Integer getOrDefault(Object key, Integer def) { return getOrDefaultInt((int) key, def); }
 
-	public _Generic_Entry<?>[] __entries() { return entries; }
+	public _Generic_Entry[] __entries() { return entries; }
 	public void __remove(Entry entry) { remove(entry.k); }
 
 	protected void resize() {

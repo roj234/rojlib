@@ -1,6 +1,6 @@
 package roj.asm.visitor;
 
-import roj.asm.cst.ConstantPool;
+import roj.asm.cp.ConstantPool;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.util.ByteList;

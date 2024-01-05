@@ -15,6 +15,8 @@ import java.io.InputStream;
 public class NativeLibrary {
 	public static final boolean IN_DEV = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\java").isDirectory();
 	public static final boolean loaded;
+	// only use clinit
+	public static boolean loaded() { return loaded; }
 
 	static {
 		boolean t;

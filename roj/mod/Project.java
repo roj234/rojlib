@@ -2,6 +2,7 @@ package roj.mod;
 
 import roj.archive.ArchiveConstants;
 import roj.archive.zip.ZipOutput;
+import roj.asmx.mapper.Mapper;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
@@ -13,7 +14,6 @@ import roj.config.data.CMapping;
 import roj.config.data.CString;
 import roj.dev.Compiler;
 import roj.io.IOUtil;
-import roj.mapper.Mapper;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
@@ -169,14 +169,14 @@ public final class Project extends FileConfig {
 		}
 	}
 
-	public AsyncTask<MyHashSet<String>> getResourceTask() {
+	public AsyncTask<MyHashSet<String>> getResourceTask(boolean inc) {
 		return new AsyncTask<MyHashSet<String>>() {
 			@Override
 			protected MyHashSet<String> invoke() {
 				boolean prevCompress = dstFile.isCompress();
 				block: {
 					// 检测是否第一次运行 关机状态无法检测文件变化
-					if (state != null) {
+					if (state != null && inc) {
 						Set<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
 						if (!set.contains(null)) {
 							synchronized (set) {

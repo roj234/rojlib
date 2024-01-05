@@ -1,10 +1,13 @@
 package roj.ui.terminal;
 
 import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.config.word.Word;
+import roj.io.IOUtil;
 import roj.reflect.EnumHelper;
+import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.AnsiString;
 import roj.ui.CLIUtil;
@@ -94,8 +97,9 @@ public interface Argument<T> {
 	}
 	static <T extends Enum<T>> Argument<T> enumeration(Class<T> type) { return oneOf(Helpers.cast(EnumHelper.cDirAcc.enumConstantDirectory(type))); }
 	static <T> Argument<T> oneOf(Map<String, T> map) { return new ArgSetOf<>(0, map); }
-	static <T> Argument<T> someOf(Map<String, T> map) { return new ArgSetOf<>(1, map); }
-	static <T> Argument<T> anyOf(Map<String, T> map) { return new ArgSetOf<>(2, map); }
+	static Argument<String> suggest(Map<String, String> map) { return new ArgSetOf<>(1, map); }
+	static <T> Argument<T> someOf(Map<String, T> map) { return new ArgSetOf<>(2, map); }
+	static <T> Argument<T> anyOf(Map<String, T> map) { return new ArgSetOf<>(3, map); }
 	class ArgSetOf<T> implements Argument<T> {
 		private final byte mode;
 		protected final Map<String, T> choice;
@@ -108,7 +112,7 @@ public interface Argument<T> {
 		@Override
 		public T parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 			updateChoices();
-			if (mode!=0) {
+			if (mode > 1) {
 				List<T> arr = new SimpleList<>();
 				while (true) {
 					Word w = ctx.peekWord();
@@ -118,7 +122,7 @@ public interface Argument<T> {
 							return null;
 						}
 
-						if (mode == 1 && arr.isEmpty()) throw ctx.error("该参数"+type()+"不能为空");
+						if (mode == 2 && arr.isEmpty()) throw ctx.error("该参数"+type()+"不能为空");
 						return Helpers.cast(arr);
 					}
 					arr.add(choice.get(ctx.nextString()));
@@ -131,7 +135,8 @@ public interface Argument<T> {
 						complete(val, completions);
 						return null;
 					}
-					throw ctx.error("选择不存在");
+					if (mode == 0) throw ctx.error("选择不存在");
+					else return Helpers.cast(val);
 				}
 				return result;
 			}
@@ -147,9 +152,24 @@ public interface Argument<T> {
 		public void example(List<Completion> completions) { updateChoices(); for (String name : choice.keySet()) completions.add(new Completion(name)); }
 
 		@Override
-		public String type() { updateChoices(); return (mode==2?"anyOf":mode==1?"someOf":"oneOf")+"('"+TextUtil.join(choice.keySet(), "', '")+"')"; }
+		public String type() { updateChoices(); return (mode==3?"anyOf":mode==2?"someOf":mode==1?"suggest":"oneOf")+"('"+TextUtil.join(choice.keySet(), "', '")+"')"; }
 
 		protected void updateChoices() {}
+	}
+	static Argument<String> rest() {
+		return (ctx, completions) -> {
+			if (ctx.peekWord() == null) return "";
+
+			CharList sb = IOUtil.getSharedCharBuf();
+			while (true) {
+				Word w = ctx.nextWord();
+				sb.append(w.val());
+				w = ctx.peekWord();
+				if (w == null) break;
+				sb.append(' ');
+			}
+			return sb.toStringAndFree();
+		};
 	}
 	static Argument<Integer> number(int min, int max) {
 		return new Argument<Integer>() {
@@ -180,12 +200,13 @@ public interface Argument<T> {
 		};
 	}
 	static Argument<Boolean> bool() {
+		final MyHashSet<String> truly = new MyHashSet<>("true", "t", "yes", "y"), falsy = new MyHashSet<>("false", "f", "no", "n");
 		return new Argument<Boolean>() {
 			@Override
 			public Boolean parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 				String s = ctx.nextUnquotedString();
-				if (s.equals("true")) return true;
-				if (s.equals("false")) return false;
+				if (truly.contains(s)) return true;
+				if (falsy.contains(s)) return false;
 
 				if (completions != null) {
 					if ("true".startsWith(s)) completions.add(new Completion("true".substring(s.length())));

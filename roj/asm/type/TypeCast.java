@@ -2,11 +2,9 @@ package roj.asm.type;
 
 import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
-import roj.asm.util.AccessFlag;
 import roj.collect.Int2IntMap;
 import roj.collect.LFUCache;
 import roj.collect.SimpleList;
-import roj.io.IOUtil;
 import roj.lavac.parser.MethodWriterL;
 import roj.text.CharList;
 
@@ -164,7 +162,7 @@ public final class TypeCast {
 		return to_list;
 	}
 	private static IType composite_sub(Generic gg) {
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 
 		sb.append(gg.owner);
 
@@ -280,7 +278,7 @@ public final class TypeCast {
 			to = tmp;
 		}
 
-		CharList key = IOUtil.ddLayeredCharBuf().append(from.owner).append(';').append(to.owner);
+		CharList key = new CharList().append(from.owner).append(';').append(to.owner);
 		TypeCast v = ClassConvertCache.get(key);
 		if (v == null) {
 			v = checkInheritable(from, to, klassEnv);
@@ -299,9 +297,9 @@ public final class TypeCast {
 
 		if (fromClass == toClass) return RESULT(UPCAST);
 
-		if ((toClass.modifier() & AccessFlag.FINAL) == 0) {
+		if ((toClass.modifier() & Opcodes.ACC_FINAL) == 0) {
 			// 接口
-			boolean itf = (toClass.modifier() & AccessFlag.INTERFACE) != 0;
+			boolean itf = (toClass.modifier() & Opcodes.ACC_INTERFACE) != 0;
 			if (itf) {
 				if (fromClass.interfaces().contains(to.owner)) return RESULT(UPCAST);
 			}
@@ -319,7 +317,7 @@ public final class TypeCast {
 			}
 		}
 
-		return (fromClass.modifier() & AccessFlag.FINAL) == 0 ? RESULT(E_CAST) : RESULT(E_NEVER);
+		return (fromClass.modifier() & Opcodes.ACC_FINAL) == 0 ? RESULT(E_CAST) : RESULT(E_NEVER);
 	}
 	private static boolean isWrapperFor(Type self, int type) {
 		if (self.array() == 0 && self.owner != null) {

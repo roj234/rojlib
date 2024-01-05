@@ -1,7 +1,6 @@
 package roj.util;
 
 import roj.io.CorruptedInputException;
-import roj.io.buf.NativeArray;
 
 import java.io.IOException;
 
@@ -247,7 +246,7 @@ public class BsDiff {
 				 .putIntLE(scan - lastScan - lenF - lenB)
 				 .putIntLE(pos - lastPos - lenF - lenB);
 
-			NativeArray range = patch.byteRangeW(lenF);
+			ArrayRef range = patch.byteRangeW(lenF);
 			for (int i = 0; i < lenF; ++i) range.set(i, toPositive(left[lastPos + i]) - toPositive(right[lastScan + i]));
 
 			if (overlap == -1) patch.put(right, lastScan + lenF, scan - lastScan - lenF - lenB);

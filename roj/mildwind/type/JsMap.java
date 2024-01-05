@@ -38,9 +38,11 @@ public class JsMap extends AbstractJsMap implements JsObject {
 
 	public final JsObject __proto__() { return __proto__ == null ? JsNull.NULL : __proto__; }
 
+	@Deprecated
 	public void defineGS(Object name, JsObject getter, JsObject setter, int flag) {
 
 	}
+	@Deprecated
 	public void defineVal(Object name, JsObject value, int flag) {
 
 	}

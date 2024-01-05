@@ -1,6 +1,7 @@
 package roj.mildwind.parser.ast;
 
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsObject;
 import roj.mildwind.type.Type;
@@ -25,7 +26,7 @@ final class AsNumber implements Expression {
 	public JsObject constVal() { return right.constVal().op_inc(0); }
 
 	@Override
-	public JsObject compute(JsObject ctx) { return right.compute(ctx).op_inc(0); }
+	public JsObject compute(JsContext ctx) { return right.compute(ctx).op_inc(0); }
 
 	public Type type() { return isConstant() ? right.constVal().type() == Type.INT ? Type.INT : Type.DOUBLE : Type.OBJECT; }
 }

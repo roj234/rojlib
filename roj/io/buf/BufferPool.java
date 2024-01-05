@@ -2,13 +2,12 @@ package roj.io.buf;
 
 import roj.collect.IntMap;
 import roj.concurrent.SegmentReadWriteLock;
+import roj.concurrent.task.ITask;
+import roj.concurrent.timing.Scheduler;
 import roj.util.*;
 import sun.misc.Unsafe;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import java.lang.ref.WeakReference;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
@@ -23,19 +22,13 @@ import static roj.util.ArrayCache.DEBUG_DISABLE_CACHE;
  * @since 2022/6/1 7:06
  */
 public final class BufferPool {
-	private static final int TL_HEAP_INITIAL = 65536, TL_HEAP_MAX = 262144, TL_HEAP_INCR = 65536;
-	private static final int TL_DIRECT_INITIAL = 65536, TL_DIRECT_MAX = 262144, TL_DIRECT_INCR = 65536;
+	// 数据瞎填的
+	// 另外req >= CAP+INCR也不会用
+	private static final int TL_HEAP_INITIAL = 65536, TL_HEAP_INCR = 65536, TL_HEAP_MAX = 16777216, TL_HEAP_THRES = 131072;
+	private static final int TL_DIRECT_INITIAL = 65536, TL_DIRECT_INCR = 65536, TL_DIRECT_MAX = 16777216, TL_DIRECT_THRES = 131072;
 
-	private static final int GLOBAL_HEAP_SIZE = 1048576, GLOBAL_DIRECT_SIZE = 4194304;
+	private static final int GLOBAL_HEAP_SIZE = 4194304, GLOBAL_DIRECT_SIZE = 4194304;
 	private static final int UNPOOLED_SIZE = 10485760, DEFAULT_KEEP_BEFORE = 16;
-
-	// NOT FINISHED
-	@Retention(RetentionPolicy.CLASS)
-	@Target(ElementType.LOCAL_VARIABLE)
-	public @interface AutoKeepBefore {
-		int max() default 16;
-		int slideAvgWindow() default 0;
-	}
 
 	private static final class PooledDirectBuf extends DirectByteList.Slice implements PooledBuffer {
 		private static final long u_pool = fieldOffset(PooledDirectBuf.class, "pool");
@@ -101,7 +94,10 @@ public final class BufferPool {
 
 	private final LeakDetector ldt = LeakDetector.create();
 
-	private final int heapIncr, heapMax, directIncr, directMax;
+	private final int
+		heapInit, heapIncr, heapThreshold,
+		directInit, directIncr, directThreshold;
+	private final long heapMax, directMax;
 
 	private final SegmentReadWriteLock lock = new SegmentReadWriteLock();
 	private Page pDirect, pHeap;
@@ -112,22 +108,75 @@ public final class BufferPool {
 	private final PooledBuffer[] directShell, heapShell;
 	private int directShellLen, heapShellLen;
 
+	private long directTimeStamp, heapTimestamp;
+	private boolean hasTask;
+	private final int maxStall;
+	private final ITask stallReleaseTask;
 
-	private final boolean useGlobal;
+	private BufferPool() {
+		this(TL_DIRECT_INITIAL, TL_DIRECT_INCR, TL_DIRECT_MAX, TL_DIRECT_THRES,
+		TL_HEAP_INITIAL, TL_HEAP_INCR, TL_HEAP_MAX, TL_HEAP_THRES, 15, 60000); }
 
-	private BufferPool() { this(TL_DIRECT_INITIAL, TL_DIRECT_INCR, TL_DIRECT_MAX, TL_HEAP_INITIAL, TL_HEAP_INCR, TL_HEAP_MAX, 15, true); }
-	public BufferPool(int directInit, int directIncr, int directMax,
-					  int heapInit, int heapIncr, int heapMax,
-					  int shellSize, boolean useGlobal) {
-		this.pHeap = Page.create(heapInit);
+	public BufferPool(int directInit, int directIncr, int directMax, int directGlobalThreshold,
+					  int heapInit, int heapIncr, int heapMax, int heapGlobalThreshold,
+					  int shellSize, int maxStall) {
+		this.directInit = directInit;
+		this.heapInit = heapInit;
+
+		this.pHeap = heapInit <= 0 ? null : Page.create(heapInit);
 		this.heapIncr = heapIncr;
 		this.heapMax = heapMax;
-		this.pDirect = Page.create(directInit);
+		this.heapThreshold = heapGlobalThreshold;
+		this.pDirect = directInit <= 0 ? null : Page.create(directInit);
 		this.directIncr = directIncr;
 		this.directMax = directMax;
+		this.directThreshold = directGlobalThreshold;
 		this.directShell = directInit <= 0 ? null : new PooledBuffer[shellSize];
 		this.heapShell = heapInit <= 0 ? null : new PooledBuffer[shellSize];
-		this.useGlobal = useGlobal;
+
+		this.maxStall = maxStall;
+		if (maxStall > 0) {
+			stallReleaseTask = getTask(new WeakReference<>(this));
+		} else {
+			stallReleaseTask = null;
+			hasTask = true;
+		}
+	}
+
+	private void scheduleClean() { Scheduler.getDefaultScheduler().delay(stallReleaseTask, maxStall); hasTask = true; }
+	private static ITask getTask(WeakReference<BufferPool> pool) {
+		return () -> {
+			BufferPool p = pool.get();
+			if (p == null) return;
+
+			long yy = System.currentTimeMillis();
+			if (p.directRef != null && p.pDirect.usedSpace() == 0 && yy - p.directTimeStamp > p.maxStall) {
+				p.lock.lock(0);
+				try {
+					if (p.pDirect.usedSpace() == 0) {
+						p.directRef.release();
+						p.directRef = null;
+						p.pDirect = new Page(Math.min(p.directInit, (int) p.pDirect.totalSpace() - p.directIncr));
+					}
+				} finally {
+					p.lock.unlock(0);
+				}
+			}
+			if (p.heap != null && p.pHeap.usedSpace() == 0 && yy - p.heapTimestamp > p.maxStall) {
+				p.lock.lock(1);
+				try {
+					if (p.pHeap.usedSpace() == 0) {
+						p.heap = null;
+						p.pHeap = new Page(Math.min(p.heapInit, (int) p.pHeap.totalSpace() - p.heapIncr));
+					}
+				} finally {
+					p.lock.unlock(1);
+				}
+			}
+
+			if (p.directRef == null && p.heap == null) p.hasTask = false;
+			else p.scheduleClean();
+		};
 	}
 
 	public static DynByteBuf buffer(boolean direct, int cap) { return localPool().allocate(direct, cap); }
@@ -139,13 +188,16 @@ public final class BufferPool {
 		cap += keepBefore;
 
 		PooledBuffer buf;
-		boolean large = useGlobal && cap >= (direct ? directIncr : heapIncr);
+		int threshold = direct ? directThreshold : heapThreshold;
+		boolean large = threshold > 0 && cap >= threshold;
 		if (direct) {
 			buf = getShell(directShell, u_directShellLen);
 			if (buf == null) buf = new PooledDirectBuf();
 			buf.setKeepBefore(keepBefore);
 
 			if (allocDirect(large, cap, buf)) {
+				if (!hasTask) scheduleClean();
+				directTimeStamp = System.currentTimeMillis();
 				buf.pool(this);
 				if (ldt != null) ldt.track(buf);
 				return (DynByteBuf) buf;
@@ -156,6 +208,8 @@ public final class BufferPool {
 			buf.setKeepBefore(keepBefore);
 
 			if (allocHeap(large, cap, buf)) {
+				if (!hasTask) scheduleClean();
+				heapTimestamp = System.currentTimeMillis();
 				buf.pool(this);
 				if (ldt != null) ldt.track(buf);
 				return (DynByteBuf) buf;
@@ -183,7 +237,7 @@ public final class BufferPool {
 		if (len == 0) return null;
 
 		for (int i = array.length-1; i >= 0; i--) {
-			long o = Unsafe.ARRAY_OBJECT_BASE_OFFSET + i * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
+			long o = Unsafe.ARRAY_OBJECT_BASE_OFFSET + (long) i * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
 
 			Object b = u.getObjectVolatile(array, o);
 			if (b == null) continue;
@@ -226,21 +280,24 @@ public final class BufferPool {
 
 			if (off >= 0) {
 				NativeMemory nm = directRef;
-				sh.set(nm, directAddr+off+sh.getKeepBefore(), cap-sh.getKeepBefore());
 
 				// ensure we got the address associated with that stamp
 				if (nm == stamp) {
-					sh.page(p);
+					if (sh != null) {
+						sh.set(nm, directAddr+off+sh.getKeepBefore(), cap-sh.getKeepBefore());
+						sh.page(p);
+					}
 					return true;
 				}
 			}
 
-			if (cap > p.totalSpace()+directIncr || p.totalSpace() == directMax) break;
+			if (p.totalSpace()+cap > directMax) break;
 
 			lock.lock(0);
 			try {
 				if (pDirect == p) {
-					p = Page.create(Math.min(p.totalSpace() + directIncr, directMax));
+					long space = p.totalSpace() + (long) ((cap+directIncr-1)/directIncr)*directIncr;
+					p = Page.create(Math.min(space, directMax));
 
 					directRef = new NativeMemory((int) p.totalSpace());
 					directAddr = directRef.address();
@@ -253,7 +310,7 @@ public final class BufferPool {
 		}
 
 		try {
-			if (!useGlobal || !lgDirect.tryLock(16, TimeUnit.MILLISECONDS)) return false;
+			if (directThreshold < 0 || !lgDirect.tryLock(16, TimeUnit.MILLISECONDS)) return false;
 		} catch (InterruptedException ignored) {}
 
 		try {
@@ -305,21 +362,23 @@ public final class BufferPool {
 
 			if (off >= 0) {
 				byte[] b = heap;
-				sh.set(b, off+sh.getKeepBefore(), cap-sh.getKeepBefore());
 
 				// ensure we got the address associated with that stamp
 				if (b == stamp) {
+					sh.set(b, off+sh.getKeepBefore(), cap-sh.getKeepBefore());
 					sh.page(p);
 					return true;
 				}
 			}
 
-			if (cap > p.totalSpace()+heapIncr || p.totalSpace() == heapMax) break;
+
+			if (p.totalSpace()+cap > heapMax) break;
 
 			lock.lock(1);
 			try {
 				if (pHeap == p) {
-					p = Page.create(Math.min(p.totalSpace()+heapIncr, heapMax));
+					long space = p.totalSpace() + (long) ((cap+heapIncr-1)/heapIncr)*heapIncr;
+					p = Page.create(Math.min(space, heapMax));
 
 					heap = new byte[(int) p.totalSpace()];
 
@@ -331,7 +390,7 @@ public final class BufferPool {
 		}
 
 		try {
-			if (!useGlobal || !lgHeap.tryLock(16, TimeUnit.MILLISECONDS)) return false;
+			if (heapThreshold < 0 || !lgHeap.tryLock(16, TimeUnit.MILLISECONDS)) return false;
 		} catch (InterruptedException ignored) {}
 
 		try {

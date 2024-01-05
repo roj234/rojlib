@@ -88,7 +88,7 @@ public class ArgumentContext {
 		else {
 			try {
 				command.accept(ctx);
-			} catch (ParseException e) {
+			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}

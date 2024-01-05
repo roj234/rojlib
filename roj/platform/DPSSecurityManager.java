@@ -1,18 +1,15 @@
 package roj.platform;
 
 import roj.asm.Parser;
-import roj.asm.cst.Constant;
-import roj.asm.cst.CstClass;
-import roj.asm.cst.CstUTF;
+import roj.asm.cp.Constant;
+import roj.asm.cp.CstClass;
+import roj.asm.cp.CstUTF;
+import roj.asm.type.Desc;
 import roj.asm.type.TypeHelper;
+import roj.asm.util.ClassUtil;
 import roj.asm.util.Context;
-import roj.collect.IntMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
-import roj.collect.TrieTreeSet;
-import roj.launcher.MethodHook;
-import roj.mapper.MapUtil;
-import roj.mapper.util.Desc;
+import roj.asmx.MethodHook;
+import roj.collect.*;
 import roj.net.URIUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.ILSecurityManager;
@@ -22,7 +19,6 @@ import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.Helpers;
 import sun.misc.Unsafe;
-import sun.reflect.CallerSensitive;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -55,54 +51,54 @@ public class DPSSecurityManager extends MethodHook {
 	}
 
 	static final class SecureClassDefineIL extends ILSecurityManager {
-		public byte[] checkDefineAnonymousClass(ByteList buf) { return buf.toByteArray(); }
+		@Override
+		public ByteList checkDefineClass(String name, ByteList buf) {
+			int i = 3;
+			Class<?> caller;
+			do {
+				caller = ReflectionUtils.getCallerClass(i++);
+			} while (caller == ClassDefiner.class);
 
-		public boolean checkAccess(Field f) { return filterField(f, false, null) != null; }
-		public boolean checkInvoke(Method m) { return filterMethod(m, false, null) != null; }
-		public boolean checkConstruct(Constructor<?> c) { return filterConstructor(c, false, null) != null; }
+			PluginDescriptor pd = DefaultPluginSystem.PM.getPluginDescriptor(caller);
+			return preDefineHook(name, pd, buf);
+		}
+
+		// 0: TraceUtil
+		// 1: SecureClassDefineIL
+		// 2: roj.reflect.XX
+		// 3: real caller
+		public boolean checkAccess(Field f) { return filterField(f, false, ReflectionUtils.getCallerClass(3)) != null; }
+		public boolean checkInvoke(Method m) { return filterMethod(m, false, ReflectionUtils.getCallerClass(3)) != null; }
+		public boolean checkConstruct(Constructor<?> c) { return filterConstructor(c, false, ReflectionUtils.getCallerClass(3)) != null; }
 
 		public void checkAccess(String owner, String name, String desc) {
-			Desc d = MapUtil.getInstance().sharedDC;
+			Desc d = ClassUtil.getInstance().sharedDC;
 			d.owner = owner;
 			d.name = name;
 			d.param = desc;
 
-			Object v = ban(d, null);
+			Class<?> caller = ReflectionUtils.getCallerClass(3);
+			Object v = ban(d, caller);
 			if (v == IntMap.UNDEFINED) throw new SecurityException(d+" is blocked");
 		}
 
 		public void filterMethods(MyHashSet<Method> methods) {
+			Class<?> caller = ReflectionUtils.getCallerClass(3);
 			for (Iterator<Method> itr = methods.iterator(); itr.hasNext(); ) {
-				if (filterMethod(itr.next(), false, null) == null) itr.remove();
+				if (filterMethod(itr.next(), false, caller) == null) itr.remove();
 			}
 		}
 		public void filterFields(SimpleList<Field> fields) {
+			Class<?> caller = ReflectionUtils.getCallerClass(3);
 			for (Iterator<Field> itr = fields.iterator(); itr.hasNext(); ) {
-				if (filterField(itr.next(), false, null) == null) itr.remove();
+				if (filterField(itr.next(), false, caller) == null) itr.remove();
 			}
-		}
-	}
-	static final class SecureClassLoader extends ClassDefiner {
-		SecureClassLoader() { super(null); }
-
-		@Override
-		public Class<?> defineClass(String name, ByteList buf) throws ClassFormatError {
-			dumpClass(name, buf);
-
-			byte[] b = buf.toByteArray();
-			buf.rIndex = buf.wIndex();
-			buf = new ByteList(b);
-			PluginDescriptor pd = DefaultPluginSystem.PM.getPluginDescriptor(null);
-			preDefineHook(name, pd, buf);
-			return ClassDefiner.defineClass(pd.cl, name, buf.list, 0, buf.wIndex(), pd.cl.getClass().getProtectionDomain());
 		}
 	}
 
 	// region 反射保护
-	@CallerSensitive
 	@RealDesc(value = "java/lang/Class.forName(Ljava/lang/String;)Ljava/lang/Class;", callFrom = true)
 	public static Class<?> hook_static_forName(String name, Class<?> caller) throws Exception { return checkClass(name, true, caller.getClassLoader(), caller); }
-	@CallerSensitive
 	@RealDesc(value = "java/lang/Class.forName(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;", callFrom = true)
 	public static Class<?> hook_static_forName(String name, boolean init, ClassLoader loader, Class<?> caller) throws Exception { return checkClass(name, init, loader, caller); }
 
@@ -110,15 +106,10 @@ public class DPSSecurityManager extends MethodHook {
 	private static final Field[] EMPTY_FIELDS = new Field[0];
 	private static final Constructor<?>[] EMPTY_CONSTRUCTORS = new Constructor<?>[0];
 
-	@CallerSensitive
 	public static Method hook_callFrom_getMethod(Class<?> c, String name, Class<?>[] param, Class<?> caller) throws Exception { return filterMethod(c.getMethod(name, param), true, caller); }
-	@CallerSensitive
 	public static Method hook_callFrom_getDeclaredMethod(Class<?> c, String name, Class<?>[] param, Class<?> caller) throws Exception { return filterMethod(c.getDeclaredMethod(name, param), true, caller); }
-	@CallerSensitive
 	public static Method[] hook_callFrom_getMethods(Class<?> c, Class<?> caller) { return filterMethods(c.getMethods(), caller); }
-	@CallerSensitive
 	public static Method[] hook_callFrom_getDeclaredMethods(Class<?> c, Class<?> caller) { return filterMethods(c.getDeclaredMethods(), caller); }
-	@CallerSensitive
 	private static Method[] filterMethods(Method[] a, Class<?> caller) {
 		SimpleList<Method> list = SimpleList.asModifiableList(a);
 		for (int i = list.size()-1; i >= 0; i--) {
@@ -130,9 +121,8 @@ public class DPSSecurityManager extends MethodHook {
 		}
 		return list.toArray(a);
 	}
-	@CallerSensitive
 	private static Method filterMethod(Method m, boolean _throw, Class<?> caller) {
-		Desc d = MapUtil.getInstance().sharedDC;
+		Desc d = ClassUtil.getInstance().sharedDC;
 		d.owner = m.getDeclaringClass().getName().replace('.', '/');
 		d.name = m.getName();
 		d.param = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
@@ -156,11 +146,16 @@ public class DPSSecurityManager extends MethodHook {
 		}
 	}
 
-	@CallerSensitive
 	public static Object hook_callFrom_invoke(Method m, Object inst, Object[] value, Class<?> caller) throws Exception {
+		MyHashSet<Object[]> arr = null;
 		while (m.equals(INVOKE)) {
 			m = (Method) inst;
 			inst = value[0];
+
+			// 防止可能的DoS漏洞
+			if (arr == null) arr = new MyHashSet<>(Hasher.identity());
+			if (!arr.add(value)) throw new StackOverflowError();
+
 			value = (Object[]) value[1];
 		}
 
@@ -169,15 +164,10 @@ public class DPSSecurityManager extends MethodHook {
 		return checkInvoke(m, inst, value, caller);
 	}
 
-	@CallerSensitive
 	public static Field hook_callFrom_getField(Class<?> c, String name, Class<?> caller) throws Exception { return filterField(c.getField(name), true, caller); }
-	@CallerSensitive
 	public static Field hook_callFrom_getDeclaredField(Class<?> c, String name, Class<?> caller) throws Exception { return filterField(c.getDeclaredField(name), true, caller); }
-	@CallerSensitive
 	public static Field[] hook_callFrom_getFields(Class<?> c, Class<?> caller) { return filterFields(c.getFields(), caller); }
-	@CallerSensitive
 	public static Field[] hook_callFrom_getDeclaredFields(Class<?> c, Class<?> caller) { return filterFields(c.getDeclaredFields(), caller); }
-	@CallerSensitive
 	private static Field[] filterFields(Field[] a, Class<?> caller) {
 		SimpleList<Field> list = SimpleList.asModifiableList(a);
 		for (int i = list.size()-1; i >= 0; i--) {
@@ -189,9 +179,8 @@ public class DPSSecurityManager extends MethodHook {
 		}
 		return list.toArray(a);
 	}
-	@CallerSensitive
 	private static Field filterField(Field f, boolean _throw, Class<?> caller) {
-		Desc d = MapUtil.getInstance().sharedDC;
+		Desc d = ClassUtil.getInstance().sharedDC;
 		d.owner = f.getDeclaringClass().getName().replace('.', '/');
 		d.name = f.getName();
 		d.param = TypeHelper.class2asm(f.getType());
@@ -205,15 +194,10 @@ public class DPSSecurityManager extends MethodHook {
 		return (Field) v;
 	}
 
-	@CallerSensitive
 	public static Constructor<?> hook_callFrom_getConstructor(Class<?> c, Class<?>[] param, Class<?> caller) throws Exception { return filterConstructor(c.getConstructor(param), true, caller); }
-	@CallerSensitive
 	public static Constructor<?> hook_callFrom_getDeclaredConstructor(Class<?> c, Class<?>[] param, Class<?> caller) throws Exception { return filterConstructor(c.getDeclaredConstructor(param), true, caller); }
-	@CallerSensitive
 	public static Constructor<?>[] hook_callFrom_getConstructors(Class<?> c, Class<?> caller) { return filterConstructors(c.getConstructors(), caller); }
-	@CallerSensitive
 	public static Constructor<?>[] hook_callFrom_getDeclaredConstructors(Class<?> c, Class<?> caller) { return filterConstructors(c.getDeclaredConstructors(), caller); }
-	@CallerSensitive
 	private static Constructor<?>[] filterConstructors(Constructor<?>[] a, Class<?> caller) {
 		SimpleList<Constructor<?>> list = SimpleList.asModifiableList(a);
 		for (int i = list.size()-1; i >= 0; i--) {
@@ -225,9 +209,8 @@ public class DPSSecurityManager extends MethodHook {
 		}
 		return list.toArray(a);
 	}
-	@CallerSensitive
 	private static Constructor<?> filterConstructor(Constructor<?> c, boolean _throw, Class<?> caller) {
-		Desc d = MapUtil.getInstance().sharedDC;
+		Desc d = ClassUtil.getInstance().sharedDC;
 		d.owner = c.getDeclaringClass().getName().replace('.', '/');
 		d.name = "<init>";
 		d.param = TypeHelper.class2asm(c.getParameterTypes(), void.class);
@@ -241,18 +224,15 @@ public class DPSSecurityManager extends MethodHook {
 		return (Constructor<?>) v;
 	}
 
-	@CallerSensitive
 	public static Method hook_callFrom_getEnclosingMethod(Class<?> c, Class<?> caller) {
 		Method m = c.getEnclosingMethod();
 		return m == null ? null : filterMethod(m, false, caller); }
-	@CallerSensitive
 	public static Constructor<?> hook_callFrom_getEnclosingConstructor(Class<?> c, Class<?> caller) {
 		Constructor<?> c1 = c.getEnclosingConstructor();
 		return c1 == null ? null : filterConstructor(c1, false, caller); }
 
-	@CallerSensitive
 	public static Object hook_callFrom_newInstance(Class<?> c, Class<?> caller) throws Exception {
-		Desc d = MapUtil.getInstance().sharedDC;
+		Desc d = ClassUtil.getInstance().sharedDC;
 		d.owner = c.getDeclaringClass().getName().replace('.', '/');
 		d.name = "<init>";
 		d.param = "()V";
@@ -376,18 +356,16 @@ public class DPSSecurityManager extends MethodHook {
 	}
 	// endregion
 	// region 本地库保护
-	@CallerSensitive
 	@RealDesc(value = "java/lang/System.load(Ljava/lang/String;)V", callFrom = true)
 	public static void hook_callFrom_load(String path, Class<?> caller) {
-		PluginDescriptor pd1 = DefaultPluginSystem.PM.getPluginDescriptor(caller);
-		if (!pd1.loadNative) throw new SecurityException("权限不足");
+		PluginDescriptor pd = DefaultPluginSystem.PM.getPluginDescriptor(caller);
+		if (!pd.loadNative) throw new SecurityException("loadNative权限未为"+pd+"开启");
 		System.load(path);
 	}
-	@CallerSensitive
 	@RealDesc(value = "java/lang/System.loadLibrary(Ljava/lang/String;)V", callFrom = true)
 	public static void hook_callFrom_loadLibrary(String path, Class<?> caller) {
-		PluginDescriptor pd1 = DefaultPluginSystem.PM.getPluginDescriptor(caller);
-		if (!pd1.loadNative) throw new SecurityException("权限不足");
+		PluginDescriptor pd = DefaultPluginSystem.PM.getPluginDescriptor(caller);
+		if (!pd.loadNative) throw new SecurityException("loadNative权限未为"+pd+"开启");
 		System.loadLibrary(path);
 	}
 	// endregion
@@ -404,16 +382,21 @@ public class DPSSecurityManager extends MethodHook {
 		ByteList buf = new ByteList(Arrays.copyOfRange(b, off, off+len));
 
 		PluginDescriptor pd1 = DefaultPluginSystem.PM.getPluginDescriptor(caller);
-		preDefineHook(name, pd1, buf);
+		buf = preDefineHook(name, pd1, buf);
 		return ClassDefiner.defineClass(cl, name, buf.list, 0, buf.wIndex(), pd);
 	}
 
-	static void preDefineHook(String name, PluginDescriptor pd1, ByteList buf) {
+	static ByteList preDefineHook(String name, PluginDescriptor pd1, ByteList buf) {
 		if (!pd1.dynamicLoadClass) throw new SecurityException("dynamicLoadClass权限未为"+pd1+"开启");
 		if (!pd1.skipCheck) {
+			// 一个有趣的问题是，如果另一个线程异步修改这个数组？
+			// 因为final了，所以就不用clone
+			buf = new ByteList(buf.toByteArray());
+
 			name = Parser.parseAccess(buf, false).name;
 			DefaultPluginSystem.transform(name, buf);
 		}
+		return buf;
 	}
 	// endregion
 
@@ -424,9 +407,8 @@ public class DPSSecurityManager extends MethodHook {
 		return c.newInstance(value);
 	}
 
-	@CallerSensitive
 	private static Class<?> checkClass(String name, boolean init, ClassLoader loader, Class<?> caller) throws Exception {
-		Desc d = MapUtil.getInstance().sharedDC;
+		Desc d = ClassUtil.getInstance().sharedDC;
 		d.owner = name.replace('.', '/');
 		d.name = "";
 		d.param = "";
@@ -470,7 +452,7 @@ public class DPSSecurityManager extends MethodHook {
 	}
 
 	@Override
-	public boolean transform(String mappedName, Context ctx) {
+	public boolean transform(String name, Context ctx) {
 		boolean changed = false;
 		if (PluginClassLoader.PLUGIN_CONTEXT.get() != null) {
 			for (Constant c : ctx.getData().cp.array()) {
@@ -484,6 +466,6 @@ public class DPSSecurityManager extends MethodHook {
 				}
 			}
 		}
-		return changed|super.transform(mappedName, ctx);
+		return changed|super.transform(name, ctx);
 	}
 }

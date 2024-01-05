@@ -1,6 +1,7 @@
 package roj.mildwind.parser.ast;
 
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.parser.ParseContext;
 import roj.mildwind.type.JsObject;
@@ -22,7 +23,7 @@ public interface Expression {
 
 	default boolean isEqual(Expression left) { return left == this; }
 
-	default JsObject compute(JsObject ctx) { throw new UnsupportedOperationException(getClass().getName()); }
+	default JsObject compute(JsContext ctx) { throw new UnsupportedOperationException(getClass().getName()); }
 
 	/**
 	 * 特殊操作处理

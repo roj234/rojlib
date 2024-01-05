@@ -1,19 +1,18 @@
 package roj.asm.visitor;
 
 import roj.asm.AsmShared;
-import roj.asm.OpcodeUtil;
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstUTF;
+import roj.asm.Opcodes;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstUTF;
+import roj.asm.frame.Var2;
 import roj.asm.tree.Attributed;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.attr.LineNumberTable;
-import roj.asm.tree.attr.LocalVariableTable;
-import roj.asm.tree.attr.TypeAnnotations;
-import roj.asm.util.AttributeList;
-import roj.asm.util.TryCatchEntry;
+import roj.asm.tree.attr.*;
+import roj.asm.tree.insn.SwitchEntry;
+import roj.asm.tree.insn.TryCatchEntry;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
@@ -172,11 +171,12 @@ public class XAttrCode extends Attribute implements Attributed {
 		c.visitEnd();
 	}
 
-	public String toString() {
-		CharList sb = new CharList().append("代码");
+	public String toString() { return toString(IOUtil.getSharedCharBuf().append("代码"), 4).toString(); }
+	public CharList toString(CharList sb, int prefix) {
+		sb.padEnd(' ', prefix).append("stack=").append((int)stackSize).append(", local=").append((int)localSize).append('\n');
 
 		LineNumberTable lines = getLines();
-		SimpleList<Object> a = SimpleList.asModifiableList("BCI","操作码","参数","Label",IntMap.UNDEFINED);
+		SimpleList<Object> a = SimpleList.asModifiableList("BCI","操作码","参数",IntMap.UNDEFINED);
 		if (lines != null) a.add(0, "行号");
 
 		CharList sb2 = new CharList();
@@ -188,8 +188,8 @@ public class XAttrCode extends Attribute implements Attributed {
 			}
 
 			a.add(node.bci());
-			a.add(OpcodeUtil.toString0(node.opcode()));
-			if ((OpcodeUtil.flag(node.opcode())&16) == 0) {
+			a.add(Opcodes.showOpcode(node.opcode()));
+			if ((Opcodes.flag(node.opcode())&16) == 0) {
 				sb2.clear();
 				try {
 					String string = node.myToString(sb2, true).toString();
@@ -203,13 +203,13 @@ public class XAttrCode extends Attribute implements Attributed {
 			} else {
 				a.add("");
 			}
-			a.add("b"+node.pos().getBlock()+"+"+node.pos().getOffset());
 			a.add(IntMap.UNDEFINED);
 		}
-		TextUtil.prettyTable(sb, "    ", a.toArray(), "  ", "    ");
+		sb2.clear();
+		TextUtil.prettyTable(sb, sb2.padEnd(' ', prefix).toString(), a.toArray(), "  ", "    ");
 
 		if (tryCatch != null && !tryCatch.isEmpty()) {
-			sb.append("  异常处理程序");
+			sb.append('\n').padEnd(' ', prefix).append("异常处理程序");
 
 			a.clear(); a.addAll("从","至","处理程序","异常",IntMap.UNDEFINED);
 			for (TryCatchEntry ex : tryCatch) {
@@ -219,19 +219,108 @@ public class XAttrCode extends Attribute implements Attributed {
 				a.add(ex.type==null||ex.type.equals("java/lang/Throwable")?"<任意>":ex.type);
 				a.add(IntMap.UNDEFINED);
 			}
-			TextUtil.prettyTable(sb, "    ", a.toArray(), "  ", "  ");
+			sb2.clear();
+			TextUtil.prettyTable(sb, sb2.padEnd(' ', prefix).toString(), a.toArray(), "  ", "  ");
 		}
 
 		LocalVariableTable lvt = getLVT();
-		if (lvt != null) sb.append("  变量: ").append(lvt.toString(getLVTT()));
+		if (lvt != null) lvt.toString(sb.append('\n').padEnd(' ', prefix).append("变量: "), getLVTT(), prefix+4);
 
 		if (frames != null) {
-			sb.append("  堆栈映射:\n");
-			for (int i = 0; i < frames.size(); i++) {
-				sb.append(frames.get(i));
+			sb.append('\n').padEnd(' ', prefix).append("堆栈映射:\n");
+			for (int i = 0; i < frames.size(); i++)
+				frames.get(i).toString(sb, prefix+4);
+		}
+		return sb;
+	}
+
+	public CharList toAsmLang(CharList sb, int prefix) {
+		sb.append('\n').padEnd(' ', prefix).append(".stack ").append((int)stackSize);
+		sb.append('\n').padEnd(' ', prefix).append(".local ").append((int)localSize);
+
+		IntMap<Frame2> frames = new IntMap<>();
+		if (this.frames != null) {
+			for (int i = 0; i < this.frames.size(); i++) {
+				Frame2 f = this.frames.get(i);
+				frames.putIfAbsent(f.target3.getValue(), f);
 			}
 		}
-		return sb.toString();
+
+		IntMap<String> labels = new IntMap<>();
+		if (tryCatch != null) {
+			for (int i = 0; i < tryCatch.size(); i++) {
+				TryCatchEntry ex = tryCatch.get(i);
+				labels.putIfAbsent(ex.start.getValue(), "exc_"+i+"_start");
+				labels.putIfAbsent(ex.end.getValue(), "exc_"+i+"_end");
+				labels.putIfAbsent(ex.handler.getValue(), "exc_"+i+"_handler");
+			}
+		}
+
+		for (XInsnNodeView node : instructions) {
+			if (Opcodes.showOpcode(node.opcode()).endsWith("Switch")) {
+				SwitchSegment seg = node.switchTargets();
+				labels.putIfAbsent(seg.def.getValue(), "switch_"+node.bci()+"_def");
+				List<SwitchEntry> targets = seg.targets;
+				for (int i = 0; i < targets.size(); i++) {
+					SwitchEntry target = targets.get(i);
+					labels.putIfAbsent(target.pos.getValue(), "switch_"+node.bci()+"_target_"+target.val);
+				}
+			} else {
+				Label target = node.targetOrNull();
+				if (target != null) labels.putIfAbsent(target.getValue(), "label"+target.getValue());
+			}
+		}
+
+		LineNumberTable lines = getLines();
+
+		for (XInsnNodeView node : instructions) {
+			sb.append("\n\n");
+
+			if (lines != null) {
+				int line = lines.searchLine(node.bci());
+				if (line > 0) sb.padEnd(' ', prefix).append(".line ").append(line).append('\n');
+			}
+
+			Frame2 fr = frames.get(node.bci());
+			if (fr != null) {
+				sb.padEnd(' ', prefix).append(".frame ").append(Frame2.getName(fr.type)).append(" {\n");
+				int len = sb.length();
+				if (fr.locals != null) {
+					for (Var2 v : fr.locals) {
+						sb.padEnd(' ', prefix+4).append(".local ").append(v).append('\n');
+					}
+				}
+				if (fr.stacks != null) {
+					for (Var2 v : fr.stacks) {
+						sb.padEnd(' ', prefix+4).append(".stack ").append(v).append('\n');
+					}
+				}
+				if (sb.length() == len) sb.setLength(sb.length()-3);
+				else sb.padEnd(' ', prefix).append("}");
+				sb.append('\n');
+			}
+
+			String lbl = labels.get(node.bci());
+			if (lbl != null) sb.padEnd(' ', prefix).append(lbl).append(':').append('\n');
+
+			sb.padEnd(' ', prefix).append(Opcodes.showOpcode(node.opcode()));
+			if ((Opcodes.flag(node.opcode())&16) == 0) {
+				sb.append(' ');
+				node.toAsmCode(sb, labels, prefix);
+			}
+		}
+
+		if (tryCatch != null && !tryCatch.isEmpty()) {
+			sb.append("\n\n").padEnd(' ', prefix).append(".exception");
+
+			for (int i = 0; i < tryCatch.size(); i++) {
+				TryCatchEntry ex = tryCatch.get(i);
+				sb.append('\n').padEnd(' ', prefix+4).append("exc_").append(i).append("_start exc_").append(i).append("_end => exc_").append(i).append("_handler");
+				sb.append('\n').padEnd(' ', prefix+4).append(ex.type == null ? "*" : ex.type);
+			}
+		}
+
+		return sb;
 	}
 
 	public LocalVariableTable getLVT() { return (LocalVariableTable) attrByName("LocalVariableTable"); }

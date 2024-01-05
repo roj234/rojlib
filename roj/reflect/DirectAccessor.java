@@ -1,10 +1,9 @@
 package roj.reflect;
 
-import roj.asm.cst.CstClass;
+import roj.asm.cp.CstClass;
 import roj.asm.tree.ConstantData;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
@@ -23,7 +22,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static roj.asm.Opcodes.*;
 import static roj.asm.type.Type.CLASS;
-import static roj.asm.util.AccessFlag.PUBLIC;
 
 /**
  * 替代反射，目前不能修改final字段，然而这是JVM的锅 <br>
@@ -55,7 +53,7 @@ public final class DirectAccessor<T> {
 		Method[] methods = itf.getMethods();
 		this.methodByName = new MyHashMap<>(methods.length);
 		for (Method method : methods) {
-			if ((method.getModifiers() & AccessFlag.STATIC) != 0) continue;
+			if ((method.getModifiers() & ACC_STATIC) != 0) continue;
 
 			// skip 'internal' methods
 			if (("toString".equals(method.getName()) || "clone".equals(method.getName())) && method.getParameterCount() == 0) continue;
@@ -207,7 +205,7 @@ public final class DirectAccessor<T> {
 			Class<?>[] params2 = sm.getParameterTypes();
 			String sDesc = toAsmDesc(params, sm.getReturnType(), fuzzy == null);
 
-			CodeWriter cw = var.newMethod(PUBLIC, sm.getName(), sDesc);
+			CodeWriter cw = var.newMethod(ACC_PUBLIC, sm.getName(), sDesc);
 
 			cw.clazz(NEW, tName);
 			cw.one(DUP);
@@ -332,7 +330,7 @@ public final class DirectAccessor<T> {
 				for (int j = 0; j < methods.size(); j++) {
 					Method m = methods.get(j);
 					// NCI 无法用在静态方法上
-					int off1 = (m.getModifiers() & AccessFlag.STATIC) != 0 ? 0 : off;
+					int off1 = (m.getModifiers() & ACC_STATIC) != 0 ? 0 : off;
 					if (m.getName().equals(targetMethodName) && m.getParameterCount() == types.length - off1) {
 						Class<?>[] types2 = m.getParameterTypes();
 						if (fuzzy) toFuzzyMode(types2);
@@ -385,9 +383,9 @@ public final class DirectAccessor<T> {
 			Method sm = sMethods[i];
 			Class<?>[] params2 = sm.getParameterTypes();
 			String sDesc = toAsmDesc(params2, sm.getReturnType(), fuzzyMode == null);
-			CodeWriter cw = var.newMethod(PUBLIC, selfNames[i], sDesc);
+			CodeWriter cw = var.newMethod(ACC_PUBLIC, selfNames[i], sDesc);
 
-			int isStatic = (tm.getModifiers() & AccessFlag.STATIC) != 0 ? 1 : 0;
+			int isStatic = (tm.getModifiers() & ACC_STATIC) != 0 ? 1 : 0;
 			if (isStatic == 0) {
 				cw.one(ALOAD_1);
 				if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
@@ -477,7 +475,7 @@ public final class DirectAccessor<T> {
 
 			if (found == -1 || sm1 != null && !sm1.checkAccess(allFields.get(found))) throw new IllegalArgumentException("无法找到字段 "+target.getName()+'.'+fields[i]);
 			fieldFs[i] = allFields.remove(found);
-			int off = (fieldFs[i].getModifiers() & AccessFlag.STATIC) != 0 ? 0 : 1;
+			int off = (fieldFs[i].getModifiers() & ACC_STATIC) != 0 ? 0 : 1;
 
 			name = getters == null ? null : getters[i];
 			if (name != null) {
@@ -510,12 +508,12 @@ public final class DirectAccessor<T> {
 		for (int i = 0, len = fieldFs.length; i < len; i++) {
 			Field field = fieldFs[i];
 			Type fType = TypeHelper.class2type(field.getType());
-			boolean isStatic = (field.getModifiers() & AccessFlag.STATIC) != 0;
+			boolean isStatic = (field.getModifiers() & ACC_STATIC) != 0;
 
 			Method getter = getterMs[i];
 			if (getter != null) {
 				Class<?>[] params2 = isStatic ? ArrayCache.CLASSES : getter.getParameterTypes();
-				CodeWriter cw = var.newMethod(PUBLIC, getter.getName(), TypeHelper.class2asm(params2, getter.getReturnType()));
+				CodeWriter cw = var.newMethod(ACC_PUBLIC, getter.getName(), TypeHelper.class2asm(params2, getter.getReturnType()));
 
 				byte type = fType.type;
 				int localSize;
@@ -537,7 +535,7 @@ public final class DirectAccessor<T> {
 			Method setter = setterMs[i];
 			if (setter != null) {
 				Class<?>[] params2 = setter.getParameterTypes();
-				CodeWriter cw = var.newMethod(PUBLIC, setter.getName(), TypeHelper.class2asm(params2, void.class));
+				CodeWriter cw = var.newMethod(ACC_PUBLIC, setter.getName(), TypeHelper.class2asm(params2, void.class));
 
 				byte type = fType.type;
 				int localSize;
@@ -569,7 +567,7 @@ public final class DirectAccessor<T> {
 		ILSecurityManager sm1 = ILSecurityManager.getSecurityManager();
 		if (sm1 != null) sm1.checkAccess(target, "<init>", desc);
 
-		CodeWriter cw = var.newMethod(PUBLIC, self.getName(), TypeHelper.class2asm(self.getParameterTypes(), self.getReturnType()));
+		CodeWriter cw = var.newMethod(ACC_PUBLIC, self.getName(), TypeHelper.class2asm(self.getParameterTypes(), self.getReturnType()));
 
 		cw.clazz(NEW, target);
 		cw.one(DUP);
@@ -603,7 +601,7 @@ public final class DirectAccessor<T> {
 
 		String sDesc = TypeHelper.class2asm(self.getParameterTypes(), self.getReturnType());
 
-		CodeWriter cw = var.newMethod(PUBLIC, self.getName(), sDesc);
+		CodeWriter cw = var.newMethod(ACC_PUBLIC, self.getName(), sDesc);
 
 		boolean isStatic = opcode == INVOKESTATIC;
 		if (!isStatic) cw.one(ALOAD_1);
@@ -645,7 +643,7 @@ public final class DirectAccessor<T> {
 
 		if (getter != null) {
 			Class<?>[] params2 = isStatic ? ArrayCache.CLASSES : getter.getParameterTypes();
-			CodeWriter cw = var.newMethod(PUBLIC, getter.getName(), TypeHelper.class2asm(params2, getter.getReturnType()));
+			CodeWriter cw = var.newMethod(ACC_PUBLIC, getter.getName(), TypeHelper.class2asm(params2, getter.getReturnType()));
 
 			byte typeId = type.type;
 			int stackSize = (char) (typeId == Type.DOUBLE || typeId == Type.LONG ? 2 : 1);
@@ -666,7 +664,7 @@ public final class DirectAccessor<T> {
 
 		if (setter != null) {
 			Class<?>[] params2 = setter.getParameterTypes();
-			CodeWriter cw = var.newMethod(PUBLIC, setter.getName(), TypeHelper.class2asm(params2, void.class));
+			CodeWriter cw = var.newMethod(ACC_PUBLIC, setter.getName(), TypeHelper.class2asm(params2, void.class));
 
 			byte typeId = type.type;
 			int stackSize = (char) (typeId == Type.DOUBLE || typeId == Type.LONG ? 3 : 2);
@@ -717,7 +715,7 @@ public final class DirectAccessor<T> {
 
 		clz.parent(MAGIC_ACCESSOR_CLASS);
 		clz.interfaces.add(new CstClass(invokerName.replace('.', '/')));
-		clz.access = AccessFlag.SUPER | PUBLIC;
+		clz.access = ACC_SUPER | ACC_PUBLIC;
 	}
 
 	private static Class<?>[] toFuzzyMode(Class<?>[] params) {

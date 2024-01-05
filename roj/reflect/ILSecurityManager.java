@@ -20,12 +20,9 @@ public class ILSecurityManager {
 		inst = am;
 	}
 
-	protected void checkReplace(ILSecurityManager am) {
-		if (this != am) throw new SecurityException("cannot replace existing AccessManager");
-	}
+	protected void checkReplace(ILSecurityManager am) { if (this != am) throw new SecurityException("cannot replace existed "+getClass().getName()+" to "+am.getClass().getName()); }
 
-	// FastInit and ClassDefiner
-	public byte[] checkDefineAnonymousClass(ByteList buf) { return buf.toByteArray(); }
+	public ByteList checkDefineClass(String name, ByteList buf) { return buf; }
 
 	public boolean checkAccess(Field field) { return true; }
 	public boolean checkInvoke(Method field) throws NoSuchMethodException { return true; }

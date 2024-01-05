@@ -199,7 +199,7 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 			s.seek(pos & -PAGE);
 			sync |= 1;
 
-			buf = (ByteList) pool.allocate(false, PAGE);
+			buf = (ByteList) pool.allocate(false, PAGE, 0);
 			try {
 				int len = s.read(buf.list, buf.arrayOffset(), PAGE);
 				buf.wIndex(len);

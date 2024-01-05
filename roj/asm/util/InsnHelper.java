@@ -1,6 +1,6 @@
 package roj.asm.util;
 
-import roj.asm.OpcodeUtil;
+import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.asm.visitor.*;
 import roj.collect.Int2IntMap;
@@ -12,7 +12,7 @@ import roj.text.CharList;
 import java.util.List;
 import java.util.Map;
 
-import static roj.asm.OpcodeUtil.*;
+import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
@@ -20,11 +20,11 @@ import static roj.asm.OpcodeUtil.*;
  */
 public class InsnHelper {
 	public static byte changeCodeType(int code, Type from, Type to) {
-		int flag = OpcodeUtil.flag(code);
-		if ((flag&OpcodeUtil.TRAIT_ILFDA) == 0) return (byte) code;
+		int flag = flag(code);
+		if ((flag&TRAIT_ILFDA) == 0) return (byte) code;
 
-		String name = OpcodeUtil.toString0(code);
-		if ((flag&0xF) == OpcodeUtil.CATE_ARRAY_SL)
+		String name = showOpcode(code);
+		if ((flag&0xF) == CATE_ARRAY_SL)
 			return (byte) ((name.endsWith("Store") ? 33 : 0)+XALoad(to));
 
 		if (from != null && name.charAt(0) != from.nativeName().charAt(0)) return (byte) code;
@@ -32,29 +32,14 @@ public class InsnHelper {
 		CharList sb = IOUtil.getSharedCharBuf().append(name);
 		sb.list[0] = to.nativeName().charAt(0);
 
-		int v = OpcodeUtil.getByName().getOrDefault(sb, -1);
+		int v = Opcodes.opcodeByName().getOrDefault(sb, -1);
 		if (v < 0) throw new IllegalStateException("找不到"+sb);
 		return (byte) v;
 	}
 
+	@Deprecated
 	public static int getVarId(XInsnNodeView node) {
-		switch (OpcodeUtil.category(node.opcode())) {
-			case OpcodeUtil.CATE_LOAD_STORE: return getVarId(node.opcode());
-			case OpcodeUtil.CATE_LOAD_STORE_LEN: return node.id();
-		}
-		return -1;
-	}
-
-	public static int getVarId(byte code) {
-		if (OpcodeUtil.category(code) == OpcodeUtil.CATE_LOAD_STORE) {
-			String name = OpcodeUtil.toString0(code);
-			return name.charAt(name.length()-1) - '0';
-		}
-		return -1;
-	}
-
-	public static boolean isReturn(int code) {
-		return OpcodeUtil.category(code) == OpcodeUtil.CATE_RETURN;
+		return node.getVarId();
 	}
 
 	public static byte ToPrimitiveArrayId(int nativeType) {
@@ -101,7 +86,7 @@ public class InsnHelper {
 		}
 	}
 
-	public static void switchString222(CodeWriter c, Map<String, Label> target, Label def) {
+	public static void switchString(CodeWriter c, Map<String, Label> target, Label def) {
 		if (target.isEmpty()) {
 			c.jump(GOTO, def);
 			return;
@@ -139,6 +124,44 @@ public class InsnHelper {
 		}
 	}
 
+	public static boolean canThrowRuntimeException(byte code) {
+		switch (code) {
+			// ClassCastException
+			case CHECKCAST:
+				// NullPointerException
+			case ATHROW:
+				// NullPointerException
+			case MONITORENTER: case MONITOREXIT:
+				// NullPointerException, ArrayStoreException
+			case IALOAD: case LALOAD: case FALOAD: case DALOAD:
+			case AALOAD: case BALOAD: case CALOAD: case SALOAD:
+			case IASTORE: case LASTORE: case FASTORE: case DASTORE:
+			case AASTORE: case BASTORE: case CASTORE: case SASTORE:
+				// NullPointerException
+				// NoClassDefFoundError, NoSuchMethodError, AbstractMethodError ...
+			case GETFIELD: case PUTFIELD:
+			case INVOKEVIRTUAL: case INVOKEINTERFACE: case INVOKESPECIAL:
+				// NullPointerException
+			case ARRAYLENGTH:
+				// NoClassDefFoundError, OutOfMemoryError, NegativeArraySizeException
+			case NEW: case NEWARRAY:
+			case ANEWARRAY: case MULTIANEWARRAY:
+				// NoSuchMethodError
+			case INVOKESTATIC: case INVOKEDYNAMIC:
+				return true;
+			default: return false;
+		}
+	}
+
+	public static void checkWide(byte code) {
+		switch (code) {
+			case RET: case IINC:
+			case ISTORE: case LSTORE: case FSTORE: case DSTORE: case ASTORE:
+			case ILOAD: case LLOAD: case FLOAD: case DLOAD: case ALOAD: break;
+			default: throw new IllegalStateException("Unable wide " + showOpcode(code));
+		}
+	}
+
 	Int2IntMap varIdReplace = new Int2IntMap();
 	protected boolean failed;
 
@@ -169,7 +192,7 @@ public class InsnHelper {
 	public void mapVarId(XInsnList from) {
 		Int2IntMap map = varIdReplace;
 		for (XInsnNodeView node : from) {
-			switch (OpcodeUtil.category(node.opcode())) {
+			switch (Opcodes.category(node.opcode())) {
 				default: if (node.opcode() != IINC) break;
 				case CATE_LOAD_STORE_LEN:
 					node.setId(map.getOrDefaultInt(node.id(), node.id()));

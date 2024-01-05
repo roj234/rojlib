@@ -11,6 +11,7 @@ import roj.ui.CLIBoxRenderer;
 import roj.ui.CLIUtil;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 指令系统的使用方式完全借鉴自Minecraft
@@ -32,11 +33,11 @@ public class CommandConsole extends DefaultConsole {
 	public CommandConsole(String prompt) { super(prompt); }
 
 	protected final List<CommandNode> nodes = new SimpleList<>();
-	public void register(CommandNode node) { nodes.add(node); }
+	public CommandConsole register(CommandNode node) { nodes.add(node); return this; }
 	public boolean unregister(String name) {
 		for (int i = nodes.size()-1; i >= 0; i--) {
 			CommandNode node = nodes.get(i);
-			if (name.equals(node.getName())) {
+			if (Objects.equals(name, node.getName())) {
 				nodes.remove(i);
 				return true;
 			}
@@ -44,9 +45,9 @@ public class CommandConsole extends DefaultConsole {
 		return false;
 	}
 
-	public CharList dumpNodes(CharList sb) {
+	public CharList dumpNodes(CharList sb, int depth) {
 		for (CommandNode node : nodes)
-			node.dump(sb, 0);
+			node.dump(sb.padEnd(' ', depth), depth);
 		return sb;
 	}
 
@@ -54,12 +55,16 @@ public class CommandConsole extends DefaultConsole {
 	protected void printHelp() {
 		CLIBoxRenderer.DEFAULT.render(new String[][]{
 			new String[] { "Roj234的指令终端 帮助", "注册的指令", "快捷键" },
-			new String[] { dumpNodes(new CharList()).toStringAndFree(), KEY_SHORTCUT }
+			new String[] { dumpNodes(new CharList(), 0).toStringAndFree(), KEY_SHORTCUT }
 		});
 	}
 
-	protected ArgumentContext ctx = new ArgumentContext(TaskPool.Common());
-	protected final Tokenizer wr = new Tokenizer();
+	public ArgumentContext ctx = new ArgumentContext(TaskPool.Common());
+	public boolean commandEcho = true;
+	protected final Tokenizer wr = new Tokenizer() {
+		@Override
+		protected Word onInvalidNumber(char value, int i, String reason) throws ParseException { return readLiteral(); }
+	};
 	private List<Word> parse(String cmd) {
 		List<Word> words = new SimpleList<>();
 
@@ -136,7 +141,7 @@ public class CommandConsole extends DefaultConsole {
 	}
 
 	@Override
-	protected final boolean evaluate(String cmd) { return execute(cmd, true); }
+	protected final boolean evaluate(String cmd) { return execute(cmd, commandEcho); }
 	public boolean executeCommand(String cmd) {
 		TaskPool executor = ctx.executor;
 		ctx.executor = null;

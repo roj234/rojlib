@@ -8,5 +8,5 @@ import roj.collect.MyHashSet;
  */
 public class ArchiveConstants {
 	// 有意的不包含zip格式
-	public static final MyHashSet<String> INCOMPRESSIBLE_FILE_EXT = new MyHashSet<>("7z", "rar", "xz", "txz", "lzma", "lzma2", "bz2", "bzip2", "tbz", "tbz2", "gz", "gzip", "esd", "wim", "png");
+	public static final MyHashSet<String> INCOMPRESSIBLE_FILE_EXT = new MyHashSet<>("7z", "rar", "xz", "txz", "lzma", "lzma2", "bz2", "bzip2", "tbz", "tbz2", "gz", "gzip", "esd", "wim");
 }

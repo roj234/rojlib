@@ -1,9 +1,8 @@
 package roj.asm.type;
 
 import roj.io.IOUtil;
-import roj.mapper.Mapping;
 import roj.text.CharList;
-import roj.text.logging.Level;
+import roj.text.logging.Logger;
 import roj.util.Helpers;
 
 import java.util.List;
@@ -82,7 +81,7 @@ public class Generic extends IGeneric {
 
 				prevI = ++i;
 			}
-			if (x != null) Mapping.LOGGER.log(Level.WARN, "[GenericSub]: {}({}) => {} has too less '$'", null, t, this, newName);
+			if (x != null) Logger.getLogger("GenericSub").warn("{}({}) => {} has too less '$'", t, this, newName);
 		} else {
 			owner = fn.apply(owner);
 		}

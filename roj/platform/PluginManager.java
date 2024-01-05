@@ -1,7 +1,6 @@
 package roj.platform;
 
 import roj.archive.zip.ZipArchive;
-import roj.collect.LFUCache;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
@@ -12,7 +11,6 @@ import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.math.Version;
-import roj.reflect.ClassDefiner;
 import roj.text.logging.Logger;
 
 import java.io.File;
@@ -31,7 +29,6 @@ public class PluginManager {
 
 	private final ClassLoader env = getClass().getClassLoader();
 	private final File dataFolder;
-	private final LFUCache<String, PluginDescriptor> loadedClasses = new LFUCache<>(1000,1);
 
 	public PluginManager(File dataFolder) { this.dataFolder = dataFolder; }
 
@@ -104,7 +101,7 @@ public class PluginManager {
 
 		LOGGER.info("正在加载插件 {}", pd);
 		pd.cl = pd.pcl = new PluginClassLoader(env, pd);
-		Class<?> klass = pd.pcl.findClass(pd.mainClass);
+		Class<?> klass = pd.mainClass.startsWith("roj.") ? pd.pcl.loadClass(pd.mainClass) : pd.pcl.findClass(pd.mainClass);
 		pd.instance = (Plugin) klass.newInstance();
 		pd.instance.init(this, new File(dataFolder, pd.id), pd);
 		pd.instance.onLoad();
@@ -225,7 +222,6 @@ public class PluginManager {
 		for (PluginDescriptor pd : plugins.values()) {
 			unloadPlugin(pd);
 		}
-		synchronized (loadedClasses) { loadedClasses.clear(); }
 		plugins.clear();
 		System.gc();
 	}
@@ -234,7 +230,6 @@ public class PluginManager {
 		if (pd == null) return;
 		if (isCriticalPlugin(pd)) throw new IllegalArgumentException("不能禁用关键插件"+pd);
 		plugins.remove(name);
-		synchronized (loadedClasses) { loadedClasses.clear(); }
 		unloadPlugin(pd);
 		System.gc();
 	}
@@ -258,28 +253,9 @@ public class PluginManager {
 		if (clazz != null) {
 			ClassLoader cl = clazz.getClassLoader();
 			if (cl instanceof PluginClassLoader) return ((PluginClassLoader) cl).desc;
+			return getPlugin("Core");
 		}
 
-		StackTraceElement[] trace = new Throwable().getStackTrace();
-		for (StackTraceElement element : trace) {
-			PluginDescriptor pd = loadedClasses.get(element.getClassName());
-			if (pd != null) return pd;
-
-			synchronized (loadedClasses) {
-				pd = loadedClasses.get(element.getClassName());
-				if (pd != null) return pd;
-
-				for (PluginDescriptor pd1 : plugins.values()) {
-					if (pd1.pcl != null) {
-						if (ClassDefiner.findLoadedClass(pd1.pcl, element.getClassName()) != null) {
-							loadedClasses.put(element.getClassName(), pd1);
-							return pd1;
-						}
-					}
-				}
-			}
-		}
-
-		return getPlugin("Core");
+		throw new NullPointerException("clazz");
 	}
 }

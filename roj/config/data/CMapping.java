@@ -189,17 +189,20 @@ public class CMapping extends CEntry {
 		CEntry entry = get(key);
 		return Type.STRING.isSimilar(entry.getType()) ? entry.asString() : def;
 	}
-	public final int getInteger(String key) {
+	public final int getInteger(String key) { return getInteger(key, 0); }
+	public final int getInteger(String key, int def) {
 		CEntry entry = get(key);
-		return entry.isNumber() ? entry.asInteger() : 0;
+		return entry.isNumber() ? entry.asInteger() : def;
 	}
-	public final long getLong(String key) {
+	public final long getLong(String key) { return getLong(key, 0); }
+	public final long getLong(String key, long def) {
 		CEntry entry = get(key);
-		return entry.isNumber() ? entry.asLong() : 0;
+		return entry.isNumber() ? entry.asLong() : def;
 	}
-	public final double getDouble(String key) {
+	public final double getDouble(String key) { return getDouble(key, 0); }
+	public final double getDouble(String key, double def) {
 		CEntry entry = get(key);
-		return entry.isNumber() ? entry.asDouble() : 0;
+		return entry.isNumber() ? entry.asDouble() : def;
 	}
 	public final CList getList(String key) { return get(key).asList(); }
 	public final CMapping getMap(String key) { return get(key).asMap(); }

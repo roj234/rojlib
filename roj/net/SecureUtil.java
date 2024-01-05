@@ -13,6 +13,7 @@ import java.security.cert.X509Certificate;
  * @author Roj234
  * @since 2021/2/5 0:26
  */
+@Deprecated
 public final class SecureUtil {
 	public static final String KEY_FORMAT = "PKCS12", MANAGER_FORMAT = "SunX509";
 

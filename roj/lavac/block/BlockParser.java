@@ -2,14 +2,14 @@ package roj.lavac.block;
 
 import org.jetbrains.annotations.ApiStatus.Internal;
 import roj.asm.Opcodes;
-import roj.asm.cst.Constant;
+import roj.asm.cp.Constant;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.AttrLavaSpec;
+import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.type.TypeCast;
-import roj.asm.util.TryCatchEntry;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.SwitchSegment;
 import roj.asm.visitor.XAttrCode;

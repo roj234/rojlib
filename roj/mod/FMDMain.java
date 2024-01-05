@@ -4,9 +4,11 @@ import roj.archive.zip.EntryMod;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipOutput;
-import roj.asm.ATList;
 import roj.asm.tree.ConstantData;
 import roj.asm.util.Context;
+import roj.asmx.mapper.Mapper;
+import roj.asmx.mapper.Mapper.State;
+import roj.asmx.mapper.MapperUI;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -16,9 +18,6 @@ import roj.config.data.*;
 import roj.dev.ByteListOutput;
 import roj.dev.Compiler;
 import roj.io.IOUtil;
-import roj.mapper.MapUtil;
-import roj.mapper.Mapper.State;
-import roj.mapper.MapperUI;
 import roj.mod.MCLauncher.RunMinecraftTask;
 import roj.mod.plugin.PluginContext;
 import roj.text.CharList;
@@ -88,7 +87,6 @@ public final class FMDMain {
 		}));
 		c.register(literal("gc").executes(ctx -> {
 			long used = Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory();
-			ATHelper.close();
 			System.runFinalization();
 			System.gc();
 			System.runFinalization();
@@ -193,7 +191,7 @@ public final class FMDMain {
 		// 关闭文件监控
 		watcher.removeAll();
 
-		Map<String, Collection<String>> map = ATList.getMapping(); map.clear();
+		Map<String, Collection<String>> map = ATHelper.getMapping(); map.clear();
 
 		Shared.loadSrg2Mcp();
 
@@ -203,7 +201,7 @@ public final class FMDMain {
 				CLIUtil.warning("Unknown entry " + s);
 				return;
 			}
-			ATList.add(s.substring(0,i), s.substring(i+1));
+			ATHelper.add(s.substring(0,i), s.substring(i+1));
 		}, "预AT.编译期");
 		for (CEntry ce : CONFIG.getDot("预AT.编译期+运行期").asMap().values()) {
 			if (ce.getType() == Type.MAP) loadATMap(ce.asMap(), true);
@@ -254,11 +252,11 @@ public final class FMDMain {
 					List<CEntry> rl = ce.asList().raw();
 					for (int i = 0; i < rl.size(); i++) {
 						CEntry ce1 = rl.get(i);
-						ATList.add(k, dev ? toDevName(ce1) : ce1.asString());
+						ATHelper.add(k, dev ? toDevName(ce1) : ce1.asString());
 					}
 					break;
 				case STRING:
-					ATList.add(k, dev ? toDevName(ce) : ce.asString());
+					ATHelper.add(k, dev ? toDevName(ce) : ce.asString());
 					break;
 			}
 		}
@@ -442,7 +440,7 @@ public final class FMDMain {
 			if (increment) {
 				try (ZipOutput zo1 = updateDst(p, jarFile)) {
 					zo1.begin(false);
-					p.getResourceTask().execute();
+					p.getResourceTask(true).execute();
 				}
 
 				if ((flag & 3) == 0) CLIUtil.info("更新了资源(若有)");
@@ -465,7 +463,7 @@ public final class FMDMain {
 		binWriter.begin(!increment);
 		binWriter.setComment("FMD "+VERSION+"\r\nBy Roj234 @ https://www.github.com/roj234/rojlib");
 
-		AsyncTask<MyHashSet<String>> writeRes = p.getResourceTask();
+		AsyncTask<MyHashSet<String>> writeRes = p.getResourceTask(increment);
 		Task.pushTask(writeRes);
 		Profiler.endStartSection("applyAT <= openWriter");
 		// region 应用权限转换
@@ -475,7 +473,7 @@ public final class FMDMain {
 				return -1;
 			}
 
-			Map<String, Collection<String>> map = ATList.getMapping(); map.clear();
+			Map<String, Collection<String>> map = ATHelper.getMapping(); map.clear();
 			loadATMap(CONFIG.getDot("预AT.编译期+运行期").asMap().get(p.name).asMap(), false);
 
 			CharList atData = IOUtil.getSharedCharBuf();
@@ -695,7 +693,7 @@ public final class FMDMain {
 		if (a == null || a.length == 0) return "";
 		List<File> fs = Arrays.asList(a);
 
-		if (MapUtil.libHash(fs) == lastLibHash) return sb;
+		if (Mapper.libHash(fs) == lastLibHash) return sb;
 		sb.clear();
 
 		for (int i = 0; i < fs.size(); i++) {
@@ -716,7 +714,7 @@ public final class FMDMain {
 			}
 		}
 
-		lastLibHash = MapUtil.libHash(fs);
+		lastLibHash = Mapper.libHash(fs);
 		sb.setLength(sb.length()-1);
 		return sb;
 	}

@@ -3,7 +3,6 @@ package roj.math;
 
 import roj.asm.Opcodes;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
 import roj.reflect.DirectAccessor;
 
 import java.lang.reflect.Method;
@@ -170,7 +169,7 @@ public final class MutableBigInteger implements Comparable<MutableBigInteger> {
 			if (m.getName().startsWith("_")) continue;
 			Method im = itMethods[j++];
 			dab.i_delegate(target, m.getName(), TypeHelper.class2asm(im.getParameterTypes(), im.getReturnType()), m,
-						   (im.getModifiers() & AccessFlag.STATIC) != 0 ? Opcodes.INVOKESTATIC : Opcodes.INVOKESPECIAL);
+						   (im.getModifiers() & Opcodes.ACC_STATIC) != 0 ? Opcodes.INVOKESTATIC : Opcodes.INVOKESPECIAL);
 		}
 
 		o = dab.build();

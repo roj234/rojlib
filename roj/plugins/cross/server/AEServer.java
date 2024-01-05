@@ -9,7 +9,7 @@ import roj.concurrent.timing.Scheduler;
 import roj.crypt.KeyType;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
-import roj.net.NetworkUtil;
+import roj.net.NetUtil;
 import roj.net.ch.*;
 import roj.net.ch.handler.MSSCipher;
 import roj.net.ch.handler.Timeout;
@@ -80,7 +80,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 			return;
 		}
 
-		InetSocketAddress addr = NetworkUtil.getListenAddress(port);
+		InetSocketAddress addr = NetUtil.parseListeningAddress(port);
 
 		KeyPair pair = KeyType.getInstance("EdDSA").getKeyPair(new File("ae_server.key"), new File("ae_public.key"), keyPass);
 		if (pair == null) {
@@ -213,7 +213,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 	public AEServer(InetSocketAddress addr, int conn, MSSKeyPair key) throws IOException {
 		server = this;
 
-		this.launch = ServerLaunch.tcp().listen(addr, conn).option(StandardSocketOptions.SO_REUSEADDR, true).initializator(this);
+		this.launch = ServerLaunch.tcp().bind(addr, conn).option(StandardSocketOptions.SO_REUSEADDR, true).initializator(this);
 		if (conn > 0) launch.option(ServerLaunch.TCP_MAX_CONNECTION, conn);
 
 		this.key = key;

@@ -19,13 +19,11 @@ import java.net.MalformedURLException;
  */
 public class URIUtil {
 	public static String decodeURI(CharSequence src) throws MalformedURLException {
-		CharList sb = IOUtil.ddLayeredCharBuf();
 		ByteList bb = IOUtil.ddLayeredByteBuf();
 
 		try {
-			return decodeURI(src, sb, bb).toString();
+			return decodeURI(src, new CharList(), bb).toStringAndFree();
 		} finally {
-			sb._free();
 			bb._free();
 		}
 	}

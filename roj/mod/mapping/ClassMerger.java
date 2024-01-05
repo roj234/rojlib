@@ -1,6 +1,6 @@
 package roj.mod.mapping;
 
-import roj.asm.cst.CstClass;
+import roj.asm.cp.CstClass;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;

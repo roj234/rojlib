@@ -4,11 +4,15 @@ import roj.NativeLibrary;
 import roj.collect.*;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
+import roj.config.word.Tokenizer;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
 import roj.math.MutableInt;
 import roj.text.*;
-import roj.text.pattern.MyPattern;
+import roj.ui.terminal.Argument;
+import roj.ui.terminal.ArgumentContext;
+import roj.ui.terminal.CommandConsole;
+import roj.ui.terminal.CommandNode;
 import roj.util.*;
 
 import javax.annotation.Nonnull;
@@ -16,10 +20,8 @@ import java.io.*;
 import java.lang.reflect.Method;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -263,9 +265,9 @@ public final class CLIUtil implements Runnable {
 		});
 	}
 
-	static final int STDIN = 0, STDOUT = 1, STDERR = 2;
-	static final int MODE_GET = 0, MODE_SET = 1, MODE_ADD = 2, MODE_REMOVE = 3, MODE_XOR = 4;
-	static final int
+	private static final int STDIN = 0, STDOUT = 1, STDERR = 2;
+	private static final int MODE_GET = 0, MODE_SET = 1, MODE_ADD = 2, MODE_REMOVE = 3, MODE_XOR = 4;
+	private static final int
 		ENABLE_PROCESSED_INPUT = 0x1,
 		ENABLE_LINE_INPUT = 0x2,
 		ENABLE_ECHO_INPUT = 0x4,
@@ -280,19 +282,17 @@ public final class CLIUtil implements Runnable {
 		ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x4,
 		DISABLE_NEWLINE_AUTO_RETURN = 0x8,
 		ENABLE_LVB_GRID_WORLDWIDE = 0x10;
-	static void enableDirectInput(boolean enable) {
-		if (OS.CURRENT == OS.WINDOWS) {
-			if (NativeLibrary.loaded) {
-				try {
-					if (enable) {
-						setConsoleMode0(STDIN, MODE_SET, 0);
-						setConsoleMode0(STDIN, MODE_SET, ENABLE_VIRTUAL_TERMINAL_INPUT);
-					} else {
-						setConsoleMode0(STDIN, MODE_SET, ENABLE_PROCESSED_INPUT|ENABLE_ECHO_INPUT|ENABLE_LINE_INPUT);
-					}
-				} catch (NativeException e) {
-					System.err.println("Failed to initialize VT input: " + e.getMessage());
+	private static void enableDirectInput(boolean enable) {
+		if (OS.CURRENT == OS.WINDOWS && NativeLibrary.loaded) {
+			try {
+				if (enable) {
+					setConsoleMode0(STDIN, MODE_SET, 0);
+					setConsoleMode0(STDIN, MODE_SET, ENABLE_VIRTUAL_TERMINAL_INPUT);
+				} else {
+					setConsoleMode0(STDIN, MODE_SET, ENABLE_PROCESSED_INPUT|ENABLE_ECHO_INPUT|ENABLE_LINE_INPUT);
 				}
+			} catch (NativeException e) {
+				System.err.println("Failed to initialize VT input: " + e.getMessage());
 			}
 		}
 	}
@@ -304,8 +304,7 @@ public final class CLIUtil implements Runnable {
 	public static void reset() { if (ANSI) System.out.print("\u001B[0m"); }
 	public static void clearScreen() { if (ANSI) System.out.print("\u001b[1;1H\u001b[2J"); }
 
-	public static void bg(int bg, boolean hl) { if (ANSI) System.out.print("\u001B[" + (bg + (hl ? 70 : 10)) + 'm'); }
-	public static void fg(int fg, boolean hl) { if (ANSI) System.out.print("\u001B[" + (fg + (hl ? 60 : 0)) + 'm'); }
+	public static void fg(int fg, boolean hl) { if (ANSI) System.out.print("\u001B["+(fg+(hl?HIGHLIGHT:0))+'m'); }
 
 	private static void color(String s, int fg, boolean reset, boolean println) {
 		PrintStream o = System.out;
@@ -340,116 +339,14 @@ public final class CLIUtil implements Runnable {
 	 * @param min 最小值(包括)
 	 * @param max 最大值(不包括)
 	 */
-	public static int getNumberInRange(int min, int max) throws IOException {
-		String s;
-		int i;
-		do {
-			do {
-				info("您的选择: ", false);
-				fg(YELLOW, true);
-				s = in.readLine();
-				reset();
-				if (s == null) System.exit(-2);
-				if (TextUtil.isNumber(s) == 0) break;
-				warning("输入的不是数字!", true);
-			} while (true);
-			try {
-				i = Integer.parseInt(s);
-				if (i >= min && i < max) {
-					break;
-				}
-			} catch (NumberFormatException ignored) {
-			}
-			warning("输入的数太大或者太小!", true);
-		} while (true);
-		return i;
-	}
-
-	public static File readFile(String name) throws IOException {
-		info("请键入, 粘贴或者拖动" + name + "到这里并按下回车!");
-		File file;
-		do {
-			fg(YELLOW, true);
-			String s = in.readLine();
-			reset();
-			if (s == null) System.exit(-2);
-			if (s.startsWith("\"") && s.endsWith("\"")) s = s.substring(1, s.length() - 1);
-			file = new File(s);
-			if (file.exists()) return file;
-			warning("文件不存在，请重试!", true);
-		} while (!file.exists());
-		return file;
-	}
-
-	public static boolean readBoolean(String info) throws IOException {
-		boolean enableAt;
-		do {
-			info(info, false);
-			fg(YELLOW, true);
-			String s = in.readLine();
-			if (s == null) System.exit(-2);
-			reset();
-			Boolean b = null;
-			switch (s.toLowerCase(Locale.ROOT)) {
-				case "y": case "yes": case "ok":
-				case "t": case "true": case "是":
-					b = true;
-					break;
-				case "n": case "no": case "not":
-				case "false": case "cancel":
-				case "f": case "否":
-					b = false;
-					break;
-			}
-			if (b != null) {
-				enableAt = b;
-				break;
-			}
-			warning("不是true或false");
-		} while (true);
-		return enableAt;
-	}
-
-	public static String userInput(String info, Function<String, Boolean> verifier) throws IOException {
-		info(info, false);
-		String string;
-		do {
-			fg(YELLOW, true);
-			string = in.readLine();
-			if (string == null) System.exit(-2);
-			if (verifier.apply(string) == Boolean.TRUE) {
-				break;
-			}
-			System.out.println("输入不正确!");
-			reset();
-		} while (true);
-		return string.trim();
-	}
-
-	public static String userInput(String info) throws IOException {
-		info(info, false);
-		fg(YELLOW, true);
-		String string = in.readLine();
-		reset();
-		if (string == null) System.exit(-2);
-		return string.trim();
-	}
-
-	public static char[] readPassword() {
-		return System.console().readPassword("");
-	}
-
-	public static void pause() {
-		try {
-			userInput("按回车继续");
-		} catch (IOException ignored) {}
-	}
-
-	public static int selectOneFile(List<File> files, String name1) throws IOException {
+	public static int readInt(int min, int max) { return getCommandResult("您的选择: ", Argument.number(min, max)); }
+	public static boolean readBoolean(String info) throws IOException { return getCommandResult(info, Argument.bool()); }
+	public static File readFile(String name) { return getCommandResult("请输入"+name+"的路径", Argument.file()); }
+	public static int readChosenFile(List<File> files, String name1) {
 		if (files.size() == 1) return 0;
-		info("有多个 " + name1 + " , 请选择(输入编号)");
+		info("有多个 "+name1+" , 请选择(输入编号)");
 
-		for (int i = 0, forgeVersionsSize = files.size(); i < forgeVersionsSize; i++) {
+		for (int i = 0; i < files.size(); i++) {
 			String name = files.get(i).getName();
 			int k = name.lastIndexOf(File.separatorChar);
 			fg(WHITE, (i & 1) == 1);
@@ -457,8 +354,91 @@ public final class CLIUtil implements Runnable {
 			reset();
 		}
 
-		return getNumberInRange(0, files.size());
+		return readInt(0, files.size());
 	}
+	public static void pause() { readString("按回车继续"); }
+	public static String readString(String info) { return getCommandResult(info, Argument.rest()).trim(); }
+	// relatively safe when ANSI not available
+	public static char[] readPassword() { return System.console().readPassword(""); }
+	public static <T> T getCommandResult(String prompt, Argument<T> argument) {
+		if (!ANSI) {
+			while (true) {
+				System.out.print(prompt);
+				try {
+					String s = in.readLine();
+					ArgumentContext ctx = new ArgumentContext(null);
+					ctx.init(s, Tokenizer.arguments().split(s));
+					return argument.parse(ctx, null);
+				} catch (Exception e) {
+					System.out.println("输入不合法:"+e);
+				}
+			}
+		}
+		return awaitCommand(new CommandConsole("\u001B[;"+(WHITE+HIGHLIGHT)+'m'+prompt), argument);
+	}
+	@SuppressWarnings("unchecked")
+	public static <T> T awaitCommand(CommandConsole c, Argument<T> arg) {
+		Console prev = console;
+
+		Object[] ref = new Object[1];
+		c.register(CommandNode.argument("arg", arg).executes(ctx -> {
+			synchronized (ref) {
+				ref[0] = ctx.argument("arg", Object.class);
+				ref.notify();
+			}
+		}));
+		c.ctx.executor = null;
+
+		setConsole(c);
+		try {
+			synchronized (ref) { ref.wait(); }
+		} catch (InterruptedException e) {
+			return Helpers.maybeNull();
+		} finally {
+			setConsole(prev);
+			c.unregister(null);
+		}
+
+		return (T) ref[0];
+	}
+
+	public static char awaitCharacter(MyBitSet allow) {
+		Console prev = console;
+
+		char[] ref = new char[1];
+		Console c = new Console() {
+			public void registered() {}
+			public void unregistered() {}
+			public void keyEnter(int keyCode, boolean isVirtualKey) {
+				synchronized (ref) {
+					ref[0] = (char) keyCode;
+					ref.notify();
+				}
+			}
+		};
+
+		if (prev == null) setConsole(c);
+		else console = c;
+		try {
+			while (true) {
+				synchronized (ref) {
+					ref.wait();
+
+					char ch = ref[0];
+					if (ch == (VK_CTRL|VK_C)) return 0;
+					if (allow.contains(ch)) return ch;
+				}
+				beep();
+			}
+		} catch (InterruptedException e) {
+			return 0;
+		} finally {
+			if (prev == null) setConsole(null);
+			else console = prev;
+		}
+	}
+
+	public static void beep() { sysOut.write(7); sysOut.flush(); }
 
 	public static final Pattern ANSI_ESCAPE = Pattern.compile("\u001b\\[[^a-zA-Z]+?[a-zA-Z]");
 	public static ByteList stripAnsi(ByteList b) {
@@ -470,6 +450,7 @@ public final class CLIUtil implements Runnable {
 			out.put(b, i, m.start()-i);
 			i = m.end();
 		}
+		out.put(b, i, b.length()-i);
 		b.wIndex(out.wIndex());
 		return b;
 	}
@@ -492,7 +473,7 @@ public final class CLIUtil implements Runnable {
 		if (!ANSI || CharLength == null) {
 			if (c == '\t') return 4;
 			if (c <= 0xFF) return c < 16 ? 0 : 1;
-			return MyPattern.标点.contains(c) ? 2 : 1;
+			return ChineseCharsetDetector.标点.contains(c) ? 2 : 1;
 		}
 
 		int len = CharLength.getOrDefaultInt(c, -1);
@@ -509,7 +490,6 @@ public final class CLIUtil implements Runnable {
 				len = (instance.getCursorPos()&0xFF)-1;
 				CharLength.put(c, len);
 			} catch (Exception e) {
-				e.printStackTrace();
 				CharLength = null;
 				len = 2;
 			}
@@ -693,7 +673,7 @@ public final class CLIUtil implements Runnable {
 				if (pos < 0) return;
 				LINES.remove(pos);
 
-				writeSeq(SEQ.putAscii(LINES.isEmpty() ? "\u001b[1M" : "\u001b7\u001b[" + LINES.size() + "F\u001b[1M\u001b8\u001bM"));
+				writeSeq(SEQ.putAscii(LINES.isEmpty() ? "\u001b[1M" : "\u001b7\u001b["+(pos-1)+"F\u001b[1M\u001b8\u001bM"));
 				if (!clearText) System.out.println(b);
 			}
 		}
@@ -708,32 +688,62 @@ public final class CLIUtil implements Runnable {
 	}
 
 	static final class AnsiOut extends DelegatedPrintStream {
-		private int isEndOfLine = 0;
+		private final CharList mySb = new CharList();
+		private boolean mySbRegister;
 
 		AnsiOut(int max) { super(max); }
 
 		private synchronized void writeLine(boolean newLine) {
-			// wait for any displayable character
-			// 也许以后优化下
-			if (!newLine && getStringWidth(bb) == 0 && getStringWidth(sb) == 0) return;
+			if (!ANSI) {
+				stripAnsi(bb);
+				stripAnsi(sb);
+			}
 
 			synchronized (sysOut) {
-				if (!LINES.isEmpty()) {
-					SEQ.putAscii("\u001b[?25l");
-					if (LINES.size() > 1) SEQ.putAscii("\u001b["+(LINES.size()-1)+"F");
-					else SEQ.putAscii("\u001b[1G");
-					SEQ.putAscii("\u001b[0K");
-				}
+				if (LINES.isEmpty()) {
+					SEQ.put(bb);
+					CE.encodeFixedIn(sb, SEQ);
+					sb.clear(); bb.clear();
+					if (newLine) SEQ.put('\n');
+				} else {
+					if (!newLine && bb.wIndex() == 0) {
+						mySb.append(sb); sb.clear();
 
-				if (isEndOfLine != 0) SEQ.putAscii("\u001b[1F\u001b["+isEndOfLine+"C");
+						int w = getStringWidth(mySb);
+						boolean overflow = w >= windowWidth;
+						if (overflow) {
+							List<String> lines = splitByWidth(mySb.toString(), windowWidth);
 
-				SEQ.put(bb);
-				CE.encodeFixedIn(sb, SEQ);
-				if (newLine) isEndOfLine = 0;
-				else isEndOfLine = (isEndOfLine + getStringWidth(sb)) % windowWidth;
-				sb.clear(); bb.clear(); SEQ.put('\n');
+							prepAdvance();
+							for (int i = 0; i < lines.size()-1; i++) SEQ.putAscii(lines.get(i)).put('\n');
 
-				if (!LINES.isEmpty()) {
+							mySb.clear();
+							mySb.append(lines.get(lines.size()-1));
+						}
+
+						if (!overflow) {
+							if (w > 0) {
+								mySbRegister = true;
+								renderBottomLine(mySb, true, w);
+							}
+							return;
+						}
+					} else {
+						if (mySbRegister) {
+							mySbRegister = false;
+							removeBottomLine(mySb, true);
+						}
+						prepAdvance();
+
+						CE.encodeFixedIn(mySb, SEQ);
+						mySb.clear();
+
+						SEQ.put(bb);
+						CE.encodeFixedIn(sb, SEQ);
+						sb.clear(); bb.clear();
+						SEQ.put('\n');
+					}
+
 					int i = LINES.size()-1;
 					while (true) {
 						try {
@@ -751,6 +761,13 @@ public final class CLIUtil implements Runnable {
 
 				writeSeq(SEQ);
 			}
+		}
+
+		private static void prepAdvance() {
+			SEQ.putAscii("\u001b[?25l");
+			if (LINES.size() > 1) SEQ.putAscii("\u001b["+(LINES.size()-1)+"F");
+			else SEQ.putAscii("\u001b[1G");
+			SEQ.putAscii("\u001b[0K");
 		}
 
 		@Override
@@ -784,7 +801,7 @@ public final class CLIUtil implements Runnable {
 		}
 
 		inited = 2;
-		synchronized (CLIUtil.class) { if (console == null) enableDirectInput(false); }
+		synchronized (CLIUtil.class) { if (console == null && ANSI) enableDirectInput(false); }
 
 		ByteList.Slice shellB = IOUtil.SharedCoder.get().shellB;
 		byte[] buf = new byte[260];
@@ -817,9 +834,10 @@ public final class CLIUtil implements Runnable {
 
 			try {
 				if (ANSI) processInput(buf, 0, r, shellB);
-				else
+				else if (console != null)
 					for (int i = 0; i < r; i++)
 						keyEnter(buf[i]&0xFF, buf[i] == '\n');
+				else pipe(buf, 0, r);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -830,19 +848,27 @@ public final class CLIUtil implements Runnable {
 		System.exit(13102);
 	}
 
-	private static Console console;
+	private static volatile Console console;
 	public static void setConsole(Console c) {
 		synchronized (CLIUtil.class) {
-			if (console != null) console.unregistered();
+			Console prev = console;
+			if (prev == c) return;
+			if (prev != null) {
+				synchronized (prev) {
+					prev.unregistered();
+					console = c;
+				}
+			}
+
 			console = c;
 		}
 
 		if (c != null) {
-			CLIUtil.enableDirectInput(true);
+			if (ANSI) enableDirectInput(true);
 			c.registered();
 			synchronized (IN_READ) { IN_READ.notify(); }
 		} else {
-			CLIUtil.enableDirectInput(false);
+			if (ANSI) enableDirectInput(false);
 		}
 	}
 	public static Console getConsole() { return console; }
@@ -951,7 +977,11 @@ public final class CLIUtil implements Runnable {
 			i += matchLen;
 		}
 
-		if (console == null && inited == 2) pipe(buf, off, len);
+		if (console == null && inited == 2) {
+			ByteList shell = IOUtil.SharedCoder.get().wrap(buf, off, len);
+			stripAnsi(shell);
+			if (shell.wIndex() > 0) pipe(buf, off, shell.wIndex());
+		}
 	}
 	private void keyEnter(int keyCode, boolean isVirtual) {
 		Console line = console;

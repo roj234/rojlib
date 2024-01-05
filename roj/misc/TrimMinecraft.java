@@ -19,14 +19,14 @@ import java.nio.charset.StandardCharsets;
 public class TrimMinecraft {
 	public static void main(String[] args) throws IOException {
 		System.out.println("(assets)资源目录");
-		String assets = CLIUtil.userInput("");
+		String assets = CLIUtil.readString("");
 		System.out.println("(libraries)库目录");
-		String libraries = CLIUtil.userInput("");
+		String libraries = CLIUtil.readString("");
 
 		SimpleList<File> versions = new SimpleList<>();
 		while (true) {
 			System.out.println("(versions)版本目录,可以添加多个,如果没有了请按回车");
-			String v = CLIUtil.userInput("");
+			String v = CLIUtil.readString("");
 			if (v.isEmpty()) break;
 			versions.add(new File(v));
 		}
@@ -108,7 +108,7 @@ public class TrimMinecraft {
 		c:
 		while (true) {
 			System.out.println("按回车执行删除,按L查看文件列表");
-			String selection = CLIUtil.userInput("");
+			String selection = CLIUtil.readString("");
 			switch (selection) {
 				case "": break c;
 				case "L":

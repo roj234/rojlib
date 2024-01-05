@@ -2,7 +2,6 @@ package roj.net.ch;
 
 import roj.asm.type.TypeHelper;
 import roj.io.buf.BufferPool;
-import roj.net.ch.handler.PacketMerger;
 import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
@@ -77,33 +76,8 @@ class UdpChImpl extends MyChannel {
 	@Override
 	protected boolean connect0(InetSocketAddress na) throws IOException {
 		dc.connect(na);
-		addFirst("_UDP_AddressProvider", new AddressBinder(na));
+		//addFirst("_UDP_AddressProvider", new AddressBinder(na));
 		return true;
-	}
-
-	static final class AddressBinder extends PacketMerger {
-		InetAddress addr;
-		int port;
-
-		public AddressBinder(InetSocketAddress address) {
-			addr = address.getAddress();
-			port = address.getPort();
-		}
-
-		@Override
-		public void channelWrite(ChannelCtx ctx, Object msg) throws IOException {
-			ctx.channelWrite(new DatagramPkt(addr,port,(DynByteBuf) msg));
-		}
-
-		@Override
-		public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
-			DatagramPkt pkt = (DatagramPkt) msg;
-			if (pkt.addr != addr || pkt.port != port) {
-				System.out.println("ignored packet " + pkt);
-				return;
-			}
-			mergedRead(ctx, pkt.buf);
-		}
 	}
 
 	@Override

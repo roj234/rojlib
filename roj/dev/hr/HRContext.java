@@ -1,21 +1,20 @@
 package roj.dev.hr;
 
-import roj.asm.OpcodeUtil;
+import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstClass;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstClass;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;
+import roj.asm.type.Desc;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.AccessFlag;
+import roj.asm.util.ClassUtil;
 import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.SwitchSegment;
 import roj.collect.*;
-import roj.mapper.MapUtil;
-import roj.mapper.util.Desc;
 import roj.reflect.DirectAccessor;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -43,7 +42,7 @@ public final class HRContext extends ClassLoader {
 	public Map<String, Structure> dirty = new MyHashMap<>();
 
 	public void update(ConstantData data) {
-		Desc d = MapUtil.getInstance().sharedDC;
+		Desc d = ClassUtil.getInstance().sharedDC;
 		d.owner = data.name;
 
 		Structure s = structure.get(data.name);
@@ -134,7 +133,7 @@ public final class HRContext extends ClassLoader {
 	private void createFieldStorage(ConstantData data, Structure s) {
 		data.fields.clear();
 		if ((s.o_size|s.p_size) != 0) {
-			int id = data.newField(AccessFlag.PUBLIC|AccessFlag.FINAL, "fs_i", "Lroj/dev/hr/HRFieldStorage;");
+			int id = data.newField(ACC_PUBLIC|ACC_FINAL, "fs_i", "Lroj/dev/hr/HRFieldStorage;");
 			for (MethodNode mn : data.methods) {
 				if (mn.name().equals("<init>")) {
 					mn.forEachCode(new CodeWriter() {
@@ -150,7 +149,7 @@ public final class HRContext extends ClassLoader {
 			}
 		}
 		if ((s.o_size_static|s.p_size_static) != 0) {
-			data.newField(AccessFlag.PUBLIC|AccessFlag.STATIC|AccessFlag.FINAL, "fs_s", "Lroj/dev/hr/HRFieldStorage;");
+			data.newField(ACC_PUBLIC|ACC_STATIC|ACC_FINAL, "fs_s", "Lroj/dev/hr/HRFieldStorage;");
 			data.forEachCode(new CodeWriter() {
 				@Override
 				protected void begin() {
@@ -172,7 +171,7 @@ public final class HRContext extends ClassLoader {
 			d.name = n.name();
 			d.param = n.rawDesc();
 			d.flags = n.modifier();
-			if (((d.flags&AccessFlag.STATIC) == 0) == _static) continue;
+			if (((d.flags&ACC_STATIC) == 0) == _static) continue;
 
 			removed.remove(d);
 			Type type = n.fieldType();
@@ -279,7 +278,7 @@ public final class HRContext extends ClassLoader {
 
 					int id = s.fieldIndex.getOrDefault(d, -1);
 					if (id != 0) {
-						String opName = OpcodeUtil.toString0(code);
+						String opName = Opcodes.showOpcode(code);
 
 						if (opName.startsWith("Put")) {
 							if (tmpId < 0) {
@@ -337,12 +336,12 @@ public final class HRContext extends ClassLoader {
 			impl.name("roj/dev/hr/HRMethodStorage$"+methodId);
 			impl.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
 			impl.interfaces().add("roj/dev/hr/HRContext$Method");
-			impl.newField(AccessFlag.PRIVATE|AccessFlag.STATIC, "OFFSET", "I");
+			impl.newField(ACC_PRIVATE|ACC_STATIC, "OFFSET", "I");
 		} else {
 			impl.methods.clear();
 		}
 
-		CodeWriter cWrap = impl.newMethod(AccessFlag.PUBLIC|AccessFlag.FINAL, "invoke", "(ILroj/dev/hr/HRContext$Stack;)V");
+		CodeWriter cWrap = impl.newMethod(ACC_PUBLIC|ACC_FINAL, "invoke", "(ILroj/dev/hr/HRContext$Stack;)V");
 		SwitchSegment seg = new SwitchSegment(true);
 
 		cWrap.visitSize(2, 4);
@@ -361,7 +360,7 @@ public final class HRContext extends ClassLoader {
 		SimpleList<MethodNode> nodes = data.methods;
 		for (int i = 0; i < nodes.size(); i++) {
 			MethodNode m = nodes.get(i);
-			if ((m.modifier() & (AccessFlag.NATIVE|AccessFlag.ABSTRACT)) != 0 ||
+			if ((m.modifier() & (ACC_NATIVE|ACC_ABSTRACT)) != 0 ||
 				m.name().equals("<clinit>")) continue;
 			if (m.name().equals("<init>")) continue;
 
@@ -372,11 +371,11 @@ public final class HRContext extends ClassLoader {
 			seg.branch(methodId, seg.def = cWrap.label());
 
 			List<Type> params = copy.parameters();
-			if ((copy.modifier()&AccessFlag.STATIC) == 0) {
+			if ((copy.modifier()&ACC_STATIC) == 0) {
 				params.add(0, new Type(data.name));
-				copy.modifier(copy.modifier()|AccessFlag.STATIC);
+				copy.modifier(copy.modifier()| ACC_STATIC);
 			}
-			copy.modifier(copy.modifier()&(~(AccessFlag.PUBLIC|AccessFlag.PROTECTED))|AccessFlag.PRIVATE);
+			copy.modifier(copy.modifier()&(~(ACC_PUBLIC|ACC_PROTECTED))| ACC_PRIVATE);
 
 			int maxSize = 0;
 			for (int j = 0; j < params.size(); j++) maxSize += params.get(j).length();
@@ -461,7 +460,7 @@ public final class HRContext extends ClassLoader {
 				cDisp.vars(ALOAD, maxSize);
 				cDisp.one(type.shiftedOpcode(IRETURN));
 
-				int b = OpcodeUtil.getByName().getInt(type.nativeName()+"STORE_0");
+				int b = Opcodes.opcodeByName().getInt(type.nativeName()+"STORE_0");
 				// lengthunknown's swapground
 				cWrap.one((byte) b);
 				cWrap.one(ALOAD_2);

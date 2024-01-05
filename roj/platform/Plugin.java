@@ -49,7 +49,7 @@ public abstract class Plugin {
 	}
 	protected final void reloadConfig() {
 		try {
-			Parser<?> parser = new ConfigMaster("config.yml").parser();
+			Parser<?> parser = new ConfigMaster("yml").parser();
 
 			config = parser.parseRaw(configFile).asMap();
 			InputStream defaults = getResource("config.yml");

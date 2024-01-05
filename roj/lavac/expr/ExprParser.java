@@ -396,7 +396,7 @@ public final class ExprParser {
 					for (int j = i; j < e; j++) {
 						Int2IntMap.Entry v = sort.get(j);
 						if (v.getIntKey() > lv) {
-							v.Internal_Set_Key(v.getIntKey()-2);
+							v._SetKey(v.getIntKey()-2);
 						}
 					}
 				}

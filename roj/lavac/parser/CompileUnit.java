@@ -7,8 +7,8 @@ import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.attr.MethodParameters.MethodParam;
 import roj.asm.type.*;
-import roj.asm.util.AccessFlag;
 import roj.asm.util.AttrHelper;
+import roj.asm.util.ClassUtil;
 import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.*;
@@ -21,7 +21,6 @@ import roj.lavac.asm.GenericPrimer;
 import roj.lavac.asm.MethodParamAnno;
 import roj.lavac.asm.SignaturePrimer;
 import roj.lavac.block.ParseTask;
-import roj.mapper.MapUtil;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -43,8 +42,8 @@ import static roj.lavac.parser.JavaLexer.*;
  * @since 2020/12/31 17:34
  */
 public final class CompileUnit extends ConstantData {
-	static final int NON_FIELD_ACC = AccessFlag.TRANSIENT | AccessFlag.VOLATILE;
-	static final int NON_METHOD_ACC = AccessFlag.STRICTFP | AccessFlag.NATIVE;
+	static final int NON_FIELD_ACC = Opcodes.ACC_TRANSIENT | Opcodes.ACC_VOLATILE;
+	static final int NON_METHOD_ACC = Opcodes.ACC_STRICT | Opcodes.ACC_NATIVE;
 	static final int _ACC_DEFAULT = 1 << 17, _ACC_ANNOTATION = 1 << 18, _ACC_RECORD = 1 << 19,
 		_ACC_INNERCLASS = 0x0040, _ACC_ANONYMOUS = 0x0080;
 
@@ -154,7 +153,7 @@ public final class CompileUnit extends ConstantData {
 		// }
 
 		c.name(IOUtil.getSharedCharBuf().append(name).append("$").append(_children.size() + 1).toString());
-		c.access = AccessFlag.SYNTHETIC | AccessFlag.FINAL | AccessFlag.SUPER | _ACC_ANONYMOUS;
+		c.access = Opcodes.ACC_SYNTHETIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER | _ACC_ANONYMOUS;
 		c.parent(parent.owner());
 
 		c.copyTmpFromCache();
@@ -164,7 +163,7 @@ public final class CompileUnit extends ConstantData {
 		paramTypes.add(Type.std(Type.VOID));
 
 		String rawDesc = TypeHelper.getMethod(paramTypes);
-		CodeWriter code = c.newMethod(AccessFlag.SYNTHETIC, "<init>", rawDesc);
+		CodeWriter code = c.newMethod(Opcodes.ACC_SYNTHETIC, "<init>", rawDesc);
 		int size = (1 + TypeHelper.paramSize(rawDesc));
 		code.visitSize(size, size);
 		// todo write !?
@@ -316,7 +315,7 @@ public final class CompileUnit extends ConstantData {
 		annotations.clear();
 
 		// 修饰符和注解
-		access = (char) _modifier(wr, AccessFlag.PUBLIC | AccessFlag.FINAL | AccessFlag.ABSTRACT | _ACC_ANNOTATION);
+		access = (char) _modifier(wr, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_ABSTRACT | _ACC_ANNOTATION);
 		if (!annotations.isEmpty()) addAnnotation(this, new SimpleList<>(annotations));
 	}
 
@@ -349,7 +348,7 @@ public final class CompileUnit extends ConstantData {
 
 		if ((access &_ACC_INNERCLASS) != 0) {
 			List<InnerClasses.InnerClass> c = _innerClass(this);
-			if ((acc & (AccessFlag.INTERFACE|AccessFlag.ENUM)) != 0) acc |= AccessFlag.STATIC;
+			if ((acc & (Opcodes.ACC_INTERFACE | Opcodes.ACC_ENUM)) != 0) acc |= Opcodes.ACC_STATIC;
 			c.get(c.size()-1).flags = (char) acc;
 		}
 
@@ -361,7 +360,7 @@ public final class CompileUnit extends ConstantData {
 		classIdx = w.pos();
 		name(name.concat(w.val()));
 
-		if ((access & AccessFlag.PUBLIC) != 0) {
+		if ((access & Opcodes.ACC_PUBLIC) != 0) {
 			//if (!path.substring(0, path.length()-6).endsWith(w.val()))
 			//    fireDiagnostic(Diagnostic.Kind.ERROR, "public_class_name_wrong");
 		}
@@ -381,13 +380,13 @@ public final class CompileUnit extends ConstantData {
 
 		// 继承和实现
 
-		String parent = (acc & AccessFlag.ENUM) != 0 ? "java/lang/Enum" : "java/lang/Object";
-		if ((acc & AccessFlag.ANNOTATION) != 0) interfacesPre.add("java/lang/annotation/Annotation");
+		String parent = (acc & Opcodes.ACC_ENUM) != 0 ? "java/lang/Enum" : "java/lang/Object";
+		if ((acc & Opcodes.ACC_ANNOTATION) != 0) interfacesPre.add("java/lang/annotation/Annotation");
 
 		checkExtends:
 		if (w.type() == EXTENDS) {
-			if ((acc & (AccessFlag.ENUM | AccessFlag.ANNOTATION)) != 0) fireDiagnostic(Diagnostic.Kind.ERROR, "no_inherit_allowed");
-			if ((acc & AccessFlag.INTERFACE) != 0) break checkExtends;
+			if ((acc & (Opcodes.ACC_ENUM | Opcodes.ACC_ANNOTATION)) != 0) fireDiagnostic(Diagnostic.Kind.ERROR, "no_inherit_allowed");
+			if ((acc & Opcodes.ACC_INTERFACE) != 0) break checkExtends;
 
 			IType type = _genericUse(null, 0);
 			if (type.genericType() > 0) _signature()._add(type);
@@ -397,7 +396,7 @@ public final class CompileUnit extends ConstantData {
 		}
 		parent(parent);
 
-		if (w.type() == ((acc & AccessFlag.INTERFACE) != 0 ? EXTENDS : IMPLEMENTS)) {
+		if (w.type() == ((acc & Opcodes.ACC_INTERFACE) != 0 ? EXTENDS : IMPLEMENTS)) {
 			List<String> itfs = this.interfacesPre;
 			out:
 			while (true) {
@@ -447,7 +446,7 @@ public final class CompileUnit extends ConstantData {
 		MyHashSet<String> names = Cache.names; names.clear();
 
 		// ## 2.9 枚举的处理
-		if ((access & AccessFlag.ENUM) != 0) {
+		if ((access & Opcodes.ACC_ENUM) != 0) {
 			Type selfType = new Type(name);
 
 			w = wr.next();
@@ -457,7 +456,7 @@ public final class CompileUnit extends ConstantData {
 
 				fieldIdx.add(w.pos());
 
-				FieldNode f = new FieldNode(AccessFlag.PUBLIC | AccessFlag.STATIC | AccessFlag.FINAL, name, selfType);
+				FieldNode f = new FieldNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL, name, selfType);
 				lazyTasks.add(ParseTask.Enum(this, fields.size(), f));
 				fields.add(f);
 
@@ -482,15 +481,15 @@ public final class CompileUnit extends ConstantData {
 			}
 
 			// ## 3.1 acc
-			acc = AccessFlag.PUBLIC|AccessFlag.STATIC|AccessFlag.STRICTFP|AccessFlag.FINAL|AccessFlag.ABSTRACT|_ACC_ANNOTATION;
-			switch (access & (AccessFlag.INTERFACE | AccessFlag.ANNOTATION)) {
-				case AccessFlag.INTERFACE:
+			acc = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_STRICT | Opcodes.ACC_FINAL | Opcodes.ACC_ABSTRACT |_ACC_ANNOTATION;
+			switch (access & (Opcodes.ACC_INTERFACE | Opcodes.ACC_ANNOTATION)) {
+				case Opcodes.ACC_INTERFACE:
 					acc |= _ACC_DEFAULT;
 					break;
-				case AccessFlag.INTERFACE | AccessFlag.ANNOTATION:
+				case Opcodes.ACC_INTERFACE | Opcodes.ACC_ANNOTATION:
 					break;
 				case 0:
-					acc |= AccessFlag.NATIVE|AccessFlag.PRIVATE|AccessFlag.PROTECTED|AccessFlag.TRANSIENT|AccessFlag.VOLATILE|AccessFlag.SYNCHRONIZED;
+					acc |= Opcodes.ACC_NATIVE | Opcodes.ACC_PRIVATE | Opcodes.ACC_PROTECTED | Opcodes.ACC_TRANSIENT | Opcodes.ACC_VOLATILE | Opcodes.ACC_SYNCHRONIZED;
 					break;
 			}
 
@@ -504,7 +503,7 @@ public final class CompileUnit extends ConstantData {
 
 			switch (w.type()) {
 				case left_l_bracket: // static initializator
-					lazyTasks.add((acc & AccessFlag.STATIC) == 0 ? ParseTask.InstanceInitBlock(this) : ParseTask.StaticInitBlock(this));
+					lazyTasks.add((acc & Opcodes.ACC_STATIC) == 0 ? ParseTask.InstanceInitBlock(this) : ParseTask.StaticInitBlock(this));
 				continue;
 				case CLASS: case INTERFACE: case ENUM:
 				case AT_INTERFACE: case RECORD:
@@ -529,7 +528,7 @@ public final class CompileUnit extends ConstantData {
 					name = "<init>";
 					type = Type.std(Type.VOID);
 
-					if ((access & AccessFlag.INTERFACE) != 0)
+					if ((access & Opcodes.ACC_INTERFACE) != 0)
 						fireDiagnostic(Diagnostic.Kind.ERROR, "interface_constructor");
 					break mof;
 				}
@@ -573,7 +572,7 @@ public final class CompileUnit extends ConstantData {
 							fireDiagnostic(Diagnostic.Kind.ERROR, "vararg_not_last");
 						}
 
-						int acc1 = _modifier(wr, AccessFlag.FINAL | _ACC_ANNOTATION);
+						int acc1 = _modifier(wr, Opcodes.ACC_FINAL | _ACC_ANNOTATION);
 
 						IType parType = _type(wr, tmp, TYPE_PRIMITIVE | TYPE_GENERIC);
 						if (parType.genericType() != 0)
@@ -618,7 +617,7 @@ public final class CompileUnit extends ConstantData {
 						}
 						switch (w.type()) {
 							case right_s_bracket:
-								if (lsVarargs) method.access |= AccessFlag.TRANSIENT;
+								if (lsVarargs) method.access |= Opcodes.ACC_TRANSIENT;
 								break label;
 							case comma: continue;
 							default: throw wr.err("unexpected:" + w.val());
@@ -637,7 +636,7 @@ public final class CompileUnit extends ConstantData {
 
 				w = wr.next();
 				if (w.type() == THROWS) {
-					if ((access & AccessFlag.ANNOTATION) != 0) {
+					if ((access & Opcodes.ACC_ANNOTATION) != 0) {
 						fireDiagnostic(Diagnostic.Kind.ERROR, "@interface should not have throws");
 					}
 
@@ -658,17 +657,17 @@ public final class CompileUnit extends ConstantData {
 				// 不能包含方法体:
 				//   被abstract或native修饰
 				//   是接口且没有default且不是static
-				if ((acc & (AccessFlag.ABSTRACT | AccessFlag.NATIVE)) != 0 ||
-					(0 != (access & AccessFlag.INTERFACE) && (acc & (AccessFlag.STATIC | _ACC_DEFAULT)) == 0)) {
-					if ((acc & NATIVE) == 0) method.access = (char) (acc | AccessFlag.ABSTRACT);
+				if ((acc & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0 ||
+					(0 != (access & Opcodes.ACC_INTERFACE) && (acc & (Opcodes.ACC_STATIC | _ACC_DEFAULT)) == 0)) {
+					if ((acc & NATIVE) == 0) method.access = (char) (acc | Opcodes.ACC_ABSTRACT);
 
-					if ((access & AccessFlag.ANNOTATION) != 0) {
+					if ((access & Opcodes.ACC_ANNOTATION) != 0) {
 						// 注解的default
 						if (w.type() == DEFAULT) {
 							lazyTasks.add(ParseTask.AnnotationDefault(this, method));
 							continue;
 						} else {
-							method.access |= AccessFlag.ABSTRACT;
+							method.access |= Opcodes.ACC_ABSTRACT;
 						}
 					}
 
@@ -730,43 +729,43 @@ public final class CompileUnit extends ConstantData {
 					acc |= _ACC_ANNOTATION;
 					continue;
 				case PUBLIC:
-					f = (1 << 20) | AccessFlag.PUBLIC;
+					f = (1 << 20) | Opcodes.ACC_PUBLIC;
 					break;
 				case PROTECTED:
-					f = (1 << 20) | AccessFlag.PROTECTED;
+					f = (1 << 20) | Opcodes.ACC_PROTECTED;
 					break;
 				case PRIVATE: // private - abstract
-					f = (1 << 20) | (1 << 21) | AccessFlag.PRIVATE;
+					f = (1 << 20) | (1 << 21) | Opcodes.ACC_PRIVATE;
 					break;
 				case ABSTRACT: // abstract - final
-					f = (1 << 22) | (1 << 21) | AccessFlag.ABSTRACT;
+					f = (1 << 22) | (1 << 21) | Opcodes.ACC_ABSTRACT;
 					break;
 				case STATIC:
-					f = AccessFlag.STATIC;
+					f = Opcodes.ACC_STATIC;
 					break;
 				case CONST: // public static final
 					if (!ctx.isSpecEnabled(CompilerConfig.CONST))
 						throw wr.err("disabled_spec:const");
 					f = (1 << 21) | (1 << 20) |
-						AccessFlag.PUBLIC | AccessFlag.STATIC | AccessFlag.FINAL;
+						Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_FINAL;
 					break;
 				case STRICTFP:
-					f = AccessFlag.STRICTFP;
+					f = Opcodes.ACC_STRICT;
 					break;
 				case VOLATILE:
-					f = AccessFlag.VOLATILE;
+					f = Opcodes.ACC_VOLATILE;
 					break;
 				case TRANSIENT:
-					f = AccessFlag.TRANSIENT;
+					f = Opcodes.ACC_TRANSIENT;
 					break;
 				case NATIVE:
-					f = AccessFlag.NATIVE;
+					f = Opcodes.ACC_NATIVE;
 					break;
 				case SYNCHRONIZED:
-					f = AccessFlag.SYNCHRONIZED;
+					f = Opcodes.ACC_SYNCHRONIZED;
 					break;
 				case FINAL:
-					f = (1 << 22) | AccessFlag.FINAL;
+					f = (1 << 22) | Opcodes.ACC_FINAL;
 					break;
 				case DEFAULT:
 					f = _ACC_DEFAULT;
@@ -796,19 +795,19 @@ public final class CompileUnit extends ConstantData {
 		w = wr.next();
 		switch (w.type()) {
 			case CLASS: // class
-				acc |= AccessFlag.SUPER;
+				acc |= Opcodes.ACC_SUPER;
 				break;
 			case INTERFACE: // interface
-				if ((acc & (AccessFlag.FINAL)) != 0) throw wr.err("illegal_modifier:interface:final");
-				acc |= AccessFlag.ABSTRACT | AccessFlag.INTERFACE;
+				if ((acc & (Opcodes.ACC_FINAL)) != 0) throw wr.err("illegal_modifier:interface:final");
+				acc |= Opcodes.ACC_ABSTRACT | Opcodes.ACC_INTERFACE;
 				break;
 			case ENUM: // enum
-				if ((acc & (AccessFlag.ABSTRACT)) != 0) throw wr.err("illegal_modifier:enum:abstract");
-				acc |= AccessFlag.ENUM | AccessFlag.FINAL;
+				if ((acc & (Opcodes.ACC_ABSTRACT)) != 0) throw wr.err("illegal_modifier:enum:abstract");
+				acc |= Opcodes.ACC_ENUM | Opcodes.ACC_FINAL;
 				break;
 			case AT_INTERFACE: // @interface
-				if ((acc & (AccessFlag.FINAL)) != 0) throw wr.err("illegal_modifier:@interface:final");
-				acc |= AccessFlag.ANNOTATION | AccessFlag.INTERFACE | AccessFlag.ABSTRACT;
+				if ((acc & (Opcodes.ACC_FINAL)) != 0) throw wr.err("illegal_modifier:@interface:final");
+				acc |= Opcodes.ACC_ANNOTATION | Opcodes.ACC_INTERFACE | Opcodes.ACC_ABSTRACT;
 				break;
 			case RECORD:
 				//javaVersion();
@@ -1185,19 +1184,19 @@ public final class CompileUnit extends ConstantData {
 			return;
 		} else {
             int acc = pInfo.modifier();
-            if (0 == (acc & AccessFlag.SUPER)) {
-                if (0 != (acc & AccessFlag.ANNOTATION)) {
+            if (0 == (acc & Opcodes.ACC_SUPER)) {
+                if (0 != (acc & Opcodes.ACC_ANNOTATION)) {
                     fireDiagnostic(Diagnostic.Kind.NOTE, "inherit:annotation");
-                } else if (0 != (acc & AccessFlag.ENUM)) {
+                } else if (0 != (acc & Opcodes.ACC_ENUM)) {
                     fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:enum");
-                } else if (0 != (acc & AccessFlag.FINAL)) {
+                } else if (0 != (acc & Opcodes.ACC_FINAL)) {
                     fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:final");
-                } else if (0 != (acc & AccessFlag.INTERFACE)) {
+                } else if (0 != (acc & Opcodes.ACC_INTERFACE)) {
                     fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:interface");
                 }
             }
-            if (0 == (acc & AccessFlag.PUBLIC)) {
-                if (!MapUtil.arePackagesSame(name, parent)) {
+            if (0 == (acc & Opcodes.ACC_PUBLIC)) {
+                if (!ClassUtil.arePackagesSame(name, parent)) {
                     fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:package-private");
                 }
             }
@@ -1217,11 +1216,11 @@ public final class CompileUnit extends ConstantData {
 				fireDiagnostic(Diagnostic.Kind.ERROR, "unable_resolve:INTERFACE:" + itfs.get(i));
 			} else {
                 int acc = info.modifier();
-                if (0 == (acc & AccessFlag.INTERFACE)) {
+                if (0 == (acc & Opcodes.ACC_INTERFACE)) {
                     fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:non_interface");
                 }
-                if (0 == (acc & AccessFlag.PUBLIC)) {
-                    if (!MapUtil.arePackagesSame(name, info.name())) {
+                if (0 == (acc & Opcodes.ACC_PUBLIC)) {
+                    if (!ClassUtil.arePackagesSame(name, info.name())) {
                         fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:package-private");
                     }
                 }
@@ -1234,23 +1233,23 @@ public final class CompileUnit extends ConstantData {
 		List<FieldNode> fields = Helpers.cast(this.fields);
 		for (int i = 0; i < fields.size(); i++) {
 			FieldNode f = fields.get(i);
-			if ((access & AccessFlag.INTERFACE) != 0) {
+			if ((access & Opcodes.ACC_INTERFACE) != 0) {
 				int acc = f.access;
-				if ((acc & (AccessFlag.PRIVATE|AccessFlag.PROTECTED)) != 0) {
+				if ((acc & (Opcodes.ACC_PRIVATE | Opcodes.ACC_PROTECTED)) != 0) {
 					if (ctx.isSpecEnabled(CompilerConfig.INTERFACE_INACCESSIBLE_FIELD)) {
-						if ((acc & AccessFlag.PRIVATE) != 0)
+						if ((acc & Opcodes.ACC_PRIVATE) != 0)
 							fireDiagnostic(Diagnostic.Kind.WARNING, "inaccessible_interface_field");
 					} else {
 						fireDiagnostic(Diagnostic.Kind.ERROR, "modifier_not_allowed:"+acc);
 					}
 				}
-				f.access = (char) (AccessFlag.STATIC | acc);
+				f.access = (char) (Opcodes.ACC_STATIC | acc);
 			}
 
 			allNodeNames.add(f.name());
 		}
 
-		boolean autoInit = (access & AccessFlag.INTERFACE) == 0;
+		boolean autoInit = (access & Opcodes.ACC_INTERFACE) == 0;
 		List<MethodNode> methods = this.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			diagPos = methodIdx.get(i);
@@ -1258,11 +1257,11 @@ public final class CompileUnit extends ConstantData {
 			MethodNode m = methods.get(i);
 			if (m.name().equals("<init>")) {
 				autoInit = false;
-				if ((access & AccessFlag.ENUM) != 0) {
-					if ((m.access & (AccessFlag.PUBLIC | AccessFlag.PROTECTED)) != 0) {
+				if ((access & Opcodes.ACC_ENUM) != 0) {
+					if ((m.access & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) != 0) {
 						fireDiagnostic(Diagnostic.Kind.ERROR, "enum_public_protected_constructor");
-					} else if ((m.access & AccessFlag.PRIVATE) == 0) {
-						m.access |= AccessFlag.PRIVATE;
+					} else if ((m.access & Opcodes.ACC_PRIVATE) == 0) {
+						m.access |= Opcodes.ACC_PRIVATE;
 					}
 					// not necessary to check
 					continue;
@@ -1271,7 +1270,7 @@ public final class CompileUnit extends ConstantData {
 			allNodeNames.add(m.name() +m.rawDesc());
 
 			// todo: check interface method flags
-			if ((access & AccessFlag.INTERFACE) != 0 && (m.access & (AccessFlag.STATIC | AccessFlag.FINAL)) == AccessFlag.FINAL) {
+			if ((access & Opcodes.ACC_INTERFACE) != 0 && (m.access & (Opcodes.ACC_STATIC | Opcodes.ACC_FINAL)) == Opcodes.ACC_FINAL) {
 				fireDiagnostic(Diagnostic.Kind.ERROR, "final_interface_method");
 			}
 
@@ -1284,8 +1283,8 @@ public final class CompileUnit extends ConstantData {
 						fireDiagnostic(Diagnostic.Kind.ERROR, "unable_resolve:EXCEPTION:"+classes.get(i));
 					} else {
 						int acc = info.modifier();
-						if (0 == (acc & AccessFlag.PUBLIC)) {
-							if (!MapUtil.arePackagesSame(name, info.name())) {
+						if (0 == (acc & Opcodes.ACC_PUBLIC)) {
+							if (!ClassUtil.arePackagesSame(name, info.name())) {
 								fireDiagnostic(Diagnostic.Kind.ERROR, "inherit:package-private");
 							}
 						}
@@ -1321,7 +1320,7 @@ public final class CompileUnit extends ConstantData {
 				fireDiagnostic(Diagnostic.Kind.ERROR, "not_empty_constructor");
 			}
 
-			CodeWriter cw = newMethod(AccessFlag.PUBLIC | AccessFlag.SYNTHETIC, "<init>", "()V");
+			CodeWriter cw = newMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC, "<init>", "()V");
 			cw.visitSize(1,1);
 			cw.one(Opcodes.ALOAD_0);
 			cw.invoke(Opcodes.INVOKESPECIAL, this.parent, "<init>", "()V");
@@ -1353,7 +1352,7 @@ public final class CompileUnit extends ConstantData {
 
 		// endregion
 		// region 自己是注解
-		if ((access & AccessFlag.ANNOTATION) != 0) {
+		if ((access & Opcodes.ACC_ANNOTATION) != 0) {
 			List<AnnotationPrimer> list = annoTask.get(this);
 			if (list != null) annoInfo = AttrHelper.getAnnotationInfo(list);
 			if (annoInfo == null) fireDiagnostic(Diagnostic.Kind.ERROR, "annotation_error:class");
@@ -1405,7 +1404,7 @@ public final class CompileUnit extends ConstantData {
 		IClass type1 = resolve(t.owner());
 		if (type1 == null) {
 			fireDiagnostic(Diagnostic.Kind.ERROR, "unable_resolve:"+kind+":" + t.owner());
-		} else if (!_accessible(type1, AccessFlag.PUBLIC)) {
+		} else if (!_accessible(type1, Opcodes.ACC_PUBLIC)) {
 			fireDiagnostic(Diagnostic.Kind.ERROR, "unable_access:"+kind+":" + t.owner());
 		} else t.owner(type1.name());
 	}
@@ -1415,15 +1414,15 @@ public final class CompileUnit extends ConstantData {
 		if (this == target) return true;
 
 		boolean pkg = false;
-		if ((target.modifier() & AccessFlag.PUBLIC) == 0) {
-			if (!MapUtil.arePackagesSame(name, target.name())) return false;
+		if ((target.modifier() & Opcodes.ACC_PUBLIC) == 0) {
+			if (!ClassUtil.arePackagesSame(name, target.name())) return false;
 			pkg = true;
 		}
-		switch (acc & (AccessFlag.PUBLIC | AccessFlag.PROTECTED | AccessFlag.PRIVATE)) {
-			case AccessFlag.PUBLIC: return true;
-			case AccessFlag.PROTECTED: if (ctx.canInstanceOf(name, target.name(), 0)) return true;
-			case 0: return pkg || MapUtil.arePackagesSame(name, target.name());
-			case AccessFlag.PRIVATE: return false;
+		switch (acc & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED | Opcodes.ACC_PRIVATE)) {
+			case Opcodes.ACC_PUBLIC: return true;
+			case Opcodes.ACC_PROTECTED: if (ctx.canInstanceOf(name, target.name(), 0)) return true;
+			case 0: return pkg || ClassUtil.arePackagesSame(name, target.name());
+			case Opcodes.ACC_PRIVATE: return false;
 		}
 		return false;
 	}
@@ -1485,7 +1484,7 @@ public final class CompileUnit extends ConstantData {
 		int v = getMethod("<clinit>");
 		if (v >= 0) return ((AttrCodeWriter)methods.get(v).attrByName("Code")).cw;
 
-		return newMethod(AccessFlag.PUBLIC | AccessFlag.STATIC | AccessFlag.SYNTHETIC, "<clinit>", "()V");
+		return newMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC, "<clinit>", "()V");
 	}
 
 	public void S3_Code() throws ParseException {
@@ -1505,7 +1504,7 @@ public final class CompileUnit extends ConstantData {
 				List<? extends RawNode> methods = a.clazzInst.methods();
 				for (int j = 0; j < methods.size(); j++) {
 					MethodNode m = (MethodNode) methods.get(j);
-					if ((m.modifier() & AccessFlag.STATIC) != 0) continue;
+					if ((m.modifier() & Opcodes.ACC_STATIC) != 0) continue;
 					if (m.attrByName(Attribute.AnnotationDefault.name) == null) {
 						if (!a.values.containsKey(m.name())) {
 							missed.add(m.name());

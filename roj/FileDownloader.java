@@ -23,7 +23,7 @@ public final class FileDownloader {
 		int threadCount;
 		if (args.length < 3) {
 			System.out.print("线程数: ");
-			threadCount = CLIUtil.getNumberInRange(0, 256);
+			threadCount = CLIUtil.readInt(0, 256);
 			if (threadCount == 0) {
 				threadCount = Runtime.getRuntime().availableProcessors() << 2;
 			}

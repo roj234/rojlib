@@ -1,13 +1,16 @@
 package roj.collect;
 
+import roj.concurrent.FastThreadLocal;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
 import javax.annotation.Nonnull;
-import java.util.*;
+import java.util.AbstractMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.function.IntFunction;
 
-import static roj.collect.IntMap.MAX_NOT_USING;
 import static roj.collect.IntMap.UNDEFINED;
 
 public final class CharMap<V> extends AbstractMap<Character, V> implements _Generic_Map<CharMap.Entry<V>> {
@@ -35,29 +38,17 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 		}
 	}
 
-	public static class Entry<V> implements _Generic_Entry<Entry<V>>, Map.Entry<Character, V> {
+	public static class Entry<V> implements _Generic_Entry, Map.Entry<Character, V> {
 		char k;
 		Object v;
 
-		Entry(char k, Object v) {
-			this.k = k;
-			this.v = v;
-		}
-
-		public char getChar() {
-			return k;
-		}
-
+		public char getChar() { return k; }
 		@Override
 		@Deprecated
-		public Character getKey() {
-			return k;
-		}
+		public Character getKey() { return k; }
 
 		@SuppressWarnings("unchecked")
-		public V getValue() {
-			return (V) v;
-		}
+		public V getValue() { return (V) v; }
 
 		@SuppressWarnings("unchecked")
 		public V setValue(V now) {
@@ -67,20 +58,15 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 		}
 
 		Entry<V> next;
-
 		@Override
-		public Entry<V> __next() {
-			return next;
-		}
+		public _Generic_Entry __next() { return next; }
 	}
 
 	Entry<?>[] entries;
 	int size = 0;
 
-	Entry<V> notUsing = null;
-
-	int length = 1;
-	float loadFactor = 0.8f;
+	int length = 1, mask;
+	float loadFactor = 1f;
 
 	public CharMap() {
 		this(16);
@@ -110,11 +96,11 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 
 	private Entry<V> cloneNode(Entry<V> entry) {
 		if (entry == null) return null;
-		Entry<V> newEntry = getCachedEntry(entry.k, entry.getValue());
+		Entry<V> newEntry = useEntry(entry.k, entry.getValue());
 		Entry<V> head = newEntry;
 		while (entry.next != null) {
 			entry = entry.next;
-			newEntry.next = getCachedEntry(entry.k, entry.getValue());
+			newEntry.next = useEntry(entry.k, entry.getValue());
 			newEntry = newEntry.next;
 		}
 		return head;
@@ -123,6 +109,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 	public void ensureCapacity(int size) {
 		if (size < length) return;
 		length = MathUtils.getMin2PowerOf(size);
+		mask = length-1;
 
 		if (this.entries != null) resize();
 	}
@@ -156,7 +143,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 	public int size() { return size; }
 
 	@Override
-	public _Generic_Entry<?>[] __entries() { return entries; }
+	public _Generic_Entry[] __entries() { return entries; }
 	@Override
 	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
 
@@ -172,6 +159,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 	@SuppressWarnings("unchecked")
 	private void resize() {
 		Entry<?>[] newEntries = new Entry<?>[length];
+		int newMask = length-1;
 		Entry<V> entry;
 		Entry<V> next;
 		int i = 0, j = entries.length;
@@ -179,7 +167,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 			entry = (Entry<V>) entries[i];
 			while (entry != null) {
 				next = entry.next;
-				int newKey = indexFor(entry.k);
+				int newKey = charHash(entry.k)&newMask;
 				Entry<V> entry2 = (Entry<V>) newEntries[newKey];
 				newEntries[newKey] = entry;
 				entry.next = entry2;
@@ -188,6 +176,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 		}
 
 		this.entries = newEntries;
+		this.mask = newMask;
 	}
 
 	public V put(char key, V e) {
@@ -222,13 +211,11 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 		if (prevEntry != null) {
 			prevEntry.next = entry.next;
 		} else {
-			entries[indexFor(id)] = entry.next;
+			entries[charHash(id)&mask] = entry.next;
 		}
 
 		V v = (V) entry.v;
-
-		putRemovedEntry(entry);
-
+		reserveEntry(entry);
 		return v;
 	}
 
@@ -243,13 +230,11 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 	@SuppressWarnings("unchecked")
 	private Entry<V> getEntry(V v) {
 		if (entries == null) return null;
-		for (int i = 0; i < length; i++) {
-			Entry<V> entry = (Entry<V>) entries[i];
+		for (Entry<?> entry : entries) {
 			if (entry == null) continue;
 			while (entry != null) {
-				if (Objects.equals(v, entry.getValue())) {
-					return entry;
-				}
+				if (Objects.equals(v, entry.getValue()))
+					return (Entry<V>) entry;
 				entry = entry.next;
 			}
 		}
@@ -273,38 +258,16 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 			entry = entry.next;
 		}
 
-		return entry.next = getCachedEntry(id, UNDEFINED);
+		return entry.next = useEntry(id, UNDEFINED);
 	}
 
-	private Entry<V> getCachedEntry(char id, Object value) {
-		Entry<V> cached = this.notUsing;
-		if (cached != null) {
-			cached.k = id;
-			cached.v = value;
-			this.notUsing = cached.next;
-			cached.next = null;
-			return cached;
-		}
-
-		return new Entry<>(id, value);
-	}
-
-	private void putRemovedEntry(Entry<V> entry) {
-		if (notUsing != null && notUsing.k > MAX_NOT_USING) {
-			return;
-		}
-		entry.next = notUsing;
-		entry.k = (char) (notUsing == null ? 1 : notUsing.k + 1);
-		notUsing = entry;
-	}
-
-	private int indexFor(int id) {
-		return (id ^ (id >>> 16)) & (length - 1);
+	private int charHash(int id) {
+		return ((id ^ (id >>> 7) ^ (id >>> 5) ^ (id >>> 3)) * 13 );
 	}
 
 	@SuppressWarnings("unchecked")
 	private Entry<V> getEntryFirst(char k, boolean create) {
-		int id = indexFor(k);
+		int id = charHash(k)&mask;
 		if (entries == null) {
 			if (!create) return null;
 			entries = new Entry<?>[length];
@@ -312,7 +275,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 		Entry<V> entry;
 		if ((entry = (Entry<V>) entries[id]) == null) {
 			if (!create) return null;
-			return (Entry<V>) (entries[id] = getCachedEntry(k, UNDEFINED));
+			return (Entry<V>) (entries[id] = useEntry(k, UNDEFINED));
 		}
 		return entry;
 	}
@@ -326,14 +289,27 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 		if (size == 0) return;
 		size = 0;
 		if (entries != null) {
-			if (notUsing == null || notUsing.k < MAX_NOT_USING) {
-				for (int i = 0; i < length; i++) {
-					if (entries[i] != null) {
-						putRemovedEntry(Helpers.cast(entries[i]));
-						entries[i] = null;
-					}
+			Entry<?>[] ent = entries;
+			for (int i = 0; i < ent.length; i++) {
+				if (ent[i] != null) {
+					reserveEntry(ent[i]);
+					ent[i] = null;
 				}
-			} else {Arrays.fill(entries, null);}
+			}
 		}
+	}
+
+	private static final FastThreadLocal<ObjectPool<CharMap.Entry<?>>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(null, 99));
+	private CharMap.Entry<V> useEntry(char k, Object val) {
+		CharMap.Entry<V> entry = Helpers.cast(MY_OBJECT_POOL.get().get());
+		if (entry == null) entry = new CharMap.Entry<>();
+		entry.k = k;
+		entry.v = Helpers.cast(val);
+		return entry;
+	}
+	private void reserveEntry(CharMap.Entry<?> entry) {
+		entry.v = null;
+		entry.next = null;
+		MY_OBJECT_POOL.get().reserve(entry);
 	}
 }

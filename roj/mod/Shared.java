@@ -1,5 +1,7 @@
 package roj.mod;
 
+import roj.asm.type.Desc;
+import roj.asmx.mapper.Mapper;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
@@ -11,8 +13,6 @@ import roj.dev.HRRemote;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
-import roj.mapper.Mapper;
-import roj.mapper.util.Desc;
 import roj.mod.plugin.Plugin;
 import roj.ui.CLIUtil;
 import roj.util.HighResolutionTimer;
@@ -111,10 +111,11 @@ public final class Shared {
 	}
 
 	public static final Mapper mapperFwd = new Mapper();
+	public static boolean mappingIsClean;
 	private static Mapper mapperRev;
 
 	public static void loadMapper() {
-		if (mapperFwd.getClassMap().isEmpty()) {
+		if (!mappingIsClean) {
 			synchronized (mapperFwd) {
 				if (mapperFwd.getClassMap().isEmpty()) {
 					File map = new File(BASE, "/util/mcp-srg.srg");
@@ -128,6 +129,7 @@ public final class Shared {
 					} catch (Exception e) {
 						CLIUtil.error("混淆映射表加载失败", e);
 					}
+					mappingIsClean = true;
 				}
 			}
 		}

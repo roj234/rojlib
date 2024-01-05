@@ -1,13 +1,29 @@
 
 ### 本项目存在大量无意留下的漏洞，仅供学习研究用途，如用作商业行为，不提供任何保证
 
-### (Module level) TODO LIST
+### TODO LIST
 * [ ] yield
 * [ ] java compiler
 * [ ] javascript interpreter
 * [ ] data flow analyze for bytecode
 * [ ] retransform based advanced hot-reload
 * [ ] server-side template language for web server
+* [ ] FrameVisitor
+* [ ] UDP Transport Protocol
+* [ ] Gradio for java
+
+## 又臭又长的readme恐怕也没人愿意看吧，那么下面是重要到值得我为他单独写文档的类
+[自动识别中文编码](docs/Re_ChineseCharset.md)  
+[带指令注册的终端模拟器](docs/Re_CommandConsole.md)  
+[Java8-17通杀的高性能反射解决方案](docs/Re_DirectAccessor.md)  
+[高性能的字符串全文匹配方案](docs/Re_MatchMap.md)  
+[NAT打洞](docs/Re_NAT.md)  
+[RojLib网络系统](docs/Re_Nio.md)  
+[注解定义的HTTP路由](docs/Re_OKRouter.md)  
+[(并不是很)安全的插件系统](docs/Re_PluginSystem.md)  
+[多线程高性能7z压缩和解压](docs/Re_QZArchiver.md)  
+[任意对象的安全序列化解决方案](docs/Re_SerializerFactory.md)  
+没列出来的还在WIP
 
 # 这里都有啥
 ## roj.archive
@@ -32,14 +48,9 @@
 * 追加修改(复制字块)  
 * 高性能（大量使用Unsafe，请注意线程安全）
 
-LZMA2Input/OutputStream均支持并行压缩和解压
-2023/12/22: 支持在压缩时动态修改prop byte(仅支持单线程下)
-
 注释：  
  *: 比起上一版本  
 
-### 图片展示
-![roj.archive.ui.QZArchiverUI](images/archiver.png)
 
 ## roj.asm  
     自己做的ASM, 资料来自VM规范  
@@ -66,12 +77,35 @@ LZMA2Input/OutputStream均支持并行压缩和解压
 * TypedName在`roj.asm.tree.Attribute`中列举了（或者你也可以new一个，它只是为了通过泛型规范Attribute的类型）
 * 使用`roj.asm.tree.CNode#parsed(ConstantPool cp)`解析一个方法或字段的所有属性
 
-实例见`roj.mapper.Mapper`
+实例见`roj.asmx.mapper.Mapper`
 
 ### ConstantData Parser.parse(DynByteBuf buf)
 * 同上，而后解析所有属性，最后清空常量池  
 
-### 还有Nixim:
+## roj.asmx
+    基于Transformer的各种骚操作
+### annorepo
+统一注解缓存
+### fast_reflect
+将直接(constant parameter)反射调用替换为opcode
+### launcher
+launchwrapper
+### mapper
+class映射(对方法/类改名)器 Mapper
+* 上面我说到ASM的ConstantData等级好就好在这里
+* 它的速度是SpecialSource的十倍 _(2023/2/11更新:更快了)_
+
+class混淆器 Obfuscator`
+* 还支持反混淆，也就是把所有接受常量字符串的函数eval一遍
+* [ ] 字符串解密
+* [ ] 字符串解密+堆栈
+* [ ] 流程分析(先保存至一个(本地)变量,也许很久之后再解密)
+
+#### 图片展示
+![roj.asmx.mapper.MapperUI](docs/images/mapper v3.png)  
+![roj.asmx.mapper.ObfuscatorUI](docs/images/ofbuscator.png)
+
+### nixim
  * 使用注解注入一个class，修改其中一些方法，或者让它实现接口  
  * 在头部、尾部、（使用SIJ模式）或中间插入你的代码
  * 删除或替换方法
@@ -82,19 +116,22 @@ LZMA2Input/OutputStream均支持并行压缩和解压
   
 ## roj.collect  
 包含了各种我写的集合,举几个好玩的  
- * 不保存hash，进而更省内存（对于String之类算hash简单或者有缓存）的Map `MyHashMap`
- * `UnsortedMultiKeyMap<K, T, V> implements Map<List<K>,  V>`  
-`.getMulti(List<K> keys, int limit, Collection<? extends V> col, boolean partial)`  
-获取map中全部或部分符合keys的所有组合  
-最差时间(0.1% ile?): 阶乘  
-平均时间: 接近常数
-  
- * 带压缩的前缀后缀树`TrieTree`
- * `RSegmentTree<T>` 取各区间的交集  
-* 可以用来计算变量的作用域  
-* 或者对于区间只是挨着的, 比如bundle中的某些小文件, 用来减少IO次数  
- 详情看MutableZipFile  
- * `RingBuffer`
+ * `MyHashMap` `MyHashSet` 不缓存hash更省内存（对于String之类速度不影响）
+ * `RecipeMap<食材, 食材的标签, 菜> implements Map<List<食材>, 菜>`  
+   我有一些食材(m)，getMulti()以[常数 ~ log(n)]的时间复杂度告诉我能做哪些菜(n)  
+   条件：提供的食材 >= 菜所需的食材  
+ * `UntitledMap<K (WIP), V>`  
+   getMulti()以[log(m) - m*n]的时间复杂度告诉我能做哪些半成品  
+   与RecipeMap的区别是：提供的食材 <= 菜所需的食材  
+   (所以是半成品, 因为你材料不够)
+
+ * 带压缩的字典树 `TrieTree`
+ * 取各区间的交集 `RSegmentTree<T>`  
+   可以用来计算变量的作用域  
+   或者对于区间只是挨着的, 比如bundle中的某些小文件, 用来减少IO次数  
+   ZipArchive中有用到
+ * 环形缓冲 `RingBuffer`
+ * `LFUCache` / `LRUCache`
 
 ## roj.concurrent
 Promise:
@@ -131,101 +168,9 @@ Promise:
 * 支持Xlsx和Csv的处理，它们在roj.excel包
 * 人性化的错误提示
 * 一种文件格式，叫做Vinary，通过保存Map类型中共有的Key以节约空间（虽然不如压缩）
-
-自动序列化`roj.config.serial.SerialFactory`
-* 不使用反射
-* 支持任意对象
-* 支持通过泛型推断目标类型
-
-标记(flag):
-* `GENERATE`        对未知的class自动生成序列化器
-* `CHECK_INTERFACE` 检查实现的接口是否有序列化器
-* `CHECK_PARENT`    检查父类是否有序列化器
-* `NO_CONSTRUCTOR`  不调用&lt;init&gt;
-* 动态模式: 根据对象的class来序列化
-* `ALLOW_DYNAMIC`   允许动态模式  仅应用到无法确定类型的字段
-* `PREFER_DYNAMIC`  优先动态模式  禁用泛型推断
-* `FORCE_DYNAMIC`   强制动态模式  对所有字段启用
-
-```java
-
-import roj.config.ConfigMaster;
-import roj.config.serial.*;
-import roj.text.CharList;
-
-import java.io.File;
-import java.nio.charset.Charset;
-
-public class Test {
-	public static void main(String[] args) throws Exception {
-		// 为什么这么设计可以去看看SerializerFactoryFactory里面写了什么
-		SerializerFactory man = Serializers.newSerializerFactory();
-		// 自定义序列化方式(使用@As调用)
-		Serializers.registerAsRGB(man);
-		// 自定义序列化器(不是一定要匿名类)
-		man.register(Charset.class, new Object() {
-			public String serializeMyObject(Charset cs) {return cs.name();}
-
-			public Charset deserMyObj(String s) {return Charset.forName(s);}
-		});
-
-		CAdapter<Pojo> adapter = man.adapter(Pojo.class);
-
-		Pojo p = new Pojo();
-		p.color = 0xAABBCC;
-		p.charset = StandardCharsets.UTF_8;
-		p.map = Collections.singletonMap("114514", Collections.singletonMap("1919810", 23333L));
-
-		// simple
-		ConfigMaster.write(p, "C:\\test.yml", "YAML", adapter);
-		p = ConfigMaster.adapt(adapter, new File("C:\\test.yml"));
-
-		// or CVisitor
-		ToJson ser = new ToJson();
-		adapter.write(ser, p);
-		CharList json = ser.getValue();
-		System.out.println(json);
-
-		System.out.println(adapter.read(new CCJson(), json, 0));
-	}
-
-	public static class Pojo {
-		// 自定义序列化方式
-		@As("rgb")
-		// 自定义序列化名称
-		@Name("myColor")
-		private int color;
-		// 通过getter或setter来访问字段
-		@Via(get = "getCharset", set = "setCharset")
-		public Charset charset;
-		// 支持任意对象和多层泛型
-		// 字段类型为接口和抽象类时，会用ObjAny序列化对象，会使用==表示对象的class
-		// 如果要保留这个Map的类型，那就（1）字段改成HashMap(具体)或者（2）开启DYNAMIC
-		public Map<String, Map<String, Object>> map;
-
-		//使用transient避免被序列化
-		private transient Object doNotSerializeMe;
-
-		// 若有无参构造器则调用之，否则allocateInstance
-		public Pojo() {}
-
-		public Charset getCharset() {
-			return charset;
-		}
-
-		public void setCharset(Charset charset) {
-			this.charset = charset;
-		}
-
-		@Override
-		public String toString() {
-			return "Pojo{" + "color=" + color + '}';
-		}
-	}
-}
+* 自动对象序列化
 
 
-```
 #### 人性化的错误(仅适用于等宽字体)  
 ```  
 解析错误:  
@@ -255,6 +200,7 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 * OAEP
 * DH
 * EdDSA (optimize)
+* X25519DH
 * `FeedbackCipher`
 * CRC4、5、6、7、8、16、32
 
@@ -274,31 +220,13 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 
 `BinaryDB` 分块锁的实验品,似乎效率还行
   
-## roj.kscript  
+## roj.mildwind  
     js解释器, WIP  
 并没有完全支持ECMAScript  
 基本类型还没加函数, 比如charAt  
 
 ## roj.lavac
     自己开发的javac, WIP  
-
-## roj.launcher
-    功能类似javaagent
-
-## roj.mapper  
-  class映射(对方法/类改名)器 Mapper  
-   * 上面我说到ASM的ConstantData等级好就好在这里  
-   * 它的速度是SpecialSource的十倍 _(2023/2/11更新:更快了)_  
-
-  class混淆器 Obfuscator` 
-   * 还支持反混淆，也就是把所有接受常量字符串的函数eval一遍  
-   * [ ] 字符串解密
-   * [ ] 字符串解密+堆栈
-   * [ ] 流程分析(先保存至一个(本地)变量,也许很久之后再解密)
-
-### 图片展示
-![roj.mapper.MapperUI](images/mapper v3.png)  
-![roj.mapper.ObfuscatorUI](images/ofbuscator.png)
 
 ## roj.math  
     各种向量啊矩阵啊并不是我写的，不过我感觉我现在也能写出来...  
@@ -357,7 +285,7 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 * 你还可以在这里下载编译好的版本
 
 ### 图片展示
-![roj.mod.FMDMain](images/fmd.png)
+![roj.mod.FMDMain](docs/images/fmd.png)
 
 ## roj.net
     基于管线的网络请求
@@ -378,7 +306,7 @@ DNS服务器
 * 中转服务器模式下支持多个房间(主机)并行
 
 ### 图片展示
-![roj.plugins.cross.AEGui](images/port transfer.png)
+![roj.plugins.cross.AEGui](docs/images/port transfer.png)
 
 MSS协议，My Secure Socket`roj.net.mss`  
   因为(jvav的)SSL不好用，自用的话还不如自己写一个协议  
@@ -388,116 +316,7 @@ MSS协议，My Secure Socket`roj.net.mss`
   
 ## roj.reflect
 `EnumHelper`,  动态增删枚举  
-`DirectAccessor`, 实现高效率的‘反射’操作  
-不管是新建实例，还是访问字段，还是调用方法，它都可以帮你解决
-
-首先，我们要一个接口, 里面定义一些方法吧  
-不，先来需求，我要给玩家发标题，以下是假的代码  
-
-```java
-    class Player {  
-      private Connection conn;  
-    }  
-      
-    class Connection {  
-      public void sendPacket(Packet packet);  
-    }  
-      
-    interface Packet {  
-       // ...  
-    }  
-      
-    class TitlePacket {  
-      public TitlePacket(String title) {  
-        // ...  
-      }  
-    }
-```
-
-这本来是个很简单的事... 但是如果游戏有多个版本, 每个版本的类名都不一样....  
-* 你可以用反射, 效率损失... 因为不频繁也可以忍受  
-* 你还可以给每个游戏版本建一个类, 共同实现一个接口  
-* 你也可以用 `DirectAccessor`  
-
-由于你不能直接写出方法的参数的类，因为它们也会随着游戏版本改变，你需要使用模糊匹配(all-object)模式, 这个模式的有关信息可以在代码注释中找到  
-它的特点是所有非基本类型都需要表示为Object  
-  
-  
-```java
-interface H {  
-   Object getConn(Object player);  
-   void sendPacket(Object conn, Object packet);  
-   Object getTitlePacket(Object title);  
-}
-```
-  
-然后 使用 `DirectAccessor.builder(H.class)` 获得一个构建器  
-
-### 字段 （注，这里都是同名方法里参数最多的那个)  
-`access(Class<?> target, String[] fields, String[] getters, String[] setters)`  
-此方法用来访问字段
-* target是字段位于的class
-* fields是它的名字 (字符串数组，下同)
-* getters是在`H`中它的getter（得到值的方法）的名字, 一项或整体可以为null 不构建对应的getter
-* setters是setter(设置值的方法)的名字, 一项或整体可以为null 不构建对应的setter
-
-所以:  
-```java 
-b.access(Class.forName(version + "Player"), ["conn"], ["getConn"], null);
-```
-
-### 方法  
-`b.delegate(Class<?> target, String[] methodNames, MyBitSet flags, String[] selfNames, List<Class<?>[]> fuzzyMode)` 
-
-`target`,`methodNames`,`selfNames`同`target`,`fields`,`getters/setters`
-
-* flags: 第i项是true时，代表使用‘直接’访问  
-也就是方法静态绑定(INVOKESPECIAL)到target  
-不懂这是啥的话传入`DirectAccessor.EMPTY_BITS`  
-
-* fuzzyMode 指的是 模糊匹配(all-object) 模式  
-`null`: 不启用  
-`空列表`: 模糊匹配  
-`长methodNames.length的列表`: 其中为null的项模糊匹配，否则用这些类精确匹配  
-<br>
-  模糊匹配：函数的参数和返回值中不是基本类型的部分全为Object  
-  只匹配参数个数、基本和非基本类型的位置，可能会重复，这时候需要手动指定参数的类型 (精确)  
-  例如:
-```java
-void test(int a, String b);  
-void test(int a, List<String> b);
-```
-
-所以：
-```java 
-b.delegate(Class.forName(version + "Connection"), ["sendPacket"], EMPTY_BITS, ["sendPacket"], Collections.emptyList());
-```
-
-### 构造器  
-`b.construct(Class<?> target, String[] names, List<Class<?>[]> fuzzy)`  
-没啥好讲的  
-```java 
-b.construct(Class.forName(version + "TitlePacket"), ["getTitlePacket"], Collections.emptyList())
-```
-
-### 生成！
-```java
-static final H Helper;
-...
-Helper = b.build();
-```
-
-最后你方法
-```java
-public static void sendTitle(AbstractPlayer player, String title) {  
-  h.sendPacket(h.getConn(player), h.getTitlePacket(title));  
-}
-```
-
-### 这还没完！
-`i_`开头的方法以绕过需要Class实例的限制，直接生成字节码  
-`unchecked()`关闭类型检查  
-生成的类无视权限控制 (不能写final字段)
+`DirectAccessor`, 实现高效率的‘反射’操作
 
 ## roj.terrain  
     地形生成器, WIP  
@@ -512,17 +331,16 @@ public static void sendTitle(AbstractPlayer player, String title) {
 
   `LineReader` 按行读取  
   `FastMatcher` 基于改进版BM算法的字符串寻找
-  `CliConsole` 基于虚拟终端序列的终端模拟器
 
 ### 图片展示 (/WIP)
-![roj.text.novel.NovelFrame](images/novel manager.png)
+![roj.text.novel.NovelFrame](docs/images/novel manager.png)
 
 
 ## roj.ui  
     请在支持虚拟终端转义序列的Console中执行 （在windows上可能需要libcpp.dll）
   `CLIUtil.Minecraft` 将Minecraft的小节号转义或JSON字符串原样映射到控制台中  
   `EasyProgressBar` 进度条
-  `DefaultConsole` 使用虚拟终端序列模拟的终端
+  `terminal.DefaultConsole` 基于虚拟终端序列的终端模拟器
   
 ## roj.util  
   `DynByteBuf`，能扩展的ByteBuffer，也许Streamed，可作为Input/OutputStream, DataInput/Output  

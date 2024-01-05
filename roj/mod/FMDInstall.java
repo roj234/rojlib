@@ -29,7 +29,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static roj.mapper.Mapper.DONT_LOAD_PREFIX;
+import static roj.asmx.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.mod.MCLauncher.*;
 import static roj.mod.Shared.*;
 
@@ -55,7 +55,7 @@ public class FMDInstall {
 			return;
 		}
 
-		File mcJson = versions.get(CLIUtil.selectOneFile(versions, "模组客户端"));
+		File mcJson = versions.get(CLIUtil.readChosenFile(versions, "模组客户端"));
 
 		System.exit(setupWorkspace(mcRoot, mcJson));
 	}
@@ -198,7 +198,7 @@ public class FMDInstall {
 			CLIUtil.reset();
 		}
 
-		return list.get(CLIUtil.getNumberInRange(0, list.size()));
+		return list.get(CLIUtil.readInt(0, list.size()));
 	}
 
 	private static WorkspaceBuilder createBuilder(Collection<String> lib, boolean highVersion) {

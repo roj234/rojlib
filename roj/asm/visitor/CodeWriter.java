@@ -2,11 +2,11 @@ package roj.asm.visitor;
 
 import roj.RequireUpgrade;
 import roj.asm.AsmShared;
-import roj.asm.OpcodeUtil;
-import roj.asm.cst.Constant;
-import roj.asm.cst.ConstantPool;
-import roj.asm.cst.CstClass;
-import roj.asm.cst.CstUTF;
+import roj.asm.Opcodes;
+import roj.asm.cp.Constant;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstClass;
+import roj.asm.cp.CstUTF;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.CodeAttribute;
@@ -18,7 +18,6 @@ import roj.util.DynByteBuf;
 
 import java.util.List;
 
-import static roj.asm.OpcodeUtil.assertCate;
 import static roj.asm.Opcodes.*;
 
 /**
@@ -179,7 +178,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	// region instruction
 	public void multiArray(String clz, int dimension) { codeOb.put(MULTIANEWARRAY).putShort(cpw.getClassId(clz)).put(dimension); }
-	public void clazz(byte code, String clz) { assertCate(code,OpcodeUtil.CATE_CLASS); codeOb.put(code).putShort(cpw.getClassId(clz)); }
+	public void clazz(byte code, String clz) { assertCate(code, Opcodes.CATE_CLASS); codeOb.put(code).putShort(cpw.getClassId(clz)); }
 
 	protected void ldc1(byte code, Constant c) {
 		int i = cpw.reset(c).getIndex();
@@ -197,10 +196,10 @@ public class CodeWriter extends AbstractCodeWriter {
 			return;
 		}
 
-		assertCate(code,OpcodeUtil.CATE_METHOD);
+		assertCate(code, Opcodes.CATE_METHOD);
 		codeOb.put(code).putShort(isInterfaceMethod ? cpw.getItfRefId(owner, name, desc) : cpw.getMethodRefId(owner, name, desc));
 	}
-	public void field(byte code, String owner, String name, String type) { assertCate(code,OpcodeUtil.CATE_FIELD); codeOb.put(code).putShort(cpw.getFieldRefId(owner, name, type)); }
+	public void field(byte code, String owner, String name, String type) { assertCate(code, Opcodes.CATE_FIELD); codeOb.put(code).putShort(cpw.getFieldRefId(owner, name, type)); }
 
 	// endregion
 

@@ -4,7 +4,6 @@ import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ChecksumInputStream;
 import roj.archive.SourceStreamCAS;
-import roj.archive.qz.QZArchive;
 import roj.collect.*;
 import roj.collect.RSegmentTree.Range;
 import roj.crypt.CipherInputStream;
@@ -53,7 +52,7 @@ public class ZipArchive implements ArchiveFile {
 
 	private Source r;
 	private Source fpRead;
-	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(QZArchive.class, "fpRead");
+	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(ZipArchive.class, "fpRead");
 
 	private final MyHashMap<String, ZEntry> entries;
 	private final MyHashSet<EntryMod> modified;

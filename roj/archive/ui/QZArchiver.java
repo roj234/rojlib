@@ -50,7 +50,6 @@ public class QZArchiver {
 	public File input;
 	public boolean storeFolder, storeMT, storeCT, storeAT, storeAttr;
 	public int threads;
-	public long memoryLimit;
 	public boolean autoSolidSize;
 	public long solidSize, splitSize;
 	public boolean compressHeader;
@@ -340,7 +339,7 @@ public class QZArchiver {
 	private void addBlock(QZCoder[] coders, List<Consumer<QZWriter>> tmpa, List<QZEntry> tmpb, long size) {
 		WordBlockAppend block = new WordBlockAppend();
 		block.coders = coders;
-		block.data = tmpa.toArray(Helpers.cast(new Consumer<?>[tmpa.size()]));
+		block.data = Helpers.cast(tmpa.toArray(new Consumer<?>[tmpa.size()]));
 		block.file = tmpb.toArray(new QZEntry[tmpb.size()]);
 		block.size = size;
 		appends.add(block);
@@ -443,7 +442,7 @@ public class QZArchiver {
 			}
 
 			pool.pushTask(() -> {
-				try (QZArchive _in = oldArchive.parallel()) {
+				try (QZReader _in = oldArchive.parallel()) {
 					try (QZWriter _out = parallel(writer)) {
 						_out.setCodec(coders);
 

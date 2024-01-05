@@ -15,7 +15,7 @@ import roj.crypt.KeyType;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.math.MutableInt;
-import roj.net.NetworkUtil;
+import roj.net.NetUtil;
 import roj.net.ch.*;
 import roj.net.http.srv.HttpServer11;
 import roj.net.http.srv.StringResponse;
@@ -330,7 +330,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 				IAEClient.client_factory.key(key);
 
 				ClientLaunch launch = ClientLaunch.tcp();
-				InetSocketAddress address = NetworkUtil.getConnectAddress(uiServer.getText());
+				InetSocketAddress address = NetUtil.parseConnectAddress(uiServer.getText());
 				System.out.println("正在连接"+address.getAddress()+", 端口"+address.getPort());
 				launch.loop(loop).connect(address);
 

@@ -2,12 +2,12 @@ package roj.misc;
 
 import roj.crypt.Base64;
 import roj.io.IOUtil;
-import roj.io.buf.NativeArray;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.EmbeddedChannel;
 import roj.net.http.Headers;
 import roj.net.http.srv.MultipartFormHandler;
 import roj.text.TextUtil;
+import roj.util.ArrayRef;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -78,8 +78,8 @@ public class MHTParser extends MultipartFormHandler {
 		ByteList buf1 = IOUtil.getSharedByteBuf();
 		if (enc == 1) {
 			ByteList tmp = new ByteList();
-			NativeArray range = buf.byteRangeR(buf.readableBytes());
-			for (int i = 0; i < range.length(); i++) {
+			ArrayRef range = buf.byteRangeR(buf.readableBytes());
+			for (int i = 0; i < range.length; i++) {
 				byte b = range.get(i);
 				if ((b&0xFF) >= 32) tmp.put(b);
 			}

@@ -39,7 +39,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 		return entry == null ? def : entry.v;
 	}
 
-	public static class Entry<V> implements _Generic_Entry<Entry<V>>, Map.Entry<Integer, V> {
+	public static class Entry<V> implements _Generic_Entry, Map.Entry<Integer, V> {
 		protected int k;
 		protected V v;
 
@@ -50,18 +50,11 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 
 		@Override
 		@Deprecated
-		public Integer getKey() {
-			return k;
-		}
+		public Integer getKey() { return k; }
 
-		public int getIntKey() {
-			return k;
-		}
+		public int getIntKey() { return k; }
 
-		public V getValue() {
-			return v;
-		}
-
+		public V getValue() { return v; }
 		public V setValue(V now) {
 			V v = this.v;
 			this.v = now;
@@ -71,14 +64,10 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 		protected Entry<V> next;
 
 		@Override
-		public Entry<V> __next() {
-			return next;
-		}
+		public Entry<V> __next() { return next; }
 
 		@Override
-		public String toString() {
-			return k + "=" + v;
-		}
+		public String toString() { return k+"="+v; }
 	}
 
 	protected Entry<?>[] entries;
@@ -87,7 +76,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 	protected Entry<V> notUsing = null;
 
 	int length = 2;
-	float loadFactor = 0.8f;
+	float loadFactor = 1f;
 
 	public IntMap() {
 		this(16);
@@ -139,7 +128,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 	public Set<Entry<V>> selfEntrySet() { return _Generic_EntrySet.create(this); }
 	public Set<Map.Entry<Integer, V>> entrySet() { return Helpers.cast(selfEntrySet()); }
 
-	public _Generic_Entry<?>[] __entries() { return entries; }
+	public _Generic_Entry[] __entries() { return entries; }
 	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
 
 	public V computeIfAbsentInt(int k, @Nonnull IntFunction<V> fn) {

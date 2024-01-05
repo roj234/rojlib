@@ -5,6 +5,7 @@ import roj.config.word.ITokenizer;
 import roj.io.source.Source;
 import roj.math.Version;
 import roj.text.CharList;
+import roj.text.TextUtil;
 
 import java.nio.charset.Charset;
 import java.util.Collections;
@@ -47,7 +48,7 @@ public class PluginDescriptor {
 		CharList sb = new CharList();
 		sb.append("插件 ").append(id).append(" v").append(version).append(" 作者 ").append(authors).append('\n');
 		if (!website.isEmpty()) sb.append("网址: ").append(website).append('\n');
-		if (!desc.isEmpty()) sb.append("简介:\n").append(desc).append('\n');
+		if (!desc.isEmpty()) sb.append("简介:\n  ").append(TextUtil.join(TextUtil.split(desc, '\n'), "\n  ")).append('\n');
 		sb.append("状态: ");
 		switch (state) {
 			case PluginManager.UNLOAD: sb.append("UNLOAD"); break;
@@ -56,7 +57,6 @@ public class PluginDescriptor {
 			case PluginManager.ENABLED: sb.append("ENABLED"); break;
 			case PluginManager.DISABLED: sb.append("DISABLED"); break;
 		}
-		sb.append(skipCheck);
 		return sb.toStringAndFree();
 	}
 }

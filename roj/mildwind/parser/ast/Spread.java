@@ -1,6 +1,7 @@
 package roj.mildwind.parser.ast;
 
 import roj.config.word.NotStatementException;
+import roj.mildwind.JsContext;
 import roj.mildwind.asm.JsMethodWriter;
 import roj.mildwind.type.JsArray;
 import roj.mildwind.type.JsObject;
@@ -48,7 +49,7 @@ final class Spread implements Expression {
 	public boolean isConstant() { return provider.isConstant(); }
 	public JsObject constVal() { return __spread(provider.constVal()); }
 
-	public JsObject compute(JsObject ctx) { return provider.compute(ctx); }
+	public JsObject compute(JsContext ctx) { return provider.compute(ctx); }
 
 	@Override
 	public boolean isEqual(Expression left) {

@@ -1,17 +1,17 @@
 package roj.asm.visitor;
 
-import roj.asm.cst.*;
+import roj.asm.cp.*;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.RawNode;
 import roj.asm.tree.insn.SwitchEntry;
+import roj.asm.type.Desc;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.Hasher;
 import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.mapper.util.Desc;
 import roj.util.DynByteBuf;
 
 import java.util.Arrays;
@@ -19,7 +19,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.function.Supplier;
 
-import static roj.asm.OpcodeUtil.*;
+import static roj.asm.Opcodes.*;
 import static roj.asm.type.Type.*;
 import static roj.asm.util.InsnHelper.ToPrimitiveArrayId;
 
@@ -115,7 +115,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		switch (c.type()) {
 			case Constant.DYNAMIC:
 				String dyn = ((CstDynamic) c).desc().getType().str();
-				if (dyn.charAt(0) == Type.DOUBLE || dyn.charAt(0) == Type.LONG) {
+				if (dyn.charAt(0) == DOUBLE || dyn.charAt(0) == LONG) {
 					ldc2(c);
 					return;
 				}
@@ -265,11 +265,11 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 			Type klass = types.get(i);
 			if (klass.isPrimitive()) {
 				switch (klass.type) {
-					case Type.BOOLEAN:
+					case BOOLEAN:
 						clazz(CHECKCAST, "java/lang/Boolean");
 						invoke(INVOKESPECIAL, "java/lang/Boolean", "booleanValue", "()Z");
 						break;
-					case Type.CHAR:
+					case CHAR:
 						clazz(CHECKCAST, "java/lang/Character");
 						invoke(INVOKESPECIAL, "java/lang/Character", "charValue", "()C");
 						break;
