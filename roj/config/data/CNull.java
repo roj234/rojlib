@@ -1,11 +1,10 @@
 package roj.config.data;
 
+import org.jetbrains.annotations.NotNull;
 import roj.config.VinaryParser;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
-
-import javax.annotation.Nonnull;
 
 /**
  * @author Roj234
@@ -16,13 +15,13 @@ public final class CNull extends CEntry {
 
 	private CNull() {}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Type getType() {
 		return Type.NULL;
 	}
 
-	@Nonnull
+	@NotNull
 	public String asString() {
 		return "";
 	}
@@ -47,13 +46,13 @@ public final class CNull extends CEntry {
 		return 0;
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public CMapping asMap() {
 		return new CMapping();
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public CList asList() {
 		return new CList();

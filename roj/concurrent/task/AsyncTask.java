@@ -1,10 +1,10 @@
 package roj.concurrent.task;
 
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.NotNull;
 import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.concurrent.*;
 
 import static roj.reflect.ReflectionUtils.u;
@@ -61,18 +61,6 @@ public class AsyncTask<T> implements Future<T>, ITask {
 
 	@ApiStatus.OverrideOnly
 	protected T invoke() throws Exception { return supplier.call(); }
-	protected final boolean setDone(T result) {
-		if (!u.compareAndSwapInt(this, u_stateOffset, INITIAL, RUNNING)) return false;
-		out = result;
-		state = COMPLETED;
-		return true;
-	}
-	protected final boolean setFailed(Throwable e) {
-		if (!u.compareAndSwapInt(this, u_stateOffset, INITIAL, RUNNING)) return false;
-		out = Helpers.cast(e);
-		state = FAILED;
-		return true;
-	}
 
 	public boolean isDone() { return state > RUNNING; }
 
@@ -83,7 +71,7 @@ public class AsyncTask<T> implements Future<T>, ITask {
 	}
 
 	@Override
-	public T get(long timeout, @Nonnull TimeUnit unit) throws InterruptedException, TimeoutException, ExecutionException {
+	public T get(long timeout, @NotNull TimeUnit unit) throws InterruptedException, TimeoutException, ExecutionException {
 		synchronized (this) { if (!isDone()) wait(unit.toMillis(timeout)); }
 		if (!isDone()) throw new TimeoutException();
 		return getOrThrow();

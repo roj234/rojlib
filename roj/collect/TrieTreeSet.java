@@ -1,11 +1,11 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.TrieEntry.KeyItr;
 import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
-import javax.annotation.Nonnull;
 import java.lang.reflect.Array;
 import java.util.*;
 import java.util.function.Consumer;
@@ -206,7 +206,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 	}
 
 	@Override
-	public boolean addAll(@Nonnull Collection<? extends CharSequence> m) {
+	public boolean addAll(@NotNull Collection<? extends CharSequence> m) {
 		if (m instanceof TrieTreeSet) {
 			addTrieTree((TrieTreeSet) m);
 			return true;
@@ -428,13 +428,13 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 	 *
 	 * @return null
 	 */
-	@Nonnull
+	@NotNull
 	@Override
 	public Iterator<CharSequence> iterator() {
 		return new KeyItr(root);
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Object[] toArray() {
 		Object[] arr = new Object[size];
@@ -447,10 +447,10 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 		forEach((cs) -> arr[i.getAndIncrement()] = cs);
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	@SuppressWarnings("unchecked")
-	public <T> T[] toArray(@Nonnull T[] arr) {
+	public <T> T[] toArray(@NotNull T[] arr) {
 		if (arr.length < size) {
 			Class<?> newType = arr.getClass();
 			arr = (newType == Object[].class) ? (T[]) new Object[size] : (T[]) Array.newInstance(newType.getComponentType(), size);

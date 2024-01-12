@@ -4,7 +4,6 @@ import roj.collect.MyHashSet;
 import roj.io.IOUtil;
 import roj.net.ch.SelectorLoop;
 import roj.net.http.srv.*;
-import roj.text.UTFCoder;
 import roj.util.ByteList;
 
 import java.security.MessageDigest;
@@ -43,7 +42,7 @@ public abstract class WebsocketManager {
 	private void calcKey(String key, ResponseHeader out) {
 		String SECRET = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-		UTFCoder uc = IOUtil.SharedCoder.get();
+		IOUtil uc = IOUtil.SharedCoder.get();
 		ByteList in = uc.byteBuf; in.clear();
 		SHA1.update(in.putAscii(key).putAscii(SECRET).list, 0, in.wIndex());
 

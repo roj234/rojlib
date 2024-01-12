@@ -28,7 +28,7 @@ final class CollectionSer extends Adapter {
 
 	@Override
 	public Adapter inheritBy(SerializerFactory factory, Class<?> type) {
-		IntFunction<Collection<?>> subType = factory.dataContainer(type);
+		IntFunction<Collection<?>> subType = SerializerFactory.dataContainer(type);
 		return subType == null ? this : new CollectionSer(valueType, set, subType);
 	}
 

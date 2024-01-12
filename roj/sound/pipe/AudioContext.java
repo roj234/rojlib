@@ -1,6 +1,5 @@
 package roj.sound.pipe;
 
-import roj.collect.Graph;
 import roj.util.DynByteBuf;
 
 /**
@@ -8,27 +7,21 @@ import roj.util.DynByteBuf;
  * @since 2023/2/3 0003 14:49
  */
 public class AudioContext {
-	Graph<AudioPipeline> graph;
 	DynByteBuf buffer;
 
 	public void register(AudioPipeline pipeline) {
-		graph.addNode(pipeline);
 	}
 
 	public void connect(AudioPipeline from, AudioPipeline to) {
-		graph.addEdge(from, to);
 	}
 
 	public void disconnect(AudioPipeline from, AudioPipeline to) {
-		graph.removeEdge(from, to);
 	}
 
 	public void disconnectFrom(AudioPipeline from) {
-		graph.removeEdgeFrom(from);
 	}
 
 	public void disconnectTo(AudioPipeline to) {
-		graph.removeEdgeTo(to);
 	}
 
 	public void initSource() {

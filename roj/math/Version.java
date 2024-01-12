@@ -1,11 +1,10 @@
 package roj.math;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.IntList;
 import roj.config.word.ITokenizer;
 import roj.text.CharList;
 import roj.text.TextUtil;
-
-import javax.annotation.Nonnull;
 
 public final class Version {
 	public static final Version INFINITY = new Version("6.6.6-Inf");
@@ -67,7 +66,7 @@ public final class Version {
 		return i;
 	}
 
-	public int compareTo(@Nonnull Version o) {
+	public int compareTo(@NotNull Version o) {
 		if (this == INFINITY) return o == INFINITY ? 0 : 1;
 		if (o == INFINITY) return -1;
 

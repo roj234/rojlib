@@ -1,9 +1,9 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.function.Supplier;
 
@@ -117,8 +117,8 @@ public class LongMap<V> extends AbstractMap<Long, V> implements _Generic_Map<Lon
 	public _Generic_Entry[] __entries() { return entries; }
 	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
 
-	@Nonnull
-	public V computeIfAbsent(long k, @Nonnull Supplier<V> supplier) {
+	@NotNull
+	public V computeIfAbsent(long k, @NotNull Supplier<V> supplier) {
 		V v = get(k);
 		if (v == null) {
 			putLong(k, v = supplier.get());

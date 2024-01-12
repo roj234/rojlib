@@ -1,8 +1,15 @@
 
-# 任意对象的安全序列化解决方案
+# 任意对象的 安全* 序列化解决方案
 * 不使用反射
 * 任意对象
 * 通过泛型推断目标类型
+* 安全看你指的是什么了...
+* 如果是防止不知名类的反序列化
+* * 别设置GENERATE，手动注册允许序列化的类
+* * 带GENERATE序列化一次然后去掉
+* 或者是...循环引用不会出问题
+* * 你能控制的: +transient
+* * 你不能控制：FORCE_DYNAMIC
 
 标记(flag):
 * `GENERATE`        对未知的class自动生成序列化器
@@ -51,7 +58,7 @@ public class Test {
 
 		// simple
 		ConfigMaster.write(p, "C:\\test.yml", "YAML", adapter);
-		p = ConfigMaster.adapt(adapter, new File("C:\\test.yml"));
+		p = man.deserialize(adapter, new File("C:\\test.yml"));
 
 		// or CVisitor
 		ToJson ser = new ToJson();

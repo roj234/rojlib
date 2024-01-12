@@ -132,7 +132,7 @@ public class ObfuscatorUI extends JFrame {
 	}
 
 	public static void main(String[] args) throws Exception {
-		GUIUtil.systemLook();
+		GuiUtil.systemLook();
 		ObfuscatorUI f = new ObfuscatorUI();
 
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -144,9 +144,9 @@ public class ObfuscatorUI extends JFrame {
 	public ObfuscatorUI() {
 		initComponents();
 
-		GUIUtil.dropFilePath(uiInputPath, (f) -> uiOutputPath.setText(new File(f.getName()).getAbsolutePath()), false);
-		GUIUtil.dropFilePath(uiOutputPath, null, false);
-		GUIUtil.dropFilePath(uiLibPath, null, true);
+		GuiUtil.dropFilePath(uiInputPath, (f) -> uiOutputPath.setText(new File(f.getName()).getAbsolutePath()), false);
+		GuiUtil.dropFilePath(uiOutputPath, null, false);
+		GuiUtil.dropFilePath(uiLibPath, null, true);
 
 		createObfTypes(uiClassObf, (x) -> {
 			obf.clazz = x;
@@ -170,6 +170,7 @@ public class ObfuscatorUI extends JFrame {
 			File in = new File(uiInputPath.getText());
 			uiLoadPackage.setEnabled(false);
 			TaskPool.Common().pushTask(() -> {
+				GuiPathTreeBuilder<Void> builder = new GuiPathTreeBuilder<>();
 				MyHashSet<String> packages = new MyHashSet<>();
 				try (ZipArchive za = new ZipArchive(in)) {
 					for (ZEntry value : za.getEntries().values()) {
@@ -179,11 +180,7 @@ public class ObfuscatorUI extends JFrame {
 							String exceptClassName = name.substring(0, name.length()-6);
 
 							if (className.equals(exceptClassName)) {
-								int i = className.length();
-								while ((i = className.lastIndexOf('/', i-1)) >= 0) {
-									packages.add(className.substring(0, i));
-								}
-								packages.add(className);
+								builder.add(className, null, false);
 							}
 						}
 					}
@@ -191,36 +188,7 @@ public class ObfuscatorUI extends JFrame {
 					ex.printStackTrace();
 				}
 
-				ExclusionNode root = new ExclusionNode(in.getName(), 0); root.fullName = "";
-				ExclusionNode node = root;
-
-				Object[] array = packages.toArray();
-				Arrays.sort(array);
-				int level = 0;
-				for (int i = 0; i < array.length; i++) {
-					String o = array[i].toString();
-					int myLevel = packageLevel(o);
-
-					while (myLevel < level) {
-						node = node.parent;
-						level--;
-					}
-					boolean inserted = false;
-					while (myLevel > level) {
-						node = node.children.get(node.children.size()-1);
-						ExclusionNode next = new ExclusionNode(o, o.lastIndexOf('/')+1);
-						node.insert(next, node.getChildCount());
-						level++;
-						inserted = true;
-					}
-
-					if (!inserted) {
-						ExclusionNode next = new ExclusionNode(o, o.lastIndexOf('/')+1);
-						node.insert(next, node.getChildCount());
-					}
-				}
-
-				pList.setRoot(root);
+				pList.setRoot(builder.build(in.getName()));
 				uiLoadPackage.setEnabled(true);
 			});
 		});
@@ -232,7 +200,7 @@ public class ObfuscatorUI extends JFrame {
 
 			for (TreePath path : paths) {
 				ExclusionEntry entry = new ExclusionEntry();
-				entry.name = ((ExclusionNode) path.getLastPathComponent()).fullName;
+				entry.name = ((GuiPathTreeBuilder.Node<?>) path.getLastPathComponent()).fullName;
 				if (entry.name == null) continue;
 				if (!pActive.contains(entry)) pActive.addElement(entry);
 			}
@@ -339,7 +307,7 @@ public class ObfuscatorUI extends JFrame {
 		});
 
 		uiSaveCfg.addActionListener((e) -> {
-			File file = GUIUtil.fileSaveTo("保存混淆器配置", "obfuscator.yml", ObfuscatorUI.this);
+			File file = GuiUtil.fileSaveTo("保存混淆器配置", "obfuscator.yml", ObfuscatorUI.this);
 			if (file == null) return;
 
 			try {
@@ -349,7 +317,7 @@ public class ObfuscatorUI extends JFrame {
 			}
 		});
 		uiLoadCfg.addActionListener((e) -> {
-			File file = GUIUtil.fileLoadFrom("加载混淆器配置", ObfuscatorUI.this);
+			File file = GuiUtil.fileLoadFrom("加载混淆器配置", ObfuscatorUI.this);
 			if (file == null) return;
 
 			try {
@@ -359,7 +327,7 @@ public class ObfuscatorUI extends JFrame {
 			}
 		});
 		uiSaveMap.addActionListener((e) -> {
-			File file = GUIUtil.fileSaveTo("保存映射表", "obfuscator.map", ObfuscatorUI.this);
+			File file = GuiUtil.fileSaveTo("保存映射表", "obfuscator.map", ObfuscatorUI.this);
 			if (file == null) return;
 
 			try {
@@ -369,7 +337,7 @@ public class ObfuscatorUI extends JFrame {
 			}
 		});
 		uiSaveLines.addActionListener((e) -> {
-			File file = GUIUtil.fileSaveTo("保存行号表", "lines.log", ObfuscatorUI.this);
+			File file = GuiUtil.fileSaveTo("保存行号表", "lines.log", ObfuscatorUI.this);
 			if (file == null) return;
 
 			try (TextWriter fos = TextWriter.to(file)) {
@@ -381,13 +349,6 @@ public class ObfuscatorUI extends JFrame {
 	}
 
 	// region packageList
-	private static int packageLevel(String o) {
-		int j = 0;
-		for (int i = 0; i < o.length(); i++)
-			if (o.charAt(i) == '/') j++;
-		return j;
-	}
-
 	private static void createBiFlag(SpinnerNumberModel sm, JCheckBox... flags) {
 		for (int i = 0; i < flags.length; i++) {
 			JCheckBox flag = flags[i];
@@ -413,18 +374,6 @@ public class ObfuscatorUI extends JFrame {
 		};
 	}
 
-	private static final class ExclusionNode extends TreeNodeImpl<ExclusionNode> {
-		String fullName;
-		String name;
-
-		public ExclusionNode(String name, int pos) {
-			this.name = name.substring(pos);
-			this.fullName = name;
-		}
-
-		@Override
-		public String toString() { return name; }
-	}
 	private static final class ExclusionEntry {
 		String name;
 		int flag;
@@ -546,7 +495,7 @@ public class ObfuscatorUI extends JFrame {
 		addObf(" abc", ABC::new);
 		addObf("- 自文件 -", 我是分隔符);
 		addObf(" 每行一个名称", () -> {
-			File file = GUIUtil.fileLoadFrom("选择字符串文件");
+			File file = GuiUtil.fileLoadFrom("选择字符串文件");
 			if (file == null) return null;
 
 			try {
@@ -592,7 +541,7 @@ public class ObfuscatorUI extends JFrame {
 		ConfigMaster.write(o, file, "YAML", SF.adapter(SaveTo.class));
 	}
 	private void readYml(File file) throws IOException, ParseException {
-		SaveTo o = ConfigMaster.adapt(SF.adapter(SaveTo.class), file);
+		SaveTo o = SF.deserialize(SaveTo.class, file);
 		uiFlag.setValue(o.flag);
 		uiSeed.setValue(o.seed);
 		obf.clazz = o.classObf;

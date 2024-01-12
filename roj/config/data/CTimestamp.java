@@ -1,8 +1,7 @@
 package roj.config.data;
 
+import org.jetbrains.annotations.NotNull;
 import roj.config.serial.CVisitor;
-
-import javax.annotation.Nonnull;
 
 /**
  * @author Roj234
@@ -13,7 +12,7 @@ public final class CTimestamp extends CLong {
 		super(number);
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Type getType() {
 		return Type.DATE;

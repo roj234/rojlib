@@ -18,6 +18,8 @@ import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
 import roj.ui.EasyProgressBar;
+import roj.ui.terminal.CommandContext;
+import roj.ui.terminal.SimpleCliParser;
 import roj.util.ArrayCache;
 import roj.util.BsDiff;
 import roj.util.Helpers;
@@ -32,6 +34,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static roj.reflect.ReflectionUtils.u;
+import static roj.ui.terminal.Argument.file;
+import static roj.ui.terminal.Argument.string;
+import static roj.ui.terminal.CommandNode.argument;
+import static roj.ui.terminal.SimpleCliParser.nullImpl;
 
 /**
  * @author Roj234
@@ -91,16 +97,24 @@ public class TextDeDup {
 	}
 
 	public static void main(String[] args) throws Exception {
-		if (args.length < 2) {
-			System.out.println("TextDeDuplicate <mode> <path> <list>\n" +
-				"mode: find | apply\n" +
-				"path: novel path\n" +
-				"list: a yml/json file to store duplicate file");
+		CommandContext ctx = new SimpleCliParser()
+			.add(argument("mode", string("find", "apply"))
+				.then(argument("path", file(true))
+					.then(argument("list", file(false))
+						.executes(nullImpl()))))
+			.parse(args, true);
+
+		if (ctx == null) {
+			System.out.println("""
+				TextDeDuplicate <mode> <path> <list>
+				mode: find | apply
+				path: novel path
+				list: a yml/json file to store duplicate file""");
 			return;
 		}
 
-		basePath = new File(args[1]);
-		pathLen = basePath.getAbsolutePath().length();
+		basePath = ctx.argument("path", File.class);
+		pathLen = basePath.getAbsolutePath().length()+1;
 
 		sf = Serializers.newSerializerFactory();
 		sf.register(File.class, new Object() {
@@ -114,10 +128,11 @@ public class TextDeDup {
 		replacement.put('\t', "");
 		replacement.put(' ', "");
 		replacement.put('　', "");
-		asyn2.setRejectPolicy(TaskPool::executePolicy);
+		POOL.setRejectPolicy(TaskPool::waitPolicy);
 
-		if (args[0].equals("find")) {
-			cfg = new ToYaml().to(new FileOutputStream(args[2]));
+		switch (ctx.argument("mode", String.class)) {
+			case "find":
+			cfg = new ToYaml().to(new FileOutputStream(ctx.argument("list", File.class)));
 			cfg.valueList();
 
 			ConcurrentHashMap<File, byte[]> fileCache = new ConcurrentHashMap<>();
@@ -130,7 +145,7 @@ public class TextDeDup {
 			bar.addMax(allFiles.size());
 			for (int i = 0; i < allFiles.size(); i++) {
 				File file = allFiles.get(i);
-				asyn2.pushTask(() -> {
+				POOL.pushTask(() -> {
 					char[] data = ArrayCache.getCharArray(SIZE_BUFFER, false);
 					CharList sb = new CharList(data);
 					try (TextReader in = TextReader.auto(file)) {
@@ -158,7 +173,7 @@ public class TextDeDup {
 					ArrayCache.putArray(data);
 				});
 			}
-			asyn2.awaitFinish();
+			POOL.awaitFinish();
 			bar.end("loaded");
 
 			bar.reset();
@@ -168,9 +183,10 @@ public class TextDeDup {
 
 			cfg.finish();
 			bar.end("end");
-		} else if (args[0].equals("apply")) {
+			break;
+			case "apply":
 			CAdapter<List<Diff>> adapter = sf.listOf(Diff.class);
-			List<Diff> diffs = ConfigMaster.adapt(adapter, new File(args[2]));
+			List<Diff> diffs = sf.deserialize(adapter, ctx.argument("list", File.class));
 			for (int i = 0; i < diffs.size();) {
 				Diff d = diffs.get(i);
 				if (!d.left.isFile() || !d.right.isFile()) {
@@ -183,18 +199,19 @@ public class TextDeDup {
 					d.left = right;
 				}
 
-				asyn2.pushTask(d);
+				POOL.pushTask(d);
 				i++;
 			}
 
-			asyn2.awaitFinish();
+			POOL.awaitFinish();
 			diffs.sort((o1, o2) -> Integer.compare(o1.diff, o2.diff));
 			for (int i = diffs.size()-1; i > 0; i--) {
 				if (diffs.get(i).equals(diffs.get(i-1))) diffs.remove(i);
 			}
 			System.out.println("count:" + diffs.size());
-			ConfigMaster.write(diffs, args[2], "yml", adapter);
+			ConfigMaster.write(diffs, ctx.argument("list", File.class).getAbsolutePath(), "yml", adapter);
 
+			bar.addMax(diffs.size());
 			for (int i = 0; i < diffs.size(); i++) {
 				Diff d = diffs.get(i);
 
@@ -209,19 +226,31 @@ public class TextDeDup {
 				args2.add(d.left.getAbsolutePath());
 				args2.add(d.right.getAbsolutePath());
 
-				bar.update((double) i / diffs.size(), 1);
+				bar.addCurrent(1);
 
-				System.out.println("left file:"+d.left);
-				System.out.println("right file:"+d.right);
-				new ProcessBuilder().command("D:\\Everything\\Everything.exe", "-s", "<"+Tokenizer.addSlashes(IOUtil.noExtName(d.left.getName())) + ">|<" + Tokenizer.addSlashes(IOUtil.noExtName(d.right.getName()))+'>').start();
+				new ProcessBuilder().command("D:\\Everything\\Everything.exe", "-s", "<"+Tokenizer.addSlashes(IOUtil.fileName(d.left.getName())) + ">|<" + Tokenizer.addSlashes(IOUtil.fileName(d.right.getName()))+'>').start();
 				int exit = new ProcessBuilder().command(args2).start().waitFor();
 
-				if (exit == 0) CLIUtil.readString("请按任意键继续");
+				if (exit == 0) {
+					System.out.println("left:" + d.left);
+					System.out.println("right:" + d.right);
+					System.out.println("删除左(l)右(r)取消(c)");
+					char c = CLIUtil.awaitCharacter(MyBitSet.from("lrc"));
+					if (c != 'c') {
+						if (c == 'l') {
+							d.left.delete();
+						} else if (c == 'r') {
+							d.right.delete();
+						} else {
+							System.exit(1);
+						}
+					}
+				}
 
-				System.out.println("exit code:"+exit);
 				System.out.println();
 			}
-		} else {
+			break;
+			default:
 			System.out.println("unknown command, see help");
 		}
 	}
@@ -231,14 +260,13 @@ public class TextDeDup {
 
 	private static File basePath;
 	private static int pathLen;
-	private static TaskPool asyn2 = TaskPool.MaxSize(9999, "TDD worker");
+	private static final TaskPool POOL = TaskPool.MaxSize(9999, "TDD worker");
 
 	static EasyProgressBar bar = new EasyProgressBar("进度");
 
 	private static CharMap<String> replacement;
 	private static ToSomeString cfg;
 	private static SerializerFactory sf;
-	private static int limit;
 
 	public static void diff(IntMap<List<File>> fileMap, ConcurrentHashMap<File, byte[]> fileCache) {
 		SimpleList<IntMap.Entry<List<File>>> entries = new SimpleList<>(fileMap.selfEntrySet());
@@ -260,6 +288,8 @@ public class TextDeDup {
 
 		TaskExecutor asyn1 = new TaskExecutor();
 		asyn1.start();
+		TaskExecutor asyn2 = new TaskExecutor();
+		asyn2.start();
 
 		for (int i = files.size()-1; i >= 0; i--) {
 			List<File> prev = i==0?Collections.emptyList():files.get(i-1);
@@ -271,7 +301,7 @@ public class TextDeDup {
 			int finalI = i;
 			asyn1.pushTask(() -> {
 				System.out.println("================ Compare Status ================");
-				System.out.println("|  Block: "+finalI+"");
+				System.out.println("|  Block: "+finalI);
 				System.out.println("|  Compare: "+self.size()+"("+cmpCount+")");
 				System.out.println("|  Memory:"+TextUtil.scaledNumber(curMem.get())+"B/"+TextUtil.scaledNumber(finalMaxMem)+"B");
 				System.out.println("================================================");
@@ -280,17 +310,19 @@ public class TextDeDup {
 
 				for (int j = 0; j < self.size(); j++) {
 					File me = self.get(j);
+					boolean flag = me.getAbsolutePath().contains("文本");
 
 					byte[] dataA = fileCache.get(me);
 					BsDiff diff = new BsDiff();
 					diff.setLeft(dataA);
 
 					int finalJ = j;
-					tasks.add(Promise.async(asyn2, (x) -> {
+					tasks.add(Promise.async(POOL, (x) -> {
 						List<Diff> sorter = new SimpleList<>();
 
 						for (int k = 0; k < prev.size(); k++) {
 							File tc = prev.get(k);
+							if (flag && tc.getAbsolutePath().contains("文本")) continue;
 
 							byte[] dataB = fileCache.get(tc);
 							int maxHeadDiff = (int) (Math.min(dataA.length, dataB.length) * DIFF_MAX);
@@ -307,6 +339,7 @@ public class TextDeDup {
 
 						for (int k = finalJ+1; k < self.size(); k++) {
 							File tc = self.get(k);
+							if (flag && tc.getAbsolutePath().contains("文本")) continue;
 
 							byte[] dataB = fileCache.get(tc);
 							int maxHeadDiff = (int) (Math.min(dataA.length, dataB.length) * DIFF_MAX);
@@ -333,11 +366,11 @@ public class TextDeDup {
 						int count = prev.size() + self.size() - finalJ - 1;
 						bar.addCurrent(count);
 
-						x.resolve(null);
+						x.resolveOn(null, asyn2);
 					}));
 				}
 
-				Promise.all(null, tasks).thenR(() -> {
+				Promise.all(asyn2, tasks).thenR(() -> {
 					synchronized (finishedBlock) {
 						finishedBlock.add(finalI);
 						long mem = 0;
@@ -360,8 +393,11 @@ public class TextDeDup {
 
 		try {
 			asyn1.waitFor();
+			asyn2.waitFor();
+			asyn1.shutdown();
+			asyn2.shutdown();
 		} catch (InterruptedException ignored) {}
-		asyn2.awaitFinish();
-		asyn2.shutdown();
+		POOL.awaitFinish();
+		POOL.shutdown();
 	}
 }

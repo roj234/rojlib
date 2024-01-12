@@ -9,7 +9,7 @@ import roj.util.DynByteBuf;
 public final class CstInt extends Constant {
 	public int value;
 
-	public CstInt(int value) { this.value = value;}
+	public CstInt(int value) { this.value = value; }
 	@Override
 	void write(DynByteBuf w) { w.put(INT).putInt(value); }
 	@Override

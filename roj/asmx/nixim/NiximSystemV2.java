@@ -1,5 +1,6 @@
 package roj.asmx.nixim;
 
+import org.jetbrains.annotations.NotNull;
 import roj.RequireTest;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
@@ -26,7 +27,6 @@ import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.InputStream;
 import java.util.*;
@@ -279,7 +279,7 @@ public class NiximSystemV2 implements ITransformer {
 				return nx == null ? null : nx.target;
 			}
 
-			@Nonnull
+			@NotNull
 			@Override
 			public Set<Entry<String, String>> entrySet() { return Collections.emptySet(); }
 		};
@@ -368,14 +368,14 @@ public class NiximSystemV2 implements ITransformer {
 					throw new NiximException("特殊方法("+name+")不能包含注解");
 
 				if (!name.startsWith(SPEC_M_CONSTRUCTOR)) {
-					if (0 == (method.access & ACC_STATIC)) throw new NiximException("特殊方法("+name+")必须静态");
+					if (0 == (method.modifier & ACC_STATIC)) throw new NiximException("特殊方法("+name+")必须静态");
 					if (!method.rawDesc().startsWith("()")) throw new NiximException("特殊方法("+name+")不能有参数");
 				} else if (!method.rawDesc().endsWith(")V")) {
 					throw new NiximException("构造器标记("+name+")必须返回void");
-				} else if (0 != (method.access & ACC_STATIC)) throw new NiximException("构造器标记("+name+")不能静态");
+				} else if (0 != (method.modifier & ACC_STATIC)) throw new NiximException("构造器标记("+name+")不能静态");
 			}
 
-			if (0 != (method.access & ACC_SYNTHETIC))
+			if (0 != (method.modifier & ACC_SYNTHETIC))
 				autoCopy.add(methods.get(i));
 		}
 
@@ -572,7 +572,7 @@ public class NiximSystemV2 implements ITransformer {
 
 				// 2.0不再限制对入参的更改
 				for (XInsnNodeView node : code.instructions) {
-					int id = InsnHelper.getVarId(node);
+					int id = node.getVarId();
 					if (id >= 0) {
 						if (node.opName().startsWith("Store", 1)) {
 							if (id >= paramLength) continue;
@@ -607,7 +607,7 @@ public class NiximSystemV2 implements ITransformer {
 				int paramLength = TypeHelper.paramSize(method.rawDesc());
 
 				for (XInsnNodeView node : code.instructions) {
-					int id = InsnHelper.getVarId(node);
+					int id = node.getVarId();
 					if (id >= 0) {
 						int bci = node.bci();
 						if (node.opName().startsWith("Load", 1)) {
@@ -674,7 +674,7 @@ public class NiximSystemV2 implements ITransformer {
 				if (pcd.mapName.equals("/")) pcd.mapName = pcd.name;
 				pcd.mapOwner = unifyClassName(a.getString("owner", nx.target));
 
-				pcd.mode = Pcd.SHADOW | node.access;
+				pcd.mode = Pcd.SHADOW | node.modifier;
 
 				nx.preconditions.add(pcd);
 
@@ -704,7 +704,7 @@ public class NiximSystemV2 implements ITransformer {
 				pcd.mapName = a.getString("value", pcd.name);
 				pcd.mapOwner = nx.target;
 
-				pcd.mode = Pcd.COPY | node.access;
+				pcd.mode = Pcd.COPY | node.modifier;
 
 				nx.preconditions.add(pcd);
 
@@ -745,7 +745,7 @@ public class NiximSystemV2 implements ITransformer {
 				pcd.mapName = a.getString("value", pcd.name);
 				pcd.mapOwner = nx.target;
 
-				pcd.mode = Pcd.INJECT | node.access;
+				pcd.mode = Pcd.INJECT | node.modifier;
 
 				if ((a.getInt("flags") & Inject.RUNTIME_MAP) != 0)
 					pcd.mapName = mapName(data.name, pcd.mapOwner, pcd.mapName, node);
@@ -773,7 +773,7 @@ public class NiximSystemV2 implements ITransformer {
 	private static void addInaccessible(ConstantData data, SimpleList<? extends CNode> nodes, MyHashSet<Desc> inaccessible, boolean isSamePackage) {
 		for (int i = 0; i < nodes.size(); i++) {
 			CNode remain = nodes.get(i);
-			int acc = remain.access;
+			int acc = remain.modifier;
 			if (((acc & (ACC_PRIVATE | ACC_STATIC)) != ACC_STATIC) || ((acc & ACC_PUBLIC) == 0 && !isSamePackage)) {
 				inaccessible.add(new Desc(data.name, remain.name(), remain.rawDesc()));
 			}
@@ -919,7 +919,7 @@ public class NiximSystemV2 implements ITransformer {
 				InjectState state = nx.inject.remove(tmp);
 				if (state == null) continue;
 
-				if ((state.method.access& ACC_STATIC) != (mn.access& ACC_STATIC)) {
+				if ((state.method.modifier & ACC_STATIC) != (mn.modifier & ACC_STATIC)) {
 					throw new NiximException(nx.self+"."+state.method+"无法覆盖"+data.name+"."+mn+": static不匹配");
 				}
 
@@ -1023,9 +1023,9 @@ public class NiximSystemV2 implements ITransformer {
 				pcds.remove(tmp);
 
 				if ((pcd.mode & Pcd.REAL_ADD_FINAL) != 0) {
-					node.access |= ACC_FINAL;
+					node.modifier |= ACC_FINAL;
 				} else if ((pcd.mode & Pcd.REAL_DEL_FINAL) != 0) {
-					node.access &= ~ACC_FINAL;
+					node.modifier &= ~ACC_FINAL;
 				}
 
 				// shadow did not process unique
@@ -1124,7 +1124,7 @@ public class NiximSystemV2 implements ITransformer {
 				MyBitSet occurrences = s.getOccurrences();
 				int ordinal = 0;
 
-				int isStatic = (s.method.access & ACC_STATIC);
+				int isStatic = (s.method.modifier & ACC_STATIC);
 				int used = 0;
 				for (XInsnNodeView node : mnCode.instructions) {
 					Desc d = node.descOrNull();
@@ -1179,7 +1179,7 @@ public class NiximSystemV2 implements ITransformer {
 						default: throw new NiximException("OverwriteConstant的matchType必须是Constant中的有效类别ID");
 					}
 				} else {
-					if ((s.method.access & ACC_STATIC) == 0) {
+					if ((s.method.modifier & ACC_STATIC) == 0) {
 						replaceTo.one(ALOAD_0);
 						replaceTo.invokeV(data.name, s.method.name(), s.method.rawDesc());
 					} else {
@@ -1296,7 +1296,7 @@ public class NiximSystemV2 implements ITransformer {
 					tmpList.clear();
 					for (XInsnNodeView node : insn) {
 						String name = node.opName();
-						int vid = InsnHelper.getVarId(node);
+						int vid = node.getVarId();
 						if (vid >= 0 && name.startsWith("Store", 1)) {
 							Int2IntMap.Entry entry = overwriteCheck.getEntry(vid);
 							if (entry != null && entry.v == -1) {
@@ -1397,7 +1397,7 @@ public class NiximSystemV2 implements ITransformer {
 						if (needle.opcode() == INVOKESTATIC) {
 							Desc d = needle.desc();
 							if (d.name.startsWith(SPEC_M_ANYVAR)) {
-								int vid = getVarId(haystack);
+								int vid = haystack.getVarId();
 								if (vid < 0) {
 									failed = true;
 									return false;
@@ -1450,7 +1450,7 @@ public class NiximSystemV2 implements ITransformer {
 		usedSlots.fill(paramSize);
 		for (XInsnNodeView node : insn) {
 			String name = node.opName();
-			int vid = InsnHelper.getVarId(node);
+			int vid = node.getVarId();
 			if (vid >= paramSize && name.startsWith("Store", 1)) {
 				usedSlots.add(vid++);
 				if (name.charAt(0) == 'D' || name.charAt(0) == 'L') {

@@ -1,5 +1,6 @@
 package roj.text;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.CharMap;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
@@ -9,7 +10,6 @@ import roj.math.MutableInt;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.CharBuffer;
@@ -176,7 +176,7 @@ public class CharList implements CharSequence, Appender {
 	public final int indexOf(CharSequence s) { return indexOf(s, 0); }
 	public final int indexOf(CharSequence s, int from) { return doMatch(s, from, len-s.length()+1); }
 	public final boolean startsWith(CharSequence s) { return s.length() == 0 || doMatch(s, 0, 1) >= 0; }
-	public final boolean endsWith(CharSequence s) { return s.length() == 0 || doMatch(s, len-s.length(), len-s.length()+1) >= 0; }
+	public final boolean endsWith(CharSequence s) { return s.length() == 0 || (len >= s.length() && doMatch(s, len-s.length(), len-s.length()+1) >= 0); }
 
 	public final int match(CharSequence s, int start, int end) {
 		checkBounds(start, end, len);
@@ -725,7 +725,7 @@ public class CharList implements CharSequence, Appender {
 
 			return start==end ? "" : new Slice(list, start+off, end+off);
 		}
-		@Nonnull
+		@NotNull
 		public String toString() { return new String(list, off, len); }
 
 		@Override

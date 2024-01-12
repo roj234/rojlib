@@ -1,12 +1,11 @@
 package roj.config.data;
 
+import org.jetbrains.annotations.NotNull;
 import roj.config.NBTParser;
 import roj.config.VinaryParser;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
-
-import javax.annotation.Nonnull;
 
 /**
  * @author Roj234
@@ -42,13 +41,13 @@ public final class CDouble extends CEntry {
 		return (long) value;
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Type getType() {
 		return Type.DOUBLE;
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public String asString() {
 		return String.valueOf(value);

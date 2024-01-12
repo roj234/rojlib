@@ -1,8 +1,6 @@
 package roj.net;
 
 import roj.collect.MyBitSet;
-import roj.io.IOUtil;
-import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.UTF8MB4;
@@ -19,8 +17,7 @@ import java.net.MalformedURLException;
  */
 public class URIUtil {
 	public static String decodeURI(CharSequence src) throws MalformedURLException {
-		ByteList bb = IOUtil.ddLayeredByteBuf();
-
+		ByteList bb = new ByteList();
 		try {
 			return decodeURI(src, new CharList(), bb).toStringAndFree();
 		} finally {
@@ -98,12 +95,8 @@ public class URIUtil {
 	public static final MyBitSet URI_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!@#$&*()_+-=/?.,:;'");
 	public static final MyBitSet URI_COMPONENT_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!*()_-.'");
 
-	public static String encodeURI(CharSequence src) {
-		return encodeURI(new CharList(), src).toStringAndFree();
-	}
-	public static String encodeURIComponent(CharSequence src) {
-		return encodeURIComponent(new CharList(), src).toStringAndFree();
-	}
+	public static String encodeURI(CharSequence src) { return encodeURI(new CharList(), src).toStringAndFree(); }
+	public static String encodeURIComponent(CharSequence src) { return encodeURIComponent(new CharList(), src).toStringAndFree(); }
 	public static <T extends Appendable> T encodeURI(T sb, CharSequence src) {
 		ByteList bb = new ByteList();
 		try {
@@ -120,28 +113,23 @@ public class URIUtil {
 			bb._free();
 		}
 	}
-	public static <T extends Appendable> T encodeURI(DynByteBuf ib, T ob, MyBitSet safe) {
+	public static <T extends Appendable> T encodeURI(CharSequence src, T sb, MyBitSet safe) {
 		try {
-			Object ref = ib.array();
-			long off = ib._unsafeAddr();
-			long end = off + ib.readableBytes();
-
-			while (off < end) {
-				int c = ReflectionUtils.u.getByte(ref, off++)&0xFF;
-				ib.rIndex++;
-
-				if (safe.contains(c)) ob.append((char) c);
-				else ob.append('%').append(Integer.toString(c, 16));
+			for (int i = 0; i < src.length(); i++) {
+				char c = src.charAt(i);
+				if (safe.contains(c)) sb.append(c);
+				else sb.append("%").append(Integer.toString(c, 16));
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
-		return ob;
+		return sb;
 	}
 
-	public static String encodeFilePath(CharSequence src) { return encodeFilePath(new CharList(), src).toStringAndFree(); }
-	private static final MyBitSet invalid = MyBitSet.from("\\/:*?\"<>|+");
-	public static <T extends Appendable> T encodeFilePath(T sb, CharSequence src) {
+	public static String escapeFilePath(CharSequence src) { return escapeFilePath(new CharList(), src, FILE_PATH_INVALID).toStringAndFree(); }
+	public static String escapeFileName(CharSequence src) { return escapeFilePath(new CharList(), src, FILE_NAME_INVALID).toStringAndFree(); }
+	private static final MyBitSet FILE_NAME_INVALID = MyBitSet.from("\\/:*?\"<>|+"), FILE_PATH_INVALID = MyBitSet.from(":*?\"<>|+");
+	public static <T extends Appendable> T escapeFilePath(T sb, CharSequence src, MyBitSet invalid) {
 		try {
 			for (int i = 0; i < src.length(); i++) {
 				char c = src.charAt(i);

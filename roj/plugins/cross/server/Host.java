@@ -4,7 +4,6 @@ import roj.collect.IntMap;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
 import roj.net.ch.Pipe;
 import roj.text.logging.Level;
 import roj.util.ByteList;
@@ -19,7 +18,7 @@ import static roj.plugins.cross.server.AEServer.server;
  * @author Roj233
  * @since 2022/1/24 3:21
  */
-final class Host extends Connection implements ChannelHandler {
+final class Host extends Connection {
 	String token;
 
 	String motdString;
@@ -68,18 +67,18 @@ final class Host extends Connection implements ChannelHandler {
 				int id;
 				PipeInfo pi;
 			break;
-			case P_S_PING:
+			case P_S_CONNECT_REQ:
 				byte[] ip = rb.readBytes(rb.readUnsignedByte());
 				char port = rb.readChar();
 
 				Pinger task = ping(ip, port);
 				if (task == null) {
 					rb = IOUtil.getSharedByteBuf();
-					rb.put(P_S_PING).put(-3);
+					rb.put(P_S_CONNECT_REQ).put(-3);
 					ctx.channelWrite(rb);
 				}
 			break;
-			case P_S_PONG: pong(rb); break;
+			case P_S_CONNECT_ACK: pong(rb); break;
 			case PHS_CHANNEL_ALLOW:
 				id = rb.readInt();
 				PipeInfo pipe = pipes.get(id);

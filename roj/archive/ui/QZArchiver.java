@@ -10,8 +10,10 @@ import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.crypt.CRCAny;
 import roj.io.IOUtil;
+import roj.io.source.CacheSource;
 import roj.io.source.FileSource;
 import roj.io.source.SplittedSource;
+import roj.text.TextUtil;
 import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
@@ -37,17 +39,10 @@ import java.util.function.Consumer;
  * @since 2023/6/4 0004 3:54
  */
 public class QZArchiver {
-	public static Consumer<QZWriter> fileData(File f) {
-		return out -> {
-			try (FileInputStream in = new FileInputStream(f)) {
-				IOUtil.copyStream(in, out);
-			} catch (IOException e) {
-				Helpers.athrow(e);
-			}
-		};
-	}
+	public static final int AOP_REPLACE = 0, AOP_UPDATE = 1, AOP_UPDATE_EXISTING = 2, AOP_SYNC = 3, AOP_IGNORE = 4;
+	public static final int PATH_RELATIVE = 0, PATH_FULL = 1, PATH_ABSOLUTE = 2;
 
-	public File input;
+	public List<File> input;
 	public boolean storeFolder, storeMT, storeCT, storeAT, storeAttr;
 	public int threads;
 	public boolean autoSolidSize;
@@ -59,10 +54,14 @@ public class QZArchiver {
 	public boolean useBCJ, useBCJ2;
 	public LZMA2Options options;
 	public boolean fastAppendCheck;
-	public int appendOptions;
+	public int appendOptions, pathType;
 	public File cacheFolder;
 	public File outputFolder;
 	public String outputName;
+	public boolean singleThread;
+
+	public int autoSplitTaskSize;
+	public LZMA2Options autoSplitTaskOptions;
 
 	private QZArchive oldArchive;
 	private long keepSize;
@@ -82,7 +81,7 @@ public class QZArchiver {
 		keep.clear();
 		empties.clear();
 
-		File path = input;
+		List<File> paths = input;
 		String inAbsPath = new File(outputFolder, outputName).getAbsolutePath();
 		int[] prefix = new int[1];
 
@@ -115,12 +114,28 @@ public class QZArchiver {
 			}
 		};
 
-		if (path.isFile()) {
-			prefix[0] = path.getAbsolutePath().length() - path.getName().length();
-			callback.accept(path);
-		} else {
-			prefix[0] = path.getAbsolutePath().length()+1;
-			traverseFolder(path, callback, emptyOrFolder);
+		if (pathType == PATH_FULL) {
+			String shortestCommonParent = paths.get(0).getAbsolutePath();
+			int prefixLength = shortestCommonParent.length();
+			for (int i = 1; i < paths.size(); i++) {
+				String path = paths.get(i).getAbsolutePath();
+				for (int j = 0; j < Math.min(prefixLength, path.length()); j++) {
+					if (path.charAt(j) != shortestCommonParent.charAt(j)) {
+						prefixLength = j;
+						break;
+					}
+				}
+			}
+			prefix[0] = prefixLength;
+		}
+		for (File path : paths) {
+			if (path.isFile()) {
+				if (pathType == PATH_RELATIVE) prefix[0] = path.getAbsolutePath().length() - path.getName().length();
+				callback.accept(path);
+			} else {
+				if (pathType == PATH_RELATIVE) prefix[0] = path.getAbsolutePath().length()+1;
+				traverseFolder(path, callback, emptyOrFolder);
+			}
 		}
 
 		File out = new File(outputFolder, outputName.concat(splitSize == 0 ? "" : ".001"));
@@ -135,7 +150,7 @@ public class QZArchiver {
 		keep.clear();
 		keepSize = 0;
 		switch (appendOptions) {
-			case 0: {
+			case AOP_REPLACE: {
 				// 添加并替换文件
 				if (oldArchive != null) {
 					for (QZEntry entry : oldArchive.getEntriesByPresentOrder()) {
@@ -146,7 +161,7 @@ public class QZArchiver {
 				}
 			}
 			break;
-			case 1: {
+			case AOP_UPDATE: {
 				// 更新并添加文件
 				if (oldArchive != null) {
 					for (QZEntry entry : oldArchive.getEntriesByPresentOrder()) {
@@ -163,7 +178,7 @@ public class QZArchiver {
 				}
 			}
 			break;
-			case 2: {
+			case AOP_UPDATE_EXISTING: {
 				// 只更新已存在的文件
 				if (oldArchive == null) return -1;
 				MyHashMap<String, QZEntry> inEntry = oldArchive.getEntries();
@@ -173,7 +188,7 @@ public class QZArchiver {
 				for (QZEntry value : inEntry.values()) keepEntry(value);
 			}
 			break;
-			case 3: {
+			case AOP_SYNC: {
 				// 同步压缩包内容
 				if (oldArchive != null) {
 					for (QZEntry entry : oldArchive.getEntriesByPresentOrder()) {
@@ -190,7 +205,7 @@ public class QZArchiver {
 				}
 			}
 			break;
-			case 4: // 重新建立压缩包
+			case AOP_IGNORE: // 重新建立压缩包
 		}
 
 		// EMPTY
@@ -199,7 +214,7 @@ public class QZArchiver {
 			if (entry != null) empties.add(entry);
 		}
 
-		List<Consumer<QZWriter>> tmpa = new SimpleList<>();
+		List<Object> tmpa = new SimpleList<>();
 		List<QZEntry> tmpb = new SimpleList<>();
 
 		QzAES qzAes = password == null ? null : new QzAES(password, cryptPower, cryptSalt);
@@ -210,7 +225,7 @@ public class QZArchiver {
 			for (File file : uncompressed) {
 				QZEntry entry = entryFor(file);
 				if (entry != null) {
-					tmpa.add(fileData(file));
+					tmpa.add(file);
 					tmpb.add(entry);
 				}
 			}
@@ -218,7 +233,7 @@ public class QZArchiver {
 			addBlock(new QZCoder[] {qzAes == null ? Copy.INSTANCE : qzAes}, tmpa, tmpb, 0);
 		}
 
-		long chunkSize = autoSolidSize ? compressedLen[0] / threads : solidSize;
+		long chunkSize = autoSolidSize ? Math.max(compressedLen[0] / threads, 1048576L) : solidSize;
 		if (chunkSize < 0) chunkSize = Long.MAX_VALUE;
 
 		QZCoder lzma2 = options.getMode() == LZMA2Options.MODE_UNCOMPRESSED ? Copy.INSTANCE : new LZMA2(options);
@@ -315,7 +330,7 @@ public class QZArchiver {
 		}
 	}
 
-	private void makeBlock(List<File> compressed, long chunkSize, QZCoder[] coders, List<Consumer<QZWriter>> tmpa, List<QZEntry> tmpb) {
+	private void makeBlock(List<File> compressed, long chunkSize, QZCoder[] coders, List<Object> tmpa, List<QZEntry> tmpb) {
 		long size = 0;
 		for (File file : compressed) {
 			QZEntry entry = entryFor(file);
@@ -329,17 +344,17 @@ public class QZArchiver {
 					size = nextSize;
 				}
 
-				tmpa.add(fileData(file));
+				tmpa.add(file);
 				tmpb.add(entry);
 			}
 
 		}
 		if (!tmpa.isEmpty()) addBlock(coders, tmpa, tmpb, size);
 	}
-	private void addBlock(QZCoder[] coders, List<Consumer<QZWriter>> tmpa, List<QZEntry> tmpb, long size) {
+	private void addBlock(QZCoder[] coders, List<Object> tmpa, List<QZEntry> tmpb, long size) {
 		WordBlockAppend block = new WordBlockAppend();
 		block.coders = coders;
-		block.data = Helpers.cast(tmpa.toArray(new Consumer<?>[tmpa.size()]));
+		block.data = Helpers.cast(tmpa.toArray(new Object[tmpa.size()]));
 		block.file = tmpb.toArray(new QZEntry[tmpb.size()]);
 		block.size = size;
 		appends.add(block);
@@ -385,7 +400,7 @@ public class QZArchiver {
 	static final class WordBlockAppend {
 		QZCoder[] coders;
 		QZEntry[] file;
-		Consumer<QZWriter>[] data;
+		Object[] data;
 		long size;
 	}
 
@@ -411,6 +426,8 @@ public class QZArchiver {
 
 		if (bar != null) {
 			bar.setName("1/4 复制未修改的文件");
+			bar.setUnit("B");
+			bar.setDataWindow(Integer.MAX_VALUE);
 			bar.updateForce(0);
 			bar.addMax(keepSize);
 		}
@@ -452,9 +469,8 @@ public class QZArchiver {
 
 							_out.beginEntry(_file.clone());
 							try (InputStream in = _in.getInput(_file)) {
-								IOUtil.copyStream(in, _out);
+								QZUtils.copyStreamWithProgress(in, _out, bar);
 							}
-							if (bar != null) updateProgress(bar, _file);
 						}
 					}
 				}
@@ -479,7 +495,7 @@ public class QZArchiver {
 		for (QZEntry empty : empties) writer.beginEntry(empty);
 
 		// then copy uncompressed
-		if (firstIsUncompressed) writeBlock(bar, appends.remove(0), writer);
+		if (firstIsUncompressed) writeBlock(bar, appends.remove(0), writer, null);
 
 		// and copy compressed
 		AtomicInteger blockCompleted = new AtomicInteger();
@@ -488,10 +504,13 @@ public class QZArchiver {
 			bar.updateForce(0);
 		}
 
-		for (WordBlockAppend task : appends) {
+		writer.closeWordBlock();
+		writer.setIgnoreClose(true);
+		for (int i = 0; i < appends.size(); i++) {
+			int myi = i;
 			pool.pushTask(() -> {
-				try (QZWriter writer1 = parallel(writer)) {
-					writeBlock(bar, task, writer1);
+				try (QZWriter writer1 = /*myi == 0 ? writer : */parallel(writer)) {
+					writeBlock(bar, appends.get(myi), writer1, pool);
 				}
 				if (bar != null) bar.setName("3/4 压缩("+blockCompleted.incrementAndGet()+"/"+appends.size()+")");
 			});
@@ -517,35 +536,39 @@ public class QZArchiver {
 			writer.setCompressHeader(0);
 		}
 
+		writer.setIgnoreClose(false);
 		writer.close();
 		if (bar != null) bar.end("压缩成功");
-		boolean b = tmp.renameTo(new File(outputFolder, outputName));
+		Files.move(tmp.toPath(), new File(outputFolder, outputName).toPath());
 	}
 
 	private QZWriter parallel(QZFileWriter qfw) throws IOException {
-		return cacheFolder == null ? qfw.parallel() : qfw.parallel(new FileSource(File.createTempFile("qzx-", ".bin", cacheFolder)));
+		return singleThread ? qfw :
+			cacheFolder == null ? qfw.parallel() : qfw.parallel(new CacheSource(1048576, 134217728, "qzx-", cacheFolder));
 	}
 
-	private void writeBlock(EasyProgressBar bar, WordBlockAppend block, QZWriter writer) throws IOException {
+	private void writeBlock(EasyProgressBar bar, WordBlockAppend block, QZWriter writer, TaskPool canSplit) throws IOException {
 		writer.setCodec(block.coders);
-		try {
-			QZEntry[] file = block.file;
-			for (int i = 0; i < file.length; i++) {
-				writer.beginEntry(file[i]);
-				block.data[i].accept(writer);
-
-				if (bar != null) updateProgress(bar, file[i]);
+		QZEntry[] file = block.file;
+		for (int i = 0; i < file.length; i++) {
+			writer.beginEntry(file[i]);
+			File data = (File) block.data[i];
+			try (FileInputStream in = new FileInputStream(data)) {
+				QZUtils.copyStreamWithProgress(in, writer, bar);
 			}
-		} finally {
-			writer.closeEntry();
+
+			if (canSplit != null && canSplit.busyCount() <= autoSplitTaskSize) {
+				QZCoder[] copyCoder = block.coders.clone();
+				for (int j = 0; j < copyCoder.length; j++) {
+					QZCoder coder = copyCoder[j];
+					if (coder instanceof LZMA2) {
+						copyCoder[j] = new LZMA2(autoSplitTaskOptions);
+						System.out.println("正在拆分任务 "+TextUtil.scaledNumber1024(block.size));
+					}
+				}
+				writer.setCodec(copyCoder);
+				canSplit = null;
+			}
 		}
-	}
-	private static void updateProgress(EasyProgressBar bar, QZEntry entry) {
-		long size = entry.getSize();
-		while (size > Integer.MAX_VALUE) {
-			bar.addCurrent(Integer.MAX_VALUE);
-			size -= Integer.MAX_VALUE;
-		}
-		bar.addCurrent((int) size);
 	}
 }

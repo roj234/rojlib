@@ -8,6 +8,7 @@ import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
 import roj.io.CorruptedInputException;
+import roj.io.IOUtil;
 import roj.io.MBInputStream;
 import roj.reflect.ReflectionUtils;
 import roj.util.ArrayUtil;
@@ -17,7 +18,6 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.AsynchronousCloseException;
-import java.nio.channels.ClosedByInterruptException;
 
 import static roj.archive.qz.xz.LZMA2Out.COMPRESSED_SIZE_MAX;
 import static roj.archive.qz.xz.LZMAInputStream.getDictSize;
@@ -262,12 +262,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 						}
 					}
 
-					try {
-						out.wait();
-					} catch (InterruptedException e) {
-						close();
-						throw new ClosedByInterruptException();
-					}
+					IOUtil.ioWait(this, out);
 				}
 
 				int copyLen = Math.min(out.readableBytes(), len);
@@ -337,11 +332,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 						while (tasksFree.isEmpty()) {
 							if (noMoreInput) throw new AsynchronousCloseException();
 
-							try {
-								taskLock.wait();
-							} catch (InterruptedException e) {
-								throw new ClosedByInterruptException();
-							}
+							IOUtil.ioWait(this, taskLock);
 						}
 						task = tasksFree.pop();
 					}

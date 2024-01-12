@@ -1,7 +1,12 @@
 package roj.reflect;
 
+import org.jetbrains.annotations.Nullable;
+import roj.asm.Parser;
 import roj.asm.cp.CstClass;
 import roj.asm.tree.ConstantData;
+import roj.asm.tree.MethodNode;
+import roj.asm.tree.anno.Annotation;
+import roj.asm.tree.attr.Annotations;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.visitor.CodeWriter;
@@ -11,7 +16,6 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.ArrayCache;
 
-import javax.annotation.Nullable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -24,16 +28,17 @@ import static roj.asm.Opcodes.*;
 import static roj.asm.type.Type.CLASS;
 
 /**
- * 替代反射，目前不能修改final字段，然而这是JVM的锅 <br>
- * <br>
- * PackagePrivateProxy已被Nixim替代，能用到它的都是【在应用启动前加载的class】那还不如boot class替换
+ * 用接口替代反射，虽然看起来和{@link java.lang.invoke.MethodHandle}很相似，其实却是同一个原理 <br>
+ * * 但是理论上比MethodHandle快<br>
+ * * 而且MethodHandle也不能随便用(不限制权限)啊<br>
+ * 限制: 不能写final字段，因为JVM太安全辣，请使用{@link ReflectionUtils#access(Field)} <br>
  *
  * @author Roj233
  * @since 2021/8/13 20:16
  */
 public final class DirectAccessor<T> {
 	public static final String MAGIC_ACCESSOR_CLASS = ReflectionUtils.JAVA_VERSION <= 8 ?
-		"sun/reflect/MagicAccessorImpl" : Java9Compat.HackMagicAccessor();
+		"sun/reflect/MagicAccessorImpl" : VMInternals.HackMagicAccessor();
 
 	public static final MyBitSet EMPTY_BITS = new MyBitSet(0);
 
@@ -44,12 +49,12 @@ public final class DirectAccessor<T> {
 	private ConstantData var;
 
 	// Cast check
-	private boolean check;
+	private byte flags;
+	private static final int UNCHECKED_CAST = 1, WEAK_REF = 2, INLINE = 4;
 
 	private DirectAccessor(Class<T> itf, boolean checkDuplicate) {
 		if (!itf.isInterface()) throw new IllegalArgumentException(itf.getName()+" must be a interface");
 		this.itf = itf;
-		this.check = true;
 		Method[] methods = itf.getMethods();
 		this.methodByName = new MyHashMap<>(methods.length);
 		for (Method method : methods) {
@@ -70,17 +75,31 @@ public final class DirectAccessor<T> {
 		FastInit.prepare(var);
 	}
 
-	/**
-	 * 构建DirectAccessor
-	 *
-	 * @return T
-	 */
+	public final T build() { return build(ClassDefiner.INSTANCE); }
 	@SuppressWarnings("unchecked")
-	public final T build() {
+	public final T build(ClassDefiner def) {
 		if (var == null) throw new IllegalStateException("Already built");
 		methodByName.clear();
+
+		if ((flags&INLINE) != 0) {
+			// jdk.internal.vm.annotation.ForceInline
+			Annotation annotation = new Annotation("Ljdk/internal/vm/annotation/ForceInline;", Collections.emptyMap());
+			for (MethodNode mn : var.methods) {
+				if (mn.name().startsWith("<")) continue;
+				mn.putAttr(new Annotations(true, annotation));
+			}
+
+			try {
+				byte[] array = Parser.toByteArray(var);
+				Class<?> klass = VMInternals.DefineVMClass(null, array, 0, array.length);
+				return (T) FastInit.manualGet(klass);
+			} finally {
+				var = null;
+			}
+		}
+
 		try {
-			return (T) FastInit.make(var);
+			return (T) FastInit.make(var, (flags&WEAK_REF) == 0 ? def : null);
 		} finally {
 			var = null;
 		}
@@ -215,7 +234,7 @@ public final class DirectAccessor<T> {
 				Class<?> param = params[j];
 				Type type = TypeHelper.class2type(param);
 				cw.varLoad(type, size++);
-				if (check && !param.isAssignableFrom(params2[j])) cw.clazz(CHECKCAST, type.getActualClass());
+				if ((flags&UNCHECKED_CAST) == 0 && !param.isAssignableFrom(params2[j])) cw.clazz(CHECKCAST, type.getActualClass());
 				switch (type.getActualType()) {
 					case 'D': case 'J': size++;
 				}
@@ -388,7 +407,7 @@ public final class DirectAccessor<T> {
 			int isStatic = (tm.getModifiers() & ACC_STATIC) != 0 ? 1 : 0;
 			if (isStatic == 0) {
 				cw.one(ALOAD_1);
-				if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
+				if ((this.flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
 			}
 
 			int size = isStatic != 0 ? 0 : 1;
@@ -396,7 +415,7 @@ public final class DirectAccessor<T> {
 			for (Class<?> param : params) {
 				Type type = TypeHelper.class2type(param);
 				cw.varLoad(type, ++size);
-				if (check && !param.isAssignableFrom(params2[j])) // 强制转换再做检查...
+				if ((this.flags&UNCHECKED_CAST) == 0 && !param.isAssignableFrom(params2[j])) // 强制转换再做检查...
 					cw.clazz(CHECKCAST, type.getActualClass());
 				j++;
 				switch (type.getActualType()) {
@@ -521,7 +540,7 @@ public final class DirectAccessor<T> {
 				if (!isStatic) {
 					localSize = 2;
 					cw.one(ALOAD_1);
-					if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
+					if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
 					cw.field(GETFIELD, tName, field.getName(), fType);
 				} else {
 					localSize = 1;
@@ -544,12 +563,12 @@ public final class DirectAccessor<T> {
 				if (!isStatic) {
 					localSize = (char) (stackSize+1);
 					cw.one(ALOAD_1);
-					if (check && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
+					if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
 				} else {
 					localSize = stackSize--;
 				}
 				cw.varLoad(fType, isStatic ? 1 : 2);
-				if (check && type == CLASS && !field.getType().isAssignableFrom(params2[isStatic ? 0 : 1]))
+				if ((flags&UNCHECKED_CAST) == 0 && type == CLASS && !field.getType().isAssignableFrom(params2[isStatic ? 0 : 1]))
 					cw.clazz(CHECKCAST, fType.owner);
 				cw.field(isStatic ? PUTSTATIC : PUTFIELD, tName, field.getName(), fType);
 				cw.one(RETURN);
@@ -689,10 +708,9 @@ public final class DirectAccessor<T> {
 	public static <V> DirectAccessor<V> builder(Class<V> impl) { return new DirectAccessor<>(impl, true); }
 	public static <V> DirectAccessor<V> builderInternal(Class<V> impl) { return new DirectAccessor<>(impl, false); }
 
-	public final DirectAccessor<T> unchecked() {
-		check = false;
-		return this;
-	}
+	public final DirectAccessor<T> unchecked() { flags |= UNCHECKED_CAST; return this; }
+	public final DirectAccessor<T> weak() { flags |= WEAK_REF; return this; }
+	public final DirectAccessor<T> inline() { flags |= INLINE; return this; }
 
 	/**
 	 * 首字母大写: xx,set => setXxx

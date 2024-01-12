@@ -1,10 +1,10 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
 import roj.util.ArrayCache;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 
 /**
@@ -168,13 +168,13 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		return indexOf(o) != -1;
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Iterator<E> iterator() {
 		return size == 0 ? Collections.emptyIterator() : new Itr(false);
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Iterator<E> descendingIterator() {
 		return size == 0 ? Collections.emptyIterator() : new Itr(true);
@@ -313,7 +313,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		return removeFirstOccurrence(o);
 	}
 	@Override
-	public boolean retainAll(@Nonnull Collection<?> c) {
+	public boolean retainAll(@NotNull Collection<?> c) {
 		throw new UnsupportedOperationException();
 	}
 	// endregion

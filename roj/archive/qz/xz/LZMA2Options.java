@@ -1,10 +1,12 @@
 package roj.archive.qz.xz;
 
+import org.intellij.lang.annotations.MagicConstant;
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.lzma.LZMAEncoder;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.io.DummyOutputStream;
+import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -105,9 +107,9 @@ public class LZMA2Options implements Cloneable {
 	private int mf;
 	private int depthLimit;
 
-	private byte asyncAffinity, asyncDictMode;
-	private int asyncBlockSize;
 	private TaskHandler asyncExecutor;
+	private BufferPool asyncBufferPool;
+	private LZMA2Parallel asyncMan;
 
 	public LZMA2Options() { this(DEFAULT_COMPRESSION); }
 	public LZMA2Options(int preset) { setPreset(preset); }
@@ -380,24 +382,29 @@ public class LZMA2Options implements Cloneable {
 	 * {@link #ASYNC_DICT_SET} 在write的调用线程上设置词典, 速度慢, 压缩率好, 内存占用中等
 	 * {@link #ASYNC_DICT_ASYNCSET} 在异步任务线程上设置词典, 速度中等, 压缩率好, 内存大
 	 */
-	public void setAsyncMode(int blockSize, TaskHandler executor, int affinity, int dictMode) {
-		if (blockSize != 0 && blockSize < ASYNC_BLOCK_SIZE_MIN || blockSize > ASYNC_BLOCK_SIZE_MAX) throw new IllegalArgumentException("无效的分块大小 "+blockSize);
-		if (affinity != 0 && affinity < 2 || affinity > 255) throw new IllegalArgumentException("无效的并行任务数量 "+affinity);
-		if (dictMode < 0 || dictMode > ASYNC_DICT_ASYNCSET) throw new IllegalArgumentException("无效的词典处理模式 "+dictMode);
-		asyncBlockSize = blockSize;
+	public void setAsyncMode(int blockSize, TaskHandler executor, int affinity, BufferPool bufferPool, @MagicConstant(intValues = {ASYNC_DICT_NONE,ASYNC_DICT_SET,ASYNC_DICT_ASYNCSET}) int dictMode) {
 		asyncExecutor = executor;
-		asyncAffinity = (byte) affinity;
-		asyncDictMode = (byte) dictMode;
+		asyncBufferPool = bufferPool;
+		asyncMan = new LZMA2Parallel(this, blockSize, dictMode, affinity);
 	}
-	public int getAsyncBlockSize() { return asyncBlockSize; }
+	public void setAsyncMode(TaskHandler executor, BufferPool bufferPool, LZMA2Parallel parallel) {
+		asyncExecutor = executor;
+		asyncBufferPool = bufferPool;
+		asyncMan = parallel;
+	}
+	public void clearAsyncMode() {
+		asyncExecutor = null;
+		asyncBufferPool = null;
+		asyncMan = null;
+	}
 	public TaskHandler getAsyncExecutor() { return asyncExecutor; }
-	public int getAsyncAffinity() { return asyncAffinity; }
-	public byte getAsyncDictionaryMode() { return asyncDictMode; }
+	public BufferPool getAsyncBufferPool() { return asyncBufferPool; }
+	public LZMA2Parallel getAsyncMan() { return asyncMan; }
 
 	public int getEncoderMemoryUsage() { return mode == MODE_UNCOMPRESSED ? LZMA2StoredWriter.getMemoryUsage() : LZMA2Writer.getMemoryUsage(this); }
 	public OutputStream getOutputStream(OutputStream out) {
 		if (mode == MODE_UNCOMPRESSED) return new LZMA2StoredWriter(out);
-		return asyncAffinity > 0 ? new LZMA2ParallelWriter(out, this) : new LZMA2Writer(out, this);
+		return asyncMan != null ? asyncMan.createEncoder(out) : new LZMA2Writer(out, this);
 	}
 
 	public int getDecoderMemoryUsage() { return LZMA2InputStream.getMemoryUsage(dictSize); }
@@ -405,10 +412,11 @@ public class LZMA2Options implements Cloneable {
 
 	public LZMA2Options clone() {
 		try {
-			return (LZMA2Options) super.clone();
+			LZMA2Options opt = (LZMA2Options) super.clone();
+			opt.clearAsyncMode();
+			return opt;
 		} catch (CloneNotSupportedException e) {
-			assert false;
-			throw new RuntimeException();
+			throw new RuntimeException(e);
 		}
 	}
 

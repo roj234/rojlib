@@ -30,6 +30,15 @@ public class Generic extends IGeneric {
 
 	public Generic() {}
 
+	public Generic(String owner) { this.owner = owner; }
+	public Generic(String owner, List<? extends IType> children) {
+		this.owner = owner;
+		this.children = Helpers.cast(children);
+	}
+	public Generic(String owner, byte extendType) {
+		this.extendType = extendType;
+		this.owner = owner;
+	}
 	public Generic(String owner, int array, byte extendType) {
 		this.extendType = extendType;
 		this.owner = owner;

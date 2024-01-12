@@ -17,18 +17,13 @@ public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K
 		public long v;
 
 		@Override
+		@Deprecated
 		public Long getValue() { return v; }
 		@Override
+		@Deprecated
 		public Long setValue(Long value) {
 			long oldV = v;
 			v = value;
-			return oldV;
-		}
-
-		public long getLong() { return v; }
-		public long setLong(long v) {
-			long oldV = this.v;
-			this.v = v;
 			return oldV;
 		}
 

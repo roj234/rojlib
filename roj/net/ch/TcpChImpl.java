@@ -1,6 +1,7 @@
 package roj.net.ch;
 
 import roj.io.FastFailException;
+import roj.io.NIOUtil;
 import roj.io.buf.BufferPool;
 import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
@@ -9,6 +10,8 @@ import roj.util.DynByteBuf;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.net.SocketOption;
+import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
@@ -67,6 +70,16 @@ class TcpChImpl extends MyChannel {
 		}
 	}
 
+	@Override
+	public <T> MyChannel setOption(SocketOption<T> k, T v) throws IOException {
+		if (k == ServerLaunch.TCP_RECEIVE_BUFFER) buffer = (Integer) v;
+		else if (k == StandardSocketOptions.SO_REUSEPORT) NIOUtil.setReusePort(sc, (boolean) v);
+		else sc.setOption(k, v);
+		return this;
+	}
+
+	@Override
+	protected void bind0(InetSocketAddress na) throws IOException { sc.bind(na); }
 	@Override
 	protected boolean connect0(InetSocketAddress na) throws IOException { return sc.connect(na); }
 	@Override

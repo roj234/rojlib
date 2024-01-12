@@ -178,7 +178,8 @@ public final class UPnPDevice {
 				throw new IllegalStateException("无效的UPnP设备描述文件", e);
 			}
 
-			loc = xml.querySelector("/root/URLBase").textContent();
+			Node node = xml.querySelector("/root/URLBase");
+			loc = node == null ? loc.substring(0, loc.indexOf('/')) : node.textContent();
 
 			List<Service> services = device.services = new ArrayList<>();
 			List<Element> xmlServices = xml.getElementsByTagName("service");

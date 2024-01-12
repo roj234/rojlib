@@ -18,7 +18,7 @@ public final class CstDouble extends Constant {
 	public String toString() { return super.toString() + " : " + value; }
 
 	@Override
-	public String getEasyReadValue() { return Double.toString(value).concat("d"); }
+	public String getEasyReadValue() { return value == value ? Double.toString(value).concat("d") : "Double.NaN"; }
 	@Override
 	public String getEasyCompareValue() { return Double.toString(value); }
 
@@ -29,6 +29,6 @@ public final class CstDouble extends Constant {
 
 	public boolean equals(Object o) {
 		if (o == this) return true;
-		return o instanceof CstDouble && ((CstDouble) o).value == this.value;
+		return o instanceof CstDouble && Double.compare(((CstDouble) o).value, value) == 0;
 	}
 }

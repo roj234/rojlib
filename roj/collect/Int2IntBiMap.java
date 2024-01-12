@@ -1,13 +1,16 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 import roj.util.Int2IntFunction;
 
-import javax.annotation.Nonnull;
-import java.util.*;
+import java.util.AbstractMap;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Set;
 
-public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Generic_Map<Int2IntMap.Entry>, Flippable<Integer, Integer> {
+public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Generic_Map<Int2IntMap.Entry> {
 	public void setNullId(int nullId) {
 		this.nullId = nullId;
 	}
@@ -20,111 +23,6 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Gene
 		public Entry __next() { return (Entry) next; }
 	}
 
-	public static final class Inverse extends AbstractMap<Integer, Integer> implements Flippable<Integer, Integer> {
-		private final Int2IntBiMap parent;
-
-		private Inverse(Int2IntBiMap parent) {
-			this.parent = parent;
-		}
-
-		public int size() {
-			return parent.size();
-		}
-
-		public boolean containsKey(Object key) {
-			return parent.containsValue(key);
-		}
-
-		public boolean containsValue(Object value) {
-			return parent.containsKey(value);
-		}
-
-		public Integer get(Object key) {
-			return parent.getByValue((Integer) key);
-		}
-
-		public Integer put(Integer key, Integer value) {
-			return parent.putByValue(key, value);
-		}
-
-		@Override
-		public void putAll(@Nonnull Map<? extends Integer, ? extends Integer> map) {
-			for (Map.Entry<? extends Integer, ? extends Integer> entry : map.entrySet()) {
-				parent.putByValue(entry.getKey(), entry.getValue());
-			}
-		}
-
-		public Integer forcePut(Integer key, Integer value) {
-			return parent.forcePutByValue(key, value);
-		}
-
-		public Integer remove(Object key) {
-			return parent.removeByValue((Integer) key);
-		}
-
-		public void clear() {
-			parent.clear();
-		}
-
-		@Nonnull
-		public Set<Entry<Integer, Integer>> entrySet() {
-			return new EntrySet(this.parent);
-		}
-
-		static class EntrySet extends AbstractSet<Map.Entry<Integer, Integer>> {
-			private final Int2IntBiMap map;
-
-			public EntrySet(Int2IntBiMap map) {
-				this.map = map;
-			}
-
-			public final int size() {
-				return map.size();
-			}
-
-			public final void clear() {
-				map.clear();
-			}
-
-			@Nonnull
-			public final Iterator<Map.Entry<Integer, Integer>> iterator() {
-				if (isEmpty()) {return Collections.emptyIterator();}
-				_Generic_EntryItr<Int2IntMap.Entry> dlg = new _Generic_EntryItr<>(map);
-				return new AbstractIterator<Entry<Integer, Integer>>() {
-
-					@Override
-					public boolean computeNext() {
-						boolean next = dlg.hasNext();
-						if (next) {
-							Int2IntMap.Entry t = dlg.nextT();
-							result = new SimpleImmutableEntry<>(t.v, t.k);
-						}
-						return next;
-					}
-				};
-			}
-
-			public final boolean contains(Object o) {
-				if (!(o instanceof Entry)) return false;
-				Int2IntMap.Entry e = (Int2IntMap.Entry) o;
-				Int2IntMap.Entry comp = map.getValueEntry(e.k);
-				return comp != null && comp.v == e.getIntValue();
-			}
-
-			public final boolean remove(Object o) {
-				if (o instanceof Map.Entry) {
-					HashBiMap.Entry<?, ?> e = (HashBiMap.Entry<?, ?>) o;
-					return map.remove(e.v) != null;
-				}
-				return false;
-			}
-		}
-
-		public Int2IntBiMap flip() {
-			return parent;
-		}
-	}
-
 	protected Entry[] entries;
 	protected Entry[] valueEntries;
 
@@ -134,8 +32,6 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Gene
 
 	float loadFactor = 0.8f;
 	int nullId = -1;
-
-	private final Inverse inverse = new Inverse(this);
 
 	public Int2IntBiMap() {
 		this(16);
@@ -164,7 +60,6 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Gene
 		return entry == null ? def : entry.v;
 	}
 
-	public Inverse flip() { return this.inverse; }
 	public int size() { return size; }
 
 	public Set<Entry> selfEntrySet() { return _Generic_EntrySet.create(this); }
@@ -175,7 +70,7 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Gene
 	@Override
 	public void __remove(Int2IntMap.Entry vEntry) { removeEntry((Entry) vEntry); }
 
-	public int computeIfAbsent(int k, @Nonnull Int2IntFunction supplier) {
+	public int computeIfAbsent(int k, @NotNull Int2IntFunction supplier) {
 		Integer v = get(k);
 		if (v == null) {
 			put(k, v = supplier.apply(k));
@@ -206,11 +101,6 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Gene
 	@Override
 	public Integer getOrDefault(Object key, Integer def) {
 		return getOrDefaultInt((int) key, def);
-	}
-
-	@Override
-	public Integer forcePut(Integer key, Integer e) {
-		return forcePutInt(key, e);
 	}
 
 	protected void resize() {

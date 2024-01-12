@@ -9,7 +9,9 @@ import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import java.nio.file.attribute.FileTime;
 import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 
@@ -28,7 +30,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 	int modTime;
 	long pModTime, pAccTime, pCreTime;
 
-	int CRC32;
+	int crc32;
 	long cSize, uSize;
 
 	//Bit 0: apparent ASCII/text file
@@ -65,9 +67,8 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		if (LOC != Boolean.FALSE) mzfFlag |= MZ_HASLOC;
 	}
 
-	public String getName() {
-		return name;
-	}
+	public String getName() { return name; }
+	public boolean isDirectory() { return name.endsWith("/"); }
 
 	@Override
 	public final long startPos() { return offset - 30 - nameBytes.length - extraLenOfLOC; }
@@ -77,21 +78,35 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		EXTLenOfLOC = (byte) (pos - cSize - offset);
 	}
 
-	final int getMethodFW() {
-		return (mzfFlag & MZ_AESENC) != 0 ? 99 : method;
-	}
+	// 给加密用的
+	final int getMethodFW() { return (mzfFlag & MZ_AESENC) != 0 ? 99 : method; }
 	final int getVersionFW() {
 		if ((mzfFlag & MZ_AESENC) != 0) return ZIP_AES;
 		if (uSize > U32_MAX || cSize > U32_MAX || offset > U32_MAX) return ZIP_64;
 		return method == ZipEntry.DEFLATED ? ZIP_DEFLATED : ZIP_STORED;
 	}
-	final int getCRC32FW() {
-		return (mzfFlag & MZ_NOCRC) != 0 ? 0 : CRC32;
-	}
+	final int getCRC32FW() { return (mzfFlag & MZ_NOCRC) != 0 ? 0 : crc32; }
+	// 给加密用的 end
 
-	public final long getModificationTime() { return pModTime == 0 ? dos2JavaTime(modTime) : pModTime; }
+	public final long getSize() { return uSize; }
+	public final long getCompressedSize() { return cSize; }
+
+	public final long getAccessTime() { return winTime2JavaTime(pAccTime); }
+	public final long getCreationTime() { return winTime2JavaTime(pCreTime); }
+	public final long getModificationTime() { return pModTime == 0 ? dos2JavaTime(modTime) : winTime2JavaTime(pModTime); }
+
+	public final FileTime getPrecisionAccessTime() { return pAccTime == 0 ? null : winTime2FileTime(pAccTime); }
+	public final FileTime getPrecisionCreationTime() { return pCreTime == 0 ? null : winTime2FileTime(pCreTime); }
+	public final FileTime getPrecisionModificationTime() { return pModTime == 0 ? winTime2FileTime(java2WinTime(dos2JavaTime(modTime))) : winTime2FileTime(pModTime); }
+
+	public final boolean hasAccessTime() { return pAccTime != 0; }
+	public final boolean hasCreationTime() { return pCreTime != 0; }
+	public final boolean hasModificationTime() { return modTime != 0 || pModTime != 0; }
+
+	public final void setAccessTime(long t) { pAccTime = t == 0 ? 0 : java2WinTime(t); }
+	public final void setCreationTime(long t) { pCreTime = t == 0 ? 0 : java2WinTime(t); }
 	public final void setModificationTime(long t) {
-		if (t == -1) {
+		if (t == 0) {
 			modTime = 0;
 			pModTime = 0;
 		} else {
@@ -99,14 +114,14 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 			pModTime = t;
 		}
 	}
-
-	public final long getSize() { return uSize; }
-	public final long getCompressedSize() { return cSize; }
+	public final void setPrecisionAccessTime(FileTime t) { pAccTime = t == null ? 0 : fileTime2WinTime(t); }
+	public final void setPrecisionCreationTime(FileTime t) { pCreTime = t == null ? 0 : fileTime2WinTime(t); }
+	public final void setPrecisionModificationTime(FileTime t) { pModTime = t == null ? 0 : fileTime2WinTime(t); modTime = t == null ? 0 : java2DosTime(t.toMillis()); }
 
 	public final int getMethod() { return method; }
 	public final void setMethod(int m) { this.method = (char) m; }
 
-	public final int getCRC32() { return CRC32; }
+	public final int getCrc32() { return crc32; }
 
 	public final boolean isEncrypted() { return (flags & GP_ENCRYPTED) != 0; }
 	public final int getEncryptType() {
@@ -121,7 +136,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 
 	@SuppressWarnings("fallthrough")
 	final void prepareWrite(int crypt) {
-		CRC32 = 0;
+		crc32 = 0;
 		flags &= GP_UTF;
 		mzfFlag = MZ_HASLOC|MZ_HASCEN;
 
@@ -172,8 +187,8 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 	}
 	protected void writeLOCExtra(ByteList buf, int extOff, int extLenOff) {
 		if (cSize >= U32_MAX || uSize >= U32_MAX) {
-			if (uSize >= U32_MAX) buf.putIntLE(extLenOff-6, (int) U32_MAX);
-			if (cSize >= U32_MAX) buf.putIntLE(extLenOff-10, (int) U32_MAX);
+			if (uSize > U32_MAX) buf.putIntLE(extLenOff-6, (int) U32_MAX);
+			if (cSize > U32_MAX) buf.putIntLE(extLenOff-10, (int) U32_MAX);
 
 			buf.putShortLE(0x0001).putShortLE(16).putLongLE(uSize).putLongLE(cSize);
 		}
@@ -206,9 +221,9 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 						int k = buf.readUShortLE();
 						DynByteBuf v = buf.slice(buf.readUShortLE());
 						if (k == 1) {
-							if (v.readableBytes() >= 8) pModTime = winTime2JavaTime(v.readLongLE());
-							if (v.readableBytes() >= 8) pAccTime = winTime2JavaTime(v.readLongLE());
-							if (v.readableBytes() >= 8) pCreTime = winTime2JavaTime(v.readLongLE());
+							if (v.readableBytes() >= 8) pModTime = checkAndSet0(v.readLongLE());
+							if (v.readableBytes() >= 8) pAccTime = checkAndSet0(v.readLongLE());
+							if (v.readableBytes() >= 8) pCreTime = checkAndSet0(v.readLongLE());
 							mzfFlag |= MZ_LTIME;
 						}
 					}
@@ -404,8 +419,8 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 			error(file);
 		}
 
-		if (CRC32 == 0) {
-			if (file.CRC32 != 0) CRC32 = file.CRC32;
+		if (crc32 == 0) {
+			if (file.crc32 != 0) crc32 = file.crc32;
 		}
 
 		if (cSize != file.cSize || uSize != file.uSize) {
@@ -445,7 +460,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 	public String toString() {
 		return "File{" + "method=" + (int) method +
 			", time=" + dos2JavaTime(modTime) +
-			", crc=0x" + Integer.toHexString(CRC32) +
+			", crc=0x" + Integer.toHexString(crc32) +
 			", cSize=" + Long.toUnsignedString(cSize) +
 			", uSize=" + Long.toUnsignedString(uSize) +
 			", ia=0b" + Integer.toBinaryString(internalAttr) +
@@ -468,11 +483,11 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		return (year << 25) | (arr[ACalendar.MONTH] << 21) | (arr[ACalendar.DAY] << 16) | (arr[ACalendar.HOUR] << 11) | (arr[ACalendar.MINUTE] << 5) | (arr[ACalendar.SECOND] >> 1);
 	}
 
+	private static final long WINDOWS_TIME_NOT_AVAILABLE = Long.MIN_VALUE;
+	public static long checkAndSet0(long time) { return time == WINDOWS_TIME_NOT_AVAILABLE ? 0 : time; }
 	private static final long WINDOWS_EPOCH_IN_MICROSECONDS = -11644473600000000L;
-	public static long winTime2JavaTime(long wtime) {
-		return (wtime / 10 + WINDOWS_EPOCH_IN_MICROSECONDS) / 1000;
-	}
-	public static long java2WinTime(long time) {
-		return (time*1000 - WINDOWS_EPOCH_IN_MICROSECONDS) * 10;
-	}
+	public static long winTime2JavaTime(long wtime) { return (wtime / 10 + WINDOWS_EPOCH_IN_MICROSECONDS) / 1000; }
+	public static long java2WinTime(long time) { return (time*1000 - WINDOWS_EPOCH_IN_MICROSECONDS) * 10; }
+	public static FileTime winTime2FileTime(long wtime) { return FileTime.from(wtime / 10 + WINDOWS_EPOCH_IN_MICROSECONDS, TimeUnit.MICROSECONDS); }
+	public static long fileTime2WinTime(FileTime time) { return (time.to(TimeUnit.MICROSECONDS) - WINDOWS_EPOCH_IN_MICROSECONDS) * 10; }
 }

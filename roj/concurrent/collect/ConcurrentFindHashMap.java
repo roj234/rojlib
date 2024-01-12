@@ -1,9 +1,9 @@
 package roj.concurrent.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.FindMap;
 import roj.collect.MyHashMap;
 
-import javax.annotation.Nonnull;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -67,7 +67,7 @@ public class ConcurrentFindHashMap<K, V> extends MyHashMap<K, V> implements Find
 	}
 
 	@Override
-	public void putAll(@Nonnull Map<? extends K, ? extends V> m) {
+	public void putAll(@NotNull Map<? extends K, ? extends V> m) {
 		try {
 			lock.writeLock().lock();
 			super.putAll(m);

@@ -3,11 +3,10 @@ package roj.archive.qz;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
+import roj.io.source.CacheSource;
 import roj.io.source.FileSource;
-import roj.io.source.MemorySource;
 import roj.io.source.Source;
 import roj.math.MutableInt;
-import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -15,7 +14,7 @@ import roj.util.Helpers;
 import java.io.File;
 import java.io.IOException;
 import java.nio.channels.AsynchronousCloseException;
-import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.IntFunction;
@@ -48,7 +47,7 @@ public class QZFileWriter extends QZWriter {
 
     private List<ParallelWriter> parallelWriter;
 
-    public final QZWriter parallel() throws IOException { return parallel(new MemorySource()); }
+    public final QZWriter parallel() throws IOException { return parallel(new CacheSource()); }
     public synchronized QZWriter parallel(Source cache) throws IOException {
         if (finished) throw new IOException("Stream closed");
 
@@ -63,9 +62,10 @@ public class QZFileWriter extends QZWriter {
     }
 
     private synchronized void waitAsyncFinish() {
+        if (parallelWriter == null) return;
         while (!parallelWriter.isEmpty()) {
             try {
-                parallelWriter.wait();
+                wait();
             } catch (InterruptedException e) {
                 Helpers.athrow(e);
             }
@@ -76,6 +76,31 @@ public class QZFileWriter extends QZWriter {
         ParallelWriter(Source s) { super(s, QZFileWriter.this); }
 
         @Override
+        void closeWordBlock0() throws IOException {
+            if (out == null) return;
+
+            super.closeWordBlock0();
+            QZFileWriter that = QZFileWriter.this;
+            synchronized (that) {
+                that.s.put(s);
+                s.seek(0);
+
+                that.blocks.addAll(blocks);
+                that.files.addAll(files);
+                that.emptyFiles.addAll(emptyFiles);
+
+                blocks.clear();
+                files.clear();
+                emptyFiles.clear();
+
+                int[] sum = that.flagSum;
+                for (int i = 0; i < sum.length; i++) sum[i] += flagSum[i];
+
+                Arrays.fill(flagSum, 0);
+            }
+        }
+
+        @Override
         public void finish() throws IOException {
             if (finished) return;
             super.finish();
@@ -83,36 +108,10 @@ public class QZFileWriter extends QZWriter {
             QZFileWriter that = QZFileWriter.this;
             synchronized (that) {
 				if (!parallelWriter.remove(this)) throw new AsynchronousCloseException();
-
-                if (s instanceof MemorySource) {
-                    MemorySource s = (MemorySource) this.s;
-                    that.s.write(s.buffer());
-                    ((ByteList)s.buffer())._free();
-                } else {
-                    FileSource s = (FileSource) this.s;
-                    try {
-                        byte[] data = ArrayCache.getByteArray(4096, false);
-                        s.seek(0);
-                        while (true) {
-                            int r = s.read(data);
-                            if (r < 0) break;
-                            that.s.write(data, 0, r);
-                        }
-                    } finally {
-                        s.close();
-                        Files.deleteIfExists(s.getFile().toPath());
-                    }
-                }
-
-				that.blocks.addAll(blocks);
-				that.files.addAll(files);
-				that.emptyFiles.addAll(emptyFiles);
-
-				int[] sum = that.flagSum;
-				for (int i = 0; i < sum.length; i++) sum[i] += flagSum[i];
-
 				if (parallelWriter.isEmpty()) that.notifyAll();
-			}
+            }
+
+            s.close();
         }
     }
 

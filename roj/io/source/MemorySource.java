@@ -1,6 +1,5 @@
 package roj.io.source;
 
-import roj.RequireTest;
 import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -62,7 +61,6 @@ public class MemorySource extends Source {
 	public Source threadSafeCopy() { return new MemorySource(asReadonly()); }
 
 	@Override
-	@RequireTest("direct memory copying maybe not stable if region collisions")
 	public void moveSelf(long from, long to, long length) {
 		if ((from | to | length) < 0) throw new IllegalArgumentException();
 		ReflectionUtils.u.copyMemory(list.array(), list._unsafeAddr()+from, list.array(), list._unsafeAddr()+to, length);

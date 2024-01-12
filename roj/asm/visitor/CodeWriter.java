@@ -7,6 +7,8 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstUTF;
+import roj.asm.frame.Frame2;
+import roj.asm.frame.FrameVisitor;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.CodeAttribute;
@@ -197,6 +199,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		}
 
 		assertCate(code, Opcodes.CATE_METHOD);
+		// itf ref只用于INVOKESTATIC指令
 		codeOb.put(code).putShort(isInterfaceMethod ? cpw.getItfRefId(owner, name, desc) : cpw.getMethodRefId(owner, name, desc));
 	}
 	public void field(byte code, String owner, String name, String type) { assertCate(code, Opcodes.CATE_FIELD); codeOb.put(code).putShort(cpw.getFieldRefId(owner, name, type)); }

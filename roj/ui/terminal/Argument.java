@@ -1,9 +1,11 @@
 package roj.ui.terminal;
 
+import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
+import roj.config.word.ITokenizer;
 import roj.config.word.Word;
 import roj.io.IOUtil;
 import roj.reflect.EnumHelper;
@@ -13,7 +15,6 @@ import roj.ui.AnsiString;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
-import javax.annotation.Nullable;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
@@ -45,19 +46,7 @@ public interface Argument<T> {
 						prefix = "";
 					}
 
-					File[] list = path.listFiles();
-					if (list == null) return null;
-					for (File file : list) {
-						if (file.getName().toLowerCase().startsWith(match)) {
-							String name = prefix.concat(file.getName().substring(match.length()));
-							AnsiString desc = new AnsiString(file.getAbsolutePath());
-							if (file.isFile()) {
-								if (folder != Boolean.TRUE) completions.add(new Completion(new AnsiString(name).color16(CLIUtil.CYAN), desc));
-							} else {
-								completions.add(new Completion(new AnsiString(name+File.separatorChar).color16(CLIUtil.YELLOW), desc));
-							}
-						}
-					}
+					listPath(completions, path, match, prefix);
 					return null;
 				}
 
@@ -72,8 +61,29 @@ public interface Argument<T> {
 				return path;
 			}
 
+			private void listPath(List<Completion> completions, File path, String match, String prefix) {
+				File[] list = path.listFiles();
+				if (list == null) return;
+				for (File file : list) {
+					if (file.getName().toLowerCase().startsWith(match)) {
+						String name = prefix.concat(file.getName().substring(match.length()));
+						AnsiString desc = new AnsiString(file.getAbsolutePath());
+						if (file.isFile()) {
+							if (folder != Boolean.TRUE) completions.add(new Completion(new AnsiString(name).color16(CLIUtil.CYAN), desc));
+						} else {
+							completions.add(new Completion(new AnsiString(name+File.separatorChar).color16(CLIUtil.YELLOW), desc));
+						}
+					}
+				}
+			}
+
 			@Override
-			public void example(List<Completion> completions) { completions.add(new Completion(new File("").getAbsolutePath())); }
+			public void example(List<Completion> completions) {
+				File file = new File("").getAbsoluteFile();
+				String prefix = file.getAbsolutePath();
+				completions.add(new Completion(prefix));
+				listPath(completions, file, "", prefix+File.separator);
+			}
 
 			@Override
 			public String type() { return folder == null ? "path" : folder ? "folder" : "file"; }
@@ -163,7 +173,8 @@ public interface Argument<T> {
 			CharList sb = IOUtil.getSharedCharBuf();
 			while (true) {
 				Word w = ctx.nextWord();
-				sb.append(w.val());
+				if (w.type() == Word.STRING) ITokenizer.addSlashes(sb.append('"'), w.val()).append('"');
+				else sb.append(w.val());
 				w = ctx.peekWord();
 				if (w == null) break;
 				sb.append(' ');

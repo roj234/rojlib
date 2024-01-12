@@ -9,6 +9,8 @@
 
 package roj.archive.qz.xz;
 
+import roj.text.TextUtil;
+
 /**
  * Thrown when the memory usage limit given to the XZ decompressor
  * would be exceeded.
@@ -32,7 +34,7 @@ public class MemoryLimitException extends java.io.IOException {
 	 * @param memoryLimit specified memory usage limit as kibibytes (KiB)
 	 */
 	public MemoryLimitException(int memoryNeeded, int memoryLimit) {
-		super("" + memoryNeeded + " KiB of memory would be needed; limit was " + memoryLimit + " KiB");
+		super(TextUtil.scaledNumber1024(memoryNeeded*1024)+" of memory would be needed; limit was "+TextUtil.scaledNumber1024(memoryLimit*1024));
 
 		this.memoryNeeded = memoryNeeded;
 		this.memoryLimit = memoryLimit;
@@ -43,9 +45,7 @@ public class MemoryLimitException extends java.io.IOException {
 	 *
 	 * @return amount of memory needed as kibibytes (KiB)
 	 */
-	public int getMemoryNeeded() {
-		return memoryNeeded;
-	}
+	public int getMemoryNeeded() { return memoryNeeded; }
 
 	/**
 	 * Gets what the memory usage limit was at the time the exception
@@ -53,7 +53,5 @@ public class MemoryLimitException extends java.io.IOException {
 	 *
 	 * @return memory usage limit as kibibytes (KiB)
 	 */
-	public int getMemoryLimit() {
-		return memoryLimit;
-	}
+	public int getMemoryLimit() { return memoryLimit; }
 }

@@ -1,10 +1,10 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.concurrent.FastThreadLocal;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.AbstractMap;
 import java.util.Map;
 import java.util.Objects;
@@ -30,7 +30,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public void putAll(@Nonnull Map<? extends Character, ? extends V> m) {
+	public void putAll(@NotNull Map<? extends Character, ? extends V> m) {
 		if (m instanceof CharMap) {
 			putAll((CharMap<V>) m);
 		} else {
@@ -116,7 +116,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 
 	public Set<Entry<V>> selfEntrySet() { return _Generic_EntrySet.create(this); }
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Set<Map.Entry<Character, V>> entrySet() { return Helpers.cast(selfEntrySet()); }
 
@@ -147,8 +147,8 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 	@Override
 	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
 
-	@Nonnull
-	public V computeIfAbsent(char k, @Nonnull IntFunction<V> supplier) {
+	@NotNull
+	public V computeIfAbsent(char k, @NotNull IntFunction<V> supplier) {
 		V v = get(k);
 		if (v == null) {
 			put(k, v = supplier.apply(k));

@@ -26,6 +26,8 @@ public abstract class ServerLaunch implements Closeable {
 
 	public final boolean isTCP() { return getClass() != ServerLaunchUdp.class; }
 
+	public MyChannel udpCh() { return null; }
+
 	public static ServerLaunch tcp() throws IOException { return new ServerLaunchTcp(); }
 	public static ServerLaunch udp() throws IOException { return new ServerLaunchUdp(); }
 	public static ServerLaunch tcp(String name) throws IOException { return new ServerLaunchTcp(); }
@@ -50,6 +52,7 @@ public abstract class ServerLaunch implements Closeable {
 		initializator = i;
 		return this;
 	}
+	public final Consumer<MyChannel> initializator() { return initializator; }
 	public abstract ServerLaunch launch() throws IOException;
 
 	public abstract boolean isOpen();

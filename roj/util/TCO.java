@@ -1,6 +1,7 @@
 package roj.util;
 
-import javax.annotation.Nonnull;
+import org.jetbrains.annotations.NotNull;
+
 import java.util.function.Function;
 
 /**
@@ -15,7 +16,7 @@ public abstract class TCO<T, R> implements Function<T, R> {
 	private Object[] stack = new Object[4];
 	private int stackUsed;
 
-	@Nonnull
+	@NotNull
 	@SuppressWarnings("unchecked")
 	public final T pop() {
 		T v = (T) stack[--stackUsed];
@@ -23,7 +24,7 @@ public abstract class TCO<T, R> implements Function<T, R> {
 		return v;
 	}
 
-	public final void push(@Nonnull T base) {
+	public final void push(@NotNull T base) {
 		if (stackUsed == stack.length) {
 			Object[] plus = new Object[(int) (stackUsed * 1.5)];
 			System.arraycopy(stack, 0, plus, 0, stackUsed);

@@ -3,13 +3,13 @@ package roj.plugins.cross.server;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
 import roj.net.ch.Pipe;
 import roj.text.logging.Level;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 
 import static roj.plugins.cross.server.AEServer.server;
 
@@ -17,7 +17,7 @@ import static roj.plugins.cross.server.AEServer.server;
  * @author Roj233
  * @since 2022/1/24 3:21
  */
-final class Client extends Connection implements ChannelHandler {
+final class Client extends Connection {
 	Host room;
 	int clientId;
 
@@ -41,20 +41,24 @@ final class Client extends Connection implements ChannelHandler {
 				int id;
 				PipeInfo pi;
 			break;
-			case P_S_PING:
-				byte[] ip = rb.readBytes(rb.readUnsignedByte());
-				char port = rb.readChar();
-
-				Pinger task = ping(ip, port);
-				if (task == null) {
-					rb = IOUtil.getSharedByteBuf();
-					ctx.channelWrite(rb.put(P_S_PING).put(-3));
+			case P_S_CONNECT_REQ:
+				int target_user = rb.readInt();
+				Client client = room.clients.get(target_user);
+				rb = IOUtil.getSharedByteBuf();
+				if (client == null) {
+					ctx.channelWrite(rb.put(P_S_CONNECT_ACK).putBool(false).putVUIGB("client not exist"));
+					break;
 				}
+
+				InetSocketAddress addr = (InetSocketAddress) ctx.channel().remoteAddress();
+				byte[] bytes = addr.getAddress().getAddress();
+				client.writeAsync(rb.put(P_S_CONNECT_REQ).putInt(clientId).put(bytes.length).put(bytes).putShort(addr.getPort()));
 			break;
-			case P_S_PONG: pong(rb); break;
+			case P_S_CONNECT_ACK: pong(rb); break;
 			case PCS_REQUEST_CHANNEL:
 				id = rb.readInt();
-				Object pipe = generatePipe(id);
+				boolean relay = rb.readBoolean();
+				Object pipe = makePipe(id, relay);
 				ByteList b = IOUtil.getSharedByteBuf();
 
 				if (pipe.getClass() == String.class) {
@@ -63,7 +67,7 @@ final class Client extends Connection implements ChannelHandler {
 					break;
 				}
 
-				room.writeAsync(b.put(PHH_CLIENT_REQUEST_CHANNEL).put(rb).putInt(clientId).putInt((int) pipe));
+				room.writeAsync(b.put(PHH_CLIENT_REQUEST_CHANNEL).put(rb).putInt(clientId).putBool(relay).putInt((int) pipe));
 				rb.rIndex += 33;
 			break;
 			default: unknownPacket(ctx, rb); return;
@@ -87,13 +91,13 @@ final class Client extends Connection implements ChannelHandler {
 		LOGGER.info("[{}] 连接中止", this);
 	}
 
-	Object generatePipe(int sessionId) {
+	private Object makePipe(int sessionId, boolean relay) {
 		if (server.pipes.size() > SERVER_MAX_PIPES) return "服务器合计等待打开的管道过多";
 		if (pipes.size() > CLIENT_MAX_PIPES) return "你打开的管道过多";
 		if (room.pipes.size() > HOST_MAX_PIPES) return "Host打开的管道过多";
 
 		PipeInfo group = new PipeInfo();
-		group.pipe = new Pipe();
+		group.pipe = relay ? new Pipe() : null;
 		group.sessionId = sessionId;
 		group.timeout = System.currentTimeMillis() + CLIENT_TIMEOUT;
 

@@ -7,6 +7,7 @@ import roj.util.Helpers;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author Roj234
@@ -24,8 +25,15 @@ public abstract class IGeneric implements IType {
 		children.add(child);
 	}
 
-	public List<IType> childrenRaw() {
-		return children;
+	public List<IType> childrenRaw() { return children; }
+
+	@Override
+	public IType resolveTypeParam(Map<String, IType> visualType, Map<String, List<IType>> bounds) {
+		for (int i = 0; i < children.size(); i++) {
+			children.set(i, children.get(i).resolveTypeParam(visualType, bounds));
+		}
+		if (sub != null) sub = (GenericSub) sub.resolveTypeParam(visualType, bounds);
+		return this;
 	}
 
 	@Override
@@ -39,10 +47,13 @@ public abstract class IGeneric implements IType {
 	public IGeneric clone() {
 		try {
 			IGeneric clone = (IGeneric) super.clone();
-			clone.sub = (GenericSub) sub.clone();
-			clone.children = new SimpleList<>(children.size());
-			for (int i = 0; i < children.size(); i++)
-				clone.children.add(children.get(i).clone());
+			clone.sub = sub == null ? null : (GenericSub) sub.clone();
+			if (children.isEmpty()) clone.children = Collections.emptyList();
+			else {
+				clone.children = new SimpleList<>(children.size());
+				for (int i = 0; i < children.size(); i++)
+					clone.children.add(children.get(i).clone());
+			}
 			return clone;
 		} catch (CloneNotSupportedException e) {
 			Helpers.athrow(e);

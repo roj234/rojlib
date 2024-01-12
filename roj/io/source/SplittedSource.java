@@ -81,7 +81,7 @@ public class SplittedSource extends Source {
 	}
 
 	public SplittedSource(FileSource src, long size) throws IOException {
-		this(new File(src.getFile().getParentFile(), IOUtil.noExtName(src.getFile().getName())), size);
+		this(new File(src.getFile().getParentFile(), IOUtil.fileName(src.getFile().getName())), size);
 	}
 
 	public static SplittedSource fixedSize(File file, long size) throws IOException { return new SplittedSource(file, size); }

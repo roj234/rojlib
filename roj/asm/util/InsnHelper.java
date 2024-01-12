@@ -37,11 +37,6 @@ public class InsnHelper {
 		return (byte) v;
 	}
 
-	@Deprecated
-	public static int getVarId(XInsnNodeView node) {
-		return node.getVarId();
-	}
-
 	public static byte ToPrimitiveArrayId(int nativeType) {
 		switch (nativeType) {
 			case 'Z': return 4;
@@ -198,7 +193,7 @@ public class InsnHelper {
 					node.setId(map.getOrDefaultInt(node.id(), node.id()));
 				break;
 				case CATE_LOAD_STORE:
-					int id = getVarId(node);
+					int id = node.getVarId();
 					int code = node.opcode()&0xFF;
 					if (code >= ILOAD && code <= ALOAD_3) {
 						if (code >= ILOAD_0) code = (byte) (((code - ILOAD_0) / 4) + ILOAD);

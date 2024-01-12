@@ -1,9 +1,11 @@
 package roj.archive.zip;
 
+import org.jetbrains.annotations.NotNull;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveWriter;
 import roj.collect.MyHashSet;
+import roj.io.IOUtil;
 import roj.io.source.BufferedSource;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
@@ -11,7 +13,6 @@ import roj.io.source.SplittedSource;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -161,7 +162,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 
 		if (this.entry != null) closeEntry();
 		long entryBeginOffset = file.position();
-		if (duplicate != null && !duplicate.add(entry.name)) throw new ZipException("Duplicate entry " + entry.name);
+		if (duplicate != null && !duplicate.add(entry.name)) throw new ZipException("Duplicate entry " +entry.name);
 		if (file.hasChannel() & owner.getFile().hasChannel()) {
 			FileChannel myCh = file.channel();
 			owner.getFile().channel().transferTo(entry.startPos(), entry.endPos() - entry.startPos(), myCh);
@@ -174,8 +175,9 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 			byte[] list = buf.list;
 			int len = (int) (entry.endPos() - entry.startPos());
 			while (len > 0) {
-				src.readFully(list, 0, Math.min(len, max));
-				file.write(list, 0, max);
+				int read = Math.min(len, max);
+				src.readFully(list, 0, read);
+				file.write(list, 0, read);
 				len -= max;
 			}
 		}
@@ -191,7 +193,6 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 
 	private ZEntry entry;
 	private long entryBeginOffset, dataBeginOffset;
-	private boolean zip64;
 
 	public void beginEntry(ZipEntry ze) throws IOException {
 		ZEntry entry = new ZEntry(ze.getName());
@@ -212,38 +213,14 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 
 		entryBeginOffset = file.position();
 
-		byte[] extra = null;
-
-		buf.putInt(HEADER_LOC)
-		   .putShortLE(large?45:20)
-		   .putShortLE(2048) // EFS
-		   .putShortLE(ze.getMethod())
-		   .putIntLE(ze.modTime)
-		   .putIntLE(0) // crc32
-		   .putIntLE(0) // csize
-		   .putIntLE(0) // usize
-		   .putShortLE(DynByteBuf.byteCountUTF8(ze.getName()))
-		   .putShortLE((extra == null ? 0 : extra.length) + (large?20:0))
-		   .putUTFData(ze.getName());
-
-		zip64 = large;
-
-		if (extra != null) buf.put(extra);
-		if (large) buf.putShortLE(0x0001).putShortLE(16).putLongLE(0).putLongLE(0);
-
-		file.write(buf);
-		buf.clear();
-
-		dataBeginOffset = file.position();
-	}
-
-	private static long getTime(ZipEntry ze) {
-		long l = ze.getTime();
-		if (l < 0) {
-			l = System.currentTimeMillis();
-			ze.setTime(l);
+		if (large) ze.cSize = ze.uSize = U32_MAX;
+		if (ze.nameBytes == null) {
+			entry.flags |= GP_UTF;
+			entry.nameBytes = IOUtil.SharedCoder.get().encode(entry.name);
 		}
-		return l;
+
+		ZipArchive.writeLOC(file, buf, ze);
+		dataBeginOffset = file.position();
 	}
 
 	private byte[] b1;
@@ -256,7 +233,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 	}
 
 	@Override
-	public void write(@Nonnull byte[] b, int off, int len) throws IOException {
+	public void write(@NotNull byte[] b, int off, int len) throws IOException {
 		if (entry == null) throw new ZipException("Entry closed");
 		crc.update(b, off, len);
 		if (entry.getMethod() == ZipEntry.STORED) {
@@ -306,59 +283,23 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 		def.reset();
 
 		boolean large = cSize >= U32_MAX || uSize >= U32_MAX;
-		if (large && !zip64)
+		if (large && entry.cSize < U32_MAX && entry.uSize < U32_MAX)
 			throw new ZipException("文件过大(4GB), 你要在beginEntry中打开zip64 (默认关闭以节约空间)");
 
-		buf.putInt(HEADER_CEN)
-		   .putShortLE(20)
-		   .putShortLE(20)
-		   .putShortLE(2048) // EFS
-		   .putShortLE(entry.getMethod())
-		   .putIntLE(entry.modTime)
-		   .putIntLE((int) crc.getValue())
-		   .putIntLE((int) (cSize >= U32_MAX ? U32_MAX : cSize))
-		   .putIntLE((int) (uSize >= U32_MAX ? U32_MAX : uSize))
-		   .putShortLE(DynByteBuf.byteCountUTF8(entry.getName()))
-		   .putShortLE(0) // ext
-		   .putShortLE(0) // comment
-		   .putShortLE(0) // disk
-		   .putShortLE(0) // attrIn
-		   .putIntLE(0) // attrEx
-		   .putIntLE((int) (entryBeginOffset >= U32_MAX ? U32_MAX : entryBeginOffset))
-		   .putUTFData(entry.getName());
+		entry.offset = dataBeginOffset;
+		entry.cSize = cSize;
+		entry.uSize = uSize;
+		entry.crc32 = (int) crc.getValue();
 
-		if (large || entryBeginOffset >= U32_MAX) {
-			buf.putShortLE(4, 45).putShortLE(6, 45);
-
-			int begin = buf.wIndex();
-			buf.putShortLE(1).putShortLE(0);
-
-			int zx = 0;
-			if (uSize >= U32_MAX) {
-				buf.putLongLE(uSize);
-				zx++;
-			}
-			if (cSize >= U32_MAX) {
-				buf.putLongLE(uSize);
-				zx++;
-			}
-			if (entryBeginOffset >= U32_MAX) {
-				buf.putLongLE(entryBeginOffset);
-				zx++;
-			}
-
-			buf.putShortLE(buf.wIndex()-(zx<<3), zx<<3)
-			   .putShortLE(30, buf.wIndex()-begin);
-		}
-		CENs.put(buf);
+		int off = CENs.wIndex();
+		ZipArchive.writeCEN(CENs, entry);
 		eof.cDirTotal++;
 
-		f.seek(entryBeginOffset + 14);
-		f.write(buf.list, 16, 12);
-		buf.clear();
+		f.seek(entryBeginOffset+14);
+		f.write(CENs.list, off+16, 12);
 
 		if (large) {
-			f.seek(dataBeginOffset-16);
+			f.seek(entryBeginOffset+34+entry.nameBytes.length);
 			buf.clear();
 			buf.putLongLE(uSize).putLongLE(cSize);
 			f.write(buf);

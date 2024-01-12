@@ -1,5 +1,6 @@
 package roj.archive.qz;
 
+import org.jetbrains.annotations.NotNull;
 import roj.archive.qz.xz.rangecoder.RangeDecoderFromStream;
 import roj.archive.qz.xz.rangecoder.RangeEncoderToStream;
 import roj.io.CorruptedInputException;
@@ -7,7 +8,6 @@ import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -76,7 +76,7 @@ public final class BCJ2 extends QZComplexCoder {
 		}
 
 		@Override
-		public void write(@Nonnull byte[] b, int off, int len) throws IOException {
+		public void write(@NotNull byte[] b, int off, int len) throws IOException {
 			if (len == 0) return;
 
 			while (ob.isReadable()) {
@@ -170,7 +170,7 @@ public final class BCJ2 extends QZComplexCoder {
 				ob.writeToStream(main);
 				ob._free();
 				rc.finish();
-				rc.putArraysToCache();
+				rc.release();
 				if (main instanceof Finishable) ((Finishable) main).finish();
 				if (call instanceof Finishable) ((Finishable) call).finish();
 				if (jump instanceof Finishable) ((Finishable) jump).finish();
@@ -218,7 +218,7 @@ public final class BCJ2 extends QZComplexCoder {
 		}
 
 		@Override
-		public int read(@Nonnull byte[] b, int off, int len) throws IOException {
+		public int read(@NotNull byte[] b, int off, int len) throws IOException {
 			if (len == 0) return 0;
 			if (!ob.isReadable()) decode(offset+512);
 			if (!ob.isReadable()) return -1;

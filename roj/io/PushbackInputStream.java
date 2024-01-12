@@ -1,6 +1,7 @@
 package roj.io;
 
-import javax.annotation.Nonnull;
+import org.jetbrains.annotations.NotNull;
+
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,7 +19,7 @@ public class PushbackInputStream extends FilterInputStream {
 		super(in);
 	}
 
-	public void setBuffer(@Nonnull byte[] b, int off, int len) {
+	public void setBuffer(@NotNull byte[] b, int off, int len) {
 		this.buffer = b;
 		this.bOff = off;
 		this.bLen = len;
@@ -27,7 +28,7 @@ public class PushbackInputStream extends FilterInputStream {
 	protected void bufferEmpty() {}
 
 	@Override
-	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
+	public int read(@NotNull byte[] b, int off, int len) throws IOException {
 		int k = bOff;
 		if (k < bLen) {
 			int rm = bLen - k;

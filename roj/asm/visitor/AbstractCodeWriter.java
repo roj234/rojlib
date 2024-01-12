@@ -192,7 +192,6 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		clazz(code, clz.getActualClass());
 	}
 
-	@Deprecated
 	public final void invoke(byte code, MethodNode m) { invoke(code, m.ownerClass(), m.name(), m.rawDesc()); }
 	public final void invoke(byte code, IClass cz, int id) {
 		RawNode node = cz.methods().get(id);

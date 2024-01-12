@@ -1,6 +1,7 @@
 package roj.archive;
 
-import javax.annotation.Nonnull;
+import org.jetbrains.annotations.NotNull;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.zip.Checksum;
@@ -32,7 +33,7 @@ public final class ChecksumInputStream extends InputStream {
 		return b;
 	}
 
-	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
+	public int read(@NotNull byte[] b, int off, int len) throws IOException {
 		len = in.read(b, off, len);
 		if (len >= 0) c.update(b, off, len);
 		else check();

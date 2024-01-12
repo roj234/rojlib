@@ -10,23 +10,27 @@ import roj.util.DynByteBuf;
  * @since 2021/6/18 9:51
  */
 public final class AnnValEnum extends AnnVal {
-	public AnnValEnum(String type, String value) {
-		// 当你已知这不可能是基本类型...
-		this.clazz = type.substring(1, type.length()-1);
-		this.value = value;
+	public AnnValEnum(String type, String field) {
+		this.owner = type;
+		this.field = field;
 	}
 
-	public String clazz, value;
+	/**
+	 * ClassOnlyDesc
+	 */
+	public String owner;
+	public String field;
+	public String rawOwner() { return owner.substring(1, owner.length()-1); }
 
 	public AnnValEnum asEnum() { return this; }
 
 	public byte type() { return ENUM; }
 
-	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) ENUM).putShort(cp.getUtfId("L" + clazz + ';')).putShort(cp.getUtfId(value)); }
+	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) ENUM).putShort(cp.getUtfId(owner)).putShort(cp.getUtfId(field)); }
 	public String toString() {
 		CharList sb = new CharList();
-		TypeHelper.toStringOptionalPackage(sb, clazz);
-		return sb.replace('/', '.').append('.').append(value).toStringAndFree();
+		TypeHelper.toStringOptionalPackage(sb, rawOwner());
+		return sb.replace('/', '.').append('.').append(field).toStringAndFree();
 	}
 
 	@Override
@@ -36,14 +40,14 @@ public final class AnnValEnum extends AnnVal {
 
 		AnnValEnum anEnum = (AnnValEnum) o;
 
-		if (!clazz.equals(anEnum.clazz)) return false;
-		return value.equals(anEnum.value);
+		if (!owner.equals(anEnum.owner)) return false;
+		return field.equals(anEnum.field);
 	}
 
 	@Override
 	public int hashCode() {
-		int result = clazz.hashCode();
-		result = 31 * result + value.hashCode();
+		int result = owner.hashCode();
+		result = 31 * result + field.hashCode();
 		return result;
 	}
 }

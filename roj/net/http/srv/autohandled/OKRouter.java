@@ -1,5 +1,6 @@
 package roj.net.http.srv.autohandled;
 
+import org.jetbrains.annotations.Nullable;
 import roj.asm.Parser;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstString;
@@ -10,7 +11,7 @@ import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.type.*;
-import roj.asm.util.AttrHelper;
+import roj.asm.util.Attributes;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.SwitchSegment;
@@ -32,7 +33,6 @@ import roj.reflect.FastInit;
 import roj.util.AttributeKey;
 import roj.util.Helpers;
 
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -66,7 +66,7 @@ public class OKRouter implements Router {
 	public OKRouter() {}
 
 	public void setHandleError(boolean b) { handleError = b; }
-	public void addPostRequestCallback(Callable<Void> callback) {
+	public void afterRequest(Callable<Void> callback) {
 		if (prCallback.isEmpty()) prCallback = new SimpleList<>();
 		prCallback.add(callback);
 	}
@@ -124,9 +124,9 @@ public class OKRouter implements Router {
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
 
-			List<Annotation> list = AttrHelper.getAnnotations(data.cp, mn, false);
-			Annotation a = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Route");
-			Annotation a2 = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Interceptor");
+			List<Annotation> list = Attributes.getAnnotations(data.cp, mn, false);
+			Annotation a = Attributes.getAnnotation(list, "roj/net/http/srv/autohandled/Route");
+			Annotation a2 = Attributes.getAnnotation(list, "roj/net/http/srv/autohandled/Interceptor");
 			if (a == null) {
 				if (a2 == null) continue;
 				List<AnnVal> value = a2.getArray("value");
@@ -135,7 +135,7 @@ public class OKRouter implements Router {
 				interceptors.putInt(value.isEmpty()?mn.name():value.get(0).asString(), id++);
 				a = a2;
 			} else {
-				handlers.putInt(a, id++);
+				handlers.putInt(id++, a);
 				if (a.getString("value") == null)
 					a.put("value", AnnVal.valueOf(mn.name().replace("__", "/")));
 				if (a2 != null) a.put("interceptor", a2.values.get("value"));
@@ -189,7 +189,7 @@ public class OKRouter implements Router {
 			}
 			cw.one(ARETURN);
 
-			Annotation a1 = AttrHelper.getAnnotation(list, "roj/net/http/srv/autohandled/Accepts");
+			Annotation a1 = Attributes.getAnnotation(list, "roj/net/http/srv/autohandled/Accepts");
 			if (a1 != null) a.put("accepts", a1.values.get("value"));
 		}
 		if (seg.def == null) throw new IllegalArgumentException(fn.concat("没有任何处理函数"));
@@ -321,10 +321,10 @@ public class OKRouter implements Router {
 	private void provideBodyPars(CodeWriter c, ConstantPool cp, MethodNode m, int begin, List<TryCatchEntry> tries) {
 		List<Type> parTypes = m.parameters();
 
-		Annotation body = AttrHelper.getAnnotation(AttrHelper.getAnnotations(cp, m, false), "roj/net/http/srv/autohandled/Body");
+		Annotation body = Attributes.getAnnotation(Attributes.getAnnotations(cp, m, false), "roj/net/http/srv/autohandled/Body");
 		if (body == null) throw new IllegalArgumentException("没有@Body注解 " + m);
 
-		List<List<Annotation>> annos = AttrHelper.getParameterAnnotation(cp, m, false);
+		List<List<Annotation>> annos = Attributes.getParameterAnnotation(cp, m, false);
 		if (annos == null) annos = Collections.emptyList();
 
 		Signature signature = m.parsedAttr(cp, Attribute.SIGNATURE);
@@ -344,7 +344,7 @@ public class OKRouter implements Router {
 
 		for (; begin < parTypes.size(); begin++) {
 			bw.process(cp,
-				begin>=annos.size()?null:AttrHelper.getAnnotation(annos.get(begin), "roj/net/http/srv/autohandled/Field"),
+				begin>=annos.size()?null: Attributes.getAnnotation(annos.get(begin), "roj/net/http/srv/autohandled/Field"),
 				begin>=parNames.size()?null:parNames.get(begin),
 				parTypes.get(begin),
 				begin>=genTypes.size()|| !(genTypes.get(begin) instanceof Generic) ? null: (Generic) genTypes.get(begin));

@@ -1,14 +1,16 @@
 package roj.net;
 
 import roj.asm.type.Type;
+import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.reflect.DirectAccessor;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
+import java.io.IOException;
+import java.net.*;
 import java.nio.ByteBuffer;
+import java.util.Enumeration;
 import java.util.LinkedHashMap;
 
 /**
@@ -17,6 +19,43 @@ import java.util.LinkedHashMap;
  */
 public final class NetUtil {
 	public static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
+
+	private static SimpleList<NetworkInterface> networkInterfaces;
+	private static MyHashSet<InetAddress> endpoints;
+	private static boolean hasAnyIpV6Address;
+	static { refreshEndpoints(); }
+
+	public static void refreshEndpoints() {
+		SimpleList<NetworkInterface> interfaces = new SimpleList<>();
+		MyHashSet<InetAddress> addresses = new MyHashSet<>();
+		boolean val = false;
+
+		try {
+			Enumeration<NetworkInterface> itr = NetworkInterface.getNetworkInterfaces();
+			while (itr.hasMoreElements()) {
+				NetworkInterface itf = itr.nextElement();
+				if (/*itf.getParent() == null && */itf.isUp() && !itf.isLoopback()) {
+					interfaces.add(itf);
+					Enumeration<InetAddress> itr1 = itf.getInetAddresses();
+					while (itr1.hasMoreElements()) {
+						InetAddress endpoint = itr1.nextElement();
+						if (endpoint instanceof Inet6Address) {
+							val = true;
+						}
+						addresses.add(endpoint);
+					}
+				}
+			}
+		} catch (IOException ignored) {}
+
+		networkInterfaces = interfaces;
+		endpoints = addresses;
+		hasAnyIpV6Address = val;
+	}
+
+	public static boolean hasAnyIpV6Address() { return hasAnyIpV6Address; }
+	public static MyHashSet<InetAddress> getNetworkEndpoints() { return endpoints; }
+	public static SimpleList<NetworkInterface> getNetworkInterfaces() { return networkInterfaces; }
 
 	private static InetAddress any;
 	public static InetAddress anyLocalAddress() {
@@ -138,6 +177,11 @@ public final class NetUtil {
 			throw new IllegalArgumentException("illegal port");
 		}
 		return addr;
+	}
+	public static InetSocketAddress parseUnresolvedAddress(String hostStr, int defaultPort) {
+		if (hostStr == null || hostStr.isEmpty()) throw new IllegalArgumentException("null port");
+		int pos = hostStr.lastIndexOf(':');
+		return InetSocketAddress.createUnresolved(pos < 0 ? hostStr : hostStr.substring(0, pos), pos < 0 ? defaultPort : Integer.parseInt(hostStr.substring(pos+1)));
 	}
 	// endregion
 

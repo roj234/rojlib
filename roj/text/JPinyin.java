@@ -1,85 +1,21 @@
 package roj.text;
 
 import roj.archive.qz.xz.LZMA2InputStream;
-import roj.archive.qz.xz.LZMAInputStream;
 import roj.collect.Int2IntMap;
 import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
 import roj.collect.TrieTree;
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
 import roj.math.MutableInt;
-import roj.util.ByteList;
 import roj.util.DirectByteList;
 
-import java.io.InputStream;
 import java.nio.CharBuffer;
-import java.util.List;
-import java.util.Map;
 
 /**
  * @author Roj234
  * @since 2020/9/30 20:51
  */
 public class JPinyin {
-	private static final TrieTree<Integer> WordsFrequency = new TrieTree<>();
-	public static List<String> splitWord(String input) {
-		loadMPDict();
-		int i = 0, len = input.length();
-		List<String> out = new SimpleList<>();
-		while (i < len) {
-			Map.Entry<MutableInt, Integer> spec = WordsFrequency.longestMatches(input, i, len), prob, prob2 = null;
-			if (spec != null) {
-				int to = i+spec.getKey().getValue();
-				int probIdx = i, probIdx2 = 0;
-				for (int j = to+2; j >= i+1; j--) {
-					prob = WordsFrequency.longestMatches(input, j, len);
-					if (prob == null) continue;
-
-					boolean b = WordsFrequency.containsKey(input, i, j);
-
-					if (j < to && prob.getValue() > spec.getValue() && prob.getKey().getValue() >= spec.getKey().getValue()) {
-						spec = prob;
-						probIdx = j;
-					} else if (b && j+prob.getKey().getValue() >= to) {
-						spec = prob2 = prob;
-						probIdx = probIdx2 = j;
-					}
-				}
-
-				if (prob2 != null) {
-					spec = prob2;
-					probIdx = probIdx2;
-				}
-
-				if (probIdx > i) out.add(input.substring(i, probIdx));
-				out.add(input.substring(probIdx, probIdx+=spec.getKey().getValue()));
-				i = probIdx;
-			} else {
-				out.add(String.valueOf(input.charAt(i++)));
-			}
-		}
-		return out;
-	}
-	private static void loadMPDict() {
-		if (!WordsFrequency.isEmpty()) return;
-		// https://github.com/yanyiwu/cppjieba
-		try (InputStream in = new LZMAInputStream(JPinyin.class.getResourceAsStream("/META-INF/china/mp_dict.lzma"))) {
-			ByteList bb = new ByteList().readStreamFully(in);
-			int priority = 0;
-			while (bb.isReadable()) {
-				int len = bb.readInt();
-				for (int i = 0; i < len; i++) {
-					String key = bb.readVUIGB();
-					WordsFrequency.put(key, priority);
-				}
-				priority++;
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
-
 	private static char[] StringPool;
 	private static int CPBits, CPMask;
 	private static final TrieTree<Integer> PinyinWords = new TrieTree<>();
@@ -108,7 +44,6 @@ public class JPinyin {
 			GB18030.CODER.decodeFixedIn(bb,ycpLenByte,ycp);
 			StringPool = ycp.array();
 
-			CharList sb = IOUtil.getSharedCharBuf();
 			while (mapSize-- > 0) {
 				int zref = bb.readInt();
 				int yref = bb.readInt();

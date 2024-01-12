@@ -7,6 +7,7 @@ import roj.concurrent.TaskPool;
 import roj.io.buf.BufferPool;
 import roj.util.*;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
@@ -25,7 +26,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author Roj233
  * @since 2022/5/17 12:47
  */
-public abstract class MyChannel implements Selectable {
+public abstract class MyChannel implements Selectable, Closeable {
 	public static final Identifier IN_EOF = new Identifier("input_eof");
 
 	ChannelCtx pipelineHead, pipelineTail;
@@ -470,9 +471,8 @@ public abstract class MyChannel implements Selectable {
 			if (state > OPENED) throw new ClosedChannelException();
 
 			key.cancel();
-			key = DummySelectionKey.INSTANCE;
-
 			disconnect0();
+			key = DummySelectionKey.INSTANCE;
 			ch.configureBlocking(false);
 
 			state = INITIAL;
@@ -594,7 +594,13 @@ public abstract class MyChannel implements Selectable {
 	}
 	// endregion
 
+	// TODO - add checks
+	public void bind(InetSocketAddress na) throws IOException {
+		bind0(na);
+	}
+
 	// abstract
+	protected abstract void bind0(InetSocketAddress na) throws IOException;
 	protected abstract boolean connect0(InetSocketAddress na) throws IOException;
 	protected abstract SocketAddress finishConnect0() throws IOException;
 	protected abstract void closeGracefully0() throws IOException;

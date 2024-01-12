@@ -20,7 +20,7 @@ public final class Serializers {
 	static boolean injected;
 	static {
 		try {
-			ConstantData c = Parser.parseConstants(IOUtil.readRes("roj/config/serial/Adapter.class"));
+			ConstantData c = Parser.parseConstants(IOUtil.getResource("roj/config/serial/Adapter.class"));
 			c.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
 			ClassDefiner.INSTANCE.defineClass(c);
 			injected = true;

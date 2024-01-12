@@ -13,6 +13,8 @@ import java.util.List;
  * @since 2023/11/20 0020 15:05
  */
 public class ArgumentContext {
+	public static final Word EOF = new Word().init(Word.EOF, 0, "");
+
 	public TaskPool executor;
 
 	private String context;
@@ -79,8 +81,9 @@ public class ArgumentContext {
 
 	public int getMaxI() { return maxI; }
 
+	protected final CommandContext createContext() { return new CommandContext(map); }
 	public void wrapExecute(CommandImpl command) {
-		CommandContext ctx = new CommandContext(map);
+		CommandContext ctx = createContext();
 		if (executor != null) executor.pushTask(() -> {
 			synchronized (this) {}
 			command.accept(ctx);
@@ -93,4 +96,6 @@ public class ArgumentContext {
 			}
 		}
 	}
+
+	public void failedOn(String name, Argument<?> arg) {}
 }

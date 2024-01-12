@@ -1,5 +1,6 @@
 package roj.asmx.mapper;
 
+import org.jetbrains.annotations.Nullable;
 import roj.asm.type.Desc;
 import roj.asm.util.ClassUtil;
 import roj.asmx.mapper.util.MapperList;
@@ -13,7 +14,6 @@ import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
-import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;

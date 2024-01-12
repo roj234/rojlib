@@ -1,8 +1,7 @@
 package roj.collect;
 
+import org.jetbrains.annotations.Nullable;
 import roj.util.Helpers;
-
-import javax.annotation.Nullable;
 
 /**
  * @author Roj234

@@ -22,8 +22,9 @@ import roj.mod.MCLauncher.RunMinecraftTask;
 import roj.mod.plugin.PluginContext;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.text.TextWriter;
 import roj.ui.CLIUtil;
-import roj.ui.GUIUtil;
+import roj.ui.GuiUtil;
 import roj.ui.Profiler;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
@@ -33,7 +34,6 @@ import roj.util.Helpers;
 
 import javax.swing.*;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.locks.LockSupport;
@@ -71,7 +71,7 @@ public final class FMDMain {
 		CommandImpl cDeobf = ctx -> {
 			String mode = ctx.argument("reverse", String.class, "mcp2srg");
 
-			GUIUtil.systemLook();
+			GuiUtil.systemLook();
 			MapperUI f = new MapperUI();
 			f.setDefaultCloseOperation(isCLI ? JFrame.DISPOSE_ON_CLOSE : JFrame.EXIT_ON_CLOSE);
 			loadMapper();
@@ -436,7 +436,6 @@ public final class FMDMain {
 		// region 无代码变动的处理
 		if (files.isEmpty()) {
 			Profiler.endStartSection("updateResource <= ensureWritable");
-			p.registerWatcher();
 			if (increment) {
 				try (ZipOutput zo1 = updateDst(p, jarFile)) {
 					zo1.begin(false);
@@ -454,6 +453,7 @@ public final class FMDMain {
 				CLIUtil.warning("无法执行指令", e);
 			}
 
+			p.registerWatcher();
 			Profiler.endSection();
 			return 0;
 		}
@@ -495,10 +495,7 @@ public final class FMDMain {
 				map.computeIfAbsent(entry.clazz, Helpers.fnMyHashSet()).addAll(entry.value);
 			}
 
-			try (FileOutputStream fos = new FileOutputStream(p.atConfigPathStr)) {
-				IOUtil.SharedCoder.get().encodeTo(fos);
-			}
-
+			TextWriter.write(new File(p.atConfigPathStr), atData);
 			// FIXME Use Lavac to resolve access transform
 			// ATHelper.makeATJar(p.name, map);
 		}

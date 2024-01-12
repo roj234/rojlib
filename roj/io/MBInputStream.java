@@ -1,8 +1,8 @@
 package roj.io;
 
+import org.jetbrains.annotations.NotNull;
 import roj.util.ArrayCache;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -20,7 +20,7 @@ public abstract class MBInputStream extends InputStream {
 	}
 
 	@Override
-	public abstract int read(@Nonnull byte[] b, int off, int len) throws IOException;
+	public abstract int read(@NotNull byte[] b, int off, int len) throws IOException;
 
 	@Override
 	public long skip(long n) throws IOException {

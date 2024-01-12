@@ -4,6 +4,7 @@ import roj.text.TextWriter;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.Charset;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -14,11 +15,12 @@ public class LDStream implements LogDestination {
 	private final ReentrantLock lock;
 	private final TextWriter out;
 
-	public static LDStream of(OutputStream out) { return new LDStream(out); }
+	public static LDStream of(OutputStream out) { return new LDStream(out, null); }
+	public static LDStream of(OutputStream out, Charset cs) { return new LDStream(out, cs); }
 
-	public LDStream(OutputStream os) {
+	public LDStream(OutputStream os, Charset charset) {
 		lock = new ReentrantLock(true);
-		out = new TextWriter(os, null);
+		out = new TextWriter(os, charset);
 	}
 
 	@Override

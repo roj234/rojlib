@@ -24,11 +24,11 @@ public final class FieldNode extends CNode {
 	public FieldNode(int acc, String name, Type type) { this(acc, (Object) name, type); }
 	public FieldNode(int acc, CstUTF name, CstUTF type) { this(acc, (Object) name, type); }
 	private FieldNode(int acc, Object name, Object type) {
-		this.access = (char) acc;
+		this.modifier = (char) acc;
 		this.name = name;
 		this.desc = type;
 	}
-	public FieldNode copyDesc() { return new FieldNode(access, name, desc); }
+	public FieldNode copyDesc() { return new FieldNode(modifier, name, desc); }
 	public FieldNode copy() {
 		FieldNode inst = copyDesc();
 		if (attributes != null) inst.attributes = new AttributeList(attributes);
@@ -36,7 +36,7 @@ public final class FieldNode extends CNode {
 	}
 
 	public FieldNode(java.lang.reflect.Field f) {
-		this.access = (char) f.getModifiers();
+		this.modifier = (char) f.getModifiers();
 		this.name = f.getName();
 		this.desc = TypeHelper.class2asm(f.getType());
 	}
@@ -77,7 +77,7 @@ public final class FieldNode extends CNode {
 		if (a != null) a.toString(sb, prefix).append('\n');
 
 		Signature sig = writeSignature ? parsedAttr(cp, Attribute.SIGNATURE) : null;
-		Opcodes.showModifiers(access, Opcodes.ACC_SHOW_FIELD, sb.padEnd(' ', prefix)).append(sig != null ? sig : fieldType()).append(' ').append(name());
+		Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_FIELD, sb.padEnd(' ', prefix)).append(sig != null ? sig : fieldType()).append(' ').append(name());
 
 		ConstantValue cv = parsedAttr(cp, Attribute.ConstantValue);
 		if (cv != null) sb.append(" = ").append(cv.c.getEasyReadValue());

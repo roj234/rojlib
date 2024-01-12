@@ -139,7 +139,7 @@ public final class Bootstrap {
 
 		ByteList list = Parser.toByteArrayShared(L);
 		Class<?> loaderClass = entryPoint.defineClassB(L.name.replace('/', '.'), list.list, 0, list.wIndex());
-		ReflectionUtils.u.ensureClassInitialized(loaderClass);
+		ReflectionUtils.ensureClassInitialized(loaderClass);
 	}
 
 	private static URL[] GetOtherJars() {

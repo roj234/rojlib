@@ -1,10 +1,10 @@
 package roj.ui.terminal;
 
+import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.text.CharList;
 
-import javax.annotation.Nullable;
 import java.util.List;
 
 /**
@@ -122,6 +122,7 @@ public abstract class CommandNode {
 						ctx.putArgument(name, o);
 						return doApply(ctx, null);
 					} catch (Exception e) {
+						ctx.failedOn(name, argument);
 						return false;
 					}
 				}

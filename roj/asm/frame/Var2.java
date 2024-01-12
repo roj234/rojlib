@@ -3,7 +3,6 @@ package roj.asm.frame;
 import roj.asm.cp.Constant;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.visitor.FrameVisitor;
 import roj.asm.visitor.Label;
 import roj.collect.MyHashSet;
 

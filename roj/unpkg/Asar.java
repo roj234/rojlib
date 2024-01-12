@@ -9,7 +9,6 @@ import roj.io.IOUtil;
 import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.text.UTFCoder;
 import roj.ui.CLIUtil;
 import roj.util.ByteList;
 
@@ -39,14 +38,12 @@ public class Asar {
 		f.readFully(data);
 		if (f.read() != 0) throw new IOException("EOF flag excepted");
 
-		UTFCoder uc = IOUtil.SharedCoder.get();
-		CMapping root = JSONParser.parses(uc.decodeR(data)).asMap();
+		CMapping root = new JSONParser().parseRaw(ByteList.wrap(data)).asMap();
 
 		TrieTree<PosInfo> tree = new TrieTree<>();
 
 		MutableInt dir = new MutableInt();
-		CharList tmp = uc.charBuf; tmp.clear();
-		recursionTree(tmp, root, tree, dir);
+		recursionTree(IOUtil.getSharedCharBuf(), root, tree, dir);
 
 		System.out.println("总文件数目: " + tree.size() + ", 总文件大小: " + TextUtil.scaledNumber(f.length() - 16 - jsonLen) + "B, 目录数: " + dir.getValue());
 
@@ -66,7 +63,7 @@ public class Asar {
 			key = "";
 		}
 
-		ByteList tmp2 = uc.byteBuf;
+		ByteList tmp2 = IOUtil.getSharedByteBuf();
 		tree.forEachSince(key, (k, v) -> {
 			File file = new File(target, k.toString());
 			file.getParentFile().mkdirs();

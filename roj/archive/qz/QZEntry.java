@@ -5,8 +5,9 @@ import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.util.Helpers;
 
-import static roj.archive.zip.ZEntry.java2WinTime;
-import static roj.archive.zip.ZEntry.winTime2JavaTime;
+import java.nio.file.attribute.FileTime;
+
+import static roj.archive.zip.ZEntry.*;
 
 /**
  * @author Roj234
@@ -34,9 +35,7 @@ public class QZEntry implements ArchiveEntry, Cloneable {
     QZEntry next;
 
     QZEntry() {}
-    public QZEntry(String name) {
-        this.name = name;
-    }
+    public QZEntry(String name) { this.name = name; }
     public QZEntry(String name, long expectSize) {
         this.name = name;
         this.uSize = expectSize;
@@ -54,9 +53,16 @@ public class QZEntry implements ArchiveEntry, Cloneable {
     public final long getSize() { return uSize; }
     public final long getCompressedSize() { return block == null ? 0 : block.fileCount == 1 ? block.size() : -1; }
 
+    public final boolean isEncrypted() { return block != null && block.hasProcessor(QzAES.class); }
+
     public final long getAccessTime() { return winTime2JavaTime(accessTime); }
     public final long getCreationTime() { return winTime2JavaTime(createTime); }
     public final long getModificationTime() {  return winTime2JavaTime(modifyTime); }
+
+    public FileTime getPrecisionAccessTime() { return !hasAccessTime() ? null : winTime2FileTime(accessTime); }
+    public FileTime getPrecisionCreationTime() { return !hasCreationTime() ? null : winTime2FileTime(createTime); }
+    public FileTime getPrecisionModificationTime() { return !hasModificationTime() ? null : winTime2FileTime(modifyTime); }
+
     public final int getAttributes() { return attributes; }
     public final boolean hasAccessTime() { return (flag&AT) != 0; }
     public final boolean hasCreationTime() { return (flag&CT) != 0; }
@@ -66,17 +72,48 @@ public class QZEntry implements ArchiveEntry, Cloneable {
     public final boolean isAntiItem() { return (flag & ANTI) != 0; }
 
     public final void setAccessTime(long t) {
-        accessTime = java2WinTime(t);
-        flag |= AT;
+        if (t == 0) flag &= ~AT;
+        else {
+            accessTime = java2WinTime(t);
+            flag |= AT;
+        }
     }
     public final void setCreationTime(long t) {
-        createTime = java2WinTime(t);
-        flag |= CT;
+        if (t == 0) flag &= ~CT;
+        else {
+            createTime = java2WinTime(t);
+            flag |= CT;
+        }
     }
     public final void setModificationTime(long t) {
-        modifyTime = java2WinTime(t);
-        flag |= MT;
+        if (t == 0) flag &= ~MT;
+        else {
+            modifyTime = java2WinTime(t);
+            flag |= MT;
+        }
     }
+    public final void setPrecisionAccessTime(FileTime t) {
+        if (t == null) flag &= ~AT;
+        else {
+            accessTime = fileTime2WinTime(t);
+            flag |= AT;
+        }
+    }
+    public final void setPrecisionCreationTime(FileTime t) {
+        if (t == null) flag &= ~CT;
+        else {
+            createTime = fileTime2WinTime(t);
+            flag |= CT;
+        }
+    }
+    public final void setPrecisionModificationTime(FileTime t) {
+        if (t == null) flag &= ~MT;
+        else {
+            modifyTime = fileTime2WinTime(t);
+            flag |= MT;
+        }
+    }
+
     // int DIRECTORY = 16, READONLY = 1, HIDDEN = 2, ARCHIVE = 32;
     public final void setAttributes(int attr) {
         attributes = attr;

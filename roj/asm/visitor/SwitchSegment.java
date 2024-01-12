@@ -2,9 +2,9 @@ package roj.asm.visitor;
 
 import roj.asm.Opcodes;
 import roj.asm.tree.insn.SwitchEntry;
-import roj.collect.BSLowHeap;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
+import roj.collect.SortedList;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -27,7 +27,7 @@ public final class SwitchSegment extends Segment {
 
 	public boolean opt;
 
-	int fv_bci;
+	public int fv_bci;
 
 	SwitchSegment(int code, Label def, List<SwitchEntry> targets, int origPos) {
 		this.code = (byte) code;
@@ -42,7 +42,7 @@ public final class SwitchSegment extends Segment {
 	public SwitchSegment(boolean optimizeToGoto) { this(0); this.opt = optimizeToGoto; }
 	public SwitchSegment(int code) {
 		this.code = (byte) code;
-		this.targets = new BSLowHeap<>(null);
+		this.targets = new SortedList<>(null);
 		this.length = 1;
 	}
 

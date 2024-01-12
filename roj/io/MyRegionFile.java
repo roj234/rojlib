@@ -1,5 +1,6 @@
 package roj.io;
 
+import org.jetbrains.annotations.Nullable;
 import roj.collect.MyBitSet;
 import roj.io.buf.BufferPool;
 import roj.io.source.FileSource;
@@ -10,7 +11,6 @@ import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import javax.annotation.Nullable;
 import java.io.*;
 import java.util.Arrays;
 import java.util.concurrent.locks.Lock;

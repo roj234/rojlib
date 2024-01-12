@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets;
  * @since 2023/12/25 0025 16:00
  */
 public abstract class Plugin {
-	public final Logger logger = Logger.getLogger(getClass().getSimpleName());
+	private Logger logger;
 
 	private PluginManager pluginManager;
 	private PluginDescriptor desc;
@@ -35,6 +35,7 @@ public abstract class Plugin {
 		this.desc = pd;
 		this.dataFolder = dataFolder;
 		this.configFile = new File(dataFolder, "config.yml");
+		this.logger = Logger.getLogger(pd.id);
 	}
 
 	public final File getDataFolder() { return dataFolder; }

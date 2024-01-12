@@ -1,11 +1,10 @@
 package roj.asm.tree;
 
+import org.jetbrains.annotations.Nullable;
 import roj.asm.cp.ConstantPool;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.AttributeList;
 import roj.util.AttributeKey;
-
-import javax.annotation.Nullable;
 
 /**
  * @author Roj233

@@ -1,9 +1,9 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
@@ -12,7 +12,7 @@ import java.util.function.Supplier;
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<IntMap.Entry<V>>, IIntMap<V> {
+public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<IntMap.Entry<V>> {
 	public static final Object UNDEFINED = new Object() {
 		public String toString() { return "roj.collect.UNDEFINED"; }
 		public boolean equals(Object obj) { return obj == UNDEFINED; }
@@ -131,14 +131,14 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 	public _Generic_Entry[] __entries() { return entries; }
 	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
 
-	public V computeIfAbsentInt(int k, @Nonnull IntFunction<V> fn) {
+	public V computeIfAbsentInt(int k, @NotNull IntFunction<V> fn) {
 		Entry<V> entry = getEntry(k);
 		V v;
 		if (entry == null) putInt(k, v = fn.apply(k));
 		else v = entry.v;
 		return v;
 	}
-	public V computeIfAbsentIntS(int k, @Nonnull Supplier<V> supplier) {
+	public V computeIfAbsentIntS(int k, @NotNull Supplier<V> supplier) {
 		Entry<V> entry = getEntry(k);
 		V v;
 		if (entry == null) putInt(k, v = supplier.get());
@@ -181,15 +181,9 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 
 		Entry<V> entry = getOrCreateEntry(key);
 		V oldV = entry.setValue(e);
-		if (oldV == UNDEFINED) {
-			oldV = null;
-			afterPut(entry);
-		}
+		if (oldV == UNDEFINED) oldV = null;
 		return oldV;
 	}
-
-	void afterPut(Entry<V> entry) {}
-	void afterRemove(Entry<V> entry) {}
 
 	public V remove(int id) {
 		Entry<V> prevEntry = null;
@@ -207,8 +201,6 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 		}
 
 		if (toRemove == null) return null;
-
-		afterRemove(toRemove);
 
 		this.size--;
 

@@ -1,5 +1,6 @@
 package roj.text;
 
+import org.jetbrains.annotations.NotNull;
 import roj.io.Finishable;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
@@ -7,7 +8,6 @@ import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -36,10 +36,10 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 
 	public static TextReader auto(File file) throws IOException { return new TextReader(file, null); }
 	public static TextReader auto(Path file) throws IOException { return new TextReader(file, null); }
-	public static TextReader auto(InputStream in) throws IOException { return new TextReader(in); }
-
-	public TextReader(InputStream in) throws IOException { this(in, (Charset) null); }
-	public TextReader(InputStream in, String charset) throws IOException { this(in, Charset.forName(charset)); }
+	public static TextReader auto(InputStream in) throws IOException { return new TextReader(in, null); }
+	public static TextReader from(File file, Charset cs) throws IOException { return new TextReader(file, cs); }
+	public static TextReader from(Path file, Charset cs) throws IOException { return new TextReader(file, cs); }
+	public static TextReader from(InputStream in, Charset cs) throws IOException { return new TextReader(in, cs); }
 
 	public TextReader(File in, Charset charset) throws IOException { this(in.toPath(), charset); }
 	public TextReader(Path in, Charset charset) throws IOException {
@@ -129,7 +129,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 		}
 		return buf[i-off];
 	}
-	@Nonnull
+	@NotNull
 	public final CharSequence subSequence(int start, int end) {
 		fillBuffer(end);
 		return new CharList.Slice(buf, start-off, end-off);
@@ -191,12 +191,17 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 			DynByteBuf ba = (DynByteBuf) lock;
 			len += off;
 			int prevOff = off;
+			boolean flag = true;
 			while (true) {
 				long x = ucs.unsafeDecode(ba.array(),ba._unsafeAddr(),b.position(),b.limit(),buf,off,len-off);
 				b.position((int) (x >>> 32));
 				off = (int) x;
 
-				if (len-off <= 1 || (eof < 0 && !b.hasRemaining())) break;
+				if (len-off <= 1) break;
+				if (eof < 0) {
+					if (!b.hasRemaining() || !flag) break;
+					flag = false;
+				}
 
 				read(b);
 			}
@@ -289,7 +294,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 		return buf[0];
 	}
 	@Override
-	public int read(@Nonnull char[] cbuf, int coff, int clen) throws IOException {
+	public int read(@NotNull char[] cbuf, int coff, int clen) throws IOException {
 		int remain = clen;
 
 		int blen = len-off;

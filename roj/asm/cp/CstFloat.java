@@ -18,7 +18,7 @@ public final class CstFloat extends Constant {
 	public final String toString() { return super.toString() + " : " + value; }
 
 	@Override
-	public String getEasyReadValue() { return Float.toString(value).concat("f"); }
+	public String getEasyReadValue() { return value == value ? Float.toString(value).concat("f") : "Float.NaN"; }
 	@Override
 	public String getEasyCompareValue() { return Float.toString(value); }
 
@@ -26,6 +26,6 @@ public final class CstFloat extends Constant {
 
 	public final boolean equals(Object o) {
 		if (o == this) return true;
-		return o instanceof CstFloat && ((CstFloat) o).value == this.value;
+		return o instanceof CstFloat && Float.compare(((CstFloat) o).value, value) == 0;
 	}
 }

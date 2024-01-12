@@ -61,7 +61,7 @@ public class MappingFormat {
 			}
 		}
 		if (!used.isEmpty()) throw new IllegalStateException("缺少的表: " + used);
-		List<String> list = LineReader.slrParserV2(cfg.getString("formula"), true);
+		List<String> list = LineReader.toLines(cfg.getString("formula"), true);
 		for (int i = list.size() - 1; i >= 0; i--) {
 			String s = list.get(i).trim();
 			if (s.startsWith("#") || s.isEmpty()) list.remove(i);
@@ -107,14 +107,16 @@ public class MappingFormat {
 		String ovr1 = cfg.getOrDefault("override","").toString();
 		if (!ovr1.isEmpty()) {
 			overrides = new MyHashMap<>();
-			LineReader slr = new LineReader(ovr1, true);
-			for (String line : slr) {
+			int ln = 0;
+			for (String line : new LineReader(ovr1)) {
+				ln++;
+
 				line = line.trim();
-				if (line.startsWith("#")) continue;
+				if (line.isEmpty() || line.startsWith("#")) continue;
 
 				int pos = line.indexOf(',');
 				if (pos < 0) {
-					CLIUtil.warning("override.cfg:"+slr.lineNumber()+": 非法的格式");
+					CLIUtil.warning("override.cfg:"+ln+": 非法的格式");
 					continue;
 				}
 				overrides.put(line.substring(0,pos).trim(),line.substring(pos+1).trim());

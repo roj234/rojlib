@@ -16,15 +16,15 @@ import roj.net.http.srv.autohandled.Body;
 import roj.net.http.srv.autohandled.From;
 import roj.net.http.srv.autohandled.Route;
 import roj.text.CharList;
-import roj.text.LineReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.BitBuffer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
+import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -83,26 +83,28 @@ public class DnsServer implements ChannelHandler {
 
 	// Save / Load
 
-	public void loadHosts(InputStream in) throws IOException {
-		for (String line : new LineReader(in)) {
-			if (line.isEmpty() || line.startsWith("#")) continue;
+	public void loadHosts(File in) throws IOException {
+		try (TextReader tr = TextReader.auto(in)) {
+			for (String line : tr) {
+				if (line.isEmpty() || line.startsWith("#")) continue;
 
-			int i = line.indexOf(' ');
-			if (i < 0) {
-				System.err.println("Invalid line " + line);
-				continue;
+				int i = line.indexOf(' ');
+				if (i < 0) {
+					System.err.println("Invalid line "+line);
+					continue;
+				}
+
+				RecordKey key = new RecordKey();
+				key.url = line.substring(i+1);
+
+				Record record = new Record();
+				byte[] value = NetUtil.ip2bytes(line.substring(0, i));
+				record.qType = value.length == 4 ? Q_A : Q_AAAA;
+				record.data = value;
+				record.TTL = Integer.MAX_VALUE;
+
+				resolved.computeIfAbsent(key, Helpers.fnArrayList()).add(record);
 			}
-
-			RecordKey key = new RecordKey();
-			key.url = line.substring(i + 1);
-
-			Record record = new Record();
-			byte[] value = NetUtil.ip2bytes(line.substring(0, i));
-			record.qType = value.length == 4 ? Q_A : Q_AAAA;
-			record.data = value;
-			record.TTL = Integer.MAX_VALUE;
-
-			resolved.computeIfAbsent(key, Helpers.fnArrayList()).add(record);
 		}
 	}
 

@@ -15,7 +15,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static roj.reflect.ReflectionUtils.fieldOffset;
 import static roj.reflect.ReflectionUtils.u;
-import static roj.util.ArrayCache.DEBUG_DISABLE_CACHE;
 
 /**
  * @author Roj233
@@ -82,7 +81,9 @@ public final class BufferPool {
 
 	private static final long
 		u_directShellLen = fieldOffset(BufferPool.class, "directShellLen"),
-		u_heapShellLen = fieldOffset(BufferPool.class, "heapShellLen");
+		u_heapShellLen = fieldOffset(BufferPool.class, "heapShellLen"),
+		u_heap = fieldOffset(BufferPool.class, "heap"),
+		u_directRef = fieldOffset(BufferPool.class, "directRef");
 
 	private static final AtomicLong UNPOOLED_REMAIN = new AtomicLong(UNPOOLED_SIZE);
 	private static final Object _UNPOOLED = IntMap.UNDEFINED;
@@ -95,13 +96,17 @@ public final class BufferPool {
 	private final LeakDetector ldt = LeakDetector.create();
 
 	private final int
-		heapInit, heapIncr, heapThreshold,
-		directInit, directIncr, directThreshold;
-	private final long heapMax, directMax;
+		heapInit, heapIncr, heapThreshold, heapMax,
+		directThreshold;
+	private final long directInit, directIncr, directMax;
+	private final byte oomHandler;
+	public static final byte OOM_UNPOOLED = 0, OOM_THROW = 1, OOM_NULL = 2;
+
+	public long getDirectMax() { return directMax; }
+	public int getHeapMax() { return heapMax; }
 
 	private final SegmentReadWriteLock lock = new SegmentReadWriteLock();
 	private Page pDirect, pHeap;
-	private long directAddr;
 	private volatile NativeMemory directRef;
 	private volatile byte[] heap;
 
@@ -115,11 +120,11 @@ public final class BufferPool {
 
 	private BufferPool() {
 		this(TL_DIRECT_INITIAL, TL_DIRECT_INCR, TL_DIRECT_MAX, TL_DIRECT_THRES,
-		TL_HEAP_INITIAL, TL_HEAP_INCR, TL_HEAP_MAX, TL_HEAP_THRES, 15, 60000); }
+		TL_HEAP_INITIAL, TL_HEAP_INCR, TL_HEAP_MAX, TL_HEAP_THRES, 15, 60000, OOM_UNPOOLED); }
 
-	public BufferPool(int directInit, int directIncr, int directMax, int directGlobalThreshold,
+	public BufferPool(long directInit, long directIncr, long directMax, int directGlobalThreshold,
 					  int heapInit, int heapIncr, int heapMax, int heapGlobalThreshold,
-					  int shellSize, int maxStall) {
+					  int shellSize, int maxStall, byte oomHandler) {
 		this.directInit = directInit;
 		this.heapInit = heapInit;
 
@@ -134,6 +139,7 @@ public final class BufferPool {
 		this.directShell = directInit <= 0 ? null : new PooledBuffer[shellSize];
 		this.heapShell = heapInit <= 0 ? null : new PooledBuffer[shellSize];
 
+		this.oomHandler = oomHandler;
 		this.maxStall = maxStall;
 		if (maxStall > 0) {
 			stallReleaseTask = getTask(new WeakReference<>(this));
@@ -150,39 +156,57 @@ public final class BufferPool {
 			if (p == null) return;
 
 			long yy = System.currentTimeMillis();
-			if (p.directRef != null && p.pDirect.usedSpace() == 0 && yy - p.directTimeStamp > p.maxStall) {
-				p.lock.lock(0);
-				try {
-					if (p.pDirect.usedSpace() == 0) {
-						p.directRef.release();
-						p.directRef = null;
-						p.pDirect = new Page(Math.min(p.directInit, (int) p.pDirect.totalSpace() - p.directIncr));
-					}
-				} finally {
-					p.lock.unlock(0);
-				}
+			if (p.directRef != null && p.pDirect.usedSpace() == 0 && yy - p.directTimeStamp >= p.maxStall) {
+				freeDirect(p);
 			}
-			if (p.heap != null && p.pHeap.usedSpace() == 0 && yy - p.heapTimestamp > p.maxStall) {
-				p.lock.lock(1);
-				try {
-					if (p.pHeap.usedSpace() == 0) {
-						p.heap = null;
-						p.pHeap = new Page(Math.min(p.heapInit, (int) p.pHeap.totalSpace() - p.heapIncr));
-					}
-				} finally {
-					p.lock.unlock(1);
-				}
+			if (p.heap != null && p.pHeap.usedSpace() == 0 && yy - p.heapTimestamp >= p.maxStall) {
+				freeHeap(p);
 			}
 
 			if (p.directRef == null && p.heap == null) p.hasTask = false;
 			else p.scheduleClean();
 		};
 	}
+	public void release() {
+		if (pHeap != null) {
+			if (pHeap.usedSpace() != 0) throw new IllegalStateException(pHeap.toString());
+			else freeHeap(this);
+		}
+
+		if (pDirect != null) {
+			if (pDirect.usedSpace() != 0) throw new IllegalStateException(pDirect.toString());
+			else freeDirect(this);
+		}
+	}
+	private static void freeDirect(BufferPool p) {
+		p.lock.lock(0);
+		try {
+			if (p.pDirect.usedSpace() == 0) {
+				if (p.directRef != null) {
+					p.directRef.release();
+					p.directRef = null;
+				}
+				p.pDirect = Page.create(Math.max(p.directInit, (int) p.pDirect.totalSpace() - p.directIncr));
+			}
+		} finally {
+			p.lock.unlock(0);
+		}
+	}
+	private static void freeHeap(BufferPool p) {
+		p.lock.lock(1);
+		try {
+			if (p.pHeap.usedSpace() == 0) {
+				p.heap = null;
+				p.pHeap = Page.create(Math.max(p.heapInit, (int) p.pHeap.totalSpace() - p.heapIncr));
+			}
+		} finally {
+			p.lock.unlock(1);
+		}
+	}
 
 	public static DynByteBuf buffer(boolean direct, int cap) { return localPool().allocate(direct, cap); }
 	public DynByteBuf allocate(boolean direct, int cap) { return allocate(direct, cap, DEFAULT_KEEP_BEFORE); }
 	public DynByteBuf allocate(boolean direct, int cap, int keepBefore) {
-		if (DEBUG_DISABLE_CACHE) return direct ? DirectByteList.allocateDirect(cap) : ByteList.allocate(cap);
 		if (cap < 0) throw new IllegalArgumentException("size < 0");
 
 		cap += keepBefore;
@@ -214,6 +238,13 @@ public final class BufferPool {
 				if (ldt != null) ldt.track(buf);
 				return (DynByteBuf) buf;
 			}
+		}
+
+		switch (oomHandler) {
+			default:
+			case OOM_UNPOOLED: break;
+			case OOM_THROW: throw new OutOfMemoryError("BufferPool is full: "+(direct?pDirect:pHeap));
+			case OOM_NULL: return Helpers.maybeNull();
 		}
 
 		if (UNPOOLED_REMAIN.addAndGet(-cap) < 0) {
@@ -253,61 +284,7 @@ public final class BufferPool {
 		return null;
 	}
 	private boolean allocDirect(boolean large, int cap, PooledBuffer sh) {
-		block:
-		if (!large && directRef == null) {
-			lock.lock(0);
-			try {
-				if (directRef != null) break block;
-				directRef = new NativeMemory((int) pDirect.freeSpace());
-				directAddr = directRef.address();
-			} finally {
-				lock.unlock(0);
-			}
-		}
-
-		int off;
-		if (!large) while (true) {
-			Page p = pDirect;
-			NativeMemory stamp = directRef;
-
-			int slot = System.identityHashCode(p);
-			lock.lock(slot);
-			try {
-				off = (int) p.alloc(cap);
-			} finally {
-				lock.unlock(slot);
-			}
-
-			if (off >= 0) {
-				NativeMemory nm = directRef;
-
-				// ensure we got the address associated with that stamp
-				if (nm == stamp) {
-					if (sh != null) {
-						sh.set(nm, directAddr+off+sh.getKeepBefore(), cap-sh.getKeepBefore());
-						sh.page(p);
-					}
-					return true;
-				}
-			}
-
-			if (p.totalSpace()+cap > directMax) break;
-
-			lock.lock(0);
-			try {
-				if (pDirect == p) {
-					long space = p.totalSpace() + (long) ((cap+directIncr-1)/directIncr)*directIncr;
-					p = Page.create(Math.min(space, directMax));
-
-					directRef = new NativeMemory((int) p.totalSpace());
-					directAddr = directRef.address();
-
-					pDirect = p;
-				}
-			} finally {
-				lock.unlock(0);
-			}
-		}
+		if (!large && allocateDirect0(cap, sh) != 0) return true;
 
 		try {
 			if (directThreshold < 0 || !lgDirect.tryLock(16, TimeUnit.MILLISECONDS)) return false;
@@ -324,7 +301,7 @@ public final class BufferPool {
 				}
 			}
 
-			off = (int) pgDirect.alloc(cap);
+			long off = pgDirect.alloc(cap);
 			if (off >= 0) {
 				sh.set(null, gDirect+off+sh.getKeepBefore(), cap-sh.getKeepBefore());
 				return true;
@@ -335,22 +312,62 @@ public final class BufferPool {
 
 		return false;
 	}
-	private boolean allocHeap(boolean large, int cap, PooledBuffer sh) {
-		block:
-		if (!large && heap == null) {
-			lock.lock(1);
+	private long allocateDirect0(long cap, PooledBuffer sh) {
+		long off;
+		while (true) {
+			Page p = pDirect;
+			NativeMemory stamp = directRef;
+			if (stamp == null && !u.compareAndSwapObject(this, u_directRef, null, stamp = new NativeMemory(p.totalSpace()))) {
+				stamp.release();
+				continue;
+			}
+
+			int slot = System.identityHashCode(p);
+			lock.lock(slot);
 			try {
-				if (heap != null) break block;
-				heap = new byte[(int) pHeap.freeSpace()];
+				off = p.alloc(cap);
 			} finally {
-				lock.unlock(1);
+				lock.unlock(slot);
+			}
+
+			// ensure we got the address associated with that stamp
+			if (off >= 0 && directRef == stamp) {
+				long base = stamp.address()+off;
+				if (sh != null) {
+					sh.set(stamp, base+sh.getKeepBefore(), (int) (cap-sh.getKeepBefore()));
+					sh.page(p);
+				}
+				return base;
+			}
+
+			if (p.totalSpace()+cap > directMax) break;
+
+			lock.lock(0);
+			try {
+				if (pDirect == p) {
+					// otherwise give it to GC
+					if (p.usedSpace() == 0) directRef.release();
+
+					long space = Math.min(p.totalSpace() + ((cap+directIncr-1)/directIncr)*directIncr, directMax);
+					p = Page.create(space);
+					directRef = new NativeMemory(p.totalSpace());
+
+					pDirect = p;
+				}
+			} finally {
+				lock.unlock(0);
 			}
 		}
 
+		return 0;
+	}
+	private boolean allocHeap(boolean large, int cap, PooledBuffer sh) {
 		int off;
 		if (!large) while (true) {
 			Page p = pHeap;
 			byte[] stamp = heap;
+			if (stamp == null && !u.compareAndSwapObject(this, u_heap, null, stamp = new byte[(int) p.totalSpace()]))
+				continue;
 
 			int slot = System.identityHashCode(p);
 			lock.lock(slot);
@@ -360,17 +377,12 @@ public final class BufferPool {
 				lock.unlock(slot);
 			}
 
-			if (off >= 0) {
-				byte[] b = heap;
-
-				// ensure we got the address associated with that stamp
-				if (b == stamp) {
-					sh.set(b, off+sh.getKeepBefore(), cap-sh.getKeepBefore());
-					sh.page(p);
-					return true;
-				}
+			// ensure we got the address associated with that stamp
+			if (off >= 0 && heap == stamp) {
+				sh.set(stamp, off+sh.getKeepBefore(), cap-sh.getKeepBefore());
+				sh.page(p);
+				return true;
 			}
-
 
 			if (p.totalSpace()+cap > heapMax) break;
 
@@ -408,10 +420,44 @@ public final class BufferPool {
 		return false;
 	}
 
+	public long malloc(long size) {
+		if (pDirect.totalSpace() < directMax) throw new UnsupportedOperationException("only non-extensible pool can direct allocate");
+		if (size < 0) throw new IllegalArgumentException("size < 0");
+		if (size == 0) return 0;
+
+		size += 16;
+		long addr = allocateDirect0(size, null);
+		if (addr == 0) {
+			if (oomHandler == OOM_THROW) throw new OutOfMemoryError("BufferPool is full: "+pDirect);
+			return 0;
+		}
+
+		if (!hasTask) scheduleClean();
+		directTimeStamp = System.currentTimeMillis();
+
+		u.putLong(addr, size);
+		u.putLong(addr+8, ~size);
+
+		return addr+16;
+	}
+	public void free(long address) {
+		if (address == 0) return;
+		long cap1 = ~u.getLong(address -= 8);
+		long cap2 = u.getLong(address -= 8);
+		if (cap1 != cap2 || cap1 == 0) throw new UnsupportedOperationException("memory segment mangled");
+
+		int slot = System.identityHashCode(pDirect);
+		lock.lock(slot);
+		try {
+			pDirect.free(address-directRef.address(), cap1);
+		} finally {
+			lock.unlock(slot);
+		}
+	}
+
 	public static boolean isPooled(DynByteBuf buf) { return buf instanceof PooledBuffer; }
 
 	public static void reserve(DynByteBuf buf) {
-		if (DEBUG_DISABLE_CACHE) return;
 		Object pool = ((PooledBuffer) buf).pool(null);
 
 		if (pool == null) throwUnpooled(buf);
@@ -447,7 +493,8 @@ public final class BufferPool {
 				int slot = System.identityHashCode(p);
 				lock.lock(slot);
 				try {
-					p.free(m-directAddr-prefix, buf.capacity()+prefix);
+					p.free(m-nm.address()-prefix, buf.capacity()+prefix);
+					if (p.usedSpace() == 0 && directRef != nm) nm.release();
 				} finally {
 					lock.unlock(slot);
 				}
@@ -514,7 +561,7 @@ public final class BufferPool {
 			// 禁止异步reserve
 			pool = ((PooledBuffer) buf).pool(null);
 			if (pool == null) throwUnpooled(buf);
-			else if(DEBUG_DISABLE_CACHE || pool == _UNPOOLED
+			else if(pool == _UNPOOLED
 					? tryZeroCopyExt(more, addAtEnd, (PooledBuffer) buf)
 					: tryZeroCopy(buf, more, addAtEnd, (BufferPool) pool, (PooledBuffer) buf)) {
 				((PooledBuffer) buf).pool(pool);
@@ -537,7 +584,6 @@ public final class BufferPool {
 		int offset;
 
 		if (buf.isDirect()) {
-			long m = buf.address();
 			NativeMemory nm = ((DirectByteList) buf).memory();
 			if (nm == null) {
 				page = pgDirect;
@@ -546,7 +592,7 @@ public final class BufferPool {
 			} else {
 				page = pb.page();
 				lock = p.lock.asReadLock(System.identityHashCode(page));
-				offset = (int) (buf.address()-p.directAddr);
+				offset = (int) (buf.address()-nm.address());
 			}
 		} else {
 			offset = buf.arrayOffset();

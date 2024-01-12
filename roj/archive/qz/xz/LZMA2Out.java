@@ -35,12 +35,8 @@ abstract class LZMA2Out extends OutputStream {
 	}
 	LZMA2Out(LZMA2Options options) {
 		rc = new RangeEncoder(COMPRESSED_SIZE_MAX);
-
-		int dictSize = options.getDictSize();
 		lzma = LZMAEncoder.getInstance(rc, options, COMPRESSED_SIZE_MAX);
-
 		lz = lzma.getLZEncoder();
-
 		props = options.getPropByte();
 	}
 

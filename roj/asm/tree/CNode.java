@@ -13,7 +13,7 @@ import roj.util.DynByteBuf;
  * @since 2023/9/24 0024 13:54
  */
 public abstract class CNode implements RawNode {
-	public char access;
+	public char modifier;
 	Object name, desc;
 	public AttributeList attributes;
 
@@ -23,7 +23,7 @@ public abstract class CNode implements RawNode {
 	public abstract CNode parsed(ConstantPool cp);
 
 	public final void toByteArray(DynByteBuf w, ConstantPool pool) {
-		w.putShort(access)
+		w.putShort(modifier)
 		 .putShort(name.getClass() == CstUTF.class ? pool.reset((CstUTF) name).getIndex() : pool.getUtfId(name.toString()))
 		 .putShort(desc.getClass() == CstUTF.class ? pool.reset((CstUTF) desc).getIndex() : pool.getUtfId(rawDesc()));
 
@@ -42,8 +42,8 @@ public abstract class CNode implements RawNode {
 	// public String rawDesc();
 	public void rawDesc(String desc) { this.desc = desc.toString(); } // null check
 
-	public final char modifier() { return access; }
-	public final void modifier(int flag) { access = (char) flag; }
+	public final char modifier() { return modifier; }
+	public final void modifier(int flag) { modifier = (char) flag; }
 
 	public final boolean descMatch(CstNameAndType nat) {
 		CstUTF u = nat.name();

@@ -20,7 +20,7 @@ import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextReader;
 import roj.text.TextUtil;
-import roj.ui.GUIUtil;
+import roj.ui.GuiUtil;
 import roj.ui.OnChangeHelper;
 
 import javax.swing.*;
@@ -184,7 +184,7 @@ public class MapperUI extends JFrame {
 	private static final Pattern STACKTRACE = Pattern.compile("at (.+)\\.(.+)\\((?:(.+)\\.java|Unknown Source)(?::(\\d+))?\\)");
 	private static final MyHashMap<Desc, Int2IntMap> LINES = new MyHashMap<>();
 	private void loadLines() {
-		File file = GUIUtil.fileLoadFrom("选择行号表", dlgMapTrace);
+		File file = GuiUtil.fileLoadFrom("选择行号表", dlgMapTrace);
 		if (file == null) return;
 
 		LINES.clear();
@@ -207,7 +207,7 @@ public class MapperUI extends JFrame {
 	}
 
 	public static void main(String[] args) throws Exception {
-		GUIUtil.systemLook();
+		GuiUtil.systemLook();
 		MapperUI f = new MapperUI();
 
 		f.setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -217,9 +217,9 @@ public class MapperUI extends JFrame {
 	private MappingUI mappingUI;
 	public MapperUI() {
 		initComponents();
-		GUIUtil.dropFilePath(uiInputPath, (f) -> uiOutputPath.setText(new File(f.getName()).getAbsolutePath()), false);
-		GUIUtil.dropFilePath(uiOutputPath, null, false);
-		GUIUtil.dropFilePath(uiLibraries, null, true);
+		GuiUtil.dropFilePath(uiInputPath, (f) -> uiOutputPath.setText(new File(f.getName()).getAbsolutePath()), false);
+		GuiUtil.dropFilePath(uiOutputPath, null, false);
+		GuiUtil.dropFilePath(uiLibraries, null, true);
 
 		OnChangeHelper helper = new OnChangeHelper(this);
 		helper.addRoot(dlgMapTrace);
@@ -228,7 +228,7 @@ public class MapperUI extends JFrame {
 			uiInit.setEnabled(false);
 			TaskPool.Common().pushTask(() -> {
 				try {
-					File file = GUIUtil.fileLoadFrom("选择映射表(Srg / XSrg)", this);
+					File file = GuiUtil.fileLoadFrom("选择映射表(Srg / XSrg)", this);
 					if (file != null) load(file);
 				} finally {
 					uiInit.setEnabled(true);

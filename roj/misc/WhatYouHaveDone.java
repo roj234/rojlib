@@ -8,7 +8,7 @@ import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
-import roj.ui.GUIUtil;
+import roj.ui.GuiUtil;
 import roj.ui.TextAreaPrintStream;
 
 import javax.swing.*;
@@ -41,7 +41,7 @@ public class WhatYouHaveDone {
 		if (!CLIUtil.ANSI) {
 			if (!hasUI) {
 				hasUI = true;
-				GUIUtil.systemLook();
+				GuiUtil.systemLook();
 				JFrame frame = new JFrame() {
 					{
 						JScrollPane scrollPane1 = new JScrollPane();
@@ -82,7 +82,7 @@ public class WhatYouHaveDone {
 		List<File> files;
 		File f = new File(args.length == 0 ? "D:\\mc\\FMD-1.5.2\\projects\\implib\\java" : args[0]);
 		if (!f.isDirectory()) {
-			File[] f1 = GUIUtil.filesLoadFrom("选择文件夹以统计所有子目录(可多选)", null, JFileChooser.DIRECTORIES_ONLY);
+			File[] f1 = GuiUtil.filesLoadFrom("选择文件夹以统计所有子目录(可多选)", null, JFileChooser.DIRECTORIES_ONLY);
 			if (f1 == null) return;
 			files = Arrays.asList(f1);
 		} else {

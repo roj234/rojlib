@@ -48,7 +48,7 @@ public abstract class TreeNodeImpl<T extends TreeNodeImpl<T>> implements Mutable
 	public final boolean getAllowsChildren() { return children != null; }
 
 	public final boolean isLeaf() { return children == null || children.isEmpty(); }
-	public final Enumeration<?> children() { return children == null ? Collections.emptyEnumeration() : Collections.enumeration(children); }
+	public final Enumeration<? extends TreeNode> children() { return children == null ? Collections.emptyEnumeration() : Collections.enumeration(children); }
 
 	@SuppressWarnings("unchecked")
 	public final void flat(Collection<T> out) {

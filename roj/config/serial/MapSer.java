@@ -22,7 +22,7 @@ final class MapSer extends Adapter {
 
 	@Override
 	public Adapter inheritBy(SerializerFactory factory, Class<?> type) {
-		return new MapSer(valueType, factory.dataContainer(type));
+		return new MapSer(valueType, SerializerFactory.dataContainer(type));
 	}
 
 	@Override

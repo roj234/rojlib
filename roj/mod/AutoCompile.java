@@ -5,7 +5,6 @@ import roj.collect.SimpleList;
 import roj.concurrent.timing.ScheduleTask;
 import roj.ui.CLIUtil;
 
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.locks.LockSupport;
 
@@ -75,18 +74,7 @@ final class AutoCompile extends Thread {
 			if (!enable) {
 				if (DEBUG) System.out.println("[AC] 关闭");
 			} else {
-				Project p = Shared.project;
-				List<Project> dependencies = p.getAllDependencies();
-				if (dependencies.isEmpty()) {
-					checkAndCompile(p);
-				} else {
-					dependencies.add(p);
-					for (int i = dependencies.size() - 1; i >= 0; i--) {
-						if (checkAndCompile(dependencies.get(i))) {
-							break;
-						}
-					}
-				}
+				checkAndCompile(Shared.project);
 			}
 		}
 	}
@@ -121,7 +109,6 @@ final class AutoCompile extends Thread {
 		selfTrigger = true;
 		try {
 			FMDMain.build(args);
-			if (DEBUG) CLIUtil.success("[AC] Done");
 		} catch (Throwable e) {
 			CLIUtil.error("自动编译出错", e);
 			enable = false;

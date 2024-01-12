@@ -1,6 +1,7 @@
 package roj.io.source;
 
 import roj.io.SourceInputStream;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -68,6 +69,27 @@ public abstract class Source extends DataOutputStream implements Closeable {
 
 	public boolean hasChannel() { return false; }
 	public FileChannel channel() { return null; }
+	/**
+	 * 和isBuffered没关系
+	 */
+	public DynByteBuf buffer() { return null; }
+	public void put(Source s) throws IOException {
+		DynByteBuf buf = s.buffer();
+		if (buf != null) {
+			write(buf);
+		} else if (hasChannel()&s.hasChannel()) {
+			s.channel().transferTo(0, s.length(), channel());
+		} else {
+			byte[] data = ArrayCache.getByteArray(4096, false);
+			s.seek(0);
+			while (true) {
+				int r = s.read(data);
+				if (r < 0) break;
+				write(data, 0, r);
+			}
+			ArrayCache.putArray(data);
+		}
+	}
 
 	public void close() throws IOException {}
 	public void reopen() throws IOException, UnsupportedOperationException {

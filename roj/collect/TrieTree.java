@@ -1,5 +1,7 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.collect.TrieEntry.Itr;
 import roj.collect.TrieEntry.KeyItr;
 import roj.io.IOUtil;
@@ -8,8 +10,6 @@ import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -242,7 +242,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public void putAll(@Nonnull Map<? extends CharSequence, ? extends V> m) {
+	public void putAll(@NotNull Map<? extends CharSequence, ? extends V> m) {
 		if (m instanceof TrieTree) {
 			addTrieTree((TrieTree<? extends V>) m);
 			return;
@@ -525,7 +525,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	/**
 	 * @see #forEach(BiConsumer)
 	 */
-	@Nonnull
+	@NotNull
 	@Override
 	@Deprecated
 	public Set<Map.Entry<CharSequence, V>> entrySet() {
@@ -575,7 +575,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 			map.clear();
 		}
 
-		@Nonnull
+		@NotNull
 		public final Iterator<Map.Entry<CharSequence, V>> iterator() {
 			return new Itr<Map.Entry<CharSequence, V>, Entry<V>>() {
 				{

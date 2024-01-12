@@ -1,5 +1,6 @@
 package roj.plugins.mychat;
 
+import org.jetbrains.annotations.Nullable;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
@@ -22,13 +23,11 @@ import roj.net.http.ws.WebsocketHandler;
 import roj.net.http.ws.WebsocketManager;
 import roj.text.ACalendar;
 import roj.text.TextUtil;
-import roj.text.UTFCoder;
 import roj.text.logging.LoggingStream;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -541,7 +540,7 @@ public class Server extends WebsocketManager implements Router, Context {
 	}
 	// usage | timestamp | seqNum | hash
 	private String createToken(User u, int usage, long expire) {
-		UTFCoder uc = IOUtil.SharedCoder.get();
+		IOUtil uc = IOUtil.SharedCoder.get();
 		ByteList bb = uc.byteBuf; bb.clear();
 		bb.putInt(usage).putLong(expire < 0 ? -expire : System.currentTimeMillis() + expire).putLong(u == null ? seqNum.getAndIncrement() : u.tokenSeq++);
 

@@ -78,9 +78,19 @@ public class TaskPool implements TaskHandler {
 		static final TaskPool P = new TaskPool(1, Runtime.getRuntime().availableProcessors(), 0, 60000, "Cpu任务-");
 	}
 
-	public static TaskPool MaxThread(int threadCount, String prefix) { return new TaskPool(0, threadCount, 1, 16, 60000, new PrefixFactory(prefix)); }
-	public static TaskPool MaxThread(int threadCount, MyThreadFactory factory) { return new TaskPool(0, threadCount, 1, 16, 60000, factory); }
+	public static TaskPool MaxThread(int threadCount, String prefix) { return MaxThread(threadCount, new PrefixFactory(prefix)); }
+	public static TaskPool MaxThread(int threadCount, MyThreadFactory factory) {
+		TaskPool pool = new TaskPool(0, threadCount, 0, 10, 60000, factory);
+		pool.setRejectPolicy(TaskPool::waitPolicy);
+		return pool;
+	}
 	public static TaskPool MaxSize(int rejectThreshold, String prefix) { return new TaskPool(0, Runtime.getRuntime().availableProcessors(), 0, rejectThreshold, 60000, new PrefixFactory(prefix)); }
+
+	@Override
+	public void pushTask(Callable<ITask> lazyTask) throws Exception {
+		if (parking > 0 || running < max) pushTask(lazyTask.call());
+		else TaskHandler.super.pushTask(lazyTask);
+	}
 
 	@Override
 	public void pushTask(@Async.Schedule ITask task) {
@@ -263,6 +273,10 @@ public class TaskPool implements TaskHandler {
 	}
 
 	public int taskPending() { return tasks.size(); }
+
+	public int threadCount() { return threads.size(); }
+	public int idleCount() { return parking; }
+	public int busyCount() { return threadCount() - idleCount(); }
 
 	public void awaitFinish() {
 		synchronized (this) {

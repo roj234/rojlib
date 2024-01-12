@@ -122,7 +122,7 @@ public class AEClient extends IAEClient {
 			o.sessionId = session;
 
 			ByteList b = IOUtil.getSharedByteBuf();
-			b.put(PCS_REQUEST_CHANNEL).putInt(session).put(o.portId).put(o.key, 0, 32);
+			b.put(PCS_REQUEST_CHANNEL).putInt(session).putBool(true).put(o.portId).put(o.key, 0, 32);
 			ctx.channelWrite(b);
 		}
 	}

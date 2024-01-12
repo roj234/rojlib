@@ -56,13 +56,7 @@ public abstract class ITokenizer {
 		return input;
 	}
 
-	public void emptyWordCache() {
-		if (marker == -1) {
-			marker = -3;
-			index = prevIndex;
-		}
-	}
-
+	@Deprecated
 	public int indexForRet() { return lastWordPos; }
 
 	public final Word next() throws ParseException {
@@ -99,6 +93,7 @@ public abstract class ITokenizer {
 		}
 		marker = -1;
 	}
+	public void clearRetract() { marker = -3; }
 
 	// region 转义
 

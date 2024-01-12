@@ -1,15 +1,15 @@
-# Java8-17通杀的高性能反射解决方案
+# Java8-21通杀的高性能反射解决方案
 ## 优点
  * [x] get/set field
  * [x] invoke method
  * [x] new object
- * [x] 仅需改动一次VM参数，即可应对未来任何需求 (java16或更低无需添加VM参数)
+ * [x] 无需改动VM参数，可应对未来任何需求
  * [x] ASM生成，几乎不损失性能
  * [x] 无法访问Field Method甚至Class对象也可以构建
 ## 缺点
  * 需要建立一个接口类
  * 无视所有安全保护措施 (可以使用roj.reflect.ILSecurityManager缓解)
- * 在Java17或更高版本时，需要添加VM参数 --add-opens=java.base/java.lang=ALL-UNNAMED
+ * （已解决请无视）在Java17或更高版本时，需要添加VM参数 --add-opens=java.base/java.lang=ALL-UNNAMED
 ## 使用方法
 
 ### 假设有个需求：用NMS给玩家发标题

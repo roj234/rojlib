@@ -5,11 +5,10 @@ import roj.asmx.mapper.Mapper;
 import roj.asmx.mapper.Mapping;
 import roj.collect.MyHashMap;
 import roj.config.data.CMapping;
-import roj.text.LineReader;
+import roj.text.TextReader;
 import roj.util.Helpers;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -47,7 +46,7 @@ public final class MapLoader {
 				return new MCPMapping(file, map);
 			case "OJNG":
 				OjngMapping m = new OjngMapping();
-				m.readMojangMap(file.getName(), new LineReader(new FileInputStream(file)), tmp1);
+				m.readMojangMap(file.getName(), TextReader.auto(file), tmp1);
 				return m;
 			case "TSRG":
 				TSrgMapping m1 = new TSrgMapping();
@@ -61,7 +60,7 @@ public final class MapLoader {
 				return m1;
 			case "INTR":
 				YarnMapping m2 = new YarnMapping();
-				m2.readIntermediaryMap(file.getName(), new LineReader(new FileInputStream(file)), tmp1);
+				m2.readIntermediaryMap(file.getName(), TextReader.auto(file), tmp1);
 				return m2;
 			case "YARN":
 				YarnMapping m3 = new YarnMapping();
@@ -75,7 +74,7 @@ public final class MapLoader {
 				return m3;
 			case "SRG":
 				Mapping m4 = new Mapping();
-				m4.loadMap(new LineReader(new FileInputStream(file)), false);
+				m4.loadMap(TextReader.auto(file), false);
 				return m4;
 			case "BIN":
 				Mapper m5 = new Mapper();

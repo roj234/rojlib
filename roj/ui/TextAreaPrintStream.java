@@ -26,7 +26,7 @@ public final class TextAreaPrintStream extends DelegatedPrintStream {
 		}
 
 		SwingUtilities.invokeLater(() -> {
-			Document doc = GUIUtil.insert(textArea, value);
+			Document doc = GuiUtil.insert(textArea, value);
 
 			if (doc.getLength() > MAX) {
 				int diff = doc.getLength() - MAX;

@@ -1,6 +1,7 @@
 package roj.text;
 
 import roj.archive.qz.xz.LZMAInputStream;
+import roj.collect.MyHashSet;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -48,18 +49,8 @@ public final class GB18030 extends UnsafeCharset {
 		}
 	}
 
-	private static final Charset J_GB2312, J_GBK, J_GB18030;
-	static {
-		boolean b = Charset.isSupported("GB2312");
-		J_GB2312 = b ? Charset.forName("GB2312") : null;
-		b = Charset.isSupported("GBK");
-		J_GBK = b ? Charset.forName("GBK") : null;
-		b = Charset.isSupported("GB18030");
-		J_GB18030 = b ? Charset.forName("GB18030") : null;
-	}
-	public static boolean is(Charset cs) {
-		return cs != null && cs == J_GB2312 || cs == J_GBK || cs == J_GB18030;
-	}
+	private static final MyHashSet<String> GB18030_IDS = new MyHashSet<>("GBK", "GB2312", "GB18030", "x-mswin-936");
+	public static boolean is(Charset cs) { return cs != null && GB18030_IDS.contains(cs.name()); }
 
 	@Override
 	public long unsafeEncode(char[] s, int i, int end, Object ref, long addr, int outMax) {

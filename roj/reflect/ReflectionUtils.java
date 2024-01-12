@@ -1,17 +1,18 @@
 package roj.reflect;
 
-import roj.ReferenceByPrecompiledClass;
+import org.jetbrains.annotations.NotNull;
 import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.util.ByteList;
 import roj.util.Helpers;
 import sun.misc.Unsafe;
 
-import javax.annotation.Nonnull;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.ByteOrder;
 import java.util.Collections;
 import java.util.List;
 
@@ -22,19 +23,11 @@ import static roj.asm.type.Type.CLASS;
  * @author Roj234
  * @since 2021/6/17 19:51
  */
-@ReferenceByPrecompiledClass
 public final class ReflectionUtils {
-	@ReferenceByPrecompiledClass
-	public static final Unsafe u = getUnsafe();
-	private static Unsafe getUnsafe() {
-		try {
-			Field f = Unsafe.class.getDeclaredField("theUnsafe");
-			f.setAccessible(true);
-			return (Unsafe) f.get(null);
-		} catch (IllegalAccessException | NoSuchFieldException e) {
-			throw new RuntimeException(e);
-		}
-	}
+	public static final int JAVA_VERSION = VMInternals.JAVA_VERSION;
+
+	public static final Unsafe u = VMInternals.u;
+	public static final boolean BIG_ENDIAN = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
 
 	public static long fieldOffset(Class<?> type, String fieldName) {
 		try {
@@ -46,13 +39,6 @@ public final class ReflectionUtils {
 			Helpers.athrow(e);
 			return 0;
 		}
-	}
-
-	public static final int JAVA_VERSION;
-	static {
-		String v = System.getProperty("java.version");
-		String major = v.substring(0, v.indexOf('.'));
-		JAVA_VERSION = Integer.parseInt(major);
 	}
 
 	/**
@@ -107,7 +93,11 @@ public final class ReflectionUtils {
 		throw new NoSuchFieldException(type.getName()+"中没有任一字段匹配提供的名称"+set);
 	}
 
-	public static FieldAccessor access(@Nonnull Field field) { return new FieldAccessor(field); }
+	/**
+	 * 仅适用于一次访问字段的情况
+	 * 未来可能移除
+	 */
+	public static FieldAccessor access(@NotNull Field field) { return new FieldAccessor(field); }
 
 	public static List<Class<?>> getAllParentsWithSelfOrdered(Class<?> clazz) {
 		SimpleList<Class<?>> classes = new SimpleList<>();
@@ -142,12 +132,26 @@ public final class ReflectionUtils {
 		}
 	}
 
-	private static boolean smRemoved = JAVA_VERSION > 17;
+	/**
+	 * 在Class及其实例被GC时，自动从VM中卸载这个类
+	 */
+	public static Class<?> defineWeakClass(ByteList b) {
+		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
+		if (sm != null) b = sm.checkDefineClass(null, b);
+		return VMInternals.DefineWeakClass(b.toByteArray());
+	}
+	public static void ensureClassInitialized(Class<?> klass) { VMInternals.InitializeClass(klass); }
+	/**
+	 * 对target_module开放src_module中的src_package
+	 */
+	public static void openModule(Class<?> src_module, String src_package, Class<?> target_module) { VMInternals.OpenModule(src_module, src_package, target_module); }
+
+	private static boolean smRemoved = JAVA_VERSION > 21;
 	public static Class<?> getCallerClass(int backward) {
 		if (!smRemoved) {
 			try {
 				return Tracer.INSTANCE.getCallerClass(backward+1);
-			} catch (Exception e) {
+			} catch (Throwable e) {
 				smRemoved = true;
 			}
 		}

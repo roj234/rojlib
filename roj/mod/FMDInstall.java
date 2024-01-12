@@ -12,12 +12,11 @@ import roj.config.data.CMapping;
 import roj.io.IOUtil;
 import roj.math.Version;
 import roj.mod.fp.Fabric;
-import roj.mod.fp.LegacyForge;
 import roj.mod.fp.WorkspaceBuilder;
 import roj.mod.mapping.MappingFormat;
 import roj.mod.mapping.VersionRange;
 import roj.ui.CLIUtil;
-import roj.ui.GUIUtil;
+import roj.ui.GuiUtil;
 import roj.ui.ProgressBar;
 
 import javax.swing.*;
@@ -43,7 +42,7 @@ public class FMDInstall {
 	public static final File MCP2SRG_PATH = new File(BASE, "util/mcp-srg.srg");
 
 	public static void main(String[] args) throws IOException {
-		GUIUtil.systemLook();
+		GuiUtil.systemLook();
 		CONFIG.size();
 		Shared._lock();
 
@@ -67,7 +66,7 @@ public class FMDInstall {
 			String[] s = mcRoot.list();
 			if (s == null || s.length <= 0) return mcRoot;
 
-			File file = GUIUtil.fileLoadFrom("选择【.minecraft】文件夹", null, JFileChooser.DIRECTORIES_ONLY);
+			File file = GuiUtil.fileLoadFrom("选择【.minecraft】文件夹", null, JFileChooser.DIRECTORIES_ONLY);
 
 			if (file == null) {
 				error("用户取消操作.");
@@ -204,7 +203,7 @@ public class FMDInstall {
 	private static WorkspaceBuilder createBuilder(Collection<String> lib, boolean highVersion) {
 		for (String s : lib) {
 			if (s.contains("minecraftforge")) {
-				return highVersion ? null : new LegacyForge();
+				return null;
 			} else if (s.contains("fabricmc")) {
 				return new Fabric();
 			}

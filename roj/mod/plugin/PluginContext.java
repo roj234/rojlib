@@ -2,7 +2,7 @@ package roj.mod.plugin;
 
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.anno.Annotation;
-import roj.asm.util.AttrHelper;
+import roj.asm.util.Attributes;
 import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.util.Helpers;
@@ -25,14 +25,14 @@ public class PluginContext {
 				Context ctx = list.get(j);
 				ConstantData data = ctx.getData();
 
-				List<Annotation> anns = AttrHelper.getAnnotations(data.cp, data, false);
+				List<Annotation> anns = Attributes.getAnnotations(data.cp, data, false);
 				if (anns != null) {
 					for (int i = 0; i < anns.size(); i++) {
 						byAnnotation.computeIfAbsent(anns.get(i).type, Helpers.fnArrayList()).add(ctx);
 					}
 				}
 
-				anns = AttrHelper.getAnnotations(data.cp, data, true);
+				anns = Attributes.getAnnotations(data.cp, data, true);
 				if (anns != null) {
 					for (int i = 0; i < anns.size(); i++) {
 						byAnnotation.computeIfAbsent(anns.get(i).type, Helpers.fnArrayList()).add(ctx);

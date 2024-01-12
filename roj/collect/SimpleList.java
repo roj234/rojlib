@@ -1,10 +1,10 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -27,7 +27,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 
 	public void ensureCapacity(int cap) {
 		if (list.length < cap) {
-			int newCap = list.length == 0 ? cap : cap+10;
+			int newCap = list.length == 0 ? cap : cap > 65536 ? MathUtils.getMin2PowerOf(cap) : cap > 512 ? cap+512 : cap+10;
 			Object[] newList = new Object[newCap];
 			if (size > 0) System.arraycopy(list, 0, newList, 0, size);
 			list = newList;
@@ -96,20 +96,20 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 		return size == 0 ? null : (E) list[--size];
 	}
 
-	@Nonnull
+	@NotNull
 	public Iterator<E> iterator() { return listIterator(0); }
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Object[] toArray() {
 		if (size == 0) return ArrayCache.OBJECTS;
 		return Arrays.copyOf(list, size);
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	@SuppressWarnings("unchecked")
-	public <T> T[] toArray(@Nonnull T[] a) {
+	public <T> T[] toArray(@NotNull T[] a) {
 		if (a.length < size) return (T[]) Arrays.copyOf(list, size, a.getClass());
 
 		System.arraycopy(list, 0, a, 0, size);
@@ -189,7 +189,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 	}
 
 	@Override
-	public boolean addAll(@Nonnull Collection<? extends E> collection) {
+	public boolean addAll(@NotNull Collection<? extends E> collection) {
 		return addAll(size, collection);
 	}
 
@@ -268,17 +268,17 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 	}
 
 	@Override
-	public final boolean removeAll(@Nonnull Collection<?> collection) {
+	public final boolean removeAll(@NotNull Collection<?> collection) {
 		return batchRemove(collection, true);
 	}
 
 	@Override
-	public final boolean retainAll(@Nonnull Collection<?> collection) {
+	public final boolean retainAll(@NotNull Collection<?> collection) {
 		return batchRemove(collection, false);
 	}
 
 	@SuppressWarnings("unchecked")
-	protected boolean batchRemove(@Nonnull Collection<?> collection, boolean equ) {
+	protected boolean batchRemove(@NotNull Collection<?> collection, boolean equ) {
 		boolean changed = false;
 		for (int i = size - 1; i >= 0; i--) {
 			E o = (E) list[i];
@@ -319,7 +319,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 	}
 
 	@Override
-	public boolean containsAll(@Nonnull Collection<?> c) {
+	public boolean containsAll(@NotNull Collection<?> c) {
 		return false;
 	}
 
@@ -360,14 +360,14 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 		return -1;
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public ListIterator<E> listIterator() { return listIterator(0); }
-	@Nonnull
+	@NotNull
 	@Override
 	public ListIterator<E> listIterator(int i) { return new Itr(i); }
 
-	@Nonnull
+	@NotNull
 	@Override
 	public List<E> subList(int fromIndex, int toIndex) { return new SubList<>(this, fromIndex, toIndex); }
 

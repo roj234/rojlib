@@ -1,10 +1,9 @@
 package roj.config.data;
 
+import org.jetbrains.annotations.NotNull;
 import roj.config.serial.CVisitor;
 import roj.text.ACalendar;
 import roj.text.TextUtil;
-
-import javax.annotation.Nonnull;
 
 /**
  * @author Roj234
@@ -31,7 +30,7 @@ public final class CDate extends CLong {
 		return new CDate(timestamp);
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Type getType() {
 		return Type.DATE;

@@ -1,9 +1,9 @@
 package roj.asm.tree;
 
+import org.jetbrains.annotations.Nullable;
 import roj.asm.cp.ConstantPool;
 import roj.util.DynByteBuf;
 
-import javax.annotation.Nullable;
 import java.util.List;
 
 /**

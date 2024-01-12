@@ -157,6 +157,11 @@ public class uTP implements ChannelHandler {
 		}
 
 		@Override
+		protected void bind0(InetSocketAddress na) throws IOException {
+			throw new UnsupportedOperationException("not implemented");
+		}
+
+		@Override
 		public boolean connect0(InetSocketAddress address) throws IOException {
 			if (state != INITIAL) throw new IOException("Must be INITIAL state");
 

@@ -1,5 +1,6 @@
 package roj.net.http;
 
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.UnmodifiableView;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
@@ -12,7 +13,6 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Identifier;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.ClosedByInterruptException;
@@ -69,7 +69,7 @@ public class SyncHttpClient implements ChannelHandler {
 		ctx.channelOpened();
 	}
 
-	@Nonnull
+	@NotNull
 	private ChannelCtx findHandler(ChannelCtx ctx) {
 		ChannelCtx ctx1 = ctx.prev();
 		while (!(ctx1.handler() instanceof HttpRequest)) {

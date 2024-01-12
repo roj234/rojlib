@@ -166,13 +166,13 @@ public class Obfuscator {
 		List<? extends MethodNode> methods = (exclusion&EX_METHOD)!=0 ? Collections.emptyList() : data.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode method = methods.get(i);
-			int acc = method.access;
+			int acc = method.modifier;
 			if ((flags & ADD_SYNTHETIC) != 0) {
 				acc |= Opcodes.ACC_SYNTHETIC;
 			} else if ((flags & REMOVE_SYNTHETIC) != 0) {
 				acc &= ~(Opcodes.ACC_SYNTHETIC | Opcodes.ACC_BRIDGE);
 			}
-			method.access = (char) acc;
+			method.modifier = (char) acc;
 
 			if ((d.name = method.name()).charAt(0) == '<') continue; // clinit, init
 			d.param = method.rawDesc();
@@ -191,13 +191,13 @@ public class Obfuscator {
 		List<? extends FieldNode> fields = (exclusion&EX_FIELD)!=0 ? Collections.emptyList() : data.fields;
 		for (int i = 0; i < fields.size(); i++) {
 			FieldNode field = fields.get(i);
-			int acc = field.access;
+			int acc = field.modifier;
 			if ((flags & ADD_SYNTHETIC) != 0) {
 				acc |= Opcodes.ACC_SYNTHETIC;
 			} else if ((flags & REMOVE_SYNTHETIC) != 0) {
 				acc &= ~(Opcodes.ACC_SYNTHETIC | Opcodes.ACC_BRIDGE);
 			}
-			field.access = (char) acc;
+			field.modifier = (char) acc;
 
 			d.name = field.name();
 			d.param = field.rawDesc();

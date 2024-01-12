@@ -55,8 +55,8 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 	}
 
 	// region UNSAFE OPS
-	public void putArraysToCache() {
-		super.putArraysToCache();
+	public void release() {
+		super.release();
 		mem.release();
 	}
 

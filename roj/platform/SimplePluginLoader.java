@@ -1,8 +1,8 @@
 package roj.platform;
 
 import roj.asm.tree.anno.Annotation;
-import roj.asmx.more_annotations.AnnotationInfo;
-import roj.asmx.more_annotations.AnnotationRepo;
+import roj.asmx.AnnotationOwner;
+import roj.asmx.AnnotationRepo;
 import roj.collect.MyHashMap;
 import roj.math.Version;
 import roj.ui.terminal.Argument;
@@ -26,8 +26,8 @@ public class SimplePluginLoader extends Plugin {
 	private int loadAnnotationPlugins(File jar) {
 		REPO.add(jar);
 
-		Set<AnnotationInfo> infos = REPO.annotatedBy("roj/platform/SimplePlugin");
-		for (AnnotationInfo info : infos) {
+		Set<AnnotationOwner> infos = REPO.annotatedBy("roj/platform/SimplePlugin");
+		for (AnnotationOwner info : infos) {
 			PluginDescriptor pd = new PluginDescriptor();
 			pd.mainClass = info.owner().replace('/', '.');
 			Annotation annotation = info.annotations().get("roj/platform/SimplePlugin");

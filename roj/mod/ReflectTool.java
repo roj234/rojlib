@@ -4,7 +4,7 @@ import roj.asm.type.Desc;
 import roj.asm.type.TypeHelper;
 import roj.asmx.mapper.Mapper;
 import roj.collect.*;
-import roj.ui.GUIUtil;
+import roj.ui.GuiUtil;
 import roj.util.Helpers;
 
 import javax.swing.*;
@@ -34,7 +34,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 
 	public ReflectTool(boolean exit, String flag) {
 		super("反射工具");
-		GUIUtil.setLogo(this, "FMD_logo.png");
+		GuiUtil.setLogo(this, "FMD_logo.png");
 
 		setDefaultCloseOperation(exit ? JFrame.EXIT_ON_CLOSE : JFrame.DISPOSE_ON_CLOSE);
 		addWindowListener(this);
@@ -239,7 +239,7 @@ public class ReflectTool extends JFrame implements KeyListener, WindowListener {
 			setLayout(null);
 			setAlwaysOnTop(true);
 
-			GUIUtil.setLogo(this, "FMD_logo.png");
+			GuiUtil.setLogo(this, "FMD_logo.png");
 
 			setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 			addWindowListener(parent);

@@ -1,9 +1,10 @@
 package roj.mod;
 
 import com.sun.nio.file.ExtendedWatchEventModifier;
+import roj.collect.Hasher;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.concurrent.timing.ScheduleTask;
+import roj.collect.XHashSet;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
@@ -28,6 +29,8 @@ import static roj.mod.Shared.BASE;
  */
 final class FileWatcher extends IFileWatcher implements Runnable {
 	private static final class X {
+		private Object _next;
+
 		WatchKey key;
 		final String owner;
 		final byte x;
@@ -43,38 +46,24 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 			this.owner = "";
 			this.x = 0;
 		}
-
-		@Override
-		public boolean equals(Object o) {
-			if (this == o) return true;
-			if (o == null || getClass() != o.getClass()) return false;
-
-			X x = (X) o;
-
-			return key == x.key;
-		}
-
-		@Override
-		public int hashCode() {
-			return key.hashCode();
-		}
 	}
 
 	private final X via;
-	private final MyHashSet<X> actions;
+	private final XHashSet<WatchKey, X> actions;
 	private final WatchService watcher;
 	private final Thread t;
 	private volatile boolean pause;
 	private final String libPath;
-	private ScheduleTask reloadMapTask;
 
 	private MyHashMap<String, X[]> listeners;
 
 	public FileWatcher() throws IOException {
 		watcher = FileSystems.getDefault().newWatchService();
-		actions = new MyHashSet<>();
+		XHashSet.Shape<WatchKey, X> shape = XHashSet.noCreation(X.class, "key", "_next", Hasher.identity());
+		actions = shape.create();
 		listeners = new MyHashMap<>();
 		via = new X();
+		actions.add(via);
 
 		File lib = new File(BASE, "/class/");
 		lib.toPath().register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW);
@@ -100,9 +89,8 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 				continue;
 			}
 
-			via.key = key;
-			X csm = actions.find(via);
-			if (csm == via) {
+			X csm = actions.get(key);
+			if (csm == null || csm == via) {
 				for (WatchEvent<?> event : key.pollEvents()) {
 					if (!event.kind().name().equals("OVERFLOW")) {
 						String path = key.watchable().toString();
@@ -239,9 +227,9 @@ final class FileWatcher extends IFileWatcher implements Runnable {
 				x.s.clear();
 		} else {
 			arr = new X[2];
-			WatchKey key = proj.resPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
+			WatchKey key = proj.resPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
 			actions.add(arr[0] = new X(proj.name, key, ID_RES));
-			key = proj.srcPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
+			key = proj.srcPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
 			actions.add(arr[1] = new X(proj.name, key, ID_SRC));
 
 			listeners.put(proj.name, arr);

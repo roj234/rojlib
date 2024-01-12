@@ -1,12 +1,17 @@
 package roj.util;
 
+import org.jetbrains.annotations.NotNull;
+import roj.io.UnsafeOutputStream;
+import roj.math.MathUtils;
+import roj.reflect.ReflectionUtils;
 import roj.text.TextUtil;
 import sun.misc.Unsafe;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ConcurrentModificationException;
 import java.util.List;
@@ -19,48 +24,29 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2021/5/29 20:45
  */
 public class DirectByteList extends DynByteBuf {
-	private static final boolean BE_CPU = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
 	private static final boolean SAFER_BUT_NOT_TOTALLY_SAFE_TS_EXPAND = true;
 
 	NativeMemory nm;
 	volatile long address;
 	int length;
 
-	public static DirectByteList allocateDirect() {
-		return new DirectByteList();
-	}
-	public static DirectByteList allocateDirect(int capacity) {
-		return new DirectByteList(capacity);
-	}
+	public static DirectByteList allocateDirect() { return new DirectByteList(); }
+	public static DirectByteList allocateDirect(int capacity) { return new DirectByteList(capacity); }
 	public static DirectByteList allocateDirect(int capacity, int maxCapacity) {
 		return new DirectByteList(capacity) {
 			@Override
-			public void ensureCapacity(int required) {
-				if (required > maxCapacity) throw new IllegalArgumentException("Exceeds max capacity " + maxCapacity);
-				super.ensureCapacity(required);
-			}
-
-			@Override
-			public int maxCapacity() {
-				return maxCapacity;
-			}
+			public int maxCapacity() { return maxCapacity; }
 		};
 	}
-	public static DirectByteList wrap(long address, int length) {
-		return new DirectByteList.Slice(address, length);
-	}
+	public static DirectByteList wrap(long address, int length) { return new DirectByteList.Slice(address, length); }
 
-	DirectByteList() {
-		nm = new NativeMemory();
-	}
-
+	DirectByteList(boolean unused) {}
+	DirectByteList() { nm = new NativeMemory(); }
 	DirectByteList(int cap) {
 		nm = new NativeMemory();
 		address = nm.allocate(cap);
 		length = cap;
 	}
-
-	DirectByteList(boolean unused) {}
 
 	public synchronized void _free() {
 		clear();
@@ -76,7 +62,7 @@ public class DirectByteList extends DynByteBuf {
 	public NativeMemory memory() { return nm; }
 
 	public int capacity() { return length; }
-	public int maxCapacity() { return nm == null ? length : 2147000000; }
+	public int maxCapacity() { return nm == null ? length : Integer.MAX_VALUE; }
 	public boolean immutableCapacity() { return nm == null; }
 	public final boolean isDirect() { return true; }
 	public final long address() { return address; }
@@ -94,9 +80,10 @@ public class DirectByteList extends DynByteBuf {
 
 	public void ensureCapacity(int required) {
 		if (length < required) {
-			if (nm == null) throw new IndexOutOfBoundsException("cannot hold "+required+"bytes in this buffer("+length+")");
+			int newLen = Math.max(MathUtils.getMin2PowerOf(required), 1024);
+			if (newLen > 1073741823 || newLen > maxCapacity()) newLen = maxCapacity();
+			if (nm == null || newLen <= length) throw new IndexOutOfBoundsException("cannot hold "+required+" bytes in this buffer("+(nm==null&&length==0?"NaN":length)+"/"+newLen+")");
 
-			required = length == 0 ? Math.max(required, 1024) : ((required * 3) >>> 1) + 1;
 			if (SAFER_BUT_NOT_TOTALLY_SAFE_TS_EXPAND) {
 				int len = wIndex;
 				wIndex = 0;
@@ -104,10 +91,13 @@ public class DirectByteList extends DynByteBuf {
 				long prevAddr = address;
 
 				NativeMemory mem = new NativeMemory();
-				long addr = mem.allocate(required);
-				u.copyMemory(prevAddr, addr, Math.min(required, len));
+				long addr = mem.allocate(newLen);
+				u.copyMemory(prevAddr, addr, Math.min(newLen, len));
 
-				if (wIndex != 0) throw new ConcurrentModificationException();
+				if (wIndex != 0) {
+					mem.release();
+					throw new ConcurrentModificationException();
+				}
 				wIndex = len;
 
 				address = addr;
@@ -115,9 +105,35 @@ public class DirectByteList extends DynByteBuf {
 
 				prevNM.release();
 			} else {
-				address = nm.resize(required);
+				address = nm.resize(newLen);
 			}
-			length = required;
+			length = newLen;
+		}
+	}
+
+	@Override
+	public void writeToStream(OutputStream out) throws IOException {
+		int len = readableBytes();
+		if (len <= 0) return;
+
+		if (out instanceof UnsafeOutputStream) {
+			((UnsafeOutputStream) out).write0(null, address, len);
+			return;
+		}
+
+		byte[] array = ArrayCache.getByteArray(4096, false);
+		try {
+			long addr = address;
+			while (len > 0) {
+				int w = Math.min(len, array.length);
+				u.copyMemory(null, addr, array, Unsafe.ARRAY_BYTE_BASE_OFFSET, w);
+				out.write(array, 0, w);
+
+				addr += w;
+				len -= w;
+			}
+		} finally {
+			ArrayCache.putArray(array);
 		}
 	}
 
@@ -162,7 +178,7 @@ public class DirectByteList extends DynByteBuf {
 
 	public final DirectByteList putInt(int wi, int i) {
 		long addr = testWI(wi, 4)+address;
-		if (BE_CPU) {
+		if (ReflectionUtils.BIG_ENDIAN) {
 			u.putInt(addr, i);
 		} else {
 			u.putByte(addr++, (byte) (i >>> 24));
@@ -174,7 +190,7 @@ public class DirectByteList extends DynByteBuf {
 	}
 	public final DirectByteList putIntLE(int wi, int i) {
 		long addr = testWI(wi, 4)+address;
-		if (!BE_CPU) {
+		if (!ReflectionUtils.BIG_ENDIAN) {
 			u.putInt(addr, i);
 		} else {
 			u.putByte(addr++, (byte) i);
@@ -187,7 +203,7 @@ public class DirectByteList extends DynByteBuf {
 
 	public final DirectByteList putLong(int wi, long l) {
 		long addr = testWI(wi, 8)+address;
-		if (BE_CPU) {
+		if (ReflectionUtils.BIG_ENDIAN) {
 			u.putLong(addr, l);
 		} else {
 			u.putByte(addr++, (byte) (l >>> 56));
@@ -203,7 +219,7 @@ public class DirectByteList extends DynByteBuf {
 	}
 	public final DirectByteList putLongLE(int wi, long l) {
 		long addr = testWI(wi, 8)+address;
-		if (!BE_CPU) {
+		if (!ReflectionUtils.BIG_ENDIAN) {
 			u.putLong(addr, l);
 		} else {
 			u.putByte(addr++, (byte) l);
@@ -377,18 +393,18 @@ public class DirectByteList extends DynByteBuf {
 
 	public final int readInt(int i) {
 		long addr = testWI(i, 4)+address;
-		if (BE_CPU) return u.getInt(addr);
+		if (ReflectionUtils.BIG_ENDIAN) return u.getInt(addr);
 		return (u.getByte(addr++) & 0xFF) << 24 | (u.getByte(addr++) & 0xFF) << 16 | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr) & 0xFF);
 	}
 	public final int readIntLE(int i) {
 		long addr = testWI(i, 4)+address;
-		if (!BE_CPU) return u.getInt(addr);
+		if (!ReflectionUtils.BIG_ENDIAN) return u.getInt(addr);
 		return (u.getByte(addr++) & 0xFF) | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr++) & 0xFF) << 16 | (u.getByte(addr) & 0xFF) << 24;
 	}
 
 	public final long readLong(int i) {
 		long addr = testWI(i, 8)+address;
-		if (BE_CPU) return u.getLong(addr);
+		if (ReflectionUtils.BIG_ENDIAN) return u.getLong(addr);
 		return (u.getByte(addr++) & 0xFFL) << 56 |
 			(u.getByte(addr++) & 0xFFL) << 48 |
 			(u.getByte(addr++) & 0xFFL) << 40 |
@@ -400,7 +416,7 @@ public class DirectByteList extends DynByteBuf {
 	}
 	public final long readLongLE(int i) {
 		long addr = testWI(i, 8)+address;
-		if (!BE_CPU) return u.getLong(addr);
+		if (!ReflectionUtils.BIG_ENDIAN) return u.getLong(addr);
 		return (u.getByte(addr++) & 0xFFL) |
 			(u.getByte(addr++) & 0xFFL) << 8 |
 			(u.getByte(addr++) & 0xFFL) << 16 |
@@ -504,7 +520,7 @@ public class DirectByteList extends DynByteBuf {
 
 	@Override
 	public final ByteBuffer nioBuffer() {
-		return (ByteBuffer) NativeMemory.newDirectBuffer(address, length, nm).limit(wIndex).position(rIndex);
+		return NativeMemory.newDirectBuffer(address, length, nm).limit(wIndex).position(rIndex);
 	}
 
 	@Override
@@ -547,25 +563,30 @@ public class DirectByteList extends DynByteBuf {
 	@Override
 	public final boolean equals(Object o) {
 		if (this == o) return true;
-		if (o == null || getClass() != o.getClass()) return false;
+		if (!(o instanceof DynByteBuf b)) return false;
 
-		DirectByteList list = (DirectByteList) o;
+		int len = readableBytes();
+		if (len != b.readableBytes()) return false;
+		assert len < length;
 
-		if (address != list.address) return false;
-		return length == list.length;
+		return 0 == ArrayUtil.vectorizedMismatch(null, address, b.array(), b._unsafeAddr(), len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE);
 	}
 
 	@Override
 	public int hashCode() {
-		int result = (int) (address ^ (address >>> 32));
-		result = 31 * result + length;
-		return result;
+		int len = wIndex - rIndex;
+		assert len < length;
+		return ArrayUtil.byteHashCode(null, address, len);
 	}
 
 	@Override
+	@NotNull
 	public String toString() {
-		byte[] tmp = new byte[wIndex];
-		copyToArray(address, tmp, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, tmp.length);
+		int len = wIndex - rIndex;
+		assert len < length;
+
+		byte[] tmp = new byte[len];
+		copyToArray(address, tmp, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, len);
 		return new String(tmp, StandardCharsets.US_ASCII);
 	}
 

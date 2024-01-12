@@ -11,9 +11,12 @@ import roj.net.dns.DnsServer.Record;
 import roj.net.http.srv.HttpServer11;
 import roj.net.http.srv.autohandled.OKRouter;
 import roj.text.CharList;
-import roj.text.LineReader;
+import roj.text.TextReader;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -37,7 +40,7 @@ public class AdGuard {
 
 		CList list = cfg.getOrCreateList("hosts");
 		for (int i = 0; i < list.size(); i++) {
-			dns.loadHosts(new FileInputStream(list.get(i).asString()));
+			dns.loadHosts(new File(list.get(i).asString()));
 		}
 
 		TrieTreeSet tree = new TrieTreeSet();
@@ -65,12 +68,14 @@ public class AdGuard {
 			}
 
 			CharList tmp = new CharList();
-			for (String ln : new LineReader(new FileInputStream(file))) {
-				if (ln.isEmpty() || ln.startsWith("!")) continue;
+			try (TextReader tr = TextReader.auto(file)) {
+				for (String ln : tr) {
+					if (ln.isEmpty() || ln.startsWith("!")) continue;
 
-				tmp.clear();
-				tmp.append(ln).replace("@@", "").replace("|", "").replace("^", "");
-				tree.add(tmp.toString());
+					tmp.clear();
+					tmp.append(ln).replace("@@", "").replace("|", "").replace("^", "");
+					tree.add(tmp.toString());
+				}
 			}
 		}
 		if (!tree.isEmpty()) {

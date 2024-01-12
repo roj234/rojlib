@@ -6,7 +6,8 @@ import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMapping;
 import roj.io.IOUtil;
-import roj.text.LineReader;
+import roj.text.LinedReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
@@ -15,6 +16,7 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -33,23 +35,27 @@ public final class TSrgMapping extends Mapping {
 			return false;
 		}
 
-		LineReader slr = new LineReader(IOUtil.readUTF(in));
-
-		switch (cfg.version()) {
-			case 1: tsrgV1(slr, tmp); break;
-			case 2: case 3: tSrgV2(slr, tmp, paramMap); break;
-			default: CLIUtil.warning("不支持的版本 " + cfg.version());
+		try (TextReader tr = TextReader.from(in, StandardCharsets.UTF_8)) {
+			switch (cfg.version()) {
+				case 1: tsrgV1(tr, tmp); break;
+				case 2: case 3: tSrgV2(tr, tmp, paramMap); break;
+				default: CLIUtil.warning("不支持的版本 " + cfg.version());
+			}
+		} finally {
+			cfg.close();
 		}
-		cfg.close();
+
 		return true;
 	}
 
-	public boolean tsrgV1(LineReader slr, List<String> tmp) {
+	public boolean tsrgV1(LinedReader slr, List<String> tmp) throws IOException {
 		String prevF = null;
 
+		int ln = 1;
 		slr.skipLines(1);
-		while (slr.hasNext()) {
-			String line = slr.next();
+		for (String line : slr) {
+			ln++;
+
 			int level = 0;
 			for (; level < line.length(); level++) {
 				if (line.charAt(level) != '\t') {
@@ -70,7 +76,7 @@ public final class TSrgMapping extends Mapping {
 				}
 			} else {
 				if (prevF == null) {
-					CLIUtil.error("#!config/joined.tsrg:" + slr.lineNumber() + ": 无效的元素开始.");
+					CLIUtil.error("#!config/joined.tsrg:"+ln+": 无效的元素开始.");
 					return false;
 				}
 
@@ -86,13 +92,15 @@ public final class TSrgMapping extends Mapping {
 		return true;
 	}
 
-	public boolean tSrgV2(LineReader slr, List<String> tmp, Map<Desc, List<String>> paramMap) {
+	public boolean tSrgV2(LinedReader slr, List<String> tmp, Map<Desc, List<String>> paramMap) throws IOException {
 		String prevF = null;
 		Desc method = null;
 
+		int ln = 1;
 		slr.skipLines(1);
-		while (slr.hasNext()) {
-			String line = slr.next();
+		for (String line : slr) {
+			ln++;
+
 			int level = 0;
 			for (; level < line.length(); level++) {
 				if (line.charAt(level) != '\t') {
@@ -111,7 +119,7 @@ public final class TSrgMapping extends Mapping {
 				}
 			} else if (level == 1) {
 				if (prevF == null) {
-					CLIUtil.error("#!config/joined.tsrg:" + slr.lineNumber() + ": 无效的元素开始.");
+					CLIUtil.error("#!config/joined.tsrg:"+ln+": 无效的元素开始.");
 					return false;
 				}
 
@@ -126,11 +134,11 @@ public final class TSrgMapping extends Mapping {
 				}
 			} else {
 				if (method == null) {
-					CLIUtil.error("#!config/joined.tsrg:" + slr.lineNumber() + ": 无效的元素开始.");
+					CLIUtil.error("#!config/joined.tsrg:"+ln+": 无效的元素开始.");
 					return false;
 				}
 				if (tmp.get(0).equals("static")) {
-					CLIUtil.warning("TSrgMapping:134: " + tmp);
+					CLIUtil.warning("TSrgMapping:141: "+tmp);
 					continue;
 				}
 

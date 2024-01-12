@@ -12,13 +12,17 @@
 * 支持BCJ2等复杂coder
 * 追加修改(复制字块)
 * 高性能（大量使用Unsafe，请注意线程安全）
+* 2024/01/14实测: 电脑为13600K@5.1Ghz/3.9Ghz
+*  * 对于比较好压缩的文件和7-zip一样快，否则会慢一些，仅有80%左右
+*  * 但是7-zip有时候跑不满CPU，这种情况性能再好又有什么用呢
 
 LZMA2Input/OutputStream均支持并行压缩和解压  
 2023/12/22: 支持在压缩时动态修改prop byte(仅支持单线程下)
 
 ### 可以先试试这个类 `roj.archive.ui.QZArchiverUI`
-![roj.archive.ui.QZArchiverUI](images/archiver.png)
-
+    如果选择【自动固实大小】建议同时勾选图中红框部分提高核心利用率
+    其余选项基本在7-zip的文档中都有介绍，我不在赘述
+![roj.archive.ui.QZArchiverUI](images/archiver_split.png)
 ### 示例
 
 ```java

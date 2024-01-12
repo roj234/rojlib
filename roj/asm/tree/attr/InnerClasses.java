@@ -1,5 +1,7 @@
 package roj.asm.tree.attr;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
@@ -8,8 +10,6 @@ import roj.asm.tree.IClass;
 import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Objects;
 
@@ -72,13 +72,13 @@ public final class InnerClasses extends Attribute {
 	}
 
 	public static class InnerClass {
-		@Nonnull
+		@NotNull
 		public String self;
 		@Nullable
 		public String parent, name;
 		public char flags;
 
-		public InnerClass(@Nonnull String self, @Nullable String parent, @Nullable String name, int flags) {
+		public InnerClass(@NotNull String self, @Nullable String parent, @Nullable String name, int flags) {
 			this.self = self;
 			this.parent = parent;
 			this.name = name;

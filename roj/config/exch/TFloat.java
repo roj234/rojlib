@@ -1,5 +1,6 @@
 package roj.config.exch;
 
+import org.jetbrains.annotations.NotNull;
 import roj.config.NBTParser;
 import roj.config.VinaryParser;
 import roj.config.data.CEntry;
@@ -7,8 +8,6 @@ import roj.config.data.Type;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
-
-import javax.annotation.Nonnull;
 
 /**
  * @author Roj234
@@ -24,7 +23,7 @@ public final class TFloat extends CEntry {
 		return new TFloat(v);
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Type getType() { return Type.Float4; }
 

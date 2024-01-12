@@ -1,11 +1,11 @@
 package roj.platform;
 
+import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.net.URIUtil;
 import roj.util.ByteList;
 
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;

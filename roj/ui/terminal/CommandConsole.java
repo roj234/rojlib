@@ -79,7 +79,7 @@ public class CommandConsole extends DefaultConsole {
 			}
 		}
 
-		if (words.isEmpty()) words.add(new Word().init(Word.EOF, 0, ""));
+		if (words.isEmpty()) words.add(ArgumentContext.EOF);
 		return words;
 	}
 	@Override
@@ -180,4 +180,6 @@ public class CommandConsole extends DefaultConsole {
 
 		return true;
 	}
+
+	public void setCommandEcho(boolean echo) { commandEcho = echo; }
 }

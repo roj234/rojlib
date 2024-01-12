@@ -302,7 +302,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         closeEntry();
         closeWordBlock0();
     }
-    final void closeWordBlock0() throws IOException {
+    void closeWordBlock0() throws IOException {
         if (out == null) return;
 
         WordBlock b = blocks.get(blocks.size()-1);
@@ -356,10 +356,12 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
     @Override
     public void close() throws IOException {
+        if (ignoreClose) return;
+
         try {
             finish();
         } finally {
-            if (!ignoreClose) s.close();
+            s.close();
         }
     }
 

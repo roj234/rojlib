@@ -1,5 +1,6 @@
 package roj.config.data;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.config.NBTParser;
@@ -10,7 +11,6 @@ import roj.config.word.ITokenizer;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -28,7 +28,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 
 	public final boolean isEmpty() { return list.isEmpty(); }
 	public final int size() { return list.size(); }
-	@Nonnull
+	@NotNull
 	public Iterator<CEntry> iterator() { return list.iterator(); }
 	@Override
 	public void forEach(Consumer<? super CEntry> action) { list.forEach(action); }
@@ -60,7 +60,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		list.set(index, entry == null ? CNull.NULL : entry);
 	}
 
-	@Nonnull
+	@NotNull
 	public CEntry get(int i) {
 		return list.get(i);
 	}
@@ -91,7 +91,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		return list.remove(i);
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Type getType() {
 		return Type.LIST;
@@ -145,7 +145,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 
 	public final void clear() { list.clear(); }
 
-	@Nonnull
+	@NotNull
 	@Override
 	public final CList asList() { return this; }
 

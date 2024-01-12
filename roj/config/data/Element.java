@@ -1,12 +1,12 @@
 package roj.config.data;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.serial.CVisitor;
 import roj.config.word.ITokenizer;
 import roj.text.CharList;
 
-import javax.annotation.Nonnull;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -70,12 +70,12 @@ public class Element extends Node {
 	@Override
 	public int size() { return children.size(); }
 	@Override
-	public void add(@Nonnull Node node) {
+	public void add(@NotNull Node node) {
 		if (children == Collections.EMPTY_LIST) children = Collections.singletonList(node);
 		else _childNodes().add(node);
 	}
 	@Override
-	@Nonnull
+	@NotNull
 	public Node child(int index) { return children.get(index); }
 	@Override
 	public List<Node> _childNodes() {

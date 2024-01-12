@@ -1,7 +1,7 @@
 package roj.plugins.ddns;
 
 import roj.net.p2p.STUN;
-import roj.net.p2p.StunServers;
+import roj.net.p2p.Servers;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -26,15 +26,16 @@ public class Stun extends IpGetter {
 	}
 
 	private void extracted(InetAddress[] addresses, int index) throws IOException {
+		Servers instance = Servers.getDefault();
 		if (lastGood[index] != -1) {
-			STUN.Response response = STUN.request(StunServers.getAddress(lastGood[index], index > 0), 1000, STUN.UDP);
+			STUN.Response response = STUN.request(instance.getStunServer(lastGood[index], index > 0), 1000, STUN.UDP);
 			if (response.errCode != 0) {
 				addresses[index] = response.internetAddress.getAddress();
 				return;
 			}
 		}
-		for (int i = 0; i < StunServers.STUN_SERVER_COUNT; i++) {
-			InetSocketAddress addr = StunServers.getAddress(i, false);
+		for (int i = 0; i < instance.stunServerCount; i++) {
+			InetSocketAddress addr = instance.getStunServer(i, false);
 			STUN.Response response = STUN.request(addr, 1000, STUN.UDP);
 			if (response.errCode != 0) {
 				addresses[index] = response.internetAddress.getAddress();

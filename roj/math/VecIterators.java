@@ -1,8 +1,8 @@
 package roj.math;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.AbstractIterator;
 
-import javax.annotation.Nonnull;
 import java.util.Iterator;
 import java.util.function.Consumer;
 
@@ -95,7 +95,7 @@ public final class VecIterators {
 			return true;
 		}
 
-		@Nonnull
+		@NotNull
 		@Override
 		public Iterator<Vec2i> iterator() {
 			return this;
@@ -170,7 +170,7 @@ public final class VecIterators {
 			return false;
 		}
 
-		@Nonnull
+		@NotNull
 		@Override
 		public Iterator<Vec3i> iterator() {
 			throw new UnsupportedOperationException("Not implement yet, use forEach() instead");
@@ -377,7 +377,7 @@ public final class VecIterators {
 			this.immutable = immutable;
 		}
 
-		@Nonnull
+		@NotNull
 		@Override
 		public Iterator<Vec3i> iterator() {
 			reset();

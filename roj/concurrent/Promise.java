@@ -63,7 +63,6 @@ public interface Promise<T> extends Future<T> {
 	}
 
 	default Promise<Void> thenR(Runnable fn) { return Helpers.cast(then((v, o) -> fn.run(), null)); }
-	@SuppressWarnings("unchecked")
 	default <NEXT> Promise<Object> thenF(Function<T, NEXT> fn) { return then((v, o) -> o.resolve(fn.apply(v)), null); }
 
 	default Promise<Object> then(BiConsumer<T, PromiseCallback> fn) { return then(fn, null); }
@@ -81,5 +80,7 @@ public interface Promise<T> extends Future<T> {
 	interface PromiseCallback {
 		void resolve(Object result);
 		void reject(Object reason);
+		void resolveOn(Object result, TaskHandler handler);
+		void rejectOn(Object reason, TaskHandler handler);
 	}
 }

@@ -1,7 +1,6 @@
 package roj.asm.cp;
 
 import roj.asm.type.TypeHelper;
-import roj.text.CharList;
 
 /**
  * @author Roj234
@@ -16,9 +15,7 @@ public final class CstClass extends CstRefUTF {
 	public byte type() { return Constant.CLASS; }
 	@Override
 	public String getEasyReadValue() {
-		CharList sb = new CharList();
-		TypeHelper.toStringOptionalPackage(sb, name().str());
-		return sb.replace('/', '.').append(".class").toStringAndFree();
+		return TypeHelper.parseField(name().str()).toString().replace('/', '.')+".class";
 	}
 	@Override
 	public String getEasyCompareValue() { return name().str(); }

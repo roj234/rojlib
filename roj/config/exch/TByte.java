@@ -1,5 +1,6 @@
 package roj.config.exch;
 
+import org.jetbrains.annotations.NotNull;
 import roj.config.NBTParser;
 import roj.config.VinaryParser;
 import roj.config.data.CEntry;
@@ -7,8 +8,6 @@ import roj.config.data.Type;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
-
-import javax.annotation.Nonnull;
 
 /**
  * @author Roj234
@@ -20,7 +19,7 @@ public final class TByte extends CEntry {
 	public TByte(byte v) { this.value = v; }
 	public static TByte valueOf(byte v) { return new TByte(v); }
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Type getType() { return Type.Int1; }
 

@@ -3,7 +3,6 @@ package roj.net.ch;
 import roj.collect.SimpleList;
 import roj.reflect.DirectAccessor;
 import roj.reflect.FieldAccessor;
-import roj.reflect.Java9Compat;
 import roj.reflect.ReflectionUtils;
 
 import java.io.IOException;
@@ -44,7 +43,7 @@ public final class MySelector extends SimpleList<SelectionKey> implements Set<Se
 										   .access(HashSet.class, "map", "getMap", null).build();
 					try {
 						if (ReflectionUtils.JAVA_VERSION > 8)
-							Java9Compat.OpenModule(HashSet.class, "sun.nio.ch", MySelector.class);
+							ReflectionUtils.openModule(HashSet.class, "sun.nio.ch", MySelector.class);
 
 						setSelectedSet1 = ReflectionUtils.access(ReflectionUtils.getField(t.getClass(), "selectedKeys"));
 						setPublicSelectedSet1 = ReflectionUtils.access(ReflectionUtils.getField(t.getClass(), "publicSelectedKeys"));

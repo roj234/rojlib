@@ -1,5 +1,6 @@
 package roj.asm.type;
 
+import org.intellij.lang.annotations.MagicConstant;
 import roj.asm.Opcodes;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -52,12 +53,12 @@ public final class Type implements IType, Cloneable {
 		return MAP[c-BYTE] != null;
 	}
 
-	public static Type std(int c) {
+	public static Type std(@MagicConstant(intValues = {VOID,BOOLEAN,BYTE,CHAR,SHORT,INT,FLOAT,DOUBLE,LONG}) int c) {
 		if (c >= BYTE && c <= ARRAY) {
 			Object[] arr = MAP[c-BYTE];
 			if (arr != null) return (Type) arr[2];
 		}
-		throw new IllegalArgumentException("Illegal type desc " + (char)c);
+		throw new IllegalArgumentException("Illegal type desc '"+(char)c+"'("+c+")");
 	}
 
 	/**
@@ -115,6 +116,16 @@ public final class Type implements IType, Cloneable {
 	public Type rawType() { return this; }
 
 	@Override
+	public int array() { return array&0xFF; }
+
+	@Override
+	public void setArrayDim(int array) {
+		if (array > 255 || array < 0) throw new ArrayIndexOutOfBoundsException(array);
+		if (type == VOID && array != 0) throw new IllegalStateException("VOID cannot have array");
+		this.array = (byte) array;
+	}
+
+	@Override
 	public String owner() { return owner; }
 
 	@Override
@@ -133,11 +144,11 @@ public final class Type implements IType, Cloneable {
 		switch (env) {
 			case FIELD_ENV:
 			case INPUT_ENV:
-				if (type == 'V')
+				if (type == VOID)
 					throw new IllegalStateException("field or input cannot be 'void' type");
 				break;
 			case THROW_ENV:
-				if (type != 'L' || array != 0)
+				if (type != CLASS || array != 0)
 					throw new IllegalStateException(this + " is not throwable");
 		}
 	}
@@ -154,12 +165,10 @@ public final class Type implements IType, Cloneable {
 		return (byte) ((data&0xFF)+shift);
 	}
 
-	public String nativeName() {
-		return MAP[getActualType()-BYTE][4].toString();
-	}
+	public String nativeName() { return MAP[getActualType()-BYTE][4].toString(); }
 	public boolean isPrimitive() { return array == 0 && type != CLASS; }
 	public int getActualType() { return array == 0 ? type : CLASS; }
-	public String getActualClass() { return array == 0 ? owner : toDesc(); }
+	public String getActualClass() { return array == 0 && type == CLASS ? owner : toDesc(); }
 	public String ownerForCstClass() { return getActualClass(); }
 
 	public String toString() {
@@ -231,17 +240,5 @@ public final class Type implements IType, Cloneable {
 		result = 31 * result + (owner != null ? owner.hashCode() : 0);
 		result = 31 * result + array;
 		return result;
-	}
-
-	@Override
-	public int array() {
-		return array&0xFF;
-	}
-
-	@Override
-	public void setArrayDim(int array) {
-		if (array > 255 || array < 0) throw new ArrayIndexOutOfBoundsException(array);
-		if (type == VOID && array != 0) throw new IllegalStateException("VOID cannot have array");
-		this.array = (byte) array;
 	}
 }

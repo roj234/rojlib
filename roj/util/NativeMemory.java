@@ -87,7 +87,7 @@ public class NativeMemory {
 	private static native void hpFree0(long address) throws NativeException;
 
 	public NativeMemory() { this(false); }
-	public NativeMemory(int size) { this(false); allocate(size); }
+	public NativeMemory(long size) { this(false); allocate(size); }
 	public NativeMemory(boolean zeroFilled) {
 		unmanaged = new Unmanaged(zeroFilled);
 		hlp.newCleaner(this, unmanaged);
@@ -163,7 +163,7 @@ public class NativeMemory {
 			if (cap < 0) throw new IllegalArgumentException("cap="+cap);
 			if (base != 0 && !resize) release();
 
-			this.except = (int) cap;
+			this.except = (int) Math.min(cap, Integer.MAX_VALUE);
 
 			boolean pa = hlp.isDirectMemoryPageAligned();
 			int ps = hlp.pageSize();

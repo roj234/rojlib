@@ -1,9 +1,9 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.Collections;
 import java.util.Iterator;
 
@@ -67,7 +67,7 @@ public class LocationSet<V> implements Iterable<V> {
 		return min_dist2;
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Iterator<V> iterator() {
 		return size == 0 ? Collections.emptyIterator() : Helpers.cast(new ArrayIterator<>(values, 0, size));

@@ -13,23 +13,28 @@ import roj.asm.tree.attr.Annotations;
 import roj.asm.tree.attr.AttrString;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.*;
-import roj.asm.util.AttrHelper;
+import roj.asm.util.Attributes;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.LongByeBye;
 import roj.asm.visitor.SwitchSegment;
 import roj.collect.*;
-import roj.config.data.CEntry;
-import roj.config.data.CNull;
+import roj.config.BinaryParser;
+import roj.config.ConfigMaster;
+import roj.config.ParseException;
+import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.reflect.FastInit;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
+import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Collection;
@@ -42,13 +47,10 @@ import java.util.function.ToIntFunction;
 import static roj.asm.Opcodes.*;
 
 /**
- * 需要注意的是，这个实现并没有考虑到安全性，
- * ie. 一旦一个类的序列化器被生成，它的As-type和安全性设置永远是第一次生成时的状态
- * 要避免这个问题，请将{@link SerializerFactory#GENERATED}改为private final (删去static)
- * 这可能会造成class资源的浪费，权衡。
+ * 得益于VMInternals兼容了Java8-21，我可以放心的使用weak class了
  *
  * @author Roj233
- * @version 2.2
+ * @version 2.3
  * @since 2022/1/11 17:49
  */
 public final class SerializerFactory {
@@ -109,21 +111,6 @@ public final class SerializerFactory {
 		return flagGetter == null ? flag : flagGetter.applyAsInt(className);
 	}
 
-	@Deprecated
-	public CEntry serialize(Object o) {
-		if (o == null) return CNull.NULL;
-		ToEntry c = new ToEntry();
-		adapter(Object.class).write(c, Helpers.cast(o));
-		return c.get();
-	}
-
-	@Deprecated
-	public <T> T deserialize(Class<T> type, CEntry entry) {
-		CAdapter<T> des = adapter(type);
-		entry.forEachChild(des);
-		return des.result();
-	}
-
 	public SerializerFactory(int flag) {
 		this.flag = flag;
 
@@ -137,6 +124,33 @@ public final class SerializerFactory {
 		localRegistry.put("java/util/List", LIST);
 		localRegistry.put("java/util/Set", new CollectionSer(any, true, null));
 		localRegistry.put("java/util/Collection", LIST);
+	}
+
+	public <T> T deserialize(Class<T> type, File file) throws IOException, ParseException {
+		return deserialize(adapter(type), IOUtil.extensionName(file.getName()), file);
+	}
+	@SuppressWarnings("unchecked")
+	public <T> T deserialize(IType type, File file) throws IOException, ParseException {
+		return (T) deserialize(adapter(type), IOUtil.extensionName(file.getName()), file);
+	}
+	public <T> T deserialize(CAdapter<T> adapter, File file) throws IOException, ParseException {
+		return deserialize(adapter, IOUtil.extensionName(file.getName()), file);
+	}
+	// target can be file, outputstream or DynByteBuf
+	public <T> T deserialize(CAdapter<T> adapter, String format, Object from) throws IOException, ParseException {
+		ConfigMaster man = new ConfigMaster(format);
+		BinaryParser bp = man.binParser();
+		if (from instanceof File f) {
+			bp.parseRaw(adapter, f, man.flag());
+		} else if (from instanceof InputStream in) {
+			bp.parseRaw(adapter, in, man.flag());
+		} else if (from instanceof DynByteBuf buf) {
+			bp.parseRaw(adapter, buf, man.flag());
+		} else {
+			throw new IllegalArgumentException("unknown from type "+from.getClass().getName());
+		}
+		if (!adapter.finished()) throw new CorruptedInputException("!finished()");
+		return adapter.result();
 	}
 
 	// 方便预分配空间，并且不用重新转换 (其实就是给我的TrieTreeSet和TrieTree用)
@@ -163,6 +177,8 @@ public final class SerializerFactory {
 		String name = type.getName().replace('.', '/');
 		Adapter ser;
 
+		int _flag = flagFor(type);
+		name = (_flag&(SAFE|NO_CONSTRUCTOR|SERIALIZE_PARENT))+"|"+name;
 		generate:
 		if (!GENERATED.containsKey(name)) {
 			lock.lock();
@@ -174,7 +190,7 @@ public final class SerializerFactory {
 				} else if (type.getComponentType() != null) {
 					ser = array(type);
 				} else {
-					ser = klass(type, flag);
+					ser = klass(type, _flag);
 				}
 
 				GENERATED.put(name, ser);
@@ -373,7 +389,7 @@ public final class SerializerFactory {
 	public <T> CAdapter<T> adapter(Class<T> type) { return context(make(null, type, null, false)); }
 	public CAdapter<?> adapter(IType generic) {
 		Adapter root = get(generic);
-		if (root == null) return null;
+		if (root == null) return Helpers.maybeNull();
 		return context(root);
 	}
 	public <T> CAdapter<List<T>> listOf(Class<T> content) {
@@ -414,7 +430,7 @@ public final class SerializerFactory {
 		try {
 			klass = type.toJavaClass();
 		} catch (ClassNotFoundException e) {
-			return null;
+			throw new TypeNotPresentException(generic.toDesc(), e);
 		}
 
 		if (type == generic || (flagFor(klass) & PREFER_DYNAMIC_INTERNAL) != 0) {
@@ -488,6 +504,7 @@ public final class SerializerFactory {
 		}
 
 		// 是否要移到377行？
+		// 377行？在哪，所以这种东西以后还是别写了
 		if ((flag & GENERATE) == 0) throw new IllegalArgumentException("未找到"+name+"的序列化器");
 
 		if (isInvalid(type)) {
@@ -497,6 +514,7 @@ public final class SerializerFactory {
 			throw new IllegalArgumentException(name+"无法被序列化(ALLOW_DYNAMIC)");
 		}
 
+		name = (flag&(SAFE|NO_CONSTRUCTOR|SERIALIZE_PARENT))+"|"+name;
 		generate:
 		if ((ser = GENERATED.get(name)) == null) {
 			lock.lock();
@@ -550,7 +568,7 @@ public final class SerializerFactory {
 		if (type.isPrimitive()) {
 			byte[] b;
 			try {
-				b = IOUtil.readRes("roj/config/serial/PrimArr.class");
+				b = IOUtil.getResource("roj/config/serial/PrimArr.class");
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}
@@ -712,15 +730,15 @@ public final class SerializerFactory {
 		int t = GENERATE|CHECK_PARENT|SERIALIZE_PARENT;
 		if ((flag&t) == t) throw new IllegalArgumentException("GENERATE CHECK_PARENT SERIALIZE_PARENT 不能同时为真");
 
-		if ((o.getModifiers()& ACC_PUBLIC) == 0 && (flag&SAFE) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
+		if ((o.getModifiers()&ACC_PUBLIC) == 0 && (flag&SAFE) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
 		ConstantData data = Parser.parse(o);
 		if (data == null) throw new IllegalArgumentException("无法获取"+o.getName()+"的类文件");
 
 		int _init = data.getMethod("<init>", "()V");
 		if (_init < 0) {
-			if ((flag & NO_CONSTRUCTOR) == 0) throw new IllegalArgumentException("不允许跳过构造器(NO_CONSTRUCTOR)" + o.getName());
+			if ((flag & NO_CONSTRUCTOR) == 0) throw new IllegalArgumentException("不允许跳过构造器(NO_CONSTRUCTOR)"+o.getName());
 		} else if ((data.methods.get(_init).modifier() & ACC_PUBLIC) == 0) {
-			if (!Serializers.injected) throw new IllegalArgumentException("UnsafeAdapter没有激活,不能跳过无参构造器生成对象" + o.getName());
+			if (!Serializers.injected) throw new IllegalArgumentException("UnsafeAdapter没有激活,不能跳过无参构造器生成对象"+o.getName());
 			if ((flag & SAFE) != 0) throw new IllegalArgumentException("UNSAFE: "+o.getName()+".<init>");
 		}
 
@@ -754,6 +772,7 @@ public final class SerializerFactory {
 
 		if (data.fields.size() == 0 && fieldIds.size() == 0) throw new IllegalArgumentException("这"+o.getName()+"味道不对啊,怎么一个字段都没有");
 
+		currentObject = o.getName().replace('.', '/');
 		// region toString
 		CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "toString", "()Ljava/lang/String;");
 		cw.visitSize(1,1);
@@ -835,7 +854,7 @@ public final class SerializerFactory {
 
 		Annotations tmp1 = data.parsedAttr(data.cp, Attribute.ClAnnotations);
 		if (tmp1 != null) {
-			Annotation opt = AttrHelper.getAnnotation(tmp1.annotations, "roj/config/serial/Optional");
+			Annotation opt = Attributes.getAnnotation(tmp1.annotations, "roj/config/serial/Optional");
 			if (opt != null) defaultOptional = opt.getBoolean("value", true);
 		}
 
@@ -965,6 +984,7 @@ public final class SerializerFactory {
 		return build();
 	}
 
+	private String currentObject;
 	private int parentSer;
 	private final MyBitSet parentExist = new MyBitSet();
 	private void invokeParent(CodeWriter cw, byte opcode) {
@@ -1274,13 +1294,17 @@ public final class SerializerFactory {
 		serializerId.putInt(_name,id);
 
 		copy.one(ALOAD_0);
-		copy.one(ALOAD_1);
-		copy.ldc(new CstClass(type));
-		if (generic == null || generic.equals("java/lang/Object")) {
-			copy.invoke(INVOKEVIRTUAL, "roj/config/serial/SerializerFactory", "get", "(Ljava/lang/Class;)Lroj/config/serial/Adapter;");
+		if (!type.equals(currentObject)) {
+			copy.one(ALOAD_1);
+			copy.ldc(new CstClass(type));
+			if (generic == null || generic.equals("java/lang/Object")) {
+				copy.invoke(INVOKEVIRTUAL, "roj/config/serial/SerializerFactory", "get", "(Ljava/lang/Class;)Lroj/config/serial/Adapter;");
+			} else {
+				copy.ldc(new CstString(generic));
+				copy.invoke(INVOKEVIRTUAL, "roj/config/serial/SerializerFactory", "get", "(Ljava/lang/Class;Ljava/lang/String;)Lroj/config/serial/Adapter;");
+			}
 		} else {
-			copy.ldc(new CstString(generic));
-			copy.invoke(INVOKEVIRTUAL, "roj/config/serial/SerializerFactory", "get", "(Ljava/lang/Class;Ljava/lang/String;)Lroj/config/serial/Adapter;");
+			copy.one(ALOAD_0);
 		}
 		copy.field(PUTFIELD, c, id);
 		return id;
@@ -1312,7 +1336,7 @@ public final class SerializerFactory {
 	}
 
 	private static final MyHashMap<String, IntFunction<?>> DATA_CONTAINER = new MyHashMap<>();
-	public <T> IntFunction<T> dataContainer(Class<?> type) {
+	public static <T> IntFunction<T> dataContainer(Class<?> type) {
 		IntFunction<?> fn = DATA_CONTAINER.get(type.getName());
 		if (fn == null && !DATA_CONTAINER.containsKey(type.getName()))  {
 			synchronized (DATA_CONTAINER) {

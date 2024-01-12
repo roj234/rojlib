@@ -86,7 +86,7 @@ public abstract class LZMAEncoder extends LZMACoder {
 		else return new LZMAEncoderNormal(rc, options, minKeepBefore);
 	}
 
-	public void putArraysToCache() { lz.release(); }
+	public void release() { lz.release(); }
 
 	/**
 	 * Gets an integer [0, 63] matching the highest two bits of an integer.

@@ -2,6 +2,7 @@ package roj.util;
 
 import roj.config.word.ITokenizer;
 import roj.io.IOUtil;
+import roj.reflect.DirectAccessor;
 import roj.text.CharList;
 import roj.ui.CLIUtil;
 
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.ToIntFunction;
 
+import static roj.reflect.ReflectionUtils.BIG_ENDIAN;
 import static roj.reflect.ReflectionUtils.u;
 
 /**
@@ -19,6 +21,19 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2020/10/15 0:43
  */
 public final class ArrayUtil {
+	interface H {
+		int vectorizedMismatch(Object a, long aOffset,
+							   Object b, long bOffset,
+							   int length,
+							   int log2ArrayIndexScale);
+	}
+	private static H fastCompare;
+	static {
+		try {
+			fastCompare = DirectAccessor.builder(H.class).inline().delegate(Class.forName("jdk.internal.util.ArraysSupport"), "vectorizedMismatch").build();
+		} catch (Throwable ignored) {}
+	}
+
 	public static void pack(int[] arr) {
 		ByteList tmp = IOUtil.getSharedByteBuf();
 		for (int i = 0; i < arr.length; i++) tmp.putInt(arr[i]);
@@ -60,73 +75,22 @@ public final class ArrayUtil {
 		return b;
 	}
 
-	public static <T> T[] inverse(T[] arr) {
-		return inverse(arr, 0, arr.length);
-	}
+	public static <T> List<T> inverse(List<T> list) { return inverse(list, 0, list.size()); }
+	public static <T> List<T> inverse(List<T> list, int i, int length) {
+		if (--length <= 0) return list;
 
-	public static <T> T[] inverse(T[] arr, int i, int length) {
-		if (--length <= 0) return arr;
-
-		for (int e = Math.max((length + 1) >> 1, 1); i < e; i++) {
-			T a = arr[i];
-			arr[i] = arr[length - i];
-			arr[length - i] = a;
+		for (int end = Math.max((length + 1) >> 1, 1); i < end; i++) {
+			T a = list.set(i, list.get(length-i));
+			list.set(length-i, a);
 		}
-		return arr;
+		return list;
 	}
 
-	public static <T> T[] inverse(T[] arr, int size) {
-		return inverse(arr, 0, size);
-	}
-
-	public static <T> List<T> inverse(List<T> arr) {
-		return inverse(arr, 0, arr.size());
-	}
-
-	public static <T> List<T> inverse(List<T> arr, int i, int length) {
-		if (--length <= 0) return arr; // empty or one
-		// i = 0, arr.length = 4, e = 2
-		// swap 0 and 3 swap 1 and 2
-		for (int e = Math.max((length + 1) >> 1, 1); i < e; i++) {
-			T a = arr.get(i);
-			arr.set(i, arr.get(length - i));
-			arr.set(length - i, a);
-		}
-		return arr;
-	}
-
-	public static void shuffleArray(Object arr, long off, int len, int scale, Random random) {
-		long ptr = u.allocateMemory(scale);
-		if (ptr == 0) throw new OutOfMemoryError();
-
-		len *= scale;
-		try {
-			for (int i = 0; i < len; i += scale) {
-				u.copyMemory(arr, off+i, null, ptr, scale);
-				int j = random.nextInt(len)*scale;
-				u.copyMemory(arr, off+j, arr, off+i, scale);
-				u.copyMemory(null, ptr, arr, off+j, scale);
-			}
-		} finally {
-			u.freeMemory(ptr);
-		}
-	}
-
-	public static void shuffle(Object[] arr, Random random) {
-		for (int i = 0; i < arr.length; i++) {
-			Object a = arr[i];
-			int an = random.nextInt(arr.length);
-			arr[i] = arr[an];
-			arr[an] = a;
-		}
-	}
-
-	public static <T> void shuffle(List<T> arr, Random random) {
-		for (int i = 0; i < arr.size(); i++) {
-			T a = arr.get(i);
-			int an = random.nextInt(arr.size());
-			arr.set(i, arr.get(an));
-			arr.set(an, a);
+	public static <T> void shuffle(List<T> list, Random r) {
+		for (int i = 0; i < list.size(); i++) {
+			int an = r.nextInt(list.size());
+			T a = list.set(i, list.get(an));
+			list.set(an, a);
 		}
 	}
 
@@ -136,6 +100,64 @@ public final class ArrayUtil {
 			if (b[off1++] != b1[off2++]) return false;
 		}
 		return true;
+	}
+
+	public static final int LOG2_ARRAY_BOOLEAN_INDEX_SCALE = 0;
+	public static final int LOG2_ARRAY_BYTE_INDEX_SCALE = 0;
+	public static final int LOG2_ARRAY_CHAR_INDEX_SCALE = 1;
+	public static final int LOG2_ARRAY_SHORT_INDEX_SCALE = 1;
+	public static final int LOG2_ARRAY_INT_INDEX_SCALE = 2;
+	public static final int LOG2_ARRAY_LONG_INDEX_SCALE = 3;
+	public static final int LOG2_ARRAY_FLOAT_INDEX_SCALE = 2;
+	public static final int LOG2_ARRAY_DOUBLE_INDEX_SCALE = 3;
+	private static final int LOG2_BYTE_BIT_SIZE = 3;
+
+	public static int vectorizedMismatch(Object a, long aOffset,
+										 Object b, long bOffset,
+										 int length,
+										 int log2ArrayIndexScale) {
+		if (fastCompare != null) return fastCompare.vectorizedMismatch(a, aOffset, b, bOffset, length, log2ArrayIndexScale);
+		// 当null时也就意味着是Java8 ...
+
+		int log2ValuesPerWidth = LOG2_ARRAY_LONG_INDEX_SCALE - log2ArrayIndexScale;
+		int wi = 0;
+		for (; wi < length >> log2ValuesPerWidth; wi++) {
+			long bi = ((long) wi) << LOG2_ARRAY_LONG_INDEX_SCALE;
+			long av = u.getLong(a, aOffset + bi);
+			long bv = u.getLong(b, bOffset + bi);
+			if (av != bv) {
+				long x = av ^ bv;
+				int o = BIG_ENDIAN
+					? Long.numberOfLeadingZeros(x) >> (LOG2_BYTE_BIT_SIZE + log2ArrayIndexScale)
+					: Long.numberOfTrailingZeros(x) >> (LOG2_BYTE_BIT_SIZE + log2ArrayIndexScale);
+				return (wi << log2ValuesPerWidth) + o;
+			}
+		}
+
+		// Calculate the tail of remaining elements to check
+		int tail = length - (wi << log2ValuesPerWidth);
+
+		if (log2ArrayIndexScale < LOG2_ARRAY_INT_INDEX_SCALE) {
+			int wordTail = 1 << (LOG2_ARRAY_INT_INDEX_SCALE - log2ArrayIndexScale);
+			// Handle 4 bytes or 2 chars in the tail using int width
+			if (tail >= wordTail) {
+				long bi = ((long) wi) << LOG2_ARRAY_LONG_INDEX_SCALE;
+				int av = u.getInt(a, aOffset + bi);
+				int bv = u.getInt(b, bOffset + bi);
+				if (av != bv) {
+					int x = av ^ bv;
+					int o = BIG_ENDIAN
+						? Integer.numberOfLeadingZeros(x) >> (LOG2_BYTE_BIT_SIZE + log2ArrayIndexScale)
+						: Integer.numberOfTrailingZeros(x) >> (LOG2_BYTE_BIT_SIZE + log2ArrayIndexScale);
+					return (wi << log2ValuesPerWidth) + o;
+				}
+				tail -= wordTail;
+			}
+			return ~tail;
+		}
+		else {
+			return ~tail;
+		}
 	}
 
 	public static int binarySearch(Object[] a, int low, int high, Object key, Comparator<Object> cmp) {
@@ -170,19 +192,17 @@ public final class ArrayUtil {
 		return sb.append(']').toString();
 	}
 
-	public static int rangedHashCode(byte[] b, int off, int len) {
+	public static int byteHashCode(Object o, long off, int len) {
 		if (len == 0) return 0;
 
-		len += off;
+		long end = off+len;
 		int hash = 1;
-		while (off < len) {
-			hash = b[off++] + 31 * hash;
+		while (off < end) {
+			hash = u.getByte(o, off++) + 31 * hash;
 		}
 		return hash;
 	}
 
-	public static <T extends Comparable<T>> int binarySearchList(List<T> list, T key) { return binarySearchList(list, 0, list.size(), key); }
-	public static <T extends Comparable<T>> int binarySearchList(List<T> list, int low, int high, T key) { return binarySearchEx(list, low, high, key::compareTo); }
 	public static <T> int binarySearchEx(List<T> list, ToIntFunction<T> comparator) { return binarySearchEx(list, 0, list.size(), comparator); }
 	public static <T> int binarySearchEx(List<T> list, int low, int high, ToIntFunction<T> comparator) {
 		high--;

@@ -25,7 +25,7 @@ public class GreatErrorPage {
 	private static Template template;
 	static {
 		try {
-			template = Template.compile(IOUtil.readResUTF("META-INF/html/system_error.html"));
+			template = Template.compile(IOUtil.getTextResource("META-INF/html/system_error.html"));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -175,7 +175,7 @@ public class GreatErrorPage {
 		if (line == -2) return sb.append("<a>(Native method)</a>");
 
 		if (file == null) sb.append("<a>(Unknown Source)");
-		else sb.append("<a title='").append(CODEBASE).append('\\').append(file).append("'>").append(IOUtil.fileName(file));
+		else sb.append("<a title='").append(CODEBASE).append('\\').append(file).append("'>").append(IOUtil.pathToName(file));
 
 		sb.append("</a>");
 		if (line != -1) sb.append(" line ").append(line);

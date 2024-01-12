@@ -1,8 +1,8 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.util.ArrayCache;
 
-import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.ListIterator;
 import java.util.PrimitiveIterator;
@@ -50,7 +50,7 @@ public class IntList implements Iterable<Integer> {
 		return sb.append(']').toString();
 	}
 
-	@Nonnull
+	@NotNull
 	public int[] toArray() {
 		if (size == 0) return ArrayCache.INTS;
 		int[] arr = new int[size];
@@ -173,12 +173,12 @@ public class IntList implements Iterable<Integer> {
 		return -1;
 	}
 
-	@Nonnull
+	@NotNull
 	public PrimitiveIterator.OfInt iterator() {
 		return iterator(0);
 	}
 
-	@Nonnull
+	@NotNull
 	public PrimitiveIterator.OfInt iterator(int i) {
 		Itr itr = new Itr();
 		itr.i = i;
@@ -197,6 +197,9 @@ public class IntList implements Iterable<Integer> {
 		if (i > size) throw new ArrayIndexOutOfBoundsException(i);
 		return list[i];
 	}
+
+	public int pop() { if (size == 0) throw new ArrayIndexOutOfBoundsException(-1);
+		return list[--size]; }
 
 	public void clear() {
 		size = 0;

@@ -36,7 +36,6 @@ public class Signature extends Attribute {
 	public List<IType> Throws;
 
 	public static IType any() { return Any.I; }
-	public static IType placeholder() { return EmptyClass.I; }
 
 	public Signature(int type) {
 		this.typeParams = Collections.emptyMap();
@@ -153,9 +152,9 @@ public class Signature extends Attribute {
 		sb.append(name);
 		if (list == null) list = typeParams.getOrDefault(name, Collections.emptyList());
 		if (list.isEmpty()) return;
-		if (list.size() > 1 || !list.get(0).owner().equals("java/lang/Object")) {
+		if (list.size() > 1 || !"java/lang/Object".equals(list.get(0).owner())) {
 			sb.append(" extends ");
-			int i = list.get(0).owner().equals("java/lang/Object") ? 1 : 0;
+			int i = "java/lang/Object".equals(list.get(0).owner()) ? 1 : 0;
 			while (true) {
 				IType value = list.get(i++);
 				value.toString(sb);
@@ -174,7 +173,7 @@ public class Signature extends Attribute {
 				toMethodString(sb, null);
 			} else {
 				getTypeParam();
-				if (!values.get(0).owner().equals("java/lang/Object")) values.get(0).toString(sb.append(" extends "));
+				if (!"java/lang/Object".equals(values.get(0).owner())) values.get(0).toString(sb.append(" extends "));
 				if (values.size() > 1) {
 					sb.append(" implements ");
 					int i = 1;

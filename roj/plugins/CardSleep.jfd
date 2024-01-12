@@ -7,7 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "CardSleep 1.1"
+			"title": "CardSleep 1.1.1"
 			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
 				name: "scrollPane1"
 				add( new FormComponent( "javax.swing.JList" ) {
@@ -101,6 +101,7 @@ new FormModel {
 				name: "uiApplyStaticCfg"
 				"text": "静态应用"
 				"margin": new java.awt.Insets( 2, 4, 2, 4 )
+				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 315
 				"y": 115

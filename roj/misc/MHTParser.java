@@ -33,7 +33,7 @@ public class MHTParser extends MultipartFormHandler {
 		MHTParser parser = new MHTParser();
 		parser.init(type);
 
-		EmbeddedChannel ch = EmbeddedChannel.createSingle();
+		EmbeddedChannel ch = EmbeddedChannel.createReadonly();
 		ch.addLast("_", parser);
 		ch.fireChannelRead(buf);
 		parser.onSuccess();
