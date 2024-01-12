@@ -22,14 +22,14 @@ public class EasyProgressBar extends ProgressBar {
 	}
 
 	public void addMax(long count) { max.addAndGet(count); }
-	public void addCurrent(int count) {
+	public void addCurrent(long count) {
 		fin.add(count);
 
 		long sum = fin.sum();
 		long tot = max.get();
 
 		double pct = (double) sum / tot;
-		update(pct, count);
+		update(pct, (int) Math.min(count, Integer.MAX_VALUE));
 		if (pct >= 1) updateForce(pct);
 	}
 

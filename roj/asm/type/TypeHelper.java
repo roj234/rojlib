@@ -155,6 +155,11 @@ public final class TypeHelper {
 		}
 	}
 
+	public static int toPrimitiveType(String primitiveName) {
+		Object[] objects = PD.get(primitiveName);
+		return objects == null ? -1 : objects[0].toString().charAt(0);
+	}
+
 	/**
 	 * 转换class为字段的asm type
 	 */
@@ -274,5 +279,11 @@ public final class TypeHelper {
 		if (arr != null) return sb.append(arr[0]);
 
 		return sb.append('L').append(sb1.replace('.', '/')).append(';');
+	}
+
+	public static IType componentType(IType t) {
+		IType type = t.clone();
+		type.setArrayDim(type.array()-1);
+		return type;
 	}
 }

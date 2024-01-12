@@ -1,8 +1,7 @@
 package roj.net.http.srv;
 
+import org.jetbrains.annotations.Nullable;
 import roj.net.http.IllegalRequestException;
-
-import javax.annotation.Nullable;
 
 /**
  * @author Roj234

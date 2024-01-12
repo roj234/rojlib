@@ -16,6 +16,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
+import java.nio.channels.spi.AbstractSelectableChannel;
 
 /**
  * @author Roj233
@@ -27,6 +28,7 @@ class UdpChImpl extends MyChannel {
 		Object getHolder(Object o);
 		void setAddress(Object holder, Object address);
 		void setPort(Object holder, int port);
+		void removeKey(AbstractSelectableChannel ch, SelectionKey key);
 	}
 	static {
 		H inst;
@@ -34,7 +36,7 @@ class UdpChImpl extends MyChannel {
 			Class<?> type = InetSocketAddress.class.getDeclaredField("holder").getType();
 			DirectAccessor<H> b = DirectAccessor.builder(H.class).i_access("java/net/InetSocketAddress", "holder", TypeHelper.class2type(type), "getHolder", null, false);
 			Field field = ReflectionUtils.checkFieldName(type, "address", "addr");
-			inst = b.access(type, new String[]{field.getName(),"port"}, null, new String[]{"setAddress","setPort"}).build();
+			inst = b.access(type, new String[]{field.getName(),"port"}, null, new String[]{"setAddress","setPort"}).delegate(AbstractSelectableChannel.class, "removeKey").build();
 		} catch (Exception e) {
 			Logger.getLogger().error("UdpChImpl.SocketAddressHelper初始化错误", e);
 			inst = null;
@@ -74,18 +76,22 @@ class UdpChImpl extends MyChannel {
 	}
 
 	@Override
+	protected void bind0(InetSocketAddress na) throws IOException { dc.bind(na); }
+	@Override
 	protected boolean connect0(InetSocketAddress na) throws IOException {
 		dc.connect(na);
 		//addFirst("_UDP_AddressProvider", new AddressBinder(na));
 		return true;
 	}
-
 	@Override
 	protected SocketAddress finishConnect0() throws IOException { return dc.getRemoteAddress(); }
 	@Override
 	protected void closeGracefully0() throws IOException { close(); }
 	@Override
-	protected void disconnect0() throws IOException { dc.disconnect(); }
+	protected void disconnect0() throws IOException {
+		dc.disconnect();
+		UdpUtil.removeKey(dc, key);
+	}
 
 	@Override
 	public SocketAddress remoteAddress() {

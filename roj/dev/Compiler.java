@@ -174,8 +174,10 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 	public void report(Diagnostic<? extends JavaFileObject> diag) {
 		if (diag.getKind() == Diagnostic.Kind.ERROR || !skipErrors.contains(diag.getCode())) {
 			CharList sb = buf;
+			block1:
 			if (diag.getSource() != null) {
 				String file = diag.getSource().toUri().getPath();
+				if (file == null) break block1;
 				int off = 1;
 				if (file.startsWith(basePath, 1)) {
 					off += basePath.length() + 1;
@@ -204,7 +206,7 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 	private static String getNearCode(JavaFileObject source, long lineNumber) {
 		if (lineNumber == -1) return "";
 		try {
-			return LineReader.readSingleLine(IOUtil.readUTF(source.openInputStream()), (int) lineNumber);
+			return LineReader.getLine(IOUtil.readUTF(source.openInputStream()), (int) lineNumber);
 		} catch (IOException e) {
 			e.printStackTrace();
 			return "<ERROR> failed to get " + source.getName() + " due to " + e;

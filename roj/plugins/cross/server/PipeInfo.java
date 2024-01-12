@@ -1,5 +1,6 @@
 package roj.plugins.cross.server;
 
+import org.jetbrains.annotations.Nullable;
 import roj.io.IOUtil;
 import roj.net.ch.Pipe;
 import roj.util.ByteList;
@@ -18,6 +19,7 @@ public final class PipeInfo implements Consumer<Pipe> {
 
 	int sessionId, hostId, clientId;
 
+	@Nullable
 	Pipe pipe;
 
 	Host host;

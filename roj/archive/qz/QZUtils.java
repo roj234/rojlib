@@ -2,11 +2,16 @@ package roj.archive.qz;
 
 import roj.concurrent.TaskPool;
 import roj.io.FastFailException;
+import roj.io.IOUtil;
 import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
+import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -56,5 +61,19 @@ public class QZUtils {
 		}
 
 		bar.end("验证成功");
+	}
+
+	public static void copyStreamWithProgress(InputStream in, OutputStream out, EasyProgressBar bar) throws IOException {
+		ByteList b = IOUtil.getSharedByteBuf();
+		b.ensureCapacity(4096);
+		byte[] data = b.list;
+
+		while (true) {
+			int len = in.read(data);
+			if (len < 0) break;
+			out.write(data, 0, len);
+
+			if (bar != null) bar.addCurrent(len);
+		}
 	}
 }

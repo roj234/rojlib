@@ -69,4 +69,5 @@ public abstract class AnnVal {
 
 	public abstract void toByteArray(ConstantPool cp, DynByteBuf w);
 	public abstract String toString();
+	public String toRawString() { return toString(); }
 }

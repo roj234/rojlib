@@ -1,5 +1,6 @@
 package roj.collect;
 
+import org.jetbrains.annotations.Range;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 
@@ -22,7 +23,7 @@ public class BitArray {
 		mask = ((1 << bits)-1);
 	}
 
-	public BitArray(int bits, int length) {
+	public BitArray(@Range(from = 1, to = 32) int bits, @Range(from = 0, to = Integer.MAX_VALUE) int length) {
 		if (bits < 1 || bits > 32 || length < 0) throw new IllegalArgumentException();
 
 		this.data = new int[(bits*length + 31) / 32];

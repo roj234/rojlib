@@ -1,11 +1,11 @@
 package roj.concurrent;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.IntMap;
 import roj.concurrent.task.ITask;
 import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -235,7 +235,17 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 		promiseFinish(TASK_COMPLETE|TASK_SUCCESS, result);
 	}
 	@Override
+	public void resolveOn(Object result, TaskHandler handler) {
+		executor = handler;
+		resolve(result);
+	}
+	@Override
 	public void reject(Object reason) { promiseFinish(TASK_COMPLETE, reason == null ? new RuntimeException() : reason); }
+	@Override
+	public void rejectOn(Object reason, TaskHandler handler) {
+		executor = handler;
+		reject(reason);
+	}
 
 	private void promiseFinish(int target, Object o) {
 		int s = _state&CALLBACK;
@@ -259,7 +269,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 	}
 
 	@Override
-	public T get(long timeout, @Nonnull TimeUnit unit) throws InterruptedException, TimeoutException, ExecutionException {
+	public T get(long timeout, @NotNull TimeUnit unit) throws InterruptedException, TimeoutException, ExecutionException {
 		synchronized (this) { if (!isDone()) wait(unit.toMillis(timeout)); }
 		if (!isDone()) throw new TimeoutException();
 		return getOrThrow();

@@ -2,7 +2,7 @@ package roj.mod;
 
 import roj.collect.MyHashSet;
 import roj.text.TextUtil;
-import roj.ui.GUIUtil;
+import roj.ui.GuiUtil;
 
 import javax.swing.*;
 import java.awt.event.*;
@@ -52,7 +52,7 @@ final class ConfigEditWindow extends JFrame {
 		super(p.getFile().getName());
 		this.p = p;
 
-		GUIUtil.setLogo(this, "FMD_logo.png");
+		GuiUtil.setLogo(this, "FMD_logo.png");
 
 		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 

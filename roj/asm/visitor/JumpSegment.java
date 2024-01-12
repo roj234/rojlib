@@ -9,11 +9,11 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2022/11/17 0017 12:53
  */
-final class JumpSegment extends Segment {
-	byte code;
-	Label target;
+public final class JumpSegment extends Segment {
+	public byte code;
+	public Label target;
 
-	int fv_bci;
+	public int fv_bci;
 
 	JumpSegment(byte code, Label target) {
 		this.code = code;

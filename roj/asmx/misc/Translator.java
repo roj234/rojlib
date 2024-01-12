@@ -16,9 +16,13 @@ import roj.config.word.Word;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextReader;
+import roj.text.TextWriter;
 import roj.util.ByteList;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
@@ -32,7 +36,7 @@ import java.util.zip.ZipFile;
  */
 public class Translator {
 	private static Map<String, IntMap<String>> value;
-	private static OutputStream out1;
+	private static TextWriter out1;
 
 	public static void main(String[] args) throws IOException, ParseException {
 		if (args.length < 2) {
@@ -48,7 +52,7 @@ public class Translator {
 			return;
 		}
 
-		try (OutputStream out = new BufferedOutputStream(new FileOutputStream(args[args.length-1]))) {
+		try (TextWriter out = TextWriter.to(new File(args[args.length-1]))) {
 			out1 = out;
 			for (int i = 0; i < args.length - 1; i++) read(new File(args[i]));
 			out1 = null;
@@ -205,6 +209,6 @@ public class Translator {
 			}
 		}
 
-		if (any) IOUtil.SharedCoder.get().encodeTo(out1);
+		if (any) out1.append(sb);
 	}
 }

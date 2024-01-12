@@ -1,8 +1,8 @@
 package roj.io;
 
+import org.jetbrains.annotations.NotNull;
 import roj.io.source.Source;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.zip.ZipException;
@@ -38,7 +38,7 @@ public class SourceInputStream extends InputStream {
 	}
 
 	@Override
-	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
+	public int read(@NotNull byte[] b, int off, int len) throws IOException {
 		if (remain <= 0) return -1;
 
 		len = Math.min(len, available());

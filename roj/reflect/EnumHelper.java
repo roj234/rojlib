@@ -10,7 +10,6 @@ import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.InsnHelper;
 import roj.asm.visitor.CodeVisitor;
 import roj.asm.visitor.XAttrCode;
 import roj.asm.visitor.XInsnList;
@@ -80,7 +79,7 @@ public final class EnumHelper extends CodeVisitor {
 
 				XInsnList list = staticInit.instructions;
 				for (XInsnNodeView node : list) {
-					lvid = Math.max(InsnHelper.getVarId(node), lvid);
+					lvid = Math.max(node.getVarId(), lvid);
 					if (node.opcode() == ANEWARRAY && node.type().equals(klass.name)) {
 						addPos = node.insertAfter();
 

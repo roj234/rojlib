@@ -1,6 +1,7 @@
 package roj.asm.visitor;
 
 import org.intellij.lang.annotations.MagicConstant;
+import org.jetbrains.annotations.NotNull;
 import roj.asm.AsmShared;
 import roj.asm.Opcodes;
 import roj.asm.cp.Constant;
@@ -16,7 +17,6 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 
 import static roj.asm.Opcodes.*;
@@ -194,7 +194,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 		return view;
 	}
 	public final int byteLength() { return bci(); }
-	@Nonnull
+	@NotNull
 	public final NodeIterator iterator() { return since(0); }
 	public final NodeIterator since(int bci) { return new NodeIterator(bci); }
 
@@ -356,7 +356,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 			return true;
 		}
 
-		@Nonnull
+		@NotNull
 		@Override
 		public Iterator<Map.Entry<Label, Object>> iterator() { i = 0; stage = INITIAL; return this; }
 

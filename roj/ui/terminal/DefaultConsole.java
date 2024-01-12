@@ -57,6 +57,7 @@ public class DefaultConsole implements Console {
 	private int tabCursor = -1, tabId;
 
 	private boolean _history = true, _echo = true;
+	private Runnable keyboardInterruptHandler;
 
 	public DefaultConsole(String prompt) {
 		setPrompt(prompt);
@@ -81,7 +82,10 @@ public class DefaultConsole implements Console {
 		CLIUtil.enableQuickEditMode();
 		doRender();
 	}
-	public void unregistered() { CLIUtil.removeBottomLine(prompt, true); }
+	public void unregistered() {
+		CLIUtil.removeBottomLine(prompt, true);
+		CLIUtil.removeBottomLine(tooltip, true);
+	}
 
 	private void checkAnsi() {
 		invisible.clear();
@@ -203,24 +207,22 @@ public class DefaultConsole implements Console {
 					if (clipboard.isDataFlavorAvailable(stringFlavor)) {
 						try {
 							String text = filterText(clipboard.getData(stringFlavor).toString());
+							endCompletion(false);
 							input.insert(cursor, text);
 							cursor += text.length();
 							afterInput();
 						} catch (UnsupportedFlavorException | IOException e) {
 							e.printStackTrace();
 						}
-						//break;
 					}
 				break;
 				case VK_B:
-					if (ctrlCForCopy) System.exit(0);
-				break;
+					Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(CLIUtil.stripAnsi(new CharList(input)).toStringAndFree()), null);
+				return;
 				case VK_C:
-					if (!ctrlCForCopy) System.exit(0);
-					else {
-						Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(CLIUtil.stripAnsi(new CharList(input)).toStringAndFree()), null);
-					}
-				break;
+					if (keyboardInterruptHandler == null) System.exit(0);
+					else keyboardInterruptHandler.run();
+				return;
 				case VK_UP: scrollLeft++; break;
 				case VK_DOWN: scrollLeft--; break;
 				case VK_LEFT: cursor = 0; break;
@@ -231,10 +233,10 @@ public class DefaultConsole implements Console {
 			switch (keyCode) {
 				case VK_F1: printHelp(); return;
 				case VK_F2:
-					ctrlCForCopy = !ctrlCForCopy;
-					tooltip().append(ctrlCForCopy ?
-						"\u001b[91m现在Ctrl+C可以用来复制选中的文本，使用Ctrl+B中断程序" :
-						"\u001b[92m现在Ctrl+C用来中断程序");
+					tabToggle = !tabToggle;
+					tooltip().append(tabToggle ?
+						"\u001b[91m现在Tab用来循环切换补全" :
+						"\u001b[92m现在Tab用来应用补全");
 					displayTooltip(1000);
 				return;
 				case VK_F3:
@@ -319,11 +321,16 @@ public class DefaultConsole implements Console {
 				break;
 				case VK_TAB:
 					if (!_echo || input.length() > MAX_INPUT) { beep(); return; }
-					/*if (tabs.size() > 1) {
-						setComplete((tabId+1) % tabs.size());
-						break;
-					}*/
-					if (endCompletion(true)) break;
+
+					if (tabToggle) {
+						if (tabs.size() > 0) {
+							setComplete((tabId+1) % tabs.size());
+							break;
+						}
+					} else {
+						if (endCompletion(true)) break;
+					}
+
 					complete(input, cursor, tabs);
 					if (tabs.size() > 0) setComplete(0);
 					else return;
@@ -390,7 +397,7 @@ public class DefaultConsole implements Console {
 			if (relCursor >= maxWidth) {
 				scrollLeft = Math.max(relCursor-maxWidth+1, scrollLeft+cursorMoveBound);
 				scrollLeft = invisible.nextFalse(scrollLeft);
-			} else if (relCursor < 0) {
+			} else if (relCursor <= 0) {
 				scrollLeft = Math.max(0, invisible.prevFalse(scrollLeft+Math.min(-cursorMoveBound, relCursor)));
 			} else break reComputeWidth;
 
@@ -451,7 +458,7 @@ public class DefaultConsole implements Console {
 		return input.length();
 	}
 
-	private boolean autoHighlight = true, ctrlCForCopy, autoComplete, isAutoComplete;
+	private boolean autoHighlight = true, tabToggle, autoComplete, isAutoComplete;
 	private final CharList tooltip = new CharList();
 	private ScheduleTask removeTooltip;
 	protected final CharList tooltip() { tooltip.clear(); return tooltip; }
@@ -470,12 +477,12 @@ public class DefaultConsole implements Console {
 
 	public static final String KEY_SHORTCUT =
 		"F1: 查看帮助\n" +
-		"F2: 切换Ctrl+C功能\n" +
-		"F3: 开关语法高亮\n" +
-		"F4: 开关即时补全\n" +
-		"Ctrl+A: 全选\n" +
-		"Ctrl+B: 中断程序(F2)\n" +
-		"Ctrl+C: 中断程序或复制(F2)\n" +
+		"F2: 切换Tab功能\n" +
+		"F3: 切换语法高亮\n" +
+		"F4: 切换即时补全\n" +
+		"Ctrl+A: 全选(WIP)\n" +
+		"Ctrl+B: 复制\n" +
+		"Ctrl+C: 键盘中断(默认退出)\n" +
 		"Ctrl+V: 粘贴\n" +
 		"↑: 上一条历史或补全候选\n" +
 		"↓: 下一条历史或补全候选, 或回到当前输入\n" +
@@ -501,6 +508,7 @@ public class DefaultConsole implements Console {
 	protected void complete(CharList input, int cursor, List<Completion> out) {}
 	protected boolean evaluate(String cmd) { return true; }
 
-	public void setEchoEnabled(boolean echo) { this._echo = echo; doRender(); }
-	public void setHistoryEnabled(boolean history) { this._history = history; }
+	public void setInputEcho(boolean echo) { this._echo = echo; doRender(); }
+	public void setInputHistory(boolean history) { this._history = history; }
+	public void onKeyboardInterrupt(Runnable o) { keyboardInterruptHandler = o; }
 }

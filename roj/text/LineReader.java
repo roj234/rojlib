@@ -1,10 +1,12 @@
 package roj.text;
 
-import javax.annotation.Nonnull;
+import org.jetbrains.annotations.NotNull;
+import roj.collect.SimpleList;
+import roj.config.word.Tokenizer;
+import roj.io.IOUtil;
+import roj.util.Helpers;
+
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -13,193 +15,90 @@ import java.util.NoSuchElementException;
  * @author Roj234
  * @since 2021/5/27 0:12
  */
-public class LineReader implements Iterable<String>, Iterator<String>, AutoCloseable, LinedReader {
+public class LineReader implements Iterator<String>, LinedReader {
 	private final CharSequence str;
-	private boolean keepEmpty, reuse;
-	private int index;
-	private int lineNumber;
+	private final boolean keepEmpty;
+	private int i;
 
-	@Deprecated
-	public LineReader(InputStream in) throws IOException {
-		str = new TextReader(in);
-	}
-	@Deprecated
-	public LineReader(InputStream in, Charset cs, boolean cleanEmpty) throws IOException {
-		this.str = new TextReader(in, cs);
-		this.keepEmpty = !cleanEmpty;
-	}
-
-	public LineReader(CharSequence string) {
-		this(string, true);
-	}
-	public LineReader(CharSequence s, boolean cleanEmpty) {
+	public LineReader(CharSequence string) { this(string, true); }
+	private LineReader(CharSequence s, boolean cleanEmpty) {
 		this.str = s;
 		this.keepEmpty = !cleanEmpty;
-		this.reuse = !(s instanceof TextReader);
 	}
+	public static LinedReader create(CharSequence str) { return new LineReader(str, true); }
+	public static LinedReader create(CharSequence str, boolean removeEmpty) { return new LineReader(str, removeEmpty); }
 
-	@SuppressWarnings("fallthrough")
-	public static List<String> slrParserV2(CharSequence keys, boolean clean) {
-		List<String> list = new ArrayList<>();
-
-		int r = 0, i = 0, prev = 0;
-		while (i < keys.length()) {
-			switch (keys.charAt(i)) {
-				case '\r':
-					if (i + 1 >= keys.length() || keys.charAt(i + 1) != '\n') {
-						break;
-					} else {
-						r = 1;
-						i++;
-					}
-				case '\n':
-					if (prev < i || !clean) {
-						list.add(prev == i ? "" : keys.subSequence(prev, i - r).toString());
-					}
-					prev = i + 1;
-					r = 0;
-					break;
+	public static List<String> toLines(CharSequence str, boolean clean) {
+		List<String> list = new SimpleList<>();
+		CharList sb = IOUtil.getSharedCharBuf();
+		int i = 0;
+		do {
+			i = TextUtil.gAppendToNextCRLF(str, i, sb, -1);
+			if (!clean || sb.length() > 0) {
+				list.add(Tokenizer.addSlashes(sb.toString()));
+				sb.clear();
 			}
-			i++;
-		}
-
-		if (prev < i) list.add(keys.subSequence(prev, i).toString());
-
+		} while (i >= 0);
 		return list;
 	}
 
-	@SuppressWarnings("fallthrough")
-	public static String readSingleLine(CharSequence keys, int line) {
-		int r = 0, i = 0, prev = 0;
-		while (i < keys.length()) {
-			switch (keys.charAt(i)) {
-				case '\r':
-					if (i + 1 >= keys.length() || keys.charAt(i + 1) != '\n') {
-						break;
-					} else {
-						r = 1;
-						i++;
-					}
-				case '\n':
-					if (--line == 0) {
-						return prev == i ? "" : keys.subSequence(prev, i - r).toString();
-					}
-					prev = i + 1;
-					r = 0;
-					break;
-			}
-			i++;
+	/**
+	 * line1为第一行
+	 */
+	public static String getLine(CharSequence keys, int line) {
+		int i = 0;
+		while (--line > 0) {
+			i = TextUtil.gNextCRLF(keys, i);
+			if (i < 0) return null;
 		}
 
-		return --line == 0 ? prev == i ? "" : keys.subSequence(prev, i).toString() : null;
+		CharList sb = IOUtil.getSharedCharBuf();
+		TextUtil.gAppendToNextCRLF(keys, i, sb, -1);
+		return sb.toString();
 	}
 
-	@Nonnull
+	private String tmp;
+	@NotNull
 	@Override
-	public Iterator<String> iterator() {
-		if (!reuse && index > 0) throw new IllegalArgumentException("Set 'reusable' to TRUE when reading stream");
-		index = 0;
-		lineNumber = 0;
-		cur = null;
-		return this;
-	}
-
-	static final String EOF = new String();
-	private String cur;
-	private boolean doSkip;
-
+	public Iterator<String> iterator() { i = 0; return this; }
 	@Override
-	@SuppressWarnings("fallthrough")
 	public boolean hasNext() {
-		if (cur != null) {
-			return cur != EOF;
-		} else if (index >= str.length()) {
-			if (keepEmpty) lineNumber++;
-			int size = lineNumber;
-			cur = EOF;
-			return false;
-		}
-
-		int r = 0, i = index;
-		CharSequence s = str;
-		if (!reuse) ((TextReader) s).releaseBefore(i);
-		while (i < s.length()) {
-			switch (s.charAt(i)) {
-				case '\r':
-					if (i >= s.length() || s.charAt(i + 1) != '\n') {
-						break;
-					} else {
-						r = 1;
-						i++;
-					}
-				case '\n':
-					if (i > index + r || keepEmpty) {
-						CharSequence seq = doSkip || index == i ? "" : s.subSequence(index, i - r);
-						index = i + 1;
-						lineNumber++;
-						cur = seq.toString();
-						return true;
-					}
-					index = i + 1;
-					r = 0;
-					break;
-			}
-			i++;
-		}
-
-		if (i > index || keepEmpty) {
-			CharSequence seq = doSkip || index == i ? "" : s.subSequence(index, i);
-			index = i + 1;
-			cur = seq.toString();
-			return true;
-		} else {
-			index = i;
-			cur = EOF;
-			return false;
-		}
+		if (tmp == null) tmp = readLine();
+		return tmp != null;
 	}
-
-	public String readLine() { return hasNext() ? next() : null; }
-	public boolean readLine(CharList buf) throws IOException {
-		String s = readLine();
-		if (s == null) return false;
-		buf.append(s);
-		return true;
-	}
-
 	@Override
 	public String next() {
-		hasNext();
-		if (cur == EOF) {
-			throw new NoSuchElementException();
-		} else {
-			String c = cur;
-			cur = null;
-			return c;
-		}
-	}
-
-	@SuppressWarnings("fallthrough")
-	public int skipLines(int oLines) {
-		int lines = oLines;
-		doSkip = true;
-		try {
-			while (hasNext() && oLines > 0) {
-				cur = null;
-				oLines--;
-			}
-		} finally {
-			doSkip = false;
-		}
-		return oLines - lines;
-	}
-
-	public int lineNumber() {
-		return lineNumber;
+		String t = tmp;
+		tmp = null;
+		if (t == null) throw new NoSuchElementException();
+		return t;
 	}
 
 	@Override
-	public void close() throws IOException {
-		if (!reuse) ((TextReader) str).close();
+	public int skipLines(int oLines) {
+		try {
+			return LinedReader.super.skipLines(oLines);
+		} catch (IOException e) {
+			return Helpers.nonnull();
+		}
+	}
+
+	@Override
+	public String readLine() {
+		try {
+			return LinedReader.super.readLine();
+		} catch (IOException e) {
+			return Helpers.nonnull();
+		}
+	}
+
+	@Override
+	public boolean readLine(CharList buf) {
+		int prevLen = buf.length();
+		while (true) {
+			if (i < 0) return false;
+			i = TextUtil.gAppendToNextCRLF(str, i, buf, -1);
+			if (keepEmpty || buf.length() > prevLen) return true;
+		}
 	}
 }

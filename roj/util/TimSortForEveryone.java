@@ -16,7 +16,7 @@ public class TimSortForEveryone {
 	public static BufferPool TimSort_BufferPool = new BufferPool(
 		4096, 4096, 16777216, 1048576,
 		0, 0, 0, 0,
-		15, 15000);
+		15, 15000, BufferPool.OOM_UNPOOLED);
 
 	/**
 	 * @implNote 对象数组的ArrayRef compSize固定为4，并且内存中保存的是int index

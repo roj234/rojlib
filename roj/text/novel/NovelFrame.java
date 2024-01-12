@@ -15,7 +15,7 @@ import roj.concurrent.timing.Scheduler;
 import roj.io.IOUtil;
 import roj.text.*;
 import roj.ui.DragReorderHelper;
-import roj.ui.GUIUtil;
+import roj.ui.GuiUtil;
 import roj.ui.OnChangeHelper;
 import roj.ui.TextAreaPrintStream;
 import roj.util.BsDiff;
@@ -42,7 +42,7 @@ import java.util.regex.Pattern;
  */
 public class NovelFrame extends JFrame {
 	public static void main(String[] args) {
-		GUIUtil.systemLook();
+		GuiUtil.systemLook();
 		NovelFrame f = new NovelFrame();
 
 		f.pack();
@@ -84,7 +84,7 @@ public class NovelFrame extends JFrame {
 		changeHelper.addEventListener(presetRegexpInp, this::onPresetRegexpChange);
 		changeHelper.addEventListener(alignRegexp, this::alignRegexpKeyTyped);
 
-		GUIUtil.dropFilePath(novelPath, (e) -> { read_novel(null); }, false);
+		GuiUtil.dropFilePath(novelPath, (e) -> { read_novel(null); }, false);
 
 		PresetRegexp regexp = new PresetRegexp();
 		regexp.name = "";
@@ -249,7 +249,7 @@ public class NovelFrame extends JFrame {
 				len--;
 			}
 
-			for (String line : new LineReader(new CharList.Slice(val, st, len), false)) {
+			for (String line : new LineReader(new CharList.Slice(val, st, len))) {
 				if (!haveTrimmedFirstLine && (line.isEmpty() || prefixSpaceOnly.isSelected() && !Character.isWhitespace(line.charAt(0)))) {
 					novel_out.append(line).append('\n');
 					continue;
@@ -315,7 +315,7 @@ public class NovelFrame extends JFrame {
 		if (cascadeChapter.isSelected()) {
 			List<List<Chapter>> chapters = null;
 			try {
-				chapters = Chapter.parse(new LineReader(novel_in, false));
+				chapters = Chapter.parse(new LineReader(novel_in));
 			} catch (IOException ignored) {}
 
 			root.children = Chapter.groupChapter(chapters, 0);

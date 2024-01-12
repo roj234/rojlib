@@ -10,9 +10,9 @@ import java.util.List;
  * @since 2023/5/5 0005 15:15
  */
 public interface TableWriter extends Closeable, Flushable {
-	default void beginSheet(String name) {
-		throw new UnsupportedOperationException();
-	}
+	default void beginSheet(String name) { throw new UnsupportedOperationException(getClass().getName()); }
+
+	default void setColWidth(int col, float width) { throw new UnsupportedOperationException(getClass().getName()); }
 
 	/**
 	 * String|Object => str

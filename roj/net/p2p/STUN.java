@@ -14,6 +14,8 @@ import roj.util.DynByteBuf;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.net.*;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.SocketChannel;
 import java.util.Arrays;
 import java.util.Random;
 
@@ -50,9 +52,13 @@ public final class STUN implements ChannelHandler {
 
 		byte[] pkt = b.list;
 		int length = b.wIndex();
-		if ((flag& UDP) != 0) {
-			try (DatagramSocket so = new DatagramSocket(localAddr)) {
-				so.setReuseAddress(true);
+		if ((flag&UDP) != 0) {
+			try (DatagramChannel ch = DatagramChannel.open()) {
+				// 不能reusePort
+
+				// 你就说恶不恶心吧... 不然呢？while time < deadline => sleep ?
+				ch.configureBlocking(true);
+				DatagramSocket so = ch.socket();
 				so.setSoTimeout(timeout);
 
 				DatagramPacket p = new DatagramPacket(pkt, 0, length, stunServer);
@@ -62,7 +68,7 @@ public final class STUN implements ChannelHandler {
 				so.receive(p);
 				length = p.getLength();
 
-				r.localAddress = (InetSocketAddress) so.getLocalSocketAddress();
+				r.localAddress = (InetSocketAddress) ch.getLocalAddress();
 				r.serverAddress = (InetSocketAddress) p.getSocketAddress();
 			} catch (SocketTimeoutException e) {
 				r.errCode = 999;
@@ -74,16 +80,22 @@ public final class STUN implements ChannelHandler {
 				return r;
 			}
 		} else {
-			try (Socket so = new Socket(Proxy.NO_PROXY)) {
-				so.setReuseAddress(true);
+			try (SocketChannel ch = SocketChannel.open()) {
+				ch.setOption(StandardSocketOptions.SO_REUSEADDR, true);
 				if (localAddr != null) {
-					NIOUtil.windowsSetReusePort(NIOUtil.socketFD(so));
-					so.bind(localAddr);
+					NIOUtil.setReusePort(ch, true);
+					ch.bind(localAddr);
 				}
-				so.setSoTimeout(timeout);
 
+				ch.configureBlocking(true);
+				Socket so = ch.socket();
 				so.connect(stunServer, timeout);
+				so.setSoTimeout(timeout);
 				so.getOutputStream().write(pkt, 0, length);
+
+				r.localAddress = (InetSocketAddress) ch.getLocalAddress();
+				r.serverAddress = (InetSocketAddress) ch.getRemoteAddress();
+
 				try (DataInputStream in = new DataInputStream(so.getInputStream())) {
 					int type = in.readUnsignedShort();
 					int len = in.readUnsignedShort();
@@ -91,9 +103,6 @@ public final class STUN implements ChannelHandler {
 					in.readFully(pkt, 4, len+16);
 					length = len+20;
 				}
-
-				r.localAddress = (InetSocketAddress) so.getLocalSocketAddress();
-				r.serverAddress = (InetSocketAddress) so.getRemoteSocketAddress();
 			} catch (SocketTimeoutException e) {
 				r.errCode = 999;
 				r.errMsg = "no response";
@@ -207,12 +216,27 @@ public final class STUN implements ChannelHandler {
 		public int errCode;
 		public String errMsg;
 
+		public String getErrCodeString() {
+			return switch (errCode) {
+				case 400 -> "Bad Request";
+				case 401 -> "Unauthorized";
+				case 420 -> "Unknown Attribute";
+				case 430 -> "Stale Credentials";
+				case 431 -> "Integrity Check Failure";
+				case 432 -> "Missing Username";
+				case 433 -> "Use TLS";
+				case 500 -> "Server Error";
+				case 600 -> "Global Failure";
+				default -> Integer.toString(errCode);
+			};
+		}
+
 		@Override
 		public String toString() {
 			if (errCode == 0) {
 				return "STUN.Response: "+localAddress+" => "+internetAddress+" (from server "+software+" at "+serverAddress+")";
 			} else {
-				return "STUN.Response: error "+errCode+": "+errMsg;
+				return "STUN.Response: error \""+getErrCodeString()+"\": "+errMsg;
 			}
 		}
 	}

@@ -1,11 +1,11 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.Octree.Node;
 import roj.collect.Octree.OctreeEntry;
 import roj.math.MathUtils;
 import roj.math.Vec3i;
 
-import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -766,7 +766,7 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 	/**
 	 * 补充说明：此迭代器无任何显式的顺序
 	 */
-	@Nonnull
+	@NotNull
 	public Iterator<Node> iterator() { return new _Generic_EntryItr<>(this); }
 	public _Generic_Entry[] __entries() { return nodes; }
 	public void __remove(Node node) { throw new UnsupportedOperationException(); }

@@ -130,7 +130,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 
 	private static String res(String name) throws IOException {
 		String v = tmp.get(name);
-		if (v == null) tmp.put(name, v = IOUtil.readResUTF("META-INF/html/" + name));
+		if (v == null) tmp.put(name, v = IOUtil.getTextResource("META-INF/html/" + name));
 		return v;
 	}
 

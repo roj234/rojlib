@@ -18,7 +18,7 @@ import static roj.collect.AbstractIterator.*;
  */
 public abstract class Generator<T> implements Iterator<T> {
 	public static void main(String[] args) throws Exception {
-		ConstantData data = Parser.parseConstants(IOUtil.readRes("roj/sa/yield/YieldTest.class"));
+		ConstantData data = Parser.parseConstants(IOUtil.getResource("roj/sa/yield/YieldTest.class"));
 		MethodNode mn = data.methods.get(data.getMethod("looper"));
 
 		ConstantData register = createRegister(data, mn);

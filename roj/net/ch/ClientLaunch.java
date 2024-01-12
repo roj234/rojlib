@@ -36,6 +36,11 @@ public final class ClientLaunch {
 	public <T> ClientLaunch option(SocketOption<T> k, T v) throws IOException { ch.setOption(k,v); return this; }
 	public <T> T option(SocketOption<T> k) throws IOException { return ch.getOption(k); }
 
+	public ClientLaunch bind(InetSocketAddress address) throws IOException {
+		ch.bind0(address);
+		return this;
+	}
+
 	public ClientLaunch connect(URL url) {
 		this.addr = new InetSocketAddress(url.getHost(), url.getPort()<0?url.getDefaultPort():url.getPort());
 		return this;

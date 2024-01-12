@@ -1,5 +1,6 @@
 package roj.util;
 
+@Deprecated
 public class Identifier implements Comparable<Identifier> {
 	protected final String namespace, path;
 	private String combined;

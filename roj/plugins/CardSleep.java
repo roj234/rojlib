@@ -9,6 +9,7 @@ import roj.collect.IntSet;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskExecutor;
+import roj.concurrent.TaskPool;
 import roj.config.CsvParser;
 import roj.io.IOUtil;
 import roj.platform.Plugin;
@@ -17,7 +18,7 @@ import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.CMBoxValue;
 import roj.ui.DoubleClickHelper;
-import roj.ui.GUIUtil;
+import roj.ui.GuiUtil;
 import roj.ui.OnChangeHelper;
 import roj.util.ByteList;
 import roj.util.VMUtil;
@@ -53,7 +54,7 @@ public class CardSleep extends JFrame {
 		@Override
 		protected void onLoad() {
 			if (!VMUtil.isRoot()) throw new RuntimeException("本程序需要管理员权限");
-			GUIUtil.systemLook();
+			GuiUtil.systemLook();
 		}
 
 		@Override
@@ -555,7 +556,7 @@ public class CardSleep extends JFrame {
 	}
 
 	private static final int[] prevFreq = new int[6];
-	private static boolean setClock(boolean isGraphicClock, int frequency, boolean isLocked) {
+	private boolean setClock(boolean isGraphicClock, int frequency, boolean isLocked) {
 		if (frequency == prevFreq[isGraphicClock ? 1 : 0]) return false;
 		prevFreq[isGraphicClock ? 1 : 0] = frequency;
 
@@ -566,11 +567,27 @@ public class CardSleep extends JFrame {
 
 		try {
 			Process p = new ProcessBuilder().command(args).start();
-			if (0 == p.waitFor()) return true;
+			if (0 == p.waitFor()) {
+				String buf = IOUtil.read(TextReader.auto(p.getInputStream()));
+				if (!buf.contains("locked")) return true;
+			}
 			String read = IOUtil.read(TextReader.auto(p.getErrorStream()));
 			System.out.println(read);
 		} catch (Exception e) {
 			e.printStackTrace();
+		}
+		if (isGraphicClock) {
+			TaskPool.Common().pushTask(() -> {
+				JOptionPane.showMessageDialog(this, "该显卡不支持或没有权限调节核心频率");
+			});
+			uiST_Core.setSelected(false);
+			uiST_Core.setEnabled(false);
+		} else {
+			TaskPool.Common().pushTask(() -> {
+				JOptionPane.showMessageDialog(this, "该显卡不支持或没有权限调节显存频率");
+			});
+			uiST_Memory.setSelected(false);
+			uiST_Memory.setEnabled(false);
 		}
 		return false;
 	}
@@ -612,32 +629,32 @@ public class CardSleep extends JFrame {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
 		scrollPane1 = new JScrollPane();
 		uiCardList = new JList<>();
-		JLabel label3 = new JLabel();
+		var label3 = new JLabel();
 		uiPowerLimit = new JSpinner();
-		JLabel label4 = new JLabel();
+		var label4 = new JLabel();
 		uiTempLimit = new JSpinner();
-		JLabel label5 = new JLabel();
+		var label5 = new JLabel();
 		uiMaxCore = new JSpinner();
-		JLabel label6 = new JLabel();
+		var label6 = new JLabel();
 		uiMaxMem = new JComboBox<>();
 		uiApplyStaticCfg = new JButton();
-		JLabel label1 = new JLabel();
+		var label1 = new JLabel();
 		uiMinCore = new JSpinner();
-		JLabel label2 = new JLabel();
+		var label2 = new JLabel();
 		uiMinMem = new JComboBox<>();
-		JLabel label7 = new JLabel();
+		var label7 = new JLabel();
 		uiCheckInterval = new JSpinner();
-		JLabel label9 = new JLabel();
+		var label9 = new JLabel();
 		uiST_TargetCore = new JSpinner();
-		JLabel label8 = new JLabel();
+		var label8 = new JLabel();
 		uiST_TargetCoreUB = new JSpinner();
-		JLabel label10 = new JLabel();
+		var label10 = new JLabel();
 		uiST_TargetCoreLB = new JSpinner();
-		JLabel label12 = new JLabel();
+		var label12 = new JLabel();
 		uiST_TargetMem = new JSpinner();
-		JLabel label11 = new JLabel();
+		var label11 = new JLabel();
 		uiST_TargetMemUB = new JSpinner();
-		JLabel label13 = new JLabel();
+		var label13 = new JLabel();
 		uiST_TargetMemLB = new JSpinner();
 		uiST_Core = new JCheckBox();
 		uiST_Memory = new JCheckBox();
@@ -646,16 +663,16 @@ public class CardSleep extends JFrame {
 		uiST_InstantInfo = new JLabel();
 		uiGraphCore = new JPanel();
 		uiGraphMem = new JPanel();
-		JLabel label15 = new JLabel();
-		JLabel label16 = new JLabel();
+		var label15 = new JLabel();
+		var label16 = new JLabel();
 		uiST_State = new JLabel();
 		uiST_DecrCount = new JSpinner();
-		JLabel label14 = new JLabel();
+		var label14 = new JLabel();
 		uiMakeUsageCsv = new JCheckBox();
 
 		//======== this ========
-		setTitle("CardSleep 1.1");
-		Container contentPane = getContentPane();
+		setTitle("CardSleep 1.1.1");
+		var contentPane = getContentPane();
 		contentPane.setLayout(null);
 
 		//======== scrollPane1 ========
@@ -708,6 +725,7 @@ public class CardSleep extends JFrame {
 		//---- uiApplyStaticCfg ----
 		uiApplyStaticCfg.setText("\u9759\u6001\u5e94\u7528");
 		uiApplyStaticCfg.setMargin(new Insets(2, 4, 2, 4));
+		uiApplyStaticCfg.setEnabled(false);
 		contentPane.add(uiApplyStaticCfg);
 		uiApplyStaticCfg.setBounds(new Rectangle(new Point(315, 115), uiApplyStaticCfg.getPreferredSize()));
 

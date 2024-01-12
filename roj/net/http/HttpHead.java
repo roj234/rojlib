@@ -1,9 +1,9 @@
 package roj.net.http;
 
+import org.jetbrains.annotations.Nullable;
 import roj.math.Version;
 import roj.util.DynByteBuf;
 
-import javax.annotation.Nullable;
 import java.util.Locale;
 
 /**

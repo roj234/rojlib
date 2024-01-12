@@ -1,6 +1,7 @@
 package roj.io;
 
-import javax.annotation.Nonnull;
+import org.jetbrains.annotations.NotNull;
+
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,7 +39,7 @@ public class LimitInputStream extends FilterInputStream {
 	}
 
 	@Override
-	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
+	public int read(@NotNull byte[] b, int off, int len) throws IOException {
 		if (remain <= 0) return -1;
 
 		len = Math.min(len, available());

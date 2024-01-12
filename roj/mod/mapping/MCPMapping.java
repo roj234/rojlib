@@ -6,6 +6,7 @@ import roj.asmx.mapper.Mapping;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.text.LineReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
@@ -44,12 +45,10 @@ public final class MCPMapping extends Mapping {
 				fields.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(entry.getKey());
 		}
 
-		int len = srg.getMethodMap().size();
 		Map<String, List<Desc>> methods = new MyHashMap<>(srg.getMethodMap().size());
 		for (Map.Entry<Desc, String> entry : srg.getMethodMap().entrySet()) {
 			if (entry.getValue().startsWith("func_"))
 				methods.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(entry.getKey());
-			len--;
 		}
 
 		try (ZipFile zf = new ZipFile(file)) {
@@ -64,21 +63,23 @@ public final class MCPMapping extends Mapping {
 	}
 
 	private static void parseMoF(ZipFile zf, String name, List<String> tmp, Map<String, List<Desc>> map, Map<Desc, String> target) throws IOException {
-		try (LineReader slr = new LineReader(zf.getInputStream(zf.getEntry(name)), StandardCharsets.UTF_8, true)) {
+		try (TextReader slr = TextReader.from(zf.getInputStream(zf.getEntry(name)), StandardCharsets.UTF_8)) {
+			int ln = 1;
 			slr.skipLines(1);
-			while (slr.hasNext()) {
-				String line = slr.next();
-				if (line.startsWith("#")) continue;
+
+			for (String line : slr) {
+				ln++;
+				if (line.isEmpty() || line.startsWith("#")) continue;
 
 				tmp.clear();
 				if (TextUtil.split(tmp, line, ',').size() < 2) {
-					CLIUtil.warning(name+":"+slr.lineNumber()+": 未知标记: " + line);
+					CLIUtil.warning(name+":"+ln+": 未知标记: " + line);
 					continue;
 				}
 
 				List<Desc> desc = map.get(tmp.get(0));
 				if (desc == null) {
-					if (printAll != Boolean.FALSE) CLIUtil.warning(name+":"+slr.lineNumber() + ": 不存在的Srg: " + tmp.get(0));
+					if (printAll != Boolean.FALSE) CLIUtil.warning(name+":"+ln+": 不存在的Srg: "+tmp.get(0));
 					if (printAll == null) printAll = false;
 				} else {
 					for (Desc d : desc) {
@@ -96,7 +97,7 @@ public final class MCPMapping extends Mapping {
 		int i = 2;
 		while (slr.hasNext()) {
 			String line = slr.next();
-			if (line.length() == 0 || line.startsWith("#")) continue;
+			if (line.isEmpty() || line.startsWith("#")) continue;
 
 			tmp.clear();
 			if (TextUtil.split(tmp, line, ',').size() < 2) {

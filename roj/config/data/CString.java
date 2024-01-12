@@ -1,5 +1,6 @@
 package roj.config.data;
 
+import org.jetbrains.annotations.NotNull;
 import roj.config.IniParser;
 import roj.config.NBTParser;
 import roj.config.VinaryParser;
@@ -9,7 +10,6 @@ import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
-import javax.annotation.Nonnull;
 import java.util.Objects;
 
 /**
@@ -25,13 +25,13 @@ public final class CString extends CEntry {
 		this.value = string.toString();
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Type getType() { return Type.STRING; }
 
 	@Override
 	protected boolean isNumber() { return TextUtil.isNumber(value) >= 0; }
-	@Nonnull
+	@NotNull
 	@Override
 	public String asString() { return value; }
 	@Override

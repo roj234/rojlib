@@ -1,15 +1,12 @@
 package roj.util;
 
+import org.jetbrains.annotations.NotNull;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.GB18030;
 import roj.text.UTF8MB4;
 
-import javax.annotation.Nonnull;
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
@@ -27,7 +24,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 			return get()&0xFF;
 		}
 
-		public int read(@Nonnull byte[] arr, int off, int len) {
+		public int read(@NotNull byte[] arr, int off, int len) {
 			if (!isReadable()) return -1;
 			len = Math.min(readableBytes(), len);
 			DynByteBuf.this.read(arr, off, len);
@@ -149,19 +146,19 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 
 	// region DataInput
 	@Override
-	public final void readFully(@Nonnull byte[] b) {
+	public final void readFully(@NotNull byte[] b) {
 		read(b, 0, b.length);
 	}
 
 	@Override
-	public final void readFully(@Nonnull byte[] b, int off, int len) {
+	public final void readFully(@NotNull byte[] b, int off, int len) {
 		read(b, off, len);
 	}
 	// endregion
 	// region DataOutput
 	public final void write(int b) { put((byte) b); }
-	public final void write(@Nonnull byte[] b) { put(b, 0, b.length); }
-	public final void write(@Nonnull byte[] b, int off, int len) { put(b, off, len); }
+	public final void write(@NotNull byte[] b) { put(b, 0, b.length); }
+	public final void write(@NotNull byte[] b, int off, int len) { put(b, off, len); }
 	public final void writeBoolean(boolean v) { put((byte) (v ? 1 : 0)); }
 	public final void writeByte(int v) { put((byte) v); }
 	public final void writeShort(int s) { putShort(s); }
@@ -170,13 +167,13 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 	public final void writeLong(long l) { putLong(l); }
 	public final void writeFloat(float v) { putInt(Float.floatToRawIntBits(v)); }
 	public final void writeDouble(double v) { putLong(Double.doubleToRawLongBits(v)); }
-	public void writeBytes(@Nonnull String s) { putAscii(s); }
-	public final void writeChars(@Nonnull String s) { putChars(s); }
-	public final void writeUTF(@Nonnull String str) {
+	public void writeBytes(@NotNull String s) { putAscii(s); }
+	public final void writeChars(@NotNull String s) { putChars(s); }
+	public final void writeUTF(@NotNull String str) {
 		int byteLen = byteCountDioUTF(str);
 		putShort(byteLen)._writeDioUTF(str, byteLen);
 	}
-	public static int byteCountDioUTF(@Nonnull String str) {
+	public static int byteCountDioUTF(@NotNull String str) {
 		int len = str.length();
 		int byteLen = len;
 
@@ -201,11 +198,10 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 		return skipped;
 	}
 	// endregion
+	public abstract void writeToStream(OutputStream out) throws IOException;
 	// region PUTxxx
 
-	public final DynByteBuf putBool(boolean b) {
-		return put((byte) (b?1:0));
-	}
+	public final DynByteBuf putBool(boolean b) { return put(b?1:0); }
 
 	public abstract DynByteBuf put(int e);
 	public abstract DynByteBuf put(int i, int e);
@@ -500,7 +496,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 	public final String readAscii(int len) { return readAscii(moveRI(len), len); }
 	public abstract String readAscii(int pos, int len);
 
-	@Nonnull
+	@NotNull
 	public final String readUTF() { return readUTF(readUnsignedShort()); }
 	public final String readVarIntUTF() { return readVarIntUTF(1000000); }
 	public final String readVarIntUTF(int max) {

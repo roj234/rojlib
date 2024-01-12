@@ -1,7 +1,5 @@
 package roj.crypt;
 
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.security.Provider;
 import java.security.Security;
 
@@ -15,10 +13,7 @@ public class ILProvider extends Provider {
 
 	public ILProvider() {
 		super(PROVIDER_NAME, 1.1, "RojLib Security Provider v1.1");
-		AccessController.doPrivileged((PrivilegedAction<Object>) () -> {
-			setup();
-			return null;
-		});
+		setup();
 		INSTANCE = this;
 	}
 

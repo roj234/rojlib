@@ -1,16 +1,16 @@
 package roj.sql;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.AbstractIterator;
 import roj.collect.IntBiMap;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 
 /**
  * @author Roj234
  * @since 2023/5/17 0017 7:19
  */
-class ListMap extends AbstractMap<String, String> implements Map<String, String> {
+class ListMap extends AbstractMap<String, String> {
 	final IntBiMap<String> index;
 	final List<String> values;
 
@@ -29,7 +29,7 @@ class ListMap extends AbstractMap<String, String> implements Map<String, String>
 		return i < 0 ? null : values.get(i);
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Set<Entry<String, String>> entrySet() {
 		return new AbstractSet<Entry<String, String>>() {

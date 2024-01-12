@@ -3,20 +3,23 @@ package roj.io;
 import roj.collect.SimpleList;
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.Waitable;
+import roj.crypt.Base64;
 import roj.math.MutableLong;
 import roj.net.http.HttpRequest;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
-import roj.text.UTFCoder;
+import roj.text.UTF8MB4;
 import roj.util.ByteList;
+import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.*;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.FileChannel;
-import java.nio.charset.UnsupportedCharsetException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -29,20 +32,66 @@ import java.util.function.Predicate;
  * @since 2021/5/29 22:1
  */
 public final class IOUtil {
-	public static final FastThreadLocal<UTFCoder> SharedCoder = FastThreadLocal.withInitial(UTFCoder::new);
+	public static final FastThreadLocal<IOUtil> SharedCoder = FastThreadLocal.withInitial(IOUtil::new);
+
+	// region ThreadLocal part
+	public final CharList charBuf = new CharList();
+	public final ByteList byteBuf = new ByteList();
+
+	private final ByteList.Slice shell = new ByteList.Slice();
+	public final ByteList.Slice shellB = new ByteList.Slice();
+
+	public final StringBuilder numberHelper = new StringBuilder(32);
+
+	public byte[] encode(CharSequence str) {
+		ByteList b = byteBuf; b.clear();
+		return b.putUTFData(str).toByteArray();
+	}
+
+	public String decode(byte[] b) { return decodeR(b).toString(); }
+	public CharList decodeR(byte[] b) { return decodeR(shell.setR(b,0,b.length)); }
+	public CharList decodeR(DynByteBuf b) {
+		charBuf.clear();
+		UTF8MB4.CODER.decodeFixedIn(b, b.readableBytes(), charBuf);
+		return charBuf;
+	}
+
+	public String encodeHex(byte[] b) { return encodeHex(shell.setR(b,0,b.length)); }
+	public String encodeHex(ByteList b) {
+		charBuf.clear();
+		TextUtil.bytes2hex(b.list, 0, b.wIndex(), charBuf);
+		return charBuf.toString();
+	}
+
+	public byte[] decodeHex(CharSequence c) {
+		ByteList b = byteBuf; b.clear();
+		return TextUtil.hex2bytes(c, b).toByteArray();
+	}
+
+	public String encodeBase64(byte[] b) { return encodeBase64(shell.setR(b,0,b.length)); }
+	public String encodeBase64(DynByteBuf b) { return encodeBase64(b, Base64.B64_CHAR); }
+	public String encodeBase64(DynByteBuf b, byte[] chars) {
+		charBuf.clear();
+		Base64.encode(b, charBuf, chars);
+		return charBuf.toString();
+	}
+
+	public byte[] decodeBase64(CharSequence c) { return decodeBase64R(c).toByteArray(); }
+	public ByteList decodeBase64R(CharSequence c) { return decodeBase64R(c, Base64.B64_CHAR_REV); }
+	public ByteList decodeBase64R(CharSequence c, byte[] chars) {
+		ByteList b = byteBuf; b.clear();
+		Base64.decode(c, 0, c.length(), b, chars);
+		return b;
+	}
+
+	public ByteList wrap(byte[] b) { return shell.setR(b,0,b.length); }
+	public ByteList wrap(byte[] b, int off, int len) { return shell.setR(b,off,len); }
+	// endregion
 
 	@Deprecated
-	public static ByteList ddLayeredByteBuf() {
-		ByteList bb = new ByteList();
-		bb.ensureCapacity(1024);
-		return bb;
-	}
+	public static ByteList ddLayeredByteBuf() { return new ByteList(); }
 	@Deprecated
-	public static CharList ddLayeredCharBuf() {
-		CharList sb = new CharList();
-		sb.ensureCapacity(1024);
-		return sb;
-	}
+	public static CharList ddLayeredCharBuf() { return new CharList(); }
 
 	public static ByteList getSharedByteBuf() {
 		ByteList o = SharedCoder.get().byteBuf;
@@ -58,71 +107,55 @@ public final class IOUtil {
 		return o;
 	}
 
-	public static String readResUTF(String path) throws IOException { return readResUTF(IOUtil.class, path); }
-	public static String readResUTF(Class<?> jar, String path) throws IOException {
-		ClassLoader cl = jar.getClassLoader();
-		InputStream in = cl == null ? ClassLoader.getSystemResourceAsStream(path) : cl.getResourceAsStream(path);
-		if (in == null) return null;
-		return readAs(in, "UTF-8");
+	public static byte[] getResource(String path) throws IOException { return getResource(IOUtil.class, path); }
+	public static byte[] getResource(Class<?> caller, String path) throws IOException {
+		InputStream in = caller.getClassLoader().getResourceAsStream(path);
+		if (in == null) throw new FileNotFoundException(path+" is not in jar "+caller.getName());
+		return read(in);
 	}
-
-	public static byte[] readRes(String path) throws IOException { return read1(IOUtil.class, path, getSharedByteBuf()).toByteArray(); }
-	public static byte[] readRes(Class<?> jar, String path) throws IOException { return read1(jar, path, getSharedByteBuf()).toByteArray(); }
-	private static ByteList read1(Class<?> jar, String path, ByteList list) throws IOException {
-		InputStream in = jar.getClassLoader().getResourceAsStream(path);
-		if (in == null) throw new FileNotFoundException(path + " is not in jar " + jar.getName());
-		return list.readStreamFully(in);
+	public static String getTextResource(String path) throws IOException { return getTextResource(IOUtil.class, path); }
+	public static String getTextResource(Class<?> caller, String path) throws IOException {
+		ClassLoader cl = caller.getClassLoader();
+		InputStream in = cl == null ? ClassLoader.getSystemResourceAsStream(path) : cl.getResourceAsStream(path);
+		if (in == null) throw new FileNotFoundException(path+" is not in jar "+caller.getName());
+		return readUTF(in);
 	}
 
 	public static byte[] read(File file) throws IOException {
-		try(FileInputStream in = new FileInputStream(file)) {
-			return read(in);
+		long len = file.length();
+		if (len > Integer.MAX_VALUE) throw new IOException("file > 2GB");
+		byte[] data = new byte[(int) len];
+		try (FileInputStream in = new FileInputStream(file)) {
+			readFully(in, data);
+			return data;
 		}
 	}
 	public static byte[] read(InputStream in) throws IOException { return getSharedByteBuf().readStreamFully(in).toByteArray(); }
 
-	public static String read(Reader in) throws IOException {
-		return getSharedCharBuf().readFully(in).toString();
-	}
-
-	public static String readAs(InputStream in, String encoding) throws UnsupportedCharsetException, IOException {
-		try (Reader r = new TextReader(in, encoding)) {
-			return getSharedCharBuf().readFully(r).toString();
-		}
-	}
 
 	public static String readUTF(File f) throws IOException {
-		try(FileInputStream in = new FileInputStream(f)) {
-			return readUTF(in);
+		try (Reader r = TextReader.from(f, StandardCharsets.UTF_8)) {
+			return f.length() > 1048576L ? read1(r) : read(r);
 		}
 	}
 	public static String readUTF(InputStream in) throws IOException {
-		UTFCoder x = SharedCoder.get();
-		x.decodeFrom(in);
-		return x.charBuf.toString();
-	}
-
-	public static String readString(File file) throws IOException {
-		try (TextReader sr = TextReader.auto(file)) {
-			return new CharList().readFully(sr).toStringAndFree();
+		try (Reader r = TextReader.from(in, StandardCharsets.UTF_8)) {
+			return in.available() > 1048576L ? read1(r) : read(r);
 		}
 	}
-
+	public static String readString(File f) throws IOException {
+		try (TextReader r = TextReader.auto(f)) {
+			return f.length() > 1048576L ? read1(r) : read(r);
+		}
+	}
 	public static String readString(InputStream in) throws IOException {
-		try (TextReader sr = TextReader.auto(in)) {
-			return new CharList().readFully(sr).toStringAndFree();
+		try (Reader r = TextReader.auto(in)) {
+			return in.available() > 1048576L ? read1(r) : read(r);
 		}
 	}
 
-	public static void write(CharSequence cs, File out) throws IOException {
-		try (FileOutputStream fos = new FileOutputStream(out)) {
-			SharedCoder.get().encodeTo(cs, fos);
-		}
-	}
-
-	public static void write(CharSequence cs, OutputStream out) throws IOException {
-		SharedCoder.get().encodeTo(cs, out);
-	}
+	public static String read(Reader r) throws IOException { return getSharedCharBuf().readFully(r).toString(); }
+	private static String read1(Reader r) throws IOException { return new CharList(1048576).readFully(r).toStringAndFree(); }
 
 	public static void readFully(InputStream in, byte[] b) throws IOException { readFully(in, b, 0, b.length); }
 	public static void readFully(InputStream in, byte[] b, int off, int len) throws IOException {
@@ -199,7 +232,7 @@ public final class IOUtil {
 		// noinspection all
 		if (file.length() != length) {
 			// noinspection all
-			if (!file.isFile() || file.length() < length) {
+			if (!file.isFile() || (file.length() < length && file.delete())) {
 				FileChannel fc = FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW, StandardOpenOption.SPARSE)
 											.position(length-1);
 				fc.write(ByteBuffer.wrap(new byte[1]));
@@ -312,13 +345,13 @@ public final class IOUtil {
 		return i < 0 ? "" : path.substring(i+1);
 	}
 
-	public static String noExtName(String path) {
-		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
-		int i = path.lastIndexOf('.');
-		return i < 0 ? path : path.substring(0, i);
+	public static String fileName(String pat) {
+		pat = pat.substring(Math.max(pat.lastIndexOf('/'), pat.lastIndexOf('\\'))+1);
+		int i = pat.lastIndexOf('.');
+		return i < 0 ? pat : pat.substring(0, i);
 	}
 
-	public static String fileName(String text) {
+	public static String pathToName(String text) {
 		int i = text.lastIndexOf('/');
 		i = Math.max(i, text.lastIndexOf('\\'));
 		return text.substring(i+1);
@@ -334,26 +367,6 @@ public final class IOUtil {
 				 .replaceInReplaceResult("../", "/")
 				 .replaceInReplaceResult("//", "/")
 				 .toString(sb.length() > 0 && sb.charAt(0) == '/' ? 1 : 0, sb.length());
-	}
-
-	// todo 支持HTTP2.0后移走
-	public static int timeout = 10000;
-
-	public static ByteList downloadFileToMemory(String url) throws IOException {
-		return HttpRequest.nts().url(new URL(url)).execute().bytes();
-	}
-
-	public static final class ImmediateFuture implements Waitable {
-		@Override
-		public void waitFor() {}
-
-		@Override
-		public boolean isDone() {
-			return true;
-		}
-
-		@Override
-		public void cancel() {}
 	}
 
 	public static long movePath(File from, File to, boolean move) throws IOException {
@@ -408,5 +421,37 @@ public final class IOUtil {
 			}
 		});
 		return state.value;
+	}
+
+	public static void ioWait(AutoCloseable closeable, Object waiter) throws IOException {
+		synchronized (waiter) {
+			try {
+				waiter.wait();
+			} catch (InterruptedException e) {
+				ClosedByInterruptException ex2 = new ClosedByInterruptException();
+				try {
+					closeable.close();
+				} catch (Throwable ex) {
+					ex2.addSuppressed(ex);
+				}
+				throw ex2;
+			}
+		}
+	}
+
+	// todo 支持HTTP2.0后移走
+	public static int timeout = 10000;
+
+	public static ByteList downloadFileToMemory(String url) throws IOException {
+		return HttpRequest.nts().url(new URL(url)).execute().bytes();
+	}
+
+	public static final class ImmediateFuture implements Waitable {
+		@Override
+		public void waitFor() {}
+		@Override
+		public boolean isDone() { return true; }
+		@Override
+		public void cancel() {}
 	}
 }

@@ -3,17 +3,18 @@ package roj.io;
 import roj.NativeLibrary;
 import roj.reflect.DirectAccessor;
 import roj.text.logging.Logger;
+import roj.util.NativeException;
 import roj.util.NativeMemory;
 import roj.util.OS;
 
 import java.io.Closeable;
 import java.io.FileDescriptor;
 import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.SocketImpl;
+import java.net.StandardSocketOptions;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
 /**
@@ -45,18 +46,24 @@ public final class NIOUtil {
 		}
 
 		try {
-			da.access(Socket.class, "impl", "getImplSocket", null)
-			  .access(ServerSocket.class, "impl", "getImplServerSocket", null)
-			  .access(SocketImpl.class, "fd", "getSocketFd", null);
-		} catch (Throwable e1) {
-			Logger.getLogger("NIOUtil").error("无法加载模块 {}", e1, "GetSocketFD");
-		}
-
-		try {
 			SocketChannel sc = SocketChannel.open(); sc.close();
 			da.access(sc.getClass(), new String[] {"fd","nd"}, new String[] {"tcpFD","sChNd"}, null);
 		} catch (Throwable e1) {
 			Logger.getLogger("NIOUtil").error("无法加载模块 {}", e1, "GetChannelFD");
+		}
+
+		try {
+			DatagramChannel dc = DatagramChannel.open(); dc.close();
+			da.access(dc.getClass(), new String[] {"fd","nd"}, new String[] {"udpFD","dChNd"}, null);
+		} catch (Throwable e1) {
+			Logger.getLogger("NIOUtil").error("无法加载模块 {}", e1, "GetChannelFD");
+		}
+
+		try {
+			ServerSocketChannel sc = ServerSocketChannel.open(); sc.close();
+			da.access(sc.getClass(), "fd", "tcpsFD", null);
+		} catch (Throwable e1) {
+			Logger.getLogger("NIOUtil").error("无法加载模块 {}", e1, "GetServerChannelFD");
 		}
 
 		UTIL = da.build();
@@ -76,27 +83,47 @@ public final class NIOUtil {
 	public static final int UNAVAILABLE = -2;
 
 	public static FileDescriptor tcpFD(SocketChannel ch) { return UTIL.tcpFD(ch); }
-	public static FileDescriptor socketFD(Socket so) { return UTIL.getSocketFd(UTIL.getImplSocket(so)); }
-	public static FileDescriptor socketFD(ServerSocket so) { return UTIL.getSocketFd(UTIL.getImplServerSocket(so)); }
+	public static FileDescriptor tcpFD(ServerSocketChannel ch) { return UTIL.tcpsFD(ch); }
 
 	// on windows reuse is NOT ignored
-	public static int windowsSetReusePort(FileDescriptor fd) throws IOException {
-		if (OS.CURRENT != OS.WINDOWS || !NativeLibrary.loaded()) throw new FastFailException("windows native library not loaded");
-		return windowsOnlyReuseAddr(UTIL.fdVal(fd), true);
+	public static void setReusePort(DatagramChannel so, boolean on) throws IOException {
+		if (OS.CURRENT != OS.WINDOWS) so.setOption(StandardSocketOptions.SO_REUSEPORT, on);
+		else setReusePortW(UTIL.udpFD(so), on);
 	}
-	private static native int windowsOnlyReuseAddr(int fd, boolean enable) throws IOException;
+	public static void setReusePort(SocketChannel so, boolean on) throws IOException {
+		if (OS.CURRENT != OS.WINDOWS) so.setOption(StandardSocketOptions.SO_REUSEPORT, on);
+		else setReusePortW(UTIL.tcpFD(so), on);
+	}
+	public static void setReusePort(ServerSocketChannel so, boolean on) throws IOException {
+		if (OS.CURRENT != OS.WINDOWS) so.setOption(StandardSocketOptions.SO_REUSEPORT, on);
+		else setReusePortW(UTIL.tcpsFD(so), on);
+	}
+
+	private static void setReusePortW(FileDescriptor fd, boolean enabled) throws IOException {
+		if (!NativeLibrary.loaded()) throw new NativeException("native library not available");
+		int error = windowsOnlyReuseAddr(UTIL.fdVal(fd), enabled);
+		if (error != 0) {
+			switch (error) {
+				case 10036: throw new IOException("WSAEINPROGRESS");
+				case 10038: throw new IOException("WSAENOTSOCK");
+				case 10042: throw new IOException("WSAENOPROTOOPT");
+				case 10050: throw new IOException("WSAENETDOWN");
+				default: throw new IOException("native setsockopt returns "+error);
+			}
+		}
+	}
+	private static native int windowsOnlyReuseAddr(int fd, boolean enable);
 
 	public interface NUT {
 		void fdFd(FileDescriptor fd, int fdVal);
 		int fdVal(FileDescriptor fd);
 		void fdClose(FileDescriptor fd, Closeable releaser) throws IOException;
 
-		SocketImpl getImplSocket(Socket o);
-		SocketImpl getImplServerSocket(ServerSocket o);
-		FileDescriptor getSocketFd(SocketImpl o);
-
 		Object sChNd();
+		Object dChNd();
+		FileDescriptor udpFD(DatagramChannel ch);
 		FileDescriptor tcpFD(SocketChannel ch);
+		FileDescriptor tcpsFD(ServerSocketChannel ch);
 
 		long address(Object buf);
 		Object attachment(Object buf);

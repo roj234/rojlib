@@ -22,14 +22,13 @@ import roj.net.http.srv.StringResponse;
 import roj.net.mss.MSSKeyPair;
 import roj.plugins.cross.server.AEServer;
 import roj.text.TextUtil;
-import roj.ui.GUIUtil;
+import roj.ui.GuiUtil;
 import roj.ui.OnChangeHelper;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -49,7 +48,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 	static IAEClient client;
 	static final SelectorLoop loop = new SelectorLoop(null, "AE 网络IO", 1, 30000, 1);
 
-	static KeyType keyType;
+	static KeyType keyType = KeyType.getInstance("EdDSA");
 	static KeyPair userCert;
 	static byte[] userId;
 
@@ -83,17 +82,13 @@ public class AEGui extends JFrame implements ChannelHandler {
 	}
 
 	public static void main(String[] args) throws IOException, ParseException {
-		GUIUtil.systemLook();
-		keyType = KeyType.getInstance("EdDSA");
+		GuiUtil.systemLook();
+
+		assert NIOUtil.available();
+
 		AEGui f = new AEGui();
-
-		if (!NIOUtil.available()) {
-			JOptionPane.showMessageDialog(null, "请使用Java8!");
-			return;
-		}
-
 		if (args.length > 0) {
-			CMapping cfg = JSONParser.parses(IOUtil.readUTF(new FileInputStream(args[0])), JSONParser.LITERAL_KEY).asMap();
+			CMapping cfg = new JSONParser().parseRaw(new File(args[0]), JSONParser.LITERAL_KEY).asMap();
 
 			f.uiServer.setText(cfg.getString("server"));
 			f.uiRoom.setText(cfg.getString("room"));
@@ -230,7 +225,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 		});
 		uiKeySL.addActionListener(e -> {
 			if (uiKeySL.getText().startsWith("读取")) {
-				File file = GUIUtil.fileLoadFrom("选择密钥文件", uiConnect);
+				File file = GuiUtil.fileLoadFrom("选择密钥文件", uiConnect);
 				String pass = JOptionPane.showInputDialog(uiConnect, "请输入保存时设置的密码", "输入密码", JOptionPane.QUESTION_MESSAGE);
 				try {
 					userCert = keyType.loadKey(pass.getBytes(StandardCharsets.UTF_8), file);
@@ -241,7 +236,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 					e1.printStackTrace();
 				}
 			} else {
-				File file = GUIUtil.fileSaveTo("选择密钥文件", "key.bin", uiConnect);
+				File file = GuiUtil.fileSaveTo("选择密钥文件", "key.bin", uiConnect);
 				String pass = JOptionPane.showInputDialog(uiConnect, "您必须设置密码来保护私钥", "设置密码", JOptionPane.INFORMATION_MESSAGE);
 				try {
 					keyType.saveKey(userCert, pass.getBytes(StandardCharsets.UTF_8), file);
@@ -341,8 +336,6 @@ public class AEGui extends JFrame implements ChannelHandler {
 					}
 
 					if (uiDirectServer.isSelected()) {
-						EmbeddedChannel[] pair = EmbeddedChannel.createPair();
-
 						AEServer server = new AEServer(launch.address(), 512, key);
 						server.launch.loop(loop);
 						server.start();
@@ -370,7 +363,8 @@ public class AEGui extends JFrame implements ChannelHandler {
 
 		uiLogout.addActionListener(e -> {
 			uiLogout.setEnabled(false);
-			client.logout(client.handlers.handler("open_check"));
+			if (client != null) client.logout(client.handlers.handler("open_check"));
+			else onLogout("屠龙宝刀点击就送");
 		});
 
 		uiWeb.addActionListener(e -> {
@@ -397,7 +391,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 	private static final MyHashMap<String, String> res = new MyHashMap<>();
 	private static String res(String name) throws IOException {
 		String v = res.get(name);
-		if (v == null) res.put(name, v = IOUtil.readResUTF("META-INF/html/"+name));
+		if (v == null) res.put(name, v = IOUtil.getTextResource("META-INF/html/"+name));
 		return v;
 	}
 	private static void runServer(int port) throws IOException {

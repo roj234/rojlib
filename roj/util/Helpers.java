@@ -1,11 +1,11 @@
 package roj.util;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.net.URIUtil;
 
-import javax.annotation.Nonnull;
 import java.io.File;
 import java.net.MalformedURLException;
 import java.util.LinkedList;
@@ -84,7 +84,7 @@ public class Helpers {
 	}
 
 	private static Object field;
-	@Nonnull
+	@NotNull
 	public static <T> T nonnull() {
 		// noinspection all
 		return null;

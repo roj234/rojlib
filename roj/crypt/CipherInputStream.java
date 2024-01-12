@@ -1,11 +1,11 @@
 package roj.crypt;
 
+import org.jetbrains.annotations.NotNull;
 import roj.io.MBInputStream;
 import roj.io.buf.BufferPool;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -32,7 +32,7 @@ public class CipherInputStream extends MBInputStream {
 	}
 
 	@Override
-	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
+	public int read(@NotNull byte[] b, int off, int len) throws IOException {
 		if (eof) return -1;
 
 		int myLen = len;

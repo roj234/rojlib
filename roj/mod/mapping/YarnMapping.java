@@ -4,16 +4,15 @@ import roj.asm.type.Desc;
 import roj.asmx.mapper.Mapping;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
-import roj.text.LineReader;
 import roj.text.LinedReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
-import roj.text.UTFCoder;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +26,7 @@ import java.util.zip.ZipFile;
 public final class YarnMapping extends Mapping {
 	public Mapping load(File intermediary, File mapping, String version) throws IOException {
 		SimpleList<String> tmp = new SimpleList<>();
-		readIntermediaryMap(intermediary.getName(), new LineReader(new FileInputStream(intermediary)), tmp);
+		readIntermediaryMap(intermediary.getName(), TextReader.auto(intermediary), tmp);
 
 		YarnMapping map1 = new YarnMapping();
 		map1.readYarnMap(mapping, tmp, version, null);
@@ -37,8 +36,6 @@ public final class YarnMapping extends Mapping {
 	}
 
 	public void readYarnMap(File file, List<String> tmp, String version, Map<Desc, List<String>> paramMap) throws IOException {
-		UTFCoder uc = IOUtil.SharedCoder.get();
-
 		boolean any = false;
 		try (ZipFile zf = new ZipFile(file)) {
 			Enumeration<? extends ZipEntry> e = zf.entries();
@@ -49,24 +46,26 @@ public final class YarnMapping extends Mapping {
 				String name = ze.getName();
 				if (name.startsWith(fp) && name.endsWith(".mapping")) {
 					any = true;
-					uc.decodeFrom(zf.getInputStream(ze));
-					readYarnEntry(name, new LineReader(uc.charBuf, false), tmp, paramMap);
+					try (TextReader r = new TextReader(zf.getInputStream(ze), StandardCharsets.UTF_8)) {
+						readYarnEntry(name, r, tmp, paramMap);
+					}
 				}
 			}
 		}
 		if (!any) throw new RuntimeException("Not found any yarn for mc" + version);
 	}
 
-	public void readYarnEntry(String name, LineReader slr, List<String> tmp, Map<Desc, List<String>> paramMap) {
-		int i = 1;
-
+	public void readYarnEntry(String name, TextReader slr, List<String> tmp, Map<Desc, List<String>> paramMap) {
 		String srcCls = null;
 		SimpleList<String> srcLevel = new SimpleList<>();
 		SimpleList<String> dstLevel = new SimpleList<>();
 		Desc method = null;
 		int prevCL = 0;
 
+		int ln = 0;
 		for (String line : slr) {
+			ln++;
+
 			int level = 0;
 			for (; level < line.length(); level++) {
 				if (line.charAt(level) != '\t') {
@@ -123,9 +122,8 @@ public final class YarnMapping extends Mapping {
 					}
 					break;
 				case "COMMENT": break;
-				default: CLIUtil.error(name + ":" + i + ": 未知标记类型. " + tmp);
+				default: CLIUtil.error(name+":"+ln+": 未知标记类型. "+tmp);
 			}
-			i++;
 		}
 	}
 
@@ -133,10 +131,7 @@ public final class YarnMapping extends Mapping {
 		int i = 2;
 
 		slr.readLine();
-		while (true) {
-			String line = slr.readLine();
-			if (line == null) break;
-
+		for (String line : slr) {
 			line = line.trim();
 			if (line.length() == 0 || line.startsWith("#")) continue;
 

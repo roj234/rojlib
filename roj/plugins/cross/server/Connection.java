@@ -62,7 +62,7 @@ public abstract class Connection extends Constants {
 		Pinger task = pingTask;
 		if (task != null && task.state != 0) {
 			DynByteBuf b = IOUtil.getSharedByteBuf();
-			b.put(P_S_PING).put(task.state);
+			b.put(P_S_CONNECT_REQ).put(task.state);
 			try {
 				ctx.channelWrite(b);
 			} finally {

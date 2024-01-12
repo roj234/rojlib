@@ -1,7 +1,9 @@
 package roj.util;
 
+import org.jetbrains.annotations.NotNull;
+import roj.compiler.api.Constant;
 import roj.io.buf.BufferPool;
-import roj.lavac.api.Constant;
+import roj.math.MathUtils;
 import roj.text.TextUtil;
 import sun.misc.Unsafe;
 
@@ -21,36 +23,19 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2021/5/29 20:45
  */
 public class ByteList extends DynByteBuf implements Appendable {
-	static final boolean USE_CACHE = true;
 	public static final ByteList EMPTY = new Slice(ArrayCache.BYTES, 0, 0);
 
 	public byte[] list;
 
-	public static ByteList wrap(byte[] b) {
-		return new ByteList(b);
-	}
-	public static ByteList wrap(byte[] b, int off, int len) {
-		return new ByteList.Slice(b, off, len);
-	}
+	public static ByteList wrap(byte[] b) { return new ByteList(b); }
+	public static ByteList wrap(byte[] b, int off, int len) { return new ByteList.Slice(b, off, len); }
 
-	public static ByteList wrapWrite(byte[] b) {
-		return wrapWrite(b, 0, b.length);
-	}
-	public static ByteList wrapWrite(byte[] b, int off, int len) {
-		ByteList bl = new ByteList.Slice(b, off, len);
-		bl.wIndex = 0;
-		return bl;
-	}
+	public static ByteList wrapWrite(byte[] b) { return wrapWrite(b, 0, b.length); }
+	public static ByteList wrapWrite(byte[] b, int off, int len) { ByteList bl = new ByteList.Slice(b, off, len); bl.wIndex = 0; return bl; }
 
 	public static ByteList allocate(int cap) { return new ByteList(cap); }
 	public static ByteList allocate(int capacity, int maxCapacity) {
 		return new ByteList(capacity) {
-			@Override
-			public void ensureCapacity(int required) {
-				if (required > maxCapacity) throw new IllegalArgumentException("Exceeds max capacity " + maxCapacity);
-				super.ensureCapacity(required);
-			}
-
 			@Override
 			public int maxCapacity() { return maxCapacity; }
 		};
@@ -72,7 +57,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	}
 
 	public int capacity() { return list.length; }
-	public int maxCapacity() { return 2147000000; }
+	public int maxCapacity() { return Integer.MAX_VALUE - 1024; }
 	public final boolean isDirect() { return false; }
 	public long _unsafeAddr() { return (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+arrayOffset(); }
 	public boolean hasArray() { return true; }
@@ -84,25 +69,18 @@ public class ByteList extends DynByteBuf implements Appendable {
 		DirectByteList.copyFromArray(list, Unsafe.ARRAY_BYTE_BASE_OFFSET, arrayOffset() + moveRI(len), address, len);
 	}
 
-	public void clear() {
-		wIndex = rIndex = 0;
-	}
+	public void clear() { wIndex = rIndex = 0; }
 
 	public void ensureCapacity(int required) {
 		if (required > list.length) {
-			int newLen = list.length == 0 ? Math.max(required, 256) : ((required * 3) >>> 1) + 1;
-			if (newLen == 1073741823 || newLen > maxCapacity()) newLen = maxCapacity();
-			if (newLen <= list.length) throw new IndexOutOfBoundsException("cannot hold "+required+"bytes in this buffer("+list.length+")");
+			int newLen = Math.max(MathUtils.getMin2PowerOf(required), 1024);
+			if (newLen > 1073741823 || newLen > maxCapacity()) newLen = maxCapacity();
+			if (newLen <= list.length) throw new IndexOutOfBoundsException("cannot hold "+required+" bytes in this buffer("+list.length+"/"+newLen+")");
 
-			byte[] newList;
-			if (USE_CACHE) {
-				ArrayCache.putArray(list);
-				newList = ArrayCache.getByteArray(newLen, false);
-			} else {
-				newList = new byte[newLen];
-			}
+			byte[] newList = ArrayCache.getByteArray(newLen, false);
 
 			if (wIndex > 0) System.arraycopy(list, 0, newList, 0, wIndex);
+			ArrayCache.putArray(list);
 			list = newList;
 		}
 	}
@@ -603,15 +581,20 @@ public class ByteList extends DynByteBuf implements Appendable {
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
-		if (!(o instanceof ByteList)) return false;
-		ByteList ot = (ByteList) o;
-		return ArrayUtil.rangedEquals(list, arrayOffset() + rIndex, readableBytes(), ot.list, ot.arrayOffset() + ot.rIndex, ot.readableBytes());
+		if (!(o instanceof DynByteBuf b)) return false;
+
+		int length = wIndex-rIndex;
+		if (length != b.readableBytes()) return false;
+
+		return 0 == ArrayUtil.vectorizedMismatch(list, arrayOffset()+rIndex, b.array(), b._unsafeAddr(), length, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE);
 	}
 
 	@Override
-	public int hashCode() { return ArrayUtil.rangedHashCode(list, arrayOffset() + rIndex, wIndex); }
+	public int hashCode() { return ArrayUtil.byteHashCode(list, arrayOffset()+rIndex, wIndex-rIndex); }
 
 	@Override
+	@NotNull
+	@SuppressWarnings("deprecation")
 	public String toString() { return new String(list, 0, arrayOffset()+rIndex, wIndex-rIndex); }
 
 	public static class WriteOut extends ByteList {

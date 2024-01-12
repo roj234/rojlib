@@ -12,6 +12,7 @@ package roj.archive.qz.xz.lz;
 
 import roj.archive.qz.xz.LZMA2Options;
 import roj.util.ArrayCache;
+import roj.util.ArrayUtil;
 import roj.util.NativeMemory;
 import sun.misc.Unsafe;
 
@@ -170,14 +171,18 @@ public abstract class LZEncoder {
 		if (presetDict != null) setPresetDict(dictSize, presetDict, 0, presetDict.length);
 	}
 	public final void setPresetDict(int dictSize, byte[] dict, int off, int len) {
+		ArrayUtil.checkRange(dict, off, len);
+		setPresetDict(dictSize, dict, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
+	}
+	public final void setPresetDict(int dictSize, Object ref, long off, int len) {
 		assert !isStarted();
 		assert writePos == 0;
 
 		// If the preset dictionary buffer is bigger than the dictionary
 		// size, copy only the tail of the preset dictionary.
 		int copySize = Math.min(len, dictSize);
-		int offset = off + len - copySize;
-		u.copyMemory(dict, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+offset, null, buf, copySize);
+		long offset = off + len - copySize;
+		u.copyMemory(ref, offset, null, buf, copySize);
 		writePos += copySize;
 		skip(copySize);
 	}

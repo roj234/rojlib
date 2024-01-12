@@ -22,6 +22,7 @@ public final class AnnValDouble extends AnnVal {
 
 	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) Type.DOUBLE).putShort(cp.getDoubleId(value)); }
 	public String toString() { return String.valueOf(value).concat("D"); }
+	public String toRawString() { return String.valueOf(value); }
 
 	@Override
 	public boolean equals(Object o) {

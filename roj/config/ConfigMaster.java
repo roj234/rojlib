@@ -58,18 +58,6 @@ public class ConfigMaster {
 	public BinaryParser binParser() { return bp; }
 	public int flag() { return flag; }
 
-	public static <T> T adapt(CAdapter<T> ser, File file) throws IOException, ParseException { return adapt(ser,file,null); }
-	public static <T> T adapt(CAdapter<T> ser, File file, Charset cs) throws IOException, ParseException {
-		ConfigMaster c = create(file);
-		ser.reset();
-
-		if (c.p != null) c.p.charset = cs;
-		c.bp.parseRaw(ser, file, 0);
-
-		if (!ser.finished()) throw new IllegalStateException("数据结构有误");
-		return ser.result();
-	}
-
 	public static CEntry parse(File file) throws IOException, ParseException { return parse(file, null); }
 	public static CEntry parse(File file, Charset cs) throws IOException, ParseException {
 		ConfigMaster c = create(file);
@@ -82,16 +70,13 @@ public class ConfigMaster {
 		return new ConfigMaster(IOUtil.extensionName(file.getName()));
 	}
 
-	public static void write(CEntry obj, String file, String type) throws IOException {
-		try (FileOutputStream out = new FileOutputStream(file)) {
-			new ConfigMaster(type).binParser().serialize(obj, out);
-		}
-	}
-
 	// todo optimize for already implemented CVisitor
+	@Deprecated
 	public static <T> void write(T obj, String file, String type, CAdapter<? super T> serializer) throws IOException {
 		ToEntry tmp = new ToEntry();
 		serializer.write(tmp, obj);
-		write(tmp.get(), file, type);
+		try (FileOutputStream out = new FileOutputStream(file)) {
+			new ConfigMaster(type).binParser().serialize(tmp.get(), out);
+		}
 	}
 }

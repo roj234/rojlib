@@ -1,10 +1,10 @@
 package roj.archive.zip;
 
+import org.jetbrains.annotations.NotNull;
 import roj.crypt.CipherInputStream;
 import roj.io.IOUtil;
 import roj.io.SourceInputStream;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
@@ -23,7 +23,7 @@ final class AESInputSt extends CipherInputStream {
 		super(in, cip);
 	}
 
-	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
+	public int read(@NotNull byte[] b, int off, int len) throws IOException {
 		len = super.read(b, off, len);
 		if (len < 0) check();
 		return len;

@@ -1,8 +1,8 @@
 package roj.concurrent.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.FindSet;
 
-import javax.annotation.Nonnull;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,21 +46,21 @@ public class ConcurrentFindHashSet<T> implements FindSet<T> {
 		return set.containsKey(key);
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Iterator<T> iterator() {
 		return set.keySet().iterator();
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Object[] toArray() {
 		return set.keySet().toArray();
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
-	public <T1> T1[] toArray(@Nonnull T1[] a) {
+	public <T1> T1[] toArray(@NotNull T1[] a) {
 		return set.keySet().toArray(a);
 	}
 
@@ -75,24 +75,24 @@ public class ConcurrentFindHashSet<T> implements FindSet<T> {
 	}
 
 	@Override
-	public boolean containsAll(@Nonnull Collection<?> c) {
+	public boolean containsAll(@NotNull Collection<?> c) {
 		return set.keySet().containsAll(c);
 	}
 
 	@Override
-	public boolean addAll(@Nonnull Collection<? extends T> m) {
+	public boolean addAll(@NotNull Collection<? extends T> m) {
 		boolean flag = false;
 		for (T t : m) flag |= null != set.putIfAbsent(t, t);
 		return flag;
 	}
 
 	@Override
-	public boolean retainAll(@Nonnull Collection<?> c) {
+	public boolean retainAll(@NotNull Collection<?> c) {
 		return set.keySet().retainAll(c);
 	}
 
 	@Override
-	public boolean removeAll(@Nonnull Collection<?> c) {
+	public boolean removeAll(@NotNull Collection<?> c) {
 		for (Object o : c) set.remove(o);
 		return true;
 	}

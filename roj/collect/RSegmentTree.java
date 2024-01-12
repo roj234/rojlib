@@ -1,9 +1,9 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.RSegmentTree.Range;
 import roj.util.ArrayUtil;
 
-import javax.annotation.Nonnull;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -278,7 +278,7 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 		return target;
 	}
 
-	@Nonnull
+	@NotNull
 	public Iterator<Region> iterator() {
 		return new ArrayIterator<>(data, 0, arrSize);
 	}

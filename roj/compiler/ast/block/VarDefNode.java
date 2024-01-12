@@ -1,7 +1,6 @@
 package roj.compiler.ast.block;
 
 import roj.asm.Opcodes;
-import roj.asm.frame.Var2;
 import roj.asm.type.Type;
 import roj.compiler.ast.expr.ExprNode;
 import roj.text.CharList;
@@ -12,7 +11,6 @@ import roj.text.CharList;
  */
 public class VarDefNode extends BlockNode {
 	Type defineType;
-	Var2 mergeType;
 	int flags;
 	String name;
 	ExprNode directDefine;

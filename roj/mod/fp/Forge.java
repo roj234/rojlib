@@ -1,5 +1,6 @@
 package roj.mod.fp;
 
+import org.jetbrains.annotations.NotNull;
 import roj.asm.util.Context;
 import roj.collect.MyHashSet;
 import roj.collect.TrieTree;
@@ -12,7 +13,6 @@ import roj.text.CharList;
 import roj.ui.CLIUtil;
 import roj.util.ByteList;
 
-import javax.annotation.Nonnull;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -123,7 +123,7 @@ public final class Forge extends WorkspaceBuilder {
 		this.mcClearSrg = mcClear;
 	}
 
-	@Nonnull
+	@NotNull
 	private static List<File> getSpecialSource(File librariesPath) {
 		return IOUtil.findAllFiles(librariesPath, (file -> {
 			String n = file.getName();

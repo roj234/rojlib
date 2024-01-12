@@ -11,13 +11,15 @@
 package roj.archive.qz.xz;
 
 import roj.io.Finishable;
+import roj.io.UnsafeOutputStream;
 import roj.util.ArrayUtil;
 import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.channels.AsynchronousCloseException;
 
-public final class LZMA2Writer extends LZMA2Out implements Finishable {
+public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOutputStream {
 	private volatile byte closed;
 
 	LZMA2Writer(OutputStream out, LZMA2Options options) {
@@ -53,6 +55,8 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable {
 
 		try {
 			while (len > 0) {
+				if (closed != 0) throw new AsynchronousCloseException();
+
 				int used = lz.fillWindow0(buf, off, len);
 				off += used;
 				len -= used;
@@ -112,10 +116,10 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable {
 			} catch (Throwable ignored) {}
 			throw e;
 		} finally {
-			lzma.putArraysToCache();
+			lzma.release();
 			lzma = null;
 			lz = null;
-			rc.putArraysToCache();
+			rc.release();
 			rc = null;
 		}
 

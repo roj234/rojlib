@@ -1,10 +1,10 @@
 package roj.crypt;
 
+import org.jetbrains.annotations.NotNull;
 import roj.io.buf.BufferPool;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -48,7 +48,7 @@ public class CipherOutputStream extends FilterOutputStream {
 		b1[0] = (byte) i;
 		write(b1, 0, 1);
 	}
-	public void write(@Nonnull byte[] b, int off, int len) throws IOException {
+	public void write(@NotNull byte[] b, int off, int len) throws IOException {
 		if (out == null) throw new IOException("Stream closed");
 
 		try {

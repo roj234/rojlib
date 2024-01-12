@@ -1,6 +1,6 @@
 package roj.asm.util;
 
-import roj.asm.tree.FieldNode;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.tree.IClass;
 import roj.asm.type.Desc;
 import roj.asm.type.Type;
@@ -8,14 +8,11 @@ import roj.collect.SimpleList;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.logging.Logger;
-import roj.util.Helpers;
 
-import javax.annotation.Nullable;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Mapper Util
@@ -26,7 +23,8 @@ import java.util.function.Consumer;
 public final class ClassUtil {
 	private static final ThreadLocal<ClassUtil> ThreadBasedCache = ThreadLocal.withInitial(ClassUtil::new);
 
-	private ClassUtil() {}
+	private ClassUtil() { this.localClassInfo = s -> null; }
+	public ClassUtil(Function<CharSequence, IClass> classInfo) { this.localClassInfo = classInfo; }
 
 	public final Desc sharedDC = new Desc();
 	public boolean checkSubClass;
@@ -34,7 +32,7 @@ public final class ClassUtil {
 	private static final ReflectClass FAILED = new ReflectClass(ClassUtil.class);
 	private static final ConcurrentHashMap<String, ReflectClass> classInfo = new ConcurrentHashMap<>();
 
-	private Map<String, IClass> localClassInfo = Collections.emptyMap();
+	private final Function<CharSequence, IClass> localClassInfo;
 
 	private final CharList sharedCL = new CharList(128), sharedCL2 = new CharList(12);
 	private final SimpleList<?> sharedAL = new SimpleList<>();
@@ -137,6 +135,13 @@ public final class ClassUtil {
 
 		return packageA.regionMatches(0, packageB, 0, ia);
 	}
+	public static boolean canAccessPrivate(String fieldOwner, String accessor) {
+		int ia = accessor.lastIndexOf('/');
+		ia = accessor.indexOf('$', ia);
+		if (ia < 0) ia = accessor.length();
+
+		return fieldOwner.regionMatches(0, accessor, 0, ia);
+	}
 
 	public static ReflectClass reflectClassInfo(CharSequence _name) {
 		ReflectClass me = classInfo.get(_name);
@@ -162,7 +167,7 @@ public final class ClassUtil {
 		}
 	}
 	public IClass getClassInfo(CharSequence name) {
-		IClass ref = localClassInfo.get(name);
+		IClass ref = localClassInfo.apply(name);
 		if (ref != null) return ref;
 		return reflectClassInfo(name);
 	}
@@ -215,118 +220,6 @@ public final class ClassUtil {
 			}
 		}
 		return failedSome ? defVal : false;
-	}
-
-	/**
-	 * 将这种格式的字符串 net/minecraft/client/Minecraft/fontRender/FONT_HEIGHT
-	 * 解析为 class => getfield (repeatable) => invokespeicla (optional)
-	 */
-	public String resolveSymbol(String desc, Consumer<List<Object>> cb, boolean stopOnFirstMatch) {
-		CharList sb = sharedCL;
-		List<Object> tmp = Helpers.cast(sharedAL); tmp.clear();
-
-		String anySuccess = "symbolResolver.error.noSuchClass";
-		int slash = 0;
-		while (true) {
-			slash = desc.indexOf('/', slash);
-			if (slash < 0) break;
-
-			sb.clear();
-			sb.append(desc, 0, slash);
-
-			int dollar = slash++;
-			while (true) {
-				IClass clz = getClassInfo(sb);
-				if (clz != null) {
-					String error = resolveSymbol(clz, desc, slash, tmp);
-					if (error == null) {
-						cb.accept(tmp);
-						anySuccess = null;
-						if (stopOnFirstMatch) break;
-					} else if (anySuccess != null) {
-						anySuccess = error;
-					}
-
-					tmp.clear();
-				}
-
-				dollar = sb.lastIndexOf("/", dollar);
-				if (dollar < 0) break;
-				sb.set(dollar, '$');
-			}
-
-		}
-		return anySuccess;
-	}
-	private String resolveSymbol(IClass clz, String desc, int prevI, List<Object> list) {
-		// first String => class name
-		list.add(clz.name());
-		int i = desc.indexOf('/', prevI);
-		if (i < 0) return null; // just class node
-
-		while (true) {
-			String name = desc.substring(prevI, i);
-			int fid = clz.getField(name);
-			if (fid < 0) {
-				fid = clz.getMethod(name);
-				if (fid < 0) return "symbolResolver.error.noSuchSymbol";
-				// last String => invoke (1/2) opcode
-				list.add(name);
-				return null;
-			}
-
-			// then FieldNode (RawNode) => getfield opcode
-			FieldNode field = (FieldNode) clz.fields().get(fid);
-			list.add(field);
-
-			prevI = i+1;
-			i = desc.indexOf('/', prevI);
-
-			Type type = field.fieldType();
-			if (type.isPrimitive()) {
-				if (i < 0) return null;
-				// 不能解引用基本类型
-				return "symbolResolver.error.derefPrimitiveField";
-			} else if (type.array() > 0) {
-				if (i < 0) return null;
-
-				// array solid methods / field
-				name = desc.substring(prevI, i);
-				list.add(name);
-				switch (name) {
-					case "getClass":
-					case "toString":
-					case "hashCode":
-					case "equals":
-					case "wait":
-					case "notify":
-					case "notifyAll":
-					case "length": return null;
-					default: return "symbolResolver.error.noSuchSymbol";
-				}
-			}
-
-			clz = reflectClassInfo(type.owner);
-			if (clz == null) return "symbolResolver.error.noSuchClass";
-
-			if (i < 0) i = desc.length();
-		}
-	}
-
-	public boolean instanceOf(Map<String, IClass> ctx, CharSequence testClass, CharSequence instClass, int isInterface) {
-		IClass clz;
-		do {
-			if (isInterface <= 0 && testClass.equals(instClass)) return true;
-
-			clz = ctx.get(instClass);
-			if (clz == null) clz = getClassInfo(instClass);
-			if (clz == null) return false;
-
-			if (isInterface >= 0 && clz.interfaces().contains(testClass)) return true;
-
-			instClass = clz.parent();
-		} while (instClass != null);
-		return false;
 	}
 
 	// endregion

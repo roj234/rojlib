@@ -104,7 +104,7 @@ public final class Opcodes {
 
 	GOTO_W = (byte) 0xc8, JSR_W = (byte) 0xc9,
 
-	BREAKPOINT = (byte) 0xca, IMPDEP1 = (byte) 0xfe, IMPDEP2 = (byte) 0xff;
+	BREAKPOINT = (byte) 0xca;
 	// endregion
 	// region access modifier
 	public static final char

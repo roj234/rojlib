@@ -1,6 +1,8 @@
 package roj.collect;
 
 import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.concurrent.FastThreadLocal;
 import roj.crypt.SipHash;
 import roj.io.FastFailException;
@@ -8,8 +10,6 @@ import roj.math.MathUtils;
 import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -379,7 +379,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		return newV;
 	}
 	@Override
-	public final V computeIfAbsent(K key, @Nonnull Function<? super K, ? extends V> mapper) {
+	public final V computeIfAbsent(K key, @NotNull Function<? super K, ? extends V> mapper) {
 		AbstractEntry<K, V> entry = getOrCreateEntry(key);
 		if (entry.k != UNDEFINED) return entry.getValue();
 
@@ -392,7 +392,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		return v;
 	}
 	@Override
-	public final V computeIfPresent(K key, @Nonnull BiFunction<? super K, ? super V, ? extends V> mapper) {
+	public final V computeIfPresent(K key, @NotNull BiFunction<? super K, ? super V, ? extends V> mapper) {
 		AbstractEntry<K, V> entry = getEntry(key);
 		if (entry == null) return null;
 		V v = entry.getValue();
@@ -410,7 +410,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	// replaceAll
 	@Override
 	@SuppressWarnings("unchecked")
-	public void putAll(@Nonnull Map<? extends K, ? extends V> map) {
+	public void putAll(@NotNull Map<? extends K, ? extends V> map) {
 		ensureCapacity(size+map.size());
 		if (map instanceof MyHashMap) putAll((MyHashMap<K, V>) map);
 		else super.putAll(map);

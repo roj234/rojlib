@@ -5,7 +5,7 @@ import roj.asm.tree.RawNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.type.Desc;
-import roj.asm.util.AttrHelper;
+import roj.asm.util.Attributes;
 import roj.asm.util.ClassUtil;
 import roj.asm.util.Context;
 import roj.asmx.mapper.Mapper;
@@ -34,7 +34,7 @@ public class NiximHandler implements Plugin {
 
 		for (int i = 0; i < ctx.size(); i++) {
 			ConstantData data = ctx.get(i).getData();
-			Annotation nixim = AttrHelper.getAnnotation(AttrHelper.getAnnotations(data.cp, data, false), NiximSystemV2.A_NIXIM_CLASS_FLAG);
+			Annotation nixim = Attributes.getAnnotation(Attributes.getAnnotations(data.cp, data, false), NiximSystemV2.A_NIXIM_CLASS_FLAG);
 
 			// noinspection all
 			String dest = nixim.getString("value");
@@ -51,7 +51,7 @@ public class NiximHandler implements Plugin {
 			RawNode node = nodes.get(i);
 			if (node.name().startsWith("func_") || node.name().startsWith("field_")) continue;
 
-			List<Annotation> list = AttrHelper.getAnnotations(data.cp, node, false);
+			List<Annotation> list = Attributes.getAnnotations(data.cp, node, false);
 			if (list == null) continue;
 			for (int j = 0; j < list.size(); j++) {
 				Annotation anno = list.get(j);

@@ -2,12 +2,9 @@ package roj.collect;
 
 import org.intellij.lang.annotations.MagicConstant;
 import roj.reflect.ReflectionUtils;
-import roj.sql.DBA;
-import roj.sql.MariaDB;
-import roj.sql.SimpleConnectionPool;
-import roj.ui.CLIUtil;
-import roj.ui.terminal.DefaultConsole;
-import roj.util.*;
+import roj.util.ArrayCache;
+import roj.util.ArrayRef;
+import roj.util.TimSortForEveryone;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -17,56 +14,11 @@ import java.util.function.IntFunction;
 import static roj.reflect.ReflectionUtils.u;
 
 /**
- * 我有一些食材(m)，getMulti()用O( (log(m) to m) * n )的时间告诉我能做哪些半成品的菜(n)
- * 当然如果把returnLess设为true返回的就是能做的菜
+ * 比删除的UnsortedMultiKeyMap更快、更好、更方便 (除了现在key只有string外...)
  *
  * @since 2024/1/5 06:53
  */
 public class MatchMapString<V> {
-	public static void main(String[] args) throws Exception {
-		HighResolutionTimer.activate();
-
-		DBA.setConnectionPool(new SimpleConnectionPool(new MariaDB("127.0.0.1:3306", "novel", "root", "root"), 4));
-		MatchMapString<Integer> untitledMap = new MatchMapString<>();
-		try (DBA dba = DBA.getInstance()) {
-			dba.table("pbookstore").field("tid,title").select_paged(1000);
-			while (true) {
-				List<String> getone = dba.getone();
-				if (getone == null) break;
-				int value = Integer.parseInt(getone.get(0));
-				String key = getone.get(1);
-				untitledMap.add(key, value);
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		long time = System.currentTimeMillis();
-		untitledMap.compat();
-		System.out.println(System.currentTimeMillis()-time);
-
-		SimpleList<Entry<Integer>> multi = new SimpleList<>();
-		String[] ref = new String[] {"GAME"};
-		CLIUtil.setConsole(new DefaultConsole("str > ") {
-			@Override
-			protected boolean evaluate(String cmd) {
-				ref[0] = cmd;
-				return true;
-			}
-		});
-		while (true) {
-			time = System.currentTimeMillis();
-			for (int i = 0; i < 100000; i++) {
-				multi.clear();
-				untitledMap.matchUnordered(ref[0], MATCH_LONGER, multi);
-			}
-			System.out.println(multi);
-			long cost = (System.currentTimeMillis() - time);
-			System.out.println(cost+"ms");
-		}
-	}
-
-	private final IntSet ignored = new IntSet();
 	private final CharMap<PosList> map = new CharMap<>();
 	private int size;
 
@@ -114,8 +66,8 @@ public class MatchMapString<V> {
 				return Integer.compare(u.getChar(refLeft, offLeft), u.getChar(offRight));
 			}, ArrayRef.primitiveArray(pos), ArrayRef.objectArray(entries));
 
-			if (size > 1023) {
-				indexOf = new ToIntMap<>();
+			if (size > 255) {
+				indexOf = new ToIntMap<>(size);
 
 				Entry<?> prev = null;
 				for (int i = 0; i < entries.length; i++) {
@@ -136,9 +88,8 @@ public class MatchMapString<V> {
 		}
 	}
 
-	public static final class Entry<V> {
+	public static final class Entry<V> extends MatchMap.AbstractEntry<V> {
 		public String key;
-		public V value;
 
 		@Override
 		public String toString() { return "Entry{"+key+"="+value+'}'; }
@@ -147,7 +98,8 @@ public class MatchMapString<V> {
 	public int size() { return size; }
 	public boolean isEmpty() { return size != 0; }
 
-	public V add(String key, V value) {
+	public V put(String key, V value) {
+		if (key.isEmpty()) throw new IllegalArgumentException("Key cannot be empty");
 		Entry<V> entry = getEntry(key);
 		if (entry != null) {
 			V prev = entry.value;
@@ -155,6 +107,12 @@ public class MatchMapString<V> {
 			return prev;
 		}
 
+		add(key, value);
+		return null;
+	}
+
+	public void add(String key, V value) {
+		Entry<V> entry;
 		if (key.length() > 65536) throw new IllegalArgumentException("Key length cannot > 65536");
 
 		entry = new Entry<>();
@@ -165,7 +123,6 @@ public class MatchMapString<V> {
 		}
 
 		size++;
-		return null;
 	}
 
 	public V get(String key) {
@@ -174,7 +131,7 @@ public class MatchMapString<V> {
 	}
 
 	@SuppressWarnings("unchecked")
-	private Entry<V> getEntry(String key) {
+	public final Entry<V> getEntry(String key) {
 		PosList list = null;
 		int minSize = 0;
 		for (int i = 0; i < key.length(); i++) {
@@ -229,36 +186,6 @@ public class MatchMapString<V> {
 
 		assert pos == entry.key.length();
 		return (V) entry.value;
-	}
-
-	// TODO not done
-	public int removeLarge(float percent) {
-		CharMap.Entry<PosList>[] array = Helpers.cast(map.entrySet().toArray(new CharMap.Entry<?>[map.size()]));
-		Arrays.sort(array, (o1, o2) -> Integer.compare(o2.getValue().size, o1.getValue().size));
-		int removed = 0;
-		cannotDelete:
-		for (int i = 0; i < array.length; i++) {
-			PosList value = array[i].getValue();
-			if ((float)size / value.size < percent) break;
-
-			Entry<?>[] entries = value.entries;
-			for (int j = 0; j < value.size; j++) {
-				String key = entries[j].key;
-				block: {
-					for (int k = 0; k < key.length(); k++) {
-						if (!ignored.contains(key.charAt(k))) break block;
-					}
-					continue cannotDelete;
-				}
-			}
-
-			char key = array[i].getChar();
-			ignored.add(key);
-			map.remove(key);
-			removed++;
-		}
-
-		return removed;
 	}
 
 	public String prepareUnorderedQuery(String key) {
@@ -351,6 +278,15 @@ public class MatchMapString<V> {
 				int prevK = 0;
 				for (int j = 0; j < list.size; j++) {
 					Entry<?> entry = list.entries[j];
+
+					int length = entry.key.length();
+					if (length != key.length()) {
+						if (length < key.length()) {
+							if ((flag&MATCH_SHORTER) == 0) continue;
+						} else {
+							if ((flag&MATCH_LONGER) == 0) continue;
+						}
+					}
 
 					int k = prev.indexOf(entry, prevK);
 					if (k < 0) continue;
@@ -455,12 +391,18 @@ public class MatchMapString<V> {
 	}
 
 	/**
-	 * 该方法的匹配模式:
-	 * 返回之前通过添加的字符串（S）中，包含key中每个字符出现的顺序和次数的
-	 * 参考：添加过abcde
-	 * [0] abc acd cde均可获取 (也即key中只能出现abcde，且最多一个，且需要按顺序)
-	 * [MATCH_CONTINUOUS] 字符必须连续出现 如同 LIKE %key%
-	 * [MATCH_SHORTER] adeg (符合上述条件，且以S中最后一个字符结尾的子序列也可匹配)
+	 * @param flag 该方法的匹配模式:
+	 * <pre>
+	 * [0] 返回Map内容（下称S）中，包含key的子序列 <b>（不一定连续）</b>
+	 *     比如添加了abc，则ac可获取,bc也可获取（结尾相同即可）
+	 * [MATCH_CONTINUOUS] 返回S中，<b>连续</b>包含key的子序列
+	 *     如同 LIKE %key%
+	 *     比如添加了abcde，则ac,bd不能获取，cde,bcde...可获取
+	 * [MATCH_SHORTER] 返回，匹配到S结尾，但未匹配到key结尾，的成功匹配
+	 *    key=abc可以在该模式下匹配S=ab
+	 * [MATCH_LONGER] 返回，未匹配到S结尾的成功匹配
+	 *    key=ab可以在该模式下匹配S=abc
+	 * 上述模式可组合使用
 	 */
 	@SuppressWarnings("unchecked")
 	public List<Entry<V>> matchOrdered(String key, @MagicConstant(flags = {MATCH_CONTINUOUS, MATCH_SHORTER, MATCH_LONGER}) final int flag, List<Entry<V>> out) {
@@ -479,12 +421,6 @@ public class MatchMapString<V> {
 				PosList list = map.get(key.charAt(i));
 				if (list == null) break block;
 
-				if (list.size > prev.size) {
-					PosList tmp = prev;
-					prev = list;
-					list = tmp;
-				}
-
 				Entry<?>[] keys = prev.entries;
 				char[] vals = prev.pos;
 				int prevK = 0;
@@ -492,6 +428,12 @@ public class MatchMapString<V> {
 				fail:
 				for (int j = 0; j < list.size; j++) {
 					Entry<?> entry = list.entries[j];
+
+					int length = entry.key.length();
+					if (length < key.length()) {
+						if ((flag&MATCH_SHORTER) == 0) continue;
+					}
+
 					int pos = list.pos[j];
 
 					int k = prev.indexOf(entry, prevK);
@@ -514,7 +456,7 @@ public class MatchMapString<V> {
 
 					if ((flag&MATCH_SHORTER) != 0 && pos == entry.key.length()-1) {
 						out.add((Entry<V>) entry);
-					} else {
+					} else if (length+1 - pos >= key.length()) {
 						next.add(entry, pos);
 					}
 				}
@@ -552,12 +494,12 @@ public class MatchMapString<V> {
 						} while (vals[--k] > prevPos);
 					}
 
-					if ((flag&MATCH_CONTINUOUS) != 0 && vals[k] != prevPos+1) continue;
-
 					int pos = vals[k];
+					if ((flag&MATCH_CONTINUOUS) != 0 && pos != prevPos+1) continue;
+
 					if ((flag&MATCH_SHORTER) != 0 && pos == entry.key.length()-1) {
 						out.add((Entry<V>) entry);
-					} else {
+					} else if (entry.key.length() - pos >= key.length() - i) {
 						next.add(entry, pos);
 					}
 				}

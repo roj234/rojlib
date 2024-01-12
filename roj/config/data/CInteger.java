@@ -1,13 +1,12 @@
 package roj.config.data;
 
+import org.jetbrains.annotations.NotNull;
 import roj.config.NBTParser;
 import roj.config.VinaryParser;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
-
-import javax.annotation.Nonnull;
 
 /**
  * @author Roj234
@@ -48,13 +47,13 @@ public final class CInteger extends CEntry {
 		return value;
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public Type getType() {
 		return Type.INTEGER;
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public String asString() {
 		return String.valueOf(value);

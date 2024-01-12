@@ -1,10 +1,12 @@
 package roj.net.ch;
 
+import roj.io.NIOUtil;
 import roj.util.Helpers;
 
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.SocketOption;
+import java.net.StandardSocketOptions;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -30,6 +32,7 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 	public <T> ServerLaunch option(SocketOption<T> k, T v) throws IOException {
 		if (k == TCP_MAX_CONNECTION) maxConn = new AtomicInteger((Integer) v);
 		else if (k == TCP_RECEIVE_BUFFER) rcvBuf = (Integer) v;
+		else if (k == StandardSocketOptions.SO_REUSEPORT) NIOUtil.setReusePort(tcp, (boolean) v);
 		else tcp.setOption(k, v);
 		return this;
 	}

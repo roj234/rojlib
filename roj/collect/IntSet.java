@@ -1,8 +1,8 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 
-import javax.annotation.Nonnull;
 import java.util.AbstractSet;
 import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
@@ -46,7 +46,7 @@ public class IntSet extends AbstractSet<Integer> {
 		resize();
 	}
 
-	@Nonnull
+	@NotNull
 	public IntIterator iterator() {
 		return new Itr(this);
 	}
@@ -223,7 +223,7 @@ public class IntSet extends AbstractSet<Integer> {
 		return true;
 	}
 
-	@Nonnull
+	@NotNull
 	private Entry merge(int key, Entry dualEntry) {
 		int mKey = dualEntry.k;
 

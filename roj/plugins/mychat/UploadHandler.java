@@ -11,7 +11,6 @@ import roj.net.http.srv.HttpServer11;
 import roj.net.http.srv.MultipartFormHandler;
 import roj.net.http.srv.Request;
 import roj.text.TextUtil;
-import roj.text.UTFCoder;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -35,7 +34,7 @@ public class UploadHandler extends MultipartFormHandler {
 	private final int uid;
 	private final boolean image;
 
-	private UTFCoder uc;
+	private IOUtil uc;
 	private SM3 sm3;
 
 	public File[] files;

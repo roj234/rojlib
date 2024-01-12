@@ -90,7 +90,7 @@ public class Annotation {
 	public final String getEnumValue(String name, String def) {
 		AnnVal av = values.get(name);
 		if (av == null) return def;
-		return av.asEnum().value;
+		return av.asEnum().field;
 	}
 
 	public final Type getClass(String name) {

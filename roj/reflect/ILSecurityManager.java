@@ -1,5 +1,6 @@
 package roj.reflect;
 
+import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.util.ByteList;
@@ -22,7 +23,7 @@ public class ILSecurityManager {
 
 	protected void checkReplace(ILSecurityManager am) { if (this != am) throw new SecurityException("cannot replace existed "+getClass().getName()+" to "+am.getClass().getName()); }
 
-	public ByteList checkDefineClass(String name, ByteList buf) { return buf; }
+	public ByteList checkDefineClass(@Nullable String name, ByteList buf) { return buf; }
 
 	public boolean checkAccess(Field field) { return true; }
 	public boolean checkInvoke(Method field) throws NoSuchMethodException { return true; }

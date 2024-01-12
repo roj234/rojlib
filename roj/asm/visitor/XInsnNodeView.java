@@ -1,6 +1,7 @@
 package roj.asm.visitor;
 
 import org.intellij.lang.annotations.MagicConstant;
+import org.jetbrains.annotations.NotNull;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
 import roj.asm.type.Desc;
@@ -12,8 +13,6 @@ import roj.text.CharList;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
-
-import javax.annotation.Nonnull;
 
 import static roj.asm.Opcodes.*;
 
@@ -141,7 +140,7 @@ public final class XInsnNodeView {
 	public final Label end1() { return new Label(pos.getValue()+len); }
 
 	/** 直接改，但是不要动flag | owner为null时，是invokeDynamic */
-	@Nonnull
+	@NotNull
 	public final Desc desc() {
 		byte code = opcode();
 		if (!(ref instanceof Desc)) invalidArg(code);
@@ -155,7 +154,7 @@ public final class XInsnNodeView {
 	/**
 	 * 不能修改Constant类型，LDC LDC_W LDC2_W
 	 */
-	@Nonnull
+	@NotNull
 	public final Constant constant() {
 		byte code = opcode();
 		switch (code) {
@@ -173,7 +172,7 @@ public final class XInsnNodeView {
 		}
 	}
 
-	@Nonnull
+	@NotNull
 	public final String type() {
 		byte code = opcode();
 		// includes 0xC5 (MultiANewArray)
@@ -311,7 +310,7 @@ public final class XInsnNodeView {
 		if (code != MULTIANEWARRAY) invalidArg(code);
 		return number;
 	}
-	@Nonnull
+	@NotNull
 	public final Type arrayType() {
 		byte code = opcode();
 		switch (code) {
@@ -321,7 +320,7 @@ public final class XInsnNodeView {
 		}
 	}
 
-	@Nonnull
+	@NotNull
 	public Label target() {
 		byte code = opcode();
 		if (!(ref instanceof JumpSegment)) invalidArg(code);
@@ -337,7 +336,7 @@ public final class XInsnNodeView {
 		if (!(ref instanceof JumpSegment)) invalidArg(code);
 		((JumpSegment) ref).target = label;
 	}
-	@Nonnull
+	@NotNull
 	public SwitchSegment switchTargets() {
 		byte code = opcode();
 		if (code != LOOKUPSWITCH && code != TABLESWITCH) invalidArg(code);
@@ -414,8 +413,8 @@ public final class XInsnNodeView {
 							return true;
 						}*/
 					} else {
-						int id1 = InsnHelper.getVarId(this);
-						int id2 = InsnHelper.getVarId(b);
+						int id1 = getVarId();
+						int id2 = b.getVarId();
 						return id1<0&&id2<0 || context.checkId(id1, id2);
 					}
 			}

@@ -200,10 +200,10 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 			} catch (Throwable ignored) {}
 			throw e;
 		} finally {
-			lzma.putArraysToCache();
+			lzma.release();
 			lzma = null;
 			lz = null;
-			rc.putArraysToCache();
+			rc.release();
 		}
 	}
 

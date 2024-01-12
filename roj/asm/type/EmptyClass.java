@@ -12,7 +12,7 @@ final class EmptyClass implements IType {
 	private EmptyClass() {}
 
 	@Override
-	public byte genericType() { return EMPTY_TYPE; }
+	public byte genericType() { return PLACEHOLDER_TYPE; }
 	@Override
 	public void toDesc(CharList sb) {}
 	@Override

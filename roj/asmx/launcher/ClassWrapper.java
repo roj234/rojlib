@@ -51,7 +51,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 
 		try {
 			// preload transforming classes
-			ConstantData data = new Context("_classwrapper_", IOUtil.readRes("roj/asmx/launcher/ClassWrapper.class")).getData();
+			ConstantData data = new Context("_classwrapper_", IOUtil.getResource("roj/asmx/launcher/ClassWrapper.class")).getData();
 		} catch (Exception e) {
 			throw new IllegalStateException("预加载转换器相关类时出现异常", e);
 		}

@@ -87,7 +87,7 @@ public class Websocketd extends WebsocketManager implements Router {
 	private static final MyHashMap<String, String> tmp = new MyHashMap<>();
 	private static String res(String name) throws IOException {
 		String v = tmp.get(name);
-		if (v == null) tmp.put(name, v = IOUtil.readResUTF("META-INF/html/"+name));
+		if (v == null) tmp.put(name, v = IOUtil.getTextResource("META-INF/html/"+name));
 		return v;
 	}
 

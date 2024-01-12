@@ -1,5 +1,6 @@
 package roj.ui;
 
+import org.jetbrains.annotations.NotNull;
 import roj.NativeLibrary;
 import roj.collect.*;
 import roj.config.data.CList;
@@ -15,9 +16,7 @@ import roj.ui.terminal.CommandConsole;
 import roj.ui.terminal.CommandNode;
 import roj.util.*;
 
-import javax.annotation.Nonnull;
 import java.io.*;
-import java.lang.reflect.Method;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -190,7 +189,7 @@ public final class CLIUtil implements Runnable {
 		}
 	}
 
-	private static final UnsafeCharset CE = GB18030.is(TextUtil.DefaultOutputCharset) ? GB18030.CODER : UTF8MB4.CODER;
+	private static final UnsafeCharset CE = GB18030.is(TextUtil.ConsoleCharset) ? GB18030.CODER : UTF8MB4.CODER;
 	private static final ByteList SEQ = new ByteList(256);
 
 	private static final CLIUtil instance = new CLIUtil();
@@ -200,6 +199,7 @@ public final class CLIUtil implements Runnable {
 
 	private static boolean initialize() {
 		if (Boolean.getBoolean("roj.disableAnsi")) return false;
+		if (System.console() == null) return false;
 
 		if (OS.CURRENT == OS.WINDOWS) {
 			if (NativeLibrary.loaded) {
@@ -214,17 +214,10 @@ public final class CLIUtil implements Runnable {
 
 		enableDirectInput(true);
 
-		try {
-			Method m = java.io.Console.class.getDeclaredMethod("istty");
-			m.setAccessible(true);
-			if (!((Boolean) m.invoke(null, ArrayCache.OBJECTS))) return false;
-		} catch (Exception e) {
-			if (System.console() == null) return false;
-		}
-
 		CLIUtil con = instance;
 
 		Thread t = new Thread(con, "终端模拟器");
+		t.setPriority(Thread.MAX_PRIORITY);
 		t.setDaemon(true);
 		t.start();
 
@@ -251,7 +244,7 @@ public final class CLIUtil implements Runnable {
 		}
 		thread = t;
 
-		AnsiOut out = new AnsiOut(1024);
+		AnsiOut out = new AnsiOut(10240);
 		System.setOut(out);
 		System.setErr(out);
 		return true;
@@ -259,7 +252,7 @@ public final class CLIUtil implements Runnable {
 	private static void pipeStdIn() {
 		System.setIn(new MBInputStream() {
 			@Override
-			public int read(@Nonnull byte[] b, int off, int len) throws IOException { return instance.read(b, off, len); }
+			public int read(@NotNull byte[] b, int off, int len) throws IOException { return instance.read(b, off, len); }
 			@Override
 			public int available() { return instance.available(); }
 		});
@@ -302,7 +295,6 @@ public final class CLIUtil implements Runnable {
 	}
 
 	public static void reset() { if (ANSI) System.out.print("\u001B[0m"); }
-	public static void clearScreen() { if (ANSI) System.out.print("\u001b[1;1H\u001b[2J"); }
 
 	public static void fg(int fg, boolean hl) { if (ANSI) System.out.print("\u001B["+(fg+(hl?HIGHLIGHT:0))+'m'); }
 
@@ -385,8 +377,11 @@ public final class CLIUtil implements Runnable {
 			synchronized (ref) {
 				ref[0] = ctx.argument("arg", Object.class);
 				ref.notify();
+				setConsole(prev);
 			}
 		}));
+		Thread t = Thread.currentThread();
+		c.onKeyboardInterrupt(t::interrupt);
 		c.ctx.executor = null;
 
 		setConsole(c);
@@ -395,14 +390,16 @@ public final class CLIUtil implements Runnable {
 		} catch (InterruptedException e) {
 			return Helpers.maybeNull();
 		} finally {
-			setConsole(prev);
+			c.onKeyboardInterrupt(null);
 			c.unregister(null);
+			setConsole(prev);
 		}
 
 		return (T) ref[0];
 	}
 
-	public static char awaitCharacter(MyBitSet allow) {
+	public static char awaitCharacter(MyBitSet allow) { return awaitCharacter(allow, true); }
+	public static char awaitCharacter(MyBitSet allow, boolean exitOnCancel) {
 		Console prev = console;
 
 		char[] ref = new char[1];
@@ -426,11 +423,12 @@ public final class CLIUtil implements Runnable {
 
 					char ch = ref[0];
 					if (ch == (VK_CTRL|VK_C)) return 0;
-					if (allow.contains(ch)) return ch;
+					if (allow == null || allow.contains(ch)) return ch;
 				}
 				beep();
 			}
 		} catch (InterruptedException e) {
+			if (exitOnCancel) System.exit(1);
 			return 0;
 		} finally {
 			if (prev == null) setConsole(null);
@@ -549,7 +547,7 @@ public final class CLIUtil implements Runnable {
 	private final byte[] Pipe = new byte[RING_BUFFER_CAPACITY];
 	private int rPtr, wPtr;
 
-	public int read(@Nonnull byte[] b, int off, int len) throws IOException {
+	public int read(@NotNull byte[] b, int off, int len) throws IOException {
 		ArrayUtil.checkRange(b, off, len);
 		if (len == 0) return 0;
 

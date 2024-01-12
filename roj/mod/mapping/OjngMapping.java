@@ -7,10 +7,9 @@ import roj.asmx.mapper.Mapping;
 import roj.collect.FilterList;
 import roj.collect.SimpleList;
 import roj.io.FastFailException;
-import roj.io.IOUtil;
 import roj.math.MutableBoolean;
-import roj.text.LineReader;
 import roj.text.LinedReader;
+import roj.text.TextReader;
 import roj.text.TextUtil;
 
 import java.io.File;
@@ -28,11 +27,15 @@ public final class OjngMapping extends Mapping {
 		SimpleList<String> tmp = new SimpleList<>(5);
 
 		if (client != null) {
-			readMojangMap(client.getName(), new LineReader(IOUtil.readUTF(client)), tmp);
+			try (TextReader tr = TextReader.auto(client)) {
+				readMojangMap(client.getName(), tr, tmp);
+			}
 			tmp.clear();
 		}
 		if (server != null) {
-			readMojangMap(server.getName(), new LineReader(IOUtil.readUTF(server)), tmp);
+			try (TextReader tr = TextReader.auto(server)) {
+				readMojangMap(server.getName(), tr, tmp);
+			}
 		}
 	}
 

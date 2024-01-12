@@ -31,12 +31,12 @@ public final class MethodNode extends CNode {
 	public MethodNode(int acc, String owner, String name, String desc) { this(acc, owner, (Object) name, desc); }
 	public MethodNode(int acc, String owner, CstUTF name, CstUTF desc) { this(acc, owner, (Object) name, desc); }
 	private MethodNode(int acc, String owner, Object name, Object type) {
-		this.access = (char) acc;
+		this.modifier = (char) acc;
 		this.owner = owner;
 		this.name = name;
 		this.desc = type;
 	}
-	public MethodNode copyDesc() { return new MethodNode(access, owner, name, desc); }
+	public MethodNode copyDesc() { return new MethodNode(modifier, owner, name, desc); }
 	public MethodNode copy() {
 		MethodNode inst = copyDesc();
 		if (attributes != null) inst.attributes = new AttributeList(attributes);
@@ -45,14 +45,14 @@ public final class MethodNode extends CNode {
 
 	public MethodNode(java.lang.reflect.Method m) {
 		name = m.getName();
-		access = (char) m.getModifiers();
+		modifier = (char) m.getModifiers();
 		desc = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
 		owner = m.getDeclaringClass().getName().replace('.', '/');
 	}
 
 	// todo move to parameter
-	@Deprecated
 	public String owner;
+	public String ownerClass() { return owner; }
 
 	private List<Type> in;
 	private Type out;
@@ -61,7 +61,7 @@ public final class MethodNode extends CNode {
 		if (attributes == null) return this;
 		Parser.parseAttributes(this, cp, attributes, Signature.METHOD);
 
-		if ((attrByName("Code") == null) == (0 == (access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)))) {
+		if ((attrByName("Code") == null) == (0 == (modifier & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)))) {
 			System.err.println("Method.java:63: Non-abstract " + owner + '.' + name + desc + " missing Code.");
 		}
 
@@ -99,9 +99,6 @@ public final class MethodNode extends CNode {
 
 	@Override
 	public <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) { return Parser.parseAttribute(this, cp, type, attributes, Signature.METHOD); }
-
-	@Deprecated
-	public String ownerClass() { return owner; }
 
 	public String rawDesc() {
 		if (in != null) {
@@ -141,8 +138,8 @@ public final class MethodNode extends CNode {
 		if (a != null) a.toString(sb, prefix).append('\n');
 
 		sb.padEnd(' ', prefix);
-		if ((access&Opcodes.ACC_ABSTRACT) == 0 && owner != null && (owner.access&Opcodes.ACC_INTERFACE) != 0) sb.append("default ");
-		Opcodes.showModifiers(access, Opcodes.ACC_SHOW_METHOD, sb);
+		if ((modifier &Opcodes.ACC_ABSTRACT) == 0 && owner != null && (owner.access&Opcodes.ACC_INTERFACE) != 0) sb.append("default ");
+		Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_METHOD, sb);
 		if (attrByName("Synthetic") != null) sb.append("/*synthetic*/ ");
 
 		if (!name().equals("<clinit>")) {
@@ -167,7 +164,7 @@ public final class MethodNode extends CNode {
 				LocalVariableTable lvt = code != null ? (LocalVariableTable) code.attrByName("LocalVariableTable") : null;
 				Label ZERO_READONLY = new Label(0);
 
-				int slot = (access&Opcodes.ACC_STATIC) == 0 ? 1 : 0;
+				int slot = (modifier &Opcodes.ACC_STATIC) == 0 ? 1 : 0;
 				for (int j = 0;;) {
 					IType type = sig != null && sig.values.size() > j ? sig.values.get(j) : in.get(j);
 
@@ -208,9 +205,13 @@ public final class MethodNode extends CNode {
 		AnnotationDefault def = parsedAttr(cp, Attribute.AnnotationDefault);
 		if (def != null) sb.append(" default ").append(def.val);
 
-		XAttrCode code = parsedAttr(cp, Attribute.Code);
-		if (code != null) code.toString(sb.append(" {\n"), prefix+4).padEnd(' ', prefix).append("}\n");
-		else sb.append(';');
+		try {
+			XAttrCode code = parsedAttr(cp, Attribute.Code);
+			if (code != null) code.toString(sb.append(" {\n"), prefix+4).padEnd(' ', prefix).append("}\n");
+			else sb.append(';');
+		} catch (Exception e) {
+			sb.append(e);
+		}
 		return sb;
 	}
 
@@ -225,7 +226,7 @@ public final class MethodNode extends CNode {
 		a = parsedAttr(cp, Attribute.ClAnnotations);
 		if (a != null) a.toString(sb, prefix).append('\n');
 
-		Opcodes.showModifiers(access, Opcodes.ACC_SHOW_METHOD, sb.padEnd(' ', prefix));
+		Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_METHOD, sb.padEnd(' ', prefix));
 
 		if (!name().equals("<clinit>")) {
 			sb.append(name()).append(' ').append(rawDesc());

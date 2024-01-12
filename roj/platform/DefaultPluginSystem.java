@@ -12,6 +12,7 @@ import roj.math.Version;
 import roj.net.http.srv.HttpServer11;
 import roj.net.http.srv.autohandled.OKRouter;
 import roj.reflect.ILSecurityManager;
+import roj.text.Template;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.ui.CLIUtil;
@@ -50,6 +51,7 @@ public final class DefaultPluginSystem extends PluginManager {
 		Bootstrap.classLoader.registerTransformer(new DPSAutoObfuscate());
 
 		Logger.getRootContext().destination(() -> System.out);
+		Logger.getRootContext().setPrefix(Template.compile("[${0}][${THREAD}][${NAME}/${LEVEL}]: "));
 
 		File altConfig = new File("DPSCore.yml");
 		CONFIG = altConfig.isFile() ? ConfigMaster.parse(altConfig).asMap() : new CMapping();

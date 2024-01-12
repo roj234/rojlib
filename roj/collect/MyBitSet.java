@@ -1,8 +1,8 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.util.DynByteBuf;
 
-import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
 
@@ -336,7 +336,7 @@ public class MyBitSet implements Iterable<Integer> {
 		}
 	}
 
-	@Nonnull
+	@NotNull
 	public IntIterator iterator() {
 		return new FItr();
 	}

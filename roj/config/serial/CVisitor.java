@@ -1,10 +1,13 @@
 package roj.config.serial;
 
+import java.io.Closeable;
+import java.io.IOException;
+
 /**
  * @author Roj234
  * @since 2022/11/15 0015 22:37
  */
-public interface CVisitor {
+public interface CVisitor extends Closeable {
 	default void value(byte l) { value((int) l); }
 	default void value(short l) { value((int) l); }
 	default void value(char l) { value(String.valueOf(l)); }
@@ -45,9 +48,7 @@ public interface CVisitor {
 	default void valueDate(long value) { value(value); }
 	default void valueTimestamp(long value) { value(value); }
 
-	default void rawString(CharSequence v) {
-		throw new UnsupportedOperationException();
-	}
-
 	default void vsopt(String k, Object v) {}
+
+	default void close() throws IOException {}
 }

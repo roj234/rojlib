@@ -31,7 +31,6 @@ public class AEHost extends IAEClient {
 		onlyOneMissed = true;
 
 		DynByteBuf rb = (DynByteBuf) msg;
-		int ridx = rb.rIndex;
 		switch (rb.readUnsignedByte()) {
 			case P___HEARTBEAT: rb.readLong(); break;
 			case P___LOGOUT: ctx.close(); break;
@@ -59,6 +58,7 @@ public class AEHost extends IAEClient {
 				rb.read(key, 0, 32);
 
 				int clientId = rb.readInt();
+				boolean isRelay = rb.readBoolean();
 				int pipeId = rb.readInt();
 
 				ByteList b = new ByteList(); // AEServer.server on local mode also uses IOUtil.getSharedByteBuf()
@@ -100,7 +100,6 @@ public class AEHost extends IAEClient {
 								public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
 									ex.printStackTrace();
 									ctx.close();
-									channelClosed(ctx);
 								}
 
 								@Override

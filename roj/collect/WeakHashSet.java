@@ -1,9 +1,9 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.AbstractSet;
@@ -178,7 +178,7 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _Gener
 		return false;
 	}
 
-	@Nonnull
+	@NotNull
 	public Iterator<K> iterator() { doEvict(); return isEmpty() ? Collections.emptyIterator() : new SetItr<>(this); }
 
 	public void doEvict() {

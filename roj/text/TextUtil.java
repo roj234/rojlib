@@ -4,6 +4,7 @@ import roj.collect.*;
 import roj.config.word.ITokenizer;
 import roj.config.word.Tokenizer;
 import roj.io.IOUtil;
+import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -21,45 +22,21 @@ import static roj.ui.CLIUtil.getStringWidth;
  * @since 2021/6/19 0:14
  */
 public class TextUtil {
-	public static Charset DefaultOutputCharset;
+	public static Charset DefaultOutputCharset, ConsoleCharset;
 	static {
 		String property = System.getProperty("roj.text.outputCharset", null);
 		DefaultOutputCharset = property == null ? Charset.defaultCharset() : Charset.forName(property);
+		ConsoleCharset = getStdOutCharset();
 	}
 
-	public static Map<String, String> parseLang(CharSequence content) {
-		MyHashMap<String, String> map = new MyHashMap<>();
-		if (content == null) return map;
-		try {
-			boolean block = false;
-			CharList sb = new CharList();
-			List<String> k_v = new ArrayList<>();
-			for (String entry : new LineReader(content)) {
-				if (entry.startsWith("#") || entry.isEmpty()) continue;
-				if (!block) {
-					k_v.clear();
-					split(k_v, entry, '=', 2);
-					if (k_v.get(1).startsWith("#strl")) {
-						block = true;
-						sb.clear();
-						sb.append(k_v.get(1).substring(5));
-					} else {
-						map.put(k_v.get(0), k_v.get(1));
-					}
-				} else {
-					if (entry.equals("#endl")) {
-						block = false;
-						map.put(k_v.get(0), sb.toString());
-						sb.clear();
-					} else {
-						sb.append(entry).append('\n');
-					}
-				}
-			}
-		} catch (NullPointerException e) {
-			e.printStackTrace();
+	private static Charset getStdOutCharset() {
+		if (ReflectionUtils.JAVA_VERSION >= 17) {
+			java.io.Console c = System.console();
+			if (c != null) return c.charset();
 		}
-		return map;
+
+		String property = System.getProperty("sun.stdout.encoding", null);
+		return property == null ? DefaultOutputCharset : Charset.forName(property);
 	}
 
 	public static final MyBitSet HEX = MyBitSet.from("0123456789ABCDEFabcdef");
@@ -396,7 +373,8 @@ public class TextUtil {
 			}
 		}
 
-		return dot>0 || (max != null && !checkMax(max, s, off, s.charAt(0) == '-')) ? 1 : 0;
+		if (dot > 0) return s.length() == 1 ? -1 : 1;
+		return max != null && !checkMax(max, s, off, s.charAt(0) == '-') ? 1 : 0;
 	}
 
 	/**
@@ -678,7 +656,8 @@ public class TextUtil {
 		return -1;
 	}
 
-	public static int gAppendToNextCRLF(CharSequence in, final int prevI, Appendable to) {
+	public static int gAppendToNextCRLF(CharSequence in, final int prevI, Appendable to) { return gAppendToNextCRLF(in, prevI, to, in.length()); }
+	public static int gAppendToNextCRLF(CharSequence in, int prevI, Appendable to, int def) {
 		int i = prevI;
 		try {
 			while (i < in.length()) {
@@ -699,7 +678,7 @@ public class TextUtil {
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
-		return in.length();
+		return def;
 	}
 
 	// region indexOf
@@ -885,7 +864,7 @@ public class TextUtil {
 			String s = String.valueOf(o);
 			int sLen;
 			if (s.indexOf('\n') >= 0) {
-				List<String> _sLines = LineReader.slrParserV2(String.valueOf(o), false);
+				List<String> _sLines = LineReader.toLines(String.valueOf(o), false);
 				row.add(s = _sLines.get(0));
 				sLen = getStringWidth(s);
 
@@ -959,6 +938,15 @@ public class TextUtil {
 			tmp.append(c);
 		}
 		return tmp.toStringAndFree();
+	}
+	public static CharList join(Iterable<?> split, CharSequence c, CharList sb) {
+		Iterator<?> itr = split.iterator();
+		if (itr.hasNext()) for(;;) {
+			sb.append(itr.next());
+			if (!itr.hasNext()) break;
+			sb.append(c);
+		}
+		return sb;
 	}
 
 	private static JPinyin pinyin;

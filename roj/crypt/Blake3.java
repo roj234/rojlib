@@ -193,21 +193,21 @@ public final class Blake3 extends BufferedDigest implements MessageAuthenticCode
         reset();
     }
     public Blake3 KDF(DynByteBuf key) {
-        reset();
+        engineReset();
 
         setKeyDefault();
         flags = DERIVE_KEY_CONTEXT;
 
-        int kl = keyLen;
-        keyLen = BLOCK_LEN;
         update(key);
-        digest();
-        keyLen = kl;
+        int len = keyLen;
+        keyLen = 0;
+        digest(new ByteList());
+        keyLen = len;
 
         System.arraycopy(Vec, 0, Key, 0, 8);
         flags = DERIVE_KEY_MATERIAL;
 
-        reset();
+        engineReset();
         return this;
     }
 

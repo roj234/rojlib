@@ -1,5 +1,6 @@
 package roj.excel;
 
+import org.jetbrains.annotations.NotNull;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.collect.MyHashMap;
@@ -16,7 +17,6 @@ import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.text.TextUtil;
 
-import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,7 +34,7 @@ public abstract class XlsxReader {
 		public Dummy() { super(""); }
 
 		public void attr(String k, CEntry v) {}
-		public void add(@Nonnull Node node) {}
+		public void add(@NotNull Node node) {}
 	}
 	private static final Dummy DUMMY = new Dummy();
 	private static final Element FAKE = new Dummy();

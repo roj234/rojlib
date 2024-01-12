@@ -1,9 +1,9 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 
 /**
@@ -47,7 +47,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		}
 
 		@Override
-		public void putAll(@Nonnull Map<? extends V, ? extends K> map) {
+		public void putAll(@NotNull Map<? extends V, ? extends K> map) {
 			for (Map.Entry<? extends V, ? extends K> entry : map.entrySet()) {
 				parent.putByValue(entry.getKey(), entry.getValue());
 			}
@@ -66,7 +66,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 			parent.clear();
 		}
 
-		@Nonnull
+		@NotNull
 		public Set<Entry<V, K>> entrySet() {
 			return new EntrySet<>(this.parent);
 		}
@@ -86,7 +86,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 				map.clear();
 			}
 
-			@Nonnull
+			@NotNull
 			public final Iterator<Map.Entry<V, K>> iterator() {
 				if (isEmpty()) return Collections.emptyIterator();
 				// 不能复用parent.entrySet.iterator，否则在迭代过程中修改就会丢元素
@@ -189,7 +189,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		return this.inverse;
 	}
 
-	@Nonnull
+	@NotNull
 	public Set<Map.Entry<K, V>> entrySet() { return _Generic_EntrySet.create(this); }
 
 	public int size() {

@@ -1,5 +1,6 @@
 package roj.config.data;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -14,7 +15,6 @@ import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -156,8 +156,8 @@ public abstract class Node {
 	// endregion
 	// region children
 	public int size() { return 0; }
-	public void add(@Nonnull Node node) { throw new UnsupportedOperationException(); }
-	@Nonnull
+	public void add(@NotNull Node node) { throw new UnsupportedOperationException(); }
+	@NotNull
 	public Node child(int index) { throw new ArrayIndexOutOfBoundsException(index); }
 	public List<Node> _childNodes() { return Collections.emptyList(); }
 	public List<Node> children() { return Collections.emptyList(); }

@@ -1,11 +1,11 @@
 package roj.text;
 
+import org.jetbrains.annotations.Nullable;
 import roj.config.ParseException;
 import roj.config.word.ITokenizer;
 import roj.config.word.Tokenizer;
 import roj.io.IOUtil;
 
-import javax.annotation.Nullable;
 import java.util.TimeZone;
 
 /**

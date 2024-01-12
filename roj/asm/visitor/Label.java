@@ -1,6 +1,7 @@
 package roj.asm.visitor;
 
-import javax.annotation.Nonnull;
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Arrays;
 
 /**
@@ -99,7 +100,7 @@ public final class Label extends Number implements Comparable<Label>, ReadonlyLa
 	}
 
 	@Override
-	public int compareTo(@Nonnull Label o) {
+	public int compareTo(@NotNull Label o) {
 		if (!isValid() || !o.isValid()) throw new IllegalArgumentException(this+"|"+o);
 
 		if (block != o.block) return block > o.block ? 1 : -1;

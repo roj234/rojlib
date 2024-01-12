@@ -40,6 +40,9 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 	public static TextWriter append(File file, Charset cs) throws IOException {
 		return new TextWriter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.APPEND), cs);
 	}
+	public static void write(File file, CharSequence str) throws IOException {
+		try (TextWriter tw = to(file)) { tw.append(str); }
+	}
 
 	public TextWriter(Closeable out, Charset charset) {
 		this(out,charset,BufferPool.localPool());
@@ -157,12 +160,12 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 	}
 
 	public void flush() throws IOException {
-		if (len == 0) return;
+		if (len > 0) {
+			if (ib == null) ib = CharBuffer.wrap(list);
+			ib.position(0).limit(len);
 
-		if (ib == null) ib = CharBuffer.wrap(list);
-		ib.position(0).limit(len);
-
-		encode(false, ib);
+			encode(false, ib);
+		}
 		flush_ce();
 	}
 
@@ -175,11 +178,8 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 				while (i < ib.length()) {
 					i = ucs.encodeFixedOut(ib, i, ib.length(), buf1, buf1.writableBytes());
 
-					if (buf1.writableBytes() < 8) {
-						ob.position(buf1.wIndex());
-						buf1.clear();
-						flush_ce();
-					}
+					ob.position(buf1.wIndex());
+					if (buf1.writableBytes() < 8) flush_ce();
 				}
 			}
 
@@ -209,6 +209,7 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 		}
 	}
 	private void flush_ce() throws IOException {
+		buf1.clear();
 		if (ob.position() > 0) {
 			switch (type) {
 				case 2:

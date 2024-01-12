@@ -230,7 +230,9 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		}
 	}
 	public void putAllS(CharSequence data) {
-		for (String line : new LineReader(data, true)) {
+		for (String line : LineReader.create(data)) {
+			if (line.isEmpty()) continue;
+
 			int pos = line.indexOf(':');
 			put(line.substring(0, pos), line.substring(pos+1).trim());
 		}

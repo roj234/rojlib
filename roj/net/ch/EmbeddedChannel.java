@@ -13,6 +13,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Function;
 
 /**
  * @author Roj233
@@ -90,8 +91,8 @@ public class EmbeddedChannel extends MyChannel {
 		return defaultTicker;
 	}
 
-
 	byte closeFlag;
+	Function<Object, Boolean> writer;
 	EmbeddedChannel pair;
 	Exception ex;
 
@@ -99,7 +100,14 @@ public class EmbeddedChannel extends MyChannel {
 
 	EmbeddedChannel() {}
 
-	public static EmbeddedChannel createSingle() { return new EmbeddedChannel(); }
+	public static EmbeddedChannel createReadonly() { return new EmbeddedChannel(); }
+	public static EmbeddedChannel createWritable(Function<Object, Boolean> writer) { return createWritable(writer, getDefaultTicker()); }
+	public static EmbeddedChannel createWritable(Function<Object, Boolean> writer, Ticker sched) {
+		EmbeddedChannel ch = new EmbeddedChannel();
+		ch.writer = writer;
+		if (sched != null) sched.tick(ch);
+		return ch;
+	}
 	public static EmbeddedChannel[] createPair() { return createPair(getDefaultTicker()); }
 	public static EmbeddedChannel[] createPair(Ticker sched) {
 		EmbeddedChannel left = new EmbeddedChannel(), right = new EmbeddedChannel();
@@ -140,6 +148,8 @@ public class EmbeddedChannel extends MyChannel {
 	@Override
 	public <T> T getOption(SocketOption<T> k) throws IOException { throw new IOException("Channel is embedded"); }
 
+	@Override
+	protected void bind0(InetSocketAddress na) throws IOException { throw new IOException("Channel is embedded"); }
 	@Override
 	protected boolean connect0(InetSocketAddress na) throws IOException { throw new IOException("Channel is embedded"); }
 	@Override
@@ -201,9 +211,13 @@ public class EmbeddedChannel extends MyChannel {
 				Object buf = pending.peekFirst();
 				if (buf == null) break;
 
-				if (pair.readDisabled()) return;
-				pair.fireChannelRead(buf);
-				if (buf instanceof DynByteBuf && ((DynByteBuf) buf).isReadable()) return;
+				if (writer != null) {
+					if (!writer.apply(buf)) return;
+				} else {
+					if (pair.readDisabled()) return;
+					pair.fireChannelRead(buf);
+					if (buf instanceof DynByteBuf && ((DynByteBuf) buf).isReadable()) return;
+				}
 
 				pending.pollFirst();
 			} while (true);
@@ -218,8 +232,12 @@ public class EmbeddedChannel extends MyChannel {
 		}
 	}
 	protected void write(Object o) throws IOException {
-		if (pair.readDisabled()) pending.ringAddLast(o);
-		else pair.fireChannelRead(o);
+		if (writer != null) {
+			if (!writer.apply(o)) pending.ringAddLast(o);
+		} else {
+			if (pair.readDisabled()) pending.ringAddLast(o);
+			else pair.fireChannelRead(o);
+		}
 	}
 
 	@Override

@@ -1,7 +1,6 @@
 package roj.crypt;
 
 import roj.io.IOUtil;
-import roj.text.UTFCoder;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -77,7 +76,7 @@ public abstract class RCipherSpi extends CipherSpi {
 			insertAAD(new ByteList(b));
 		}
 	}
-	protected final void engineUpdateAAD(byte[] bytes, int off, int len) { insertAAD(IOUtil.SharedCoder.get().wrap(bytes, off, len)); }
+	protected final void engineUpdateAAD(byte[] bytes, int off, int len) { insertAAD(roj.io.IOUtil.SharedCoder.get().wrap(bytes, off, len)); }
 
 	// region unify
 	protected final byte[] engineUpdate(byte[] b, int off, int len) { return updateIA(b,off,len,false); }
@@ -98,12 +97,12 @@ public abstract class RCipherSpi extends CipherSpi {
 	}
 
 	private byte[] updateIA(byte[] b, int off, int len, boolean doFinal) {
-		UTFCoder uc = IOUtil.SharedCoder.get(); uc.byteBuf.clear();
+		IOUtil uc = IOUtil.SharedCoder.get(); uc.byteBuf.clear();
 		bufferedUpdate(doFinal, uc.wrap(b, off, len), uc.byteBuf);
 		return uc.byteBuf.toByteArray();
 	}
 	private int updateIAOA(byte[] b, int off, int len, byte[] out, int off1, boolean doFinal) {
-		UTFCoder uc = IOUtil.SharedCoder.get();
+		IOUtil uc = IOUtil.SharedCoder.get();
 		ByteList ob = uc.shellB.set(out, off1, out.length - off1);
 		bufferedUpdate(doFinal, uc.wrap(b, off, len), ob);
 		return ob.wIndex();

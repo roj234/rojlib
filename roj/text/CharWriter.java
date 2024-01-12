@@ -1,6 +1,7 @@
 package roj.text;
 
-import javax.annotation.Nonnull;
+import org.jetbrains.annotations.NotNull;
+
 import java.io.IOException;
 import java.io.Writer;
 
@@ -13,9 +14,9 @@ public class CharWriter extends Writer {
 	public void flush() throws IOException {}
 	public void close() throws IOException {}
 	public void write(int c) throws IOException { sb.append((char) c); }
-	public void write(@Nonnull char[] buf, int off, int len) throws IOException { sb.append(buf, off, len); }
-	public void write(@Nonnull String str) throws IOException { sb.append(str); }
-	public void write(@Nonnull String str, int off, int len) throws IOException { sb.append(str, off, len); }
+	public void write(@NotNull char[] buf, int off, int len) throws IOException { sb.append(buf, off, len); }
+	public void write(@NotNull String str) throws IOException { sb.append(str); }
+	public void write(@NotNull String str, int off, int len) throws IOException { sb.append(str, off, len); }
 	public Writer append(CharSequence csq) throws IOException { sb.append(csq, 0, csq.length()); return this; }
 	public Writer append(CharSequence csq, int start, int end) throws IOException { sb.append(csq, start, end); return this; }
 }

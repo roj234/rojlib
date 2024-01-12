@@ -6,7 +6,7 @@ import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.InnerClasses;
-import roj.asm.util.AttrHelper;
+import roj.asm.util.Attributes;
 import roj.asm.util.Context;
 import roj.asm.visitor.XAttrCode;
 import roj.collect.MyHashMap;
@@ -110,9 +110,9 @@ public class ClassMerger {
 	}
 
 	private void processInnerClasses(ConstantData main, ConstantData sub) {
-		List<InnerClasses.InnerClass> scs = AttrHelper.getInnerClasses(sub.cp, sub);
+		List<InnerClasses.InnerClass> scs = Attributes.getInnerClasses(sub.cp, sub);
 		if (scs == null) return;
-		List<InnerClasses.InnerClass> mcs = AttrHelper.getInnerClasses(main.cp, main);
+		List<InnerClasses.InnerClass> mcs = Attributes.getInnerClasses(main.cp, main);
 		if (mcs == null) {
 			main.putAttr(sub.attrByName("InnerClasses"));
 			return;

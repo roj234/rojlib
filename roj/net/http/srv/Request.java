@@ -106,7 +106,7 @@ public final class Request extends Headers {
 						protected void onValue(ChannelCtx ctx, DynByteBuf buf) { map.put(name, buf.readUTF(buf.readableBytes())); }
 					};
 
-					EmbeddedChannel ch = EmbeddedChannel.createSingle();
+					EmbeddedChannel ch = EmbeddedChannel.createReadonly();
 					ch.addLast("_", handler);
 					ch.fireChannelRead(pf);
 					handler.onSuccess();

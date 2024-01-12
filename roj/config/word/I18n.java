@@ -1,10 +1,9 @@
 package roj.config.word;
 
+import roj.collect.MyHashMap;
 import roj.text.CharList;
-import roj.text.TextUtil;
+import roj.text.LineReader;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -16,33 +15,105 @@ import java.util.Map;
 public class I18n {
 	public static final I18n NULL = new I18n("");
 
+	public static Map<String, String> parseLang(CharSequence content) {
+		MyHashMap<String, String> map = new MyHashMap<>();
+		if (content == null) return map;
+		try {
+			for (String line : new LineReader(content)) {
+				line = line.trim();
+				if (line.startsWith("#") || line.isEmpty()) continue;
+
+				int i = line.indexOf('=');
+				String k = line.substring(0, i++);
+				map.put(k, line.charAt(i) == '"' ? ITokenizer.removeSlashes(line.substring(i+1, line.length()-1)) : line.substring(i));
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return map;
+	}
+
 	public I18n(CharSequence data) {
-		translateMap = TextUtil.parseLang(data);
-		at = translateMap.getOrDefault("at", " 在 ");
+		langMap = parseLang(data);
+		at = langMap.getOrDefault("at", " 在 ");
 	}
 
 	public final String at;
-	final Map<String, String> translateMap;
+	final Map<String, String> langMap;
 
-	public String translate(String s) {
-		String v = translateMap.get(s);
+	public String translate(String str) {
+		String v = langMap.get(str);
 		if (v != null) return v;
+
 		// a:b:c
-		CharList cl = new CharList();
-		List<String> tmp = TextUtil.split(new ArrayList<>(), s, ':');
-		if (tmp.size() <= 1) return s;
-		cl.clear();
+		int pos = str.indexOf(':');
+		if (pos < 0) return str;
 
-		v = translateMap.get(tmp.get(0));
-		if (v == null) return s;
+		v = langMap.get(str.substring(0, pos));
+		if (v == null) return str;
 
-		cl.append(v);
-		CharList cl2 = new CharList(4);
-		for (int i = 1; i < tmp.size(); i++) {
-			cl.replace(cl2.append('%').append(Integer.toString(i)), translate(tmp.get(i)));
-			cl2.clear();
+		CharList sb = new CharList(v);
+		CharList tmp = new CharList();
+
+		int num = 0;
+		int i, prevI = pos+1;
+		while (true) {
+			int kk = prevI;
+			while (true) {
+				i = str.indexOf(':', kk);
+
+				int bracket = str.indexOf('{', kk);
+				if (bracket < 0 || bracket > i) break;
+
+				kk = getBracketEnd(str, bracket);
+			}
+
+			tmp.clear();
+			int j = sb.indexOf(tmp.append('%').append(++num));
+			if (j < 0) {
+				sb.append(str, prevI, str.length());
+				break;
+			}
+
+			String seq = str.substring(prevI, i < 0 ? str.length() : i);
+			CharSequence s = langMap.get(seq);
+			if (s == null) {
+				tmp.clear();
+				inlineTranslate(seq, 0, tmp);
+				s = tmp;
+			}
+			sb.replace(j, j+2, s);
+
+			if (i < 0) break;
+			prevI = i+1;
 		}
+		return sb.toStringAndFree();
+	}
 
-		return cl.toString();
+	private void inlineTranslate(String str, int prevI, CharList out) {
+		int i;
+		while (true) {
+			i = str.indexOf('{', prevI);
+			if (i < 0) break;
+			int j = getBracketEnd(str, i);
+
+			out.append(str, prevI, i);
+			out.append(translate(str.substring(i+1, j)));
+
+			prevI = j+1;
+		}
+		out.append(str, prevI, str.length());
+	}
+
+	private static int getBracketEnd(String str, int i) {
+		int depth = 1;
+		int j = i +1;
+		for (;;) {
+			char c = str.charAt(j);
+			if (c == '{') depth++;
+			else if (c == '}' && --depth == 0) break;
+			if (++j == str.length()) throw new IllegalArgumentException("i18n错误 未闭合的括号: "+ str);
+		}
+		return j;
 	}
 }

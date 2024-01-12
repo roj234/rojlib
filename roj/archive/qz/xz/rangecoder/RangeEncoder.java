@@ -53,7 +53,7 @@ public class RangeEncoder extends RangeCoder {
 		reset();
 	}
 
-	public final synchronized void putArraysToCache() {
+	public final synchronized void release() {
 		if (cacheSize == -1) return;
 		ArrayCache.putArray(buf);
 		cacheSize = -1;

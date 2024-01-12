@@ -46,8 +46,8 @@ public class MyPassIs extends Plugin {
 
 	@Override
 	protected void onEnable() {
-		c.commandEcho = false;
-		c.setHistoryEnabled(false);
+		c.setCommandEcho(false);
+		c.setInputHistory(false);
 
 		registerCommand(literal("mpi")
 			.then(literal("login").executes(ctx -> login()))
@@ -64,7 +64,7 @@ public class MyPassIs extends Plugin {
 			}))
 			.then(literal("unregister").then(argument("site", Argument.oneOf(hints)).executes(ctx -> {
 				c.setPrompt("\u001b[;97m再次键入网站名并按回车以删除 > ");
-				c.setEchoEnabled(true);
+				c.setInputEcho(true);
 
 				String site = CLIUtil.awaitCommand(c, Argument.rest());
 				String site1 = ctx.argument("site", String.class);
@@ -102,9 +102,9 @@ public class MyPassIs extends Plugin {
 		if (data != null) return;
 
 		c.setPrompt("\u001b[;97m请输入密码 > ");
-		c.setEchoEnabled(false);
+		c.setInputEcho(false);
 		String passStr = CLIUtil.awaitCommand(c, Argument.rest());
-		c.setEchoEnabled(true);
+		c.setInputEcho(true);
 
 		this.mac = new HMAC(MessageDigest.getInstance("SHA-256"));
 		this.pass = HMAC.HKDF_expand(mac, IOUtil.SharedCoder.get().encode(passStr), 32);

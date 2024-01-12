@@ -16,7 +16,6 @@ import roj.net.http.SyncHttpClient;
 import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.text.UTFCoder;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
@@ -91,7 +90,7 @@ public class Aliyun implements DDNSService {
 		String signStr = "GET" + "&%2F&" + encodeSignature(sb);
 
 		try {
-			UTFCoder uc = IOUtil.SharedCoder.get();
+			IOUtil uc = IOUtil.SharedCoder.get();
 
 			HMAC hmac = new HMAC(MessageDigest.getInstance("SHA-1"));
 			hmac.setSignKey(accessSecret.concat("&").getBytes(StandardCharsets.UTF_8));

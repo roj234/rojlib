@@ -24,7 +24,7 @@ import java.util.Iterator;
  * @since 2023/12/25 0025 16:08
  */
 public class PluginManager {
-	final Logger LOGGER = Logger.getLogger(getClass().getSimpleName());
+	final Logger LOGGER = Logger.getLogger("DPS/Plugin");
 	final MyHashMap<String, PluginDescriptor> plugins = new MyHashMap<>();
 
 	private final ClassLoader env = getClass().getClassLoader();

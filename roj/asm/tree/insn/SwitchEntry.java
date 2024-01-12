@@ -1,8 +1,7 @@
 package roj.asm.tree.insn;
 
+import org.jetbrains.annotations.NotNull;
 import roj.asm.visitor.Label;
-
-import javax.annotation.Nonnull;
 
 /**
  * @author Roj233
@@ -18,7 +17,7 @@ public final class SwitchEntry implements Comparable<SwitchEntry> {
 	}
 
 	@Override
-	public int compareTo(@Nonnull SwitchEntry o) { return Integer.compare(val, o.val); }
+	public int compareTo(@NotNull SwitchEntry o) { return Integer.compare(val, o.val); }
 	public int getBci() { return pos.getValue(); }
 
 	@Override

@@ -116,19 +116,20 @@ public abstract class Constants implements ChannelHandler {
 	public static final int P___CHANNEL_CLOSED = 5;
 	// sends
 	/**
-	 * 让服务端去ping
+	 * 发起P2P请求，服务端转发，尝试让对方连接
+	 * u4 target_user;
+	 * bool is_tcp;
+	 *
+	 * server => target add:
 	 * u1 ipLen;
 	 * opaque[ipLen] ip;
 	 * u2 port;
-	 * 回包
-	 * u1 state
 	 */
-	public static final int P_S_PING = 5;
+	public static final int P_S_CONNECT_REQ = 5;
 	/**
-	 * 上述地址通过MSS协议连接后会发送一些随机的数据用于验证地址
-	 * opaque[packet length] verify
+	 * 尝试连接后的回复
 	 */
-	public static final int P_S_PONG = 6;
+	public static final int P_S_CONNECT_ACK = 6;
 
 	// client
 	// receives

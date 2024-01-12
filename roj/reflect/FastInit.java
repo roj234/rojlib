@@ -6,7 +6,6 @@ import roj.asm.visitor.CodeWriter;
 import roj.util.ByteList;
 
 import static roj.asm.Opcodes.*;
-import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -22,15 +21,20 @@ public final class FastInit {
 		String name = var.name().replace('/', '.');
 
 		try {
-			Class<?> klass = l.defineClass(name, buf);
-			u.ensureClassInitialized(klass);
-			//MethodHandles.lookup().ensureInitialized(klass);
-
-			Object o = Callback.get();
-			if (null == o) throw new IllegalStateException("初始化失败: 你是否调用了prepare()来写入<clinit>?");
-			return o;
+			Class<?> klass = l == null ? ReflectionUtils.defineWeakClass(buf) : l.defineClass(name, buf);
+			return manualGet(klass);
 		} catch (Throwable e) {
 			throw new IllegalStateException("初始化失败", e);
+		}
+	}
+
+	public static Object manualGet(Class<?> klass) {
+		try {
+			VMInternals.InitializeClass(klass);
+
+			Object o = Callback.get();
+			if (null == o) throw new IllegalStateException("未在过去调用prepare()");
+			return o;
 		} finally {
 			Callback.remove();
 		}

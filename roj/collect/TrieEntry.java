@@ -1,10 +1,10 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.Iterator;
 
 /**
@@ -91,7 +91,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 		return null;
 	}
 
-	@Nonnull
+	@NotNull
 	@Override
 	public final Iterator<TrieEntry> iterator() { return new _Generic_EntryItr<>(entries); }
 

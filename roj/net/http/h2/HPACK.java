@@ -1,5 +1,6 @@
 package roj.net.http.h2;
 
+import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashSet;
 import roj.collect.RingBuffer;
 import roj.crypt.Base64;
@@ -9,7 +10,6 @@ import roj.util.BitBuffer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import javax.annotation.Nullable;
 import java.util.Arrays;
 import java.util.List;
 

@@ -7,7 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "Roj234 SevenZ Archiver 1.2"
+			"title": "Roj234 SevenZ Archiver 2.1"
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label4"
 				"text": "压缩这个目录或文件"
@@ -41,7 +41,7 @@ new FormModel {
 				"font": new com.jformdesigner.model.SwingDerivedFont( null, 0, 4, false )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 15
-				"y": 55
+				"y": 60
 				"width": 335
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
@@ -57,10 +57,11 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JProgressBar" ) {
 				name: "uiProgress"
+				"maximum": 10000
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 5
-				"y": 445
-				"width": 480
+				"y": 480
+				"width": 500
 			} )
 			add( new FormComponent( "javax.swing.JSeparator" ) {
 				name: "separator1"
@@ -171,7 +172,6 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JTextField" ) {
 				name: "uiMemoryLimit"
-				"text": "4GB"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 225
 				"y": 125
@@ -325,7 +325,7 @@ new FormModel {
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 320
 				"y": 315
-				"width": 155
+				"width": 170
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "uiFastLZMA"
@@ -525,24 +525,57 @@ new FormModel {
 					name: "uiLog"
 				} )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 80
-				"y": 340
-				"width": 405
-				"height": 100
+				"x": 5
+				"y": 355
+				"width": 495
+				"height": 120
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label1"
-				"text": "Log =>"
+				"text": "Log \ud83d\udc47"
 				auxiliary() {
 					"JavaCodeGenerator.variableLocal": true
 				}
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 30
-				"y": 375
+				"x": 80
+				"y": 340
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiAutoSplitTask"
+				"text": "自动拆分"
+				"enabled": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 370
+				"y": 125
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiMixedMode"
+				"text": "混合模式"
+				"enabled": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 440
+				"y": 125
+			} )
+			add( new FormComponent( "javax.swing.JComboBox" ) {
+				name: "uiPathType"
+				auxiliary() {
+					"JavaCodeGenerator.typeParameters": "String"
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 240
+				"y": 40
+				"width": 110
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiReadDirFromLog"
+				"text": "从Log读取更多文件(夹) (每行一个)"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 125
+				"y": 333
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 50, 30 )
-			"size": new java.awt.Dimension( 495, 460 )
+			"size": new java.awt.Dimension( 510, 495 )
 		} )
 	}
 }

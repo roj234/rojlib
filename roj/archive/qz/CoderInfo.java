@@ -1,5 +1,6 @@
 package roj.archive.qz;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.io.Finishable;
@@ -9,7 +10,6 @@ import roj.util.ByteList;
 import roj.util.DirectByteList;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -114,7 +114,7 @@ final class CoderInfo {
 		}
 
 		@Override
-		public void write(@Nonnull byte[] b, int off, int len) throws IOException {
+		public void write(@NotNull byte[] b, int off, int len) throws IOException {
 			if (len <= 0) return;
 
 			if (os != null) os.write(b, off, len);
@@ -150,7 +150,7 @@ final class CoderInfo {
 		}
 
 		public void write(int b) throws IOException { out.write(b); }
-		public void write(@Nonnull byte[] b, int off, int len) throws IOException { out.write(b, off, len); }
+		public void write(@NotNull byte[] b, int off, int len) throws IOException { out.write(b, off, len); }
 		public void flush() throws IOException { out.flush(); }
 		public void finish() throws IOException { if (out instanceof Finishable) ((Finishable) out).finish(); }
 

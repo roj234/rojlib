@@ -5,10 +5,7 @@ import java.util.AbstractList;
 import java.util.function.BiFunction;
 
 /**
- * No description provided
- *
  * @author Roj234
- * @version 0.1
  * @since 2020/8/23 0:44
  */
 public class FilterList<T> extends AbstractList<T> {

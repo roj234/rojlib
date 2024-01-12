@@ -43,6 +43,13 @@ public final class WordBlock {
 	public QZEntry getFirstEntry() { return firstEntry; }
 	public long getuSize() { return uSize; }
 
+	public boolean hasProcessor(Class<? extends QZCoder> type) {
+		for (QZCoder qzCoder : coder != null ? coder : (QZCoder[]) tmp) {
+			if (type.isInstance(qzCoder)) return true;
+		}
+		return false;
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
@@ -101,4 +108,3 @@ public final class WordBlock {
 		}
 	}
 }
-

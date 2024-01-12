@@ -8,7 +8,7 @@ import java.util.function.ToIntFunction;
 
 import static roj.collect.IntMap.UNDEFINED;
 
-public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<K>, IIntMap<K> {
+public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<K> {
 	public static final class Entry<K> extends AbstractEntry<K, Integer> {
 		public int v;
 
@@ -19,18 +19,13 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 		}
 
 		@Override
+		@Deprecated
 		public Integer getValue() { return v; }
 		@Override
+		@Deprecated
 		public Integer setValue(Integer value) {
 			int oldV = v;
 			v = value;
-			return oldV;
-		}
-
-		public int getInt() { return v; }
-		public int setInt(int v) {
-			int oldV = this.v;
-			this.v = v;
 			return oldV;
 		}
 

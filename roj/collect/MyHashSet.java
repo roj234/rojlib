@@ -1,8 +1,8 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -62,7 +62,7 @@ public final class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 		if (entries != null) resize(mask+1);
 	}
 
-	@Nonnull
+	@NotNull
 	public Iterator<K> iterator() {
 		return isEmpty() ? Collections.emptyIterator() : new SetItr();
 	}

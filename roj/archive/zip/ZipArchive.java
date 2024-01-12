@@ -399,7 +399,7 @@ public class ZipArchive implements ArchiveFile {
 		entry.flags = (char) flags;
 		int cp = entry.method = (char) buf.readUShortLE(4);
 		entry.modTime = buf.readIntLE(6);
-		entry.CRC32 = buf.readIntLE(10);
+		entry.crc32 = buf.readIntLE(10);
 		long cSize = buf.readUIntLE(14);
 		entry.cSize = cSize;
 		entry.uSize = buf.readUIntLE(18);
@@ -499,7 +499,7 @@ public class ZipArchive implements ArchiveFile {
 		entry.flags = (char) buf.readUShortLE(4);
 		entry.method = (char) buf.readUShortLE(6);
 		entry.modTime = buf.readIntLE(8);
-		entry.CRC32 = buf.readIntLE(12);
+		entry.crc32 = buf.readIntLE(12);
 		entry.cSize = buf.readUIntLE(16);
 		entry.uSize = buf.readUIntLE(20);
 
@@ -660,11 +660,11 @@ public class ZipArchive implements ArchiveFile {
 				in = new CipherInputStream(in, c);
 
 				// has ext, CRC cannot be computed before
-				int checkByte = (file.flags & GP_HAS_EXT) != 0 ? 0xFF&(file.modTime >>> 8) : file.CRC32 >>> 24;
+				int checkByte = (file.flags & GP_HAS_EXT) != 0 ? 0xFF&(file.modTime >>> 8) : file.crc32 >>> 24;
 				if (in.skip(11) < 11) throw new IOException("Early EOF");
 
 				int myCb = in.read();
-				if (myCb != checkByte && (flags & FLAG_VERIFY) != 0) throw new ZipException("Checksum error: except " + checkByte + " got " + myCb);
+				if (myCb != checkByte && (flags & FLAG_VERIFY) != 0) throw new ZipException("Checksum error: except "+checkByte+" got "+myCb);
 			} else {
 				ZipAES c = new ZipAES();
 				boolean checkPassed = c.setKeyDecrypt(pass, in);
@@ -682,7 +682,7 @@ public class ZipArchive implements ArchiveFile {
 		if (file.method == ZipEntry.DEFLATED) in = _cachedInflate(in);
 
 		if ((file.mzfFlag & MZ_NOCRC) == 0 && (flags & FLAG_VERIFY) != 0)
-			in = new ChecksumInputStream(in, new CRC32(), file.CRC32 & 0xFFFFFFFFL);
+			in = new ChecksumInputStream(in, new CRC32(), file.crc32 & 0xFFFFFFFFL);
 
 		return in;
 	}
@@ -740,7 +740,7 @@ public class ZipArchive implements ArchiveFile {
 				if (bl.readableBytes() == attr.uSize) {
 					crc.reset();
 					crc.update(bl.list, bl.arrayOffset()+bl.rIndex, bl.readableBytes());
-					if ((int) crc.getValue() == attr.CRC32) {
+					if ((int) crc.getValue() == attr.crc32) {
 						// apparently same file, skip
 						continue;
 					}
@@ -884,7 +884,7 @@ public class ZipArchive implements ArchiveFile {
 				ByteList data = (ByteList) mf.data;
 
 				crc.update(data.list, data.arrayOffset() + data.rIndex, data.readableBytes());
-				e.CRC32 = (int) crc.getValue();
+				e.crc32 = (int) crc.getValue();
 
 				e.uSize = data.readableBytes();
 				if (e.method == 0) e.cSize = e.uSize;
@@ -903,7 +903,7 @@ public class ZipArchive implements ArchiveFile {
 						byte[] rnd = new byte[12];
 						ThreadLocalRandom.current().nextBytes(rnd);
 						// check byte
-						rnd[11] = (byte) (e.CRC32 >>> 24);
+						rnd[11] = (byte) (e.crc32 >>> 24);
 						cout.write(rnd);
 					} else {
 						za = new ZipAES();
@@ -1048,7 +1048,7 @@ public class ZipArchive implements ArchiveFile {
 				r.seek(offset);
 				if ((e.mzfFlag & MZ_NOCRC) == 0) {
 					r.writeInt(Integer.reverseBytes((int) crc.getValue()));
-					e.CRC32 = (int) crc.getValue();
+					e.crc32 = (int) crc.getValue();
 				} else {
 					r.writeInt(0);
 				}
@@ -1103,7 +1103,7 @@ public class ZipArchive implements ArchiveFile {
 			throw new IllegalArgumentException("目录不是空的");
 	}
 
-	private static void writeLOC(OutputStream os, ByteList buf, ZEntry file) throws IOException {
+	static void writeLOC(OutputStream os, ByteList buf, ZEntry file) throws IOException {
 		buf.putInt(HEADER_LOC)
 		   .putShortLE(file.getVersionFW())
 		   .putShortLE(file.flags)
@@ -1122,7 +1122,7 @@ public class ZipArchive implements ArchiveFile {
 	}
 	private static void writeEXT(OutputStream os, ByteList buf, ZEntry file) throws IOException {
 		if ((file.flags & GP_HAS_EXT) == 0) throw new ZipException("Not has ext set");
-		buf.putInt(HEADER_EXT).putIntLE(file.CRC32);
+		buf.putInt(HEADER_EXT).putIntLE(file.crc32);
 		if (file.cSize >= U32_MAX | file.uSize >= U32_MAX) {
 			buf.putLongLE(file.cSize).putLongLE(file.uSize);
 			file.EXTLenOfLOC = 24;

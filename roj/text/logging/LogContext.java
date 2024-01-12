@@ -2,6 +2,7 @@ package roj.text.logging;
 
 import roj.collect.SimpleList;
 import roj.text.Template;
+import roj.text.TextUtil;
 import roj.text.logging.c.LCTime;
 import roj.text.logging.c.LogComponent;
 import roj.text.logging.d.LDStream;
@@ -37,7 +38,7 @@ public class LogContext {
 		name = "root";
 		prefix = Template.compile("[${0}][${THREAD}/${LEVEL}]: ");
 		components = Collections.singletonList(LCTime.of("H:i:s"));
-		destination = LDStream.of(System.out);
+		destination = LDStream.of(System.out, TextUtil.ConsoleCharset);
 	}
 
 	public List<LogComponent> getComponents() { return components; }

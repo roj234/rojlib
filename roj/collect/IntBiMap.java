@@ -1,16 +1,16 @@
 package roj.collect;
 
+import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.function.IntFunction;
 import java.util.function.ToIntFunction;
 
 import static roj.collect.IntMap.UNDEFINED;
 
-public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<IntMap.Entry<V>>, ToIntFunction<V>, IIntMap<V> {
+public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<IntMap.Entry<V>>, ToIntFunction<V> {
 	public void setNullId(int nullId) {
 		this.nullId = nullId;
 	}
@@ -67,7 +67,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 		return entry == null ? v : entry.v;
 	}
 
-	public int getValueOrDefault(V val, int def) {
+	public int getValueOrDefault(Object val, int def) {
 		Entry<V> entry = getValueEntry(val);
 		return entry == null ? def : entry.k;
 	}
@@ -103,8 +103,8 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 	@Override
 	public void __remove(IntMap.Entry<V> vEntry) { removeEntry((Entry<V>) vEntry); }
 
-	@Nonnull
-	public V computeIfAbsentInt(int k, @Nonnull IntFunction<V> supplier) {
+	@NotNull
+	public V computeIfAbsentInt(int k, @NotNull IntFunction<V> supplier) {
 		V v = get(k);
 		if (v == null) {
 			putInt(k, v = supplier.apply(k));
@@ -155,21 +155,10 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 		return v == null ? 0 : v.hashCode();
 	}
 
-	public V putInt(int key, V e) {
-		return put0(key, e, false);
-	}
-
-	public V forcePut(int key, V e) {
-		return put0(key, e, true);
-	}
-
-	public int putByValue(int key, V e) {
-		return putByValue0(e, key, false);
-	}
-
-	public int forcePutByValue(int key, V e) {
-		return putByValue0(e, key, true);
-	}
+	public V putInt(int key, V e) { return put0(key, e, false); }
+	public V forcePut(int key, V e) { return put0(key, e, true); }
+	public int putByValue(int key, V e) { return putByValue0(e, key, false); }
+	public int forcePutByValue(int key, V e) { return putByValue0(e, key, true); }
 
 	private int putByValue0(V v, int key, boolean replace) {
 		if (size > length * loadFactor) {
@@ -315,13 +304,6 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 		return getValueEntry((V) v) != null;
 	}
 
-	@Override
-	@Deprecated
-	public Integer putInt(V key, int e) {
-		int i = putByValue0(key, e, false);
-		return i == nullId ? null : i;
-	}
-
 	public String toString() {
 		StringBuilder sb = new StringBuilder("IntBiMap").append('{');
 		for (Entry<V> entry : selfEntrySet()) {
@@ -441,7 +423,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 	}
 
 	@SuppressWarnings("unchecked")
-	protected Entry<V> getValueEntry(V v) {
+	protected Entry<V> getValueEntry(Object v) {
 		if (valueEntries == null) return null;
 		int id = indexFor(hashFor(v));
 

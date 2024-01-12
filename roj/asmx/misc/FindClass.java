@@ -18,7 +18,7 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.ui.GUIUtil;
+import roj.ui.GuiUtil;
 
 import javax.swing.*;
 import java.awt.*;
@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
  */
 public class FindClass extends JFrame {
 	public static void main(String[] args) {
-		GUIUtil.systemLook();
+		GuiUtil.systemLook();
 		FindClass f = new FindClass();
 
 		f.pack();
@@ -187,8 +187,8 @@ public class FindClass extends JFrame {
 	private final DefaultListModel<Object> model = new DefaultListModel<>();
 	public FindClass() {
 		initComponents();
-		GUIUtil.dropFilePath(this, this::open, false);
-		uiOpen.addActionListener(e -> open(GUIUtil.fileLoadFrom("jar file", this)));
+		GuiUtil.dropFilePath(this, this::open, false);
+		uiOpen.addActionListener(e -> open(GuiUtil.fileLoadFrom("jar file", this)));
 		ActionListener ser = e -> search();
 		uiDeclOnly.addActionListener(ser);
 		uiSerClass.addActionListener(ser);

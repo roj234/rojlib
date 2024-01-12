@@ -7,6 +7,8 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -17,6 +19,14 @@ public final class Annotations extends Attribute {
 	public Annotations(boolean visibleForRuntime) {
 		vis = visibleForRuntime;
 		annotations = new SimpleList<>();
+	}
+	public Annotations(boolean visibleForRuntime, Annotation annotation) {
+		vis = visibleForRuntime;
+		annotations = Collections.singletonList(annotation);
+	}
+	public Annotations(boolean visibleForRuntime, Annotation... annotations) {
+		vis = visibleForRuntime;
+		this.annotations = Arrays.asList(annotations);
 	}
 
 	public Annotations(String name, DynByteBuf r, ConstantPool pool) {

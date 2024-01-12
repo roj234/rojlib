@@ -1,6 +1,7 @@
 package roj.concurrent;
 
-import javax.annotation.Nonnull;
+import org.jetbrains.annotations.NotNull;
+
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 import java.util.concurrent.locks.Condition;
@@ -48,7 +49,7 @@ public final class SegmentReadWriteLock extends AbstractQueuedSynchronizer {
 		}
 
 		@Override
-		public boolean tryLock(long time, @Nonnull TimeUnit unit) throws InterruptedException {
+		public boolean tryLock(long time, @NotNull TimeUnit unit) throws InterruptedException {
 			if (slot < 0) return tryAcquireNanos(0, unit.toNanos(time));
 			else return tryAcquireSharedNanos(slot, unit.toNanos(time));
 		}
@@ -59,7 +60,7 @@ public final class SegmentReadWriteLock extends AbstractQueuedSynchronizer {
 			else releaseShared(slot);
 		}
 
-		@Nonnull
+		@NotNull
 		@Override
 		public Condition newCondition() {
 			return SegmentReadWriteLock.this.newCondition();

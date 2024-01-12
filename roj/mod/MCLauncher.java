@@ -1,5 +1,7 @@
 package roj.mod;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
@@ -24,19 +26,17 @@ import roj.math.Version;
 import roj.text.CharList;
 import roj.text.Template;
 import roj.text.TextUtil;
-import roj.text.UTFCoder;
 import roj.ui.CLIUtil;
 import roj.util.ByteList;
 import roj.util.OS;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.event.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -167,7 +167,7 @@ public class MCLauncher {
 					CLIUtil.warning("文件的编码中含有BOM(推荐使用UTF-8无BOM格式!), 识别的编码: " + bom.getCharset());
 				}
 
-				config = JSONParser.parses(IOUtil.readAs(bom, bom.getCharset())).asMap();
+				config = new JSONParser().charset(Charset.forName(bom.getCharset())).parseRaw(bom).asMap();
 				config.dot(true);
 				CEntry path = config.getOrNull("mc_conf.native_path");
 				if (path != null) {
@@ -238,7 +238,7 @@ public class MCLauncher {
 		File def = new File(CONFIG.getString("通用.外部accessToken"));
 		if (def.isFile()) {
 			try {
-				CMapping map = JSONParser.parses(IOUtil.readUTF(def)).asMap();
+				CMapping map = JSONParser.parses(roj.io.IOUtil.readUTF(def)).asMap();
 				authName = map.getString("name");
 				authToken = map.getString("token");
 				authUUID = map.getString("uuid");
@@ -323,7 +323,7 @@ public class MCLauncher {
 		CMapping jsonDesc;
 
 		try {
-			jsonDesc = JSONParser.parses(IOUtil.readUTF(new FileInputStream(mcJson))).asMap();
+			jsonDesc = JSONParser.parses(IOUtil.readUTF(mcJson)).asMap();
 
 			File librariesPath = new File(mcRoot, "/libraries/");
 
@@ -420,7 +420,7 @@ public class MCLauncher {
 		return new String[] {s1, s2};
 	}
 
-	@Nonnull
+	@NotNull
 	private static String buildNewArgs(CList mcArg) {
 		StringBuilder arg = new StringBuilder();
 
@@ -502,7 +502,7 @@ public class MCLauncher {
 		String inherit = mapping.getString("inheritsFrom");
 		if (inherit.length() > 0) {
 			File dir = new File(version, inherit + '/' + inherit + ".json");
-			CMapping desc = JSONParser.parses(IOUtil.readUTF(new FileInputStream(dir))).asMap();
+			CMapping desc = JSONParser.parses(IOUtil.readUTF(dir)).asMap();
 			Object[] arr = mergeInherit(imArg, version, desc, jar, asset, mainClass, arg, ver);
 			if (jar == null) jar = (File) arr[0];
 			if (asset == null) asset = (String) arr[1];
@@ -712,7 +712,7 @@ public class MCLauncher {
 				final String name = zipEntry.getName();
 				if (!zipEntry.isDirectory() && !trieTree.strStartsWithThis(name) && (name.endsWith(".dll") || name.endsWith(".so"))) {
 					try (FileOutputStream fos = new FileOutputStream(new File(nativePath, name))) {
-						fos.write(IOUtil.read(zipFile.getInputStream(zipEntry)));
+						fos.write(roj.io.IOUtil.read(zipFile.getInputStream(zipEntry)));
 					}
 				} else if (DEBUG) {
 					CLIUtil.info("排除文件 " + zipEntry);
@@ -835,7 +835,7 @@ public class MCLauncher {
 			}
 		}
 
-		private final UTFCoder uc;
+		private final IOUtil uc;
 		private MessageDigest DIG;
 		private final ProgressGroupedMulti hdr = new ProgressGroupedMulti();
 
@@ -849,7 +849,7 @@ public class MCLauncher {
 		}
 
 		public DownMcFile(String alg) {
-			uc = new UTFCoder();
+			uc = new IOUtil();
 			try {
 				DIG = MessageDigest.getInstance(alg);
 			} catch (NoSuchAlgorithmException ignored) {}

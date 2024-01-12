@@ -1,5 +1,6 @@
 package roj.asm.tree.attr;
 
+import org.jetbrains.annotations.Nullable;
 import roj.asm.Parser;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
@@ -7,7 +8,6 @@ import roj.asm.tree.RawNode;
 import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
 
-import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 

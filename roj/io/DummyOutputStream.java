@@ -1,6 +1,7 @@
 package roj.io;
 
-import javax.annotation.Nonnull;
+import org.jetbrains.annotations.NotNull;
+
 import java.io.OutputStream;
 
 /**
@@ -21,7 +22,7 @@ public final class DummyOutputStream extends OutputStream {
 		wrote++;
 	}
 
-	public void write(@Nonnull byte[] arr, int off, int len) {
+	public void write(@NotNull byte[] arr, int off, int len) {
 		wrote += len;
 	}
 }
