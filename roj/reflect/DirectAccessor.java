@@ -512,7 +512,7 @@ public final class DirectAccessor<T> {
 			if (name != null) {
 				Method method = methodByName.get(name);
 				if (method == null) throw new IllegalArgumentException(itf.getName()+'.'+name+" 不存在或已使用!");
-				if (method.getParameterCount() != off+1) throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 setter, 只因有1个参数, got "+method.getParameterCount()+'!');
+				if (method.getParameterCount() != off+1) throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 setter, 只应有1个参数, got "+method.getParameterCount()+'!');
 				if (!method.getParameterTypes()[off].isAssignableFrom(fieldFs[i].getType())) {
 					throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 setter, 但是参数["+(off+1)+"]不兼容 "+fieldFs[i].getType().getName()+" ("+method.getReturnType().getName()+')');
 				}
