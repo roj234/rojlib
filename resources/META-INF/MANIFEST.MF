@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Main-Class: roj.misc.UIEntry
+Premain-Class: roj.dev.HRAgent
+Agent-Class: roj.dev.HRAgent
+Can-Redefine-Classes: true

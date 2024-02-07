@@ -1,6 +1,14 @@
 # Lava™编译器  (WIP)
 ![lavac](images%2Flavac.png)* 纯属玩梗，并未注册任何商标
 
+## 用前须知
+Lava编译器并非设计为Javac的替代品  
+它的API更多为修改java语法设计  
+（我认为比Javac的API更好）  
+并且不兼容所有Javac的API和部分Java语言特性  
+这意味着如果你习惯使用一些编译插件来帮助你写代码，那么它们无法支持  
+对于一些喜欢使用某些特性的人来说，代码也无法无缝迁移到Lava编译器
+
 ## Lava支持，Java17不支持的
 ### 参数调用  
   使用 `method({参数名:表达式,(可叠加)})` 来按参数调用方法
@@ -45,7 +53,7 @@ static void test(int a = 3, Object o = some_variable.some_field) {
   或  
   import static a.b as c;  
 ### 过程
-  在方法中使用`__sub name(type name)`标记一个过程
+  在方法中使用`__sub name(type name)`标记一个过程  
   几乎用不到，但，我可以不用，你不能没有
 ```java
 static void test() {

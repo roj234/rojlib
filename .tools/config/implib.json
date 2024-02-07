@@ -1,0 +1,8 @@
+{
+	"charset": "UTF-8",
+	"version": "2.0.0",
+	OVERRIDE_RES_PATH: "../resources", 
+	OVERRIDE_SRC_PATH: "../java", 
+	OVERRIDE_BIN_JAR: "tmp/implib.jar", 
+	OVERRIDE_DEV_JAR: "tmp/implib-dev.jar",
+}
