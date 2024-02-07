@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset="utf-8">
+    <title>通用后台</title>
+    <link rel="stylesheet" href="bundle.min.css" />
+</head>
+
+<body>
+    <div class="admin_panel">
+        <div class="top noSel" v-id="title"><i>AE Admin panel</i></div>
+        <div class="body_div">
+            <div class="r closed">
+                <div class="main" id="main">
+                    <button class="btn btn-op btn-light" v-id="power">关闭服务器</button>
+                    <button class="btn btn-op btn-light" v-id="create">允许创建房间:<span>开启</span></button>
+                    <button class="btn btn-op btn-light" v-id="join">允许加入房间:<span>开启</span></button>
+                    <div class="setting-cate"><span>日志</span></div>
+                    <textarea id="logs" v-id="logs"
+                        style="width: 100%; min-height: 400px; background: #333; color: #eee; font-family: Consolas; line-height: 18px;" readonly></textarea>
+                    <button onclick="logs.value='';" class="btn btn-danger">清除</button>
+                    <div class="setting-cate"><span>房间列表</span></div>
+                    <table class="myTable myTable-b">
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>密码</th>
+                                <th>主机</th>
+                                <th>用户 (历史用户)</th>
+                                <th>上行流量</th>
+                                <th>下行流量</th>
+                                <th>创建时间</th>
+                            </tr>
+                        </thead>
+                        <tbody v-id="rooms" v-template="room_list"></tbody>
+                    </table>
+                    <script type="text/tmpl" class="template" data-name="room_list"><%if data.length>0%><%foreach data as $arr%><tr><td><span><%=$arr['id']%></span>&nbsp;<a class="goto">管理</a></td><td><%=$arr['pass']%></td><td><%=$arr['master']%></td><td><%=$arr['users']%>(<%=$arr['index']%>)</td><td><%=$arr['up']%></td><td><%=$arr['down']%></td><td><%=$arr['time']%></td></tr><%/foreach%><%else%><tr class="tc"><td></td><td><h4 class="pad10">没有数据</h4></td><td></td></tr><%/if%>
+                    </script>
+                </div>
+                <div class="main" id="room_info" style="display: none;">
+                    <div class="setting-cate"><span id="room_name"></span> <button class="btn btn-primary" v-id="back">返回</button>&nbsp;&nbsp;</div>
+                    <input class="from-control" v-id="new_pass" placeholder="新密码(自动修改)" />
+                    <button class="btn btn-op btn-dark" v-id="lock">锁定房间:<span>关闭</span></button>
+                    <div class="setting-cate"><span>用户列表</span></div>
+                    <table class="myTable myTable-b">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>地址</th>
+                                <th>状态</th>
+                                <th>上行流量</th>
+                                <th>下行流量</th>
+                                <th>连接时间 (心跳)</th>
+                            </tr>
+                        </thead>
+                        <tbody v-id="users" v-template="user_list"></tbody>
+                    </table>
+                    <button class="btn btn-danger btn-op" v-id="kick_all">踢出所有用户</button>
+                    <button class="btn btn-danger" id="btnKickSel">踢出选中用户</button>
+                    <script type="text/tmpl" class="template" data-name="user_list">
+                       <%if data.length>0%><%foreach data as $arr%><tr><td><div class="custom-box checkbox sm invert"><label><%=$arr['id']%></label></div></td><td><%=$arr['ip']%></td><td><%=$arr['state']%></td><td><%=$arr['up']%></td><td><%=$arr['down']%></td><td><%=$arr['time']%>(<%=$arr['heart']%>)</td></tr><%/foreach%><%else%><tr class="tc"><td></td><td><h4 class="pad10">没有数据</h4></td><td></td></tr><%/if%>
+                    </script>
+                </div>
+            </div>
+        </div>
+        <div class="bottom"><span style="left: 0;"><button id="day_night" class="btn btn-dark btn-sm">日夜<i></i></button></span><span style="right: 0.5rem;">&copy;&nbsp;2022&nbsp;Roj234</span>
+        </div>
+    </div>
+    <div class="notifications"></div>
+    <script type="text/javascript" src="bundle.min.js"></script>
+    <script type="text/javascript">
+        $(function() {
+            ui.v();
+            
+            var t = "main",
+                o = -1,
+                e = ["B", "KB", "MB", "GB", "TB"],
+                n = !0;
+
+            function a() {
+                t = "main", $("#room_name", "#user_list_t").text(""), $("#room_info").hide(), $("#main").show(), o = -1, r()
+            }
+
+            function i(t) {
+                var o = 0;
+                for (t = parseFloat(t); t > 1024;) o++, t /= 1024;
+                return (t = String(t)).substring(0, 6) + e[o]
+            }
+
+            function onUpdate_logs() {
+                var o = $("#logs");
+                o.scrollHeight() - o.scrollTop() - o.height() < 20 && setTimeout(function() {
+                    o.scrollTop(o.scrollHeight())
+                }, 0)
+            }
+            function onUpdate_rooms(t) {
+                t = t.data;
+                for (var e = 0; e < t.length; e++) {
+                    var n = t[e];
+                    n.time = $.StampToDate("Y-m-d H:i:s", n.time), n.up = i(n.up), n.down = i(n.down)
+                }
+            }
+            function onUpdate_users(t) {
+                t = t.data;
+                 for (var o = 0; o < t.length; o++) {
+                    var e = t[o];
+                    e.heart = $.StampToDate("H:i:s", e.heart), e.time = $.StampToDate("Y-m-d H:i:s", e.time), e.up = i(e.up), e.down = i(e.down)
+                }
+            }
+
+            function s(t) {
+                (t = JSON.parse(t)).o || ui.showNotification(t.r), r()
+            }
+            $("#btnBack").on("click", a), $("#room_list_t").delegate("click", "a.goto", function(e) {
+                t = "room", $("#room_name").text(o = $(e.target).parent().find("span").text()), $("#main").hide(), $("#room_info").show(), r()
+            }), 
+
+            $(".btn-op").on("click", function(t) {
+                "SPAN" == (t = $(t.target))[0].nodeName && (t = t.parent());
+                var e = t.find("span");
+                $.ajax({
+                    method: "post",
+                    url: "./api",
+                    data: {
+                        i: t.data("id"),
+                        r: o,
+                        v: "关闭" == e.text()
+                    },
+                    success: function(o) {
+                        (o = JSON.parse(o)).o ? e.length && (t.toggleClass("btn-light").toggleClass("btn-dark"), e.text("关闭" == e.text() ? "开启" : "关闭")) : ui.showNotification(o.r)
+                    }
+                })
+            });
+            $("#btnKickSel").on("click", function(t) {
+                var e = function(t) {
+                    var o;
+                    return (o = $(t + " tr td .custom-box label.toggled").text()) && o.join ? o.join(",") : null == o || 0 == o.length ? null : o
+                }("#user_list_t");
+                e && $.ajax({
+                    method: "post",
+                    url: "./api",
+                    data: {
+                        i: "r_kick",
+                        r: o,
+                        v: e
+                    },
+                    success: s
+                })
+            });
+        });
+    </script>
+</body>
+
+</html>

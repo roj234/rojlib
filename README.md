@@ -178,8 +178,8 @@ Promise:
 对象位置: $.通用.  
 原因: 未预料的: ,  
   
-at roj.config.word.ITokenizer.err(ITokenizer.java:967)  
-at roj.config.word.ITokenizer.err(ITokenizer.java:963)  
+at roj.config.word.Tokenizer.err(ITokenizer.java:967)  
+at roj.config.word.Tokenizer.err(ITokenizer.java:963)  
 at roj.config.JSONParser.unexpected(JSONParser.java:232)  
 at roj.config.JSONParser.jsonObject(JSONParser.java:153)  
 at roj.config.JSONParser.jsonRead(JSONParser.java:217)  

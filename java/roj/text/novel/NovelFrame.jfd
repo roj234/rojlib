@@ -1,0 +1,521 @@
+JFDML JFormDesigner: "8.1.1.0.298" Java: "17.0.9" encoding: "UTF-8"
+
+new FormModel {
+	contentType: "form/swing"
+	root: new FormRoot {
+		add( new FormWindow( "javax.swing.JFrame", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
+			"autoSize": false
+		} ) {
+			name: "this"
+			"title": "小说管理系统"
+			add( new FormComponent( "javax.swing.JSeparator" ) {
+				name: "separator1"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 50
+				"width": 420
+				"height": -2
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnRead"
+				"text": "读取"
+				"margin": new java.awt.Insets( 2, 4, 2, 4 )
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "read_novel", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 55
+				"height": 20
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "novelPath"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 55
+				"y": 55
+				"width": 167
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnSelectNovel"
+				"text": "…"
+				"margin": new java.awt.Insets( 2, 2, 2, 2 )
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "select_novel", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 220
+				"y": 54
+				"height": 23
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label3"
+				"text": "校对整理"
+				"font": new com.jformdesigner.model.SwingDerivedFont( null, 0, -2, false )
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 385
+				"y": 51
+			} )
+			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
+				name: "scrollPane1"
+				"horizontalScrollBarPolicy": 31
+				"verticalScrollBarPolicy": 22
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+				add( new FormComponent( "javax.swing.JEditorPane" ) {
+					name: "errout"
+					"text": "小提示\n在章节界面误拖动可以按右键取消\n预定义正则可以在高级菜单中修改\n双击章节编辑名称和序号"
+				} )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 435
+				"y": 5
+				"width": 505
+				"height": 630
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnAlign"
+				"text": "排版"
+				"enabled": false
+				"margin": new java.awt.Insets( 2, 4, 2, 4 )
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "align_novel", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 95
+				"height": 20
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnFindChapter"
+				"text": "分章"
+				"enabled": false
+				"margin": new java.awt.Insets( 2, 4, 2, 4 )
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "test_chapter", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 75
+				"height": 20
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "alignRegexp"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 55
+				"y": 85
+				"width": 320
+			} )
+			add( new FormComponent( "javax.swing.JProgressBar" ) {
+				name: "progress"
+				"value": 2000
+				"maximum": 10000
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 4
+				"width": 320
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "progressStr"
+				"text": "ready"
+				"horizontalAlignment": 0
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 325
+				"y": 4
+				"width": 105
+			} )
+			add( new FormComponent( "javax.swing.JComboBox" ) {
+				name: "cPresetRegexp"
+				auxiliary() {
+					"JavaCodeGenerator.typeParameters": "PresetRegexp"
+				}
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "on_preset_regexp_clicked", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 290
+				"y": 60
+				"width": 85
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "openAdvanceMenu"
+				"text": "高级"
+				"margin": new java.awt.Insets( 1, 6, 1, 6 )
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "open_advanced_menu", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 245
+				"y": 60
+			} )
+			add( new FormComponent( "javax.swing.JSeparator" ) {
+				name: "separator2"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 490
+				"width": 420
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label7"
+				"text": "章节管理"
+				"font": new com.jformdesigner.model.SwingDerivedFont( null, 0, -2, false )
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 385
+				"y": 491
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnWrite"
+				"text": "写入"
+				"enabled": false
+				"margin": new java.awt.Insets( 2, 4, 2, 4 )
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "write_novel", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 115
+				"height": 20
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "draggedItem"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 0
+				"y": 0
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "alignReplaceTo"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 55
+				"y": 110
+				"width": 320
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "prefixSpaceOnly"
+				"text": "仅整理空白开始的行"
+				"selected": true
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 435
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "removeHalfEmpty"
+				"text": "去除50%的空行"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 150
+				"y": 435
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "reorderChapter"
+				"text": "重新排序章节"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 255
+				"y": 435
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "renameChapter"
+				"text": "重新生成章节名称"
+				addEvent( new FormEvent( "javax.swing.event.ChangeListener", "stateChanged", "renameChapterStateChanged", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 460
+			} )
+			add( new FormComponent( "javax.swing.JComboBox" ) {
+				name: "chapterNameType"
+				"model": new javax.swing.DefaultComboBoxModel {
+					selectedItem: "不处理数字"
+					addElement( "不处理数字" )
+					addElement( "阿拉伯数字" )
+					addElement( "中国数字" )
+				}
+				"enabled": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 140
+				"y": 462
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "checkChapterDup"
+				"text": "查重"
+				"enabled": false
+				"toolTipText": "查找疑似重复的章节"
+				"margin": new java.awt.Insets( 2, 4, 2, 4 )
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "checkChapterDup", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 320
+				"y": 500
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "delChapterText"
+				"text": "删除"
+				"enabled": false
+				"toolTipText": "删除该章节及其内容"
+				"margin": new java.awt.Insets( 2, 4, 2, 4 )
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "delChapterText", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 55
+				"y": 500
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "delChapterName"
+				"text": "与上章合并"
+				"enabled": false
+				"margin": new java.awt.Insets( 2, 4, 2, 4 )
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "delChapterName", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 245
+				"y": 500
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "keepModTime"
+				"text": "保留修改时间"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 295
+				"y": 460
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "replaceChapter"
+				"text": "替换内容"
+				"enabled": false
+				"toolTipText": "用右侧输入框的内容替换选中章节的内容"
+				"margin": new java.awt.Insets( 2, 4, 2, 4 )
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "replaceChapter", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 95
+				"y": 500
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "nextDisorder"
+				"text": "查找疑似误判"
+				"enabled": false
+				"margin": new java.awt.Insets( 2, 4, 2, 4 )
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "nextDisorderChapter", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 158
+				"y": 500
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "cascadeChapter"
+				"text": "启发式断章(WIP)"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 185
+				"y": 130
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnTextReplaceRegex"
+				"text": "正则替换"
+				"margin": &Insets0 new java.awt.Insets( 0, 0, 0, 0 )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 55
+				"y": 135
+				"width": 60
+				"height": 20
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnTextReplaceBatch"
+				"text": "批量替换"
+				"margin": #Insets0
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"width": 60
+				"height": 20
+				"x": 120
+				"y": 135
+			} )
+			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
+				name: "scrollPane4"
+				add( new FormComponent( "javax.swing.JTree" ) {
+					name: "cascadeChapterUI"
+					"model": new javax.swing.tree.DefaultTreeModel( new javax.swing.tree.DefaultMutableTreeNode {
+						userObject: "未加载"
+					} )
+					"rootVisible": false
+				} )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 160
+				"width": 410
+				"height": 270
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "btnInsertMode"
+				"text": "快速插入模式"
+				"toolTipText": "按住节点(A)并拖动到节点(B)上时\n将A设置为B的孩子"
+				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "btnInsertMode", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 525
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "button5"
+				"text": "新增章节"
+				"enabled": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 110
+				"y": 525
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "checkBox1"
+				"text": "重新命名"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 215
+				"y": 580
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "button1"
+				"text": "del by len"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 50
+				"y": 575
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 0, 0 )
+			"size": new java.awt.Dimension( 945, 670 )
+		} )
+		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) ) {
+			name: "advancedMenu"
+			"title": "高级正则参数"
+			addEvent( new FormEvent( "java.awt.event.WindowListener", "windowClosing", "advancedMenuWindowClosing", true ) )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label5"
+				"text": "章节序号group"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 20
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label6"
+				"text": "章节名称group"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 45
+			} )
+			add( new FormComponent( "javax.swing.JSpinner" ) {
+				name: "chapIdGroupInp"
+				"model": new javax.swing.SpinnerNumberModel {
+					minimum: 0
+					value: 1
+				}
+				addEvent( new FormEvent( "javax.swing.event.ChangeListener", "stateChanged", "chapIdGroupInpStateChanged", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 90
+				"y": 15
+				"width": 45
+			} )
+			add( new FormComponent( "javax.swing.JSpinner" ) {
+				name: "chapNameGroupInp"
+				"model": new javax.swing.SpinnerNumberModel {
+					minimum: 0
+					value: 2
+				}
+				addEvent( new FormEvent( "javax.swing.event.ChangeListener", "stateChanged", "chapNameGroupInpStateChanged", true ) )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 90
+				"y": 40
+				"width": 45
+			} )
+			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
+				name: "scrollPane3"
+				add( new FormComponent( "javax.swing.JTextArea" ) {
+					name: "presetRegexpInp"
+					"text": "常用|1|3\n(?:正文\\s*)?第(?:\\s+)?([―－\\-─—壹贰叁肆伍陆柒捌玖一二两三四五六七八九十○〇零百千O0-9０-９ ]{1,12})(?:\\s+)?([章卷])[ 　\\t]*(.*)$\n第$1$2 $3\n纯中文|1|1\n(?<=[ 　\\t\\n])([0-9 \\x4e00-\\x9fa5（）\\(\\)\\[\\]]{1,15})[ 　\\t]*$\n$1"
+				} )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 90
+				"width": 380
+				"height": 185
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label8"
+				"text": "预定义正则"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 70
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 950, 0 )
+			"size": new java.awt.Dimension( 400, 315 )
+		} )
+		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) ) {
+			name: "chapterParamWin"
+			"title": "章节参数(直接保存)"
+			addEvent( new FormEvent( "java.awt.event.WindowListener", "windowClosing", "advancedMenuWindowClosing", true ) )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "cpwOutName"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 15
+				"width": 185
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "cpwChapName"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 60
+				"y": 70
+				"width": 130
+			} )
+			add( new FormComponent( "javax.swing.JSpinner" ) {
+				name: "cpwChapNo"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 60
+				"y": 45
+				"width": 130
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "cpwOrigName"
+				"editable": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 100
+				"width": 185
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label4"
+				"text": "输出名称"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 0
+				"y": 0
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label9"
+				"text": "章节序号"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 45
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label10"
+				"text": "章节名称"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 70
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label11"
+				"text": "输入名称"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 0
+				"y": 85
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 950, 320 )
+			"size": new java.awt.Dimension( 200, 180 )
+		} )
+	}
+}
