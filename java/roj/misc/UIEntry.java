@@ -57,6 +57,7 @@ public class UIEntry extends JFrame {
 		bind(uiMapper, "roj.asmx.mapper.MapperUI");
 		bind(uiObfuscator, "roj.asmx.mapper.ObfuscatorUI");
 		bind(uiLavacTest, "roj.compiler.LavacUI");
+		bind(uiDIffFinder, "roj.text.diff.DiffFinder");
 	}
 
 	private void initComponents() {
@@ -71,6 +72,7 @@ public class UIEntry extends JFrame {
 		uiLavacTest = new JButton();
 		uiNat = new JButton();
 		uiNovel = new JButton();
+		uiDIffFinder = new JButton();
 
 		//======== this ========
 		setTitle("\u9009\u62e9\u9700\u8981\u8fdb\u5165\u7684GUI\u529f\u80fd");
@@ -132,6 +134,11 @@ public class UIEntry extends JFrame {
 		contentPane.add(uiNovel);
 		uiNovel.setBounds(270, 40, 80, 21);
 
+		//---- uiDIffFinder ----
+		uiDIffFinder.setText("\u6587\u4ef6\u6bd4\u8f83\u5de5\u5177");
+		contentPane.add(uiDIffFinder);
+		uiDIffFinder.setBounds(new Rectangle(new Point(45, 70), uiDIffFinder.getPreferredSize()));
+
 		contentPane.setPreferredSize(new Dimension(400, 325));
 		pack();
 		setLocationRelativeTo(getOwner());
@@ -149,5 +156,6 @@ public class UIEntry extends JFrame {
 	private JButton uiLavacTest;
 	private JButton uiNat;
 	private JButton uiNovel;
+	private JButton uiDIffFinder;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

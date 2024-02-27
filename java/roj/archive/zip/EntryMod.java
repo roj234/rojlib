@@ -1,5 +1,7 @@
 package roj.archive.zip;
 
+import org.intellij.lang.annotations.MagicConstant;
+
 /**
  * @author Roj234
  * @since 2023/3/14 0014 0:42
@@ -8,17 +10,17 @@ public final class EntryMod {
 	String name;
 	ZEntry entry;
 
-	public static final int E_COMPRESS = 8, E_UTF_NAME = 2, E_LARGE = 4, E_ORIGINAL_TIME = 1;
+	public static final int KEEP_TIME = 1, UFS = 2, LARGE = 4, COMPRESS = 8;
+	@MagicConstant(flags = {KEEP_TIME, UFS, LARGE, COMPRESS})
 	public byte flag;
 
 	public Object data;
 
 	public byte[] pass;
+	@MagicConstant(intValues = {ZipArchive.CRYPT_NONE, ZipArchive.CRYPT_ZIP2, ZipArchive.CRYPT_AES, ZipArchive.CRYPT_AES2})
 	public int cryptType;
 
-	public String getName() {
-		return name;
-	}
+	public String getName() { return name; }
 
 	@Override
 	public boolean equals(Object o) {
@@ -29,11 +31,7 @@ public final class EntryMod {
 	}
 
 	@Override
-	public int hashCode() {
-		return name.hashCode();
-	}
+	public int hashCode() { return name.hashCode(); }
 
-	public boolean large() {
-		return (flag & E_LARGE) != 0;
-	}
+	public boolean large() { return (flag & LARGE) != 0; }
 }

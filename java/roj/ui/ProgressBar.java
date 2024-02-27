@@ -18,7 +18,7 @@ public class ProgressBar implements AutoCloseable {
 
 	protected String unit;
 	private String name, prefix, postfix;
-	private int barInterval, dataWindow;
+	private int barInterval;
 	private long barUpdate, dataUpdate;
 	private boolean hideBar, hideSpeed;
 
@@ -28,7 +28,6 @@ public class ProgressBar implements AutoCloseable {
 		this.name = name;
 		this.unit = "it";
 		this.barInterval = 200;
-		this.dataWindow = 60000;
 	}
 
 	public void setName(String name) { this.name = name; }
@@ -36,25 +35,23 @@ public class ProgressBar implements AutoCloseable {
 	public void setPrefix(String s) { this.prefix = s; }
 	public void setPostfix(String s) { this.postfix = s; }
 	public void setBarInterval(int bi) { this.barInterval = bi; }
-	public void setDataWindow(int dw) { this.dataWindow = dw; }
 	public void setHideBar(boolean b) { this.hideBar = b; }
 	public void setHideSpeed(boolean hideSpeed) { this.hideSpeed = hideSpeed; }
 	public double getEta(long remainUnit) { return remainUnit <= 0 ? 0 : remainUnit / speedPerMs(); }
 	public double speedPerMs() { return dataUpdate == 0 ? 1 : (double) delta / (System.currentTimeMillis() - dataUpdate); }
 
+	public synchronized void resetSpeed() {
+		delta = 0;
+		dataUpdate = 0;
+	}
+
 	public void update(double percent, int deltaUnit) {
 		long time = System.currentTimeMillis();
 		synchronized (this) {
-			long dtime = time - dataUpdate;
-			if (dtime >= dataWindow) {
-				delta = deltaUnit;
-				dataUpdate = time-1;
-			} else {
-				delta += deltaUnit;
-			}
+			if (dataUpdate == 0) dataUpdate = time;
+			delta += deltaUnit;
 
-			dtime = time - barUpdate;
-			if (dtime < barInterval) return;
+			if (time - barUpdate < barInterval) return;
 			barUpdate = time;
 		}
 		updateForce(percent);

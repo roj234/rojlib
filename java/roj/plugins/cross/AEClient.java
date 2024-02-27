@@ -93,7 +93,7 @@ public class AEClient extends IAEClient {
 					break;
 				}
 
-				rb.read(task.key, 32, 32);
+				rb.readFully(task.key, 32, 32);
 				task.pipeId = id = rb.readInt();
 				asyncPipeLogin(id, task.key, task);
 			break;
@@ -252,7 +252,7 @@ public class AEClient extends IAEClient {
 				pipe.setDown(income);
 				loop.register(pipe, null);
 			} catch (IOException e) {
-				e.printStackTrace();
+				LOGGER.error("无法开启管道 {}", e, pipe.att);
 			}
 
 			LOGGER.info("开启管道 {}", pipe.att);

@@ -42,5 +42,5 @@ public final class Deflate extends QZCoder {
 			}
 		};
 	}
-	public InputStream decode(InputStream in, byte[] password, long uncompressedSize, int maxMemoryLimitInKb) throws IOException { return ZipArchive._cachedInflate(in); }
+	public InputStream decode(InputStream in, byte[] password, long uncompressedSize, int maxMemoryLimitInKb) throws IOException { return ZipArchive.getCachedInflater(in); }
 }

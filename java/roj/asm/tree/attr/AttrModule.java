@@ -78,7 +78,7 @@ public final class AttrModule extends Attribute {
 	public String name() { return "Module"; }
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		self.write(w, pool);
 
 		final List<ModuleInfo> requires = this.requires;

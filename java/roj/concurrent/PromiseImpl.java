@@ -292,14 +292,13 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 	}
 
 	@Override
-	public boolean cancel(boolean mayInterruptIfRunning) {
+	public boolean cancel() {
 		if (isDone()) return false;
 		reject(new CancellationException("user cancelled"));
 		return true;
 	}
 	@Override
 	public boolean isCancelled() { return (_state&(TASK_COMPLETE|TASK_SUCCESS)) == TASK_COMPLETE && _val instanceof CancellationException; }
-	@Override
 	public boolean isDone() { return (_state&TASK_COMPLETE) != 0; }
 
 	@Override

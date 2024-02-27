@@ -1,7 +1,7 @@
 package roj.asmx;
 
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.asm.Parser;
 import roj.asm.cp.ConstantPool;
 import roj.asm.tree.*;
@@ -38,10 +38,10 @@ public class AnnotationRepo {
 	public void add(File file) {
 		if (monitor == null) throw new IllegalStateException("finished");
 
-		try (ZipArchive za = new ZipArchive(file)) {
-			for (ZEntry ze : za.getEntries().values()) {
+		try (ZipFile za = new ZipFile(file)) {
+			for (ZEntry ze : za.entries()) {
 				if (IOUtil.extensionName(ze.getName()).equalsIgnoreCase("class")) {
-					ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(za.getInput(ze)));
+					ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(ze)));
 					if (data.name.concat(".class").equalsIgnoreCase(ze.getName())) {
 						add(data);
 					}

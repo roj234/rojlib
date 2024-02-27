@@ -6,7 +6,7 @@ import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.LZMAInputStream;
 import roj.archive.qz.xz.LZMAOutputStream;
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.asm.AsmShared;
 import roj.asm.cp.*;
 import roj.asm.tree.*;
@@ -1323,12 +1323,11 @@ public class Mapper extends Mapping {
 
 		for (int i = 0; i < files.size(); i++) {
 			Object o = files.get(i);
-			if (o instanceof File) {
-				File fi = (File) o;
+			if (o instanceof File fi) {
 				String f = fi.getName().toLowerCase(Locale.ROOT);
 				if (!f.startsWith(DONT_LOAD_PREFIX) && (f.endsWith(".zip") || f.endsWith(".jar"))) {
-					try (ZipArchive archive = new ZipArchive(fi)) {
-						for (ZEntry entry : archive.getEntries().values()) {
+					try (ZipFile archive = new ZipFile(fi)) {
+						for (ZEntry entry : archive.entries()) {
 							if (entry.getName().endsWith(".class")) {
 								try (InputStream in = archive.getStream(entry)) {
 									readLibFile(new Context(entry.getName(), in), classes, m);

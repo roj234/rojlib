@@ -102,7 +102,7 @@ public class ToNBT implements CVisitor {
 				}
 				break;
 			default:
-				if (state != type+2) throw new IllegalStateException("NBT列表的每项类型必须相同/at="+stateLen+":"+size);
+				if (state != type+2) throw new IllegalStateException("NBT列表的每项类型必须相同/at="+stateLen+":"+size+"/type="+(type+2)+",exceptType="+state);
 				size++;
 				break;
 		}
@@ -132,9 +132,9 @@ public class ToNBT implements CVisitor {
 		long[] arr = states;
 		if (arr.length <= depth) states = arr = Arrays.copyOf(arr, depth+1);
 
-		if (size > 0xFFFFFFFL) throw new IllegalStateException("天哪你这是哪家的列表");
+		if (size < -0x3FFFFFF || size > 0x3FFFFFF) throw new IllegalStateException("天哪你这是哪家的列表/size="+size);
 
-		arr[depth] = ((long) state << 60) | ((long) sizeOffset << 28) | (size &0xFFFFFFFL);
+		arr[depth] = ((long) state << 60) | ((long) (sizeOffset+1) << 28) | ((size+0x3FFFFFF)&0xFFFFFFFL);
 
 		state = (byte) state1;
 		size = 0;
@@ -162,8 +162,8 @@ public class ToNBT implements CVisitor {
 		long data = states[--stateLen];
 
 		state = (byte) (data >>> 60);
-		sizeOffset = (int) (data >>> 28);
-		size = (int) data;
+		sizeOffset = (int) (data >>> 28) - 1;
+		size = ((int) data&0xFFFFFFF) - 0x3FFFFFF;
 	}
 
 	public final void reset() {

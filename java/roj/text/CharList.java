@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.CharBuffer;
 import java.util.Arrays;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -667,6 +668,18 @@ public class CharList implements CharSequence, Appender {
 
 		list = out.list;
 		len = out.len;
+		return count;
+	}
+	public final int preg_match_cllabck(Pattern regexp, Consumer<Matcher> callback) {
+		Matcher m = regexp.matcher(this);
+		int count = 0;
+		int i = 0;
+		while (m.find(i)) {
+			callback.accept(m);
+
+			i = m.end();
+			count++;
+		}
 		return count;
 	}
 	// endregion

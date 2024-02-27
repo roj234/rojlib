@@ -1,9 +1,9 @@
 package roj.util;
 
 import org.jetbrains.annotations.NotNull;
+import roj.io.MyDataInput;
 import roj.io.UnsafeOutputStream;
 import roj.math.MathUtils;
-import roj.reflect.ReflectionUtils;
 import roj.text.TextUtil;
 import sun.misc.Unsafe;
 
@@ -17,6 +17,7 @@ import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
 
+import static roj.reflect.ReflectionUtils.BIG_ENDIAN;
 import static roj.reflect.ReflectionUtils.u;
 
 /**
@@ -29,16 +30,6 @@ public class DirectByteList extends DynByteBuf {
 	NativeMemory nm;
 	volatile long address;
 	int length;
-
-	public static DirectByteList allocateDirect() { return new DirectByteList(); }
-	public static DirectByteList allocateDirect(int capacity) { return new DirectByteList(capacity); }
-	public static DirectByteList allocateDirect(int capacity, int maxCapacity) {
-		return new DirectByteList(capacity) {
-			@Override
-			public int maxCapacity() { return maxCapacity; }
-		};
-	}
-	public static DirectByteList wrap(long address, int length) { return new DirectByteList.Slice(address, length); }
 
 	DirectByteList(boolean unused) {}
 	DirectByteList() { nm = new NativeMemory(); }
@@ -178,7 +169,7 @@ public class DirectByteList extends DynByteBuf {
 
 	public final DirectByteList putInt(int wi, int i) {
 		long addr = testWI(wi, 4)+address;
-		if (ReflectionUtils.BIG_ENDIAN) {
+		if (BIG_ENDIAN) {
 			u.putInt(addr, i);
 		} else {
 			u.putByte(addr++, (byte) (i >>> 24));
@@ -190,7 +181,7 @@ public class DirectByteList extends DynByteBuf {
 	}
 	public final DirectByteList putIntLE(int wi, int i) {
 		long addr = testWI(wi, 4)+address;
-		if (!ReflectionUtils.BIG_ENDIAN) {
+		if (!BIG_ENDIAN) {
 			u.putInt(addr, i);
 		} else {
 			u.putByte(addr++, (byte) i);
@@ -203,7 +194,7 @@ public class DirectByteList extends DynByteBuf {
 
 	public final DirectByteList putLong(int wi, long l) {
 		long addr = testWI(wi, 8)+address;
-		if (ReflectionUtils.BIG_ENDIAN) {
+		if (BIG_ENDIAN) {
 			u.putLong(addr, l);
 		} else {
 			u.putByte(addr++, (byte) (l >>> 56));
@@ -219,7 +210,7 @@ public class DirectByteList extends DynByteBuf {
 	}
 	public final DirectByteList putLongLE(int wi, long l) {
 		long addr = testWI(wi, 8)+address;
-		if (!ReflectionUtils.BIG_ENDIAN) {
+		if (!BIG_ENDIAN) {
 			u.putLong(addr, l);
 		} else {
 			u.putByte(addr++, (byte) l);
@@ -329,13 +320,13 @@ public class DirectByteList extends DynByteBuf {
 	// endregion
 	// region GETxxx
 
-	public final void read(byte[] b, int off, int len) {
+	public final void readFully(byte[] b, int off, int len) {
 		ArrayUtil.checkRange(b, off, len);
 		if (len > 0) {
 			copyToArray(address+moveRI(len), b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, len);
 		}
 	}
-	public final void read(int i, byte[] b, int off, int len) {
+	public final void readFully(int i, byte[] b, int off, int len) {
 		ArrayUtil.checkRange(b, off, len);
 		if (len > 0) {
 			copyToArray(address+testWI(i, len), b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, len);
@@ -367,7 +358,7 @@ public class DirectByteList extends DynByteBuf {
 		return (u.getByte(addr++) & 0xFF) | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr) & 0xFF) << 16;
 	}
 
-	public final int readVarInt(boolean mayNeg) {
+	public final int readVarInt(boolean zag) {
 		int value = 0;
 		int i = 0;
 
@@ -382,7 +373,7 @@ public class DirectByteList extends DynByteBuf {
 			i += 7;
 			if ((chunk & 0x80) == 0) {
 				rIndex = (int) (off - address);
-				if (mayNeg) return zag(value);
+				if (zag) return MyDataInput.zag(value);
 				if (value < 0) break;
 				return value;
 			}
@@ -393,18 +384,16 @@ public class DirectByteList extends DynByteBuf {
 
 	public final int readInt(int i) {
 		long addr = testWI(i, 4)+address;
-		if (ReflectionUtils.BIG_ENDIAN) return u.getInt(addr);
-		return (u.getByte(addr++) & 0xFF) << 24 | (u.getByte(addr++) & 0xFF) << 16 | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr) & 0xFF);
+		return BIG_ENDIAN ? u.getInt(addr) : (u.getByte(addr++) & 0xFF) << 24 | (u.getByte(addr++) & 0xFF) << 16 | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr) & 0xFF);
 	}
 	public final int readIntLE(int i) {
 		long addr = testWI(i, 4)+address;
-		if (!ReflectionUtils.BIG_ENDIAN) return u.getInt(addr);
-		return (u.getByte(addr++) & 0xFF) | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr++) & 0xFF) << 16 | (u.getByte(addr) & 0xFF) << 24;
+		return !BIG_ENDIAN ? u.getInt(addr) : (u.getByte(addr++) & 0xFF) | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr++) & 0xFF) << 16 | (u.getByte(addr) & 0xFF) << 24;
 	}
 
 	public final long readLong(int i) {
 		long addr = testWI(i, 8)+address;
-		if (ReflectionUtils.BIG_ENDIAN) return u.getLong(addr);
+		if (BIG_ENDIAN) return u.getLong(addr);
 		return (u.getByte(addr++) & 0xFFL) << 56 |
 			(u.getByte(addr++) & 0xFFL) << 48 |
 			(u.getByte(addr++) & 0xFFL) << 40 |
@@ -416,7 +405,7 @@ public class DirectByteList extends DynByteBuf {
 	}
 	public final long readLongLE(int i) {
 		long addr = testWI(i, 8)+address;
-		if (!ReflectionUtils.BIG_ENDIAN) return u.getLong(addr);
+		if (!BIG_ENDIAN) return u.getLong(addr);
 		return (u.getByte(addr++) & 0xFFL) |
 			(u.getByte(addr++) & 0xFFL) << 8 |
 			(u.getByte(addr++) & 0xFFL) << 16 |
@@ -431,18 +420,15 @@ public class DirectByteList extends DynByteBuf {
 		if (len <= 0) return "";
 
 		long addr = testWI(i, len)+address;
+		byte[] ob = ArrayCache.getByteArray(len, false);
+		u.copyMemory(null,addr,ob,Unsafe.ARRAY_BYTE_BASE_OFFSET, len);
 
-		char[] ob = ArrayCache.getCharArray(len, false);
-		int j = 0;
-		while (len-- > 0) ob[j++] = (char)u.getByte(addr++);
-
-		String s = new String(ob, 0, j);
+		String s = new String(ob, 0, len, StandardCharsets.ISO_8859_1);
 		ArrayCache.putArray(ob);
 		return s;
 	}
 
 	@Override
-	@SuppressWarnings("deprecation")
 	public final String readLine() {
 		long l = address+rIndex;
 		int r = wIndex-rIndex;
@@ -459,7 +445,7 @@ public class DirectByteList extends DynByteBuf {
 		byte[] tmp = new byte[(int)(l-address)-rIndex];
 		copyToArray(address + rIndex, tmp, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, tmp.length);
 		rIndex += tmp.length;
-		return new String(tmp, 0);
+		return new String(tmp, 0, tmp.length, StandardCharsets.ISO_8859_1);
 	}
 
 	public final int readZeroTerminate(int max) {
@@ -486,9 +472,6 @@ public class DirectByteList extends DynByteBuf {
 	// endregion
 	// region Buffer Ops
 
-	public final DirectByteList slice(int len) {
-		return slice(moveRI(len), len);
-	}
 	public final DirectByteList slice(int off, int len) {
 		return new Slice(testWI(off, len)+address, len);
 	}

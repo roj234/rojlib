@@ -22,7 +22,6 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static roj.asm.Opcodes.*;
 
@@ -40,8 +39,6 @@ public final class DirectAccessor<T> {
 		"sun/reflect/MagicAccessorImpl" : VMInternals.HackMagicAccessor();
 
 	public static final MyBitSet EMPTY_BITS = new MyBitSet(0);
-
-	static final AtomicInteger NEXT_ID = new AtomicInteger();
 
 	private final MyHashMap<String, Method> methodByName;
 	private final Class<T> itf;
@@ -69,7 +66,7 @@ public final class DirectAccessor<T> {
 		var = new ConstantData();
 
 		String itfClass = itf.getName().replace('.', '/');
-		String clsName = itfClass+"$DAC$"+NEXT_ID.getAndIncrement();
+		String clsName = itfClass+"$DAC$"+ReflectionUtils.uniqueId();
 		makeHeader(clsName, itfClass, var);
 		FastInit.prepare(var);
 	}
@@ -336,11 +333,8 @@ public final class DirectAccessor<T> {
 								continue outer;
 							}
 						}
+						if (off1 == 1 && !types[0].isAssignableFrom(target)) continue;
 
-						types = sm.getParameterTypes();
-						if (off1 == 1 && !types[0].isAssignableFrom(target)) {
-							throw new IllegalArgumentException(itf.getName()+'.'+name+" 的第一个参数 ("+types[0].getName()+") 不能转换为 "+target.getName());
-						}
 						if (found != -1) {
 							if (!Arrays.equals(m.getParameterTypes(), tm.getParameterTypes())) {
 								throw new IllegalArgumentException(

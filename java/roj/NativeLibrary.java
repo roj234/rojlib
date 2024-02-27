@@ -71,4 +71,24 @@ public class NativeLibrary {
 	}
 
 	private static native void init();
+
+	/*
+	HANDLE g_hEvent;
+	int main() {
+		g_hEvent = CreateEventW(NULL, 0, 0, LPCWSTR("Hi"));
+		SetEvent(g_hEvent);
+
+		if (g_hEvent) {
+			if (ERROR_ALREADY_EXISTS == GetLastError()){
+				//如果多开会退出
+				std::cout << "只能启动一个哦" << std::endl;
+				return 0;
+			}
+		}
+
+		return 0;
+	}
+	 */
+	private static native long createMutex(String name);
+	private static native void deleteMutex(long addr);
 }

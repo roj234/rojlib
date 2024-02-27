@@ -83,7 +83,7 @@ public class StreamCompress implements ChannelHandler {
 				if (!in.isReadable()) break;
 
 				int cnt = Math.min(in.readableBytes(), tmp1.capacity());
-				in.read(tmp1.array(), tmp1.arrayOffset(), cnt);
+				in.readFully(tmp1.array(), tmp1.arrayOffset(), cnt);
 				inf.setInput(tmp1.array(), tmp1.arrayOffset(), cnt);
 			} while (true);
 
@@ -143,7 +143,7 @@ public class StreamCompress implements ChannelHandler {
 				if (!in.isReadable()) break;
 
 				int cnt = Math.min(in.readableBytes(), tmp1.capacity());
-				in.read(tmp1.array(), tmp1.arrayOffset(), cnt);
+				in.readFully(tmp1.array(), tmp1.arrayOffset(), cnt);
 				def.setInput(tmp1.array(), tmp1.arrayOffset(), cnt);
 			} while (true);
 

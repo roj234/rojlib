@@ -11,10 +11,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.visitor.CodeVisitor;
-import roj.asm.visitor.CodeWriter;
-import roj.asm.visitor.Label;
-import roj.asm.visitor.XAttrCode;
+import roj.asm.visitor.*;
 import roj.text.CharList;
 import roj.util.AttributeKey;
 import roj.util.ByteList;
@@ -159,7 +156,14 @@ public final class MethodNode extends CNode {
 
 			if (!in.isEmpty()) {
 				MethodParameters acc = parsedAttr(cp, Attribute.MethodParameters);
-				XAttrCode code = parsedAttr(cp, Attribute.Code);
+				XAttrCode code;
+				try {
+					code = parsedAttr(cp, Attribute.Code);
+				} catch (ClassCastException e) {
+					AttrCodeWriter code1 = (AttrCodeWriter) attrByName("Code");
+					//noinspection all
+					code = new XAttrCode(code1.getRawData(), cp, this);
+				}
 
 				LocalVariableTable lvt = code != null ? (LocalVariableTable) code.attrByName("LocalVariableTable") : null;
 				Label ZERO_READONLY = new Label(0);

@@ -51,7 +51,8 @@ public class DelegatedPrintStream extends PrintStream {
 		int prevI = i;
 		while (len-- > 0) {
 			if (b[i] == '\n') {
-				bb.put(b, prevI, i-prevI);
+				int isRn = i > prevI && b[i - 1] == '\r' ? 1 : 0;
+				bb.put(b, prevI, i-prevI-isRn);
 				prevI = i+1;
 
 				newLine();

@@ -1,6 +1,6 @@
 package roj.net.proto_obf;
 
-import roj.crypt.CRCAny;
+import roj.crypt.CRC32s;
 import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
@@ -23,7 +23,7 @@ public final class Obfuscate extends PacketMerger implements ChannelHandler {
 		DynByteBuf buf = (DynByteBuf) msg;
 		if (sByte == -1) {
 			sByte = buf.readUnsignedByte();
-			sByte = CRCAny.CRC_32.update(sByte, 0);
+			sByte = CRC32s.update(sByte, 0);
 		}
 
 		ArrayRef arr = buf.byteRange(buf.rIndex, buf.readableBytes());
@@ -32,7 +32,7 @@ public final class Obfuscate extends PacketMerger implements ChannelHandler {
 		for (int i = 0; i < arr.length; i++) {
 			int v = arr.get(i) ^ cc;
 			arr.set(i, v);
-			cc = CRCAny.CRC_32.update(cc, v);
+			cc = CRC32s.update(cc, v);
 		}
 		sByte = cc;
 
@@ -54,7 +54,7 @@ public final class Obfuscate extends PacketMerger implements ChannelHandler {
 		for (int i = 0; i < arr.length; i++) {
 			int v = arr.get(i);
 			arr.set(i, v ^ cc);
-			cc = CRCAny.CRC_32.update(cc, v);
+			cc = CRC32s.update(cc, v);
 		}
 		cByte = cc;
 

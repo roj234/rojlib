@@ -8,6 +8,7 @@ import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
@@ -71,7 +72,7 @@ public class ObfuscatorUI extends JFrame {
 		Profiler.startSection("IO: input");
 
 		List<Context> arr = Context.fromZip(new File(uiInputPath.getText()), resource);
-		ZipFileWriter zfw = new ZipFileWriter(new File(uiOutputPath.getText()), false);
+		ZipFileWriter zfw = new ZipFileWriter(new File(uiOutputPath.getText()));
 
 		AsyncTask<Void> writer = new ResWriter(zfw, resource);
 		TaskPool.Common().pushTask(writer);
@@ -172,11 +173,11 @@ public class ObfuscatorUI extends JFrame {
 			TaskPool.Common().pushTask(() -> {
 				GuiPathTreeBuilder<Void> builder = new GuiPathTreeBuilder<>();
 				MyHashSet<String> packages = new MyHashSet<>();
-				try (ZipArchive za = new ZipArchive(in)) {
-					for (ZEntry value : za.getEntries().values()) {
+				try (ZipFile za = new ZipFile(in)) {
+					for (ZEntry value : za.entries()) {
 						String name = value.getName();
 						if (name.endsWith(".class")) {
-							String className = Parser.parseAccess(IOUtil.getSharedByteBuf().readStreamFully(za.getInput(value)), false).name;
+							String className = Parser.parseAccess(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(value)), false).name;
 							String exceptClassName = name.substring(0, name.length()-6);
 
 							if (className.equals(exceptClassName)) {
@@ -253,10 +254,10 @@ public class ObfuscatorUI extends JFrame {
 				if (uiExcNative.isSelected()) flag |= 32;
 
 				try (ZipArchive za = new ZipArchive(uiInputPath.getText())) {
-					for (ZEntry value : za.getEntries().values()) {
+					for (ZEntry value : za.entries()) {
 						String name = value.getName();
 						if (name.endsWith(".class")) {
-							ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(za.getInput(value)));
+							ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(value)));
 
 							if (name.substring(0, name.length()-6).equals(data.name)) {
 								checkExclusion(data, flag);

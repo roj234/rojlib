@@ -62,7 +62,10 @@ public class MyPassIs extends Plugin {
 				System.gc();
 				CLIUtil.success("清除内存中的密码");
 			}))
-			.then(literal("unregister").then(argument("site", Argument.oneOf(hints)).executes(ctx -> {
+			.then(literal("unregister").fastFail().then(argument("site", Argument.oneOf(hints)).executes(ctx -> {
+				login();
+				if (data == null) return;
+
 				c.setPrompt("\u001b[;97m再次键入网站名并按回车以删除 > ");
 				c.setInputEcho(true);
 
@@ -80,6 +83,7 @@ public class MyPassIs extends Plugin {
 			})))
 			.then(argument("site", Argument.suggest(hints)).executes(ctx -> {
 				login();
+				if (data == null) return;
 
 				Console prev = CLIUtil.getConsole();
 				CLIUtil.setConsole(null);
@@ -110,12 +114,13 @@ public class MyPassIs extends Plugin {
 		this.pass = HMAC.HKDF_expand(mac, IOUtil.SharedCoder.get().encode(passStr), 32);
 		this.cipher = new FeedbackCipher(new AES(), FeedbackCipher.MODE_CTR);
 
-		File file = new File(getDataFolder(), "key.yml");
+		File plaintextKey = new File(getDataFolder(), "key.yml");
 		CMapping data;
-		if (file.isFile()) {
-			data = ConfigMaster.parse(file).asMap();
+		if (plaintextKey.isFile()) {
+			if (keyFile.isFile()) throw new IllegalStateException("明文和加密的数据同时存在");
+			data = ConfigMaster.parse(plaintextKey).asMap();
 			data.put("key", new TByteArray(data.get("key").asList().toByteArray()));
-			CLIUtil.warning("数据已导入, 使用save保存");
+			CLIUtil.warning("数据已导入");
 		} else if (keyFile.length() == 0) {
 			data = new CMapping();
 
@@ -145,7 +150,7 @@ public class MyPassIs extends Plugin {
 			hints.put(name, name);
 
 		CLIUtil.success("登录成功");
-		save();
+		if (plaintextKey.isFile()) save();
 	}
 
 	private void site(String site) {
@@ -170,6 +175,10 @@ public class MyPassIs extends Plugin {
 					data.getOrCreateMap("record").put(site, m);
 				break;
 				} catch (Exception e) {
+					if (e instanceof NullPointerException) {
+						CLIUtil.warning("用户取消操作");
+						return;
+					}
 					System.out.println("输入错误");
 				}
 			}
@@ -186,6 +195,10 @@ public class MyPassIs extends Plugin {
 		for (String s : accounts.keySet()) hints.put(s, s);
 		c.setPrompt("账号 > ");
 		String account = CLIUtil.awaitCommand(c, Argument.suggest(hints));
+		if (account == null) {
+			CLIUtil.warning("用户取消操作");
+			return;
+		}
 
 		byte[] keys = (byte[]) data.get("key").unwrap();
 		int iter = accounts.getInteger(account);
@@ -196,6 +209,7 @@ public class MyPassIs extends Plugin {
 			CharList sb = new CharList();
 			for (int i = 0; i < gen_pass.length; i++) {
 				sb.append(charset[(gen_pass[i]&0xFF) % charset.length]);
+				gen_pass[i] = 0;
 			}
 
 			if (accounts.containsKey(account)) {
@@ -216,6 +230,8 @@ public class MyPassIs extends Plugin {
 			CLIUtil.renderBottomLine(sb, true, CLIUtil.getStringWidth(sb)+1);
 			char acr = CLIUtil.awaitCharacter(MyBitSet.from("acr"));
 			CLIUtil.removeBottomLine(sb, true);
+			Arrays.fill(sb.list, (char) 0);
+			sb._free();
 			switch (acr) {
 				case 'a':
 					accounts.put(account, iter);

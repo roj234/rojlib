@@ -29,20 +29,20 @@ public class PluginClassLoader extends ClassLoader {
 	public PluginClassLoader(ClassLoader parent, PluginDescriptor plugin) throws IOException {
 		super(parent);
 		this.desc = plugin;
-		this.archive = new ZipArchive(plugin.source, ZipArchive.FLAG_VERIFY|ZipArchive.FLAG_BACKWARD_READ, plugin.charset);
+		this.archive = new ZipArchive(plugin.source, ZipArchive.FLAG_VERIFY| ZipArchive.FLAG_BACKWARD_READ, plugin.charset);
 		this.archive.reload();
 	}
 
 	@Override
 	protected Class<?> findClass(String name) throws ClassNotFoundException {
 		String klass = name.replace('.', '/').concat(".class");
-		ZEntry entry = archive.getEntries().get(klass);
+		ZEntry entry = archive.getEntry(klass);
 		if (entry == null) throw new ClassNotFoundException(name);
 
 		PluginClassLoader prev = PLUGIN_CONTEXT.get();
 		PLUGIN_CONTEXT.set(this);
 		try {
-			ByteList buf = new ByteList().readStreamFully(archive.getInput(entry));
+			ByteList buf = new ByteList().readStreamFully(archive.getStream(entry));
 			CodeSource cs = new CodeSource(new URL("jar:file:/"+desc.fileName+"!/"+URIUtil.encodeURI(klass)), (CodeSigner[]) null);
 
 			DefaultPluginSystem.transform(name, buf);
@@ -57,10 +57,9 @@ public class PluginClassLoader extends ClassLoader {
 		}
 	}
 
-	@Nullable
 	@Override
-	public URL getResource(String name) {
-		if (archive.getEntries().containsKey(name)) {
+	protected URL findResource(String name) {
+		if (archive.getEntry(name) != null) {
 			try {
 				return new URL("jar:file:/"+desc.fileName+"!/"+URIUtil.encodeURI(name));
 			} catch (MalformedURLException ignored) {}
@@ -69,12 +68,12 @@ public class PluginClassLoader extends ClassLoader {
 	}
 
 	@Override
-	public Enumeration<URL> getResources(String name) { return archive.getEntries().containsKey(name) ? Collections.enumeration(Collections.singleton(getResource(name))) : Collections.emptyEnumeration(); }
+	protected Enumeration<URL> findResources(String name) { return archive.getEntry(name) != null ? Collections.enumeration(Collections.singleton(getResource(name))) : Collections.emptyEnumeration(); }
 
 	@Nullable
 	@Override
 	public InputStream getResourceAsStream(String name) {
-		ZEntry entry = archive.getEntries().get(name);
+		ZEntry entry = archive.getEntry(name);
 		if (entry == null) return getParent().getResourceAsStream(name);
 		try {
 			return archive.getStream(entry);

@@ -1,6 +1,6 @@
 package roj.archive.ui;
 
-import roj.archive.ArchiveConstants;
+import roj.archive.ArchiveUtils;
 import roj.archive.qz.*;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.collect.HashBiMap;
@@ -8,11 +8,11 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
-import roj.crypt.CRCAny;
+import roj.crypt.CRC32s;
 import roj.io.IOUtil;
 import roj.io.source.CacheSource;
 import roj.io.source.FileSource;
-import roj.io.source.SplittedSource;
+import roj.io.source.FragmentSource;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
 import roj.ui.EasyProgressBar;
@@ -73,7 +73,7 @@ public class QZArchiver {
 	private final List<QZEntry> empties = new SimpleList<>();
 	private boolean firstIsUncompressed;
 
-	private static final MyHashSet<String> UNCOMPRESSED = ArchiveConstants.INCOMPRESSIBLE_FILE_EXT;
+	private static final MyHashSet<String> UNCOMPRESSED = ArchiveUtils.INCOMPRESSIBLE_FILE_EXT;
 	private static final MyHashSet<String> EXECUTABLE_X86 = new MyHashSet<>("exe", "dll", "sys", "so");
 
 	public long prepare() throws IOException {
@@ -316,13 +316,13 @@ public class QZArchiver {
 	private static boolean checkCrc32(File file, int crc2) {
 		byte[] data = ArrayCache.getByteArray(4096, false);
 		try (FileInputStream in = new FileInputStream(file)) {
-			int crc = CRCAny.CRC_32.INIT_VALUE;
+			int crc = CRC32s.INIT_CRC;
 			while (true) {
 				int r = in.read(data);
 				if (r < 0) break;
-				crc = CRCAny.CRC_32.update(crc, data, 0, r);
+				crc = CRC32s.update(crc, data, 0, r);
 			}
-			crc = CRCAny.CRC_32.retVal(crc);
+			crc = CRC32s.retVal(crc);
 			return crc == crc2;
 		} catch (Exception e) {
 			return false;
@@ -422,13 +422,12 @@ public class QZArchiver {
 			writer = new QZFileWriter(new FileSource(tmp));
 		} else {
 			// .tmp.001
-			writer = new QZFileWriter(SplittedSource.fixedSize(tmp, splitSize));
+			writer = new QZFileWriter(FragmentSource.fixed(tmp, splitSize));
 		}
 
 		if (bar != null) {
 			bar.setName("1/4 复制未修改的文件");
 			bar.setUnit("B");
-			bar.setDataWindow(Integer.MAX_VALUE);
 			bar.updateForce(0);
 			bar.addMax(keepSize);
 		}

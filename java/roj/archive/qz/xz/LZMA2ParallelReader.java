@@ -266,7 +266,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 				}
 
 				int copyLen = Math.min(out.readableBytes(), len);
-				out.read(buf, off, copyLen);
+				out.readFully(buf, off, copyLen);
 				if (out.readableBytes() < 1048576) out.notify();
 
 				off += copyLen;

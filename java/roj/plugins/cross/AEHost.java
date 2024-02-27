@@ -55,7 +55,7 @@ public class AEHost extends IAEClient {
 
 				byte[] key = new byte[64];
 				rnd.nextBytes(key);
-				rb.read(key, 0, 32);
+				rb.readFully(key, 0, 32);
 
 				int clientId = rb.readInt();
 				boolean isRelay = rb.readBoolean();
@@ -74,8 +74,6 @@ public class AEHost extends IAEClient {
 					asyncPipeLogin(pipeId, key, pipe -> {
 						pipe.att = att;
 
-						LOGGER.info("开启管道 {}", att);
-
 						try {
 							ClientLaunch c = ClientLaunch.tcp().loop(loop).timeout(800).connect(InetAddress.getLoopbackAddress(), portMap[att.portId]);
 							c.channel().addLast("@@", new ChannelHandler() {
@@ -93,27 +91,28 @@ public class AEHost extends IAEClient {
 										throw e;
 									}
 
-									LOGGER.debug("连接本地成功 {}", att);
+									LOGGER.debug("本地连接成功 {}", att);
 								}
 
 								@Override
 								public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
-									ex.printStackTrace();
+									LOGGER.error("本地连接异常 {}", ex, att);
 									ctx.close();
 								}
 
 								@Override
 								public void channelClosed(ChannelCtx ctx) throws IOException {
 									if (!opened) {
-										LOGGER.debug("连接本地失败 {}", att);
+										LOGGER.debug("本地连接失败 {}", att);
 										pipe.close();
 									}
 								}
 							});
 
 							c.launch();
+							LOGGER.info("开启管道 {}", att);
 						} catch (Exception e) {
-							e.printStackTrace();
+							LOGGER.error("无法开启管道 {}", e, att);
 						}
 					});
 				}

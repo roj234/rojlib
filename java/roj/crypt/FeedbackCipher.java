@@ -246,7 +246,7 @@ public class FeedbackCipher extends RCipherSpi {
 				V.rIndex = 0; T.clear();
 				cip.cryptOneBlock(V, T);
 
-				in.read(vArr);
+				in.readFully(vArr);
 
 				for (int i = 0; i < blockSize; i++) vArr[i] ^= T.get(i);
 

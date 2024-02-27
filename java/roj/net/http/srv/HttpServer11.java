@@ -480,7 +480,7 @@ public final class HttpServer11 extends PacketMerger implements
 		if (code == 0) code = 200;
 		if (body == Response.EMPTY) body = null; // fast path
 
-		ByteList hdr = IOUtil.ddLayeredByteBuf();
+		ByteList hdr = new ByteList();
 		hdr.putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put((byte) ' ').putAscii(HttpCode.getDescription(code)).putAscii("\r\n");
 
 		req.packToHeader();

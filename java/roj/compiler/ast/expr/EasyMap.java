@@ -63,7 +63,6 @@ final class EasyMap extends ExprNode {
 		cw.one(DUP);
 		cw.ldc(map.size());
 		cw.invoke(INVOKESPECIAL, "roj/collect/MyHashMap", "<init>", "(I)V");
-		// TODO 是否用变量？
 		for (Map.Entry<ExprNode, ExprNode> entry : map.entrySet()) {
 			cw.one(DUP);
 

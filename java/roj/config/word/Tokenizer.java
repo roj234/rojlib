@@ -182,7 +182,10 @@ public class Tokenizer {
 		assert (seek&1) != 0;
 		seek = 0;
 		seekPos = prevSeekPos;
-		if (lastWord == wd) lastWord.init(lwType, lwBegin, lwStr);
+		if (lastWord == wd) {
+			lastWord.init(lwType, lwBegin, lwStr);
+			lwEnd = index;
+		}
 	}
 
 	public final Word next() throws ParseException {
@@ -531,7 +534,7 @@ public class Tokenizer {
 			default: return onSpecialToken(w);
 			case ST_SINGLE_LINE_COMMENT: singleLineComment(comment); return readWord();
 			case ST_MULTI_LINE_COMMENT: multiLineComment(comment, w.val); return readWord();
-			case ST_STRING: case ST_LITERAL_STRING:
+			case ST_STRING, ST_LITERAL_STRING:
 				String s = w.val;
 				if (s.length() != 1) throw new UnsupportedOperationException("readSlashString not support len > 1 terminator");
 				return formClip(STRING, readSlashString(s.charAt(0), w.pos == ST_STRING));
@@ -743,8 +746,8 @@ public class Tokenizer {
 			switch (type) {
 				default:
 				case 0:
-					if ((flag &= 3) == 0 && !TextUtil.checkMax(TextUtil.INT_MAXS, v, 0, neg)) {
-						if (TextUtil.checkMax(TextUtil.LONG_MAXS, v, 0, neg)) {
+					if ((flag &= 3) == 0 && !TextUtil.checkMax(TextUtil.INT_MAXS, v, 0, v.length(), neg)) {
+						if (TextUtil.checkMax(TextUtil.LONG_MAXS, v, 0, v.length(), neg)) {
 							onNumberFlow(v, INTEGER, LONG);
 							w = new L(index, parseNumber(v, 4, neg), represent);
 						} else {
@@ -832,7 +835,7 @@ public class Tokenizer {
 	public static long parseNumber(CharSequence s, @Range(from = 0, to = 7) int mode, boolean neg) { return parseNumber(s, 0, s.length(), mode, neg); }
 	public static long parseNumber(CharSequence s, int i, int len, @Range(from = 0, to = 7) int radixId, boolean neg) throws NumberFormatException {
 		// range check done
-		if (!TextUtil.checkMax(RADIX_MAX[radixId], s, 0, neg))
+		if (!TextUtil.checkMax(RADIX_MAX[radixId], s, i, len, neg))
 			throw new NumberFormatException("lexer.number.overflow:"+s);
 
 		radixId = RADIX[radixId&3];

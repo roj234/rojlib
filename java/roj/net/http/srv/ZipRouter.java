@@ -1,11 +1,10 @@
 package roj.net.http.srv;
 
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.net.http.Headers;
 import roj.net.http.HttpCode;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.zip.ZipEntry;
@@ -15,21 +14,21 @@ import java.util.zip.ZipEntry;
  * @since 2021/2/16 11:17
  */
 public class ZipRouter implements Router {
-	public final ZipArchive zipFs;
+	public final ZipFile zipFs;
 
-	public ZipRouter(String zipFs) throws IOException {
-		this.zipFs = new ZipArchive(new File(zipFs), ZipArchive.FLAG_BACKWARD_READ);
+	public ZipRouter(String path) throws IOException {
+		this.zipFs = new ZipFile(path);
 	}
 
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws IOException {
-		String url = req.path().substring(1);
+		String url = req.path();
 
-		boolean flag = req.path().endsWith("/");
-		ZEntry ze = zipFs.getEntries().get(flag ? url + "index.html" : url);
+		boolean flag = url.isEmpty() || url.endsWith("/");
+		ZEntry ze = zipFs.getEntry(flag ? url + "index.html" : url);
 		if (ze == null) {
 			if (flag) {
-				ZEntry dir = zipFs.getEntries().get(url);
+				ZEntry dir = zipFs.getEntry(url);
 				if (dir != null && dir.getName().endsWith("/")) {
 					rh.code(403);
 					return StringResponse.httpErr(HttpCode.FORBIDDEN);
@@ -43,10 +42,10 @@ public class ZipRouter implements Router {
 	}
 
 	static final class ZipFileInfo implements FileInfo {
-		final ZipArchive zf;
+		final ZipFile zf;
 		final ZEntry ze;
 
-		ZipFileInfo(ZipArchive zf, ZEntry ze) {
+		ZipFileInfo(ZipFile zf, ZEntry ze) {
 			if (ze.isEncrypted()) throw new IllegalArgumentException("encrypted");
 			this.zf = zf;
 			this.ze = ze;
@@ -64,7 +63,7 @@ public class ZipRouter implements Router {
 			if (deflated) {
 				if (ze.getMethod() != ZipEntry.DEFLATED)
 					throw new UnsupportedOperationException();
-				in = zf.i_getRawData(ze);
+				in = zf.getFileStream(ze);
 			} else {
 				in = zf.getStream(ze);
 			}

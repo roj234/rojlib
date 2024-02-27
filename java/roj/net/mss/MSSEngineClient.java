@@ -149,7 +149,7 @@ public class MSSEngineClient extends MSSEngine {
 				break;
 			case SERVER_HELLO:
 				if (rx.isReadable() && (rx.get(rx.rIndex) != H_SERVER_HELLO && rx.get(rx.rIndex) != P_ALERT))
-					return error(ILLEGAL_PACKET, "not mss server");
+					return error(ILLEGAL_PACKET, null);
 
 				int lim = rx.wIndex();
 				int type = readPacket(rx);
@@ -268,7 +268,7 @@ public class MSSEngineClient extends MSSEngine {
 
 	private int handleServerHelloSsl(DynByteBuf out, DynByteBuf in) throws MSSException {
 		if (in.readUnsignedShort() != 0x0303) return error(NEGOTIATION_FAILED, "legacy_version");
-		in.read(sharedKey, 32, 32);
+		in.readFully(sharedKey, 32, 32);
 		if (ArrayUtil.rangedEquals(sharedKey,56,8,DOWNGRADE_11,0,7) &&
 			(sharedKey[63]&0xFF) <= 1) {
 			return error(ILLEGAL_PARAM, "random");
@@ -341,14 +341,14 @@ public class MSSEngineClient extends MSSEngine {
 		int inBegin = rx.rIndex;
 
 		if (rx.readUnsignedByte() != PROTOCOL_VERSION) return error(VERSION_MISMATCH, "");
-		rx.read(sharedKey,32,32);
+		rx.readFully(sharedKey,32,32);
 
 		int cs_id = rx.readUnsignedShort();
 		if (cs_id == 0xFFFF) {
 			if ((flag & HAS_HELLO_RETRY) != 0) return error(ILLEGAL_PARAM, "hello_retry");
 			flag |= HAS_HELLO_RETRY;
 
-			if (rx.readUnsignedShort() != 4) return error(ILLEGAL_PACKET, "");
+			if (rx.readUnsignedShort() != 4) return error(ILLEGAL_PACKET, null);
 			int ke_avl = getSupportedKeyExchanges() & rx.readInt();
 			if (ke_avl == 0) return error(NEGOTIATION_FAILED, "key_exchange");
 

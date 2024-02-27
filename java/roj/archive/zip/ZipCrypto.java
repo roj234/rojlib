@@ -1,6 +1,6 @@
 package roj.archive.zip;
 
-import roj.crypt.CRCAny;
+import roj.crypt.CRC32s;
 import roj.crypt.RCipherSpi;
 import roj.util.DynByteBuf;
 
@@ -16,7 +16,6 @@ import java.security.spec.AlgorithmParameterSpec;
  */
 public final class ZipCrypto extends RCipherSpi {
 	int key0,key1,key2;
-	// int iv0,iv1,iv2;
 
 	public boolean encrypt;
 
@@ -26,10 +25,10 @@ public final class ZipCrypto extends RCipherSpi {
 		int key2 = 0x34567890;
 
 		for(byte b : key) {
-			key0 = CRCAny.CRC_32.update(key0, b);
+			key0 = CRC32s.updateS(key0, b);
 			key1 = key1 + (key0 & 0xFF);
 			key1 = key1 * 134775813 + 1;
-			key2 = CRCAny.CRC_32.update(key2, (byte) (key1 >>> 24));
+			key2 = CRC32s.updateS(key2, key1 >>> 24);
 		}
 
 		this.key0 = key0;
@@ -53,12 +52,12 @@ public final class ZipCrypto extends RCipherSpi {
 			int tmp = key2 | 2;
 			int outByte = inByte ^ (tmp * (tmp ^ 1) >>> 8);
 
-			out.put((byte) outByte);
+			out.put(outByte);
 
-			key0 = CRCAny.CRC_32.update(key0, encrypt?inByte:outByte);
+			key0 = CRC32s.updateS(key0, encrypt?inByte:outByte);
 			key1 = key1 + (key0 & 0xFF);
 			key1 = key1 * 134775813 + 1;
-			key2 = CRCAny.CRC_32.update(key2, (byte) (key1 >>> 24));
+			key2 = CRC32s.updateS(key2, (byte) (key1 >>> 24));
 		}
 
 		this.key0 = key0;

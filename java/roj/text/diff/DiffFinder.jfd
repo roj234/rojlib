@@ -1,0 +1,191 @@
+JFDML JFormDesigner: "8.1.1.0.298" Java: "17.0.9" encoding: "UTF-8"
+
+new FormModel {
+	contentType: "form/swing"
+	root: new FormRoot {
+		add( new FormWindow( "javax.swing.JFrame", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
+			"autoSize": false
+		} ) {
+			name: "this"
+			"title": "O(Log2(n) * n) 文件比较"
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label1"
+				"text": "输入"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 5
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "uiInput"
+				"font": new com.jformdesigner.model.SwingDerivedFont( null, 0, 6, false )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 20
+				"width": 280
+				"height": 30
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label3"
+				"text": "全局正则过滤器"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 55
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "uiNameFilter"
+				"text": "\\.[Tt][Xx][Tt]$"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 75
+				"width": 280
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label4"
+				"text": "差异输出（YML）"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 100
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "uiOutput"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 120
+				"width": 280
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label5"
+				"text": "桶大小   快速窗口   滑动窗口"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 145
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "uiBucketSize"
+				"text": "512K"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 165
+				"width": 50
+			} )
+			add( new FormComponent( "javax.swing.JSpinner" ) {
+				name: "uiPreWindow"
+				"model": new javax.swing.SpinnerNumberModel( 8192, 2048, 32768, 256 )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 70
+				"y": 165
+				"width": 60
+			} )
+			add( new FormComponent( "javax.swing.JSpinner" ) {
+				name: "uiSlideWindow"
+				"model": new javax.swing.SpinnerNumberModel( 1536, 0, 8192, 128 )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 135
+				"y": 165
+				"width": 60
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiTogle"
+				"text": "开始"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 305
+				"y": 20
+				"height": 55
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiGroupIsRegex"
+				"text": "这是正则"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 223
+				"y": 188
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "uiGroupInput"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 210
+				"width": 280
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label2"
+				"text": "分组比较（组内成员不会比较）"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 190
+			} )
+			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
+				name: "scrollPane2"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+				add( new FormComponent( "javax.swing.JList" ) {
+					name: "uiGroups"
+					auxiliary() {
+						"JavaCodeGenerator.typeParameters": "Group"
+					}
+				} )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 235
+				"width": 280
+				"height": 290
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiGroupAdd"
+				"text": "添加"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 300
+				"y": 235
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiGroupDel"
+				"text": "移除"
+				"enabled": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 300
+				"y": 260
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "uiMemoryState"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 530
+				"width": 345
+				"height": 15
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "uiCompareState"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 550
+				"width": 345
+				"height": 15
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiNotTextCompare"
+				"text": "比较的不是文本"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 170
+				"y": 53
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 255, 120 )
+			"size": new java.awt.Dimension( 375, 605 )
+		} )
+	}
+}

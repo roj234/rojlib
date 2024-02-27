@@ -152,7 +152,7 @@ public class QZArchiverUI extends JFrame {
 						e.printStackTrace();
 					}
 				}
-				uiProgress.setValue(1000);
+				uiProgress.setValue(10000);
 				uiBegin.setEnabled(true);
 				uiBegin.setText("压缩");
 			}
@@ -374,7 +374,6 @@ public class QZArchiverUI extends JFrame {
 				throw new RuntimeException(ex);
 			}
 		});
-		uiProgress.setModel(new DefaultBoundedRangeModel(0,0,0,1000));
 	}
 
 	private void syncToUI(boolean isPreset) {

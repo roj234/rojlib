@@ -74,7 +74,7 @@ public final class StaticSegment extends Segment {
 		that.array = arr;
 		that.off = (short) local.getOffset(arr, that.length);
 
-		b.read(b.rIndex, arr, that.off, that.length);
+		b.readFully(b.rIndex, arr, that.off, that.length);
 		return that;
 	}
 }

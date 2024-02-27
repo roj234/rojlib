@@ -25,8 +25,8 @@ public class LineReader implements Iterator<String>, LinedReader {
 		this.str = s;
 		this.keepEmpty = !cleanEmpty;
 	}
-	public static LinedReader create(CharSequence str) { return new LineReader(str, true); }
-	public static LinedReader create(CharSequence str, boolean removeEmpty) { return new LineReader(str, removeEmpty); }
+	public static LineReader create(CharSequence str) { return new LineReader(str, true); }
+	public static LineReader create(CharSequence str, boolean removeEmpty) { return new LineReader(str, removeEmpty); }
 
 	public static List<String> toLines(CharSequence str, boolean clean) {
 		List<String> list = new SimpleList<>();

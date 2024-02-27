@@ -68,7 +68,7 @@ public class ScenePkg {
 			file.getParentFile().mkdirs();
 			try (FileOutputStream fos = new FileOutputStream(file)) {
 				tmp.ensureCapacity(v.length);
-				b.read((int) (v.offset+baseOffset), tmp.list, 0, v.length);
+				b.readFully((int) (v.offset+baseOffset), tmp.list, 0, v.length);
 				fos.write(tmp.list, 0, v.length);
 			} catch (IOException e) {
 				e.printStackTrace();

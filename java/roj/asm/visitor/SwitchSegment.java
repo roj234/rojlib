@@ -3,6 +3,7 @@ package roj.asm.visitor;
 import roj.asm.Opcodes;
 import roj.asm.tree.insn.SwitchEntry;
 import roj.collect.IntMap;
+import roj.collect.IntSet;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -115,7 +116,12 @@ public final class SwitchSegment extends Segment {
 		if (tableSwitchSpaceCost <= lookupSwitchSpaceCost) {
 			code = TABLESWITCH;
 			if (m.size() < hi-lo+1) {
-				for (int i = lo; i <= hi; i++) m.add(new SwitchEntry(i, def));
+				IntSet set = new IntSet();
+				for (int i = 0; i < m.size(); i++) set.add(m.get(i).val);
+				for (int i = lo; i <= hi; i++) {
+					if (!set.contains(i)) m.add(new SwitchEntry(i, def));
+				}
+				m.sort(null);
 			}
 		} else {
 			code = LOOKUPSWITCH;

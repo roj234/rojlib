@@ -722,9 +722,16 @@ public final class CLIUtil implements Runnable {
 						}
 
 						if (!overflow) {
+							boolean renderLine = mySb.length() > 0 && LINES.size() > 0;
+							if (renderLine) renderBottomLine(LINES.get(LINES.size()-1), false, LineCursor);
 							if (w > 0) {
 								mySbRegister = true;
 								renderBottomLine(mySb, true, w);
+							} else if (!renderLine & mySb.length() > 0) {
+								// TODO should render and clear?
+								CE.encodeFixedIn(mySb, SEQ);
+								mySb.clear();
+								writeSeq(SEQ);
 							}
 							return;
 						}
@@ -745,7 +752,7 @@ public final class CLIUtil implements Runnable {
 					}
 
 					int i = LINES.size()-1;
-					while (true) {
+					if (i > 0) while (true) {
 						try {
 							CE.encodeFixedIn(LINES.get(i), SEQ);
 						} catch (Throwable ignored) {}

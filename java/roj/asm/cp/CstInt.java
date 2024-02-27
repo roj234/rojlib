@@ -22,7 +22,7 @@ public final class CstInt extends Constant {
 	@Override
 	public String getEasyCompareValue() { return Integer.toString(value); }
 
-	public final int hashCode() { return value; }
+	public final int hashCode() { return ~value; }
 
 	public final boolean equals(Object o) {
 		if (o == this) return true;

@@ -104,6 +104,12 @@ public class ToXEntry implements CVisitor {
 	}
 
 	@Override
+	public void comment(String comment) {
+		if (state != XML_CHILD) throw new IllegalStateException(String.valueOf(state));
+		stackBottom.add(new Text(comment, Node.COMMENT));
+	}
+
+	@Override
 	public void vsopt(String k, Object v) {
 		switch (k) {
 			case "xml:headless": ((Document)stackBottom).headless(); break;

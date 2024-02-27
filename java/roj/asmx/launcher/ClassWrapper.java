@@ -1,20 +1,23 @@
 package roj.asmx.launcher;
 
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.asm.AsmShared;
 import roj.asm.tree.ConstantData;
 import roj.asm.util.Context;
 import roj.asmx.ITransformer;
 import roj.collect.TrieTreeSet;
+import roj.io.FastFailException;
 import roj.io.IOUtil;
+import roj.io.source.FileSource;
 import roj.text.logging.Level;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.net.URLConnection;
+import java.security.CodeSigner;
 import java.security.CodeSource;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,9 +31,9 @@ import static roj.asmx.launcher.Bootstrap.LOGGER;
  */
 public class ClassWrapper implements Function<String, Class<?>> {
 	private static final Class<?> ERROR_CLASS = Integer.TYPE;
-	private static final EntryPoint PARENT = (EntryPoint) ClassWrapper.class.getClassLoader();
+	private static final EntryPoint ENTRY_POINT = (EntryPoint) ClassWrapper.class.getClassLoader();
 
-	private final List<ZipArchive> zipArchives = new ArrayList<>();
+	private final List<ZipFile> fastZips = new ArrayList<>();
 
 	private INameTransformer nameTransformer;
 	private final List<ITransformer> transformers = new ArrayList<>();
@@ -88,7 +91,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 			throw new ClassNotFoundException(name);
 		}
 
-		if (loadExcept.strStartsWithThis(name)) return PARENT.getClass().getClassLoader().loadClass(name);
+		if (loadExcept.strStartsWithThis(name)) return ENTRY_POINT.PARENT.loadClass(name);
 
 		String newName;
 		if (nameTransformer == null) {
@@ -112,41 +115,34 @@ public class ClassWrapper implements Function<String, Class<?>> {
 		try {
 			name = newName.replace('.', '/').concat(".class");
 
-			block1:
-			if (zipArchives.isEmpty()) {
-				URL url = PARENT.getResource(name);
-				if (url == null) url = ClassLoader.getSystemResource(name);
-				if (url != null) {
-					try {
-						URLConnection conn = url.openConnection();
-						buf.readStreamFully(conn.getInputStream());
-						cs = PARENT.getCodeSource(url, newName, conn);
-					} catch (IOException e) {
-						LOGGER.log(Level.ERROR, "读取类'{}'时发生异常", e, name);
-						throw e;
+			block:
+			try {
+				for (int i = 0; i < fastZips.size(); i++) {
+					ZipFile za = fastZips.get(i);
+					InputStream in = za.getStream(name);
+					if (in != null) {
+						buf.readStreamFully(in);
+						URL url = new URL("file", "", ((FileSource)za.source()).getFile().getAbsolutePath().replace(File.separatorChar, '/')+"!"+name);
+						cs = new CodeSource(url, (CodeSigner[]) null);
+						break block;
 					}
+				}
+
+				InputStream in = ENTRY_POINT.PARENT.getResourceAsStream(name);
+				if (in == null) in = ClassLoader.getSystemResourceAsStream(name);
+				if (in != null) {
+					buf.readStreamFully(in);
+					cs = new CodeSource(ENTRY_POINT.PARENT.getResource(name), (CodeSigner[]) null);
 				} else {
-					throw new IOException("no "+name);
+					throw new FastFailException("no file");
 				}
-			} else {
-				try {
-					for (int i = 0; i < zipArchives.size(); i++) {
-						InputStream in = zipArchives.get(i).getInput(name);
-						if (in != null) {
-							buf.readStreamFully(in);
-							cs = null;
-							break block1;
-						}
-					}
-				} catch (IOException e) {
-					LOGGER.log(Level.ERROR, "读取类'{}'时发生异常", e, name);
-					throw e;
-				}
-				throw new IOException("no file");
+			} catch (IOException e) {
+				LOGGER.log(Level.ERROR, "读取类'{}'时发生异常", e, name);
+				throw e;
 			}
 
 			if (!transformExcept.strStartsWithThis(newName)) transform(name, newName.replace('.', '/'), buf);
-			clazz = PARENT.defineClassA(newName, buf.list, 0, buf.wIndex(), cs);
+			clazz = ENTRY_POINT.defineClassA(newName, buf.list, 0, buf.wIndex(), cs);
 
 			loadedClasses.put(name, clazz);
 			loadedClasses.put(newName, clazz);
@@ -198,13 +194,9 @@ public class ClassWrapper implements Function<String, Class<?>> {
 		for (String key : fileNames) loadedClasses.remove(key, ERROR_CLASS);
 	}
 
-	public void enableFastZip(URL[] urls) {
-		for (URL url : urls) {
-			try {
-				zipArchives.add(new ZipArchive(url.getPath().substring(1)));
-			} catch (Exception e) {
-				Helpers.athrow(e);
-			}
-		}
+	public void enableFastZip(URL url) throws IOException {
+		ZipFile e = new ZipFile(new File(url.getPath().substring(1)));
+		if (fastZips.isEmpty()) e.getStream(e.entries().iterator().next()).close(); // INIT
+		fastZips.add(e);
 	}
 }

@@ -38,6 +38,12 @@ final class Handshake extends Constants {
 		}
 	}
 
+	@Override
+	public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
+		LOGGER.error("处理失败", ex);
+		ctx.close();
+	}
+
 	// 只要连接不被服务器关闭，就是open状态，所以立即发送，无需等待。
 	private void doPipeLogin(ChannelCtx ctx, DynByteBuf rb) throws IOException {
 		int id = rb.readInt();
@@ -84,7 +90,6 @@ final class Handshake extends Constants {
 			return;
 		}
 
-		System.out.println(userId.length);
 		Client c = ((Client) o);
 		c.digest = userId;
 
@@ -163,7 +168,7 @@ final class Handshake extends Constants {
 		sb.setLength(sb.length()-2);
 
 		ctx.channel().addLast("client", room);
-		LOGGER.info("[{}] 登录成功, 端口映射表: {}", room, sb);
+		LOGGER.info("[{}] 登录成功, 房间 {}, 端口 [{}]", room, room.token, sb);
 	}
 
 	public void localPipe(int id, byte[] key, Consumer<Pipe> cb) {

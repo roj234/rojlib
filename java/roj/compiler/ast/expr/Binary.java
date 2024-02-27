@@ -398,7 +398,6 @@ final class Binary extends ExprNode {
 						cw.one(ICONST_1);
 						cw.one(IAND);
 						if (operator == equ) {
-							// TODO 这能提升多少呢...
 							cw.one(ICONST_1);
 							cw.one(IXOR);
 						}

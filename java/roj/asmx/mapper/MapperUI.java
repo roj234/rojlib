@@ -16,6 +16,7 @@ import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.concurrent.task.AsyncTask;
 import roj.io.IOUtil;
+import roj.misc.mapping.MappingUI;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextReader;
@@ -214,7 +215,6 @@ public class MapperUI extends JFrame {
 		f.show();
 	}
 
-	private MappingUI mappingUI;
 	public MapperUI() {
 		initComponents();
 		GuiUtil.dropFilePath(uiInputPath, (f) -> uiOutputPath.setText(new File(f.getName()).getAbsolutePath()), false);
@@ -246,9 +246,9 @@ public class MapperUI extends JFrame {
 			});
 		});
 		uiCreateMap.addActionListener((e) -> {
-			if (mappingUI == null) mappingUI = new MappingUI();
-			mappingUI.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-			mappingUI.show();
+			MappingUI ui = new MappingUI();
+			ui.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+			ui.show();
 		});
 		uiMapTrace.addActionListener((e) -> {
 			dlgMapTrace.show();

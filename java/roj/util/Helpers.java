@@ -8,6 +8,7 @@ import roj.net.URIUtil;
 
 import java.io.File;
 import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,9 @@ public class Helpers {
 	}
 
 	public static File getJarByClass(Class<?> clazz) {
-		String loc = clazz.getProtectionDomain().getCodeSource().getLocation().getPath();
+		URL location = clazz.getProtectionDomain().getCodeSource().getLocation();
+		if (location == null) return null;
+		String loc = location.getPath();
 		if (loc.startsWith("file:")) loc = loc.substring(5);
 		int i = loc.lastIndexOf('!');
 		loc = loc.substring(loc.startsWith("/")?1:0, i<0?loc.length():i);

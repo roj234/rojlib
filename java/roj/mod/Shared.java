@@ -1,8 +1,6 @@
 package roj.mod;
 
-import roj.asm.type.Desc;
 import roj.asmx.mapper.Mapper;
-import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.concurrent.timing.Scheduler;
@@ -12,7 +10,6 @@ import roj.config.data.CMapping;
 import roj.dev.HRRemote;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
-import roj.io.down.DownloadTask;
 import roj.mod.plugin.Plugin;
 import roj.ui.CLIUtil;
 import roj.util.HighResolutionTimer;
@@ -23,7 +20,6 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static roj.config.JSONParser.*;
@@ -36,10 +32,9 @@ import static roj.config.JSONParser.*;
  */
 public final class Shared {
 	public static final boolean DEBUG;
-	public static final String MC_BINARY = "forgeMcBin";
-	public static final String VERSION = "2.3.0-alpha";
+	public static final String VERSION = "3.0.1";
 
-	public static final File BASE, TMP_DIR, CONFIG_DIR;
+	public static final File BASE, CONFIG_DIR;
 
 	static IFileWatcher watcher;
 	static HRRemote hotReload;
@@ -112,7 +107,6 @@ public final class Shared {
 
 	public static final Mapper mapperFwd = new Mapper();
 	public static boolean mappingIsClean;
-	private static Mapper mapperRev;
 
 	public static void loadMapper() {
 		if (!mappingIsClean) {
@@ -123,7 +117,6 @@ public final class Shared {
 						CLIUtil.error("混淆映射表"+map+"不存在,建议重新安装");
 						return;
 					}
-					mapperRev = null;
 					try {
 						mapperFwd.initEnv(map, new File(BASE, "/class/"), new File(BASE, "/util/mapCache.lzma"), false);
 					} catch (Exception e) {
@@ -131,31 +124,6 @@ public final class Shared {
 					}
 					mappingIsClean = true;
 				}
-			}
-		}
-	}
-	public static Mapper loadReverseMapper() {
-		if (mapperRev == null) {
-			loadMapper();
-			mapperRev = new Mapper(mapperFwd);
-			mapperRev.reverseSelf();
-		}
-		return mapperRev;
-	}
-
-	public static final Map<String, String> srg2mcp = new MyHashMap<>(1000, 1.5f);
-	public static void loadSrg2Mcp() {
-		Map<String, String> srg2mcp = Shared.srg2mcp;
-		if (srg2mcp.isEmpty()) {
-			loadMapper();
-
-			Mapper fwd = mapperFwd;
-			for (Map.Entry<Desc, String> entry : fwd.getFieldMap().entrySet()) {
-				srg2mcp.put(entry.getValue(), entry.getKey().name);
-			}
-
-			for (Map.Entry<Desc, String> entry : fwd.getMethodMap().entrySet()) {
-				srg2mcp.put(entry.getValue(), entry.getKey().name);
 			}
 		}
 	}
@@ -192,13 +160,6 @@ public final class Shared {
 		loadConfig();
 		if (CONFIG == null) System.exit(-2);
 
-		TMP_DIR = new File(BASE, "tmp");
-
-		if (!TMP_DIR.isDirectory() && !TMP_DIR.mkdir()) {
-			CLIUtil.error("无法创建临时文件夹: " + TMP_DIR.getAbsolutePath());
-			System.exit(-2);
-		}
-
 		File classDir = new File(BASE, "class");
 		if (!classDir.isDirectory() && !classDir.mkdir()) {
 			CLIUtil.error("无法创建库文件夹: " + classDir.getAbsolutePath());
@@ -212,13 +173,6 @@ public final class Shared {
 		}
 
 		DEBUG = CONFIG.getBool("调试模式");
-
-		CMapping cfgGen = CONFIG.get("通用").asMap();
-		int threads = cfgGen.getInteger("最大线程数");
-		DownloadTask.defChunkStart = threads > 0 ? 4096 : Integer.MAX_VALUE;
-		DownloadTask.defMaxChunks = threads;
-		DownloadTask.userAgent = cfgGen.getString("UserAgent");
-		IOUtil.timeout = cfgGen.getInteger("下载超时");
 
 		IFileWatcher w = null;
 		if (CONFIG.getBool("文件修改监控")) {

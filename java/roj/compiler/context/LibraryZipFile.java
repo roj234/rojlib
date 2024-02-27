@@ -2,10 +2,10 @@ package roj.compiler.context;
 
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.asm.Parser;
 import roj.asm.tree.IClass;
 import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -18,54 +18,41 @@ import java.util.Set;
  * @since 2022/9/16 0016 21:52
  */
 public class LibraryZipFile implements Library {
-	public final ZipArchive zf;
-	private final MyHashMap<String, IClass> info;
+	public final ZipFile zf;
+	private final MyHashMap<String, Object> info;
 
 	public LibraryZipFile(File file) throws IOException {
-		this.zf = new ZipArchive(file, ZipArchive.FLAG_BACKWARD_READ);
+		this.zf = new ZipFile(file, ZipArchive.FLAG_BACKWARD_READ);
+		this.info = new MyHashMap<>();
 
-		MyHashSet<ZEntry> set = new MyHashSet<>(zf.getEntries().size());
-		for (ZEntry entry : zf.getEntries().values()) {
-			if (entry.getName().endsWith(".class")) set.add(entry);
+		for (ZEntry entry : zf.entries()) {
+			String name = entry.getName();
+			if (name.endsWith(".class")) info.put(name.substring(0, name.length()-6), entry);
 		}
-		zf.getEntries().clear();
-		for (ZEntry entry : set) {
-			zf.getEntries().put(entry.getName().substring(0, entry.getName().length() - 6), entry);
-		}
-
-		info = new MyHashMap<>();
+		zf.entries().clear();
 	}
 
 	@Override
-	public Set<String> content() {
-		return zf.getEntries().keySet();
-	}
+	public Set<String> content() { return info.keySet(); }
 
 	@Override
 	public IClass get(CharSequence name) {
-		MyHashMap.AbstractEntry<String, IClass> entry = info.getEntry(Helpers.cast(name));
-		if (entry != null) return entry.getValue();
+		MyHashMap.AbstractEntry<String, Object> entry = info.getEntry(Helpers.cast(name));
+		if (entry == null) return null;
+		if (entry instanceof IClass c) return c;
 		synchronized (info) {
-			IClass v = apply(name);
-			info.put(name.toString(), v);
+			IClass v = null;
+			try {
+				ByteList data = ByteList.wrap(zf.get((ZEntry) entry.getValue()));
+				v = Parser.parseConstants(data);
+				entry.setValue(v);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 			return v;
 		}
 	}
 
 	@Override
-	public void close() throws Exception {
-		zf.close();
-	}
-
-	public IClass apply(CharSequence s) {
-		ZEntry file = zf.getEntries().get(s);
-		if (file == null) return null;
-		try {
-			ByteList data = ByteList.wrap(zf.get(file));
-			return Parser.parseConstants(data);
-		} catch (Exception e) {
-			e.printStackTrace();
-			return null;
-		}
-	}
+	public void close() throws Exception { zf.close(); }
 }

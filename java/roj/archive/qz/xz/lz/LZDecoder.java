@@ -21,12 +21,9 @@ import java.io.IOException;
 public final class LZDecoder {
 	private final byte[] buf;
 	private final int bufSize; // To avoid buf.length with an array-cached buf.
-	private int start = 0;
-	private int pos = 0;
-	private int full = 0;
-	private int limit = 0;
-	private int pendingLen = 0;
-	private int pendingDist = 0;
+	private int pos, limit; // they were initialized to 0
+	private int start, full;
+	private int pendingDist, pendingLen;
 
 	public LZDecoder(int dictSize, byte[] presetDict) {
 		bufSize = dictSize;
@@ -56,17 +53,10 @@ public final class LZDecoder {
 		else limit = pos + outMax;
 	}
 
-	public boolean hasSpace() {
-		return pos < limit;
-	}
-
-	public boolean hasPending() {
-		return pendingLen > 0;
-	}
-
-	public int getPos() {
-		return pos;
-	}
+	public boolean hasSpace() { return pos < limit; }
+	public boolean hasPending() { return pendingLen > 0; }
+	public int getPos() { return pos; }
+	public int getDictSize() { return bufSize; }
 
 	public int getByte(int dist) {
 		int offset = pos - dist - 1;

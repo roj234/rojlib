@@ -171,7 +171,7 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 				DynByteBuf in = (DynByteBuf) this.in;
 				max = Math.min(in.readableBytes()-bLen, max);
 
-				in.read(in.rIndex+bLen, b, bLen, max);
+				in.readFully(in.rIndex+bLen, b, bLen, max);
 				return max;
 			}
 		}

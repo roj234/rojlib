@@ -1,8 +1,8 @@
 package roj.archive.zip.crack;
 
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipCrypto;
+import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.collect.IntMap;
 import roj.concurrent.TaskPool;
@@ -13,7 +13,6 @@ import roj.ui.ProgressBar;
 import roj.util.ByteList;
 
 import java.io.*;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
@@ -89,9 +88,9 @@ public class Main {
 	}
 
 	private static void tryFindPass(String[] args, File file, int argOff) throws IOException {
-		ZipArchive mzf = new ZipArchive(file, 0, 0, Charset.defaultCharset());
-		ZEntry entry = mzf.getEntries().get(args[argOff++]);
-		if (entry == null || !entry.isEncrypted() || entry.getEncryptType() != ZipArchive.CRYPT_ZIP2) {
+		ZipFile mzf = new ZipFile(file);
+		ZEntry entry = mzf.getEntry(args[argOff++]);
+		if (entry == null || !entry.isEncrypted() || entry.getEncryptType() != ZipFile.CRYPT_ZIP2) {
 			System.out.println("没找到或不符合要求:"+args[argOff-1]);
 			return;
 		}
@@ -109,7 +108,7 @@ public class Main {
 			plains.putInt(off, data);
 		}
 
-		ZCKiller ctx = new ZCKiller(IOUtil.read(mzf.i_getRawData(entry)), plains);
+		ZCKiller ctx = new ZCKiller(IOUtil.read(mzf.getFileStream(entry)), plains);
 		mzf.close();
 		ctx.stopOnFirstKey = true;
 
@@ -145,16 +144,16 @@ public class Main {
 		ProgressBar ep = new ProgressBar("重新压缩");
 		ep.setUnit("");
 
-		ZipArchive zip = new ZipArchive(f, 0, 0, Charset.defaultCharset());
-		try (ZipFileWriter dst = new ZipFileWriter(new File(f.getAbsolutePath() + ".crk.zip"), false)) {
+		ZipFile zip = new ZipFile(f);
+		try (ZipFileWriter dst = new ZipFileWriter(new File(f.getAbsolutePath() + ".crk.zip"))) {
 			int i = 0;
-			int size = zip.getEntries().size();
-			for (ZEntry entry : zip.getEntries().values()) {
+			int size = zip.entries().size();
+			for (ZEntry entry : zip.entries()) {
 				if (entry.isEncrypted()) {
 					zc.copyState(state, true);
 					inf.reset();
 
-					try (InputStream in = new CipherInputStream(zip.i_getRawData(entry), zc)) {
+					try (InputStream in = new CipherInputStream(zip.getFileStream(entry), zc)) {
 						in.skip(12);
 						InputStream iin = entry.getMethod() == 0 ? in : new InflaterInputStream(in, inf);
 						entry.setMethod(ZipEntry.STORED); // 不压缩

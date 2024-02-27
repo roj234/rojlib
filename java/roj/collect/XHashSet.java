@@ -15,7 +15,7 @@ import static roj.reflect.ReflectionUtils.u;
  * @author Roj234
  * @since 2024/1/26 06:09
  */
-public final class XHashSet<K, V> implements Iterable<V> {
+public final class XHashSet<K, V> extends AbstractSet<V> {
 	public static <K, V> Shape<K, V> shape(Class<K> kType, Class<V> vType, String field_key, String field_next) { return shape(kType, vType, field_key, field_next, Hasher.defaul()); }
 	public static <K, V> Shape<K, V> shape(Class<K> kType, Class<V> vType, String field_key, String field_next, Hasher<K> hasher) {
 		DirectAccessor<ObjectNew> da = DirectAccessor.builder(ObjectNew.class).weak().unchecked();
@@ -43,7 +43,7 @@ public final class XHashSet<K, V> implements Iterable<V> {
 		}
 	}
 
-	static interface ObjectNew {
+	interface ObjectNew {
 		default Object createValue(Object key) { return createValueNoarg(); }
 		Object createValueNoarg();
 	}
@@ -105,9 +105,10 @@ public final class XHashSet<K, V> implements Iterable<V> {
 	public Iterator<V> iterator() { return size == 0 ? Collections.emptyIterator() : new ValueItr(); }
 	public AbstractIterator<V> valItr() { return new ValueItr(); }
 
-	public boolean isEmpty() { return size == 0; }
 	public int size() { return size; }
 
+	@Override
+	public final boolean contains(Object o) { return get(shape.GET_KEY(o)) != null; }
 	public boolean containsKey(Object o) { return get(o) != null; }
 	public V get(Object k) { return getOrDefault(k, null); }
 	@SuppressWarnings("unchecked")
@@ -175,8 +176,10 @@ public final class XHashSet<K, V> implements Iterable<V> {
 		return add ? v : null;
 	}
 
+	@Override
+	public boolean remove(Object o) { return removeKey(shape.GET_KEY(o)) != null; }
 	@SuppressWarnings("unchecked")
-	public V remove(Object o) {
+	public V removeKey(Object o) {
 		if (entries == null) return null;
 
 		K key = (K) o;
@@ -294,4 +297,30 @@ public final class XHashSet<K, V> implements Iterable<V> {
 			if (localEntries != entries) throw new ConcurrentModificationException();
 		}
 	}
+
+	/*public Map<K, V> asMap() {
+		return new AbstractMap<>() {
+			@Override
+			public int size() { return XHashSet.this.size; }
+			@Override
+			public boolean containsKey(Object key) { return XHashSet.this.containsKey(key); }
+			@Override
+			public boolean containsValue(Object value) { return contains(value); }
+			@Override
+			public V get(Object key) { return XHashSet.this.get(key); }
+			@Override
+			public V put(K key, V value) { return XHashSet.this.put(key, value); }
+			@Override
+			public V remove(Object key) { return XHashSet.this.removeKey(key); }
+			@Override
+			public void clear() { XHashSet.this.clear(); }
+			@Nullable
+			@Override
+			public V putIfAbsent(K key, V value) { return XHashSet.this.putIfAbsent(key, value); }
+
+			@NotNull
+			@Override
+			public Set<Entry<K, V>> entrySet() {throw new UnsupportedOperationException("未实现");}
+		};
+	}*/
 }

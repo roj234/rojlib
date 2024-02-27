@@ -18,7 +18,7 @@ public final class AttrString extends Attribute {
 		this.name = (byte) NAMED_ID.getInt(name);
 		this.value = value;
 	}
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) { w.putShort(name==SOURCE_ID ? pool.getUtfId(value) : pool.getClassId(value)); }
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) { w.putShort(name==SOURCE_ID ? pool.getUtfId(value) : pool.getClassId(value)); }
 
 	public String name() { return NAMED_ID.get(name); }
 	public String toString() { return name()+": "+value; }

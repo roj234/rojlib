@@ -97,6 +97,13 @@ new FormModel {
 				"x": 270
 				"y": 40
 			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiDIffFinder"
+				"text": "文件比较工具"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 45
+				"y": 70
+			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 305, 180 )
 			"size": new java.awt.Dimension( 400, 325 )

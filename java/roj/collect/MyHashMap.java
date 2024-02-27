@@ -2,9 +2,7 @@ package roj.collect;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import roj.concurrent.FastThreadLocal;
-import roj.crypt.SipHash;
 import roj.io.FastFailException;
 import roj.math.MathUtils;
 import roj.util.ArrayUtil;
@@ -24,7 +22,6 @@ import static roj.collect.IntMap.UNDEFINED;
  * 基于Hash-like机制实现的较高速Map
  */
 public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _Generic_Map<MyHashMap.AbstractEntry<K, V>> {
-	static final boolean USE_SIPHASH = false;
 	static final int TREEIFY_THRESHOLD = 8;
 	static final int UNTREEIFY_THRESHOLD = 6;
 	static final int MIN_TREEIFY_CAPACITY = 64;
@@ -508,9 +505,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		while (true) {
 			if (hasher.equals(key, entry.k)) return entry;
 			if (entry.next == null) {
-				if (loop >= TREEIFY_THRESHOLD && size > MIN_TREEIFY_CAPACITY) {
-					treeify(key, loop);
-
+				if (loop >= TREEIFY_THRESHOLD && size > MIN_TREEIFY_CAPACITY && treeify(key, loop)) {
 					return getOrCreateEntry(key);
 				}
 
@@ -524,60 +519,38 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		}
 	}
 
-	private void treeify(K key, int loop) {
+	private boolean treeify(K key, int loop) {
 		AbstractEntry<K, V> entry;
 		if (hasher != Hasher.defaul()) new Exception("Custom hasher "+hasher+"(A "+hasher.getClass().getName()+") generate many("+ loop +") hash collisions for "+ key.getClass().getName()).printStackTrace();
-		if (!supportAutoCollisionFix()) return;//throw new FastFailException("Child class "+getClass().getName()+" did not support auto collision fix");
+		if (!supportAutoCollisionFix()) return false;//throw new FastFailException("Child class "+getClass().getName()+" did not support auto collision fix");
 
-		if (USE_SIPHASH && key instanceof CharSequence) {
-			hasher = new Hasher<K>() {
-				final SipHash hash = new SipHash();
-				{ hash.setKeyDefault(); }
+		//if (key instanceof Comparable) throw new FastFailException("那你这comparable实现也做的太差了...");
 
-				@Override
-				public int hashCode(@Nullable K k) {
-					long v = hash.digest((CharSequence) k);
-					v = (v >>> 32) ^ v;
-					v = (v >>> 16) ^ v;
-					v = (v >>>  8) ^ v;
-					v = (v >>>  4) ^ v;
-					return (int) v;
-				}
+		AbstractEntry<K, V>[] arr = Helpers.cast(new AbstractEntry<?,?>[MathUtils.getMin2PowerOf(loop +1)]);
+		int i = 0;
 
-				@Override
-				public boolean equals(K from_argument, Object stored_in) {
-					return from_argument.equals(stored_in);
-				}
-			};
-			resize();
-		} else {
-			//if (key instanceof Comparable) throw new FastFailException("那你这comparable实现也做的太差了...");
-
-			AbstractEntry<K, V>[] arr = Helpers.cast(new AbstractEntry<?,?>[MathUtils.getMin2PowerOf(loop +1)]);
-			int i = 0;
-
-			int slot = hasher.hashCode(key)&mask;
-			entry = Helpers.cast(entries[slot]);
-			while (entry != null) {
-				arr[i++] = entry;
-				entry = entry.next;
-			}
-
-			boolean b = key instanceof Comparable;
-			Arrays.sort(arr, 0, i, (o1, o2) -> {
-				int v = Integer.compare(hasher.hashCode(o1.k), hasher.hashCode(o2.k));
-				if (v != 0) return v;
-				if (b) v = ((Comparable<?>) o1.k).compareTo(Helpers.cast(o2.k));
-				if (v != 0) return v;
-				return Integer.compare(System.identityHashCode(o1.k), System.identityHashCode(o2.k));
-			});
-
-			Entry2 entry2 = new Entry2(b);
-			entry2.k = arr;
-			entry2.len = i;
-			entry2.slot = slot;
-			entries[slot] = entry2;
+		int slot = hasher.hashCode(key)&mask;
+		entry = Helpers.cast(entries[slot]);
+		while (entry != null) {
+			arr[i++] = entry;
+			entry = entry.next;
 		}
+
+		boolean b = key instanceof Comparable;
+		Arrays.sort(arr, 0, i, (o1, o2) -> {
+			int v = Integer.compare(hasher.hashCode(o1.k), hasher.hashCode(o2.k));
+			if (v != 0) return v;
+			if (b) v = ((Comparable<?>) o1.k).compareTo(Helpers.cast(o2.k));
+			if (v != 0) return v;
+			return Integer.compare(System.identityHashCode(o1.k), System.identityHashCode(o2.k));
+		});
+
+		Entry2 entry2 = new Entry2(b);
+		entry2.k = arr;
+		entry2.len = i;
+		entry2.slot = slot;
+		entries[slot] = entry2;
+		return true;
 	}
 	@SuppressWarnings("unchecked")
 	private void untreeify(AbstractEntry<K, V> entry, int newMask, AbstractEntry<?, ?>[] newEntries) {

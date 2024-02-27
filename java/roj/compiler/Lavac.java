@@ -14,8 +14,6 @@ import roj.compiler.diagnostic.SimpleDiagnosticListener;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.text.TextUtil;
-import roj.text.logging.Logger;
-import roj.text.logging.LoggingStream;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -222,8 +220,6 @@ public final class Lavac {
 		if (dst != null && !dst.isDirectory() && !dst.mkdirs()) {
 			throw new RuntimeException("Binary path is not exist and unable to create.");
 		}
-
-		System.setOut(new LoggingStream(Logger.getLogger()));
 
 		SimpleDiagnosticListener diagnostic = new SimpleDiagnosticListener(maxError, maxWarn, warnOps);
 

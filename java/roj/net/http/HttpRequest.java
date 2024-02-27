@@ -422,19 +422,19 @@ public abstract class HttpRequest {
 			while (true) {
 				if (size > 0) {
 					lock.lock();
-					try {
-						while (true) {
-							MyChannel some = pollFirst();
-							if (some == null) break;
-
-							some.remove("super_timer");
-							some.addBefore("h11@merger", "super_timer", timer);
-							SyncHttpClient shc = (SyncHttpClient) some.handler("h11@merger").handler();
-							if (shc.queue(request, client) != null) return;
-						}
-					} finally {
+					while (true) {
+						MyChannel ch = pollFirst();
+						if (ch == null) break;
+						if (!(ch.isOpen() & ch.isInputOpen() & ch.isOutputOpen())) continue;
 						lock.unlock();
+
+						SyncHttpClient shc = (SyncHttpClient) ch.handler("h11@merger").handler();
+						shc.retain(request, client);
+						ch.remove("super_timer");
+						ch.addBefore("h11@merger", "super_timer", timer);
+						return;
 					}
+					lock.unlock();
 				}
 
 				while (true) {

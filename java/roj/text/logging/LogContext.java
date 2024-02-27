@@ -34,7 +34,7 @@ public class LogContext {
 		logger = null;
 	}
 
-	public LogContext() {
+	LogContext() {
 		name = "root";
 		prefix = Template.compile("[${0}][${THREAD}/${LEVEL}]: ");
 		components = Collections.singletonList(LCTime.of("H:i:s"));

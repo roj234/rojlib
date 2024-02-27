@@ -41,7 +41,7 @@ public final class AttrClassList extends Attribute {
 	@Override
 	public String name() { return NAMED_ID.get(name); }
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		List<String> list = value;
 		w.putShort(list.size());
 

@@ -2,7 +2,6 @@ package roj.sql;
 
 import roj.collect.*;
 import roj.config.word.Tokenizer;
-import roj.io.IOUtil;
 import roj.net.http.srv.error.GreatErrorPage;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -68,9 +67,7 @@ public final class DBA implements AutoCloseable {
 	public synchronized void close() throws SQLException {
 		reset();
 		try {
-			if (!connection().getAutoCommit()) {
-				transEnd(false);
-			}
+			if (isInTrans()) transEnd(false);
 
 			if (defaultStm != null) {
 				defaultStm.close();
@@ -192,7 +189,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	public DBA rawFieldForSelect(String field) { this.field.clear(); this.field.append(field); this.rawField.clear(); return this; }
-	public DBA field(String field) { rawField = TextUtil.split(field, ","); fieldString(); return this; }
+	public DBA field(String field) { rawField = TextUtil.split(field, ','); fieldString(); return this; }
 	public DBA fields(String... field) { rawField = Arrays.asList(field); fieldString(); return this; }
 	public DBA fields(List<String> field) { rawField = field; fieldString(); return this; }
 
@@ -287,7 +284,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	private CharList makeSelect(boolean count) {
-		CharList sb = IOUtil.ddLayeredCharBuf().append("SELECT ").append(count ? "COUNT(*)" : field.length()==0?"*":field);
+		CharList sb = new CharList().append("SELECT ").append(count ? "COUNT(*)" : field.length()==0?"*":field);
 		if (table.length() > 0) sb.append(" FROM ").append(table);
 		if (where.length() > 0) sb.append(" WHERE ").append(where);
 		if (order != null) sb.append(" ORDER BY ").append(order);
@@ -313,12 +310,13 @@ public final class DBA implements AutoCloseable {
 		connection.setAutoCommit(true);
 		return this;
 	}
-	public boolean isInTrans() throws SQLException { return !connection().getAutoCommit(); }
+	public boolean isInTrans() throws SQLException { return connection != null && !connection.getAutoCommit(); }
 
 	/**
 	 * 读取一条结果
 	 */
 	public List<String> getone() throws SQLException {
+		if (set == null) throw new SQLException("not in select mode!");
 		List<String> result = new SimpleList<>(set.getMetaData().getColumnCount());
 		return getone(result) ? result : null;
 	}
@@ -502,7 +500,7 @@ public final class DBA implements AutoCloseable {
 
 		if (values.size() < rawField.size()) throw new SQLException("field数量少于values长度");
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		sb.append("UPDATE ").append(table).append(" SET ");
 		int i = 0;
 		while (true) {
@@ -540,7 +538,7 @@ public final class DBA implements AutoCloseable {
 		if (table.length() == 0) throw new SQLException("table not defined");
 		if (rawField.isEmpty()) throw new SQLException("field not defined, or not for update");
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		sb.append("INSERT INTO ").append(table).append(" (").append(field).append(") VALUES (");
 		int i = 0;
 		while (true) {
@@ -561,7 +559,7 @@ public final class DBA implements AutoCloseable {
 
 		List<?> values = manyValues.next();
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		sb.append("INSERT INTO ").append(table).append(" (").append(field).append(") VALUES (");
 		for (int i = 0; i < values.size();) {
 			sb.append('?');
@@ -609,7 +607,7 @@ public final class DBA implements AutoCloseable {
 	public int delete() throws SQLException {
 		if (table.length() == 0) throw new SQLException("table not defined");
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		sb.append("DELETE FROM ").append(table);
 
 		return condition(sb);

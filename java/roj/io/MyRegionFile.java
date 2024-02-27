@@ -99,7 +99,7 @@ public class MyRegionFile implements AutoCloseable {
 			int off = n >>> 8;
 			int len = n & 255;
 			if (len == 255 && off <= sectors) {
-				raf.seek(off * chunkSize);
+				raf.seek((long) off * chunkSize);
 				len = chunkCount(raf.asDataInput().readInt() + 4);
 			}
 
@@ -142,12 +142,12 @@ public class MyRegionFile implements AutoCloseable {
 
 		assert off + len < sectorCount;
 
-		raf.seek(off*chunkSize);
+		raf.seek((long) off * chunkSize);
 		int byteLength = raf.asDataInput().readInt();
 		if (byteLength > chunkSize*len - 4 && len != 255) {
 			log("无效的块: {} #{} 范围:[{}+{}] 数据溢出(Block): {} > {}", file, id, off, len, byteLength, len*chunkSize - 4);
 			return null;
-		} else if (byteLength + off*chunkSize > raf.length()) {
+		} else if (byteLength + (long) off * chunkSize > raf.length()) {
 			log("无效的块: {} #{} 范围:[{}+{}] 数据溢出(Global): {} > {}", file, id, off, len, byteLength + off*chunkSize, raf.length());
 			return null;
 		} else {
@@ -181,7 +181,7 @@ public class MyRegionFile implements AutoCloseable {
 		int off = i1 >>> 8;
 		int oldCLen = i1 & 255;
 		if (oldCLen == 255) {
-			raf.seek(off*chunkSize);
+			raf.seek((long) off * chunkSize);
 			oldCLen = chunkCount(raf.asDataInput().readInt() + 4);
 		}
 
@@ -232,7 +232,7 @@ public class MyRegionFile implements AutoCloseable {
 			// 在文件后增加
 			int extraBlocks = cLen + lastAvailBlock;
 
-			raf.setLength(chunkSize*extraBlocks);
+			raf.setLength((long) chunkSize * extraBlocks);
 
 			int sec = sectorCount;
 			sectorCount = extraBlocks;
@@ -259,7 +259,7 @@ public class MyRegionFile implements AutoCloseable {
 		int len = i & 255;
 
 		if (len == 255) {
-			raf.seek(off * chunkSize);
+			raf.seek((long) off * chunkSize);
 			len = chunkCount(raf.asDataInput().readInt() + 4);
 		}
 
@@ -350,7 +350,7 @@ public class MyRegionFile implements AutoCloseable {
 		writeBlock(raf, off, data);
 	}
 	private void writeBlock(Source raf, int off, DynByteBuf data) throws IOException {
-		raf.seek(off*chunkSize);
+		raf.seek((long) off * chunkSize);
 		raf.writeInt(data.readableBytes()+1);
 		raf.write(data);
 	}

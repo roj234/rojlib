@@ -16,6 +16,7 @@ import java.lang.reflect.Method;
 import java.nio.ByteOrder;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static roj.asm.type.Type.ARRAY;
 import static roj.asm.type.Type.CLASS;
@@ -204,4 +205,7 @@ public final class ReflectionUtils {
 			return ctx.length < backward ? null : ctx[backward];
 		}
 	}
+
+	private static final AtomicInteger NEXT_ID = new AtomicInteger();
+	public static int uniqueId() { return NEXT_ID.getAndIncrement(); }
 }

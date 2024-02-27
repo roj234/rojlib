@@ -23,11 +23,17 @@ public final class Text extends Node {
 
 	public void toJSON(CVisitor cc) { if (nodeType == COMMENT) cc.comment(value); else cc.value(value); }
 
-	public void toXML(CharList sb, int depth) { toCompatXML(sb); }
-	public void toCompatXML(CharList sb) {
+	public void toXML(CharList sb, int depth) {
 		switch (nodeType) {
 			case CDATA: sb.append("<![CDATA[").append(value).append("]]>"); break;
 			case COMMENT: sb.append("<!--").append(value).append("-->"); break;
+			default: HttpUtil.htmlspecial(sb, value); break;
+		}
+	}
+	public void toCompatXML(CharList sb) {
+		switch (nodeType) {
+			case CDATA: sb.append("<![CDATA[").append(value).append("]]>"); break;
+			case COMMENT: break; // no comment in compat XMLs
 			default: HttpUtil.htmlspecial(sb, value); break;
 		}
 	}

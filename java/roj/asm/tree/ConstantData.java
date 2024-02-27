@@ -165,6 +165,8 @@ public class ConstantData implements IClass {
 
 	@Override
 	public DynByteBuf getBytes(DynByteBuf w) {
+		int begin = w.wIndex();
+
 		ConstantPool cw = this.cp;
 
 		w.putShort(access)
@@ -195,9 +197,9 @@ public class ConstantData implements IClass {
 
 		int pos = w.wIndex();
 		int cpl = cw.byteLength() + 10;
-		w.preInsert(0, cpl);
+		w.preInsert(begin, cpl);
 
-		w.wIndex(0);
+		w.wIndex(begin);
 		cw.write(w.putInt(0xCAFEBABE).putShort(version).putShort(version >> 16));
 		assert w.wIndex() == cpl;
 		w.wIndex(pos + cpl);

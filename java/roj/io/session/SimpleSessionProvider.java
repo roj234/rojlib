@@ -8,7 +8,6 @@ import roj.config.serial.CAdapter;
 import roj.config.serial.SerializerFactory;
 import roj.config.serial.Serializers;
 import roj.config.serial.ToNBT;
-import roj.io.IOUtil;
 import roj.io.source.BufferedSource;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
@@ -190,8 +189,8 @@ public class SimpleSessionProvider extends SessionProvider implements BiConsumer
 			}
 		}
 
-		IOUtil.deleteFile(new File(baseDir, id));
-		IOUtil.deleteFile(new File(baseDir, id+".tmp"));
+		new File(baseDir, id).delete();
+		new File(baseDir, id+".tmp").delete();
 	}
 
 	private static CAdapter<Map<String, Object>> adapter() {

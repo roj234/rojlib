@@ -34,7 +34,7 @@ public final class TypeAnnotations extends Attribute {
 	public String name() { return vis?VISIBLE_NAME:INVISIBLE_NAME; }
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		w.putShort(annotations.size());
 		for (TypeAnno annotation : annotations) {
 			annotation.toByteArray(pool, w);

@@ -1,6 +1,6 @@
 package roj.platform;
 
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
@@ -144,8 +144,8 @@ public class PluginManager {
 		}
 	}
 	private PluginDescriptor getMetadata(File plugin) throws IOException {
-		try (ZipArchive za = new ZipArchive(plugin)) {
-			InputStream in = za.getInput("plugin.yml");
+		try (ZipFile za = new ZipFile(plugin)) {
+			InputStream in = za.getStream("plugin.yml");
 			if (in == null) return null;
 
 			CMapping config = new YAMLParser().parseRaw(in).asMap();

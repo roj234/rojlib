@@ -1,5 +1,6 @@
 package roj.asm.frame;
 
+import org.jetbrains.annotations.NotNull;
 import roj.asm.visitor.Label;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -51,10 +52,13 @@ public final class Frame2 {
 		return "unknown";
 	}
 
+	public static final Var2[] NONE = new Var2[0];
+
 	public short type;
 	public int target;
 	public Label target3;
-	public Var2[] locals, stacks;
+	@NotNull
+	public Var2[] locals = NONE, stacks = NONE;
 
 	public static Frame2 fromVarietyType(int type) {
 		return new Frame2(toExactFrameType(type));
@@ -70,7 +74,7 @@ public final class Frame2 {
 	public String toString() { return toString(IOUtil.getSharedCharBuf(), 0).toString(); }
 	public CharList toString(CharList sb, int prefix) {
 		sb.padEnd(' ', prefix).append(getName(type)).append(" #").append(bci());
-		if (locals != null && locals.length > 0) {
+		if (locals.length > 0) {
 			sb.append('\n').padEnd(' ', prefix).append("Local: [");
 			int i = 0;
 			while (true) {
@@ -80,7 +84,7 @@ public final class Frame2 {
 			}
 			sb.append(']');
 		}
-		if (stacks != null && stacks.length > 0) {
+		if (stacks.length > 0) {
 			sb.append('\n').padEnd(' ', prefix).append("Stack: [");
 			int i = 0;
 			while (true) {

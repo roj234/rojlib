@@ -231,7 +231,9 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 			synchronized (this) { notifyAll(); }
 
 			if (response != null && response.getField("connection").equalsIgnoreCase("close")) {
-				ctx.channel().closeGracefully();
+				try {
+					ctx.channel().closeGracefully();
+				} catch (IOException ignored) {}
 			}
 		}
 		state = IDLE;

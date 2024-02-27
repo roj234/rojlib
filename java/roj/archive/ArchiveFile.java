@@ -3,7 +3,7 @@ package roj.archive;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Map;
+import java.util.Collection;
 
 /**
  * @author Roj234
@@ -16,7 +16,9 @@ public interface ArchiveFile extends Closeable {
 	 */
 	void reload() throws IOException;
 
-	Map<String, ? extends ArchiveEntry> getEntries();
-	default InputStream getInput(ArchiveEntry entry) throws IOException { return getInput(entry, null); }
-	InputStream getInput(ArchiveEntry entry, byte[] password) throws IOException;
+	ArchiveEntry getEntry(String name);
+	Collection<? extends ArchiveEntry> entries();
+
+	default InputStream getStream(ArchiveEntry entry) throws IOException { return getStream(entry, null); }
+	InputStream getStream(ArchiveEntry entry, byte[] pw) throws IOException;
 }

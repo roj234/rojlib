@@ -1,5 +1,6 @@
 package roj.compiler.context;
 
+import org.jetbrains.annotations.NotNull;
 import roj.asm.Opcodes;
 import roj.asm.tree.Attributed;
 import roj.asm.tree.ConstantData;
@@ -75,6 +76,7 @@ public class ClassContext implements CompilerConfig {
 	public IntBiMap<String> parentList(IClass info) throws ClassNotFoundException { return getResolveHelper(info).getClassList(this); }
 	public ComponentList methodList(IClass info, String name) throws ClassNotFoundException { return getResolveHelper(info).findMethod(this, name); }
 	public ComponentList fieldList(IClass info, String name) throws ClassNotFoundException { return getResolveHelper(info).findField(this, name); }
+	@NotNull
 	public List<IType> getTypeParamOwner(IClass info, IType superType) throws ClassNotFoundException {
 		Map<String, List<IType>> map = getResolveHelper(info).getTypeParamOwner(this);
 

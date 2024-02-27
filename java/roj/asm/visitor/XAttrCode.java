@@ -122,7 +122,7 @@ public class XAttrCode extends Attribute implements Attributed {
 	public byte getFrameFlag() { return frameFlag; }
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool cp) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool cp) {
 		CodeWriter c = AsmShared.local().cw();
 		c.init(w, cp, owner, frameFlag);
 

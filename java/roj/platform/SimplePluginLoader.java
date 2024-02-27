@@ -47,7 +47,8 @@ public class SimplePluginLoader extends Plugin {
 
 	@Override
 	protected void onEnable() throws Exception {
-		loadAnnotationPlugins(Helpers.getJarByClass(SimplePluginLoader.class));
+		File file = Helpers.getJarByClass(SimplePluginLoader.class);
+		if (file != null) loadAnnotationPlugins(file);
 		DefaultPluginSystem.CMD.register(literal("spl_add").then(argument("file", Argument.file()).executes(ctx -> {
 			getLogger().info("正在读取文件中的注解插件");
 			int v = loadAnnotationPlugins(ctx.argument("file", File.class));

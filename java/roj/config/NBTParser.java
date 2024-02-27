@@ -5,10 +5,10 @@ import roj.config.data.CMapping;
 import roj.config.serial.CVisitor;
 import roj.config.serial.ToEntry;
 import roj.config.serial.ToNBT;
+import roj.io.MyDataInputStream;
 import roj.util.DynByteBuf;
 
 import java.io.DataInput;
-import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -22,7 +22,7 @@ public final class NBTParser implements BinaryParser {
 	public static final byte END = 0, BYTE = 1, SHORT = 2, INT = 3, LONG = 4, FLOAT = 5, DOUBLE = 6, BYTE_ARRAY = 7, STRING = 8, LIST = 9, COMPOUND = 10, INT_ARRAY = 11, LONG_ARRAY = 12;
 
 	public static CMapping parse(InputStream is) throws IOException {
-		return parse((DataInput) (is instanceof DataInput ? is : new DataInputStream(is)));
+		return parse((DataInput) (is instanceof DataInput ? is : new MyDataInputStream(is)));
 	}
 	public static CMapping parse(DataInput in) throws IOException {
 		ToEntry copy = new ToEntry();
@@ -37,7 +37,7 @@ public final class NBTParser implements BinaryParser {
 
 	@Override
 	public <T extends CVisitor> T parseRaw(T cc, InputStream in, int flag) throws IOException {
-		root(cc, (DataInput) (in instanceof DataInput ? in : new DataInputStream(in)), flag);
+		root(cc, (DataInput) (in instanceof DataInput ? in : new MyDataInputStream(in)), flag);
 		return cc;
 	}
 	public <T extends CVisitor> T parseRaw(T cc, DynByteBuf buf, int flag) throws IOException {

@@ -7,10 +7,11 @@ package roj.plugins.cross;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.config.JSONParser;
-import roj.config.ParseException;
+import roj.config.YAMLParser;
 import roj.config.data.CList;
 import roj.config.data.CMapping;
+import roj.config.serial.ToSomeString;
+import roj.config.serial.ToYaml;
 import roj.crypt.KeyType;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
@@ -22,6 +23,7 @@ import roj.net.http.srv.StringResponse;
 import roj.net.mss.MSSKeyPair;
 import roj.plugins.cross.server.AEServer;
 import roj.text.TextUtil;
+import roj.text.TextWriter;
 import roj.ui.GuiUtil;
 import roj.ui.OnChangeHelper;
 
@@ -32,10 +34,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.security.KeyPair;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.security.*;
 import java.util.function.Consumer;
 
 import static roj.plugins.cross.Constants.MAX_PORTS;
@@ -81,25 +80,44 @@ public class AEGui extends JFrame implements ChannelHandler {
 		onLogout("很遗憾，今日屠龙宝刀已送完");
 	}
 
-	public static void main(String[] args) throws IOException, ParseException {
+	public static void main(String[] args) throws Exception {
 		GuiUtil.systemLook();
 
 		assert NIOUtil.available();
 
 		AEGui f = new AEGui();
-		if (args.length > 0) {
-			CMapping cfg = new JSONParser().parseRaw(new File(args[0]), JSONParser.LITERAL_KEY).asMap();
+		f.pack();
 
-			f.uiServer.setText(cfg.getString("server"));
-			f.uiRoom.setText(cfg.getString("room"));
-			f.uiUser.setText(cfg.getString("user"));
-			f.uiCustomMotd.setText(cfg.getString("motd"));
+		if (args.length > 0) {
+			try {
+				f.uiKeySL.setEnabled(false);
+				f.loadFromFile(new File(args[0]));
+			} catch (Throwable e) {
+				e.printStackTrace();
+				System.exit(-1);
+			}
 		}
 
-		f.pack();
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-
 		f.onLogout("屠龙宝刀点击就送");
+	}
+
+	private void loadFromFile(File file) throws Exception {
+		CMapping yml = new YAMLParser().parseRaw(file).asMap();
+		uiServer.setText(yml.getString("server"));
+		uiRoom.setText(yml.getString("room"));
+		uiUser.setText(yml.getString("nickname"));
+		if (yml.getBool("room_owner")) {
+			uiCreateRoom.doClick();
+			uiCustomMotd.setText(yml.getString("room_desc"));
+			DefaultListModel<Object> model = (DefaultListModel<Object>) uiPortList.getModel();
+			CList list = yml.getList("ports");
+			for (int i = 0; i < list.size(); i++) {
+				model.addElement(new MutableInt(list.getInteger(i)));
+			}
+		}
+		userCert = new KeyPair((PublicKey) keyType.fromPEM(yml.getString("public_key")), (PrivateKey) keyType.fromPEM(yml.getString("private_key")));
+		setUserCert();
 	}
 
 	private void onLogout(String msg) {
@@ -181,7 +199,8 @@ public class AEGui extends JFrame implements ChannelHandler {
 			setVisible(true);
 
 			uiCustomMotd.setEditable(true);
-			uiCustomMotd.setText("在此编辑您房间的介绍");
+			if (uiCustomMotd.getDocument().getLength() == 0)
+				uiCustomMotd.setText("在此编辑您房间的介绍");
 
 			uiRemotePort.setVisible(false);
 			uiDelPort.setVisible(true);
@@ -225,21 +244,43 @@ public class AEGui extends JFrame implements ChannelHandler {
 		});
 		uiKeySL.addActionListener(e -> {
 			if (uiKeySL.getText().startsWith("读取")) {
-				File file = GuiUtil.fileLoadFrom("选择密钥文件", uiConnect);
-				String pass = JOptionPane.showInputDialog(uiConnect, "请输入保存时设置的密码", "输入密码", JOptionPane.QUESTION_MESSAGE);
+				File file = GuiUtil.fileLoadFrom("选择配置文件(也可以通过参数指定)", uiConnect);
 				try {
-					userCert = keyType.loadKey(pass.getBytes(StandardCharsets.UTF_8), file);
-					if (userCert == null) uiKeySL.setText("读取失败");
-					else setUserCert();
+					loadFromFile(file);
 				} catch (Exception e1) {
 					uiKeySL.setText("读取失败");
 					e1.printStackTrace();
 				}
 			} else {
-				File file = GuiUtil.fileSaveTo("选择密钥文件", "key.bin", uiConnect);
-				String pass = JOptionPane.showInputDialog(uiConnect, "您必须设置密码来保护私钥", "设置密码", JOptionPane.INFORMATION_MESSAGE);
-				try {
-					keyType.saveKey(userCert, pass.getBytes(StandardCharsets.UTF_8), file);
+				File file = GuiUtil.fileSaveTo("保存配置文件", "AE-Cross_config.yml", uiConnect);
+				try (TextWriter out = TextWriter.to(file)) {
+					ToSomeString v = new ToYaml().multiline(true).sb(out);
+					v.valueMap();
+					v.key("server");
+					v.value(uiServer.getText());
+					v.key("room");
+					v.value(uiRoom.getText());
+					if (uiCreateRoom.isSelected()) {
+						v.key("room_owner");
+						v.value(true);
+						v.key("room_desc");
+						v.value(uiCustomMotd.getText());
+						v.key("ports");
+						v.valueList();
+						for (int i = 0; i < model.size(); i++) {
+							MutableInt c = (MutableInt) model.get(i);
+							v.value(c.value);
+						}
+						v.pop();
+					}
+					v.key("nickname");
+					v.value(uiUser.getText());
+					v.key("public_key");
+					v.value(keyType.toPEM(userCert.getPublic()));
+					v.key("private_key");
+					v.value(keyType.toPEM(userCert.getPrivate()));
+					v.getValue();
+
 					uiKeySL.setEnabled(false);
 					uiKeySL.setText("保存");
 				} catch (Exception e1) {
@@ -401,7 +442,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 				case "bundle.min.css": return new StringResponse(res("bundle.min.css"), "text/css");
 				case "bundle.min.js": return new StringResponse(res("bundle.min.js"), "text/javascript");
 				case "": return new StringResponse(res("client_owner.html"), "text/html");
-				case "user_list":
+				case "ws":// return man.switchToWebsocket(request, rh);
 					CList lx = new CList();
 					for (IntMap.Entry<AEHost.Client> entry : host.clients.selfEntrySet()) {
 						CMapping map = new CMapping();
@@ -442,24 +483,24 @@ public class AEGui extends JFrame implements ChannelHandler {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
 		uiLogout = new JButton();
 		uiWeb = new JButton();
-		JScrollPane scrollPane1 = new JScrollPane();
+		var scrollPane1 = new JScrollPane();
 		uiPortList = new JList<>();
 		uiRefreshPort = new JButton();
-		JLabel label4 = new JLabel();
+		var label4 = new JLabel();
 		uiRemotePort = new JLabel();
-		JLabel label6 = new JLabel();
+		var label6 = new JLabel();
 		uiLocalPort = new JTextField();
 		uiDelPort = new JButton();
-		JLabel label7 = new JLabel();
-		JScrollPane scrollPane2 = new JScrollPane();
+		var label7 = new JLabel();
+		var scrollPane2 = new JScrollPane();
 		uiCustomMotd = new JTextPane();
 		uiConnect = new JDialog();
 		uiServer = new JTextField();
 		uiLogin = new JButton();
 		uiRoom = new JTextField();
-		JLabel label1 = new JLabel();
-		JLabel label2 = new JLabel();
-		JLabel label3 = new JLabel();
+		var label1 = new JLabel();
+		var label2 = new JLabel();
+		var label3 = new JLabel();
 		uiUser = new JTextField();
 		uiCreateRoom = new JCheckBox();
 		uiDirectServer = new JCheckBox();
@@ -469,19 +510,20 @@ public class AEGui extends JFrame implements ChannelHandler {
 
 		//======== this ========
 		setTitle("AE-FakeP2P");
-		Container contentPane = getContentPane();
+		var contentPane = getContentPane();
 		contentPane.setLayout(null);
 
 		//---- uiLogout ----
 		uiLogout.setText("\u65ad\u5f00\u8fde\u63a5");
 		uiLogout.setMargin(new Insets(2, 2, 2, 2));
 		contentPane.add(uiLogout);
-		uiLogout.setBounds(new Rectangle(new Point(246, 0), uiLogout.getPreferredSize()));
+		uiLogout.setBounds(new Rectangle(new Point(246, 2), uiLogout.getPreferredSize()));
 
 		//---- uiWeb ----
-		uiWeb.setText("\u7f51\u9875\u7aef");
+		uiWeb.setText("WebUI");
+		uiWeb.setMargin(new Insets(2, 2, 2, 2));
 		contentPane.add(uiWeb);
-		uiWeb.setBounds(new Rectangle(new Point(195, 125), uiWeb.getPreferredSize()));
+		uiWeb.setBounds(new Rectangle(new Point(185, 2), uiWeb.getPreferredSize()));
 
 		//======== scrollPane1 ========
 		{
@@ -546,7 +588,8 @@ public class AEGui extends JFrame implements ChannelHandler {
 		{
 			uiConnect.setTitle("\u4eca\u665a\u516b\u70b9\uff0c\u6211\u5728\u6c99\u57ce\u7b49\u4f60");
 			uiConnect.setResizable(false);
-			Container uiConnectContentPane = uiConnect.getContentPane();
+			uiConnect.setAlwaysOnTop(true);
+			var uiConnectContentPane = uiConnect.getContentPane();
 			uiConnectContentPane.setLayout(null);
 
 			//---- uiServer ----

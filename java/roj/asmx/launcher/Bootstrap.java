@@ -44,18 +44,29 @@ public final class Bootstrap {
 	public static void boot(String[] args) {
 		// 甚至都不用传参
 		EntryPoint entryPoint = (EntryPoint) Bootstrap.class.getClassLoader();
-		URL[] urls = GetOtherJars();
-		for (URL url : urls) entryPoint.addURL(url);
 
-		block:
 		if (EntryPoint.EXPERIMENTAL_FAST_ZIP) {
-			for (URL url : urls) {
+			URL[] urls = GetOtherJars();
+			if (urls != null) for (URL url : urls) {
 				if (!url.getProtocol().equals("file")) {
 					LOGGER.warn("非文件的classpath {}", url);
-					break block;
+				} else {
+					try {
+						classLoader.enableFastZip(url);
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
 				}
 			}
-			classLoader.enableFastZip(urls);
+
+			URL myJar = EntryPoint.class.getProtectionDomain().getCodeSource().getLocation();
+			if (myJar != null) {
+				try {
+					classLoader.enableFastZip(myJar);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
 		}
 
 		Set<String> tweakerNames = new LinkedHashSet<>();
@@ -149,7 +160,7 @@ public final class Bootstrap {
 		// necessary
 		Level level = LOGGER.getLevel();
 		LOGGER.setLevel(Level.ALL);
-		LOGGER.info("欢迎使用Roj234通用类转换包装器1.2");
+		LOGGER.info("欢迎使用Roj234通用类转换包装器1.3");
 		LOGGER.setLevel(level);
 
 		ByteList list = Parser.toByteArrayShared(L);
@@ -173,7 +184,8 @@ public final class Bootstrap {
 				}
 			}
 		}
-		throw new IllegalArgumentException("不支持的ClassLoader " + loader.getClass().getName());
+		LOGGER.warn("并非直接从从文件加载: {}", loader.getClass().getName());
+		return null;
 	}
 	private interface H {
 		Object getUCP(Object o);

@@ -2,7 +2,6 @@ package roj.net.http;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.UnmodifiableView;
-import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
 import roj.net.ch.ChannelCtx;
@@ -18,10 +17,6 @@ import java.io.InputStream;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.AbstractMap;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -40,16 +35,14 @@ public class SyncHttpClient implements ChannelHandler {
 	private final ReentrantLock lock = new ReentrantLock(true);
 	private final Condition hasData = lock.newCondition();
 
-	private static final byte READY = 0, HEAD = 1, FAIL = 2, SUCCESS = 3;
-	private volatile byte state;
+	static final byte READY = 0, HEAD = 1, FAIL = 2, SUCCESS = 3;
+	volatile byte state;
 
-	private ChannelCtx o;
+	ChannelCtx o;
 	private boolean async;
 	private Throwable ex;
 
 	private Consumer<SyncHttpClient> callback;
-
-	private List<Map.Entry<HttpRequest, SyncHttpClient>> _queue = Collections.emptyList();
 
 	@Override
 	public void handlerAdded(ChannelCtx ctx) {
@@ -100,7 +93,13 @@ public class SyncHttpClient implements ChannelHandler {
 		if (event.id == HttpRequest.DOWNLOAD_EOF) {
 			finish(ctx, (boolean) event.getData());
 
-			if (ctx.postEvent(SHC_CLOSE_CHECK).getResult() == Event.RESULT_DEFAULT) ctx.channel().closeGracefully();
+			if (state != SUCCESS || ctx.postEvent(SHC_CLOSE_CHECK).getResult() == Event.RESULT_DEFAULT) {
+				try {
+					ctx.channel().closeGracefully();
+				} catch (IOException ignored) {
+					ctx.channel().close();
+				}
+			}
 		}
 	}
 	@Override
@@ -116,24 +115,9 @@ public class SyncHttpClient implements ChannelHandler {
 			if (state < FAIL) {
 				if (ok) {
 					state = SUCCESS;
-
-					if (!_queue.isEmpty()) {
-						Map.Entry<HttpRequest, SyncHttpClient> entry = _queue.remove(0);
-
-						SyncHttpClient shc = entry.getValue();
-						if (shc._queue.isEmpty()) shc._queue = _queue;
-						else shc._queue.addAll(0, _queue);
-
-						execute(entry.getKey(), shc);
-					}
 				} else {
 					state = FAIL;
 					if (ex == null) ex = new Exception();
-
-					// 手动调用queue才可能在SUCCESS前
-					for (int i = 0; i < _queue.size(); i++) {
-						_queue.get(i).getValue().finish(ctx, false);
-					}
 				}
 			}
 			notifyAll();
@@ -146,37 +130,8 @@ public class SyncHttpClient implements ChannelHandler {
 		if (callback != null) callback.accept(this);
 	}
 
-	public SyncHttpClient queue(HttpRequest request, SyncHttpClient client) {
-		ChannelCtx ctx = o;
-		if (ctx == null) return null;
-
-		boolean locked = ctx.channel().lock().tryLock();
-		try {
-			if (!ctx.isOpen() || !ctx.isInputOpen() || !ctx.isOutputOpen()) return null;
-
-			synchronized (this) {
-				if (state < FAIL) {
-					if (_queue.isEmpty()) _queue = new SimpleList<>(4);
-					if (_queue.size() >= 4) return null;
-					_queue.add(new AbstractMap.SimpleImmutableEntry<>(request, client));
-					return this;
-				}
-			}
-
-			if (!locked) {
-				ctx.channel().lock().lock();
-				locked = true;
-			}
-
-			execute(request, client);
-		} finally {
-			if (locked) ctx.channel().lock().unlock();
-		}
-
-		return client;
-	}
-
-	private void execute(HttpRequest http, SyncHttpClient shc) {
+	void retain(HttpRequest http, SyncHttpClient shc) {
+		assert state == SyncHttpClient.SUCCESS;
 		o.replaceSelf(shc);
 		try {
 			ChannelCtx ctx = findHandler(o);
@@ -276,7 +231,7 @@ public class SyncHttpClient implements ChannelHandler {
 					}
 
 					int v = Math.min(data.readableBytes(), len);
-					data.read(b, off, v);
+					data.readFully(b, off, v);
 					return v;
 				} finally {
 					lock.unlock();
@@ -319,7 +274,6 @@ public class SyncHttpClient implements ChannelHandler {
 		}
 		sb.append('>');
 		if (is != null) sb.append(", streaming");
-		if (!_queue.isEmpty()) sb.append(", ").append(_queue.size()).append(" queued");
 		return sb.append('}').toString();
 	}
 }

@@ -11,5 +11,5 @@ import java.io.IOException;
 public interface Waitable {
 	void waitFor() throws IOException;
 	boolean isDone();
-	void cancel();
+	boolean cancel();
 }
