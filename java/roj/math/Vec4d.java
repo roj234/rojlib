@@ -21,7 +21,7 @@ public class Vec4d extends Vector {
 	public Vec4d(Vec2d xy, double z, double s) {
 		this(xy.x, xy.y, z, s);
 	}
-	public Vec4d(Vec3f xyz, double s) {
+	public Vec4d(Vec3d xyz, double s) {
 		this(xyz.x, xyz.y, xyz.z, s);
 	}
 	public Vec4d(Vec4d xyzw) {
@@ -35,7 +35,7 @@ public class Vec4d extends Vector {
 		this.s = w;
 		return this;
 	}
-	public Vec4d set(Vec3f xyz, double w) {
+	public Vec4d set(Vec3d xyz, double w) {
 		this.x = xyz.x;
 		this.y = xyz.y;
 		this.z = xyz.z;
@@ -48,20 +48,6 @@ public class Vec4d extends Vector {
 		this.z = xyzw.z;
 		this.s = xyzw.s;
 		return this;
-	}
-
-	// 四元数旋转
-	public static void main(String[] args) {
-		double v = Math.sqrt(2) / 2;
-
-		Vec4d rot = new Vec4d().makeRotation(Math.toRadians(45), new Vec3d(v,0,v));
-		System.out.println(rot);
-		Vec4d aaa = new Vec4d(2,0,0, 0);
-		System.out.println(aaa.len(3));
-		aaa.applyRotation(rot);
-		System.out.println(aaa);
-		System.out.println(aaa.len(3));
-		System.out.println(rot);
 	}
 
 	// q*

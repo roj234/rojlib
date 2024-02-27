@@ -23,18 +23,22 @@ public final class WordBlock {
 	long uSize;
     long[] outSizes = ArrayCache.LONGS;
 
+	/**
+	 * bit 1: crc32 of uncompressed data
+	 * bit 2: crc32 of compressed data (Deprecated)
+	 * new bit2: is complex coder
+	 *
+	 * bit 3-8: outSize index [if complexCode == null else] complexCoderIndex
+	 */
 	byte hasCrc;
     int crc;
 
     int fileCount;
 	QZEntry firstEntry;
 
-	Object tmp;
-
 	public long size() {
 		long s = size;
-		for (int i = 0; i < extraSizes.length; i++)
-			s += extraSizes[i];
+		for (long extraSize : extraSizes) s += extraSize;
 		return s;
 	}
 
@@ -44,7 +48,8 @@ public final class WordBlock {
 	public long getuSize() { return uSize; }
 
 	public boolean hasProcessor(Class<? extends QZCoder> type) {
-		for (QZCoder qzCoder : coder != null ? coder : (QZCoder[]) tmp) {
+		if (complexCoder != null) return complexCoder.hasProcessor(type);
+		for (QZCoder qzCoder : coder) {
 			if (type.isInstance(qzCoder)) return true;
 		}
 		return false;
@@ -55,8 +60,9 @@ public final class WordBlock {
 		StringBuilder sb = new StringBuilder();
 		sb.append("{\n")
 		  .append("  偏移").append(offset).append(",长度").append(size()).append('\n');
-		if (coder != null) linearCoder(sb, coder);
-		else linearCoder(sb, (Object[]) tmp);
+		if (complexCoder == null) linearCoder(sb, coder);
+		// ENHANCE: A graph view for complex coder
+		else linearCoder(sb, (Object[]) coder);
 		sb.append("\n  包含").append(fileCount).append("个文件");
 
 		if ((hasCrc&1) != 0)
@@ -64,25 +70,29 @@ public final class WordBlock {
 		return sb.append("\n}").toString();
 	}
 
-	// ENHANCE: A graph view for complex coder
 	private void linearCoder(StringBuilder sb, Object[] coders) {
-		Object[] k = new Object[((coders.length+1)<<1)+1];
-		k[0] = "Raw";
-		k[coders.length+1] = IntMap.UNDEFINED;
+		int width = coders.length*2 + 1;
+		Object[] k = new Object[width*2+1];
+		k[0] = "";
+		k[width] = IntMap.UNDEFINED;
 		for (int i = 0; i < coders.length;i++) {
-			String s = coders[i].toString();
-			k[coders.length+2+i] = Long.toString(i == 0 ? size : outSizes[i-1]);
-			k[i+1] = s;
+			int offset = i*2 + 1;
+			k[offset] = coders[i];
+			k[offset+1] = "";
+
+			k[offset+width] = Long.toString(i == 0 ? size : outSizes[i-1]);
+			k[offset+width+1] = "=>";
 		}
+		k[k.length-2] = "=>";
 		k[k.length-1] = Long.toString(uSize);
 
-		TextUtil.prettyTable(sb, "  ", k, "    ", " => ");
+		TextUtil.prettyTable(sb, "  ", k, " ");
 	}
 
-	public final class Counter extends FilterOutputStream {
+	final class Counter extends FilterOutputStream {
 		private final int id;
 
-		public Counter(OutputStream out, int id) {
+		Counter(OutputStream out, int id) {
 			super(out);
 			this.id = id;
 		}
@@ -107,4 +117,6 @@ public final class WordBlock {
 			if (id >= 0) out.close();
 		}
 	}
+
+	CoderInfo complexCoder() {return complexCoder;}
 }

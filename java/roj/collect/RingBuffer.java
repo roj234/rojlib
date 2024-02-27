@@ -8,90 +8,32 @@ import roj.util.ArrayCache;
 import java.util.*;
 
 /**
- * A simple ring buffer
+ * 简单的环形缓冲区实现
+ * 除此之外，还可以作为一个有界的ArrayDeque使用
  *
  * @author Roj234
  * @since 2021/4/13 23:25
  */
 public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
-	public final class Itr extends AbstractIterator<E> {
-		int i;
-		int dir;
-		int fence;
-
-		@SuppressWarnings("unchecked")
-		public Itr(boolean rev) {
-			if (size == 0) {
-				stage = ENDED;
-				return;
-			}
-
-			if (rev) {
-				i = (tail == 0 ? array.length : tail) - 1;
-				dir = -1;
-				fence = (head == 0 ? array.length : head) - 1;
-			} else {
-				i = head;
-				dir = 1;
-				fence = tail;
-			}
-
-			stage = CHECKED;
-			result = (E) array[i];
-			i += dir;
-		}
-
-		@Override
-		@SuppressWarnings("unchecked")
-		public boolean computeNext() {
-			if (i == -1) {
-				if (size < array.length) return false;
-				i = array.length - 1;
-			} else if (i == array.length) {
-				i = 0;
-			}
-
-			if (i == fence) return false;
-			result = (E) array[i];
-			i += dir;
-			return true;
-		}
-
-		public int getPos() {
-			return i;
-		}
-
-		@Override
-		public String toString() {
-			return "Itr{" + i + "+" + dir + " => " + fence + '}';
-		}
-	}
-
 	protected int maxCap;
 	protected Object[] array;
 
 	protected int head, tail, size;
 
-	public RingBuffer(int capacity) {
-		this(capacity, true);
-	}
-
+	public static <T> RingBuffer<T> infCap() {return new RingBuffer<>(-1, false);}
+	public RingBuffer(int capacity) {this(capacity, true);}
 	public RingBuffer(int capacity, boolean allocateNow) {
 		maxCap = capacity;
 		if (capacity < 0) capacity = 10;
 		else if (!allocateNow) capacity = Math.min(10, capacity);
 		array = new Object[capacity];
 	}
-
 	public RingBuffer(int capacity, int maxCapacity) {
 		maxCap = maxCapacity;
 		array = capacity == 0 ? ArrayCache.OBJECTS : new Object[capacity];
 	}
 
-	public static <T> RingBuffer<T> infCap() {
-		return new RingBuffer<>(-1, false);
-	}
-
+	public int capacity() {return maxCap;}
 	public void setCapacity(int capacity) {
 		if (array.length > capacity && capacity > 0) resize(capacity);
 		maxCap = capacity;
@@ -133,69 +75,121 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		size = Math.min(j, size);
 	}
 
-	public int capacity() {
-		return maxCap;
-	}
-
-	public int head() {
-		return head;
-	}
-
-	public int tail() {
-		return tail;
-	}
-
-	public Object[] getArray() {
-		return array;
-	}
-
-	@Override
-	public int size() {
-		return size;
-	}
-
-	public int remaining() {
-		return maxCap - size;
-	}
-
-	@Override
-	public boolean isEmpty() {
-		return size == 0;
-	}
-
-	@Override
-	public boolean contains(Object o) {
-		return indexOf(o) != -1;
-	}
-
 	@NotNull
 	@Override
-	public Iterator<E> iterator() {
-		return size == 0 ? Collections.emptyIterator() : new Itr(false);
-	}
-
+	public Iterator<E> iterator() {return size == 0 ? Collections.emptyIterator() : new Itr(false);}
 	@NotNull
 	@Override
-	public Iterator<E> descendingIterator() {
-		return size == 0 ? Collections.emptyIterator() : new Itr(true);
-	}
+	public Iterator<E> descendingIterator() {return size == 0 ? Collections.emptyIterator() : new Itr(true);}
+	private final class Itr extends AbstractIterator<E> {
+		int i, dir, fence;
 
-	public Itr listItr(boolean reverse) {
-		return new Itr(reverse);
+		@SuppressWarnings("unchecked")
+		public Itr(boolean rev) {
+			if (size == 0) {
+				stage = ENDED;
+				return;
+			}
+
+			if (rev) {
+				i = (tail == 0 ? array.length : tail) - 1;
+				dir = -1;
+				fence = (head == 0 ? array.length : head) - 1;
+			} else {
+				i = head;
+				dir = 1;
+				fence = tail;
+			}
+
+			stage = CHECKED;
+			result = (E) array[i];
+			i += dir;
+		}
+
+		@Override
+		@SuppressWarnings("unchecked")
+		public boolean computeNext() {
+			if (i == -1) {
+				if (size < array.length) return false;
+				i = array.length - 1;
+			} else if (i == array.length) {
+				i = 0;
+			}
+
+			if (i == fence) return false;
+			result = (E) array[i];
+			i += dir;
+			return true;
+		}
 	}
 
 	@Override
-	public E pollFirst() {
-		return size == 0 ? null : removeFirst();
-	}
+	public int size() {return size;}
+	public int head() {return head;}
+	public int tail() {return tail;}
+	public int remaining() {return maxCap - size;}
+
+	// region *** Collection ***
 	@Override
-	public E pollLast() {
-		return size == 0 ? null : removeLast();
+	public final boolean contains(Object o) {return indexOf(o) != -1;}
+	@Deprecated
+	public final boolean add(E e) {addLast(e);return true;}
+	@Override
+	public final boolean remove(Object o) {return removeFirstOccurrence(o);}
+	@Override
+	public boolean retainAll(@NotNull Collection<?> c) {throw new UnsupportedOperationException();}
+
+	@Override
+	public void clear() {
+		head = tail = size = 0;
+		Arrays.fill(array, null);
+	}
+	// endregion
+	public final int indexOf(Object o) {
+		Object[] arr = array;
+		int i = head;
+		while (i != tail) {
+			if (o == null ? arr[i] == null : o.equals(arr[i])) return i;
+			if (--i < 0) i = arr.length - 1;
+		}
+		return -1;
+	}
+	public final int lastIndexOf(Object o) {
+		Object[] arr = array;
+		int i = tail;
+		while (i != head) {
+			if (o == null ? arr[i] == null : o.equals(arr[i])) return i;
+			if (++i == arr.length) i = 0;
+		}
+		return -1;
+	}
+	// region *** Deque ***
+	public final void addFirst(E e) {
+		if (size >= maxCap) throw new IllegalStateException("RingBuffer is full");
+		ringAddFirst(e);
+	}
+	public final void addLast(E e) {
+		if (size >= maxCap) throw new IllegalStateException("RingBuffer is full");
+		ringAddLast(e);
+	}
+	public final boolean offerFirst(E e) {
+		if (size < maxCap) {
+			ringAddFirst(e);
+			return true;
+		}
+		return false;
+	}
+	public final boolean offerLast(E e) {
+		if (size < maxCap) {
+			ringAddLast(e);
+			return true;
+		}
+		return false;
 	}
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public E removeFirst() {
+	public final E removeFirst() {
 		if (size == 0) throw new NoSuchElementException();
 
 		int h = head;
@@ -209,7 +203,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		return val;
 	}
 	@SuppressWarnings("unchecked")
-	public E removeLast() {
+	public final E removeLast() {
 		if (size == 0) throw new NoSuchElementException();
 
 		int t = tail;
@@ -226,98 +220,89 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 	}
 
 	@Override
+	public final E pollFirst() {return size == 0 ? null : removeFirst();}
+	@Override
+	public final E pollLast() {return size == 0 ? null : removeLast();}
+
+	@Override
 	@SuppressWarnings("unchecked")
-	public E getFirst() {
+	public final E getFirst() {
 		if (size == 0) throw new NoSuchElementException();
 		return (E) array[head];
 	}
 	@Override
 	@SuppressWarnings("unchecked")
-	public E getLast() {
+	public final E getLast() {
 		if (size == 0) throw new NoSuchElementException();
 		return (E) array[tail];
 	}
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public E peekFirst() {
-		return size == 0 ? null : (E) array[head];
-	}
+	public final E peekFirst() {return size == 0 ? null : (E) array[head];}
 	@Override
 	@SuppressWarnings("unchecked")
-	public E peekLast() {
-		return size == 0 ? null : (E) array[tail];
-	}
+	public final E peekLast() {return size == 0 ? null : (E) array[tail];}
 
-	// region *** Deque incompatible methods ***
-	@Deprecated
-	public void addFirst(E e) {
-		ringAddFirst(e);
-	}
-	@Deprecated
-	public void addLast(E e) {
-		ringAddLast(e);
-	}
-	@Deprecated
-	public boolean offerFirst(E e) {
-		ringAddFirst(e);
-		return true;
-	}
-	@Deprecated
-	public boolean offerLast(E e) {
-		ringAddLast(e);
-		return true;
-	}
-	// endregion
-	// region *** Queue methods ***
-	@Deprecated
-	public boolean add(E e) {
-		ringAddLast(e);
-		return true;
-	}
-	@Deprecated
-	public boolean offer(E e) {
-		ringAddLast(e);
-		return true;
-	}
-	@Deprecated
-	public E remove() {
-		return removeFirst();
-	}
-	@Deprecated
-	public E poll() {
-		return size == 0 ? null : removeFirst();
-	}
-	@Deprecated
-	public E element() {
-		return getFirst();
-	}
-	@Deprecated
-	public E peek() {
-		return peekFirst();
-	}
-	// endregion
-	// region *** Stack methods ***
-	@Deprecated
-	public void push(E e) {
-		ringAddLast(e);
-	}
-	@Deprecated
-	public E pop() {
-		return removeLast();
-	}
-	// endregion
-	// region *** Collection methods ***
 	@Override
-	public boolean remove(Object o) {
-		return removeFirstOccurrence(o);
+	public final boolean removeFirstOccurrence(Object o) {
+		int i = indexOf(o);
+		if (i < 0) return false;
+		remove(i);
+		return true;
 	}
 	@Override
-	public boolean retainAll(@NotNull Collection<?> c) {
-		throw new UnsupportedOperationException();
+	public final boolean removeLastOccurrence(Object o) {
+		int i = lastIndexOf(o);
+		if (i < 0) return false;
+		remove(i);
+		return true;
 	}
 	// endregion
+	/**
+	 * 删除数组下标i的元素，并保证缓冲区依然可用
+	 */
+	@SuppressWarnings("unchecked")
+	public E remove(int i) {
+		checkArrayBound(i);
+		Object[] array = this.array;
+		E e = (E) array[i];
+		int t = tail;
 
+		if (i >= t) {
+			// [head, array.length]
+			if (head < array.length - 1) System.arraycopy(array, head, array, head + 1, i - head);
+			array[head] = null;
+			head = head == array.length - 1 ? 0 : head + 1;
+		} else {
+			// [0, tail)
+			if (i > 0 && t - i - 1 > 0) System.arraycopy(array, i + 1, array, i, t - i - 1);
+			array[tail = t - 1] = null;
+		}
+
+		size--;
+		return e;
+	}
+
+	private void checkArrayBound(int i) {
+		if (size == array.length) return;
+		if (head > tail) {
+			if (i >= tail && i < head) throw new ArrayIndexOutOfBoundsException(i);
+		} else if (i < head || (i >= tail)) throw new ArrayIndexOutOfBoundsException(i);
+	}
+	// region *** Queue ***
+	public final boolean offer(E e) {return offerLast(e);}
+	public final E remove() {return removeFirst();}
+	public final E poll() {return size == 0 ? null : removeFirst();}
+	public final E element() {return getFirst();}
+	public final E peek() {return peekFirst();}
+	// endregion
+	// region *** Stack ***
+	@Deprecated
+	public void push(E e) {addLast(e);}
+	@Deprecated
+	public E pop() {return removeLast();}
+	// endregion
 	@SuppressWarnings("unchecked")
 	public E ringAddFirst(E e) {
 		int s = size;
@@ -356,12 +341,6 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		return v;
 	}
 
-	@Override
-	public void clear() {
-		head = tail = size = 0;
-		Arrays.fill(array, null);
-	}
-
 	@SuppressWarnings("unchecked")
 	public void getSome(int dir, int i, int fence, List<E> dst) {
 		if (size == 0) return;
@@ -387,93 +366,6 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 			if (i == arr.length) i = 0;
 			else if (i < 0) i = arr.length - 1;
 		} while (i != fence);
-	}
-
-	@SuppressWarnings("unchecked")
-	public E getArray(int i) {
-		checkArrayBound(i);
-		return (E) array[i];
-	}
-
-	@SuppressWarnings("unchecked")
-	public E get(int i) {
-		if (i < 0 || i >= size) throw new ArrayIndexOutOfBoundsException(i);
-
-		i = head - i;
-		return (E) (i < 0 ? array[i + array.length] : array[i]);
-	}
-
-	@SuppressWarnings("unchecked")
-	public E set(int i, E val) {
-		checkArrayBound(i);
-		E orig = (E) array[i];
-		array[i] = val;
-		return orig;
-	}
-
-	@Override
-	public boolean removeFirstOccurrence(Object o) {
-		int i = indexOf(o);
-		if (i < 0) return false;
-		remove(i);
-		return true;
-	}
-
-	public int indexOf(Object o) {
-		Object[] arr = array;
-		int i = head;
-		while (i != tail) {
-			if (o == null ? arr[i] == null : o.equals(arr[i])) return i;
-			if (--i < 0) i = arr.length - 1;
-		}
-		return -1;
-	}
-
-	@Override
-	public boolean removeLastOccurrence(Object o) {
-		int i = lastIndexOf(o);
-		if (i < 0) return false;
-		remove(i);
-		return true;
-	}
-
-	public int lastIndexOf(Object o) {
-		Object[] arr = array;
-		int i = tail;
-		while (i != head) {
-			if (o == null ? arr[i] == null : o.equals(arr[i])) return i;
-			if (++i == arr.length) i = 0;
-		}
-		return -1;
-	}
-
-	@SuppressWarnings("unchecked")
-	public E remove(int i) {
-		checkArrayBound(i);
-		Object[] array = this.array;
-		E e = (E) array[i];
-		int t = tail;
-
-		if (i >= t) {
-			// [head, array.length]
-			if (head < array.length-1) System.arraycopy(array, head, array, head+1, i-head);
-			array[head] = null;
-			head = head == array.length-1 ? 0 : head+1;
-		} else {
-			// [0, tail)
-			if (i > 0 && t-i-1 > 0) System.arraycopy(array, i+1, array, i, t-i-1);
-			array[tail = t-1] = null;
-		}
-
-		size--;
-		return e;
-	}
-
-	private void checkArrayBound(int i) {
-		if (size == array.length) return;
-		if (head > tail) {
-			if (i >= tail && i < head) throw new ArrayIndexOutOfBoundsException(i);
-		} else if (i < head || (i >= tail)) throw new ArrayIndexOutOfBoundsException(i);
 	}
 
 	@Override

@@ -2,7 +2,6 @@ package roj.text;
 
 import org.jetbrains.annotations.NotNull;
 import roj.collect.SimpleList;
-import roj.config.word.Tokenizer;
 import roj.io.IOUtil;
 import roj.util.Helpers;
 
@@ -15,18 +14,17 @@ import java.util.NoSuchElementException;
  * @author Roj234
  * @since 2021/5/27 0:12
  */
-public class LineReader implements Iterator<String>, LinedReader {
+public final class LineReader implements Iterator<String>, LinedReader {
 	private final CharSequence str;
 	private final boolean keepEmpty;
 	private int i;
 
-	public LineReader(CharSequence string) { this(string, true); }
 	private LineReader(CharSequence s, boolean cleanEmpty) {
 		this.str = s;
 		this.keepEmpty = !cleanEmpty;
 	}
-	public static LinedReader create(CharSequence str) { return new LineReader(str, true); }
-	public static LinedReader create(CharSequence str, boolean removeEmpty) { return new LineReader(str, removeEmpty); }
+	public static LineReader create(CharSequence str) { return new LineReader(str, true); }
+	public static LineReader create(CharSequence str, boolean removeEmpty) { return new LineReader(str, removeEmpty); }
 
 	public static List<String> toLines(CharSequence str, boolean clean) {
 		List<String> list = new SimpleList<>();
@@ -35,7 +33,7 @@ public class LineReader implements Iterator<String>, LinedReader {
 		do {
 			i = TextUtil.gAppendToNextCRLF(str, i, sb, -1);
 			if (!clean || sb.length() > 0) {
-				list.add(Tokenizer.addSlashes(sb.toString()));
+				list.add(sb.toString());
 				sb.clear();
 			}
 		} while (i >= 0);

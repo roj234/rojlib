@@ -79,7 +79,7 @@ public class WavDecoder implements AudioDecoder {
 			}
 		}
 
-		out.start(af, frameSize);
+		out.init(af, frameSize / 2);
 
 		this.af = af;
 		bytePerSecond = frameSize;
@@ -173,10 +173,8 @@ public class WavDecoder implements AudioDecoder {
 
 	@Override
 	public void stop() {
-		if (out != null) {
-			in = null;
-			out.stop();
-		}
+		in = null;
+		out = null;
 		dataBegin = dataEnd = bytePerSecond = 0;
 	}
 
@@ -195,7 +193,7 @@ public class WavDecoder implements AudioDecoder {
 			buf.clear();
 			int len = (int) Math.min(bytePerSecond, dataEnd-in1.position());
 			in1.read(buf, len);
-			out.write(buf.list, len);
+			out.write(buf.list, 0, len, true);
 		}
 	}
 
@@ -206,7 +204,8 @@ public class WavDecoder implements AudioDecoder {
 		int pos = (int) (second * bytePerSecond);
 		if (pos < 0) pos = 0;
 		else if (pos > dataEnd) pos = dataEnd;
-		in.seek(dataBegin + pos);
+		// ~ ( fs - 1 ) => - fs
+		in.seek(dataBegin + (pos & -af.getFrameSize()));
 	}
 
 	@Override

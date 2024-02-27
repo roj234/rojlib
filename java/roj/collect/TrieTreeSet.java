@@ -2,7 +2,7 @@ package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
 import roj.collect.TrieEntry.KeyItr;
-import roj.math.MutableInt;
+import roj.config.data.CInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -68,12 +68,11 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 
 		CharSequence text() { return val; }
 		@Override
-		void append(CharList sb) { sb.append(val); }
+		public void append(CharList sb) { sb.append(val); }
 		@Override
-		int length() { return val.length(); }
-
+		public int length() { return val.length(); }
 		@Override
-		public String toString() { return "PE{" + val + '}'; }
+		public String toString() { return "PE{"+val+'}'; }
 	}
 
 	/**
@@ -388,18 +387,16 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 	public boolean strStartsWithThis(CharSequence s, int i, int len) {
 		Entry entry = root;
 
-		for (; i < len; i++) {
+		for (; i < len;) {
 			entry = (Entry) entry.getChild(s.charAt(i));
 			if (entry == null) return false;
-			final CharSequence text = entry.text();
+			var text = entry.text();
 			if (text != null) {
 				int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
-				if (lastMatch != text.length()) {
-					return false;
-					// 不符合规定: entry.isEnd && lastMatch == len - i;
-				}
-				i += text.length() - 1;
+				// 不符合规定: entry.isEnd && lastMatch == len - i;
+				if (lastMatch != text.length()) return false;
 			}
+			i += entry.length();
 
 			if (entry.isEnd) return true;
 		}
@@ -443,8 +440,8 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 	}
 
 	private void reuseLambda(Object[] arr) {
-		MutableInt i = new MutableInt(0);
-		forEach((cs) -> arr[i.getAndIncrement()] = cs);
+		CInt i = new CInt(0);
+		forEach((cs) -> arr[i.value++] = cs);
 	}
 
 	@NotNull

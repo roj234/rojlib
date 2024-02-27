@@ -1,15 +1,13 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.visitor.Label;
 import roj.collect.MyBitSet;
-import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -30,10 +28,10 @@ final class Binary extends ExprNode {
 	ExprNode left, right;
 
 	// 对于下列操作，由于范围已知，可以保证它们的类型不会自动变int
-	private static final MyBitSet KNOWN_NUMBER_STATE = MyBitSet.from(and,or,xor,lsh,rsh,rsh_unsigned);
+	private static final MyBitSet KNOWN_NUMBER_STATE = MyBitSet.from(and,or,xor,rsh);
 	private IType type;
 	private TypeCast.Cast castLeft, castRight;
-	private byte flag;
+	private byte flag, dType;
 
 	Binary(short op) { this.operator = op; }
 	// assign operation
@@ -50,7 +48,7 @@ final class Binary extends ExprNode {
 		if (shouldAddBracket(left)) sb.append('(').append(left).append(')');
 		else sb.append(left);
 
-		sb.append(byId(operator));
+		sb.append(' ').append(byId(operator)).append(' ');
 
 		if (shouldAddBracket(right)) sb.append('(').append(right).append(')');
 		else sb.append(right);
@@ -58,14 +56,15 @@ final class Binary extends ExprNode {
 		return sb.toStringAndFree();
 	}
 	private boolean shouldAddBracket(ExprNode node) {
-		return !node.isConstant() && (!(node instanceof Binary) ||
-			(binaryOperatorPriority(((Binary) node).operator) > binaryOperatorPriority(operator)));
+		ExprParser ep = LocalContext.get().ep;
+		if (node.isConstant() || node instanceof VarNode || node instanceof Invoke) return false;
+		return !(node instanceof Binary n) || ep.binaryOperatorPriority(n.operator) > ep.binaryOperatorPriority(operator);
 	}
 
 	private static final ThreadLocal<Boolean> IN_ANY_BINARY = new ThreadLocal<>();
 	@NotNull
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if (type != null) return this;
 
 		IType lType, rType;
@@ -95,7 +94,7 @@ final class Binary extends ExprNode {
 
 		if (lType.getActualType() == Type.VOID || rType.getActualType() == Type.VOID) {
 			ctx.report(Kind.ERROR, "binary.error.void");
-			return this;
+			return NaE.RESOLVE_FAILED;
 		}
 
 		// (A + 1) - 2 => A + (1 - 2)
@@ -104,7 +103,7 @@ final class Binary extends ExprNode {
 		// 3. 变量不能移动
 		if (left instanceof Binary br &&
 			br.right.isConstant() && TypeCast.getDataCap(br.right.type().getActualType()) <= 4 &&
-			JavaLexer.binaryOperatorPriority(br.operator) == JavaLexer.binaryOperatorPriority(operator) ) {
+			ctx.ep.binaryOperatorPriority(br.operator) == ctx.ep.binaryOperatorPriority(operator) ) {
 
 			left = br.right;
 			br.right = this.resolve(ctx);
@@ -116,7 +115,7 @@ final class Binary extends ExprNode {
 
 		primitive: {
 			IType plType = lType.isPrimitive() ? lType : rType;
-			if (plType.isPrimitive()) {
+			if (plType.isPrimitive() && (operator < logic_and || operator > nullish_consolidating)) {
 				int cap = TypeCast.getDataCap(plType.getActualType());
 				if ((cap&7) != 0) dpType = Math.max(cap, dpType);
 				else dpType = 8; // boolean
@@ -140,9 +139,9 @@ final class Binary extends ExprNode {
 								else castLeft = cast;
 							}
 						}
-					} else if (dpType != 8 || operator > xor || operator < and) {
+					} else if (dpType != 8 || operator > logic_or || operator < and) {
 						ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
-						return this;
+						return NaE.RESOLVE_FAILED;
 					}
 
 					break primitive;
@@ -150,7 +149,9 @@ final class Binary extends ExprNode {
 					int wrType = TypeCast.getWrappedPrimitive(prType.rawType());
 					if (wrType != 0) {
 						cap = TypeCast.getDataCap(wrType);
-						if (cap > dpType) type = Type.std(wrType);
+						if (cap > dpType)
+							//noinspection MagicConstant
+							type = Type.std(wrType);
 						else type = plType;
 						castLeft = ctx.castTo(lType, type, TypeCast.E_NUMBER_DOWNCAST);
 						castRight = ctx.castTo(rType, type, TypeCast.E_NUMBER_DOWNCAST);
@@ -161,85 +162,104 @@ final class Binary extends ExprNode {
 			}
 
 			switch (operator) {
-				case equ: case neq:
-					// 无法比较的类型
+				case equ, neq:// 无法比较的类型
 					if (rType.isPrimitive()) castRight = ctx.castTo(rType, lType, TypeCast.E_DOWNCAST);
 					else if (lType.isPrimitive()) castLeft = ctx.castTo(lType, rType, TypeCast.E_DOWNCAST);
-					type = Type.std(Type.BOOLEAN);
 					dpType = 9;
-					break;
-				case logic_and: case logic_or:
-					castLeft = ctx.castTo(lType, Type.std(Type.BOOLEAN), 0);
-					castRight = ctx.castTo(rType, Type.std(Type.BOOLEAN), 0);
-					break;
+				break;
+				case logic_and, logic_or, nullish_consolidating:
+					if (operator == nullish_consolidating) {
+						if (lType.isPrimitive()) ctx.report(Kind.ERROR, "symbol.error.derefPrimitive", lType);
+						type = ctx.getCommonParent(lType, rType);
+					} else {
+						type = Type.std(Type.BOOLEAN);
+					}
+
+					castLeft = ctx.castTo(lType, type, 0);
+					castRight = ctx.castTo(rType, type, 0);
+				break;
 				default:
-					MethodNode override = ctx.getBinaryOverride(lType, rType, operator);
+					ExprNode override = ctx.getOperatorOverride(left, right, operator);
 					if (override == null) {
 						ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
-						return this;
+						return NaE.RESOLVE_FAILED;
 					}
-					String name = override.name();
-					// 反转
-					if ((override.modifier()&ACC_STATIC) != 0 && name.endsWith("\0INVERT")) {
-						override.name(name.substring(0, name.length()-7));
-						return Invoke.binaryAlt(override, right, left);
-					}
-					return Invoke.binaryAlt(override, left, right);
+					return override;
 			}
+
+			if (castLeft != null && (castLeft.type) < 0 ||
+				castRight != null && (castRight.type) < 0) return NaE.RESOLVE_FAILED;
 		}
+
+		dType = (byte) (TypeCast.getDataCap(type.rawType().type)-4);
+		if (operator >= equ) type = Type.std(Type.BOOLEAN);
 
 		if (!left.isConstant()) {
 			if (right.isConstant()) {
 				switch (operator) {
 					// equ 和 neq 应该可以直接删除跳转？反正boolean也就是0和非0 （AND 1就行）
-					case equ: case neq: case lss: case geq: case gtr: case leq: {
+					case equ, neq, lss, geq, gtr, leq -> {
 						if (dpType <= 4 && ((AnnVal) right.constVal()).asInt() == 0) {
 							flag = 1;
 						}
 						return this;
 					}
+					// expr ?? null => expr
+					case nullish_consolidating -> {
+						if (right.constVal() == null) {
+							ctx.report(Kind.WARNING, "binary.uselessNullish");
+							return left;
+						}
+					}
+					default -> checkDivZero(right, ctx);
 				}
 			}
 			return this;
 		}
+
+		switch (operator) {
+			default: checkDivZero(right, ctx); break;
+			case logic_and, logic_or:
+				var exprVal = (boolean) left.constVal();
+				var v = exprVal == (operator == logic_and) ? right : Constant.valueOf(exprVal);
+				ctx.report(Kind.WARNING, "binary.constant", v);
+				return v;
+			case nullish_consolidating:
+				v = left.constVal() == null ? right : left;
+				ctx.report(Kind.WARNING, "binary.constant", v);
+				return v;
+		}
+
 		if (!right.isConstant()) {
 			switch (operator) {
-				case equ: case neq: case lss: case geq: case gtr: case leq: {
+				case equ, neq, lss, geq, gtr, leq: {
 					if (dpType <= 4 && ((AnnVal) left.constVal()).asInt() == 0) {
 						flag = 2;
 					}
-					return this;
 				}
-				case logic_and:
-					ctx.report(Kind.WARNING, "binary.warn.always");
-					return ((boolean) left.constVal()) ? right : Constant.valueOf(false);
-				case logic_or:
-					ctx.report(Kind.WARNING, "binary.warn.always");
-					return ((boolean) left.constVal()) ? Constant.valueOf(true) : right;
-				default: return this;
 			}
+			return this;
 		}
 
 		switch (operator) {
-			case lss: case gtr: case geq: case leq:
+			case lss, gtr, geq, leq:
 				double l = ((AnnVal) left.constVal()).asDouble(), r = ((AnnVal) right.constVal()).asDouble();
-				boolean v = switch (operator) {
+				return Constant.valueOf(switch (operator) {
 					case lss -> l < r;
 					case gtr -> l > r;
 					case geq -> l >= r;
 					case leq -> l <= r;
 					default -> throw OperationDone.NEVER;
-				};
-				return Constant.valueOf(v);
+				});
 
-			case equ: case neq:
+			case equ, neq:
 				return Constant.valueOf((operator == equ) == (dpType == 9 ?
 					left.constVal().equals(right.constVal()) :
 					((AnnVal)left.constVal()).asDouble() == ((AnnVal)right.constVal()).asDouble()));
 		}
 
 		switch (dpType) {
-			case 1: case 2: case 3: case 4: {
+			case 1, 2, 3, 4: {
 				int l = ((AnnVal) left.constVal()).asInt(), r = ((AnnVal) right.constVal()).asInt();
 				int o = switch (operator) {
 					case add -> l+r;
@@ -320,6 +340,12 @@ final class Binary extends ExprNode {
 		return this;
 	}
 
+	private void checkDivZero(ExprNode node, LocalContext ctx) {
+		if (dType <= 1 && operator == div && ((AnnVal) node.constVal()).asInt() == 0) {
+			ctx.report(Kind.WARNING, "binary.divisionByZero");
+		}
+	}
+
 	@Override
 	public IType type() { return type; }
 
@@ -328,7 +354,7 @@ final class Binary extends ExprNode {
 	public void write(MethodWriter cw, boolean noRet) {
 		switch (operator) {
 			// && 和 || 想怎么用，就怎么用！
-			case logic_and: case logic_or: {
+			case logic_and, logic_or: {
 				Label end = new Label();
 				int id = cw.beginJumpOn(operator == logic_or, end);
 				left.writeDyn(cw, castLeft);
@@ -346,6 +372,18 @@ final class Binary extends ExprNode {
 				}
 				return;
 			}
+			case nullish_consolidating: {
+				mustBeStatement(noRet);
+
+				Label end = new Label();
+				left.writeDyn(cw, castLeft);
+				cw.one(DUP);
+				cw.jump(IFNONNULL, end);
+				cw.one(POP);
+				right.writeDyn(cw, castRight);
+				cw.label(end);
+				return;
+			}
 		}
 
 		mustBeStatement(noRet);
@@ -361,15 +399,15 @@ final class Binary extends ExprNode {
 	}
 	@SuppressWarnings("fallthrough")
 	final void writeOperator(MethodWriter cw) {
-		int opc = TypeCast.getDataCap(type.rawType().type)-4;
+		int opc = dType;
 		if (opc < 0) opc = 0;
 
 		switch (operator) {
 			default: throw OperationDone.NEVER;
-			case add: case sub: case mul: case div: case mod: opc += ((operator - add) << 2) + IADD; break;
+			case add, sub, mul, div, mod: opc += ((operator - add) << 2) + IADD; break;
 			case pow: throw new IllegalArgumentException("pow未实现");
-			case lsh: case rsh: case rsh_unsigned: case and: case or: case xor: opc += ((operator - lsh) << 1) + ISHL; break;
-			case equ: case neq:
+			case lsh, rsh, rsh_unsigned, and, or, xor: opc += ((operator - lsh) << 1) + ISHL; break;
+			case equ, neq:
 				if (!left.type().isPrimitive() & !right.type().isPrimitive()) {
 					if (!cw.jumpOn(opc = IF_acmpeq + (operator - equ))) {
 						jump(cw, opc);
@@ -377,28 +415,25 @@ final class Binary extends ExprNode {
 					return;
 				}
 
-			case lss: case geq: case gtr: case leq: {
+			case lss, geq, gtr, leq: {
 				switch (opc) {
-					case 1:
+					case 1 -> {
 						cw.one(LCMP);
-						opc += IFEQ;
-						break;
-					case 2: case 3:
+						opc = IFEQ;
+					}
+					case 2, 3 -> {
 						// 遇到NaN时必须失败(不跳转
 						// lss => CMPG
-						cw.one((byte) (FCMPL - 1 + opc - ((operator-equ)&1)));
-						opc += IFEQ;
-						break;
-					default:
-						opc += flag != 0 ? IFEQ : IF_icmpeq;
-						break;
+						cw.one((byte) (FCMPL -4+opc*2 + ((operator-equ)&1)));
+						opc = IFEQ;
+					}
+					default -> opc = flag != 0 ? IFEQ : IF_icmpeq;
 				}
+
 				if (!cw.jumpOn(opc += (operator - equ))) {
-					if (operator <= neq) {
-						cw.one(ICONST_1);
-						cw.one(IAND);
+					if (dType == 0 && operator <= neq && flag == 0) {
+						cw.one(ISUB); // (left - right) == 0
 						if (operator == equ) {
-							// TODO 这能提升多少呢...
 							cw.one(ICONST_1);
 							cw.one(IXOR);
 						}
@@ -426,8 +461,7 @@ final class Binary extends ExprNode {
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
-		if (!(o instanceof Binary)) return false;
-		Binary b = (Binary) o;
+		if (!(o instanceof Binary b)) return false;
 		return b.left.equals(o) && b.right.equals(right) && b.operator == operator;
 	}
 

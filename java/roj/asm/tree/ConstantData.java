@@ -25,6 +25,7 @@ import roj.util.Helpers;
 
 import java.io.FileOutputStream;
 import java.util.AbstractList;
+import java.util.Collections;
 import java.util.List;
 
 import static roj.asm.Opcodes.*;
@@ -40,7 +41,7 @@ public class ConstantData implements IClass {
 
 	public int version;
 
-	public char access;
+	public char modifier;
 
 	private CstClass nameCst, parentCst;
 	private ItfView itfView;
@@ -49,14 +50,21 @@ public class ConstantData implements IClass {
 
 	public ConstantPool cp;
 
-	public final SimpleList<CstClass> interfaces = new SimpleList<>();
+	public SimpleList<CstClass> interfaceWritable() {
+		if (interfaces instanceof SimpleList<CstClass> c) return c;
+		var list = new SimpleList<CstClass>();
+		interfaces = list;
+		return list;
+	}
+
+	protected List<CstClass> interfaces = Collections.emptyList();
 	public final SimpleList<FieldNode> fields = new SimpleList<>();
 	public final SimpleList<MethodNode> methods = new SimpleList<>();
 
 	private AttributeList attributes;
 
 	@SuppressWarnings("fallthrough")
-	public void verify() {
+	public boolean verify() {
 		/*
 		 * If the ACC_MODULE flag is set in the access_flags item, then no other flag in the access_flags item may be
 		 * set, and the following rules apply to the rest of the ClassFile structure:
@@ -67,9 +75,9 @@ public class ConstantData implements IClass {
 		 *
 		 * super_class, interfaces_count, fields_count, methods_count: zero
 		 */
-		boolean module = (access & ACC_MODULE) != 0;
+		boolean module = (modifier & ACC_MODULE) != 0;
 		if (module) {
-			if (access != ACC_MODULE) throw new IllegalArgumentException("Module should only have 'module' flag");
+			if (modifier != ACC_MODULE) throw new IllegalArgumentException("Module should only have 'module' flag");
 			if (!interfaces.isEmpty()) throw new IllegalArgumentException("Module should not have interfaces");
 			if (!fields.isEmpty()) throw new IllegalArgumentException("Module should not have fields");
 			if (!methods.isEmpty()) throw new IllegalArgumentException("Module should not have methods");
@@ -78,7 +86,7 @@ public class ConstantData implements IClass {
 		if (parent == null && !"java/lang/Object".equals(name) && !module)
 			throw new IllegalArgumentException("parent is null in " + name);
 
-		int acc = access;
+		int acc = modifier;
 		if (Integer.bitCount(acc&(ACC_PUBLIC|ACC_PROTECTED|ACC_PRIVATE)) > 1)
 			throw new IllegalArgumentException("无效的描述符组合(Acc) "+this);
 		if (Integer.bitCount(acc&(ACC_FINAL|ACC_ABSTRACT)) > 1)
@@ -86,20 +94,21 @@ public class ConstantData implements IClass {
 		if (Integer.bitCount(acc&(ACC_INTERFACE|ACC_ENUM)) > 1)
 			throw new IllegalArgumentException("无效的描述符组合(Itf) "+this);
 
-		int v = access & (ACC_ANNOTATION|ACC_INTERFACE);
+		int v = modifier & (ACC_ANNOTATION|ACC_INTERFACE);
 		if (v == ACC_ANNOTATION)
 			throw new IllegalArgumentException("无效的描述符组合(ANN) "+this);
 
 		// 如果设置了 ACC_INTERFACE 标志，还必须设置 ACC_ABSTRACT 标志，并且不得设置 ACC_FINAL、ACC_SUPER、ACC_ENUM 和 ACC_MODULE 标志。
 		// 如果不设置 ACC_INTERFACE 标志，则可以设置表 4.1-B 中除 ACC_ANNOTATION 和 ACC_MODULE 以外的任何其他标志。
 		// 但是，这样的类文件不能同时设置 ACC_FINAL 和 ACC_ABSTRACT 标志（JLS §8.1.1.2）。
-		if (v != 0 && (access & (ACC_ABSTRACT|ACC_SUPER|ACC_ENUM)) != ACC_ABSTRACT)
+		if (v != 0 && (modifier & (ACC_ABSTRACT|ACC_SUPER|ACC_ENUM)) != ACC_ABSTRACT)
 			throw new IllegalArgumentException("无效的描述符组合(Itf) "+this);
 
 		MyHashSet<String> descs = new MyHashSet<>();
 		fastValidate(Helpers.cast(methods), descs);
 		descs.clear();
 		fastValidate(Helpers.cast(fields), descs);
+		return true;
 	}
 
 	private void fastValidate(SimpleList<RawNode> nodes, MyHashSet<String> out) {
@@ -120,15 +129,15 @@ public class ConstantData implements IClass {
 		this.cp = new ConstantPool();
 		this.name = Helpers.nonnull();
 		this.parent = "java/lang/Object";
-		this.access = ACC_PUBLIC | ACC_SUPER;
+		this.modifier = ACC_PUBLIC | ACC_SUPER;
 		this.version = 49 << 16;
 	}
 	public static int JavaVersion(int version) { return (44+version) << 16; }
 
-	public ConstantData(int version, ConstantPool cp, int access, int nameIndex, int parentIndex) {
+	public ConstantData(int version, ConstantPool cp, int modifier, int nameIndex, int parentIndex) {
 		this.cp = cp;
 		this.version = version;
-		this.access = (char) access;
+		this.modifier = (char) modifier;
 		this.nameCst = ((CstClass) cp.array(nameIndex));
 		this.name = nameCst.name().str();
 		if (parentIndex == 0) {
@@ -165,9 +174,12 @@ public class ConstantData implements IClass {
 
 	@Override
 	public DynByteBuf getBytes(DynByteBuf w) {
-		ConstantPool cw = this.cp;
+		int begin = w.wIndex();
 
-		w.putShort(access)
+		ConstantPool cw = this.cp;
+		assert autoVerify(w, cw);
+
+		w.putShort(modifier)
 		 .putShort(cw.reset(nameCst).getIndex())
 		 .putShort(parent == null ? 0 : parentCst == null ? (parentCst = cw.getClazz(parent)).getIndex() : cw.reset(parentCst).getIndex())
 		 .putShort(interfaces.size());
@@ -195,14 +207,19 @@ public class ConstantData implements IClass {
 
 		int pos = w.wIndex();
 		int cpl = cw.byteLength() + 10;
-		w.preInsert(0, cpl);
+		w.preInsert(begin, cpl);
 
-		w.wIndex(0);
-		cw.write(w.putInt(0xCAFEBABE).putShort(version).putShort(version >> 16));
-		assert w.wIndex() == cpl;
+		w.wIndex(begin);
+		cw.write(w.putInt(0xCAFEBABE).putShort(version).putShort(version >> 16), false);
 		w.wIndex(pos + cpl);
 
 		return w;
+	}
+
+	private boolean autoVerify(DynByteBuf w, ConstantPool cw) {
+		cw.checkCollision(w);
+		verify();
+		return true;
 	}
 
 	public final void parsed() {
@@ -289,7 +306,7 @@ public class ConstantData implements IClass {
 	}
 
 	private void writeModifier(CharList sb) {
-		int acc = access;
+		int acc = modifier;
 		if ((acc&ACC_ANNOTATION) != 0) acc &= ~(ACC_ABSTRACT|ACC_INTERFACE);
 		else if ((acc&ACC_INTERFACE) != 0) acc &= ~(ACC_ABSTRACT);
 		showModifiers(acc, ACC_SHOW_CLASS, sb);
@@ -311,10 +328,10 @@ public class ConstantData implements IClass {
 	}
 
 	public final String name() { return nameCst.name().str(); }
-	public final String parent() { return parentCst == null ? null : parentCst.name().str(); }
+	public final String parent() { return parentCst == null ? Helpers.maybeNull() : parentCst.name().str(); }
 
-	public final void modifier(int flag) { access = (char) flag; }
-	public final char modifier() { return access; }
+	public final void modifier(int flag) { modifier = (char) flag; }
+	public final char modifier() { return modifier; }
 
 	public final List<String> interfaces() { return itfView == null ? itfView = new ItfView() : itfView; }
 	public final List<MethodNode> methods() { return methods; }
@@ -403,7 +420,7 @@ public class ConstantData implements IClass {
 		c.one(Opcodes.ARETURN);
 		c.finish();
 
-		interfaces.add(new CstClass("java/lang/Cloneable"));
+		addInterface("java/lang/Cloneable");
 	}
 
 	private class ItfView extends AbstractList<String> {
@@ -412,7 +429,7 @@ public class ConstantData implements IClass {
 		@Override
 		public String set(int index, String obj) { return interfaces.set(index, cp.getClazz(obj)).name().str(); }
 		@Override
-		public void add(int index, String element) { interfaces.add(index, cp.getClazz(element)); }
+		public void add(int index, String element) { interfaceWritable().add(index, cp.getClazz(element)); }
 		@Override
 		public String remove(int index) { return interfaces.remove(index).name().str(); }
 
@@ -441,8 +458,5 @@ public class ConstantData implements IClass {
 		@Override
 		public int size() { return interfaces.size(); }
 	}
-
-	public final void addInterface(String s) {
-		interfaces.add(cp.getClazz(s));
-	}
+	public final void addInterface(String s) {interfaceWritable().add(cp.getClazz(s));}
 }

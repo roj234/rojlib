@@ -1,15 +1,16 @@
 package roj.net.http;
 
+import roj.concurrent.TaskPool;
 import roj.io.FastFailException;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
-import roj.net.ch.handler.Timeout;
+import roj.net.handler.Timeout;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.IOException;
-import java.net.URL;
+import java.net.URI;
 
 /**
  * @author Roj234
@@ -18,7 +19,7 @@ import java.net.URL;
 public class AutoRedirect extends Timeout implements ChannelHandler {
 	private final HttpRequest req;
 	private int maxRedirect, maxRetry;
-	private URL redirectPending;
+	private URI redirectPending;
 
 	public AutoRedirect(HttpRequest req, int timeout, int redirect) {
 		this(req,timeout,redirect,0);
@@ -46,7 +47,7 @@ public class AutoRedirect extends Timeout implements ChannelHandler {
 					throw new FastFailException("AutoRedirect:重定向过多");
 				}
 
-				redirectPending = new URL(req.url(), location);
+				redirectPending = req.url().resolve(location);
 				return;
 			}
 		}
@@ -69,12 +70,18 @@ public class AutoRedirect extends Timeout implements ChannelHandler {
 			if (event.getData() == Boolean.TRUE) {
 				if (redirectPending != null) {
 					event.stopPropagate();
-					ctx.invokeLater(() -> {
+
+					var ch = ctx.channel();
+					TaskPool.Common().submit(() -> {
+						var lock = ch.lock();
 						try {
-							req._redirect(ctx.channel(), redirectPending, readTimeout);
+							lock.lock();
+							req._redirect(ch, redirectPending, readTimeout);
 							redirectPending = null;
 						} catch (IOException e) {
 							Helpers.athrow(e);
+						} finally {
+							lock.unlock();
 						}
 					});
 					return;

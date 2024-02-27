@@ -1,9 +1,8 @@
 package roj.archive.qz;
 
-import roj.archive.ChecksumInputStream;
+import roj.archive.CRC32InputStream;
 import roj.io.LimitInputStream;
 import roj.io.SourceInputStream;
-import roj.io.source.BufferedSource;
 import roj.io.source.Source;
 import roj.reflect.ReflectionUtils;
 
@@ -11,7 +10,6 @@ import java.io.Closeable;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.zip.CRC32;
 
 import static roj.reflect.ReflectionUtils.u;
 
@@ -21,7 +19,7 @@ import static roj.reflect.ReflectionUtils.u;
  */
 public abstract class QZReader implements Closeable {
 	Source r;
-	boolean recovery;
+	byte flag;
 
 	Source fpRead;
 	static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(QZReader.class, "fpRead");
@@ -33,6 +31,9 @@ public abstract class QZReader implements Closeable {
 	QZReader() {}
 
 	public final InputStream getInput(QZEntry file) throws IOException { return getInput(file, null); }
+	/**
+	 * 带有对顺序访问的优化，但是不支持并发访问，{@link #getInputUncached(QZEntry, byte[])}
+	 */
 	public final InputStream getInput(QZEntry file, byte[] pass) throws IOException {
 		if (file.uSize == 0) return new SourceInputStream(null, 0);
 
@@ -57,7 +58,7 @@ public abstract class QZReader implements Closeable {
 
 		closeSolidStream();
 
-		InputStream in = blockInput = getSolidStream(file.block, pass);
+		InputStream in = blockInput = getSolidStream(file.block, pass, true);
 		if (in.skip(file.offset) < file.offset) {
 			in.close();
 			throw new EOFException("数据流过早终止");
@@ -69,8 +70,26 @@ public abstract class QZReader implements Closeable {
 			activeIn = fin;
 		}
 
-		if (!recovery && (file.flag&QZEntry.CRC) != 0) return new ChecksumInputStream(fin, new CRC32(), file.crc32&0xFFFFFFFFL);
+		if ((flag&QZArchive.FLAG_RECOVERY) != 0 && (file.flag&QZEntry.CRC) != 0) return new CRC32InputStream(fin, file.crc32);
 		return fin;
+	}
+
+	public final InputStream getInputUncached(QZEntry file) throws IOException {return getInputUncached(file, null);}
+	/**
+	 * 适用于少量的并发访问，如果大量并发访问，可能会打开太多的文件，应该使用{@link QZArchive#parallel()}
+	 */
+	public final InputStream getInputUncached(QZEntry file, byte[] pass) throws IOException {
+		if (file.uSize == 0) return new SourceInputStream(null, 0);
+
+		InputStream in = getSolidStream(file.block, pass, (file.flag&QZEntry.CRC) == 0);
+		if (in.skip(file.offset) < file.offset) {
+			in.close();
+			throw new EOFException("数据流过早终止");
+		}
+
+		LimitInputStream fin = new LimitInputStream(in, file.uSize);
+		if ((file.flag&QZEntry.CRC) != 0) return new CRC32InputStream(fin, file.crc32);
+		return null;
 	}
 
 	final void closeSolidStream() throws IOException {
@@ -82,18 +101,10 @@ public abstract class QZReader implements Closeable {
 		activeEntry = null;
 	}
 
-	final InputStream getSolidStream(WordBlock b, byte[] pass) throws IOException {
-		Source src;
-		do {
-			src = fpRead;
-			if (src == null) {
-				src = r.threadSafeCopy();
-				src = src.isBuffered()?src:BufferedSource.autoClose(src);
-				break;
-			}
-		} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, src, null));
-
-		return getSolidStream1(b, pass, src, this);
+	final InputStream getSolidStream(WordBlock b, byte[] pass, boolean verify) throws IOException {
+		Source src = (Source) u.getAndSetObject(this, FPREAD_OFFSET, null);
+		if (src == null) src = r.threadSafeCopy();
+		return getSolidStream1(b, pass, src, this, verify);
 	}
-	abstract InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that) throws IOException;
+	abstract InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that, boolean verify) throws IOException;
 }

@@ -14,16 +14,16 @@ public final class CstMethodHandle extends Constant {
 		this.kind = kind;
 		this.ref = refIndex;
 	}
-
-	@Override
-	public byte type() {
-		return Constant.METHOD_HANDLE;
+	public CstMethodHandle(byte kind, CstRef ref) {
+		this.kind = kind;
+		this.ref = ref;
 	}
 
 	@Override
-	public final void write(DynByteBuf w) {
-		w.put(Constant.METHOD_HANDLE).put(kind).putShort(getRefIndex());
-	}
+	public byte type() {return Constant.METHOD_HANDLE;}
+
+	@Override
+	public final void write(DynByteBuf w) {w.put(Constant.METHOD_HANDLE).put(kind).putShort(getRefIndex());}
 
 	public final String toString() { return super.toString() + " Type: " + kind + ", Method: " + ref; }
 

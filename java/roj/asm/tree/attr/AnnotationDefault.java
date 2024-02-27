@@ -11,8 +11,9 @@ import roj.util.DynByteBuf;
 public final class AnnotationDefault extends Attribute {
 	public AnnVal val;
 
+	public AnnotationDefault(AnnVal val) { this.val = val; }
 	public AnnotationDefault(DynByteBuf r, ConstantPool pool) { val = AnnVal.parse(pool, r); }
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) { val.toByteArray(pool, w); }
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) { val.toByteArray(pool, w); }
 
 	public final String name() { return "AnnotationDefault"; }
 	public String toString() { return name()+": "+val; }

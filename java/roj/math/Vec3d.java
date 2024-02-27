@@ -12,13 +12,8 @@ public class Vec3d extends Vector {
 		this.y = y;
 		this.z = z;
 	}
-
-	public Vec3d(Vector xy, double z) {
-		this(xy.x(), xy.y(), z);
-	}
-	public Vec3d(Vector xyz) {
-		this(xyz.x(), xyz.y(), xyz.z());
-	}
+	public Vec3d(Vec2d xy, double z) {this(xy.x, xy.y, z);}
+	public Vec3d(Vector xyz) {this(xyz.x(), xyz.y(), xyz.z());}
 
 	/**
 	 * @param yaw 旋转X
@@ -30,12 +25,6 @@ public class Vec3d extends Vector {
 		double xz = MathUtils.cos(pitch);
 		x = -xz * MathUtils.sin(yaw);
 		z = xz * MathUtils.cos(yaw);
-
-		/** 左手系
-		 x = MathUtils.cos(yaw) * xz;
-		 y = MathUtils.sin(yaw) * xz;
-		 z = MathUtils.sin(pitch);
-		 */
 	}
 
 	public final Vec3d set(double x, double y, double z) {
@@ -50,9 +39,7 @@ public class Vec3d extends Vector {
 		this.z = z;
 		return this;
 	}
-	public final Vec2d xy() {
-		return new Vec2d(x, y);
-	}
+	public final Vec2d xy() {return new Vec2d(x, y);}
 
 	public final Vec3d normalizeUnit(double d) {
 		double abs = 1 / (Math.sqrt(x * x + y * y + z * z) * d);
@@ -110,25 +97,11 @@ public class Vec3d extends Vector {
 		return new Vec2d(k * x, k * y);
 	}
 
-	public final double x() {
-		return x;
-	}
-	public final double y() {
-		return y;
-	}
-	public final double z() {
-		return z;
-	}
-	public final void x(double x) {
-		this.x = x;
-	}
-	public final void y(double y) {
-		this.y = y;
-	}
-	public final void z(double z) {
-		this.z = z;
-	}
-	public final int axis() {
-		return 3;
-	}
+	public final double x() {return x;}
+	public final double y() {return y;}
+	public final double z() {return z;}
+	public final void x(double x) {this.x = x;}
+	public final void y(double y) {this.y = y;}
+	public final void z(double z) {this.z = z;}
+	public final int axis() {return 3;}
 }

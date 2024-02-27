@@ -3,28 +3,18 @@ package roj.sound;
 import roj.util.ByteList;
 
 import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.LineUnavailableException;
 
 /**
- * 将解码得到的PCM数据写入音频设备（播放）。
+ * 将解码得到的PCM数据写入内存缓冲区
  */
 public class MemoryAudioOutput implements AudioOutput {
-	private AudioFormat format;
-	private ByteList data = new ByteList();
+	public AudioFormat format;
+	public ByteList buf = new ByteList();
 	@Override
-	public void start(AudioFormat h, int buffer) throws LineUnavailableException {
+	public void init(AudioFormat h, int buffer) {
 		this.format = h;
-		this.data.clear();
+		this.buf.clear();
 	}
-
-	@Override
-	public void stop() {}
-
-	@Override
-	public void flush() {}
-
-	@Override
-	public void write(byte[] b, int size) {
-		this.data.put(b, 0, size);
-	}
+	@Override public void close() {}
+	@Override public int write(byte[] b, int off, int len, boolean flush) {buf.put(b, off, len);return len;}
 }

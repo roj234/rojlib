@@ -3,8 +3,8 @@ package roj.config.data;
 import org.jetbrains.annotations.NotNull;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.config.Tokenizer;
 import roj.config.serial.CVisitor;
-import roj.config.word.Tokenizer;
 import roj.text.CharList;
 
 import java.util.Collections;
@@ -24,13 +24,16 @@ public class Element extends Node {
 	public byte nodeType() { return ELEMENT; }
 	public Element asElement() { return this; }
 	public String textContent() {
-		if (children.size() > 1) return super.textContent();
+		if (children.size() > 1 || isBreak()) return super.textContent();
 		return children.isEmpty()?"":children.get(0).textContent();
 	}
 	public void appendTextContent(CharList sb) {
+		if (isBreak()) sb.append('\n');
 		for (int i = 0; i < children.size(); i++)
 			sb.append(children.get(i).textContent());
 	}
+	private boolean isBreak() {return shortTag && tag.equals("br");}
+
 	public void textContent(String str) {
 		_childNodes().clear();
 		if (str != null) children.add(new Text(str));
@@ -49,7 +52,7 @@ public class Element extends Node {
 	Map<String, CEntry> attributes = Collections.emptyMap();
 
 	public Element attr(String name, String value) { attributes().put(name, CString.valueOf(value)); return this; }
-	public Element attr(String name, int value) { attributes().put(name, CInteger.valueOf(value)); return this; }
+	public Element attr(String name, int value) { attributes().put(name, CInt.valueOf(value)); return this; }
 	public Element attr(String name, double value) { attributes().put(name, CDouble.valueOf(value)); return this; }
 	public Element attr(String name, boolean value) { attributes().put(name, CBoolean.valueOf(value)); return this; }
 	public CEntry attr(String name) { return attributes.getOrDefault(name, CNull.NULL); }
@@ -80,7 +83,7 @@ public class Element extends Node {
 	@Override
 	public List<Node> _childNodes() {
 		if (!(children instanceof SimpleList)) {
-			SimpleList<Node> s = SimpleList.withCapacityType(children.size(), 2);
+			SimpleList<Node> s = SimpleList.hugeCapacity(children.size());
 			s.addAll(children);
 			children = s;
 		}
@@ -99,7 +102,7 @@ public class Element extends Node {
 		writeTag(sb);
 
 		if (shortTag && children.isEmpty()) {
-			sb.append(" />");
+			sb.append("!DOCTYPE".equals(tag) ? ">" : " />");
 			return;
 		}
 
@@ -172,7 +175,7 @@ public class Element extends Node {
 			cc.valueMap(attributes.size());
 			for (Map.Entry<String, CEntry> entry : attributes.entrySet()) {
 				cc.key(entry.getKey());
-				entry.getValue().forEachChild(cc);
+				entry.getValue().accept(cc);
 			}
 			cc.pop();
 		}

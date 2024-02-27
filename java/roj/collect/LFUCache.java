@@ -1,6 +1,5 @@
 package roj.collect;
 
-import roj.concurrent.FastThreadLocal;
 import roj.util.Helpers;
 
 import java.util.function.BiConsumer;
@@ -13,25 +12,16 @@ import static roj.collect.IntMap.UNDEFINED;
  * @author Roj233
  * @since 2021/9/9 23:17
  */
-public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
+public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 	public static final class Entry<K, V> extends MyHashMap.Entry<K, V> {
 		Bucket owner;
 		Entry<K, V> lfuPrev, lfuNext;
-
-		public String cToString() {
-			return lfuNext == null ? String.valueOf(k) : k + ", " + lfuNext.cToString();
-		}
 	}
 
 	private static final class Bucket {
 		int freq;
 		Bucket prev, next;
 		Entry<?, ?> entry;
-
-		@Override
-		public String toString() {
-			return freq + "=>[" + entry.cToString() + "], " + next;
-		}
 	}
 
 	private final int maximumCapacity, removeAtOnce;
@@ -40,44 +30,15 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 	private int wellDepth;
 	private Bucket well;
 
-	private BiConsumer<K,V> listener;
+	private BiConsumer<K, V> listener;
 
-	public LFUCache(int maxCap) {
-		this(maxCap, 16);
-	}
-
+	public LFUCache(int maxCap) {this(maxCap, 16);}
 	public LFUCache(int maxCap, int evictOnce) {
 		this.maximumCapacity = maxCap;
 		this.removeAtOnce = evictOnce;
 		this.head = new Bucket();
 		this.head.freq = 1;
 	}
-
-	private static final FastThreadLocal<ObjectPool<AbstractEntry<?,?>>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(null, 99));
-	protected AbstractEntry<K, V> useEntry() {
-		if (size == maximumCapacity) evict(removeAtOnce);
-
-		Entry<K, V> entry = Helpers.cast(MY_OBJECT_POOL.get().get());
-
-		if (entry == null) entry = new Entry<>();
-		entry.k = Helpers.cast(UNDEFINED);
-		append(entry, head);
-		return entry;
-	}
-	@SuppressWarnings("unchecked")
-	protected void reserveEntry(AbstractEntry<?, ?> entry) {
-		Entry<K, V> ent = (Entry<K, V>) entry;
-		unlink(ent);
-		ent.owner = null;
-		ent.lfuPrev = ent.lfuNext = null;
-		entry.k = null;
-		entry.next = null;
-		entry.setValue(null);
-		MY_OBJECT_POOL.get().reserve(entry);
-	}
-
-	@Override
-	protected boolean supportAutoCollisionFix() { return false; }
 
 	@Override
 	public final void clear() {
@@ -89,49 +50,16 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 	}
 
 	@Override
-	public void setEvictListener(BiConsumer<K,V> listener) {
-		this.listener = listener;
-	}
-
-	public final int evict(int amount) {
-		int except = amount;
-
-		Bucket b = head;
-		while (amount > 0) {
-			Bucket tmpNext = b.next;
-
-			Entry<?, ?> entry = b.entry;
-			while (entry != null && amount-- > 0) {
-				Entry<?, ?> next = entry.lfuNext;
-
-				Object k = entry.k;
-				Object v = entry.v;
-
-				remove(k);
-				if (listener != null) listener.accept(Helpers.cast(k), Helpers.cast(v));
-				entry = next;
-			}
-
-			if (tmpNext == null) break;
-			b = tmpNext;
-		}
-
-		return except-amount;
-	}
-
-	@Override
-	protected void onGet(AbstractEntry<K, V> entry) { access((Entry<K, V>) entry); }
-	public final void access(Entry<K, V> entry) {
-		Bucket b = entry.owner;
+	public final void onGet(AbstractEntry<K, V> entry) {
+		Bucket b = ((Entry<K, V>) entry).owner;
 
 		int nextF = b.freq+1;
-		if (nextF < 0) throw new IllegalArgumentException("ERROR!");
+		assert nextF >= 0;
 
-		find: {
+		find:{
 			while (b.freq < nextF) {
-				if (b.freq == -1) {
-					throw new IllegalArgumentException();
-				}
+				assert b.freq >= 0;
+
 				if (b.next == null) {
 					Bucket f = fill();
 					f.freq = nextF;
@@ -154,20 +82,34 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 			}
 		}
 
-		unlink(entry);
-		append(entry, b);
+		unlink((Entry<K, V>) entry);
+		append((Entry<K, V>) entry, b);
 	}
 
-	@SuppressWarnings("unchecked")
-	private static <K,V> void append(Entry<K,V> entry, Bucket b) {
-		entry.owner = b;
+	@Override
+	protected boolean acceptTreeNode() {return false;}
 
-		entry.lfuPrev = null;
-		Entry<K, V> prevNext = entry.lfuNext = (Entry<K, V>) b.entry;
-		if (prevNext != null) prevNext.lfuPrev = entry;
+	protected AbstractEntry<K, V> useEntry() {
+		if (size == maximumCapacity) evict(removeAtOnce);
 
-		b.entry = entry;
+		Entry<K, V> entry = new Entry<>();
+
+		entry.k = Helpers.cast(UNDEFINED);
+		append(entry, head);
+		return entry;
 	}
+
+	@Override
+	protected void onDel(AbstractEntry<K, V> entry) {
+		Entry<K, V> ent = (Entry<K, V>) entry;
+		unlink(ent);
+
+		ent.owner = null;
+		ent.lfuPrev = ent.lfuNext = null;
+		ent.next = null;
+		ent.k = null;
+	}
+
 	private void unlink(Entry<K, V> entry) {
 		if (entry.lfuPrev == null) entry.owner.entry = entry.lfuNext;
 		else entry.lfuPrev.lfuNext = entry.lfuNext;
@@ -177,8 +119,17 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 			if (b.prev != null && b.entry == null) { // do not remove head (1)
 				drain(b);
 			}
-		}
-		else entry.lfuNext.lfuPrev = entry.lfuPrev;
+		} else entry.lfuNext.lfuPrev = entry.lfuPrev;
+	}
+	@SuppressWarnings("unchecked")
+	private static <K, V> void append(Entry<K, V> entry, Bucket b) {
+		entry.owner = b;
+
+		entry.lfuPrev = null;
+		Entry<K, V> prevNext = entry.lfuNext = (Entry<K, V>) b.entry;
+		if (prevNext != null) prevNext.lfuPrev = entry;
+
+		b.entry = entry;
 	}
 
 	private void drain(Bucket o) {
@@ -202,5 +153,33 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K,V> {
 			return rt;
 		}
 		return new Bucket();
+	}
+
+	@Override
+	public void setEvictListener(BiConsumer<K, V> listener) {this.listener = listener;}
+	public final int evict(int amount) {
+		int except = amount;
+
+		Bucket b = head;
+		while (amount > 0) {
+			Bucket tmpNext = b.next;
+
+			Entry<?, ?> entry = b.entry;
+			while (entry != null && amount-- > 0) {
+				Entry<?, ?> next = entry.lfuNext;
+
+				Object k = entry.k;
+				Object v = entry.v;
+
+				remove(k);
+				if (listener != null) listener.accept(Helpers.cast(k), Helpers.cast(v));
+				entry = next;
+			}
+
+			if (tmpNext == null) break;
+			b = tmpNext;
+		}
+
+		return except - amount;
 	}
 }

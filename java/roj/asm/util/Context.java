@@ -1,9 +1,8 @@
 package roj.asm.util;
 
-import roj.archive.ArchiveEntry;
-import roj.archive.ArchiveFile;
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
+import roj.archive.zip.ZipFileWriter;
 import roj.asm.Parser;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
@@ -15,138 +14,101 @@ import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 public final class Context implements Consumer<Constant>, Supplier<ByteList> {
-	static final int ID_METHOD = 0, ID_FIELD = 1, ID_CLASS = 2;
+	private static final int ID_METHOD = 0, ID_FIELD = 1, ID_CLASS = 2;
 
 	private String name;
-	private ConstantData data;
 	private Object in;
-	private ByteList buf;
-	private boolean absolutelyCompressed;
+	private ConstantData data;
+	private boolean isCompressed;
 
-	@Deprecated
-	private ArrayList<Constant>[] cstCache;
-
+	public Context(ConstantData o) {
+		data = o;
+		getFileName();
+	}
 	public Context(String name, Object o) {
 		this.name = name;
 		if (o instanceof ConstantData) this.data = (ConstantData) o;
-		else this.in = o;
+		else this.in = Objects.requireNonNull(o, name);
 	}
 
-	public ConstantData getData() {
-		absolutelyCompressed = false;
-		if (this.data == null) {
-			ByteList bytes;
-			if (in != null) {
-				bytes = read0(in);
-				in = null;
-			} else if (buf != null) {
-				bytes = this.buf;
-				this.buf = null;
-			} else throw new IllegalStateException(getFileName() + " 没有数据");
-			ConstantData data;
+	private static ByteList read0(Object o) throws IOException {
+		if (o instanceof InputStream in) {
 			try {
-				data = Parser.parseConstants(bytes);
-			} catch (Throwable e) {
-				File file = new File(getFileName().replace('/', '.').concat(".class"));
-				try (FileOutputStream fos = new FileOutputStream(file)) {
-					bytes.writeToStream(fos);
-				} catch (Throwable ex) {
-					ex.printStackTrace();
-				}
-				throw new IllegalArgumentException(name + " 解析失败", e);
+				return ByteList.wrap(IOUtil.read(in));
+			} finally {
+				IOUtil.closeSilently(in);
 			}
-			this.data = data;
-			getFileName();
-		}
-		return this.data;
-	}
-
-	private static ByteList read0(Object o) {
-		if (o instanceof InputStream) {
-			try (InputStream in = (InputStream) o) {
-				return ByteList.wrap(IOUtil.getSharedByteBuf().readStreamFully(in).toByteArray());
-			} catch (IOException e) {
-				throw new RuntimeException(e);
-			}
-		} else if (o instanceof ByteList) {
-			return (ByteList) o;
-		} else if (o instanceof byte[]) {
-			return ByteList.wrap((byte[]) o);
-		} else if (o instanceof File) {
+		} else if (o instanceof ByteList n) return n;
+		else if (o instanceof byte[] n) return ByteList.wrap(n);
+		else if (o instanceof File) {
 			try {
 				return ByteList.wrap(IOUtil.read((File) o));
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}
 		}
-		throw new ClassCastException(o.getClass().getName());
+		throw new IllegalArgumentException("无法读取"+o);
 	}
 
-	@Deprecated
+	public ConstantData getData() {
+		isCompressed = false;
+		if (data == null) {
+			try {
+				ByteList r = read0(in);
+				in = null;
+
+				data = Parser.parseConstants(r, cp);
+				cp = data.cp;
+			} catch (Throwable e) {
+				throw new IllegalArgumentException(name+" 解析失败", e);
+			}
+
+			getFileName();
+		}
+		return data;
+	}
+
+	//region ConstantRef
+	private ConstantPool cp;
+	private ArrayList<Constant>[] cstCache;
+
+	public ConstantPool getConstantPool() {
+		if (cp == null) {
+			try {
+				ByteList r = read0(in);
+				in = r;
+
+				int i = r.rIndex;
+
+				if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
+				r.rIndex += 4;
+
+				cp = new ConstantPool();
+				cp.read(r, ConstantPool.BYTE_STRING);
+
+				r.rIndex = i;
+			} catch (Throwable e) {
+				throw new IllegalArgumentException(name+" 解析失败", e);
+			}
+
+			getFileName();
+		}
+		return cp;
+	}
+
 	public List<CstRef> getMethodConstants() { cstInit(); return Helpers.cast(cstCache[ID_METHOD]); }
-	@Deprecated
 	public List<CstRef> getFieldConstants() { cstInit(); return Helpers.cast(cstCache[ID_FIELD]); }
-	@Deprecated
 	public List<CstClass> getClassConstants() { cstInit(); return Helpers.cast(cstCache[ID_CLASS]); }
 
-	public ByteList get() { return get(true); }
-	public ByteList get(boolean shared) {
-		if (this.buf == null) {
-			if (this.data != null) {
-				getFileName();
-				try {
-					data.verify();
-					if (shared) {
-						return Parser.toByteArrayShared(data);
-					} else {
-						this.buf = new ByteList(Parser.toByteArray(data));
-						clearData();
-					}
-				} catch (Throwable e) {
-					throw new IllegalArgumentException(name + " 写入失败", e);
-				}
-			} else {
-				this.buf = read0(in);
-				this.in = null;
-			}
-		}
-		return this.buf;
-	}
-
-	private void clearData() {
-		if (this.data != null) {
-			getFileName();
-			this.data = null;
-			if (cstCache[0] != null) {
-				for (List<?> list : cstCache) {
-					list.clear();
-				}
-			}
-		}
-	}
-
-	public void set(ByteList bytes) {
-		this.buf = bytes;
-		clearData();
-	}
-
-	@Override
-	public String toString() {
-		return "Ctx " + "'" + name + '\'';
-	}
-
-	@Deprecated
 	private void cstInit() {
 		if (cstCache == null) {
 			cstCache = Helpers.cast(new ArrayList<?>[] {
@@ -157,19 +119,14 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 		}
 
 		if (cstCache[0].isEmpty()) {
-			boolean prev = absolutelyCompressed;
-			ConstantPool cw = getData().cp;
-			absolutelyCompressed = prev;
-
-			cw.setAddListener(this);
-			List<Constant> csts = cw.array();
+			var cp = getConstantPool();
+			cp.setAddListener(this);
+			List<Constant> csts = cp.array();
 			for (int i = 0; i < csts.size(); i++) accept(csts.get(i));
-			getFileName();
 		}
 	}
 
 	@Override
-	@Deprecated
 	public void accept(Constant c) {
 		if (c == null) {
 			for (List<?> list : cstCache) list.clear();
@@ -183,49 +140,64 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 			case Constant.FIELD: cstCache[ID_FIELD].add(c); break;
 		}
 	}
+	// endregion
+
+	/**
+	 * This buffer maybe (ThreadLocal) shared, use toByteArray() to distinguish it
+	 */
+	public ByteList get() {
+		try {
+			if (data != null) {
+				getFileName();
+				return Parser.toByteArrayShared(data);
+			} else {
+				var buf = read0(in);
+				in = buf;
+				return buf;
+			}
+		} catch (Throwable e) {
+			throw new IllegalArgumentException(name+" 序列化失败", e);
+		}
+	}
+
+	public ByteList getCompressedShared() {
+		compress();
+		return get();
+	}
+
+	public void compress() {
+		if (isCompressed) return;
+		TransformUtil.compress(getData());
+		isCompressed = true;
+	}
+
+	@Override
+	public String toString() {return "Ctx " + "'" + name + '\'';}
 
 	public String getFileName() {
 		if (data == null) return name;
 		return name = data.name.concat(".class");
 	}
-
-	public ByteList getCompressedShared() {
-		getFileName();
-		compress();
-		return get(true);
+	public String getClassName() {
+		if (data == null) return name.substring(0, name.length()-6);
+		return name = data.name;
 	}
 
-	public void compress() {
-		if (absolutelyCompressed) return;
-
-		boolean targetIsByte = data == null;
-		Parser.compress(getData());
-		if (targetIsByte) set(ByteList.wrap(Parser.toByteArray(data)));
-		absolutelyCompressed = true;
-	}
-
-	public static List<Context> fromZip(File input) throws IOException { return fromZip(input, null, Helpers.alwaysTrue()); }
-	public static List<Context> fromZip(File input, Predicate<String> filter) throws IOException { return fromZip(input, null, filter); }
-	public static List<Context> fromZip(File input, Map<ArchiveEntry, ArchiveFile> resource) throws IOException { return fromZip(input, resource, Helpers.alwaysTrue()); }
-	public static List<Context> fromZip(File input, Map<ArchiveEntry, ArchiveFile> resource, Predicate<String> filter) throws IOException {
+	public static List<Context> fromZip(File input, ZipFileWriter rw) throws IOException {
 		List<Context> ctx = new ArrayList<>();
-		ByteList buf = new ByteList();
 
-		try (ZipArchive archive = new ZipArchive(input)) {
-			for (ZEntry value : archive.getEntries().values()) {
+		try (ZipFile archive = new ZipFile(input)) {
+			for (ZEntry value : archive.entries()) {
 				String name = value.getName();
 				if (name.endsWith("/")) continue;
 
-				if (name.endsWith(".class") && filter.test(name)) {
-					buf.clear();
-					ctx.add(new Context(name, archive.get(value, buf).toByteArray()));
-				} else if (resource != null) {
-					resource.put(value, archive);
+				if (name.endsWith(".class")) {
+					ctx.add(new Context(name, archive.get(value)));
+				} else if (rw != null) {
+					rw.copy(archive, value);
 				}
 			}
 		}
-		buf._free();
-
 		return ctx;
 	}
 }

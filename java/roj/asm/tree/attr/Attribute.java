@@ -53,10 +53,10 @@ public abstract class Attribute {
 	public void toByteArray(DynByteBuf w, ConstantPool pool) {
 		w.putShort(pool.getUtfId(name())).putInt(0);
 		int i = w.wIndex();
-		toByteArray1(w, pool);
+		toByteArrayNoHeader(w, pool);
 		w.putInt(i-4, w.wIndex()-i);
 	}
-	protected void toByteArray1(DynByteBuf w, ConstantPool cp) { w.put(getRawData()); }
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool cp) { w.put(getRawData()); }
 
 	public boolean isEmpty() { return false; }
 

@@ -4,11 +4,9 @@ import roj.collect.LRUCache;
 import roj.collect.MyHashMap;
 import roj.concurrent.SegmentReadWriteLock;
 import roj.config.NBTParser;
-import roj.config.serial.CAdapter;
-import roj.config.serial.SerializerFactory;
-import roj.config.serial.Serializers;
+import roj.config.auto.Serializer;
+import roj.config.auto.Serializers;
 import roj.config.serial.ToNBT;
-import roj.io.IOUtil;
 import roj.io.source.BufferedSource;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
@@ -32,12 +30,7 @@ import java.util.function.BiConsumer;
  * @since 2023/5/15 0015 14:13
  */
 public class SimpleSessionProvider extends SessionProvider implements BiConsumer<String,Map<String,Object>> {
-	private static final SerializerFactory factory = Serializers.newSerializerFactory(
-		SerializerFactory.GENERATE|
-		SerializerFactory.PREFER_DYNAMIC|
-		SerializerFactory.CHECK_INTERFACE|SerializerFactory.CHECK_PARENT);
-
-	private static final ThreadLocal<CAdapter<?>> local = new ThreadLocal<>();
+	private static final ThreadLocal<Serializer<?>> local = new ThreadLocal<>();
 	private static volatile StandardCopyOption[] moveAction = {StandardCopyOption.ATOMIC_MOVE};
 
 	private final File baseDir;
@@ -120,10 +113,10 @@ public class SimpleSessionProvider extends SessionProvider implements BiConsumer
 		if (!file.isFile()) return new MyHashMap<>();
 
 		try (Source in = BufferedSource.autoClose(new FileSource(file))) {
-			CAdapter<Map<String, Object>> des = adapter();
+			Serializer<Map<String, Object>> des = adapter();
 			des.reset();
-			NBTParser.root(des,in.asDataInput(),NBTParser.DONT_FOLLOW_MINECRAFT);
-			return des.finished() ? des.result() : null;
+			NBTParser.root(in.asDataInput(), des);
+			return des.finished() ? des.get() : null;
 		} catch (Exception e) {
 			e.printStackTrace();
 			return null;
@@ -190,14 +183,14 @@ public class SimpleSessionProvider extends SessionProvider implements BiConsumer
 			}
 		}
 
-		IOUtil.deleteFile(new File(baseDir, id));
-		IOUtil.deleteFile(new File(baseDir, id+".tmp"));
+		new File(baseDir, id).delete();
+		new File(baseDir, id+".tmp").delete();
 	}
 
-	private static CAdapter<Map<String, Object>> adapter() {
-		CAdapter<?> c = local.get();
+	private static Serializer<Map<String, Object>> adapter() {
+		Serializer<?> c = local.get();
 		if (c == null) {
-			c = factory.mapOf(Object.class);
+			c = Serializers.POOLED.mapOf(Object.class);
 			local.set(c);
 		}
 		return Helpers.cast(c);

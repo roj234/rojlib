@@ -2,7 +2,7 @@ package roj.net.ch;
 
 import roj.asm.type.TypeHelper;
 import roj.io.buf.BufferPool;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
@@ -12,7 +12,6 @@ import java.lang.reflect.Field;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -34,7 +33,7 @@ class UdpChImpl extends MyChannel {
 		H inst;
 		try {
 			Class<?> type = InetSocketAddress.class.getDeclaredField("holder").getType();
-			DirectAccessor<H> b = DirectAccessor.builder(H.class).i_access("java/net/InetSocketAddress", "holder", TypeHelper.class2type(type), "getHolder", null, false);
+			Bypass<H> b = Bypass.builder(H.class).i_access("java/net/InetSocketAddress", "holder", TypeHelper.class2type(type), "getHolder", null, false);
 			Field field = ReflectionUtils.checkFieldName(type, "address", "addr");
 			inst = b.access(type, new String[]{field.getName(),"port"}, null, new String[]{"setAddress","setPort"}).delegate(AbstractSelectableChannel.class, "removeKey").build();
 		} catch (Exception e) {
@@ -78,11 +77,7 @@ class UdpChImpl extends MyChannel {
 	@Override
 	protected void bind0(InetSocketAddress na) throws IOException { dc.bind(na); }
 	@Override
-	protected boolean connect0(InetSocketAddress na) throws IOException {
-		dc.connect(na);
-		//addFirst("_UDP_AddressProvider", new AddressBinder(na));
-		return true;
-	}
+	protected boolean connect0(InetSocketAddress na) throws IOException {dc.connect(na);return true;}
 	@Override
 	protected SocketAddress finishConnect0() throws IOException { return dc.getRemoteAddress(); }
 	@Override
@@ -107,7 +102,6 @@ class UdpChImpl extends MyChannel {
 		fireFlushing();
 		if (pending.isEmpty()) return;
 
-		BufferPool bp = alloc();
 		lock.lock();
 		try {
 			do {
@@ -123,7 +117,7 @@ class UdpChImpl extends MyChannel {
 			} while (true);
 
 			if (pending.isEmpty()) {
-				flag &= ~PAUSE_FOR_FLUSH;
+				flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 				key.interestOps(SelectionKey.OP_READ);
 
 				fireFlushed();
@@ -134,49 +128,62 @@ class UdpChImpl extends MyChannel {
 	}
 
 	private void write1(DatagramPkt p, DynByteBuf buf) throws IOException {
-		ByteBuffer nioBuffer = syncNioWrite(buf);
-		InetSocketAddress address = setAddress(nioAddr, p.addr, p.port);
-		int w = dc.send(nioBuffer, address);
+		var nioBuffer = syncNioWrite(buf);
+		var address = setAddress(nioAddr, p.addr, p.port);
+		// buf.readableBytes() or 0
+		dc.send(nioBuffer, address);
 		buf.rIndex = nioBuffer.position();
 	}
 
 	protected void read() throws IOException {
-		while (state == OPENED && dc.isOpen()) {
-			DynByteBuf buf = alloc().allocate(true, UDP_MAX_SIZE, 0);
+		while (state == OPENED) {
+			var buf = alloc().allocate(true, UDP_MAX_SIZE, 0);
 			try {
-				ByteBuffer nioBuffer = syncNioRead(buf);
-				InetSocketAddress r = (InetSocketAddress) dc.receive(nioBuffer);
-				buf.wIndex(nioBuffer.position());
-				BufferPool.expand(buf, buf.wIndex()-buf.capacity());
+				var nioBuffer = syncNioRead(buf);
+				var addr = (InetSocketAddress) dc.receive(nioBuffer);
+				if (addr == null) break;
 
-				if (r == null) break;
+				buf.wIndex(nioBuffer.position());
+				alloc().expand(buf, buf.wIndex()-buf.capacity());
 
 				first.buf = buf;
-				first.addr = r.getAddress();
-				first.port = r.getPort();
+				first.addr = addr.getAddress();
+				first.port = addr.getPort();
 				fireChannelRead(first);
 			} finally {
 				BufferPool.reserve(buf);
 			}
+
+			if ((flag&READ_INACTIVE) != 0) break;
 		}
 	}
 
 	protected void write(Object o) throws IOException {
-		BufferPool bp = alloc();
+		var bp = alloc();
 
-		DatagramPkt p = (DatagramPkt) o;
-		DynByteBuf buf = p.buf;
+		var p = (DatagramPkt) o;
+		var buf = p.buf;
 		if (buf.readableBytes() > UDP_MAX_SIZE) throw new IOException("packet too large");
-		if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes(), 0).put(buf);
 
 		try {
-			write1(p, buf);
+			if (pending.isEmpty()) {
+				if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes(), 0).put(buf);
+				write1(p, buf);
+			}
 
 			if (buf.isReadable()) {
-				if (pending.isEmpty()) key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
+				if (pending.isEmpty()) {
+					fireFlushing();
+					key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
+				} else if (pending.size() > 5) {
+					pauseAndFlush();
+				}
 
-				Object o1 = pending.ringAddLast(new DatagramPkt(p, bp.allocate(true, buf.readableBytes(), 0).put(buf)));
-				if (o1 != null) throw new IOException("上层发送缓冲区过载");
+				DynByteBuf put = bp.allocate(true, buf.readableBytes(), 0).put(buf);
+				if (!pending.offerLast(new DatagramPkt(p, put))) {
+					BufferPool.reserve(put);
+					throw new IOException("上层发送缓冲区过载");
+				}
 			} else {
 				fireFlushed();
 			}

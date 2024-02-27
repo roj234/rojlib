@@ -8,12 +8,13 @@ import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 
 import java.util.Collections;
+import java.util.Objects;
 
 /**
  * 操作符 - 常量
@@ -26,7 +27,7 @@ public final class Constant extends ExprNode {
 	private boolean isClassRef() { return c == CLASSREF || c instanceof CstClass; }
 
 	private final IType type;
-	private final Object c;
+	private Object c;
 
 	public Constant(IType type, Object c) {
 		this.type = type;
@@ -37,6 +38,8 @@ public final class Constant extends ExprNode {
 	public String toString() { return c instanceof String ? '"'+ Tokenizer.addSlashes(c.toString())+'"' : isClassRef() ? type+".class" : String.valueOf(c); }
 
 	@Override
+	public boolean isKind(ExprKind kind) {return kind == ExprKind.IMMEDIATE_CONSTANT || (kind == ExprKind.LDC_CLASS && isClassRef());}
+	@Override
 	public IType type() { return type; }
 	@Override
 	public boolean isConstant() { return !isClassRef(); }
@@ -44,21 +47,35 @@ public final class Constant extends ExprNode {
 	public Object constVal() { return c; }
 
 	public static final Type STRING = new Type("java/lang/String");
-	public static ExprNode classRef(Type type) { return new Constant(new Generic("java/lang/Class", Collections.singletonList(type)), type); }
+	public static Constant classRef(Type type) { return new Constant(new Generic("java/lang/Class", Collections.singletonList(type)), type); }
 	public static Constant valueOf(boolean v) { return new Constant(Type.std(Type.BOOLEAN), v); }
 	public static Constant valueOf(String v) { return new Constant(STRING, v); }
+	public static Constant valueOf(AnnVal v) {
+		return switch (v.type()) {
+			case 's' -> valueOf(v.asString());
+			case 'e' -> new Constant(new Type(v.asEnum().owner()), v);
+			case 'c' -> classRef(v.asClass());
+			case '@', '[' -> throw new IllegalArgumentException("not supported at this time");
+			default -> new Constant(Type.std(v.type()), v);
+		};
+	}
 
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
-		if (c instanceof IType t) ctx.resolveType(t);
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
+		if (c instanceof IType t) c = ctx.resolveType(t);
 		return this;
 	}
 
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
-		if (c instanceof IType t) cw.ldc(new CstClass(t.rawType().ownerForCstClass()));
-		else if (c instanceof CstClass cx) cw.ldc(cx);
+		if (c instanceof IType t) {
+			if (t.isPrimitive()) {
+				cw.field(Opcodes.GETSTATIC, Objects.requireNonNull(TypeCast.getWrapper(t)).owner, "TYPE", "Ljava/lang/Class;");
+			} else {
+				cw.ldc(new CstClass(t.rawType().ownerForCstClass()));
+			}
+		} else if (c instanceof CstClass cx) cw.ldc(cx);
 		else if (c == null) cw.one(Opcodes.ACONST_NULL);
 		else if ("java/lang/String".equals(type.owner())) cw.ldc(c.toString());
 		else {
@@ -71,20 +88,24 @@ public final class Constant extends ExprNode {
 		if (cast == null) {
 			write(cw, false);
 		} else {
-			if (cast.type == TypeCast.E_NUMBER_DOWNCAST || cast.type == TypeCast.NUMBER_UPCAST) {
-				String name = Opcodes.showOpcode(cast.getOp1());
-				assert name.length() == 3;
-				writePrimitive(cw, switch (name.charAt(2)) {
-					default  -> 4;
-					case 'L' -> 5;
-					case 'F' -> 6;
-					case 'D' -> 7;
-				});
-				return;
+			switch (cast.type) {
+				case TypeCast.E_NUMBER_DOWNCAST, TypeCast.NUMBER_UPCAST, TypeCast.BOXING -> {
+					String name = Opcodes.showOpcode(cast.getOp1());
+					assert name.length() == 3;
+					writePrimitive(cw, switch (name.charAt(2)) {
+						default -> 4;
+						case 'L' -> 5;
+						case 'F' -> 6;
+						case 'D' -> 7;
+					});
+					if (cast.type == TypeCast.BOXING)
+						cast.writeBox(cw);
+				}
+				default -> {
+					write(cw, false);
+					cast.write(cw);
+				}
 			}
-
-			write(cw, false);
-			cast.write(cw);
 		}
 	}
 

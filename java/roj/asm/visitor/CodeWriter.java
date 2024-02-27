@@ -1,5 +1,6 @@
 package roj.asm.visitor;
 
+import org.jetbrains.annotations.Range;
 import roj.RequireUpgrade;
 import roj.asm.AsmShared;
 import roj.asm.Opcodes;
@@ -34,7 +35,6 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	public MethodNode mn;
 	public int interpretFlags;
-	public boolean debugLines;
 
 	public SimpleList<Frame2> frames;
 	private FrameVisitor fv;
@@ -75,6 +75,21 @@ public class CodeWriter extends AbstractCodeWriter {
 	public final void init(DynByteBuf bw, ConstantPool cpw, MethodNode owner, byte flags) {
 		init(bw, cpw);
 		initFrames(owner, flags);
+	}
+
+	/**
+	 * 将buf插入代码开始之前
+	 * 可能需要处理位于index0的label（见重载）
+	 */
+	public void insertBefore(DynByteBuf buf) {
+		if (state != 1) throw new IllegalStateException();
+		var bw = this.bw;
+		int offset = tmpLenOffset;
+		bw.preInsert(offset, buf.readableBytes());
+		int pos = bw.wIndex();
+		bw.wIndex(offset);
+		bw.put(buf);
+		bw.wIndex(pos);
 	}
 
 	public void visitSize(int stackSize, int localSize) {
@@ -141,7 +156,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		validateBciRef();
 	}
 	@Override
-	final void _visitNodePre() {
+	protected void _visitNodePre() {
 		IntMap.Entry<Label> entry = bciR2W.getEntry(bci);
 		if (entry != null) label(entry.getValue());
 	}
@@ -171,7 +186,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				}
 				break;
 			case "StackMapTable":
-				if (interpretFlags == 0) {
+				if (interpretFlags == 0 && mn != null) {
 					FrameVisitor.readFrames(frames = new SimpleList<>(r.readUnsignedShort(r.rIndex)), r, cp, this, mn.ownerClass(), 0xffff, 0xffff);
 				}
 				break;
@@ -183,13 +198,17 @@ public class CodeWriter extends AbstractCodeWriter {
 	public void clazz(byte code, String clz) { assertCate(code, Opcodes.CATE_CLASS); codeOb.put(code).putShort(cpw.getClassId(clz)); }
 
 	protected void ldc1(byte code, Constant c) {
-		int i = cpw.reset(c).getIndex();
-		if (i < 256) codeOb.put(LDC).put(i);
-		else codeOb.put(LDC_W).putShort(i);
+		// 同时读写，长度可能会变，特别是Transformer#compress...
+		if (bciR2W != null) addSegment(new LdcSegment(code, c));
+		else {
+			int i = cpw.reset(c).getIndex();
+			if (i < 256) codeOb.put(LDC).put(i);
+			else codeOb.put(LDC_W).putShort(i);
+		}
 	}
 	protected void ldc2(Constant c) { codeOb.put(LDC2_W).putShort(cpw.reset(c).getIndex()); }
 
-	public void invokeDyn(int idx, String name, String desc, int type) { codeOb.put(INVOKEDYNAMIC).putShort(cpw.getInvokeDynId(idx, name, desc)).putShort(type); }
+	public void invokeDyn(int idx, String name, String desc, @Range(from = 0, to = 0) int type) { codeOb.put(INVOKEDYNAMIC).putShort(cpw.getInvokeDynId(idx, name, desc)).putShort(type); }
 	public void invokeItf(String owner, String name, String desc) { codeOb.put(INVOKEINTERFACE).putShort(cpw.getItfRefId(owner, name, desc)).putShortLE(1+TypeHelper.paramSize(desc)); }
 	public void invoke(byte code, String owner, String name, String desc, boolean isInterfaceMethod) {
 		// calling by user code
@@ -324,17 +343,7 @@ public class CodeWriter extends AbstractCodeWriter {
 			bw.putShort(frames.size());
 			FrameVisitor.writeFrames(frames, bw, cpw);
 			visitAttributeIEnd(stack);
-
-			hasFrames = true;
 		}
-
-		if (debugLines) lineNumberDebug();
-	}
-
-	void _addFrames(DynByteBuf data) {
-		bw.putShort(cpw.getUtfId("StackMapTable")).putInt(data.readableBytes()).put(data);
-		data.rIndex = data.wIndex();
-		tmpLen++;
 	}
 
 	public final void lineNumberDebug() {
@@ -408,7 +417,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				}
 				break;
 			case "StackMapTable":
-				if (hasFrames) return;
+				if (hasFrames || frames == null) return;
 				hasFrames = true;
 
 				// must rewrite, bci change
@@ -482,7 +491,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		return lbl;
 	}
 
-	public final void label(Label x) {
+	public void label(Label x) {
 		if (x.block >= 0) throw new IllegalStateException("Label already had a position at "+x);
 
 		if (segments.isEmpty()) {
@@ -501,15 +510,13 @@ public class CodeWriter extends AbstractCodeWriter {
 		return bci;
 	}
 
-	@RequireUpgrade
-	public FrameVisitor getFv() {
-		return fv;
-	}
+	@RequireUpgrade public FrameVisitor getFv() {return fv;}
+	public int getState() {return state;}
 
 	public final void addSegment(Segment c) {
 		if (c == null) throw new NullPointerException("c");
 
-		if (segments.isEmpty()) segments.add(new FirstSegment(offset = bw.wIndex()-tmpLenOffset));
+		if (segments.isEmpty()) _addFirst();
 		else endSegment();
 
 		segments.add(c);
@@ -524,16 +531,22 @@ public class CodeWriter extends AbstractCodeWriter {
 		codeOb = ss.getData();
 	}
 
+	protected final void _addOffset(int c) {offset += c;}
+	protected final void _addFirst() {
+		segments = new SimpleList<>(3);
+		segments.add(new FirstSegment(offset = bw.wIndex()-tmpLenOffset));
+	}
+
 	public boolean isContinuousControlFlow() {
 		int block = segments.size()-1;
-		return block < 0 || isContinuousControlFlow(block);
+		return block >= 0 ? isContinuousControlFlow(block) : !StaticSegment.isTerminate(bw, tmpLenOffset, bw.wIndex());
 	}
 
 	public boolean isContinuousControlFlow(int targetBlock) {
 		Segment seg = segments.get(targetBlock);
-		if (!seg.isTerminate()) return true;
-
-		for (int i = 0; i < segments.size(); i++) {
+		// targetBlock-1 : 有机会走到这个长度为0的StaticSegment
+		if (seg.length() > 0 ? !seg.isTerminate() : targetBlock == 0 || !segments.get(targetBlock-1).isTerminate()) return true;
+		for (int i = 1; i < segments.size(); i++) {
 			if (segments.get(i).willJumpTo(targetBlock, seg.length())) return true;
 		}
 		return false;

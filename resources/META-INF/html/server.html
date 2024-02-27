@@ -73,7 +73,7 @@
     <script type="text/javascript">
         $(function() {
             ui.v();
-            
+
             var t = "main",
                 o = -1,
                 e = ["B", "KB", "MB", "GB", "TB"],
@@ -115,7 +115,7 @@
             }
             $("#btnBack").on("click", a), $("#room_list_t").delegate("click", "a.goto", function(e) {
                 t = "room", $("#room_name").text(o = $(e.target).parent().find("span").text()), $("#main").hide(), $("#room_info").show(), r()
-            }), 
+            }),
 
             $(".btn-op").on("click", function(t) {
                 "SPAN" == (t = $(t.target))[0].nodeName && (t = t.parent());

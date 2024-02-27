@@ -1,5 +1,6 @@
 package roj.archive;
 
+import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.util.ByteList;
@@ -14,7 +15,7 @@ import java.io.IOException;
  * @author Roj234
  * @since 2023/3/15 0015 8:34
  */
-public interface ArchiveWriter extends Closeable {
+public interface ArchiveWriter extends Closeable, Finishable {
 	ArchiveEntry createEntry(String fileName);
 
 	void copy(ArchiveFile owner, ArchiveEntry entry) throws IOException;
@@ -22,7 +23,6 @@ public interface ArchiveWriter extends Closeable {
 	default void write(ArchiveEntry entry, DynByteBuf data) throws IOException {
 		beginEntry(entry);
 		if (!data.hasArray()) {
-			BufferPool pool = BufferPool.localPool();
 			try (ByteList bb = (ByteList) BufferPool.buffer(false,Math.min(data.readableBytes(),1024))) {
 				while (data.isReadable()) {
 					bb.put(data, Math.min(data.readableBytes(),1024));

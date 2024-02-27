@@ -10,9 +10,7 @@ import roj.text.TextUtil;
  * @since 2021/7/7 0:43
  */
 public final class CDate extends CLong {
-	public CDate(long value) {
-		super(value);
-	}
+	public CDate(long value) { super(value); }
 
 	/**
 	 * 2020-(0)1-10
@@ -32,12 +30,9 @@ public final class CDate extends CLong {
 
 	@NotNull
 	@Override
-	public Type getType() {
-		return Type.DATE;
-	}
-
+	public Type getType() { return Type.DATE; }
 	@Override
-	public void forEachChild(CVisitor ser) {
-		ser.valueDate(value);
-	}
+	public boolean mayCastTo(Type o) { return o == Type.DATE; }
+	@Override
+	public void accept(CVisitor ser) { ser.valueDate(value); }
 }

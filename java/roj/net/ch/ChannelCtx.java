@@ -4,7 +4,6 @@ import roj.collect.SimpleList;
 import roj.io.buf.BufferPool;
 import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
-import roj.util.Identifier;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -27,7 +26,6 @@ public final class ChannelCtx {
 	}
 
 	public MyChannel channel() { return root; }
-	public void invokeLater(Runnable r) { root.invokeLater(r); }
 
 	public SocketAddress remoteAddress() { return root.remoteAddress(); }
 	public SocketAddress localAddress() { return root.localAddress(); }
@@ -52,23 +50,25 @@ public final class ChannelCtx {
 
 	public void channelWrite(Object data) throws IOException {
 		if (prev != null) prev.handler.channelWrite(prev, data);
-		else root.write(data);
+		else {
+			if (!root.lock.isHeldByCurrentThread()) throw new IllegalStateException("Call MyChannel#fireChannelWrite or lock()");
+			root.write(data);
+		}
 	}
 
-	public void pauseAndFlush() { root.pauseAndFlush(); }
-	public void flush() throws IOException { root.flush(); }
-	public boolean isPendingSend() { return root.isPendingSend(); }
+	public void pauseAndFlush() {root.pauseAndFlush();}
+	public void flush() throws IOException {root.flush();}
+	public boolean isFlushing() {return root.isFlushing();}
 
 	public void channelRead(Object data) throws IOException {
 		if (next != null) next.handler.channelRead(next, data);
 	}
 
-	public Event postEvent(Identifier key) throws IOException {
-		Event event = new Event(key);
+	public Event postEvent(String id) throws IOException {
+		Event event = new Event(id);
 		postEvent(event);
 		return event;
 	}
-
 	public void postEvent(Event event) throws IOException { root.postEvent(event); }
 
 	public void exceptionCaught(Throwable ex) throws Exception {

@@ -1,16 +1,16 @@
 package roj.util;
 
-import roj.config.word.Tokenizer;
+import roj.compiler.plugins.asm.ASM;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.text.CharList;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 
 import java.awt.*;
 import java.awt.datatransfer.*;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.function.ToIntFunction;
 
 import static roj.reflect.ReflectionUtils.u;
@@ -29,7 +29,7 @@ public final class ArrayUtil {
 	private static H SCOPED_MEMORY_ACCESS;
 	static {
 		try {
-			SCOPED_MEMORY_ACCESS = DirectAccessor.builder(H.class).inline().delegate(Class.forName("jdk.internal.util.ArraysSupport"), "vectorizedMismatch").build();
+			SCOPED_MEMORY_ACCESS = Bypass.builder(H.class).inline().delegate(Class.forName("jdk.internal.util.ArraysSupport"), "vectorizedMismatch").build();
 		} catch (Throwable ignored) {}
 	}
 
@@ -48,7 +48,7 @@ public final class ArrayUtil {
 		if (br.readableBits() > 0) sb.append((char) (br.readBit(br.readableBits())+1));
 
 		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(Tokenizer.addSlashes(sb, 0, new CharList().append('"'), '\'').append('"').toStringAndFree()), null);
-		CLIUtil.pause();
+		Terminal.pause();
 	}
 
 	private static ByteList UnBase128(String s) {
@@ -117,7 +117,7 @@ public final class ArrayUtil {
 										 int log2ArrayIndexScale) {
 		int i = 0;
 		// 当null时也就意味着是Java8 ... 无法确定处理器是否支持不对齐访问呢
-		if (length > 7 && SCOPED_MEMORY_ACCESS != null) {
+		if (length > (8 >> log2ArrayIndexScale) - 1 && SCOPED_MEMORY_ACCESS != null) {
 			if (u.getByte(a, aOffset) != u.getByte(b, bOffset))
 				return 0;
 			i = SCOPED_MEMORY_ACCESS.vectorizedMismatch(a, aOffset, b, bOffset, length, log2ArrayIndexScale);
@@ -193,5 +193,17 @@ public final class ArrayUtil {
 	public static void checkRange(byte[] b, int off, int len) {
 		if ((off|len|(off+len)) < 0 || off + len > b.length)
 			throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+b.length);
+	}
+
+	private static final Class<?> IMMUTABLE_ARRAY_TYPE = Arrays.asList().getClass();
+	@SuppressWarnings("unchecked")
+	public static <T> List<T> copyOf(Collection<T> list) {
+		if (list.isEmpty()) return Collections.emptyList();
+		if (list.getClass() == IMMUTABLE_ARRAY_TYPE) return (List<T>) list;
+		if (ASM.TARGET_JAVA_VERSION > 9) {
+			return List.copyOf(list);
+		} else {
+			return (List<T>) Arrays.asList(list.toArray());
+		}
 	}
 }

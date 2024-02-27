@@ -1,11 +1,7 @@
 package roj.config.data;
 
-import org.jetbrains.annotations.NotNull;
-import roj.config.NBTParser;
-import roj.config.VinaryParser;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
-import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
@@ -14,85 +10,43 @@ import roj.util.DynByteBuf;
 public final class CDouble extends CEntry {
 	public double value;
 
-	public CDouble(double number) {
-		this.value = number;
+	public CDouble(double number) { this.value = number; }
+	public static CDouble valueOf(double number) { return new CDouble(number); }
+	public static CDouble valueOf(String number) { return valueOf(Double.parseDouble(number)); }
+
+	public Type getType() { return Type.DOUBLE; }
+	public boolean eqVal(CEntry o) { return Double.compare(value, o.asDouble()) == 0; }
+	public boolean mayCastTo(Type o) {
+		//                          TDFLISBZNsML
+		if (((1 << o.ordinal()) & 0b011000000100) != 0) return true;
+		return switch (o) {
+			case Int1 -> value >= -128 && value <= 127;
+			case Int2 -> value >= -32768 && value <= 32767;
+			case INTEGER -> value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE;
+			case LONG -> value >= Long.MIN_VALUE && value <= Long.MAX_VALUE;
+			default -> false;
+		};
 	}
 
-	public static CDouble valueOf(double number) {
-		return new CDouble(number);
-	}
+	public int asInteger() { return value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE ? (int) value : super.asInteger(); }
+	public long asLong() { return value >= Long.MIN_VALUE && value <= Long.MAX_VALUE ? (long) value : super.asLong(); }
+	public float asFloat() { return (float) value; }
+	public double asDouble() { return value; }
+	public String asString() { return String.valueOf(value); }
 
-	public static CDouble valueOf(String number) {
-		return valueOf(Double.parseDouble(number));
-	}
+	public void accept(CVisitor ser) { ser.value(value); }
+	public Object raw() { return value; }
 
-	@Override
-	public double asDouble() {
-		return value;
-	}
+	public CharList toJSON(CharList sb, int depth) { return sb.append(value); }
 
-	@Override
-	public int asInteger() {
-		return (int) value;
+	public int hashCode() {
+		long l = Double.doubleToRawLongBits(value);
+		return (int) (l ^ (l >>> 32));
 	}
-
-	@Override
-	public long asLong() {
-		return (long) value;
-	}
-
-	@NotNull
-	@Override
-	public Type getType() {
-		return Type.DOUBLE;
-	}
-
-	@NotNull
-	@Override
-	public String asString() {
-		return String.valueOf(value);
-	}
-
-	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 		CDouble that = (CDouble) o;
 		return Double.compare(that.value, value) == 0;
-	}
-
-	@Override
-	public boolean isSimilar(CEntry o) {
-		return o.getType() == Type.DOUBLE || (o.getType().isSimilar(Type.DOUBLE) && o.asDouble() == value);
-	}
-
-	@Override
-	public int hashCode() {
-		return Float.floatToIntBits((float) value);
-	}
-
-	@Override
-	public CharList toJSON(CharList sb, int depth) {
-		return sb.append(value);
-	}
-
-	@Override
-	public byte getNBTType() {
-		return NBTParser.DOUBLE;
-	}
-
-	@Override
-	public Object unwrap() {
-		return value;
-	}
-
-	@Override
-	protected void toBinary(DynByteBuf w, VinaryParser struct) {
-		w.put((byte) Type.DOUBLE.ordinal()).putDouble(value);
-	}
-
-	@Override
-	public void forEachChild(CVisitor ser) {
-		ser.value(value);
 	}
 }

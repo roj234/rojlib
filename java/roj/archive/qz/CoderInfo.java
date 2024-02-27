@@ -5,21 +5,20 @@ import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.io.Finishable;
 import roj.io.IOUtil;
-import roj.util.ArrayCache;
 import roj.util.ByteList;
-import roj.util.DirectByteList;
 import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Roj234
  * @since 2023/5/30 0030 17:50
  */
-final class CoderInfo {
+final class CoderInfo extends QZCoder {
 	private final QZCoder self;
 	final Object[] uses;
 	final int provides;
@@ -30,9 +29,9 @@ final class CoderInfo {
 
 	CoderInfo(QZCoder c, int sizeId) {
 		self = c;
-		if (c instanceof QZComplexCoder) {
-			uses = new Object[((QZComplexCoder) c).useCount()];
-			provides = ((QZComplexCoder) c).provideCount();
+		if (c instanceof QZComplexCoder cc) {
+			uses = new Object[cc.useCount()];
+			provides = cc.provideCount();
 		} else {
 			uses = new Object[1];
 			provides = 1;
@@ -40,36 +39,55 @@ final class CoderInfo {
 		this.sizeId = sizeId;
 	}
 
+	@Override byte[] id() {return null;}
+	@Override public InputStream decode(InputStream a, byte[] b, long c, AtomicInteger d) throws IOException {throw new IllegalArgumentException("CoderInfo应该由根节点解压，而不是QZCoder，这是编程错误。");}
+	@Override public OutputStream encode(OutputStream a) throws IOException {throw new IllegalArgumentException("CoderInfo应该由根节点压缩，而不是QZCoder，这是编程错误。");}
+
 	@Override
 	public String toString() { return String.valueOf(sizeId)+'#'+self; }
 
-	InputStream[] getInputStream(long[] outSizes, InputStream[] fs, Map<CoderInfo, InputStream[]> buffer, byte[] pass, int memory) throws IOException {
-		InputStream[] assoc = new InputStream[uses.length];
+	public boolean hasProcessor(Class<? extends QZCoder> type) {
+		if (type.isInstance(self)) return true;
+		for (Object o : uses) {
+			if (o.getClass() == Integer.class) {
+				continue;
+			} else if (o.getClass() == CoderInfo.class) {
+				if (((CoderInfo) o).hasProcessor(type)) return true;
+			} else {
+				IntMap.Entry<CoderInfo> entry = Helpers.cast(o);
+				if (entry.getValue().hasProcessor(type)) return true;
+			}
+		}
+		return false;
+	}
+
+	InputStream[] getInputStream(long[] outSizes, InputStream[] fs, Map<CoderInfo, InputStream[]> buffer, byte[] pass, AtomicInteger memoryLimit) throws IOException {
+		var assoc = new InputStream[uses.length];
 		for (int i = 0; i < uses.length; i++) {
 			Object o = uses[i];
 			if (o.getClass() == Integer.class) {
 				assoc[i] = fs[(int) o];
 			} else if (o.getClass() == CoderInfo.class) {
-				InputStream[] arr = buffer.get(o);
+				var arr = buffer.get(o);
 				if (arr == null) {
-					arr = ((CoderInfo) o).getInputStream(outSizes, fs, buffer, pass, memory);
+					arr = ((CoderInfo) o).getInputStream(outSizes, fs, buffer, pass, memoryLimit);
 					buffer.put((CoderInfo) o, arr);
 				}
 				assoc[i] = arr[0];
 			} else {
 				IntMap.Entry<CoderInfo> entry = Helpers.cast(o);
-				InputStream[] arr = buffer.get(entry.getValue());
+				var arr = buffer.get(entry.getValue());
 				if (arr == null) {
-					arr = entry.getValue().getInputStream(outSizes, fs, buffer, pass, memory);
+					arr = entry.getValue().getInputStream(outSizes, fs, buffer, pass, memoryLimit);
 					buffer.put(entry.getValue(), arr);
 				}
 				assoc[i] = arr[entry.getIntKey()];
 			}
 		}
 
-		return self instanceof QZComplexCoder
-			? ((QZComplexCoder) self).complexDecode(assoc, outSizes, sizeId)
-			: new InputStream[] {self.decode(assoc[0], pass, outSizes[sizeId], memory)};
+		return self instanceof QZComplexCoder cc
+			? cc.complexDecode(assoc, outSizes, sizeId, memoryLimit)
+			: new InputStream[] {self.decode(assoc[0], pass, outSizes[sizeId], memoryLimit)};
 	}
 
 	OutputStream getOutputStream(WordBlock b, OutputStream out) throws IOException {
@@ -86,7 +104,7 @@ final class CoderInfo {
 		final WordBlock owner;
 		final OutputStream os;
 
-		private final DirectByteList oa;
+		private final ByteList oa;
 
 		private final int offset;
 
@@ -94,7 +112,7 @@ final class CoderInfo {
 			this.owner = owner;
 			this.offset = countOffset-1;
 			this.os = null;
-			this.oa = DirectByteList.allocateDirect(1024);
+			this.oa = ByteList.allocate(1024);
 		}
 
 		Chunk(WordBlock owner, OutputStream out) {
@@ -125,20 +143,7 @@ final class CoderInfo {
 		}
 
 		void drain(OutputStream s) throws IOException {
-			if (os == null) {
-				byte[] b = ArrayCache.getByteArray(1024, false);
-				try {
-					while (true) {
-						int len = Math.min(b.length, oa.readableBytes());
-						if (len == 0) break;
-						oa.read(b,0,len);
-						s.write(b,0,len);
-					}
-				} finally {
-					oa._free();
-					ArrayCache.putArray(b);
-				}
-			}
+			if (os == null) oa.writeToStream(s);
 		}
 	}
 	static final class Composer extends OutputStream implements Finishable {
@@ -170,13 +175,13 @@ final class CoderInfo {
 	}
 
 	private OutputStream[] getOutputStreams(WordBlock b, OutputStream[] fs, Map<CoderInfo, OutputStream[]> buffer) throws IOException {
-		OutputStream[] assoc = new OutputStream[uses.length];
+		var assoc = new OutputStream[uses.length];
 		for (int i = 0; i < uses.length; i++) {
 			Object o = uses[i];
 			if (o.getClass() == Integer.class) {
 				assoc[i] = fs[(int) o];
 			} else if (o.getClass() == CoderInfo.class) {
-				OutputStream[] arr = buffer.get(o);
+				var arr = buffer.get(o);
 				if (arr == null) {
 					arr = ((CoderInfo) o).getOutputStreams(b, fs, buffer);
 					buffer.put((CoderInfo) o, arr);
@@ -184,7 +189,7 @@ final class CoderInfo {
 				assoc[i] = arr[0];
 			} else {
 				IntMap.Entry<CoderInfo> entry = Helpers.cast(o);
-				OutputStream[] arr = buffer.get(entry.getValue());
+				var arr = buffer.get(entry.getValue());
 				if (arr == null) {
 					arr = entry.getValue().getOutputStreams(b, fs, buffer);
 					buffer.put(entry.getValue(), arr);
@@ -193,8 +198,8 @@ final class CoderInfo {
 			}
 		}
 
-		OutputStream[] streams = self instanceof QZComplexCoder
-			? ((QZComplexCoder) self).complexEncode(assoc) // actually provides
+		var streams = self instanceof QZComplexCoder cc
+			? cc.complexEncode(assoc) // actually provides
 			: new OutputStream[] {self.encode(assoc[0])};
 
 		if (sizeId >= 0) {
@@ -212,10 +217,10 @@ final class CoderInfo {
 	void writeCoder(WordBlock b, ByteList buf) {
 		ByteList w = IOUtil.getSharedByteBuf();
 
-		CoderInfo[] sortedInfo = (CoderInfo[]) b.tmp;
-		buf.putVUInt(sortedInfo.length);
+		var sorted = (CoderInfo[]) b.coder;
+		buf.putVUInt(sorted.length);
 
-		for (CoderInfo c : sortedInfo) {
+		for (CoderInfo c : sorted) {
 			w.clear();
 			c.self.writeOptions(w);
 
@@ -237,17 +242,17 @@ final class CoderInfo {
 		int used = 0;
 		int[] blocks = new int[b.extraSizes.length+1];
 
-		for (CoderInfo c : sortedInfo) {
+		for (var c : sorted) {
 			Object[] uses = c.uses;
 			for (int j = 0; j < uses.length; j++) {
 				Object o = uses[j];
 				if (o.getClass() == CoderInfo.class) {
-					buf.putVUInt(j+used);
-					buf.putVUInt(outputIndex(sortedInfo, (CoderInfo) o));
+					buf.putVUInt(j+used)
+					   .putVUInt(outputIndex(sorted, (CoderInfo) o));
 				} else if (o.getClass() != Integer.class) {
-					buf.putVUInt(j+used);
 					IntMap.Entry<CoderInfo> entry = Helpers.cast(o);
-					buf.putVUInt(outputIndex(sortedInfo, entry.getValue()) + entry.getIntKey());
+					buf.putVUInt(j+used)
+					   .putVUInt(outputIndex(sorted, entry.getValue()) + entry.getIntKey());
 				} else {
 					blocks[(int)o] = j+used;
 				}
@@ -275,13 +280,13 @@ final class CoderInfo {
 		return sid;
 	}
 
-	public int setUSizeId(WordBlock b) {
+	int initSizeId(WordBlock b) {
 		assert sizeId >= 0;
 		int id = sizeId;
 		sizeId = -1;
 
-		CoderInfo[] sortedCodersMy = (CoderInfo[]) b.tmp;
-		for (CoderInfo use : sortedCodersMy) {
+		var sorted = (CoderInfo[]) b.coder;
+		for (CoderInfo use : sorted) {
 			if (use.sizeId > id) use.sizeId--;
 		}
 

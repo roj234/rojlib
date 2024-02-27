@@ -11,7 +11,7 @@ public class LoggingStream extends DelegatedPrintStream {
 
 	@Deprecated
 	public LoggingStream() { this(Logger.getLogger("STDOUT")); }
-	public LoggingStream(Logger l) { super(9999); logger = l; }
+	public LoggingStream(Logger l) { super(); logger = l; }
 
 	@Override
 	protected void newLine() { logger.log(Level.INFO, sb, null); sb.clear(); }

@@ -7,24 +7,17 @@ import roj.util.Helpers;
 
 import java.nio.file.attribute.FileTime;
 
-import static roj.archive.zip.ZEntry.*;
-
 /**
  * @author Roj234
  * @since 2023/3/14 0014 7:56
  */
-public class QZEntry implements ArchiveEntry, Cloneable {
+public sealed class QZEntry implements ArchiveEntry, Cloneable permits QZEntryA {
 	String name;
 
     byte flag;
-
     static final int
-        EMPTY = 1, DIRECTORY = 2, ANTI = 4,
-        CT = 8, AT = 16, MT = 32, ATTR = 64,
-        CRC = 128;
-
-    long accessTime, createTime, modifyTime;
-    int attributes;
+        CT = 1, AT = 2, MT = 4, ATTR = 8,
+        DIRECTORY = 16, CRC = 32, ANTI = 64;
 
     int crc32;
     long uSize;
@@ -35,90 +28,50 @@ public class QZEntry implements ArchiveEntry, Cloneable {
     QZEntry next;
 
     QZEntry() {}
-    public QZEntry(String name) { this.name = name; }
-    public QZEntry(String name, long expectSize) {
-        this.name = name;
-        this.uSize = expectSize;
-    }
+    QZEntry(String name) {this.name = name;}
 
-    public void _setSize(long size) { uSize = size; }
-    public void _setCrc(int crc) {
-        crc32 = crc;
-        flag |= CRC;
-    }
+    public static QZEntry of(String name) {return new QZEntryA(name);}
+    public static QZEntry ofNoAttribute(String name) {return new QZEntry(name);}
 
-    public final String getName() { return name; }
-    public final void setName(String s) { name = s; }
+    public void _setSize(long size) {uSize = size;}
+    public void _setCrc(int crc) {crc32 = crc;flag |= CRC;}
 
-    public final long getSize() { return uSize; }
-    public final long getCompressedSize() { return block == null ? 0 : block.fileCount == 1 ? block.size() : -1; }
+    public final String getName() {return name;}
+    public final void setName(String s) {name = s;}
 
-    public final boolean isEncrypted() { return block != null && block.hasProcessor(QzAES.class); }
+    public final long getSize() {return uSize;}
+    public final long getCompressedSize() {return block == null ? 0 : block.fileCount == 1 ? block.size() : -1;}
 
-    public final long getAccessTime() { return winTime2JavaTime(accessTime); }
-    public final long getCreationTime() { return winTime2JavaTime(createTime); }
-    public final long getModificationTime() {  return winTime2JavaTime(modifyTime); }
+    public final boolean hasCrc32() {return (flag&CRC) != 0;}
+    public final int getCrc32() {return crc32;}
+    public final WordBlock block() {return block;}
+    public final long offset() {return offset;}
+    public final boolean isEncrypted() {return block != null && block.hasProcessor(QzAES.class);}
 
-    public FileTime getPrecisionAccessTime() { return !hasAccessTime() ? null : winTime2FileTime(accessTime); }
-    public FileTime getPrecisionCreationTime() { return !hasCreationTime() ? null : winTime2FileTime(createTime); }
-    public FileTime getPrecisionModificationTime() { return !hasModificationTime() ? null : winTime2FileTime(modifyTime); }
+    public long getAccessTime() {return 0;}
+    public long getCreationTime() {return 0;}
+    public long getModificationTime() {return 0;}
+    public int getAttributes() {return 0;}
 
-    public final int getAttributes() { return attributes; }
-    public final boolean hasAccessTime() { return (flag&AT) != 0; }
-    public final boolean hasCreationTime() { return (flag&CT) != 0; }
-    public final boolean hasModificationTime() { return (flag&MT) != 0; }
-    public final boolean hasAttributes() { return (flag&ATTR) != 0; }
-    public final boolean isDirectory() { return (flag&DIRECTORY) != 0; }
-    public final boolean isAntiItem() { return (flag & ANTI) != 0; }
+    public FileTime getPrecisionAccessTime() {return null;}
+    public FileTime getPrecisionCreationTime() {return null;}
+    public FileTime getPrecisionModificationTime() {return null;}
 
-    public final void setAccessTime(long t) {
-        if (t == 0) flag &= ~AT;
-        else {
-            accessTime = java2WinTime(t);
-            flag |= AT;
-        }
-    }
-    public final void setCreationTime(long t) {
-        if (t == 0) flag &= ~CT;
-        else {
-            createTime = java2WinTime(t);
-            flag |= CT;
-        }
-    }
-    public final void setModificationTime(long t) {
-        if (t == 0) flag &= ~MT;
-        else {
-            modifyTime = java2WinTime(t);
-            flag |= MT;
-        }
-    }
-    public final void setPrecisionAccessTime(FileTime t) {
-        if (t == null) flag &= ~AT;
-        else {
-            accessTime = fileTime2WinTime(t);
-            flag |= AT;
-        }
-    }
-    public final void setPrecisionCreationTime(FileTime t) {
-        if (t == null) flag &= ~CT;
-        else {
-            createTime = fileTime2WinTime(t);
-            flag |= CT;
-        }
-    }
-    public final void setPrecisionModificationTime(FileTime t) {
-        if (t == null) flag &= ~MT;
-        else {
-            modifyTime = fileTime2WinTime(t);
-            flag |= MT;
-        }
-    }
+    public final boolean hasAccessTime() {return (flag&AT) != 0;}
+    public final boolean hasCreationTime() {return (flag&CT) != 0;}
+    public final boolean hasModificationTime() {return (flag&MT) != 0;}
+    public final boolean hasAttributes() {return (flag&ATTR) != 0;}
+    public final boolean isDirectory() {return (flag&DIRECTORY) != 0;}
+    public final boolean isAntiItem() {return (flag & ANTI) != 0;}
 
-    // int DIRECTORY = 16, READONLY = 1, HIDDEN = 2, ARCHIVE = 32;
-    public final void setAttributes(int attr) {
-        attributes = attr;
-        flag |= ATTR;
-    }
+    public void setAccessTime(long t) {throw getException();}
+    public void setCreationTime(long t) {throw getException();}
+    public void setModificationTime(long t) {throw getException();}
+    public void setPrecisionAccessTime(FileTime t) {throw getException();}
+    public void setPrecisionCreationTime(FileTime t) {throw getException();}
+    public void setPrecisionModificationTime(FileTime t) {throw getException();}
+    public void setAttributes(int attr) {throw getException();}
+    private static UnsupportedOperationException getException() {return new UnsupportedOperationException("属性已被忽略");}
     public final void setIsDirectory(boolean directory) {
         if (directory) flag |= DIRECTORY;
         else flag &= ~DIRECTORY;
@@ -127,11 +80,6 @@ public class QZEntry implements ArchiveEntry, Cloneable {
         if (anti) flag |= ANTI;
         else flag &= ~ANTI;
     }
-
-    public WordBlock getBlock() { return block; }
-    public long getOffset() { return offset; }
-    public boolean hasCrc32() { return (flag&CRC) != 0; }
-    public int getCrc32() { return crc32; }
 
     @Override
     public String toString() {
@@ -160,12 +108,27 @@ public class QZEntry implements ArchiveEntry, Cloneable {
 
     private void appendWindowsAttribute(CharList sb) {
         int len = sb.length();
+        var attributes = getAttributes();
         if ((attributes&   1) != 0) sb.append("只读|");
         if ((attributes&   2) != 0) sb.append("隐藏|");
         if ((attributes&   4) != 0) sb.append("系统|");
         if ((attributes&  32) != 0) sb.append("存档|");
         if ((attributes&1024) != 0) sb.append("链接|");
         if (sb.length() > len) sb.setLength(sb.length()-1);
+    }
+
+    @Override
+    public final int hashCode() {return name.hashCode();}
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        QZEntry entry = (QZEntry) o;
+
+        if (offset != entry.offset) return false;
+        if (!name.equals(entry.name)) return false;
+        return block == entry.block;
     }
 
     @Override

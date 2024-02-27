@@ -206,7 +206,7 @@ public abstract class MSSEngine {
 				flag = 1;
 			} else {
 				for (byte b : signLocal)
-					flag |= b ^ in.get();
+					flag |= b ^ in.readByte();
 			}
 		}
 

@@ -13,14 +13,14 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class LDStream implements LogDestination {
 	private final ReentrantLock lock;
-	private final TextWriter out;
+	private final Appendable out;
 
 	public static LDStream of(OutputStream out) { return new LDStream(out, null); }
 	public static LDStream of(OutputStream out, Charset cs) { return new LDStream(out, cs); }
 
 	public LDStream(OutputStream os, Charset charset) {
-		lock = new ReentrantLock(true);
-		out = new TextWriter(os, charset);
+		lock = new ReentrantLock();
+		out = os instanceof Appendable p ? p : new TextWriter(os, charset);
 	}
 
 	@Override
@@ -32,7 +32,8 @@ public class LDStream implements LogDestination {
 	@Override
 	public void unlockAndFlush() throws IOException {
 		try {
-			out.flush();
+			if (out instanceof TextWriter tw)
+				tw.flush();
 		} finally {
 			lock.unlock();
 		}

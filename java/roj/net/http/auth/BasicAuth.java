@@ -1,7 +1,6 @@
 package roj.net.http.auth;
 
 import roj.crypt.Base64;
-import roj.io.IOUtil;
 import roj.util.ByteList;
 
 /**
@@ -23,7 +22,7 @@ public class BasicAuth implements AuthScheme {
 
 	@Override
 	public String check(String header) {
-		ByteList out = IOUtil.ddLayeredByteBuf();
+		ByteList out = new ByteList();
 		String auth = Base64.decode(header, out).readUTF(out.readableBytes());
 		out._free();
 
@@ -35,8 +34,8 @@ public class BasicAuth implements AuthScheme {
 
 	@Override
 	public String send() {
-		ByteList in = IOUtil.ddLayeredByteBuf().putUTFData(user).put(':').putUTFData(pass);
-		ByteList out = IOUtil.ddLayeredByteBuf();
+		ByteList in = new ByteList().putUTFData(user).put(':').putUTFData(pass);
+		ByteList out = new ByteList();
 		String auth = Base64.encode(in, out).toString();
 		in._free();
 		out._free();

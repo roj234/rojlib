@@ -1,12 +1,16 @@
 package roj.net.http;
 
-import roj.collect.*;
-import roj.concurrent.FastThreadLocal;
+import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
+import roj.collect.ToIntMap;
 import roj.concurrent.OperationDone;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
-import roj.net.URIUtil;
+import roj.net.http.server.HttpCache;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
+import roj.text.Escape;
 import roj.text.LineReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
@@ -82,8 +86,8 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			String s = queries.get(i);
 			int j = s.indexOf('=');
 			try {
-				if (j == -1) map.put(URIUtil.decodeURI(s), "");
-				else map.put(URIUtil.decodeURI(s.substring(0, j)), URIUtil.decodeURI(s.substring(j+1)));
+				if (j == -1) map.put(Escape.decodeURI(s), "");
+				else map.put(Escape.decodeURI(s.substring(0, j)), Escape.decodeURI(s.substring(j+1)));
 			} catch (MalformedURLException e) {
 				if (throwOrSkip) throw e;
 			}
@@ -101,7 +105,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			if (flag == 1) {
 				if (c == '"') {
 					if (k == null) throw new IllegalArgumentException("Escaped key");
-					kvs.accept(URIUtil.decodeURI(k), Sub(field, j, i - 1));
+					kvs.accept(Escape.decodeURI(k), Sub(field, j, i - 1));
 					j = i;
 					k = null;
 					flag = 2;
@@ -129,7 +133,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 					case ',':
 					case ';':
 						if (k != null) {
-							kvs.accept(URIUtil.decodeURI(k), Sub(field, j, i - 1));
+							kvs.accept(Escape.decodeURI(k), Sub(field, j, i - 1));
 							k = null;
 						} else {
 							if (i - 1 > j) kvs.accept(Sub(field, j, i - 1), "");
@@ -143,7 +147,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		}
 
 		if (k != null) {
-			kvs.accept(URIUtil.decodeURI(k), Sub(field, j, i));
+			kvs.accept(Escape.decodeURI(k), Sub(field, j, i));
 		} else if (i > j) {
 			kvs.accept(Sub(field, j, i).toLowerCase(Locale.ROOT), "");
 		}
@@ -151,9 +155,9 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			if (throwOrSkip) Helpers.athrow(e);
 		}
 	}
-	private static String Sub(CharSequence c, int s, int e) throws MalformedURLException { return URIUtil.decodeURI(c.subSequence(s, e)); }
+	private static String Sub(CharSequence c, int s, int e) throws MalformedURLException { return Escape.decodeURI(c.subSequence(s, e)); }
 
-	public Headers() {}
+	public Headers() { super(4); }
 	public Headers(CharSequence data) { putAllS(data); }
 	public Headers(Map<CharSequence, String> data) {
 		putAll(data);
@@ -252,7 +256,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 				try {
 					if (cookie != null) cookie.clearDirty();
-					cookie = new Cookie(URIUtil.decodeURI(k), URIUtil.decodeURI(v));
+					cookie = new Cookie(Escape.decodeURI(k), Escape.decodeURI(v));
 					cookies.add(cookie);
 				} catch (MalformedURLException e) {
 					cookie = new Cookie("invalid");
@@ -274,9 +278,12 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		if (cookies.isEmpty()) return;
 
 		E entry = (E) getOrCreateEntry("set-cookie");
-		if (entry.v == UNDEFINED) size++;
+		if (entry.k == UNDEFINED) {
+			entry.k = "set-cookie";
+			size++;
+		}
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		cookies.get(0).write(sb, true);
 		entry.setValue(sb.toString());
 
@@ -296,7 +303,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 		Iterator<Cookie> itr = cookies.iterator();
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		while (true) {
 			itr.next().write(sb, false);
 			if (!itr.hasNext()) break;
@@ -353,31 +360,28 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	public AbstractEntry<CharSequence, String> getEntry(CharSequence key) { return super.getEntry(lower(key)); }
 	public AbstractEntry<CharSequence, String> getOrCreateEntry(CharSequence key) { return super.getOrCreateEntry(lower(key)); }
 
-	private static final FastThreadLocal<ObjectPool<E>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(null, 128));
-
 	@Override
 	protected AbstractEntry<CharSequence, String> useEntry() {
-		E entry = Helpers.cast(MY_OBJECT_POOL.get().get());
+		E entry = Helpers.cast(HttpCache.getInstance().headers.pop());
 
 		if (entry == null) entry = new E();
 		entry.k = entry.v = Helpers.cast(UNDEFINED);
 		return entry;
 	}
 	@Override
-	protected void reserveEntry(AbstractEntry<?, ?> entry) {
+	protected void onDel(AbstractEntry<CharSequence, String> entry) {
 		E e = (E) entry;
 		e.k = null;
-		e.v = null;
 		e.next = null;
 		e.all.clear();
-		MY_OBJECT_POOL.get().reserve(e);
+		HttpCache.getInstance().headers.add(e);
 	}
 
 	@Override
 	protected void onPut(AbstractEntry<CharSequence, String> entry, String newV) {
 		checkVal(newV);
 
-		if (entry.getValue() == IntMap.UNDEFINED) {
+		if (entry.getValue() == UNDEFINED) {
 			entry.k = dedup.find(lower(entry.k)).toString();
 			checkKey(entry.k);
 		}
@@ -388,7 +392,8 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		checkVal(value);
 
 		E e = (E) getOrCreateEntry(key);
-		if (e.v == IntMap.UNDEFINED) {
+		if (e.k == UNDEFINED) {
+			e.k = lower(key).toString();
 			e.v = value;
 			size++;
 		} else {
@@ -401,7 +406,10 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		checkVal(value);
 
 		E e = (E) getOrCreateEntry(key);
-		if (e.v == IntMap.UNDEFINED) size++;
+		if (e.k == UNDEFINED) {
+			e.k = lower(key);
+			size++;
+		}
 		e.all = Collections.emptyList();
 		e.v = value;
 	}
@@ -411,7 +419,10 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			checkVal(value.get(i));
 
 		E e = (E) getOrCreateEntry(key);
-		if (e.v == IntMap.UNDEFINED) size++;
+		if (e.k == UNDEFINED) {
+			e.k = lower(key);
+			size++;
+		}
 		if (value.size() == 1) {
 			e.all = Collections.emptyList();
 		} else {
@@ -458,45 +469,78 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 	public final void encode(Appendable sb) {
 		try {
-			for (Iterator<Map.Entry<CharSequence, String>> it = entrySet().iterator(); it.hasNext(); ) {
+			for (var it = entrySet().iterator(); it.hasNext(); ) {
 				E entry = (E) it.next();
-				h(sb, entry, entry.getValue());
+				var key = entry.getKey();
+
+				char c = key.charAt(0);
+				int offset = c == ':' || c == '*' || c == '^' ? 1 : 0;
+
+				h(sb, key, offset, entry.getValue());
 
 				List<String> all = entry.all;
-				for (int i = 0; i < all.size(); i++) h(sb, entry, all.get(i));
+				for (int i = 0; i < all.size(); i++) {
+					h(sb, key, offset, all.get(i));
+				}
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
 	}
-	private static Appendable h(Appendable sb, E entry, String value) throws IOException { return sb.append(entry.getKey()).append(value.isEmpty()?":":": ").append(value).append("\r\n"); }
+	private static Appendable h(Appendable sb, CharSequence key, int off, String value) throws IOException {return sb.append(key, off, key.length()).append(value.isEmpty()?":":": ").append(value).append("\r\n");}
 
 	private static void checkKey(CharSequence key) {
 		for (int i = 0; i < key.length(); i++) {
 			char c = key.charAt(i);
-			if (c < 0x20 || c == 0x3a || c >= 0x7f) {
+			if (c <= 0x20 || c == 0x3a || c >= 0x7f) {
+				if (i == 0 && c == ':' && key.length() > 1) continue;
 				illegalChar(key, i, c);
 			}
 		}
 	}
-
 	private static void checkVal(CharSequence val) {
+		int found = -1;
 		for (int i = 0; i < val.length(); i++) {
-			char c = val.charAt(i);
-			if (c < 0x20 && c != '\t') {
-				illegalChar(val, i, c);
+			var c = val.charAt(i);
+			if (c == 0 || c == '\r' || c == '\n') illegalChar(val, i, c);
+
+			if (c == ' ' || c == '\t') {
+				if (found < 0) illegalChar(val, i, c);
+			} else {
+				found = i;
 			}
 		}
+		if (found != val.length()-1) illegalChar(val, ++found, val.charAt(found));
 	}
-
-	private static void illegalChar(CharSequence key, int i, char c) {
-		throw new IllegalArgumentException("HTTP头/无效字符 #"+(int)c+" 偏移 "+i+" 内容 "+ Tokenizer.addSlashes(key));
-	}
+	private static void illegalChar(CharSequence key, int i, char c) {throw new IllegalArgumentException("HTTP头/无效字符 #"+(int)c+" 偏移 "+i+" 内容 "+Tokenizer.addSlashes(key));}
 
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		encode(sb);
 		return sb.toString();
+	}
+
+	private ToIntMap<String> encType;
+	public int getEncType(String name) {return encType == null ? 0 : encType.getOrDefault(name, 0);}
+	public void setEncType(String name, int enc) {
+		if (encType == null) encType = new ToIntMap<>();
+		encType.putInt(name, enc);
+	}
+
+	private static final long LENGTH_OFFSET = ReflectionUtils.fieldOffset(MyHashMap.class, "length");
+	public void _moveFrom(Headers head) {
+		entries = null;
+		if (head.entries != null) {
+			ReflectionUtils.u.putInt(this, LENGTH_OFFSET, 0);
+			ensureCapacity(head.entries.length);
+			entries = head.entries;
+		}
+		size = head.size;
+		encType = head.encType;
+
+		head.entries = null;
+		head.size = 0;
+		head.encType = null;
 	}
 }

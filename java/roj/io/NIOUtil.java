@@ -1,7 +1,8 @@
 package roj.io;
 
-import roj.NativeLibrary;
-import roj.reflect.DirectAccessor;
+import roj.RojLib;
+import roj.reflect.Bypass;
+import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 import roj.util.NativeException;
 import roj.util.NativeMemory;
@@ -16,6 +17,13 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.file.FileSystems;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.function.Consumer;
+
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -30,7 +38,7 @@ public final class NIOUtil {
 	static {
 		ByteBuffer b = ByteBuffer.allocateDirect(1);
 
-		DirectAccessor<NUT> da = DirectAccessor.builder(NUT.class).unchecked();
+		Bypass<NUT> da = Bypass.builder(NUT.class).inline().unchecked();
 		try {
 			Class<?> itf = b.getClass().getInterfaces()[0];
 			da.delegate_o(itf, "attachment", "cleaner", "address");
@@ -72,7 +80,7 @@ public final class NIOUtil {
 		String[] ss1 = new String[] {"read", "readVector", "write", "writeVector"};
 		String[] ss2 = new String[] {"read0", "readv0", "write0", "writev0"};
 		try {
-			SCN = DirectAccessor.builder(LLIO.class).delegate(UTIL.sChNd().getClass(), ss2, ss1).build();
+			SCN = Bypass.builder(LLIO.class).inline().delegate(UTIL.sChNd().getClass(), ss2, ss1).build();
 		} catch (Throwable e1) {
 			Logger.getLogger("NIOUtil").error("无法加载模块 {}", e1, "TCP_LLIO");
 		}
@@ -100,7 +108,7 @@ public final class NIOUtil {
 	}
 
 	private static void setReusePortW(FileDescriptor fd, boolean enabled) throws IOException {
-		if (!NativeLibrary.loaded()) throw new NativeException("native library not available");
+		if (!RojLib.hasNative(RojLib.WIN32)) throw new NativeException("native library not available");
 		int error = windowsOnlyReuseAddr(UTIL.fdVal(fd), enabled);
 		if (error != 0) {
 			switch (error) {
@@ -151,5 +159,53 @@ public final class NIOUtil {
 		long writeVector(FileDescriptor fd, long _IoVec_Length, int len) throws IOException;
 
 		void close(FileDescriptor fd) throws IOException;
+	}
+
+	private static long pendingKeys_offset;
+	/**
+	 * 让consumer能在事件监听线程上拿到独占(synchronized)的WatchKey，少开一个线程<br>
+	 * 请勿做长耗时操作，否则可能造成未预料的事件溢出 (等等，LinkedBlockingDeque不是也有锁么)<br>
+	 * 你不能在该线程上调用WatchService的close和WatchKey的cancel方法，将会(而不是可能)造成死锁<br>
+	 * 另外请勿在任何线程上调用WatchService的take或poll方法，会无限期等待<br>
+	 */
+	public static WatchService syncWatchPoll(String threadName, Consumer<WatchKey> c) throws IOException {
+		var watcher = FileSystems.getDefault().newWatchService();
+		try {
+			long off;
+			if ((off=pendingKeys_offset) == 0) {
+				off = pendingKeys_offset = ReflectionUtils.fieldOffset(Class.forName("sun.nio.fs.AbstractWatchService"), "pendingKeys");
+			}
+			if (off > 0) {
+				u.putObject(watcher, off, new LinkedBlockingDeque<>() {
+					@Override
+					public boolean offer(Object o) {
+						c.accept((WatchKey) o);
+						return true;
+					}
+				});
+				return watcher;
+			}
+		} catch (Exception e) {
+			pendingKeys_offset = -1;
+		}
+
+		var t = new Thread(() -> {
+			while (true) {
+				WatchKey key;
+				try {
+					key = watcher.take();
+					if (key.watchable() == null) break;
+				} catch (Exception e) {
+					break;
+				}
+				c.accept(key);
+			}
+		});
+		if (threadName == null) threadName = "FileWatcher2-"+watcher.hashCode();
+		t.setName(threadName);
+		t.setDaemon(true);
+		t.start();
+
+		return watcher;
 	}
 }

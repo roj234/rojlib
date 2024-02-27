@@ -60,31 +60,31 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 		mem.release();
 	}
 
-	private boolean oPrev1IsLiteral(int i) { return u.getByte(opts+i*OPT_STRUCT_SIZE+PREV1ISLITERAL_OFF) != 0; }
-	private boolean oHasPrev2(int i) { return u.getByte(opts+i*OPT_STRUCT_SIZE+HASPREV2_OFF) != 0; }
-	private int oGetOptPrev2(int i) { return u.getInt(opts+i*OPT_STRUCT_SIZE+OPTPREV2_OFF); }
-	private int oGetBackPrev2(int i) { return u.getInt(opts+i*OPT_STRUCT_SIZE+BACKPREV2_OFF); }
+	private boolean oPrev1IsLiteral(int i) { return u.getByte(opts+ (long) i*OPT_STRUCT_SIZE+PREV1ISLITERAL_OFF) != 0; }
+	private boolean oHasPrev2(int i) { return u.getByte(opts+ (long) i*OPT_STRUCT_SIZE+HASPREV2_OFF) != 0; }
+	private int oGetOptPrev2(int i) { return u.getInt(opts+ (long) i*OPT_STRUCT_SIZE+OPTPREV2_OFF); }
+	private int oGetBackPrev2(int i) { return u.getInt(opts+ (long) i*OPT_STRUCT_SIZE+BACKPREV2_OFF); }
 
-	private int oGetOptPrev(int i) { return u.getInt(opts+i*OPT_STRUCT_SIZE+OPTPREV_OFF); }
-	private void oSetOptPrev(int i, int v) { u.putInt(opts+i*OPT_STRUCT_SIZE+OPTPREV_OFF, v); }
-	private int oGetBackPrev(int i) { return u.getInt(opts+i*OPT_STRUCT_SIZE+BACKPREV_OFF); }
-	private void oSetBackPrev(int i, int v) { u.putInt(opts+i*OPT_STRUCT_SIZE+BACKPREV_OFF, v); }
-	private int oGetPrice(int i) { return u.getInt(opts+i*OPT_STRUCT_SIZE+PRICE_OFF); }
+	private int oGetOptPrev(int i) { return u.getInt(opts+ (long) i*OPT_STRUCT_SIZE+OPTPREV_OFF); }
+	private void oSetOptPrev(int i, int v) { u.putInt(opts+ (long) i*OPT_STRUCT_SIZE+OPTPREV_OFF, v); }
+	private int oGetBackPrev(int i) { return u.getInt(opts+ (long) i*OPT_STRUCT_SIZE+BACKPREV_OFF); }
+	private void oSetBackPrev(int i, int v) { u.putInt(opts+ (long) i*OPT_STRUCT_SIZE+BACKPREV_OFF, v); }
+	private int oGetPrice(int i) { return u.getInt(opts+ (long) i*OPT_STRUCT_SIZE+PRICE_OFF); }
 	private static final int INFINITY_PRICE = 1 << 30;
 	/**
 	 * Resets the price.
 	 */
-	private void oReset(int pos) { u.putInt(opts+pos*OPT_STRUCT_SIZE+PRICE_OFF, INFINITY_PRICE); }
-	private int oGetRep(int pos, int i) { return u.getInt(opts+pos*OPT_STRUCT_SIZE+REPS_OFF+(i<<2)); }
-	private void oSetRep(int pos, int i, int v) { u.putInt(opts+pos*OPT_STRUCT_SIZE+REPS_OFF+(i<<2), v); }
-	private int oGetState(int pos) { return u.getByte(opts+pos*OPT_STRUCT_SIZE+STATE_OFF); }
-	private void oSetState(int pos, int v) { u.putByte(opts+pos*OPT_STRUCT_SIZE+STATE_OFF, (byte) v); }
+	private void oReset(int pos) { u.putInt(opts+ (long) pos*OPT_STRUCT_SIZE+PRICE_OFF, INFINITY_PRICE); }
+	private int oGetRep(int pos, int i) { return u.getInt(opts+ (long) pos*OPT_STRUCT_SIZE+REPS_OFF+((long) i<<2)); }
+	private void oSetRep(int pos, int i, int v) { u.putInt(opts+ (long) pos*OPT_STRUCT_SIZE+REPS_OFF+((long) i<<2), v); }
+	private int oGetState(int pos) { return u.getByte(opts+ (long) pos*OPT_STRUCT_SIZE+STATE_OFF); }
+	private void oSetState(int pos, int v) { u.putByte(opts+ (long) pos*OPT_STRUCT_SIZE+STATE_OFF, (byte) v); }
 
 	/**
 	 * Sets to indicate one LZMA symbol (literal, rep, or match).
 	 */
 	private void ouSet1(int pos, int newPrice, int optCur, int back) {
-		long addr = opts+pos*OPT_STRUCT_SIZE;
+		long addr = opts+ (long) pos*OPT_STRUCT_SIZE;
 		u.putInt(addr+PRICE_OFF, newPrice);
 		u.putInt(addr+OPTPREV_OFF, optCur);
 		u.putInt(addr+BACKPREV_OFF, back);
@@ -94,7 +94,7 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 	 * Sets to indicate two LZMA symbols of which the first one is a literal.
 	 */
 	private void ouSet2(int pos, int newPrice, int optCur, int back) {
-		long addr = opts+pos*OPT_STRUCT_SIZE;
+		long addr = opts+ (long) pos*OPT_STRUCT_SIZE;
 		u.putInt(addr+PRICE_OFF, newPrice);
 		u.putInt(addr+OPTPREV_OFF, optCur+1);
 		u.putInt(addr+BACKPREV_OFF, back);
@@ -106,7 +106,7 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 	 * is a literal.
 	 */
 	private void ouSet3(int pos, int newPrice, int optCur, int back2, int len2, int back) {
-		long addr = opts+pos*OPT_STRUCT_SIZE;
+		long addr = opts+ (long) pos*OPT_STRUCT_SIZE;
 		u.putInt(addr+PRICE_OFF, newPrice);
 		u.putInt(addr+OPTPREV_OFF, optCur+len2+1);
 		u.putInt(addr+BACKPREV_OFF, back);
@@ -368,8 +368,8 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 			else oSetState(optCur, state_updateLiteral(oGetState(optCur)));
 
 			u.copyMemory(
-				opts+optPrev*OPT_STRUCT_SIZE+REPS_OFF,
-				opts+optCur*OPT_STRUCT_SIZE+REPS_OFF,
+				opts+ (long) optPrev*OPT_STRUCT_SIZE+REPS_OFF,
+				opts+ (long) optCur*OPT_STRUCT_SIZE+REPS_OFF,
 				REPS << 2);
 		} else {
 			int back;
@@ -395,8 +395,8 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 			} else {
 				oSetRep(optCur, 0, back - REPS);
 				u.copyMemory(
-					opts+optPrev*OPT_STRUCT_SIZE+REPS_OFF,
-					opts+optCur*OPT_STRUCT_SIZE+REPS_OFF+4,
+					opts+ (long) optPrev*OPT_STRUCT_SIZE+REPS_OFF,
+					opts+ (long) optCur*OPT_STRUCT_SIZE+REPS_OFF+4,
 					(REPS-1) << 2);
 			}
 		}

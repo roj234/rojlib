@@ -1,6 +1,5 @@
 package roj.archive.qz.xz;
 
-import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.lzma.LZMAEncoder;
 import roj.archive.qz.xz.rangecoder.RangeEncoder;
 
@@ -16,7 +15,6 @@ abstract class LZMA2Out extends OutputStream {
 
 	OutputStream out;
 
-	LZEncoder lz;
 	RangeEncoder rc;
 	LZMAEncoder lzma;
 
@@ -24,8 +22,6 @@ abstract class LZMA2Out extends OutputStream {
 
 	byte state;
 	static final byte STATE_LZMA = 0, STATE_RESET = 1, PROP_RESET = 2, DICT_RESET = 3;
-
-	int pendingSize = 0;
 
 	final byte[] chunkMeta = new byte[6];
 
@@ -36,11 +32,10 @@ abstract class LZMA2Out extends OutputStream {
 	LZMA2Out(LZMA2Options options) {
 		rc = new RangeEncoder(COMPRESSED_SIZE_MAX);
 		lzma = LZMAEncoder.getInstance(rc, options, COMPRESSED_SIZE_MAX);
-		lz = lzma.getLZEncoder();
 		props = options.getPropByte();
 	}
 
-	final void writeChunk() throws IOException {
+	final void writeChunk(boolean compressionDisabled) throws IOException {
 		int cSize = rc.finish();
 		int uSize = lzma.getUncompressedSize();
 
@@ -49,16 +44,9 @@ abstract class LZMA2Out extends OutputStream {
 
 		// +2 because the header of a compressed chunk is 2 bytes
 		// bigger than the header of an uncompressed chunk.
-		if (cSize + 2 < uSize) {
-			writeLZMAChunk(uSize, cSize);
-		} else {
-			lzma.reset();
-			uSize = lzma.getUncompressedSize();
-			assert uSize > 0 : uSize;
-			writeRawChunk(uSize);
-		}
+		if (cSize + 2 < uSize && !compressionDisabled) writeLZMAChunk(uSize, cSize);
+		else writeRawChunk();
 
-		pendingSize -= uSize;
 		lzma.resetUncompressedSize();
 		rc.reset();
 	}
@@ -83,7 +71,11 @@ abstract class LZMA2Out extends OutputStream {
 
 		state = STATE_LZMA;
 	}
-	private void writeRawChunk(int uSize) throws IOException {
+	private void writeRawChunk() throws IOException {
+		lzma.reset();
+		int uSize = lzma.getUncompressedSize();
+		assert uSize > 0 : uSize;
+
 		byte control = 0x02;
 
 		// 仅为第一个块时 (这似乎没有意义，然而对于7-zip的C语言Lzma2Dec实现是必须的)
@@ -98,7 +90,7 @@ abstract class LZMA2Out extends OutputStream {
 			chunkMeta[1] = (byte) ((chunkSize-1) >>> 8);
 			chunkMeta[2] = (byte) (chunkSize-1);
 			out.write(chunkMeta, 0, 3);
-			lz.copyUncompressed(out, uSize, chunkSize);
+			lzma.lzCopy(out, uSize, chunkSize);
 			uSize -= chunkSize;
 			control = 0x02;
 		}

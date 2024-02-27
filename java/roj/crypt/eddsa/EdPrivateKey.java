@@ -6,10 +6,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
 
-public class EdPrivateKey implements EdKey, PrivateKey {
+public class EdPrivateKey implements EdKey, PrivateKey, KeySpec {
 	static final int OID_OLD = 100, OID_ED25519 = 112;
 	private static final int OID_BYTE = 11, IDLEN_BYTE = 6;
 
@@ -90,13 +91,13 @@ public class EdPrivateKey implements EdKey, PrivateKey {
 			if (doid == OID_OLD) {
 				totlen = 49;
 				idlen = 8;
-			} else if (doid == OID_ED25519) {
+			} else if (doid == OID_ED25519 || doid == 110) {
 				if (d[IDLEN_BYTE] == 7) {
 					totlen = 50;
 					idlen = 7;
 				}
 			} else {
-				throw new InvalidKeySpecException("unsupported key spec");
+				throw new InvalidKeySpecException("unsupported key spec "+doid);
 			}
 			if (d.length != totlen) {
 				throw new InvalidKeySpecException("invalid key spec length");

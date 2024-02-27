@@ -3,15 +3,16 @@ package roj.config.data;
 import org.jetbrains.annotations.NotNull;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.config.NBTParser;
 import roj.config.TOMLParser;
-import roj.config.VinaryParser;
+import roj.config.Tokenizer;
 import roj.config.serial.CVisitor;
-import roj.config.word.Tokenizer;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 
 /**
@@ -21,13 +22,32 @@ import java.util.function.Consumer;
 public class CList extends CEntry implements Iterable<CEntry> {
 	protected List<CEntry> list;
 
-	public CList() { this(SimpleList.withCapacityType(0,2)); }
+	public CList() { this(SimpleList.hugeCapacity(0)); }
 	public CList(int size) { list = new SimpleList<>(size); }
 	@SuppressWarnings("unchecked")
 	public CList(List<? extends CEntry> list) { this.list = (List<CEntry>) list; }
 
+	public Type getType() { return Type.LIST; }
+
+	public final CList asList() { return this; }
+
+	public void accept(CVisitor ser) {
+		List<CEntry> l = list;
+		ser.valueList(l.size());
+		for (int i = 0; i < l.size(); i++) l.get(i).accept(ser);
+		ser.pop();
+	}
+
+	public List<CEntry> raw() { return list; }
+	public Object rawDeep() {
+		List<Object> caster = Arrays.asList(new Object[list.size()]);
+		for (int i = 0; i < list.size(); i++) caster.set(i, list.get(i).rawDeep());
+		return caster;
+	}
+
 	public final boolean isEmpty() { return list.isEmpty(); }
 	public final int size() { return list.size(); }
+
 	@NotNull
 	public Iterator<CEntry> iterator() { return list.iterator(); }
 	@Override
@@ -39,65 +59,42 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		list.add(entry == null ? CNull.NULL : entry);
 		return this;
 	}
-
-	public final void add(String s) {
-		list.add(CString.valueOf(s));
-	}
-	public final void add(int s) {
-		list.add(CInteger.valueOf(s));
-	}
-	public final void add(double s) {
-		list.add(CDouble.valueOf(s));
-	}
-	public final void add(long s) {
-		list.add(CLong.valueOf(s));
-	}
-	public final void add(boolean b) {
-		list.add(CBoolean.valueOf(b));
-	}
-
-	public final void set(int index, CEntry entry) {
-		list.set(index, entry == null ? CNull.NULL : entry);
-	}
+	public final void add(String s) { list.add(CString.valueOf(s)); }
+	public final void add(boolean b) { list.add(CBoolean.valueOf(b)); }
+	public final void add(int s) { list.add(CInt.valueOf(s)); }
+	public final void add(long s) { list.add(CLong.valueOf(s)); }
+	public final void add(double s) { list.add(CDouble.valueOf(s)); }
 
 	@NotNull
-	public CEntry get(int i) {
-		return list.get(i);
-	}
+	public CEntry get(int i) { return list.get(i); }
 	public final boolean getBool(int i) {
 		CEntry entry = list.get(i);
-		return Type.BOOL.isSimilar(entry.getType()) && entry.asBool();
+		return entry.mayCastTo(Type.BOOL) && entry.asBool();
 	}
 	public final String getString(int i) {
 		CEntry entry = list.get(i);
-		return Type.STRING.isSimilar(entry.getType()) ? entry.asString() : "";
+		return entry.mayCastTo(Type.STRING) ? entry.asString() : "";
 	}
 	public final int getInteger(int i) {
 		CEntry entry = list.get(i);
-		return entry.isNumber() ? entry.asInteger() : 0;
+		return entry.mayCastTo(Type.INTEGER) ? entry.asInteger() : 0;
 	}
 	public final long getLong(int i) {
 		CEntry entry = list.get(i);
-		return entry.isNumber() ? entry.asLong() : 0;
+		return entry.mayCastTo(Type.LONG) ? entry.asLong() : 0;
+	}
+	public final double getFloat(int i) {
+		CEntry entry = list.get(i);
+		return entry.mayCastTo(Type.Float4) ? entry.asFloat() : 0;
 	}
 	public final double getDouble(int i) {
 		CEntry entry = list.get(i);
-		return entry.isNumber() ? entry.asDouble() : 0;
+		return entry.mayCastTo(Type.DOUBLE) ? entry.asDouble() : 0;
 	}
 	public CList getList(int i) { return list.get(i).asList(); }
-	public CMapping getMap(int i) { return list.get(i).asMap(); }
+	public CMap getMap(int i) { return list.get(i).asMap(); }
 
-	public CEntry remove(int i) {
-		return list.remove(i);
-	}
-
-	@NotNull
-	@Override
-	public Type getType() {
-		return Type.LIST;
-	}
-
-	public final MyHashSet<String> asStringSet() {
+	public final MyHashSet<String> toStringSet() {
 		MyHashSet<String> stringSet = new MyHashSet<>(list.size());
 		for (CEntry entry : list) {
 			try {
@@ -108,8 +105,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		}
 		return stringSet;
 	}
-
-	public final SimpleList<String> asStringList() {
+	public final SimpleList<String> toStringList() {
 		SimpleList<String> stringList = new SimpleList<>(list.size());
 		for (CEntry entry : list) {
 			try {
@@ -120,52 +116,45 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		}
 		return stringList;
 	}
-
 	public final int[] toIntArray() {
 		int[] array = new int[list.size()];
 		for (int i = 0; i < list.size(); i++) {
 			CEntry entry = list.get(i);
-			array[i] = entry.isNumber() ? entry.asInteger() : 0;
+			array[i] = entry.mayCastTo(Type.INTEGER) ? entry.asInteger() : 0;
 		}
 		return array;
 	}
-
 	public final byte[] toByteArray() {
 		byte[] array = new byte[list.size()];
 		for (int i = 0; i < list.size(); i++) {
 			CEntry entry = list.get(i);
-			array[i] = (byte) (entry.isNumber() ? entry.asInteger() : 0);
+			array[i] = (byte) (entry.mayCastTo(Type.INTEGER) ? entry.asInteger() : 0);
 		}
 		return array;
 	}
 
-	public final void addAll(CList list) { this.list.addAll(list.list); }
-
-	public final List<CEntry> raw() { return list; }
-
-	public final void clear() { list.clear(); }
-
-	@NotNull
-	@Override
-	public final CList asList() { return this; }
+	public boolean isCommentSupported() {return false;}
+	public String getComment(int key) {return null;}
+	public void putComment(int key, String val) {throw new UnsupportedOperationException();}
+	public CList withComments() { return new CCommList(list); }
+	public void clearComments() {}
 
 	@Override
 	public final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }
 
 	@Override
-	public byte getNBTType() { return NBTParser.LIST; }
-
+	public void toB_encode(DynByteBuf w) {
+		w.put('l');
+		for (int i = 0; i < list.size(); i++) list.get(i).toB_encode(w);
+		w.put('e');
+	}
 	@Override
 	public final CharList toINI(CharList sb, int depth) {
-		if (depth != 1) {
-			throw new IllegalArgumentException("Can not serialize LIST to INI at depth " + depth);
-		}
-		for (int i = 0; i < list.size(); i++) {
-			list.get(i).toINI(sb, 1).append('\n');
-		}
+		if (depth != 1) throw new IllegalArgumentException("Can not serialize LIST to INI at depth "+depth);
+
+		for (int i = 0; i < list.size(); i++) list.get(i).toINI(sb, 1).append('\n');
 		return sb;
 	}
-
 	@Override
 	public CharList toTOML(CharList sb, int depth, CharSequence chain) {
 		if (list.isEmpty()) {
@@ -198,106 +187,10 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		}
 	}
 
-	@Override
-	public Object unwrap() {
-		List<Object> caster = Arrays.asList(new Object[list.size()]);
-		for (int i = 0; i < list.size(); i++) {
-			caster.set(i, list.get(i).unwrap());
-		}
-		return caster;
-	}
-
-	@Override
-	@SuppressWarnings("fallthrough")
-	protected void toBinary(DynByteBuf w, VinaryParser struct) {
-		int iType = -1;
-
-		List<CEntry> list = this.list;
-		for (int i = 0; i < list.size(); i++) {
-			int type = list.get(i).getType().ordinal();
-			if (type == 0) {
-				iType = -1;
-				break;
-			}
-
-			if (iType == -1) {
-				iType = type;
-			} else if (iType != type) {
-				iType = -1;
-				break;
-			}
-		}
-
-		if (iType == 1 && struct != null) iType = -1;
-
-		w.put((byte) (((1 + iType) << 4))).putVUInt(list.size());
-
-		Type type = iType >= 0 ? Type.VALUES[iType] : null;
-		if (type == null) {
-			// list, map, or mixed different types
-			for (int i = 0; i < list.size(); i++) {
-				list.get(i).toBinary(w, struct);
-			}
-			return;
-		} else if (type == Type.NULL) {
-			return;
-		}
-
-		int bv = 0, bvi = 8;
-		for (int i = 0; i < list.size(); i++) {
-			CEntry el = list.get(i);
-			switch (type) {
-				case BOOL:
-					bv |= (el.asInteger() << --bvi);
-					if (bvi == 0) {
-						w.put((byte) bv);
-						bv = 0;
-						bvi = 8;
-					}
-					break;
-				// noMap
-				case INTEGER: w.putInt(el.asInteger()); break;
-				case LONG: w.putLong(el.asLong()); break;
-				case DOUBLE: w.putDouble(el.asDouble()); break;
-				case STRING: w.putVUIGB(el.asString()); break;
-				case Int1: w.put((byte) el.asInteger()); break;
-				case Int2: w.putShort(el.asInteger()); break;
-				case Float4: w.putFloat((float) el.asDouble()); break;
-			}
-		}
-
-		if (bvi != 8) w.put((byte) bv);
-	}
-
-	@Override
-	public void toB_encode(DynByteBuf w) {
-		w.put((byte) 'l');
-		for (int i = 0; i < list.size(); i++) {
-			list.get(i).toB_encode(w);
-		}
-		w.put((byte) 'e');
-	}
-
-	@Override
+	public int hashCode() { return list.hashCode(); }
 	public boolean equals(Object o) {
 		if (this == o) return true;
-		if (o == null || getClass() != o.getClass()) return false;
-
-		CList that = (CList) o;
-
-		return Objects.equals(list, that.list);
-	}
-
-	@Override
-	public int hashCode() {
-		return list != null ? list.hashCode() : 0;
-	}
-
-	@Override
-	public void forEachChild(CVisitor ser) {
-		List<CEntry> l = list;
-		ser.valueList(l.size());
-		for (int i = 0; i < l.size(); i++) l.get(i).forEachChild(ser);
-		ser.pop();
+		if (!(o instanceof CList that)) return false;
+		return list.equals(that.list);
 	}
 }

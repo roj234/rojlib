@@ -1,133 +1,146 @@
 package roj.concurrent;
 
+import org.jetbrains.annotations.Nullable;
 import roj.io.buf.BufferPool;
 import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import java.util.concurrent.locks.LockSupport;
+
 import static roj.reflect.ReflectionUtils.u;
 
 /**
+ * 一个适合【多线程写入，单线程读取】的无界FIFO队列
  * @author Roj234
  * @since 2023/5/17 0017 18:48
  */
-public class PacketBuffer {
-	protected static class Entry {
+public final class PacketBuffer {
+	private static final class Entry {
 		volatile Entry next;
-		protected DynByteBuf buffer;
+		volatile Thread waiter;
+		volatile DynByteBuf buffer;
 	}
 
 	private static final long
-		u_size = ReflectionUtils.fieldOffset(PacketBuffer.class, "size"),
-		u_tail = ReflectionUtils.fieldOffset(PacketBuffer.class, "tail");
+		u_head = ReflectionUtils.fieldOffset(PacketBuffer.class, "head"),
+		u_recycle = ReflectionUtils.fieldOffset(PacketBuffer.class, "recycle"),
+		u_recycleSize = ReflectionUtils.fieldOffset(PacketBuffer.class, "recycleSize"),
+		u_entryNext = ReflectionUtils.fieldOffset(Entry.class, "next"),
+		u_entryWaiter = ReflectionUtils.fieldOffset(Entry.class, "waiter");
 
-	volatile Entry head, tail;
-	volatile int size;
+	private volatile Entry head, recycle;
+	private volatile int recycleSize;
+
+	private Entry rHead, rTail;
 
 	private final int max;
 
-	public PacketBuffer(int max) {
-		this.head = this.tail = createEntry();
-		this.max = max;
+	public PacketBuffer(int maxUnused) {
+		this.max = maxUnused;
 	}
 
-	protected Entry createEntry() { return new Entry(); }
-	protected void cacheEntry(Entry entry) {}
-
-	public void offer(DynByteBuf b) {
-		Entry entry = createEntry();
-		entry.buffer = BufferPool.buffer(true, b.readableBytes()).put(b);
-		b.rIndex = b.wIndex();
-		doOffer(entry, true);
-	}
-	private boolean doOffer(Entry entry, boolean wait) {
-		int i = 0;
+	public void offer(DynByteBuf b) {doOffer(b, false);}
+	public void offerSync(DynByteBuf b) {doOffer(b, true);}
+	private boolean doOffer(DynByteBuf b, boolean wait) {
+		Entry entry;
 		while (true) {
-			Entry tail = this.tail;
-			if (size < max && u.compareAndSwapObject(this, u_tail, tail, entry)) {
-				while (true) {
-					int s = size;
-					if (u.compareAndSwapInt(this, u_size, s, s+1)) break;
-				}
-
-				tail.next = entry;
+			entry = recycle;
+			if (entry == null) {
+				entry = new Entry();
 				break;
 			}
 
-			if (size >= max && (++i & 15) == 0) {
-				if (!wait) return false;
+			Entry next = entry.next;
+			// 似乎有些bug，可能会扔掉一些对象
+			if (u.compareAndSwapObject(this, u_recycle, entry, next)) {
+				u.getAndAddInt(this, u_recycleSize, -1);
 
-				try {
-					synchronized (this) {
-						if (size >= max) wait();
-					}
-				} catch (InterruptedException e) {
-					throw new IllegalStateException("wait cancelled due to interrupt");
-				}
+				entry.next = null;
+				break;
 			}
 		}
+
+		// if stable, will not use this!
+		entry.buffer = BufferPool.buffer(true, b.readableBytes()).put(b);
+		Thread waiter = wait ? Thread.currentThread() : null;
+		entry.waiter = waiter;
+
+		// need this ?
+		u.storeFence();
+
+		entry.next = (Entry) u.getAndSetObject(this, u_head, entry);
+
+		if (wait) while (entry.waiter == waiter) LockSupport.park(this);
 
 		return true;
 	}
 
-	public DynByteBuf take(DynByteBuf b) {
-		DynByteBuf r = removeWith(b, true);
-		return r == null ? b : r;
-	}
-	public boolean mayTake(DynByteBuf b) { return removeWith(b, false) == b; }
+	@Nullable
+	public DynByteBuf take(DynByteBuf b) {return removeWith(b, true);}
+	public boolean mayTake(DynByteBuf b) { return removeWith(b, false) != null; }
 
 	private DynByteBuf removeWith(DynByteBuf buf, boolean must) {
-		Entry entry = poll(must?Integer.MAX_VALUE:buf.writableBytes());
+		pollReverse();
+
+		Entry entry = rHead;
 		if (entry == null) return null;
 
 		DynByteBuf data = entry.buffer;
 		assert data != null;
 
 		try {
-			if (data.readableBytes() > buf.writableBytes()) buf = new ByteList(buf.readableBytes()).put(buf);
-			else buf.put(data);
+			if (buf.writableBytes() < data.readableBytes()) {
+				if (!must) return null;
+				buf = new ByteList(data.readableBytes());
+			}
+
+			buf.put(data);
 		} finally {
-			BufferPool.reserve(entry.buffer);
+			assert entry.buffer == data;
 			entry.buffer = null;
+			BufferPool.reserve(data);
+		}
+
+		LockSupport.unpark((Thread) u.getAndSetObject(entry, u_entryWaiter, null));
+
+		if (entry.next == null) {
+			assert entry == rTail;
+			rTail = null;
+		}
+		rHead = (Entry) u.getAndSetObject(entry, u_entryNext, null);
+
+		if (recycleSize < max) {
+			entry.next = (Entry) u.getAndSetObject(this, u_recycle, entry);
+			u.getAndAddInt(this, u_recycleSize, 1);
 		}
 
 		return buf;
 	}
-	private Entry poll(int len) {
-		Entry prev = head, entry = prev.next;
+	private void pollReverse() {
+		Entry h = (Entry) u.getAndSetObject(this, u_head, null);
+		if (h == null) return;
 
-		if (entry == null || entry.buffer.readableBytes() > len) return null;
+		Entry hold = h;
+		Entry rev = null;
 
-		prev.next = null;
-		head = entry;
+		while (h != null) {
+			Entry next = (Entry) u.getAndSetObject(h, u_entryNext, rev);
 
-		while (true) {
-			int s = size;
-			if (u.compareAndSwapInt(this, u_size, s, s-1)) break;
+			rev = h;
+
+			h = next;
 		}
 
-		return entry;
+		if (rHead == null) {
+			rHead = rev;
+			rTail = hold;
+		} else {
+			rTail.next = rev;
+			rTail = rev;
+		}
 	}
 
-	public boolean isEmpty() { return size == 0; }
-	public int size() { return size; }
-	public int remaining() { return max - size; }
-
-	public void clear() {
-		Entry prev = head, task = prev.next;
-
-		while (task != null) {
-			prev = task;
-			task = task.next;
-		}
-
-		task = head;
-		while (task != prev) {
-			Entry t = task;
-			task = task.next;
-			t.next = null;
-		}
-
-		head = prev;
-	}
+	public boolean isEmpty() {return head == null && rHead == null;}
+	public void clear() {head = rHead = rTail = null;}
 }

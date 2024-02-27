@@ -22,18 +22,12 @@ public class AsyncTask<T> implements Future<T>, ITask {
 
 	protected Callable<T> supplier;
 
-	public static AsyncTask<Void> fromRunnable(Runnable runnable) {
-		return new AsyncTask<>(() -> {
-			runnable.run();
-			return null;
-		});
-	}
-
 	public AsyncTask(Callable<T> c) { this.supplier = c; }
 	protected AsyncTask() {}
 
+	public boolean cancel(boolean mayInterruptIfRunning) { return cancel(); }
 	@Override
-	public boolean cancel(boolean mayInterruptIfRunning) {
+	public boolean cancel() {
 		if (u.compareAndSwapInt(this, u_stateOffset, INITIAL, RUNNING)) {
 			state = CANCELLED;
 			synchronized (this) { notifyAll(); }

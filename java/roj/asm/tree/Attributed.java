@@ -16,17 +16,10 @@ public interface Attributed {
 		return list == null ? null : (Attribute) list.getByName(name);
 	}
 
-	default <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) {
-		throw new UnsupportedOperationException("未实现");
-	}
+	default <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) {throw new UnsupportedOperationException("未实现");}
 
-	default void putAttr(Attribute inv) {
-		attributes().add(inv);
-	}
-
-	default AttributeList attributes() {
-		throw new UnsupportedOperationException(getClass().getName());
-	}
+	default void putAttr(Attribute attr) {attributes().add(attr);}
+	default AttributeList attributes() {throw new UnsupportedOperationException(getClass().getName());}
 	@Nullable
 	default AttributeList attributesNullable() {return null;}
 

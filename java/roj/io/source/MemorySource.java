@@ -26,7 +26,7 @@ public class MemorySource extends Source {
 		if (i <= 0) return -1;
 
 		len = Math.min(len, i);
-		list.read(b, off, len);
+		list.readFully(b, off, len);
 		return len;
 	}
 
@@ -43,11 +43,14 @@ public class MemorySource extends Source {
 		list.wIndex(cap);
 	}
 
-	public void seek(long pos) { list.rIndex = (int) pos; }
+	public void seek(long pos) throws IOException {
+		if (pos > Integer.MAX_VALUE - 16) throw new IOException("Index "+pos+" too large");
+		list.rIndex = (int) pos;
+	}
 	public long position() { return list.rIndex; }
 
 	public void setLength(long length) throws IOException {
-		if (length < 0 || length > Integer.MAX_VALUE - 16) throw new IOException();
+		if (length < 0 || length > Integer.MAX_VALUE - 16) throw new IOException("Index "+length+" too large");
 		list.ensureCapacity(cap = (int) length);
 		list.wIndex(cap);
 	}

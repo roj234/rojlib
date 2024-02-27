@@ -6,7 +6,7 @@ import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.LZMAInputStream;
 import roj.archive.qz.xz.LZMAOutputStream;
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.asm.AsmShared;
 import roj.asm.cp.*;
 import roj.asm.tree.*;
@@ -23,16 +23,13 @@ import roj.asm.util.ReflectClass;
 import roj.asmx.mapper.util.MapperList;
 import roj.asmx.mapper.util.NameAndType;
 import roj.asmx.mapper.util.SubImpl;
-import roj.asmx.mapper.util.Worker;
 import roj.collect.*;
 import roj.concurrent.TaskPool;
-import roj.concurrent.collect.ConcurrentFindHashMap;
-import roj.concurrent.collect.ConcurrentFindHashSet;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.StringPool;
 import roj.text.logging.Level;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -42,6 +39,7 @@ import java.nio.file.NotDirectoryException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
@@ -131,8 +129,8 @@ public class Mapper extends Mapping {
 	/**
 	 * 工作中数据
 	 */
-	private FindMap<Desc, String> selfInherited;
-	private FindSet<Desc> stopAnchor;
+	private Map<Desc, String> selfInherited;
+	private Set<Desc> stopAnchor;
 	Map<String, List<String>> selfSupers;
 
 	public byte flag = FLAG_FULL_CLASS_MAP;
@@ -265,9 +263,10 @@ public class Mapper extends Mapping {
 			return;
 		}
 
-		stopAnchor = new ConcurrentFindHashSet<>(libStopAnchor);
+		stopAnchor = Collections.newSetFromMap(new ConcurrentHashMap<>(libStopAnchor.size()));
+		stopAnchor.addAll(libStopAnchor);
 		selfSupers = new ConcurrentHashMap<>(ctxs.size());
-		selfInherited = new ConcurrentFindHashMap<>();
+		selfInherited = new SynchronizedFindMap<>();
 
 		List<List<Context>> tasks = new ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);
 
@@ -298,10 +297,19 @@ public class Mapper extends Mapping {
 	}
 
 	private static void async(Consumer<Context> action, List<List<Context>> ctxs) {
-		ArrayList<Worker> wait = new ArrayList<>(ctxs.size());
+		ArrayList<Future<?>> wait = new ArrayList<>(ctxs.size());
 		for (int i = 0; i < ctxs.size(); i++) {
-			Worker w = new Worker(ctxs.get(i), action);
-			TaskPool.Common().pushTask(w);
+			List<Context> files = ctxs.get(i);
+			var w = TaskPool.Common().submit(() -> {
+				for (int j = 0; j < files.size(); j++) {
+					try {
+						action.accept(files.get(j));
+					} catch (Throwable e) {
+						throw new RuntimeException(files.get(j).getFileName(), e);
+					}
+				}
+				return null;
+			});
 			wait.add(w);
 		}
 
@@ -365,14 +373,14 @@ public class Mapper extends Mapping {
 	 */
 	public final void S1_parse(Context c) {
 		ConstantData data = c.getData();
-		List<CstClass> itfs = data.interfaces;
+		var itfs = data.interfaces();
 
 		int size = itfs.size() + ("java/lang/Object".equals(data.parent) ? 0 : 1);
 		if (size == 0 && (flag&MF_ANNOTATION_INHERIT) == 0) return;
 
 		ArrayList<String> list = new ArrayList<>(size);
 		if (!"java/lang/Object".equals(data.parent)) list.add(data.parent);
-		for (int i = 0; i < itfs.size(); i++) list.add(itfs.get(i).name().str());
+		for (int i = 0; i < itfs.size(); i++) list.add(itfs.get(i));
 
 		if ((flag&MF_ANNOTATION_INHERIT) != 0) {
 			Annotations a = data.parsedAttr(data.cp, Attribute.ClAnnotations);
@@ -749,7 +757,7 @@ public class Mapper extends Mapping {
 			ConstantData data = ctx.get(i).getData();
 			if ((data.modifier() & (ACC_INTERFACE|ACC_ANNOTATION|ACC_MODULE)) != 0) continue;
 
-			List<CstClass> itfs = data.interfaces;
+			List<String> itfs = data.interfaces();
 			if (itfs.isEmpty()) continue;
 
 			interfaceMethods.clear();
@@ -761,7 +769,7 @@ public class Mapper extends Mapping {
 			}
 
 			for (int j = 0; j < itfs.size(); j++) {
-				String name = itfs.get(j).name().str();
+				String name = itfs.get(j);
 				if (!parents.contains(name)) {
 					List<RawNode> nodes = getMethodInfoEx(name);
 
@@ -1008,7 +1016,7 @@ public class Mapper extends Mapping {
 	/** Map: lambda method name */
 	private void mapLambda(BootstrapMethods bs, ConstantData data, CstDynamic dyn) {
 		if (dyn.tableIdx >= bs.methods.size())
-			throw new IllegalArgumentException("BootstrapMethod id 不存在: " + (int) dyn.tableIdx + " at class " + data.name);
+			throw new IllegalArgumentException("BootstrapMethod id 不存在: "+(int) dyn.tableIdx+" at class "+data.name);
 
 		BootstrapMethods.Item ibm = bs.methods.get(dyn.tableIdx);
 		if (!ibm.isInvokeMethod()) return;
@@ -1105,12 +1113,12 @@ public class Mapper extends Mapping {
 	}
 	/** InnerClass type */
 	private void mapInnerClass(ClassUtil U, ConstantData data) {
-		List<InnerClasses.InnerClass> classes = Attributes.getInnerClasses(data.cp, data);
+		List<InnerClasses.Item> classes = Attributes.getInnerClasses(data.cp, data);
 		if (classes == null) return;
 
 		CharList sb = IOUtil.getSharedCharBuf();
 		for (int j = 0; j < classes.size(); j++) {
-			InnerClasses.InnerClass clz = classes.get(j);
+			InnerClasses.Item clz = classes.get(j);
 			if (clz.parent != null) {
 				sb.clear();
 				String name = U.mapClassName(classMap, sb.append(clz.parent).append('$').append(clz.name));
@@ -1315,25 +1323,24 @@ public class Mapper extends Mapping {
 		SimpleList<Context> classes = new SimpleList<>();
 		Desc m = ClassUtil.getInstance().sharedDC;
 
-		Map<String, List<String>> prevSS = selfSupers;
-		FindSet<Desc> prevSA = stopAnchor;
+		var prevSS = selfSupers;
+		var prevSA = stopAnchor;
 
 		selfSupers = libSupers;
 		stopAnchor = libStopAnchor;
 
 		for (int i = 0; i < files.size(); i++) {
 			Object o = files.get(i);
-			if (o instanceof File) {
-				File fi = (File) o;
+			if (o instanceof File fi) {
 				String f = fi.getName().toLowerCase(Locale.ROOT);
 				if (!f.startsWith(DONT_LOAD_PREFIX) && (f.endsWith(".zip") || f.endsWith(".jar"))) {
-					try (ZipArchive archive = new ZipArchive(fi)) {
-						for (ZEntry entry : archive.getEntries().values()) {
+					try (ZipFile archive = new ZipFile(fi)) {
+						for (ZEntry entry : archive.entries()) {
 							if (entry.getName().endsWith(".class")) {
 								try (InputStream in = archive.getStream(entry)) {
 									readLibFile(new Context(entry.getName(), in), classes, m);
 								} catch (Throwable e) {
-									CLIUtil.warning(f+"#!"+entry.getName()+" 无法读取", e);
+									Terminal.warning(f+"#!"+entry.getName()+" 无法读取", e);
 								}
 							}
 						}
@@ -1440,8 +1447,7 @@ public class Mapper extends Mapping {
 		long hash = FILE_HEADER;
 		if (cacheFile != null && libPath != null) {
 			List<?> list;
-			if (libPath instanceof File) {
-				File folder = (File) libPath;
+			if (libPath instanceof File folder) {
 				if (!folder.isDirectory()) {
 					throw new IllegalArgumentException(new FileNotFoundException(folder.getAbsolutePath()));
 				}
@@ -1461,14 +1467,15 @@ public class Mapper extends Mapping {
 				result = readCache(hash, cacheFile);
 			} catch (Throwable e) {
 				if (!(e instanceof IllegalArgumentException)) {
-					CLIUtil.warning("缓存读取失败!", e);
+					Terminal.warning("缓存读取失败!", e);
 				} else {
-					CLIUtil.warning("缓存读取失败: " + e.getMessage());
+					Terminal.warning("缓存读取失败: " + e.getMessage());
 				}
 			}
 
 			if (result != null) {
 				if (result == Boolean.FALSE) break loadLibraryOnly;
+				packup();
 				return;
 			}
 		}
@@ -1524,7 +1531,7 @@ public class Mapper extends Mapping {
 		selfInherited = new MyHashMap<>();
 	}
 
-	public FindSet<Desc> getStopAnchor() { return stopAnchor; }
+	public Set<Desc> getStopAnchor() { return stopAnchor; }
 	public Map<String, List<String>> getSelfSupers() { return selfSupers; }
 	public final List<State> getSeperatedLibraries() { return extraStates; }
 	public ParamNameMapper getParamTypeMapper() { return PARAM_TYPE_MAPPER; }
@@ -1597,8 +1604,7 @@ public class Mapper extends Mapping {
 	public static long libHash(List<?> list) {
 		long hash = 0;
 		for (int i = 0; i < list.size(); i++) {
-			if (!(list.get(i) instanceof File)) continue;
-			File f = (File) list.get(i);
+			if (!(list.get(i) instanceof File f)) continue;
 			if (f.getName().endsWith(".jar") || f.getName().endsWith(".zip")) {
 				hash = 31 * hash + f.getName().hashCode();
 				hash = 31 * hash + (f.length() * 262143);

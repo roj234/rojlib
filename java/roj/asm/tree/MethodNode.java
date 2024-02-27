@@ -11,10 +11,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.visitor.CodeVisitor;
-import roj.asm.visitor.CodeWriter;
-import roj.asm.visitor.Label;
-import roj.asm.visitor.XAttrCode;
+import roj.asm.visitor.*;
 import roj.text.CharList;
 import roj.util.AttributeKey;
 import roj.util.ByteList;
@@ -36,18 +33,25 @@ public final class MethodNode extends CNode {
 		this.name = name;
 		this.desc = type;
 	}
-	public MethodNode copyDesc() { return new MethodNode(modifier, owner, name, desc); }
+	public MethodNode(RawNode m) {
+		modifier = m.modifier();
+		owner = m.ownerClass();
+		name = m.name();
+		desc = m.rawDesc();
+	}
+
+	public MethodNode(java.lang.reflect.Method m) {
+		modifier = (char) m.getModifiers();
+		owner = m.getDeclaringClass().getName().replace('.', '/');
+		name = m.getName();
+		desc = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
+	}
+
+	public MethodNode copyDesc() { return new MethodNode(modifier, owner, name, in != null ? rawDesc() : desc); }
 	public MethodNode copy() {
 		MethodNode inst = copyDesc();
 		if (attributes != null) inst.attributes = new AttributeList(attributes);
 		return inst;
-	}
-
-	public MethodNode(java.lang.reflect.Method m) {
-		name = m.getName();
-		modifier = (char) m.getModifiers();
-		desc = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
-		owner = m.getDeclaringClass().getName().replace('.', '/');
 	}
 
 	// todo move to parameter
@@ -85,11 +89,11 @@ public final class MethodNode extends CNode {
 			putAttr(code);
 		}
 
-		if (cv instanceof CodeWriter) {
+		if (cv instanceof CodeWriter cv1) {
 			ByteList b = new ByteList();
-			((CodeWriter) cv).init(b, cp, this, (byte) 0);
+			cv1.init(b, cp, this, (byte) 0);
 			cv.visit(cp, Parser.reader(code));
-			((CodeWriter) cv).finish();
+			cv1.finish();
 			((AttrUnknown) code).setRawData(b);
 		} else {
 			cv.visit(cp, Parser.reader(code));
@@ -138,7 +142,7 @@ public final class MethodNode extends CNode {
 		if (a != null) a.toString(sb, prefix).append('\n');
 
 		sb.padEnd(' ', prefix);
-		if ((modifier &Opcodes.ACC_ABSTRACT) == 0 && owner != null && (owner.access&Opcodes.ACC_INTERFACE) != 0) sb.append("default ");
+		if ((modifier&Opcodes.ACC_ABSTRACT) == 0 && owner != null && (owner.modifier&(Opcodes.ACC_INTERFACE|Opcodes.ACC_ANNOTATION)) == Opcodes.ACC_INTERFACE) sb.append("default ");
 		Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_METHOD, sb);
 		if (attrByName("Synthetic") != null) sb.append("/*synthetic*/ ");
 
@@ -159,7 +163,14 @@ public final class MethodNode extends CNode {
 
 			if (!in.isEmpty()) {
 				MethodParameters acc = parsedAttr(cp, Attribute.MethodParameters);
-				XAttrCode code = parsedAttr(cp, Attribute.Code);
+				XAttrCode code;
+				try {
+					code = parsedAttr(cp, Attribute.Code);
+				} catch (ClassCastException e) {
+					AttrCodeWriter code1 = (AttrCodeWriter) attrByName("Code");
+					//noinspection all
+					code = new XAttrCode(code1.getRawData(), cp, this);
+				}
 
 				LocalVariableTable lvt = code != null ? (LocalVariableTable) code.attrByName("LocalVariableTable") : null;
 				Label ZERO_READONLY = new Label(0);
@@ -206,9 +217,13 @@ public final class MethodNode extends CNode {
 		if (def != null) sb.append(" default ").append(def.val);
 
 		try {
-			XAttrCode code = parsedAttr(cp, Attribute.Code);
-			if (code != null) code.toString(sb.append(" {\n"), prefix+4).padEnd(' ', prefix).append("}\n");
-			else sb.append(';');
+			if (attrByName("Code") instanceof AttrCodeWriter cw) {
+				sb.append(cw.cw.toString());
+			} else {
+				XAttrCode code = parsedAttr(cp, Attribute.Code);
+				if (code != null) code.toString(sb.append(" {\n"), prefix+4).padEnd(' ', prefix).append("}\n");
+				else sb.append(';');
+			}
 		} catch (Exception e) {
 			sb.append(e);
 		}

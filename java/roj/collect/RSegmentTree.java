@@ -19,47 +19,44 @@ import java.util.function.ObjLongConsumer;
 public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Region> {
 	private static final Region[] EMPTY_DATA = new Region[0];
 
-	public RSegmentTree() {
-		this(0, true, 15);
+	/**
+	 * 两个方法的调用最好能常数时间
+	 */
+	public interface Range {
+		long startPos();
+		long endPos();
 	}
-	public RSegmentTree(int capacity) {
-		this(capacity, true, 15);
+
+	public static final class Wrap<T1> implements Range {
+		public long s, e;
+		public T1 sth;
+
+		public Wrap(T1 sth, long s, long e) {
+			this.sth = sth;
+			this.s = s;
+			this.e = e;
+		}
+
+		@Override
+		public long startPos() {return s;}
+		@Override
+		public long endPos() {return e;}
+		@Override
+		public String toString() {return "Cross{"+s+" => "+e+'}'+sth;}
 	}
+
+	public RSegmentTree() {this(0, true, 15);}
+	public RSegmentTree(int capacity) {this(capacity, true, 15);}
 	public RSegmentTree(int capacity, boolean careContent, int pointBuffer) {
 		data = capacity == 0 ? EMPTY_DATA : new Region[capacity << 1];
 		care = careContent;
-		pointBinSize = pointBuffer;
+		pointCnt = pointBuffer;
 	}
 
 	private Region[] data;
 	private int size, arrSize;
 	private boolean care;
 
-	private int binarySearch(long key) {
-		int low = 0;
-		int high = arrSize - 1;
-
-		Region[] a = data;
-
-		while (low <= high) {
-			int mid = (low + high) >>> 1;
-			long midVal = a[mid].node.pos();
-
-			if (midVal < key) {
-				low = mid + 1;
-			} else if (midVal > key) {
-				high = mid - 1;
-			} else {
-				return mid; // key found
-			}
-		}
-
-		// low ...
-
-		return -(low + 1);  // key not found.
-	}
-
-	private final int pointBinSize;
 	private Point pointBin;
 	private int pointCnt;
 
@@ -72,30 +69,25 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 
 			pointBin = p.next;
 			p.next = null;
-			pointCnt--;
+			pointCnt++;
 		} else {
 			p = new Point(owner, end);
 		}
 		return p;
 	}
-
 	protected final void release(Point p) {
-		if (pointBin != null && pointCnt > pointBinSize) {
+		if (pointBin != null && pointCnt > 0) {
 			return;
 		}
 		p.owner = null;
 		p.next = pointBin;
-		pointCnt++;
+		pointCnt--;
 		pointBin = p;
 	}
 
 	public void withContent(boolean care) {
 		if (arrSize != 0) throw new IllegalStateException("Not empty");
 		this.care = care;
-	}
-
-	public boolean getCare() {
-		return care;
 	}
 
 	public void clear() {
@@ -113,7 +105,7 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 				p = next;
 			}
 
-			if (pointCnt == pointBinSize) break;
+			if (pointCnt == 0) break;
 		}
 		for (; i < arrSize; i++) {
 			Region r = data[i];
@@ -158,6 +150,28 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 			point = point.next;
 		}
 		return null;
+	}
+
+	private int binarySearch(long key) {
+		int low = 0;
+		int high = arrSize - 1;
+
+		Region[] a = data;
+
+		while (low <= high) {
+			int mid = (low + high) >>> 1;
+			long midVal = a[mid].node.pos();
+
+			if (midVal < key) {
+				low = mid + 1;
+			} else if (midVal > key) {
+				high = mid - 1;
+			} else {
+				return mid;
+			}
+		}
+
+		return -(low + 1);
 	}
 
 	private int addPoint(int pos, T val, boolean end) {
@@ -229,27 +243,10 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 			point = point.next;
 		}
 		return false;
-		//        int[] arr;
-		//
-		//        // 从arr中删除一位
-		//        int j = 1 + (i >>> 5);
-		//
-		//        int data = arr[i>>>5], mask = (1 << 31-(i&31)) - 1;
-		//        arr[i>>>5] = (data & mask) | ((data & ~mask) << 1) | (arr[j] >>> 31);
-		//
-		//        while (j < arr.length - 1) {
-		//            arr[j] = (arr[j++] << 1) | (arr[j] >>> 31);
-		//        }
-		//        arr[j] <<= 1;
 	}
 
-	public int size() {
-		return size;
-	}
-
-	public int arraySize() {
-		return arrSize;
-	}
+	public int size() {return size;}
+	public int arraySize() {return arrSize;}
 
 	public Region findRegion(long key) {
 		int pos = binarySearch(key);
@@ -279,13 +276,9 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 	}
 
 	@NotNull
-	public Iterator<Region> iterator() {
-		return new ArrayIterator<>(data, 0, arrSize);
-	}
+	public Iterator<Region> iterator() {return new ArrayIterator<>(data, 0, arrSize);}
 
-	public Region[] dataArray() {
-		return data;
-	}
+	public Region[] dataArray() {return data;}
 
 	/**
 	 * int param: length
@@ -302,22 +295,22 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 			Range owner = p.owner;
 
 			if (p.next != null) {
-				if (begin == -1) throw new IllegalArgumentException("不适合的Range " + r + ": 重叠的区间");
+				if (begin == -1) throw new IllegalArgumentException("不适合的Range "+r+": 重叠的区间");
 
 				if (p.end) {
 					p = p.next; // 找到Start
-					if (p.next != null) throw new IllegalArgumentException("不适合的Range " + r + ": 重叠的区间");
+					if (p.next != null) throw new IllegalArgumentException("不适合的Range "+r+": 重叠的区间");
 				}
 
 				list.add(p.owner);
 			} else if (begin == -1) {
-				if (p.end) throw new IllegalArgumentException("不适合的Range " + r + ": 长度为零");
+				if (p.end) throw new IllegalArgumentException("不适合的Range "+r+": 长度为零");
 
 				list.add(p.owner);
 
 				begin = owner.startPos();
 			} else {
-				if (!p.end) throw new IllegalArgumentException("不适合的Range " + r + ": 重叠的区间, 与列表中的至少一个 " + list);
+				if (!p.end) throw new IllegalArgumentException("不适合的Range "+r+": 重叠的区间, 与列表中的至少一个 "+list);
 
 				l.accept(list, owner.endPos() - begin);
 
@@ -361,47 +354,11 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 		return "Unioner" + ArrayUtil.toString(data, 0, arrSize);
 	}
 
-	/**
-	 * 两个方法的调用最好能常数时间
-	 */
-	public interface Range {
-		long startPos();
-		long endPos();
-	}
-
-	public static final class Wrap<T1> implements Range {
-		public long s, e;
-		public T1 sth;
-
-		public Wrap(T1 sth, long s, long e) {
-			this.sth = sth;
-			this.s = s;
-			this.e = e;
-		}
-
-		@Override
-		public long startPos() {
-			return s;
-		}
-
-		@Override
-		public long endPos() {
-			return e;
-		}
-
-		@Override
-		public String toString() {
-			return "Cross{" + s + " => " + e + '}' + sth.toString();
-		}
-	}
-
 	public static final class Region {
-		List<Range> value;
 		Point node;
+		List<Range> value;
 
-		public Region(boolean care) {
-			value = care ? new SimpleList<>() : Collections.emptyList();
-		}
+		public Region(boolean care) {value = care ? new SimpleList<>() : Collections.emptyList();}
 
 		void init(boolean care) {
 			if ((value == Collections.EMPTY_LIST) == care) {
@@ -409,24 +366,16 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 			}
 		}
 
-		public Point node() {
-			return node;
-		}
-
-		public long pos() {
-			return node.pos();
-		}
+		public Point node() {return node;}
+		public long pos() {return node.pos();}
+		@SuppressWarnings("unchecked")
+		public <T extends Range> List<T> value() {return (List<T>) value;}
 
 		@Override
 		public String toString() {
 			StringBuilder sb = new StringBuilder().append(node.toString());
 			if (value != Collections.EMPTY_LIST) sb.append(value);
 			return sb.toString();
-		}
-
-		@SuppressWarnings("unchecked")
-		public <T extends Range> List<T> value() {
-			return (List<T>) value;
 		}
 	}
 
@@ -440,28 +389,18 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 			owner = data;
 		}
 
-		long pos() {
-			return end ? owner.endPos() : owner.startPos();
-		}
+		long pos() {return end ? owner.endPos() : owner.startPos();}
 
-		public boolean end() {
-			return end;
-		}
+		@SuppressWarnings("unchecked")
+		public <T extends Range> T owner() {return (T) owner;}
+		public boolean end() {return end;}
+		public Point next() {return next;}
 
 		@Override
 		public String toString() {
 			StringBuilder sb = new StringBuilder("{").append(end ? "E" : "S").append("/").append(owner).append(" at ").append(pos()).append('}');
 			if (next != null) sb.append("\n").append(next);
 			return sb.toString();
-		}
-
-		@SuppressWarnings("unchecked")
-		public <T extends Range> T owner() {
-			return (T) owner;
-		}
-
-		public Point next() {
-			return next;
 		}
 	}
 }

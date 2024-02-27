@@ -4,6 +4,7 @@
 
 package roj.archive.ui;
 
+import roj.RojLib;
 import roj.archive.qz.QZArchive;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.LZMA2Parallel;
@@ -43,6 +44,7 @@ public class QZArchiverUI extends JFrame {
 
 	private final LZMA2Options options = new LZMA2Options();
 	private final OnChangeHelper helper;
+	private final ActionListener beginListener;
 
 	private void begin() throws Exception {
 		if (uiOutput.getText().isEmpty()) {
@@ -51,11 +53,24 @@ public class QZArchiverUI extends JFrame {
 			uiOutput.setText(file.getAbsolutePath());
 		}
 
+		File out = new File(uiOutput.getText());
+		boolean ok = true;
+		try {
+			if (!out.isFile() && (!out.createNewFile() || !out.delete())) ok = false;
+		} catch (Exception e) {
+			ok = false;
+		}
+
+		if (!ok) {
+			JOptionPane.showMessageDialog(this, out.getAbsolutePath()+"\n请注意，输出路径包括文件名称和扩展名", "路径不合法", JOptionPane.ERROR_MESSAGE);
+			return;
+		}
+
 		QZArchiver arc = new QZArchiver();
 		List<File> input = new SimpleList<>();
 		input.add(new File(uiInput.getText()));
 		if (uiReadDirFromLog.isSelected()) {
-			for (String line : new LineReader(uiLog.getText())) {
+			for (String line : LineReader.create(uiLog.getText())) {
 				if (!line.isEmpty()) input.add(new File(line));
 			}
 		}
@@ -65,10 +80,15 @@ public class QZArchiverUI extends JFrame {
 		arc.storeCT = uiStoreCT.isSelected();
 		arc.storeAT = uiStoreAT.isSelected();
 		arc.storeAttr = uiStoreAttr.isSelected();
-		arc.threads = ((Number) uiThreads.getValue()).intValue();
-		arc.autoSolidSize = uiAutoSolidSize.isSelected();
-		if (!arc.autoSolidSize)
+		if (!(arc.autoSolidSize = uiAutoSolidSize.isSelected())) {
 			arc.solidSize = (long) TextUtil.unscaledNumber1024(uiSolidSize.getText());
+		}
+		if (uiSplitTask.isSelected() & !uiAutoSplitTask.isSelected() & !uiMixedMode.isSelected()) {
+			arc.autoSolidSize = false;
+			arc.solidSize = -1;
+			arc.threads = 1;
+		}
+		else arc.threads = ((Number) uiThreads.getValue()).intValue();
 		arc.splitSize = uiSplitSize.getText().isEmpty() ? 0 : (long) TextUtil.unscaledNumber1024(uiSplitSize.getText());
 		arc.compressHeader = uiCompressHeader.isSelected();
 		if (uiCrypt.isSelected()) {
@@ -82,10 +102,13 @@ public class QZArchiverUI extends JFrame {
 		arc.options = options;
 		arc.appendOptions = uiAppendOptions.getSelectedIndex();
 		arc.fastAppendCheck = uiFastCheck.isSelected();
-		arc.cacheFolder = uiDiskCache.isSelected() ? new File("F:\\") : null;
-		File out = new File(uiOutput.getText());
+		arc.cacheFolder = uiDiskCache.isSelected() ? new File(System.getProperty("roj.archiver.temp", ".")) : null;
 		arc.outputFolder = out.getParentFile();
 		arc.outputName = out.getName();
+		arc.keepArchive = uiKeepArchive.isSelected();
+		if (uiSortByFilename.isSelected()) {
+			arc.sorter = (f1, f2) -> f1.getName().compareTo(f2.getName());
+		}
 
 		uiLog.setText("正在计数文件\n");
 
@@ -94,6 +117,8 @@ public class QZArchiverUI extends JFrame {
 			uiLog.append("压缩文件无需更新\n");
 			return;
 		}
+
+		options.setNativeAccelerate(uiNativeAccel.isSelected());
 
 		int[] arr = createTaskPool();
 		int threads = arr[0];
@@ -112,7 +137,7 @@ public class QZArchiverUI extends JFrame {
 			int blockSize = (int) MathUtils.clamp(chunkSize, LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX);
 
 			LZMA2Parallel man = new LZMA2Parallel(myOpt, blockSize, uiSplitTaskType.getSelectedIndex(), threads);
-			long mem = man.getExtraMemoryUsageBytes(uiMixedMode.isSelected());
+			long mem = (man.getExtraMemoryUsageBytes(uiMixedMode.isSelected()) & ~7) + (16 * threads);// 8-byte alignment
 			long needed = mem - ((long) arr[1]<<10);
 			if (needed > 0) {
 				JOptionPane.showMessageDialog(this, "压缩所需的内存超过了内存输入框的限制\n还需要"+TextUtil.scaledNumber1024(needed)+"的内存", "压缩流并行导致的内存不足", JOptionPane.ERROR_MESSAGE);
@@ -124,27 +149,32 @@ public class QZArchiverUI extends JFrame {
 			buffer = new BufferPool(mem, 0, mem, 0, 0, 0, 0, 0, threads, 0, BufferPool.OOM_NULL);
 
 			myOpt.setAsyncMode(pool2, buffer, man);
+			if (arc.threads == 1) threads = 1;
 		} else {
 			pool2 = null;
 			buffer = null;
 		}
 
-		arc.singleThread = uiSplitTask.isSelected() & !uiAutoSplitTask.isSelected() & !uiMixedMode.isSelected();
-		TaskPool pool = TaskPool.MaxThread(arc.singleThread ? 1 : threads, "7z-worker-");
+		TaskPool pool = TaskPool.MaxThread(threads, "7z-worker-");
+
+		ActionListener stopListener = e -> {
+			arc.interrupt();
+			pool.shutdownAndCancel();
+		};
 
 		uiBegin.setText("停下");
-		uiBegin.setEnabled(false);
-		TaskPool.Common().pushTask(() -> {
+		uiBegin.removeActionListener(beginListener);
+		uiBegin.addActionListener(stopListener);
+
+		TaskPool.Common().submit(() -> {
 			pool.setRejectPolicy(TaskPool::waitPolicy);
 			EasyProgressBar bar = new GuiProgressBar(uiLog, uiProgress);
 			try {
 				arc.compress(pool, bar);
 			} finally {
-				pool.shutdown();
-				pool.awaitShutdown();
+				pool.shutdownAndCancel();
 				if (pool2 != null) {
-					pool2.shutdown();
-					pool2.awaitShutdown();
+					pool2.shutdownAndCancel();
 
 					try {
 						buffer.release();
@@ -152,9 +182,10 @@ public class QZArchiverUI extends JFrame {
 						e.printStackTrace();
 					}
 				}
-				uiProgress.setValue(1000);
-				uiBegin.setEnabled(true);
+				uiProgress.setValue(10000);
 				uiBegin.setText("压缩");
+				uiBegin.removeActionListener(stopListener);
+				uiBegin.addActionListener(beginListener);
 			}
 			new QZArchive(out, arc.password).close();
 		});
@@ -173,6 +204,8 @@ public class QZArchiverUI extends JFrame {
 		uiMatchFinder.setModel(Helpers.cast(md));
 
 		md = new DefaultComboBoxModel<>();
+		md.addElement(new CMBoxValue("仅存储", 0));
+
 		md.addElement(new CMBoxValue("1-极速压缩", 1));
 		md.addElement(new CMBoxValue("2", 2));
 		md.addElement(new CMBoxValue("3-快速压缩", 3));
@@ -184,10 +217,17 @@ public class QZArchiverUI extends JFrame {
 		md.addElement(new CMBoxValue("9-极限压缩", 9));
 		uiPreset.setModel(Helpers.cast(md));
 		uiPreset.addActionListener(e -> {
-			options.setPreset(((CMBoxValue) uiPreset.getSelectedItem()).value);
+			int level = ((CMBoxValue) uiPreset.getSelectedItem()).value;
+			if (level == 0) {
+				options.setMode(LZMA2Options.MODE_UNCOMPRESSED);
+			} else {
+				options.setPreset(level);
+			}
+
+			uiBCJ2.setSelected(level == 9);
 			syncToUI(true);
 		});
-		uiPreset.setSelectedIndex(4);
+		uiPreset.setSelectedIndex(5);
 
 		ChangeListener cl1 = e -> {
 			try {
@@ -250,7 +290,7 @@ public class QZArchiverUI extends JFrame {
 			uiLog.setText("开始测试,时间依据您除了LcLpPb的LZMA设定而变化,请耐心等待\n" +
 				"请不要在测试过程中修改LZMA设定,这会导致结果不准确");
 
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				TaskPool pool = TaskPool.MaxThread(createTaskPool()[0], "LcLpTest-worker-");
 				try {
 					ByteList data = new ByteList();
@@ -273,7 +313,7 @@ public class QZArchiverUI extends JFrame {
 						"使用它们的压缩大小为"+toDigital(minSize)+" ("+TextUtil.toFixed((double)minSize/data.length() * 100, 2)+"%)");
 				} finally {
 					uiFindBestProp.setEnabled(true);
-					pool.shutdown();
+					pool.shutdownAndCancel();
 				}
 			});
 		});
@@ -294,6 +334,8 @@ public class QZArchiverUI extends JFrame {
 		md.addElement("更新并添加文件");
 		md.addElement("只更新已存在的文件");
 		md.addElement("同步压缩包内容");
+		md.addElement("忽略压缩包内容");
+		md.addElement("计算差异的文件");
 		uiAppendOptions.setModel(Helpers.cast(md));
 		md = new DefaultComboBoxModel<>();
 		md.addElement("相对路径"); // RELATIVE_PATH
@@ -326,9 +368,10 @@ public class QZArchiverUI extends JFrame {
 				注意事项：
 				  · 开启后，【固实大小】越小，压缩效果越差，CPU占用率也越低
 				    （和不开启时相反）
-				  · 若CPU跑不满，取消勾选【固实大小】的【自动】，并填写【512MB】
-				    填写【512MB】后，CPU仍无法跑满，请开启【混合模式】，CPU必定跑满（会使用更多内存）
-				  · 也可以开启【自动拆分任务】，可以适应大部分文件""", "关于压缩流并行……", JOptionPane.WARNING_MESSAGE);
+				  · 若CPU跑不满
+				    1. 取消勾选【固实大小】的【自动】，并填写【1TB】
+				    2. 开启【混合模式】，CPU必定跑满（会使用更多内存）
+				  · 开启【自动拆分任务】，可以在不降低很多速度的同时，提升压缩效果""", "关于压缩流并行……", JOptionPane.WARNING_MESSAGE);
 			uiSplitTask.removeActionListener(tip[0]);
 		};
 		tip[1] = e -> {
@@ -367,14 +410,28 @@ public class QZArchiverUI extends JFrame {
 		// endregion
 		GuiUtil.dropFilePath(uiInput, null, false);
 		GuiUtil.dropFilePath(uiOutput, null, false);
-		uiBegin.addActionListener(e -> {
+		uiBegin.addActionListener(beginListener = e -> {
 			try {
 				begin();
 			} catch (Exception ex) {
 				throw new RuntimeException(ex);
 			}
 		});
-		uiProgress.setModel(new DefaultBoundedRangeModel(0,0,0,1000));
+		uiHideComplicate.addActionListener(e -> {
+			boolean v = uiHideComplicate.isSelected();
+			Component[] c = {uiPathType,uiKeepArchive,uiStoreAT,uiStoreAttr,uiStoreCT,uiStoreFolder,uiStoreMT,uiCyclePower,uiSaltLength,uiFastLZMA,uiFastCheck,uiCompressHeader,uiBCJ,uiBCJ2,uiMatchFinder,uiLc,uiLp,uiPb,uiDepthLimit,uiReadDirFromLog};
+			for (Component cc : c) {
+				cc.setVisible(!v);
+			}
+		});
+
+		if (!RojLib.hasNative(RojLib.FAST_LZMA))
+			uiNativeAccel.setEnabled(false);
+		else {
+			uiNativeAccel.addActionListener(e -> {
+				JOptionPane.showConfirmDialog(this, "作者C++技术力不行，压缩后可能没法解压（数据错误）\n请自行决定是否使用");
+			});
+		}
 	}
 
 	private void syncToUI(boolean isPreset) {
@@ -394,7 +451,7 @@ public class QZArchiverUI extends JFrame {
 		}
 	}
 	private void updateMemoryUsage() {
-		double myUsage = options.getEncoderMemoryUsage() * 1024d;
+		long myUsage = options.getEncoderMemoryUsage() * 1024L;
 		String text = uiSolidSize.getText();
 		String msg = "";
 		if (uiSplitTask.isSelected() && !uiAutoSplitTask.isSelected()) {
@@ -426,7 +483,7 @@ public class QZArchiverUI extends JFrame {
 		return new int[] {threads, (int) (memoryLimit - (perThreadUsageKb * threads))};
 	}
 
-	private static String toDigital(double size) { return TextUtil.scaledNumber1024(size); }
+	private static String toDigital(long size) { return TextUtil.scaledNumber1024(size); }
 	private int fromDigital(String text) {
 		double v = text.isEmpty() ? 0 : TextUtil.unscaledNumber1024(text);
 		if (v > Integer.MAX_VALUE) throw new FastFailException(text+"超出了整型范围！");
@@ -435,423 +492,451 @@ public class QZArchiverUI extends JFrame {
 
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
-		var label4 = new JLabel();
-		var label15 = new JLabel();
-		uiInput = new JTextField();
-		uiOutput = new JTextField();
-		uiBegin = new JButton();
-		uiProgress = new JProgressBar();
-		var separator1 = new JSeparator();
-		var label14 = new JLabel();
-		uiSplitSize = new JTextField();
-		var label3 = new JLabel();
-		uiSolidSize = new JTextField();
-		uiAutoSolidSize = new JCheckBox();
-		uiDiskCache = new JCheckBox();
-		var separator5 = new JSeparator();
-		uiThreads = new JSpinner();
-		var label2 = new JLabel();
-		uiSplitTask = new JCheckBox();
-		uiSplitTaskType = new JComboBox<>();
-		uiMemoryLimit = new JTextField();
-		var label5 = new JLabel();
-		var separator2 = new JSeparator();
-		uiPreset = new JComboBox<>();
-		uiFindBestProp = new JButton();
-		var label7 = new JLabel();
-		var label8 = new JLabel();
-		var label9 = new JLabel();
-		var label10 = new JLabel();
-		var label11 = new JLabel();
-		uiLc = new JSpinner();
-		uiLp = new JSpinner();
-		uiPb = new JSpinner();
-		uiDictSize = new JTextField();
-		uiNiceLen = new JSpinner();
-		uiDepthLimit = new JSpinner();
-		uiMatchFinder = new JComboBox<>();
-		uiMemoryUsage = new JLabel();
-		uiFastLZMA = new JCheckBox();
-		var separator3 = new JSeparator();
-		uiCrypt = new JCheckBox();
-		uiCryptHeader = new JCheckBox();
-		uiPassword = new JTextField();
-		var label12 = new JLabel();
-		var label13 = new JLabel();
-		uiCyclePower = new JSpinner();
-		uiSaltLength = new JSpinner();
-		var separator4 = new JSeparator();
-		uiCompressHeader = new JCheckBox();
-		uiFastCheck = new JCheckBox();
-		uiAppendOptions = new JComboBox<>();
-		var label6 = new JLabel();
-		uiStoreMT = new JCheckBox();
-		uiStoreCT = new JCheckBox();
-		uiStoreAT = new JCheckBox();
-		uiStoreAttr = new JCheckBox();
-		uiStoreFolder = new JCheckBox();
-		var separator6 = new JSeparator();
-		uiBCJ = new JCheckBox();
-		uiBCJ2 = new JCheckBox();
-		var scrollPane1 = new JScrollPane();
-		uiLog = new JTextArea();
-		var label1 = new JLabel();
-		uiAutoSplitTask = new JCheckBox();
-		uiMixedMode = new JCheckBox();
-		uiPathType = new JComboBox<>();
-		uiReadDirFromLog = new JCheckBox();
+        var label4 = new JLabel();
+        var label15 = new JLabel();
+        uiInput = new JTextField();
+        uiOutput = new JTextField();
+        uiKeepArchive = new JCheckBox();
+        uiPathType = new JComboBox<>();
+        uiBegin = new JButton();
+        uiHideComplicate = new JCheckBox();
+        uiNativeAccel = new JCheckBox();
+        uiProgress = new JProgressBar();
+        var separator1 = new JSeparator();
+        var label14 = new JLabel();
+        uiSplitSize = new JTextField();
+        var label3 = new JLabel();
+        uiSolidSize = new JTextField();
+        uiAutoSolidSize = new JCheckBox();
+        uiDiskCache = new JCheckBox();
+        var separator5 = new JSeparator();
+        uiThreads = new JSpinner();
+        var label2 = new JLabel();
+        uiSplitTask = new JCheckBox();
+        uiSplitTaskType = new JComboBox<>();
+        uiMemoryLimit = new JTextField();
+        var label5 = new JLabel();
+        var separator2 = new JSeparator();
+        uiPreset = new JComboBox<>();
+        uiFindBestProp = new JButton();
+        var label7 = new JLabel();
+        var label8 = new JLabel();
+        var label9 = new JLabel();
+        var label10 = new JLabel();
+        var label11 = new JLabel();
+        uiLc = new JSpinner();
+        uiLp = new JSpinner();
+        uiPb = new JSpinner();
+        uiDictSize = new JTextField();
+        uiNiceLen = new JSpinner();
+        uiDepthLimit = new JSpinner();
+        uiMatchFinder = new JComboBox<>();
+        uiMemoryUsage = new JLabel();
+        uiFastLZMA = new JCheckBox();
+        var separator3 = new JSeparator();
+        uiCrypt = new JCheckBox();
+        uiCryptHeader = new JCheckBox();
+        uiPassword = new JTextField();
+        var label12 = new JLabel();
+        var label13 = new JLabel();
+        uiCyclePower = new JSpinner();
+        uiSaltLength = new JSpinner();
+        var separator4 = new JSeparator();
+        uiCompressHeader = new JCheckBox();
+        uiFastCheck = new JCheckBox();
+        uiAppendOptions = new JComboBox<>();
+        var label6 = new JLabel();
+        uiStoreMT = new JCheckBox();
+        uiStoreCT = new JCheckBox();
+        uiStoreAT = new JCheckBox();
+        uiStoreAttr = new JCheckBox();
+        uiStoreFolder = new JCheckBox();
+        var separator6 = new JSeparator();
+        uiBCJ = new JCheckBox();
+        uiBCJ2 = new JCheckBox();
+        var scrollPane1 = new JScrollPane();
+        uiLog = new JTextArea();
+        var label1 = new JLabel();
+        uiAutoSplitTask = new JCheckBox();
+        uiMixedMode = new JCheckBox();
+        uiReadDirFromLog = new JCheckBox();
+        uiSortByFilename = new JCheckBox();
 
-		//======== this ========
-		setTitle("Roj234 SevenZ Archiver 2.2");
-		var contentPane = getContentPane();
-		contentPane.setLayout(null);
+        //======== this ========
+        setTitle("Roj234 SevenZ Archiver 2.6");
+        var contentPane = getContentPane();
+        contentPane.setLayout(null);
 
-		//---- label4 ----
-		label4.setText("\u538b\u7f29\u8fd9\u4e2a\u76ee\u5f55\u6216\u6587\u4ef6");
-		contentPane.add(label4);
-		label4.setBounds(new Rectangle(new Point(10, 0), label4.getPreferredSize()));
+        //---- label4 ----
+        label4.setText("\u538b\u7f29\u8fd9\u4e2a\u76ee\u5f55\u6216\u6587\u4ef6");
+        contentPane.add(label4);
+        label4.setBounds(new Rectangle(new Point(10, 0), label4.getPreferredSize()));
 
-		//---- label15 ----
-		label15.setText("...\u5230\u8fd9\u4e2a\u6587\u4ef6\u4e2d");
-		contentPane.add(label15);
-		label15.setBounds(new Rectangle(new Point(10, 40), label15.getPreferredSize()));
+        //---- label15 ----
+        label15.setText("...\u5230\u8fd9\u4e2a\u6587\u4ef6\u4e2d");
+        contentPane.add(label15);
+        label15.setBounds(new Rectangle(new Point(10, 40), label15.getPreferredSize()));
 
-		//---- uiInput ----
-		uiInput.setFont(uiInput.getFont().deriveFont(uiInput.getFont().getStyle() | Font.BOLD, uiInput.getFont().getSize() + 4f));
-		contentPane.add(uiInput);
-		uiInput.setBounds(15, 15, 335, uiInput.getPreferredSize().height);
+        //---- uiInput ----
+        uiInput.setFont(uiInput.getFont().deriveFont(uiInput.getFont().getStyle() | Font.BOLD, uiInput.getFont().getSize() + 4f));
+        contentPane.add(uiInput);
+        uiInput.setBounds(15, 15, 335, uiInput.getPreferredSize().height);
 
-		//---- uiOutput ----
-		uiOutput.setFont(uiOutput.getFont().deriveFont(uiOutput.getFont().getSize() + 4f));
-		contentPane.add(uiOutput);
-		uiOutput.setBounds(15, 60, 335, uiOutput.getPreferredSize().height);
+        //---- uiOutput ----
+        uiOutput.setFont(uiOutput.getFont().deriveFont(uiOutput.getFont().getSize() + 4f));
+        contentPane.add(uiOutput);
+        uiOutput.setBounds(15, 60, 335, uiOutput.getPreferredSize().height);
 
-		//---- uiBegin ----
-		uiBegin.setText("\u538b\u7f29");
-		uiBegin.setFont(uiBegin.getFont().deriveFont(uiBegin.getFont().getSize() + 10f));
-		uiBegin.setMargin(new Insets(2, 2, 2, 2));
-		contentPane.add(uiBegin);
-		uiBegin.setBounds(355, 17, 60, 60);
+        //---- uiKeepArchive ----
+        uiKeepArchive.setText("\u4fdd\u7559\u539f\u538b\u7f29\u5305");
+        contentPane.add(uiKeepArchive);
+        uiKeepArchive.setBounds(new Rectangle(new Point(135, 40), uiKeepArchive.getPreferredSize()));
+        contentPane.add(uiPathType);
+        uiPathType.setBounds(240, 40, 110, uiPathType.getPreferredSize().height);
 
-		//---- uiProgress ----
-		uiProgress.setMaximum(10000);
-		contentPane.add(uiProgress);
-		uiProgress.setBounds(5, 480, 500, uiProgress.getPreferredSize().height);
-		contentPane.add(separator1);
-		separator1.setBounds(0, 90, 490, 2);
+        //---- uiBegin ----
+        uiBegin.setText("\u538b\u7f29");
+        uiBegin.setFont(uiBegin.getFont().deriveFont(uiBegin.getFont().getSize() + 10f));
+        uiBegin.setMargin(new Insets(2, 2, 2, 2));
+        contentPane.add(uiBegin);
+        uiBegin.setBounds(355, 17, 60, 60);
 
-		//---- label14 ----
-		label14.setText("\u5206\u5377\u5927\u5c0f");
-		contentPane.add(label14);
-		label14.setBounds(new Rectangle(new Point(5, 103), label14.getPreferredSize()));
-		contentPane.add(uiSplitSize);
-		uiSplitSize.setBounds(55, 100, 90, uiSplitSize.getPreferredSize().height);
+        //---- uiHideComplicate ----
+        uiHideComplicate.setText("\u6211\u662f\u65b0\u624b");
+        contentPane.add(uiHideComplicate);
+        uiHideComplicate.setBounds(new Rectangle(new Point(425, 20), uiHideComplicate.getPreferredSize()));
 
-		//---- label3 ----
-		label3.setText("\u56fa\u5b9e\u5927\u5c0f");
-		contentPane.add(label3);
-		label3.setBounds(new Rectangle(new Point(5, 128), label3.getPreferredSize()));
+        //---- uiNativeAccel ----
+        uiNativeAccel.setText("C\u8bed\u8a00\u52a0\u901f");
+        contentPane.add(uiNativeAccel);
+        uiNativeAccel.setBounds(new Rectangle(new Point(425, 50), uiNativeAccel.getPreferredSize()));
 
-		//---- uiSolidSize ----
-		uiSolidSize.setEnabled(false);
-		contentPane.add(uiSolidSize);
-		uiSolidSize.setBounds(55, 125, 90, uiSolidSize.getPreferredSize().height);
+        //---- uiProgress ----
+        uiProgress.setMaximum(10000);
+        contentPane.add(uiProgress);
+        uiProgress.setBounds(5, 480, 500, uiProgress.getPreferredSize().height);
+        contentPane.add(separator1);
+        separator1.setBounds(0, 90, 490, 2);
 
-		//---- uiAutoSolidSize ----
-		uiAutoSolidSize.setText("\u81ea\u52a8");
-		uiAutoSolidSize.setSelected(true);
-		contentPane.add(uiAutoSolidSize);
-		uiAutoSolidSize.setBounds(new Rectangle(new Point(145, 124), uiAutoSolidSize.getPreferredSize()));
+        //---- label14 ----
+        label14.setText("\u5206\u5377\u5927\u5c0f");
+        contentPane.add(label14);
+        label14.setBounds(new Rectangle(new Point(5, 103), label14.getPreferredSize()));
+        contentPane.add(uiSplitSize);
+        uiSplitSize.setBounds(55, 100, 90, uiSplitSize.getPreferredSize().height);
 
-		//---- uiDiskCache ----
-		uiDiskCache.setText("\u78c1\u76d8\u7f13\u5b58");
-		contentPane.add(uiDiskCache);
-		uiDiskCache.setBounds(new Rectangle(new Point(300, 124), uiDiskCache.getPreferredSize()));
+        //---- label3 ----
+        label3.setText("\u56fa\u5b9e\u5927\u5c0f");
+        contentPane.add(label3);
+        label3.setBounds(new Rectangle(new Point(5, 128), label3.getPreferredSize()));
 
-		//---- separator5 ----
-		separator5.setOrientation(SwingConstants.VERTICAL);
-		contentPane.add(separator5);
-		separator5.setBounds(130, 175, separator5.getPreferredSize().width, 155);
-		contentPane.add(uiThreads);
-		uiThreads.setBounds(225, 100, 70, uiThreads.getPreferredSize().height);
+        //---- uiSolidSize ----
+        uiSolidSize.setEnabled(false);
+        contentPane.add(uiSolidSize);
+        uiSolidSize.setBounds(55, 125, 90, uiSolidSize.getPreferredSize().height);
 
-		//---- label2 ----
-		label2.setText("\u5e76\u884c");
-		contentPane.add(label2);
-		label2.setBounds(new Rectangle(new Point(198, 103), label2.getPreferredSize()));
+        //---- uiAutoSolidSize ----
+        uiAutoSolidSize.setText("\u81ea\u52a8");
+        uiAutoSolidSize.setSelected(true);
+        contentPane.add(uiAutoSolidSize);
+        uiAutoSolidSize.setBounds(new Rectangle(new Point(145, 124), uiAutoSolidSize.getPreferredSize()));
 
-		//---- uiSplitTask ----
-		uiSplitTask.setText("\u5355\u538b\u7f29\u6d41\u5e76\u884c");
-		contentPane.add(uiSplitTask);
-		uiSplitTask.setBounds(new Rectangle(new Point(220, 148), uiSplitTask.getPreferredSize()));
+        //---- uiDiskCache ----
+        uiDiskCache.setText("\u78c1\u76d8\u7f13\u5b58");
+        contentPane.add(uiDiskCache);
+        uiDiskCache.setBounds(new Rectangle(new Point(300, 124), uiDiskCache.getPreferredSize()));
 
-		//---- uiSplitTaskType ----
-		uiSplitTaskType.setEnabled(false);
-		contentPane.add(uiSplitTaskType);
-		uiSplitTaskType.setBounds(320, 150, 170, uiSplitTaskType.getPreferredSize().height);
-		contentPane.add(uiMemoryLimit);
-		uiMemoryLimit.setBounds(225, 125, 70, uiMemoryLimit.getPreferredSize().height);
+        //---- separator5 ----
+        separator5.setOrientation(SwingConstants.VERTICAL);
+        contentPane.add(separator5);
+        separator5.setBounds(130, 175, separator5.getPreferredSize().width, 155);
+        contentPane.add(uiThreads);
+        uiThreads.setBounds(225, 100, 70, uiThreads.getPreferredSize().height);
 
-		//---- label5 ----
-		label5.setText("\u5185\u5b58");
-		contentPane.add(label5);
-		label5.setBounds(new Rectangle(new Point(198, 128), label5.getPreferredSize()));
-		contentPane.add(separator2);
-		separator2.setBounds(0, 175, 495, 2);
-		contentPane.add(uiPreset);
-		uiPreset.setBounds(140, 180, 110, uiPreset.getPreferredSize().height);
+        //---- label2 ----
+        label2.setText("\u5e76\u884c");
+        contentPane.add(label2);
+        label2.setBounds(new Rectangle(new Point(198, 103), label2.getPreferredSize()));
 
-		//---- uiFindBestProp ----
-		uiFindBestProp.setText("\u9884\u6d4b");
-		uiFindBestProp.setMargin(new Insets(2, 4, 2, 4));
-		contentPane.add(uiFindBestProp);
-		uiFindBestProp.setBounds(new Rectangle(new Point(259, 180), uiFindBestProp.getPreferredSize()));
+        //---- uiSplitTask ----
+        uiSplitTask.setText("\u5355\u538b\u7f29\u6d41\u5e76\u884c");
+        contentPane.add(uiSplitTask);
+        uiSplitTask.setBounds(new Rectangle(new Point(220, 148), uiSplitTask.getPreferredSize()));
 
-		//---- label7 ----
-		label7.setText("Lc Lp Pb");
-		contentPane.add(label7);
-		label7.setBounds(new Rectangle(new Point(140, 207), label7.getPreferredSize()));
+        //---- uiSplitTaskType ----
+        uiSplitTaskType.setEnabled(false);
+        contentPane.add(uiSplitTaskType);
+        uiSplitTaskType.setBounds(320, 150, 170, uiSplitTaskType.getPreferredSize().height);
+        contentPane.add(uiMemoryLimit);
+        uiMemoryLimit.setBounds(225, 125, 70, uiMemoryLimit.getPreferredSize().height);
 
-		//---- label8 ----
-		label8.setText("\u5b57\u5178\u5927\u5c0f");
-		contentPane.add(label8);
-		label8.setBounds(new Rectangle(new Point(140, 233), label8.getPreferredSize()));
+        //---- label5 ----
+        label5.setText("\u5185\u5b58");
+        contentPane.add(label5);
+        label5.setBounds(new Rectangle(new Point(198, 128), label5.getPreferredSize()));
+        contentPane.add(separator2);
+        separator2.setBounds(0, 175, 495, 2);
+        contentPane.add(uiPreset);
+        uiPreset.setBounds(140, 180, 110, uiPreset.getPreferredSize().height);
 
-		//---- label9 ----
-		label9.setText("\u5355\u8bcd\u5927\u5c0f");
-		contentPane.add(label9);
-		label9.setBounds(new Rectangle(new Point(140, 258), label9.getPreferredSize()));
+        //---- uiFindBestProp ----
+        uiFindBestProp.setText("\u9884\u6d4b");
+        uiFindBestProp.setMargin(new Insets(2, 4, 2, 4));
+        contentPane.add(uiFindBestProp);
+        uiFindBestProp.setBounds(new Rectangle(new Point(259, 180), uiFindBestProp.getPreferredSize()));
 
-		//---- label10 ----
-		label10.setText("\u641c\u7d22\u6df1\u5ea6");
-		contentPane.add(label10);
-		label10.setBounds(new Rectangle(new Point(140, 283), label10.getPreferredSize()));
+        //---- label7 ----
+        label7.setText("Lc Lp Pb");
+        contentPane.add(label7);
+        label7.setBounds(new Rectangle(new Point(140, 207), label7.getPreferredSize()));
 
-		//---- label11 ----
-		label11.setText("\u5339\u914d\u7b97\u6cd5");
-		contentPane.add(label11);
-		label11.setBounds(new Rectangle(new Point(140, 308), label11.getPreferredSize()));
+        //---- label8 ----
+        label8.setText("\u5b57\u5178\u5927\u5c0f");
+        contentPane.add(label8);
+        label8.setBounds(new Rectangle(new Point(140, 233), label8.getPreferredSize()));
 
-		//---- uiLc ----
-		uiLc.setModel(new SpinnerNumberModel(0, 0, 4, 1));
-		contentPane.add(uiLc);
-		uiLc.setBounds(new Rectangle(new Point(200, 205), uiLc.getPreferredSize()));
+        //---- label9 ----
+        label9.setText("\u5355\u8bcd\u5927\u5c0f");
+        contentPane.add(label9);
+        label9.setBounds(new Rectangle(new Point(140, 258), label9.getPreferredSize()));
 
-		//---- uiLp ----
-		uiLp.setModel(new SpinnerNumberModel(0, 0, 4, 1));
-		contentPane.add(uiLp);
-		uiLp.setBounds(new Rectangle(new Point(233, 205), uiLp.getPreferredSize()));
+        //---- label10 ----
+        label10.setText("\u641c\u7d22\u6df1\u5ea6");
+        contentPane.add(label10);
+        label10.setBounds(new Rectangle(new Point(140, 283), label10.getPreferredSize()));
 
-		//---- uiPb ----
-		uiPb.setModel(new SpinnerNumberModel(0, 0, 4, 1));
-		contentPane.add(uiPb);
-		uiPb.setBounds(new Rectangle(new Point(266, 205), uiPb.getPreferredSize()));
-		contentPane.add(uiDictSize);
-		uiDictSize.setBounds(200, 230, 95, uiDictSize.getPreferredSize().height);
+        //---- label11 ----
+        label11.setText("\u5339\u914d\u7b97\u6cd5");
+        contentPane.add(label11);
+        label11.setBounds(new Rectangle(new Point(140, 308), label11.getPreferredSize()));
 
-		//---- uiNiceLen ----
-		uiNiceLen.setModel(new SpinnerNumberModel(8, 8, 273, 1));
-		contentPane.add(uiNiceLen);
-		uiNiceLen.setBounds(200, 255, 95, uiNiceLen.getPreferredSize().height);
-		contentPane.add(uiDepthLimit);
-		uiDepthLimit.setBounds(200, 280, 95, uiDepthLimit.getPreferredSize().height);
-		contentPane.add(uiMatchFinder);
-		uiMatchFinder.setBounds(200, 305, 95, uiMatchFinder.getPreferredSize().height);
+        //---- uiLc ----
+        uiLc.setModel(new SpinnerNumberModel(0, 0, 4, 1));
+        contentPane.add(uiLc);
+        uiLc.setBounds(new Rectangle(new Point(200, 205), uiLc.getPreferredSize()));
 
-		//---- uiMemoryUsage ----
-		uiMemoryUsage.setText("0");
-		contentPane.add(uiMemoryUsage);
-		uiMemoryUsage.setBounds(320, 315, 170, uiMemoryUsage.getPreferredSize().height);
+        //---- uiLp ----
+        uiLp.setModel(new SpinnerNumberModel(0, 0, 4, 1));
+        contentPane.add(uiLp);
+        uiLp.setBounds(new Rectangle(new Point(233, 205), uiLp.getPreferredSize()));
 
-		//---- uiFastLZMA ----
-		uiFastLZMA.setText("\u5feb\u901fLZMA");
-		contentPane.add(uiFastLZMA);
-		uiFastLZMA.setBounds(new Rectangle(new Point(315, 290), uiFastLZMA.getPreferredSize()));
+        //---- uiPb ----
+        uiPb.setModel(new SpinnerNumberModel(0, 0, 4, 1));
+        contentPane.add(uiPb);
+        uiPb.setBounds(new Rectangle(new Point(266, 205), uiPb.getPreferredSize()));
+        contentPane.add(uiDictSize);
+        uiDictSize.setBounds(200, 230, 95, uiDictSize.getPreferredSize().height);
 
-		//---- separator3 ----
-		separator3.setOrientation(SwingConstants.VERTICAL);
-		contentPane.add(separator3);
-		separator3.setBounds(310, 175, separator3.getPreferredSize().width, 155);
+        //---- uiNiceLen ----
+        uiNiceLen.setModel(new SpinnerNumberModel(8, 8, 273, 1));
+        contentPane.add(uiNiceLen);
+        uiNiceLen.setBounds(200, 255, 95, uiNiceLen.getPreferredSize().height);
+        contentPane.add(uiDepthLimit);
+        uiDepthLimit.setBounds(200, 280, 95, uiDepthLimit.getPreferredSize().height);
+        contentPane.add(uiMatchFinder);
+        uiMatchFinder.setBounds(200, 305, 95, uiMatchFinder.getPreferredSize().height);
 
-		//---- uiCrypt ----
-		uiCrypt.setText("\u52a0\u5bc6");
-		contentPane.add(uiCrypt);
-		uiCrypt.setBounds(new Rectangle(new Point(316, 180), uiCrypt.getPreferredSize()));
+        //---- uiMemoryUsage ----
+        uiMemoryUsage.setText("0");
+        contentPane.add(uiMemoryUsage);
+        uiMemoryUsage.setBounds(320, 315, 170, uiMemoryUsage.getPreferredSize().height);
 
-		//---- uiCryptHeader ----
-		uiCryptHeader.setText("\u52a0\u5bc6\u6587\u4ef6\u540d");
-		uiCryptHeader.setEnabled(false);
-		contentPane.add(uiCryptHeader);
-		uiCryptHeader.setBounds(new Rectangle(new Point(365, 180), uiCryptHeader.getPreferredSize()));
+        //---- uiFastLZMA ----
+        uiFastLZMA.setText("\u5feb\u901fLZMA");
+        contentPane.add(uiFastLZMA);
+        uiFastLZMA.setBounds(new Rectangle(new Point(315, 290), uiFastLZMA.getPreferredSize()));
 
-		//---- uiPassword ----
-		uiPassword.setEnabled(false);
-		contentPane.add(uiPassword);
-		uiPassword.setBounds(320, 205, 150, uiPassword.getPreferredSize().height);
+        //---- separator3 ----
+        separator3.setOrientation(SwingConstants.VERTICAL);
+        contentPane.add(separator3);
+        separator3.setBounds(310, 175, separator3.getPreferredSize().width, 155);
 
-		//---- label12 ----
-		label12.setText("\u6d3e\u751f\u5faa\u73af\u6b21\u65b9");
-		contentPane.add(label12);
-		label12.setBounds(new Rectangle(new Point(320, 233), label12.getPreferredSize()));
+        //---- uiCrypt ----
+        uiCrypt.setText("\u52a0\u5bc6");
+        contentPane.add(uiCrypt);
+        uiCrypt.setBounds(new Rectangle(new Point(316, 180), uiCrypt.getPreferredSize()));
 
-		//---- label13 ----
-		label13.setText("\u76d0\u957f\u5ea6");
-		contentPane.add(label13);
-		label13.setBounds(new Rectangle(new Point(320, 258), label13.getPreferredSize()));
+        //---- uiCryptHeader ----
+        uiCryptHeader.setText("\u52a0\u5bc6\u6587\u4ef6\u540d");
+        uiCryptHeader.setEnabled(false);
+        contentPane.add(uiCryptHeader);
+        uiCryptHeader.setBounds(new Rectangle(new Point(365, 180), uiCryptHeader.getPreferredSize()));
 
-		//---- uiCyclePower ----
-		uiCyclePower.setModel(new SpinnerNumberModel(19, 10, 22, 1));
-		uiCyclePower.setEnabled(false);
-		contentPane.add(uiCyclePower);
-		uiCyclePower.setBounds(395, 230, 75, uiCyclePower.getPreferredSize().height);
+        //---- uiPassword ----
+        uiPassword.setEnabled(false);
+        contentPane.add(uiPassword);
+        uiPassword.setBounds(320, 205, 150, uiPassword.getPreferredSize().height);
 
-		//---- uiSaltLength ----
-		uiSaltLength.setModel(new SpinnerNumberModel(16, 0, 16, 1));
-		uiSaltLength.setEnabled(false);
-		contentPane.add(uiSaltLength);
-		uiSaltLength.setBounds(360, 255, 110, uiSaltLength.getPreferredSize().height);
-		contentPane.add(separator4);
-		separator4.setBounds(310, 285, 185, 2);
+        //---- label12 ----
+        label12.setText("\u6d3e\u751f\u5faa\u73af\u6b21\u65b9");
+        contentPane.add(label12);
+        label12.setBounds(new Rectangle(new Point(320, 233), label12.getPreferredSize()));
 
-		//---- uiCompressHeader ----
-		uiCompressHeader.setText("\u538b\u7f29\u5143\u6570\u636e");
-		uiCompressHeader.setSelected(true);
-		contentPane.add(uiCompressHeader);
-		uiCompressHeader.setBounds(new Rectangle(new Point(5, 180), uiCompressHeader.getPreferredSize()));
+        //---- label13 ----
+        label13.setText("\u76d0\u957f\u5ea6");
+        contentPane.add(label13);
+        label13.setBounds(new Rectangle(new Point(320, 258), label13.getPreferredSize()));
 
-		//---- uiFastCheck ----
-		uiFastCheck.setText("\u5feb\u901f\u91cd\u590d\u68c0\u6d4b(CRC32+ModTime)");
-		uiFastCheck.setSelected(true);
-		contentPane.add(uiFastCheck);
-		uiFastCheck.setBounds(new Rectangle(new Point(5, 148), uiFastCheck.getPreferredSize()));
-		contentPane.add(uiAppendOptions);
-		uiAppendOptions.setBounds(5, 205, 120, uiAppendOptions.getPreferredSize().height);
+        //---- uiCyclePower ----
+        uiCyclePower.setModel(new SpinnerNumberModel(19, 10, 22, 1));
+        uiCyclePower.setEnabled(false);
+        contentPane.add(uiCyclePower);
+        uiCyclePower.setBounds(395, 230, 75, uiCyclePower.getPreferredSize().height);
 
-		//---- label6 ----
-		label6.setText("\u5728\u5143\u6570\u636e\u4e2d\u4fdd\u5b58");
-		contentPane.add(label6);
-		label6.setBounds(new Rectangle(new Point(5, 230), label6.getPreferredSize()));
+        //---- uiSaltLength ----
+        uiSaltLength.setModel(new SpinnerNumberModel(16, 0, 16, 1));
+        uiSaltLength.setEnabled(false);
+        contentPane.add(uiSaltLength);
+        uiSaltLength.setBounds(360, 255, 110, uiSaltLength.getPreferredSize().height);
+        contentPane.add(separator4);
+        separator4.setBounds(310, 285, 185, 2);
 
-		//---- uiStoreMT ----
-		uiStoreMT.setText("\u4fee\u6539\u65f6\u95f4");
-		uiStoreMT.setSelected(true);
-		contentPane.add(uiStoreMT);
-		uiStoreMT.setBounds(new Rectangle(new Point(5, 245), uiStoreMT.getPreferredSize()));
+        //---- uiCompressHeader ----
+        uiCompressHeader.setText("\u538b\u7f29\u5143\u6570\u636e");
+        uiCompressHeader.setSelected(true);
+        contentPane.add(uiCompressHeader);
+        uiCompressHeader.setBounds(new Rectangle(new Point(5, 180), uiCompressHeader.getPreferredSize()));
 
-		//---- uiStoreCT ----
-		uiStoreCT.setText("\u521b\u5efa\u65f6\u95f4");
-		contentPane.add(uiStoreCT);
-		uiStoreCT.setBounds(new Rectangle(new Point(5, 265), uiStoreCT.getPreferredSize()));
+        //---- uiFastCheck ----
+        uiFastCheck.setText("\u5feb\u901f\u91cd\u590d\u68c0\u6d4b(CRC32+ModTime)");
+        uiFastCheck.setSelected(true);
+        contentPane.add(uiFastCheck);
+        uiFastCheck.setBounds(new Rectangle(new Point(5, 148), uiFastCheck.getPreferredSize()));
+        contentPane.add(uiAppendOptions);
+        uiAppendOptions.setBounds(5, 205, 120, uiAppendOptions.getPreferredSize().height);
 
-		//---- uiStoreAT ----
-		uiStoreAT.setText("\u8bbf\u95ee\u65f6\u95f4");
-		contentPane.add(uiStoreAT);
-		uiStoreAT.setBounds(new Rectangle(new Point(5, 285), uiStoreAT.getPreferredSize()));
+        //---- label6 ----
+        label6.setText("\u5728\u5143\u6570\u636e\u4e2d\u4fdd\u5b58");
+        contentPane.add(label6);
+        label6.setBounds(new Rectangle(new Point(5, 230), label6.getPreferredSize()));
 
-		//---- uiStoreAttr ----
-		uiStoreAttr.setText("\u6587\u4ef6\u6743\u9650 (DOS)");
-		contentPane.add(uiStoreAttr);
-		uiStoreAttr.setBounds(new Rectangle(new Point(5, 305), uiStoreAttr.getPreferredSize()));
+        //---- uiStoreMT ----
+        uiStoreMT.setText("\u4fee\u6539\u65f6\u95f4");
+        uiStoreMT.setSelected(true);
+        contentPane.add(uiStoreMT);
+        uiStoreMT.setBounds(new Rectangle(new Point(5, 245), uiStoreMT.getPreferredSize()));
 
-		//---- uiStoreFolder ----
-		uiStoreFolder.setText("\u6587\u4ef6\u5939");
-		uiStoreFolder.setSelected(true);
-		contentPane.add(uiStoreFolder);
-		uiStoreFolder.setBounds(new Rectangle(new Point(5, 325), uiStoreFolder.getPreferredSize()));
-		contentPane.add(separator6);
-		separator6.setBounds(130, 330, 180, 2);
+        //---- uiStoreCT ----
+        uiStoreCT.setText("\u521b\u5efa\u65f6\u95f4");
+        contentPane.add(uiStoreCT);
+        uiStoreCT.setBounds(new Rectangle(new Point(5, 265), uiStoreCT.getPreferredSize()));
 
-		//---- uiBCJ ----
-		uiBCJ.setText("\u5bf9\u53ef\u6267\u884c\u6587\u4ef6\u4f7f\u7528BCJ");
-		uiBCJ.setSelected(true);
-		contentPane.add(uiBCJ);
-		uiBCJ.setBounds(new Rectangle(new Point(300, 99), uiBCJ.getPreferredSize()));
+        //---- uiStoreAT ----
+        uiStoreAT.setText("\u8bbf\u95ee\u65f6\u95f4");
+        contentPane.add(uiStoreAT);
+        uiStoreAT.setBounds(new Rectangle(new Point(5, 285), uiStoreAT.getPreferredSize()));
 
-		//---- uiBCJ2 ----
-		uiBCJ2.setText("BCJ2");
-		contentPane.add(uiBCJ2);
-		uiBCJ2.setBounds(new Rectangle(new Point(440, 99), uiBCJ2.getPreferredSize()));
+        //---- uiStoreAttr ----
+        uiStoreAttr.setText("\u6587\u4ef6\u6743\u9650 (DOS)");
+        contentPane.add(uiStoreAttr);
+        uiStoreAttr.setBounds(new Rectangle(new Point(5, 305), uiStoreAttr.getPreferredSize()));
 
-		//======== scrollPane1 ========
-		{
-			scrollPane1.setViewportView(uiLog);
-		}
-		contentPane.add(scrollPane1);
-		scrollPane1.setBounds(5, 355, 495, 120);
+        //---- uiStoreFolder ----
+        uiStoreFolder.setText("\u6587\u4ef6\u5939");
+        uiStoreFolder.setSelected(true);
+        contentPane.add(uiStoreFolder);
+        uiStoreFolder.setBounds(new Rectangle(new Point(5, 325), uiStoreFolder.getPreferredSize()));
+        contentPane.add(separator6);
+        separator6.setBounds(130, 330, 180, 2);
 
-		//---- label1 ----
-		label1.setText("Log \ud83d\udc47");
-		contentPane.add(label1);
-		label1.setBounds(new Rectangle(new Point(80, 340), label1.getPreferredSize()));
+        //---- uiBCJ ----
+        uiBCJ.setText("\u5bf9\u53ef\u6267\u884c\u6587\u4ef6\u4f7f\u7528BCJ");
+        uiBCJ.setSelected(true);
+        contentPane.add(uiBCJ);
+        uiBCJ.setBounds(new Rectangle(new Point(300, 99), uiBCJ.getPreferredSize()));
 
-		//---- uiAutoSplitTask ----
-		uiAutoSplitTask.setText("\u81ea\u52a8\u62c6\u5206");
-		uiAutoSplitTask.setEnabled(false);
-		contentPane.add(uiAutoSplitTask);
-		uiAutoSplitTask.setBounds(new Rectangle(new Point(370, 125), uiAutoSplitTask.getPreferredSize()));
+        //---- uiBCJ2 ----
+        uiBCJ2.setText("BCJ2");
+        contentPane.add(uiBCJ2);
+        uiBCJ2.setBounds(new Rectangle(new Point(440, 99), uiBCJ2.getPreferredSize()));
 
-		//---- uiMixedMode ----
-		uiMixedMode.setText("\u6df7\u5408\u6a21\u5f0f");
-		uiMixedMode.setEnabled(false);
-		contentPane.add(uiMixedMode);
-		uiMixedMode.setBounds(new Rectangle(new Point(440, 125), uiMixedMode.getPreferredSize()));
-		contentPane.add(uiPathType);
-		uiPathType.setBounds(240, 40, 110, uiPathType.getPreferredSize().height);
+        //======== scrollPane1 ========
+        {
+            scrollPane1.setViewportView(uiLog);
+        }
+        contentPane.add(scrollPane1);
+        scrollPane1.setBounds(5, 355, 495, 120);
 
-		//---- uiReadDirFromLog ----
-		uiReadDirFromLog.setText("\u4eceLog\u8bfb\u53d6\u66f4\u591a\u6587\u4ef6(\u5939) (\u6bcf\u884c\u4e00\u4e2a)");
-		contentPane.add(uiReadDirFromLog);
-		uiReadDirFromLog.setBounds(new Rectangle(new Point(125, 333), uiReadDirFromLog.getPreferredSize()));
+        //---- label1 ----
+        label1.setText("Log \ud83d\udc47");
+        contentPane.add(label1);
+        label1.setBounds(new Rectangle(new Point(80, 340), label1.getPreferredSize()));
 
-		contentPane.setPreferredSize(new Dimension(510, 495));
-		pack();
-		setLocationRelativeTo(getOwner());
+        //---- uiAutoSplitTask ----
+        uiAutoSplitTask.setText("\u81ea\u52a8\u62c6\u5206");
+        uiAutoSplitTask.setEnabled(false);
+        contentPane.add(uiAutoSplitTask);
+        uiAutoSplitTask.setBounds(new Rectangle(new Point(370, 125), uiAutoSplitTask.getPreferredSize()));
+
+        //---- uiMixedMode ----
+        uiMixedMode.setText("\u6df7\u5408\u6a21\u5f0f");
+        uiMixedMode.setEnabled(false);
+        contentPane.add(uiMixedMode);
+        uiMixedMode.setBounds(new Rectangle(new Point(440, 125), uiMixedMode.getPreferredSize()));
+
+        //---- uiReadDirFromLog ----
+        uiReadDirFromLog.setText("\u4eceLog\u8bfb\u53d6\u66f4\u591a\u6587\u4ef6(\u5939) (\u6bcf\u884c\u4e00\u4e2a)");
+        contentPane.add(uiReadDirFromLog);
+        uiReadDirFromLog.setBounds(new Rectangle(new Point(125, 333), uiReadDirFromLog.getPreferredSize()));
+
+        //---- uiSortByFilename ----
+        uiSortByFilename.setText("\u6309\u6587\u4ef6\u540d\u6392\u5e8f");
+        contentPane.add(uiSortByFilename);
+        uiSortByFilename.setBounds(new Rectangle(new Point(395, 290), uiSortByFilename.getPreferredSize()));
+
+        contentPane.setPreferredSize(new Dimension(510, 495));
+        pack();
+        setLocationRelativeTo(getOwner());
 		// JFormDesigner - End of component initialization  //GEN-END:initComponents  @formatter:on
 	}
 
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
-	private JTextField uiInput;
-	private JTextField uiOutput;
-	private JButton uiBegin;
-	private JProgressBar uiProgress;
-	private JTextField uiSplitSize;
-	private JTextField uiSolidSize;
-	private JCheckBox uiAutoSolidSize;
-	private JCheckBox uiDiskCache;
-	private JSpinner uiThreads;
-	private JCheckBox uiSplitTask;
-	private JComboBox<String> uiSplitTaskType;
-	private JTextField uiMemoryLimit;
-	private JComboBox<CMBoxValue> uiPreset;
-	private JButton uiFindBestProp;
-	private JSpinner uiLc;
-	private JSpinner uiLp;
-	private JSpinner uiPb;
-	private JTextField uiDictSize;
-	private JSpinner uiNiceLen;
-	private JSpinner uiDepthLimit;
-	private JComboBox<CMBoxValue> uiMatchFinder;
-	private JLabel uiMemoryUsage;
-	private JCheckBox uiFastLZMA;
-	private JCheckBox uiCrypt;
-	private JCheckBox uiCryptHeader;
-	private JTextField uiPassword;
-	private JSpinner uiCyclePower;
-	private JSpinner uiSaltLength;
-	private JCheckBox uiCompressHeader;
-	private JCheckBox uiFastCheck;
-	private JComboBox<String> uiAppendOptions;
-	private JCheckBox uiStoreMT;
-	private JCheckBox uiStoreCT;
-	private JCheckBox uiStoreAT;
-	private JCheckBox uiStoreAttr;
-	private JCheckBox uiStoreFolder;
-	private JCheckBox uiBCJ;
-	private JCheckBox uiBCJ2;
-	private JTextArea uiLog;
-	private JCheckBox uiAutoSplitTask;
-	private JCheckBox uiMixedMode;
-	private JComboBox<String> uiPathType;
-	private JCheckBox uiReadDirFromLog;
+    private JTextField uiInput;
+    private JTextField uiOutput;
+    private JCheckBox uiKeepArchive;
+    private JComboBox<String> uiPathType;
+    private JButton uiBegin;
+    private JCheckBox uiHideComplicate;
+    private JCheckBox uiNativeAccel;
+    private JProgressBar uiProgress;
+    private JTextField uiSplitSize;
+    private JTextField uiSolidSize;
+    private JCheckBox uiAutoSolidSize;
+    private JCheckBox uiDiskCache;
+    private JSpinner uiThreads;
+    private JCheckBox uiSplitTask;
+    private JComboBox<String> uiSplitTaskType;
+    private JTextField uiMemoryLimit;
+    private JComboBox<CMBoxValue> uiPreset;
+    private JButton uiFindBestProp;
+    private JSpinner uiLc;
+    private JSpinner uiLp;
+    private JSpinner uiPb;
+    private JTextField uiDictSize;
+    private JSpinner uiNiceLen;
+    private JSpinner uiDepthLimit;
+    private JComboBox<CMBoxValue> uiMatchFinder;
+    private JLabel uiMemoryUsage;
+    private JCheckBox uiFastLZMA;
+    private JCheckBox uiCrypt;
+    private JCheckBox uiCryptHeader;
+    private JTextField uiPassword;
+    private JSpinner uiCyclePower;
+    private JSpinner uiSaltLength;
+    private JCheckBox uiCompressHeader;
+    private JCheckBox uiFastCheck;
+    private JComboBox<String> uiAppendOptions;
+    private JCheckBox uiStoreMT;
+    private JCheckBox uiStoreCT;
+    private JCheckBox uiStoreAT;
+    private JCheckBox uiStoreAttr;
+    private JCheckBox uiStoreFolder;
+    private JCheckBox uiBCJ;
+    private JCheckBox uiBCJ2;
+    private JTextArea uiLog;
+    private JCheckBox uiAutoSplitTask;
+    private JCheckBox uiMixedMode;
+    private JCheckBox uiReadDirFromLog;
+    private JCheckBox uiSortByFilename;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

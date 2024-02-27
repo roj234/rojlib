@@ -2,14 +2,12 @@ package roj.plugins.mychat;
 
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.TaskPool;
-import roj.concurrent.task.AsyncTask;
-import roj.crypt.Base64;
 import roj.crypt.SM3;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
-import roj.net.http.srv.HttpServer11;
-import roj.net.http.srv.MultipartFormHandler;
-import roj.net.http.srv.Request;
+import roj.net.http.server.HttpCache;
+import roj.net.http.server.MultipartFormHandler;
+import roj.net.http.server.Request;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -22,7 +20,6 @@ import java.awt.image.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.security.DigestException;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -34,14 +31,12 @@ public class UploadHandler extends MultipartFormHandler {
 	private final int uid;
 	private final boolean image;
 
-	private IOUtil uc;
 	private SM3 sm3;
 
 	public File[] files;
 	public String[] errors;
 
 	private FileOutputStream fos;
-	private ByteList tmp;
 	protected int i;
 
 	public UploadHandler(Request req, int count, int uid, boolean image) {
@@ -54,9 +49,8 @@ public class UploadHandler extends MultipartFormHandler {
 	@Override
 	public void init(String req) {
 		super.init(req);
-		uc = IOUtil.SharedCoder.get();
 
-		Map<String, Object> ctx = HttpServer11.TSO.get().ctx;
+		Map<String, Object> ctx = HttpCache.getInstance().ctx;
 		if (!ctx.containsKey("SM3U")) {
 			ctx.put("SM3U", sm3 = new SM3());
 		} else {
@@ -96,25 +90,24 @@ public class UploadHandler extends MultipartFormHandler {
 	private File getFile() throws IOException {
 		sm3.reset();
 
-		ByteList bb = uc.byteBuf;
-		bb.clear();
-		bb.putLong(System.nanoTime()).putLong(System.currentTimeMillis()).putInt(files.length).putInt(files.hashCode()).putInt(i);
-
+		ByteList bb = IOUtil.getSharedByteBuf();
 		File file;
 		int i = 0;
 		do {
-			if (i++ > 5) {
-				throw new IOException("哈希碰撞");
-			}
+			if (i++ > 5) throw new IOException("哈希碰撞");
 
-			sm3.update(bb.list, 0, bb.wIndex());
-			try {
-				sm3.digest(bb.list, 0, 32);
-			} catch (DigestException ignored) {}
+			bb.clear();
+
+			bb.putLong(System.nanoTime()).putLong(System.currentTimeMillis()).putInt(files.length).putInt(files.hashCode()).putInt(i);
+			sm3.update(bb);
+
+			bb.clear();
+			sm3.digest(bb);
 			bb.wIndex(16);
+
 			bb.putInt(uid);
 
-			file = new File(Server.attDir, uc.encodeBase64(bb, Base64.B64_URL_SAFE));
+			file = new File(Server.attDir, bb.base64UrlSafe());
 		} while (file.isFile());
 		return file;
 	}
@@ -134,11 +127,7 @@ public class UploadHandler extends MultipartFormHandler {
 				buf.rIndex = buf.wIndex();
 			} else {
 				fos.getChannel().write(buf.nioBuffer());
-
-				ByteList tmp = uc.byteBuf;
-				tmp.clear();
-				tmp.put(buf);
-				sm3.update(tmp.list, 0, tmp.wIndex());
+				sm3.update(buf);
 			}
 		} catch (IOException e) {
 			if (errors == null) errors = new String[files.length];
@@ -163,11 +152,11 @@ public class UploadHandler extends MultipartFormHandler {
 			if (files[i] == null) return;
 
 			try {
-				ByteList tmp = uc.byteBuf;
-				sm3.digest(tmp.list, 0, 32);
+				ByteList tmp = IOUtil.getSharedByteBuf();
+				sm3.digest(tmp);
 				tmp.wIndex(16);
 
-				String hashFileName = uc.encodeBase64(tmp, Base64.B64_URL_SAFE);
+				String hashFileName = tmp.base64UrlSafe();
 
 				File old = new File(Server.attDir, hashFileName);
 				File cur = files[i];
@@ -187,7 +176,6 @@ public class UploadHandler extends MultipartFormHandler {
 					}
 					files[i] = old;
 				}
-			} catch (DigestException ignored) {
 			} catch (IOException e) {
 				if (errors == null) errors = new String[files.length];
 				errors[i] = e.getMessage();
@@ -241,7 +229,31 @@ public class UploadHandler extends MultipartFormHandler {
 				}
 
 				// todo stream
-				TaskPool.Common().pushTask(new ConvertImage(r, ins, fmt, files[i]));
+				String v$fmt = fmt;
+				File v$file = files[i];
+				TaskPool.Common().submit(() -> {
+					BufferedImage dst = img.get();
+					if (dst == null || dst.getWidth() < r.getWidth(0) || dst.getHeight() < r.getHeight(0)) {
+						dst = new BufferedImage(r.getWidth(0), r.getHeight(0), BufferedImage.TYPE_3BYTE_BGR);
+						img.set(dst);
+					}
+					dst = dst.getSubimage(0, 0, r.getWidth(0), r.getHeight(0));
+
+					ImageReadParam param = new ImageReadParam();
+					param.setSourceBands(new int[] {0, 1, 2});
+					param.setDestination(dst);
+
+					BufferedImage img;
+					try {
+						img = r.read(0, param);
+					} finally {
+						r.dispose();
+						ins.close();
+					}
+
+					ImageIO.write(img, v$fmt, v$file);
+					return null;
+				});
 			} catch (Throwable e) {
 				e.printStackTrace();
 				if (errors == null) errors = new String[files.length];
@@ -249,45 +261,5 @@ public class UploadHandler extends MultipartFormHandler {
 			}
 		}
 	}
-
-	private static class ConvertImage extends AsyncTask<Void> {
-		static final FastThreadLocal<BufferedImage> img = new FastThreadLocal<>();
-
-		private final ImageReader v$r;
-		private final ImageInputStream v$in;
-		private final String v$fmt;
-		private final File v$file;
-
-		public ConvertImage(ImageReader v$r, ImageInputStream v$in, String v$fmt, File v$file) {
-			this.v$r = v$r;
-			this.v$in = v$in;
-			this.v$fmt = v$fmt;
-			this.v$file = v$file;
-		}
-
-		@Override
-		protected Void invoke() throws Exception {
-			BufferedImage dst = img.get();
-			if (dst == null || dst.getWidth() < v$r.getWidth(0) || dst.getHeight() < v$r.getHeight(0)) {
-				dst = new BufferedImage(v$r.getWidth(0), v$r.getHeight(0), BufferedImage.TYPE_3BYTE_BGR);
-				img.set(dst);
-			}
-			dst = dst.getSubimage(0, 0, v$r.getWidth(0), v$r.getHeight(0));
-
-			ImageReadParam param = new ImageReadParam();
-			param.setSourceBands(new int[] {0, 1, 2});
-			param.setDestination(dst);
-
-			BufferedImage img;
-			try {
-				img = v$r.read(0, param);
-			} finally {
-				v$r.dispose();
-				v$in.close();
-			}
-
-			ImageIO.write(img, v$fmt, v$file);
-			return null;
-		}
-	}
+	static final FastThreadLocal<BufferedImage> img = new FastThreadLocal<>();
 }

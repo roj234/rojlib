@@ -2,6 +2,7 @@ package roj.compiler.asm;
 
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.collect.SimpleList;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -14,14 +15,21 @@ import java.util.List;
  * @since 2024/1/27 0001 11:04
  */
 public final class Asterisk implements IType {
-	public static final Asterisk anyType = new Asterisk();
-	public static final Asterisk anyGeneric = new Asterisk();
+	// 尽管AnyGeneric有专门的检测，AnyType是没有的
+	public static final Asterisk anyType = new Asterisk("<AnyType>");
+	public static final Asterisk anyGeneric = new Asterisk("<AnyGeneric>");
 
+	private String typename;
 	private IType bound;
 	private List<IType> bounds = Collections.emptyList();
 	private boolean limited;
 
-	private Asterisk() {}
+	public Asterisk(String typename) {this.typename = typename;}
+	/**
+	 * "泛型返回值"类型
+	 * @param visualType 表现类型 以这个类型去测试能否转换
+	 * @param rawType 真实类型 以这个类型的转换写入二进制
+	 */
 	public Asterisk(IType visualType, IType rawType) {
 		this.bound = visualType;
 		this.bounds = Collections.singletonList(rawType);
@@ -30,6 +38,7 @@ public final class Asterisk implements IType {
 	public Asterisk(List<IType> bound) {
 		this.bound = bound.get(0);
 		this.bounds = bound;
+		this.limited = false;
 	}
 
 	public IType getBound() { return bound; }
@@ -39,8 +48,6 @@ public final class Asterisk implements IType {
 	public byte genericType() { return limited ? CONCRETE_ASTERISK_TYPE : ASTERISK_TYPE; }
 	@Override
 	public void toDesc(CharList sb) { throw new UnsupportedOperationException("Asterisk仅用于类型转换的比较"); }
-	@Override
-	public void toString(CharList sb) { sb.append(toString()); }
 	@Override
 	public void checkPosition(int env, int pos) {throw new UnsupportedOperationException("Asterisk仅用于类型转换的比较");}
 
@@ -69,6 +76,7 @@ public final class Asterisk implements IType {
 		try {
 			Asterisk clone = (Asterisk) super.clone();
 			clone.bound = clone.bound.clone();
+			clone.bounds = new SimpleList<>(clone.bounds);
 			return clone;
 		} catch (CloneNotSupportedException e) {
 			Helpers.athrow(e);
@@ -77,9 +85,23 @@ public final class Asterisk implements IType {
 	}
 
 	@Override
+	public void toString(CharList sb) {
+		if (typename != null) sb.append(typename);
+		else if (limited) {
+			bound.toString(sb.append('*'));
+		} else {
+			sb.append("* extends ");
+			var itr = bounds.iterator();
+			while (true) {
+				itr.next().toString(sb);
+				if (!itr.hasNext()) break;
+				sb.append('&');
+			}
+		}
+	}
+	@Override
 	public String toString() {
-		if (this == anyType) return "<AnyType>";
-		if (this == anyGeneric) return "<AnyGeneric>";
+		if (typename != null) return typename;
 		return limited ? "*"+bound : "* extends "+TextUtil.join(bounds, "&");
 	}
 
@@ -87,9 +109,22 @@ public final class Asterisk implements IType {
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (!(o instanceof Asterisk asterisk)) return false;
-		return bound == null ? asterisk.bound == null : bound.equals(asterisk.bound);
+
+		if (typename != null) return asterisk.typename != null;
+		if (asterisk.typename != null) return false;
+
+		if (limited != asterisk.limited) return false;
+		if (!bound.equals(asterisk.bound)) return false;
+		return bounds.equals(asterisk.bounds);
 	}
 
 	@Override
-	public int hashCode() { return bound == null ? 1 : bound.hashCode(); }
+	public int hashCode() {
+		if (typename != null) return 42;
+
+		int hash = bound.hashCode();
+		hash = 31 * hash + bounds.hashCode();
+		hash = 31 * hash + (limited ? 1 : 0);
+		return hash;
+	}
 }

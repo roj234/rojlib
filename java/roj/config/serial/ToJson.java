@@ -1,27 +1,18 @@
 package roj.config.serial;
 
-import roj.config.word.Tokenizer;
-import roj.util.ArrayCache;
+import org.jetbrains.annotations.NotNull;
+import roj.config.Tokenizer;
 
 /**
  * @author Roj233
  * @since 2022/2/19 19:14
  */
-public class ToJson extends ToSomeString {
-	public ToJson() {
-		this.indent = ArrayCache.CHARS;
-	}
+public final class ToJson extends ToSomeString {
+	public ToJson() { super(); }
+	public ToJson(@NotNull String indent) { super(indent); }
 
-	public ToJson(int indent) {
-		spaceIndent(indent);
-	}
-
-	public ToJson(String indent) {
-		this.indent = indent.toCharArray();
-	}
-
-	protected final void listNext() { sb.append(","); }
-	protected final void mapNext() { sb.append(","); }
+	protected final void listNext() { sb.append(','); }
+	protected final void mapNext() { sb.append(','); }
 	protected final void endLevel() {
 		if ((flag&NEXT) != 0) indent(depth);
 		sb.append((flag & 12) == LIST ? ']' : '}');
@@ -32,19 +23,16 @@ public class ToJson extends ToSomeString {
 
 	@Override
 	protected void indent(int x) {
-		if (indent.length > 0) {
+		if (indentCount > 0) {
 			sb.append('\n');
 			if (comment != null) writeSingleLineComment("//");
-			while (x > 0) {
-				sb.append(indent);
-				x--;
-			}
+			sb.padEnd(indent, indentCount*x);
 		}
 	}
 
 	public final void key0(String key) {
 		indent(depth);
 		Tokenizer.addSlashes(key, 0, sb.append('"'), '\'').append("\":");
-		if (indent.length > 0) sb.append(' ');
+		if (indentCount > 0) sb.append(' ');
 	}
 }

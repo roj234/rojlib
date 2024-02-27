@@ -12,12 +12,8 @@ public class Vec3i extends Vector {
 		this.y = y;
 		this.z = z;
 	}
-	public Vec3i(Vector xy, int z) {
-		this((int) xy.x(), (int) xy.y(), z);
-	}
-	public Vec3i(Vector xyz) {
-		this((int) xyz.x(), (int) xyz.y(), (int) xyz.z());
-	}
+	public Vec3i(Vector xy, int z) {this((int) xy.x(), (int) xy.y(), z);}
+	public Vec3i(Vector xyz) {this((int) xyz.x(), (int) xyz.y(), (int) xyz.z());}
 
 	public Vec3i set(int x, int y, int z) {
 		this.x = x;
@@ -49,25 +45,11 @@ public class Vec3i extends Vector {
 		return this;
 	}
 
-	public final double x() {
-		return x;
-	}
-	public final double y() {
-		return y;
-	}
-	public final double z() {
-		return z;
-	}
-	public final void x(double x) {
-		this.x = (int) x;
-	}
-	public final void y(double y) {
-		this.y = (int) y;
-	}
-	public final void z(double z) {
-		this.z = (int) z;
-	}
-	public final int axis() {
-		return 3;
-	}
+	public final double x() {return x;}
+	public final double y() {return y;}
+	public final double z() {return z;}
+	public final void x(double x) {this.x = (int) x;}
+	public final void y(double y) {this.y = (int) y;}
+	public final void z(double z) {this.z = (int) z;}
+	public final int axis() {return 3;}
 }

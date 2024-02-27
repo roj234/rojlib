@@ -23,28 +23,25 @@ public class ConstantPool {
 	public static final int ONLY_STRING = -1, BYTE_STRING = 0, CHAR_STRING = 1;
 
 	private final SimpleList<Constant> constants;
-	private final MyHashSet<Constant> refMap;
+	private MyHashSet<Constant> refMap;
 	private int length;
+	private boolean isForWrite;
 
+	public ConstantPool(int size) {constants = new SimpleList<>(size);}
 	public ConstantPool() {
 		constants = new SimpleList<>();
 		refMap = new MyHashSet<>();
 	}
 
-	public ConstantPool(int size) {
-		constants = new SimpleList<>(size);
-		refMap = new MyHashSet<>(size);
-	}
-
 	public void read(DynByteBuf r, int stringDecodeType) {
 		int len = r.readUnsignedShort()-1;
+		if (len < 0) throw new IllegalArgumentException("size error: "+len);
 
 		constants.clear();
 		constants.ensureCapacity(len);
-		constants.i_setSize(len);
+		constants._setSize(len);
 
-		refMap.clear();
-		refMap.ensureCapacity(len);
+		if (refMap != null) refMap.clear();
 
 		Object[] csts = constants.getInternalArray();
 
@@ -96,19 +93,15 @@ public class ConstantPool {
 		int i = 0;
 		while (i < len) {
 			switch (r.get(r.rIndex)) {
-				case UTF: case CLASS:
-					Constant c = readConstant(r, csts, i, false);
+				case UTF, CLASS:
+					var c = readConstant(r, csts, i, false);
 					if (c == null) c = (Constant) csts[i];
 					if (listener != null) listener.accept(c);
 
 					csts[i++] = c;
 					c.setIndex(i);
 					break;
-				case INT: case FLOAT:
-				case NAME_AND_TYPE:
-				case FIELD: case METHOD: case INTERFACE:
-				case DYNAMIC:
-				case INVOKE_DYNAMIC:
+				case INT, FLOAT, NAME_AND_TYPE, FIELD, METHOD, INTERFACE, DYNAMIC, INVOKE_DYNAMIC:
 					r.rIndex += 5;
 					i++;
 					break;
@@ -116,10 +109,7 @@ public class ConstantPool {
 					r.rIndex += 9;
 					i += 2;
 					break;
-				case METHOD_TYPE:
-				case MODULE:
-				case PACKAGE:
-				case STRING:
+				case METHOD_TYPE, MODULE, PACKAGE, STRING:
 					r.rIndex += 3;
 					i++;
 					break;
@@ -158,11 +148,7 @@ public class ConstantPool {
 			case LONG: return new CstLong(r.readLong());
 			case DOUBLE: return new CstDouble(r.readDouble());
 
-			case METHOD_TYPE:
-			case MODULE:
-			case PACKAGE:
-			case CLASS:
-			case STRING: {
+			case METHOD_TYPE, MODULE, PACKAGE, CLASS, STRING: {
 				int id = r.readUnsignedShort()-1;
 				CstUTF utf;
 				if (arr[id] == null) arr[id] = utf = new CstUTF();
@@ -177,13 +163,13 @@ public class ConstantPool {
 					return null;
 				}
 
-				switch (b) {
-					case METHOD_TYPE: return new CstMethodType(utf);
-					case MODULE: return new CstModule(utf);
-					case PACKAGE: return new CstPackage(utf);
-					case CLASS: return new CstClass(utf);
-					default: return new CstString(utf);
-				}
+				return switch (b) {
+					case METHOD_TYPE -> new CstMethodType(utf);
+					case MODULE -> new CstModule(utf);
+					case PACKAGE -> new CstPackage(utf);
+					case CLASS -> new CstClass(utf);
+					default -> new CstString(utf);
+				};
 			}
 			case NAME_AND_TYPE: {
 				int id = r.readUnsignedShort()-1;
@@ -209,9 +195,7 @@ public class ConstantPool {
 
 				return new CstNameAndType(name, type);
 			}
-			case FIELD:
-			case METHOD:
-			case INTERFACE: {
+			case FIELD, METHOD, INTERFACE: {
 				int id = r.readUnsignedShort()-1;
 				CstClass clz;
 				if (arr[id] == null) arr[id] = clz = new CstClass();
@@ -222,14 +206,13 @@ public class ConstantPool {
 				if (arr[id] == null) arr[id] = nat = new CstNameAndType();
 				else nat = (CstNameAndType) arr[id];
 
-				switch (b) {
-					case FIELD: return new CstRefField(clz, nat);
-					case METHOD: return new CstRefMethod(clz, nat);
-					default: return new CstRefItf(clz, nat);
-				}
+				return switch (b) {
+					case FIELD -> new CstRefField(clz, nat);
+					case METHOD -> new CstRefMethod(clz, nat);
+					default -> new CstRefItf(clz, nat);
+				};
 			}
-			case DYNAMIC:
-			case INVOKE_DYNAMIC: {
+			case DYNAMIC, INVOKE_DYNAMIC: {
 				int id = r.readUnsignedShort(r.rIndex + 2)-1;
 				CstNameAndType desc;
 				if (arr[id] == null) arr[id] = desc = new CstNameAndType();
@@ -253,10 +236,13 @@ public class ConstantPool {
 		return id < 0 ? null : ((CstRefUTF) constants.get(id)).name().str();
 	}
 
-	private final CstTop fp = AsmShared.local().fp;
-
 	private void initRefMap() {
-		if (!refMap.isEmpty()) return;
+		if (refMap == null) refMap = new MyHashSet<>(constants.size());
+		else {
+			if (!refMap.isEmpty()) return;
+			refMap.ensureCapacity(constants.size());
+		}
+
 		Object[] cst = constants.getInternalArray();
 		for (int i = 0; i < constants.size(); i++) {
 			Constant c = (Constant) cst[i];
@@ -264,6 +250,11 @@ public class ConstantPool {
 
 			Constant c1 = refMap.intern(c);
 			if (c != c1) c.setIndex(c1.getIndex());
+		}
+
+		if (!isForWrite) {
+			isForWrite = true;
+			AsmShared.local().getCpWriter(constants);
 		}
 	}
 
@@ -293,28 +284,22 @@ public class ConstantPool {
 	}
 
 	private void addConstant(Constant c) {
-		c.setIndex(constants.size()+1);
+		int size = constants.size();
+		if (size >= 0xFFFE) throw new UnsupportedOperationException("constant overflow!");
+		c.setIndex(size+1);
 		refMap.add(c);
 		constants.add(c);
 
 		switch (c.type()) {
-			case UTF: length += 3 + DynByteBuf.byteCountDioUTF(((CstUTF) c).str()); break;
-			case INT: case FLOAT:
-			case NAME_AND_TYPE: case INVOKE_DYNAMIC:
-			case METHOD: case FIELD: case INTERFACE:
-				length += 5; break;
-			case LONG: case DOUBLE:
+			case UTF -> length += 3 + DynByteBuf.byteCountDioUTF(((CstUTF) c).str());
+			case INT, FLOAT, NAME_AND_TYPE, INVOKE_DYNAMIC, DYNAMIC, METHOD, FIELD, INTERFACE -> length += 5;
+			case LONG, DOUBLE -> {
 				length += 9;
 				constants.add(CstTop.TOP);
-				break;
-			case METHOD_TYPE:
-			case STRING: case CLASS:
-			case MODULE: case PACKAGE:
-				length += 3;
-				break;
-			case METHOD_HANDLE: length += 4; break;
-			case _TOP_: break;
-			default: throw new IllegalStateException("Unknown type " + c.type());
+			}
+			case METHOD_TYPE, STRING, CLASS, MODULE, PACKAGE -> length += 3;
+			case METHOD_HANDLE -> length += 4;
+			default -> throw new IllegalStateException("Unknown type " + c.type());
 		}
 
 		if (listener != null) listener.accept(c);
@@ -324,6 +309,7 @@ public class ConstantPool {
 		initRefMap();
 
 		CstUTF utf;
+		CstTop fp = AsmShared.local().fp;
 		Constant o = refMap.find(fp.set(msg));
 		if (o == fp) {
 			addConstant(utf = new CstUTF(msg.toString()));
@@ -339,6 +325,7 @@ public class ConstantPool {
 		CstUTF uName = getUtf(name);
 		CstUTF uType = getUtf(type);
 
+		CstTop fp = AsmShared.local().fp;
 		Object ref = refMap.find(fp.set(uName, uType));
 		if (ref == fp) {
 			CstNameAndType t = new CstNameAndType();
@@ -355,6 +342,7 @@ public class ConstantPool {
 	public CstClass getClazz(String name) {
 		CstUTF uName = getUtf(name);
 
+		CstTop fp = AsmShared.local().fp;
 		Object ref = refMap.find(fp.set(CLASS, uName));
 		if (ref == fp) {
 			CstClass t = new CstClass();
@@ -371,6 +359,7 @@ public class ConstantPool {
 		CstClass clazz = getClazz(owner);
 		CstNameAndType nat = getDesc(name, desc);
 
+		CstTop fp = AsmShared.local().fp;
 		Object ref = refMap.find(fp.set(METHOD, clazz, nat));
 		if (ref == fp) {
 			CstRefMethod t = new CstRefMethod();
@@ -388,6 +377,7 @@ public class ConstantPool {
 		CstClass clazz = getClazz(owner);
 		CstNameAndType nat = getDesc(name, desc);
 
+		CstTop fp = AsmShared.local().fp;
 		Object ref = refMap.find(fp.set(FIELD, clazz, nat));
 		if (ref == fp) {
 			CstRefField t = new CstRefField();
@@ -405,6 +395,7 @@ public class ConstantPool {
 		CstClass clazz = getClazz(owner);
 		CstNameAndType nat = getDesc(name, desc);
 
+		CstTop fp = AsmShared.local().fp;
 		Object ref = refMap.find(fp.set(INTERFACE, clazz, nat));
 		if (ref == fp) {
 			CstRefItf t = new CstRefItf();
@@ -461,6 +452,7 @@ public class ConstantPool {
 	public CstPackage getPackage(String owner) {
 		CstUTF name = getUtf(owner);
 
+		CstTop fp = AsmShared.local().fp;
 		Object ref = refMap.find(fp.set(PACKAGE, name));
 		if (ref == fp) {
 			CstPackage t = new CstPackage();
@@ -476,6 +468,7 @@ public class ConstantPool {
 	public CstModule getModule(String owner) {
 		CstUTF name = getUtf(owner);
 
+		CstTop fp = AsmShared.local().fp;
 		Object ref = refMap.find(fp.set(MODULE, name));
 		if (ref == fp) {
 			CstModule t = new CstModule();
@@ -491,6 +484,7 @@ public class ConstantPool {
 	public int getIntId(int i) {
 		initRefMap();
 
+		CstTop fp = AsmShared.local().fp;
 		Constant ref = refMap.find(fp.set(i));
 		if (ref == fp) addConstant(ref = new CstInt(i));
 		return ref.getIndex();
@@ -498,6 +492,7 @@ public class ConstantPool {
 	public int getLongId(long i) {
 		initRefMap();
 
+		CstTop fp = AsmShared.local().fp;
 		Constant ref = refMap.find(fp.set(i));
 		if (ref == fp) addConstant(ref = new CstLong(i));
 		return ref.getIndex();
@@ -505,6 +500,7 @@ public class ConstantPool {
 	public int getFloatId(float i) {
 		initRefMap();
 
+		CstTop fp = AsmShared.local().fp;
 		Constant ref = refMap.find(fp.set(i));
 		if (ref == fp) addConstant(ref = new CstFloat(i));
 		return ref.getIndex();
@@ -512,6 +508,7 @@ public class ConstantPool {
 	public int getDoubleId(double i) {
 		initRefMap();
 
+		CstTop fp = AsmShared.local().fp;
 		Constant ref = refMap.find(fp.set(i));
 		if (ref == fp) addConstant(ref = new CstDouble(i));
 		return ref.getIndex();
@@ -520,17 +517,12 @@ public class ConstantPool {
 	@SuppressWarnings({"unchecked", "fallthrough"})
 	public <T extends Constant> T reset(T c) {
 		switch (c.type()) {
-			case DYNAMIC:
-			case INVOKE_DYNAMIC: {
+			case DYNAMIC, INVOKE_DYNAMIC: {
 				CstDynamic dyn = (CstDynamic) c;
 				dyn.setDesc(reset(dyn.desc()));
 			}
 			break;
-			case CLASS:
-			case STRING:
-			case METHOD_TYPE:
-			case MODULE:
-			case PACKAGE: {
+			case CLASS, STRING, METHOD_TYPE, MODULE, PACKAGE: {
 				CstRefUTF ref = (CstRefUTF) c;
 				ref.setValue(reset(ref.name()));
 			}
@@ -540,9 +532,7 @@ public class ConstantPool {
 				ref.setRef(reset(ref.getRef()));
 			}
 			break;
-			case METHOD:
-			case INTERFACE:
-			case FIELD: {
+			case METHOD, INTERFACE, FIELD: {
 				CstRef ref = (CstRef) c;
 				ref.clazz(reset(ref.clazz()));
 				ref.desc(reset(ref.desc()));
@@ -556,10 +546,7 @@ public class ConstantPool {
 			break;
 			case UTF:
 				((CstUTF) c).str();
-			case INT:
-			case DOUBLE:
-			case FLOAT:
-			case LONG:
+			case INT, DOUBLE, FLOAT, LONG:
 				// No need to do anything, just append it
 				break;
 			default: throw new IllegalArgumentException("Unsupported type: " + c.type());
@@ -583,11 +570,16 @@ public class ConstantPool {
 		return length;
 	}
 
-	public void write(DynByteBuf w) {
+	public void write(DynByteBuf w, boolean discard) {
 		w.putShort(constants.size()+1);
 		List<Constant> csts = constants;
 		for (int i = 0; i < csts.size(); i++)
 			csts.get(i).write(w);
+
+		if (isForWrite) {
+			isForWrite = false;
+			AsmShared.local().freeCpWriter(constants, discard);
+		}
 	}
 
 	@Override
@@ -632,6 +624,24 @@ public class ConstantPool {
 		if (!refMap.isEmpty()) {
 			refMap.remove(prev);
 			refMap.add(c);
+		}
+	}
+
+	public void checkCollision(DynByteBuf w) {
+		for (int i = 0; i < constants.size(); i++) {
+			Constant c = constants.get(i);
+			if (c instanceof CstUTF u) {
+				if (u.data instanceof DynByteBuf w2) {
+					if (w2.array() == w.array()) {
+						if (w.array() == null) {
+							if (w2.address() > w.address() && w2.address() < w.address()+w.capacity())
+								throw new AssertionError("请勿将未解析字符串常量的ConstantData写入和来源相同的DynByteBuf之中");
+						} else {
+							throw new AssertionError("请勿将未解析字符串常量的ConstantData写入和来源相同的DynByteBuf之中");
+						}
+					}
+				}
+			}
 		}
 	}
 }

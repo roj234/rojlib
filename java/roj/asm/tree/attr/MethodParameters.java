@@ -11,31 +11,29 @@ import roj.util.DynByteBuf;
  * @since 2021/5/29 17:16
  */
 public final class MethodParameters extends Attribute {
-	public static final String NAME = "MethodParameters";
-
 	public MethodParameters() { flags = new SimpleList<>(); }
 	public MethodParameters(DynByteBuf r, ConstantPool pool) {
 		int len = r.readUnsignedByte();
-		SimpleList<MethodParam> params = this.flags = new SimpleList<>(len);
+		var params = this.flags = new SimpleList<>(len);
 		while (len-- > 0) {
-			String name = ((CstUTF) pool.get(r)).str();
-			params.add(new MethodParam(name, r.readChar()));
+			var utf = (CstUTF) pool.get(r);
+			params.add(new MethodParam(utf == null ? null : utf.str(), r.readChar()));
 		}
 	}
 
 	public final SimpleList<MethodParam> flags;
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
-		w.put((byte) flags.size());
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
+		w.put(flags.size());
 		for (int i = 0; i < flags.size(); i++) {
-			MethodParam e = flags.get(i);
-			w.putShort(pool.getUtfId(e.name)).putShort(e.flag);
+			var mp = flags.get(i);
+			w.putShort(mp.name == null ? 0 : pool.getUtfId(mp.name)).putShort(mp.flag);
 		}
 	}
 
 	@Override
-	public String name() { return NAME; }
+	public String name() { return "MethodParameters"; }
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder("MethodParameters: \n");
@@ -57,4 +55,6 @@ public final class MethodParameters extends Attribute {
 			this.flag = flag;
 		}
 	}
+
+	public int getFlag(int i, int def) { return flags.size() > i ? flags.get(i).flag : def; }
 }

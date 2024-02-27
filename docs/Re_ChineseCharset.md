@@ -1,8 +1,8 @@
 # 自动识别中文编码（ASCII UTF-8 GB2312 GBK GB18030）
  * roj.text.UnsafeCharset
- * roj.text.UTF8MB4
+ * roj.text.UTF8
  * roj.text.GB18030
- * roj.text.ChineseCharsetDetector
+ * roj.text.CharsetDetector
 
 ## 注意：对于既不是中文也不是英文的文件，比如俄文和日文，可能会报错
 

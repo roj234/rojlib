@@ -20,7 +20,7 @@ final class ContinuousFrame {
 
 	void append(ChannelCtx ctx, DynByteBuf b) {
 		if (packet == null) packet = ctx.allocate(true, b.readableBytes());
-		else if (packet.writableBytes()<b.readableBytes()) packet = BufferPool.expand(packet, b.readableBytes());
+		else if (packet.writableBytes()<b.readableBytes()) packet = ctx.alloc().expand(packet, b.readableBytes());
 
 		packet.put(b);
 		length += b.readableBytes();

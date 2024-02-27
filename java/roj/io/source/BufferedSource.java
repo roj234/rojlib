@@ -2,8 +2,8 @@ package roj.io.source;
 
 import roj.collect.LRUCache;
 import roj.collect.MyHashMap;
+import roj.config.data.CInt;
 import roj.io.buf.BufferPool;
-import roj.math.MutableInt;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -16,7 +16,7 @@ import java.util.function.BiConsumer;
  * @author Roj233
  * @since 2021/8/18 13:36
  */
-public class BufferedSource extends Source implements BiConsumer<MutableInt,ByteList> {
+public class BufferedSource extends Source implements BiConsumer<CInt,ByteList> {
 	private static final int PAGE = 4096;
 
 	private long pos, len;
@@ -25,7 +25,7 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 	private final Source s;
 	private final boolean close;
 
-	private final LRUCache<MutableInt, ByteList> buffers;
+	private final LRUCache<CInt, ByteList> buffers;
 	private final BufferPool pool;
 
 	public static Source autoClose(Source copy) throws IOException {
@@ -71,20 +71,20 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 
 		int plen = (int) p&(PAGE-1);
 		int rLen = Math.min(len, PAGE-plen);
-		buffer(p).read(plen, b, off, rLen);
+		buffer(p).readFully(plen, b, off, rLen);
 		p += rLen;
 
 		int end = off+len;
 		off += rLen;
 
 		while (end-off >= PAGE) {
-			buffer(p).read(0, b, off, PAGE);
+			buffer(p).readFully(0, b, off, PAGE);
 			off += PAGE;
 			p += PAGE;
 		}
 
 		if (end>off) {
-			buffer(p).read(0, b, off, end-off);
+			buffer(p).readFully(0, b, off, end-off);
 			p += end-off;
 		}
 
@@ -164,13 +164,13 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 	}
 
 	@Override
-	public boolean isBuffered() {
-		return true;
-	}
+	public boolean isBuffered() {return true;}
+	@Override
+	public boolean isWritable() {return s.isWritable();}
 
 	public final void invalidate() {
-		for (Iterator<MyHashMap.Entry<MutableInt, ByteList>> it = buffers.__iterator_javac_is_sb(); it.hasNext(); ) {
-			MyHashMap.Entry<MutableInt, ByteList> next = it.next();
+		for (Iterator<MyHashMap.Entry<CInt, ByteList>> it = buffers.__iterator_javac_is_sb(); it.hasNext(); ) {
+			MyHashMap.Entry<CInt, ByteList> next = it.next();
 			try {
 				BufferPool.reserve(next.v);
 			} catch (Exception e) {
@@ -184,16 +184,17 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 		int f = (int) (from>>>12);
 		int t = (int) ((to+(PAGE-1))>>>12);
 		while (f < t) {
-			val.setValue(f++);
+			int v = f++;
+			val.value = v;
 			DynByteBuf buf = buffers.remove(val);
 			if (buf != null) BufferPool.reserve(buf);
 		}
 	}
 
-	private final MutableInt val = new MutableInt();
-	private MutableInt myNext;
+	private final CInt val = new CInt();
+	private CInt myNext;
 	private ByteList buffer(long pos) throws IOException {
-		val.setValue((int) (pos>>>12));
+		val.value = (int) (pos>>>12);
 		ByteList buf = buffers.get(val);
 		if (buf == null) {
 			s.seek(pos & -PAGE);
@@ -209,11 +210,11 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 				throw e;
 			}
 
-			MutableInt next = myNext;
+			CInt next = myNext;
 			myNext = null;
 
-			if (next == null) next = new MutableInt(val);
-			else next.setValue(val);
+			if (next == null) next = new CInt(val);
+			else next.value = val.value;
 
 			buffers.put(next, buf);
 		}
@@ -237,7 +238,7 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 	public String toString() { return "BufferedSource@" + pool; }
 
 	@Override
-	public void accept(MutableInt key,ByteList buffer) {
+	public void accept(CInt key, ByteList buffer) {
 		myNext = key;
 		BufferPool.reserve(buffer);
 	}

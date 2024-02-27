@@ -50,15 +50,22 @@ public final class StaticSegment extends Segment {
 
 	@Override
 	public boolean isTerminate() {
-		DynByteBuf data = getData();
-		int r = data.rIndex;
-		if (data.wIndex() == r) return false;
-		int b;
+		if (length() == 0) return false;
+		DynByteBuf buf = getData();
+		return isTerminate(buf, buf.rIndex, buf.wIndex());
+	}
+
+	static boolean isTerminate(DynByteBuf buf, int start, int end) {
+		int op = buf.get(end-1);
+		if ((op < Opcodes.IRETURN || op > Opcodes.RETURN) && op != Opcodes.ATHROW) return false;
+
+		// 常量池ID可能正好落在这个范围中, 所以再做一次终止检查
 		do {
-			b = data.getU(r);
-			r += 0xF&(XInsnNodeView.OPLENGTH[b]>>>4);
-		} while (data.wIndex() != r);
-		return b == (Opcodes.ATHROW&0xFF) || Opcodes.category(b) == Opcodes.CATE_RETURN;
+			op = buf.get(start);
+			start += 0xF&(XInsnNodeView.OPLENGTH[op&0xFF]>>>4);
+		} while (start != end);
+
+		return (op >= Opcodes.IRETURN && op <= Opcodes.RETURN) || op == Opcodes.ATHROW;
 	}
 
 	boolean compacted() { return array.getClass() == byte[].class; }
@@ -74,7 +81,7 @@ public final class StaticSegment extends Segment {
 		that.array = arr;
 		that.off = (short) local.getOffset(arr, that.length);
 
-		b.read(b.rIndex, arr, that.off, that.length);
+		b.readFully(b.rIndex, arr, that.off, that.length);
 		return that;
 	}
 }

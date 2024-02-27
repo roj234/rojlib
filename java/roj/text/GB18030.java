@@ -2,13 +2,12 @@ package roj.text;
 
 import roj.archive.qz.xz.LZMAInputStream;
 import roj.collect.MyHashSet;
+import roj.util.ArrayCache;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.function.IntConsumer;
 
-import static java.lang.Character.*;
 import static roj.reflect.ReflectionUtils.u;
 
 /**
@@ -19,23 +18,23 @@ public final class GB18030 extends UnsafeCharset {
 	public static final UnsafeCharset CODER = new GB18030(), THROW_ON_FAIL = new GB18030();
 
 	@Override
-	public String name() { return "GB18030"; }
+	public String name() {return "GB18030";}
 
 	private static final int TAB2 = 24066;
 	private static final char[] TABLE = new char[63486];
 	private static final char[] REVERSE_TABLE = new char[65408];
 
 	static {
-		try (InputStream in = new LZMAInputStream(GB18030.class.getResourceAsStream("/META-INF/china/gb18030.lzma"))) {
-			byte[] b = new byte[1024];
+		try (var in = new LZMAInputStream(GB18030.class.getClassLoader().getResourceAsStream("roj/text/GB18030.lzma"))) {
+			byte[] b = ArrayCache.getByteArray(1024, false);
 			int off = 0;
 			while (true) {
-				// UTF16-BE
 				int r = in.read(b);
 				if (r < 0) break;
 
 				for (int i = 0; i < r; i+=2) {
-					char c = (char) ((b[i+1] & 0xFF) | ((b[i] & 0xFF) << 8));
+					// UTF-16BE
+					char c = (char) (((b[i] & 0xFF) << 8) | (b[i+1] & 0xFF));
 					int id = (off + i) >> 1;
 					TABLE[id] = c;
 					if (c != 0) {
@@ -44,9 +43,16 @@ public final class GB18030 extends UnsafeCharset {
 				}
 				off += r;
 			}
+			ArrayCache.putArray(b);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	public static boolean isTwoByte(char c) {
+		if (c <= 128) return false;
+		var cp = REVERSE_TABLE[c-128] - 1;
+		return cp >= 0 && cp < TAB2;
 	}
 
 	private static final MyHashSet<String> GB18030_IDS = new MyHashSet<>("GBK", "GB2312", "GB18030", "x-mswin-936");
@@ -81,11 +87,10 @@ public final class GB18030 extends UnsafeCharset {
 			int sum = 1;
 			int cp;
 			check:{
-				if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
-					if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+				if (isSurrogate(c)) {
 					if (i+1 == end) break;
 
-					c = TextUtil.codepoint(c, s[i+1]);
+					c = codepoint(c, s[i+1]);
 					sum++;
 					if (c > 0xFFFF) {
 						cp = c + 123464 + TAB2;
@@ -123,8 +128,6 @@ public final class GB18030 extends UnsafeCharset {
 
 	@Override
 	public long unsafeDecode(Object ref, long base, int pos, int end, char[] out, int off, int outMax) {
-		if (pos < 0) throw new IllegalArgumentException("pos="+pos);
-
 		long i = base+pos;
 		long max = base+end;
 		outMax += off;
@@ -289,11 +292,9 @@ public final class GB18030 extends UnsafeCharset {
 
 			int cp;
 			check: {
-				if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
-					if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+				if (isSurrogate(c)) {
 					if (i == end) throw new IllegalStateException("Trailing high surrogate \\U+"+Integer.toHexString(c));
-
-					c = TextUtil.codepoint(c,s.charAt(i++));
+					c = codepoint(c,s.charAt(i++));
 					len--;
 
 					if (c > 0xFFFF) {

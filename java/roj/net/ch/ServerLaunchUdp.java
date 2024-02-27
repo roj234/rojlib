@@ -35,10 +35,12 @@ final class ServerLaunchUdp extends ServerLaunch {
 
 	@Override
 	public final ServerLaunch launch() throws IOException {
-		if (initializator == null) throw new IllegalStateException("no initializator");
-
 		udp.state = MyChannel.CONNECTED;
-		initializator.accept(udp);
+
+		if (initializator == null) {
+			if (udp.pipelineHead == null) throw new IllegalStateException("no initializator");
+		} else initializator.accept(udp);
+
 		udp.open();
 		loop().register(udp, null, SelectionKey.OP_READ);
 		return this;

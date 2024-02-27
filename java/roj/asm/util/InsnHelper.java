@@ -2,15 +2,11 @@ package roj.asm.util;
 
 import roj.asm.Opcodes;
 import roj.asm.type.Type;
-import roj.asm.visitor.*;
+import roj.asm.visitor.XInsnList;
+import roj.asm.visitor.XInsnNodeView;
 import roj.collect.Int2IntMap;
-import roj.collect.IntMap;
-import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
-
-import java.util.List;
-import java.util.Map;
 
 import static roj.asm.Opcodes.*;
 
@@ -38,31 +34,31 @@ public class InsnHelper {
 	}
 
 	public static byte ToPrimitiveArrayId(int nativeType) {
-		switch (nativeType) {
-			case 'Z': return 4;
-			case 'C': return 5;
-			case 'F': return 6;
-			case 'D': return 7;
-			case 'B': return 8;
-			case 'S': return 9;
-			case 'I': return 10;
-			case 'J': return 11;
-			default: throw new IllegalArgumentException(String.valueOf((char)nativeType));
-		}
+		return switch (nativeType) {
+			case 'Z' -> 4;
+			case 'C' -> 5;
+			case 'F' -> 6;
+			case 'D' -> 7;
+			case 'B' -> 8;
+			case 'S' -> 9;
+			case 'I' -> 10;
+			case 'J' -> 11;
+			default -> throw new IllegalArgumentException(String.valueOf((char) nativeType));
+		};
 	}
 
 	public static byte FromPrimitiveArrayId(int id) {
-		switch (id) {
-			case 4: return 'Z';
-			case 5: return 'C';
-			case 6: return 'F';
-			case 7: return 'D';
-			case 8: return 'B';
-			case 9: return 'S';
-			case 10: return 'I';
-			case 11: return 'J';
-		}
-		throw new IllegalStateException("Unknown PrimArrayType " + id);
+		return switch (id) {
+			case 4 -> 'Z';
+			case 5 -> 'C';
+			case 6 -> 'F';
+			case 7 -> 'D';
+			case 8 -> 'B';
+			case 9 -> 'S';
+			case 10 -> 'I';
+			case 11 -> 'J';
+			default -> throw new IllegalStateException("Unknown PrimArrayType " + id);
+		};
 	}
 
 	public static byte XAStore(Type type) { return (byte) (XALoad(type)+33); }
@@ -78,44 +74,6 @@ public class InsnHelper {
 			case 'C': return CALOAD;
 			case 'S': return SALOAD;
 			default: throw new IllegalArgumentException();
-		}
-	}
-
-	public static void switchString(CodeWriter c, Map<String, Label> target, Label def) {
-		if (target.isEmpty()) {
-			c.jump(GOTO, def);
-			return;
-		}
-
-		c.one(DUP);
-		c.invoke(INVOKESPECIAL, "java/lang/String", "hashCode", "()I");
-
-		SwitchSegment sw = CodeWriter.newSwitch(LOOKUPSWITCH);
-		c.addSegment(sw);
-		sw.def = def;
-
-		// check duplicate
-		IntMap<List<Map.Entry<String, Label>>> tmp = new IntMap<>(target.size());
-		for (Map.Entry<String, Label> entry : target.entrySet()) {
-			int hash = entry.getKey().hashCode();
-
-			List<Map.Entry<String, Label>> dup = tmp.get(hash);
-			if (dup == null) tmp.putInt(hash, dup = new SimpleList<>(2));
-			dup.add(entry);
-		}
-
-		for (IntMap.Entry<List<Map.Entry<String, Label>>> entry : tmp.selfEntrySet()) {
-			Label pos = new Label();
-			sw.branch(entry.getIntKey(), pos);
-			c.label(pos);
-			List<Map.Entry<String, Label>> list1 = entry.getValue();
-			for (int i = 0; i < list1.size(); i++) {
-				Map.Entry<String, Label> entry1 = list1.get(i);
-				c.ldc(entry1.getKey());
-				c.invoke(INVOKESPECIAL, "java/lang/String", "equals", "(Ljava/lang/Object;)Z");
-				c.jump(IFNE, entry1.getValue());
-			}
-			c.jump(GOTO, def);
 		}
 	}
 

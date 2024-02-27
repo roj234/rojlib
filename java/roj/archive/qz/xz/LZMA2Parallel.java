@@ -95,10 +95,7 @@ public final class LZMA2Parallel {
 		Compressor task;
 		getTask:
 		synchronized (tasksFree) {
-			if (!tasksFree.isEmpty()) {
-				task = tasksFree.pop();
-				break getTask;
-			}
+			if ((task = tasksFree.pop()) != null) break getTask;
 
 			if (taskFree > 0) {
 				DynByteBuf in = acquireBuffer(caller, asyncBufLen);
@@ -119,7 +116,8 @@ public final class LZMA2Parallel {
 
 		try {
 			task.owner = caller;
-			options.getAsyncExecutor().pushTask(() -> caller.prepareTask(task));
+			var javac傻逼 = task;
+			options.getAsyncExecutor().pushTask(() -> caller.prepareTask(javac傻逼));
 		} catch (Exception e) {
 			Helpers.athrow(e);
 		}
@@ -213,7 +211,7 @@ public final class LZMA2Parallel {
 				u.copyMemory(buf, task.in.address()+man.asyncBufOff, task.pendingSize = bufPos);
 			} else {
 				if (dictMode == ASYNC_DICT_NONE) dictSize = 0;
-				else if (task.id > 0) task.lz.setPresetDict(dictSize, null, buf, dictSize);
+				else if (task.id > 0) task.lzma.lzPresetDict0(dictSize, null, buf, dictSize);
 
 				u.copyMemory(buf+dictSize, task.in.address()+man.asyncBufOff, task.pendingSize = bufPos - dictSize);
 			}
@@ -312,6 +310,7 @@ public final class LZMA2Parallel {
 	static final class Compressor extends LZMA2Out implements ITask {
 		final LZMA2Parallel man;
 		DynByteBuf in;
+		int pendingSize;
 
 		Writer owner;
 		int id;
@@ -335,7 +334,7 @@ public final class LZMA2Parallel {
 			if (id == 0) {
 				byte[] presetDict = man.options.getPresetDict();
 				if (presetDict != null && presetDict.length > 0) {
-					lz.setPresetDict(man.dictSize, presetDict);
+					lzma.lzPresetDict(man.dictSize, presetDict);
 					state = PROP_RESET;
 				} else {
 					state = DICT_RESET;
@@ -343,7 +342,7 @@ public final class LZMA2Parallel {
 			} else {
 				switch (man.dictMode) {
 					case ASYNC_DICT_NONE: state = DICT_RESET; break;
-					case ASYNC_DICT_ASYNCSET: lz.setPresetDict(off, null, in.address()+ man.asyncBufOff, off);
+					case ASYNC_DICT_ASYNCSET: lzma.lzPresetDict0(off, null, in.address()+man.asyncBufOff, off);
 					case ASYNC_DICT_SET: state = STATE_RESET; break;
 				}
 			}
@@ -354,20 +353,22 @@ public final class LZMA2Parallel {
 				while (len > 0) {
 					if ((lw.closed&4) != 0) throw new AsynchronousCloseException();
 
-					int used = lz.fillWindow(doff, len);
+					int used = lzma.lzFill(doff, len);
 					doff += used;
 					len -= used;
 
-					if (lzma.encodeForLZMA2()) writeChunk();
+					if (lzma.encodeForLZMA2()) writeChunk(false);
 				}
 
-				lz.setFinishing();
-				while (pendingSize > 0) {
+				lzma.lzFinish();
+
+				while (true) {
 					lzma.encodeForLZMA2();
-					writeChunk();
+					if (lzma.getUncompressedSize() == 0) break;
+					writeChunk(false);
 				}
 
-				lz.reuse();
+				lzma.lzReset();
 				lzma.reset();
 
 				lw.taskFinished(this);

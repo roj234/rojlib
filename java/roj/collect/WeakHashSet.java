@@ -1,5 +1,6 @@
 package roj.collect;
 
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.util.Helpers;
@@ -119,6 +120,7 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _Gener
 	@SuppressWarnings("unchecked")
 	public final K intern(K k) { return (K) findOrAdd(k, true).get(); }
 
+	@Contract("_,true -> !null")
 	protected final Entry findOrAdd(K key, boolean doAdd) {
 		if (key == null) throw new NullPointerException("key");
 
@@ -197,8 +199,8 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _Gener
 				curr = curr.next;
 			}
 
-			if (prev == null) entries[entry.hash&mask] = null;
-			else prev.next = Helpers.cast(curr.next);
+			if (prev == null) entries[entry.hash&mask] = curr.next;
+			else prev.next = curr.next;
 			size--;
 		}
 	}

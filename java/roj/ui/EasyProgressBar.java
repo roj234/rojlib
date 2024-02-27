@@ -19,6 +19,7 @@ public class EasyProgressBar extends ProgressBar {
 	public void reset() {
 		fin.reset();
 		max.set(0);
+		super.reset();
 	}
 
 	public void addMax(long count) { max.addAndGet(count); }

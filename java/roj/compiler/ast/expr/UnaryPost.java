@@ -1,11 +1,10 @@
 package roj.compiler.ast.expr;
 
-import roj.asm.tree.MethodNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -21,9 +20,9 @@ final class UnaryPost extends ExprNode {
 	private VarNode left;
 
 	// inc(++) or dec(--)
-	UnaryPost(short op, ExprNode left) {
+	UnaryPost(short op, VarNode left) {
 		this.op = op;
-		this.left = (VarNode) left;
+		this.left = left;
 	}
 
 	@Override
@@ -33,21 +32,24 @@ final class UnaryPost extends ExprNode {
 	public IType type() { return left.type(); }
 
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		ExprNode node = left.resolve(ctx);
 		if (node instanceof VarNode vn && !vn.isFinal()) left = (VarNode) node;
-		else ctx.report(Kind.ERROR, "unary.error.final", node);
+		else {
+			ctx.report(Kind.ERROR, "unary.error.final", node);
+			return NaE.RESOLVE_FAILED;
+		}
 
 		IType type = node.type();
 		int iType = type.getActualType();
 		if (iType == Type.CLASS) {
-			MethodNode override = ctx.getUnaryOverride(type, op, true);
-			if (override != null) return Invoke.unaryAlt(left, override);
+			ExprNode override = ctx.getOperatorOverride(left, null, op | LocalContext.UNARY_POST);
+			if (override != null) return override;
 
 			iType = TypeCast.getWrappedPrimitive(type);
 			if (iType == 0) {
 				ctx.report(Kind.ERROR, "unary.error.notApplicable", byId(op), type);
-				return this;
+				return NaE.RESOLVE_FAILED;
 			}
 
 			ctx.report(Kind.SEVERE_WARNING, "unary.warn.wrapper", type, byId(op));

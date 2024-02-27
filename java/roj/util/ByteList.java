@@ -1,9 +1,10 @@
 package roj.util;
 
 import org.jetbrains.annotations.NotNull;
-import roj.compiler.api.Constant;
+import roj.compiler.plugins.constant.Constant;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
+import roj.text.CharList;
 import roj.text.TextUtil;
 import sun.misc.Unsafe;
 
@@ -13,7 +14,7 @@ import java.io.OutputStream;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.ReadOnlyBufferException;
-import java.util.List;
+import java.nio.charset.StandardCharsets;
 import java.util.function.IntUnaryOperator;
 
 import static roj.reflect.ReflectionUtils.u;
@@ -27,20 +28,6 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	public byte[] list;
 
-	public static ByteList wrap(byte[] b) { return new ByteList(b); }
-	public static ByteList wrap(byte[] b, int off, int len) { return new ByteList.Slice(b, off, len); }
-
-	public static ByteList wrapWrite(byte[] b) { return wrapWrite(b, 0, b.length); }
-	public static ByteList wrapWrite(byte[] b, int off, int len) { ByteList bl = new ByteList.Slice(b, off, len); bl.wIndex = 0; return bl; }
-
-	public static ByteList allocate(int cap) { return new ByteList(cap); }
-	public static ByteList allocate(int capacity, int maxCapacity) {
-		return new ByteList(capacity) {
-			@Override
-			public int maxCapacity() { return maxCapacity; }
-		};
-	}
-
 	public ByteList() { list = ArrayCache.BYTES; }
 	public ByteList(int len) { list = new byte[len]; }
 
@@ -52,12 +39,13 @@ public class ByteList extends DynByteBuf implements Appendable {
 	public synchronized void _free() {
 		clear();
 		byte[] b = list;
+		// REMIND: b.length can be zero, but ArrayCache rejects it
 		list = ArrayCache.BYTES;
 		ArrayCache.putArray(b);
 	}
 
 	public int capacity() { return list.length; }
-	public int maxCapacity() { return Integer.MAX_VALUE - 1024; }
+	public int maxCapacity() { return Integer.MAX_VALUE - 16; }
 	public final boolean isDirect() { return false; }
 	public long _unsafeAddr() { return (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+arrayOffset(); }
 	public boolean hasArray() { return true; }
@@ -66,7 +54,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	@Override
 	public final void copyTo(long address, int len) {
-		DirectByteList.copyFromArray(list, Unsafe.ARRAY_BYTE_BASE_OFFSET, arrayOffset() + moveRI(len), address, len);
+		DirectByteList.copyFromArray(list, Unsafe.ARRAY_BYTE_BASE_OFFSET, arrayOffset() + preRead(len), address, len);
 	}
 
 	public void clear() { wIndex = rIndex = 0; }
@@ -94,12 +82,6 @@ public class ByteList extends DynByteBuf implements Appendable {
 		return this;
 	}
 
-	@Override
-	final int testWI(int i, int req) {
-		if (i < 0 || i + req > wIndex) throw new ArrayIndexOutOfBoundsException("pos="+i+",len="+req+",cap="+wIndex);
-		return i + arrayOffset();
-	}
-
 	// region Byte Streams
 
 	public final ByteList readStreamFully(InputStream in) throws IOException {
@@ -108,8 +90,12 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	public final ByteList readStreamFully(InputStream in, boolean close) throws IOException {
 		while (true) {
-			if (wIndex == capacity())
+			if (wIndex == capacity()) {
+				int r = in.read();
+				if (r < 0) break;
 				ensureCapacity(wIndex + Math.max(1, in.available()));
+				list[arrayOffset()+wIndex++] = (byte) r;
+			}
 
 			int r = in.read(list, arrayOffset()+wIndex, capacity()-wIndex);
 			if (r < 0) break;
@@ -141,135 +127,31 @@ public class ByteList extends DynByteBuf implements Appendable {
 	// endregion
 	// region PUTxxx
 
-	public final ByteList put(int e) {
-		int i = arrayOffset() + moveWI(1);
-		list[i] = (byte) e;
-		return this;
-	}
+	public final ByteList put(int x) {int i = preWrite(1)+arrayOffset();list[i] = (byte) x;return this;}
+	public final ByteList put(int i, int x) {list[testWI(i, 1)+arrayOffset()] = (byte) x;return this;}
 
-	public final ByteList put(int i, int e) {
-		list[testWI(i, 1)] = (byte) e;
-		return this;
-	}
-
-	public final ByteList put(byte[] b, int off, int len) {
+	public ByteList put(byte[] b, int off, int len) {
 		if (len < 0 || off < 0 || len > b.length - off) throw new ArrayIndexOutOfBoundsException();
 		if (len > 0) {
-			int off1 = arrayOffset() + moveWI(len);
+			int off1 = arrayOffset() + preWrite(len);
 			System.arraycopy(b, off, list, off1, len);
 		}
 		return this;
 	}
 
 	@Override
-	public final ByteList put(DynByteBuf b, int len) {
-		return put(b, b.rIndex, len);
-	}
-
+	public final ByteList put(DynByteBuf b, int len) {return put(b, b.rIndex, len);}
 	@Override
-	public final ByteList put(DynByteBuf b, int off, int len) {
+	public ByteList put(DynByteBuf b, int off, int len) {
 		if (off+len > b.wIndex) throw new IndexOutOfBoundsException();
 		ensureCapacity(wIndex+len);
-		b.read(off, list, wIndex+arrayOffset(), len);
+		b.readFully(off, list, wIndex+arrayOffset(), len);
 		wIndex += len;
 		return this;
 	}
 
-	public final ByteList putVarInt(int i, boolean canBeNegative) {
-		putVarLong(this, canBeNegative ? zig(i) : i);
-		return this;
-	}
-
-	public final ByteList putIntLE(int wi, int i) {
-		wi = testWI(wi, 4);
-		byte[] list = this.list;
-		list[wi++] = (byte) i;
-		list[wi++] = (byte) (i >>> 8);
-		list[wi++] = (byte) (i >>> 16);
-		list[wi] = (byte) (i >>> 24);
-		return this;
-	}
-
-	public final ByteList putInt(int i) {
-		return putInt(moveWI(4), i);
-	}
-	public final ByteList putInt(int wi, int i) {
-		wi = testWI(wi, 4);
-		byte[] list = this.list;
-		list[wi++] = (byte) (i >>> 24);
-		list[wi++] = (byte) (i >>> 16);
-		list[wi++] = (byte) (i >>> 8);
-		list[wi] = (byte) i;
-		return this;
-	}
-
-	public final ByteList putLongLE(int wi, long l) {
-		wi = testWI(wi, 8);
-		byte[] list = this.list;
-		list[wi++] = (byte) l;
-		list[wi++] = (byte) (l >>> 8);
-		list[wi++] = (byte) (l >>> 16);
-		list[wi++] = (byte) (l >>> 24);
-		list[wi++] = (byte) (l >>> 32);
-		list[wi++] = (byte) (l >>> 40);
-		list[wi++] = (byte) (l >>> 48);
-		list[wi] = (byte) (l >>> 56);
-		return this;
-	}
-
-	public final ByteList putLong(int wi, long l) {
-		wi = testWI(wi, 8);
-		byte[] list = this.list;
-		list[wi++] = (byte) (l >>> 56);
-		list[wi++] = (byte) (l >>> 48);
-		list[wi++] = (byte) (l >>> 40);
-		list[wi++] = (byte) (l >>> 32);
-		list[wi++] = (byte) (l >>> 24);
-		list[wi++] = (byte) (l >>> 16);
-		list[wi++] = (byte) (l >>> 8);
-		list[wi] = (byte) l;
-		return this;
-	}
-
-	public final ByteList putShort(int s) {
-		return putShort(moveWI(2), s);
-	}
-	public final ByteList putShort(int wi, int s) {
-		wi = testWI(wi, 2);
-		byte[] list = this.list;
-		list[wi++] = (byte) (s >>> 8);
-		list[wi] = (byte) s;
-		return this;
-	}
-
-	public final ByteList putShortLE(int wi, int s) {
-		wi = testWI(wi, 2);
-		byte[] list = this.list;
-		list[wi++] = (byte) s;
-		list[wi] = (byte) (s >>> 8);
-		return this;
-	}
-
-	public final ByteList putMedium(int wi, int m) {
-		wi = testWI(wi, 3);
-		byte[] list = this.list;
-		list[wi++] = (byte) (m >>> 16);
-		list[wi++] = (byte) (m >>> 8);
-		list[wi] = (byte) m;
-		return this;
-	}
-
-	public final ByteList putMediumLE(int wi, int m) {
-		wi = testWI(wi, 3);
-		byte[] list = this.list;
-		list[wi++] = (byte) m;
-		list[wi++] = (byte) (m >>> 8);
-		list[wi] = (byte) (m >>> 16);
-		return this;
-	}
-
 	public final ByteList putChars(int wi, CharSequence s) {
-		wi = testWI(wi, s.length() << 1);
+		wi = testWI(wi, s.length() << 1)+arrayOffset();
 		byte[] list = this.list;
 		for (int i = 0; i < s.length(); i++) {
 			char c = s.charAt(i);
@@ -281,11 +163,11 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	@SuppressWarnings("deprecation")
 	final void _writeDioUTF(String s, int byteLen) {
-		int wi = moveWI(byteLen);
+		int wi = preWrite(byteLen);
 
 		// better on Java 9 and later
 		if (byteLen == s.length()) {
-			s.getBytes(0,byteLen,list,wi);
+			s.getBytes(0,byteLen,list,arrayOffset()+wi);
 			return;
 		}
 
@@ -294,10 +176,10 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	public final ByteList putUTFData(CharSequence s) { return (ByteList) super.putUTFData(s); }
 
-	public final ByteList putAscii(CharSequence s) { return putAscii(moveWI(s.length()), s); }
+	public final ByteList putAscii(CharSequence s) { return putAscii(preWrite(s.length()), s); }
 	@SuppressWarnings("deprecation")
 	public final ByteList putAscii(int wi, CharSequence s) {
-		wi = testWI(wi, s.length());
+		wi = testWI(wi, s.length())+arrayOffset();
 		if (s.getClass() == String.class) {
 			s.toString().getBytes(0, s.length(), list, wi);
 		} else {
@@ -309,12 +191,13 @@ public class ByteList extends DynByteBuf implements Appendable {
 		return this;
 	}
 
+	public final Appendable append(char c) {return put(c);}
 	public final Appendable append(CharSequence s) { return append(s,0, s.length()); }
 	@SuppressWarnings("deprecation")
-	public Appendable append(CharSequence s, int start, int end) {
+	public final Appendable append(CharSequence s, int start, int end) {
 		int wi = end-start;
 		if ((wi|start|(s.length()-end)) < 0) throw new IndexOutOfBoundsException();
-		wi = moveWI(wi);
+		wi = preWrite(wi);
 		if (s.getClass() == String.class) {
 			s.toString().getBytes(start, end, list, wi);
 		} else {
@@ -325,11 +208,10 @@ public class ByteList extends DynByteBuf implements Appendable {
 		}
 		return this;
 	}
-	public Appendable append(char c) { return put((byte) c); }
 
 	public final ByteList put(ByteBuffer buf) {
 		int rem = buf.remaining();
-		int v = moveWI(rem);
+		int v = preWrite(rem);
 		buf.get(list, v, rem);
 		return this;
 	}
@@ -339,6 +221,22 @@ public class ByteList extends DynByteBuf implements Appendable {
 		byte[] b = new byte[wIndex - rIndex];
 		System.arraycopy(list, arrayOffset() + rIndex, b, 0, b.length);
 		return b;
+	}
+	public final byte[] toByteArrayAndZero() {
+		byte[] array = toByteArray();
+		byte[] arr1 = list;
+		for (int i = 0; i < wIndex; i++) arr1[i] = 0;
+		return array;
+	}
+	public final void clearAndZero() {
+		byte[] arr1 = list;
+		for (int i = 0; i < wIndex; i++) arr1[i] = 0;
+		wIndex = 0;
+	}
+	public final byte[] toByteArrayAndFree() {
+		byte[] array = toByteArray();
+		_free();
+		return array;
 	}
 
 	@Override
@@ -361,45 +259,20 @@ public class ByteList extends DynByteBuf implements Appendable {
 	// endregion
 	// region GETxxx
 
-	public final void read(byte[] b, int off, int len) {
+	public final void readFully(byte[] b, int off, int len) {
 		ArrayUtil.checkRange(b, off, len);
-		if (len > 0) System.arraycopy(list, moveRI(len) + arrayOffset(), b, off, len);
+		if (len > 0) System.arraycopy(list, preRead(len) + arrayOffset(), b, off, len);
 	}
 
-	public final void read(int i, byte[] b, int off, int len) {
+	public final void readFully(int i, byte[] b, int off, int len) {
 		ArrayUtil.checkRange(b, off, len);
-		if (len > 0) System.arraycopy(list, testWI(i, len), b, off, len);
+		if (len > 0) System.arraycopy(list, testWI(i, len)+arrayOffset(), b, off, len);
 	}
 
-	public final byte get(int i) { return list[testWI(i, 1)]; }
-	@Override
-	public final byte readByte() { return list[moveRI(1) + arrayOffset()]; }
+	public final byte get(int i) {return list[testWI(i, 1)+arrayOffset()];}
+	@Override public final byte readByte() {return list[preRead(1)+arrayOffset()];}
 
-	public final int readUnsignedShort(int i) {
-		i = testWI(i, 2);
-		byte[] l = this.list;
-		return (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
-	}
-
-	public final int readUShortLE(int i) {
-		i = testWI(i, 2);
-		byte[] l = this.list;
-		return (l[i++] & 0xFF) | (l[i] & 0xFF) << 8;
-	}
-
-	public final int readMedium(int i) {
-		i = testWI(i, 3);
-		byte[] l = this.list;
-		return (l[i++] & 0xFF) << 16 | (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
-	}
-
-	public final int readMediumLE(int i) {
-		i = testWI(i, 3);
-		byte[] l = this.list;
-		return (l[i++] & 0xFF)| (l[i++] & 0xFF) << 8 | (l[i] & 0xFF) << 16;
-	}
-
-	public final int readVarInt(boolean mayNeg) {
+	public final int readVarInt() {
 		int value = 0;
 		int i = 0;
 
@@ -414,7 +287,6 @@ public class ByteList extends DynByteBuf implements Appendable {
 			value |= (chunk & 0x7F) << i;
 			i += 7;
 			if ((chunk & 0x80) == 0) {
-				if (mayNeg) return zag(value);
 				if (value < 0) break;
 				return value;
 			}
@@ -423,64 +295,21 @@ public class ByteList extends DynByteBuf implements Appendable {
 		throw new RuntimeException("VarInt format error near " + rIndex);
 	}
 
-	public final int readInt(int i) {
-		i = testWI(i, 4);
-		byte[] l = this.list;
-		return (l[i++] & 0xFF) << 24 | (l[i++] & 0xFF) << 16 | (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
-	}
-
-	public final int readIntLE(int i) {
-		i = testWI(i, 4);
-		byte[] l = this.list;
-		return (l[i++] & 0xFF) | (l[i++] & 0xFF) << 8 | (l[i++] & 0xFF) << 16 | (l[i] & 0xFF) << 24;
-	}
-
-	public final long readLong(int i) {
-		i = testWI(i, 8);
-		byte[] l = this.list;
-		return (l[i++] & 0xFFL) << 56 |
-			(l[i++] & 0xFFL) << 48 |
-			(l[i++] & 0xFFL) << 40 |
-			(l[i++] & 0xFFL) << 32 |
-			(l[i++] & 0xFFL) << 24 |
-			(l[i++] & 0xFFL) << 16 |
-			(l[i++] & 0xFFL) << 8 |
-			l[i] & 0xFFL;
-	}
-
-	public final long readLongLE(int i) {
-		i = testWI(i, 8);
-		byte[] l = this.list;
-		return (l[i++] & 0xFFL) |
-			(l[i++] & 0xFFL) << 8 |
-			(l[i++] & 0xFFL) << 16 |
-			(l[i++] & 0xFFL) << 24 |
-			(l[i++] & 0xFFL) << 32 |
-			(l[i++] & 0xFFL) << 40 |
-			(l[i++] & 0xFFL) << 48 |
-			(l[i] & 0xFFL) << 56;
-	}
-
-	@SuppressWarnings("deprecation")
-	public final String readAscii(int i, int len) {
-		return new String(list, 0, testWI(i, len), len);
-	}
+	public final String readAscii(int i, int len) {return new String(list, testWI(i, len)+arrayOffset(), len, StandardCharsets.ISO_8859_1);}
 
 	@Override
-	@SuppressWarnings("deprecation")
 	public final String readLine() {
 		int i = rIndex + arrayOffset();
 		int len = wIndex + arrayOffset();
 		byte[] l = list;
-		while (true) {
-			if (i >= len) throw new ArrayIndexOutOfBoundsException();
+		while (i < len) {
 			byte b = l[i++];
 			if (b == '\r' || b == '\n') {
 				if (b == '\r' && i < wIndex && l[i] == '\n') i++;
 				break;
 			}
 		}
-		String s = new String(l, 0, rIndex, i - rIndex);
+		String s = new String(l, rIndex, i - rIndex, StandardCharsets.ISO_8859_1);
 		rIndex = i - arrayOffset();
 		return s;
 	}
@@ -511,39 +340,23 @@ public class ByteList extends DynByteBuf implements Appendable {
 	// endregion
 	// region Buffer Ops
 
-	public final ByteList slice(int length) {
-		if (length == 0) return EMPTY;
-		ByteList list = slice(rIndex, length);
-		rIndex += length;
-		return list;
-	}
 	public final ByteList slice(int off, int len) {
-		return new Slice(list, off + arrayOffset(), len);
+		return len == 0 ? EMPTY : new Slice(list, testWI(off, len)+arrayOffset(), len);
 	}
+	public final ByteList sliceNoIndexCheck(int off, int len) {return new Slice(list, off, len);}
 
 	@Override
 	public final ByteList compact() {
 		if (rIndex > 0) {
-			System.arraycopy(list, arrayOffset() + rIndex, list, arrayOffset(), wIndex - rIndex);
-			wIndex -= rIndex;
+			System.arraycopy(list, arrayOffset() + rIndex, list, arrayOffset(), wIndex -= rIndex);
 			rIndex = 0;
 		}
 		return this;
 	}
 
 	@Override
-	public final int nioBufferCount() {
-		return 1;
-	}
-
-	@Override
 	public final ByteBuffer nioBuffer() {
 		return NativeMemory.newHeapBuffer(list, -1, rIndex, wIndex, capacity(), arrayOffset());
-	}
-
-	@Override
-	public final void nioBuffers(List<ByteBuffer> buffers) {
-		buffers.add(nioBuffer());
 	}
 
 	@Override
@@ -579,25 +392,13 @@ public class ByteList extends DynByteBuf implements Appendable {
 	}
 
 	@Override
-	public boolean equals(Object o) {
-		if (this == o) return true;
-		if (!(o instanceof DynByteBuf b)) return false;
-
-		int length = wIndex-rIndex;
-		if (length != b.readableBytes()) return false;
-
-		return ArrayUtil.vectorizedMismatch(list, _unsafeAddr()+rIndex, b.array(), b._unsafeAddr()+b.rIndex, length, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
-	}
-
-	@Override
-	public int hashCode() { return ArrayUtil.byteHashCode(list, _unsafeAddr()+rIndex, wIndex-rIndex); }
-
-	@Override
 	@NotNull
 	@SuppressWarnings("deprecation")
-	public String toString() { return new String(list, 0, arrayOffset()+rIndex, wIndex-rIndex); }
+	public String toString() {return new String(list, 0, arrayOffset()+rIndex, wIndex-rIndex);}
 
-	public static class WriteOut extends ByteList {
+	@Override public CharList hex(CharList sb) {return TextUtil.bytes2hex(list, arrayOffset()+rIndex, arrayOffset()+wIndex, sb);}
+
+	public static final class WriteOut extends ByteList {
 		private OutputStream out;
 		private int fakeWriteIndex;
 
@@ -617,11 +418,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		public final void setDispatchClose(boolean dispatchClose) { this.dispatchClose = dispatchClose; }
 
 		@Override
-		public int wIndex() {
-			flush();
-			return fakeWriteIndex;
-		}
-		protected final int realWIndex() { return wIndex; }
+		public int wIndex() {flush();return fakeWriteIndex;}
 		public void wIndex(int w) { throw a(); }
 
 		public final boolean hasBuffer() { return false; }
@@ -630,28 +427,64 @@ public class ByteList extends DynByteBuf implements Appendable {
 		public final int maxCapacity() { return buf.maxCapacity(); }
 
 		@Override
+		public ByteList put(byte[] b, int off, int len) {
+			if (len < buf.capacity()) return super.put(b, off, len);
+			flush();
+			try {
+				out.write(b, off, len);
+			} catch (IOException e) {
+				Helpers.athrow(e);
+			}
+			fakeWriteIndex += len;
+			return this;
+		}
+
+		@Override
+		public ByteList put(DynByteBuf b, int off, int len) {
+			if (len < buf.capacity()) return super.put(b, off, len);
+			flush();
+			try {
+				if (b.hasArray()) out.write(b.array(), b.arrayOffset()+off, len);
+				else {
+					while (len > 0) {
+						int read = Math.min(len, capacity());
+						b.readFully(off, list, arrayOffset(), read);
+						out.write(list, arrayOffset(), read);
+
+						off += read;
+						len -= read;
+					}
+				}
+			} catch (IOException e) {
+				Helpers.athrow(e);
+			}
+			fakeWriteIndex += len;
+			return this;
+		}
+
+		@Override
 		public void ensureCapacity(int cap) {
 			if (cap > buf.capacity()) {
 				cap -= wIndex;
 				flush();
 
 				if (wIndex+cap > buf.capacity()) {
-					buf = BufferPool.expand(buf, cap);
+					buf = BufferPool.localPool().expand(buf, cap);
 					list = buf.array();
 				}
 			}
 		}
 
-		final int moveWI(int i) {
+		final int preWrite(int i) {
 			ensureCapacity(wIndex+i);
 			int j = wIndex;
 			wIndex = j+i;
 			return j;
 		}
-		final int moveRI(int i) { throw a(); }
+		final int preRead(int i) { throw a(); }
 
 		public final boolean hasArray() { return false; }
-		public final byte[] array() { throw a(); }
+		//public final byte[] array() { throw a(); }
 		public final ByteList setArray(byte[] array) { throw a(); }
 
 		public void flush() {
@@ -731,23 +564,12 @@ public class ByteList extends DynByteBuf implements Appendable {
 			return this;
 		}
 
-		@Override
-		public int capacity() { return len; }
-		@Override
-		public int maxCapacity() { return len; }
-		@Override
-		public boolean immutableCapacity() { return true; }
-		@Override
-		public void ensureCapacity(int required) {
-			if (required > len) throw new IndexOutOfBoundsException("cannot hold "+required+"bytes in this buffer("+len+")");
+		@Override public int capacity() {return len;}
+		@Override public int maxCapacity() {return len;}
+		@Override public void ensureCapacity(int required) {
+			if (required > len) throw new IndexOutOfBoundsException("cannot hold "+required+" bytes in this buffer("+len+")");
 		}
-
-		@Override
-		public int arrayOffset() { return off; }
-
-		@Override
-		public ByteList setArray(byte[] array) { throw new ReadOnlyBufferException(); }
-		@Override
-		public void preInsert(int off, int len) { throw new ReadOnlyBufferException(); }
+		@Override public int arrayOffset() {return off;}
+		@Override public ByteList setArray(byte[] array) {throw new ReadOnlyBufferException();}
 	}
 }

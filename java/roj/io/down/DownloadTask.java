@@ -1,29 +1,28 @@
 package roj.io.down;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
-import roj.concurrent.Waitable;
 import roj.concurrent.task.ITask;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.net.ch.*;
-import roj.net.ch.handler.Timeout;
+import roj.net.handler.Timeout;
 import roj.net.http.AutoRedirect;
 import roj.net.http.HttpClient11;
 import roj.net.http.HttpHead;
 import roj.net.http.HttpRequest;
-import roj.text.ACalendar;
-import roj.util.Helpers;
+import roj.text.DateParser;
 
 import java.io.*;
-import java.net.URL;
+import java.net.URI;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CancellationException;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.zip.GZIPInputStream;
@@ -34,13 +33,13 @@ import java.util.zip.InflaterInputStream;
  * @author solo6975
  * @since 2022/5/1 0:55
  */
-public final class DownloadTask implements ChannelHandler, ITask, Waitable {
+public final class DownloadTask implements ChannelHandler, ITask, Future<File> {
 	public static final TaskHandler QUERY = new TaskPool(0, 2, 50, 60000, "NIO连接器");
 
-	public static int defChunkStart = 1024 * 512;
+	public static int defChunkStart = 65536;
 	public static int defMaxChunks = 16;
-	public static int defMinChunkSize = 1024;
-	public static boolean defETag = false;
+	public static int defMinChunkSize = 4096;
+	public static boolean useETag = false;
 	public static String userAgent;
 	public static Map<String, String> defHeaders = Collections.emptyMap();
 	static {
@@ -54,34 +53,34 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 		userAgent = agent;
 	}
 
-	public static Waitable download(String url, File file) throws IOException {
+	public static Future<File> download(String url, File file) throws IOException {
 		return download(url, file, new ProgressMulti());
 	}
 
 	/**
 	 * 单线程下载文件
 	 */
-	public static Waitable download(String url, File file, IProgress handler) throws IOException {
-		if (file.isFile()) return new IOUtil.ImmediateFuture();
+	public static Future<File> download(String url, File file, IProgress handler) throws IOException {
+		if (file.isFile()) throw new IllegalStateException("文件已存在");
 
 		DownloadTask ad = createTask(url, file, handler);
 		ad.operation = STREAM_DOWNLOAD;
-		QUERY.pushTask(ad);
+		QUERY.submit(ad);
 		return ad;
 	}
 
-	public static Waitable downloadMTD(String url, File file) throws IOException {
+	public static Future<File> downloadMTD(String url, File file) throws IOException {
 		return downloadMTD(url, file, new ProgressMulti());
 	}
 
 	/**
 	 * 多线程下载文件
 	 */
-	public static Waitable downloadMTD(String url, File file, IProgress pg) throws IOException {
-		if (file.isFile()) return new IOUtil.ImmediateFuture();
+	public static Future<File> downloadMTD(String url, File file, IProgress pg) throws IOException {
+		if (file.isFile()) throw new IllegalStateException("文件已存在");
 
 		DownloadTask ad = createTask(url, file, pg);
-		QUERY.pushTask(ad);
+		QUERY.submit(ad);
 		return ad;
 	}
 
@@ -90,11 +89,11 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 		if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new IOException("无法创建下载目录");
 
 		File info = new File(file.getAbsolutePath() + ".nfo");
-		if (info.isFile() && !IOUtil.checkTotalWritePermission(info)) {
+		if (info.isFile() && !IOUtil.isReallyWritable(info)) {
 			throw new IOException("下载进度文件无法写入");
 		}
 
-		return new DownloadTask(new URL(url), file, pg, info);
+		return new DownloadTask(URI.create(url), file, pg, info);
 	}
 
 	volatile Throwable ex;
@@ -110,7 +109,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 	public int minChunkSize = defMinChunkSize;
 	public int retryCount = 3;
 	public int maxRedirect = 5;
-	public boolean ETag = defETag, checkTime = true;
+	public boolean ETag = useETag, checkTime = true;
 	public boolean acceptDecompress;
 
 	public int operation;
@@ -118,7 +117,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 
 	public final HttpRequest client;
 
-	public DownloadTask(URL address, File file, IProgress handler, File info) {
+	public DownloadTask(URI address, File file, IProgress handler, File info) {
 		client = HttpRequest.nts().url(address).headers(defHeaders);
 		this.file = file;
 		this.handler = handler;
@@ -138,10 +137,10 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 
 			ch = MyChannel.openTCP();
 
-			ch.addLast("Redirect", new AutoRedirect(client, IOUtil.timeout, maxRedirect))
+			ch.addLast("Redirect", new AutoRedirect(client, Downloader.timeout, maxRedirect))
 			  .addLast("Checker", this);
 
-			client.connect(ch, IOUtil.timeout);
+			client.connect(ch, Downloader.timeout);
 
 			ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 		} catch (Exception e) {
@@ -155,11 +154,11 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
-		ctx.channel().addBefore(ctx, "Timer", new Timeout(IOUtil.timeout, 2000));
+		ctx.channel().addBefore(ctx, "Timer", new Timeout(Downloader.timeout, 2000));
 
 		HttpHead h = client.response();
 		String lastMod = h.getField("last-modified");
-		if (!lastMod.isEmpty()) time = ACalendar.parseRFCDate(lastMod);
+		if (!lastMod.isEmpty()) time = DateParser.parseRFCDate(lastMod);
 
 		long len = h.getContentLengthLong();
 		String encoding = null;
@@ -170,7 +169,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 		this.encoding = encoding;
 
 		File tmpFile = new File(file.getAbsolutePath()+".tmp");
-		if (len > 0) IOUtil.allocSparseFile(tmpFile, len);
+		if (len > 0) IOUtil.createSparseFile(tmpFile, len);
 
 		try (RandomAccessFile raf = new RandomAccessFile(info, "rw")) {
 			int chunks;
@@ -205,7 +204,6 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 			}
 		}
 
-		URL url = client.url();
 		List<Downloader> tasks = new SimpleList<>();
 
 		if (operation == STREAM_DOWNLOAD || len < 0 || (
@@ -247,7 +245,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 		if (tasks.isEmpty()) {
 			done.set(-1);
 			this.tasks = Collections.emptyList();
-			QUERY.pushTask(this);
+			QUERY.submit(this);
 		} else {
 			done.set(tasks.size());
 			this.tasks = tasks;
@@ -260,7 +258,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 		d.retry = retryCount;
 		d.client = client.clone();
 		if (handler != null) handler.onJoin(d);
-		QUERY.pushTask(d);
+		QUERY.submit(d);
 	}
 
 	@Override
@@ -273,34 +271,11 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 	}
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id == Timeout.READ_TIMEOUT) ex = new FastFailException("Read Timeout");
+		if (event.id.equals(Timeout.READ_TIMEOUT)) ex = new FastFailException("Read Timeout");
 	}
 
 	private List<Downloader> tasks;
 	private String encoding;
-
-	@Override
-	public void waitFor() throws IOException {
-		while (true) {
-			if (ex != null) {
-				if (ex instanceof IOException) Helpers.athrow(ex);
-
-				IOException e = new IOException(ex);
-				e.setStackTrace(new StackTraceElement[0]);
-				throw e;
-			}
-
-			if (done.get() < -1) break;
-
-			synchronized (this) {
-				try {
-					wait();
-				} catch (InterruptedException e) {
-					throw new IOException(e);
-				}
-			}
-		}
-	}
 
 	private void guardedFinish() {
 		try {
@@ -376,13 +351,18 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 		if (time != 0) file.setLastModified(time);
 	}
 
-	public boolean isSuccessful() { return done.get() == -2; }
 	@Override
-	public boolean isDone() { return done.get() < -1; }
+	public boolean isDone() {return done.get() < -1;}
 	@Override
-	public void cancel() {
+	public boolean isCancelled() {return done.get() == -4;}
+	public boolean isSuccessful() {return done.get() == -2;}
+
+	@Override
+	public boolean cancel(boolean mayInterruptIfRunning) {return cancel();}
+	@Override
+	public boolean cancel() {
 		if (ex == null) ex = new CancellationException();
-		if (done.getAndSet(-4) == -4) return;
+		if (done.getAndSet(-4) == -4) return true;
 
 		if (handler != null) handler.shutdown();
 		if (tasks != null) {
@@ -390,13 +370,35 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 				tasks.get(i).close();
 			}
 		}
-		synchronized (this) { notifyAll(); }
+		synchronized (this) {notifyAll();}
+		return true;
+	}
+
+	@Override
+	public File get() throws InterruptedException, ExecutionException {
+		while (true) {
+			if (ex != null) throw new ExecutionException(ex);
+			if (done.get() < -1) break;
+			synchronized (this) {wait();}
+		}
+		return file;
+	}
+
+	@Override
+	public File get(long timeout, @NotNull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+		if (ex != null) throw new ExecutionException(ex);
+		if (!isDone()) {
+			synchronized (this) {wait(unit.toMillis(timeout));}
+			if (ex != null) throw new ExecutionException(ex);
+			if (!isDone()) throw new TimeoutException();
+		}
+		return file;
 	}
 
 	void onSubDone() {
 		if (done.decrementAndGet() == 0) {
 			if (done.compareAndSet(0, -1)) {
-				QUERY.pushTask(this);
+				QUERY.submit(this);
 			}
 		}
 	}

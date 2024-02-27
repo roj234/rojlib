@@ -5,8 +5,8 @@ import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.concurrent.timing.ScheduleTask;
 import roj.config.data.CEntry;
-import roj.config.data.CMapping;
-import roj.platform.Plugin;
+import roj.config.data.CMap;
+import roj.plugin.Plugin;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -28,7 +28,7 @@ public class DDNSClient extends Plugin {
 
 	@Override
 	protected void onEnable() throws Exception {
-		CMapping cfg = getConfig();
+		CMap cfg = getConfig();
 
 		ip = (IpGetter) Class.forName(cfg.getString("GetIp")).newInstance();
 		ip.loadConfig(cfg);
@@ -41,7 +41,7 @@ public class DDNSClient extends Plugin {
 		Map<String, List<String>> sites = new MyHashMap<>();
 		monitorIps = new ToIntMap<>();
 		for (Map.Entry<String, CEntry> subSites : cfg.get("Sites").asMap().entrySet()) {
-			CMapping map1 = subSites.getValue().asMap();
+			CMap map1 = subSites.getValue().asMap();
 			for (Iterator<Map.Entry<String, CEntry>> itr = map1.entrySet().iterator(); itr.hasNext(); ) {
 				Map.Entry<String, CEntry> entry = itr.next();
 				int e = entry.getValue().asInteger();
@@ -76,8 +76,8 @@ public class DDNSClient extends Plugin {
 			List<Map.Entry<String, InetAddress[]>> changes = new SimpleList<>(monitorIps.size());
 			for (ToIntMap.Entry<String> entry : monitorIps.selfEntrySet()) {
 				InetAddress[] addr1 = new InetAddress[2];
-				if ((entry.v & 1) == 0) addr1[0] = address[0];
-				if ((entry.v & 2) == 0 && hasV6) addr1[1] = address[1];
+				if ((entry.v & 1) != 0) addr1[0] = address[0];
+				if ((entry.v & 2) != 0 && hasV6) addr1[1] = address[1];
 
 				// both null
 				if (addr1[0] == addr1[1]) continue;

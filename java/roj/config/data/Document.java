@@ -2,6 +2,9 @@ package roj.config.data;
 
 import roj.text.CharList;
 
+import java.util.Collections;
+import java.util.Map;
+
 /**
  * @author Roj234
  * @since 2021/5/31 21:17
@@ -9,8 +12,11 @@ import roj.text.CharList;
 public final class Document extends Element {
 	public Document() { super("?xml"); }
 
-	public Text createTextNode(String text) { return new Text(text, TEXT); }
-	public Element createElement(String tag) { return new Element(tag); }
+	public Text createTextNode(String text) {return new Text(text, TEXT);}
+	public Element createElement(String tag) {return new Element(tag);}
+
+	@Override
+	public Map<String, CEntry> attributesForRead() {return Collections.emptyMap();}
 
 	public void toXML(CharList sb, int depth) {
 		if (depth != 0) throw new UnsupportedOperationException("Xml header must on top");

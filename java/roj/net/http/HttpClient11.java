@@ -4,7 +4,7 @@ import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
-import roj.net.ch.handler.StreamCompress;
+import roj.net.ch.MyChannel;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -51,8 +51,7 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 		ctx.channelWrite(text.putShort(0x0D0A));
 
 		_getBody();
-		if (_body instanceof DynByteBuf) {
-			DynByteBuf b = (DynByteBuf) _body;
+		if (_body instanceof DynByteBuf b) {
 			ctx.channelWrite(b.slice(b.rIndex, b.readableBytes()));
 		} else {
 			/*if ("deflate".equalsIgnoreCase(hdr.get("content-encoding")))
@@ -69,8 +68,8 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 		if (_body != null) {
 			Object body1 = _write(ctx, _body);
 			if (body1 == null) {
-				ctx.postEvent(StreamCompress.OUT_EOF);
-				ctx.postEvent(ChunkSplitter.CHUNK_OUT_EOF);
+				ctx.postEvent(HCompress.EVENT_CLOSE_OUT);
+				ctx.postEvent(HChunk.EVENT_CLOSE_OUT);
 
 				if (_body instanceof AutoCloseable) {
 					try {
@@ -87,17 +86,17 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		switch (event.id.toString()) {
-			case "null:input_eof": // MyChannel.IN_EOF
+		switch (event.id) {
+			case MyChannel.IN_EOF:
 				sendEof(ctx, false);
 				break;
-			case "sc:in_eof": // StreamCompress.IN_EOF
+			case HCompress.EVENT_IN_END:
 				if (crc != null) {
-					((StreamCompress) event.getData()).setInf(null);
+					((HCompress) event.getData()).setInf(null);
 					state = RECV_CHECKSUM;
 				} else sendEof(ctx, true);
 				break;
-			case "cs:cin": // ChunkSplitter.CHUNK_IN_EOF
+			case HChunk.EVENT_IN_END:
 				if (response.getContentEncoding().equals("identity")) {
 					sendEof(ctx, true);
 				} else if (state == RECV_CHECKSUM) {
@@ -231,7 +230,9 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 			synchronized (this) { notifyAll(); }
 
 			if (response != null && response.getField("connection").equalsIgnoreCase("close")) {
-				ctx.channel().closeGracefully();
+				try {
+					ctx.channel().closeGracefully();
+				} catch (IOException ignored) {}
 			}
 		}
 		state = IDLE;
@@ -345,16 +346,16 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 	}
 
 	private static ChannelCtx setCompr(ChannelCtx ctx, Inflater inf) {
-		StreamCompress sc;
+		HCompress sc;
 
 		ChannelCtx hwarp = ctx.channel().handler("h11@compr");
 		if (hwarp == null) {
 			if (inf == null) return ctx;
 
-			ctx.channel().addBefore(ctx, "h11@compr", sc = new StreamCompress(1024));
+			ctx.channel().addBefore(ctx, "h11@compr", sc = new HCompress(1024));
 			hwarp = ctx.channel().handler("h11@compr");
 		} else {
-			sc = (StreamCompress) hwarp.handler();
+			sc = (HCompress) hwarp.handler();
 		}
 
 		if (inf == null) {
@@ -365,7 +366,7 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 		return hwarp;
 	}
 	public static ChannelCtx setChunk(ChannelCtx ctx, int op) {
-		ChunkSplitter cs;
+		HChunk cs;
 
 		ChannelCtx hwarp = ctx.channel().handler("h11@chunk");
 		if (hwarp == null) {
@@ -375,10 +376,10 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 			ChannelCtx c1 = ctx.channel().handler("h11@compr");
 			if (c1 != null) ctx = c1;
 
-			ctx.channel().addBefore(ctx, "h11@chunk", cs = new ChunkSplitter());
+			ctx.channel().addBefore(ctx, "h11@chunk", cs = new HChunk());
 			hwarp = ctx.channel().handler("h11@chunk");
 		} else {
-			cs = (ChunkSplitter) hwarp.handler();
+			cs = (HChunk) hwarp.handler();
 
 			if (op == 0) {
 				cs.reset();

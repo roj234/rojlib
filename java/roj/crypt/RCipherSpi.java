@@ -99,7 +99,7 @@ public abstract class RCipherSpi extends CipherSpi {
 	private byte[] updateIA(byte[] b, int off, int len, boolean doFinal) {
 		IOUtil uc = IOUtil.SharedCoder.get(); uc.byteBuf.clear();
 		bufferedUpdate(doFinal, uc.wrap(b, off, len), uc.byteBuf);
-		return uc.byteBuf.toByteArray();
+		return uc.byteBuf.toByteArrayAndZero();
 	}
 	private int updateIAOA(byte[] b, int off, int len, byte[] out, int off1, boolean doFinal) {
 		IOUtil uc = IOUtil.SharedCoder.get();
@@ -133,7 +133,7 @@ public abstract class RCipherSpi extends CipherSpi {
 						break handlePrev;
 					}
 
-					prev.put(ib.get());
+					prev.put(ib.readByte());
 					crypt(prev, ob);
 				}
 				prev.clear();

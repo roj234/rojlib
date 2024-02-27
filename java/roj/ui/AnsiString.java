@@ -1,8 +1,11 @@
 package roj.ui;
 
 import roj.collect.SimpleList;
+import roj.config.data.CInt;
+import roj.config.serial.CVisitor;
+import roj.config.serial.ToJson;
+import roj.config.serial.ToSomeString;
 import roj.io.IOUtil;
-import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -54,8 +57,51 @@ public class AnsiString {
 			extra.get(i).writeRaw(sb);
 		return sb;
 	}
-	public String toString() { return writeRaw(IOUtil.getSharedCharBuf()).toString(); }
-	public String toAnsiString() { return writeAnsi(IOUtil.getSharedCharBuf()).toString(); }
+	protected String getMinecraftType() { return "text"; }
+	public void writeJson(CVisitor ser) {
+		ser.valueMap();
+		ser.key(getMinecraftType());
+		ser.value(value.toString());
+
+		if (flag != 0) {
+			if (isClear()) {
+				ser.key("reset");
+				ser.value(true);
+			}
+			addFlag(ser, 1, "bold");
+			addFlag(ser, 4, "italic");
+			addFlag(ser, 16, "underline");
+			addFlag(ser, 256, "obfuscated");
+			addFlag(ser, 1024, "strikethrough");
+		}
+
+		if (fgColor != 0) {
+			ser.key("color");
+			if (isColorRGB()) {
+				ser.value("#"+Integer.toHexString(fgColor));
+			} else {
+				ser.value(Terminal.MinecraftColor.getByConsoleCode(fgColor&0xFF));
+			}
+		}
+
+		if (extra.size() > 0) {
+			ser.key("extra");
+			ser.valueList(extra.size());
+			for (int i = 0; i < extra.size(); i++) {
+				extra.get(i).writeJson(ser);
+			}
+			ser.pop();
+		}
+	}
+
+	public String toString() { return extra == null ? value.toString() : writeRaw(IOUtil.getSharedCharBuf()).toString(); }
+	public String toAnsiString() { return isSimple() ? value.toString() : writeAnsi(IOUtil.getSharedCharBuf()).toString(); }
+	public String toMinecraftJson() {
+		ToSomeString ser = new ToJson().sb(IOUtil.getSharedCharBuf());
+		writeJson(ser);
+		return ser.getValue().toString();
+	}
+	private boolean isSimple() {return extra == null && (fgColor|bgColor|flag) == 0;}
 
 	public void flat(List<AnsiString> str) {
 		str.add(this);
@@ -89,13 +135,13 @@ public class AnsiString {
 		out.add(currentLine);
 		return out;
 	}
-	public AnsiString writeLimited(CharList sb, MutableInt maxWidth, boolean ansi) {
-		int width = CLIUtil.getStringWidth(value);
+	public AnsiString writeLimited(CharList sb, CInt maxWidth, boolean ansi) {
+		int width = Terminal.getStringWidth(value);
 		if (width > maxWidth.value) {
 			int i = 0;
 			width = 0;
 			while (i < value.length()) {
-				int w = CLIUtil.getCharWidth(value.charAt(i));
+				int w = Terminal.getCharWidth(value.charAt(i));
 				if (width+w > maxWidth.value) {
 					sb.append(value, 0, i);
 					return new AnsiString(this, value.subSequence(i, value.length()));
@@ -155,7 +201,7 @@ public class AnsiString {
 	public AnsiString colorRGB(int c) { fgColor = c|0xFF000000; return this; }
 	public AnsiString bgColorRGB(int c) { bgColor = c|0xFF000000; return this; }
 	public boolean isColorRGB() { return (fgColor&0xFF000000) == 0xFF000000; }
-	public boolean isBgColorRGB() { return (fgColor&0xFF000000) == 0xFF000000; }
+	public boolean isBgColorRGB() { return (bgColor&0xFF000000) == 0xFF000000; }
 	public int getFgColor() { return fgColor&0xFFFFFF; }
 	public int getBgColor() { return bgColor&0xFFFFFF; }
 
@@ -197,6 +243,11 @@ public class AnsiString {
 		} else {
 			sb.append('2').append(yes).append(';');
 		}
+	}
+	private void addFlag(CVisitor sb, int bit, String yes) {
+		if ((flag&(bit<<1)) == 0) return;
+		sb.key(yes);
+		sb.value((flag & bit) != 0);
 	}
 
 	private static void addColor(CharList sb, int rgb, int type) {

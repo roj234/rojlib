@@ -4,18 +4,15 @@
 
 package roj.asmx.mapper;
 
-import roj.archive.ArchiveEntry;
-import roj.archive.ArchiveFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.type.Desc;
 import roj.asm.util.Context;
-import roj.asmx.mapper.util.ResWriter;
 import roj.collect.Int2IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
-import roj.concurrent.task.AsyncTask;
 import roj.io.IOUtil;
+import roj.misc.mapping.MappingUI;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextReader;
@@ -25,7 +22,6 @@ import roj.ui.OnChangeHelper;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -61,7 +57,7 @@ public class MapperUI extends JFrame {
 		MAPPER.flag = (byte) flag;
 
 		List<File> lib = new SimpleList<>();
-		for (String line : new LineReader(uiLibraries.getText())) {
+		for (String line : LineReader.create(uiLibraries.getText())) {
 			if (line.startsWith("#")) continue;
 			File f = new File(line);
 			if (!f.exists()) {
@@ -82,7 +78,7 @@ public class MapperUI extends JFrame {
 	private void map() throws Exception {
 		List<File> input = new SimpleList<>();
 
-		for (String path : new LineReader(uiInputPath.getText())) {
+		for (String path : LineReader.create(uiInputPath.getText())) {
 			File file = new File(path);
 			if (file.isFile()) input.add(file);
 			else if (file.isDirectory()) IOUtil.findAllFiles(file, input, jarFilter());
@@ -129,9 +125,11 @@ public class MapperUI extends JFrame {
 		List<Context> ctxs = new SimpleList<>();
 		try {
 			for (File file : input) {
-				Map<ArchiveEntry, ArchiveFile> resource = new MyHashMap<>();
-				List<Context> arr = Context.fromZip(file, resource);
-				files.add(new MapTask(input.size() == 1 && !output.isDirectory() ? output : new File(output, file.getName()), ctxs.size(), arr.size(), resource));
+				File out = input.size() == 1 && !output.isDirectory() ? output : new File(output, file.getName());
+				ZipFileWriter zfwOut = new ZipFileWriter(out);
+
+				List<Context> arr = Context.fromZip(file, zfwOut);
+				files.add(new MapTask(ctxs.size(), arr.size(), zfwOut));
 
 				if (uiMapUsers.isSelected()) m.loadLibraries(Collections.singletonList(file));
 				m.map(arr);
@@ -153,19 +151,15 @@ public class MapperUI extends JFrame {
 	}
 	private static final class MapTask {
 		ZipFileWriter zfw;
-		AsyncTask<Void> task;
 		int off, len;
 
-		MapTask(File out, int off, int len, Map<ArchiveEntry, ArchiveFile> resource) throws IOException {
-			zfw = new ZipFileWriter(out);
-			task = new ResWriter(zfw, resource);
+		MapTask(int off, int len, ZipFileWriter zfw) {
+			this.zfw = zfw;
 			this.off = off;
 			this.len = len;
-			TaskPool.Common().pushTask(task);
 		}
 
 		public void finish(List<Context> byName) throws Exception {
-			task.get();
 			for (int i = off; i < off+len; i++) {
 				Context c = byName.get(i);
 				zfw.writeNamed(c.getFileName(), c.getCompressedShared());
@@ -175,7 +169,7 @@ public class MapperUI extends JFrame {
 	}
 	private static Predicate<File> jarFilter() {
 		return fn -> {
-			String ext = IOUtil.extensionName(fn.getName().toLowerCase());
+			String ext = IOUtil.extensionName(fn.getName());
 			return ext.equals("jar") || ext.equals("zip");
 		};
 	}
@@ -214,7 +208,6 @@ public class MapperUI extends JFrame {
 		f.show();
 	}
 
-	private MappingUI mappingUI;
 	public MapperUI() {
 		initComponents();
 		GuiUtil.dropFilePath(uiInputPath, (f) -> uiOutputPath.setText(new File(f.getName()).getAbsolutePath()), false);
@@ -226,7 +219,7 @@ public class MapperUI extends JFrame {
 
 		uiInit.addActionListener((e) -> {
 			uiInit.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				try {
 					File file = GuiUtil.fileLoadFrom("选择映射表(Srg / XSrg)", this);
 					if (file != null) load(file);
@@ -237,7 +230,7 @@ public class MapperUI extends JFrame {
 		});
 		uiMap.addActionListener((e) -> {
 			uiMap.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				try {
 					map();
 				} finally {
@@ -246,9 +239,9 @@ public class MapperUI extends JFrame {
 			});
 		});
 		uiCreateMap.addActionListener((e) -> {
-			if (mappingUI == null) mappingUI = new MappingUI();
-			mappingUI.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-			mappingUI.show();
+			MappingUI ui = new MappingUI();
+			ui.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+			ui.show();
 		});
 		uiMapTrace.addActionListener((e) -> {
 			dlgMapTrace.show();
@@ -256,7 +249,7 @@ public class MapperUI extends JFrame {
 		});
 		uiLoadLines.addActionListener((e) -> {
 			uiLoadLines.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				try {
 					loadLines();
 				} finally {
@@ -292,23 +285,16 @@ public class MapperUI extends JFrame {
 		/*helper.addEventListener(uiStackTrace, (c) -> {
 			uiDeobfStackTrace.setEnabled(c.getDocument().getLength() > 0);
 		});*/
-		uiInputPath.addFocusListener(new FocusListener() {
-			@Override
-			public void focusGained(FocusEvent e) { scrollPane2.setSize(scrollPane2.getWidth(), 155); }
-			@Override
-			public void focusLost(FocusEvent e) { scrollPane2.setSize(scrollPane2.getWidth(), 19); }
-		});
 	}
 
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
-		JScrollPane scrollPane1 = new JScrollPane();
+		var scrollPane1 = new JScrollPane();
 		uiLibraries = new JTextArea();
-		scrollPane2 = new JScrollPane();
 		uiInputPath = new JTextArea();
 		uiOutputPath = new JTextField();
-		JLabel label1 = new JLabel();
-		JLabel label2 = new JLabel();
+		var label1 = new JLabel();
+		var label2 = new JLabel();
 		uiCharset = new JTextField();
 		uiInvert = new JCheckBox();
 		uiFlag1 = new JCheckBox();
@@ -319,7 +305,7 @@ public class MapperUI extends JFrame {
 		uiMFlag64 = new JCheckBox();
 		uiInit = new JButton();
 		uiMap = new JButton();
-		JLabel label3 = new JLabel();
+		var label3 = new JLabel();
 		uiMapUsers = new JCheckBox();
 		uiCheckFieldType = new JCheckBox();
 		uiOverwriteOut = new JCheckBox();
@@ -328,13 +314,13 @@ public class MapperUI extends JFrame {
 		dlgMapTrace = new JDialog();
 		uiLoadLines = new JButton();
 		uiDeobfStackTrace = new JButton();
-		JScrollPane scrollPane4 = new JScrollPane();
+		var scrollPane4 = new JScrollPane();
 		uiStackTrace = new JTextArea();
 
 		//======== this ========
 		setTitle("Roj234 Jar Mapper 3.1.1");
 		setResizable(false);
-		Container contentPane = getContentPane();
+		var contentPane = getContentPane();
 		contentPane.setLayout(null);
 
 		//======== scrollPane1 ========
@@ -346,16 +332,8 @@ public class MapperUI extends JFrame {
 		}
 		contentPane.add(scrollPane1);
 		scrollPane1.setBounds(4, 160, 380, 210);
-
-		//======== scrollPane2 ========
-		{
-
-			//---- uiInputPath ----
-			uiInputPath.setToolTipText("\u4e5f\u53ef\u4ee5\u662f\u6587\u4ef6\u5939");
-			scrollPane2.setViewportView(uiInputPath);
-		}
-		contentPane.add(scrollPane2);
-		scrollPane2.setBounds(30, 5, 215, 19);
+		contentPane.add(uiInputPath);
+		uiInputPath.setBounds(30, 5, 215, uiInputPath.getPreferredSize().height);
 		contentPane.add(uiOutputPath);
 		uiOutputPath.setBounds(30, 30, 215, uiOutputPath.getPreferredSize().height);
 
@@ -471,7 +449,7 @@ public class MapperUI extends JFrame {
 		//======== dlgMapTrace ========
 		{
 			dlgMapTrace.setTitle("StackTrace\u6062\u590d");
-			Container dlgMapTraceContentPane = dlgMapTrace.getContentPane();
+			var dlgMapTraceContentPane = dlgMapTrace.getContentPane();
 			dlgMapTraceContentPane.setLayout(null);
 
 			//---- uiLoadLines ----
@@ -503,7 +481,6 @@ public class MapperUI extends JFrame {
 
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
 	private JTextArea uiLibraries;
-	private JScrollPane scrollPane2;
 	private JTextArea uiInputPath;
 	private JTextField uiOutputPath;
 	private JTextField uiCharset;

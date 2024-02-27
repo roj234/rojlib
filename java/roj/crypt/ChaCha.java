@@ -109,7 +109,7 @@ public class ChaCha extends RCipherSpi {
 		if ((i & 3) != 0) {
 			int j = Integer.reverseBytes(T[i >> 2]) >>> ((i & 3) << 3);
 			while (in.isReadable() && (i & 3) != 0) {
-				out.put((byte) (in.get() ^ j));
+				out.put((byte) (in.readByte() ^ j));
 				j >>>= 8;
 				i++;
 			}
@@ -132,7 +132,7 @@ public class ChaCha extends RCipherSpi {
 			this.pos = i + in.readableBytes();
 			i = Integer.reverseBytes(T[i >> 2]);
 			while (in.isReadable()) {
-				out.put((byte) (in.get() ^ i));
+				out.put((byte) (in.readByte() ^ i));
 				i >>>= 8;
 			}
 		} else {

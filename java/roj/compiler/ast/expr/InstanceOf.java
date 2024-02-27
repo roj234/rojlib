@@ -6,7 +6,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -18,7 +18,7 @@ import java.util.List;
  * @since 2022/2/24 19:55
  */
 public final class InstanceOf extends ExprNode {
-	private final IType type;
+	private IType type;
 	private ExprNode left;
 	private String variable;
 
@@ -39,11 +39,11 @@ public final class InstanceOf extends ExprNode {
 
 	@Override
 	@SuppressWarnings("fallthrough")
-	public ExprNode resolve(CompileContext ctx) {
+	public ExprNode resolve(LocalContext ctx) {
 		left = left.resolve(ctx);
 		ctx.resolveType(type);
 
-		if (left.type().isPrimitive()) ctx.report(Kind.ERROR, "instanceOf.error.primitive");
+		if (left.type().isPrimitive()) ctx.report(Kind.ERROR, "symbol.error.derefPrimitive");
 
 		if (type.genericType() != IType.STANDARD_TYPE) {
 			if (type.genericType() == IType.GENERIC_TYPE) {
@@ -70,7 +70,7 @@ public final class InstanceOf extends ExprNode {
 			default: throw new ResolveException("unknownState-"+cast);
 		}
 
-		ctx.report(Kind.SEVERE_WARNING, "instanceOf.warn.always", type.toString());
+		ctx.report(Kind.SEVERE_WARNING, "instanceOf.constant", type.toString());
 		return Constant.valueOf(result);
 	}
 

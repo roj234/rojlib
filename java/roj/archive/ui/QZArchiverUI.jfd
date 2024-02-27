@@ -1,4 +1,4 @@
-JFDML JFormDesigner: "8.1.1.0.298" Java: "17.0.9" encoding: "UTF-8"
+JFDML JFormDesigner: "8.2.3.0.386" Java: "17.0.9" encoding: "UTF-8"
 
 new FormModel {
 	contentType: "form/swing"
@@ -7,7 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "Roj234 SevenZ Archiver 2.2"
+			"title": "Roj234 SevenZ Archiver 2.6"
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label4"
 				"text": "压缩这个目录或文件"
@@ -44,6 +44,23 @@ new FormModel {
 				"y": 60
 				"width": 335
 			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiKeepArchive"
+				"text": "保留原压缩包"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 135
+				"y": 40
+			} )
+			add( new FormComponent( "javax.swing.JComboBox" ) {
+				name: "uiPathType"
+				auxiliary() {
+					"JavaCodeGenerator.typeParameters": "String"
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 240
+				"y": 40
+				"width": 110
+			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiBegin"
 				"text": "压缩"
@@ -54,6 +71,20 @@ new FormModel {
 				"y": 17
 				"width": 60
 				"height": 60
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiHideComplicate"
+				"text": "我是新手"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 425
+				"y": 20
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiNativeAccel"
+				"text": "C语言加速"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 425
+				"y": 50
 			} )
 			add( new FormComponent( "javax.swing.JProgressBar" ) {
 				name: "uiProgress"
@@ -556,22 +587,19 @@ new FormModel {
 				"x": 440
 				"y": 125
 			} )
-			add( new FormComponent( "javax.swing.JComboBox" ) {
-				name: "uiPathType"
-				auxiliary() {
-					"JavaCodeGenerator.typeParameters": "String"
-				}
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 240
-				"y": 40
-				"width": 110
-			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "uiReadDirFromLog"
 				"text": "从Log读取更多文件(夹) (每行一个)"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 125
 				"y": 333
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiSortByFilename"
+				"text": "按文件名排序"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 395
+				"y": 290
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 50, 30 )

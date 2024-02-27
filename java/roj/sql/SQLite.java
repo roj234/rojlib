@@ -20,12 +20,8 @@ public final class SQLite extends DbConnector {
 
 	private final File db;
 
-	public SQLite(File db) {
-		this.db = db;
-	}
+	public SQLite(String db) {this.db = new File(db);}
+	public SQLite(File db) {this.db = db;}
 
-	@Override
-	public Connection createConnection() throws SQLException {
-		return DriverManager.getConnection("jdbc:sqlite:" + db.getAbsolutePath());
-	}
+	@Override public Connection createConnection() throws SQLException {return DriverManager.getConnection("jdbc:sqlite:" + db.getAbsolutePath());}
 }

@@ -71,7 +71,7 @@ final class SynthesisTask implements ITask {
 	}
 
 	@Override
-	public boolean cancel(boolean force) {
+	public boolean cancel() {
 		synchronized (this) {
 			done = true;
 			notify();

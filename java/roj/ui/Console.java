@@ -5,7 +5,8 @@ package roj.ui;
  * @since 2023/11/19 0019 2:30
  */
 public interface Console {
-	void registered();
-	void unregistered();
+	default void registered() {}
+	default void unregistered() {}
+	default void idleCallback() {}
 	void keyEnter(int keyCode, boolean isVirtualKey);
 }

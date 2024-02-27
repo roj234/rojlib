@@ -9,7 +9,7 @@ import roj.io.NIOUtil;
 import roj.net.NetUtil;
 import roj.net.ch.*;
 import roj.net.http.HttpRequest;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -48,10 +48,11 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 		}
 
 		System.out.println("请选择作为发起方(o)或接受方(x)");
-		char c = CLIUtil.awaitCharacter(MyBitSet.from("ox"));
+		char c = Terminal.readChar(MyBitSet.from("ox"));
+		if (c == 0) return;
 		InetSocketAddress remote;
 		if (c == 'x') {
-			String addr = CLIUtil.readString("请输入对方地址: ");
+			String addr = Terminal.readString("请输入对方地址: ");
 			remote = NetUtil.parseAddress(addr, null);
 		} else remote = null;
 
@@ -99,9 +100,9 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 					System.out.println("网络状态一般:"+natt);
 					System.out.println("将该地址给对方:"+natt.remoteAddress.toString().substring(1));
 					System.out.println("按回车键继续");
-					CLIUtil.awaitCharacter(MyBitSet.from("\n"));
+					Terminal.readChar(MyBitSet.from("\n"));
 
-					String addr = CLIUtil.readString("请输入对方的连接码: ");
+					String addr = Terminal.readString("请输入对方的连接码: ");
 					natt.connect(addr);
 
 				} else {
@@ -112,8 +113,8 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 		}
 
 		while (true) {
-			String s = CLIUtil.readString("输入数据或按x退出");
-			if (s.equals("x")) break;
+			String s = Terminal.readString("输入数据或按x退出");
+			if (s.equals("x")) System.exit(0);
 			System.out.println("sending "+natt.localAddress +" => "+natt.peerAddress);
 			((ServerLaunch) natt.keepalive).udpCh().fireChannelWrite(new DatagramPkt(natt.peerAddress, new ByteList().putAscii(s)));
 		}
@@ -221,7 +222,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 				return;
 			}
 
-			throw new IOException("no STUN server return ok");
+			throw new IOException("no STUN servers available");
 		} catch (Throwable e) {
 			close();
 			throw e;
@@ -336,7 +337,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 
 	public static Boolean checkTCPPort(int port) {
 		try {
-			ByteList data = HttpRequest.nts().url(new URL("http://portcheck.transmissionbt.com/"+port)).execute(10000).bytes();
+			ByteList data = HttpRequest.nts().url("http://portcheck.transmissionbt.com/"+port).execute(10000).bytes();
 			char isOk = data.charAt(0);
 			if (isOk == '1') return true;
 			else if (isOk == '0') return false;

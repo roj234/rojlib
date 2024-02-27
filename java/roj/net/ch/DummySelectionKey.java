@@ -5,31 +5,23 @@ import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 
-public class DummySelectionKey extends SelectionKey {
-	public static final SelectionKey INSTANCE = new DummySelectionKey();
+final class DummySelectionKey extends SelectionKey {
+	static final SelectionKey INSTANCE = new DummySelectionKey();
 
 	@Override
-	public SelectableChannel channel() {
-		throw new UnsupportedOperationException();
-	}
+	public SelectableChannel channel() {throw new UnsupportedOperationException();}
 
 	@Override
-	public Selector selector() {
-		throw new UnsupportedOperationException();
-	}
+	public Selector selector() {throw new UnsupportedOperationException();}
 
 	@Override
-	public boolean isValid() {
-		return false;
-	}
+	public boolean isValid() {return false;}
 
 	@Override
 	public void cancel() {}
 
 	@Override
-	public int interestOps() {
-		return 0;
-	}
+	public int interestOps() {return 0;}
 
 	@Override
 	public SelectionKey interestOps(int ops) {
@@ -38,7 +30,5 @@ public class DummySelectionKey extends SelectionKey {
 	}
 
 	@Override
-	public int readyOps() {
-		return 0;
-	}
+	public int readyOps() {return 0;}
 }

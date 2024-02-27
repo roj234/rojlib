@@ -1,80 +1,90 @@
 package roj.reflect;
 
-import roj.asm.AsmShared;
+import roj.ReferenceByGeneratedClass;
 import roj.asm.Parser;
+import roj.asm.tree.ConstantData;
 import roj.asm.tree.IClass;
-import roj.io.IOUtil;
+import roj.asm.visitor.CodeWriter;
 import roj.util.ByteList;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.security.ProtectionDomain;
+
+import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
  * @since 2021/6/16 1:31
  */
-public class ClassDefiner extends ClassLoader {
-	public static ClassDefiner getFor(Class<?> c) { return new ClassDefiner(getParent(c)); }
-	public static ClassDefiner INSTANCE = getFor(ClassDefiner.class);
+public final class ClassDefiner extends ClassLoader {
+	static {registerAsParallelCapable();}
+	private final String desc;
+	public ClassDefiner(ClassLoader parent, String desc) {super(parent);this.desc = desc;}
+	public String toString() {return "ClassDefiner<"+desc+">";}
 
-	private static final H def;
+	public static final ClassLoader APP_LOADER = ClassDefiner.class.getClassLoader();
+
+	private static final ThreadLocal<Object> Callback = new ThreadLocal<>();
+	@ReferenceByGeneratedClass
+	public static void __(Object handle) { Callback.set(handle); }
+
+	public static void premake(ConstantData clz) {
+		clz.npConstructor();
+
+		CodeWriter cw = clz.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
+		cw.visitSize(2,0);
+
+		cw.newObject(clz.name);
+		cw.invoke(INVOKESTATIC, ClassDefiner.class.getName().replace('.', '/'), "__", "(Ljava/lang/Object;)V");
+		cw.one(RETURN);
+		cw.finish();
+	}
+	public static Object make(ConstantData data) {return make(data, APP_LOADER);}
+	public static Object make(ConstantData data, ClassLoader cl) {
+		try {
+			ByteList buf = Parser.toByteArrayShared(data);
+			Class<?> klass = cl == null ? ReflectionUtils.defineWeakClass(buf) : defineClass(cl, null, buf);
+			return postMake(klass);
+		} catch (Throwable e) {
+			throw new IllegalStateException("初始化失败", e);
+		}
+	}
+	public static Object postMake(Class<?> klass) {
+		try {
+			ReflectionUtils.ensureClassInitialized(klass);
+
+			Object o = Callback.get();
+			if (null == o) throw new IllegalStateException("未在过去调用premake()");
+			return o;
+		} finally {
+			Callback.remove();
+		}
+	}
+
+	// 用weak(), 这样不会走ClassDefiner#defineClass分支
+	private static final H def = Bypass.builder(H.class).inline().delegate(ClassLoader.class, new String[] {"defineClass", "findLoadedClass"}).build();
 	private interface H {
 		Class<?> defineClass(ClassLoader loader, String name, byte[] b, int off, int len, ProtectionDomain pd);
 		Class<?> findLoadedClass(ClassLoader loader, String name);
 	}
-	static {
-		ClassLoader.registerAsParallelCapable();
-
-		AsmShared.local().setLevel(true);
-		try {
-			def = DirectAccessor.builder(H.class).delegate(ClassLoader.class, new String[] {"defineClass", "findLoadedClass"}).build();
-		} finally {
-			AsmShared.local().setLevel(false);
-		}
-	}
-
-	public static boolean debug = System.getProperty("roj.reflect.debugClass") != null;
-	protected static void dumpClass(String name, ByteList buf) {
-		if (debug) {
-			File f = new File("./ClassDefiner_dump");
-			f.mkdir();
-			try (FileOutputStream fos = new FileOutputStream(new File(f, name+".class"))) {
-				buf.writeToStream(fos);
-			} catch (IOException ignored) {}
-		}
-	}
 
 	public static Class<?> findLoadedClass(ClassLoader loader, String name) { return def.findLoadedClass(loader, name); }
+	// DPS Hooked, also used by DPS Hooks
 	public static Class<?> defineClass(ClassLoader loader, String name, byte[] b, int off, int len, ProtectionDomain pd) { return def.defineClass(loader, name, b, off, len, pd); }
 
-	public ClassDefiner(ClassLoader parent) { super(parent); }
-
-	public final Class<?> defineClass(String name, byte[] bytes) throws ClassFormatError { return defineClass(name, IOUtil.SharedCoder.get().wrap(bytes)); }
-	public final Class<?> defineClass(IClass data) { return defineClass(null, Parser.toByteArrayShared(data)); }
-	public Class<?> defineClass(String name, ByteList buf) throws ClassFormatError {
-		dumpClass(name, buf);
+	public static Class<?> defineGlobalClass(IClass data) {return defineClass(APP_LOADER, data);}
+	public static Class<?> defineClass(ClassLoader cl, IClass data) {return defineClass(cl, null, Parser.toByteArrayShared(data));}
+	public static Class<?> defineClass(ClassLoader cl, String name, ByteList buf) throws ClassFormatError {
+		if (cl == null) throw new NullPointerException("classLoader cannot be null");
+		if (Debug.CLASS_DUMP) Debug.dump("define", buf);
 
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
 		if (sm != null) buf = sm.checkDefineClass(name, buf);
 
 		int off = buf.arrayOffset()+buf.rIndex;
-		try{
-			if (def != null) {
-				ClassLoader p = getParent();
-				return def.defineClass(p, name, buf.list, off, buf.readableBytes(), p.getClass().getProtectionDomain());
-			}
-
-			return defineClass(name, buf.list, off, buf.readableBytes(), getClass().getProtectionDomain());
+		try {
+			return def.defineClass(cl, name, buf.list, off, buf.readableBytes(), cl.getClass().getProtectionDomain());
 		} finally {
 			buf.rIndex = buf.wIndex();
 		}
-	}
-
-	private static ClassLoader getParent(Class<?> type) {
-		ClassLoader parent = type.getClassLoader();
-		if (parent == null) parent = ClassLoader.getSystemClassLoader();
-		return parent;
 	}
 }

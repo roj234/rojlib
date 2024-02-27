@@ -3,21 +3,22 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
-import roj.collect.SimpleList;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.text.TextUtil;
+
+import java.util.List;
 
 /**
  * @author Roj234
  * @since 2023/9/18 0018 9:07
  */
 final class Chained extends ExprNode {
-	public final SimpleList<ExprNode> par;
+	private final List<ExprNode> par;
 
-	public Chained(SimpleList<ExprNode> par) { this.par = par; }
+	public Chained(List<ExprNode> par) { this.par = par; }
 
 	@Override
 	public String toString() { return TextUtil.join(par, ", "); }
@@ -27,15 +28,17 @@ final class Chained extends ExprNode {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(CompileContext ctx) {
-		for (int i = 0; i < par.size(); i++) {
+	public ExprNode resolve(LocalContext ctx) {
+		int i = 0;
+		while (i < par.size()) {
 			ExprNode node = par.get(i).resolve(ctx);
-			if (node.isConstant()) {
+			if (node.isConstant() && i != par.size()-1) {
 				ctx.report(Kind.SEVERE_WARNING, "chained.warn.constant_expr");
-				par.remove(i--);
-			} else par.set(i, node);
+				par.remove(i);
+			} else {
+				par.set(i++, node);
+			}
 		}
-		par.set(par.size()-1, par.get(par.size()-1).resolve(ctx));
 		return par.size() == 1 ? par.get(0) : this;
 	}
 

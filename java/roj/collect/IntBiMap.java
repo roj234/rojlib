@@ -155,6 +155,9 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 		return v == null ? 0 : v.hashCode();
 	}
 
+	@Override
+	@Deprecated
+	public V put(Integer key, V e) { return put0(key, e, true); }
 	public V putInt(int key, V e) { return put0(key, e, false); }
 	public V forcePut(int key, V e) { return put0(key, e, true); }
 	public int putByValue(int key, V e) { return putByValue0(e, key, false); }

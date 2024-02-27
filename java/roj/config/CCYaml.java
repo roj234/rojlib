@@ -1,11 +1,11 @@
 package roj.config;
 
 import roj.config.serial.CVisitor;
-import roj.config.word.Word;
 
-import static roj.config.CCJson.adaptError;
-import static roj.config.JSONParser.*;
-import static roj.config.word.Word.EOF;
+import java.util.Map;
+
+import static roj.config.CCJson.*;
+import static roj.config.Word.EOF;
 
 /**
  * @author Roj234
@@ -15,12 +15,15 @@ public final class CCYaml extends YAMLParser implements CCParser {
 	public CCYaml() {}
 	public CCYaml(int flag) { super(flag); }
 
+	public Map<String, Integer> dynamicFlags() { return Map.of("Lenient", LENIENT); }
+
 	private CVisitor cc;
 	@Override
-	public <CV extends CVisitor> CV parse(CV cv, CharSequence text, int flag) throws ParseException {
+	public <CV extends CVisitor> CV parse(CharSequence text, int flag, CV cv) throws ParseException {
 		this.flag = flag;
 		cc = cv;
 		init(text);
+		if (!next().val().equals("---")) retractWord();
 		try {
 			ccElement(flag);
 		} catch (ParseException e) {
@@ -34,16 +37,16 @@ public final class CCYaml extends YAMLParser implements CCParser {
 
 	private void ccLineArray() throws ParseException {
 		int superIndent = prevIndent;
-		int firstIndent = getIndent();
-		if (firstIndent <= superIndent) throw err("下级缩进("+firstIndent+")<=上级("+superIndent+")");
+		int firstIndent = indent;
+		if (firstIndent < superIndent) throw err("下级缩进("+firstIndent+")<上级("+superIndent+")");
 
 		cc.valueList();
 		int size = 0;
 
 		while (true) {
-			int line = LN;
+			int line = LN, i = index;
 			Word w = next();
-			if (LN > line && getIndent() == firstIndent && w.type() == delim) {
+			if (LN > line && indent <= firstIndent && whiteSpaceUntilNextLine(i)) {
 				cc.valueNull();
 				size++;
 			} else {
@@ -62,7 +65,7 @@ public final class CCYaml extends YAMLParser implements CCParser {
 			}
 
 			int off;
-			if (w.type() != delim || (off = getIndent()) < firstIndent) {
+			if (w.type() != delim || superIndent == -2 || (off = indent) < firstIndent) {
 				retractWord();
 				break;
 			} else if (off != firstIndent) throw err("缩进有误:"+off+"/"+firstIndent);
@@ -72,7 +75,7 @@ public final class CCYaml extends YAMLParser implements CCParser {
 	}
 	private void ccObject(Word w) throws ParseException {
 		int superIndent = prevIndent;
-		int firstIndent = getIndent();
+		int firstIndent = indent;
 		if (firstIndent <= superIndent) throw err("下级缩进("+firstIndent+")<=上级("+superIndent+")");
 
 		cc.valueMap();
@@ -82,12 +85,8 @@ public final class CCYaml extends YAMLParser implements CCParser {
 			switch (w.type()) {
 				case ask: throw err("配置文件不用字符串做key是坏文明");
 				case join: throw err("CConsumer不支持回退式更改");
-				case Word.LITERAL:
-				case Word.STRING:
-				case Word.INTEGER:
-				case Word.LONG:
-				case Word.DOUBLE:
-				case Word.FLOAT:
+				case Word.LITERAL, Word.STRING:
+				case Word.INTEGER, Word.LONG, Word.DOUBLE, Word.FLOAT:
 				case NULL:
 					except(colon, ":");
 
@@ -109,7 +108,7 @@ public final class CCYaml extends YAMLParser implements CCParser {
 			w = nextNN();
 			if (w.type() == EOF) break;
 
-			int indent = getIndent();
+			int indent = this.indent;
 			if (indent < firstIndent) {
 				// 上一个是List
 				if (firstIndent == Integer.MAX_VALUE) {
@@ -130,39 +129,48 @@ public final class CCYaml extends YAMLParser implements CCParser {
 		String cnt = w.val();
 		try {
 			switch (w.type()) {
-				case join: case force_cast: case ref: case anchor: throw err("访问者模式不支持seek-past");
-				case left_m_bracket: CCJson.jsonList(this, flag|LITERAL_KEY); break;
-				case left_l_bracket: CCJson.jsonMap(this, flag|LITERAL_KEY); break;
-				case multiline: case multiline_clump: cc.value(cnt); break;
-				case Word.STRING:
-				case Word.LITERAL: if (!checkMap()) cc.value(cnt); break;
-				case Word.DOUBLE:
-				case Word.FLOAT: {
+				case join, force_cast, ref, anchor -> throw err("访问者模式不支持seek-past");
+				case lBracket -> {
+					this.flag |= JSON_MODE;
+					jsonList(this, flag);
+					this.flag ^= JSON_MODE;
+				}
+				case lBrace -> {
+					this.flag |= JSON_MODE;
+					jsonMap(this, flag);
+					this.flag ^= JSON_MODE;
+				}
+				case multiline, multiline_clump -> cc.value(cnt);
+				case Word.STRING, Word.LITERAL -> {
+					if (!checkMap()) cc.value(cnt);
+				}
+				case Word.DOUBLE, Word.FLOAT -> {
 					double d = w.asDouble();
 					if (!checkMap()) cc.value(d);
-					break;
 				}
-				case Word.INTEGER: {
+				case Word.INTEGER -> {
 					int i = w.asInt();
 					if (!checkMap()) cc.value(i);
-					break;
 				}
-				case Word.RFCDATE_DATE: cc.valueDate(w.asLong()); break;
-				case Word.RFCDATE_DATETIME:
-				case Word.RFCDATE_DATETIME_TZ: cc.valueTimestamp(w.asLong()); break;
-				case Word.LONG: cc.value(w.asLong()); break;
-				case TRUE: case FALSE: {
+				case Word.RFCDATE_DATE -> cc.valueDate(w.asLong());
+				case Word.RFCDATE_DATETIME, Word.RFCDATE_DATETIME_TZ -> cc.valueTimestamp(w.asLong());
+				case Word.LONG -> cc.value(w.asLong());
+				case TRUE, FALSE -> {
 					boolean b = w.type() == TRUE;
 					if (!checkMap()) cc.value(b);
-					break;
 				}
-				case NULL: if (!checkMap()) cc.valueNull(); break;
-				case delim:
-					if (prevLN == LN && LN != 1) throw err("期待换行");
+				case NULL -> {
+					if (!checkMap()) cc.valueNull();
+				}
+				case delim -> {
+					if (prevLN == LN && LN != 1) {
+						if ((flag & LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
+						prevIndent = -1;
+					}
 					ccLineArray();
-					break;
-				case Word.EOF: cc.valueNull(); break;
-				default: unexpected(cnt); break;
+				}
+				case Word.EOF -> cc.valueNull();
+				default -> unexpected(cnt);
 			}
 		} catch (Exception e) {
 			if (e instanceof ParseException) throw e;
@@ -173,29 +181,34 @@ public final class CCYaml extends YAMLParser implements CCParser {
 	public CVisitor cc() { return cc; }
 
 	private boolean checkMap() throws ParseException {
-		int i = prevIndex;
+		mark();
+
 		Word firstKey = tmpKey.init(wd.type(), wd.pos(), wd.val());
 
 		int ln = prevLN;
-		short type = nextNN().type();
-
-		if (type == colon) {
-			if (getIndent() <= prevIndent) {
+		if (nextNN().type() == colon) {
+			if (indent <= prevIndent) {
 				if (prevLN == ln) {
-					throw err("若"+firstKey.val()+"是一个key,则其必须换行");
+					if ((flag&LENIENT) == 0) throw err("一行内不允许同时放置列表和映射 (通过LENIENT参数关闭该限制)");
+					int begin = firstKey.pos();
+					while (begin > 0) {
+						indent++;
+						if (input.charAt(--begin) == '-') break;
+					}
 				} else {
-					index = i;
+					retract();
+					retractWord();
 					cc.valueNull();
 					return true;
 				}
 			}
 
-			retractWord();
+			retract();
 			ccObject(firstKey);
 			return true;
 		}
 
-		retractWord();
+		retract();
 		return false;
 	}
 }

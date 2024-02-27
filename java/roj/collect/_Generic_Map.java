@@ -9,5 +9,5 @@ import java.util.Iterator;
 interface _Generic_Map<T extends _Generic_Entry> {
 	_Generic_Entry[] __entries();
 	void __remove(T t);
-	default Iterator<T> __iterator() { return null; }
+	default Iterator<?> __iterator() {return null;}
 }

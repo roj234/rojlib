@@ -1,6 +1,7 @@
 package roj.crypt;
 
 import org.jetbrains.annotations.NotNull;
+import roj.io.Finishable;
 import roj.io.buf.BufferPool;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -14,7 +15,7 @@ import java.security.GeneralSecurityException;
  * @author Roj234
  * @since 2022/11/12 0012 15:27
  */
-public class CipherOutputStream extends FilterOutputStream {
+public class CipherOutputStream extends FilterOutputStream implements Finishable {
 	static final int BUFFER_SIZE = 1024;
 
 	private byte[] b1;
@@ -93,27 +94,34 @@ public class CipherOutputStream extends FilterOutputStream {
 		ib.writeToStream(out);
 		ob.compact();
 	}
+
+	@Override
+	public void finish() throws IOException {
+		if (block != 0 && o.isReadable()) {
+			flush();
+			try {
+				finalBlock(o);
+			} catch (Exception e) {
+				Helpers.athrow(e);
+			}
+		}
+
+		if (o != null) {
+			if (BufferPool.isPooled(o))
+				BufferPool.reserve(o);
+			o = null;
+		}
+
+		out.flush();
+	}
+
 	public synchronized void close() throws IOException {
 		if (out == null) return;
-		try (OutputStream out = this.out) {
-			if (block != 0 && o.isReadable()) {
-				flush();
-				try {
-					finalBlock(o);
-				} catch (Exception e) {
-					Helpers.athrow(e);
-				}
-			}
-
-			out.flush();
+		try {
+			finish();
 		} finally {
-			this.out = null;
-
-			if (o != null) {
-				if (BufferPool.isPooled(o))
-					BufferPool.reserve(o);
-				o = null;
-			}
+			out.close();
+			out = null;
 		}
 	}
 

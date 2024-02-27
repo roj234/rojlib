@@ -7,12 +7,12 @@ import roj.util.Helpers;
  * @since 2020/8/23 0:54
  */
 public final class OperationDone extends RuntimeException {
-	static final long serialVersionUID = 2333L;
+	public static final RuntimeException NEVER = Helpers.nonnull();
+	public static final OperationDone INSTANCE = new OperationDone("操作完成.");
 
-	public static final OperationDone NEVER = Helpers.nonnull();
-	public static final OperationDone INSTANCE = new OperationDone("Operation done.");
+	private OperationDone(String s) {super(s);}
 
-	private OperationDone(String s) {
-		super(s);
-	}
+	// backtrace will strong reference some class, weird……
+	@Override
+	public synchronized Throwable fillInStackTrace() {return this;}
 }

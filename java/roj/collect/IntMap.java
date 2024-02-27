@@ -14,122 +14,176 @@ import java.util.function.Supplier;
  */
 public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<IntMap.Entry<V>> {
 	public static final Object UNDEFINED = new Object() {
-		public String toString() { return "roj.collect.UNDEFINED"; }
-		public boolean equals(Object obj) { return obj == UNDEFINED; }
-		public int hashCode() { return 0; }
+		public String toString() {return "roj.collect.UNDEFINED";}
 	};
-	public static final int MAX_NOT_USING = 5;
 
-	@SuppressWarnings("unchecked")
-	public void putAll(IntMap<? extends V> map) {
-		if (map.entries == null) return;
-		this.ensureCapacity(size + map.size());
-		for (int i = 0; i < map.length; i++) {
-			Entry<?> entry = map.entries[i];
-			while (entry != null) {
-				putInt(entry.k, (V) entry.v);
+	static final float RESIZE_LOADFACTOR = 0.75f;
+	static final int RESIZE_THRESHOLD_GREATER = 3;
 
-				entry = entry.next;
-			}
-		}
-	}
-
-	public V getOrDefault(int key, V def) {
-		Entry<V> entry = getEntry(key);
-		return entry == null ? def : entry.v;
-	}
+	static final float NUMKEY_LOADFACTOR = 1f;
 
 	public static class Entry<V> implements _Generic_Entry, Map.Entry<Integer, V> {
-		protected int k;
-		protected V v;
+		int k;
+		public V v;
 
-		public Entry(int k, V v) {
-			this.k = k;
-			this.v = v;
-		}
+		public Entry(int k, V v) {this.k = k;this.v = v;}
 
 		@Override
 		@Deprecated
-		public Integer getKey() { return k; }
+		public Integer getKey() {return k;}
+		public int getIntKey() {return k;}
 
-		public int getIntKey() { return k; }
-
-		public V getValue() { return v; }
+		public V getValue() {return v;}
 		public V setValue(V now) {
 			V v = this.v;
 			this.v = now;
 			return v;
 		}
 
-		protected Entry<V> next;
+		Entry<V> next;
+		@Override
+		public _Generic_Entry __next() {return next;}
 
 		@Override
-		public Entry<V> __next() { return next; }
-
-		@Override
-		public String toString() { return k+"="+v; }
+		public String toString() {return k+"="+v;}
 	}
 
-	protected Entry<?>[] entries;
-	protected int size = 0;
+	Entry<?>[] entries;
+	int size;
 
-	protected Entry<V> notUsing = null;
+	int length, mask;
 
-	int length = 2;
-	float loadFactor = 1f;
-
-	public IntMap() {
-		this(16);
-	}
-
-	public IntMap(int size) {
-		ensureCapacity(size);
-	}
-
-	public IntMap(int size, float loadFactor) {
-		ensureCapacity(size);
-		this.loadFactor = loadFactor;
-	}
-
-	@SuppressWarnings("unchecked")
+	public IntMap() {this(16);}
+	public IntMap(int size) {ensureCapacity(size);}
 	public IntMap(IntMap<? extends V> map) {
-		ensureCapacity(map.size);
-		this.loadFactor = map.loadFactor;
-		if (map.size() == 0) return;
-
-		this.entries = new Entry<?>[map.entries.length];
-		for (int i = 0; i < this.entries.length; i++) {
-			this.entries[i] = cloneNode((Entry<V>) map.entries[i]);
-		}
-		this.size = map.size();
-	}
-
-	private Entry<V> cloneNode(Entry<V> entry) {
-		if (entry == null) return null;
-		Entry<V> newEntry = getCachedEntry(entry.k, entry.getValue());
-		Entry<V> head = newEntry;
-		while (entry.next != null) {
-			entry = entry.next;
-			newEntry.next = getCachedEntry(entry.k, entry.getValue());
-			newEntry = newEntry.next;
-		}
-		return head;
+		length = map.length;
+		mask = map.mask;
+		putAll(map);
 	}
 
 	public void ensureCapacity(int size) {
-		if (size < length) return;
-		length = MathUtils.getMin2PowerOf(size);
+		if (size <= mask) return;
+		int length = MathUtils.getMin2PowerOf(size);
+		mask = length-1;
 
-		if (this.entries != null) resize();
+		if (entries != null) resize();
+		else this.length = (int) (length * NUMKEY_LOADFACTOR);
 	}
 
-	public int size() { return size; }
+	static int intHash(int i) {return (i ^ (i >>> 16) ^ (i >> 25));}
 
-	public Set<Entry<V>> selfEntrySet() { return _Generic_EntrySet.create(this); }
-	public Set<Map.Entry<Integer, V>> entrySet() { return Helpers.cast(selfEntrySet()); }
+	// GenericMap interface
+	@Override
+	public _Generic_Entry[] __entries() {return entries;}
+	@Override
+	public void __remove(Entry<V> vEntry) {remove(vEntry.k);}
+	// GenericMap interface
+	public int size() {return size;}
 
-	public _Generic_Entry[] __entries() { return entries; }
-	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
+	@SuppressWarnings("unchecked")
+	public final boolean containsValue(Object v) {return getValueEntry((V) v) != null;}
+	@SuppressWarnings("unchecked")
+	public Entry<V> getValueEntry(V v) {
+		if (entries == null) return null;
+		for (int i = 0; i <= mask; i++) {
+			Entry<V> entry = (Entry<V>) entries[i];
+			if (entry == null) continue;
+			while (entry != null) {
+				if (Objects.equals(v, entry.getValue())) return entry;
+				entry = entry.next;
+			}
+		}
+		return null;
+	}
+
+	@Override
+	@Deprecated
+	public final boolean containsKey(Object key) {return containsKey((int) key);}
+	public final boolean containsKey(int key) {return getEntry(key) != null;}
+
+	@Override
+	@Deprecated
+	public final V get(Object key) {return get((int) key);}
+	public final V get(int key) {
+		Entry<V> entry = getEntry(key);
+		return entry == null ? null : entry.getValue();
+	}
+	public final Entry<V> getEntry(int key) {
+		Entry<V> entry = getFirst(key, false);
+		while (entry != null) {
+			if (entry.k == key) return entry;
+			entry = entry.next;
+		}
+		return null;
+	}
+
+	@Override
+	@Deprecated
+	public final V put(Integer key, V value) {return putInt(key, value);}
+	public V putInt(int key, V e) {
+		Entry<V> entry = getOrCreateEntry(key);
+		V oldV = entry.setValue(e);
+		return oldV == UNDEFINED ? null : oldV;
+	}
+
+	public final V remove(Object key) {return remove((int) key);}
+	public V remove(int key) {
+		Entry<V> entry = getFirst(key, false);
+		if (entry == null) return null;
+
+		if (entry.k == key) {
+			size--;
+			entries[intHash(key)&mask] = entry.next;
+			return entry.v;
+		}
+
+		Entry<V> prev = entry;
+		while (true) {
+			entry = entry.next;
+			if (entry == null) return null;
+
+			if (entry.k == key) {
+				size--;
+				prev.next = entry.next;
+				return entry.v;
+			}
+
+			prev = entry;
+		}
+	}
+
+	@Override
+	@SuppressWarnings("unchecked")
+	public final void putAll(@NotNull Map<? extends Integer, ? extends V> m) {
+		if (m instanceof IntMap) putAll((IntMap<V>) m);
+		else super.putAll(m);
+	}
+	@SuppressWarnings("unchecked")
+	public void putAll(IntMap<? extends V> map) {
+		if (map.entries == null) return;
+		ensureCapacity(size + map.size());
+		for (int i = 0; i <= map.mask; i++) {
+			Entry<?> entry = map.entries[i];
+			while (entry != null) {
+				getOrCreateEntry(entry.k).v = (V) entry.v;
+				entry = entry.next;
+			}
+		}
+	}
+
+	public void clear() {
+		if (size == 0) return;
+		size = 0;
+		Arrays.fill(entries, null);
+	}
+
+	public final Set<Map.Entry<Integer, V>> entrySet() {return Helpers.cast(selfEntrySet());}
+	public final Set<Entry<V>> selfEntrySet() {return _Generic_EntrySet.create(this);}
+
+	public V getOrDefault(Object key, V def) {return getOrDefault((int) key, def);}
+	public V getOrDefault(int key, V def) {
+		Entry<V> entry = getEntry(key);
+		return entry == null ? def : entry.v;}
 
 	public V computeIfAbsentInt(int k, @NotNull IntFunction<V> fn) {
 		Entry<V> entry = getEntry(k);
@@ -146,191 +200,62 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 		return v;
 	}
 
-	public V remove(Object key) { return remove((int) key); }
-	public V get(Object key) { return get((int) key); }
-	public boolean containsKey(Object key) { return containsKey((int) key); }
-	public V put(Integer key, V value) { return putInt(key, value); }
-	public V getOrDefault(Object key, V def) { return getOrDefault((int) key, def); }
-
 	@SuppressWarnings("unchecked")
-	protected void resize() {
+	private void resize() {
+		int length = MathUtils.getMin2PowerOf(this.length) << 1;
+		if (length <= 0) return;
+
 		Entry<?>[] newEntries = new Entry<?>[length];
-		Entry<V> entry;
-		Entry<V> next;
+		int newMask = length-1;
+
+		Entry<V> entry, next;
 		int i = 0, j = entries.length;
 		for (; i < j; i++) {
 			entry = (Entry<V>) entries[i];
 			while (entry != null) {
 				next = entry.next;
-				int newKey = indexFor(entry.k);
-				Entry<V> entry2 = (Entry<V>) newEntries[newKey];
+				int newKey = intHash(entry.k)&newMask;
+				entry.next = (Entry<V>) newEntries[newKey];
 				newEntries[newKey] = entry;
-				entry.next = entry2;
 				entry = next;
 			}
 		}
 
 		this.entries = newEntries;
+		this.mask = newMask;
+		this.length = (int) (length * NUMKEY_LOADFACTOR);
 	}
 
-	public V putInt(int key, V e) {
-		if (size > length * loadFactor) {
-			length <<= 1;
-			resize();
-		}
-
-		Entry<V> entry = getOrCreateEntry(key);
-		V oldV = entry.setValue(e);
-		if (oldV == UNDEFINED) oldV = null;
-		return oldV;
-	}
-
-	public V remove(int id) {
-		Entry<V> prevEntry = null;
-		Entry<V> toRemove = null;
-		{
-			Entry<V> entry = getEntryFirst(id, false);
-			while (entry != null) {
-				if (entry.k == id) {
-					toRemove = entry;
-					break;
-				}
-				prevEntry = entry;
-				entry = entry.next;
-			}
-		}
-
-		if (toRemove == null) return null;
-
-		this.size--;
-
-		if (prevEntry != null) {
-			prevEntry.next = toRemove.next;
-		} else {
-			this.entries[indexFor(id)] = toRemove.next;
-		}
-
-		V v = toRemove.v;
-
-		putRemovedEntry(toRemove);
-
-		return v;
-	}
 
 	@SuppressWarnings("unchecked")
-	public boolean containsValue(Object v) {
-		return getEntry((V) v) != null;
-	}
-
-	public boolean containsKey(int i) {
-		return getEntry(i) != null;
-	}
-
-	@SuppressWarnings("unchecked")
-	Entry<V> getEntry(V v) {
-		if (entries == null) return null;
-		for (int i = 0; i < length; i++) {
-			Entry<V> entry = (Entry<V>) entries[i];
-			if (entry == null) continue;
-			while (entry != null) {
-				if (Objects.equals(v, entry.getValue())) {
-					return entry;
-				}
-				entry = entry.next;
-			}
-		}
-		return null;
-	}
-
-	public Entry<V> getEntry(int id) {
-		Entry<V> entry = getEntryFirst(id, false);
-		while (entry != null) {
-			if (entry.k == id) return entry;
-			entry = entry.next;
-		}
-		return null;
-	}
-
-	@SuppressWarnings("unchecked")
-	public Entry<V> getOrCreateEntry(int id) {
-		Entry<V> entry = getEntryFirst(id, true);
-		if (entry.v == UNDEFINED) {
-			size++;
-			return entry;
-		}
+	public Entry<V> getOrCreateEntry(int key) {
+		Entry<V> entry = getFirst(key, true);
 		while (true) {
-			if (entry.k == id) return entry;
-			if (entry.next == null) break;
+			if (entry.k == key) return entry;
+			if (entry.next == null) {
+				entry = entry.next = new Entry<>(key, (V)UNDEFINED);
+
+				if (++size > length) resize();
+
+				return entry;
+			}
+
 			entry = entry.next;
 		}
-
-		size++;
-		return entry.next = getCachedEntry(id, (V) UNDEFINED);
 	}
-
-	protected Entry<V> getCachedEntry(int id, V value) {
-		Entry<V> cached = this.notUsing;
-		if (cached != null) {
-			cached.k = id;
-			cached.v = value;
-			this.notUsing = cached.next;
-			cached.next = null;
-			return cached;
-		}
-
-		return createEntry(id, value);
-	}
-
-	protected void putRemovedEntry(Entry<V> entry) {
-		if (notUsing != null && notUsing.k > MAX_NOT_USING) {
-			return;
-		}
-		entry.next = notUsing;
-		entry.k = notUsing == null ? 1 : notUsing.k + 1;
-		entry.v = null;
-		notUsing = entry;
-	}
-
-	int indexFor(int id) {
-		return (id ^ (id >>> 16)) & (length - 1);
-	}
-
-	protected Entry<V> createEntry(int id, V value) {
-		return new Entry<>(id, value);
-	}
-
 	@SuppressWarnings("unchecked")
-	Entry<V> getEntryFirst(int k, boolean create) {
-		int id = indexFor(k);
+	private Entry<V> getFirst(int k, boolean create) {
+		int id = intHash(k) & mask;
 		if (entries == null) {
 			if (!create) return null;
-			entries = new Entry<?>[length];
+			entries = new Entry<?>[mask+1];
 		}
 		Entry<V> entry;
 		if ((entry = (Entry<V>) entries[id]) == null) {
 			if (!create) return null;
-			return (Entry<V>) (entries[id] = getCachedEntry(k, (V) UNDEFINED));
+			size++;
+			return (Entry<V>) (entries[id] = new Entry<>(k, UNDEFINED));
 		}
 		return entry;
-	}
-
-	public V get(int id) {
-		Entry<V> entry = getEntry(id);
-		return entry == null ? null : entry.getValue();
-	}
-
-	public void clear() {
-		if (size == 0) return;
-		size = 0;
-		if (entries == null) return;
-
-		if (notUsing == null || notUsing.k < MAX_NOT_USING) {
-			for (int i = 0; i < length; i++) {
-				if (entries[i] != null) {
-					putRemovedEntry(Helpers.cast(entries[i]));
-					entries[i] = null;
-				}
-			}
-		} else Arrays.fill(entries, null);
 	}
 }

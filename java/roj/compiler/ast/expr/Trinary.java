@@ -7,7 +7,8 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.visitor.Label;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.GlobalContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 
@@ -32,22 +33,24 @@ final class Trinary extends ExprNode {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(CompileContext ctx) {
+	public ExprNode resolve(LocalContext ctx) {
+		// must before resolve
+		if (val.isKind(ExprKind.IMMEDIATE_CONSTANT))
+			ctx.report(Kind.WARNING, "trinary.constant");
+
 		val = val.resolve(ctx);
 		cast = ctx.castTo(val.type(), Type.std(Type.BOOLEAN), 0);
 
 		ok = ok.resolve(ctx);
 		fail = fail.resolve(ctx);
 		type = ctx.getCommonParent(ok.type(), fail.type());
-		ctx.report(Kind.NOTE, "common parent of "+ok.type()+" and "+fail.type()+" is "+type);
+		GlobalContext.debugLogger().info("common parent of "+ok.type()+" and "+fail.type()+" is "+type);
 
-		if (cast.type >= 0 && val.isConstant()) {
-			ctx.report(Kind.WARNING, "trinary.warn.always");
+		if (cast.type >= 0 && val.isConstant())
 			return (boolean) val.constVal() ? ok : fail;
-		}
 
 		if (ok.equals(fail)) {
-			ctx.report(Kind.WARNING, "trinary.warn.always");
+			ctx.report(Kind.WARNING, "trinary.constant");
 		}
 
 		if (ok.isConstant()&fail.isConstant()) {
@@ -73,10 +76,9 @@ final class Trinary extends ExprNode {
 	// 通过这种处理(不检查noRet)，现在可以直接使用 ? : 而不是必须在有返回值的环境了
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
-		// TODO review possible side-effect
 		if (boolHack != 0 && !(val instanceof Binary)) {
 			mustBeStatement(noRet);
-			cw.ctx1.report(Kind.WARNING, "trinary.note.boolean_hack", this);
+			GlobalContext.debugLogger().info("trinary.note.boolean_hack {}", this);
 
 			val.writeDyn(cw, cast);
 			int value = ((AnnValInt) ok.constVal()).value;

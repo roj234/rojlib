@@ -3,9 +3,11 @@ package roj.net.ch;
 import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
-import roj.concurrent.TaskPool;
 import roj.io.buf.BufferPool;
-import roj.util.*;
+import roj.util.AttributeKey;
+import roj.util.DynByteBuf;
+import roj.util.Helpers;
+import roj.util.NativeMemory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -27,7 +29,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @since 2022/5/17 12:47
  */
 public abstract class MyChannel implements Selectable, Closeable {
-	public static final Identifier IN_EOF = new Identifier("input_eof");
+	public static final String IN_EOF = "channel:inEnd";
 
 	ChannelCtx pipelineHead, pipelineTail;
 
@@ -44,9 +46,9 @@ public abstract class MyChannel implements Selectable, Closeable {
 	public static final int INITIAL = 0, CONNECTED = 1, CONNECT_PENDING = 2, OPENED = 3, CLOSE_PENDING = 4, CLOSED = 5;
 	protected volatile byte state;
 
-	protected final RingBuffer<Object> pending = new RingBuffer<>(0, 100);
+	protected final RingBuffer<Object> pending = new RingBuffer<>(0, 30);
 
-	protected static final int PAUSE_FOR_FLUSH = 1, REINVOKE_READ = 2, READ_INACTIVE = 4;
+	protected static final int PAUSE_FOR_FLUSH = 1, REINVOKE_READ = 2, READ_INACTIVE = 4, TIMED_FLUSH = 8;
 	protected byte flag;
 
 	protected final ReentrantLock lock = new ReentrantLock();
@@ -239,13 +241,8 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 	// endregion
 
-	public final int getState() {
-		return state;
-	}
-
-	public boolean isOpen() {
-		return state < CLOSED && ch.isOpen();
-	}
+	public final int getState() {return state;}
+	public boolean isOpen() {return state < CLOSED && ch.isOpen();}
 	public boolean isInputOpen() { return isOpen(); }
 	public boolean isOutputOpen() { return isOpen(); }
 
@@ -277,27 +274,21 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 
 	// region State
-	final void setFlagLock(int newFlag) {
-		lock.lock();
-		flag = (byte) newFlag;
-		lock.unlock();
-	}
 
 	public void readActive() {
 		int ops = key.interestOps();
-		setFlagLock(flag & ~READ_INACTIVE);
-		if ((ops & SelectionKey.OP_READ) == 0) {
-			key.interestOps(ops | SelectionKey.OP_READ);
-
-			DynByteBuf rb = this.rb;
-			if (rb != null && rb.isReadable()) {
-				invokeReadLater();
-			}
-		}
+		lock.lock();
+		flag &= ~READ_INACTIVE;
+		lock.unlock();
+		if ((ops & SelectionKey.OP_READ) == 0) key.interestOps(ops | SelectionKey.OP_READ);
+		var rb = this.rb;
+		if (rb != null && rb.isReadable()) invokeReadLater();
 	}
 	public void readInactive() {
 		int ops = key.interestOps();
-		setFlagLock(flag | READ_INACTIVE);
+		lock.lock();
+		flag |= READ_INACTIVE;
+		lock.unlock();
 		if ((ops & SelectionKey.OP_READ) != 0) {
 			key.interestOps(ops & ~SelectionKey.OP_READ);
 		}
@@ -306,31 +297,30 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	public void pauseAndFlush() {
 		if (!pending.isEmpty()) {
-			setFlagLock(flag | PAUSE_FOR_FLUSH);
+			lock.lock();
+			flag |= PAUSE_FOR_FLUSH;
+			lock.unlock();
 			key.interestOps(SelectionKey.OP_WRITE);
 		}
 	}
-
-	public final boolean isPendingSend() {
-		return !pending.isEmpty();
-	}
+	public final boolean isFlushing() {return !pending.isEmpty();}
 	// endregion
 
+	private static ChannelHandler flushedHandler_;
 	public final void closeGracefully() throws IOException {
 		flush();
 		if (!pending.isEmpty()) {
 			pauseAndFlush();
-			if (handler("@@flush_callback") == null) {
-				addLast("@@flush_callback", new ChannelHandler() {
-					@Override
-					public void channelFlushed(ChannelCtx ctx) throws IOException {
-						ctx.channel().closeGracefully();
-					}
-				});
+			if (handler("channel:flushed") == null) {
+				if (flushedHandler_ == null) {
+					flushedHandler_ = new ChannelHandler() {
+						@Override public void channelFlushed(ChannelCtx ctx) throws IOException {ctx.channel().closeGracefully();}
+					};
+				}
+				addLast("channel:flushed", flushedHandler_);
 			}
-		} else {
-			closeGracefully0();
 		}
+		else closeGracefully0();
 	}
 
 	public BufferPool alloc() {
@@ -371,7 +361,9 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 
 	public void invokeReadLater() {
-		setFlagLock(flag | REINVOKE_READ);
+		lock.lock();
+		flag |= REINVOKE_READ;
+		lock.unlock();
 	}
 
 	private ChannelCtx head() {
@@ -401,8 +393,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	public final boolean connect(SocketAddress address) throws IOException { return connect(address, -1); }
 	public final boolean connect(SocketAddress address, int timeout) throws IOException {
-		if (!(address instanceof InetSocketAddress)) throw new UnsupportedOperationException("Not InetSocketAddress");
-		InetSocketAddress na = (InetSocketAddress) address;
+		if (!(address instanceof InetSocketAddress na)) throw new UnsupportedOperationException("Not InetSocketAddress");
 
 		lock.lock();
 		try {
@@ -491,6 +482,10 @@ public abstract class MyChannel implements Selectable, Closeable {
 			throw new ConnectException("Connect timeout");
 		}
 
+		if ((flag&TIMED_FLUSH) != 0 && (System.currentTimeMillis()&15) == (hashCode()&15)) {
+			flush();
+		}
+
 		lock.lock();
 		try {
 			if ((flag & REINVOKE_READ) != 0) {
@@ -498,7 +493,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 				fireChannelRead(rb);
 			}
 
-			ChannelCtx pipe = pipelineHead;
+			var pipe = pipelineHead;
 			while (pipe != null) {
 				pipe.handler.channelTick(pipe);
 				if (state >= CLOSE_PENDING) break;
@@ -553,8 +548,19 @@ public abstract class MyChannel implements Selectable, Closeable {
 			if (!finishConnect()) return;
 		}
 
-		if (!pending.isEmpty() && (readyOps & SelectionKey.OP_WRITE) != 0) flush();
-		if ((flag & PAUSE_FOR_FLUSH) != 0 || (readyOps & SelectionKey.OP_READ) == 0) return;
+		if (!pending.isEmpty() && (readyOps & SelectionKey.OP_WRITE) != 0) {
+			int size = pending.size();
+			flush();
+			if (pending.size() == size) {
+				key.interestOps(0);
+
+				lock.lock();
+				flag |= TIMED_FLUSH;
+				lock.unlock();
+			}
+			return;
+		}
+		if ((readyOps & SelectionKey.OP_READ) == 0) return;
 
 		if (!lock.tryLock()) return;
 		try {
@@ -594,8 +600,11 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 	// endregion
 
-	// TODO - add checks
 	public void bind(InetSocketAddress na) throws IOException {
+		if (state != INITIAL) {
+			if (state > OPENED) throw new ClosedChannelException();
+			throw new IOException("Must INITIAL not "+state);
+		}
 		bind0(na);
 	}
 
@@ -612,8 +621,8 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	// callback
 
-	final void onInputClosed() throws IOException {
-		Event inputEndEvent = new Event(IN_EOF);
+	final void onInputClosed(Object data) throws IOException {
+		var inputEndEvent = new Event(IN_EOF, data);
 		postEvent(inputEndEvent);
 		if (inputEndEvent.getResult() == Event.RESULT_DEFAULT) {
 			close();
@@ -622,7 +631,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	protected void closeHandler() throws IOException {
 		Throwable ee = null;
-		ChannelCtx pipe = pipelineTail;
+		var pipe = pipelineTail;
 		while (pipe != null) {
 			try {
 				pipe.handler.channelClosed(pipe);
@@ -635,16 +644,17 @@ public abstract class MyChannel implements Selectable, Closeable {
 		if (ee != null) Helpers.athrow(ee);
 	}
 
+	// isFlushing() false => true
 	protected final void fireFlushing() throws IOException {
-		ChannelCtx pipe = pipelineTail;
+		var pipe = pipelineTail;
 		while (pipe != null) {
 			pipe.handler.channelFlushing(pipe);
 			pipe = pipe.prev;
 		}
 	}
-
+	// isFlushing() true => false
 	protected final void fireFlushed() throws IOException {
-		ChannelCtx pipe = pipelineHead;
+		var pipe = pipelineHead;
 		while (pipe != null) {
 			pipe.handler.channelFlushed(pipe);
 			pipe = pipe.next;
@@ -683,23 +693,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 		}
 	}
 
-	public boolean isTCP() {
-		return true;
-	}
-	public final boolean isClosePending() {
-		return state == CLOSE_PENDING;
-	}
-
-	public void invokeLater(Runnable r) {
-		TaskPool.Common().pushTask(() -> {
-			lock.lock();
-			try {
-				r.run();
-			} finally {
-				lock.unlock();
-			}
-		});
-	}
-
-	public Lock lock() { return lock; }
+	public boolean isTCP() {return true;}
+	public boolean canSendfile() {return false;}
+	public Lock lock() {return lock;}
 }

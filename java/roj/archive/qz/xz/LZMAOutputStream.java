@@ -10,7 +10,6 @@
 
 package roj.archive.qz.xz;
 
-import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.lzma.LZMAEncoder;
 import roj.archive.qz.xz.rangecoder.RangeEncoderToStream;
 import roj.io.Finishable;
@@ -28,7 +27,6 @@ import java.io.OutputStream;
 public class LZMAOutputStream extends OutputStream implements Finishable {
 	private OutputStream out;
 
-	private LZEncoder lz;
 	private final RangeEncoderToStream rc;
 	private LZMAEncoder lzma;
 
@@ -57,14 +55,13 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 		}
 
 		lzma = LZMAEncoder.getInstance(rc, options, 0);
-		lz = lzma.getLZEncoder();
 
 		byte[] presetDict = options.getPresetDict();
 		if (presetDict != null && presetDict.length > 0) {
-			if (useHeader) throw new UnsupportedOptionsException("Preset dictionary cannot be used in .lzma files " +
+			if (useHeader) throw new IllegalArgumentException("Preset dictionary cannot be used in .lzma files " +
 				"(try a raw LZMA stream instead)");
 
-			lz.setPresetDict(dictSize, presetDict);
+			lzma.lzPresetDict(dictSize, presetDict);
 		}
 
 		props = options.getPropByte();
@@ -163,7 +160,7 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 
 		try {
 			while (len > 0) {
-				int used = lz.fillWindow(buf, off, len);
+				int used = lzma.lzFill(buf, off, len);
 				off += used;
 				len -= used;
 				lzma.encodeForLZMA1();
@@ -188,7 +185,7 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 				throw new IOException("Expected uncompressed size ("+expectedUncompressedSize+") doesn't equal " +
 					"the number of bytes written to the stream ("+processed+")");
 
-			lz.setFinishing();
+			lzma.lzFinish();
 			lzma.encodeForLZMA1();
 
 			if (useEndMarker) lzma.encodeLZMA1EndMarker();
@@ -202,7 +199,6 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 		} finally {
 			lzma.release();
 			lzma = null;
-			lz = null;
 			rc.release();
 		}
 	}

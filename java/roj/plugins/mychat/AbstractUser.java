@@ -1,7 +1,7 @@
 package roj.plugins.mychat;
 
 import roj.collect.IntSet;
-import roj.config.exch.TRawString;
+import roj.config.serial.CRawString;
 import roj.config.serial.ToJson;
 import roj.config.serial.ToSomeString;
 import roj.util.ByteList;
@@ -23,11 +23,11 @@ public abstract class AbstractUser {
 
 	public abstract void postMessage(Context c, Message m, boolean sys);
 
-	public final TRawString put() {
+	public final CRawString put() {
 		ToJson ser = new ToJson();
 		ser.valueMap();
 		put(ser);
 		ser.pop();
-		return new TRawString(ser.getValue());
+		return new CRawString(ser.getValue());
 	}
 }

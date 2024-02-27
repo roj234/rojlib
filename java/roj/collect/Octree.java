@@ -11,18 +11,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 
 /**
- * Benchmark (capacity: 壹仟萬, loc: ±4096)
- * 内存: 661.33M
- * add() 每次/1kw: 9.094E-4ms
- * getNearest(20) 每次/10000: 0.0047ms
- * getNearest(100) 每次/10000: 0.0093ms
- * getRange(0, 10) 每次/10000: 0.0047ms ; Avg size: 0.0758
- * getRange(0, 50) 每次/10000: 0.0094ms ; Avg size: 9.5253
- * getRange(0, 100) 每次/10000: 0.0313ms ; Avg size: 75.2286
- * getOrigin(0, 100) 每次/10000: 0.0047ms ; Size: 82
- * getExact() 每次/1kw: 8.996E-4ms
- * remove() 每次/1kw: 9.251E-4ms
- *
  * @author solo6975
  * @since 2022/1/16 6:04
  */
@@ -51,39 +39,18 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 		public Node __next() { return next; }
 	}
 
-	// field顺序=index
-	// 适配toBinaryString
-	public static final int I_UUU = 1;
-	public static final int I_UUD = 2;
-	public static final int I_UDU = 4;
-	public static final int I_UDD = 8;
-	public static final int I_DUU = 16;
-	public static final int I_DUD = 32;
-	public static final int I_DDU = 64;
-	public static final int I_DDD = 128;
-
 	/**
 	 * {@link #init(int, int, int) init(unit = 1024, maxDepth = 10, capacity = 16)}
 	 */
 	public Octree() {init(1024, 10, 16);}
-
 	public Octree(int unit) {init(unit, 10, 16);}
-
 	public Octree(int unit, int capacity) {init(unit, 10, capacity);}
 
 	private int unit, maxDepth, vCount;
 
-	public int unit() {
-		return unit;
-	}
-
-	public int size() {
-		return vCount;
-	}
-
-	public int maxDepth() {
-		return maxDepth;
-	}
+	public int unit() {return unit;}
+	public int size() {return vCount;}
+	public int maxDepth() {return maxDepth;}
 
 	/**
 	 * 使用int存储位置，flag1位，每层3bit，最大支持10层，默认unit为 1 << 10 = 1024 <br>
@@ -94,7 +61,6 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 	 * @param capacity 初始化容量
 	 *
 	 * @see Node#k node偏移量
-	 * @see #fill(int) 预填充
 	 * @see #clear()
 	 */
 	public void init(int unit, int maxDepth, int capacity) {
@@ -123,50 +89,6 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 		vCount = 0;
 		size = 0;
 		if (nodes != null) Arrays.fill(nodes, null);
-	}
-
-	/**
-	 * 预构造一个全满八叉树
-	 *
-	 * @param level 构造几层
-	 */
-	public void fill(int level) {
-		if (vCount > 0) throw new IllegalStateException();
-		if (level <= 1 || level > 10) throw new IllegalArgumentException();
-		int amount = 0, t = 8;
-		for (int i = 0; i < level; i++) {
-			amount += t;
-			t *= t;
-		}
-		if (amount < 0) throw new IllegalArgumentException();
-
-		if (mask + 1 < amount) {
-			int p2 = MathUtils.getMin2PowerOf(amount);
-			nodes = new Node[p2];
-			mask = p2 - 1;
-		}
-
-		int unit = this.unit;
-		int child_unit = unit >>> 1;
-		for (int i = 0; i < 8; i++) {
-			int child_x = ((i & 4) != 0 ? -unit : unit);
-			int child_y = ((i & 2) != 0 ? -unit : unit);
-			int child_z = ((i & 1) != 0 ? -unit : unit);
-			fill(getOrCreateEntry(0b1000 | i), child_x, child_y, child_z, child_unit, level);
-		}
-	}
-
-	private void fill(Node n, int cx, int cy, int cz, int unit, int level) {
-		if (level-- == 0) return;
-		if (unit == 0) return;
-
-		int child_unit = unit >>> 1;
-		for (int i = 0; i < 8; i++) {
-			int child_x = cx + ((i & 4) != 0 ? -unit : unit);
-			int child_y = cy + ((i & 2) != 0 ? -unit : unit);
-			int child_z = cz + ((i & 1) != 0 ? -unit : unit);
-			fill(getOrCreateEntry((n.k << 3) | i), child_x, child_y, child_z, child_unit, level);
-		}
 	}
 
 	@SuppressWarnings("unchecked")

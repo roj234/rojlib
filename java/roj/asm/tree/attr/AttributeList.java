@@ -115,9 +115,17 @@ public final class AttributeList extends SimpleList<Attribute> {
 	}
 
 	public void toByteArray(DynByteBuf w, ConstantPool cw) {
+		int pos = w.wIndex();
+		int size = this.size;
 		w.putShort(size);
-		Object[] o = list;
-		for (int i = 0; i < size; i++)
-			((Attribute) o[i]).toByteArray(w, cw);
+		var o = list;
+
+		for (int i = 0; i < size; i++) {
+			var attr = (Attribute) o[i];
+			if (attr.isEmpty()) size--;
+			else attr.toByteArray(w, cw);
+		}
+
+		w.putShort(pos, size);
 	}
 }

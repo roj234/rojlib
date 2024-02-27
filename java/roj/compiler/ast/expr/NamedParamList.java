@@ -3,7 +3,7 @@ package roj.compiler.ast.expr;
 import roj.asm.type.IType;
 import roj.collect.MyHashMap;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 
 import java.util.Map;
@@ -21,7 +21,7 @@ final class NamedParamList extends ExprNode {
 	public String toString() { return map.toString(); }
 
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		for (Map.Entry<String, ExprNode> entry : map.entrySet()) {
 			entry.setValue(entry.getValue().resolve(ctx));
 		}

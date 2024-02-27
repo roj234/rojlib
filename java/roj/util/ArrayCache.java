@@ -1,13 +1,16 @@
 package roj.util;
 
-import roj.collect.LFUCache;
-import roj.math.MutableInt;
+import roj.plugin.Status;
+import roj.reflect.Unaligned;
+import roj.text.CharList;
+import roj.text.TextUtil;
+import sun.misc.Unsafe;
 
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
-import java.util.Map;
-import java.util.concurrent.locks.ReentrantLock;
+
+import static roj.reflect.ReflectionUtils.u;
 
 public class ArrayCache {
 	public static final byte[] BYTES = new byte[0];
@@ -18,104 +21,203 @@ public class ArrayCache {
 	public static final long[] LONGS = new long[0];
 	public static final Object[] OBJECTS = new Object[0];
 	public static final Class<?>[] CLASSES = new Class<?>[0];
+	public static <T> WeakReference<T> emptyWeakRef() {return Helpers.cast(G_Sential);}
+
+	private static final int MIN_ARRAY_SIZE = 256, LARGE_ARRAY_SIZE = 1048576;
+	private static final int ID_COUNT = 3, CACHE_COUNT = 15;
 
 	private static final ThreadLocal<ArrayCache> CACHE = new ThreadLocal<>();
-	private static final ArrayCache LARGE_ARRAY = new ArrayCache();
 	private static ArrayCache small() {
 		ArrayCache cache = CACHE.get();
 		if (cache == null) CACHE.set(cache = new ArrayCache());
 		return cache;
 	}
 
-	private static final int LARGE_ARRAY_SIZE = 65536;
-	private static final int CHIP_SIZE = 256;
-	private static final int SIZES_MAX = 64;
-	private static final int ARRAYS_MAX = 9;
+	// 100KB左右的指针
+	private static final Object[] G_Cache = new Object[ID_COUNT * 256 * CACHE_COUNT];
+	private static final int[] G_Using = new int[ID_COUNT * 256];
+	private static final WeakReference<?> G_Sential = new WeakReference<>(null);
 
-	private final LFUCache<MutableInt, Object[]>
-		byteCache = new LFUCache<>(SIZES_MAX, 1),
-		charCache = new LFUCache<>(SIZES_MAX, 1),
-		intCache = new LFUCache<>(SIZES_MAX, 1);
+	// 1<<8 (256) => 1<<20 (1048576)
+	private final Object[] cache = new Object[ID_COUNT * 13 * CACHE_COUNT];
+	private final int[] using = new int[ID_COUNT * 13];
 
-	private final ReentrantLock lock = new ReentrantLock();
-	private final MutableInt val = new MutableInt();
+	@Status
+	public static CharList status(CharList sb) {
+		sb.append("小数组缓存(Reserved/Total):\n");
+		var ac = CACHE.get();
+		if (ac == null) sb.append("未创建");
+		else {
+			int[] ints = ac.using;
+			for (int i = 0; i < ints.length; i++) {
+				int bitset = ints[i];
+				int exist = 0, reserved = 0;
+				var base = i * CACHE_COUNT;
+				for (int j = 0; j < CACHE_COUNT; j++) {
+					var r = (Reference<?>) ac.cache[base+j];
+					if (r != null && r.get() != null) {
+						exist++;
+						if ((bitset&(1 << j)) != 0) reserved++;
+					}
+				}
+				if ((exist|reserved) == 0) continue;
+
+				sb.append("  类型").append(typeOf(i / 13)).append(" 容量");
+				TextUtil.scaledNumber1024(sb, 1L << (8 + i % 13));
+				sb.append(": ").append(reserved).append('/').append(exist).append('\n');
+			}
+		}
+
+		sb.append("大数组缓存:\n");
+		int[] ints = G_Using;
+		for (int i = 0; i < ints.length; i++) {
+			int bitset = ints[i];
+			int exist = 0, reserved = 0;
+			var base = i * CACHE_COUNT;
+			for (int j = 0; j < CACHE_COUNT; j++) {
+				var r = (Reference<?>) G_Cache[base+j];
+				if (r != null && r.get() != null) {
+					exist++;
+					if ((bitset&(1 << j)) != 0) reserved++;
+				}
+			}
+			if ((exist|reserved) == 0) continue;
+
+			sb.append("  类型").append(typeOf(i / 256)).append(" 容量").append((i&255)+1).append("M: ")
+			  .append(reserved).append('/').append(exist).append('\n');
+		}
+
+		return sb;
+	}
+	private static String typeOf(int i) {
+		return switch (i) {
+			case 0 -> "byte";
+			case 1 -> "int";
+			case 2 -> "char";
+			default -> "unknown";
+		};
+	}
 
 	public ArrayCache() {}
 
-	private <T> T getArray(Map<MutableInt, Object[]> cache, int size) {
-		if (size < CHIP_SIZE) return null;
+	@SuppressWarnings("unchecked")
+	private static <T> T getGlobalArray(int idx, int size) {
+		idx <<= 8;
+		int i1 = size / LARGE_ARRAY_SIZE - 1;
+		if (i1 >= 255) {
+			idx = idx + 255;
+		} else {
+			idx += i1;
+			if (Integer.lowestOneBit(size) != size) return null;
+		}
 
-		lock.lock();
-		try {
-			val.setValue(size/CHIP_SIZE);
-			Object[] stack = cache.get(val);
-			if (stack == null) return null;
-
-			MutableInt used_ref = (MutableInt) stack[0];
-			int bits = 1;
-			for (int i = 1; i < stack.length; i++, bits <<= 1) {
-				Reference<?> r = (Reference<?>) stack[i];
-				if (r == null) continue;
-
-				Object t = r.get();
-				if (t != null) {
-					if ((used_ref.value & bits) == 0) {
-						used_ref.value |= bits;
-						return Helpers.cast(t);
-					} else {
-						// treat as if is null
-					}
-				} else {
-					stack[i] = null;
+		long offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
+		long offUsing = Unsafe.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
+		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
+			var r = (Reference<?>) u.getObjectVolatile(G_Cache, offCache);
+			Object t;
+			if (r != null && (t = r.get()) != null) {
+				while (true) {
+					int bits = u.getIntVolatile(G_Using, offUsing);
+					if ((bits & (1<<i)) != 0) break;
+					if (u.compareAndSwapInt(G_Using, offUsing, bits, bits | (1<<i)))
+						return (T) t;
 				}
 			}
-			return null;
-		} finally {
-			lock.unlock();
+		}
+
+		return null;
+	}
+
+	private static void putGlobalArray(int idx, Object array, int size) {
+		idx = idx * 256 + Math.min(size / LARGE_ARRAY_SIZE - 1, 255);
+
+		long offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
+		long offUsing = Unsafe.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
+		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
+			var r = (Reference<?>) u.getObjectVolatile(G_Cache, offCache);
+			if (r != null && r.get() == array) {
+				int mask = 1 << i;
+				while (true) {
+					int bits = u.getIntVolatile(G_Using, offUsing);
+					if ((bits & mask) == 0) throw new InternalError("using[i] == false");
+					if (u.compareAndSwapInt(G_Using, offUsing, bits, bits&~mask))
+						return;
+				}
+			}
+		}
+
+		offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
+		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
+			var r = (Reference<?>) u.getObjectVolatile(G_Cache, offCache);
+			if (r == null || r.get() == null) {
+				if (u.compareAndSwapObject(G_Cache, offCache, r, G_Sential)) {
+					var ref = i < 2 ? new SoftReference<>(array) : new WeakReference<>(array);
+					u.putObjectVolatile(G_Cache, offCache, ref);
+
+					int mask = 1 << i;
+					while (true) {
+						int bits = u.getIntVolatile(G_Using, offUsing);
+						if ((bits & mask) == 0 || u.compareAndSwapInt(G_Using, offUsing, bits, bits&~mask))
+							return;
+					}
+				}
+			}
 		}
 	}
-	private void putArray(Map<MutableInt, Object[]> cache, Object array, int size) {
-		if (size < CHIP_SIZE) return;
 
-		lock.lock();
-		try {
-			val.setValue(size/CHIP_SIZE);
-			Object[] stack = cache.get(val);
-			MutableInt used_ref;
-			if (stack == null) {
-				cache.put(new MutableInt(val), stack = new Object[ARRAYS_MAX+1]);
-				stack[0] = used_ref = new MutableInt();
-			} else {
-				used_ref = (MutableInt) stack[0];
-			}
+	@SuppressWarnings("unchecked")
+	private <T> T getArray(int base, int size) {
+		if (size < MIN_ARRAY_SIZE) return null;
 
-			int free = 0;
-			for (int i = 1; i < stack.length; i++) {
-				Reference<?> r = (Reference<?>) stack[i];
-				Object t = r == null ? null : r.get();
-				if (t == null && free == 0) free = i;
-				else if (t == array) {
-					used_ref.value &= ~(1<<(i-1));
-					return;
-				}
-			}
+		int idx = base * 13 + (23 - Integer.numberOfLeadingZeros(size));
+		if (Integer.lowestOneBit(size) != size) idx++;
+		base = idx * CACHE_COUNT;
 
-			if (free > 0) {
-				stack[free] = --free == 0 ? new SoftReference<>(array) : new WeakReference<>(array);
-				used_ref.value &= ~(1<<free);
+		int used = using[idx];
+		for (int i = 0; i < CACHE_COUNT; i++) {
+			var r = (Reference<?>) cache[base+i];
+			Object t;
+			if (r != null && (t = r.get()) != null && (used&(1<<i)) == 0) {
+				using[idx] |= 1<<i;
+				return (T) t;
 			}
-		} finally {
-			lock.unlock();
 		}
+
+		return null;
+	}
+	private void putArray(int base, Object array, int size) {
+		if (size < MIN_ARRAY_SIZE) return;
+
+		int idx = base * 13 + (23 - Integer.numberOfLeadingZeros(size));
+		base = idx * CACHE_COUNT;
+
+		int used = using[idx];
+		int free = -4;
+		for (int i = 0; i < CACHE_COUNT; i++) {
+			var r = (Reference<?>) cache[base+i];
+			var t = r == null ? null : r.get();
+			if (t == array) {
+				using[idx] = used & ~(1<<i);
+				return;
+			}
+			if (free < 0) {
+				if (t == null) free = i;
+				else if ((used&(1<<i)) != 0) free = -(i + 1);
+			}
+		}
+
+		if (free < 0) free = -free - 1;
+		cache[base+free] = free < 3 ? new SoftReference<>(array) : new WeakReference<>(array);
+		using[idx] &= ~(1<<free);
 	}
 
 	public static byte[] getByteArray(int size, boolean fillWithZeros) {
-		int size1 = (size+CHIP_SIZE-1)& -CHIP_SIZE;
+		int size1 = (size+MIN_ARRAY_SIZE-1)& -MIN_ARRAY_SIZE;
 
-		ArrayCache inst = size1 > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
-		byte[] array = inst.getArray(inst.byteCache, size1);
+		byte[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(0, size1) : small().getArray(0, size1);
 
-		if (array == null) array = new byte[size1];
+		if (array == null) array = fillWithZeros ? new byte[size1] : (byte[]) Unaligned.U.allocateUninitializedArray(byte.class, size1);
 		else if (fillWithZeros) {
 			for (int i = 0; i < size; i++)
 				array[i] = 0;
@@ -124,17 +226,16 @@ public class ArrayCache {
 		return array;
 	}
 	public static void putArray(byte[] array) {
-		ArrayCache inst = array.length > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
-		inst.putArray(inst.byteCache, array, array.length);
+		if (array.length > LARGE_ARRAY_SIZE) putGlobalArray(0, array, array.length);
+		else small().putArray(0, array, array.length);
 	}
 
 	public static int[] getIntArray(int size, int fillWithZeros) {
-		int size1 = (size+CHIP_SIZE-1)& -CHIP_SIZE;
+		int size1 = (size+MIN_ARRAY_SIZE-1)& -MIN_ARRAY_SIZE;
 
-		ArrayCache inst = size1 > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
-		int[] array = inst.getArray(inst.intCache, size1);
+		int[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(1, size1) : small().getArray(1, size1);
 
-		if (array == null) array = new int[size1];
+		if (array == null) array = fillWithZeros != 0 ? new int[size1] : (int[]) Unaligned.U.allocateUninitializedArray(int.class, size1);
 		else {
 			for (int i = 0; i < fillWithZeros; i++)
 				array[i] = 0;
@@ -143,19 +244,18 @@ public class ArrayCache {
 		return array;
 	}
 	public static void putArray(int[] array) {
-		ArrayCache inst = array.length > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
-		inst.putArray(inst.intCache, array, array.length);
+		if (array.length > LARGE_ARRAY_SIZE) putGlobalArray(1, array, array.length);
+		else small().putArray(1, array, array.length);
 	}
 
 	public static char[] getCharArray(int size, boolean fillWithZeros) {
 		// round up to CHIP_SIZE
 		// 分块... 反正get实际意义是... 长度至少为N的数组
-		int size1 = (size+CHIP_SIZE-1)& -CHIP_SIZE;
+		int size1 = (size+ MIN_ARRAY_SIZE -1)& -MIN_ARRAY_SIZE;
 
-		ArrayCache inst = size1 > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
-		char[] array = inst.getArray(inst.charCache, size1);
+		char[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(2, size1) : small().getArray(2, size1);
 
-		if (array == null) array = new char[size1];
+		if (array == null) array = fillWithZeros ? new char[size1] : (char[]) Unaligned.U.allocateUninitializedArray(char.class, size1);
 		else if (fillWithZeros) {
 			for (int i = 0; i < size; i++)
 				array[i] = 0;
@@ -164,7 +264,7 @@ public class ArrayCache {
 		return array;
 	}
 	public static void putArray(char[] array) {
-		ArrayCache inst = array.length > LARGE_ARRAY_SIZE ? LARGE_ARRAY : small();
-		inst.putArray(inst.charCache, array, array.length);
+		if (array.length > LARGE_ARRAY_SIZE) putGlobalArray(2, array, array.length);
+		else small().putArray(2, array, array.length);
 	}
 }

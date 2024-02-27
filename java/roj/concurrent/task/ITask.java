@@ -6,9 +6,7 @@ package roj.concurrent.task;
  */
 public interface ITask {
 	default boolean isCancelled() { return false; }
-	default boolean cancel(boolean force) { return false; }
+	default boolean cancel() { return false; }
 
 	void execute() throws Exception;
-
-	default boolean repeating() { return false; }
 }

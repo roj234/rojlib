@@ -25,7 +25,10 @@ public class DoubleClickHelper extends MouseAdapter {
 	@Override
 	public void mousePressed(MouseEvent e) {
 		int[] pp = component.getSelectedIndices();
-		if (pp.length != 1) return;
+		if (pp.length != 1) {
+			prevId = -1;
+			return;
+		}
 
 		if (pp[0] == prevId && System.currentTimeMillis() - prevClick < delay) {
 			callback.accept(component);

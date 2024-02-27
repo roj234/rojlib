@@ -1,9 +1,8 @@
 package roj.net.ch;
 
-import roj.io.FastFailException;
 import roj.io.NIOUtil;
 import roj.io.buf.BufferPool;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 import roj.util.DynByteBuf;
 
@@ -50,7 +49,7 @@ class TcpChImpl extends MyChannel {
 			synchronized (TcpChImpl.class) {
 				if (TcpUtil == null) {
 					String[] fields = ReflectionUtils.JAVA_VERSION < 11 ? new String[] {"isInputOpen", "isOutputOpen"} : new String[] {"isInputClosed", "isOutputClosed"};
-					TcpUtil = DirectAccessor.builder(H.class).access(server.getClass(), fields, fields, null).build();
+					TcpUtil = Bypass.builder(H.class).access(server.getClass(), fields, fields, null).build();
 				}
 			}
 		}
@@ -91,14 +90,12 @@ class TcpChImpl extends MyChannel {
 
 	public void flush() throws IOException {
 		if (state >= CLOSED) return;
-		fireFlushing();
 		if (pending.isEmpty()) return;
 
-		BufferPool bp = alloc();
 		lock.lock();
 		try {
 			do {
-				DynByteBuf buf = (DynByteBuf) pending.peekFirst();
+				var buf = (DynByteBuf) pending.peekFirst();
 				if (buf == null) break;
 
 				write0(buf);
@@ -110,7 +107,7 @@ class TcpChImpl extends MyChannel {
 			} while (true);
 
 			if (pending.isEmpty()) {
-				flag &= ~PAUSE_FOR_FLUSH;
+				flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 				key.interestOps(SelectionKey.OP_READ);
 				fireFlushed();
 			}
@@ -121,52 +118,68 @@ class TcpChImpl extends MyChannel {
 
 	@Override
 	protected void read() throws IOException {
-		DynByteBuf buf = rb;
-		while (state == OPENED && sc.isOpen()) {
-			if (!buf.isWritable()) {
-				if (buf == EMPTY) rb = buf = alloc().allocate(true, buffer, 0);
-				else rb = buf = BufferPool.expand(buf, buf.capacity());
-			}
-
+		if (state != OPENED || (flag&READ_INACTIVE) != 0) return;
+		var buf = rb;
+		if (buf == EMPTY) rb = buf = alloc().allocate(true, buffer, 0);
+		while (true) {
+			int w = buf.writableBytes();
 			ByteBuffer nioBuffer = syncNioRead(buf);
-			int r;
-			try {
-				r = sc.read(nioBuffer);
-			} catch (IOException e) {
-				if (TcpUtil.isOutputOpen(sc)) throw new FastFailException(e.getMessage());
-				close();
-				return;
-			}
+			// IOException => exceptionCaught
+			int r = sc.read(nioBuffer);
 			buf.wIndex(nioBuffer.position());
 
 			if (r < 0) {
-				onInputClosed();
-			} else if (r == 0) {
-				break;
-			} else {
-				try {
-					fireChannelRead(buf);
-				} finally {
-					buf.compact();
-				}
+				onInputClosed(buf);
+				return;
 			}
+
+			if (r > 0) {
+				fireChannelRead(buf);
+				buf.compact();
+				// reset to initial capacity if buffer is empty
+				if (buf.capacity() > buffer && !buf.isReadable()) alloc().expand(buf, buffer-buf.capacity());
+			}
+
+			if (r < w || (flag&READ_INACTIVE) != 0 || state != OPENED) return;
+
+			if (!buf.isWritable()) rb = buf = alloc().expand(buf, buf.capacity());
 		}
 	}
 
 	protected void write(Object o) throws IOException {
 		BufferPool bp = alloc();
 
-		DynByteBuf buf = (DynByteBuf) o;
-		if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes(), 0).put(buf);
+		if (o instanceof SendfilePkt req) {
+			if (!pending.isEmpty()) flush();
+			req.written = pending.isEmpty() ? req.channel.transferTo(req.offset, req.length, sc) : -1;
+			return;
+		}
+
+		var buf = (DynByteBuf) o;
+		if (!buf.isReadable()) return;
 
 		try {
-			write0(buf);
+			if (pending.isEmpty()) {
+				if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes(), 0).put(buf);
+				write0(buf);
+			}
 
 			if (buf.isReadable()) {
-				if (pending.isEmpty()) key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
+				DynByteBuf flusher;
 
-				Object o1 = pending.ringAddLast(bp.allocate(true, buf.readableBytes(), 0).put(buf));
-				if (o1 != null) throw new IOException("上层发送缓冲区过载");
+				if (pending.isEmpty()) {
+					fireFlushing();
+					key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
+					flusher = DynByteBuf.allocateDirect();
+					pending.offerLast(flusher);
+				} else {
+					flusher = (DynByteBuf) pending.getFirst();
+				}
+
+				if (flusher.unsafeWritableBytes() < buf.readableBytes()) flusher.compact();
+				flusher.put(buf);
+				if (flusher.readableBytes() > rb.capacity()) pauseAndFlush();
+				if (flusher.readableBytes() > 1048576) throw new IOException("上层发送缓冲区过载");
 			} else {
 				fireFlushed();
 			}
@@ -179,8 +192,11 @@ class TcpChImpl extends MyChannel {
 	}
 
 	private void write0(DynByteBuf buf) throws IOException {
-		ByteBuffer nioBuffer = syncNioWrite(buf);
-		int w = sc.write(nioBuffer);
+		var nioBuffer = syncNioWrite(buf);
+		sc.write(nioBuffer);
 		buf.rIndex = nioBuffer.position();
 	}
+
+	@Override
+	public boolean canSendfile() {return true;}
 }

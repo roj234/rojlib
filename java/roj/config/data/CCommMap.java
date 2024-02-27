@@ -9,7 +9,7 @@ import java.util.Map;
  * @author Roj233
  * @since 2022/1/14 20:07
  */
-public class CCommMap extends CMapping {
+public class CCommMap extends CMap {
 	Map<String, String> comments = new MyHashMap<>();
 
 	public CCommMap() {}
@@ -20,18 +20,7 @@ public class CCommMap extends CMapping {
 	}
 
 	@Override
-	public final String getComment(String key) { return comments.get(key); }
-	public final CMapping withComments() { return this; }
-	public final boolean isCommentSupported() { return true; }
-	public void putComment(String key, String val) { comments.put(key, val); }
-
-	public void clearComments(boolean withSub) {
-		if (withSub) super.clearComments(true);
-		comments.clear();
-	}
-
-	@Override
-	public void forEachChild(CVisitor ser) {
+	public void accept(CVisitor ser) {
 		ser.valueMap();
 		if (!map.isEmpty()) {
 			for (Map.Entry<String, CEntry> entry : map.entrySet()) {
@@ -39,13 +28,13 @@ public class CCommMap extends CMapping {
 				if (s != null) ser.comment(s);
 
 				ser.key(entry.getKey());
-				entry.getValue().forEachChild(ser);
+				entry.getValue().accept(ser);
 			}
 		}
 		ser.pop();
 	}
 
-	public void forEachChildSorted(CVisitor ser, String... names) {
+	public void acceptOrdered(CVisitor ser, String... names) {
 		ser.valueMap();
 		for (String k : names) {
 			CEntry v = map.get(k);
@@ -53,9 +42,16 @@ public class CCommMap extends CMapping {
 				String s = comments.get(k);
 				if (s != null) ser.comment(s);
 				ser.key(k);
-				v.forEachChild(ser);
+				v.accept(ser);
 			}
 		}
 		ser.pop();
 	}
+
+	@Override
+	public final String getComment(String key) { return comments.get(key); }
+	public final CMap withComments() { return this; }
+	public final boolean isCommentSupported() { return true; }
+	public void putComment(String key, String val) { comments.put(key, val); }
+	public void clearComments() {comments.clear();}
 }

@@ -1170,18 +1170,18 @@ final class Layer3 extends Layer {
 
 		// 异步多相合成滤波
 		xrch0 = filterCh0.swapBuf();
-		DECODER.pushTask(filterCh0);
+		DECODER.submit(filterCh0);
 		if (channels == 2) {
 			xrch1 = filterCh1.swapBuf();
-			DECODER.pushTask(filterCh1);
+			DECODER.submit(filterCh1);
 		}
 
 		return off;
 	}
 
 	public void close() {
-		filterCh0.cancel(true);
-		if (channels == 2) filterCh1.cancel(true);
+		filterCh0.cancel();
+		if (channels == 2) filterCh1.cancel();
 	}
 
 	/**

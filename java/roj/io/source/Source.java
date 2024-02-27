@@ -12,6 +12,7 @@ import java.nio.channels.FileChannel;
  * @author Roj233
  * @since 2021/8/18 13:36
  */
+// TODO implements MyDataInput and remove dataInput
 public abstract class Source extends DataOutputStream implements Closeable {
 	private byte[] b1;
 
@@ -117,7 +118,6 @@ public abstract class Source extends DataOutputStream implements Closeable {
 	public abstract Source threadSafeCopy() throws IOException;
 	public abstract void moveSelf(long from, long to, long length) throws IOException;
 
-	public boolean isBuffered() {
-		return false;
-	}
+	public boolean isBuffered() {return false;}
+	public boolean isWritable() {return true;}
 }

@@ -34,8 +34,6 @@ public class LZMA2ParallelReader extends MBInputStream {
 	private final SimpleList<SubDecoder> tasksFree = new SimpleList<>();
 	private int taskFree, taskId;
 
-	private final Object taskLock = new Object();
-
 	final class SubDecoder implements ITask {
 		int id;
 		final ByteList in;
@@ -68,7 +66,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 		public final void execute1() throws Exception {
 			ByteList ob;
 			boolean isGlobalOut;
-			synchronized (taskLock) {
+			synchronized (tasksFree) {
 				if (doneId == id) {
 					isGlobalOut = true;
 					ob = LZMA2ParallelReader.this.out;
@@ -114,8 +112,8 @@ public class LZMA2ParallelReader extends MBInputStream {
 			}
 
 			if (!isGlobalOut) {
-				synchronized (taskLock) {
-					while (doneId != id) taskLock.wait();
+				synchronized (tasksFree) {
+					while (doneId != id) tasksFree.wait();
 				}
 
 				synchronized (out) {
@@ -208,7 +206,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 
 	void taskFinished(SubDecoder task) {
 		int i;
-		synchronized (taskLock) {
+		synchronized (tasksFree) {
 			i = --taskRunning;
 
 			if (noMoreInput) task.release();
@@ -216,7 +214,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 
 			assert doneId == task.id;
 			doneId++;
-			taskLock.notifyAll();
+			tasksFree.notifyAll();
 		}
 
 		if (i == 0) {
@@ -239,7 +237,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 		this.taskExecutor = taskExecutor;
 		this.taskFree = affinity;
 		ReflectionUtils.u.storeFence();
-		taskExecutor.pushTask(() -> { while (!noMoreInput) nextChunk(); });
+		taskExecutor.submit(() -> { while (!noMoreInput) nextChunk(); });
 	}
 
 	public int read(byte[] buf, int off, int len) throws IOException {
@@ -257,7 +255,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 					out.clear();
 
 					if (noMoreInput) {
-						synchronized (taskLock) {
+						synchronized (tasksFree) {
 							if (taskRunning == 0) break loop;
 						}
 					}
@@ -266,7 +264,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 				}
 
 				int copyLen = Math.min(out.readableBytes(), len);
-				out.read(buf, off, copyLen);
+				out.readFully(buf, off, copyLen);
 				if (out.readableBytes() < 1048576) out.notify();
 
 				off += copyLen;
@@ -316,7 +314,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 			SubDecoder task = null;
 
 			if (!tasksFree.isEmpty()) {
-				synchronized (taskLock) {
+				synchronized (tasksFree) {
 					if (!tasksFree.isEmpty()) {
 						task = tasksFree.pop();
 					}
@@ -328,11 +326,11 @@ public class LZMA2ParallelReader extends MBInputStream {
 					taskFree--;
 					task = new SubDecoder(decoder == null);
 				} else {
-					synchronized (taskLock) {
+					synchronized (tasksFree) {
 						while (tasksFree.isEmpty()) {
 							if (noMoreInput) throw new AsynchronousCloseException();
 
-							IOUtil.ioWait(this, taskLock);
+							IOUtil.ioWait(this, tasksFree);
 						}
 						task = tasksFree.pop();
 					}
@@ -341,8 +339,8 @@ public class LZMA2ParallelReader extends MBInputStream {
 
 			task.id = taskId++;
 
-			taskExecutor.pushTask(task);
-			synchronized (taskLock) { taskRunning++; }
+			taskExecutor.submit(task);
+			synchronized (tasksFree) { taskRunning++; }
 
 			decoder = task;
 		}
@@ -367,10 +365,10 @@ public class LZMA2ParallelReader extends MBInputStream {
 	public void close() throws IOException {
 		noMoreInput = true;
 
-		synchronized (taskLock) {
+		synchronized (tasksFree) {
 			while (taskRunning > 0) {
 				try {
-					taskLock.wait();
+					tasksFree.wait();
 				} catch (InterruptedException e) {
 					break;
 				}
@@ -379,7 +377,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 
 		synchronized (out) { out.notifyAll(); }
 
-		for (SubDecoder encoder : tasksFree) encoder.release();
+		for (SubDecoder decoder : tasksFree) decoder.release();
 		tasksFree.clear();
 
 		if (in != null) {

@@ -5,7 +5,9 @@ import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.text.CharList;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @author Roj234
@@ -13,23 +15,23 @@ import java.util.List;
  */
 public abstract class CommandNode {
 	private final List<CommandNode> children = new SimpleList<>();
-	private CommandImpl impl;
+	private Command impl;
 
 	@Nullable
 	public String getName() { return null; }
 
-	public static CommandNode literal(String name) { return new LiteralNode(name); }
+	//public static CommandNode root(List<CommandNode> name) { return new Literal(name); }
+	public static CommandNode literal(String name) { return new Literal(name); }
 	public static CommandNode argument(String name, Argument<?> argument) { return new ArgumentNode(name, argument); }
+	public static CommandNode redirect(CommandNode node) { return new Redirect(node); }
 
 	public CharList dump(CharList sb, int depth) {
-		depth += 2;
-
 		if (impl == null) {
 			if (children.size() == 1) return children.get(0).dump(sb.append(' '), depth);
-			else if (children.size() == 0) return sb.append("[无可执行]");
-		} else if (children.isEmpty()) {
-			return sb.append('\n');
-		}
+			else if (children.size() == 0) return sb.append("[**错误:不可执行**]\n");
+		} else if (children.isEmpty()) return sb.append('\n');
+
+		depth += 2;
 
 		sb.append(":\n");
 		if (impl != null) sb.padEnd(' ', depth).append("[无参数]\n");
@@ -39,14 +41,14 @@ public abstract class CommandNode {
 		return sb;
 	}
 
-	public CommandNode executes(CommandImpl e) {
+	public CommandNode executes(Command e) {
 		if (impl != null) throw new IllegalStateException("Already have executor");
 		impl = e;
 		return this;
 	}
 
-	public abstract boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException;
-	final boolean doApply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+	public abstract boolean apply(CommandParser ctx, List<Completion> completions) throws ParseException;
+	final boolean doApply(CommandParser ctx, List<Completion> completions) throws ParseException {
 		if (ctx.peekWord() == null) {
 			if (completions == null && impl != null) {
 				ctx.wrapExecute(impl);
@@ -56,19 +58,44 @@ public abstract class CommandNode {
 
 		ParseException pe = null;
 		for (int i = 0; i < children.size(); i++) {
+			CommandNode node = children.get(i);
 			ctx.pushStack();
 			try {
-				if (children.get(i).apply(ctx, completions)) {
+				if (node.apply(ctx, completions)) {
 					return true;
 				}
 			} catch (ParseException e) {
 				pe = e;
 			}
 			ctx.popStack();
+
+			if (node.fastFail) break;
 		}
 
 		if (pe != null) throw pe;
 		return false;
+	}
+
+	public List<CommandNode> getChildren() { return children; }
+	public Command getCommand() { return impl; }
+	public CommandNode getRedirect() { return null; }
+
+	static final Comparator<CommandNode> sorter = (o1, o2) -> {
+		String n1 = o1.getName();
+		String n2 = o2.getName();
+		if (n1 == null) return n2 == null ? 0 : 1;
+		if (n2 == null) return -1;
+		int i = n1.compareTo(n2);
+		if (i == 0) throw new IllegalStateException("指令名称重复:"+n1);
+		return i;
+	};
+	public CommandNode sorted(boolean recursion) {
+		if (recursion) {
+			for (var child : children) child.sorted(true);
+		}
+		children.sort(sorter);
+
+		return this;
 	}
 
 	public CommandNode then(CommandNode node) {
@@ -76,9 +103,27 @@ public abstract class CommandNode {
 		return this;
 	}
 
-	static final class LiteralNode extends CommandNode {
+	private boolean fastFail;
+	public CommandNode fastFail() { fastFail = true; return this; }
+
+	public static final class Redirect extends CommandNode {
+		private CommandNode redirect;
+		Redirect(CommandNode redirect) {this.redirect = redirect;}
+
+		@Override
+		public String getName() { return redirect.getName(); }
+		@Override
+		public boolean apply(CommandParser ctx, List<Completion> completions) throws ParseException { return redirect.apply(ctx, completions);}
+		@Override
+		public CommandNode getRedirect() { return redirect; }
+		public void setRedirect(CommandNode redirect) { this.redirect = redirect; }
+	}
+	private static final class Literal extends CommandNode {
 		private final String name;
-		LiteralNode(String name) { this.name = name; }
+		Literal(String name) {
+			if (name.trim() != name || name.isEmpty()) throw new IllegalArgumentException("literal参数不能包含空格或为空");
+			this.name = name;
+		}
 
 		public String getName() { return name; }
 
@@ -86,7 +131,7 @@ public abstract class CommandNode {
 		public CharList dump(CharList sb, int depth) { return super.dump(sb.append(name), depth); }
 
 		@Override
-		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+		public boolean apply(CommandParser ctx, List<Completion> completions) throws ParseException {
 			if (ctx.isEOF()) {
 				if (completions != null) completions.add(new Completion(name));
 				return false;
@@ -104,10 +149,13 @@ public abstract class CommandNode {
 			return doApply(ctx, completions);
 		}
 	}
-	static final class ArgumentNode extends CommandNode {
+	public static final class ArgumentNode extends CommandNode {
 		private final String name;
 		private final Argument<?> argument;
-		ArgumentNode(String name, Argument<?> argument) { this.name = name; this.argument = argument; }
+		ArgumentNode(String name, Argument<?> argument) { this.name = Objects.requireNonNull(name); this.argument = Objects.requireNonNull(argument); }
+
+		public String getArgumentName() { return name; }
+		public Argument<?> getArgument() { return argument; }
 
 		@Override
 		public CharList dump(CharList sb, int depth) {
@@ -115,7 +163,7 @@ public abstract class CommandNode {
 		}
 
 		@Override
-		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+		public boolean apply(CommandParser ctx, List<Completion> completions) throws ParseException {
 			if (ctx.isEOF()) {
 				if (completions != null) argument.example(completions);
 				else {

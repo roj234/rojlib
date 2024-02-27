@@ -3,6 +3,7 @@ package roj.asm.visitor;
 import roj.asm.Opcodes;
 import roj.asm.tree.insn.SwitchEntry;
 import roj.collect.IntMap;
+import roj.collect.IntSet;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -100,11 +101,10 @@ public final class SwitchSegment extends Segment {
 	@Override
 	public int length() { return length; }
 
-	private void findBestCode() {
+	public byte findBestCode() {
 		List<SwitchEntry> m = targets;
 		if (m.isEmpty()) {
-			code = LOOKUPSWITCH;
-			return;
+			return code = LOOKUPSWITCH;
 		}
 
 		int lo = m.get(0).val;
@@ -113,12 +113,17 @@ public final class SwitchSegment extends Segment {
 		long tableSwitchSpaceCost = 4 * ((long) hi - lo + 1) + 12;
 		int lookupSwitchSpaceCost = 4 + 8 * m.size();
 		if (tableSwitchSpaceCost <= lookupSwitchSpaceCost) {
-			code = TABLESWITCH;
 			if (m.size() < hi-lo+1) {
-				for (int i = lo; i <= hi; i++) m.add(new SwitchEntry(i, def));
+				IntSet set = new IntSet();
+				for (int i = 0; i < m.size(); i++) set.add(m.get(i).val);
+				for (int i = lo; i <= hi; i++) {
+					if (!set.contains(i)) m.add(new SwitchEntry(i, def));
+				}
+				m.sort(null);
 			}
+			return code = TABLESWITCH;
 		} else {
-			code = LOOKUPSWITCH;
+			return code = LOOKUPSWITCH;
 		}
 	}
 

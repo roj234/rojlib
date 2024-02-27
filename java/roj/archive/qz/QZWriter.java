@@ -4,15 +4,15 @@ import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveWriter;
 import roj.collect.SimpleList;
+import roj.config.data.CInt;
+import roj.crypt.CRC32s;
 import roj.io.source.Source;
-import roj.math.MutableInt;
 import roj.util.ArrayCache;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
-import java.util.zip.CRC32;
 
 /**
  * @author Roj234
@@ -44,13 +44,18 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     private long entryUSize;
     OutputStream out;
 
-    final CRC32 crc32 = new CRC32(), blockCrc32 = new CRC32();
+    int crc32 = CRC32s.INIT_CRC, blockCrc32 = CRC32s.INIT_CRC;
 
-    boolean finished, ignoreClose;
+    boolean finished;
+
+    public byte flag;
+    public static final int IGNORE_CLOSE = 1, NO_TRIM_FILE = 2;
+    public void setIgnoreClose(boolean ignoreClose) { if (ignoreClose) flag |= IGNORE_CLOSE; else flag &= ~IGNORE_CLOSE; }
+    public int[] getFlagSum() {return flagSum;}
 
     private long solidSize;
 
-    private Object[] coders;
+    QZCoder[] coders;
     public static final QZCoder[] NO_COMPRESS = {Copy.INSTANCE};
 
     private CoderInfo complexCoder;
@@ -63,7 +68,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         this.coders = parent.coders;
     }
 
-    public ArchiveEntry createEntry(String fileName) { return new QZEntry(fileName); }
+    public ArchiveEntry createEntry(String fileName) { return QZEntry.of(fileName); }
 
     public final void setCodec(QZCoder... methods) {
         try {
@@ -121,15 +126,15 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         CoderInfo root = nodes[0];
         if (root.provides > 1) throw new IllegalArgumentException("root只能有一个输入!");
 
-        MutableInt blockId = new MutableInt();
+        CInt blockId = new CInt();
         inflateTree(root, nodes, blockId, 1);
 
         coders = nonNull.toArray(new CoderInfo[nonNull.size()]);
         complexCoder = root;
-        cOffsets = blockId.getValue()-1;
+		cOffsets = blockId.value-1;
         cOutSizes = provides;
     }
-    private int inflateTree(CoderInfo node, CoderInfo[] nodes, MutableInt blockId, int i) {
+    private int inflateTree(CoderInfo node, CoderInfo[] nodes, CInt blockId, int i) {
         for (int j = 0; j < node.uses.length; j++) {
             CoderInfo next = nodes[i++];
             if (next != null) {
@@ -138,7 +143,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
                     node.pipe(j, next, k);
                 }
             } else {
-                node.setFileInput(blockId.getAndIncrement(), j);
+                node.setFileInput(blockId.value++, j);
             }
         }
         return i;
@@ -146,13 +151,12 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
     /**
      * 固实大小
-     * 0: 合计一个字块
-     * -1: 否 (一个文件一个字块)
+     * 0: 固实 (合计一个字块)
+     * -1: 非固实 (每文件一个字块)
      * 大于零: 按此(输入)大小
      */
-    public void setSolidSize(long l) {
-        this.solidSize = l;
-    }
+    public void setSolidSize(long l) {solidSize = l;}
+    public long getSolidSize() {return solidSize;}
 
     // do not remove!
     public SimpleList<QZEntry> getFiles() { return files; }
@@ -218,8 +222,8 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         if (currentEntry == null) throw new IOException("No active entry");
 
         out().write(b);
-        crc32.update(b);
-        blockCrc32.update(b);
+        crc32 = CRC32s.update(crc32, b);
+        blockCrc32 = CRC32s.update(blockCrc32, b);
         entryUSize++;
     }
     public final void write(byte[] b, int off, int len) throws IOException {
@@ -227,8 +231,8 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
         if (len <= 0) return;
         out().write(b, off, len);
-        crc32.update(b, off, len);
-        blockCrc32.update(b, off, len);
+        crc32 = CRC32s.update(crc32, b, off, len);
+        blockCrc32 = CRC32s.update(blockCrc32, b, off, len);
         entryUSize += len;
     }
     public final void closeEntry() throws IOException {
@@ -255,10 +259,9 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         files.add(entry);
 
         flagSum[7]++;
-        entry.crc32 = (int) crc32.getValue();
+        entry.crc32 = CRC32s.retVal(crc32);
         entry.flag |= QZEntry.CRC;
-
-        crc32.reset();
+        crc32 = CRC32s.INIT_CRC;
 
         if (solidSize != 0 && b.uSize >= solidSize) closeWordBlock0();
 
@@ -305,12 +308,12 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     void closeWordBlock0() throws IOException {
         if (out == null) return;
 
-        WordBlock b = blocks.get(blocks.size()-1);
+        WordBlock b = blocks.getLast();
 
         flagSum[8]++;
         b.hasCrc |= 1;
-        b.crc = (int) blockCrc32.getValue();
-        blockCrc32.reset();
+        b.crc = CRC32s.retVal(blockCrc32);
+        blockCrc32 = CRC32s.INIT_CRC;
 
         out.close();
         out = null;
@@ -319,19 +322,17 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     final OutputStream out() throws IOException {
         if (out != null) return out;
 
-        WordBlock wb = new WordBlock();
+        var wb = new WordBlock();
         blocks.add(wb);
 
+        wb.coder = coders;
         if (complexCoder != null) {
-            wb.tmp = coders;
+            flagSum[9] += cOffsets;
             wb.complexCoder = complexCoder;
             wb.extraSizes = new long[cOffsets];
-            flagSum[9] += cOffsets;
             wb.outSizes = new long[cOutSizes];
             return this.out = complexCoder.getOutputStream(wb, s);
         }
-
-        wb.coder = (QZCoder[]) coders;
 
         if (coders.length > 1)
             wb.outSizes = new long[coders.length-1];
@@ -339,11 +340,8 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         OutputStream out = s;
         for (int i = 0; i < wb.coder.length; i++) {
             out = wb.new Counter(out, i-1);
-
-            QZCoder m = wb.coder[i];
-            out = m.encode(out);
+            out = wb.coder[i].encode(out);
         }
-
         return this.out = out;
     }
 
@@ -356,7 +354,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
     @Override
     public void close() throws IOException {
-        if (ignoreClose) return;
+        if ((flag&IGNORE_CLOSE) != 0) return;
 
         try {
             finish();
@@ -364,7 +362,4 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
             s.close();
         }
     }
-
-    public boolean isIgnoreClose() { return ignoreClose; }
-    public void setIgnoreClose(boolean ignoreClose) { this.ignoreClose = ignoreClose; }
 }

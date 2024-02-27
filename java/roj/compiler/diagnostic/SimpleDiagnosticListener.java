@@ -1,83 +1,41 @@
 package roj.compiler.diagnostic;
 
-import roj.compiler.context.CompileUnit;
-import roj.math.MutableInt;
-import roj.text.LineReader;
+import roj.text.CharList;
+import roj.ui.AnsiString;
+import roj.ui.Terminal;
 
 import java.io.PrintStream;
-import java.util.EnumMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 /**
  * @author solo6975
  * @since 2020/12/31 22:22
  */
-public final class SimpleDiagnosticListener implements Consumer<Diagnostic> {
-	int err, warn, op;
+public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
+	int err, warn;
+	int[] counter = new int[6];
 
 	public SimpleDiagnosticListener(int maxError, int maxWarn, int warnOps) {
 		this.err = maxError;
 		this.warn = maxWarn;
-		this.op = warnOps;
 	}
 
-	private static String buildErrorMessage(Diagnostic diagnostic, EnumMap<Kind, MutableInt> map) {
-		StringBuilder sb = new StringBuilder();
-		if (diagnostic.getSource() != null) {
-			String file = diagnostic.getSource().getFilePath();
-			sb.append(file, 6, file.length()).append(':');
-			if (diagnostic.getLineNumber() > 0) sb.append(diagnostic.getLineNumber()).append(':');
-			sb.append(' ');
-		}
-		sb.append(getErrorMsg(diagnostic.getKind(), map)).append(':').append(' ').append(diagnostic.getMessage(Locale.CHINA)).append('\n');
-		if (diagnostic.getLineNumber() > 0) {
-			sb.append(getNearCode(diagnostic.getSource(), diagnostic.getLineNumber())).append('\n');
-			for (int i = 0; i < diagnostic.getColumnNumber(); i++) {
-				sb.append(' ');
-			}
-			sb.setCharAt(sb.length() - 1, '^');
-			sb.append('\n');
-		}
-
-		return sb.toString();
+	private String getErrorType(Kind kind) {
+		counter[kind.ordinal()]++;
+		return switch (kind) {
+			case INCOMPATIBLE -> "INCOMPATIBLE";
+			case NOTE -> "注";
+			case WARNING -> "警告";
+			case SEVERE_WARNING -> "强警告";
+			case ERROR, INTERNAL_ERROR -> "错误";
+		};
 	}
-
-	private static String getNearCode(CompileUnit source, long lineNumber) {
-		if (lineNumber == -1) return "";
-		return LineReader.getLine(source.getContext(), (int) lineNumber - 1);
-	}
-
-	static final Function<Kind, MutableInt> k2i = (kind1) -> new MutableInt(0);
-
-	private static String getErrorMsg(Kind kind, EnumMap<Kind, MutableInt> kinds) {
-		switch (kind) {
-			case NOTE:
-				return "注";
-			case ERROR:
-				if (kinds != null) kinds.computeIfAbsent(kind, k2i).increment();
-				return "错误";
-			case OTHER:
-				return "其他";
-			case WARNING:
-				if (kinds != null) kinds.computeIfAbsent(kind, k2i).increment();
-				return "警告";
-			case SEVERE_WARNING:
-				if (kinds != null) kinds.computeIfAbsent(Kind.WARNING, k2i).increment();
-				return "强警告";
-		}
-		throw new IllegalArgumentException();
-	}
-
-
-	final EnumMap<Kind, MutableInt> kinds = new EnumMap<>(Kind.class);
 
 	/**
 	 * Invoked when a problem is found.
 	 *
-	 * @param diagnostic a diagnostic representing the problem that
+	 * @param diag a diagnostic representing the problem that
 	 * was found
 	 *
 	 * @throws NullPointerException if the diagnostic argument is
@@ -85,38 +43,64 @@ public final class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 	 * arguments
 	 */
 	@Override
-	public void accept(Diagnostic diagnostic) {
-		switch (diagnostic.getKind()) {
-			case WARNING:
-			case SEVERE_WARNING:
-				switch (op) {
-					case 1:
-						System.err.println(buildErrorMessage(diagnostic, kinds));
-						throw new RuntimeException("警告as错误");
-					case 2:
-						return;
-				}
-				if (warn > 0) {
-					warn--;
-				} else {
-					return;
-				}
-				break;
-			case ERROR:
-				if (err > 0) {
-					err--;
-				} else {
-					return;
-				}
+	public void accept(Diagnostic diag) {
+		if (diag.getCode().equals("import.any") || diag.getCode().equals("ps.method.paramDef")) {
+			return;
 		}
 
-		System.err.println(buildErrorMessage(diagnostic, kinds));
+		CharList sb = new CharList();
+
+		if (diag.getFilePath() != null) {
+			String file = diag.getFilePath();
+			sb.append(file).append(':');
+			if (diag.getLineNumber() > 0) sb.append(diag.getLineNumber()).append(':');
+			sb.append(' ');
+		}
+
+		sb.append(getErrorType(diag.getKind())).append(':').append(' ').append(diag.getMessage(Locale.CHINA)).append('\n');
+
+		if (diag.getLine() != null) {
+			String line = diag.getLine();
+
+			if (diag.getLength() > 0) {
+				sb.append(line, 0, diag.getColumnNumber());
+
+				// 多行
+				if (diag.getColumnNumber()+diag.getLength() <= line.length()) {
+					AnsiString as = new AnsiString(line.substring(diag.getColumnNumber(), diag.getColumnNumber() + diag.getLength()));
+					as.bgColorRGB(0xff3333).append(new AnsiString("").clear()).writeAnsi(sb);
+
+					sb.append(line, diag.getColumnNumber()+diag.getLength(), line.length());
+				} else {
+					AnsiString as = new AnsiString(line.substring(diag.getColumnNumber()));
+					as.bgColorRGB(0xff3333).append(new AnsiString("").clear()).writeAnsi(sb);
+				}
+				sb.append('\n');
+			} else {
+				sb.append(line).append('\n');
+
+				int realWidth = -1;
+				for (int i = 0; i < diag.getColumnNumber(); i++) {
+					realWidth += Terminal.getCharWidth(line.charAt(i));
+				}
+				sb.padEnd(' ', realWidth).append('^').append('\n');
+			}
+		}
+
+		System.err.print(sb);
+		StackTraceElement[] trace = new Throwable().getStackTrace();
+		for (int i = 2; i < trace.length; i++) {
+			String name = trace[i].getMethodName();
+			if (!name.equals("report") && !name.equals("fireDiagnostic") && !name.equals("castTo") && !name.equals("writeCast")) {
+				System.err.println("    at "+trace[i]);
+				break;
+			}
+		}
 	}
 
 	public void conclusion() {
-		PrintStream errorOutput = System.err;
-		for (Map.Entry<Kind, MutableInt> entry : kinds.entrySet()) {
-			errorOutput.println(entry.getValue().getValue() + " 个 " + getErrorMsg(entry.getKey(), null));
-		}
+		PrintStream err = System.err;
+		err.println((counter[2]+counter[3]) + " 个 警告");
+		err.println((counter[4]+counter[5]) + " 个 错误");
 	}
 }

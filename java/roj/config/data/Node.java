@@ -6,10 +6,10 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.collect.TrieTree;
 import roj.config.ParseException;
+import roj.config.Tokenizer;
+import roj.config.Word;
 import roj.config.XMLParser;
 import roj.config.serial.CVisitor;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * XML Value Base
@@ -28,10 +29,10 @@ import java.util.Map;
  */
 public abstract class Node {
 	// region simple xpath-like selector language
-	private static final short lsb = 10, rsb = 11, child = 12, any_child = 13, lmb = 14, rmb = 15, any = 16, equ = 17, neq = 18, or = 19, comma = 20, range = 21, attr = 22;
+	private static final short lsb = 10, rsb = 11, child = 12, any_child = 13, lmb = 14, rmb = 15, any = 16, equ = 17, neq = 18, or = 19, comma = 20, range = 21, attr = 22, xstartwith = 23;
 	private static final MyBitSet XPATH_TOKEN_CHAR = new MyBitSet();
 	private static final TrieTree<Word> XPATH_TOKEN_ID = new TrieTree<>();
-	static { Tokenizer.addSymbols(XPATH_TOKEN_ID, XPATH_TOKEN_CHAR, 10, TextUtil.split1("( ) / // [ ] * = != | , ... @", ' ')); Tokenizer.addWhitespace(XPATH_TOKEN_CHAR); }
+	static { Tokenizer.addSymbols(XPATH_TOKEN_ID, XPATH_TOKEN_CHAR, 10, TextUtil.split1("( ) / // [ ] * = != | , ... @ ^=", ' ')); Tokenizer.addWhitespace(XPATH_TOKEN_CHAR); }
 
 	/**
 	 * /module/component[name="NewModuleRootManager"]/content
@@ -91,19 +92,19 @@ public abstract class Node {
 
 					while (true) {
 						String key = wr.next().val();
-
-						w = wr.next();
-						int operator = w.type();
-						if (operator != equ && operator != neq) wr.unexpected(w.val(), "== | !=");
-
-						boolean bopr = operator == equ;
+						int operator = wr.next().type();
 
 						do {
-							CEntry of = XMLParser.of(wr.next());
+							CEntry of = XMLParser.attrVal(wr.next());
 							for (int i = 0; i < in.size(); i++) {
-								if (of.isSimilar(in.get(i).attr(key)) == bopr) {
-									_out.add(in.get(i));
-								}
+								CEntry cmp = in.get(i).attr(key);
+								boolean match = switch (operator) {
+									case equ -> of.contentEquals(cmp);
+									case neq -> !of.contentEquals(cmp);
+									case xstartwith -> cmp.asString().startsWith(of.asString());
+									default -> false;
+								};
+								if (match) _out.add(in.get(i));
 							}
 
 							w = wr.next();
@@ -140,7 +141,7 @@ public abstract class Node {
 	public abstract byte nodeType();
 	public Element asElement() { throw new IllegalArgumentException("类型不是元素"); }
 	public String textContent() {
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		appendTextContent(sb);
 		return sb.toStringAndFree();
 	}
@@ -226,6 +227,14 @@ public abstract class Node {
 				if (elem.tag.equals(tag)) collector.add(elem);
 				elem.getElementsByTagName(tag, collector);
 			}
+		}
+	}
+
+	public void forEach(Consumer<Node> consumer) {
+		consumer.accept(this);
+		var nodes = _childNodes();
+		for (int i = 0; i < nodes.size(); i++) {
+			nodes.get(i).forEach(consumer);
 		}
 	}
 	// endregion

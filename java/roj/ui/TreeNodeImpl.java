@@ -1,6 +1,7 @@
 package roj.ui;
 
 import roj.collect.SimpleList;
+import roj.config.auto.Optional;
 
 import javax.swing.tree.MutableTreeNode;
 import javax.swing.tree.TreeNode;
@@ -13,6 +14,7 @@ import java.util.List;
  * @author Roj234
  * @since 2023/9/14 0014 20:57
  */
+@Optional
 public abstract class TreeNodeImpl<T extends TreeNodeImpl<T>> implements MutableTreeNode {
 	public transient T parent;
 	public List<T> children;

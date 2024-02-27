@@ -1,15 +1,12 @@
 package roj.config.serial;
 
-import roj.config.word.Tokenizer;
+import org.jetbrains.annotations.NotNull;
+import roj.config.Tokenizer;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.text.TextWriter;
+import roj.util.Helpers;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
@@ -17,8 +14,6 @@ import java.util.Arrays;
  * @since 2022/1/29 8:44
  */
 public abstract class ToSomeString implements CVisitor {
-	private static final char[] TAB = {'\t'};
-
 	protected static final int END = 1, NEXT = 2, MAP = 4, LIST = 8, VALUE = 16;
 
 	protected CharList sb = new CharList();
@@ -28,29 +23,22 @@ public abstract class ToSomeString implements CVisitor {
 		this.sb = sb;
 		return this;
 	}
-	public ToSomeString to(File out) throws IOException {
-		sb = TextWriter.to(out).append(sb);
-		return this;
-	}
-	public ToSomeString to(OutputStream out) { return to(out, StandardCharsets.UTF_8); }
-	public ToSomeString to(OutputStream out, Charset charset) {
-		sb = new TextWriter(out, charset).append(sb);
-		return this;
-	}
 
 	private int[] stack = new int[2];
 	protected int depth;
 
-	protected char[] indent;
+	protected char indent;
+	protected byte indentCount;
 
-	public final void tabIndent() { indent = TAB; }
-	public final void spaceIndent(int len) {
-		indent = new char[len];
-		Arrays.fill(indent, ' ');
+	protected ToSomeString() {}
+	protected ToSomeString(@NotNull String indent) {
+		this.indentCount = (byte) indent.length();
+		if (indent.length() > 0)
+			this.indent = indent.charAt(0);
 	}
 
 	protected void indent(int x) {
-		if (indent.length > 0) {
+		if (indentCount > 0) {
 			sb.append('\n');
 			while (x-- > 0) sb.append(indent);
 		}
@@ -74,23 +62,16 @@ public abstract class ToSomeString implements CVisitor {
 		if (s == null) valNull();
 		else valString(s);
 	}
-	protected void valString(String l) {
-		Tokenizer.addSlashes(l, 0, sb.append('"'), '\'').append('"');
-	}
+	public void valString(CharSequence l) {Tokenizer.addSlashes(l, 0, sb.append('"'), '\'').append('"');}
 
 	public final void value(long l) { preValue(false); sb.append(l); }
 	public final void value(double l) { preValue(false); sb.append(l); }
 	public final void value(boolean l) { preValue(false); sb.append(l); }
 	public final void valueNull() { preValue(false); valNull(); }
-	protected void valNull() {
-		sb.append("null");
-	}
+	protected void valNull() { sb.append("null"); }
 
 	protected String comment;
-	public final void comment(String s) {
-		if (indent.length == 0) return;
-		comment = s;
-	}
+	public final void comment(String s) { if (indentCount > 0) comment = s; }
 
 	protected void preValue(boolean hasNext) {
 		int f = flag;
@@ -150,26 +131,23 @@ public abstract class ToSomeString implements CVisitor {
 		while (depth > 0) pop();
 		return sb;
 	}
-	public final CharList getHalfValue() { return sb; }
-	public String toString() { return getValue().toString(); }
+	public String toString() { return sb.toString(); }
 
-	public void reset() {
+	public ToSomeString reset() {
 		comment = null;
 		depth = 0;
 		flag = 0;
 		sb.clear();
+		return this;
 	}
 
-	public final void finish() throws IOException {
-		if (sb instanceof TextWriter) {
-			while (depth > 0) pop();
-			((TextWriter) sb).finish();
-		}
-	}
 	public final void close() throws IOException {
-		if (sb instanceof TextWriter) {
-			finish();
-			((TextWriter) sb).close();
+		if (sb instanceof AutoCloseable c) {
+			try {
+				c.close();
+			} catch (Exception e) {
+				Helpers.athrow(e);
+			}
 		}
 	}
 }

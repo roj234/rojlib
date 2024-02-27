@@ -15,6 +15,7 @@ import java.awt.event.*;
  * @author Roj234
  * @since 2023/9/6 0006 18:08
  */
+@Deprecated
 public class DragReorderHelper extends MouseAdapter {
 	private TreePath clicked, insertAfter;
 	private boolean dragging;

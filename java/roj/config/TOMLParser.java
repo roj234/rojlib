@@ -5,17 +5,14 @@ import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.config.data.*;
-import roj.config.word.Word;
-import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.Helpers;
 
-import java.io.File;
-import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 import static roj.config.JSONParser.*;
-import static roj.config.word.Word.*;
+import static roj.config.Word.*;
 
 /**
  * 汤小明的小巧明晰语言 <br>
@@ -24,16 +21,17 @@ import static roj.config.word.Word.*;
  * @author Roj234
  * @since 2022/1/6 19:49
  */
-public final class TOMLParser extends Parser<CMapping> {
+public final class TOMLParser extends Parser {
 	public static final int LENIENT = 1;
+
 	private static final int INLINE = 2;
-	private static final short eq = 18, dot = 19, dlmb = 20, drmb = 21;
+	private static final short eq = 17, dot = 18, dlmb = 19, drmb = 20;
 
 	private static final TrieTree<Word> TOML_TOKENS = new TrieTree<>();
 	private static final MyBitSet TOML_LENDS = new MyBitSet();
 	static {
 		addKeywords(TOML_TOKENS, TRUE, "true", "false", "null");
-		addSymbols(TOML_TOKENS, TOML_LENDS, left_l_bracket, "{", "}", "[", "]", ",", "=", ".", "[[", "]]");
+		addSymbols(TOML_TOKENS, TOML_LENDS, lBrace, "{", "}", "[", "]", ",", "=", ".", "[[", "]]");
 		addWhitespace(TOML_LENDS);
 
 		num("nan", Double.NaN);
@@ -47,68 +45,36 @@ public final class TOMLParser extends Parser<CMapping> {
 		TOML_LENDS.addAll("+-#\"'");
 	}
 	private static void num(String k, double v) {
-		D pos = new D(0, v, k);
-		TOML_TOKENS.put(k, pos);
-		TOML_TOKENS.put("+"+k, pos);
-		TOML_TOKENS.put("-"+k, new D(0, v, k));
+		Word w = Word.numberWord(0, v, k);
+		TOML_TOKENS.put(k, w);
+		TOML_TOKENS.put("+"+k, w);
+		TOML_TOKENS.put("-"+k, Word.numberWord(0, v, k));
 	}
 
 	{ tokens = TOML_TOKENS; literalEnd = TOML_LENDS; }
-
-	public static void main(String[] args) throws ParseException, IOException {
-		System.out.print(parses(IOUtil.readUTF(new File(args[0]))).toTOML());
-	}
-
-	public static CMapping parses(CharSequence string) throws ParseException {
-		return new TOMLParser().parse(string, 0);
-	}
-	public static CMapping parses(CharSequence string, int flag) throws ParseException {
-		return new TOMLParser().parse(string, flag);
-	}
 
 	public TOMLParser() {}
 	public TOMLParser(int flag) { super(flag); }
 
 	@Override
-	public final CMapping parse(CharSequence text, int flags) throws ParseException {
-		this.flag = flags;
-		init(text);
-
-		CMapping entry;
-		try {
-			entry = parse0(flags);
-			if ((flags & NO_EOF) == 0) except(EOF, "EOF");
-		} catch (ParseException e) {
-			throw e.addPath("$");
-		} finally {
-			init(null);
-		}
-
-		return entry;
-	}
-
-	public final int availableFlags() { return LENIENT; }
-	public final String format() { return "TOML"; }
-
-	@Override
-	public final CharList append(CEntry entry, int flag, CharList sb) {
-		return entry.appendTOML(sb, new CharList());
-	}
+	public Map<String, Integer> dynamicFlags() { return Map.of("Lenient", LENIENT, "OrderedMap", ORDERED_MAP); }
+	public final ConfigMaster format() { return ConfigMaster.TOML; }
 
 	/**
 	 * @param flag LENIENT 允许修改行内表
 	 */
-	public CMapping parse0(int flag) throws ParseException {
-		CMapping map = comment == null ? new CMapping() : new CCommMap();
+	@Override
+	CEntry element(int flag) throws ParseException {
+		CMap map = comment == null ? new CMap() : new CCommMap();
 
-		CMapping root = tomlObject(flag);
-		if (root.size() > 0) map.put(CMapping.CONFIG_TOPLEVEL, root);
+		CMap root = tomlObject(flag);
+		if (root.size() > 0) map.put(CMap.CONFIG_TOPLEVEL, root);
 
 		o:
 		while (hasNext()) {
 			Word w = next();
 			switch (w.type()) {
-				case left_m_bracket:
+				case lBracket:
 					w = next();
 					if (w.type() != LITERAL && w.type() != STRING) unexpected(w.val(), "键");
 					try {
@@ -139,9 +105,9 @@ public final class TOMLParser extends Parser<CMapping> {
 	 * {xxx = yyy, zzz = uuu}
 	 */
 	@SuppressWarnings("fallthrough")
-	private CMapping tomlObject(int flag) throws ParseException {
+	private CMap tomlObject(int flag) throws ParseException {
 		Map<String, CEntry> valmap = createMap(flag);
-		CMapping map = (flag & INLINE) != 0 ? new CTOMLFxMap(valmap) : comment == null ? new CMapping(valmap) : new CCommMap(valmap);
+		CMap map = (flag & INLINE) != 0 ? new IMap(valmap) : comment == null ? new CMap(valmap) : new CCommMap(valmap);
 
 		o:
 		while (true) {
@@ -150,8 +116,8 @@ public final class TOMLParser extends Parser<CMapping> {
 			firstChar = SIGNED_NUMBER_C2C;
 
 			switch (w.type()) {
-				case left_m_bracket: retractWord();
-				case right_l_bracket: break o;
+				case lBracket: retractWord();
+				case rBrace: break o;
 				case INTEGER: case LITERAL: case STRING: break;
 				default:
 					if ((flag & INLINE) == 0) {
@@ -174,39 +140,9 @@ public final class TOMLParser extends Parser<CMapping> {
 
 	private static Map<String, CEntry> createMap(int flag) { return (flag & ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>(); }
 
-	CEntry element(int flag) throws ParseException {
-		Word w = next();
-		switch (w.type()) {
-			case left_l_bracket: return tomlObject(flag | INLINE);
-			case left_m_bracket: return JSONParser.list(this, new CTOMLList(), flag);
-			case STRING:
-			case LITERAL: {
-				int i = prevIndex;
-				if (next().type() == eq) {
-					index = i;
-					return tomlObject(flag);
-				} else {
-					retractWord();
-					return CString.valueOf(w.val());
-				}
-			}
-			case RFCDATE_DATE: return new CDate(w.asLong());
-			case RFCDATE_DATETIME:
-			case RFCDATE_DATETIME_TZ: return new CTimestamp(w.asLong());
-			case DOUBLE:
-			case FLOAT: return CDouble.valueOf(w.asDouble());
-			case INTEGER: return CInteger.valueOf(w.asInt());
-			case LONG: return CLong.valueOf(w.asLong());
-			case TRUE: return CBoolean.TRUE;
-			case FALSE: return CBoolean.FALSE;
-			case NULL: return CNull.NULL;
-			default: unexpected(w.val()); return Helpers.nonnull();
-		}
-	}
-
 	@SuppressWarnings("fallthrough")
 	public static boolean literalSafe(CharSequence text) {
-		if (LITERAL_UNSAFE) return false;
+		if (ALWAYS_ESCAPE) return false;
 		if (text.length() == 0) return false;
 
 		for (int i = 0; i < text.length(); i++) {
@@ -230,15 +166,19 @@ public final class TOMLParser extends Parser<CMapping> {
 						return readDigit(true);
 					}
 					// fall to literal(symbol)
-				default: prevIndex = index = i; return readSymbol();
+				default:
+					prevIndex = index = i;
+					Word w = readSymbol();
+					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
+					return w;
 				case C_NUMBER:
 					prevIndex = index = i;
 
 					if (in.length() - i > 5 && in.charAt(i + 3) == '-') {
-						Word w = ISO8601Datetime(true);
+						w = ISO8601Datetime(false);
 						if (w != null) return w;
 					} else if (in.length() - i > 3 && in.charAt(i + 1) == ':') {
-						Word w = ISO8601Datetime(true);
+						w = ISO8601Datetime(false);
 						if (w != null) return w;
 					}
 
@@ -305,7 +245,7 @@ public final class TOMLParser extends Parser<CMapping> {
 		int orig = index;
 		index = i;
 
-		throw err("未终止的 引号 (" + end3 + end3 + end3 + ")", orig);
+		throw err("未终止的 引号 ("+end3+end3+end3+")", orig);
 	}
 
 	@Override
@@ -315,7 +255,7 @@ public final class TOMLParser extends Parser<CMapping> {
 
 	String k;
 
-	private void dotName(String key, CMapping val, int flag, String except) throws ParseException {
+	private void dotName(String key, CMap val, int flag, String except) throws ParseException {
 		firstChar = NONE_C2C;
 		Word w;
 		while (true) {
@@ -326,7 +266,7 @@ public final class TOMLParser extends Parser<CMapping> {
 			CEntry entry = map.get(key);
 			if (entry == null) {
 				Map<String, CEntry> valmap = createMap(flag);
-				map.put(key, entry = comment == null ? new CMapping(valmap): new CCommMap(valmap));
+				map.put(key, entry = comment == null ? new CMap(valmap): new CCommMap(valmap));
 			} else if (entry.getType() == Type.LIST) {
 				CList list = entry.asList();
 				if (list.size() == 0) throw err("空的行内数组");
@@ -337,7 +277,7 @@ public final class TOMLParser extends Parser<CMapping> {
 			key = next().val();
 			val = entry.asMap();
 
-			if ((flag & LENIENT) == 0 && val.getClass() == CTOMLFxMap.class) throw err("不能修改行内表");
+			if ((flag & LENIENT) == 0 && val.getClass() == IMap.class) throw err("不能修改行内表");
 		}
 
 		if (!w.val().equals(except)) unexpected(w.val(), except);
@@ -354,12 +294,42 @@ public final class TOMLParser extends Parser<CMapping> {
 		if (except.equals("]]")) {
 			val.getOrCreateList(key).add(tomlObject(flag));
 		} else {
-			CEntry entry = ((flag & INLINE) != 0) ? tomlObject(flag & ~INLINE) : element(flag);
+			CEntry entry;
+			if (((flag & INLINE) != 0)) entry = tomlObject(flag & ~INLINE);
+			else {
+				w = next();
+				entry = switch (w.type()) {
+					case lBrace -> tomlObject(flag | INLINE);
+					case lBracket -> JSONParser.list(this, new IList(), flag);
+					case STRING, LITERAL -> {
+						int i = prevIndex;
+						if (next().type() == eq) {
+							index = i;
+							yield tomlObject(flag);
+						} else {
+							retractWord();
+							yield CString.valueOf(w.val());
+						}
+					}
+					case RFCDATE_DATE -> new CDate(w.asLong());
+					case RFCDATE_DATETIME, RFCDATE_DATETIME_TZ -> new CTimestamp(w.asLong());
+					case DOUBLE, FLOAT -> CDouble.valueOf(w.asDouble());
+					case INTEGER -> CInt.valueOf(w.asInt());
+					case LONG -> CLong.valueOf(w.asLong());
+					case TRUE -> CBoolean.TRUE;
+					case FALSE -> CBoolean.FALSE;
+					case NULL -> CNull.NULL;
+					default -> {
+						unexpected(w.val());
+						yield Helpers.nonnull();
+					}
+				};
+			}
 
 			CEntry me = val.raw().putIfAbsent(key, entry);
 			if (me != null) {
-				if (entry.getType() != me.getType()) throw err("覆盖已存在的 "+me.toShortJSONb());
-				if (me.getType() != Type.MAP) throw err(me.toShortJSONb()+"不是表");
+				if (entry.getType() != me.getType()) throw err("覆盖已存在的 "+me);
+				if (me.getType() != Type.MAP) throw err(me+"不是表");
 				me.asMap().merge(entry.asMap(), false, true);
 			}
 		}
@@ -378,5 +348,28 @@ public final class TOMLParser extends Parser<CMapping> {
 			if (!WHITESPACE.contains(c)) throw err("我们建议你换个行");
 		}
 		index = i;
+	}
+
+	/**
+	 * I is Inline
+	 * @since 2022/1/12 13:21
+	 */
+	public static final class IList extends CList {
+		public boolean fixed = true;
+		public IList() {}
+		public IList(List<CEntry> list) { super(list); }
+
+		public CharList toTOML(CharList sb, int depth, CharSequence chain) { return super.toTOML(sb, fixed ? 3 : depth, chain); }
+	}
+
+	/**
+	 * @since 2022/1/12 16:10
+	 */
+	public static class IMap extends CMap {
+		public boolean fixed = true;
+		public IMap() { super(); }
+		public IMap(Map<String, CEntry> map) { super(map); }
+
+		public CharList toTOML(CharList sb, int depth, CharSequence chain) { return super.toTOML(sb, fixed ? 3 : depth, chain); }
 	}
 }

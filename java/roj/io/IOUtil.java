@@ -1,17 +1,16 @@
 package roj.io;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
+import roj.compiler.plugins.annotations.Attach;
 import roj.concurrent.FastThreadLocal;
-import roj.concurrent.Waitable;
+import roj.config.data.CInt;
+import roj.config.data.CLong;
 import roj.crypt.Base64;
-import roj.math.MutableLong;
-import roj.net.http.HttpRequest;
-import roj.text.CharList;
-import roj.text.TextReader;
-import roj.text.TextUtil;
-import roj.text.UTF8MB4;
+import roj.reflect.ReflectionUtils;
+import roj.text.*;
 import roj.util.ByteList;
-import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.*;
@@ -23,8 +22,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Predicate;
 
 /**
@@ -35,8 +34,9 @@ public final class IOUtil {
 	public static final FastThreadLocal<IOUtil> SharedCoder = FastThreadLocal.withInitial(IOUtil::new);
 
 	// region ThreadLocal part
-	public final CharList charBuf = new CharList();
+	public final CharList charBuf = new CharList(1024);
 	public final ByteList byteBuf = new ByteList();
+	{byteBuf.ensureCapacity(1024);}
 
 	private final ByteList.Slice shell = new ByteList.Slice();
 	public final ByteList.Slice shellB = new ByteList.Slice();
@@ -47,38 +47,22 @@ public final class IOUtil {
 		ByteList b = byteBuf; b.clear();
 		return b.putUTFData(str).toByteArray();
 	}
-
-	public String decode(byte[] b) { return decodeR(b).toString(); }
-	public CharList decodeR(byte[] b) { return decodeR(shell.setR(b,0,b.length)); }
-	public CharList decodeR(DynByteBuf b) {
-		charBuf.clear();
-		UTF8MB4.CODER.decodeFixedIn(b, b.readableBytes(), charBuf);
-		return charBuf;
+	public String decode(byte[] b) {
+		CharList c = charBuf; c.clear();
+		UTF8.CODER.decodeFixedIn(shell.setR(b,0,b.length), b.length, c);
+		return c.toString();
 	}
 
-	public String encodeHex(byte[] b) { return encodeHex(shell.setR(b,0,b.length)); }
-	public String encodeHex(ByteList b) {
-		charBuf.clear();
-		TextUtil.bytes2hex(b.list, 0, b.wIndex(), charBuf);
-		return charBuf.toString();
-	}
+	public String encodeHex(byte[] b) { return shell.setR(b,0,b.length).hex(); }
+	public String encodeBase64(byte[] b) { return shell.setR(b,0,b.length).base64(); }
 
 	public byte[] decodeHex(CharSequence c) {
 		ByteList b = byteBuf; b.clear();
 		return TextUtil.hex2bytes(c, b).toByteArray();
 	}
 
-	public String encodeBase64(byte[] b) { return encodeBase64(shell.setR(b,0,b.length)); }
-	public String encodeBase64(DynByteBuf b) { return encodeBase64(b, Base64.B64_CHAR); }
-	public String encodeBase64(DynByteBuf b, byte[] chars) {
-		charBuf.clear();
-		Base64.encode(b, charBuf, chars);
-		return charBuf.toString();
-	}
-
-	public byte[] decodeBase64(CharSequence c) { return decodeBase64R(c).toByteArray(); }
-	public ByteList decodeBase64R(CharSequence c) { return decodeBase64R(c, Base64.B64_CHAR_REV); }
-	public ByteList decodeBase64R(CharSequence c, byte[] chars) {
+	public ByteList decodeBase64(CharSequence c) { return decodeBase64(c, Base64.B64_CHAR_REV); }
+	public ByteList decodeBase64(CharSequence c, byte[] chars) {
 		ByteList b = byteBuf; b.clear();
 		Base64.decode(c, 0, c.length(), b, chars);
 		return b;
@@ -88,37 +72,30 @@ public final class IOUtil {
 	public ByteList wrap(byte[] b, int off, int len) { return shell.setR(b,off,len); }
 	// endregion
 
-	@Deprecated
-	public static ByteList ddLayeredByteBuf() { return new ByteList(); }
-	@Deprecated
-	public static CharList ddLayeredCharBuf() { return new CharList(); }
-
 	public static ByteList getSharedByteBuf() {
-		ByteList o = SharedCoder.get().byteBuf;
-		o.clear();
-		o.ensureCapacity(1024);
+		ByteList o = SharedCoder.get().byteBuf; o.clear();
 		return o;
 	}
 
 	public static CharList getSharedCharBuf() {
-		CharList o = SharedCoder.get().charBuf;
-		o.clear();
-		o.ensureCapacity(1024);
+		CharList o = SharedCoder.get().charBuf; o.clear();
 		return o;
 	}
 
-	public static byte[] getResource(String path) throws IOException { return getResource(IOUtil.class, path); }
+	//region InputStream/TextReader
+	public static byte[] getResource(String path) throws IOException { return getResource(ReflectionUtils.getCallerClass(2), path); }
 	public static byte[] getResource(Class<?> caller, String path) throws IOException {
-		InputStream in = caller.getClassLoader().getResourceAsStream(path);
+		var in = caller.getClassLoader().getResourceAsStream(path);
 		if (in == null) throw new FileNotFoundException(path+" is not in jar "+caller.getName());
-		return read(in);
+		return new ByteList(Math.max(in.available(), 4096)).readStreamFully(in).toByteArrayAndFree();
 	}
-	public static String getTextResource(String path) throws IOException { return getTextResource(IOUtil.class, path); }
+	public static String getTextResource(String path) throws IOException { return getTextResource(ReflectionUtils.getCallerClass(2), path); }
 	public static String getTextResource(Class<?> caller, String path) throws IOException {
-		ClassLoader cl = caller.getClassLoader();
-		InputStream in = cl == null ? ClassLoader.getSystemResourceAsStream(path) : cl.getResourceAsStream(path);
+		var in = caller.getClassLoader().getResourceAsStream(path);
 		if (in == null) throw new FileNotFoundException(path+" is not in jar "+caller.getName());
-		return readUTF(in);
+		try (var r = TextReader.from(in, StandardCharsets.UTF_8)) {
+			return new CharList(Math.max(in.available()/3, 4096)).readFully(r).toStringAndFree();
+		}
 	}
 
 	public static byte[] read(File file) throws IOException {
@@ -134,22 +111,22 @@ public final class IOUtil {
 
 
 	public static String readUTF(File f) throws IOException {
-		try (Reader r = TextReader.from(f, StandardCharsets.UTF_8)) {
+		try (var r = TextReader.from(f, StandardCharsets.UTF_8)) {
 			return f.length() > 1048576L ? read1(r) : read(r);
 		}
 	}
 	public static String readUTF(InputStream in) throws IOException {
-		try (Reader r = TextReader.from(in, StandardCharsets.UTF_8)) {
+		try (var r = TextReader.from(in, StandardCharsets.UTF_8)) {
 			return in.available() > 1048576L ? read1(r) : read(r);
 		}
 	}
 	public static String readString(File f) throws IOException {
-		try (TextReader r = TextReader.auto(f)) {
+		try (var r = TextReader.auto(f)) {
 			return f.length() > 1048576L ? read1(r) : read(r);
 		}
 	}
 	public static String readString(InputStream in) throws IOException {
-		try (Reader r = TextReader.auto(in)) {
+		try (var r = TextReader.auto(in)) {
 			return in.available() > 1048576L ? read1(r) : read(r);
 		}
 	}
@@ -157,7 +134,9 @@ public final class IOUtil {
 	public static String read(Reader r) throws IOException { return getSharedCharBuf().readFully(r).toString(); }
 	private static String read1(Reader r) throws IOException { return new CharList(1048576).readFully(r).toStringAndFree(); }
 
-	public static void readFully(InputStream in, byte[] b) throws IOException { readFully(in, b, 0, b.length); }
+	@Attach
+	public static void readFully(InputStream in, byte[] b) throws IOException {readFully(in, b, 0, b.length);}
+	@Attach
 	public static void readFully(InputStream in, byte[] b, int off, int len) throws IOException {
 		while (len > 0) {
 			int r = in.read(b, off, len);
@@ -167,8 +146,20 @@ public final class IOUtil {
 		}
 	}
 
-	public static void copyFile(File source, File target) throws IOException {
-		Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+	@Attach("skipAlt")
+	public static long skip(InputStream in, long count) throws IOException {
+		long start = count;
+		for(;;) {
+			long i = in.skip(count);
+			if (i == 0) break;
+			count -= i;
+			if (count == 0) break;
+		}
+		return start-count;
+	}
+	@Attach
+	public static void skipFully(InputStream in, long count) throws IOException {
+		if (skip(in, count) < count) throw new EOFException(in+"无法跳过"+count+"个字节");
 	}
 
 	public static void copyStream(InputStream in, OutputStream out) throws IOException {
@@ -181,13 +172,33 @@ public final class IOUtil {
 			out.write(data, 0, len);
 		}
 	}
+	//endregion
 
-	public static List<File> findAllFiles(File file) {
-		return findAllFiles(file, SimpleList.withCapacityType(0,2), Helpers.alwaysTrue());
+	/**
+	 * 获取这个类所属的jar
+	 */
+	public static File getJar(Class<?> clazz) {
+		URL location = clazz.getProtectionDomain().getCodeSource().getLocation();
+		if (location == null) return null;
+		String loc = location.getPath();
+		if (loc.startsWith("file:")) loc = loc.substring(5);
+		int i = loc.lastIndexOf('!');
+		loc = loc.substring(loc.startsWith("/")?1:0, i<0?loc.length():i);
+		try {
+			return new File(Escape.decodeURI(loc)).getCanonicalFile();
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
 	}
-	public static List<File> findAllFiles(File file, Predicate<File> predicate) {
-		return findAllFiles(file, SimpleList.withCapacityType(0,2), predicate);
-	}
+
+	public static void copyFile(File source, File target) throws IOException {Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);}
+
+	@Attach("listAll")
+	public static List<File> findAllFiles(File file) {return findAllFiles(file, SimpleList.hugeCapacity(0), Helpers.alwaysTrue());}
+	@Attach("listAll")
+	public static List<File> findAllFiles(File file, Predicate<File> predicate) {return findAllFiles(file, SimpleList.hugeCapacity(0), predicate);}
+	@Attach("listAll")
 	public static List<File> findAllFiles(File file, List<File> files, Predicate<File> predicate) {
 		try {
 			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
@@ -204,6 +215,7 @@ public final class IOUtil {
 		return files;
 	}
 
+	@Attach
 	public static boolean deletePath(File file) {
 		try {
 			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
@@ -225,10 +237,27 @@ public final class IOUtil {
 		}
 		return true;
 	}
-	@Deprecated
-	public static boolean deleteFile(File file) { return file.delete(); }
 
-	public static void allocSparseFile(File file, long length) throws IOException {
+	@Attach
+	public static int removeEmptyPaths(File file) {
+		CInt tmp = new CInt();
+		try {
+			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
+				int size;
+				@Override
+				public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {size++;return FileVisitResult.CONTINUE;}
+				@Override
+				public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
+					if (--size > 0 && dir.toFile().delete()) tmp.value++;
+					return FileVisitResult.CONTINUE;
+				}
+			});
+		} catch (IOException ignored) {}
+		return tmp.value;
+	}
+
+	@Attach
+	public static void createSparseFile(File file, long length) throws IOException {
 		// noinspection all
 		if (file.length() != length) {
 			// noinspection all
@@ -245,8 +274,8 @@ public final class IOUtil {
 		} else if (length == 0) file.createNewFile();
 	}
 
-	public static boolean checkTotalWritePermission(File file) {
-		try (RandomAccessFile f = new RandomAccessFile(file, "rw")) {
+	public static boolean isReallyWritable(File file) {
+		try (var f = new RandomAccessFile(file, "rw")) {
 			long l = f.length();
 			f.seek(l);
 			f.writeByte(1);
@@ -255,24 +284,6 @@ public final class IOUtil {
 			return false;
 		}
 		return true;
-	}
-
-	public static int removeEmptyPaths(Collection<String> files) {
-		boolean oneRemoved = true;
-		int i = 0;
-		while (oneRemoved) {
-			oneRemoved = false;
-			for (String path : files) {
-				File dir = new File(path);
-				while ((dir = dir.getParentFile()) != null) {
-					if (!dir.delete()) break;
-
-					oneRemoved = true;
-					i++;
-				}
-			}
-		}
-		return i;
 	}
 
 	public static long transferFileSelf(FileChannel cf, long from, long to, long len) throws IOException {
@@ -298,7 +309,7 @@ public final class IOUtil {
 				File tmpPath = new File(System.getProperty("java.io.tmpdir"));
 				File tmpFile;
 				do {
-					tmpFile = new File(tmpPath, "FUT~" + (float) Math.random() + ".tmp");
+					tmpFile = new File(tmpPath, "FUT~"+(float)Math.random()+".tmp");
 				} while (tmpFile.exists());
 
 				try (FileChannel ct = FileChannel.open(tmpFile.toPath(),
@@ -339,10 +350,17 @@ public final class IOUtil {
 		return cl.append('.').append(ext);
 	}
 
+	public static File deriveOutput(File src, String postfix) {
+		var path = src.getName();
+		int i = path.lastIndexOf('.');
+		if (i < 0) return new File(src.getAbsolutePath()+postfix);
+		return new File(src.getParentFile(), path.substring(0, i)+postfix+path.substring(i));
+	}
+
 	public static String extensionName(String path) {
 		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
 		int i = path.lastIndexOf('.');
-		return i < 0 ? "" : path.substring(i+1);
+		return i < 0 ? "" : path.substring(i+1).toLowerCase(Locale.ROOT);
 	}
 
 	public static String fileName(String pat) {
@@ -357,16 +375,48 @@ public final class IOUtil {
 		return text.substring(i+1);
 	}
 
-	public static String safePath(String path) {
+	/**
+	 * 路径过滤函数，处理不可信的用户输入路径.
+	 * 这个函数会删除路径中的
+	 *   //
+	 *   ../
+	 *   ./
+	 *   开头的/
+	 *   空白字符
+	 * 并截断字符串到任意(不可打印, ' ')字符之前
+	 */
+	@NotNull
+	public static String safePath(String path) throws InvalidPathException {
 		CharList sb = getSharedCharBuf();
 
-		int altStream = path.lastIndexOf(':');
-		if (altStream > 1) path = path.substring(0, altStream);
+		int end = 0;
+		int i = 0;
+		while (i < path.length()) {
+			var c = path.charAt(i);
+			if (c < 32/* || c == ':'*/) break;
+			i++;
+			if (c != ' ') end = i;
+		}
 
-		return sb.append(path).trim()
-				 .replaceInReplaceResult("../", "/")
+		return sb.append(path, 0, end).trim()
+				 .replace(File.separatorChar, '/')
+				 .replaceInReplaceResult("./", "/")
 				 .replaceInReplaceResult("//", "/")
-				 .toString(sb.length() > 0 && sb.charAt(0) == '/' ? 1 : 0, sb.length());
+				 .substring(sb.length() > 0 && sb.charAt(0) == '/' ? 1 : 0, sb.length());
+	}
+	/**
+	 * 这是另外一个实现
+	 * @param base 允许访问的目录
+	 * @param relative 不可信的用户输入
+	 * @return 如果输入合法，那么返回非空
+	 */
+	@Nullable
+	public static File safePath(String base, String relative) {
+		File file = new File(base, relative);
+		try {
+			if (file.getCanonicalPath().startsWith(base)) return file;
+		} catch (IOException ignored) {}
+		return null;
 	}
 
 	public static long movePath(File from, File to, boolean move) throws IOException {
@@ -377,7 +427,7 @@ public final class IOUtil {
 		}
 		if (from.equals(to)) return 1;
 
-		MutableLong state = new MutableLong();
+		CLong state = new CLong();
 		int len = from.getAbsolutePath().length()+1;
 		to.mkdirs();
 		Files.walkFileTree(from.toPath(), new SimpleFileVisitor<Path>() {
@@ -423,12 +473,21 @@ public final class IOUtil {
 		return state.value;
 	}
 
+	@Attach
+	public static void closeSilently(@Nullable AutoCloseable c) {
+		if (c != null) try {
+			c.close();
+		} catch (Throwable e) {
+			e.printStackTrace();
+		}
+	}
+
 	public static void ioWait(AutoCloseable closeable, Object waiter) throws IOException {
 		synchronized (waiter) {
 			try {
 				waiter.wait();
 			} catch (InterruptedException e) {
-				ClosedByInterruptException ex2 = new ClosedByInterruptException();
+				var ex2 = new ClosedByInterruptException();
 				try {
 					closeable.close();
 				} catch (Throwable ex) {
@@ -437,21 +496,5 @@ public final class IOUtil {
 				throw ex2;
 			}
 		}
-	}
-
-	// todo 支持HTTP2.0后移走
-	public static int timeout = 10000;
-
-	public static ByteList downloadFileToMemory(String url) throws IOException {
-		return HttpRequest.nts().url(new URL(url)).execute().bytes();
-	}
-
-	public static final class ImmediateFuture implements Waitable {
-		@Override
-		public void waitFor() {}
-		@Override
-		public boolean isDone() { return true; }
-		@Override
-		public void cancel() {}
 	}
 }

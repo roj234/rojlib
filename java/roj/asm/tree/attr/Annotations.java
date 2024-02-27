@@ -44,7 +44,7 @@ public final class Annotations extends Attribute {
 	public String name() { return vis?"RuntimeVisibleAnnotations":"RuntimeInvisibleAnnotations"; }
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		w.putShort(annotations.size());
 		for (int i = 0; i < annotations.size(); i++) {
 			annotations.get(i).toByteArray(pool, w);

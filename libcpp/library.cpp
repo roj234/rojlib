@@ -1,15 +1,31 @@
 
 #include "roj_NativeLibrary.h"
-#include <windows.h>
-
 static jclass nativeException = nullptr;
-JNIEXPORT void JNICALL Java_roj_NativeLibrary_init(JNIEnv *env, jclass) {
-    if (nativeException == nullptr)
-        nativeException = (jclass) (env->NewGlobalRef(env->FindClass("roj/util/NativeException")));
-}
 void Error(JNIEnv *env, const char* msg) { env->ThrowNew(nativeException, msg); }
 
-const int MODE_GET = 0, MODE_SET = 1, MODE_ADD = 2, MODE_REMOVE = 3, MODE_XOR = 4;
+#include "bsdiff.cpp"
+#include "lz/LZ_Jni.cpp"
+
+JNIEXPORT jlong JNICALL Java_roj_RojLib_init(JNIEnv *env, jclass) {
+    if (nativeException == nullptr)
+        nativeException = (jclass) (env->NewGlobalRef(env->FindClass("roj/util/NativeException")));
+    jlong bitset = ANSI_CONSOLE | BSDIFF | SHARED_MEMORY
+#ifdef _WIN32
+     |FUNC_WINDOWS
+#endif
+            ;
+    if (LzJni_init(env)) bitset |= FAST_LZMA;
+    return bitset;
+}
+
+const int MODE_GET = 0, MODE_SET = 1;
+
+#ifdef _WIN32
+#include <windows.h>
+
+JNIEXPORT jint JNICALL Java_roj_RojLib_getLastError(JNIEnv *, jclass) {
+    return static_cast<jint>(GetLastError());
+}
 
 static byte modHandle = 0;
 static DWORD prevMode[3];
@@ -29,10 +45,10 @@ static void restoreHandle() {
     }
 }
 
-JNIEXPORT jint JNICALL Java_roj_ui_CLIUtil_setConsoleMode0(JNIEnv *env, jclass, jint handle, jint mode, jint flags) {
+JNIEXPORT jint JNICALL Java_roj_ui_NativeVT_setConsoleMode0(JNIEnv *env, jclass, jint handle, jint mode, jint flags) {
     DWORD dwHandle;
     switch (handle) {
-        default: Error(env, "INVALID_HANDLE_VALUE"); return 0;
+        default: Error(env, "no such handle"); return 0;
         case 0: dwHandle = STD_INPUT_HANDLE; break;
         case 1: dwHandle = STD_OUTPUT_HANDLE; break;
         case 2: dwHandle = STD_ERROR_HANDLE; break;
@@ -40,7 +56,7 @@ JNIEXPORT jint JNICALL Java_roj_ui_CLIUtil_setConsoleMode0(JNIEnv *env, jclass, 
 
     HANDLE h = GetStdHandle(dwHandle);
     if (h == INVALID_HANDLE_VALUE) {
-        Error(env, "INVALID_HANDLE_VALUE");
+        Error(env, "no such handle");
         return 0;
     }
 
@@ -50,62 +66,159 @@ JNIEXPORT jint JNICALL Java_roj_ui_CLIUtil_setConsoleMode0(JNIEnv *env, jclass, 
         return 0;
     }
 
-    if (mode != MODE_GET && !(modHandle & (1 << handle))) {
-        if (modHandle == 0) atexit(restoreHandle);
+    if (mode == MODE_SET) {
+        if (!(modHandle & (1 << handle))) {
+            if (modHandle == 0) atexit(restoreHandle);
 
-        modHandle |= 1 << handle;
-        prevMode[handle] = lpMode;
-    }
+            modHandle |= 1 << handle;
+            prevMode[handle] = lpMode;
+        }
 
-    switch (mode) {
-        default:
-        case MODE_GET: return static_cast<jint>(lpMode);
-        case MODE_REMOVE: lpMode &= ~flags; break;
-        case MODE_ADD: lpMode |= flags; break;
-        case MODE_SET: lpMode = flags; break;
-        case MODE_XOR: lpMode ^= flags; break;
-    }
+        lpMode = flags;
 
-    if (!SetConsoleMode(h, lpMode)) {
-        Error(env, "SetConsoleMode() failed");
-        return 0;
+        if (!SetConsoleMode(h, lpMode)) {
+            Error(env, "SetConsoleMode() failed");
+            return 0;
+        }
     }
 
     return static_cast<jint>(lpMode);
 }
 
-JNIEXPORT jclass JNICALL Java_roj_reflect_Java9Compat_defineClass0(JNIEnv *env, jclass, jstring name, jobject cl, jbyteArray b, jint len) {
-    auto len1 = env->GetArrayLength(b);
-    if (len > len1) {
-        Error(env, "array index out of bounds");
-        return nullptr;
-    }
+struct NativePipeWin {
+    HANDLE pHandle;
+    LPVOID sharedMemory;
+};
 
-    auto realName = name == nullptr ? nullptr : env->GetStringUTFChars(name, JNI_FALSE);
-    auto realData = env->GetByteArrayElements(b, JNI_FALSE);
-    return env->DefineClass(realName, cl, realData, len);
-}
+jlong doMap(JNIEnv *env, HANDLE mapping, DWORD mapMode) {
+    LPVOID shared_memory = MapViewOfFile(mapping, mapMode, 0, 0, 0);
+    if (shared_memory == nullptr) {
+        CloseHandle(mapping);
 
-JNIEXPORT jlong JNICALL Java_roj_util_NativeMemory_hpAlloc0(JNIEnv *env, jclass, jlong size) {
-    if (size < 0) {
-        Error(env, "invalid size");
+        Error(env, "MapViewOfFile() failed");
         return 0;
     }
 
-    void *address = malloc(size);
-    if (!address) {
-        Error(env, "malloc() failed");
-        return 0;
-    }
-    return reinterpret_cast<jlong>(address);
+    auto *ptr = static_cast<NativePipeWin *>(malloc(sizeof(NativePipeWin)));
+    ptr->pHandle = mapping;
+    ptr->sharedMemory = shared_memory;
+
+    return reinterpret_cast<jlong>(ptr);
 }
 
-JNIEXPORT void JNICALL Java_roj_util_NativeMemory_hpFree0(JNIEnv *, jclass, jlong address) {
-    free(reinterpret_cast<void *>(address));
+JNIEXPORT jlong JNICALL Java_roj_util_SharedMemory_nCreate(JNIEnv *env, jclass, jstring name, jlong size) {
+    if (name == nullptr || size <= 0) {
+        Error(env, "Invalid parameter");
+        return 0;
+    }
+
+    auto pipeName = static_cast<LPCSTR>(env->GetStringUTFChars(name, nullptr));
+    if (pipeName == nullptr) return 0;
+
+    // 有这个必要吗，我到底在干啥，我检查过小于零了不是么
+    auto mySize = static_cast<unsigned long long>(size);
+
+    HANDLE mapping = OpenFileMappingA(FILE_MAP_READ, FALSE, pipeName);
+    if (mapping != nullptr) {
+        CloseHandle(mapping);
+        Error(env, "SharedMemory already exist");
+        return 0;
+    }
+
+    mapping = CreateFileMappingA(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE | SEC_COMMIT, static_cast<DWORD>(mySize >> 32), static_cast<DWORD>(mySize), pipeName);
+
+    env->ReleaseStringUTFChars(name, pipeName);
+
+    if (mapping == nullptr) {
+        Error(env, "CreateFileMapping() failed");
+        return 0;
+    }
+
+    return doMap(env, mapping, FILE_MAP_READ|FILE_MAP_WRITE);
+}
+
+JNIEXPORT jlong JNICALL Java_roj_util_SharedMemory_nAttach(JNIEnv *env, jclass, jstring name, jboolean writable) {
+    if (name == nullptr) {
+        Error(env, "Invalid parameter");
+        return 0;
+    }
+
+    auto pipeName = static_cast<LPCSTR>(env->GetStringUTFChars(name, nullptr));
+    if (pipeName == nullptr) return 0;
+
+    DWORD modeFlag = writable ? FILE_MAP_READ|FILE_MAP_WRITE : FILE_MAP_READ;
+
+    HANDLE mapping = OpenFileMappingA(modeFlag, FALSE, pipeName);
+    if (mapping == nullptr) return 0;
+
+    env->ReleaseStringUTFChars(name, pipeName);
+
+    return doMap(env, mapping, modeFlag);
+}
+
+JNIEXPORT jlong JNICALL Java_roj_util_SharedMemory_nGetAddress(JNIEnv*, jclass, jlong pointer) {
+    if (pointer == 0) return 0;
+
+    auto *ptr = reinterpret_cast<NativePipeWin *>(pointer);
+    return reinterpret_cast<jlong>(ptr->sharedMemory);
+}
+
+JNIEXPORT void JNICALL Java_roj_util_SharedMemory_nClose(JNIEnv*, jclass, jlong pointer) {
+    if (pointer == 0) return;
+
+    auto *ptr = reinterpret_cast<NativePipeWin *>(pointer);
+    UnmapViewOfFile(ptr->sharedMemory);
+    CloseHandle(ptr->pHandle);
+    free(ptr);
 }
 
 const char* ENABLE = "11";
 const char* DISABLE = "00";
-JNIEXPORT jint JNICALL Java_roj_io_NIOUtil_windowsOnlyReuseAddr (JNIEnv *env, jclass, jint fd, jboolean on) {
+JNIEXPORT jint JNICALL Java_roj_io_NIOUtil_windowsOnlyReuseAddr(JNIEnv *env, jclass, jint fd, jboolean on) {
     return setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, on ? ENABLE : DISABLE, sizeof(int));
 }
+
+
+JNIEXPORT jlong JNICALL Java_roj_ui_GuiUtil_nGetWindowLong(JNIEnv *, jclass, jlong hwnd, jint dwType) {
+    return GetWindowLong((HWND) hwnd, dwType);
+}
+
+JNIEXPORT void JNICALL Java_roj_ui_GuiUtil_nSetWindowLong(JNIEnv *, jclass, jlong hwnd, jint dwType, jlong flags) {
+    SetWindowLong((HWND) hwnd, dwType, flags);
+}
+
+JNIEXPORT jlong JNICALL Java_roj_ui_GuiUtil_nGetConsoleWindow(JNIEnv *, jclass) {
+    return reinterpret_cast<jlong>(GetConsoleWindow());
+}
+
+#else
+
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+JNIEXPORT jint JNICALL Java_roj_ui_NativeVT_setConsoleMode0(JNIEnv *env, jclass, jint handle, jint mode, jint flags) {
+    Error(env, "Unsupported operation system");
+    return 0;
+}
+
+JNIEXPORT jlong JNICALL Java_roj_util_SharedMemory_nCreate(JNIEnv *env, jclass, jstring name, jlong size) {
+    Error(env, "Unsupported operation system");
+    return 0;
+}
+
+JNIEXPORT jlong JNICALL Java_roj_util_SharedMemory_nAttach(JNIEnv *env, jclass, jstring name) {
+    Error(env, "Unsupported operation system");
+    return 0;
+}
+
+JNIEXPORT jlong JNICALL Java_roj_util_SharedMemory_nGetAddress(JNIEnv *env, jclass, jlong pointer) {
+    Error(env, "Unsupported operation system");
+    return 0;
+}
+
+JNIEXPORT void JNICALL Java_roj_util_SharedMemory_nClose(JNIEnv *env, jclass, jlong pointer) {
+    Error(env, "Unsupported operation system");
+}
+
+#endif

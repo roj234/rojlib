@@ -13,16 +13,20 @@ import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
+import roj.asm.util.Attributes;
 import roj.asmx.AnnotationSelf;
 import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.compiler.context.ClassContext;
+import roj.compiler.asm.LazyAnnVal;
+import roj.compiler.context.GlobalContext;
+import roj.compiler.diagnostic.Kind;
 
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static roj.asmx.AnnotationSelf.*;
 
@@ -34,192 +38,205 @@ public final class ResolveHelper {
 	private Object _next;
 	public final IClass owner;
 
-	public ResolveHelper(IClass owner) {this.owner = owner;}
+	public ResolveHelper(IClass owner) {this.owner = Objects.requireNonNull(owner);}
 
+	private MethodNode lambdaMethod;
+	private byte lambdaType;
+	public int getLambdaType() {
+		if (lambdaType == 0) {
+			if ((owner.modifier()&Opcodes.ACC_ABSTRACT) == 0) {
+				lambdaType = 3;
+			} else {
+				RawNode mn = null;
+				for (RawNode method : owner.methods()) {
+					if ((method.modifier()&Opcodes.ACC_ABSTRACT) != 0) {
+						if (mn != null) return lambdaType = 5;
+						mn = method;
+					}
+				}
+
+				if (mn == null) {
+					lambdaType = 4;
+				} else {
+					lambdaMethod = (MethodNode) mn;
+					lambdaType = (byte) ((owner.modifier()&Opcodes.ACC_INTERFACE) != 0 ? 1 : 2);
+				}
+
+			}
+		}
+		return lambdaType;
+	}
+	public MethodNode getLambdaMethod() {return lambdaMethod;}
+
+	private byte foreachType;
+	public boolean isFastForeach(GlobalContext ctx) {
+		if (foreachType != 0) return foreachType > 0;
+
+		IntBiMap<String> classes;
+		try {
+			classes = getClassList(ctx);
+		} catch (ClassNotFoundException e) {
+			ctx.report(owner, Kind.WARNING, -1, "symbol.error.noSuchClass", e.getMessage());
+			foreachType = -1;
+			return false;
+		}
+
+		if (classes.containsValue("java/util/List") && classes.containsValue("java/util/RandomAccess")) {
+			foreachType = 1;
+			return true;
+		}
+
+		var attr = owner.parsedAttr(owner.cp(), Attribute.ClAnnotations);
+		if (attr != null && Attributes.getAnnotation(attr.annotations, "roj/compiler/api/ListIterable") != null) {
+			if (owner.getMethod("get") >= 0 && owner.getMethod("size", "()I") >= 0) {
+				foreachType = 1;
+				return true;
+			}
+		}
+
+		foreachType = -1;
+		return false;
+	}
+
+	// region 父类列表
 	private IntBiMap<String> classList;
+	private boolean query;
 
-	public synchronized IntBiMap<String> getClassList(ClassContext ctx) throws ClassNotFoundException {
+	public synchronized IntBiMap<String> getClassList(GlobalContext ctx) throws ClassNotFoundException {
 		if (classList != null) return classList;
+
+		if (query) throw new ResolveException("rh.cyclicDepend:"+owner.name());
+		query = true;
 
 		IntBiMap<String> list = new IntBiMap<>();
 
-		String owner = this.owner.name();
+		IClass info = owner;
 		while (true) {
-			IClass info = ctx.getClassInfo(owner);
-			if (info == null) throw new ClassNotFoundException(owner);
+			String owner = info.name();
+			try {
+				int i = list.size();
+				list.putInt((i << 16) | i, owner);
+			} catch (IllegalArgumentException e) {
+				throw new ResolveException("rh.cyclicDepend:"+owner);
+			}
+
 			owner = info.parent();
 			if (owner == null) break;
-			DIST(list, list.size()+1, owner);
+			info = ctx.getClassInfo(owner);
+			if (info == null) throw new ClassNotFoundException(owner);
 		}
 
-		owner = this.owner.name();
+		info = owner;
 		int castDistance = 1;
-		do {
-			IClass info = ctx.getClassInfo(owner);
-
+		while (true) {
 			List<String> itf = info.interfaces();
 			for (int i = 0; i < itf.size(); i++) {
 				String name = itf.get(i);
 
 				IClass itfInfo = ctx.getClassInfo(name);
-				if (itfInfo == null) throw new ClassNotFoundException(owner);
+				if (itfInfo == null) throw new ClassNotFoundException(name);
 
-				if (list.getInt(name) < 0) DIST(list, castDistance, name);
+				list.forcePut((castDistance == 1 ? 0x80000000 : 0) | (list.size() << 16) | castDistance, name);
 
-				IntBiMap<String> superInterfaces = ctx.parentList(itfInfo);
-				for (IntBiMap.Entry<String> entry : superInterfaces.selfEntrySet()) {
+				for (var entry : ctx.getParentList(itfInfo).selfEntrySet()) {
+					int id = entry.getIntKey();
 					name = entry.getValue();
-					if (list.getInt(name) < 0) DIST(list, castDistance + (entry.getIntKey()>>>16), name);
+
+					// id's castDistance is smaller
+					// parentList是包含自身的
+					if ((list.getInt(name)&0xFFFF) > (id&0xFFFF)) {
+						list.forcePut((list.size() << 16) | (castDistance + (id & 0xFFFF)), name);
+					}
 				}
 			}
 
 			castDistance++;
-			owner = info.parent();
-		} while (owner != null);
+			String owner = info.parent();
+			if (owner == null) break;
+			info = ctx.getClassInfo(owner);
+			if (info == null) throw new ClassNotFoundException(owner);
+		}
+
+		query = false;
 
 		return this.classList = list;
 	}
 
-	private static void DIST(IntBiMap<String> list, int castDistance, String name) {
-		list.putInt((list.size()<<16) | castDistance, name);
-	}
-
+	// endregion
 	// region 注解
 	private AnnotationSelf ac;
 
-	public synchronized AnnotationSelf annotationInfo() {
+	public AnnotationSelf annotationInfo() {
 		if (ac != null || (owner.modifier() & Opcodes.ACC_ANNOTATION) == 0) return ac;
 
-		AnnotationSelf ac = this.ac = new AnnotationSelf();
-		Annotations attr = owner.parsedAttr(owner.cp(), Attribute.RtAnnotations);
-		if (attr == null) return ac;
+		synchronized (this) {
+			if (ac != null) return ac;
+			AnnotationSelf ac = this.ac = new AnnotationSelf();
 
-		List<Annotation> list = attr.annotations;
-		for (int i = 0; i < list.size(); i++) {
-			Annotation a = list.get(i);
-			switch (a.type) {
-				case "java/lang/annotation/Retention":
-					if (!a.containsKey("value")) return null;
-					switch (a.getEnumValue("value", "RUNTIME")) {
-						case "SOURCE":
-							ac.kind = SOURCE;
-							break;
-						case "CLASS":
-							ac.kind = CLASS;
-							break;
-						case "RUNTIME":
-							ac.kind = RUNTIME;
-							break;
-					}
-					break;
-				case "java/lang/annotation/Repeatable":
-					if (!a.containsKey("value")) return null;
-					ac.repeatOn = a.getClass("value").owner;
-					break;
-				case "java/lang/annotation/Target":
-					int tmp = 0;
-					if (!a.containsKey("value")) return null;
-					List<AnnVal> array = a.getArray("value");
-					for (int j = 0; j < array.size(); j++) {
-						switch (array.get(j).asEnum().field) {
-							case "TYPE":
-								tmp |= TYPE;
-								break;
-							case "FIELD":
-								tmp |= FIELD;
-								break;
-							case "METHOD":
-								tmp |= METHOD;
-								break;
-							case "PARAMETER":
-								tmp |= PARAMETER;
-								break;
-							case "CONSTRUCTOR":
-								tmp |= CONSTRUCTOR;
-								break;
-							case "LOCAL_VARIABLE":
-								tmp |= LOCAL_VARIABLE;
-								break;
-							case "ANNOTATION_TYPE":
-								tmp |= ANNOTATION_TYPE;
-								break;
-							case "PACKAGE":
-								tmp |= PACKAGE;
-								break;
-							case "TYPE_PARAMETER":
-								tmp |= TYPE_PARAMETER;
-								break;
-							case "TYPE_USE":
-								tmp |= TYPE_USE;
-								break;
-						}
-					}
-					ac.applicableTo = tmp;
-					break;
+			List<? extends RawNode> methods = owner.methods();
+			for (int j = 0; j < methods.size(); j++) {
+				MethodNode m = (MethodNode) methods.get(j);
+				if ((m.modifier() & Opcodes.ACC_STATIC) != 0) continue;
+				var dv = m.parsedAttr(owner.cp(), Attribute.AnnotationDefault);
+				if (dv != null) ac.values.put(m.name(), dv.val == null ? new LazyAnnVal(dv) : dv.val);
+				ac.types.put(m.name(), m.returnType());
 			}
+
+			Annotations attr = owner.parsedAttr(owner.cp(), Attribute.RtAnnotations);
+			if (attr == null) return ac;
+
+			List<Annotation> list = attr.annotations;
+			for (int i = 0; i < list.size(); i++) {
+				Annotation a = list.get(i);
+				switch (a.type()) {
+					case "java/lang/annotation/Retention" -> {
+						if (!a.containsKey("value")) throw new NullPointerException("Invalid @Retention");
+						ac.kind = switch (a.getEnumValue("value", "RUNTIME")) {
+							case "SOURCE" -> SOURCE;
+							case "CLASS" -> CLASS;
+							case "RUNTIME" -> RUNTIME;
+							default -> throw new IllegalStateException("Unexpected Retention: "+a.getEnumValue("value", "RUNTIME"));
+						};
+					}
+					case "java/lang/annotation/Repeatable" -> {
+						if (!a.containsKey("value")) throw new NullPointerException("Invalid @Repeatable");
+						ac.repeatOn = a.getClass("value").owner;
+					}
+					case "java/lang/annotation/Target" -> {
+						int tmp = 0;
+						if (!a.containsKey("value")) throw new NullPointerException("Invalid @Target");
+						List<AnnVal> array = a.getArray("value");
+						for (int j = 0; j < array.size(); j++) {
+							tmp |= switch (array.get(j).asEnum().field) {
+								case "TYPE" -> TYPE;
+								case "FIELD" -> FIELD;
+								case "METHOD" -> METHOD;
+								case "PARAMETER" -> PARAMETER;
+								case "CONSTRUCTOR" -> CONSTRUCTOR;
+								case "LOCAL_VARIABLE" -> LOCAL_VARIABLE;
+								case "ANNOTATION_TYPE" -> ANNOTATION_TYPE;
+								case "PACKAGE" -> PACKAGE;
+								case "TYPE_PARAMETER" -> TYPE_PARAMETER;
+								case "TYPE_USE" -> TYPE_USE;
+								case "MODULE" -> MODULE;
+								case "RECORD_COMPONENT" -> RECORD_COMPONENT;
+								default -> 0;
+							};
+						}
+						ac.applicableTo = tmp;
+					}
+					case "roj/compiler/api/Stackable" -> ac.stackable = true;
+				}
+			}
+			return ac;
 		}
-		return ac;
 	}
 
 	// endregion
 	// region 方法
 	private MyHashMap<String, ComponentList> methods;
 
-	public synchronized ComponentList findMethod(ClassContext ctx, String name) throws ClassNotFoundException {
-		if (methods == null) {
-			methods = new MyHashMap<>();
-
-			List<? extends RawNode> methods1 = owner.methods();
-			for (int i = 0; i < methods1.size(); i++) {
-				MethodNode mn = (MethodNode) methods1.get(i);
-				if (mn.name().equals("<clinit>") || (mn.modifier & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) continue;
-
-				MethodList ml = (MethodList) methods.get(mn.name());
-				if (ml == null) methods.put(mn.name(), ml = new MethodList());
-				ml.add(owner, mn);
-			}
-
-			IClass type = owner;
-			List<Object> tmp = new SimpleList<>(); tmp.add(type);
-
-			String parent = type.parent();
-			if (parent != null) {
-				type = ctx.getClassInfo(parent);
-				while (true) {
-					if (type == null) throw new ClassNotFoundException(parent);
-					tmp.add(type);
-					addMethods(ctx, type);
-
-					parent = type.parent();
-					if (parent == null) break;
-					type = ctx.getClassInfo(parent);
-				}
-			}
-
-			// 尽量别走invokeinterface(毕竟多两个字节呢)
-			for (int i = 0; i < tmp.size(); i++) {
-				List<String> list = ((IClass) tmp.get(i)).interfaces();
-				for (int j = 0; j < list.size(); j++)
-					addMethods(ctx, ctx.getClassInfo(list.get(j)));
-			}
-
-			tmp.clear();
-			for (Iterator<ComponentList> itr = methods.values().iterator(); itr.hasNext(); ) {
-				if (itr.next() instanceof MethodList ml && ml.owner == null && ml.pack(owner)) {
-					tmp.add(new MethodListSingle(ml.methods.get(0)));
-					itr.remove();
-				}
-			}
-
-			for (int i = 0; i < tmp.size(); i++) {
-				MethodListSingle list = (MethodListSingle) tmp.get(i);
-				methods.put(list.node.name(), list);
-			}
-		}
-
-		return methods.get(name);
-	}
-
+	public ComponentList findMethod(GlobalContext ctx, String name) {return getMethods(ctx).get(name);}
 	/*
 	 * <pre> 调用的实际方法由以下查找过程选择：
 	 * C = 符号引用的类名称
@@ -244,90 +261,143 @@ public final class ResolveHelper {
 	 * 2. M 未设置 ACC_PRIVATE 或 ACC_STATIC 标志
 	 * 3. 如果方法是在接口 I 中声明的，则接口 I 的子接口中没有 C 的最大特异性超接口方法
 	 */
-	private void addMethods(ClassContext ctx, IClass type) throws ClassNotFoundException {
-		List<? extends RawNode> list = type.methods();
-		for (int i = 0; i < list.size(); i++) {
-			MethodNode mn = (MethodNode) list.get(i);
-			if (mn.name().charAt(0) == '<' || (mn.modifier & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) continue;
+	public MyHashMap<String, ComponentList> getMethods(GlobalContext ctx) {
+		if (methods == null) {
+			synchronized (this) {
+				if (methods != null) return methods;
+				methods = new MyHashMap<>();
 
-			ComponentList cl = methods.get(mn.name());
-			if (cl instanceof MethodList ml) {
-				if (ml.owner == owner) {
+				IClass type = owner;
+				List<? extends RawNode> methods1 = type.methods();
+				MyHashSet<String> remove = new MyHashSet<>();
+				for (int i = 0; i < methods1.size(); i++) {
+					MethodNode mn = (MethodNode) methods1.get(i);
+					// <init> 允许 synthetic
+					if (mn.name().startsWith("<") ? mn.name().equals("<clinit>") : (mn.modifier & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) {
+						remove.add(mn.rawDesc());
+						continue;
+					}
+
+					MethodList ml = (MethodList) methods.get(mn.name());
+					if (ml == null) methods.put(mn.name(), ml = new MethodList());
 					ml.add(type, mn);
 				}
-			} else {
-				methods.put(mn.name(), ctx.methodList(type, mn.name()));
+
+				// Object不会实现接口
+				String className = type.parent();
+				if (className != null) {
+					int i = 0;
+
+					// 尽量别走invokeinterface(毕竟多两个字节呢)
+					List<String> itf = type.interfaces();
+
+					while (true) {
+						IClass info = ctx.getClassInfo(className);
+						if (info == null) {
+							ctx.report(type, Kind.WARNING, -1, "symbol.error.noSuchClass", className);
+						} else for (Map.Entry<String, ComponentList> entry : ctx.getResolveHelper(info).getMethods(ctx).entrySet()) {
+							String key = entry.getKey();
+							if (key.startsWith("<")) continue;
+
+							ComponentList list = entry.getValue();
+
+							ComponentList cl = methods.putIfAbsent(key, list);
+							if (cl instanceof MethodList prev && prev.owner == null) {
+								if (list instanceof MethodList ml) {
+									for (MethodNode node : ml.methods) {
+										if (!remove.contains(node.rawDesc()))
+											prev.add(ctx.getClassInfo(node.owner), node);
+									}
+								} else {
+									MethodNode node = ((MethodListSingle) list).node;
+									if (!remove.contains(node.rawDesc()))
+										prev.add(ctx.getClassInfo(node.owner), node);
+								}
+							}
+						}
+
+						if (i == itf.size()) break;
+						className = itf.get(i++);
+					}
+				}
+
+				for (Map.Entry<String, ComponentList> entry : methods.entrySet()) {
+					if (entry.getValue() instanceof MethodList ml && ml.owner == null && ml.pack(type)) {
+						entry.setValue(new MethodListSingle(ml.methods.get(0)));
+					}
+				}
 			}
 		}
-	}
 
+		return methods;
+	}
 	//endregion
 	//region 字段
 	private MyHashMap<String, ComponentList> fields;
 
-	public synchronized ComponentList findField(ClassContext ctx, String name) throws ClassNotFoundException {
-		block:
+	public ComponentList findField(GlobalContext ctx, String name) {return getFields(ctx).get(name);}
+	public MyHashMap<String, ComponentList> getFields(GlobalContext ctx) {
 		if (fields == null) {
-			List<? extends RawNode> fields1 = owner.fields();
-			if (fields1.isEmpty()) {
-				fields = ctx.getResolveHelper(ctx.getClassInfo(owner.parent())).fields;
-				break block;
-			}
+			synchronized (this) {
+				if (fields != null) return fields;
+				fields = new MyHashMap<>();
 
-			fields = new MyHashMap<>();
+				IClass type = owner;
+				List<? extends RawNode> fields1 = type.fields();
+				for (int i = 0; i < fields1.size(); i++) {
+					FieldNode fn = (FieldNode) fields1.get(i);
 
-			for (int i = 0; i < fields1.size(); i++) {
-				FieldNode fn = (FieldNode) fields1.get(i);
-
-				FieldList fl = (FieldList) fields.get(fn.name());
-				if (fl == null) fields.put(fn.name(), fl = new FieldList());
-				fl.add(owner, fn);
-			}
-
-			IClass type = owner;
-			String parent = type.parent();
-			if (parent != null) {
-				type = ctx.getClassInfo(parent);
-				while (true) {
-					if (type == null) throw new ClassNotFoundException(parent);
-					addFields(ctx, type);
-
-					parent = type.parent();
-					if (parent == null) break;
-					type = ctx.getClassInfo(parent);
-				}
-			}
-
-			List<FieldListSingle> tmp = new SimpleList<>();
-			for (Iterator<ComponentList> itr = fields.values().iterator(); itr.hasNext(); ) {
-				if (itr.next() instanceof FieldList fl && fl.owners.get(0) == owner && fl.pack(owner)) {
-					tmp.add(new FieldListSingle(owner, fl.fields.get(0)));
-					itr.remove();
-				}
-			}
-
-			for (int i = 0; i < tmp.size(); i++)
-				fields.put(tmp.get(i).node.name(), tmp.get(i));
-		}
-
-		return fields.get(name);
-	}
-
-	private void addFields(ClassContext ctx, IClass type) throws ClassNotFoundException {
-		List<? extends RawNode> list = type.fields();
-		for (int i = 0; i < list.size(); i++) {
-			FieldNode fn = (FieldNode) list.get(i);
-			if ((fn.modifier & (Opcodes.ACC_SYNTHETIC)) != 0) continue;
-
-			ComponentList cl = fields.get(fn.name());
-			if (cl instanceof FieldList fl) {
-				if (fl.owners.get(0) == owner) {
+					FieldList fl = (FieldList) fields.get(fn.name());
+					if (fl == null) fields.put(fn.name(), fl = new FieldList());
 					fl.add(type, fn);
 				}
-			} else {
-				fields.put(fn.name(), ctx.fieldList(type, fn.name()));
+
+				String className = type.parent();
+				if (className != null) {
+					int i = 0;
+					List<String> itf = type.interfaces();
+
+					while (true) {
+						IClass info = ctx.getClassInfo(className);
+						if (info == null) {
+							ctx.report(type, Kind.WARNING, -1, "symbol.error.noSuchClass", className);
+							continue;
+						}
+
+						ResolveHelper rh = ctx.getResolveHelper(info);
+						rh.findField(ctx, "");
+
+						for (Map.Entry<String, ComponentList> entry : rh.fields.entrySet()) {
+							String key = entry.getKey();
+							ComponentList list = entry.getValue();
+
+							ComponentList cl = fields.putIfAbsent(key, list);
+							if (cl instanceof FieldList prev && prev.owners.get(0) == type) {
+								if (list instanceof FieldList fl) {
+									SimpleList<FieldNode> nodes = fl.fields;
+									for (int j = 0; j < nodes.size(); j++) {
+										prev.add(fl.owners.get(j), nodes.get(j));
+									}
+								} else {
+									FieldListSingle fl = (FieldListSingle) list;
+									prev.add(fl.owner, fl.node);
+								}
+							}
+						}
+						if (i == itf.size()) break;
+						className = itf.get(i++);
+					}
+				}
+
+				for (Map.Entry<String, ComponentList> entry : fields.entrySet()) {
+					if (entry.getValue() instanceof FieldList fl && fl.owners.get(0) == type && fl.pack(type)) {
+						entry.setValue(new FieldListSingle(type, fl.fields.get(0)));
+					}
+				}
 			}
 		}
+
+		return fields;
 	}
 	//endregion
 	// region 类型拥有者
@@ -337,55 +407,65 @@ public final class ResolveHelper {
 	// a. class Ch<T> extends Su<T>
 	// b. class Ch<T> extends Su<String>
 	// c. class Ch<T> extends Su<List<T>>
-	public synchronized Map<String, List<IType>> getTypeParamOwner(ClassContext ctx) throws ClassNotFoundException {
+	public Map<String, List<IType>> getTypeParamOwner(GlobalContext ctx) throws ClassNotFoundException {
 		if (typeParamOwner == null) {
-			Signature sign = owner.parsedAttr(owner.cp(), Attribute.SIGNATURE);
-			if (sign == null) return typeParamOwner = Collections.emptyMap();
+			synchronized (this) {
+				if (typeParamOwner != null) return typeParamOwner;
 
-			typeParamOwner = new MyHashMap<>();
-			for (IType value : sign.values) {
-				if (value.genericType() == IType.PLACEHOLDER_TYPE) continue;
+				Signature sign = owner.parsedAttr(owner.cp(), Attribute.SIGNATURE);
+				if (sign == null) return typeParamOwner = Collections.emptyMap();
 
-				IClass ref = ctx.getClassInfo(value.owner());
-				if (ref == null) throw new ClassNotFoundException(value.toString());
+				typeParamOwner = new MyHashMap<>();
+				Map<String, List<IType>> tmp = new MyHashMap<>();
+				for (IType value : sign.values) {
+					if (value.genericType() == IType.PLACEHOLDER_TYPE) continue;
 
-				if (value.genericType() == IType.GENERIC_TYPE) {
-					// 大概是不允许用extendType的
-					List<IType> children = ((Generic) value).children;
-					if (Inferrer.hasTypeParam(value)) children = new SimpleList<>(children) {}; // class marker
+					IClass ref = ctx.getClassInfo(value.owner());
+					if (ref == null) throw new ClassNotFoundException(value.toString());
 
-					List<IType> prev = typeParamOwner.putIfAbsent(value.owner(), children);
-					if (prev != null) throw new IllegalArgumentException(owner.name()+" 的泛型签名有误");
+					if (value.genericType() == IType.GENERIC_TYPE) {
+						// 大概是不允许用extendType的
+						List<IType> children = ((Generic) value).children;
+						if (Inferrer.hasTypeParam(value)) {
+							List<IType> c1 = SimpleList.hugeCapacity(children.size());
+							// getClass() marker
+							c1.addAll(children);
+							children = c1;
+						}
+
+						List<IType> prev = tmp.putIfAbsent(value.owner(), children);
+						if (prev != null) throw new IllegalArgumentException(owner.name()+" 的泛型签名有误");
+					}
+
+					typeParamOwner.putAll(ctx.getResolveHelper(ref).getTypeParamOwner(ctx));
 				}
 
-				Map<String, List<IType>> parentMap = ctx.getResolveHelper(ref).getTypeParamOwner(ctx);
-
-				int size = parentMap.size()+typeParamOwner.size();
-				typeParamOwner.putAll(parentMap);
-				if (typeParamOwner.size() != size) throw new IllegalArgumentException(owner.name()+" 的泛型签名有误");
+				typeParamOwner.putAll(tmp);
 			}
 		}
 
 		return typeParamOwner;
 	}
 	// endregion
-	private MyHashMap<String, InnerClasses.InnerClass> subclassByName;
+	private MyHashMap<String, InnerClasses.Item> subclassDecl;
 
-	public synchronized MyHashMap<String, InnerClasses.InnerClass> getInnerClassFlags(ClassContext ctx) {
-		if (subclassByName == null) {
-			subclassByName = new MyHashMap<>();
-			InnerClasses classes = owner.parsedAttr(owner.cp(), Attribute.InnerClasses);
-			if (classes == null) return subclassByName;
+	public MyHashMap<String, InnerClasses.Item> getInnerClasses() {
+		if (subclassDecl == null) {
+			synchronized (this) {
+				if (subclassDecl != null) return subclassDecl;
+				subclassDecl = new MyHashMap<>();
+				var classes = owner.parsedAttr(owner.cp(), Attribute.InnerClasses);
+				if (classes == null) return subclassDecl;
 
-			List<InnerClasses.InnerClass> list = classes.classes;
-			for (int i = 0; i < list.size(); i++) {
-				InnerClasses.InnerClass ref = list.get(i);
-				if (ref.name != null) {
-					subclassByName.put(ref.name, ref);
+				var list = classes.classes;
+				for (int i = 0; i < list.size(); i++) {
+					var ref = list.get(i);
+					if (ref.name != null && owner.name().equals(ref.parent))
+						subclassDecl.put(ref.name, ref);
 				}
 			}
 		}
 
-		return subclassByName;
+		return subclassDecl;
 	}
 }

@@ -20,14 +20,6 @@ public class Generic extends IGeneric {
 	public byte extendType;
 	private byte array;
 
-	public static Generic parameterized(Class<?> owner, Class<?>... params) {
-		List<Type> types = TypeHelper.parseMethod(TypeHelper.class2asm(params, owner));
-		Type own = types.remove(types.size()-1);
-		Generic g = new Generic(own.owner,own.array(),EX_NONE);
-		g.children = Helpers.cast(types);
-		return g;
-	}
-
 	public Generic() {}
 
 	public Generic(String owner) { this.owner = owner; }
@@ -45,10 +37,7 @@ public class Generic extends IGeneric {
 		setArrayDim(array);
 	}
 
-	public boolean isRealGeneric() {
-		return !children.isEmpty() || "*".equals(owner) || extendType != 0 || sub != null;
-	}
-	public boolean isAnyType() { return extendType == EX_EXTENDS && owner.equals("java/lang/Object") && children.isEmpty() && sub == null; }
+	public boolean canBeAny() { return extendType == EX_EXTENDS && owner.equals("java/lang/Object") && children.isEmpty() && sub == null; }
 
 	public void toDesc(CharList sb) {
 		if (extendType != 0) sb.append(extendType == EX_SUPER ? '-' : '+');

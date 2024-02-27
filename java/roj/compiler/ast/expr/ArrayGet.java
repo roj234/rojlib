@@ -7,8 +7,9 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.InsnHelper;
+import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 
@@ -35,11 +36,17 @@ final class ArrayGet extends VarNode {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(CompileContext ctx) {
+	public ExprNode resolve(LocalContext ctx) {
 		array = array.resolve(ctx);
 		index = index.resolve(ctx);
 
-		if (array.type().array() == 0) ctx.report(Kind.ERROR, "arrayGet.error.notArray:"+array.type());
+		if (array.type().array() == 0) {
+			ExprNode override = ctx.getOperatorOverride(array, index, JavaLexer.lBracket);
+			if (override != null) return override;
+
+			ctx.report(Kind.ERROR, "arrayGet.error.notArray:"+array.type());
+			return NaE.RESOLVE_FAILED;
+		}
 		cast = ctx.castTo(index.type(), Type.std(Type.INT), 0);
 
 		if (array.isConstant()) {

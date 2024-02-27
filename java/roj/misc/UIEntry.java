@@ -4,12 +4,18 @@
 
 package roj.misc;
 
+import roj.asm.tree.ConstantData;
+import roj.asm.util.Context;
 import roj.asmx.launcher.EntryPoint;
+import roj.concurrent.TaskPool;
+import roj.io.IOUtil;
+import roj.text.CharList;
 import roj.ui.GuiUtil;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.lang.reflect.Method;
 
 /**
  * @author Roj234
@@ -23,24 +29,57 @@ public class UIEntry extends JFrame {
 	private static void launchUI() {
 		GuiUtil.systemLook();
 		UIEntry f = new UIEntry();
+		try {
+			f.uiInfo.setText(IOUtil.getTextResource("change.log"));
+		} catch (Exception e) {
+			f.uiInfo.setText("changelog已丢失");
+		}
 
+		f.uiCLITool.setText("正在读取……");
 		f.pack();
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		f.setVisible(true);
+
+		TaskPool.Common().submit(() -> {
+			CharList sb = new CharList();
+			try {
+				for (Context ctx : Context.fromZip(IOUtil.getJar(UIEntry.class), null)) {
+					ConstantData data = ctx.getData();
+					int id = data.getMethod("main", "([Ljava/lang/String;)V");
+					String p = data.parent();
+					if (id >= 0 && !p.startsWith("javax/swing/")/* && !p.equals("roj/plugin/Plugin")*/) {
+						sb.append(data.name().replace('/', '.')).append('\n');
+					}
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			f.uiCLITool.setText(sb.toString());
+		});
 	}
 
 	private static void bind(JButton button, String klass) {
 		button.addActionListener(e -> {
 			button.setEnabled(false);
 			try {
-				JFrame frame = (JFrame) Class.forName(klass).newInstance();
-				frame.pack();
-				frame.setResizable(false);
-				frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-				frame.setVisible(true);
-				frame.addWindowListener(new WindowAdapter() {
-					public void windowClosing(WindowEvent e) { button.setEnabled(true); }
-				});
+				String copy = klass;
+				boolean useMainClass = copy.startsWith("^");
+				if (useMainClass) copy = copy.substring(1);
+				Class<?> aClass = Class.forName(copy);
+				if (useMainClass) {
+					Method main = aClass.getDeclaredMethod("main", String[].class);
+					main.setAccessible(true);
+					main.invoke(null, (Object) new String[0]);
+				} else {
+					JFrame frame = (JFrame) aClass.newInstance();
+					frame.pack();
+					frame.setResizable(false);
+					frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+					frame.setVisible(true);
+					frame.addWindowListener(new WindowAdapter() {
+						public void windowClosing(WindowEvent e) { button.setEnabled(true); }
+					});
+				}
 			} catch (Exception ex) {
 				throw new RuntimeException(ex);
 			}
@@ -51,103 +90,153 @@ public class UIEntry extends JFrame {
 		initComponents();
 		bind(uiArchiver, "roj.archive.ui.QZArchiverUI");
 		bind(uiUnarchiver, "roj.archive.ui.UnarchiverUI");
-		bind(uiFindClass, "roj.asmx.misc.FindClass");
+		bind(uiFindClass, "roj.misc.FindClass");
 		bind(uiNovel, "roj.text.novel.NovelFrame");
-		bind(uiNat, "roj.plugins.cross.AEGui");
+		bind(uiNat, "^roj.plugins.frp.AEGui");
 		bind(uiMapper, "roj.asmx.mapper.MapperUI");
 		bind(uiObfuscator, "roj.asmx.mapper.ObfuscatorUI");
-		bind(uiLavacTest, "roj.compiler.LavacUI");
+		bind(uiSM, "roj.novel.SimpleMergeUI");
+		bind(uiDIffFinder, "roj.text.diff.DiffFinder");
+		bind(uiCardSleep, "^roj.plugins.CardSleep");
+
+		uiTest.setEnabled(false);
 	}
 
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
-		scrollPane1 = new JScrollPane();
-		textArea1 = new JTextArea();
-		uiArchiver = new JButton();
-		uiUnarchiver = new JButton();
-		uiFindClass = new JButton();
-		uiMapper = new JButton();
-		uiObfuscator = new JButton();
-		uiLavacTest = new JButton();
-		uiNat = new JButton();
-		uiNovel = new JButton();
+        var label1 = new JLabel();
+        var scrollPane1 = new JScrollPane();
+        uiInfo = new JTextArea();
+        uiArchiver = new JButton();
+        uiUnarchiver = new JButton();
+        uiFindClass = new JButton();
+        uiMapper = new JButton();
+        uiObfuscator = new JButton();
+        uiNat = new JButton();
+        uiNovel = new JButton();
+        uiDIffFinder = new JButton();
+        uiCardSleep = new JButton();
+        uiSM = new JButton();
+        uiTest = new JButton();
+        var label2 = new JLabel();
+        var scrollPane2 = new JScrollPane();
+        uiCLITool = new JTextArea();
 
-		//======== this ========
-		setTitle("\u9009\u62e9\u9700\u8981\u8fdb\u5165\u7684GUI\u529f\u80fd");
-		var contentPane = getContentPane();
-		contentPane.setLayout(null);
+        //======== this ========
+        setTitle("RojLib \u7528\u6237\u754c\u9762\u4e3b\u8981\u5165\u53e3");
+        var contentPane = getContentPane();
+        contentPane.setLayout(null);
 
-		//======== scrollPane1 ========
-		{
-			scrollPane1.setViewportView(textArea1);
-		}
-		contentPane.add(scrollPane1);
-		scrollPane1.setBounds(20, 130, 355, 160);
+        //---- label1 ----
+        label1.setText("\u66f4\u65b0\u65e5\u5fd7");
+        contentPane.add(label1);
+        label1.setBounds(new Rectangle(new Point(20, 95), label1.getPreferredSize()));
 
-		//---- uiArchiver ----
-		uiArchiver.setText("7z\u5e76\u884c\u538b\u7f29");
-		uiArchiver.setMargin(new Insets(2, 2, 2, 2));
-		contentPane.add(uiArchiver);
-		uiArchiver.setBounds(new Rectangle(new Point(45, 15), uiArchiver.getPreferredSize()));
+        //======== scrollPane1 ========
+        {
+            scrollPane1.setViewportView(uiInfo);
+        }
+        contentPane.add(scrollPane1);
+        scrollPane1.setBounds(20, 115, 355, 160);
 
-		//---- uiUnarchiver ----
-		uiUnarchiver.setText("7z\u5e76\u884c\u89e3\u538b");
-		uiUnarchiver.setMargin(new Insets(2, 2, 2, 2));
-		contentPane.add(uiUnarchiver);
-		uiUnarchiver.setBounds(45, 40, 69, 21);
+        //---- uiArchiver ----
+        uiArchiver.setText("7z\u5e76\u884c\u538b\u7f29");
+        uiArchiver.setMargin(new Insets(2, 2, 2, 2));
+        contentPane.add(uiArchiver);
+        uiArchiver.setBounds(new Rectangle(new Point(20, 15), uiArchiver.getPreferredSize()));
 
-		//---- uiFindClass ----
-		uiFindClass.setText("\u5e38\u91cf\u67e5\u8be2");
-		uiFindClass.setMargin(new Insets(2, 2, 2, 2));
-		contentPane.add(uiFindClass);
-		uiFindClass.setBounds(195, 15, 69, 21);
+        //---- uiUnarchiver ----
+        uiUnarchiver.setText("7z\u5e76\u884c\u89e3\u538b");
+        uiUnarchiver.setMargin(new Insets(2, 2, 2, 2));
+        contentPane.add(uiUnarchiver);
+        uiUnarchiver.setBounds(20, 40, 69, 21);
 
-		//---- uiMapper ----
-		uiMapper.setText("\u6620\u5c04\u5668");
-		uiMapper.setMargin(new Insets(2, 2, 2, 2));
-		contentPane.add(uiMapper);
-		uiMapper.setBounds(120, 15, 69, 21);
+        //---- uiFindClass ----
+        uiFindClass.setText("\u5e38\u91cf\u67e5\u8be2");
+        uiFindClass.setMargin(new Insets(2, 2, 2, 2));
+        contentPane.add(uiFindClass);
+        uiFindClass.setBounds(170, 15, uiFindClass.getPreferredSize().width, 21);
 
-		//---- uiObfuscator ----
-		uiObfuscator.setText("\u6df7\u6dc6\u5668");
-		uiObfuscator.setMargin(new Insets(2, 2, 2, 2));
-		contentPane.add(uiObfuscator);
-		uiObfuscator.setBounds(120, 40, 69, 21);
+        //---- uiMapper ----
+        uiMapper.setText("\u6620\u5c04\u5668");
+        uiMapper.setMargin(new Insets(2, 2, 2, 2));
+        contentPane.add(uiMapper);
+        uiMapper.setBounds(95, 15, 69, 21);
 
-		//---- uiLavacTest ----
-		uiLavacTest.setText("LavacTest");
-		uiLavacTest.setMargin(new Insets(2, 2, 2, 2));
-		contentPane.add(uiLavacTest);
-		uiLavacTest.setBounds(195, 40, 69, 21);
+        //---- uiObfuscator ----
+        uiObfuscator.setText("\u6df7\u6dc6\u5668");
+        uiObfuscator.setMargin(new Insets(2, 2, 2, 2));
+        contentPane.add(uiObfuscator);
+        uiObfuscator.setBounds(95, 40, 69, 21);
 
-		//---- uiNat ----
-		uiNat.setText("NAT\u7a7f\u900f\u5de5\u5177");
-		uiNat.setMargin(new Insets(2, 2, 2, 2));
-		contentPane.add(uiNat);
-		uiNat.setBounds(270, 15, 80, 21);
+        //---- uiNat ----
+        uiNat.setText("\u5b89\u5168\u96a7\u9053");
+        uiNat.setMargin(new Insets(2, 2, 2, 2));
+        contentPane.add(uiNat);
+        uiNat.setBounds(315, 40, 65, 21);
 
-		//---- uiNovel ----
-		uiNovel.setText("\u5c0f\u8bf4\u6574\u7406\u5de5\u5177");
-		uiNovel.setMargin(new Insets(2, 2, 2, 2));
-		contentPane.add(uiNovel);
-		uiNovel.setBounds(270, 40, 80, 21);
+        //---- uiNovel ----
+        uiNovel.setText("\u5c0f\u8bf4\u6574\u7406\u5de5\u5177");
+        uiNovel.setMargin(new Insets(2, 2, 2, 2));
+        contentPane.add(uiNovel);
+        uiNovel.setBounds(230, 40, uiNovel.getPreferredSize().width, 21);
 
-		contentPane.setPreferredSize(new Dimension(400, 325));
-		pack();
-		setLocationRelativeTo(getOwner());
+        //---- uiDIffFinder ----
+        uiDIffFinder.setText("\u6587\u4ef6\u6bd4\u8f83");
+        uiDIffFinder.setMargin(new Insets(2, 2, 2, 2));
+        contentPane.add(uiDIffFinder);
+        uiDIffFinder.setBounds(170, 40, uiDIffFinder.getPreferredSize().width, 21);
+
+        //---- uiCardSleep ----
+        uiCardSleep.setText("N\u5361\u7701\u7535\u5de5\u5177");
+        uiCardSleep.setMargin(new Insets(2, 2, 2, 2));
+        contentPane.add(uiCardSleep);
+        uiCardSleep.setBounds(230, 15, 80, uiCardSleep.getPreferredSize().height);
+
+        //---- uiSM ----
+        uiSM.setText("SMUI");
+        contentPane.add(uiSM);
+        uiSM.setBounds(315, 15, 65, uiSM.getPreferredSize().height);
+
+        //---- uiTest ----
+        uiTest.setText("\u6d4b\u8bd5\u529f\u80fd");
+        contentPane.add(uiTest);
+        uiTest.setBounds(new Rectangle(new Point(160, 65), uiTest.getPreferredSize()));
+
+        //---- label2 ----
+        label2.setText("\u547d\u4ee4\u884c\u5de5\u5177");
+        contentPane.add(label2);
+        label2.setBounds(new Rectangle(new Point(25, 280), label2.getPreferredSize()));
+
+        //======== scrollPane2 ========
+        {
+
+            //---- uiCLITool ----
+            uiCLITool.setEditable(false);
+            scrollPane2.setViewportView(uiCLITool);
+        }
+        contentPane.add(scrollPane2);
+        scrollPane2.setBounds(20, 300, 355, 245);
+
+        contentPane.setPreferredSize(new Dimension(400, 565));
+        pack();
+        setLocationRelativeTo(getOwner());
 		// JFormDesigner - End of component initialization  //GEN-END:initComponents  @formatter:on
 	}
 
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
-	private JScrollPane scrollPane1;
-	private JTextArea textArea1;
-	private JButton uiArchiver;
-	private JButton uiUnarchiver;
-	private JButton uiFindClass;
-	private JButton uiMapper;
-	private JButton uiObfuscator;
-	private JButton uiLavacTest;
-	private JButton uiNat;
-	private JButton uiNovel;
+    private JTextArea uiInfo;
+    private JButton uiArchiver;
+    private JButton uiUnarchiver;
+    private JButton uiFindClass;
+    private JButton uiMapper;
+    private JButton uiObfuscator;
+    private JButton uiNat;
+    private JButton uiNovel;
+    private JButton uiDIffFinder;
+    private JButton uiCardSleep;
+    private JButton uiSM;
+    private JButton uiTest;
+    private JTextArea uiCLITool;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

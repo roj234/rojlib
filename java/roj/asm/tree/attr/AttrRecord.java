@@ -5,10 +5,10 @@ import roj.asm.Parser;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.tree.RawNode;
+import roj.collect.SimpleList;
 import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -16,10 +16,10 @@ import java.util.List;
  * @since 2021/1/1 23:12
  */
 public final class AttrRecord extends Attribute {
-	public AttrRecord() { variables = new ArrayList<>(); }
+	public AttrRecord() { variables = new SimpleList<>(); }
 	public AttrRecord(DynByteBuf r, ConstantPool cp) {
 		int len = r.readUnsignedShort();
-		variables = new ArrayList<>(len);
+		variables = new SimpleList<>(len);
 		while (len-- > 0) {
 			Val rd = new Val();
 			variables.add(rd);
@@ -46,7 +46,7 @@ public final class AttrRecord extends Attribute {
 	public String name() { return "Record"; }
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		w.putShort(variables.size());
 		for (int i = 0; i < variables.size(); i++) {
 			Val r = variables.get(i);

@@ -11,6 +11,7 @@ import roj.util.ByteList;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Integer.MIN_VALUE;
 import static roj.archive.qz.xz.rangecoder.RangeCoder.initProbs;
@@ -24,18 +25,16 @@ public final class BCJ2 extends QZComplexCoder {
 	public BCJ2() { segmentSize = 64<<20; }
 	public BCJ2(int size) { segmentSize = size; }
 
-	QZCoder factory() { return this; }
 	private static final byte[] id = {3,3,1,27};
-	public byte[] id() { return id; }
+	public byte[] id() {return id;}
 
-	public int useCount() { return 4; }
-	public int provideCount() { return 1; }
+	public int useCount() {return 4;}
+	public int provideCount() {return 1;}
 
-	public OutputStream[] complexEncode(OutputStream[] out) {
-		return new OutputStream[] { new Encoder(out[0], out[1], out[2], out[3]) };
-	}
+	public OutputStream[] complexEncode(OutputStream[] out) {return new OutputStream[] { new Encoder(out[0], out[1], out[2], out[3]) };}
 
-	public InputStream[] complexDecode(InputStream[] in, long[] uncompressedSize, int sizeBegin) throws IOException {
+	public InputStream[] complexDecode(InputStream[] in, long[] uncompressedSize, int sizeBegin, AtomicInteger memoryLimit) throws IOException {
+		useMemory(memoryLimit, 10);
 		return new InputStream[] { new Decoder(in[0], in[1], in[2], in[3]) };
 	}
 
@@ -222,7 +221,7 @@ public final class BCJ2 extends QZComplexCoder {
 			if (len == 0) return 0;
 			if (!ob.isReadable()) decode(offset+512);
 			if (!ob.isReadable()) return -1;
-			ob.read(b, off, len = Math.min(ob.readableBytes(), len));
+			ob.readFully(b, off, len = Math.min(ob.readableBytes(), len));
 			return len;
 		}
 

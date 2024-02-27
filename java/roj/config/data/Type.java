@@ -7,43 +7,23 @@ package roj.config.data;
  * @since 2021/4/21 22:51
  */
 public enum Type {
-	LIST, MAP, STRING, NULL, BOOL, INTEGER, LONG, DOUBLE, DATE, Int1, Int2, Float4;
+	LIST, MAP, STRING, NULL, BOOL, Int1, Int2, INTEGER, LONG, Float4, DOUBLE, DATE;
 
 	public static final Type[] VALUES = values();
 
-	public boolean isNumber() {
-		return ordinal() >= INTEGER.ordinal();
-	}
+	public boolean isContainer() { return ordinal() <= 1; }
+	public boolean isNumber() { return ordinal() >= Int1.ordinal(); }
 
+	@Deprecated
 	public boolean isSimilar(Type type) {
 		if (this == type) return type != NULL;
 
-		switch (this) {
-			case STRING:
-			case BOOL:
-			case INTEGER:
-			case LONG:
-			case DOUBLE:
-			case DATE:
-			case Int1:
-			case Int2:
-			case Float4:
-				switch (type) {
-					case STRING:
-					case BOOL:
-					case INTEGER:
-					case LONG:
-					case DOUBLE:
-					case Int1:
-					case Int2:
-					case Float4: return true;
-					default: return false;
-				}
-			default: return false;
-		}
-	}
-
-	public boolean isContainer() {
-		return this == MAP || this == LIST;
+		return switch (this) {
+			case STRING, BOOL, INTEGER, LONG, DOUBLE, DATE, Int1, Int2, Float4 -> switch (type) {
+				case STRING, BOOL, INTEGER, LONG, DOUBLE, Int1, Int2, Float4 -> true;
+				default -> false;
+			};
+			default -> false;
+		};
 	}
 }

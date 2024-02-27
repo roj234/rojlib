@@ -2,11 +2,13 @@ package roj.compiler.ast.expr;
 
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
+import roj.asm.type.Type;
 import roj.collect.Hasher;
 import roj.collect.MyHashMap;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
+import roj.compiler.resolve.TypeCast;
 
 import java.util.Map;
 
@@ -24,7 +26,7 @@ final class EasyMap extends ExprNode {
 	public String toString() { return "<EasyMap> "+map; }
 
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if (type != null) return this;
 
 		IType key = null, val = null;
@@ -47,8 +49,11 @@ final class EasyMap extends ExprNode {
 
 		map = map1;
 		type = new Generic("java/util/Map", 0, Generic.EX_NONE);
-		type.addChild(key);
-		type.addChild(val);
+
+		Type wrapper = TypeCast.getWrapper(key);
+		type.addChild(wrapper == null ? key : wrapper);
+		wrapper = TypeCast.getWrapper(key);
+		type.addChild(wrapper == null ? val : wrapper);
 
 		return this;
 	}
@@ -63,12 +68,12 @@ final class EasyMap extends ExprNode {
 		cw.one(DUP);
 		cw.ldc(map.size());
 		cw.invoke(INVOKESPECIAL, "roj/collect/MyHashMap", "<init>", "(I)V");
-		// TODO 是否用变量？
+		var lc = LocalContext.get();
 		for (Map.Entry<ExprNode, ExprNode> entry : map.entrySet()) {
 			cw.one(DUP);
 
-			entry.getKey().writeDyn(cw, cw.ctx1.castTo(entry.getKey().type(), CompileContext.OBJECT_TYPE, 0));
-			entry.getValue().writeDyn(cw, cw.ctx1.castTo(entry.getValue().type(), CompileContext.OBJECT_TYPE, 0));
+			entry.getKey().writeDyn(cw, lc.castTo(entry.getKey().type(), LocalContext.OBJECT_TYPE, 0));
+			entry.getValue().writeDyn(cw, lc.castTo(entry.getValue().type(), LocalContext.OBJECT_TYPE, 0));
 
 			cw.invoke(INVOKEVIRTUAL, "roj/collect/MyHashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
 			cw.one(POP);

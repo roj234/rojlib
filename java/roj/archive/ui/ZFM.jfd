@@ -1,0 +1,632 @@
+JFDML JFormDesigner: "8.2.3.0.386" Java: "17.0.9" encoding: "UTF-8"
+
+new FormModel {
+	contentType: "form/swing"
+	root: new FormRoot {
+		add( new FormWindow( "javax.swing.JFrame", new FormLayoutManager( class java.awt.BorderLayout ) ) {
+			name: "this"
+			"title": "Roj234's ZFM 0.2"
+			add( new FormContainer( "javax.swing.JMenuBar", new FormLayoutManager( class javax.swing.JMenuBar ) ) {
+				name: "menuBar"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+				add( new FormContainer( "javax.swing.JMenu", new FormLayoutManager( class javax.swing.JMenu ) ) {
+					name: "menuFile"
+					"text": "文件"
+					auxiliary() {
+						"JavaCodeGenerator.variableLocal": true
+					}
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnOpen"
+						"text": "打开"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnOpenNew"
+						"text": "新窗口打开"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnOpenSelect"
+						"text": "打开选中项"
+					} )
+					add( new FormComponent( "javax.swing.JPopupMenu$Separator" ) {
+						name: "separator3"
+						auxiliary() {
+							"JavaCodeGenerator.variableLocal": true
+						}
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnSave"
+						"text": "保存"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnExit"
+						"text": "退出"
+					} )
+				} )
+				add( new FormContainer( "javax.swing.JMenu", new FormLayoutManager( class javax.swing.JMenu ) ) {
+					name: "menuEdit"
+					"text": "编辑"
+					auxiliary() {
+						"JavaCodeGenerator.variableLocal": true
+					}
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnRename"
+						"text": "重命名"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnRepath"
+						"text": "移动到"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnCopy"
+						"text": "复制到"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnLink"
+						"text": "链接"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnDelete"
+						"text": "删除"
+					} )
+					add( new FormComponent( "javax.swing.JPopupMenu$Separator" ) {
+						name: "separator4"
+						auxiliary() {
+							"JavaCodeGenerator.variableLocal": true
+						}
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnSplit"
+						"text": "分卷"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnComment"
+						"text": "注释"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnEncrypt"
+						"text": "加密"
+					} )
+				} )
+				add( new FormContainer( "javax.swing.JMenu", new FormLayoutManager( class javax.swing.JMenu ) ) {
+					name: "menuView"
+					"text": "查看"
+					auxiliary() {
+						"JavaCodeGenerator.variableLocal": true
+					}
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnSelAll"
+						"text": "全选"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnSelNone"
+						"text": "全不选"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnSelRev"
+						"text": "反选"
+					} )
+					add( new FormComponent( "javax.swing.JPopupMenu$Separator" ) {
+						name: "separator2"
+						auxiliary() {
+							"JavaCodeGenerator.variableLocal": true
+						}
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnSelRegex"
+						"text": "正则选择"
+					} )
+				} )
+				add( new FormContainer( "javax.swing.JMenu", new FormLayoutManager( class javax.swing.JMenu ) ) {
+					name: "menuAbout"
+					"text": "关于"
+					auxiliary() {
+						"JavaCodeGenerator.variableLocal": true
+					}
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnOptions"
+						"text": "首选项"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnBenchmark"
+						"text": "基准测试"
+					} )
+					add( new FormComponent( "javax.swing.JPopupMenu$Separator" ) {
+						name: "separator1"
+						auxiliary() {
+							"JavaCodeGenerator.variableLocal": true
+						}
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnHelp"
+						"text": "帮助"
+					} )
+					add( new FormComponent( "javax.swing.JMenuItem" ) {
+						name: "btnAbout"
+						"text": "关于ZFM"
+					} )
+				} )
+			}, new FormLayoutConstraints( class java.lang.String ) {
+				"value": "North"
+			} )
+			add( new FormContainer( "javax.swing.JPanel", new FormLayoutManager( class javax.swing.BoxLayout ) {
+				"axis": 1
+			} ) {
+				name: "mainPanel"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+				add( new FormContainer( "javax.swing.JPanel", new FormLayoutManager( class java.awt.GridLayout ) ) {
+					name: "btnPanel"
+					auxiliary() {
+						"JavaCodeGenerator.variableLocal": true
+					}
+					add( new FormComponent( "javax.swing.JButton" ) {
+						name: "btnAdd"
+						"text": "添加"
+						"margin": &Insets0 new java.awt.Insets( 40, 8, 10, 8 )
+					} )
+					add( new FormComponent( "javax.swing.JButton" ) {
+						name: "btnExtract"
+						"text": "提取"
+						"margin": #Insets0
+					} )
+					add( new FormComponent( "javax.swing.JButton" ) {
+						name: "btnTest"
+						"text": "测试"
+						"margin": #Insets0
+					} )
+					add( new FormComponent( "javax.swing.JButton" ) {
+						name: "btnDelete2"
+						"text": "删除"
+						"margin": #Insets0
+					} )
+					add( new FormComponent( "javax.swing.JButton" ) {
+						name: "btnInfo"
+						"text": "信息"
+						"margin": #Insets0
+					} )
+				} )
+				add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
+					name: "treePanel"
+					auxiliary() {
+						"JavaCodeGenerator.variableLocal": true
+					}
+					add( new FormComponent( "javax.swing.JTable" ) {
+						name: "uiTable"
+					} )
+				} )
+			}, new FormLayoutConstraints( class java.lang.String ) {
+				"value": "Center"
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 80, 75 )
+			"size": new java.awt.Dimension( 915, 675 )
+		} )
+		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
+			"autoSize": false
+		} ) {
+			name: "winAbout"
+			"title": "关于ZFM"
+			add( new FormContainer( "javax.swing.JPanel", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
+				"autoSize": false
+			} ) {
+				name: "uiLogo"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 5
+				"height": 80
+				"width": 155
+			} )
+			add( new FormComponent( "javax.swing.JTextPane" ) {
+				name: "textAbout"
+				"text": "ZFM 0.2\n2024-04-24\nCopyright(c) 2018-2024 Roj234\nZFM是一款开源软件\n使用并修改了以Public Domain开源的LibLZMA"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 90
+				"width": 345
+				"height": 80
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnCloseAbout"
+				"text": "OK"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 175
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnGithub"
+				"text": "GitHub"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 285
+				"y": 175
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 1010, 75 )
+			"size": new java.awt.Dimension( 370, 230 )
+		} )
+		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
+			"autoSize": false
+		} ) {
+			name: "winEncrypt"
+			"title": "加密"
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label2"
+				"text": "原密码"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 5
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "uiOldPass"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 35
+				"y": 25
+				"width": 180
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label3"
+				"text": "新密码"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 50
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "uiNewPass"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 35
+				"y": 75
+				"width": 180
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label4"
+				"text": "加密方法(zip)"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 105
+			} )
+			add( new FormComponent( "javax.swing.JComboBox" ) {
+				name: "uiZipMethod"
+				auxiliary() {
+					"JavaCodeGenerator.typeParameters": "CMBoxValue"
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 35
+				"y": 125
+				"width": 120
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label5"
+				"text": "7z AES 循环幂及盐长度"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 150
+			} )
+			add( new FormComponent( "javax.swing.JSpinner" ) {
+				name: "ui7zMethod1"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 35
+				"y": 170
+				"width": 80
+			} )
+			add( new FormComponent( "javax.swing.JSpinner" ) {
+				name: "ui7zMethod2"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 120
+				"y": 170
+				"width": 85
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiDecrypt"
+				"text": "取消加密"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 30
+				"y": 205
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnCloseEncrypt"
+				"text": "提交"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 105
+				"y": 205
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 1010, 320 )
+			"size": new java.awt.Dimension( 240, 270 )
+		} )
+		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
+			"autoSize": false
+		} ) {
+			name: "winExtract"
+			"title": "提取"
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "uiExtractPath"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 15
+				"width": 380
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiSelectPath"
+				"text": "…"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 395
+				"y": 15
+			} )
+			add( new FormComponent( "javax.swing.JTextPane" ) {
+				name: "uiExtractInfo"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 15
+				"y": 40
+				"width": 380
+				"height": 200
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label1"
+				"text": "多线程"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 420
+				"y": 70
+			} )
+			add( new FormComponent( "javax.swing.JSpinner" ) {
+				name: "uiThreads"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 460
+				"y": 65
+				"width": 50
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiExtract"
+				"text": "提取"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 450
+				"y": 225
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 80, 765 )
+			"size": new java.awt.Dimension( 525, 285 )
+		} )
+		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
+			"autoSize": false
+		} ) {
+			name: "winGenericText"
+			"title": "测试、信息、帮助、注释、重命名、移动到、复制到、正则、链接"
+			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
+				name: "scrollPane1"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+				add( new FormComponent( "javax.swing.JTextPane" ) {
+					name: "uiGenericText"
+				} )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 5
+				"y": 5
+				"width": 380
+				"height": 255
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnOkText"
+				"text": "确定"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 30
+				"y": 265
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnCloseText"
+				"text": "取消"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 365
+				"y": 265
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 615, 765 )
+			"size": new java.awt.Dimension( 430, 320 )
+		} )
+		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
+			"autoSize": false
+		} ) {
+			name: "winSplit"
+			"title": "分卷"
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnMerge"
+				"text": "合并"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 85
+				"y": 35
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label6"
+				"text": "用逗号分隔多个"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 20
+				"y": 90
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "uiSplitSizes"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 20
+				"y": 110
+				"width": 105
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnSplit2"
+				"text": "拆分"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 125
+				"y": 110
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 1260, 320 )
+			"size": new java.awt.Dimension( 230, 190 )
+		} )
+		add( new FormWindow( "java.awt.Window", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
+			"autoSize": false
+		} ) {
+			name: "winSave"
+			auxiliary() {
+				"JavaCodeGenerator.customCreateCode": "new Window(null);"
+			}
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label7"
+				"text": "正在保存更改"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 45
+				"y": 50
+			} )
+			add( new FormComponent( "javax.swing.JProgressBar" ) {
+				name: "uiSaveProgress"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 20
+				"y": 115
+				"width": 295
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiCloseSave"
+				"text": "取消"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 280
+				"y": 195
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 1085, 595 )
+			"size": new java.awt.Dimension( 345, 225 )
+		} )
+		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
+			"autoSize": false
+		} ) {
+			name: "dialog1"
+			"title": "原神"
+			add( new FormComponent( "javax.swing.JComboBox" ) {
+				name: "comboBox1"
+				auxiliary() {
+					"JavaCodeGenerator.typeParameters": "CMBoxValue"
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 65
+				"y": 85
+				"width": 130
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "textField1"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 65
+				"y": 115
+				"width": 130
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "textField2"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 65
+				"y": 145
+				"width": 130
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label8"
+				"text": "压缩质量"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 90
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label9"
+				"text": "分卷大小"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 120
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label10"
+				"text": "密码"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 150
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "button1"
+				"text": "Waaagh"
+				"font": new com.jformdesigner.model.SwingDerivedFont( null, 0, 28, true )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 200
+				"y": 185
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "textField3"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 65
+				"y": 15
+				"width": 265
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "textField4"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 65
+				"y": 50
+				"width": 265
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "button2"
+				"text": "Give me some brain"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 220
+				"y": 85
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label11"
+				"text": "from"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 20
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label12"
+				"text": "to"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 55
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "button3"
+				"text": "…"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 330
+				"y": 15
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "button4"
+				"text": "…"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 330
+				"y": 50
+			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 1080, 850 )
+			"size": new java.awt.Dimension( 515, 335 )
+		} )
+	}
+}

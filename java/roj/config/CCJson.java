@@ -1,9 +1,10 @@
 package roj.config;
 
 import roj.config.serial.CVisitor;
-import roj.config.word.Word;
 
-import static roj.config.word.Word.*;
+import java.util.Map;
+
+import static roj.config.Word.*;
 
 /**
  * @author Roj234
@@ -13,9 +14,11 @@ public final class CCJson extends JSONParser implements CCParser {
 	public CCJson() {}
 	public CCJson(int flag) { super(flag); }
 
+	public final Map<String, Integer> dynamicFlags() { return Map.of(); }
+
 	private CVisitor cc;
 	@Override
-	public <CV extends CVisitor> CV parse(CV cv, CharSequence text, int flag) throws ParseException {
+	public <CV extends CVisitor> CV parse(CharSequence text, int flag, CV cv) throws ParseException {
 		this.flag = flag;
 		cc = cv;
 		init(text);
@@ -30,7 +33,7 @@ public final class CCJson extends JSONParser implements CCParser {
 		return cv;
 	}
 
-	static <T extends Parser<?>&CCParser> void jsonList(T wr, int flag) throws ParseException {
+	static <T extends Parser &CCParser> void jsonList(T wr, int flag) throws ParseException {
 		boolean more = true;
 		int size = 0;
 
@@ -39,7 +42,7 @@ public final class CCJson extends JSONParser implements CCParser {
 		while (true) {
 			Word w = wr.next();
 			switch (w.type()) {
-				case right_m_bracket: break o;
+				case rBracket: break o;
 				case comma:
 					if (more) wr.unexpected(",");
 					more = true;
@@ -47,7 +50,7 @@ public final class CCJson extends JSONParser implements CCParser {
 				default: wr.retractWord();
 			}
 
-			if (!more && (flag & LENIENT_COMMA) == 0) wr.unexpected(w.val(), "逗号");
+			if (!more) wr.unexpected(w.val(), "逗号");
 			more = false;
 
 			try {
@@ -61,7 +64,7 @@ public final class CCJson extends JSONParser implements CCParser {
 		wr.cc().pop();
 	}
 	@SuppressWarnings("fallthrough")
-	static <T extends Parser<?>&CCParser> void jsonMap(T wr, int flag) throws ParseException {
+	static <T extends Parser &CCParser> void jsonMap(T wr, int flag) throws ParseException {
 		boolean more = true;
 
 		wr.cc().valueMap();
@@ -69,17 +72,16 @@ public final class CCJson extends JSONParser implements CCParser {
 		while (true) {
 			Word name = wr.next();
 			switch (name.type()) {
-				case right_l_bracket: break o;
+				case rBrace: break o;
 				case comma:
 					if (more) wr.unexpected(",");
 					more = true;
 					continue;
-				case STRING: break;
-				case LITERAL: if ((flag & LITERAL_KEY) != 0) break;
+				case STRING, LITERAL: break;
 				default: wr.unexpected(name.val(), more ? "字符串" : "逗号");
 			}
 
-			if (!more && (flag & LENIENT_COMMA) == 0) wr.unexpected(name.val(), "逗号");
+			if (!more) wr.unexpected(name.val(), "逗号");
 			more = false;
 
 			String k = name.val();
@@ -95,7 +97,7 @@ public final class CCJson extends JSONParser implements CCParser {
 		}
 		wr.cc().pop();
 	}
-	static ParseException adaptError(Parser<?> wr, Exception e) {
+	static ParseException adaptError(Parser wr, Exception e) {
 		ParseException err = wr.err(e.getClass().getName() + ": " + e.getMessage());
 		err.setStackTrace(e.getStackTrace());
 		return err;
@@ -106,21 +108,17 @@ public final class CCJson extends JSONParser implements CCParser {
 		Word w = next();
 		try {
 			switch (w.type()) {
-				case left_m_bracket: jsonList(this, flag); break;
-				case STRING: cc.value(w.val()); break;
-				case DOUBLE: case FLOAT: cc.value(w.asDouble()); break;
-				case INTEGER: cc.value(w.asInt()); break;
-				case LONG: cc.value(w.asLong()); break;
-				case TRUE: cc.value(true); break;
-				case FALSE: cc.value(false); break;
-				case NULL: cc.valueNull(); break;
-				case left_l_bracket: jsonMap(this, flag); break;
-				case LITERAL:
-					if ((flag & LITERAL_KEY) != 0) {
-						cc.value(w.val());
-						break;
-					}
-				default: unexpected(w.val());
+				default -> unexpected(w.val());
+				case lBracket -> jsonList(this, flag);
+				case lBrace -> jsonMap(this, flag);
+				case LITERAL, STRING -> cc.value(w.val());
+				case NULL -> cc.valueNull();
+				case TRUE -> cc.value(true);
+				case FALSE -> cc.value(false);
+				case INTEGER -> cc.value(w.asInt());
+				case LONG -> cc.value(w.asLong());
+				case FLOAT -> cc.value(w.asFloat());
+				case DOUBLE -> cc.value(w.asDouble());
 			}
 		} catch (Exception e) {
 			if (e instanceof ParseException) throw e;

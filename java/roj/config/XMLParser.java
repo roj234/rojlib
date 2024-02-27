@@ -1,91 +1,84 @@
 package roj.config;
 
-import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashSet;
 import roj.collect.TrieTree;
 import roj.config.data.*;
 import roj.config.serial.CVisitor;
 import roj.config.serial.ToEntry;
-import roj.config.serial.ToXEntry;
-import roj.config.word.Word;
-import roj.net.http.HttpUtil;
+import roj.config.serial.ToXml;
 import roj.text.CharList;
+import roj.text.Escape;
+import roj.text.Interner;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
 import java.util.function.Predicate;
 
 import static roj.config.JSONParser.*;
-import static roj.config.word.Word.*;
+import static roj.config.Word.*;
 
 /**
  * XML - 可扩展标记语言（EXtensible Markup Language）
  *
  * @author Roj234
  */
-public class XMLParser extends Parser<CList> {
-	static final short
-		tag_start = 13, tag_end = 14, tag_end_close = 15,
-		equ = 16, ask = 17,
-		tag_start_close = 18, header_start = 19,
-		header_end = 20, CDATA_STRING = 21;
+public class XMLParser extends Parser {
+	private static final short
+		COMMENT = 11, CDATA_STRING = 12,
+		tag_start = 13, tag_start_close = 14, tag_end = 15, tag_end_close = 16,
+		header_start = 17, header_end = 18, equ = 19;
 
 	private static final TrieTree<Word> XML_TOKENS = new TrieTree<>();
 	private static final MyBitSet XML_LENDS = new MyBitSet();
-	private static final Int2IntMap XML_FC = new Int2IntMap();
 	static {
-		addKeywords(XML_TOKENS, 10, "true", "false");
-		addSymbols(XML_TOKENS, XML_LENDS, 13, "<", ">", "/>", "=", "?", "</", "<?", "?>");
+		addKeywords(XML_TOKENS, TRUE, "true", "false");
+		addSymbols(XML_TOKENS, XML_LENDS, tag_start, "<", "</", ">", "/>", "<?", "?>", "=");
 		addWhitespace(XML_LENDS);
 
-		XML_FC.putAll(SIGNED_NUMBER_C2C);
-		XML_FC.put('<', 5); // magic number in switch
+		XML_TOKENS.put("<!--", new Word().init(COMMENT, -99, "-->"));
+		XML_TOKENS.put("<![CDATA[", new Word().init(CDATA_STRING, -98,"]]>"));
 	}
 
-	{ tokens = XML_TOKENS; literalEnd = XML_LENDS; firstChar = XML_FC; }
+	{ tokens = XML_TOKENS; literalEnd = XML_LENDS; firstChar = SIGNED_NUMBER_C2C; }
 
-	public static final int FORCE_XML_HEADER = 1, LENIENT = 2, HTML = 8, PROCESS_ENTITY = 16;
-	private static final MyHashSet<String> HTML_SHORT_TAGS = new MyHashSet<>(TextUtil.split("!doctype|br|img|link|input|source|track|param", '|'));
+	public static final int LENIENT = 1, HTML = 2, DECODE_ENTITY = 4, KEEP_SPACE = 8;
+	private static final MyHashSet<String> HTML_SHORT_TAGS = new MyHashSet<>(TextUtil.split("area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr", '|'));
 
-	public static Document parses(CharSequence string) throws ParseException {
-		return new XMLParser().parseToXml(string, LENIENT);
-	}
-	public static Document parses(CharSequence string, int flag) throws ParseException {
-		return new XMLParser().parseToXml(string, flag);
-	}
+	public static Document parses(CharSequence string) throws ParseException { return new XMLParser().parseToXml(string, LENIENT); }
+	public static Document parses(CharSequence string, int flag) throws ParseException { return new XMLParser().parseToXml(string, flag); }
 
 	@Override
-	public final int availableFlags() { return FORCE_XML_HEADER | LENIENT | UNESCAPED_SINGLE_QUOTE | PROCESS_ENTITY; }
-
+	public final Map<String, Integer> dynamicFlags() { return Map.of("Lenient", LENIENT, "HTML", HTML, "DecodeEntity", DECODE_ENTITY, "KeepSpace", KEEP_SPACE); }
 	@Override
-	public final String format() { return "XML"; }
+	public final ConfigMaster format() { return ConfigMaster.XML; }
 
 	public Document parseToXml(CharSequence text, int flag) throws ParseException {
-		ToXEntry entry = new ToXEntry();
-		parse(entry, text, flag);
+		ToXml entry = new ToXml();
+		parse(text, flag, entry);
 		return (Document) entry.get();
 	}
 
 	public Document parseToXml(File file, int flag) throws ParseException, IOException {
-		ToXEntry entry = new ToXEntry();
-		parseRaw(entry, file, flag);
+		ToXml entry = new ToXml();
+		parse(file, flag, entry);
 		return (Document) entry.get();
 	}
 
 	@Override
-	public CList parse(CharSequence text, int flag) throws ParseException {
+	public CEntry parse(CharSequence text, int flag) throws ParseException {
 		ToEntry entry = new ToEntry();
-		parse(entry, text, flag);
-		return entry.get().asList();
+		parse(text, flag, entry);
+		return entry.get();
 	}
 
 	private CVisitor cc;
 
 	@Override
-	public <CV extends CVisitor> CV parse(CV cv, CharSequence text, int flag) throws ParseException {
+	public <CV extends CVisitor> CV parse(CharSequence text, int flag, CV cv) throws ParseException {
 		this.flag = flag;
 		cc = cv;
 		init(text);
@@ -106,9 +99,8 @@ public class XMLParser extends Parser<CList> {
 
 		Word w = next();
 		if (w.type() != header_start) {
-			if ((flag & FORCE_XML_HEADER) != 0) unexpected(w.val(), "<?xml");
 			retractWord();
-			cc.vsopt("xml:headless", true);
+			cc.setProperty("xml:headless", true);
 		} else {
 			if (!readLiteral().val().equalsIgnoreCase("xml")) {
 				throw err("<? 但不是 <?xml");
@@ -131,7 +123,7 @@ public class XMLParser extends Parser<CList> {
 		while (true) {
 			w = next();
 			if (w.type() != tag_start) {
-				if ((flag & HTML) == 0 || w.type() == EOF)
+				if ((flag & LENIENT) == 0 || w.type() == EOF)
 					break;
 			}
 			ccXmlElem();
@@ -143,7 +135,7 @@ public class XMLParser extends Parser<CList> {
 	}
 
 	private void ccXmlElem() throws ParseException {
-		String name = except(LITERAL, "元素名称").val();
+		String name = Interner.intern(except(LITERAL, "元素名称").val());
 
 		cc.valueList();
 		cc.value(name);
@@ -162,24 +154,24 @@ public class XMLParser extends Parser<CList> {
 			cc.pop();
 		}
 
-		if (w.type() == tag_end_close || !needCLOSE.test(name)) {
-			cc.vsopt("xml:short_tag", true);
+		if (w.type() == tag_end_close || name.equals("!DOCTYPE") || !needCLOSE.test(name)) {
+			cc.setProperty("xml:short_tag", true);
 			cc.pop();
 			return;
 		}
 
 		int i = 0;
 
-		w = readValue();
+		w = readElementValue();
 		flushBefore(index);
 
 		if (w.type() != tag_start_close) {
 			cc.valueList();
 
-			label:
+			loop:
 			while (true) {
 				switch (w.type()) {
-					case tag_start_close: break label;
+					case tag_start_close: break loop;
 					case tag_start:
 						try {
 							ccXmlElem();
@@ -187,10 +179,11 @@ public class XMLParser extends Parser<CList> {
 							throw e.addPath('.'+name+'['+i+']');
 						}
 						break;
-					case CDATA_STRING: cc.value(w.val()); cc.vsopt("xml:cdata", true); break;
+					case COMMENT: cc.comment(w.val()); break;
+					case CDATA_STRING: cc.value(w.val()); cc.setProperty("xml:cdata", true); break;
 					case LITERAL: cc.value(w.val()); break;
 					case EOF:
-						if ((flag & HTML) != 0) {
+						if ((flag & LENIENT) != 0) {
 							cc.pop();
 							cc.pop();
 							return;
@@ -200,7 +193,7 @@ public class XMLParser extends Parser<CList> {
 				}
 
 				i++;
-				w = readValue();
+				w = readElementValue();
 				flushBefore(index);
 			}
 
@@ -208,7 +201,7 @@ public class XMLParser extends Parser<CList> {
 		}
 
 		if (!name.equals(except(LITERAL, "元素名称").val())) {
-			if ((flag & LENIENT) == 0) throw err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
+			if ((flag & LENIENT) == 0) throw err("结束标签不匹配! 需要 "+name+" 找到 "+w.val());
 			errorTag = w.val();
 		}
 		except(tag_end, ">");
@@ -217,11 +210,11 @@ public class XMLParser extends Parser<CList> {
 	}
 
 	private Word readAttribute(Word w) throws ParseException {
-		cc.key(w.val());
+		cc.key(Interner.intern(w.val()));
 		w = next();
 
 		if (w.type() == equ) {
-			of(next()).forEachChild(cc);
+			attrVal(next()).accept(cc);
 			return next();
 		} else {
 			cc.valueNull();
@@ -231,7 +224,7 @@ public class XMLParser extends Parser<CList> {
 
 	@SuppressWarnings("fallthrough")
 	public static boolean literalSafe(CharSequence text) {
-		if (LITERAL_UNSAFE) return false;
+		if (ALWAYS_ESCAPE) return false;
 		if (text.length() == 0) return false;
 
 		for (int i = 0; i < text.length(); i++) {
@@ -241,20 +234,18 @@ public class XMLParser extends Parser<CList> {
 		return true;
 	}
 
-	@Deprecated
-	public static CEntry of(Word w) {
+	public static CEntry attrVal(Word w) {
 		switch (w.type()) {
 			case TRUE: return CBoolean.TRUE;
 			case FALSE: return CBoolean.FALSE;
 			case NULL: return CNull.NULL;
-			case DOUBLE:
-			case FLOAT: return CDouble.valueOf(w.asDouble());
-			case INTEGER: return CInteger.valueOf(w.asInt());
+			case FLOAT: return CFloat.valueOf(w.asFloat());
+			case DOUBLE: return CDouble.valueOf(w.asDouble());
+			case INTEGER: return CInt.valueOf(w.asInt());
 			case LONG: return CLong.valueOf(w.asLong());
-			case STRING:
-			case LITERAL: return CString.valueOf(w.val());
+			case STRING, LITERAL: return CString.valueOf(w.val());
 		}
-		throw new IllegalArgumentException("不是简单类型:" + w);
+		throw new IllegalArgumentException("不是简单类型:"+w);
 	}
 
 	public Predicate<String> needCLOSE = Helpers.alwaysTrue();
@@ -273,27 +264,23 @@ public class XMLParser extends Parser<CList> {
 
 		while (i < in.length()) {
 			char c = in.charAt(i);
-			switch (XML_FC.getOrDefaultInt(c, 0)) {
+			switch (SIGNED_NUMBER_C2C.getOrDefaultInt(c, 0)) {
 				case C_MAY__NUMBER_SIGN:
 					if (i+1 < in.length() && NUMBER.contains(in.charAt(i+1))) {
 						prevIndex = index = i;
 						return readDigit(true);
 					}
 					// fall to literal(symbol)
-				default: prevIndex = index = i; return readSymbol();
+				default:
+					prevIndex = index = i;
+					Word w = readSymbol();
+					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
+					return w;
 				case C_NUMBER: prevIndex = index = i; return readDigit(false);
 				case C_STRING:
 					prevIndex = i;
 					index = i+1;
-					return formClip(STRING, readSlashString(c, (flag & UNESCAPED_SINGLE_QUOTE) == 0 || c == '"'));
-				case 5:
-					prevIndex = index = i;
-					int j = checkCommentOrCDATA(i+1, false);
-					if (j > 0) formClip(CDATA_STRING, in.subSequence(i+9, j));
-					if (j == 0) return readSymbol();
-					i = index;
-				continue;
-
+					return formClip(STRING, readSlashString(c, true));
 				case C_WHITESPACE: i++;
 			}
 		}
@@ -301,100 +288,89 @@ public class XMLParser extends Parser<CList> {
 		return eof();
 	}
 
-	final Word readValue() throws ParseException {
+	/**
+	 * 将开头结尾空格替换为一个的字符串，或元素
+	 */
+	final Word readElementValue() throws ParseException {
 		CharSequence in = input;
 		int i = index;
+		if (i == in.length()) return eof();
 		int prevI = i;
 
-		int c = 0;
-		while (i < in.length()) {
+		// skip and collect whitespace
+		int c;
+		while (true) {
 			c = in.charAt(i);
 			if (!WHITESPACE.contains(c)) break;
-			i++;
+
+			if (++i == in.length()) {
+				index = i;
+				return eof();
+			}
 		}
 		index = i;
-		if (i == in.length()) return eof();
 
-		while (c == '<') {
-			c = checkCommentOrCDATA(i+1, false);
-			if (c > 0) return formClip(CDATA_STRING, in.subSequence(i+9, c));
-
-			i = index;
-			if (c == 0) break;
-			c = in.charAt(i);
+		if (in.charAt(i) == '<' && ((flag&KEEP_SPACE) == 0 || prevI == i)) {
+			// includes tag_start, tag_end
+			// and CDATA_STRING (and skipped COMMEND)
+			return tryMatchToken();
 		}
 
-		Word w = tryMatchToken();
-		if (w != null) return w;
+		// 上面部分和readWord差不多，除了不处理数字什么的
+		// 下面处理字符串，读到<为止
 
+		// 规定：不保留元素之间的纯空白字符串
+		// 非空白字符串头尾的空白字符串会被替换为单个空格
 		CharList v = found; v.clear();
 
 		// restore whitespace
-		i = prevI;
+		if (i != prevI) v.append(' ');
+		int lastNonEmpty = prevI = i;
 
-		findstr:
+		boolean hasEntity = false;
 		while (i < in.length()) {
 			c = in.charAt(i);
-			while (c == '<') {
-				v.append(in, prevI, i);
-
-				c = checkCommentOrCDATA(i+1, true);
-				if (c >= 0) {
-					prevI = i;
-					break findstr;
-				}
-
-				prevI = i = index;
-				continue findstr;
+			if (c == '<') {
+				// 如果是comment，那么拆成两个字符串块是应该的吗？
+				// 20240319 我暂时感觉是应该的，因为某些解析器中comment也是element
+				break;
 			}
+			if (c == '&') hasEntity = true;
 
-			if (c == '&' && (flag & PROCESS_ENTITY) != 0) {
-				v.append(in, prevI, i++);
+			i++;
 
-				int j = i;
-				while (j < in.length()) {
-					c = in.charAt(j);
-					if (c == ';') break;
-					j++;
-				}
-
-				handleAmp(in.subSequence(i, j), v);
-				prevI = i = j;
-			} else {
-				i++;
-			}
+			if (!WHITESPACE.contains(c)) lastNonEmpty = i;
 		}
-		v.append(in, prevI, i);
+
+		if (hasEntity && (flag&DECODE_ENTITY) != 0) {
+			Escape.deHtmlEntities_Append(v, in.subSequence(prevI, lastNonEmpty));
+		} else {
+			v.append(in, prevI, lastNonEmpty);
+		}
+
+		if (lastNonEmpty != i || (flag&KEEP_SPACE) != 0) v.append(' ');
 
 		index = i;
 		return formClip(LITERAL, v);
 	}
 
-	private int checkCommentOrCDATA(int i, boolean quick) throws ParseException {
-		CharSequence in = input;
-		if (TextUtil.regionMatches("!--", 0, in, i)) { // <!--
-			int j = TextUtil.gIndexOf(in, "-->", i+3, in.length());
-			if (j < 0) throw err("在注释结束前遇到了文件尾");
-			if (comment != null) {
-				comment.clear();
-				cc.comment(comment.append(in, i+3, j).toString());
-			}
-			index = j+3;
-			return -1;
-		} else if (TextUtil.regionMatches("![CDATA[", 0, in, i)) { // CDATA
-			if (quick) return 1;
-
-			int j = TextUtil.gIndexOf(in, "]]>", i +8, in.length());
-			if (j < 0) throw err("在CDATA结束前遇到了文件尾");
-
-			index = j+3;
-			return j;
+	@Override
+	protected Word onSpecialToken(Word w) throws ParseException {
+		String matcher = w.type() == CDATA_STRING ? "]]>" : "-->";
+		int i;
+		try {
+			i = TextUtil.gIndexOf(input, matcher, index, input.length());
+		} catch (Exception e) {
+			i = -1;
 		}
 
-		return 0;
-	}
+		if (i < 0) throw err(w.type() == CDATA_STRING ? "未结束的CDATA标签" : "未结束的注释", index);
 
-	protected void handleAmp(CharSequence seq, CharList out) throws ParseException { HttpUtil.htmlspecial_decode_all(out, seq); }
+		found.clear();
+		found.append(input, index, i);
+		index = i+3;
+		return formClip(w.type(), found.toString());
+	}
 
 	@Override
 	protected final Word onInvalidNumber(int flag, int i, String reason) throws ParseException { return readLiteral(); }

@@ -2,9 +2,9 @@ package roj.asm.tree.attr;
 
 import roj.asm.cp.ConstantPool;
 import roj.collect.SimpleList;
+import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -12,18 +12,13 @@ import java.util.List;
  * @since 2021/5/29 17:16
  */
 public final class AttrClassList extends Attribute {
-	public static final String
-		EXCEPTIONS = "Exceptions",
-		NEST_MEMBERS = "NestMembers",
-		PERMITTED_SUBCLASSES = "PermittedSubclasses",
-		MODULE_PACKAGES = "ModulePackages";
-	private static final int MODULE_PACKAGES_ID = NAMED_ID.getInt(MODULE_PACKAGES);
-
+	private static final int MODULE_PACKAGES_ID = NAMED_ID.getInt("ModulePackages");
 	private final byte name;
 
-	public AttrClassList(String name) {
-		this.name = (byte) NAMED_ID.getInt(name);
-		value = new ArrayList<>();
+	public AttrClassList(AttributeKey<AttrClassList> key) {this(key, new SimpleList<>());}
+	public AttrClassList(AttributeKey<AttrClassList> key, List<String> list) {
+		this.name = (byte) NAMED_ID.getInt(key.name);
+		value = list;
 	}
 
 	public AttrClassList(String name, DynByteBuf r, ConstantPool pool) {
@@ -41,7 +36,7 @@ public final class AttrClassList extends Attribute {
 	@Override
 	public String name() { return NAMED_ID.get(name); }
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		List<String> list = value;
 		w.putShort(list.size());
 

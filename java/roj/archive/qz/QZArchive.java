@@ -1,34 +1,34 @@
 package roj.archive.qz;
 
+import org.jetbrains.annotations.NotNull;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
-import roj.archive.ChecksumInputStream;
-import roj.archive.SourceStreamCAS;
+import roj.archive.ArchiveUtils;
+import roj.archive.CRC32InputStream;
 import roj.collect.*;
 import roj.concurrent.TaskHandler;
-import roj.crypt.CRCAny;
+import roj.crypt.CRC32s;
+import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.LimitInputStream;
 import roj.io.SourceInputStream;
 import roj.io.buf.BufferPool;
-import roj.io.source.BufferedSource;
-import roj.io.source.FileSource;
 import roj.io.source.Source;
-import roj.io.source.SplittedSource;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.Helpers;
 
-import java.io.*;
+import java.io.EOFException;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.channels.AsynchronousCloseException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
-import java.util.function.ObjLongConsumer;
-import java.util.zip.CRC32;
 
 import static roj.archive.qz.BlockId.*;
 import static roj.reflect.ReflectionUtils.u;
@@ -44,60 +44,52 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	private QZEntry[] entries;
 	private MyHashMap<String, QZEntry> byName;
 
-	private boolean recovery;
+	public static final byte FLAG_RECOVERY = 1, FLAG_SKIP_METADATA = 2;
 	private final byte[] password;
 	private int maxFileCount = 0xFFFFF, memoryLimitKb = 131072;
 
 	public QZArchive(String path) throws IOException { this(new File(path), null); }
 	public QZArchive(File file) throws IOException { this(file, null); }
 	public QZArchive(File file, String pass) throws IOException {
-		if (!file.isFile()) throw new FileNotFoundException(file.getName());
-
+		r = ArchiveUtils.tryOpenSplitArchive(file, true);
 		password = pass == null ? null : pass.getBytes(StandardCharsets.UTF_16LE);
-
-		r = new FileSource(file, false);
-		if (file.getName().endsWith(".001")) {
-			r = BufferedSource.autoClose(new SplittedSource((FileSource) r, -1));
-		}
-
 		reload();
 	}
 
 	public QZArchive(Source s) throws IOException { this(s, null); }
 	public QZArchive(Source s, String pass) throws IOException {
-		password = pass == null ? null : pass.getBytes(StandardCharsets.UTF_16LE);
-
 		r = s;
 		r.seek(0);
+		password = pass == null ? null : pass.getBytes(StandardCharsets.UTF_16LE);
 		reload();
 	}
-	public QZArchive(Source s, boolean recovery, int maxFileCount, byte[] pass) {
+	public QZArchive(Source s, int recovery, int maxFileCount, byte[] pass) {
 		r = s;
-		this.recovery = recovery;
+		this.flag = (byte) recovery;
 		this.password = pass;
 		this.maxFileCount = maxFileCount;
+		this.entries = new QZEntry[0];
 	}
 
 	public void setMemoryLimitKb(int v) { memoryLimitKb = v; }
 
 	public Source getFile() { return r; }
-	public final boolean isEmpty() { return entries == null; }
+	public final boolean isEmpty() { return entries.length == 0; }
 	public WordBlock[] getWordBlocks() { return blocks; }
 
-	@SuppressWarnings("deprecation")
 	public QZFileWriter append() throws IOException {
+		if (!r.isWritable()) throw new IllegalStateException("Source ["+r+"] not writable");
+
 		QZFileWriter fw = new QZFileWriter(r);
 
-		if (entries != null) {
-			for (QZEntry ent : entries) {
-				if (ent.uSize > 0) fw.files.add(ent);
-				else fw.emptyFiles.add(ent);
-			}
+		for (QZEntry ent : entries) {
+			if (ent.uSize > 0) fw.files.add(ent);
+			else fw.emptyFiles.add(ent);
 		}
 
 		if (blocks != null) {
-			fw.blocks.setRawArray(blocks);
-			fw.blocks.i_setSize(blocks.length);
+			fw.blocks._setArray(blocks);
+			fw.blocks._setSize(blocks.length);
 
 			WordBlock b = blocks[blocks.length-1];
 			r.seek(b.offset+b.size());
@@ -114,6 +106,11 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		else byName.clear();
 		entries = null;
 
+		if (fpRead != r) {
+			if (fpRead != null) fpRead.close();
+			fpRead = r;
+		}
+
 		try {
 			Loader loader = new Loader(this);
 			loader.load();
@@ -125,7 +122,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		}
 	}
 
-	static final long QZ_HEADER = 0x377abcaf271c_00_02L;
+	public static final long QZ_HEADER = 0x377abcaf271c_00_02L;
 	private static final class Loader {
 		// -- IN --
 		final QZArchive that;
@@ -135,26 +132,17 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		private long offset;
 		private long[] streamLen;
 
+		//共享以减少无用对象
+		final MyHashSet<Object[]> coders = new MyHashSet<>(Hasher.array(Object[].class));
+		final QZCoder[] temp = new QZCoder[32];
+		final Int2IntBiMap pipe1 = new Int2IntBiMap();
+		final int[] sorted1 = new int[32];
+
 		WordBlock[] blocks;
 		QZEntry[] files;
 
 		// -- INTERNAL --
 		private ByteList buf = ByteList.EMPTY;
-		private static final ObjLongConsumer<QZEntry>[] attributeReader = Helpers.cast(new ObjLongConsumer<?>[4]);
-		static {
-			attributeReader[0] = (k, v) -> {
-				k.flag |= QZEntry.CT;
-				k.createTime = v;
-			};
-			attributeReader[1] = (k, v) -> {
-				k.flag |= QZEntry.AT;
-				k.accessTime = v;
-			};
-			attributeReader[2] = (k, v) -> {
-				k.flag |= QZEntry.MT;
-				k.modifyTime = v;
-			};
-		}
 
 		final void load() throws IOException {
 			streamLen = null;
@@ -166,36 +154,40 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				ByteList buf = read(32);
 
 				if ((buf.readLong() >>> 16) != (QZ_HEADER >>> 16))
-					throw new IOException("文件头错误"+Long.toHexString(buf.readLong(0)>>>16));
+					throw new CorruptedInputException("文件头错误"+Long.toHexString(buf.readLong(0)>>>16));
 				buf.rIndex = 6;
 
 				int major = buf.readUnsignedByte();
 				int minor = buf.readUnsignedByte();
 				if (major != 0 || minor > 4)
-					throw new IOException("不支持的版本"+major+"."+minor);
+					throw new UnsupportedOperationException("不支持的版本"+major+"."+minor);
 
 				buf.rIndex = 12;
 				long offset = buf.readLongLE();
 				long length = buf.readLongLE();
 				if ((offset|length) < 0 || offset+length > that.r.length()) {
-					throw new IOException("目录表偏移错误"+offset+'+'+length+",len="+that.r.length());
+					throw new CorruptedInputException("目录表偏移错误"+offset+'+'+length+",len="+that.r.length());
 				}
 
-				int crc = CRCAny.CRC_32.INIT_VALUE;
-				crc = CRCAny.CRC_32.update(crc, buf.list, buf.arrayOffset()+12, 20);
-				crc = CRCAny.CRC_32.retVal(crc);
+				int crc = CRC32s.once(buf.list, buf.arrayOffset()+12, 20);
 				int myCrc = buf.readIntLE(8);
 				if (crc != myCrc) {
 					// https://www.7-zip.org/recover.html : if crc, offset and length are zero
-					if ((offset|length|myCrc) == 0 && that.recovery) {
-						recoverFT();
-						return;
+					if (that.isRecovering()) {
+						if ((offset|length|myCrc) == 0) {
+							recoverFT();
+							return;
+						}
+					} else {
+						throw new CorruptedInputException("文件头校验错误"+Integer.toHexString(crc)+"/"+Integer.toHexString(myCrc));
 					}
-					throw new IOException("文件头校验错误"+Integer.toHexString(crc)+"/"+Integer.toHexString(myCrc));
 				}
 
 				if (length > that.maxFileCount) throw new IOException("文件表过大"+length);
-				if (length == 0) return;
+				if (length == 0) {
+					files = new QZEntry[0];
+					return;
+				}
 
 				myCrc = buf.readIntLE();
 
@@ -203,10 +195,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				that.r.seek(32+offset);
 				buf = read((int) length);
 
-				crc = CRCAny.CRC_32.INIT_VALUE;
-				crc = CRCAny.CRC_32.update(crc, buf.list, buf.arrayOffset(), buf.wIndex());
-				crc = CRCAny.CRC_32.retVal(crc);
-				if (crc != myCrc) throw new IOException("元数据校验错误"+Integer.toHexString(crc)+"/"+Integer.toHexString(myCrc));
+				crc = CRC32s.once(buf.list, buf.arrayOffset(), buf.wIndex());
+				if (crc != myCrc && !that.isRecovering()) throw new CorruptedInputException("元数据校验错误 got 0x"+Integer.toHexString(crc)+"/except 0x"+Integer.toHexString(myCrc));
 
 				readHeader();
 			} finally {
@@ -254,7 +244,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			if (id == kAdditionalStreamsInfo) {
 				readStreamInfo();
 				id = buf.readUnsignedByte();
-				throw new IOException("kAdditionalStreamsInfo=="+this);
+				throw new UnsupportedOperationException("kAdditionalStreamsInfo=="+this);
 			}
 
 			if (id == kMainStreamsInfo) {
@@ -273,19 +263,20 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		private void readEncodedHeader() throws IOException {
 			readStreamInfo();
 
-			if (blocks.length == 0) throw new IOException("元数据错误");
+			if (blocks.length != 1) throw new CorruptedInputException("元数据错误");
 			if (files != null) error("files != null");
 
 			computeOffset();
 			WordBlock b = blocks[0];
+			blocks = null;
 
 			buf.close();
 
-			try (InputStream in = that.getSolidStream(b, null)) {
+			try (InputStream in = that.getSolidStream(b, null, false)) {
 				int size = (int) b.uSize;
 				buf = (ByteList) BufferPool.buffer(false, size);
 				int read = buf.readStream(in, size);
-				if (read < size) throw new EOFException("数据流过早终止");
+				if (read != size || in.read() >= 0) throw new EOFException("数据流过早终止");
 			}
 		}
 
@@ -312,7 +303,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			if (id == kCRC) {
 				MyBitSet hasCrc = readBitsOrTrue(count);
 				// int32(LE)
-				buf.rIndex += hasCrc.size() * 4;
+				buf.rIndex += hasCrc.size() << 2;
 
 				id = buf.readUnsignedByte();
 			}
@@ -327,18 +318,19 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 			count = readVarInt();
 
-			if (buf.get() != 0) error("kFolder.external");
+			if (buf.readByte() != 0) error("kFolder.external");
 
-			WordBlock[] blocks = this.blocks = new WordBlock[count];
-			for (int i = 0; i < count; i++) blocks[i] = readBlock();
+			var blocks = this.blocks = new WordBlock[count];
+			var tempSorter = new int[count][];
+			for (int i = 0; i < count; i++) blocks[i] = readBlock(tempSorter, i);
 
 			id = buf.readUnsignedByte();
 			if (id != kCodersUnPackSize) fatalError();
 
-			for (WordBlock b : blocks) {
-				int uSizeId = b.complexCoder != null
-					? b.complexCoder.setUSizeId(b)
-					: b.hasCrc >>> 2;
+			for (int k = 0; k < blocks.length; k++) {
+				var b = blocks[k];
+				var cc = b.complexCoder();
+				int uSizeId = cc != null ? cc.initSizeId(b) : b.hasCrc >>> 2;
 
 				long[] out = b.outSizes;
 				int i = 0;
@@ -348,16 +340,12 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					else out[i++] = size;
 				}
 
-				if (b.complexCoder == null && out.length > 0) {
-					long[] sortedSize = new long[out.length];
-					Int2IntMap sorter = ((Int2IntMap) b.tmp);
+				var sorter = tempSorter[k];
+				if (sorter != null) {
+					var sortedSize = new long[out.length];
 					for (i = 0; i < out.length; i++)
-						sortedSize[i] = out[sorter.getOrDefaultInt(i,-1)];
-
+						sortedSize[i] = out[sorter[i]];
 					b.outSizes = sortedSize;
-
-					// no use
-					b.tmp = null;
 				}
 			}
 
@@ -384,27 +372,27 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 			end(id);
 		}
-		private WordBlock readBlock() throws IOException {
+		private WordBlock readBlock(int[][] sorterArr, int thisId) throws IOException {
 			WordBlock b = new WordBlock();
 
 			int ioLen = readVarInt(32);
 			if (ioLen == 0) error("没有coder");
-			QZCoder[] coders = new QZCoder[ioLen];
 
+			QZCoder[] coders = temp;
 			for (int i = 0; i < ioLen; i++) {
 				int flag = buf.readUnsignedByte();
 
 				boolean complex = (flag & 0x10) != 0;
 				boolean prop = (flag & 0x20) != 0;
-				boolean alternative = (flag & 0x80) != 0;
-				if (alternative) error("coder["+i+"].alternative");
+				boolean alternate = (flag & 0x80) != 0;
+				if (alternate) error("coder["+i+"].alternate");
 
 				if (complex) {
 					buf.rIndex--;
-					return readComplexBlock(coders, b, i);
+					return readComplexBlock(coders, b, i, ioLen);
 				}
 
-				QZCoder c = coders[i] = QZCoder.create(buf, flag&0xF);
+				var c = coders[i] = QZCoder.create(buf, flag&0xF);
 
 				if (prop) {
 					int len = readVarInt(0xFF);
@@ -415,24 +403,27 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			}
 
 			int pipeCount = ioLen-1;
-			Int2IntBiMap pipe = new Int2IntBiMap(pipeCount);
-			Int2IntMap sorter = new Int2IntMap(ioLen);
+			var pipe = pipe1; pipe.clear();
+			// 物理顺序index到排序后顺序val的映射
+			var sortedIds = sorted1;
 
 			if (pipeCount > 0) {
 				b.outSizes = new long[pipeCount];
+				// 2024/7/24 注释 这里可以检测部分管道错误：Int2IntMap的KV都不能重复，所以不能添加任意一侧在map中的管道
 				for (int i = pipeCount; i > 0; i--) {
-					pipe.putInt(readVarInt(ioLen), readVarInt(ioLen));
+					sortedIds[i] = -1;
+					pipe.putInt(readVarInt(pipeCount), readVarInt(pipeCount));
 				}
-				b.tmp = sorter;
 			}
 
-			QZCoder[] sorted = b.coder = new QZCoder[ioLen];
+			var sorted = new QZCoder[ioLen];
 			for (int i = 0; i < ioLen; i++) {
 				if (!pipe.containsKey(i)) {
 					int sortId = 0, id = i;
 
+					// 2024/7/24 注释 这里检测剩余所有的管道错误
 					while (sortId < ioLen) {
-						sorter.put(id, sortId);
+						sortedIds[id] = sortId;
 						sorted[sortId++] = coders[id];
 						id = pipe.getByValueOrDefault(id, -1);
 					}
@@ -440,14 +431,25 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					b.hasCrc |= i<<2;
 				}
 			}
+
+			// 如果正好和解压路径一样（这也是正常文件的行为）那么可以省下一个数组
+			for (int i = 0; i < ioLen; i++) {
+				if (sortedIds[i] != i) {
+					sorterArr[thisId] = Arrays.copyOf(sortedIds, ioLen);
+					break;
+				}
+			}
+
+			// 排序之后是从零开始的解压路径
+			b.coder = (QZCoder[]) this.coders.intern(sorted);
 			return b;
 		}
-		private WordBlock readComplexBlock(QZCoder[] coders, WordBlock b, int i) throws IOException {
+		private WordBlock readComplexBlock(QZCoder[] coders, WordBlock b, int i, int ioLen) throws IOException {
 			List<IntMap.Entry<CoderInfo>>
 				inputs = new SimpleList<>(),
 				outputs = new SimpleList<>();
 
-			CoderInfo[] ordered = new CoderInfo[coders.length];
+			var ordered = new CoderInfo[ioLen];
 			for (int j = 0; j < i; j++) {
 				QZCoder c = coders[j];
 				CoderInfo info = new CoderInfo(c, j);
@@ -456,18 +458,17 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				inputs.add(entry);
 				outputs.add(entry);
 			}
-			b.tmp = ordered;
 
-			for (; i < coders.length; i++) {
+			for (; i < ioLen; i++) {
 				int flag = buf.readUnsignedByte();
 
 				boolean complex = (flag & 0x10) != 0;
 				boolean prop = (flag & 0x20) != 0;
-				boolean alternative = (flag & 0x80) != 0;
-				if (alternative) error("coder["+i+"].alternative");
+				boolean alternate = (flag & 0x80) != 0;
+				if (alternate) error("coder["+i+"].alternate");
 
-				QZCoder c = QZCoder.create(buf, flag&0xF);
-				CoderInfo node = new CoderInfo(c, outputs.size());
+				var c = QZCoder.create(buf, flag&0xF);
+				var node = new CoderInfo(c, outputs.size());
 				ordered[i] = node;
 
 				if (complex) {
@@ -488,14 +489,16 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					buf.rIndex = ri+len;
 				}
 			}
+			// 2024/07/13 以后再intern吧
+			b.coder = ordered;
 
 			int inCount = inputs.size();
 			int outCount = outputs.size();
 			int pipeCount = outCount-1;
 			// only have one 'actual' output
-			if (pipeCount < 0) throw new IOException("too few output");
+			if (pipeCount < 0) throw new CorruptedInputException("too few output");
 			// but can have many inputs
-			if (inCount <= pipeCount) throw new IOException("too few input");
+			if (inCount <= pipeCount) throw new CorruptedInputException("too few input");
 
 			b.outSizes = new long[outCount-1];
 
@@ -510,19 +513,19 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			int dataCount = inCount-pipeCount;
 			b.extraSizes = new long[dataCount-1];
 			for (int j = 0; j < dataCount; j++) {
-				IntMap.Entry<CoderInfo> entry = inputs.set(readVarInt(inCount), null);
+				var entry = inputs.set(readVarInt(inCount), null);
 				entry.getValue().setFileInput(j, entry.getIntKey());
 			}
 
 			for (int j = 0; j < outputs.size(); j++) {
-				IntMap.Entry<CoderInfo> entry = outputs.get(j);
+				var entry = outputs.get(j);
 				if (entry != null) {
 					b.complexCoder = entry.getValue();
 					return b;
 				}
 			}
 
-			throw new IOException("no output specified");
+			throw new CorruptedInputException("no output specified");
 		}
 
 		// 文件的大小偏移等"数据的元数据"
@@ -544,8 +547,9 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 			if (neFiles > that.maxFileCount) error("文件数量超出限制");
 			QZEntry[] files = this.files = new QZEntry[neFiles];
+			boolean skipMetadata = (that.flag&FLAG_SKIP_METADATA) != 0;
 			for (int i = 0; i < neFiles; i++)
-				files[i] = new QZEntry();
+				files[i] = skipMetadata ? new QZEntry() : new QZEntryA();
 
 			int fileId = 0;
 			if (nid == kSize) {
@@ -645,6 +649,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		}
 		// 文件名称，空文件，文件夹，修改时间等元数据
 		private void readFileMeta() throws IOException {
+			boolean skipMetadata = (that.flag&FLAG_SKIP_METADATA) != 0;
 			int count = readVarInt(that.maxFileCount);
 			QZEntry[] files = this.files;
 
@@ -652,19 +657,20 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				// 全部是空文件
 				files = new QZEntry[count];
 				for (int i = 0; i < count; i++)
-					files[i] = new QZEntry();
+					files[i] = skipMetadata ? new QZEntry() : new QZEntryA();
 			} else if (count != files.length) {
 				if (count < files.length) fatalError();
 
 				// 有一些空文件
 				files = new QZEntry[count];
 				System.arraycopy(this.files, 0, files, 0, this.files.length);
-				for (int i = this.files.length; i < count; i++) files[i] = new QZEntry();
+				for (int i = this.files.length; i < count; i++) files[i] = skipMetadata ? new QZEntry() : new QZEntryA();
 			}
 
 			MyBitSet empty = null, emptyFile = null;
 			MyBitSet anti = null;
 
+			int maybeInvalid = 0;
 			int pos = buf.rIndex;
 			while (true) {
 				int id = buf.readUnsignedByte();
@@ -675,13 +681,15 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					case kEmptyStream: empty = MyBitSet.readBits(buf, count); break;
 					case kEmptyFile: emptyFile = MyBitSet.readBits(buf, Objects.requireNonNull(empty, "属性顺序错误").size()); break;
 					case kAnti: anti = MyBitSet.readBits(buf, Objects.requireNonNull(empty, "属性顺序错误").size()); break;
-					default: buf.rIndex = end; break;
+					default: if (empty == null) maybeInvalid = id; buf.rIndex = end; break;
 				}
-				assert buf.rIndex == end;
+				if (buf.rIndex != end) error("属性长度错误");
 			}
 
 			// 重排序空文件
 			if (empty != null) {
+				if (maybeInvalid != 0) new IOException("属性顺序错误, 在kEmpty之前遇到了"+maybeInvalid).printStackTrace();
+
 				int emptyNo = this.files == null ? 0 : this.files.length, fileNo = 0;
 				int emptyNoNo = 0;
 				for (int i = 0; i < count; i++) {
@@ -709,8 +717,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 				int len = readVarInt();
 				switch (id) {
-					case kName: {
-						if (buf.get() != 0) error("iFileName.external");
+					case kName -> {
+						if (buf.readByte() != 0) error("iFileName.external");
 
 						int end = buf.rIndex+len-1;
 						int j = 0;
@@ -727,36 +735,37 @@ public class QZArchive extends QZReader implements ArchiveFile {
 							}
 						}
 
-						if (buf.rIndex != end || j != count)
-							throw new IOException("文件名太少");
-						break;
+						if (buf.rIndex != end || j != count) error("文件名太少");
 					}
-					case kCTime:
-					case kATime:
-					case kMTime: {
+					case kCTime, kATime, kMTime -> {
+						if (skipMetadata) {buf.rIndex += len;continue;}
+
 						MyBitSet set = readBitsOrTrue(count);
-						if (buf.get() != 0) error("i_Time.external");
+						if (buf.readByte() != 0) error("i_Time.external");
 
-						ObjLongConsumer<QZEntry> c = attributeReader[id-kCTime];
+						long off = QZEntryA.SPARSE_ATTRIBUTE_OFFSET[id-kCTime];
+						int flag = 1 << (id-kCTime);
 
-						for (IntIterator itr = set.iterator(); itr.hasNext(); ) {
-							c.accept(files[itr.nextInt()], buf.readLongLE());
+						for (var itr = set.iterator(); itr.hasNext(); ) {
+							var entry = files[itr.nextInt()];
+							entry.flag |= flag;
+							u.putLong(entry, off, buf.readLongLE());
 						}
 					}
-					break;
-					case kWinAttributes: {
-						MyBitSet set = readBitsOrTrue(count);
-						if (buf.get() != 0) error("iAttribute.external");
+					case kWinAttributes -> {
+						if (skipMetadata) {buf.rIndex += len;continue;}
 
-						for (IntIterator itr = set.iterator(); itr.hasNext(); ) {
-							QZEntry entry = files[itr.nextInt()];
+						MyBitSet set = readBitsOrTrue(count);
+						if (buf.readByte() != 0) error("iAttribute.external");
+
+						long off = QZEntryA.SPARSE_ATTRIBUTE_OFFSET[3];
+						for (var itr = set.iterator(); itr.hasNext(); ) {
+							var entry = files[itr.nextInt()];
 							entry.flag |= QZEntry.ATTR;
-							entry.attributes = buf.readIntLE();
+							u.putInt(entry, off, buf.readIntLE());
 						}
 					}
-					break;
-
-					default: buf.rIndex += len; break;
+					default -> buf.rIndex += len;
 				}
 			}
 
@@ -764,11 +773,14 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		}
 
 		private void computeOffset() throws IOException {
-			WordBlock[] blocks = this.blocks;
+			var blocks = this.blocks;
+			if (blocks == null) return;
+
 			long off = offset;
+			long length = that.r.length();
 			int streamId = 0;
 			for (int i = 0; i < blocks.length; i++) {
-				WordBlock b = blocks[i];
+				var b = blocks[i];
 
 				b.offset = off;
 
@@ -780,7 +792,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					off += len;
 				}
 
-				if (off > that.r.length()) error("字块["+i+"](子流"+streamId+")越过文件边界("+off+" > "+that.r.length()+")");
+				if (off > length) error("字块["+i+"](子流"+streamId+")越过文件边界("+off+" > "+length+")");
 			}
 		}
 
@@ -800,7 +812,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		private MyBitSet readBitsOrTrue(int size) {
 			MyBitSet set;
 			// all true
-			if (buf.get() != 0) {
+			if (buf.readByte() != 0) {
 				set = new MyBitSet();
 				set.fill(size);
 			} else {
@@ -810,61 +822,72 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		}
 		private long readVarLong() throws IOException {
 			long i = buf.readVULong();
-			if (i < 0) throw new IOException("溢出:"+i);
+			if (i < 0) error("溢出:"+i);
 			return i;
 		}
 		private int readVarInt() throws IOException {
 			long i = buf.readVULong();
-			if (i < 0 || i > Integer.MAX_VALUE) throw new IOException("溢出:"+i);
+			if (i < 0 || i > Integer.MAX_VALUE) error("溢出:"+i);
 			return (int) i;
 		}
 		private int readVarInt(int max) throws IOException {
 			int i = readVarInt();
-			if (i > max && !that.recovery) error("长度超出限制");
+			if (i > max && !that.isRecovering()) error("长度超出限制");
 			return i;
 		}
 		private void end(int type) throws IOException {
-			if (type != 0) throw new IOException("期待0,"+type);
+			if (type != 0) error("期待0,"+type);
 		}
 
-		private static void fatalError() throws IOException { throw new IOException("数据错误"); }
-		private void error(String msg) throws IOException { if (!that.recovery) throw new IOException(msg); }
+		private static void fatalError() throws IOException { throw new CorruptedInputException(); }
+		private void error(String msg) throws IOException { if (!that.isRecovering()) throw new CorruptedInputException(msg); }
 
 		// endregion
 	}
 
+	public boolean isRecovering() {return (flag & FLAG_RECOVERY) != 0;}
+
+	@Override
+	public QZEntry getEntry(String name) { return getEntries().get(name); }
+	@Deprecated
 	public MyHashMap<String, QZEntry> getEntries() {
 		if (byName.isEmpty()) {
 			byName.ensureCapacity(entries.length);
 			for (QZEntry entry : entries) {
-				byName.put(entry.name, entry);
+				if (byName.put(entry.name, entry) != null) {
+					throw new IllegalArgumentException("文件名重复！该文件可能已损坏，请通过entries()获取Entry并读取");
+				}
 			}
 		}
 		return byName;
 	}
+
+	@Override
+	public List<QZEntry> entries() { return Arrays.asList(entries); }
 	public QZEntry[] getEntriesByPresentOrder() { return entries; }
 
 	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback) { parallelDecompress(th, callback, password); }
 	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback, byte[] pass) {
 		if (blocks == null) return;
 		for (WordBlock b : blocks) {
-			th.pushTask(() -> {
+			th.submit(() -> {
 				if (r == null) throw new AsynchronousCloseException();
 
-				try (InputStream in = getSolidStream(b, pass)) {
+				try (InputStream in = getSolidStream(b, pass, false)) {
 					// noinspection all
 					LimitInputStream lin = new LimitInputStream(in, 0, false);
 					QZEntry entry = b.firstEntry;
+					long toSkip = 0;
 					do {
 						lin.remain = entry.uSize;
 
 						InputStream fin = lin;
-						if ((entry.flag&QZEntry.CRC) != 0) fin = new ChecksumInputStream(fin, new CRC32(), entry.crc32&0xFFFFFFFFL);
+						if ((entry.flag&QZEntry.CRC) != 0) fin = new CRC32InputStream(fin, entry.crc32);
+						if (toSkip > 0) fin = new SkipInputStream(fin, in, toSkip);
 
 						callback.accept(entry, fin);
-						if (lin.remain > 0) {
-							if (in.skip(lin.remain) < lin.remain) throw new IOException("数据流过早终止");
-						}
+						if (fin instanceof SkipInputStream x) toSkip = x.toSkip;
+						toSkip += lin.remain;
 
 						entry = entry.next;
 					} while (entry != null);
@@ -872,55 +895,89 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			});
 		}
 	}
+	private static final class SkipInputStream extends InputStream {
+		private final InputStream in, rin;
+		long toSkip;
 
-	public InputStream getInput(String entry) throws IOException {
+		private SkipInputStream(InputStream in, InputStream rin, long skip) {
+			this.in = in;
+			this.rin = rin;
+			toSkip = skip;
+		}
+
+		@Override
+		public int read() throws IOException {
+			if (toSkip != 0) doSkip();
+			return in.read();
+		}
+		@Override
+		public int read(@NotNull byte[] b, int off, int len) throws IOException {
+			if (toSkip != 0) doSkip();
+			return in.read(b, off, len);
+		}
+
+		private void doSkip() throws IOException {
+			long skip = rin.skip(toSkip);
+			if (skip < toSkip) throw new EOFException("数据流过早终止");
+			toSkip = 0;
+		}
+	}
+
+
+	public final InputStream getStream(String entry) throws IOException {
 		QZEntry file = getEntries().get(entry);
 		if (file == null) return null;
 		return getInput(file, null);
 	}
 	@Override
-	public InputStream getInput(ArchiveEntry entry, byte[] pass) throws IOException { return getInput((QZEntry) entry, pass); }
+	public final InputStream getStream(ArchiveEntry entry, byte[] pw) throws IOException { return getInput((QZEntry) entry, pw); }
 
-	final InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that) throws IOException {
+	final InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that, boolean verify) throws IOException {
 		if (pass == null) pass = password;
+		assert blocks == null || Arrays.asList(blocks).contains(b) : "foreign word block "+b;
 
 		src.seek(b.offset);
 
+		var limit = new AtomicInteger(memoryLimitKb);
 		InputStream in;
-		if (b.complexCoder == null) {
-			in = new SourceStreamCAS(src, b.size, that, FPREAD_OFFSET);
+		var node = b.complexCoder();
+		if (node == null) {
+			in = new SourceInputStream.Shared(src, b.size, that, FPREAD_OFFSET);
 
-			QZCoder[] coders = b.coder;
+			var coders = b.coder;
+			QZCoder.useMemory(limit, coders.length);
 			for (int i = 0; i < coders.length; i++) {
-				QZCoder c = coders[i];
-				in = c.decode(in, pass, i==coders.length-1?b.uSize:b.outSizes[i], memoryLimitKb);
+				in = coders[i].decode(in, pass, i==coders.length-1?b.uSize:b.outSizes[i], limit);
 			}
 		} else {
-			CoderInfo node = b.complexCoder;
-			InputStream[] streams = new InputStream[b.extraSizes.length+1];
+			long[] sizes = b.extraSizes;
+			var streams = new InputStream[sizes.length+1];
+			QZCoder.useMemory(limit, streams.length);
 
 			long off = b.offset;
 			src.seek(off);
 			// noinspection all
-			streams[0] = new SourceStreamCAS(src, b.size, that, FPREAD_OFFSET);
+			streams[0] = new SourceInputStream.Shared(src, b.size, that, FPREAD_OFFSET);
 			off += b.size;
 
-			for (int i = 0; i < b.extraSizes.length;) {
+			for (int i = 0; i < sizes.length;) {
 				src = src.threadSafeCopy();
 				src.seek(off);
 
-				long len = b.extraSizes[i++];
+				long len = sizes[i++];
 				// noinspection all
 				streams[i] = new SourceInputStream(src, len);
 				off += len;
 			}
 
-			InputStream[] ins = node.getInputStream(b.outSizes, streams, new MyHashMap<>(), pass, memoryLimitKb);
-			assert ins.length == 1 : "root node has many outputs";
+			var ins = node.getInputStream(b.outSizes, streams, new MyHashMap<>(), pass, limit);
+			if (ins.length != 1) throw new CorruptedInputException("root node has many outputs");
 			in = ins[0];
 		}
 
-		if (!recovery && (b.hasCrc&1) != 0) in = new ChecksumInputStream(in, new CRC32(), b.crc&0xFFFFFFFFL);
+		// 这个可以清理掉，因为QZEntry自身有CRC32了
+		// 不过我喜欢搞骚操作，也许直接读WordBlock了
+		if (verify && !isRecovering() && (b.hasCrc&1) != 0) in = new CRC32InputStream(in, b.crc);
 
 		return in;
 	}
@@ -928,13 +985,14 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	public synchronized QZReader parallel() {
 		if (asyncReaders.isEmpty()) asyncReaders = new SimpleList<>();
 		AsyncReader ar = new AsyncReader();
+		ar.r = r;
 		asyncReaders.add(ar);
 		return ar;
 	}
 	private final class AsyncReader extends QZReader {
 		@Override
-		InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that) throws IOException {
-			return QZArchive.this.getSolidStream1(b, pass, src, that);
+		InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that, boolean verify) throws IOException {
+			return QZArchive.this.getSolidStream1(b, pass, src, that, verify);
 		}
 
 		@Override
@@ -949,8 +1007,11 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	public synchronized void close() throws IOException {
 		closeSolidStream();
 
-		for (AsyncReader reader : asyncReaders)
+		for (AsyncReader reader : asyncReaders) {
+			if (reader.fpRead != null)
+				reader.fpRead.close();
 			reader.closeSolidStream();
+		}
 		asyncReaders.clear();
 
 		if (r != null) {
@@ -958,11 +1019,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			r1.close();
 			r = null;
 
-			Source s;
-			do {
-				s = fpRead;
-				if (s != null) s.close();
-			} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, s, r1));
+			Source s = (Source) u.getAndSetObject(this, FPREAD_OFFSET, r1);
+			if (s != null) s.close();
 
 			if (password != null) Arrays.fill(password, (byte) 0);
 		}

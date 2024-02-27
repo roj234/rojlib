@@ -16,119 +16,101 @@ import java.util.List;
  * @since 2021/5/29 17:16
  */
 public final class AttrModule extends Attribute {
-	public AttrModule() {
-		this.self = new ModuleInfo();
+	public AttrModule(String name, int access) {
+		this.self = new Module(name, access);
 		this.requires = new ArrayList<>();
 		this.exports = new ArrayList<>();
 		this.opens = new ArrayList<>();
 		this.uses = new ArrayList<>();
-		this.providers = new ArrayList<>();
+		this.provides = new ArrayList<>();
 	}
 
 	public AttrModule(DynByteBuf r, ConstantPool pool) {
-		self = new ModuleInfo().read(r, pool);
-		int count = r.readUnsignedShort();
+		self = new Module(r, pool);
+
+		int len = r.readUnsignedShort();
 		if (self.name.startsWith("java.base")) {
-			if (count != 0) throw new IllegalArgumentException("'" + self.name + "' module should not have 'require' section");
+			if (len != 0) throw new IllegalArgumentException("'"+self.name+"' module should not have 'require' section");
 		}
-		List<ModuleInfo> requires = new ArrayList<>(count);
-		while (count-- > 0) {
-			requires.add(new ModuleInfo().read(r, pool));
-		}
-		this.requires = requires;
 
-		count = r.readUnsignedShort();
-		List<ExportInfo> export = new ArrayList<>(count);
-		while (count-- > 0) {
-			export.add(new ExportInfo().read(r, pool));
-		}
-		this.exports = export;
+		List<Module> requires = this.requires = new ArrayList<>(len);
+		while (len-- > 0) requires.add(new Module(r, pool));
 
-		count = r.readUnsignedShort();
-		List<ExportInfo> open = new ArrayList<>(count);
-		while (count-- > 0) {
-			open.add(new ExportInfo().read(r, pool));
-		}
-		this.opens = open;
+		len = r.readUnsignedShort();
+		List<Export> export = this.exports = new ArrayList<>(len);
+		while (len-- > 0) export.add(new Export(r, pool));
 
-		count = r.readUnsignedShort();
-		List<String> use = new ArrayList<>(count);
-		while (count-- > 0) {
-			use.add(pool.getRefName(r));
-		}
-		this.uses = use;
+		len = r.readUnsignedShort();
+		List<Export> open = this.opens = new ArrayList<>(len);
+		while (len-- > 0) open.add(new Export(r, pool));
 
-		count = r.readUnsignedShort();
-		List<Provider> provide = new ArrayList<>(count);
-		while (count-- > 0) {
-			provide.add(new Provider().read(r, pool));
-		}
-		this.providers = provide;
+		len = r.readUnsignedShort();
+		List<String> use = this.uses = new ArrayList<>(len);
+		while (len-- > 0) use.add(pool.getRefName(r));
+
+		len = r.readUnsignedShort();
+		List<Provide> provide = this.provides = new ArrayList<>(len);
+		while (len-- > 0) provide.add(new Provide(r, pool));
 	}
 
-	public ModuleInfo self;
+	public AttrModule.Module self;
 
-	public List<ModuleInfo> requires;
-	public List<ExportInfo> exports, opens;
+	public List<AttrModule.Module> requires;
+	public List<Export> exports, opens;
 	// To tell the SPI that these classes should be loaded
 	public List<String> uses;
-	public List<Provider> providers;
+	public List<Provide> provides;
 
 	@Override
-	public String name() { return "Module"; }
+	public String name() {return "Module";}
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		self.write(w, pool);
 
-		final List<ModuleInfo> requires = this.requires;
+		var requires = this.requires;
 		w.putShort(requires.size());
-		for (int i = 0; i < requires.size(); i++) {
+		for (int i = 0; i < requires.size(); i++)
 			requires.get(i).write(w, pool);
-		}
 
-		final List<ExportInfo> exports = this.exports;
+		var exports = this.exports;
 		w.putShort(exports.size());
-		for (int i = 0; i < exports.size(); i++) {
+		for (int i = 0; i < exports.size(); i++)
 			exports.get(i).write(w, pool);
-		}
 
-		final List<ExportInfo> opens = this.opens;
+		var opens = this.opens;
 		w.putShort(opens.size());
-		for (int i = 0; i < opens.size(); i++) {
+		for (int i = 0; i < opens.size(); i++)
 			opens.get(i).write(w, pool);
-		}
 
-		final List<String> uses = this.uses;
+		var uses = this.uses;
 		w.putShort(uses.size());
-		for (int i = 0; i < uses.size(); i++) {
+		for (int i = 0; i < uses.size(); i++)
 			w.putShort(pool.getClassId(uses.get(i)));
-		}
 
-		final List<Provider> providers = this.providers;
-		w.putShort(providers.size());
-		for (int i = 0; i < providers.size(); i++) {
-			providers.get(i).write(w, pool);
-		}
+		var provides = this.provides;
+		w.putShort(provides.size());
+		for (int i = 0; i < provides.size(); i++)
+			provides.get(i).write(w, pool);
 	}
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder("Module: \n");
 		sb.append(self).append("Requires: \n");
 
-		final List<ModuleInfo> requires = this.requires;
+		final List<AttrModule.Module> requires = this.requires;
 		for (int i = 0; i < requires.size(); i++) {
 			sb.append(requires.get(i)).append('\n');
 		}
 
 		sb.append("Exports: \n");
-		final List<ExportInfo> exports = this.exports;
+		final List<Export> exports = this.exports;
 		for (int i = 0; i < exports.size(); i++) {
 			sb.append(exports.get(i)).append('\n');
 		}
 
 		sb.append("Reflective opens: \n");
-		final List<ExportInfo> opens = this.opens;
+		final List<Export> opens = this.opens;
 		for (int i = 0; i < opens.size(); i++) {
 			sb.append(opens.get(i)).append('\n');
 		}
@@ -140,27 +122,28 @@ public final class AttrModule extends Attribute {
 		}
 
 		sb.append("SPI implements: \n");
-		final List<Provider> providers = this.providers;
-		for (int i = 0; i < providers.size(); i++) {
-			sb.append(providers.get(i)).append('\n');
+		final List<Provide> provides = this.provides;
+		for (int i = 0; i < provides.size(); i++) {
+			sb.append(provides.get(i)).append('\n');
 		}
 
 		return sb.toString();
 	}
 
-	public static final class ModuleInfo {
-		public String name;
+	public static final class Module {
+		public final String name;
 		public int access;
 		public String version;
 
-		public ModuleInfo() {}
-
-		public ModuleInfo read(DynByteBuf r, ConstantPool pool) {
+		public Module(DynByteBuf r, ConstantPool pool) {
 			name = ((CstModule) pool.get(r)).name().str();
 			access = r.readUnsignedShort();
 			CstUTF utf = (CstUTF) pool.get(r);
 			version = utf == null ? null : utf.str();
-			return this;
+		}
+		public Module(String name, int access) {
+			this.name = name;
+			this.access = access;
 		}
 
 		public void write(DynByteBuf w, ConstantPool writer) {
@@ -173,64 +156,61 @@ public final class AttrModule extends Attribute {
 		}
 	}
 
-	public static final class ExportInfo {
-		public String Package;
+	public static final class Export {
+		public final String pkg;
 		public int access;
-		public List<String> accessible;
+		public List<String> to;
 
-		public ExportInfo() {}
-
-		public ExportInfo read(DynByteBuf r, ConstantPool pool) {
-			Package = ((CstPackage) pool.get(r)).name().str();
+		public Export(DynByteBuf r, ConstantPool pool) {
+			pkg = ((CstPackage) pool.get(r)).name().str();
 			access = r.readUnsignedShort();
+
 			int len = r.readUnsignedShort();
-			accessible = new SimpleList<>(len);
-			while (len-- > 0) {
-				accessible.add(((CstModule) pool.get(r)).name().str());
-			}
-			return this;
+			to = new SimpleList<>(len);
+			while (len-- > 0) to.add(((CstModule) pool.get(r)).name().str());
+		}
+		public Export(String pkg) {
+			this.pkg = pkg;
+			this.to = new SimpleList<>();
 		}
 
 		public void write(DynByteBuf w, ConstantPool writer) {
-			w.putShort(writer.getPackageId(Package)).putShort(access).putShort(accessible.size());
-			for (int i = 0, s = accessible.size(); i < s; i++) {
-				w.putShort(writer.getModuleId(accessible.get(i)));
+			w.putShort(writer.getPackageId(pkg)).putShort(access).putShort(to.size());
+			for (int i = 0, s = to.size(); i < s; i++) {
+				w.putShort(writer.getModuleId(to.get(i)));
 			}
 		}
 
 		@Override
-		public String toString() {
-			return "Export '" + Package + '\'' + ", acc=" + Opcodes.showModifiers(access, Opcodes.ACC_SHOW_MODULE) + ", accessibleClasses=" + accessible + '}';
-		}
+		public String toString() {return "export "+Opcodes.showModifiers(access, Opcodes.ACC_SHOW_MODULE)+' '+pkg+" to "+to+';';}
 	}
 
-	public static final class Provider {
-		public String serviceName;
-		public List<String> implement;
+	public static final class Provide {
+		public final String spi;
+		public final List<String> impl;
 
-		public Provider() {}
+		public Provide(DynByteBuf r, ConstantPool pool) {
+			spi = pool.getRefName(r);
 
-		public Provider read(DynByteBuf r, ConstantPool pool) {
-			serviceName = pool.getRefName(r);
 			int len = r.readUnsignedShort();
-			if (len == 0) throw new IllegalArgumentException("Provider.length should not be 0");
-			implement = new SimpleList<>(len);
-			while (len-- > 0) {
-				implement.add(pool.getRefName(r));
-			}
-			return this;
+			if (len == 0) throw new IllegalArgumentException("Provide cannot be empty");
+
+			impl = new SimpleList<>(len);
+			while (len-- > 0) impl.add(pool.getRefName(r));
+		}
+		public Provide(String spi) {
+			this.spi = spi;
+			this.impl = new SimpleList<>();
 		}
 
 		public void write(DynByteBuf w, ConstantPool writer) {
-			w.putShort(writer.getClassId(serviceName)).putShort(implement.size());
-			for (int i = 0, s = implement.size(); i < s; i++) {
-				w.putShort(writer.getClassId(implement.get(i)));
+			w.putShort(writer.getClassId(spi)).putShort(impl.size());
+			for (int i = 0, s = impl.size(); i < s; i++) {
+				w.putShort(writer.getClassId(impl.get(i)));
 			}
 		}
 
 		@Override
-		public String toString() {
-			return "Server '" + serviceName + '\'' + ", implementors=" + implement + '}';
-		}
+		public String toString() {return "provide "+spi.replace('/', '.')+" with "+impl+';';}
 	}
 }

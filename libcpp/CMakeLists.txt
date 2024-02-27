@@ -1,16 +1,21 @@
 cmake_minimum_required(VERSION 3.23)
-project(cpp LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_EXE_LINKER_FLAGS "-static")
+project(cpp)
 
 include_directories("$ENV{JAVA_HOME}\\include")
 include_directories("$ENV{JAVA_HOME}\\include\\win32")
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/libdivsufsort/include")
 
-link_libraries(ws2_32)
-link_libraries(bcrypt)
+function(add_libdivsufsort)
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+    set(BUILD_EXAMPLES OFF)
+    set(BUILD_SHARED_LIBS OFF)
+    add_subdirectory(libdivsufsort)
+endfunction()
+add_libdivsufsort()
 
 add_library(cpp SHARED library.cpp)
+
+target_link_libraries(cpp PRIVATE divsufsort PRIVATE gcc PRIVATE stdc++ PRIVATE winpthread PRIVATE ws2_32 PRIVATE bcrypt)
 
 install(
         TARGETS cpp

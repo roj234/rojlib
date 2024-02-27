@@ -2,7 +2,7 @@ package roj.math;
 
 import org.jetbrains.annotations.NotNull;
 import roj.collect.IntList;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.text.CharList;
 import roj.text.TextUtil;
 

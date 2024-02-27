@@ -1,90 +1,79 @@
 package roj.concurrent;
 
 import roj.concurrent.task.ITask;
+import roj.reflect.ReflectionUtils;
+import roj.util.ArrayUtil;
 
+import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.LockSupport;
+
+import static roj.reflect.ReflectionUtils.u;
 
 public class TaskExecutor extends FastLocalThread implements TaskHandler {
 	ConcurrentLinkedQueue<ITask> tasks = new ConcurrentLinkedQueue<>();
-	volatile boolean running = true;
+
+	static final long STATE_OFFSET = ReflectionUtils.fieldOffset(TaskExecutor.class, "state");
+	//0 => running, 1 => terminating, 2 => stopped
+	volatile int state = 0;
 
 	public TaskExecutor() {
-		setName("TaskScheduler-" + hashCode());
+		setName("RojLib - 未命名任务线程#"+hashCode());
 		setDaemon(true);
 	}
 
 	@Override
 	public void run() {
-		while (running) {
-			ITask task;
-			do {
-				task = tasks.peek();
-				if (task == null) {
-					synchronized (this) {
-						notifyAll();
-					}
-
-					do {
-						LockSupport.park();
-						if (!running) return;
-					} while (tasks.isEmpty());
-				} else if (task.isCancelled()) {
-					tasks.poll();
-				} else {
-					break;
-				}
-			} while (true);
-
-			try {
-				task.execute();
-			} catch (Throwable e) {
-				if (!(e instanceof InterruptedException)) e.printStackTrace();
+		while (true) {
+			ITask task = tasks.peek();
+			if (task == null) {
+				synchronized (this) {notifyAll();}
+				LockSupport.park();
+				if (state != 0) break;
+				continue;
 			}
-			tasks.poll();
-			try {
-				if (task.repeating()) {
-					tasks.add(task);
+
+			if (!task.isCancelled()) {
+				try {
+					task.execute();
+				} catch (Throwable e) {
+					if (!(e instanceof InterruptedException)) e.printStackTrace();
 				}
-			} catch (Throwable e) {
-				e.printStackTrace();
 			}
+
+			if (tasks.poll() == null) break;
 		}
+
+		state = 2;
 	}
 
 	@Override
-	public void pushTask(ITask task) {
+	public void submit(ITask task) {
+		if (state != 0) throw new RejectedExecutionException("TaskExecutor was shutdown.");
 		tasks.add(task);
 		LockSupport.unpark(this);
 	}
-
-	public boolean removeTask(ITask task) {
-		return tasks.remove(task);
-	}
-
-	public int getTaskAmount() {
-		return tasks.size();
-	}
-
 	@Override
-	public void clearTasks() {
-		ConcurrentLinkedQueue<ITask> queue = tasks;
-		tasks = new ConcurrentLinkedQueue<>();
-		for (ITask task : queue) task.cancel(true);
-		queue.clear();
-
-		LockSupport.unpark(this);
-	}
-
-	public void waitFor() throws InterruptedException {
-		synchronized (this) {
-			if (tasks.isEmpty()) return;
-			wait();
-		}
-	}
-
 	public void shutdown() {
-		running = false;
-		LockSupport.unpark(this);
+		if (u.compareAndSwapInt(this, STATE_OFFSET, 0, 1))
+			LockSupport.unpark(this);
+	}
+	@Override
+	public List<ITask> shutdownNow() {
+		var queue = tasks;
+		tasks = new ConcurrentLinkedQueue<>();
+		shutdown();
+		return ArrayUtil.copyOf(queue);
+	}
+	@Override
+	public boolean isShutdown() {return state != 0;}
+	@Override
+	public boolean isTerminated() {return state == 2;}
+
+	public void awaitTermination() throws InterruptedException {
+		synchronized (this) {
+			while (!tasks.isEmpty()) wait();
+		}
 	}
 }

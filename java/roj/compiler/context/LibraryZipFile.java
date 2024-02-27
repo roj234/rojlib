@@ -1,16 +1,19 @@
 package roj.compiler.context;
 
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.asm.Parser;
-import roj.asm.tree.IClass;
+import roj.asm.tree.ConstantData;
+import roj.asm.tree.attr.AttrModule;
+import roj.asm.tree.attr.Attribute;
 import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.util.ByteList;
+import roj.crypt.CRC32s;
+import roj.io.IOUtil;
 import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Set;
 
 /**
@@ -18,54 +21,70 @@ import java.util.Set;
  * @since 2022/9/16 0016 21:52
  */
 public class LibraryZipFile implements Library {
-	public final ZipArchive zf;
-	private final MyHashMap<String, IClass> info;
+	public final ZipFile zf;
+	private final MyHashMap<String, Object> info;
+	private String moduleName;
 
 	public LibraryZipFile(File file) throws IOException {
-		this.zf = new ZipArchive(file, ZipArchive.FLAG_BACKWARD_READ);
+		this.zf = new ZipFile(file, ZipFile.FLAG_BACKWARD_READ);
+		this.info = new MyHashMap<>();
 
-		MyHashSet<ZEntry> set = new MyHashSet<>(zf.getEntries().size());
-		for (ZEntry entry : zf.getEntries().values()) {
-			if (entry.getName().endsWith(".class")) set.add(entry);
+		for (ZEntry entry : zf.entries()) {
+			String name = entry.getName();
+			if (name.endsWith(".class")) info.put(name.substring(0, name.length()-6), entry);
 		}
-		zf.getEntries().clear();
-		for (ZEntry entry : set) {
-			zf.getEntries().put(entry.getName().substring(0, entry.getName().length() - 6), entry);
-		}
+		//zf.entries().clear();
 
-		info = new MyHashMap<>();
+		var module = get("module-info");
+		if (module != null) {
+			AttrModule module1 = module.parsedAttr(module.cp, Attribute.Module);
+			moduleName = module1.self.name;
+		}
 	}
 
 	@Override
-	public Set<String> content() {
-		return zf.getEntries().keySet();
+	public String getModule(String className) {return moduleName;}
+
+	@Override
+	public int fileHashCode() {
+		int hash = CRC32s.INIT_CRC;
+		var b = IOUtil.getSharedByteBuf();
+
+		for (ZEntry entry : zf.entries()) {
+			b.putChars(entry.getName()).putShort(0).putInt(entry.getCrc32()).putLong(entry.getModificationTime());
+			if (b.wIndex() > 1024) {
+				hash = CRC32s.update(hash, b.list, 0, b.wIndex());
+				b.clear();
+			}
+		}
+
+		return CRC32s.retVal(hash);
 	}
 
 	@Override
-	public IClass get(CharSequence name) {
-		MyHashMap.AbstractEntry<String, IClass> entry = info.getEntry(Helpers.cast(name));
-		if (entry != null) return entry.getValue();
+	public Set<String> content() { return info.keySet(); }
+
+	@Override
+	@SuppressWarnings("unchecked")
+	public ConstantData get(CharSequence name) {
+		var entry = (MyHashMap.AbstractEntry<String, Object>) ((MyHashMap<?,?>)info).getEntry(Helpers.cast(name));
+		if (entry == null) return null;
+		if (entry.getValue() instanceof ConstantData c) return c;
 		synchronized (info) {
-			IClass v = apply(name);
-			info.put(name.toString(), v);
+			ConstantData v = null;
+			try {
+				v = Parser.parseConstants(IOUtil.read(zf.getStream((ZEntry) entry.getValue())));
+				entry.setValue(v);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 			return v;
 		}
 	}
 
 	@Override
-	public void close() throws Exception {
-		zf.close();
-	}
+	public InputStream getResource(CharSequence name) throws IOException {return zf.getStream(name.toString());}
 
-	public IClass apply(CharSequence s) {
-		ZEntry file = zf.getEntries().get(s);
-		if (file == null) return null;
-		try {
-			ByteList data = ByteList.wrap(zf.get(file));
-			return Parser.parseConstants(data);
-		} catch (Exception e) {
-			e.printStackTrace();
-			return null;
-		}
-	}
+	@Override
+	public void close() throws Exception { zf.close(); }
 }

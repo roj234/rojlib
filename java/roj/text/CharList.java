@@ -4,9 +4,9 @@ import org.jetbrains.annotations.NotNull;
 import roj.collect.CharMap;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
+import roj.config.data.CInt;
 import roj.io.IOUtil;
 import roj.math.MathUtils;
-import roj.math.MutableInt;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.CharBuffer;
 import java.util.Arrays;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -22,9 +23,9 @@ import java.util.regex.Pattern;
  * @author Roj234
  * @since 2021/6/19 1:28
  */
-public class CharList implements CharSequence, Appender {
+public class CharList implements CharSequence, Appendable {
 	// region Number helper
-	static void getChars(long l, int charPos, char[] buf) {
+	public static void getChars(long l, int charPos, char[] buf) {
 		long q;
 		int r;
 
@@ -40,7 +41,7 @@ public class CharList implements CharSequence, Appender {
 
 		getChars((int) l, charPos, buf);
 	}
-	static void getChars(int i, int charPos, char[] buf) {
+	public static void getChars(int i, int charPos, char[] buf) {
 		int r;
 
 		int q;
@@ -152,23 +153,15 @@ public class CharList implements CharSequence, Appender {
 
 	// region search
 	public final boolean contains(CharSequence s) { return indexOf(s, 0) >= 0; }
-	public final boolean containsAny(TrieTree<MutableInt> map, boolean stopOnFirst) {
+	public final boolean containsAny(TrieTree<CInt> map) {
 		int pos = 0;
 
-		MyHashMap.Entry<MutableInt, MutableInt> entry = new MyHashMap.Entry<>(new MutableInt(), null);
+		MyHashMap.Entry<CInt, CInt> entry = new MyHashMap.Entry<>(new CInt(), null);
 		while (pos < len) {
 			map.match(this, pos, len, entry);
-
-			int len = entry.getKey().getValue();
-			if (len < 0) {
-				pos++;
-				continue;
-			}
-
-			if (stopOnFirst) return true;
-
-			entry.getValue().increment();
-			pos += len;
+			int len = entry.getKey().value;
+			if (len >= 0) return true;
+			pos++;
 		}
 
 		return false;
@@ -177,6 +170,22 @@ public class CharList implements CharSequence, Appender {
 	public final int indexOf(CharSequence s, int from) { return doMatch(s, from, len-s.length()+1); }
 	public final boolean startsWith(CharSequence s) { return s.length() == 0 || doMatch(s, 0, 1) >= 0; }
 	public final boolean endsWith(CharSequence s) { return s.length() == 0 || (len >= s.length() && doMatch(s, len-s.length(), len-s.length()+1) >= 0); }
+
+	public final int indexOf(TrieTree<String> map, int pos) {
+		MyHashMap.Entry<CInt, String> entry = new MyHashMap.Entry<>(new CInt(), null);
+		while (pos < len) {
+			map.match(this, pos, len, entry);
+			int len = entry.getKey().value;
+			if (len < 0) {
+				pos++;
+				continue;
+			}
+
+			return pos;
+		}
+
+		return -1;
+	}
 
 	public final int match(CharSequence s, int start, int end) {
 		checkBounds(start, end, len);
@@ -386,10 +395,10 @@ public class CharList implements CharSequence, Appender {
 	public final CharList padStart(CharSequence str, int count) { return pad(str, 0, count); }
 	public final CharList padEnd(char c, int count) { return pad(c, len, count); }
 	public final CharList padEnd(CharSequence str, int count) { return pad(str, len, count); }
-	public final CharList pad(char c, int off, int count) {
+	public CharList pad(char c, int off, int count) {
 		if (count > 0) {
 			ensureCapacity(len+count);
-			if (off != len) System.arraycopy(list, off, list, off+count, len-off);
+			System.arraycopy(list, off, list, off+count, len-off);
 			len += count;
 			count += off;
 			while (off < count) list[off++] = c;
@@ -397,7 +406,7 @@ public class CharList implements CharSequence, Appender {
 
 		return this;
 	}
-	public final CharList pad(CharSequence str, int off, int count) {
+	public CharList pad(CharSequence str, int off, int count) {
 		if (str.length() < 1) throw new IllegalStateException("empty padding");
 		if (count > 0) {
 			ensureCapacity(len+count);
@@ -562,14 +571,14 @@ public class CharList implements CharSequence, Appender {
 	}
 	public final CharList replaceMulti(TrieTree<String> map) {
 		CharList out = null;
-		int prevI = 0, i = 0;
+		int prevI = 0;
 
 		int pos = 0;
 
-		MyHashMap.Entry<MutableInt, String> entry = new MyHashMap.Entry<>(new MutableInt(), null);
+		MyHashMap.Entry<CInt, String> entry = new MyHashMap.Entry<>(new CInt(), null);
 		while (pos < len) {
 			map.match(this, pos, len, entry);
-			int len = entry.getKey().getValue();
+			int len = entry.getKey().value;
 			if (len < 0) {
 				pos++;
 				continue;
@@ -594,7 +603,7 @@ public class CharList implements CharSequence, Appender {
 	}
 	public final CharList replaceMulti(CharMap<String> map) {
 		CharList out = null;
-		int prevI = 0, i = 0;
+		int prevI = 0;
 		int pos = 0;
 
 		while (pos < len) {
@@ -669,14 +678,27 @@ public class CharList implements CharSequence, Appender {
 		len = out.len;
 		return count;
 	}
+	public final int preg_match_callback(Pattern regexp, Consumer<Matcher> callback) {
+		Matcher m = regexp.matcher(this);
+		int count = 0;
+		int i = 0;
+		while (m.find(i)) {
+			callback.accept(m);
+
+			i = m.end();
+			count++;
+		}
+		return count;
+	}
 	// endregion
 	public final CharSequence subSequence(int start, int end) {
 		checkBounds(start,end,len);
 		if (start == 0 && end == len) return this;
 		return start==end ? "" : new Slice(list, start, end);
 	}
-	public final String toString() { return toString(0, len); }
-	public final String toString(int start, int end) {
+	public final String toString() {return substring(0, len);}
+	public String substring(int start) {return substring(start, len);}
+	public final String substring(int start, int end) {
 		checkBounds(start,end,len);
 		return start==end ? "" : new String(list, start, end-start);
 	}
@@ -692,11 +714,13 @@ public class CharList implements CharSequence, Appender {
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
-		if (!(o instanceof CharSequence)) return false;
-
-		CharSequence cs = (CharSequence) o;
-
+		if (!(o instanceof CharSequence cs)) return false;
 		if (len != cs.length()) return false;
+
+		if (cs instanceof CharList anotherList && anotherList.getClass() == CharList.class) {
+			return Arrays.equals(list, 0, len, anotherList.list, 0, len);
+		}
+
 		char[] c = list;
 		for (int i = 0; i < len; i++) {
 			if (c[i] != cs.charAt(i)) return false;

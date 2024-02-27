@@ -1,11 +1,12 @@
 package roj.asm;
 
-import roj.asm.cp.*;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstClass;
+import roj.asm.cp.CstNameAndType;
+import roj.asm.cp.CstUTF;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.*;
 import roj.asm.type.Signature;
-import roj.asm.visitor.CodeVisitor;
-import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.XAttrCode;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
@@ -16,7 +17,6 @@ import roj.util.DynByteBuf;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
-import java.util.function.Consumer;
 
 /**
  * 字节码解析器
@@ -28,20 +28,8 @@ public final class Parser {
 	public static final int RECORD_ATTR = 8;
 
 	// region CLAZZ parse LOD 2
-
-	public static ConstantData parse(Class<?> o) {
-		String fn = o.getName().replace('.', '/').concat(".class");
-		ClassLoader cl = o.getClassLoader();
-		try (InputStream in = cl==null?ClassLoader.getSystemResourceAsStream(fn):cl.getResourceAsStream(fn)) {
-			return parse(IOUtil.getSharedByteBuf().readStreamFully(in));
-		} catch (Exception ignored) {}
-		return null;
-	}
-
 	public static ConstantData parse(byte[] b) { return parse(new ByteList(b)); }
-	public static ConstantData parse(DynByteBuf buf) {
-		DynByteBuf r = AsmShared.local().copy(buf);
-
+	public static ConstantData parse(DynByteBuf r) {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
 
@@ -52,9 +40,11 @@ public final class Parser {
 
 		int len = r.readUnsignedShort();
 
-		SimpleList<CstClass> itf = data.interfaces;
-		itf.ensureCapacity(len);
-		while (len-- > 0) itf.add((CstClass) pool.get(r));
+		if (len > 0) {
+			SimpleList<CstClass> itf = data.interfaceWritable();
+			itf.ensureCapacity(len);
+			while (len-- > 0) itf.add((CstClass) pool.get(r));
+		}
 
 		len = r.readUnsignedShort();
 		SimpleList<FieldNode> fields = data.fields;
@@ -202,23 +192,28 @@ public final class Parser {
 		} catch (IOException ignored) {}
 		return null;
 	}
-	public static ConstantData parseConstants(byte[] buf) { return parseConstants(new ByteList(buf)); }
-	public static ConstantData parseConstants(DynByteBuf buf) {
-		DynByteBuf r = AsmShared.local().copy(buf);
-
+	public static ConstantData parseConstants(byte[] buf) {return parseConstants(new ByteList(buf));}
+	public static ConstantData parseConstants(DynByteBuf r) {return parseConstants(r, null);}
+	public static ConstantData parseConstants(DynByteBuf r, ConstantPool pool) {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
 
-		ConstantPool pool = new ConstantPool();
-		pool.read(r, ConstantPool.BYTE_STRING);
+		if (pool == null) {
+			pool = new ConstantPool();
+			pool.read(r, ConstantPool.BYTE_STRING);
+		} else {
+			r.rIndex += pool.byteLength()+2;
+		}
 
 		ConstantData data = new ConstantData(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
 
 		int len = r.readUnsignedShort();
 
-		SimpleList<CstClass> itf = data.interfaces;
-		itf.ensureCapacity(len);
-		while (len-- > 0) itf.add((CstClass) pool.get(r));
+		if (len > 0) {
+			SimpleList<CstClass> itf = data.interfaceWritable();
+			itf.ensureCapacity(len);
+			while (len-- > 0) itf.add((CstClass) pool.get(r));
+		}
 
 		len = r.readUnsignedShort();
 		SimpleList<FieldNode> fields = data.fields;
@@ -261,20 +256,18 @@ public final class Parser {
 	// endregion
 	// region ACCESS parse LOD 0
 
-	public static AccessData parseAccess(DynByteBuf buf, boolean modifiable) {
-		DynByteBuf r = AsmShared.local().copy(buf);
-
+	public static AccessData parseAccess(DynByteBuf r, boolean modifiable) {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 
 		r.rIndex += 4; // ver
 
-		ConstantPool pool = AsmShared.local().constPool();
+		var pool = AsmShared.local().constPool();
 		pool.read(r, ConstantPool.ONLY_STRING);
 
 		int cfo = r.rIndex; // acc
 		char acc = r.readChar();
 
-		AccessData data = new AccessData(modifiable?buf.toByteArray():null, cfo, pool.getRefName(r), pool.getRefName(r));
+		AccessData data = new AccessData(modifiable?r.toByteArray():null, cfo, pool.getRefName(r), pool.getRefName(r));
 		data.acc = acc;
 
 		int len = r.readUnsignedShort();
@@ -305,28 +298,9 @@ public final class Parser {
 			if (k == 0) data.fields = com;
 			else data.methods = com;
 		}
+
+		AsmShared.local().constPool(pool);
 		return data;
-	}
-
-	// endregion
-	// region FOREACH CONSTANT LOD 0
-
-	public static void forEachConstant(DynByteBuf buf, Consumer<Constant> c) {
-		DynByteBuf r = AsmShared.local().copy(buf);
-		if (r.readInt() != 0xcafebabe) {
-			throw new IllegalArgumentException("Illegal header");
-		}
-
-		r.rIndex += 4; // ver
-
-		ConstantPool cp = AsmShared.local().constPool();
-		cp.setAddListener(c);
-		try {
-			cp.read(r, ConstantPool.CHAR_STRING);
-		} finally {
-			cp.setAddListener(null);
-			cp.clear();
-		}
 	}
 
 	// endregion
@@ -335,51 +309,4 @@ public final class Parser {
 	public static ByteList toByteArrayShared(IClass c) { return (ByteList) c.getBytes(AsmShared.getBuf()); }
 
 	public static DynByteBuf reader(Attribute attr) { return AsmShared.local().copy(attr.getRawData()); }
-
-	public static void compress(ConstantData data) {
-		ConstantPool cpw = new ConstantPool(data.cp.array().size());
-		CodeVisitor smallerLdc = new CodeVisitor() {
-			protected void ldc(byte code, Constant c) { cpw.reset(c); }
-		};
-
-		SimpleList<MethodNode> methods = data.methods;
-		for (int i = 0; i < methods.size(); i++) {
-			Attribute code = methods.get(i).attrByName("Code");
-			if (code != null) smallerLdc.visit(data.cp, reader(code));
-		}
-
-		CodeWriter cw = new CodeWriter();
-		ByteList bw = new ByteList();
-		for (int i = 0; i < methods.size(); i++) {
-			MethodNode mn = methods.get(i);
-			Attribute code = mn.attrByName("Code");
-			if (code != null) {
-				cw.init(bw, cpw);
-				cw.mn = mn; // for UNINITIAL_THIS
-				cw.visit(data.cp, code.getRawData());
-				cw.finish();
-
-				byte[] array = bw.toByteArray();
-				// will not parse this
-				mn.putAttr(new Attribute() {
-					@Override
-					public String name() { return "Code"; }
-					@Override
-					public DynByteBuf getRawData() { return ByteList.wrap(array); }
-					@Override
-					public String toString() { return "Tmpcw"; }
-				});
-				bw.clear();
-			}
-		}
-
-		data.parsed();
-		data.cp = cpw;
-
-		for (int i = 0; i < methods.size(); i++) {
-			MethodNode mn = methods.get(i);
-			Attribute code = mn.attrByName("Code");
-			if (code != null) mn.putAttr(new AttrUnknown("Code", code.getRawData()));
-		}
-	}
 }

@@ -16,4 +16,7 @@ public class UnableCastException extends ResolveException {
 		this.to = to;
 		this.code = cast;
 	}
+
+	@Override
+	public Throwable fillInStackTrace() {return this;}
 }

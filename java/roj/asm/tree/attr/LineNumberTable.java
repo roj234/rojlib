@@ -17,7 +17,7 @@ import java.util.List;
  * @since 2021/4/30 19:27
  */
 public final class LineNumberTable extends Attribute implements CodeAttribute {
-	public List<Item> list;
+	public SimpleList<Item> list;
 
 	public LineNumberTable() { list = new SimpleList<>(); }
 
@@ -38,6 +38,9 @@ public final class LineNumberTable extends Attribute implements CodeAttribute {
 		int i = ArrayUtil.binarySearchEx(list, value -> Integer.compare(value.pos.getValue(), bci));
 		return i < 0 ? -1 : list.get(i).line;
 	}
+
+	public void add(Label pos, int i) {list.add(new Item(pos, i));}
+	public int lastBci() { return list.isEmpty() ? -1 : list.getLast().pos.getValue(); }
 
 	public String toString() {
 		List<Object> a = SimpleList.asModifiableList("BCI","行号",IntMap.UNDEFINED);

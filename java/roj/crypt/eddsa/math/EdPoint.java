@@ -1,6 +1,6 @@
 package roj.crypt.eddsa.math;
 
-import roj.collect.ObjectPool;
+import roj.collect.SimpleList;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -19,7 +19,8 @@ public final class EdPoint implements Serializable {
 
 		final byte[] ba = new byte[256], bb = new byte[256];
 
-		final ObjectPool<EdInteger> tmp1 = new ObjectPool<>(null, 10);
+		final SimpleList<EdInteger> tmp1 = new SimpleList<>(10);
+		void reserve(EdInteger t) {if (tmp1.size() < 10) tmp1.add(t);}
 	}
 
 	private EdCurve curve;
@@ -115,7 +116,7 @@ public final class EdPoint implements Serializable {
 					case P2:
 						if (mutable) {
 							state = Format.P2;
-							NUMS.get().tmp1.reserve(T);
+							NUMS.get().reserve(T);
 							T = null;
 							return this;
 						}
@@ -140,7 +141,7 @@ public final class EdPoint implements Serializable {
 							X.mul(T);
 							Y.mul(Z);
 							Z.mul(T);
-							NUMS.get().tmp1.reserve(T);
+							NUMS.get().reserve(T);
 							T = null;
 							return this;
 						}
@@ -234,7 +235,7 @@ public final class EdPoint implements Serializable {
 					EdInteger Zn;
 					if (T != null) Zn = T.set(Y);
 					else {
-						Zn = tt.tmp1.get();
+						Zn = tt.tmp1.pop();
 						if (Zn == null) Zn = Y.mutable();
 						else Zn.set(Y);
 					}
@@ -622,4 +623,3 @@ public final class EdPoint implements Serializable {
 		return "[EdPoint\nX=" + this.X + "\nY=" + this.Y + "\nZ=" + this.Z + "\nT=" + this.T + "\n]";
 	}
 }
-

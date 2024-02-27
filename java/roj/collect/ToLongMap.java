@@ -1,6 +1,5 @@
 package roj.collect;
 
-import roj.concurrent.FastThreadLocal;
 import roj.util.Helpers;
 
 import java.util.Set;
@@ -29,23 +28,45 @@ public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K
 
 		@Override
 		public String toString() { return String.valueOf(k)+'='+v; }
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+
+			var entry = (Entry<?>) o;
+			if (!(k != null ? k.equals(entry.k) : entry.k == null)) return false;
+			return v == entry.v;
+		}
+		@Override
+		public int hashCode() {
+			int hash = k != null ? k.hashCode() : 0;
+			return (int)(v ^ v >>> 32) ^ hash;
+		}
 	}
 
 	public ToLongMap() { super(); }
 	public ToLongMap(int size) { super(size); }
-	public ToLongMap(int size, float loadFactor) { super(size, loadFactor); }
 	public ToLongMap(MyHashMap<K, Long> map) { super(map); }
 
-	public Set<Entry<K>> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public final Set<Entry<K>> selfEntrySet() { return _Generic_EntrySet.create(this); }
 
 	@Override
-	public long applyAsLong(K key) { return getOrDefault(key, -1); }
-
-	public long getLong(K key) { return getOrDefault(key, 0); }
-	public long getOrDefault(K key, long def) {
+	public final long applyAsLong(K key) { return getOrDefault(key, -1); }
+	public final long getLong(K key) { return getOrDefault(key, 0); }
+	public final long getOrDefault(K key, long def) {
 		Entry<K> entry = (Entry<K>) getEntry(key);
 		return entry == null ? def : entry.v;
 	}
+
+	public long increment(K key, long i) {
+		Entry<K> entry = (Entry<K>) getOrCreateEntry(key);
+		if (entry.k == UNDEFINED) {
+			entry.k = key;
+			size++;
+		}
+		return entry.v += i;
+	}
+
 	public Long putLong(K key, long val) {
 		Entry<K> entry = (Entry<K>) getOrCreateEntry(key);
 		Long oldV;
@@ -57,7 +78,7 @@ public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K
 		} else {
 			oldV = entry.v;
 		}
-		onPut(entry, val);
+
 		entry.v = val;
 		return oldV;
 	}
@@ -66,18 +87,17 @@ public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K
 		if (entry.k == UNDEFINED) {
 			entry.k = key;
 			entry.v = val;
-			onPut(entry, val);
+			size++;
 			return true;
 		}
 		return false;
 	}
 
-	public long removeLong(Object k) {
+	public final long removeLong(Object k) { return removeLong(k, -1); }
+	public long removeLong(Object k, int def) {
 		Entry<K> entry = (Entry<K>) remove0(k, UNDEFINED);
-		if (entry == null) return -1;
-		long oldV = entry.v;
-		reserveEntry(entry);
-		return oldV;
+		if (entry == null) return def;
+		return entry.v;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -94,21 +114,9 @@ public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K
 		return false;
 	}
 
-	@Override
-	protected final void onPut(AbstractEntry<K, Long> entry, Long newV) { onPut(entry, (long)newV); }
-	protected void onPut(AbstractEntry<K, Long> entry, long newV) {}
-
-	private static final FastThreadLocal<ObjectPool<AbstractEntry<?,?>>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(null, 99));
 	protected AbstractEntry<K, Long> useEntry() {
-		AbstractEntry<K, Long> entry = Helpers.cast(MY_OBJECT_POOL.get().get());
-
-		if (entry == null) entry = new Entry<>();
+		AbstractEntry<K, Long> entry = new Entry<>();
 		entry.k = Helpers.cast(UNDEFINED);
 		return entry;
-	}
-	protected void reserveEntry(AbstractEntry<?, ?> entry) {
-		entry.k = null;
-		entry.next = null;
-		MY_OBJECT_POOL.get().reserve(entry);
 	}
 }

@@ -1,6 +1,5 @@
 package roj.crypt;
 
-import roj.io.IOUtil;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -36,9 +35,6 @@ public final class Base64 {
 		return out;
 	}
 
-	public static String btoa(byte[] in) { return IOUtil.SharedCoder.get().encodeBase64(in); }
-	public static byte[] atob(CharSequence s) { return IOUtil.SharedCoder.get().decodeBase64(s); }
-
 	public static <T extends Appendable> T encode(DynByteBuf in, T out) { return encode(in, out, B64_CHAR); }
 	public static <T extends Appendable> T encode(DynByteBuf in, T out, byte[] tab) {
 		try {
@@ -73,6 +69,7 @@ public final class Base64 {
 	}
 
 	public static DynByteBuf decode(CharSequence s, DynByteBuf out) { return decode(s, 0, s.length(), out, B64_CHAR_REV); }
+	public static DynByteBuf decode(CharSequence s, DynByteBuf out, byte[] tab) { return decode(s, 0, s.length(), out, tab); }
 	public static DynByteBuf decode(CharSequence s, int i, int len, DynByteBuf out, byte[] tab) {
 		do {
 			int bits = tab[s.charAt(i++)] << 18 | tab[s.charAt(i++)] << 12;

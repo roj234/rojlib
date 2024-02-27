@@ -1,0 +1,33 @@
+package roj.net.http.h2;
+
+import org.jetbrains.annotations.NotNull;
+
+import java.io.IOException;
+
+/**
+ * @author Roj234
+ * @since 2024/7/13 0013 2:25
+ */
+public class H2FlowControlSimple implements H2FlowControl {
+	public H2FlowControlSimple() {this(65535, 0.5f);}
+	public H2FlowControlSimple(int windowSize, float ratio) {this.windowSize = windowSize;this.ratio = ratio;}
+
+	private final int windowSize;
+	private final float ratio;
+
+	@Override
+	public void initSetting(H2Setting setting) {setting.initial_window_size = windowSize;}
+
+	@Override
+	public void dataReceived(H2Connection connection, @NotNull H2Stream stream, int bytes) throws IOException {
+		// send data when remain < 512 or window >= 512
+		//    anti small increment attack
+		int size = connection.getLocalSetting().initial_window_size;
+		int stWindow = stream.getReceiveWindow();
+
+		if ((float) stWindow / size < ratio) connection.sendWindowUpdate(stream, size-stWindow);
+
+		int conWindow = connection.getReceiveWindow();
+		if ((float) conWindow / size < ratio) connection.sendWindowUpdate(null, size-conWindow);
+	}
+}

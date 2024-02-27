@@ -5,7 +5,6 @@ import roj.util.Helpers;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -17,7 +16,7 @@ import java.util.function.Function;
  * @author Roj234
  * @since 2022/10/7 0007 23:54
  */
-public interface Promise<T> extends Future<T> {
+public interface Promise<T> {
 	static <T> Promise<T> sync(Consumer<PromiseCallback> handler) { return new PromiseImpl<>(null, handler); }
 	static <T> Promise<T> async(TaskHandler e, Consumer<PromiseCallback> handler) { return new PromiseImpl<>(e, handler); }
 	static <T> Promise<T> resolve(T t) {

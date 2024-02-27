@@ -1,6 +1,7 @@
 package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
+import roj.compiler.api.ListIterable;
 import roj.util.ArrayCache;
 
 import java.util.Arrays;
@@ -11,20 +12,13 @@ import java.util.PrimitiveIterator;
  * @author Roj234
  * @since 2021/5/27 13:37
  */
+@ListIterable
 public class IntList implements Iterable<Integer> {
-	public static final int DEFAULT_VALUE = -1;
-
 	protected int[] list;
-	protected int size = 0;
+	protected int size;
 
-	public IntList() {
-		list = ArrayCache.INTS;
-	}
-
-	public IntList(int size) {
-		list = new int[size];
-		Arrays.fill(list, DEFAULT_VALUE);
-	}
+	public IntList() {list = ArrayCache.INTS;}
+	public IntList(int size) {list = new int[size];}
 
 	public void ensureCapacity(int cap) {
 		if (list.length < cap) {
@@ -32,49 +26,41 @@ public class IntList implements Iterable<Integer> {
 			int[] newList = new int[length];
 			if (size > 0) System.arraycopy(list, 0, newList, 0, size);
 			list = newList;
-			Arrays.fill(list, size, length, DEFAULT_VALUE);
 		}
 	}
 
-	@Override
-	public String toString() {
-		StringBuilder sb = new StringBuilder("IntList[");
-		if (size > 0) {
-			int i = 0;
-			while (true) {
-				sb.append(list[i++]);
-				if (i == size) break;
-				sb.append(", ");
-			}
-		}
-		return sb.append(']').toString();
+	public boolean isEmpty() {return size == 0;}
+	public int size() {return size;}
+	public void setSize(int size) {
+		ensureCapacity(size);
+		this.size = size;
+	}
+	public boolean contains(int o) {return indexOf(o) != -1;}
+
+	@NotNull
+	public PrimitiveIterator.OfInt iterator() {return iterator(0);}
+	@NotNull
+	public PrimitiveIterator.OfInt iterator(int i) {
+		Itr itr = new Itr();
+		itr.i = i;
+		return itr;
 	}
 
 	@NotNull
 	public int[] toArray() {
 		if (size == 0) return ArrayCache.INTS;
-		int[] arr = new int[size];
-		System.arraycopy(list, 0, arr, 0, size);
-		return arr;
-	}
-
-	public int[] getRawArray() {
-		return list;
-	}
-
-	public void setSize(int size) {
-		ensureCapacity(size);
-		this.size = size;
-	}
-
-	public int size() {
-		return size;
+		return Arrays.copyOf(list, size);
 	}
 
 	public boolean add(int e) {
 		ensureCapacity(size + 1);
 		list[size++] = e;
 		return true;
+	}
+
+	public int pop() {
+		if (size == 0) throw new ArrayIndexOutOfBoundsException(-1);
+		return list[--size];
 	}
 
 	public boolean addAll(int[] ints) {
@@ -84,16 +70,10 @@ public class IntList implements Iterable<Integer> {
 		return true;
 	}
 
-	public void trimToSize() {
-		if (list.length != size) list = Arrays.copyOf(list, size);
-	}
-
-	public void addAll(IntList il) {
-		addAll(il.list, il.size);
-	}
+	public void addAll(IntList il) {addAll(il.list, il.size);}
 
 	public boolean addAll(int[] ints, int len) {
-		if (len < 0) throw new NegativeArraySizeException();
+		if (len < 0) throw new ArrayIndexOutOfBoundsException(len);
 		if (len == 0) return false;
 		ensureCapacity(size + len);
 		System.arraycopy(ints, 0, list, size, len);
@@ -110,19 +90,16 @@ public class IntList implements Iterable<Integer> {
 		return true;
 	}
 
-	public boolean addAllReversed(int i, int[] collection) {
-		if (i > size) throw new ArrayIndexOutOfBoundsException(i);
-		ensureCapacity(size + collection.length);
-		System.arraycopy(list, i, list, i + collection.length, size - i);
-		for (int k = collection.length - 1; k >= 0; k--) {
-			list[i++] = collection[k];
-		}
-		size += collection.length;
-		return true;
+	public void clear() {size = 0;}
+	public void trimToSize() {if (list.length != size) list = Arrays.copyOf(list, size);}
+
+	public int get(int i) {
+		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
+		return list[i];
 	}
 
 	public int set(int i, int e) {
-		if(i < 0 || i >= size) throw new ArrayIndexOutOfBoundsException(i);
+		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
 		int o = list[i];
 		list[i] = e;
 		return o;
@@ -132,27 +109,16 @@ public class IntList implements Iterable<Integer> {
 		if (i > size) throw new ArrayIndexOutOfBoundsException(i);
 		System.arraycopy(list, i, list, i + 1, size - i);
 		list[i] = e;
+		size++;
 	}
 
 	public int remove(int i) {
-		if (i >= 0 && i < size) {
-			int val = list[i];
-			if (size - 1 - i >= 0) {
-				System.arraycopy(list, i + 1, list, i, size - 1 - i);
-			}
-			size--;
-			return val;
-		}
-		throw new ArrayIndexOutOfBoundsException(i);
-	}
+		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
 
-	public boolean removeByValue(int e) {
-		int i = indexOf(e);
-		if (i >= 0) {
-			remove(i);
-			return true;
-		}
-		return false;
+		int val = list[i];
+		if (size - 1 - i > 0) System.arraycopy(list, i + 1, list, i, size - 1 - i);
+		size--;
+		return val;
 	}
 
 	public int indexOf(int key) {
@@ -173,50 +139,39 @@ public class IntList implements Iterable<Integer> {
 		return -1;
 	}
 
-	@NotNull
-	public PrimitiveIterator.OfInt iterator() {
-		return iterator(0);
+	public void removeRange(int begin, int end) {
+		if (begin >= end) return;
+		// will throw exceptions if out of bounds...
+		System.arraycopy(list, end, list, begin, size - end);
+		size -= end - begin;
 	}
 
-	@NotNull
-	public PrimitiveIterator.OfInt iterator(int i) {
-		Itr itr = new Itr();
-		itr.i = i;
-		return itr;
-	}
+	public int[] getRawArray() {return list;}
 
-	public boolean isEmpty() {
-		return size == 0;
-	}
-
-	public boolean contains(int o) {
-		return indexOf(o) != -1;
-	}
-
-	public int get(int i) {
-		if (i > size) throw new ArrayIndexOutOfBoundsException(i);
-		return list[i];
-	}
-
-	public int pop() { if (size == 0) throw new ArrayIndexOutOfBoundsException(-1);
-		return list[--size]; }
-
-	public void clear() {
-		size = 0;
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder("IntList[");
+		if (size > 0) {
+			int i = 0;
+			while (true) {
+				sb.append(list[i++]);
+				if (i == size) break;
+				sb.append(", ");
+			}
+		}
+		return sb.append(']').toString();
 	}
 
 	private class Itr implements ListIterator<Integer>, PrimitiveIterator.OfInt {
 		int i = 0, mark = -1;
 
-		public boolean hasNext() { return i < size; }
-		public int nextInt() { return list[mark = i++]; }
-		public Integer next() { return nextInt(); }
-		public int nextIndex() { return i; }
-
-		public boolean hasPrevious() { return i > 0; }
-		public int previousInt() { return list[mark = --i]; }
-		public Integer previous() { return previousInt(); }
-		public int previousIndex() { return i-1; }
+		public boolean hasNext() {return i < size;}
+		public Integer next() {return nextInt();}
+		public int nextInt() {return list[mark = i++];}
+		public boolean hasPrevious() {return i > 0;}
+		public Integer previous() {return previousInt();}
+		public int nextIndex() {return i;}
+		public int previousIndex() {return i - 1;}
 
 		public void remove() {
 			if (mark == -1) throw new IllegalStateException();
@@ -224,12 +179,15 @@ public class IntList implements Iterable<Integer> {
 			if (mark < i) i--;
 			mark = -1;
 		}
-		public void set(Integer v) { list[mark] = v; }
+
+		public void set(Integer v) {list[mark] = v;}
 		public void add(Integer v) {
 			if (mark == -1) throw new IllegalStateException();
 
 			IntList.this.add(i++, v);
 			mark = -1;
 		}
+
+		public int previousInt() {return list[mark = --i];}
 	}
 }

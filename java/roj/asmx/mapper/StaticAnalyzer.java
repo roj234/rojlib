@@ -30,7 +30,7 @@ public class StaticAnalyzer {
 		Map<String, Context> map = new MyHashMap<>();
 
 		ZipArchive zf = new ZipArchive(new File(args[1]));
-		for (ZEntry entry : zf.getEntries().values()) {
+		for (ZEntry entry : zf.entries()) {
 			if (entry.getName().endsWith(".class")) {
 				Context ctx = new Context(entry.getName(), zf.get(entry));
 				map.put(ctx.getData().name, ctx);
@@ -57,7 +57,7 @@ public class StaticAnalyzer {
 		System.out.println(removed.size() + " removed");
 
 		for (String name : removed) zf.put(name + ".class", null);
-		zf.store();
+		zf.save();
 		zf.close();
 	}
 

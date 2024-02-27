@@ -4,13 +4,10 @@ import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.config.data.*;
-import roj.config.word.Word;
+import roj.config.serial.CVisitor;
 import roj.text.CharList;
-import roj.text.TextReader;
 import roj.util.Helpers;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -18,10 +15,8 @@ import java.util.function.Consumer;
  * @author Roj233
  * @since 2022/1/6 13:46
  */
-public final class CsvParser extends Parser<CList> {
-	public static final int SKIP_FIRST_LINE = 1;
-
-	private static final short seperator = 11, line = 12;
+public final class CsvParser extends Parser {
+	private static final short seperator = 9, line = 10;
 
 	private static final MyBitSet CSV_LENDS = MyBitSet.from("\r\n,;");
 	private static final Int2IntMap CSV_C2C = new Int2IntMap(16);
@@ -35,33 +30,13 @@ public final class CsvParser extends Parser<CList> {
 	}
 	{ literalEnd = CSV_LENDS; }
 
-	public static CList parses(CharSequence string) throws ParseException {
-		return new CsvParser().parse(string, 0);
-	}
-
 	private List<CEntry> tmpList;
 
-	public void forEachLine(File file, Consumer<List<String>> c) throws IOException, ParseException {
-		forEachLine(file,c,0);
-	}
-	public void forEachLine(File file, Consumer<List<String>> c, int flag) throws IOException, ParseException {
-		try (TextReader in = new TextReader(file, charset)) {
-			forEachLine(in, c, flag);
-		}
-	}
 	public void forEachLine(CharSequence text, Consumer<List<String>> c) throws ParseException {
-		forEachLine(text,c,0);
-	}
-	public void forEachLine(CharSequence text, Consumer<List<String>> c, int flag) throws ParseException {
 		init(text);
 		tmpList = new SimpleList<>();
 
 		int i = 0;
-		if ((flag & SKIP_FIRST_LINE) != 0) {
-			skipFirstLine();
-			i = 1;
-		}
-
 		while (true) {
 			Word w = next();
 			short type = w.type();
@@ -79,41 +54,20 @@ public final class CsvParser extends Parser<CList> {
 		tmpList = null;
 		input = "";
 	}
-
-	private void skipFirstLine() throws ParseException {
-		while (true) {
-			Word w = next();
-			short type = w.type();
-			if (type == Word.EOF) break;
-			else if (type == line) continue;
-
-			try {
-				fastLine(w);
-			} catch (ParseException e) {
-				throw e.addPath("$[0]");
-			}
-			break;
-		}
-	}
-
 	private List<String> fastLine(Word w) throws ParseException {
 		List<String> list = Helpers.cast(tmpList); list.clear();
 
-		loop:
-		while (true) {
-			if (w.type() < 10) {
-				list.add(w.val());
-				w = next();
-			} else {
-				// really: after-seperator
-				list.add(null);
-			}
+		for(;; w = next()) {
+			var type = w.type();
+			if (type == seperator) {list.add(null);continue;}
+			list.add(w.val());
 
-			switch (w.type()) {
-				case line: case Word.EOF: break loop;
-				case seperator: w = next(); break;
-				default: unexpected(w.val(), "分隔符");
-			}
+			w = next();
+			type = w.type();
+
+			if (type == seperator) continue;
+			if (type == line || type == Word.EOF) break;
+			unexpected(w.toString(), "分隔符");
 		}
 
 		return list;
@@ -121,19 +75,68 @@ public final class CsvParser extends Parser<CList> {
 
 	public CsvParser() {}
 
+	public <C extends CVisitor> C parse(CharSequence text, int flags, C cv) throws ParseException {
+		this.flag = flags;
+		init(text);
+		tmpList = new SimpleList<>();
+
+		int i = 0;
+
+		cv.valueList();
+
+		var keys = new SimpleList<>(fastLine(next()));
+		List<String> list = Helpers.cast(tmpList);
+
+		while (true) {
+			Word w = next();
+			short type = w.type();
+			if (type == Word.EOF) break;
+			else if (type == line) continue;
+
+			try {
+				list.clear();
+				int j = 0;
+
+				cv.valueMap();
+				for(;; w = next(), j++) {
+					if (w.type() == seperator) continue;
+
+					cv.key(keys.get(j));
+					switch (w.type()) {
+						case Word.LITERAL -> cv.value(w.val());
+						case Word.INTEGER -> cv.value(w.asInt());
+						case Word.DOUBLE -> cv.value(w.asDouble());
+						case Word.LONG -> cv.value(w.asLong());
+					}
+
+					w = next();
+					type = w.type();
+
+					if (type == seperator) continue;
+					if (type == line || type == Word.EOF) break;
+					unexpected(w.val(), "分隔符");
+				}
+				cv.pop();
+			} catch (ParseException e) {
+				throw e.addPath("$["+i+"]");
+			}
+			i++;
+		}
+
+		cv.pop();
+		init(null);
+		return cv;
+	}
+
 	@Override
+	@Deprecated
 	public CList parse(CharSequence text, int flags) throws ParseException {
 		this.flag = flags;
 		init(text);
 		tmpList = new SimpleList<>();
 
 		int i = 0;
-		if ((flag & SKIP_FIRST_LINE) != 0) {
-			skipFirstLine();
-			i = 1;
-		}
-
-		CList list = new CList();
+		var list = new CList();
 		while (true) {
 			Word w = next();
 			short type = w.type();
@@ -152,35 +155,32 @@ public final class CsvParser extends Parser<CList> {
 		init(null);
 		return list;
 	}
-
 	private CList csvLine(Word w) throws ParseException {
-		List<CEntry> buf = tmpList; buf.clear();
+		var buf = tmpList; buf.clear();
 
-		loop:
-		while (true) {
-			CEntry entry;
-			switch (w.type()) {
-				case Word.LITERAL: entry = CString.valueOf(w.val()); break;
-				case Word.INTEGER: entry = CInteger.valueOf(w.asInt()); break;
-				case Word.DOUBLE: entry = CDouble.valueOf(w.asDouble()); break;
-				case Word.LONG: entry = CLong.valueOf(w.asLong()); break;
-				default: entry = CNull.NULL; break;
-			}
-			buf.add(entry);
-			if (w.type() < 10) w = next();
+		for(;; w = next()) {
+			var type = w.type();
+			buf.add(switch (type) {
+				case Word.LITERAL -> CString.valueOf(w.val());
+				case Word.INTEGER -> CInt.valueOf(w.asInt());
+				case Word.DOUBLE -> CDouble.valueOf(w.asDouble());
+				case Word.LONG -> CLong.valueOf(w.asLong());
+				default -> CNull.NULL;
+			});
+			if (type == seperator) continue;
 
-			switch (w.type()) {
-				case line: case Word.EOF: break loop;
-				case seperator: w = next(); break;
-				default: unexpected(w.val(), "分隔符");
-			}
+			w = next();
+			type = w.type();
+
+			if (type == seperator) continue;
+			if (type == line || type == Word.EOF) break;
+			unexpected(w.val(), "分隔符");
 		}
 
 		return new CList(new SimpleList<>(buf));
 	}
 
-	public int availableFlags() { return SKIP_FIRST_LINE; }
-	public String format() { return "CSV"; }
+	public ConfigMaster format() {return ConfigMaster.CSV;}
 
 	@Override
 	@SuppressWarnings("fallthrough")
@@ -228,7 +228,5 @@ public final class CsvParser extends Parser<CList> {
 	}
 
 	@Override
-	protected Word onInvalidNumber(int flag, int i, String reason) throws ParseException {
-		return readLiteral();
-	}
+	protected Word onInvalidNumber(int flag, int i, String reason) throws ParseException { return readLiteral(); }
 }

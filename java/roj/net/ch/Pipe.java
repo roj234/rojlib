@@ -1,9 +1,5 @@
 package roj.net.ch;
 
-import roj.crypt.AEADParameterSpec;
-import roj.crypt.RCipherSpi;
-import roj.crypt.SM3;
-import roj.crypt.XChaCha;
 import roj.io.NIOUtil;
 import roj.io.buf.BufferPool;
 import roj.util.DynByteBuf;
@@ -14,10 +10,6 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
-import java.security.GeneralSecurityException;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.util.Arrays;
 
 import static roj.io.NIOUtil.UNAVAILABLE;
 
@@ -25,7 +17,7 @@ import static roj.io.NIOUtil.UNAVAILABLE;
  * @author Roj233
  * @since 2021/12/24 23:27
  */
-public class Pipe implements Selectable {
+public final class Pipe implements Selectable {
 	public Object att;
 	private SelectionKey upKey, downKey;
 
@@ -36,48 +28,34 @@ public class Pipe implements Selectable {
 	// state / flag
 	public long uploaded, downloaded;
 	public boolean closeDown = true;
-
-	BufferPool pool() {
-		return BufferPool.localPool();
-	}
+	private int altWriteCheck;
 
 	public Pipe() {}
 
-	public final boolean isUpstreamEof() {
-		return up == null || !up.isOpen();
-	}
-
-	public final boolean isDownstreamEof() {
-		return down == null || !down.isOpen();
-	}
+	public final boolean isUpstreamEof() {return up == null || !up.isOpen();}
+	public final boolean isDownstreamEof() {return down == null || !down.isOpen();}
 
 	public final void setUp(MyChannel ctx) throws IOException {
 		pendDown = ctx.i_getBuffer();
 		if (!pendDown.isReadable()) pendDown = null;
 		else {
-			pendDown = pool().allocate(true, pendDown.readableBytes()).put(pendDown);
+			pendDown = BufferPool.buffer(true, pendDown.readableBytes()).put(pendDown);
 			cipher(pendDown, true);
 		}
 		up = (SocketChannel) ctx.i_outOfControl();
 	}
-
-	public SocketChannel getUp() {
-		return up;
-	}
+	public SocketChannel getUp() {return up;}
 
 	public final void setDown(MyChannel ctx) throws IOException {
 		pendUp = ctx.i_getBuffer();
 		if (!pendUp.isReadable()) pendUp = null;
 		else {
-			pendUp = pool().allocate(true, pendUp.readableBytes()).put(pendUp);
+			pendUp = BufferPool.buffer(true, pendUp.readableBytes()).put(pendUp);
 			cipher(pendUp, false);
 		}
 		down = (SocketChannel) ctx.i_outOfControl();
 	}
-
-	public SocketChannel getDown() {
-		return down;
-	}
+	public SocketChannel getDown() {return down;}
 
 	public void reset() {
 		if (pendUp != null) BufferPool.reserve(pendUp);
@@ -101,26 +79,33 @@ public class Pipe implements Selectable {
 		downKey = down.register(sel, pendDown == null ? SelectionKey.OP_READ : SelectionKey.OP_WRITE, att);
 	}
 
-	public void selected(int readyOps) throws IOException, GeneralSecurityException {
+	public void selected(int readyOps) throws IOException {
 		if (up == null || down == null) return;
 
 		int c;
 		if (pendUp != null) {
 			try {
 				c = write(up, pendUp);
+
+				SelectionKey k = upKey;
+				if (k == null) k = DummySelectionKey.INSTANCE;
+
 				if (!pendUp.isReadable()) {
 					BufferPool.reserve(pendUp);
 					pendUp = null;
 
-					SelectionKey k = upKey;
-					if (k != null) k.interestOps(SelectionKey.OP_READ);
+					k.interestOps(SelectionKey.OP_READ);
 				}
 
 				if (c > 0) {
 					uploaded += c;
+					altWriteCheck &= ~2;
 				} else if (c < 0) {
 					close();
 					return;
+				} else if (k.isWritable()) {
+					k.interestOps(0);
+					altWriteCheck |= 2;
 				}
 			} catch (IOException e) {
 				close();
@@ -131,19 +116,26 @@ public class Pipe implements Selectable {
 		if (pendDown != null) {
 			try {
 				c = write(down, pendDown);
+
+				SelectionKey k = downKey;
+				if (k == null) k = DummySelectionKey.INSTANCE;
+
 				if (!pendDown.isReadable()) {
 					BufferPool.reserve(pendDown);
 					pendDown = null;
 
-					SelectionKey k = downKey;
-					if (k != null) k.interestOps(SelectionKey.OP_READ);
+					k.interestOps(SelectionKey.OP_READ);
 				}
 
 				if (c > 0) {
 					downloaded += c;
+					altWriteCheck &= ~1;
 				} else if (c < 0) {
 					close();
 					return;
+				} else if (k.isWritable()) {
+					k.interestOps(0);
+					altWriteCheck |= 1;
 				}
 			} catch (IOException e) {
 				close();
@@ -151,7 +143,7 @@ public class Pipe implements Selectable {
 			}
 		}
 
-		BufferPool pool = pool();
+		BufferPool pool = BufferPool.localPool();
 		DynByteBuf tmp = pool.allocate(true, 1536);
 
 		// region up=>down
@@ -208,11 +200,13 @@ public class Pipe implements Selectable {
 		// endregion
 	}
 
-	protected void cipher(DynByteBuf tmp, boolean toDown) {}
+	private void cipher(DynByteBuf tmp, boolean toDown) {}
 
 	@Override
-	public void tick(int elapsed) {
+	public void tick(int elapsed) throws IOException {
 		idleTime += elapsed;
+
+		if (elapsed > 0 && altWriteCheck != 0) selected(0);
 	}
 
 	private void closeDown() throws IOException {
@@ -227,12 +221,12 @@ public class Pipe implements Selectable {
 		}
 	}
 
-	public final void close() throws IOException {
-		if (up == null) return;
-		reset();
+	public synchronized final void close() throws IOException {
 		try {
-			up.close();
+			if (up != null) up.close();
 			if (down != null) down.close();
+
+			reset();
 		} finally {
 			pendUp = pendDown = null;
 			up = down = null;
@@ -242,46 +236,6 @@ public class Pipe implements Selectable {
 	@Override
 	public String toString() {
 		return "Pipe{" + "att=" + att + ", idle=" + idleTime + ", U=" + uploaded + ", D=" + downloaded + '}';
-	}
-
-	public static class CipherPipe extends Pipe {
-		final XChaCha enc, dec;
-		final byte[] pass;
-
-		public CipherPipe(byte[] pass) {
-			if (pass.length != 32) pass = new SM3().digest(pass);
-			this.pass = pass;
-			enc = new XChaCha();
-			dec = new XChaCha();
-			reset();
-		}
-
-		@Override
-		public void reset() {
-			super.reset();
-			byte[] iv = Arrays.copyOf(pass, 24);
-
-			try {
-				enc.init(XChaCha.ENCRYPT_MODE, pass, new AEADParameterSpec(iv), null);
-				dec.init(XChaCha.DECRYPT_MODE, pass, new AEADParameterSpec(iv), null);
-			} catch (InvalidAlgorithmParameterException | InvalidKeyException e) {
-				e.printStackTrace();
-			}
-		}
-
-		@Override
-		protected void cipher(DynByteBuf src, boolean toDown) {
-			if (!src.isReadable()) return;
-
-			RCipherSpi cip = toDown ? dec : enc;
-			int idx = src.rIndex;
-			DynByteBuf dst = src.slice(src.rIndex, src.readableBytes());
-			dst.wIndex(0);
-			try {
-				cip.crypt(src, dst);
-			} catch (GeneralSecurityException never_happen) {}
-			src.rIndex = idx;
-		}
 	}
 
 	private static int read(SocketChannel ch, DynByteBuf dst) throws IOException {

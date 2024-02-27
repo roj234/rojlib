@@ -6,7 +6,7 @@ import roj.asm.type.TypeHelper;
 import roj.asm.visitor.Label;
 import roj.concurrent.SegmentReadWriteLock;
 import roj.io.buf.LeakDetector;
-import roj.reflect.FastInit;
+import roj.reflect.ClassDefiner;
 import roj.reflect.Proxy;
 import roj.util.Helpers;
 
@@ -35,8 +35,7 @@ public class SimpleConnectionPool {
 	private volatile int multiplier;
 
 	private final LinkedTransferQueue<Object[]> transfer = new LinkedTransferQueue<>();
-
-	static final ThreadLocal<Object[]> connId = new ThreadLocal<>();
+	private final ThreadLocal<Object[]> connId = new ThreadLocal<>();
 
 	public SimpleConnectionPool(DbConnector connector, int pooledConnections) {
 		this.connector = connector;
@@ -113,7 +112,7 @@ public class SimpleConnectionPool {
 	private Connection wrap(Connection connection) {
 		if (proxy == null) {
 			block:
-			synchronized (this) {
+			synchronized (SimpleConnectionPool.class) {
 				if (proxy != null) break block;
 				ConstantData data = new ConstantData();
 				data.name("roj/sql/SimpleConnectionPool$PooledConnection");
@@ -148,8 +147,8 @@ public class SimpleConnectionPool {
 					return false;
 				}, closeHandler);
 
-				FastInit.prepare(data);
-				proxy = Helpers.cast(FastInit.make(data));
+				ClassDefiner.premake(data);
+				proxy = Helpers.cast(ClassDefiner.make(data));
 			}
 		}
 

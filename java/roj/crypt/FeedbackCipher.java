@@ -1,5 +1,6 @@
 package roj.crypt;
 
+import org.intellij.lang.annotations.MagicConstant;
 import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -37,7 +38,7 @@ public class FeedbackCipher extends RCipherSpi {
 			default: throw new NoSuchAlgorithmException(s);
 		}
 
-		tmp = type == MODE_OFB || type == MODE_CFB ? new ByteList(vec.array()) : new ByteList(cip.engineGetBlockSize());
+		tmp = type == MODE_OFB ? new ByteList(vec.array()) : new ByteList(cip.engineGetBlockSize());
 	}
 
 	@Override
@@ -72,7 +73,7 @@ public class FeedbackCipher extends RCipherSpi {
 	private byte type, padding;
 	protected boolean decrypt;
 
-	public FeedbackCipher(RCipherSpi cip, int mode) {
+	public FeedbackCipher(RCipherSpi cip, @MagicConstant(intValues = {MODE_ECB,MODE_CBC,MODE_PCBC,MODE_CTS,MODE_OFB,MODE_CFB,MODE_CTR}) int mode) {
 		if (!cip.isBareBlockCipher() || cip.engineGetBlockSize() == 0) throw new IllegalArgumentException("Not a block cipher");
 
 		this.cip = cip;
@@ -205,7 +206,7 @@ public class FeedbackCipher extends RCipherSpi {
 		} else {
 			T.setArray(vArr);
 			while (cyl-- > 0) {
-				for (int i = 0; i < blockSize; i++) vArr[i] ^= in.get();
+				for (int i = 0; i < blockSize; i++) vArr[i] ^= in.readByte();
 
 				T.clear();
 				cip.cryptOneBlock(V, T);
@@ -246,7 +247,7 @@ public class FeedbackCipher extends RCipherSpi {
 				V.rIndex = 0; T.clear();
 				cip.cryptOneBlock(V, T);
 
-				in.read(vArr);
+				in.readFully(vArr);
 
 				for (int i = 0; i < blockSize; i++) vArr[i] ^= T.get(i);
 
@@ -295,7 +296,7 @@ public class FeedbackCipher extends RCipherSpi {
 
 		if (!decrypt) {
 			// Copied CBC method, block N-1
-			for (int i = 0; i < blockSize; i++) vArr[i] ^= in.get();
+			for (int i = 0; i < blockSize; i++) vArr[i] ^= in.readByte();
 
 			cip.cryptOneBlock(vec, T);
 
@@ -304,7 +305,7 @@ public class FeedbackCipher extends RCipherSpi {
 			out.wIndex(pos);
 
 			// E^P + X, block N
-			for (int i = 0; i < ext; i++) tArr[i] ^= in.get();
+			for (int i = 0; i < ext; i++) tArr[i] ^= in.readByte();
 
 			cip.cryptOneBlock(T, out);
 			out.wIndex(pos+blockSize+ext);
@@ -342,19 +343,16 @@ public class FeedbackCipher extends RCipherSpi {
 						VO.rIndex = 0;
 					}
 
-					out.put(in.get() ^ VI.get());
+					out.put(in.readByte() ^ VI.readByte());
 				}
 			break;
 			case MODE_CFB: // Cipher Feedback
 				while (cyl-- > 0) {
-					if (!VI.isReadable()) {
-						VI.clear();
-						cip.cryptOneBlock(VO, VI);
-						VO.clear();
-					}
+					VI.clear();
+					cip.cryptOneBlock(VO, VI);
+					VO.rIndex = 1; VO.compact();
 
-					int b = in.get(), v = VI.get();
-
+					int b = in.readByte(), v = VI.list[0];
 					VO.put(decrypt ? b : b^v);
 					out.put(b^v);
 				}
@@ -368,7 +366,7 @@ public class FeedbackCipher extends RCipherSpi {
 						increment(VO.array());
 					}
 
-					out.put(in.get() ^ VI.get());
+					out.put(in.readByte() ^ VI.readByte());
 				}
 			break;
 		}
@@ -392,20 +390,6 @@ public class FeedbackCipher extends RCipherSpi {
 					out.putInt(in.readInt() ^ VI.readInt());
 				}
 				break;
-			case MODE_CFB:
-				while (ints-- > 0) {
-					if (!VI.isReadable()) {
-						VI.clear();
-						cip.cryptOneBlock(VO, VI);
-						VO.clear();
-					}
-
-					int b = in.readInt(), v = VI.readInt();
-
-					VO.putInt(decrypt ? b : b^v);
-					out.putInt(b^v);
-				}
-			break;
 			case MODE_CTR:
 				while (ints-- > 0) {
 					if (!VI.isReadable()) {

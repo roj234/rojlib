@@ -7,15 +7,19 @@ import roj.asm.tree.attr.Attribute;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.IntMap;
 import roj.collect.MatchMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
+import roj.compiler.api.Evaluable;
 import roj.compiler.ast.expr.ExprNode;
-import roj.compiler.context.ClassContext;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.CompileUnit;
+import roj.compiler.context.GlobalContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -29,7 +33,7 @@ import java.util.Map;
  */
 final class MethodList extends ComponentList {
 	IClass owner;
-	final SimpleList<MethodNode> methods = new SimpleList<>(4);
+	final SimpleList<MethodNode> methods = new SimpleList<>();
 	private int childId;
 	private boolean hasVarargs, hasDefault;
 	private MyHashSet<String> ddtmp = new MyHashSet<>();
@@ -37,8 +41,8 @@ final class MethodList extends ComponentList {
 	private volatile MatchMap<String, Object> namedLookup;
 
 	void add(IClass klass, MethodNode mn) {
-		// 重载的处理
-		if (!ddtmp.add(mn.rawDesc())) return;
+		// 忽略改变返回类型的重载的parent
+		if (!ddtmp.add(TypeHelper.getMethod(mn.parameters()))) return;
 		methods.add(mn);
 		if ((mn.modifier & Opcodes.ACC_VARARGS) != 0) hasVarargs = true;
 		mn.parsedAttr(klass.cp(), Attribute.SIGNATURE);
@@ -74,7 +78,7 @@ final class MethodList extends ComponentList {
 			return super.add(entry);
 		}
 	}
-	public MethodResult findMethod(CompileContext ctx, IType genericHint, SimpleList<IType> params,
+	public MethodResult findMethod(LocalContext ctx, IType that, List<IType> params,
 								   Map<String, IType> namedType, int flags) {
 		SimpleList<MethodNode> candidates;
 
@@ -106,14 +110,14 @@ final class MethodList extends ComponentList {
 
 		MethodResult best = null;
 		List<MethodNode> dup = new SimpleList<>();
-		SimpleList<IType> myParam = params;
+		SimpleList<IType> myParam = null;
 
 		int size = (flags&THIS_ONLY) != 0 ? childId : candidates.size();
 
 		loop:
 		for (int j = 0; j < size; j++) {
 			MethodNode mn = candidates.get(j);
-			IClass mnOwner = ctx.classes.getClassInfo(mn.owner);
+			var mnOwner = ctx.classes.getClassInfo(mn.owner);
 
 			if (!ctx.checkAccessible(mnOwner, mn, (flags&IN_STATIC) != 0, false)) continue;
 
@@ -131,8 +135,8 @@ final class MethodList extends ComponentList {
 				if (defReq > mdvalue.size()) continue;
 
 				defParamState = new IntMap<>();
-				if (myParam == params) myParam = new SimpleList<>(params);
-				else myParam.i_setSize(params.size());
+				if (myParam == null) myParam = new SimpleList<>(params);
+				else myParam._setSize(params.size());
 
 				List<String> names = ParamNameMapper.getParameterName(mnOwner.cp(), mn);
 
@@ -163,7 +167,7 @@ final class MethodList extends ComponentList {
 				}
 			}
 
-			MethodResult result = ctx.inferrer.infer(mnOwner, mn, genericHint, myParam);
+			MethodResult result = ctx.inferrer.infer(mnOwner, mn, that, myParam == null ? params : myParam);
 			int score = result.distance;
 			if (score < 0) continue;
 
@@ -183,19 +187,21 @@ final class MethodList extends ComponentList {
 
 			appendInput(params, sb);
 
-			sb.append("  ").append(best.method.owner).append("{invoke.method}").append(name).append('(');
+			sb.append("  ").append(best.method.owner).append("\1invoke.method\0").append(name).append('(');
 			getArg(best.method, sb).append(')');
 
 			for (MethodNode mn : dup) {
-				sb.append(" {and}\n  ").append(mn.owner).append("{invoke.method}").append(name).append('(');
+				sb.append(" \1and\0\n  ").append(mn.owner).append("\1invoke.method\0").append(name).append('(');
 				getArg(mn, sb).append(')');
 			}
 
-			ctx.report(Kind.ERROR, sb.replace('/', '.').append(" {invoke.matches}").toStringAndFree());
+			ctx.report(Kind.ERROR, sb.replace('/', '.').append(" \1invoke.matches\0").toStringAndFree());
 		} else if (best == null) {
+			if ((flags & NO_REPORT) != 0) return null;
+
 			CharList sb = new CharList().append("invoke.incompatible.plural:").append(name).append('(');
 
-			if (params.isEmpty()) sb.append("{invoke.no_param}");
+			if (params.isEmpty()) sb.append("\1invoke.no_param\0");
 			else sb.append(TextUtil.join(params, ","));
 			sb.append("):");
 
@@ -209,22 +215,24 @@ final class MethodList extends ComponentList {
 
 			for (int i = 0; i < size; i++) {
 				MethodNode mn = methods.get(i);
-				sb.append("  {invoke.method}").append(mn.owner).append('.').append(mn.name());
-				getArg(mn, sb.append('(')).append("){invoke.notApplicable}\n    ");
+				sb.append("  \1invoke.method\0").append(mn.owner).append('.').append(mn.name());
+				getArg(mn, sb.append('(')).append(")\1invoke.notApplicable\0\n    ");
 
-				getErrorMsg(ctx, genericHint, params, (flags&IN_STATIC) != 0, mn, sb.append('('), tmp);
-				sb.append(')').append('\n');
+				getErrorMsg(ctx, that, params, (flags&IN_STATIC) != 0, mn, sb.append("(\1"), tmp);
+				sb.append("\0)\n");
 			}
 
 			ctx.errorCapture = null;
 			ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
+		} else {
+			checkBridgeMethod(ctx, best);
 		}
 
 		return best;
 	}
 
-	private static void getErrorMsg(CompileContext ctx, IType genericHint, List<IType> params, boolean in_static, MethodNode mn, CharList sb, CharList errRpt) {
-		IClass info = ctx.classes.getClassInfo(mn.owner);
+	private static void getErrorMsg(LocalContext ctx, IType genericHint, List<IType> params, boolean in_static, MethodNode mn, CharList sb, CharList errRpt) {
+		var info = ctx.classes.getClassInfo(mn.owner);
 		if (!ctx.checkAccessible(info, mn, in_static, true)) {
 			sb.append(errRpt);
 		} else {
@@ -233,7 +241,7 @@ final class MethodList extends ComponentList {
 	}
 
 	@SuppressWarnings("unchecked")
-	private void createNamedLookup(ClassContext ctx) {
+	private void createNamedLookup(GlobalContext ctx) {
 		if (namedLookup != null) return;
 
 		MatchMap<String, Object> lookup = new MatchMap<>();
@@ -259,14 +267,43 @@ final class MethodList extends ComponentList {
 		sb.append(JavaLexer.translate.translate(mr.error == null || mr.error.length == 0 ? "typeCast.error."+mr.distance : "typeCast.error."+mr.distance+":"+mr.error[0]+":"+mr.error[1]));
 	}
 	static void appendInput(List<IType> params, CharList sb) {
-		sb.append("  ").append("{invoke.found} ");
-		if (params.isEmpty()) sb.append("{invoke.no_param}");
+		sb.append("  ").append("\1invoke.found\0 ");
+		if (params.isEmpty()) sb.append("\1invoke.no_param\0");
 		else sb.append(TextUtil.join(params, ","));
 		sb.append('\n');
 	}
 	static CharList getArg(MethodNode mn, CharList sb) {
 		Signature sign = mn.parsedAttr(null, Attribute.SIGNATURE);
 		List<? extends IType> params2 = sign == null ? mn.parameters() : sign.values.subList(0, sign.values.size()-1);
-		return sb.append(params2.isEmpty() ? "{invoke.no_param}" : TextUtil.join(params2, ","));
+		return sb.append(params2.isEmpty() ? "\1invoke.no_param\0" : TextUtil.join(params2, ","));
+	}
+
+	@Override
+	public List<MethodNode> getMethods() {return methods;}
+
+	@Override
+	public String toString() {
+		CharList sb = new CharList().append('[');
+
+		for (MethodNode node : methods) {
+			sb.append(node.ownerClass()).append(" => (").append(TextUtil.join(node.parameters(), ", ")).append(") => ").append(node.returnType())
+			  .append(", ");
+		}
+
+		return sb.append(']').toStringAndFree();
+	}
+
+	static void checkBridgeMethod(LocalContext ctx, MethodResult mr) {
+		var mn = mr.method;
+		if ((mn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file.name.equals(mn.owner) ||
+			ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) return;
+
+		var prev = (Evaluable)mn.attrByName(Evaluable.NAME);
+		if (prev != null) {
+			GlobalContext.debugLogger().warn("Method {} Already have Evaluable!!!", mn);
+		}
+
+		var fwr = new MethodBridge((CompileUnit) ctx.classes.getClassInfo(mn.owner), mn, prev);
+		mn.putAttr(fwr);
 	}
 }

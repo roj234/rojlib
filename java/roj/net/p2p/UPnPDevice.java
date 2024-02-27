@@ -1,21 +1,29 @@
 package roj.net.p2p;
 
 import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
+import roj.concurrent.TaskPool;
 import roj.config.ParseException;
 import roj.config.XMLParser;
 import roj.config.data.Element;
 import roj.config.data.Node;
 import roj.io.CorruptedInputException;
 import roj.net.ch.*;
-import roj.net.ch.handler.Timeout;
+import roj.net.handler.Timeout;
 import roj.net.http.HttpHead;
 import roj.net.http.HttpRequest;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 
 import java.io.IOException;
-import java.net.*;
-import java.util.*;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.util.Collection;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -33,7 +41,7 @@ public final class UPnPDevice {
 
 	public List<Service> getServices() { return services; }
 	public List<Service> getServices(Collection<String> typeFilter) {
-		ArrayList<Service> services1 = new ArrayList<>();
+		SimpleList<Service> services1 = new SimpleList<>();
 		for (int i = 0; i < services.size(); i++) {
 			Service service = services.get(i);
 			if (typeFilter.contains(service.serviceType)) {
@@ -57,11 +65,11 @@ public final class UPnPDevice {
 	}
 
 	public static Supplier<List<UPnPDevice>> discover(List<String> deviceTypes) throws IOException {
-		SelectorLoop loop = new SelectorLoop(null, "UPnP discover", 1);
+		SelectorLoop loop = new SelectorLoop("UPnP discover", 1);
 
-		List<UPnPDevice> devices = new ArrayList<>();
+		List<UPnPDevice> devices = new SimpleList<>();
 
-		List<Discoverer> tasks = new ArrayList<>();
+		List<Discoverer> tasks = new SimpleList<>();
 		Enumeration<NetworkInterface> itfs = NetworkInterface.getNetworkInterfaces();
 		while (itfs.hasMoreElements()) {
 			NetworkInterface itf = itfs.nextElement();
@@ -70,7 +78,7 @@ public final class UPnPDevice {
 			Enumeration<InetAddress> addrs = itf.getInetAddresses();
 			while (addrs.hasMoreElements()) {
 				InetAddress addr = addrs.nextElement();
-				if (!(addr instanceof Inet4Address)) continue; // maybe check IPv6?
+				if (!(addr instanceof Inet4Address)) continue; // 已经支持ipv6，不过UPnP支持它吗？
 				Discoverer task = new Discoverer(addr, deviceTypes, devices);
 				ServerLaunch.udp().initializator(task).loop(loop).launch();
 				tasks.add(task);
@@ -82,7 +90,7 @@ public final class UPnPDevice {
 				try {
 					Discoverer task = tasks.get(i);
 					synchronized (task) {
-						while (!task.completed) task.wait();
+						while (task.completed < task.tasks) task.wait();
 					}
 				} catch (InterruptedException ignored) {}
 			}
@@ -112,7 +120,7 @@ public final class UPnPDevice {
 		private final List<String> requests;
 		private final List<UPnPDevice> devices;
 
-		boolean completed;
+		int completed, tasks = 1;
 
 		public Discoverer(InetAddress addr, List<String> types, List<UPnPDevice> devices) {
 			this.addr = addr;
@@ -141,12 +149,16 @@ public final class UPnPDevice {
 			DatagramPkt pkt = (DatagramPkt) msg;
 			HttpHead head = HttpHead.parse(pkt.buf);
 			String loc = head.get("location");
+			UPnPGateway.LOGGER.debug("接收到来自{}的UPnP响应, 数据为{}", pkt.addr, loc);
 			if (null == loc) return/*"没有 'Location' 头"*/;
 
 			UPnPDevice device;
 			synchronized (devices) {
 				for (UPnPDevice dev : devices) {
-					if (dev.deviceIp.equals(pkt.addr)) return;
+					if (dev.deviceIp.equals(pkt.addr)) {
+						UPnPGateway.LOGGER.debug("该数据包已存在,丢弃");
+						return;
+					}
 				}
 				device = new UPnPDevice(addr, pkt.addr);
 				devices.add(device);
@@ -158,7 +170,7 @@ public final class UPnPDevice {
 			if (tmp == null) {
 				device.TTL = -1;
 			} else {
-				List<String> cache = TextUtil.split(new ArrayList<>(), tmp, ',');
+				List<String> cache = TextUtil.split(new SimpleList<>(), tmp, ',');
 				for (int i = 0; i < cache.size(); i++) {
 					String s = cache.get(i).trim().toLowerCase();
 					if (s.equals("no-cache")) {
@@ -170,48 +182,52 @@ public final class UPnPDevice {
 				}
 			}
 
-			Element xml;
-			try {
-				URL url = new URL(loc);
-				xml = XMLParser.parses(HttpRequest.nts().url(url).header("connection", "close").execute().str());
-			} catch (ParseException e) {
-				throw new IllegalStateException("无效的UPnP设备描述文件", e);
-			}
+			List<Service> services = device.services = new SimpleList<>();
+			TaskPool.Common().submit(() -> {
+				UPnPGateway.LOGGER.debug("正在请求设备描述: {}", loc);
+				Element xml;
+				try {
+					xml = XMLParser.parses(HttpRequest.nts().url(loc).header("connection", "close").execute(500).str());
 
-			Node node = xml.querySelector("/root/URLBase");
-			loc = node == null ? loc.substring(0, loc.indexOf('/')) : node.textContent();
+					Node node = xml.querySelector("/root/URLBase");
+					String loc1 = node == null ? loc.substring(0, loc.indexOf('/')) : node.textContent();
 
-			List<Service> services = device.services = new ArrayList<>();
-			List<Element> xmlServices = xml.getElementsByTagName("service");
-			for (int i = 0; i < xmlServices.size(); i++) {
-				Element xServ = xmlServices.get(i);
-				Service srv = new Service();
-				srv.serviceType = xServ.element("serviceType").textContent();
-				srv.serviceId = xServ.element("serviceId").textContent();
+					List<Element> xmlServices = xml.getElementsByTagName("service");
+					for (int i = 0; i < xmlServices.size(); i++) {
+						Element xServ = xmlServices.get(i);
+						Service srv = new Service();
+						srv.serviceType = xServ.element("serviceType").textContent();
+						srv.serviceId = xServ.element("serviceId").textContent();
 
-				srv.controlURL = getURL(loc, "controlURL", xServ);
-				srv.eventSubURL = getURL(loc, "eventSubURL", xServ);
-				srv.SCPDURL = getURL(loc, "SCPDURL", xServ); // Service Descriptor
+						srv.controlURL = getURL(loc1, "controlURL", xServ);
+						srv.eventSubURL = getURL(loc1, "eventSubURL", xServ);
+						srv.SCPDURL = getURL(loc1, "SCPDURL", xServ); // Service Descriptor
 
-				services.add(srv);
-			}
-
-			Map<String, String> deviceInfo = new MyHashMap<>(8);
-			List<Element> xDevice = xml.getElementsByTagName("device");
-			for (int i = 0; i < xDevice.size(); i++) {
-				Node xDesc = xDevice.get(i);
-				if (xDesc.size() > 0) {
-					if (xDesc.child(0).nodeType() == Node.ELEMENT) {
-						deviceInfo.put(xDesc.asElement().tag, xDesc.child(0).textContent().trim());
+						services.add(srv);
 					}
+
+					Map<String, String> deviceInfo = new MyHashMap<>(8);
+					List<Element> xDevice = xml.getElementsByTagName("device");
+					for (int i = 0; i < xDevice.size(); i++) {
+						Node xDesc = xDevice.get(i);
+						if (xDesc.size() > 0) {
+							if (xDesc.child(0).nodeType() == Node.ELEMENT) {
+								deviceInfo.put(xDesc.asElement().tag, xDesc.child(0).textContent().trim());
+							}
+						}
+					}
+					device.deviceInfo = deviceInfo;
+				} catch (ParseException e) {
+					UPnPGateway.LOGGER.debug("设备描述请求失败: {}", e);
+				} finally {
+					channelClosed(null);
 				}
-			}
-			device.deviceInfo = deviceInfo;
+			});
 		}
 
 		@Override
 		public void channelClosed(ChannelCtx ctx) throws IOException {
-			completed = true;
+			completed++;
 			synchronized (this) { notifyAll(); }
 		}
 	}
@@ -241,7 +257,7 @@ public final class UPnPDevice {
 			data.append("</m:").append(action).append("></SOAP-ENV:Body></SOAP-ENV:Envelope>");
 
 			HttpRequest query = HttpRequest.nts()
-				.url(new URL(controlURL))
+				.url(controlURL)
 				.header("Content-Type", "text/xml")
 				.header("SOAPAction", "\""+serviceType+"#"+action+"\"")
 				.header("Connection", "Close")
@@ -250,7 +266,7 @@ public final class UPnPDevice {
 
 			Element header;
 			try {
-				header = XMLParser.parses(query.execute().str(), XMLParser.LENIENT);
+				header = XMLParser.parses(query.execute().str());
 			} catch (ParseException e) {
 				throw new CorruptedInputException("invalid SOAP response", e);
 			}

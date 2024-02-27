@@ -3,7 +3,7 @@ package roj.util;
 import org.jetbrains.annotations.NotNull;
 import roj.io.UnsafeOutputStream;
 import roj.math.MathUtils;
-import roj.reflect.ReflectionUtils;
+import roj.text.CharList;
 import roj.text.TextUtil;
 import sun.misc.Unsafe;
 
@@ -14,10 +14,10 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ConcurrentModificationException;
-import java.util.List;
 import java.util.function.IntUnaryOperator;
 
 import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -29,16 +29,6 @@ public class DirectByteList extends DynByteBuf {
 	NativeMemory nm;
 	volatile long address;
 	int length;
-
-	public static DirectByteList allocateDirect() { return new DirectByteList(); }
-	public static DirectByteList allocateDirect(int capacity) { return new DirectByteList(capacity); }
-	public static DirectByteList allocateDirect(int capacity, int maxCapacity) {
-		return new DirectByteList(capacity) {
-			@Override
-			public int maxCapacity() { return maxCapacity; }
-		};
-	}
-	public static DirectByteList wrap(long address, int length) { return new DirectByteList.Slice(address, length); }
 
 	DirectByteList(boolean unused) {}
 	DirectByteList() { nm = new NativeMemory(); }
@@ -63,7 +53,6 @@ public class DirectByteList extends DynByteBuf {
 
 	public int capacity() { return length; }
 	public int maxCapacity() { return nm == null ? length : Integer.MAX_VALUE; }
-	public boolean immutableCapacity() { return nm == null; }
 	public final boolean isDirect() { return true; }
 	public final long address() { return address; }
 	public final long _unsafeAddr() { return address; }
@@ -71,7 +60,7 @@ public class DirectByteList extends DynByteBuf {
 
 	@Override
 	public final void copyTo(long addr, int len) {
-		copyToArray(addr, null, moveRI(len), address, length);
+		copyToArray(addr, null, preRead(len), address, length);
 	}
 
 	public final void clear() {
@@ -121,7 +110,7 @@ public class DirectByteList extends DynByteBuf {
 			return;
 		}
 
-		byte[] array = ArrayCache.getByteArray(4096, false);
+		byte[] array = ArrayCache.getByteArray(Math.min(len, 4096), false);
 		try {
 			long addr = address;
 			while (len > 0) {
@@ -138,27 +127,26 @@ public class DirectByteList extends DynByteBuf {
 	}
 
 	// region PUTxxx
-
-	public final DirectByteList put(int e) {
-		u.putByte(moveWI(1)+address, (byte) e);
+	public final DynByteBuf put(int x) {
+		u.putByte(preWrite(1)+address, (byte) x);
 		return this;
 	}
-	public final DirectByteList put(int i, int e) {
-		u.putByte(testWI(i, 1)+address, (byte) e);
+	public final DynByteBuf put(int i, int x) {
+		u.putByte(testWI(i, 1)+address, (byte) x);
 		return this;
 	}
 
-	public final DirectByteList put(byte[] b, int off, int len) {
+	public final DynByteBuf put(byte[] b, int off, int len) {
 		ArrayUtil.checkRange(b, off, len);
 		if (len > 0) {
-			int off1 = moveWI(len);
+			int off1 = preWrite(len);
 			copyFromArray(b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, address + off1, len);
 		}
 		return this;
 	}
 
 	@Override
-	public final DirectByteList put(DynByteBuf b, int off, int len) {
+	public final DynByteBuf put(DynByteBuf b, int off, int len) {
 		if (off+len > b.wIndex) throw new IndexOutOfBoundsException();
 
 		if (b.hasArray()) {
@@ -167,7 +155,7 @@ public class DirectByteList extends DynByteBuf {
 			if ((off|len) < 0) throw new IndexOutOfBoundsException();
 			if (len == 0) return this;
 
-			int wi = moveWI(len);
+			int wi = preWrite(len);
 			copyToArray(b.address()+off, null, address, wi, len);
 		} else {
 			while (len-- > 0) put(b.get(off++));
@@ -176,103 +164,16 @@ public class DirectByteList extends DynByteBuf {
 		return this;
 	}
 
-	public final DirectByteList putInt(int wi, int i) {
-		long addr = testWI(wi, 4)+address;
-		if (ReflectionUtils.BIG_ENDIAN) {
-			u.putInt(addr, i);
-		} else {
-			u.putByte(addr++, (byte) (i >>> 24));
-			u.putByte(addr++, (byte) (i >>> 16));
-			u.putByte(addr++, (byte) (i >>> 8));
-			u.putByte(addr, (byte) i);
-		}
-		return this;
-	}
-	public final DirectByteList putIntLE(int wi, int i) {
-		long addr = testWI(wi, 4)+address;
-		if (!ReflectionUtils.BIG_ENDIAN) {
-			u.putInt(addr, i);
-		} else {
-			u.putByte(addr++, (byte) i);
-			u.putByte(addr++, (byte) (i >>> 8));
-			u.putByte(addr++, (byte) (i >>> 16));
-			u.putByte(addr, (byte) (i >>> 24));
-		}
-		return this;
-	}
-
-	public final DirectByteList putLong(int wi, long l) {
-		long addr = testWI(wi, 8)+address;
-		if (ReflectionUtils.BIG_ENDIAN) {
-			u.putLong(addr, l);
-		} else {
-			u.putByte(addr++, (byte) (l >>> 56));
-			u.putByte(addr++, (byte) (l >>> 48));
-			u.putByte(addr++, (byte) (l >>> 40));
-			u.putByte(addr++, (byte) (l >>> 32));
-			u.putByte(addr++, (byte) (l >>> 24));
-			u.putByte(addr++, (byte) (l >>> 16));
-			u.putByte(addr++, (byte) (l >>> 8));
-			u.putByte(addr, (byte) l);
-		}
-		return this;
-	}
-	public final DirectByteList putLongLE(int wi, long l) {
-		long addr = testWI(wi, 8)+address;
-		if (!ReflectionUtils.BIG_ENDIAN) {
-			u.putLong(addr, l);
-		} else {
-			u.putByte(addr++, (byte) l);
-			u.putByte(addr++, (byte) (l >>> 8));
-			u.putByte(addr++, (byte) (l >>> 16));
-			u.putByte(addr++, (byte) (l >>> 24));
-			u.putByte(addr++, (byte) (l >>> 32));
-			u.putByte(addr++, (byte) (l >>> 40));
-			u.putByte(addr++, (byte) (l >>> 48));
-			u.putByte(addr, (byte) (l >>> 56));
-		}
-		return this;
-	}
-
-	public final DirectByteList putShort(int wi, int s) {
-		long addr = testWI(wi, 2)+address;
-		u.putByte(addr++, (byte) (s >>> 8));
-		u.putByte(addr, (byte) s);
-		return this;
-	}
-	public final DirectByteList putShortLE(int wi, int s) {
-		long addr = testWI(wi, 2)+address;
-		u.putByte(addr++, (byte) s);
-		u.putByte(addr, (byte) (s >>> 8));
-		return this;
-	}
-
-	public final DirectByteList putMedium(int wi, int m) {
-		long addr = testWI(wi, 3)+address;
-		u.putByte(addr++, (byte) (m >>> 16));
-		u.putByte(addr++, (byte) (m >>> 8));
-		u.putByte(addr, (byte) m);
-		return this;
-	}
-	public final DirectByteList putMediumLE(int wi, int m) {
-		long addr = testWI(wi, 3)+address;
-		u.putByte(addr++, (byte) m);
-		u.putByte(addr++, (byte) (m >>> 8));
-		u.putByte(addr, (byte) (m >>> 16));
-		return this;
-	}
-
-	public final DirectByteList putChars(int wi, CharSequence s) {
+	public final DynByteBuf putChars(int wi, CharSequence s) {
 		long addr = testWI(wi, (s.length() << 1))+address;
 		for (int i = 0; i < s.length(); i++) {
 			char c = s.charAt(i);
-			u.putByte(addr, (byte) (c >>> 8));
-			u.putByte(addr, (byte) c);
+			U.put16UB(null, addr, c);
 			addr += 2;
 		}
 		return this;
 	}
-	public final DirectByteList putAscii(int wi, CharSequence s) {
+	public final DynByteBuf putAscii(int wi, CharSequence s) {
 		long addr = testWI(wi, s.length())+address;
 		for (int i = 0; i < s.length(); i++) {
 			u.putByte(addr++, (byte) s.charAt(i));
@@ -281,16 +182,16 @@ public class DirectByteList extends DynByteBuf {
 	}
 
 	final void _writeDioUTF(String s, int byteLen) {
-		long addr = moveWI(byteLen)+address;
+		long addr = preWrite(byteLen)+address;
 		ByteList.jutf8_encode_all(s, null, addr);
 	}
 
-	public final DirectByteList put(ByteBuffer buf) {
+	public final DynByteBuf put(ByteBuffer buf) {
 		int rem = buf.remaining();
 		if (buf.isDirect()) {
-			u.copyMemory(NativeMemory.getAddress(buf)+buf.position(), moveWI(rem)+address, rem);
+			u.copyMemory(NativeMemory.getAddress(buf)+buf.position(), preWrite(rem)+address, rem);
 		} else if (buf.hasArray()) {
-			copyFromArray(buf.array(), Unsafe.ARRAY_BYTE_BASE_OFFSET, buf.arrayOffset() + buf.position(), moveWI(rem)+address, rem);
+			copyFromArray(buf.array(), Unsafe.ARRAY_BYTE_BASE_OFFSET, buf.arrayOffset() + buf.position(), preWrite(rem)+address, rem);
 		} else {
 			while (rem-- > 0) put(buf.get());
 		}
@@ -329,45 +230,23 @@ public class DirectByteList extends DynByteBuf {
 	// endregion
 	// region GETxxx
 
-	public final void read(byte[] b, int off, int len) {
+	public final void readFully(byte[] b, int off, int len) {
 		ArrayUtil.checkRange(b, off, len);
 		if (len > 0) {
-			copyToArray(address+moveRI(len), b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, len);
+			copyToArray(address+ preRead(len), b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, len);
 		}
 	}
-	public final void read(int i, byte[] b, int off, int len) {
+	public final void readFully(int i, byte[] b, int off, int len) {
 		ArrayUtil.checkRange(b, off, len);
 		if (len > 0) {
 			copyToArray(address+testWI(i, len), b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, len);
 		}
 	}
 
-	public final byte get(int i) {
-		return u.getByte(testWI(i, 1)+address);
-	}
-	public final byte readByte() {
-		return u.getByte(moveRI(1)+address);
-	}
+	public final byte get(int i) {return u.getByte(testWI(i, 1)+address);}
+	public final byte readByte() {return u.getByte(preRead(1)+address);}
 
-	public final int readUnsignedShort(int i) {
-		long addr = testWI(i, 2)+address;
-		return ((u.getByte(addr++) & 0xFF) << 8) | (u.getByte(addr) & 0xFF);
-	}
-	public final int readUShortLE(int i) {
-		long addr = testWI(i, 2)+address;
-		return (u.getByte(addr++) & 0xFF) | (u.getByte(addr) & 0xFF) << 8;
-	}
-
-	public final int readMedium(int i) {
-		long addr = testWI(i, 3)+address;
-		return (u.getByte(addr++) & 0xFF) << 16 | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr) & 0xFF);
-	}
-	public final int readMediumLE(int i) {
-		long addr = testWI(i, 3)+address;
-		return (u.getByte(addr++) & 0xFF) | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr) & 0xFF) << 16;
-	}
-
-	public final int readVarInt(boolean mayNeg) {
+	public final int readVarInt() {
 		int value = 0;
 		int i = 0;
 
@@ -382,7 +261,6 @@ public class DirectByteList extends DynByteBuf {
 			i += 7;
 			if ((chunk & 0x80) == 0) {
 				rIndex = (int) (off - address);
-				if (mayNeg) return zag(value);
 				if (value < 0) break;
 				return value;
 			}
@@ -391,58 +269,19 @@ public class DirectByteList extends DynByteBuf {
 		throw new RuntimeException("VarInt format error near " + rIndex);
 	}
 
-	public final int readInt(int i) {
-		long addr = testWI(i, 4)+address;
-		if (ReflectionUtils.BIG_ENDIAN) return u.getInt(addr);
-		return (u.getByte(addr++) & 0xFF) << 24 | (u.getByte(addr++) & 0xFF) << 16 | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr) & 0xFF);
-	}
-	public final int readIntLE(int i) {
-		long addr = testWI(i, 4)+address;
-		if (!ReflectionUtils.BIG_ENDIAN) return u.getInt(addr);
-		return (u.getByte(addr++) & 0xFF) | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr++) & 0xFF) << 16 | (u.getByte(addr) & 0xFF) << 24;
-	}
-
-	public final long readLong(int i) {
-		long addr = testWI(i, 8)+address;
-		if (ReflectionUtils.BIG_ENDIAN) return u.getLong(addr);
-		return (u.getByte(addr++) & 0xFFL) << 56 |
-			(u.getByte(addr++) & 0xFFL) << 48 |
-			(u.getByte(addr++) & 0xFFL) << 40 |
-			(u.getByte(addr++) & 0xFFL) << 32 |
-			(u.getByte(addr++) & 0xFFL) << 24 |
-			(u.getByte(addr++) & 0xFFL) << 16 |
-			(u.getByte(addr++) & 0xFFL) << 8 |
-			u.getByte(addr) & 0xFFL;
-	}
-	public final long readLongLE(int i) {
-		long addr = testWI(i, 8)+address;
-		if (!ReflectionUtils.BIG_ENDIAN) return u.getLong(addr);
-		return (u.getByte(addr++) & 0xFFL) |
-			(u.getByte(addr++) & 0xFFL) << 8 |
-			(u.getByte(addr++) & 0xFFL) << 16 |
-			(u.getByte(addr++) & 0xFFL) << 24 |
-			(u.getByte(addr++) & 0xFFL) << 32 |
-			(u.getByte(addr++) & 0xFFL) << 40 |
-			(u.getByte(addr++) & 0xFFL) << 48 |
-			(u.getByte(addr) & 0xFFL) << 56;
-	}
-
 	public final String readAscii(int i, int len) {
 		if (len <= 0) return "";
 
 		long addr = testWI(i, len)+address;
+		byte[] ob = ArrayCache.getByteArray(len, false);
+		u.copyMemory(null,addr,ob,Unsafe.ARRAY_BYTE_BASE_OFFSET, len);
 
-		char[] ob = ArrayCache.getCharArray(len, false);
-		int j = 0;
-		while (len-- > 0) ob[j++] = (char)u.getByte(addr++);
-
-		String s = new String(ob, 0, j);
+		String s = new String(ob, 0, len, StandardCharsets.ISO_8859_1);
 		ArrayCache.putArray(ob);
 		return s;
 	}
 
 	@Override
-	@SuppressWarnings("deprecation")
 	public final String readLine() {
 		long l = address+rIndex;
 		int r = wIndex-rIndex;
@@ -459,7 +298,7 @@ public class DirectByteList extends DynByteBuf {
 		byte[] tmp = new byte[(int)(l-address)-rIndex];
 		copyToArray(address + rIndex, tmp, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, tmp.length);
 		rIndex += tmp.length;
-		return new String(tmp, 0);
+		return new String(tmp, 0, tmp.length, StandardCharsets.ISO_8859_1);
 	}
 
 	public final int readZeroTerminate(int max) {
@@ -486,26 +325,18 @@ public class DirectByteList extends DynByteBuf {
 	// endregion
 	// region Buffer Ops
 
-	public final DirectByteList slice(int len) {
-		return slice(moveRI(len), len);
-	}
-	public final DirectByteList slice(int off, int len) {
+	public final DynByteBuf slice(int off, int len) {
 		return new Slice(testWI(off, len)+address, len);
 	}
 
 	@Override
-	public final DirectByteList compact() {
+	public final DynByteBuf compact() {
 		if (rIndex > 0) {
 			long addr = address;
 			if (addr != 0) {
-				if (wIndex < rIndex) {
-					rIndex = 0;
-					System.out.println("data = " + TextUtil.dumpBytes(toByteArray()));
-					new Throwable("windex < rindex").printStackTrace();
-					wIndex = rIndex = 0;
-					return this;
-				}
-				u.copyMemory(addr+rIndex, addr, wIndex-rIndex);
+				int wi = wIndex, ri = rIndex;
+				if ((wi -= ri) < 0) throw new AssertionError("Illegal Buffer State:"+info());
+				u.copyMemory(addr+ri, addr, wi);
 			}
 			wIndex -= rIndex;
 			rIndex = 0;
@@ -514,19 +345,7 @@ public class DirectByteList extends DynByteBuf {
 	}
 
 	@Override
-	public final int nioBufferCount() {
-		return 1;
-	}
-
-	@Override
-	public final ByteBuffer nioBuffer() {
-		return NativeMemory.newDirectBuffer(address, length, nm).limit(wIndex).position(rIndex);
-	}
-
-	@Override
-	public final void nioBuffers(List<ByteBuffer> buffers) {
-		buffers.add(nioBuffer());
-	}
+	public final ByteBuffer nioBuffer() {return NativeMemory.newDirectBuffer(address, length, nm).limit(wIndex).position(rIndex);}
 
 	@Override
 	public String dump() {
@@ -561,33 +380,30 @@ public class DirectByteList extends DynByteBuf {
 	}
 
 	@Override
-	public final boolean equals(Object o) {
-		if (this == o) return true;
-		if (!(o instanceof DynByteBuf b)) return false;
-
-		int len = readableBytes();
-		if (len != b.readableBytes()) return false;
-		assert len < length;
-
-		return ArrayUtil.vectorizedMismatch(null, address, b.array(), b._unsafeAddr(), len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
-	}
-
-	@Override
-	public int hashCode() {
-		int len = wIndex - rIndex;
-		assert len < length;
-		return ArrayUtil.byteHashCode(null, address, len);
-	}
-
-	@Override
 	@NotNull
 	public String toString() {
 		int len = wIndex - rIndex;
-		assert len < length;
+		assert len <= length : info();
 
 		byte[] tmp = new byte[len];
 		copyToArray(address, tmp, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, len);
 		return new String(tmp, StandardCharsets.US_ASCII);
+	}
+
+	@Override
+	public CharList hex(CharList sb) {
+		long off = address+rIndex;
+		long len = address+wIndex;
+		sb.ensureCapacity((int) (sb.length() + (len-off) << 1));
+		char[] tmp = sb.list;
+		int j = sb.length();
+		while (off < len) {
+			int bb = u.getByte(off++);
+			tmp[j++] = TextUtil.b2h(bb >>> 4);
+			tmp[j++] = TextUtil.b2h(bb & 0xf);
+		}
+		sb.setLength(j);
+		return sb;
 	}
 
 	public static class Slice extends DirectByteList {
@@ -599,7 +415,7 @@ public class DirectByteList extends DynByteBuf {
 			length = len;
 		}
 
-		public DirectByteList set(NativeMemory mem, long addr, int len) {
+		public DynByteBuf set(NativeMemory mem, long addr, int len) {
 			rIndex = wIndex = 0;
 			address = addr;
 			length = len;
@@ -614,7 +430,7 @@ public class DirectByteList extends DynByteBuf {
 			length += len;
 		}
 
-		public DirectByteList copy(DynByteBuf buf) {
+		public DynByteBuf copy(DynByteBuf buf) {
 			address = buf.address();
 			rIndex = buf.rIndex;
 			wIndex = buf.wIndex;
@@ -624,13 +440,8 @@ public class DirectByteList extends DynByteBuf {
 			return this;
 		}
 
-		@Override
-		public int capacity() { return length; }
-		@Override
-		public int maxCapacity() { return length; }
-		@Override
-		public boolean immutableCapacity() { return true; }
-		@Override
-		public void ensureCapacity(int required) { if (required > length) throw new BufferOverflowException(); }
+		@Override public int capacity() {return length;}
+		@Override public int maxCapacity() {return length;}
+		@Override public void ensureCapacity(int required) {if (required > length) throw new IndexOutOfBoundsException("长度为"+length+"的缓冲区无法放下"+required);}
 	}
 }

@@ -4,10 +4,8 @@
 
 package roj.asmx.mapper;
 
-import roj.archive.ArchiveEntry;
-import roj.archive.ArchiveFile;
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
@@ -18,17 +16,14 @@ import roj.asm.type.Desc;
 import roj.asm.util.Context;
 import roj.asmx.mapper.obf.MyExcluder;
 import roj.asmx.mapper.obf.nodename.*;
-import roj.asmx.mapper.util.ResWriter;
-import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
-import roj.concurrent.task.AsyncTask;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
-import roj.config.serial.Optional;
-import roj.config.serial.SerializerFactory;
-import roj.config.serial.Serializers;
+import roj.config.auto.Optional;
+import roj.config.auto.SerializerFactory;
+import roj.config.auto.Serializers;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.LineReader;
@@ -46,7 +41,9 @@ import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
-import java.util.*;
+import java.util.Random;
+import java.util.Set;
+import java.util.Vector;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -66,15 +63,10 @@ public class ObfuscatorUI extends JFrame {
 		Profiler p = new Profiler("obfuscator");
 		p.begin();
 
-		Map<ArchiveEntry, ArchiveFile> resource = new MyHashMap<>();
-
 		Profiler.startSection("IO: input");
 
-		List<Context> arr = Context.fromZip(new File(uiInputPath.getText()), resource);
-		ZipFileWriter zfw = new ZipFileWriter(new File(uiOutputPath.getText()), false);
-
-		AsyncTask<Void> writer = new ResWriter(zfw, resource);
-		TaskPool.Common().pushTask(writer);
+		ZipFileWriter zfw = new ZipFileWriter(new File(uiOutputPath.getText()));
+		List<Context> arr = Context.fromZip(new File(uiInputPath.getText()), zfw);
 
 		Profiler.endStartSection("exclusion");
 
@@ -105,12 +97,11 @@ public class ObfuscatorUI extends JFrame {
 
 		Profiler.endStartSection("IO: output");
 
-		writer.get();
 		for (int i = 0; i < arr.size(); i++) {
 			Context ctx = arr.get(i);
 			zfw.writeNamed(ctx.getFileName(), ctx.get());
 		}
-		zfw.finish();
+		zfw.close();
 
 		Profiler.endSection();
 		p.popup();
@@ -120,7 +111,7 @@ public class ObfuscatorUI extends JFrame {
 
 	private void run(ActionEvent e) {
 		uiRun.setEnabled(false);
-		TaskPool.Common().pushTask(() -> {
+		TaskPool.Common().submit(() -> {
 			try {
 				run0();
 			} finally {
@@ -169,14 +160,14 @@ public class ObfuscatorUI extends JFrame {
 		uiLoadPackage.addActionListener((e) -> {
 			File in = new File(uiInputPath.getText());
 			uiLoadPackage.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				GuiPathTreeBuilder<Void> builder = new GuiPathTreeBuilder<>();
 				MyHashSet<String> packages = new MyHashSet<>();
-				try (ZipArchive za = new ZipArchive(in)) {
-					for (ZEntry value : za.getEntries().values()) {
+				try (ZipFile za = new ZipFile(in)) {
+					for (ZEntry value : za.entries()) {
 						String name = value.getName();
 						if (name.endsWith(".class")) {
-							String className = Parser.parseAccess(IOUtil.getSharedByteBuf().readStreamFully(za.getInput(value)), false).name;
+							String className = Parser.parseAccess(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(value)), false).name;
 							String exceptClassName = name.substring(0, name.length()-6);
 
 							if (className.equals(exceptClassName)) {
@@ -239,7 +230,7 @@ public class ObfuscatorUI extends JFrame {
 		uiExcStart.addActionListener((e) -> {
 			uiExcStart.setEnabled(false);
 			uiPackageSelected.setModel(new DefaultListModel<>());
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				uiExcStart.setEnabled(true);
 				int flag = 0;
 				if (uiExcEnum.isSelected()) flag |= 1;
@@ -252,11 +243,11 @@ public class ObfuscatorUI extends JFrame {
 				}
 				if (uiExcNative.isSelected()) flag |= 32;
 
-				try (ZipArchive za = new ZipArchive(uiInputPath.getText())) {
-					for (ZEntry value : za.getEntries().values()) {
+				try (ZipFile za = new ZipFile(uiInputPath.getText())) {
+					for (ZEntry value : za.entries()) {
 						String name = value.getName();
 						if (name.endsWith(".class")) {
-							ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(za.getInput(value)));
+							ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(value)));
 
 							if (name.substring(0, name.length()-6).equals(data.name)) {
 								checkExclusion(data, flag);
@@ -311,7 +302,7 @@ public class ObfuscatorUI extends JFrame {
 			if (file == null) return;
 
 			try {
-				saveYml(file.getAbsolutePath());
+				saveYml(file);
 			} catch (IOException ex) {
 				Helpers.athrow(ex);
 			}
@@ -525,9 +516,9 @@ public class ObfuscatorUI extends JFrame {
 		String lib;
 		ExclusionEntry[] exclusions;
 	}
-	private static final SerializerFactory SF = Serializers.newSerializerFactory(SerializerFactory.GENERATE | SerializerFactory.ALLOW_DYNAMIC | SerializerFactory.NO_CONSTRUCTOR);
+	private static final SerializerFactory SF = SerializerFactory.getInstance(SerializerFactory.GENERATE | SerializerFactory.ALLOW_DYNAMIC | SerializerFactory.NO_CONSTRUCTOR);
 	static { Serializers.serializeCharArrayToString(SF); }
-	private void saveYml(String file) throws IOException {
+	private void saveYml(File file) throws IOException {
 		SaveTo o = new SaveTo();
 		o.flag = uiFlag.getNumber().intValue();
 		o.seed = (int) uiSeed.getValue();
@@ -538,10 +529,10 @@ public class ObfuscatorUI extends JFrame {
 		o.lib = uiLibPath.getText();
 		o.exclusions = new ExclusionEntry[pActive.size()];
 		pActive.copyInto(o.exclusions);
-		ConfigMaster.write(o, file, "YAML", SF.adapter(SaveTo.class));
+		ConfigMaster.YAML.writeObject(SF.serializer(SaveTo.class), o, file);
 	}
 	private void readYml(File file) throws IOException, ParseException {
-		SaveTo o = SF.deserialize(SaveTo.class, file);
+		SaveTo o = ConfigMaster.fromExtension(file).readObject(SF.serializer(SaveTo.class), file);
 		uiFlag.setValue(o.flag);
 		uiSeed.setValue(o.seed);
 		obf.clazz = o.classObf;
@@ -557,7 +548,7 @@ public class ObfuscatorUI extends JFrame {
 
 	private List<File> getLibraries() {
 		List<File> lib = new SimpleList<>();
-		for (String line : new LineReader(uiLibPath.getText())) {
+		for (String line : LineReader.create(uiLibPath.getText())) {
 			if (line.startsWith("#")) continue;
 			File f = new File(line);
 			if (!f.exists()) {

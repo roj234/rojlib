@@ -32,7 +32,7 @@ public final class ZipOutput implements AutoCloseable {
 
 		useZFW = allModifyMode;
 		if (allModifyMode) {
-			all = new ZipFileWriter(file, false);
+			all = new ZipFileWriter(file);
 			if (some != null) {
 				some.close();
 				some = null;
@@ -47,7 +47,7 @@ public final class ZipOutput implements AutoCloseable {
 
 	public void setComment(String comment) {
 		if (useZFW) all.setComment(comment);
-		else some.getEND().setComment(comment);
+		else some.setComment(comment);
 	}
 
 	public void set(String name, ByteList data) throws IOException {
@@ -95,8 +95,8 @@ public final class ZipOutput implements AutoCloseable {
 					all = null;
 				}
 			} else if (some != null) {
-				some.store();
-				some.closeFile();
+				some.save();
+				some.close();
 			}
 		} catch (Exception e) {
 			e3 = e;
@@ -110,12 +110,9 @@ public final class ZipOutput implements AutoCloseable {
 	}
 
 	public ZipArchive getMZF() throws IOException {
-		if (some == null) {
-			return new ZipArchive(file, ZipArchive.FLAG_BACKWARD_READ);
-		} else {
-			if (!some.isOpen())
-				some.reopen();
-		}
+		if (some == null) return new ZipArchive(file);
+
+		some.reopen();
 		return some;
 	}
 

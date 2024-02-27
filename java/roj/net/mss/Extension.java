@@ -31,7 +31,7 @@ public class Extension {
 		buf.putShort(ext.size());
 		for (CharMap.Entry<DynByteBuf> entry : ext.selfEntrySet()) {
 			DynByteBuf b = entry.getValue();
-			buf.putShort(entry.getChar());
+			buf.putShort(entry.getCharKey());
 			if (b == null) buf.putShort(0);
 			else buf.putShort(b.readableBytes()).put(b);
 
@@ -45,7 +45,7 @@ public class Extension {
 		if (ext == null) return;
 		for (CharMap.Entry<DynByteBuf> entry : ext.selfEntrySet()) {
 			DynByteBuf b = entry.getValue();
-			buf.putShort(entry.getChar());
+			buf.putShort(entry.getCharKey());
 			if (b == null) {
 				buf.putShort(0);
 			} else {

@@ -1,14 +1,11 @@
 package roj.text.logging;
 
-import roj.collect.SimpleList;
+import roj.text.Formatter;
 import roj.text.Template;
-import roj.text.TextUtil;
 import roj.text.logging.c.LCTime;
 import roj.text.logging.c.LogComponent;
-import roj.text.logging.d.LDStream;
 import roj.text.logging.d.LogDestination;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -17,42 +14,46 @@ import java.util.List;
  * @since 2022/6/1 5:09
  */
 public class LogContext {
-	private String name;
+	LogContext parent;
 
-	private Template prefix;
+	private String name;
+	private Level level;
+
+	private Formatter prefix;
 	private List<LogComponent> components;
 
 	private LogDestination destination;
 
 	Logger logger;
 
-	public LogContext(LogContext copy) {
-		prefix = copy.prefix;
-		components = new SimpleList<>(copy.components);
-		name = copy.name;
-		destination = copy.destination;
-		logger = null;
+	public LogContext(LogContext parent, String name) {
+		this.parent = parent;
+		this.name = name;
 	}
 
-	public LogContext() {
+	LogContext() {
 		name = "root";
+		level = Level.DEBUG;
 		prefix = Template.compile("[${0}][${THREAD}/${LEVEL}]: ");
 		components = Collections.singletonList(LCTime.of("H:i:s"));
-		destination = LDStream.of(System.out, TextUtil.ConsoleCharset);
+		destination = () -> System.out;
 	}
 
-	public List<LogComponent> getComponents() { return components; }
-	public Template getPrefix() { return prefix; }
-	public void setPrefix(Template t) { prefix = t; }
+	public List<LogComponent> getComponents() { return components != null ? components : parent.getComponents(); }
+	public void setComponents(List<LogComponent> components) {this.components = components;}
+	public Formatter getPrefix() { return prefix != null ? prefix : parent.getPrefix(); }
+	public void setPrefix(Formatter t) { prefix = t; }
 
-	public LogContext format(String template, LogComponent... components) {
-		this.components = Arrays.asList(components);
-		this.prefix = Template.compile(template);
-		return this;
-	}
-	public LogContext name(String name) { this.name = name; return this; }
 	public String name() { return name; }
+	public LogContext name(String name) { this.name = name; return this; }
 
-	public LogDestination destination() { return destination; }
+	public LogDestination destination() { return destination != null ? destination : parent.destination(); }
 	public LogContext destination(LogDestination d) { destination = d; return this; }
+
+	public Level level() {return level != null ? level : parent.level;}
+	public LogContext level(Level level) {this.level = level;return this;}
+
+	LogWriter getWriter() {return getPrefix() == null ? LogWriterJson.LOCAL.get() : LogWriter.LOCAL.get();}
+
+	public LogContext child(String name) {return new LogContext(this, this.name+"/"+name);}
 }

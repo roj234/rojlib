@@ -11,9 +11,7 @@ import java.util.zip.InflaterInputStream;
  * @since 2023/3/14 0014 0:42
  */
 final class InflateIn extends InflaterInputStream {
-	InflateIn(InputStream in) {
-		super(in, new Inflater(true), 512);
-	}
+	InflateIn(InputStream in) { super(in, new Inflater(true), 512); }
 
 	public InflateIn reset(InputStream in) {
 		myClosed = false;
@@ -22,10 +20,10 @@ final class InflateIn extends InflaterInputStream {
 		return this;
 	}
 
+	public Inflater getInf() { return inf; }
+
 	@Override
-	public int available() {
-		return myClosed ? 0 : 1;
-	}
+	public int available() { return myClosed ? 0 : 1; }
 
 	@Override
 	public int read(byte[] b, int off, int len) throws IOException {
@@ -40,8 +38,8 @@ final class InflateIn extends InflaterInputStream {
 	public void close() throws IOException {
 		if (!myClosed) {
 			myClosed = true;
-			List<InflateIn> infs = ZipArchive.inflaters.get();
-			if (infs.size() < ZipArchive.MAX_INFLATER_SIZE) {
+			List<InflateIn> infs = ZipFile.INFS.get();
+			if (infs.size() < ZipFile.MAX_INFS) {
 				infs.add(this);
 				in.close();
 			} else {

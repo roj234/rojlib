@@ -1,9 +1,8 @@
 package roj.sql;
 
 import roj.collect.*;
-import roj.config.word.Tokenizer;
-import roj.io.IOUtil;
-import roj.net.http.srv.error.GreatErrorPage;
+import roj.config.Tokenizer;
+import roj.plugins.http.error.GreatErrorPage;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -18,8 +17,9 @@ import java.util.*;
 public final class DBA implements AutoCloseable {
 	public static final ThreadLocal<DBA> CMAP = new ThreadLocal<>();
 
-	private static SimpleConnectionPool pool;
-	public static void setConnectionPool(SimpleConnectionPool p) { pool = p; }
+	private static SimpleConnectionPool defaultPool;
+	public static void setConnectionPool(SimpleConnectionPool p) {defaultPool = p;}
+	private SimpleConnectionPool pool = defaultPool;
 
 	private String group, order;
 	private final CharList table = new CharList(), field = new CharList(), where = new CharList(), limit = new CharList();
@@ -44,6 +44,13 @@ public final class DBA implements AutoCloseable {
 		if (inst != null) inst.close();
 	}
 
+	public static DBA getInstance(SimpleConnectionPool pool) {
+		DBA dba = new DBA();
+		dba.pool = pool;
+		return dba;
+	}
+	public DBA copy() {return new DBA(this);}
+
 	static {
 		GreatErrorPage.addCustomTag("QUERIES", req -> {
 			DBA inst = CMAP.get();
@@ -52,7 +59,7 @@ public final class DBA implements AutoCloseable {
 			List<String> values = new SimpleList<>(inst.logs);
 			IntBiMap<String> index = new IntBiMap<>(values.size());
 			for (int i = 0; i < values.size();) index.putInt(i, String.valueOf(++i));
-			return new ListMap(index, values);
+			return new ListMap<>(index, values);
 		});
 	}
 
@@ -68,9 +75,7 @@ public final class DBA implements AutoCloseable {
 	public synchronized void close() throws SQLException {
 		reset();
 		try {
-			if (!connection().getAutoCommit()) {
-				transEnd(false);
-			}
+			if (isInTrans()) transEnd(false);
 
 			if (defaultStm != null) {
 				defaultStm.close();
@@ -192,7 +197,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	public DBA rawFieldForSelect(String field) { this.field.clear(); this.field.append(field); this.rawField.clear(); return this; }
-	public DBA field(String field) { rawField = TextUtil.split(field, ","); fieldString(); return this; }
+	public DBA field(String field) { rawField = TextUtil.split(field, ','); fieldString(); return this; }
 	public DBA fields(String... field) { rawField = Arrays.asList(field); fieldString(); return this; }
 	public DBA fields(List<String> field) { rawField = field; fieldString(); return this; }
 
@@ -239,7 +244,7 @@ public final class DBA implements AutoCloseable {
 		String sql = makeSelect(true).toStringAndFree();
 		logs.ringAddLast(sql);
 
-		if (defaultStm == null) defaultStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_UPDATABLE);
+		if (defaultStm == null) defaultStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_READ_ONLY);
 
 		set = defaultStm.executeQuery(sql);
 		select_index = null;
@@ -279,7 +284,7 @@ public final class DBA implements AutoCloseable {
 	public DBA query(String sql) throws SQLException {
 		logs.ringAddLast(sql);
 
-		if (defaultStm == null) defaultStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_UPDATABLE);
+		if (defaultStm == null) defaultStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_READ_ONLY);
 		set = defaultStm.executeQuery(sql);
 		select_index = null;
 
@@ -287,7 +292,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	private CharList makeSelect(boolean count) {
-		CharList sb = IOUtil.ddLayeredCharBuf().append("SELECT ").append(count ? "COUNT(*)" : field.length()==0?"*":field);
+		CharList sb = new CharList().append("SELECT ").append(count ? "COUNT(*)" : field.length()==0?"*":field);
 		if (table.length() > 0) sb.append(" FROM ").append(table);
 		if (where.length() > 0) sb.append(" WHERE ").append(where);
 		if (order != null) sb.append(" ORDER BY ").append(order);
@@ -313,12 +318,13 @@ public final class DBA implements AutoCloseable {
 		connection.setAutoCommit(true);
 		return this;
 	}
-	public boolean isInTrans() throws SQLException { return !connection().getAutoCommit(); }
+	public boolean isInTrans() throws SQLException { return connection != null && !connection.getAutoCommit(); }
 
 	/**
 	 * 读取一条结果
 	 */
 	public List<String> getone() throws SQLException {
+		if (set == null) throw new SQLException("not in select mode!");
 		List<String> result = new SimpleList<>(set.getMetaData().getColumnCount());
 		return getone(result) ? result : null;
 	}
@@ -342,7 +348,7 @@ public final class DBA implements AutoCloseable {
 	 */
 	public Map<String, String> getone_colkey() throws SQLException {
 		List<String> list = getone();
-		return list == null ? null : new ListMap(select_field_names(), list);
+		return list == null ? null : new ListMap<>(select_field_names(), list);
 	}
 
 	private IntBiMap<String> select_index;
@@ -502,7 +508,7 @@ public final class DBA implements AutoCloseable {
 
 		if (values.size() < rawField.size()) throw new SQLException("field数量少于values长度");
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		sb.append("UPDATE ").append(table).append(" SET ");
 		int i = 0;
 		while (true) {
@@ -540,7 +546,7 @@ public final class DBA implements AutoCloseable {
 		if (table.length() == 0) throw new SQLException("table not defined");
 		if (rawField.isEmpty()) throw new SQLException("field not defined, or not for update");
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		sb.append("INSERT INTO ").append(table).append(" (").append(field).append(") VALUES (");
 		int i = 0;
 		while (true) {
@@ -561,7 +567,7 @@ public final class DBA implements AutoCloseable {
 
 		List<?> values = manyValues.next();
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		sb.append("INSERT INTO ").append(table).append(" (").append(field).append(") VALUES (");
 		for (int i = 0; i < values.size();) {
 			sb.append('?');
@@ -574,11 +580,10 @@ public final class DBA implements AutoCloseable {
 
 		boolean success = false;
 		int successCount = 0;
-		try(PreparedStatement stm = connection().prepareStatement(sql)) {
+		try(var stm = connection().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 			while (true) {
 				for (int i = 0; i < values.size(); i++) {
-					Object x = values.get(i);
-					stm.setObject(i, values.get(i));
+					stm.setObject(i+1, values.get(i));
 				}
 				stm.addBatch();
 
@@ -609,7 +614,7 @@ public final class DBA implements AutoCloseable {
 	public int delete() throws SQLException {
 		if (table.length() == 0) throw new SQLException("table not defined");
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		sb.append("DELETE FROM ").append(table);
 
 		return condition(sb);

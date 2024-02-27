@@ -6,6 +6,7 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.AttrUnknown;
+import roj.asm.tree.attr.Attribute;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.MyBitSet;
@@ -27,7 +28,7 @@ public abstract class ParamNameMapper {
 
 		int len = TypeHelper.paramSize(m.rawDesc())+j;
 		SimpleList<String> names = new SimpleList<>(len);
-		names.i_setSize(len);
+		names._setSize(len);
 
 		ParamNameMapper pmap = new ParamNameMapper() {
 			@Override
@@ -42,7 +43,7 @@ public abstract class ParamNameMapper {
 				if (j != i) names.set(i, names.get(j));
 				j += parameters.get(i).length();
 			}
-			names.i_setSize(parameters.size());
+			names._setSize(parameters.size());
 			return names;
 		}
 
@@ -56,15 +57,16 @@ public abstract class ParamNameMapper {
 	public boolean mapParam(ConstantPool pool, MethodNode m) {
 		List<String> parNames = getNewParamName(m);
 
-		AttrUnknown a;
+		Attribute a;
+		DynByteBuf r;
 		if (!parNames.isEmpty()) {
-			a = (AttrUnknown) m.attrByName("MethodParameters");
+			a = m.attrByName("MethodParameters");
 			if (a != null) {
 				int i = 0;
 				int j = (m.modifier() & Opcodes.ACC_STATIC) == 0 ? 1 : 0;
 				List<Type> parameters = m.parameters();
 
-				DynByteBuf r = Parser.reader(a);
+				r = a instanceof AttrUnknown ? Parser.reader(a) : AttrUnknown.downgrade(pool, IOUtil.getSharedByteBuf(), a).getRawData();
 				int len = r.readUnsignedByte();
 				while (len-- > 0) {
 					String name = ((CstUTF) pool.get(r)).str();
@@ -77,11 +79,11 @@ public abstract class ParamNameMapper {
 			}
 		}
 
-		AttrUnknown code = (AttrUnknown) m.attrByName("Code");
-		if (code != null) {
+		a =  m.attrByName("Code");
+		if (a != null) {
 			MyBitSet replaced = new MyBitSet(parNames.size());
 
-			DynByteBuf r = Parser.reader(code);
+			r = a instanceof AttrUnknown ? Parser.reader(a) : AttrUnknown.downgrade(pool, IOUtil.getSharedByteBuf(), a).getRawData();
 			r.rIndex += 4; // stack size
 			int codeLen = r.readInt();
 			r.rIndex += codeLen; // code

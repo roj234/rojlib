@@ -23,7 +23,7 @@ public @interface InvokeRedirect {
 
 	/**
 	 * (匹配用)方法参数
-	 * 方法的形参是用来匹配被映射的方法，而该参数
+	 * 方法的形参用来匹配被映射的方法，而该参数和value一起用来识别在哪个方法里检测
 	 */
 	String injectDesc();
 

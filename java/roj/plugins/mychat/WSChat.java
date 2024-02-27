@@ -4,28 +4,26 @@ import roj.collect.IntSet;
 import roj.concurrent.PacketBuffer;
 import roj.config.JSONParser;
 import roj.config.data.CList;
-import roj.config.data.CMapping;
-import roj.config.serial.ToJson;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
-import roj.net.http.ws.WebsocketHandler;
-import roj.text.CharList;
+import roj.net.http.ws.WebSocketHandler;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
  * @author Roj234
  * @since 2022/2/7 18:48
  */
-public abstract class WSChat extends WebsocketHandler {
+public abstract class WSChat extends WebSocketHandler {
 	public static final int
 		P_USER_STATE = 1, P_USER_INFO = 2,
 		P_MESSAGE = 3, P_SYS_MESSAGE = 4,
 		P_DATA_CHANGED = 5, P_ROOM_STATE = 6,
-		P_SPACE_NEW = 7,
 		P_GET_HISTORY = 8, P_REMOVE_HISTORY = 9, P_COLD_HISTORY = 14,
 		P_NEW_FRIEND = 15;
 	public static final int P_HEARTBEAT = 10, P_LOGOUT = 11, P_LOGIN = 12, P_ALERT = 13, P_JSON_PAYLOAD = 255;
@@ -49,7 +47,7 @@ public abstract class WSChat extends WebsocketHandler {
 
 			while (true) {
 				b.clear();
-				if (pb.take(b) == null) break;
+				if (pb.take(b) == null || !b.isReadable()) break;
 
 				send((flag2 & USE_BINARY) != 0 ? FRAME_BINARY : FRAME_TEXT, b);
 			}
@@ -72,7 +70,7 @@ public abstract class WSChat extends WebsocketHandler {
 	}
 
 	private void binaryPacket(DynByteBuf in) throws IOException {
-		switch (in.get() & 0xFF) {
+		switch (in.readByte() & 0xFF) {
 			case P_LOGOUT:
 				error(ERR_OK, null);
 				break;
@@ -102,11 +100,8 @@ public abstract class WSChat extends WebsocketHandler {
 			case P_COLD_HISTORY:
 				requestColdHistory(in.readInt());
 				break;
-			case P_NEW_FRIEND:
-				addFriendResult(in.readInt(), in.get());
-				break;
-			case P_JSON_PAYLOAD:
-				jsonPacket(in);
+			case P_NEW_FRIEND, P_JSON_PAYLOAD:
+				error(ERR_INVALID_DATA, "未实现的函数");
 				break;
 			default:
 				error(ERR_INVALID_DATA, "无效包类别 " + in.get(0));
@@ -117,9 +112,8 @@ public abstract class WSChat extends WebsocketHandler {
 	private void jsonPacket(DynByteBuf in) throws IOException {
 		int mark = in.rIndex;
 		try {
-			CharList s = decodeToUTF(in);
-			if (jl == null) jl = new JSONParser();
-			CMapping map = jl.parse(s, JSONParser.LITERAL_KEY | JSONParser.NO_DUPLICATE_KEY).asMap();
+			if (jl == null) jl = (JSONParser) new JSONParser().charset(StandardCharsets.UTF_8);
+			CMap map = jl.parse(in, JSONParser.NO_DUPLICATE_KEY).asMap();
 			switch (map.getInteger("act")) {
 				case P_LOGOUT:
 					error(ERR_OK, null);
@@ -151,7 +145,7 @@ public abstract class WSChat extends WebsocketHandler {
 					requestColdHistory(map.getInteger("id"));
 					break;
 				case P_NEW_FRIEND:
-					addFriendResult(map.getInteger("id"), map.getInteger("result"));
+					error(ERR_INVALID_DATA, "未实现的函数");
 					break;
 				default:
 					error(ERR_INVALID_DATA, "无效包类别 " + map.getInteger("act"));
@@ -163,14 +157,10 @@ public abstract class WSChat extends WebsocketHandler {
 	}
 
 	protected void init() {}
-	//@Override
-	//protected void onClosed() {}
 
 	protected abstract void message(int to, CharSequence msg);
 
 	protected abstract void requestUserInfo(int id);
-
-	protected void addFriendResult(int id, int result) {}
 
 	protected void requestHistory(int id, CharSequence filter, int off, int len) {}
 
@@ -183,18 +173,7 @@ public abstract class WSChat extends WebsocketHandler {
 		user.addMoreInfo(known);
 
 		ByteList b = IOUtil.getSharedByteBuf();
-		if ((flag2 & USE_BINARY) != 0) {
-			user.put(b.put((byte) P_USER_INFO));
-		} else {
-			ToJson ser = new ToJson();
-			ser.valueMap();
-
-			ser.key("act");
-			ser.value(P_USER_INFO);
-
-			user.put(ser);
-			b.putUTFData(ser.getValue());
-		}
+		user.put(b.put(P_USER_INFO));
 		pb.offer(b);
 	}
 
@@ -202,33 +181,11 @@ public abstract class WSChat extends WebsocketHandler {
 		if (add) known.add(user.id);
 
 		ByteList b = IOUtil.getSharedByteBuf();
-		if ((flag2 & USE_BINARY) != 0) {
-			b.put((byte) P_ROOM_STATE).putInt(groupId);
-			if (add) {
-				user.put(b);
-			} else {
-				b.putInt(user.id);
-			}
+		b.put(P_ROOM_STATE).putInt(groupId);
+		if (add) {
+			user.put(b);
 		} else {
-			ToJson ser = new ToJson();
-			ser.valueMap();
-
-			ser.key("act");
-			ser.value(P_ROOM_STATE);
-
-			ser.key("id");
-			ser.value(groupId);
-
-			if (add) {
-				ser.key("user");
-				ser.valueMap();
-				user.put(ser);
-				ser.pop();
-			} else {
-				ser.key("uid");
-				ser.value(user.id);
-			}
-			b.putUTFData(ser.getValue());
+			b.putInt(user.id);
 		}
 		pb.offer(b);
 	}
@@ -237,28 +194,13 @@ public abstract class WSChat extends WebsocketHandler {
 		if (!known.remove(userId)) return;
 
 		ByteList b = IOUtil.getSharedByteBuf();
-		if ((flag2 & USE_BINARY) != 0) {
-			b.put((byte) P_DATA_CHANGED).putInt(userId);
-		} else {
-			CMapping map = new CMapping();
-			map.put("act", P_DATA_CHANGED);
-			map.put("id", userId);
-			b.putUTFData(map.toShortJSONb());
-		}
+		b.put(P_DATA_CHANGED).putInt(userId);
 		pb.offer(b);
 	}
 
 	public final void sendOnlineState(int userId, byte online) {
 		ByteList b = IOUtil.getSharedByteBuf();
-		if ((flag2 & USE_BINARY) != 0) {
-			b.put((byte) P_USER_STATE).putInt(userId).put(online);
-		} else {
-			CMapping map = new CMapping();
-			map.put("act", P_USER_STATE);
-			map.put("id", userId);
-			map.put("on", online);
-			b.putUTFData(map.toShortJSONb());
-		}
+		b.put(P_USER_STATE).putInt(userId).put(online);
 		pb.offer(b);
 	}
 
@@ -273,14 +215,7 @@ public abstract class WSChat extends WebsocketHandler {
 
 	private void sendUTF(String utf, int id) {
 		ByteList b = IOUtil.getSharedByteBuf();
-		if ((flag2 & USE_BINARY) != 0) {
-			b.put((byte) id).putUTFData(utf);
-		} else {
-			CMapping map = new CMapping();
-			map.put("act", id);
-			map.put("desc", utf);
-			b.putUTFData(map.toShortJSONb());
-		}
+		b.put(id).putUTFData(utf);
 		pb.offer(b);
 	}
 
@@ -290,91 +225,18 @@ public abstract class WSChat extends WebsocketHandler {
 		known.add(userId);
 
 		ByteList b = IOUtil.getSharedByteBuf();
-		if ((flag2 & USE_BINARY) != 0) {
-			b.put((byte) (sys ? P_SYS_MESSAGE : P_MESSAGE))
-			 .putInt(userId).putInt(message.uid).putLong(message.time)
-			 .putUTFData(message.text);
-		} else {
-			CMapping map = new CMapping();
-			map.put("act", sys ? P_SYS_MESSAGE : P_MESSAGE);
-			map.put("id", userId);
-			if (!sys) {
-				if (userId != message.uid) {
-					map.put("uid", message.uid);
-				}
-			} else {
-				map.put("style", message.uid);
-			}
-			CMapping subMap = map.getOrCreateMap("msg");
-			subMap.put("time", message.time);
-			subMap.put("text", message.text);
-			b.putUTFData(map.toShortJSONb());
-		}
-		pb.offer(b);
-	}
-
-	public final void sendNotLogin() {
-		ByteList b = IOUtil.getSharedByteBuf();
-		if ((flag2 & USE_BINARY) != 0) {
-			b.put((byte) P_LOGIN);
-		} else {
-			CMapping map = new CMapping();
-			map.put("act", P_LOGIN);
-			b.putUTFData(map.toShortJSONb());
-		}
-		pb.offer(b);
-	}
-
-	public final void sendSpaceChanged() {
-		ByteList b = IOUtil.getSharedByteBuf();
-		if ((flag2 & USE_BINARY) != 0) {
-			b.put((byte) P_SPACE_NEW);
-		} else {
-			CMapping map = new CMapping();
-			map.put("act", P_SPACE_NEW);
-			b.putUTFData(map.toShortJSONb());
-		}
+		b.put((byte) (sys ? P_SYS_MESSAGE : P_MESSAGE))
+		 .putInt(userId).putInt(message.uid).putLong(message.time)
+		 .putUTFData(message.text);
 		pb.offer(b);
 	}
 
 	public final void sendHistory(int userId, int total, List<Message> msgs) {
 		ByteList b = IOUtil.getSharedByteBuf();
-		if ((flag2 & USE_BINARY) != 0) {
-			b.put((byte) P_GET_HISTORY).putInt(userId).putInt(total).putInt(msgs.size());
-			for (int i = 0; i < msgs.size(); i++) {
-				Message msg = msgs.get(i);
-				b.putLong(msg.time).putInt(msg.uid).putUTF(msg.text);
-			}
-		} else {
-			CMapping map = new CMapping();
-			map.put("act", P_GET_HISTORY);
-			map.put("id", userId);
-			map.put("total", total);
-			CList data = new CList(msgs.size());
-			for (int i = 0; i < msgs.size(); i++) {
-				Message msg = msgs.get(i);
-				CMapping subMap = new CMapping(2);
-				data.add(subMap);
-				subMap.put("time", msg.time);
-				subMap.put("text", msg.text);
-				subMap.put("uid", msg.uid);
-			}
-			map.put("data", data);
-			b.putUTFData(map.toShortJSONb());
-		}
-		pb.offer(b);
-	}
-
-	public final void sendNewFriend(int userId, String text) {
-		ByteList b = IOUtil.getSharedByteBuf();
-		if ((flag2 & USE_BINARY) != 0) {
-			b.put((byte) P_NEW_FRIEND).putUTFData(text).putInt(userId);
-		} else {
-			CMapping map = new CMapping();
-			map.put("act", P_NEW_FRIEND);
-			map.put("id", userId);
-			map.put("desc", text);
-			b.putUTFData(map.toShortJSONb());
+		b.put(P_GET_HISTORY).putInt(userId).putInt(total).putInt(msgs.size());
+		for (int i = 0; i < msgs.size(); i++) {
+			Message msg = msgs.get(i);
+			b.putLong(msg.time).putInt(msg.uid).putUTF(msg.text);
 		}
 		pb.offer(b);
 	}

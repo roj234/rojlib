@@ -446,19 +446,23 @@ public final class XInsnNodeView {
 		switch (OPLENGTH[code&0xFF]&0xF) {
 			case 1:
 				Desc d = desc();
-				sb.append(parseOwner(d.owner, simple)).append('.').append(d.name).append(" // ").append(TypeHelper.parseField(d.param));
+				sb.append(parseOwner(d.owner, simple)).append('.').append(d.name).append(" // ");
+				TypeHelper.parseField(d.param).toString(sb);
 			break;
 			case 2:
 				d = desc();
-				sb.append(TypeHelper.humanize(TypeHelper.parseMethod(d.param), parseOwner(d.owner, simple)+'.'+d.name, simple));
+				TypeHelper.humanize(TypeHelper.parseMethod(d.param), parseOwner(d.owner, simple)+'.'+d.name, simple, sb);
 			break;
 			case 3:
 				d = desc();
-				sb.append(TypeHelper.humanize(TypeHelper.parseMethod(d.param), "*."+d.name, simple)).append(" // [#").append((int)d.flags).append(']');
+				TypeHelper.humanize(TypeHelper.parseMethod(d.param), "*."+d.name, simple, sb).append(" // [#").append((int)d.flags).append(']');
 			break;
-			case 5: case 6: case 8: case 9: sb.append(id); break;
+			case 6:
+				//noinspection MagicConstant
+				sb.append(Type.std(InsnHelper.FromPrimitiveArrayId(id))); break;
+			case 5: case 8: case 9: sb.append(id); break;
 			case 7: sb.append('#').append(id).append(number >= 0 ? " += " : " -= ").append(Math.abs(number)); break;
-			case 10: sb.append(TypeHelper.parseField(ref.toString())).append(" // [维度=").append(id).append(']'); break;
+			case 10: TypeHelper.parseField(ref.toString()).toString(sb); sb.append(" // [维度=").append(id).append(']'); break;
 			default:
 				if (ref instanceof LdcSegment) sb.append(((LdcSegment) ref).c.getEasyReadValue());
 				else if (ref instanceof JumpSegment) sb.append(((JumpSegment) ref).target);

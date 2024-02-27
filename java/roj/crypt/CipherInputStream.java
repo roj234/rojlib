@@ -39,12 +39,12 @@ public class CipherInputStream extends MBInputStream {
 		try {
 			while (true) {
 				if (o.readableBytes() >= myLen) {
-					o.read(b, off, myLen);
+					o.readFully(b, off, myLen);
 					return len;
 				}
 
 				int avl = o.readableBytes();
-				o.read(b, off, avl);
+				o.readFully(b, off, avl);
 				off += avl;
 				myLen -= avl;
 

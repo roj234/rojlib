@@ -174,20 +174,22 @@ final class BT4 extends LZEncoder {
 			long pair = base + (((long) cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) << 3);
 			int len = Math.min(len0, len1);
 
-			if (u.getByte(buf + readPos + len - delta) == u.getByte(buf + readPos + len)) {
+			long myOff = buf + readPos + len;
+			if (u.getByte(myOff - delta) == u.getByte(myOff)) {
 				// No need to look for longer matches than niceLenLimit
 				// because we only are updating the tree, not returning
 				// matches found to the caller.
 				do {
+					myOff++;
 					if (++len == niceLenLimit) {
 						u.putInt(ptr1, u.getInt(pair));
 						u.putInt(ptr0, u.getInt(pair + 4));
 						return;
 					}
-				} while (u.getByte(buf + readPos + len - delta) == u.getByte(buf + readPos + len));
+				} while (u.getByte(myOff - delta) == u.getByte(myOff));
 			}
 
-			if ((u.getByte(buf + readPos + len - delta) & 0xFF) < (u.getByte(buf + readPos + len) & 0xFF)) {
+			if ((u.getByte(myOff - delta) & 0xFF) < (u.getByte(myOff) & 0xFF)) {
 				u.putInt(ptr1, currentMatch);
 				ptr1 = pair + 4;
 				currentMatch = u.getInt(ptr1);

@@ -1,8 +1,5 @@
 package roj.config.data;
 
-import org.jetbrains.annotations.NotNull;
-import roj.config.NBTParser;
-import roj.config.VinaryParser;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
@@ -14,90 +11,41 @@ import roj.util.DynByteBuf;
 public class CLong extends CEntry {
 	public long value;
 
-	public CLong(long number) {
-		this.value = number;
+	public CLong() {}
+	public CLong(long number) { this.value = number; }
+	public static CLong valueOf(long number) { return new CLong(number); }
+	public static CLong valueOf(String number) { return valueOf(Long.parseLong(number)); }
+
+	public Type getType() { return Type.LONG; }
+	public boolean eqVal(CEntry o) { return o.asLong() == value; }
+	public boolean mayCastTo(Type o) {
+		if (((1 << o.ordinal()) & 0b011100000100) != 0) return true;
+		return switch (o) {
+			case Int1 -> value >= -128 && value <= 127;
+			case Int2 -> value >= -32768 && value <= 32767;
+			case INTEGER -> value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE;
+			default -> false;
+		};
 	}
 
-	public static CLong valueOf(long number) {
-		return new CLong(number);
-	}
+	public int asInteger() { return value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE ? (int) value : super.asInteger(); }
+	public final long asLong() { return value; }
+	public float asFloat() { return value; }
+	public final double asDouble() { return value; }
+	public final String asString() { return String.valueOf(value); }
 
-	public static CLong valueOf(String number) {
-		return valueOf(Long.parseLong(number));
-	}
+	public void accept(CVisitor ser) { ser.value(value); }
+	public Object raw() { return value; }
 
-	@Override
-	public final double asDouble() {
-		return value;
-	}
+	public CharList toJSON(CharList sb, int depth) { return sb.append(value); }
 
-	@Override
-	public final int asInteger() {
-		return (int) value;
-	}
+	public void toB_encode(DynByteBuf w) { w.put('i').putAscii(Long.toString(value)).put('e'); }
 
-	@Override
-	public final long asLong() {
-		return value;
-	}
-
-	@NotNull
-	@Override
-	public Type getType() {
-		return Type.LONG;
-	}
-
-	@NotNull
-	@Override
-	public final String asString() {
-		return String.valueOf(value);
-	}
-
-	@Override
+	public int hashCode() { return (int) (value ^ (value >>> 32)); }
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 		CLong that = (CLong) o;
 		return that.value == value;
-	}
-
-	@Override
-	public boolean isSimilar(CEntry o) {
-		return o.getType() == Type.LONG || (o.getType().isSimilar(Type.LONG) && o.asLong() == value);
-	}
-
-	@Override
-	public int hashCode() {
-		return (int) value;
-	}
-
-	@Override
-	public CharList toJSON(CharList sb, int depth) {
-		return sb.append(value);
-	}
-
-	@Override
-	public byte getNBTType() {
-		return NBTParser.LONG;
-	}
-
-	@Override
-	public Object unwrap() {
-		return value;
-	}
-
-	@Override
-	protected void toBinary(DynByteBuf w, VinaryParser struct) {
-		w.put((byte) Type.LONG.ordinal()).putLong(value);
-	}
-
-	@Override
-	public void toB_encode(DynByteBuf w) {
-		w.put((byte) 'i').putAscii(Long.toString(value)).put((byte) 'e');
-	}
-
-	@Override
-	public void forEachChild(CVisitor ser) {
-		ser.value(value);
 	}
 }

@@ -1,6 +1,6 @@
 package roj.asm.cp;
 
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 
 /**
  * @author Roj234
@@ -8,7 +8,7 @@ import roj.config.word.Tokenizer;
  */
 public final class CstString extends CstRefUTF {
 	public CstString(CstUTF v) { super(v); }
-	public CstString(String s) { setValue(new CstUTF(s)); }
+	public CstString(String name) { super(name); }
 
 	@Override
 	public byte type() { return STRING; }

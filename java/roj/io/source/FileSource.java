@@ -67,12 +67,13 @@ public class FileSource extends Source {
 	public DataInput asDataInput() { return io; }
 
 	@Override
-	public Source threadSafeCopy() throws IOException { return new FileSource(file, offset); }
+	public boolean isWritable() {return write;}
 
 	@Override
-	public void moveSelf(long from, long to, long length) throws IOException {
-		IOUtil.transferFileSelf(channel(), from, to, length);
-	}
+	public Source threadSafeCopy() throws IOException { return new FileSource(file, offset, write); }
+
+	@Override
+	public void moveSelf(long from, long to, long length) throws IOException { IOUtil.transferFileSelf(channel(), from, to, length); }
 
 	@Override
 	public String toString() { return file.getPath(); }

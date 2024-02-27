@@ -6,22 +6,26 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.IClass;
+import roj.asm.tree.anno.AnnValEnum;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.type.TypeHelper;
 import roj.asm.visitor.Label;
-import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
+import roj.compiler.api.FieldWriteReplace;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.context.ClassContext;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.GlobalContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
+import roj.compiler.resolve.ComponentList;
+import roj.compiler.resolve.FieldResult;
 import roj.compiler.resolve.ResolveException;
 import roj.text.CharList;
 import roj.text.TextUtil;
+
+import java.util.function.Consumer;
 
 /**
  * 操作符 - 获取定名字的量
@@ -29,53 +33,82 @@ import roj.text.TextUtil;
  * @author Roj233
  * @since 2022/2/27 20:27
  */
-final class DotGet extends VarNode {
-	private static final MyBitSet EMPTY_BITS = new MyBitSet();
+public final class DotGet extends VarNode {
+	static final ThreadLocal<Label> NULLISH_TARGET = new ThreadLocal<>();
+	static void writeNullishTarget(MethodWriter cw, Label ifNull, IType targetType) {
+		NULLISH_TARGET.remove();
+
+		var tmp = new Label();
+		cw.jump(tmp);
+		cw.label(ifNull);
+		cw.one(Opcodes.POP);
+		int type1 = targetType.getActualType();
+		if (type1 != Type.VOID) {
+			if (type1 != Type.CLASS) throw new ResolveException("symbol.error.derefPrimitive:"+targetType);
+			cw.one(Opcodes.ACONST_NULL);
+		}
+		cw.label(tmp);
+	}
 
 	ExprNode parent;
 	SimpleList<String> names;
 
-	private byte state;
-	private MyBitSet bits = EMPTY_BITS;
-	private Object[] fch;
+	private byte flags;
+	private long bits;
+
+	private IClass begin;
+	private FieldNode[] chain;
 	private IType type;
 
-	private static final byte ARRAY_LENGTH = 1, FINAL_FIELD = 2, SELF_FIELD = 4, CHECKED = 8;
+	private static final byte ARRAY_LENGTH = 1, FINAL_FIELD = 2, SELF_FIELD = 4, RESOLVED = 8;
 
-	// parent可以是Constant This Super ArrayGet Invoke ArrayDef New
 	private static final ToIntMap<Class<?>> TypeId = new ToIntMap<>();
 	static {
-		TypeId.putInt(This.class, 0);
-		TypeId.putInt(Invoke.class, 1);
+		// Notnull
+		TypeId.putInt(This.class, 1);
+		TypeId.putInt(EncloseRef.class, 1);
+		TypeId.putInt(Constant.class, 1);
+		TypeId.putInt(ArrayDef.class, 1);
+
+		TypeId.putInt(Invoke.class, 2);
 		TypeId.putInt(ArrayGet.class, 2);
-		TypeId.putInt(ArrayDef.class, 3);
-		TypeId.putInt(Constant.class, 4);
-		TypeId.putInt(Cast.class, 5);
-		TypeId.putInt(EncloseRef.class, 6);
+
+		TypeId.putInt(Cast.class, 3);
+
+		// only after resolve (via getOperatorOverride)
+		TypeId.putInt(LocalVariable.class, 114);
 	}
 
 	public DotGet(@Nullable ExprNode parent, String name, int flag) {
 		this.parent = parent;
 		this.names = new SimpleList<>(4);
 		this.names.add(name);
-		if (flag != 0) {
-			bits = new MyBitSet();
-			bits.add(1);
-		}
+		// a() ?. expr
+		if (flag != 0) bits = 1;
 
 		if (parent != null) {
 			int type = TypeId.getOrDefault(parent.getClass(), -1);
 			if (type == -1) throw new IllegalArgumentException("未识别的parent:"+parent.getClass().getName());
-			this.state = (byte) type;
+			this.flags = (byte) type;
 		} else {
-			this.state = -128;
+			this.flags = -128;
 		}
 	}
+	DotGet() {}
 
-	public Type toClassRef() {
-		if (state >= 0) throw new IllegalArgumentException("cannot be class ref");
+	public static ExprNode resolved(ExprNode parent, IClass begin, IType type, boolean isFinal, FieldNode... chain) {
+		DotGet el = new DotGet();
+		el.names = new SimpleList<>();
+		el.parent = parent;
+		el.begin = begin;
+		el.chain = chain;
+		el.type = type == null ? chain[chain.length-1].fieldType() : type;
+		el.flags = (byte) (RESOLVED | (isFinal ? FINAL_FIELD : 0));
+		return el;
+	}
 
-		CharList sb = CompileContext.get().tmpList; sb.clear();
+	Type toClassRef() {
+		CharList sb = LocalContext.get().tmpSb; sb.clear();
 		int i = 0;
 		String part = names.get(0);
 		while (true) {
@@ -84,8 +117,7 @@ final class DotGet extends VarNode {
 			sb.append('/');
 		}
 
-		int pt = i == 1 ? TypeHelper.toPrimitiveType(names.get(0)) : -1;
-		return pt > 0 ? new Type(pt, names.size()-i) : new Type(sb.toString(), names.size()-i);
+		return new Type(sb.toString(), names.size()-i);
 	}
 
 	@Override
@@ -97,155 +129,234 @@ final class DotGet extends VarNode {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException { return resolveEx(ctx, null); }
+	public ExprNode resolve(LocalContext ctx) throws ResolveException { return resolveEx(ctx, null); }
 	@Contract("_, null -> !null")
-	final ExprNode resolveEx(CompileContext ctx, Invoke invoke) throws ResolveException {
-		if ((state&CHECKED) != 0) return this;
+	final ExprNode resolveEx(LocalContext ctx, Consumer<IClass> classExprTarget) throws ResolveException {
+		if ((flags&RESOLVED) != 0) return this;
 
-		String part = names.get(0);
-		if (parent == null && names.size() == 1) {
-			// LocalVariable Ref
-			Variable variable = ctx.tryVariable(part);
-			if (variable != null) return new LocalVariable(variable);
+		// 用于错误提示
+		FieldResult inaccessibleThis = null;
 
-			Object[] field = ctx.tryImportField(part);
-			if (field != null) fch = field;
+		if (flags < 0) {
+			// 首先我们要拿到第一个field
+			// 这里按顺序处理下列情况
+
+			String part = names.get(0);
+
+			Variable varParent = ctx.tryVariable(part);
+			check:
+			if (varParent != null) {
+				// 1. 变量
+				parent = new LocalVariable(varParent);
+				if (names.size() == 1) return parent;
+
+				names.remove(0);
+				flags = 0;
+				bits >>>= 1;
+			} else {
+				// 2. 省略this的当前类字段（包括继承！）
+				// * => 在错误处理中需要二次检查以生成更有帮助的错误信息（static）
+
+				ComponentList fieldList = ctx.fieldListOrReport(ctx.file, part);
+				if (fieldList != null) {
+					inaccessibleThis = fieldList.findField(ctx, ctx.in_static ? ComponentList.IN_STATIC : 0);
+					if (inaccessibleThis.error == null) {
+						begin = ctx.file;
+						parent = (inaccessibleThis.field.modifier&Opcodes.ACC_STATIC) != 0 ? null : ctx.ep.This();
+						flags = 0;
+						break check;
+					}
+				}
+
+				LocalContext.Import result;
+				// 3. 静态字段导入
+				if ((result = ctx.tryImportField(part)) != null) {
+					begin = result.owner;
+					if (begin == null) return result.prev;
+					names.set(0, result.method);
+					parent = result.prev;
+					flags = 0;
+				}
+			}
+
+			// 4. 前缀包名.字段
 		}
 
+		String part = names.get(0);
 		int i = 0;
-		CharList sb = ctx.tmpList; sb.clear();
+		CharList sb = ctx.tmpSb; sb.clear();
 		while (true) {
 			sb.append(part);
 			if (++i == names.size()) break;
-			if ((part = names.get(i)).equals(";[")) throw new ResolveException("symbol.error.arrayBrOutsideClassRef");
+			if ((part = names.get(i)).equals(";[")) {
+				ctx.report(Kind.ERROR, "symbol.error.arrayBrOutsideClassRef");
+				return NaE.RESOLVE_FAILED;
+			}
 			sb.append('/');
 		}
 
-		IType fType;
-		if (state >= 0) {
-			parent = parent.resolve(ctx);
+		if (flags >= 0) { // parent不为null, 下面是处理importField
+			IType fType;
+			IClass symbol;
 
-			fType = parent.type();
-			if (fType.isPrimitive()) {
-				ctx.report(Kind.ERROR, "symbol.error.derefPrimitiveField", fType);
-				return this;
+			if (parent == null) {
+				fType = new Type(begin.name());
+				symbol = begin;
+			} else {
+				fType = (parent = parent.resolve(ctx)).type();
+				if (fType.isPrimitive()) {
+					ctx.report(Kind.ERROR, "symbol.error.derefPrimitive", fType);
+					return NaE.RESOLVE_FAILED;
+				}
+
+				symbol = ctx.getClassOrArray(fType);
+				if (symbol == null) {
+					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", fType);
+					return NaE.RESOLVE_FAILED;
+				}
+
+				if (bits != 0 && flags == 1) {
+					final int offset = 0;
+					if (Long.numberOfTrailingZeros(bits) <= offset) ctx.report(Kind.ERROR, "dotGet.opChain.inClassDecl");
+					//bits >>>= offset;
+				}
 			}
-
-			IClass symbol = ctx.getClassOrArray(fType);
-			if (symbol == null) throw new ResolveException("symbol.error.noSuchClass:"+fType);
 
 			String error = ctx.resolveField(symbol, fType, sb);
 			if (error != null) {
 				ctx.report(Kind.ERROR, error);
-				return this;
+				return NaE.RESOLVE_FAILED;
 			}
 
-			type = (IType) ctx.popLastResolveResult();
-			fch = ctx.fieldResolveResult();
-			i = 1;
 			part = fType.owner();
 		} else {
-			if (fch == null) {
-				String error = ctx.resolveClassField(sb, invoke != null);
-				if (error != null) {
-					if (error.isEmpty()) {
-						assert invoke != null;
-						invoke.fn = ctx.popLastResolveResult();
-						return null;
-					}
+			// 4. 前缀包名.字段 ^
+			// ^ => 我决定采用（已经设计好的）这种机制，虽然可能没必要
+			String error = ctx.resolveDotGet(sb, classExprTarget != null);
 
-					ctx.report(Kind.ERROR, error);
-					return this;
+			if (bits != 0) {
+				int offset = ctx.get_frOffset()+1;
+				if (Long.numberOfTrailingZeros(bits) <= offset) ctx.report(Kind.ERROR, "dotGet.opChain.inClassDecl");
+				bits >>>= offset;
+			}
+
+			if (error != null) {
+				if (error.isEmpty()) {
+					assert classExprTarget != null;
+					classExprTarget.accept(ctx.get_frBegin());
+					return null;
 				}
 
-				fch = ctx.fieldResolveResult();
+				if (inaccessibleThis != null) error = inaccessibleThis.error;
+				ctx.report(Kind.ERROR, error);
+				return NaE.RESOLVE_FAILED;
 			}
 
-			i = 2;
-			part = ((FieldNode) fch[1]).fieldType().owner();
+			part = ctx.get_frChain().get(0).fieldType().owner();
 		}
-		state = CHECKED;
 
-		assert fch != null;
+		begin = ctx.get_frBegin();
+		chain = ctx.get_frChain().toArray(new FieldNode[ctx.get_frChain().size()]);
+		type = ctx.get_frType();
 
-		int length = fch.length;
-		Object last = fch[length-2];
-		// 数组长度分支，数组实现了一些接口，也有对应的方法，但是length不是字段而是opcode
-		if (sb.endsWith("length")) {
-			if(last.getClass() == FieldNode.class ? ((FieldNode) last).fieldType().array() > 0 : last == ClassContext.anyArray()) {
-				state |= FINAL_FIELD|ARRAY_LENGTH;
-				length--;
-			}
+		ctx.checkType(part);
+
+		flags = RESOLVED;
+
+		int length = chain.length;
+		FieldNode last = chain[length-1];
+
+		// length不是字段而是opcode
+		if (last == GlobalContext.arrayLength()) {
+			flags |= FINAL_FIELD|ARRAY_LENGTH;
+			type = Type.std(Type.INT);
+			length--;
+		} else if (type == null) {
+			// get_frType只处理泛型
+			type = last.fieldType();
 		}
 
 		FieldNode fn;
-		if (i < length) for (;;) {
-			fn = (FieldNode) fch[i];
+		int i1 = 1;
+		if (i1 < length) for (;;) {
+			fn = chain[i1];
 			if ((fn.modifier & Opcodes.ACC_STATIC) != 0) {
 				ctx.report(Kind.SEVERE_WARNING, "symbol.warn.static_on_half", part, fn.name(), "symbol.field");
 			}
 
-			if (++i == length) break;
+			if (++i1 == length) break;
 			part = fn.fieldType().owner();
 		} else  {
-			fn = (FieldNode) fch[1];
-			assert fch.length == 2;
+			fn = chain[0];
+			assert chain.length == 1;
 
 			// 替换常量 如你所见只有直接访问(<class>.<field>)才会替换,如果中途使用了非静态字段会警告，👆
 			if (!ctx.disableConstantValue) {
-				Object c = ctx.getConstantValue((IClass)fch[0], fn);
 				// 大概也用不到泛型... 不过还是留着
-				if (c != null) return new Constant(type == null ? fn.fieldType() : type, c);
+				ExprNode node = ctx.getConstantValue(begin, fn, type);
+				if (node != null) return node;
 			}
 		}
 
-		if (bits != EMPTY_BITS) {
-			state |= FINAL_FIELD;
-			if ((state&ARRAY_LENGTH) != 0) ctx.report(Kind.ERROR, "dotGet.error.illegalArrayLength");
-		} else if ((fn.modifier&Opcodes.ACC_FINAL) != 0) state |= FINAL_FIELD;
-		if (part != null && part.equals(ctx.file.name)) state |= SELF_FIELD;
+		if (isStaticField()) bits &= ~1;
+		if (bits != 0) {
+			flags |= FINAL_FIELD;
+			if ((flags&ARRAY_LENGTH) != 0) ctx.report(Kind.ERROR, "dotGet.opChain.arrayLen");
+		} else if ((fn.modifier&Opcodes.ACC_FINAL) != 0) flags |= FINAL_FIELD;
+
+		// == is better
+		//noinspection all
+		if (part != null && part == ctx.file.name) {
+			flags |= SELF_FIELD;
+			// redirect check to LocalContext
+			if (ctx.in_constructor) flags &= ~FINAL_FIELD;
+		}
 		return this;
 	}
 
 	@Override
-	public IType type() {
-		// array length
-		if ((state&ARRAY_LENGTH) != 0) return Type.std(Type.INT);
+	public boolean isKind(ExprKind kind) {return kind == ExprKind.ENUM_REFERENCE && isStaticField() && (chain[0].modifier&Opcodes.ACC_ENUM) != 0;}
+	@Override
+	public Object constVal() {return isKind(ExprKind.ENUM_REFERENCE) ? new AnnValEnum(begin.name(), chain[0].name()) : super.constVal();}
 
-		if (type != null) return type;
-		if (fch == null) return Asterisk.anyType;
-		return ((FieldNode) fch[fch.length-1]).fieldType();
-	}
+	@Override
+	public IType type() {return type == null ? Asterisk.anyType : type;}
 
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
 
-		int length = fch.length - (state&ARRAY_LENGTH);
+		int length = chain.length - (flags&ARRAY_LENGTH);
 		write0(cw, length);
-		if (length != fch.length) cw.one(Opcodes.ARRAYLENGTH);
+		if (length != chain.length) cw.one(Opcodes.ARRAYLENGTH);
 	}
 
 	@Override
-	public boolean isFinal() { return (state&FINAL_FIELD) != 0; }
+	public boolean isFinal() { return (flags&FINAL_FIELD) != 0; }
 
 	@Override
 	public void preStore(MethodWriter cw) {
-		if ((state&SELF_FIELD) != 0) cw.ctx1.checkSelfField((FieldNode)fch[fch.length-1], true);
-		write0(cw, fch.length-1);
+		if ((flags&SELF_FIELD) != 0) LocalContext.get().checkSelfField(chain[chain.length-1], true);
+		write0(cw, chain.length-1);
 	}
 
 	@Override
 	public void preLoadStore(MethodWriter cw) {
+		if ((flags&SELF_FIELD) != 0) LocalContext.get().checkSelfField(chain[chain.length-1], false);
 		preStore(cw);
 		if (!isStaticField()) cw.one(Opcodes.DUP);
 	}
 
 	@Override
 	public void postStore(MethodWriter cw) {
-		FieldNode fn = (FieldNode) fch[fch.length-1];
-		String owner = fch.length == 2 ? ((IClass) fch[0]).name() : ((FieldNode) fch[fch.length - 2]).fieldType().owner();
-		cw.field((fn.modifier & Opcodes.ACC_STATIC) != 0 ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, owner, fn.name(), fn.rawDesc());
+		FieldNode fn = chain[chain.length-1];
+		String owner = chain.length == 1 ? begin.name() : chain[chain.length-2].fieldType().owner();
+
+		if (fn.attrByName(FieldWriteReplace.NAME) instanceof FieldWriteReplace hook) {
+			hook.writeWrite(cw, owner, fn);
+		} else {
+			cw.field((fn.modifier & Opcodes.ACC_STATIC) != 0 ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, owner, fn.name(), fn.rawDesc());
+		}
 	}
 
 	@Override
@@ -255,14 +366,12 @@ final class DotGet extends VarNode {
 
 	@Override
 	public boolean canBeReordered() { return parent == null && isStaticField(); }
-	private boolean isStaticField() { return fch.length == 2 && (((FieldNode) fch[1]).modifier & Opcodes.ACC_STATIC) != 0; }
+	private boolean isStaticField() { return chain.length == 1 && (chain[0].modifier & Opcodes.ACC_STATIC) != 0; }
 
 	private void write0(MethodWriter cw, int length) {
-		if ((state&SELF_FIELD) != 0) cw.ctx1.checkSelfField((FieldNode)fch[fch.length-1], false);
-
-		int i = 1;
-		String owner = fch.length == 2 ? ((IClass) fch[0]).name() : ((FieldNode) fch[fch.length-2]).fieldType().owner();
-		FieldNode fn = (FieldNode) fch[1];
+		int i = 0;
+		String owner = begin.name();
+		FieldNode fn = chain[0];
 		byte opcode;
 
 		boolean hasParent = parent != null;
@@ -277,18 +386,32 @@ final class DotGet extends VarNode {
 
 		if (i == length) return;
 
-		Label ifNull = bits == EMPTY_BITS ? null : new Label();
+		boolean isSet = false;
+		Label ifNull;
+		if (bits == 0) ifNull = null;
+		else {
+			ifNull = NULLISH_TARGET.get();
+			if (ifNull == null) {
+				NULLISH_TARGET.set(ifNull = new Label());
+				isSet = true;
+			}
+		}
+
 		for (;;) {
-			if (bits.contains(i)) {
+			if ((bits&(1L << i)) != 0) {
 				cw.one(Opcodes.DUP);
 				cw.jump(Opcodes.IFNULL, ifNull);
 			}
 
-			cw.field(opcode, owner, fn.name(), fn.rawDesc());
+			if (fn.attrByName(FieldWriteReplace.NAME) instanceof FieldWriteReplace hook) {
+				hook.writeRead(cw, owner, fn);
+			} else {
+				cw.field(opcode, owner, fn.name(), fn.rawDesc());
+			}
 			if (++i == length) break;
 
 			owner = fn.fieldType().owner();
-			fn = (FieldNode) fch[i];
+			fn = chain[i];
 
 			if ((fn.modifier & Opcodes.ACC_STATIC) != 0) {
 				opcode = Opcodes.GETSTATIC;
@@ -298,16 +421,22 @@ final class DotGet extends VarNode {
 			}
 		}
 
-		if (ifNull != null) cw.label(ifNull);
+		if (isSet) writeNullishTarget(cw, ifNull, fn.fieldType());
 	}
 
 	public DotGet add(String name, int flag) {
-		names.add(name);
 		if (flag != 0) {
-			if (bits.size() == 0) bits = new MyBitSet();
-			bits.add(names.size());
+			if (names.size() > 64) throw new ResolveException("dotGet.opChain.tooLong");
+			bits |= 1L << names.size();
 		}
+		names.add(name);
 		return this;
+	}
+
+	public boolean maybeStringTemplate() {return parent == null && names.size() == 1 && bits == 0;}
+	public int isNullish() {
+		int off = (chain[0].modifier & Opcodes.ACC_STATIC) != 0 ? 1 : 0;
+		return ((1L << names.size() - off) & bits) != 0 ? 2 : bits != 0 ? 1 : 0;
 	}
 
 	@Override
@@ -323,9 +452,9 @@ final class DotGet extends VarNode {
 
 	@Override
 	public int hashCode() {
-		int result = parent.hashCode();
+		int result = parent == null ? 42 : parent.hashCode();
 		result = 31 * result + names.hashCode();
-		result = 31 * result + bits.hashCode();
+		result = 31 * result + (int) (bits ^ (bits >>> 32));
 		return result;
 	}
 }

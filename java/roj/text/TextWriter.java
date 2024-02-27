@@ -14,14 +14,17 @@ import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
-import java.nio.charset.*;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.CoderResult;
+import java.nio.charset.CodingErrorAction;
 import java.nio.file.StandardOpenOption;
 
 /**
  * @author Roj234
  * @since 2023/3/18 0018 0:11
  */
-public class TextWriter extends CharList implements Appender, AutoCloseable, Finishable {
+public class TextWriter extends CharList implements Closeable, Finishable {
 	private final Closeable out;
 	private final byte type;
 
@@ -32,52 +35,48 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 
 	private DynByteBuf buf1;
 
-	public static TextWriter to(File file) throws IOException { return to(file, StandardCharsets.UTF_8); }
+	public static TextWriter to(File file) throws IOException { return to(file, null); }
 	public static TextWriter to(File file, Charset cs) throws IOException {
 		return new TextWriter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING), cs);
 	}
-	public static TextWriter append(File file) throws IOException { return append(file, StandardCharsets.UTF_8); }
+	public static TextWriter append(File file) throws IOException { return append(file, null); }
 	public static TextWriter append(File file, Charset cs) throws IOException {
 		return new TextWriter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.APPEND), cs);
 	}
 	public static void write(File file, CharSequence str) throws IOException {
-		try (TextWriter tw = to(file)) { tw.append(str); }
+		try (var tw = to(file)) { tw.append(str); }
 	}
 
-	public TextWriter(Closeable out, Charset charset) {
-		this(out,charset,BufferPool.localPool());
-	}
-	public TextWriter(Closeable out, Charset cs, BufferPool pool) {
-		if (out instanceof DynByteBuf) {
-			type = 2;
-		} else if (out instanceof OutputStream) {
-			type = 0;
-		} else if (out instanceof WritableByteChannel) {
-			type = 1;
-		} else {
-			throw new IllegalArgumentException("无法确定 " + out.getClass().getName() + " 的类型");
-		}
+	public TextWriter(Closeable out, Charset charset) { this(out,charset,BufferPool.localPool()); }
+	public TextWriter(Closeable out, Charset charset, BufferPool pool) {
+		if (out instanceof DynByteBuf) type = 2;
+		else if (out instanceof OutputStream) type = 0;
+		else if (out instanceof WritableByteChannel) type = 1;
+		else throw new IllegalArgumentException("无法确定 "+out.getClass().getName()+" 的类型");
 
-		if (cs == null) cs = TextUtil.DefaultOutputCharset;
-
-		if (StandardCharsets.UTF_8 == cs) {
-			ucs = UTF8MB4.CODER;
-			ce = null;
-		} else if (GB18030.is(cs)) {
-			ucs = GB18030.CODER;
-			ce = null;
-		} else {
-			ucs = null;
-			ce = cs.newEncoder().onUnmappableCharacter(CodingErrorAction.REPORT);
-		}
-
-		buf1 = pool.allocate(!(out instanceof OutputStream), 1024);
-
-		ob = buf1.nioBuffer();
-		ob.clear();
+		if (charset == null) charset = TextUtil.DefaultOutputCharset;
 
 		this.list = ArrayCache.getCharArray(512, false);
 		this.out = out;
+
+		var _ucs = UnsafeCharset.getInstance(charset);
+		if (_ucs != null) {
+			ucs = _ucs;
+			ce = null;
+
+			if (type == 2) {
+				buf1 = null;
+				ob = null;
+				return;
+			}
+		} else {
+			ucs = null;
+			ce = charset.newEncoder().onUnmappableCharacter(CodingErrorAction.REPORT);
+		}
+
+		buf1 = pool.allocate(!(out instanceof OutputStream), 1024);
+		ob = buf1.nioBuffer();
+		ob.clear();
 	}
 
 	@Override
@@ -85,13 +84,14 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 		if (list == null) Helpers.athrow(new IOException("Stream closed"));
 
 		if (cap > list.length) {
+			cap -= len;
 			try {
 				flush();
 			} catch (IOException e) {
 				Helpers.athrow(e);
 			}
 
-			if (list.length-len < cap) {
+			if (cap > list.length) {
 				char[] newArray = ArrayCache.getCharArray(cap, false);
 				System.arraycopy(list, 0, newArray, 0, len);
 				ArrayCache.putArray(list);
@@ -104,10 +104,16 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 	private CharBuffer excb;
 	public final CharList append(char[] c, int start, int end) {
 		try {
-			flush();
-			if (excb == null || excb.array() != c) excb = CharBuffer.wrap(c, start, end-start);
-			else excb.limit(end).position(start);
-			encode(false, excb);
+			int avl = end - start;
+			if (avl < list.length-len) {
+				System.arraycopy(c, start, list, len, avl);
+				len += avl;
+			} else {
+				flush();
+				if (excb == null || excb.array() != c) excb = CharBuffer.wrap(c, start, avl);
+				else excb.limit(end).position(start);
+				encode(false, excb);
+			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
@@ -117,15 +123,14 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 	@Override
 	public final CharList append(String s, int start, int end) {
 		try {
-			flush();
 			char[] ch = list;
 			while (start < end) {
-				len = Math.min(end-start, ch.length);
-				s.getChars(start, start+len, ch, 0);
-				if (len < ch.length) break;
+				int readable = Math.min(end-start, ch.length-len);
+				s.getChars(start, start+readable, ch, len);
 
-				start += len;
-				flush();
+				start += readable;
+				len += readable;
+				if (len == ch.length) flush();
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
@@ -159,6 +164,36 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 		return this;
 	}
 
+	public CharList pad(char c, int off, int count) {
+		if (off != len) throw new UnsupportedOperationException();
+		if (count > 0) {
+			ensureCapacity(len+count);
+			off = len;
+			len += count;
+			count += off;
+			while (off < count) list[off++] = c;
+		}
+
+		return this;
+	}
+	public CharList pad(CharSequence str, int off, int count) {
+		if (off != len) throw new UnsupportedOperationException();
+		if (count > 0) {
+			ensureCapacity(len+count);
+			off = len;
+			len += count;
+			count += off;
+			while (true) {
+				for (int j = 0; j < str.length(); j++) {
+					list[off] = str.charAt(j);
+					if (++off == count) return this;
+				}
+			}
+		}
+
+		return this;
+	}
+
 	public void flush() throws IOException {
 		if (len > 0) {
 			if (ib == null) ib = CharBuffer.wrap(list);
@@ -166,7 +201,7 @@ public class TextWriter extends CharList implements Appender, AutoCloseable, Fin
 
 			encode(false, ib);
 		}
-		flush_ce();
+		if (ob != null) flush_ce();
 	}
 
 	private void encode(boolean EOF, CharBuffer ib) throws IOException {

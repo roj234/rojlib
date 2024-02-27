@@ -1,8 +1,13 @@
 package roj.ui;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import roj.RojLib;
+import roj.compiler.plugins.annotations.Attach;
 import roj.io.IOUtil;
+import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
+import roj.util.NativeException;
 import roj.util.OS;
 
 import javax.imageio.ImageIO;
@@ -19,16 +24,51 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.function.Consumer;
 
+import static roj.reflect.ReflectionUtils.u;
+
 /**
  * @author Roj234
  * @since 2021/5/29 18:40
  */
 public final class GuiUtil {
-	public static void systemLook() {
+	private static Clipboard clipboard;
+	@Nullable
+	public static Clipboard getClipboard() {
+		if (clipboard != null) return clipboard;
+
+		Clipboard c;
 		try {
-			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException e) {
-			e.printStackTrace();
+			c = Toolkit.getDefaultToolkit().getSystemClipboard();
+		} catch (Exception e) {
+			c = null;
+		}
+		return clipboard = c;
+	}
+
+	public static void systemLook() {
+		int dpi;
+		try {
+			dpi = Toolkit.getDefaultToolkit().getScreenResolution();
+		} catch (HeadlessException ex) {
+			return;
+		}
+		System.out.println("Dpi="+dpi);
+		int size = 12;
+		if (Math.round(size * 72F / dpi) < 8) {
+			size = Math.round(8 * dpi / 72F);
+		}
+
+		if (size < 12) System.setProperty("swing.useSystemFontSettings","false");
+
+		try {
+			UIManager.setLookAndFeel("com.sun.java.swing.plaf.windows.WindowsLookAndFeel");
+		} catch (Exception e) {
+			System.err.println("RojLib Warning: Windows皮肤不可用，您可能会感受到绝对定位的痛苦");
+			try {
+				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+			} catch (Exception ex) {
+				Helpers.athrow(ex);
+			}
 		}
 	}
 
@@ -42,6 +82,21 @@ public final class GuiUtil {
 			}
 		}
 	}
+
+	public static void setClickThrough(Window window) throws Exception {
+		if (!RojLib.hasNative(RojLib.WIN32)) throw new NativeException("不支持所请求的操作");
+
+		Object peer = u.getObject(window, u.objectFieldOffset(Component.class.getDeclaredField("peer")));
+		long hwnd = u.getLong(peer, u.objectFieldOffset(ReflectionUtils.getField(peer.getClass(), "hwnd")));
+
+		long flags = nGetWindowLong(hwnd, -20/*GWL_EXSTYLE*/);
+		flags |= 524320/*WS_EX_LAYERED|WS_EX_TRANSPARENT*/;
+		nSetWindowLong(hwnd, -20, flags);
+	}
+	public static long getConsoleWindow() {return nGetConsoleWindow();}
+	private static native long nGetWindowLong(long hwnd, int dwType);
+	private static native void nSetWindowLong(long hwnd, int dwType, long flags);
+	private static native long nGetConsoleWindow();
 
 	@NotNull
 	public static DropTarget dropFilePath(Component comp, Consumer<File> callback, boolean append) {
@@ -84,9 +139,12 @@ public final class GuiUtil {
 		return doc;
 	}
 
-	private static File lastPath = new File(".");
+	private static File lastPath = new File("");
+	@Nullable
 	public static File fileSaveTo(String title, String defaultFileName) { return fileSaveTo(title, defaultFileName, null, false); }
+	@Nullable
 	public static File fileSaveTo(String title, String defaultFileName, Component pos) { return fileSaveTo(title, defaultFileName, pos, false); }
+	@Nullable
 	public static File fileSaveTo(String title, String defaultFileName, Component pos, boolean folder) {
 		JFileChooser jfc = getFileChooser();
 		jfc.setDialogTitle(title);
@@ -100,8 +158,11 @@ public final class GuiUtil {
 		return jfc.getSelectedFile();
 	}
 
+	@Nullable
 	public static File fileLoadFrom(String title) { return fileLoadFrom(title, null, JFileChooser.FILES_ONLY); }
+	@Nullable
 	public static File fileLoadFrom(String title, Component pos) { return fileLoadFrom(title, pos, JFileChooser.FILES_ONLY); }
+	@Nullable
 	public static File fileLoadFrom(String title, Component pos, int mode) {
 		JFileChooser jfc = getFileChooser();
 		jfc.setDialogTitle(title);
@@ -113,6 +174,7 @@ public final class GuiUtil {
 
 		return jfc.getSelectedFile();
 	}
+	@Nullable
 	public static File[] filesLoadFrom(String title, Component pos, int mode) {
 		JFileChooser jfc = getFileChooser();
 		jfc.setDialogTitle(title);
@@ -158,8 +220,7 @@ public final class GuiUtil {
 					dropFilePath(comp, this::setSelectedFile, false);
 				}
 
-				if (comp instanceof Container) {
-					Container c = (Container) comp;
+				if (comp instanceof Container c) {
 					synchronized (c.getTreeLock()) {
 						for (int i = 0; i < c.getComponentCount(); i++) {
 							myadd(c.getComponent(i));
@@ -170,10 +231,8 @@ public final class GuiUtil {
 		};
 	}
 
-	@Deprecated
-	public static void center(Window frame) {
-		Dimension dim = Toolkit.getDefaultToolkit().getScreenSize();
-		Rectangle bounds = frame.getBounds();
-		frame.setBounds((dim.width - bounds.width) / 2, (dim.height - bounds.height) / 2, bounds.width, bounds.height);
+	@Attach("remove")
+	public static void removeComponent(Component component) {
+		component.getParent().remove(component);
 	}
 }

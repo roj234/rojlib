@@ -1,6 +1,6 @@
 package roj.util;
 
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 
 import java.nio.Buffer;
@@ -51,7 +51,7 @@ public class NativeMemory {
 	static final H hlp;
 	static {
 		try {
-			DirectAccessor<H> da = DirectAccessor.builder(H.class);
+			Bypass<H> da = Bypass.builder(H.class);
 			da.access(ByteBuffer.class, new String[]{"hb","offset"});
 
 			boolean j17 = ReflectionUtils.JAVA_VERSION >= 17;
@@ -74,6 +74,8 @@ public class NativeMemory {
 	public static ByteBuffer newDirectBuffer(long addr, int cap, Object att) { return hlp.newDirectBuffer(addr, cap, att); }
 	public static long getAddress(ByteBuffer buf) { return hlp.getAddress(buf); }
 	public static void setBufferCapacityAndAddress(ByteBuffer buf, long addr, int cap) { assert buf.isDirect() : "buffer is not direct"; hlp.setCapacity(buf, cap); hlp.setAddress(buf, addr); }
+
+	public static Object createCleaner(Object referent, Runnable fastCallable) { return hlp.newCleaner(referent, fastCallable); }
 	public static void cleanNativeMemory(Object cleaner) { hlp.invokeClean(cleaner); }
 
 	public static ByteBuffer newHeapBuffer(byte[] buf, int mark, int pos, int lim, int cap, int off) { return hlp.newHeapBuffer(buf, mark, pos, lim, cap, off); }
@@ -82,9 +84,6 @@ public class NativeMemory {
 
 	public static void reserveMemory(int length) { hlp.reserveMemory(length, length); }
 	public static void unreserveMemory(int length) { hlp.unreserveMemory(length, length); }
-
-	private static native long hpAlloc0(long capacity) throws NativeException;
-	private static native void hpFree0(long address) throws NativeException;
 
 	public NativeMemory() { this(false); }
 	public NativeMemory(long size) { this(false); allocate(size); }

@@ -24,7 +24,7 @@ public final class AnnValInt extends AnnVal {
 	public byte type() { return type; }
 
 	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put(type).putShort(cp.getIntId(value)); }
-	public String toString() { return String.valueOf(value); }
+	public String toString() { return type == 'Z'? String.valueOf(value != 0) : String.valueOf(value); }
 
 	@Override
 	public boolean equals(Object o) {

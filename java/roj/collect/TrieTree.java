@@ -4,8 +4,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.TrieEntry.Itr;
 import roj.collect.TrieEntry.KeyItr;
+import roj.config.data.CInt;
 import roj.io.IOUtil;
-import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -88,13 +88,10 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		}
 
 		CharSequence text() { return val; }
-
 		@Override
-		void append(CharList sb) { sb.append(val); }
-
+		public void append(CharList sb) { sb.append(val); }
 		@Override
-		int length() { return val.length(); }
-
+		public int length() { return val.length(); }
 		@Override
 		public String toString() { return "PE{"+val+'}'; }
 	}
@@ -298,7 +295,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 				// 压缩剩余的entry
 				// root <== a <== b (curr) <== def <== ghi
 				if (curr.size == 1 && curr.value == UNDEFINED && i >= COMPRESS_START_DEPTH) {
-					CharList sb = IOUtil.ddLayeredCharBuf();
+					CharList sb = new CharList();
 
 					do {
 						curr.append(sb);
@@ -336,11 +333,11 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	}
 	public boolean containsKey(CharSequence s, int off, int len) { return getEntry(s, off, len) != null; }
 
-	public Map.Entry<MutableInt, V> longestMatches(CharSequence s) { return longestMatches(s, 0, s.length()); }
-	public Map.Entry<MutableInt, V> longestMatches(CharSequence s, int i, int len) {
-		MyHashMap.Entry<MutableInt, V> entry = new MyHashMap.Entry<>(new MutableInt(), null);
+	public Map.Entry<CInt, V> longestMatches(CharSequence s) { return longestMatches(s, 0, s.length()); }
+	public Map.Entry<CInt, V> longestMatches(CharSequence s, int i, int len) {
+		MyHashMap.Entry<CInt, V> entry = new MyHashMap.Entry<>(new CInt(), null);
 		match(s,i,len,entry);
-		return entry.getKey().getValue() < 0 ? null : entry;
+		return entry.getKey().value < 0 ? null : entry;
 	}
 	/**
 	 * 返回：s能连续匹配在map中的最长长度
@@ -351,8 +348,8 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	 * s="abcdef" 返回 6, feed: 6=B
 	 */
 	@SuppressWarnings("unchecked")
-	public int match(CharSequence s, int i, int len, MyHashMap.Entry<MutableInt, V> feed) {
-		feed.k.setValue(-1);
+	public int match(CharSequence s, int i, int len, MyHashMap.Entry<CInt, V> feed) {
+		feed.k.value = -1;
 
 		int d = 0;
 
@@ -375,7 +372,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 			}
 
 			if (entry.value != UNDEFINED) {
-				feed.k.setValue(d);
+				feed.k.value = d;
 				feed.v = entry.value;
 			}
 		}
@@ -383,7 +380,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	}
 
 	@SuppressWarnings("unchecked")
-	public int longestWithCallback(CharSequence s, int i, int len, MutableInt cont, BiFunction<MutableInt, V, Boolean> callback) {
+	public int longestWithCallback(CharSequence s, int i, int len, CInt cont, BiFunction<CInt, V, Boolean> callback) {
 		int d = 0;
 
 		Entry<V> entry = root;
@@ -404,7 +401,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 			}
 
 			if (entry.value != UNDEFINED) {
-				cont.setValue(d);
+				cont.value = d;
 				if (callback.apply(cont, entry.value)) break;
 			}
 		}

@@ -1,4 +1,4 @@
-JFDML JFormDesigner: "8.1.1.0.298" Java: "17.0.9" encoding: "UTF-8"
+JFDML JFormDesigner: "8.2.3.0.386" Java: "17.0.9" encoding: "UTF-8"
 
 new FormModel {
 	contentType: "form/swing"
@@ -45,16 +45,6 @@ new FormModel {
 				"y": 35
 				"width": 180
 				"height": 25
-			} )
-			add( new FormComponent( "javax.swing.JComboBox" ) {
-				name: "uiArchiveType"
-				auxiliary() {
-					"JavaCodeGenerator.typeParameters": "String"
-				}
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 245
-				"y": 10
-				"width": 60
 			} )
 			add( new FormComponent( "javax.swing.JSpinner" ) {
 				name: "uiThreads"
@@ -131,7 +121,7 @@ new FormModel {
 				"y": 10
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "uiStoreCTime"
+				name: "uiStoreMTime"
 				"text": "修改时间"
 				"selected": true
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
@@ -139,7 +129,7 @@ new FormModel {
 				"y": 30
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "uiStoreMTime"
+				name: "uiStoreCTime"
 				"text": "创建时间"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 315
@@ -202,6 +192,21 @@ new FormModel {
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 10
 				"y": 420
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiNoVerify"
+				"text": "不验证"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 210
+				"y": 417
+			} )
+			add( new FormComponent( "javax.swing.JTextField" ) {
+				name: "uiCharset"
+				"text": "UTF-8"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 305
+				"y": 415
+				"width": 75
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 0, 0 )

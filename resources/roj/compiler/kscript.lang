@@ -1,0 +1,343 @@
+# Common
+type.literal=标识符(identifier)
+type.expr=表达式
+
+unexpected=此时不应有 '%1'
+unexpected_2=未预料的 '%1', 期待 '%2'
+
+braceMismatch=未关闭的花括号
+not_statement=不是语句
+noExpression=非法的表达式开始
+
+lava.sandbox.enabled=[Sandbox]预编译模式已开启，请注意安全
+lava.sandbox.error=[Sandbox]计算出错: %1
+
+# ResolveHelper
+rh.cyclicDepend=[RH]包括%1在内的循环继承
+
+# Tokenizer
+lexer.number.floatLarge=[Num]浮点数过大
+lexer.number.floatSmall=[Num]浮点数过小
+lexer.number.overflow=[Num]整数太大
+lexer.number.notNumber=[Num]非法的字符'%1'
+lexer.number.eof=[Num]在解析数字时遇到了文件尾
+lexer.number.exceptBlank=[Num]期待[空白]
+lexer.number.exceptDec=[Num]期待[阿拉伯数字]
+lexer.number.noExponent=[Num]数字在指数后被截断
+lexer.number.formatError=[Num]浮点文字的格式错误
+
+lexer.stringBlock.noCRLF=[StringBlock]期待换行
+lexer.stringBlock.noIndent=[StringBlock]缩进为零
+lexer.stringBlock.indentChange=[StringBlock][Incompatible]文本块的最小缩进必须在第一行确定
+
+# Predefined annotation processor
+annotation.override=此方法未能覆盖超类的方法
+
+# CompileUnit
+
+# TypeResolver(class)
+# Nothing here
+
+#Cu Stage1 [Module]
+package.annotation=程序包注释应在文件 package-info.java 中
+
+module.dup=一个编译环境中只允许一个模块
+module.unexpected=模块描述应在文件 module-info.java 中
+module.open=开放的模块不允许使用opens语句
+module.dup.requires=模块%1已导入
+module.dup.exports=包%1已导出
+module.dup.exports2=包%1已导出至%2
+module.dup.uses=服务提供接口%1已注册
+module.dup.provides=服务提供接口%1已注册实现
+module.dup.provides2=服务提供接口%1的实现%2已注册
+module.semicolon=此处期待分号
+module.eof=模块文本在解析完成前终止
+
+#Cu Stage1 [Import]
+import.unpackaged=[Import]不带包名的导入
+import.any=[Import]任意导入可能导致安全性或可靠性下降，建议仅用于脚本模式
+import.conflict=[Import] %1 的短名称%2与 %3 重复
+
+modifier.annotation=[Modifier]此处不允许注解
+modifier.conflict=[Modifier]修饰符%1不能与%2组合
+modifier.notAllowed=[Modifier]此处不允许修饰符%1
+
+#Cu Stage1 [Class]
+cu.filename=[CU]%1中的公共类名称应当与文件名相同
+cu.record.header=[CU]record类必须有至少一个字段
+cu.struct.antibody=[CU]结构不能包含子节点
+
+cu.noInheritance=[CU]%1已隐式的从%2继承
+cu.interfaceInit=[CU]接口中不允许有初始化程序
+cu.interfacePrivateNonstatic=[CU]仅接口中的静态方法和字段允许私有修饰
+cu.enumInit=[CU]枚举的初始化程序必须是私有的
+
+cu.sealed.noPermits=密封类必须具有permits字句
+
+# 已在<context>中定义了<type> <name>
+cu.nameConflict=[CU]已在%1中定义了%2 %3
+cu.method.mustNotBody=不能包含方法体
+cu.method.mustHasBody=缺少方法体, 或声明抽象
+cu.method.paramVoid=void 不能作为参数
+cu.method.paramConflict=参数名称重复
+cu.method.paramVararg=可变参数必须是最后一个 (未来会扩展varargs，只要继承链没有交集，那么可以设置多个可变参数！)
+cu.method.paramCount=方法参数过多
+cu.method.annotationThrow=注解方法不能抛出异常
+cu.method.noAbstract=在非抽象类%1中无法声明抽象方法%2
+
+cu.annotation.valueOnly=注解值必须采用 'name=value' 格式
+cu.annotation.multiAnnotation=非法的类型开始
+ap.annotation.noConstant=注解值不是常量
+
+cu.except.type=class、interface、enum、@interface或record
+cu.name=<名称>
+cu.except.initBlock=初始化块
+cu.except.fieldName=字段名
+cu.except.fieldEnd=','或';'
+cu.except.record=','或')'
+
+#Cu Stage2 [Resolve]
+cu.interface=继承 接口
+cu.class=实现 类
+cu.final=最终
+cu.genericException=异常类不能拥有泛型参数
+cu.resolve.notInheritable=[CU]无法%1 %2
+cu.throwException=[CU]扔出的 %1 不是异常
+cu.noDefaultConstructor=[CU]%1 没有默认(无参)构造器
+
+cu.annotation.missing=注解 @%1 缺少参数'%2'的默认值
+cu.annotation.extra=注解 @%1 不存在参数'%2'
+cu.annotation.notApplicable=注解 @%1 无法应用于元素 %2
+cu.annotation.invalidDefault=注解值只能是基本类型、字符串、枚举、注解或它们的数组，其中注解只能是一维数组
+cu.annotation.cyclic=循环引用
+cu.annotation.noRepeat=注解@%1不可重复(@Repeatable|@Stackable)
+
+cu.sealed.indirectInherit=允许的子类%1必须直接继承或实现密封类%2
+cu.sealed.unlisted.c="无法继承自密封类%1\n  只允许下列类继承: %2"
+cu.sealed.unlisted.i="无法实现密封接口%1\n  只允许下列类实现: %2"
+cu.sealed.missing=需要sealed、non-sealed或final修饰符
+
+#Cu Stage3/4
+cu.override.unable="%1无法实现%2中的方法%3\n  %4"
+cu.override.access=正在分配更低的访问权限 (%1=> %2)
+cu.override.returnType="返回类型不兼容\n  原因: %1"
+cu.override.thrown=被覆盖的方法未抛出异常 %1
+cu.override.noImplement=%1 不是抽象的, 并且未覆盖%2中的抽象方法%3
+cu.override.static.self=被覆盖的方法不是静态的
+cu.override.static.other=被覆盖的方法是静态的
+
+cu.unrelatedDefault=方法%1在%2实现的其它接口中也有默认值, 必须覆盖此方法
+
+cu.finalField.assigned=无法为最终变量%1分配值
+cu.finalField.missed=可能尚未初始化变量%1
+
+#Cu readType
+type.illegalType=非法的类型开始(在'%1')
+type.arrayDepth=超过255维的数组
+type.primitiveNotAllowed=此处不允许基本类型
+type.voidNotAllowed=此处不允许void类型
+
+#Cu readGeneric
+type.parameterizedParam=类型参数不能有参数 (类型参数已是具体的类)
+type.illegalGenericDecl=此处不能定义泛型
+type.partialGenericSub=动态泛型组合格式不正确, 缺少%1的参数
+type.staticGenericSub=在动态泛型组合格式%1中引用静态类%2
+type.illegalAnyType=非法的类型开始
+type.except.afterAsk=大于号、逗号、extends或super
+type.except.afterLss=大于号或逗号
+
+# LocalContext
+lc.unReportedException=[LC]可能抛出未声明的异常%1
+lc.packageRestricted=[LC]中间变量或返回值%1不在受限import的导入范围中
+
+# ParseTask
+ps.method.paramDef=[PS]默认参数不是立即常量
+
+# BlockParser
+block.initializorCannotComplete=初始化程序必须能够正常完成
+block.missingReturnValue=缺少返回值
+block.unreachable=无法访问的语句
+block.emptyStatement=多余的分号
+block.error.dupLabel=标签名称%1已存在
+
+block.assert.constant=[Assert]值始终为真
+
+block.goto.error.outsideLoop=[Goto]在switch或循环外%1
+block.goto.error.noSuchLabel=[Goto]未定义的标签: %1
+
+block.return.error.outsideMethod=[Return]方法外的返回
+block.return.error.exceptVoid=[Return]意外的返回值
+block.return.error.exceptExpr=[Return]缺少返回值
+
+block.try.duplicateCatch=[Try]在AnyCatch后不能再有catch
+block.try.notException=[Try]%1不是异常
+block.try.generic=[Try]不能捕获泛型异常%1
+block.try.captured=[Try]异常%1已被%2捕获
+block.try.noHandler=[Try]孤立的try
+block.try.noAutoCloseable=[Try] try-with-resources 不适用 (%1无法转换为java.lang.AutoCloseable)
+block.try.waste=[Try]finally代码块（%1字节）被复制了%2次，用"...finally"替换finally以减小文件体积
+block.try.interrupted=[Try]对close()的隐式调用可能抛出InterruptedException
+
+
+block.switch.mixedCase=[Switch]使用了不同的 case 类型
+block.switch.manyDefault=[Switch]default 标签重复
+block.switch.duplicate=[Switch]标签 %1 重复
+block.switch.uncovered="[Switch]缺少default分支\n  %1"
+block.switch.collisionType=[Switch]分支类型%1和%2之间存在交集
+block.switch.nullfail=[Switch]基本类型不允许case null
+block.switch.nonConstant=[Switch]使用"...switch"允许非编译期常量
+block.switch.fallthrough=[Switch]在分支最后没有break
+
+block.switch.noBranch=[Switch]没有分支
+block.switch.incompatible=[Switch]类型%1不能使用switch比较 (对于对象类型，添加@Switchable即可)
+block.switch.lookupSwitch=[Switch]当前语句以二分查找O(log2 n)编译，使用"...switch"语句以哈希表O(1)编译
+block.switch.noCast=[Switch]标签%1无法转换为用于比较的类型%2
+
+block.switch.exprMode=不能在switch表达式中使用%1
+block.switch.exprMode.legacy=switch表达式必须使用新式switch
+block.switch.exprMode.return=不能在switch表达式中使用（被try挂钩的）return
+block.switch.yield=yield 不在 switch 表达式中, 也不在生成器函数中
+block.switch.exprMode.noYield=switch表达式的每个分支必须提供值或抛出
+block.switch.exprMode.uncovered="switch表达式未覆盖所有可能结果\n  1. 添加default分支\n  2. 如果类型是枚举或封闭类，列出每一种可能结果"
+
+block.multiReturn.typeError=多返回值自动解包仅适用于ReturnStack<?>类型
+block.multiReturn.countError=多返回值数量错误: 期待%1, 实际%2
+block.except.multiReturn=','或']'
+
+block.var.unused=未使用的变量 %1
+block.var.exist=变量%1已存在
+block.var.final=最终变量未赋初值
+block.var.var=var变量必须初始化
+
+expr.constantWritable.ifOnly=ASM_if只能在if语句中使用
+
+# BlockParser Excepting Types
+block.except.tryOrAuto=(或{
+block.except.name=变量名称(标识符)
+block.except.labelOrSemi=标签或;
+block.except.switchCase=逗号, 分号或'->'
+block.except.switch=case, default或'}'
+
+# 表达式Parse阶段
+expr.stackOverflow=表达式太复杂
+expr.lambda.pattern=需要->
+expr.lambda.illegal=lambda表达式格式错误
+expr.easyMap.kvOrRet='->'或','
+expr.notVariable='%1'期待变量类型
+expr.newArray.generic=[NewArray]创建泛型数组
+expr.newArray.unInit=[NewArray]期待数组初始化
+expr.newArray.noTypePresent=[NewArray]省略类型的数组初始化在此处不可用
+expr.invoke.paramName=[Invoke]参数名称%1重复
+expr.typeRef.illegal=[TypeRef]无效的基本定义
+expr.typeRef.arrayDecl=[TypeRef]未预料的数组定义
+
+# 表达式Resolve阶段
+arrayDef.notArray=[NewArray]无法对%1应用数组初始化
+arrayDef.autoCastNumber=[NewArray]自动将超过范围的数字降级
+arrayDef.autoTypeTip=[NewArray]自动类型推断正在测试
+arrayDef.inferFailed=[NewArray]类型推断失败
+arrayGet.error.notArray=[ArrayGet] %1 不是数组
+arrayGet.warn.constant=[ArrayGet]值总是常量
+arrayGet.note.uselessCreation=[ArrayGet]建议将该数组转换为static final字段
+assign.incompatible.redundantCast=[Assign][Incompatible]Lavac支持在赋值时自动降级
+assign.error.final=[Assign]无法为最终变量%1分配值
+assignD.error.cast=[AssignD]直接赋值操作符无法进行%1到%2的类型转换
+binary.error.void=[Binary]void不是有效的值
+binary.error.notApplicable=[Binary]%1和%2不是操作符%3的有效参数
+binary.constant=[Binary]值总是%1
+binary.divisionByZero=除数为零
+binary.uselessNullish=无意义的??表达式
+cast.warn.redundant=[Cast]出现冗余的到 %1 的转换
+chained.warn.constant_expr=[Chained]在逗号分隔中的常量表达式
+dotGet.opChain.arrayLen=无法在?.表达式中访问数组长度
+dotGet.opChain.isChild= ?. 表达式只能在字段访问语句中使用
+dotGet.opChain.tooLong= ?. 表达式仅适用于64级以内的字段访问 （李在赣神魔？）
+dotGet.opChain.inClassDecl= ?. 表达式不能插入在<不可空>的部分中
+dotGet.incompatible.plural="[DotGet]对于%1找不到合适的字段\n%2"
+symbol.error.arrayBrOutsideClassRef=[Symbol]数组索引不能为<空>
+symbol.error.derefPrimitive=[Symbol]不能取消引用 %1
+symbol.error.expression=[Symbol]期待表达式 而不是%1
+symbol.error.noSuchClass=[Symbol]找不到 %1 的类
+symbol.error.noSuchSymbol="[Symbol]找不到符号\n符号: %1 %2\n位置: %3"
+symbol.error.generic.paramCount=[Symbol] %1 的类型变量数目错误; 找到%2; 需要%3
+symbol.error.generic.paramCount.0=[Symbol]类型 %1 不带有参数
+symbol.warn.generic.rawTypes=[Symbol]找到原始类型: %1
+symbol.error.accessDenied.type=[Symbol] %1 的修饰符是%2; 无法在 %3 访问
+symbol.error.accessDenied.symbol=[Symbol] %1 的修饰符是%2; 无法在 %3 访问
+symbol.error.accessDenied.package=[Symbol]%1在 %2 中不是公共的; 无法从外部程序包中对其进行访问
+symbol.error.nonStatic.type=[Symbol]'%1'不是静态类，无法在静态上下文中访问
+symbol.error.nonStatic.symbol=[Symbol]无法从静态上下文中引用非静态 %3 '%1.%2'
+symbol.error.field.writeAfterWrite=[Symbol]字段 '%1.%2' 已被赋值
+symbol.error.field.writeFinal=[Symbol]修改最终字段 '%1.%2'
+symbol.error.field.readBeforeWrite=[Symbol]非法前向引用 '%1.%2'
+symbol.warn.static_on_half=[Symbol]静态%3应由类型名称'%1.%2'而不是表达式限定
+encloseRef.nds=[EncloseRef] %2 不是 %1 的超类或超接口
+encloseRef.tooFar=[EncloseRef][Incompatible] %2 不是 %1 的直接超类或超接口
+encloseRef.staticEnv=[EncloseRef] 无法从静态上下文中引用非静态 变量 this
+encloseRef.noRef=[EncloseRef] %1 不是可选的this类型
+instanceof.error.unsafeCast=[InstanceOf]%1 无法安全地转换为 %2
+instanceOf.constant=[InstanceOf]对 %1 的检测总是常量
+invoke.error.constructor=[Invoke]对 %1 的调用必须是构造器中的第一个语句
+invoke.error.instantiationAbstract=[Invoke] %1 是抽象的; 无法实例化
+invoke.compatible.plural="[Invoke]对 %1 的引用不明确\n%2"
+invoke.incompatible.single="[Invoke]无法将类 %1 中的方法 %2 应用到给定类型\n%3"
+invoke.incompatible.plural="[Invoke]对于%1找不到合适的方法\n%2"
+invoke.noExact=创建的类型参数不得包含非具体泛型(<>除外)
+trinary.constant=[Trinary]值总是常量
+this.static=[This]无法在静态上下文中引用this
+this.no_super=[This]%1没有超类引用
+unary.error.notApplicable=[Unary]运算符'%1'不适用于'%2'
+unary.warn.wrapper=[Unary]对包装类型%1的%2操作
+unary.error.void=[Unary]空类型
+unary.error.final=[Unary]无法为最终变量%1分配值
+var.notAssigned=[Var]可能尚未初始化变量%1
+multiReturn.incompatible=[MR]只有多返回值方法才能使用多返回值语法糖
+multiReturn.russianToy=[MR]此处禁止套娃！！！
+anonymousClass.inferFailed=匿名类的自动泛型推断无法在该状态下使用
+anonymousClass.interfaceArg=匿名类实现接口; 不能有参数
+
+# lambda表达式
+lambda.untyped=[Lambda]未知的目标类型
+# 这些magic number的定义见ResolveHelper
+lambda.unsupported.3=[Lambda]不是抽象的
+lambda.unsupported.4=[Lambda]没有抽象方法
+lambda.unsupported.5=[Lambda]有好多抽象方法
+
+# 表达式 write
+expr.skipReturnValue=[Expr]该语句的返回值不能省略
+
+# 表达式 辅助 (MethodList/FieldList)
+symbol.type=类
+symbol.field=字段
+invoke.method=方法
+
+invoke.except=需要:
+invoke.found=找到:
+invoke.reason=原因:
+invoke.no_param=没有参数
+invoke.matches=都匹配
+invoke.notApplicable=不适用:
+and=和
+
+invoke.warn.illegalNameList=[Resolve]方法%1的参数列表不合法
+# 类型转换 (注意，当修改TypeCast中对应数值需要同步这里)
+typeCast.warn.rawTypes=[TypeCast]对原始类型的转换: %1 => %2
+typeCast.error.-1=%1无法隐式转换为%2 # char
+typeCast.error.-2=基本类型%1无法转换为%2
+typeCast.error.-3=%1无法转换为%2
+typeCast.error.-4=%1无法转换为基本类型%2
+typeCast.error.-5=基本类型%1无法转换为%2
+typeCast.error.-6=实际参数列表和形式参数列表长度不同
+typeCast.error.-7=找不到符号，无法处理%1与%2的转换关系
+typeCast.error.-8=%1不可能转换为%2
+typeCast.error.-99=%2不是具有%1个参数的函数式接口
+
+
+# 插件
+plugins.annotation.namedAttachOnType=在类型上使用具名Attach
+plugins.annotation.propertyExist=要生成的伪字段%1已存在
+plugins.annotation.getterNotFound=属性%1的getter %2 不存在
+plugins.annotation.argError.getter=属性%1的getter %2 参数验证失败
+plugins.annotation.argError.setter=属性%1的setter %2 参数验证失败
+
+plugins.annotation.singleton=Singleton的方法必须是静态，无参数，有返回值

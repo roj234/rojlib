@@ -1,7 +1,8 @@
 package roj.config.serial;
 
+import org.jetbrains.annotations.NotNull;
+import roj.config.Tokenizer;
 import roj.config.YAMLParser;
-import roj.config.word.Tokenizer;
 import roj.text.ACalendar;
 import roj.text.TextUtil;
 
@@ -11,27 +12,12 @@ import java.util.TimeZone;
  * @author Roj233
  * @since 2022/2/19 19:14
  */
-public class ToYaml extends ToSomeString {
-	private static final char[] DEFAULT_INDENT = {' '};
+public final class ToYaml extends ToSomeString {
+	public ToYaml() { super(" "); }
+	public ToYaml(@NotNull String indent) { super(indent.isEmpty() ? " " : indent);  }
 
-	public ToYaml() {
-		indent = DEFAULT_INDENT;
-	}
-
-	public ToYaml(int indent) {
-		if (indent == 0) throw new IllegalArgumentException("YAML requires indent");
-		spaceIndent(indent);
-	}
-
-	public ToYaml multiline(boolean b) {
-		this.multiline = b;
-		return this;
-	}
-
-	public ToYaml timezone(TimeZone tz) {
-		cal = new ACalendar(tz);
-		return this;
-	}
+	public ToYaml multiline(boolean b) { this.multiline = b; return this; }
+	public ToYaml timezone(TimeZone tz) { cal = new ACalendar(tz); return this; }
 
 	private boolean topLevel, multiline;
 
@@ -56,14 +42,10 @@ public class ToYaml extends ToSomeString {
 		if (topLevel) sb.append('\n');
 		else topLevel = true;
 
-		x--;
-
 		if (comment != null) writeSingleLineComment("#");
 
-		while (x > 0){
-			sb.append(indent);
-			x--;
-		}
+		// there are > 0 check in padEnd()
+		sb.padEnd(indent, indentCount*(x-1));
 	}
 
 	public final void valueMap() { push(MAP|32); }
@@ -84,8 +66,8 @@ public class ToYaml extends ToSomeString {
 	}
 
 	@Override
-	protected final void valString(String val) {
-		if (multiline && val.indexOf('\n') >= 0) {
+	public final void valString(CharSequence val) {
+		if (multiline && TextUtil.gIndexOf(val, '\n') >= 0) {
 			sb.append(val.charAt(val.length()-1) == '\n'?"|+":"|-");
 
 			int i = 0;
@@ -101,7 +83,7 @@ public class ToYaml extends ToSomeString {
 			return;
 		}
 
-		if (YAMLParser.literalSafe(val)<0) sb.append(val);
+		if (YAMLParser.literalSafe(val, true)<0) sb.append(val);
 		else super.valString(val);
 	}
 
@@ -109,14 +91,15 @@ public class ToYaml extends ToSomeString {
 	protected final void valNull() { sb.append('~'); }
 
 	@Override
-	public final void key0(String key) {
+	protected final void key0(String key) {
 		indent(depth);
-		(YAMLParser.literalSafe(key)<0 ? sb.append(key) : Tokenizer.addSlashes(key, 0, sb.append('"'), '\'').append('"')).append(":");
+		(YAMLParser.literalSafe(key, false)<0 ? sb.append(key) : Tokenizer.addSlashes(key, 0, sb.append('"'), '\'').append('"')).append(":");
 	}
 
 	@Override
-	public final void reset() {
+	public final ToYaml reset() {
 		super.reset();
 		topLevel = false;
+		return this;
 	}
 }

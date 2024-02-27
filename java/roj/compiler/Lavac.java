@@ -1,28 +1,28 @@
 package roj.compiler;
 
-import roj.asm.Opcodes;
+import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipFileWriter;
 import roj.asm.Parser;
-import roj.asm.tree.MethodNode;
-import roj.asm.type.TypeHelper;
-import roj.asm.visitor.XAttrCode;
+import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
-import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.block.BlockParser;
-import roj.compiler.context.*;
+import roj.compiler.context.CompileUnit;
+import roj.compiler.context.GlobalContext;
+import roj.compiler.context.LibraryZipFile;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.SimpleDiagnosticListener;
+import roj.compiler.plugins.GlobalContextApi;
+import roj.compiler.plugins.constant.Constant;
 import roj.io.IOUtil;
-import roj.reflect.ClassDefiner;
+import roj.text.ACalendar;
 import roj.text.TextUtil;
-import roj.text.logging.Logger;
-import roj.text.logging.LoggingStream;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -31,96 +31,55 @@ import java.util.function.Consumer;
  * @since 2022/9/16 19:05
  */
 public final class Lavac {
+	@Constant
+	public static String getCompileTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
+	public static String getCurrentTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
+
+	public static final String VERSION = "0.10.2[RC] (compiled on "+getCompileTime()+")";
+
 	int debugOps = 10;
-
-	ClassContext ctx;
-
+	GlobalContext ctx;
 	final ArrayList<CompileUnit> CompileUnits = new ArrayList<>();
 
-	public static void main(String[] args) {
-		//方向: Block(Method) -> Class
-		TypeHelper.TYPE_TOSTRING_NO_PACKAGE = false;
-
-		ClassContext ctx = new ClassContext();
-		CompileContext cache = new CompileContext(ctx);
-		CompileContext.set(cache);
-		CompileUnit u = new CompileUnit("<stdin>", ctx);
-		u.npConstructor();
-		u.copyTmpFromCache();
-		u.name("roj/compiler/generated/VM0000");
-		u.parent("java/lang/Object");
-		u.interfaces().add("java/lang/Runnable");
-		u.newMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "run", "()V");
-		u.getImportCls().put("InputStream", "java/io/InputStream");
-		u.getImportCls().put("FIS", "java/io/FileInputStream");
-		u.getImportPkg().add("roj/compiler/api/");
-		ctx.addCompileUnit(u);
-		MethodNode mn = u.methods.get(1);
-
-		cache.setClass(u);
-		cache.setMethod(mn);
-
-		try {
-			String seq = IOUtil.readUTF(new File("D:\\mc\\FMD-1.5.2\\t.java"));
-			u.lex().init(seq);
-			BlockParser bp = cache.bp.reset();
-			MethodWriter cw = bp.parseMethod(u, mn, Collections.emptyList(), 0, seq.length());
-			cw.one(Opcodes.RETURN);
-			cw.visitSize(30,30);
-			if (!ctx.hasError) {
-				cw.finish();
-				XAttrCode attr = new XAttrCode(cw.bw, u.cp, mn);
-				mn.putAttr(attr);
-				System.out.println(attr.toString());
-				byte[] array = Parser.toByteArray(u);
-				new FileOutputStream("t.class").write(array);
-				((Runnable) ClassDefiner.INSTANCE.defineClass(null, array).newInstance()).run();
-			} else {
-				System.out.println("Resolve阶段失败");
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
-
-	public static void main2(String[] args) throws IOException, ReflectiveOperationException {
+	public static void main(String[] args) throws IOException, ReflectiveOperationException {
 		if (args.length < 1) {
-			System.out.println(
-				"用法: lavac <options> <source>\n" +
-					"            其中, 可能的选项包括:\n" +
-					"            -classpath/-cp <路径>      指定查找用户类文件和注释处理程序的位置\n" +
-					"            -rtpath <路径>             覆盖引导类文件的位置\n" +
-					"\n" +
-					"            -d <目录>                  指定放置生成的类文件的位置\n" +
-					"            -s <目录>                  指定放置生成的源文件的位置\n" +
-					"            -h <目录>                  指定放置生成的C语言头文件的位置\n" +
-					"\n" +
-					"            -encoding <编码>           指定源文件使用的字符编码\n" +
-					"            -g                         选择生成哪些调试信息\n" +
-					"              可用的值有：lines,vars,source,params 并以逗号分隔\n" +
-					"            -nowarn                    不生成任何警告\n" +
-					"            -Werror                    出现警告时终止编译\n" +
-					"\n" +
-					"            -processor <class1>[,<class2>...] 要运行的注释处理程序的名称; 绕过默认的搜索进程\n" +
-					"            -processorpath <路径>      指定查找注释处理程序的位置\n" +
-					"            -A关键字[=值]              传递给注释处理程序的选项\n" +
-					"\n" +
-					"            -tweaker                   设定编译上下文的类名称\n" +
-					"            -T关键字[=值]              传递给编译上下文的选项\n" +
-					"\n" +
-					"            -EnableSpec/DisableSpec ID 启用或禁用不与Javac兼容的特性\n" +
-					"            -target <发行版>           生成支持不高于特定 Java 版本的类文件\n" +
-					"\n" +
-					"            -version                   版本信息\n");
+			System.out.println("""
+				用法: lavac <options> <source>
+				            其中, 可能的选项包括:
+				            -rtpath <路径>             覆盖JVM类文件的位置 (未实现)
+				            -classpath/-cp <路径>      指定查找用户类文件和注释处理程序的位置
+
+				            -d <目录>                  指定放置生成的类文件的位置
+				            -s <目录>                  指定放置生成的源文件的位置 (未实现)
+				            -h <目录>                  指定放置生成的头文件的位置 (未实现)
+
+				            -encoding <编码>           指定源文件使用的字符编码 (未实现)
+				            -g                         选择生成哪些调试信息 (未实现)
+				              可用的值有：lines,vars,source,params 并以逗号分隔
+				            -debug                     生成调试日志 (未实现)
+
+				            -lap <class1>[,<class2>...] 实现了Lavac Api 1.0的注解处理程序 (未实现)
+
+				            -precomp <flag1>[,<flag2>...] 预编译沙盒白名单 (未实现)
+
+				            -GC <class>                设定全局上下文的类名称
+				            -T <key> <val>             传递给上下文的参数 (未实现)
+
+				            -EnableSpec/DisableSpec ID 启用或禁用Lavac特性 (未实现)
+				            -target <发行版>           生成支持不高于特定 Java 版本的类文件 (未实现)
+
+				            -version                   版本信息
+				""");
+			return;
 		}
-		String src = null;
 		String cp = "";
 		String bin = null;
 
-		String tweaker = "roj.compiler.context.CompileContext";
+		String gcName = "roj.compiler.plugins.GlobalContextApi";
+
 		MyHashMap<String, String> tweakerOps = new MyHashMap<>();
 
-		int maxWarn = 100, maxError = 100, warnOps = 0;
+		int maxWarn = 100, maxError = 100;
 
 		Lavac compiler = new Lavac();
 
@@ -129,41 +88,15 @@ public final class Lavac {
 			String argi = args[i];
 			if (!argi.startsWith("-")) break;
 			switch (argi) {
-				case "-maxWarn":
-					maxWarn = Integer.parseInt(args[++i]);
-					break;
-				case "-maxError":
-					maxError = Integer.parseInt(args[++i]);
-					break;
-
-				case "-Werror":
-					if (warnOps != 0) throw new RuntimeException("-Werror, -ignoreWarn 参数不能同时使用");
-
-					warnOps = 1;
-					break;
-
-				case "-ignoreWarn":
-					if (warnOps != 0) throw new RuntimeException("-Werror, -ignoreWarn 参数不能同时使用");
-					warnOps = 2;
-					break;
-
-				case "-stdOutAsErr":
-					System.setErr(System.out);
-					break;
-
-
-				case "-cp":
-				case "-classpath":
-					cp = args[++i];
-					break;
-
-				case "-dest":
-				case "-bin":
-					bin = args[++i];
-					break;
-
-
-				case "-g":
+				case "-version" -> {
+					System.out.println("lavac "+VERSION);
+					System.exit(0);
+				}
+				case "-maxWarn" -> maxWarn = Integer.parseInt(args[++i]);
+				case "-maxError" -> maxError = Integer.parseInt(args[++i]);
+				case "-cp", "-classpath" -> cp = args[++i];
+				case "-d" -> bin = args[++i];
+				case "-g" -> {
 					compiler.debugOps &= 1;
 					o:
 					for (String s : TextUtil.split(new ArrayList<>(), args[++i], ',')) {
@@ -187,52 +120,49 @@ public final class Lavac {
 								throw new RuntimeException("Invalid config[" + i);
 						}
 					}
-					break;
-				case "-debug":
-					compiler.debugOps |= 1;
-					break;
-
-				case "-tweaker":
-					tweaker = args[++i];
-					break;
-
-				case "-T":
-					tweakerOps.put(args[++i], args[++i]);
-					break;
-				default:
-					throw new RuntimeException("Invalid config[" + i + "]=" + args[i]);
+				}
+				case "-debug" -> compiler.debugOps |= 1;
+				case "-GC" -> gcName = args[++i];
+				case "-T" -> tweakerOps.put(args[++i], args[++i]);
+				default -> throw new RuntimeException("Invalid config["+i+"]="+args[i]);
 			}
 		}
 
 		if (i == args.length) throw new RuntimeException("没有源文件");
 
-		compiler.ctx = (ClassContext) Class.forName(tweaker).newInstance();
+		compiler.ctx = (GlobalContext) Class.forName(gcName).newInstance();
+		compiler.ctx.packageCacheFile = new File("lavaPackageCache0.bin");
+		LocalContext.set(compiler.ctx.createLocalContext());
 
 		for (String s : TextUtil.split(new ArrayList<>(), cp, File.pathSeparatorChar)) {
 			File f = new File(s);
 			if (!f.exists()) throw new RuntimeException(f + " not exist.");
-			compiler.addClassPath(f);
+			compiler.addCp(f);
 		}
+
+		LavaCompiler.initDefaultPlugins((GlobalContextApi) compiler.ctx);
 
 		while (i < args.length) {
-			addSrc(new File(args[i++]), compiler.CompileUnits, compiler.ctx);
+			addSrc(new File(args[i++]), compiler.CompileUnits);
 		}
 
-		File dst = bin == null ? null : new File(bin);
-		if (dst != null && !dst.isDirectory() && !dst.mkdirs()) {
-			throw new RuntimeException("Binary path is not exist and unable to create.");
-		}
+		File dst = bin == null ? new File("Lava.jar") : new File(bin);
 
-		System.setOut(new LoggingStream(Logger.getLogger()));
+		SimpleDiagnosticListener diagnostic = new SimpleDiagnosticListener(maxError, maxWarn, 0);
 
-		SimpleDiagnosticListener diagnostic = new SimpleDiagnosticListener(maxError, maxWarn, warnOps);
-
-		System.out.println("begin " + compiler.CompileUnits.size());
-		boolean fl = compiler.compile(dst, diagnostic);
-		System.out.println("ok="+fl);
+		boolean ok = compiler.compile(dst, diagnostic);
+		System.out.println("success="+ok);
 
 		diagnostic.conclusion();
-		System.exit(fl ? 0 : -1);
+
+		try {
+			var ucl = new URLClassLoader(new URL[] {dst.toURL()});
+			((Runnable) Class.forName("Test", true, ucl).newInstance()).run();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		System.exit(ok ? 0 : -1);
 	}
 
 	public boolean compile(File dst, Consumer<Diagnostic> listener) throws IOException {
@@ -241,133 +171,85 @@ public final class Lavac {
 
 		boolean done = false;
 		compile:
-		try {
+		try (ZipFileWriter zfw = new ZipFileWriter(dst)) {
 			for (int i = ctxs.size() - 1; i >= 0; i--) {
-				if (!ctxs.get(i).S0_Init())
-					// special process for package-info or empty java
+				if (!ctxs.get(i).S1_Struct())
+					// 下列可能性
+					// 文件是空的
+					// package-info
+					// module-info
 					ctxs.remove(i);
 			}
 			if (ctx.hasError()) break compile;
+			ctx.addGeneratedCompileUnits(ctxs);
 			for (int i = 0; i < ctxs.size(); i++) {
-				ctxs.get(i).S1_Struct();
+				ctxs.get(i).S2_ResolveSelf();
 			}
 			if (ctx.hasError()) break compile;
 			for (int i = 0; i < ctxs.size(); i++) {
-				ctxs.get(i).S2_Parse();
+				ctxs.get(i).S2_ResolveRef();
 			}
 			if (ctx.hasError()) break compile;
 			for (int i = 0; i < ctxs.size(); i++) {
-				ctxs.get(i).S3_Code();
+				ctxs.get(i).S3_Annotation();
 			}
-			done = true;
+			if (ctx.hasError()) break compile;
+			for (int i = 0; i < ctxs.size(); i++) {
+				ctxs.get(i).S4_Code();
+			}
+			if (ctx.hasError()) break compile;
+			// write
+
+			for (int i = 0; i < ctxs.size(); i++) {
+				CompileUnit data = ctxs.get(i);
+				data.S5_noStore();
+				zfw.beginEntry(new ZEntry(data.name.concat(".class")));
+				Parser.toByteArrayShared(data).writeToStream(zfw);
+			}
+			for (ConstantData data : ctx.getGeneratedClasses()) {
+				zfw.beginEntry(new ZEntry(data.name.concat(".class")));
+				Parser.toByteArrayShared(data).writeToStream(zfw);
+			}
+
+			zfw.setComment("Lavac v"+VERSION);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
-		if (done) {
-			// write
-			for (int i = 0; i < ctxs.size(); i++) {
-				CompileUnit ctx = ctxs.get(i);
-				try (FileOutputStream fos = new FileOutputStream(new File(dst, "/" + ctx.name + ".class"))) {
-					ctx.getBytes().writeToStream(fos);
-				} catch (IOException e) {
-					done = false;
-					e.printStackTrace();
-				}
-			}
-		} else {
-
-		}
-
 		ctxs.clear();
-
 		return done;
 	}
 
-	private static void handleSrc(List<File> srcFiles, List<CompileUnit> ctxs, ClassContext ctx) throws IOException {
-		for (File f : srcFiles) {
-			if (!f.exists()) {
-				throw new RuntimeException(f.getAbsolutePath() + " not exist.");
-			}
-			if (f.isDirectory()) {
-				for (File f1 : IOUtil.findAllFiles(f)) {
-					addSrc(f1, ctxs, ctx);
-				}
-			} else if (!addSrc(f, ctxs, ctx)) {
-				throw new IOException("Unable to detect file type by extension name, only support zip,jar,gz,txt,java and directory");
-			}
-		}
-	}
-
-	private static boolean addSrc(File f, List<CompileUnit> ctxs, ClassContext ctx) throws IOException {
+	private static boolean addSrc(File f, List<CompileUnit> ctxs) throws IOException {
 		if (f.isDirectory()) {
-			handleSrc(Collections.singletonList(f), ctxs, ctx);
+			for (File f1 : IOUtil.findAllFiles(f)) {
+				addSrc(f1, ctxs);
+			}
 			return true;
 		}
-		String ext = f.getName();
 
-		if ("java".equalsIgnoreCase(ext.substring(ext.lastIndexOf('.') + 1))) {
-			ctxs.add(new CompileUnit(f.getAbsolutePath(), new FileInputStream(f), ctx));
+		if ("java".equals(IOUtil.extensionName(f.getName()))) {
+			ctxs.add(new CompileUnit(f.getName(), new FileInputStream(f)));
+			return true;
 		} else {
 			return false;
 		}
-		return true;
 	}
 
-	private void handleClassPath(List<File> cp) throws IOException {
-		for (File f : cp) {
-			if (!f.exists()) {
-				throw new RuntimeException(f + " not exist.");
-			}
-			if (f.isDirectory()) {
-				for (File f1 : IOUtil.findAllFiles(f)) {
-					addClassPath(f1);
-				}
-			} else if (!addClassPath(f)) {
-				throw new IOException("Unable to detect file type by extension name, only support zip,jar,gz,txt,class and directory");
-			}
-		}
-	}
-
-	private boolean addClassPath(File f) throws IOException {
+	private boolean addCp(File f) throws IOException {
 		if (f.isDirectory()) {
-			handleClassPath(Collections.singletonList(f));
+			for (File f1 : IOUtil.findAllFiles(f)) {
+				addCp(f1);
+			}
 			return true;
 		}
 
-		String ext = f.getName();
-		if (!ext.contains(".")) {
-			System.err.println("缺少扩展名无法判断 " + f.getName());
-			return false;
-		}
-
-		switch (ext.substring(ext.lastIndexOf('.') + 1)) {
-			case "zip":
-			case "jar":
-			case "gz":
+		switch (IOUtil.extensionName(f.getName())) {
+			case "zip", "jar":
 				ctx.addLibrary(new LibraryZipFile(f));
-				break;
+			return true;
 
-			case "txt": {
-				List<File> files = new ArrayList<>();
-				for (String s : TextUtil.split(IOUtil.readUTF(f), '\n')) {
-					s = s.trim();
-					if (s.length() == 0 || s.charAt(0) == '#') {
-						continue;
-					}
-					files.add(new File(s));
-				}
-				handleClassPath(files);
-			}
-			break;
-
-			case "class":
-				ctx.addLibrary(new LibraryFile(f));
-				break;
-
-			default:
-				return false;
+			default: return false;
 		}
-		return true;
 	}
 }

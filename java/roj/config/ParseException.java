@@ -2,7 +2,7 @@ package roj.config;
 
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 
 /**
  * Signals that an error has been reached unexpectedly
@@ -85,11 +85,11 @@ public class ParseException extends Exception {
 		int i = 0;
 		while (true) {
 			int j = TextUtil.gNextCRLF(lines, i);
-			if (j >= pos || j < 0) {
+			if (j > pos || j < 0) {
 				CharList sb = new CharList().append(lines, i, j < 0 ? lines.length() : j).trimLast();
 				int myLen = sb.length(), myLen2 = sb.replace("\t", "    ").length();
 				line = ln;
-				column = pos-i + myLen2-myLen;
+				column = Math.min(pos-i + myLen2-myLen, sb.length());
 				lineContent = sb.toStringAndFree();
 				break;
 			}
@@ -118,11 +118,11 @@ public class ParseException extends Exception {
 		CharList k = new CharList().append("解析失败: ").append(msg).append("\n第").append(line).append("行: ");
 
 		String line = getLineContent();
-		if (column < 0 || column > line.length() || line.length() > 512) {
+		if (column < 0 || column > line.length() || line.length() > 220) {
 			k.append("偏移: ").append(column);
 		} else {
 			k.append(line).append("\n");
-			int off = 6 + TextUtil.digitCount(this.line) + CLIUtil.getStringWidth(line.substring(0, column));
+			int off = 6 + TextUtil.digitCount(this.line) + Terminal.getStringWidth(line.substring(0, column));
 			for (int i = 0; i < off; i++) k.append('-');
 
 			k.append('^');

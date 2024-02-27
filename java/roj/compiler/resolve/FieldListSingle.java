@@ -3,7 +3,7 @@ package roj.compiler.resolve;
 import org.jetbrains.annotations.NotNull;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.IClass;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.text.CharList;
 
 /**
@@ -16,11 +16,11 @@ final class FieldListSingle extends ComponentList {
 		this.node = node;
 	}
 
-	private final IClass owner;
+	final IClass owner;
 	final FieldNode node;
 
 	@NotNull
-	public FieldResult findField(CompileContext ctx, int flag) {
+	public FieldResult findField(LocalContext ctx, int flag) {
 		CharList tmp = new CharList();
 		ctx.errorCapture = (trans, param) -> {
 			tmp.clear();
@@ -32,6 +32,7 @@ final class FieldListSingle extends ComponentList {
 		try {
 			if (ctx.checkAccessible(owner, node, (flag&IN_STATIC) != 0, true)) {
 				tmp._free();
+				FieldList.checkBridgeMethod(ctx, owner, node);
 				return new FieldResult(owner, node);
 			}
 			return new FieldResult(tmp.replace('/', '.').toStringAndFree());

@@ -4,12 +4,12 @@ import org.jetbrains.annotations.NotNull;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveWriter;
-import roj.collect.MyHashSet;
+import roj.crypt.CRC32s;
 import roj.io.IOUtil;
-import roj.io.source.BufferedSource;
 import roj.io.source.FileSource;
+import roj.io.source.FragmentSource;
 import roj.io.source.Source;
-import roj.io.source.SplittedSource;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -17,7 +17,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.FileChannel;
-import java.util.zip.CRC32;
+import java.nio.charset.StandardCharsets;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
@@ -25,67 +25,41 @@ import java.util.zip.ZipException;
 import static roj.archive.zip.ZipArchive.*;
 
 /**
- * Zip [File] Writer
- *
  * @author solo6975
- * @version 1.0
  * @since 2021/10/5 13:54
  */
 public class ZipFileWriter extends OutputStream implements ArchiveWriter {
-	public static final int CHECK_DUPLICATE_FILE = 1, SPLIT_FILE = 2;
-
 	private Source file;
 	private final Deflater def;
-	private final ByteList CENs;
-	private final ByteList buf;
-	private final CRC32 crc;
-	private final MyHashSet<String> duplicate;
+	private final ByteList CENs = new ByteList(), buf = new ByteList();
 
 	private boolean finish;
-	private final END eof;
+	private int fileCount;
+	private byte[] comment = ArrayCache.BYTES;
 
-	public ZipFileWriter(File file) throws IOException {
-		this(new FileSource(file), Deflater.DEFAULT_COMPRESSION, false, 0);
+	public ZipFileWriter(File file) throws IOException { this(file, Deflater.DEFAULT_COMPRESSION, 0); }
+	public ZipFileWriter(File file, int compression, long splitSize) throws IOException {
+		this.file = splitSize != 0 ? FragmentSource.fixed(file, splitSize) : new FileSource(file);
+		this.file.seek(0);
+		this.def = new Deflater(compression, true);
 	}
-
-	public ZipFileWriter(File file, boolean checkDuplicate) throws IOException {
-		this(new FileSource(file), Deflater.DEFAULT_COMPRESSION, checkDuplicate, 0);
-	}
-
-	public ZipFileWriter(Source file, int compressionLevel, boolean checkDuplicate, int splitSize) throws IOException {
+	public ZipFileWriter(Source file, int compression) throws IOException {
 		this.file = file;
 		this.file.seek(0);
-		this.def = new Deflater(compressionLevel, true);
-		this.CENs = new ByteList();
-		this.buf = new ByteList();
-		this.crc = new CRC32();
-		this.eof = new END();
-		this.duplicate = checkDuplicate ? new MyHashSet<>() : null;
-
-		if (splitSize != 0) {
-			this.file = BufferedSource.autoClose(new SplittedSource((FileSource) file, splitSize));
-			buf.clear();
-		}
+		this.def = new Deflater(compression, true);
 	}
 
 	public ArchiveEntry createEntry(String fileName) { return new ZEntry(fileName); }
 
-	public void setComment(String comment) {
-		eof.setComment(comment);
-	}
-	public void setComment(byte[] comment) {
-		eof.setComment(comment);
-	}
+	public void setComment(String comment) { this.comment = comment.getBytes(StandardCharsets.UTF_8); }
+	public void setComment(byte[] comment) { this.comment = comment; }
 
-	public void writeNamed(String name, ByteList b) throws IOException {
-		writeNamed(name, b, ZipEntry.DEFLATED);
-	}
+	public void writeNamed(String name, ByteList b) throws IOException { writeNamed(name, b, ZipEntry.DEFLATED); }
 	public void writeNamed(String name, ByteList b, int method) throws IOException {
 		if (entry != null) closeEntry();
-		if (name.endsWith("/")) throw new ZipException("ZipEntry couldn't be directory");
-		if (duplicate != null && !duplicate.add(name)) throw new ZipException("Duplicate entry " + name);
+		if (name.endsWith("/")) throw new ZipException("目录不是空的: "+name);
 
-		crc.update(b.list, b.arrayOffset()+b.rIndex, b.readableBytes());
+		int crc = CRC32s.once(b.list, b.arrayOffset()+b.rIndex, b.readableBytes());
 
 		int time = ZEntry.java2DosTime(System.currentTimeMillis());
 		ByteList buf = this.buf;
@@ -95,7 +69,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 		   .putShortLE(2048)
 		   .putShortLE(method)
 		   .putIntLE(time)
-		   .putIntLE((int) crc.getValue())
+		   .putIntLE(crc)
 		   .putIntLE(b.readableBytes()) // cSize
 		   .putIntLE(b.readableBytes())
 		   .putShortLE(DynByteBuf.byteCountUTF8(name))
@@ -135,7 +109,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 		   .putShortLE(2048)
 		   .putShortLE(method)
 		   .putIntLE(time)
-		   .putIntLE((int) crc.getValue())
+		   .putIntLE(crc)
 		   .putIntLE(cSize)
 		   .putIntLE(b.readableBytes())
 		   .putShortLE(DynByteBuf.byteCountUTF8(name))
@@ -149,25 +123,22 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 			buf.putShortLE(1).putShortLE(8).putLongLE(entryBeginOffset);
 		}
 		CENs.put(buf);
-		eof.cDirTotal++;
+		fileCount++;
 		buf.clear();
-
-		crc.reset();
 	}
 
 	@Override
 	public void copy(ArchiveFile o, ArchiveEntry e) throws IOException {
-		ZipArchive owner = (ZipArchive) o;
+		ZipFile owner = (ZipFile) o;
 		ZEntry entry = (ZEntry) e;
 
 		if (this.entry != null) closeEntry();
 		long entryBeginOffset = file.position();
-		if (duplicate != null && !duplicate.add(entry.name)) throw new ZipException("Duplicate entry " +entry.name);
-		if (file.hasChannel() & owner.getFile().hasChannel()) {
+		if (file.hasChannel() & owner.source().hasChannel()) {
 			FileChannel myCh = file.channel();
-			owner.getFile().channel().transferTo(entry.startPos(), entry.endPos() - entry.startPos(), myCh);
+			owner.source().channel().transferTo(entry.startPos(), entry.endPos() - entry.startPos(), myCh);
 		} else {
-			Source src = owner.getFile();
+			Source src = owner.source();
 			src.seek(entry.startPos());
 			int max = Math.max(4096, buf.list.length);
 			buf.ensureCapacity(max);
@@ -184,15 +155,17 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 
 		long delta = entryBeginOffset - entry.startPos();
 		entry.offset += delta;
+		buf.clear();
 		ZipArchive.writeCEN(buf, entry);
 		entry.offset -= delta;
 		CENs.put(buf);
-		eof.cDirTotal++;
+		fileCount++;
 		buf.clear();
 	}
 
 	private ZEntry entry;
 	private long entryBeginOffset, dataBeginOffset;
+	private int crc = CRC32s.INIT_CRC;
 
 	public void beginEntry(ZipEntry ze) throws IOException {
 		ZEntry entry = new ZEntry(ze.getName());
@@ -206,7 +179,6 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 	}
 	public void beginEntry(ZEntry ze, boolean large) throws IOException {
 		if (entry != null) closeEntry();
-		if (duplicate != null && !duplicate.add(ze.getName())) throw new ZipException("Duplicate entry " + ze.getName());
 		entry = ze;
 		// noinspection all
 		if (ze.getMethod() == -1) ze.setMethod(ZipEntry.STORED);
@@ -235,7 +207,9 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 	@Override
 	public void write(@NotNull byte[] b, int off, int len) throws IOException {
 		if (entry == null) throw new ZipException("Entry closed");
-		crc.update(b, off, len);
+
+		crc = CRC32s.update(crc, b, off, len);
+
 		if (entry.getMethod() == ZipEntry.STORED) {
 			file.write(b, off, len);
 		} else {
@@ -289,11 +263,12 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 		entry.offset = dataBeginOffset;
 		entry.cSize = cSize;
 		entry.uSize = uSize;
-		entry.crc32 = (int) crc.getValue();
+		entry.crc32 = crc;
+		crc = CRC32s.INIT_CRC;
 
 		int off = CENs.wIndex();
 		ZipArchive.writeCEN(CENs, entry);
-		eof.cDirTotal++;
+		fileCount++;
 
 		f.seek(entryBeginOffset+14);
 		f.write(CENs.list, off+16, 12);
@@ -307,35 +282,42 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 
 		f.seek(pos);
 
-		crc.reset();
 		entry = null;
 	}
 
 	public void finish() throws IOException {
-		if (finish) return;
+		synchronized (this) {
+			if (finish) return;
+			finish = true;
+		}
 
 		if (entry != null) closeEntry();
 
 		def.end();
 
 		Source f = file;
-		eof.cDirOffset = f.position();
+		long cDirOffset = f.position();
 		f.write(CENs);
-		CENs.clear();
+		CENs._free();
 
-		eof.cDirLen = f.position()-eof.cDirOffset;
-		ZipArchive.writeEND(buf, eof, f.position());
+		long cDirLen = f.position()-cDirOffset;
+		buf.clear();
+		ZipArchive.writeEND(buf, cDirOffset, cDirLen, fileCount, comment, f.position());
 		f.write(buf.list, 0, buf.wIndex());
 
 		if (f.length() != f.position()) // truncate
 			f.setLength(f.position());
 		f.close();
 
-		finish = true;
+		buf._free();
 	}
 
 	@Override
-	public void close() throws IOException {
-		finish();
+	public synchronized void close() throws IOException {
+		try {
+			finish();
+		} finally {
+			file.close();
+		}
 	}
 }

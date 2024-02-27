@@ -1,7 +1,6 @@
 package roj.io;
 
 import org.jetbrains.annotations.NotNull;
-import roj.util.ArrayCache;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,6 +10,8 @@ import java.io.InputStream;
  * @since 2024/1/3 0003 10:10
  */
 public abstract class MBInputStream extends InputStream {
+	private static final byte[] SHARED_SKIP_BUFFER = new byte[4096];
+
 	private byte[] b1;
 
 	@Override
@@ -27,17 +28,10 @@ public abstract class MBInputStream extends InputStream {
 		if (n <= 0) return 0;
 
 		long remaining = n;
-
-		int size = (int)Math.min(4096, remaining);
-		byte[] skipBuffer = ArrayCache.getByteArray(size, false);
-		try {
-			while (remaining > 0) {
-				int r = read(skipBuffer, 0, (int)Math.min(size, remaining));
-				if (r < 0) break;
-				remaining -= r;
-			}
-		} finally {
-			ArrayCache.putArray(skipBuffer);
+		while (remaining > 0) {
+			int r = read(SHARED_SKIP_BUFFER, 0, (int)Math.min(4096, remaining));
+			if (r < 0) break;
+			remaining -= r;
 		}
 
 		return n - remaining;

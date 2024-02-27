@@ -1,4 +1,4 @@
-JFDML JFormDesigner: "8.1.1.0.298" Java: "17.0.9" encoding: "UTF-8"
+JFDML JFormDesigner: "8.2.3.0.386" Java: "17.0.9" encoding: "UTF-8"
 
 new FormModel {
 	contentType: "form/swing"
@@ -7,15 +7,28 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "选择需要进入的GUI功能"
+			"title": "RojLib 用户界面主要入口"
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label1"
+				"text": "更新日志"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 20
+				"y": 95
+			} )
 			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
 				name: "scrollPane1"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
 				add( new FormComponent( "javax.swing.JTextArea" ) {
-					name: "textArea1"
+					name: "uiInfo"
 				} )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 20
-				"y": 130
+				"y": 115
 				"width": 355
 				"height": 160
 			} )
@@ -24,7 +37,7 @@ new FormModel {
 				"text": "7z并行压缩"
 				"margin": &Insets0 new java.awt.Insets( 2, 2, 2, 2 )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 45
+				"x": 20
 				"y": 15
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
@@ -34,7 +47,7 @@ new FormModel {
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"width": 69
 				"height": 21
-				"x": 45
+				"x": 20
 				"y": 40
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
@@ -42,9 +55,8 @@ new FormModel {
 				"text": "常量查询"
 				"margin": #Insets0
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"width": 69
 				"height": 21
-				"x": 195
+				"x": 170
 				"y": 15
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
@@ -54,7 +66,7 @@ new FormModel {
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"width": 69
 				"height": 21
-				"x": 120
+				"x": 95
 				"y": 15
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
@@ -64,42 +76,89 @@ new FormModel {
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"width": 69
 				"height": 21
-				"x": 120
-				"y": 40
-			} )
-			add( new FormComponent( "javax.swing.JButton" ) {
-				name: "uiLavacTest"
-				"text": "LavacTest"
-				"margin": #Insets0
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"width": 69
-				"height": 21
-				"x": 195
+				"x": 95
 				"y": 40
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiNat"
-				"text": "NAT穿透工具"
+				"text": "安全隧道"
 				"margin": #Insets0
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"width": 80
 				"height": 21
-				"x": 270
-				"y": 15
+				"x": 315
+				"y": 40
+				"width": 65
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiNovel"
 				"text": "小说整理工具"
 				"margin": #Insets0
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"width": 80
 				"height": 21
-				"x": 270
+				"x": 230
 				"y": 40
 			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiDIffFinder"
+				"text": "文件比较"
+				"margin": new java.awt.Insets( 2, 2, 2, 2 )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 170
+				"y": 40
+				"height": 21
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiCardSleep"
+				"text": "N卡省电工具"
+				"margin": new java.awt.Insets( 2, 2, 2, 2 )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 230
+				"y": 15
+				"width": 80
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiSM"
+				"text": "SMUI"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 315
+				"y": 15
+				"width": 65
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiTest"
+				"text": "测试功能"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 160
+				"y": 65
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label2"
+				"text": "命令行工具"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 25
+				"y": 280
+			} )
+			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
+				name: "scrollPane2"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+				add( new FormComponent( "javax.swing.JTextArea" ) {
+					name: "uiCLITool"
+					"editable": false
+				} )
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 20
+				"y": 300
+				"width": 355
+				"height": 245
+			} )
 		}, new FormLayoutConstraints( null ) {
-			"location": new java.awt.Point( 305, 180 )
-			"size": new java.awt.Dimension( 400, 325 )
+			"location": new java.awt.Point( 305, 220 )
+			"size": new java.awt.Dimension( 400, 565 )
 		} )
 	}
 }

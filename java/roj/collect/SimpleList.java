@@ -14,7 +14,7 @@ import java.util.function.UnaryOperator;
  * @author Roj234
  * @since 2021/5/24 23:26
  */
-public class SimpleList<E> implements List<E>, RandomAccess {
+public class SimpleList<E> extends AbstractCollection<E> implements List<E>, RandomAccess {
 	protected Object[] list;
 	protected int size;
 
@@ -27,7 +27,12 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 
 	public void ensureCapacity(int cap) {
 		if (list.length < cap) {
-			int newCap = list.length == 0 ? cap : cap > 65536 ? MathUtils.getMin2PowerOf(cap) : cap > 512 ? cap+512 : cap+10;
+			int newCap;
+			if (list.length == 0) newCap = cap;
+			else if (cap > 1000) newCap = MathUtils.getMin2PowerOf(cap);
+			else if (cap > 100) newCap = cap + (cap >> 1);
+			else newCap = cap + 11;
+
 			Object[] newList = new Object[newCap];
 			if (size > 0) System.arraycopy(list, 0, newList, 0, size);
 			list = newList;
@@ -42,20 +47,11 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 		return list;
 	}
 
-	public static <T> SimpleList<T> withCapacityType(int initialCapacity, int capacityType) {
-		return new SimpleList<T>(initialCapacity) {
-			int nextCap(int cap) {
-				switch (capacityType&3) {
-					default: case 0: return cap + 10;
-					case 1: return 1 + ((cap*3) >> 1);
-					case 2: return MathUtils.getMin2PowerOf(cap+1);
-					case 3: throw new ArrayIndexOutOfBoundsException("Capacity locked: " + list.length);
-				}
-			}
-
+	public static <T> SimpleList<T> hugeCapacity(int initialCapacity) {
+		return new SimpleList<>(initialCapacity) {
 			public void ensureCapacity(int cap) {
 				if (list.length < cap) {
-					int newCap = list.length == 0 ? cap : nextCap(cap);
+					int newCap = list.length == 0 ? cap : MathUtils.getMin2PowerOf(cap);
 					Object[] newList = new Object[newCap];
 					if (size > 0) System.arraycopy(list, 0, newList, 0, size);
 					list = newList;
@@ -118,16 +114,10 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 		return a;
 	}
 
-	public Object[] getInternalArray() {
-		return list;
-	}
+	public Object[] getInternalArray() {return list;}
+	public void _setArray(Object[] arr) {list = arr;}
+	public void _setSize(int i) {this.size = i;}
 
-	@Deprecated
-	public void setRawArray(Object[] arr) {
-		list = arr;
-	}
-
-	public boolean isEmpty() { return size == 0; }
 	public int size() { return size; }
 
 	public boolean add(E e) {
@@ -168,22 +158,6 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 		return true;
 	}
 
-	@SafeVarargs
-	@SuppressWarnings("varargs")
-	public final boolean addAllReversed(int i, E... collection) {
-		rangeCheck(i);
-
-		if (collection.length == 0) return false;
-		ensureCapacity(size + collection.length);
-		if (size - i > 0) System.arraycopy(list, i, list, i + collection.length, size - i);
-		for (int k = collection.length - 1; k >= 0; k--) {
-			final E e = collection[k];
-			list[i++] = e;
-		}
-		size += collection.length;
-		return true;
-	}
-
 	void rangeCheck(int i) {
 		if (i < 0 || i > size) throw new ArrayIndexOutOfBoundsException(i);
 	}
@@ -211,10 +185,11 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 		if (size != index && size > 0) System.arraycopy(list, index, list, index + collection.size(), size - index);
 
 		Iterator<? extends E> it = collection.iterator();
-		for (int j = index; j < index + collection.size(); j++) {
-			list[j] = it.next();
-		}
-		size += collection.size();
+		int j = index;
+		do {
+			list[j++] = it.next();
+		} while (it.hasNext() && j != index + collection.size());
+		size += j - index;
 		return true;
 	}
 
@@ -237,22 +212,6 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 	@SuppressWarnings("unchecked")
 	public void sort(int from, int to, Comparator<? super E> c) { Arrays.sort(list, from, to, (Comparator<? super Object>) c); }
 
-	@SuppressWarnings("unchecked")
-	public <X extends Comparable<E>> int binarySearch(int fromIndex, int toIndex, X key) {
-		Object[] list = this.list;
-		int low = fromIndex;
-		int high = toIndex - 1;
-
-		while (low <= high) {
-			int mid = (low + high) >>> 1;
-			X midVal = (X) list[mid];
-
-			int v = midVal.compareTo((E) key);
-			if (v < 0) {low = mid + 1;} else if (v > 0) {high = mid - 1;} else return mid; // key found
-		}
-		return -(low + 1);
-	}
-
 	@Override
 	@SuppressWarnings("unchecked")
 	public boolean removeIf(Predicate<? super E> filter) {
@@ -268,14 +227,9 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 	}
 
 	@Override
-	public final boolean removeAll(@NotNull Collection<?> collection) {
-		return batchRemove(collection, true);
-	}
-
+	public final boolean removeAll(@NotNull Collection<?> collection) {return batchRemove(collection, true);}
 	@Override
-	public final boolean retainAll(@NotNull Collection<?> collection) {
-		return batchRemove(collection, false);
-	}
+	public final boolean retainAll(@NotNull Collection<?> collection) {return batchRemove(collection, false);}
 
 	@SuppressWarnings("unchecked")
 	protected boolean batchRemove(@NotNull Collection<?> collection, boolean equ) {
@@ -292,7 +246,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 
 	@SuppressWarnings("unchecked")
 	public E set(int i, E e) {
-		if (i < 0 || i >= size) throw new ArrayIndexOutOfBoundsException(i);
+		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
 		Object o = list[i];
 		list[i] = e;
 		return (E) o;
@@ -318,11 +272,6 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 		return false;
 	}
 
-	@Override
-	public boolean containsAll(@NotNull Collection<?> c) {
-		return false;
-	}
-
 	public void removeRange(int begin, int end) {
 		if (begin >= end) return;
 		// will throw exceptions if out of bounds...
@@ -336,16 +285,12 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 
 	@SuppressWarnings("unchecked")
 	public E remove(int index) {
-		if (index >= 0 && index < size) {
-			Object o = list[index];
-			if (size - 1 - index > 0) {
-				System.arraycopy(list, index + 1, list, index, size - 1 - index);
-			}
+		if (index >= size) throw new ArrayIndexOutOfBoundsException(index);
+		Object o = list[index];
+		if (size - 1 - index > 0) System.arraycopy(list, index + 1, list, index, size - 1 - index);
+		list[--size] = null;
+		return (E) o;
 
-			list[--size] = null;
-			return (E) o;
-		}
-		throw new ArrayIndexOutOfBoundsException(index);
 	}
 
 	@Override
@@ -369,7 +314,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 
 	@NotNull
 	@Override
-	public List<E> subList(int fromIndex, int toIndex) { return new SubList<>(this, fromIndex, toIndex); }
+	public List<E> subList(int fromIndex, int toIndex) { return new SubList(fromIndex, toIndex); }
 
 	@Override
 	public boolean contains(Object o) { return indexOf(o) != -1; }
@@ -379,12 +324,15 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 		if (i < 0 || i >= size) throw new ArrayIndexOutOfBoundsException(i);
 		return (E) list[i];
 	}
-
-	public E getLast() { return getLast(null); }
 	@SuppressWarnings("unchecked")
-	public E getLast(E def) {
-		return size == 0 ? def : (E) list[size-1];
+	public E get(int i, E def) {
+		if (i < 0 || i >= size) return def;
+		return (E) list[i];
 	}
+
+	public E getLast() {return getLast(null);}
+	@SuppressWarnings("unchecked")
+	public E getLast(E def) {return size == 0 ? def : (E) list[size-1];}
 
 	public void clear() {
 		if (list == null || size == 0) return;
@@ -396,8 +344,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 
 	public boolean equals(Object o) {
 		if (o == this) return true;
-		if (!(o instanceof List)) return false;
-		List<?> l = (List<?>) o;
+		if (!(o instanceof List<?> l)) return false;
 		if (l.size() != size) return false;
 		if (o instanceof RandomAccess) {
 			for (int i = 0; i < size; i++) {
@@ -425,14 +372,10 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 		return v;
 	}
 
-	public void i_setSize(int i) {
-		this.size = i;
-	}
-
 	@Override
 	public String toString() { return ArrayUtil.toString(list,0,size); }
 
-	private final class Itr implements ListIterator<E> {
+	private class Itr implements ListIterator<E> {
 		int i, mark = -1;
 
 		Itr(int pos) { this.i = pos; }
@@ -462,60 +405,50 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 		}
 	}
 
-	private static final
-	class SubList<E> extends AbstractList<E> {
-		private final SimpleList<E> l;
+	private final class SubList extends AbstractList<E> {
 		private final int offset;
 		private int size;
 
-		SubList(SimpleList<E> list, int fromIndex, int toIndex) {
-			if (fromIndex < 0)
-				throw new IndexOutOfBoundsException("fromIndex = " + fromIndex);
-			if (toIndex > list.size())
-				throw new IndexOutOfBoundsException("toIndex = " + toIndex);
-			if (fromIndex > toIndex)
-				throw new IllegalArgumentException("fromIndex(" + fromIndex +
-					") > toIndex(" + toIndex + ")");
-			l = list;
+		SubList(int fromIndex, int toIndex) {
+			if (fromIndex < 0) throw new IndexOutOfBoundsException("fromIndex = " + fromIndex);
+			if (toIndex >  SimpleList.this.size()) throw new IndexOutOfBoundsException("toIndex = " + toIndex);
+			if (fromIndex > toIndex) throw new IllegalArgumentException("fromIndex(" + fromIndex + ") > toIndex(" + toIndex + ")");
+
 			offset = fromIndex;
 			size = toIndex - fromIndex;
 		}
 
 		public E set(int index, E element) {
 			rangeCheck(index);
-			return l.set(index+offset, element);
+			return SimpleList.this.set(index+offset, element);
 		}
 
 		public E get(int index) {
 			rangeCheck(index);
-			return l.get(index+offset);
+			return SimpleList.this.get(index+offset);
 		}
 
-		public int size() {
-			return size;
-		}
+		public int size() {return size;}
 
 		public void add(int index, E element) {
 			rangeCheckForAdd(index);
-			l.add(index+offset, element);
+			SimpleList.this.add(index+offset, element);
 			size++;
 		}
 
 		public E remove(int index) {
 			rangeCheck(index);
-			E result = l.remove(index+offset);
+			E result =  SimpleList.this.remove(index+offset);
 			size--;
 			return result;
 		}
 
 		protected void removeRange(int fromIndex, int toIndex) {
-			l.removeRange(fromIndex+offset, toIndex+offset);
+			SimpleList.this.removeRange(fromIndex+offset, toIndex+offset);
 			size -= (toIndex-fromIndex);
 		}
 
-		public boolean addAll(Collection<? extends E> c) {
-			return addAll(size, c);
-		}
+		public boolean addAll(Collection<? extends E> c) {return addAll(size, c);}
 
 		public boolean addAll(int index, Collection<? extends E> c) {
 			rangeCheckForAdd(index);
@@ -523,7 +456,7 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 			if (cSize==0)
 				return false;
 
-			l.addAll(offset+index, c);
+			SimpleList.this.addAll(offset+index, c);
 			size += cSize;
 			return true;
 		}
@@ -532,71 +465,42 @@ public class SimpleList<E> implements List<E>, RandomAccess {
 		public ListIterator<E> listIterator(final int index) {
 			rangeCheckForAdd(index);
 
-			return new ListIterator<E>() {
-				private final ListIterator<E> i = l.listIterator(index+offset);
-
-				public boolean hasNext() {
-					return nextIndex() < size;
-				}
+			return new Itr(index+offset) {
+				public boolean hasNext() {return nextIndex() < size;}
 
 				public E next() {
-					if (hasNext())
-						return i.next();
-					else
-						throw new NoSuchElementException();
+					if (hasNext()) return super.next();
+					else throw new NoSuchElementException();
 				}
 
-				public boolean hasPrevious() {
-					return previousIndex() >= 0;
-				}
+				public boolean hasPrevious() {return previousIndex() >= 0;}
 
 				public E previous() {
-					if (hasPrevious())
-						return i.previous();
-					else
-						throw new NoSuchElementException();
+					if (hasPrevious()) return super.previous();
+					else throw new NoSuchElementException();
 				}
 
-				public int nextIndex() {
-					return i.nextIndex() - offset;
-				}
+				public int nextIndex() {return super.nextIndex() - offset;}
+				public int previousIndex() {return super.previousIndex() - offset;}
 
-				public int previousIndex() {
-					return i.previousIndex() - offset;
-				}
-
-				public void remove() {
-					i.remove();
-					size--;
-				}
-
-				public void set(E e) {
-					i.set(e);
-				}
-
-				public void add(E e) {
-					i.add(e);
-					size++;
-				}
+				public void remove() {super.remove();size--;}
+				public void set(E e) {super.set(e);}
+				public void add(E e) {super.add(e);size++;}
 			};
 		}
 
 		public List<E> subList(int fromIndex, int toIndex) {
-			return new SubList<>(l, offset+fromIndex, offset+toIndex);
+			return new SubList(offset+fromIndex, offset+toIndex);
 		}
 
 		private void rangeCheck(int index) {
-			if (index < 0 || index >= size)
-				throw new IndexOutOfBoundsException(outOfBoundsMsg(index));
+			if (index < 0 || index >= size) throw new IndexOutOfBoundsException(outOfBoundsMsg(index));
 		}
 
 		private void rangeCheckForAdd(int index) {
-			if (index < 0 || index > size)
-				throw new IndexOutOfBoundsException(outOfBoundsMsg(index));
+			if (index < 0 || index > size) throw new IndexOutOfBoundsException(outOfBoundsMsg(index));
 		}
 
-		private String outOfBoundsMsg(int index) {
-			return "Index: "+index+", Size: "+size;
-		}
+		private String outOfBoundsMsg(int index) {return "Index: "+index+", Size: "+size;}
 	}
 }

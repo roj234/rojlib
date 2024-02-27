@@ -1,8 +1,6 @@
 package roj.text;
 
 import org.jetbrains.annotations.Nullable;
-import roj.config.ParseException;
-import roj.config.word.Tokenizer;
 import roj.io.IOUtil;
 
 import java.util.TimeZone;
@@ -11,13 +9,13 @@ import java.util.TimeZone;
  * @author solo6975
  * @since 2021/6/16 2:48
  */
-public class ACalendar {
-	public static ACalendar GMT() { return new ACalendar(TimeZone.getTimeZone("GMT")); }
+public final class ACalendar {
+	public static ACalendar GMT() { return new ACalendar(null); }
 	public static ACalendar Local() { return new ACalendar(TimeZone.getDefault()); }
 
 	public ACalendar copy() { return new ACalendar(zone); }
 
-	public static final int YEAR = 0, MONTH = 1, DAY = 2, HOUR = 3, MINUTE = 4, SECOND = 5, MILLISECOND = 6, DAY_OF_WEEK = 7, REN_YEAR = 8, TOTAL = 9;
+	public static final int YEAR = 0, MONTH = 1, DAY = 2, HOUR = 3, MINUTE = 4, SECOND = 5, MILLISECOND = 6, DAY_OF_WEEK = 7, LEAP_YEAR = 8, TOTAL = 9;
 
 	private final int[] buf = new int[TOTAL];
 	private final long[] cache = new long[4];
@@ -45,20 +43,20 @@ public class ACalendar {
 
 		int y = buf[YEAR] = yearSinceUnix(date);
 		long days = daySinceAD(y, 1, 1, cache);
-		boolean renYear = isRenYear(y);
+		boolean leapYear = isLeapYear(y);
 
 		int daysSinceY = (int) (date - days);
 
-		long daysAfterFeb = days + 31 + 28 + (renYear ? 1 : 0);
+		long daysAfterFeb = days + 31 + 28 + (leapYear ? 1 : 0);
 		if (date >= daysAfterFeb) {
-			daysSinceY += renYear ? 1 : 2;
+			daysSinceY += leapYear ? 1 : 2;
 		}
 
 		int m = 12 * daysSinceY + 373;
 		if (m > 0) m /= 367;
 		else m = floorDiv(m, 367);
 
-		long monthDays = days + SUMMED_DAYS[m] + (m >= 3 && renYear ? 1 : 0);
+		long monthDays = days + SUMMED_DAYS[m] + (m >= 3 && leapYear ? 1 : 0);
 		buf[DAY] = (int) (date - monthDays) + 1;
 
 		if (m == 0) {
@@ -72,7 +70,7 @@ public class ACalendar {
 
 		buf[DAY_OF_WEEK] = dayOfWeek(date - 1);
 
-		buf[REN_YEAR] = renYear ? 1 : 0;
+		buf[LEAP_YEAR] = leapYear ? 1 : 0;
 
 		return buf;
 	}
@@ -149,7 +147,7 @@ public class ACalendar {
 				+ longYr / 4L - longYr / 100L + longYr / 400L; // ren days
 
 			if (month > 2) { // feb offset
-				date -= isRenYear(year) ? 1L : 2L;
+				date -= isLeapYear(year) ? 1L : 2L;
 			}
 
 			if (cache != null && firstDay) {
@@ -161,8 +159,8 @@ public class ACalendar {
 		}
 	}
 
-	private static boolean isRenYear(int year) { return (year & 3) == 0 && (year % 100 != 0 || year % 400 == 0); }
-	private static long dayOfYear(int year, int month, int day) { return day + (long) (SUMMED_DAYS[month] + (month > 2 && isRenYear(year) ? 1 : 0)); }
+	private static boolean isLeapYear(int year) { return (year & 3) == 0 && (year % 100 != 0 || year % 400 == 0); }
+	private static long dayOfYear(int year, int month, int day) { return day + (long) (SUMMED_DAYS[month] + (month > 2 && isLeapYear(year) ? 1 : 0)); }
 	private static int dayOfWeek(long day) { return (int) (day % 7L) + 1; }
 
 	/**
@@ -180,8 +178,8 @@ public class ACalendar {
 	public static final int GREGORIAN_OFFSET_DAY = 719163; // Fixed day of 1970/1/ 1 (Gregorian)
 	public static final int MINIMUM_GREGORIAN_DAY = 577736; // Fixed day of 1582/8/15
 
-	public static int floorDiv(int a, int b) { return a >= 0 ? a / b : (a + 1) / b - 1; }
-	public static long divModLss(long a, int b, int[] buf) {
+	private static int floorDiv(int a, int b) { return a >= 0 ? a / b : (a + 1) / b - 1; }
+	private static long divModLss(long a, int b, int[] buf) {
 		if (a >= 0) {
 			return (a % b) << 54 | (a / b);
 		} else {
@@ -191,7 +189,7 @@ public class ACalendar {
 		}
 	}
 
-	private static final String[]
+	static final String[]
 		UTCWEEK = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"},
 		UTCMONTH = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
@@ -201,70 +199,71 @@ public class ACalendar {
 		char c;
 		for (int i = 0; i < format.length(); i++) {
 			switch (c = format.charAt(i)) {
-				case 'L': sb.append(fields[REN_YEAR]); break;
-				case 'Y': sb.append(fields[YEAR]); break;
-				case 'y': sb.append(fields[YEAR] % 100); break;
-				case 'd': sb.padNumber(fields[DAY], 2); break;
-				case 'j': sb.append(fields[DAY]); break;
-				case 'l': sb.append("星期").append(ChinaNumeric.NUMBER[fields[DAY_OF_WEEK]]); break;
-				case 'W': sb.append(UTCWEEK[fields[DAY_OF_WEEK]-1]); break;
-				case 'w': sb.append(fields[DAY_OF_WEEK]-1); break;
-				case 'N': sb.append(fields[DAY_OF_WEEK]); break;
-				case 'm': sb.padNumber(fields[MONTH], 2); break;
-				case 'x': sb.padNumber(fields[MILLISECOND], 3); break;
-				case 'n': sb.append(fields[MONTH]); break;
-				case 't': // 本月有几天
+				case 'Y' -> sb.append(fields[YEAR]);
+				case 'y' -> sb.append(fields[YEAR] % 100);
+
+				case 'L' -> sb.append(fields[LEAP_YEAR]);
+
+				case 'M' -> sb.append(UTCMONTH[fields[MONTH] - 1]);
+				case 'm' -> sb.padNumber(fields[MONTH], 2);
+				case 'n' -> sb.append(fields[MONTH]);
+
+				case 't' -> {// 本月有几天
 					int mth = fields[MONTH];
-					if (mth == 2) {
-						sb.append(28 + fields[REN_YEAR]);
-					} else {
-						sb.append(((mth & 1) != 0) == mth < 8 ? 31 : 30);
-					}
-					break;
-				case 'a': sb.append(fields[HOUR] > 11 ? "pm" : "am"); break;
-				case 'A': sb.append(fields[HOUR] > 11 ? "PM" : "AM"); break;
-				case 'g': // am/pm时间
+					sb.append(mth == 2 ? 28 + fields[LEAP_YEAR] : ((mth & 1) != 0) == mth < 8 ? 31 : 30);
+				}
+
+				case 'd' -> sb.padNumber(fields[DAY], 2);
+				case 'j' -> sb.append(fields[DAY]);
+				case 'D' -> sb.append(stamp / 86400000L);
+
+				case 'l' -> sb.append("星期").append(ChinaNumeric.NUMBER[fields[DAY_OF_WEEK]]);
+				case 'W' -> sb.append(UTCWEEK[fields[DAY_OF_WEEK]-1]);
+				case 'w' -> sb.append(fields[DAY_OF_WEEK]-1);
+
+				case 'H' -> sb.padNumber(fields[HOUR], 2);
+				case 'G' -> sb.append(fields[HOUR]);
+
+				case 'A' -> sb.append(fields[HOUR] > 11 ? "PM" : "AM");
+				case 'a' -> sb.append(fields[HOUR] > 11 ? "pm" : "am");
+
+				case 'h' -> {
+					int h = fields[HOUR] % 12;
+					sb.padNumber(h == 0 ? 12 : h, 2);
+				}
+				case 'g' -> {// am/pm时间
 					int h = fields[HOUR] % 12;
 					sb.append(h == 0 ? 12 : h);
-					break;
-				case 'G': sb.append(fields[HOUR]); break;
-				case 'h':
-					h = fields[HOUR] % 12;
-					sb.padNumber(h == 0 ? 12 : h, 2);
-					break;
-				case 'H': sb.padNumber(fields[HOUR], 2); break;
-				case 'i': sb.padNumber(fields[MINUTE], 2); break;
-				case 's': sb.padNumber(fields[SECOND], 2); break;
-				case 'O': // timezone offset 2
-					if (tzoff(stamp, sb) < 0) sb.append("GMT");
-					break;
-				case 'P':
-					int v = tzoff(stamp, sb);
-					if (v < 0) sb.append('Z');
-					else sb.insert(v+3, ':');
-					break;
-				case 'c': format("Y-m-dTH:i:sP", stamp, sb); break;
-				case 'M': sb.append(UTCMONTH[fields[MONTH] - 1]); break;
-				case 'U': sb.append(stamp / 1000); break;
-				default: sb.append(c); break;
+				}
+
+				case 'i' -> sb.padNumber(fields[MINUTE], 2);
+				case 's' -> sb.padNumber(fields[SECOND], 2);
+				case 'x' -> sb.padNumber(fields[MILLISECOND], 3);
+
+				// unix秒时间戳
+				case 'U' -> sb.append(stamp / 1000);
+
+				case 'O', 'P' -> {// TimeZone offset
+					if (tzoff(stamp, sb)) sb.append(c == 'P' ? "Z" : "GMT");
+				}
+
+				case 'c' -> format("Y-m-dTH:i:sP", stamp, sb);
+				default -> sb.append(c);
 			}
 		}
 		return sb;
 	}
-	private int tzoff(long stamp, CharList sb) {
-		if (zone == null) return -1;
-		// 这里曾经有个负号
-		int offset = zone.getOffset(stamp);
-		if (offset == 0) return -1;
-
-		int pos = sb.length();
-		sb.append(offset>0?'+':'-');
+	private boolean tzoff(long stamp, CharList sb) {
+		int offset;
+		if (zone == null || (offset = zone.getOffset(stamp)) == 0) return true;
 
 		offset /= 60000;
 
-		sb.padNumber(Math.abs(offset / 60), 2);
-		sb.padNumber(offset % 60, 2);
-		return pos;
+		sb.append(offset>0?'+':'-')
+		  .padNumber(Math.abs(offset / 60), 2)
+		  .append(':')
+		  .padNumber(offset % 60, 2);
+		return false;
 	}
 
 	public String toISOString(long millis) { return toISOString(new CharList(), millis).toStringAndFree(); }
@@ -275,93 +274,7 @@ public class ACalendar {
 
 	public static String toLocalTimeString(long time) {
 		ACalendar cal = new ACalendar();
-		return cal.format("Y-m-d H:i:s.x", time, new CharList()).append(" (").append(cal.zone.getDisplayName()).append(')').toStringAndFree(); }
-
-	/**
-	 * parse ISO8601 timestamp
-	 * 使用这个函数是为了支持可选的前导零
-	 * @see Tokenizer#ISO8601Datetime
-	 * @param seq "2020-07-14T07:59:08+08:00"
-	 * @return unix timestamp
-	 */
-	public static long parseISO8601Datetime(CharSequence seq) {
-		try {
-			return new Tokenizer().init(seq).ISO8601Datetime(true).asLong();
-		} catch (ParseException e) {
-			throw new IllegalArgumentException(e.toString());
-		}
-	}
-	/**
-	 * parse RFC like timestamp
-	 * @param seq "Tue, 25 Feb 2022 21:48:10 GMT"
-	 * @return unix timestamp
-	 */
-	@SuppressWarnings("fallthrough")
-	public static long parseRFCDate(CharSequence seq) {
-		String str = seq.subSequence(0, 3).toString();
-		String[] x = UTCWEEK;
-		int week = 0;
-		while (week < x.length) {
-			if (str.equals(x[week++])) {
-				break;
-			}
-		}
-		if (week == 8) throw new IllegalArgumentException("Invalid week " + str);
-		if (seq.charAt(3) != ',' || seq.charAt(4) != ' ') throw new IllegalArgumentException("分隔符错误");
-		int day = TextUtil.parseInt(seq, 5, 7);
-		if (seq.charAt(7) != ' ') throw new IllegalArgumentException("分隔符错误");
-
-		str = seq.subSequence(8, 11).toString();
-		x = UTCMONTH;
-		int month = 0;
-		while (month < x.length) {
-			if (str.equals(x[month++])) {
-				break;
-			}
-		}
-		if (month == 13) throw new IllegalArgumentException("Invalid month " + str);
-
-		if (seq.charAt(11) != ' ') throw new IllegalArgumentException("分隔符错误");
-
-		int year = TextUtil.parseInt(seq, 12, 16);
-		if (seq.charAt(16) != ' ') throw new IllegalArgumentException("分隔符错误");
-		int h = TextUtil.parseInt(seq, 17, 19);
-		if (seq.charAt(19) != ':') throw new IllegalArgumentException("分隔符错误");
-		int m = TextUtil.parseInt(seq, 20, 22);
-		if (seq.charAt(22) != ':') throw new IllegalArgumentException("分隔符错误");
-		int s = TextUtil.parseInt(seq, 23, 25);
-		if (seq.charAt(25) != ' ') throw new IllegalArgumentException("分隔符错误");
-
-		if (h > 23) throw new IllegalArgumentException("你一天" + h + "小时");
-		if (m > 59) throw new IllegalArgumentException("你一小时" + m + "分钟");
-		if (s > 59) throw new IllegalArgumentException("你一分钟" + s + "秒");
-
-		long a = (daySinceAD(year, month, day, null) - GREGORIAN_OFFSET_DAY) * 86400000L + h * 3600000 + m * 60000 + s * 1000;
-
-		int i = -1;
-		switch (seq.charAt(26)) {
-			case '-':
-				i = 1;
-			case '+':
-				i *= TextUtil.parseInt(seq, 27, 30);
-				int d = i % 100;
-				if (d < -59 || d > 59) throw new IllegalArgumentException("你一小时" + d + "分钟");
-				a += 60000 * d;
-
-				d = i / 100;
-				if (d < -23 || d > 23) throw new IllegalArgumentException("你一天" + d + "小时");
-				a += 3600000 * d;
-
-				break;
-			case 'G':
-				if (seq.charAt(27) != 'M' || seq.charAt(28) != 'T') throw new IllegalArgumentException("分隔符错误");
-				break;
-			default:
-				throw new IllegalArgumentException("分隔符错误");
-		}
-
-		return a;
-	}
+		return cal.format("Y-m-d H:i:s.x", time, new CharList()).append(" (").append(cal.zone!=null?cal.zone.getDisplayName():"GMT").append(')').toStringAndFree(); }
 
 	private static final int[]
 		TIME_DT = {60, 1800, 3600, 86400, 604800, 2592000, 15552000},

@@ -3,7 +3,7 @@ package roj.collect;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.math.MathUtils;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 
 import java.lang.reflect.Field;
@@ -15,20 +15,20 @@ import static roj.reflect.ReflectionUtils.u;
  * @author Roj234
  * @since 2024/1/26 06:09
  */
-public final class XHashSet<K, V> implements Iterable<V> {
+public final class XHashSet<K, V> extends AbstractSet<V> {
 	public static <K, V> Shape<K, V> shape(Class<K> kType, Class<V> vType, String field_key, String field_next) { return shape(kType, vType, field_key, field_next, Hasher.defaul()); }
 	public static <K, V> Shape<K, V> shape(Class<K> kType, Class<V> vType, String field_key, String field_next, Hasher<K> hasher) {
-		DirectAccessor<ObjectNew> da = DirectAccessor.builder(ObjectNew.class).weak().unchecked();
+		Bypass<ObjectNew> da = Bypass.builder(ObjectNew.class).weak().unchecked();
 		try {
 			da.construct(vType, "createValue", kType);
 		} catch (IllegalArgumentException e) {
 			da.construct(vType, "createValueNoarg");
 		}
 		try {
-			ObjectNew creater = da.build();
+			ObjectNew creator = da.build();
 			Field key = ReflectionUtils.getField(vType, field_key);
 			Field next =  ReflectionUtils.getField(vType, field_next);
-			return new Shape<>(vType, u.objectFieldOffset(next), u.objectFieldOffset(key), hasher, creater);
+			return new Shape<>(vType, u.objectFieldOffset(next), u.objectFieldOffset(key), hasher, creator);
 		} catch (NoSuchFieldException e) {
 			throw new IllegalArgumentException("无法找到字段", e);
 		}
@@ -43,7 +43,7 @@ public final class XHashSet<K, V> implements Iterable<V> {
 		}
 	}
 
-	static interface ObjectNew {
+	interface ObjectNew {
 		default Object createValue(Object key) { return createValueNoarg(); }
 		Object createValueNoarg();
 	}
@@ -71,10 +71,15 @@ public final class XHashSet<K, V> implements Iterable<V> {
 
 		final int hashCode(@Nullable K k) { return hasher.hashCode(k); }
 		final boolean equals(K from_argument, Object stored_in) { return hasher.equals(from_argument, stored_in); }
+		@SuppressWarnings("unchecked")
+		final V checkCast(Object s) {
+			if (!type.isAssignableFrom(s.getClass())) throw new ClassCastException(s.getClass()+" cannot cast to "+type);
+			return (V) s;
+		}
 
 		@SuppressWarnings("unchecked")
 		final K GET_KEY(@NotNull Object obj) { return (K) u.getObject(obj, key_offset); }
-		final void SET_KEY(@NotNull Object obj, K key) { u.putObject(obj, key_offset, key); }
+		final void SET_KEY(@NotNull V obj, K key) { u.putObject(obj, key_offset, key); }
 		final Object GET_NEXT(@NotNull Object obj) { return u.getObject(obj, next_offset); }
 		final void SET_NEXT(@NotNull Object obj, Object next) { u.putObject(obj, next_offset, next); }
 
@@ -105,9 +110,10 @@ public final class XHashSet<K, V> implements Iterable<V> {
 	public Iterator<V> iterator() { return size == 0 ? Collections.emptyIterator() : new ValueItr(); }
 	public AbstractIterator<V> valItr() { return new ValueItr(); }
 
-	public boolean isEmpty() { return size == 0; }
 	public int size() { return size; }
 
+	@Override
+	public final boolean contains(Object o) { return get(shape.GET_KEY(shape.checkCast(o))) != null; }
 	public boolean containsKey(Object o) { return get(o) != null; }
 	public V get(Object k) { return getOrDefault(k, null); }
 	@SuppressWarnings("unchecked")
@@ -122,8 +128,8 @@ public final class XHashSet<K, V> implements Iterable<V> {
 		return def;
 	}
 
-	public boolean add(V value) { return null == put1(shape.GET_KEY(value), value, false, false); }
-	public boolean set(V value) { return null == put1(shape.GET_KEY(value), value, true, false); }
+	public boolean add(V value) { return null == put1(shape.GET_KEY(shape.checkCast(value)), value, false, false); }
+	public boolean set(V value) { return null == put1(shape.GET_KEY(shape.checkCast(value)), value, true, false); }
 
 	public V put(K key, V val) {
 		if (val == null) throw new NullPointerException("val cannot be null");
@@ -139,7 +145,8 @@ public final class XHashSet<K, V> implements Iterable<V> {
 	private V put1(K k, V v, boolean replace, boolean add) {
 		int i = shape.hashCode(k)&mask;
 
-		if (v != null && shape.GET_NEXT(v) == v) throw new UnsupportedOperationException("entry "+v+" 被锁定，无法加入map");
+		if (v != null && shape.GET_NEXT(shape.checkCast(v)) == v)
+			throw new UnsupportedOperationException("entry "+v+" 被锁定，无法加入map");
 
 		if (entries == null) entries = new Object[mask+1];
 		Object obj = entries[i];
@@ -169,17 +176,18 @@ public final class XHashSet<K, V> implements Iterable<V> {
 
 		if (v == null) v = shape.createValue(k);
 
-		if (++size > mask * LOAD_FACTOR) resize((mask+1)<<1);
 		shape.SET_NEXT(v, entries[i]);
 		entries[i] = v;
+
+		if (++size > mask * LOAD_FACTOR) resize((mask+1)<<1);
 		return add ? v : null;
 	}
 
+	@Override
+	public boolean remove(Object o) { return removeKey(shape.GET_KEY(shape.checkCast(o))) != null; }
 	@SuppressWarnings("unchecked")
-	public V remove(Object o) {
+	public V removeKey(K key) {
 		if (entries == null) return null;
-
-		K key = (K) o;
 
 		int i = shape.hashCode(key)&mask;
 		Object entry = entries[i], prev = null;
@@ -221,8 +229,8 @@ public final class XHashSet<K, V> implements Iterable<V> {
 				Object next = shape.GET_NEXT(entry);
 
 				Object old = newEntries[newKey];
-				newEntries[newKey] = entry;
 				shape.SET_NEXT(entry, old);
+				newEntries[newKey] = entry;
 
 				entry = next;
 			}
@@ -294,4 +302,6 @@ public final class XHashSet<K, V> implements Iterable<V> {
 			if (localEntries != entries) throw new ConcurrentModificationException();
 		}
 	}
+
+	final K _valueGetKey(V next) {return shape.GET_KEY(next);}
 }

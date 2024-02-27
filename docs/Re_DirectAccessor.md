@@ -1,16 +1,15 @@
 # Java8-21通杀的高性能反射解决方案
-## 优点
- * [x] get/set field
- * [x] invoke method
- * [x] new object
- * [x] 无需改动VM参数，可应对未来任何需求
- * [x] ASM生成，几乎不损失性能
- * [x] 无法访问Field Method甚至Class对象也可以构建
-## 缺点
- * 需要建立一个接口类
- * 无视所有安全保护措施 (可以使用roj.reflect.ILSecurityManager缓解)
- * （已解决请无视）在Java17或更高版本时，需要添加VM参数 --add-opens=java.base/java.lang=ALL-UNNAMED
-## 使用方法
+## 优势
+* [x] 支持字段的读取和设置
+* [x] 支持调用方法
+* [x] 支持创建新对象
+* [x] 可适应未来的需求，无需调整虚拟机参数
+* [x] 使用ASM生成代码，支持强制内联函数，性能损失几乎可以忽略不计
+* [x] 即使无法访问字段、方法甚至类对象，也可以构建
+## 劣势
+* 需要创建一个接口类
+* 忽略了所有安全保护措施（可以通过roj.reflect.ILSecurityManager来缓解）
+* （问题已解决，请忽略）在Java17或更高版本下，需要添加VM参数 --add-opens=java.base/java.lang=ALL-UNNAMED## 使用方法
 
 ### 假设有个需求：用NMS给玩家发标题
 这本来是个很简单的事... 但是如果游戏有多个版本, 每个版本的类名都不一样....
@@ -52,7 +51,9 @@ interface H {
 }
 ```
 ### 生成代码
+
 ```java 
+import roj.reflect.Bypass;
 import roj.reflect.DirectAccessor;
 
 class Example {
@@ -60,11 +61,12 @@ class Example {
 
 	static {
 		String version = getNMSPackage(); // for example: net.minecraft.server.v1_12_R2.
-		h = DirectAccessor.builder(H.class)
-		    .access(Class.forName(version+"Player"), {"conn"}, {"getConn"}, null)
-		    .delegate(Class.forName(version+"Connection"), {"sendPacket"}, DirectAccessor.EMPTY_BITS,  {"sendPacket"}, Collections.emptyList())
-		    .construct(Class.forName(version+"TitlePacket"), {"getTitlePacket"}, Collections.emptyList())
-		    .build();
+		h = Bypass.builder(H.class)
+				  .access(Class.forName(version + "Player"), {"conn"}, {"getConn"}, null)
+				  .delegate(Class.forName(version + "Connection"), {"sendPacket"}, Bypass.EMPTY_BITS, {"sendPacket"},
+					  Collections.emptyList())
+				  .construct(Class.forName(version + "TitlePacket"), {"getTitlePacket"}, Collections.emptyList())
+				  .build();
 	}
 
 	public static void sendTitle(AbstractPlayer player, String title) {

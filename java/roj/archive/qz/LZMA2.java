@@ -3,12 +3,12 @@ package roj.archive.qz;
 import roj.archive.qz.xz.LZMA2InputStream;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.LZMA2ParallelReader;
-import roj.archive.qz.xz.MemoryLimitException;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class LZMA2 extends QZCoder {
     public static boolean experimental_async_decompress;
@@ -18,7 +18,19 @@ public final class LZMA2 extends QZCoder {
     public LZMA2(LZMA2Options options) { this.options = options; }
     LZMA2(boolean unused) {}
 
-    QZCoder factory() { return new LZMA2(true); }
+    QZCoder factory() {return new LZMA2(true);}
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || LZMA2.class != o.getClass()) return false;
+        LZMA2 lzma2 = (LZMA2) o;
+
+        if (dictSize != lzma2.dictSize) return false;
+		return options != null ? options.equals(lzma2.options) : lzma2.options == null;
+	}
+    @Override
+    public int hashCode() {return getDictSize();}
+
     private static final byte[] ID = {33};
     byte[] id() { return ID; }
 
@@ -26,21 +38,19 @@ public final class LZMA2 extends QZCoder {
     private LZMA2Options options;
 
     @Override
-    public OutputStream encode(OutputStream out) throws IOException { return options.getOutputStream(out); }
+    public OutputStream encode(OutputStream out) throws IOException {return options.getOutputStream(out);}
 
     @Override
-    public InputStream decode(InputStream in, byte[] password, long uncompressedSize, int maxMemoryLimitInKb) throws IOException {
+    public InputStream decode(InputStream in, byte[] password, long uncompressedSize, AtomicInteger memoryLimit) throws IOException {
         int dictSize = getDictSize();
-
-        if (uncompressedSize > LZMA2Options.DICT_SIZE_MIN)
-            dictSize = (int) Math.min(uncompressedSize, dictSize);
-
-        int memoryUsage = LZMA2InputStream.getMemoryUsage(dictSize);
-        if (memoryUsage > maxMemoryLimitInKb) throw new MemoryLimitException(memoryUsage, maxMemoryLimitInKb);
+        if (uncompressedSize < dictSize) {
+            dictSize = uncompressedSize < LZMA2Options.DICT_SIZE_MIN ? LZMA2Options.DICT_SIZE_MIN : (int) uncompressedSize;
+        }
+        useMemory(memoryLimit, LZMA2InputStream.getMemoryUsage(dictSize));
 
         return experimental_async_decompress ? new LZMA2ParallelReader(in, dictSize) : new LZMA2InputStream(in, dictSize);
     }
-    private int getDictSize() { return options==null?this.dictSize:options.getDictSize(); }
+    private int getDictSize() {return options==null?this.dictSize:options.getDictSize();}
 
     @Override
     public String toString() { return "LZMA2:"+(options != null ? options : (31-Integer.numberOfLeadingZeros(dictSize))); }

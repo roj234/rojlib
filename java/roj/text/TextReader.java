@@ -13,7 +13,10 @@ import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
-import java.nio.charset.*;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CoderResult;
+import java.nio.charset.CodingErrorAction;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
@@ -61,23 +64,23 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 			lock = in;
 			type = 2;
 		} else {
-			DynByteBuf buf = pool.allocate(!(in instanceof InputStream), buffer);
-			buf.clear();
-
-			lock = buf;
-			ib = buf.nioBuffer();
-
 			if (in instanceof InputStream) {
 				type = 0;
 			} else if (in instanceof ReadableByteChannel) {
 				type = 1;
 			} else {
-				throw new IllegalArgumentException("无法确定 " + in.getClass().getName() + " 的类型");
+				throw new IllegalArgumentException("无法确定 "+in.getClass().getName()+" 的类型");
 			}
+
+			var buf = pool.allocate(!(in instanceof InputStream), buffer, 0);
+			buf.clear();
+
+			lock = buf;
+			ib = buf.nioBuffer();
 		}
 
 		if (charset == null) {
-			try (ChineseCharsetDetector cd = new ChineseCharsetDetector(in)) {
+			try (var cd = new CharsetDetector(in)) {
 				charset = Charset.forName(cd.detect());
 
 				if (type == 2) {
@@ -85,7 +88,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 				} else {
 					if (ib.capacity() < cd.limit()) {
 						BufferPool.reserve((DynByteBuf) lock);
-						DynByteBuf buf = pool.allocate(ib.isDirect(), cd.limit());
+						DynByteBuf buf = pool.allocate(ib.isDirect(), cd.limit(), 0);
 
 						lock = buf;
 						ib = buf.nioBuffer();
@@ -101,11 +104,9 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 			}
 		}
 
-		if (StandardCharsets.UTF_8 == charset) {
-			ucs = UTF8MB4.CODER;
-			cd = null;
-		} else if (GB18030.is(charset)) {
-			ucs = GB18030.CODER;
+		var _ucs = UnsafeCharset.getInstance(charset);
+		if (_ucs != null) {
+			ucs = _ucs;
 			cd = null;
 		} else {
 			ucs = null;
@@ -122,9 +123,9 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 
 	public final int length() { return eof<0 ? off+len : 0x70000000; }
 	public final char charAt(int i) {
-		fillBuffer(i+1);
+		fillBuffer(i+2);
 		if (i > off+len) {
-			if (i > off+len + 32) throw new IllegalStateException("not a sequence unless in Parser");
+			if (i > off+len + 32) throw new IllegalStateException("not a sequence unless in Parser("+i+" on "+off+")");
 			return 0;
 		}
 		return buf[i-off];
@@ -133,12 +134,6 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 	public final CharSequence subSequence(int start, int end) {
 		fillBuffer(end);
 		return new CharList.Slice(buf, start-off, end-off);
-	}
-
-	private boolean unbuffered;
-	public TextReader unbuffered() {
-		unbuffered = true;
-		return this;
 	}
 
 	private void fillBuffer(int i) {
@@ -153,10 +148,8 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 				System.arraycopy(buf, moveBefore, buf, 0, len -= moveBefore);
 			}
 
-			if (!unbuffered) {
-				toRead = Math.max(toRead, buf.length/2 - len);
-				if (toRead < 32) toRead = 32;
-			}
+			toRead = Math.max(toRead, buf.length/2 - len);
+			if (toRead < 32) toRead = 32;
 
 			if (buf.length < len+toRead) grow(toRead);
 
@@ -295,30 +288,37 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 	}
 	@Override
 	public int read(@NotNull char[] cbuf, int coff, int clen) throws IOException {
-		int remain = clen;
+		int need = clen;
 
-		int blen = len-off;
-		if (blen > 0) {
-			if (clen < blen) blen = clen;
+		int fRead = len-off;
+		if (fRead > 0) {
+			if (fRead > clen) fRead = clen;
 
-			System.arraycopy(buf, off, cbuf, coff, blen);
-			off += blen;
+			System.arraycopy(buf, off, cbuf, coff, fRead);
+			off += fRead;
 
-			coff += blen;
-			remain -= blen;
+			coff += fRead;
+			need -= fRead;
 		}
 
-		if (remain == 0) return clen;
-		if (remain < buf.length) {
-			int r = fill(buf, 0, buf.length);
-			if (r <= 0) return r;
-			this.off = 0;
-			this.len = Math.max(r - remain, 0);
-			System.arraycopy(buf, 0, cbuf, coff, remain);
-			return clen;
+		if (need < buf.length) {
+			int r;
+			if (need == 0 || (r = fill(buf, 0, buf.length)) <= 0) return fRead;
+
+			if (r >= need) {
+				off = need;
+				len = r - need;
+				System.arraycopy(buf, 0, cbuf, coff, need);
+				return clen;
+			} else {
+				off = len = 0;
+				System.arraycopy(buf, 0, cbuf, coff, r);
+				return clen - need + r;
+			}
 		}
 
-		return fill(cbuf, coff, remain) + clen-remain;
+		int r = fill(cbuf, coff, need);
+		return r < 0 ? fRead == 0 ? -1 : fRead : r+clen-need;
 	}
 	@Override
 	public long skip(long n) throws IOException {

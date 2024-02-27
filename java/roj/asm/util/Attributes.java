@@ -27,12 +27,12 @@ public abstract class Attributes extends Attribute {
 	public static Annotation getAnnotation(List<Annotation> list, String name) {
 		if (list == null) return null;
 		for (int i = 0; i < list.size(); i++) {
-			if (list.get(i).type.equals(name)) return list.get(i);
+			if (list.get(i).type().equals(name)) return list.get(i);
 		}
 		return null;
 	}
 
-	public static List<InnerClasses.InnerClass> getInnerClasses(ConstantPool cp, IClass node) {
+	public static List<InnerClasses.Item> getInnerClasses(ConstantPool cp, IClass node) {
 		InnerClasses ic = node.parsedAttr(cp, InnerClasses);
 		return ic == null ? null : ic.classes;
 	}

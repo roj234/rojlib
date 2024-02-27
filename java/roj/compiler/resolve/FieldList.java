@@ -1,10 +1,14 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.NotNull;
+import roj.asm.Opcodes;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.IClass;
 import roj.collect.SimpleList;
-import roj.compiler.context.CompileContext;
+import roj.compiler.CompilerSpec;
+import roj.compiler.api.FieldWriteReplace;
+import roj.compiler.context.CompileUnit;
+import roj.compiler.context.LocalContext;
 import roj.text.CharList;
 
 /**
@@ -34,7 +38,7 @@ final class FieldList extends ComponentList {
 	}
 
 	@NotNull
-	public FieldResult findField(CompileContext ctx, int flags) {
+	public FieldResult findField(LocalContext ctx, int flags) {
 		SimpleList<FieldNode> fields = this.fields;
 		int size = (flags&THIS_ONLY) != 0 ? childId : fields.size();
 
@@ -43,6 +47,7 @@ final class FieldList extends ComponentList {
 			FieldNode fn = fields.get(j);
 
 			if (ctx.checkAccessible(owner, fn, (flags&IN_STATIC) != 0, false)) {
+				checkBridgeMethod(ctx, owner, fn);
 				return new FieldResult(owner, fn);
 			}
 		}
@@ -72,5 +77,15 @@ final class FieldList extends ComponentList {
 		ctx.errorCapture = null;
 		tmp._free();
 		return new FieldResult(sb.replace('/', '.').toStringAndFree());
+	}
+
+	static void checkBridgeMethod(LocalContext ctx, IClass owner, FieldNode fn) {
+		if ((fn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file == owner ||
+			ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) return;
+
+		if (fn.attrByName(FieldWriteReplace.NAME) != null) return;
+
+		var fwr = new FieldBridge((CompileUnit) owner);
+		fn.putAttr(fwr);
 	}
 }

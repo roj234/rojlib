@@ -13,17 +13,16 @@ import roj.util.DynByteBuf;
 import java.util.Arrays;
 import java.util.List;
 
+import static roj.net.http.h2.H2Exception.ERROR_COMPRESS;
+import static roj.net.http.h2.H2Exception.ERROR_PROTOCOL;
+
 /**
  * @author Roj234
  * @since 2022/10/8 0008 6:52
  */
-public final class HPACK {
-	private static Field F(String k) {
-		return F(k, "");
-	}
-	private static Field F(String k, String v) {
-		return new Field(k, v);
-	}
+final class HPACK {
+	private static Field F(String k) {return F(k, "");}
+	private static Field F(String k, String v) {return new Field(k, v);}
 	static final class Field {
 		int id;
 		CharSequence k,v;
@@ -33,9 +32,7 @@ public final class HPACK {
 			this.v = v;
 		}
 
-		int len() {
-			return 32+k.length()+v.length();
-		}
+		int len() {return 32+k.length()+v.length();}
 
 		@Override
 		public boolean equals(Object o) {
@@ -49,29 +46,25 @@ public final class HPACK {
 		}
 
 		@Override
-		public int hashCode() {
-			return 31 * k.hashCode() + v.hashCode();
-		}
+		public int hashCode() {return 31 * k.hashCode() + v.hashCode();}
 
 		@Override
-		public String toString() {
-			return "Field{" + k + "='" + v + '\'' + '}';
-		}
+		public String toString() {return "Field{"+k+"='"+v+'\''+'}';}
 	}
 	private static final class Table extends RingBuffer<Field> {
 		HPACK owner;
-		long size, cap;
+		int size, cap;
 
 		public Table(int capacity) {
 			super(256, false);
 			cap = capacity;
 		}
 
-		public Field getField(int id) throws H2Error {
+		public Field getField(int id) throws H2Exception {
 			if (--id < STATIC_TABLE.size()) return STATIC_TABLE.get(id);
 			id -= STATIC_TABLE.size();
-			if (id >= super.size) throw new H2Error(HttpClient20.ERROR_COMPRESS, "Illegal table id");
-			return super.getArray((id+head) % array.length);
+			if (id >= super.size) throw new H2Exception(ERROR_COMPRESS, "HPACK.Table.IndexError");
+			return (Field) array[(id+head) % array.length];
 		}
 
 		public void _add(Field f) {
@@ -160,36 +153,42 @@ public final class HPACK {
 
 	private final BitBuffer bu;
 
-	private final Table encode_tbl;
+	private boolean encoderSizeChanged, decoderSizeChanged;
+	private final Table encode_tbl, decode_tbl;
 	private final Field checker;
 	private final MyHashSet<Field> encode_fp;
-
-	public static final int NEVER = 1, ALWAYS = 0, DONT = 2;
-
-	private final Table decode_tbl;
 
 	public HPACK() {
 		bu = new BitBuffer();
 
 		encode_tbl = new Table(4096);
+		encode_tbl.owner = this;
 		checker = new Field();
 		encode_fp = new MyHashSet<>();
 
 		decode_tbl = new Table(4096);
-
-		encode_tbl.owner = this;
 	}
 
-	public void setMaxSize(int maxCapacity, DynByteBuf ack) {
-		encode_tbl.setCapacity(maxCapacity);
-		writeInt(0x20, 5, maxCapacity, ack);
+	public void setEncoderTableSize(int encodeMax/*REMOTE*/) {
+		if (encodeMax != encode_tbl.cap) {
+			encode_tbl.setCapacity(encodeMax);
+			encoderSizeChanged = true;
+		}
+	}
+	public void setDecoderTableSize(int decodeMax/*LOCAL*/) {
+		if (decodeMax != decode_tbl.cap) {
+			decode_tbl.setCapacity(decodeMax);
+			decoderSizeChanged = true;
+		}
 	}
 
-	public void encode(CharSequence k, CharSequence v, DynByteBuf out) {
-		encode(k,v,out,0);
-	}
-
+	public void encode(CharSequence k, CharSequence v, DynByteBuf out) {encode(k,v,out,0);}
 	public void encode(CharSequence k, CharSequence v, DynByteBuf out, int indexType) {
+		if (encoderSizeChanged) {
+			writeInt(0x20, 5, encode_tbl.cap, out);
+			encoderSizeChanged = false;
+		}
+
 		int id = findExistField(STATIC_MAP, k, v);
 		// 0: not, <0: pair, >0: key
 		if (id >= 0 && encode_tbl.cap > 0) {
@@ -197,26 +196,19 @@ public final class HPACK {
 			if (dyn_id < 0 || id == 0) id = dyn_id;
 		}
 
-		if (id < 0) {
-			// 1xxx xxxx
-			writeInt(0x80, 7, -id, out);
-			return;
-		}
+		// 1xxx xxxx
+		if (id < 0) {writeInt(0x80, 7, -id, out);return;}
 
 		switch (indexType) {
-			case ALWAYS:
-				encode_tbl._add(F(k.toString(),v.toString()));
-				// 01xx xxxx
+			// 01xx xxxx
+			case H2Connection.FIELD_SAVE -> {
+				encode_tbl._add(F(k.toString(), v.toString()));
 				writeInt(0x40, 6, id, out);
-				break;
-			case DONT:
-				// 0000 xxxx
-				writeInt(0x00, 4, id, out);
-				break;
-			case NEVER:
-				// 0001 xxxx
-				writeInt(0x10, 4, id, out);
-				break;
+			}
+			// 0000 xxxx
+			case H2Connection.FIELD_DISCARD -> writeInt(0x00, 4, id, out);
+			// 0001 xxxx
+			case H2Connection.FIELD_DISCARD_ALWAYS -> writeInt(0x10, 4, id, out);
 		}
 
 		if (id == 0) writeString(k, out);
@@ -224,43 +216,33 @@ public final class HPACK {
 	}
 
 	@Nullable
-	public Field decode(DynByteBuf in) throws H2Error {
+	public Field decode(DynByteBuf in) throws H2Exception {
 		Field f = null;
 		int k = in.readUnsignedByte();
-		switch (k>>>4) {
-			// 1xxx xxxx
-			// Indexed Header Field
-			case 8: case 9: case 10: case 11:
-			case 12: case 13: case 14: case 15:
-				k &= 0x7F;
-				if (k == 0) throw new H2Error(HttpClient20.ERROR_COMPRESS, "Illegal value");
-				f = decode_tbl.getField(k==0x7F?readInt(in, 0x7F):k);
-				break;
-			// 01xx xxxx
-			// Literal Header Field with Incremental Indexing
-			case 4: case 5: case 6: case 7:
-				decode_tbl._add(f = getField(in, k, 63));
-				break;
-			// 001x xxxx
-			// Dynamic Table Size Update
-			case 2: case 3:
-				k &= 31;
-				if (k == 31) k = readInt(in, 31);
-				if (k < 0) throw new H2Error(HttpClient20.ERROR_COMPRESS, "Illegal table size");
+		switch (k >>> 4) {
+			// 1xxx xxxx    Indexed Header Field
+			case 8, 9, 10, 11, 12, 13, 14, 15 -> {
+				if ((k &= 0x7F) == 0) throw new H2Exception(ERROR_COMPRESS, "HPACK.Table.IndexError");
+				f = decode_tbl.getField(k == 0x7F ? readInt(in, 0x7F) : k);
+			}
+			// 01xx xxxx    Literal Header Field with Incremental Indexing
+			case 4, 5, 6, 7 -> decode_tbl._add(f = getField(in, k, 63));
+			// 001x xxxx    Dynamic Table Size Update
+			case 2, 3 -> {
+				if ((k &= 31) == 31) k = readInt(in, 31);
+				if (k < 0 || k > decode_tbl.cap) throw new H2Exception(ERROR_COMPRESS, "HPACK.Table.SizeError");
 				decode_tbl.setCapacity(k);
-				break;
-			// 0001 xxxx
-			// Literal Header Field Never Indexed
-			case 1:
+				decoderSizeChanged = false;
+			}
+			// 0001 xxxx    Literal Header Field Never Indexed
+			case 1 -> {
 				f = getField(in, k, 15);
-				break;
-			// 0000 xxxx
-			// Literal Header Field without Indexing
-			case 0:
-				f = getField(in, k, 15);
-				//f.never_index = true;
-				break;
+				f.id = -1; // it is not indexed
+			}
+			// 0000 xxxx    Literal Header Field without Indexing
+			case 0 -> f = getField(in, k, 15);
 		}
+		if (decoderSizeChanged) throw new H2Exception(ERROR_COMPRESS, "HPACK.Table.UpdateExcepting");
 		return f;
 	}
 
@@ -302,16 +284,28 @@ public final class HPACK {
 		} else {
 			out.put((byte) (prefix | max))
 			   // includes zero
-			   .putVarInt(val-max, false);
+			   .putVarInt(val-max);
 		}
 	}
 
-	private Field getField(DynByteBuf in, int k, int mask) throws H2Error {
+	private Field getField(DynByteBuf in, int k, int mask) throws H2Exception {
 		k &= mask;
-		return F(k!=0 ? decode_tbl.getField(k==mask ? readInt(in, mask) : k).k.toString() : readString(in), readString(in));
+		return F(k!=0 ? decode_tbl.getField(k==mask ? readInt(in, mask) : k).k.toString() : checkKey(readString(in)), readString(in));
 	}
 
-	private String readString(DynByteBuf in) throws H2Error {
+	private static String checkKey(String key) throws H2Exception {
+		int pseudo = 0;
+		int i = 0;
+		if (key.charAt(i) == ':') {i++;pseudo = ':';}
+		while (i < key.length()) {
+			var c = key.charAt(i++);
+			if (c <= 0x20 || (c >= 0x41 && c <= 0x5a) || c >= 0x7f || c == pseudo)
+				throw new H2Exception(ERROR_PROTOCOL, "Header.KeyError");
+		}
+		return null;
+	}
+
+	private String readString(DynByteBuf in) throws H2Exception {
 		int first = in.readByte();
 		int length = (first&0x7F)==0x7F?readInt(in, 0x7F):first&0x7F;
 		if (first < 0) {
@@ -326,21 +320,21 @@ public final class HPACK {
 		return in.readAscii(length);
 	}
 
-	private static int readInt(DynByteBuf in, int first) throws H2Error {
+	private static int readInt(DynByteBuf in, int first) throws H2Exception {
 		int shl = 0;
 		while (in.isReadable()) {
-			int b = in.get();
+			int b = in.readByte();
 
 			first += (b & 0x7F) << shl;
 			if ((b & 128) == 0) return first;
 
 			if (shl >= 28) {
-				throw new H2Error(HttpClient20.ERROR_COMPRESS, "Implement does not accept integer > 31 bits");
+				throw new H2Exception(ERROR_COMPRESS, "HPACK.Varint.Overflow");
 			}
 			shl += 7;
 		}
 
-		throw new H2Error(HttpClient20.ERROR_COMPRESS, "Unexpected EOF");
+		throw new H2Exception(ERROR_COMPRESS, "HPACK.Varint.Malformed");
 	}
 
 	// region huffman
@@ -439,7 +433,7 @@ public final class HPACK {
 		return (int) (len >>> 3);
 	}
 
-	private static String huffmanDecode(BitBuffer in) throws H2Error {
+	private static String huffmanDecode(BitBuffer in) throws H2Exception {
 		CharList tmp = IOUtil.getSharedCharBuf();
 
 		out:
@@ -449,14 +443,11 @@ public final class HPACK {
 				int remain = in.readableBits();
 
 				table = table.get(in.readBit(8));
-				if (table == null) {
-					throw new H2Error(HttpClient20.ERROR_COMPRESS, "No such code");
-				}
+				if (table == null) throw new H2Exception(ERROR_COMPRESS, "HPACK.Huffman.InvalidCode");
+
 				if (remain < table.bit) break out;
 				if (table.entries == null) {
-					if (table.sym == 256) {
-						throw new H2Error(HttpClient20.ERROR_COMPRESS, "Unexpected EOF");
-					}
+					if (table.sym == 256) throw new H2Exception(ERROR_COMPRESS, "HPACK.Huffman.UnexpectedEOF");
 					tmp.append(table.sym);
 					in.retractBits(8-table.bit);
 					break;
@@ -467,7 +458,7 @@ public final class HPACK {
 
 		int mask = (1 << in.bitPos) - 1;
 		if (in.bitPos >0 && (in.list.get(in.list.rIndex) & mask) != mask) {
-			throw new H2Error(HttpClient20.ERROR_COMPRESS, "Invalid padding");
+			throw new H2Exception(ERROR_COMPRESS, "HPACK.Huffman.InvalidPadding");
 		}
 		in.endBitRead();
 

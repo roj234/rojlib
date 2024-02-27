@@ -1,17 +1,15 @@
 package roj.concurrent.timing;
 
-import org.jetbrains.annotations.Async;
-import org.jetbrains.annotations.Nullable;
-import roj.collect.PriorityQueueHelper;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
 import roj.reflect.ReflectionUtils;
+import roj.util.Helpers;
 
-import java.util.Comparator;
-import java.util.PriorityQueue;
+import java.util.Collection;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.ToLongFunction;
 
 import static roj.reflect.ReflectionUtils.u;
 
@@ -19,7 +17,8 @@ import static roj.reflect.ReflectionUtils.u;
  * 处理定时任务
  *
  * @author Roj234
- * @since 2022/2/8 8:00
+ * @version 2.1
+ * @since 2024/3/6 0:38
  */
 public class Scheduler implements Runnable {
 	private static volatile Scheduler defaultScheduler;
@@ -27,179 +26,353 @@ public class Scheduler implements Runnable {
 		if (defaultScheduler == null) {
 			synchronized (Scheduler.class) {
 				if (defaultScheduler != null) return defaultScheduler;
+
 				defaultScheduler = new Scheduler(TaskPool.Common());
-				defaultScheduler.runNewThread("任务计划子进程");
+				Thread t = new Thread(defaultScheduler, "RojLib - 任务定时器");
+				t.setDaemon(true);
+				t.start();
 			}
 		}
 		return defaultScheduler;
 	}
 
-	private static final Comparator<ScheduleTask> CPR = (o1, o2) -> {
-		int v = Long.compare(o1.nextRun, o2.nextRun);
-		if (v == 0) v = Integer.compare(System.identityHashCode(o1), System.identityHashCode(o2));
-		if (v == 0) v = o1 == o2 ? 0 : -1;
-		return v;
-	};
+	private static final class TaskHolder implements ScheduleTask {
+		// root
+		TaskHolder(TimingWheel wheel) {
+			lock = wheel;
+			prev = next = this;
+		}
+		TaskHolder(ITask task, long delay) {
+			this.task = task;
+			timeLeft = delay;
+		}
 
-	private static final long u_tail = ReflectionUtils.fieldOffset(Scheduler.class, "tail");
-	private static final long u_owner = ReflectionUtils.fieldOffset(ScheduleTask.class, "owner");
-	private volatile ScheduleTask head, tail;
+		@Override
+		public String toString() {
+			String state;
+			if (lock instanceof TimingWheel) state = "list-root";
+			else if (lock instanceof TaskHolder) state = "queued";
+			else state = timeLeft == 0 ? "expired" : timeLeft == -1 ? "cancelled" : "detached";
+			return "ScheduleTask{state="+state+",task="+task+",lock="+lock+",approx.timeLeft="+timeLeft+'}';
+		}
 
-	private final SimpleList<ScheduleTask> remain;
-	private final PriorityQueue<ScheduleTask> timer;
+		static final long OFF_LOCK = ReflectionUtils.fieldOffset(TaskHolder.class, "lock");
+		static final long OFF_NEXT = ReflectionUtils.fieldOffset(TaskHolder.class, "next");
+		static final long OFF_TIME_LEFT = ReflectionUtils.fieldOffset(TaskHolder.class, "timeLeft");
 
-	private volatile Thread worker;
-	private final TaskHandler executor;
+		Object lock;
+		TaskHolder prev, next;
 
-	private int timeout;
+		ITask task;
+		volatile long timeLeft;
 
-	public Scheduler(@Nullable TaskHandler executor) {
-		this.remain = SimpleList.withCapacityType(16, 2);
-		this.timer = new PriorityQueue<>(CPR);
-		this.head = this.tail = new ScheduleTask(null, 0,0,1) { public void execute() {} };
-		this.head.nextRun = -1L;
-		this.executor = executor;
+		public ITask getTask() { return task; }
+		public boolean isExpired() { return timeLeft == 0 || timeLeft == -2; }
+		public boolean isCancelled() { return timeLeft < 0; }
+		public boolean cancel() {
+			long t;
+			do {
+				t = timeLeft;
+				if (t < 0) break;
+			} while (!u.compareAndSwapLong(this, OFF_TIME_LEFT, t, t == 0 ? -2 : -1));
+
+			var root = (TaskHolder) lock;
+			return (root != null && ((TimingWheel) root.lock).remove(root, this)) | task.cancel() | t < 0;
+		}
 	}
 
-	public void runNewThread(String name) {
-		Thread t = new Thread(this, name);
-		t.setDaemon(true);
-		t.start();
-		synchronized (this) {
-			if (worker == null) {
-				try {
-					wait(100);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
+	private static final int DEPTH_SHL = 4, DEPTH_MASK = (1 << DEPTH_SHL) - 1;
+	private static final class TimingWheel {
+		TimingWheel(TimingWheel prev) {
+			this.prev = prev;
+			this.slot = prev==null ? 0 : prev.slot+1;
+
+			tasks = new TaskHolder[1 << DEPTH_SHL];
+			for (int i = 0; i < tasks.length; i++)
+				tasks[i] = new TaskHolder(this);
+		}
+
+		private final TaskHolder[] tasks;
+		private final int slot;
+		private int clock;
+		private static final long OFF_TASK_COUNT = ReflectionUtils.fieldOffset(TimingWheel.class, "taskCount");
+		private volatile int taskCount;
+
+		private final TimingWheel prev;
+		// STABLE
+		private volatile TimingWheel next;
+		private TimingWheel getNext() {
+			if (next == null) {
+				synchronized (this) {
+					if (next == null) next = new TimingWheel(this);
+				}
+			}
+			return next;
+		}
+
+		@Override
+		public String toString() { return next == null ? Integer.toString(clock) : next.toString()+":"+Integer.toHexString(clock); }
+
+		final void fastForward(int ticks, Collection<TaskHolder> lazyTask, ToLongFunction<TaskHolder> exec) {
+			int ff = (ticks >>> (slot*DEPTH_SHL)) & DEPTH_MASK;
+			int c = clock;
+			clock = (c+ff) & DEPTH_MASK;
+
+			if (taskCount > 0) {
+				if (ticks >>> (slot*DEPTH_SHL) > DEPTH_MASK) ff = DEPTH_MASK;
+
+				for (int slot = c; slot < c+ff; slot++) {
+					TaskHolder root = tasks[slot&DEPTH_MASK], task = root.next;
+					while (task != root) {
+						TaskHolder next = task.next;
+						long time = task.timeLeft;
+
+						block:
+						if (remove(root, task) && time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time = Math.max(0, time-ticks))) {
+							if (time == 0) {
+								time = exec.applyAsLong(task);
+								if (time == 0) break block;
+
+								if (u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, 0, time)) lazyTask.add(task);
+							} else {
+								// 后序遍历
+								add(prev, task);
+							}
+						}
+						task = next;
+					}
+				}
+			}
+
+			if (next != null) next.fastForward(ticks, lazyTask, exec);
+		}
+
+		final void tick(ToLongFunction<TaskHolder> exec) {
+			int c = clock;
+			if (c != DEPTH_MASK) {
+				clock = c+1;
+			} else {
+				clock = 0;
+
+				TimingWheel p = next;
+				if (p != null) p.tick(exec);
+			}
+
+			if (taskCount > 0) {
+				long mask = (1L << (slot * DEPTH_SHL)) - 1;
+
+				TaskHolder root = tasks[c], task = root.next;
+				while (task != root) {
+					TaskHolder next = task.next;
+					long time = task.timeLeft;
+
+					block:
+					if (remove(root, task) && time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time &= mask)) {
+						if (time == 0) {
+							time = exec.applyAsLong(task);
+							if (time == 0) break block;
+
+							TimingWheel whell = this;
+							while (whell.prev != null) whell = whell.prev;
+							if (u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, 0, fixTime(whell, time))) {
+								add(this, task);
+							}
+						} else {
+							add(prev, task);
+						}
+					} // else task was cancelled
+					task = next;
 				}
 			}
 		}
-	}
 
-	public void stop() {
-		LockSupport.unpark(worker);
-		worker = null;
-	}
+		static long fixTime(TimingWheel wheel, long time) {
+			assert wheel.prev == null;
 
-	@Override
-	public void run() {
-		Thread r = Thread.currentThread();
-		synchronized (this) {
-			if (worker != null) {
-				throw new IllegalStateException("already running on another thread!");
+			int i = 0;
+			while (true) {
+				int slot = (63 - Long.numberOfLeadingZeros(time)) / DEPTH_SHL;
+				if (i >= slot) break;
+				i++;
+
+				time += (long) wheel.clock << (DEPTH_SHL * wheel.slot);
+				wheel = wheel.next;
+				if (wheel == null) break;
 			}
-			worker = r;
+
+			return time;
+		}
+		static void add(TimingWheel clk, TaskHolder task) {
+			long time = task.timeLeft;
+			if (time <= 0) return;
+
+			int slot = (63 - Long.numberOfLeadingZeros(time)) / DEPTH_SHL;
+
+			int delta = clk.slot - slot;
+			if (delta != 0) {
+				if (delta < 0) {
+					while (delta++ < 0) clk = clk.getNext();
+				} else {
+					while (delta-- > 0) clk = clk.prev;
+				}
+			}
+
+			int i = clk.clock + ((int) (time >> (DEPTH_SHL*slot)) & DEPTH_MASK) - 1;
+			TaskHolder root = clk.tasks[i & DEPTH_MASK];
+
+			u.putObjectVolatile(task, TaskHolder.OFF_LOCK, root);
+			u.getAndAddInt(clk, OFF_TASK_COUNT, 1);
+
+			synchronized (root) {
+				task.next = root.next;
+				root.next.prev = task;
+				task.prev = root;
+				root.next = task;
+			}
+		}
+		final boolean remove(TaskHolder root, TaskHolder task) {
+			if (!u.compareAndSwapObject(task, TaskHolder.OFF_LOCK, root, null)) return false;
+			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
+
+			synchronized (root) {
+				var next = task.next;
+				next.prev = task.prev;
+				task.prev.next = next;
+				// 但是不要清除task.next，因为上面(#127/#142)可能会引用
+			}
+			return true;
 		}
 
-		while (worker == r) {
-			long waitMs = work();
-			if (waitMs < 0) LockSupport.park();
-			else LockSupport.parkNanos(waitMs * 1_000_000L);
-		}
-	}
+		final void collect(Collection<TaskHolder> collector) {
+			if (taskCount > 0) {
+				for (TaskHolder root : tasks) {
+					TaskHolder task = root.next;
+					while (task != root) {
+						TaskHolder next = task.next;
 
-	private long work() {
-		long time = System.currentTimeMillis();
-		long startTime = time;
+						task.lock = task.prev = task.next = null;
+						if (task.timeLeft > 0) collector.add(task);
 
-		boolean taskRemoved = false;
-		Object[] array = PriorityQueueHelper.INSTANCE.getInternalArray(timer);
-		int i = 0;
-		while (i < timer.size()) {
-			ScheduleTask task = (ScheduleTask) array[i++];
-			if (task.nextRun < 0) {
-				taskRemoved = true;
-				continue;
-			}
-
-			time = System.currentTimeMillis();
-			if (time < task.nextRun) {
-				remain.add(task);
-				break;
-			}
-
-			try {
-				if (task.scheduleNext(startTime)) {
-					// 15.625ms
-					if (task != head && time - task.nextRun > 16) {
-						timeout ++;
+						task = next;
 					}
 
-					remain.add(task);
-				} else {
-					taskRemoved = true;
+					root.prev = root.next = root;
 				}
 
-				executeForDebug(task);
-			} catch (Throwable e) {
-				e.printStackTrace();
+				taskCount = 0;
+			}
+
+			if (next != null) next.collect(collector);
+		}
+	}
+
+	private static final long OFF_HEAD = ReflectionUtils.fieldOffset(Scheduler.class, "head");
+
+	private final TimingWheel wheel = new TimingWheel(null);
+	private volatile boolean stopFlag;
+	private final ToLongFunction<TaskHolder> callback;
+
+	private volatile TaskHolder head;
+
+	public Scheduler(ToLongFunction<ScheduleTask> callback) { this.callback = Helpers.cast(callback); }
+	public Scheduler(TaskHandler th) {
+		callback = task -> {
+			ITask _task = task.getTask();
+			long nextRun = _task instanceof LoopTaskWrapper loop ? loop.getNextRun() : 0;
+			th.submit(_task);
+			return nextRun;
+		};
+	}
+
+	public void run() {
+		int delta = 1;
+		long prevTime, time = System.currentTimeMillis();
+
+		// 这个锁是给stop用的
+		synchronized (this) {
+			while (!stopFlag) {
+				// 系统睡眠了或者怎么了，那就别管误差了，遍历到期的任务吧，O(n)
+				if (delta > 127) fastForward(delta);
+				// 1（每毫秒轮询一次确实不影响性能，毕竟这是O(1)的算法，如果没有任务，仅仅是tick++
+				// 2（睡久了容易产生误差，比如10000ms差了400ms，我总不能循环tick400次吧
+				else while (delta-- > 0) wheel.tick(callback);
+
+				pollNewTasks(time);
+
+				// 奈奎斯特采样定理？不管了，反正也只有1ms的精度
+				LockSupport.parkNanos(500_000L);
+
+				prevTime = time;
+				time = System.currentTimeMillis();
+
+				delta = (int) (time - prevTime);
 			}
 		}
-
-		PriorityQueue<ScheduleTask> tasks = timer;
-		if (taskRemoved) {
-			while (i < timer.size()) remain.add((ScheduleTask) array[i++]);
-			tasks.clear();
-
-			for (int j = 0; j < remain.size(); j++) tasks.add(remain.get(j));
-		}
-		remain.clear();
-
-		pollNewTasks();
-
-		if (tasks.isEmpty()) return -1;
-		long run = tasks.peek().nextRun - System.currentTimeMillis();
-		return run < 0 ? 0 : run;
 	}
 
-	private void executeForDebug(@Async.Execute ScheduleTask task) throws Exception {
-		if (executor != null && !task.forceOnScheduler()) executor.pushTask(task);
-		else task.execute();
+	public final void tick() { wheel.tick(callback); }
+	public final void fastForward(int ticks) {
+		SimpleList<TaskHolder> tasks = new SimpleList<>();
+		wheel.fastForward(ticks, tasks, callback);
+		for (int i = 0; i < tasks.size(); i++) {
+			TaskHolder task = tasks.get(i);
+			long timeLeft = task.timeLeft;
+			if (timeLeft > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, timeLeft, TimingWheel.fixTime(wheel, timeLeft)))
+				TimingWheel.add(wheel, task);
+		}
 	}
 
-	private void pollNewTasks() {
-		long time = System.currentTimeMillis();
+	public final void pollNewTasks(long time) {
+		if (head == null) return;
 
-		ScheduleTask prev = head, task = prev.next;
+		TaskHolder h = (TaskHolder) u.getAndSetObject(this, OFF_HEAD, null);
 
-		while (task != null) {
-			if (task.nextRun >= 0) timer.add(task);
-			prev = task;
-			task = task.next;
-		}
+		while (h != null) {
+			TaskHolder next = (TaskHolder) u.getAndSetObject(h, TaskHolder.OFF_NEXT, null);
 
-		task = head;
-		while (task != prev) {
-			ScheduleTask t = task;
-			task = task.next;
-			t.next = null;
-		}
+			block: {
+				long timeLeft = h.timeLeft;
+				// 取消，下CAS同, 因为只能取消，所以不用放在循环里
+				if (timeLeft < 0) break block;
 
-		head = prev;
-	}
+				long addTime = timeLeft - time;
+				if (addTime <= 0) {
+					addTime = callback.applyAsLong(h);
+					if (addTime == 0) break block;
+				}
 
-	public ScheduleTask delay(ITask task, int delayMs) { return add(new ScheduleTask(task, 0, delayMs, 1)); }
-	public ScheduleTask loop(ITask task, int intervalMs) { return add(new ScheduleTask(task, intervalMs, 0, Integer.MAX_VALUE)); }
-	public ScheduleTask loop(ITask task, int intervalMs, int count) { return add(new ScheduleTask(task, intervalMs, 0, count)); }
-	public ScheduleTask loop(ITask task, int intervalMs, int count, int delayMs) { return add(new ScheduleTask(task, intervalMs, delayMs, count)); }
+				if (!u.compareAndSwapLong(h, TaskHolder.OFF_TIME_LEFT, timeLeft, TimingWheel.fixTime(wheel, addTime)))
+					break block;
 
-	public ScheduleTask add(@Async.Schedule ScheduleTask t) {
-		if (worker == null) throw new IllegalStateException("定时器已关闭");
-		if (!u.compareAndSwapObject(t, u_owner, null, this)) throw new IllegalArgumentException("任务已经注册");
-		assert t.next == null;
-
-		int j = 0;
-		while (true) {
-			ScheduleTask tail = this.tail;
-			if (u.compareAndSwapObject(this, u_tail, tail, t)) {
-				tail.next = t;
-				break;
+				TimingWheel.add(wheel, h);
 			}
-			if ((++j & 15) == 0) LockSupport.parkNanos(1);
+
+			h = next;
+		}
+	}
+
+	public ScheduleTask delay(ITask task, long delayMs) {
+		if (delayMs < 0) throw new IllegalArgumentException("delayMs < 0");
+		TaskHolder holder = new TaskHolder(task, delayMs);
+		if (delayMs == 0) {
+			delayMs = callback.applyAsLong(holder);
+			if (delayMs == 0) return holder; // expired
 		}
 
-		if (t.nextRun < head.nextRun || head.nextRun < 0)
-			LockSupport.unpark(worker);
-		return t;
+		holder.timeLeft = System.currentTimeMillis()+delayMs;
+
+		TaskHolder head = (TaskHolder) u.getAndSetObject(this, OFF_HEAD, holder);
+		u.putObjectVolatile(holder, TaskHolder.OFF_NEXT, head);
+
+		return holder;
+	}
+	public ScheduleTask runAsync(ITask task) { return delay(task, 1); }
+	public ScheduleTask loop(ITask task, long intervalMs) { return delay(new LoopTaskWrapper(this, task, intervalMs, -1, true), 0); }
+	public ScheduleTask loop(ITask task, long intervalMs, int count) { return delay(new LoopTaskWrapper(this, task, intervalMs, count, true), 0); }
+	public ScheduleTask loop(ITask task, long intervalMs, int count, long delayMs) { return delay(new LoopTaskWrapper(this, task, intervalMs, count, true), delayMs); }
+
+	public void stop(Collection<ScheduleTask> collector) {
+		stopFlag = true;
+		synchronized (this) { wheel.collect(Helpers.cast(collector)); }
 	}
 }

@@ -4,23 +4,19 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
 import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
-import roj.asm.tree.attr.Attribute;
 import roj.asm.type.*;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.Int2IntMap;
 import roj.collect.IntBiMap;
-import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.compiler.CompilerConfig;
 import roj.compiler.asm.Asterisk;
-import roj.compiler.context.ClassContext;
+import roj.compiler.context.GlobalContext;
+import roj.compiler.context.LocalContext;
 import roj.concurrent.OperationDone;
 import roj.text.CharList;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Function;
 
 import static roj.asm.type.Generic.ANY_TYPE;
@@ -53,14 +49,14 @@ public class TypeCast {
 	public static final class Cast {
 		public int type;
 		public int distance;
-		//public boolean rawType;
+
 		byte op1, op2, box;
-		Type type1;
+		IType type1;
 
 		Cast(int t, int d) { type = t; distance = d; }
 
-		public boolean isNoop() { return op1 == op2 && type1 == null; }
-		public Type getType1() { return type1; }
+		public boolean isNoop() { return type1 == null ? op1 == op2 : op1 != 0; }
+		public IType getType1() { return type1; }
 		public byte getOp1() { return op1; }
 		public byte getOp2() { return op2; }
 
@@ -82,19 +78,29 @@ public class TypeCast {
 		@SuppressWarnings("fallthrough")
 		public void write(CodeWriter cw) {
 			switch (type) {
-				default: throw new UnsupportedOperationException(getCastDesc()+"无法生成字节码");
+				default: throw new UnsupportedOperationException("'"+getCastDesc()+"'无法生成字节码");
 				case NUMBER_UPCAST, E_EXPLICIT_CAST, E_NUMBER_DOWNCAST: break;
 				case BOXING:
-					Type wrapper = WRAPPER.get(box);
-					cw.invoke(Opcodes.INVOKESTATIC, wrapper.owner, "valueOf", "("+(char)box+")L"+wrapper.owner+";");
-				break;
+					writeOp(cw);
+					writeBox(cw);
+					return;
 				case UNBOXING:
 					cast(cw);
 					cw.invoke(Opcodes.INVOKEVIRTUAL, WRAPPER.get(box).owner, std(box).toString().concat("Value"), "()"+(char)box);
 				break;
-				case UPCAST, E_DOWNCAST: cast(cw); break;
+				case UPCAST, E_DOWNCAST:
+					if (isNoop()) return;
+					cast(cw);
+				break;
 			}
 
+			writeOp(cw);
+		}
+		public void writeBox(CodeWriter cw) {
+			Type wrapper = WRAPPER.get(box);
+			cw.invoke(Opcodes.INVOKESTATIC, wrapper.owner, "valueOf", "("+(char)box+")L"+wrapper.owner+";");
+		}
+		private void writeOp(CodeWriter cw) {
 			if (op1 != 0) {
 				cw.one(op1);
 				if (op2 != 0) cw.one(op2);
@@ -102,7 +108,15 @@ public class TypeCast {
 		}
 
 		private void cast(CodeWriter cw) {
-			if (type1 != null) cw.clazz(Opcodes.CHECKCAST, type1.getActualClass());
+			if (type1 != null && op1 == 0) cw.clazz(Opcodes.CHECKCAST, type1.rawType().getActualClass());
+		}
+
+		public boolean canCast() {return type > E_OBJ2INT;}
+
+		Cast setAnyCast(IType to) {
+			op1 = 42;
+			type1 = to;
+			return this;
 		}
 	}
 
@@ -114,8 +128,8 @@ public class TypeCast {
 			SOLID[i-E_NEVER] = new Cast(i, -1); // -1 : not applicable
 		}
 	}
-	private static Cast ERROR(@Range(from = E_NEVER, to = E_DOWNCAST) int type) { return SOLID[type-E_NEVER]; }
-	private static Cast DOWNCAST(Type type) {
+	public static Cast ERROR(@Range(from = E_NEVER, to = E_DOWNCAST) int type) { return SOLID[type-E_NEVER]; }
+	private static Cast DOWNCAST(IType type) {
 		Cast cast = new Cast(E_DOWNCAST, -1);
 		cast.type1 = type;
 		return cast; }
@@ -130,7 +144,7 @@ public class TypeCast {
 		return cast; }
 	// endregion
 
-	public ClassContext context;
+	public GlobalContext context;
 	public Function<String, List<IType>> genericResolver;
 
 	public Cast checkCast(IType from, IType to) { return checkCast(from, to, -1); }
@@ -164,10 +178,13 @@ public class TypeCast {
 			break;
 
 			case TYPE_PARAMETER_TYPE: isTypeParam = true; break;
-			case ANY_TYPE: if (!isTypeParam) return DOWNCAST(to.rawType()); break;
+			case ANY_TYPE: if (!isTypeParam) return DOWNCAST(to); break;
 			case ASTERISK_TYPE:
 				asterisk = (Asterisk) from;
-				if (asterisk.getBound() == null) return to.isPrimitive() ? ERROR(E_OBJ2INT) : RESULT(UPCAST, 0);
+				if (asterisk.getBound() == null) {
+					if (to.isPrimitive()) return ERROR(E_OBJ2INT);
+					return RESULT(UPCAST, 0).setAnyCast(to);
+				}
 
 				from = to;
 				to = asterisk.getBound();
@@ -185,9 +202,10 @@ public class TypeCast {
 		if (asterisk != null) {
 			List<IType> bounds = asterisk.getBounds();
 			if (asterisk.genericType() == CONCRETE_ASTERISK_TYPE) {
-				if (genericCast(bounds.get(0), to, etype).type >= 0)
-					return result;
-				result.type1 = asterisk.getBound().rawType();
+				var cast = genericCast(bounds.get(0), to, etype);
+				// direct cast
+				if (cast.type >= 0) return cast;
+				result.type1 = asterisk.getBound();
 			} else {
 				for (int i = 1; i < bounds.size(); i++) {
 					Cast r = genericCast(from, bounds.get(i), etype);
@@ -198,7 +216,7 @@ public class TypeCast {
 					result.type ^= 1;
 					result.type1 = WRAPPER.get(from.getActualType());
 				} else if (result.distance != 0) {
-					result.type1 = from.rawType();
+					result.type1 = from;
 				}
 			}
 		}
@@ -220,7 +238,7 @@ public class TypeCast {
 				IType t = to_list.get(j);
 
 				Cast v = genericCast(f, t, etype);
-				if (v.type >= 0) if (ok == null || v.type < ok.type) ok = v;
+				if (v.type >= 0) {if (ok == null || v.type < ok.type) ok = v;}
 				else if (res == null || v.type < res.type) res = v;
 			}
 
@@ -295,6 +313,8 @@ public class TypeCast {
 	}
 
 	private Cast genericCast(IType from, IType to, int etype) {
+		if (from.equals(to)) return RESULT(UPCAST, 0);
+
 		List<IType> fc, tc;
 
 		if (to.genericType() == GENERIC_TYPE) {
@@ -302,46 +322,34 @@ public class TypeCast {
 			etype = gt.extendType;
 			tc = gt.children;
 		} else {
-			tc = !context.isSpecEnabled(CompilerConfig.ADVANCED_GENERIC_CHECK) ? null : getClassTPB(to);
+			tc = null;
 		}
 
 		Cast r = checkCast(from.rawType(), to.rawType(), etype);
 
 		if (from.genericType() == GENERIC_TYPE) {
 			fc = ((Generic)from).children;
+
+			if (fc.size() == 1 && fc.get(0) == Asterisk.anyGeneric) {
+				return r.type == UPCAST ? r.setAnyCast(to) : r;
+			}
 		} else {
-			fc = !context.isSpecEnabled(CompilerConfig.ADVANCED_GENERIC_CHECK) ? null : getClassTPB(from);
+			fc = null;
 		}
 
-		if (fc != null && tc != null) {
-			if (fc.size() == 1 && fc.get(0) == Asterisk.anyGeneric) return r;
+		if (r.type != UPCAST && r.type != E_DOWNCAST) return r;
 
-			// 计算泛型继承并擦除类型 这里仍然没支持GSub
-			if (r.distance > 0) {
-				checkTPB:
-				try {
-					List<IType> tmp;
-					if (r.type == UPCAST) {
-						IClass info = context.getClassInfo(from.owner());
-						tmp = context.getTypeParamOwner(info, to);
-						if (tmp == null) break checkTPB;
-						// TODO 如果泛型类继承非泛型类，那么tmp可能为空，这时候传个上界？
-						fc = clearTypeParams(tmp, info, fc);
-					} else if (r.type == E_DOWNCAST) {
-						IClass info = context.getClassInfo(to.owner());
-						tmp = context.getTypeParamOwner(info, from);
-						if (tmp == null) break checkTPB;
-						tc = clearTypeParams(tmp, info, tc);
-					} else {
-						ClassContext.debugLogger().debug("from={},to={}, this cast will fail", from, to);
-						return r;
-					}
-				} catch (ClassNotFoundException e) {
-					return ERROR(E_NODATA);
-				}
-			} else {
-				assert r.type == UPCAST;
-				//assert fc.size() == tc.size(); // probably not
+		// 计算泛型继承并擦除类型
+		genericCastCheck:
+		if (to.owner() != null && from.owner() != null) {
+			if (tc == null) {
+				tc = LocalContext.get().inferGeneric(to, from.owner());
+				if (tc == null) break genericCastCheck;
+			}
+
+			if (fc == null) {
+				fc = LocalContext.get().inferGeneric(from, to.owner());
+				if (fc == null) break genericCastCheck;
 			}
 
 			if (fc.size() != tc.size()) return ERROR(E_GEN_PARAM_COUNT);
@@ -351,81 +359,46 @@ public class TypeCast {
 				if (v.type != UPCAST) return ERROR(E_NEVER);
 			}
 		} else {
-			// 基本类型泛型模板 SimpleList<int>继承自List<Integer>但不是SimpleList的实例
-			if (checkPrimitive(tc) || checkPrimitive(fc)) return ERROR(E_NEVER);
+			if (fc != null && tc != null) throw new AssertionError("primitive not resolved");
+			// 基本类型泛型由LocalContext的resolveType处理，并根据模板生产
 		}
 
 		return r;
 	}
 
-	private static boolean checkPrimitive(List<IType> fc) {
-		if (fc != null) {
-			for (int i = 0; i < fc.size(); i++) {
-				if (fc.get(i).getActualType() != CLASS) return true;
-			}
-		}
-		return false;
-	}
-
-	private List<IType> getClassTPB(IType from) {
-		if (from.owner() == null) return null;
-		IClass info = context.getClassInfo(from.owner());
-		if (info != null) {
-			Signature sign = info.parsedAttr(info.cp(), Attribute.SIGNATURE);
-			if (sign != null && !sign.typeParams.isEmpty()) {
-				List<IType> list = Arrays.asList(new IType[sign.typeParams.size()]);
-				int i = 0;
-				for (List<IType> value : sign.typeParams.values()) {
-					list.set(i++, new Asterisk(value.get(0).genericType() == IType.PLACEHOLDER_TYPE ? value.subList(1, value.size()) : value));
-				}
-				return list;
-			}
-		}
-		return null;
-	}
-
-	private static List<IType> clearTypeParams(List<IType> tps, IClass childTypeInst, List<IType> childType) {
-		if (tps.getClass() != SimpleList.class) {
-			tps = new SimpleList<>(tps);
-
-			int i = 0;
-			Map<String, IType> tpVis = new MyHashMap<>();
-			// TODO 这里可能会有多级，那么首先通过self找到自己，然后通过parent找到父亲，然后PutIfAbsent一路往上
-			System.out.println(childTypeInst.parsedAttr(childTypeInst.cp(), Attribute.InnerClasses));
-			Map<String, List<IType>> tpBound = childTypeInst.parsedAttr(childTypeInst.cp(), Attribute.SIGNATURE).typeParams;
-			for (Map.Entry<String, List<IType>> entry : tpBound.entrySet())
-				tpVis.put(entry.getKey(), childType.get(i++));
-
-			for (i = 0; i < tps.size(); i++) {
-				IType x = tps.get(i);
-				tps.set(i, Inferrer.clearTypeParams(x.clone(), tpVis, tpBound));
-			}
-		}
-		return tps;
-	}
-
 	public Cast checkCast(Type from, Type to, int inheritType) {
 		if (from.equals(to)) return RESULT(UPCAST, 0);
+		if (from.type == VOID || to.type == VOID) return ERROR(E_NEVER);
 
 		if (from.isPrimitive()) {
 			// 泛型
 			if (inheritType >= 0) return ERROR(E_NEVER);
 			// 装箱
 			if (!to.isPrimitive()) {
-				Cast cast = checkCast(WRAPPER.get(from.type), to, inheritType);
-				if (cast.type < E_NUMBER_DOWNCAST) return cast;
+				int box = from.type;
+				Cast cast = checkCast(WRAPPER.get(box), to, inheritType);
+
+				// 让byte可以转换到Integer
+				if (cast.type < UPCAST) {
+					box = getWrappedPrimitive(to);
+					if (box == 0) return ERROR(E_INT2OBJ);
+
+					//noinspection MagicConstant
+					cast = checkCast(from, std(box), inheritType);
+					if (cast.type < UPCAST) return ERROR(E_INT2OBJ);
+				}
+
 				assert cast.type <= NUMBER_UPCAST;
 
 				// possible: E_EXPLICIT_CAST E_NUMBER_DOWNCAST UPCAST NUMBER_UPCAST
 				cast.type = BOXING;
 				cast.distance += DISTANCE_BOXING;
-				cast.box = from.type;
+				cast.box = (byte) box;
 				return cast;
 			}
 
 			// 皆为基本
 			int fCap = DataCap.getOrDefaultInt(from.type, 0);
-
 			int tCap = DataCap.getOrDefaultInt(to.type, 0);
 			// downcast
 			if (fCap > tCap) {
@@ -498,8 +471,8 @@ public class TypeCast {
 			x = (String[]) (String) null;
 			x = (String[]) (Object) null;
 			x = (String[]) (Serializable) null;*/
-			if (from.owner.equals("java/lang/Object") ||
-				ClassContext.anyArray().interfaces().contains(from.owner))
+			if ("java/lang/Object".equals(from.owner) ||
+				GlobalContext.anyArray().interfaces().contains(from.owner))
 				return DOWNCAST(to);
 
 			return ERROR(E_NEVER);
@@ -512,7 +485,7 @@ public class TypeCast {
 				if (owner == null) return ERROR(E_NEVER); // t2是基本类型数组
 
 				if (owner.equals("java/lang/Object")) return RESULT(UPCAST, 2);
-				if (ClassContext.anyArray().interfaces().contains(owner)) return RESULT(UPCAST, 1);
+				if (GlobalContext.anyArray().interfaces().contains(owner)) return RESULT(UPCAST, 1);
 
 				return ERROR(E_NEVER); // int[] 除了转换成数组实现的类不能变成任何其他东西
 			} else {
@@ -542,7 +515,7 @@ public class TypeCast {
 		if (fromClass == toClass) return RESULT(UPCAST, 0);
 
 		try {
-			int distance = context.parentList(fromClass).getInt(toClass.name())&0xFFFF;
+			int distance = context.getParentList(fromClass).getValueOrDefault(toClass.name(), -1)&0xFFFF;
 			if (distance != 0xFFFF) return RESULT(UPCAST, distance);
 		} catch (ClassNotFoundException e) {
 			return ERROR(E_NODATA);

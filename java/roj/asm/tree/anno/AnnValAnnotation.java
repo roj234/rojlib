@@ -18,4 +18,15 @@ public final class AnnValAnnotation extends AnnVal {
 
 	public void toByteArray(ConstantPool cp, DynByteBuf w) { value.toByteArray(cp, w.put((byte) ANNOTATION)); }
 	public String toString() { return value.toString(); }
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof AnnValAnnotation that)) return false;
+
+		return value.equals(that.value);
+	}
+
+	@Override
+	public int hashCode() { return value.hashCode(); }
 }

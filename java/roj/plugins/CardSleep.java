@@ -12,8 +12,8 @@ import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.config.CsvParser;
 import roj.io.IOUtil;
-import roj.platform.Plugin;
-import roj.platform.SimplePlugin;
+import roj.plugin.Plugin;
+import roj.plugin.SimplePlugin;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.CMBoxValue;
@@ -25,9 +25,9 @@ import roj.util.VMUtil;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.*;
 import java.io.InputStream;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Vector;
 import java.util.function.Consumer;
@@ -45,6 +45,7 @@ public class CardSleep extends JFrame {
 		PluginHandler p = new PluginHandler();
 		p.onLoad();
 		p.onEnable();
+		p.instance.setDefaultCloseOperation(EXIT_ON_CLOSE);
 		Runtime.getRuntime().addShutdownHook(new Thread(p::onDisable));
 	}
 	@SimplePlugin(id = "card_sleep", version = "1.1", desc = "让你的显卡更凉快")
@@ -53,7 +54,7 @@ public class CardSleep extends JFrame {
 
 		@Override
 		protected void onLoad() {
-			if (!VMUtil.isRoot()) throw new RuntimeException("本程序需要管理员权限");
+			if (!VMUtil.isRoot()) System.err.println("本程序需要管理员权限才能完美工作");
 			GuiUtil.systemLook();
 		}
 
@@ -67,7 +68,7 @@ public class CardSleep extends JFrame {
 			monitorRead.start();
 
 			CardSleep f = instance = new CardSleep();
-			f.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+			f.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 			f.setVisible(true);
 		}
 
@@ -79,6 +80,7 @@ public class CardSleep extends JFrame {
 			monitorRead.shutdown();
 			monitorRead = null;
 
+			if (VMUtil.isShutdown()) return;
 			instance.dispose();
 			instance = null;
 		}
@@ -125,8 +127,33 @@ public class CardSleep extends JFrame {
 			return (int)(i/arr.length*100);
 		}
 	}
+	private static class MyGraph2 extends JComponent {
+		private final RingBuffer<Float> records;
+		public MyGraph2(RingBuffer<Float> records) {
+			this.records = records;
+		}
+
+		@Override
+		public void paint(Graphics g) {
+			g.setColor(Color.WHITE);
+			g.fillRect(0,0,getWidth(),getHeight());
+
+			g.setColor(new Color(30, 132, 233));
+			int off = 0;
+			int prevY = -1;
+			for (float record : records) {
+				float freq = record / myCard.pMax * 100;
+				int height = (int) ((100-freq) * getHeight() / 100 - 1);
+				g.drawLine(off-1, prevY < 0 ? height : prevY, off, height);
+				prevY = height;
+
+				off++;
+			}
+		}
+	}
 
 	private static RingBuffer<Integer> coreRecords, memRecords;
+	private static RingBuffer<Float> powerRecords;
 
 	private static GraphicCard myCard;
 	private static final class GraphicCard {
@@ -138,20 +165,16 @@ public class CardSleep extends JFrame {
 			uuid = desc.get(0);
 			name = desc.get(1);
 			try {
-				tMax = Integer.parseInt(desc.get(5));
+				tMax = Integer.parseInt(desc.get(9));
 			} catch (Exception ignored) {}
-			pMin = Float.parseFloat(desc.get(6));
-			pMax = Float.parseFloat(desc.get(7));
+			pMin = Float.parseFloat(desc.get(5));
+			pMax = Float.parseFloat(desc.get(6));
 			longDesc = name+" ("+desc.get(2)+" PCIe "+desc.get(3)+".0x"+desc.get(4)+") \n" +
-				"TMax="+desc.get(5)+",PL="+pMin+"-"+pMax+"W,Core="+desc.get(8)+"MHz,Mem="+desc.get(9)+"MHz";
+				"TMax="+tMax+",PL="+pMin+"-"+pMax+"W,Core="+desc.get(7)+"MHz,Mem="+desc.get(8)+"MHz";
 		}
 
 		@Override
 		public String toString() { return name; }
-
-		public void addFreqGroup(int memFreq, int coreFreq) {
-
-		}
 	}
 
 	private static class CoreFreqSpinner extends SpinnerListModel { // hack createEditor()
@@ -197,7 +220,11 @@ public class CardSleep extends JFrame {
 		new OnChangeHelper(this);
 
 		DefaultListModel<GraphicCard> cards = new DefaultListModel<>();
-		query(strings -> cards.addElement(new GraphicCard(strings)), "--query-gpu=gpu_uuid,name,pci.bus_id,pcie.link.gen.max,pcie.link.width.max,temperature.gpu.tlimit,power.min_limit,power.max_limit,clocks.max.graphics,clocks.max.memory");
+		try {
+			query(strings -> cards.addElement(new GraphicCard(strings)), "--query-gpu=gpu_uuid,name,pci.bus_id,pcie.link.gen.max,pcie.link.width.max,power.min_limit,power.max_limit,clocks.max.graphics,clocks.max.memory,temperature.gpu.tlimit");
+		} catch (ArrayIndexOutOfBoundsException e) {
+			query(strings -> cards.addElement(new GraphicCard(strings)), "--query-gpu=gpu_uuid,name,pci.bus_id,pcie.link.gen.max,pcie.link.width.max,power.min_limit,power.max_limit,clocks.max.graphics,clocks.max.memory");
+		}
 		uiCardList.setModel(cards);
 
 		uiCardList.addMouseListener(new DoubleClickHelper(uiCardList, 500, list -> {
@@ -303,6 +330,7 @@ public class CardSleep extends JFrame {
 
 		coreRecords = new RingBuffer<>(uiGraphCore.getWidth());
 		memRecords = new RingBuffer<>(uiGraphMem.getWidth());
+		powerRecords = new RingBuffer<>(uiGraphPower.getWidth());
 
 		Container pane = getContentPane();
 
@@ -315,6 +343,23 @@ public class CardSleep extends JFrame {
 		graphMem.setBounds(uiGraphMem.getBounds());
 		pane.remove(uiGraphMem);
 		pane.add(graphMem);
+
+		JComponent graphPwr = new MyGraph2(powerRecords);
+		graphPwr.setBounds(uiGraphPower.getBounds());
+		pane.remove(uiGraphPower);
+		pane.add(graphPwr);
+
+		MouseAdapter remove = new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				if (e.getButton() == MouseEvent.BUTTON3) {
+					GuiUtil.removeComponent(e.getComponent());
+				}
+			}
+		};
+		graphCore.addMouseListener(remove);
+		graphMem.addMouseListener(remove);
+		graphPwr.addMouseListener(remove);
 
 		uiST_DecrCount.setModel(new SpinnerNumberModel(7, 1, 50, 1));
 		uiST_TargetCore.setModel(createMyModel(77));
@@ -358,7 +403,7 @@ public class CardSleep extends JFrame {
 			uiST_Toggle.setText("停止");
 			Arrays.fill(prevFreq, 0);
 
-			monitorRead.pushTask(() -> {
+			monitorRead.submit(() -> {
 				CsvParser cp = new CsvParser();
 				byte[] buf = new byte[256];
 				int rIndex = 0, wIndex = 0;
@@ -374,11 +419,13 @@ public class CardSleep extends JFrame {
 									for (int j = 0; j < lines.size(); j++) lines.set(j, lines.get(j).trim());
 
 									int cfreq, cusage, mfreq, musage;
+									float pwr;
 									try {
 										cfreq = Integer.parseInt(lines.get(1));
 										cusage = Integer.parseInt(lines.get(0));
 										mfreq = Integer.parseInt(lines.get(3));
 										musage = Integer.parseInt(lines.get(2));
+										pwr = Float.parseFloat(lines.get(5));
 									} catch (Exception ex) {
 										uiST_State.setText("Input error: "+lines);
 										throw ex;
@@ -386,6 +433,7 @@ public class CardSleep extends JFrame {
 
 									coreRecords.ringAddLast((cfreq << 7) | cusage);
 									memRecords.ringAddLast((mfreq << 7) | musage);
+									powerRecords.ringAddLast(pwr);
 
 									block:
 									if (uiST_Core.isSelected()) {
@@ -468,40 +516,17 @@ public class CardSleep extends JFrame {
 										}
 									}
 
-									block:
-									if (uiMakeUsageCsv.isSelected()) {
-										int freq = myCard.coreFreq[prevFreq[5]];
-										float avgUsage;
-
-										if (++prevFreq[4] == 5) {
-											avgUsage = slidingAvg(coreRecords, 5);
-											if (avgUsage < 100) break block;
-										} else if (prevFreq[4] == 50) {
-											prevFreq[4] = 0;
-											avgUsage = slidingAvg(coreRecords, 50);
-										} else break block;
-
-										System.out.println(freq+","+avgUsage);
-										if (prevFreq[5] == myCard.coreFreq.length-1) {
-											setClock(true, 0, true);
-											setClock(false, 0, true);
-											uiST_Toggle.doClick();
-											return;
-										}
-										setClock(true, myCard.coreFreq[++prevFreq[5]], true);
-									}
-
 									if (System.currentTimeMillis() - prevUpdate > 500) {
 										uiST_InstantInfo.setText("Core:"+cfreq+"MHz@"+cusage+"%  Mem:"+mfreq+"MHz@"+musage+"%  Temp="+lines.get(4)+"℃ Pwr="+lines.get(5)+"W");
 										if (uiST_paint.isSelected()) {
 											graphCore.repaint();
 											graphMem.repaint();
+											graphPwr.repaint();
 										}
 										prevUpdate = System.currentTimeMillis();
 									}
 								});
 
-								//processLine(buf, rIndex, wIndex);
 								rIndex = wIndex;
 							}
 
@@ -520,39 +545,13 @@ public class CardSleep extends JFrame {
 			});
 		});
 
-		uiMakeUsageCsv.addActionListener(e -> {
-			uiST_Core.setSelected(false);
+		if (!VMUtil.isRoot()) {
+			GuiUtil.removeComponent(uiPanelControl);
 			uiST_Memory.setSelected(false);
-			uiMakeUsageCsv.setEnabled(false);
-			setClock(false, 99999, true);
-			setClock(true, myCard.coreFreq[0], false);
-			System.out.println("freq,usage");
-		});
-	}
-
-	private static float slidingAvg(RingBuffer<Integer> rb, int len) {
-		Iterator<Integer> itr = rb.descendingIterator();
-		if (!itr.hasNext()) return Float.NaN;
-		int val = itr.next();
-
-		int freqSlot = val >>> 7;
-		int sum = val & 127;
-
-		for (int j = 1; j < len; j++) {
-			if (!itr.hasNext()) {
-				len = j;
-				break;
-			}
-
-			val = itr.next();
-			if (val >>> 7 != freqSlot) {
-				len = j;
-				break;
-			}
-
-			sum += val & 127;
+			uiST_Core.setSelected(false);
+			uiST_State.setText("没有管理员权限，工作在只读模式下");
+			repaint();
 		}
-		return (float) sum / len;
 	}
 
 	private static final int[] prevFreq = new int[6];
@@ -577,13 +576,13 @@ public class CardSleep extends JFrame {
 			e.printStackTrace();
 		}
 		if (isGraphicClock) {
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				JOptionPane.showMessageDialog(this, "该显卡不支持或没有权限调节核心频率");
 			});
 			uiST_Core.setSelected(false);
 			uiST_Core.setEnabled(false);
 		} else {
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				JOptionPane.showMessageDialog(this, "该显卡不支持或没有权限调节显存频率");
 			});
 			uiST_Memory.setSelected(false);
@@ -619,6 +618,8 @@ public class CardSleep extends JFrame {
 				int exitCode = p.waitFor();
 				return exitCode == 0;
 			}
+		} catch (RuntimeException e) {
+			throw e;
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -627,281 +628,272 @@ public class CardSleep extends JFrame {
 
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
-		scrollPane1 = new JScrollPane();
-		uiCardList = new JList<>();
-		var label3 = new JLabel();
-		uiPowerLimit = new JSpinner();
-		var label4 = new JLabel();
-		uiTempLimit = new JSpinner();
-		var label5 = new JLabel();
-		uiMaxCore = new JSpinner();
-		var label6 = new JLabel();
-		uiMaxMem = new JComboBox<>();
-		uiApplyStaticCfg = new JButton();
-		var label1 = new JLabel();
-		uiMinCore = new JSpinner();
-		var label2 = new JLabel();
-		uiMinMem = new JComboBox<>();
-		var label7 = new JLabel();
-		uiCheckInterval = new JSpinner();
-		var label9 = new JLabel();
-		uiST_TargetCore = new JSpinner();
-		var label8 = new JLabel();
-		uiST_TargetCoreUB = new JSpinner();
-		var label10 = new JLabel();
-		uiST_TargetCoreLB = new JSpinner();
-		var label12 = new JLabel();
-		uiST_TargetMem = new JSpinner();
-		var label11 = new JLabel();
-		uiST_TargetMemUB = new JSpinner();
-		var label13 = new JLabel();
-		uiST_TargetMemLB = new JSpinner();
-		uiST_Core = new JCheckBox();
-		uiST_Memory = new JCheckBox();
-		uiST_Toggle = new JButton();
-		uiST_paint = new JCheckBox();
-		uiST_InstantInfo = new JLabel();
-		uiGraphCore = new JPanel();
-		uiGraphMem = new JPanel();
-		var label15 = new JLabel();
-		var label16 = new JLabel();
-		uiST_State = new JLabel();
-		uiST_DecrCount = new JSpinner();
-		var label14 = new JLabel();
-		uiMakeUsageCsv = new JCheckBox();
+        scrollPane1 = new JScrollPane();
+        uiCardList = new JList<>();
+        var label7 = new JLabel();
+        uiST_Toggle = new JButton();
+        uiCheckInterval = new JSpinner();
+        uiST_paint = new JCheckBox();
+        uiPanelControl = new JPanel();
+        uiST_Core = new JCheckBox();
+        uiST_Memory = new JCheckBox();
+        var label9 = new JLabel();
+        uiST_TargetCore = new JSpinner();
+        var label10 = new JLabel();
+        uiST_TargetCoreLB = new JSpinner();
+        var label8 = new JLabel();
+        uiST_TargetCoreUB = new JSpinner();
+        var label1 = new JLabel();
+        uiMinCore = new JSpinner();
+        var label2 = new JLabel();
+        uiMinMem = new JComboBox<>();
+        var label5 = new JLabel();
+        uiMaxCore = new JSpinner();
+        var label6 = new JLabel();
+        uiMaxMem = new JComboBox<>();
+        var label14 = new JLabel();
+        uiST_DecrCount = new JSpinner();
+        var label12 = new JLabel();
+        uiST_TargetMem = new JSpinner();
+        var label11 = new JLabel();
+        uiST_TargetMemUB = new JSpinner();
+        var label13 = new JLabel();
+        uiST_TargetMemLB = new JSpinner();
+        var label3 = new JLabel();
+        uiPowerLimit = new JSpinner();
+        var label4 = new JLabel();
+        uiTempLimit = new JSpinner();
+        uiApplyStaticCfg = new JButton();
+        uiST_State = new JLabel();
+        uiST_InstantInfo = new JLabel();
+        var label15 = new JLabel();
+        uiGraphCore = new JPanel();
+        var label16 = new JLabel();
+        uiGraphMem = new JPanel();
+        uiGraphPower = new JPanel();
 
-		//======== this ========
-		setTitle("CardSleep 1.1.1");
-		var contentPane = getContentPane();
-		contentPane.setLayout(null);
+        //======== this ========
+        setTitle("CardSleep 1.2.0");
+        var contentPane = getContentPane();
+        contentPane.setLayout(null);
 
-		//======== scrollPane1 ========
-		{
-			scrollPane1.setViewportView(uiCardList);
-		}
-		contentPane.add(scrollPane1);
-		scrollPane1.setBounds(5, 5, 190, 225);
+        //======== scrollPane1 ========
+        {
+            scrollPane1.setViewportView(uiCardList);
+        }
+        contentPane.add(scrollPane1);
+        scrollPane1.setBounds(5, 5, 385, 225);
 
-		//---- label3 ----
-		label3.setText("\u529f\u8017\u5899 (W)");
-		contentPane.add(label3);
-		label3.setBounds(new Rectangle(new Point(210, 18), label3.getPreferredSize()));
+        //---- label7 ----
+        label7.setText("\u68c0\u6d4b\u8f6e\u8be2 (ms)");
+        contentPane.add(label7);
+        label7.setBounds(new Rectangle(new Point(185, 160), label7.getPreferredSize()));
 
-		//---- uiPowerLimit ----
-		uiPowerLimit.setEnabled(false);
-		contentPane.add(uiPowerLimit);
-		uiPowerLimit.setBounds(275, 15, 100, uiPowerLimit.getPreferredSize().height);
+        //---- uiST_Toggle ----
+        uiST_Toggle.setText("\u5f00\u59cb");
+        uiST_Toggle.setMargin(new Insets(2, 10, 2, 10));
+        uiST_Toggle.setEnabled(false);
+        contentPane.add(uiST_Toggle);
+        uiST_Toggle.setBounds(new Rectangle(new Point(250, 180), uiST_Toggle.getPreferredSize()));
+        contentPane.add(uiCheckInterval);
+        uiCheckInterval.setBounds(265, 155, 100, uiCheckInterval.getPreferredSize().height);
 
-		//---- label4 ----
-		label4.setText("\u6e29\u5ea6\u5899 (\u2103)");
-		contentPane.add(label4);
-		label4.setBounds(new Rectangle(new Point(205, 44), label4.getPreferredSize()));
+        //---- uiST_paint ----
+        uiST_paint.setText("\u7ed8\u56fe");
+        uiST_paint.setSelected(true);
+        contentPane.add(uiST_paint);
+        uiST_paint.setBounds(new Rectangle(new Point(200, 180), uiST_paint.getPreferredSize()));
 
-		//---- uiTempLimit ----
-		uiTempLimit.setEnabled(false);
-		contentPane.add(uiTempLimit);
-		uiTempLimit.setBounds(275, 40, 100, uiTempLimit.getPreferredSize().height);
+        //======== uiPanelControl ========
+        {
+            uiPanelControl.setLayout(null);
 
-		//---- label5 ----
-		label5.setText("\u6700\u5927\u6838\u5fc3\u9891\u7387");
-		contentPane.add(label5);
-		label5.setBounds(new Rectangle(new Point(200, 67), label5.getPreferredSize()));
+            //---- uiST_Core ----
+            uiST_Core.setText("\u7ba1\u7406\u6838\u5fc3");
+            uiST_Core.setSelected(true);
+            uiPanelControl.add(uiST_Core);
+            uiST_Core.setBounds(new Rectangle(new Point(10, 0), uiST_Core.getPreferredSize()));
 
-		//---- uiMaxCore ----
-		uiMaxCore.setEnabled(false);
-		contentPane.add(uiMaxCore);
-		uiMaxCore.setBounds(275, 65, 100, uiMaxCore.getPreferredSize().height);
+            //---- uiST_Memory ----
+            uiST_Memory.setText("\u7ba1\u7406\u663e\u5b58");
+            uiST_Memory.setSelected(true);
+            uiPanelControl.add(uiST_Memory);
+            uiST_Memory.setBounds(new Rectangle(new Point(90, 0), uiST_Memory.getPreferredSize()));
 
-		//---- label6 ----
-		label6.setText("\u6700\u5927\u663e\u5b58\u9891\u7387");
-		contentPane.add(label6);
-		label6.setBounds(new Rectangle(new Point(200, 92), label6.getPreferredSize()));
+            //---- label9 ----
+            label9.setText("\u6838\u5fc3\u5360\u7528\u9884\u671f");
+            uiPanelControl.add(label9);
+            label9.setBounds(new Rectangle(new Point(0, 28), label9.getPreferredSize()));
+            uiPanelControl.add(uiST_TargetCore);
+            uiST_TargetCore.setBounds(75, 25, 100, uiST_TargetCore.getPreferredSize().height);
 
-		//---- uiMaxMem ----
-		uiMaxMem.setEnabled(false);
-		contentPane.add(uiMaxMem);
-		uiMaxMem.setBounds(275, 90, 100, uiMaxMem.getPreferredSize().height);
+            //---- label10 ----
+            label10.setText("\u6838\u5fc3\u5360\u7528\u4e0b\u754c");
+            uiPanelControl.add(label10);
+            label10.setBounds(new Rectangle(new Point(0, 77), label10.getPreferredSize()));
+            uiPanelControl.add(uiST_TargetCoreLB);
+            uiST_TargetCoreLB.setBounds(75, 75, 100, uiST_TargetCoreLB.getPreferredSize().height);
 
-		//---- uiApplyStaticCfg ----
-		uiApplyStaticCfg.setText("\u9759\u6001\u5e94\u7528");
-		uiApplyStaticCfg.setMargin(new Insets(2, 4, 2, 4));
-		uiApplyStaticCfg.setEnabled(false);
-		contentPane.add(uiApplyStaticCfg);
-		uiApplyStaticCfg.setBounds(new Rectangle(new Point(315, 115), uiApplyStaticCfg.getPreferredSize()));
+            //---- label8 ----
+            label8.setText("\u6838\u5fc3\u5360\u7528\u4e0a\u754c");
+            uiPanelControl.add(label8);
+            label8.setBounds(new Rectangle(new Point(0, 52), label8.getPreferredSize()));
+            uiPanelControl.add(uiST_TargetCoreUB);
+            uiST_TargetCoreUB.setBounds(75, 50, 100, uiST_TargetCoreUB.getPreferredSize().height);
 
-		//---- label1 ----
-		label1.setText("\u7a81\u53d1\u6838\u5fc3\u9891\u7387");
-		contentPane.add(label1);
-		label1.setBounds(new Rectangle(new Point(200, 163), label1.getPreferredSize()));
+            //---- label1 ----
+            label1.setText("\u7a81\u53d1\u6838\u5fc3\u9891\u7387");
+            uiPanelControl.add(label1);
+            label1.setBounds(new Rectangle(new Point(0, 103), label1.getPreferredSize()));
+            uiPanelControl.add(uiMinCore);
+            uiMinCore.setBounds(75, 100, 100, uiMinCore.getPreferredSize().height);
 
-		//---- uiMinCore ----
-		uiMinCore.setEnabled(false);
-		contentPane.add(uiMinCore);
-		uiMinCore.setBounds(275, 160, 100, uiMinCore.getPreferredSize().height);
+            //---- label2 ----
+            label2.setText("\u7a81\u53d1\u663e\u5b58\u9891\u7387");
+            uiPanelControl.add(label2);
+            label2.setBounds(new Rectangle(new Point(0, 128), label2.getPreferredSize()));
+            uiPanelControl.add(uiMinMem);
+            uiMinMem.setBounds(75, 125, 100, uiMinMem.getPreferredSize().height);
 
-		//---- label2 ----
-		label2.setText("\u7a81\u53d1\u663e\u5b58\u9891\u7387");
-		contentPane.add(label2);
-		label2.setBounds(new Rectangle(new Point(200, 188), label2.getPreferredSize()));
+            //---- label5 ----
+            label5.setText("\u6700\u5927\u6838\u5fc3\u9891\u7387");
+            uiPanelControl.add(label5);
+            label5.setBounds(new Rectangle(new Point(0, 152), label5.getPreferredSize()));
+            uiPanelControl.add(uiMaxCore);
+            uiMaxCore.setBounds(75, 150, 100, uiMaxCore.getPreferredSize().height);
 
-		//---- uiMinMem ----
-		uiMinMem.setEnabled(false);
-		contentPane.add(uiMinMem);
-		uiMinMem.setBounds(275, 185, 100, uiMinMem.getPreferredSize().height);
+            //---- label6 ----
+            label6.setText("\u6700\u5927\u663e\u5b58\u9891\u7387");
+            uiPanelControl.add(label6);
+            label6.setBounds(new Rectangle(new Point(0, 177), label6.getPreferredSize()));
+            uiPanelControl.add(uiMaxMem);
+            uiMaxMem.setBounds(75, 175, 100, uiMaxMem.getPreferredSize().height);
 
-		//---- label7 ----
-		label7.setText("\u68c0\u6d4b\u8f6e\u8be2 (ms)");
-		contentPane.add(label7);
-		label7.setBounds(new Rectangle(new Point(195, 214), label7.getPreferredSize()));
-		contentPane.add(uiCheckInterval);
-		uiCheckInterval.setBounds(275, 210, 100, uiCheckInterval.getPreferredSize().height);
+            //---- label14 ----
+            label14.setText("\u964d\u9891\u8fde\u7eed\u8ba1\u6570");
+            uiPanelControl.add(label14);
+            label14.setBounds(new Rectangle(new Point(185, 3), label14.getPreferredSize()));
+            uiPanelControl.add(uiST_DecrCount);
+            uiST_DecrCount.setBounds(260, 0, 100, uiST_DecrCount.getPreferredSize().height);
 
-		//---- label9 ----
-		label9.setText("\u6838\u5fc3\u5360\u7528\u9884\u671f");
-		contentPane.add(label9);
-		label9.setBounds(new Rectangle(new Point(15, 264), label9.getPreferredSize()));
-		contentPane.add(uiST_TargetCore);
-		uiST_TargetCore.setBounds(90, 260, 100, uiST_TargetCore.getPreferredSize().height);
+            //---- label12 ----
+            label12.setText("\u663e\u5b58\u5360\u7528\u9884\u671f");
+            uiPanelControl.add(label12);
+            label12.setBounds(new Rectangle(new Point(185, 28), label12.getPreferredSize()));
+            uiPanelControl.add(uiST_TargetMem);
+            uiST_TargetMem.setBounds(260, 25, 100, uiST_TargetMem.getPreferredSize().height);
 
-		//---- label8 ----
-		label8.setText("\u6838\u5fc3\u5360\u7528\u4e0a\u754c");
-		contentPane.add(label8);
-		label8.setBounds(new Rectangle(new Point(15, 288), label8.getPreferredSize()));
-		contentPane.add(uiST_TargetCoreUB);
-		uiST_TargetCoreUB.setBounds(90, 285, 100, uiST_TargetCoreUB.getPreferredSize().height);
+            //---- label11 ----
+            label11.setText("\u663e\u5b58\u5360\u7528\u4e0a\u754c");
+            uiPanelControl.add(label11);
+            label11.setBounds(new Rectangle(new Point(185, 52), label11.getPreferredSize()));
+            uiPanelControl.add(uiST_TargetMemUB);
+            uiST_TargetMemUB.setBounds(260, 50, 100, uiST_TargetMemUB.getPreferredSize().height);
 
-		//---- label10 ----
-		label10.setText("\u6838\u5fc3\u5360\u7528\u4e0b\u754c");
-		contentPane.add(label10);
-		label10.setBounds(new Rectangle(new Point(15, 313), label10.getPreferredSize()));
-		contentPane.add(uiST_TargetCoreLB);
-		uiST_TargetCoreLB.setBounds(90, 310, 100, uiST_TargetCoreLB.getPreferredSize().height);
+            //---- label13 ----
+            label13.setText("\u663e\u5b58\u5360\u7528\u4e0b\u754c");
+            uiPanelControl.add(label13);
+            label13.setBounds(new Rectangle(new Point(185, 77), label13.getPreferredSize()));
+            uiPanelControl.add(uiST_TargetMemLB);
+            uiST_TargetMemLB.setBounds(260, 75, 100, uiST_TargetMemLB.getPreferredSize().height);
 
-		//---- label12 ----
-		label12.setText("\u663e\u5b58\u5360\u7528\u9884\u671f");
-		contentPane.add(label12);
-		label12.setBounds(new Rectangle(new Point(200, 264), label12.getPreferredSize()));
-		contentPane.add(uiST_TargetMem);
-		uiST_TargetMem.setBounds(275, 260, 100, uiST_TargetMem.getPreferredSize().height);
+            //---- label3 ----
+            label3.setText("\u529f\u8017\u5899 (W)");
+            uiPanelControl.add(label3);
+            label3.setBounds(new Rectangle(new Point(195, 102), label3.getPreferredSize()));
+            uiPanelControl.add(uiPowerLimit);
+            uiPowerLimit.setBounds(260, 100, 100, uiPowerLimit.getPreferredSize().height);
 
-		//---- label11 ----
-		label11.setText("\u663e\u5b58\u5360\u7528\u4e0a\u754c");
-		contentPane.add(label11);
-		label11.setBounds(new Rectangle(new Point(200, 288), label11.getPreferredSize()));
-		contentPane.add(uiST_TargetMemUB);
-		uiST_TargetMemUB.setBounds(275, 285, 100, uiST_TargetMemUB.getPreferredSize().height);
+            //---- label4 ----
+            label4.setText("\u6e29\u5ea6\u5899 (\u2103)");
+            uiPanelControl.add(label4);
+            label4.setBounds(new Rectangle(new Point(190, 129), label4.getPreferredSize()));
+            uiPanelControl.add(uiTempLimit);
+            uiTempLimit.setBounds(260, 125, 100, uiTempLimit.getPreferredSize().height);
 
-		//---- label13 ----
-		label13.setText("\u663e\u5b58\u5360\u7528\u4e0b\u754c");
-		contentPane.add(label13);
-		label13.setBounds(new Rectangle(new Point(200, 313), label13.getPreferredSize()));
-		contentPane.add(uiST_TargetMemLB);
-		uiST_TargetMemLB.setBounds(275, 310, 100, uiST_TargetMemLB.getPreferredSize().height);
+            //---- uiApplyStaticCfg ----
+            uiApplyStaticCfg.setText("\u9759\u6001\u5e94\u7528");
+            uiApplyStaticCfg.setMargin(new Insets(2, 4, 2, 4));
+            uiPanelControl.add(uiApplyStaticCfg);
+            uiApplyStaticCfg.setBounds(new Rectangle(new Point(300, 175), uiApplyStaticCfg.getPreferredSize()));
+        }
+        contentPane.add(uiPanelControl);
+        uiPanelControl.setBounds(5, 5, 385, 225);
 
-		//---- uiST_Core ----
-		uiST_Core.setText("\u7ba1\u7406\u6838\u5fc3");
-		uiST_Core.setSelected(true);
-		contentPane.add(uiST_Core);
-		uiST_Core.setBounds(new Rectangle(new Point(25, 235), uiST_Core.getPreferredSize()));
+        //---- uiST_State ----
+        uiST_State.setText("state");
+        contentPane.add(uiST_State);
+        uiST_State.setBounds(5, 235, 270, uiST_State.getPreferredSize().height);
 
-		//---- uiST_Memory ----
-		uiST_Memory.setText("\u7ba1\u7406\u663e\u5b58");
-		uiST_Memory.setSelected(true);
-		contentPane.add(uiST_Memory);
-		uiST_Memory.setBounds(new Rectangle(new Point(105, 235), uiST_Memory.getPreferredSize()));
+        //---- uiST_InstantInfo ----
+        uiST_InstantInfo.setText("statistic");
+        contentPane.add(uiST_InstantInfo);
+        uiST_InstantInfo.setBounds(5, 250, 395, uiST_InstantInfo.getPreferredSize().height);
 
-		//---- uiST_Toggle ----
-		uiST_Toggle.setText("\u5f00\u59cb");
-		uiST_Toggle.setMargin(new Insets(2, 10, 2, 10));
-		uiST_Toggle.setEnabled(false);
-		contentPane.add(uiST_Toggle);
-		uiST_Toggle.setBounds(new Rectangle(new Point(325, 335), uiST_Toggle.getPreferredSize()));
+        //---- label15 ----
+        label15.setText("\u56fe\u8868: \u6838\u5fc3\u9891\u7387\u3001\u5360\u7528\u7387");
+        contentPane.add(label15);
+        label15.setBounds(new Rectangle(new Point(5, 265), label15.getPreferredSize()));
 
-		//---- uiST_paint ----
-		uiST_paint.setText("\u7ed8\u56fe");
-		uiST_paint.setSelected(true);
-		contentPane.add(uiST_paint);
-		uiST_paint.setBounds(new Rectangle(new Point(275, 335), uiST_paint.getPreferredSize()));
+        //======== uiGraphCore ========
+        {
+            uiGraphCore.setLayout(null);
+        }
+        contentPane.add(uiGraphCore);
+        uiGraphCore.setBounds(0, 280, 380, 100);
 
-		//---- uiST_InstantInfo ----
-		uiST_InstantInfo.setText("statistic");
-		contentPane.add(uiST_InstantInfo);
-		uiST_InstantInfo.setBounds(5, 355, 395, uiST_InstantInfo.getPreferredSize().height);
+        //---- label16 ----
+        label16.setText("\u56fe\u8868: \u663e\u5b58\u9891\u7387\u3001\u5360\u7528\u7387");
+        contentPane.add(label16);
+        label16.setBounds(5, 380, 180, 13);
 
-		//======== uiGraphCore ========
-		{
-			uiGraphCore.setLayout(null);
-		}
-		contentPane.add(uiGraphCore);
-		uiGraphCore.setBounds(5, 395, 380, 100);
+        //======== uiGraphMem ========
+        {
+            uiGraphMem.setLayout(null);
+        }
+        contentPane.add(uiGraphMem);
+        uiGraphMem.setBounds(0, 395, 380, 100);
 
-		//======== uiGraphMem ========
-		{
-			uiGraphMem.setLayout(null);
-		}
-		contentPane.add(uiGraphMem);
-		uiGraphMem.setBounds(5, 520, 380, 100);
+        //======== uiGraphPower ========
+        {
+            uiGraphPower.setLayout(null);
+        }
+        contentPane.add(uiGraphPower);
+        uiGraphPower.setBounds(0, 510, 380, 100);
 
-		//---- label15 ----
-		label15.setText("\u6838\u5fc3\u9891\u7387\u3001\u5360\u7528\u7387\u968f\u65f6\u95f4\u53d8\u5316\u56fe\u793a");
-		contentPane.add(label15);
-		label15.setBounds(new Rectangle(new Point(5, 375), label15.getPreferredSize()));
-
-		//---- label16 ----
-		label16.setText("\u663e\u5b58\u9891\u7387\u3001\u5360\u7528\u7387\u968f\u65f6\u95f4\u53d8\u5316\u56fe\u793a");
-		contentPane.add(label16);
-		label16.setBounds(5, 500, 180, 13);
-
-		//---- uiST_State ----
-		uiST_State.setText("state");
-		contentPane.add(uiST_State);
-		uiST_State.setBounds(5, 340, 270, uiST_State.getPreferredSize().height);
-		contentPane.add(uiST_DecrCount);
-		uiST_DecrCount.setBounds(275, 235, 100, uiST_DecrCount.getPreferredSize().height);
-
-		//---- label14 ----
-		label14.setText("\u964d\u9891\u8fde\u7eed\u8ba1\u6570");
-		contentPane.add(label14);
-		label14.setBounds(new Rectangle(new Point(200, 239), label14.getPreferredSize()));
-
-		//---- uiMakeUsageCsv ----
-		uiMakeUsageCsv.setText("csv freq/usage");
-		uiMakeUsageCsv.setEnabled(false);
-		contentPane.add(uiMakeUsageCsv);
-		uiMakeUsageCsv.setBounds(new Rectangle(new Point(205, 115), uiMakeUsageCsv.getPreferredSize()));
-
-		contentPane.setPreferredSize(new Dimension(395, 630));
-		pack();
-		setLocationRelativeTo(getOwner());
+        contentPane.setPreferredSize(new Dimension(400, 620));
+        pack();
+        setLocationRelativeTo(getOwner());
 		// JFormDesigner - End of component initialization  //GEN-END:initComponents  @formatter:on
 	}
 
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
-	private JScrollPane scrollPane1;
-	private JList<GraphicCard> uiCardList;
-	private JSpinner uiPowerLimit;
-	private JSpinner uiTempLimit;
-	private JSpinner uiMaxCore;
-	private JComboBox<CMBoxValue> uiMaxMem;
-	private JButton uiApplyStaticCfg;
-	private JSpinner uiMinCore;
-	private JComboBox<CMBoxValue> uiMinMem;
-	private JSpinner uiCheckInterval;
-	private JSpinner uiST_TargetCore;
-	private JSpinner uiST_TargetCoreUB;
-	private JSpinner uiST_TargetCoreLB;
-	private JSpinner uiST_TargetMem;
-	private JSpinner uiST_TargetMemUB;
-	private JSpinner uiST_TargetMemLB;
-	private JCheckBox uiST_Core;
-	private JCheckBox uiST_Memory;
-	private JButton uiST_Toggle;
-	private JCheckBox uiST_paint;
-	private JLabel uiST_InstantInfo;
-	private JPanel uiGraphCore;
-	private JPanel uiGraphMem;
-	private JLabel uiST_State;
-	private JSpinner uiST_DecrCount;
-	private JCheckBox uiMakeUsageCsv;
+    private JScrollPane scrollPane1;
+    private JList<GraphicCard> uiCardList;
+    private JButton uiST_Toggle;
+    private JSpinner uiCheckInterval;
+    private JCheckBox uiST_paint;
+    private JPanel uiPanelControl;
+    private JCheckBox uiST_Core;
+    private JCheckBox uiST_Memory;
+    private JSpinner uiST_TargetCore;
+    private JSpinner uiST_TargetCoreLB;
+    private JSpinner uiST_TargetCoreUB;
+    private JSpinner uiMinCore;
+    private JComboBox<CMBoxValue> uiMinMem;
+    private JSpinner uiMaxCore;
+    private JComboBox<CMBoxValue> uiMaxMem;
+    private JSpinner uiST_DecrCount;
+    private JSpinner uiST_TargetMem;
+    private JSpinner uiST_TargetMemUB;
+    private JSpinner uiST_TargetMemLB;
+    private JSpinner uiPowerLimit;
+    private JSpinner uiTempLimit;
+    private JButton uiApplyStaticCfg;
+    private JLabel uiST_State;
+    private JLabel uiST_InstantInfo;
+    private JPanel uiGraphCore;
+    private JPanel uiGraphMem;
+    private JPanel uiGraphPower;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

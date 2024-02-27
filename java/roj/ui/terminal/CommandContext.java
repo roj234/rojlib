@@ -1,7 +1,6 @@
 package roj.ui.terminal;
 
 import roj.collect.MyHashMap;
-import roj.ui.CLIUtil;
 
 import java.util.Map;
 
@@ -10,8 +9,9 @@ import java.util.Map;
  * @since 2023/11/21 0021 17:34
  */
 public class CommandContext {
+	public final String context;
 	private final MyHashMap<String, Object> map = new MyHashMap<>();
-	public CommandContext(Map<String, Object> map) { this.map.putAll(map); }
+	public CommandContext(String context, Map<String, Object> map) { this.context = context; this.map.putAll(map); }
 
 	public <T> T argument(String name, Class<T> type) { return type.cast(map.get(name)); }
 	public <T> T argument(String name, Class<T> type, T defValue) {
@@ -19,5 +19,5 @@ public class CommandContext {
 		return argument == null ? defValue : argument;
 	}
 
-	public void writeToSystemIn(byte[] b, int off, int len) { CLIUtil.writeToSystemIn(b, off, len); }
+	public void put(String name, Object value) {map.put(name, value);}
 }

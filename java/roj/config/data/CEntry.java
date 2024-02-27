@@ -1,10 +1,10 @@
 package roj.config.data;
 
+import org.intellij.lang.annotations.MagicConstant;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
-import roj.config.VinaryParser;
+import roj.config.ConfigMaster;
 import roj.config.serial.CVisitor;
-import roj.config.serial.ToJson;
-import roj.config.serial.ToYaml;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -23,13 +23,18 @@ public abstract class CEntry {
 	protected CEntry() {}
 
 	public abstract Type getType();
-	protected boolean isNumber() { return getType().isNumber(); }
+	public boolean contentEquals(CEntry o) {
+		return this == o || (o.getType().ordinal() > Type.INTEGER.ordinal()
+		? o.contentEquals(this)
+		: o.mayCastTo(getType()) && eqVal(o));
+	}
+	protected boolean eqVal(CEntry o) { return equals(o); }
+	public boolean mayCastTo(Type o) { return o == getType(); }
 
 	public static final int Q_SET = 1, Q_SET_IF_ABSENT = 2, Q_SET_IF_NOT_SIMILAR = 4, Q_CREATE_MID = 8, Q_REPLACE_MID = 16, Q_RETURN_CONTAINER = 32;
-	public final CEntry query(CharSequence sql) {
-		return query(sql, 0, null, IOUtil.getSharedCharBuf());
-	}
-	public final CEntry query(CharSequence sql, int flag, @Nullable CEntry def, CharList tmp) {
+	public final CEntry query(CharSequence sql) { return query(sql, 0, null, IOUtil.getSharedCharBuf()); }
+	@Contract("_,_,!null,_ -> !null")
+	public final CEntry query(CharSequence sql, @MagicConstant(flags = {Q_SET,Q_SET_IF_ABSENT,Q_SET_IF_NOT_SIMILAR,Q_CREATE_MID,Q_REPLACE_MID,Q_RETURN_CONTAINER}) int flag, @Nullable CEntry def, CharList tmp) {
 		CEntry node = this;
 
 		tmp.clear();
@@ -84,7 +89,7 @@ public abstract class CEntry {
 
 									if ((flag & Q_SET_IF_ABSENT) != 0 && entry != CNull.NULL) {
 										break set;
-									} else if ((flag & Q_SET_IF_NOT_SIMILAR) != 0 && entry.isSimilar(def)) {
+									} else if ((flag & Q_SET_IF_NOT_SIMILAR) != 0 && entry.contentEquals(def)) {
 										break set;
 									}
 
@@ -118,7 +123,7 @@ public abstract class CEntry {
 		CEntry v = map.getOrDefault(tmp, CNull.NULL);
 		if ((flag & Q_SET_IF_ABSENT) != 0 && v != CNull.NULL) {
 			return v;
-		} else if ((flag & Q_SET_IF_NOT_SIMILAR) != 0 && v.isSimilar(def)) {
+		} else if ((flag & Q_SET_IF_NOT_SIMILAR) != 0 && v.contentEquals(def)) {
 			return v;
 		}
 
@@ -132,7 +137,7 @@ public abstract class CEntry {
 		if (node.getType() == Type.NULL || (node.getType() != (list?Type.LIST:Type.MAP) && (opFlag & Q_REPLACE_MID) != 0)) {
 			if ((opFlag & Q_CREATE_MID) != 0) {
 				if (list) throw new IllegalStateException("Cannot create LIST");
-				_map.put(name.toString(), node = new CMapping());
+				_map.put(name.toString(), node = new CMap());
 			} else {
 				return null;
 			}
@@ -142,83 +147,32 @@ public abstract class CEntry {
 
 	////// easy caster
 
-	public String asString() { throw new ClassCastException(getType() + "不是字符串"); }
-	public int asInteger() { throw new ClassCastException(getType() + "不是整数"); }
-	public double asDouble() { throw new ClassCastException(getType() + "不是浮点数"); }
-	public long asLong() { throw new ClassCastException(getType() + "不是长整数"); }
 	public boolean asBool() { throw new ClassCastException(getType() + "不是布尔值"); }
-	public CMapping asMap() { throw new ClassCastException(getType() + "不是地图(迫真)"); }
+	public int asInteger() { throw new ClassCastException(getType() + "不是整数"); }
+	public long asLong() { throw new ClassCastException(getType() + "不是长整数"); }
+	public float asFloat() { throw new ClassCastException(getType() + "不是浮点数"); }
+	public double asDouble() { throw new ClassCastException(getType() + "不是双精度浮点数"); }
+	public String asString() { throw new ClassCastException(getType() + "不是字符串"); }
+	public CMap asMap() { throw new ClassCastException(getType() + "不是映射"); }
 	public CList asList() { throw new ClassCastException(getType() + "不是列表"); }
 
 	////// toString methods
 
 	@Override
-	public String toString() { return toShortJSON(); }
+	public String toString() { return ConfigMaster.JSON.toString(this); }
 
-	protected abstract CharList toJSON(CharList sb, int depth);
-
-	public final String toJSON() {
-		ToJson ser = new ToJson(4);
-		forEachChild(ser.sb(IOUtil.getSharedCharBuf()));
-		return ser.toString();
-	}
-	public final CharList toJSONb() {
-		ToJson ser = new ToJson(4);
-		forEachChild(ser);
-		return ser.getValue();
-	}
-	public final String toShortJSON() {
-		ToJson ser = new ToJson();
-		forEachChild(ser.sb(IOUtil.getSharedCharBuf()));
-		return ser.toString();
-	}
-	public final CharList toShortJSONb() {
-		ToJson ser = new ToJson();
-		forEachChild(ser);
-		return ser.getValue();
-	}
-
-	public final String toYAML() {
-		ToYaml ser = new ToYaml();
-		forEachChild(ser.sb(IOUtil.getSharedCharBuf()));
-		return ser.toString();
-	}
-	public final CharList toYAMLb() {
-		ToYaml ser = new ToYaml();
-		forEachChild(ser);
-		return ser.getValue();
-	}
+	public abstract void accept(CVisitor ser);
+	// Convert to java object wrapper (Map, List, Number, String, etc.)
+	public abstract Object raw();
+	public Object rawDeep() { return raw(); }
 
 	protected CharList toINI(CharList sb, int depth) { return toJSON(sb, 0); }
-	public final String toINI() { return toINI(IOUtil.getSharedCharBuf(), 0).toString(); }
-	public final CharList toINIb() { return toINI(new CharList(), 0); }
 	public final CharList appendINI(CharList sb) { return toINI(sb, 0); }
 
 	protected CharList toTOML(CharList sb, int depth, CharSequence chain) { return toJSON(sb, 0); }
-	public final String toTOML() { return toTOML(IOUtil.getSharedCharBuf(), 0, new CharList()).toString(); }
-	public final CharList toTOMLb() { return toTOML(new CharList(), 0, new CharList()); }
 	public final CharList appendTOML(CharList sb, CharList tmp) { return toTOML(sb, 0, tmp); }
 
-	// Converting
-
-	public abstract void forEachChild(CVisitor ser);
-
-	//@MagicConstant(valuesFromClass = NBTParser.class)
-	public byte getNBTType() { throw new ClassCastException(getType()+"无法序列化为NBT"); }
-
-	public abstract Object unwrap();
-
-	public final DynByteBuf toBinary(DynByteBuf w) {
-		toBinary(w, null);
-		return w;
-	}
-	public final void _toBinary(DynByteBuf w, VinaryParser struct) {
-		struct.reset();
-		toBinary(w, struct);
-	}
-	protected abstract void toBinary(DynByteBuf w, @Nullable VinaryParser struct);
+	protected abstract CharList toJSON(CharList sb, int depth);
 
 	public void toB_encode(DynByteBuf w) { throw new ClassCastException(getType() + "无法序列化为B-encode"); }
-
-	public boolean isSimilar(CEntry o) { return getType().isSimilar(o.getType()); }
 }

@@ -1,315 +1,245 @@
 package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
-import roj.concurrent.FastThreadLocal;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
-import java.util.AbstractMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.IntFunction;
 
+import static roj.collect.IntMap.NUMKEY_LOADFACTOR;
 import static roj.collect.IntMap.UNDEFINED;
 
 public final class CharMap<V> extends AbstractMap<Character, V> implements _Generic_Map<CharMap.Entry<V>> {
+	public static final class Entry<V> implements _Generic_Entry, Map.Entry<Character, V> {
+		final char k;
+		public V v;
+
+		public Entry(char k, V v) {this.k = k;this.v = v;}
+
+		@Override
+		@Deprecated
+		public Character getKey() {return k;}
+		public char getCharKey() {return k;}
+		public V getValue() {return v;}
+		public V setValue(V now) {
+			V v = this.v;
+			this.v = now;
+			return v;
+		}
+
+		Entry<V> next;
+		@Override
+		public _Generic_Entry __next() {return next;}
+
+		@Override
+		public String toString() {return k+"="+v;}
+	}
+
+	Entry<?>[] entries;
+	int size;
+
+	int length, mask;
+
+	public CharMap() {this(16);}
+	public CharMap(int size) {ensureCapacity(size);}
+	public CharMap(CharMap<V> map) {
+		length = map.length;
+		mask = map.mask;
+		putAll(map);
+	}
+
+	public final void ensureCapacity(int size) {
+		if (size <= mask) return;
+		int length = MathUtils.getMin2PowerOf(size);
+		mask = length-1;
+
+		if (entries != null) resize();
+		else this.length = (int) (length * NUMKEY_LOADFACTOR);
+	}
+
+	private static int charHash(int c) {return ((c ^ (c >>> 7) ^ (c >>> 5) ^ (c >>> 3)) * 13);}
+
+	// GenericMap interface
+	@Override
+	public final _Generic_Entry[] __entries() {return entries;}
+	@Override
+	public final void __remove(Entry<V> vEntry) {remove(vEntry.k);}
+	// GenericMap interface
+	// Map interface
+	public final int size() {return size;}
+
 	@SuppressWarnings("unchecked")
-	public void putAll(CharMap<V> map) {
+	public final boolean containsValue(Object v) {return getValueEntry((V) v) != null;}
+	@SuppressWarnings("unchecked")
+	public final Entry<V> getValueEntry(V v) {
+		if (entries == null) return null;
+		for (Entry<?> entry : entries) {
+			if (entry == null) continue;
+			while (entry != null) {
+				if (Objects.equals(v, entry.getValue())) return (Entry<V>) entry;
+				entry = entry.next;
+			}
+		}
+		return null;
+	}
+
+	@Override
+	@Deprecated
+	public final boolean containsKey(Object key) {return containsKey((char) key);}
+	public final boolean containsKey(char key) {return getEntry(key) != null;}
+
+	@Override
+	@Deprecated
+	public final V get(Object key) {return get((char) key);}
+	public final V get(char key) {
+		Entry<V> entry = getEntry(key);
+		return entry == null ? null : entry.getValue();
+	}
+	public final Entry<V> getEntry(char key) {
+		Entry<V> entry = getFirst(key, false);
+		while (entry != null) {
+			if (entry.k == key) return entry;
+			entry = entry.next;
+		}
+		return null;
+	}
+
+	@Override
+	@Deprecated
+	public final V put(Character key, V value) {return put((char) key, value);}
+	public final V put(char key, V e) {
+		Entry<V> entry = getOrCreateEntry(key);
+		V oldV = entry.setValue(e);
+		return oldV == UNDEFINED ? null : oldV;
+	}
+
+	@Override
+	@Deprecated
+	public final V remove(Object key) {return remove((char) key);}
+	public final V remove(char key) {
+		Entry<V> entry = getFirst(key, false);
+		if (entry == null) return null;
+
+		if (entry.k == key) {
+			size--;
+			entries[charHash(key)&mask] = entry.next;
+			return entry.v;
+		}
+
+		Entry<V> prev = entry;
+		while (true) {
+			entry = entry.next;
+			if (entry == null) return null;
+
+			if (entry.k == key) {
+				size--;
+				prev.next = entry.next;
+				return entry.v;
+			}
+
+			prev = entry;
+		}
+	}
+
+	@Override
+	@SuppressWarnings("unchecked")
+	public final void putAll(@NotNull Map<? extends Character, ? extends V> m) {
+		if (m instanceof CharMap) putAll((CharMap<V>) m);
+		else super.putAll(m);
+	}
+	@SuppressWarnings("unchecked")
+	public final void putAll(CharMap<V> map) {
 		if (map.entries == null) return;
-		this.ensureCapacity(size + map.size());
-		for (int i = 0; i < map.length; i++) {
+		ensureCapacity(size + map.size());
+		for (int i = 0; i <= map.mask; i++) {
 			Entry<?> entry = map.entries[i];
 			while (entry != null) {
-				put(entry.k, (V) entry.v);
-
+				getOrCreateEntry(entry.k).v = (V) entry.v;
 				entry = entry.next;
 			}
 		}
 	}
 
-	@Override
-	@SuppressWarnings("unchecked")
-	public void putAll(@NotNull Map<? extends Character, ? extends V> m) {
-		if (m instanceof CharMap) {
-			putAll((CharMap<V>) m);
-		} else {
-			super.putAll(m);
-		}
+	public void clear() {
+		if (size == 0) return;
+		size = 0;
+		Arrays.fill(entries, null);
 	}
-
-	public static class Entry<V> implements _Generic_Entry, Map.Entry<Character, V> {
-		char k;
-		Object v;
-
-		public char getChar() { return k; }
-		@Override
-		@Deprecated
-		public Character getKey() { return k; }
-
-		@SuppressWarnings("unchecked")
-		public V getValue() { return (V) v; }
-
-		@SuppressWarnings("unchecked")
-		public V setValue(V now) {
-			Object v = this.v;
-			this.v = now;
-			return (V) v;
-		}
-
-		Entry<V> next;
-		@Override
-		public _Generic_Entry __next() { return next; }
-	}
-
-	Entry<?>[] entries;
-	int size = 0;
-
-	int length = 1, mask;
-	float loadFactor = 1f;
-
-	public CharMap() {
-		this(16);
-	}
-
-	public CharMap(int size) {
-		ensureCapacity(size);
-	}
-
-	public CharMap(int size, float loadFactor) {
-		ensureCapacity(size);
-		this.loadFactor = loadFactor;
-	}
-
-	@SuppressWarnings("unchecked")
-	public CharMap(CharMap<V> map) {
-		ensureCapacity(map.size);
-		this.loadFactor = map.loadFactor;
-		if (map.size() == 0) return;
-
-		this.entries = new Entry<?>[map.entries.length];
-		for (int i = 0; i < this.entries.length; i++) {
-			this.entries[i] = cloneNode((Entry<V>) map.entries[i]);
-		}
-		this.size = map.size();
-	}
-
-	private Entry<V> cloneNode(Entry<V> entry) {
-		if (entry == null) return null;
-		Entry<V> newEntry = useEntry(entry.k, entry.getValue());
-		Entry<V> head = newEntry;
-		while (entry.next != null) {
-			entry = entry.next;
-			newEntry.next = useEntry(entry.k, entry.getValue());
-			newEntry = newEntry.next;
-		}
-		return head;
-	}
-
-	public void ensureCapacity(int size) {
-		if (size < length) return;
-		length = MathUtils.getMin2PowerOf(size);
-		mask = length-1;
-
-		if (this.entries != null) resize();
-	}
-
-	public Set<Entry<V>> selfEntrySet() { return _Generic_EntrySet.create(this); }
 
 	@NotNull
 	@Override
-	public Set<Map.Entry<Character, V>> entrySet() { return Helpers.cast(selfEntrySet()); }
+	public final Set<Map.Entry<Character, V>> entrySet() {return Helpers.cast(selfEntrySet());}
+	public final Set<Entry<V>> selfEntrySet() {return _Generic_EntrySet.create(this);}
 
 	@Override
-	public boolean containsKey(Object key) {
-		return containsKey((char) key);
-	}
+	@Deprecated
+	public final V getOrDefault(Object key, V def) {return getOrDefault((char) key, def);}
+	public final V getOrDefault(char k, V def) {
+		Entry<V> entry = getEntry(k);
+		return entry == null ? def : entry.v;}
 
-	@Override
-	public V get(Object key) {
-		return get((char) key);
-	}
-
-	@Override
-	public V put(Character key, V value) {
-		return put((char) key, value);
-	}
-
-	@Override
-	public V remove(Object key) {
-		return remove((char) key);
-	}
-
-	public int size() { return size; }
-
-	@Override
-	public _Generic_Entry[] __entries() { return entries; }
-	@Override
-	public void __remove(Entry<V> vEntry) { remove(vEntry.k); }
-
-	@NotNull
-	public V computeIfAbsent(char k, @NotNull IntFunction<V> supplier) {
-		V v = get(k);
-		if (v == null) {
-			put(k, v = supplier.apply(k));
-		}
-		return v;
+	public final V computeIfAbsentC(char k, @NotNull IntFunction<V> supplier) {
+		Entry<V> entry = getOrCreateEntry(k);
+		if (entry.v == UNDEFINED) return entry.v = supplier.apply(k);
+		return entry.v;
 	}
 
 	@SuppressWarnings("unchecked")
 	private void resize() {
+		int length = MathUtils.getMin2PowerOf(this.length) << 1;
+		if (length <= 0 || length > 16383) return;
+
 		Entry<?>[] newEntries = new Entry<?>[length];
 		int newMask = length-1;
-		Entry<V> entry;
-		Entry<V> next;
+
+		Entry<V> entry, next;
 		int i = 0, j = entries.length;
 		for (; i < j; i++) {
 			entry = (Entry<V>) entries[i];
 			while (entry != null) {
 				next = entry.next;
 				int newKey = charHash(entry.k)&newMask;
-				Entry<V> entry2 = (Entry<V>) newEntries[newKey];
+				entry.next = (Entry<V>) newEntries[newKey];
 				newEntries[newKey] = entry;
-				entry.next = entry2;
 				entry = next;
 			}
 		}
 
 		this.entries = newEntries;
 		this.mask = newMask;
-	}
-
-	public V put(char key, V e) {
-		Entry<V> entry = getOrCreateEntry(key);
-		V oldV = entry.setValue(e);
-		if (oldV == UNDEFINED) {
-			oldV = null;
-			if (++size > length * loadFactor) {
-				length <<= 1;
-				resize();
-			}
-		}
-		return oldV;
+		this.length = (int) (length * NUMKEY_LOADFACTOR);
 	}
 
 	@SuppressWarnings("unchecked")
-	public V remove(char id) {
-		Entry<V> prevEntry = null;
-		Entry<V> entry = getEntryFirst(id, false);
-		while (entry != null) {
-			if (entry.k == id) {
-				break;
-			}
-			prevEntry = entry;
-			entry = entry.next;
-		}
-
-		if (entry == null) return null;
-
-		size--;
-
-		if (prevEntry != null) {
-			prevEntry.next = entry.next;
-		} else {
-			entries[charHash(id)&mask] = entry.next;
-		}
-
-		V v = (V) entry.v;
-		reserveEntry(entry);
-		return v;
-	}
-
-	@SuppressWarnings("unchecked")
-	public boolean containsValue(Object v) {
-		return getEntry((V) v) != null;
-	}
-	public boolean containsKey(char i) {
-		return getEntry(i) != null;
-	}
-
-	@SuppressWarnings("unchecked")
-	private Entry<V> getEntry(V v) {
-		if (entries == null) return null;
-		for (Entry<?> entry : entries) {
-			if (entry == null) continue;
-			while (entry != null) {
-				if (Objects.equals(v, entry.getValue()))
-					return (Entry<V>) entry;
-				entry = entry.next;
-			}
-		}
-		return null;
-	}
-
-	private Entry<V> getEntry(char id) {
-		Entry<V> entry = getEntryFirst(id, false);
-		while (entry != null) {
-			if (entry.k == id) return entry;
-			entry = entry.next;
-		}
-		return null;
-	}
-
-	private Entry<V> getOrCreateEntry(char id) {
-		Entry<V> entry = getEntryFirst(id, true);
+	private Entry<V> getOrCreateEntry(char key) {
+		Entry<V> entry = getFirst(key, true);
 		while (true) {
-			if (entry.k == id) return entry;
-			if (entry.next == null) break;
+			if (entry.k == key) return entry;
+			if (entry.next == null) {
+				entry = entry.next = new Entry<>(key, (V)UNDEFINED);
+
+				if (++size > length) resize();
+
+				return entry;
+			}
+
 			entry = entry.next;
 		}
-
-		return entry.next = useEntry(id, UNDEFINED);
 	}
-
-	private int charHash(int id) {
-		return ((id ^ (id >>> 7) ^ (id >>> 5) ^ (id >>> 3)) * 13 );
-	}
-
 	@SuppressWarnings("unchecked")
-	private Entry<V> getEntryFirst(char k, boolean create) {
-		int id = charHash(k)&mask;
+	private Entry<V> getFirst(char k, boolean create) {
+		int id = charHash(k) & mask;
 		if (entries == null) {
 			if (!create) return null;
-			entries = new Entry<?>[length];
+			entries = new Entry<?>[mask+1];
 		}
 		Entry<V> entry;
 		if ((entry = (Entry<V>) entries[id]) == null) {
 			if (!create) return null;
-			return (Entry<V>) (entries[id] = useEntry(k, UNDEFINED));
+			size++;
+			return (Entry<V>) (entries[id] = new Entry<>(k, UNDEFINED));
 		}
 		return entry;
-	}
-
-	public V get(char id) {
-		Entry<V> entry = getEntry(id);
-		return entry == null ? null : entry.getValue();
-	}
-
-	public void clear() {
-		if (size == 0) return;
-		size = 0;
-		if (entries != null) {
-			Entry<?>[] ent = entries;
-			for (int i = 0; i < ent.length; i++) {
-				if (ent[i] != null) {
-					reserveEntry(ent[i]);
-					ent[i] = null;
-				}
-			}
-		}
-	}
-
-	private static final FastThreadLocal<ObjectPool<CharMap.Entry<?>>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(null, 99));
-	private CharMap.Entry<V> useEntry(char k, Object val) {
-		CharMap.Entry<V> entry = Helpers.cast(MY_OBJECT_POOL.get().get());
-		if (entry == null) entry = new CharMap.Entry<>();
-		entry.k = k;
-		entry.v = Helpers.cast(val);
-		return entry;
-	}
-	private void reserveEntry(CharMap.Entry<?> entry) {
-		entry.v = null;
-		entry.next = null;
-		MY_OBJECT_POOL.get().reserve(entry);
 	}
 }

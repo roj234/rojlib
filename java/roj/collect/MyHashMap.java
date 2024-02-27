@@ -2,9 +2,6 @@ package roj.collect;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import roj.concurrent.FastThreadLocal;
-import roj.crypt.SipHash;
 import roj.io.FastFailException;
 import roj.math.MathUtils;
 import roj.util.ArrayUtil;
@@ -14,20 +11,15 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
-import static roj.collect.IntMap.UNDEFINED;
+import static roj.collect.IntMap.*;
 
 /**
  * @author Roj234
  * @since 2021/6/18 11:5
- * 基于Hash-like机制实现的较高速Map
  */
 public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _Generic_Map<MyHashMap.AbstractEntry<K, V>> {
-	static final boolean USE_SIPHASH = false;
-	static final int TREEIFY_THRESHOLD = 8;
-	static final int UNTREEIFY_THRESHOLD = 6;
-	static final int MIN_TREEIFY_CAPACITY = 64;
+	static final int TREEIFY_THRESHOLD = 8, UNTREEIFY_THRESHOLD = 6, MIN_TREEIFY_CAPACITY = 64;
 
 	public static abstract class AbstractEntry<K, V> implements Map.Entry<K, V>, _Generic_Entry {
 		public K k;
@@ -55,7 +47,22 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		}
 
 		@Override
-		public String toString() { return String.valueOf(k)+'='+v; }
+		public String toString() {return String.valueOf(k)+'='+v;}
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+
+			var entry = (Entry<?, ?>) o;
+			if (!(k != null ? k.equals(entry.k) : entry.k == null)) return false;
+			return v != null ? v.equals(entry.v) : entry.v == null;
+		}
+		@Override
+		public int hashCode() {
+			int hash = k != null ? k.hashCode() : 0;
+			hash = hash ^ (v != null ? v.hashCode() : 0);
+			return hash;
+		}
 	}
 	private final class Entry2 extends AbstractEntry<Object[], Object> implements Comparator<Object> {
 		int slot, len, lastPos;
@@ -160,7 +167,6 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	protected int size = 0;
 
 	private int length = 1, mask;
-	private float loadFactor = 1f;
 
 	private Hasher<K> hasher = Hasher.defaul();
 	public void setHasher(Hasher<K> hasher) {
@@ -174,15 +180,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 
 	public MyHashMap() { this(16); }
 	public MyHashMap(int size) { ensureCapacity(size); }
-	public MyHashMap(int size, float loadFactor) {
-		ensureCapacity(size);
-		this.loadFactor = loadFactor;
-	}
 	public MyHashMap(Map<K, V> map) { this.putAll(map); }
-
-	public void setLoadFactor(float loadFactor) {
-		this.loadFactor = loadFactor;
-	}
 
 	public void ensureCapacity(int size) {
 		if (size < length) return;
@@ -192,11 +190,15 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		else mask = length-1;
 	}
 
+	// GenericMap interface
+	@Override
 	public _Generic_Entry[] __entries() { return entries; }
+	@Override
 	public void __remove(AbstractEntry<K, V> entry) { remove(entry.k); }
+	// GenericMap interface
 
 	@SuppressWarnings("unchecked")
-	protected void resize() {
+	private void resize() {
 		AbstractEntry<?, ?>[] newEntries = new AbstractEntry<?, ?>[length];
 		int newMask = length-1;
 
@@ -211,9 +213,8 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 				do {
 					AbstractEntry<K, V> next = entry.next;
 					int newKey = hasher.hashCode(entry.k) & newMask;
-					AbstractEntry<K, V> old = (AbstractEntry<K, V>) newEntries[newKey];
+					entry.next = (AbstractEntry<K, V>) newEntries[newKey];
 					newEntries[newKey] = entry;
-					entry.next = old;
 					entry = next;
 				} while (entry != null);
 			}
@@ -227,10 +228,10 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	public final int size() { return size; }
 
 	@Override
+	public final boolean containsValue(Object val) { return getValueEntry(val) != null; }
+	@Override
 	@SuppressWarnings("unchecked")
 	public final boolean containsKey(Object key) { return getEntry((K) key) != null; }
-	@Override
-	public final boolean containsValue(Object val) { return getValueEntry(val) != null; }
 
 	@Override
 	public final V get(Object key) { return getOrDefault(key, null); }
@@ -245,22 +246,18 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	public final Map.Entry<K, V> find(K k) { return getEntry(k); }
 	@Override
 	public V put(K key, V val) {
-		AbstractEntry<K, V> entry = getOrCreateEntry(key);
-
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
-			size++;
-
-			onPut(entry, val);
-			entry.setValue(val);
-			return null;
-		}
-
+		AbstractEntry<K, V> entry = myCreateEntry(key, val);
+		if (entry == null) return null;
 		onPut(entry, val);
 		return entry.setValue(val);
 	}
 	@Override
 	public V putIfAbsent(K key, V val) {
+		AbstractEntry<K, V> entry = myCreateEntry(key, val);
+		if (entry == null) return null;
+		return entry.getValue();
+	}
+	private AbstractEntry<K, V> myCreateEntry(K key, V val) {
 		AbstractEntry<K, V> entry = getOrCreateEntry(key);
 		if (entry.k == UNDEFINED) {
 			entry.k = key;
@@ -270,8 +267,9 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 			entry.setValue(val);
 			return null;
 		}
-		return entry.getValue();
+		return entry;
 	}
+
 	@Override
 	public boolean replace(K key, V oldValue, V newValue) {
 		AbstractEntry<K, V> entry = getEntry(key);
@@ -293,40 +291,18 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	public final V remove(Object key) {
 		AbstractEntry<K, V> entry = remove0(key, UNDEFINED);
 		if (entry == null) return null;
-		V oldV = entry.getValue();
-		reserveEntry(entry);
-		return oldV;
+		return entry.getValue();
 	}
 	@Override
-	public final boolean remove(Object key, Object value) {
-		AbstractEntry<K, V> entry = remove0(key, value);
-		if (entry == null) return false;
-		reserveEntry(entry);
-		return true;
-	}
-	@SuppressWarnings("unchecked")
-	public final void removeIf(Predicate<K> predicate) {
-		if (entries == null) return;
-		K k;
-		for (AbstractEntry<?, ?> entry : entries) {
-			while (entry != null) {
-				if (predicate.test(k = (K) entry.k)) {
-					entry = entry.next;
-					remove(k);
-					continue;
-				}
-				entry = entry.next;
-			}
-		}
-	}
+	public final boolean remove(Object key, Object value) {return remove0(key, value) != null;}
 
 	@SuppressWarnings("unchecked")
 	protected AbstractEntry<K, V> remove0(Object k, Object v) {
-		K kk = (K) k;
+		AbstractEntry<K, V> prev = null, entry = getFirst((K) k, false);
+		if (entry == null) return null;
 
-		AbstractEntry<K, V> prev = null, entry = getEntryFirst(kk, false);
 		chk:
-		if (entry != null && entry.getClass() == Entry2.class) {
+		if (entry.getClass() == Entry2.class) {
 			Entry2 entry2 = (Entry2) entry;
 			prev = (AbstractEntry<K, V>) entry2.get(k);
 			if (prev == null) return null;
@@ -341,7 +317,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 			return prev;
 		} else {
 			while (entry != null) {
-				if (hasher.equals(kk, entry.k)) break chk;
+				if (hasher.equals((K) k, entry.k)) break chk;
 				prev = entry;
 				entry = entry.next;
 			}
@@ -353,7 +329,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		size--;
 
 		if (prev != null) prev.next = entry.next;
-		else entries[hasher.hashCode(kk)&mask] = entry.next;
+		else entries[hasher.hashCode((K) k)&mask] = entry.next;
 
 		onDel(entry);
 		return entry;
@@ -367,11 +343,8 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 			if (entry != null) remove(key);
 			return null;
 		} else if (entry == null) {
-			entry = getOrCreateEntry(key);
-			if (entry.k == UNDEFINED) {
-				entry.k = key;
-				size++;
-			}
+			entry = myCreateEntry(key, newV);
+			if (entry == null) return newV;
 		}
 
 		onPut(entry, newV);
@@ -407,7 +380,6 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		return newV;
 	}
 
-	// replaceAll
 	@Override
 	@SuppressWarnings("unchecked")
 	public void putAll(@NotNull Map<? extends K, ? extends V> map) {
@@ -428,13 +400,13 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 
 	@Override
 	public void clear() {
-		if (size == 0 || entries == null) return;
+		if (size == 0) return;
 		size = 0;
 
-		for (int i = entries.length - 1; i >= 0; i--) {
+		for (int i = 0; i < entries.length; i++) {
 			AbstractEntry<?, ?> entry = entries[i];
 			if (entry != null) {
-				reserveEntry(Helpers.cast(entry));
+				onDel(Helpers.cast(entry));
 				entries[i] = null;
 			}
 		}
@@ -462,122 +434,108 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	protected void onDel(AbstractEntry<K, V> entry) {}
 
 	@SuppressWarnings("unchecked")
+	public AbstractEntry<K, V> getValueEntry(Object v) {
+		AbstractEntry<?, ?>[] ent = entries;
+		if (ent == null) return null;
+		for (int i = ent.length - 1; i >= 0; i--) {
+			AbstractEntry<K, V> entry = (AbstractEntry<K, V>) ent[i];
+			while (entry != null) {
+				if (Objects.equals(v, entry.getValue())) return entry;
+				entry = entry.next;
+			}
+		}
+		return null;
+	}
+
+	@SuppressWarnings("unchecked")
 	public AbstractEntry<K, V> getEntry(K key) {
-		AbstractEntry<K, V> entry = getEntryFirst(key, false);
+		AbstractEntry<K, V> entry = getFirst(key, false);
 
 		if (entry != null && entry.getClass() == Entry2.class) {
 			return (AbstractEntry<K, V>) ((Entry2) entry).get(key);
 		}
 
-		int loop = 0;
 		while (entry != null) {
 			if (hasher.equals(key, entry.k)) {
-				if (loop >= TREEIFY_THRESHOLD && size > MIN_TREEIFY_CAPACITY) {
-					treeify(key, loop);
-				}
-
 				onGet(entry);
 				return entry;
 			}
 
-			loop++;
 			entry = entry.next;
 		}
 		return null;
 	}
 	@SuppressWarnings("unchecked")
 	public AbstractEntry<K, V> getOrCreateEntry(K key) {
-		if (size > length * loadFactor) {
-			length <<= 1;
-			resize();
-		}
-
-		AbstractEntry<K, V> entry = getEntryFirst(key, true);
-		if (entry.getClass() == Entry2.class) {
-			AbstractEntry<K, V> next = (AbstractEntry<K, V>) ((Entry2) entry).get(key);
-			if (next == null) {
-				next = useEntry();
-				((Entry2) entry).insert(key, next);
-			}
-			return next;
-		}
-
-		if (entry.k == UNDEFINED) return entry;
-
-		int loop = 0;
-		while (true) {
-			if (hasher.equals(key, entry.k)) return entry;
-			if (entry.next == null) {
-				if (loop >= TREEIFY_THRESHOLD && size > MIN_TREEIFY_CAPACITY) {
-					treeify(key, loop);
-
-					return getOrCreateEntry(key);
+		restart:
+		for(;;) {
+			AbstractEntry<K, V> entry = getFirst(key, true);
+			if (entry.getClass() == Entry2.class) {
+				AbstractEntry<K, V> next = (AbstractEntry<K, V>) ((Entry2) entry).get(key);
+				if (next == null) {
+					next = useEntry();
+					((Entry2) entry).insert(key, next);
 				}
-
-				AbstractEntry<K, V> next = useEntry();
-				entry.next = next;
 				return next;
 			}
 
-			loop++;
-			entry = entry.next;
+			if (entry.k == UNDEFINED) return entry;
+
+			int loop = 0;
+			while (true) {
+				if (hasher.equals(key, entry.k)) return entry;
+
+				if (entry.next == null) {
+					if (loop >= TREEIFY_THRESHOLD && size > MIN_TREEIFY_CAPACITY && treeify(key, loop))
+						continue restart;
+
+					if (loop > RESIZE_THRESHOLD_GREATER && size > length*RESIZE_LOADFACTOR) {
+						length <<= 1;
+						resize();
+						continue restart;
+					}
+
+					AbstractEntry<K, V> next = useEntry();
+					entry.next = next;
+					return next;
+				}
+
+				loop++;
+				entry = entry.next;
+			}
 		}
 	}
 
-	private void treeify(K key, int loop) {
+	private boolean treeify(K key, int loop) {
 		AbstractEntry<K, V> entry;
-		if (hasher != Hasher.defaul()) new Exception("Custom hasher "+hasher+"(A "+hasher.getClass().getName()+") generate many("+ loop +") hash collisions for "+ key.getClass().getName()).printStackTrace();
-		if (!supportAutoCollisionFix()) return;//throw new FastFailException("Child class "+getClass().getName()+" did not support auto collision fix");
+		if (hasher != Hasher.defaul()) new Exception("Custom hasher "+hasher+"(A "+hasher.getClass().getName()+") generate many("+loop+") hash collisions for "+ key.getClass().getName()).printStackTrace();
+		if (!acceptTreeNode()) return false;
 
-		if (USE_SIPHASH && key instanceof CharSequence) {
-			hasher = new Hasher<K>() {
-				final SipHash hash = new SipHash();
-				{ hash.setKeyDefault(); }
+		AbstractEntry<K, V>[] arr = Helpers.cast(new AbstractEntry<?,?>[MathUtils.getMin2PowerOf(loop +1)]);
+		int i = 0;
 
-				@Override
-				public int hashCode(@Nullable K k) {
-					long v = hash.digest((CharSequence) k);
-					v = (v >>> 32) ^ v;
-					v = (v >>> 16) ^ v;
-					v = (v >>>  8) ^ v;
-					v = (v >>>  4) ^ v;
-					return (int) v;
-				}
-
-				@Override
-				public boolean equals(K from_argument, Object stored_in) {
-					return from_argument.equals(stored_in);
-				}
-			};
-			resize();
-		} else {
-			//if (key instanceof Comparable) throw new FastFailException("那你这comparable实现也做的太差了...");
-
-			AbstractEntry<K, V>[] arr = Helpers.cast(new AbstractEntry<?,?>[MathUtils.getMin2PowerOf(loop +1)]);
-			int i = 0;
-
-			int slot = hasher.hashCode(key)&mask;
-			entry = Helpers.cast(entries[slot]);
-			while (entry != null) {
-				arr[i++] = entry;
-				entry = entry.next;
-			}
-
-			boolean b = key instanceof Comparable;
-			Arrays.sort(arr, 0, i, (o1, o2) -> {
-				int v = Integer.compare(hasher.hashCode(o1.k), hasher.hashCode(o2.k));
-				if (v != 0) return v;
-				if (b) v = ((Comparable<?>) o1.k).compareTo(Helpers.cast(o2.k));
-				if (v != 0) return v;
-				return Integer.compare(System.identityHashCode(o1.k), System.identityHashCode(o2.k));
-			});
-
-			Entry2 entry2 = new Entry2(b);
-			entry2.k = arr;
-			entry2.len = i;
-			entry2.slot = slot;
-			entries[slot] = entry2;
+		int slot = hasher.hashCode(key)&mask;
+		entry = Helpers.cast(entries[slot]);
+		while (entry != null) {
+			arr[i++] = entry;
+			entry = entry.next;
 		}
+
+		boolean b = key instanceof Comparable;
+		Arrays.sort(arr, 0, i, (o1, o2) -> {
+			int v = Integer.compare(hasher.hashCode(o1.k), hasher.hashCode(o2.k));
+			if (v != 0) return v;
+			if (b) v = ((Comparable<?>) o1.k).compareTo(Helpers.cast(o2.k));
+			if (v != 0) return v;
+			return Integer.compare(System.identityHashCode(o1.k), System.identityHashCode(o2.k));
+		});
+
+		Entry2 entry2 = new Entry2(b);
+		entry2.k = arr;
+		entry2.len = i;
+		entry2.slot = slot;
+		entries[slot] = entry2;
+		return true;
 	}
 	@SuppressWarnings("unchecked")
 	private void untreeify(AbstractEntry<K, V> entry, int newMask, AbstractEntry<?, ?>[] newEntries) {
@@ -591,11 +549,11 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		}
 	}
 
-	protected boolean supportAutoCollisionFix() { return true; }
+	protected boolean acceptTreeNode() { return true; }
 
 	@SuppressWarnings("unchecked")
 	@Contract("_, true -> !null")
-	private AbstractEntry<K, V> getEntryFirst(K key, boolean create) {
+	private AbstractEntry<K, V> getFirst(K key, boolean create) {
 		if (key == UNDEFINED) throw new FastFailException("IntMap.UNDEFINED cannot be key");
 
 		int i = hasher.hashCode(key)&mask;
@@ -611,33 +569,9 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		return entry;
 	}
 
-	@SuppressWarnings("unchecked")
-	public AbstractEntry<K, V> getValueEntry(Object value) {
-		AbstractEntry<?, ?>[] ent = entries;
-		if (ent == null) return null;
-		for (int i = ent.length - 1; i >= 0; i--) {
-			AbstractEntry<K, V> entry = (AbstractEntry<K, V>) ent[i];
-			while (entry != null) {
-				if (Objects.equals(value, entry.getValue())) return entry;
-				entry = entry.next;
-			}
-		}
-		return null;
-	}
-
-	private static final FastThreadLocal<ObjectPool<AbstractEntry<?,?>>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(null, 99));
 	protected AbstractEntry<K, V> useEntry() {
-		AbstractEntry<K, V> entry = Helpers.cast(MY_OBJECT_POOL.get().get());
-
-		if (entry == null) entry = new Entry<>();
+		AbstractEntry<K, V> entry = new Entry<>();
 		entry.k = Helpers.cast(UNDEFINED);
 		return entry;
-	}
-	protected void reserveEntry(AbstractEntry<?, ?> entry) {
-		entry.k = null;
-		entry.next = null;
-		entry.setValue(null);
-		if (entry.getClass() == Entry.class)
-			MY_OBJECT_POOL.get().reserve(entry);
 	}
 }
