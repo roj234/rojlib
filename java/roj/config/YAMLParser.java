@@ -69,7 +69,7 @@ public class YAMLParser extends Parser<CEntry> {
 	public YAMLParser() {}
 	public YAMLParser(int flag) { super(flag); }
 
-	public final int availableFlags() { return ORDERED_MAP | LENIENT_COMMA | LENIENT | NO_DUPLICATE_KEY | NO_EOF; }
+	public final int availableFlags() { return ORDERED_MAP | LENIENT_COMMA | LENIENT | NO_DUPLICATE_KEY; }
 	public final String format() { return "YAML"; }
 
 	@Override
@@ -89,13 +89,13 @@ public class YAMLParser extends Parser<CEntry> {
 		CList list = new CList();
 
 		int superIndent = prevIndent;
-		int firstIndent = getIndent();
+		int firstIndent = indent;
 		if (firstIndent < superIndent) throw err("下级缩进("+firstIndent+")<上级("+superIndent+")");
 
 		while (true) {
 			int line = LN;
 			Word w = next();
-			if (LN > line && getIndent() == firstIndent && w.type() == delim) {
+			if (LN > line && indent <= firstIndent) {
 				list.add(CNull.NULL);
 			} else {
 				retractWord();
@@ -111,7 +111,8 @@ public class YAMLParser extends Parser<CEntry> {
 			}
 
 			int off;
-			if (w.type() != delim || (off = getIndent()) < firstIndent) {
+			// 第二个判断检查 - - val
+			if (w.type() != delim || superIndent < 0 || (off = indent) < firstIndent) {
 				retractWord();
 				break;
 			} else if (off != firstIndent) throw err("缩进有误:"+off+"/"+firstIndent);
@@ -130,10 +131,9 @@ public class YAMLParser extends Parser<CEntry> {
 		Map<String, String> comment = null;
 
 		int superIndent = prevIndent;
-		int firstIndent = getIndent();
+		int firstIndent = indent;
 		if (firstIndent <= superIndent) throw err("下级缩进("+firstIndent+")<=上级("+superIndent+")");
 
-		retractWord();
 		cyl:
 		while (true) {
 			String name = w.val();
@@ -145,10 +145,10 @@ public class YAMLParser extends Parser<CEntry> {
 					except(colon, ":");
 					except(ref, "*");
 					CEntry entry = anchors.get(w.val());
-					if (entry == null) throw err("不存在的锚点 " + w.val());
-					if (!entry.getType().isSimilar(Type.MAP)) throw err("锚点 " + w.val() + " 无法转换为map");
+					if (entry == null) throw err("不存在的锚点 "+w.val());
+					if (!entry.getType().isSimilar(Type.MAP)) throw err("锚点 "+w.val()+" 无法转换为map");
 					map.putAll(entry.asMap().raw());
-					break;
+				break;
 				case Word.LITERAL:
 				case Word.STRING:
 				case Word.INTEGER:
@@ -156,20 +156,20 @@ public class YAMLParser extends Parser<CEntry> {
 				case Word.DOUBLE:
 				case Word.FLOAT:
 				case NULL:
-					if ((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(name)) throw err("重复的key: " + name);
-
 					except(colon, ":");
 					comment = addComment(comment, name);
 
 					try {
 						prevIndent = firstIndent;
-						map.put(name, element(flag));
+						if (map.put(name, element(flag)) != null) {
+							if ((flag & NO_DUPLICATE_KEY) != 0) throw err("重复的key: "+name);
+						}
 					} catch (ParseException e) {
 						throw e.addPath('.'+name);
 					} finally {
 						prevIndent = superIndent;
 					}
-					break;
+				break;
 				case Word.EOF: break cyl;
 				default: unexpected(w.val(), "字符串");
 			}
@@ -177,7 +177,7 @@ public class YAMLParser extends Parser<CEntry> {
 			w = nextNN();
 			if (w.type() == EOF) break;
 
-			int indent = getIndent();
+			int indent = this.indent;
 			if (indent < firstIndent) {
 				// 上一个是List
 				if (firstIndent == Integer.MAX_VALUE) {
@@ -266,7 +266,10 @@ public class YAMLParser extends Parser<CEntry> {
 				return map;
 			}
 			case delim:
-				if (prevLN == LN && LN != 1) throw err("期待换行");
+				if (prevLN == LN && LN != 1) {
+					if ((flag&LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
+					prevIndent = -1;
+				}
 				return yamlLineArray();
 			case anchor: {
 				CEntry val = element(flag);
@@ -285,31 +288,38 @@ public class YAMLParser extends Parser<CEntry> {
 
 	final Word tmpKey = new Word();
 	private CEntry checkMap() throws ParseException {
+		mark();
+
 		int i = prevIndex;
 		Word firstKey = tmpKey.init(wd.type(), wd.pos(), wd.val());
 
 		int ln = prevLN;
-		short type = nextNN().type();
-
-		if (type == colon) {
-			if (getIndent() <= prevIndent) {
+		if (nextNN().type() == colon) {
+			if (indent <= prevIndent) {
 				if (prevLN == ln) {
-					throw err("若"+firstKey.val()+"是一个key,则其必须换行");
+					if ((flag&LENIENT) == 0) throw err("一行内不允许同时放置列表和映射 (通过LENIENT参数关闭该限制)");
+					//' - 'key: val
+					//单引号部分
+					//第一个字符: indent
+					//第二个字符: +1
+					//第三个字符: wd.pos-wd.val.length - i
+					indent = indent+1-i+wd.pos()-wd.val().length();
 				} else {
-					index = i;
+					retract();
+					retractWord();
 					return CNull.NULL;
 				}
 			}
 
+			retract();
 			return yamlObject(firstKey);
 		}
 
-		retractWord();
+		retract();
 		return null;
 	}
 
 	// -1:true 0:false 1:ln 2:unchecked
-	@SuppressWarnings("fallthrough")
 	public static int literalSafe(CharSequence text) {
 		if (LITERAL_UNSAFE) return 0;
 
@@ -344,13 +354,13 @@ public class YAMLParser extends Parser<CEntry> {
 	}
 
 	final MyHashMap<String, CEntry> anchors = new MyHashMap<>();
-	int prevIndent;
+	int indent, prevIndent;
 
 	@Override
 	public final YAMLParser init(CharSequence seq) {
 		anchors.clear();
 		prevIndent = -1;
-		indentPos = -1;
+		indent = 0;
 		super.init(seq);
 		LN = 1;
 		return this;
@@ -361,6 +371,7 @@ public class YAMLParser extends Parser<CEntry> {
 	public final Word readWord() throws ParseException {
 		CharSequence in = input;
 		int i = index;
+		int _indent = 0;
 
 		while (i < in.length()) {
 			char c = in.charAt(i);
@@ -368,12 +379,21 @@ public class YAMLParser extends Parser<CEntry> {
 				case C_MAY__NUMBER_SIGN:
 					if (i < in.length() && NUMBER.contains(in.charAt(i))) {
 						index = i;
+						if (_indent > 0) indent = i - _indent;
 						return readDigit(true);
 					}
 					// fall to literal(symbol)
-				default: index = i; return readSymbol();
-				case C_NUMBER: index = i; return readDigit(false);
-				case C_WHITESPACE: i++;
+				default:
+					index = i;
+					if (_indent > 0) indent = i - _indent;
+					return readSymbol();
+				case C_NUMBER:
+					if (_indent > 0) indent = i - _indent;
+					index = i;
+					return readDigit(false);
+				case C_WHITESPACE:
+					i++;
+					if (c == '\n') _indent = i;
 			}
 		}
 
@@ -391,30 +411,19 @@ public class YAMLParser extends Parser<CEntry> {
 	@SuppressWarnings("fallthrough")
 	@Override
 	protected final boolean isValidToken(int off, Word w) {
-		if ((flag & LITERAL_KEY) != 0) return true;
-
-		switch (w.type()) {
-			case TRUE: case FALSE: case NULL:
-				if (!whiteSpaceUntilNextLine(index+off)) return false;
-				break;
-			case delim: if (wd.type() == delim) return onNextLine(index+off);
-			case colon:
+		if ((flag & LITERAL_KEY) == 0) switch (w.type()) {
+			case TRUE, FALSE, NULL:
+				if (!whiteSpaceUntilNextLine(index + off)) return false;
+			break;
+			case delim, colon:
 				// :和-后面必须是WHITESPACE
 				if (!WHITESPACE.contains(lookAhead(off))) return false;
-				break;
-			case ask: case join:
+			break;
+			case ask, join:
 				if (firstChar == SIGNED_NUMBER_C2C) return false;
-				break;
+			break;
 		}
 		return super.isValidToken(off, w);
-	}
-	private boolean onNextLine(int len) {
-		CharSequence in = input;
-		int i = prevIndex;
-		while (i < len) {
-			if (in.charAt(i++) == '\n') return true;
-		}
-		return false;
 	}
 	private boolean whiteSpaceUntilNextLine(int i) {
 		CharSequence in = input;
@@ -491,7 +500,7 @@ public class YAMLParser extends Parser<CEntry> {
 		int i = index;
 		CharList v = found; v.clear();
 
-		/**
+		/*
 		 * 字符串可以写成多行，从第二行开始，必须有一个单空格缩进。换行符会被转为空格。
 		 * 使用|保留换行符，也可以使用>折叠换行。
 		 * +表示保留文字块末尾的换行，-表示删除字符串末尾的换行。*/
@@ -641,37 +650,5 @@ public class YAMLParser extends Parser<CEntry> {
 
 		index = i;
 		return formClip(w.type(), v);
-	}
-
-	int indent, indentPos = -1;
-	final int getIndent() {
-		if (index == indentPos) return indent;
-
-		CharSequence in = input;
-		int count = 0;
-		int i = indentPos = index;
-		while (i > 0) {
-			char c = in.charAt(--i);
-			switch (c) {
-				case '\'': case '"': i = escapePrev(c,i); break;
-				case '\r': case '\n': return indent = count;
-				case '-': if (count > 0) return indent = Integer.MAX_VALUE;
-				break;
-				case ' ': case '\t': count++; break;
-				default: count = 0; break;
-			}
-		}
-
-		indent = 0;
-		return 0;
-	}
-
-	private int escapePrev(char c, int i) {
-		CharSequence in = input;
-		while (i > 0) {
-			char c1 = in.charAt(--i);
-			if (c1 == c && (i==0 || in.charAt(i-1) != '\\')) break;
-		}
-		return i;
 	}
 }

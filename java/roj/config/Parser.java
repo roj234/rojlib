@@ -140,7 +140,7 @@ public abstract class Parser<T extends CEntry> extends Tokenizer implements Bina
 	}
 
 	public final String toString(CEntry entry) { return toString(entry, 0); }
-	public final String toString(CEntry entry, int flag) { return append(entry, flag, IOUtil.ddLayeredCharBuf()).toStringAndFree(); }
+	public final String toString(CEntry entry, int flag) {return append(entry, flag, new CharList()).toStringAndFree(); }
 	public CharList append(CEntry entry, int flag, CharList sb) { throw new UnsupportedOperationException(); }
 
 	public final void serialize(CEntry entry, DynByteBuf out) throws IOException { serialize(entry, 0, out); }

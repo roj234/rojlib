@@ -6,7 +6,6 @@ import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
-import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -158,7 +157,7 @@ public class Annotation {
 	}
 
 	public void toByteArray(ConstantPool pool, DynByteBuf w) {
-		CharList sb = IOUtil.ddLayeredCharBuf().append('L').append(type).append(';');
+		CharList sb = new CharList().append('L').append(type).append(';');
 		w.putShort(pool.getUtfId(sb)).putShort(values.size());
 		sb._free();
 		for (Map.Entry<String, AnnVal> e : values.entrySet()) {

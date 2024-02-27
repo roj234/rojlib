@@ -231,7 +231,7 @@ public abstract class Constants implements ChannelHandler {
 
 	protected final Logger LOGGER;
 	public Constants() {
-		LogContext ctx = new LogContext();
+		LogContext ctx = new LogContext(Logger.getRootContext());
 		ctx.name(getClass().getSimpleName()).setPrefix(Template.compile("[${0}][${NAME}/${LEVEL}]: "));
 		LOGGER = Logger.getLogger(ctx);
 		LOGGER.setLevel(LOG_LEVEL);

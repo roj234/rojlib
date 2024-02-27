@@ -1,5 +1,7 @@
 package roj.text;
 
+import roj.reflect.ReflectionUtils;
+
 import java.util.function.IntConsumer;
 
 import static java.lang.Character.*;
@@ -191,6 +193,8 @@ public final class UTF8MB4 extends UnsafeCharset {
 
 	@Override
 	public int byteCount(CharSequence s, int i, int len) {
+		if (ReflectionUtils.JAVA_VERSION >= 9 && s.getClass() == String.class && J9String.isLatin1(s.toString())) return len;
+
 		int end = i+len;
 		while (i < end) {
 			int c = s.charAt(i++);

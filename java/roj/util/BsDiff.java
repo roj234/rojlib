@@ -256,13 +256,14 @@ public class BsDiff {
 			lastOffset = pos-scan;
 		}
 	}
-	public int getDiffLength(byte[] right, int maxDifference) {
+	public int getDiffLength(byte[] right, int maxDifference) { return getDiffLength(right, 0, right.length, maxDifference); }
+	public int getDiffLength(byte[] right, int scan, int rightLen, int maxDifference) {
 		int diffBytes = 0;
 
 		byte[] left = this.left;
-		int leftLen = left.length, rightLen = right.length;
+		int leftLen = left.length;
 
-		int scan = 0, lastScan = 0;
+		int lastScan = scan;
 		int pos = 0, lastPos = 0;
 		int len = 0, lastOffset = 0;
 		while (scan < rightLen) {

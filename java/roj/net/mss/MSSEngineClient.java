@@ -149,7 +149,7 @@ public class MSSEngineClient extends MSSEngine {
 				break;
 			case SERVER_HELLO:
 				if (rx.isReadable() && (rx.get(rx.rIndex) != H_SERVER_HELLO && rx.get(rx.rIndex) != P_ALERT))
-					return error(ILLEGAL_PACKET, "not mss server");
+					return error(ILLEGAL_PACKET, null);
 
 				int lim = rx.wIndex();
 				int type = readPacket(rx);
@@ -348,7 +348,7 @@ public class MSSEngineClient extends MSSEngine {
 			if ((flag & HAS_HELLO_RETRY) != 0) return error(ILLEGAL_PARAM, "hello_retry");
 			flag |= HAS_HELLO_RETRY;
 
-			if (rx.readUnsignedShort() != 4) return error(ILLEGAL_PACKET, "");
+			if (rx.readUnsignedShort() != 4) return error(ILLEGAL_PACKET, null);
 			int ke_avl = getSupportedKeyExchanges() & rx.readInt();
 			if (ke_avl == 0) return error(NEGOTIATION_FAILED, "key_exchange");
 

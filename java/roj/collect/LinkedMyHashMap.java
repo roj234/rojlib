@@ -120,6 +120,8 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 	@Override
 	protected void onPut(AbstractEntry<K, V> entry, V newV) {
 		LinkedEntry<K, V> myEntry = (LinkedEntry<K, V>) entry;
+		if (myEntry.v != UNDEFINED) return;
+
 		if (head == null) head = myEntry;
 
 		myEntry.p = tail;
@@ -155,10 +157,11 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 
 	private static final FastThreadLocal<ObjectPool<AbstractEntry<?,?>>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(null, 128));
 	protected AbstractEntry<K, V> useEntry() {
-		AbstractEntry<K, V> entry = Helpers.cast(MY_OBJECT_POOL.get().get());
+		LinkedEntry<K, V> entry = Helpers.cast(MY_OBJECT_POOL.get().get());
 
 		if (entry == null) entry = new LinkedEntry<>();
 		entry.k = Helpers.cast(UNDEFINED);
+		entry.v = Helpers.cast(UNDEFINED);
 		return entry;
 	}
 	protected void reserveEntry(AbstractEntry<?, ?> entry) {

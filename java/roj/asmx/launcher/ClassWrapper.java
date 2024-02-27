@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
+import java.security.CodeSigner;
 import java.security.CodeSource;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -131,10 +132,11 @@ public class ClassWrapper implements Function<String, Class<?>> {
 			} else {
 				try {
 					for (int i = 0; i < zipArchives.size(); i++) {
-						InputStream in = zipArchives.get(i).getInput(name);
+						ZipArchive za = zipArchives.get(i);
+						InputStream in = za.getInput(name);
 						if (in != null) {
 							buf.readStreamFully(in);
-							cs = null;
+							cs = new CodeSource(za.file.toURL(), (CodeSigner[]) null);
 							break block1;
 						}
 					}

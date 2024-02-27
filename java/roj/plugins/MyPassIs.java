@@ -196,6 +196,7 @@ public class MyPassIs extends Plugin {
 			CharList sb = new CharList();
 			for (int i = 0; i < gen_pass.length; i++) {
 				sb.append(charset[(gen_pass[i]&0xFF) % charset.length]);
+				gen_pass[i] = 0;
 			}
 
 			if (accounts.containsKey(account)) {
@@ -216,6 +217,8 @@ public class MyPassIs extends Plugin {
 			CLIUtil.renderBottomLine(sb, true, CLIUtil.getStringWidth(sb)+1);
 			char acr = CLIUtil.awaitCharacter(MyBitSet.from("acr"));
 			CLIUtil.removeBottomLine(sb, true);
+			Arrays.fill(sb.list, (char) 0);
+			sb._free();
 			switch (acr) {
 				case 'a':
 					accounts.put(account, iter);

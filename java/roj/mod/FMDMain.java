@@ -83,7 +83,7 @@ public final class FMDMain {
 		c.register(literal("preAT").executes(ctx -> preAT()));
 		c.register(literal("kill").executes(ctx -> {
 			if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
-				MCLauncher.task.cancel(true);
+				MCLauncher.task.cancel();
 			}
 		}));
 		c.register(literal("gc").executes(ctx -> {
@@ -280,7 +280,7 @@ public final class FMDMain {
 		MCLauncher.load();
 		if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
 			if (CLIUtil.readBoolean("是否结束游戏进程?")) {
-				MCLauncher.task.cancel(true);
+				MCLauncher.task.cancel();
 				MCLauncher.task = null;
 			} else {
 				return -1;

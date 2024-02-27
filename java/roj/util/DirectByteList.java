@@ -30,16 +30,6 @@ public class DirectByteList extends DynByteBuf {
 	volatile long address;
 	int length;
 
-	public static DirectByteList allocateDirect() { return new DirectByteList(); }
-	public static DirectByteList allocateDirect(int capacity) { return new DirectByteList(capacity); }
-	public static DirectByteList allocateDirect(int capacity, int maxCapacity) {
-		return new DirectByteList(capacity) {
-			@Override
-			public int maxCapacity() { return maxCapacity; }
-		};
-	}
-	public static DirectByteList wrap(long address, int length) { return new DirectByteList.Slice(address, length); }
-
 	DirectByteList(boolean unused) {}
 	DirectByteList() { nm = new NativeMemory(); }
 	DirectByteList(int cap) {

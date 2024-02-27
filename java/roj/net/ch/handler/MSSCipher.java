@@ -99,18 +99,7 @@ public class MSSCipher extends PacketMerger {
 		DynByteBuf tx = ctx.allocate(true, 1024);
 		try {
 			do {
-				try {
-					req = sslMode ? engine.handshakeSSL(tx, rx) : engine.handshake(tx, rx);
-				} catch (MSSException e) {
-					if (!engine.isClientMode() && e.code == MSSEngine.ILLEGAL_PACKET) {
-						ctx.channelWrite(IOUtil.getSharedByteBuf().putAscii(
-							"HTTP/1.1 400 Bad Request\r\n" +
-								"Connection: close\r\n" +
-								"\r\n" +
-								"<h1>This is not a HTTP server</h1>"));
-					}
-					throw e;
-				}
+				req = sslMode ? engine.handshakeSSL(tx, rx) : engine.handshake(tx, rx);
 
 				// overflow
 				if (req == MSSEngine.HS_OK) {
@@ -138,11 +127,11 @@ public class MSSCipher extends PacketMerger {
 
 	@Override
 	public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
-		if (ex instanceof MSSException) {
+		if (ex instanceof MSSException e && e.code != MSSEngine.ILLEGAL_PACKET) {
 			if (!sslMode) {
 				try {
 					ByteList ob = IOUtil.getSharedByteBuf();
-					((MSSException) ex).notifyRemote(engine, ob);
+					e.notifyRemote(engine, ob);
 					ctx.channelWrite(ob);
 				} catch (Exception ignored) {}
 			}

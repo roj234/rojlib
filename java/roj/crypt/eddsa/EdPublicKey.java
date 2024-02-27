@@ -1,5 +1,6 @@
 package roj.crypt.eddsa;
 
+import roj.crypt.EasilyDerivedFromPrivateKey;
 import roj.crypt.eddsa.math.EdPoint;
 
 import java.security.PublicKey;
@@ -10,7 +11,7 @@ import java.util.Arrays;
 import static roj.crypt.eddsa.EdPrivateKey.OID_ED25519;
 import static roj.crypt.eddsa.EdPrivateKey.OID_OLD;
 
-public class EdPublicKey implements EdKey, PublicKey {
+public class EdPublicKey implements EdKey, PublicKey, EasilyDerivedFromPrivateKey {
 	private static final int OID_BYTE = 8;
 	private static final int IDLEN_BYTE = 3;
 

@@ -15,8 +15,6 @@ public abstract class MathUtils {
 	public static final double TWO_PI = Math.PI * 2;
 	public static final double EPS_2 = 1e-14;
 
-	public static int sig(int num) { return Integer.compare(num, 0); }
-
 	public static <T> IntList discretization(Iterable<T> list, ToIntFunction<T> retriever) {
 		if (retriever == null) retriever = Helpers.cast((ToIntFunction<Number>) Number::intValue);
 
@@ -29,67 +27,6 @@ public abstract class MathUtils {
 	public static int clamp(int val, int min, int max) { return val < min ? min : val > max ? max : val; }
 	public static long clamp(long val, long min, long max) { return val < min ? min : val > max ? max : val; }
 	public static double clamp(double val, double min, double max) { return val < min ? min : val > max ? max : val; }
-
-	/**
-	 * @see #interpolate(double, double, double, double, double)
-	 */
-	public static float interpolate(float in, float inMin, float inMax, float outMin, float outMax) {
-		if (inMin > inMax) { // reverse
-			float t = inMin;
-			inMin = inMax;
-			inMax = t;
-			t = outMin;
-			outMin = outMax;
-			outMax = t;
-		}
-
-		if (in <= inMin) return outMin;
-		if (in >= inMax) return outMax;
-
-		float xFrac = (in - inMin) / (inMax - inMin);
-		return outMin + xFrac * (outMax - outMin);
-	}
-
-	/**
-	 * <p>
-	 * linearly interpolate for y between [inMin, outMin] to [inMax, outMax] using in
-	 * </p>
-	 * y = outMin + (outMax - outMin) * (in - inMin) / (inMax - inMin) <br>
-	 * For example: <br>
-	 * if [inMin, outMin] is [0, 100], and [inMax,outMax] is [1, 200], <br>
-	 * then as in increases from 0 to 1, this function will increase from 100 to 200 <br>
-	 *
-	 * @return linearly interpolated value.  If in is outside the range, clip it to the nearest end
-	 */
-	public static double interpolate(double in, double inMin, double inMax, double outMin, double outMax) {
-		if (inMin > inMax) { // reverse
-			double t = inMin;
-			inMin = inMax;
-			inMax = t;
-			t = outMin;
-			outMin = outMax;
-			outMax = t;
-		}
-
-		if (in <= inMin) return outMin;
-		if (in >= inMax) return outMax;
-
-		double xFrac = (in - inMin) / (inMax - inMin);
-		return outMin + xFrac * (outMax - outMin);
-	}
-
-	/**
-	 * @see #interpolate(double, double, double, double, double)
-	 */
-	public static float interpolate(float old, float now, float delta) {
-		return old + delta * (now - old);
-	}
-	/**
-	 * @see #interpolate(double, double, double, double, double)
-	 */
-	public static double interpolate(double old, double now, double delta) {
-		return old + delta * (now - old);
-	}
 
 	/**
 	 * Returns an iterator providing a number sequence. This sequence starts with <i>{@code from}</i> (given as
@@ -311,35 +248,11 @@ public abstract class MathUtils {
 		return min + rand.nextInt(max - min + 1);
 	}
 
-	public static int Log2(int value) { return value == 0 ? 0 : Integer.numberOfLeadingZeros(value)^31; }
-	public static int Log2(long value) { return value == 0 ? 0 : Long.numberOfLeadingZeros(value)^31; }
 
-	// 神奇的德布鲁因序列
-	// https://halfrost.com/go_s2_de_bruijn/
-
-	private static final byte[] DeBruijnLogTable = {
-		 0,  9,  1, 10, 13, 21,  2, 29,
-		11, 14, 16, 18, 22, 25,  3, 30,
-		 8, 12, 20, 28, 15, 17, 24,  7,
-		19, 27, 23,  6, 26,  5,  4, 31
-	};
-	private static int MyLog2(int value) {
-		value |= value >>>  1;
-		value |= value >>>  2;
-		value |= value >>>  4;
-		value |= value >>>  8;
-		value |= value >>> 16;
-
-		// fast and no branching 0 -> 0
-		return DeBruijnLogTable[(value * 0x07C4ACDD) >>> 27];
+	public static final long[] MASK64 = new long[64];
+	public static final int[] MASK32 = new int[32];
+	static {
+		for (int i = 0; i < 64; i++) MASK64[i] = (1L << i) - 1;
+		for (int i = 0; i < 32; i++) MASK32[i] = (1 << i) - 1;
 	}
-	private static int MyLeadingZeroCount(int v) { return v == 0 ? 32 : MyLog2(v); }
-
-	private static final byte[] DeBruijnTrailingZeroTable = {
-		 0,  1, 28,  2, 29, 14, 24, 3,
-		30, 22, 20, 15, 25, 17,  4, 8,
-		31, 27, 13, 23, 21, 19, 16, 7,
-		26, 12, 18,  6, 11,  5, 10, 9
-	};
-	private static int MyTrailingZeroCount(int v) { return v == 0 ? 32 : DeBruijnTrailingZeroTable[((v & -v) * 0x077CB531) >>> 27]; }
 }

@@ -24,17 +24,13 @@ public class ConfigMaster {
 
 	public ConfigMaster(String type) {
 		switch (type.toLowerCase(Locale.ROOT)) {
-			case "yml":
-			case "yaml":
-				flag = NO_DUPLICATE_KEY|LITERAL_KEY|COMMENT;
+			case "yml", "yaml":
 				bp = p = new CCYaml(flag);
 				break;
 			case "xml":
-				flag = 0;
 				bp = p = new XMLParser();
 				break;
-			case "json":
-			case "json5":
+			case "json", "json5":
 				flag = NO_DUPLICATE_KEY|LITERAL_KEY|COMMENT|UNESCAPED_SINGLE_QUOTE;
 				bp = p = new CCJson(flag);
 				break;

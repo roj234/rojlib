@@ -4,14 +4,12 @@
 
 package roj.text.novel;
 
-import roj.collect.IntMap;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
-import roj.collect.ToIntMap;
+import roj.collect.*;
 import roj.concurrent.OperationDone;
 import roj.concurrent.TaskPool;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
+import roj.config.word.Tokenizer;
 import roj.io.IOUtil;
 import roj.text.*;
 import roj.ui.DragReorderHelper;
@@ -38,6 +36,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
+ * 屎山范例！
  * @author Roj234
  */
 public class NovelFrame extends JFrame {
@@ -99,16 +98,18 @@ public class NovelFrame extends JFrame {
 		btnFindChapter.setEnabled(false);
 
 		chapterManager = (DefaultTreeModel) cascadeChapterUI.getModel();
-		button1.addActionListener(e -> {
+		btnDelByLen.addActionListener(e -> {
 			chapters.clear();
 			((Chapter) chapterManager.getRoot()).flat(chapters);
 			chapters.remove(0);
-			String s = JOptionPane.showInputDialog(this, "length");
+			String s = JOptionPane.showInputDialog(this, "长度 (以!开始来小于等于)");
+			boolean lss = s.startsWith("!");
+			if (lss) s = s.substring(1);
 			int i = Integer.parseInt(s);
 			for (int j = chapters.size() - 1; j >= 0; j--) {
 				Chapter c = chapters.get(j);
 				int len = (c.data == null ? c.end - c.start : c.data.length());
-				if (len == i) {
+				if (lss ? len <= i : len == i) {
 					chapters.remove(j);
 				}
 			}
@@ -116,6 +117,60 @@ public class NovelFrame extends JFrame {
 			children.clear();
 			children.addAll(chapters);
 			chapterManager.reload();
+		});
+
+		CharList tmp = new CharList();
+		btnRegexMatch.addActionListener(e -> {
+			int[] match = new int[1];
+			tmp.clear();
+			novel_in.preg_replace_callback(novel_regexp, matcher -> {
+				tmp.append(++match[0]).append(' ').append(Tokenizer.addSlashes(matcher.group())).append('\n');
+				return matcher.group();
+			});
+			tmp.append("共找到").append(match[0]).append("个匹配");
+			errout.setText(tmp.toString());
+		});
+		btnRegexRpl.addActionListener(e -> {
+			novel_in.preg_replace_callback(novel_regexp, m -> {
+				tmp.clear();
+				tmp.append(alignReplaceTo.getText());
+				for (int j = 0; j <= m.groupCount(); j++) {
+					String str = m.group(j);
+					tmp.replace("$"+j, str);
+				}
+
+				return tmp;
+			});
+		});
+
+		btnFixEnter.addActionListener(e -> {
+			Int2IntMap length = new Int2IntMap();
+			int linenum = 0;
+			List<String> lines = LineReader.toLines(novel_in, false);
+			for (String line : lines) {
+				if (line.isEmpty()) continue;
+				length.getEntryOrCreate(line.length()).v++;
+				linenum++;
+			}
+			SimpleList<Int2IntMap.Entry> entries = new SimpleList<>(length.selfEntrySet());
+			entries.sort((o1, o2) -> Integer.compare(o1.v, o2.v));
+			System.out.println(linenum);
+			Int2IntMap.Entry pop = entries.pop();
+			System.out.println(pop);
+			novel_in.clear();
+			linenum = 0;
+			for (int i = 0; i < lines.size();) {
+				String line = lines.get(i++);
+				while (line.length() == pop.getIntKey()) {
+					System.out.println("merge "+line);
+					novel_in.append(line);
+					line = lines.get(i++);
+					linenum++;
+				}
+				novel_in.append(line).append('\n');
+			}
+
+			errout.setText("长度："+pop.getIntKey()+"\n合并："+linenum);
 		});
 	}
 
@@ -140,7 +195,7 @@ public class NovelFrame extends JFrame {
 
 	List<Chapter> chapters;
 
-	static final MyBitSet myWhiteSpace = MyBitSet.from("\r\n\t 　 \uFEFF\u200B");
+	static final MyBitSet myWhiteSpace = MyBitSet.from("\r\n\t 　 \uE5E5\uFEFF\u200B");
 
 	private Chapter firstActiveChapter(boolean nonnullWhenMultiply) {
 		TreePath[] paths = cascadeChapterUI.getSelectionPaths();
@@ -208,8 +263,7 @@ public class NovelFrame extends JFrame {
 			return;
 		}
 
-		if (keepModTime.isSelected())
-			file.setLastModified(time);
+		file.setLastModified(time);
 	}
 
 	private void align_novel(ActionEvent e) {
@@ -217,10 +271,6 @@ public class NovelFrame extends JFrame {
 
 		chapters.clear();
 		((Chapter) chapterManager.getRoot()).flat(chapters);
-
-		if (reorderChapter.isSelected()) {
-			chapters.sort((o1, o2) -> Long.compare(o1.no, o2.no));
-		}
 
 		SimpleList<String> replacedName = null;
 		ToIntMap<String> myChapterNo = new ToIntMap<>();
@@ -267,7 +317,7 @@ public class NovelFrame extends JFrame {
 				len--;
 			}
 
-			for (String line : new LineReader(new CharList.Slice(val, st, len))) {
+			for (String line : LineReader.create(new CharList.Slice(val, st, len), false)) {
 				if (!haveTrimmedFirstLine && (line.isEmpty() || prefixSpaceOnly.isSelected() && !Character.isWhitespace(line.charAt(0)))) {
 					novel_out.append(line).append('\n');
 					continue;
@@ -305,7 +355,7 @@ public class NovelFrame extends JFrame {
 		for (int j = 0; j <= m.groupCount(); j++) {
 			String str = m.group(j);
 			if (j == chapterId_group) {
-				if (checkBox1.isSelected()) {
+				if (btnReOrder.isSelected()) {
 					str = Integer.toString(myChapterNo.increase(String.valueOf(c.type), 1));
 					System.out.println("type="+c.type);
 				}
@@ -728,32 +778,30 @@ public class NovelFrame extends JFrame {
 		alignReplaceTo = new JTextField();
 		prefixSpaceOnly = new JCheckBox();
 		removeHalfEmpty = new JCheckBox();
-		reorderChapter = new JCheckBox();
 		renameChapter = new JCheckBox();
 		chapterNameType = new JComboBox<>();
 		checkChapterDup = new JButton();
 		delChapterText = new JButton();
 		delChapterName = new JButton();
-		keepModTime = new JCheckBox();
 		replaceChapter = new JButton();
 		nextDisorder = new JButton();
 		cascadeChapter = new JCheckBox();
-		btnTextReplaceRegex = new JButton();
-		btnTextReplaceBatch = new JButton();
+		btnRegexRpl = new JButton();
+		btnRegexMatch = new JButton();
 		scrollPane4 = new JScrollPane();
 		cascadeChapterUI = new JTree();
 		btnInsertMode = new JCheckBox();
-		button5 = new JButton();
-		checkBox1 = new JCheckBox();
-		button1 = new JButton();
-		advancedMenu = new JDialog();
+		btnAddChapter = new JButton();
+		btnReOrder = new JCheckBox();
+		btnDelByLen = new JButton();
+		btnFixEnter = new JButton();
 		var label5 = new JLabel();
-		var label6 = new JLabel();
 		chapIdGroupInp = new JSpinner();
+		var label6 = new JLabel();
 		chapNameGroupInp = new JSpinner();
+		advancedMenu = new JDialog();
 		scrollPane3 = new JScrollPane();
 		presetRegexpInp = new JTextArea();
-		var label8 = new JLabel();
 		chapterParamWin = new JDialog();
 		cpwOutName = new JTextField();
 		cpwChapName = new JTextField();
@@ -868,7 +916,7 @@ public class NovelFrame extends JFrame {
 		alignReplaceTo.setBounds(55, 110, 320, alignReplaceTo.getPreferredSize().height);
 
 		//---- prefixSpaceOnly ----
-		prefixSpaceOnly.setText("\u4ec5\u6574\u7406\u7a7a\u767d\u5f00\u59cb\u7684\u884c");
+		prefixSpaceOnly.setText("\u4e0d\u6574\u7406\u9876\u683c\u7684\u884c");
 		prefixSpaceOnly.setSelected(true);
 		contentPane.add(prefixSpaceOnly);
 		prefixSpaceOnly.setBounds(new Rectangle(new Point(15, 435), prefixSpaceOnly.getPreferredSize()));
@@ -877,11 +925,6 @@ public class NovelFrame extends JFrame {
 		removeHalfEmpty.setText("\u53bb\u966450%\u7684\u7a7a\u884c");
 		contentPane.add(removeHalfEmpty);
 		removeHalfEmpty.setBounds(new Rectangle(new Point(150, 435), removeHalfEmpty.getPreferredSize()));
-
-		//---- reorderChapter ----
-		reorderChapter.setText("\u91cd\u65b0\u6392\u5e8f\u7ae0\u8282");
-		contentPane.add(reorderChapter);
-		reorderChapter.setBounds(new Rectangle(new Point(255, 435), reorderChapter.getPreferredSize()));
 
 		//---- renameChapter ----
 		renameChapter.setText("\u91cd\u65b0\u751f\u6210\u7ae0\u8282\u540d\u79f0");
@@ -925,11 +968,6 @@ public class NovelFrame extends JFrame {
 		contentPane.add(delChapterName);
 		delChapterName.setBounds(new Rectangle(new Point(245, 500), delChapterName.getPreferredSize()));
 
-		//---- keepModTime ----
-		keepModTime.setText("\u4fdd\u7559\u4fee\u6539\u65f6\u95f4");
-		contentPane.add(keepModTime);
-		keepModTime.setBounds(new Rectangle(new Point(295, 460), keepModTime.getPreferredSize()));
-
 		//---- replaceChapter ----
 		replaceChapter.setText("\u66ff\u6362\u5185\u5bb9");
 		replaceChapter.setEnabled(false);
@@ -952,17 +990,17 @@ public class NovelFrame extends JFrame {
 		contentPane.add(cascadeChapter);
 		cascadeChapter.setBounds(new Rectangle(new Point(185, 130), cascadeChapter.getPreferredSize()));
 
-		//---- btnTextReplaceRegex ----
-		btnTextReplaceRegex.setText("\u6b63\u5219\u66ff\u6362");
-		btnTextReplaceRegex.setMargin(new Insets(0, 0, 0, 0));
-		contentPane.add(btnTextReplaceRegex);
-		btnTextReplaceRegex.setBounds(55, 135, 60, 20);
+		//---- btnRegexRpl ----
+		btnRegexRpl.setText("\u6b63\u5219\u66ff\u6362");
+		btnRegexRpl.setMargin(new Insets(0, 0, 0, 0));
+		contentPane.add(btnRegexRpl);
+		btnRegexRpl.setBounds(55, 135, 60, 20);
 
-		//---- btnTextReplaceBatch ----
-		btnTextReplaceBatch.setText("\u6279\u91cf\u66ff\u6362");
-		btnTextReplaceBatch.setMargin(new Insets(0, 0, 0, 0));
-		contentPane.add(btnTextReplaceBatch);
-		btnTextReplaceBatch.setBounds(120, 135, 60, 20);
+		//---- btnRegexMatch ----
+		btnRegexMatch.setText("\u6b63\u5219\u5339\u914d");
+		btnRegexMatch.setMargin(new Insets(0, 0, 0, 0));
+		contentPane.add(btnRegexMatch);
+		btnRegexMatch.setBounds(120, 135, 60, 20);
 
 		//======== scrollPane4 ========
 		{
@@ -980,27 +1018,54 @@ public class NovelFrame extends JFrame {
 		scrollPane4.setBounds(10, 160, 410, 270);
 
 		//---- btnInsertMode ----
-		btnInsertMode.setText("\u5feb\u901f\u63d2\u5165\u6a21\u5f0f");
+		btnInsertMode.setText("\u8282\u70b9\u63d2\u5165\u6a21\u5f0f");
 		btnInsertMode.setToolTipText("\u6309\u4f4f\u8282\u70b9(A)\u5e76\u62d6\u52a8\u5230\u8282\u70b9(B)\u4e0a\u65f6\n\u5c06A\u8bbe\u7f6e\u4e3aB\u7684\u5b69\u5b50");
 		btnInsertMode.addActionListener(e -> btnInsertMode(e));
 		contentPane.add(btnInsertMode);
 		btnInsertMode.setBounds(new Rectangle(new Point(10, 525), btnInsertMode.getPreferredSize()));
 
-		//---- button5 ----
-		button5.setText("\u65b0\u589e\u7ae0\u8282");
-		button5.setEnabled(false);
-		contentPane.add(button5);
-		button5.setBounds(new Rectangle(new Point(110, 525), button5.getPreferredSize()));
+		//---- btnAddChapter ----
+		btnAddChapter.setText("\u65b0\u589e\u7ae0\u8282/WIP");
+		btnAddChapter.setEnabled(false);
+		contentPane.add(btnAddChapter);
+		btnAddChapter.setBounds(new Rectangle(new Point(110, 525), btnAddChapter.getPreferredSize()));
 
-		//---- checkBox1 ----
-		checkBox1.setText("\u91cd\u65b0\u547d\u540d");
-		contentPane.add(checkBox1);
-		checkBox1.setBounds(new Rectangle(new Point(215, 580), checkBox1.getPreferredSize()));
+		//---- btnReOrder ----
+		btnReOrder.setText("\u91cd\u65b0\u751f\u6210\u5e8f\u53f7");
+		contentPane.add(btnReOrder);
+		btnReOrder.setBounds(new Rectangle(new Point(275, 435), btnReOrder.getPreferredSize()));
 
-		//---- button1 ----
-		button1.setText("del by len");
-		contentPane.add(button1);
-		button1.setBounds(new Rectangle(new Point(50, 575), button1.getPreferredSize()));
+		//---- btnDelByLen ----
+		btnDelByLen.setText("\u6309\u957f\u5ea6\u5220\u9664\u7ae0\u8282");
+		contentPane.add(btnDelByLen);
+		btnDelByLen.setBounds(new Rectangle(new Point(240, 460), btnDelByLen.getPreferredSize()));
+
+		//---- btnFixEnter ----
+		btnFixEnter.setText("\u8bc6\u522b\u5e76\u4fee\u590d\u786c\u56de\u8f66");
+		contentPane.add(btnFixEnter);
+		btnFixEnter.setBounds(new Rectangle(new Point(225, 525), btnFixEnter.getPreferredSize()));
+
+		//---- label5 ----
+		label5.setText("\u7ae0\u8282\u5e8f\u53f7\u7ec4");
+		contentPane.add(label5);
+		label5.setBounds(new Rectangle(new Point(375, 80), label5.getPreferredSize()));
+
+		//---- chapIdGroupInp ----
+		chapIdGroupInp.setModel(new SpinnerNumberModel(1, 0, null, 1));
+		chapIdGroupInp.addChangeListener(e -> chapIdGroupInpStateChanged(e));
+		contentPane.add(chapIdGroupInp);
+		chapIdGroupInp.setBounds(385, 95, 45, chapIdGroupInp.getPreferredSize().height);
+
+		//---- label6 ----
+		label6.setText("\u7ae0\u8282\u540d\u79f0\u7ec4");
+		contentPane.add(label6);
+		label6.setBounds(new Rectangle(new Point(375, 120), label6.getPreferredSize()));
+
+		//---- chapNameGroupInp ----
+		chapNameGroupInp.setModel(new SpinnerNumberModel(2, 0, null, 1));
+		chapNameGroupInp.addChangeListener(e -> chapNameGroupInpStateChanged(e));
+		contentPane.add(chapNameGroupInp);
+		chapNameGroupInp.setBounds(385, 135, 45, chapNameGroupInp.getPreferredSize().height);
 
 		contentPane.setPreferredSize(new Dimension(945, 670));
 		pack();
@@ -1008,7 +1073,7 @@ public class NovelFrame extends JFrame {
 
 		//======== advancedMenu ========
 		{
-			advancedMenu.setTitle("\u9ad8\u7ea7\u6b63\u5219\u53c2\u6570");
+			advancedMenu.setTitle("\u9884\u5b9a\u4e49\u6b63\u5219");
 			advancedMenu.addWindowListener(new WindowAdapter() {
 				@Override
 				public void windowClosing(WindowEvent e) {
@@ -1018,28 +1083,6 @@ public class NovelFrame extends JFrame {
 			var advancedMenuContentPane = advancedMenu.getContentPane();
 			advancedMenuContentPane.setLayout(null);
 
-			//---- label5 ----
-			label5.setText("\u7ae0\u8282\u5e8f\u53f7group");
-			advancedMenuContentPane.add(label5);
-			label5.setBounds(new Rectangle(new Point(10, 20), label5.getPreferredSize()));
-
-			//---- label6 ----
-			label6.setText("\u7ae0\u8282\u540d\u79f0group");
-			advancedMenuContentPane.add(label6);
-			label6.setBounds(new Rectangle(new Point(10, 45), label6.getPreferredSize()));
-
-			//---- chapIdGroupInp ----
-			chapIdGroupInp.setModel(new SpinnerNumberModel(1, 0, null, 1));
-			chapIdGroupInp.addChangeListener(e -> chapIdGroupInpStateChanged(e));
-			advancedMenuContentPane.add(chapIdGroupInp);
-			chapIdGroupInp.setBounds(90, 15, 45, chapIdGroupInp.getPreferredSize().height);
-
-			//---- chapNameGroupInp ----
-			chapNameGroupInp.setModel(new SpinnerNumberModel(2, 0, null, 1));
-			chapNameGroupInp.addChangeListener(e -> chapNameGroupInpStateChanged(e));
-			advancedMenuContentPane.add(chapNameGroupInp);
-			chapNameGroupInp.setBounds(90, 40, 45, chapNameGroupInp.getPreferredSize().height);
-
 			//======== scrollPane3 ========
 			{
 
@@ -1048,12 +1091,7 @@ public class NovelFrame extends JFrame {
 				scrollPane3.setViewportView(presetRegexpInp);
 			}
 			advancedMenuContentPane.add(scrollPane3);
-			scrollPane3.setBounds(10, 90, 380, 185);
-
-			//---- label8 ----
-			label8.setText("\u9884\u5b9a\u4e49\u6b63\u5219");
-			advancedMenuContentPane.add(label8);
-			label8.setBounds(new Rectangle(new Point(10, 70), label8.getPreferredSize()));
+			scrollPane3.setBounds(10, 10, 380, 265);
 
 			{
 				// compute preferred size
@@ -1152,27 +1190,26 @@ public class NovelFrame extends JFrame {
 	private JTextField alignReplaceTo;
 	private JCheckBox prefixSpaceOnly;
 	private JCheckBox removeHalfEmpty;
-	private JCheckBox reorderChapter;
 	private JCheckBox renameChapter;
 	private JComboBox<String> chapterNameType;
 	private JButton checkChapterDup;
 	private JButton delChapterText;
 	private JButton delChapterName;
-	private JCheckBox keepModTime;
 	private JButton replaceChapter;
 	private JButton nextDisorder;
 	private JCheckBox cascadeChapter;
-	private JButton btnTextReplaceRegex;
-	private JButton btnTextReplaceBatch;
+	private JButton btnRegexRpl;
+	private JButton btnRegexMatch;
 	private JScrollPane scrollPane4;
 	private JTree cascadeChapterUI;
 	private JCheckBox btnInsertMode;
-	private JButton button5;
-	private JCheckBox checkBox1;
-	private JButton button1;
-	private JDialog advancedMenu;
+	private JButton btnAddChapter;
+	private JCheckBox btnReOrder;
+	private JButton btnDelByLen;
+	private JButton btnFixEnter;
 	private JSpinner chapIdGroupInp;
 	private JSpinner chapNameGroupInp;
+	private JDialog advancedMenu;
 	private JScrollPane scrollPane3;
 	private JTextArea presetRegexpInp;
 	private JDialog chapterParamWin;

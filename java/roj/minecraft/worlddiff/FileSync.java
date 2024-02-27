@@ -21,8 +21,6 @@ import roj.net.mss.MSSKeyPair;
 import roj.net.mss.SimpleEngineFactory;
 import roj.net.proto_obf.ProtoObf;
 import roj.text.ACalendar;
-import roj.text.logging.Logger;
-import roj.text.logging.LoggingStream;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -48,10 +46,6 @@ public class FileSync implements ChannelHandler {
 	private static int HASH_LENGTH;
 
 	public static void main(String[] args) throws Exception {
-		LoggingStream log = new LoggingStream(Logger.getLogger());
-		System.setOut(log);
-		System.setErr(log);
-
 		InputStream cfgin = FileSync.class.getClassLoader().getResourceAsStream("cas_config.yml");
 		if (cfgin == null) {
 			if (args.length == 0) throw new IOException("缺少配置文件.");
@@ -111,7 +105,7 @@ public class FileSync implements ChannelHandler {
 			System.out.println("生成EdDSA证书");
 
 			ILProvider.register();
-			KeyPair kp = KeyType.getInstance("EdDSA").getKeyPair(new File("fs.key"), new File("fs.pem"), "114514".getBytes());
+			KeyPair kp = KeyType.getInstance("EdDSA").loadOrGenerateKey(new File("fs.key"), "114514".getBytes());
 
 			SimpleEngineFactory factory = SimpleEngineFactory.server().key(new MSSKeyPair(kp));
 

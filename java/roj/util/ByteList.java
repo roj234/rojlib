@@ -27,20 +27,6 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	public byte[] list;
 
-	public static ByteList wrap(byte[] b) { return new ByteList(b); }
-	public static ByteList wrap(byte[] b, int off, int len) { return new ByteList.Slice(b, off, len); }
-
-	public static ByteList wrapWrite(byte[] b) { return wrapWrite(b, 0, b.length); }
-	public static ByteList wrapWrite(byte[] b, int off, int len) { ByteList bl = new ByteList.Slice(b, off, len); bl.wIndex = 0; return bl; }
-
-	public static ByteList allocate(int cap) { return new ByteList(cap); }
-	public static ByteList allocate(int capacity, int maxCapacity) {
-		return new ByteList(capacity) {
-			@Override
-			public int maxCapacity() { return maxCapacity; }
-		};
-	}
-
 	public ByteList() { list = ArrayCache.BYTES; }
 	public ByteList(int len) { list = new byte[len]; }
 
@@ -285,7 +271,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 		// better on Java 9 and later
 		if (byteLen == s.length()) {
-			s.getBytes(0,byteLen,list,wi);
+			s.getBytes(0,byteLen,list,arrayOffset()+wi);
 			return;
 		}
 
@@ -472,8 +458,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		int i = rIndex + arrayOffset();
 		int len = wIndex + arrayOffset();
 		byte[] l = list;
-		while (true) {
-			if (i >= len) throw new ArrayIndexOutOfBoundsException();
+		while (i < len) {
 			byte b = l[i++];
 			if (b == '\r' || b == '\n') {
 				if (b == '\r' && i < wIndex && l[i] == '\n') i++;

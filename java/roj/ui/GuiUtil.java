@@ -169,11 +169,4 @@ public final class GuiUtil {
 			}
 		};
 	}
-
-	@Deprecated
-	public static void center(Window frame) {
-		Dimension dim = Toolkit.getDefaultToolkit().getScreenSize();
-		Rectangle bounds = frame.getBounds();
-		frame.setBounds((dim.width - bounds.width) / 2, (dim.height - bounds.height) / 2, bounds.width, bounds.height);
-	}
 }

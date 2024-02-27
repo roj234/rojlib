@@ -122,9 +122,9 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 
 	public final int length() { return eof<0 ? off+len : 0x70000000; }
 	public final char charAt(int i) {
-		fillBuffer(i+1);
+		fillBuffer(i+2);
 		if (i > off+len) {
-			if (i > off+len + 32) throw new IllegalStateException("not a sequence unless in Parser");
+			if (i > off+len + 32) throw new IllegalStateException("not a sequence unless in Parser("+i+" on "+off+")");
 			return 0;
 		}
 		return buf[i-off];
@@ -133,12 +133,6 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 	public final CharSequence subSequence(int start, int end) {
 		fillBuffer(end);
 		return new CharList.Slice(buf, start-off, end-off);
-	}
-
-	private boolean unbuffered;
-	public TextReader unbuffered() {
-		unbuffered = true;
-		return this;
 	}
 
 	private void fillBuffer(int i) {
@@ -153,10 +147,8 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 				System.arraycopy(buf, moveBefore, buf, 0, len -= moveBefore);
 			}
 
-			if (!unbuffered) {
-				toRead = Math.max(toRead, buf.length/2 - len);
-				if (toRead < 32) toRead = 32;
-			}
+			toRead = Math.max(toRead, buf.length/2 - len);
+			if (toRead < 32) toRead = 32;
 
 			if (buf.length < len+toRead) grow(toRead);
 
@@ -312,8 +304,8 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 		if (remain < buf.length) {
 			int r = fill(buf, 0, buf.length);
 			if (r <= 0) return r;
-			this.off = 0;
-			this.len = Math.max(r - remain, 0);
+			this.off = remain;
+			this.len = r - remain;
 			System.arraycopy(buf, 0, cbuf, coff, remain);
 			return clen;
 		}

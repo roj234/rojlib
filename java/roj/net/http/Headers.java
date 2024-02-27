@@ -276,7 +276,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		E entry = (E) getOrCreateEntry("set-cookie");
 		if (entry.v == UNDEFINED) size++;
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		cookies.get(0).write(sb, true);
 		entry.setValue(sb.toString());
 
@@ -296,7 +296,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 		Iterator<Cookie> itr = cookies.iterator();
 
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		while (true) {
 			itr.next().write(sb, false);
 			if (!itr.hasNext()) break;

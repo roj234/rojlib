@@ -23,9 +23,9 @@ public class ZipRouter implements Router {
 
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws IOException {
-		String url = req.path().substring(1);
+		String url = req.path();
 
-		boolean flag = req.path().endsWith("/");
+		boolean flag = url.isEmpty() || url.endsWith("/");
 		ZEntry ze = zipFs.getEntries().get(flag ? url + "index.html" : url);
 		if (ze == null) {
 			if (flag) {

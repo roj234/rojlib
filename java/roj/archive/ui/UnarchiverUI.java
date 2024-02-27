@@ -330,8 +330,8 @@ public class UnarchiverUI extends JFrame {
 		var scrollPane1 = new JScrollPane();
 		uiPathTree = new JTree();
 		var label5 = new JLabel();
-		uiStoreCTime = new JCheckBox();
 		uiStoreMTime = new JCheckBox();
+		uiStoreCTime = new JCheckBox();
 		uiStoreATime = new JCheckBox();
 		uiStoreAttr = new JCheckBox();
 		uiStoreAnti = new JCheckBox();
@@ -404,16 +404,16 @@ public class UnarchiverUI extends JFrame {
 		contentPane.add(label5);
 		label5.setBounds(new Rectangle(new Point(320, 10), label5.getPreferredSize()));
 
-		//---- uiStoreCTime ----
-		uiStoreCTime.setText("\u4fee\u6539\u65f6\u95f4");
-		uiStoreCTime.setSelected(true);
-		contentPane.add(uiStoreCTime);
-		uiStoreCTime.setBounds(new Rectangle(new Point(315, 30), uiStoreCTime.getPreferredSize()));
-
 		//---- uiStoreMTime ----
-		uiStoreMTime.setText("\u521b\u5efa\u65f6\u95f4");
+		uiStoreMTime.setText("\u4fee\u6539\u65f6\u95f4");
+		uiStoreMTime.setSelected(true);
 		contentPane.add(uiStoreMTime);
-		uiStoreMTime.setBounds(new Rectangle(new Point(315, 50), uiStoreMTime.getPreferredSize()));
+		uiStoreMTime.setBounds(new Rectangle(new Point(315, 30), uiStoreMTime.getPreferredSize()));
+
+		//---- uiStoreCTime ----
+		uiStoreCTime.setText("\u521b\u5efa\u65f6\u95f4");
+		contentPane.add(uiStoreCTime);
+		uiStoreCTime.setBounds(new Rectangle(new Point(315, 50), uiStoreCTime.getPreferredSize()));
 
 		//---- uiStoreATime ----
 		uiStoreATime.setText("\u8bbf\u95ee\u65f6\u95f4");
@@ -468,8 +468,8 @@ public class UnarchiverUI extends JFrame {
 	private JButton uiExtract;
 	private JComboBox<String> uiDuplicateType;
 	private JTree uiPathTree;
-	private JCheckBox uiStoreCTime;
 	private JCheckBox uiStoreMTime;
+	private JCheckBox uiStoreCTime;
 	private JCheckBox uiStoreATime;
 	private JCheckBox uiStoreAttr;
 	private JCheckBox uiStoreAnti;

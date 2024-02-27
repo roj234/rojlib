@@ -191,7 +191,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "prefixSpaceOnly"
-				"text": "仅整理空白开始的行"
+				"text": "不整理顶格的行"
 				"selected": true
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 15
@@ -202,13 +202,6 @@ new FormModel {
 				"text": "去除50%的空行"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 150
-				"y": 435
-			} )
-			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "reorderChapter"
-				"text": "重新排序章节"
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 255
 				"y": 435
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
@@ -264,13 +257,6 @@ new FormModel {
 				"x": 245
 				"y": 500
 			} )
-			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "keepModTime"
-				"text": "保留修改时间"
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 295
-				"y": 460
-			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "replaceChapter"
 				"text": "替换内容"
@@ -300,7 +286,7 @@ new FormModel {
 				"y": 130
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
-				name: "btnTextReplaceRegex"
+				name: "btnRegexRpl"
 				"text": "正则替换"
 				"margin": &Insets0 new java.awt.Insets( 0, 0, 0, 0 )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
@@ -310,8 +296,8 @@ new FormModel {
 				"height": 20
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
-				name: "btnTextReplaceBatch"
-				"text": "批量替换"
+				name: "btnRegexMatch"
+				"text": "正则匹配"
 				"margin": #Insets0
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"width": 60
@@ -336,7 +322,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "btnInsertMode"
-				"text": "快速插入模式"
+				"text": "节点插入模式"
 				"toolTipText": "按住节点(A)并拖动到节点(B)上时\n将A设置为B的孩子"
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "btnInsertMode", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
@@ -344,54 +330,43 @@ new FormModel {
 				"y": 525
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
-				name: "button5"
-				"text": "新增章节"
+				name: "btnAddChapter"
+				"text": "新增章节/WIP"
 				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 110
 				"y": 525
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "checkBox1"
-				"text": "重新命名"
+				name: "btnReOrder"
+				"text": "重新生成序号"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 215
-				"y": 580
+				"x": 275
+				"y": 435
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
-				name: "button1"
-				"text": "del by len"
+				name: "btnDelByLen"
+				"text": "按长度删除章节"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 50
-				"y": 575
+				"x": 240
+				"y": 460
 			} )
-		}, new FormLayoutConstraints( null ) {
-			"location": new java.awt.Point( 0, 0 )
-			"size": new java.awt.Dimension( 945, 670 )
-		} )
-		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) ) {
-			name: "advancedMenu"
-			"title": "高级正则参数"
-			addEvent( new FormEvent( "java.awt.event.WindowListener", "windowClosing", "advancedMenuWindowClosing", true ) )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnFixEnter"
+				"text": "识别并修复硬回车"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 225
+				"y": 525
+			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label5"
-				"text": "章节序号group"
+				"text": "章节序号组"
 				auxiliary() {
 					"JavaCodeGenerator.variableLocal": true
 				}
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 10
-				"y": 20
-			} )
-			add( new FormComponent( "javax.swing.JLabel" ) {
-				name: "label6"
-				"text": "章节名称group"
-				auxiliary() {
-					"JavaCodeGenerator.variableLocal": true
-				}
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 10
-				"y": 45
+				"x": 375
+				"y": 80
 			} )
 			add( new FormComponent( "javax.swing.JSpinner" ) {
 				name: "chapIdGroupInp"
@@ -401,9 +376,19 @@ new FormModel {
 				}
 				addEvent( new FormEvent( "javax.swing.event.ChangeListener", "stateChanged", "chapIdGroupInpStateChanged", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 90
-				"y": 15
+				"x": 385
+				"y": 95
 				"width": 45
+			} )
+			add( new FormComponent( "javax.swing.JLabel" ) {
+				name: "label6"
+				"text": "章节名称组"
+				auxiliary() {
+					"JavaCodeGenerator.variableLocal": true
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 375
+				"y": 120
 			} )
 			add( new FormComponent( "javax.swing.JSpinner" ) {
 				name: "chapNameGroupInp"
@@ -413,10 +398,18 @@ new FormModel {
 				}
 				addEvent( new FormEvent( "javax.swing.event.ChangeListener", "stateChanged", "chapNameGroupInpStateChanged", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 90
-				"y": 40
+				"x": 385
+				"y": 135
 				"width": 45
 			} )
+		}, new FormLayoutConstraints( null ) {
+			"location": new java.awt.Point( 0, 0 )
+			"size": new java.awt.Dimension( 945, 670 )
+		} )
+		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) ) {
+			name: "advancedMenu"
+			"title": "预定义正则"
+			addEvent( new FormEvent( "java.awt.event.WindowListener", "windowClosing", "advancedMenuWindowClosing", true ) )
 			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
 				name: "scrollPane3"
 				add( new FormComponent( "javax.swing.JTextArea" ) {
@@ -425,19 +418,9 @@ new FormModel {
 				} )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 10
-				"y": 90
+				"y": 10
 				"width": 380
-				"height": 185
-			} )
-			add( new FormComponent( "javax.swing.JLabel" ) {
-				name: "label8"
-				"text": "预定义正则"
-				auxiliary() {
-					"JavaCodeGenerator.variableLocal": true
-				}
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 10
-				"y": 70
+				"height": 265
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 950, 0 )

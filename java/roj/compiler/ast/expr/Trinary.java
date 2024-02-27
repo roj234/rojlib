@@ -73,7 +73,6 @@ final class Trinary extends ExprNode {
 	// 通过这种处理(不检查noRet)，现在可以直接使用 ? : 而不是必须在有返回值的环境了
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
-		// TODO review possible side-effect
 		if (boolHack != 0 && !(val instanceof Binary)) {
 			mustBeStatement(noRet);
 			cw.ctx1.report(Kind.WARNING, "trinary.note.boolean_hack", this);

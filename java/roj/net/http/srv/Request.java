@@ -288,7 +288,7 @@ public final class Request extends Headers {
 			}
 		}
 		// WWW-Authenticate: Basic realm="Fantasy"
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		for (AuthScheme authScheme : schemes) sb.append(authScheme.type()).append(' ');
 		Tokenizer.addSlashes(sb.append("realm=\""), URIUtil.encodeURI(message)).append("\"");
 		responseHeader.put("www-authenticate", sb.toStringAndFree());

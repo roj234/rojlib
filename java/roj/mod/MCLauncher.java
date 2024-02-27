@@ -114,7 +114,7 @@ public class MCLauncher {
 			if (!skip) {
 				int r = ifBreakWait();
 				if (r == -1) {
-					if (task != null) task.cancel(true);
+					if (task != null) task.cancel();
 					return;
 				}
 				if (r == 1) skip = true;
@@ -197,7 +197,7 @@ public class MCLauncher {
 	private static boolean checkMCRun() {
 		if (task != null && !task.isDone()) {
 			int n = JOptionPane.showConfirmDialog(activeWindow, "MC没有退出,是否结束进程?", "询问", JOptionPane.YES_NO_OPTION);
-			if (n == JOptionPane.YES_OPTION) task.cancel(true);
+			if (n == JOptionPane.YES_OPTION) task.cancel();
 			else return true;
 		}
 		return false;
@@ -750,7 +750,7 @@ public class MCLauncher {
 		}
 
 		@Override
-		public boolean cancel(boolean force) {
+		public boolean cancel() {
 			if (run || process == null) return false;
 			process.destroyForcibly();
 			process = null;
@@ -875,7 +875,7 @@ public class MCLauncher {
 			if (wait && System.currentTimeMillis() > except) {
 				int r = ifBreakWait();
 				if (r == -1) {
-					cancel(true);
+					cancel();
 					return null;
 				}
 				if (r == 1) {wait = false;} else refresh();
@@ -987,7 +987,7 @@ public class MCLauncher {
 
 		//TODO
 		@Override
-		public boolean cancel(boolean force) {
+		public boolean cancel() {
 			refresh();
 			entries.clear();
 			return true;

@@ -428,7 +428,6 @@ public class QZArchiver {
 		if (bar != null) {
 			bar.setName("1/4 复制未修改的文件");
 			bar.setUnit("B");
-			bar.setDataWindow(Integer.MAX_VALUE);
 			bar.updateForce(0);
 			bar.addMax(keepSize);
 		}

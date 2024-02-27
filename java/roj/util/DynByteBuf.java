@@ -2,8 +2,10 @@ package roj.util;
 
 import org.jetbrains.annotations.NotNull;
 import roj.io.IOUtil;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.GB18030;
+import roj.text.J9String;
 import roj.text.UTF8MB4;
 
 import java.io.*;
@@ -16,6 +18,31 @@ import java.util.function.IntUnaryOperator;
  * @since 2022/5/19 1:44
  */
 public abstract class DynByteBuf extends OutputStream implements CharSequence, DataInput, DataOutput {
+	public static ByteList wrap(byte[] b) { return new ByteList(b); }
+	public static ByteList wrap(byte[] b, int off, int len) { return new ByteList.Slice(b, off, len); }
+
+	public static ByteList wrapWrite(byte[] b) { return wrapWrite(b, 0, b.length); }
+	public static ByteList wrapWrite(byte[] b, int off, int len) { ByteList bl = new ByteList.Slice(b, off, len); bl.wIndex = 0; return bl; }
+
+	public static ByteList allocate() { return new ByteList(); }
+	public static ByteList allocate(int cap) { return new ByteList(cap); }
+	public static ByteList allocate(int capacity, int maxCapacity) {
+		return new ByteList(capacity) {
+			@Override
+			public int maxCapacity() { return maxCapacity; }
+		};
+	}
+
+	public static DirectByteList allocateDirect() { return new DirectByteList(); }
+	public static DirectByteList allocateDirect(int capacity) { return new DirectByteList(capacity); }
+	public static DirectByteList allocateDirect(int capacity, int maxCapacity) {
+		return new DirectByteList(capacity) {
+			@Override
+			public int maxCapacity() { return maxCapacity; }
+		};
+	}
+	public static DirectByteList wrap(long address, int length) { return new DirectByteList.Slice(address, length); }
+
 	public final class BufferInputStream extends InputStream {
 		public DynByteBuf buffer() { return DynByteBuf.this; }
 
@@ -174,6 +201,8 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 		putShort(byteLen)._writeDioUTF(str, byteLen);
 	}
 	public static int byteCountDioUTF(@NotNull String str) {
+		if (ReflectionUtils.JAVA_VERSION >= 9 && J9String.isLatin1(str)) return str.length();
+
 		int len = str.length();
 		int byteLen = len;
 

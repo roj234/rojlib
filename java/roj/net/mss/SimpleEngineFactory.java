@@ -1,12 +1,10 @@
 package roj.net.mss;
 
 import roj.collect.IntMap;
-import roj.crypt.KeyType;
 import roj.net.SecureUtil;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.X509KeyManager;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.*;
@@ -50,22 +48,6 @@ public final class SimpleEngineFactory implements Supplier<MSSEngine> {
 		if (!client && !(key instanceof MSSKeyPair)) throw new IllegalArgumentException("Server mode psc must be private key");
 		if (psc == null) psc = new IntMap<>();
 		psc.putInt(id, key);
-		return this;
-	}
-	public SimpleEngineFactory pscOnly(File file, String format) {
-		if (!client) throw new IllegalArgumentException("Client mode only");
-		if (file.isFile()) {
-			KeyType kf = KeyType.getInstance(format);
-			try {
-				PublicKey pk = kf.getPublic(file);
-				if (pk != null) {
-					psc(0, pk);
-					switches |= MSSEngine.PSC_ONLY;
-				}
-			} catch (IOException | GeneralSecurityException e) {
-				e.printStackTrace();
-			}
-		}
 		return this;
 	}
 

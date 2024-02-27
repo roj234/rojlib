@@ -206,7 +206,8 @@ public class WavDecoder implements AudioDecoder {
 		int pos = (int) (second * bytePerSecond);
 		if (pos < 0) pos = 0;
 		else if (pos > dataEnd) pos = dataEnd;
-		in.seek(dataBegin + pos);
+		// ~ ( fs - 1 ) => - fs
+		in.seek(dataBegin + (pos & -af.getFrameSize()));
 	}
 
 	@Override

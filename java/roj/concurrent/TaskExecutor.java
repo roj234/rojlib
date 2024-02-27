@@ -70,7 +70,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler {
 	public void clearTasks() {
 		ConcurrentLinkedQueue<ITask> queue = tasks;
 		tasks = new ConcurrentLinkedQueue<>();
-		for (ITask task : queue) task.cancel(true);
+		for (ITask task : queue) task.cancel();
 		queue.clear();
 
 		LockSupport.unpark(this);

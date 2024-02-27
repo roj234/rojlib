@@ -745,7 +745,7 @@ public final class CLIUtil implements Runnable {
 					}
 
 					int i = LINES.size()-1;
-					while (true) {
+					if (i > 0) while (true) {
 						try {
 							CE.encodeFixedIn(LINES.get(i), SEQ);
 						} catch (Throwable ignored) {}

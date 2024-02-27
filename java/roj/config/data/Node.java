@@ -140,7 +140,7 @@ public abstract class Node {
 	public abstract byte nodeType();
 	public Element asElement() { throw new IllegalArgumentException("类型不是元素"); }
 	public String textContent() {
-		CharList sb = IOUtil.ddLayeredCharBuf();
+		CharList sb = new CharList();
 		appendTextContent(sb);
 		return sb.toStringAndFree();
 	}

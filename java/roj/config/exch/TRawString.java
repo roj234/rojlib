@@ -5,8 +5,11 @@ import roj.config.VinaryParser;
 import roj.config.data.CEntry;
 import roj.config.data.Type;
 import roj.config.serial.CVisitor;
+import roj.config.serial.ToSomeString;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
+
+import java.lang.reflect.Method;
 
 /**
  * @author Roj234
@@ -36,5 +39,16 @@ public final class TRawString extends CEntry {
 	public Object unwrap() { return getType(); }
 	protected void toBinary(DynByteBuf w, VinaryParser struct) { getType(); }
 
-	public void forEachChild(CVisitor ser) { getType(); }
+	public void forEachChild(CVisitor ser) {
+		if ((ser instanceof ToSomeString x)) {
+			try {
+				Method m = ToSomeString.class.getDeclaredMethod("preValue", boolean.class);
+				m.setAccessible(true);
+				m.invoke(x, false);
+			} catch (Throwable e) {
+				e.printStackTrace();
+			}
+			x.getHalfValue().append(v);
+		} else getType();
+	}
 }

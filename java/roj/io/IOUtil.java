@@ -5,7 +5,6 @@ import roj.concurrent.FastThreadLocal;
 import roj.concurrent.Waitable;
 import roj.crypt.Base64;
 import roj.math.MutableLong;
-import roj.net.http.HttpRequest;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -15,7 +14,6 @@ import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.*;
-import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.FileChannel;
@@ -87,11 +85,6 @@ public final class IOUtil {
 	public ByteList wrap(byte[] b) { return shell.setR(b,0,b.length); }
 	public ByteList wrap(byte[] b, int off, int len) { return shell.setR(b,off,len); }
 	// endregion
-
-	@Deprecated
-	public static ByteList ddLayeredByteBuf() { return new ByteList(); }
-	@Deprecated
-	public static CharList ddLayeredCharBuf() { return new CharList(); }
 
 	public static ByteList getSharedByteBuf() {
 		ByteList o = SharedCoder.get().byteBuf;
@@ -225,8 +218,6 @@ public final class IOUtil {
 		}
 		return true;
 	}
-	@Deprecated
-	public static boolean deleteFile(File file) { return file.delete(); }
 
 	public static void allocSparseFile(File file, long length) throws IOException {
 		// noinspection all
@@ -442,16 +433,12 @@ public final class IOUtil {
 	// todo 支持HTTP2.0后移走
 	public static int timeout = 10000;
 
-	public static ByteList downloadFileToMemory(String url) throws IOException {
-		return HttpRequest.nts().url(new URL(url)).execute().bytes();
-	}
-
 	public static final class ImmediateFuture implements Waitable {
 		@Override
 		public void waitFor() {}
 		@Override
 		public boolean isDone() { return true; }
 		@Override
-		public void cancel() {}
+		public boolean cancel() { return true; }
 	}
 }

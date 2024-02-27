@@ -48,9 +48,12 @@ public abstract class QZCoder {
 			}
 		}
 
-		buf = buf.slice(len);
+		int wIdx = buf.wIndex();
+		buf.wIndex(buf.rIndex+len);
 		QZCoder coder = coders.get(buf);
-		return coder == null ? new Unknown(buf.toByteArray()) : coder.factory();
+		buf.rIndex = buf.wIndex();
+		buf.wIndex(wIdx);
+		return coder == null ? new Unknown(buf.readBytes(len)) : coder.factory();
 	}
 
 	// 黑科技.jpg

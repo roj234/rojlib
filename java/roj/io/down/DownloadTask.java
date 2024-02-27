@@ -380,9 +380,9 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 	@Override
 	public boolean isDone() { return done.get() < -1; }
 	@Override
-	public void cancel() {
+	public boolean cancel() {
 		if (ex == null) ex = new CancellationException();
-		if (done.getAndSet(-4) == -4) return;
+		if (done.getAndSet(-4) == -4) return true;
 
 		if (handler != null) handler.shutdown();
 		if (tasks != null) {
@@ -391,6 +391,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 			}
 		}
 		synchronized (this) { notifyAll(); }
+		return true;
 	}
 
 	void onSubDone() {

@@ -34,8 +34,8 @@ public final class CCYaml extends YAMLParser implements CCParser {
 
 	private void ccLineArray() throws ParseException {
 		int superIndent = prevIndent;
-		int firstIndent = getIndent();
-		if (firstIndent <= superIndent) throw err("下级缩进("+firstIndent+")<=上级("+superIndent+")");
+		int firstIndent = indent;
+		if (firstIndent < superIndent) throw err("下级缩进("+firstIndent+")<上级("+superIndent+")");
 
 		cc.valueList();
 		int size = 0;
@@ -43,7 +43,7 @@ public final class CCYaml extends YAMLParser implements CCParser {
 		while (true) {
 			int line = LN;
 			Word w = next();
-			if (LN > line && getIndent() == firstIndent && w.type() == delim) {
+			if (LN > line && indent <= firstIndent) {
 				cc.valueNull();
 				size++;
 			} else {
@@ -62,7 +62,7 @@ public final class CCYaml extends YAMLParser implements CCParser {
 			}
 
 			int off;
-			if (w.type() != delim || (off = getIndent()) < firstIndent) {
+			if (w.type() != delim || superIndent < 0 || (off = indent) < firstIndent) {
 				retractWord();
 				break;
 			} else if (off != firstIndent) throw err("缩进有误:"+off+"/"+firstIndent);
@@ -72,7 +72,7 @@ public final class CCYaml extends YAMLParser implements CCParser {
 	}
 	private void ccObject(Word w) throws ParseException {
 		int superIndent = prevIndent;
-		int firstIndent = getIndent();
+		int firstIndent = indent;
 		if (firstIndent <= superIndent) throw err("下级缩进("+firstIndent+")<=上级("+superIndent+")");
 
 		cc.valueMap();
@@ -109,7 +109,7 @@ public final class CCYaml extends YAMLParser implements CCParser {
 			w = nextNN();
 			if (w.type() == EOF) break;
 
-			int indent = getIndent();
+			int indent = this.indent;
 			if (indent < firstIndent) {
 				// 上一个是List
 				if (firstIndent == Integer.MAX_VALUE) {
@@ -134,10 +134,8 @@ public final class CCYaml extends YAMLParser implements CCParser {
 				case left_m_bracket: CCJson.jsonList(this, flag|LITERAL_KEY); break;
 				case left_l_bracket: CCJson.jsonMap(this, flag|LITERAL_KEY); break;
 				case multiline: case multiline_clump: cc.value(cnt); break;
-				case Word.STRING:
-				case Word.LITERAL: if (!checkMap()) cc.value(cnt); break;
-				case Word.DOUBLE:
-				case Word.FLOAT: {
+				case Word.STRING, Word.LITERAL: if (!checkMap()) cc.value(cnt); break;
+				case Word.DOUBLE, Word.FLOAT: {
 					double d = w.asDouble();
 					if (!checkMap()) cc.value(d);
 					break;
@@ -148,8 +146,7 @@ public final class CCYaml extends YAMLParser implements CCParser {
 					break;
 				}
 				case Word.RFCDATE_DATE: cc.valueDate(w.asLong()); break;
-				case Word.RFCDATE_DATETIME:
-				case Word.RFCDATE_DATETIME_TZ: cc.valueTimestamp(w.asLong()); break;
+				case Word.RFCDATE_DATETIME, Word.RFCDATE_DATETIME_TZ: cc.valueTimestamp(w.asLong()); break;
 				case Word.LONG: cc.value(w.asLong()); break;
 				case TRUE: case FALSE: {
 					boolean b = w.type() == TRUE;
@@ -158,7 +155,10 @@ public final class CCYaml extends YAMLParser implements CCParser {
 				}
 				case NULL: if (!checkMap()) cc.valueNull(); break;
 				case delim:
-					if (prevLN == LN && LN != 1) throw err("期待换行");
+					if (prevLN == LN && LN != 1) {
+						if ((flag&LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
+						prevIndent = -1;
+					}
 					ccLineArray();
 					break;
 				case Word.EOF: cc.valueNull(); break;
@@ -173,29 +173,35 @@ public final class CCYaml extends YAMLParser implements CCParser {
 	public CVisitor cc() { return cc; }
 
 	private boolean checkMap() throws ParseException {
+		mark();
+
 		int i = prevIndex;
 		Word firstKey = tmpKey.init(wd.type(), wd.pos(), wd.val());
 
 		int ln = prevLN;
-		short type = nextNN().type();
-
-		if (type == colon) {
-			if (getIndent() <= prevIndent) {
+		if (nextNN().type() == colon) {
+			if (indent <= prevIndent) {
 				if (prevLN == ln) {
-					throw err("若"+firstKey.val()+"是一个key,则其必须换行");
+					if ((flag&LENIENT) == 0) throw err("一行内不允许同时放置列表和映射 (通过LENIENT参数关闭该限制)");
+					//' - 'key: val
+					//单引号部分
+					//第一个字符: indent
+					//第二个字符: +1
+					//第三个字符: wd.pos-wd.val.length - i
+					indent = indent+1-i+wd.pos()-wd.val().length();
 				} else {
-					index = i;
+					retract();
+					retractWord();
 					cc.valueNull();
-					return true;
 				}
 			}
 
-			retractWord();
+			retract();
 			ccObject(firstKey);
 			return true;
 		}
 
-		retractWord();
+		retract();
 		return false;
 	}
 }

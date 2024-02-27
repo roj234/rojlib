@@ -102,7 +102,7 @@ public class MSSEngineServer extends MSSEngine {
 		// fast-fail preventing useless waiting
 		if (stage == CLIENT_HELLO && rx.isReadable() &&
 			(rx.get(rx.rIndex) != H_CLIENT_HELLO && rx.get(rx.rIndex) != P_ALERT))
-			return error(ILLEGAL_PACKET, "not mss protocol");
+			return error(ILLEGAL_PACKET, null);
 
 		int lim = rx.wIndex();
 		int type = readPacket(rx);
@@ -113,13 +113,13 @@ public class MSSEngineServer extends MSSEngine {
 			switch (stage) {
 				case CLIENT_HELLO:
 				case RETRY_KEY_EXCHANGE:
-					if (type != H_CLIENT_HELLO) return error(ILLEGAL_PACKET, "");
+					if (type != H_CLIENT_HELLO) return error(ILLEGAL_PACKET, null);
 					return handleClientHello(tx, rx);
 				case PREFLIGHT_END_WAIT:
 					if (type == P_PREDATA) return handlePreflight(tx, rx);
 					stage = FINISH_WAIT;
 				case FINISH_WAIT:
-					if (type != H_ENCRYPTED_EXTENSION) return error(ILLEGAL_PACKET, "");
+					if (type != H_ENCRYPTED_EXTENSION) return error(ILLEGAL_PACKET, null);
 					return handleFinish(tx, rx);
 			}
 		} catch (GeneralSecurityException e) {
@@ -230,8 +230,8 @@ public class MSSEngineServer extends MSSEngine {
 	// u4 support_key_bits
 	// extension[]
 	private int handleClientHello(DynByteBuf tx, DynByteBuf rx) throws MSSException, GeneralSecurityException {
-		if (rx.readInt() != H_MAGIC) return error(ILLEGAL_PACKET, "header");
-		if (rx.readUnsignedByte() != PROTOCOL_VERSION) return error(VERSION_MISMATCH, "");
+		if (rx.readInt() != H_MAGIC) return error(ILLEGAL_PACKET, null);
+		if (rx.readUnsignedByte() != PROTOCOL_VERSION) return error(VERSION_MISMATCH, null);
 		int packetBegin = rx.rIndex;
 
 		byte[] sharedRandom = sharedKey = new byte[64];
@@ -241,7 +241,7 @@ public class MSSEngineServer extends MSSEngine {
 		CipherSuite suite = null;
 		CharMap<CipherSuite> map = getCipherSuiteMap();
 		int len = rx.readUnsignedShort();
-		if (len > 1024) return error(ILLEGAL_PACKET, "cipher_suite.length");
+		if (len > 1024) return error(ILLEGAL_PARAM, "cipher_suite.length");
 		int suite_id = -1;
 		for (int i = 0; i < len; i++) {
 			CipherSuite mySuite = map.get((char) rx.readUnsignedShort());

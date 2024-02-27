@@ -131,7 +131,7 @@ new FormModel {
 				"y": 10
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "uiStoreCTime"
+				name: "uiStoreMTime"
 				"text": "修改时间"
 				"selected": true
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
@@ -139,7 +139,7 @@ new FormModel {
 				"y": 30
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "uiStoreMTime"
+				name: "uiStoreCTime"
 				"text": "创建时间"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 315

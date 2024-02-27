@@ -1180,8 +1180,8 @@ final class Layer3 extends Layer {
 	}
 
 	public void close() {
-		filterCh0.cancel(true);
-		if (channels == 2) filterCh1.cancel(true);
+		filterCh0.cancel();
+		if (channels == 2) filterCh1.cancel();
 	}
 
 	/**

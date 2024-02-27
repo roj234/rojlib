@@ -6,7 +6,6 @@ import roj.config.word.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
-import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -176,9 +175,7 @@ public class TextUtil {
 	/**
 	 * byte to hex
 	 */
-	public static char b2h(int a) {
-		return (char) (a < 10 ? 48 + a : (a < 16 ? 87 + a : '!'));
-	}
+	public static char b2h(int a) { return (char) digits[a&0xF]; }
 
 	/**
 	 * hex to byte
@@ -259,90 +256,6 @@ public class TextUtil {
 
 		return editDist;
 	}
-	//region WIP
-	//todo
-	public static final class Diff {
-		public static final byte SAME = 0, CHANGE = 1, INSERT = 2, DELETE = 3;
-		public final byte type;
-		public final int leftOff, rightOff, len;
-		public int advance;
-
-		public static Diff link(Diff a, Diff next) {
-			a.next = next;
-			next.prev = a;
-			return next;
-		}
-
-		private Diff(byte type, int leftOff, int rightOff, int len) {
-			this.type = type;
-			this.leftOff = leftOff;
-			this.rightOff = rightOff;
-			this.len = len;
-		}
-
-		public static Diff same(int leftOff, int rightOff, int len) { return new Diff(SAME, leftOff, rightOff, len); }
-		public static Diff change(int leftOff, int rightOff, int len) { return new Diff(CHANGE, leftOff, rightOff, len); }
-		public static Diff insert(int rightOff, int len) { return new Diff(INSERT, -1, rightOff, len); }
-		public static Diff delete(int leftOff, int len) { return new Diff(DELETE, leftOff, -1, len); }
-
-		Diff prev, next;
-	}
-
-	public List<Diff> getDiff(byte[] right) {
-		Diff head = Diff.insert(0,0), tail = head;
-
-
-
-		return toRealDiff(right, head.next);
-	}
-	private List<Diff> toRealDiff(byte[] right, Diff in) {
-		// todo merge nearby diff and insert SAME diff
-		SimpleList<Diff> list = new SimpleList<>();
-
-		return list;
-	}
-	public void toMarkdown(byte[] left, byte[] right, List<Diff> diffs, Appender sb) throws IOException {
-		Charset cs = Charset.forName("GB18030");
-
-		System.out.println(diffs.size());
-		long l = 0;
-		for (Diff diff : diffs) {
-			l += diff.len;
-		}
-		System.out.println(TextUtil.scaledNumber(l)+"B");
-
-		ByteList buf1 = new ByteList(), buf2 = new ByteList();
-		int type = Diff.SAME;
-		for (Diff diff : diffs) {
-			if (diff.type != type) {
-				finishBlock(sb, buf1, buf2, type, cs);
-				type = diff.type;
-			}
-
-			switch (diff.type) {
-				default: buf1.put(left, diff.leftOff, diff.len); break;
-				case Diff.CHANGE:
-					buf1.put(left, diff.leftOff, diff.len);
-					buf2.put(right, diff.rightOff, diff.len);
-					break;
-				case Diff.INSERT: buf1.put(right, diff.rightOff, diff.len); break;
-			}
-		}
-
-		finishBlock(sb, buf1, buf2, type, cs);
-	}
-	private static void finishBlock(Appender sb, ByteList buf1, ByteList buf2, int type, Charset cs) throws IOException {
-		switch (type) {
-			default: case Diff.SAME: sb.append(new String(buf1.list, 0, buf1.length(), cs)); break;
-			case Diff.CHANGE: sb.append("<i title=\"").append(Tokenizer.addSlashes(new String(buf1.list, 0, buf1.length(), cs))).append("\">")
-								.append(new String(buf2.list, 0, buf2.length(), cs)).append("</i>"); break;
-			case Diff.INSERT: sb.append("<b>").append(new String(buf1.list, 0, buf1.length(), cs)).append("</b>"); break;
-			case Diff.DELETE: sb.append("<del>").append(new String(buf1.list, 0, buf1.length(), cs)).append("</del>"); break;
-		}
-		buf1.clear();
-		buf2.clear();
-	}
-	// endregion
 
 	// region 数字相关
 
@@ -374,7 +287,7 @@ public class TextUtil {
 		}
 
 		if (dot > 0) return s.length() == 1 ? -1 : 1;
-		return max != null && !checkMax(max, s, off, s.charAt(0) == '-') ? 1 : 0;
+		return max != null && !checkMax(max, s, off, s.length(), s.charAt(0) == '-') ? 1 : 0;
 	}
 
 	/**
@@ -459,11 +372,11 @@ public class TextUtil {
 	public static final byte[] INT_MAXS = new byte[] {'2', '1', '4', '7', '4', '8', '3', '6', '4', '8'};
 	public static final byte[] LONG_MAXS = new byte[] {'9', '2', '2', '3', '3', '7', '2', '0', '3', '6', '8', '5', '4', '7', '7', '5', '8', '0', '8'};
 
-	public static boolean checkMax(byte[] maxs, CharSequence s, int off, boolean negative) {
-		while (s.charAt(off) == '0' && ++off < s.length());
+	public static boolean checkMax(byte[] maxs, CharSequence s, int off, int end, boolean negative) {
+		while (s.charAt(off) == '0' && ++off < end);
 
 		int k = maxs.length + off;
-		if (s.length() != k) return s.length() < k;
+		if (end != k) return end < k;
 
 		for (int i = off; i < k; i++) {
 			if (s.charAt(i) < maxs[i-off]) return true;
@@ -634,7 +547,7 @@ public class TextUtil {
 		return -1;
 	}
 
-	public static int gAppendToNextCRLF(CharSequence in, final int prevI, Appendable to) { return gAppendToNextCRLF(in, prevI, to, in.length()); }
+	public static int gAppendToNextCRLF(CharSequence in, final int prevI, Appendable to) { return gAppendToNextCRLF(in, prevI, to, 0); }
 	public static int gAppendToNextCRLF(CharSequence in, int prevI, Appendable to, int def) {
 		int i = prevI;
 		try {
@@ -656,7 +569,8 @@ public class TextUtil {
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
-		return def;
+		// well, in.length may vary over time (I mean TextReader)
+		return def == 0 ? in.length() : def;
 	}
 
 	// region indexOf

@@ -23,14 +23,12 @@ import roj.net.http.ws.WebsocketHandler;
 import roj.net.http.ws.WebsocketManager;
 import roj.text.ACalendar;
 import roj.text.TextUtil;
-import roj.text.logging.LoggingStream;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.security.SecureRandom;
@@ -76,10 +74,6 @@ public class Server extends WebsocketManager implements Router, Context {
 		}
 
 		FileResponse.loadMimeMap(IOUtil.readUTF(new File("mychat/mime.ini")));
-
-		PrintStream out = new LoggingStream();
-		System.setOut(out);
-		System.setErr(out);
 
 		User S = new User();
 		S.name = "系统";

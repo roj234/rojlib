@@ -11,6 +11,7 @@ import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.net.NetUtil;
 import roj.net.ch.*;
+import roj.net.ch.handler.Fail2Ban;
 import roj.net.ch.handler.MSSCipher;
 import roj.net.ch.handler.Timeout;
 import roj.net.ch.handler.VarintSplitter;
@@ -51,6 +52,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 	public static byte[] localUserId;
 
 	static RingBuffer<String> logBuffer = new RingBuffer<>(1000, false);
+	static final Fail2Ban fail2Ban = new Fail2Ban();
 
 	public static void main(String[] args) throws GeneralSecurityException, IOException {
 		if (!NIOUtil.available()) {
@@ -82,7 +84,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 
 		InetSocketAddress addr = NetUtil.parseListeningAddress(port);
 
-		KeyPair pair = KeyType.getInstance("EdDSA").getKeyPair(new File("ae_server.key"), new File("ae_public.key"), keyPass);
+		KeyPair pair = KeyType.getInstance("EdDSA").loadOrGenerateKey(new File("ae_server.key"), keyPass);
 		if (pair == null) {
 			System.out.println("无法解密密钥");
 			return;
@@ -238,7 +240,8 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 			engine.setDefaultCert(key);
 			engine.switches(MSSEngineServer.VERIFY_CLIENT);
 			//engine.setPreSharedCertificate();
-			ctx.addLast("tls", new MSSCipher(engine))
+			ctx.addLast("handshake_logger", fail2Ban)
+			   .addLast("tls", new MSSCipher(engine))
 			   .addLast("splitter", VarintSplitter.twoMbVLUI())
 			   .addLast("timeout", new Timeout(SERVER_TIMEOUT, 500))
 			   .addLast("state", Handshake.HANDSHAKE);

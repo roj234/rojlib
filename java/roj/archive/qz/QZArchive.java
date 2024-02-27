@@ -1,5 +1,6 @@
 package roj.archive.qz;
 
+import org.jetbrains.annotations.NotNull;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ChecksumInputStream;
@@ -765,6 +766,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 		private void computeOffset() throws IOException {
 			WordBlock[] blocks = this.blocks;
+			if (blocks == null) return;
 			long off = offset;
 			int streamId = 0;
 			for (int i = 0; i < blocks.length; i++) {
@@ -855,16 +857,17 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					// noinspection all
 					LimitInputStream lin = new LimitInputStream(in, 0, false);
 					QZEntry entry = b.firstEntry;
+					long toSkip = 0;
 					do {
 						lin.remain = entry.uSize;
 
 						InputStream fin = lin;
 						if ((entry.flag&QZEntry.CRC) != 0) fin = new ChecksumInputStream(fin, new CRC32(), entry.crc32&0xFFFFFFFFL);
+						if (toSkip > 0) fin = new SkipInputStream(fin, in, toSkip);
 
 						callback.accept(entry, fin);
-						if (lin.remain > 0) {
-							if (in.skip(lin.remain) < lin.remain) throw new IOException("数据流过早终止");
-						}
+						if (fin instanceof SkipInputStream x) toSkip = x.toSkip;
+						toSkip += lin.remain;
 
 						entry = entry.next;
 					} while (entry != null);
@@ -872,6 +875,34 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			});
 		}
 	}
+	private static final class SkipInputStream extends InputStream {
+		private final InputStream in, rin;
+		long toSkip;
+
+		private SkipInputStream(InputStream in, InputStream rin, long skip) {
+			this.in = in;
+			this.rin = rin;
+			toSkip = skip;
+		}
+
+		@Override
+		public int read() throws IOException {
+			if (toSkip != 0) doSkip();
+			return in.read();
+		}
+		@Override
+		public int read(@NotNull byte[] b, int off, int len) throws IOException {
+			if (toSkip != 0) doSkip();
+			return in.read(b, off, len);
+		}
+
+		private void doSkip() throws IOException {
+			long skip = rin.skip(toSkip);
+			if (skip < toSkip) throw new EOFException("数据流过早终止");
+			toSkip = 0;
+		}
+	}
+
 
 	public InputStream getInput(String entry) throws IOException {
 		QZEntry file = getEntries().get(entry);
@@ -883,6 +914,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 	final InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that) throws IOException {
 		if (pass == null) pass = password;
+		assert blocks == null || Arrays.asList(blocks).contains(b) : "foreign word block "+b;
 
 		src.seek(b.offset);
 
@@ -928,6 +960,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	public synchronized QZReader parallel() {
 		if (asyncReaders.isEmpty()) asyncReaders = new SimpleList<>();
 		AsyncReader ar = new AsyncReader();
+		ar.r = r;
 		asyncReaders.add(ar);
 		return ar;
 	}
