@@ -442,7 +442,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 				case "bundle.min.css": return new StringResponse(res("bundle.min.css"), "text/css");
 				case "bundle.min.js": return new StringResponse(res("bundle.min.js"), "text/javascript");
 				case "": return new StringResponse(res("client_owner.html"), "text/html");
-				case "user_list":
+				case "ws":// return man.switchToWebsocket(request, rh);
 					CList lx = new CList();
 					for (IntMap.Entry<AEHost.Client> entry : host.clients.selfEntrySet()) {
 						CMapping map = new CMapping();

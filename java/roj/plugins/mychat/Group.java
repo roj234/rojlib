@@ -1,10 +1,11 @@
 package roj.plugins.mychat;
 
-import roj.collect.*;
+import roj.collect.IntSet;
+import roj.collect.MyHashSet;
+import roj.collect.RingBuffer;
 import roj.config.serial.ToSomeString;
 import roj.util.ByteList;
 
-import java.util.List;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -12,33 +13,22 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @since 2022/2/7 19:56
  */
 public class Group extends AbstractUser {
-	static final boolean initialSendUserInfo = false;
-
-	public List<User> users = new SimpleList<>();
+	public MyHashSet<User> users = new MyHashSet<>();
 
 	public final RingBuffer<Message> history = new RingBuffer<>(100);
 
-	private final MyHashSet<User> online = new MyHashSet<>();
-
-	private final Int2IntMap userProps = new Int2IntMap();
-
 	private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-
-	public int owner;
-	public final IntSet operators = new IntSet();
 
 	public void joinGroup(User b) {
 		users.add(b);
-		onlineHook(b);
-		if (online.isEmpty()) return;
+		if (users.size()==1) return;
 
 		lock.readLock().lock();
 		try {
 			Message newJoin = new Message(id, "[Tr]group_join|" + b.id + "[/Tr]");
-			for (User entry : online) {
+			for (User entry : users) {
 				WSChat w = entry.worker;
-				if (w == null) continue;
-				w.sendMessage(this, newJoin, true);
+				if (w != null) w.sendMessage(this, newJoin, true);
 			}
 		} finally {
 			lock.readLock().unlock();
@@ -47,16 +37,14 @@ public class Group extends AbstractUser {
 
 	public void exitGroup(User b, int reason) {
 		users.remove(b);
-		offlineHook(b);
-		if (online.isEmpty()) return;
+		if (users.isEmpty()) return;
 
 		lock.readLock().lock();
 		try {
 			Message exit = new Message(id, "[Tr]group_exit|" + b.id + "|" + reason + "[/Tr]");
-			for (User entry : online) {
+			for (User entry : users) {
 				WSChat w = entry.worker;
-				if (w == null || !operators.contains(entry.id)) continue;
-				w.sendMessage(this, exit, true);
+				if (w != null) w.sendMessage(this, exit, true);
 			}
 		} finally {
 			lock.readLock().unlock();
@@ -67,32 +55,13 @@ public class Group extends AbstractUser {
 		history.ringAddLast(m);
 		lock.readLock().lock();
 		try {
-			for (User entry : online) {
+			for (User entry : users) {
 				WSChat w = entry.worker;
 				if (w == null || entry.id == m.uid) continue;
 				w.sendMessage(this, m, sys);
 			}
 		} finally {
 			lock.readLock().unlock();
-		}
-	}
-
-	public void onlineHook(User entry) {
-		if (entry.worker == null) return;
-		lock.writeLock().lock();
-		try {
-			online.add(entry);
-		} finally {
-			lock.writeLock().unlock();
-		}
-	}
-
-	public void offlineHook(User entry) {
-		lock.writeLock().lock();
-		try {
-			online.remove(entry);
-		} finally {
-			lock.writeLock().unlock();
 		}
 	}
 
@@ -103,21 +72,9 @@ public class Group extends AbstractUser {
 		b.putUTF(face);
 		b.putUTF(desc);
 
-		if (users.isEmpty()) {
-			b.put((byte) 255);
-			return;
-		}
-
-		if (initialSendUserInfo) {
-			b.put(1);
-			for (int i = 0; i < users.size(); i++) {
-				users.get(i).put(b);
-			}
-		} else {
-			b.put(0);
-			for (int i = 0; i < users.size(); i++) {
-				b.putInt(users.get(i).id);
-			}
+		b.put(1);
+		for (User u : users) {
+			u.put(b);
 		}
 	}
 
@@ -125,22 +82,12 @@ public class Group extends AbstractUser {
 	public void put(ToSomeString ser) {
 		ser.key("users");
 		ser.valueList();
-
-		if (initialSendUserInfo) {
-			for (int i = 0; i < users.size(); i++) {
-				ser.valueMap();
-				users.get(i).put(ser);
-				ser.pop();
-			}
+		for (User u : users) {
+			ser.valueMap();
+			u.put(ser);
 			ser.pop();
-		} else {
-			for (int i = 0; i < users.size(); i++) {
-				ser.value(users.get(i).id);
-			}
-			ser.pop();
-			ser.key("raw");
-			ser.value(1);
 		}
+		ser.pop();
 		ser.key("id");
 		ser.value(id);
 
@@ -159,10 +106,8 @@ public class Group extends AbstractUser {
 
 	@Override
 	public void addMoreInfo(IntSet known) {
-		if (users != null) {
-			for (int i = 0; i < users.size(); i++) {
-				known.add(users.get(i).id);
-			}
+		for (User user : users) {
+			known.add(user.id);
 		}
 	}
 }
