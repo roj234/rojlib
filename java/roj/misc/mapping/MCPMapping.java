@@ -1,4 +1,4 @@
-package roj.mod.mapping;
+package roj.misc.mapping;
 
 import roj.asm.type.Desc;
 import roj.asm.util.ClassUtil;

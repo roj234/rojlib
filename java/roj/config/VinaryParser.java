@@ -4,7 +4,8 @@ import roj.collect.SimpleList;
 import roj.config.data.CEntry;
 import roj.config.data.Type;
 import roj.config.serial.CVisitor;
-import roj.io.IOUtil;
+import roj.io.MyDataInput;
+import roj.io.MyDataInputStream;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -86,7 +87,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 		decodeTab.clear();
 		this.cc = cc;
 		try {
-			element(IOUtil.getSharedByteBuf().readStreamFully(in));
+			element(in instanceof MyDataInput ? (MyDataInput) in : new MyDataInputStream(in));
 		} finally {
 			this.cc = null;
 		}
@@ -105,7 +106,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 		return cc;
 	}
 
-	private void element(DynByteBuf r) throws IOException {
+	private void element(MyDataInput r) throws IOException {
 		int b = r.readUnsignedByte();
 
 		int rid = decodeMap[b];
@@ -165,7 +166,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 			default: throw new IllegalArgumentException("Unexpected id " + b);
 		}
 	}
-	private void parseList(int type, DynByteBuf r) throws IOException {
+	private void parseList(int type, MyDataInput r) throws IOException {
 		int cap = r.readVUInt();
 		if (type == 0) {
 			cc.valueList(cap);
@@ -179,15 +180,20 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 
 			switch (value) {
 				case BOOL:
-					int bi = 0;
-					while (cap-- > 0) {
-						int bit = ((r.get(r.rIndex) << (bi & 0x7)) >>> 7) & 0x1;
+					if (cap > 0) {
+						int bi = 0;
+						byte b = r.readByte();
+						while (true) {
+							int bit = ((b << (bi & 0x7)) >>> 7) & 0x1;
 
-						cc.value(bit != 0);
+							cc.value(bit != 0);
 
-						if (++bi == 8) {
-							r.rIndex ++;
-							bi = 0;
+							if (--cap == 0) break;
+
+							if (++bi == 8) {
+								b = r.readByte();
+								bi = 0;
+							}
 						}
 					}
 					break;
@@ -217,10 +223,10 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 				case NULL: while (cap-- > 0) cc.valueNull(); break;
 				case LONG: {
 					if (asArray) {
-						long[] data = new long[cap];
+						long[] arr = new long[cap];
 						int i = 0;
-						while (cap-- > 0) data[i++] = r.readLong();
-						cc.value(data);
+						while (cap-- > 0) arr[i++] = r.readLong();
+						cc.value(arr);
 						return;
 					} else {
 						while (cap-- > 0) cc.value(r.readLong());
@@ -231,9 +237,9 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 				case STRING: while (cap-- > 0) cc.value(r.readVUIGB()); break;
 				case Int1: {
 					if (asArray) {
-						byte[] data = new byte[cap];
-						r.read(data);
-						cc.value(data);
+						byte[] arr = new byte[cap];
+						r.readFully(arr);
+						cc.value(arr);
 						return;
 					} else {
 						while (cap-- > 0) cc.value(r.readByte());

@@ -71,20 +71,20 @@ public class BufferedSource extends Source implements BiConsumer<MutableInt,Byte
 
 		int plen = (int) p&(PAGE-1);
 		int rLen = Math.min(len, PAGE-plen);
-		buffer(p).read(plen, b, off, rLen);
+		buffer(p).readFully(plen, b, off, rLen);
 		p += rLen;
 
 		int end = off+len;
 		off += rLen;
 
 		while (end-off >= PAGE) {
-			buffer(p).read(0, b, off, PAGE);
+			buffer(p).readFully(0, b, off, PAGE);
 			off += PAGE;
 			p += PAGE;
 		}
 
 		if (end>off) {
-			buffer(p).read(0, b, off, end-off);
+			buffer(p).readFully(0, b, off, end-off);
 			p += end-off;
 		}
 

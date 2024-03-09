@@ -2,17 +2,15 @@
  * Created by JFormDesigner on Sat Sep 09 21:07:44 CST 2023
  */
 
-package roj.asmx.mapper;
+package roj.misc.mapping;
 
 import roj.asm.type.Desc;
+import roj.asmx.mapper.Mapper;
+import roj.asmx.mapper.Mapping;
 import roj.collect.IntSet;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.crypt.MT19937;
-import roj.mod.mapping.MCPMapping;
-import roj.mod.mapping.OjngMapping;
-import roj.mod.mapping.TSrgMapping;
-import roj.mod.mapping.YarnMapping;
 import roj.text.TextReader;
 import roj.ui.DoubleClickHelper;
 import roj.ui.GuiUtil;

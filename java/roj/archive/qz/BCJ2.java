@@ -222,7 +222,7 @@ public final class BCJ2 extends QZComplexCoder {
 			if (len == 0) return 0;
 			if (!ob.isReadable()) decode(offset+512);
 			if (!ob.isReadable()) return -1;
-			ob.read(b, off, len = Math.min(ob.readableBytes(), len));
+			ob.readFully(b, off, len = Math.min(ob.readableBytes(), len));
 			return len;
 		}
 

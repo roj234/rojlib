@@ -128,7 +128,7 @@ public final class QzAES extends QZCoder {
         int saltLen = ((b0 >> 7) & 1) + (b1 >> 4);
 
         salt = saltLen == 0 ? ArrayCache.BYTES : buf.readBytes(saltLen);
-        buf.read(iv, 0, ivLen);
+        buf.readFully(iv, 0, ivLen);
         while (ivLen < 16) iv[ivLen++] = 0;
     }
 

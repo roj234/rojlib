@@ -55,7 +55,7 @@ public class AEHost extends IAEClient {
 
 				byte[] key = new byte[64];
 				rnd.nextBytes(key);
-				rb.read(key, 0, 32);
+				rb.readFully(key, 0, 32);
 
 				int clientId = rb.readInt();
 				boolean isRelay = rb.readBoolean();

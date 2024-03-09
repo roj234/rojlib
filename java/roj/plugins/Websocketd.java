@@ -219,7 +219,7 @@ public class Websocketd extends WebsocketManager implements Router {
 				try {
 					while (in.isReadable()) {
 						int len = Math.min(in.readableBytes(), array.length);
-						in.read(array, 0, len);
+						in.readFully(array, 0, len);
 						out.write(array, 0, len);
 					}
 				} finally {

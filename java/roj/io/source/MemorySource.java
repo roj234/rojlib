@@ -26,7 +26,7 @@ public class MemorySource extends Source {
 		if (i <= 0) return -1;
 
 		len = Math.min(len, i);
-		list.read(b, off, len);
+		list.readFully(b, off, len);
 		return len;
 	}
 

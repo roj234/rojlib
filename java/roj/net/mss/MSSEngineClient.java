@@ -268,7 +268,7 @@ public class MSSEngineClient extends MSSEngine {
 
 	private int handleServerHelloSsl(DynByteBuf out, DynByteBuf in) throws MSSException {
 		if (in.readUnsignedShort() != 0x0303) return error(NEGOTIATION_FAILED, "legacy_version");
-		in.read(sharedKey, 32, 32);
+		in.readFully(sharedKey, 32, 32);
 		if (ArrayUtil.rangedEquals(sharedKey,56,8,DOWNGRADE_11,0,7) &&
 			(sharedKey[63]&0xFF) <= 1) {
 			return error(ILLEGAL_PARAM, "random");
@@ -341,7 +341,7 @@ public class MSSEngineClient extends MSSEngine {
 		int inBegin = rx.rIndex;
 
 		if (rx.readUnsignedByte() != PROTOCOL_VERSION) return error(VERSION_MISMATCH, "");
-		rx.read(sharedKey,32,32);
+		rx.readFully(sharedKey,32,32);
 
 		int cs_id = rx.readUnsignedShort();
 		if (cs_id == 0xFFFF) {

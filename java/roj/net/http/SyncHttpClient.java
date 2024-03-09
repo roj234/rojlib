@@ -276,7 +276,7 @@ public class SyncHttpClient implements ChannelHandler {
 					}
 
 					int v = Math.min(data.readableBytes(), len);
-					data.read(b, off, v);
+					data.readFully(b, off, v);
 					return v;
 				} finally {
 					lock.unlock();

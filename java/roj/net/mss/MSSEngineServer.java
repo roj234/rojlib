@@ -159,7 +159,7 @@ public class MSSEngineServer extends MSSEngine {
 
 		byte[] rnd = sharedKey = new byte[64];
 		random.nextBytes(rnd);
-		in.read(rnd,0,32);
+		in.readFully(rnd,0,32);
 
 		int len = in.readUnsignedByte();
 		if (len > 32) return error(ILLEGAL_PARAM, "session_id");
@@ -236,7 +236,7 @@ public class MSSEngineServer extends MSSEngine {
 
 		byte[] sharedRandom = sharedKey = new byte[64];
 		random.nextBytes(sharedRandom);
-		rx.read(sharedRandom,0,32);
+		rx.readFully(sharedRandom,0,32);
 
 		CipherSuite suite = null;
 		CharMap<CipherSuite> map = getCipherSuiteMap();

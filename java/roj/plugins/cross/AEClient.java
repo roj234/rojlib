@@ -93,7 +93,7 @@ public class AEClient extends IAEClient {
 					break;
 				}
 
-				rb.read(task.key, 32, 32);
+				rb.readFully(task.key, 32, 32);
 				task.pipeId = id = rb.readInt();
 				asyncPipeLogin(id, task.key, task);
 			break;

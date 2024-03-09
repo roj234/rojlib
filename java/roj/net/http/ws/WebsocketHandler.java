@@ -205,7 +205,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 			case DATA:
 				if (rb.readableBytes() < length) return;
 				if ((flag & REMOTE_MASK) != 0) {
-					rb.read(mask);
+					rb.readFully(mask);
 					length -= 4;
 				}
 				break;
@@ -245,7 +245,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 
 			while (buf != null) {
 				int $len = Math.min(rb.readableBytes(), zi.length);
-				rb.read(zi, 0, $len);
+				rb.readFully(zi, 0, $len);
 
 				pushEOS:
 				if (!rb.isReadable()) {
@@ -455,7 +455,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 				byte[] zb = buf.array();
 
 				// input is promised to used up
-				data.read(zb, 0, $len);
+				data.readFully(zb, 0, $len);
 				def.setInput(zb, 0, $len);
 			}
 

@@ -102,7 +102,7 @@ public class XTSCipher extends RCipherSpi {
 				out.rIndex = delta;
 
 				// backup ciphertext remain
-				out.read(b3);
+				out.readFully(b3);
 
 				// plaintext
 				int i = 0;
@@ -122,7 +122,7 @@ public class XTSCipher extends RCipherSpi {
 				System.arraycopy(b1, 0, b3, 0, b1.length);
 
 				// 读取block[len-2]
-				in.read(b2);
+				in.readFully(b2);
 
 				// next X
 				mul(b1, GFA);

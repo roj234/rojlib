@@ -1,4 +1,4 @@
-package roj.asmx.misc;
+package roj.misc;
 
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;

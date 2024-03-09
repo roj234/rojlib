@@ -29,10 +29,7 @@ public final class DiffResult {
 	@Optional
 	public int minSize;
 
-	public void postProcess(File basePath, boolean isText) throws Exception {
-		leftFile = new File(basePath, left);
-		rightFile = new File(basePath, right);
-
+	public void postProcess(boolean isText) throws Exception {
 		if (minSize != 0) return;
 
 		BsDiff d = new BsDiff();

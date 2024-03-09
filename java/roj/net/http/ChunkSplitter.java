@@ -95,7 +95,7 @@ public class ChunkSplitter extends PacketMerger implements ChannelHandler {
 				continue;
 			}
 
-			buf.read(hex, 0, i-prevI);
+			buf.readFully(hex, 0, i-prevI);
 
 			try {
 				tmp.rIndex = 0;

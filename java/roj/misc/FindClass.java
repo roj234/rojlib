@@ -2,7 +2,7 @@
  * Created by JFormDesigner on Fri Dec 22 21:56:16 CST 2023
  */
 
-package roj.asmx.misc;
+package roj.misc;
 
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;

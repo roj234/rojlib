@@ -6,7 +6,6 @@ import roj.asmx.mapper.Mapper;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
 import roj.concurrent.task.AsyncTask;
 import roj.config.FileConfig;
 import roj.config.data.CList;
@@ -60,7 +59,6 @@ public final class Project extends FileConfig {
 	private final int resPrefix;
 
 	ZipOutput dstFile, binFile;
-	List<ATDesc> atEntryCache = new SimpleList<>();
 
 	private Project(String name) {
 		super(new File(BASE, "config/"+name+".json"), true);

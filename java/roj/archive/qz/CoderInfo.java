@@ -131,7 +131,7 @@ final class CoderInfo {
 					while (true) {
 						int len = Math.min(b.length, oa.readableBytes());
 						if (len == 0) break;
-						oa.read(b,0,len);
+						oa.readFully(b,0,len);
 						s.write(b,0,len);
 					}
 				} finally {

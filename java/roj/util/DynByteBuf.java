@@ -2,13 +2,16 @@ package roj.util;
 
 import org.jetbrains.annotations.NotNull;
 import roj.io.IOUtil;
+import roj.io.MyDataInput;
 import roj.reflect.ReflectionUtils;
-import roj.text.CharList;
 import roj.text.GB18030;
 import roj.text.J9String;
 import roj.text.UTF8MB4;
 
-import java.io.*;
+import java.io.DataOutput;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
@@ -17,7 +20,7 @@ import java.util.function.IntUnaryOperator;
  * @author Roj233
  * @since 2022/5/19 1:44
  */
-public abstract class DynByteBuf extends OutputStream implements CharSequence, DataInput, DataOutput {
+public abstract class DynByteBuf extends OutputStream implements CharSequence, MyDataInput, DataOutput {
 	public static ByteList wrap(byte[] b) { return new ByteList(b); }
 	public static ByteList wrap(byte[] b, int off, int len) { return new ByteList.Slice(b, off, len); }
 
@@ -54,7 +57,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 		public int read(@NotNull byte[] arr, int off, int len) {
 			if (!isReadable()) return -1;
 			len = Math.min(readableBytes(), len);
-			DynByteBuf.this.read(arr, off, len);
+			DynByteBuf.this.readFully(arr, off, len);
 			return len;
 		}
 
@@ -171,17 +174,6 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 
 	public final InputStream asInputStream() { return new BufferInputStream(); }
 
-	// region DataInput
-	@Override
-	public final void readFully(@NotNull byte[] b) {
-		read(b, 0, b.length);
-	}
-
-	@Override
-	public final void readFully(@NotNull byte[] b, int off, int len) {
-		read(b, off, len);
-	}
-	// endregion
 	// region DataOutput
 	public final void write(int b) { put((byte) b); }
 	public final void write(@NotNull byte[] b) { put(b, 0, b.length); }
@@ -399,14 +391,14 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 
 	public final byte[] readBytes(int len) {
 		byte[] result = new byte[len];
-		read(result, 0, len);
+		this.readFully(result, 0, len);
 		return result;
 	}
 
-	public final void read(byte[] b) { read(b, 0, b.length); }
-	public abstract void read(byte[] b, int off, int len);
-	public final void read(int i, byte[] b) { read(i, b, 0, b.length); }
-	public abstract void read(int i, byte[] b, int off, int len);
+	public final void readFully(byte[] b) { this.readFully(b, 0, b.length); }
+	public abstract void readFully(byte[] b, int off, int len);
+	public final void readFully(int i, byte[] b) { readFully(i, b, 0, b.length); }
+	public abstract void readFully(int i, byte[] b, int off, int len);
 
 	public final boolean readBoolean(int i) { return get(i) != 0; }
 	public final boolean readBoolean() { return get() != 0; }
@@ -437,14 +429,11 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 	public final int readMediumLE() { return readMediumLE(moveRI(3)); }
 	public abstract int readMediumLE(int i);
 
-	public static int zag(int i) { return (i >> 1) & ~(1 << 31) ^ -(i & 1); }
-	public static long zag(long i) { return (i >> 1) & ~(1L << 63) ^ -(i & 1); }
-
 	public final int readVarInt() { return readVarInt(true); }
-	public abstract int readVarInt(boolean mayNeg);
+	public abstract int readVarInt(boolean zag);
 
 	public final long readVarLong() { return readVarLong(true); }
-	public final long readVarLong(boolean mayNeg) {
+	public final long readVarLong(boolean zag) {
 		long value = 0;
 		int i = 0;
 
@@ -453,7 +442,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 			value |= (chunk & 0x7F) << i;
 			i += 7;
 			if ((chunk & 0x80) == 0) {
-				if (mayNeg) return zag(value);
+				if (zag) return MyDataInput.zag(value);
 				if (value < 0) break;
 				return value;
 			}
@@ -527,28 +516,15 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 
 	@NotNull
 	public final String readUTF() { return readUTF(readUnsignedShort()); }
-	public final String readVarIntUTF() { return readVarIntUTF(1000000); }
-	public final String readVarIntUTF(int max) {
-		int l = readVarInt(false);
-		if (l > max) throw new IllegalArgumentException("Maximum " + max + " got " + l);
-		return readUTF(l);
-	}
-	public final String readVUIUTF() { return readVUIUTF(1048575); }
+	public final String readVUIUTF() { return readVUIUTF(DEFAULT_MAX_STRING_LEN); }
 	public final String readVUIUTF(int max) {
-		int l = readVUInt();
-		if (l > max) throw new IllegalArgumentException("Maximum " + max + " got " + l);
-		return readUTF(l);
+		int len = readVUInt();
+		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
+		return readUTF(len);
 	}
-	public final String readUTF(int len) {
-		if (len < 0) throw new IllegalArgumentException("length="+len);
-		if (len == 0) return "";
-		testWI(rIndex,len);
-		CharList sb = IOUtil.getSharedCharBuf();
-		UTF8MB4.CODER.decodeFixedIn(this,len,sb);
-		return sb.toString();
-	}
+	public final String readUTF(int len) { return readUTF(len, IOUtil.getSharedCharBuf()).toString(); }
 	public final <T extends Appendable> T readUTF(int len, T target) {
-		if (len < 0) throw new IllegalArgumentException("length="+len);
+		if (len < 0) throw new IllegalArgumentException("length < 0: "+len);
 		if (len > 0) {
 			testWI(rIndex,len);
 			UTF8MB4.CODER.decodeFixedIn(this,len,target);
@@ -556,22 +532,14 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, D
 		return target;
 	}
 
-	public final String readVUIGB() { return readGB(readVUInt()); }
+	public final String readVUIGB() { return readGB(DEFAULT_MAX_STRING_LEN); }
 	public final String readVUIGB(int max) {
-		int l = readVUInt();
-		if (l > max) throw new IllegalArgumentException("Maximum " + max + " got " + l);
-		return readGB(l);
+		int len = readVUInt();
+		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
+		return readGB(len);
 	}
-	public final String readGB(int len) {
-		if (len < 0) throw new IllegalArgumentException("length="+len);
-		if (len == 0) return "";
-		testWI(rIndex,len);
-		CharList sb = IOUtil.getSharedCharBuf();
-		GB18030.CODER.decodeFixedIn(this,len,sb);
-		return sb.toString();
-	}
+	public final String readGB(int len) { return readGB(len, IOUtil.getSharedCharBuf()).toString(); }
 	public final <T extends Appendable> T readGB(int len, T target) {
-		if (len < 0) throw new IllegalArgumentException("length="+len);
 		if (len > 0) {
 			testWI(rIndex,len);
 			GB18030.CODER.decodeFixedIn(this,len,target);

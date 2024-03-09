@@ -1,6 +1,5 @@
 package roj.mod;
 
-import roj.archive.zip.EntryMod;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipOutput;
@@ -8,7 +7,6 @@ import roj.asm.tree.ConstantData;
 import roj.asm.util.Context;
 import roj.asmx.mapper.Mapper;
 import roj.asmx.mapper.Mapper.State;
-import roj.asmx.mapper.MapperUI;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -24,15 +22,12 @@ import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.TextWriter;
 import roj.ui.CLIUtil;
-import roj.ui.GuiUtil;
 import roj.ui.Profiler;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
-import roj.ui.terminal.CommandImpl;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
-import javax.swing.*;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -68,19 +63,6 @@ public final class FMDMain {
 		CommandConsole c = console;
 
 		c.register(literal("auto").then(argument("auto", Argument.bool()).executes(ctx -> AutoCompile.setEnabled(ctx.argument("auto", Boolean.class)))));
-		c.register(literal("reflect").executes(ctx -> ReflectTool.start(!isCLI)));
-		CommandImpl cDeobf = ctx -> {
-			String mode = ctx.argument("reverse", String.class, "mcp2srg");
-
-			GuiUtil.systemLook();
-			MapperUI f = new MapperUI();
-			f.setDefaultCloseOperation(isCLI ? JFrame.DISPOSE_ON_CLOSE : JFrame.EXIT_ON_CLOSE);
-			loadMapper();
-			f.setMapper(mode.equals("mcp2srg") ? mapperFwd : loadReverseMapper());
-			f.show();
-		};
-		c.register(literal("deobf").executes(cDeobf).then(argument("reverse", Argument.string("mcp2srg", "srg2mcp")).executes(cDeobf)));
-		c.register(literal("preAT").executes(ctx -> preAT()));
 		c.register(literal("kill").executes(ctx -> {
 			if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
 				MCLauncher.task.cancel();
@@ -159,7 +141,7 @@ public final class FMDMain {
 		if (args.length == 0) {
 			isCLI = true;
 
-			String slogan = "FMD 更快的mod开发环境 "+VERSION+" By Roj234";
+			String slogan = "FMD编译器 "+VERSION+" By Roj234";
 			System.out.println(slogan);
 			System.out.println("\u001b[96mhttps://www.github.com/roj234/rojlib");
 
@@ -188,96 +170,9 @@ public final class FMDMain {
 		}
 	}
 
-	public static void preAT() {
-		// 关闭文件监控
-		watcher.removeAll();
-
-		Map<String, Collection<String>> map = ATHelper.getMapping(); map.clear();
-
-		Shared.loadSrg2Mcp();
-
-		readTextList((s) -> {
-			int i = s.indexOf(' ');
-			if (i < 0) {
-				CLIUtil.warning("Unknown entry " + s);
-				return;
-			}
-			ATHelper.add(s.substring(0,i), s.substring(i+1));
-		}, "预AT.编译期");
-		for (CEntry ce : CONFIG.getDot("预AT.编译期+运行期").asMap().values()) {
-			if (ce.getType() == Type.MAP) loadATMap(ce.asMap(), true);
-		}
-
-		try (ZipOutput zo = new ZipOutput(new File(BASE, "class/"+MC_BINARY+".jar"))) {
-			zo.setCompress(true);
-			zo.begin(false);
-			ATHelper.transform(zo, map, true);
-
-			// 备份
-			try (ZipArchive atBackup = new ZipArchive(ATHelper.AT_BACKUP_LIB)) {
-				ZipArchive mcBin = zo.getMZF();
-
-				MyHashSet<String> removable = new MyHashSet<>(atBackup.getEntries().keySet());
-				for (EntryMod mod : mcBin.getModified()) {
-					// 删除老的
-					removable.remove(mod.getName());
-
-					// 已经包含
-					if (atBackup.getEntries().containsKey(mod.getName())) continue;
-
-					// 追加新的
-					atBackup.putStream(mod.getName(), mcBin.getInput(mod.getName()), true);
-				}
-				for (String name : removable) atBackup.put(name, null);
-				atBackup.store();
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-			return;
-		}
-
-		CLIUtil.success("操作成功完成");
-	}
-
-	// region PreAT.Util
-
-	private static void loadATMap(CMapping at, boolean dev) {
-		if (at.size() == 0) return;
-
-		for (Map.Entry<String, CEntry> entry : at.entrySet()) {
-			String k = entry.getKey();
-
-			CEntry ce = entry.getValue();
-			switch (ce.getType()) {
-				case LIST:
-					List<CEntry> rl = ce.asList().raw();
-					for (int i = 0; i < rl.size(); i++) {
-						CEntry ce1 = rl.get(i);
-						ATHelper.add(k, dev ? toDevName(ce1) : ce1.asString());
-					}
-					break;
-				case STRING:
-					ATHelper.add(k, dev ? toDevName(ce) : ce.asString());
-					break;
-			}
-		}
-	}
-	private static String toDevName(CEntry ce1) {
-		String s = TextUtil.split(ce1.asString(), ' ').get(0);
-		int i = s.lastIndexOf('|');
-		if (i != -1) {
-			String s1 = s.substring(0, i);
-			s = srg2mcp.getOrDefault(s1, s1) + s.substring(i);
-		} else {
-			s = srg2mcp.getOrDefault(s, s);
-		}
-		return s;
-	}
-
-	// endregion
-
 	public static int run(Map<String, Object> args) throws IOException {
-		MCLauncher.load();
+		// TODO not use Minecraft anymore!
+		//   switch to custom command
 		if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
 			if (CLIUtil.readBoolean("是否结束游戏进程?")) {
 				MCLauncher.task.cancel();
@@ -287,7 +182,7 @@ public final class FMDMain {
 			}
 		}
 
-		CMapping mc_conf = MCLauncher.config.get("mc_conf").asMap();
+		CMapping mc_conf = new CMapping();
 		if (mc_conf.size() == 0) {
 			CLIUtil.error("启动配置不存在，请重新setup");
 			return -1;
@@ -468,14 +363,13 @@ public final class FMDMain {
 		Task.pushTask(writeRes);
 		Profiler.endStartSection("applyAT <= openWriter");
 		// region 应用权限转换
-		if (!p.atEntryCache.isEmpty()) {
+		if (false) {
 			if (p.atName.isEmpty()) {
 				CLIUtil.error(p.name+" 使用了AT注解,请设置AT配置的存放位置");
 				return -1;
 			}
 
-			Map<String, Collection<String>> map = ATHelper.getMapping(); map.clear();
-			loadATMap(CONFIG.getDot("预AT.编译期+运行期").asMap().get(p.name).asMap(), false);
+			Map<String, Collection<String>> map = new MyHashMap<>();
 
 			CharList atData = IOUtil.getSharedCharBuf();
 			for (Map.Entry<String, Collection<String>> entry : map.entrySet()) {
@@ -484,17 +378,6 @@ public final class FMDMain {
 				}
 			}
 			map.clear();
-
-			List<ATDesc> cmt = p.atEntryCache;
-			for (int i = 0; i < cmt.size(); i++) {
-				ATDesc entry = cmt.get(i);
-				if (!entry.compile) {
-					for (String val : entry.value) {
-						atData.append("public-f ").append(entry.clazz).append(' ').append(val).append('\n');
-					}
-				}
-				map.computeIfAbsent(entry.clazz, Helpers.fnMyHashSet()).addAll(entry.value);
-			}
 
 			TextWriter.write(new File(p.atConfigPathStr), atData);
 			// FIXME Use Lavac to resolve access transform

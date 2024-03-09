@@ -44,6 +44,9 @@ public class DiffUser {
 		List<DiffResult> diffs = sf.deserialize(adapter, ctx.argument("diffYml", File.class));
 		for (int i = diffs.size() - 1; i >= 0; i--) {
 			DiffResult d = diffs.get(i);
+			d.leftFile = new File(basePath, d.left);
+			d.rightFile = new File(basePath, d.right);
+
 			if(!d.leftFile.isFile() || !d.rightFile.isFile()) {
 				diffs.remove(i);
 				continue;
@@ -55,7 +58,7 @@ public class DiffUser {
 			}
 
 			bar.addMax(1);
-			POOL.pushTask(() -> d.postProcess(basePath, true));
+			POOL.pushTask(() -> d.postProcess(true));
 		}
 
 		POOL.awaitFinish();
