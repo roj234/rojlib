@@ -56,15 +56,18 @@ public abstract class CommandNode {
 
 		ParseException pe = null;
 		for (int i = 0; i < children.size(); i++) {
+			CommandNode node = children.get(i);
 			ctx.pushStack();
 			try {
-				if (children.get(i).apply(ctx, completions)) {
+				if (node.apply(ctx, completions)) {
 					return true;
 				}
 			} catch (ParseException e) {
 				pe = e;
 			}
 			ctx.popStack();
+
+			if (node.fastFail) break;
 		}
 
 		if (pe != null) throw pe;
@@ -75,6 +78,9 @@ public abstract class CommandNode {
 		children.add(node);
 		return this;
 	}
+
+	private boolean fastFail;
+	public CommandNode fastFail() { fastFail = true; return this; }
 
 	static final class LiteralNode extends CommandNode {
 		private final String name;

@@ -22,7 +22,6 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static roj.asm.Opcodes.*;
 
@@ -40,8 +39,6 @@ public final class DirectAccessor<T> {
 		"sun/reflect/MagicAccessorImpl" : VMInternals.HackMagicAccessor();
 
 	public static final MyBitSet EMPTY_BITS = new MyBitSet(0);
-
-	static final AtomicInteger NEXT_ID = new AtomicInteger();
 
 	private final MyHashMap<String, Method> methodByName;
 	private final Class<T> itf;
@@ -69,7 +66,7 @@ public final class DirectAccessor<T> {
 		var = new ConstantData();
 
 		String itfClass = itf.getName().replace('.', '/');
-		String clsName = itfClass+"$DAC$"+NEXT_ID.getAndIncrement();
+		String clsName = itfClass+"$DAC$"+ReflectionUtils.uniqueId();
 		makeHeader(clsName, itfClass, var);
 		FastInit.prepare(var);
 	}

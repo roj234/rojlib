@@ -47,6 +47,12 @@ public class LoopTaskWrapper implements ITask {
 		}
 	}
 
+	@Override
+	public boolean cancel() {
+		int state = u.getAndAddInt(this, STATE_OFFSET, 3);
+		return state <= 0 || task.cancel();
+	}
+
 	public int getNextRun() {
 		if (u.compareAndSwapInt(this, STATE_OFFSET, 1, 2)) return 0;
 		return --repeat == 0 ? 0 : interval;

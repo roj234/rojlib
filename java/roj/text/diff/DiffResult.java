@@ -25,6 +25,7 @@ public final class DiffResult {
 
 	public transient File leftFile, rightFile;
 	public String left, right;
+	@Optional
 	public int diff, pos;
 	@Optional
 	public int minSize;
@@ -56,5 +57,26 @@ public final class DiffResult {
 		} else {
 			return IOUtil.read(file);
 		}
+	}
+
+	@Override
+	public String toString() {
+		return "Diff: "+left+" <=> "+right +" => "+diff+"/"+minSize;
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof DiffResult result)) return false;
+
+		if (leftFile != null ? !leftFile.equals(result.leftFile) : result.left.equals(left)) return false;
+		return rightFile != null ? rightFile.equals(result.rightFile) : result.right.equals(right);
+	}
+
+	@Override
+	public int hashCode() {
+		int result = leftFile != null ? leftFile.hashCode() : left.hashCode();
+		result = 31 * result + (rightFile != null ? rightFile.hashCode() : right.hashCode());
+		return result;
 	}
 }

@@ -472,9 +472,6 @@ public class DirectByteList extends DynByteBuf {
 	// endregion
 	// region Buffer Ops
 
-	public final DirectByteList slice(int len) {
-		return slice(moveRI(len), len);
-	}
 	public final DirectByteList slice(int off, int len) {
 		return new Slice(testWI(off, len)+address, len);
 	}

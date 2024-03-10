@@ -293,7 +293,9 @@ public class ConstantPool {
 	}
 
 	private void addConstant(Constant c) {
-		c.setIndex(constants.size()+1);
+		int size = constants.size();
+		if (size >= 0xFFFF) throw new UnsupportedOperationException("constant overflow!");
+		c.setIndex(size+1);
 		refMap.add(c);
 		constants.add(c);
 

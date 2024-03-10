@@ -3,6 +3,7 @@ package roj.io;
 import org.jetbrains.annotations.NotNull;
 import roj.text.GB18030;
 import roj.text.UTF8MB4;
+import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 import sun.misc.Unsafe;
@@ -27,22 +28,39 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2024/3/10 0010 3:10
  */
 public class MyDataInputStream extends FilterInputStream implements MyDataInput {
+	public static MyDataInput wrap(InputStream in) {
+		if (in instanceof MyDataInputStream d) return d;
+		if (in instanceof DynByteBuf.BufferInputStream b) return b.buffer();
+		return new MyDataInputStream(in);
+	}
+
 	public MyDataInputStream(InputStream in) {
 		super(in);
 	}
 
 	@Override
-	public final int read(byte[] b) throws IOException { return in.read(b, 0, b.length); }
+	public final int read(byte[] b) throws IOException { return read(b, 0, b.length); }
 	@Override
-	public final int read(byte[] b, int off, int len) throws IOException { return in.read(b, off, len); }
+	public final int read(byte[] b, int off, int len) throws IOException {
+		ArrayUtil.checkRange(b,off,len);
+		int total = this.len - this.off;
+		if (len <= total) {
+			System.arraycopy(this.list, this.off, b, off, len);
+			this.off += len;
+			return len;
+		}
+		System.arraycopy(this.list, this.off, b, off, total);
+		this.off = this.len = 0;
+		int r = in.read(b, off + total, len - total);
+		return r < 0 ? total == 0 ? r : total : total+r;
+	}
 	@Override
 	public final void readFully(byte[] b) throws IOException { readFully(b, 0, b.length); }
 	@Override
 	public final void readFully(byte[] b, int off, int len) throws IOException {
-		ArrayUtil.checkRange(b,off,len);
 		int n = 0;
 		while (n < len) {
-			int r = in.read(b, off + n, len - n);
+			int r = read(b, off + n, len - n);
 			if (r < 0) throw new EOFException();
 			n += r;
 		}
@@ -76,15 +94,16 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 	@Override
 	public int available() throws IOException { return len-off + in.available(); }
 
-	private byte[] list;
+	private byte[] list = ArrayCache.BYTES;
 	private int off, len;
 	private int doRead(int count) throws IOException {
 		int l = len;
 		int o = off;
 		if (l - o < count) {
 			byte[] dst = list;
-			if (dst.length < count) dst = list = new byte[count];
+			if (dst.length < count) dst = new byte[count];
 			System.arraycopy(list, off, dst, 0, l -= o);
+			list = dst;
 
 			while (l < dst.length) {
 				int r = in.read(dst, l, dst.length - l);
@@ -92,8 +111,8 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 				l += r;
 			}
 
-			if (l < count) throw new EOFException();
-			off = 0;
+			if (l < count) throw new EOFException("need="+count+",read="+l);
+			off = count;
 			len = l;
 			return 0;
 		} else {
@@ -293,7 +312,7 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 	}
 
 	@Override
-	public final String readVUIGB() throws IOException { return readGB(DEFAULT_MAX_STRING_LEN); }
+	public final String readVUIGB() throws IOException { return readVUIGB(DEFAULT_MAX_STRING_LEN); }
 	@Override
 	public final String readVUIGB(int max) throws IOException {
 		int len = readVUInt();

@@ -336,7 +336,7 @@ public class TaskPool implements TaskHandler {
 					}
 				} catch (Throwable e) {
 					if (exceptionHandler != null) exceptionHandler.uncaughtException(this, e);
-					else Logger.getLogger("TaskPool@"+TaskPool.this.hashCode()).error(e);
+					else Logger.getLogger("@").error(e);
 				}
 			}
 

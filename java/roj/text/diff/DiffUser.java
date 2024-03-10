@@ -67,7 +67,15 @@ public class DiffUser {
 		bar.reset();
 		diffs.sort((o1, o2) -> Integer.compare(o1.diff, o2.diff));
 		for (int i = diffs.size() - 1; i > 0; i--) {
-			if (diffs.get(i).equals(diffs.get(i - 1))) diffs.remove(i);
+			DiffResult d = diffs.get(i);
+			if ((double) d.diff / d.minSize > 0.75) {
+				System.out.println("too similar:"+d);
+				diffs.remove(i);
+			}
+			else if (d.equals(diffs.get(i - 1))) {
+				System.out.println("same:"+d);
+				diffs.remove(i);
+			}
 		}
 		System.out.println("count:" + diffs.size());
 		ConfigMaster.write(diffs, ctx.argument("diffYml", File.class).getAbsolutePath(), "yml", adapter);

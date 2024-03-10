@@ -40,6 +40,11 @@ public class ProgressBar implements AutoCloseable {
 	public double getEta(long remainUnit) { return remainUnit <= 0 ? 0 : remainUnit / speedPerMs(); }
 	public double speedPerMs() { return dataUpdate == 0 ? 1 : (double) delta / (System.currentTimeMillis() - dataUpdate); }
 
+	public synchronized void resetSpeed() {
+		delta = 0;
+		dataUpdate = 0;
+	}
+
 	public void update(double percent, int deltaUnit) {
 		long time = System.currentTimeMillis();
 		synchronized (this) {

@@ -563,12 +563,10 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	// endregion
 	// region Buffer Ops
 
-	public abstract DynByteBuf slice(int length);
+	public final DynByteBuf slice() { return slice(rIndex, readableBytes()); }
+	public final DynByteBuf slice(int len) { return slice(moveRI(len), len); }
 	public abstract DynByteBuf slice(int off, int len);
 
-	public final DynByteBuf duplicate() {
-		return slice(0, capacity());
-	}
 	public abstract DynByteBuf compact();
 
 	public abstract int nioBufferCount();

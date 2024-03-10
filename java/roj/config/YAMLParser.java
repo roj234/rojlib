@@ -112,7 +112,7 @@ public class YAMLParser extends Parser<CEntry> {
 
 			int off;
 			// 第二个判断检查 - - val
-			if (w.type() != delim || superIndent < 0 || (off = indent) < firstIndent) {
+			if (w.type() != delim || superIndent == -2 || (off = indent) < firstIndent) {
 				retractWord();
 				break;
 			} else if (off != firstIndent) throw err("缩进有误:"+off+"/"+firstIndent);
@@ -179,12 +179,6 @@ public class YAMLParser extends Parser<CEntry> {
 
 			int indent = this.indent;
 			if (indent < firstIndent) {
-				// 上一个是List
-				if (firstIndent == Integer.MAX_VALUE) {
-					firstIndent = indent;
-					continue;
-				}
-
 				retractWord();
 				break;
 			} else if (indent != firstIndent) throw err("缩进有误:"+indent+"/"+firstIndent);
@@ -268,7 +262,7 @@ public class YAMLParser extends Parser<CEntry> {
 			case delim:
 				if (prevLN == LN && LN != 1) {
 					if ((flag&LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
-					prevIndent = -1;
+					prevIndent = -2;
 				}
 				return yamlLineArray();
 			case anchor: {

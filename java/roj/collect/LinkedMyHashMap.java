@@ -19,9 +19,6 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 		public LinkedEntry<K, V> p, n;
 	}
 
-	@Override
-	protected boolean supportAutoCollisionFix() { return false; }
-
 	public LinkedEntry<K, V> firstEntry() {
 		return tail == head ? null : head;
 	}
@@ -121,7 +118,9 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 	protected void onPut(AbstractEntry<K, V> entry, V newV) {
 		LinkedEntry<K, V> myEntry = (LinkedEntry<K, V>) entry;
 		if (myEntry.v != UNDEFINED) return;
-
+		insert(myEntry);
+	}
+	private void insert(LinkedEntry<K, V> myEntry) {
 		if (head == null) head = myEntry;
 
 		myEntry.p = tail;
@@ -144,9 +143,9 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 
 	@Override
 	protected void onGet(AbstractEntry<K, V> entry) {
-		if (accessOrder) {
+		if (accessOrder && entry != head) {
 			onDel(entry);
-			onPut(entry, null);
+			insert((LinkedEntry<K, V>) entry);
 		}
 	}
 

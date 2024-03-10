@@ -87,7 +87,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 		decodeTab.clear();
 		this.cc = cc;
 		try {
-			element(in instanceof MyDataInput ? (MyDataInput) in : new MyDataInputStream(in));
+			element(MyDataInputStream.wrap(in));
 		} finally {
 			this.cc = null;
 		}

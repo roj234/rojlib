@@ -190,6 +190,8 @@ public class TextUtil {
 		return c - 0x30;
 	}
 
+
+	public static byte[] hex2bytes(String str) { return hex2bytes(str, IOUtil.getSharedByteBuf()).toByteArray(); }
 	public static DynByteBuf hex2bytes(CharSequence hex, DynByteBuf bl) {
 		bl.ensureCapacity(bl.wIndex() + (hex.length() >> 1));
 

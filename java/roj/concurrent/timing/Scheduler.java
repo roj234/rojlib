@@ -67,16 +67,17 @@ public class Scheduler implements Runnable {
 		volatile long timeLeft;
 
 		public ITask getTask() { return task; }
-		public boolean isExpired() { return timeLeft == 0; }
-		public boolean isCancelled() { return timeLeft == -1; }
+		public boolean isExpired() { return timeLeft == 0 || timeLeft == -2; }
+		public boolean isCancelled() { return timeLeft < 0; }
 		public boolean cancel() {
-			if (timeLeft == -1) return true;
-			if (timeLeft == 0 || !u.compareAndSwapLong(this, OFF_TIME_LEFT, timeLeft, -1)) return task.cancel();
+			long t;
+			do {
+				t = timeLeft;
+				if (t == -1) return true;
+			} while (!u.compareAndSwapLong(this, OFF_TIME_LEFT, t, t == 0 ? -2 : -1));
 
 			TaskHolder root = (TaskHolder) lock;
-			if (root != null) ((TimingWheel) root.lock).remove(root, this);
-
-			return true;
+			return (root != null && ((TimingWheel) root.lock).remove(root, this)) || task.cancel();
 		}
 	}
 
@@ -126,10 +127,8 @@ public class Scheduler implements Runnable {
 						TaskHolder next = task.next;
 						long time = task.timeLeft;
 
-						remove(root, task);
-
 						block:
-						if (time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time = Math.max(0, time-ticks))) {
+						if (remove(root, task) && time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time = Math.max(0, time-ticks))) {
 							if (time == 0) {
 								time = exec.applyAsInt(task);
 								if (time == 0) break block;
@@ -167,10 +166,8 @@ public class Scheduler implements Runnable {
 					TaskHolder next = task.next;
 					long time = task.timeLeft;
 
-					remove(root, task);
-
 					block:
-					if (time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time &= mask)) {
+					if (remove(root, task) && time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time &= mask)) {
 						if (time == 0) {
 							time = exec.applyAsInt(task);
 							if (time == 0) break block;
@@ -183,10 +180,7 @@ public class Scheduler implements Runnable {
 						} else {
 							add(prev, task);
 						}
-					} else {
-						// task was cancelled
-						assert task.timeLeft == -1;
-					}
+					} // else task was cancelled
 					task = next;
 				}
 			}
@@ -238,11 +232,12 @@ public class Scheduler implements Runnable {
 				root.next = root.next.prev = task;
 			}
 		}
-		final void remove(TaskHolder root, TaskHolder task) {
+		final boolean remove(TaskHolder root, TaskHolder task) {
 			assert root != task;
 			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
 
 			synchronized (root) {
+				if (task.lock == null) return false;
 				assert task.lock == root;
 
 				task.prev.next = task.next;
@@ -250,6 +245,7 @@ public class Scheduler implements Runnable {
 				task.prev = task.next = null;
 				task.lock = null;
 			}
+			return true;
 		}
 
 		final void collect(Collection<TaskHolder> collector) {
@@ -325,7 +321,7 @@ public class Scheduler implements Runnable {
 		for (int i = 0; i < tasks.size(); i++) {
 			TaskHolder task = tasks.get(i);
 			long timeLeft = task.timeLeft;
-			if (u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, timeLeft, TimingWheel.fixTime(wheel, timeLeft)))
+			if (timeLeft > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, timeLeft, TimingWheel.fixTime(wheel, timeLeft)))
 				TimingWheel.add(wheel, task);
 		}
 	}
