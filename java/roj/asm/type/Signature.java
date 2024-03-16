@@ -126,7 +126,7 @@ public class Signature extends Attribute {
 	public String name() { return "Signature"; }
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool cp) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool cp) {
 		w.putShort(cp.getUtfId(toDesc()));
 	}
 

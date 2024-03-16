@@ -1,6 +1,5 @@
 package roj.config;
 
-import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashSet;
 import roj.collect.TrieTree;
@@ -28,24 +27,22 @@ import static roj.config.word.Word.*;
  */
 public class XMLParser extends Parser<CList> {
 	static final short
-		tag_start = 13, tag_end = 14, tag_end_close = 15,
-		equ = 16, ask = 17,
-		tag_start_close = 18, header_start = 19,
-		header_end = 20, CDATA_STRING = 21;
+		COMMENT = 12, CDATA_STRING = 13,
+		tag_start = 14, tag_start_close = 15, tag_end = 16, tag_end_close = 17,
+		header_start = 18, header_end = 19, equ = 20;
 
 	private static final TrieTree<Word> XML_TOKENS = new TrieTree<>();
 	private static final MyBitSet XML_LENDS = new MyBitSet();
-	private static final Int2IntMap XML_FC = new Int2IntMap();
 	static {
 		addKeywords(XML_TOKENS, 10, "true", "false");
-		addSymbols(XML_TOKENS, XML_LENDS, 13, "<", ">", "/>", "=", "?", "</", "<?", "?>");
+		addSymbols(XML_TOKENS, XML_LENDS, 14, "<", "</", ">", "/>", "<?", "?>", "=");
 		addWhitespace(XML_LENDS);
 
-		XML_FC.putAll(SIGNED_NUMBER_C2C);
-		XML_FC.put('<', 5); // magic number in switch
+		XML_TOKENS.put("<!--", new Word().init(COMMENT, -99, "-->"));
+		XML_TOKENS.put("<![CDATA[", new Word().init(CDATA_STRING, -98,"]]>"));
 	}
 
-	{ tokens = XML_TOKENS; literalEnd = XML_LENDS; firstChar = XML_FC; }
+	{ tokens = XML_TOKENS; literalEnd = XML_LENDS; firstChar = SIGNED_NUMBER_C2C; }
 
 	public static final int FORCE_XML_HEADER = 1, LENIENT = 2, HTML = 8, PROCESS_ENTITY = 16;
 	private static final MyHashSet<String> HTML_SHORT_TAGS = new MyHashSet<>(TextUtil.split("!doctype|br|img|link|input|source|track|param", '|'));
@@ -170,16 +167,16 @@ public class XMLParser extends Parser<CList> {
 
 		int i = 0;
 
-		w = readValue();
+		w = readElementValue();
 		flushBefore(index);
 
 		if (w.type() != tag_start_close) {
 			cc.valueList();
 
-			label:
+			loop:
 			while (true) {
 				switch (w.type()) {
-					case tag_start_close: break label;
+					case tag_start_close: break loop;
 					case tag_start:
 						try {
 							ccXmlElem();
@@ -187,6 +184,7 @@ public class XMLParser extends Parser<CList> {
 							throw e.addPath('.'+name+'['+i+']');
 						}
 						break;
+					case COMMENT: cc.comment(w.val()); break;
 					case CDATA_STRING: cc.value(w.val()); cc.vsopt("xml:cdata", true); break;
 					case LITERAL: cc.value(w.val()); break;
 					case EOF:
@@ -200,7 +198,7 @@ public class XMLParser extends Parser<CList> {
 				}
 
 				i++;
-				w = readValue();
+				w = readElementValue();
 				flushBefore(index);
 			}
 
@@ -247,14 +245,12 @@ public class XMLParser extends Parser<CList> {
 			case TRUE: return CBoolean.TRUE;
 			case FALSE: return CBoolean.FALSE;
 			case NULL: return CNull.NULL;
-			case DOUBLE:
-			case FLOAT: return CDouble.valueOf(w.asDouble());
+			case DOUBLE, FLOAT: return CDouble.valueOf(w.asDouble());
 			case INTEGER: return CInteger.valueOf(w.asInt());
 			case LONG: return CLong.valueOf(w.asLong());
-			case STRING:
-			case LITERAL: return CString.valueOf(w.val());
+			case STRING, LITERAL: return CString.valueOf(w.val());
 		}
-		throw new IllegalArgumentException("不是简单类型:" + w);
+		throw new IllegalArgumentException("不是简单类型:"+w);
 	}
 
 	public Predicate<String> needCLOSE = Helpers.alwaysTrue();
@@ -273,7 +269,7 @@ public class XMLParser extends Parser<CList> {
 
 		while (i < in.length()) {
 			char c = in.charAt(i);
-			switch (XML_FC.getOrDefaultInt(c, 0)) {
+			switch (SIGNED_NUMBER_C2C.getOrDefaultInt(c, 0)) {
 				case C_MAY__NUMBER_SIGN:
 					if (i+1 < in.length() && NUMBER.contains(in.charAt(i+1))) {
 						prevIndex = index = i;
@@ -286,14 +282,6 @@ public class XMLParser extends Parser<CList> {
 					prevIndex = i;
 					index = i+1;
 					return formClip(STRING, readSlashString(c, (flag & UNESCAPED_SINGLE_QUOTE) == 0 || c == '"'));
-				case 5:
-					prevIndex = index = i;
-					int j = checkCommentOrCDATA(i+1, false);
-					if (j > 0) formClip(CDATA_STRING, in.subSequence(i+9, j));
-					if (j == 0) return readSymbol();
-					i = index;
-				continue;
-
 				case C_WHITESPACE: i++;
 			}
 		}
@@ -301,100 +289,90 @@ public class XMLParser extends Parser<CList> {
 		return eof();
 	}
 
-	final Word readValue() throws ParseException {
+	/**
+	 * 将开头结尾空格替换为一个的字符串，或元素
+	 */
+	final Word readElementValue() throws ParseException {
 		CharSequence in = input;
 		int i = index;
 		int prevI = i;
 
-		int c = 0;
-		while (i < in.length()) {
+		// skip and collect whitespace
+		int c;
+		while (true) {
 			c = in.charAt(i);
 			if (!WHITESPACE.contains(c)) break;
-			i++;
+
+			if (++i == in.length()) {
+				index = i;
+				return eof();
+			}
 		}
 		index = i;
-		if (i == in.length()) return eof();
 
-		while (c == '<') {
-			c = checkCommentOrCDATA(i+1, false);
-			if (c > 0) return formClip(CDATA_STRING, in.subSequence(i+9, c));
-
-			i = index;
-			if (c == 0) break;
-			c = in.charAt(i);
+		if (in.charAt(i) == '<') {
+			// includes tag_start, tag_end
+			// and CDATA_STRING (and skipped COMMEND)
+			return tryMatchToken();
 		}
 
-		Word w = tryMatchToken();
-		if (w != null) return w;
+		// 上面部分和readWord差不多，除了不处理数字什么的
+		// 下面处理字符串，读到<为止
 
+		// 规定：不保留元素之间的纯空白字符串
+		// 非空白字符串头尾的空白字符串会被替换为单个空格
 		CharList v = found; v.clear();
 
 		// restore whitespace
-		i = prevI;
+		if (i != prevI) v.append(' ');
+		int lastNonEmpty = prevI = i;
 
-		findstr:
 		while (i < in.length()) {
 			c = in.charAt(i);
-			while (c == '<') {
+			if (c == '<') {
+				// 如果是comment，那么拆成两个字符串块是应该的吗？
+				// 20240319 我暂时感觉是应该的，因为某些解析器中comment也是element
+				break;
+			}
+
+			i++;
+			if (c == '&' && (flag & PROCESS_ENTITY) != 0) {
 				v.append(in, prevI, i);
 
-				c = checkCommentOrCDATA(i+1, true);
-				if (c >= 0) {
-					prevI = i;
-					break findstr;
-				}
-
-				prevI = i = index;
-				continue findstr;
-			}
-
-			if (c == '&' && (flag & PROCESS_ENTITY) != 0) {
-				v.append(in, prevI, i++);
-
-				int j = i;
-				while (j < in.length()) {
-					c = in.charAt(j);
-					if (c == ';') break;
-					j++;
-				}
+				int j = TextUtil.gIndexOf(in, ';', i);
 
 				handleAmp(in.subSequence(i, j), v);
-				prevI = i = j;
-			} else {
-				i++;
+				prevI = i = j+1;
 			}
+
+			if (!WHITESPACE.contains(c)) lastNonEmpty = i;
 		}
-		v.append(in, prevI, i);
+		v.append(in, prevI, lastNonEmpty);
+		if (lastNonEmpty != i) v.append(' ');
 
 		index = i;
 		return formClip(LITERAL, v);
 	}
 
-	private int checkCommentOrCDATA(int i, boolean quick) throws ParseException {
-		CharSequence in = input;
-		if (TextUtil.regionMatches("!--", 0, in, i)) { // <!--
-			int j = TextUtil.gIndexOf(in, "-->", i+3, in.length());
-			if (j < 0) throw err("在注释结束前遇到了文件尾");
-			if (comment != null) {
-				comment.clear();
-				cc.comment(comment.append(in, i+3, j).toString());
-			}
-			index = j+3;
-			return -1;
-		} else if (TextUtil.regionMatches("![CDATA[", 0, in, i)) { // CDATA
-			if (quick) return 1;
-
-			int j = TextUtil.gIndexOf(in, "]]>", i +8, in.length());
-			if (j < 0) throw err("在CDATA结束前遇到了文件尾");
-
-			index = j+3;
-			return j;
+	@Override
+	protected Word onSpecialToken(Word w) throws ParseException {
+		String matcher = w.type() == CDATA_STRING ? "]]>" : "-->";
+		int i;
+		try {
+			i = TextUtil.gIndexOf(input, matcher, index, input.length());
+		} catch (Exception e) {
+			i = -1;
 		}
 
-		return 0;
+		if (i < 0) throw err(w.type() == CDATA_STRING ? "未结束的CDATA标签" : "未结束的注释", index);
+
+		found.clear();
+		found.append(input, index, i);
+		index = i+3;
+		return formClip(w.type(), found.toString());
 	}
 
-	protected void handleAmp(CharSequence seq, CharList out) throws ParseException { HttpUtil.htmlspecial_decode_all(out, seq); }
+	protected void handleAmp(CharSequence seq, CharList out) { HttpUtil.htmlspecial_decode_all(out, seq); }
 
 	@Override
 	protected final Word onInvalidNumber(int flag, int i, String reason) throws ParseException { return readLiteral(); }

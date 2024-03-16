@@ -1,17 +1,22 @@
 package roj.asm.util;
 
+import org.jetbrains.annotations.Nullable;
+import roj.asm.Parser;
+import roj.asm.cp.Constant;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstDynamic;
+import roj.asm.cp.CstNameAndType;
 import roj.asm.tree.*;
-import roj.asm.tree.attr.AttrUnknown;
-import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.attr.AttributeList;
-import roj.asm.tree.attr.InnerClasses;
+import roj.asm.tree.attr.*;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
+import roj.asm.visitor.CodeVisitor;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.XAttrCode;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.util.ByteList;
+import roj.util.DynByteBuf;
 
 import java.util.Collection;
 import java.util.List;
@@ -65,9 +70,9 @@ public class TransformUtil {
 	}
 
 	private static final MyHashSet<String>
-		class_allow = new MyHashSet<>("InnerClasses", "RuntimeInvisibleAnnotations", "RuntimeVisibleAnnotations", "BootstrapMethods"),
-		field_allow = new MyHashSet<>("ConstantValue", "RuntimeInvisibleAnnotations", "RuntimeVisibleAnnotations"),
-		method_allow = new MyHashSet<>("Code", "RuntimeInvisibleAnnotations", "RuntimeVisibleAnnotations", "AnnotationDefault");
+		class_allow = new MyHashSet<>("RuntimeVisibleAnnotations", "BootstrapMethods"),
+		field_allow = new MyHashSet<>("ConstantValue", "RuntimeVisibleAnnotations"),
+		method_allow = new MyHashSet<>("Code", "RuntimeVisibleAnnotations", "AnnotationDefault");
 
 	/**
 	 * 删除多余的属性，目前仅支持Java8
@@ -77,7 +82,7 @@ public class TransformUtil {
 
 		boolean low = false;
 		if (data.version >= 52 << 16 && data.attrByName("BootstrapMethods") == null) {
-			data.version = 51 << 16;
+			data.version = 49 << 16;
 			low = true;
 		}
 
@@ -158,4 +163,139 @@ public class TransformUtil {
 		return flag;
 	}
 	// endregion
+	@Nullable
+	public static ConstantData noStackFrameTableEver(ConstantData data, @Nullable String lambdaClassName) {
+		BootstrapMethods lambda = data.parsedAttr(data.cp, Attribute.BootstrapMethods);
+		if (lambda == null) return null;
+
+		ByteList tmp = new ByteList();
+		boolean[] frame = {false};
+		List<CstDynamic> dynList = new SimpleList<>();
+
+		CodeVisitor cv = new CodeVisitor() {
+			protected void invokeDyn(CstDynamic dyn, int type) {dynList.add(dyn);}
+			protected void jump(byte code, int offset) {frame[0] = true;}
+			protected void lookupSwitch(DynByteBuf r) {frame[0] = true;}
+			protected void tableSwitch(DynByteBuf r) {frame[0] = true;}
+		};
+
+		for (MethodNode mn : data.methods)
+			visitCode(data, mn, tmp, cv);
+
+		if (!frame[0]) return null;
+
+		ConstantData newClass = new ConstantData();
+		newClass.name(lambdaClassName != null ? lambdaClassName : data.name+"$Lambda");
+		newClass.putAttr(lambda);
+		data.attributes().removeByName(Attribute.BootstrapMethods.name);
+
+		data.version = 49 << 16;
+		newClass.version = 52 << 16;
+
+		List<BootstrapMethods.Item> methods = lambda.methods;
+		for (int i = 0; i < methods.size(); i++) {
+			CstNameAndType nat = null;
+			for (int j = 0; j < dynList.size(); j++) {
+				if (dynList.get(j).tableIdx == i) {
+					nat = dynList.get(i).desc();
+					break;
+				}
+			}
+			assert nat != null;
+
+			String desc = nat.getType().str();
+			int size = 0;
+			List<Type> types = TypeHelper.parseMethod(desc);
+			Type ret = types.remove(types.size() - 1);
+
+			CodeWriter mycw = newClass.newMethod(ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, "lambdaBridge"+i, desc);
+
+			for (int j = 0; j < types.size(); j++) {
+				Type type = types.get(j);
+				mycw.varLoad(type, size);
+				size += type.length();
+			}
+			mycw.visitSize(Math.max(1,size), size);
+			mycw.invokeDyn(i, nat.name().str(), desc, 0);
+			mycw.return_(ret);
+		}
+
+		CodeWriter cw = new CodeWriter() {
+			public void invokeDyn(int idx, String name, String desc, int type) { super.invoke(INVOKESTATIC, newClass, idx); }
+			public void visitExceptions() { super.visitExceptions(); frames = null; }
+		};
+
+		for (MethodNode mn : data.methods) {
+			Attribute code = mn.attrByName("Code");
+			if (code != null) {
+				tmp.clear();
+				cw.init(tmp, data.cp);
+				cw.mn = mn;
+				cw.visit(data.cp, code.getRawData());
+				cw.finish();
+				mn.putAttr(new AttrUnknown("Code", new ByteList(tmp.toByteArray())));
+			}
+		}
+
+		return newClass;
+	}
+
+	public static void compress(ConstantData data) {
+		ConstantPool cpw = new ConstantPool(data.cp.array().size());
+		CodeVisitor smallerLdc = new CodeVisitor() {
+			protected void ldc(byte code, Constant c) { cpw.reset(c); }
+		};
+		ByteList bw = new ByteList();
+
+		SimpleList<MethodNode> methods = data.methods;
+		for (int i = 0; i < methods.size(); i++) {
+			visitCode(data, methods.get(i), bw, smallerLdc);
+		}
+
+		CodeWriter cw = new CodeWriter();
+		for (int i = 0; i < methods.size(); i++) {
+			MethodNode mn = methods.get(i);
+			Attribute code = mn.attrByName("Code");
+			if (code != null) {
+				bw.clear();
+				cw.init(bw, cpw);
+				cw.mn = mn; // for UNINITIAL_THIS
+				cw.visit(data.cp, code.getRawData());
+				cw.finish();
+
+				byte[] array = bw.toByteArray();
+				// will not parse this
+				mn.putAttr(new Attribute() {
+					@Override
+					public String name() { return "Code"; }
+					@Override
+					public DynByteBuf getRawData() { return ByteList.wrap(array); }
+					@Override
+					public String toString() { return "Tmpcw"; }
+				});
+			}
+		}
+
+		data.parsed();
+		data.cp = cpw;
+
+		for (int i = 0; i < methods.size(); i++) {
+			MethodNode mn = methods.get(i);
+			Attribute code = mn.attrByName("Code");
+			if (code != null) mn.putAttr(new AttrUnknown("Code", code.getRawData()));
+		}
+	}
+
+	public static void visitCode(ConstantData data, MethodNode mn, ByteList tmp, CodeVisitor cv) {
+		Attribute code = mn.attrByName("Code");
+		if (code != null) {
+			if (code instanceof XAttrCode x) {
+				tmp.clear();
+				code.toByteArrayNoHeader(tmp, data.cp);
+				code = new AttrUnknown("Code", new ByteList(tmp.toByteArray()));
+				mn.putAttr(code);
+			}
+			cv.visit(data.cp, Parser.reader(code));
+		}
+	}
 }

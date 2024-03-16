@@ -37,8 +37,6 @@ public final class TypeHelper {
 	public static void parseMethod(String desc, List<Type> params) {
 		int index = desc.indexOf(')');
 
-		CharList tmp = IOUtil.getSharedCharBuf();
-
 		int arr = 0;
 		for (int i = 1; i < index; i++) {
 			char c = desc.charAt(i);
@@ -124,7 +122,7 @@ public final class TypeHelper {
 	 * @see Type#toDesc()
 	 */
 	public static String getField(IType type) {
-		if (type instanceof Type && ((Type) type).isPrimitive()) return toDesc(((Type) type).type);
+		if (type instanceof Type && type.isPrimitive()) return toDesc(((Type) type).type);
 
 		CharList sb = IOUtil.getSharedCharBuf();
 		type.toDesc(sb);
@@ -214,9 +212,11 @@ public final class TypeHelper {
 	 * @return void <init>(java.lang.String, double)
 	 */
 	public static String humanize(List<Type> types, String methodName, boolean trimPackage) {
+		return humanize(types, methodName, trimPackage, IOUtil.getSharedCharBuf()).toString();
+	}
+	public static CharList humanize(List<Type> types, String methodName, boolean trimPackage, CharList sb) {
 		Type t = types.remove(types.size() - 1);
 
-		CharList sb = IOUtil.getSharedCharBuf();
 		if (trimPackage && t.owner != null) {
 			String o = t.owner;
 			sb.append(o, o.lastIndexOf('/') + 1, o.length());
@@ -244,7 +244,7 @@ public final class TypeHelper {
 
 		types.add(t);
 
-		return sb.append(')').toString();
+		return sb.append(')');
 	}
 
 	/**

@@ -26,7 +26,7 @@ public final class MethodParameters extends Attribute {
 	public final SimpleList<MethodParam> flags;
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		w.put((byte) flags.size());
 		for (int i = 0; i < flags.size(); i++) {
 			MethodParam e = flags.get(i);

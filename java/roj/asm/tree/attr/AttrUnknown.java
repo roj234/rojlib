@@ -13,7 +13,7 @@ public class AttrUnknown extends Attribute {
 	public static Attribute downgrade(ConstantPool cw, DynByteBuf r, Attribute attr) {
 		if (attr.getClass() == AttrUnknown.class) return attr;
 
-		r.clear(); attr.toByteArray1(r, cw);
+		r.clear(); attr.toByteArrayNoHeader(r, cw);
 		int length = r.readableBytes();
 		return new AttrUnknown(attr.name(), length == 0 ? null : r.toByteArray());
 	}

@@ -37,7 +37,7 @@ public final class EnclosingMethod extends Attribute {
 	public String name() { return "EnclosingMethod"; }
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		w.putShort(pool.getClassId(owner));
 		if (PREDEFINED == name) {
 			w.putShort(0);

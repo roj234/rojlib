@@ -3,9 +3,7 @@ package roj.util;
 import org.jetbrains.annotations.NotNull;
 import roj.io.IOUtil;
 import roj.io.MyDataInput;
-import roj.reflect.ReflectionUtils;
 import roj.text.GB18030;
-import roj.text.J9String;
 import roj.text.UTF8MB4;
 
 import java.io.DataOutput;
@@ -193,8 +191,6 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		putShort(byteLen)._writeDioUTF(str, byteLen);
 	}
 	public static int byteCountDioUTF(@NotNull String str) {
-		if (ReflectionUtils.JAVA_VERSION >= 9 && J9String.isLatin1(str)) return str.length();
-
 		int len = str.length();
 		int byteLen = len;
 
@@ -532,7 +528,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		return target;
 	}
 
-	public final String readVUIGB() { return readGB(DEFAULT_MAX_STRING_LEN); }
+	public final String readVUIGB() { return readVUIGB(DEFAULT_MAX_STRING_LEN); }
 	public final String readVUIGB(int max) {
 		int len = readVUInt();
 		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);

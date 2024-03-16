@@ -10,7 +10,7 @@ import roj.archive.qz.QZArchive;
 import roj.archive.qz.QZEntry;
 import roj.archive.qz.QZUtils;
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.TaskPool;
 import roj.io.CorruptedInputException;
@@ -54,7 +54,7 @@ public class UnarchiverUI extends JFrame {
 
 	private ArchiveFile archiveFile;
 	private QZArchive qzArhive;
-	private ZipArchive zipArchive;
+	private ZipFile zipFile;
 	public UnarchiverUI() {
 		initComponents();
 		addWindowListener(new WindowAdapter() {
@@ -77,6 +77,9 @@ public class UnarchiverUI extends JFrame {
 		uiArchiveType.addActionListener(e -> {
 			String id = uiArchiveType.getSelectedItem().toString();
 			boolean is7z = id.equals("7z");
+			uiCharset.setEnabled(!is7z);
+			if (!is7z&&uiCharset.getText().isEmpty())
+				uiCharset.setText("UTF-8");
 			uiStoreAnti.setEnabled(is7z);
 		});
 
@@ -101,8 +104,8 @@ public class UnarchiverUI extends JFrame {
 
 				GuiPathTreeBuilder<ArchiveEntry> pathTree = new GuiPathTreeBuilder<>();
 				if (uiArchiveType.getSelectedItem().equals("zip")) {
-					archiveFile = zipArchive = new ZipArchive(archive);
-					for (ZEntry entry : zipArchive.getEntries().values()) {
+					archiveFile = zipFile = new ZipFile(archive, ZipFile.FLAG_BACKWARD_READ, Charset.forName(uiCharset.getText()));
+					for (ZEntry entry : zipFile.entries()) {
 						pathTree.add(entry.getName(), entry, entry.isDirectory());
 					}
 				} else {
@@ -228,9 +231,9 @@ public class UnarchiverUI extends JFrame {
 			}
 		};
 
-		if (zipArchive != null) {
+		if (zipFile != null) {
 			byte[] password = null;
-			for (ZEntry entry : zipArchive.getEntries().values()) {
+			for (ZEntry entry : zipFile.entries()) {
 				if (set == null || set.strStartsWithThis(entry.getName())) {
 					block:
 					if (entry.isEncrypted() && password == null) {
@@ -251,10 +254,10 @@ public class UnarchiverUI extends JFrame {
 			}
 
 			byte[] javacSbAgain = password;
-			for (ZEntry entry : zipArchive.getEntries().values()) {
+			for (ZEntry entry : zipFile.entries()) {
 				if (set == null || set.strStartsWithThis(entry.getName())) {
 					pool.pushTask(() -> {
-						try (InputStream in = zipArchive.getInput(entry, javacSbAgain)) {
+						try (InputStream in = zipFile.getStream(entry, javacSbAgain)) {
 							cb.accept(entry, in);
 						}
 					});
@@ -300,14 +303,14 @@ public class UnarchiverUI extends JFrame {
 	private void closeFile(DefaultTreeModel m1) throws IOException {
 		if (m1 != null) m1.setRoot(null);
 		if (archiveFile != null) archiveFile.close();
-		zipArchive = null;
+		zipFile = null;
 		qzArhive = null;
 		archiveFile = null;
 	}
 
 	private byte[] checkPassword(ArchiveEntry entry, String pass, String charset) {
 		byte[] password;
-		try (InputStream in = archiveFile.getInput(entry, password = pass.getBytes(Charset.forName(charset)))) {
+		try (InputStream in = archiveFile.getStream(entry, password = pass.getBytes(Charset.forName(charset)))) {
 			in.skip(1048576);
 			return password;
 		} catch (Exception ex) {
@@ -340,6 +343,8 @@ public class UnarchiverUI extends JFrame {
 		var scrollPane2 = new JScrollPane();
 		uiPasswords = new JTextArea();
 		uiPasswordInfo = new JLabel();
+		uiNoVerify = new JCheckBox();
+		uiCharset = new JTextField();
 
 		//======== this ========
 		setTitle("Roj234 Unarchiver 1.1");
@@ -453,6 +458,16 @@ public class UnarchiverUI extends JFrame {
 		contentPane.add(uiPasswordInfo);
 		uiPasswordInfo.setBounds(new Rectangle(new Point(10, 420), uiPasswordInfo.getPreferredSize()));
 
+		//---- uiNoVerify ----
+		uiNoVerify.setText("\u4e0d\u9a8c\u8bc1");
+		contentPane.add(uiNoVerify);
+		uiNoVerify.setBounds(new Rectangle(new Point(210, 417), uiNoVerify.getPreferredSize()));
+
+		//---- uiCharset ----
+		uiCharset.setEnabled(false);
+		contentPane.add(uiCharset);
+		uiCharset.setBounds(300, 415, 75, uiCharset.getPreferredSize().height);
+
 		contentPane.setPreferredSize(new Dimension(390, 675));
 		pack();
 		setLocationRelativeTo(getOwner());
@@ -477,5 +492,7 @@ public class UnarchiverUI extends JFrame {
 	private JCheckBox uiPathFilter;
 	private JTextArea uiPasswords;
 	private JLabel uiPasswordInfo;
+	private JCheckBox uiNoVerify;
+	private JTextField uiCharset;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

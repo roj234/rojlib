@@ -43,14 +43,14 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 	@Override
 	public final int read(byte[] b, int off, int len) throws IOException {
 		ArrayUtil.checkRange(b,off,len);
-		int total = this.len - this.off;
+		int total = lim - pos;
 		if (len <= total) {
-			System.arraycopy(this.list, this.off, b, off, len);
-			this.off += len;
+			System.arraycopy(buf, pos, b, off, len);
+			pos += len;
 			return len;
 		}
-		System.arraycopy(this.list, this.off, b, off, total);
-		this.off = this.len = 0;
+		System.arraycopy(buf, pos, b, off, total);
+		pos = lim = 0;
 		int r = in.read(b, off + total, len - total);
 		return r < 0 ? total == 0 ? r : total : total+r;
 	}
@@ -68,9 +68,9 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 
 	@Override
 	public final int skipBytes(int n) throws IOException {
-		int total = len - off;
+		int total = lim - pos;
 		if (n < total) {
-			off += n;
+			pos += n;
 			return n;
 		}
 
@@ -83,27 +83,27 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 	}
 
 	public long skip(long n) throws IOException {
-		long total = len - off;
+		long total = lim - pos;
 		if (n < total) {
-			off += n;
+			pos += n;
 			return n;
 		}
 		return super.skip(n-total)+total;
 	}
 
 	@Override
-	public int available() throws IOException { return len-off + in.available(); }
+	public int available() throws IOException { return lim - pos + in.available(); }
 
-	private byte[] list = ArrayCache.BYTES;
-	private int off, len;
+	private byte[] buf = ArrayCache.BYTES;
+	private int pos, lim;
 	private int doRead(int count) throws IOException {
-		int l = len;
-		int o = off;
+		int l = lim;
+		int o = pos;
 		if (l - o < count) {
-			byte[] dst = list;
+			byte[] dst = buf;
 			if (dst.length < count) dst = new byte[count];
-			System.arraycopy(list, off, dst, 0, l -= o);
-			list = dst;
+			System.arraycopy(buf, pos, dst, 0, l -= o);
+			buf = dst;
 
 			while (l < dst.length) {
 				int r = in.read(dst, l, dst.length - l);
@@ -112,11 +112,11 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 			}
 
 			if (l < count) throw new EOFException("need="+count+",read="+l);
-			off = count;
-			len = l;
+			pos = count;
+			lim = l;
 			return 0;
 		} else {
-			off = o+count;
+			pos = o+count;
 			return o;
 		}
 	}
@@ -124,17 +124,17 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 	@Override
 	public final boolean readBoolean() throws IOException {
 		int i = doRead(1);
-		return list[i] != 0;
+		return buf[i] != 0;
 	}
 	@Override
 	public final byte readByte() throws IOException {
 		int i = doRead(1);
-		return list[i];
+		return buf[i];
 	}
 	@Override
 	public final int readUnsignedByte() throws IOException {
 		int i = doRead(1);
-		return list[i]&0xFF;
+		return buf[i]&0xFF;
 	}
 	@Override
 	public final short readShort() throws IOException { return (short) readUnsignedShort(); }
@@ -143,35 +143,35 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 	@Override
 	public final int readUnsignedShort() throws IOException {
 		int i = doRead(2);
-		return ((list[i]&0xFF) << 8) | (list[i+1]&0xFF);
+		return ((buf[i]&0xFF) << 8) | (buf[i+1]&0xFF);
 	}
 	@Override
 	public final int readUShortLE() throws IOException {
 		int i = doRead(2);
-		return (list[i] & 0xFF) | ((list[i+1] & 0xFF) << 8);
+		return (buf[i] & 0xFF) | ((buf[i+1] & 0xFF) << 8);
 	}
 	@Override
 	public final int readMedium() throws IOException {
 		int i = doRead(3);
-		byte[] l = list;
+		byte[] l = buf;
 		return (l[i++] & 0xFF) << 16 | (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
 	}
 	@Override
 	public final int readMediumLE() throws IOException {
 		int i = doRead(3);
-		byte[] l = list;
+		byte[] l = buf;
 		return (l[i++] & 0xFF)| (l[i++] & 0xFF) << 8 | (l[i] & 0xFF) << 16;
 	}
 	@Override
 	public final int readInt() throws IOException {
 		int i = doRead(4);
-		byte[] l = this.list;
+		byte[] l = this.buf;
 		return BIG_ENDIAN ? u.getInt(l, Unsafe.ARRAY_BYTE_BASE_OFFSET+i) : (l[i++] & 0xFF) << 24 | (l[i++] & 0xFF) << 16 | (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
 	}
 	@Override
 	public final int readIntLE() throws IOException {
 		int i = doRead(4);
-		byte[] l = this.list;
+		byte[] l = this.buf;
 		return !BIG_ENDIAN ? u.getInt(l, Unsafe.ARRAY_BYTE_BASE_OFFSET+i) : (l[i++] & 0xFF) | (l[i++] & 0xFF) << 8 | (l[i++] & 0xFF) << 16 | (l[i] & 0xFF) << 24;
 	}
 	@Override
@@ -181,7 +181,7 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 	@Override
 	public final long readLong() throws IOException {
 		int i = doRead(8);
-		byte[] l = this.list;
+		byte[] l = this.buf;
 		if (BIG_ENDIAN) return u.getLong(l, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);
 		return (l[i++] & 0xFFL) << 56 |
 			(l[i++] & 0xFFL) << 48 |
@@ -195,7 +195,7 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 	@Override
 	public final long readLongLE() throws IOException {
 		int i = doRead(8);
-		byte[] l = this.list;
+		byte[] l = this.buf;
 		if (!BIG_ENDIAN) return u.getLong(l, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);
 		return (l[i++] & 0xFFL) |
 			(l[i++] & 0xFFL) << 8 |
@@ -285,7 +285,7 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 	@Override
 	public final String readAscii(int len) throws IOException {
 		int i = doRead(len);
-		return new String(list, i, i+len, StandardCharsets.ISO_8859_1);
+		return new String(buf, i, len, StandardCharsets.ISO_8859_1);
 	}
 
 	@Override
@@ -306,7 +306,7 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 		if (len < 0) throw new IllegalArgumentException("length="+len);
 		if (len > 0) {
 			int i = doRead(len);
-			UTF8MB4.CODER.decodeFixedIn(DynByteBuf.wrap(list, i, len),len,target);
+			UTF8MB4.CODER.decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
 		}
 		return target;
 	}
@@ -326,7 +326,7 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 		if (len < 0) throw new IllegalArgumentException("length="+len);
 		if (len > 0) {
 			int i = doRead(len);
-			GB18030.CODER.decodeFixedIn(DynByteBuf.wrap(list, i, len),len,target);
+			GB18030.CODER.decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
 		}
 		return target;
 	}

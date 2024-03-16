@@ -333,11 +333,8 @@ public final class DirectAccessor<T> {
 								continue outer;
 							}
 						}
+						if (off1 == 1 && !types[0].isAssignableFrom(target)) continue;
 
-						types = sm.getParameterTypes();
-						if (off1 == 1 && !types[0].isAssignableFrom(target)) {
-							throw new IllegalArgumentException(itf.getName()+'.'+name+" 的第一个参数 ("+types[0].getName()+") 不能转换为 "+target.getName());
-						}
 						if (found != -1) {
 							if (!Arrays.equals(m.getParameterTypes(), tm.getParameterTypes())) {
 								throw new IllegalArgumentException(

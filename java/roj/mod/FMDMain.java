@@ -25,7 +25,6 @@ import roj.ui.CLIUtil;
 import roj.ui.Profiler;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
-import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -439,12 +438,10 @@ public final class FMDMain {
 				for (int i = 0; i < list.size(); i++) changed.add(list.get(i).getFileName());
 
 				ZipArchive mzf = devJar.getMZF();
-				ByteList buf = IOUtil.getSharedByteBuf();
-				for (ZEntry file : mzf.getEntries().values()) {
+				for (ZEntry file : mzf.entries()) {
 					if (!changed.contains(file.getName())) {
-						Context ctx = new Context(file.getName(), mzf.get(file, buf).toByteArray());
+						Context ctx = new Context(file.getName(), mzf.get(file));
 						list.add(ctx);
-						buf.clear();
 					}
 				}
 

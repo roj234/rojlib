@@ -235,7 +235,7 @@ public final class BootstrapMethods extends Attribute {
 	}
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		w.putShort(methods.size());
 		for (int i = 0; i < methods.size(); i++) {
 			methods.get(i).toByteArray(pool, w);

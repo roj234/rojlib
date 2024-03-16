@@ -1,9 +1,8 @@
 package roj.archive.qz;
 
-import roj.archive.ChecksumInputStream;
+import roj.archive.CRC32InputStream;
 import roj.io.LimitInputStream;
 import roj.io.SourceInputStream;
-import roj.io.source.BufferedSource;
 import roj.io.source.Source;
 import roj.reflect.ReflectionUtils;
 
@@ -11,7 +10,6 @@ import java.io.Closeable;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.zip.CRC32;
 
 import static roj.reflect.ReflectionUtils.u;
 
@@ -69,7 +67,7 @@ public abstract class QZReader implements Closeable {
 			activeIn = fin;
 		}
 
-		if (!recovery && (file.flag&QZEntry.CRC) != 0) return new ChecksumInputStream(fin, new CRC32(), file.crc32&0xFFFFFFFFL);
+		if (!recovery && (file.flag&QZEntry.CRC) != 0) return new CRC32InputStream(fin, file.crc32);
 		return fin;
 	}
 
@@ -88,7 +86,6 @@ public abstract class QZReader implements Closeable {
 			src = fpRead;
 			if (src == null) {
 				src = r.threadSafeCopy();
-				src = src.isBuffered()?src:BufferedSource.autoClose(src);
 				break;
 			}
 		} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, src, null));

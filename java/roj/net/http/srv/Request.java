@@ -83,9 +83,9 @@ public final class Request extends Headers {
 	}
 
 	public List<String> directories() {
-		List<String> paths = TextUtil.split(new SimpleList<>(), path(), '/', -1, true);
+		List<String> paths = TextUtil.split(new SimpleList<>(), path(), '/');
 		if (paths.isEmpty()) paths.add("");
-		else if (paths.get(0).isEmpty()) paths.remove(0);
+		else if (paths.get(0).isEmpty() && paths.size() > 1) paths.remove(0);
 		return paths;
 	}
 

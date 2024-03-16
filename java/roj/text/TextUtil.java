@@ -427,16 +427,13 @@ public class TextUtil {
 		int prefix = Integer.toHexString(off+len-1).length();
 
 		int rem = off & 15;
-		if (rem != 0) {
-			_off(sb, off & ~15, prefix);
-			sb.padEnd(' ', (rem << 1) + (rem >> 1));
-		} else {
-			_off(sb, off, prefix);
-		}
+		_off(sb, off ^ rem, prefix);
+		if (rem != 0) sb.padEnd(' ', (rem << 1) + (rem >> 1));
 
 		int d = 0;
 		while (true) {
-			sb.append(b2h((b[off] & 0xFF) >>> 4)).append(b2h(b[off++] & 0xf));
+			int i1 = b[off++] & 0xFF;
+			sb.append(b2h(i1 >>> 4)).append(b2h(i1 & 0xf));
 
 			if (off == len) {
 				rem = 16 + d - off;
@@ -513,7 +510,6 @@ public class TextUtil {
 
 	// endregion
 	// region regionMatches
-
 	public static int lastMatches(CharSequence a, int aIndex, CharSequence b, int bIndex, int max) {
 		int min = Math.min(Math.min(a.length() - aIndex, b.length() - bIndex), max);
 		int i = 0;
@@ -532,9 +528,8 @@ public class TextUtil {
 
 		return true;
 	}
-
 	// endregion
-
+	// region nextCRLF
 	public static int gNextCRLF(CharSequence in, int i) {
 		while (i < in.length()) {
 			char c = in.charAt(i++);
@@ -574,9 +569,8 @@ public class TextUtil {
 		// well, in.length may vary over time (I mean TextReader)
 		return def == 0 ? in.length() : def;
 	}
-
-	// region indexOf
-
+	// endregion
+	// region indexOf / lastIndexOf
 	public static int gIndexOf(CharSequence haystack, char needle) {
 		for (int i = 0; i < haystack.length(); i++) {
 			if (haystack.charAt(i) == needle) return i;
@@ -589,6 +583,13 @@ public class TextUtil {
 		}
 		return -1;
 	}
+	public static int gLastIndexOf(CharSequence haystack, char needle) {
+		for (int i = haystack.length() - 1; i >= 0; i--) {
+			if (haystack.charAt(i) == needle) return i;
+		}
+		return -1;
+	}
+
 	public static int gIndexOf(CharSequence haystack, CharSequence needle, int i, int max) {
 		char first = needle.charAt(0);
 		o:
@@ -604,11 +605,6 @@ public class TextUtil {
 		}
 
 		return -1;
-	}
-
-	public static int gLastIndexOf(CharSequence haystack, CharSequence needle) {
-		int i = haystack.length()-needle.length();
-		return gLastIndexOf(haystack, needle, i, 0);
 	}
 	public static int gLastIndexOf(CharSequence haystack, CharSequence needle, int i, int min) {
 		// or sub loop will throw
@@ -629,13 +625,6 @@ public class TextUtil {
 
 		return -1;
 	}
-	public static int gLastIndexOf(CharSequence haystack, char needle) {
-		for (int i = haystack.length() - 1; i >= 0; i--) {
-			if (haystack.charAt(i) == needle) return i;
-		}
-		return -1;
-	}
-
 	// endregion
 	// region split
 
@@ -647,91 +636,84 @@ public class TextUtil {
 		return split(list, keys, c).toArray(new String[list.size()]);
 	}
 
-	public static List<String> split(CharSequence keys, char c) {
-		return split(new SimpleList<>(), keys, c);
-	}
-
-	public static List<String> split(List<String> list, CharSequence str, char splitter) {
-		return split(list, str, splitter, Integer.MAX_VALUE, false);
-	}
-
+	public static List<String> split(CharSequence keys, char c) { return split(new SimpleList<>(), keys, c); }
+	public static List<String> split(List<String> list, CharSequence str, char splitter) { return split(list, str, splitter, Integer.MAX_VALUE); }
+	/**
+	 * 策略：不保留最后的连续空行
+	 * 比如: a||b|| => ["a", "", "b"]
+	 */
 	public static List<String> split(List<String> list, CharSequence str, char splitter, int max) {
-		return split(list, str, splitter, max, false);
-	}
-
-	public static List<String> split(List<String> list, CharSequence str, char splitter, int max, boolean keepEmpty) {
-		int i = 0, prev = 0;
+		int i = 0, prev = 0, lastNonEmpty = max;
 		while (i < str.length()) {
 			if (splitter == str.charAt(i)) {
-				if (prev < i || keepEmpty) {
-					if (--max == 0) {
-						list.add(str.subSequence(prev, str.length()).toString());
-						return list;
-					}
-					list.add(prev == i ? "" : str.subSequence(prev, i).toString());
+				if (--max == 0) i = str.length();
+
+				if (prev < i) {
+					list.add(str.subSequence(prev, i).toString());
+					lastNonEmpty = max;
+				} else {
+					list.add("");
 				}
-				prev = i + 1;
+
+				prev = ++i;
+			} else {
+				i++;
 			}
-			i++;
 		}
 
-		if (max != 0 && (prev < i || keepEmpty)) {
-			list.add(prev == i ? "" : str.subSequence(prev, i).toString());
+		if (prev < i) list.add(str.subSequence(prev, str.length()).toString());
+		else {
+			lastNonEmpty -= max;
+			while (lastNonEmpty-- > 0)
+				list.remove(list.size()-1);
 		}
 
 		return list;
 	}
 
-	public static List<String> split(CharSequence str, CharSequence splitter) {
-		return split(new SimpleList<>(), str, splitter, Integer.MAX_VALUE, false);
-	}
-
-	public static List<String> splitKeepEmpty(CharSequence str, CharSequence splitter) {
-		return split(new SimpleList<>(), str, splitter, Integer.MAX_VALUE, true);
-	}
-
-	public static List<String> split(List<String> list, CharSequence str, CharSequence splitter) {
-		return split(list, str, splitter, Integer.MAX_VALUE, false);
-	}
-
-	public static List<String> split(List<String> list, CharSequence str, CharSequence splitter, int max, boolean keepEmpty) {
+	public static List<String> split(CharSequence str, CharSequence splitter) { return split(new SimpleList<>(), str, splitter, Integer.MAX_VALUE); }
+	public static List<String> split(List<String> list, CharSequence str, CharSequence splitter) { return split(list, str, splitter, Integer.MAX_VALUE); }
+	public static List<String> split(List<String> list, CharSequence str, CharSequence splitter, int max) {
 		switch (splitter.length()) {
+			case 1: return split(list, str, splitter.charAt(0), max);
 			case 0:
 				for (int i = 0; i < str.length(); i++) {
 					list.add(String.valueOf(str.charAt(i)));
 				}
 				return list;
-			case 1:
-				return split(list, str, splitter.charAt(0), max, keepEmpty);
 		}
 
 		char first = splitter.charAt(0);
 
 		int len = splitter.length();
-		int i = 0, prev = 0;
+		int i = 0, prev = 0, lastNonEmpty = max;
 		while (i < str.length()) {
 			if (first == str.charAt(i) && lastMatches(str, i, splitter, 0, len) == len) {
-				if (prev < i || keepEmpty) {
-					if (--max == 0) {
-						list.add(str.subSequence(prev, str.length()).toString());
-						return list;
-					}
-					list.add(prev == i ? "" : str.subSequence(prev, i).toString());
+				if (--max == 0) i = str.length();
+
+				if (prev < i) {
+					list.add(str.subSequence(prev, i).toString());
+					lastNonEmpty = max;
+				} else {
+					list.add("");
 				}
+
 				i += len;
 				prev = i;
+			} else {
+				i++;
 			}
-			i++;
 		}
 
-		i = Math.min(i, str.length());
-		if (max != 0 && (prev < i || keepEmpty)) {
-			list.add(prev == i ? "" : str.subSequence(prev, i).toString());
+		if (prev < i && prev < str.length()) list.add(str.subSequence(prev, str.length()).toString());
+		else {
+			lastNonEmpty -= max;
+			while (lastNonEmpty-- > 0)
+				list.remove(list.size()-1);
 		}
 
 		return list;
 	}
-
 	// endregion
 
 	public static <T extends Appendable> T prettyTable(T sb, String linePrefix, Object data, String... separators) {
@@ -739,8 +721,6 @@ public class TextUtil {
 		List<String> row = new SimpleList<>();
 		List<List<String>> multiLineRef = new SimpleList<>();
 		IntList maxLens = new IntList();
-
-		Object _EMPTY = new String();
 
 		List<Object> myList = data instanceof List ? Helpers.cast(data) : SimpleList.asModifiableList((Object[]) data);
 		for (Object o : myList) {

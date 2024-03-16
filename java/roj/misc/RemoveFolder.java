@@ -24,12 +24,12 @@ public class RemoveFolder {
 		}
 
 		try (ZipArchive za = new ZipArchive(args[0])) {
-			for (ZEntry ze : za.getEntries().values()) {
+			for (ZEntry ze : za.entries()) {
 				if (ze.getName().endsWith("/")) {
 					za.put(ze.getName(), null);
 				}
 			}
-			za.store();
+			za.save();
 		}
 	}
 	public static void deobf(String[] args) throws IOException {
@@ -37,10 +37,10 @@ public class RemoveFolder {
 		ZipFileWriter out2 = new ZipFileWriter(new File(args[1]));
 		System.out.println(args[1]);
 		try (ZipArchive za = new ZipArchive(args[0])) {
-			for (ZEntry ze : za.getEntries().values()) {
+			for (ZEntry ze : za.entries()) {
 				if (ze.getName().endsWith("/")) {
 					if (ze.getSize() > 0) {
-						try (InputStream in = za.getInput(ze)) {
+						try (InputStream in = za.getStream(ze)) {
 							byte[] data = IOUtil.read(in);
 							out2.beginEntry(new ZEntry(ze.getName().substring(0, ze.getName().length()-1)));
 							out2.write(data);
@@ -57,7 +57,7 @@ public class RemoveFolder {
 					terminator.put(ze.getName(), ze);
 				}
 			}
-			for (ZEntry ze : za.getEntries().values()) {
+			for (ZEntry ze : za.entries()) {
 				if (!ze.getName().endsWith("/")) {
 					Map.Entry<MutableInt, ZEntry> fake = terminator.longestMatches(ze.getName(), 0, ze.getName().length());
 					if (fake != null && fake.getKey().value < ze.getName().length()) {
@@ -65,7 +65,7 @@ public class RemoveFolder {
 						System.out.println("self="+ze);
 						za.put(fake.getValue().getName(), null);
 					} else {
-						try (InputStream in = za.getInput(ze)) {
+						try (InputStream in = za.getStream(ze)) {
 							byte[] data = IOUtil.read(in);
 							out2.beginEntry(new ZEntry(ze.getName()));
 							out2.write(data);
@@ -79,7 +79,7 @@ public class RemoveFolder {
 					}
 				}
 			}
-			za.store();
+			za.save();
 			out2.close();
 		}
 	}

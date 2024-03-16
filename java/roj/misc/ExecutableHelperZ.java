@@ -1,6 +1,7 @@
 package roj.misc;
 
 import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.io.IOUtil;
 
 import java.io.File;
@@ -34,8 +35,8 @@ public class ExecutableHelperZ {
 				} while (data[offset++] != 'K');
 
 				offset -= 2;
-				try (ZipArchive mzf = new ZipArchive(file, ZipArchive.FLAG_VERIFY, offset, StandardCharsets.UTF_8)) {
-					mzf.getEntries();
+				try {
+					new ZipFile(file, ZipArchive.FLAG_VERIFY, offset, StandardCharsets.UTF_8).close();
 					break;
 				} catch (Throwable ignored) {}
 				offset += 2;

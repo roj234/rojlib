@@ -1,6 +1,6 @@
 package roj.mod;
 
-import roj.archive.ArchiveConstants;
+import roj.archive.ArchiveUtils;
 import roj.archive.zip.ZipOutput;
 import roj.asmx.mapper.Mapper;
 import roj.collect.LinkedMyHashMap;
@@ -199,7 +199,7 @@ public final class Project extends FileConfig {
 
 	final void writeRes(String s) {
 		String relPath = s.substring(resPrefix).replace('\\', '/');
-		dstFile.setCompress(!ArchiveConstants.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath).toLowerCase()));
+		dstFile.setCompress(!ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath).toLowerCase()));
 		try {
 			dstFile.set(relPath, new FileInputStream(s));
 		} catch (IOException e) {

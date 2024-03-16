@@ -354,6 +354,7 @@ public class CodeWriter extends AbstractCodeWriter {
 	public final int visitAttributeI(String name) {
 		if (state != 3) throw new IllegalStateException();
 		if (name.equals("StackMapTable")) {
+			// TODO ??
 			if (hasFrames) return -1;
 			hasFrames = true;
 		}
@@ -408,7 +409,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				}
 				break;
 			case "StackMapTable":
-				if (hasFrames) return;
+				if (hasFrames || frames == null) return;
 				hasFrames = true;
 
 				// must rewrite, bci change

@@ -104,27 +104,14 @@ public abstract class MathUtils {
 		};
 	}
 
-	public static int getMin2PowerOf(int n) {
-		if (n >= 1073741824) return 1073741824;
-		n--;
-		n |= n >>> 1;
-		n |= n >>> 2;
-		n |= n >>> 4;
-		n |= n >>> 8;
-		n |= n >>> 16;
-		return (n < 0) ? 1 : n + 1;
+	public static int getMin2PowerOf(int cap) {
+		int n = -1 >>> Integer.numberOfLeadingZeros(cap - 1);
+		return (n < 0) ? 1 : (n >= 1073741824) ? 1073741824 : n + 1;
 	}
 
-	public static long getMin2PowerOf(long n) {
-		if (n >= 4611686018427387904L) return 4611686018427387904L;
-		n--;
-		n |= n >>> 1;
-		n |= n >>> 2;
-		n |= n >>> 4;
-		n |= n >>> 8;
-		n |= n >>> 16;
-		n |= n >>> 32;
-		return (n < 0) ? 1 : n + 1;
+	public static long getMin2PowerOf(long cap) {
+		long n = -1L >>> Long.numberOfLeadingZeros(cap - 1);
+		return (n < 0) ? 1 : (n >= 4611686018427387904L) ? 4611686018427387904L : n + 1;
 	}
 
 	public static float cos(float value) {

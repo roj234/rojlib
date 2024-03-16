@@ -9,14 +9,13 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.channels.NonWritableChannelException;
 import java.nio.file.Files;
 
 /**
  * @author Roj234
  * @since 2023/3/13 0013 5:11
  */
-public class SplittedSource extends Source {
+public final class FragmentSource extends Source {
 	private final File path;
 	private final String name;
 
@@ -29,7 +28,7 @@ public class SplittedSource extends Source {
 	private final SimpleList<Object> ref;
 	private final Object[] cache;
 
-	private SplittedSource(Source[] sources) {
+	private FragmentSource(Source[] sources) {
 		path = null;
 		name = null;
 		cache = null;
@@ -39,7 +38,7 @@ public class SplittedSource extends Source {
 		ref = SimpleList.asModifiableList((Object[]) sources);
 		s = sources[0];
 	}
-	private SplittedSource(File file, long fragSize) throws IOException {
+	private FragmentSource(File file, long fragSize) throws IOException {
 		path = file.getParentFile();
 		name = file.getName();
 		cache = new Object[16];
@@ -80,13 +79,14 @@ public class SplittedSource extends Source {
 		}
 	}
 
-	public SplittedSource(FileSource src, long size) throws IOException {
+	@Deprecated
+	public FragmentSource(FileSource src, long size) throws IOException {
 		this(new File(src.getFile().getParentFile(), IOUtil.fileName(src.getFile().getName())), size);
 	}
 
-	public static SplittedSource fixedSize(File file, long size) throws IOException { return new SplittedSource(file, size); }
-	public static SplittedSource dynSize(File file) throws IOException { return new SplittedSource(file, -1); }
-	public static SplittedSource concated(Source... files) { return new SplittedSource(files); }
+	public static FragmentSource fixed(File file, long size) throws IOException { return new FragmentSource(file, size); }
+	public static FragmentSource dynamic(File file) throws IOException { return new FragmentSource(file, -1); }
+	public static FragmentSource concat(Source... files) { return new FragmentSource(files); }
 
 	public int read(byte[] b, int off, int len) throws IOException {
 		if (len <= 0) return 0;
@@ -107,7 +107,7 @@ public class SplittedSource extends Source {
 
 	public void write(byte[] b, int off, int len) throws IOException { write(IOUtil.SharedCoder.get().wrap(b, off, len)); }
 	public void write(DynByteBuf data) throws IOException {
-		if (fragmentSize <= 0) throw new NonWritableChannelException();
+		if (fragmentSize <= 0) throw new IOException("大小不规则的源是只读的");
 
 		int readable = data.readableBytes();
 		written += readable;
@@ -176,7 +176,7 @@ public class SplittedSource extends Source {
 
 		Source v = (Source) cache[minId+1];
 		if (v != null) v.close();
-		cache[minId+1] = v = new FileSource((File) o);
+		cache[minId+1] = v = new FileSource((File) o, fragmentSize > 0);
 
 		return v;
 	}
@@ -212,6 +212,7 @@ public class SplittedSource extends Source {
 
 	public void setLength(long length) throws IOException {
 		ensureFileSource();
+		if (fragmentSize <= 0) throw new IOException("大小不规则的源是只读的");
 
 		int newFrags = (int) (length/fragmentSize) + 1;
 
@@ -272,7 +273,7 @@ public class SplittedSource extends Source {
 
 	public Source threadSafeCopy() throws IOException {
 		ensureFileSource();
-		return new ReadonlySource(new SplittedSource(new File(path, name), fragmentSize));
+		return new ReadonlySource(new FragmentSource(new File(path, name), fragmentSize));
 	}
 
 	public void moveSelf(long from, long to, long length) {

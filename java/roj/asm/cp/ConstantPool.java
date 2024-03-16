@@ -38,6 +38,7 @@ public class ConstantPool {
 
 	public void read(DynByteBuf r, int stringDecodeType) {
 		int len = r.readUnsignedShort()-1;
+		if (len < 0) throw new IllegalArgumentException("size error: "+len);
 
 		constants.clear();
 		constants.ensureCapacity(len);
@@ -294,7 +295,7 @@ public class ConstantPool {
 
 	private void addConstant(Constant c) {
 		int size = constants.size();
-		if (size >= 0xFFFF) throw new UnsupportedOperationException("constant overflow!");
+		if (size >= 0xFFFE) throw new UnsupportedOperationException("constant overflow!");
 		c.setIndex(size+1);
 		refMap.add(c);
 		constants.add(c);

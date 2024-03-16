@@ -189,7 +189,7 @@ public final class DBA implements AutoCloseable {
 	}
 
 	public DBA rawFieldForSelect(String field) { this.field.clear(); this.field.append(field); this.rawField.clear(); return this; }
-	public DBA field(String field) { rawField = TextUtil.split(field, ","); fieldString(); return this; }
+	public DBA field(String field) { rawField = TextUtil.split(field, ','); fieldString(); return this; }
 	public DBA fields(String... field) { rawField = Arrays.asList(field); fieldString(); return this; }
 	public DBA fields(List<String> field) { rawField = field; fieldString(); return this; }
 

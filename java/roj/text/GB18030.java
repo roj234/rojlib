@@ -2,7 +2,6 @@ package roj.text;
 
 import roj.archive.qz.xz.LZMAInputStream;
 import roj.collect.MyHashSet;
-import roj.reflect.ReflectionUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -283,8 +282,6 @@ public final class GB18030 extends UnsafeCharset {
 
 	@Override
 	public int byteCount(CharSequence s, int i, int len) {
-		if (ReflectionUtils.JAVA_VERSION >= 9 && s.getClass() == String.class && J9String.isLatin1(s.toString())) return len;
-
 		int end = i+len;
 		while (i < end) {
 			int c = s.charAt(i++);

@@ -46,7 +46,7 @@ public final class AttrRecord extends Attribute {
 	public String name() { return "Record"; }
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		w.putShort(variables.size());
 		for (int i = 0; i < variables.size(); i++) {
 			Val r = variables.get(i);

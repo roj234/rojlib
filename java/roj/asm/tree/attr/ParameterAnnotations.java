@@ -38,7 +38,7 @@ public final class ParameterAnnotations extends Attribute {
 	public String name() { return vis?VISIBLE:INVISIBLE; }
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		w.put((byte) annotations.size());
 		for (int i = 0; i < annotations.size(); i++) {
 			List<Annotation> list = annotations.get(i);

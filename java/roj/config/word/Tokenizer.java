@@ -534,7 +534,7 @@ public class Tokenizer {
 			default: return onSpecialToken(w);
 			case ST_SINGLE_LINE_COMMENT: singleLineComment(comment); return readWord();
 			case ST_MULTI_LINE_COMMENT: multiLineComment(comment, w.val); return readWord();
-			case ST_STRING: case ST_LITERAL_STRING:
+			case ST_STRING, ST_LITERAL_STRING:
 				String s = w.val;
 				if (s.length() != 1) throw new UnsupportedOperationException("readSlashString not support len > 1 terminator");
 				return formClip(STRING, readSlashString(s.charAt(0), w.pos == ST_STRING));

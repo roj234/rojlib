@@ -52,7 +52,7 @@ public final class InnerClasses extends Attribute {
 	public String name() { return NAME; }
 
 	@Override
-	protected void toByteArray1(DynByteBuf w, ConstantPool pool) {
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		w.putShort(classes.size());
 		for (int i = 0; i < classes.size(); i++) {
 			InnerClass clazz = classes.get(i);

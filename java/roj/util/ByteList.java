@@ -41,6 +41,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	public synchronized void _free() {
 		clear();
 		byte[] b = list;
+		// REMIND: b.length can be zero, but ArrayCache rejects it
 		list = ArrayCache.BYTES;
 		ArrayCache.putArray(b);
 	}
@@ -97,8 +98,12 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	public final ByteList readStreamFully(InputStream in, boolean close) throws IOException {
 		while (true) {
-			if (wIndex == capacity())
+			if (wIndex == capacity()) {
+				int r = in.read();
+				if (r < 0) break;
 				ensureCapacity(wIndex + Math.max(1, in.available()));
+				list[arrayOffset()+wIndex++] = (byte) r;
+			}
 
 			int r = in.read(list, arrayOffset()+wIndex, capacity()-wIndex);
 			if (r < 0) break;

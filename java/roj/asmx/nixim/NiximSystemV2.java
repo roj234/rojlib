@@ -5,8 +5,11 @@ import roj.RequireTest;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFileWriter;
+import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cp.*;
+import roj.asm.frame.Frame2;
+import roj.asm.frame.Var2;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.AnnValString;
@@ -59,7 +62,7 @@ public class NiximSystemV2 implements ITransformer {
 		try (ZipArchive toNixim = new ZipArchive(target)) {
 			for (Map.Entry<String, NiximData> entry : nx.registry.entrySet()) {
 				String file = entry.getKey().replace('.', '/')+".class";
-				InputStream in = toNixim.getInput(file);
+				InputStream in = toNixim.getStream(file);
 				if (in == null) {
 					System.err.println("nixim target "+file+" not found");
 					continue;
@@ -76,7 +79,7 @@ public class NiximSystemV2 implements ITransformer {
 				}
 			}
 
-			toNixim.store();
+			toNixim.save();
 		}
 
 		System.out.println("OK");
@@ -507,13 +510,12 @@ public class NiximSystemV2 implements ITransformer {
 			node.name(pcd.mapName);
 		}
 
-		if (hasNewCopyMethod) {
+		if (hasNewCopyMethod)
 			fixNewCopyMethod(tmpPcd, nx, nx.copied);
 
-			List<CNode> list = new SimpleList<>(nx.inject.values().size());
-			for (InjectState t : nx.inject.values()) list.add(t.method);
-			fixNewCopyMethod(tmpPcd, nx, list);
-		}
+		List<CNode> list = new SimpleList<>(nx.inject.values().size());
+		for (InjectState t : nx.inject.values()) list.add(t.method);
+		fixNewCopyMethod(tmpPcd, nx, list);
 
 		// special case
 		nx.copied.remove(nx.copyInit);
@@ -539,6 +541,19 @@ public class NiximSystemV2 implements ITransformer {
 							desc.name = pcd.mapName;
 						}
 					}
+				}
+			}
+
+			// TODO well, maybe automatic calculation future
+			List<Frame2> frames = code.frames;
+			if (frames != null) {
+				for (Frame2 frame : frames) {
+					for (Var2 v : frame.stacks)
+						if (nx.self.equals(v.owner))
+							v.owner = nx.target;
+					for (Var2 v : frame.locals)
+						if (nx.self.equals(v.owner))
+							v.owner = nx.target;
 				}
 			}
 		}
@@ -732,9 +747,9 @@ public class NiximSystemV2 implements ITransformer {
 			}
 
 			a = map.get(A_INJECT);
-			if (a == null) a = map.get("roj/asm/nixim/InvokeRedirect");
-			if (a == null) a = map.get("roj/asm/nixim/OverwriteConstant");
-			if (a == null) a = map.get("roj/asm/nixim/SearchReplace");
+			if (a == null) a = map.get("roj/asmx/nixim/InvokeRedirect");
+			if (a == null) a = map.get("roj/asmx/nixim/OverwriteConstant");
+			if (a == null) a = map.get("roj/asmx/nixim/SearchReplace");
 			if (a != null) {
 				if (annotationPreCheck(data, a, map, node, pcd, dyn)) continue;
 
@@ -856,7 +871,7 @@ public class NiximSystemV2 implements ITransformer {
 		NiximData nx2 = registry.get(name);
 		if (nx2 == nx1) {
 			if (nx2 == null) {
-				transformNiximUser(data, null, getParentMap());
+				transformNiximUser(data, null, registry);
 			}
 		} else if (nx2 != null) apply(data, nx2);
 
@@ -1519,7 +1534,7 @@ public class NiximSystemV2 implements ITransformer {
 		for (int i = annotations.size()-1; i >= 0; i--) {
 			Annotation a = annotations.get(i);
 			map.put(a.type, a);
-			if (a.type.startsWith("roj/asm/nixim/")) annotations.remove(i);
+			if (a.type.startsWith("roj/asmx/nixim/")) annotations.remove(i);
 		}
 		return map;
 	}
@@ -1598,6 +1613,8 @@ public class NiximSystemV2 implements ITransformer {
 			checkAccess(field);
 
 			if (initFlag != 2) {
+				if (Opcodes.showOpcode(code).startsWith("Get")) return;
+
 				tmp2.name = field.descName();
 				tmp2.desc = field.descType();
 				Pcd pcd = nx.preconditions.find(tmp2);

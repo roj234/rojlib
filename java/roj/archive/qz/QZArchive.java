@@ -1,21 +1,15 @@
 package roj.archive.qz;
 
 import org.jetbrains.annotations.NotNull;
-import roj.archive.ArchiveEntry;
-import roj.archive.ArchiveFile;
-import roj.archive.ChecksumInputStream;
-import roj.archive.SourceStreamCAS;
+import roj.archive.*;
 import roj.collect.*;
 import roj.concurrent.TaskHandler;
-import roj.crypt.CRCAny;
+import roj.crypt.CRC32s;
 import roj.io.IOUtil;
 import roj.io.LimitInputStream;
 import roj.io.SourceInputStream;
 import roj.io.buf.BufferPool;
-import roj.io.source.BufferedSource;
-import roj.io.source.FileSource;
 import roj.io.source.Source;
-import roj.io.source.SplittedSource;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -29,7 +23,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.ObjLongConsumer;
-import java.util.zip.CRC32;
 
 import static roj.archive.qz.BlockId.*;
 import static roj.reflect.ReflectionUtils.u;
@@ -53,14 +46,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	public QZArchive(File file) throws IOException { this(file, null); }
 	public QZArchive(File file, String pass) throws IOException {
 		if (!file.isFile()) throw new FileNotFoundException(file.getName());
-
 		password = pass == null ? null : pass.getBytes(StandardCharsets.UTF_16LE);
-
-		r = new FileSource(file, false);
-		if (file.getName().endsWith(".001")) {
-			r = BufferedSource.autoClose(new SplittedSource((FileSource) r, -1));
-		}
-
+		r = ArchiveUtils.tryOpenSplitArchive(file, true);
 		reload();
 	}
 
@@ -182,9 +169,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					throw new IOException("目录表偏移错误"+offset+'+'+length+",len="+that.r.length());
 				}
 
-				int crc = CRCAny.CRC_32.INIT_VALUE;
-				crc = CRCAny.CRC_32.update(crc, buf.list, buf.arrayOffset()+12, 20);
-				crc = CRCAny.CRC_32.retVal(crc);
+				int crc = CRC32s.once(buf.list, buf.arrayOffset()+12, 20);
 				int myCrc = buf.readIntLE(8);
 				if (crc != myCrc) {
 					// https://www.7-zip.org/recover.html : if crc, offset and length are zero
@@ -204,9 +189,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				that.r.seek(32+offset);
 				buf = read((int) length);
 
-				crc = CRCAny.CRC_32.INIT_VALUE;
-				crc = CRCAny.CRC_32.update(crc, buf.list, buf.arrayOffset(), buf.wIndex());
-				crc = CRCAny.CRC_32.retVal(crc);
+				crc = CRC32s.once(buf.list, buf.arrayOffset(), buf.wIndex());
 				if (crc != myCrc) throw new IOException("元数据校验错误"+Integer.toHexString(crc)+"/"+Integer.toHexString(myCrc));
 
 				readHeader();
@@ -835,6 +818,9 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		// endregion
 	}
 
+	@Override
+	public QZEntry getEntry(String name) { return getEntries().get(name); }
+	@Deprecated
 	public MyHashMap<String, QZEntry> getEntries() {
 		if (byName.isEmpty()) {
 			byName.ensureCapacity(entries.length);
@@ -844,6 +830,9 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		}
 		return byName;
 	}
+
+	@Override
+	public List<QZEntry> entries() { return Arrays.asList(entries); }
 	public QZEntry[] getEntriesByPresentOrder() { return entries; }
 
 	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback) { parallelDecompress(th, callback, password); }
@@ -862,7 +851,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 						lin.remain = entry.uSize;
 
 						InputStream fin = lin;
-						if ((entry.flag&QZEntry.CRC) != 0) fin = new ChecksumInputStream(fin, new CRC32(), entry.crc32&0xFFFFFFFFL);
+						if ((entry.flag&QZEntry.CRC) != 0) fin = new CRC32InputStream(fin, entry.crc32);
 						if (toSkip > 0) fin = new SkipInputStream(fin, in, toSkip);
 
 						callback.accept(entry, fin);
@@ -904,13 +893,13 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	}
 
 
-	public InputStream getInput(String entry) throws IOException {
+	public final InputStream getStream(String entry) throws IOException {
 		QZEntry file = getEntries().get(entry);
 		if (file == null) return null;
 		return getInput(file, null);
 	}
 	@Override
-	public InputStream getInput(ArchiveEntry entry, byte[] pass) throws IOException { return getInput((QZEntry) entry, pass); }
+	public final InputStream getStream(ArchiveEntry entry, byte[] pw) throws IOException { return getInput((QZEntry) entry, pw); }
 
 	final InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that) throws IOException {
 		if (pass == null) pass = password;
@@ -952,7 +941,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			in = ins[0];
 		}
 
-		if (!recovery && (b.hasCrc&1) != 0) in = new ChecksumInputStream(in, new CRC32(), b.crc&0xFFFFFFFFL);
+		if (!recovery && (b.hasCrc&1) != 0) in = new CRC32InputStream(in, b.crc);
 
 		return in;
 	}

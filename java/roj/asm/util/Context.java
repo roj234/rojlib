@@ -3,7 +3,7 @@ package roj.asm.util;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.asm.Parser;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
@@ -37,6 +37,10 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 	@Deprecated
 	private ArrayList<Constant>[] cstCache;
 
+	public Context(ConstantData o) {
+		name = o.name;
+		data = o;
+	}
 	public Context(String name, Object o) {
 		this.name = name;
 		if (o instanceof ConstantData) this.data = (ConstantData) o;
@@ -199,7 +203,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 		if (absolutelyCompressed) return;
 
 		boolean targetIsByte = data == null;
-		Parser.compress(getData());
+		TransformUtil.compress(getData());
 		if (targetIsByte) set(ByteList.wrap(Parser.toByteArray(data)));
 		absolutelyCompressed = true;
 	}
@@ -209,23 +213,19 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 	public static List<Context> fromZip(File input, Map<ArchiveEntry, ArchiveFile> resource) throws IOException { return fromZip(input, resource, Helpers.alwaysTrue()); }
 	public static List<Context> fromZip(File input, Map<ArchiveEntry, ArchiveFile> resource, Predicate<String> filter) throws IOException {
 		List<Context> ctx = new ArrayList<>();
-		ByteList buf = new ByteList();
 
-		try (ZipArchive archive = new ZipArchive(input)) {
-			for (ZEntry value : archive.getEntries().values()) {
+		try (ZipFile archive = new ZipFile(input)) {
+			for (ZEntry value : archive.entries()) {
 				String name = value.getName();
 				if (name.endsWith("/")) continue;
 
 				if (name.endsWith(".class") && filter.test(name)) {
-					buf.clear();
-					ctx.add(new Context(name, archive.get(value, buf).toByteArray()));
+					ctx.add(new Context(name, archive.get(value)));
 				} else if (resource != null) {
 					resource.put(value, archive);
 				}
 			}
 		}
-		buf._free();
-
 		return ctx;
 	}
 }

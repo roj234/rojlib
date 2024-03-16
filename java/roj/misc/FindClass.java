@@ -5,7 +5,7 @@
 package roj.misc;
 
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.asm.Parser;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstRef;
@@ -170,10 +170,10 @@ public class FindClass extends JFrame {
 
 	private void open(File file) {
 		ref.clear();
-		try (ZipArchive za = new ZipArchive(file)) {
-			for (ZEntry value : za.getEntries().values()) {
+		try (ZipFile za = new ZipFile(file)) {
+			for (ZEntry value : za.entries()) {
 				if (value.getName().toLowerCase().endsWith(".class")) {
-					ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(za.getInput(value)).toByteArray());
+					ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(value)).toByteArray());
 					ref.add(data);
 				}
 			}

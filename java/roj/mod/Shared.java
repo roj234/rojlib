@@ -11,7 +11,6 @@ import roj.dev.HRRemote;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.mod.plugin.Plugin;
-import roj.text.TextReader;
 import roj.ui.CLIUtil;
 import roj.util.HighResolutionTimer;
 
@@ -33,7 +32,7 @@ import static roj.config.JSONParser.*;
  */
 public final class Shared {
 	public static final boolean DEBUG;
-	public static final String VERSION = "3.0.0";
+	public static final String VERSION = "3.0.1";
 
 	public static final File BASE, CONFIG_DIR;
 
@@ -58,11 +57,8 @@ public final class Shared {
 
 	static void loadConfig() {
 		File file = new File(BASE, "config.json");
-		try (TextReader tr = TextReader.auto(file)) {
-			if (!tr.charset().equals("UTF8")) { // 检测到了则是 UTF-8
-				CLIUtil.warning("文件不是UTF-8无BOM格式! 建议转换为此格式, 以保证能在其他软件中识别.");
-			}
-			CONFIG = new JSONParser().parse(tr, NO_DUPLICATE_KEY|LITERAL_KEY|UNESCAPED_SINGLE_QUOTE|LENIENT_COMMA).asMap();
+		try {
+			CONFIG = new JSONParser().parseRaw(file, NO_DUPLICATE_KEY|LITERAL_KEY|UNESCAPED_SINGLE_QUOTE|LENIENT_COMMA).asMap();
 			CONFIG.dot(true);
 		} catch (ParseException | ClassCastException e) {
 			CLIUtil.error("config.json 有语法错误! 请修正!", e);

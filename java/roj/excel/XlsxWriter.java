@@ -1,7 +1,7 @@
 package roj.excel;
 
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.collect.IntList;
 import roj.collect.SimpleList;
@@ -17,16 +17,17 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.zip.Deflater;
 
 /**
  * @author Roj234
  * @since 2023/5/5 0005 15:16
  */
 public class XlsxWriter implements TableWriter {
-	private static ZipArchive TEMPLATE;
+	private static ZipFile TEMPLATE;
 	static {
 		try {
-			TEMPLATE = new ZipArchive(new MemorySource(IOUtil.getResource("META-INF/template.xlsx")), 0, StandardCharsets.UTF_8);
+			TEMPLATE = new ZipFile(new MemorySource(IOUtil.getResource("META-INF/template.xlsx")), 0, StandardCharsets.UTF_8);
 			TEMPLATE.reload();
 		} catch (IOException ignored) {}
 	}
@@ -38,16 +39,12 @@ public class XlsxWriter implements TableWriter {
 	private IntList cw;
 	private final List<Object> sheets = new SimpleList<>();
 
-	public static XlsxWriter to(Source out) throws IOException {
-		return new XlsxWriter(new ZipFileWriter(out, 5, false, 0));
-	}
-	public static XlsxWriter to(File out) throws IOException {
-		return new XlsxWriter(new ZipFileWriter(out));
-	}
+	public static XlsxWriter to(Source out) throws IOException { return new XlsxWriter(new ZipFileWriter(out, Deflater.DEFAULT_COMPRESSION)); }
+	public static XlsxWriter to(File out) throws IOException { return new XlsxWriter(new ZipFileWriter(out)); }
 
 	public XlsxWriter(ZipFileWriter zfw) throws IOException {
 		zip = zfw;
-		for (ZEntry entry : TEMPLATE.getEntries().values()) {
+		for (ZEntry entry : TEMPLATE.entries()) {
 			if (!entry.getName().endsWith("/")) zfw.copy(TEMPLATE, entry);
 		}
 		zip.beginEntry(new ZEntry("xl/sharedStrings.xml"));

@@ -82,18 +82,21 @@ public final class LocalVariableTable extends Attribute implements CodeAttribute
 
 	public String toString() { return toString(IOUtil.getSharedCharBuf(), null, 0).toString(); }
 	public CharList toString(CharList sb, LocalVariableTable table, int prefix) {
+		CharList tmp = new CharList();
 		List<Object> a = SimpleList.asModifiableList("名称","类型","槽","从","至",IntMap.UNDEFINED);
 		for (int i = 0; i < list.size(); i++) {
 			Item v = list.get(i);
 			v = table != null ? table.getSimilar(v) : v;
 			a.add(v.name);
-			a.add(v.type);
+			v.type.toString(tmp);
+			a.add(tmp.toString());
+			tmp.clear();
 			a.add(v.slot);
 			a.add(v.start.getValue());
 			a.add(v.end==null?"<函数结束>":v.end.getValue());
 			a.add(IntMap.UNDEFINED);
 		}
-		return TextUtil.prettyTable(sb, new CharList().padEnd(' ', prefix).toStringAndFree(), a.toArray(), "  ", "  ");
+		return TextUtil.prettyTable(sb, tmp.padEnd(' ', prefix).toStringAndFree(), a.toArray(), "  ", "  ");
 	}
 	private Item getSimilar(Item lv) {
 		for (int i = 0; i < list.size(); i++) {

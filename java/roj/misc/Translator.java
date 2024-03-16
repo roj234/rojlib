@@ -113,10 +113,10 @@ public class Translator {
 				}
 			} else {
 				try (ZipArchive mzf = new ZipArchive(f)) {
-					mzf.getEND().setComment("Roj234's class translator");
+					mzf.setComment("Roj234's class translator");
 
 					String path = f.getName()+'/';
-					for (ZEntry file : mzf.getEntries().values()) {
+					for (ZEntry file : mzf.entries()) {
 						String name = file.getName();
 						if (name.endsWith(".class")) {
 							ib.clear();
@@ -131,7 +131,7 @@ public class Translator {
 						}
 					}
 
-					mzf.store();
+					mzf.save();
 				}
 			}
 		}

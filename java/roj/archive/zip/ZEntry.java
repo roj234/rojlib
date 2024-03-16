@@ -1,9 +1,9 @@
 package roj.archive.zip;
 
 import roj.archive.ArchiveEntry;
-import roj.collect.MyHashMap;
 import roj.collect.RSegmentTree;
-import roj.crypt.CRCAny;
+import roj.collect.XHashSet;
+import roj.crypt.CRC32s;
 import roj.text.ACalendar;
 import roj.text.TextUtil;
 import roj.util.ByteList;
@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 
-import static roj.archive.zip.ZipArchive.*;
+import static roj.archive.zip.ZipFile.*;
 
 /**
  * @author Roj234
@@ -57,6 +57,8 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 	char extraLenOfLOC;
 	byte EXTLenOfLOC;
 
+	private ZEntry next;
+
 	public ZEntry(String name) {
 		this.name = name;
 		this.method = 8;
@@ -70,6 +72,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 	public String getName() { return name; }
 	public boolean isDirectory() { return name.endsWith("/"); }
 
+	public long getOffset() { return offset; }
 	@Override
 	public final long startPos() { return offset - 30 - nameBytes.length - extraLenOfLOC; }
 	@Override
@@ -146,12 +149,12 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 				case CRYPT_ZIP2: break;
 				case CRYPT_AES2: mzfFlag |= MZ_NOCRC;
 				case CRYPT_AES: mzfFlag |= MZ_AESENC; break;
-				default: throw new IllegalArgumentException("Unknown crypt method: " + crypt);
+				default: throw new IllegalArgumentException("未知的加密方式: "+crypt);
 			}
 		}
 	}
 
-	final void readLOCExtra(ZipArchive o, ByteList buf) {
+	final void readLOCExtra(ZipFile o, ByteList buf) {
 		while (buf.readableBytes() > 4) {
 			int id = buf.readUShortLE();
 			int len = buf.readUShortLE();
@@ -178,14 +181,11 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 				case 0x9901: // AE-x encryption structure
 					readAES(buf, len);
 					break;
-				default:
-					customReadExtraLOC(id, buf, len);
-					break;
 			}
 			buf.rIndex = end;
 		}
 	}
-	protected void writeLOCExtra(ByteList buf, int extOff, int extLenOff) {
+	final void writeLOCExtra(ByteList buf, int extOff, int extLenOff) {
 		if (cSize >= U32_MAX || uSize >= U32_MAX) {
 			if (uSize > U32_MAX) buf.putIntLE(extLenOff-6, (int) U32_MAX);
 			if (cSize > U32_MAX) buf.putIntLE(extLenOff-10, (int) U32_MAX);
@@ -204,9 +204,8 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 
 		buf.putShortLE(extLenOff, extraLenOfLOC = (char) (buf.wIndex() - extOff));
 	}
-	protected void customReadExtraLOC(int id, ByteList buf, int len) {}
 
-	final long readCENExtra(ZipArchive o, ByteList buf, long header) {
+	final long readCENExtra(ZipFile o, ByteList buf, long header) {
 		while (buf.readableBytes() > 4) {
 			int id = buf.readUShortLE();
 			int len = buf.readUShortLE();
@@ -216,7 +215,6 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 					read5455ExtTime(buf, len);
 					break;
 				case 0x000A: // NTFS timestamp
-					buf.rIndex += 4;
 					while (buf.rIndex < end) {
 						int k = buf.readUShortLE();
 						DynByteBuf v = buf.slice(buf.readUShortLE());
@@ -247,16 +245,13 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 				case 0x9901:
 					readAES(buf, len);
 					break;
-				default:
-					customReadExtraCEN(id, buf, len);
-					break;
 			}
 			if (buf.rIndex > end) throw new IllegalStateException("0x" + Integer.toHexString(id));
 			buf.rIndex = end;
 		}
 		return header;
 	}
-	protected void writeCENExtra(ByteList buf, int extLenOff) {
+	final void writeCENExtra(ByteList buf, int extLenOff) {
 		// u2LE(0x01) u2LE(0x00)
 		buf.putInt(0x01000000);
 		int pos = buf.wIndex();
@@ -301,13 +296,10 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 			if ((mzfFlag & MZ_NOCRC) != 0) buf.putIntLE(extLenOff-14, 0);
 		}
 	}
-	protected void customReadExtraCEN(int id, ByteList buf, int len) {}
 
-	private void readUnicodePath(ByteList buf, int len, ZipArchive o) {
+	private void readUnicodePath(ByteList buf, int len, ZipFile o) {
 		if(len >= 5) {
-			int crc = CRCAny.CRC_32.INIT_VALUE;
-			crc = CRCAny.CRC_32.update(crc, nameBytes, 0, nameBytes.length);
-			crc = CRCAny.CRC_32.retVal(crc);
+			int crc = CRC32s.once(nameBytes, 0, nameBytes.length);
 
 			buf.skipBytes(1);
 			int expectedCrc = buf.readIntLE();
@@ -330,11 +322,9 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		int pos = buf.wIndex();
 		buf.wIndex(pos+2);
 
-		int crc = CRCAny.CRC_32.INIT_VALUE;
-		crc = CRCAny.CRC_32.update(crc, nameBytes, 0, nameBytes.length);
-
+		int crc = CRC32s.once(nameBytes, 0, nameBytes.length);
 		buf.put(0)
-		   .putIntLE(CRCAny.CRC_32.retVal(crc))
+		   .putIntLE(crc)
 		   .putUTFData(name)
 		   .putShortLE(pos, buf.wIndex()-pos-2);
 	}
@@ -389,7 +379,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		}
 	}
 
-	final boolean merge(MyHashMap<String, ZEntry> entries, ZEntry file) throws ZipException {
+	final boolean merge(XHashSet<String, ZEntry> entries, ZEntry file) throws ZipException {
 		if ((mzfFlag & (MZ_HASCEN|MZ_HASLOC)) == (MZ_HASCEN|MZ_HASLOC)) {
 			System.err.println("重复的文件: " + name + " 注意这些文件没法合并LOC和CEN");
 

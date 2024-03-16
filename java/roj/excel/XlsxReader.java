@@ -71,7 +71,7 @@ public abstract class XlsxReader {
 		xml.charset = charset;
 
 		try (ZipArchive zf = new ZipArchive(file, 0, charset)) {
-			ZEntry ze = zf.getEntries().get("xl/sharedStrings.xml");
+			ZEntry ze = zf.getEntry("xl/sharedStrings.xml");
 
 			readWith(zf, ze, entry -> {
 				if (sharedStrings.isEmpty()) sharedStrings.ensureCapacity(replaceNodes.get("sst").attr("count").asInteger());
@@ -98,7 +98,7 @@ public abstract class XlsxReader {
 
 			int sheet = 1;
 			while (true) {
-				ze = zf.getEntries().get("xl/worksheets/sheet"+sheet+".xml");
+				ze = zf.getEntry("xl/worksheets/sheet"+sheet+".xml");
 				if (ze == null) break;
 
 				cells.clear();
@@ -181,7 +181,7 @@ public abstract class XlsxReader {
 	private void readWith(ZipArchive zip, ZEntry entry, Consumer<Element> c) throws IOException,ParseException {
 		consumer = c;
 
-		try (InputStream in = zip.getInput(entry)) {
+		try (InputStream in = zip.getStream(entry)) {
 			xml.parseRaw(new ToXEntry() {
 				@Override
 				protected Element createElement(String str) {
