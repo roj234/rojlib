@@ -47,7 +47,7 @@ jobs:
 
       - name: Compile Java
         working-directory: ${{github.workspace}}/.tools
-        run: java -D"file.encoding"=UTF-8 -cp builder.jar roj.asmx.launcher.EntryPoint -- roj.mod.FMDMain build
+        run: java -D"file.encoding"=UTF-8 -jar fmd.cpk.jar build
 
       - uses: actions/upload-artifact@v4
         with:

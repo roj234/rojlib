@@ -535,7 +535,7 @@ public final class FMDMain {
 			CLIUtil.warning("无法执行指令", e);
 		}
 
-		return 1;
+		return 0;
 	}
 
 	// region Build.util
