@@ -1,7 +1,6 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -9,7 +8,7 @@ import roj.asm.visitor.Label;
 import roj.collect.MyBitSet;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -65,7 +64,7 @@ final class Binary extends ExprNode {
 	private static final ThreadLocal<Boolean> IN_ANY_BINARY = new ThreadLocal<>();
 	@NotNull
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if (type != null) return this;
 
 		IType lType, rType;
@@ -173,18 +172,12 @@ final class Binary extends ExprNode {
 					castRight = ctx.castTo(rType, Type.std(Type.BOOLEAN), 0);
 					break;
 				default:
-					MethodNode override = ctx.getBinaryOverride(lType, rType, operator);
+					ExprNode override = ctx.getOperatorOverride(left, right, operator);
 					if (override == null) {
 						ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
 						return this;
 					}
-					String name = override.name();
-					// 反转
-					if ((override.modifier()&ACC_STATIC) != 0 && name.endsWith("\0INVERT")) {
-						override.name(name.substring(0, name.length()-7));
-						return Invoke.binaryAlt(override, right, left);
-					}
-					return Invoke.binaryAlt(override, left, right);
+					return override;
 			}
 		}
 

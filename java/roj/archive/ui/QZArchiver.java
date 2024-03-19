@@ -11,7 +11,6 @@ import roj.concurrent.TaskPool;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
 import roj.io.source.CacheSource;
-import roj.io.source.FileSource;
 import roj.io.source.FragmentSource;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
@@ -40,7 +39,7 @@ import java.util.function.Consumer;
  * @since 2023/6/4 0004 3:54
  */
 public class QZArchiver {
-	public static final int AOP_REPLACE = 0, AOP_UPDATE = 1, AOP_UPDATE_EXISTING = 2, AOP_SYNC = 3, AOP_IGNORE = 4;
+	public static final int AOP_REPLACE = 0, AOP_UPDATE = 1, AOP_UPDATE_EXISTING = 2, AOP_SYNC = 3, AOP_IGNORE = 4, AOP_DIFF = 5;
 	public static final int PATH_RELATIVE = 0, PATH_FULL = 1, PATH_ABSOLUTE = 2;
 
 	public List<File> input;
@@ -59,7 +58,7 @@ public class QZArchiver {
 	public File cacheFolder;
 	public File outputFolder;
 	public String outputName;
-	public boolean singleThread;
+	public boolean singleThread, keepArchive;
 
 	public int autoSplitTaskSize;
 	public LZMA2Options autoSplitTaskOptions;
@@ -142,7 +141,7 @@ public class QZArchiver {
 		File out = new File(outputFolder, outputName.concat(splitSize == 0 ? "" : ".001"));
 		if (out.isFile()) {
 			try {
-				oldArchive = new QZArchive(out, password);
+				oldArchive = new QZArchive(ArchiveUtils.tryOpenSplitArchive(out, false), password);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -167,11 +166,7 @@ public class QZArchiver {
 				if (oldArchive != null) {
 					for (QZEntry entry : oldArchive.getEntriesByPresentOrder()) {
 						File file = byPath.get(entry.getName());
-						if (file == null || file.length() != entry.getSize() ||
-							(!fastAppendCheck ? contentSame(entry, file) :
-							(entry.hasModificationTime() && file.lastModified() <= entry.getModificationTime()) ||
-								(entry.hasCrc32() && checkCrc32(file, entry.getCrc32())))) {
-
+						if (file == null || isSame(file, entry)) {
 							byPath.remove(entry.getName());
 							keepEntry(entry);
 						}
@@ -194,11 +189,7 @@ public class QZArchiver {
 				if (oldArchive != null) {
 					for (QZEntry entry : oldArchive.getEntriesByPresentOrder()) {
 						File file = byPath.get(entry.getName());
-						if (file != null && file.length() == entry.getSize() &&
-							(!fastAppendCheck ? contentSame(entry, file) :
-							(entry.hasModificationTime() && file.lastModified() <= entry.getModificationTime()) ||
-								(entry.hasCrc32() && checkCrc32(file, entry.getCrc32())))) {
-
+						if (file != null && isSame(file, entry)) {
 							byPath.remove(entry.getName());
 							keepEntry(entry);
 						}
@@ -207,6 +198,22 @@ public class QZArchiver {
 			}
 			break;
 			case AOP_IGNORE: // 重新建立压缩包
+				break;
+			case AOP_DIFF: // 仅保留差异的文件
+				if (oldArchive != null) {
+					for (QZEntry entry : oldArchive.getEntriesByPresentOrder()) {
+						File file = byPath.get(entry.getName());
+						if (file == null) {
+							entry.setName("@@was_deleted/"+entry.getName());
+							keepEntry(entry);
+						} else if (isSame(file, entry)) {
+							byPath.remove(entry.getName());
+						} else {
+							entry.setName("@@was_changed/"+entry.getName());
+							keepEntry(entry);
+						}
+					}
+				}
 		}
 
 		// EMPTY
@@ -246,6 +253,13 @@ public class QZArchiver {
 		makeBlock(executable, chunkSize, coders, tmpa, tmpb);
 
 		return chunkSize;
+	}
+
+	private boolean isSame(File file, QZEntry entry) {
+		return file.length() == entry.getSize() &&
+			(!fastAppendCheck ? contentSame(entry, file) :
+				(entry.hasModificationTime() && file.lastModified() <= entry.getModificationTime()) ||
+					(entry.hasCrc32() && checkCrc32(file, entry.getCrc32())));
 	}
 
 	/**
@@ -406,23 +420,58 @@ public class QZArchiver {
 	}
 
 	public void compress(TaskPool pool, EasyProgressBar bar) throws IOException {
+		QZFileWriter writer;
 		File tmp;
-		do {
-			tmp = new File(outputFolder, outputName+"."+Integer.toString((int) System.nanoTime(),36)+".tmp");
-		} while (tmp.isFile());
 
 		long totalLength = 0;
 		for (WordBlockAppend block : appends) {
 			totalLength += block.size;
 		}
 
-		QZFileWriter writer;
-		if (splitSize == 0) {
-			IOUtil.allocSparseFile(tmp, totalLength);
-			writer = new QZFileWriter(new FileSource(tmp));
-		} else {
-			// .tmp.001
-			writer = new QZFileWriter(FragmentSource.fixed(tmp, splitSize));
+		createNewQZFW: {
+			if (keepSize > 0) {
+				long mySize = 0;
+				for (QZEntry entry : oldArchive.getEntriesByPresentOrder()) {
+					mySize += entry.getSize();
+				}
+
+				if (keepSize == mySize) {
+					System.out.println("FastPath: 尾部追加");
+
+					writer = oldArchive.append();
+
+					List<QZEntry> emptyFiles = keep.get(null);
+					if (emptyFiles != null) {
+						MyHashSet<QZEntry> set = new MyHashSet<>(emptyFiles);
+
+						SimpleList<QZEntry> files = writer.getEmptyFiles();
+						for (int i = files.size() - 1; i >= 0; i--) {
+							QZEntry file = files.get(i);
+							if (!set.contains(file)) {
+								writer.removeEmptyFile(i);
+							}
+						}
+					}
+
+					tmp = null;
+					keep.clear();
+					keepSize = 0;
+					oldArchive = null;
+					break createNewQZFW;
+				}
+			}
+
+			do {
+				tmp = new File(outputFolder, outputName+"."+Integer.toString((int) System.nanoTime()&Integer.MAX_VALUE,36)+".tmp");
+			} while (tmp.isFile());
+
+			if (splitSize == 0) {
+				IOUtil.allocSparseFile(tmp, totalLength);
+				writer = new QZFileWriter(tmp);
+			} else {
+				// .tmp.001
+				writer = new QZFileWriter(FragmentSource.fixed(tmp, splitSize));
+			}
 		}
 
 		if (bar != null) {
@@ -480,7 +529,8 @@ public class QZArchiver {
 
 		if (oldArchive != null) {
 			oldArchive.close();
-			Files.delete(new File(outputFolder, outputName).toPath());
+			if (!keepArchive)
+				Files.delete(new File(outputFolder, outputName).toPath());
 		}
 
 		if (bar != null) {
@@ -536,10 +586,12 @@ public class QZArchiver {
 			writer.setCompressHeader(0);
 		}
 
+		writer.flag |= QZWriter.TRIM_FILE;
 		writer.setIgnoreClose(false);
 		writer.close();
 		if (bar != null) bar.end("压缩成功");
-		Files.move(tmp.toPath(), new File(outputFolder, outputName).toPath());
+
+		if (tmp != null && !keepArchive) Files.move(tmp.toPath(), new File(outputFolder, outputName).toPath());
 	}
 
 	private QZWriter parallel(QZFileWriter qfw) throws IOException {

@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.Visitor;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 
@@ -18,7 +18,7 @@ public abstract class ExprNode implements UnresolvedExprNode {
 	public abstract String toString();
 
 	public abstract IType type();
-	public ExprNode resolve(CompileContext ctx) throws ResolveException { return this; }
+	public ExprNode resolve(LocalContext ctx) throws ResolveException { return this; }
 
 	@Override
 	public boolean isConstant() { return UnresolvedExprNode.super.isConstant(); }
@@ -28,6 +28,12 @@ public abstract class ExprNode implements UnresolvedExprNode {
 	public void visit(Visitor visitor, TypeCast.Cast exceptingType) {
 		// NOT IMPLEMENTED
 	}
+
+	public enum ExprKind {
+		INVOKE_CONSTRUCTOR, BOOLY_COMPARE
+	}
+	public boolean isKind(ExprKind kind) {return false;}
+
 	public abstract void write(MethodWriter cw, boolean noRet);
 	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
 		write(cw, false);

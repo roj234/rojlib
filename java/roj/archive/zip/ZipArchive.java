@@ -31,13 +31,15 @@ import java.util.function.Supplier;
 import java.util.zip.Deflater;
 import java.util.zip.ZipException;
 
-import static roj.archive.zip.ZEntry.MZ_NOCRC;
+import static roj.archive.zip.ZEntry.MZ_NoCrc;
 
 /**
  * 支持分卷压缩文件
  * 支持AES、ZipCrypto加密的读写
  * 支持任意编码，支持InfoZip的UTF文件名
  * 支持ZIP64
+ * <p>
+ * 注意事项：ZipArchive禁止使用FLAG_BACKWARD_READ标记，查看{@link ZEntry#setEndPos(long)}和{@link ZipFile#initDataOffset(Source, ZEntry)}以获取详细信息
  *
  * @author Roj233
  * @since 2021/7/10 17:09
@@ -48,14 +50,14 @@ public final class ZipArchive extends ZipFile {
 	private final MyHashSet<EntryMod> modified = new MyHashSet<>();
 
 	public ZipArchive(String name) throws IOException { this(new File(name)); }
-	public ZipArchive(File file) throws IOException { this(file, FLAG_KILL_EXT|FLAG_BACKWARD_READ); }
+	public ZipArchive(File file) throws IOException { this(file, FLAG_KILL_EXT|FLAG_VERIFY); }
 	public ZipArchive(File file, int flag) throws IOException { this(file, flag, StandardCharsets.UTF_8); }
 	public ZipArchive(File file, int flag, Charset charset) throws IOException {
-		super(ArchiveUtils.tryOpenSplitArchive(file, false), flag, charset);
+		super(ArchiveUtils.tryOpenSplitArchive(file, false), flag & ~FLAG_BACKWARD_READ, charset);
 		if (r.length() > 0) reload();
 		this.file = file;
 	}
-	public ZipArchive(Source source, int flag, Charset cs) { super(source, flag, cs); }
+	public ZipArchive(Source source, int flag, Charset cs) { super(source, flag & ~FLAG_BACKWARD_READ, cs); }
 
 	public void setComment(String str) {
 		comment = str == null || str.isEmpty() ? ArrayCache.BYTES : IOUtil.SharedCoder.get().encode(str);
@@ -86,11 +88,19 @@ public final class ZipArchive extends ZipFile {
 		mod.data = in;
 		return mod;
 	}
+	public EntryMod putStream(String entry, Supplier<InputStream> in, boolean compress) {
+		EntryMod mod = createMod(entry);
+		mod.flag = (byte) (compress ? EntryMod.COMPRESS : 0);
+		mod.data = in;
+		return mod;
+	}
 	public EntryMod createMod(String entry) {
 		EntryMod file = new EntryMod();
 		file.name = entry;
 		if (file == (file = modified.find(file))) {
-			file.entry = entries.get(entry);
+			if ((flags & FLAG_HAS_ERROR) != 0) throw new IllegalStateException("该压缩文件不符合规范，因此无法写入");
+
+			file.entry = getEntry(entry);
 			modified.add(file);
 		}
 		return file;
@@ -106,26 +116,27 @@ public final class ZipArchive extends ZipFile {
 
 	public void save() throws IOException { save(Deflater.DEFAULT_COMPRESSION); }
 	public void save(int level) throws IOException {
-		if (modified.isEmpty()) return;
+		if (modified.isEmpty() || (flags&FLAG_HAS_ERROR) != 0) return;
+		getEntry(null);
 
 		Deflater def = new Deflater(level, true);
 
 		ZEntry minFile = null;
 
-		RSegmentTree<ZEntry> uFile = new RSegmentTree<>((int) Math.log(entries.size()), false, modified.size());
+		RSegmentTree<ZEntry> uFile = new RSegmentTree<>((int) Math.log(namedEntries.size()), false, modified.size());
 
 		for (Iterator<EntryMod> itr = modified.iterator(); itr.hasNext(); ) {
 			EntryMod file = itr.next();
 			checkName(file);
 
-			ZEntry o = entries.get(file.name);
+			ZEntry o = namedEntries.get(file.name);
 			if (o != null) {
 				if (minFile == null || minFile.offset > o.offset) {
 					minFile = o;
 				}
 
 				if (file.data == null) {
-					entries.removeKey(file.name);
+					namedEntries.removeKey(file.name);
 					// 删除【删除】类型的EntryMod
 					itr.remove();
 				} else uFile.add(o);
@@ -139,7 +150,7 @@ public final class ZipArchive extends ZipFile {
 
 		// write linear EFile header
 		if (minFile != null) {
-			for (ZEntry file : entries) {
+			for (ZEntry file : namedEntries) {
 				if (file.offset >= minFile.offset && !uFile.add(file)) { // ^=
 					uFile.remove(file);
 				}
@@ -193,12 +204,13 @@ public final class ZipArchive extends ZipFile {
 
 			ZEntry e = mf.entry;
 			if (e == null) {
-				e = mf.entry = new ZEntry((Boolean) null);
-				entries.put(e.name = mf.name, e);
+				e = mf.entry = new ZEntry();
+				namedEntries.put(e.name = mf.name, e);
 				if ((flags & FLAG_FORCE_UTF) != 0 || (mf.flag & EntryMod.UFS) != 0) {
 					e.flags = GP_UTF;
 					e.nameBytes = IOUtil.SharedCoder.get().encode(mf.name);
 				} else {
+					e.flags = 0;
 					e.nameBytes = mf.name.getBytes(cs);
 				}
 			} else if ((mf.flag & EntryMod.UFS) != 0 && (e.flags & GP_UTF) == 0) {
@@ -356,12 +368,7 @@ public final class ZipArchive extends ZipFile {
 			r.seek(offset);
 
 			e.offset += e.extraLenOfLOC;
-			if ((e.mzfFlag & MZ_NOCRC) == 0) {
-				r.writeInt(Integer.reverseBytes(e.crc32));
-			} else {
-				e.crc32 = 0;
-				r.writeInt(0);
-			}
+			r.writeInt(Integer.reverseBytes(e.getCRC32FW()));
 
 			if (!mf.large()) {
 				r.writeInt(Integer.reverseBytes((int) e.cSize));
@@ -383,7 +390,7 @@ public final class ZipArchive extends ZipFile {
 		// 排序CEN
 		int v = bw.list.length - 256;
 		// 原方法更慢，离大谱
-		Object[] list = entries.toArray();
+		Object[] list = namedEntries.toArray();
 		Arrays.sort(list, Helpers.cast(CEN_SORTER));
 		for (int i = 0; i < list.length; i++) {
 			writeCEN(bw, (ZEntry) list[i]);
@@ -395,7 +402,7 @@ public final class ZipArchive extends ZipFile {
 		modified.clear();
 
 		cDirLen = r.position()+bw.wIndex()-cDirOffset;
-		cDirTotal = entries.size();
+		cDirTotal = namedEntries.size();
 		writeEND(bw, cDirOffset, cDirLen, cDirTotal, comment, r.position()+bw.wIndex());
 
 		bw.writeToStream(out);
@@ -438,6 +445,8 @@ public final class ZipArchive extends ZipFile {
 	}
 	private static void writeEXT(OutputStream os, ByteList buf, ZEntry file) throws IOException {
 		if ((file.flags & GP_HAS_EXT) == 0) throw new ZipException("Not has ext set");
+		assert (file.mzFlag & MZ_NoCrc) == 0;
+
 		buf.clear();
 		buf.putInt(HEADER_EXT).putIntLE(file.crc32);
 		if (file.cSize >= U32_MAX | file.uSize >= U32_MAX) {

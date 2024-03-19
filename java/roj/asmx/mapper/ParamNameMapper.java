@@ -27,7 +27,7 @@ public abstract class ParamNameMapper {
 
 		int len = TypeHelper.paramSize(m.rawDesc())+j;
 		SimpleList<String> names = new SimpleList<>(len);
-		names.i_setSize(len);
+		names._setSize(len);
 
 		ParamNameMapper pmap = new ParamNameMapper() {
 			@Override
@@ -42,7 +42,7 @@ public abstract class ParamNameMapper {
 				if (j != i) names.set(i, names.get(j));
 				j += parameters.get(i).length();
 			}
-			names.i_setSize(parameters.size());
+			names._setSize(parameters.size());
 			return names;
 		}
 

@@ -171,7 +171,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				}
 				break;
 			case "StackMapTable":
-				if (interpretFlags == 0) {
+				if (interpretFlags == 0 && mn != null) {
 					FrameVisitor.readFrames(frames = new SimpleList<>(r.readUnsignedShort(r.rIndex)), r, cp, this, mn.ownerClass(), 0xffff, 0xffff);
 				}
 				break;

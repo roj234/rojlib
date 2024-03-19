@@ -1,5 +1,6 @@
 package roj.compiler.api_rt;
 
+import org.jetbrains.annotations.Nullable;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.VarNode;
@@ -19,6 +20,7 @@ public interface StreamChainExpr {
 	 * 0  从起始方法开始
 	 * 1  从变量开始
 	 */
+	@Nullable
 	VarNode sourceType();
 	/**
 	 * StreamChain表达式目标类型

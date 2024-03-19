@@ -2,7 +2,7 @@ package roj.asm.type;
 
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;

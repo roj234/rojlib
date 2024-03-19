@@ -1,9 +1,9 @@
 package roj.util;
 
 import org.jetbrains.annotations.NotNull;
-import roj.io.MyDataInput;
 import roj.io.UnsafeOutputStream;
 import roj.math.MathUtils;
+import roj.text.CharList;
 import roj.text.TextUtil;
 import sun.misc.Unsafe;
 
@@ -358,7 +358,7 @@ public class DirectByteList extends DynByteBuf {
 		return (u.getByte(addr++) & 0xFF) | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr) & 0xFF) << 16;
 	}
 
-	public final int readVarInt(boolean zag) {
+	public final int readVarInt() {
 		int value = 0;
 		int i = 0;
 
@@ -373,7 +373,6 @@ public class DirectByteList extends DynByteBuf {
 			i += 7;
 			if ((chunk & 0x80) == 0) {
 				rIndex = (int) (off - address);
-				if (zag) return MyDataInput.zag(value);
 				if (value < 0) break;
 				return value;
 			}
@@ -550,7 +549,7 @@ public class DirectByteList extends DynByteBuf {
 
 		int len = readableBytes();
 		if (len != b.readableBytes()) return false;
-		assert len < length;
+		assert len < length : info();
 
 		return ArrayUtil.vectorizedMismatch(null, address, b.array(), b._unsafeAddr(), len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
 	}
@@ -558,7 +557,7 @@ public class DirectByteList extends DynByteBuf {
 	@Override
 	public int hashCode() {
 		int len = wIndex - rIndex;
-		assert len < length;
+		assert len < length : info();
 		return ArrayUtil.byteHashCode(null, address, len);
 	}
 
@@ -566,11 +565,27 @@ public class DirectByteList extends DynByteBuf {
 	@NotNull
 	public String toString() {
 		int len = wIndex - rIndex;
-		assert len < length;
+		assert len < length : info();
 
 		byte[] tmp = new byte[len];
 		copyToArray(address, tmp, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, len);
 		return new String(tmp, StandardCharsets.US_ASCII);
+	}
+
+	@Override
+	public CharList hex(CharList sb) {
+		long off = address+rIndex;
+		long len = address+wIndex;
+		sb.ensureCapacity((int) (sb.length() + (len-off) << 1));
+		char[] tmp = sb.list;
+		int j = sb.length();
+		while (off < len) {
+			int bb = u.getByte(off++);
+			tmp[j++] = TextUtil.b2h(bb >>> 4);
+			tmp[j++] = TextUtil.b2h(bb & 0xf);
+		}
+		sb.setLength(j);
+		return sb;
 	}
 
 	public static class Slice extends DirectByteList {

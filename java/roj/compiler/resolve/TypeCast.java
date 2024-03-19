@@ -13,7 +13,7 @@ import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.compiler.CompilerConfig;
 import roj.compiler.asm.Asterisk;
-import roj.compiler.context.ClassContext;
+import roj.compiler.context.GlobalContext;
 import roj.concurrent.OperationDone;
 import roj.text.CharList;
 
@@ -130,7 +130,7 @@ public class TypeCast {
 		return cast; }
 	// endregion
 
-	public ClassContext context;
+	public GlobalContext context;
 	public Function<String, List<IType>> genericResolver;
 
 	public Cast checkCast(IType from, IType to) { return checkCast(from, to, -1); }
@@ -333,7 +333,7 @@ public class TypeCast {
 						if (tmp == null) break checkTPB;
 						tc = clearTypeParams(tmp, info, tc);
 					} else {
-						ClassContext.debugLogger().debug("from={},to={}, this cast will fail", from, to);
+						GlobalContext.debugLogger().debug("from={},to={}, this cast will fail", from, to);
 						return r;
 					}
 				} catch (ClassNotFoundException e) {
@@ -376,7 +376,7 @@ public class TypeCast {
 				List<IType> list = Arrays.asList(new IType[sign.typeParams.size()]);
 				int i = 0;
 				for (List<IType> value : sign.typeParams.values()) {
-					list.set(i++, new Asterisk(value.get(0).genericType() == IType.PLACEHOLDER_TYPE ? value.subList(1, value.size()) : value));
+					list.set(i++, new Asterisk(value.get(0).genericType() == IType.PLACEHOLDER_TYPE ? value.subList(1, value.size()) : value, true));
 				}
 				return list;
 			}
@@ -498,8 +498,8 @@ public class TypeCast {
 			x = (String[]) (String) null;
 			x = (String[]) (Object) null;
 			x = (String[]) (Serializable) null;*/
-			if (from.owner.equals("java/lang/Object") ||
-				ClassContext.anyArray().interfaces().contains(from.owner))
+			if ("java/lang/Object".equals(from.owner) ||
+				GlobalContext.anyArray().interfaces().contains(from.owner))
 				return DOWNCAST(to);
 
 			return ERROR(E_NEVER);
@@ -512,7 +512,7 @@ public class TypeCast {
 				if (owner == null) return ERROR(E_NEVER); // t2是基本类型数组
 
 				if (owner.equals("java/lang/Object")) return RESULT(UPCAST, 2);
-				if (ClassContext.anyArray().interfaces().contains(owner)) return RESULT(UPCAST, 1);
+				if (GlobalContext.anyArray().interfaces().contains(owner)) return RESULT(UPCAST, 1);
 
 				return ERROR(E_NEVER); // int[] 除了转换成数组实现的类不能变成任何其他东西
 			} else {

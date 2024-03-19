@@ -9,7 +9,7 @@ import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.compiler.ast.expr.ExprNode;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
 
@@ -24,7 +24,7 @@ final class MethodListSingle extends ComponentList {
 	final MethodNode node;
 	MethodListSingle(MethodNode node) { this.node = node; }
 
-	public MethodResult findMethod(CompileContext ctx, IType genericHint, SimpleList<IType> params,
+	public MethodResult findMethod(LocalContext ctx, IType genericHint, SimpleList<IType> params,
 								   Map<String, IType> namedType, int flags) {
 		SimpleList<IType> myParam = params;
 		MethodNode mn = node;

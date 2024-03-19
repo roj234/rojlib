@@ -25,8 +25,7 @@ public final class AsmShared {
 
 	private IntMap<Label> pcm = new IntMap<>();
 	public IntMap<Label> getBciMap() {
-		pcm.clear();
-		return pcm;
+		pcm.clear(); return pcm;
 	}
 
 	private byte[] xInsn_sharedSegmentData = new byte[256];
@@ -78,24 +77,21 @@ public final class AsmShared {
 		throw new IllegalStateException("Not standard DynByteBuf: " + src.getClass().getName());
 	}
 
-	private final ByteList rootBuffer = new ByteList(4096);
-	private int level;
+	private final ByteList buf = new ByteList(4096);
+	private boolean unbuffered;
 
 	ByteList current() {
-		if (level == 0) {
-			rootBuffer.clear();
-			return rootBuffer;
+		if (unbuffered) {
+			// uses ArrayCache now!
+			ByteList b = new ByteList();
+			b.ensureCapacity(4096);
+			return b;
 		}
 
-		// uses ArrayCache now!
-		ByteList b = new ByteList();
-		b.ensureCapacity(4096);
-		return b;
+		buf.clear();
+		return buf;
 	}
 
 	@Deprecated
-	public void setLevel(boolean add) {
-		if (add) level++;
-		else level--;
-	}
+	public void setUnbuffered(boolean add) { unbuffered = add; }
 }

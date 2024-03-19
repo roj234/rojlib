@@ -3,12 +3,12 @@ package roj.archive.qz;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.LZMAInputStream;
 import roj.archive.qz.xz.LZMAOutputStream;
-import roj.archive.qz.xz.MemoryLimitException;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class LZMA extends QZCoder {
     public LZMA() { options = new LZMA2Options(); }
@@ -34,7 +34,7 @@ public final class LZMA extends QZCoder {
     public OutputStream encode(OutputStream out) throws IOException { return new LZMAOutputStream(out, options, false); }
 
     @Override
-    public InputStream decode(InputStream in, byte[] password, long uncompressedSize, int maxMemoryLimitInKb) throws IOException {
+    public InputStream decode(InputStream in, byte[] password, long uncompressedSize, AtomicInteger memoryLimit) throws IOException {
         byte props;
         int dictSize;
 
@@ -45,10 +45,7 @@ public final class LZMA extends QZCoder {
             props = this.props;
             dictSize = this.dictSize;
         }
-
-        int memoryUsage = LZMAInputStream.getMemoryUsage(dictSize, props);
-        if (memoryUsage > maxMemoryLimitInKb)
-            throw new MemoryLimitException(memoryUsage, maxMemoryLimitInKb);
+        useMemory(memoryLimit, LZMAInputStream.getMemoryUsage(dictSize, props));
 
         LZMAInputStream in1 = new LZMAInputStream(in, uncompressedSize, props, dictSize);
         in1.enableRelaxedEndCondition();
@@ -66,7 +63,7 @@ public final class LZMA extends QZCoder {
         }
     }
     void readOptions(DynByteBuf buf, int length) {
-        props = buf.get();
+		props = buf.readByte();
         dictSize = buf.readIntLE();
     }
 }

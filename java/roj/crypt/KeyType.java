@@ -22,6 +22,7 @@ public class KeyType {
 
 	public static KeyType getInstance(String alg) {
 		try {
+			ILProvider.register();
 			return new KeyType(alg);
 		} catch (NoSuchAlgorithmException e) {
 			return Helpers.maybeNull();

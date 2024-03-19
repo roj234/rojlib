@@ -2,16 +2,16 @@ package roj.excel;
 
 import org.jetbrains.annotations.NotNull;
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
+import roj.config.Tokenizer;
 import roj.config.XMLParser;
 import roj.config.data.CEntry;
 import roj.config.data.Element;
 import roj.config.data.Node;
-import roj.config.serial.ToXEntry;
-import roj.config.word.Tokenizer;
+import roj.config.serial.ToXml;
 import roj.io.FastFailException;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
@@ -70,7 +70,7 @@ public abstract class XlsxReader {
 	public void parse(Source file, Charset charset) throws IOException, ParseException {
 		xml.charset = charset;
 
-		try (ZipArchive zf = new ZipArchive(file, 0, charset)) {
+		try (ZipFile zf = new ZipFile(file, ZipFile.FLAG_BACKWARD_READ, charset)) {
 			ZEntry ze = zf.getEntry("xl/sharedStrings.xml");
 
 			readWith(zf, ze, entry -> {
@@ -178,11 +178,11 @@ public abstract class XlsxReader {
 		xy[1] = yPos;
 	}
 
-	private void readWith(ZipArchive zip, ZEntry entry, Consumer<Element> c) throws IOException,ParseException {
+	private void readWith(ZipFile zip, ZEntry entry, Consumer<Element> c) throws IOException,ParseException {
 		consumer = c;
 
 		try (InputStream in = zip.getStream(entry)) {
-			xml.parseRaw(new ToXEntry() {
+			xml.parse(in, 0, new ToXml() {
 				@Override
 				protected Element createElement(String str) {
 					Element el = replaceNodes.get(str);
@@ -200,7 +200,7 @@ public abstract class XlsxReader {
 				protected void beforePop(Element child, Element parent) {
 					if (parent == FAKE) consumer.accept(child);
 				}
-			}, in, 0);
+			});
 		}
 	}
 }

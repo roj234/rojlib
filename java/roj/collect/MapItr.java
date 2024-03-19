@@ -82,27 +82,22 @@ public class MapItr<T extends _Generic_Entry> {
 			return true;
 		}
 
-		while (true) {
-			if (obj == null) {
-				while (true) {
-					if (i >= entries.length) return false;
-					obj = (T) entries[i++];
-					if (obj != null) {
-						itr = (Iterator<T>) obj.__iterator();
-						if (itr != null) {
-							if (itr.hasNext()) {
-								obj = itr.next();
-							}
-						}
+		if (obj != null) obj = (T) obj.__next();
 
-						return true;
-					}
+		while (obj == null) {
+			if (i >= entries.length) return false;
+
+			obj = (T) entries[i++];
+			if (obj != null) {
+				Iterator<T> itr = (Iterator<T>) obj.__iterator();
+				if (itr != null && itr.hasNext()) {
+					obj = itr.next();
+					this.itr = itr;
+					return true;
 				}
 			}
-
-			obj = (T) obj.__next();
-			if (obj != null) return true;
 		}
+		return true;
 	}
 
 	private void checkConcMod() {

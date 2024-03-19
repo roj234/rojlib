@@ -4,9 +4,9 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.tree.attr.Attribute;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.SimpleList;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
+import roj.config.data.CInt;
 import roj.io.IOUtil;
-import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -235,12 +235,9 @@ public class Signature extends Attribute {
 		signature.validate();
 	}
 
-	public static Signature parse(CharSequence s) {
-		return parse(s, 99);
-	}
-
+	public static Signature parse(CharSequence s) {return parse(s, 99);}
 	public static Signature parse(CharSequence s, int expect) {
-		MutableInt i1 = new MutableInt();
+		CInt i1 = new CInt();
 		CharList tmp = IOUtil.getSharedCharBuf();
 
 		int i = 0;
@@ -270,17 +267,17 @@ public class Signature extends Attribute {
 
 				// first parameter: 'extends'
 				// 'nullable': use '::' mark EmptyClass
-				i1.setValue(i);
+				i1.value = i;
 				vals.add(getSignatureValue(s, i1, F_TYPE_CLASS, tmp));
-				i = i1.getValue();
+				i = i1.value;
 
 				// other parameters: 'implements'
 				while (s.charAt(i) == ':') {
 					if (i >= s.length()) error("before type desc end( != ':')", i, s);
 
-					i1.setValue(i+1);
+					i1.value = i+1;
 					vals.add(getSignatureValue(s, i1, F_INTERFACE, tmp));
-					i = i1.getValue();
+					i = i1.value;
 				}
 
 				if (vals.size() == 1 && vals.get(0) == EmptyClass.I)
@@ -301,40 +298,40 @@ public class Signature extends Attribute {
 		if (isMethod) {
 			if (expect != 99 && expect != METHOD) error("excepting " + expect + " and is METHOD", i, s);
 			sign.type = METHOD;
-			i1.setValue(i+1);
+			i1.value = i+1;
 
 			// in
-			while (s.charAt(i1.getValue()) != ')') {
+			while (s.charAt(i1.value) != ')') {
 				v.add(getSignatureValue(s, i1, F_PRIMITIVE, tmp));
 			}
-			i1.increment();
+			i1.value++;
 
 			// out
 			v.add(getSignatureValue(s, i1, F_PRIMITIVE, tmp));
 
 			// throws
-			i = i1.getAndIncrement();
+			i = i1.value++;
 			if (i < s.length()) {
 				if (s.charAt(i) != '^') error("THROWS should begin with '^'", i, s);
 
 				v = sign.Throws = new SimpleList<>(2);
-				while (i1.getValue() < s.length()) {
+				while (i1.value < s.length()) {
 					v.add(getSignatureValue(s, i1, 0, tmp));
-					i1.increment();
+					i1.value++;
 				}
 			}
 		} else {
-			i1.setValue(i);
+			i1.value = i;
 			// extends or field type
 			v.add(getSignatureValue(s, i1, 0, tmp));
 
 			// implements
-			i = i1.getValue();
+			i = i1.value;
 			if (i < s.length()) {
 				if (expect != 99 && expect != CLASS) error("excepting " + expect + " and is CLASS", i, s);
 				sign.type = CLASS;
 
-				while (i1.getValue() < s.length()) {
+				while (i1.value < s.length()) {
 					v.add(getSignatureValue(s, i1, F_INTERFACE, tmp));
 				}
 			}
@@ -349,7 +346,7 @@ public class Signature extends Attribute {
 	}
 
 	public static IType parseGeneric(CharSequence s) {
-		return getSignatureValue(s, new MutableInt(), 0, IOUtil.getSharedCharBuf());
+		return getSignatureValue(s, new CInt(), 0, IOUtil.getSharedCharBuf());
 	}
 
 	static void error(String msg, int i, CharSequence s) {
@@ -358,21 +355,21 @@ public class Signature extends Attribute {
 
 	private static final int F_INTERFACE = 0x1000, F_PRIMITIVE = 0x2000, F_SUBCLASS = 0x4000, F_TYPE_CLASS = 0x8000;
 
-	private static IType getSignatureValue(CharSequence s, MutableInt mi, int flag, CharList tmp) {
+	private static IType getSignatureValue(CharSequence s, CInt mi, int flag, CharList tmp) {
 		tmp.clear();
-		int i = mi.getValue();
+		int i = mi.value;
 
 		int array = i;
 		while (s.charAt(i) == '[') i++;
 		array = i-array;
 
 		char c = s.charAt(i);
-		mi.setValue(i+1);
+		mi.value = i+1;
 		switch (c) {
 			case ':':
 				if ((flag & F_TYPE_CLASS) == 0)
 					error("unexpected ':', not F_TYPE_CLASS flag",i,s);
-				mi.decrement();
+				mi.value--;
 				return EmptyClass.I;
 
 			case 'L':
@@ -380,7 +377,7 @@ public class Signature extends Attribute {
 
 			case 'T':
 				c = _getDesc(s,mi,tmp);
-				if (c != ';') error("excepting ';' but got " + c,mi.getValue()-1,s);
+				if (c != ';') error("excepting ';' but got " + c, mi.value -1,s);
 				return new TypeParam(tmp.toString(), array, (flag >>> 8) & 0xF);
 
 			default:
@@ -395,9 +392,9 @@ public class Signature extends Attribute {
 		}
 	}
 
-	private static IType genericUse(CharSequence s, MutableInt mi, CharList tmp, int flag) {
+	private static IType genericUse(CharSequence s, CInt mi, CharList tmp, int flag) {
 		char c = _getDesc(s, mi, tmp);
-		int pos = mi.getValue();
+		int pos = mi.value;
 
 		IGeneric g;
 		if ((flag & F_SUBCLASS) != 0) {
@@ -437,14 +434,14 @@ public class Signature extends Attribute {
 								ex = 0;
 								break;
 						}
-						mi.setValue(pos);
+						mi.value = pos;
 						g.addChild(getSignatureValue(s, mi, F_PRIMITIVE | ex, tmp));
-						pos = mi.getValue();
+						pos = mi.value;
 						break;
 				}
 			}
 			c = s.charAt(pos);
-			mi.setValue(pos+1);
+			mi.value = pos+1;
 		}
 
 		if (c == '.') {
@@ -457,18 +454,18 @@ public class Signature extends Attribute {
 		return new Type(tmp.toString(), flag&0xFF);
 	}
 
-	private static char _getDesc(CharSequence s, MutableInt mi, CharList tmp) {
-		int j = mi.getValue();
+	private static char _getDesc(CharSequence s, CInt mi, CharList tmp) {
+		int j = mi.value;
 		while (true) {
 			switch (s.charAt(j)) {
 				case ';':
 				case '.':
 				case '<':
-					if (mi.getValue() == j)
+					if (mi.value == j)
 						error("类名为空",j,s);
 					tmp.clear();
-					tmp.append(s,mi.getValue(),j);
-					mi.setValue(j+1);
+					tmp.append(s, mi.value,j);
+					mi.value = j+1;
 					return s.charAt(j);
 			}
 			j++;

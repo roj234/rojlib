@@ -7,7 +7,7 @@ import roj.config.data.Element;
 import roj.config.data.Node;
 import roj.io.CorruptedInputException;
 import roj.net.ch.*;
-import roj.net.ch.handler.Timeout;
+import roj.net.handler.Timeout;
 import roj.net.http.HttpHead;
 import roj.net.http.HttpRequest;
 import roj.text.TextUtil;
@@ -250,7 +250,7 @@ public final class UPnPDevice {
 
 			Element header;
 			try {
-				header = XMLParser.parses(query.execute().str(), XMLParser.LENIENT);
+				header = XMLParser.parses(query.execute().str());
 			} catch (ParseException e) {
 				throw new CorruptedInputException("invalid SOAP response", e);
 			}

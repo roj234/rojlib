@@ -169,6 +169,9 @@ public class QZEntry implements ArchiveEntry, Cloneable {
     }
 
     @Override
+    public int hashCode() {return name.hashCode();}
+
+    @Override
     public QZEntry clone() {
         try {
             QZEntry clone = (QZEntry) super.clone();

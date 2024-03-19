@@ -28,8 +28,8 @@ public interface Hasher<K> {
 	};
 	static <T> Hasher<T> identity() { return Helpers.cast(IDENTITY); }
 
+	static <T> Hasher<T> primitiveArray(Class<T> type) {return ArrayHasher.primitiveArray(type);}
+
 	int hashCode(@Nullable K k);
 	boolean equals(K from_argument, Object stored_in);
-
-	default Object customCreateEntry(K k) { return null; }
 }

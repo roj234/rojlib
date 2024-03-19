@@ -91,7 +91,7 @@ public final class MCPMapping extends Mapping {
 	}
 
 	private static void parseParam(String csv, List<String> tmp, Map<String, String> paramMap) {
-		LineReader slr = new LineReader(csv);
+		LineReader slr = LineReader.create(csv);
 
 		slr.skipLines(1);
 		int i = 2;

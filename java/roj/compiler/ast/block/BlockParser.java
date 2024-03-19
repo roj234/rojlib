@@ -1,8 +1,10 @@
 package roj.compiler.ast.block;
 
 import org.jetbrains.annotations.NotNull;
+import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
+import roj.asm.tree.attr.LineNumberTable;
 import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -15,7 +17,6 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.compiler.JavaLexer;
-import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.VariableDeclare;
@@ -23,14 +24,14 @@ import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.UnresolvedExprNode;
-import roj.compiler.context.CompileContext;
 import roj.compiler.context.CompileUnit;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.MethodResult;
 import roj.compiler.resolve.TypeCast;
 import roj.config.ParseException;
-import roj.config.word.Word;
+import roj.config.Word;
 import roj.util.Helpers;
 
 import java.util.Collections;
@@ -46,14 +47,14 @@ import static roj.compiler.JavaLexer.*;
  * @since 2020/10/3 19:20
  */
 public class BlockParser {
-	private final CompileContext ctx;
+	private final LocalContext ctx;
 	private final ExprParser ep;
 	private MethodWriter cw;
 	private CompileUnit file;
 	private JavaLexer wr;
 	int methodType;
 
-	public BlockParser(CompileContext ctx) {
+	public BlockParser(LocalContext ctx) {
 		this.ctx = ctx;
 		this.ep = ctx.ep;
 	}
@@ -73,60 +74,70 @@ public class BlockParser {
 		return this;
 	}
 
-	@Deprecated
-	public void init(CompileUnit u, int start, MethodNode mn) {
-		file = u;
-		wr = u.getLexer();
-		wr.index = start;
-	}
-
 	/// region 解析
 
-	public void parseStaticInit(CompileUnit file, XAttrCode attr, int begin, int end) throws ParseException {
+	public void parseStaticInit(CompileUnit file, XAttrCode attr, int begin) throws ParseException {
 		this.file = file;
 		this.wr = file.getLexer();
 		this.wr.index = begin;
+		methodType = 1;
+		//cw = new MethodWriter(file, mn);
+		ctx.variables = Collections.emptyMap();
+		cw.ctx1 = ctx;
 		parse0();
 	}
 
-	public void parseGlobalInit(CompileUnit file, XAttrCode attr, int begin, int end) throws ParseException {
+	public void parseGlobalInit(CompileUnit file, XAttrCode attr, int begin) throws ParseException {
 		this.file = file;
 		this.wr = file.getLexer();
 		this.wr.index = begin;
+		methodType = 2;
+		//cw = new MethodWriter(file, mn);
+		ctx.variables = Collections.emptyMap();
+		cw.ctx1 = ctx;
 		parse0();
 	}
 
-	public MethodWriter parseMethod(CompileUnit file, MethodNode mn, List<String> names, int begin, int end) throws ParseException {
+	public MethodWriter parseMethod(CompileUnit file, MethodNode mn, List<String> names, int begin) throws ParseException {
 		this.file = file;
 		this.wr = file.getLexer();
 		this.wr.index = begin;
+
 		methodType = 0;
+
 		cw = new MethodWriter(file, mn);
 		ctx.variables = this.variables;
 		cw.ctx1 = ctx;
-		beginCodeBlock();
+
+		wr.labelGen = cw;
+		wr.table = new LineNumberTable();
+
 		parse0();
-		endCodeBlock();
-		// 这也太拉了
-		// TODO => 想个办法实现方法整体中的推断（估计很难...）
-		/*var test = new SimpleList<>();
-		test.add("3");
-		String o = (String) test.get(0);*/
+
+		//System.out.println(wr.table);
+		wr.labelGen = null;
+		wr.table = null;
 		return cw;
 	}
 
-	public void parse0() throws ParseException {
-		//wr.setLineHandler(this);
-		//TODO expr写的时候要注意line
+	private void parse0() throws ParseException {
+		reset();
+		beginCodeBlock();
 
 		while (true) {
 			Word w = wr.next();
-			if (w.type() == Word.EOF) {
+			if (w.type() == Word.EOF || w.type() == rBrace) {
+				if ((sectionFlag&2) == 0) {
+					if (cw.mn.returnType().type == Type.VOID) cw.one(Opcodes.RETURN);
+					else file.fireDiagnostic(Kind.ERROR, "block.missingReturnValue");
+				}
 				break;
-			} else {
-				statement(w);
 			}
+
+			statement(w);
 		}
+
+		endCodeBlock();
 	}
 
 	//endregion
@@ -232,12 +243,25 @@ public class BlockParser {
 				define(null);
 			}
 			default -> {
+				if (w.val().equals("var") || w.val().equals("const")) {
+					wr.mark();
+					short type = wr.next().type();
+					wr.retract();
+
+					if (type == Word.LITERAL) {
+						define(new Type("var"));
+						return;
+					}
+				}
+				// TODO 等word改好了要更新
+				boolean isconstructor= w.val().equals("this") || w.val().equals("super") ;
 				wr.retractWord();
 				UnresolvedExprNode expr = ep.parse(file, 0);
 				if (expr != null) {
 					expr.resolve(ctx).write(cw, true);
 					except(semicolon);
 				}
+				if (isconstructor) ctx.not_invoke_constructor = false;
 			}
 		}
 
@@ -435,17 +459,13 @@ public class BlockParser {
 			if ((info.modifier()&ACC_INTERFACE) != 0) cw.invokeItf(tryADefinedVar.type.owner(), "close", "()V");
 			else cw.invokeV(tryADefinedVar.type.owner(), "close", "()V");
 
-			try {
-				ComponentList list = ctx.classes.methodList(info, "close");
-				if (list != null) {
-					MethodResult result = list.findMethod(ctx, tryADefinedVar.type, new SimpleList<>(), null, 0);
-					if (result != null) {
-						// TODO 提示是由隐式调用产生的异常
-						result.addExceptions(ctx, info, 1);
-					}
+			ComponentList list = ctx.methodListOrReport(info, "close");
+			if (list != null) {
+				MethodResult result = list.findMethod(ctx, tryADefinedVar.type, new SimpleList<>(), null, 0);
+				if (result != null) {
+					// TODO 提示是由隐式调用产生的异常
+					result.addExceptions(ctx, info, 1);
 				}
-			} catch (Exception e) {
-				e.printStackTrace();
 			}
 
 			cw.jump(tryCloseTotallyEnd);
@@ -897,7 +917,7 @@ public class BlockParser {
 			ctx.report(Kind.ERROR, "block.error.noExpression");
 		} else {
 			int i = cw.beginJumpOn(invert, target);
-			expr.resolve(cw.ctx1).write(cw, false);
+			expr.resolve(ctx).write(cw, false);
 			cw.endJumpOn(i);
 		}
 
@@ -1083,8 +1103,8 @@ public class BlockParser {
 		byte prev = sectionFlag;
 		sectionFlag |= 4;
 
-		List<Object> labelsCur = Helpers.cast(CompileContext.get().annotationTmp); labelsCur.clear();
-		MyHashSet<Object> labels = Helpers.cast(CompileContext.get().toResolve_unc); labels.clear();
+		List<Object> labelsCur = Helpers.cast(LocalContext.get().annotationTmp); labelsCur.clear();
+		MyHashSet<Object> labels = Helpers.cast(LocalContext.get().toResolve_unc); labels.clear();
 
 		byte state;
 		o:
@@ -1210,10 +1230,13 @@ public class BlockParser {
 			// todo generic supporting
 			type = file.readType(CompileUnit.TYPE_PRIMITIVE|CompileUnit.TYPE_GENERIC);
 		}
-		// TODO : var let const
+
+		boolean isVar = false;
+
 		if (type.genericType() == 0 && "var".equals(type.owner())) {
 			// dynamic type
-			type = Asterisk.anyType;
+			type = null;
+			isVar = true;
 		} else {
 			ctx.resolveType(type);
 		}
@@ -1221,7 +1244,8 @@ public class BlockParser {
 		Word w;
 		do {
 			String name = wr.except(Word.LITERAL).val();
-			Variable variable = newVar(name, type);
+			// TODO 自动分配还要一段时间
+			Variable variable = newVar(name, isVar ? Type.std(Type.DOUBLE) : type);
 
 			w = wr.next();
 			if (w.type() == assign) {
@@ -1233,7 +1257,12 @@ public class BlockParser {
 					return;
 				}
 
-				writeCast(expr.resolve(ctx), type);
+				ExprNode node = expr.resolve(ctx);
+				if (isVar) {
+					// TODO merge (optional ?)
+					variable.type = type = node.type();
+				}
+				writeCast(node, type);
 				cw.store(variable);
 
 				w = wr.next();

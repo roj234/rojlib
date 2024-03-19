@@ -7,7 +7,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.visitor.Label;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 
@@ -32,7 +32,7 @@ final class Trinary extends ExprNode {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(CompileContext ctx) {
+	public ExprNode resolve(LocalContext ctx) {
 		val = val.resolve(ctx);
 		cast = ctx.castTo(val.type(), Type.std(Type.BOOLEAN), 0);
 

@@ -4,7 +4,7 @@ import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -26,7 +26,7 @@ final class EncloseRef extends ExprNode {
 	public String toString() { return type.toString() + (thisEnclosing?".this":".super"); }
 
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		ctx.resolveType(type);
 		if (thisEnclosing) {
 			ctx.report(Kind.ERROR, "this enclosing class暂未实现（non static ref）");

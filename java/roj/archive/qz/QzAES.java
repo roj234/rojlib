@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Roj234
@@ -57,7 +58,7 @@ public final class QzAES extends QZCoder {
         }
         return new CipherOutputStream(out, cip);
     }
-    public InputStream decode(InputStream in, byte[] key, long uncompressedSize, int maxMemoryLimitInKb) throws IOException {
+    public InputStream decode(InputStream in, byte[] key, long uncompressedSize, AtomicInteger memoryLimit) throws IOException {
         if (key == null) throw new IllegalArgumentException("缺少密码");
         init(key);
 

@@ -53,7 +53,7 @@ final class Hash234 {
 		hash4Table = hash3Table + (HASH_3_SIZE<<2);
 	}
 
-	void reuse() { u.setMemory(hash2Table, hashTable.length(), (byte) 0); }
+	void reset() { u.setMemory(hash2Table, hashTable.length(), (byte) 0); }
 	void release() { hashTable.release(); }
 
 	void calcHashes(long buf, int off) {

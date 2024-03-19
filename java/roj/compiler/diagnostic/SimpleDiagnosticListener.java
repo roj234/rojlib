@@ -1,7 +1,7 @@
 package roj.compiler.diagnostic;
 
 import roj.compiler.context.CompileUnit;
-import roj.math.MutableInt;
+import roj.config.data.CInt;
 import roj.text.LineReader;
 
 import java.io.PrintStream;
@@ -24,7 +24,7 @@ public final class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 		this.op = warnOps;
 	}
 
-	private static String buildErrorMessage(Diagnostic diagnostic, EnumMap<Kind, MutableInt> map) {
+	private static String buildErrorMessage(Diagnostic diagnostic, EnumMap<Kind, CInt> map) {
 		StringBuilder sb = new StringBuilder();
 		if (diagnostic.getSource() != null) {
 			String file = diagnostic.getSource().getFilePath();
@@ -50,29 +50,29 @@ public final class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 		return LineReader.getLine(source.getContext(), (int) lineNumber - 1);
 	}
 
-	static final Function<Kind, MutableInt> k2i = (kind1) -> new MutableInt(0);
+	static final Function<Kind, CInt> k2i = (kind1) -> new CInt(0);
 
-	private static String getErrorMsg(Kind kind, EnumMap<Kind, MutableInt> kinds) {
+	private static String getErrorMsg(Kind kind, EnumMap<Kind, CInt> kinds) {
 		switch (kind) {
 			case NOTE:
 				return "注";
 			case ERROR:
-				if (kinds != null) kinds.computeIfAbsent(kind, k2i).increment();
+				if (kinds != null) kinds.computeIfAbsent(kind, k2i).value++;
 				return "错误";
 			case OTHER:
 				return "其他";
 			case WARNING:
-				if (kinds != null) kinds.computeIfAbsent(kind, k2i).increment();
+				if (kinds != null) kinds.computeIfAbsent(kind, k2i).value++;
 				return "警告";
 			case SEVERE_WARNING:
-				if (kinds != null) kinds.computeIfAbsent(Kind.WARNING, k2i).increment();
+				if (kinds != null) kinds.computeIfAbsent(Kind.WARNING, k2i).value++;
 				return "强警告";
 		}
 		throw new IllegalArgumentException();
 	}
 
 
-	final EnumMap<Kind, MutableInt> kinds = new EnumMap<>(Kind.class);
+	final EnumMap<Kind, CInt> kinds = new EnumMap<>(Kind.class);
 
 	/**
 	 * Invoked when a problem is found.
@@ -115,8 +115,8 @@ public final class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 
 	public void conclusion() {
 		PrintStream errorOutput = System.err;
-		for (Map.Entry<Kind, MutableInt> entry : kinds.entrySet()) {
-			errorOutput.println(entry.getValue().getValue() + " 个 " + getErrorMsg(entry.getKey(), null));
+		for (Map.Entry<Kind, CInt> entry : kinds.entrySet()) {
+			errorOutput.println(entry.getValue().value + " 个 " + getErrorMsg(entry.getKey(), null));
 		}
 	}
 }

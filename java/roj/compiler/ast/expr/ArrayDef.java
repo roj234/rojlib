@@ -7,7 +7,7 @@ import roj.asm.type.Type;
 import roj.asm.util.InsnHelper;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -40,18 +40,14 @@ class ArrayDef extends ExprNode {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if ((flag&4) != 0) return this;
 		flag |= 4;
 
 		boolean resolved = false;
 		if (type == null) {
 			resolved = true;
-
-			// TODO => should be nulltype[]
-			// 这里的类型推断存在不少问题
-			// 大概需要从ctx引入一些上级的信息
-			ctx.report(Kind.WARNING, "arrayDef.warn.notTestedPath");
+			ctx.report(Kind.WARNING, "arrayDef.warn.autoType");
 			IType type1 = null;
 
 			for (int i = 0; i < expr.size(); i++) {
@@ -123,8 +119,8 @@ class ArrayDef extends ExprNode {
 	private Type makeArray(MethodWriter cw, int dimension) {
 		Type at = type.rawType();
 		if (at.array() == 1) {
-			if (at.isPrimitive()) cw.newArray(InsnHelper.ToPrimitiveArrayId(at.type));
-			else cw.clazz(Opcodes.ANEWARRAY, at);
+			if (at.type != Type.CLASS) cw.newArray(InsnHelper.ToPrimitiveArrayId(at.type));
+			else cw.clazz(Opcodes.ANEWARRAY, at.owner);
 		} else {
 			cw.multiArray(at.getActualClass(), dimension);
 		}

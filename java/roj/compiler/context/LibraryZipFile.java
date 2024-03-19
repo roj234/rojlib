@@ -1,7 +1,6 @@
 package roj.compiler.context;
 
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFile;
 import roj.asm.Parser;
 import roj.asm.tree.IClass;
@@ -20,9 +19,10 @@ import java.util.Set;
 public class LibraryZipFile implements Library {
 	public final ZipFile zf;
 	private final MyHashMap<String, Object> info;
+	private String moduleName;
 
 	public LibraryZipFile(File file) throws IOException {
-		this.zf = new ZipFile(file, ZipArchive.FLAG_BACKWARD_READ);
+		this.zf = new ZipFile(file, ZipFile.FLAG_BACKWARD_READ);
 		this.info = new MyHashMap<>();
 
 		for (ZEntry entry : zf.entries()) {
@@ -31,6 +31,13 @@ public class LibraryZipFile implements Library {
 		}
 		zf.entries().clear();
 	}
+	public LibraryZipFile(File file, String moduleName) throws IOException {
+		this(file);
+		this.moduleName = moduleName;
+	}
+
+	@Override
+	public String getModule(String className) {return moduleName;}
 
 	@Override
 	public Set<String> content() { return info.keySet(); }
@@ -39,7 +46,7 @@ public class LibraryZipFile implements Library {
 	public IClass get(CharSequence name) {
 		MyHashMap.AbstractEntry<String, Object> entry = info.getEntry(Helpers.cast(name));
 		if (entry == null) return null;
-		if (entry instanceof IClass c) return c;
+		if (entry.getValue() instanceof IClass c) return c;
 		synchronized (info) {
 			IClass v = null;
 			try {

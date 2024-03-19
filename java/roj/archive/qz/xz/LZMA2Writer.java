@@ -21,6 +21,7 @@ import java.nio.channels.AsynchronousCloseException;
 
 public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOutputStream {
 	private volatile byte closed;
+	private boolean compressionDisabled;
 
 	LZMA2Writer(OutputStream out, LZMA2Options options) {
 		super(options);
@@ -30,7 +31,7 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 
 		byte[] presetDict = options.getPresetDict();
 		if (presetDict != null && presetDict.length > 0) {
-			lz.setPresetDict(options.getDictSize(), presetDict);
+			lzma.lzPresetDict(options.getDictSize(), presetDict);
 			state = PROP_RESET;
 		} else {
 			state = DICT_RESET;
@@ -43,6 +44,10 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 		if (state < PROP_RESET) state = PROP_RESET;
 		props = options.getPropByte();
 		lzma.propReset(options.getLc(), options.getLp(), options.getPb());
+	}
+	public final void setCompressionDisabled(boolean b) throws IOException {
+		flush();
+		this.compressionDisabled = b;
 	}
 
 	public final void write(byte[] buf, int off, int len) throws IOException {
@@ -57,12 +62,11 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 			while (len > 0) {
 				if (closed != 0) throw new AsynchronousCloseException();
 
-				int used = lz.fillWindow0(buf, off, len);
-				off += used;
-				len -= used;
-				pendingSize += used;
+				int w = lzma.lzFill0(buf, off, len);
+				off += w;
+				len -= w;
 
-				if (lzma.encodeForLZMA2()) writeChunk();
+				if (lzma.encodeForLZMA2()) writeChunk(compressionDisabled);
 			}
 		} catch (Throwable e) {
 			try {
@@ -76,11 +80,12 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 		if (closed != 0) throw new IOException("Stream finished or closed");
 
 		try {
-			lz.setFlushing();
+			lzma.lzFlush();
 
-			while (pendingSize > 0) {
+			while (true) {
 				lzma.encodeForLZMA2();
-				writeChunk();
+				if (lzma.getUncompressedSize() == 0) break;
+				writeChunk(compressionDisabled);
 			}
 
 			out.flush();
@@ -101,12 +106,13 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 			closed |= 1;
 		}
 
-		lz.setFinishing();
+		lzma.lzFinish();
 
 		try {
-			while (pendingSize > 0) {
+			while (true) {
 				lzma.encodeForLZMA2();
-				writeChunk();
+				if (lzma.getUncompressedSize() == 0) break;
+				writeChunk(compressionDisabled);
 			}
 
 			out.write(0x00);
@@ -118,7 +124,6 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 		} finally {
 			lzma.release();
 			lzma = null;
-			lz = null;
 			rc.release();
 			rc = null;
 		}

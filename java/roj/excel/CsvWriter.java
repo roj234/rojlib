@@ -1,7 +1,7 @@
 package roj.excel;
 
 import roj.collect.TrieTree;
-import roj.math.MutableInt;
+import roj.config.data.CInt;
 import roj.text.CharList;
 import roj.text.TextWriter;
 
@@ -15,7 +15,7 @@ import java.util.List;
  * @since 2023/6/2 0002 14:12
  */
 public class CsvWriter implements TableWriter {
-	private static final TrieTree<MutableInt> CSV_ESCAPE = new TrieTree<>();
+	private static final TrieTree<CInt> CSV_ESCAPE = new TrieTree<>();
 	static {
 		CSV_ESCAPE.put(",", null);
 		CSV_ESCAPE.put("\n", null);

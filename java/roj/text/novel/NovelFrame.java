@@ -10,10 +10,10 @@ import roj.concurrent.OperationDone;
 import roj.concurrent.TaskPool;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
+import roj.config.data.CInt;
 import roj.io.IOUtil;
 import roj.text.*;
-import roj.text.epub.EpubWriter;
 import roj.ui.DragReorderHelper;
 import roj.ui.GuiUtil;
 import roj.ui.OnChangeHelper;
@@ -119,7 +119,7 @@ public class NovelFrame extends JFrame {
 		btnRegexMatch.addActionListener(e -> {
 			IntList tmp2 = new IntList();
 			tmp.clear();
-			int matches = novel_in.preg_match_cllabck(novel_regexp, m -> {
+			int matches = novel_in.preg_match_callback(novel_regexp, m -> {
 				tmp.append(m.start()).append("@").append(Tokenizer.addSlashes(m.group())).append('\n');
 				tmp2.add(m.start());
 			});
@@ -151,16 +151,27 @@ public class NovelFrame extends JFrame {
 			errout.setText(tmp.toString());
 		});
 		btnRegexRpl.addActionListener(e -> {
-			novel_in.preg_replace_callback(novel_regexp, m -> {
-				tmp.clear();
-				tmp.append(uiRegexRplTo.getText());
-				for (int j = 0; j <= m.groupCount(); j++) {
-					String str = m.group(j);
-					tmp.replace("$"+j, str);
-				}
+			int prevHash = novel_in.hashCode();
+			int count = 0;
+			CInt rpl = new CInt(0);
+			do {
+				novel_in.preg_replace_callback(novel_regexp, m -> {
+					tmp.clear();
+					tmp.append(uiRegexRplTo.getText());
+					for (int j = 0; j <= m.groupCount(); j++) {
+						String str = m.group(j);
+						tmp.replace("$"+j, str);
+					}
 
-				return tmp;
-			});
+					rpl.value++;
+					return tmp;
+				});
+
+				count++;
+			} while (uiRepeatRpl.isSelected() && prevHash != (prevHash = novel_in.hashCode()));
+
+			tmp.append("共循环").append(count).append("次,进行了").append(rpl.value).append("次替换");
+			errout.setText(tmp.toString());
 		});
 
 		chapters = new SimpleList<>();
@@ -261,7 +272,7 @@ public class NovelFrame extends JFrame {
 	CharList novel_in = new CharList(), novel_out = new CharList();
 
 
-	static final MyBitSet myWhiteSpace = MyBitSet.from("\r\n\t 　 \uE5E5\uFEFF\u200B");
+	static final MyBitSet myWhiteSpace = MyBitSet.from("\r\n\t 　 \uE4C6\uE5E5\uFEFF\u200B");
 
 	// region 功能区-文件读取
 	private void select_novel(ActionEvent e) {
@@ -315,7 +326,7 @@ public class NovelFrame extends JFrame {
 	}
 
 	private void presetRegexChanged(JTextComponent c) {
-		LineReader lr = new LineReader(c.getText());
+		LineReader lr = LineReader.create(c.getText());
 
 		PresetRegexp none = uxPresetRegexs.getElementAt(0);
 		uxPresetRegexs.removeAllElements();
@@ -384,7 +395,7 @@ public class NovelFrame extends JFrame {
 		if (uiSmrtChapter.isSelected()) {
 			List<List<Chapter>> chapters = null;
 			try {
-				chapters = Chapter.parse(new LineReader(novel_in));
+				chapters = Chapter.parse(LineReader.create(novel_in));
 			} catch (IOException ignored) {}
 
 			root.children = Chapter.groupChapter(chapters, 0);
@@ -526,7 +537,7 @@ public class NovelFrame extends JFrame {
 		JOptionPane.showMessageDialog(advancedMenu, "没有了", "提示", JOptionPane.INFORMATION_MESSAGE);
 	}
 
-	/** 替换内容  */
+	/** 替换内容 */
 	private void replaceChapter(ActionEvent e) {
 		Chapter c = getOneChapter();
 		if (c == null) {
@@ -616,7 +627,7 @@ public class NovelFrame extends JFrame {
 					pool.pushTask(() -> {
 						byte[] bb = IOUtil.SharedCoder.get().encode(cb.data != null ? cb.data : novel_in.subSequence(cb.start, cb.end));
 						int siz = Math.min(ba.length, bb.length);
-						int dd = new BsDiff(diff).getDiffLength(bb, siz / 2);
+						int dd = diff.parallel().getDiffLength(bb, siz / 2);
 						if (dd >= 0) {
 							synchronized (list) {
 								list.add(new IntMap.Entry<>((int) ((double)(siz-dd) / siz * 10000), ca.fullName + "|" + cb.fullName));
@@ -722,9 +733,7 @@ public class NovelFrame extends JFrame {
 			author = text.substring(pos+3);
 		}
 
-		// TODO auto configure cover
-		File cover = new File("D:\\Desktop\\novel\\小说封面_20230831\\百炼成神 - 恩赐解脱.jpg");
-		if (!cover.isFile()) cover = null;
+		File cover = GuiUtil.fileLoadFrom("选择小说封面");
 
 		try (EpubWriter epw = new EpubWriter(new ZipFileWriter(path), title, author, cover)) {
 			SimpleList<String> replacedName = null;
@@ -826,7 +835,7 @@ public class NovelFrame extends JFrame {
 				String str = m.group(j);
 				if (j == chapterId_group) {
 					if (uiRegenId.isSelected()) {
-						str = Integer.toString(myChapterNo.increase(String.valueOf(c.type), 1));
+						str = Integer.toString(myChapterNo.increment(String.valueOf(c.type), 1));
 						System.out.println("type=" + c.type);
 					}
 
@@ -882,463 +891,470 @@ public class NovelFrame extends JFrame {
 
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
-		progress = new JProgressBar();
-		progressStr = new JLabel();
-		var fg1 = new JSeparator();
-		var lb1 = new JLabel();
-		uiNovelPath = new JTextField();
-		btnLoad = new JButton();
-		btnFindNovel = new JButton();
-		var fg2 = new JSeparator();
-		var lb2 = new JLabel();
-		btnMakeChapter = new JButton();
-		uiSmrtChapter = new JCheckBox();
-		var lb3 = new JLabel();
-		uiRegexIdGroup = new JSpinner();
-		var lb4 = new JLabel();
-		uiRegexNameGroup = new JSpinner();
-		btnFixEnter = new JButton();
-		btnRemoveHalfLine = new JButton();
-		uiPresetRegexs = new JComboBox<>();
-		var uiModPresetRegexs = new JButton();
-		btnRegexMatch = new JButton();
-		uiRegex = new JTextField();
-		btnRegexRpl = new JButton();
-		uiRegexRplTo = new JTextField();
-		lb5 = new JLabel();
-		sp1 = new JScrollPane();
-		uiChapters = new JTree();
-		var fg3 = new JSeparator();
-		var lb6 = new JLabel();
-		btnAddChapter = new JButton();
-		btnDelChapter = new JButton();
-		btnWrongChapter = new JButton();
-		btnPutChapter = new JButton();
-		btnMergeChapter = new JButton();
-		btnDeDupChapter = new JButton();
-		btnInsertMode = new JCheckBox();
-		btnDelByLen = new JButton();
-		cpwOrigName = new JLabel();
-		cpwOutName = new JTextField();
-		var lb10 = new JLabel();
-		cpwChapNo = new JSpinner();
-		var lb11 = new JLabel();
-		cpwChapName = new JTextField();
-		var fg4 = new JSeparator();
-		var lb12 = new JLabel();
-		btnAlign = new JButton();
-		btnWrite = new JButton();
-		btnToEpub = new JButton();
-		uiSkipNoSpace = new JCheckBox();
-		uiRegenName = new JCheckBox();
-		uiRegenNameType = new JComboBox<>();
-		uiRegenId = new JCheckBox();
-		draggedItem = new JLabel();
-		var scrollPane1 = new JScrollPane();
-		errout = new JEditorPane();
-		advancedMenu = new JDialog();
-		scrollPane3 = new JScrollPane();
-		presetRegexpInp = new JTextArea();
+        progress = new JProgressBar();
+        progressStr = new JLabel();
+        var fg1 = new JSeparator();
+        var lb1 = new JLabel();
+        uiNovelPath = new JTextField();
+        btnLoad = new JButton();
+        btnFindNovel = new JButton();
+        var fg2 = new JSeparator();
+        var lb2 = new JLabel();
+        btnMakeChapter = new JButton();
+        uiSmrtChapter = new JCheckBox();
+        var lb3 = new JLabel();
+        uiRegexIdGroup = new JSpinner();
+        var lb4 = new JLabel();
+        uiRegexNameGroup = new JSpinner();
+        btnFixEnter = new JButton();
+        btnRemoveHalfLine = new JButton();
+        uiPresetRegexs = new JComboBox<>();
+        var uiModPresetRegexs = new JButton();
+        btnRegexMatch = new JButton();
+        uiRegex = new JTextField();
+        btnRegexRpl = new JButton();
+        uiRegexRplTo = new JTextField();
+        uiRepeatRpl = new JCheckBox();
+        lb5 = new JLabel();
+        sp1 = new JScrollPane();
+        uiChapters = new JTree();
+        var fg3 = new JSeparator();
+        var lb6 = new JLabel();
+        btnAddChapter = new JButton();
+        btnDelChapter = new JButton();
+        btnWrongChapter = new JButton();
+        btnPutChapter = new JButton();
+        btnMergeChapter = new JButton();
+        btnDeDupChapter = new JButton();
+        btnInsertMode = new JCheckBox();
+        btnDelByLen = new JButton();
+        cpwOrigName = new JLabel();
+        cpwOutName = new JTextField();
+        var lb10 = new JLabel();
+        cpwChapNo = new JSpinner();
+        var lb11 = new JLabel();
+        cpwChapName = new JTextField();
+        var fg4 = new JSeparator();
+        var lb12 = new JLabel();
+        btnAlign = new JButton();
+        btnWrite = new JButton();
+        btnToEpub = new JButton();
+        uiSkipNoSpace = new JCheckBox();
+        uiRegenName = new JCheckBox();
+        uiRegenNameType = new JComboBox<>();
+        uiRegenId = new JCheckBox();
+        draggedItem = new JLabel();
+        var scrollPane1 = new JScrollPane();
+        errout = new JEditorPane();
+        advancedMenu = new JDialog();
+        scrollPane3 = new JScrollPane();
+        presetRegexpInp = new JTextArea();
 
-		//======== this ========
-		setTitle("\u5c0f\u8bf4\u7ba1\u7406\u7cfb\u7edf (Novel Management System) v2.0-beta");
-		var contentPane = getContentPane();
-		contentPane.setLayout(null);
+        //======== this ========
+        setTitle("\u5c0f\u8bf4\u7ba1\u7406\u7cfb\u7edf (Novel Management System) v2.0-beta");
+        var contentPane = getContentPane();
+        contentPane.setLayout(null);
 
-		//---- progress ----
-		progress.setValue(2000);
-		progress.setMaximum(10000);
-		contentPane.add(progress);
-		progress.setBounds(5, 4, 320, progress.getPreferredSize().height);
+        //---- progress ----
+        progress.setValue(2000);
+        progress.setMaximum(10000);
+        contentPane.add(progress);
+        progress.setBounds(5, 4, 320, progress.getPreferredSize().height);
 
-		//---- progressStr ----
-		progressStr.setText("ready");
-		progressStr.setHorizontalAlignment(SwingConstants.CENTER);
-		contentPane.add(progressStr);
-		progressStr.setBounds(325, 4, 105, progressStr.getPreferredSize().height);
-		contentPane.add(fg1);
-		fg1.setBounds(5, 30, 420, 2);
+        //---- progressStr ----
+        progressStr.setText("ready");
+        progressStr.setHorizontalAlignment(SwingConstants.CENTER);
+        contentPane.add(progressStr);
+        progressStr.setBounds(325, 4, 105, progressStr.getPreferredSize().height);
+        contentPane.add(fg1);
+        fg1.setBounds(5, 30, 420, 2);
 
-		//---- lb1 ----
-		lb1.setText("\u6587\u4ef6\u8bfb\u53d6");
-		lb1.setFont(lb1.getFont().deriveFont(lb1.getFont().getSize() - 2f));
-		contentPane.add(lb1);
-		lb1.setBounds(385, 32, 40, 11);
-		contentPane.add(uiNovelPath);
-		uiNovelPath.setBounds(40, 36, 170, uiNovelPath.getPreferredSize().height);
+        //---- lb1 ----
+        lb1.setText("\u6587\u4ef6\u8bfb\u53d6");
+        lb1.setFont(lb1.getFont().deriveFont(lb1.getFont().getSize() - 2f));
+        contentPane.add(lb1);
+        lb1.setBounds(385, 32, 40, 11);
+        contentPane.add(uiNovelPath);
+        uiNovelPath.setBounds(40, 36, 170, uiNovelPath.getPreferredSize().height);
 
-		//---- btnLoad ----
-		btnLoad.setText("\u52a0\u8f7d");
-		btnLoad.setMargin(new Insets(2, 4, 2, 4));
-		btnLoad.addActionListener(e -> read_novel(e));
-		contentPane.add(btnLoad);
-		btnLoad.setBounds(5, 35, btnLoad.getPreferredSize().width, 23);
+        //---- btnLoad ----
+        btnLoad.setText("\u52a0\u8f7d");
+        btnLoad.setMargin(new Insets(2, 4, 2, 4));
+        btnLoad.addActionListener(e -> read_novel(e));
+        contentPane.add(btnLoad);
+        btnLoad.setBounds(5, 35, btnLoad.getPreferredSize().width, 23);
 
-		//---- btnFindNovel ----
-		btnFindNovel.setText("\u2026");
-		btnFindNovel.setMargin(new Insets(2, 2, 2, 2));
-		btnFindNovel.addActionListener(e -> select_novel(e));
-		contentPane.add(btnFindNovel);
-		btnFindNovel.setBounds(208, 35, btnFindNovel.getPreferredSize().width, 23);
-		contentPane.add(fg2);
-		fg2.setBounds(5, 60, 420, 2);
+        //---- btnFindNovel ----
+        btnFindNovel.setText("\u2026");
+        btnFindNovel.setMargin(new Insets(2, 2, 2, 2));
+        btnFindNovel.addActionListener(e -> select_novel(e));
+        contentPane.add(btnFindNovel);
+        btnFindNovel.setBounds(208, 35, btnFindNovel.getPreferredSize().width, 23);
+        contentPane.add(fg2);
+        fg2.setBounds(5, 60, 420, 2);
 
-		//---- lb2 ----
-		lb2.setText("\u6821\u5bf9\u6574\u7406");
-		lb2.setFont(lb2.getFont().deriveFont(lb2.getFont().getSize() - 2f));
-		contentPane.add(lb2);
-		lb2.setBounds(385, 62, 40, 11);
+        //---- lb2 ----
+        lb2.setText("\u6821\u5bf9\u6574\u7406");
+        lb2.setFont(lb2.getFont().deriveFont(lb2.getFont().getSize() - 2f));
+        contentPane.add(lb2);
+        lb2.setBounds(385, 62, 40, 11);
 
-		//---- btnMakeChapter ----
-		btnMakeChapter.setText("\u5206\u7ae0");
-		btnMakeChapter.setEnabled(false);
-		btnMakeChapter.setMargin(new Insets(2, 4, 2, 4));
-		btnMakeChapter.addActionListener(e -> test_chapter(e));
-		contentPane.add(btnMakeChapter);
-		btnMakeChapter.setBounds(5, 65, 60, 20);
+        //---- btnMakeChapter ----
+        btnMakeChapter.setText("\u5206\u7ae0");
+        btnMakeChapter.setEnabled(false);
+        btnMakeChapter.setMargin(new Insets(2, 4, 2, 4));
+        btnMakeChapter.addActionListener(e -> test_chapter(e));
+        contentPane.add(btnMakeChapter);
+        btnMakeChapter.setBounds(5, 65, 60, 20);
 
-		//---- uiSmrtChapter ----
-		uiSmrtChapter.setText("\u542f\u53d1\u5f0f\u65ad\u7ae0");
-		contentPane.add(uiSmrtChapter);
-		uiSmrtChapter.setBounds(new Rectangle(new Point(65, 65), uiSmrtChapter.getPreferredSize()));
+        //---- uiSmrtChapter ----
+        uiSmrtChapter.setText("\u542f\u53d1\u5f0f\u65ad\u7ae0");
+        contentPane.add(uiSmrtChapter);
+        uiSmrtChapter.setBounds(new Rectangle(new Point(65, 65), uiSmrtChapter.getPreferredSize()));
 
-		//---- lb3 ----
-		lb3.setText("\u7ae0\u8282\u5e8f\u53f7\u7ec4");
-		contentPane.add(lb3);
-		lb3.setBounds(new Rectangle(new Point(160, 65), lb3.getPreferredSize()));
+        //---- lb3 ----
+        lb3.setText("\u7ae0\u8282\u5e8f\u53f7\u7ec4");
+        contentPane.add(lb3);
+        lb3.setBounds(new Rectangle(new Point(160, 65), lb3.getPreferredSize()));
 
-		//---- uiRegexIdGroup ----
-		uiRegexIdGroup.setModel(new SpinnerNumberModel(1, 0, null, 1));
-		uiRegexIdGroup.addChangeListener(e -> chapIdGroupInpStateChanged(e));
-		contentPane.add(uiRegexIdGroup);
-		uiRegexIdGroup.setBounds(223, 65, 45, uiRegexIdGroup.getPreferredSize().height);
+        //---- uiRegexIdGroup ----
+        uiRegexIdGroup.setModel(new SpinnerNumberModel(1, 0, null, 1));
+        uiRegexIdGroup.addChangeListener(e -> chapIdGroupInpStateChanged(e));
+        contentPane.add(uiRegexIdGroup);
+        uiRegexIdGroup.setBounds(223, 65, 45, uiRegexIdGroup.getPreferredSize().height);
 
-		//---- lb4 ----
-		lb4.setText("\u7ae0\u8282\u540d\u79f0\u7ec4");
-		contentPane.add(lb4);
-		lb4.setBounds(new Rectangle(new Point(272, 65), lb4.getPreferredSize()));
+        //---- lb4 ----
+        lb4.setText("\u7ae0\u8282\u540d\u79f0\u7ec4");
+        contentPane.add(lb4);
+        lb4.setBounds(new Rectangle(new Point(272, 65), lb4.getPreferredSize()));
 
-		//---- uiRegexNameGroup ----
-		uiRegexNameGroup.setModel(new SpinnerNumberModel(2, 0, null, 1));
-		uiRegexNameGroup.addChangeListener(e -> chapNameGroupInpStateChanged(e));
-		contentPane.add(uiRegexNameGroup);
-		uiRegexNameGroup.setBounds(335, 65, 45, uiRegexNameGroup.getPreferredSize().height);
+        //---- uiRegexNameGroup ----
+        uiRegexNameGroup.setModel(new SpinnerNumberModel(2, 0, null, 1));
+        uiRegexNameGroup.addChangeListener(e -> chapNameGroupInpStateChanged(e));
+        contentPane.add(uiRegexNameGroup);
+        uiRegexNameGroup.setBounds(335, 65, 45, uiRegexNameGroup.getPreferredSize().height);
 
-		//---- btnFixEnter ----
-		btnFixEnter.setText("\u4fee\u590d\u786c\u56de\u8f66");
-		contentPane.add(btnFixEnter);
-		btnFixEnter.setBounds(new Rectangle(new Point(5, 90), btnFixEnter.getPreferredSize()));
+        //---- btnFixEnter ----
+        btnFixEnter.setText("\u5171\u957f\u5408\u5e76");
+        contentPane.add(btnFixEnter);
+        btnFixEnter.setBounds(new Rectangle(new Point(5, 90), btnFixEnter.getPreferredSize()));
 
-		//---- btnRemoveHalfLine ----
-		btnRemoveHalfLine.setText("\u53bb\u9664\u4e00\u534a\u7a7a\u884c");
-		contentPane.add(btnRemoveHalfLine);
-		btnRemoveHalfLine.setBounds(new Rectangle(new Point(105, 90), btnRemoveHalfLine.getPreferredSize()));
+        //---- btnRemoveHalfLine ----
+        btnRemoveHalfLine.setText("\u53bb\u9664\u4e00\u534a\u7a7a\u884c");
+        contentPane.add(btnRemoveHalfLine);
+        btnRemoveHalfLine.setBounds(new Rectangle(new Point(105, 90), btnRemoveHalfLine.getPreferredSize()));
 
-		//---- uiPresetRegexs ----
-		uiPresetRegexs.addActionListener(e -> on_preset_regexp_clicked(e));
-		contentPane.add(uiPresetRegexs);
-		uiPresetRegexs.setBounds(250, 91, 112, 21);
+        //---- uiPresetRegexs ----
+        uiPresetRegexs.addActionListener(e -> on_preset_regexp_clicked(e));
+        contentPane.add(uiPresetRegexs);
+        uiPresetRegexs.setBounds(250, 91, 112, 21);
 
-		//---- uiModPresetRegexs ----
-		uiModPresetRegexs.setText("\u6539");
-		uiModPresetRegexs.setMargin(new Insets(2, 2, 2, 2));
-		uiModPresetRegexs.addActionListener(e -> open_advanced_menu(e));
-		contentPane.add(uiModPresetRegexs);
-		uiModPresetRegexs.setBounds(new Rectangle(new Point(360, 90), uiModPresetRegexs.getPreferredSize()));
+        //---- uiModPresetRegexs ----
+        uiModPresetRegexs.setText("\u6539");
+        uiModPresetRegexs.setMargin(new Insets(2, 2, 2, 2));
+        uiModPresetRegexs.addActionListener(e -> open_advanced_menu(e));
+        contentPane.add(uiModPresetRegexs);
+        uiModPresetRegexs.setBounds(new Rectangle(new Point(360, 90), uiModPresetRegexs.getPreferredSize()));
 
-		//---- btnRegexMatch ----
-		btnRegexMatch.setText("\u6b63\u5219\u5339\u914d");
-		btnRegexMatch.setMargin(new Insets(0, 0, 0, 0));
-		contentPane.add(btnRegexMatch);
-		btnRegexMatch.setBounds(5, 114, 60, 23);
-		contentPane.add(uiRegex);
-		uiRegex.setBounds(65, 115, 360, uiRegex.getPreferredSize().height);
+        //---- btnRegexMatch ----
+        btnRegexMatch.setText("\u6b63\u5219\u5339\u914d");
+        btnRegexMatch.setMargin(new Insets(0, 0, 0, 0));
+        contentPane.add(btnRegexMatch);
+        btnRegexMatch.setBounds(5, 114, 60, 23);
+        contentPane.add(uiRegex);
+        uiRegex.setBounds(65, 115, 360, uiRegex.getPreferredSize().height);
 
-		//---- btnRegexRpl ----
-		btnRegexRpl.setText("\u6b63\u5219\u66ff\u6362");
-		btnRegexRpl.setMargin(new Insets(0, 0, 0, 0));
-		contentPane.add(btnRegexRpl);
-		btnRegexRpl.setBounds(5, 135, 60, 23);
-		contentPane.add(uiRegexRplTo);
-		uiRegexRplTo.setBounds(65, 135, 360, uiRegexRplTo.getPreferredSize().height);
+        //---- btnRegexRpl ----
+        btnRegexRpl.setText("\u6b63\u5219\u66ff\u6362");
+        btnRegexRpl.setMargin(new Insets(0, 0, 0, 0));
+        contentPane.add(btnRegexRpl);
+        btnRegexRpl.setBounds(5, 135, 60, 23);
+        contentPane.add(uiRegexRplTo);
+        uiRegexRplTo.setBounds(65, 135, 360, uiRegexRplTo.getPreferredSize().height);
 
-		//---- lb5 ----
-		lb5.setText("\u7ae0\u8282\u5217\u8868");
-		contentPane.add(lb5);
-		lb5.setBounds(new Rectangle(new Point(5, 160), lb5.getPreferredSize()));
+        //---- uiRepeatRpl ----
+        uiRepeatRpl.setText("\u5faa\u73af\u5339\u914d");
+        contentPane.add(uiRepeatRpl);
+        uiRepeatRpl.setBounds(new Rectangle(new Point(80, 155), uiRepeatRpl.getPreferredSize()));
 
-		//======== sp1 ========
-		{
+        //---- lb5 ----
+        lb5.setText("\u7ae0\u8282\u5217\u8868");
+        contentPane.add(lb5);
+        lb5.setBounds(new Rectangle(new Point(5, 160), lb5.getPreferredSize()));
 
-			//---- uiChapters ----
-			uiChapters.setModel(new DefaultTreeModel(
-				new DefaultMutableTreeNode("\u672a\u52a0\u8f7d") {
-					{
-					}
-				}));
-			uiChapters.setRootVisible(false);
-			sp1.setViewportView(uiChapters);
-		}
-		contentPane.add(sp1);
-		sp1.setBounds(5, 175, 420, 270);
-		contentPane.add(fg3);
-		fg3.setBounds(5, 450, 420, fg3.getPreferredSize().height);
+        //======== sp1 ========
+        {
 
-		//---- lb6 ----
-		lb6.setText("\u7ae0\u8282\u7ba1\u7406");
-		lb6.setFont(lb6.getFont().deriveFont(lb6.getFont().getSize() - 2f));
-		contentPane.add(lb6);
-		lb6.setBounds(new Rectangle(new Point(385, 452), lb6.getPreferredSize()));
+            //---- uiChapters ----
+            uiChapters.setModel(new DefaultTreeModel(
+                new DefaultMutableTreeNode("\u672a\u52a0\u8f7d") {
+                    {
+                    }
+                }));
+            uiChapters.setRootVisible(false);
+            sp1.setViewportView(uiChapters);
+        }
+        contentPane.add(sp1);
+        sp1.setBounds(5, 175, 420, 270);
+        contentPane.add(fg3);
+        fg3.setBounds(5, 450, 420, fg3.getPreferredSize().height);
 
-		//---- btnAddChapter ----
-		btnAddChapter.setText("\u65b0\u589e");
-		btnAddChapter.setEnabled(false);
-		btnAddChapter.setMargin(new Insets(2, 4, 2, 4));
-		contentPane.add(btnAddChapter);
-		btnAddChapter.setBounds(new Rectangle(new Point(10, 455), btnAddChapter.getPreferredSize()));
+        //---- lb6 ----
+        lb6.setText("\u7ae0\u8282\u7ba1\u7406");
+        lb6.setFont(lb6.getFont().deriveFont(lb6.getFont().getSize() - 2f));
+        contentPane.add(lb6);
+        lb6.setBounds(new Rectangle(new Point(385, 452), lb6.getPreferredSize()));
 
-		//---- btnDelChapter ----
-		btnDelChapter.setText("\u5220\u9664");
-		btnDelChapter.setEnabled(false);
-		btnDelChapter.setToolTipText("\u5220\u9664\u8be5\u7ae0\u8282\u53ca\u5176\u5185\u5bb9");
-		btnDelChapter.setMargin(new Insets(2, 4, 2, 4));
-		btnDelChapter.addActionListener(e -> delChapterText(e));
-		contentPane.add(btnDelChapter);
-		btnDelChapter.setBounds(new Rectangle(new Point(50, 455), btnDelChapter.getPreferredSize()));
+        //---- btnAddChapter ----
+        btnAddChapter.setText("\u65b0\u589e");
+        btnAddChapter.setEnabled(false);
+        btnAddChapter.setMargin(new Insets(2, 4, 2, 4));
+        contentPane.add(btnAddChapter);
+        btnAddChapter.setBounds(new Rectangle(new Point(10, 455), btnAddChapter.getPreferredSize()));
 
-		//---- btnWrongChapter ----
-		btnWrongChapter.setText("\u67e5\u627e\u9519\u8bef\u5339\u914d");
-		btnWrongChapter.setEnabled(false);
-		btnWrongChapter.setMargin(new Insets(2, 4, 2, 4));
-		btnWrongChapter.addActionListener(e -> nextDisorderChapter(e));
-		contentPane.add(btnWrongChapter);
-		btnWrongChapter.setBounds(new Rectangle(new Point(90, 455), btnWrongChapter.getPreferredSize()));
+        //---- btnDelChapter ----
+        btnDelChapter.setText("\u5220\u9664");
+        btnDelChapter.setEnabled(false);
+        btnDelChapter.setToolTipText("\u5220\u9664\u8be5\u7ae0\u8282\u53ca\u5176\u5185\u5bb9");
+        btnDelChapter.setMargin(new Insets(2, 4, 2, 4));
+        btnDelChapter.addActionListener(e -> delChapterText(e));
+        contentPane.add(btnDelChapter);
+        btnDelChapter.setBounds(new Rectangle(new Point(50, 455), btnDelChapter.getPreferredSize()));
 
-		//---- btnPutChapter ----
-		btnPutChapter.setText("\u4ece\u53f3\u4fa7\u66ff\u6362");
-		btnPutChapter.setEnabled(false);
-		btnPutChapter.setToolTipText("\u7528\u53f3\u4fa7\u8f93\u5165\u6846\u7684\u5185\u5bb9\u66ff\u6362\u9009\u4e2d\u7ae0\u8282\u7684\u5185\u5bb9");
-		btnPutChapter.setMargin(new Insets(2, 4, 2, 4));
-		btnPutChapter.addActionListener(e -> replaceChapter(e));
-		contentPane.add(btnPutChapter);
-		btnPutChapter.setBounds(new Rectangle(new Point(180, 455), btnPutChapter.getPreferredSize()));
+        //---- btnWrongChapter ----
+        btnWrongChapter.setText("\u67e5\u627e\u9519\u8bef\u5339\u914d");
+        btnWrongChapter.setEnabled(false);
+        btnWrongChapter.setMargin(new Insets(2, 4, 2, 4));
+        btnWrongChapter.addActionListener(e -> nextDisorderChapter(e));
+        contentPane.add(btnWrongChapter);
+        btnWrongChapter.setBounds(new Rectangle(new Point(90, 455), btnWrongChapter.getPreferredSize()));
 
-		//---- btnMergeChapter ----
-		btnMergeChapter.setText("\u4e0e\u4e0a\u7ae0\u5408\u5e76");
-		btnMergeChapter.setEnabled(false);
-		btnMergeChapter.setMargin(new Insets(2, 4, 2, 4));
-		btnMergeChapter.addActionListener(e -> delChapterName(e));
-		contentPane.add(btnMergeChapter);
-		btnMergeChapter.setBounds(new Rectangle(new Point(255, 455), btnMergeChapter.getPreferredSize()));
+        //---- btnPutChapter ----
+        btnPutChapter.setText("\u4ece\u53f3\u4fa7\u66ff\u6362");
+        btnPutChapter.setEnabled(false);
+        btnPutChapter.setToolTipText("\u7528\u53f3\u4fa7\u8f93\u5165\u6846\u7684\u5185\u5bb9\u66ff\u6362\u9009\u4e2d\u7ae0\u8282\u7684\u5185\u5bb9");
+        btnPutChapter.setMargin(new Insets(2, 4, 2, 4));
+        btnPutChapter.addActionListener(e -> replaceChapter(e));
+        contentPane.add(btnPutChapter);
+        btnPutChapter.setBounds(new Rectangle(new Point(255, 455), btnPutChapter.getPreferredSize()));
 
-		//---- btnDeDupChapter ----
-		btnDeDupChapter.setText("\u67e5\u91cd");
-		btnDeDupChapter.setEnabled(false);
-		btnDeDupChapter.setToolTipText("\u67e5\u627e\u7591\u4f3c\u91cd\u590d\u7684\u7ae0\u8282");
-		btnDeDupChapter.setMargin(new Insets(2, 4, 2, 4));
-		btnDeDupChapter.addActionListener(e -> checkChapterDup(e));
-		contentPane.add(btnDeDupChapter);
-		btnDeDupChapter.setBounds(new Rectangle(new Point(330, 455), btnDeDupChapter.getPreferredSize()));
+        //---- btnMergeChapter ----
+        btnMergeChapter.setText("\u4e0e\u4e0a\u7ae0\u5408\u5e76");
+        btnMergeChapter.setEnabled(false);
+        btnMergeChapter.setMargin(new Insets(2, 4, 2, 4));
+        btnMergeChapter.addActionListener(e -> delChapterName(e));
+        contentPane.add(btnMergeChapter);
+        btnMergeChapter.setBounds(new Rectangle(new Point(178, 455), btnMergeChapter.getPreferredSize()));
 
-		//---- btnInsertMode ----
-		btnInsertMode.setText("\u63d2\u5165\u5b50\u6811");
-		btnInsertMode.setToolTipText("\u6309\u4f4f\u8282\u70b9(A)\u5e76\u62d6\u52a8\u5230\u8282\u70b9(B)\u4e0a\u65f6\n\u5c06A\u8bbe\u7f6e\u4e3aB\u7684\u5b69\u5b50");
-		btnInsertMode.addActionListener(e -> btnInsertMode(e));
-		contentPane.add(btnInsertMode);
-		btnInsertMode.setBounds(new Rectangle(new Point(10, 485), btnInsertMode.getPreferredSize()));
+        //---- btnDeDupChapter ----
+        btnDeDupChapter.setText("\u67e5\u91cd");
+        btnDeDupChapter.setEnabled(false);
+        btnDeDupChapter.setToolTipText("\u67e5\u627e\u7591\u4f3c\u91cd\u590d\u7684\u7ae0\u8282");
+        btnDeDupChapter.setMargin(new Insets(2, 4, 2, 4));
+        btnDeDupChapter.addActionListener(e -> checkChapterDup(e));
+        contentPane.add(btnDeDupChapter);
+        btnDeDupChapter.setBounds(new Rectangle(new Point(330, 455), btnDeDupChapter.getPreferredSize()));
 
-		//---- btnDelByLen ----
-		btnDelByLen.setText("\u6309\u957f\u5ea6\u5220\u9664");
-		btnDelByLen.setEnabled(false);
-		contentPane.add(btnDelByLen);
-		btnDelByLen.setBounds(new Rectangle(new Point(85, 485), btnDelByLen.getPreferredSize()));
+        //---- btnInsertMode ----
+        btnInsertMode.setText("\u63d2\u5165\u5b50\u6811");
+        btnInsertMode.setToolTipText("\u6309\u4f4f\u8282\u70b9(A)\u5e76\u62d6\u52a8\u5230\u8282\u70b9(B)\u4e0a\u65f6\n\u5c06A\u8bbe\u7f6e\u4e3aB\u7684\u5b69\u5b50");
+        btnInsertMode.addActionListener(e -> btnInsertMode(e));
+        contentPane.add(btnInsertMode);
+        btnInsertMode.setBounds(new Rectangle(new Point(10, 485), btnInsertMode.getPreferredSize()));
 
-		//---- cpwOrigName ----
-		cpwOrigName.setText("\u53cc\u51fb\u9009\u62e9\u7ae0\u8282");
-		contentPane.add(cpwOrigName);
-		cpwOrigName.setBounds(10, 520, 415, cpwOrigName.getPreferredSize().height);
+        //---- btnDelByLen ----
+        btnDelByLen.setText("\u6309\u957f\u5ea6\u5220\u9664");
+        btnDelByLen.setEnabled(false);
+        contentPane.add(btnDelByLen);
+        btnDelByLen.setBounds(new Rectangle(new Point(85, 485), btnDelByLen.getPreferredSize()));
 
-		//---- cpwOutName ----
-		cpwOutName.setEnabled(false);
-		contentPane.add(cpwOutName);
-		cpwOutName.setBounds(10, 535, 415, cpwOutName.getPreferredSize().height);
+        //---- cpwOrigName ----
+        cpwOrigName.setText("\u53cc\u51fb\u9009\u62e9\u7ae0\u8282");
+        contentPane.add(cpwOrigName);
+        cpwOrigName.setBounds(10, 520, 415, cpwOrigName.getPreferredSize().height);
 
-		//---- lb10 ----
-		lb10.setText("\u7ae0\u8282\u5e8f\u53f7");
-		contentPane.add(lb10);
-		lb10.setBounds(new Rectangle(new Point(305, 563), lb10.getPreferredSize()));
-		contentPane.add(cpwChapNo);
-		cpwChapNo.setBounds(355, 560, 70, cpwChapNo.getPreferredSize().height);
+        //---- cpwOutName ----
+        cpwOutName.setEnabled(false);
+        contentPane.add(cpwOutName);
+        cpwOutName.setBounds(10, 535, 415, cpwOutName.getPreferredSize().height);
 
-		//---- lb11 ----
-		lb11.setText("\u7ae0\u8282\u540d\u79f0");
-		contentPane.add(lb11);
-		lb11.setBounds(new Rectangle(new Point(60, 562), lb11.getPreferredSize()));
-		contentPane.add(cpwChapName);
-		cpwChapName.setBounds(110, 560, 190, cpwChapName.getPreferredSize().height);
-		contentPane.add(fg4);
-		fg4.setBounds(5, 585, 420, fg4.getPreferredSize().height);
+        //---- lb10 ----
+        lb10.setText("\u7ae0\u8282\u5e8f\u53f7");
+        contentPane.add(lb10);
+        lb10.setBounds(new Rectangle(new Point(305, 563), lb10.getPreferredSize()));
+        contentPane.add(cpwChapNo);
+        cpwChapNo.setBounds(355, 560, 70, cpwChapNo.getPreferredSize().height);
 
-		//---- lb12 ----
-		lb12.setText("\u8f93\u51fa\u683c\u5f0f");
-		lb12.setFont(lb12.getFont().deriveFont(lb12.getFont().getSize() - 2f));
-		contentPane.add(lb12);
-		lb12.setBounds(new Rectangle(new Point(385, 587), lb12.getPreferredSize()));
+        //---- lb11 ----
+        lb11.setText("\u7ae0\u8282\u540d\u79f0");
+        contentPane.add(lb11);
+        lb11.setBounds(new Rectangle(new Point(60, 562), lb11.getPreferredSize()));
+        contentPane.add(cpwChapName);
+        cpwChapName.setBounds(110, 560, 190, cpwChapName.getPreferredSize().height);
+        contentPane.add(fg4);
+        fg4.setBounds(5, 585, 420, fg4.getPreferredSize().height);
 
-		//---- btnAlign ----
-		btnAlign.setText("\u6392\u7248");
-		btnAlign.setEnabled(false);
-		btnAlign.setMargin(new Insets(2, 4, 2, 4));
-		btnAlign.addActionListener(e -> align_novel(e));
-		contentPane.add(btnAlign);
-		btnAlign.setBounds(15, 590, btnAlign.getPreferredSize().width, 20);
+        //---- lb12 ----
+        lb12.setText("\u8f93\u51fa\u683c\u5f0f");
+        lb12.setFont(lb12.getFont().deriveFont(lb12.getFont().getSize() - 2f));
+        contentPane.add(lb12);
+        lb12.setBounds(new Rectangle(new Point(385, 587), lb12.getPreferredSize()));
 
-		//---- btnWrite ----
-		btnWrite.setText("\u4fdd\u5b58");
-		btnWrite.setEnabled(false);
-		btnWrite.setMargin(new Insets(2, 4, 2, 4));
-		btnWrite.addActionListener(e -> write_novel(e));
-		contentPane.add(btnWrite);
-		btnWrite.setBounds(15, 615, btnWrite.getPreferredSize().width, 20);
+        //---- btnAlign ----
+        btnAlign.setText("\u6392\u7248");
+        btnAlign.setEnabled(false);
+        btnAlign.setMargin(new Insets(2, 4, 2, 4));
+        btnAlign.addActionListener(e -> align_novel(e));
+        contentPane.add(btnAlign);
+        btnAlign.setBounds(15, 590, btnAlign.getPreferredSize().width, 20);
 
-		//---- btnToEpub ----
-		btnToEpub.setText("\u8f6cEPUB");
-		btnToEpub.setEnabled(false);
-		btnToEpub.setMargin(new Insets(2, 4, 2, 4));
-		contentPane.add(btnToEpub);
-		btnToEpub.setBounds(new Rectangle(new Point(10, 640), btnToEpub.getPreferredSize()));
+        //---- btnWrite ----
+        btnWrite.setText("\u4fdd\u5b58");
+        btnWrite.setEnabled(false);
+        btnWrite.setMargin(new Insets(2, 4, 2, 4));
+        btnWrite.addActionListener(e -> write_novel(e));
+        contentPane.add(btnWrite);
+        btnWrite.setBounds(15, 615, btnWrite.getPreferredSize().width, 20);
 
-		//---- uiSkipNoSpace ----
-		uiSkipNoSpace.setText("\u4e0d\u6574\u7406\u9876\u683c\u7684\u884c");
-		uiSkipNoSpace.setSelected(true);
-		contentPane.add(uiSkipNoSpace);
-		uiSkipNoSpace.setBounds(new Rectangle(new Point(75, 590), uiSkipNoSpace.getPreferredSize()));
+        //---- btnToEpub ----
+        btnToEpub.setText("\u8f6cEPUB");
+        btnToEpub.setEnabled(false);
+        btnToEpub.setMargin(new Insets(2, 4, 2, 4));
+        contentPane.add(btnToEpub);
+        btnToEpub.setBounds(new Rectangle(new Point(10, 640), btnToEpub.getPreferredSize()));
 
-		//---- uiRegenName ----
-		uiRegenName.setText("\u91cd\u65b0\u751f\u6210\u7ae0\u8282\u6807\u9898");
-		uiRegenName.addChangeListener(e -> renameChapterStateChanged(e));
-		contentPane.add(uiRegenName);
-		uiRegenName.setBounds(new Rectangle(new Point(75, 610), uiRegenName.getPreferredSize()));
+        //---- uiSkipNoSpace ----
+        uiSkipNoSpace.setText("\u4e0d\u6574\u7406\u9876\u683c\u7684\u884c");
+        uiSkipNoSpace.setSelected(true);
+        contentPane.add(uiSkipNoSpace);
+        uiSkipNoSpace.setBounds(new Rectangle(new Point(75, 590), uiSkipNoSpace.getPreferredSize()));
 
-		//---- uiRegenNameType ----
-		uiRegenNameType.setModel(new DefaultComboBoxModel<>(new String[] {
-			"\u4e0d\u5904\u7406\u6570\u5b57",
-			"\u963f\u62c9\u4f2f\u6570\u5b57",
-			"\u4e2d\u56fd\u6570\u5b57"
-		}));
-		uiRegenNameType.setEnabled(false);
-		contentPane.add(uiRegenNameType);
-		uiRegenNameType.setBounds(new Rectangle(new Point(195, 612), uiRegenNameType.getPreferredSize()));
+        //---- uiRegenName ----
+        uiRegenName.setText("\u91cd\u65b0\u751f\u6210\u7ae0\u8282\u6807\u9898");
+        uiRegenName.addChangeListener(e -> renameChapterStateChanged(e));
+        contentPane.add(uiRegenName);
+        uiRegenName.setBounds(new Rectangle(new Point(75, 610), uiRegenName.getPreferredSize()));
 
-		//---- uiRegenId ----
-		uiRegenId.setText("\u91cd\u6570\u5e8f\u53f7");
-		uiRegenId.setEnabled(false);
-		contentPane.add(uiRegenId);
-		uiRegenId.setBounds(new Rectangle(new Point(280, 610), uiRegenId.getPreferredSize()));
-		contentPane.add(draggedItem);
-		draggedItem.setBounds(new Rectangle(new Point(0, 0), draggedItem.getPreferredSize()));
+        //---- uiRegenNameType ----
+        uiRegenNameType.setModel(new DefaultComboBoxModel<>(new String[] {
+            "\u4e0d\u5904\u7406\u6570\u5b57",
+            "\u963f\u62c9\u4f2f\u6570\u5b57",
+            "\u4e2d\u56fd\u6570\u5b57"
+        }));
+        uiRegenNameType.setEnabled(false);
+        contentPane.add(uiRegenNameType);
+        uiRegenNameType.setBounds(new Rectangle(new Point(195, 612), uiRegenNameType.getPreferredSize()));
 
-		//======== scrollPane1 ========
-		{
-			scrollPane1.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-			scrollPane1.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+        //---- uiRegenId ----
+        uiRegenId.setText("\u91cd\u6570\u5e8f\u53f7");
+        uiRegenId.setEnabled(false);
+        contentPane.add(uiRegenId);
+        uiRegenId.setBounds(new Rectangle(new Point(280, 610), uiRegenId.getPreferredSize()));
+        contentPane.add(draggedItem);
+        draggedItem.setBounds(new Rectangle(new Point(0, 0), draggedItem.getPreferredSize()));
 
-			//---- errout ----
-			errout.setText("\u5c0f\u63d0\u793a\n\u5728\u7ae0\u8282\u754c\u9762\u8bef\u62d6\u52a8\u53ef\u4ee5\u6309\u53f3\u952e\u53d6\u6d88\n\u9884\u5b9a\u4e49\u6b63\u5219\u53ef\u4ee5\u5728\u9ad8\u7ea7\u83dc\u5355\u4e2d\u4fee\u6539\n\u53cc\u51fb\u7ae0\u8282\u7f16\u8f91\u540d\u79f0\u548c\u5e8f\u53f7");
-			scrollPane1.setViewportView(errout);
-		}
-		contentPane.add(scrollPane1);
-		scrollPane1.setBounds(435, 5, 505, 630);
+        //======== scrollPane1 ========
+        {
+            scrollPane1.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+            scrollPane1.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 
-		contentPane.setPreferredSize(new Dimension(945, 700));
-		pack();
-		setLocationRelativeTo(getOwner());
+            //---- errout ----
+            errout.setText("\u5c0f\u63d0\u793a\n\u5728\u7ae0\u8282\u754c\u9762\u8bef\u62d6\u52a8\u53ef\u4ee5\u6309\u53f3\u952e\u53d6\u6d88\n\u9884\u5b9a\u4e49\u6b63\u5219\u53ef\u4ee5\u5728\u9ad8\u7ea7\u83dc\u5355\u4e2d\u4fee\u6539\n\u53cc\u51fb\u7ae0\u8282\u7f16\u8f91\u540d\u79f0\u548c\u5e8f\u53f7");
+            scrollPane1.setViewportView(errout);
+        }
+        contentPane.add(scrollPane1);
+        scrollPane1.setBounds(435, 5, 505, 630);
 
-		//======== advancedMenu ========
-		{
-			advancedMenu.setTitle("\u9884\u5b9a\u4e49\u6b63\u5219");
-			advancedMenu.addWindowListener(new WindowAdapter() {
-				@Override
-				public void windowClosing(WindowEvent e) {
-					advancedMenuWindowClosing(e);
-				}
-			});
-			var advancedMenuContentPane = advancedMenu.getContentPane();
-			advancedMenuContentPane.setLayout(null);
+        contentPane.setPreferredSize(new Dimension(945, 700));
+        pack();
+        setLocationRelativeTo(getOwner());
 
-			//======== scrollPane3 ========
-			{
+        //======== advancedMenu ========
+        {
+            advancedMenu.setTitle("\u9884\u5b9a\u4e49\u6b63\u5219");
+            advancedMenu.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent e) {
+                    advancedMenuWindowClosing(e);
+                }
+            });
+            var advancedMenuContentPane = advancedMenu.getContentPane();
+            advancedMenuContentPane.setLayout(null);
 
-				//---- presetRegexpInp ----
-				presetRegexpInp.setText("\u5e38\u7528|1|3\n(?:\u6b63\u6587\\s*)?\u7b2c(?:\\s+)?([\u2015\uff0d\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19 ]{1,12})(?:\\s+)?([\u7ae0\u5377])[ \u3000\\t]*(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1");
-				scrollPane3.setViewportView(presetRegexpInp);
-			}
-			advancedMenuContentPane.add(scrollPane3);
-			scrollPane3.setBounds(0, 0, 395, 270);
+            //======== scrollPane3 ========
+            {
 
-			{
-				// compute preferred size
-				Dimension preferredSize = new Dimension();
-				for(int i = 0; i < advancedMenuContentPane.getComponentCount(); i++) {
-					Rectangle bounds = advancedMenuContentPane.getComponent(i).getBounds();
-					preferredSize.width = Math.max(bounds.x + bounds.width, preferredSize.width);
-					preferredSize.height = Math.max(bounds.y + bounds.height, preferredSize.height);
-				}
-				Insets insets = advancedMenuContentPane.getInsets();
-				preferredSize.width += insets.right;
-				preferredSize.height += insets.bottom;
-				advancedMenuContentPane.setMinimumSize(preferredSize);
-				advancedMenuContentPane.setPreferredSize(preferredSize);
-			}
-			advancedMenu.pack();
-			advancedMenu.setLocationRelativeTo(advancedMenu.getOwner());
-		}
+                //---- presetRegexpInp ----
+                presetRegexpInp.setText("\u5e38\u7528|1|3\n(?:\u6b63\u6587\\s*)?\u7b2c(?:\\s+)?([\u2015\uff0d\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19 ]{1,12})(?:\\s+)?([\u7ae0\u5377])[ \u3000\\t]*(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\ue4c6\ue4c6\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1\n\u786c\u56de\u8f66\u7b80\u6613\u4fee\u590d|0|0\n^([ \u3000\ue4c6\ue4c6\\t]+.+)\\r?\\n([^ \u3000\\t\\r\\n].+)$\n$1$2\n\u664b\u6c5f\u5e38\u7528|1|2\n\u7b2c$1\u7ae0 $2\n^[ \u3000\ue4c6\ue4c6\\t]*([0-9\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u96f6]{1,5})[\uff0e.\u3001\u203b](.+)");
+                scrollPane3.setViewportView(presetRegexpInp);
+            }
+            advancedMenuContentPane.add(scrollPane3);
+            scrollPane3.setBounds(0, 0, 395, 270);
+
+            {
+                // compute preferred size
+                Dimension preferredSize = new Dimension();
+                for(int i = 0; i < advancedMenuContentPane.getComponentCount(); i++) {
+                    Rectangle bounds = advancedMenuContentPane.getComponent(i).getBounds();
+                    preferredSize.width = Math.max(bounds.x + bounds.width, preferredSize.width);
+                    preferredSize.height = Math.max(bounds.y + bounds.height, preferredSize.height);
+                }
+                Insets insets = advancedMenuContentPane.getInsets();
+                preferredSize.width += insets.right;
+                preferredSize.height += insets.bottom;
+                advancedMenuContentPane.setMinimumSize(preferredSize);
+                advancedMenuContentPane.setPreferredSize(preferredSize);
+            }
+            advancedMenu.pack();
+            advancedMenu.setLocationRelativeTo(advancedMenu.getOwner());
+        }
 		// JFormDesigner - End of component initialization  //GEN-END:initComponents  @formatter:on
 	}
 
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
-	private JProgressBar progress;
-	private JLabel progressStr;
-	private JTextField uiNovelPath;
-	private JButton btnLoad;
-	private JButton btnFindNovel;
-	private JButton btnMakeChapter;
-	private JCheckBox uiSmrtChapter;
-	private JSpinner uiRegexIdGroup;
-	private JSpinner uiRegexNameGroup;
-	private JButton btnFixEnter;
-	private JButton btnRemoveHalfLine;
-	private JComboBox<PresetRegexp> uiPresetRegexs;
-	private JButton btnRegexMatch;
-	private JTextField uiRegex;
-	private JButton btnRegexRpl;
-	private JTextField uiRegexRplTo;
-	private JLabel lb5;
-	private JScrollPane sp1;
-	private JTree uiChapters;
-	private JButton btnAddChapter;
-	private JButton btnDelChapter;
-	private JButton btnWrongChapter;
-	private JButton btnPutChapter;
-	private JButton btnMergeChapter;
-	private JButton btnDeDupChapter;
-	private JCheckBox btnInsertMode;
-	private JButton btnDelByLen;
-	private JLabel cpwOrigName;
-	private JTextField cpwOutName;
-	private JSpinner cpwChapNo;
-	private JTextField cpwChapName;
-	private JButton btnAlign;
-	private JButton btnWrite;
-	private JButton btnToEpub;
-	private JCheckBox uiSkipNoSpace;
-	private JCheckBox uiRegenName;
-	private JComboBox<String> uiRegenNameType;
-	private JCheckBox uiRegenId;
-	private JLabel draggedItem;
-	private JEditorPane errout;
-	private JDialog advancedMenu;
-	private JScrollPane scrollPane3;
-	private JTextArea presetRegexpInp;
+    private JProgressBar progress;
+    private JLabel progressStr;
+    private JTextField uiNovelPath;
+    private JButton btnLoad;
+    private JButton btnFindNovel;
+    private JButton btnMakeChapter;
+    private JCheckBox uiSmrtChapter;
+    private JSpinner uiRegexIdGroup;
+    private JSpinner uiRegexNameGroup;
+    private JButton btnFixEnter;
+    private JButton btnRemoveHalfLine;
+    private JComboBox<PresetRegexp> uiPresetRegexs;
+    private JButton btnRegexMatch;
+    private JTextField uiRegex;
+    private JButton btnRegexRpl;
+    private JTextField uiRegexRplTo;
+    private JCheckBox uiRepeatRpl;
+    private JLabel lb5;
+    private JScrollPane sp1;
+    private JTree uiChapters;
+    private JButton btnAddChapter;
+    private JButton btnDelChapter;
+    private JButton btnWrongChapter;
+    private JButton btnPutChapter;
+    private JButton btnMergeChapter;
+    private JButton btnDeDupChapter;
+    private JCheckBox btnInsertMode;
+    private JButton btnDelByLen;
+    private JLabel cpwOrigName;
+    private JTextField cpwOutName;
+    private JSpinner cpwChapNo;
+    private JTextField cpwChapName;
+    private JButton btnAlign;
+    private JButton btnWrite;
+    private JButton btnToEpub;
+    private JCheckBox uiSkipNoSpace;
+    private JCheckBox uiRegenName;
+    private JComboBox<String> uiRegenNameType;
+    private JCheckBox uiRegenId;
+    private JLabel draggedItem;
+    private JEditorPane errout;
+    private JDialog advancedMenu;
+    private JScrollPane scrollPane3;
+    private JTextArea presetRegexpInp;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

@@ -1,7 +1,7 @@
 package roj.util;
 
 import roj.collect.LFUCache;
-import roj.math.MutableInt;
+import roj.config.data.CInt;
 
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
@@ -32,26 +32,26 @@ public class ArrayCache {
 	private static final int SIZES_MAX = 64;
 	private static final int ARRAYS_MAX = 9;
 
-	private final LFUCache<MutableInt, Object[]>
+	private final LFUCache<CInt, Object[]>
 		byteCache = new LFUCache<>(SIZES_MAX, 1),
 		charCache = new LFUCache<>(SIZES_MAX, 1),
 		intCache = new LFUCache<>(SIZES_MAX, 1);
 
 	private final ReentrantLock lock = new ReentrantLock();
-	private final MutableInt val = new MutableInt();
+	private final CInt val = new CInt();
 
 	public ArrayCache() {}
 
-	private <T> T getArray(Map<MutableInt, Object[]> cache, int size) {
+	private <T> T getArray(Map<CInt, Object[]> cache, int size) {
 		if (size < CHIP_SIZE) return null;
 
 		lock.lock();
 		try {
-			val.setValue(size/CHIP_SIZE);
+			val.value = size/CHIP_SIZE;
 			Object[] stack = cache.get(val);
 			if (stack == null) return null;
 
-			MutableInt used_ref = (MutableInt) stack[0];
+			CInt used_ref = (CInt) stack[0];
 			int bits = 1;
 			for (int i = 1; i < stack.length; i++, bits <<= 1) {
 				Reference<?> r = (Reference<?>) stack[i];
@@ -74,19 +74,19 @@ public class ArrayCache {
 			lock.unlock();
 		}
 	}
-	private void putArray(Map<MutableInt, Object[]> cache, Object array, int size) {
+	private void putArray(Map<CInt, Object[]> cache, Object array, int size) {
 		if (size < CHIP_SIZE) return;
 
 		lock.lock();
 		try {
-			val.setValue(size/CHIP_SIZE);
+			val.value = size/CHIP_SIZE;
 			Object[] stack = cache.get(val);
-			MutableInt used_ref;
+			CInt used_ref;
 			if (stack == null) {
-				cache.put(new MutableInt(val), stack = new Object[ARRAYS_MAX+1]);
-				stack[0] = used_ref = new MutableInt();
+				cache.put(new CInt(val), stack = new Object[ARRAYS_MAX+1]);
+				stack[0] = used_ref = new CInt();
 			} else {
-				used_ref = (MutableInt) stack[0];
+				used_ref = (CInt) stack[0];
 			}
 
 			int free = 0;

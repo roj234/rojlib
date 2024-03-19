@@ -19,7 +19,7 @@ public class LDStream implements LogDestination {
 	public static LDStream of(OutputStream out, Charset cs) { return new LDStream(out, cs); }
 
 	public LDStream(OutputStream os, Charset charset) {
-		lock = new ReentrantLock(true);
+		lock = new ReentrantLock();
 		out = os instanceof Appendable p ? p : new TextWriter(os, charset);
 	}
 

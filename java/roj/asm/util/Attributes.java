@@ -27,7 +27,7 @@ public abstract class Attributes extends Attribute {
 	public static Annotation getAnnotation(List<Annotation> list, String name) {
 		if (list == null) return null;
 		for (int i = 0; i < list.size(); i++) {
-			if (list.get(i).type.equals(name)) return list.get(i);
+			if (list.get(i).type().equals(name)) return list.get(i);
 		}
 		return null;
 	}

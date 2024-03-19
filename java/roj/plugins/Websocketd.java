@@ -6,12 +6,13 @@ import roj.config.data.CEntry;
 import roj.config.data.Type;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
-import roj.net.http.srv.*;
-import roj.net.http.ws.WebsocketHandler;
-import roj.net.http.ws.WebsocketManager;
+import roj.net.http.server.*;
+import roj.net.http.ws.WebSocketHandler;
+import roj.net.http.ws.WebSocketServer;
 import roj.platform.Plugin;
 import roj.text.TextUtil;
 import roj.text.UTF8MB4;
+import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -34,28 +35,27 @@ import java.util.Map;
  * @author solo6975
  * @since 2022/3/20 22:53
  */
-public class Websocketd extends WebsocketManager implements Router {
+public class Websocketd extends WebSocketServer implements Router {
 	List<String> cmd;
 	static volatile boolean disabled;
 	static final List<CmdWorker> workers = new ArrayList<>();
+	static Logger logger;
 
 	public static class PluginHandler extends Plugin {
 		protected void onEnable() {
+			logger = getLogger();
 			for (Map.Entry<String, CEntry> entry : getConfig().getMap("path_to_command").entrySet()) {
 				Websocketd ws = new Websocketd();
 				CEntry value = entry.getValue();
-				ws.cmd = value.getType() == Type.STRING ? Collections.singletonList(value.asString()) : value.asList().asStringList();
+				ws.cmd = value.getType() == Type.STRING ? Collections.singletonList(value.asString()) : value.asList().toStringList();
 				registerRoute(entry.getKey(), ws);
 
-				getLogger().info("Path: {}, Command: {}", entry.getKey(), ws.cmd);
+				getLogger().info("URL子路径: {}, 指令: {}", entry.getKey(), ws.cmd);
 			}
 		}
 
 		@Override
 		protected void onDisable() {
-			for (String path : getConfig().getMap("path_to_command").keySet())
-				unregisterRoute(path);
-
 			SimpleList<CmdWorker> copy;
 			synchronized (workers) {
 				disabled = true;
@@ -66,7 +66,8 @@ public class Websocketd extends WebsocketManager implements Router {
 			for (int i = 0; i < copy.size(); i++) {
 				CmdWorker worker = copy.get(i);
 				try {
-					worker.error(WebsocketHandler.ERR_CLOSED, "plugin disabled");
+					worker.error(WebSocketHandler.ERR_CLOSED, "plugin disabled");
+					worker.ch.close();
 				} catch (Throwable e) {
 					e.printStackTrace();
 				}
@@ -75,7 +76,7 @@ public class Websocketd extends WebsocketManager implements Router {
 	}
 
 	@Override
-	protected WebsocketHandler newWorker(Request req, ResponseHeader handle) {
+	protected WebSocketHandler newWorker(Request req, ResponseHeader handle) {
 		try {
 			if (!disabled) return new CmdWorker(cmd);
 		} catch (IOException e) {
@@ -97,13 +98,13 @@ public class Websocketd extends WebsocketManager implements Router {
 			case "bundle.min.css": return new StringResponse(res("bundle.min.css"), "text/css");
 			case "bundle.min.js": return new StringResponse(res("bundle.min.js"), "text/javascript");
 			case "":
-				if ("websocket".equals(req.getField("Upgrade"))) return switchToWebsocket(req, rh);
+				if ("websocket".equals(req.getField("Upgrade"))) return switchToWebsocket(req);
 				return new StringResponse(res("websocketd_ui.html"), "text/html");
 			default: return rh.code(404).returnNull();
 		}
 	}
 
-	static final class CmdWorker extends WebsocketHandler {
+	static final class CmdWorker extends WebSocketHandler {
 		Process process;
 
 		CharsetEncoder sysEnc;
@@ -119,16 +120,16 @@ public class Websocketd extends WebsocketManager implements Router {
 
 			tmp2 = ByteBuffer.allocate(1024);
 
-			if (TextUtil.DefaultOutputCharset != StandardCharsets.UTF_8) {
-				sysEnc = TextUtil.DefaultOutputCharset.newEncoder();
-				sysDec = TextUtil.DefaultOutputCharset.newDecoder();
+			if (TextUtil.ConsoleCharset != StandardCharsets.UTF_8) {
+				sysEnc = TextUtil.ConsoleCharset.newEncoder();
+				sysDec = TextUtil.ConsoleCharset.newDecoder();
 
 				tmp1 = CharBuffer.allocate(1024);
 				sndRem = ByteBuffer.allocate(8);
 				sndRem.flip();
 			}
 			synchronized (workers) { workers.add(this); }
-			System.out.println("会话 "+Integer.toHexString(hashCode())+" 开始");
+			logger.info("会话 "+Integer.toHexString(hashCode())+" 开始");
 		}
 
 		@Override
@@ -137,7 +138,7 @@ public class Websocketd extends WebsocketManager implements Router {
 
 			process.destroy();
 			synchronized (workers) { workers.remove(this); }
-			System.out.println("会话 "+Integer.toHexString(hashCode())+" 结束: "+errCode+"@"+errMsg);
+			logger.info("会话 "+Integer.toHexString(hashCode())+" 结束: "+errCode+"@"+errMsg);
 		}
 
 		@Override
@@ -172,7 +173,7 @@ public class Websocketd extends WebsocketManager implements Router {
 
 							CoderResult r = sysDec.decode(inByte, tmpChar, false);
 							if (r.isError() || r.isMalformed() || r.isUnmappable()) {
-								error(ERR_UNEXPECTED, "charset decode error for " + TextUtil.DefaultOutputCharset);
+								error(ERR_UNEXPECTED, "charset decode error for " + TextUtil.ConsoleCharset);
 							}
 
 							if (tmpChar.position() == 0) {
@@ -240,7 +241,7 @@ public class Websocketd extends WebsocketManager implements Router {
 
 					CoderResult r = sysEnc.encode(tmp1, sndBuf, false);
 					if (r.isError() || r.isMalformed() || r.isUnmappable()) {
-						error(ERR_UNEXPECTED, "charset encode error for " + TextUtil.DefaultOutputCharset);
+						error(ERR_UNEXPECTED, "charset encode error for " + TextUtil.ConsoleCharset);
 						return;
 					}
 

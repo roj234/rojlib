@@ -5,15 +5,14 @@ import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.io.Finishable;
 import roj.io.IOUtil;
-import roj.util.ArrayCache;
 import roj.util.ByteList;
-import roj.util.DirectByteList;
 import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Roj234
@@ -43,7 +42,7 @@ final class CoderInfo {
 	@Override
 	public String toString() { return String.valueOf(sizeId)+'#'+self; }
 
-	InputStream[] getInputStream(long[] outSizes, InputStream[] fs, Map<CoderInfo, InputStream[]> buffer, byte[] pass, int memory) throws IOException {
+	InputStream[] getInputStream(long[] outSizes, InputStream[] fs, Map<CoderInfo, InputStream[]> buffer, byte[] pass, AtomicInteger memoryLimit) throws IOException {
 		InputStream[] assoc = new InputStream[uses.length];
 		for (int i = 0; i < uses.length; i++) {
 			Object o = uses[i];
@@ -52,7 +51,7 @@ final class CoderInfo {
 			} else if (o.getClass() == CoderInfo.class) {
 				InputStream[] arr = buffer.get(o);
 				if (arr == null) {
-					arr = ((CoderInfo) o).getInputStream(outSizes, fs, buffer, pass, memory);
+					arr = ((CoderInfo) o).getInputStream(outSizes, fs, buffer, pass, memoryLimit);
 					buffer.put((CoderInfo) o, arr);
 				}
 				assoc[i] = arr[0];
@@ -60,7 +59,7 @@ final class CoderInfo {
 				IntMap.Entry<CoderInfo> entry = Helpers.cast(o);
 				InputStream[] arr = buffer.get(entry.getValue());
 				if (arr == null) {
-					arr = entry.getValue().getInputStream(outSizes, fs, buffer, pass, memory);
+					arr = entry.getValue().getInputStream(outSizes, fs, buffer, pass, memoryLimit);
 					buffer.put(entry.getValue(), arr);
 				}
 				assoc[i] = arr[entry.getIntKey()];
@@ -68,8 +67,8 @@ final class CoderInfo {
 		}
 
 		return self instanceof QZComplexCoder
-			? ((QZComplexCoder) self).complexDecode(assoc, outSizes, sizeId)
-			: new InputStream[] {self.decode(assoc[0], pass, outSizes[sizeId], memory)};
+			? ((QZComplexCoder) self).complexDecode(assoc, outSizes, sizeId, memoryLimit)
+			: new InputStream[] {self.decode(assoc[0], pass, outSizes[sizeId], memoryLimit)};
 	}
 
 	OutputStream getOutputStream(WordBlock b, OutputStream out) throws IOException {
@@ -86,7 +85,7 @@ final class CoderInfo {
 		final WordBlock owner;
 		final OutputStream os;
 
-		private final DirectByteList oa;
+		private final ByteList oa;
 
 		private final int offset;
 
@@ -94,7 +93,7 @@ final class CoderInfo {
 			this.owner = owner;
 			this.offset = countOffset-1;
 			this.os = null;
-			this.oa = DirectByteList.allocateDirect(1024);
+			this.oa = ByteList.allocate(1024);
 		}
 
 		Chunk(WordBlock owner, OutputStream out) {
@@ -125,20 +124,7 @@ final class CoderInfo {
 		}
 
 		void drain(OutputStream s) throws IOException {
-			if (os == null) {
-				byte[] b = ArrayCache.getByteArray(1024, false);
-				try {
-					while (true) {
-						int len = Math.min(b.length, oa.readableBytes());
-						if (len == 0) break;
-						oa.readFully(b,0,len);
-						s.write(b,0,len);
-					}
-				} finally {
-					oa._free();
-					ArrayCache.putArray(b);
-				}
-			}
+			if (os == null) oa.writeToStream(s);
 		}
 	}
 	static final class Composer extends OutputStream implements Finishable {

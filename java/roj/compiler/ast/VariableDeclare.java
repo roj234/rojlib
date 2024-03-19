@@ -3,7 +3,7 @@ package roj.compiler.ast;
 import roj.asm.type.IType;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.UnresolvedExprNode;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 
 /**
@@ -21,5 +21,5 @@ public final class VariableDeclare implements UnresolvedExprNode {
 	@Override
 	public IType type() { return type; }
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException { throw new ResolveException("not expression"); }
+	public ExprNode resolve(LocalContext ctx) throws ResolveException { throw new ResolveException("not expression"); }
 }

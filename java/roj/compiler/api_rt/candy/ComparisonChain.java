@@ -13,7 +13,7 @@ import java.util.Comparator;
 public abstract class ComparisonChain {
 	private ComparisonChain() {}
 
-	public static ComparisonChain start() { throw new CandyNotResolvedError(); }
+	public static ComparisonChain start() { throw new Error(); }
 
 	public abstract ComparisonChain compare(Comparable<?> a, Comparable<?> b);
 	public abstract <T> ComparisonChain compare(@Nullable T a, @Nullable T b, Comparator<T> cmp);

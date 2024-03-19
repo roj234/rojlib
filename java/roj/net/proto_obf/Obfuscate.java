@@ -4,7 +4,7 @@ import roj.crypt.CRC32s;
 import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
-import roj.net.ch.handler.PacketMerger;
+import roj.net.handler.PacketMerger;
 import roj.util.ArrayRef;
 import roj.util.DynByteBuf;
 
@@ -45,7 +45,7 @@ public final class Obfuscate extends PacketMerger implements ChannelHandler {
 		if (cByte == -1) {
 			cByte = new Random().nextInt(256);
 
-			buf = BufferPool.expand(buf, 1, false, false).put(0, 0);
+			buf = ctx.alloc().expand(buf, 1, false, false).put(0, 0);
 		}
 
 		ArrayRef arr = buf.byteRange(buf.rIndex, buf.readableBytes());

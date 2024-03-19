@@ -87,6 +87,8 @@ public class Desc implements RawNode {
 	}
 
 	@Override
+	public final String ownerClass() {return owner;}
+	@Override
 	public final String name() { return name; }
 	@Override
 	public final String rawDesc() { return param; }

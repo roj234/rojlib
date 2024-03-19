@@ -1,13 +1,14 @@
 package roj.misc;
 
+import roj.config.ConfigMaster;
 import roj.config.JSONParser;
 import roj.config.ParseException;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.net.NetUtil;
 import roj.net.ch.*;
-import roj.net.ch.handler.Timeout;
-import roj.net.ch.handler.VarintSplitter;
+import roj.net.handler.Timeout;
+import roj.net.handler.VarintSplitter;
 import roj.text.CharList;
 import roj.ui.CLIUtil;
 import roj.ui.ProgressBar;
@@ -88,11 +89,11 @@ public class SameServerFinder {
 			System.out.println("open " + ctx.remoteAddress());
 			ByteList buf = IOUtil.getSharedByteBuf();
 			buf.put(0) // packet id: handshake
-			   .putVarInt(1343, false); // protocol
+			   .putVarInt(1343); // protocol
 			InetSocketAddress addr = ((InetSocketAddress) ctx.remoteAddress());
 			buf.putVarIntUTF(addr.getHostName()+"\u0000FML\u0000") // host
 			   .putShort(addr.getPort()) // port
-			   .putVarInt(1, false); // status query
+			   .putVarInt(1); // status query
 
 			ctx.channelWrite(buf);
 
@@ -103,13 +104,13 @@ public class SameServerFinder {
 		@Override
 		public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 			try {
-				DynByteBuf buf = ((DynByteBuf) msg);
+				DynByteBuf buf = (DynByteBuf) msg;
 				if (buf.readByte() != 0) {
-					CLIUtil.error("Unexpected packet: " + buf.slice(0, Math.min(buf.readableBytes(), 16)));
+					CLIUtil.error("Unexpected packet: "+buf.dump());
 					return;
 				}
 
-				CMapping json;
+				CMap json;
 				try {
 					json = new JSONParser().parse(buf.readVarIntUTF(32767)).asMap();
 				} catch (ParseException e) {
@@ -118,11 +119,11 @@ public class SameServerFinder {
 				}
 
 				CharList ccc = IOUtil.getSharedCharBuf();
-				minecraftJsonStyleToString(json.getOrCreateMap("description")).writeAnsi(ccc);
+				minecraftJsonStyleToString(json.getMap("description")).writeAnsi(ccc);
 				System.out.println(ctx.remoteAddress()+"/"+json.getDot("players.online")+"/"+json.getDot("players.max"));
 				System.out.println(ccc);
 
-				System.err.println(json.toJSONb());
+				System.err.println(ConfigMaster.JSON.toString(json));
 			} finally {
 				ctx.close();
 			}

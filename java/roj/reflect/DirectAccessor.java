@@ -66,7 +66,7 @@ public final class DirectAccessor<T> {
 		var = new ConstantData();
 
 		String itfClass = itf.getName().replace('.', '/');
-		String clsName = itfClass+"$DAC$"+ReflectionUtils.uniqueId();
+		String clsName = "roj/gen/DAc$"+ReflectionUtils.uniqueId();
 		makeHeader(clsName, itfClass, var);
 		FastInit.prepare(var);
 	}

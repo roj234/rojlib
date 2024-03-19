@@ -5,60 +5,83 @@
 * 通过泛型推断目标类型
 * 安全看你指的是什么了...
 * 如果是防止不知名类的反序列化
-* * 别设置GENERATE，手动注册允许序列化的类
-* * 带GENERATE序列化一次然后去掉
+* * 只要不开启动态模式就行，getInstance默认不开启
 * 或者是...循环引用不会出问题
-* * 你能控制的: +transient
-* * 你不能控制：FORCE_DYNAMIC
+* * OBJECT_POOL
 
-标记(flag):
+## 注意事项
+### ToMap
+像这样
+```java
+class T { Object x = new byte[2]; }  
+```
+如果你有一个字段类型是Object的数组，字符串（或任何不该序列化成Mapping的）  
+它们会在序列化之后变成Mapping以避免类型丢失
+```json
+{"x":{"==":"[B","v":[0,0]}}
+```
+
+### Set的序列化
+开启对象池后，任何Set都会在反序列化后变成MyHashSet (Identity Hash)  
+这可能会造成一些问题，但是不这么做可能反序列化完成之前就会崩溃  
+
+## 标记(flag):
 * `GENERATE`        对未知的class自动生成序列化器
 * `CHECK_INTERFACE` 检查实现的接口是否有序列化器
 * `CHECK_PARENT`    检查父类是否有序列化器
 * `NO_CONSTRUCTOR`  不调用&lt;init&gt;
 * `SAFE`            扩展安全检查  检查字段访问权限，而不是使用unsafe绕过
+* `OBJECT_POOL`     对象池   使用一个ID来替换已存在的对象
 * `SERIALIZE_PARENT`**序列化父类**   不能与CHECK_PARENT共用
 
-
-* 动态模式: 根据对象的class来序列化
+### 动态模式: 根据对象的class来序列化
 * `ALLOW_DYNAMIC`   允许动态模式  仅应用到无法确定类型的字段
 * `PREFER_DYNAMIC`  优先动态模式  禁用泛型推断
-* `FORCE_DYNAMIC`   强制动态模式  对所有字段启用
+
+如果序列化的类满足任一条件
+ * 有Object (包括泛型擦除的Object，自动泛型序列化目前仅支持Collection和Map)
+ * 是除了 CharSequence Number List Set Collection Map 之外的接口
+ * 是抽象类  
+
+那么需要启用ALLOW_DYNAMIC，否则会报错，因为无法确定到一个具体的类  
+下面代码中，我启用了ALLOW_DYNAMIC，因为测试的Pojo类中有一个Object（Map的泛型）
 
 ```java
 
 import roj.config.ConfigMaster;
-import roj.config.serial.*;
+import roj.config.auto.*;
+import roj.config.serial.ToJson;
 import roj.text.CharList;
 
 import java.io.File;
 import java.nio.charset.Charset;
+import java.util.Map;
 
 public class Test {
 	public static void main(String[] args) throws Exception {
-		// 这么设计是为了方便Unsafe绕过字段访问权限
-		SerializerFactory man = Serializers.newSerializerFactory();
+		SerializerFactory man = SerializerFactory.getInstance(
+			SerializerFactory.GENERATE | SerializerFactory.CHECK_INTERFACE | SerializerFactory.CHECK_PARENT | SerializerFactory.ALLOW_DYNAMIC);
 		// 自定义序列化方式(使用@As调用)
 		Serializers.registerAsRGB(man);
 		// 自定义序列化器(不一定要匿名类)
 		// 方法名称也不重要 参数和返回值才重要
-		man.register(Charset.class, new Object() {
+		man.add(Charset.class, new Object() {
 			public String serializeMyObject(Charset cs) {return cs.name();}
 
 			public Charset deserMyObj(String s) {return Charset.forName(s);}
 		});
 
 		// 生成一个序列化器
-		CAdapter<Pojo> adapter = man.adapter(Pojo.class);
+		Serializer<Pojo> adapter = man.serializer(Pojo.class);
 
 		Pojo p = new Pojo();
 		p.color = 0xAABBCC;
 		p.charset = StandardCharsets.UTF_8;
-		p.map = Collections.singletonMap("114514", Collections.singletonMap("1919810", 23333L));
+		p.map = Map.of("114514", Map.of("1919810", 23333L));
 
 		// simple
-		ConfigMaster.write(p, "C:\\test.yml", "YAML", adapter);
-		p = man.deserialize(adapter, new File("C:\\test.yml"));
+		ConfigMaster.YAML.writeObject(p, adapter, new File("C:\\test.yml"));
+		p = ConfigMaster.YAML.readObject(adapter, new File("C:\\test.yml"));
 
 		// or CVisitor
 		ToJson ser = new ToJson();

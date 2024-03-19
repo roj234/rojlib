@@ -1,10 +1,11 @@
 package roj.ui.terminal;
 
 import roj.collect.SimpleList;
-import roj.concurrent.TaskPool;
+import roj.concurrent.TaskExecutor;
+import roj.concurrent.TaskHandler;
 import roj.config.ParseException;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
+import roj.config.Tokenizer;
+import roj.config.Word;
 import roj.text.CharList;
 import roj.ui.AnsiString;
 import roj.ui.CLIBoxRenderer;
@@ -34,6 +35,7 @@ public class CommandConsole extends DefaultConsole {
 
 	protected final List<CommandNode> nodes = new SimpleList<>();
 	public CommandConsole register(CommandNode node) { nodes.add(node); return this; }
+	public boolean unregister(CommandNode node) { return nodes.remove(node); }
 	public boolean unregister(String name) {
 		for (int i = nodes.size()-1; i >= 0; i--) {
 			CommandNode node = nodes.get(i);
@@ -43,6 +45,15 @@ public class CommandConsole extends DefaultConsole {
 			}
 		}
 		return false;
+	}
+	public void sortCommands() {
+		nodes.sort((o1, o2) -> {
+			String n1 = o1.getName();
+			String n2 = o2.getName();
+			if (n1 == null) n1 = "";
+			if (n2 == null) n2 = "";
+			return n1.compareTo(n2);
+		});
 	}
 
 	public CharList dumpNodes(CharList sb, int depth) {
@@ -59,7 +70,13 @@ public class CommandConsole extends DefaultConsole {
 		});
 	}
 
-	public ArgumentContext ctx = new ArgumentContext(TaskPool.Common());
+	private static final TaskExecutor Dispatcher = new TaskExecutor();
+	static {
+		Dispatcher.setName("CLI - CommandDispatcher");
+		Dispatcher.start();
+	}
+
+	public ArgumentContext ctx = new ArgumentContext(Dispatcher);
 	public boolean commandEcho = true;
 	protected final Tokenizer wr = new Tokenizer() {
 		@Override
@@ -100,7 +117,6 @@ public class CommandConsole extends DefaultConsole {
 			if (w.pos() > prevI) root.append(new AnsiString(input.substring(prevI, w.pos())));
 			switch (w.type()) {
 				case Word.LITERAL: root.append(new AnsiString(w.val()).color16(CLIUtil.YELLOW+CLIUtil.HIGHLIGHT)); break;
-				case Word.CHARACTER: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(CLIUtil.GREEN)); break;
 				case Word.STRING: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(CLIUtil.GREEN+CLIUtil.HIGHLIGHT)); break;
 				case Word.INTEGER: case Word.LONG: root.append(new AnsiString(w.val()).color16(getNumberColor(w.val()))); break;
 				case Word.DOUBLE: case Word.FLOAT: root.append(new AnsiString(w.val()).color16(CLIUtil.BLUE+CLIUtil.HIGHLIGHT)); break;
@@ -124,14 +140,13 @@ public class CommandConsole extends DefaultConsole {
 	}
 
 	@Override
-	protected void complete(CharList input, int cursor, List<Completion> out) {
-		String cmd = input.toString(0, cursor);
-		List<Word> words = parse(cmd);
+	protected void complete(String prefix, List<Completion> out) {
+		List<Word> words = parse(prefix);
 		if (words == null) return;
 
 		for (int i = 0; i < nodes.size(); i++) {
 			CommandNode node = nodes.get(i);
-			ctx.init(cmd, words);
+			ctx.init(prefix, words);
 			try {
 				node.apply(ctx, out);
 			} catch (ParseException e) {
@@ -142,8 +157,8 @@ public class CommandConsole extends DefaultConsole {
 
 	@Override
 	protected final boolean evaluate(String cmd) { return execute(cmd, commandEcho); }
-	public boolean executeCommand(String cmd) {
-		TaskPool executor = ctx.executor;
+	public boolean executeSync(String cmd) {
+		TaskHandler executor = ctx.executor;
 		ctx.executor = null;
 		try {
 			return execute(cmd, false);

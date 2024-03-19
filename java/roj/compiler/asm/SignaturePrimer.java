@@ -7,7 +7,7 @@ import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.SimpleList;
-import roj.compiler.context.CompileUnit;
+import roj.compiler.context.LocalContext;
 
 import java.util.List;
 
@@ -59,7 +59,10 @@ public class SignaturePrimer extends Signature {
 	public void initS0(MethodNode mn) {
 		for (List<IType> list : typeParams.values()) {
 			if (list.isEmpty()) list.add(object);
+			else init1(list);
 		}
+		init1(values);
+
 		if (mn == null) {
 			// field
 			if (returns != null) {
@@ -87,25 +90,30 @@ public class SignaturePrimer extends Signature {
 			values.add(mn.returnType());
 		}
 	}
-
-	public void initS1(CompileUnit file) {
-		for (List<IType> list : typeParams.values()) {
-			for (int i = 0; i < list.size(); i++) {
-				IType t = list.get(i);
-				file._resolve(t, "ANNOTATION_TYPE");
-				if (t instanceof GenericPrimer)
-					((GenericPrimer) t).resolveS2(file, "ANNOTATION_TYPE");
-			}
-		}
-		for (int i = 0; i < values.size(); i++) {
-			IType t = values.get(i);
-			file._resolve(t, "ANNOTATION_VALUE");
-			if (t instanceof GenericPrimer)
-				((GenericPrimer) t).resolveS2(file, "ANNOTATION_TYPE");
+	private void init1(List<IType> list) {
+		for (int i = 0; i < list.size(); i++) {
+			IType type = list.get(i);
+			if (type instanceof GenericPrimer gp)
+				list.set(i, gp.toRealType(this));
 		}
 	}
 
-	public CharSequence getTypeBoundary(CharSequence name) {
+	// 查找类型为Type的类型变量，并用TypeParam替换他们
+	public void resolveS2() {
+		LocalContext ctx = LocalContext.get();
+		for (List<IType> value : typeParams.values())
+			resolve1(value, ctx);
+		resolve1(values, ctx);
+	}
+	private void resolve1(List<IType> list, LocalContext ctx) {
+		for (int i = 0; i < list.size(); i++) {
+			IType type = list.get(i);
+			if (type instanceof GenericPrimer gp) gp.initS2(ctx);
+			ctx.resolveType(type);
+		}
+	}
+
+	public CharSequence getTypeBound(CharSequence name) {
 		SignaturePrimer sp = this;
 		do {
 			List<IType> list = sp.typeParams.get(name);
@@ -119,7 +127,7 @@ public class SignaturePrimer extends Signature {
 				// todo? fix for <T extends Y<?>> from class
 				System.out.println("type boundary for " + name + " is " + g);
 				if (sp.parent == null) throw new NullPointerException("type param not found ?");
-				return sp.parent.getTypeBoundary(g.owner());
+				return sp.parent.getTypeBound(g.owner());
 			}
 			sp = sp.parent;
 		} while (sp != null);

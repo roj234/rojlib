@@ -21,17 +21,20 @@ import java.util.Map;
  * @since 2021/6/18 9:51
  */
 public class Annotation {
-	public String type;
+	private String type;
 	public Map<String, AnnVal> values;
 
+	public Annotation() { values = new MyHashMap<>(); }
 	public Annotation(String type, Map<String, AnnVal> values) {
-		this.type = type.substring(1, type.length() - 1);
+		this.type = type;
 		this.values = values;
 	}
 
-	public Annotation() {
-		this.values = new MyHashMap<>();
+	public String type() {
+		if (type.endsWith(";")) type = type.substring(1, type.length()-1);
+		return type;
 	}
+	public void setType(String type) { this.type = type; }
 
 	public final boolean getBoolean(String name) { return getBoolean(name, false); }
 	public final boolean getBoolean(String name, boolean def) {
@@ -130,10 +133,7 @@ public class Annotation {
 		return arr;
 	}
 
-	public final boolean containsKey(String name) {
-		return values.containsKey(name);
-	}
-
+	public final boolean containsKey(String name) { return values.containsKey(name); }
 	public final void put(String name, AnnVal av) {
 		if (values == Collections.EMPTY_MAP) values = new LinkedMyHashMap<>();
 		values.put(name, av);
@@ -157,17 +157,23 @@ public class Annotation {
 	}
 
 	public void toByteArray(ConstantPool pool, DynByteBuf w) {
-		CharList sb = new CharList().append('L').append(type).append(';');
-		w.putShort(pool.getUtfId(sb)).putShort(values.size());
-		sb._free();
-		for (Map.Entry<String, AnnVal> e : values.entrySet()) {
-			e.getValue().toByteArray(pool, w.putShort(pool.getUtfId(e.getKey())));
+		int id;
+		if (type.endsWith(";")) {
+			id = pool.getUtfId(type);
+		} else {
+			CharList sb = new CharList().append('L').append(type).append(';');
+			id = pool.getUtfId(sb);
+			sb._free();
 		}
+
+		w.putShort(id).putShort(values.size());
+		for (Map.Entry<String, AnnVal> e : values.entrySet())
+			e.getValue().toByteArray(pool, w.putShort(pool.getUtfId(e.getKey())));
 	}
 
 	public String toString() {
 		CharList sb = new CharList().append('@');
-		TypeHelper.toStringOptionalPackage(sb, type);
+		TypeHelper.toStringOptionalPackage(sb, type.endsWith(":") ? type.substring(1, type.length()-1) : type);
 		if (!values.isEmpty()) {
 			sb.append('(');
 			if (values.size() == 1 && values.containsKey("value")) {

@@ -14,8 +14,8 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.compiler.JavaLexer;
 import roj.compiler.ast.expr.ExprNode;
-import roj.compiler.context.ClassContext;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.GlobalContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -74,7 +74,7 @@ final class MethodList extends ComponentList {
 			return super.add(entry);
 		}
 	}
-	public MethodResult findMethod(CompileContext ctx, IType genericHint, SimpleList<IType> params,
+	public MethodResult findMethod(LocalContext ctx, IType genericHint, SimpleList<IType> params,
 								   Map<String, IType> namedType, int flags) {
 		SimpleList<MethodNode> candidates;
 
@@ -132,7 +132,7 @@ final class MethodList extends ComponentList {
 
 				defParamState = new IntMap<>();
 				if (myParam == params) myParam = new SimpleList<>(params);
-				else myParam.i_setSize(params.size());
+				else myParam._setSize(params.size());
 
 				List<String> names = ParamNameMapper.getParameterName(mnOwner.cp(), mn);
 
@@ -223,7 +223,7 @@ final class MethodList extends ComponentList {
 		return best;
 	}
 
-	private static void getErrorMsg(CompileContext ctx, IType genericHint, List<IType> params, boolean in_static, MethodNode mn, CharList sb, CharList errRpt) {
+	private static void getErrorMsg(LocalContext ctx, IType genericHint, List<IType> params, boolean in_static, MethodNode mn, CharList sb, CharList errRpt) {
 		IClass info = ctx.classes.getClassInfo(mn.owner);
 		if (!ctx.checkAccessible(info, mn, in_static, true)) {
 			sb.append(errRpt);
@@ -233,7 +233,7 @@ final class MethodList extends ComponentList {
 	}
 
 	@SuppressWarnings("unchecked")
-	private void createNamedLookup(ClassContext ctx) {
+	private void createNamedLookup(GlobalContext ctx) {
 		if (namedLookup != null) return;
 
 		MatchMap<String, Object> lookup = new MatchMap<>();

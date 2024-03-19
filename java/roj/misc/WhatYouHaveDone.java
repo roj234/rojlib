@@ -182,7 +182,7 @@ public class WhatYouHaveDone {
 
 		this.lines.computeIfAbsent(ext, compute).put(name, lines);
 		this.chars.computeIfAbsent(ext, compute).put(name, chars);
-		totalLines.increase(ext, lines);
-		totalChars.increase(ext, chars);
+		totalLines.increment(ext, lines);
+		totalChars.increment(ext, chars);
 	}
 }

@@ -15,7 +15,8 @@ public final class CstClass extends CstRefUTF {
 	public byte type() { return Constant.CLASS; }
 	@Override
 	public String getEasyReadValue() {
-		return TypeHelper.parseField(name().str()).toString().replace('/', '.')+".class";
+		String str = name().str();
+		return (str.startsWith("[")?TypeHelper.parseField(str).toString():str).replace('/', '.')+".class";
 	}
 	@Override
 	public String getEasyCompareValue() { return name().str(); }

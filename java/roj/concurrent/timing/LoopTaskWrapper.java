@@ -10,37 +10,38 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2024/3/6 0006 2:07
  */
 public class LoopTaskWrapper implements ITask {
-	private final Scheduler sched;
-	private final ITask task;
+	protected final Scheduler sched;
+	protected final ITask task;
 
-	private final int interval;
-	private int repeat;
+	protected final long interval;
+	protected int repeat;
 
 	private static final long STATE_OFFSET = ReflectionUtils.fieldOffset(LoopTaskWrapper.class, "taskState");
 	private volatile int taskState;
+	//CANCELLED = -1, ACCURATE_TIME = 0, AUTODELAY_READY = 1, AUTODELAY_RUNNING = 2, AUTODELAY_DELAYED = 3
 
-	public LoopTaskWrapper(Scheduler sched, ITask task, int interval, int repeat, boolean slowTaskProof) {
+	public LoopTaskWrapper(Scheduler sched, ITask task, long interval, int repeat, boolean slowTaskProof) {
 		if (interval <= 0) throw new IllegalArgumentException("interval <= 0");
 		this.sched = sched;
 		this.task = task;
 		this.interval = interval;
 		this.repeat = repeat;
-		this.taskState = slowTaskProof ? 0 : -1;
+		this.taskState = slowTaskProof ? 1 : 0;
 	}
 
 	@Override
 	public void execute() throws Exception {
 		switch (taskState) {
-			case -1: task.execute(); break; // ACCURATE_TIMER
-			case 0:
-				if (u.compareAndSwapInt(this, STATE_OFFSET, 0, 1)) {
+			case 0: task.execute(); break; // ACCURATE_TIMER
+			case 1:
+				if (u.compareAndSwapInt(this, STATE_OFFSET, 1, 2)) {
 					task.execute();
 					// 任务执行时间超过一个周期，在完成之后重新添加
-					if (u.compareAndSwapInt(this, STATE_OFFSET, 2, 0)) {
+					if (u.compareAndSwapInt(this, STATE_OFFSET, 3, 1)) {
 						// re-schedule
 						sched.delay(this, interval);
 					} else {
-						taskState = 0;
+						u.compareAndSwapInt(this, STATE_OFFSET, 2, 1);
 					}
 				}
 				break;
@@ -49,12 +50,12 @@ public class LoopTaskWrapper implements ITask {
 
 	@Override
 	public boolean cancel() {
-		int state = u.getAndAddInt(this, STATE_OFFSET, 3);
-		return state <= 0 || task.cancel();
+		int state = u.getAndSetInt(this, STATE_OFFSET, -1);
+		return state < 0 || task.cancel();
 	}
 
-	public int getNextRun() {
-		if (u.compareAndSwapInt(this, STATE_OFFSET, 1, 2)) return 0;
+	public long getNextRun() {
+		if (u.compareAndSwapInt(this, STATE_OFFSET, 2, 3) || taskState < 0) return 0;
 		return --repeat == 0 ? 0 : interval;
 	}
 }

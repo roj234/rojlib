@@ -1,10 +1,11 @@
 package roj.archive.qz;
 
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFile;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
@@ -42,5 +43,5 @@ public final class Deflate extends QZCoder {
 			}
 		};
 	}
-	public InputStream decode(InputStream in, byte[] password, long uncompressedSize, int maxMemoryLimitInKb) throws IOException { return ZipArchive.getCachedInflater(in); }
+	public InputStream decode(InputStream in, byte[] password, long uncompressedSize, AtomicInteger memoryLimit) throws IOException { useMemory(memoryLimit, 64); return ZipFile.getCachedInflater(in); }
 }

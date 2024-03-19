@@ -13,6 +13,6 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface Nixim {
 	String value(); // target
-	boolean copyItf() default false;
+	boolean copyItf() default true;
 	int flags() default 0; // no usage now
 }

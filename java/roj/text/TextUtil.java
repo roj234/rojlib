@@ -2,7 +2,7 @@ package roj.text;
 
 import org.jetbrains.annotations.Range;
 import roj.collect.*;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
@@ -11,6 +11,7 @@ import roj.util.Helpers;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static java.lang.Character.*;
@@ -24,7 +25,8 @@ public class TextUtil {
 	public static Charset DefaultOutputCharset, ConsoleCharset;
 	static {
 		String property = System.getProperty("roj.text.outputCharset", null);
-		DefaultOutputCharset = property == null ? Charset.defaultCharset() : Charset.forName(property);
+		DefaultOutputCharset = property == null ? StandardCharsets.UTF_8 : Charset.forName(property);
+
 		ConsoleCharset = getStdOutCharset();
 	}
 
@@ -35,7 +37,7 @@ public class TextUtil {
 		}
 
 		String property = System.getProperty("sun.stdout.encoding", null);
-		return property == null ? DefaultOutputCharset : Charset.forName(property);
+		return property == null ? Charset.defaultCharset() : Charset.forName(property);
 	}
 
 	public static final MyBitSet HEX = MyBitSet.from("0123456789ABCDEFabcdef");
@@ -58,14 +60,6 @@ public class TextUtil {
 		arr[name.length() - 1] = name.charAt(0);
 		return new String(arr, 0, name.length());
 	}
-
-	@Deprecated
-	public static CharList repeat(int num, char ch) {
-		return new CharList().padEnd(ch, num);
-	}
-
-	// 8bits: ⣿ 每个点代表一位
-	public static final int BRAILLN_CODE = 10240;
 
 	public final static byte[] digits = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 										 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
@@ -148,29 +142,7 @@ public class TextUtil {
 		}
 	}
 
-	/**
-	 * 找到首个大写字符
-	 */
-	public static int firstCap(CharSequence str) {
-		for (int i = 0; i < str.length(); i++) {
-			if (Character.isUpperCase(str.charAt(i))) {
-				return i;
-			}
-		}
-		return -1;
-	}
-
-	public static boolean isPrintableAscii(int j) {
-		return j > 31 && j < 127;
-	}
-
-	/**
-	 * char to (ascii) number it represents
-	 */
-	public static int c2i(char c) {
-		if (c < '0' || c > '9') return -1;
-		return c-'0';
-	}
+	public static boolean isPrintableAscii(int j) {return j > 31 && j < 127;}
 
 	/**
 	 * byte to hex
@@ -203,17 +175,15 @@ public class TextUtil {
 		return bl;
 	}
 
-	public static String bytes2hex(byte[] b) {
-		return bytes2hex(b, 0, b.length, new CharList()).toStringAndFree();
-	}
+	public static String bytes2hex(byte[] b) {return bytes2hex(b, 0, b.length, new CharList()).toStringAndFree();}
 
-	public static CharList bytes2hex(byte[] b, int off, int len, CharList sb) {
-		sb.ensureCapacity(sb.len + len << 1);
-		len += off;
+	// not recommend to use!
+	public static CharList bytes2hex(byte[] b, int off, int end, CharList sb) {
+		sb.ensureCapacity(sb.len + (end-off) << 1);
 		char[] tmp = sb.list;
 		int j = sb.len;
-		while (off < len) {
-			int bb = b[off++] & 0xFF;
+		while (off < end) {
+			int bb = b[off++];
 			tmp[j++] = b2h(bb >>> 4);
 			tmp[j++] = b2h(bb & 0xf);
 		}
@@ -430,7 +400,7 @@ public class TextUtil {
 		_off(sb, off ^ rem, prefix);
 		if (rem != 0) sb.padEnd(' ', (rem << 1) + (rem >> 1));
 
-		int d = 0;
+		int d = off;
 		while (true) {
 			int i1 = b[off++] & 0xFF;
 			sb.append(b2h(i1 >>> 4)).append(b2h(i1 & 0xf));
@@ -821,5 +791,18 @@ public class TextUtil {
 			sb.append(c);
 		}
 		return sb;
+	}
+
+	public static String substr(String s, int off) {return substr(s, 0, off);}
+	public static String substr(String s, int begin, int end) {
+		if (end < 0) end = s.length() + end;
+		if (begin < 0) begin = s.length() + begin;
+		if (begin > end) {
+			int tmp = begin;
+			begin = end;
+			end = tmp;
+		}
+		if (begin < 0 || end > s.length()) return "";
+		return s.substring(begin, end);
 	}
 }

@@ -156,7 +156,7 @@ public class FindClass extends JFrame {
 	private void checkAnnotation(Predicate<CharSequence> filter, Annotations a, MyHashSet<Object> out, Attributed node, ConstantData data) {
 		if (a == null) return;
 		for (Annotation annotation : a.annotations) {
-			if (filter.test(annotation.type)) {
+			if (filter.test(annotation.type())) {
 				if (node instanceof ConstantData) {
 					ConstantData node1 = (ConstantData) node;
 					out.add(node1.name);

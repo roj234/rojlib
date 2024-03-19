@@ -7,6 +7,5 @@ import java.util.List;
  * @since 2023/8/4 0004 16:03
  */
 public interface ITweaker {
-	String[] initialize(String[] args, ClassWrapper loader);
-	default void addArguments(List<String> args) {}
+	void init(List<String> args, ClassWrapper loader);
 }

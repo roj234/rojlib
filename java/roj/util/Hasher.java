@@ -3,22 +3,15 @@ package roj.util;
 
 /**
  * HashBuilder using the FNV-1a algorithm.
- *
- * @author Maximilian Luz
+ * TODO 使用Lavac compute chain重构
  */
 public class Hasher {
-	private static final int FNV_PRIME = 16777619;
-	private static final int FNV_BASE = (int) 2166136261L;
+	public static final int FNV_PRIME = 16777619;
+	public static final int FNV_BASE = (int) 2166136261L;
 
 	private int hash;
-
-	public Hasher() {
-		this.hash = FNV_BASE;
-	}
-
-	public int getHash() {
-		return hash;
-	}
+	public Hasher() {hash = FNV_BASE;}
+	public int getHash() {return hash;}
 
 	public Hasher add(Object obj) {
 		hash = ((obj != null ? obj.hashCode() : 0) ^ hash) * FNV_PRIME;
@@ -30,16 +23,12 @@ public class Hasher {
 		return this;
 	}
 
-	public Hasher add(float obj) {
-		return add(Float.floatToIntBits(obj));
-	}
+	public Hasher add(float obj) {return add(Float.floatToIntBits(obj));}
 
 	public Hasher add(long obj) {
 		hash = (int) (((obj ^ (obj >> 32)) ^ hash) * FNV_PRIME);
 		return this;
 	}
 
-	public Hasher add(double obj) {
-		return add(Double.doubleToLongBits(obj));
-	}
+	public Hasher add(double obj) {return add(Double.doubleToLongBits(obj));}
 }

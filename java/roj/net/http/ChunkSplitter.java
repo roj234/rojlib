@@ -3,7 +3,7 @@ package roj.net.http;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
-import roj.net.ch.handler.PacketMerger;
+import roj.net.handler.PacketMerger;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;

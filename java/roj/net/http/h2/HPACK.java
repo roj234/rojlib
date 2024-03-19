@@ -71,7 +71,7 @@ public final class HPACK {
 			if (--id < STATIC_TABLE.size()) return STATIC_TABLE.get(id);
 			id -= STATIC_TABLE.size();
 			if (id >= super.size) throw new H2Error(HttpClient20.ERROR_COMPRESS, "Illegal table id");
-			return super.getArray((id+head) % array.length);
+			return (Field) array[(id+head) % array.length];
 		}
 
 		public void _add(Field f) {
@@ -302,7 +302,7 @@ public final class HPACK {
 		} else {
 			out.put((byte) (prefix | max))
 			   // includes zero
-			   .putVarInt(val-max, false);
+			   .putVarInt(val-max);
 		}
 	}
 
@@ -329,7 +329,7 @@ public final class HPACK {
 	private static int readInt(DynByteBuf in, int first) throws H2Error {
 		int shl = 0;
 		while (in.isReadable()) {
-			int b = in.get();
+			int b = in.readByte();
 
 			first += (b & 0x7F) << shl;
 			if ((b & 128) == 0) return first;

@@ -1,7 +1,7 @@
 package roj.compiler.ast.expr;
 
 import roj.asm.type.IType;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 
 /**
@@ -10,7 +10,7 @@ import roj.compiler.resolve.ResolveException;
  */
 public interface UnresolvedExprNode {
 	IType type();
-	ExprNode resolve(CompileContext ctx) throws ResolveException;
+	ExprNode resolve(LocalContext ctx) throws ResolveException;
 
 	default boolean isConstant() { return false; }
 	default Object constVal() { throw new IllegalArgumentException("'"+this+"' ("+getClass().getName()+") is not a constant."); }

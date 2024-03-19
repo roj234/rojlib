@@ -4,9 +4,9 @@ import roj.archive.qz.xz.LZMA2InputStream;
 import roj.collect.Int2IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
+import roj.config.data.CInt;
 import roj.io.IOUtil;
-import roj.math.MutableInt;
 import roj.util.DirectByteList;
 
 import java.nio.CharBuffer;
@@ -22,7 +22,7 @@ public class JPinyin {
 	private static final Int2IntMap FastSwitch = new Int2IntMap(8);
 	static {
 		// https://github.com/mozillazg/pinyin-data
-		try (LZMA2InputStream in = new LZMA2InputStream(JPinyin.class.getResourceAsStream("/META-INF/china/pinyin.lzma2"), 524288)) {
+		try (LZMA2InputStream in = new LZMA2InputStream(JPinyin.class.getClassLoader().getResourceAsStream("META-INF/china/pinyin.lzma2"), 524288)) {
 			int DATALEN = 1432238;
 			DirectByteList bb = DirectByteList.allocateDirect(DATALEN);
 			int i = in.read(bb.address(), DATALEN);
@@ -69,7 +69,7 @@ public class JPinyin {
 
 	public static TrieTree<Integer> getPinyinWords() { return PinyinWords; }
 
-	private final MyHashMap.Entry<MutableInt, Integer> entry = new MyHashMap.Entry<>(new MutableInt(), null);
+	private final MyHashMap.Entry<CInt, Integer> entry = new MyHashMap.Entry<>(new CInt(), null);
 
 	public JPinyin() {}
 
@@ -89,7 +89,7 @@ public class JPinyin {
 		while (i < len) {
 			PinyinWords.match(str, i, len, entry);
 
-			int matchLen = entry.getKey().getValue();
+			int matchLen = entry.getKey().value;
 			if (matchLen > 0) {
 				if (!hasSplitter) sb.append(splitter);
 				addTone(sb, entry.getValue(), matchLen > 1 ? mode|PINYIN_DUOYINZI : mode, splitter);

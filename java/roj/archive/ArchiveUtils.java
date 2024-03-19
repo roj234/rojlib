@@ -4,9 +4,11 @@ import roj.collect.MyHashSet;
 import roj.io.source.FileSource;
 import roj.io.source.FragmentSource;
 import roj.io.source.Source;
+import roj.text.TextUtil;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -19,6 +21,7 @@ public class ArchiveUtils {
 	public static final Pattern SPLIT_ARCHIVE_PATTERN = Pattern.compile("\\.[0zZ]01$");
 
 	public static Source tryOpenSplitArchive(File file, boolean readonly) throws IOException {
-		return SPLIT_ARCHIVE_PATTERN.matcher(file.getName()).matches() ? FragmentSource.dynamic(file) : new FileSource(file, !readonly);
+		Matcher m = SPLIT_ARCHIVE_PATTERN.matcher(file.getName());
+		return m.find() ? FragmentSource.dynamic(new File(TextUtil.substr(file.getAbsolutePath(), -(m.end() - m.start()))), !readonly) : new FileSource(file, !readonly);
 	}
 }

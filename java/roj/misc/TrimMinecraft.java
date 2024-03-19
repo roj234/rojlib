@@ -7,7 +7,7 @@ import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.ui.CLIUtil;
@@ -57,9 +57,9 @@ public class TrimMinecraft {
 					continue;
 				}
 
-				CMapping json;
+				CMap json;
 				try {
-					json = new JSONParser().charset(StandardCharsets.UTF_8).parseRaw(versionJson).asMap();
+					json = new JSONParser().charset(StandardCharsets.UTF_8).parse(versionJson).asMap();
 				} catch (ParseException e) {
 					CLIUtil.warning(versionJson+" 不是有效的版本JSON");
 					continue;
@@ -90,9 +90,9 @@ public class TrimMinecraft {
 				continue;
 			}
 
-			CMapping json;
+			CMap json;
 			try {
-				json = JSONParser.parses(IOUtil.readUTF(file)).asMap().getOrCreateMap("objects");
+				json = new JSONParser().parse(file).asMap().getMap("objects");
 			} catch (ParseException e) {
 				CLIUtil.warning(file+" 不是有效的资源索引");
 				continue;

@@ -170,9 +170,10 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 
 		if (v == null) v = shape.createValue(k);
 
-		if (++size > mask * LOAD_FACTOR) resize((mask+1)<<1);
 		shape.SET_NEXT(v, entries[i]);
 		entries[i] = v;
+
+		if (++size > mask * LOAD_FACTOR) resize((mask+1)<<1);
 		return add ? v : null;
 	}
 
@@ -224,8 +225,8 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 				Object next = shape.GET_NEXT(entry);
 
 				Object old = newEntries[newKey];
-				newEntries[newKey] = entry;
 				shape.SET_NEXT(entry, old);
+				newEntries[newKey] = entry;
 
 				entry = next;
 			}

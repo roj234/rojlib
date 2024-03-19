@@ -11,9 +11,7 @@ import java.nio.channels.Selector;
 public interface Selectable {
 	default void tick(int elapsed) throws Exception {}
 
-	default boolean isClosedOn(SelectionKey key) {
-		return !key.isValid();
-	}
+	default boolean isClosedOn(SelectionKey key) {return !key.isValid();}
 
 	default void close() throws Exception {}
 
@@ -21,7 +19,5 @@ public interface Selectable {
 
 	void register(Selector sel, int ops, Object att) throws IOException;
 
-	default Boolean exceptionCaught(String stage, Throwable ex) throws Exception {
-		return null;
-	}
+	default Boolean exceptionCaught(String stage, Throwable ex) throws Exception {return null;}
 }

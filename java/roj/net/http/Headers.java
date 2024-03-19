@@ -1,12 +1,15 @@
 package roj.net.http;
 
-import roj.collect.*;
+import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
+import roj.collect.ObjectPool;
+import roj.collect.SimpleList;
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.OperationDone;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
-import roj.net.URIUtil;
 import roj.text.CharList;
+import roj.text.EscapeUtil;
 import roj.text.LineReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
@@ -82,8 +85,8 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			String s = queries.get(i);
 			int j = s.indexOf('=');
 			try {
-				if (j == -1) map.put(URIUtil.decodeURI(s), "");
-				else map.put(URIUtil.decodeURI(s.substring(0, j)), URIUtil.decodeURI(s.substring(j+1)));
+				if (j == -1) map.put(EscapeUtil.decodeURI(s), "");
+				else map.put(EscapeUtil.decodeURI(s.substring(0, j)), EscapeUtil.decodeURI(s.substring(j+1)));
 			} catch (MalformedURLException e) {
 				if (throwOrSkip) throw e;
 			}
@@ -101,7 +104,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			if (flag == 1) {
 				if (c == '"') {
 					if (k == null) throw new IllegalArgumentException("Escaped key");
-					kvs.accept(URIUtil.decodeURI(k), Sub(field, j, i - 1));
+					kvs.accept(EscapeUtil.decodeURI(k), Sub(field, j, i - 1));
 					j = i;
 					k = null;
 					flag = 2;
@@ -129,7 +132,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 					case ',':
 					case ';':
 						if (k != null) {
-							kvs.accept(URIUtil.decodeURI(k), Sub(field, j, i - 1));
+							kvs.accept(EscapeUtil.decodeURI(k), Sub(field, j, i - 1));
 							k = null;
 						} else {
 							if (i - 1 > j) kvs.accept(Sub(field, j, i - 1), "");
@@ -143,7 +146,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		}
 
 		if (k != null) {
-			kvs.accept(URIUtil.decodeURI(k), Sub(field, j, i));
+			kvs.accept(EscapeUtil.decodeURI(k), Sub(field, j, i));
 		} else if (i > j) {
 			kvs.accept(Sub(field, j, i).toLowerCase(Locale.ROOT), "");
 		}
@@ -151,9 +154,9 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			if (throwOrSkip) Helpers.athrow(e);
 		}
 	}
-	private static String Sub(CharSequence c, int s, int e) throws MalformedURLException { return URIUtil.decodeURI(c.subSequence(s, e)); }
+	private static String Sub(CharSequence c, int s, int e) throws MalformedURLException { return EscapeUtil.decodeURI(c.subSequence(s, e)); }
 
-	public Headers() {}
+	public Headers() { super(4); }
 	public Headers(CharSequence data) { putAllS(data); }
 	public Headers(Map<CharSequence, String> data) {
 		putAll(data);
@@ -252,7 +255,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 				try {
 					if (cookie != null) cookie.clearDirty();
-					cookie = new Cookie(URIUtil.decodeURI(k), URIUtil.decodeURI(v));
+					cookie = new Cookie(EscapeUtil.decodeURI(k), EscapeUtil.decodeURI(v));
 					cookies.add(cookie);
 				} catch (MalformedURLException e) {
 					cookie = new Cookie("invalid");
@@ -274,7 +277,10 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		if (cookies.isEmpty()) return;
 
 		E entry = (E) getOrCreateEntry("set-cookie");
-		if (entry.v == UNDEFINED) size++;
+		if (entry.k == UNDEFINED) {
+			entry.k = "set-cookie";
+			size++;
+		}
 
 		CharList sb = new CharList();
 		cookies.get(0).write(sb, true);
@@ -353,7 +359,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	public AbstractEntry<CharSequence, String> getEntry(CharSequence key) { return super.getEntry(lower(key)); }
 	public AbstractEntry<CharSequence, String> getOrCreateEntry(CharSequence key) { return super.getOrCreateEntry(lower(key)); }
 
-	private static final FastThreadLocal<ObjectPool<E>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(null, 128));
+	private static final FastThreadLocal<ObjectPool<E>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(128));
 
 	@Override
 	protected AbstractEntry<CharSequence, String> useEntry() {
@@ -364,10 +370,9 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		return entry;
 	}
 	@Override
-	protected void reserveEntry(AbstractEntry<?, ?> entry) {
+	protected void onDel(AbstractEntry<CharSequence, String> entry) {
 		E e = (E) entry;
 		e.k = null;
-		e.v = null;
 		e.next = null;
 		e.all.clear();
 		MY_OBJECT_POOL.get().reserve(e);
@@ -377,7 +382,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	protected void onPut(AbstractEntry<CharSequence, String> entry, String newV) {
 		checkVal(newV);
 
-		if (entry.getValue() == IntMap.UNDEFINED) {
+		if (entry.getValue() == UNDEFINED) {
 			entry.k = dedup.find(lower(entry.k)).toString();
 			checkKey(entry.k);
 		}
@@ -388,7 +393,8 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		checkVal(value);
 
 		E e = (E) getOrCreateEntry(key);
-		if (e.v == IntMap.UNDEFINED) {
+		if (e.k == UNDEFINED) {
+			e.k = lower(key).toString();
 			e.v = value;
 			size++;
 		} else {
@@ -401,7 +407,10 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		checkVal(value);
 
 		E e = (E) getOrCreateEntry(key);
-		if (e.v == IntMap.UNDEFINED) size++;
+		if (e.k == UNDEFINED) {
+			e.k = lower(key);
+			size++;
+		}
 		e.all = Collections.emptyList();
 		e.v = value;
 	}
@@ -411,7 +420,10 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			checkVal(value.get(i));
 
 		E e = (E) getOrCreateEntry(key);
-		if (e.v == IntMap.UNDEFINED) size++;
+		if (e.k == UNDEFINED) {
+			e.k = lower(key);
+			size++;
+		}
 		if (value.size() == 1) {
 			e.all = Collections.emptyList();
 		} else {

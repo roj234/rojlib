@@ -5,7 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
 import roj.collect.SimpleList;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.text.TextUtil;
@@ -27,7 +27,7 @@ final class Chained extends ExprNode {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(CompileContext ctx) {
+	public ExprNode resolve(LocalContext ctx) {
 		for (int i = 0; i < par.size(); i++) {
 			ExprNode node = par.get(i).resolve(ctx);
 			if (node.isConstant()) {

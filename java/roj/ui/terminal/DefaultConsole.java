@@ -4,8 +4,8 @@ import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
+import roj.config.data.CInt;
 import roj.io.IOUtil;
-import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.text.GB18030;
 import roj.text.UTF8MB4;
@@ -100,12 +100,13 @@ public class DefaultConsole implements Console {
 	private void setComplete(int id) {
 		if (tabCursor < 0) {
 			tabCursor = cursor;
-			lastInput = input.toString();
+			if (lastInput == null)
+				lastInput = input.toString();
 		}
 
 		Completion c = tabs.get(id);
 		if (c.description != null) {
-			c.description.writeLimited(tooltip(), new MutableInt(CLIUtil.windowWidth), true);
+			c.description.writeLimited(tooltip(), new CInt(CLIUtil.windowWidth), true);
 			displayTooltip(5000);
 		} else {
 			displayTooltip(-1);
@@ -113,14 +114,9 @@ public class DefaultConsole implements Console {
 
 		tabId = id;
 		input.clear();
-		if (c.replaceBefore) {
-			c.completion.writeAnsi(input);
-			if (!isAutoComplete) cursor = getStringWidth(input);
-		} else {
-			input.append(lastInput);
-			input.insert(tabCursor, c.completion.writeAnsi(IOUtil.getSharedCharBuf()).append("\u001b[0m").append(staticHighlight));
-			if (!isAutoComplete) cursor = tabCursor + c.completion.length();
-		}
+		input.append(lastInput);
+		input.replace(tabCursor+c.offset, tabCursor, c.completion.writeAnsi(IOUtil.getSharedCharBuf()).append("\u001b[0m").append(staticHighlight));
+		if (!isAutoComplete) cursor = tabCursor+c.offset + c.completion.length();
 
 		checkAnsi();
 	}
@@ -144,14 +140,8 @@ public class DefaultConsole implements Console {
 		Completion c = tabs.get(tabId);
 		AnsiString str = c.completion;
 		if (insert) {
-			if (c.replaceBefore) {
-				input.clear();
-				str.writeRaw(input);
-				if (isAutoComplete) cursor = getStringWidth(input);
-			} else {
-				input.insert(tabCursor, str.writeRaw(IOUtil.getSharedCharBuf()));
-				if (isAutoComplete) cursor = tabCursor + str.length();
-			}
+			input.replace(tabCursor+c.offset, tabCursor, str.writeRaw(IOUtil.getSharedCharBuf()));
+			if (isAutoComplete) cursor = tabCursor+c.offset + str.length();
 			afterInput();
 		} else {
 			if (cursor > tabCursor) {
@@ -189,7 +179,7 @@ public class DefaultConsole implements Console {
 			cursor += charDec.length();
 
 			if (autoComplete) {
-				complete(input, cursor, tabs);
+				complete(lastInput != null ? lastInput.substring(0, cursor) : input.toString(0, cursor), tabs);
 				if (tabs.size() > 0) {
 					isAutoComplete = true;
 					setComplete(0);
@@ -233,24 +223,24 @@ public class DefaultConsole implements Console {
 			switch (keyCode) {
 				case VK_F1: printHelp(); return;
 				case VK_F2:
-					tabToggle = !tabToggle;
-					tooltip().append(tabToggle ?
-						"\u001b[91m现在Tab用来循环切换补全" :
-						"\u001b[92m现在Tab用来应用补全");
+					autoLCA = !autoLCA;
+					tooltip().append(autoLCA ?
+						"\u001b[92m+AutoLCA" :
+						"\u001b[91m-AutoLCA");
 					displayTooltip(1000);
 				return;
 				case VK_F3:
 					autoHighlight = !autoHighlight;
 					tooltip().append(autoHighlight ?
-						"\u001b[92m已启用动态语法高亮" :
-						"\u001b[91m已禁用动态语法高亮");
+						"\u001b[92m+动态语法高亮" :
+						"\u001b[91m-动态语法高亮");
 					displayTooltip(1000);
 				return;
 				case VK_F4:
 					autoComplete = !autoComplete;
 					tooltip().append(autoComplete ?
-						"\u001b[92m已启用即时补全" :
-						"\u001b[91m已禁用即时补全");
+						"\u001b[92m+即时补全" :
+						"\u001b[91m-即时补全");
 					displayTooltip(1000);
 				return;
 				case VK_ESCAPE:
@@ -283,6 +273,7 @@ public class DefaultConsole implements Console {
 
 					if (historyPos > 0) {
 						if (historyPos == history.size()) {
+							endCompletion(false);
 							currentHistory = input.toString();
 						}
 
@@ -322,17 +313,61 @@ public class DefaultConsole implements Console {
 				case VK_TAB:
 					if (!_echo || input.length() > MAX_INPUT) { beep(); return; }
 
-					if (tabToggle) {
-						if (tabs.size() > 0) {
-							setComplete((tabId+1) % tabs.size());
-							break;
-						}
-					} else {
-						if (endCompletion(true)) break;
+					if (tabs.size() > 0) {
+						endCompletion(true);
+						break;
 					}
 
-					complete(input, cursor, tabs);
-					if (tabs.size() > 0) setComplete(0);
+					complete(lastInput != null ? lastInput.substring(0, cursor) : input.toString(0, cursor), tabs);
+					if (tabs.size() > 0) {
+						if (autoLCA && !isAutoComplete) {
+							String prev = null;
+							int lca = 0;
+							int offset = 1;
+							for (Completion tab : tabs) {
+								if (tab.offset != offset) {
+									if (offset != 1) {
+										lca = 0;
+										break;
+									}
+									offset = tab.offset;
+								}
+
+								String rawStr = tab.completion.toString();
+								if (prev == null) {
+									prev = rawStr;
+									lca = prev.length();
+								} else {
+									lca = Math.min(rawStr.length(), lca);
+									for (int i = 0; i < lca; i++) {
+										if (prev.charAt(i) != rawStr.charAt(i)) {
+											lca = i;
+											break;
+										}
+									}
+									if (lca == 0) break;
+								}
+							}
+
+							if (lca > -offset) {
+								tabs.clear();
+
+								if (lastInput != null) {
+									input.clear();
+									input.append(lastInput);
+									lastInput = null;
+									highlight = null;
+								}
+								input.insert(cursor, prev, -offset, lca);
+								cursor += lca + offset;
+								afterInput();
+								checkAnsi();
+
+								break;
+							}
+						}
+						setComplete(0);
+					}
 					else return;
 				break;
 				case VK_BACK_SPACE:
@@ -365,7 +400,7 @@ public class DefaultConsole implements Console {
 		System.out.println(pp);
 	}
 	protected synchronized final void doRender() {
-		if (CLIUtil.getConsole() != this) return;
+		if (CLIUtil.getConsole() != this || !ANSI) return;
 
 		if (!_echo) {
 			prompt.setLength(prefixLen);
@@ -458,7 +493,7 @@ public class DefaultConsole implements Console {
 		return input.length();
 	}
 
-	private boolean autoHighlight = true, tabToggle, autoComplete, isAutoComplete;
+	private boolean autoHighlight = true, autoLCA = true, autoComplete, isAutoComplete;
 	private final CharList tooltip = new CharList();
 	private ScheduleTask removeTooltip;
 	protected final CharList tooltip() { tooltip.clear(); return tooltip; }
@@ -505,7 +540,7 @@ public class DefaultConsole implements Console {
 		});
 	}
 	protected AnsiString highlight(String input) { return null; }
-	protected void complete(CharList input, int cursor, List<Completion> out) {}
+	protected void complete(String prefix, List<Completion> out) {}
 	protected boolean evaluate(String cmd) { return true; }
 
 	public void setInputEcho(boolean echo) { this._echo = echo; doRender(); }

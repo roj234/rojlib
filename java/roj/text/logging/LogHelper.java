@@ -53,12 +53,12 @@ final class LogHelper extends PrintWriter {
 	final void doLog(LogContext ctx, Level level, CharSequence msg, Throwable ex, Object[] args, int argc) {
 		MyMap m = tmpCtx;
 		m.put("THREAD", Thread.currentThread().getName());
-		m.put("LEVEL", level.name());
+		m.put("LEVEL", level);
 		m.put("NAME", ctx.name());
 		m.components = ctx.getComponents();
 
 		CharList sb = this.sb; sb.clear();
-		ctx.getPrefix().replace(m, sb);
+		ctx.getPrefix().format(m, sb);
 
 		int pref = sb.length();
 

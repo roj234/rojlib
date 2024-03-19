@@ -7,7 +7,7 @@ import roj.asm.tree.attr.Attribute;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.IntMap;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 
 import java.util.List;
 
@@ -39,7 +39,7 @@ public final class MethodResult {
 		this.error = error;
 	}
 
-	public void addExceptions(CompileContext ctx, IClass cn, int issuer) {
+	public void addExceptions(LocalContext ctx, IClass cn, int issuer) {
 		if (exception != null) {
 			for (IType ex : exception) {
 				ctx.addException(ex);

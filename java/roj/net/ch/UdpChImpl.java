@@ -78,11 +78,7 @@ class UdpChImpl extends MyChannel {
 	@Override
 	protected void bind0(InetSocketAddress na) throws IOException { dc.bind(na); }
 	@Override
-	protected boolean connect0(InetSocketAddress na) throws IOException {
-		dc.connect(na);
-		//addFirst("_UDP_AddressProvider", new AddressBinder(na));
-		return true;
-	}
+	protected boolean connect0(InetSocketAddress na) throws IOException {dc.connect(na);return true;}
 	@Override
 	protected SocketAddress finishConnect0() throws IOException { return dc.getRemoteAddress(); }
 	@Override
@@ -107,7 +103,6 @@ class UdpChImpl extends MyChannel {
 		fireFlushing();
 		if (pending.isEmpty()) return;
 
-		BufferPool bp = alloc();
 		lock.lock();
 		try {
 			do {
@@ -147,7 +142,7 @@ class UdpChImpl extends MyChannel {
 				ByteBuffer nioBuffer = syncNioRead(buf);
 				InetSocketAddress r = (InetSocketAddress) dc.receive(nioBuffer);
 				buf.wIndex(nioBuffer.position());
-				BufferPool.expand(buf, buf.wIndex()-buf.capacity());
+				alloc().expand(buf, buf.wIndex()-buf.capacity());
 
 				if (r == null) break;
 
@@ -174,6 +169,7 @@ class UdpChImpl extends MyChannel {
 
 			if (buf.isReadable()) {
 				if (pending.isEmpty()) key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
+				else if (pending.size() > 30) pauseAndFlush();
 
 				Object o1 = pending.ringAddLast(new DatagramPkt(p, bp.allocate(true, buf.readableBytes(), 0).put(buf)));
 				if (o1 != null) throw new IOException("上层发送缓冲区过载");

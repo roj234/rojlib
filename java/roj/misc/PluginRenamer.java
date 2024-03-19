@@ -2,8 +2,7 @@ package roj.misc;
 
 import roj.config.ParseException;
 import roj.config.YAMLParser;
-import roj.config.data.CMapping;
-import roj.io.IOUtil;
+import roj.config.data.CMap;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,12 +24,12 @@ public class PluginRenamer {
 		for (File file : new File(args[0]).listFiles()) {
 			final String name = file.getName();
 			if (file.isFile() && name.endsWith(".zip") || name.endsWith(".jar")) {
-				CMapping map;
+				CMap map;
 				try (ZipFile zf = new ZipFile(file)) {
 					ZipEntry ze = zf.getEntry("plugin.yml");
 					if (ze == null) continue;
 
-					map = YAMLParser.parses(IOUtil.readUTF(zf.getInputStream(ze))).asMap();
+					map = new YAMLParser().parse(zf.getInputStream(ze)).asMap();
 				} catch (IOException | ParseException e) {
 					System.out.println("In " + file.getName());
 					e.printStackTrace();

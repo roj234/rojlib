@@ -113,7 +113,7 @@ public class SimpleConnectionPool {
 	private Connection wrap(Connection connection) {
 		if (proxy == null) {
 			block:
-			synchronized (this) {
+			synchronized (SimpleConnectionPool.class) {
 				if (proxy != null) break block;
 				ConstantData data = new ConstantData();
 				data.name("roj/sql/SimpleConnectionPool$PooledConnection");

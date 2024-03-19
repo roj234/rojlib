@@ -7,7 +7,7 @@ import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.MyChannel;
-import roj.net.ch.handler.MSSCipher;
+import roj.net.handler.MSSCipher;
 import roj.net.mss.MSSEngine;
 import roj.net.mss.MSSEngineClient;
 import roj.util.ByteList;
@@ -120,7 +120,7 @@ public class ProtoObf extends LengthFake {
 			int len = out.readInt();
 			in.wIndex(in.rIndex+len+16);
 
-			out.clear(); if (len > 5) out = BufferPool.expand(out, len-5);
+			out.clear(); if (len > 5) out = ctx.alloc().expand(out, len-5);
 			c_in.cryptFinal(in, out);
 
 			if ((state & 1) == 0) super.mergedRead(ctx, out);
@@ -134,7 +134,7 @@ public class ProtoObf extends LengthFake {
 
 	@Override
 	DynByteBuf writePacket(ChannelCtx ctx, DynByteBuf out, DynByteBuf in, int len) throws IOException {
-		if (out.writableBytes() < len+21) out = BufferPool.expand(out, len+21-out.writableBytes());
+		if (out.writableBytes() < len+21) out = ctx.alloc().expand(out, len+21-out.writableBytes());
 
 		// 偶数为真实包
 		int flag = rnd.nextInt(256) & ~1;

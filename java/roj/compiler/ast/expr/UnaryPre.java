@@ -1,7 +1,6 @@
 package roj.compiler.ast.expr;
 
 import roj.asm.Opcodes;
-import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnValDouble;
 import roj.asm.tree.anno.AnnValFloat;
 import roj.asm.tree.anno.AnnValInt;
@@ -9,7 +8,7 @@ import roj.asm.tree.anno.AnnValLong;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 
@@ -32,7 +31,7 @@ class UnaryPre extends UnaryPreNode {
 
 	@Override
 	@SuppressWarnings("fallthrough")
-	public ExprNode resolve(CompileContext ctx) {
+	public ExprNode resolve(LocalContext ctx) {
 		if (type != null) return this;
 
 		right = right.resolve(ctx);
@@ -42,8 +41,8 @@ class UnaryPre extends UnaryPreNode {
 
 		int iType = type.getActualType();
 		if (iType == Type.CLASS) {
-			MethodNode override = ctx.getUnaryOverride(type, op, false);
-			if (override != null) return Invoke.unaryAlt(right, override);
+			ExprNode override = ctx.getOperatorOverride(right, null, op | LocalContext.UNARY_PRE);
+			if (override != null) return override;
 
 			iType = TypeCast.getWrappedPrimitive(type);
 			if (iType == 0) {

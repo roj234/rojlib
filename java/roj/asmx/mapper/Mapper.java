@@ -23,11 +23,11 @@ import roj.asm.util.ReflectClass;
 import roj.asmx.mapper.util.MapperList;
 import roj.asmx.mapper.util.NameAndType;
 import roj.asmx.mapper.util.SubImpl;
-import roj.asmx.mapper.util.Worker;
 import roj.collect.*;
 import roj.concurrent.TaskPool;
 import roj.concurrent.collect.ConcurrentFindHashMap;
 import roj.concurrent.collect.ConcurrentFindHashSet;
+import roj.concurrent.task.AsyncTask;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.StringPool;
@@ -298,9 +298,19 @@ public class Mapper extends Mapping {
 	}
 
 	private static void async(Consumer<Context> action, List<List<Context>> ctxs) {
-		ArrayList<Worker> wait = new ArrayList<>(ctxs.size());
+		ArrayList<AsyncTask<?>> wait = new ArrayList<>(ctxs.size());
 		for (int i = 0; i < ctxs.size(); i++) {
-			Worker w = new Worker(ctxs.get(i), action);
+			List<Context> files = ctxs.get(i);
+			AsyncTask<?> w = new AsyncTask<>(() -> {
+				for (int j = 0; j < files.size(); j++) {
+					try {
+						action.accept(files.get(j));
+					} catch (Throwable e) {
+						throw new RuntimeException(files.get(j).getFileName(), e);
+					}
+				}
+				return null;
+			});
 			TaskPool.Common().pushTask(w);
 			wait.add(w);
 		}
@@ -1439,8 +1449,7 @@ public class Mapper extends Mapping {
 		long hash = FILE_HEADER;
 		if (cacheFile != null && libPath != null) {
 			List<?> list;
-			if (libPath instanceof File) {
-				File folder = (File) libPath;
+			if (libPath instanceof File folder) {
 				if (!folder.isDirectory()) {
 					throw new IllegalArgumentException(new FileNotFoundException(folder.getAbsolutePath()));
 				}
@@ -1468,6 +1477,7 @@ public class Mapper extends Mapping {
 
 			if (result != null) {
 				if (result == Boolean.FALSE) break loadLibraryOnly;
+				packup();
 				return;
 			}
 		}
@@ -1596,8 +1606,7 @@ public class Mapper extends Mapping {
 	public static long libHash(List<?> list) {
 		long hash = 0;
 		for (int i = 0; i < list.size(); i++) {
-			if (!(list.get(i) instanceof File)) continue;
-			File f = (File) list.get(i);
+			if (!(list.get(i) instanceof File f)) continue;
 			if (f.getName().endsWith(".jar") || f.getName().endsWith(".zip")) {
 				hash = 31 * hash + f.getName().hashCode();
 				hash = 31 * hash + (f.length() * 262143);

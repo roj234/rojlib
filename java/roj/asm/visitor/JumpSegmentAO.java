@@ -33,8 +33,8 @@ public final class JumpSegmentAO extends JumpSegment {
 		// if-goto-segment自动翻转
 		if (!isTerminate() &&
 			target.offset == 0 && target.block == segmentId+2 &&
-			!(to.segments.get(segmentId+2) instanceof JumpSegmentAO) &&
-			to.segments.get(segmentId+1) instanceof JumpSegmentAO t &&
+			!(to.segments.get(segmentId+2) instanceof JumpSegment) &&
+			to.segments.get(segmentId+1) instanceof JumpSegment t &&
 			t.isTerminate()) {
 
 			target = t.target;

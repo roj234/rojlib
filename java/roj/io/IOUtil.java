@@ -1,10 +1,11 @@
 package roj.io;
 
+import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.Waitable;
+import roj.config.data.CLong;
 import roj.crypt.Base64;
-import roj.math.MutableLong;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -33,7 +34,7 @@ public final class IOUtil {
 	public static final FastThreadLocal<IOUtil> SharedCoder = FastThreadLocal.withInitial(IOUtil::new);
 
 	// region ThreadLocal part
-	public final CharList charBuf = new CharList();
+	private final CharList charBuf = new CharList();
 	public final ByteList byteBuf = new ByteList();
 
 	private final ByteList.Slice shell = new ByteList.Slice();
@@ -54,25 +55,13 @@ public final class IOUtil {
 		return charBuf;
 	}
 
-	public String encodeHex(byte[] b) { return encodeHex(shell.setR(b,0,b.length)); }
-	public String encodeHex(ByteList b) {
-		charBuf.clear();
-		TextUtil.bytes2hex(b.list, 0, b.wIndex(), charBuf);
-		return charBuf.toString();
-	}
-
+	public String encodeHex(byte[] b) { return shell.setR(b,0,b.length).hex(); }
 	public byte[] decodeHex(CharSequence c) {
 		ByteList b = byteBuf; b.clear();
 		return TextUtil.hex2bytes(c, b).toByteArray();
 	}
 
-	public String encodeBase64(byte[] b) { return encodeBase64(shell.setR(b,0,b.length)); }
-	public String encodeBase64(DynByteBuf b) { return encodeBase64(b, Base64.B64_CHAR); }
-	public String encodeBase64(DynByteBuf b, byte[] chars) {
-		charBuf.clear();
-		Base64.encode(b, charBuf, chars);
-		return charBuf.toString();
-	}
+	public String encodeBase64(byte[] b) { return shell.setR(b,0,b.length).base64(); }
 
 	public byte[] decodeBase64(CharSequence c) { return decodeBase64R(c).toByteArray(); }
 	public ByteList decodeBase64R(CharSequence c) { return decodeBase64R(c, Base64.B64_CHAR_REV); }
@@ -289,7 +278,7 @@ public final class IOUtil {
 				File tmpPath = new File(System.getProperty("java.io.tmpdir"));
 				File tmpFile;
 				do {
-					tmpFile = new File(tmpPath, "FUT~" + (float) Math.random() + ".tmp");
+					tmpFile = new File(tmpPath, "FUT~"+(float)Math.random()+".tmp");
 				} while (tmpFile.exists());
 
 				try (FileChannel ct = FileChannel.open(tmpFile.toPath(),
@@ -348,6 +337,12 @@ public final class IOUtil {
 		return text.substring(i+1);
 	}
 
+	/**
+	 * no URLDecode
+	 * no \ TO /
+	 * @param path
+	 * @return
+	 */
 	public static String safePath(String path) {
 		CharList sb = getSharedCharBuf();
 
@@ -368,7 +363,7 @@ public final class IOUtil {
 		}
 		if (from.equals(to)) return 1;
 
-		MutableLong state = new MutableLong();
+		CLong state = new CLong();
 		int len = from.getAbsolutePath().length()+1;
 		to.mkdirs();
 		Files.walkFileTree(from.toPath(), new SimpleFileVisitor<Path>() {
@@ -412,6 +407,14 @@ public final class IOUtil {
 			}
 		});
 		return state.value;
+	}
+
+	public static void closeSilently(@Nullable AutoCloseable c) {
+		if (c != null) try {
+			c.close();
+		} catch (Throwable e) {
+			e.printStackTrace();
+		}
 	}
 
 	public static void ioWait(AutoCloseable closeable, Object waiter) throws IOException {

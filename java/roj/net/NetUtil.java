@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
  * @since 2020/10/30 23:05
  */
 public final class NetUtil {
+	@Deprecated
 	public static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
 
 	private static SimpleList<NetworkInterface> networkInterfaces;

@@ -3,6 +3,7 @@ package roj.net.ch;
 import roj.collect.SimpleList;
 import roj.concurrent.FastLocalThread;
 import roj.concurrent.Shutdownable;
+import roj.text.logging.Logger;
 import roj.util.Helpers;
 import roj.util.HighResolutionTimer;
 
@@ -21,7 +22,8 @@ import java.util.function.Consumer;
  * @since 2022/1/24 11:38
  */
 public class SelectorLoop implements Shutdownable {
-	public static final BiConsumer<String, Throwable> PRINT_HANDLER = (reason, error) -> error.printStackTrace();
+	public static final Logger LOGGER = Logger.getLogger("Channel");
+	public static final BiConsumer<String, Throwable> PRINT_HANDLER = (reason, error) -> LOGGER.warn("未处理的{}异常", error, reason);
 	static { HighResolutionTimer.activate(); }
 
 	final class Poller extends FastLocalThread implements Consumer<SelectionKey> {
@@ -134,7 +136,7 @@ public class SelectorLoop implements Shutdownable {
 
 					if (missedTime >= 50) {
 						if (prevAlert - time > 10000) {
-							System.err.println(Thread.currentThread().getName() + "@" + Thread.currentThread().getId() + "超过50ms未同步 请降低该线程的负载 / CT=" + missedTime);
+							LOGGER.warn(Thread.currentThread().getName() + "@" + Thread.currentThread().getId() + "超过50ms未同步 请降低该线程的负载 / CT=" + missedTime);
 							prevAlert = time;
 						}
 						missedTime = 1;
@@ -166,6 +168,11 @@ public class SelectorLoop implements Shutdownable {
 						delayed = 0;
 						System.err.println("rebuild selector");
 						continue;
+					}
+
+					if (missedTime < 0) {
+						time = System.currentTimeMillis();
+						LOGGER.warn("时间倒流了{}ms", -missedTime);
 					}
 				}
 

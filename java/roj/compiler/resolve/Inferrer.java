@@ -9,7 +9,7 @@ import roj.asm.type.*;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.compiler.asm.Asterisk;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.util.ArrayCache;
 
 import java.util.List;
@@ -24,7 +24,7 @@ public final class Inferrer {
 	public static final MethodResult FAIL_ARGCOUNT = new MethodResult(TypeCast.E_GEN_PARAM_COUNT, ArrayCache.OBJECTS);
 	private static final int LEVEL_DEPTH = 5120;
 
-	private final CompileContext ctx;
+	private final LocalContext ctx;
 	private final TypeCast castChecker = new TypeCast();
 
 	private final Map<String, IType> typeParams = new MyHashMap<>();
@@ -35,7 +35,7 @@ public final class Inferrer {
 	private Signature sign;
 	private IType[] bounds;
 
-	public Inferrer(CompileContext ctx) {
+	public Inferrer(LocalContext ctx) {
 		this.ctx = ctx;
 		this.castChecker.genericResolver = typeParamBounds::get;
 	}
@@ -84,8 +84,8 @@ public final class Inferrer {
 				if (typeMirror instanceof Generic gHint) {
 					// TODO 非静态 泛型 内部类
 					assert gHint.sub == null : "dynamic subclass not supported at this time";
-					if (gHint.children.size() != len) {
-						if (gHint.children.size() ==1 && gHint.children.get(0) == Asterisk.anyGeneric)
+					if (gHint.children.size() != typeParamBounds.size()) {
+						if (gHint.children.size() == 1 && gHint.children.get(0) == Asterisk.anyGeneric)
 							break boundPreCheck;
 
 						throw new ResolveException("GENERIC ARG COUNT ERROR");
@@ -127,7 +127,7 @@ public final class Inferrer {
 
 			if (inSize == vararg) {
 				if (vararg == 0)
-					distance -= cast(componentType, CompileContext.OBJECT_TYPE).distance;
+					distance -= cast(componentType, LocalContext.OBJECT_TYPE).distance;
 				break checkSpecial;
 			}
 

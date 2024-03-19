@@ -1,6 +1,5 @@
 package roj.misc;
 
-import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFile;
 import roj.io.IOUtil;
 
@@ -36,7 +35,7 @@ public class ExecutableHelperZ {
 
 				offset -= 2;
 				try {
-					new ZipFile(file, ZipArchive.FLAG_VERIFY, offset, StandardCharsets.UTF_8).close();
+					new ZipFile(file, ZipFile.FLAG_VERIFY, offset, StandardCharsets.UTF_8).close();
 					break;
 				} catch (Throwable ignored) {}
 				offset += 2;

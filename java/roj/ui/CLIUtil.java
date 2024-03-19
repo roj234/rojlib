@@ -3,18 +3,21 @@ package roj.ui;
 import org.jetbrains.annotations.NotNull;
 import roj.NativeLibrary;
 import roj.collect.*;
+import roj.config.Tokenizer;
+import roj.config.data.CInt;
 import roj.config.data.CList;
-import roj.config.data.CMapping;
-import roj.config.word.Tokenizer;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
-import roj.math.MutableInt;
 import roj.text.*;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.ArgumentContext;
 import roj.ui.terminal.CommandConsole;
 import roj.ui.terminal.CommandNode;
-import roj.util.*;
+import roj.util.ArrayUtil;
+import roj.util.ByteList;
+import roj.util.Helpers;
+import roj.util.NativeException;
 
 import java.io.*;
 import java.nio.channels.ClosedByInterruptException;
@@ -39,21 +42,12 @@ import static java.awt.event.KeyEvent.*;
  * ESC [ <n> d	VPA	绝对垂直行位置	光标在当前列中垂直移动到第 <n> 个位置
  * ESC [ <y> ; <x> H	CUP	光标位置	游标移动到视区中的 <x>；<y> 坐标，其中 <x> 是 <y> 行的列
  * ESC [ <y> ; <x> f	HVP	水平垂直位置	游标移动到视区中的 <x>；<y> 坐标，其中 <x> 是 <y> 行的列
- * ESC 7		保存光标
- * ESC 8		还原光标
- * ESC [ ? 12 h	ATT160		开始光标闪烁
- * ESC [ ? 12 l	ATT160		停止闪烁光标
- * ESC [ ? 25 h	DECTCEM		显示光标
- * ESC [ ? 25 l	DECTCEM		隐藏光标
- *
- *  备注
- * *<x> 和 <y> 参数的限制与上面的 <n> 相同。 如果省略 <x> 和 <y>，则将其设置为 1;1。
- *
+ * <p>
  * 对于以下行，参数 <n> 有 3 个有效值：
  * 0 的擦除范围是从当前光标位置（含）到行/显示的末尾
  * 1 的擦除范围是从行/显示开始到当前光标位置（含）
  * 2 的擦除范围是整行/显示
- *
+ * <p>
  * ESC [ <n> J	ED	显示中的擦除	将 <n> 指定的当前视区/屏幕中的所有文本替换为空格字符
  * ESC [ <n> K	EL	行中的擦除	将行上的所有文本替换为由 <n> 指定的光标与空格字符
  * @author Roj234
@@ -102,7 +96,8 @@ public final class CLIUtil implements Runnable {
 			}
 		}
 
-		public static AnsiString minecraftJsonStyleToString(CMapping map) {
+		public static String getByConsoleCode(int color) { return MC_COLOR_JSON.get(color); }
+		public static AnsiString minecraftJsonStyleToString(CMap map) {
 			AnsiString sts = minecraftRawStyleToString(map.getString("text"));
 
 			int colorCode = MC_COLOR_JSON.getInt(map.getString("color").toLowerCase());
@@ -201,14 +196,12 @@ public final class CLIUtil implements Runnable {
 		if (Boolean.getBoolean("roj.disableAnsi")) return false;
 		if (System.console() == null) return false;
 
-		if (OS.CURRENT == OS.WINDOWS) {
-			if (NativeLibrary.loaded) {
-				try {
-					setConsoleMode0(STDOUT, MODE_SET, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT);
-				} catch (NativeException e) {
-					System.err.println("Failed to initialize VT output: " + e.getMessage());
-					return false;
-				}
+		if (NativeLibrary.hasFunction(NativeLibrary.ANSI_CONSOLE)) {
+			try {
+				setConsoleMode0(STDOUT, MODE_SET, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT);
+			} catch (NativeException e) {
+				System.err.println("Failed to initialize VT output: " + e.getMessage());
+				return false;
 			}
 		}
 
@@ -244,7 +237,7 @@ public final class CLIUtil implements Runnable {
 		}
 		thread = t;
 
-		AnsiOut out = new AnsiOut(10240);
+		AnsiOut out = new AnsiOut();
 		System.setOut(out);
 		System.setErr(out);
 		return true;
@@ -276,7 +269,7 @@ public final class CLIUtil implements Runnable {
 		DISABLE_NEWLINE_AUTO_RETURN = 0x8,
 		ENABLE_LVB_GRID_WORLDWIDE = 0x10;
 	private static void enableDirectInput(boolean enable) {
-		if (OS.CURRENT == OS.WINDOWS && NativeLibrary.loaded) {
+		if (NativeLibrary.hasFunction(NativeLibrary.ANSI_CONSOLE)) {
 			try {
 				if (enable) {
 					setConsoleMode0(STDIN, MODE_SET, 0);
@@ -291,7 +284,7 @@ public final class CLIUtil implements Runnable {
 	}
 	private static native int setConsoleMode0(int target, int mode, int flag) throws NativeException;
 	public static void enableQuickEditMode() {
-		if (ANSI && NativeLibrary.loaded) setConsoleMode0(STDIN, MODE_ADD, ENABLE_QUICK_EDIT_MODE|ENABLE_EXTENDED_FLAGS);
+		if (ANSI && NativeLibrary.hasFunction(NativeLibrary.ANSI_CONSOLE)) setConsoleMode0(STDIN, MODE_ADD, ENABLE_QUICK_EDIT_MODE|ENABLE_EXTENDED_FLAGS);
 	}
 
 	public static void reset() { if (ANSI) System.out.print("\u001B[0m"); }
@@ -373,13 +366,14 @@ public final class CLIUtil implements Runnable {
 		Console prev = console;
 
 		Object[] ref = new Object[1];
-		c.register(CommandNode.argument("arg", arg).executes(ctx -> {
+		CommandNode node = CommandNode.argument("arg", arg).executes(ctx -> {
 			synchronized (ref) {
 				ref[0] = ctx.argument("arg", Object.class);
 				ref.notify();
 				setConsole(prev);
 			}
-		}));
+		});
+		c.register(node);
 		Thread t = Thread.currentThread();
 		c.onKeyboardInterrupt(t::interrupt);
 		c.ctx.executor = null;
@@ -391,7 +385,7 @@ public final class CLIUtil implements Runnable {
 			return Helpers.maybeNull();
 		} finally {
 			c.onKeyboardInterrupt(null);
-			c.unregister(null);
+			c.unregister(node);
 			setConsole(prev);
 		}
 
@@ -438,7 +432,7 @@ public final class CLIUtil implements Runnable {
 
 	public static void beep() { sysOut.write(7); sysOut.flush(); }
 
-	public static final Pattern ANSI_ESCAPE = Pattern.compile("\u001b\\[[^a-zA-Z]+?[a-zA-Z]");
+	public static final Pattern ANSI_ESCAPE = Pattern.compile("\u001B(?:\\[[^a-zA-Z]+?[a-zA-Z]|].*?\u0007)");
 	public static ByteList stripAnsi(ByteList b) {
 		Matcher m = ANSI_ESCAPE.matcher(b);
 		ByteList out = b.slice(0, b.length()); out.clear();
@@ -523,7 +517,7 @@ public final class CLIUtil implements Runnable {
 				tmpWidth = 0;
 			} else if (c == '\u001b') {
 				if (m.find(i)) i = m.end();
-				else throw new RuntimeException("未识别的转义,请更新ANSI_ESCAPE PATTERN");
+				else throw new RuntimeException("未识别的转义"+Tokenizer.addSlashes(str)+",请更新ANSI_ESCAPE PATTERN");
 			} else {
 				int w = getCharWidth(c);
 				if (tmpWidth+w > width) {
@@ -557,7 +551,7 @@ public final class CLIUtil implements Runnable {
 			synchronized (this) {
 				if (rPtr == wPtr) {
 					IN_READ.incrementAndGet();
-					synchronized (IN_READ) { IN_READ.notify(); }
+					LockSupport.unpark(thread);
 
 					try {
 						wait();
@@ -603,8 +597,8 @@ public final class CLIUtil implements Runnable {
 	// endregion
 
 	// region bottom line
-	private static final SimpleList<CharList> LINES = new SimpleList<>();
-	private static int LineCursor;
+	static final SimpleList<CharList> LINES = new SimpleList<>();
+	static int LineCursor, PrevWidth;
 
 	public static boolean hasBottomLine(CharList prompt) { return LINES.indexOfAddress(prompt) >= 0; }
 
@@ -673,116 +667,90 @@ public final class CLIUtil implements Runnable {
 				if (pos < 0) return;
 				LINES.remove(pos);
 
-				writeSeq(SEQ.putAscii(LINES.isEmpty() ? "\u001b[1M" : "\u001b7\u001b["+(pos-1)+"F\u001b[1M\u001b8\u001bM"));
+				writeSeq(SEQ.putAscii(LINES.isEmpty() & PrevWidth == 0 ? "\u001b[1M" : "\u001b7\u001b["+(pos-1)+"F\u001b[1M\u001b8\u001bM"));
 				if (!clearText) System.out.println(b);
 			}
 		}
 	}
 	static void writeSeq(ByteList b) {
-		try {
-			b.writeToStream(sysOut);
-			b.clear();
-		} catch (IOException e) {
-			Helpers.athrow(e);
-		}
+		sysOut.write(b.list, 0, b.wIndex());
+		b.clear();
 	}
 
 	static final class AnsiOut extends DelegatedPrintStream {
-		private final CharList mySb = new CharList();
-		private boolean mySbRegister;
+		private boolean started;
 
-		AnsiOut(int max) { super(max); }
-
-		private synchronized void writeLine(boolean newLine) {
-			if (!ANSI) {
-				stripAnsi(bb);
-				stripAnsi(sb);
-			}
-
-			synchronized (sysOut) {
-				if (LINES.isEmpty()) {
-					SEQ.put(bb);
-					CE.encodeFixedIn(sb, SEQ);
-					sb.clear(); bb.clear();
-					if (newLine) SEQ.put('\n');
-				} else {
-					if (!newLine && bb.wIndex() == 0) {
-						mySb.append(sb); sb.clear();
-
-						int w = getStringWidth(mySb);
-						boolean overflow = w >= windowWidth;
-						if (overflow) {
-							List<String> lines = splitByWidth(mySb.toString(), windowWidth);
-
-							prepAdvance();
-							for (int i = 0; i < lines.size()-1; i++) SEQ.putAscii(lines.get(i)).put('\n');
-
-							mySb.clear();
-							mySb.append(lines.get(lines.size()-1));
-						}
-
-						if (!overflow) {
-							boolean renderLine = mySb.length() > 0 && LINES.size() > 0;
-							if (renderLine) renderBottomLine(LINES.get(LINES.size()-1), false, LineCursor);
-							if (w > 0) {
-								mySbRegister = true;
-								renderBottomLine(mySb, true, w);
-							} else if (!renderLine & mySb.length() > 0) {
-								// TODO should render and clear?
-								CE.encodeFixedIn(mySb, SEQ);
-								mySb.clear();
-								writeSeq(SEQ);
-							}
-							return;
-						}
-					} else {
-						if (mySbRegister) {
-							mySbRegister = false;
-							removeBottomLine(mySb, true);
-						}
-						prepAdvance();
-
-						CE.encodeFixedIn(mySb, SEQ);
-						mySb.clear();
-
-						SEQ.put(bb);
-						CE.encodeFixedIn(sb, SEQ);
-						sb.clear(); bb.clear();
-						SEQ.put('\n');
-					}
-
-					int i = LINES.size()-1;
-					if (i > 0) while (true) {
-						try {
-							CE.encodeFixedIn(LINES.get(i), SEQ);
-						} catch (Throwable ignored) {}
-						SEQ.putAscii("\u001b[0K");
-						if (i-- == 0) {
-							if (LineCursor > 0) SEQ.putAscii("\u001b["+LineCursor+"G");
-							break;
-						}
-						SEQ.put('\n');
-					}
-					SEQ.putAscii("\u001b[?25h");
-				}
-
-				writeSeq(SEQ);
-			}
-		}
-
-		private static void prepAdvance() {
-			SEQ.putAscii("\u001b[?25l");
-			if (LINES.size() > 1) SEQ.putAscii("\u001b["+(LINES.size()-1)+"F");
-			else SEQ.putAscii("\u001b[1G");
-			SEQ.putAscii("\u001b[0K");
-		}
+		AnsiOut() {}
 
 		@Override
 		protected void flushBytes() {}
 		@Override
-		protected void newLine() { writeLine(true); }
+		protected void newLine() {
+			begin();
+			PrevWidth = 0;
+			writeSeq(bb.put('\n'));
+		}
 		@Override
-		protected void partialLine() { writeLine(false); }
+		protected void partialLine() {
+			begin();
+
+			int width = getStringWidth(bb);
+			if (width > windowWidth) {
+				CharList buf = IOUtil.getSharedCharBuf();
+				CE.decodeFixedIn(bb, bb.readableBytes(), buf);
+				List<String> lines = splitByWidth(buf.toString(), windowWidth);
+
+				for (int i = 0; i < lines.size(); i++) {
+					bb.clear();
+					CE.encodeFixedIn(lines.get(i), bb);
+
+					// soft warp...
+					sysOut.write(bb.list, 0, bb.wIndex());
+				}
+
+				width = getStringWidth(bb);
+			} else {
+				sysOut.write(bb.list, 0, bb.wIndex());
+			}
+
+			if (width > 0) sysOut.write('\n');
+			PrevWidth = width;
+		}
+		private void begin() {
+			CE.encodeFixedIn(sb, bb);sb.clear();
+			if (!ANSI) stripAnsi(bb);
+			else {
+				int advance = LINES.size() + (PrevWidth > 0 ? 1 : 0);
+				if (advance > 0 && !started) {
+					SEQ.putAscii("\u001b[?25l");
+					if (advance > 1) SEQ.putAscii("\u001b["+(advance-1)+"F");
+					else SEQ.putAscii("\u001b[1G");
+					writeSeq(SEQ.putAscii("\u001b[2K"));
+					started = true;
+				}
+			}
+		}
+
+		@Override
+		public void flush() {
+			if (started) {
+				ByteList s = SEQ;
+				int i = LINES.size()-1;
+				if (i >= 0) while (true) {
+					try {
+						CE.encodeFixedIn(LINES.get(i), s);
+					} catch (Throwable ignored) {}
+					s.putAscii("\u001b[0K");
+					if (i-- == 0) {
+						if (LineCursor > 0) s.putAscii("\u001b["+LineCursor+"G");
+						break;
+					}
+					s.put('\n');
+				}
+				writeSeq(s.putAscii("\u001b[?25h"));
+			}
+			started = false;
+		}
 	}
 	// endregion
 
@@ -815,14 +783,8 @@ public final class CLIUtil implements Runnable {
 
 		while (true) {
 			if (console == null) {
-				synchronized (IN_READ) {
-					if (IN_READ.get() == 0 || rPtr != wPtr) {
-						try {
-							IN_READ.wait();
-						} catch (InterruptedException e) {
-							break;
-						}
-					}
+				if (IN_READ.get() == 0 || rPtr != wPtr) {
+					LockSupport.park(IN_READ);
 				}
 			}
 
@@ -873,10 +835,10 @@ public final class CLIUtil implements Runnable {
 		if (c != null) {
 			if (ANSI) enableDirectInput(true);
 			c.registered();
-			synchronized (IN_READ) { IN_READ.notify(); }
 		} else {
 			if (ANSI) enableDirectInput(false);
 		}
+		LockSupport.unpark(thread);
 	}
 	public static Console getConsole() { return console; }
 
@@ -946,14 +908,14 @@ public final class CLIUtil implements Runnable {
 	}
 	private static void key(int vk, String seq) { KeyMap.put(TextUtil.hex2bytes(seq, new ByteList()), vk); }
 
-	private final MyHashMap.Entry<MutableInt, Integer> matcher = new MyHashMap.Entry<>(new MutableInt(), null);
+	private final MyHashMap.Entry<CInt, Integer> matcher = new MyHashMap.Entry<>(new CInt(), null);
 	private void processInput(byte[] buf, int off, int len, ByteList.Slice inBuf) {
 		inBuf.setR(buf, off, len);
 		int i = 0;
 
 		while (i < len) {
 			KeyMap.match(inBuf, i, len, matcher);
-			int matchLen = matcher.getKey().getValue();
+			int matchLen = matcher.getKey().value;
 			if (matchLen < 0) {
 				keyEnter(buf[i++], false);
 				continue;
@@ -1041,7 +1003,7 @@ public final class CLIUtil implements Runnable {
 				}
 
 				if (isGetCursor == -1) {
-					synchronized (IN_READ) { IN_READ.notify(); }
+					LockSupport.unpark(thread);
 					try {
 						lcb.wait(30);
 					} catch (InterruptedException e) {

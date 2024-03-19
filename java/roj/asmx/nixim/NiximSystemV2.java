@@ -1,10 +1,7 @@
 package roj.asmx.nixim;
 
 import org.jetbrains.annotations.NotNull;
-import roj.RequireTest;
-import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
-import roj.archive.zip.ZipFileWriter;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cp.*;
@@ -24,8 +21,8 @@ import roj.asm.util.InsnHelper;
 import roj.asm.visitor.*;
 import roj.asmx.ITransformer;
 import roj.collect.*;
+import roj.config.data.CInt;
 import roj.io.IOUtil;
-import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -35,9 +32,11 @@ import java.io.InputStream;
 import java.util.*;
 
 import static roj.asm.Opcodes.*;
+import static roj.reflect.ClassDumper.DUMP_ENABLED;
+import static roj.reflect.ClassDumper.dump;
 
 /**
- * Nixim class injector 3.0
+ * Nixim class injector 3.1
  * @author Roj234
  * @since 2023/10/9 18:49
  */
@@ -85,18 +84,8 @@ public class NiximSystemV2 implements ITransformer {
 		System.out.println("OK");
 	}
 
-	public static ZipFileWriter DEBUG;
-	private static void writeClassDebug(String id, ConstantData data) {
-		try {
-			DEBUG.beginEntry(new ZEntry(id+"/"+data.name+".class"));
-			Parser.toByteArrayShared(data).writeToStream(DEBUG);
-			DEBUG.closeEntry();
-		} catch (Exception ignored) {}
-	}
-
 	public static final String A_NIXIM_CLASS_FLAG = unifyClassName(Nixim.class.getName());
 	public static final String A_INJECT = unifyClassName(Inject.class.getName());
-	public static final String A_IMPL_INTERFACE = unifyClassName(Implements.class.getName());
 	public static final String A_SHADOW = unifyClassName(Shadow.class.getName());
 	public static final String A_COPY = unifyClassName(Copy.class.getName());
 	public static final String A_DYNAMIC = unifyClassName(Dynamic.class.getName());
@@ -165,14 +154,13 @@ public class NiximSystemV2 implements ITransformer {
 		public String target;
 
 		public List<String> impls = Collections.emptyList();
-		final void init_impls() { if (impls.isEmpty()) impls = new SimpleList<>(); }
 
 		public Map<Pcd, InjectState> inject = Collections.emptyMap();
 		final Map<Pcd, InjectState> inject() { if (inject.isEmpty()) inject = new MyHashMap<>(); return inject; }
 
 		public MethodNode copyInit;
-		public List<CNode> copied = Collections.emptyList();
-		final List<CNode> copied() { if (copied.isEmpty()) copied = new SimpleList<>(); return copied; }
+		public Set<CNode> copied = Collections.emptySet();
+		final Set<CNode> copied() { if (copied.isEmpty()) copied = new MyHashSet<>(Hasher.identity()); return copied; }
 
 		// Shadow
 		public final MyHashSet<Pcd> preconditions = new MyHashSet<>();
@@ -187,6 +175,7 @@ public class NiximSystemV2 implements ITransformer {
 		@Override
 		public String toString() { return "Nixim{'"+self+"' => '"+target+"'}"; }
 	}
+	static final int SKIP_STATIC_CHECK = 16384;
 	static final class InjectState {
 		// 注解的信息
 		String at;
@@ -222,13 +211,13 @@ public class NiximSystemV2 implements ITransformer {
 			flags = map.getInt("flags", 0);
 
 			boolean isAbstract = method.attrByName("Code") == null;
-			if (map.type.endsWith("OverwriteConstant")) {
+			if (map.type().endsWith("OverwriteConstant")) {
 				at = "LDC";
 				extra = map;
-			} else if (map.type.endsWith("InvokeRedirect")) {
+			} else if (map.type().endsWith("InvokeRedirect")) {
 				at = "INVOKE";
 				extra = map;
-			} else if (map.type.endsWith("SearchReplace")) {
+			} else if (map.type().endsWith("SearchReplace")) {
 				at = "MIDDLE";
 				extra = map;
 			} else {
@@ -255,7 +244,7 @@ public class NiximSystemV2 implements ITransformer {
 	public final void load(ConstantData data) throws NiximException {
 		NiximData nx = read(data);
 		if (nx == null) return;
-		nx.next = registry.put(data.name, nx);
+		nx.next = registry.put(nx.target, nx);
 	}
 	public final boolean unload(String target, String source) {
 		NiximData nx = registry.get(target), prev = null;
@@ -272,20 +261,9 @@ public class NiximSystemV2 implements ITransformer {
 	}
 	public final boolean unload(String target) { return registry.remove(target) != null; }
 
-	public static void transformNiximUser(ConstantData data, NiximData nx, Map<String, NiximData> ctx) {
-		AbstractMap<String, String> fakeMap = new AbstractMap<String, String>() {
-			@Override
-			public String get(Object key) {
-				if (nx != null && key.equals(nx.self)) return nx.target;
-
-				NiximData nx = ctx.get(key);
-				return nx == null ? null : nx.target;
-			}
-
-			@NotNull
-			@Override
-			public Set<Entry<String, String>> entrySet() { return Collections.emptySet(); }
-		};
+	public static boolean transformNiximUser(ConstantData data, NiximData nx, Map<String, NiximData> ctx) {
+		boolean changed = false;
+		AbstractMap<String, String> fakeMap = getFakeMap(nx, ctx);
 
 		Pcd tmpPCD = new Pcd();
 		List<Constant> constants = data.cp.array();
@@ -302,6 +280,8 @@ public class NiximSystemV2 implements ITransformer {
 						tmpPCD.desc = ref.descType();
 						Pcd pcd = nx1.preconditions.find(tmpPCD);
 						if (pcd != tmpPCD) {
+							changed = true;
+
 							if (!pcd.mapOwner.equals(ref.className())) ref.clazz(data.cp.getClazz(pcd.mapOwner));
 							if (!pcd.mapName.equals(pcd.name)) ref.desc(data.cp.getDesc(pcd.mapName, ref.descType()));
 
@@ -317,12 +297,34 @@ public class NiximSystemV2 implements ITransformer {
 			if (c.type() == Constant.CLASS) {
 				CstClass ref1 = (CstClass) c;
 				NiximData nx1 = ctx.get(ref1.name().str());
-				if (nx1 != null) data.cp.setUTFValue(ref1.name(), nx1.target);
+				if (nx1 != null) {
+					changed = true;
+
+					data.cp.setUTFValue(ref1.name(), nx1.target);
+				}
 			}
 		}
+
+		return changed;
 	}
+	private static AbstractMap<String, String> getFakeMap(NiximData nx, Map<String, NiximData> ctx) {
+		return new AbstractMap<>() {
+			@Override
+			public String get(Object key) {
+				if (nx != null && key.equals(nx.self)) return nx.target;
+
+				NiximData nx = ctx.get(key);
+				return nx == null ? null : nx.target;
+			}
+
+			@NotNull
+			@Override
+			public Set<Entry<String, String>> entrySet() {return Collections.emptySet();}
+		};
+	}
+
 	public NiximData read(ConstantData data) throws NiximException {
-		if (DEBUG != null) writeClassDebug("nixim", data);
+		if (DUMP_ENABLED) dump("nixim_mapping", data);
 
 		NiximData nx = new NiximData(data.name);
 
@@ -333,12 +335,9 @@ public class NiximSystemV2 implements ITransformer {
 		nx.target = unifyClassName(a.getString("value"));
 		if (nx.target.equals("/")) nx.target = data.parent;
 
-		if (a.getBoolean("copyItf")) {
+		if (a.getBoolean("copyItf", true)) {
 			List<CstClass> itf = data.interfaces;
-			nx.init_impls();
-			for (int i = 0; i < itf.size(); i++) {
-				nx.impls.add(itf.get(i).name().str());
-			}
+			if (!itf.isEmpty()) nx.impls = new SimpleList<>(data.interfaces());
 		}
 
 		//int flag = a.getInt("flags");
@@ -348,15 +347,6 @@ public class NiximSystemV2 implements ITransformer {
 			List<AnnVal> annVals = a.getArray("value");
 			if (!shouldApply(A_NIXIM_CLASS_FLAG, data, Helpers.cast(annVals))) {
 				return null;
-			}
-		}
-
-		a = annotation.get(A_IMPL_INTERFACE);
-		if (a != null) {
-			List<AnnVal> annVals = a.getArray("value");
-			nx.init_impls();
-			for (int i = 0; i < annVals.size(); i++) {
-				nx.impls.add(annVals.get(i).asClass().owner);
 			}
 		}
 
@@ -382,11 +372,22 @@ public class NiximSystemV2 implements ITransformer {
 				autoCopy.add(methods.get(i));
 		}
 
+		Map<String, NiximData> ctx = getParentMap();
+		AbstractMap<String, String> fakeMap = getFakeMap(nx, ctx);
+		for (MethodNode method : data.methods) {
+			String desc = ClassUtil.getInstance().mapMethodParam(fakeMap, method.rawDesc());
+			method.rawDesc(desc);
+		}
+		for (FieldNode field : data.fields) {
+			String desc = ClassUtil.getInstance().mapFieldType(fakeMap, field.rawDesc());
+			if (desc != null) field.rawDesc(desc);
+		}
+
 		// 处理 Final Copy Shadow Unique
 		readAnnotations(data, nx, data.methods);
 		readAnnotations(data, nx, data.fields);
 
-		transformNiximUser(data, nx, getParentMap());
+		transformNiximUser(data, nx, ctx);
 
 		// 查找无法访问的方法
 		MyHashSet<Desc> inaccessible = new MyHashSet<>();
@@ -429,8 +430,8 @@ public class NiximSystemV2 implements ITransformer {
 		cv.state = null;
 
 		for (CNode node : nx.copied) {
-			if (node instanceof MethodNode)
-				cv.copied.add((MethodNode) node);
+			if (node instanceof MethodNode mn)
+				cv.copied.add(mn);
 		}
 
 		boolean hasNew;
@@ -468,7 +469,7 @@ public class NiximSystemV2 implements ITransformer {
 						}
 					}
 
-					throw new NiximException("无法找到符合条件的 lambda 方法: " + ref.desc());
+					throw new NiximException("无法找到符合条件的 lambda 方法: "+ref.desc());
 				}
 			}
 			lambdaPending.clear();
@@ -523,7 +524,7 @@ public class NiximSystemV2 implements ITransformer {
 		return nx;
 	}
 	// region Utilities for reading Nixim classes
-	private static void fixNewCopyMethod(Pcd tmp, NiximData nx, List<CNode> nodes) {
+	private static void fixNewCopyMethod(Pcd tmp, NiximData nx, Collection<CNode> nodes) {
 		for (CNode n : nodes) {
 			if (!(n instanceof MethodNode)) continue;
 			XAttrCode code = n.parsedAttr(null, Attribute.Code);
@@ -770,6 +771,11 @@ public class NiximSystemV2 implements ITransformer {
 				InjectState prev = nx.inject().put(pcd, state);
 				if (prev != null) state.next = prev;
 				nodes.remove(i);
+
+				if (a.type().equals("roj/asmx/nixim/InvokeRedirect")) {
+					nx.copied().add(node);
+					state.flags |= SKIP_STATIC_CHECK;
+				}
 			}
 		}
 	}
@@ -777,7 +783,7 @@ public class NiximSystemV2 implements ITransformer {
 		if (pcd != null) throw new NiximException("冲突的注解: "+data.name+'.'+node+": "+annotation.values());
 		if (dyn != null) {
 			List<AnnVal> annVals = dyn.getArray("value");
-			if (!shouldApply(a.type, data, Helpers.cast(annVals))) return true;
+			if (!shouldApply(a.type(), data, Helpers.cast(annVals))) return true;
 		}
 		if (node.name().equals("<init>"))
 			throw new NiximException("不支持操作: 自Nixim3.0起,你不能在构造器中使用Inject注解: "+data.name+'.'+node+"\n" +
@@ -865,32 +871,40 @@ public class NiximSystemV2 implements ITransformer {
 	public boolean transform(String name, Context ctx) throws NiximException {
 		ConstantData data = ctx.getData();
 
+		boolean changed = false;
+
 		NiximData nx1 = registry.get(data.name);
-		if (nx1 != null) apply(data, nx1);
+		if (nx1 != null) {
+			apply(data, nx1);
+			changed = true;
+		}
 
 		NiximData nx2 = registry.get(name);
 		if (nx2 == nx1) {
 			if (nx2 == null) {
-				transformNiximUser(data, null, registry);
+				changed = transformNiximUser(data, null, registry);
 			}
-		} else if (nx2 != null) apply(data, nx2);
+		} else if (nx2 != null) {
+			apply(data, nx2);
+			changed = true;
+		}
 
-		return true;
+		return changed;
 	}
 
 	public void apply(ConstantData data, NiximData nx) throws NiximException {
 		if (!data.name.equals(nx.target)) throw new NiximException("期待目标为"+nx.target+"而不是"+data.name);
 
-		if (DEBUG != null) writeClassDebug("in", data);
+		if (DUMP_ENABLED) dump("nixim_in", data);
 		while (nx != null) {
 			data.unparsed();
 			applyLoop(data, nx);
 			nx = nx.next;
 		}
-		if (DEBUG != null) writeClassDebug("out", data);
+		if (DUMP_ENABLED) dump("nixim_out", data);
 	}
 	private void applyLoop(ConstantData data, NiximData nx) throws NiximException {
-		System.out.println("NiximClass " + data.name);
+		//System.out.println("NiximClass " + data.name);
 
 		// 添加接口
 		List<String> itfs = nx.impls;
@@ -934,7 +948,7 @@ public class NiximSystemV2 implements ITransformer {
 				InjectState state = nx.inject.remove(tmp);
 				if (state == null) continue;
 
-				if ((state.method.modifier & ACC_STATIC) != (mn.modifier & ACC_STATIC)) {
+				if ((state.flags&SKIP_STATIC_CHECK) == 0 && (state.method.modifier & ACC_STATIC) != (mn.modifier & ACC_STATIC)) {
 					throw new NiximException(nx.self+"."+state.method+"无法覆盖"+data.name+"."+mn+": static不匹配");
 				}
 
@@ -1141,7 +1155,8 @@ public class NiximSystemV2 implements ITransformer {
 
 				int isStatic = (s.method.modifier & ACC_STATIC);
 				int used = 0;
-				for (XInsnNodeView node : mnCode.instructions) {
+				for (XInsnList.NodeIterator itr = mnCode.instructions.iterator(); itr.hasNext(); ) {
+					XInsnNodeView node = itr.next();
 					Desc d = node.descOrNull();
 					if (d != null && d.owner != null) {
 						if ((m.owner.isEmpty() || m.owner.equals(d.owner)) &&
@@ -1161,10 +1176,29 @@ public class NiximSystemV2 implements ITransformer {
 								continue;
 							}
 
-							if (!s.method.rawDesc().equals(desc))
-								throw new NiximException("@InvokeRedirect "+m+" 参数不匹配: except " + desc+" , got "+s.method.rawDesc());
-
 							node.setOpcode(isStatic > 0 ? INVOKESTATIC : INVOKEVIRTUAL);
+
+							block:
+							if (!s.method.rawDesc().equals(desc)) {
+								List<Type> par1 = s.method.parameters();
+								List<Type> par2 = TypeHelper.parseMethod(desc);
+								par2.remove(par2.size()-1);
+								if (par1.size()-1 == par2.size() && data.name.equals(par1.get(par1.size()-1).owner)) {
+									if ((input.modifier&ACC_STATIC) != 0) throw new NiximException("@InvokeRedirect.ContextInject 期待非静态方法: "+input.name()+"."+input.rawDesc());
+									// context_inject
+
+									itr = mnCode.instructions.since(node.bci());
+
+									XInsnList list = new XInsnList();
+									list.one(ALOAD_0);
+									node.insertBefore(list, XInsnList.REP_CLONE);
+
+									break block;
+								}
+
+								throw new NiximException("@InvokeRedirect "+m+" 参数不匹配: except " + desc+" , got "+s.method.rawDesc());
+							}
+
 							d.owner = data.name;
 							d.name = s.method.name();
 							d.param = s.method.rawDesc();
@@ -1203,7 +1237,7 @@ public class NiximSystemV2 implements ITransformer {
 				}
 
 				MyBitSet occurrences = s.getOccurrences();
-				MutableInt ordinal = new MutableInt();
+				CInt ordinal = new CInt();
 
 				int used = 0;
 
@@ -1236,14 +1270,14 @@ public class NiximSystemV2 implements ITransformer {
 						break;
 						case BIPUSH: case SIPUSH:
 							if (type == Constant.INT && find.equals(String.valueOf(node.getNumberExact())) &&
-								(occurrences == null || occurrences.contains(ordinal.incrementAndGet()))) {
+								(occurrences == null || occurrences.contains(++ordinal.value))) {
 								node.replace(replaceTo, XInsnList.REP_SHARED);
 								used++;
 							}
 						break;
 						case LDC: case LDC_W: case LDC2_W:
 							if (type == node.constant().type() && find.equals(node.constant().getEasyCompareValue()) &&
-								(occurrences == null || occurrences.contains(ordinal.incrementAndGet()))) {
+								(occurrences == null || occurrences.contains(++ordinal.value))) {
 								node.replace(replaceTo, XInsnList.REP_SHARED);
 								used++;
 							}
@@ -1484,10 +1518,10 @@ public class NiximSystemV2 implements ITransformer {
 		usedSlots.addRange(newSlot, newSlot+len);
 		return newSlot;
 	}
-	private static boolean doLdcMatchBytecode(XInsnNodeView node, byte base, String find, MyBitSet occurrences, MutableInt ordinal) {
+	private static boolean doLdcMatchBytecode(XInsnNodeView node, byte base, String find, MyBitSet occurrences, CInt ordinal) {
 		int value = node.opcode() - base;
 		if (!find.equals(String.valueOf(value))) return false;
-		return occurrences == null || occurrences.contains(ordinal.incrementAndGet());
+		return occurrences == null || occurrences.contains(++ordinal.value);
 	}
 	private static void copyLine(XAttrCode from, XAttrCode to, int pcOff) {
 		LineNumberTable lnFr = (LineNumberTable) from.attrByName("LineNumberTable");
@@ -1533,8 +1567,8 @@ public class NiximSystemV2 implements ITransformer {
 		List<Annotation> annotations = attr.annotations;
 		for (int i = annotations.size()-1; i >= 0; i--) {
 			Annotation a = annotations.get(i);
-			map.put(a.type, a);
-			if (a.type.startsWith("roj/asmx/nixim/")) annotations.remove(i);
+			map.put(a.type(), a);
+			if (a.type().startsWith("roj/asmx/nixim/")) annotations.remove(i);
 		}
 		return map;
 	}
@@ -1588,13 +1622,12 @@ public class NiximSystemV2 implements ITransformer {
 		}
 
 		@Override
-		@RequireTest
 		public void invoke(byte code, CstRef method) {
 			checkAccess(method);
 
 			String name = method.descName();
 			if (name.startsWith(SPEC_M_CONSTRUCTOR)) {
-				if (isConstructor) throw new IllegalStateException(SPEC_M_CONSTRUCTOR+" called twice!");
+				if (isConstructor) throw new IllegalStateException("构造器("+SPEC_M_CONSTRUCTOR+")只能调用一次");
 				isConstructor = true;
 				if (state != null) {
 					state.initBci = bci;

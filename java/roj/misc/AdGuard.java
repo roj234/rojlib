@@ -4,12 +4,11 @@ import roj.collect.TrieTreeSet;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CList;
-import roj.config.data.CMapping;
-import roj.io.IOUtil;
+import roj.config.data.CMap;
 import roj.net.dns.DnsServer;
 import roj.net.dns.DnsServer.Record;
-import roj.net.http.srv.HttpServer11;
-import roj.net.http.srv.autohandled.OKRouter;
+import roj.net.http.server.HttpServer11;
+import roj.net.http.server.auto.OKRouter;
 import roj.text.CharList;
 import roj.text.TextReader;
 
@@ -29,7 +28,7 @@ import java.net.URL;
 public class AdGuard {
 	public static void main(String[] args) throws IOException, ParseException {
 		String configFile = args.length > 0 ? args[0] : "config.json";
-		CMapping cfg = JSONParser.parses(IOUtil.readUTF(new File(configFile)), JSONParser.LITERAL_KEY).asMap();
+		CMap cfg = new JSONParser().parse(new File(configFile)).asMap();
 
 		/**
 		 * Init DNS Server
@@ -46,7 +45,7 @@ public class AdGuard {
 		TrieTreeSet tree = new TrieTreeSet();
 		list = cfg.getOrCreateList("adblock");
 		for (int i = 0; i < list.size(); i++) {
-			CMapping map = list.get(i).asMap();
+			CMap map = list.get(i).asMap();
 			File file = new File(map.getString("file"));
 			if (System.currentTimeMillis() - file.lastModified() > map.getLong("update")) {
 				String url = map.getString("url");

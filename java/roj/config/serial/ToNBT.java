@@ -1,26 +1,30 @@
 package roj.config.serial;
 
+import roj.text.J9String;
+import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.util.Arrays;
 
 import static roj.config.NBTParser.*;
+import static roj.config.XNBTParser.*;
 
 /**
  * @author Roj234
  * @since 2023/3/27 22:38
  */
 public class ToNBT implements CVisitor {
+	private boolean XNbt = false;
+
 	public ToNBT() {}
 	public ToNBT(DynByteBuf buf) { this.ob = buf; }
+
+	public ToNBT setXNbt(boolean XNBT_CHECK) {this.XNbt = XNBT_CHECK;return this;}
 
 	private DynByteBuf ob;
 	public DynByteBuf buffer() { return ob; }
 	public ToNBT buffer(DynByteBuf buf) { ob = buf; return this; }
-
-	@Override
-	public void close() throws IOException { if (ob != null) ob.close(); }
 
 	private String key;
 
@@ -43,10 +47,6 @@ public class ToNBT implements CVisitor {
 		onValue(INT);
 		ob.writeInt(l);
 	}
-	public final void value(String l) {
-		onValue(STRING);
-		ob.writeUTF(l);
-	}
 	public final void value(long l) {
 		onValue(LONG);
 		ob.writeLong(l);
@@ -59,7 +59,36 @@ public class ToNBT implements CVisitor {
 		onValue(DOUBLE);
 		ob.writeDouble(l);
 	}
-	public final void valueNull() { throw new NullPointerException("NBT不支持Null"); }
+	public final void value(String l) {
+		if (XNbt) {
+			if (J9String.isLatin1(l)) {
+				onValue(X_LATIN1_STRING);
+				ob.putVUInt(l.length()).putAscii(l);
+				return;
+			}
+
+			int utfExtra = l.length() * 2 / 3;
+			int numCn = 0;
+			for (int i = 0; i < l.length(); i++) {
+				if (TextUtil.isChinese(l.charAt(i))) {
+					if (++numCn > utfExtra) {
+						onValue(X_GB18030_STRING);
+						ob.putVUIGB(l);
+						return;
+					}
+				}
+			}
+		}
+
+		onValue(STRING);
+		ob.writeUTF(l);
+	}
+	public final void valueNull() {
+		if (!XNbt) throw new NullPointerException("NBT不支持Null (请使用XNBT)");
+		onValue(X_NULL);
+		ob.put(X_NULL);
+	}
+	public final boolean supportArray() {return true;}
 	public final void value(byte[] ba) {
 		onValue(BYTE_ARRAY);
 		ob.writeInt(ba.length);
@@ -76,7 +105,7 @@ public class ToNBT implements CVisitor {
 		for (long l : la) ob.writeLong(l);
 	}
 
-	private void onValue(byte type) {
+	public final void onValue(byte type) {
 		switch (state) {
 			case -1:
 				//if (type != COMPOUND) throw new IllegalStateException("NBT开头必须是COMPOUND");
@@ -109,7 +138,7 @@ public class ToNBT implements CVisitor {
 	}
 
 	public final void key(String key) {
-		if (state != 1) throw new IllegalStateException("状态不是COMPOUND");
+		if (state != 1) throw new IllegalStateException("状态不是COMPOUND "+state);
 		if (this.key != null) throw new IllegalStateException("期待"+this.key+"的值|"+key);
 		this.key = key;
 	}
@@ -166,11 +195,15 @@ public class ToNBT implements CVisitor {
 		size = ((int) data&0xFFFFFFF) - 0x3FFFFFF;
 	}
 
-	public final void reset() {
+	public final ToNBT reset() {
 		state = -1;
 		stateLen = 0;
 		size = 0;
 		sizeOffset = 0;
 		key = null;
+		return this;
 	}
+
+	@Override
+	public void close() throws IOException { if (ob != null) ob.close(); }
 }

@@ -12,9 +12,7 @@ public class FilterList<T> extends AbstractList<T> {
 	public T found;
 	final BiFunction<T, T, Boolean> checker;
 
-	public FilterList(BiFunction<T, T, Boolean> checker) {
-		this.checker = checker;
-	}
+	public FilterList(BiFunction<T, T, Boolean> checker) {this.checker = checker;}
 
 	public void add(int index, T element) {
 		if (checker.apply(found, element)) {

@@ -3,12 +3,12 @@ package roj.archive.qz;
 import roj.archive.qz.xz.LZMA2InputStream;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.LZMA2ParallelReader;
-import roj.archive.qz.xz.MemoryLimitException;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class LZMA2 extends QZCoder {
     public static boolean experimental_async_decompress;
@@ -29,14 +29,12 @@ public final class LZMA2 extends QZCoder {
     public OutputStream encode(OutputStream out) throws IOException { return options.getOutputStream(out); }
 
     @Override
-    public InputStream decode(InputStream in, byte[] password, long uncompressedSize, int maxMemoryLimitInKb) throws IOException {
+    public InputStream decode(InputStream in, byte[] password, long uncompressedSize, AtomicInteger memoryLimit) throws IOException {
         int dictSize = getDictSize();
-
-        if (uncompressedSize > LZMA2Options.DICT_SIZE_MIN)
-            dictSize = (int) Math.min(uncompressedSize, dictSize);
-
-        int memoryUsage = LZMA2InputStream.getMemoryUsage(dictSize);
-        if (memoryUsage > maxMemoryLimitInKb) throw new MemoryLimitException(memoryUsage, maxMemoryLimitInKb);
+        if (uncompressedSize < dictSize) {
+            dictSize = uncompressedSize < LZMA2Options.DICT_SIZE_MIN ? LZMA2Options.DICT_SIZE_MIN : (int) uncompressedSize;
+        }
+        useMemory(memoryLimit, LZMA2InputStream.getMemoryUsage(dictSize));
 
         return experimental_async_decompress ? new LZMA2ParallelReader(in, dictSize) : new LZMA2InputStream(in, dictSize);
     }

@@ -75,7 +75,7 @@ public class TaskPool implements TaskHandler {
 
 	public static TaskPool Common() { return CommonHolder.P; }
 	private static final class CommonHolder {
-		static final TaskPool P = new TaskPool(1, Runtime.getRuntime().availableProcessors(), 0, 60000, "Cpu任务-");
+		static final TaskPool P = new TaskPool(1, Integer.getInteger("roj.cpuPoolSize", Runtime.getRuntime().availableProcessors()), 0, 60000, "Cpu任务-");
 	}
 
 	public static TaskPool MaxThread(int threadCount, String prefix) { return MaxThread(threadCount, new PrefixFactory(prefix)); }
@@ -132,24 +132,20 @@ public class TaskPool implements TaskHandler {
 		boolean timeout = false;
 
 		for(;;) {
-			// shutdown
-			if (running < 0) {
-				int r;
-				do {
-					r = running;
-				} while (!u.compareAndSwapInt(this, RUNNING_OFFSET, r, r+1));
+			int r = running;
 
-				if (r == -2) {
+			// shutdown
+			if (r < 0) {
+				if (u.getAndAddInt(this, RUNNING_OFFSET, 1) == -2) {
 					synchronized (threads) { threads.notifyAll(); }
 				}
 				return null;
 			}
 
-			if (running > core &&
+			if (r > core &&
 				timeout &&
 				System.currentTimeMillis() - prevStop >= idleTime) {
 
-				int r = running;
 				if (u.compareAndSwapInt(this, RUNNING_OFFSET, r, r-1)) {
 					prevStop = System.currentTimeMillis();
 
@@ -173,10 +169,7 @@ public class TaskPool implements TaskHandler {
 					}
 				}
 
-				int r;
-				do {
-					r = parking;
-				} while (!u.compareAndSwapInt(this, PARKING_OFFSET, r, r+1));
+				u.getAndAddInt(this, PARKING_OFFSET, 1);
 
 				synchronized (this) { notifyAll(); }
 
@@ -190,9 +183,7 @@ public class TaskPool implements TaskHandler {
 						if (!tt.isCancelled()) return tt;
 					}
 				} finally {
-					do {
-						r = parking;
-					} while (!u.compareAndSwapInt(this, PARKING_OFFSET, r, r-1));
+					u.getAndAddInt(this, PARKING_OFFSET, -1);
 				}
 			} catch (InterruptedException ignored) {}
 		}
@@ -245,21 +236,17 @@ public class TaskPool implements TaskHandler {
 	}
 
 	public void shutdown() {
-		lock.lock();
-
 		int r;
 		do {
 			r = running;
+			if (r < 0) return;
 		} while (!u.compareAndSwapInt(this, RUNNING_OFFSET, r, -r-1));
 
 		synchronized (this) { notifyAll(); }
-
-		tasks.clear();
+		clearTasks();
 
 		while (fastPath.tryTransfer(IntMap.UNDEFINED));
-		noFull.signalAll();
-
-		lock.unlock();
+		for (Thread t : threads()) t.interrupt();
 	}
 
 	public boolean working() {
@@ -306,6 +293,7 @@ public class TaskPool implements TaskHandler {
 	}
 
 	public void awaitShutdown() throws InterruptedException {
+		shutdown();
 		synchronized (threads) {
 			while (running != -1) threads.wait();
 		}
@@ -330,10 +318,7 @@ public class TaskPool implements TaskHandler {
 				if (task == null) break;
 
 				try {
-					if (!task.isCancelled()) {
-						executeForDebug(task);
-						if (task.repeating()) pushTask(task);
-					}
+					if (!task.isCancelled()) executeForDebug(task);
 				} catch (Throwable e) {
 					if (exceptionHandler != null) exceptionHandler.uncaughtException(this, e);
 					else Logger.getLogger("@").error(e);

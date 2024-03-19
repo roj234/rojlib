@@ -7,8 +7,8 @@ import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.MyChannel;
 import roj.net.ch.ServerLaunch;
-import roj.net.ch.handler.Compress;
-import roj.net.ch.handler.VarintSplitter;
+import roj.net.handler.Compress;
+import roj.net.handler.VarintSplitter;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 

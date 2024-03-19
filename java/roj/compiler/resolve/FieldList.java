@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.IClass;
 import roj.collect.SimpleList;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.text.CharList;
 
 /**
@@ -34,7 +34,7 @@ final class FieldList extends ComponentList {
 	}
 
 	@NotNull
-	public FieldResult findField(CompileContext ctx, int flags) {
+	public FieldResult findField(LocalContext ctx, int flags) {
 		SimpleList<FieldNode> fields = this.fields;
 		int size = (flags&THIS_ONLY) != 0 ? childId : fields.size();
 
