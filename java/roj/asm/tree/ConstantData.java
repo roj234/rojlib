@@ -168,6 +168,7 @@ public class ConstantData implements IClass {
 		int begin = w.wIndex();
 
 		ConstantPool cw = this.cp;
+		assert autoVerify(w, cw);
 
 		w.putShort(access)
 		 .putShort(cw.reset(nameCst).getIndex())
@@ -201,10 +202,15 @@ public class ConstantData implements IClass {
 
 		w.wIndex(begin);
 		cw.write(w.putInt(0xCAFEBABE).putShort(version).putShort(version >> 16));
-		assert w.wIndex() == cpl;
 		w.wIndex(pos + cpl);
 
 		return w;
+	}
+
+	private boolean autoVerify(DynByteBuf w, ConstantPool cw) {
+		cw.checkCollision(w);
+		verify();
+		return true;
 	}
 
 	public final void parsed() {
@@ -443,8 +449,22 @@ public class ConstantData implements IClass {
 		@Override
 		public int size() { return interfaces.size(); }
 	}
+	public final void addInterface(String s) {interfaces.add(cp.getClazz(s));}
 
-	public final void addInterface(String s) {
-		interfaces.add(cp.getClazz(s));
+	public final AccessData toAccessData() {
+		AccessData data = new AccessData(null, -1, name, parent);
+
+		data.itf = new SimpleList<>(interfaces());
+		data.acc = access;
+
+		List<AccessData.MOF> f = new SimpleList<>();
+		for (FieldNode field : fields) f.add(data.new MOF(field));
+		data.fields = f;
+
+		List<AccessData.MOF> m = new SimpleList<>();
+		for (MethodNode method : methods) m.add(data.new MOF(method));
+		data.methods = m;
+
+		return data;
 	}
 }

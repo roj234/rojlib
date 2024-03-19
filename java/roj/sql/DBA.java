@@ -1,8 +1,8 @@
 package roj.sql;
 
 import roj.collect.*;
-import roj.config.word.Tokenizer;
-import roj.net.http.srv.error.GreatErrorPage;
+import roj.config.Tokenizer;
+import roj.net.http.server.error.GreatErrorPage;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -51,7 +51,7 @@ public final class DBA implements AutoCloseable {
 			List<String> values = new SimpleList<>(inst.logs);
 			IntBiMap<String> index = new IntBiMap<>(values.size());
 			for (int i = 0; i < values.size();) index.putInt(i, String.valueOf(++i));
-			return new ListMap(index, values);
+			return new ListMap<>(index, values);
 		});
 	}
 
@@ -340,7 +340,7 @@ public final class DBA implements AutoCloseable {
 	 */
 	public Map<String, String> getone_colkey() throws SQLException {
 		List<String> list = getone();
-		return list == null ? null : new ListMap(select_field_names(), list);
+		return list == null ? null : new ListMap<>(select_field_names(), list);
 	}
 
 	private IntBiMap<String> select_index;

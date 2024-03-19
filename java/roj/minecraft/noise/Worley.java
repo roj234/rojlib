@@ -1,15 +1,15 @@
 package roj.minecraft.noise;
 
 import roj.collect.LRUCache;
+import roj.config.data.CLong;
 import roj.math.MathUtils;
-import roj.math.MutableLong;
 import roj.math.Vec3d;
 
 public class Worley implements Noiser {
 	private final Noiser n, r;
 
-	private final LRUCache<MutableLong, Vec3d> nTmp = new LRUCache<>(512);
-	private final MutableLong t = new MutableLong();
+	private final LRUCache<CLong, Vec3d> nTmp = new LRUCache<>(512);
+	private final CLong t = new CLong();
 
 	private static final double farY = 43186.43289;
 	private static final double[] vec = {0, -1, 1};
@@ -45,7 +45,7 @@ public class Worley implements Noiser {
 					v.x = x0+n.noise(x0, y0, 0);
 					v.y = y0+n.noise(x0, y0, farY);
 					v.z = r.noise(x0, y0);
-					nTmp.put(new MutableLong(t.value), v);
+					nTmp.put(new CLong(t.value), v);
 				}
 
 				double nx = x-v.x;

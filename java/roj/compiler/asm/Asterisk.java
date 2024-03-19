@@ -27,9 +27,11 @@ public final class Asterisk implements IType {
 		this.bounds = Collections.singletonList(rawType);
 		this.limited = true;
 	}
-	public Asterisk(List<IType> bound) {
+	public Asterisk(List<IType> bound) {this(bound,false);}
+	public Asterisk(List<IType> bound, boolean limited) {
 		this.bound = bound.get(0);
 		this.bounds = bound;
+		this.limited = limited;
 	}
 
 	public IType getBound() { return bound; }

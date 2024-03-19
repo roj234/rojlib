@@ -1,5 +1,6 @@
 package roj.archive.qz;
 
+import roj.archive.qz.xz.MemoryLimitException;
 import roj.collect.MyHashMap;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -7,7 +8,7 @@ import roj.util.DynByteBuf;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.Deflater;
 
 /**
@@ -22,7 +23,10 @@ public abstract class QZCoder {
 	abstract byte[] id();
 
 	public OutputStream encode(OutputStream out) throws IOException { throw new UnsupportedOperationException(); }
-	public abstract InputStream decode(InputStream in, byte[] password, long uncompressedSize, final int maxMemoryLimitInKb) throws IOException;
+	public abstract InputStream decode(InputStream in, byte[] password, long uncompressedSize, AtomicInteger memoryLimit) throws IOException;
+	protected static void useMemory(AtomicInteger memoryLimit, int memoryUsage) throws MemoryLimitException {
+		if (memoryLimit.addAndGet(-memoryUsage) < 0) throw new MemoryLimitException(memoryUsage, memoryLimit.get()+memoryUsage);
+	}
 
 	@Override
 	public String toString() { return getClass().getSimpleName(); }
@@ -30,7 +34,7 @@ public abstract class QZCoder {
 	void writeOptions(DynByteBuf buf) {}
 	void readOptions(DynByteBuf buf, int length) throws IOException {}
 
-	public static QZCoder create(ByteList buf, int len) {
+	public static QZCoder create(DynByteBuf buf, int len) {
 		if (coders.isEmpty()) {
 			synchronized (coders) {
 				if (coders.isEmpty()) {
@@ -54,23 +58,5 @@ public abstract class QZCoder {
 		buf.rIndex = buf.wIndex();
 		buf.wIndex(wIdx);
 		return coder == null ? new Unknown(buf.readBytes(len)) : coder.factory();
-	}
-
-	// 黑科技.jpg
-	public final int hashCode() { return Arrays.hashCode(id()); }
-	public final boolean equals(Object o) {
-		if (this == o) return true;
-
-		if (!(o instanceof ByteList)) return false;
-		ByteList b = ((ByteList) o);
-
-		byte[] list = b.list;
-		byte[] id = id();
-		int off = b.relativeArrayOffset();
-		int len = b.readableBytes();
-		for (int i = 0; i < len; i++) {
-			if (list[off] != id[i]) return false;
-		}
-		return true;
 	}
 }

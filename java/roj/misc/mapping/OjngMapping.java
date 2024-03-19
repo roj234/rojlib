@@ -7,7 +7,6 @@ import roj.asmx.mapper.Mapping;
 import roj.collect.FilterList;
 import roj.collect.SimpleList;
 import roj.io.FastFailException;
-import roj.math.MutableBoolean;
 import roj.text.LinedReader;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -44,9 +43,9 @@ public final class OjngMapping extends Mapping {
 
 		String[] currentClass = null;
 
-		MutableBoolean mb = new MutableBoolean();
+		boolean[] found = new boolean[1];
 		FilterList<String> list = new FilterList<>((s, t1) -> {
-			if (s != null) mb.set(true);
+			if (s != null) found[0] = true;
 			return true;
 		});
 
@@ -59,15 +58,15 @@ public final class OjngMapping extends Mapping {
 			if (c == ' ') {
 				if (currentClass == null) throw new FastFailException(map + ':' + i + ": 无效的元素开始.");
 
-				mb.set(false);
+				found[0] = false;
 				list.found = null;
 				FilterList<String> arr1 = (FilterList<String>) TextUtil.split(list, line.trim(), ':');
 				String val = arr1.found;
 
-				if (!mb.get()) {
+				if (!found[0]) {
 					if (TextUtil.gLastIndexOf(val, ')') != -1) {
 						// SBMJ, no line number
-						mb.set(true);
+						found[0] = true;
 					} else {
 						// field type: arr[0]
 						tmp.clear();
@@ -79,28 +78,24 @@ public final class OjngMapping extends Mapping {
 					}
 				}
 
-				if (mb.get()) {
-					tmp.clear();
-					List<String> arr = TextUtil.split(tmp, val, ' ', 2);
-					final String s = arr.get(1);
-					int index = s.indexOf(" -> ");
+				tmp.clear();
+				List<String> arr = TextUtil.split(tmp, val, ' ', 2);
+				final String s = arr.get(1);
+				int index = s.indexOf(" -> ");
 
-					String arr20 = s.substring(0, index);
+				String arr20 = s.substring(0, index);
 
-					//void <init>(int) -> <init>
+				//void <init>(int) -> <init>
 
-					int j = arr20.indexOf('(');
+				int j = arr20.indexOf('(');
 
-					String param = TypeHelper.dehumanize(arr20.substring(j + 1, arr20.length() - 1), arr.get(0));
-					// ' -> '.length
-					String dstName = s.substring(index + 4);
+				String param = TypeHelper.dehumanize(arr20.substring(j + 1, arr20.length() - 1), arr.get(0));
+				// ' -> '.length
+				String dstName = s.substring(index + 4);
 
-					String srcName = arr20.substring(0, j);
-					if (!srcName.equals(dstName)) {
-						methodMap.putIfAbsent(new Desc(currentClass[1], dstName, param), srcName);
-					}
-				} else {
-					throw new FastFailException(map + ':' + i + ": 未知标记类型: " + line);
+				String srcName = arr20.substring(0, j);
+				if (!srcName.equals(dstName)) {
+					methodMap.putIfAbsent(new Desc(currentClass[1], dstName, param), srcName);
 				}
 			} else {
 				int index = line.indexOf(" -> ");

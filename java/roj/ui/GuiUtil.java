@@ -26,8 +26,22 @@ import java.util.function.Consumer;
 public final class GuiUtil {
 	public static void systemLook() {
 		try {
+			int dpi;
+			try {
+				dpi = Toolkit.getDefaultToolkit().getScreenResolution();
+			} catch (HeadlessException ex) {
+				dpi = 96;
+			}
+			System.out.println("Dpi="+dpi);
+			int size = 12;
+			if (Math.round(size * 72F / dpi) < 8) {
+				size = Math.round(8 * dpi / 72F);
+			}
+
+			if (size < 12) System.setProperty("swing.useSystemFontSettings","false");
+
 			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}

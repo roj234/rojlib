@@ -26,7 +26,7 @@ public final class GB18030 extends UnsafeCharset {
 	private static final char[] REVERSE_TABLE = new char[65408];
 
 	static {
-		try (InputStream in = new LZMAInputStream(GB18030.class.getResourceAsStream("/META-INF/china/gb18030.lzma"))) {
+		try (InputStream in = new LZMAInputStream(GB18030.class.getClassLoader().getResourceAsStream("META-INF/china/gb18030.lzma"))) {
 			byte[] b = new byte[1024];
 			int off = 0;
 			while (true) {

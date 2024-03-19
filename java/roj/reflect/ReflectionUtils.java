@@ -64,7 +64,7 @@ public final class ReflectionUtils {
 
 				ILSecurityManager sm = ILSecurityManager.getSecurityManager();
 				if (sm == null || sm.checkAccess(field)) {
-					field.setAccessible(true);
+					//field.setAccessible(true);
 					return field;
 				}
 			} catch (NoSuchFieldException ignored) {}
@@ -170,7 +170,25 @@ public final class ReflectionUtils {
 	/**
 	 * 对target_module开放src_module中的src_package
 	 */
-	public static void openModule(Class<?> src_module, String src_package, Class<?> target_module) { VMInternals.OpenModule(src_module, src_package, target_module); }
+	public static void openModule(Class<?> src_module, String src_package, Class<?> target_module) {
+		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
+		if (sm != null) sm.checkOpenModule(src_module, src_package, target_module);
+
+		VMInternals.OpenModule(src_module, src_package, target_module);
+	}
+	/**
+	 * 禁用模块权限系统
+	 */
+	public static void killJigsaw(Class<?> target_module) {
+		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
+		if (sm != null) sm.checkKillJigsaw(target_module);
+
+		for (Module module : Object.class.getModule().getLayer().modules()) {
+			for (String pkg : module.getDescriptor().packages()) {
+				VMInternals.OpenModule(module, pkg, target_module.getModule());
+			}
+		}
+	}
 
 	private static boolean smRemoved = JAVA_VERSION > 21;
 	public static Class<?> getCallerClass(int backward) {

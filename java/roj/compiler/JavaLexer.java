@@ -5,12 +5,12 @@ import roj.asm.visitor.CodeWriter;
 import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.TrieTree;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
+import roj.config.I18n;
 import roj.config.ParseException;
-import roj.config.word.I18n;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
+import roj.config.Tokenizer;
+import roj.config.Word;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -18,8 +18,7 @@ import roj.text.TextUtil;
 import java.io.File;
 import java.io.IOException;
 
-import static roj.config.word.Word.CHARACTER;
-import static roj.config.word.Word.LITERAL;
+import static roj.config.Word.LITERAL;
 
 /**
  * Java词法分析器
@@ -28,6 +27,8 @@ import static roj.config.word.Word.LITERAL;
  * @since 2020/10/3 19:20
  */
 public final class JavaLexer extends Tokenizer {
+	public static final short CHARACTER = 9;
+
 	public static final String[] keywords = TextUtil.split1("for,while,do,continue,break,case,if,else,goto,return,switch," +
 		"this,new,true,false,null," +
 		"void,int,long,double,float,short,byte,char,boolean," +
@@ -39,7 +40,7 @@ public final class JavaLexer extends Tokenizer {
 		"package,import," +
 		"default,throws,record,const,var,as,instanceof," +
 		"assert,yield,_with" +
-		"__sub,__end_sub,__struct,__ignore_error,__NOIMPL", ',');
+		"__sub,__end_sub,__struct,package-restricted,unimport", ',');
 	public static final short
 		FOR = 10, WHILE = 11, DO = 12, CONTINUE = 13, BREAK = 14, CASE = 15, IF = 16, ELSE = 17, GOTO = 18, RETURN = 19, SWITCH = 20,
 		THIS = 21, NEW = 22,
@@ -53,7 +54,7 @@ public final class JavaLexer extends Tokenizer {
 		IMPLEMENTS = 54, EXTENDS = 55, SUPER = 56,
 		PACKAGE = 57, IMPORT = 58,
 		DEFAULT = 59, THROWS = 60, RECORD = 61, CONST = 62, VAR = 63, AS = 64, INSTANCEOF = 65,
-		ASSERT = 66, YIELD = 67, WITH = 68;
+		ASSERT = 66, YIELD = 67, WITH = 68, SUB = 69, END_SUB = 70, STRUCT = 71, PACKAGE_RESTRICTED = 72, UNIMPORT = 73;
 
 	public static final String[] operators = {
 		// Syntax
@@ -109,7 +110,7 @@ public final class JavaLexer extends Tokenizer {
 
 	public static I18n translate;
 	static {
-		String path = System.getProperty("kscript.translate");
+		String path = System.getProperty("roj.lavac.i18n");
 		try {
 			translate = new I18n(path == null ? IOUtil.getTextResource("META-INF/kscript.lang") : IOUtil.readUTF(new File(path)));
 		} catch (IOException e) {
@@ -257,7 +258,7 @@ public final class JavaLexer extends Tokenizer {
 
 	@Override
 	protected void onNumberFlow(CharSequence str, short from, short to) {
-		CompileContext.get().report(Kind.ERROR, "lexer.number.overflow");
+		LocalContext.get().report(Kind.ERROR, "lexer.number.overflow");
 	}
 
 	@Override
@@ -325,18 +326,8 @@ public final class JavaLexer extends Tokenizer {
 		}
 	}
 
-	@Override
-	protected boolean isValidToken(int off, Word w) {
-		int category = category(w.type());
-		if (category != 0 && (env & category) == 0) {
-			System.out.println("ignore word "+ w);
-			return false;
-		}
-		return super.isValidToken(off, w);
-	}
-
-	CodeWriter labelGen;
-	LineNumberTable table;
+	public CodeWriter labelGen;
+	public LineNumberTable table;
 
 	@Override
 	protected void afterWord() {
@@ -344,7 +335,7 @@ public final class JavaLexer extends Tokenizer {
 		super.afterWord();
 		if (line != LN) {
 			if (table != null) table.list.add(new LineNumberTable.Item(labelGen.label(), LN));
-			System.out.println("line changed on "+index+"|"+wd);
+			//System.out.println("line changed on "+index+"|"+wd);
 		}
 	}
 

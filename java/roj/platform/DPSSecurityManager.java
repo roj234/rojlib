@@ -10,10 +10,10 @@ import roj.asm.util.ClassUtil;
 import roj.asm.util.Context;
 import roj.asmx.MethodHook;
 import roj.collect.*;
-import roj.net.URIUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.ReflectionUtils;
+import roj.text.EscapeUtil;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
@@ -37,8 +37,8 @@ import java.util.Iterator;
  * @author Roj234
  * @since 2023/8/4 0004 15:36
  */
-public class DPSSecurityManager extends MethodHook {
-	public static final TrieTreeSet
+final class DPSSecurityManager extends MethodHook {
+	static final TrieTreeSet
 		GlobalClassBlackList = new TrieTreeSet("roj/platform/DPS"),
 		GlobalFileWhiteList = new TrieTreeSet(),
 		GlobalReflectWhiteList = new TrieTreeSet();
@@ -59,7 +59,7 @@ public class DPSSecurityManager extends MethodHook {
 				caller = ReflectionUtils.getCallerClass(i++);
 			} while (caller == ClassDefiner.class);
 
-			PluginDescriptor pd = DefaultPluginSystem.PM.getPluginDescriptor(caller);
+			PluginDescriptor pd = DefaultPluginSystem.PM.getOwner(caller);
 			return preDefineHook(name, pd, buf);
 		}
 
@@ -323,13 +323,13 @@ public class DPSSecurityManager extends MethodHook {
 	/* -- URL -- */
 	public static InputStream hook_callFrom_openStream(URL url, Class<?> caller) throws IOException {
 		if (url.getProtocol().equals("file")) {
-			if (!checkFileAccess(new File(URIUtil.decodeURI(url.getFile())), caller)) throw new SecurityException("没有读取权限");
+			if (!checkFileAccess(new File(EscapeUtil.decodeURI(url.getFile())), caller)) throw new SecurityException("没有读取权限");
 		} else if (url.getProtocol().equals("jar")) {
 			String spec = url.getFile();
 			int separator = spec.indexOf("!/");
 			if (separator == -1) throw new MalformedURLException("no !/ found in url spec:" + spec);
 
-			if (!checkFileAccess(new File(URIUtil.decodeURI(spec.substring(0, separator))), caller))
+			if (!checkFileAccess(new File(EscapeUtil.decodeURI(spec.substring(0, separator))), caller))
 				throw new SecurityException("没有读取权限");
 		}
 		return url.openStream();
@@ -358,20 +358,20 @@ public class DPSSecurityManager extends MethodHook {
 	// region 本地库保护
 	@RealDesc(value = "java/lang/System.load(Ljava/lang/String;)V", callFrom = true)
 	public static void hook_callFrom_load(String path, Class<?> caller) {
-		PluginDescriptor pd = DefaultPluginSystem.PM.getPluginDescriptor(caller);
+		PluginDescriptor pd = DefaultPluginSystem.PM.getOwner(caller);
 		if (!pd.loadNative) throw new SecurityException("loadNative权限未为"+pd+"开启");
 		System.load(path);
 	}
 	@RealDesc(value = "java/lang/System.loadLibrary(Ljava/lang/String;)V", callFrom = true)
 	public static void hook_callFrom_loadLibrary(String path, Class<?> caller) {
-		PluginDescriptor pd = DefaultPluginSystem.PM.getPluginDescriptor(caller);
+		PluginDescriptor pd = DefaultPluginSystem.PM.getOwner(caller);
 		if (!pd.loadNative) throw new SecurityException("loadNative权限未为"+pd+"开启");
 		System.loadLibrary(path);
 	}
 	// endregion
 	// region Unsafe
 	public static Unsafe ReflectionUtils_getUnsafe(Class<?> caller) {
-		PluginDescriptor pd = DefaultPluginSystem.PM.getPluginDescriptor(caller);
+		PluginDescriptor pd = DefaultPluginSystem.PM.getOwner(caller);
 		if (!pd.accessUnsafe) throw new SecurityException("accessUnsafe权限未为"+pd+"开启");
 		return ReflectionUtils.u;
 	}
@@ -381,7 +381,7 @@ public class DPSSecurityManager extends MethodHook {
 	public static Class<?> hook_defineClass(ClassLoader cl, String name, byte[] b, int off, int len, ProtectionDomain pd, Class<?> caller) {
 		ByteList buf = new ByteList(Arrays.copyOfRange(b, off, off+len));
 
-		PluginDescriptor pd1 = DefaultPluginSystem.PM.getPluginDescriptor(caller);
+		PluginDescriptor pd1 = DefaultPluginSystem.PM.getOwner(caller);
 		buf = preDefineHook(name, pd1, buf);
 		return ClassDefiner.defineClass(cl, name, buf.list, 0, buf.wIndex(), pd);
 	}
@@ -421,7 +421,7 @@ public class DPSSecurityManager extends MethodHook {
 
 	static boolean checkFileAccess(File file, Class<?> caller) { return checkFileAccess(file.getPath(), caller); }
 	static boolean checkFileAccess(String path, Class<?> caller) {
-		PluginDescriptor pd = DefaultPluginSystem.PM.getPluginDescriptor(caller);
+		PluginDescriptor pd = DefaultPluginSystem.PM.getOwner(caller);
 		if (pd.skipCheck || GlobalFileWhiteList.strStartsWithThis(path) || pd.extraPath.strStartsWithThis(path)) {
 			LOGGER.debug("允许读写 {}", path);
 			return true;
@@ -442,7 +442,7 @@ public class DPSSecurityManager extends MethodHook {
 		if (d.owner.startsWith("roj/platform/") || d.owner.startsWith("roj/reflect/") || d.owner.startsWith("roj/mapper/"))
 			return IntMap.UNDEFINED;
 
-		PluginDescriptor pd = DefaultPluginSystem.PM.getPluginDescriptor(caller);
+		PluginDescriptor pd = DefaultPluginSystem.PM.getOwner(caller);
 		if (pd.skipCheck || GlobalReflectWhiteList.contains(d.owner) || pd.reflectiveClass.contains(d.owner)) {
 			LOGGER.debug("允许反射 {}", d);
 			return null;

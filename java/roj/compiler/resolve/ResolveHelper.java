@@ -17,7 +17,7 @@ import roj.asmx.AnnotationSelf;
 import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.compiler.context.ClassContext;
+import roj.compiler.context.GlobalContext;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -38,12 +38,14 @@ public final class ResolveHelper {
 
 	private IntBiMap<String> classList;
 
-	public synchronized IntBiMap<String> getClassList(ClassContext ctx) throws ClassNotFoundException {
+	public synchronized IntBiMap<String> getClassList(GlobalContext ctx) throws ClassNotFoundException {
 		if (classList != null) return classList;
 
 		IntBiMap<String> list = new IntBiMap<>();
 
 		String owner = this.owner.name();
+		list.putInt(0, owner);
+
 		while (true) {
 			IClass info = ctx.getClassInfo(owner);
 			if (info == null) throw new ClassNotFoundException(owner);
@@ -97,7 +99,7 @@ public final class ResolveHelper {
 		List<Annotation> list = attr.annotations;
 		for (int i = 0; i < list.size(); i++) {
 			Annotation a = list.get(i);
-			switch (a.type) {
+			switch (a.type()) {
 				case "java/lang/annotation/Retention":
 					if (!a.containsKey("value")) return null;
 					switch (a.getEnumValue("value", "RUNTIME")) {
@@ -165,7 +167,7 @@ public final class ResolveHelper {
 	// region 方法
 	private MyHashMap<String, ComponentList> methods;
 
-	public synchronized ComponentList findMethod(ClassContext ctx, String name) throws ClassNotFoundException {
+	public synchronized ComponentList findMethod(GlobalContext ctx, String name) throws ClassNotFoundException {
 		if (methods == null) {
 			methods = new MyHashMap<>();
 
@@ -244,7 +246,7 @@ public final class ResolveHelper {
 	 * 2. M 未设置 ACC_PRIVATE 或 ACC_STATIC 标志
 	 * 3. 如果方法是在接口 I 中声明的，则接口 I 的子接口中没有 C 的最大特异性超接口方法
 	 */
-	private void addMethods(ClassContext ctx, IClass type) throws ClassNotFoundException {
+	private void addMethods(GlobalContext ctx, IClass type) throws ClassNotFoundException {
 		List<? extends RawNode> list = type.methods();
 		for (int i = 0; i < list.size(); i++) {
 			MethodNode mn = (MethodNode) list.get(i);
@@ -265,12 +267,14 @@ public final class ResolveHelper {
 	//region 字段
 	private MyHashMap<String, ComponentList> fields;
 
-	public synchronized ComponentList findField(ClassContext ctx, String name) throws ClassNotFoundException {
+	public synchronized ComponentList findField(GlobalContext ctx, String name) throws ClassNotFoundException {
 		block:
 		if (fields == null) {
 			List<? extends RawNode> fields1 = owner.fields();
 			if (fields1.isEmpty()) {
-				fields = ctx.getResolveHelper(ctx.getClassInfo(owner.parent())).fields;
+				String parent = owner.parent();
+				if (parent != null) fields = ctx.getResolveHelper(ctx.getClassInfo(parent)).fields;
+				else fields = new MyHashMap<>();
 				break block;
 			}
 
@@ -313,7 +317,7 @@ public final class ResolveHelper {
 		return fields.get(name);
 	}
 
-	private void addFields(ClassContext ctx, IClass type) throws ClassNotFoundException {
+	private void addFields(GlobalContext ctx, IClass type) throws ClassNotFoundException {
 		List<? extends RawNode> list = type.fields();
 		for (int i = 0; i < list.size(); i++) {
 			FieldNode fn = (FieldNode) list.get(i);
@@ -337,7 +341,7 @@ public final class ResolveHelper {
 	// a. class Ch<T> extends Su<T>
 	// b. class Ch<T> extends Su<String>
 	// c. class Ch<T> extends Su<List<T>>
-	public synchronized Map<String, List<IType>> getTypeParamOwner(ClassContext ctx) throws ClassNotFoundException {
+	public synchronized Map<String, List<IType>> getTypeParamOwner(GlobalContext ctx) throws ClassNotFoundException {
 		if (typeParamOwner == null) {
 			Signature sign = owner.parsedAttr(owner.cp(), Attribute.SIGNATURE);
 			if (sign == null) return typeParamOwner = Collections.emptyMap();
@@ -371,7 +375,7 @@ public final class ResolveHelper {
 	// endregion
 	private MyHashMap<String, InnerClasses.InnerClass> subclassByName;
 
-	public synchronized MyHashMap<String, InnerClasses.InnerClass> getInnerClassFlags(ClassContext ctx) {
+	public synchronized MyHashMap<String, InnerClasses.InnerClass> getInnerClassFlags(GlobalContext ctx) {
 		if (subclassByName == null) {
 			subclassByName = new MyHashMap<>();
 			InnerClasses classes = owner.parsedAttr(owner.cp(), Attribute.InnerClasses);

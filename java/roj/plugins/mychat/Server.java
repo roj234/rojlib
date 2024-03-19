@@ -5,9 +5,10 @@ import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
-import roj.config.data.CMapping;
+import roj.config.ConfigMaster;
+import roj.config.Tokenizer;
+import roj.config.data.CMap;
 import roj.config.serial.ToJson;
-import roj.config.word.Tokenizer;
 import roj.crypt.HMAC;
 import roj.crypt.SM3;
 import roj.io.IOUtil;
@@ -15,16 +16,18 @@ import roj.net.ch.ChannelCtx;
 import roj.net.ch.ServerLaunch;
 import roj.net.http.HttpUtil;
 import roj.net.http.IllegalRequestException;
-import roj.net.http.srv.*;
-import roj.net.http.srv.autohandled.Accepts;
-import roj.net.http.srv.autohandled.Interceptor;
-import roj.net.http.srv.autohandled.OKRouter;
-import roj.net.http.srv.autohandled.Route;
-import roj.net.http.ws.WebsocketHandler;
-import roj.net.http.ws.WebsocketManager;
+import roj.net.http.server.*;
+import roj.net.http.server.auto.Accepts;
+import roj.net.http.server.auto.Interceptor;
+import roj.net.http.server.auto.OKRouter;
+import roj.net.http.server.auto.Route;
+import roj.net.http.ws.WebSocketHandler;
+import roj.net.http.ws.WebSocketServer;
 import roj.text.ACalendar;
+import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
+import roj.util.HighResolutionTimer;
 
 import java.io.File;
 import java.io.IOException;
@@ -35,13 +38,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  * @author solo6975
  * @since 2022/2/7 17:05
  */
-public class Server extends WebsocketManager implements Router, Context {
+public class Server extends WebSocketServer implements Router, Context {
 	static final SecureRandom rnd = new SecureRandom();
 	final byte[] secKey = new byte[16];
 
@@ -53,7 +55,7 @@ public class Server extends WebsocketManager implements Router, Context {
 	}
 
 	@Override
-	protected WebsocketHandler newWorker(Request req, ResponseHeader handle) {
+	protected WebSocketHandler newWorker(Request req, ResponseHeader handle) {
 		ChatImpl w = new ChatImpl();
 		w.owner = (User) userMap.get(1);
 		return w;
@@ -104,12 +106,11 @@ public class Server extends WebsocketManager implements Router, Context {
 
 		Server man = new Server();
 		ServerLaunch server = HttpServer11.simple(new InetSocketAddress(InetAddress.getLoopbackAddress(), 1999), 233, man);
-		man.loop = server.loop();
 		server.launch();
-		man.router.registerSubpathRouter("chat", chatHtml);
+		man.router.addPrefixDelegation("chat", chatHtml);
 
 		System.out.println("监听 " + server.localAddress());
-		LockSupport.park();
+		HighResolutionTimer.activate();
 	}
 
 	static ZipRouter chatHtml;
@@ -132,14 +133,14 @@ public class Server extends WebsocketManager implements Router, Context {
 		if (cfg != null) {
 			if (!cfg.postAccepted()) cfg.postAccept(131072, 200);
 		}
-		req.handler().headers("Access-Control-Allow-Headers: MCTK\r\n" +
+		req.server().headers("Access-Control-Allow-Headers: MCTK\r\n" +
 			"Access-Control-Allow-Origin: " + req.getOrDefault("Origin", "*") + "\r\n" +
 			"Access-Control-Max-Age: 2592000\r\n" +
 			"Access-Control-Allow-Methods: *");
 	}
 
 	private static void jsonErrorPre(Request req, String str) {
-		req.handler().die().code(200).headers("Access-Control-Allow-Origin: *").body(jsonErr(str));
+		req.server().die().code(200).headers("Access-Control-Allow-Origin: *").body(jsonErr(str));
 	}
 
 	OKRouter router = new OKRouter().register(this);
@@ -179,7 +180,7 @@ public class Server extends WebsocketManager implements Router, Context {
 		}
 
 		u.parallelUD.getAndDecrement();
-		rh.finishHandler((__) -> {
+		rh.onFinish((__) -> {
 			u.parallelUD.getAndIncrement();
 			return false;
 		});
@@ -190,17 +191,17 @@ public class Server extends WebsocketManager implements Router, Context {
 	@Route
 	public String ping() { return "pong"; }
 
-	@Route(value = "file/", type = Route.Type.PREFIX)
+	@Route(value = "file/", prefix = true)
 	@Accepts(Accepts.GET)
 	@Interceptor({"logon","parallelLimit"})
 	public Response getFile(Request req, ResponseHeader rh) {
 		String safePath = IOUtil.safePath(req.subDirectory(1).path());
 		File file = new File(attDir, safePath);
 		if (!file.isFile()) return rh.code(404).returnNull();
-		return new DiskFileInfo(file).response(req, rh);
+		return new DiskFileInfo(file).response(req);
 	}
 
-	@Route(value = "file/", type = Route.Type.PREFIX)
+	@Route(value = "file/", prefix = true)
 	@Accepts(Accepts.DELETE)
 	@Interceptor("logon")
 	public Object deleteFile(Request req) {
@@ -230,7 +231,7 @@ public class Server extends WebsocketManager implements Router, Context {
 		ps.postHandler(new UploadHandler(req, count, u.id, img));
 	}
 
-	@Route(value = "file/", type = Route.Type.PREFIX)
+	@Route(value = "file/", prefix = true)
 	@Accepts(Accepts.POST)
 	@Interceptor({"logon","parallelLimit","fileUpload"})
 	public String postFile(Request req) {
@@ -261,7 +262,7 @@ public class Server extends WebsocketManager implements Router, Context {
 
 	@Route
 	@Accepts(Accepts.GET)
-	public Response im(Request req, ResponseHeader rh) { return switchToWebsocket(req, rh); }
+	public Response im(Request req) { return switchToWebsocket(req); }
 
 	@Route
 	@Accepts(Accepts.GET)
@@ -273,22 +274,22 @@ public class Server extends WebsocketManager implements Router, Context {
 			if (u.worker != null) {
 				u.worker.sendExternalLogout(
 					"您已在他处登录<br />" +
-						"IP: " + req.handler().ch.remoteAddress() + "<br />" +
+						"IP: " + req.connection().remoteAddress() + "<br />" +
 						"UA: " + req.getField("User-Agent") + "<br />" +
 						"时间: " + ACalendar.toLocalTimeString(System.currentTimeMillis()));
 			}
 
-			CMapping m = new CMapping();
+			CMap m = new CMap();
 			m.put("user", u.put());
 			m.put("protocol", "WSChat2");
 			m.put("address", "ws://127.0.0.1:1999/im/");
 			m.put("token", "114514");//createToken(u, -1, 86400000));
 			m.put("ok", true);
-			return new StringResponse(m.toShortJSONb());
+			return new StringResponse(ConfigMaster.JSON.toString(m, new CharList()));
 		}
 	}
 
-	@Route(type = Route.Type.PREFIX)
+	@Route(prefix = true)
 	@Accepts(Accepts.GET)
 	public Response user__head(Request req, ResponseHeader rh) {
 		File img = new File(attDir, pathFilter(req.subDirectory(2).path()));
@@ -296,7 +297,7 @@ public class Server extends WebsocketManager implements Router, Context {
 		if (!img.isFile()) img = new File(attDir, "default");
 
 		rh.headers("Access-Control-Allow-Origin: *");
-		return new DiskFileInfo(img).response(req, rh);
+		return new DiskFileInfo(img).response(req);
 	}
 
 	@Route

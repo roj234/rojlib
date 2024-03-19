@@ -37,9 +37,7 @@ public final class Parser {
 	}
 
 	public static ConstantData parse(byte[] b) { return parse(new ByteList(b)); }
-	public static ConstantData parse(DynByteBuf buf) {
-		DynByteBuf r = AsmShared.local().copy(buf);
-
+	public static ConstantData parse(DynByteBuf r) {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
 
@@ -201,9 +199,7 @@ public final class Parser {
 		return null;
 	}
 	public static ConstantData parseConstants(byte[] buf) { return parseConstants(new ByteList(buf)); }
-	public static ConstantData parseConstants(DynByteBuf buf) {
-		DynByteBuf r = AsmShared.local().copy(buf);
-
+	public static ConstantData parseConstants(DynByteBuf r) {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
 
@@ -259,9 +255,7 @@ public final class Parser {
 	// endregion
 	// region ACCESS parse LOD 0
 
-	public static AccessData parseAccess(DynByteBuf buf, boolean modifiable) {
-		DynByteBuf r = AsmShared.local().copy(buf);
-
+	public static AccessData parseAccess(DynByteBuf r, boolean modifiable) {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 
 		r.rIndex += 4; // ver
@@ -272,7 +266,7 @@ public final class Parser {
 		int cfo = r.rIndex; // acc
 		char acc = r.readChar();
 
-		AccessData data = new AccessData(modifiable?buf.toByteArray():null, cfo, pool.getRefName(r), pool.getRefName(r));
+		AccessData data = new AccessData(modifiable?r.toByteArray():null, cfo, pool.getRefName(r), pool.getRefName(r));
 		data.acc = acc;
 
 		int len = r.readUnsignedShort();
@@ -309,8 +303,7 @@ public final class Parser {
 	// endregion
 	// region FOREACH CONSTANT LOD 0
 
-	public static void forEachConstant(DynByteBuf buf, Consumer<Constant> c) {
-		DynByteBuf r = AsmShared.local().copy(buf);
+	public static void forEachConstant(DynByteBuf r, Consumer<Constant> c) {
 		if (r.readInt() != 0xcafebabe) {
 			throw new IllegalArgumentException("Illegal header");
 		}

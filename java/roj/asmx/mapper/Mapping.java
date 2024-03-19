@@ -6,9 +6,9 @@ import roj.asm.util.ClassUtil;
 import roj.asmx.mapper.util.MapperList;
 import roj.collect.*;
 import roj.config.ParseException;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
+import roj.config.data.CInt;
 import roj.io.IOUtil;
-import roj.math.MutableInt;
 import roj.text.*;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
@@ -95,7 +95,7 @@ public class Mapping {
 			String key = s.substring(0, i);
 
 			q.clear();
-			TextUtil.split(q, s.substring(i + 1), ' ');
+			TextUtil.split(q, s.substring(i + 1).trim(), ' ');
 
 			int id, id2;
 			switch (key) {
@@ -250,7 +250,7 @@ public class Mapping {
 			self.batchAddFiltered(entry.getValue());
 			self.pack0();
 
-			/**
+			/*
 			 * excepted order:
 			 *     fatherclass fatheritf grandclass granditf, etc...
 			 */
@@ -290,10 +290,10 @@ public class Mapping {
 
 		for (Iterator<Map.Entry<String, String>> itr = classMap.entrySet().iterator(); itr.hasNext(); ) {
 			Map.Entry<String, String> entry = itr.next();
-			Map.Entry<MutableInt, String> found = packageMap.longestMatches(entry.getValue());
+			Map.Entry<CInt, String> found = packageMap.longestMatches(entry.getValue());
 			if (found != null) {
 				String k = entry.getKey();
-				String v = found.getValue().concat(entry.getValue().substring(found.getKey().getValue()));
+				String v = found.getValue().concat(entry.getValue().substring(found.getKey().value));
 				itr.remove();
 				classMap.put(k, v);
 			}

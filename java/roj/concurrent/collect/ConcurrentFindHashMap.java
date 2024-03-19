@@ -47,10 +47,10 @@ public class ConcurrentFindHashMap<K, V> extends MyHashMap<K, V> implements Find
 	}
 
 	@Override
-	public AbstractEntry<K, V> getValueEntry(Object value) {
+	public AbstractEntry<K, V> getValueEntry(Object v) {
 		try {
 			lock.readLock().lock();
-			return super.getValueEntry(value);
+			return super.getValueEntry(v);
 		} finally {
 			lock.readLock().unlock();
 		}

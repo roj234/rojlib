@@ -95,5 +95,5 @@ public interface ExprApi {
 	 * 添加hook以便转换链式方法调用
 	 * @param existInRuntime
 	 */
-	StreamChain newStreamChain(boolean existInRuntime, Consumer<StreamChainExpr> fn);
+	StreamChain newStreamChain(String chainType, boolean existInRuntime, Consumer<StreamChainExpr> fn, Type... exactType);
 }

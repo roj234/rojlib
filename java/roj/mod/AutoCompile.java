@@ -81,16 +81,17 @@ final class AutoCompile extends Thread {
 
 	private ScheduleTask debounceTask;
 	private boolean checkAndCompile(Project p) {
+		if (selfTrigger) return false;
+
 		Set<String> set = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
 		if (set.contains(null) || set.isEmpty()) {
 			if (set.contains(null)) if (DEBUG) System.out.println("[AC] 未注册监听器");
 			return false;
 		} else {
-			if (debounceTask != null) debounceTask.cancel();
-
 			tmp1.clear();
 			tmp1.addAll(set);
 
+			if (debounceTask != null) debounceTask.cancel();
 			debounceTask = PeriodicTask.delay(() -> {
 				Set<String> set2 = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
 				tmp2.clear();

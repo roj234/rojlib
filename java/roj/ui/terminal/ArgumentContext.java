@@ -2,9 +2,9 @@ package roj.ui.terminal;
 
 import roj.collect.IntList;
 import roj.collect.MyHashMap;
-import roj.concurrent.TaskPool;
+import roj.concurrent.TaskHandler;
 import roj.config.ParseException;
-import roj.config.word.Word;
+import roj.config.Word;
 
 import java.util.List;
 
@@ -15,7 +15,7 @@ import java.util.List;
 public class ArgumentContext {
 	public static final Word EOF = new Word().init(Word.EOF, 0, "");
 
-	public TaskPool executor;
+	public TaskHandler executor;
 
 	private String context;
 	private List<Word> words;
@@ -24,7 +24,7 @@ public class ArgumentContext {
 
 	private final MyHashMap<String, Object> map = new MyHashMap<>();
 
-	public ArgumentContext(TaskPool executor) { this.executor = executor; }
+	public ArgumentContext(TaskHandler executor) { this.executor = executor; }
 
 	public void init(String context, List<Word> words) {
 		this.context = context;
@@ -41,7 +41,7 @@ public class ArgumentContext {
 		return w.val();}
 	public String nextQuotedString() throws ParseException {
 		Word w = nextWord();
-		if (w.type() != Word.STRING && w.type() != Word.CHARACTER) throw error("参数不是转义字符串");
+		if (w.type() != Word.STRING) throw error("参数不是转义字符串");
 		return w.val();
 	}
 	public int nextInt() throws ParseException {

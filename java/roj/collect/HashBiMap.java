@@ -6,6 +6,8 @@ import roj.util.Helpers;
 
 import java.util.*;
 
+import static roj.collect.IntMap.NUMKEY_LOADFACTOR;
+
 /**
  * @author Roj234
  * @since 2021/6/18 10:35
@@ -21,70 +23,30 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 	static final class Inverse<V, K> extends AbstractMap<V, K> implements Flippable<V, K> {
 		private final HashBiMap<K, V> parent;
 
-		private Inverse(HashBiMap<K, V> parent) {
-			this.parent = parent;
-		}
+		private Inverse(HashBiMap<K, V> parent) {this.parent = parent;}
 
-		public int size() {
-			return parent.size();
-		}
-
-		public boolean containsKey(Object key) {
-			return parent.containsValue(key);
-		}
-
-		public boolean containsValue(Object value) {
-			return parent.containsKey(value);
-		}
+		public int size() {return parent.size();}
+		public boolean containsKey(Object key) {return parent.containsValue(key);}
+		public boolean containsValue(Object value) {return parent.containsKey(value);}
+		@SuppressWarnings("unchecked")
+		public K get(Object key) {return parent.getByValue((V) key);}
+		public K put(V key, K value) {return parent.putByValue(key, value);}
+		public K forcePut(V key, K value) {return parent.forcePutByValue(key, value);}
 
 		@SuppressWarnings("unchecked")
-		public K get(Object key) {
-			return parent.getByValue((V) key);
-		}
-
-		public K put(V key, K value) {
-			return parent.putByValue(key, value);
-		}
-
-		@Override
-		public void putAll(@NotNull Map<? extends V, ? extends K> map) {
-			for (Map.Entry<? extends V, ? extends K> entry : map.entrySet()) {
-				parent.putByValue(entry.getKey(), entry.getValue());
-			}
-		}
-
-		public K forcePut(V key, K value) {
-			return parent.forcePutByValue(key, value);
-		}
-
-		@SuppressWarnings("unchecked")
-		public K remove(Object key) {
-			return parent.removeByValue((V) key);
-		}
-
-		public void clear() {
-			parent.clear();
-		}
+		public K remove(Object key) {return parent.removeByValue((V) key);}
+		public void clear() {parent.clear();}
 
 		@NotNull
-		public Set<Entry<V, K>> entrySet() {
-			return new EntrySet<>(this.parent);
-		}
+		public Set<Entry<V, K>> entrySet() {return new EntrySet<>(this.parent);}
 
 		static class EntrySet<V, K> extends AbstractSet<Map.Entry<V, K>> {
 			private final HashBiMap<K, V> map;
 
-			public EntrySet(HashBiMap<K, V> map) {
-				this.map = map;
-			}
+			public EntrySet(HashBiMap<K, V> map) {this.map = map;}
 
-			public final int size() {
-				return map.size();
-			}
-
-			public final void clear() {
-				map.clear();
-			}
+			public final int size() {return map.size();}
+			public final void clear() {map.clear();}
 
 			@NotNull
 			public final Iterator<Map.Entry<V, K>> iterator() {
@@ -140,9 +102,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 			}
 		}
 
-		public HashBiMap<K, V> flip() {
-			return parent;
-		}
+		public HashBiMap<K, V> flip() {return parent;}
 	}
 
 	protected Entry<?, ?>[] kTab, vTab;
@@ -150,32 +110,17 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 
 	int length = 2, mask = 1;
 
-	float loadFactor = 0.8f;
-
 	private final Inverse<V, K> inverse = new Inverse<>(this);
 
-	public HashBiMap() {
-		this(16);
-	}
-
-	public HashBiMap(int size) {
-		ensureCapacity(size);
-	}
-
-	public HashBiMap(int size, float loadFactor) {
-		ensureCapacity(size);
-		this.loadFactor = loadFactor;
-	}
-
+	public HashBiMap() {this(16);}
+	public HashBiMap(int size) {ensureCapacity(size);}
 	public HashBiMap(Map<K, V> map) {
 		ensureCapacity(map.size());
 		putAll(map);
 	}
 
 	@Override
-	public Map.Entry<K, V> find(K k) {
-		return getKeyEntry(k);
-	}
+	public Map.Entry<K, V> find(K k) {return getKeyEntry(k);}
 
 	public void ensureCapacity(int size) {
 		if (size < length) return;
@@ -185,19 +130,15 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		else mask = length -1;
 	}
 
-	public Flippable<V, K> flip() {
-		return this.inverse;
-	}
+	public Flippable<V, K> flip() {return inverse;}
 
 	@NotNull
 	public Set<Map.Entry<K, V>> entrySet() { return _Generic_EntrySet.create(this); }
 
-	public int size() {
-		return size;
-	}
+	public int size() {return size;}
 
 	@SuppressWarnings("unchecked")
-	protected void resize() {
+	private void resize() {
 		if (kTab != null) {
 			Entry<?, ?>[] kTab1 = new Entry<?, ?>[length];
 			Entry<?, ?>[] vTab1 = new Entry<?, ?>[length];
@@ -257,7 +198,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 	}
 
 	private V put0(K key, V v, boolean replace) {
-		if (size > length * loadFactor) {
+		if (size > length * NUMKEY_LOADFACTOR) {
 			length <<= 1;
 			resize();
 		}
@@ -297,7 +238,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		}
 	}
 	private K putByValue0(V v, K key, boolean replace) {
-		if (size > length * loadFactor) {
+		if (size > length * NUMKEY_LOADFACTOR) {
 			length <<= 1;
 			resize();
 		}

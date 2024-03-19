@@ -7,9 +7,8 @@ import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.compiler.asm.node.LazyIINC;
 import roj.compiler.asm.node.LazyLoadStore;
-import roj.compiler.context.ClassContext;
-import roj.compiler.context.CompileContext;
 import roj.compiler.context.CompileUnit;
+import roj.compiler.context.LocalContext;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -22,22 +21,17 @@ import static roj.asm.Opcodes.*;
  * @since 2022/2/24 19:19
  */
 public class MethodWriter extends CodeWriter {
-	public CompileUnit owner;
-	public ClassContext ctx;
-	public CompileContext ctx1;
+	private CompileUnit owner;
+
+	public LocalContext ctx1;
 	public Variable current_variable;
 
 	private SimpleList<TryCatchEntry> entryList = new SimpleList<>();
 
 	public MethodWriter(CompileUnit unit, MethodNode mn) {
 		this.owner = unit;
-		this.ctx = unit.ctx();
-		this.ctx1 = CompileContext.get();
+		this.ctx1 = LocalContext.get();
 		this.init(new ByteList(),unit.cp,mn,(byte)0);
-	}
-
-	public MethodWriter fork() {
-		return new MethodWriter(owner, mn);
 	}
 
 	public TryCatchEntry addException(Label str, Label end, Label proc, String s) {
@@ -94,13 +88,10 @@ public class MethodWriter extends CodeWriter {
 		return true;
 	}
 
-	public int nextSegmentId() {
-		return segments.size()-1;
-	}
+	public int nextSegmentId() {return segments.size()-1;}
+	public void replaceSegment(int id, Segment segment) {segments.set(id, segment);}
 
-	public void replaceSegment(int id, Segment segment) {
-		segments.set(id, segment);
-	}
+	public MethodWriter fork() {return new MethodWriter(owner, mn);}
 
 	public StaticSegment writeTo() {
 		MethodWriter fork = fork();

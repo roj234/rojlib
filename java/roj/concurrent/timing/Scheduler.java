@@ -9,7 +9,7 @@ import roj.util.Helpers;
 
 import java.util.Collection;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.ToIntFunction;
+import java.util.function.ToLongFunction;
 
 import static roj.reflect.ReflectionUtils.u;
 
@@ -28,7 +28,7 @@ public class Scheduler implements Runnable {
 				if (defaultScheduler != null) return defaultScheduler;
 
 				defaultScheduler = new Scheduler(TaskPool.Common());
-				Thread t = new Thread(defaultScheduler, "任务计划子进程");
+				Thread t = new Thread(defaultScheduler, "定时任务");
 				t.setDaemon(true);
 				t.start();
 			}
@@ -73,11 +73,11 @@ public class Scheduler implements Runnable {
 			long t;
 			do {
 				t = timeLeft;
-				if (t == -1) return true;
+				if (t < 0) break;
 			} while (!u.compareAndSwapLong(this, OFF_TIME_LEFT, t, t == 0 ? -2 : -1));
 
 			TaskHolder root = (TaskHolder) lock;
-			return (root != null && ((TimingWheel) root.lock).remove(root, this)) || task.cancel();
+			return (root != null && ((TimingWheel) root.lock).remove(root, this)) | task.cancel() | t < 0;
 		}
 	}
 
@@ -113,7 +113,7 @@ public class Scheduler implements Runnable {
 		@Override
 		public String toString() { return next == null ? Integer.toString(clock) : next.toString()+":"+Integer.toHexString(clock); }
 
-		final void fastForward(int ticks, Collection<TaskHolder> lazyTask, ToIntFunction<TaskHolder> exec) {
+		final void fastForward(int ticks, Collection<TaskHolder> lazyTask, ToLongFunction<TaskHolder> exec) {
 			int ff = (ticks >>> (slot*DEPTH_SHL)) & DEPTH_MASK;
 			int c = clock;
 			clock = (c+ff) & DEPTH_MASK;
@@ -130,7 +130,7 @@ public class Scheduler implements Runnable {
 						block:
 						if (remove(root, task) && time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time = Math.max(0, time-ticks))) {
 							if (time == 0) {
-								time = exec.applyAsInt(task);
+								time = exec.applyAsLong(task);
 								if (time == 0) break block;
 
 								if (u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, 0, time)) lazyTask.add(task);
@@ -147,7 +147,7 @@ public class Scheduler implements Runnable {
 			if (next != null) next.fastForward(ticks, lazyTask, exec);
 		}
 
-		final void tick(ToIntFunction<TaskHolder> exec) {
+		final void tick(ToLongFunction<TaskHolder> exec) {
 			int c = clock;
 			if (c != DEPTH_MASK) {
 				clock = c+1;
@@ -169,7 +169,7 @@ public class Scheduler implements Runnable {
 					block:
 					if (remove(root, task) && time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time &= mask)) {
 						if (time == 0) {
-							time = exec.applyAsInt(task);
+							time = exec.applyAsLong(task);
 							if (time == 0) break block;
 
 							TimingWheel whell = this;
@@ -234,7 +234,6 @@ public class Scheduler implements Runnable {
 		}
 		final boolean remove(TaskHolder root, TaskHolder task) {
 			assert root != task;
-			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
 
 			synchronized (root) {
 				if (task.lock == null) return false;
@@ -245,6 +244,8 @@ public class Scheduler implements Runnable {
 				task.prev = task.next = null;
 				task.lock = null;
 			}
+
+			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
 			return true;
 		}
 
@@ -275,16 +276,17 @@ public class Scheduler implements Runnable {
 
 	private final TimingWheel wheel = new TimingWheel(null);
 	private volatile boolean stopFlag;
-	private final ToIntFunction<TaskHolder> callback;
+	private final ToLongFunction<TaskHolder> callback;
 
 	private volatile TaskHolder head;
 
-	public Scheduler(ToIntFunction<ScheduleTask> callback) { this.callback = Helpers.cast(callback); }
+	public Scheduler(ToLongFunction<ScheduleTask> callback) { this.callback = Helpers.cast(callback); }
 	public Scheduler(TaskHandler th) {
 		callback = task -> {
 			ITask _task = task.getTask();
+			long nextRun = _task instanceof LoopTaskWrapper loop ? loop.getNextRun() : 0;
 			th.pushTask(_task);
-			return _task instanceof LoopTaskWrapper loop ? loop.getNextRun() : 0;
+			return nextRun;
 		};
 	}
 
@@ -329,14 +331,10 @@ public class Scheduler implements Runnable {
 	public final void pollNewTasks(long time) {
 		if (head == null) return;
 
-		TaskHolder h;
-		do {
-			h = head;
-		} while (!u.compareAndSwapObject(this, OFF_HEAD, h, null));
+		TaskHolder h = (TaskHolder) u.getAndSetObject(this, OFF_HEAD, null);
 
 		while (h != null) {
-			TaskHolder next = (TaskHolder) u.getObjectVolatile(h, TaskHolder.OFF_NEXT);
-			h.next = null;
+			TaskHolder next = (TaskHolder) u.getAndSetObject(h, TaskHolder.OFF_NEXT, null);
 
 			block: {
 				long timeLeft = h.timeLeft;
@@ -345,10 +343,8 @@ public class Scheduler implements Runnable {
 
 				long addTime = timeLeft - time;
 				if (addTime <= 0) {
-					int delayMs = callback.applyAsInt(h);
-					if (delayMs == 0) break block;
-
-					addTime = delayMs;
+					addTime = callback.applyAsLong(h);
+					if (addTime == 0) break block;
 				}
 
 				if (!u.compareAndSwapLong(h, TaskHolder.OFF_TIME_LEFT, timeLeft, TimingWheel.fixTime(wheel, addTime)))
@@ -361,37 +357,25 @@ public class Scheduler implements Runnable {
 		}
 	}
 
-	public ScheduleTask delay(ITask task, int delayMs) {
+	public ScheduleTask delay(ITask task, long delayMs) {
 		if (delayMs < 0) throw new IllegalArgumentException("delayMs < 0");
 		TaskHolder holder = new TaskHolder(task, delayMs);
 		if (delayMs == 0) {
-			delayMs = callback.applyAsInt(holder);
+			delayMs = callback.applyAsLong(holder);
 			if (delayMs == 0) return holder; // expired
 		}
 
 		holder.timeLeft = System.currentTimeMillis()+delayMs;
-		while (true) {
-			TaskHolder h = head;
-			if (u.compareAndSwapObject(this, OFF_HEAD, h, holder)) {
-				u.putObjectVolatile(holder, TaskHolder.OFF_NEXT, h);
-				break;
-			}
-		}
+
+		TaskHolder head = (TaskHolder) u.getAndSetObject(this, OFF_HEAD, holder);
+		u.putObjectVolatile(holder, TaskHolder.OFF_NEXT, head);
 
 		return holder;
 	}
-
-	public ScheduleTask loop(ITask task, int intervalMs) {
-		return delay(new LoopTaskWrapper(this, task, intervalMs, -1, true), 0);
-	}
-
-	public ScheduleTask loop(ITask task, int intervalMs, int count) {
-		return delay(new LoopTaskWrapper(this, task, intervalMs, count, true), 0);
-	}
-
-	public ScheduleTask loop(ITask task, int intervalMs, int count, int delayMs) {
-		return delay(new LoopTaskWrapper(this, task, intervalMs, count, true), delayMs);
-	}
+	public ScheduleTask runAsync(ITask task) { return delay(task, 1); }
+	public ScheduleTask loop(ITask task, long intervalMs) { return delay(new LoopTaskWrapper(this, task, intervalMs, -1, true), 0); }
+	public ScheduleTask loop(ITask task, long intervalMs, int count) { return delay(new LoopTaskWrapper(this, task, intervalMs, count, true), 0); }
+	public ScheduleTask loop(ITask task, long intervalMs, int count, long delayMs) { return delay(new LoopTaskWrapper(this, task, intervalMs, count, true), delayMs); }
 
 	public void stop(Collection<ScheduleTask> collector) {
 		stopFlag = true;

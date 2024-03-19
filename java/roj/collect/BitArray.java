@@ -20,7 +20,7 @@ public class BitArray {
 		data = ArrayUtil.unpackI(unpack);
 		bits = data[data.length-1];
 		length = (data.length-1) * 32 / bits;
-		mask = ((1 << bits)-1);
+		mask = bits == 32 ? -1 : ((1 << bits)-1);
 	}
 
 	public BitArray(@Range(from = 1, to = 32) int bits, @Range(from = 0, to = Integer.MAX_VALUE) int length) {
@@ -29,7 +29,7 @@ public class BitArray {
 		this.data = new int[(bits*length + 31) / 32];
 		this.bits = bits;
 		this.length = length;
-		this.mask = ((1 << bits)-1);
+		this.mask = bits == 32 ? -1 : ((1 << bits)-1);
 	}
 	public BitArray(int bits, int length, int[] data) {
 		int len = (bits*length + 31) / 32;
@@ -38,9 +38,10 @@ public class BitArray {
 		this.data = data;
 		this.bits = bits;
 		this.length = length;
-		this.mask = ((1 << bits)-1);
+		this.mask = bits == 32 ? -1 : ((1 << bits)-1);
 	}
 
+	public int bits() { return bits; }
 	public int length() { return length; }
 
 	public final int get(int i) {
@@ -50,18 +51,18 @@ public class BitArray {
 		int bitPos = (i&31);
 		i >>>= 5;
 
-		if (bitPos+bits > 31) return (int) (((data[i]&0xFFFFFFFFL) | ((long) data[i+1] << 32)) >>> bitPos) & mask;
+		if (bitPos+bits > 32) return (int) (((data[i]&0xFFFFFFFFL) | ((long) data[i+1] << 32)) >>> bitPos) & mask;
 		else return (data[i] >>> bitPos) & mask;
 	}
 	public final void set(int i, int val) {
-		i&=0xff;
 		check(i);
+		if ((val & ~mask) != 0) throw new IllegalArgumentException("val "+val+" outside of mask "+mask);
 
 		i *= bits;
 		int bitPos = i&31;
 		i >>>= 5;
 
-		if (bitPos+bits > 31) {
+		if (bitPos+bits > 32) {
 			long myMask = (long) mask << bitPos;
 			long longVal = ((long) val << bitPos) & myMask;
 
@@ -79,6 +80,7 @@ public class BitArray {
 
 	public final void setAll(int off, int len, int val) {
 		checkBatch(off, len);
+		if ((val & ~mask) != 0) throw new IllegalArgumentException("val "+val+" outside of mask "+mask);
 		if (len == 0) return;
 
 		int i = off*bits;
@@ -86,8 +88,8 @@ public class BitArray {
 		int bitPos = i&31;
 		i >>>= 5;
 		long d = data[i]&0xFFFFFFFFL;
-		if (i+1 < data.length)
-			d |= (long) data[i+1] << 32;
+		if (data.length > 1)
+			d |= (long) data[++i] << 32;
 
 		val &= mask;
 		while (true) {
@@ -98,18 +100,14 @@ public class BitArray {
 
 			if (--len == 0) break;
 
-			if ((bitPos += bits) > 31) {
+			if ((bitPos += bits) > 32) {
 				bitPos -= 32;
-
 				data[i] = (int) d;
-
-				d = d>>>32 | (long)data[i+2] << 32;
-
-				i++;
+				d = ((++i == data.length) ? 0L : (long) data[i] << 32) | d >>> 32;
 			}
 		}
 
-		data[i] = (int) d;
+		if (i < data.length) data[i] = (int) d;
 	}
 	public final void getAll(int off, int len, IntConsumer consumer) {
 		checkBatch(off, len);
@@ -121,19 +119,16 @@ public class BitArray {
 		i >>>= 5;
 		long d = data[i]&0xFFFFFFFFL;
 		if (i+1 < data.length)
-			d |= (long) data[i+1] << 32;
+			d |= (long) data[++i] << 32;
 
 		while (true) {
 			consumer.accept((int) (d >>> bitPos & mask));
 
 			if (--len == 0) break;
 
-			if ((bitPos += bits) > 31) {
+			if ((bitPos += bits) > 32) {
 				bitPos -= 32;
-
-				d = d>>>32 | (long)data[i+2] << 32;
-
-				i++;
+				d = ((++i == data.length) ? 0L : (long) data[i] << 32) | d >>> 32;
 			}
 		}
 	}
@@ -151,42 +146,39 @@ public class BitArray {
 
 	private static void copyInternal(int[] from, int fromBits, int[] to, int toBits, int off, int len) {
 		int i = off*fromBits, bitPos = i&31;
+		i >>>= 5;
 		long d = from[i]&0xFFFFFFFFL;
 		if (i+1 < from.length)
-			d |= (long) from[i+1] << 32;
-		i >>>= 5;
+			d |= (long) from[++i] << 32;
 
 		int i2 = off*toBits, bitPos2 = i2&31;
 		i2 >>>= 5;
 		long d2 = to[i2]&0xFFFFFFFFL;
-		if (i2+1 < to.length)
-			d2 |= (long) to[i2+1] << 32;
 
-		long mask = (1 << toBits)-1;
+		long mask = (1L << fromBits)-1;
+		long mask2 = (1L << toBits)-1;
 
 		while (true) {
 			long myMask = mask << bitPos2;
-			long longVal = ((d >>> bitPos) << bitPos2) & myMask;
+			long longVal = (((d >>> bitPos) & mask2) << bitPos2) & myMask;
 
 			d2 = d2 & ~myMask | longVal;
 
 			if (--len == 0) break;
 
-			if ((bitPos += fromBits) > 31) {
+			if ((bitPos += fromBits) > 32) {
 				bitPos -= 32;
-				d = d>>>32 | (long) from[i+2] << 32;
-				i++;
+				d = ((++i == from.length) ? 0L : (long) from[i] << 32) | d >>> 32;
 			}
 
-			if ((bitPos2 += toBits) > 31) {
+			if ((bitPos2 += toBits) > 32) {
 				bitPos2 -= 32;
 				to[i2] = (int) d2;
-				d2 = d2>>>32 | (long)to[i2+2] << 32;
-				i2++;
+				d2 = ((++i2 == to.length) ? 0L : (long) to[i2] << 32) | d2 >>> 32;
 			}
 		}
 
-		to[i2] = (int) d2;
+		if (i2 < to.length) to[i2] = (int) d2;
 	}
 
 	public int[] getInternal() { return data; }
@@ -196,8 +188,8 @@ public class BitArray {
 
 		int i = 0, bitPos = 0;
 		long d = data[i]&0xFFFFFFFFL;
-		if (i+1 < data.length)
-			d |= (long) data[i+1] << 32;
+		if (data.length > 1)
+			d |= (long) data[++i] << 32;
 
 		int j = 0;
 		while (true) {
@@ -205,12 +197,9 @@ public class BitArray {
 
 			if (j == length) return out;
 
-			if ((bitPos += bits) > 31) {
+			if ((bitPos += bits) > 32) {
 				bitPos -= 32;
-
-				d = d>>>32 | (long)data[i+2] << 32;
-
-				i++;
+				d = ((++i == data.length) ? 0L : (long) data[i] << 32) | d >>> 32;
 			}
 		}
 	}
@@ -230,5 +219,5 @@ public class BitArray {
 	}
 
 	@Override
-	public String toString() { return Arrays.toString(toIntArray()); }
+	public String toString() { return "BitArray("+bits+")["+length+"]"+Arrays.toString(toIntArray()); }
 }

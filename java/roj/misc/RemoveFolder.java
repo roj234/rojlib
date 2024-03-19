@@ -4,8 +4,8 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFileWriter;
 import roj.collect.TrieTree;
+import roj.config.data.CInt;
 import roj.io.IOUtil;
-import roj.math.MutableInt;
 
 import java.io.File;
 import java.io.IOException;
@@ -59,7 +59,7 @@ public class RemoveFolder {
 			}
 			for (ZEntry ze : za.entries()) {
 				if (!ze.getName().endsWith("/")) {
-					Map.Entry<MutableInt, ZEntry> fake = terminator.longestMatches(ze.getName(), 0, ze.getName().length());
+					Map.Entry<CInt, ZEntry> fake = terminator.longestMatches(ze.getName(), 0, ze.getName().length());
 					if (fake != null && fake.getKey().value < ze.getName().length()) {
 						System.out.println("忽略假货 "+fake.getValue());
 						System.out.println("self="+ze);

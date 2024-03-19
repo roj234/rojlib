@@ -2,12 +2,12 @@ package roj.plugins.mychat;
 
 import roj.config.JSONParser;
 import roj.config.ParseException;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.net.ch.ChannelCtx;
-import roj.net.http.srv.Request;
-import roj.net.http.srv.ResponseHeader;
-import roj.net.http.ws.WebsocketHandler;
-import roj.net.http.ws.WebsocketManager;
+import roj.net.http.server.Request;
+import roj.net.http.server.ResponseHeader;
+import roj.net.http.ws.WebSocketHandler;
+import roj.net.http.ws.WebSocketServer;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -16,12 +16,12 @@ import java.io.IOException;
  * @author Roj234
  * @since 2024/3/7 0007 15:03
  */
-public class AEWebUI extends WebsocketHandler {
+public class AEWebUI extends WebSocketHandler {
 	public static void fn() {
 
-		WebsocketManager man = new WebsocketManager() {
+		WebSocketServer man = new WebSocketServer() {
 			@Override
-			protected WebsocketHandler newWorker(Request req, ResponseHeader handle) {
+			protected WebSocketHandler newWorker(Request req, ResponseHeader handle) {
 				return new AEWebUI();
 			}
 		};
@@ -34,9 +34,9 @@ public class AEWebUI extends WebsocketHandler {
 
 	@Override
 	protected void onData(int ph, DynByteBuf in) throws IOException {
-		CMapping map;
+		CMap map;
 		try {
-			map = new JSONParser().parseRaw(in).asMap();
+			map = new JSONParser().parse(in).asMap();
 		} catch (ParseException e) {
 			error(ERR_INVALID_DATA, e.getMessage());
 			return;

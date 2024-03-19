@@ -1,6 +1,5 @@
 package roj.compiler.context;
 
-import org.jetbrains.annotations.Nullable;
 import roj.asm.tree.IClass;
 
 import java.util.Set;
@@ -10,8 +9,10 @@ import java.util.Set;
  * @since 2022/9/16 0016 21:51
  */
 public interface Library {
-	@Nullable
-	default Set<String> content() { return null; }
+	//TODO module
+	default String getModule(String className) { return null; }
+
+	Set<String> content();
 	IClass get(CharSequence name);
 	default void close() throws Exception {}
 }

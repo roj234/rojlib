@@ -1,6 +1,7 @@
 package roj.archive.qz.xz;
 
 import org.intellij.lang.annotations.MagicConstant;
+import roj.NativeLibrary;
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.lzma.LZMAEncoder;
 import roj.concurrent.TaskHandler;
@@ -106,6 +107,7 @@ public class LZMA2Options implements Cloneable {
 	private int niceLen;
 	private int mf;
 	private int depthLimit;
+	private boolean nativeAccelerate;
 
 	private TaskHandler asyncExecutor;
 	private BufferPool asyncBufferPool;
@@ -401,9 +403,13 @@ public class LZMA2Options implements Cloneable {
 	public BufferPool getAsyncBufferPool() { return asyncBufferPool; }
 	public LZMA2Parallel getAsyncMan() { return asyncMan; }
 
+	public void setNativeAccelerate(boolean nativeAccelerate) {this.nativeAccelerate = nativeAccelerate;}
+	public boolean isNativeAccelerate() {return nativeAccelerate;}
+
 	public int getEncoderMemoryUsage() { return mode == MODE_UNCOMPRESSED ? LZMA2StoredWriter.getMemoryUsage() : LZMA2Writer.getMemoryUsage(this); }
 	public OutputStream getOutputStream(OutputStream out) {
 		if (mode == MODE_UNCOMPRESSED) return new LZMA2StoredWriter(out);
+		if (nativeAccelerate && NativeLibrary.hasFunction(NativeLibrary.FAST_LZMA)) return new LZMA2WriterN(out, this);
 		return asyncMan != null ? asyncMan.createEncoder(out) : new LZMA2Writer(out, this);
 	}
 

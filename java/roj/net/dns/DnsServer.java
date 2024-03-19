@@ -2,20 +2,20 @@ package roj.net.dns;
 
 import roj.collect.MyHashMap;
 import roj.config.data.CList;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.net.NetUtil;
-import roj.net.URIUtil;
 import roj.net.ch.*;
 import roj.net.http.Action;
-import roj.net.http.srv.Request;
-import roj.net.http.srv.ResponseHeader;
-import roj.net.http.srv.StringResponse;
-import roj.net.http.srv.autohandled.Accepts;
-import roj.net.http.srv.autohandled.Body;
-import roj.net.http.srv.autohandled.From;
-import roj.net.http.srv.autohandled.Route;
+import roj.net.http.server.Request;
+import roj.net.http.server.ResponseHeader;
+import roj.net.http.server.StringResponse;
+import roj.net.http.server.auto.Accepts;
+import roj.net.http.server.auto.Body;
+import roj.net.http.server.auto.From;
+import roj.net.http.server.auto.Route;
 import roj.text.CharList;
+import roj.text.EscapeUtil;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.BitBuffer;
@@ -54,7 +54,7 @@ public class DnsServer implements ChannelHandler {
 	public List<InetSocketAddress> forwardDns;
 	public InetSocketAddress fakeDns;
 
-	public DnsServer(CMapping cfg, InetSocketAddress address) throws IOException {
+	public DnsServer(CMap cfg, InetSocketAddress address) throws IOException {
 		ServerLaunch.udp().bind(new InetSocketAddress(cfg.getInteger("forwarderReceive")))
 					.initializator(new ForwardQueryHandler(this))
 					.option(ServerLaunch.TCP_RECEIVE_BUFFER, 10000)
@@ -846,7 +846,7 @@ public class DnsServer implements ChannelHandler {
 
 		if (msg != null && !msg.isEmpty()) {
 			sb.append("<div style='background: 0xAA8888; margin: 16px; padding: 16px; border: #000 1px dashed; font-size: 24px; text-align: center;'>")
-			  .append(URIUtil.decodeURI(msg))
+			  .append(EscapeUtil.decodeURI(msg))
 			  .append("</div>");
 		}
 
@@ -921,6 +921,6 @@ public class DnsServer implements ChannelHandler {
 			}
 		}
 
-		rh.code(302).header("Location", "/?msg="+URIUtil.encodeURI(msg));
+		rh.code(302).header("Location", "/?msg="+EscapeUtil.encodeURI(msg));
 	}
 }

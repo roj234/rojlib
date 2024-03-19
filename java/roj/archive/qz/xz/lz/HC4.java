@@ -112,7 +112,7 @@ final class HC4 extends LZEncoder {
 			// dictionary size.
 			if (depth-- == 0 || delta >= cyclicSize) return;
 
-			currentMatch = u.getInt(base + ((cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0))<<2));
+			currentMatch = u.getInt(base + ((long) (cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) <<2));
 
 			// Test the first byte and the first new byte that would give us
 			// a match that is at least one byte longer than lenBest. This

@@ -7,6 +7,7 @@ import roj.util.DynByteBuf;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Roj234
@@ -22,7 +23,7 @@ public final class Delta extends QZCoder {
 	byte[] id() { return id; }
 
 	public OutputStream encode(OutputStream out) { return new CipherOutputStream(out, new DeltaFilter(true, distance)); }
-	public InputStream decode(InputStream in, byte[] p, long u, int m) { return new CipherInputStream(in, new DeltaFilter(false, distance)); }
+	public InputStream decode(InputStream in, byte[] p, long u, AtomicInteger memoryLimit) { return new CipherInputStream(in, new DeltaFilter(false, distance)); }
 
 	public String toString() { return "delta:"+distance; }
 

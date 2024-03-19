@@ -38,8 +38,8 @@ final class InflateIn extends InflaterInputStream {
 	public void close() throws IOException {
 		if (!myClosed) {
 			myClosed = true;
-			List<InflateIn> infs = ZipArchive.INFS.get();
-			if (infs.size() < ZipArchive.MAX_INFS) {
+			List<InflateIn> infs = ZipFile.INFS.get();
+			if (infs.size() < ZipFile.MAX_INFS) {
 				infs.add(this);
 				in.close();
 			} else {

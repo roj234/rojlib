@@ -133,7 +133,7 @@ public abstract class RCipherSpi extends CipherSpi {
 						break handlePrev;
 					}
 
-					prev.put(ib.get());
+					prev.put(ib.readByte());
 					crypt(prev, ob);
 				}
 				prev.clear();

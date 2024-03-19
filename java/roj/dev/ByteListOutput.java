@@ -1,6 +1,6 @@
 package roj.dev;
 
-import roj.net.URIUtil;
+import roj.text.EscapeUtil;
 import roj.util.ByteList;
 
 import javax.tools.SimpleJavaFileObject;
@@ -17,7 +17,7 @@ public class ByteListOutput extends SimpleJavaFileObject {
 	private final ByteList output;
 
 	protected ByteListOutput(String className, String basePath) throws URISyntaxException {
-		super(new URI("file://"+URIUtil.encodeURIComponent(basePath)+className.replace('.', '/') + ".class"), Kind.CLASS);
+		super(new URI("file://"+EscapeUtil.encodeURIComponent(basePath)+className.replace('.', '/') + ".class"), Kind.CLASS);
 		this.output = new ByteList();
 		this.name = className.replace('.', '/') + ".class";
 	}

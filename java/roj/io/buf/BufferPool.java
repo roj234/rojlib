@@ -548,9 +548,9 @@ public final class BufferPool {
 	}
 	private static void throwUnpooled(DynByteBuf buf) { throw new RuntimeException("已释放的缓冲区: "+buf.info()+"@"+System.identityHashCode(buf)); }
 
-	public static DynByteBuf expand(DynByteBuf buf, int more) { return expand(buf, more, true, true); }
-	public static DynByteBuf expand(DynByteBuf buf, int more, boolean addAtEnd) { return expand(buf, more, addAtEnd, true); }
-	public static DynByteBuf expand(DynByteBuf buf, int more, boolean addAtEnd, boolean reserveOld) {
+	public DynByteBuf expand(DynByteBuf buf, int more) { return expand(buf, more, true, true); }
+	public DynByteBuf expandBefore(DynByteBuf buf, int more) { return expand(buf, more, false, false); }
+	public DynByteBuf expand(DynByteBuf buf, int more, boolean addAtEnd, boolean reserveOld) {
 		if (more < 0 && (!addAtEnd || !reserveOld)) throw new IllegalArgumentException("size < 0");
 
 		Object pool;
@@ -572,7 +572,7 @@ public final class BufferPool {
 		if (pool != null) ((PooledBuffer) buf).pool(pool);
 		if (more < 0) return buf;
 
-		DynByteBuf newBuf = buffer(buf.isDirect(), buf.capacity()+more);
+		DynByteBuf newBuf = allocate(buf.isDirect(), buf.capacity()+more);
 		if (!addAtEnd) newBuf.wIndex(more);
 		newBuf.put(buf);
 		if (reserveOld) reserve(buf);

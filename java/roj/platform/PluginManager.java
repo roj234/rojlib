@@ -5,7 +5,8 @@ import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
 import roj.config.YAMLParser;
-import roj.config.data.CMapping;
+import roj.config.auto.SerializerFactory;
+import roj.config.data.CMap;
 import roj.io.CorruptedInputException;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
@@ -18,25 +19,34 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.Iterator;
+import java.util.function.IntFunction;
 
 /**
  * @author Roj234
  * @since 2023/12/25 0025 16:08
  */
 public class PluginManager {
-	final Logger LOGGER = Logger.getLogger("DPS/Plugin");
+	static final Logger LOGGER = Logger.getLogger("PM");
 	final MyHashMap<String, PluginDescriptor> plugins = new MyHashMap<>();
 
 	private final ClassLoader env = getClass().getClassLoader();
-	private final File dataFolder;
+	private final File pluginFolder;
 
-	public PluginManager(File dataFolder) { this.dataFolder = dataFolder; }
+	public PluginManager(File pluginFolder) { this.pluginFolder = pluginFolder; }
+	public File getPluginFolder() {return pluginFolder;}
 
 	protected boolean isCriticalPlugin(PluginDescriptor pd) {
 		return pd.fileName == null;
 	}
 
-	public void loadPlugins() {
+	protected final void readPlugins() {
+		for (File file : pluginFolder.listFiles()) {
+			String ext = IOUtil.extensionName(file.getName()).toLowerCase();
+			if (ext.equals("jar") || ext.equals("zip")) preloadPlugin(file);
+		}
+		loadPlugins();
+	}
+	protected final void loadPlugins() {
 		for (PluginDescriptor pd : plugins.values()) {
 			for (String s : pd.loadBefore) {
 				PluginDescriptor dep = plugins.get(s);
@@ -68,7 +78,7 @@ public class PluginManager {
 	}
 
 	static final int UNLOAD = 0, LOADING = 1, LOADED = 2, ENABLED = 3, DISABLED = 4;
-	private boolean loadPlugin(PluginDescriptor pd, boolean must) throws Throwable {
+	private boolean loadPlugin(PluginDescriptor pd, boolean must) throws IOException {
 		if (pd == null) return false;
 		switch (pd.state) {
 			case UNLOAD:
@@ -100,59 +110,82 @@ public class PluginManager {
 		}
 
 		LOGGER.info("正在加载插件 {}", pd);
-		pd.cl = pd.pcl = new PluginClassLoader(env, pd);
-		Class<?> klass = pd.mainClass.startsWith("roj.") ? pd.pcl.loadClass(pd.mainClass) : pd.pcl.findClass(pd.mainClass);
-		pd.instance = (Plugin) klass.newInstance();
-		pd.instance.init(this, new File(dataFolder, pd.id), pd);
-		pd.instance.onLoad();
+		Class<?> klass;
+		try {
+			if (pd.source != null) {
+				PluginClassLoader pcl = new PluginClassLoader(env, pd);
+				pd.cl = pcl;
+				klass = pcl.loadClass(pd.mainClass);
+			} else {
+				klass = PluginManager.class.getClassLoader().loadClass(pd.mainClass);
+			}
+		} catch (ClassNotFoundException|NoClassDefFoundError e) {
+			LOGGER.error("无法初始化主类 {}", e, pd, pd.mainClass);
+			pd.state = DISABLED;
+			return false;
+		}
 
-		pd.state = LOADED;
+		IntFunction<Object> fn = SerializerFactory.dataContainer(klass);
+		if (fn == null) {
+			LOGGER.error("在主类 {} 中找不到无参构造器", pd, pd.mainClass);
+			pd.state = DISABLED;
+		} else {
+			pd.instance = (Plugin) fn.apply(0);
+			pd.instance.init(this, new File(pluginFolder, pd.id), pd);
+			pd.instance.onLoad();
+
+			pd.state = LOADED;
+		}
 		return true;
 	}
-	public void readPlugins() {
-		for (File file : dataFolder.listFiles()) {
-			String ext = IOUtil.extensionName(file.getName()).toLowerCase();
-			if (ext.equals("jar") || ext.equals("zip")) readPlugin(file);
-		}
-		loadPlugins();
-	}
 
-	public void loadPlugin(File plugin) {
-		readPlugin(plugin);
-		loadPlugins();
+	protected final void loadPlugin(File plugin) throws IOException {
+		PluginDescriptor pd = preloadPlugin(plugin);
+		if (pd != null) loadPlugin(pd);
 	}
-	public void readPlugin(File plugin) {
+	protected final void loadPlugin(PluginDescriptor pd) throws IOException {
+		for (String id : pd.loadBefore) {
+			PluginDescriptor dep = plugins.get(id);
+			if (dep != null && (dep.state&2) != 0) throw new IllegalStateException("loadBefore["+id+"]已加载");
+		}
+		loadPlugin(pd, true);
+		enablePlugin(pd);
+	}
+	private PluginDescriptor preloadPlugin(File plugin) {
 		try {
 			PluginDescriptor pd = getMetadata(plugin);
 			if (pd == null) {
 				LOGGER.warn("{} 不是插件, 忽略", plugin);
-				return;
 			} else {
 				PluginDescriptor prev = plugins.get(pd.id);
 				if (prev != null) {
 					LOGGER.warn("插件 {} 已加载另外的版本 {}", pd, prev.version);
 					if (prev.version.compareTo(pd.version) >= 0) {
-						return;
+						return prev;
 					} else {
 						unloadPlugin(prev);
 					}
 				}
+
+				plugins.put(pd.id, pd);
+				return pd;
 			}
-			plugins.put(pd.id, pd);
 		} catch (Exception e) {
 			LOGGER.error("加载插件 {} 出错",e,plugin);
 		}
+
+		return null;
 	}
 	private PluginDescriptor getMetadata(File plugin) throws IOException {
 		try (ZipFile za = new ZipFile(plugin)) {
 			InputStream in = za.getStream("plugin.yml");
 			if (in == null) return null;
 
-			CMapping config = new YAMLParser().parseRaw(in).asMap();
+			CMap config = new YAMLParser().parse(in).asMap();
 
 			PluginDescriptor pd = new PluginDescriptor();
 			pd.fileName = plugin.getName();
-			pd.source = new FileSource(plugin);
+			pd.source = new FileSource(plugin, false);
 			pd.id = config.getString("id");
 			if (pd.id.isEmpty()) throw new FastFailException("id未指定");
 			pd.version = new Version(config.getString("version", "1"));
@@ -160,20 +193,20 @@ public class PluginManager {
 			pd.mainClass = config.getString("mainClass");
 			if (pd.mainClass.isEmpty()) throw new FastFailException("mainClass未指定");
 
-			pd.depend = config.getList("depend").asStringList();
-			pd.loadBefore = config.getList("loadBefore").asStringList();
-			pd.loadAfter = config.getList("loadAfter").asStringList();
+			pd.depend = config.getList("depend").toStringList();
+			pd.loadBefore = config.getList("loadBefore").toStringList();
+			pd.loadAfter = config.getList("loadAfter").toStringList();
 
-			SimpleList<String> path = config.getList("extraPath").asStringList();
+			SimpleList<String> path = config.getList("extraPath").toStringList();
 			pd.extraPath = new TrieTreeSet();
 			for (String s : path) pd.extraPath.add(new File(s).getAbsolutePath());
 
-			pd.reflectiveClass = new TrieTreeSet(config.getList("reflectivePackage").asStringList());
+			pd.reflectiveClass = new TrieTreeSet(config.getList("reflectivePackage").toStringList());
 			pd.dynamicLoadClass = config.getBool("dynamicLoadClass");
 			pd.loadNative = config.getBool("loadNative");
 
 			pd.desc = config.getString("desc");
-			pd.authors = config.getList("authors").asStringList();
+			pd.authors = config.getList("authors").toStringList();
 			pd.website = config.getString("website");
 			return pd;
 		} catch (Exception e) {
@@ -181,44 +214,36 @@ public class PluginManager {
 		}
 	}
 
-	protected void registerPlugin(PluginDescriptor pd, Plugin plugin) {
-		if (plugin != null) {
-			pd.instance = plugin;
-			plugin.init(this, dataFolder, pd);
-			plugin.onLoad();
-			pd.state = LOADED;
-		} else {
-			assert isCriticalPlugin(pd);
-			pd.state = ENABLED;
-		}
-		plugins.put(pd.id, pd);
-	}
-
 	public PluginDescriptor getPlugin(String id) { return plugins.get(id); }
-	public void enablePlugin(String id) { enablePlugin(getPlugin(id)); }
-	public void enablePlugin(Plugin plugin) { enablePlugin(plugin.getDescription()); }
 	public void enablePlugin(PluginDescriptor pd) {
-		if (pd.state < LOADED) throw new IllegalStateException("无法启用未加载的插件 "+pd);
-		try {
-			if (pd.state != ENABLED) pd.instance.onEnable();
-			pd.state = ENABLED;
-		} catch (Exception e) {
-			LOGGER.error("无法启用插件 {}",e,pd);
+		synchronized (pd) {
+			if (pd.state < LOADED) throw new IllegalStateException("无法启用未加载的插件 "+pd);
+			if (pd.state == ENABLED) return;
+			try {
+				LOGGER.info("正在启用插件 {}", pd);
+				pd.instance.onEnable();
+				pd.state = ENABLED;
+			} catch (Exception e) {
+				LOGGER.error("无法启用插件 {}",e,pd);
+			}
 		}
 	}
-	public void disablePlugin(String id) { disablePlugin(getPlugin(id)); }
-	public void disablePlugin(Plugin plugin) { disablePlugin(plugin.getDescription()); }
 	public void disablePlugin(PluginDescriptor pd) {
-		if (pd.state == UNLOAD) return;
-		try {
-			if (pd.state == ENABLED && pd.instance != null) pd.instance.onDisable();
-			pd.state = DISABLED;
-		} catch (Exception e) {
-			LOGGER.error("无法禁用插件 {}",e,pd);
+		synchronized (pd) {
+			if (pd.state == UNLOAD) return;
+			try {
+				if (pd.state == ENABLED && pd.instance != null) pd.instance.onDisable();
+				pd.state = DISABLED;
+			} catch (Exception e) {
+				LOGGER.error("无法禁用插件 {}",e,pd);
+			} finally {
+				Plugin instance = pd.instance;
+				if (instance != null) instance.postDisable();
+			}
 		}
 	}
 
-	public void unloadPlugins() {
+	protected final void unloadPlugins() {
 		for (PluginDescriptor pd : plugins.values()) {
 			unloadPlugin(pd);
 		}
@@ -229,33 +254,28 @@ public class PluginManager {
 		PluginDescriptor pd = plugins.get(name);
 		if (pd == null) return;
 		if (isCriticalPlugin(pd)) throw new IllegalArgumentException("不能禁用关键插件"+pd);
-		plugins.remove(name);
+
+		synchronized (plugins) {plugins.remove(name);}
 		unloadPlugin(pd);
 		System.gc();
 	}
 	private void unloadPlugin(PluginDescriptor pd) {
 		LOGGER.info("正在卸载插件 {}", pd);
-		disablePlugin(pd);
-		pd.instance = null;
-		if (pd.pcl != null) {
-			try {
-				pd.pcl.close();
-			}  catch (Throwable e) {
-				LOGGER.error("卸载插件 {} 出错", e, pd);
+		synchronized (pd) {
+			disablePlugin(pd);
+			pd.instance = null;
+			if (pd.cl != null) {
+				try {
+					pd.cl.close();
+				}  catch (Throwable e) {
+					LOGGER.error("卸载插件 {} 出错", e, pd);
+				}
+				pd.cl = null;
 			}
-			pd.cl = pd.pcl = null;
-		}
 
-		pd.state = UNLOAD;
+			pd.state = UNLOAD;
+		}
 	}
 
-	public PluginDescriptor getPluginDescriptor(Class<?> clazz) {
-		if (clazz != null) {
-			ClassLoader cl = clazz.getClassLoader();
-			if (cl instanceof PluginClassLoader) return ((PluginClassLoader) cl).desc;
-			return getPlugin("Core");
-		}
-
-		throw new NullPointerException("clazz");
-	}
+	public PluginDescriptor getOwner(Class<?> clazz) {return clazz.getClassLoader() instanceof PluginClassLoader pcl ? pcl.desc : getPlugin("Core");}
 }

@@ -21,7 +21,7 @@ public class Vec4d extends Vector {
 	public Vec4d(Vec2d xy, double z, double s) {
 		this(xy.x, xy.y, z, s);
 	}
-	public Vec4d(Vec3f xyz, double s) {
+	public Vec4d(Vec3d xyz, double s) {
 		this(xyz.x, xyz.y, xyz.z, s);
 	}
 	public Vec4d(Vec4d xyzw) {
@@ -35,7 +35,7 @@ public class Vec4d extends Vector {
 		this.s = w;
 		return this;
 	}
-	public Vec4d set(Vec3f xyz, double w) {
+	public Vec4d set(Vec3d xyz, double w) {
 		this.x = xyz.x;
 		this.y = xyz.y;
 		this.z = xyz.z;

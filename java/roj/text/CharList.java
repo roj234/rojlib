@@ -4,9 +4,9 @@ import org.jetbrains.annotations.NotNull;
 import roj.collect.CharMap;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
+import roj.config.data.CInt;
 import roj.io.IOUtil;
 import roj.math.MathUtils;
-import roj.math.MutableInt;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
  * @author Roj234
  * @since 2021/6/19 1:28
  */
-public class CharList implements CharSequence, Appender {
+public class CharList implements CharSequence, Appendable {
 	// region Number helper
 	static void getChars(long l, int charPos, char[] buf) {
 		long q;
@@ -153,14 +153,14 @@ public class CharList implements CharSequence, Appender {
 
 	// region search
 	public final boolean contains(CharSequence s) { return indexOf(s, 0) >= 0; }
-	public final boolean containsAny(TrieTree<MutableInt> map, boolean stopOnFirst) {
+	public final boolean containsAny(TrieTree<CInt> map, boolean stopOnFirst) {
 		int pos = 0;
 
-		MyHashMap.Entry<MutableInt, MutableInt> entry = new MyHashMap.Entry<>(new MutableInt(), null);
+		MyHashMap.Entry<CInt, CInt> entry = new MyHashMap.Entry<>(new CInt(), null);
 		while (pos < len) {
 			map.match(this, pos, len, entry);
 
-			int len = entry.getKey().getValue();
+			int len = entry.getKey().value;
 			if (len < 0) {
 				pos++;
 				continue;
@@ -168,7 +168,7 @@ public class CharList implements CharSequence, Appender {
 
 			if (stopOnFirst) return true;
 
-			entry.getValue().increment();
+			entry.getValue().value++;
 			pos += len;
 		}
 
@@ -387,10 +387,10 @@ public class CharList implements CharSequence, Appender {
 	public final CharList padStart(CharSequence str, int count) { return pad(str, 0, count); }
 	public final CharList padEnd(char c, int count) { return pad(c, len, count); }
 	public final CharList padEnd(CharSequence str, int count) { return pad(str, len, count); }
-	public final CharList pad(char c, int off, int count) {
+	public CharList pad(char c, int off, int count) {
 		if (count > 0) {
 			ensureCapacity(len+count);
-			if (off != len) System.arraycopy(list, off, list, off+count, len-off);
+			System.arraycopy(list, off, list, off+count, len-off);
 			len += count;
 			count += off;
 			while (off < count) list[off++] = c;
@@ -398,7 +398,7 @@ public class CharList implements CharSequence, Appender {
 
 		return this;
 	}
-	public final CharList pad(CharSequence str, int off, int count) {
+	public CharList pad(CharSequence str, int off, int count) {
 		if (str.length() < 1) throw new IllegalStateException("empty padding");
 		if (count > 0) {
 			ensureCapacity(len+count);
@@ -567,10 +567,10 @@ public class CharList implements CharSequence, Appender {
 
 		int pos = 0;
 
-		MyHashMap.Entry<MutableInt, String> entry = new MyHashMap.Entry<>(new MutableInt(), null);
+		MyHashMap.Entry<CInt, String> entry = new MyHashMap.Entry<>(new CInt(), null);
 		while (pos < len) {
 			map.match(this, pos, len, entry);
-			int len = entry.getKey().getValue();
+			int len = entry.getKey().value;
 			if (len < 0) {
 				pos++;
 				continue;
@@ -670,7 +670,7 @@ public class CharList implements CharSequence, Appender {
 		len = out.len;
 		return count;
 	}
-	public final int preg_match_cllabck(Pattern regexp, Consumer<Matcher> callback) {
+	public final int preg_match_callback(Pattern regexp, Consumer<Matcher> callback) {
 		Matcher m = regexp.matcher(this);
 		int count = 0;
 		int i = 0;

@@ -5,7 +5,7 @@ import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.EmbeddedChannel;
 import roj.net.http.Headers;
-import roj.net.http.srv.MultipartFormHandler;
+import roj.net.http.server.MultipartFormHandler;
 import roj.text.TextUtil;
 import roj.util.ArrayRef;
 import roj.util.ByteList;
@@ -127,7 +127,7 @@ public class MHTParser extends MultipartFormHandler {
 					len = 0;
 				}
 
-				out.put((byte) '=').put((byte) TextUtil.b2h(v>>>4)).put((byte) TextUtil.b2h(v&0xF));
+				out.put('=').put(TextUtil.b2h(v>>>4)).put(TextUtil.b2h(v&0xF));
 				len += 3;
 			}
 			this.len = len;

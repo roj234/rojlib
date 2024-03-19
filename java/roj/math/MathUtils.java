@@ -11,9 +11,7 @@ import java.util.function.ToIntFunction;
  * Math utilities.
  */
 public abstract class MathUtils {
-	public static final double HALF_PI = Math.PI / 2;
-	public static final double TWO_PI = Math.PI * 2;
-	public static final double EPS_2 = 1e-14;
+	public static final double HALF_PI = Math.PI / 2, TWO_PI = Math.PI * 2;
 
 	public static <T> IntList discretization(Iterable<T> list, ToIntFunction<T> retriever) {
 		if (retriever == null) retriever = Helpers.cast((ToIntFunction<Number>) Number::intValue);
@@ -27,6 +25,19 @@ public abstract class MathUtils {
 	public static int clamp(int val, int min, int max) { return val < min ? min : val > max ? max : val; }
 	public static long clamp(long val, long min, long max) { return val < min ? min : val > max ? max : val; }
 	public static double clamp(double val, double min, double max) { return val < min ? min : val > max ? max : val; }
+	// Will this faster than Math ?
+	public static int floor(float value) {
+		int i = (int) value;
+		return value < i ? i - 1 : i;
+	}
+	public static int floor(double value) {
+		int i = (int) value;
+		return value < i ? i - 1 : i;
+	}
+	public static int ceil(float value) {
+		int i = (int) value;
+		return value > i ? i + 1 : i;
+	}
 
 	/**
 	 * Returns an iterator providing a number sequence. This sequence starts with <i>{@code from}</i> (given as
@@ -114,15 +125,7 @@ public abstract class MathUtils {
 		return (n < 0) ? 1 : (n >= 4611686018427387904L) ? 4611686018427387904L : n + 1;
 	}
 
-	public static float cos(float value) {
-		return (float) sin(HALF_PI + value);
-	}
-	public static double cos(double value) {
-		return sin(HALF_PI + value);
-	}
-	public static float sin(float value) {
-		return (float) sin((double) value);
-	}
+	public static double cos(double value) {return sin(HALF_PI + value);}
 	/** 精度1e-6 */
 	public static double sin(double value) {
 		if (value >= 0) {
@@ -150,56 +153,6 @@ public abstract class MathUtils {
 		}
 	}
 
-	public static int floor(float value) {
-		int i = (int) value;
-		return value < i ? i - 1 : i;
-	}
-
-	public static int ceil(float value) {
-		int i = (int) value;
-		return value > i ? i + 1 : i;
-	}
-
-	public static int floor(double value) {
-		int i = (int) value;
-		return value < i ? i - 1 : i;
-	}
-
-    public static float invSqrt(float x) {
-        float halfX = 0.5f * x;
-
-        int i = Float.floatToRawIntBits(x); // get bits for floating VALUE
-        i = 0x5f375a86 - (i >> 1); // gives initial guess y0
-        x = Float.intBitsToFloat(i); // convert bits BACK to float
-
-        x = x * (1.5f - halfX * x * x); // Newton step, repeating increases accuracy
-        x = x * (1.5f - halfX * x * x);
-        x = x * (1.5f - halfX * x * x);
-
-        return x;
-    }
-
-    private static double invSqrt(double x) {
-        double halfX = 0.5f * x;
-
-        long i = Double.doubleToRawLongBits(x);
-        i = 6910469410427058090L - (i >> 1);
-        x = Double.longBitsToDouble(i);
-
-        x = x * (1.5f - halfX * x * x);
-        x = x * (1.5f - halfX * x * x);
-        x = x * (1.5f - halfX * x * x);
-        x = x * (1.5f - halfX * x * x);
-
-        return x;
-    }
-
-	public static float sqrt(float x) {
-		if (x < 0) throw new IllegalArgumentException("Must be non-negative");
-		if (x == 0) return 0;
-		return 1 / invSqrt(x);
-	}
-
 	public static int average(int[] values) {
 		if (values == null || values.length == 0) return 0;
 		int sum = 0;
@@ -216,25 +169,22 @@ public abstract class MathUtils {
 
 	public static double[] pdf2cdf(double[] pdf) {
 		double[] cdf = pdf.clone();
-		for (int i = 1; i < cdf.length-1; i++) cdf[i] += cdf[i - 1];
+		for (int i = 1; i < cdf.length-1; i++) cdf[i] += cdf[i-1];
 		// Force set last cdf to 1, preventing floating-point summing error in the loop.
 		cdf[cdf.length-1] = 1;
 		return cdf;
 	}
-
-	public static int cdfRandom(Random rand, double[] targetCdf) {
+	public static int cdfRandom(Random rand, double[] cdf) {
 		double x = rand.nextDouble();
 
-		for (int i = 0; i < targetCdf.length; i++) {
-			if (x < targetCdf[i]) return i;
+		int i = 0, end = cdf.length-1;
+		while (i < end) {
+			if (x < cdf[i]) return i;
+			i++;
 		}
-		throw new IllegalArgumentException("targetCdf");
+		return end;
 	}
-
-	public static int randomRange(Random rand, int min, int max) {
-		return min + rand.nextInt(max - min + 1);
-	}
-
+	public static int randomRange(Random rand, int min, int max) {return min + rand.nextInt(max - min + 1);}
 
 	public static final long[] MASK64 = new long[64];
 	public static final int[] MASK32 = new int[32];

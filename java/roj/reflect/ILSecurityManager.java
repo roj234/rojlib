@@ -33,4 +33,7 @@ public class ILSecurityManager {
 
 	public void filterMethods(MyHashSet<Method> methods) {}
 	public void filterFields(SimpleList<Field> fields) {}
+
+	public void checkKillJigsaw(Class<?> module) {throw new SecurityException("不允许此操作");}
+	public void checkOpenModule(Class<?> src_module, String src_package, Class<?> dst_module) {}
 }

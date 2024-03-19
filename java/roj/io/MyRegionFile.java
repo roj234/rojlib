@@ -392,7 +392,7 @@ public class MyRegionFile implements AutoCloseable {
 		}
 
 		private synchronized void expand(int more) {
-			buf = BufferPool.expand(buf, MathUtils.getMin2PowerOf(more));
+			buf = BufferPool.localPool().expand(buf, MathUtils.getMin2PowerOf(more));
 		}
 
 		public synchronized void close() throws IOException {

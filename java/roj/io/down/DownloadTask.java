@@ -10,12 +10,12 @@ import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.net.ch.*;
-import roj.net.ch.handler.Timeout;
+import roj.net.handler.Timeout;
 import roj.net.http.AutoRedirect;
 import roj.net.http.HttpClient11;
 import roj.net.http.HttpHead;
 import roj.net.http.HttpRequest;
-import roj.text.ACalendar;
+import roj.text.DateParser;
 import roj.util.Helpers;
 
 import java.io.*;
@@ -159,7 +159,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 
 		HttpHead h = client.response();
 		String lastMod = h.getField("last-modified");
-		if (!lastMod.isEmpty()) time = ACalendar.parseRFCDate(lastMod);
+		if (!lastMod.isEmpty()) time = DateParser.parseRFCDate(lastMod);
 
 		long len = h.getContentLengthLong();
 		String encoding = null;

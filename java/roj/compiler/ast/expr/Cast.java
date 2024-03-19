@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.concurrent.OperationDone;
@@ -28,7 +28,7 @@ final class Cast extends UnaryPre {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(CompileContext ctx) {
+	public ExprNode resolve(LocalContext ctx) {
 		IType rType = (right = right.resolve(ctx)).type();
 		ctx.resolveType(type);
 		cast = ctx.castTo(rType, type, TypeCast.E_DOWNCAST);

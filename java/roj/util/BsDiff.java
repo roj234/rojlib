@@ -1,6 +1,9 @@
 package roj.util;
 
+import roj.NativeLibrary;
 import roj.io.CorruptedInputException;
+import roj.reflect.ReflectionUtils;
+import sun.misc.Unsafe;
 
 import java.io.IOException;
 
@@ -10,407 +13,63 @@ import static roj.reflect.ReflectionUtils.u;
  * @author Roj234
  * @since 2023/8/2 0002 6:08
  */
-public class BsDiff {
-	public BsDiff() {}
-	public BsDiff(BsDiff prev) { sfx = prev.sfx; left = prev.left; }
+public final class BsDiff {
+	private static final String SIGNATURE = "MYBDSIFF";
 
-	private byte[] left;
-	private int[] sfx;
+	public BsDiff() { if (!NativeLibrary.hasFunction(NativeLibrary.BSDIFF)) impl = new JavaImpl(); }
+
+	private BsDiff(Impl prev) {impl = prev.copy(this);}
+	public BsDiff parallel() {return new BsDiff(impl);}
+
+	private Impl impl;
 
 	public void setLeft(byte[] left) {
-		this.left = left;
-		int size = left.length;
+		if (impl instanceof JavaImpl ji) {
+			ji.setLeft(left);
+		} else {
+			NativeImpl ni = (NativeImpl) impl;
+			if (ni != null) ni.close();
 
-		int[] bucket = ArrayCache.getIntArray(256, 256);
-		// count
-		for (int i = 0; i < left.length; i++) bucket[toPositive(left[i])]++;
-		// cumulative sum
-		for (int i = 1; i < bucket.length; i++) bucket[i] += bucket[i-1];
-		// move
-		System.arraycopy(bucket, 0, bucket, 1, bucket.length-1);
-		bucket[0] = 0;
-
-		sfx = new int[size];
-		for (int i = 0; i < size; i++) {
-			int n = toPositive(left[i]);
-			int v = bucket[n]++;
-			sfx[v] = i;
-		}
-
-		for (int i = 1; i < bucket.length; ++i) {
-			if (bucket[i] != bucket[i-1] + 1) continue;
-			sfx[bucket[i]-1] = -1;
-		}
-
-		if (bucket[0] == 1) sfx[0] = -1;
-
-
-		int[] V = ArrayCache.getIntArray(size, 0);
-		for (int i = 0; i < size; ++i) V[i] = bucket[toPositive(left[i])] - 1;
-
-		ArrayCache.putArray(bucket);
-		bucket = null;
-
-		int h = 1;
-		while (sfx[0] != -size) {
-			int j = 0, len = 0;
-			while (j < size) {
-				if (sfx[j] < 0) {
-					len -= sfx[j];
-					j -= sfx[j];
-					continue;
-				}
-
-				if (len > 0) sfx[j - len] = -len;
-
-				int groupLen = V[sfx[j]] - j + 1;
-				split(sfx, V, j, groupLen, h);
-
-				j += groupLen;
-				len = 0;
-			}
-
-			if (len > 0) sfx[size - len] = -len;
-
-			h <<= 1;
-			if (h < 0) break;
-		}
-
-		for (int i = 0; i < size; ++i) sfx[V[i]] = i;
-
-		ArrayCache.putArray(V);
-	}
-	private static void split(int[] I, int[] V, int start, int len, int h) {
-		int temp;
-		if (len < 16) {
-			int i = start;
-			int k;
-			while (i < start + len) {
-				int j;
-				int X = getV(V, I[i] + h);
-				k = i + 1;
-				for (j = i + 1; j < start + len; ++j) {
-					if (getV(V, I[j] + h) < X) {
-						X = getV(V, I[j] + h);
-						k = i;
-					}
-					if (getV(V, I[j] + h) != X) continue;
-					temp = I[j];
-					I[j] = I[k];
-					I[k] = temp;
-					++k;
-				}
-				for (j = i; j < k; ++j) {
-					V[I[j]] = k - 1;
-				}
-				if (k == i + 1) {
-					I[i] = -1;
-				}
-				i = k;
-			}
-			return;
-		}
-		int X = getV(V, I[start + len / 2] + h);
-		int smallCount = 0;
-		int equalCount = 0;
-		for (int i = 0; i < len; ++i) {
-			if (getV(V, I[start + i] + h) < X) {
-				++smallCount;
-				continue;
-			}
-			if (getV(V, I[start + i] + h) != X) continue;
-			++equalCount;
-		}
-
-		int smallPos = start + smallCount;
-		int equalPos = smallPos + equalCount;
-		int i = start;
-		int j = i + smallCount;
-		int k = j + equalCount;
-		while (i < smallPos) {
-			if (getV(V, I[i] + h) < X) {
-				++i;
-				continue;
-			}
-			if (getV(V, I[i] + h) == X) {
-				temp = I[i];
-				I[i] = I[j];
-				I[j] = temp;
-				++j;
-				continue;
-			}
-			temp = I[i];
-			I[i] = I[k];
-			I[k] = temp;
-			++k;
-		}
-		while (j < equalPos) {
-			if (getV(V, I[j] + h) == X) {
-				++j;
-				continue;
-			}
-			temp = I[j];
-			I[j] = I[k];
-			I[k] = temp;
-			++k;
-		}
-
-		if (smallPos > start) split(I, V, start, smallPos - start, h);
-		for (i = smallPos; i < equalPos; ++i) V[I[i]] = equalPos - 1;
-		if (equalPos == smallPos + 1) I[smallPos] = -1;
-
-		if (equalPos < start + len) split(I, V, equalPos, len - (equalPos - start), h);
-	}
-	private static int getV(int[] V, int pos) { return pos < V.length ? V[pos] : -1; }
-
-	// TODO this patch format is DESIGNED to be compressed
-	public void bsdiff(byte[] oldData, byte[] newData, DynByteBuf patch) {
-		patch.putAscii("ENDSLEY/BSDIFF43").putIntLE(newData.length);
-		setLeft(oldData);
-		genPatch(newData, patch);
-	}
-
-	public void genPatch(byte[] right, DynByteBuf patch) {
-		byte[] left = this.left;
-		int leftLen = left.length, rightLen = right.length;
-
-		int scan = 0, lastScan = 0;
-		int pos = 0, lastPos = 0;
-		int len = 0, lastOffset = 0;
-		while (scan < rightLen) {
-			int match = 0;
-			int scsc = scan += len;
-			while (scan < rightLen) {
-				pos = search(right, scan, left, 0, leftLen);
-				len = this.len;
-				while (scsc < scan + len) {
-					if (scsc + lastOffset < leftLen && left[scsc + lastOffset] == right[scsc]) {
-						++match;
-					}
-					++scsc;
-				}
-				if (len == match && len != 0 || len > match + 8) break;
-				if (scan + lastOffset < leftLen && left[scan + lastOffset] == right[scan]) {
-					--match;
-				}
-				++scan;
-			}
-			if (len == match && scan != rightLen) continue;
-			int f = 0;
-			int F2 = 0;
-			int lenF = 0;
-			int i2 = 0;
-			while (i2 < scan - lastScan && i2 < leftLen - lastPos) {
-				if (right[lastScan + i2] == left[lastPos + i2]) {
-					++f;
-				}
-				if (2 * f - ++i2 <= 2 * F2 - lenF) continue;
-				F2 = f;
-				lenF = i2;
-			}
-			int b = 0;
-			int B = 0;
-			int lenB = 0;
-			if (scan < rightLen) {
-				for (int i3 = 1; i3 < scan - lastScan + 1 && i3 < pos + 1; ++i3) {
-					if (right[scan - i3] == left[pos - i3]) {
-						++b;
-					}
-					if (2 * b - i3 <= 2 * B - lenB) continue;
-					B = b;
-					lenB = i3;
-				}
-			}
-			int overlap = -1;
-			if (lenF + lenB > scan - lastScan) {
-				overlap = lastScan + lenF - (scan - lenB);
-				int s = 0;
-				int S = 0;
-				int lenS = 0;
-				for (int i4 = 0; i4 < overlap; ++i4) {
-					if (left[lastPos + lenF - overlap + i4] == right[lastScan + lenF - overlap + i4]) {
-						++s;
-					}
-					if (left[pos - lenB + i4] == right[scan - lenB + i4]) {
-						--s;
-					}
-					if (s <= S) continue;
-					S = s;
-					lenS = i4;
-				}
-				lenF = lenF - overlap + lenS;
-				lenB -= lenS;
-			}
-
-			patch.putIntLE(lenF)
-				 .putIntLE(scan - lastScan - lenF - lenB)
-				 .putIntLE(pos - lastPos - lenF - lenB);
-
-			ArrayRef range = patch.byteRangeW(lenF);
-			for (int i = 0; i < lenF; ++i) range.set(i, toPositive(left[lastPos + i]) - toPositive(right[lastScan + i]));
-
-			if (overlap == -1) patch.put(right, lastScan + lenF, scan - lastScan - lenF - lenB);
-
-			lastPos = pos-lenB;
-			lastScan = scan-lenB;
-			lastOffset = pos-scan;
+			impl = new NativeImpl(this, left);
 		}
 	}
-	public int getDiffLength(byte[] right, int maxDifference) { return getDiffLength(right, 0, right.length, maxDifference); }
-	public int getDiffLength(byte[] right, int scan, int rightLen, int maxDifference) {
-		int diffBytes = 0;
+	public void setLeft(DynByteBuf left) {
+		if (!NativeLibrary.hasFunction(NativeLibrary.BSDIFF))
+			throw new NativeException("native not ready");
 
-		byte[] left = this.left;
-		int leftLen = left.length;
+		NativeImpl ni = (NativeImpl) impl;
+		if (ni != null) ni.close();
 
-		int lastScan = scan;
-		int pos = 0, lastPos = 0;
-		int len = 0, lastOffset = 0;
-		while (scan < rightLen) {
-			int match = 0;
-			int scsc = scan += len;
-			while (scan < rightLen) {
-				pos = search(right, scan, left, 0, leftLen);
-				len = this.len;
-				while (scsc < scan + len) {
-					if (scsc + lastOffset < leftLen && left[scsc + lastOffset] == right[scsc]) {
-						++match;
-					}
-					++scsc;
-				}
-				if (len == match && len != 0 || len > match + 8) break;
-				if (scan + lastOffset < leftLen && left[scan + lastOffset] == right[scan]) {
-					--match;
-				}
-				++scan;
-			}
-			if (len == match && scan != rightLen) continue;
-			int f = 0;
-			int F2 = 0;
-			int lenF = 0;
-			int i2 = 0;
-			while (i2 < scan - lastScan && i2 < leftLen - lastPos) {
-				if (right[lastScan + i2] == left[lastPos + i2]) {
-					++f;
-				}
-				if (2 * f - ++i2 <= 2 * F2 - lenF) continue;
-				F2 = f;
-				lenF = i2;
-			}
-			int b = 0;
-			int B = 0;
-			int lenB = 0;
-			if (scan < rightLen) {
-				for (int i3 = 1; i3 < scan - lastScan + 1 && i3 < pos + 1; ++i3) {
-					if (right[scan - i3] == left[pos - i3]) {
-						++b;
-					}
-					if (2 * b - i3 <= 2 * B - lenB) continue;
-					B = b;
-					lenB = i3;
-				}
-			}
-			int overlap = -1;
-			if (lenF + lenB > scan - lastScan) {
-				overlap = lastScan + lenF - (scan - lenB);
-				int s = 0;
-				int S = 0;
-				int lenS = 0;
-				for (int i4 = 0; i4 < overlap; ++i4) {
-					if (left[lastPos + lenF - overlap + i4] == right[lastScan + lenF - overlap + i4]) {
-						++s;
-					}
-					if (left[pos - lenB + i4] == right[scan - lenB + i4]) {
-						--s;
-					}
-					if (s <= S) continue;
-					S = s;
-					lenS = i4;
-				}
-				lenF = lenF - overlap + lenS;
-				lenB -= lenS;
-			}
-
-			for (int i = 0; i < lenF; ++i) {
-				if (left[lastPos+i] != right[lastScan+i]) {
-					diffBytes++;
-				}
-			}
-
-			if (overlap == -1) diffBytes += scan - lastScan - lenF - lenB;
-
-			if (diffBytes > maxDifference) return -1;
-
-			lastPos = pos-lenB;
-			lastScan = scan-lenB;
-			lastOffset = pos-scan;
-		}
-
-		return diffBytes;
+		impl = new NativeImpl(this, left);
 	}
 
-	private int len;
-	private int search(byte[] right, int rightOff, byte[] left, int leftOff, int leftEnd) {
-		loop:
-		while (true) {
-			int leftLen = leftEnd - leftOff;
-			if (leftLen < 2) {
-				int len1 = matchLen(left, sfx[leftOff], right, rightOff);
-				if (leftLen > 0 && leftEnd < sfx.length) {
-					int len2 = matchLen(left, sfx[leftEnd], right, rightOff);
-					if (len2 >= len1) {
-						len = len2;
-						return sfx[leftEnd];
-					}
-				}
 
-				len = len1;
-				return sfx[leftOff];
-			}
-
-			// 二分查找 log2(n)
-			int mid = leftLen/2 + leftOff;
-
-			int i = sfx[mid], j = rightOff;
-			int max = i + Math.min(left.length-i, right.length-rightOff);
-
-			while (i < max) {
-				if (left[i] < right[j]) {
-					// 小于
-					leftOff = mid;
-					continue loop;
-				}
-				if (left[i] > right[j]) break;
-
-				i++;
-				j++;
-			}
-
-			// 大于和等于
-			leftEnd = mid;
-		}
-	}
-	private static int matchLen(byte[] lData, int lStart, byte[] rData, int rStart) {
-		int i = lStart;
-		while (i < lData.length && rStart < rData.length && lData[i] == rData[rStart]) {
-			i++;
-			rStart++;
-		}
-		return i - lStart;
+	/**
+	 * 你应该用LZMA之类的压缩patch
+	 */
+	public void makePatch(byte[] right, DynByteBuf patch) {
+		patch.putAscii(SIGNATURE).putIntLE(right.length);
+		impl.makePatch(right, patch);
 	}
 
-	public static long bspatch(DynByteBuf old, DynByteBuf patch, DynByteBuf out) throws IOException {
-		if (!patch.readAscii(16).equals("ENDSLEY/BSDIFF43")) {
-			throw new CorruptedInputException("header missing");
-		}
+	public int getDiffLength(byte[] right, int stopOn) { return getDiffLength(right, 0, right.length, stopOn); }
+	/**
+	 * @param stopOn 找到多少字节的差异时停止
+	 * @return 找到的字节差异，或-1表示在完成前停止
+	 */
+	public int getDiffLength(byte[] right, int off, int end, int stopOn) {return impl.getDiffLength(right, off, end, stopOn);}
+
+	public int getDiffLength(DynByteBuf right, int off, int end, int stopOn) {
+		if (!NativeLibrary.hasFunction(NativeLibrary.BSDIFF))
+			throw new NativeException("native not ready");
+		return ((NativeImpl)impl).getDiffLength(right, off, end, stopOn);}
+
+	public static long bspatch(DynByteBuf in, DynByteBuf patch, DynByteBuf out) throws IOException {
+		if (!patch.readAscii(SIGNATURE.length()).equals(SIGNATURE)) throw new CorruptedInputException("invalid signature");
 
 		int outputSize = patch.readIntLE();
-		long wrote = bspatch1(old, patch, out);
-		if (wrote != outputSize) throw new IOException("patch: invalid output size");
+		if (!out.ensureWritable(outputSize)) throw new IOException("failed to ensure writable ("+outputSize+")");
 
-		return wrote;
-	}
-	public static long bspatch1(DynByteBuf old, DynByteBuf patch, DynByteBuf out) throws IOException {
 		long wrote = 0;
 
 		while (patch.isReadable()) {
@@ -418,12 +77,12 @@ public class BsDiff {
 			int extraLen = patch.readIntLE();
 			int advance = patch.readIntLE();
 
-			if (old.readableBytes() < diffLen) throw new IOException("in: no " + diffLen + " bytes readable");
+			if (in.readableBytes() < diffLen) throw new IOException("in: no " + diffLen + " bytes readable");
 			if (patch.readableBytes() < diffLen+extraLen) throw new CorruptedInputException("patch: no " + diffLen + " bytes readable");
 			if (!out.ensureWritable(diffLen)) throw new IOException("out: no " + diffLen + " bytes writable");
 
-			Object arIn = old.array();
-			long adIn = old._unsafeAddr() + old.rIndex;
+			Object arIn = in.array();
+			long adIn = in._unsafeAddr() + in.rIndex;
 
 			Object arPat = patch.array();
 			long adPat = patch._unsafeAddr() + patch.rIndex;
@@ -431,7 +90,7 @@ public class BsDiff {
 			Object arOut = out.array();
 			long adOut = out._unsafeAddr() + out.wIndex();
 
-			old.rIndex += diffLen;
+			in.rIndex += diffLen;
 			patch.rIndex += diffLen;
 			out.wIndex(out.wIndex()+diffLen);
 
@@ -449,13 +108,517 @@ public class BsDiff {
 			patch.rIndex += extraLen;
 			wrote += extraLen;
 
-			old.rIndex += advance;
+			in.rIndex += advance;
 		}
 
+		if (wrote != outputSize) throw new IOException("invalid output size");
 		return wrote;
 	}
 
 	// (b & 0xFF) ^ 0x80
 	private static int toPositive(byte b) { return b + 128; }
 	private static int toNormal(int b) { return b - 128; }
+
+	private static native long nCreate(long left, int length) throws NativeException;
+	private static native long nCopy(long ptr) throws NativeException;
+	private static native int nGetDiffLength(long ptr, long right, int rightLen, int maxDifference) throws NativeException;
+	private static native int nGenPatch(long ptr, long right, int length, long buffer, int bufferLength) throws NativeException;
+	private static native boolean nClose(long ptr);
+
+	private sealed interface Impl {
+		Impl copy(BsDiff gc);
+		void makePatch(byte[] right, DynByteBuf patch);
+		default void makeDiff(byte[] right, DynByteBuf patch) {throw new UnsupportedOperationException();}
+		int getDiffLength(byte[] right, int off, int end, int stopOn);
+	}
+	private static final class NativeImpl implements Impl, Runnable {
+		private static final long REFCOUNT_OFF = ReflectionUtils.fieldOffset(NativeImpl.class, "ref");
+
+		private volatile int ref;
+		private volatile boolean closePending;
+
+		private final Object cleaner;
+		private final long ptr;
+		private final NativeMemory nLeft;
+
+		NativeImpl(BsDiff gc, byte[] left) {
+			int len = left.length;
+			nLeft = new NativeMemory(len);
+			long m = nLeft.address();
+
+			try {
+				u.copyMemory(left, Unsafe.ARRAY_BYTE_BASE_OFFSET, null, m, len);
+				ptr = nCreate(m, len);
+				cleaner = NativeMemory.createCleaner(gc, this);
+			} catch (Throwable e) {
+				nLeft.release();
+				throw e;
+			}
+		}
+		NativeImpl(BsDiff gc, DynByteBuf left) {
+			nLeft = null;
+			ptr = nCreate(left.address(), left.wIndex());
+			cleaner = NativeMemory.createCleaner(gc, this);
+		}
+		final void close() {
+			closePending = true;
+			checkClose(1);
+		}
+
+		@Override
+		public Impl copy(BsDiff gc) {return new NativeImpl(gc, this);}
+		private NativeImpl(BsDiff gc, NativeImpl from) {
+			if (u.getAndAddInt(from, REFCOUNT_OFF, 1) < 0) throw new IllegalStateException("closed");
+
+			this.ptr = nCopy(from.ptr);
+
+			int v = u.getAndAddInt(from, REFCOUNT_OFF, -1);
+			from.checkClose(v);
+
+			this.nLeft = from.nLeft;
+			cleaner = NativeMemory.createCleaner(gc, this);
+		}
+
+		@Override
+		public void run() {nClose(ptr);}
+
+		@Override
+		public void makePatch(byte[] right, DynByteBuf patch) {
+			if (u.getAndAddInt(this, REFCOUNT_OFF, 1) < 0) throw new IllegalStateException("closed");
+
+			int len = right.length;
+			long m = u.allocateMemory(len);
+
+			try {
+				u.copyMemory(right, Unsafe.ARRAY_BYTE_BASE_OFFSET, null, m, len);
+				nGenPatch(ptr, m, len, patch.address(), patch.unsafeWritableBytes());
+			} finally {
+				u.freeMemory(m);
+				int v = u.getAndAddInt(this, REFCOUNT_OFF, -1);
+				checkClose(v);
+			}
+		}
+
+		@Override
+		public int getDiffLength(byte[] right, int off, int end, int stopOn) {
+			if (u.getAndAddInt(this, REFCOUNT_OFF, 1) < 0) throw new IllegalStateException("closed");
+
+			int len = right.length;
+			long m = u.allocateMemory(len);
+
+			try {
+				u.copyMemory(right, Unsafe.ARRAY_BYTE_BASE_OFFSET, null, m, len);
+				return nGetDiffLength(ptr, m, len, stopOn);
+			} finally {
+				u.freeMemory(m);
+				int v = u.getAndAddInt(this, REFCOUNT_OFF, -1);
+				checkClose(v);
+			}
+		}
+
+		//@Override
+		public int getDiffLength(DynByteBuf right, int off, int end, int stopOn) {
+			if (u.getAndAddInt(this, REFCOUNT_OFF, 1) < 0) throw new IllegalStateException("closed");
+
+			try {
+				return nGetDiffLength(ptr, right.address(), right.wIndex(), stopOn);
+			} finally {
+				int v = u.getAndAddInt(this, REFCOUNT_OFF, -1);
+				checkClose(v);
+			}
+		}
+
+		private void checkClose(int v) {
+			if (!closePending) return;
+			if (v == 1 && u.compareAndSwapInt(this, REFCOUNT_OFF, 0, -999999)) {
+				// to make Cleaner GC-able
+				NativeMemory.cleanNativeMemory(cleaner);
+			}
+		}
+	}
+	private static final class JavaImpl implements Impl {
+		JavaImpl() {}
+		JavaImpl(JavaImpl prev) { sfx = prev.sfx; left = prev.left; }
+
+		private byte[] left;
+		private int[] sfx;
+
+		@Override
+		public Impl copy(BsDiff gc) {return new JavaImpl(this);}
+
+		public void setLeft(byte[] left) {
+			this.left = left;
+			int size = left.length;
+
+			int[] bucket = ArrayCache.getIntArray(256, 256);
+			// count
+			for (int i = 0; i < left.length; i++) bucket[toPositive(left[i])]++;
+			// cumulative sum
+			for (int i = 1; i < bucket.length; i++) bucket[i] += bucket[i-1];
+			// move
+			System.arraycopy(bucket, 0, bucket, 1, bucket.length-1);
+			bucket[0] = 0;
+
+			sfx = new int[size];
+			for (int i = 0; i < size; i++) {
+				int n = toPositive(left[i]);
+				int v = bucket[n]++;
+				sfx[v] = i;
+			}
+
+			for (int i = 1; i < bucket.length; ++i) {
+				if (bucket[i] != bucket[i-1] + 1) continue;
+				sfx[bucket[i]-1] = -1;
+			}
+
+			if (bucket[0] == 1) sfx[0] = -1;
+
+
+			int[] V = ArrayCache.getIntArray(size, 0);
+			for (int i = 0; i < size; ++i) V[i] = bucket[toPositive(left[i])] - 1;
+
+			ArrayCache.putArray(bucket);
+			bucket = null;
+
+			int h = 1;
+			while (sfx[0] != -size) {
+				int j = 0, len = 0;
+				while (j < size) {
+					if (sfx[j] < 0) {
+						len -= sfx[j];
+						j -= sfx[j];
+						continue;
+					}
+
+					if (len > 0) sfx[j - len] = -len;
+
+					int groupLen = V[sfx[j]] - j + 1;
+					split(sfx, V, j, groupLen, h);
+
+					j += groupLen;
+					len = 0;
+				}
+
+				if (len > 0) sfx[size - len] = -len;
+
+				h <<= 1;
+				if (h < 0) break;
+			}
+
+			for (int i = 0; i < size; ++i) sfx[V[i]] = i;
+
+			ArrayCache.putArray(V);
+		}
+		private static void split(int[] I, int[] V, int start, int len, int h) {
+			int temp;
+			if (len < 16) {
+				int i = start;
+				int k;
+				while (i < start + len) {
+					int j;
+					int X = getV(V, I[i] + h);
+					k = i + 1;
+					for (j = i + 1; j < start + len; ++j) {
+						if (getV(V, I[j] + h) < X) {
+							X = getV(V, I[j] + h);
+							k = i;
+						}
+						if (getV(V, I[j] + h) != X) continue;
+						temp = I[j];
+						I[j] = I[k];
+						I[k] = temp;
+						++k;
+					}
+					for (j = i; j < k; ++j) {
+						V[I[j]] = k - 1;
+					}
+					if (k == i + 1) {
+						I[i] = -1;
+					}
+					i = k;
+				}
+				return;
+			}
+			int X = getV(V, I[start + len / 2] + h);
+			int smallCount = 0;
+			int equalCount = 0;
+			for (int i = 0; i < len; ++i) {
+				if (getV(V, I[start + i] + h) < X) {
+					++smallCount;
+					continue;
+				}
+				if (getV(V, I[start + i] + h) != X) continue;
+				++equalCount;
+			}
+
+			int smallPos = start + smallCount;
+			int equalPos = smallPos + equalCount;
+			int i = start;
+			int j = i + smallCount;
+			int k = j + equalCount;
+			while (i < smallPos) {
+				if (getV(V, I[i] + h) < X) {
+					++i;
+					continue;
+				}
+				if (getV(V, I[i] + h) == X) {
+					temp = I[i];
+					I[i] = I[j];
+					I[j] = temp;
+					++j;
+					continue;
+				}
+				temp = I[i];
+				I[i] = I[k];
+				I[k] = temp;
+				++k;
+			}
+			while (j < equalPos) {
+				if (getV(V, I[j] + h) == X) {
+					++j;
+					continue;
+				}
+				temp = I[j];
+				I[j] = I[k];
+				I[k] = temp;
+				++k;
+			}
+
+			if (smallPos > start) split(I, V, start, smallPos - start, h);
+			for (i = smallPos; i < equalPos; ++i) V[I[i]] = equalPos - 1;
+			if (equalPos == smallPos + 1) I[smallPos] = -1;
+
+			if (equalPos < start + len) split(I, V, equalPos, len - (equalPos - start), h);
+		}
+		private static int getV(int[] V, int pos) { return pos < V.length ? V[pos] : -1; }
+
+		public void makePatch(byte[] right, DynByteBuf patch) {
+			byte[] left = this.left;
+			int leftLen = left.length, rightLen = right.length;
+
+			int scan = 0, lastScan = 0;
+			int pos = 0, lastPos = 0;
+			int len = 0, lastOffset = 0;
+			while (scan < rightLen) {
+				int match = 0;
+				int scsc = scan += len;
+				while (scan < rightLen) {
+					pos = search(right, scan, left, 0, leftLen);
+					len = this.len;
+					while (scsc < scan + len) {
+						if (scsc + lastOffset < leftLen && left[scsc + lastOffset] == right[scsc]) {
+							++match;
+						}
+						++scsc;
+					}
+					if (len == match && len != 0 || len > match + 8) break;
+					if (scan + lastOffset < leftLen && left[scan + lastOffset] == right[scan]) {
+						--match;
+					}
+					++scan;
+				}
+				if (len == match && scan != rightLen) continue;
+				int f = 0;
+				int F2 = 0;
+				int lenF = 0;
+				int i2 = 0;
+				while (i2 < scan - lastScan && i2 < leftLen - lastPos) {
+					if (right[lastScan + i2] == left[lastPos + i2]) {
+						++f;
+					}
+					if (2 * f - ++i2 <= 2 * F2 - lenF) continue;
+					F2 = f;
+					lenF = i2;
+				}
+				int b = 0;
+				int B = 0;
+				int lenB = 0;
+				if (scan < rightLen) {
+					for (int i3 = 1; i3 < scan - lastScan + 1 && i3 < pos + 1; ++i3) {
+						if (right[scan - i3] == left[pos - i3]) {
+							++b;
+						}
+						if (2 * b - i3 <= 2 * B - lenB) continue;
+						B = b;
+						lenB = i3;
+					}
+				}
+				int overlap = -1;
+				if (lenF + lenB > scan - lastScan) {
+					overlap = lastScan + lenF - (scan - lenB);
+					int s = 0;
+					int S = 0;
+					int lenS = 0;
+					for (int i4 = 0; i4 < overlap; ++i4) {
+						if (left[lastPos + lenF - overlap + i4] == right[lastScan + lenF - overlap + i4]) {
+							++s;
+						}
+						if (left[pos - lenB + i4] == right[scan - lenB + i4]) {
+							--s;
+						}
+						if (s <= S) continue;
+						S = s;
+						lenS = i4;
+					}
+					lenF = lenF - overlap + lenS;
+					lenB -= lenS;
+				}
+
+				patch.putIntLE(lenF)
+					 .putIntLE(scan - lastScan - lenF - lenB)
+					 .putIntLE(pos - lastPos - lenF - lenB);
+
+				ArrayRef range = patch.byteRangeW(lenF);
+				for (int i = 0; i < lenF; ++i) range.set(i, toPositive(left[lastPos + i]) - toPositive(right[lastScan + i]));
+
+				if (overlap == -1) patch.put(right, lastScan + lenF, scan - lastScan - lenF - lenB);
+
+				lastPos = pos-lenB;
+				lastScan = scan-lenB;
+				lastOffset = pos-scan;
+			}
+		}
+
+		public int getDiffLength(byte[] right, int scan, int rightLen, int maxDifference) {
+			int diffBytes = 0;
+
+			byte[] left = this.left;
+			int leftLen = left.length;
+
+			int lastScan = scan;
+			int pos = 0, lastPos = 0;
+			int len = 0, lastOffset = 0;
+			while (scan < rightLen) {
+				int match = 0;
+				int scsc = scan += len;
+				while (scan < rightLen) {
+					pos = search(right, scan, left, 0, leftLen);
+					len = this.len;
+					while (scsc < scan + len) {
+						if (scsc + lastOffset < leftLen && left[scsc + lastOffset] == right[scsc]) {
+							++match;
+						}
+						++scsc;
+					}
+					if (len == match && len != 0 || len > match + 8) break;
+					if (scan + lastOffset < leftLen && left[scan + lastOffset] == right[scan]) {
+						--match;
+					}
+					++scan;
+				}
+				if (len == match && scan != rightLen) continue;
+				int f = 0;
+				int F2 = 0;
+				int lenF = 0;
+				int i2 = 0;
+				while (i2 < scan - lastScan && i2 < leftLen - lastPos) {
+					if (right[lastScan + i2] == left[lastPos + i2]) {
+						++f;
+					}
+					if (2 * f - ++i2 <= 2 * F2 - lenF) continue;
+					F2 = f;
+					lenF = i2;
+				}
+				int b = 0;
+				int B = 0;
+				int lenB = 0;
+				if (scan < rightLen) {
+					for (int i3 = 1; i3 < scan - lastScan + 1 && i3 < pos + 1; ++i3) {
+						if (right[scan - i3] == left[pos - i3]) {
+							++b;
+						}
+						if (2 * b - i3 <= 2 * B - lenB) continue;
+						B = b;
+						lenB = i3;
+					}
+				}
+				int overlap = -1;
+				if (lenF + lenB > scan - lastScan) {
+					overlap = lastScan + lenF - (scan - lenB);
+					int s = 0;
+					int S = 0;
+					int lenS = 0;
+					for (int i4 = 0; i4 < overlap; ++i4) {
+						if (left[lastPos + lenF - overlap + i4] == right[lastScan + lenF - overlap + i4]) {
+							++s;
+						}
+						if (left[pos - lenB + i4] == right[scan - lenB + i4]) {
+							--s;
+						}
+						if (s <= S) continue;
+						S = s;
+						lenS = i4;
+					}
+					lenF = lenF - overlap + lenS;
+					lenB -= lenS;
+				}
+
+				for (int i = 0; i < lenF; ++i) {
+					if (left[lastPos+i] != right[lastScan+i]) {
+						diffBytes++;
+					}
+				}
+
+				if (overlap == -1) diffBytes += scan - lastScan - lenF - lenB;
+
+				if (diffBytes > maxDifference) return -1;
+
+				lastPos = pos-lenB;
+				lastScan = scan-lenB;
+				lastOffset = pos-scan;
+			}
+
+			return diffBytes;
+		}
+
+		private int len;
+		private int search(byte[] right, int rightOff, byte[] left, int leftOff, int leftEnd) {
+			loop:
+			while (true) {
+				int leftLen = leftEnd - leftOff;
+				if (leftLen < 2) {
+					int len1 = matchLen(left, sfx[leftOff], right, rightOff);
+					if (leftLen > 0 && leftEnd < sfx.length) {
+						int len2 = matchLen(left, sfx[leftEnd], right, rightOff);
+						if (len2 >= len1) {
+							len = len2;
+							return sfx[leftEnd];
+						}
+					}
+
+					len = len1;
+					return sfx[leftOff];
+				}
+
+				// 二分查找 log2(n)
+				int mid = leftLen/2 + leftOff;
+
+				int i = sfx[mid], j = rightOff;
+				int max = i + Math.min(left.length-i, right.length-rightOff);
+
+				while (i < max) {
+					if (left[i] < right[j]) {
+						// 小于
+						leftOff = mid;
+						continue loop;
+					}
+					if (left[i] > right[j]) break;
+
+					i++;
+					j++;
+				}
+
+				// 大于和等于
+				leftEnd = mid;
+			}
+		}
+		private static int matchLen(byte[] lData, int lStart, byte[] rData, int rStart) {
+			int i = lStart;
+			while (i < lData.length && rStart < rData.length && lData[i] == rData[rStart]) {
+				i++;
+				rStart++;
+			}
+			return i - lStart;
+		}
+	}
 }

@@ -1,6 +1,5 @@
 package roj.config.data;
 
-import org.jetbrains.annotations.NotNull;
 import roj.config.serial.CVisitor;
 
 /**
@@ -8,18 +7,12 @@ import roj.config.serial.CVisitor;
  * @since 2021/7/7 0:43
  */
 public final class CTimestamp extends CLong {
-	public CTimestamp(long number) {
-		super(number);
-	}
+	public CTimestamp(long number) { super(number); }
 
-	@NotNull
+	public Type getType() { return Type.DATE; }
 	@Override
-	public Type getType() {
-		return Type.DATE;
-	}
+	public boolean mayCastTo(Type o) { return o == Type.DATE; }
 
 	@Override
-	public void forEachChild(CVisitor ser) {
-		ser.valueTimestamp(value);
-	}
+	public void accept(CVisitor ser) { ser.valueTimestamp(value); }
 }

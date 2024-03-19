@@ -13,8 +13,11 @@ package roj.archive.qz.xz.lzma;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.rangecoder.RangeEncoder;
+import roj.util.ArrayUtil;
+import sun.misc.Unsafe;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Arrays;
 
 import static roj.archive.qz.xz.rangecoder.RangeEncoder.*;
@@ -93,7 +96,7 @@ public abstract class LZMAEncoder extends LZMACoder {
 	 * This is like bit scan reverse (BSR) on x86 except that this also
 	 * cares about the second highest bit.
 	 */
-	public static int getDistSlot(int dist) {
+	private static int getDistSlot(int dist) {
 		if (dist <= DIST_MODEL_START && dist >= 0) return dist;
 
 		int n = dist;
@@ -172,8 +175,6 @@ public abstract class LZMAEncoder extends LZMACoder {
 
 		super.propReset(lc, lp, pb);
 	}
-
-	public LZEncoder getLZEncoder() { return lz; }
 
 	public void reset() {
 		super.reset();
@@ -613,4 +614,24 @@ public abstract class LZMAEncoder extends LZMACoder {
 
 	final int getMatchPrice(int len, int posState) { return prices[posState][len - MATCH_LEN_MIN]; }
 	final int getRepeatPrice(int len, int posState) { return getMatchPrice(len, posState+posMask+1); }
+
+	public final void lzPresetDict(int dictSize, byte[] dict) {
+		if (dict != null) lzPresetDict(dictSize, dict, 0, dict.length);
+	}
+	public final void lzPresetDict(int dictSize, byte[] dict, int off, int len) {
+		ArrayUtil.checkRange(dict, off, len);
+		lzPresetDict0(dictSize, dict, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
+	}
+	public final void lzPresetDict0(int dictSize, Object ref, long off, int len) { lz.setPresetDict(dictSize, ref, off, len); }
+
+	public final int lzFill(byte[] in, int off, int len) { return lzFill0(in, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len); }
+	public final int lzFill(long addr, int len) { return lzFill0(null, addr, len); }
+	public final int lzFill0(Object in, long off, int len) {return lz.fillWindow(in, off, len);}
+
+	public final void lzCopy(OutputStream out, int backward, int len) throws IOException {lz.copyUncompressed(out, backward, len);}
+
+	public final void lzFlush() {lz.setFlushing();}
+	public final void lzFinish() {lz.setFinishing();}
+
+	public final void lzReset() {lz.reset();}
 }

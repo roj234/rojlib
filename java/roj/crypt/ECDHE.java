@@ -4,7 +4,6 @@ import roj.util.DynByteBuf;
 
 import java.math.BigInteger;
 import java.security.*;
-import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECParameterSpec;
 import java.security.spec.ECPoint;
@@ -17,7 +16,6 @@ public final class ECDHE implements KeyAgreement {
 	private final ECGroup group;
 	private final javax.crypto.KeyAgreement ecAgreement;
 
-	private BigInteger pri;
 	private ECPoint pub;
 
 	public ECDHE(ECGroup group) {
@@ -40,7 +38,6 @@ public final class ECDHE implements KeyAgreement {
 			kpg.initialize(group, r);
 			KeyPair pair = kpg.generateKeyPair();
 			pub = ((ECPublicKey) pair.getPublic()).getW();
-			pri = ((ECPrivateKey) pair.getPrivate()).getS();
 			ecAgreement.init(pair.getPrivate(), r);
 		} catch (Exception e) {
 			throw new IllegalStateException("Failed generate EC key", e);
@@ -78,6 +75,5 @@ public final class ECDHE implements KeyAgreement {
 	@Override
 	public void clear() {
 		pub = null;
-		pri = null;
 	}
 }

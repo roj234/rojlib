@@ -1,11 +1,11 @@
 package roj.plugins.ddns;
 
 import roj.config.JSONParser;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
-import roj.net.URIUtil;
 import roj.net.http.HttpRequest;
 import roj.net.http.SyncHttpClient;
+import roj.text.EscapeUtil;
 import roj.ui.CLIUtil;
 import roj.util.ByteList;
 
@@ -22,7 +22,7 @@ public class CTLightCat extends IpGetter {
 
 	private boolean refreshAccessToken() {
 		try {
-			ByteList body = IOUtil.getSharedByteBuf().putAscii("username=useradmin&psd=").putAscii(URIUtil.encodeURIComponent(pass));
+			ByteList body = IOUtil.getSharedByteBuf().putAscii("username=useradmin&psd=").putAscii(EscapeUtil.encodeURIComponent(pass));
 			SyncHttpClient shc = HttpRequest.nts()
 				.url(new URL("http://"+catUrl+"/cgi-bin/luci"))
 				.header("Content-Type","application/x-www-form-urlencoded")
@@ -48,7 +48,7 @@ public class CTLightCat extends IpGetter {
 	public boolean supportsV6() { return true; }
 
 	@Override
-	public void loadConfig(CMapping config) {
+	public void loadConfig(CMap config) {
 		pass = config.getString("CatPassword");
 		catUrl = config.getString("CatUrl");
 	}
@@ -62,7 +62,7 @@ public class CTLightCat extends IpGetter {
 			.header("Cookie", "sysauth="+accessToken)
 			.executePooled();
 
-		CMapping url = new JSONParser().parseRaw(shc.stream()).asMap();
+		CMap url = new JSONParser().parse(shc.stream()).asMap();
 
 		InetAddress WANIP = InetAddress.getByName(url.getString("WANIP")),
 			WANIPv6 = InetAddress.getByName(url.getString("WANIPv6"));

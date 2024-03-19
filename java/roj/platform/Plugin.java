@@ -1,21 +1,29 @@
 package roj.platform;
 
+import roj.collect.Hasher;
+import roj.collect.MyHashSet;
+import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
+import roj.concurrent.task.ITask;
+import roj.concurrent.timing.LoopTaskWrapper;
+import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
-import roj.config.ConfigMaster;
 import roj.config.ParseException;
-import roj.config.Parser;
-import roj.config.data.CMapping;
+import roj.config.YAMLParser;
+import roj.config.data.CMap;
 import roj.config.serial.ToSomeString;
 import roj.config.serial.ToYaml;
 import roj.io.IOUtil;
-import roj.net.http.srv.Router;
+import roj.net.http.server.Router;
 import roj.text.TextWriter;
 import roj.text.logging.Logger;
 import roj.ui.terminal.CommandNode;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Set;
+import java.util.function.ToLongFunction;
 
 /**
  * @author Roj234
@@ -27,7 +35,7 @@ public abstract class Plugin {
 	private PluginManager pluginManager;
 	private PluginDescriptor desc;
 
-	private CMapping config;
+	private CMap config;
 	private File dataFolder, configFile;
 
 	final void init(PluginManager pm, File dataFolder, PluginDescriptor pd) {
@@ -40,30 +48,28 @@ public abstract class Plugin {
 
 	public final File getDataFolder() { return dataFolder; }
 	public final PluginManager getPluginManager() { return pluginManager; }
-	public final boolean isEnabled() { return desc.state == PluginManager.ENABLED; }
 	public final PluginDescriptor getDescription() { return desc; }
 	protected Logger getLogger() { return logger; }
 
-	protected final CMapping getConfig() {
+	protected final CMap getConfig() {
 		if (config == null) reloadConfig();
 		return config;
 	}
 	protected final void reloadConfig() {
 		try {
-			Parser<?> parser = new ConfigMaster("yml").parser();
+			YAMLParser parser = new YAMLParser();
 
-			config = parser.parseRaw(configFile).asMap();
+			config = parser.parse(configFile, YAMLParser.LENIENT).asMap();
 			InputStream defaults = getResource("config.yml");
-			if (defaults != null) config.merge(parser.parseRaw(defaults).asMap(), true, true);
+			if (defaults != null) config.merge(parser.parse(defaults, YAMLParser.LENIENT).asMap(), true, true);
 		} catch (ParseException|IOException e) {
 			throw new IllegalArgumentException("无法读取配置文件"+configFile.getName(),e);
 		}
 	}
 	protected final void saveConfig() {
 		try (TextWriter tw = TextWriter.to(configFile)) {
-			ToSomeString sb = new ToYaml(4).sb(tw);
-			config.forEachChild(sb);
-			sb.finish();
+			ToSomeString sb = new ToYaml("    ").sb(tw);
+			config.accept(sb);
 		} catch (IOException e) {
 			logger.error("无法保存配置文件{}",e,configFile);
 		}
@@ -101,31 +107,133 @@ public abstract class Plugin {
 	}
 	public final InputStream getResource(String path) {
 		if (path == null) throw new IllegalArgumentException("Filename cannot be null");
-		return getClassLoader().getResourceAsStream(path);
-	}
-	protected final ClassLoader getClassLoader() { return desc.pcl == null ? getClass().getClassLoader() : desc.pcl; }
-
-	protected final void registerRoute(String subpath, Router router) {
-		DefaultPluginSystem.initHttp().registerSubpathRouter(subpath, router);
-	}
-	protected final void unregisterRoute(String subpath) {
-		DefaultPluginSystem.initHttp().unregisterSubpathRouter(subpath);
+		return desc.cl.getResourceAsStream(path);
 	}
 
+	private Set<String> pPaths = Collections.emptySet();
+	protected final void registerRoute(String path, Router router) {
+		if (pPaths.isEmpty()) pPaths = new MyHashSet<>(4, Hasher.identity());
+		if (pPaths.add(path)) DefaultPluginSystem.initHttp().addPrefixDelegation(path, router);
+	}
+	protected final void unregisterRoute(String path) {
+		if (pPaths.remove(path)) DefaultPluginSystem.initHttp().removePrefixDelegation(path);
+	}
+
+	private Set<CommandNode> pCmds = Collections.emptySet();
 	protected final void registerCommand(CommandNode node) {
 		assert node.getName() != null;
-		DefaultPluginSystem.CMD.register(node);
+
+		if (pCmds.isEmpty()) pCmds = new MyHashSet<>(4, Hasher.identity());
+		if (pCmds.add(node)) DefaultPluginSystem.CMD.register(node);
 	}
-	protected final void unregisterCommand(String name) {
-		DefaultPluginSystem.CMD.unregister(name);
+	protected final void unregisterCommand(CommandNode node) {
+		if (pCmds.remove(node)) DefaultPluginSystem.CMD.unregister(node);
 	}
 
-	public final Scheduler getScheduler() { return Scheduler.getDefaultScheduler(); }
-	public final TaskPool getExecutor() { return TaskPool.Common(); }
-
-	public String toString() { return desc.getFullDesc(); }
+	private PSched pSched;
+	public final Scheduler getScheduler() { return pSched == null ? pSched = new PSched(this, Scheduler.getDefaultScheduler()) : pSched; }
 
 	protected void onLoad() {}
 	protected void onEnable() throws Exception {}
 	protected void onDisable() {}
+
+	final void postDisable() {
+		if (pSched != null) pSched.clearTasks();
+		for (CommandNode cmd : pCmds) DefaultPluginSystem.CMD.unregister(cmd);
+		for (String path : pPaths) DefaultPluginSystem.initHttp().removePrefixDelegation(path);
+		pCmds = Collections.emptySet();
+		pPaths = Collections.emptySet();
+	}
+
+	public String toString() { return desc.getFullDesc(); }
+
+	private static final class PSched extends Scheduler implements TaskHandler {
+		final Plugin plugin;
+		final MyHashSet<ScheduleTask> userTasks = new MyHashSet<>(Hasher.identity());
+
+		private final Scheduler sched;
+		public PSched(Plugin plugin, Scheduler sched) {
+			super((ToLongFunction<ScheduleTask>) null);
+			this.plugin = plugin;
+			this.sched = sched;
+		}
+
+		@Override
+		public ScheduleTask delay(ITask task, long delayMs) {
+			ScheduleTask delay = sched.delay(task, delayMs);
+			synchronized (userTasks) { userTasks.add(delay); }
+			if (task instanceof PLoopTask p) p.realTask = delay;
+			return delay;
+		}
+		@Override
+		public ScheduleTask runAsync(ITask task) {
+			PLongTask wrapper = new PLongTask(task);
+			synchronized (userTasks) { userTasks.add(wrapper); }
+			TaskPool.Common().pushTask(wrapper);
+			return wrapper;
+		}
+		public ScheduleTask loop(ITask task, long intervalMs) { return delay(new PLoopTask(sched, task, intervalMs, -1), 0); }
+		public ScheduleTask loop(ITask task, long intervalMs, int count) { return delay(new PLoopTask(sched, task, intervalMs, count), 0); }
+		public ScheduleTask loop(ITask task, long intervalMs, int count, long delayMs) { return delay(new PLoopTask(sched, task, intervalMs, count), delayMs); }
+		public void pushTask(ITask task) { runAsync(task); }
+
+		@Override
+		public void clearTasks() {
+			synchronized (userTasks) {
+				for (ScheduleTask task : userTasks) {
+					task.cancel();
+				}
+				userTasks.clear();
+			}
+		}
+
+		private final class PLongTask implements ITask, ScheduleTask {
+			private final ITask task;
+
+			public PLongTask(ITask task) { this.task = task; }
+
+			public ITask getTask() { return task; }
+			public boolean isExpired() { return !userTasks.contains(this); }
+			public boolean isCancelled() { return task.isCancelled(); }
+			public boolean cancel() { return task.cancel(); }
+
+			@Override
+			public void execute() throws Exception {
+				long start = System.currentTimeMillis();
+
+				try {
+					task.execute();
+				} finally {
+					synchronized (userTasks) {
+						userTasks.remove(this);
+					}
+				}
+
+				start = System.currentTimeMillis() - start;
+				if (start > 1000) plugin.getLogger().warn("[Long]插件{}执行任务{}时花费了太长的时间", plugin.desc.getId(), task);
+			}
+		}
+		private final class PLoopTask extends LoopTaskWrapper {
+			ScheduleTask realTask;
+
+			PLoopTask(Scheduler sched, ITask task, long interval, int repeat) {
+				super(sched, task, interval, repeat, true);
+			}
+
+			@Override
+			public long getNextRun() {
+				long run = super.getNextRun();
+				if (run == 0) {
+					if (repeat == 0) {
+						synchronized (userTasks) {
+							userTasks.remove(realTask);
+						}
+					} else {
+						plugin.getLogger().warn("[Loop]插件{}执行任务{}时花费了太长的时间", plugin.desc.getId(), task);
+					}
+				}
+				return run;
+			}
+		}
+	}
 }

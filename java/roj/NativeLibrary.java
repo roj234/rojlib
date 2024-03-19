@@ -13,33 +13,34 @@ import java.io.InputStream;
  * @since 2021/10/15 12:57
  */
 public class NativeLibrary {
-	public static final boolean IN_DEV = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\java").isDirectory();
-	public static final boolean loaded;
-	// only use clinit
-	public static boolean loaded() { return loaded; }
+	public static final boolean IN_DEV = new File("D:\\mc\\FMD-1.5.2").isDirectory();
+	@Deprecated
+	public static final boolean EXTRA_BUG_CHECK = System.getProperty("roj.debug.extraBugCheck")!=null;
+
+	public static final int REUSE_PORT_WINDOWS = 0, ANSI_CONSOLE = 1, BSDIFF = 2, SHARED_MEMORY = 3, FAST_LZMA = 4;
+	public static boolean hasFunction(int bit) {return (bits&(1L << bit)) != 0;}
+	private static final long bits;
 
 	static {
-		boolean t;
+		long t = 0;
+
+		block:
 		try {
-			File devFile = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\java\\libcpp\\bin\\libcpp.dll");
-			if (devFile.isFile()) {
-				System.load(devFile.getAbsolutePath());
-				t = true;
-			} else {
-				t = loadLibrary();
-			}
-			if (t) init();
+			File devFile = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\libcpp\\bin\\libcpp.dll");
+			if (devFile.isFile()) System.load(devFile.getAbsolutePath());
+			else if (!loadLibrary()) break block;
+			t = init();
 		} catch (Throwable e) {
-			t = false;
 			e.printStackTrace();
 		}
-		loaded = t;
+
+		bits = t;
 	}
 
 	private static boolean loadLibrary() throws Exception {
 		String lib = System.getProperty("os.arch").contains("64") ? "libcpp" : "libcpp32";
 		String appendix = OS.CURRENT == OS.WINDOWS ? ".dll" : ".so";
-		InputStream in = NativeLibrary.class.getResourceAsStream("/"+lib+appendix);
+		InputStream in = NativeLibrary.class.getClassLoader().getResourceAsStream(lib+appendix);
 		if (in == null) {
 			System.err.println("Failed to load RojLib native");
 			return false;
@@ -70,25 +71,5 @@ public class NativeLibrary {
 		return true;
 	}
 
-	private static native void init();
-
-	/*
-	HANDLE g_hEvent;
-	int main() {
-		g_hEvent = CreateEventW(NULL, 0, 0, LPCWSTR("Hi"));
-		SetEvent(g_hEvent);
-
-		if (g_hEvent) {
-			if (ERROR_ALREADY_EXISTS == GetLastError()){
-				//如果多开会退出
-				std::cout << "只能启动一个哦" << std::endl;
-				return 0;
-			}
-		}
-
-		return 0;
-	}
-	 */
-	private static native long createMutex(String name);
-	private static native void deleteMutex(long addr);
+	private static native long init();
 }

@@ -1,7 +1,9 @@
 package roj.platform;
 
+import org.jetbrains.annotations.Nullable;
+import roj.archive.zip.ZipFile;
 import roj.collect.TrieTreeSet;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.source.Source;
 import roj.math.Version;
 import roj.text.CharList;
@@ -28,8 +30,7 @@ public class PluginDescriptor {
 
 	Plugin instance;
 	List<String> depend = Collections.emptyList(), loadAfter = Collections.emptyList(), loadBefore = Collections.emptyList();
-	transient PluginClassLoader pcl;
-	transient ClassLoader cl;
+	transient PluginClassLoader cl;
 
 	// 基于transformer的安全管理
 	TrieTreeSet reflectiveClass, extraPath;
@@ -41,6 +42,11 @@ public class PluginDescriptor {
 	public String getId() { return id; }
 	public Version getVersion() { return version; }
 	public Plugin getInstance() { return instance; }
+	public int getState() { return state; }
+	@Nullable
+	public Source getFile() {return source;}
+	@Nullable
+	public ZipFile getArchive() {return cl == null ? null : cl.archive;}
 
 	@Override
 	public String toString() { return Tokenizer.addSlashes(id, 0, new CharList("'"), '"').append("' v").append(version).toStringAndFree(); }

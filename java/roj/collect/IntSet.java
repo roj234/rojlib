@@ -4,12 +4,13 @@ import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 
 import java.util.AbstractSet;
+import java.util.Arrays;
 import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
 import java.util.PrimitiveIterator.OfInt;
 
 import static roj.collect.AbstractIterator.*;
-import static roj.collect.IntMap.MAX_NOT_USING;
+import static roj.collect.IntMap.intHash;
 
 /**
  * @author Roj234
@@ -18,37 +19,135 @@ import static roj.collect.IntMap.MAX_NOT_USING;
 public class IntSet extends AbstractSet<Integer> {
 	static final class Entry {
 		int k, set;
-
-		Entry(int k) {
-			this.k = k;
-		}
-
 		Entry next;
+
+		Entry(int k) {this.k = k;}
 	}
 
 	private Entry[] entries;
-	private int size = 0, mask = 1;
+	private int size, mask = 1;
+	private int nextMask;
 
-	private boolean resizeRequested;
-
-	public IntSet() { this(16); }
-	public IntSet(int size) { ensureCapacity(size); }
-
+	public IntSet() {this(16);}
+	public IntSet(int size) {ensureCapacity(size);}
 	public IntSet(int... arr) {
 		ensureCapacity(arr.length);
 		addAll(arr);
 	}
-	public IntSet(IntSet list) { addAll(list); }
+	public IntSet(IntSet list) {addAll(list);}
 
 	public void ensureCapacity(int size) {
-		if (size <= mask+1) return;
-		mask = MathUtils.getMin2PowerOf(size)-1;
+		if (size <= mask + 1) return;
+		mask = MathUtils.getMin2PowerOf(size) - 1;
 		resize();
 	}
 
+	public int size() {return size;}
+
+	public final boolean contains(Object o) {return contains((int) o);}
+	public final boolean contains(int key) {
+		int mKey = key & ~31;
+
+		Entry e = getEntryFirst(key);
+		while (e != null) {
+			// bitset entry
+			if (e.k == mKey) return (e.set & (1 << (key & 31))) != 0;
+
+			// key.isDual() && entry.isDual()
+			if (key != mKey && (e.k & 31) != 0) {
+				if (e.k == key || e.set == key) return true;
+			}
+			e = e.next;
+		}
+		return false;
+	}
+
 	@NotNull
-	public IntIterator iterator() {
-		return new Itr(this);
+	public IntIterator iterator() {return new Itr(this);}
+	private static final class Itr implements IntIterator {
+		private final IntSet map;
+		private final Entry[] arr;
+		private byte stage;
+		private int i, set, value;
+		private Entry entry;
+
+		Itr(IntSet map) {
+			this.map = map;
+			arr = map.entries;
+			if (arr == null) stage = ENDED;
+		}
+
+		@Override
+		public final boolean hasNext() {
+			check();
+			return stage != ENDED;
+		}
+
+		@Override
+		public final void remove() {
+			if (stage != GOTTEN) throw new IllegalStateException();
+
+			int v = value;
+			check();
+			map.remove(v);
+		}
+
+		private void check() {
+			if (stage <= 1) {
+				stage = computeNext() ? CHECKED : ENDED;
+			}
+		}
+
+		private boolean computeNext() {
+			while (true) {
+				if (set != 0) {
+					while (true) {
+						boolean hasNext = (set & 1) == 0;
+						value++;
+						set >>>= 1;
+						if (!hasNext) return true;
+					}
+				}
+
+				find:{
+					if (entry != null) {
+						if ((entry.k & 31) != 0 && value == entry.k) {
+							if (entry.set != 0) {
+								value = entry.set;
+								return true;
+							}
+						}
+
+						if (entry.next != null) {
+							entry = entry.next;
+							break find;
+						}
+					}
+
+					do {
+						if (i == arr.length) return false;
+						entry = arr[i++];
+					} while (entry == null);
+				}
+
+				// dual entry
+				if ((entry.k & 31) != 0) {
+					value = entry.k;
+					return true;
+				} else {
+					set = entry.set;
+					value = entry.k - 1;
+				}
+			}
+		}
+
+		@Override
+		public int nextInt() {
+			check();
+			if (stage == ENDED) throw new NoSuchElementException();
+			stage = GOTTEN;
+			return value;
+		}
 	}
 
 	public int[] toIntArray() {
@@ -63,81 +162,20 @@ public class IntSet extends AbstractSet<Integer> {
 		return result;
 	}
 
-	public int size() { return size; }
+	private Entry getEntryFirst(int key) {return entries == null ? null : entries[intHash(key) & mask];}
 
-	public void resize() {
-		if (entries == null) return;
-
-		Entry[] newEntries = new Entry[mask+1];
-		Entry entry, next;
-		int i = 0, j = entries.length;
-		for (; i < j; i++) {
-			entry = entries[i];
-			entries[i] = null;
-			while (entry != null) {
-				next = entry.next;
-
-				int newKey = indexFor(entry.k);
-				Entry old = newEntries[newKey];
-
-				// dualEntry
-				if ((entry.k&31) != 0) {
-					if (entry.set != 0) {
-						int newKey2 = indexFor(entry.set);
-						if (newKey2 != newKey) {
-							Entry entry1 = getCachedEntry(entry.set);
-							entry.set = 0;
-
-							Entry old1 = newEntries[newKey2];
-							newEntries[newKey2] = entry1;
-							entry1.next = old1;
-						}
-					}
-				}
-
-				newEntries[newKey] = entry;
-				entry.next = old;
-				entry = next;
-			}
-		}
-
-		this.entries = newEntries;
-	}
-
-	public final boolean contains(Object o) { return contains((int) o); }
-	public final boolean contains(int key) {
-		int mKey = key & ~31;
-
-		Entry e = getEntryFirst(key);
-		while (e != null) {
-			// bitset entry
-			if (e.k == mKey) return (e.set&(1<<(key&31))) != 0;
-
-			// key.isDual() && entry.isDual()
-			if (key != mKey && (e.k & 31) != 0) {
-				if (e.k == key || e.set == key) return true;
-			}
-			e = e.next;
-		}
-		return false;
-	}
-
-	public final boolean add(Integer v) { return add((int) v); }
+	public final boolean add(Integer v) {return add((int) v);}
 	public final boolean add(int key) {
-		if (resizeRequested) {
-			resizeRequested = false;
-			mask = ((mask+1) << 1) - 1;
-			resize();
-		}
+		if (nextMask != 0) resize();
 
 		int mKey = key & ~31;
 
 		if (entries == null) entries = new Entry[mask+1];
 
-		int i = indexFor(key);
+		int i = intHash(key)&mask;
 		Entry entry = entries[i];
 		if (entry == null) {
-			entry = entries[i] = getCachedEntry(key);
+			entry = entries[i] = new Entry(key);
 
 			if (key == mKey) {
 				entry.set = 1;
@@ -154,7 +192,7 @@ public class IntSet extends AbstractSet<Integer> {
 			// bitset entry
 			if (entry.k == mKey) {
 				int set = entry.set;
-				if (set != (set |= 1<<(key&31) )) {
+				if (set != (set |= 1 << (key & 31))) {
 					entry.set = set;
 					size++;
 					return true;
@@ -187,7 +225,7 @@ public class IntSet extends AbstractSet<Integer> {
 			depth++;
 		}
 
-		if (depth > 3) resizeRequested = true;
+		if (depth > 3) nextMask = ((mask+1) << 1) - 1;
 
 		size++;
 
@@ -204,7 +242,7 @@ public class IntSet extends AbstractSet<Integer> {
 				if ((int2 & ~31) == mKey) {
 					dualEntry.set |= 1<<(int2&31);
 				} else {
-					entry.next = getCachedEntry(int2);
+					entry.next = new Entry(int2);
 				}
 			}
 			return true;
@@ -213,7 +251,7 @@ public class IntSet extends AbstractSet<Integer> {
 			return true;
 		}
 
-		entry = (entry.next = getCachedEntry(key));
+		entry = (entry.next = new Entry(key));
 
 		// force bitset
 		if (key == mKey) {
@@ -227,7 +265,7 @@ public class IntSet extends AbstractSet<Integer> {
 	private Entry merge(int key, Entry dualEntry) {
 		int mKey = dualEntry.k;
 
-		Entry entry = entries[indexFor(key)];
+		Entry entry = entries[intHash(key)&mask];
 		Entry prev = null;
 		while (true) {
 			if ((entry.k & 31) != 0) {
@@ -245,9 +283,8 @@ public class IntSet extends AbstractSet<Integer> {
 					} else {
 						Entry next = entry.next;
 						if (prev != null) prev.next = next;
-						else entries[indexFor(key)] = next;
+						else entries[intHash(key)&mask] = next;
 
-						putRemovedEntry(entry);
 						entry = next != null ? next : prev;
 						if (entry == null) throw new AssertionError();
 					}
@@ -260,8 +297,48 @@ public class IntSet extends AbstractSet<Integer> {
 		}
 		return entry;
 	}
+	private void resize() {
+		int mask1 = nextMask;
+		nextMask = 0;
 
-	public final boolean remove(Object o) { return remove((int) o); }
+		if (entries == null) return;
+		Entry[] entries1 = new Entry[mask1+1];
+
+		Entry entry, next;
+		int i = 0, j = entries.length;
+		for (; i < j; i++) {
+			entry = entries[i];
+			entries[i] = null;
+			while (entry != null) {
+				next = entry.next;
+
+				int newKey = intHash(entry.k) & mask1;
+				entry.next = entries1[newKey];
+
+				// dualEntry
+				if ((entry.k&31) != 0) {
+					if (entry.set != 0) {
+						int newKey2 = intHash(entry.set) & mask1;
+						if (newKey2 != newKey) {
+							Entry entry1 = new Entry(entry.set);
+							entry.set = 0;
+
+							entry1.next = entries1[newKey2];
+							entries1[newKey2] = entry1;
+						}
+					}
+				}
+
+				entries1[newKey] = entry;
+				entry = next;
+			}
+		}
+
+		this.entries = entries1;
+		this.mask = mask1;
+	}
+
+	public final boolean remove(Object o) {return remove((int) o);}
 	public final boolean remove(int key) {
 		int mKey = key & ~31;
 
@@ -276,9 +353,7 @@ public class IntSet extends AbstractSet<Integer> {
 				size--;
 				if (set == 0) {
 					if (prev != null) prev.next = entry.next;
-					else entries[indexFor(key)] = entry.next;
-
-					putRemovedEntry(entry);
+					else entries[intHash(key) & mask] = entry.next;
 				} else {
 					entry.set = set;
 				}
@@ -293,9 +368,7 @@ public class IntSet extends AbstractSet<Integer> {
 
 					if (entry.set == 0) {
 						if (prev != null) prev.next = entry.next;
-						else entries[indexFor(key)] = entry.next;
-
-						putRemovedEntry(entry);
+						else entries[intHash(key) & mask] = entry.next;
 					} else {
 						entry.k = entry.set;
 						entry.set = 0;
@@ -314,6 +387,12 @@ public class IntSet extends AbstractSet<Integer> {
 			entry = entry.next;
 		}
 		return false;
+	}
+
+	public void clear() {
+		if (size == 0) return;
+		size = 0;
+		Arrays.fill(entries, null);
 	}
 
 	public void addAll(IntSet other) {
@@ -362,135 +441,5 @@ public class IntSet extends AbstractSet<Integer> {
 			}
 		}
 		return m;
-	}
-
-	private int indexFor(int id) {
-		id >>= 5;
-		return (id ^ (id >>> 16)) & mask;
-	}
-
-	private Entry notUsing = null;
-	private Entry getCachedEntry(int key) {
-		Entry entry = notUsing;
-		if (entry != null) {
-			notUsing = entry.next;
-
-			entry.k = key;
-			entry.set = 0;
-			entry.next = null;
-			return entry;
-		}
-
-		return new Entry(key);
-	}
-	private void putRemovedEntry(Entry entry) {
-		if (notUsing != null && notUsing.k > MAX_NOT_USING) return;
-
-		entry.next = notUsing;
-		entry.k = notUsing == null ? 1 : notUsing.k+1;
-		notUsing = entry;
-	}
-
-	private Entry getEntryFirst(int key) {
-		return entries == null ? null : entries[indexFor(key)];
-	}
-
-	public void clear() {
-		if (size == 0) return;
-		size = 0;
-
-		for (int i = 0; i < entries.length; i++) {
-			if (entries[i] != null) {
-				putRemovedEntry(entries[i]);
-				entries[i] = null;
-			}
-		}
-	}
-
-	private static final class Itr implements IntIterator {
-		private byte stage;
-		private int i, set, value;
-		private Entry entry;
-
-		private final IntSet map;
-		private final Entry[] arr;
-
-		Itr(IntSet map) {
-			this.map = map;
-			arr = map.entries;
-			if (arr == null) stage = ENDED;
-		}
-
-		private boolean computeNext() {
-			while (true) {
-				if (set != 0) {
-					while (true) {
-						boolean hasNext = (set & 1) == 0;
-						value++;
-						set >>>= 1;
-						if (!hasNext) return true;
-					}
-				}
-
-				find: {
-					if (entry != null) {
-						if ((entry.k&31) != 0 && value == entry.k) {
-							if (entry.set != 0) {
-								value = entry.set;
-								return true;
-							}
-						}
-
-						if (entry.next != null) {
-							entry = entry.next;
-							break find;
-						}
-					}
-
-					do {
-						if (i == arr.length) return false;
-						entry = arr[i++];
-					} while (entry == null);
-				}
-
-				// dual entry
-				if ((entry.k&31) != 0) {
-					value = entry.k;
-					return true;
-				} else {
-					set = entry.set;
-					value = entry.k-1;
-				}
-			}
-		}
-
-		@Override
-		public final boolean hasNext() {
-			check();
-			return stage != ENDED;
-		}
-
-		@Override
-		public int nextInt() {
-			check();
-			if (stage == ENDED) throw new NoSuchElementException();
-			stage = GOTTEN;
-			return value;
-		}
-
-		@Override
-		public final void remove() {
-			if (stage != GOTTEN) throw new IllegalStateException();
-
-			int v = value;
-			check();
-			map.remove(v);
-		}
-
-		private void check() {
-			if (stage <= 1) {
-				stage = computeNext() ? CHECKED : ENDED;
-			}
-		}
 	}
 }

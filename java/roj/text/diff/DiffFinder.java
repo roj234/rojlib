@@ -12,13 +12,14 @@ import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
-import roj.config.NBTParser;
-import roj.config.serial.CAdapter;
+import roj.config.ConfigMaster;
+import roj.config.auto.Serializer;
+import roj.config.auto.Serializers;
 import roj.config.serial.CVisitor;
-import roj.config.serial.ToNBT;
 import roj.config.serial.ToYaml;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -28,7 +29,7 @@ import roj.ui.GuiUtil;
 import roj.ui.OnChangeHelper;
 import roj.util.ArrayCache;
 import roj.util.BsDiff;
-import roj.util.ByteList;
+import roj.util.DynByteBuf;
 import sun.misc.Unsafe;
 
 import javax.swing.*;
@@ -70,7 +71,7 @@ public class DiffFinder extends JFrame {
 	private static final class FileMeta {
 		String path;
 		int group, bucket;
-		transient byte[] data;
+		transient DynByteBuf data;
 	}
 
 	private Pattern nameFilter;
@@ -168,14 +169,12 @@ public class DiffFinder extends JFrame {
 						return;
 					}
 				} else {
-					CAdapter<FileMeta[]> adapter = DiffResult.sf.adapter(FileMeta[].class);
 					try (DataInputStream in = new DataInputStream(new FileInputStream(progress))) {
 						finished = in.readInt();
 						preWindow = in.readInt();
 						slideWindow = in.readInt();
 						base = new File(in.readUTF());
-						new NBTParser().parseRaw(adapter, in, NBTParser.DONT_FOLLOW_MINECRAFT);
-						metas = adapter.result();
+						metas = ConfigMaster.NBT.readObject(FileMeta[].class, in);
 					} catch (Exception ex) {
 						JOptionPane.showMessageDialog(this, "检查点加载失败！\n" + ex.getMessage());
 						return;
@@ -224,9 +223,7 @@ public class DiffFinder extends JFrame {
 					out.writeInt(preWindow);
 					out.writeInt(slideWindow);
 					out.writeUTF(base.getAbsolutePath());
-					try (ToNBT nbt = new ToNBT(new ByteList.WriteOut(out))) {
-						DiffResult.sf.adapter(FileMeta[].class).write(nbt, metas);
-					}
+					ConfigMaster.NBT.writeObject(metas, out);
 				} catch (Exception ex) {
 					JOptionPane.showMessageDialog(this, "检查点保存失败！\n" + ex.getMessage());
 					return;
@@ -309,7 +306,7 @@ public class DiffFinder extends JFrame {
 
 		private volatile boolean terminateFlag;
 
-		private final CAdapter<DiffResult> writer = DiffResult.sf.adapter(DiffResult.class);
+		private final Serializer<DiffResult> writer = Serializers.SAFE.serializer(DiffResult.class);
 		private CVisitor result;
 
 		final void initComparator(File base, FileMeta[] metas, int preWindow, TaskPool POOL) {
@@ -328,13 +325,8 @@ public class DiffFinder extends JFrame {
 								i = r;
 							}
 
-							if (i < preWindow) {
-								byte[] newArray = Arrays.copyOf(out, i);
-								ArrayCache.putArray(out);
-								out = newArray;
-							}
-
-							meta.data = out;
+							meta.data = BufferPool.buffer(true, i).put(out, 0, i);
+							ArrayCache.putArray(out);
 							memoryUsage.addAndGet(out.length);
 
 							bar.addCurrent(1);
@@ -358,13 +350,8 @@ public class DiffFinder extends JFrame {
 								sb.clear();
 							}
 
-							if (i < preWindow) {
-								byte[] newArray = Arrays.copyOf(out, i*2);
-								ArrayCache.putArray(out);
-								out = newArray;
-							}
-
-							meta.data = out;
+							meta.data = BufferPool.buffer(true, i).put(out, 0, i);
+							ArrayCache.putArray(out);
 							memoryUsage.addAndGet(out.length);
 
 							bar.addCurrent(1);
@@ -477,10 +464,10 @@ public class DiffFinder extends JFrame {
 							if (terminateFlag) return;
 							if (group >= 0 && right.group == group) continue;
 
-							byte[] dataB = right.data;
-							int maxHeadDiff = (int) (dataB.length * DIFF_MAX);
+							DynByteBuf dataB = right.data;
+							int maxHeadDiff = (int) (dataB.readableBytes() * DIFF_MAX);
 
-							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.length-slideWindow, maxHeadDiff);
+							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.readableBytes()-slideWindow, maxHeadDiff);
 							if (byteDiff >= 0) {
 								DiffResult diff1 = new DiffResult();
 								diff1.left = left.path;
@@ -495,10 +482,10 @@ public class DiffFinder extends JFrame {
 							if (terminateFlag) return;
 							if (group >= 0 && right.group == group) continue;
 
-							byte[] dataB = right.data;
-							int maxHeadDiff = (int) (dataB.length * DIFF_MAX);
+							DynByteBuf dataB = right.data;
+							int maxHeadDiff = (int) (dataB.readableBytes() * DIFF_MAX);
 
-							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.length-slideWindow, maxHeadDiff);
+							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.readableBytes()-slideWindow, maxHeadDiff);
 							if (byteDiff >= 0) {
 								DiffResult diff1 = new DiffResult();
 								diff1.left = left.path;
@@ -554,7 +541,8 @@ public class DiffFinder extends JFrame {
 					List<FileMeta> value = layered.get(j);
 					if (value != null) {
 						for (FileMeta file : value) {
-							mem += file.data.length;
+							mem += file.data.readableBytes();
+							BufferPool.reserve(file.data);
 							file.data = null;
 						}
 						layered.set(j, Collections.emptyList());

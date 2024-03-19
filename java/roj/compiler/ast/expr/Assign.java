@@ -6,9 +6,9 @@ import roj.asm.tree.anno.AnnValInt;
 import roj.asm.type.IType;
 import roj.collect.SimpleList;
 import roj.compiler.JavaLexer;
-import roj.compiler.api.ASM;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.asmlang.ASM;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 
@@ -45,7 +45,7 @@ final class Assign extends ExprNode {
 	public IType type() { return right.type(); }
 
 	@Override
-	public ExprNode resolve(CompileContext ctx) {
+	public ExprNode resolve(LocalContext ctx) {
 		ExprNode node = left.resolve(ctx);
 		if (node instanceof VarNode vn && !vn.isFinal()) left = vn;
 		else ctx.report(Kind.ERROR, "assign.error.final", left);

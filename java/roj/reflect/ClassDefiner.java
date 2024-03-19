@@ -6,9 +6,6 @@ import roj.asm.tree.IClass;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.security.ProtectionDomain;
 
 /**
@@ -17,7 +14,7 @@ import java.security.ProtectionDomain;
  */
 public class ClassDefiner extends ClassLoader {
 	public static ClassDefiner getFor(Class<?> c) { return new ClassDefiner(getParent(c)); }
-	public static ClassDefiner INSTANCE = getFor(ClassDefiner.class);
+	public static final ClassDefiner INSTANCE = getFor(ClassDefiner.class);
 
 	private static final H def;
 	private interface H {
@@ -27,22 +24,11 @@ public class ClassDefiner extends ClassLoader {
 	static {
 		ClassLoader.registerAsParallelCapable();
 
-		AsmShared.local().setLevel(true);
+		AsmShared.local().setUnbuffered(true);
 		try {
 			def = DirectAccessor.builder(H.class).delegate(ClassLoader.class, new String[] {"defineClass", "findLoadedClass"}).build();
 		} finally {
-			AsmShared.local().setLevel(false);
-		}
-	}
-
-	public static boolean debug = System.getProperty("roj.reflect.debugClass") != null;
-	protected static void dumpClass(String name, ByteList buf) {
-		if (debug) {
-			File f = new File("./ClassDefiner_dump");
-			f.mkdir();
-			try (FileOutputStream fos = new FileOutputStream(new File(f, name+".class"))) {
-				buf.writeToStream(fos);
-			} catch (IOException ignored) {}
+			AsmShared.local().setUnbuffered(false);
 		}
 	}
 
@@ -54,7 +40,7 @@ public class ClassDefiner extends ClassLoader {
 	public final Class<?> defineClass(String name, byte[] bytes) throws ClassFormatError { return defineClass(name, IOUtil.SharedCoder.get().wrap(bytes)); }
 	public final Class<?> defineClass(IClass data) { return defineClass(null, Parser.toByteArrayShared(data)); }
 	public Class<?> defineClass(String name, ByteList buf) throws ClassFormatError {
-		dumpClass(name, buf);
+		if (ClassDumper.DUMP_ENABLED) ClassDumper.dump("define", buf);
 
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
 		if (sm != null) buf = sm.checkDefineClass(name, buf);

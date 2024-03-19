@@ -214,7 +214,7 @@ public class AES_GCM extends AES {
 
 			// ctr update final
 			int len1 = len;
-			while (len1-- > 0) out.put((byte) (in.get() ^ ctr.get()));
+			while (len1-- > 0) out.put((byte) (in.readByte() ^ ctr.readByte()));
 
 			paddedHash(out.slice(out.wIndex()-len, len));
 		}
@@ -227,7 +227,7 @@ public class AES_GCM extends AES {
 
 		ByteList t = getHash();
 		len = tagLen;
-		while (len-- > 0) out.put((byte) (t.get() ^ ctr.get()));
+		while (len-- > 0) out.put((byte) (t.readByte() ^ ctr.readByte()));
 	}
 	private void decryptFinal(DynByteBuf in, DynByteBuf out) throws AEADBadTagException {
 		ByteList ctr = counter; ctr.clear();
@@ -244,7 +244,7 @@ public class AES_GCM extends AES {
 			paddedHash(in);
 
 			// ctr update final
-			while (len-- > 0) out.put((byte) (in.get() ^ ctr.get()));
+			while (len-- > 0) out.put((byte) (in.readByte() ^ ctr.readByte()));
 
 			in.wIndex(in.wIndex() + AES_BLOCK_SIZE);
 		}
@@ -257,7 +257,7 @@ public class AES_GCM extends AES {
 		ByteList t = getHash();
 		int v = 0;
 		for (int i = tagLen; i > 0; i--) {
-			v |= in.get() ^ t.get() ^ ctr.get();
+			v |= in.readByte() ^ t.readByte() ^ ctr.readByte();
 		}
 		if (v != 0) throw new AEADBadTagException();
 	}

@@ -52,7 +52,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 			refPos = dd.xInsn_sharedRefPos;
 			refVal = dd.xInsn_sharedRefVal;
 			segments = new SimpleList<>();
-			((SimpleList<Segment>)segments).setRawArray(dd.xInsn_sharedSegments);
+			((SimpleList<Segment>)segments)._setArray(dd.xInsn_sharedSegments);
 			myIsReading = dd.xInsn_isReading = true;
 		}
 
@@ -221,7 +221,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 
 			Segment s = segments.get(pos.block);
 			if (pos.offset+len >= s.length()) {
-				assert pos.offset+len == s.length();
+				if (pos.offset+len != s.length()) throw new ConcurrentModificationException();
 
 				if (pos.block == segments.size()-1) return false;
 
@@ -594,7 +594,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 				array[blockFrom+i] = list1.segments.get(i).move(this, this, blockDelta, mode);
 			}
 		}
-		blocks.i_setSize(blocks.size()+blockDelta);
+		blocks._setSize(blocks.size()+blockDelta);
 
 		if (inserted) blockDelta++;
 

@@ -190,8 +190,6 @@ public sealed class Page {
 	private static sealed class Ext extends Page {
 		final byte SHIFT;
 
-		private long splitBitmap;
-
 		private static final Page[] EMPTY_PAGES = new Page[0];
 		private Page[] child = EMPTY_PAGES;
 		private int childCount;
@@ -223,22 +221,19 @@ public sealed class Page {
 				sb.append('\n');
 			}
 
-			if ((bitmap|splitBitmap) != 0) {
+			if ((bitmap) != 0) {
 				int cap = bitmapCapacity();
 
 				for (int i = 0; i < depth; i++) sb.append(' ');
 				CharList bin = new CharList(cap).append(Long.toBinaryString(bitmap));
 				bin.replace('0', BITMAP_FREE).replace('1', BITMAP_USED).padStart(BITMAP_FREE, cap-bin.length());
 
-				if (splitBitmap != 0) {
-					long m = splitBitmap;
-					int i = cap-1;
-					while (m != 0) {
-						if ((m & 1) != 0) bin.set(i, bin.charAt(i) == BITMAP_USED ? 'E' : get(cap-1-i) >= 0 ? BITMAP_SUBPAGE : BITMAP_PREFIX);
+				int bitCount = (int) ((prefix+MASK64[SHIFT]) >>> SHIFT);
+				for (int i = 0; i < bitCount; i++) bin.set(i, BITMAP_PREFIX);
 
-						i--;
-						m >>>= 1;
-					}
+				for (int i = 0; i < childCount; i++) {
+					int j = cap-child[i].childId-1;
+					bin.set(j, bin.charAt(j) != BITMAP_USED ? 'E' : BITMAP_SUBPAGE);
 				}
 
 				sb.append("  mapping = ").append(bin).append('\n');
@@ -290,11 +285,11 @@ public sealed class Page {
 					notFound11:
 					if ((bitmap&flag) == 0) {
 						if (subSize == 0) {
-							if (removeEmpties(flag)) break;
-						} else if (offset+block < bitmapCapacity() && removeEmpties(flag^Long.lowestOneBit(flag))) {
+							if (isAllEmpty(flag)) break;
+						} else if (offset+block < bitmapCapacity() && isAllEmpty(flag^Long.lowestOneBit(flag))) {
 							Page p;
 							// 尝试不完整的分配
-							if (!removeEmpties(Long.lowestOneBit(flag))) {
+							if (!isAllEmpty(Long.lowestOneBit(flag))) {
 								int i = get(offset);
 								// failed, next iter
 								if (i < 0 || (p = child[i]).tailEmpty() < subSize) break notFound11;
@@ -355,7 +350,7 @@ public sealed class Page {
 					}
 				}
 
-				long space = ~(bitmap|splitBitmap);
+				long space = ~bitmap;
 				// 还有可用空间
 				if (space != 0) {
 					// later 切断【最短】的连续空间 ?
@@ -398,7 +393,7 @@ public sealed class Page {
 
 			// bitFrom is inclusive (bitFrom = off+MASK64[SHIFT] >>> SHIFT也许更好理解？)
 			long flag = BIT(before != 0 ? bitFrom+1 : bitFrom, bitTo);
-			if ((bitmap&flag) != 0 || !removeEmpties(flag)) return false;
+			if ((bitmap&flag) != 0 || !isAllEmpty(flag)) return false;
 
 			// assert len >= MASK64[SHIFT], so this is smaller
 			if (before != 0 && !goc(bitFrom).malloc(before, MASK64[SHIFT]+1 - before)) // BEFORE
@@ -418,7 +413,6 @@ public sealed class Page {
 			free += len;
 
 			if (prefix > 0) {
-				// TODO - conditional update splitBitmap
 				if (!prefixLocked && align(off+len) == prefix) {
 					prefix = (prefix - len) & ~MINIMUM_MASK;
 					return;
@@ -450,7 +444,6 @@ public sealed class Page {
 				for (int i = childCount-1; i >= 0; i--) {
 					if (!removeIfEmpty(i)) return;
 				}
-				assert splitBitmap == 0;
 				prefixLocked = false;
 			}
 		}
@@ -460,35 +453,22 @@ public sealed class Page {
 			if (bitmap == 0 && childCount == 0) return totalSpace();
 
 			int a = Long.numberOfTrailingZeros(bitmap);
-			long split = splitBitmap;
-			while (true) {
-				int b = Long.numberOfTrailingZeros(split);
-				if (b >= a) return (long) a << SHIFT;
-
-				int i = get(b);
-				if (!removeIfEmpty(i))
-					return ((long) b << SHIFT) + child[i].headEmpty();
-
-				split ^= 1L << b;
+			if (childCount > 0) {
+				int id = child[0].childId;
+				if (id <= a) return ((long) id << SHIFT) + child[0].headEmpty();
 			}
+			return (long) a << SHIFT;
 		}
 		final long tailEmpty() {
 			if (bitmap == 0 && childCount == 0) return totalSpace() - prefix;
 
 			int a = Long.numberOfLeadingZeros(bitmap);
-			long split = splitBitmap;
-			while (true) {
-				int b = Long.numberOfLeadingZeros(split);
-				if (b >= a) return (long) a << SHIFT;
-
-				b = 63-b;
-
-				int i = get(b);
-				if (!removeIfEmpty(i))
-					return ((63L-b) << SHIFT) + child[i].tailEmpty();
-
-				split ^= 1L << b;
+			if (childCount > 0) {
+				int i = childCount - 1;
+				int id = child[i].childId;
+				if (id >= a) return ((long) (63-id) << SHIFT) + child[i].tailEmpty();
 			}
+			return (long) a << SHIFT;
 		}
 
 		// 注意：按照语义，上面两个方法应该调用这个方法，但是它们不可能在TOP节点被调用，所以不改动
@@ -503,24 +483,16 @@ public sealed class Page {
 
 			myFree -= prefix;
 
-			if (splitBitmap != 0) {
-				int bitCount = (int) ((prefix + MASK64[SHIFT]) >>> SHIFT);
-
-				int i1 = Long.bitCount(splitBitmap);
-				if (childCount + bitCount != i1 && childCount != i1) throw new AssertionError(childCount+"+"+bitCount+" != Long.bitCount("+splitBitmap+")");
-				if ((bitmap & splitBitmap) != 0) throw new AssertionError(bitmap+" & "+splitBitmap+" != 0");
-
-				for (int i = 0; i < childCount; i++) {
-					Page page = child[i];
-					try {
-						page.validate();
-					} catch (AssertionError e) {
-						AssertionError error = new AssertionError("child["+page.childId+"] validate() failed: ("+e.getMessage()+")"+this);
-						error.setStackTrace(e.getStackTrace());
-						throw error;
-					}
-					myFree -= page.usedSpace();
+			for (int i = 0; i < childCount; i++) {
+				Page page = child[i];
+				try {
+					page.validate();
+				} catch (AssertionError e) {
+					AssertionError error = new AssertionError("child["+page.childId+"] validate() failed: ("+e.getMessage()+")"+this);
+					error.setStackTrace(e.getStackTrace());
+					throw error;
 				}
+				myFree += page.freeSpace();
 			}
 
 			if (bitmapCapacity() == 64 && free != myFree) {
@@ -554,7 +526,7 @@ public sealed class Page {
 				off += len;
 			}
 
-			bitmap = splitBitmap = 0;
+			bitmap = 0;
 			child = EMPTY_PAGES;
 			childCount = 0;
 			prefixLocked = false;
@@ -612,15 +584,14 @@ public sealed class Page {
 			long myId = 1L << blockId;
 			// auto split (目前只有一种可能: free when simple=DISABLED)
 			if ((bitmap & myId) != 0) {
-				bitmap ^= myId;
 				p.malloc(p.freeSpace());
 			}
-			splitBitmap |= myId;
+			bitmap |= myId;
 
 			return child[i] = p;
 		}
-		private boolean removeEmpties(long bits) {
-			bits &= splitBitmap;
+		private boolean isAllEmpty(long bits) {
+			bits &= bitmap;
 			if (bits == 0) return true;
 
 			int i = Long.numberOfTrailingZeros(bits);
@@ -630,19 +601,22 @@ public sealed class Page {
 			}
 
 			i = get(i);
-			int len = Long.bitCount(bits);
-			while (len > 0) {
+			if (i < 0) return false;
+
+			int end = 64-Long.numberOfLeadingZeros(bits);
+			while (i < childCount) {
+				Page p = child[i];
+				if (p.childId > end) break;
 				if (!removeIfEmpty(i)) return false;
-				len--;
 			}
-			return true;
+			return (bits&bitmap) == 0;
 		}
 		private boolean removeIfEmpty(int arrayId) {
 			Page p = child[arrayId];
 			if (p.usedSpace() == 0) {
 				System.arraycopy(child, arrayId+1, child, arrayId, childCount-arrayId-1);
 				child[--childCount] = null;
-				splitBitmap ^= 1L << p.childId;
+				bitmap ^= 1L << p.childId;
 				return true;
 			}
 			return false;
@@ -652,8 +626,9 @@ public sealed class Page {
 			if (prefixLocked) return;
 			int bitCount = (int) ((prefix+MASK64[SHIFT]) >>> SHIFT);
 			if (bitCount > 0) {
-				assert splitBitmap == 0;
-				splitBitmap = (1L << bitCount) - 1;
+				long mask = (1L << bitCount) - 1;
+				assert (bitmap&mask) == 0;
+				bitmap |= mask;
 			}
 			prefixLocked = true;
 		}
@@ -666,7 +641,7 @@ public sealed class Page {
 				long bit = BIT(0, bitCount);
 				assert (bitmap & bit) == 0;
 				bitmap |= bit;
-				splitBitmap &= ~bit;
+				assert child.length == 0 || child[0].childId >= bitCount;
 			}
 
 			long len = prefix&MASK64[SHIFT];

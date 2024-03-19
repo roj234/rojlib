@@ -45,22 +45,28 @@ abstract class LZMACoder {
 
 	static int getDistState(int len) { return len < DIST_STATES + MATCH_LEN_MIN ? len - MATCH_LEN_MIN : DIST_STATES - 1; }
 
-	short[][] literalProbs;
+	private static final short[][] MY_EMPTY = new short[0][];
+
+	short[][] literalProbs = MY_EMPTY;
 
 	final short[] choice = new short[2 << 1];
-	short[][] low, mid;
+	short[][] low = MY_EMPTY, mid;
 	final short[] high = new short[HIGH_SYMBOLS], high2 = new short[HIGH_SYMBOLS];
 
 	LZMACoder(int lc, int lp, int pb) { setProp0(lc, lp, pb); }
 	public void propReset(int lc, int lp, int pb) { setProp0(lc, lp, pb); reset(); }
 	private void setProp0(int lc, int lp, int pb) {
 		this.lc = lc;
-		literalProbs = new short[1 << (lc + lp)][0x300];
 		literalPosMask = (1<<lp) - 1;
 
+		if (literalProbs.length != (1 << (lc+lp)))
+			literalProbs = new short[1 << (lc + lp)][0x300];
+
 		posMask = (1<<pb) - 1;
-		low = new short[2<<pb][LOW_SYMBOLS];
-		mid = new short[2<<pb][MID_SYMBOLS];
+		if (low.length != 2<<pb) {
+			low = new short[2<<pb][LOW_SYMBOLS];
+			mid = new short[2<<pb][MID_SYMBOLS];
+		}
 	}
 
 	final int getSubcoderIndex(int prevByte, int pos) {

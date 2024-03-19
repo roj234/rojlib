@@ -1,8 +1,8 @@
 package roj.text.diff;
 
 import roj.collect.SimpleList;
-import roj.config.word.Tokenizer;
-import roj.text.Appender;
+import roj.config.Tokenizer;
+import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 
@@ -54,7 +54,7 @@ public class TextDiff {
 
 		return list;
 	}
-	public void toMarkdown(byte[] left, byte[] right, List<TextDiff> diffs, Appender sb) throws IOException {
+	public void toMarkdown(byte[] left, byte[] right, List<TextDiff> diffs, CharList sb) throws IOException {
 		Charset cs = Charset.forName("GB18030");
 
 		System.out.println(diffs.size());
@@ -84,7 +84,7 @@ public class TextDiff {
 
 		finishBlock(sb, buf1, buf2, type, cs);
 	}
-	private static void finishBlock(Appender sb, ByteList buf1, ByteList buf2, int type, Charset cs) throws IOException {
+	private static void finishBlock(CharList sb, ByteList buf1, ByteList buf2, int type, Charset cs) throws IOException {
 		switch (type) {
 			default: case TextDiff.SAME: sb.append(new String(buf1.list, 0, buf1.length(), cs)); break;
 			case TextDiff.CHANGE: sb.append("<i title=\"").append(Tokenizer.addSlashes(new String(buf1.list, 0, buf1.length(), cs))).append("\">")

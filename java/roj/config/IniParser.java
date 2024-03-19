@@ -1,65 +1,63 @@
 package roj.config;
 
+import roj.collect.LinkedMyHashMap;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.config.data.*;
-import roj.config.word.Word;
-import roj.text.CharList;
+import roj.text.TextUtil;
 
 import java.util.Map;
 
 import static roj.config.JSONParser.*;
-import static roj.config.word.Word.*;
+import static roj.config.Word.*;
 
 /**
  * @author Roj233
  * @since 2022/1/6 13:46
  */
-public final class IniParser extends Parser<CMapping> {
-	public static final int UNESCAPE = 4;
+public final class IniParser extends Parser {
+	public static final int UNESCAPE = 8;
 
-	private static final short eq = 14;
-	private static final MyBitSet LB = MyBitSet.from(']');
+	private static final short eq = rBrace;
 	// readWord() checked WHITESPACE
 	private static final MyBitSet iniSymbol_LN = MyBitSet.from("[]=\r\n");
 
 	private static final TrieTree<Word> INI_TOKENS = new TrieTree<>();
 	private static final MyBitSet INI_LENDS = new MyBitSet();
 	static {
-		addKeywords(INI_TOKENS, 10, "true", "false", "null");
-		addSymbols(INI_TOKENS, INI_LENDS, 14, "=", "[", "]");
+		addKeywords(INI_TOKENS, TRUE, "true", "false", "null");
+		addSymbols(INI_TOKENS, INI_LENDS, rBrace, "=", "[", "]");
 		addWhitespace(INI_LENDS);
 	}
 	{ tokens = INI_TOKENS; literalEnd = INI_LENDS; }
 
-	public static CMapping parses(CharSequence string) throws ParseException {
-		return new IniParser().parse(string, 0).asMap();
-	}
-
 	@Override
-	public CMapping parse(CharSequence text, int flags) throws ParseException {
+	public CMap parse(CharSequence text, int flags) throws ParseException {
 		this.flag = flags;
 		init(text);
 		try {
-			CMapping map = new CMapping();
+			MyHashMap<String, CEntry> map = (flag&ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>();
 
-			String name = CMapping.CONFIG_TOPLEVEL;
+			String name = CMap.CONFIG_TOPLEVEL;
 			while (true) {
 				try {
 					map.put(name, iniValue(flags));
 				} catch (ParseException e) {
-					throw e.addPath('.' + name);
+					throw e.addPath('.'+name);
 				}
 
 				Word w = next();
-				if (w.type() != left_m_bracket) break;
-				name = readTill(LB); index++;
-				if (name == null) break;
+				if (w.type() != lBracket) break;
 
-				if ((flags & NO_DUPLICATE_KEY) != 0 && map.containsKey(name)) throw err("重复的key: " + name);
+				CharSequence in = input;
+				int j = TextUtil.gIndexOf(in, ']', index);
+				if (j < 0) throw err("no more");
+				name = in.subSequence(index, index = j+1).toString();
+
+				if ((flags & NO_DUPLICATE_KEY) != 0 && map.containsKey(name)) throw err("重复的key: "+name);
 			}
-			return map;
+			return new CMap(map);
 		} catch (ParseException e) {
 			throw e.addPath("$");
 		} finally {
@@ -67,17 +65,15 @@ public final class IniParser extends Parser<CMapping> {
 		}
 	}
 
-	public int availableFlags() { return NO_DUPLICATE_KEY|UNESCAPE; }
-	public String format() { return "INI"; }
-
-	public CharList append(CEntry entry, int flag, CharList sb) { return entry.appendINI(sb); }
+	public Map<String, Integer> dynamicFlags() { return Map.of("NoDuplicateKey", NO_DUPLICATE_KEY, "Unescape", UNESCAPE, "OrderedMap", ORDERED_MAP); }
+	public ConfigMaster format() { return ConfigMaster.INI; }
 
 	private CEntry iniValue(int flag) throws ParseException {
 		Word w = next();
 		// EOF or not 'primitive'
 		if (w.type() < 0 || w.type() > 12) {
 			retractWord();
-			return new CMapping();
+			return new CMap();
 		}
 
 		String name = w.val();
@@ -95,17 +91,17 @@ public final class IniParser extends Parser<CMapping> {
 			retractWord();
 
 			if (w.type() == EOF) break;
-			if (w.type() == left_m_bracket) break;
+			if (w.type() == lBracket) break;
 		}
 		return list;
 	}
-	private CMapping iniMap(int flag) throws ParseException {
-		Map<String, CEntry> map = new MyHashMap<>();
+	private CMap iniMap(int flag) throws ParseException {
+		MyHashMap<String, CEntry> map = (flag&ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>();
 
 		while (true) {
 			Word w = next();
 			if (w.type() == EOF) break;
-			if (w.type() == left_m_bracket) {
+			if (w.type() == lBracket) {
 				retractWord();
 				break;
 			}
@@ -128,7 +124,7 @@ public final class IniParser extends Parser<CMapping> {
 				throw e.addPath('.' + name);
 			}
 		}
-		return new CMapping(map);
+		return new CMap(map);
 	}
 
 	@SuppressWarnings("fallthrough")
@@ -145,7 +141,7 @@ public final class IniParser extends Parser<CMapping> {
 			case STRING: return CString.valueOf(val);
 			case DOUBLE:
 			case FLOAT: return CDouble.valueOf(w.asDouble());
-			case INTEGER: return CInteger.valueOf(w.asInt());
+			case INTEGER: return CInt.valueOf(w.asInt());
 			case LONG: return CLong.valueOf(w.asLong());
 			case TRUE:
 			case FALSE: return CBoolean.valueOf(w.type() == TRUE);
@@ -188,7 +184,7 @@ public final class IniParser extends Parser<CMapping> {
 	}
 
 	public static boolean literalSafe(CharSequence key) {
-		if (LITERAL_UNSAFE) return false;
+		if (ALWAYS_ESCAPE) return false;
 
 		for (int i = 0; i < key.length(); i++) {
 			if (INI_LENDS.contains(key.charAt(i))) return false;
@@ -197,23 +193,5 @@ public final class IniParser extends Parser<CMapping> {
 	}
 
 	@Override
-	protected Word onInvalidNumber(int flag, int i, String reason) throws ParseException {
-		return readLiteral();
-	}
-
-	private String readTill(MyBitSet terminate) {
-		CharSequence in = input;
-		int i = index;
-
-		if (i >= in.length()) return null;
-
-		while (i < in.length()) {
-			char c = in.charAt(i);
-			if (terminate.contains(c)) {
-				return in.subSequence(index, index = i).toString();
-			}
-			i++;
-		}
-		return null;
-	}
+	protected Word onInvalidNumber(int flag, int i, String reason) throws ParseException { return readLiteral(); }
 }

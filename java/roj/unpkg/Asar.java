@@ -4,9 +4,9 @@ import roj.collect.TrieTree;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CEntry;
-import roj.config.data.CMapping;
+import roj.config.data.CInt;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
-import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
@@ -38,14 +38,14 @@ public class Asar {
 		f.readFully(data);
 		if (f.read() != 0) throw new IOException("EOF flag excepted");
 
-		CMapping root = new JSONParser().parseRaw(ByteList.wrap(data)).asMap();
+		CMap root = new JSONParser().parse(ByteList.wrap(data)).asMap();
 
 		TrieTree<PosInfo> tree = new TrieTree<>();
 
-		MutableInt dir = new MutableInt();
+		CInt dir = new CInt();
 		recursionTree(IOUtil.getSharedCharBuf(), root, tree, dir);
 
-		System.out.println("总文件数目: " + tree.size() + ", 总文件大小: " + TextUtil.scaledNumber(f.length() - 16 - jsonLen) + "B, 目录数: " + dir.getValue());
+		System.out.println("总文件数目: " + tree.size() + ", 总文件大小: " + TextUtil.scaledNumber(f.length() - 16 - jsonLen) + "B, 目录数: " + dir.value);
 
 		// 这里大概是要根据第一个或者第二个int计算的
 		long baseOffset = f.getFilePointer() + 1;
@@ -79,16 +79,16 @@ public class Asar {
 		});
 	}
 
-	private static void recursionTree(CharList parents, CMapping directory, TrieTree<PosInfo> tree, MutableInt dir) {
-		CMapping files = directory.get("files").asMap();
+	private static void recursionTree(CharList parents, CMap directory, TrieTree<PosInfo> tree, CInt dir) {
+		CMap files = directory.get("files").asMap();
 		int len = parents.length();
 		for (Map.Entry<String, CEntry> entry : files.entrySet()) {
 			parents.setLength(len);
 			parents.append(entry.getKey());
 
-			CMapping val = entry.getValue().asMap();
+			CMap val = entry.getValue().asMap();
 			if (val.containsKey("files")) {
-				dir.increment();
+				dir.value++;
 				parents.append('/');
 
 				if (val.containsKey("unpacked")) {

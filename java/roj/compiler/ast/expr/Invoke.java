@@ -11,10 +11,10 @@ import roj.asm.type.TypeHelper;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
+import roj.compiler.api_rt.Evaluable;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asmlang.InlineAsm;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.MethodResult;
@@ -44,7 +44,7 @@ public class Invoke extends ExprNode {
 	private List<IType> desc;
 	private IType genType1;
 
-	public static ExprNode unaryAlt(ExprNode fn, MethodNode node) {
+	public static ExprNode unaryAlt(MethodNode node, ExprNode fn) {
 		assert node.parameters().size() == 0;
 		Invoke invoke = new Invoke(fn, Collections.emptyList());
 		invoke.methodNode = node;
@@ -74,6 +74,13 @@ public class Invoke extends ExprNode {
 		invoke.desc = Helpers.cast(TypeHelper.parseMethod(node.rawDesc()));
 		return invoke;
 	}
+	public static ExprNode interfaceMethod(MethodNode node, ExprNode loader, ExprNode... args) {
+		Invoke invoke = new Invoke(loader, Arrays.asList(args));
+		invoke.methodNode = node;
+		invoke.desc = Helpers.cast(TypeHelper.parseMethod(node.rawDesc()));
+		invoke.flag = INTERFACE_CLASS;
+		return invoke;
+	}
 	public static ExprNode constructor(MethodNode node, ExprNode... args) {
 		Invoke invoke = new Invoke(new Type(node.owner), Arrays.asList(args));
 		invoke.methodNode = node;
@@ -86,14 +93,15 @@ public class Invoke extends ExprNode {
 		TypeId.putInt(This.class, 0);
 		TypeId.putInt(DotGet.class, 1);
 		TypeId.putInt(Constant.class, 2);
+		TypeId.putInt(LocalVariable.class, 3);
 	}
 
 	public Invoke(Object fn, List<ExprNode> args) {
 		if (fn != null) {
 			int type = TypeId.getOrDefault(fn.getClass(), -1);
 			if (type < 0 && !(fn instanceof IType)) throw new IllegalArgumentException("不支持的表达式类型 "+fn);
-			if (type == 2) {
-				CompileContext ctx = CompileContext.get();
+			if (type == 2 && ((Constant) fn).constVal().getClass() != String.class) {
+				LocalContext ctx = LocalContext.get();
 				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", fn, ctx.currentCodeBlockForReport());
 			}
 		}
@@ -114,7 +122,7 @@ public class Invoke extends ExprNode {
 	static final byte RESOLVED = 1, INVOKE_SPECIAL = ComponentList.THIS_ONLY, INTERFACE_CLASS = 4, PMSIGN = 8;
 	private static final byte MUST_VIRTUAL = ComponentList.IN_STATIC;
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if ((flag&RESOLVED) != 0) return this;
 		flag |= RESOLVED;
 
@@ -137,11 +145,11 @@ public class Invoke extends ExprNode {
 			if (fn1.names.isEmpty()) {
 				// 省略this : a() => this.a(); 或继承/什么的静态
 				if (fn1.parent == null) {
-					MethodNode mn = ctx.tryImportMethod(method);
+					String[] mn = ctx.tryImportMethod(method);
 					// 静态导入
 					if (mn != null) {
-						klass = mn.owner;
-						method = mn.name();
+						klass = mn[0];
+						method = mn[1];
 						fn = null;
 						break block;
 					}
@@ -174,7 +182,7 @@ public class Invoke extends ExprNode {
 			if (ownMirror.genericType() == IType.ASTERISK_TYPE) return this;
 			klass = ownMirror.owner();
 		} else if (fn.getClass() == This.class) {
-			if (!ctx.in_constructor | !ctx.first_statement) {
+			if (!ctx.in_constructor | !ctx.not_invoke_constructor) {
 				ctx.report(Kind.ERROR, "invoke.error.constructor", fn);
 				return this;
 			}
@@ -218,12 +226,7 @@ public class Invoke extends ExprNode {
 			ctx.assertAccessible(cn);
 			if ((cn.modifier()&Opcodes.ACC_INTERFACE) != 0) flag |= INTERFACE_CLASS;
 
-			ComponentList list = null;
-			try {
-				list = ctx.classes.methodList(cn, method);
-			} catch (ClassNotFoundException e) {
-				ctx.report(Kind.WARNING, "symbol.warn.noSuchClass", e.getMessage());
-			}
+			ComponentList list = ctx.methodListOrReport(cn, method);
 			if (list == null) {
 				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", ctx.currentCodeBlockForReport());
 				break block;
@@ -241,19 +244,6 @@ public class Invoke extends ExprNode {
 			methodNode = mn;
 			genType1 = ownMirror;
 
-			// TODO inline asm
-			if (mn.owner.equals("roj/compiler/api/ASM")) {
-				switch (mn.name()) {
-					case "begin":
-					case "end":
-					case "asm":
-						ExprNode node = args.get(0);
-						ctx.report(Kind.ERROR, "asm.error.not_implemented", node);
-						return new InlineAsm((String) node.constVal());
-					case "i2z", "z2i": return args.get(0);
-				}
-			}
-
 			// Object#getClass泛型的特殊处理
 			if (mn.name().equals("getClass") && mn.rawDesc().equals("()Ljava/lang/Class;")) {
 				Generic val = ownMirror instanceof Generic ? (Generic) ownMirror.clone() : new Generic(ownMirror.owner(), ownMirror.array(), Generic.EX_NONE);
@@ -262,8 +252,6 @@ public class Invoke extends ExprNode {
 			} else {
 				desc = r.desc != null ? Arrays.asList(r.desc) : Helpers.cast(TypeHelper.parseMethod(mn.rawDesc()));
 			}
-
-			r.addExceptions(ctx, cn, 0);
 
 			if ((mn.modifier&Opcodes.ACC_STATIC) != 0) {
 				if (!staticEnv & (mode&MUST_VIRTUAL) != 0)
@@ -306,6 +294,13 @@ public class Invoke extends ExprNode {
 					args.set(entry.getIntKey(), (ExprNode) value);
 				}
 			}
+
+			if (mn.attrByName("Evaluable") instanceof Evaluable eval) {
+				ExprNode result = eval.eval(fn instanceof ExprNode e ? e : null, args);
+				if (result != null) return result;
+			}
+
+			r.addExceptions(ctx, cn, 0);
 		} else {
 			ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klass);
 		}
@@ -316,6 +311,9 @@ public class Invoke extends ExprNode {
 
 	@Override
 	public IType type() { return fn instanceof IType ? ((IType) fn) : desc != null ? desc.get(desc.size()-1) : Asterisk.anyType; }
+
+	@Override
+	public boolean isKind(ExprKind kind) {return kind == ExprKind.INVOKE_CONSTRUCTOR && fn instanceof This;}
 
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
@@ -329,7 +327,7 @@ public class Invoke extends ExprNode {
 			}
 			opcode = Opcodes.INVOKESTATIC;
 		} else if (fn instanceof ExprNode expr) {
-			expr.writeDyn(cw, genType1 != null && genType1.genericType() < IType.ASTERISK_TYPE ? null : cw.ctx1.castTo(genType1, new Type(methodNode.owner), 0));
+			expr.writeDyn(cw, genType1 == null || genType1.genericType() >= IType.ASTERISK_TYPE ? null : cw.ctx1.castTo(genType1, new Type(methodNode.owner), 0));
 			opcode = (flag&INVOKE_SPECIAL) != 0 ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL;
 		} else {
 			Type rawType = ((IType) fn).rawType();

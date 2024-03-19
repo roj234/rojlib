@@ -4,7 +4,6 @@ import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
-import roj.net.ch.handler.StreamCompress;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;

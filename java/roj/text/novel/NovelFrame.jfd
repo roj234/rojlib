@@ -1,4 +1,4 @@
-JFDML JFormDesigner: "8.1.1.0.298" Java: "17.0.9" encoding: "UTF-8"
+JFDML JFormDesigner: "8.2.3.0.386" Java: "17.0.9" encoding: "UTF-8"
 
 new FormModel {
 	contentType: "form/swing"
@@ -166,7 +166,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "btnFixEnter"
-				"text": "修复硬回车"
+				"text": "共长合并"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 5
 				"y": 90
@@ -235,6 +235,13 @@ new FormModel {
 				"x": 65
 				"y": 135
 				"width": 360
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiRepeatRpl"
+				"text": "循环匹配"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 80
+				"y": 155
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "lb5"
@@ -317,7 +324,7 @@ new FormModel {
 				"margin": new java.awt.Insets( 2, 4, 2, 4 )
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "replaceChapter", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 180
+				"x": 255
 				"y": 455
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
@@ -327,7 +334,7 @@ new FormModel {
 				"margin": new java.awt.Insets( 2, 4, 2, 4 )
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "delChapterName", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 255
+				"x": 178
 				"y": 455
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
@@ -533,7 +540,7 @@ new FormModel {
 				name: "scrollPane3"
 				add( new FormComponent( "javax.swing.JTextArea" ) {
 					name: "presetRegexpInp"
-					"text": "常用|1|3\n(?:正文\\s*)?第(?:\\s+)?([―－\\-─—壹贰叁肆伍陆柒捌玖一二两三四五六七八九十○〇零百千O0-9０-９ ]{1,12})(?:\\s+)?([章卷])[ 　\\t]*(.*)$\n第$1$2 $3\n纯中文|1|1\n(?<=[ 　\\t\\n])([0-9 \\x4e00-\\x9fa5（）\\(\\)\\[\\]]{1,15})[ 　\\t]*$\n$1"
+					"text": "常用|1|3\n(?:正文\\s*)?第(?:\\s+)?([―－\\-─—壹贰叁肆伍陆柒捌玖一二两三四五六七八九十○〇零百千O0-9０-９ ]{1,12})(?:\\s+)?([章卷])[ 　\\t]*(.*)$\n第$1$2 $3\n纯中文|1|1\n(?<=[ 　\\t\\n])([0-9 \\x4e00-\\x9fa5（）\\(\\)\\[\\]]{1,15})[ 　\\t]*$\n$1\n硬回车简易修复|0|0\n^([ 　\\t]+.+)\\r?\\n([^ 　\\t\\r\\n].+)$\n$1$2\n晋江常用|1|2\n第$1章 $2\n^[ 　\\t]*([0-9一二三四五六七八九零]{1,5})[．.、※](.+)"
 				} )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 0

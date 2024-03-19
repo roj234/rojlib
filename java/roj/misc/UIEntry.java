@@ -51,7 +51,7 @@ public class UIEntry extends JFrame {
 		initComponents();
 		bind(uiArchiver, "roj.archive.ui.QZArchiverUI");
 		bind(uiUnarchiver, "roj.archive.ui.UnarchiverUI");
-		bind(uiFindClass, "roj.asmx.misc.FindClass");
+		bind(uiFindClass, "roj.misc.FindClass");
 		bind(uiNovel, "roj.text.novel.NovelFrame");
 		bind(uiNat, "roj.plugins.cross.AEGui");
 		bind(uiMapper, "roj.asmx.mapper.MapperUI");

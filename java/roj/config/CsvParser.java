@@ -4,7 +4,6 @@ import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.config.data.*;
-import roj.config.word.Word;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.util.Helpers;
@@ -12,16 +11,17 @@ import roj.util.Helpers;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
  * @author Roj233
  * @since 2022/1/6 13:46
  */
-public final class CsvParser extends Parser<CList> {
+public final class CsvParser extends Parser {
 	public static final int SKIP_FIRST_LINE = 1;
 
-	private static final short seperator = 11, line = 12;
+	private static final short seperator = 9, line = 10;
 
 	private static final MyBitSet CSV_LENDS = MyBitSet.from("\r\n,;");
 	private static final Int2IntMap CSV_C2C = new Int2IntMap(16);
@@ -105,7 +105,7 @@ public final class CsvParser extends Parser<CList> {
 				list.add(w.val());
 				w = next();
 			} else {
-				// really: after-seperator
+				// really: after-separator
 				list.add(null);
 			}
 
@@ -158,14 +158,13 @@ public final class CsvParser extends Parser<CList> {
 
 		loop:
 		while (true) {
-			CEntry entry;
-			switch (w.type()) {
-				case Word.LITERAL: entry = CString.valueOf(w.val()); break;
-				case Word.INTEGER: entry = CInteger.valueOf(w.asInt()); break;
-				case Word.DOUBLE: entry = CDouble.valueOf(w.asDouble()); break;
-				case Word.LONG: entry = CLong.valueOf(w.asLong()); break;
-				default: entry = CNull.NULL; break;
-			}
+			CEntry entry = switch (w.type()) {
+				case Word.LITERAL -> CString.valueOf(w.val());
+				case Word.INTEGER -> CInt.valueOf(w.asInt());
+				case Word.DOUBLE -> CDouble.valueOf(w.asDouble());
+				case Word.LONG -> CLong.valueOf(w.asLong());
+				default -> CNull.NULL;
+			};
 			buf.add(entry);
 			if (w.type() < 10) w = next();
 
@@ -179,8 +178,8 @@ public final class CsvParser extends Parser<CList> {
 		return new CList(new SimpleList<>(buf));
 	}
 
-	public int availableFlags() { return SKIP_FIRST_LINE; }
-	public String format() { return "CSV"; }
+	public Map<String, Integer> dynamicFlags() { return Map.of("SkipFirstLine", SKIP_FIRST_LINE); }
+	public ConfigMaster format() { return ConfigMaster.CSV; }
 
 	@Override
 	@SuppressWarnings("fallthrough")
@@ -228,7 +227,5 @@ public final class CsvParser extends Parser<CList> {
 	}
 
 	@Override
-	protected Word onInvalidNumber(int flag, int i, String reason) throws ParseException {
-		return readLiteral();
-	}
+	protected Word onInvalidNumber(int flag, int i, String reason) throws ParseException { return readLiteral(); }
 }

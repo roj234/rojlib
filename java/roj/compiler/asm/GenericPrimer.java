@@ -3,11 +3,9 @@ package roj.compiler.asm;
 import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
 import roj.asm.tree.attr.InnerClasses;
-import roj.asm.type.Generic;
-import roj.asm.type.GenericSub;
-import roj.asm.type.IType;
+import roj.asm.type.*;
 import roj.asm.util.Attributes;
-import roj.compiler.context.CompileUnit;
+import roj.compiler.context.LocalContext;
 
 import java.util.List;
 
@@ -16,27 +14,15 @@ import java.util.List;
  * @since 2022/9/17 0017 20:37
  */
 public class GenericPrimer extends Generic {
-	private byte myType;
-	// lexer碰到了LSS
-	private boolean checkSub;
+	public IType toRealType(SignaturePrimer s) {
+		if (s != null && s.hasTypeParam(owner)) return new TypeParam(owner);
+		if ("*".equals(owner)) return Signature.any();
+		return isRealGeneric() ? this : rawType();
+	}
 
 	public GenericSub toGenericSub() {
 		if (extendType != EX_NONE) return null;
 		return new GenericSub(owner, children);
-	}
-
-	// true: not java type
-	public boolean resolveS1(SignaturePrimer s) {
-		if (s != null && s.hasTypeParam(owner)) {
-			myType = TYPE_PARAMETER_TYPE;
-			return true;
-		}
-		if ("*".equals(owner)) {
-			myType = ANY_TYPE;
-			return true;
-		}
-		myType = GENERIC_TYPE;
-		return false;
 	}
 
 	public boolean isGenericArray() {
@@ -48,17 +34,14 @@ public class GenericPrimer extends Generic {
 		return false;
 	}
 
-	public void resolveS2(CompileUnit file, String kind) {
+	public void initS2(LocalContext ctx) {
 		// MyHashMap<K,V>.Entry<Z>
 		// MyHashMap.Entry<K,V>
-		// MyHashMap<K,V>.Entry
+		// MyHashMap<K,V>.Entry.SomeClass<Z>
+		// class G1<T> { class G2 { class G3<T2> {} } }
 		findSubclass:
-		if (myType == GENERIC_TYPE && !checkSub) {
-			checkSub = true;
-
-			file._resolve(this, kind);
-
-			IClass c = file.resolve(owner);
+		{
+			IClass c = ctx.resolveType(owner);
 			if (c == null) break findSubclass;
 
 			List<InnerClasses.InnerClass> list = Attributes.getInnerClasses(c.cp(), c);
@@ -67,24 +50,24 @@ public class GenericPrimer extends Generic {
 			for (InnerClasses.InnerClass ic : list) {
 				if (ic.self.equals(owner)) {
 					if ((ic.flags & Opcodes.ACC_STATIC) != 0) break findSubclass;
+
 					// I am inner class
+					// todo 结构是什么样的来着？
+					// G1<T>.G2.G3<T2> ?
 				}
 			}
 		}
 
 		List<IType> types = children;
 		for (int i = 0; i < types.size(); i++) {
-			// todo
-			//file._resolve1(types.get(i), kind);
+			if (types.get(i) instanceof GenericPrimer gp) gp.initS2(ctx);
 		}
 	}
 
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
-		if (!(o instanceof Generic)) return false;
-
-		Generic generic = (Generic) o;
+		if (!(o instanceof Generic generic)) return false;
 
 		if (array() != generic.array()) return false;
 		if (extendType != generic.extendType) return false;

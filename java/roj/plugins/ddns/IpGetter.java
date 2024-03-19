@@ -1,6 +1,6 @@
 package roj.plugins.ddns;
 
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.net.http.HttpRequest;
 import roj.net.http.SyncHttpClient;
 
@@ -28,7 +28,7 @@ public abstract class IpGetter {
 
 	public boolean supportsV6() { return false; }
 
-	public void loadConfig(CMapping config) {}
+	public void loadConfig(CMap config) {}
 
 	public abstract InetAddress[] getAddress(boolean checkV6) throws Exception;
 }

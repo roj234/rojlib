@@ -15,11 +15,10 @@ import roj.compiler.ast.VariableDeclare;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ParseException;
-import roj.config.serial.CAdapter;
+import roj.config.Word;
+import roj.config.auto.Serializer;
+import roj.config.auto.Serializers;
 import roj.config.serial.CVisitor;
-import roj.config.serial.SerializerFactory;
-import roj.config.serial.Serializers;
-import roj.config.word.Word;
 import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
 
@@ -78,82 +77,61 @@ public final class ExprParser {
 	private static final MyBitSet CAST_WHITELIST = MyBitSet.from(
 		logic_not,rev,
 		lParen,THIS,SUPER,
-		Word.INTEGER,Word.LONG, Word.FLOAT,Word.DOUBLE,Word.CHARACTER,Word.STRING,
+		Word.INTEGER,Word.LONG, Word.FLOAT,Word.DOUBLE,CHARACTER,Word.STRING,
 		TRUE,FALSE,NULL,
 		NEW,Word.LITERAL,ASSERT,ENUM,SWITCH,
 		BYTE,SHORT,CHAR,INT,LONG,FLOAT,DOUBLE,BOOLEAN,VOID);
 
-	private static final int STAGE_MASK_UPrT = 0 << 29;
-	private static final int STAGE_MASK_UPrC = 1 << 29;
-	private static final int STAGE_MASK_VGen = 2 << 29;
-	private static final int STAGE_MASK_VCnv = 3 << 29;
-	private static final int STAGE_MASK_VTrm = 4 << 29;
-	private static final int STAGE_MASK_UCnv = 5 << 29;
-	private static final int STAGE_MASK_UTrm = 6 << 29;
-	private Int2IntMap eSid = dUPO;
-	private List<Object> custom;
+	public static final int
+		SM_UnaryPreOnce = 0 << 29, SM_UnaryPreMany = 1 << 29, SM_ExprStart = 2 << 29, SM_ExprNext = 3 << 29,
+		SM_UserContinue = 4 << 29, SM_UserTerminate = 5 << 29, SM_UserExprGen = 6 << 29;
+	public Int2IntMap st = DST;
+	public List<Object> custom;
 
-	private static final Int2IntMap dUPO = new Int2IntMap();
+	public static final Int2IntMap DST = new Int2IntMap();
 	static {
-		dUPO.putInt(STAGE_MASK_UPrT | inc, -1);
-		dUPO.putInt(STAGE_MASK_UPrT | dec, -1);
+		DST.putInt(SM_UnaryPreOnce | inc, -1);
+		DST.putInt(SM_UnaryPreOnce | dec, -1);
 
-		dUPO.putInt(STAGE_MASK_UPrC | add, -1);
-		dUPO.putInt(STAGE_MASK_UPrC | sub, -1);
-		dUPO.putInt(STAGE_MASK_UPrC | logic_not, -1);
-		dUPO.putInt(STAGE_MASK_UPrC | rev, -1);
-		dUPO.putInt(STAGE_MASK_UPrC | lParen, -2);
-		dUPO.putInt(STAGE_MASK_UPrC | Word.LITERAL, -3);
+		DST.putInt(SM_UnaryPreMany | add, -1);
+		DST.putInt(SM_UnaryPreMany | sub, -1);
+		DST.putInt(SM_UnaryPreMany | logic_not, -1);
+		DST.putInt(SM_UnaryPreMany | rev, -1);
+		DST.putInt(SM_UnaryPreMany | lParen, -2);
+		DST.putInt(SM_UnaryPreMany | Word.LITERAL, -3);
 
-		dUPO.putInt(STAGE_MASK_VGen | NEW, -1);
-		dUPO.putInt(STAGE_MASK_VGen | Word.CHARACTER, -2);
-		dUPO.putInt(STAGE_MASK_VGen | Word.STRING, -3);
-		dUPO.putInt(STAGE_MASK_VGen | Word.INTEGER, -4);
-		dUPO.putInt(STAGE_MASK_VGen | Word.LONG, -5);
-		dUPO.putInt(STAGE_MASK_VGen | Word.FLOAT, -6);
-		dUPO.putInt(STAGE_MASK_VGen | Word.DOUBLE, -7);
-		dUPO.putInt(STAGE_MASK_VGen | TRUE, -8);
-		dUPO.putInt(STAGE_MASK_VGen | FALSE, -9);
-		dUPO.putInt(STAGE_MASK_VGen | NULL, -10);
-		dUPO.putInt(STAGE_MASK_VGen | SUPER, -11);
-		dUPO.putInt(STAGE_MASK_VGen | THIS, -12);
-		dUPO.putInt(STAGE_MASK_VGen | lBrace, -13);
-		dUPO.putInt(STAGE_MASK_VGen | lBracket, -14);
+		DST.putInt(SM_ExprStart | NEW, -1);
+		DST.putInt(SM_ExprStart | CHARACTER, -2);
+		DST.putInt(SM_ExprStart | Word.STRING, -3);
+		DST.putInt(SM_ExprStart | Word.INTEGER, -4);
+		DST.putInt(SM_ExprStart | Word.LONG, -5);
+		DST.putInt(SM_ExprStart | Word.FLOAT, -6);
+		DST.putInt(SM_ExprStart | Word.DOUBLE, -7);
+		DST.putInt(SM_ExprStart | TRUE, -8);
+		DST.putInt(SM_ExprStart | FALSE, -9);
+		DST.putInt(SM_ExprStart | NULL, -10);
+		DST.putInt(SM_ExprStart | SUPER, -11);
+		DST.putInt(SM_ExprStart | THIS, -12);
+		DST.putInt(SM_ExprStart | lBrace, -13);
+		DST.putInt(SM_ExprStart | lBracket, -14);
 
-		dUPO.putInt(STAGE_MASK_VCnv | lss, -1);
-		dUPO.putInt(STAGE_MASK_VCnv | lBracket, -2);
-		dUPO.putInt(STAGE_MASK_VCnv | dot, -3);
-		dUPO.putInt(STAGE_MASK_VCnv | optional_chaining, -3);
-		dUPO.putInt(STAGE_MASK_VCnv | THIS, -4);
-		dUPO.putInt(STAGE_MASK_VCnv | SUPER, -4);
-		dUPO.putInt(STAGE_MASK_VCnv | CLASS, -5);
-		dUPO.putInt(STAGE_MASK_VCnv | Word.LITERAL, -5);
+		DST.putInt(SM_ExprNext | lss, -1);
+		DST.putInt(SM_ExprNext | lBracket, -2);
+		DST.putInt(SM_ExprNext | dot, -3);
+		DST.putInt(SM_ExprNext | optional_chaining, -3);
+		DST.putInt(SM_ExprNext | THIS, -4);
+		DST.putInt(SM_ExprNext | SUPER, -4);
+		DST.putInt(SM_ExprNext | CLASS, -5);
+		DST.putInt(SM_ExprNext | Word.LITERAL, -5);
 		//batch(STAGE_MASK_ExpC, -5, TRUE, FALSE, NULL, VOID, INT, LONG, DOUBLE, FLOAT, SHORT, BYTE, CHAR, BOOLEAN);
-		dUPO.putInt(STAGE_MASK_VCnv | lParen, -6);
-		batch(STAGE_MASK_VCnv, -7, assign, add_assign, sub_assign, mul_assign, div_assign, mod_assign, pow_assign, lsh_assign, rsh_assign, rsh_unsigned_assign, and_assign, or_assign, xor_assign);
-		dUPO.putInt(STAGE_MASK_VCnv | inc, -8);
-		dUPO.putInt(STAGE_MASK_VCnv | dec, -8);
-		dUPO.putInt(STAGE_MASK_VCnv | method_referent, -9);
-
-		dUPO.putInt(STAGE_MASK_VTrm | INSTANCEOF, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | ask, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | colon, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | rBracket, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | rBrace, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | comma, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | rParen, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | semicolon, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | mapkv, -1);
-		// todo BinaryOperatorPriority
-		dUPO.putInt(STAGE_MASK_VTrm | INSTANCEOF, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | INSTANCEOF, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | INSTANCEOF, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | INSTANCEOF, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | INSTANCEOF, -1);
-		dUPO.putInt(STAGE_MASK_VTrm | INSTANCEOF, -1);
+		DST.putInt(SM_ExprNext | lParen, -6);
+		batch(SM_ExprNext, -7, assign, add_assign, sub_assign, mul_assign, div_assign, mod_assign, pow_assign, lsh_assign, rsh_assign, rsh_unsigned_assign, and_assign, or_assign, xor_assign);
+		DST.putInt(SM_ExprNext | inc, -8);
+		DST.putInt(SM_ExprNext | dec, -8);
+		DST.putInt(SM_ExprNext | method_referent, -9);
 	}
 	private static void batch(int mask, int val, short... tokens) {
-		for (short token : tokens) dUPO.putInt(token|mask, val);
+		for (short token : tokens) DST.putInt(token|mask, val);
 	}
 
 	@Deprecated
@@ -174,7 +152,7 @@ public final class ExprParser {
 	@Nullable
 	@SuppressWarnings({"fallthrough", "unchecked"})
 	private ExprNode parse1(CompileUnit file, int flag) throws ParseException {
-		JavaLexer wr = file.lex();
+		JavaLexer wr = file.getLexer();
 		Word w;
 
 		if (++depth > 127) throw wr.err("expr.stackOverflow");
@@ -189,7 +167,7 @@ public final class ExprParser {
 
 			w = wr.next();
 			// region 一次性前缀操作 (++ --)
-			int _sid = eSid.getOrDefaultInt(w.type()|STAGE_MASK_UPrT, 0);
+			int _sid = st.getOrDefaultInt(w.type()|SM_UnaryPreOnce, 0);
 			if (_sid != 0) {
 				if (_sid < 0) {
 					up = unaryPre(w.type());
@@ -207,7 +185,7 @@ public final class ExprParser {
 			loop:
 			while (true) {
 				UnaryPreNode pf;
-				switch (_sid = eSid.getOrDefaultInt(w.type()|STAGE_MASK_UPrC, 0)) {
+				switch (_sid = st.getOrDefaultInt(w.type()|SM_UnaryPreMany, 0)) {
 					case -1: //add, sub, logic_not, rev
 						pf = unaryPre(w.type());
 						w = wr.next();
@@ -261,6 +239,10 @@ public final class ExprParser {
 						}
 
 						wr.retract();
+					break loop;
+					case -4: // [Dynamic]UserExprGen
+						cur = ((Function<JavaLexer, ExprNode>) custom.get(st.getOrDefaultInt(w.type()|SM_UserExprGen, -1))).apply(wr);
+					break endValueConv;
 					default:
 						if (_sid <= 0) break loop;
 						pf = ((Function<JavaLexer, UnaryPreNode>) custom.get(_sid)).apply(wr);
@@ -272,7 +254,7 @@ public final class ExprParser {
 			}
 			// endregion
 			// region 一次性"值生成"(自造词)操作 (加载常量 new this 花括号(direct)数组内容)
-			switch (_sid = eSid.getOrDefaultInt(w.type()| STAGE_MASK_VGen, 0)) {
+			switch (_sid = st.getOrDefaultInt(w.type()|SM_ExprStart, 0)) {
 				case -1://NEW
 					// double[]的部分不受支持
 					// new <double[]>test<int[]>(new int[0], (Object) assign2op((short) 2));
@@ -381,14 +363,14 @@ public final class ExprParser {
 					}
 
 					if ((flag & _ENV_TYPED_ARRAY) != 0) {
-						newArray(file, null);
+						cur = newArray(file, null);
 						break endValueConv;
 					}
 
 					// 可以直接写json，好像没啥用，先不加了
 					// { "key" => "val" } like this
 					// [t => 3, async => 4, testVal => [ ref => 1, tar => 2 ]];
-					wr.unexpected(w.val());
+					throw wr.err("expr.newArray.noTypePresent");
 				case -14://lBracket
 					//if ((flag & _ENV_FIELD) == 0) wr.unexpected(w.val());
 
@@ -417,12 +399,12 @@ public final class ExprParser {
 			boolean curIsObj = cur != null;
 			int opFlag = 0;
 			while (true) {
-				switch (eSid.getOrDefaultInt(w.type() | STAGE_MASK_VCnv, 0)) {
+				switch (st.getOrDefaultInt(w.type()|SM_ExprNext, 0)) {
 					case -1://lss
 						// 作为操作符
 						if (curIsObj) {
 							// 是第一个子表达式
-							if (up == null && words.size() == 0 && cur instanceof DotGet dot && dot.parent == null) {
+							if (up == null && words.size() == 0 && cur instanceof DotGet dot && dot.parent == null && (flag & CHECK_VARIABLE_DECLARE) != 0) {
 								wr.retractWord();
 								wr.mark();
 								IType type = file._genericUse(dot.toClassRef().owner, 5);
@@ -502,14 +484,14 @@ public final class ExprParser {
 						cur = invoke(file, cur, null);
 					break;
 					case -10: // 自定义继续
-						_sid = eSid.getOrDefaultInt(w.type() | STAGE_MASK_UCnv, -1);
+						_sid = st.getOrDefaultInt(w.type() | SM_UserContinue, -1);
 						cur = ((BiFunction<JavaLexer, ExprNode, ExprNode>) custom.get(_sid)).apply(wr, cur);
 					break;
 
 					// 我是无敌可爱的分隔线
 
 					case -11: // 自定义终止
-						_sid = eSid.getOrDefaultInt(w.type() | STAGE_MASK_UTrm, -1);
+						_sid = st.getOrDefaultInt(w.type() | SM_UserTerminate, -1);
 						cur = ((BiFunction<JavaLexer, ExprNode, ExprNode>) custom.get(_sid)).apply(wr, cur);
 					break endValueConv;
 
@@ -699,7 +681,7 @@ public final class ExprParser {
 	private ExprNode chain(ExprNode e, String name, int flag) { return e instanceof DotGet ? ((DotGet) e).add(name, flag) : newDotGet(e, name, flag); }
 	private ExprNode invoke(CompileUnit file, Object fn, List<IType> bounds) throws ParseException {
 		// this is just assert, always succeed
-		if (!(fn instanceof ExprNode) && !(fn instanceof IType)) throw file.lex().err("illegal_invoke");
+		if (!(fn instanceof ExprNode) && !(fn instanceof IType)) throw file.getLexer().err("illegal_invoke");
 
 		List<ExprNode> args = tmp();
 
@@ -707,7 +689,7 @@ public final class ExprParser {
 			ExprNode expr = parse1(file, STOP_RSB|STOP_COMMA|SKIP_COMMA|_ENV_INVOKE|_ENV_TYPED_ARRAY);
 			// noinspection all
 			if (expr == null || (args.add(expr) & expr.getClass() == NamedParamList.class)) {
-				file.lex().except(rParen, ")");
+				file.getLexer().except(rParen, ")");
 				break;
 			}
 		}
@@ -716,25 +698,37 @@ public final class ExprParser {
 		if (bounds != null) m.setBounds(bounds);
 		return m;
 	}
+
+	private IType childArrayType;
 	private ExprNode newArray(CompileUnit file, IType arrayType) throws ParseException {
 		List<ExprNode> args = tmp();
-		JavaLexer wr = file.lex();
-		IType clone = null;
+		JavaLexer wr = file.getLexer();
+
+		IType prev = childArrayType;
+
+		updateChild: {
+			if (arrayType == null) {
+				arrayType = childArrayType;
+				if (arrayType == null) {
+					file.fireDiagnostic(Kind.ERROR, "expr.newArray.noTypePresent");
+					break updateChild;
+				} else if (arrayType.array() == 0) {
+					file.fireDiagnostic(Kind.ERROR, "expr.newArray.illegalDimension", arrayType);
+					break updateChild;
+				}
+			}
+			childArrayType = arrayType.clone();
+			childArrayType.setArrayDim(arrayType.array()-1);
+		}
+
 		while (true) {
 			ExprNode val = parse1(file, STOP_RLB|STOP_COMMA|SKIP_COMMA|_ENV_TYPED_ARRAY);
 			if (val == null) break;
-			if (val.getClass() == ArrayDef.class) {
-				ArrayDef def = (ArrayDef) val;
-				if (def.type == null && arrayType != null) {
-					if (clone == null) {
-						clone = arrayType.clone();
-						clone.setArrayDim(arrayType.array()-1);
-					}
-					def.type = clone;
-				}
-			}
 			args.add(val);
 		}
+
+		childArrayType = prev;
+
 		wr.except(rBrace);
 		return newArrayDef(arrayType, copyOf(args), false);
 	}
@@ -933,14 +927,7 @@ public final class ExprParser {
 		return new DotGet(e, name, flag);
 	}
 	// endregion
-	private static SerializerFactory factory;
-	public static void serialize(ExprNode node, CVisitor visitor) {
-		if (factory == null) {
-			factory = Serializers.newSerializerFactory(SerializerFactory.FORCE_DYNAMIC|SerializerFactory.SERIALIZE_PARENT|SerializerFactory.GENERATE);
-		}
-		serializer().write(visitor, node);
-	}
-	public static CAdapter<ExprNode> serializer() {
-		return factory.adapter(ExprNode.class);
-	}
+	// TODO store nodes ?
+	public static void serialize(ExprNode node, CVisitor visitor) { serializer().write(visitor, node); }
+	public static Serializer<ExprNode> serializer() { return Serializers.ANY_OBJECT.serializer(ExprNode.class); }
 }

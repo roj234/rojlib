@@ -45,11 +45,22 @@ public final class AccessData implements IClass {
 		public char acc;
 		private final int off;
 
+		public MOF(CNode node) {
+			this(node.name(), node.rawDesc(), -1);
+			acc = node.modifier();
+		}
 		public MOF(String name, String desc, int off) {
 			this.name = name;
 			this.desc = desc;
 			this.off = off;
 		}
+
+		@Override
+		public String ownerClass() {return AccessData.this.name;}
+		@Override
+		public String name() { return name; }
+		@Override
+		public String rawDesc() { return desc; }
 
 		@Override
 		public char modifier() { return acc; }
@@ -59,15 +70,9 @@ public final class AccessData implements IClass {
 			byteCode[off] = (byte) (flag >>> 8);
 			byteCode[off+1] = (byte) flag;
 		}
-		@Override
-		public String name() { return name; }
-		@Override
-		public String rawDesc() { return desc; }
 
 		@Override
-		public String toString() {
-			return "AccessD{" + name + ' ' + desc + '}';
-		}
+		public String toString() {return "ANode{"+name+' '+desc+'}';}
 	}
 
 	public char modifier() { return acc; }

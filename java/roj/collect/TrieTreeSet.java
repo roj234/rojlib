@@ -2,7 +2,7 @@ package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
 import roj.collect.TrieEntry.KeyItr;
-import roj.math.MutableInt;
+import roj.config.data.CInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -443,8 +443,8 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 	}
 
 	private void reuseLambda(Object[] arr) {
-		MutableInt i = new MutableInt(0);
-		forEach((cs) -> arr[i.getAndIncrement()] = cs);
+		CInt i = new CInt(0);
+		forEach((cs) -> arr[i.value++] = cs);
 	}
 
 	@NotNull

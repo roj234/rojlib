@@ -11,10 +11,11 @@ import javax.swing.text.JTextComponent;
  */
 public final class TextAreaPrintStream extends DelegatedPrintStream {
 	private final JTextComponent textArea;
+	private final int MAX;
 
 	public TextAreaPrintStream(final JTextComponent textArea, int max) {
-		super(max);
 		this.textArea = textArea;
+		this.MAX = max;
 	}
 
 	@Override

@@ -1,6 +1,6 @@
 package roj.util;
 
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.DirectAccessor;
 import roj.text.CharList;

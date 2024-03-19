@@ -9,7 +9,6 @@ import roj.util.DynByteBuf;
 import sun.misc.Unsafe;
 
 import java.io.EOFException;
-import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -27,19 +26,16 @@ import static roj.reflect.ReflectionUtils.u;
  * @author Roj234
  * @since 2024/3/10 0010 3:10
  */
-public class MyDataInputStream extends FilterInputStream implements MyDataInput {
+public class MyDataInputStream extends MBInputStream implements MyDataInput {
 	public static MyDataInput wrap(InputStream in) {
 		if (in instanceof MyDataInputStream d) return d;
 		if (in instanceof DynByteBuf.BufferInputStream b) return b.buffer();
 		return new MyDataInputStream(in);
 	}
 
-	public MyDataInputStream(InputStream in) {
-		super(in);
-	}
+	private final InputStream in;
+	public MyDataInputStream(InputStream in) {this.in = in;}
 
-	@Override
-	public final int read(byte[] b) throws IOException { return read(b, 0, b.length); }
 	@Override
 	public final int read(byte[] b, int off, int len) throws IOException {
 		ArrayUtil.checkRange(b,off,len);
@@ -52,6 +48,7 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 		System.arraycopy(buf, pos, b, off, total);
 		pos = lim = 0;
 		int r = in.read(b, off + total, len - total);
+		if (r > 0) totalRead += r;
 		return r < 0 ? total == 0 ? r : total : total+r;
 	}
 	@Override
@@ -88,11 +85,18 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 			pos += n;
 			return n;
 		}
-		return super.skip(n-total)+total;
+		return in.skip(n-total)+total;
 	}
 
 	@Override
 	public int available() throws IOException { return lim - pos + in.available(); }
+
+	@Override
+	public void close() throws IOException {
+		ArrayCache.putArray(buf);
+		buf = ArrayCache.BYTES;
+		in.close();
+	}
 
 	private byte[] buf = ArrayCache.BYTES;
 	private int pos, lim;
@@ -101,13 +105,18 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 		int o = pos;
 		if (l - o < count) {
 			byte[] dst = buf;
-			if (dst.length < count) dst = new byte[count];
+			if (dst.length < count) {
+				ArrayCache.putArray(dst);
+				dst = ArrayCache.getByteArray(Math.max(512, count), false);
+			}
+
 			System.arraycopy(buf, pos, dst, 0, l -= o);
 			buf = dst;
 
 			while (l < dst.length) {
 				int r = in.read(dst, l, dst.length - l);
 				if (r < 0) break;
+				totalRead += r;
 				l += r;
 			}
 
@@ -213,9 +222,7 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 
 
 	@Override
-	public final int readVarInt() throws IOException { return readVarInt(true); }
-	@Override
-	public final int readVarInt(boolean zag) throws IOException {
+	public final int readVarInt() throws IOException {
 		int value = 0;
 		int i = 0;
 
@@ -224,7 +231,6 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 			value |= (chunk & 0x7F) << i;
 			i += 7;
 			if ((chunk & 0x80) == 0) {
-				if (zag) return MyDataInput.zag(value);
 				if (value < 0) break;
 				return value;
 			}
@@ -234,18 +240,15 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 
 
 	@Override
-	public final long readVarLong() throws IOException { return readVarLong(true); }
-	@Override
-	public final long readVarLong(boolean zag) throws IOException {
+	public final long readVarLong() throws IOException {
 		long value = 0;
 		int i = 0;
 
 		while (i <= 63) {
 			int chunk = readByte();
-			value |= (chunk & 0x7F) << i;
+			value |= (long) (chunk & 0x7F) << i;
 			i += 7;
 			if ((chunk & 0x80) == 0) {
-				if (zag) return MyDataInput.zag(value);
 				if (value < 0) break;
 				return value;
 			}
@@ -334,5 +337,11 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 	@Override
 	public final String readLine() throws IOException {
 		throw new UnsupportedOperationException("未实现...");
+	}
+
+	private long totalRead;
+	@Override
+	public long position() throws IOException {
+		return totalRead + pos - lim;
 	}
 }

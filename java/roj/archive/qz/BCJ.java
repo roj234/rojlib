@@ -9,6 +9,7 @@ import roj.crypt.RCipherSpi;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Roj234
@@ -24,7 +25,7 @@ public final class BCJ extends QZCoder {
 	byte[] id() { return id; }
 
 	public OutputStream encode(OutputStream out) { return new CipherOutputStream(out, bcj(true)); }
-	public InputStream decode(InputStream in, byte[] p, long u, int m) { return new CipherInputStream(in, bcj(false)); }
+	public InputStream decode(InputStream in, byte[] p, long u, AtomicInteger m) { return new CipherInputStream(in, bcj(false)); }
 
 	private RCipherSpi bcj(boolean encode) {
 		switch (id[2]) {

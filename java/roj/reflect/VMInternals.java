@@ -1,13 +1,12 @@
 package roj.reflect;
 
-import roj.ReferenceByPrecompiledClass;
+import roj.ReferenceByGeneratedClass;
 import roj.asm.Parser;
 import roj.asm.cp.CstString;
 import roj.asm.tree.ConstantData;
 import roj.asm.type.Type;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
-import roj.compiler.api.ASM;
 import roj.util.Helpers;
 import sun.misc.Unsafe;
 
@@ -24,6 +23,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import static roj.asm.Opcodes.*;
+import static roj.compiler.asmlang.ASM.__asm;
 
 /**
  * 在"不归路"上越走越远
@@ -31,7 +31,7 @@ import static roj.asm.Opcodes.*;
  * @since 2023/2/11 14:16
  */
 final class VMInternals {
-	@ReferenceByPrecompiledClass
+	@ReferenceByGeneratedClass
 	private static final String PROP_NAME = "_ILJ9DC_", CLASS_NAME = "java/lang/🔓_IL🐟"; // "海阔凭鱼跃，天高任鸟飞"
 
 	public static void main(String[] args) throws Exception {
@@ -79,7 +79,7 @@ final class VMInternals {
 		w.clazz(INSTANCEOF, "java/lang/Class");
 		Label marker = new Label();
 		Label marker2 = new Label();
-		w.jump(IFLE, marker);
+		w.jump(IFEQ, marker);
 		w.clazz(CHECKCAST, "java/lang/Class");
 		w.invokeV("java/lang/Class", "getModule", "()Ljava/lang/Module;");
 		w.jump(GOTO, marker2);
@@ -95,7 +95,7 @@ final class VMInternals {
 		w.clazz(INSTANCEOF, "java/lang/Class");
 		marker = new Label();
 		marker2 = new Label();
-		w.jump(IFLE, marker);
+		w.jump(IFEQ, marker);
 		w.clazz(CHECKCAST, "java/lang/Class");
 		w.invokeV("java/lang/Class", "getModule", "()Ljava/lang/Module;");
 		w.jump(GOTO, marker2);
@@ -231,22 +231,22 @@ final class VMInternals {
 	static void OpenModule(Module src_module, String src_package, Module target_module) { _ModuleOpener.accept(new Object[] {src_module, target_module}, src_package); }
 	static Class<?> DefineWeakClass(byte[] b) {
 		if (JAVA_VERSION < 17) {
-			ASM.begin("""
+			if (__asm("""
 				getstatic this u
 				ldc sun.misc.Unsafe.class
 				aload 1
 				aconst_null
 				invokevirtual java/lang/Unsafe defineAnonymousClass (Ljava/lang/Class;[B[Ljava/lang/Object;)Ljava/lang/Class;
 				areturn
-				""");
-			try {
-				Method m = Unsafe.class.getDeclaredMethod("defineAnonymousClass", Class.class, byte[].class, Object[].class);
-				m.setAccessible(true);
-				return (Class<?>) m.invoke(u, Unsafe.class, b, null);
-			} catch (Exception e) {
-				catchException(e);
+				""")) {
+				try {
+					Method m = Unsafe.class.getDeclaredMethod("defineAnonymousClass", Class.class, byte[].class, Object[].class);
+					m.setAccessible(true);
+					return (Class<?>) m.invoke(u, Unsafe.class, b, null);
+				} catch (Exception e) {
+					catchException(e);
+				}
 			}
-			ASM.end();
 		}
 		return _ClassDefiner.apply(new Object[]{VMInternals.class.getClassLoader(), VMInternals.class, null, b, 0, b.length, VMInternals.class.getProtectionDomain(), false, HIDDEN_CLASS, null});
 	}
@@ -256,7 +256,7 @@ final class VMInternals {
 	static Class<?> DefineVMClass(String name, byte[] b, int off, int len) {
 		block:
 		if (JAVA_VERSION < 17) {
-			ASM.begin("""
+			if (__asm("""
 				getstatic this u
 				aload 1
 				aload 2
@@ -266,21 +266,21 @@ final class VMInternals {
 				aconst_null
 				invokevirtual java/lang/Unsafe defineClass (Ljava/lang/String;[BIILjava/lang/ClassLoader;Ljava/security/ProtectionDomain;)Ljava/lang/Class;
 				areturn
-				""");
-			Method m;
-			try {
-				m = Unsafe.class.getDeclaredMethod("defineClass", String.class, byte[].class, int.class, int.class, ClassLoader.class, ProtectionDomain.class);
-			} catch (NoSuchMethodException e) {
-				break block;
-			}
+				""")) {
+				Method m;
+				try {
+					m = Unsafe.class.getDeclaredMethod("defineClass", String.class, byte[].class, int.class, int.class, ClassLoader.class, ProtectionDomain.class);
+				} catch (NoSuchMethodException e) {
+					break block;
+				}
 
-			try {
-				m.setAccessible(true);
-				return (Class<?>) m.invoke(u, name, b, off, len, null, null);
-			} catch (Exception e) {
-				catchException(e);
+				try {
+					m.setAccessible(true);
+					return (Class<?>) m.invoke(u, name, b, off, len, null, null);
+				} catch (Exception e) {
+					catchException(e);
+				}
 			}
-			ASM.end();
 		}
 
 		return _ClassDefiner.apply(new Object[]{null, VMInternals.class, name, b, off, len, null, false, HIDDEN_CLASS|ACCESS_VM_ANNOTATIONS, null});

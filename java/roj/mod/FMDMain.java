@@ -26,6 +26,7 @@ import roj.ui.Profiler;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
 import roj.util.Helpers;
+import roj.util.HighResolutionTimer;
 
 import java.io.File;
 import java.io.IOException;
@@ -162,9 +163,9 @@ public final class FMDMain {
 			CLIUtil.setConsole(c);
 
 			// only non-daemon thread
-			LockSupport.park();
+			HighResolutionTimer.activate();
 		} else {
-			c.executeCommand(TextUtil.join(Arrays.asList(args), " "));
+			c.executeSync(TextUtil.join(Arrays.asList(args), " "));
 			System.exit(exitCode);
 		}
 	}
@@ -181,7 +182,7 @@ public final class FMDMain {
 			}
 		}
 
-		CMapping mc_conf = new CMapping();
+		CMap mc_conf = new CMap();
 		if (mc_conf.size() == 0) {
 			CLIUtil.error("启动配置不存在，请重新setup");
 			return -1;
@@ -265,7 +266,7 @@ public final class FMDMain {
 		String jarName = proj.name+'-'+proj.version+".jar";
 		String jarPath = base.getAbsolutePath()+'/'+jarName;
 
-		CMapping cmd = CONFIG.get("编译成功后执行指令").asMap();
+		CMap cmd = CONFIG.get("编译成功后执行指令").asMap();
 		CList list = cmd.get("**").asList();
 		ex(list, jarPath);
 		list = (cmd.containsKey(proj.name) ? cmd.get(proj.name) : cmd.get("*")).asList();
@@ -399,7 +400,7 @@ public final class FMDMain {
 		}
 		libBuf.append(getLibClasses());
 
-		SimpleList<String> options = CONFIG.getList("编译参数").asStringList();
+		SimpleList<String> options = CONFIG.getList("编译参数").toStringList();
 		options.addAll("-cp", libBuf.toString(), "-encoding", p.charset.name());
 
 		Compiler.showErrorCode(args.containsKey("showErrorCode"));

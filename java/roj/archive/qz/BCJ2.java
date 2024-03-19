@@ -11,6 +11,7 @@ import roj.util.ByteList;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Integer.MIN_VALUE;
 import static roj.archive.qz.xz.rangecoder.RangeCoder.initProbs;
@@ -35,7 +36,8 @@ public final class BCJ2 extends QZComplexCoder {
 		return new OutputStream[] { new Encoder(out[0], out[1], out[2], out[3]) };
 	}
 
-	public InputStream[] complexDecode(InputStream[] in, long[] uncompressedSize, int sizeBegin) throws IOException {
+	public InputStream[] complexDecode(InputStream[] in, long[] uncompressedSize, int sizeBegin, AtomicInteger memoryLimit) throws IOException {
+		useMemory(memoryLimit, 10);
 		return new InputStream[] { new Decoder(in[0], in[1], in[2], in[3]) };
 	}
 

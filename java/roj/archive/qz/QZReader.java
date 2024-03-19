@@ -31,6 +31,9 @@ public abstract class QZReader implements Closeable {
 	QZReader() {}
 
 	public final InputStream getInput(QZEntry file) throws IOException { return getInput(file, null); }
+	/**
+	 * 带有对顺序访问的优化，但是不支持并发访问，{@link #getInputUncached(QZEntry, byte[])}
+	 */
 	public final InputStream getInput(QZEntry file, byte[] pass) throws IOException {
 		if (file.uSize == 0) return new SourceInputStream(null, 0);
 
@@ -55,7 +58,7 @@ public abstract class QZReader implements Closeable {
 
 		closeSolidStream();
 
-		InputStream in = blockInput = getSolidStream(file.block, pass);
+		InputStream in = blockInput = getSolidStream(file.block, pass, true);
 		if (in.skip(file.offset) < file.offset) {
 			in.close();
 			throw new EOFException("数据流过早终止");
@@ -71,6 +74,24 @@ public abstract class QZReader implements Closeable {
 		return fin;
 	}
 
+	public final InputStream getInputUncached(QZEntry file) throws IOException {return getInputUncached(file, null);}
+	/**
+	 * 适用于少量的并发访问，如果大量并发访问，可能会打开太多的文件，应该使用{@link QZArchive#parallel()}
+	 */
+	public final InputStream getInputUncached(QZEntry file, byte[] pass) throws IOException {
+		if (file.uSize == 0) return new SourceInputStream(null, 0);
+
+		InputStream in = getSolidStream(file.block, pass, (file.flag&QZEntry.CRC) == 0);
+		if (in.skip(file.offset) < file.offset) {
+			in.close();
+			throw new EOFException("数据流过早终止");
+		}
+
+		LimitInputStream fin = new LimitInputStream(in, file.uSize);
+		if ((file.flag&QZEntry.CRC) != 0) return new CRC32InputStream(fin, file.crc32);
+		return null;
+	}
+
 	final void closeSolidStream() throws IOException {
 		if (blockInput != null) {
 			blockInput.close();
@@ -80,17 +101,10 @@ public abstract class QZReader implements Closeable {
 		activeEntry = null;
 	}
 
-	final InputStream getSolidStream(WordBlock b, byte[] pass) throws IOException {
-		Source src;
-		do {
-			src = fpRead;
-			if (src == null) {
-				src = r.threadSafeCopy();
-				break;
-			}
-		} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, src, null));
-
-		return getSolidStream1(b, pass, src, this);
+	final InputStream getSolidStream(WordBlock b, byte[] pass, boolean verify) throws IOException {
+		Source src = (Source) u.getAndSetObject(this, FPREAD_OFFSET, null);
+		if (src == null) src = r.threadSafeCopy();
+		return getSolidStream1(b, pass, src, this, verify);
 	}
-	abstract InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that) throws IOException;
+	abstract InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that, boolean verify) throws IOException;
 }

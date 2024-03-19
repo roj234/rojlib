@@ -4,7 +4,7 @@ import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 
 /**
@@ -23,7 +23,7 @@ public class LocalVariable extends VarNode {
 	public IType type() { return v.type; }
 
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if (v.constantValue != null) return new Constant(v.type, v.constantValue);
 		return this;
 	}

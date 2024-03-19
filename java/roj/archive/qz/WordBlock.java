@@ -33,8 +33,7 @@ public final class WordBlock {
 
 	public long size() {
 		long s = size;
-		for (int i = 0; i < extraSizes.length; i++)
-			s += extraSizes[i];
+		for (long extraSize : extraSizes) s += extraSize;
 		return s;
 	}
 
@@ -79,10 +78,10 @@ public final class WordBlock {
 		TextUtil.prettyTable(sb, "  ", k, "    ", " => ");
 	}
 
-	public final class Counter extends FilterOutputStream {
+	final class Counter extends FilterOutputStream {
 		private final int id;
 
-		public Counter(OutputStream out, int id) {
+		Counter(OutputStream out, int id) {
 			super(out);
 			this.id = id;
 		}

@@ -6,7 +6,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -39,7 +39,7 @@ public final class InstanceOf extends ExprNode {
 
 	@Override
 	@SuppressWarnings("fallthrough")
-	public ExprNode resolve(CompileContext ctx) {
+	public ExprNode resolve(LocalContext ctx) {
 		left = left.resolve(ctx);
 		ctx.resolveType(type);
 

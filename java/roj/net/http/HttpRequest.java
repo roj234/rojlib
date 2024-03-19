@@ -5,12 +5,12 @@ import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
-import roj.net.URIUtil;
 import roj.net.ch.*;
-import roj.net.ch.handler.JSslClient;
-import roj.net.ch.handler.MSSCipher;
-import roj.net.ch.handler.Timeout;
+import roj.net.handler.JSslClient;
+import roj.net.handler.MSSCipher;
+import roj.net.handler.Timeout;
 import roj.text.CharList;
+import roj.text.EscapeUtil;
 import roj.util.*;
 
 import java.io.IOException;
@@ -145,7 +145,7 @@ public abstract class HttpRequest {
 		ch.remove("h11@tls");
 		if ("https".equals(protocol)) {
 			// todo: ALPN and HTTP/2
-			ch.addFirst("h11@tls", NativeLibrary.IN_DEV ? new MSSCipher().sslMode() : new JSslClient());
+			ch.addFirst("h11@tls", NativeLibrary.EXTRA_BUG_CHECK ? new MSSCipher().sslMode() : new JSslClient());
 		}
 
 		return ch.connect(_getAddress(), timeout);
@@ -251,9 +251,9 @@ public abstract class HttpRequest {
 			for (Map.Entry<String, String> entry : q) {
 				if (i != 0) sb.append('&');
 
-				URIUtil.encodeURI(b.putUTFData(entry.getKey()), sb, URIUtil.URI_COMPONENT_SAFE).append('=');
+				EscapeUtil.escape(b.putUTFData(entry.getKey()), sb, EscapeUtil.URI_COMPONENT_SAFE).append('=');
 				b.clear();
-				URIUtil.encodeURI(b.putUTFData(entry.getValue()), sb, URIUtil.URI_COMPONENT_SAFE);
+				EscapeUtil.escape(b.putUTFData(entry.getValue()), sb, EscapeUtil.URI_COMPONENT_SAFE);
 				i = 1;
 			}
 			query = sb.subSequence(begin,sb.length()).toString();

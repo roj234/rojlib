@@ -2,7 +2,6 @@ package roj.io.source;
 
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
-import roj.math.MutableInt;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -22,26 +21,24 @@ public final class FragmentSource extends Source {
 	private int sid;
 	private Source s;
 
-	private long offset;
+	private long offset = -1;
 	private final long fragmentSize;
+	private boolean writable;
 
 	private final SimpleList<Object> ref;
-	private final Object[] cache;
 
 	private FragmentSource(Source[] sources) {
 		path = null;
 		name = null;
-		cache = null;
 
 		fragmentSize = -1;
 
 		ref = SimpleList.asModifiableList((Object[]) sources);
 		s = sources[0];
 	}
-	private FragmentSource(File file, long fragSize) throws IOException {
-		path = file.getParentFile();
+	private FragmentSource(File file, long fragSize, boolean writable) throws IOException {
+		path = file.getAbsoluteFile().getParentFile();
 		name = file.getName();
-		cache = new Object[16];
 
 		ref = new SimpleList<>();
 
@@ -62,30 +59,26 @@ public final class FragmentSource extends Source {
 				if (fragSize > 0) {
 					fragSize = -1;
 					break;
-				} else {
+				} else if (fragSize == 0) {
 					fragSize = len;
 				}
 			}
 		}
 
 		fragmentSize = fragSize;
+		this.writable = writable;
 
 		// create new
+		sid = -1;
 		if (ref.isEmpty()) {
-			sid = -1;
 			next();
 		} else {
-			s = getSource(0);
+			s = setSource(0);
 		}
 	}
 
-	@Deprecated
-	public FragmentSource(FileSource src, long size) throws IOException {
-		this(new File(src.getFile().getParentFile(), IOUtil.fileName(src.getFile().getName())), size);
-	}
-
-	public static FragmentSource fixed(File file, long size) throws IOException { return new FragmentSource(file, size); }
-	public static FragmentSource dynamic(File file) throws IOException { return new FragmentSource(file, -1); }
+	public static FragmentSource fixed(File file, long size) throws IOException { return new FragmentSource(file, size, true); }
+	public static FragmentSource dynamic(File file, boolean writable) throws IOException { return new FragmentSource(file, -1, writable); }
 	public static FragmentSource concat(Source... files) { return new FragmentSource(files); }
 
 	public int read(byte[] b, int off, int len) throws IOException {
@@ -95,7 +88,7 @@ public final class FragmentSource extends Source {
 		while (read < len) {
 			int r = s.read(b, off+read, len-read);
 			if (r < len) {
-				if (sid +1 == ref.size()) break;
+				if (sid+1 == ref.size()) break;
 				next();
 			} else {
 				read += r;
@@ -107,10 +100,15 @@ public final class FragmentSource extends Source {
 
 	public void write(byte[] b, int off, int len) throws IOException { write(IOUtil.SharedCoder.get().wrap(b, off, len)); }
 	public void write(DynByteBuf data) throws IOException {
-		if (fragmentSize <= 0) throw new IOException("大小不规则的源是只读的");
+		if (!writable) throw new IOException("源是只读的");
 
 		int readable = data.readableBytes();
 		written += readable;
+
+		if (fragmentSize <= 0) {
+			s.write(data);
+			return;
+		}
 
 		while (readable > 0) {
 			int writable = (int) Math.min(Integer.MAX_VALUE, fragmentSize - s.position());
@@ -127,9 +125,18 @@ public final class FragmentSource extends Source {
 	}
 
 	private final CharList t = new CharList();
-	private void next() throws IOException {
+
+	public void setSourceId(int sid) throws IOException {
+		s = setSource(sid);
+		s.seek(0);
+	}
+	public Source getSource() {return s;}
+
+	public void next() throws IOException {
+		offset = -1;
+
 		if (sid < ref.size()-1) {
-			s = getSource(++sid);
+			s = setSource(1+sid);
 			s.seek(0);
 			return;
 		}
@@ -140,96 +147,100 @@ public final class FragmentSource extends Source {
 		t.clear();
 		t.append(name).append('.').padNumber(ref.size()+1, 3);
 		File file = new File(path, t.toString());
-		if (!file.isFile()) {
+		if (!file.isFile() && fragmentSize > 0) {
 			try {
 				IOUtil.allocSparseFile(file, fragmentSize);
 			} catch (IOException ignored) {}
 		}
 		ref.add(file);
-		s = getSource(++sid);
+		s = setSource(1+sid);
 	}
 
+	private Source setSource(int sid) throws IOException {
+		if (this.sid == sid) return s;
+		this.sid = sid;
+
+		if (s != null) s.close();
+
+		return getSource(sid);
+	}
 	private Source getSource(int sid) throws IOException {
 		Object o = ref.get(sid);
 		if (o instanceof Source) return (Source) o;
-
-		int minId = 0, minUsage = 0xFFFF;
-		for (int i = 0; i < cache.length; i++) {
-			MutableInt id = (MutableInt) cache[i++];
-			if (id == null) break;
-
-			int usage = id.value & 0xFFFF;
-			if ((id.value>>>16) == sid) {
-				if (usage < 0xFFFF) id.value++;
-				return (Source) cache[i];
-			}
-
-			if (usage <= minUsage) {
-				minId = i-1;
-				minUsage = usage;
-			}
-		}
-
-		MutableInt id = (MutableInt) cache[minId];
-		if (id == null) cache[minId] = id = new MutableInt();
-		id.setValue(sid << 16);
-
-		Source v = (Source) cache[minId+1];
-		if (v != null) v.close();
-		cache[minId+1] = v = new FileSource((File) o, fragmentSize > 0);
-
-		return v;
+		return new FileSource((File) o, writable);
 	}
 	private long getLength(int i) throws IOException {
 		Object o = ref.get(i);
 		if (o instanceof Source) return ((Source) o).length();
 		return ((File) o).length();
 	}
+	private long getOffset() throws IOException {
+		if (offset >= 0) return offset;
+
+		long off = 0;
+		for (int i = 0; i < sid; i++) {
+			Object o = ref.get(i);
+			off += o instanceof File f ? f.length() : ((Source)o).length();
+		}
+		return offset = off;
+	}
 
 	public void seek(long pos) throws IOException {
 		if (fragmentSize > 0) {
-			trimLastFile();
-
-			s = getSource(sid = (int) (pos / fragmentSize));
+			s = setSource((int) (pos / fragmentSize));
 			s.seek(pos % fragmentSize);
 		} else {
-			offset = pos;
+			offset = -1;
 
 			for (int i = 0; i < ref.size(); i++) {
 				long len = getLength(i);
-				if (pos >= len) {
+				if (pos > len) {
 					pos -= len;
 				} else {
-					offset -= pos;
-					s = getSource(sid = i);
+					s = setSource(i);
 					s.seek(pos);
 					return;
 				}
 			}
 		}
 	}
-	public long position() throws IOException { return (fragmentSize > 0 ? sid * fragmentSize : offset) + s.position(); }
+	public long position() throws IOException { return (fragmentSize > 0 ? sid * fragmentSize : getOffset()) + s.position(); }
 
 	public void setLength(long length) throws IOException {
 		ensureFileSource();
-		if (fragmentSize <= 0) throw new IOException("大小不规则的源是只读的");
+		if (!writable) throw new IOException("源是只读的");
+
+		if (fragmentSize <= 0) {
+			offset = -1;
+
+			long off = 0;
+			int i = 0;
+			while (i < ref.size()) {
+				File f = (File) ref.get(i++);
+				long fLen = f.length();
+				if (off+fLen > length) {
+					for (int j = ref.size()-1; j >= i; j--) {
+						Files.deleteIfExists(((File) ref.remove(j)).toPath());
+					}
+					break;
+				}
+				off += fLen;
+			}
+
+			try (Source source = getSource(i-1)) {
+				source.setLength(length - off);
+			}
+			return;
+		}
 
 		int newFrags = (int) (length/fragmentSize) + 1;
-
-		for (int i = 0; i < cache.length; i++) {
-			MutableInt id = (MutableInt) cache[i++];
-			if (id == null) break;
-
-			if ((id.value>>>16) >= newFrags) {
-				((Source) cache[i]).close();
-				cache[i] = null;
-			}
-		}
 
 		for (int i = ref.size()-1; i >= newFrags; i--)
 			Files.deleteIfExists(((File) ref.remove(i)).toPath());
 
-		getSource(newFrags-1).setLength(length%fragmentSize);
+		try (Source source = getSource(newFrags-1)) {
+			source.setLength(length%fragmentSize);
+		}
 	}
 	public long length() throws IOException {
 		if (fragmentSize > 0) return (ref.size()-1)*fragmentSize + getLength(ref.size()-1);
@@ -239,41 +250,28 @@ public final class FragmentSource extends Source {
 		return len;
 	}
 
+	@Override
+	public boolean isWritable() {return writable;}
+
 	public void close() throws IOException {
 		Throwable e1 = null;
-		if (cache == null) {
+		if (path == null) {
 			for (int i = 0; i < ref.size(); i++) {
 				try {
 					((Source) ref.get(i)).close();
 				} catch (Throwable e) { e1 = e; }
 			}
 		} else {
-			try {
-				trimLastFile();
-			} catch (Throwable e) { e1 = e; }
-
-			for (int i = 0; i < cache.length; i++) {
-				MutableInt id = (MutableInt) cache[i++];
-				if (id == null) break;
-
-				try {
-					((Source) cache[i]).close();
-				} catch (Throwable e) { e1 = e; }
-				cache[i] = null;
-			}
+			s.close();
 		}
 		ref.clear();
 
 		if (e1 != null) Helpers.athrow(e1);
 	}
 
-	private void trimLastFile() throws IOException {
-		if (fragmentSize > 0 && sid == ref.size()-1) s.setLength(s.position());
-	}
-
 	public Source threadSafeCopy() throws IOException {
 		ensureFileSource();
-		return new ReadonlySource(new FragmentSource(new File(path, name), fragmentSize));
+		return new FragmentSource(new File(path, name), fragmentSize, false);
 	}
 
 	public void moveSelf(long from, long to, long length) {
@@ -281,6 +279,6 @@ public final class FragmentSource extends Source {
 	}
 
 	private void ensureFileSource() throws IOException {
-		if (path == null) throw new IOException("无法扩展通过concated函数创建的SplittedSource");
+		if (path == null) throw new IOException("无法扩展通过concated函数创建的FragmentSource");
 	}
 }

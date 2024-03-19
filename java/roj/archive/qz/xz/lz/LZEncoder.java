@@ -12,7 +12,6 @@ package roj.archive.qz.xz.lz;
 
 import roj.archive.qz.xz.LZMA2Options;
 import roj.util.ArrayCache;
-import roj.util.ArrayUtil;
 import roj.util.NativeMemory;
 import sun.misc.Unsafe;
 
@@ -50,9 +49,9 @@ public abstract class LZEncoder {
 
 	int readPos = -1;
 	private int readLimit = -1;
-	private boolean finishing = false;
-	private int writePos = 0;
-	private int pendingSize = 0;
+	private boolean finishing;
+	private int writePos;
+	private int pendingSize;
 
 	final Hash234 hash;
 	private final NativeMemory nm;
@@ -131,14 +130,14 @@ public abstract class LZEncoder {
 		this.niceLen = niceLen;
 		this.depthLimit = depthLimit;
 
-		hash = new Hash234(dictSize);
-
 		// +1 because we need dictSize bytes of history + the current byte.
 		cyclicSize = dictSize + 1;
 		lzPos = cyclicSize;
 
 		buf = nm.allocate(((long) cyclicSize << mem2Shift) + bufSize);
 		base = buf+bufSize;
+
+		hash = new Hash234(dictSize);
 	}
 
 	public final void release() {
@@ -150,7 +149,7 @@ public abstract class LZEncoder {
 		}
 	}
 
-	public final void reuse() {
+	public final void reset() {
 		mcount = 0;
 		readPos = readLimit = -1;
 		finishing = false;
@@ -159,7 +158,7 @@ public abstract class LZEncoder {
 		cyclicPos = -1;
 		lzPos = cyclicSize;
 
-		hash.reuse();
+		hash.reset();
 	}
 
 	/**
@@ -167,13 +166,6 @@ public abstract class LZEncoder {
 	 * function must be called immediately after creating the LZEncoder
 	 * before any data has been encoded.
 	 */
-	public final void setPresetDict(int dictSize, byte[] presetDict) {
-		if (presetDict != null) setPresetDict(dictSize, presetDict, 0, presetDict.length);
-	}
-	public final void setPresetDict(int dictSize, byte[] dict, int off, int len) {
-		ArrayUtil.checkRange(dict, off, len);
-		setPresetDict(dictSize, dict, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
-	}
 	public final void setPresetDict(int dictSize, Object ref, long off, int len) {
 		assert !isStarted();
 		assert writePos == 0;
@@ -204,12 +196,10 @@ public abstract class LZEncoder {
 		writePos -= moveOffset;
 	}
 
-	public final int fillWindow(byte[] in, int off, int len) { return fillWindow0(in, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len); }
-	public final int fillWindow(long addr, int len) { return fillWindow0(null, addr, len); }
 	/**
 	 * Copies new data into the LZEncoder's buffer.
 	 */
-	public final int fillWindow0(Object in, long off, int len) {
+	public final int fillWindow(Object in, long off, int len) {
 		assert !finishing;
 
 		// Move the sliding window if needed.
@@ -251,7 +241,7 @@ public abstract class LZEncoder {
 			int oldPendingSize = pendingSize;
 			pendingSize = 0;
 			skip(oldPendingSize);
-			assert pendingSize < oldPendingSize;
+			assert pendingSize <= oldPendingSize;
 		}
 	}
 

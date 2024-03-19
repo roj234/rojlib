@@ -5,7 +5,6 @@ import roj.asm.tree.MethodNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.visitor.Label;
-import roj.collect.SimpleList;
 import roj.compiler.JavaLexer;
 import roj.compiler.api_rt.ExprApi;
 import roj.compiler.api_rt.LavaApi;
@@ -13,14 +12,10 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Constant;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.Invoke;
-import roj.compiler.context.CompileContext;
-import roj.compiler.resolve.ComponentList;
-import roj.compiler.resolve.MethodResult;
-import roj.config.word.Word;
+import roj.config.Word;
 import roj.util.Helpers;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -66,28 +61,10 @@ public class CandyTestServer {
 			}
 		});
 
-		api.getResolveApi().addTypeResolver(999, name -> {
-			if (name.equals("MyString")) return api.getClassContext().getClassInfo("java/lang/String");
-			return null;
-		});
-		MethodNode mn2 = new MethodNode(Opcodes.ACC_STATIC, "roj/compiler/api/candy/CandyTestServer", "stringHooker", "(Ljava/lang/String;)I");
-		api.getResolveApi().addIdentifierResolver("java/lang/String", false, (type, identifier, method, staticEnv, list) -> {
-			if (!staticEnv && identifier.equals("myFakeMethod")) {
-				// TODO check arg (MethodList builder)
-				return new ComponentList() {
-					@Override
-					public MethodResult findMethod(CompileContext ctx, IType generic, SimpleList<IType> params, Map<String, IType> namedType, int flags) {
-						return new MethodResult(mn2);
-					}
-				};
-			}
-			return list;
-		});
-
 
 		String s = "roj/compiler/api/candy/ComparisonChain";
 
-		rtApi.newStreamChain(false, ch -> {
+		rtApi.newStreamChain(s, false, ch -> {
 			MethodWriter cw = ch.writer();
 
 			if (ch.targetType() == 2) {
@@ -111,8 +88,7 @@ public class CandyTestServer {
 					case "result":
 				}
 			}
-		})
-			 .typeMask(s, Type.std(Type.INT))
+		}, Type.std(Type.INT))
 			 .startOp(new MethodNode(Opcodes.ACC_STATIC, s, "start", "()Lroj/compiler/api/candy/ComparisonChain;"), false)
 			 .intermediateOp(new MethodNode(0, s, "compare", "(DD)L"+s+";"))
 			 .terminalOp(new MethodNode(0, s, "result", "()I"));

@@ -7,7 +7,7 @@ import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
-import roj.net.ch.handler.Timeout;
+import roj.net.handler.Timeout;
 import roj.net.http.HttpHead;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;

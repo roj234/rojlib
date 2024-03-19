@@ -54,18 +54,6 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 	private final CharList buf;
 	private List<ByteListOutput> compiled;
 
-	public Compiler() {
-		this(null, null, null, "");
-	}
-
-	public Compiler(PrintStream out) {
-		this(null, out, null, "");
-	}
-
-	public Compiler(PrintStream out, Set<String> skipErrors) {
-		this(null, out, skipErrors, "");
-	}
-
 	public Compiler(List<Processor> processor, PrintStream out, Set<String> skipErrors, String basePath) {
 		this.out = out == null ? System.out : out;
 		this.skipErrors = skipErrors == null ? Collections.emptySet() : skipErrors;

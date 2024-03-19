@@ -1,16 +1,18 @@
 # 注解定义的HTTP路由
 
  * @Route定义路由，可选value指定路径，或者通过【方法名称】.replace("__", "/")得出
- * @Interceptor定义或使用预处理拦截器，拦截时若有请求体还未接受
+ * @Interceptor定义或使用预处理拦截器，拦截时body还未接受
  * @Body(From.X)决定方法的【自定义参数】来源, GET POST_KV JSON可选，JSON模式只允许一个扩展参数，也就是反序列化的对象
  * 拦截器输入固定为Request, @Nullable PostSetting
  * 路由参数全部可选但必须按顺序：Request ResponseHeader 【其它自定义参数】
  * 返回值只能是void或任意对象类型
  * 如果不是Response也不是null会调用toString
  * [ ] 序列化未来加入
+ * 现已支持Vue语法，详见@Route注解或Vue-router主页
+ * 通过Request#getArguments()获取路由参数 （Unstable，之后大概会改）
 
 ```java
-import roj.net.http.srv.autohandled.*;
+import roj.net.http.server.auto.*;
 
 public class Example {
 	public static void main(String[] args) {

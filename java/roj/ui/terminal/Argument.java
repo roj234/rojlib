@@ -1,12 +1,13 @@
 package roj.ui.terminal;
 
 import org.jetbrains.annotations.Nullable;
+import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
+import roj.config.Tokenizer;
+import roj.config.Word;
 import roj.io.IOUtil;
 import roj.reflect.EnumHelper;
 import roj.text.CharList;
@@ -34,19 +35,21 @@ public interface Argument<T> {
 
 				if (completions != null && ctx.isWordEdge()) {
 					String match, prefix;
+
+					if (path.isFile()) return null;
 					if (path.isDirectory()) {
 						match = "";
-						prefix = pathStr.endsWith(File.separator)?"":File.separator;
+						prefix = pathStr.endsWith(File.separator) ? "" : File.separator;
 					} else {
-						if (path.isFile()) return null;
+						match = path.getName().toLowerCase();
+
 						path = path.getParentFile();
 						if (path == null) return null;
 
-						match = path.getName().toLowerCase();
 						prefix = "";
 					}
 
-					listPath(completions, path, match, prefix);
+					listPath(completions, path, match, prefix, pathStr.indexOf(' ') >= 0, pathStr);
 					return null;
 				}
 
@@ -61,28 +64,48 @@ public interface Argument<T> {
 				return path;
 			}
 
-			private void listPath(List<Completion> completions, File path, String match, String prefix) {
+			private void listPath(List<Completion> completions, File path, String match, String prefix, boolean hasSlash, String pathStr) {
 				File[] list = path.listFiles();
 				if (list == null) return;
 				for (File file : list) {
-					if (file.getName().toLowerCase().startsWith(match)) {
-						String name = prefix.concat(file.getName().substring(match.length()));
-						AnsiString desc = new AnsiString(file.getAbsolutePath());
-						if (file.isFile()) {
-							if (folder != Boolean.TRUE) completions.add(new Completion(new AnsiString(name).color16(CLIUtil.CYAN), desc));
+					String fname = file.getName();
+					if (!fname.toLowerCase().startsWith(match)) continue;
+
+					CharList sb = IOUtil.getSharedCharBuf().append(prefix).append(fname);
+
+					if (!file.isFile()) sb.append(File.separatorChar);
+					else if (folder == Boolean.TRUE) continue;
+
+					int offset = - match.length();
+
+					boolean newSlash = fname.indexOf(' ') >= 0;
+					if ((hasSlash|newSlash) && sb.endsWith("\\")) sb.append('\\');
+
+					block1: {
+						if (!hasSlash) {
+							if (newSlash) {
+								fname = "'"+pathStr.substring(0, pathStr.length()+offset)+sb+"'";
+								offset = -pathStr.length();
+								break block1;
+							}
 						} else {
-							completions.add(new Completion(new AnsiString(name+File.separatorChar).color16(CLIUtil.YELLOW), desc));
+							offset -= pathStr.endsWith("\\") ? 2 : 1;
+							sb.append('\'');
 						}
+
+						fname = sb.toString();
 					}
+
+					AnsiString desc = path.isAbsolute() ? null : new AnsiString("绝对路径: ").append(new AnsiString(file.getAbsolutePath()).colorRGB(0xffccee));
+					completions.add(new Completion(new AnsiString(fname).color16(file.isFile() ? CLIUtil.CYAN : CLIUtil.YELLOW), desc, offset));
 				}
 			}
 
 			@Override
 			public void example(List<Completion> completions) {
-				File file = new File("").getAbsoluteFile();
-				String prefix = file.getAbsolutePath();
-				completions.add(new Completion(prefix));
-				listPath(completions, file, "", prefix+File.separator);
+				File f = new File("").getAbsoluteFile();
+				completions.add(new Completion(f.getAbsolutePath()));
+				listPath(completions, f, "", ".".concat(File.separator), false, "");
 			}
 
 			@Override
@@ -142,6 +165,8 @@ public interface Argument<T> {
 				T result = choice.get(val);
 				if (result == null) {
 					if (completions != null) {
+						if (ctx.isEOF()) return Helpers.cast(IntMap.UNDEFINED);
+
 						complete(val, completions);
 						return null;
 					}
@@ -154,7 +179,7 @@ public interface Argument<T> {
 
 		private void complete(String val, List<Completion> completions) {
 			for (String name : choice.keySet()) {
-				if (name.startsWith(val)) completions.add(new Completion(name.substring(val.length())));
+				if (name.startsWith(val) && !name.equals(val)) completions.add(new Completion(name.substring(val.length())));
 			}
 		}
 
@@ -242,4 +267,6 @@ public interface Argument<T> {
 	T parse(ArgumentContext ctx, @Nullable List<Completion> completions) throws ParseException;
 	default void example(List<Completion> completions) {}
 	default String type() { return getClass().getSimpleName(); }
+
+	default int color() { return type().hashCode(); }
 }

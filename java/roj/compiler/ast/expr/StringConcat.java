@@ -7,7 +7,7 @@ import roj.asm.type.Type;
 import roj.collect.SimpleList;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
+import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.io.IOUtil;
@@ -33,7 +33,7 @@ final class StringConcat extends ExprNode {
 	public IType type() { return Constant.STRING; }
 
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		for (int i = 0; i < nodes.size(); i++) nodes.set(i, nodes.get(i).resolve(ctx));
 
 		CharList sb = IOUtil.getSharedCharBuf();

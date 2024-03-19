@@ -4,8 +4,8 @@ import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileContext;
 import roj.compiler.context.CompileUnit;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 
@@ -28,7 +28,7 @@ final class This extends ExprNode {
 	public String toString() { return type != null ? type.toString() : this==THIS?"this":"super"; }
 
 	@Override
-	public ExprNode resolve(CompileContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if (type != null) return this;
 
 		if (ctx.in_static) ctx.report(Kind.ERROR, "this.error.static_context");

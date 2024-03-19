@@ -4,9 +4,10 @@ import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
-import roj.config.serial.CAdapter;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
+import roj.config.Tokenizer;
+import roj.config.Word;
+import roj.config.auto.Serializer;
+import roj.config.auto.Serializers;
 import roj.io.IOUtil;
 import roj.ui.CLIUtil;
 import roj.ui.terminal.CommandContext;
@@ -16,7 +17,6 @@ import java.io.File;
 import java.util.List;
 
 import static roj.text.diff.DiffResult.bar;
-import static roj.text.diff.DiffResult.sf;
 import static roj.ui.terminal.Argument.file;
 import static roj.ui.terminal.CommandNode.argument;
 import static roj.ui.terminal.SimpleCliParser.nullImpl;
@@ -40,21 +40,23 @@ public class DiffUser {
 
 		basePath = ctx.argument("basePath", File.class);
 
-		CAdapter<List<DiffResult>> adapter = sf.listOf(DiffResult.class);
-		List<DiffResult> diffs = sf.deserialize(adapter, ctx.argument("diffYml", File.class));
+		Serializer<List<DiffResult>> adapter = Serializers.SAFE.listOf(DiffResult.class);
+		List<DiffResult> diffs = ConfigMaster.YAML.readObject(adapter, ctx.argument("diffYml", File.class));
 		for (int i = diffs.size() - 1; i >= 0; i--) {
 			DiffResult d = diffs.get(i);
+
+			if (d.left.compareTo(d.right) > 0) {
+				String tmp = d.left;
+				d.left = d.right;
+				d.right = tmp;
+			}
+
 			d.leftFile = new File(basePath, d.left);
 			d.rightFile = new File(basePath, d.right);
 
 			if(!d.leftFile.isFile() || !d.rightFile.isFile()) {
 				diffs.remove(i);
 				continue;
-			}
-			if (d.leftFile.getAbsolutePath().compareTo(d.rightFile.getAbsolutePath()) > 0) {
-				File right = d.rightFile;
-				d.rightFile = d.leftFile;
-				d.leftFile = right;
 			}
 
 			bar.addMax(1);
@@ -68,17 +70,13 @@ public class DiffUser {
 		diffs.sort((o1, o2) -> Integer.compare(o1.diff, o2.diff));
 		for (int i = diffs.size() - 1; i > 0; i--) {
 			DiffResult d = diffs.get(i);
-			if ((double) d.diff / d.minSize > 0.75) {
-				System.out.println("too similar:"+d);
-				diffs.remove(i);
-			}
-			else if (d.equals(diffs.get(i - 1))) {
+			if (d.equals(diffs.get(i - 1))) {
 				System.out.println("same:"+d);
 				diffs.remove(i);
 			}
 		}
 		System.out.println("count:" + diffs.size());
-		ConfigMaster.write(diffs, ctx.argument("diffYml", File.class).getAbsolutePath(), "yml", adapter);
+		ConfigMaster.YAML.writeObject(diffs, adapter, ctx.argument("diffYml", File.class));
 
 		bar.addMax(diffs.size());
 		for (int i = 0; i < diffs.size(); i++) {
@@ -97,21 +95,30 @@ public class DiffUser {
 
 			bar.addCurrent(1);
 
-			new ProcessBuilder().command("D:\\Everything\\Everything.exe", "-s", "<" + Tokenizer.addSlashes(IOUtil.fileName(d.leftFile.getName())) + ">|<" + Tokenizer.addSlashes(IOUtil.fileName(d.rightFile.getName())) + '>').start();
-			int exit = new ProcessBuilder().command(args2).start().waitFor();
+			int exit;
+			new ProcessBuilder().command("D:\\_USoft\\Everything\\Everything.exe", "-s", "<" + Tokenizer.addSlashes(IOUtil.fileName(d.leftFile.getName())) + ">|<" + Tokenizer.addSlashes(IOUtil.fileName(d.rightFile.getName())) + '>').start();
+			exit = new ProcessBuilder().command(args2).start().waitFor();
 
 			if (exit == 0) {
-				System.out.println("left:" + d.left);
-				System.out.println("right:" + d.right);
-				System.out.println("删除左(l)右(r)取消(c)");
-				char c = CLIUtil.awaitCharacter(MyBitSet.from("lrc"));
-				if (c != 'c') {
-					if (c == 'l') {
-						d.leftFile.delete();
-					} else if (c == 'r') {
-						d.rightFile.delete();
-					} else {
-						System.exit(1);
+				if (d.leftFile.getAbsolutePath().contains("aaaa")) {
+					d.leftFile.delete();
+					System.out.println("auto "+"("+d.leftFile+")");
+				} else if (d.rightFile.getAbsolutePath().contains("aaaa")) {
+					d.rightFile.delete();
+					System.out.println("auto "+"("+d.rightFile+")");
+				} else {
+					System.out.println("left:" + d.left);
+					System.out.println("right:" + d.right);
+					System.out.println("删除左(l)右(r)取消(c)");
+					char c = CLIUtil.awaitCharacter(MyBitSet.from("lrc"));
+					if (c != 'c') {
+						if (c == 'l') {
+							d.leftFile.delete();
+						} else if (c == 'r') {
+							d.rightFile.delete();
+						} else {
+							System.exit(1);
+						}
 					}
 				}
 			}

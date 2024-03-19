@@ -1,5 +1,6 @@
 package roj.asm;
 
+import org.intellij.lang.annotations.MagicConstant;
 import roj.collect.Int2IntMap;
 import roj.collect.ToIntMap;
 import roj.text.CharList;
@@ -163,7 +164,7 @@ public final class Opcodes {
 	};
 	public static final int ACC_SHOW_CLASS = 0, ACC_SHOW_FIELD = 1, ACC_SHOW_PARAM = 1, ACC_SHOW_METHOD = 2, ACC_SHOW_INNERCLASS = 3, ACC_SHOW_MODULE = 4;
 
-	public static String showModifiers(int modifier, int type) { return showModifiers(modifier, type, new CharList()).toStringAndFree(); }
+	public static String showModifiers(int modifier, @MagicConstant(intValues = {ACC_SHOW_CLASS,ACC_SHOW_FIELD,ACC_SHOW_PARAM,ACC_SHOW_METHOD,ACC_SHOW_INNERCLASS,ACC_SHOW_MODULE}) int type) { return showModifiers(modifier, type, new CharList()).toStringAndFree(); }
 	public static <T extends Appendable> T showModifiers(int modifier, int type, T sb) { return showModifiers(modifier, ACC_TOSTRING[type], sb); }
 	public static <T extends Appendable> T showModifiers(int modifier, String[] names, T sb) {
 		try {

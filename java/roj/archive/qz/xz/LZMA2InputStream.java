@@ -232,7 +232,7 @@ public final class LZMA2InputStream extends MBInputStream {
 
 	public int available() throws IOException {
 		if (in == null) throw new IOException("Stream closed");
-		return state==LZMA2Out.STATE_LZMA ? uncompressedSize : Math.min(uncompressedSize, in.available());
+		return state < 0 ? -1 : state==LZMA2Out.STATE_LZMA ? uncompressedSize : Math.min(uncompressedSize, in.available());
 	}
 
 	private synchronized void putArraysToCache() {

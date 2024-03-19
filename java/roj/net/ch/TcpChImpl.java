@@ -94,7 +94,6 @@ class TcpChImpl extends MyChannel {
 		fireFlushing();
 		if (pending.isEmpty()) return;
 
-		BufferPool bp = alloc();
 		lock.lock();
 		try {
 			do {
@@ -125,7 +124,7 @@ class TcpChImpl extends MyChannel {
 		while (state == OPENED && sc.isOpen()) {
 			if (!buf.isWritable()) {
 				if (buf == EMPTY) rb = buf = alloc().allocate(true, buffer, 0);
-				else rb = buf = BufferPool.expand(buf, buf.capacity());
+				else rb = buf = alloc().expand(buf, buf.capacity());
 			}
 
 			ByteBuffer nioBuffer = syncNioRead(buf);
@@ -164,6 +163,7 @@ class TcpChImpl extends MyChannel {
 
 			if (buf.isReadable()) {
 				if (pending.isEmpty()) key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
+				else if (pending.size() > 30) pauseAndFlush();
 
 				Object o1 = pending.ringAddLast(bp.allocate(true, buf.readableBytes(), 0).put(buf));
 				if (o1 != null) throw new IOException("上层发送缓冲区过载");

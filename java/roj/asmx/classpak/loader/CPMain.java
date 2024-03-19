@@ -4,7 +4,7 @@ import roj.archive.qz.xz.LZMA2InputStream;
 
 import java.io.*;
 import java.net.URLDecoder;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.util.function.Consumer;
@@ -43,7 +43,7 @@ public class CPMain extends ClassLoader {
 		int i = loc.lastIndexOf('!');
 		loc = loc.substring(loc.startsWith("/")?1:0, i<0?loc.length():i);
 
-		File self = new File(URLDecoder.decode(loc, Charset.defaultCharset()));
+		File self = new File(URLDecoder.decode(loc, StandardCharsets.UTF_8));
 		CodeSource cs = new CodeSource(null, pd.getCodeSource().getCertificates());
 		this.pd = new ProtectionDomain(cs, pd.getPermissions(), this, pd.getPrincipals());
 

@@ -10,10 +10,10 @@ import roj.concurrent.OperationDone;
 import roj.concurrent.TaskPool;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
+import roj.config.data.CInt;
 import roj.io.IOUtil;
 import roj.text.*;
-import roj.text.epub.EpubWriter;
 import roj.ui.DragReorderHelper;
 import roj.ui.GuiUtil;
 import roj.ui.OnChangeHelper;
@@ -119,7 +119,7 @@ public class NovelFrame extends JFrame {
 		btnRegexMatch.addActionListener(e -> {
 			IntList tmp2 = new IntList();
 			tmp.clear();
-			int matches = novel_in.preg_match_cllabck(novel_regexp, m -> {
+			int matches = novel_in.preg_match_callback(novel_regexp, m -> {
 				tmp.append(m.start()).append("@").append(Tokenizer.addSlashes(m.group())).append('\n');
 				tmp2.add(m.start());
 			});
@@ -151,16 +151,27 @@ public class NovelFrame extends JFrame {
 			errout.setText(tmp.toString());
 		});
 		btnRegexRpl.addActionListener(e -> {
-			novel_in.preg_replace_callback(novel_regexp, m -> {
-				tmp.clear();
-				tmp.append(uiRegexRplTo.getText());
-				for (int j = 0; j <= m.groupCount(); j++) {
-					String str = m.group(j);
-					tmp.replace("$"+j, str);
-				}
+			int prevHash = novel_in.hashCode();
+			int count = 0;
+			CInt rpl = new CInt(0);
+			do {
+				novel_in.preg_replace_callback(novel_regexp, m -> {
+					tmp.clear();
+					tmp.append(uiRegexRplTo.getText());
+					for (int j = 0; j <= m.groupCount(); j++) {
+						String str = m.group(j);
+						tmp.replace("$"+j, str);
+					}
 
-				return tmp;
-			});
+					rpl.value++;
+					return tmp;
+				});
+
+				count++;
+			} while (uiRepeatRpl.isSelected() && prevHash != (prevHash = novel_in.hashCode()));
+
+			tmp.append("共循环").append(count).append("次,进行了").append(rpl.value).append("次替换");
+			errout.setText(tmp.toString());
 		});
 
 		chapters = new SimpleList<>();
@@ -261,7 +272,7 @@ public class NovelFrame extends JFrame {
 	CharList novel_in = new CharList(), novel_out = new CharList();
 
 
-	static final MyBitSet myWhiteSpace = MyBitSet.from("\r\n\t 　 \uE5E5\uFEFF\u200B");
+	static final MyBitSet myWhiteSpace = MyBitSet.from("\r\n\t 　 \uE4C6\uE5E5\uFEFF\u200B");
 
 	// region 功能区-文件读取
 	private void select_novel(ActionEvent e) {
@@ -315,7 +326,7 @@ public class NovelFrame extends JFrame {
 	}
 
 	private void presetRegexChanged(JTextComponent c) {
-		LineReader lr = new LineReader(c.getText());
+		LineReader lr = LineReader.create(c.getText());
 
 		PresetRegexp none = uxPresetRegexs.getElementAt(0);
 		uxPresetRegexs.removeAllElements();
@@ -384,7 +395,7 @@ public class NovelFrame extends JFrame {
 		if (uiSmrtChapter.isSelected()) {
 			List<List<Chapter>> chapters = null;
 			try {
-				chapters = Chapter.parse(new LineReader(novel_in));
+				chapters = Chapter.parse(LineReader.create(novel_in));
 			} catch (IOException ignored) {}
 
 			root.children = Chapter.groupChapter(chapters, 0);
@@ -526,7 +537,7 @@ public class NovelFrame extends JFrame {
 		JOptionPane.showMessageDialog(advancedMenu, "没有了", "提示", JOptionPane.INFORMATION_MESSAGE);
 	}
 
-	/** 替换内容  */
+	/** 替换内容 */
 	private void replaceChapter(ActionEvent e) {
 		Chapter c = getOneChapter();
 		if (c == null) {
@@ -616,7 +627,7 @@ public class NovelFrame extends JFrame {
 					pool.pushTask(() -> {
 						byte[] bb = IOUtil.SharedCoder.get().encode(cb.data != null ? cb.data : novel_in.subSequence(cb.start, cb.end));
 						int siz = Math.min(ba.length, bb.length);
-						int dd = new BsDiff(diff).getDiffLength(bb, siz / 2);
+						int dd = diff.parallel().getDiffLength(bb, siz / 2);
 						if (dd >= 0) {
 							synchronized (list) {
 								list.add(new IntMap.Entry<>((int) ((double)(siz-dd) / siz * 10000), ca.fullName + "|" + cb.fullName));
@@ -722,9 +733,7 @@ public class NovelFrame extends JFrame {
 			author = text.substring(pos+3);
 		}
 
-		// TODO auto configure cover
-		File cover = new File("D:\\Desktop\\novel\\小说封面_20230831\\百炼成神 - 恩赐解脱.jpg");
-		if (!cover.isFile()) cover = null;
+		File cover = GuiUtil.fileLoadFrom("选择小说封面");
 
 		try (EpubWriter epw = new EpubWriter(new ZipFileWriter(path), title, author, cover)) {
 			SimpleList<String> replacedName = null;
@@ -826,7 +835,7 @@ public class NovelFrame extends JFrame {
 				String str = m.group(j);
 				if (j == chapterId_group) {
 					if (uiRegenId.isSelected()) {
-						str = Integer.toString(myChapterNo.increase(String.valueOf(c.type), 1));
+						str = Integer.toString(myChapterNo.increment(String.valueOf(c.type), 1));
 						System.out.println("type=" + c.type);
 					}
 
@@ -905,6 +914,7 @@ public class NovelFrame extends JFrame {
 		uiRegex = new JTextField();
 		btnRegexRpl = new JButton();
 		uiRegexRplTo = new JTextField();
+		uiRepeatRpl = new JCheckBox();
 		lb5 = new JLabel();
 		sp1 = new JScrollPane();
 		uiChapters = new JTree();
@@ -1061,6 +1071,11 @@ public class NovelFrame extends JFrame {
 		btnRegexRpl.setBounds(5, 135, 60, 23);
 		contentPane.add(uiRegexRplTo);
 		uiRegexRplTo.setBounds(65, 135, 360, uiRegexRplTo.getPreferredSize().height);
+
+		//---- uiRepeatRpl ----
+		uiRepeatRpl.setText("\u5faa\u73af\u5339\u914d");
+		contentPane.add(uiRepeatRpl);
+		uiRepeatRpl.setBounds(new Rectangle(new Point(80, 155), uiRepeatRpl.getPreferredSize()));
 
 		//---- lb5 ----
 		lb5.setText("\u7ae0\u8282\u5217\u8868");
@@ -1270,7 +1285,7 @@ public class NovelFrame extends JFrame {
 			{
 
 				//---- presetRegexpInp ----
-				presetRegexpInp.setText("\u5e38\u7528|1|3\n(?:\u6b63\u6587\\s*)?\u7b2c(?:\\s+)?([\u2015\uff0d\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19 ]{1,12})(?:\\s+)?([\u7ae0\u5377])[ \u3000\\t]*(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1");
+                presetRegexpInp.setText("\u5e38\u7528|1|3\n(?:\u6b63\u6587\\s*)?\u7b2c(?:\\s+)?([\u2015\uff0d\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19 ]{1,12})(?:\\s+)?([\u7ae0\u5377])[ \u3000\\t]*(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\ue4c6\ue4c6\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1\n\u786c\u56de\u8f66\u7b80\u6613\u4fee\u590d|0|0\n^([ \u3000\ue4c6\ue4c6\\t]+.+)\\r?\\n([^ \u3000\\t\\r\\n].+)$\n$1$2\n\u664b\u6c5f\u5e38\u7528\n\u7b2c$1\u7ae0 $2\n^[ \u3000\ue4c6\ue4c6\\t]*([0-9\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u96f6]{1,5})[\uff0e.\u3001\u203b](.+))");
 				scrollPane3.setViewportView(presetRegexpInp);
 			}
 			advancedMenuContentPane.add(scrollPane3);
@@ -1313,6 +1328,7 @@ public class NovelFrame extends JFrame {
 	private JTextField uiRegex;
 	private JButton btnRegexRpl;
 	private JTextField uiRegexRplTo;
+	private JCheckBox uiRepeatRpl;
 	private JLabel lb5;
 	private JScrollPane sp1;
 	private JTree uiChapters;

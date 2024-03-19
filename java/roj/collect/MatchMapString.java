@@ -119,7 +119,7 @@ public class MatchMapString<V> {
 		entry.key = key;
 		entry.value = value;
 		for (int i = 0; i < key.length(); i++) {
-			map.computeIfAbsent(key.charAt(i), CIA_FUNC).add(entry, i);
+			map.computeIfAbsentC(key.charAt(i), CIA_FUNC).add(entry, i);
 		}
 
 		size++;

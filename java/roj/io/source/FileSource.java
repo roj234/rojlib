@@ -67,6 +67,9 @@ public class FileSource extends Source {
 	public DataInput asDataInput() { return io; }
 
 	@Override
+	public boolean isWritable() {return write;}
+
+	@Override
 	public Source threadSafeCopy() throws IOException { return new FileSource(file, offset, write); }
 
 	@Override

@@ -1,15 +1,6 @@
 
 ### 本项目存在大量无意留下的漏洞，仅供学习研究用途，如用作商业行为，不提供任何保证
 
-### TODO LIST
-* [ ] yield
-* [x] java compiler
-* [ ] data flow analyze for bytecode
-* [ ] retransform based advanced hot-reload
-* [ ] FrameVisitor
-* [ ] UDP Transport Protocol
-* [ ] Gradio for java
-
 ## 有单独文档的类(包)
 [Lava编译器](docs/Re_Lavac.md)  
 [自动识别中文编码](docs/Re_ChineseCharset.md)  
@@ -82,12 +73,13 @@
 
 ## roj.asmx
     基于Transformer的各种骚操作
-### annorepo
-统一注解缓存
-### fast_reflect
-将直接(constant parameter)反射调用替换为opcode
+### classpak
+使用LZMA2压缩你的jar
+### event
+基于ASM的高性能事件系统
+取消、继承、泛型
 ### launcher
-launchwrapper
+对bytecode进行转换，运行在pre-defineClass的javaagent
 ### mapper
 class映射(对方法/类改名)器 Mapper
 * 上面我说到ASM的ConstantData等级好就好在这里
@@ -111,18 +103,17 @@ class混淆器 Obfuscator`
  * 替换常量的值，或将其的求值语句替换成一个函数
  * 替换方法的调用
  * 灵感来自spongepowered:mixin  
-  
+
+### AnnotationRepo
+ * 公共注解缓存 方便获取注解信息
+
+### NodeFilter
+ * transform过滤器，支持declare | reference | annotated => Class Field Method
+
 ## roj.collect  
 包含了各种我写的集合,举几个好玩的  
  * `MyHashMap` `MyHashSet` 不缓存hash更省内存（对于String之类速度不影响）
- * `RecipeMap<食材, 食材的标签, 菜> implements Map<List<食材>, 菜>`  
-   我有一些食材(m)，getMulti()以[常数 ~ log(n)]的时间复杂度告诉我能做哪些菜(n)  
-   条件：提供的食材 >= 菜所需的食材  
- * `UntitledMap<K (WIP), V>`  
-   getMulti()以[log(m) - m*n]的时间复杂度告诉我能做哪些半成品  
-   与RecipeMap的区别是：提供的食材 <= 菜所需的食材  
-   (所以是半成品, 因为你材料不够)
-
+ * `MatchMap`  见独立说明
  * 带压缩的字典树 `TrieTree`
  * 取各区间的交集 `RSegmentTree<T>`  
    可以用来计算变量的作用域  
@@ -130,6 +121,12 @@ class混淆器 Obfuscator`
    ZipArchive中有用到
  * 环形缓冲 `RingBuffer`
  * `LFUCache` / `LRUCache`
+ * 完美哈希表
+
+## roj.compiler
+ java编译器
+ 半成品，暂时不怎么支持泛型
+ 更多见独立说明
 
 ## roj.concurrent
 Promise:
@@ -155,17 +152,16 @@ Promise:
   
 ## roj.config  
   JSON YAML TOML INI XML NBT Torrent(Bencode) CSV 解析器  
+  ConfigMaster  
 
 ### 特点：
 * 自动识别编码（仅支持中英，默认开启可关闭）
 * 所有配置类型（除xml）使用统一结构 `roj.config.data.CEntry`
-* 提供访问者模式的读取 (仅支持JSON和YAML) 详见`roj.config.CCParser`
-* 访问者模式的写入：ToEntry ToJson ToNBT ToXEntry ToYaml... 详见(包)`roj.config.serial`
+* 访问者模式的读取和写入（仅支持JSON YAML和NBT）
 * 支持dot-get: 形如`a.b[2].c` 详见`roj.config.data.CEntry#query`
 * XML的dot-get更高级 详见`roj.config.data.Node#querySelector`
 * 支持Xlsx和Csv的处理，它们在roj.excel包
 * 人性化的错误提示
-* 一种文件格式，叫做Vinary，通过保存Map类型中共有的Key以节约空间（虽然不如压缩）
 * 自动对象序列化
 
 
@@ -187,20 +183,10 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 ```
 
 ## roj.crypt  
-* SM3
-* SM4
 * XChaCha20-Poly1305
-* AES-GCM (adapted)
-* MT19937
-* PBKDF2
-* HMAC
 * Blake3
-* OAEP
-* DH
-* EdDSA (optimize)
-* X25519DH
-* `FeedbackCipher`
-* CRC4、5、6、7、8、16、32
+* EdDSA / X25519DH
+* XXHash32
 
 ## roj.dev
     热重载
@@ -212,51 +198,29 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
     PE文件格式(.exe .dll)和ELF文件格式(.so)的解析
 
 ## roj.io  
-  多线程下载 `Downloader`
-  `BOMInputStream`  
-  `BoxFile` 类似electron的asar  
-
+  多线程下载 `Downloader`  
 `BinaryDB` 分块锁的实验品,似乎效率还行
-  
-## roj.mildwind  
-    js解释器, WIP  
-并没有完全支持ECMAScript  
-基本类型还没加函数, 比如charAt  
-
-## roj.lavac
-    自己开发的javac, WIP  
+  “分页”缓冲池
+  RegionFile
 
 ## roj.math  
     各种向量啊矩阵啊并不是我写的，不过我感觉我现在也能写出来...  
-  `VecIterators`: 两个算法  
-  * 由近到远遍历一个Rect3i  
-  * 遍历Rect3i的边界 
 
 `MutableBigInteger`: 如其名
-
-  `PolygonUtil`:  
-多边形面积，顶点顺序  
-折线长度  
-  `MathUtil`:  
-插值  
-快速sin  
-`parseInt()` without throwing
+`Version`: 1.2.3版本解析
   
 ## roj.misc  
     各种工具，也可以看作是这个lib的测试样例  
   
 1.   `AdGuard` 基于DNS的广告屏蔽器  
-2.   `AsarExporter` 导出ASAR
-3.   `CpFilter` 通过动态分析加载的class精简jar  
-4.   `HarExporter` 导出开发者工具通过【Save as Har with contents】导出的har文件 (copy网站)  
-5.   `HFTP` 基于MSS和HTTP的文件传输工具  
-6.   `MHTParser` 解析mhtml
-7.   `MP3Player` MP3播放器  
-8.   `MyPassIs` 密码生成器  
-9.   `RaytraceCulling` 基于CPU光线追踪的方块剔除(WIP)
-10.   `PluginRenamer` 恢复被无良腐竹改了的插件名  
-11.   `SameServerFinder` 端口扫描  
-15.   `Websocketed` 用Websocket执行任意脚本
+2.   `FindClass` 查找类中元素的引用或定义，比jd-gui更好！
+3.   `MHTParser` 解析mhtml
+4.   `MP3Player` MP3播放器
+5.   `PluginRenamer` 恢复被无良腐竹改了的插件名
+6.   `SameServerFinder` 端口扫描
+7.   `Translator` String常量修改（翻译）
+8.   `TrimMinecraft` 删除Minecraft不被版本JSON引用的资源和库文件
+9.   `UIEntry` 所有GUI的入口
   
 ## roj.mod
     我自己写的模组编译器  
@@ -274,13 +238,7 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 * 我没有做过时间的比较, 除了ForgeGradle
 * 在我2019年使用当时所知的最优配置时  
   FG需要30秒  
-  FMD则是50ms-1s (增量模式) 4s (全量)  
-
-怎么用: (WIP)
-* 我提供了详细的配置文件和说明
-* 你只需要编译本项目并运行roj.mod.FMDMain即可
-* 更多使用方法请看mcbbs的发布贴: xxxx
-* 你还可以在这里下载编译好的版本
+  FMD则是50ms-1s (增量模式) 4s (全量)
 
 ### 图片展示
 ![roj.mod.FMDMain](docs/images/fmd.png)
@@ -296,38 +254,49 @@ HTTP服务器, 客户端
   * Websocket ready
   * HTTP2.0 (WIP)
 
-DNS服务器 
-
-内网穿透工具 AEClient / AEServer / AEHost`roj.plugins.cross`  
-* 带或不带中转服务器的端口转发程序
-* 客户端与服务器均能自签证书（用户ID）
-* 中转服务器模式下支持多个房间(主机)并行
-
-### 图片展示
-![roj.plugins.cross.AEGui](docs/images/port transfer.png)
+DNS服务器  
 
 MSS协议，My Secure Socket`roj.net.mss`  
   因为(jvav的)SSL不好用，自用的话还不如自己写一个协议  
 * [x] 加密方式协商
 * [x] 前向安全
 * [x] 0-RTT
-  
+
+协议混淆  
+P2P  
+
+## roj.platform
+  * 插件系统，见独立介绍
+
+## roj.plugins
+内网穿透工具 AEClient / AEServer / AEHost`roj.plugins.frp`
+* 带或不带中转服务器的端口转发程序
+* 客户端与服务器均能自签证书（用户ID）
+* 中转服务器模式下支持多个房间(主机)并行
+### 图片展示
+![roj.plugins.frp.AEGui](docs/images/port transfer.png)
+ddns
+* DDNS服务器，现支持阿里云API  
+CardSleep: 显卡频率限制  
+MyPassIs: 安全密码生成器  
+`Websocketed` 用Websocket执行任意脚本
+
 ## roj.reflect
 `EnumHelper`,  动态增删枚举  
 `DirectAccessor`, 实现高效率的‘反射’操作
+`ModuleKiller`, 在Java9-21中一键禁用模块系统
+`Proxy`, ASM版本的java.lang.reflect.Proxy
 
-## roj.terrain  
-    地形生成器, WIP  
-  
+## roj.sound  
+    MP3和WAV解码器
+    TODO => AudioContext
+
+## roj.sql
+    从PHP搬过来的简易连接池和链式查询
+
 ## roj.text  
   `ACalendar`，又一个日历，提供: prettyTime,  formatDate  
-  `CharList` 又一个SB  
   `Logger`  
-  `Template` 使用 {xx} 标识变量并替换  
-`Template.compile("您是第{count}位客户！").replace(Collections.singletonMap("count", "8848"))`
-  > “您是第8848位客户！”  
-
-  `LineReader` 按行读取  
   `FastMatcher` 基于改进版BM算法的字符串寻找
 
 ### 图片展示 (/WIP)
@@ -338,10 +307,37 @@ MSS协议，My Secure Socket`roj.net.mss`
     请在支持虚拟终端转义序列的Console中执行 （在windows上可能需要libcpp.dll）
   `CLIUtil.Minecraft` 将Minecraft的小节号转义或JSON字符串原样映射到控制台中  
   `EasyProgressBar` 进度条
-  `terminal.DefaultConsole` 基于虚拟终端序列的终端模拟器
-  
+  `terminal.DefaultConsole` 基于虚拟终端序列的终端模拟器  
+
+## roj.unpkg
+1. `AsarExporter` 导出ASAR
+2. `HarExporter` 导出开发者工具通过【Save as Har with contents】导出的har文件 (copy网站)
+3. `ScenePkg` 导出小红车的壁纸包
+
 ## roj.util  
   `DynByteBuf`，能扩展的ByteBuffer，也许Streamed，可作为Input/OutputStream, DataInput/Output  
-  `ComboRandom`，多个种子的random  
   `GIFDecoder` 解码GIF文件  
   `VarMapperX` 变量ID分配器
+
+# Properties
+int roj.cpuPoolSize [CPU Count]  (TaskPool)  
+String roj.text.outputCharset [UTF-8]  (TextWriter)  
+Path roj.archiver.temp [.]  (ArchiverUI)  
+File roj.lavac.i18n [null]  (Lava Compiler)  
+boolean roj.debug.dumpClass  (ClassDefiner)
+  
+
+# Libcpp.dll
+Windows专属：
+  * 具名共享内存
+  * ReusePort
+  * ANSI转义序列
+  * Fast LZMA2 (https://github.com/conor42/fast-lzma2)
+  
+共用(WIP)：
+  * native BsDiff
+  * native LZMA2
+
+要是有人问，你为什么不给Linux做优化啊  
+Linux那么多工具缺我一个么/doge  
+而且也要有人问啊/doge  
