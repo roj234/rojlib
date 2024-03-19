@@ -825,7 +825,9 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		if (byName.isEmpty()) {
 			byName.ensureCapacity(entries.length);
 			for (QZEntry entry : entries) {
-				byName.put(entry.name, entry);
+				if (byName.put(entry.name, entry) != null) {
+					throw new IllegalArgumentException("文件名重复！该文件可能已损坏，请通过entries()获取Entry并读取");
+				}
 			}
 		}
 		return byName;

@@ -3,8 +3,8 @@ package roj.config.data;
 import org.jetbrains.annotations.NotNull;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.config.Tokenizer;
 import roj.config.serial.CVisitor;
-import roj.config.word.Tokenizer;
 import roj.text.CharList;
 
 import java.util.Collections;
@@ -172,7 +172,7 @@ public class Element extends Node {
 			cc.valueMap(attributes.size());
 			for (Map.Entry<String, CEntry> entry : attributes.entrySet()) {
 				cc.key(entry.getKey());
-				entry.getValue().forEachChild(cc);
+				entry.getValue().accept(cc);
 			}
 			cc.pop();
 		}

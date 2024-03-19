@@ -6,12 +6,12 @@ import roj.archive.zip.ZipArchive;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
+import roj.config.Tokenizer;
 import roj.config.XMLParser;
 import roj.config.data.CEntry;
 import roj.config.data.Element;
 import roj.config.data.Node;
-import roj.config.serial.ToXEntry;
-import roj.config.word.Tokenizer;
+import roj.config.serial.ToXml;
 import roj.io.FastFailException;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
@@ -182,7 +182,7 @@ public abstract class XlsxReader {
 		consumer = c;
 
 		try (InputStream in = zip.getStream(entry)) {
-			xml.parseRaw(new ToXEntry() {
+			xml.parse(in, 0, new ToXml() {
 				@Override
 				protected Element createElement(String str) {
 					Element el = replaceNodes.get(str);
@@ -200,7 +200,7 @@ public abstract class XlsxReader {
 				protected void beforePop(Element child, Element parent) {
 					if (parent == FAKE) consumer.accept(child);
 				}
-			}, in, 0);
+			});
 		}
 	}
 }

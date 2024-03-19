@@ -6,7 +6,7 @@ import roj.asm.util.ClassUtil;
 import roj.asmx.mapper.util.MapperList;
 import roj.collect.*;
 import roj.config.ParseException;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.math.MutableInt;
 import roj.text.*;
@@ -95,7 +95,7 @@ public class Mapping {
 			String key = s.substring(0, i);
 
 			q.clear();
-			TextUtil.split(q, s.substring(i + 1), ' ');
+			TextUtil.split(q, s.substring(i + 1).trim(), ' ');
 
 			int id, id2;
 			switch (key) {

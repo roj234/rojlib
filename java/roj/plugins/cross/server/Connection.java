@@ -1,15 +1,15 @@
 package roj.plugins.cross.server;
 
 import roj.collect.IntMap;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.config.serial.CVisitor;
 import roj.config.serial.ToEntry;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.Event;
 import roj.net.ch.MyChannel;
-import roj.net.ch.handler.MSSCipher;
-import roj.net.ch.handler.Timeout;
+import roj.net.handler.MSSCipher;
+import roj.net.handler.Timeout;
 import roj.plugins.cross.Constants;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -118,7 +118,7 @@ public abstract class Connection extends Constants {
 
 	public void serialize(CVisitor v) {}
 	@Deprecated
-	public CMapping serialize() {
+	public CMap serialize() {
 		ToEntry entry = new ToEntry();
 		serialize(entry);
 		return entry.get().asMap();

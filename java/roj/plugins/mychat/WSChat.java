@@ -4,7 +4,7 @@ import roj.collect.IntSet;
 import roj.concurrent.PacketBuffer;
 import roj.config.JSONParser;
 import roj.config.data.CList;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.ws.WebsocketHandler;
@@ -114,7 +114,7 @@ public abstract class WSChat extends WebsocketHandler {
 		try {
 			CharList s = decodeToUTF(in);
 			if (jl == null) jl = new JSONParser();
-			CMapping map = jl.parse(s, JSONParser.LITERAL_KEY | JSONParser.NO_DUPLICATE_KEY).asMap();
+			CMap map = jl.parse(s, JSONParser.NO_DUPLICATE_KEY).asMap();
 			switch (map.getInteger("act")) {
 				case P_LOGOUT:
 					error(ERR_OK, null);

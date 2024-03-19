@@ -3,9 +3,9 @@ package roj.ui;
 import org.jetbrains.annotations.NotNull;
 import roj.NativeLibrary;
 import roj.collect.*;
+import roj.config.Tokenizer;
 import roj.config.data.CList;
-import roj.config.data.CMapping;
-import roj.config.word.Tokenizer;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
 import roj.math.MutableInt;
@@ -102,7 +102,8 @@ public final class CLIUtil implements Runnable {
 			}
 		}
 
-		public static AnsiString minecraftJsonStyleToString(CMapping map) {
+		public static String getByConsoleCode(int color) { return MC_COLOR_JSON.get(color); }
+		public static AnsiString minecraftJsonStyleToString(CMap map) {
 			AnsiString sts = minecraftRawStyleToString(map.getString("text"));
 
 			int colorCode = MC_COLOR_JSON.getInt(map.getString("color").toLowerCase());
@@ -373,13 +374,14 @@ public final class CLIUtil implements Runnable {
 		Console prev = console;
 
 		Object[] ref = new Object[1];
-		c.register(CommandNode.argument("arg", arg).executes(ctx -> {
+		CommandNode node = CommandNode.argument("arg", arg).executes(ctx -> {
 			synchronized (ref) {
 				ref[0] = ctx.argument("arg", Object.class);
 				ref.notify();
 				setConsole(prev);
 			}
-		}));
+		});
+		c.register(node);
 		Thread t = Thread.currentThread();
 		c.onKeyboardInterrupt(t::interrupt);
 		c.ctx.executor = null;
@@ -391,7 +393,7 @@ public final class CLIUtil implements Runnable {
 			return Helpers.maybeNull();
 		} finally {
 			c.onKeyboardInterrupt(null);
-			c.unregister(null);
+			c.unregister(node);
 			setConsole(prev);
 		}
 

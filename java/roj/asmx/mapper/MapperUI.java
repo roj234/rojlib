@@ -4,17 +4,13 @@
 
 package roj.asmx.mapper;
 
-import roj.archive.ArchiveEntry;
-import roj.archive.ArchiveFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.type.Desc;
 import roj.asm.util.Context;
-import roj.asmx.mapper.util.ResWriter;
 import roj.collect.Int2IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
-import roj.concurrent.task.AsyncTask;
 import roj.io.IOUtil;
 import roj.misc.mapping.MappingUI;
 import roj.text.CharList;
@@ -130,9 +126,11 @@ public class MapperUI extends JFrame {
 		List<Context> ctxs = new SimpleList<>();
 		try {
 			for (File file : input) {
-				Map<ArchiveEntry, ArchiveFile> resource = new MyHashMap<>();
-				List<Context> arr = Context.fromZip(file, resource);
-				files.add(new MapTask(input.size() == 1 && !output.isDirectory() ? output : new File(output, file.getName()), ctxs.size(), arr.size(), resource));
+				File out = input.size() == 1 && !output.isDirectory() ? output : new File(output, file.getName());
+				ZipFileWriter zfwOut = new ZipFileWriter(out);
+
+				List<Context> arr = Context.fromZip(file, zfwOut);
+				files.add(new MapTask(ctxs.size(), arr.size(), zfwOut));
 
 				if (uiMapUsers.isSelected()) m.loadLibraries(Collections.singletonList(file));
 				m.map(arr);
@@ -154,19 +152,15 @@ public class MapperUI extends JFrame {
 	}
 	private static final class MapTask {
 		ZipFileWriter zfw;
-		AsyncTask<Void> task;
 		int off, len;
 
-		MapTask(File out, int off, int len, Map<ArchiveEntry, ArchiveFile> resource) throws IOException {
-			zfw = new ZipFileWriter(out);
-			task = new ResWriter(zfw, resource);
+		MapTask(int off, int len, ZipFileWriter zfw) {
+			this.zfw = zfw;
 			this.off = off;
 			this.len = len;
-			TaskPool.Common().pushTask(task);
 		}
 
 		public void finish(List<Context> byName) throws Exception {
-			task.get();
 			for (int i = off; i < off+len; i++) {
 				Context c = byName.get(i);
 				zfw.writeNamed(c.getFileName(), c.getCompressedShared());

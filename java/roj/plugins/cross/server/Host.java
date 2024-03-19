@@ -1,7 +1,7 @@
 package roj.plugins.cross.server;
 
 import roj.collect.IntMap;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.Pipe;
@@ -170,7 +170,7 @@ final class Host extends Connection {
 		LOGGER.info("[{}] 连接中止", this);
 	}
 
-	public CMapping serialize() {
+	public CMap serialize() {
 		long up = 0, down = 0;
 		if (!pipes.isEmpty()) {
 			synchronized (pipes) {
@@ -184,7 +184,7 @@ final class Host extends Connection {
 			}
 		}
 
-		CMapping json = new CMapping();
+		CMap json = new CMap();
 		json.put("id", token);
 		json.put("ip", handler.remoteAddress().toString());
 		json.put("time", creation);

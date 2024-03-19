@@ -4,7 +4,7 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.tree.attr.Attribute;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.SimpleList;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.math.MutableInt;
 import roj.text.CharList;

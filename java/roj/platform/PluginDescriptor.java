@@ -1,7 +1,7 @@
 package roj.platform;
 
 import roj.collect.TrieTreeSet;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.source.Source;
 import roj.math.Version;
 import roj.text.CharList;
@@ -28,7 +28,6 @@ public class PluginDescriptor {
 
 	Plugin instance;
 	List<String> depend = Collections.emptyList(), loadAfter = Collections.emptyList(), loadBefore = Collections.emptyList();
-	transient PluginClassLoader pcl;
 	transient ClassLoader cl;
 
 	// 基于transformer的安全管理
@@ -41,6 +40,7 @@ public class PluginDescriptor {
 	public String getId() { return id; }
 	public Version getVersion() { return version; }
 	public Plugin getInstance() { return instance; }
+	public int getState() { return state; }
 
 	@Override
 	public String toString() { return Tokenizer.addSlashes(id, 0, new CharList("'"), '"').append("' v").append(version).toStringAndFree(); }

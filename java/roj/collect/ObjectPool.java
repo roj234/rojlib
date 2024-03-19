@@ -1,33 +1,22 @@
 package roj.collect;
 
-import java.util.function.Supplier;
-
 /**
  * @author Roj234
  * @since 2023/5/10 0010 16:30
  */
 public class ObjectPool<T> {
-	public ObjectPool(Supplier<T> creater, int maxSize) {
-		this.creater = creater;
+	public ObjectPool(int maxSize) {
 		this.max = maxSize;
 		this.array = new Object[Math.min(maxSize,10)];
 	}
 
-	private final Supplier<T> creater;
 	private Object[] array;
 	private int size;
 	private final int max;
 
-	public final void clear() {
-		for (int i = 0; i < size; i++) {
-			array[i] = 0;
-		}
-		size = 0;
-	}
-
 	@SuppressWarnings("unchecked")
 	public final T get() {
-		if (size == 0) return newInstance();
+		if (size == 0) return null;
 		return (T) array[--size];
 	}
 
@@ -41,6 +30,4 @@ public class ObjectPool<T> {
 		array[size++] = t;
 		return true;
 	}
-
-	protected T newInstance() { return creater == null ? null : creater.get(); }
 }

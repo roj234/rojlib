@@ -2,7 +2,7 @@ package roj.text;
 
 import org.jetbrains.annotations.Nullable;
 import roj.config.ParseException;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
 
 import java.util.TimeZone;
@@ -336,7 +336,7 @@ public class ACalendar {
 		if (m > 59) throw new IllegalArgumentException("你一小时" + m + "分钟");
 		if (s > 59) throw new IllegalArgumentException("你一分钟" + s + "秒");
 
-		long a = (daySinceAD(year, month, day, null) - GREGORIAN_OFFSET_DAY) * 86400000L + h * 3600000 + m * 60000 + s * 1000;
+		long a = (daySinceAD(year, month, day, null) - GREGORIAN_OFFSET_DAY) * 86400000L + h * 3600000L + m * 60000L + s * 1000L;
 
 		int i = -1;
 		switch (seq.charAt(26)) {

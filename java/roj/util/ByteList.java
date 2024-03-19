@@ -2,7 +2,6 @@ package roj.util;
 
 import org.jetbrains.annotations.NotNull;
 import roj.compiler.api.Constant;
-import roj.io.MyDataInput;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
@@ -166,11 +165,6 @@ public class ByteList extends DynByteBuf implements Appendable {
 		ensureCapacity(wIndex+len);
 		b.readFully(off, list, wIndex+arrayOffset(), len);
 		wIndex += len;
-		return this;
-	}
-
-	public final ByteList putVarInt(int i, boolean canBeNegative) {
-		putVarLong(this, canBeNegative ? zig(i) : i);
 		return this;
 	}
 
@@ -393,7 +387,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		return (l[i++] & 0xFF)| (l[i++] & 0xFF) << 8 | (l[i] & 0xFF) << 16;
 	}
 
-	public final int readVarInt(boolean zag) {
+	public final int readVarInt() {
 		int value = 0;
 		int i = 0;
 
@@ -408,7 +402,6 @@ public class ByteList extends DynByteBuf implements Appendable {
 			value |= (chunk & 0x7F) << i;
 			i += 7;
 			if ((chunk & 0x80) == 0) {
-				if (zag) return MyDataInput.zag(value);
 				if (value < 0) break;
 				return value;
 			}
@@ -623,7 +616,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 				flush();
 
 				if (wIndex+cap > buf.capacity()) {
-					buf = BufferPool.expand(buf, cap);
+					buf = BufferPool.localPool().expand(buf, cap);
 					list = buf.array();
 				}
 			}

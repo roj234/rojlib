@@ -1,6 +1,6 @@
 package roj.reflect;
 
-import roj.ReferenceByPrecompiledClass;
+import roj.ReferenceByGeneratedClass;
 import roj.asm.Parser;
 import roj.asm.cp.CstString;
 import roj.asm.tree.ConstantData;
@@ -31,7 +31,7 @@ import static roj.asm.Opcodes.*;
  * @since 2023/2/11 14:16
  */
 final class VMInternals {
-	@ReferenceByPrecompiledClass
+	@ReferenceByGeneratedClass
 	private static final String PROP_NAME = "_ILJ9DC_", CLASS_NAME = "java/lang/🔓_IL🐟"; // "海阔凭鱼跃，天高任鸟飞"
 
 	public static void main(String[] args) throws Exception {
@@ -79,7 +79,7 @@ final class VMInternals {
 		w.clazz(INSTANCEOF, "java/lang/Class");
 		Label marker = new Label();
 		Label marker2 = new Label();
-		w.jump(IFLE, marker);
+		w.jump(IFEQ, marker);
 		w.clazz(CHECKCAST, "java/lang/Class");
 		w.invokeV("java/lang/Class", "getModule", "()Ljava/lang/Module;");
 		w.jump(GOTO, marker2);
@@ -95,7 +95,7 @@ final class VMInternals {
 		w.clazz(INSTANCEOF, "java/lang/Class");
 		marker = new Label();
 		marker2 = new Label();
-		w.jump(IFLE, marker);
+		w.jump(IFEQ, marker);
 		w.clazz(CHECKCAST, "java/lang/Class");
 		w.invokeV("java/lang/Class", "getModule", "()Ljava/lang/Module;");
 		w.jump(GOTO, marker2);

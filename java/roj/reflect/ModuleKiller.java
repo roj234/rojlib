@@ -1,11 +1,6 @@
 package roj.reflect;
 
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandContext;
-import roj.ui.terminal.CommandNode;
-import roj.ui.terminal.SimpleCliParser;
-
-import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
 /**
  * @author Roj234
@@ -13,14 +8,12 @@ import java.lang.reflect.Field;
  */
 public class ModuleKiller {
 	public static void main(String[] args) throws Exception {
-		CommandContext kill = new SimpleCliParser().add(CommandNode.argument("is_kill", Argument.bool()).executes(SimpleCliParser.nullImpl())).parse(args, true);
-		if (kill.argument("is_kill", Boolean.class)) KillModuleSince();
-
-		Field name = Class.class.getDeclaredField("name");
-		name.setAccessible(true);
-		name.set(Object.class, "安全管理器，我的安全管理器，你死得好惨啊！！！");
-
-		System.out.println(Object.class.getName());
+		KillModuleSince();
+		Class<?> c = Class.forName(args[0]);
+		Method m = c.getMethod("main", String[].class);
+		String[] args2 = new String[args.length-1];
+		System.arraycopy(args, 1, args2, 0, args2.length);
+		m.invoke(null, (Object) args2);
 	}
 
 	public static void KillModuleSince() {

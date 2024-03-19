@@ -1,5 +1,6 @@
 package roj.asm.tree;
 
+import roj.NativeLibrary;
 import roj.asm.AsmShared;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
@@ -168,6 +169,10 @@ public class ConstantData implements IClass {
 		int begin = w.wIndex();
 
 		ConstantPool cw = this.cp;
+		if (NativeLibrary.EXTRA_BUG_CHECK) {
+			cw.checkCollision(w);
+			verify();
+		}
 
 		w.putShort(access)
 		 .putShort(cw.reset(nameCst).getIndex())
@@ -201,7 +206,6 @@ public class ConstantData implements IClass {
 
 		w.wIndex(begin);
 		cw.write(w.putInt(0xCAFEBABE).putShort(version).putShort(version >> 16));
-		assert w.wIndex() == cpl;
 		w.wIndex(pos + cpl);
 
 		return w;

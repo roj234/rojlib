@@ -330,10 +330,7 @@ public class TaskPool implements TaskHandler {
 				if (task == null) break;
 
 				try {
-					if (!task.isCancelled()) {
-						executeForDebug(task);
-						if (task.repeating()) pushTask(task);
-					}
+					if (!task.isCancelled()) executeForDebug(task);
 				} catch (Throwable e) {
 					if (exceptionHandler != null) exceptionHandler.uncaughtException(this, e);
 					else Logger.getLogger("@").error(e);

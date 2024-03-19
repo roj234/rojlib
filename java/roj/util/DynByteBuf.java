@@ -1,6 +1,7 @@
 package roj.util;
 
 import org.jetbrains.annotations.NotNull;
+import roj.ReferenceByGeneratedClass;
 import roj.io.IOUtil;
 import roj.io.MyDataInput;
 import roj.text.GB18030;
@@ -109,6 +110,8 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		if (rIndex > wIndex) throw new IllegalArgumentException();
 		this.rIndex = r;
 	}
+	@Override
+	public final long position() { return rIndex; }
 
 	public final boolean isReadable() { return wIndex > rIndex; }
 	public final int readableBytes() { return Math.max(wIndex-rIndex, 0); }
@@ -219,6 +222,8 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	// region PUTxxx
 
 	public final DynByteBuf putBool(boolean b) { return put(b?1:0); }
+	@ReferenceByGeneratedClass
+	public final DynByteBuf putByte(byte e) { return put(e); }
 
 	public abstract DynByteBuf put(int e);
 	public abstract DynByteBuf put(int i, int e);
@@ -246,24 +251,17 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	}
 
 	public final DynByteBuf putVarInt(int i) {
-		putVarLong(this, zig(i));
-		return this;
-	}
-	public DynByteBuf putVarInt(int i, boolean canBeNegative) {
-		putVarLong(this, canBeNegative ? zig(i) : i);
+		putVarLong(this, i);
 		return this;
 	}
 
 	public final DynByteBuf putVarLong(long i) {
-		putVarLong(this, zig(i));
-		return this;
-	}
-	public final DynByteBuf putVarLong(long i, boolean canBeNegative) {
-		putVarLong(this, canBeNegative ? zig(i) : i);
+		putVarLong(this, i);
 		return this;
 	}
 
 	public static void putVarLong(DynByteBuf list, long i) {
+		//list.ensureWritable(VarintSplitter.getVarIntLength(i));
 		do {
 			if (i < 0x80) {
 				list.put((byte) i);
@@ -425,20 +423,21 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final int readMediumLE() { return readMediumLE(moveRI(3)); }
 	public abstract int readMediumLE(int i);
 
-	public final int readVarInt() { return readVarInt(true); }
-	public abstract int readVarInt(boolean zag);
-
-	public final long readVarLong() { return readVarLong(true); }
-	public final long readVarLong(boolean zag) {
+	public final int readVarInt(int max) {
+		int v = readVarInt();
+		if (v > max) throw new IllegalArgumentException("varint太大:"+v+",要求:"+max);
+		return v;
+	}
+	public abstract int readVarInt();
+	public final long readVarLong() {
 		long value = 0;
 		int i = 0;
 
 		while (i <= 63) {
 			int chunk = readByte();
-			value |= (chunk & 0x7F) << i;
+			value |= (long) (chunk & 0x7F) << i;
 			i += 7;
 			if ((chunk & 0x80) == 0) {
-				if (zag) return MyDataInput.zag(value);
 				if (value < 0) break;
 				return value;
 			}
@@ -510,6 +509,11 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final String readAscii(int len) { return readAscii(moveRI(len), len); }
 	public abstract String readAscii(int pos, int len);
 
+	public final String readVarIntUTF(int max) {
+		int len = readVarInt();
+		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
+		return readUTF(len);
+	}
 	@NotNull
 	public final String readUTF() { return readUTF(readUnsignedShort()); }
 	public final String readVUIUTF() { return readVUIUTF(DEFAULT_MAX_STRING_LEN); }

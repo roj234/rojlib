@@ -15,7 +15,7 @@ import roj.collect.TrieTreeSet;
 import roj.concurrent.TaskPool;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
-import roj.net.URIUtil;
+import roj.text.EscapeUtil;
 import roj.text.TextUtil;
 import roj.text.logging.Logger;
 import roj.ui.EasyProgressBar;
@@ -194,7 +194,7 @@ public class UnarchiverUI extends JFrame {
 		BiConsumer<ArchiveEntry, InputStream> cb = (entry, in) -> {
 			if (javacSb == null || javacSb.strStartsWithThis(entry.getName())) {
 				String name = entry.getName();
-				if (uiPathFilter.isSelected()) name = URIUtil.escapeFilePath(IOUtil.safePath(name));
+				if (uiPathFilter.isSelected()) name = EscapeUtil.escapeFilePath(IOUtil.safePath(name));
 
 				File file1 = new File(basePath, name);
 				loop:
@@ -284,7 +284,7 @@ public class UnarchiverUI extends JFrame {
 
 				if ((storeFlag&8) != 0 && entry.isAntiItem()) {
 					String name = entry.getName();
-					if (uiPathFilter.isSelected()) name = URIUtil.escapeFilePath(IOUtil.safePath(name));
+					if (uiPathFilter.isSelected()) name = EscapeUtil.escapeFilePath(IOUtil.safePath(name));
 
 					File file1 = new File(basePath, name);
 					try {

@@ -1,8 +1,6 @@
 package roj.text.diff;
 
-import roj.config.serial.Optional;
-import roj.config.serial.SerializerFactory;
-import roj.config.serial.Serializers;
+import roj.config.auto.Optional;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextReader;
@@ -20,7 +18,6 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2024/3/5 0005 2:30
  */
 public final class DiffResult {
-	static final SerializerFactory sf = Serializers.newSerializerFactory();
 	static final EasyProgressBar bar = new EasyProgressBar("进度");
 
 	public transient File leftFile, rightFile;

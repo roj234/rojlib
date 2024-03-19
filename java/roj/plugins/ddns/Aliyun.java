@@ -7,14 +7,14 @@ import roj.concurrent.TaskExecutor;
 import roj.concurrent.task.ITask;
 import roj.config.JSONParser;
 import roj.config.data.CList;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.crypt.HMAC;
 import roj.io.IOUtil;
-import roj.net.URIUtil;
 import roj.net.http.HttpRequest;
 import roj.net.http.SyncHttpClient;
 import roj.text.ACalendar;
 import roj.text.CharList;
+import roj.text.EscapeUtil;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
@@ -71,8 +71,8 @@ public class Aliyun implements DDNSService {
 	private String makeQuery(Map<String, String> queries) {
 		StringBuilder sb = new StringBuilder();
 		for (Map.Entry<String, String> p : queries.entrySet()) {
-			sb.append("&").append(URIUtil.encodeURIComponent(p.getKey()))
-			  .append("=").append(URIUtil.encodeURIComponent(p.getValue()));
+			sb.append("&").append(EscapeUtil.encodeURIComponent(p.getKey()))
+			  .append("=").append(EscapeUtil.encodeURIComponent(p.getValue()));
 		}
 		return sb.substring(1);
 	}
@@ -124,7 +124,7 @@ public class Aliyun implements DDNSService {
 	private final TaskExecutor th = new TaskExecutor();
 
 	@Override
-	public void loadConfig(CMapping config) {
+	public void loadConfig(CMap config) {
 		AccessKeyId = config.getString("AccessKey");
 		AccessKeySecret = config.getString("AccessSecret");
 	}
@@ -255,7 +255,7 @@ public class Aliyun implements DDNSService {
 
 		try {
 			SyncHttpClient shc = HttpRequest.nts().url(makeUrl(par)).executePooled();
-			CMapping cfg = _parse(shc);
+			CMap cfg = _parse(shc);
 		} catch (Exception e) {
 			CLIUtil.error("请求参数: " + par, e);
 		}
@@ -270,14 +270,14 @@ public class Aliyun implements DDNSService {
 		par.put("Type", type);
 
 		try {
-			CMapping cfg = _parse(pooledRequest(makeUrl(par)));
+			CMap cfg = _parse(pooledRequest(makeUrl(par)));
 		} catch (Exception e) {
 			CLIUtil.error("请求参数: " + par, e);
 		}
 	}
 
-	private CMapping _parse(SyncHttpClient shc) throws Exception {
-		CMapping map = new JSONParser().parseRaw(shc.stream()).asMap();
+	private CMap _parse(SyncHttpClient shc) throws Exception {
+		CMap map = new JSONParser().parse(shc.stream()).asMap();
 		if (map.containsKey("Message"))
 			throw new IllegalArgumentException("API错误: " + map.getString("Message"));
 		return map;
@@ -286,11 +286,11 @@ public class Aliyun implements DDNSService {
 	private ITask _init(Map<String, String> param) {
 		URL url = makeUrl(param);
 		return () -> {
-			CMapping cfg = _parse(pooledRequest(url));
+			CMap cfg = _parse(pooledRequest(url));
 			System.out.println(cfg);
 			CList list = cfg.getDot("DomainRecords.Record").asList();
 			for (int i = 0; i < list.size(); i++) {
-				CMapping data = list.get(i).asMap();
+				CMap data = list.get(i).asMap();
 				String name = data.getString("RR")+"."+data.getString("DomainName");
 
 				DDnsRecord record = domain2Id.get(name);

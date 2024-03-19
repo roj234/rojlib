@@ -27,11 +27,11 @@ public class ClassDefiner extends ClassLoader {
 	static {
 		ClassLoader.registerAsParallelCapable();
 
-		AsmShared.local().setLevel(true);
+		AsmShared.local().setUnbuffered(true);
 		try {
 			def = DirectAccessor.builder(H.class).delegate(ClassLoader.class, new String[] {"defineClass", "findLoadedClass"}).build();
 		} finally {
-			AsmShared.local().setLevel(false);
+			AsmShared.local().setUnbuffered(false);
 		}
 	}
 

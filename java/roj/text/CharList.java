@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
  * @author Roj234
  * @since 2021/6/19 1:28
  */
-public class CharList implements CharSequence, Appender {
+public class CharList implements CharSequence, Appendable {
 	// region Number helper
 	static void getChars(long l, int charPos, char[] buf) {
 		long q;

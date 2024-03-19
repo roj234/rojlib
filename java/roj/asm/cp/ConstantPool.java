@@ -301,23 +301,15 @@ public class ConstantPool {
 		constants.add(c);
 
 		switch (c.type()) {
-			case UTF: length += 3 + DynByteBuf.byteCountDioUTF(((CstUTF) c).str()); break;
-			case INT: case FLOAT:
-			case NAME_AND_TYPE: case INVOKE_DYNAMIC:
-			case METHOD: case FIELD: case INTERFACE:
-				length += 5; break;
-			case LONG: case DOUBLE:
+			case UTF -> length += 3 + DynByteBuf.byteCountDioUTF(((CstUTF) c).str());
+			case INT, FLOAT, NAME_AND_TYPE, INVOKE_DYNAMIC, METHOD, FIELD, INTERFACE -> length += 5;
+			case LONG, DOUBLE -> {
 				length += 9;
 				constants.add(CstTop.TOP);
-				break;
-			case METHOD_TYPE:
-			case STRING: case CLASS:
-			case MODULE: case PACKAGE:
-				length += 3;
-				break;
-			case METHOD_HANDLE: length += 4; break;
-			case _TOP_: break;
-			default: throw new IllegalStateException("Unknown type " + c.type());
+			}
+			case METHOD_TYPE, STRING, CLASS, MODULE, PACKAGE -> length += 3;
+			case METHOD_HANDLE -> length += 4;
+			default -> throw new IllegalStateException("Unknown type " + c.type());
 		}
 
 		if (listener != null) listener.accept(c);
@@ -635,6 +627,24 @@ public class ConstantPool {
 		if (!refMap.isEmpty()) {
 			refMap.remove(prev);
 			refMap.add(c);
+		}
+	}
+
+	public void checkCollision(DynByteBuf w) {
+		for (int i = 0; i < constants.size(); i++) {
+			Constant c = constants.get(i);
+			if (c instanceof CstUTF u) {
+				if (u.data instanceof DynByteBuf w2) {
+					if (w2.array() == w.array()) {
+						if (w.array() == null) {
+							if (w2.address() > w.address() && w2.address() < w.address()+w.capacity())
+								throw new AssertionError("请勿将未解析字符串常量的ConstantData写入和来源相同的DynByteBuf之中");
+						} else {
+							throw new AssertionError("请勿将未解析字符串常量的ConstantData写入和来源相同的DynByteBuf之中");
+						}
+					}
+				}
+			}
 		}
 	}
 }

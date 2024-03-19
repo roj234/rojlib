@@ -19,9 +19,6 @@ public class ToNBT implements CVisitor {
 	public DynByteBuf buffer() { return ob; }
 	public ToNBT buffer(DynByteBuf buf) { ob = buf; return this; }
 
-	@Override
-	public void close() throws IOException { if (ob != null) ob.close(); }
-
 	private String key;
 
 	private byte state = -1;
@@ -76,7 +73,7 @@ public class ToNBT implements CVisitor {
 		for (long l : la) ob.writeLong(l);
 	}
 
-	private void onValue(byte type) {
+	public final void onValue(byte type) {
 		switch (state) {
 			case -1:
 				//if (type != COMPOUND) throw new IllegalStateException("NBT开头必须是COMPOUND");
@@ -166,11 +163,15 @@ public class ToNBT implements CVisitor {
 		size = ((int) data&0xFFFFFFF) - 0x3FFFFFF;
 	}
 
-	public final void reset() {
+	public final ToNBT reset() {
 		state = -1;
 		stateLen = 0;
 		size = 0;
 		sizeOffset = 0;
 		key = null;
+		return this;
 	}
+
+	@Override
+	public void close() throws IOException { if (ob != null) ob.close(); }
 }

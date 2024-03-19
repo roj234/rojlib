@@ -15,11 +15,10 @@ import roj.compiler.ast.VariableDeclare;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ParseException;
-import roj.config.serial.CAdapter;
+import roj.config.Word;
+import roj.config.auto.Serializer;
+import roj.config.auto.Serializers;
 import roj.config.serial.CVisitor;
-import roj.config.serial.SerializerFactory;
-import roj.config.serial.Serializers;
-import roj.config.word.Word;
 import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
 
@@ -78,7 +77,7 @@ public final class ExprParser {
 	private static final MyBitSet CAST_WHITELIST = MyBitSet.from(
 		logic_not,rev,
 		lParen,THIS,SUPER,
-		Word.INTEGER,Word.LONG, Word.FLOAT,Word.DOUBLE,Word.CHARACTER,Word.STRING,
+		Word.INTEGER,Word.LONG, Word.FLOAT,Word.DOUBLE,CHARACTER,Word.STRING,
 		TRUE,FALSE,NULL,
 		NEW,Word.LITERAL,ASSERT,ENUM,SWITCH,
 		BYTE,SHORT,CHAR,INT,LONG,FLOAT,DOUBLE,BOOLEAN,VOID);
@@ -106,7 +105,7 @@ public final class ExprParser {
 		dUPO.putInt(STAGE_MASK_UPrC | Word.LITERAL, -3);
 
 		dUPO.putInt(STAGE_MASK_VGen | NEW, -1);
-		dUPO.putInt(STAGE_MASK_VGen | Word.CHARACTER, -2);
+		dUPO.putInt(STAGE_MASK_VGen | CHARACTER, -2);
 		dUPO.putInt(STAGE_MASK_VGen | Word.STRING, -3);
 		dUPO.putInt(STAGE_MASK_VGen | Word.INTEGER, -4);
 		dUPO.putInt(STAGE_MASK_VGen | Word.LONG, -5);
@@ -933,14 +932,7 @@ public final class ExprParser {
 		return new DotGet(e, name, flag);
 	}
 	// endregion
-	private static SerializerFactory factory;
-	public static void serialize(ExprNode node, CVisitor visitor) {
-		if (factory == null) {
-			factory = Serializers.newSerializerFactory(SerializerFactory.FORCE_DYNAMIC|SerializerFactory.SERIALIZE_PARENT|SerializerFactory.GENERATE);
-		}
-		serializer().write(visitor, node);
-	}
-	public static CAdapter<ExprNode> serializer() {
-		return factory.adapter(ExprNode.class);
-	}
+	// TODO store nodes ?
+	public static void serialize(ExprNode node, CVisitor visitor) { serializer().write(visitor, node); }
+	public static Serializer<ExprNode> serializer() { return Serializers.ANY_OBJECT.serializer(ExprNode.class); }
 }

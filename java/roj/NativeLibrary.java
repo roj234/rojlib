@@ -13,8 +13,11 @@ import java.io.InputStream;
  * @since 2021/10/15 12:57
  */
 public class NativeLibrary {
-	public static final boolean IN_DEV = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\java").isDirectory();
+	public static final boolean IN_DEV = new File("D:\\mc\\FMD-1.5.2").isDirectory();
+	public static final boolean EXTRA_BUG_CHECK = System.getProperty("extraBugCheck")!=null;
+
 	public static final boolean loaded;
+
 	// only use clinit
 	public static boolean loaded() { return loaded; }
 
@@ -39,7 +42,7 @@ public class NativeLibrary {
 	private static boolean loadLibrary() throws Exception {
 		String lib = System.getProperty("os.arch").contains("64") ? "libcpp" : "libcpp32";
 		String appendix = OS.CURRENT == OS.WINDOWS ? ".dll" : ".so";
-		InputStream in = NativeLibrary.class.getResourceAsStream("/"+lib+appendix);
+		InputStream in = NativeLibrary.class.getClassLoader().getResourceAsStream(lib+appendix);
 		if (in == null) {
 			System.err.println("Failed to load RojLib native");
 			return false;

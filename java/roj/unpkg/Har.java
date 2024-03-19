@@ -1,9 +1,8 @@
 package roj.unpkg;
 
+import roj.config.ConfigMaster;
 import roj.config.ParseException;
-import roj.config.serial.Optional;
-import roj.config.serial.SerializerFactory;
-import roj.config.serial.Serializers;
+import roj.config.auto.Optional;
 import roj.crypt.Base64;
 import roj.util.ByteList;
 
@@ -29,8 +28,7 @@ public class Har {
 		}
 
 		File base = new File(args[1]);
-		SerializerFactory factory = Serializers.newSerializerFactory();
-		PojoHar har = factory.deserialize(factory.adapter(PojoHar.class), "json", new File(args[0])).log;
+		PojoHar har = ConfigMaster.JSON.readObject(PojoHar.class, new File(args[0])).log;
 		System.out.println("Version " + har.version + " Created by " + har.creator);
 		ByteList tmp = new ByteList();
 		for (PojoHarItem entry : har.entries) {

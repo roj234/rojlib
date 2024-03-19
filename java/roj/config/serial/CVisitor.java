@@ -43,12 +43,12 @@ public interface CVisitor extends Closeable {
 	void valueList();
 	default void valueList(int size) { valueList(); }
 
-	default void comment(String comment) {}
-
 	default void valueDate(long value) { value(value); }
 	default void valueTimestamp(long value) { value(value); }
 
-	default void vsopt(String k, Object v) {}
+	default void comment(String comment) {}
 
+	default void setProperty(String k, Object v) {}
+	CVisitor reset();
 	default void close() throws IOException {}
 }

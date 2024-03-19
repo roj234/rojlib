@@ -1,5 +1,6 @@
 package roj.asmx.launcher;
 
+import roj.ReferenceByGeneratedClass;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.visitor.CodeWriter;
@@ -29,6 +30,7 @@ public final class Bootstrap {
 	public static final Logger LOGGER = Logger.getLogger("Launcher");
 	public static final Map<String, Object> blackboard = new MyHashMap<>();
 
+	@ReferenceByGeneratedClass
 	public static final List<ITweaker> tweakers = new SimpleList<>();
 
 	public static String[] arguments;
@@ -45,7 +47,7 @@ public final class Bootstrap {
 		// 甚至都不用传参
 		EntryPoint entryPoint = (EntryPoint) Bootstrap.class.getClassLoader();
 
-		if (EntryPoint.EXPERIMENTAL_FAST_ZIP) {
+		{
 			URL[] urls = GetOtherJars();
 			if (urls != null) for (URL url : urls) {
 				if (!url.getProtocol().equals("file")) {
@@ -71,6 +73,7 @@ public final class Bootstrap {
 
 		Set<String> tweakerNames = new LinkedHashSet<>();
 
+		boolean debug = false;
 		LOGGER.setLevel(Level.INFO);
 		int i;
 		for (i = 0; i < args.length-1;) {
@@ -78,11 +81,10 @@ public final class Bootstrap {
 			if (arg.charAt(0) != '-') break;
 			if (arg.equals("--")) { i++; break; }
 			switch (arg) {
-				case "-debug": LOGGER.setLevel(Level.ALL); break;
-				case "-t":
-				case "--tweaker":
+				case "-debug": debug = true; break;
+				case "-t", "--tweaker":
 					arg = args[++i];
-					if (!tweakerNames.add(arg)) LOGGER.warn("Tweaker '{}' 已存在", arg);
+					if (!tweakerNames.add(arg)) LOGGER.warn("转换器 '{}' 已存在", arg);
 				break;
 				default:
 					LOGGER.error("无法识别的参数 {}", arg);
@@ -92,7 +94,7 @@ public final class Bootstrap {
 		}
 
 		if (i == args.length) {
-			LOGGER.fatal("缺少Launch target");
+			LOGGER.fatal("未指定运行目标");
 			return;
 		}
 
@@ -100,10 +102,7 @@ public final class Bootstrap {
 
 		arguments = new String[args.length-i];
 		System.arraycopy(args, i, arguments, 0, arguments.length);
-		if (tweakerNames.isEmpty()) {
-			LOGGER.warn("未定义任何Tweaker");
-			argList = Arrays.asList(arguments);
-		}
+		if (tweakerNames.isEmpty()) argList = Arrays.asList(arguments);
 
 		ConstantData L = new ConstantData();
 		L.name("roj/asmx/launcher/Bootstrap$Loader");
@@ -117,11 +116,11 @@ public final class Bootstrap {
 
 		for (String name : tweakerNames) {
 			classLoader.addTransformerExclusion(name.substring(0, name.lastIndexOf('.')+1));
-
-			c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "LOGGER", "Lroj/text/logging/Logger;");
-			c.ldc("加载Tweaker '"+name+"'");
-			c.invokeV("roj/text/logging/Logger", "debug", "(Ljava/lang/String;)V");
-
+			if (debug) {
+				c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "LOGGER", "Lroj/text/logging/Logger;");
+				c.ldc("Tweaker => '"+name+"'");
+				c.invokeV("roj/text/logging/Logger", "debug", "(Ljava/lang/String;)V");
+			}
 			c.newObject(name.replace('.', '/'));
 			c.one(ASTORE_1);
 
@@ -149,19 +148,18 @@ public final class Bootstrap {
 
 		c = L.newMethod(ACC_PUBLIC, "run", "()V");
 		c.visitSize(2, 1);
-		c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "LOGGER", "Lroj/text/logging/Logger;");
-		c.ldc("启动 '"+target+"'");
-		c.invokeV("roj/text/logging/Logger", "info", "(Ljava/lang/String;)V");
+		if (debug) {
+			c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "LOGGER", "Lroj/text/logging/Logger;");
+			c.ldc("Main => '"+target+"'");
+			c.invokeV("roj/text/logging/Logger", "debug", "(Ljava/lang/String;)V");
+		}
 		c.invokeS("roj/asmx/launcher/Bootstrap", "getArg", "()[Ljava/lang/String;");
 		c.invokeS(target.replace('.', '/'), "main", "([Ljava/lang/String;)V");
 		c.one(RETURN);
 		c.finish();
 
-		// necessary
-		Level level = LOGGER.getLevel();
-		LOGGER.setLevel(Level.ALL);
-		LOGGER.info("欢迎使用Roj234通用类转换包装器1.3");
-		LOGGER.setLevel(level);
+		// necessary (加载Logger相关类)
+		LOGGER.info("ImpLib TLauncher 2.0");
 
 		ByteList list = Parser.toByteArrayShared(L);
 		Class<?> loaderClass = entryPoint.defineClassB(L.name.replace('/', '.'), list.list, 0, list.wIndex());

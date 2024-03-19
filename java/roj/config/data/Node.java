@@ -6,10 +6,10 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.collect.TrieTree;
 import roj.config.ParseException;
+import roj.config.Tokenizer;
+import roj.config.Word;
 import roj.config.XMLParser;
 import roj.config.serial.CVisitor;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -99,9 +99,9 @@ public abstract class Node {
 						boolean bopr = operator == equ;
 
 						do {
-							CEntry of = XMLParser.of(wr.next());
+							CEntry of = XMLParser.attrVal(wr.next());
 							for (int i = 0; i < in.size(); i++) {
-								if (of.isSimilar(in.get(i).attr(key)) == bopr) {
+								if (of.contentEquals(in.get(i).attr(key)) == bopr) {
 									_out.add(in.get(i));
 								}
 							}

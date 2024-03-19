@@ -2,7 +2,7 @@ package roj.text;
 
 import org.jetbrains.annotations.Range;
 import roj.collect.*;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
@@ -430,7 +430,7 @@ public class TextUtil {
 		_off(sb, off ^ rem, prefix);
 		if (rem != 0) sb.padEnd(' ', (rem << 1) + (rem >> 1));
 
-		int d = 0;
+		int d = off;
 		while (true) {
 			int i1 = b[off++] & 0xFF;
 			sb.append(b2h(i1 >>> 4)).append(b2h(i1 & 0xf));

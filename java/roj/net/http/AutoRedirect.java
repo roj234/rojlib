@@ -4,7 +4,7 @@ import roj.io.FastFailException;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
-import roj.net.ch.handler.Timeout;
+import roj.net.handler.Timeout;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 

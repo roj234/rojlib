@@ -19,7 +19,7 @@ import roj.compiler.asm.*;
 import roj.compiler.ast.block.ParseTask;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ParseException;
-import roj.config.word.Word;
+import roj.config.Word;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -34,8 +34,8 @@ import java.util.List;
 import java.util.Map;
 
 import static roj.compiler.JavaLexer.*;
-import static roj.config.word.Word.EOF;
-import static roj.config.word.Word.LITERAL;
+import static roj.config.Word.EOF;
+import static roj.config.Word.LITERAL;
 
 /**
  * @author solo6975
@@ -1425,9 +1425,9 @@ public final class CompileUnit extends ConstantData {
 			for (int i = 0; i < list.size(); i++) {
 				AnnotationPrimer a = list.get(i);
 
-				IClass type1 = resolve(a.type);
+				IClass type1 = resolve(a.type());
 				if (type1 == null) {
-					fireDiagnostic(Kind.ERROR, "unable_resolve:ANNOTATION:" + a.type);
+					fireDiagnostic(Kind.ERROR, "unable_resolve:ANNOTATION:" + a.type());
 				}
 				a.clazzInst = type1;
 

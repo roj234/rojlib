@@ -3,7 +3,7 @@ package roj.net.http.ws;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;
 import roj.net.ch.SelectorLoop;
-import roj.net.http.srv.*;
+import roj.net.http.server.*;
 import roj.util.ByteList;
 
 import java.security.MessageDigest;

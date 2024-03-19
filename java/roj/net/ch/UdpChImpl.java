@@ -147,7 +147,7 @@ class UdpChImpl extends MyChannel {
 				ByteBuffer nioBuffer = syncNioRead(buf);
 				InetSocketAddress r = (InetSocketAddress) dc.receive(nioBuffer);
 				buf.wIndex(nioBuffer.position());
-				BufferPool.expand(buf, buf.wIndex()-buf.capacity());
+				alloc().expand(buf, buf.wIndex()-buf.capacity());
 
 				if (r == null) break;
 

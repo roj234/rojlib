@@ -2,8 +2,8 @@ package roj.compiler.macro;
 
 import roj.collect.MyHashMap;
 import roj.config.ParseException;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
+import roj.config.Tokenizer;
+import roj.config.Word;
 import roj.text.CharList;
 import roj.text.TextUtil;
 

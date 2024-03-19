@@ -5,9 +5,10 @@ import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
-import roj.config.data.CMapping;
+import roj.config.ConfigMaster;
+import roj.config.Tokenizer;
+import roj.config.data.CMap;
 import roj.config.serial.ToJson;
-import roj.config.word.Tokenizer;
 import roj.crypt.HMAC;
 import roj.crypt.SM3;
 import roj.io.IOUtil;
@@ -15,14 +16,15 @@ import roj.net.ch.ChannelCtx;
 import roj.net.ch.ServerLaunch;
 import roj.net.http.HttpUtil;
 import roj.net.http.IllegalRequestException;
-import roj.net.http.srv.*;
-import roj.net.http.srv.autohandled.Accepts;
-import roj.net.http.srv.autohandled.Interceptor;
-import roj.net.http.srv.autohandled.OKRouter;
-import roj.net.http.srv.autohandled.Route;
+import roj.net.http.server.*;
+import roj.net.http.server.auto.Accepts;
+import roj.net.http.server.auto.Interceptor;
+import roj.net.http.server.auto.OKRouter;
+import roj.net.http.server.auto.Route;
 import roj.net.http.ws.WebsocketHandler;
 import roj.net.http.ws.WebsocketManager;
 import roj.text.ACalendar;
+import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
@@ -132,14 +134,14 @@ public class Server extends WebsocketManager implements Router, Context {
 		if (cfg != null) {
 			if (!cfg.postAccepted()) cfg.postAccept(131072, 200);
 		}
-		req.handler().headers("Access-Control-Allow-Headers: MCTK\r\n" +
+		req.server().headers("Access-Control-Allow-Headers: MCTK\r\n" +
 			"Access-Control-Allow-Origin: " + req.getOrDefault("Origin", "*") + "\r\n" +
 			"Access-Control-Max-Age: 2592000\r\n" +
 			"Access-Control-Allow-Methods: *");
 	}
 
 	private static void jsonErrorPre(Request req, String str) {
-		req.handler().die().code(200).headers("Access-Control-Allow-Origin: *").body(jsonErr(str));
+		req.server().die().code(200).headers("Access-Control-Allow-Origin: *").body(jsonErr(str));
 	}
 
 	OKRouter router = new OKRouter().register(this);
@@ -273,18 +275,18 @@ public class Server extends WebsocketManager implements Router, Context {
 			if (u.worker != null) {
 				u.worker.sendExternalLogout(
 					"您已在他处登录<br />" +
-						"IP: " + req.handler().ch.remoteAddress() + "<br />" +
+						"IP: " + req.connection().remoteAddress() + "<br />" +
 						"UA: " + req.getField("User-Agent") + "<br />" +
 						"时间: " + ACalendar.toLocalTimeString(System.currentTimeMillis()));
 			}
 
-			CMapping m = new CMapping();
+			CMap m = new CMap();
 			m.put("user", u.put());
 			m.put("protocol", "WSChat2");
 			m.put("address", "ws://127.0.0.1:1999/im/");
 			m.put("token", "114514");//createToken(u, -1, 86400000));
 			m.put("ok", true);
-			return new StringResponse(m.toShortJSONb());
+			return new StringResponse(ConfigMaster.JSON.toString(m, new CharList()));
 		}
 	}
 

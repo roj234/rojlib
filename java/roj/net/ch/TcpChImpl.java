@@ -125,7 +125,7 @@ class TcpChImpl extends MyChannel {
 		while (state == OPENED && sc.isOpen()) {
 			if (!buf.isWritable()) {
 				if (buf == EMPTY) rb = buf = alloc().allocate(true, buffer, 0);
-				else rb = buf = BufferPool.expand(buf, buf.capacity());
+				else rb = buf = alloc().expand(buf, buf.capacity());
 			}
 
 			ByteBuffer nioBuffer = syncNioRead(buf);

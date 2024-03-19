@@ -1,7 +1,6 @@
 package roj.util;
 
 import org.jetbrains.annotations.NotNull;
-import roj.io.MyDataInput;
 import roj.io.UnsafeOutputStream;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
@@ -358,7 +357,7 @@ public class DirectByteList extends DynByteBuf {
 		return (u.getByte(addr++) & 0xFF) | (u.getByte(addr++) & 0xFF) << 8 | (u.getByte(addr) & 0xFF) << 16;
 	}
 
-	public final int readVarInt(boolean zag) {
+	public final int readVarInt() {
 		int value = 0;
 		int i = 0;
 
@@ -373,7 +372,6 @@ public class DirectByteList extends DynByteBuf {
 			i += 7;
 			if ((chunk & 0x80) == 0) {
 				rIndex = (int) (off - address);
-				if (zag) return MyDataInput.zag(value);
 				if (value < 0) break;
 				return value;
 			}

@@ -11,7 +11,7 @@ public class AnnotationPrimer extends Annotation {
 	public IClass clazzInst;
 
 	public AnnotationPrimer(String type, int idx) {
-		this.type = type;
+		this.setType(type);
 		this.values = new MyHashMap<>();
 		this.idx = idx - 1;
 	}

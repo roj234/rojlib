@@ -3,20 +3,20 @@ package roj.minecraft.worlddiff;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.config.YAMLParser;
-import roj.config.data.CMapping;
+import roj.config.data.CLong;
+import roj.config.data.CMap;
 import roj.crypt.ILProvider;
 import roj.crypt.KeyType;
 import roj.io.IOUtil;
-import roj.math.MutableLong;
 import roj.net.NetUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.ClientLaunch;
 import roj.net.ch.ServerLaunch;
-import roj.net.ch.handler.Compress;
-import roj.net.ch.handler.MSSCipher;
-import roj.net.ch.handler.Timeout;
-import roj.net.ch.handler.VarintSplitter;
+import roj.net.handler.Compress;
+import roj.net.handler.MSSCipher;
+import roj.net.handler.Timeout;
+import roj.net.handler.VarintSplitter;
 import roj.net.mss.MSSKeyPair;
 import roj.net.mss.SimpleEngineFactory;
 import roj.net.proto_obf.ProtoObf;
@@ -52,9 +52,9 @@ public class FileSync implements ChannelHandler {
 			cfgin = new FileInputStream(args[0]);
 		}
 
-		CMapping config = new YAMLParser().parseRaw(cfgin).asMap();
+		CMap config = new YAMLParser().parse(cfgin).asMap();
 
-		List<String> subDirs = Helpers.cast(config.getOrCreateList("dir").unwrap());
+		List<String> subDirs = Helpers.cast(config.getOrCreateList("dir").raw());
 		File base = new File(config.getString("base_dir", ".")).getAbsoluteFile();
 		if (!base.isDirectory()) throw new IllegalArgumentException("路径不存在（不是文件夹）");
 
@@ -69,7 +69,7 @@ public class FileSync implements ChannelHandler {
 		MessageDigest md5 = MessageDigest.getInstance("MD5");
 		HASH_LENGTH = md5.getDigestLength();
 
-		MutableLong lastMod = new MutableLong(0);
+		CLong lastMod = new CLong(0);
 		for (String dirname : subDirs) {
 			File dir = new File(base, dirname);
 

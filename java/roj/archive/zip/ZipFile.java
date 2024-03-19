@@ -41,7 +41,9 @@ public class ZipFile implements ArchiveFile {
 	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(ZipFile.class, "fpRead");
 
 	private static final XHashSet.Shape<String, ZEntry> ENTRY_SHAPE = XHashSet.shape(String.class, ZEntry.class, "name", "next");
-	final XHashSet<String, ZEntry> entries = ENTRY_SHAPE.create();
+
+	XHashSet<String, ZEntry> namedEntries;
+	SimpleList<ZEntry> entries;
 
 	private ByteList buf;
 	final Charset cs;
@@ -66,14 +68,15 @@ public class ZipFile implements ArchiveFile {
 		FLAG_KILL_EXT	   = 1,
 		FLAG_VERIFY		   = 2,
 		FLAG_BACKWARD_READ = 4,
-		FLAG_FORCE_UTF     = 16;
+		FLAG_FORCE_UTF     = 8;
 
 	static final int
 		GP_ENCRYPTED = 1,
 		GP_HAS_EXT   = 8,
 		GP_STRONG_ENC= 64,
 		GP_UTF       = 2048,
-		GP_LOC_ENC   = 1<<13;
+
+		FLAG_HAS_ERROR = 128;
 
 	public static final byte
 		CRYPT_NONE = 0,
@@ -125,7 +128,8 @@ public class ZipFile implements ArchiveFile {
 	}
 
 	public final void reload() throws IOException {
-		entries.clear();
+		entries = new SimpleList<>();
+		namedEntries = null;
 		cDirLen = cDirOffset = 0;
 
 		buf = new ByteList(256);
@@ -142,17 +146,32 @@ public class ZipFile implements ArchiveFile {
 	}
 
 	@Override
-	public final ZEntry getEntry(String name) { return entries.get(name); }
+	public final ZEntry getEntry(String name) {
+		if (namedEntries == null) {
+			namedEntries = ENTRY_SHAPE.createSized(entries.size());
+			for (int i = 0; i < entries.size(); i++) {
+				ZEntry entry = entries.get(i);
+				if (!namedEntries.add(entry)) {
+					throw new IllegalArgumentException("文件名重复！该文件可能已损坏，请通过entries()获取Entry并读取");
+				}
+			}
+			entries = null;
+		}
+		return namedEntries.get(name);
+	}
 	@Override
-	public final Collection<ZEntry> entries() { return entries; }
+	public final Collection<ZEntry> entries() { return entries == null ? namedEntries : entries; }
 
 	// region Load (LOC EXT CEN END)
 	private void readForward() throws IOException {
 		Source r1 = r;
 		if (!r.isBuffered()) r = BufferedSource.wrap(r);
 
-		// found_end = 1
-		// found_zip64 = 2
+		SimpleList<ZEntry> locEntries = new SimpleList<>();
+
+		// found_cen = 1
+		// found_end = 2
+		// found_zip64 = 4
 		int state = 0;
 
 		int field;
@@ -162,36 +181,46 @@ public class ZipFile implements ArchiveFile {
 			while (true) {
 				field = r.asDataInput().readInt();
 				switch (field) {
-					case HEADER_END:
-						if ((state&1) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
+					case HEADER_LOC:
+						if ((state&7) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
 
-						readEND((state&2) != 0);
+						readLOC(locEntries);
+					break;
+					case HEADER_CEN:
+						if ((state&6) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
+
+						readCEN(locEntries);
 						state |= 1;
-						break;
-					case HEADER_ZIP64_END:
+					break;
+					case HEADER_END:
 						if ((state&2) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
 
-						readEND64();
+						readEND((state&4) != 0);
 						state |= 2;
-						break;
+					break;
+					case HEADER_ZIP64_END:
+						if ((state&4) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
+
+						readEND64();
+						state |= 4;
+					break;
 					case HEADER_ZIP64_END_LOCATOR: r.skip(16); break;
-					case HEADER_CEN:
-						if ((state&3) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
-						if ((flags & FLAG_BACKWARD_READ) != 0) return;
-
-						readCEN();
-						break;
-					case HEADER_LOC:
-						if ((state&3) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
-
-						readLOC();
-						break;
 					default: break loop;
 				}
 
 				if (r.position() >= r.length()) {
 					if (r != r1) r.close();
 					r = r1;
+
+					if ((state&1) == 0 ||
+						(state&6) == 0 ||
+						(flags&FLAG_HAS_ERROR) != 0 ||
+						locEntries.size() != entries.size()) {
+
+						flags |= FLAG_HAS_ERROR;
+						entries = locEntries;
+					}
+
 					return;
 				}
 			}
@@ -258,7 +287,7 @@ public class ZipFile implements ArchiveFile {
 						// 12 u4 total_disk
 						case HEADER_ZIP64_END_LOCATOR: r.skip(16); break;
 						case HEADER_ZIP64_END: case HEADER_END: return;
-						case HEADER_CEN: readCEN(); break;
+						case HEADER_CEN: readCEN(null); break;
 						default: throw new ZipException("未知的ZIP头: 0x"+Integer.toHexString(header));
 					}
 				}
@@ -278,9 +307,9 @@ public class ZipFile implements ArchiveFile {
 		b.wIndex(len);
 		return b;
 	}
-	private void readLOC() throws IOException {
+	private void readLOC(SimpleList<ZEntry> locEntries) throws IOException {
 		ByteList buf = read(26);
-		ZEntry entry = new ZEntry(true);
+		ZEntry entry = new ZEntry();
 
 		//entry.minExtractVer = buffer.readUShortLE(0);
 		int flags = buf.readUShortLE(2);
@@ -344,8 +373,7 @@ public class ZipFile implements ArchiveFile {
 		}
 		entry.setEndPos(r.position());
 
-		ZEntry prev = entries.putIfAbsent(entry.name, entry);
-		if (prev != null) prev.merge(entries, entry);
+		locEntries.add(entry);
 	}
 	private void skipEXT(ZEntry entry) throws IOException {
 		boolean is64 = entry.cSize >= U32_MAX | entry.uSize >= U32_MAX;
@@ -364,9 +392,9 @@ public class ZipFile implements ArchiveFile {
 			entry.name = new String(entry.nameBytes, 0, nameLen, cs);
 		}
 	}
-	private void readCEN() throws IOException {
+	private void readCEN(SimpleList<ZEntry> entryForward) throws IOException {
 		ByteList buf = read(42);
-		ZEntry entry = new ZEntry(false);
+		ZEntry entry = new ZEntry();
 
 		//entry.ver = buf[0] | buf[1] << 8;
 		//entry.minExtractVer = buf[2] | buf[3] << 8;
@@ -396,34 +424,29 @@ public class ZipFile implements ArchiveFile {
 			fileHeader = entry.readCENExtra(this, buf, fileHeader);
 		}
 
-		long off = r.position();
+		entry.mzfFlag |= ZEntry.MZ_UNMERGED;
+		entry.offset = fileHeader + 30 + nameLen;
 
-		if ((flags & FLAG_BACKWARD_READ) != 0) {
-			r.seek(fileHeader + 28);
-			extraLen = r.read() | (r.read()<<8);
-			if (extraLen < 0) throw new EOFException();
-
-			entry.offset = fileHeader + 30 + nameLen + extraLen;
-			entry.extraLenOfLOC = (char) extraLen;
-			entries.put(entry.name, entry);
-
-			r.seek(off);
+		if (entryForward == null) {
+			if (!entries.isEmpty() && entries.getLast().offset > entry.offset) {
+				flags |= FLAG_HAS_ERROR;
+			}
 		} else {
-			entry.offset = -1;
-
-			ZEntry prev = entries.putIfAbsent(entry.name, entry);
-			if (prev != null) {
-				if (prev.merge(entries, entry)) {
+			if (entries.size() >= entryForward.size()) {
+				flags |= FLAG_HAS_ERROR;
+			} else {
+				ZEntry prev = entryForward.get(entries.size());
+				if (!prev.merge(entry)) {
+					if ((flags&FLAG_VERIFY) != 0)
+						throw new ZipException("压缩参数在LOC和CEN间不匹配("+prev+", "+entry+")");
+					flags |= FLAG_HAS_ERROR;
+				} else {
 					entry = prev;
 				}
 			}
 		}
 
-		if (fileHeader != entry.startPos() && (flags&FLAG_VERIFY) != 0) {
-			throw new ZipException(entry.name+"的位置错误: except="+fileHeader+", read="+entry.startPos());
-		}
-
-		if (off > r.length()) throw new EOFException();
+		entries.add(entry);
 	}
 	private boolean readEND(boolean zip64) throws IOException {
 		ByteList buf = read(18);
@@ -464,6 +487,18 @@ public class ZipFile implements ArchiveFile {
 		cDirLen = buf.readLongLE(28);
 		cDirOffset = buf.readLongLE(36);
 	}
+
+	private void initDataOffset(Source r, ZEntry entry) throws IOException {
+		if (entry.extraLenOfLOC != 0xFFFF) return;
+
+		r.seek(entry.offset - 2 - entry.nameBytes.length);
+
+		int extraLen = r.read() | (r.read()<<8);
+		if (extraLen < 0) throw new EOFException();
+
+		entry.extraLenOfLOC = (char) extraLen;
+		entry.offset += extraLen;
+	}
 	// endregion
 
 	int cDirOnDisk, cDirTotal;
@@ -478,7 +513,7 @@ public class ZipFile implements ArchiveFile {
 
 	// region Read
 	public final InputStream getFileStream(ZEntry entry) throws IOException {
-		if (entry.nameBytes == null) throw new ZipException("Not entry load from file");
+		if (entry.nameBytes == null) throw new ZipException("ZEntry不是从文件读取的");
 
 		Source src;
 		do {
@@ -490,12 +525,13 @@ public class ZipFile implements ArchiveFile {
 			}
 		} while (!u.compareAndSwapObject(this, FPREAD_OFFSET, src, null));
 
+		initDataOffset(src, entry);
 		src.seek(entry.offset);
 		return new SourceStreamCAS(src, entry.cSize, this, FPREAD_OFFSET);
 	}
 
 	public final byte[] get(String entry) throws IOException {
-		ZEntry file = entries.get(entry);
+		ZEntry file = getEntry(entry);
 		if (file == null) return null;
 		return get(file);
 	}
@@ -510,7 +546,7 @@ public class ZipFile implements ArchiveFile {
 	}
 
 	public final InputStream getStream(String name) throws IOException {
-		ZEntry entry = entries.get(name);
+		ZEntry entry = getEntry(name);
 		if (entry == null) return null;
 		return getStream(entry, null);
 	}

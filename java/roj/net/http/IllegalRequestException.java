@@ -1,7 +1,7 @@
 package roj.net.http;
 
-import roj.net.http.srv.Response;
-import roj.net.http.srv.StringResponse;
+import roj.net.http.server.Response;
+import roj.net.http.server.StringResponse;
 
 import java.io.IOException;
 

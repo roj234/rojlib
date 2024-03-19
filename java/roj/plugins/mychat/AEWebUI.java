@@ -2,10 +2,10 @@ package roj.plugins.mychat;
 
 import roj.config.JSONParser;
 import roj.config.ParseException;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.net.ch.ChannelCtx;
-import roj.net.http.srv.Request;
-import roj.net.http.srv.ResponseHeader;
+import roj.net.http.server.Request;
+import roj.net.http.server.ResponseHeader;
 import roj.net.http.ws.WebsocketHandler;
 import roj.net.http.ws.WebsocketManager;
 import roj.util.DynByteBuf;
@@ -34,9 +34,9 @@ public class AEWebUI extends WebsocketHandler {
 
 	@Override
 	protected void onData(int ph, DynByteBuf in) throws IOException {
-		CMapping map;
+		CMap map;
 		try {
-			map = new JSONParser().parseRaw(in).asMap();
+			map = new JSONParser().parse(in).asMap();
 		} catch (ParseException e) {
 			error(ERR_INVALID_DATA, e.getMessage());
 			return;

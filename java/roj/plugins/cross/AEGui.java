@@ -7,9 +7,10 @@ package roj.plugins.cross;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.config.ConfigMaster;
 import roj.config.YAMLParser;
 import roj.config.data.CList;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.config.serial.ToSomeString;
 import roj.config.serial.ToYaml;
 import roj.crypt.KeyType;
@@ -18,10 +19,11 @@ import roj.io.NIOUtil;
 import roj.math.MutableInt;
 import roj.net.NetUtil;
 import roj.net.ch.*;
-import roj.net.http.srv.HttpServer11;
-import roj.net.http.srv.StringResponse;
+import roj.net.http.server.HttpServer11;
+import roj.net.http.server.StringResponse;
 import roj.net.mss.MSSKeyPair;
 import roj.plugins.cross.server.AEServer;
+import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.TextWriter;
 import roj.ui.GuiUtil;
@@ -103,7 +105,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 	}
 
 	private void loadFromFile(File file) throws Exception {
-		CMapping yml = new YAMLParser().parseRaw(file).asMap();
+		CMap yml = new YAMLParser().parse(file).asMap();
 		uiServer.setText(yml.getString("server"));
 		uiRoom.setText(yml.getString("room"));
 		uiUser.setText(yml.getString("nickname"));
@@ -445,7 +447,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 				case "ws":// return man.switchToWebsocket(request, rh);
 					CList lx = new CList();
 					for (IntMap.Entry<AEHost.Client> entry : host.clients.selfEntrySet()) {
-						CMapping map = new CMapping();
+						CMap map = new CMap();
 						map.put("id", entry.getIntKey());
 						map.put("ip", entry.getValue().addr);
 						map.put("time", entry.getValue().time);
@@ -453,7 +455,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 						for (Pipe pipe : host.pipes.values()) {
 							PipeInfoClient att = (PipeInfoClient) pipe.att;
 							if (att.clientId == entry.getIntKey()) {
-								CMapping map1 = new CMapping();
+								CMap map1 = new CMap();
 								map1.put("up", pipe.downloaded);
 								map1.put("down", pipe.uploaded);
 								map1.put("idle", pipe.idleTime);
@@ -464,7 +466,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 						}
 						lx.add(map);
 					}
-					return new StringResponse(lx.toShortJSONb(), "application/json");
+					return new StringResponse(ConfigMaster.JSON.toString(lx, new CharList()), "application/json");
 				case "kick_user":
 					int count = 0;
 					String[] arr = request.postFields().get("users").split(",");
@@ -473,7 +475,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 						arrs[i] = Integer.parseInt(arr[i]);
 					}
 					host.kickSome(arrs);
-					return new StringResponse("{\"count\":" + arr.length + "}", "application/json");
+					return new StringResponse("{\"count\":"+arr.length+"}", "application/json");
 			}
 			return null;
 		}).launch();

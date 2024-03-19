@@ -55,8 +55,8 @@ public class LZMAInputStream extends MBInputStream {
 	 */
 	private long remainingSize;
 
-	public static int getMemoryUsage(int dictSize, byte propsByte) throws UnsupportedOptionsException, CorruptedInputException {
-		if (dictSize < 0 || dictSize > DICT_SIZE_MAX) throw new UnsupportedOptionsException("LZMA dictionary is too big for this implementation");
+	public static int getMemoryUsage(int dictSize, byte propsByte) throws IllegalArgumentException, CorruptedInputException {
+		if (dictSize < 0 || dictSize > DICT_SIZE_MAX) throw new IllegalArgumentException("LZMA dictionary is too big for this implementation");
 
 		int props = propsByte & 0xFF;
 		if (props > (4 * 5 + 4) * 9 + 8) throw new CorruptedInputException("Invalid LZMA properties byte");
@@ -178,7 +178,7 @@ public class LZMAInputStream extends MBInputStream {
 	 *
 	 * @throws CorruptedInputException if <code>propsByte</code> is invalid or
 	 * the first input byte is not 0x00
-	 * @throws UnsupportedOptionsException dictionary size or uncompressed size is too
+	 * @throws IllegalArgumentException dictionary size or uncompressed size is too
 	 * big for this implementation
 	 */
 	public LZMAInputStream(InputStream in, long uncompSize, byte propsByte, int dictSize) throws IOException {
@@ -215,7 +215,7 @@ public class LZMAInputStream extends MBInputStream {
 	 * @param options metadata of compressed data
 	 *
 	 * @throws CorruptedInputException if the first input byte is not 0x00
-	 * @throws UnsupportedOptionsException dictionary size or uncompressed size is too
+	 * @throws IllegalArgumentException dictionary size or uncompressed size is too
 	 * big for this implementation
 	 */
 	public LZMAInputStream(InputStream in, long uncompSize, LZMA2Options options) throws IOException {
@@ -225,7 +225,7 @@ public class LZMAInputStream extends MBInputStream {
 	private void initialize(InputStream in, long uncompSize, byte propsByte, int dictSize, byte[] presetDict) throws IOException {
 		// Validate the uncompressed size since the other "initialize" throws
 		// IllegalArgumentException if uncompSize < -1.
-		if (uncompSize < -1) throw new UnsupportedOptionsException("Uncompressed size is too big");
+		if (uncompSize < -1) throw new IllegalArgumentException("Uncompressed size is too big");
 
 		// Decode the properties byte. In contrast to LZMA2, there is no
 		// limit of lc + lp <= 4.
@@ -239,7 +239,7 @@ public class LZMAInputStream extends MBInputStream {
 
 		// Validate the dictionary size since the other "initialize" throws
 		// IllegalArgumentException if dictSize is not supported.
-		if (dictSize < 0 || dictSize > DICT_SIZE_MAX) throw new UnsupportedOptionsException("LZMA dictionary is too big for this implementation");
+		if (dictSize < 0 || dictSize > DICT_SIZE_MAX) throw new IllegalArgumentException("LZMA dictionary is too big for this implementation");
 
 		initialize(in, uncompSize, lc, lp, pb, dictSize, presetDict);
 	}

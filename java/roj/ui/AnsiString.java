@@ -1,6 +1,9 @@
 package roj.ui;
 
 import roj.collect.SimpleList;
+import roj.config.serial.CVisitor;
+import roj.config.serial.ToJson;
+import roj.config.serial.ToSomeString;
 import roj.io.IOUtil;
 import roj.math.MutableInt;
 import roj.text.CharList;
@@ -54,8 +57,50 @@ public class AnsiString {
 			extra.get(i).writeRaw(sb);
 		return sb;
 	}
+	protected String getMinecraftType() { return "text"; }
+	public void writeJson(CVisitor ser) {
+		ser.valueMap();
+		ser.key(getMinecraftType());
+		ser.value(value.toString());
+
+		if (flag != 0) {
+			if (isClear()) {
+				ser.key("reset");
+				ser.value(true);
+			}
+			addFlag(ser, 1, "bold");
+			addFlag(ser, 4, "italic");
+			addFlag(ser, 16, "underline");
+			addFlag(ser, 256, "obfuscated");
+			addFlag(ser, 1024, "strikethrough");
+		}
+
+		if (fgColor != 0) {
+			ser.key("color");
+			if (isColorRGB()) {
+				ser.value("#"+Integer.toHexString(fgColor));
+			} else {
+				ser.value(CLIUtil.MinecraftColor.getByConsoleCode(fgColor&0xFF));
+			}
+		}
+
+		if (extra.size() > 0) {
+			ser.key("extra");
+			ser.valueList(extra.size());
+			for (int i = 0; i < extra.size(); i++) {
+				extra.get(i).writeJson(ser);
+			}
+			ser.pop();
+		}
+	}
+
 	public String toString() { return writeRaw(IOUtil.getSharedCharBuf()).toString(); }
 	public String toAnsiString() { return writeAnsi(IOUtil.getSharedCharBuf()).toString(); }
+	public String toMinecraftJson() {
+		ToSomeString ser = new ToJson().sb(IOUtil.getSharedCharBuf());
+		writeJson(ser);
+		return ser.getValue().toString();
+	}
 
 	public void flat(List<AnsiString> str) {
 		str.add(this);
@@ -197,6 +242,11 @@ public class AnsiString {
 		} else {
 			sb.append('2').append(yes).append(';');
 		}
+	}
+	private void addFlag(CVisitor sb, int bit, String yes) {
+		if ((flag&(bit<<1)) == 0) return;
+		sb.key(yes);
+		sb.value((flag & bit) != 0);
 	}
 
 	private static void addColor(CharList sb, int rgb, int type) {

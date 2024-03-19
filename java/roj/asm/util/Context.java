@@ -1,9 +1,8 @@
 package roj.asm.util;
 
-import roj.archive.ArchiveEntry;
-import roj.archive.ArchiveFile;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
+import roj.archive.zip.ZipFileWriter;
 import roj.asm.Parser;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
@@ -20,9 +19,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 public final class Context implements Consumer<Constant>, Supplier<ByteList> {
@@ -97,11 +94,8 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 		throw new ClassCastException(o.getClass().getName());
 	}
 
-	@Deprecated
 	public List<CstRef> getMethodConstants() { cstInit(); return Helpers.cast(cstCache[ID_METHOD]); }
-	@Deprecated
 	public List<CstRef> getFieldConstants() { cstInit(); return Helpers.cast(cstCache[ID_FIELD]); }
-	@Deprecated
 	public List<CstClass> getClassConstants() { cstInit(); return Helpers.cast(cstCache[ID_CLASS]); }
 
 	public ByteList get() { return get(true); }
@@ -208,10 +202,7 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 		absolutelyCompressed = true;
 	}
 
-	public static List<Context> fromZip(File input) throws IOException { return fromZip(input, null, Helpers.alwaysTrue()); }
-	public static List<Context> fromZip(File input, Predicate<String> filter) throws IOException { return fromZip(input, null, filter); }
-	public static List<Context> fromZip(File input, Map<ArchiveEntry, ArchiveFile> resource) throws IOException { return fromZip(input, resource, Helpers.alwaysTrue()); }
-	public static List<Context> fromZip(File input, Map<ArchiveEntry, ArchiveFile> resource, Predicate<String> filter) throws IOException {
+	public static List<Context> fromZip(File input, ZipFileWriter rw) throws IOException {
 		List<Context> ctx = new ArrayList<>();
 
 		try (ZipFile archive = new ZipFile(input)) {
@@ -219,10 +210,10 @@ public final class Context implements Consumer<Constant>, Supplier<ByteList> {
 				String name = value.getName();
 				if (name.endsWith("/")) continue;
 
-				if (name.endsWith(".class") && filter.test(name)) {
+				if (name.endsWith(".class")) {
 					ctx.add(new Context(name, archive.get(value)));
-				} else if (resource != null) {
-					resource.put(value, archive);
+				} else if (rw != null) {
+					rw.copy(archive, value);
 				}
 			}
 		}

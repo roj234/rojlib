@@ -10,7 +10,7 @@
  * [ ] 序列化未来加入
 
 ```java
-import roj.net.http.srv.autohandled.*;
+import roj.net.http.server.auto.*;
 
 public class Example {
 	public static void main(String[] args) {

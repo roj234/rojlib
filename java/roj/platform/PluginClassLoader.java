@@ -2,8 +2,8 @@ package roj.platform;
 
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
-import roj.net.URIUtil;
+import roj.archive.zip.ZipFile;
+import roj.text.EscapeUtil;
 import roj.util.ByteList;
 
 import java.io.IOException;
@@ -24,12 +24,12 @@ public class PluginClassLoader extends ClassLoader {
 	public static final ThreadLocal<PluginClassLoader> PLUGIN_CONTEXT = new ThreadLocal<>();
 
 	final PluginDescriptor desc;
-	private final ZipArchive archive;
+	private final ZipFile archive;
 
 	public PluginClassLoader(ClassLoader parent, PluginDescriptor plugin) throws IOException {
 		super(parent);
 		this.desc = plugin;
-		this.archive = new ZipArchive(plugin.source, ZipArchive.FLAG_VERIFY| ZipArchive.FLAG_BACKWARD_READ, plugin.charset);
+		this.archive = new ZipFile(plugin.source, ZipFile.FLAG_VERIFY|ZipFile.FLAG_BACKWARD_READ, plugin.charset);
 		this.archive.reload();
 	}
 
@@ -43,7 +43,7 @@ public class PluginClassLoader extends ClassLoader {
 		PLUGIN_CONTEXT.set(this);
 		try {
 			ByteList buf = new ByteList().readStreamFully(archive.getStream(entry));
-			CodeSource cs = new CodeSource(new URL("jar:file:/"+desc.fileName+"!/"+URIUtil.encodeURI(klass)), (CodeSigner[]) null);
+			CodeSource cs = new CodeSource(new URL("jar:file:/"+desc.fileName+"!/"+ EscapeUtil.encodeURI(klass)), (CodeSigner[]) null);
 
 			DefaultPluginSystem.transform(name, buf);
 			Class<?> clazz = defineClass(name, buf.list, 0, buf.wIndex(), new ProtectionDomain(cs, null));
@@ -61,7 +61,7 @@ public class PluginClassLoader extends ClassLoader {
 	protected URL findResource(String name) {
 		if (archive.getEntry(name) != null) {
 			try {
-				return new URL("jar:file:/"+desc.fileName+"!/"+URIUtil.encodeURI(name));
+				return new URL("jar:file:/"+desc.fileName+"!/"+ EscapeUtil.encodeURI(name));
 			} catch (MalformedURLException ignored) {}
 		}
 		return null;

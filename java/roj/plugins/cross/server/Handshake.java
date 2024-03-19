@@ -3,7 +3,7 @@ package roj.plugins.cross.server;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.Pipe;
-import roj.net.ch.handler.MSSCipher;
+import roj.net.handler.MSSCipher;
 import roj.net.mss.MSSException;
 import roj.plugins.cross.Constants;
 import roj.text.CharList;

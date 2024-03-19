@@ -4,7 +4,7 @@ import roj.collect.TrieTree;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CEntry;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.math.MutableInt;
 import roj.text.CharList;
@@ -38,7 +38,7 @@ public class Asar {
 		f.readFully(data);
 		if (f.read() != 0) throw new IOException("EOF flag excepted");
 
-		CMapping root = new JSONParser().parseRaw(ByteList.wrap(data)).asMap();
+		CMap root = new JSONParser().parse(ByteList.wrap(data)).asMap();
 
 		TrieTree<PosInfo> tree = new TrieTree<>();
 
@@ -79,14 +79,14 @@ public class Asar {
 		});
 	}
 
-	private static void recursionTree(CharList parents, CMapping directory, TrieTree<PosInfo> tree, MutableInt dir) {
-		CMapping files = directory.get("files").asMap();
+	private static void recursionTree(CharList parents, CMap directory, TrieTree<PosInfo> tree, MutableInt dir) {
+		CMap files = directory.get("files").asMap();
 		int len = parents.length();
 		for (Map.Entry<String, CEntry> entry : files.entrySet()) {
 			parents.setLength(len);
 			parents.append(entry.getKey());
 
-			CMapping val = entry.getValue().asMap();
+			CMap val = entry.getValue().asMap();
 			if (val.containsKey("files")) {
 				dir.increment();
 				parents.append('/');

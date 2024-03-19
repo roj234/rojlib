@@ -16,9 +16,11 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 
 /**
+ * Vinary格式即将删除 - 压缩key？你比得过LZMA嘛，哪怕是Deflate...
  * @author Roj234
  * @since 2022/2/6 9:15
  */
+@Deprecated
 public final class VinaryParser implements BinaryParser, BiConsumer<String, Object> {
 	private static final byte[] ENCODE_MAP = new byte[256], DECODE_MAP = new byte[256];
 	private static final int TINY_ID_COUNT = createMap(Type.VALUES.length, ENCODE_MAP, DECODE_MAP);
@@ -83,7 +85,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 	}
 
 	@Override
-	public <T extends CVisitor> T parseRaw(T cc, InputStream in, int flag) throws IOException {
+	public <T extends CVisitor> T parse(InputStream in, int flag, T cc) throws IOException {
 		decodeTab.clear();
 		this.cc = cc;
 		try {
@@ -95,7 +97,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 	}
 
 	@Override
-	public <T extends CVisitor> T parseRaw(T cc, DynByteBuf buf, int flag) throws IOException {
+	public <T extends CVisitor> T parse(DynByteBuf buf, int flag, T cc) throws IOException {
 		decodeTab.clear();
 		this.cc = cc;
 		try {
@@ -263,7 +265,7 @@ public final class VinaryParser implements BinaryParser, BiConsumer<String, Obje
 		}
 	}
 
-	public String format() { return "Vinary"; }
+	public ConfigMaster format() { return ConfigMaster.VINARY; }
 
 	public String[] tryCompress(Map<String, CEntry> map, DynByteBuf w) {
 		if (map.isEmpty()) return null;

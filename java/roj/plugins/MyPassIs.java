@@ -4,9 +4,9 @@ import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.config.ConfigMaster;
 import roj.config.VinaryParser;
+import roj.config.data.CByteArray;
 import roj.config.data.CEntry;
-import roj.config.data.CMapping;
-import roj.config.exch.TByteArray;
+import roj.config.data.CMap;
 import roj.crypt.*;
 import roj.io.IOUtil;
 import roj.platform.Plugin;
@@ -38,7 +38,7 @@ public class MyPassIs extends Plugin {
 	private File keyFile;
 	private HMAC mac;
 	private RCipherSpi cipher;
-	private CMapping data;
+	private CMap data;
 	private byte[] pass;
 
 	private final CommandConsole c = new CommandConsole("");
@@ -99,9 +99,6 @@ public class MyPassIs extends Plugin {
 		keyFile = new File(getDataFolder(), "key.bjson");
 	}
 
-	@Override
-	protected void onDisable() { unregisterCommand("mpi"); }
-
 	private void login() throws Exception {
 		if (data != null) return;
 
@@ -115,20 +112,20 @@ public class MyPassIs extends Plugin {
 		this.cipher = new FeedbackCipher(new AES(), FeedbackCipher.MODE_CTR);
 
 		File plaintextKey = new File(getDataFolder(), "key.yml");
-		CMapping data;
+		CMap data;
 		if (plaintextKey.isFile()) {
 			if (keyFile.isFile()) throw new IllegalStateException("明文和加密的数据同时存在");
-			data = ConfigMaster.parse(plaintextKey).asMap();
-			data.put("key", new TByteArray(data.get("key").asList().toByteArray()));
+			data = ConfigMaster.fromExtension(plaintextKey).parse(plaintextKey).asMap();
+			data.put("key", new CByteArray(data.get("key").asList().toByteArray()));
 			CLIUtil.warning("数据已导入");
 		} else if (keyFile.length() == 0) {
-			data = new CMapping();
+			data = new CMap();
 
 			byte[] master_key = new byte[MASTER_KEY_LEN];
 			new SecureRandom().nextBytes(master_key);
 
-			data.put("key", new TByteArray(master_key));
-			data.put("record", new CMapping());
+			data.put("key", new CByteArray(master_key));
+			data.put("record", new CMap());
 
 			CLIUtil.warning("新的密钥已生成，创建任意账号来保存");
 		} else {
@@ -137,7 +134,7 @@ public class MyPassIs extends Plugin {
 				IOUtil.readFully(in, iv);
 				cipher.init(Cipher.DECRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
 
-				data = new VinaryParser().asArray().parseRaw(new CipherInputStream(in, cipher)).asMap();
+				data = new VinaryParser().asArray().parse(new CipherInputStream(in, cipher)).asMap();
 			} catch (Exception e) {
 				CLIUtil.error("密码错误:"+e.getMessage());
 				return;
@@ -160,7 +157,7 @@ public class MyPassIs extends Plugin {
 		int length;
 
 		if (prev == null) {
-			CMapping m = new CMapping();
+			CMap m = new CMap();
 			while (true) {
 				try {
 					c.setPrompt("字符集[1数字a小写字母A大写字母@特殊符号] > ");
@@ -184,12 +181,12 @@ public class MyPassIs extends Plugin {
 			}
 			prev = m;
 		} else {
-			CMapping m = prev.asMap();
+			CMap m = prev.asMap();
 			charset = buildCharset(m.getString("c"));
 			length = m.getInteger("l");
 		}
 
-		CMapping accounts = prev.asMap().getOrCreateMap("account");
+		CMap accounts = prev.asMap().getOrCreateMap("account");
 
 		MyHashMap<String, String> hints = new MyHashMap<>();
 		for (String s : accounts.keySet()) hints.put(s, s);
@@ -200,7 +197,7 @@ public class MyPassIs extends Plugin {
 			return;
 		}
 
-		byte[] keys = (byte[]) data.get("key").unwrap();
+		byte[] keys = (byte[]) data.get("key").raw();
 		int iter = accounts.getInteger(account);
 
 		while (true) {
@@ -257,7 +254,7 @@ public class MyPassIs extends Plugin {
 			cipher.init(Cipher.ENCRYPT_MODE, pass, new IvParameterSpecNC(iv1), null);
 
 			ByteList buf = IOUtil.getSharedByteBuf();
-			new VinaryParser().serialize(data, buf);
+			ConfigMaster.VINARY.toBytes(data, buf);
 			cipher.cryptInline(buf,buf.readableBytes());
 
 			buf.writeToStream(out);

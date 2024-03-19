@@ -4,9 +4,10 @@ import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
-import roj.config.serial.CAdapter;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
+import roj.config.Tokenizer;
+import roj.config.Word;
+import roj.config.auto.Serializer;
+import roj.config.auto.Serializers;
 import roj.io.IOUtil;
 import roj.ui.CLIUtil;
 import roj.ui.terminal.CommandContext;
@@ -16,7 +17,6 @@ import java.io.File;
 import java.util.List;
 
 import static roj.text.diff.DiffResult.bar;
-import static roj.text.diff.DiffResult.sf;
 import static roj.ui.terminal.Argument.file;
 import static roj.ui.terminal.CommandNode.argument;
 import static roj.ui.terminal.SimpleCliParser.nullImpl;
@@ -40,8 +40,8 @@ public class DiffUser {
 
 		basePath = ctx.argument("basePath", File.class);
 
-		CAdapter<List<DiffResult>> adapter = sf.listOf(DiffResult.class);
-		List<DiffResult> diffs = sf.deserialize(adapter, ctx.argument("diffYml", File.class));
+		Serializer<List<DiffResult>> adapter = Serializers.SAFE.listOf(DiffResult.class);
+		List<DiffResult> diffs = ConfigMaster.YAML.readObject(adapter, ctx.argument("diffYml", File.class));
 		for (int i = diffs.size() - 1; i >= 0; i--) {
 			DiffResult d = diffs.get(i);
 			d.leftFile = new File(basePath, d.left);
@@ -78,7 +78,7 @@ public class DiffUser {
 			}
 		}
 		System.out.println("count:" + diffs.size());
-		ConfigMaster.write(diffs, ctx.argument("diffYml", File.class).getAbsolutePath(), "yml", adapter);
+		ConfigMaster.YAML.writeObject(diffs, adapter, ctx.argument("diffYml", File.class));
 
 		bar.addMax(diffs.size());
 		for (int i = 0; i < diffs.size(); i++) {

@@ -1,25 +1,24 @@
 package roj.config;
 
 import roj.collect.Int2IntMap;
-import roj.config.data.CEntry;
 import roj.config.serial.CVisitor;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.DynByteBuf;
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Map;
 
-import static roj.config.JSONParser.*;
+import static roj.config.JSONParser.parseNumber;
 
 /**
  * bittorrent解析器
  * @author Roj234
  */
 public final class BencodeParser implements BinaryParser {
-	public static final int SKIP_UTF_DECODE = 2;
+	public static final int SKIP_UTF_DECODE = 1;
 
 	private static final Int2IntMap BEN_C2C = new Int2IntMap();
 	static {
@@ -35,12 +34,8 @@ public final class BencodeParser implements BinaryParser {
 		}
 	}
 
-	public static CEntry parses(InputStream in) throws IOException, ParseException {
-		return new BencodeParser().parseRaw(in, 0);
-	}
-
 	@Override
-	public <T extends CVisitor> T parseRaw(T cc, InputStream in, int flag) throws IOException, ParseException {
+	public <T extends CVisitor> T parse(InputStream in, int flag, T cc) throws IOException, ParseException {
 		this.in = in;
 		this.cc = cc;
 		try {
@@ -54,9 +49,8 @@ public final class BencodeParser implements BinaryParser {
 		return cc;
 	}
 
-	public void serialize(CEntry entry, DynByteBuf out) throws IOException { entry.toB_encode(out); }
-	public int availableFlags() { return NO_DUPLICATE_KEY|SKIP_UTF_DECODE|ORDERED_MAP; }
-	public String format() { return "B-encode"; }
+	public Map<String, Integer> dynamicFlags() { return Map.of("SkipUTFDecode", SKIP_UTF_DECODE); }
+	public ConfigMaster format() { return ConfigMaster.BENCODE; }
 
 	private InputStream in;
 	private CVisitor cc;

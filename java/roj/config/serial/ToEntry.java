@@ -1,8 +1,9 @@
 package roj.config.serial;
 
+import roj.collect.LinkedMyHashMap;
+import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.data.*;
-import roj.config.exch.*;
 
 import java.util.Arrays;
 import java.util.List;
@@ -11,7 +12,7 @@ import java.util.List;
  * @author Roj234
  * @since 2022/11/15 0015 2:07
  */
-public class ToEntry implements CVisitor {
+public final class ToEntry implements CVisitor {
 	private final List<CEntry> stack = new SimpleList<>();
 	private CEntry stackTop, stackBottom;
 
@@ -21,25 +22,31 @@ public class ToEntry implements CVisitor {
 	private byte state;
 
 	private int maxDepth = 100;
+	private byte flag;
 
-	public void setMaxDepth(int maxDepth) {
-		this.maxDepth = maxDepth;
-	}
-
-	public final void value(byte l) { add(TByte.valueOf(l)); }
-	public final void value(short l) { add(TShort.valueOf(l)); }
-	public final void value(float l) { add(TFloat.valueOf(l)); }
-	public final void value(String l) { add(l==null?CNull.NULL:CString.valueOf(l)); }
+	public final void value(byte l) { add(CByte.valueOf(l)); }
+	public final void value(short l) { add(CShort.valueOf(l)); }
+	public final void value(float l) { add(CFloat.valueOf(l)); }
+	public final void value(String l) { add(CString.valueOf(l)); }
 	public final void value(int l) { add(CInteger.valueOf(l)); }
 	public final void value(long l) { add(CLong.valueOf(l)); }
 	public final void value(double l) { add(CDouble.valueOf(l));}
-	public final void value(boolean l) { add(l ? CBoolean.TRUE : CBoolean.FALSE); }
+	public final void value(boolean l) { add(CBoolean.valueOf(l)); }
 	public final void valueNull() { add(CNull.NULL); }
-	public final void value(int[] ia) { add(new TIntArray(ia)); }
-	public final void value(byte[] ba) { add(new TByteArray(ba)); }
-	public final void value(long[] la) { add(new TLongArray(la)); }
+	public final void value(int[] ia) { add(new CIntArray(ia)); }
+	public final void value(byte[] ba) { add(new CByteArray(ba)); }
+	public final void value(long[] la) { add(new CLongArray(la)); }
 
 	private void add(CEntry v) {
+		if (pendingComment != null) {
+			// TODO - may I need a CCommList
+			if (stackBottom.getType() == Type.MAP) {
+				CMap map = stackBottom.asMap();
+				if (!map.isCommentSupported()) stackBottom = new CCommMap(map.raw());
+				map.putComment(key, pendingComment);
+			}
+			pendingComment = null;
+		}
 		switch (state) {
 			case 0:
 				stackTop = v;
@@ -48,9 +55,9 @@ public class ToEntry implements CVisitor {
 					state = 1;
 				}
 				break;
-			case 1: throw new IllegalStateException("Container " + stack.get(stack.size()-1).getType() + " is not appendable");
+			case 1: throw new IllegalStateException(stack.get(stack.size()-1).getType()+" 不是容器类型");
 			case 2:
-				if (key == null) throw new IllegalStateException("Key missing for " + v);
+				if (key == null) throw new IllegalStateException("映射缺少键: "+v);
 				stackBottom.asMap().put(key, v);
 				key = null;
 				break;
@@ -59,22 +66,29 @@ public class ToEntry implements CVisitor {
 	}
 
 	public final void key(String key) {
-		if (state != 2) throw new IllegalStateException("bottom is " + stackBottom.getType() + " not MAP");
-		if (this.key != null) throw new IllegalStateException("Duplicate key " + key + " and " + this.key);
+		if (state != 2) throw new IllegalStateException("栈顶不是映射: "+stackBottom.getType());
+		if (this.key != null) throw new IllegalStateException("映射缺少值: 在键 "+this.key+" 后立即输入了键 "+key);
 		this.key = key;
 	}
 
 	public final void valueList() { push(new CList(), 3); }
 	public final void valueList(int size) { push(new CList(size), 3); }
 
-	public final void valueMap() { push(new CMapping(), 2); }
-	public final void valueMap(int size) { push(new CMapping(size), 2); }
+	public final void valueMap() { push(createMap(8), 2); }
+	public final void valueMap(int size) { push(createMap(size), 2); }
+	private CMap createMap(int size) {
+		MyHashMap<String, CEntry> core = (flag & 1) == 0 ? new MyHashMap<>(size) : new LinkedMyHashMap<>(size);
+		return new CMap(core);
+	}
+
+	private String pendingComment;
+	public void comment(String comment) { if ((flag&2) != 0) pendingComment = comment; }
 
 	private void push(CEntry e, int state) {
 		add(e);
 
 		int level = stack.size();
-		if (level == maxDepth) throw new IllegalStateException("Max object depth "+maxDepth+" exceeded");
+		if (level == maxDepth) throw new IllegalStateException("栈溢出: 最大深度是 "+maxDepth);
 		stack.add(stackBottom = e);
 		this.state = (byte) state;
 
@@ -87,13 +101,13 @@ public class ToEntry implements CVisitor {
 		arr[i] = (arr[i] & ~(3 << lsh)) | (state << lsh);
 	}
 	public final void pop() {
-		if (key != null) throw new IllegalStateException("Value missing for " + key);
+		if (key != null) throw new IllegalStateException("映射缺少值: 在键 "+this.key+" 后未输入值");
 		if (stack.size() <= 1) {
-			if (stack.isEmpty()) throw new IllegalStateException("Stack underflow");
+			if (stack.isEmpty()) throw new IllegalStateException("栈是空的");
 			stack.remove(0);
 			return;
 		}
-		CEntry entry = stack.remove(stack.size()-1);
+		stack.remove(stack.size()-1);
 		stackBottom = stack.get(stack.size()-1);
 
 		int depth = stack.size()-1;
@@ -104,7 +118,28 @@ public class ToEntry implements CVisitor {
 	}
 
 	public final CEntry get() {
+		if (stack.isEmpty()) throw new IllegalStateException(stackTop == null ? "未输入任何值" : "栈不是空的，请先pop");
 		return stackTop;
+	}
+
+	@Override
+	public void setProperty(String k, Object v) {
+		switch (k) {
+			case "entry:max_depth" -> maxDepth = (int) v;
+			case "centry:linked_map" -> {
+				boolean v1 = ((boolean) v);
+				if (v1) flag |= 1;
+				else flag &= ~1;
+			}
+			case "centry:comment" -> {
+				boolean v1 = ((boolean) v);
+				if (v1) flag |= 2;
+				else {
+					flag &= ~2;
+					pendingComment = null;
+				}
+			}
+		}
 	}
 
 	public final ToEntry reset() {

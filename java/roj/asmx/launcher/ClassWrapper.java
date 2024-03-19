@@ -1,14 +1,12 @@
 package roj.asmx.launcher;
 
 import roj.archive.zip.ZipFile;
-import roj.asm.AsmShared;
-import roj.asm.tree.ConstantData;
 import roj.asm.util.Context;
 import roj.asmx.ITransformer;
 import roj.collect.TrieTreeSet;
-import roj.io.FastFailException;
+import roj.crypt.jar.JarVerifier;
 import roj.io.IOUtil;
-import roj.io.source.FileSource;
+import roj.text.EscapeUtil;
 import roj.text.logging.Level;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -19,9 +17,12 @@ import java.io.InputStream;
 import java.net.URL;
 import java.security.CodeSigner;
 import java.security.CodeSource;
+import java.security.GeneralSecurityException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.jar.Attributes;
+import java.util.jar.Manifest;
 
 import static roj.asmx.launcher.Bootstrap.LOGGER;
 
@@ -33,7 +34,9 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	private static final Class<?> ERROR_CLASS = Integer.TYPE;
 	private static final EntryPoint ENTRY_POINT = (EntryPoint) ClassWrapper.class.getClassLoader();
 
-	private final List<ZipFile> fastZips = new ArrayList<>();
+	private final List<ZipFile> archives = new ArrayList<>();
+	private final List<CodeSource> locations = new ArrayList<>();
+	private final List<JarVerifier> verifiers = new ArrayList<>();
 
 	private INameTransformer nameTransformer;
 	private final List<ITransformer> transformers = new ArrayList<>();
@@ -43,18 +46,12 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	private final Map<String, Class<?>> loadedClasses = new ConcurrentHashMap<>(1024);
 
 	public ClassWrapper() {
-		loadExcept.addAll(Arrays.asList(
-			"java.",
-			"javax."
-		));
-		transformExcept.addAll(Arrays.asList(
-			"roj.asm.",
-			"roj.reflect."
-		));
+		loadExcept.addAll(Arrays.asList("java.", "javax."));
+		transformExcept.addAll(Arrays.asList("roj.asm.", "roj.reflect."));
 
 		try {
-			// preload transforming classes
-			ConstantData data = new Context("_classwrapper_", IOUtil.getResource("roj/asmx/launcher/ClassWrapper.class")).getData();
+			// preload asm classes
+			new Context("_classwrapper_", IOUtil.getResource("roj/asmx/launcher/ClassWrapper.class")).getData();
 		} catch (Exception e) {
 			throw new IllegalStateException("预加载转换器相关类时出现异常", e);
 		}
@@ -84,6 +81,36 @@ public class ClassWrapper implements Function<String, Class<?>> {
 		}
 	}
 
+	private void addPackage(URL url, String name, JarVerifier jv)  {
+		int dot = name.lastIndexOf('.');
+		if (dot > -1) {
+			Manifest man = jv.getManifest();
+			// TODO specTitle ...
+			//m.getAttributes();
+			String pkgName = name.substring(0, dot);
+
+			Package pkg = ENTRY_POINT.getPackage(pkgName);
+			if (pkg == null) {
+				ENTRY_POINT.definePackage(pkgName, null, null, null, null, null, null, isSealed(pkgName, man) ? url : null);
+			} else if (pkg.isSealed() && !pkg.isSealed(url)) {
+				LOGGER.log(Level.WARN,  "{} 加载了其他文件的封闭包 {} 的类 {}", null, url, pkgName, name);
+			}
+		}
+	}
+	private static boolean isSealed(String name, Manifest man) {
+		Attributes attr = man.getAttributes(name.replace('.', '/').concat("/"));
+		String sealed = null;
+		if (attr != null) {
+			sealed = attr.getValue(Attributes.Name.SEALED);
+		}
+		if (sealed == null) {
+			if ((attr = man.getMainAttributes()) != null) {
+				sealed = attr.getValue(Attributes.Name.SEALED);
+			}
+		}
+		return "true".equalsIgnoreCase(sealed);
+	}
+
 	private Class<?> findClass(String name) throws ClassNotFoundException {
 		Class<?> clazz = loadedClasses.get(name);
 		if (clazz != null) {
@@ -108,8 +135,9 @@ public class ClassWrapper implements Function<String, Class<?>> {
 			}
 		}
 
-		ByteList buf = AsmShared.getBuf();
-		AsmShared.local().setLevel(true);
+		ByteList buf = new ByteList();
+		buf.ensureCapacity(4096);
+
 		CodeSource cs;
 
 		try {
@@ -117,13 +145,17 @@ public class ClassWrapper implements Function<String, Class<?>> {
 
 			block:
 			try {
-				for (int i = 0; i < fastZips.size(); i++) {
-					ZipFile za = fastZips.get(i);
+				for (int i = 0; i < archives.size(); i++) {
+					ZipFile za = archives.get(i);
 					InputStream in = za.getStream(name);
 					if (in != null) {
+						JarVerifier jv = verifiers.get(i);
+						if (jv != null) {
+							in = jv.wrapInput(name, in);
+							addPackage(locations.get(i).getLocation(), name, jv);
+						}
 						buf.readStreamFully(in);
-						URL url = new URL("file", "", ((FileSource)za.source()).getFile().getAbsolutePath().replace(File.separatorChar, '/')+"!"+name);
-						cs = new CodeSource(url, (CodeSigner[]) null);
+						cs = locations.get(i);
 						break block;
 					}
 				}
@@ -134,7 +166,8 @@ public class ClassWrapper implements Function<String, Class<?>> {
 					buf.readStreamFully(in);
 					cs = new CodeSource(ENTRY_POINT.PARENT.getResource(name), (CodeSigner[]) null);
 				} else {
-					throw new FastFailException("no file");
+					return ENTRY_POINT.PARENT.loadClass(newName);
+					//throw new FastFailException("no file");
 				}
 			} catch (IOException e) {
 				LOGGER.log(Level.ERROR, "读取类'{}'时发生异常", e, name);
@@ -152,7 +185,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 			loadedClasses.put(newName, ERROR_CLASS);
 			throw new ClassNotFoundException(newName, e);
 		} finally {
-			AsmShared.local().setLevel(false);
+			buf._free();
 		}
 	}
 
@@ -181,6 +214,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 		reentrant = prev;
 		if (changed) {
 			list.clear();
+			// See ConstantPool#checkCollision
 			list.put(ctx.get());
 		}
 	}
@@ -195,8 +229,20 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	}
 
 	public void enableFastZip(URL url) throws IOException {
-		ZipFile e = new ZipFile(new File(url.getPath().substring(1)));
-		if (fastZips.isEmpty()) e.getStream(e.entries().iterator().next()).close(); // INIT
-		fastZips.add(e);
+		ZipFile zf = new ZipFile(new File(EscapeUtil.unescapeFilePath(url.getPath().substring(1), IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf()).toString()));
+		JarVerifier jv = JarVerifier.create(zf);
+		if (archives.isEmpty()) zf.getStream(zf.entries().iterator().next()).close(); // INIT
+		archives.add(zf);
+		if (jv != null) {
+			try {
+				jv.ensureManifestValid();
+			} catch (GeneralSecurityException e) {
+				Helpers.athrow(e);
+			}
+			locations.add(jv.getCodeSource());
+		} else {
+			locations.add(new CodeSource(url, (CodeSigner[]) null));
+		}
+		verifiers.add(jv);
 	}
 }

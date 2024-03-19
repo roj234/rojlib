@@ -277,7 +277,7 @@ public abstract class WebsocketHandler implements ChannelHandler {
 								error(ERR_TOO_LARGE, "decompressed data > " + zo.capacity() + " bytes");
 								return;
 							}
-							zo = BufferPool.expand(zo, zo.capacity());
+							zo = ctx.alloc().expand(zo, zo.capacity());
 						}
 					} while (!inf.needsInput());
 				} catch (Exception e) {

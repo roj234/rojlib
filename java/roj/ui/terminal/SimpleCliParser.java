@@ -2,8 +2,8 @@ package roj.ui.terminal;
 
 import roj.collect.SimpleList;
 import roj.config.ParseException;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
+import roj.config.Tokenizer;
+import roj.config.Word;
 import roj.reflect.ReflectionUtils;
 import roj.text.TextUtil;
 import roj.ui.CLIUtil;
@@ -31,9 +31,9 @@ public class SimpleCliParser {
 		} else {
 			int number = TextUtil.isNumber(s);
 			if (number == 0) {
-				words.add(new Word.L(i, Long.parseLong(s), s));
+				words.add(Word.numberWord(i, Long.parseLong(s), s));
 			} else if (number == 1) {
-				words.add(new Word.D(i, Double.parseDouble(s), s));
+				words.add(Word.numberWord(i, Double.parseDouble(s), s));
 			} else {
 				words.add(new Word().init(Word.LITERAL, i, s));
 			}

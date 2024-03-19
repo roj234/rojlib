@@ -1,7 +1,7 @@
 package roj.plugins.cross;
 
 import roj.collect.IntMap;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.net.NetUtil;
 import roj.net.ch.*;

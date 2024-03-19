@@ -10,16 +10,16 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2024/3/6 0006 2:07
  */
 public class LoopTaskWrapper implements ITask {
-	private final Scheduler sched;
-	private final ITask task;
+	protected final Scheduler sched;
+	protected final ITask task;
 
-	private final int interval;
-	private int repeat;
+	protected final long interval;
+	protected int repeat;
 
 	private static final long STATE_OFFSET = ReflectionUtils.fieldOffset(LoopTaskWrapper.class, "taskState");
 	private volatile int taskState;
 
-	public LoopTaskWrapper(Scheduler sched, ITask task, int interval, int repeat, boolean slowTaskProof) {
+	public LoopTaskWrapper(Scheduler sched, ITask task, long interval, int repeat, boolean slowTaskProof) {
 		if (interval <= 0) throw new IllegalArgumentException("interval <= 0");
 		this.sched = sched;
 		this.task = task;
@@ -53,7 +53,7 @@ public class LoopTaskWrapper implements ITask {
 		return state <= 0 || task.cancel();
 	}
 
-	public int getNextRun() {
+	public long getNextRun() {
 		if (u.compareAndSwapInt(this, STATE_OFFSET, 1, 2)) return 0;
 		return --repeat == 0 ? 0 : interval;
 	}

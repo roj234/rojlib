@@ -20,6 +20,7 @@ public abstract class CommandNode {
 
 	public static CommandNode literal(String name) { return new LiteralNode(name); }
 	public static CommandNode argument(String name, Argument<?> argument) { return new ArgumentNode(name, argument); }
+	public static CommandNode redirect(CommandNode node) { return new RedirectNode(node); }
 
 	public CharList dump(CharList sb, int depth) {
 		depth += 2;
@@ -74,6 +75,10 @@ public abstract class CommandNode {
 		return false;
 	}
 
+	public List<CommandNode> getChildren() { return children; }
+	public CommandImpl getCommand() { return impl; }
+	public CommandNode getRedirect() { return null; }
+
 	public CommandNode then(CommandNode node) {
 		children.add(node);
 		return this;
@@ -82,7 +87,19 @@ public abstract class CommandNode {
 	private boolean fastFail;
 	public CommandNode fastFail() { fastFail = true; return this; }
 
-	static final class LiteralNode extends CommandNode {
+	public static final class RedirectNode extends CommandNode {
+		private CommandNode redirect;
+		RedirectNode(CommandNode redirect) {this.redirect = redirect;}
+
+		@Override
+		public String getName() { return redirect.getName(); }
+		@Override
+		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException { return redirect.apply(ctx, completions);}
+		@Override
+		public CommandNode getRedirect() { return redirect; }
+		public void setRedirect(CommandNode redirect) { this.redirect = redirect; }
+	}
+	public static final class LiteralNode extends CommandNode {
 		private final String name;
 		LiteralNode(String name) { this.name = name; }
 
@@ -110,10 +127,13 @@ public abstract class CommandNode {
 			return doApply(ctx, completions);
 		}
 	}
-	static final class ArgumentNode extends CommandNode {
+	public static final class ArgumentNode extends CommandNode {
 		private final String name;
 		private final Argument<?> argument;
 		ArgumentNode(String name, Argument<?> argument) { this.name = name; this.argument = argument; }
+
+		public String getArgumentName() { return name; }
+		public Argument<?> getArgument() { return argument; }
 
 		@Override
 		public CharList dump(CharList sb, int depth) {

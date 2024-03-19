@@ -1,7 +1,7 @@
 package roj.asm.tree.anno;
 
 import roj.asm.cp.ConstantPool;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.util.DynByteBuf;
 
 /**

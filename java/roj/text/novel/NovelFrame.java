@@ -10,10 +10,9 @@ import roj.concurrent.OperationDone;
 import roj.concurrent.TaskPool;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.text.*;
-import roj.text.epub.EpubWriter;
 import roj.ui.DragReorderHelper;
 import roj.ui.GuiUtil;
 import roj.ui.OnChangeHelper;
@@ -826,7 +825,7 @@ public class NovelFrame extends JFrame {
 				String str = m.group(j);
 				if (j == chapterId_group) {
 					if (uiRegenId.isSelected()) {
-						str = Integer.toString(myChapterNo.increase(String.valueOf(c.type), 1));
+						str = Integer.toString(myChapterNo.increment(String.valueOf(c.type), 1));
 						System.out.println("type=" + c.type);
 					}
 

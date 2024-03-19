@@ -4,7 +4,7 @@ import roj.asm.type.Desc;
 import roj.asmx.mapper.Mapping;
 import roj.config.JSONParser;
 import roj.config.ParseException;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.text.LinedReader;
 import roj.text.TextReader;
@@ -155,7 +155,7 @@ public final class TSrgMapping extends Mapping {
 
 	public static final class MCPConfig implements Closeable {
 		private ZipFile zf;
-		private CMapping manifest;
+		private CMap manifest;
 		public MCPConfig(File file) throws IOException {
 			zf = new ZipFile(file);
 			try {

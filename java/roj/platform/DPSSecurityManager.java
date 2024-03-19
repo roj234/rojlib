@@ -10,10 +10,10 @@ import roj.asm.util.ClassUtil;
 import roj.asm.util.Context;
 import roj.asmx.MethodHook;
 import roj.collect.*;
-import roj.net.URIUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.ReflectionUtils;
+import roj.text.EscapeUtil;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
@@ -323,13 +323,13 @@ public class DPSSecurityManager extends MethodHook {
 	/* -- URL -- */
 	public static InputStream hook_callFrom_openStream(URL url, Class<?> caller) throws IOException {
 		if (url.getProtocol().equals("file")) {
-			if (!checkFileAccess(new File(URIUtil.decodeURI(url.getFile())), caller)) throw new SecurityException("没有读取权限");
+			if (!checkFileAccess(new File(EscapeUtil.decodeURI(url.getFile())), caller)) throw new SecurityException("没有读取权限");
 		} else if (url.getProtocol().equals("jar")) {
 			String spec = url.getFile();
 			int separator = spec.indexOf("!/");
 			if (separator == -1) throw new MalformedURLException("no !/ found in url spec:" + spec);
 
-			if (!checkFileAccess(new File(URIUtil.decodeURI(spec.substring(0, separator))), caller))
+			if (!checkFileAccess(new File(EscapeUtil.decodeURI(spec.substring(0, separator))), caller))
 				throw new SecurityException("没有读取权限");
 		}
 		return url.openStream();

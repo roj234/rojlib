@@ -9,7 +9,7 @@ import roj.collect.MyHashSet;
 import roj.concurrent.task.AsyncTask;
 import roj.config.FileConfig;
 import roj.config.data.CList;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.config.data.CString;
 import roj.dev.Compiler;
 import roj.io.IOUtil;
@@ -135,7 +135,7 @@ public final class Project extends FileConfig {
 		}
 	}
 
-	protected void load(CMapping map) {
+	protected void load(CMap map) {
 		version = map.putIfAbsent("version", "1.0.0");
 
 		String cs = map.putIfAbsent("charset", "UTF-8");
@@ -216,7 +216,7 @@ public final class Project extends FileConfig {
 	}
 
 	@Override
-	protected void save(CMapping map) {
+	protected void save(CMap map) {
 		map.put("charset", charset == null ? "UTF-8" : charset.name());
 		map.put("version", version);
 		map.put("atConfig", atName);

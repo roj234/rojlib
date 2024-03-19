@@ -3,8 +3,8 @@ package roj.ui.terminal;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.config.ParseException;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
+import roj.config.Tokenizer;
+import roj.config.Word;
 import roj.text.CharList;
 import roj.ui.AnsiString;
 import roj.ui.CLIBoxRenderer;
@@ -34,6 +34,7 @@ public class CommandConsole extends DefaultConsole {
 
 	protected final List<CommandNode> nodes = new SimpleList<>();
 	public CommandConsole register(CommandNode node) { nodes.add(node); return this; }
+	public boolean unregister(CommandNode node) { return nodes.remove(node); }
 	public boolean unregister(String name) {
 		for (int i = nodes.size()-1; i >= 0; i--) {
 			CommandNode node = nodes.get(i);
@@ -43,6 +44,15 @@ public class CommandConsole extends DefaultConsole {
 			}
 		}
 		return false;
+	}
+	public void sortCommands() {
+		nodes.sort((o1, o2) -> {
+			String n1 = o1.getName();
+			String n2 = o2.getName();
+			if (n1 == null) n1 = "";
+			if (n2 == null) n2 = "";
+			return n1.compareTo(n2);
+		});
 	}
 
 	public CharList dumpNodes(CharList sb, int depth) {
@@ -100,7 +110,6 @@ public class CommandConsole extends DefaultConsole {
 			if (w.pos() > prevI) root.append(new AnsiString(input.substring(prevI, w.pos())));
 			switch (w.type()) {
 				case Word.LITERAL: root.append(new AnsiString(w.val()).color16(CLIUtil.YELLOW+CLIUtil.HIGHLIGHT)); break;
-				case Word.CHARACTER: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(CLIUtil.GREEN)); break;
 				case Word.STRING: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(CLIUtil.GREEN+CLIUtil.HIGHLIGHT)); break;
 				case Word.INTEGER: case Word.LONG: root.append(new AnsiString(w.val()).color16(getNumberColor(w.val()))); break;
 				case Word.DOUBLE: case Word.FLOAT: root.append(new AnsiString(w.val()).color16(CLIUtil.BLUE+CLIUtil.HIGHLIGHT)); break;

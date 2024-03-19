@@ -1,6 +1,6 @@
 package roj.plugins.cross.server;
 
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.Pipe;
@@ -121,8 +121,8 @@ final class Client extends Connection {
 		return group.hostId;
 	}
 
-	public CMapping serialize() {
-		CMapping json = new CMapping();
+	public CMap serialize() {
+		CMap json = new CMap();
 		json.put("id", clientId);
 		json.put("ip", handler.remoteAddress().toString());
 		json.put("state", "<not implemented>");

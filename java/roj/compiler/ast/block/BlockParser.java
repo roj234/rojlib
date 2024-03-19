@@ -30,7 +30,7 @@ import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.MethodResult;
 import roj.compiler.resolve.TypeCast;
 import roj.config.ParseException;
-import roj.config.word.Word;
+import roj.config.Word;
 import roj.util.Helpers;
 
 import java.util.Collections;

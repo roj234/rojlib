@@ -9,7 +9,4 @@ public interface ITask {
 	default boolean cancel() { return false; }
 
 	void execute() throws Exception;
-
-	@Deprecated
-	default boolean repeating() { return false; }
 }

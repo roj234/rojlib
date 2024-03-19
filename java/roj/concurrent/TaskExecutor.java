@@ -10,31 +10,23 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler {
 	volatile boolean running = true;
 
 	public TaskExecutor() {
-		setName("TaskScheduler-" + hashCode());
+		setName("TaskScheduler-"+hashCode());
 		setDaemon(true);
 	}
 
 	@Override
 	public void run() {
+		outerLoop:
 		while (running) {
 			ITask task;
 			do {
-				task = tasks.peek();
+				task = tasks.poll();
 				if (task == null) {
-					synchronized (this) {
-						notifyAll();
-					}
-
-					do {
-						LockSupport.park();
-						if (!running) return;
-					} while (tasks.isEmpty());
-				} else if (task.isCancelled()) {
-					tasks.poll();
-				} else {
-					break;
+					synchronized (this) {notifyAll();}
+					LockSupport.park();
+					continue outerLoop;
 				}
-			} while (true);
+			} while (task.isCancelled());
 
 			try {
 				task.execute();
@@ -42,13 +34,6 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler {
 				if (!(e instanceof InterruptedException)) e.printStackTrace();
 			}
 			tasks.poll();
-			try {
-				if (task.repeating()) {
-					tasks.add(task);
-				}
-			} catch (Throwable e) {
-				e.printStackTrace();
-			}
 		}
 	}
 
@@ -56,14 +41,6 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler {
 	public void pushTask(ITask task) {
 		tasks.add(task);
 		LockSupport.unpark(this);
-	}
-
-	public boolean removeTask(ITask task) {
-		return tasks.remove(task);
-	}
-
-	public int getTaskAmount() {
-		return tasks.size();
 	}
 
 	@Override

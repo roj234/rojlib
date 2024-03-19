@@ -4,7 +4,7 @@ import roj.archive.qz.xz.LZMA2InputStream;
 import roj.collect.Int2IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.math.MutableInt;
 import roj.util.DirectByteList;
@@ -22,7 +22,7 @@ public class JPinyin {
 	private static final Int2IntMap FastSwitch = new Int2IntMap(8);
 	static {
 		// https://github.com/mozillazg/pinyin-data
-		try (LZMA2InputStream in = new LZMA2InputStream(JPinyin.class.getResourceAsStream("/META-INF/china/pinyin.lzma2"), 524288)) {
+		try (LZMA2InputStream in = new LZMA2InputStream(JPinyin.class.getClassLoader().getResourceAsStream("META-INF/china/pinyin.lzma2"), 524288)) {
 			int DATALEN = 1432238;
 			DirectByteList bb = DirectByteList.allocateDirect(DATALEN);
 			int i = in.read(bb.address(), DATALEN);

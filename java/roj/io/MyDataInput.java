@@ -10,7 +10,7 @@ import java.io.IOException;
  * @since 2024/3/10 0010 3:53
  */
 public interface MyDataInput extends DataInput {
-	int DEFAULT_MAX_STRING_LEN = 1048575;
+	int DEFAULT_MAX_STRING_LEN = 65536;
 
 	static int zag(int i) {return (i >> 1) & ~(1 << 31) ^ -(i & 1);}
 	static long zag(long i) {return (i >> 1) & ~(1L << 63) ^ -(i & 1);}
@@ -47,10 +47,8 @@ public interface MyDataInput extends DataInput {
 	double readDouble() throws IOException;
 
 	int readVarInt() throws IOException;
-	int readVarInt(boolean zag) throws IOException;
 
 	long readVarLong() throws IOException;
-	long readVarLong(boolean zag) throws IOException;
 
 	int readVUInt() throws IOException;
 	long readVULong() throws IOException;
@@ -59,16 +57,6 @@ public interface MyDataInput extends DataInput {
 
 	@NotNull String readUTF() throws IOException;
 
-	/**
-	 * 为方便与Minecraft Server交互而保留
-	 * @see #readVUIUTF()
-	 */
-	@Deprecated
-	default String readVarIntUTF(int max) throws IOException {
-		int len = readVarInt(false);
-		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
-		return readUTF(len);
-	}
 	String readVUIUTF() throws IOException;
 	String readVUIUTF(int max) throws IOException;
 	String readUTF(int len) throws IOException;
@@ -80,4 +68,6 @@ public interface MyDataInput extends DataInput {
 	<T extends Appendable> T readGB(int len, T target) throws IOException;
 
 	String readLine() throws IOException;
+
+	long position() throws IOException;
 }

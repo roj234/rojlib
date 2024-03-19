@@ -1,11 +1,11 @@
 package roj.config;
 
 import roj.config.serial.CVisitor;
-import roj.config.word.Word;
 
-import static roj.config.CCJson.adaptError;
-import static roj.config.JSONParser.*;
-import static roj.config.word.Word.EOF;
+import java.util.Map;
+
+import static roj.config.CCJson.*;
+import static roj.config.Word.EOF;
 
 /**
  * @author Roj234
@@ -15,9 +15,11 @@ public final class CCYaml extends YAMLParser implements CCParser {
 	public CCYaml() {}
 	public CCYaml(int flag) { super(flag); }
 
+	public Map<String, Integer> dynamicFlags() { return Map.of("Lenient", LENIENT); }
+
 	private CVisitor cc;
 	@Override
-	public <CV extends CVisitor> CV parse(CV cv, CharSequence text, int flag) throws ParseException {
+	public <CV extends CVisitor> CV parse(CharSequence text, int flag, CV cv) throws ParseException {
 		this.flag = flag;
 		cc = cv;
 		init(text);
@@ -41,9 +43,9 @@ public final class CCYaml extends YAMLParser implements CCParser {
 		int size = 0;
 
 		while (true) {
-			int line = LN;
+			int line = LN, i = index;
 			Word w = next();
-			if (LN > line && indent <= firstIndent) {
+			if (LN > line && indent <= firstIndent && whiteSpaceUntilNextLine(i)) {
 				cc.valueNull();
 				size++;
 			} else {
@@ -130,39 +132,48 @@ public final class CCYaml extends YAMLParser implements CCParser {
 		String cnt = w.val();
 		try {
 			switch (w.type()) {
-				case join: case force_cast: case ref: case anchor: throw err("访问者模式不支持seek-past");
-				case left_m_bracket: CCJson.jsonList(this, flag|LITERAL_KEY); break;
-				case left_l_bracket: CCJson.jsonMap(this, flag|LITERAL_KEY); break;
-				case multiline: case multiline_clump: cc.value(cnt); break;
-				case Word.STRING, Word.LITERAL: if (!checkMap()) cc.value(cnt); break;
-				case Word.DOUBLE, Word.FLOAT: {
+				case join, force_cast, ref, anchor -> throw err("访问者模式不支持seek-past");
+				case lBracket -> {
+					this.flag |= JSON_MODE;
+					jsonList(this, flag);
+					this.flag ^= JSON_MODE;
+				}
+				case lBrace -> {
+					this.flag |= JSON_MODE;
+					jsonMap(this, flag);
+					this.flag ^= JSON_MODE;
+				}
+				case multiline, multiline_clump -> cc.value(cnt);
+				case Word.STRING, Word.LITERAL -> {
+					if (!checkMap()) cc.value(cnt);
+				}
+				case Word.DOUBLE, Word.FLOAT -> {
 					double d = w.asDouble();
 					if (!checkMap()) cc.value(d);
-					break;
 				}
-				case Word.INTEGER: {
+				case Word.INTEGER -> {
 					int i = w.asInt();
 					if (!checkMap()) cc.value(i);
-					break;
 				}
-				case Word.RFCDATE_DATE: cc.valueDate(w.asLong()); break;
-				case Word.RFCDATE_DATETIME, Word.RFCDATE_DATETIME_TZ: cc.valueTimestamp(w.asLong()); break;
-				case Word.LONG: cc.value(w.asLong()); break;
-				case TRUE: case FALSE: {
+				case Word.RFCDATE_DATE -> cc.valueDate(w.asLong());
+				case Word.RFCDATE_DATETIME, Word.RFCDATE_DATETIME_TZ -> cc.valueTimestamp(w.asLong());
+				case Word.LONG -> cc.value(w.asLong());
+				case TRUE, FALSE -> {
 					boolean b = w.type() == TRUE;
 					if (!checkMap()) cc.value(b);
-					break;
 				}
-				case NULL: if (!checkMap()) cc.valueNull(); break;
-				case delim:
+				case NULL -> {
+					if (!checkMap()) cc.valueNull();
+				}
+				case delim -> {
 					if (prevLN == LN && LN != 1) {
-						if ((flag&LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
+						if ((flag & LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
 						prevIndent = -1;
 					}
 					ccLineArray();
-					break;
-				case Word.EOF: cc.valueNull(); break;
-				default: unexpected(cnt); break;
+				}
+				case Word.EOF -> cc.valueNull();
+				default -> unexpected(cnt);
 			}
 		} catch (Exception e) {
 			if (e instanceof ParseException) throw e;
@@ -175,7 +186,6 @@ public final class CCYaml extends YAMLParser implements CCParser {
 	private boolean checkMap() throws ParseException {
 		mark();
 
-		int i = prevIndex;
 		Word firstKey = tmpKey.init(wd.type(), wd.pos(), wd.val());
 
 		int ln = prevLN;
@@ -183,12 +193,11 @@ public final class CCYaml extends YAMLParser implements CCParser {
 			if (indent <= prevIndent) {
 				if (prevLN == ln) {
 					if ((flag&LENIENT) == 0) throw err("一行内不允许同时放置列表和映射 (通过LENIENT参数关闭该限制)");
-					//' - 'key: val
-					//单引号部分
-					//第一个字符: indent
-					//第二个字符: +1
-					//第三个字符: wd.pos-wd.val.length - i
-					indent = indent+1-i+wd.pos()-wd.val().length();
+					int begin = firstKey.pos();
+					while (begin > 0) {
+						indent++;
+						if (input.charAt(--begin) == '-') break;
+					}
 				} else {
 					retract();
 					retractWord();

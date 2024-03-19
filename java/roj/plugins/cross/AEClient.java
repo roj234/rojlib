@@ -1,6 +1,6 @@
 package roj.plugins.cross;
 
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.net.ch.*;
 import roj.text.TextUtil;

@@ -1,8 +1,8 @@
 package roj.sql;
 
 import roj.collect.*;
-import roj.config.word.Tokenizer;
-import roj.net.http.srv.error.GreatErrorPage;
+import roj.config.Tokenizer;
+import roj.net.http.server.error.GreatErrorPage;
 import roj.text.CharList;
 import roj.text.TextUtil;
 

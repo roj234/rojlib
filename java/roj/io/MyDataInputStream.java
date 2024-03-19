@@ -52,6 +52,7 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 		System.arraycopy(buf, pos, b, off, total);
 		pos = lim = 0;
 		int r = in.read(b, off + total, len - total);
+		if (r > 0) totalRead += r;
 		return r < 0 ? total == 0 ? r : total : total+r;
 	}
 	@Override
@@ -108,6 +109,7 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 			while (l < dst.length) {
 				int r = in.read(dst, l, dst.length - l);
 				if (r < 0) break;
+				totalRead += r;
 				l += r;
 			}
 
@@ -213,9 +215,7 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 
 
 	@Override
-	public final int readVarInt() throws IOException { return readVarInt(true); }
-	@Override
-	public final int readVarInt(boolean zag) throws IOException {
+	public final int readVarInt() throws IOException {
 		int value = 0;
 		int i = 0;
 
@@ -224,7 +224,6 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 			value |= (chunk & 0x7F) << i;
 			i += 7;
 			if ((chunk & 0x80) == 0) {
-				if (zag) return MyDataInput.zag(value);
 				if (value < 0) break;
 				return value;
 			}
@@ -234,18 +233,15 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 
 
 	@Override
-	public final long readVarLong() throws IOException { return readVarLong(true); }
-	@Override
-	public final long readVarLong(boolean zag) throws IOException {
+	public final long readVarLong() throws IOException {
 		long value = 0;
 		int i = 0;
 
 		while (i <= 63) {
 			int chunk = readByte();
-			value |= (chunk & 0x7F) << i;
+			value |= (long) (chunk & 0x7F) << i;
 			i += 7;
 			if ((chunk & 0x80) == 0) {
-				if (zag) return MyDataInput.zag(value);
 				if (value < 0) break;
 				return value;
 			}
@@ -334,5 +330,11 @@ public class MyDataInputStream extends FilterInputStream implements MyDataInput 
 	@Override
 	public final String readLine() throws IOException {
 		throw new UnsupportedOperationException("未实现...");
+	}
+
+	private long totalRead;
+	@Override
+	public long position() throws IOException {
+		return totalRead + pos - lim;
 	}
 }

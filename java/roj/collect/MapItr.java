@@ -13,7 +13,7 @@ import static roj.collect.AbstractIterator.*;
  * @since 2020/8/14 17:06
  */
 public class MapItr<T extends _Generic_Entry> {
-	public T obj;
+	public T obj, next;
 	int stage = INITIAL;
 
 	public boolean hasNext() {
@@ -82,27 +82,26 @@ public class MapItr<T extends _Generic_Entry> {
 			return true;
 		}
 
-		while (true) {
-			if (obj == null) {
-				while (true) {
-					if (i >= entries.length) return false;
-					obj = (T) entries[i++];
-					if (obj != null) {
-						itr = (Iterator<T>) obj.__iterator();
-						if (itr != null) {
-							if (itr.hasNext()) {
-								obj = itr.next();
-							}
-						}
+		obj = next;
 
+		while (obj == null) {
+			if (i >= entries.length) return false;
+
+			obj = (T) entries[i++];
+			if (obj != null) {
+				itr = (Iterator<T>) obj.__iterator();
+				if (itr != null) {
+					if (itr.hasNext()) {
+						obj = itr.next();
+						next = null;
 						return true;
 					}
 				}
 			}
-
-			obj = (T) obj.__next();
-			if (obj != null) return true;
 		}
+
+		next = (T) obj.__next();
+		return true;
 	}
 
 	private void checkConcMod() {

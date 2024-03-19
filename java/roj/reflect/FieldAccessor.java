@@ -59,6 +59,19 @@ public final class FieldAccessor {
 	}
 
 	public Object getObject(Object inst) {
+		if ((flag & 8) == 0) {
+			switch (flag&7) {
+				case 0: return getBoolean(inst);
+				case 1: return getByte(inst);
+				case 2: return getChar(inst);
+				case 3: return getShort(inst);
+				case 4: return getInt(inst);
+				case 5: return getLong(inst);
+				case 6: return getFloat(inst);
+				case 7: return getDouble(inst);
+			}
+		}
+
 		checkType(8);
 		inst = checkAccess(inst);
 		return (flag & 32) != 0 ? u.getObjectVolatile(inst, offset) : u.getObject(inst, offset);

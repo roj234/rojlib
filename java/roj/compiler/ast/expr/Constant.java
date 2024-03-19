@@ -11,7 +11,7 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.CompileContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.config.word.Tokenizer;
+import roj.config.Tokenizer;
 
 import java.util.Collections;
 

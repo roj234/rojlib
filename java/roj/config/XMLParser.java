@@ -6,36 +6,36 @@ import roj.collect.TrieTree;
 import roj.config.data.*;
 import roj.config.serial.CVisitor;
 import roj.config.serial.ToEntry;
-import roj.config.serial.ToXEntry;
-import roj.config.word.Word;
-import roj.net.http.HttpUtil;
+import roj.config.serial.ToXml;
 import roj.text.CharList;
+import roj.text.EscapeUtil;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
 import java.util.function.Predicate;
 
 import static roj.config.JSONParser.*;
-import static roj.config.word.Word.*;
+import static roj.config.Word.*;
 
 /**
  * XML - 可扩展标记语言（EXtensible Markup Language）
  *
  * @author Roj234
  */
-public class XMLParser extends Parser<CList> {
-	static final short
-		COMMENT = 12, CDATA_STRING = 13,
-		tag_start = 14, tag_start_close = 15, tag_end = 16, tag_end_close = 17,
-		header_start = 18, header_end = 19, equ = 20;
+public class XMLParser extends Parser {
+	private static final short
+		COMMENT = 11, CDATA_STRING = 12,
+		tag_start = 13, tag_start_close = 14, tag_end = 15, tag_end_close = 16,
+		header_start = 17, header_end = 18, equ = 19;
 
 	private static final TrieTree<Word> XML_TOKENS = new TrieTree<>();
 	private static final MyBitSet XML_LENDS = new MyBitSet();
 	static {
-		addKeywords(XML_TOKENS, 10, "true", "false");
-		addSymbols(XML_TOKENS, XML_LENDS, 14, "<", "</", ">", "/>", "<?", "?>", "=");
+		addKeywords(XML_TOKENS, TRUE, "true", "false");
+		addSymbols(XML_TOKENS, XML_LENDS, tag_start, "<", "</", ">", "/>", "<?", "?>", "=");
 		addWhitespace(XML_LENDS);
 
 		XML_TOKENS.put("<!--", new Word().init(COMMENT, -99, "-->"));
@@ -44,45 +44,40 @@ public class XMLParser extends Parser<CList> {
 
 	{ tokens = XML_TOKENS; literalEnd = XML_LENDS; firstChar = SIGNED_NUMBER_C2C; }
 
-	public static final int FORCE_XML_HEADER = 1, LENIENT = 2, HTML = 8, PROCESS_ENTITY = 16;
+	public static final int LENIENT = 1, HTML = 2, DECODE_ENTITY = 4;
 	private static final MyHashSet<String> HTML_SHORT_TAGS = new MyHashSet<>(TextUtil.split("!doctype|br|img|link|input|source|track|param", '|'));
 
-	public static Document parses(CharSequence string) throws ParseException {
-		return new XMLParser().parseToXml(string, LENIENT);
-	}
-	public static Document parses(CharSequence string, int flag) throws ParseException {
-		return new XMLParser().parseToXml(string, flag);
-	}
+	public static Document parses(CharSequence string) throws ParseException { return new XMLParser().parseToXml(string, LENIENT); }
+	public static Document parses(CharSequence string, int flag) throws ParseException { return new XMLParser().parseToXml(string, flag); }
 
 	@Override
-	public final int availableFlags() { return FORCE_XML_HEADER | LENIENT | UNESCAPED_SINGLE_QUOTE | PROCESS_ENTITY; }
-
+	public final Map<String, Integer> dynamicFlags() { return Map.of("Lenient", LENIENT, "HTML", HTML, "DecodeEntity", DECODE_ENTITY); }
 	@Override
-	public final String format() { return "XML"; }
+	public final ConfigMaster format() { return ConfigMaster.XML; }
 
 	public Document parseToXml(CharSequence text, int flag) throws ParseException {
-		ToXEntry entry = new ToXEntry();
-		parse(entry, text, flag);
+		ToXml entry = new ToXml();
+		parse(text, flag, entry);
 		return (Document) entry.get();
 	}
 
 	public Document parseToXml(File file, int flag) throws ParseException, IOException {
-		ToXEntry entry = new ToXEntry();
-		parseRaw(entry, file, flag);
+		ToXml entry = new ToXml();
+		parse(file, flag, entry);
 		return (Document) entry.get();
 	}
 
 	@Override
-	public CList parse(CharSequence text, int flag) throws ParseException {
+	public CEntry parse(CharSequence text, int flag) throws ParseException {
 		ToEntry entry = new ToEntry();
-		parse(entry, text, flag);
-		return entry.get().asList();
+		parse(text, flag, entry);
+		return entry.get();
 	}
 
 	private CVisitor cc;
 
 	@Override
-	public <CV extends CVisitor> CV parse(CV cv, CharSequence text, int flag) throws ParseException {
+	public <CV extends CVisitor> CV parse(CharSequence text, int flag, CV cv) throws ParseException {
 		this.flag = flag;
 		cc = cv;
 		init(text);
@@ -103,9 +98,8 @@ public class XMLParser extends Parser<CList> {
 
 		Word w = next();
 		if (w.type() != header_start) {
-			if ((flag & FORCE_XML_HEADER) != 0) unexpected(w.val(), "<?xml");
 			retractWord();
-			cc.vsopt("xml:headless", true);
+			cc.setProperty("xml:headless", true);
 		} else {
 			if (!readLiteral().val().equalsIgnoreCase("xml")) {
 				throw err("<? 但不是 <?xml");
@@ -128,7 +122,7 @@ public class XMLParser extends Parser<CList> {
 		while (true) {
 			w = next();
 			if (w.type() != tag_start) {
-				if ((flag & HTML) == 0 || w.type() == EOF)
+				if ((flag & LENIENT) == 0 || w.type() == EOF)
 					break;
 			}
 			ccXmlElem();
@@ -160,7 +154,7 @@ public class XMLParser extends Parser<CList> {
 		}
 
 		if (w.type() == tag_end_close || !needCLOSE.test(name)) {
-			cc.vsopt("xml:short_tag", true);
+			cc.setProperty("xml:short_tag", true);
 			cc.pop();
 			return;
 		}
@@ -185,10 +179,10 @@ public class XMLParser extends Parser<CList> {
 						}
 						break;
 					case COMMENT: cc.comment(w.val()); break;
-					case CDATA_STRING: cc.value(w.val()); cc.vsopt("xml:cdata", true); break;
+					case CDATA_STRING: cc.value(w.val()); cc.setProperty("xml:cdata", true); break;
 					case LITERAL: cc.value(w.val()); break;
 					case EOF:
-						if ((flag & HTML) != 0) {
+						if ((flag & LENIENT) != 0) {
 							cc.pop();
 							cc.pop();
 							return;
@@ -206,7 +200,7 @@ public class XMLParser extends Parser<CList> {
 		}
 
 		if (!name.equals(except(LITERAL, "元素名称").val())) {
-			if ((flag & LENIENT) == 0) throw err("结束标签不匹配! 需要 " + name + " 找到 " + w.val());
+			if ((flag & LENIENT) == 0) throw err("结束标签不匹配! 需要 "+name+" 找到 "+w.val());
 			errorTag = w.val();
 		}
 		except(tag_end, ">");
@@ -219,7 +213,7 @@ public class XMLParser extends Parser<CList> {
 		w = next();
 
 		if (w.type() == equ) {
-			of(next()).forEachChild(cc);
+			attrVal(next()).accept(cc);
 			return next();
 		} else {
 			cc.valueNull();
@@ -229,7 +223,7 @@ public class XMLParser extends Parser<CList> {
 
 	@SuppressWarnings("fallthrough")
 	public static boolean literalSafe(CharSequence text) {
-		if (LITERAL_UNSAFE) return false;
+		if (ALWAYS_ESCAPE) return false;
 		if (text.length() == 0) return false;
 
 		for (int i = 0; i < text.length(); i++) {
@@ -239,13 +233,13 @@ public class XMLParser extends Parser<CList> {
 		return true;
 	}
 
-	@Deprecated
-	public static CEntry of(Word w) {
+	public static CEntry attrVal(Word w) {
 		switch (w.type()) {
 			case TRUE: return CBoolean.TRUE;
 			case FALSE: return CBoolean.FALSE;
 			case NULL: return CNull.NULL;
-			case DOUBLE, FLOAT: return CDouble.valueOf(w.asDouble());
+			case FLOAT: return CFloat.valueOf(w.asFloat());
+			case DOUBLE: return CDouble.valueOf(w.asDouble());
 			case INTEGER: return CInteger.valueOf(w.asInt());
 			case LONG: return CLong.valueOf(w.asLong());
 			case STRING, LITERAL: return CString.valueOf(w.val());
@@ -281,7 +275,7 @@ public class XMLParser extends Parser<CList> {
 				case C_STRING:
 					prevIndex = i;
 					index = i+1;
-					return formClip(STRING, readSlashString(c, (flag & UNESCAPED_SINGLE_QUOTE) == 0 || c == '"'));
+					return formClip(STRING, readSlashString(c, true));
 				case C_WHITESPACE: i++;
 			}
 		}
@@ -327,6 +321,7 @@ public class XMLParser extends Parser<CList> {
 		if (i != prevI) v.append(' ');
 		int lastNonEmpty = prevI = i;
 
+		boolean hasEntity = false;
 		while (i < in.length()) {
 			c = in.charAt(i);
 			if (c == '<') {
@@ -334,20 +329,19 @@ public class XMLParser extends Parser<CList> {
 				// 20240319 我暂时感觉是应该的，因为某些解析器中comment也是element
 				break;
 			}
+			if (c == '&') hasEntity = true;
 
 			i++;
-			if (c == '&' && (flag & PROCESS_ENTITY) != 0) {
-				v.append(in, prevI, i);
-
-				int j = TextUtil.gIndexOf(in, ';', i);
-
-				handleAmp(in.subSequence(i, j), v);
-				prevI = i = j+1;
-			}
 
 			if (!WHITESPACE.contains(c)) lastNonEmpty = i;
 		}
-		v.append(in, prevI, lastNonEmpty);
+
+		if (hasEntity && (flag&DECODE_ENTITY) != 0) {
+			EscapeUtil.htmlspecial_decode_all(v, in.subSequence(prevI, lastNonEmpty));
+		} else {
+			v.append(in, prevI, lastNonEmpty);
+		}
+
 		if (lastNonEmpty != i) v.append(' ');
 
 		index = i;
@@ -371,8 +365,6 @@ public class XMLParser extends Parser<CList> {
 		index = i+3;
 		return formClip(w.type(), found.toString());
 	}
-
-	protected void handleAmp(CharSequence seq, CharList out) { HttpUtil.htmlspecial_decode_all(out, seq); }
 
 	@Override
 	protected final Word onInvalidNumber(int flag, int i, String reason) throws ParseException { return readLiteral(); }

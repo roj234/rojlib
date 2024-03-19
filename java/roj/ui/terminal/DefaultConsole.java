@@ -365,7 +365,7 @@ public class DefaultConsole implements Console {
 		System.out.println(pp);
 	}
 	protected synchronized final void doRender() {
-		if (CLIUtil.getConsole() != this) return;
+		if (CLIUtil.getConsole() != this || !ANSI) return;
 
 		if (!_echo) {
 			prompt.setLength(prefixLen);

@@ -5,7 +5,7 @@ import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.concurrent.timing.ScheduleTask;
 import roj.config.data.CEntry;
-import roj.config.data.CMapping;
+import roj.config.data.CMap;
 import roj.platform.Plugin;
 
 import java.net.Inet4Address;
@@ -28,7 +28,7 @@ public class DDNSClient extends Plugin {
 
 	@Override
 	protected void onEnable() throws Exception {
-		CMapping cfg = getConfig();
+		CMap cfg = getConfig();
 
 		ip = (IpGetter) Class.forName(cfg.getString("GetIp")).newInstance();
 		ip.loadConfig(cfg);
@@ -41,7 +41,7 @@ public class DDNSClient extends Plugin {
 		Map<String, List<String>> sites = new MyHashMap<>();
 		monitorIps = new ToIntMap<>();
 		for (Map.Entry<String, CEntry> subSites : cfg.get("Sites").asMap().entrySet()) {
-			CMapping map1 = subSites.getValue().asMap();
+			CMap map1 = subSites.getValue().asMap();
 			for (Iterator<Map.Entry<String, CEntry>> itr = map1.entrySet().iterator(); itr.hasNext(); ) {
 				Map.Entry<String, CEntry> entry = itr.next();
 				int e = entry.getValue().asInteger();

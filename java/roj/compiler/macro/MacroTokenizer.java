@@ -2,8 +2,8 @@ package roj.compiler.macro;
 
 import roj.collect.MyBitSet;
 import roj.collect.TrieTree;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
+import roj.config.Tokenizer;
+import roj.config.Word;
 import roj.text.TextUtil;
 
 /**

@@ -97,7 +97,7 @@ public final class ResolveHelper {
 		List<Annotation> list = attr.annotations;
 		for (int i = 0; i < list.size(); i++) {
 			Annotation a = list.get(i);
-			switch (a.type) {
+			switch (a.type()) {
 				case "java/lang/annotation/Retention":
 					if (!a.containsKey("value")) return null;
 					switch (a.getEnumValue("value", "RUNTIME")) {

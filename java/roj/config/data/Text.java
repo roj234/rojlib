@@ -1,8 +1,8 @@
 package roj.config.data;
 
 import roj.config.serial.CVisitor;
-import roj.net.http.HttpUtil;
 import roj.text.CharList;
+import roj.text.EscapeUtil;
 
 /**
  * @author Roj234
@@ -27,14 +27,14 @@ public final class Text extends Node {
 		switch (nodeType) {
 			case CDATA: sb.append("<![CDATA[").append(value).append("]]>"); break;
 			case COMMENT: sb.append("<!--").append(value).append("-->"); break;
-			default: HttpUtil.htmlspecial(sb, value); break;
+			default: EscapeUtil.htmlspecial(sb, value); break;
 		}
 	}
 	public void toCompatXML(CharList sb) {
 		switch (nodeType) {
 			case CDATA: sb.append("<![CDATA[").append(value).append("]]>"); break;
 			case COMMENT: break; // no comment in compat XMLs
-			default: HttpUtil.htmlspecial(sb, value); break;
+			default: EscapeUtil.htmlspecial(sb, value); break;
 		}
 	}
 }

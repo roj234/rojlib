@@ -9,9 +9,9 @@ import roj.collect.MyBitSet;
 import roj.collect.ToIntMap;
 import roj.collect.TrieTree;
 import roj.config.ParseException;
+import roj.config.Tokenizer;
+import roj.config.Word;
 import roj.config.data.Node;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
 import roj.text.CharList;
 import roj.text.TextUtil;
 

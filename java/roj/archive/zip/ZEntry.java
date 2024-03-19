@@ -2,7 +2,6 @@ package roj.archive.zip;
 
 import roj.archive.ArchiveEntry;
 import roj.collect.RSegmentTree;
-import roj.collect.XHashSet;
 import roj.crypt.CRC32s;
 import roj.text.ACalendar;
 import roj.text.TextUtil;
@@ -13,7 +12,6 @@ import java.nio.file.attribute.FileTime;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipException;
 
 import static roj.archive.zip.ZipFile.*;
 
@@ -44,9 +42,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 	byte[] nameBytes;
 
 	byte mzfFlag;
-	static final int
-		MZ_HASLOC= 1,
-		MZ_HASCEN= 2,
+	static final int MZ_UNMERGED = 1,
 		MZ_AESENC= 4,
 		MZ_NOCRC = 8,
 		MZ_LTIME = 16,
@@ -64,10 +60,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		this.method = 8;
 	}
 
-	ZEntry(Boolean LOC) {
-		if (LOC != Boolean.TRUE) mzfFlag |= MZ_HASCEN;
-		if (LOC != Boolean.FALSE) mzfFlag |= MZ_HASLOC;
-	}
+	ZEntry() {}
 
 	public String getName() { return name; }
 	public boolean isDirectory() { return name.endsWith("/"); }
@@ -141,7 +134,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 	final void prepareWrite(int crypt) {
 		crc32 = 0;
 		flags &= GP_UTF;
-		mzfFlag = MZ_HASLOC|MZ_HASCEN;
+		mzfFlag = 0;
 
 		if (crypt != CRYPT_NONE) {
 			flags |= GP_ENCRYPTED;
@@ -379,57 +372,23 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 		}
 	}
 
-	final boolean merge(XHashSet<String, ZEntry> entries, ZEntry file) throws ZipException {
-		if ((mzfFlag & (MZ_HASCEN|MZ_HASLOC)) == (MZ_HASCEN|MZ_HASLOC)) {
-			System.err.println("重复的文件: " + name + " 注意这些文件没法合并LOC和CEN");
-
-			int alt = 1;
-			while (true) {
-				String myName = file.name+"_alt"+alt++;
-				if (entries.putIfAbsent(myName, file) == null) {
-					file.name = myName;
-					return false;
-				}
-			}
+	final boolean merge(ZEntry cen) {
+		if (method != cen.method ||
+			cSize != cen.cSize ||
+			uSize != cen.uSize ||
+			flags != cen.flags ||
+			!name.equals(cen.name)) {
+			return false;
 		}
 
-		if (method != file.method) {
-			System.err.println("cm not same");
-		}
+		if (crc32 == 0) crc32 = cen.crc32;
 
-		if (modTime != file.modTime || flags != file.flags) {
-			// small violation
-			System.err.println("sv");
-		}
+		internalAttr = cen.internalAttr;
+		externalAttr = cen.externalAttr;
 
-		if (offset == -1) {
-			if (file.offset >= 0) offset = file.offset;
-			else throw new ZipException("Both entry(" + this + ", " + file + ") have not 'Offset' set");
-		} else if (file.offset != -1 && offset != file.offset) {
-			error(file);
-		}
-
-		if (crc32 == 0) {
-			if (file.crc32 != 0) crc32 = file.crc32;
-		}
-
-		if (cSize != file.cSize || uSize != file.uSize) {
-			error(file);
-		}
-
-		if ((file.mzfFlag & MZ_HASCEN) != 0) {
-			internalAttr = file.internalAttr;
-			externalAttr = file.externalAttr;
-		}
-		if ((file.mzfFlag & MZ_HASLOC) != 0) {
-			extraLenOfLOC = file.extraLenOfLOC;
-		}
-
-		mzfFlag |= file.mzfFlag;
+		mzfFlag |= cen.mzfFlag;
+		mzfFlag &= ~MZ_UNMERGED;
 		return true;
-	}
-	private void error(ZEntry file) throws ZipException {
-		throw new ZipException("文件大小或偏移在CEN和LOC间不匹配(" + this + ", " + file + ")");
 	}
 
 	@Override

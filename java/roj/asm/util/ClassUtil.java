@@ -29,8 +29,8 @@ public final class ClassUtil {
 	public final Desc sharedDC = new Desc();
 	public boolean checkSubClass;
 
-	private static final ReflectClass FAILED = new ReflectClass(ClassUtil.class);
-	private static final ConcurrentHashMap<String, ReflectClass> classInfo = new ConcurrentHashMap<>();
+	public static final ReflectClass FAILED = new ReflectClass(ClassUtil.class);
+	public static final ConcurrentHashMap<String, ReflectClass> classInfo = new ConcurrentHashMap<>();
 
 	private final Function<CharSequence, IClass> localClassInfo;
 

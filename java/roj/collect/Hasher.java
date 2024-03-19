@@ -30,6 +30,4 @@ public interface Hasher<K> {
 
 	int hashCode(@Nullable K k);
 	boolean equals(K from_argument, Object stored_in);
-
-	default Object customCreateEntry(K k) { return null; }
 }

@@ -181,7 +181,7 @@ public final class FMDMain {
 			}
 		}
 
-		CMapping mc_conf = new CMapping();
+		CMap mc_conf = new CMap();
 		if (mc_conf.size() == 0) {
 			CLIUtil.error("启动配置不存在，请重新setup");
 			return -1;
@@ -265,7 +265,7 @@ public final class FMDMain {
 		String jarName = proj.name+'-'+proj.version+".jar";
 		String jarPath = base.getAbsolutePath()+'/'+jarName;
 
-		CMapping cmd = CONFIG.get("编译成功后执行指令").asMap();
+		CMap cmd = CONFIG.get("编译成功后执行指令").asMap();
 		CList list = cmd.get("**").asList();
 		ex(list, jarPath);
 		list = (cmd.containsKey(proj.name) ? cmd.get(proj.name) : cmd.get("*")).asList();

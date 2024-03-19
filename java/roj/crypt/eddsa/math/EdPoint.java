@@ -19,7 +19,7 @@ public final class EdPoint implements Serializable {
 
 		final byte[] ba = new byte[256], bb = new byte[256];
 
-		final ObjectPool<EdInteger> tmp1 = new ObjectPool<>(null, 10);
+		final ObjectPool<EdInteger> tmp1 = new ObjectPool<>(10);
 	}
 
 	private EdCurve curve;
@@ -622,4 +622,3 @@ public final class EdPoint implements Serializable {
 		return "[EdPoint\nX=" + this.X + "\nY=" + this.Y + "\nZ=" + this.Z + "\nT=" + this.T + "\n]";
 	}
 }
-

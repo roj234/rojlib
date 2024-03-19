@@ -16,7 +16,7 @@ import roj.compiler.ast.expr.Invoke;
 import roj.compiler.context.CompileContext;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.MethodResult;
-import roj.config.word.Word;
+import roj.config.Word;
 import roj.util.Helpers;
 
 import java.util.List;

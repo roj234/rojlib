@@ -61,7 +61,7 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 
 		byte[] presetDict = options.getPresetDict();
 		if (presetDict != null && presetDict.length > 0) {
-			if (useHeader) throw new UnsupportedOptionsException("Preset dictionary cannot be used in .lzma files " +
+			if (useHeader) throw new IllegalArgumentException("Preset dictionary cannot be used in .lzma files " +
 				"(try a raw LZMA stream instead)");
 
 			lz.setPresetDict(dictSize, presetDict);

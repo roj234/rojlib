@@ -54,7 +54,7 @@ public final class ABC implements NameObfuscator {
 		noDuplicate.add("");
 
 		String param = d.param;
-		int v = counter.increase(param, 1)-1;
+		int v = counter.increment(param, 1)-1;
 		buf.clear();
 		return num2str(v);
 	}

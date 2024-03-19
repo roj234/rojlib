@@ -222,13 +222,13 @@ public class NiximSystemV2 implements ITransformer {
 			flags = map.getInt("flags", 0);
 
 			boolean isAbstract = method.attrByName("Code") == null;
-			if (map.type.endsWith("OverwriteConstant")) {
+			if (map.type().endsWith("OverwriteConstant")) {
 				at = "LDC";
 				extra = map;
-			} else if (map.type.endsWith("InvokeRedirect")) {
+			} else if (map.type().endsWith("InvokeRedirect")) {
 				at = "INVOKE";
 				extra = map;
-			} else if (map.type.endsWith("SearchReplace")) {
+			} else if (map.type().endsWith("SearchReplace")) {
 				at = "MIDDLE";
 				extra = map;
 			} else {
@@ -777,7 +777,7 @@ public class NiximSystemV2 implements ITransformer {
 		if (pcd != null) throw new NiximException("冲突的注解: "+data.name+'.'+node+": "+annotation.values());
 		if (dyn != null) {
 			List<AnnVal> annVals = dyn.getArray("value");
-			if (!shouldApply(a.type, data, Helpers.cast(annVals))) return true;
+			if (!shouldApply(a.type(), data, Helpers.cast(annVals))) return true;
 		}
 		if (node.name().equals("<init>"))
 			throw new NiximException("不支持操作: 自Nixim3.0起,你不能在构造器中使用Inject注解: "+data.name+'.'+node+"\n" +
@@ -1533,8 +1533,8 @@ public class NiximSystemV2 implements ITransformer {
 		List<Annotation> annotations = attr.annotations;
 		for (int i = annotations.size()-1; i >= 0; i--) {
 			Annotation a = annotations.get(i);
-			map.put(a.type, a);
-			if (a.type.startsWith("roj/asmx/nixim/")) annotations.remove(i);
+			map.put(a.type(), a);
+			if (a.type().startsWith("roj/asmx/nixim/")) annotations.remove(i);
 		}
 		return map;
 	}

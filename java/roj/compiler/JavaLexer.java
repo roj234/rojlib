@@ -7,10 +7,10 @@ import roj.collect.MyBitSet;
 import roj.collect.TrieTree;
 import roj.compiler.context.CompileContext;
 import roj.compiler.diagnostic.Kind;
+import roj.config.I18n;
 import roj.config.ParseException;
-import roj.config.word.I18n;
-import roj.config.word.Tokenizer;
-import roj.config.word.Word;
+import roj.config.Tokenizer;
+import roj.config.Word;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -18,8 +18,7 @@ import roj.text.TextUtil;
 import java.io.File;
 import java.io.IOException;
 
-import static roj.config.word.Word.CHARACTER;
-import static roj.config.word.Word.LITERAL;
+import static roj.config.Word.LITERAL;
 
 /**
  * Java词法分析器
@@ -28,6 +27,8 @@ import static roj.config.word.Word.LITERAL;
  * @since 2020/10/3 19:20
  */
 public final class JavaLexer extends Tokenizer {
+	public static final short CHARACTER = 9;
+
 	public static final String[] keywords = TextUtil.split1("for,while,do,continue,break,case,if,else,goto,return,switch," +
 		"this,new,true,false,null," +
 		"void,int,long,double,float,short,byte,char,boolean," +

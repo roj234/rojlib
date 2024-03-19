@@ -28,14 +28,14 @@ public class PluginContext {
 				List<Annotation> anns = Attributes.getAnnotations(data.cp, data, false);
 				if (anns != null) {
 					for (int i = 0; i < anns.size(); i++) {
-						byAnnotation.computeIfAbsent(anns.get(i).type, Helpers.fnArrayList()).add(ctx);
+						byAnnotation.computeIfAbsent(anns.get(i).type(), Helpers.fnArrayList()).add(ctx);
 					}
 				}
 
 				anns = Attributes.getAnnotations(data.cp, data, true);
 				if (anns != null) {
 					for (int i = 0; i < anns.size(); i++) {
-						byAnnotation.computeIfAbsent(anns.get(i).type, Helpers.fnArrayList()).add(ctx);
+						byAnnotation.computeIfAbsent(anns.get(i).type(), Helpers.fnArrayList()).add(ctx);
 					}
 				}
 			}

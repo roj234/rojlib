@@ -6,7 +6,7 @@ import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.MyChannel;
-import roj.net.ch.handler.Compress;
+import roj.net.handler.Compress;
 import roj.text.Template;
 import roj.text.logging.Level;
 import roj.text.logging.LogContext;

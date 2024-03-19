@@ -3,8 +3,8 @@ package roj.io;
 import roj.collect.SimpleList;
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.Waitable;
+import roj.config.data.CLong;
 import roj.crypt.Base64;
-import roj.math.MutableLong;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -368,7 +368,7 @@ public final class IOUtil {
 		}
 		if (from.equals(to)) return 1;
 
-		MutableLong state = new MutableLong();
+		CLong state = new CLong(0);
 		int len = from.getAbsolutePath().length()+1;
 		to.mkdirs();
 		Files.walkFileTree(from.toPath(), new SimpleFileVisitor<Path>() {
