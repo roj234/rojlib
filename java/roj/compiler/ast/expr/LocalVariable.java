@@ -22,6 +22,8 @@ public class LocalVariable extends VarNode {
 	@Override
 	public IType type() { return v.type; }
 
+	public Variable getVariable() {return v;}
+
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if (v.constantValue != null) return new Constant(v.type, v.constantValue);

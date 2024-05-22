@@ -6,24 +6,16 @@ import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.LineNumberTable;
 import roj.asm.tree.insn.TryCatchEntry;
+import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.visitor.Label;
-import roj.asm.visitor.StaticSegment;
-import roj.asm.visitor.SwitchSegment;
-import roj.asm.visitor.XAttrCode;
-import roj.collect.IntList;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.asm.visitor.*;
+import roj.collect.*;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.VariableDeclare;
-import roj.compiler.ast.expr.ExprNode;
-import roj.compiler.ast.expr.ExprParser;
-import roj.compiler.ast.expr.Invoke;
-import roj.compiler.ast.expr.UnresolvedExprNode;
+import roj.compiler.ast.expr.*;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -38,6 +30,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static roj.asm.Opcodes.*;
+import static roj.asm.util.InsnHelper.XALoad;
 import static roj.compiler.JavaLexer.*;
 
 /**
@@ -950,6 +943,10 @@ public class BlockParser {
 
 		Word w = wr.next();
 		boolean hasVar;
+		Label continueTo, breakTo, nBreakTo;
+		UnresolvedExprNode execLast;
+
+		NoForEach:{
 		if (w.type() != semicolon) {
 			wr.retractWord();
 
@@ -958,19 +955,119 @@ public class BlockParser {
 			hasVar = true;
 
 			if (wr.current().type() == colon) {
-				// TODO enhanced for loop
+				Variable lastVar = (Variable) regionNew.getLast().getLast();
+
+				// for (Vtype vname : expr) {}
+				UnresolvedExprNode iterExpr = ep.parse(file, ExprParser.STOP_RSB | ExprParser.SKIP_RSB);
+				if (iterExpr == null) {
+					ctx.report(Kind.ERROR, "exprIsNull...");
+				}
+
+				ExprNode iter = iterExpr.resolve(ctx);
+				IType type = iter.type();
+
+				breakTo = CodeWriter.newLabel();
+				if (type.array() == 0) {
+					ctx.castTo(type, new Generic("java/lang/Iterable", Collections.singletonList(lastVar.type)), 0);
+
+					IntBiMap<String> fpCheck;
+					try {
+						fpCheck = ctx.classes.parentList(ctx.getClassOrArray(type));
+					} catch (ClassNotFoundException e) {
+						ctx.report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
+						fpCheck = new IntBiMap<>();
+					}
+
+					if (!fpCheck.containsValue("java/util/List") || !fpCheck.containsValue("java/util/RandomAccess")) {
+						// iterable
+
+						Variable _itr = newVar("@ForEx|迭代器", new Type("java/util/Iterator"));
+						iter.write(cw, false);
+						cw.invokeItf("java/lang/Iterable", "iterator", "()Ljava/util/Iterator;");
+						cw.store(_itr);
+
+						continueTo = cw.label();
+						execLast = null;
+
+						cw.load(_itr);
+						cw.invokeItf("java/util/Iterator", "hasNext", "()Z");
+						cw.jump(IFEQ, breakTo);
+
+						cw.load(_itr);
+						cw.invokeItf("java/util/Iterator", "next", "()Ljava/lang/Object;");
+						cw.clazz(CHECKCAST, lastVar.type.rawType());
+						cw.store(lastVar);
+
+						break NoForEach;
+					} else {
+						// indexed list access
+					}
+				} else {
+					// array access
+					IType t1 = type.clone();
+					t1.setArrayDim(t1.array()-1);
+					ctx.castTo(t1, lastVar.type, 0);
+				}
+
+				Variable _arr;
+				if (iter instanceof LocalVariable lv) {
+					_arr = lv.getVariable();
+				} else {
+					_arr = newVar("@ForEx|表达式", type);
+					iter.write(cw, false);
+					cw.store(_arr);
+				}
+				Variable _i = newVar("@ForEx|索引", Type.std(Type.INT));
+				Variable _len = newVar("@ForEx|长度", Type.std(Type.INT));
+
+				// type[] __var = expr;
+				// int __i = 0;
+				// int __len = __var.length;
+				cw.load(_arr);
+				if (type.array() == 0) cw.invokeItf("java/util/List", "size", "()I");
+				else cw.one(ARRAYLENGTH);
+				cw.store(_len);
+				cw.one(ICONST_0);
+				cw.store(_i);
+
+				continueTo = cw.label();
+				execLast = new ExprNode() {
+					@Override
+					public String toString() {return "<internal> _i++;";}
+					@Override
+					public IType type() {return Type.std(Type.INT);}
+					@Override
+					public void write(MethodWriter cw, boolean noRet) {cw.iinc(_i, 1);}
+				};
+
+				// :continue_to
+				cw.load(_i);
+				cw.load(_len);
+				cw.jump(IFGE, breakTo);
+
+				cw.load(_arr);
+				cw.load(_i);
+				if (type.array() == 0) {
+					cw.invokeItf("java/util/List", "get", "()Ljava/lang/Object;");
+					cw.clazz(CHECKCAST, lastVar.type.rawType());
+				} else {
+					cw.one(XALoad(type.rawType()));
+				}
+				cw.store(lastVar);
+				// type vname = __var[__i];
+
+				break NoForEach;
 			}
 		} else {
 			hasVar = false;
 		}
 
-		Label continueTo = cw.label();
-		Label breakTo = condition(false, null, false);
+			continueTo = cw.label();
+			breakTo = condition(false, null, false);
+			execLast = ep.parse(file, ExprParser.STOP_RSB | ExprParser.SKIP_RSB);
+		}
 
-		UnresolvedExprNode execLast = ep.parse(file, ExprParser.STOP_RSB);
-		except(rParen);
-
-		loopBody(continueTo, breakTo);
+		loopBody(continueTo, nBreakTo = CodeWriter.newLabel());
 
 		if (execLast != null) {
 			Label ct1 = new Label(continueTo);
@@ -985,14 +1082,17 @@ public class BlockParser {
 
 		if (hasVar) endCodeBlock();
 
-		// for-else (python语法)
+		cw.label(breakTo);
+
+		// for-else (python语法) 如果在循环内使用break退出，则不会进入该分支
+		// 如果循环正常结束，或从未开始，都会进入该分支
 		if (wr.next().type() == ELSE) {
 			blockOrStatement();
+			cw.label(nBreakTo);
 		} else {
 			wr.retractWord();
+			nBreakTo.set(breakTo);
 		}
-
-		cw.label(breakTo);
 	}
 	private void _while() throws ParseException {
 		MethodWriter fork = cw.fork(), prev = cw;
