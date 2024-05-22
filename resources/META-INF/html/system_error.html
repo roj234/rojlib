@@ -1,67 +1,11 @@
 <!DOCTYPE html>
 <html>
-
 <head>
 	<meta charset="UTF-8">
 	<title>${site} - 系统错误</title>
 	<meta name="ROBOTS" content="NOINDEX,NOFOLLOW,NOARCHIVE" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0, minimum-scale=1.0, maximum-scale=1.0">
-	<style>
-*{margin:0;}
-body {color: #333;font: 16px Verdana, "Helvetica Neue", helvetica, Arial, 'Microsoft YaHei', sans-serif;padding: 0 20px 20px;}
-h1 {margin: 10px 0 0;font-size: 28px;font-weight: 500;line-height: 32px;}
-h2 {color: #4288ce;font-weight: 400;padding: 6px 0;margin: 6px 0 0;font-size: 18px;border-bottom: 1px solid #eee;}
-h3 {margin: 12px;font-size: 16px;font-weight: bold;}
-abbr {cursor: help;text-decoration: underline;text-decoration-style: dotted;}
-abbr.active {cursor:inherit; text-decoration: none;}
-a {color: #868686;cursor: pointer;}
-
-/* Exception Info */
-.exception {margin-top: 20px;border: 1px solid #ddd;border-radius: 4px;}
-.exception>div {padding: 6px;}
-
-.message {padding: 12px;line-height: 18px;font-size: 16px;border-top-left-radius: 4px;border-top-right-radius: 4px;font-family: Consolas,"Liberation Mono",Courier,Verdana,"微软雅黑";}
-
-.line-error {background: #f8cbcb;}
-.code {padding: 16px;border: 1px solid #ddd;border-left:none;border-right:none;background: #f9f9f9;overflow-x: auto; position: relative;}
-.code>pre {margin: 0;}
-.code>span {position: absolute; font-size: 12px; background: #c8c8c8aa; padding: 4px; right: 0px; top: 0; font-family: monospace;}
-.code>pre>ol {margin: 0;color: #4288ce;display: inline-block;min-width: 100%;box-sizing: border-box;font-size: 14px;font-family: "Century Gothic",Consolas,"Liberation Mono",Courier,Verdana;}
-.code>pre>li {border-left: 1px solid #ddd;height: 18px;line-height: 18px;text-align: left;ont-size: 14px;font-family: Consolas,"Liberation Mono",Courier,Verdana,"微软雅黑";}
-
-.trace {line-height: 16px;font-size: 14px;font-family: Consolas,"Liberation Mono",Courier,Verdana,"微软雅黑";}
-.trace>ol {margin: 12px;}
-.trace>ol>li {padding: 2px 4px;}
-
-/* Exception Variables */
-.other {border-top: 1px solid #ddd;}
-.other>table {width:100%;margin: 12px 0;box-sizing: border-box;table-layout: fixed;word-wrap: break-word; }
-.other>table>caption {text-align: left;font-size: 16px;font-weight: bold;padding: 6px 0;}
-.other>table>caption>small {font-weight: 300;display: inline-block;margin-left: 10px;color: #ccc;}
-.other>table>tbody {font-size: 13px;font-family: Consolas,"Liberation Mono",Courier,"微软雅黑";}
-.other>table>td {padding: 0 6px;vertical-align: top;word-break: break-all;}
-.other>table>td:first-child {width: 28%;font-weight: bold;white-space: nowrap;}
-.other>table>td>pre {margin: 0;}
-
-/* copy Info */
-.copy {margin-top: 24px;padding: 12px 0;}
-
-/* SPAN elements with the classes below are added by prettyprint. */
-.prettyprint .pln {color: #333;} /* plain text */
-.prettyprint .str {color: #22bb22;} /* string content */
-.prettyprint .kwd {color: blue;} /* keyword */
-.prettyprint .com {color: #808080;} /* comment */
-.prettyprint .typ {color: deepskyblue;} /* type name */
-.prettyprint .lit {color: red;} /* literal value */
-/* punctuation, lisp open bracket, lisp close bracket */
-.prettyprint .pun, pre.prettyprint .opn, pre.prettyprint .clo {color: #d000d0;}
-.prettyprint .tag { color: #008 } /* markup tag name */
-.prettyprint .atn { color: #606 } /* markup attribute name */
-.prettyprint .atv { color: #080 } /* markup attribute value */
-/* a declaration; a variable name */
-.prettyprint .dec, pre.prettyprint .var { color: #606 }
-.prettyprint .fun { color: red } /* function name */
-	</style>
+	<link href="/assets/error.css" type="text/css" rel="stylesheet" />
 </head>
 <body>
 	<div class="exception">
@@ -86,57 +30,37 @@ a {color: #868686;cursor: pointer;}
 		</div>
 	</div>
 	<div class="copy">很抱歉影响你的浏览体验，${site}已记录日志并将尽快修复 <a style='float:right;'>&copy; 2019 RojMVC</a></div>
-	<script>
-		function $(selector, node) {
-			node = node || document;
-			return node.querySelectorAll(selector);
-		}
-
-		$.getScript = function(src, func) {
-			var script = document.createElement('script');
-			script.async = true;
-			script.src = src;
-			script.onload = func;
-			$('head')[0].appendChild(script);
-		};
-
-		// 短路径和长路径变换
-		for(let url of $('a,abbr')) {
-			url.onclick = function(e) {
-				var x = this.title;
-				if (!x) return;
-
-				this.classList.toggle('active');
-				this.title = this.innerText;
-				this.innerText = x;
-
-				e.stopPropagation();
-				e.preventDefault();
-			};
-		}
-
-		$.getScript('https://cdn.bootcss.com/prettify/r298/prettify.min.js', function() {
-			prettyPrint();
-		});
-
-		const pre = $('pre');
-		let f = false;
-		for(let li of $(".trace ol li")) {
-			li.onclick = function() {
-				let id = Array.from(this.parentElement.children).indexOf(this);
-				pre.forEach((e) => e.style.display = "none");
-				pre[id].style.display = "inherit";
-				$(".code>span")[0].innerHTML = "#"+(id+1);
-			};
-
-			if (!f) {
-				li.onclick();
-				f = true;
-			}
-		}
-
-		const year = $(".copy a")[0];
-		year.innerText = year.innerText.replace("2019", new Date().getFullYear());
-	</script>
 </body>
+<script>
+    function $(n) {return document.querySelectorAll(n);}
+
+    // 短路径和长路径变换
+    for(const url of $('a[title],abbr[title]')) {
+        url.addEventListener("click", function(e) {
+            this.classList.toggle('active');
+            const x = this.title;
+            this.title = this.innerText;
+            this.innerText = x;
+            e.stopPropagation();
+            e.preventDefault();
+        });
+    }
+
+    const pre = $('pre');
+    let f = false;
+    for(let li of $(".trace ol li")) {
+        li.addEventListener("click", function() {
+            let id = Array.from(this.parentElement.children).indexOf(this);
+            pre.forEach(e => e.style.display = "none");
+            pre[id].style.display = "initial";
+            $(".code>span")[0].innerHTML = "#"+(id+1);
+        });
+
+        if (!f) {li.click();f = true;}
+    }
+
+    const yr = $(".copy a")[0];
+    yr.innerText = yr.innerText.replace("2019", new Date().getFullYear());
+</script>
+<script src="/assets/prettifier.min.js" onload="prettyPrint()" async></script>
 </html>

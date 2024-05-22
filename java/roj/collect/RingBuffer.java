@@ -8,7 +8,8 @@ import roj.util.ArrayCache;
 import java.util.*;
 
 /**
- * A simple ring buffer
+ * 简单的环形缓冲区实现
+ * 除此之外，还可以作为一个有界的ArrayDeque使用
  *
  * @author Roj234
  * @since 2021/4/13 23:25
@@ -132,7 +133,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 	@Override
 	public final boolean contains(Object o) {return indexOf(o) != -1;}
 	@Deprecated
-	public final boolean add(E e) {ringAddLast(e);return true;}
+	public final boolean add(E e) {addLast(e);return true;}
 	@Override
 	public final boolean remove(Object o) {return removeFirstOccurrence(o);}
 	@Override
@@ -163,14 +164,28 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		return -1;
 	}
 	// region *** Deque ***
-	@Deprecated
-	public final void addFirst(E e) {ringAddFirst(e);}
-	@Deprecated
-	public final void addLast(E e) {ringAddLast(e);}
-	@Deprecated
-	public final boolean offerFirst(E e) {ringAddFirst(e);return true;}
-	@Deprecated
-	public final boolean offerLast(E e) {ringAddLast(e);return true;}
+	public final void addFirst(E e) {
+		if (size >= maxCap) throw new IllegalStateException("RingBuffer is full");
+		ringAddFirst(e);
+	}
+	public final void addLast(E e) {
+		if (size >= maxCap) throw new IllegalStateException("RingBuffer is full");
+		ringAddLast(e);
+	}
+	public final boolean offerFirst(E e) {
+		if (size < maxCap) {
+			ringAddFirst(e);
+			return true;
+		}
+		return false;
+	}
+	public final boolean offerLast(E e) {
+		if (size < maxCap) {
+			ringAddLast(e);
+			return true;
+		}
+		return false;
+	}
 
 	@SuppressWarnings("unchecked")
 	@Override
@@ -276,8 +291,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		} else if (i < head || (i >= tail)) throw new ArrayIndexOutOfBoundsException(i);
 	}
 	// region *** Queue ***
-	@Deprecated
-	public final boolean offer(E e) {ringAddLast(e);return true;}
+	public final boolean offer(E e) {return offerLast(e);}
 	public final E remove() {return removeFirst();}
 	public final E poll() {return size == 0 ? null : removeFirst();}
 	public final E element() {return getFirst();}
@@ -285,7 +299,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 	// endregion
 	// region *** Stack ***
 	@Deprecated
-	public void push(E e) {ringAddLast(e);}
+	public void push(E e) {addLast(e);}
 	@Deprecated
 	public E pop() {return removeLast();}
 	// endregion

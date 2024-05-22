@@ -58,7 +58,7 @@ public final class EntryPoint extends SecureClassLoader {
 	public static Runnable loaderInst;
 
 	public static void main(String[] args) throws Exception {
-		if (args.length == 0) args = new String[] {"roj.platform.DefaultPluginSystem"};
+		if (args.length == 0) args = new String[] {"-t", "roj.plugin.PanTweaker", "roj.plugin.Panger"};
 
 		Class.forName("roj.asmx.launcher.Bootstrap", true, new EntryPoint())
 			 .getMethod("boot", String[].class)

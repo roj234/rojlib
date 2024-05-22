@@ -6,6 +6,7 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.Helpers;
 
+import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 /**
@@ -91,7 +92,7 @@ public final class Type implements IType, Cloneable {
 	 */
 	public Type(String owner, int array) {
 		this.type = CLASS;
-		this.owner = owner;
+		this.owner = Objects.requireNonNull(owner);
 		setArrayDim(array);
 	}
 
@@ -191,7 +192,7 @@ public final class Type implements IType, Cloneable {
 
 		return cn;
 	}
-	public Class<?> toJavaClass() throws ClassNotFoundException {
+	public Class<?> toJavaClass(ClassLoader loader) throws ClassNotFoundException {
 		switch (getActualType()) {
 			case VOID: return void.class;
 			case BOOLEAN: return boolean.class;
@@ -204,11 +205,7 @@ public final class Type implements IType, Cloneable {
 			case LONG: return long.class;
 			default:
 				String cn = getJavaClassName();
-				try {
-					return Class.forName(cn, false, null);
-				} catch (Exception e) {
-					return Class.forName(cn, false, Type.class.getClassLoader());
-				}
+				return Class.forName(cn, false, loader);
 		}
 	}
 

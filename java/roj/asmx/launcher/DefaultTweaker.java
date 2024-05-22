@@ -7,6 +7,7 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.visitor.CodeWriter;
 import roj.asmx.AnnotatedElement;
+import roj.asmx.NodeFilter;
 import roj.asmx.nixim.NiximException;
 import roj.asmx.nixim.NiximSystemV2;
 import roj.collect.SimpleList;
@@ -24,7 +25,8 @@ import java.util.List;
  * @since 2024/5/2 0002 4:09
  */
 public class DefaultTweaker implements ITweaker {
-	public final NiximSystemV2 autoNixim = new NiximSystemV2();
+	public static final NiximSystemV2 NIXIM = new NiximSystemV2();
+	public static final NodeFilter CONDITIONAL = new NodeFilter();
 
 	private record A(String name, int priority) {}
 
@@ -43,7 +45,7 @@ public class DefaultTweaker implements ITweaker {
 					case "TRANSFORMER" -> transformers.add(new A(owner, priority));
 					case "NIXIM" -> {
 						try {
-							autoNixim.load(Parser.parseConstants(IOUtil.read(loader.getResource(owner.concat(".class")))));
+							NIXIM.load(Parser.parseConstants(IOUtil.read(loader.getResource(owner.concat(".class")))));
 						} catch (NiximException e) {
 							Helpers.athrow(e);
 						}
@@ -71,12 +73,14 @@ public class DefaultTweaker implements ITweaker {
 					w.clazz(Opcodes.CHECKCAST, "roj/asmx/ITransformer");
 					w.invokeV("roj/asmx/launcher/ClassWrapper", "registerTransformer", "(Lroj/asmx/ITransformer;)V");
 				}
+				w.one(Opcodes.RETURN);
 
 				Class<?> klass = ReflectionUtils.defineWeakClass(Parser.toByteArrayShared(autoloader));
 				ReflectionUtils.ensureClassInitialized(klass);
 			}
 
-			loader.registerTransformer(autoNixim);
+			loader.registerTransformer(NIXIM);
+			loader.registerTransformer(CONDITIONAL);
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}

@@ -27,17 +27,17 @@ public abstract class AnnVal {
 	public static final char ANNOTATION_CLASS = 'c';
 	public static final char ANNOTATION = '@';
 
-	public int asInt() { throw new UnsupportedOperationException(getClass().getSimpleName() + " is not INT"); }
-	public float asFloat() { throw new UnsupportedOperationException(getClass().getSimpleName() + " is not FLOAT"); }
-	public double asDouble() { throw new UnsupportedOperationException(getClass().getSimpleName() + " is not DOUBLE"); }
-	public long asLong() { throw new UnsupportedOperationException(getClass().getSimpleName() + " is not LONG"); }
-	public String asString() { throw new UnsupportedOperationException(getClass().getSimpleName() + " is not STRING"); }
-	public AnnValEnum asEnum() { throw new UnsupportedOperationException(getClass().getSimpleName() + " is not ENUM"); }
-	public Type asClass() { throw new UnsupportedOperationException(getClass().getSimpleName() + " is not CLASS"); }
-	public Annotation asAnnotation() { throw new UnsupportedOperationException(getClass().getSimpleName() + " is not ANNOTATION"); }
-	public List<AnnVal> asArray() { throw new UnsupportedOperationException(getClass().getSimpleName() + " is not ARRAY"); }
+	public int asInt() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not INT"); }
+	public float asFloat() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not FLOAT"); }
+	public double asDouble() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not DOUBLE"); }
+	public long asLong() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not LONG"); }
+	public String asString() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not STRING"); }
+	public AnnValEnum asEnum() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not ENUM"); }
+	public Type asClass() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not CLASS"); }
+	public Annotation asAnnotation() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not ANNOTATION"); }
+	public List<AnnVal> asArray() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not ARRAY"); }
 
-	AnnVal() {}
+	protected AnnVal() {}
 
 	public static AnnVal parse(ConstantPool pool, DynByteBuf r) {
 		int type = r.readUnsignedByte();
@@ -46,15 +46,15 @@ public abstract class AnnVal {
 			case BOOLEAN: case BYTE: case SHORT: case CHAR: case INT:
 			case DOUBLE: case FLOAT: case LONG: case STRING: case ANNOTATION_CLASS:
 				Constant c = pool.get(r);
-				switch (type) {
-					case DOUBLE: return new AnnValDouble(((CstDouble) c).value);
-					case FLOAT: return new AnnValFloat(((CstFloat) c).value);
-					case LONG: return new AnnValLong(((CstLong) c).value);
-					case STRING: return new AnnValString(((CstUTF) c).str());
-					case ANNOTATION_CLASS: return new AnnValClass(((CstUTF) c).str());
-					default: return new AnnValInt((char) type, ((CstInt) c).value);
-				}
-			case ENUM: return new AnnValEnum(((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str());
+				return switch (type) {
+					case DOUBLE -> valueOf(((CstDouble) c).value);
+					case FLOAT -> valueOf(((CstFloat) c).value);
+					case LONG -> valueOf(((CstLong) c).value);
+					case STRING -> valueOf(((CstUTF) c).str());
+					case ANNOTATION_CLASS -> new AnnValClass(((CstUTF) c).str());
+					default -> new AnnValInt((char) type, ((CstInt) c).value);
+				};
+			case ENUM: return new AnnValEnum(checkSemicolon(((CstUTF) pool.get(r)).str()), ((CstUTF) pool.get(r)).str());
 			case ANNOTATION: return new AnnValAnnotation(Annotation.parse(pool, r));
 			case ARRAY:
 				int len = r.readUnsignedShort();
@@ -62,7 +62,12 @@ public abstract class AnnVal {
 				while (len-- > 0) annos.add(parse(pool, r));
 				return new AnnValArray(annos);
 		}
-		throw new IllegalArgumentException("Unknown annotation value type '" + (char) type + "'");
+		throw new IllegalArgumentException("Unknown annotation value type '"+(char) type+"'");
+	}
+
+	private static String checkSemicolon(String str) {
+		if (!str.endsWith(";")) throw new IllegalArgumentException("无效的枚举类型:"+str);
+		return str;
 	}
 
 	public abstract byte type();

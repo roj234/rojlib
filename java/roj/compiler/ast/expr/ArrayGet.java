@@ -45,6 +45,7 @@ final class ArrayGet extends VarNode {
 			if (override != null) return override;
 
 			ctx.report(Kind.ERROR, "arrayGet.error.notArray:"+array.type());
+			return NaE.RESOLVE_FAILED;
 		}
 		cast = ctx.castTo(index.type(), Type.std(Type.INT), 0);
 

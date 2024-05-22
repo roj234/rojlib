@@ -34,7 +34,7 @@ public class MemoryLimitException extends java.io.IOException {
 	 * @param memoryLimit specified memory usage limit as kibibytes (KiB)
 	 */
 	public MemoryLimitException(int memoryNeeded, int memoryLimit) {
-		super(TextUtil.scaledNumber1024(memoryNeeded*1024)+" of memory would be needed; limit was "+TextUtil.scaledNumber1024(memoryLimit*1024));
+		super(TextUtil.scaledNumber1024(memoryNeeded*1024L)+" of memory would be needed; limit was "+TextUtil.scaledNumber1024(memoryLimit*1024L));
 
 		this.memoryNeeded = memoryNeeded;
 		this.memoryLimit = memoryLimit;

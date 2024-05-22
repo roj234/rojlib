@@ -1,14 +1,14 @@
 package roj.net.http.server;
 
-import roj.collect.MyHashMap;
+import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.net.ch.ChannelCtx;
+import roj.net.ch.SendfilePkt;
 import roj.net.http.Headers;
 import roj.net.http.IllegalRequestException;
 import roj.text.CharList;
 import roj.text.DateParser;
-import roj.text.LineReader;
 import roj.text.TextUtil;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
@@ -17,154 +17,111 @@ import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
+import java.nio.channels.FileChannel;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * @author Roj234
  * @since 2023/2/3 0003 17:18
  */
-public class FileResponse implements Response {
-	static final class Mime {
-		String type;
-		boolean zip;
-
-		public Mime(String type) {
-			this.type = type;
-		}
-	}
-
-	static MyHashMap<String, Mime> mimeTypes;
-	static {
-		mimeTypes = new MyHashMap<>();
-		mimeTypes.put("*", new FileResponse.Mime("text/plain"));
-	}
-
-	public static synchronized void loadMimeMap(CharSequence text) {
-		ArrayList<String> arr = new ArrayList<>();
-		mimeTypes.clear();
-		for (String line : LineReader.create(text)) {
-			arr.clear();
-			TextUtil.split(arr, line, ' ');
-			Mime mime = new Mime(arr.get(1).toLowerCase(Locale.ROOT));
-			mime.zip = arr.size() > 2 && arr.get(2).equalsIgnoreCase("gz");
-			mimeTypes.put(arr.get(0).toLowerCase(Locale.ROOT), mime);
-		}
-		mimeTypes.putIfAbsent("*", new Mime("application/octet-stream"));
-	}
-
-	public static String getMimeType(String ext) {
-		ext = ext.substring(ext.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
-		String type = mimeTypes.getOrDefault(ext, mimeTypes.get("*")).type;
-		switch (ext) {
-			case "html":
-			case "css":
-			case "js":
-				type += "; charset=UTF-8";
-				break;
-		}
-		return type;
-	}
-
+final class FileResponse implements Response {
 	private FileInfo file;
 
-	private byte def;
+	//def标记 2bit
+	// 0 不能压缩
+	// 1 已经压缩 (支持随机访问)
+	// 2 允许压缩
+	//sendfile标记 1bit
+	// 4 禁用sendfile (由于带宽限制)
+	private byte flag;
 
 	private long[] ranges;
 	private int off = 0;
 
+	private SendfilePkt sendfile;
 	private InputStream in;
 	private long remain;
 
 	private String splitter;
 
 	FileResponse() {}
-
-	public static Response response(Request req, FileInfo info) {
-		Map<String, Object> map = req.threadContext();
-
-		FileResponse resp = (FileResponse) map.get("h11:send_file");
-		if (resp == null) map.put("h11:send_file", resp = new FileResponse());
-		if (resp.file != null) resp = new FileResponse();
-
-		return resp.init(req, info);
-	}
-
-	private Response init(Request req, FileInfo info) {
-		def = 0;
+	Response init(int flag, Request req, FileInfo info) {
 		file = info;
 
-		// 当与 If-Modified-Since 一同使用的时候，If-None-Match 优先级更高（假如服务器支持的话）。
-		if (req.containsKey("If-Match")) {
-			List<String> tags = TextUtil.split(req.get("If-Match"), ", ");
-			if (!tags.contains(file.getETag())) {
-				// Cache-Control、Content-Location、Date、ETag、Expires 和 Vary 。
-				return plus(304, req);
-			}
-		} else if (req.containsKey("If-None-Match")) {
-			// 当且仅当服务器上没有任何资源的 ETag 属性值与这个首部中列出的相匹配的时候，服务器端才会返回所请求的资源
-			List<String> tags = TextUtil.split(req.get("If-None-Match"), ", ");
-			if (tags.contains(file.getETag())) {
-				return plus(304, req);
-			}
-		}
+		String v;
+		var rh = req.handler;
+		String eTag = file.getETag();
 
-		ResponseHeader rh = req.handler;
-		if (req.containsKey("If-Modified-Since")) {
-			long time;
-			try {
-				time = DateParser.parseRFCDate(req.get("If-Modified-Since")) / 1000;
-			} catch (Exception e) {
-				rh.code(400);
-				return null;
+		checkIfModified: {
+			// 当与修改时间一同使用的时候，ETag优先级更高。
+			if (eTag != null) {
+				if ((v = req.get("If-Match")) != null) {
+					List<String> tags = TextUtil.split(v, ", ");
+					// Cache-Control、Content-Location、Date、ETag、Expires 和 Vary 。
+					if (!tags.contains(eTag)) return plus(304, req);
+					break checkIfModified;
+				} else if ((v = req.get("If-None-Match")) != null) {
+					// 当且仅当服务器上没有任何资源的 ETag 属性值与这个首部中列出的相匹配的时候，服务器端才会返回所请求的资源
+					List<String> tags = TextUtil.split(v, ", ");
+					if (tags.contains(eTag)) return plus(304, req);
+					break checkIfModified;
+				}
 			}
 
-			if (file.lastModified() / 1000 <= time) {
-				return plus(304, req);
-			}
-		} else if (req.containsKey("If-Unmodified-Since")) {
-			long time;
-			try {
-				time = DateParser.parseRFCDate(req.get("If-Unmodified-Since")) / 1000;
-			} catch (Exception e) {
-				rh.code(400);
-				return null;
-			}
-			// 当资源在指定的时间之后没有修改，服务器才会返回请求的资源
-			if (file.lastModified() / 1000 > time) {
-				rh.code(412);
-				return null;
+			if ((v = req.get("If-Modified-Since")) != null) {
+				long time;
+				try {
+					time = DateParser.parseRFCDate(v) / 1000;
+				} catch (Exception e) {
+					rh.code(400);
+					return null;
+				}
+
+				if (file.lastModified() / 1000 <= time) return plus(304, req);
+			} else if ((v = req.get("If-Unmodified-Since")) != null) {
+				long time;
+				try {
+					time = DateParser.parseRFCDate(v) / 1000;
+				} catch (Exception e) {
+					rh.code(400);
+					return null;
+				}
+				// 当资源在指定的时间之后没有修改，服务器才会返回请求的资源
+				// 除以 1000 是RFC时间戳精度问题
+				if (file.lastModified() / 1000 > time) {
+					rh.code(412);
+					return null;
+				}
 			}
 		}
 
 		int stat = info.stats();
 
+		int def = 0;
 		if (req.getFieldValue("accept-encoding", "deflate") != null) {
 			if ((stat & FileInfo.FILE_DEFLATED) != 0) {
 				def = 1;
-				rh.header("Content-Encoding", "deflate");
-			} else if ((stat & FileInfo.FILE_WANT_DEFLATE) != 0) {
+				req.responseHeader.put("content-encoding", "deflate");
+			} else if ((stat & FileInfo.FILE_CAN_DEFLATE) != 0) {
 				def = 2;
-				rh.compressed();
+				rh.enableCompression();
 			}
 		}
+		this.flag = (byte) (flag | def);
 
 		ranges = ArrayCache.LONGS;
 
-		if (req.containsKey("If-Range")) {
-			String s = req.get("If-Range");
-			if (s.endsWith("\"")) {
-				if (!s.equals(file.getETag())) {
+		if ((v = req.get("If-Range")) != null) {
+			if (v.endsWith("\"")) {
+				if (eTag == null || !v.regionMatches(1, eTag, 0, v.length()-2)) {
 					plus(200, req);
 					return this;
 				}
 			} else {
 				long time;
 				try {
-					time = DateParser.parseRFCDate(s) / 1000;
+					time = DateParser.parseRFCDate(v) / 1000;
 				} catch (Exception e) {
 					rh.code(400);
 					return null;
@@ -176,33 +133,36 @@ public class FileResponse implements Response {
 			}
 		}
 
-		if (!req.containsKey("Range") || (stat & (def==1? FileInfo.FILE_RA_DEFLATE : FileInfo.FILE_RA)) == 0) {
+		if ((v = req.get("Range")) == null || (stat & (def ==1 ? FileInfo.FILE_DEFLATED : FileInfo.FILE_RA)) == 0) {
 			plus(200, req);
 			return this;
 		}
 
-		String s = req.get("Range");
-		if (!s.startsWith("bytes=")) {
+		if (!v.startsWith("bytes=")) {
 			rh.code(400);
-			return StringResponse.of("not 'bytes' range");
+			return Response.text("invalid 'range' field");
 		}
 
 		long len = file.length(def == 1);
 
-		List<String> ranges = TextUtil.split(s.substring(6), ", ");
+		List<String> ranges = TextUtil.split(v.substring(6), ", ");
+		if (ranges.size() > 16) {
+			rh.code(400);
+			return Response.text("invalid 'range' field");
+		}
 		long[] data = this.ranges = new long[ranges.size() << 1];
 
 		long total = 0;
 		for (int i = 0; i < ranges.size(); i++) {
-			s = ranges.get(i);
-			int j = s.indexOf('-');
+			v = ranges.get(i);
+			int j = v.indexOf('-');
 			if (j == 0) {
 				data[(i << 1)] = 0;
-				data[(i << 1) + 1] = parseLong(s.substring(1), len);
+				data[(i << 1) + 1] = parseLong(v.substring(1), len);
 			} else {
 				// start, end
-				long o = data[i << 1] = parseLong(s.substring(0, j), len);
-				data[(i << 1) + 1] = j == s.length() - 1 ? len - 1 : parseLong(s.substring(j + 1), len);
+				data[i << 1] = parseLong(v.substring(0, j), len);
+				data[(i << 1) + 1] = j == v.length() - 1 ? len - 1 : parseLong(v.substring(j + 1), len);
 			}
 
 			long seglen = data[(i << 1) + 1] - data[i << 1] + 1;
@@ -211,7 +171,7 @@ public class FileResponse implements Response {
 		}
 
 		if (data.length == 2) {
-			req.responseHeader.put("content-range", "bytes " + data[0] + '-' + data[1] + '/' + len);
+			req.responseHeader.put("content-range", "bytes "+data[0]+'-'+data[1]+'/'+len);
 			req.responseHeader.put("content-length", Long.toString(total));
 		} else if (data.length > 2) {
 			ByteList rnd = ByteList.allocate(16);
@@ -225,68 +185,74 @@ public class FileResponse implements Response {
 
 			// 看了一眼标准，第一个可以不加\r\n，不过无所谓
 			b.replace(28, 32, "\r\n--");
-			splitter = b.toString(28, b.length()-1);
+			splitter = b.substring(28, b.length()-1);
 			b._free();
-
-			req.handler.chunked();
 		}
 
 		return plus(206, req);
 	}
-
-	private static long parseLong(String num, long max) {
-		aa: {
-			if (TextUtil.isNumber(num) != 0) break aa;
-			long s = Long.parseLong(num);
-			if (s < 0 || s >= max) break aa;
-			return s;
+	private static long parseLong(String str, long max) {
+		if (TextUtil.isNumber(str) == 0) {
+			long num = Long.parseLong(str);
+			if (num >= 0 && num < max) return num;
 		}
 		Helpers.athrow(new IllegalRequestException(416, (Response) null));
 		return 0;
 	}
 
 	private Response plus(int r, Request req) {
-		ResponseHeader h = req.handler;
+		var h = req.handler;
 		h.code(r).date();
 		if (r != 304) {
-			h.header("last-modified", HttpServer11.TSO.get().toRFC(file.lastModified()));
+			h.header("last-modified", HttpCache.getInstance().toRFC(file.lastModified()));
 			if (r == 206) return this;
 
-			if (file.getETag() != null) h.header("etag", file.getETag());
-			if (def != 2 && (file.stats() & (1<<(2+def))) != 0) h.header("accept-ranges", "bytes");
+			String tag = file.getETag();
+			if (tag != null) h.header("etag", tag);
+			var def = flag&3;
+			if (def != 2 && (file.stats() & (1<<def)) != 0) h.header("accept-ranges", "bytes");
 		}
 		return null;
 	}
 
 	@Override
-	public void prepare(ResponseHeader srv, Headers h) throws IOException {
-		boolean def = this.def == 1;
-		if (def) srv.uncompressed();
+	public void prepare(ResponseHeader rh, Headers h) throws IOException {
+		boolean def = (flag&3) == 1;
 
+		FileChannel fch;
 		off = 0;
 		if (ranges.length == 0) {
-			in = file.get(def, 0);
 			remain = file.length(def);
-			if (this.def != 2) h.put("content-length", Long.toString(remain));
+			if (cantSendfile(rh) || (fch = file.getSendFile(def)) == null) {
+				in = file.get(def, 0);
+			} else {
+				sendfile = new SendfilePkt(fch);
+				sendfile.length = remain;
+			}
+			if ((flag&3) != 2) h.put("content-length", Long.toString(remain));
 		} else {
 			if (ranges.length > 2) {
 				off = -2;
 				remain = 0;
 			} else {
-				in = file.get(def, ranges[0]);
 				remain = ranges[1]-ranges[0]+1;
+				if (cantSendfile(rh) || (fch = file.getSendFile(def)) == null) {
+					in = file.get(def, ranges[0]);
+				} else {
+					sendfile = new SendfilePkt(fch, ranges[0], remain);
+				}
 			}
 		}
 
-		file.prepare(srv, h);
+		file.prepare(rh, h);
 	}
+	private boolean cantSendfile(ResponseHeader rh) {return (flag&6) != 0 || !rh.ch().canSendfile();}
 
 	@Override
 	public boolean send(ResponseWriter rh) throws IOException {
 		if (remain < 0) return false;
 
 		if (remain == 0) {
-			if (in != null) in.close();
 			off += 2;
 
 			if (ranges.length > 2) {
@@ -295,7 +261,7 @@ public class FileResponse implements Response {
 				t.putAscii("\r\n");
 
 				if (off < ranges.length) {
-					t.putAscii("content-range: byte "+ranges[off]+"-"+ranges[off+1]+"/"+file.length(def==1)+"\r\n\r\n");
+					t.putAscii("content-range: byte "+ranges[off]+"-"+ranges[off+1]+"/"+file.length((flag&3) == 1)+"\r\n\r\n");
 				}
 
 				try {
@@ -305,25 +271,41 @@ public class FileResponse implements Response {
 				}
 			}
 
-			if (off >= ranges.length) {
-				remain = -1;
-				in = null;
-				return false;
-			}
+			if (off >= ranges.length) {remain = -1;return false;}
 
-			in = file.get(def == 1, ranges[off]);
 			remain = ranges[off+1] - ranges[off] + 1;
+			if (sendfile != null) {
+				sendfile.offset = ranges[off];
+				sendfile.length = remain;
+			} else {
+				long delta = ranges[off]/*next position*/ - ranges[off-1]/*in position*/;
+				if (delta >= 0) {
+					IOUtil.skipFully(in, delta);
+				} else {
+					IOUtil.closeSilently(in);
+					in = file.get((flag&3) == 1, ranges[off]);
+				}
+			}
 		}
 
-		remain -= rh.write(in, (int) MathUtils.clamp(remain, 0, Integer.MAX_VALUE));
+		if (sendfile != null) {
+			rh.ch().fireChannelWrite(sendfile);
+			sendfile.flip();
+			remain = sendfile.length;
+		} else {
+			remain -= rh.write(in, (int) MathUtils.clamp(remain, 0, Integer.MAX_VALUE));
+		}
 
 		return true;
 	}
 
 	@Override
-	public void release(ChannelCtx ctx) throws IOException {
-		if (in != null) {
-			in.close();
+	public void release(ChannelCtx ctx) {
+		if (sendfile != null) {
+			IOUtil.closeSilently(sendfile.channel);
+			sendfile = null;
+		} else {
+			IOUtil.closeSilently(in);
 			in = null;
 		}
 

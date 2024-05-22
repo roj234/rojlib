@@ -5,7 +5,7 @@
 [Lava编译器](docs/Re_Lavac.md)  
 [自动识别中文编码](docs/Re_ChineseCharset.md)  
 [带指令注册的终端模拟器](docs/Re_CommandConsole.md)  
-[Java8-17通杀的高性能反射解决方案](docs/Re_DirectAccessor.md)  
+[Java8-21通杀的高性能反射解决方案](docs/Re_DirectAccessor.md)  
 [高性能的字符串全文匹配方案](docs/Re_MatchMap.md)  
 [NAT打洞](docs/Re_NAT.md)  
 [注解定义的HTTP路由](docs/Re_OKRouter.md)  
@@ -13,6 +13,19 @@
 [多线程高性能7z压缩和解压](docs/Re_QZArchiver.md)  
 [任意对象的安全序列化解决方案](docs/Re_SerializerFactory.md)  
 没列出来的还在WIP
+
+## 上新
+roj.reflect.VirtualReference  
+  虚引用，via change GC root
+
+roj.reflect.GetCallerArgs  
+  像其它弱类型语言一样获取调用者的变量  
+```java
+  int[] s = {0};  
+  doSomeThingViaGetCallerArgs();  
+  assert s[0] != 0 : "这是可以做到的，相信我";  
+```
+  使用了很多内部API，但是兼容性应该不差
 
 # 这里都有啥
 ## roj.archive
@@ -124,9 +137,10 @@ class混淆器 Obfuscator`
  * 完美哈希表
 
 ## roj.compiler
- java编译器
- 半成品，暂时不怎么支持泛型
- 更多见独立说明
+ java编译器  
+ 半成品，暂时不怎么支持泛型  
+ 然而，支持很多绝赞语法  
+ 更多见独立说明  
 
 ## roj.concurrent
 Promise:
@@ -265,7 +279,7 @@ MSS协议，My Secure Socket`roj.net.mss`
 协议混淆  
 P2P  
 
-## roj.platform
+## roj.plugin
   * 插件系统，见独立介绍
 
 ## roj.plugins

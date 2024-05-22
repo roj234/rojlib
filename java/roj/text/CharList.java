@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
  */
 public class CharList implements CharSequence, Appendable {
 	// region Number helper
-	static void getChars(long l, int charPos, char[] buf) {
+	public static void getChars(long l, int charPos, char[] buf) {
 		long q;
 		int r;
 
@@ -41,7 +41,7 @@ public class CharList implements CharSequence, Appendable {
 
 		getChars((int) l, charPos, buf);
 	}
-	static void getChars(int i, int charPos, char[] buf) {
+	public static void getChars(int i, int charPos, char[] buf) {
 		int r;
 
 		int q;
@@ -178,6 +178,22 @@ public class CharList implements CharSequence, Appendable {
 	public final int indexOf(CharSequence s, int from) { return doMatch(s, from, len-s.length()+1); }
 	public final boolean startsWith(CharSequence s) { return s.length() == 0 || doMatch(s, 0, 1) >= 0; }
 	public final boolean endsWith(CharSequence s) { return s.length() == 0 || (len >= s.length() && doMatch(s, len-s.length(), len-s.length()+1) >= 0); }
+
+	public final int indexOf(TrieTree<String> map, int pos) {
+		MyHashMap.Entry<CInt, String> entry = new MyHashMap.Entry<>(new CInt(), null);
+		while (pos < len) {
+			map.match(this, pos, len, entry);
+			int len = entry.getKey().value;
+			if (len < 0) {
+				pos++;
+				continue;
+			}
+
+			return pos;
+		}
+
+		return -1;
+	}
 
 	public final int match(CharSequence s, int start, int end) {
 		checkBounds(start, end, len);
@@ -563,7 +579,7 @@ public class CharList implements CharSequence, Appendable {
 	}
 	public final CharList replaceMulti(TrieTree<String> map) {
 		CharList out = null;
-		int prevI = 0, i = 0;
+		int prevI = 0;
 
 		int pos = 0;
 
@@ -595,7 +611,7 @@ public class CharList implements CharSequence, Appendable {
 	}
 	public final CharList replaceMulti(CharMap<String> map) {
 		CharList out = null;
-		int prevI = 0, i = 0;
+		int prevI = 0;
 		int pos = 0;
 
 		while (pos < len) {
@@ -688,8 +704,9 @@ public class CharList implements CharSequence, Appendable {
 		if (start == 0 && end == len) return this;
 		return start==end ? "" : new Slice(list, start, end);
 	}
-	public final String toString() { return toString(0, len); }
-	public final String toString(int start, int end) {
+	public final String toString() {return substring(0, len);}
+	public String substring(int start) {return substring(start, len);}
+	public final String substring(int start, int end) {
 		checkBounds(start,end,len);
 		return start==end ? "" : new String(list, start, end-start);
 	}

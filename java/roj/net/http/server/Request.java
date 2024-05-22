@@ -8,14 +8,13 @@ import roj.io.session.SessionProvider;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.EmbeddedChannel;
 import roj.net.ch.MyChannel;
-import roj.net.http.Action;
 import roj.net.http.Cookie;
 import roj.net.http.Headers;
+import roj.net.http.HttpUtil;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.auth.AuthScheme;
 import roj.text.CharList;
-import roj.text.EscapeUtil;
-import roj.text.TextReader;
+import roj.text.Escape;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -29,31 +28,37 @@ import java.util.List;
 import java.util.Map;
 
 public final class Request extends Headers {
-	private int action;
+	public static final String JSESSIONID = "JSESSIONID";
 
-	private String path, initPath;
+	private byte action;
 
-	Object postFields, getFields;
-	private Map<String, Cookie> cookie;
+	private String path, initPath, version;
 
-	Map<String, Object> threadCtx;
-	Headers arguments;
-	HttpServer11 handler;
+	ResponseHeader handler;
 
-	Request() {}
+	private final Map<String, Object> ctx;
+	Request(Map<String, Object> ctx) {this.ctx = ctx;}
+	public Map<String, Object> localCtx() {return ctx;}
 
-	public Map<String, Object> threadContext() { return threadCtx; }
 	public ResponseHeader server() { return handler; }
-	public MyChannel connection() { return handler.ch.channel(); }
+	public MyChannel connection() { return handler.ch(); }
 
-	Request init(int action, String path, String query) throws IllegalRequestException {
+	Request init(byte action, String path, String version) throws IllegalRequestException {
 		this.action = action;
+		this.version = version;
+
+		int i = path.indexOf('?');
+		if (i < 0) getFields = Collections.emptyMap();
+		else {
+			getFields = path.substring(i+1);
+			path = path.substring(0, i);
+		}
+
 		try {
-			this.path = initPath = IOUtil.safePath(EscapeUtil.decodeURI(path));
+			this.path = initPath = IOUtil.safePath(Escape.decodeURI(path));
 		} catch (MalformedURLException e) {
 			throw new IllegalRequestException(400, "bad query");
 		}
-		this.getFields = query.isEmpty() ? Collections.emptyMap() : query;
 		return this;
 	}
 
@@ -65,29 +70,23 @@ public final class Request extends Headers {
 		arguments = null;
 		clear();
 		session_write_close();
+		sessionName = JSESSIONID;
 		responseHeader.clear();
 	}
 
 	public int action() { return action; }
 	public String path() { return path; }
+	public void setPath(String path) {this.path = path;}
+	public String absolutePath() { return initPath; }
 
-	public String getRawPath() { return initPath; }
-
-	public void setPath(String path) { this.path = path; }
+	private Headers arguments;
+	public String argument(String name) {return arguments.getField(name);}
+	public Headers arguments() {return arguments;}
 	public void setArguments(Headers arguments) {this.arguments = arguments;}
-	public Headers getArguments() {return arguments;}
 
-	@Deprecated
-	public Request resetPath() { path = initPath; return this; }
 	@Deprecated
 	public Request subDirectory(int i) {
 		while (i-- > 0) path = path.substring(path.lastIndexOf('/')+1);
-		return this;
-	}
-	@Deprecated
-	public Request subDirectory(String mypath) {
-		if (!path.startsWith(mypath) || mypath.endsWith("/")) throw new IllegalArgumentException();
-		path = path.substring(mypath.length()+1);
 		return this;
 	}
 
@@ -98,36 +97,58 @@ public final class Request extends Headers {
 		return paths;
 	}
 
-	public boolean isExpecting() { return "100-continue".equalsIgnoreCase(get("Expect")); }
+	public boolean isExpecting() {return "100-continue".equalsIgnoreCase(get("Expect"));}
+	public String host() {
+		String host = get("host");
+		if (host == null) host = get(":authority");
+		return host == null ? ((InetSocketAddress)handler.ch().remoteAddress()).getHostString() : host;
+	}
 
-	// region request info
-	public Map<String, String> postFields() throws IllegalRequestException {
+	// region fields
+	Object postFields, getFields;
+	private Map<String, Cookie> cookie;
+
+	public String query() {
+		if (getFields instanceof String) return (String) getFields;
+		else if (getFields == Collections.EMPTY_MAP) return "";
+		throw new IllegalStateException("Parsed");
+	}
+	public Map<String, String> GetFields() throws IllegalRequestException {
+		if (getFields instanceof CharSequence) {
+			try {
+				getFields = simpleValue((CharSequence) getFields, "&", true);
+			} catch (MalformedURLException e) {
+				throw new IllegalRequestException(400, e.getMessage());
+			}
+		}
+		return Helpers.cast(getFields);
+	}
+
+	public ByteList postBuffer() {return (ByteList) postFields;}
+	public HPostHandler postHandler() {return (HPostHandler) postFields;}
+	public Map<String, String> PostFields() throws IllegalRequestException {
 		if (postFields instanceof ByteList pf) {
-
-			String ct = getOrDefault("content-type", "");
-			if (ct.startsWith("multipart/")) {
+			if (getField("content-type").startsWith("multipart/")) {
 				try {
-					MultipartFormHandler handler = new MultipartFormHandler(this) {
+					var handler = new MultipartFormHandler(this) {
 						@Override
 						protected void onKey(ChannelCtx ctx, String name) {}
 						@Override
-						protected void onValue(ChannelCtx ctx, DynByteBuf buf) { map.put(name, buf.readUTF(buf.readableBytes())); }
+						protected void onValue(ChannelCtx ctx, DynByteBuf buf) { data.put(name, buf.readUTF(buf.readableBytes())); }
 					};
 
-					EmbeddedChannel ch = EmbeddedChannel.createReadonly();
-					ch.addLast("_", handler);
-					ch.fireChannelRead(pf);
-					handler.onSuccess();
-					handler.onComplete();
-					ch.close();
+					try (var ch = EmbeddedChannel.createReadonly()) {
+						ch.addLast("_", handler);
+						ch.fireChannelRead(pf);
+						handler.onSuccess();
+						handler.onComplete();
+					}
 
-					postFields = handler.map;
+					postFields = handler.data;
 				} catch (IOException e) {
-					IllegalRequestException ex = new IllegalRequestException(400, e.getMessage());
-					ex.setStackTrace(e.getStackTrace());
-					throw ex;
+					throw new IllegalRequestException(400, e.getMessage());
 				} catch (IllegalArgumentException e) {
-					throw new IllegalRequestException(400, "Request.postFields()不支持二进制(文件)数据,请使用PostHandler");
+					throw new IllegalRequestException(500, "Request.postFields()不支持二进制(文件)数据,请使用PostHandler");
 				}
 			} else {
 				try {
@@ -139,61 +160,13 @@ public final class Request extends Headers {
 		}
 		return postFields == null ? Collections.emptyMap() : Helpers.cast(postFields);
 	}
-	public String postString() {
-		if (postFields instanceof ByteList) {
-			try (TextReader sr = new TextReader((ByteList) postFields, null)) {
-				postFields = IOUtil.read(sr);
-			} catch (IOException e) {
-				return null;
-			}
-		}
-		return (String) postFields;
-	}
-	public ByteList postBuffer() { return (ByteList) postFields; }
-	public HPostHandler postHandler() { return ((HPostHandler) postFields); }
-
-	public Map<String, String> GET_Fields() throws IllegalRequestException {
-		if (getFields instanceof CharSequence) {
-			try {
-				getFields = simpleValue((CharSequence) getFields, "&", true);
-			} catch (MalformedURLException e) {
-				throw new IllegalRequestException(400, e.getMessage());
-			}
-		}
-		return Helpers.cast(getFields);
-	}
-
-	public String GET_Fields_Raw() {
-		if (getFields == null) {
-			return null;
-		} else if (getFields instanceof String) {
-			return (String) getFields;
-		} else if (getFields == Collections.EMPTY_MAP) {
-			return "";
-		}
-		throw new IllegalStateException("Parsed");
-	}
 
 	public Map<String, String> fields() throws IllegalRequestException {
-		Map<String, String> map1 = postFields();
-		if (map1 == null) return GET_Fields();
-		MyHashMap<String, String> map = new MyHashMap<>(GET_Fields());
-		map.putAll(map1);
-		return map;
-	}
-
-	public String field(String key) throws IllegalRequestException {
-		Map<String, String> map = postFields();
-		if (map != null && map.containsKey(key)) return map.get(key);
-
-		map = GET_Fields();
-		if (map.containsKey(key)) return map.get(key);
-		return "";
-	}
-
-	public String host() {
-		String host = get("host");
-		return host == null ? ((InetSocketAddress)handler.ch.remoteAddress()).getHostString() : host;
+		var pf = PostFields();
+		if (pf == null) return GetFields();
+		var gf = new MyHashMap<>(GetFields());
+		gf.putAll(pf);
+		return gf;
 	}
 
 	public Map<String, Cookie> cookie() throws IllegalRequestException {
@@ -218,12 +191,12 @@ public final class Request extends Headers {
 	// endregion
 
 	final Headers responseHeader = new Headers();
-	public Headers responseHeader() { return responseHeader; }
+	public Headers responseHeader() {return responseHeader;}
 
 	void packToHeader() {
 		if (cookie != null) {
 			List<Cookie> modified = new SimpleList<>();
-			for (Map.Entry<String, Cookie> entry : cookie.entrySet()) {
+			for (var entry : cookie.entrySet()) {
 				Cookie c = entry.getValue();
 				if (c.isDirty()) modified.add(c);
 			}
@@ -231,13 +204,11 @@ public final class Request extends Headers {
 		}
 	}
 
-	private String sessionName = "JSESSIONID", sessionId;
+	//region session
+	private String sessionName = JSESSIONID, sessionId;
 	private Map<String,Object> session;
 
-	public Request sessionName(String prefix) {
-		this.sessionName = prefix; return this;
-	}
-
+	public Request sessionName(String prefix) {this.sessionName = prefix; return this;}
 	public Map<String,Object> session() throws IllegalRequestException { return session(true); }
 	public Map<String,Object> session(boolean createIfNonExist) throws IllegalRequestException {
 		SessionProvider provider = SessionProvider.getDefault();
@@ -256,14 +227,13 @@ public final class Request extends Headers {
 		}
 		return session;
 	}
-
 	public void session_write_close() {
 		if (session != null) {
 			SessionProvider.getDefault().saveSession(sessionId, session);
 			session = null;
+			sessionId = null;
 		}
 	}
-
 	public void session_destroy() throws IllegalRequestException {
 		session(false);
 		if (sessionId != null) {
@@ -276,6 +246,7 @@ public final class Request extends Headers {
 			cookie.put(sessionName, ck);
 		}
 	}
+	//endregion
 
 	public void authorize(String message, AuthScheme... schemes) throws IllegalRequestException {
 		String auth = getField("authorization");
@@ -298,15 +269,15 @@ public final class Request extends Headers {
 		// WWW-Authenticate: Basic realm="Fantasy"
 		CharList sb = new CharList();
 		for (AuthScheme authScheme : schemes) sb.append(authScheme.type()).append(' ');
-		Tokenizer.addSlashes(sb.append("realm=\""), EscapeUtil.encodeURI(message)).append("\"");
+		Tokenizer.addSlashes(sb.append("realm=\""), Escape.encodeURI(message)).append("\"");
 		responseHeader.put("www-authenticate", sb.toStringAndFree());
 
-		throw new IllegalRequestException(401, StringResponse.httpErr(401));
+		throw new IllegalRequestException(401, Response.httpError(401));
 	}
 
 	public String toString() {
-		StringBuilder sb = new StringBuilder().append(Action.toString(action)).append(" /").append(path).append(" HTTP/1.1\n");
+		var sb = new CharList().append(HttpUtil.getMethodName(action)).append(" /").append(path).append(getFields).append(' ').append(version).append('\n');
 		encode(sb);
-		return sb.toString();
+		return sb.toStringAndFree();
 	}
 }

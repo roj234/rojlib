@@ -28,7 +28,7 @@ public interface Hasher<K> {
 	};
 	static <T> Hasher<T> identity() { return Helpers.cast(IDENTITY); }
 
-	static <T> Hasher<T> primitiveArray(Class<T> type) {return ArrayHasher.primitiveArray(type);}
+	static <T> Hasher<T> array(Class<T> type) {return ArrayHasher.array(type);}
 
 	int hashCode(@Nullable K k);
 	boolean equals(K from_argument, Object stored_in);

@@ -25,9 +25,6 @@ import roj.asmx.mapper.util.NameAndType;
 import roj.asmx.mapper.util.SubImpl;
 import roj.collect.*;
 import roj.concurrent.TaskPool;
-import roj.concurrent.collect.ConcurrentFindHashMap;
-import roj.concurrent.collect.ConcurrentFindHashSet;
-import roj.concurrent.task.AsyncTask;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.StringPool;
@@ -42,6 +39,7 @@ import java.nio.file.NotDirectoryException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
@@ -131,8 +129,8 @@ public class Mapper extends Mapping {
 	/**
 	 * 工作中数据
 	 */
-	private FindMap<Desc, String> selfInherited;
-	private FindSet<Desc> stopAnchor;
+	private Map<Desc, String> selfInherited;
+	private Set<Desc> stopAnchor;
 	Map<String, List<String>> selfSupers;
 
 	public byte flag = FLAG_FULL_CLASS_MAP;
@@ -265,9 +263,10 @@ public class Mapper extends Mapping {
 			return;
 		}
 
-		stopAnchor = new ConcurrentFindHashSet<>(libStopAnchor);
+		stopAnchor = Collections.newSetFromMap(new ConcurrentHashMap<>(libStopAnchor.size()));
+		stopAnchor.addAll(libStopAnchor);
 		selfSupers = new ConcurrentHashMap<>(ctxs.size());
-		selfInherited = new ConcurrentFindHashMap<>();
+		selfInherited = new SynchronizedFindMap<>();
 
 		List<List<Context>> tasks = new ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);
 
@@ -298,10 +297,10 @@ public class Mapper extends Mapping {
 	}
 
 	private static void async(Consumer<Context> action, List<List<Context>> ctxs) {
-		ArrayList<AsyncTask<?>> wait = new ArrayList<>(ctxs.size());
+		ArrayList<Future<?>> wait = new ArrayList<>(ctxs.size());
 		for (int i = 0; i < ctxs.size(); i++) {
 			List<Context> files = ctxs.get(i);
-			AsyncTask<?> w = new AsyncTask<>(() -> {
+			var w = TaskPool.Common().submit(() -> {
 				for (int j = 0; j < files.size(); j++) {
 					try {
 						action.accept(files.get(j));
@@ -311,7 +310,6 @@ public class Mapper extends Mapping {
 				}
 				return null;
 			});
-			TaskPool.Common().pushTask(w);
 			wait.add(w);
 		}
 
@@ -375,14 +373,14 @@ public class Mapper extends Mapping {
 	 */
 	public final void S1_parse(Context c) {
 		ConstantData data = c.getData();
-		List<CstClass> itfs = data.interfaces;
+		var itfs = data.interfaces();
 
 		int size = itfs.size() + ("java/lang/Object".equals(data.parent) ? 0 : 1);
 		if (size == 0 && (flag&MF_ANNOTATION_INHERIT) == 0) return;
 
 		ArrayList<String> list = new ArrayList<>(size);
 		if (!"java/lang/Object".equals(data.parent)) list.add(data.parent);
-		for (int i = 0; i < itfs.size(); i++) list.add(itfs.get(i).name().str());
+		for (int i = 0; i < itfs.size(); i++) list.add(itfs.get(i));
 
 		if ((flag&MF_ANNOTATION_INHERIT) != 0) {
 			Annotations a = data.parsedAttr(data.cp, Attribute.ClAnnotations);
@@ -759,7 +757,7 @@ public class Mapper extends Mapping {
 			ConstantData data = ctx.get(i).getData();
 			if ((data.modifier() & (ACC_INTERFACE|ACC_ANNOTATION|ACC_MODULE)) != 0) continue;
 
-			List<CstClass> itfs = data.interfaces;
+			List<String> itfs = data.interfaces();
 			if (itfs.isEmpty()) continue;
 
 			interfaceMethods.clear();
@@ -771,7 +769,7 @@ public class Mapper extends Mapping {
 			}
 
 			for (int j = 0; j < itfs.size(); j++) {
-				String name = itfs.get(j).name().str();
+				String name = itfs.get(j);
 				if (!parents.contains(name)) {
 					List<RawNode> nodes = getMethodInfoEx(name);
 
@@ -1018,7 +1016,7 @@ public class Mapper extends Mapping {
 	/** Map: lambda method name */
 	private void mapLambda(BootstrapMethods bs, ConstantData data, CstDynamic dyn) {
 		if (dyn.tableIdx >= bs.methods.size())
-			throw new IllegalArgumentException("BootstrapMethod id 不存在: " + (int) dyn.tableIdx + " at class " + data.name);
+			throw new IllegalArgumentException("BootstrapMethod id 不存在: "+(int) dyn.tableIdx+" at class "+data.name);
 
 		BootstrapMethods.Item ibm = bs.methods.get(dyn.tableIdx);
 		if (!ibm.isInvokeMethod()) return;
@@ -1115,12 +1113,12 @@ public class Mapper extends Mapping {
 	}
 	/** InnerClass type */
 	private void mapInnerClass(ClassUtil U, ConstantData data) {
-		List<InnerClasses.InnerClass> classes = Attributes.getInnerClasses(data.cp, data);
+		List<InnerClasses.Item> classes = Attributes.getInnerClasses(data.cp, data);
 		if (classes == null) return;
 
 		CharList sb = IOUtil.getSharedCharBuf();
 		for (int j = 0; j < classes.size(); j++) {
-			InnerClasses.InnerClass clz = classes.get(j);
+			InnerClasses.Item clz = classes.get(j);
 			if (clz.parent != null) {
 				sb.clear();
 				String name = U.mapClassName(classMap, sb.append(clz.parent).append('$').append(clz.name));
@@ -1325,8 +1323,8 @@ public class Mapper extends Mapping {
 		SimpleList<Context> classes = new SimpleList<>();
 		Desc m = ClassUtil.getInstance().sharedDC;
 
-		Map<String, List<String>> prevSS = selfSupers;
-		FindSet<Desc> prevSA = stopAnchor;
+		var prevSS = selfSupers;
+		var prevSA = stopAnchor;
 
 		selfSupers = libSupers;
 		stopAnchor = libStopAnchor;
@@ -1533,7 +1531,7 @@ public class Mapper extends Mapping {
 		selfInherited = new MyHashMap<>();
 	}
 
-	public FindSet<Desc> getStopAnchor() { return stopAnchor; }
+	public Set<Desc> getStopAnchor() { return stopAnchor; }
 	public Map<String, List<String>> getSelfSupers() { return selfSupers; }
 	public final List<State> getSeperatedLibraries() { return extraStates; }
 	public ParamNameMapper getParamTypeMapper() { return PARAM_TYPE_MAPPER; }

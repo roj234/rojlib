@@ -26,7 +26,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 		executor = pool;
 		if (cb != null) {
 			if (pool == null) head(cb);
-			else pool.pushTask(() -> head(cb));
+			else pool.submit(() -> head(cb));
 		}
 	}
 	private void head(Consumer<PromiseCallback> handler) {
@@ -162,7 +162,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 
 		if (state == 1) {
 			if (executor == null) execute();
-			else executor.pushTask(this);
+			else executor.submit(this);
 		} else if (state == 2) {
 			Object v = _val;
 			throw new RuntimeException("Uncaught in "+this, v instanceof Throwable ? (Throwable) v : null);

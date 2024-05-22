@@ -25,16 +25,13 @@ public final class BCJ2 extends QZComplexCoder {
 	public BCJ2() { segmentSize = 64<<20; }
 	public BCJ2(int size) { segmentSize = size; }
 
-	QZCoder factory() { return this; }
 	private static final byte[] id = {3,3,1,27};
-	public byte[] id() { return id; }
+	public byte[] id() {return id;}
 
-	public int useCount() { return 4; }
-	public int provideCount() { return 1; }
+	public int useCount() {return 4;}
+	public int provideCount() {return 1;}
 
-	public OutputStream[] complexEncode(OutputStream[] out) {
-		return new OutputStream[] { new Encoder(out[0], out[1], out[2], out[3]) };
-	}
+	public OutputStream[] complexEncode(OutputStream[] out) {return new OutputStream[] { new Encoder(out[0], out[1], out[2], out[3]) };}
 
 	public InputStream[] complexDecode(InputStream[] in, long[] uncompressedSize, int sizeBegin, AtomicInteger memoryLimit) throws IOException {
 		useMemory(memoryLimit, 10);

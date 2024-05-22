@@ -2,10 +2,12 @@ package roj.util;
 
 import roj.NativeLibrary;
 import roj.io.CorruptedInputException;
+import roj.io.MyDataInput;
 import roj.reflect.ReflectionUtils;
 import sun.misc.Unsafe;
 
 import java.io.IOException;
+import java.io.OutputStream;
 
 import static roj.reflect.ReflectionUtils.u;
 
@@ -14,9 +16,7 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2023/8/2 0002 6:08
  */
 public final class BsDiff {
-	private static final String SIGNATURE = "MYBDSIFF";
-
-	public BsDiff() { if (!NativeLibrary.hasFunction(NativeLibrary.BSDIFF)) impl = new JavaImpl(); }
+	public BsDiff() {impl = new JavaImpl();}
 
 	private BsDiff(Impl prev) {impl = prev.copy(this);}
 	public BsDiff parallel() {return new BsDiff(impl);}
@@ -37,9 +37,7 @@ public final class BsDiff {
 		if (!NativeLibrary.hasFunction(NativeLibrary.BSDIFF))
 			throw new NativeException("native not ready");
 
-		NativeImpl ni = (NativeImpl) impl;
-		if (ni != null) ni.close();
-
+		if (impl instanceof NativeImpl ni) ni.close();
 		impl = new NativeImpl(this, left);
 	}
 
@@ -48,7 +46,7 @@ public final class BsDiff {
 	 * 你应该用LZMA之类的压缩patch
 	 */
 	public void makePatch(byte[] right, DynByteBuf patch) {
-		patch.putAscii(SIGNATURE).putIntLE(right.length);
+		patch.putIntLE(right.length);
 		impl.makePatch(right, patch);
 	}
 
@@ -64,54 +62,104 @@ public final class BsDiff {
 			throw new NativeException("native not ready");
 		return ((NativeImpl)impl).getDiffLength(right, off, end, stopOn);}
 
-	public static long bspatch(DynByteBuf in, DynByteBuf patch, DynByteBuf out) throws IOException {
-		if (!patch.readAscii(SIGNATURE.length()).equals(SIGNATURE)) throw new CorruptedInputException("invalid signature");
-
+	public static long patch(DynByteBuf in, DynByteBuf patch, DynByteBuf out) throws IOException {
+		int wrote = 0;
 		int outputSize = patch.readIntLE();
 		if (!out.ensureWritable(outputSize)) throw new IOException("failed to ensure writable ("+outputSize+")");
 
-		long wrote = 0;
+		Object arIn = in.array();
+		long adIn = in._unsafeAddr() + in.rIndex;
 
-		while (patch.isReadable()) {
-			int diffLen = patch.readIntLE();
-			int extraLen = patch.readIntLE();
-			int advance = patch.readIntLE();
+		Object arPat = patch.array();
+		long adPat = patch._unsafeAddr() + patch.rIndex;
 
-			if (in.readableBytes() < diffLen) throw new IOException("in: no " + diffLen + " bytes readable");
-			if (patch.readableBytes() < diffLen+extraLen) throw new CorruptedInputException("patch: no " + diffLen + " bytes readable");
-			if (!out.ensureWritable(diffLen)) throw new IOException("out: no " + diffLen + " bytes writable");
+		Object arOut = out.array();
+		long adOut = out._unsafeAddr() + out.wIndex;
+		out.wIndex += outputSize;
 
-			Object arIn = in.array();
-			long adIn = in._unsafeAddr() + in.rIndex;
+		while (wrote < outputSize) {
+			in.rIndex = (int) (adIn - in._unsafeAddr());
+			patch.rIndex = (int) (adPat - patch._unsafeAddr());
 
-			Object arPat = patch.array();
-			long adPat = patch._unsafeAddr() + patch.rIndex;
+			int copyLen  = patch.readIntLE();
+			int diffLen  = patch.readIntLE();
+			int patchLen = patch.readIntLE();
+			int skipLen  = patch.readIntLE();
 
-			Object arOut = out.array();
-			long adOut = out._unsafeAddr() + out.wIndex();
+			wrote += copyLen + diffLen + patchLen;
+			if (wrote > outputSize) throw new CorruptedInputException("invalid patch");
 
-			in.rIndex += diffLen;
-			patch.rIndex += diffLen;
-			out.wIndex(out.wIndex()+diffLen);
+			if (in.readableBytes() < copyLen+diffLen+skipLen) throw new IOException("in: no "+(copyLen+diffLen+skipLen)+" bytes readable");
+			if (patch.readableBytes() < diffLen+patchLen) throw new CorruptedInputException("patch: no "+(diffLen+patchLen)+" bytes readable");
 
-			wrote += diffLen;
+			adPat += 16;
+
+			u.copyMemory(arIn, adIn, arOut, adOut, copyLen);
+			adIn += copyLen;
+			adOut += copyLen;
 
 			while (diffLen-- > 0) {
-				u.putByte(arOut, adOut++,
-					(byte)toNormal(
-						toPositive(u.getByte(arIn, adIn++)) - u.getByte(arPat, adPat++)
-								  )
-						 );
+				u.putByte(arOut, adOut++, (byte)toNormal(toPositive(u.getByte(arIn, adIn++)) - u.getByte(arPat, adPat++)));
 			}
 
-			out.put(patch, extraLen);
-			patch.rIndex += extraLen;
-			wrote += extraLen;
+			u.copyMemory(arPat, adPat, arOut, adOut, patchLen);
+			adPat += patchLen;
+			adOut += patchLen;
 
-			in.rIndex += advance;
+			adIn += skipLen;
 		}
 
-		if (wrote != outputSize) throw new IOException("invalid output size");
+		if (wrote != outputSize) throw new CorruptedInputException("invalid patch");
+		return wrote;
+	}
+	public static long patchStream(DynByteBuf in, MyDataInput patch, OutputStream out) throws IOException {
+		int wrote = 0;
+		int outputSize = patch.readIntLE();
+		byte[] tmp = ArrayCache.getByteArray(1024, false);
+
+		while (wrote < outputSize) {
+			int copyLen  = patch.readIntLE(); // copy in
+			int diffLen  = patch.readIntLE(); // changed
+			int patchLen = patch.readIntLE(); // copy patch
+			int skipLen  = patch.readIntLE(); // skip
+
+			wrote += copyLen + diffLen + patchLen;
+			if (wrote > outputSize) throw new CorruptedInputException("invalid patch");
+
+			if (copyLen > 0) {
+				int www = in.wIndex;
+				in.wIndex = in.rIndex + copyLen;
+
+				in.writeToStream(out);
+
+				in.rIndex += copyLen;
+				in.wIndex = www;
+			}
+
+			int i = 0;
+			while (diffLen-- > 0) {
+				tmp[i] = (byte)toNormal(toPositive(in.readByte()) - patch.readByte());
+				if (++i == tmp.length) {
+					out.write(tmp, 0, i);
+					i = 0;
+				}
+			}
+			out.write(tmp, 0, i);
+
+			while (patchLen > 0) {
+				int toFill = Math.min(tmp.length, patchLen);
+				patch.readFully(tmp, 0, toFill);
+				out.write(tmp, 0, toFill);
+
+				patchLen -= toFill;
+			}
+
+			in.rIndex += skipLen; // this can be negative
+		}
+
+		ArrayCache.putArray(tmp);
+
+		if (wrote != outputSize) throw new CorruptedInputException("invalid patch");
 		return wrote;
 	}
 
@@ -464,12 +512,18 @@ public final class BsDiff {
 					lenB -= lenS;
 				}
 
-				patch.putIntLE(lenF)
-					 .putIntLE(scan - lastScan - lenF - lenB)
-					 .putIntLE(pos - lastPos - lenF - lenB);
+				int i = 0;
+				for (; i < lenF; i++) {
+					if (left[lastPos+i] != right[lastScan+i]) break;
+				}
 
-				ArrayRef range = patch.byteRangeW(lenF);
-				for (int i = 0; i < lenF; ++i) range.set(i, toPositive(left[lastPos + i]) - toPositive(right[lastScan + i]));
+				patch.putIntLE(i) // copyLen
+					 .putIntLE(lenF-i) // diffLen
+					 .putIntLE(scan - lastScan - lenF - lenB) // patchLen
+					 .putIntLE(pos - lastPos - lenF - lenB); // skipLen
+
+				ArrayRef range = patch.byteRangeW(lenF-i);
+				for (int j = 0; j < lenF-i; j++) range.set(j, toPositive(left[lastPos + i + j]) - toPositive(right[lastScan + i + j]));
 
 				if (overlap == -1) patch.put(right, lastScan + lenF, scan - lastScan - lenF - lenB);
 

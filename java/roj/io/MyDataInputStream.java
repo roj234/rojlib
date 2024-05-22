@@ -67,6 +67,7 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 	public final int skipBytes(int n) throws IOException {
 		int total = lim - pos;
 		if (n < total) {
+			if (n < 0) return 0;
 			pos += n;
 			return n;
 		}
@@ -82,6 +83,7 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 	public long skip(long n) throws IOException {
 		long total = lim - pos;
 		if (n < total) {
+			if (n < 0) return 0;
 			pos += n;
 			return n;
 		}
@@ -343,5 +345,18 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 	@Override
 	public long position() throws IOException {
 		return totalRead + pos - lim;
+	}
+
+	@Override
+	public boolean isReadable() {
+		if (pos < 0) return false;
+
+		try {
+			pos = doRead(1);
+			return true;
+		} catch (Exception e) {
+			pos = lim = -1;
+			return false;
+		}
 	}
 }

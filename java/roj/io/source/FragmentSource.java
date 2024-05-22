@@ -149,7 +149,7 @@ public final class FragmentSource extends Source {
 		File file = new File(path, t.toString());
 		if (!file.isFile() && fragmentSize > 0) {
 			try {
-				IOUtil.allocSparseFile(file, fragmentSize);
+				IOUtil.createSparseFile(file, fragmentSize);
 			} catch (IOException ignored) {}
 		}
 		ref.add(file);
@@ -216,15 +216,13 @@ public final class FragmentSource extends Source {
 			long off = 0;
 			int i = 0;
 			while (i < ref.size()) {
-				File f = (File) ref.get(i++);
-				long fLen = f.length();
-				if (off+fLen > length) {
-					for (int j = ref.size()-1; j >= i; j--) {
-						Files.deleteIfExists(((File) ref.remove(j)).toPath());
-					}
-					break;
-				}
+				long fLen = ((File) ref.get(i++)).length();
+				if (off+fLen > length) break;
 				off += fLen;
+			}
+
+			for (int j = ref.size()-1; j >= i; j--) {
+				Files.deleteIfExists(((File) ref.remove(j)).toPath());
 			}
 
 			try (Source source = getSource(i-1)) {

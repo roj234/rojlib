@@ -22,7 +22,7 @@ public class JPinyin {
 	private static final Int2IntMap FastSwitch = new Int2IntMap(8);
 	static {
 		// https://github.com/mozillazg/pinyin-data
-		try (LZMA2InputStream in = new LZMA2InputStream(JPinyin.class.getClassLoader().getResourceAsStream("META-INF/china/pinyin.lzma2"), 524288)) {
+		try (LZMA2InputStream in = new LZMA2InputStream(JPinyin.class.getClassLoader().getResourceAsStream("roj/text/JPinyin.lzma"), 524288)) {
 			int DATALEN = 1432238;
 			DirectByteList bb = DirectByteList.allocateDirect(DATALEN);
 			int i = in.read(bb.address(), DATALEN);
@@ -80,7 +80,7 @@ public class JPinyin {
 	public static final int PINYIN_DUOYINZI = 4;
 
 	public String toPinyin(CharSequence s) { return toPinyin(s, "", IOUtil.getSharedCharBuf(), PINYIN_NONE).toString(); }
-	public String toPinyin(CharSequence s, int mode) { return toPinyin(s, " ", IOUtil.getSharedCharBuf(), mode).toString(); }
+	public String toPinyin(CharSequence s, int mode) { return toPinyin(s, "", IOUtil.getSharedCharBuf(), mode).toString(); }
 	public CharList toPinyin(CharSequence str, String splitter, CharList sb, int mode) {
 		int i = 0, len = str.length();
 		if (len == 0) return sb;

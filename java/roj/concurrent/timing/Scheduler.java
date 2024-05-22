@@ -51,12 +51,12 @@ public class Scheduler implements Runnable {
 		public String toString() {
 			String state;
 			if (lock instanceof TimingWheel) state = "list-root";
-			else if (lock instanceof Long) state = "lone,delayed";
 			else if (lock instanceof TaskHolder) state = "queued";
-			else state = timeLeft == 0 ? "expired" : timeLeft == -1 ? "cancelled" : "lone";
-			return "ScheduleTask{"+"state="+state+'}';
+			else state = timeLeft == 0 ? "expired" : timeLeft == -1 ? "cancelled" : "detached";
+			return "ScheduleTask{state="+state+",task="+task+",lock="+lock+",approx.timeLeft="+timeLeft+'}';
 		}
 
+		static final long OFF_LOCK = ReflectionUtils.fieldOffset(TaskHolder.class, "lock");
 		static final long OFF_NEXT = ReflectionUtils.fieldOffset(TaskHolder.class, "next");
 		static final long OFF_TIME_LEFT = ReflectionUtils.fieldOffset(TaskHolder.class, "timeLeft");
 
@@ -76,7 +76,7 @@ public class Scheduler implements Runnable {
 				if (t < 0) break;
 			} while (!u.compareAndSwapLong(this, OFF_TIME_LEFT, t, t == 0 ? -2 : -1));
 
-			TaskHolder root = (TaskHolder) lock;
+			var root = (TaskHolder) lock;
 			return (root != null && ((TimingWheel) root.lock).remove(root, this)) | task.cancel() | t < 0;
 		}
 	}
@@ -217,35 +217,30 @@ public class Scheduler implements Runnable {
 				}
 			}
 
-			assert task.lock == null;
-			u.getAndAddInt(clk, OFF_TASK_COUNT, 1);
-
 			int i = clk.clock + ((int) (time >> (DEPTH_SHL*slot)) & DEPTH_MASK) - 1;
 			TaskHolder root = clk.tasks[i & DEPTH_MASK];
 
+			u.putObjectVolatile(task, TaskHolder.OFF_LOCK, root);
+			u.getAndAddInt(clk, OFF_TASK_COUNT, 1);
+
 			synchronized (root) {
-				task.lock = root;
-
-				task.prev = root;
 				task.next = root.next;
-
-				root.next = root.next.prev = task;
+				root.next.prev = task;
+				task.prev = root;
+				root.next = task;
 			}
 		}
 		final boolean remove(TaskHolder root, TaskHolder task) {
-			assert root != task;
+			if (!u.compareAndSwapObject(task, TaskHolder.OFF_LOCK, root, null)) return false;
+			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
 
 			synchronized (root) {
-				if (task.lock == null) return false;
-				assert task.lock == root;
-
-				task.prev.next = task.next;
+				//按说这是不可能的，不过就是发生了，算了不去管它
+				if (task.next == null) return false;
 				task.next.prev = task.prev;
+				task.prev.next = task.next;
 				task.prev = task.next = null;
-				task.lock = null;
 			}
-
-			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
 			return true;
 		}
 
@@ -285,7 +280,7 @@ public class Scheduler implements Runnable {
 		callback = task -> {
 			ITask _task = task.getTask();
 			long nextRun = _task instanceof LoopTaskWrapper loop ? loop.getNextRun() : 0;
-			th.pushTask(_task);
+			th.submit(_task);
 			return nextRun;
 		};
 	}

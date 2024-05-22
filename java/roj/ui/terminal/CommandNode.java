@@ -5,7 +5,9 @@ import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.text.CharList;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @author Roj234
@@ -18,19 +20,18 @@ public abstract class CommandNode {
 	@Nullable
 	public String getName() { return null; }
 
-	public static CommandNode literal(String name) { return new LiteralNode(name); }
+	//public static CommandNode root(List<CommandNode> name) { return new Literal(name); }
+	public static CommandNode literal(String name) { return new Literal(name); }
 	public static CommandNode argument(String name, Argument<?> argument) { return new ArgumentNode(name, argument); }
-	public static CommandNode redirect(CommandNode node) { return new RedirectNode(node); }
+	public static CommandNode redirect(CommandNode node) { return new Redirect(node); }
 
 	public CharList dump(CharList sb, int depth) {
-		depth += 2;
-
 		if (impl == null) {
 			if (children.size() == 1) return children.get(0).dump(sb.append(' '), depth);
-			else if (children.size() == 0) return sb.append("[无可执行]");
-		} else if (children.isEmpty()) {
-			return sb.append('\n');
-		}
+			else if (children.size() == 0) return sb.append("[**错误:不可执行**]\n");
+		} else if (children.isEmpty()) return sb.append('\n');
+
+		depth += 2;
 
 		sb.append(":\n");
 		if (impl != null) sb.padEnd(' ', depth).append("[无参数]\n");
@@ -79,6 +80,24 @@ public abstract class CommandNode {
 	public CommandImpl getCommand() { return impl; }
 	public CommandNode getRedirect() { return null; }
 
+	static final Comparator<CommandNode> sorter = (o1, o2) -> {
+		String n1 = o1.getName();
+		String n2 = o2.getName();
+		if (n1 == null) return n2 == null ? 0 : 1;
+		if (n2 == null) return -1;
+		int i = n1.compareTo(n2);
+		if (i == 0) throw new IllegalStateException("指令名称重复:"+n1);
+		return i;
+	};
+	public CommandNode sorted(boolean recursion) {
+		if (recursion) {
+			for (var child : children) child.sorted(true);
+		}
+		children.sort(sorter);
+
+		return this;
+	}
+
 	public CommandNode then(CommandNode node) {
 		children.add(node);
 		return this;
@@ -87,9 +106,9 @@ public abstract class CommandNode {
 	private boolean fastFail;
 	public CommandNode fastFail() { fastFail = true; return this; }
 
-	public static final class RedirectNode extends CommandNode {
+	public static final class Redirect extends CommandNode {
 		private CommandNode redirect;
-		RedirectNode(CommandNode redirect) {this.redirect = redirect;}
+		Redirect(CommandNode redirect) {this.redirect = redirect;}
 
 		@Override
 		public String getName() { return redirect.getName(); }
@@ -99,9 +118,12 @@ public abstract class CommandNode {
 		public CommandNode getRedirect() { return redirect; }
 		public void setRedirect(CommandNode redirect) { this.redirect = redirect; }
 	}
-	public static final class LiteralNode extends CommandNode {
+	private static final class Literal extends CommandNode {
 		private final String name;
-		LiteralNode(String name) { this.name = name; }
+		Literal(String name) {
+			if (name.trim() != name || name.isEmpty()) throw new IllegalArgumentException("literal参数不能包含空格或为空");
+			this.name = name;
+		}
 
 		public String getName() { return name; }
 
@@ -130,7 +152,7 @@ public abstract class CommandNode {
 	public static final class ArgumentNode extends CommandNode {
 		private final String name;
 		private final Argument<?> argument;
-		ArgumentNode(String name, Argument<?> argument) { this.name = name; this.argument = argument; }
+		ArgumentNode(String name, Argument<?> argument) { this.name = Objects.requireNonNull(name); this.argument = Objects.requireNonNull(argument); }
 
 		public String getArgumentName() { return name; }
 		public Argument<?> getArgument() { return argument; }

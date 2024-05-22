@@ -7,7 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "小说管理系统 (Novel Management System) v2.0-beta"
+			"title": "小说管理系统 (Novel Management System) v2.2"
 			add( new FormComponent( "javax.swing.JProgressBar" ) {
 				name: "progress"
 				"value": 2000
@@ -65,7 +65,7 @@ new FormModel {
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 5
 				"y": 35
-				"height": 23
+				"height": 21
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "btnFindNovel"
@@ -75,7 +75,7 @@ new FormModel {
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 208
 				"y": 35
-				"height": 23
+				"height": 21
 			} )
 			add( new FormComponent( "javax.swing.JSeparator" ) {
 				name: "fg2"
@@ -109,16 +109,9 @@ new FormModel {
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "test_chapter", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 5
-				"y": 65
+				"y": 95
 				"height": 20
 				"width": 60
-			} )
-			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "uiSmrtChapter"
-				"text": "启发式断章"
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 65
-				"y": 65
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "lb3"
@@ -167,16 +160,18 @@ new FormModel {
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "btnFixEnter"
 				"text": "共长合并"
+				"margin": new java.awt.Insets( 2, 2, 2, 2 )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 5
-				"y": 90
+				"x": 90
+				"y": 65
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "btnRemoveHalfLine"
 				"text": "去除一半空行"
+				"margin": new java.awt.Insets( 2, 4, 2, 4 )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 105
-				"y": 90
+				"x": 5
+				"y": 65
 			} )
 			add( new FormComponent( "javax.swing.JComboBox" ) {
 				name: "uiPresetRegexs"
@@ -365,6 +360,13 @@ new FormModel {
 				"x": 85
 				"y": 485
 			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnLegadoImport"
+				"text": "从阅读导入"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 265
+				"y": 485
+			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "cpwOrigName"
 				"text": "双击选择章节"
@@ -505,12 +507,6 @@ new FormModel {
 				"x": 280
 				"y": 610
 			} )
-			add( new FormComponent( "javax.swing.JLabel" ) {
-				name: "draggedItem"
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 0
-				"y": 0
-			} )
 			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
 				name: "scrollPane1"
 				"horizontalScrollBarPolicy": 31
@@ -527,6 +523,13 @@ new FormModel {
 				"y": 5
 				"width": 505
 				"height": 630
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnGroup"
+				"text": "章节分组"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 180
+				"y": 485
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 0, 0 )

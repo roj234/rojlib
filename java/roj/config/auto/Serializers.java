@@ -15,10 +15,10 @@ import static roj.config.auto.SerializerFactory.*;
 public final class Serializers {
 	// 默认的flag仅支持在类中实际写出的具体类，不涉及任意对象的反序列化
 	// 实际上，如果在序列化的类中有字段是Object或接口或抽象类（除去CharSequence Map Collection等一些基本的类），它会报错
-	// 如果是这种情况，请使用Unsafe或AnyObject
+	// 如果是这种情况，请使用Unsafe或Pooled或自己getInstance
 	public static final SerializerFactory SAFE = getInstance();
 	public static final SerializerFactory UNSAFE = getInstance(GENERATE|ALLOW_DYNAMIC|CHECK_INTERFACE|SERIALIZE_PARENT);
-	public static final SerializerFactory ANY_OBJECT = getInstance(GENERATE|PREFER_DYNAMIC|OBJECT_POOL|SERIALIZE_PARENT|NO_CONSTRUCTOR);
+	public static final SerializerFactory POOLED = getInstance(GENERATE|ALLOW_DYNAMIC|OBJECT_POOL|CHECK_INTERFACE|SERIALIZE_PARENT|NO_CONSTRUCTOR);
 
 	private static final Serializers INSTANCE = new Serializers();
 	private Serializers() {}
@@ -31,7 +31,7 @@ public final class Serializers {
 
 	public static void serializeCharArrayToString(SerializerFactory factory) { factory.add(char[].class,INSTANCE,"writeChars","readChars"); }
 
-	public final String writeHex(byte[] arr) {return IOUtil.SharedCoder.get().encodeBase64(arr);}
+	public final String writeHex(byte[] arr) {return IOUtil.SharedCoder.get().encodeHex(arr);}
 	public final byte[] readHex(String s) {
 		ByteList b = new ByteList();
 		byte[] bb = TextUtil.hex2bytes(s, b).toByteArray();
@@ -40,7 +40,7 @@ public final class Serializers {
 	}
 
 	public final String writeBase64(byte[] arr) { return IOUtil.SharedCoder.get().encodeBase64(arr); }
-	public final byte[] readBase64(String s) { return IOUtil.SharedCoder.get().decodeBase64(s); }
+	public final byte[] readBase64(String s) { return IOUtil.SharedCoder.get().decodeBase64(s).toByteArray(); }
 
 	public final String writeRGB(int color) { return "#".concat(Integer.toHexString(color&0xFFFFFF)); }
 	public final String writeRGBA(int color) { return "#".concat(Integer.toHexString(color)); }

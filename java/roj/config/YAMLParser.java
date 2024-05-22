@@ -121,7 +121,6 @@ public class YAMLParser extends Parser {
 
 		cyl:
 		while (true) {
-			String name = w.val();
 			switch (w.type()) {
 				case ask: throw err("配置文件不用字符串做key是坏文明");
 				case join:
@@ -137,6 +136,7 @@ public class YAMLParser extends Parser {
 				case Word.LITERAL, Word.STRING:
 				case Word.INTEGER, Word.LONG, Word.DOUBLE, Word.FLOAT:
 				case NULL:
+					String name = Interner.intern(w.val());
 					except(colon, ":");
 					comment = addComment(comment, name);
 
@@ -169,6 +169,7 @@ public class YAMLParser extends Parser {
 		return comment == null ? new CMap(map) : new CCommMap(map, comment);
 	}
 
+	// TODO 使用 --- 开始 ... 结束，在同一个文档中包含多个YAML
 	final CEntry element(int flag) throws ParseException {
 		Word w = next();
 		String cnt = w.val();
@@ -246,7 +247,7 @@ public class YAMLParser extends Parser {
 			}
 			case ref: {
 				CEntry val = anchors.get(cnt);
-				if (val == null) throw err("不存在的锚点 " + cnt);
+				if (val == null) throw err("不存在的锚点 "+cnt);
 				return val;
 			}
 			case Word.EOF: return CNull.NULL;
@@ -353,7 +354,10 @@ public class YAMLParser extends Parser {
 				default:
 					prevIndex = index = i;
 					if (_indent > 0) indent = i - _indent;
-					return readSymbol();
+
+					Word w = readSymbol();
+					if (w == COMMENT_RETRY_HINT) {i = index;_indent = i;continue;}
+					return w;
 				case C_NUMBER:
 					if (_indent > 0) indent = i - _indent;
 					prevIndex = index = i;

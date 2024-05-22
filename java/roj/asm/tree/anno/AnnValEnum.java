@@ -15,23 +15,37 @@ public final class AnnValEnum extends AnnVal {
 		this.field = field;
 	}
 
-	/**
-	 * ClassOnlyDesc
-	 */
-	public String owner;
+	private String owner;
 	public String field;
-	public String rawOwner() { return owner.substring(1, owner.length()-1); }
+
+	public String owner() {
+		if (owner.endsWith(";")) owner = owner.substring(1, owner.length()-1);
+		return owner;
+	}
+	public void setOwner(String owner) { this.owner = owner; }
 
 	public AnnValEnum asEnum() { return this; }
 
 	public byte type() { return ENUM; }
 
-	public void toByteArray(ConstantPool cp, DynByteBuf w) { w.put((byte) ENUM).putShort(cp.getUtfId(owner)).putShort(cp.getUtfId(field)); }
+	public void toByteArray(ConstantPool cp, DynByteBuf w) {
+		int id;
+		if (owner.endsWith(";")) {
+			id = cp.getUtfId(owner);
+		} else {
+			CharList sb = new CharList().append('L').append(owner).append(';');
+			id = cp.getUtfId(sb);
+			sb._free();
+		}
+		w.put(ENUM).putShort(id).putShort(cp.getUtfId(field));
+	}
 	public String toString() {
 		CharList sb = new CharList();
-		TypeHelper.toStringOptionalPackage(sb, rawOwner());
+		TypeHelper.toStringOptionalPackage(sb, owner());
 		return sb.replace('/', '.').append('.').append(field).toStringAndFree();
 	}
+	@Override
+	public String toRawString() {return field;}
 
 	@Override
 	public boolean equals(Object o) {

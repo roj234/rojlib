@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.DosFileAttributes;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +59,8 @@ public class QZArchiver {
 	public File cacheFolder;
 	public File outputFolder;
 	public String outputName;
-	public boolean singleThread, keepArchive;
+	public boolean keepArchive;
+	public Comparator<File> sorter;
 
 	public int autoSplitTaskSize;
 	public LZMA2Options autoSplitTaskOptions;
@@ -113,6 +115,12 @@ public class QZArchiver {
 				compressedLen[0] += file.length();
 			}
 		};
+
+		if (sorter != null) {
+			compressed.sort(sorter);
+			executable.sort(sorter);
+			uncompressed.sort(sorter);
+		}
 
 		if (pathType == PATH_FULL) {
 			String shortestCommonParent = paths.get(0).getAbsolutePath();
@@ -227,25 +235,33 @@ public class QZArchiver {
 
 		QzAES qzAes = password == null ? null : new QzAES(password, cryptPower, cryptSalt);
 
+		boolean isUncompressed = options.getMode() == LZMA2Options.MODE_UNCOMPRESSED;
+		if (isUncompressed) {
+			uncompressed.addAll(compressed);
+			uncompressed.addAll(executable);
+		}
+
 		// UNCOMPRESSED
 		if (!uncompressed.isEmpty()) {
+			long size = 0;
 			firstIsUncompressed = true;
 			for (File file : uncompressed) {
 				QZEntry entry = entryFor(file);
 				if (entry != null) {
 					tmpa.add(file);
 					tmpb.add(entry);
+					size += file.length();
 				}
 			}
 
-			addBlock(new QZCoder[] {qzAes == null ? Copy.INSTANCE : qzAes}, tmpa, tmpb, 0);
+			addBlock(new QZCoder[] {qzAes == null ? Copy.INSTANCE : qzAes}, tmpa, tmpb, size);
 		}
+		if (isUncompressed) return Long.MAX_VALUE;
 
 		long chunkSize = autoSolidSize ? MathUtils.clamp(compressedLen[0] / threads, LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX) : solidSize;
 		if (chunkSize < 0) chunkSize = Long.MAX_VALUE;
 
-		QZCoder lzma2 = options.getMode() == LZMA2Options.MODE_UNCOMPRESSED ? Copy.INSTANCE : new LZMA2(options);
-
+		QZCoder lzma2 = new LZMA2(options);
 		QZCoder[] coders = qzAes == null ? new QZCoder[] {lzma2} : new QZCoder[] {lzma2, qzAes};
 		makeBlock(compressed, chunkSize, coders, tmpa, tmpb);
 
@@ -419,7 +435,13 @@ public class QZArchiver {
 		long size;
 	}
 
+	private Thread worker;
+	public void interrupt() {
+		Thread w = worker;
+		if (w != null) w.interrupt();
+	}
 	public void compress(TaskPool pool, EasyProgressBar bar) throws IOException {
+		worker = Thread.currentThread();
 		QZFileWriter writer;
 		File tmp;
 
@@ -466,7 +488,7 @@ public class QZArchiver {
 			} while (tmp.isFile());
 
 			if (splitSize == 0) {
-				IOUtil.allocSparseFile(tmp, totalLength);
+				IOUtil.createSparseFile(tmp, totalLength);
 				writer = new QZFileWriter(tmp);
 			} else {
 				// .tmp.001
@@ -481,6 +503,7 @@ public class QZArchiver {
 			bar.addMax(keepSize);
 		}
 
+		try {
 		// first copy unchanged
 		for (Iterator<Map.Entry<WordBlock, List<QZEntry>>> itr = keep.entrySet().iterator(); itr.hasNext(); ) {
 			Map.Entry<WordBlock, List<QZEntry>> entry = itr.next();
@@ -507,7 +530,7 @@ public class QZArchiver {
 				}
 			}
 
-			pool.pushTask(() -> {
+			pool.submit(() -> {
 				try (QZReader _in = oldArchive.parallel()) {
 					try (QZWriter _out = parallel(writer)) {
 						_out.setCodec(coders);
@@ -558,7 +581,7 @@ public class QZArchiver {
 		writer.setIgnoreClose(true);
 		for (int i = 0; i < appends.size(); i++) {
 			int myi = i;
-			pool.pushTask(() -> {
+			pool.submit(() -> {
 				try (QZWriter writer1 = /*myi == 0 ? writer : */parallel(writer)) {
 					writeBlock(bar, appends.get(myi), writer1, pool);
 				}
@@ -569,12 +592,7 @@ public class QZArchiver {
 		pool.awaitFinish();
 
 		// finally write header
-		if (bar != null) {
-			bar.setName("4/4 写入文件头");
-			bar.setHideBar(true);
-			bar.setHideSpeed(true);
-			bar.updateForce(0);
-		}
+		if (bar != null) bar.setName("4/4 写入文件头");
 
 		List<QZCoder> coders = new SimpleList<>();
 		if (compressHeader) coders.add(new LZMA2(new LZMA2Options(9).setDictSize(524288)));
@@ -586,16 +604,16 @@ public class QZArchiver {
 			writer.setCompressHeader(0);
 		}
 
-		writer.flag |= QZWriter.TRIM_FILE;
-		writer.setIgnoreClose(false);
-		writer.close();
-		if (bar != null) bar.end("压缩成功");
-
-		if (tmp != null && !keepArchive) Files.move(tmp.toPath(), new File(outputFolder, outputName).toPath());
+		} finally {
+			writer.setIgnoreClose(false);
+			writer.close();
+			if (tmp != null && !keepArchive) Files.move(tmp.toPath(), new File(outputFolder, outputName).toPath());
+			if (bar != null) bar.end("压缩成功");
+		}
 	}
 
 	private QZWriter parallel(QZFileWriter qfw) throws IOException {
-		return singleThread ? qfw :
+		return threads == 1 ? qfw :
 			cacheFolder == null ? qfw.parallel() : qfw.parallel(new CacheSource(1048576, 134217728, "qzx-", cacheFolder));
 	}
 

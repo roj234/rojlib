@@ -9,25 +9,22 @@ public class IllegalRequestException extends IOException {
 	public final int code;
 	public Response response;
 
-	public IllegalRequestException(int code) {
-		this.code = code;
-	}
-
+	public IllegalRequestException(int code) {this.code = code;}
 	public IllegalRequestException(int code, String msg) {
 		super(msg);
 		this.code = code;
-		response = new StringResponse(msg);
+		response = Response.text(msg);
 	}
 
-	public IllegalRequestException(int code, String msg, Throwable cause) {
-		super(msg, cause);
+	public IllegalRequestException(int code, String msg, Throwable x) {
+		super(msg, x);
 		this.code = code;
-		response = new StringResponse(msg);
+		response = StringResponse.detailedErrorPage(code, x);
 	}
-
 	public IllegalRequestException(int code, Throwable x) {
 		super(x);
 		this.code = code;
+		response = StringResponse.detailedErrorPage(code, x);
 	}
 
 	public IllegalRequestException(int code, Response ret) {
@@ -36,7 +33,7 @@ public class IllegalRequestException extends IOException {
 	}
 
 	@Override
-	public Throwable fillInStackTrace() {
-		return this;
-	}
+	public Throwable fillInStackTrace() {return this;}
+
+	public Response createResponse() {return response != null || code < 400 ? response : Response.httpError(code);}
 }

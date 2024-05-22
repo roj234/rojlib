@@ -10,6 +10,7 @@ import roj.config.auto.Serializer;
 import roj.config.auto.Serializers;
 import roj.io.IOUtil;
 import roj.ui.CLIUtil;
+import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandContext;
 import roj.ui.terminal.SimpleCliParser;
 
@@ -17,7 +18,6 @@ import java.io.File;
 import java.util.List;
 
 import static roj.text.diff.DiffResult.bar;
-import static roj.ui.terminal.Argument.file;
 import static roj.ui.terminal.CommandNode.argument;
 import static roj.ui.terminal.SimpleCliParser.nullImpl;
 
@@ -28,8 +28,8 @@ import static roj.ui.terminal.SimpleCliParser.nullImpl;
 public class DiffUser {
 	public static void main(String[] args) throws Exception {
 		CommandContext ctx = new SimpleCliParser()
-			.add(argument("basePath", file(true))
-					.then(argument("diffYml", file(false))
+			.add(argument("basePath", Argument.folder())
+					.then(argument("diffYml", Argument.file())
 						.executes(nullImpl())))
 			.parse(args, true);
 
@@ -38,10 +38,11 @@ public class DiffUser {
 			return;
 		}
 
-		basePath = ctx.argument("basePath", File.class);
+		File basePath = ctx.argument("basePath", File.class);
 
 		Serializer<List<DiffResult>> adapter = Serializers.SAFE.listOf(DiffResult.class);
-		List<DiffResult> diffs = ConfigMaster.YAML.readObject(adapter, ctx.argument("diffYml", File.class));
+		File file = ctx.argument("diffYml", File.class);
+		List<DiffResult> diffs = ConfigMaster.YAML.readObject(adapter, file);
 		for (int i = diffs.size() - 1; i >= 0; i--) {
 			DiffResult d = diffs.get(i);
 
@@ -55,12 +56,13 @@ public class DiffUser {
 			d.rightFile = new File(basePath, d.right);
 
 			if(!d.leftFile.isFile() || !d.rightFile.isFile()) {
+				System.out.println("removed: "+d);
 				diffs.remove(i);
 				continue;
 			}
 
 			bar.addMax(1);
-			POOL.pushTask(() -> d.postProcess(true));
+			POOL.submit(() -> d.postProcess(true));
 		}
 
 		POOL.awaitFinish();
@@ -76,7 +78,7 @@ public class DiffUser {
 			}
 		}
 		System.out.println("count:" + diffs.size());
-		ConfigMaster.YAML.writeObject(diffs, adapter, ctx.argument("diffYml", File.class));
+		ConfigMaster.YAML.writeObject(adapter, diffs, new File(file.getParentFile(), IOUtil.fileName(file.getName())+".new.yml"));
 
 		bar.addMax(diffs.size());
 		for (int i = 0; i < diffs.size(); i++) {
@@ -127,6 +129,5 @@ public class DiffUser {
 		}
 	}
 
-	private static File basePath;
 	private static final TaskPool POOL = TaskPool.MaxSize(9999, "TDD worker");
 }

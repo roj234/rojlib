@@ -80,7 +80,7 @@ public abstract class MethodHook implements ITransformer {
 
 						Desc key = toDesc.copy();
 						key.owner = owner;
-						key.name = sb.toString(i, sb.length());
+						key.name = sb.substring(i, sb.length());
 						key.param = TypeHelper.getMethod(param);
 
 						hooks.put(key, toDesc);

@@ -1,119 +1,76 @@
 package roj.mod;
 
 import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
 import roj.concurrent.timing.ScheduleTask;
 import roj.ui.CLIUtil;
 
-import java.util.Set;
-import java.util.concurrent.locks.LockSupport;
-
-import static roj.mod.Shared.DEBUG;
-import static roj.mod.Shared.PeriodicTask;
+import static roj.mod.Shared.*;
 
 /**
  * @author solo6975
  * @since 2022/1/24 20:14
  */
-final class AutoCompile extends Thread {
-	static int Debounce;
+final class AutoCompile {
+	private static volatile boolean idle;
+	private static boolean cancelled;
+	private static int delay;
+	private static ScheduleTask task;
 
-	private static AutoCompile inst;
-	private static boolean prevEnable;
-
-	static void setEnabled(boolean enabled) {
-		if (enabled && inst == null) {
-			inst = new AutoCompile();
-		}
-		if (inst == null) return;
-		inst.enable = enabled;
-		LockSupport.unpark(inst);
+	static void setEnabled(int debounce) {
+		assert task == null;
+		idle = true;
+		delay = debounce;
 	}
 
-	public static void notifyIt() {
-		if (inst != null && inst.enable) LockSupport.unpark(inst);
+	static void notifyUpdate() {
+		if (!idle) return;
+		if (task != null) task.cancel();
+		task = PeriodicTask.delay(AutoCompile::check, delay);
 	}
-
-	private AutoCompile() {
-		setName("自动编译");
-		setDaemon(true);
-		start();
-		tmp1 = new SimpleList<>(100);
-		tmp2 = new SimpleList<>(100);
-	}
-
-	private final SimpleList<String> tmp1, tmp2;
-	private boolean enable, selfTrigger;
 
 	static void beforeCompile() {
-		if (inst == null) return;
-		if (!inst.selfTrigger) {
-			if (prevEnable = inst.enable) {
-				inst.enable = false;
-				LockSupport.unpark(inst);
-			}
+		if (idle && task != null && !task.isExpired()) {
+			task.cancel();
+			cancelled = true;
+		}
+	}
+	static void afterCompile(int ok) {
+		if (cancelled) {
+			cancelled = false;
+			if (ok > 0) Task.submit(AutoCompile::check);
 		}
 	}
 
-	static void afterCompile(int v) {
-		if (inst == null) return;
-		if (!inst.selfTrigger) {
-			inst.enable = prevEnable;
-		}
-	}
-
-	@Override
-	public void run() {
-		while (Shared.project == null) {
-			if (DEBUG) System.out.println("[AC] 等待项目初始化");
-			LockSupport.park();
-		}
-
-		while (true) {
-			LockSupport.park();
-			if (!enable) {
-				if (DEBUG) System.out.println("[AC] 关闭");
-			} else {
-				checkAndCompile(Shared.project);
-			}
-		}
-	}
-
-	private ScheduleTask debounceTask;
-	private boolean checkAndCompile(Project p) {
-		if (selfTrigger) return false;
-
-		Set<String> set = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
-		if (set.contains(null) || set.isEmpty()) {
-			if (set.contains(null)) if (DEBUG) System.out.println("[AC] 未注册监听器");
-			return false;
-		} else {
-			tmp1.clear();
-			tmp1.addAll(set);
-
-			if (debounceTask != null) debounceTask.cancel();
-			debounceTask = PeriodicTask.delay(() -> {
-				Set<String> set2 = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
-				tmp2.clear();
-				tmp2.addAll(set2);
-
-				if (tmp1.equals(tmp2)) doCompile();
-			}, Debounce);
-		}
-		return true;
-	}
-
-	private void doCompile() {
-		MyHashMap<String, Object> args = new MyHashMap<>(4);
-		args.put("zl", "");
-		args.put("forcezl", "");
-		selfTrigger = true;
+	private static void check() {
+		Project p = project;
+		if (p == null) return;
+		idle = false;
 		try {
+			block:
+			if (!isDirty(p)) {
+				for (Project p1 : p.getAllDependencies()) {
+					if (isDirty(p1)) break block;
+				}
+				return;
+			}
+
+			java.util.Map<String, Object> args = new MyHashMap<>();
+			args.put("zl", "");
 			FMDMain.build(args);
 		} catch (Throwable e) {
 			CLIUtil.error("自动编译出错", e);
-			enable = false;
+		} finally {
+			idle = true;
 		}
-		selfTrigger = false;
+	}
+
+	private static boolean isDirty(Project p) {
+		var modified = Shared.watcher.getModified(p, IFileWatcher.ID_SRC);
+		if (modified.contains(null) || modified.isEmpty()) {
+			if (modified.contains(null)) if (DEBUG) System.out.println("[AC] 未注册监听器");
+			return false;
+		} else {
+			return true;
+		}
 	}
 }

@@ -1,5 +1,7 @@
 package roj.config;
 
+import org.jetbrains.annotations.Contract;
+
 /**
  * @author Roj234
  * @since 2020/10/3 19:20
@@ -30,13 +32,20 @@ public class Word {
 	@Override
 	public String toString() { return "Token{#"+type+"@'"+val+'\''+'}'; }
 
+	@Contract(pure = true)
 	public short type() { return type; }
+	@Contract(pure = true)
 	public int pos() { return pos; }
+	@Contract(pure = true)
 	public String val() { return val; }
 
+	@Contract(pure = true)
 	public int asInt() { throw new UnsupportedOperationException(this+"不是数字"); }
+	@Contract(pure = true)
 	public long asLong() { throw new UnsupportedOperationException(this+"不是数字"); }
+	@Contract(pure = true)
 	public float asFloat() { throw new UnsupportedOperationException(this+"不是数字"); }
+	@Contract(pure = true)
 	public double asDouble() { throw new UnsupportedOperationException(this+"不是数字"); }
 
 	public Word copy() { return new Word().init(type, pos, val); }

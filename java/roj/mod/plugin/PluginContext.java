@@ -17,6 +17,7 @@ import java.util.Map;
  */
 public class PluginContext {
 	private Map<String, List<Context>> byAnnotation;
+	public boolean isPartialUpdate;
 
 	public List<Context> getAnnotatedClass(List<Context> list, String annotation) {
 		if (byAnnotation == null) {

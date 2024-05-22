@@ -17,46 +17,45 @@ abstract class Adapter {
 	@ReferenceByGeneratedClass
 	static void value(CVisitor v, String s) {if(s == null) v.valueNull(); else v.value(s);}
 
-	Adapter withGenericType(SerializerFactoryImpl man, List<IType> genericType) { return this; }
-	Adapter inheritBy(SerializerFactoryImpl factory, Class<?> type) { return this; }
+	public Adapter transform(SerializerFactoryImpl man, Class<?> subclass, @Nullable List<IType> generic) { return this; }
 
-	void read(AdaptContext ctx, boolean l) {read(ctx, (Object)l);}
-	void read(AdaptContext ctx, int l) {read(ctx, (Object)l);}
-	void read(AdaptContext ctx, long l) {read(ctx, (Object)l);}
-	void read(AdaptContext ctx, float l) {read(ctx, (double)l);}
-	void read(AdaptContext ctx, double l) {read(ctx, (Object)l);}
-	void read(AdaptContext ctx, Object o) {
+	public void read(AdaptContext ctx, boolean l) {read(ctx, (Object)l);}
+	public void read(AdaptContext ctx, int l) {read(ctx, (Object)l);}
+	public void read(AdaptContext ctx, long l) {read(ctx, (Object)l);}
+	public void read(AdaptContext ctx, float l) {read(ctx, (double)l);}
+	public void read(AdaptContext ctx, double l) {read(ctx, (Object)l);}
+	public void read(AdaptContext ctx, Object o) {
 		throw new IllegalArgumentException(this+"不支持的类型:"+(o==null?null:TypeHelper.class2asm(o.getClass()))+"【"+ctx.ref+"】");
 	}
-	void read(AdaptContext ctx, byte[] o) {
+	public void read(AdaptContext ctx, byte[] o) {
 		list(ctx,o.length);
 		for (byte b : o) read(ctx,b);
 		ctx.pop();
 	}
-	void read(AdaptContext ctx, int[] o) {
+	public void read(AdaptContext ctx, int[] o) {
 		list(ctx,o.length);
 		for (int b : o) read(ctx,b);
 		ctx.pop();
 	}
-	void read(AdaptContext ctx, long[] o) {
+	public void read(AdaptContext ctx, long[] o) {
 		list(ctx,o.length);
 		for (long b : o) read(ctx,b);
 		ctx.pop();
 	}
 
-	void map(AdaptContext ctx, int size) {une(ctx,"mapping["+size+"]");}
-	void list(AdaptContext ctx, int size) {une(ctx,"array["+size+"]");}
-	void key(AdaptContext ctx, String key) {une(ctx,"key["+key+"]");}
-	void push(AdaptContext ctx) {}
-	void pop(AdaptContext ctx) {}
+	public void map(AdaptContext ctx, int size) {une(ctx,"mapping["+size+"]");}
+	public void list(AdaptContext ctx, int size) {une(ctx,"array["+size+"]");}
+	public void key(AdaptContext ctx, String key) {une(ctx,"key["+key+"]");}
+	public void push(AdaptContext ctx) {}
+	public void pop(AdaptContext ctx) {}
 
 	private void une(AdaptContext ctx, String msg) { throw new IllegalArgumentException(this+"不支持的结构:"+msg+"【"+ctx.ref+"】"); }
 
-	int fieldCount() { return 1; }
-	int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return fieldState; }
-	boolean valueIsMap() { return getClass().getName().contains("GA$"); }
+	public int fieldCount() { return 1; }
+	public int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return fieldState; }
+	public boolean valueIsMap() { return getClass().getName().contains("GA$"); }
 
-	void write(CVisitor c, Object o) {
+	public void write(CVisitor c, Object o) {
 		if (o == null) c.valueNull();
 		else {
 			c.valueMap(fieldCount());
@@ -64,5 +63,5 @@ abstract class Adapter {
 			c.pop();
 		}
 	}
-	void writeMap(CVisitor c, Object o) { throw new UnsupportedOperationException(this+" should override write() or writeMap()"); }
+	public void writeMap(CVisitor c, Object o) { throw new UnsupportedOperationException(this+" should override write() or writeMap()"); }
 }

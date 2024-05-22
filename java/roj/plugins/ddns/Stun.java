@@ -15,9 +15,6 @@ public class Stun extends IpGetter {
 	private final int[] lastGood = {-1,-1};
 
 	@Override
-	public boolean supportsV6() { return true; }
-
-	@Override
 	public InetAddress[] getAddress(boolean checkV6) throws IOException {
 		InetAddress[] addresses = new InetAddress[2];
 		extracted(addresses, 0);

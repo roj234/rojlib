@@ -81,10 +81,10 @@ public class ArgumentContext {
 
 	public int getMaxI() { return maxI; }
 
-	protected final CommandContext createContext() { return new CommandContext(map); }
+	protected final CommandContext createContext() { return new CommandContext(context, map); }
 	public void wrapExecute(CommandImpl command) {
 		CommandContext ctx = createContext();
-		if (executor != null) executor.pushTask(() -> {
+		if (executor != null) executor.submit(() -> {
 			synchronized (this) {}
 			command.accept(ctx);
 		});

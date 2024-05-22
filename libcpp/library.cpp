@@ -11,7 +11,11 @@ void Error(JNIEnv *env, const char* msg) { env->ThrowNew(nativeException, msg); 
 JNIEXPORT jlong JNICALL Java_roj_NativeLibrary_init(JNIEnv *env, jclass) {
     if (nativeException == nullptr)
         nativeException = (jclass) (env->NewGlobalRef(env->FindClass("roj/util/NativeException")));
-    jlong bitset = REUSE_PORT_WINDOWS|ANSI_CONSOLE|BSDIFF|SHARED_MEMORY;
+    jlong bitset = ANSI_CONSOLE | BSDIFF | SHARED_MEMORY
+#ifdef COMPILE_TARGET_WINDOWS
+     |FUNC_WINDOWS
+#endif
+            ;
     if (LzJni_init(env)) bitset |= FAST_LZMA;
     return bitset;
 }
@@ -179,6 +183,19 @@ const char* ENABLE = "11";
 const char* DISABLE = "00";
 JNIEXPORT jint JNICALL Java_roj_io_NIOUtil_windowsOnlyReuseAddr(JNIEnv *env, jclass, jint fd, jboolean on) {
     return setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, on ? ENABLE : DISABLE, sizeof(int));
+}
+
+
+JNIEXPORT jlong JNICALL Java_roj_ui_GuiUtil_nGetWindowLong(JNIEnv *, jclass, jlong hwnd, jint dwType) {
+    return GetWindowLong((HWND) hwnd, dwType);
+}
+
+JNIEXPORT void JNICALL Java_roj_ui_GuiUtil_nSetWindowLong(JNIEnv *, jclass, jlong hwnd, jint dwType, jlong flags) {
+    SetWindowLong((HWND) hwnd, dwType, flags);
+}
+
+JNIEXPORT jlong JNICALL Java_roj_ui_GuiUtil_nGetConsoleWindow(JNIEnv *, jclass) {
+    return reinterpret_cast<jlong>(GetConsoleWindow());
 }
 
 #else

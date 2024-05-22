@@ -20,9 +20,10 @@ public class ManifestBytes {
 	Map<String, NamedAttr> namedAttrMap = new MyHashMap<>();
 	ByteAttr mainAttr;
 
+	public ManifestBytes(InputStream in) throws IOException {this(IOUtil.read(in));}
 	@SuppressWarnings("fallthrough")
-	public ManifestBytes(InputStream in) throws IOException {
-		data = IOUtil.read(in);
+	public ManifestBytes(byte[] data) {
+		this.data = data;
 		List<ByteAttr> tmp = new SimpleList<>();
 
 		int i = 0, len = data.length;

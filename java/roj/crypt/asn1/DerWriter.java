@@ -51,9 +51,9 @@ public final class DerWriter {
 			else acc.add(value);
 		}
 
+		V.removeRange(prev, T.wIndex());
 		T.wIndex(prev);
 		L.setSize(prev);
-		V.removeRange(prev, T.wIndex());
 
 		L.set(prev-1, total);
 		V.set(prev-1, acc);
@@ -114,16 +114,27 @@ public final class DerWriter {
 		write(DerValue.BIT_STRING, buf.toByteArray());
 	}
 	public void writeBytes(byte[] data) {write(DerValue.OCTET_STRING, data);}
-	public void writeOid(int[] oid) {
+	public void writeOid(int... oid) {
 		int first = oid[0]*40 + oid[1];
-		DynByteBuf buf = IOUtil.getSharedByteBuf().putVarInt(first);
-		for (int i = 2; i < oid.length; i++) {
-			buf.putVarInt(oid[i]);
-		}
+		var buf = IOUtil.getSharedByteBuf();
+		writeDerOidEntry(buf, first);
+		for (int i = 2; i < oid.length; i++) writeDerOidEntry(buf, oid[i]);
 		write(DerValue.OID, buf.toByteArray());
+	}
+	private final byte[] tmp = new byte[5];
+	private void writeDerOidEntry(DynByteBuf buf, int i) {
+		var bits = tmp;
+		int j = 5;
+		do {
+			bits[--j] = (byte) ((i & 0x7F) | 0x80);
+			i >>>= 7;
+		} while (i != 0);
+		bits[4] &= 0x7F;
+		buf.put(bits, j, 5-j);
 	}
 	public void writeIso(int type, String iso) {write(type, IOUtil.getSharedByteBuf().putAscii(iso).toByteArray());}
 	public void writeUTF(String utf) {write(DerValue.UTF8_STRING, IOUtil.getSharedByteBuf().putUTFData(utf).toByteArray());}
+	public void writeNull() {write(DerValue.NULL, ByteList.EMPTY);}
 
 	public void write(int type, byte[] data) {write(type, DynByteBuf.wrap(data));}
 	/**
@@ -151,8 +162,8 @@ public final class DerWriter {
 	/**
 	 * 将根DerTag写入out
 	 */
-	public void flush(DynByteBuf out) throws IOException {
-		if (stack.size() != 0) throw new IOException("stack depth != 0");
+	public void flush(DynByteBuf out) {
+		if (stack.size() != 0) throw new IllegalStateException("stack depth != 0");
 		for (int i = 0; i < T.wIndex(); i++) {
 			out.put(T.get(i));
 

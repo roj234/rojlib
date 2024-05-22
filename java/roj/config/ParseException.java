@@ -89,7 +89,7 @@ public class ParseException extends Exception {
 				CharList sb = new CharList().append(lines, i, j < 0 ? lines.length() : j).trimLast();
 				int myLen = sb.length(), myLen2 = sb.replace("\t", "    ").length();
 				line = ln;
-				column = pos-i + myLen2-myLen;
+				column = Math.min(pos-i + myLen2-myLen, sb.length());
 				lineContent = sb.toStringAndFree();
 				break;
 			}
@@ -118,7 +118,7 @@ public class ParseException extends Exception {
 		CharList k = new CharList().append("解析失败: ").append(msg).append("\n第").append(line).append("行: ");
 
 		String line = getLineContent();
-		if (column < 0 || column > line.length() || line.length() > 512) {
+		if (column < 0 || column > line.length() || line.length() > 220) {
 			k.append("偏移: ").append(column);
 		} else {
 			k.append(line).append("\n");

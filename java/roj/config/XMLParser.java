@@ -8,7 +8,7 @@ import roj.config.serial.CVisitor;
 import roj.config.serial.ToEntry;
 import roj.config.serial.ToXml;
 import roj.text.CharList;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
@@ -134,7 +134,7 @@ public class XMLParser extends Parser {
 	}
 
 	private void ccXmlElem() throws ParseException {
-		String name = except(LITERAL, "元素名称").val();
+		String name = Interner.intern(except(LITERAL, "元素名称").val());
 
 		cc.valueList();
 		cc.value(name);
@@ -209,7 +209,7 @@ public class XMLParser extends Parser {
 	}
 
 	private Word readAttribute(Word w) throws ParseException {
-		cc.key(w.val());
+		cc.key(Interner.intern(w.val()));
 		w = next();
 
 		if (w.type() == equ) {
@@ -270,7 +270,11 @@ public class XMLParser extends Parser {
 						return readDigit(true);
 					}
 					// fall to literal(symbol)
-				default: prevIndex = index = i; return readSymbol();
+				default:
+					prevIndex = index = i;
+					Word w = readSymbol();
+					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
+					return w;
 				case C_NUMBER: prevIndex = index = i; return readDigit(false);
 				case C_STRING:
 					prevIndex = i;
@@ -289,6 +293,7 @@ public class XMLParser extends Parser {
 	final Word readElementValue() throws ParseException {
 		CharSequence in = input;
 		int i = index;
+		if (i == in.length()) return eof();
 		int prevI = i;
 
 		// skip and collect whitespace
@@ -337,7 +342,7 @@ public class XMLParser extends Parser {
 		}
 
 		if (hasEntity && (flag&DECODE_ENTITY) != 0) {
-			EscapeUtil.htmlspecial_decode_all(v, in.subSequence(prevI, lastNonEmpty));
+			Escape.deHtmlEntities_Append(v, in.subSequence(prevI, lastNonEmpty));
 		} else {
 			v.append(in, prevI, lastNonEmpty);
 		}

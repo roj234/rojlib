@@ -12,6 +12,7 @@ import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Collection;
 import java.util.Map;
@@ -21,7 +22,7 @@ import java.util.Map;
  * @author Roj233
  * @since 2022/3/13 15:15
  */
-public class MultipartFormHandler extends HPostHandler {
+public class MultipartFormHandler extends UrlEncodedHandler {
 	private String boundary;
 	private FastMatcher matcher;
 
@@ -29,9 +30,6 @@ public class MultipartFormHandler extends HPostHandler {
 
 	private final Headers header = new Headers();
 	private MultipartFormHandler child;
-
-	protected String name;
-	private long totalSize;
 
 	public MultipartFormHandler() {}
 	public MultipartFormHandler(Request req) { init(req.getField("content-type")); }
@@ -56,20 +54,31 @@ public class MultipartFormHandler extends HPostHandler {
 			switch (state) {
 				case 0: // find boundary | data
 					int next = matcher.match(buf, 0);
-					if (next < 0) { // full data block
-						int len = Math.min(buf.readableBytes(), boundary.length());
-						int i = buf.wIndex()-len;
-						while (len > 0) {
-							if (buf.getU(i) == boundary.charAt(0)) break;
+					if (next < 0) {
+						// 从前往后检查至多[boundary.length-1]个字节
+						// 对每个字节，尝试和boundary[0 -> i]匹配，
+						int keep = Math.min(buf.readableBytes(), boundary.length()-1);
+
+						int i = buf.wIndex()-keep;
+						while (keep > 0) {
+							findPartialMatch: {
+								for (int j = 0; j < keep; j++) {
+									if (buf.get(i+j) != boundary.charAt(j))
+										break findPartialMatch;
+								}
+								break;
+							}
+
 							i++;
-							len--;
+							keep--;
 						}
+
 						if (i == 0) return;
 
-						buf.wIndex(buf.wIndex()-len);
+						buf.wIndex(i);
 						onValue(ctx, buf);
-						buf.rIndex = buf.wIndex();
-						buf.wIndex(buf.wIndex()+len);
+						//buf.rIndex = buf.wIndex();
+						buf.wIndex(buf.wIndex()+keep);
 						return;
 					}
 
@@ -166,8 +175,7 @@ public class MultipartFormHandler extends HPostHandler {
 		}
 
 		public boolean append(DynByteBuf buf) throws IOException {
-			if (data instanceof DynByteBuf) {
-				DynByteBuf b = ((DynByteBuf) data);
+			if (data instanceof DynByteBuf b) {
 				if (b.writableBytes() >= buf.readableBytes()) {
 					b.put(buf);
 					return true;
@@ -224,8 +232,7 @@ public class MultipartFormHandler extends HPostHandler {
 				fc.position(0);
 				if (data instanceof DynByteBuf) {
 					fc.write(((DynByteBuf) data).nioBuffer());
-				} else if (data instanceof FileChannel) {
-					FileChannel fr = (FileChannel) data;
+				} else if (data instanceof FileChannel fr) {
 					fc.transferFrom(fr, 0, fr.size());
 				} else {
 					throw new IOException("is " + data.getClass().getName());
@@ -241,22 +248,20 @@ public class MultipartFormHandler extends HPostHandler {
 				if (data instanceof Closeable) ((Closeable) data).close();
 			} finally {
 				if (file != null && !file.delete()) {
-					try {
-						FileChannel.open(file.toPath(), StandardOpenOption.DELETE_ON_CLOSE).close();
-					} catch (IOException ignored) {}
+					Files.deleteIfExists(file.toPath());
 				}
 			}
 		}
 	}
 
-	public FormData file(String name) { return (FormData) map.get(name); }
+	public FormData file(String name) { return (FormData) data.get(name); }
 
 	protected MultipartFormHandler terracottaBegin() { return new MultipartFormHandler(); }
-	protected void terracottaEnd(String name, MultipartFormHandler child) { map.put(name, new FormData(name, child.map)); }
+	protected void terracottaEnd(String name, MultipartFormHandler child) { data.put(name, new FormData(name, child.data)); }
 
-	protected void onKey(ChannelCtx ctx, String name) throws IOException { map.put(name, new FormData(name, ctx.allocate(true, 0xFFFF))); }
+	protected void onKey(ChannelCtx ctx, String name) throws IOException { data.put(name, new FormData(name, ctx.allocate(true, 0xFFFF))); }
 	protected void onValue(ChannelCtx ctx, DynByteBuf buf) throws IOException {
-		FormData fd = (FormData) map.get(name);
+		FormData fd = (FormData) data.get(name);
 		if (!fd.append(buf)) {
 			throw new IOException("数据太大，请覆盖该函数提供临时文件缓存");
 		}
@@ -270,10 +275,10 @@ public class MultipartFormHandler extends HPostHandler {
 
 	@Override
 	public void onComplete() throws IOException {
-		Collection<Object> values = Helpers.cast(map.values());
+		Collection<Object> values = Helpers.cast(data.values());
 		for (Object fd : values) {
-			if (fd instanceof Closeable)
-				((Closeable) fd).close();
+			if (fd instanceof Closeable c)
+				IOUtil.closeSilently(c);
 		}
 	}
 }

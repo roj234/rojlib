@@ -6,7 +6,6 @@ import roj.net.http.SyncHttpClient;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.URL;
 import java.nio.channels.ClosedByInterruptException;
 
 /**
@@ -14,7 +13,7 @@ import java.nio.channels.ClosedByInterruptException;
  * @since 2023/1/28 0028 1:22
  */
 public abstract class IpGetter {
-	static SyncHttpClient pooledRequest(URL url) throws IOException {
+	static SyncHttpClient pooledRequest(String url) throws IOException {
 		SyncHttpClient client = HttpRequest.nts().url(url).executePooled(15000, 3);
 		try {
 			client.waitFor();
@@ -26,9 +25,6 @@ public abstract class IpGetter {
 		return client;
 	}
 
-	public boolean supportsV6() { return false; }
-
 	public void loadConfig(CMap config) {}
-
 	public abstract InetAddress[] getAddress(boolean checkV6) throws Exception;
 }

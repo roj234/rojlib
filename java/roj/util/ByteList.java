@@ -1,7 +1,7 @@
 package roj.util;
 
 import org.jetbrains.annotations.NotNull;
-import roj.compiler.api.Constant;
+import roj.compiler.plugins.constant.Constant;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.text.CharList;
@@ -47,7 +47,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	}
 
 	public int capacity() { return list.length; }
-	public int maxCapacity() { return Integer.MAX_VALUE - 1024; }
+	public int maxCapacity() { return Integer.MAX_VALUE - 16; }
 	public final boolean isDirect() { return false; }
 	public long _unsafeAddr() { return (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+arrayOffset(); }
 	public boolean hasArray() { return true; }
@@ -86,7 +86,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	@Override
 	final int testWI(int i, int req) {
-		if (i < 0 || i + req > wIndex) throw new ArrayIndexOutOfBoundsException("pos="+i+",len="+req+",cap="+wIndex);
+		if ((i|req) < 0 || i + req > wIndex) throw new ArrayIndexOutOfBoundsException("pos="+i+",len="+req+",cap="+wIndex);
 		return i + arrayOffset();
 	}
 
@@ -146,7 +146,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		return this;
 	}
 
-	public final ByteList put(byte[] b, int off, int len) {
+	public ByteList put(byte[] b, int off, int len) {
 		if (len < 0 || off < 0 || len > b.length - off) throw new ArrayIndexOutOfBoundsException();
 		if (len > 0) {
 			int off1 = arrayOffset() + moveWI(len);
@@ -156,12 +156,9 @@ public class ByteList extends DynByteBuf implements Appendable {
 	}
 
 	@Override
-	public final ByteList put(DynByteBuf b, int len) {
-		return put(b, b.rIndex, len);
-	}
-
+	public final ByteList put(DynByteBuf b, int len) {return put(b, b.rIndex, len);}
 	@Override
-	public final ByteList put(DynByteBuf b, int off, int len) {
+	public ByteList put(DynByteBuf b, int off, int len) {
 		if (off+len > b.wIndex) throw new IndexOutOfBoundsException();
 		ensureCapacity(wIndex+len);
 		b.readFully(off, list, wIndex+arrayOffset(), len);
@@ -328,6 +325,22 @@ public class ByteList extends DynByteBuf implements Appendable {
 		byte[] b = new byte[wIndex - rIndex];
 		System.arraycopy(list, arrayOffset() + rIndex, b, 0, b.length);
 		return b;
+	}
+	public final byte[] toByteArrayAndZero() {
+		byte[] array = toByteArray();
+		byte[] arr1 = list;
+		for (int i = 0; i < wIndex; i++) arr1[i] = 0;
+		return array;
+	}
+	public final void clearAndZero() {
+		byte[] arr1 = list;
+		for (int i = 0; i < wIndex; i++) arr1[i] = 0;
+		wIndex = 0;
+	}
+	public final byte[] toByteArrayAndFree() {
+		byte[] array = toByteArray();
+		_free();
+		return array;
 	}
 
 	@Override
@@ -499,14 +512,14 @@ public class ByteList extends DynByteBuf implements Appendable {
 	// region Buffer Ops
 
 	public final ByteList slice(int off, int len) {
-		return len == 0 ? EMPTY : new Slice(list, off + arrayOffset(), len);
+		return len == 0 ? EMPTY : new Slice(list, testWI(off, len), len);
 	}
+	public final ByteList sliceNoIndexCheck(int off, int len) {return new Slice(list, off, len);}
 
 	@Override
 	public final ByteList compact() {
 		if (rIndex > 0) {
-			System.arraycopy(list, arrayOffset() + rIndex, list, arrayOffset(), wIndex - rIndex);
-			wIndex -= rIndex;
+			System.arraycopy(list, arrayOffset() + rIndex, list, arrayOffset(), wIndex -= rIndex);
 			rIndex = 0;
 		}
 		return this;
@@ -560,20 +573,6 @@ public class ByteList extends DynByteBuf implements Appendable {
 	}
 
 	@Override
-	public boolean equals(Object o) {
-		if (this == o) return true;
-		if (!(o instanceof DynByteBuf b)) return false;
-
-		int length = wIndex-rIndex;
-		if (length != b.readableBytes()) return false;
-
-		return ArrayUtil.vectorizedMismatch(list, _unsafeAddr()+rIndex, b.array(), b._unsafeAddr()+b.rIndex, length, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
-	}
-
-	@Override
-	public int hashCode() { return ArrayUtil.byteHashCode(list, _unsafeAddr()+rIndex, wIndex-rIndex); }
-
-	@Override
 	@NotNull
 	@SuppressWarnings("deprecation")
 	public String toString() { return new String(list, 0, arrayOffset()+rIndex, wIndex-rIndex); }
@@ -581,7 +580,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	@Override
 	public CharList hex(CharList sb) {return TextUtil.bytes2hex(list, arrayOffset()+rIndex, arrayOffset()+wIndex, sb);}
 
-	public static class WriteOut extends ByteList {
+	public static final class WriteOut extends ByteList {
 		private OutputStream out;
 		private int fakeWriteIndex;
 
@@ -612,6 +611,42 @@ public class ByteList extends DynByteBuf implements Appendable {
 		public final int arrayOffset() { return buf.arrayOffset(); }
 		public final int capacity() { return buf.capacity(); }
 		public final int maxCapacity() { return buf.maxCapacity(); }
+
+		@Override
+		public ByteList put(byte[] b, int off, int len) {
+			if (len < buf.capacity()) return super.put(b, off, len);
+			flush();
+			try {
+				out.write(b, off, len);
+			} catch (IOException e) {
+				Helpers.athrow(e);
+			}
+			fakeWriteIndex += len;
+			return this;
+		}
+
+		@Override
+		public ByteList put(DynByteBuf b, int off, int len) {
+			if (len < buf.capacity()) return super.put(b, off, len);
+			flush();
+			try {
+				if (b.hasArray()) out.write(b.array(), b.arrayOffset()+off, len);
+				else {
+					while (len > 0) {
+						int read = Math.min(len, capacity());
+						b.readFully(off, list, arrayOffset(), read);
+						out.write(list, arrayOffset(), read);
+
+						off += read;
+						len -= read;
+					}
+				}
+			} catch (IOException e) {
+				Helpers.athrow(e);
+			}
+			fakeWriteIndex += len;
+			return this;
+		}
 
 		@Override
 		public void ensureCapacity(int cap) {
@@ -723,7 +758,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		public boolean immutableCapacity() { return true; }
 		@Override
 		public void ensureCapacity(int required) {
-			if (required > len) throw new IndexOutOfBoundsException("cannot hold "+required+"bytes in this buffer("+len+")");
+			if (required > len) throw new IndexOutOfBoundsException("cannot hold "+required+" bytes in this buffer("+len+")");
 		}
 
 		@Override

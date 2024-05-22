@@ -176,7 +176,7 @@ public class QPakFileSystem {
 		if (file.isDirectory()) {
 			int len1 = alsoReadFrom.getAbsolutePath().length();
 			file.listFiles(f -> {
-				String pa = f.getAbsolutePath().substring(len1).replace('\\', '/');
+				String pa = f.getAbsolutePath().substring(len1).replace(File.separatorChar, '/');
 				QPakPath path1 = new QPakPath(this, pa, f);
 				QPakPath prev = files.put(pa, path1);
 

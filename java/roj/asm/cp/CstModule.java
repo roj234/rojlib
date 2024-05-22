@@ -7,18 +7,10 @@ package roj.asm.cp;
  * @since 2021/5/29 17:16
  */
 public final class CstModule extends CstRefUTF {
-	public CstModule(CstUTF v) {
-		super(v);
-	}
-
 	public CstModule() {}
-
-	public CstModule(String name) {
-		setValue(new CstUTF(name));
-	}
+	public CstModule(String name) { super(name); }
+	public CstModule(CstUTF v) { super(v); }
 
 	@Override
-	public byte type() {
-		return Constant.MODULE;
-	}
+	public byte type() {return Constant.MODULE;}
 }

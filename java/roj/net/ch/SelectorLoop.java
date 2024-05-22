@@ -3,6 +3,7 @@ package roj.net.ch;
 import roj.collect.SimpleList;
 import roj.concurrent.FastLocalThread;
 import roj.concurrent.Shutdownable;
+import roj.io.IOUtil;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 import roj.util.HighResolutionTimer;
@@ -12,7 +13,6 @@ import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.ConcurrentModificationException;
-import java.util.Set;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -23,8 +23,7 @@ import java.util.function.Consumer;
  */
 public class SelectorLoop implements Shutdownable {
 	public static final Logger LOGGER = Logger.getLogger("Channel");
-	public static final BiConsumer<String, Throwable> PRINT_HANDLER = (reason, error) -> LOGGER.warn("未处理的{}异常", error, reason);
-	static { HighResolutionTimer.activate(); }
+	public static final BiConsumer<String, Throwable> PRINT_HANDLER = (reason, error) -> LOGGER.warn("在{}阶段发生了未处理的异常", error, reason);
 
 	final class Poller extends FastLocalThread implements Consumer<SelectionKey> {
 		private Selector selector;
@@ -32,41 +31,45 @@ public class SelectorLoop implements Shutdownable {
 
 		volatile boolean idle, wakeupLock;
 
+		static { HighResolutionTimer.activate(); }
 		Poller() throws IOException {
 			this.selector = MySelector.open();
-			setName(prefix + " #" + index++);
+			setName(prefix+" #"+index++);
 			setDaemon(daemon);
 		}
 
 		final void refresh() {
+			var old = selector;
+			Selector sel;
 			try {
-				Selector old = selector;
-				Selector sel = MySelector.open();
-
-				for (SelectionKey oKey : new SimpleList<>(old.keys())) {
-					Att att = (Att) oKey.attachment();
-					try {
-						att.s.register(sel, oKey.interestOps(), att);
-					} catch (Exception e) {
-						exception.accept("R_REGISTER", e);
-						safeClose(att, oKey);
-					}
-				}
-
-				selector = sel;
-
-				old.close();
+				selector = sel = MySelector.open();
 			} catch (Exception e) {
 				exception.accept("R_OPEN", e);
+				return;
 			}
+
+			var keys = new SimpleList<>(old.keys());
+			IOUtil.closeSilently(old);
+
+			for (var key : keys) {
+				var att = (Att) key.attachment();
+				try {
+					att.s.register(sel, key.interestOps(), att);
+				} catch (Exception e) {
+					exception.accept("R_REGISTER", e);
+					safeClose(att, key);
+				}
+			}
+
+			selector = sel;
 		}
 
 		@Override
 		public void run() {
-			Selector sel = this.selector;
-			SelectorLoop loop = SelectorLoop.this;
-			MySelector selected = (MySelector) sel.selectedKeys();
-			Set<SelectionKey> keys = MySelector.getForeacher(sel);
+			var sel = selector;
+			var loop = SelectorLoop.this;
+			var selected = (MySelector) sel.selectedKeys();
+			var keys = MySelector.getForeacher(sel);
 			long time = System.currentTimeMillis();
 			int delayed = 0;
 
@@ -136,7 +139,7 @@ public class SelectorLoop implements Shutdownable {
 
 					if (missedTime >= 50) {
 						if (prevAlert - time > 10000) {
-							LOGGER.warn(Thread.currentThread().getName() + "@" + Thread.currentThread().getId() + "超过50ms未同步 请降低该线程的负载 / CT=" + missedTime);
+							LOGGER.warn("网络IO线程'{}'连续{}ms未同步 请降低该线程的负载", Thread.currentThread().getName(), missedTime);
 							prevAlert = time;
 						}
 						missedTime = 1;
@@ -158,21 +161,21 @@ public class SelectorLoop implements Shutdownable {
 						//}
 					}
 				} else {
-					if (selected.isEmpty()) delayed++;
-
-					if (delayed > 1000) {
+					delayed += selected.isEmpty() ? 10 : 1;
+					if (delayed > 10000) {
+						int prevSize = sel.keys().size();
 						refresh();
 						sel = selector;
 						selected = (MySelector) sel.selectedKeys();
 						keys = MySelector.getForeacher(sel);
 						delayed = 0;
-						System.err.println("rebuild selector");
+						LOGGER.warn("重建选择器, size={}/{}", prevSize, sel.keys().size());
 						continue;
 					}
 
 					if (missedTime < 0) {
 						time = System.currentTimeMillis();
-						LOGGER.warn("时间倒流了{}ms", -missedTime);
+						if (missedTime < -1) LOGGER.warn("时间倒流了{}ms", -missedTime);
 					}
 				}
 
@@ -238,7 +241,6 @@ public class SelectorLoop implements Shutdownable {
 		}
 	}
 
-	private Shutdownable owner;
 	private boolean shutdown;
 
 	public final String prefix;
@@ -251,18 +253,11 @@ public class SelectorLoop implements Shutdownable {
 
 	int index;
 
-	public SelectorLoop(Shutdownable owner, String prefix, int maxThreads) {
-		this(owner, prefix, 1, 1, maxThreads, 30000, 32, true);
-	}
-	public SelectorLoop(Shutdownable owner, String prefix, int maxThreads, int idleKill, int threshold) {
-		this(owner, prefix, 1, 1, maxThreads, idleKill, threshold, true);
-	}
-	public SelectorLoop(Shutdownable owner, String prefix, int minThreads, int maxThreads, int idleKill, int threshold) {
-		this(owner, prefix, minThreads, minThreads, maxThreads, idleKill, threshold, true);
-	}
+	public SelectorLoop(String prefix, int maxThreads) {this(prefix, 1, 1, maxThreads, 30000, 32, true);}
+	public SelectorLoop(String prefix, int maxThreads, int idleKill, int threshold) {this(prefix, 1, 1, maxThreads, idleKill, threshold, true);}
+	public SelectorLoop(String prefix, int minThreads, int maxThreads, int idleKill, int threshold) {this(prefix, minThreads, minThreads, maxThreads, idleKill, threshold, true);}
 
 	/**
-	 * @param owner 关闭监听器
 	 * @param prefix 线程名字前缀
 	 * @param initThreads 初始线程
 	 * @param minThreads 最小线程
@@ -270,7 +265,7 @@ public class SelectorLoop implements Shutdownable {
 	 * @param idleKill 选择器空置多久终止
 	 * @param threshold 选择器中最少的都超过了这个值就再开一个线程
 	 */
-	public SelectorLoop(Shutdownable owner, String prefix, int initThreads, int minThreads, int maxThreads, int idleKill, int threshold, boolean daemon) {
+	public SelectorLoop(String prefix, int initThreads, int minThreads, int maxThreads, int idleKill, int threshold, boolean daemon) {
 		if (threshold < 0) throw new IllegalArgumentException("threshold < 0");
 		if (minThreads < 0) throw new IllegalArgumentException("minThreads < 0");
 		if (maxThreads < 1) throw new IllegalArgumentException("maxThreads < 1");
@@ -283,7 +278,6 @@ public class SelectorLoop implements Shutdownable {
 		this.idleKill = idleKill;
 		this.threshold = threshold;
 		this.lock = new Object();
-		this.owner = owner;
 		this.daemon = daemon;
 
 		Thread[] t = this.threads = new Poller[Math.max(minThreads, 2)];
@@ -304,43 +298,23 @@ public class SelectorLoop implements Shutdownable {
 		return exception;
 	}
 
-	public final void setOwner(Shutdownable s) {
-		if (owner != null) throw new IllegalArgumentException("Already has a owner");
-		owner = s;
-	}
+	/**
+	 * 只影响新创建的线程
+	 */
+	public final void setDaemon(boolean daemon) {this.daemon = daemon;}
 
-	public final void setDaemon(boolean daemon) {
-		this.daemon = daemon;
-	}
-
-	public final int getStartedCount() {
-		return index;
-	}
-
+	public final int getStartedCount() {return index;}
 	public final int getIdleCount() {
 		int idle = 0;
-		Poller[] t = this.threads;
-		for (Poller thread : t) {
+		var t = threads;
+		for (var thread : t) {
 			if (thread == null) break;
 			if (thread.idle) idle++;
 		}
 		return idle;
 	}
-
-	public void clear() {
-		Poller[] t = threads;
-		for (Poller thread : t) {
-			if (thread == null) break;
-			try {
-				thread.selector.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-	}
-
 	public final int getRunningCount() {
-		Poller[] t = this.threads;
+		var t = threads;
 		int i = 0;
 		for (; i < t.length; i++) {
 			if (t[i] == null) break;
@@ -348,15 +322,7 @@ public class SelectorLoop implements Shutdownable {
 		return i;
 	}
 
-	public boolean wasShutdown() {
-		if (shutdown) return true;
-		if (owner != null && owner.wasShutdown()) {
-			shutdown();
-			return true;
-		}
-		return false;
-	}
-
+	public boolean wasShutdown() {return shutdown;}
 	public void shutdown() {
 		synchronized (lock) {
 			if (shutdown) return;
@@ -423,7 +389,7 @@ public class SelectorLoop implements Shutdownable {
 
 		Poller thread;
 		synchronized (lock) {
-			if (shutdown) return;
+			if (shutdown) throw new IOException("SelectorLoop was shutdown.");
 
 			if (i == ts.length) {
 				ts = new Poller[Math.min(i + 10, maxThreads)];

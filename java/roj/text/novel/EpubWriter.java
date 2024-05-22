@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * @author Roj234
@@ -42,9 +43,10 @@ public class EpubWriter implements Closeable, Finishable {
 	private int tocNo, chapterNo;
 
 	private final CharList xmlOpf = new CharList(), xmlToc = new CharList();
-	private final List<String> xmlRefs = new SimpleList<>();
+	private final List<Object> xmlRefs = new SimpleList<>();
+	private final int userChapterStart;
 
-	public EpubWriter(ZipFileWriter zfw, String title, String author, @Nullable File cover) throws Exception {
+	public EpubWriter(ZipFileWriter zfw, String title, String author, @Nullable File cover) throws IOException {
 		this.zfw = zfw;
 		for (ZEntry value : TEMPLATE.entries())
 			zfw.copy(TEMPLATE, value);
@@ -73,15 +75,15 @@ public class EpubWriter implements Closeable, Finishable {
 			 "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
 			<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
 			<head>
-			   <meta content="urn:uuid:""").append(uuid).append("""
-			" name="dtb:uid"/>
-			   <meta content="0" name="dtb:depth"/>
-			   <meta content="0" name="dtb:totalPageCount"/>
-			   <meta content="0" name="dtb:maxPageNumber"/>
+			   <meta name="dtb:uid" content="urn:uuid:""").append(uuid).append("""
+			" />
+			   <meta name="dtb:depth" content="0"/>
+			   <meta name="dtb:totalPageCount" content="0"/>
+			   <meta name="dtb:maxPageNumber" content="0"/>
 			</head>
 			<docTitle><text>""")
 			  .append(title).append("</text></docTitle>\n<docAuthor><text>")
-			  .append(title).append("</text></docAuthor>\n<navMap>");
+			  .append(author).append("</text></docAuthor>\n<navMap>");
 
 		tw = new TextWriter(zfw, StandardCharsets.UTF_8);
 
@@ -97,7 +99,7 @@ public class EpubWriter implements Closeable, Finishable {
 			zfw.write(IOUtil.read(cover));
 
 			CHAPTER("封面", "cover", true)
-				.append("<div class='cover'>\n<img alt='").append(title).append("' class='bb' src='../Images/cover.").append(coverExt)
+				.append("<div class='cover'>\n<img alt='").append(title).append("' src='../Images/cover.").append(coverExt)
 				.append("' />\n</div></body></html>");
 			tw.flush();
 		} else {
@@ -108,21 +110,22 @@ public class EpubWriter implements Closeable, Finishable {
 
 		CHAPTER("制作信息", "maker", true).append("<div>");
 		HTML_LINE("""
-			使用ImpLib/EpubWriter@1.1制作
-			本软件开源在<a href="https://github.com/roj234/rojlib">GitHub</a>
+			使用 ImpLib/EpubWriter v2.0 制作
+			<a href="https://github.com/roj234/rojlib">开源地址(GitHub)</a>
 			""");
 		tw.append("\n</div></body></html>");
 		tw.flush();
 
 		CHAPTER("目录", "index", false);
 
-		xmlRefs.clear();
+		userChapterStart = xmlRefs.size();
 	}
 
 	private void endOpfMeta() {
 		xmlOpf.append("""
-			</metadata><manifest>
-			<item href="toc.ncx" id="ncx" media-type="application/x-dtbncx+xml" />
+			</metadata>
+			<manifest>
+			<item href="toc.ncx" id="ncx" media-type="application/x-dtbncx+xml"/>
 			<item href="Styles/style.css" id="css" media-type="text/css"/>
 			""");
 	}
@@ -140,15 +143,12 @@ public class EpubWriter implements Closeable, Finishable {
 
 	@Contract("_,_,true -> !null ; _,_,false -> null")
 	private CharList CHAPTER(String name, String link, boolean immediate) throws IOException {
-		if (link == null) link = "cp" + ++chapterNo;
+		if (link == null) link = String.valueOf(++chapterNo);
 
 		xmlRefs.add(link);
 		xmlRefs.add(name);
-
-		int id = tocNo++;
-		xmlOpf.append("\n<item href=\"Text/").append(link).append(".html\" id=\"r").append(id).append("\" media-type=\"application/xhtml+xml\" />");
-		xmlToc.append("<navPoint id=\"r").append(id).append("\" playOrder=\"").append(id).append("\">\n  <navLabel><text>").append(name)
-			  .append("</text></navLabel>\n  <content src=\"Text/").append(link).append(".html\"/>\n</navPoint>\n");
+		xmlRefs.add(depth);
+		tocNo++;
 
 		if (immediate) {
 			zfw.beginEntry(new ZEntry("Text/"+link+".html"));
@@ -163,45 +163,88 @@ public class EpubWriter implements Closeable, Finishable {
 		return null;
 	}
 
-	// TODO change CSS style
-	// TODO - layered chapter - does EPUB support this ?
-	public void addChapter(String name, CharList data) throws IOException {
-		if (name.equals("@@intro")) {
+	private int depth;
+	public void addChapter(Chapter chap, @Nullable Function<Chapter, CharList> encoder) throws IOException {
+		addChapter0(chap, encoder);
+		if (chap.getChildCount() > 0) {
+			depth++;
+			try {
+				for (int i = 0; i < chap.children.size(); i++) {
+					addChapter(chap.children.get(i), encoder);
+				}
+			} finally {
+				depth--;
+			}
+		}
+	}
+	public void addChapter0(Chapter c, Function<Chapter, CharList> encoder) throws IOException {
+		if (c.no < 0) {
 			if (chapterNo != 0) throw new IllegalStateException("必须在第一章之前插入小说简介");
-			CHAPTER("简介", "intro", true).append("<div>");
+			CHAPTER("简介", "intro", true).append("<div>\n<h1>简介</h1>");
 			hasIntro = true;
 		} else {
-			CHAPTER(name, null, true).append("<div>\n<h4>").append(name).append("</h4>");
+			if (c.applyOverride) {
+				CHAPTER(c.displayName, null, true).append("<div>\n<h1>").append(c.displayName).append("</h1>");
+			} else {
+				String xn = "第" + c.no + c.type;
+				CHAPTER(xn+" "+c.name, null, true).append("<div>\n<h1><span>").append(xn).append("</span>").append(c.name).append("</h1>");
+			}
 		}
 
-		HTML_LINE(data);
+		HTML_LINE(encoder != null ? encoder.apply(c) : c.text);
 		tw.append("\n</div></body></html>");
 		tw.flush();
 	}
 
 	public synchronized void finish() throws IOException {
 		if (tw == null) return;
-
-		CharList x = xmlOpf.append("</manifest><spine toc=\"ncx\">");
-		for (int i = 0; i < tocNo; i++) x.append("\n<itemref idref=\"r").append(i).append("\" />");
-		x.append("</spine><guide>\n<reference href=\"Text/index.html\" title=\"目录\" type=\"toc\" />");
-		if (hasIntro) x.append("<reference href=\"Text/intro.html\" title=\"简介\" type=\"cover\" />");
-		if (cover != null) x.append("<reference href=\"Text/cover.html\" title=\"Cover\" type=\"cover\" />");
-		x.append("</guide></package>");
+		int prevDepth;
 
 		try {
 			zfw.beginEntry(new ZEntry("content.opf"));
-			tw.append(x);
+			var x = tw.append(xmlOpf); xmlOpf._free();
+			for (int i = 0, len = xmlRefs.size()/3; i < len; i ++) {
+				String link = xmlRefs.get(i*3).toString();
+				x.append("\n<item href=\"Text/").append(link).append(".html\" id=\"").append(i).append("\" media-type=\"application/xhtml+xml\"/>");
+			}
+
+			x.append("</manifest>\n<spine toc=\"ncx\">");
+			for (int i = 0; i < tocNo; i++) x.append("\n<itemref idref=\"").append(i).append("\"/>");
+			x.append("</spine>\n<guide>\n<reference href=\"Text/index.html\" title=\"目录\" type=\"toc\"/>");
+			if (hasIntro) x.append("<reference href=\"Text/intro.html\" title=\"简介\" type=\"cover\"/>");
+			if (cover != null) x.append("<reference href=\"Text/cover.html\" title=\"封面\" type=\"cover\"/>");
+			x.append("</guide></package>");
+
 			tw.flush();
-			x._free();
+
 
 			zfw.beginEntry(new ZEntry("toc.ncx"));
-			tw.append(xmlToc).append("</navMap>\n</ncx>");
+			x = tw.append(xmlToc); xmlToc._free();
+			prevDepth = -1;
+			for (int i = 0, len = xmlRefs.size()/3; i < len; i ++) {
+				String link = xmlRefs.get(i*3).toString();
+				String name = xmlRefs.get(i*3 +1).toString();
+				int depth = (int) xmlRefs.get(i*3 +2);
+
+				if (depth > prevDepth) {
+					prevDepth++;
+					assert depth == prevDepth;
+				} else while (true) {
+					tw.append("</navPoint>\n");
+					if (prevDepth == depth) break;
+					prevDepth--;
+				}
+
+				x.append("<navPoint id=\"n").append(i).append("\">\n  <navLabel><text>").append(name)
+				 .append("</text></navLabel>\n  <content src=\"Text/").append(link).append(".html\"/>\n");
+			}
+
+			while (prevDepth-- > 0) x.append("</navPoint>\n");
+			x.append("</navPoint>\n</navMap>\n</ncx>");
 			tw.flush();
-			xmlToc._free();
 
 			zfw.beginEntry(new ZEntry("Text/index.html"));
-			tw.append("""
+			x = tw.append("""
 			<?xml version="1.0" encoding="utf-8" standalone="no"?>
 			<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 			<html xmlns="http://www.w3.org/1999/xhtml">
@@ -211,15 +254,32 @@ public class EpubWriter implements Closeable, Finishable {
 			</head>
 			<body>
 			  <div>
-			    <!--p class="cont">目录</p-->
-			    <hr class="line-index" />
-			    <ul class="contents">
+			    <p class="toc">目录</p>
+			    <hr />
 			""");
 
-			for (int i = 0; i < xmlRefs.size(); i += 2) {
-				tw.append("<li class='c-rules'><a href='../Text/").append(xmlRefs.get(i)).append(".html'>").append(xmlRefs.get(i + 1)).append("</a></li>\n");
+			prevDepth = -1;
+			for (int i = userChapterStart; i < xmlRefs.size(); i += 3) {
+				String name = xmlRefs.get(i+1).toString();
+				int depth = (int) xmlRefs.get(i+2);
+
+				if (depth > prevDepth) {
+					prevDepth++;
+					assert depth == prevDepth;
+					x.append("<ul>\n");
+				} else {
+					while (prevDepth > depth) {
+						x.append("</li>\n</ul>");
+						prevDepth--;
+					}
+					x.append("</li>\n");
+				}
+
+				x.append("<li><a href='").append(xmlRefs.get(i)).append(".html'>").append(name).append("</a>");
 			}
-			tw.append("</ul></div></body></html>");
+
+			while (prevDepth-- > 0) x.append("</li>\n</ul>");
+			x.append("</li>\n</ul></div></body></html>");
 			tw.flush();
 			zfw.closeEntry();
 		} finally {

@@ -363,6 +363,7 @@ public class MyRegionFile implements AutoCloseable {
 		raf.seek(id<<2);
 		raf.writeInt(offset);
 	}
+	public final void setTimestamp(int id, int timestamp) throws IOException {setTimestamp(raf, id, timestamp);}
 	final void setTimestamp(Source raf, int id, int timestamp) throws IOException {
 		if ((flag & F_DONT_STORE_TIME) != 0) return;
 		if (timestamps != null) timestamps[id] = timestamp;

@@ -31,7 +31,7 @@ final class Host extends Connection {
 	final IntMap<Client> clients = new IntMap<>();
 	int nextId;
 
-	final MyHashSet<byte[]> blacklist = new MyHashSet<>(Hasher.primitiveArray(byte[].class));
+	final MyHashSet<byte[]> blacklist = new MyHashSet<>(Hasher.array(byte[].class));
 	boolean whitelist;
 
 	public Host(String name) {this.name = name;}

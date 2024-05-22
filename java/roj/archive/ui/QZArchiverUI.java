@@ -56,7 +56,7 @@ public class QZArchiverUI extends JFrame {
 		File out = new File(uiOutput.getText());
 		boolean ok = true;
 		try {
-			if (!out.isFile() && !out.createNewFile()) ok = false;
+			if (!out.isFile() && (!out.createNewFile() || !out.delete())) ok = false;
 		} catch (Exception e) {
 			ok = false;
 		}
@@ -80,10 +80,15 @@ public class QZArchiverUI extends JFrame {
 		arc.storeCT = uiStoreCT.isSelected();
 		arc.storeAT = uiStoreAT.isSelected();
 		arc.storeAttr = uiStoreAttr.isSelected();
-		arc.threads = ((Number) uiThreads.getValue()).intValue();
-		arc.autoSolidSize = uiAutoSolidSize.isSelected();
-		if (!arc.autoSolidSize)
+		if (!(arc.autoSolidSize = uiAutoSolidSize.isSelected())) {
 			arc.solidSize = (long) TextUtil.unscaledNumber1024(uiSolidSize.getText());
+		}
+		if (uiSplitTask.isSelected() & !uiAutoSplitTask.isSelected() & !uiMixedMode.isSelected()) {
+			arc.autoSolidSize = false;
+			arc.solidSize = -1;
+			arc.threads = 1;
+		}
+		else arc.threads = ((Number) uiThreads.getValue()).intValue();
 		arc.splitSize = uiSplitSize.getText().isEmpty() ? 0 : (long) TextUtil.unscaledNumber1024(uiSplitSize.getText());
 		arc.compressHeader = uiCompressHeader.isSelected();
 		if (uiCrypt.isSelected()) {
@@ -101,6 +106,9 @@ public class QZArchiverUI extends JFrame {
 		arc.outputFolder = out.getParentFile();
 		arc.outputName = out.getName();
 		arc.keepArchive = uiKeepArchive.isSelected();
+		if (uiSortByFilename.isSelected()) {
+			arc.sorter = (f1, f2) -> f1.getName().compareTo(f2.getName());
+		}
 
 		uiLog.setText("正在计数文件\n");
 
@@ -129,7 +137,7 @@ public class QZArchiverUI extends JFrame {
 			int blockSize = (int) MathUtils.clamp(chunkSize, LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX);
 
 			LZMA2Parallel man = new LZMA2Parallel(myOpt, blockSize, uiSplitTaskType.getSelectedIndex(), threads);
-			long mem = man.getExtraMemoryUsageBytes(uiMixedMode.isSelected());
+			long mem = (man.getExtraMemoryUsageBytes(uiMixedMode.isSelected()) & ~7) + (16 * threads);// 8-byte alignment
 			long needed = mem - ((long) arr[1]<<10);
 			if (needed > 0) {
 				JOptionPane.showMessageDialog(this, "压缩所需的内存超过了内存输入框的限制\n还需要"+TextUtil.scaledNumber1024(needed)+"的内存", "压缩流并行导致的内存不足", JOptionPane.ERROR_MESSAGE);
@@ -141,29 +149,32 @@ public class QZArchiverUI extends JFrame {
 			buffer = new BufferPool(mem, 0, mem, 0, 0, 0, 0, 0, threads, 0, BufferPool.OOM_NULL);
 
 			myOpt.setAsyncMode(pool2, buffer, man);
+			if (arc.threads == 1) threads = 1;
 		} else {
 			pool2 = null;
 			buffer = null;
 		}
 
-		arc.singleThread = uiSplitTask.isSelected() & !uiAutoSplitTask.isSelected() & !uiMixedMode.isSelected();
-		TaskPool pool = TaskPool.MaxThread(arc.singleThread ? 1 : threads, "7z-worker-");
+		TaskPool pool = TaskPool.MaxThread(threads, "7z-worker-");
 
-		ActionListener stopListener = e -> pool.shutdown();
+		ActionListener stopListener = e -> {
+			arc.interrupt();
+			pool.shutdownAndCancel();
+		};
 
 		uiBegin.setText("停下");
 		uiBegin.removeActionListener(beginListener);
 		uiBegin.addActionListener(stopListener);
 
-		TaskPool.Common().pushTask(() -> {
+		TaskPool.Common().submit(() -> {
 			pool.setRejectPolicy(TaskPool::waitPolicy);
 			EasyProgressBar bar = new GuiProgressBar(uiLog, uiProgress);
 			try {
 				arc.compress(pool, bar);
 			} finally {
-				pool.awaitShutdown();
+				pool.shutdownAndCancel();
 				if (pool2 != null) {
-					pool2.awaitShutdown();
+					pool2.shutdownAndCancel();
 
 					try {
 						buffer.release();
@@ -279,7 +290,7 @@ public class QZArchiverUI extends JFrame {
 			uiLog.setText("开始测试,时间依据您除了LcLpPb的LZMA设定而变化,请耐心等待\n" +
 				"请不要在测试过程中修改LZMA设定,这会导致结果不准确");
 
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				TaskPool pool = TaskPool.MaxThread(createTaskPool()[0], "LcLpTest-worker-");
 				try {
 					ByteList data = new ByteList();
@@ -302,7 +313,7 @@ public class QZArchiverUI extends JFrame {
 						"使用它们的压缩大小为"+toDigital(minSize)+" ("+TextUtil.toFixed((double)minSize/data.length() * 100, 2)+"%)");
 				} finally {
 					uiFindBestProp.setEnabled(true);
-					pool.shutdown();
+					pool.shutdownAndCancel();
 				}
 			});
 		});
@@ -357,9 +368,10 @@ public class QZArchiverUI extends JFrame {
 				注意事项：
 				  · 开启后，【固实大小】越小，压缩效果越差，CPU占用率也越低
 				    （和不开启时相反）
-				  · 若CPU跑不满，取消勾选【固实大小】的【自动】，并填写【512MB】
-				    填写【512MB】后，CPU仍无法跑满，请开启【混合模式】，CPU必定跑满（会使用更多内存）
-				  · 也可以开启【自动拆分任务】，可以适应大部分文件""", "关于压缩流并行……", JOptionPane.WARNING_MESSAGE);
+				  · 若CPU跑不满
+				    1. 取消勾选【固实大小】的【自动】，并填写【1TB】
+				    2. 开启【混合模式】，CPU必定跑满（会使用更多内存）
+				  · 开启【自动拆分任务】，可以在不降低很多速度的同时，提升压缩效果""", "关于压缩流并行……", JOptionPane.WARNING_MESSAGE);
 			uiSplitTask.removeActionListener(tip[0]);
 		};
 		tip[1] = e -> {
@@ -439,7 +451,7 @@ public class QZArchiverUI extends JFrame {
 		}
 	}
 	private void updateMemoryUsage() {
-		double myUsage = options.getEncoderMemoryUsage() * 1024d;
+		long myUsage = options.getEncoderMemoryUsage() * 1024L;
 		String text = uiSolidSize.getText();
 		String msg = "";
 		if (uiSplitTask.isSelected() && !uiAutoSplitTask.isSelected()) {
@@ -471,7 +483,7 @@ public class QZArchiverUI extends JFrame {
 		return new int[] {threads, (int) (memoryLimit - (perThreadUsageKb * threads))};
 	}
 
-	private static String toDigital(double size) { return TextUtil.scaledNumber1024(size); }
+	private static String toDigital(long size) { return TextUtil.scaledNumber1024(size); }
 	private int fromDigital(String text) {
 		double v = text.isEmpty() ? 0 : TextUtil.unscaledNumber1024(text);
 		if (v > Integer.MAX_VALUE) throw new FastFailException(text+"超出了整型范围！");
@@ -548,9 +560,10 @@ public class QZArchiverUI extends JFrame {
         uiAutoSplitTask = new JCheckBox();
         uiMixedMode = new JCheckBox();
         uiReadDirFromLog = new JCheckBox();
+        uiSortByFilename = new JCheckBox();
 
         //======== this ========
-        setTitle("Roj234 SevenZ Archiver 2.5");
+        setTitle("Roj234 SevenZ Archiver 2.6");
         var contentPane = getContentPane();
         contentPane.setLayout(null);
 
@@ -866,6 +879,11 @@ public class QZArchiverUI extends JFrame {
         contentPane.add(uiReadDirFromLog);
         uiReadDirFromLog.setBounds(new Rectangle(new Point(125, 333), uiReadDirFromLog.getPreferredSize()));
 
+        //---- uiSortByFilename ----
+        uiSortByFilename.setText("\u6309\u6587\u4ef6\u540d\u6392\u5e8f");
+        contentPane.add(uiSortByFilename);
+        uiSortByFilename.setBounds(new Rectangle(new Point(395, 290), uiSortByFilename.getPreferredSize()));
+
         contentPane.setPreferredSize(new Dimension(510, 495));
         pack();
         setLocationRelativeTo(getOwner());
@@ -919,5 +937,6 @@ public class QZArchiverUI extends JFrame {
     private JCheckBox uiAutoSplitTask;
     private JCheckBox uiMixedMode;
     private JCheckBox uiReadDirFromLog;
+    private JCheckBox uiSortByFilename;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

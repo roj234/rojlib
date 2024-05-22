@@ -8,13 +8,15 @@ import roj.asm.tree.ConstantData;
 import roj.asm.util.Context;
 import roj.asmx.launcher.EntryPoint;
 import roj.concurrent.TaskPool;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.ui.GuiUtil;
-import roj.util.Helpers;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.File;
+import java.lang.reflect.Method;
 
 /**
  * @author Roj234
@@ -28,18 +30,25 @@ public class UIEntry extends JFrame {
 	private static void launchUI() {
 		GuiUtil.systemLook();
 		UIEntry f = new UIEntry();
+		try {
+			f.uiInfo.setText(IOUtil.getTextResource("change.log"));
+		} catch (Exception e) {
+			f.uiInfo.setText("changelog已丢失");
+		}
 
+		f.uiCLITool.setText("正在读取……");
 		f.pack();
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		f.setVisible(true);
 
-		TaskPool.Common().pushTask(() -> {
+		TaskPool.Common().submit(() -> {
 			CharList sb = new CharList();
 			try {
-				for (Context ctx : Context.fromZip(Helpers.getJarByClass(UIEntry.class), null)) {
+				for (Context ctx : Context.fromZip(IOUtil.getJar(UIEntry.class), null)) {
 					ConstantData data = ctx.getData();
 					int id = data.getMethod("main", "([Ljava/lang/String;)V");
-					if (id >= 0 && !data.parent().startsWith("javax/swing/")) {
+					String p = data.parent();
+					if (id >= 0 && !p.startsWith("javax/swing/")/* && !p.equals("roj/plugin/Plugin")*/) {
 						sb.append(data.name().replace('/', '.')).append('\n');
 					}
 				}
@@ -54,14 +63,24 @@ public class UIEntry extends JFrame {
 		button.addActionListener(e -> {
 			button.setEnabled(false);
 			try {
-				JFrame frame = (JFrame) Class.forName(klass).newInstance();
-				frame.pack();
-				frame.setResizable(false);
-				frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-				frame.setVisible(true);
-				frame.addWindowListener(new WindowAdapter() {
-					public void windowClosing(WindowEvent e) { button.setEnabled(true); }
-				});
+				String copy = klass;
+				boolean useMainClass = copy.startsWith("^");
+				if (useMainClass) copy = copy.substring(1);
+				Class<?> aClass = Class.forName(copy);
+				if (useMainClass) {
+					Method main = aClass.getDeclaredMethod("main", String[].class);
+					main.setAccessible(true);
+					main.invoke(null, (Object) new String[0]);
+				} else {
+					JFrame frame = (JFrame) aClass.newInstance();
+					frame.pack();
+					frame.setResizable(false);
+					frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+					frame.setVisible(true);
+					frame.addWindowListener(new WindowAdapter() {
+						public void windowClosing(WindowEvent e) { button.setEnabled(true); }
+					});
+				}
 			} catch (Exception ex) {
 				throw new RuntimeException(ex);
 			}
@@ -74,12 +93,12 @@ public class UIEntry extends JFrame {
 		bind(uiUnarchiver, "roj.archive.ui.UnarchiverUI");
 		bind(uiFindClass, "roj.misc.FindClass");
 		bind(uiNovel, "roj.text.novel.NovelFrame");
-		bind(uiNat, "roj.plugins.frp.AEGui");
+		bind(uiNat, "^roj.plugins.frp.AEGui");
 		bind(uiMapper, "roj.asmx.mapper.MapperUI");
 		bind(uiObfuscator, "roj.asmx.mapper.ObfuscatorUI");
 		bind(uiSM, "roj.novel.SimpleMergeUI");
 		bind(uiDIffFinder, "roj.text.diff.DiffFinder");
-		bind(uiCardSleep, "roj.plugins.CardSleep");
+		bind(uiCardSleep, "^roj.plugins.CardSleep");
 	}
 
 	private void initComponents() {
@@ -97,6 +116,7 @@ public class UIEntry extends JFrame {
         uiDIffFinder = new JButton();
         uiCardSleep = new JButton();
         uiSM = new JButton();
+        uiTest = new JButton();
         var label2 = new JLabel();
         var scrollPane2 = new JScrollPane();
         uiCLITool = new JTextArea();
@@ -177,6 +197,11 @@ public class UIEntry extends JFrame {
         contentPane.add(uiSM);
         uiSM.setBounds(315, 15, 65, uiSM.getPreferredSize().height);
 
+        //---- uiTest ----
+        uiTest.setText("\u6d4b\u8bd5\u529f\u80fd");
+        contentPane.add(uiTest);
+        uiTest.setBounds(new Rectangle(new Point(160, 65), uiTest.getPreferredSize()));
+
         //---- label2 ----
         label2.setText("\u547d\u4ee4\u884c\u5de5\u5177");
         contentPane.add(label2);
@@ -210,6 +235,7 @@ public class UIEntry extends JFrame {
     private JButton uiDIffFinder;
     private JButton uiCardSleep;
     private JButton uiSM;
+    private JButton uiTest;
     private JTextArea uiCLITool;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

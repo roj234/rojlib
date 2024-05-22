@@ -22,13 +22,6 @@ public class AsyncTask<T> implements Future<T>, ITask {
 
 	protected Callable<T> supplier;
 
-	public static AsyncTask<Void> fromRunnable(Runnable runnable) {
-		return new AsyncTask<>(() -> {
-			runnable.run();
-			return null;
-		});
-	}
-
 	public AsyncTask(Callable<T> c) { this.supplier = c; }
 	protected AsyncTask() {}
 

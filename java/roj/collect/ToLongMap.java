@@ -28,6 +28,20 @@ public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K
 
 		@Override
 		public String toString() { return String.valueOf(k)+'='+v; }
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+
+			var entry = (Entry<?>) o;
+			if (!(k != null ? k.equals(entry.k) : entry.k == null)) return false;
+			return v == entry.v;
+		}
+		@Override
+		public int hashCode() {
+			int hash = k != null ? k.hashCode() : 0;
+			return (int)(v ^ v >>> 32) ^ hash;
+		}
 	}
 
 	public ToLongMap() { super(); }

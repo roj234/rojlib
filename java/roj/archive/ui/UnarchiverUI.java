@@ -15,7 +15,7 @@ import roj.concurrent.TaskPool;
 import roj.io.CorruptedInputException;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.text.TextUtil;
 import roj.text.logging.Logger;
 import roj.ui.EasyProgressBar;
@@ -137,7 +137,7 @@ public class UnarchiverUI extends JFrame {
 			}
 
 			uiExtract.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				int threads = (int) uiThreads.getValue();
 				if (threads == 0) threads = Runtime.getRuntime().availableProcessors();
 				TaskPool pool = TaskPool.MaxThread(threads, "7z-worker-");
@@ -149,8 +149,8 @@ public class UnarchiverUI extends JFrame {
 				try {
 					doExtract(basePath, pool, bar);
 				} finally {
-					pool.awaitFinish();
 					pool.shutdown();
+					pool.awaitTermination();
 
 					uiExtract.setEnabled(true);
 					progressBar1.setValue(100);
@@ -190,7 +190,7 @@ public class UnarchiverUI extends JFrame {
 		BiConsumer<ArchiveEntry, InputStream> cb = (entry, in) -> {
 			if (javacSb == null || javacSb.strStartsWithThis(entry.getName())) {
 				String name = entry.getName();
-				if (uiPathFilter.isSelected()) name = EscapeUtil.escapeFilePath(IOUtil.safePath(name));
+				if (uiPathFilter.isSelected()) name = Escape.escapeFilePath(IOUtil.safePath(name));
 
 				File file1 = new File(basePath, name);
 				loop:
@@ -205,7 +205,7 @@ public class UnarchiverUI extends JFrame {
 				}
 				file1.getParentFile().mkdirs();
 				try {
-					IOUtil.allocSparseFile(file1, entry.getSize());
+					IOUtil.createSparseFile(file1, entry.getSize());
 					assert in.available() == Math.min(entry.getSize(), Integer.MAX_VALUE);
 					try (FileOutputStream out = new FileOutputStream(file1)) {
 						QZUtils.copyStreamWithProgress(in, out, bar);
@@ -252,7 +252,7 @@ public class UnarchiverUI extends JFrame {
 			byte[] javacSbAgain = password;
 			for (ZEntry entry : zipFile.entries()) {
 				if (set == null || set.strStartsWithThis(entry.getName())) {
-					pool.pushTask(() -> {
+					pool.submit(() -> {
 						try (InputStream in = zipFile.getStream(entry, javacSbAgain)) {
 							cb.accept(entry, in);
 						}
@@ -280,7 +280,7 @@ public class UnarchiverUI extends JFrame {
 
 				if ((storeFlag&8) != 0 && entry.isAntiItem()) {
 					String name = entry.getName();
-					if (uiPathFilter.isSelected()) name = EscapeUtil.escapeFilePath(IOUtil.safePath(name));
+					if (uiPathFilter.isSelected()) name = Escape.escapeFilePath(IOUtil.safePath(name));
 
 					File file1 = new File(basePath, name);
 					try {

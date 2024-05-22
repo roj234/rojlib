@@ -1,6 +1,7 @@
 package roj.archive.qz;
 
 import roj.archive.ArchiveEntry;
+import roj.reflect.ReflectionUtils;
 import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.util.Helpers;
@@ -22,6 +23,13 @@ public class QZEntry implements ArchiveEntry, Cloneable {
         EMPTY = 1, DIRECTORY = 2, ANTI = 4,
         CT = 8, AT = 16, MT = 32, ATTR = 64,
         CRC = 128;
+
+    static final long[] SPARSE_ATTRIBUTE_OFFSET = new long[] {
+        ReflectionUtils.fieldOffset(QZEntry.class, "createTime"),
+        ReflectionUtils.fieldOffset(QZEntry.class, "accessTime"),
+        ReflectionUtils.fieldOffset(QZEntry.class, "modifyTime"),
+        ReflectionUtils.fieldOffset(QZEntry.class, "attributes")
+    };
 
     long accessTime, createTime, modifyTime;
     int attributes;

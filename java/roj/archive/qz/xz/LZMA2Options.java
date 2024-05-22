@@ -15,6 +15,7 @@ import roj.text.TextUtil;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class LZMA2Options implements Cloneable {
@@ -438,7 +439,7 @@ public class LZMA2Options implements Cloneable {
 					copy.lp = lp;
 					copy.pb = pb;
 
-					th.pushTask(() -> {
+					th.submit(() -> {
 						DummyOutputStream counter = new DummyOutputStream();
 						try (OutputStream os = copy.getOutputStream(counter)) {
 							os.write(data);
@@ -462,6 +463,38 @@ public class LZMA2Options implements Cloneable {
 		this.lp = best.lp;
 		this.pb = best.pb;
 		return (int)min[1];
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || LZMA2Options.class != o.getClass()) return false;
+		LZMA2Options options = (LZMA2Options) o;
+
+		if (dictSize != options.dictSize) return false;
+		if (lc != options.lc) return false;
+		if (lp != options.lp) return false;
+		if (pb != options.pb) return false;
+		if (mode != options.mode) return false;
+		if (niceLen != options.niceLen) return false;
+		if (mf != options.mf) return false;
+		if (depthLimit != options.depthLimit) return false;
+		if (!Arrays.equals(presetDict, options.presetDict)) return false;
+		return asyncMan != null ? asyncMan.equals(options.asyncMan) : options.asyncMan == null;
+	}
+
+	@Override
+	public int hashCode() {
+		int result = dictSize;
+		result = 31 * result + Arrays.hashCode(presetDict);
+		result = 31 * result + lc;
+		result = 31 * result + lp;
+		result = 31 * result + pb;
+		result = 31 * result + mode;
+		result = 31 * result + niceLen;
+		result = 31 * result + mf;
+		result = 31 * result + depthLimit;
+		return result;
 	}
 
 	@Override

@@ -27,7 +27,12 @@ public class SimpleList<E> extends AbstractCollection<E> implements List<E>, Ran
 
 	public void ensureCapacity(int cap) {
 		if (list.length < cap) {
-			int newCap = list.length == 0 ? cap : cap > 65536 ? MathUtils.getMin2PowerOf(cap) : cap > 512 ? cap+512 : cap+10;
+			int newCap;
+			if (list.length == 0) newCap = cap;
+			else if (cap > 1000) newCap = MathUtils.getMin2PowerOf(cap);
+			else if (cap > 100) newCap = cap + (cap >> 1);
+			else newCap = cap + 11;
+
 			Object[] newList = new Object[newCap];
 			if (size > 0) System.arraycopy(list, 0, newList, 0, size);
 			list = newList;
@@ -42,20 +47,11 @@ public class SimpleList<E> extends AbstractCollection<E> implements List<E>, Ran
 		return list;
 	}
 
-	public static <T> SimpleList<T> withCapacityType(int initialCapacity, int capacityType) {
-		return new SimpleList<T>(initialCapacity) {
-			int nextCap(int cap) {
-				switch (capacityType&3) {
-					default: case 0: return cap + 10;
-					case 1: return 1 + ((cap*3) >> 1);
-					case 2: return MathUtils.getMin2PowerOf(cap+1);
-					case 3: throw new ArrayIndexOutOfBoundsException("Capacity locked: " + list.length);
-				}
-			}
-
+	public static <T> SimpleList<T> hugeCapacity(int initialCapacity) {
+		return new SimpleList<>(initialCapacity) {
 			public void ensureCapacity(int cap) {
 				if (list.length < cap) {
-					int newCap = list.length == 0 ? cap : nextCap(cap);
+					int newCap = list.length == 0 ? cap : MathUtils.getMin2PowerOf(cap);
 					Object[] newList = new Object[newCap];
 					if (size > 0) System.arraycopy(list, 0, newList, 0, size);
 					list = newList;
@@ -330,6 +326,11 @@ public class SimpleList<E> extends AbstractCollection<E> implements List<E>, Ran
 	@SuppressWarnings("unchecked")
 	public E get(int i) {
 		if (i < 0 || i >= size) throw new ArrayIndexOutOfBoundsException(i);
+		return (E) list[i];
+	}
+	@SuppressWarnings("unchecked")
+	public E get(int i, E def) {
+		if (i < 0 || i >= size) return def;
 		return (E) list[i];
 	}
 

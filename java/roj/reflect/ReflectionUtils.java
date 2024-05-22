@@ -77,6 +77,7 @@ public final class ReflectionUtils {
 		Field[] out = new Field[names.length];
 		ToIntMap<String> map = ToIntMap.fromArray(names);
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
+		var origClass = clazz;
 
 		while (clazz != null && clazz != Object.class) {
 			Field[] fields = clazz.getDeclaredFields();
@@ -94,7 +95,7 @@ public final class ReflectionUtils {
 			clazz = clazz.getSuperclass();
 		}
 
-		throw new IllegalStateException("未找到某些字段:"+clazz+"."+map.keySet());
+		throw new IllegalStateException("未找到某些字段:"+origClass+"."+map.keySet());
 	}
 
 	/**
@@ -164,7 +165,7 @@ public final class ReflectionUtils {
 	public static Class<?> defineWeakClass(ByteList b) {
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
 		if (sm != null) b = sm.checkDefineClass(null, b);
-		return VMInternals.DefineWeakClass(b.toByteArray());
+		return VMInternals.DefineWeakClass(null, b.toByteArray());
 	}
 	public static void ensureClassInitialized(Class<?> klass) { VMInternals.InitializeClass(klass); }
 	/**
@@ -190,33 +191,10 @@ public final class ReflectionUtils {
 		}
 	}
 
-	private static boolean smRemoved = JAVA_VERSION > 21;
-	public static Class<?> getCallerClass(int backward) {
-		if (!smRemoved) {
-			try {
-				return Tracer.INSTANCE.getCallerClass(backward+1);
-			} catch (Throwable e) {
-				smRemoved = true;
-			}
-		}
-
-		try {
-			StackTraceElement[] trace = new Throwable().getStackTrace();
-			return trace.length < backward ? null : Class.forName(trace[backward].getClassName());
-		} catch (ClassNotFoundException e) {
-			return null;
-		}
-	}
+	public static Class<?> getCallerClass(int backward) {return JAVA_VERSION < 17 ? Tracer.INSTANCE.getCallerClass(backward+1) : GetCallerArgs.getCallerClass(backward+1);}
 	private static final class Tracer extends SecurityManager {
 		// avoid security manager creation warning
-		static final Tracer INSTANCE;
-		static {
-			try {
-				INSTANCE = (Tracer) u.allocateInstance(Tracer.class);
-			} catch (InstantiationException e) {
-				throw new RuntimeException(e);
-			}
-		}
+		static final Tracer INSTANCE = new Tracer();
 
 		public Class<?> getCallerClass(int backward) {
 			Class<?>[] ctx = super.getClassContext();

@@ -7,7 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "Roj234 SevenZ Archiver 2.5"
+			"title": "Roj234 SevenZ Archiver 2.6"
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label4"
 				"text": "压缩这个目录或文件"
@@ -593,6 +593,13 @@ new FormModel {
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 125
 				"y": 333
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiSortByFilename"
+				"text": "按文件名排序"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 395
+				"y": 290
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 50, 30 )

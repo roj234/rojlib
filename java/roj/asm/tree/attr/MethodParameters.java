@@ -11,8 +11,6 @@ import roj.util.DynByteBuf;
  * @since 2021/5/29 17:16
  */
 public final class MethodParameters extends Attribute {
-	public static final String NAME = "MethodParameters";
-
 	public MethodParameters() { flags = new SimpleList<>(); }
 	public MethodParameters(DynByteBuf r, ConstantPool pool) {
 		int len = r.readUnsignedByte();
@@ -35,7 +33,7 @@ public final class MethodParameters extends Attribute {
 	}
 
 	@Override
-	public String name() { return NAME; }
+	public String name() { return "MethodParameters"; }
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder("MethodParameters: \n");
@@ -57,4 +55,6 @@ public final class MethodParameters extends Attribute {
 			this.flag = flag;
 		}
 	}
+
+	public int getFlag(int i, int def) { return flags.size() > i ? flags.get(i).flag : def; }
 }

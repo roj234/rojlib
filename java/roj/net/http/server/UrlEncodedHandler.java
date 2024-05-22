@@ -1,74 +1,81 @@
 package roj.net.http.server;
 
+import roj.collect.MyHashMap;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.IllegalRequestException;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.net.MalformedURLException;
 
 /**
+ * application/x-www-form-urlencoded
  * @author Roj233
  * @since 2022/3/13 15:15
  */
-public class UrlEncodedHandler extends HPostHandler {
-	private String key;
-	private byte state;
+public class UrlEncodedHandler implements HPostHandler {
+	public MyHashMap<String, Object> data;
+	@Override
+	public void handlerAdded(ChannelCtx ctx) {data = new MyHashMap<>();}
 
-	public UrlEncodedHandler() {}
+	protected String name;
+
+	public void init(String contentType) {
+		if (!contentType.startsWith("application/x-www-form-urlencoded"))
+			throw new IllegalArgumentException("不支持的content-type: '"+contentType+"'");
+		name = null;
+	}
 
 	@Override
-	public final void channelRead(ChannelCtx ctx, Object msg) throws IOException {
-		DynByteBuf buf = (DynByteBuf) msg;
+	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
+		var buf = (DynByteBuf) msg;
+		int i = buf.rIndex;
+		int len = buf.wIndex();
 
-		if (state == 0 && buf.isReadable()) state = 1;
-		else if (state == 3) throw new EOFException();
+		// a=b&c=d
+		char c = name != null ? '&' : '=';
+		while (i < len) {
+			if (buf.get(i) != c) {i++;continue;}
 
-		int pos = buf.rIndex;
-		int lim = buf.wIndex();
-
-		char c = key != null ? '&' : '=';
-		while (pos < lim) {
-			if (buf.get(pos) == c) {
-				buf.wIndex(pos);
-
-				try {
-					String o = EscapeUtil.decodeURI(buf);
-					if (key != null) {
-						onValue(o);
-						key = null;
-					} else {
-						onKey(o);
-						key = o;
-					}
-				} catch (MalformedURLException e) {
-					throw new IllegalRequestException(400, "invalid form key");
-				} finally {
-					buf.wIndex(lim);
-					buf.rIndex = pos+1;
+			buf.wIndex(i);
+			try {
+				if (c == '&') {
+					onValue(ctx, buf);
+					name = null;
+					c = '=';
+				} else {
+					if (buf.readableBytes() > 384) throw invalidKey();
+					name = Escape.decodeURI(buf);
+					if (name.indexOf('&') >= 0) throw invalidKey();
+					onKey(ctx, name);
+					c = '&';
 				}
-
-				c = key != null ? '&' : '=';
+			} catch (MalformedURLException e) {
+				throw invalidKey();
+			} finally {
+				buf.wIndex(len);
+				buf.rIndex = i+1;
 			}
-			pos++;
 		}
 
-		if (state == 2) {
-			onValue(EscapeUtil.decodeURI(buf));
-			state = 3;
+		if (buf.isReadable()) {
+			if (c == '&') {
+				onValue(ctx, buf);
+				buf.rIndex = buf.wIndex();
+			} else if (buf.readableBytes() > 384) {
+				throw invalidKey();
+			}
 		}
 	}
-
 	@Override
-	public void onSuccess() {
-		if (key == null) {
-			if (state == 1) throw new IllegalArgumentException("Invalid format");
-		}
-		state = 2;
+	public void onSuccess() throws IOException {
+		if (name == null && !data.isEmpty()) throw invalidKey();
 	}
 
-	protected void onKey(String key) throws IllegalRequestException {}
-	protected void onValue(String value) throws IllegalRequestException { map.put(key, value); }
+	private static IllegalRequestException invalidKey() {return new IllegalRequestException(400, "invalid form key");}
+
+	protected void onKey(ChannelCtx ctx, String key) throws IOException {data.put(name, new ByteList());}
+	protected void onValue(ChannelCtx ctx, DynByteBuf value) throws IOException {((ByteList)data.get(name)).put(value);}
 }

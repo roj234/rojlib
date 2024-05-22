@@ -46,16 +46,14 @@ public class CommandConsole extends DefaultConsole {
 		}
 		return false;
 	}
-	public void sortCommands() {
-		nodes.sort((o1, o2) -> {
-			String n1 = o1.getName();
-			String n2 = o2.getName();
-			if (n1 == null) n1 = "";
-			if (n2 == null) n2 = "";
-			return n1.compareTo(n2);
-		});
-	}
 
+	public void sortCommands() {
+		nodes.sort(CommandNode.sorter);
+		for (CommandNode node : nodes) {
+			node.sorted(true);
+		}
+	}
+	public List<CommandNode> nodes() {return nodes;}
 	public CharList dumpNodes(CharList sb, int depth) {
 		for (CommandNode node : nodes)
 			node.dump(sb.padEnd(' ', depth), depth);
@@ -75,6 +73,7 @@ public class CommandConsole extends DefaultConsole {
 		Dispatcher.setName("CLI - CommandDispatcher");
 		Dispatcher.start();
 	}
+	public static Thread getDefaultDispatcher() {return Dispatcher;}
 
 	public ArgumentContext ctx = new ArgumentContext(Dispatcher);
 	public boolean commandEcho = true;
@@ -100,7 +99,7 @@ public class CommandConsole extends DefaultConsole {
 		return words;
 	}
 	@Override
-	protected AnsiString highlight(String input) {
+	protected AnsiString highlight(CharList input) {
 		AnsiString root = new AnsiString("");
 
 		wr.init(input);

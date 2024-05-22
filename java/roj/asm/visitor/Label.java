@@ -8,9 +8,9 @@ import java.util.Arrays;
  * @author Roj234
  * @since 2022/11/17 0017 12:53
  */
-public final class Label extends Number implements Comparable<Label>, ReadonlyLabel {
-	short block;
-	char offset;
+public class Label extends Number implements Comparable<Label>, ReadonlyLabel {
+	protected short block;
+	protected char offset;
 	char value;
 
 	public Label() { clear(); }
@@ -48,7 +48,6 @@ public final class Label extends Number implements Comparable<Label>, ReadonlyLa
 	public int getOffset() { return block < 0 ? -1 : offset; }
 	public int getValue() { return block < -1 ? -1 : value; }
 
-	public void moveBlock(int b) { block += b; }
 	private static int findBlock(int[] lengths, int val, int len) {
 		int i = Arrays.binarySearch(lengths, 0, len, val);
 		if (i > 0) return i;

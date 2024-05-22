@@ -166,15 +166,19 @@ public final class TOMLParser extends Parser {
 						return readDigit(true);
 					}
 					// fall to literal(symbol)
-				default: prevIndex = index = i; return readSymbol();
+				default:
+					prevIndex = index = i;
+					Word w = readSymbol();
+					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
+					return w;
 				case C_NUMBER:
 					prevIndex = index = i;
 
 					if (in.length() - i > 5 && in.charAt(i + 3) == '-') {
-						Word w = ISO8601Datetime(false);
+						w = ISO8601Datetime(false);
 						if (w != null) return w;
 					} else if (in.length() - i > 3 && in.charAt(i + 1) == ':') {
-						Word w = ISO8601Datetime(false);
+						w = ISO8601Datetime(false);
 						if (w != null) return w;
 					}
 

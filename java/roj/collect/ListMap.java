@@ -33,7 +33,7 @@ public final class ListMap<K, V> extends AbstractMap<K, V> {
 	@Override
 	public V get(Object key) {
 		int i = index.getValueOrDefault(key.toString(), -1);
-		return i < 0 ? null : values.get(i);
+		return i < 0 || i >= values.size() ? null : values.get(i);
 	}
 
 	@NotNull

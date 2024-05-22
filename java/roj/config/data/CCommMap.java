@@ -53,9 +53,5 @@ public class CCommMap extends CMap {
 	public final CMap withComments() { return this; }
 	public final boolean isCommentSupported() { return true; }
 	public void putComment(String key, String val) { comments.put(key, val); }
-
-	public void clearComments(boolean withSub) {
-		if (withSub) super.clearComments(true);
-		comments.clear();
-	}
+	public void clearComments() {comments.clear();}
 }

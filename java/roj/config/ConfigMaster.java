@@ -126,9 +126,10 @@ public enum ConfigMaster {
 			case TOML -> entry.appendTOML(out, new CharList());
 			case INI -> entry.appendINI(out);
 			case XML -> {
-				// TODO
-				CVisitor sb = new ToXml();
+				// convert to xml
+				ToXml sb = new ToXml();
 				entry.accept(sb);
+				sb.get().toCompatXML(out);
 			}
 			default -> throw new UnsupportedOperationException(this+"不支持序列化到字符串");
 		}
@@ -163,7 +164,7 @@ public enum ConfigMaster {
 	public <T> T readObject(Class<T> type, File file) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), file); }
 	public <T> T readObject(Class<T> type, InputStream in) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), in); }
 	public <T> T readObject(Class<T> type, DynByteBuf buf) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), buf); }
-	public <T> T readObject(Class<T> type, CharSequence sb) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), sb); }
+	public <T> T readObject(Class<T> type, CharSequence sb) throws ParseException { return readObject(Serializers.SAFE.serializer(type), sb); }
 
 	public <T> T readObject(Serializer<T> ser, File file) throws IOException, ParseException {
 		parser(true).parse(file, 0, ser.reset());
@@ -177,7 +178,7 @@ public enum ConfigMaster {
 		parser(true).parse(buf, 0, ser.reset());
 		return ser.get();
 	}
-	public <T> T readObject(Serializer<T> ser, CharSequence sb) throws IOException, ParseException {
+	public <T> T readObject(Serializer<T> ser, CharSequence sb) throws ParseException {
 		BinaryParser p = parser(true);
 		if (!(p instanceof Parser tp)) throw new UnsupportedOperationException(this+"不是文本配置格式");
 		tp.parse(sb, 0, ser.reset());
@@ -185,21 +186,21 @@ public enum ConfigMaster {
 	}
 
 	@SuppressWarnings("unchecked")
-	public void writeObject(Object o, File file) throws IOException { writeObject(o, (Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), file); }
+	public void writeObject(Object o, File file) throws IOException { writeObject((Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), o, file); }
 	@SuppressWarnings("unchecked")
-	public void writeObject(Object o, OutputStream out) throws IOException { writeObject(o, (Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), out); }
+	public void writeObject(Object o, OutputStream out) throws IOException { writeObject((Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), o, out); }
 	@SuppressWarnings("unchecked")
-	public DynByteBuf writeObject(Object o, DynByteBuf buf) throws IOException { return writeObject(o, (Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), buf); }
+	public DynByteBuf writeObject(Object o, DynByteBuf buf) throws IOException { return writeObject((Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), o, buf); }
 	@SuppressWarnings("unchecked")
-	public CharList writeObject(Object o, CharList sb) { return writeObject(o, (Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), sb); }
+	public CharList writeObject(Object o, CharList sb) { return writeObject((Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), o, sb); }
 
-	public <T> void writeObject(T o, Serializer<T> ser, File file) throws IOException { writeObject0(o, ser, file, ""); }
-	public <T> void writeObject(T o, Serializer<T> ser, File file, String indent) throws IOException { writeObject0(o, ser, file, indent); }
-	public <T> void writeObject(T o, Serializer<T> ser, OutputStream out) throws IOException { writeObject0(o, ser, out, ""); }
-	public <T> DynByteBuf writeObject(T o, Serializer<T> ser, DynByteBuf buf) throws IOException { writeObject0(o, ser, buf, ""); return buf; }
-	public <T> CharList writeObject(T o, Serializer<T> ser, CharList sb) { ser.write(textSerializer(sb, ""), o); return sb; }
+	public <T> void writeObject(Serializer<T> ser, T o, File file) throws IOException { writeObject0(ser, o, file, ""); }
+	public <T> void writeObject(Serializer<T> ser, T o, File file, String indent) throws IOException { writeObject0(ser, o, file, indent); }
+	public <T> void writeObject(Serializer<T> ser, T o, OutputStream out) throws IOException { writeObject0(ser, o, out, ""); }
+	public <T> DynByteBuf writeObject(Serializer<T> ser, T o, DynByteBuf buf) throws IOException { writeObject0(ser, o, buf, ""); return buf; }
+	public <T> CharList writeObject(Serializer<T> ser, T o, CharList sb) { ser.write(textSerializer(sb, ""), o); return sb; }
 
-	private <T> void writeObject0(T o, Serializer<T> ser, Object out, String indent) throws IOException {
+	private <T> void writeObject0(Serializer<T> ser, T o, Object out, String indent) throws IOException {
 		if (hasSerializer()) {
 			try (CVisitor v = serializer(out, indent)) {
 				ser.write(v, o);

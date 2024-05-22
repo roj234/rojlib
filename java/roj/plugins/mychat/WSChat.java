@@ -8,11 +8,11 @@ import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.ws.WebSocketHandler;
-import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -112,9 +112,8 @@ public abstract class WSChat extends WebSocketHandler {
 	private void jsonPacket(DynByteBuf in) throws IOException {
 		int mark = in.rIndex;
 		try {
-			CharList s = decodeToUTF(in);
-			if (jl == null) jl = new JSONParser();
-			CMap map = jl.parse(s, JSONParser.NO_DUPLICATE_KEY).asMap();
+			if (jl == null) jl = (JSONParser) new JSONParser().charset(StandardCharsets.UTF_8);
+			CMap map = jl.parse(in, JSONParser.NO_DUPLICATE_KEY).asMap();
 			switch (map.getInteger("act")) {
 				case P_LOGOUT:
 					error(ERR_OK, null);

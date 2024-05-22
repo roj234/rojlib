@@ -1,6 +1,7 @@
 package roj.util;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Range;
 import roj.ReferenceByGeneratedClass;
 import roj.crypt.Base64;
 import roj.io.IOUtil;
@@ -16,6 +17,8 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
+
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj233
@@ -102,6 +105,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 
 	public int wIndex() { return wIndex; }
 	public void wIndex(int w) {
+		if (w < 0) throw new IllegalArgumentException("negative size:"+w);
 		ensureCapacity(w);
 		this.wIndex = w;
 	}
@@ -152,9 +156,29 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		return ArrayRef.create(array(), _unsafeAddr()+off, 1, len);
 	}
 
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof DynByteBuf b)) return false;
+
+		int len = readableBytes();
+		if (len != b.readableBytes()) return false;
+		assert len <= capacity() : info();
+
+		return ArrayUtil.vectorizedMismatch(array(), _unsafeAddr()+rIndex, b.array(), b._unsafeAddr()+b.rIndex, len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
+	}
+	@Override
+	public int hashCode() {
+		int len = readableBytes();
+		assert len <= capacity() : info();
+		return ArrayUtil.byteHashCode(array(), _unsafeAddr()+rIndex, len);
+	}
+
 	int moveWI(int i) {
 		int t = wIndex;
 		int e = t+i;
+		// overflow or < 0
+		if (e < t) throw new IndexOutOfBoundsException("pos="+t+",len="+i);
 		ensureCapacity(e);
 		wIndex = e;
 		return t;
@@ -225,6 +249,12 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	@ReferenceByGeneratedClass
 	public final DynByteBuf putByte(byte e) { return put(e); }
 
+	public final DynByteBuf putZero(int count) {
+		long offset = _unsafeAddr() + moveWI(count);
+		u.setMemory(array(), offset, count, (byte)0);
+		return this;
+	}
+
 	public abstract DynByteBuf put(int e);
 	public abstract DynByteBuf put(int i, int e);
 
@@ -251,26 +281,28 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	}
 
 	public final DynByteBuf putVarInt(int i) {
-		putVarLong(this, i);
-		return this;
+		//ensureWritable(VarintSplitter.getVarIntLength(i));
+		while (true) {
+			if (i < 0x80) {
+				put(i);
+				return this;
+			} else {
+				put((i & 0x7F) | 0x80);
+				i >>>= 7;
+			}
+		}
 	}
 
 	public final DynByteBuf putVarLong(long i) {
-		putVarLong(this, i);
-		return this;
-	}
-
-	public static void putVarLong(DynByteBuf list, long i) {
-		//list.ensureWritable(VarintSplitter.getVarIntLength(i));
-		do {
+		while (true) {
 			if (i < 0x80) {
-				list.put((byte) i);
-				return;
+				put((byte) i);
+				return this;
 			} else {
-				list.put((byte) ((i & 0x7F) | 0x80));
+				put((byte) ((i & 0x7F) | 0x80));
 				i >>>= 7;
 			}
-		} while (true);
+		}
 	}
 
 	// fastpath for int
@@ -360,7 +392,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		if (len > 0xFFFF) throw new ArrayIndexOutOfBoundsException("UTF too long: " + len);
 		return putShort(len).putUTFData0(s, len);
 	}
-	public final DynByteBuf putVarIntUTF(CharSequence s) { int len = byteCountUTF8(s); putVarLong(this, len); return putUTFData0(s, len); }
+	public final DynByteBuf putVarIntUTF(CharSequence s) { int len = byteCountUTF8(s); return putVarInt(len).putUTFData0(s, len); }
 	public final DynByteBuf putVUIUTF(CharSequence s) { int len = byteCountUTF8(s); return putVUInt(len).putUTFData0(s, len); }
 	public DynByteBuf putUTFData(CharSequence s) { UTF8MB4.CODER.encodeFixedIn(s, this); return this; }
 	public final DynByteBuf putUTFData0(CharSequence s, int len) { ensureWritable(len); UTF8MB4.CODER.encodePreAlloc(s, this, len); return this; }
@@ -400,13 +432,16 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public abstract byte get(int i);
 	public abstract byte readByte();
 
+	@Range(from = 0, to = 255)
 	public final int getU(int i) { return get(i)&0xFF; }
 	public final int readUnsignedByte() {return readByte()&0xFF; }
 
 	public final int readUnsignedShort() { return readUnsignedShort(moveRI(2)); }
+	@Range(from = 0, to = 65535)
 	public abstract int readUnsignedShort(int i);
 
 	public final int readUShortLE() { return readUShortLE(moveRI(2)); }
+	@Range(from = 0, to = 65535)
 	public abstract int readUShortLE(int i);
 
 	@Override
@@ -417,10 +452,14 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final char readChar() { return (char) readUnsignedShort(); }
 	public final char readChar(int i) { return (char) readUnsignedShort(i); }
 
+	@Range(from = 0, to = 16777215)
 	public final int readMedium() { return readMedium(moveRI(3)); }
+	@Range(from = 0, to = 16777215)
 	public abstract int readMedium(int i);
 
+	@Range(from = 0, to = 16777215)
 	public final int readMediumLE() { return readMediumLE(moveRI(3)); }
+	@Range(from = 0, to = 16777215)
 	public abstract int readMediumLE(int i);
 
 	public final int readVarInt(int max) {
@@ -488,10 +527,14 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final int readIntLE() { return readIntLE(moveRI(4)); }
 	public abstract int readIntLE(int i);
 
+	@Range(from = 0, to = 0xFFFFFFFFL)
 	public final long readUInt(int i) { return readInt(i) & 0xFFFFFFFFL; }
+	@Range(from = 0, to = 0xFFFFFFFFL)
 	public final long readUInt() { return readInt() & 0xFFFFFFFFL; }
 
+	@Range(from = 0, to = 0xFFFFFFFFL)
 	public final long readUIntLE() { return readIntLE() & 0xFFFFFFFFL; }
+	@Range(from = 0, to = 0xFFFFFFFFL)
 	public final long readUIntLE(int i) { return readIntLE(i) & 0xFFFFFFFFL; }
 
 	public final long readLong() { return readLong(moveRI(8)); }
@@ -580,10 +623,10 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	// endregion
 
 	public final String base64() {return base64(IOUtil.getSharedCharBuf()).toString();}
-	public final CharList base64(CharList sb) {return Base64.encode(this, sb);}
+	public final CharList base64(CharList sb) {return Base64.encode(slice(), sb);}
 
 	public final String base64UrlSafe() {return base64UrlSafe(IOUtil.getSharedCharBuf()).toString();}
-	public final CharList base64UrlSafe(CharList sb) {return Base64.encode(this, sb, Base64.B64_URL_SAFE);}
+	public final CharList base64UrlSafe(CharList sb) {return Base64.encode(slice(), sb, Base64.B64_URL_SAFE);}
 
 	public final String hex() {return hex(IOUtil.getSharedCharBuf()).toString();}
 	public abstract CharList hex(CharList sb);

@@ -1,14 +1,14 @@
 package roj.asm;
 
+import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstTop;
+import roj.asm.type.Type;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.collect.IntMap;
-import roj.util.ArrayCache;
-import roj.util.ByteList;
-import roj.util.DirectByteList;
-import roj.util.DynByteBuf;
+import roj.collect.SimpleList;
+import roj.util.*;
 
 /**
  * @author Roj234
@@ -18,12 +18,49 @@ public final class AsmShared {
 	private static final ThreadLocal<AsmShared> BUFFERS = ThreadLocal.withInitial(AsmShared::new);
 
 	public static AsmShared local() { return BUFFERS.get(); }
+	public static void drop() { BUFFERS.remove(); }
 	public static ByteList getBuf() { return BUFFERS.get().current(); }
+
+	private final SimpleList<Type> mp = new SimpleList<>();
+	public <T> SimpleList<T> methodTypeTmp() {
+		mp.clear(); return Helpers.cast(mp);
+	}
+
+	private final Object[][] cpArr = new Object[10][];
+	private int cpCount;
+
+	public void getCpWriter(SimpleList<Constant> constants) {
+		if (cpCount == 10) return;
+		int i = cpCount++;
+		Object[] objects = cpArr[i];
+		if (objects == null) objects = new Object[1024];
+
+		if (constants.isEmpty()) {
+			constants._setArray(objects);
+		}
+	}
+
+	public void freeCpWriter(SimpleList<Constant> constants, boolean discard) {
+		if (cpCount == 0) return;
+
+		Object[] cpArray = constants.getInternalArray();
+
+		if (discard) constants._setArray(null);
+		else {
+			if (cpArray.length == constants.size()) return;
+			constants.trimToSize();
+		}
+
+		int len = constants.size();
+		for (int i = len-1; i >= 0; i--) cpArray[i] = null;
+
+		cpArr[--cpCount] = cpArray;
+	}
 
 	private final CodeWriter cw = new CodeWriter();
 	public CodeWriter cw() { return cw; }
 
-	private IntMap<Label> pcm = new IntMap<>();
+	private final IntMap<Label> pcm = new IntMap<>();
 	public IntMap<Label> getBciMap() {
 		pcm.clear(); return pcm;
 	}
@@ -60,10 +97,15 @@ public final class AsmShared {
 	public final CstTop fp = new CstTop();
 	private ConstantPool pool;
 	public ConstantPool constPool() {
-		if (pool == null) pool = new ConstantPool();
+		if (pool == null) return new ConstantPool();
+		var t = pool;
+		pool = null;
+		return t;
+	}
+	public void constPool(ConstantPool cp) {
+		pool = cp;
 		pool.setAddListener(null);
 		pool.clear();
-		return pool;
 	}
 
 	private final ByteList.Slice wrapB = new ByteList.Slice();
@@ -78,20 +120,8 @@ public final class AsmShared {
 	}
 
 	private final ByteList buf = new ByteList(4096);
-	private boolean unbuffered;
-
 	ByteList current() {
-		if (unbuffered) {
-			// uses ArrayCache now!
-			ByteList b = new ByteList();
-			b.ensureCapacity(4096);
-			return b;
-		}
-
 		buf.clear();
 		return buf;
 	}
-
-	@Deprecated
-	public void setUnbuffered(boolean add) { unbuffered = add; }
 }

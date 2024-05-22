@@ -14,7 +14,7 @@ import java.util.Arrays;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-import static roj.compiler.asmlang.ASM.__asm;
+import static roj.compiler.plugins.asm.ASM.__asm;
 
 /**
  * 在"不归路"上越走越远
@@ -45,7 +45,7 @@ final class VMInternals {
 		u = uu;
 
 		if (JAVA_VERSION > 8) {
-			try (DataInputStream in = new DataInputStream(VMInternals.class.getClassLoader().getResourceAsStream("META-INF/ReflectionCompat.class"))) {
+			try (DataInputStream in = new DataInputStream(VMInternals.class.getClassLoader().getResourceAsStream("roj/reflect/Injector.class"))) {
 				if (JAVA_VERSION >= 17) {
 					// 失效后解法，防止我忘了：Unsafe遍历找allowedMode替换
 					// 如果Unsafe也不让拿：
@@ -84,7 +84,7 @@ final class VMInternals {
 		Class<?> type;
 		try {
 			if (JAVA_VERSION < 17) {
-				type = DefineWeakClass(bytes);
+				type = DefineWeakClass("ILInjector", bytes);
 			} else {
 				type = _ImplLookup.defineClass(bytes);
 			}
@@ -112,7 +112,7 @@ final class VMInternals {
 	static String HackMagicAccessor() { return JAVA_VERSION <= 8 ? "sun/reflect/MagicAccessorImpl" : _MagicAccessor; }
 	static void OpenModule(Class<?> src_module, String src_package, Class<?> target_module) { _ModuleOpener.accept(new Object[] {src_module, target_module}, src_package); }
 	static void OpenModule(Module src_module, String src_package, Module target_module) { _ModuleOpener.accept(new Object[] {src_module, target_module}, src_package); }
-	static Class<?> DefineWeakClass(byte[] b) {
+	static Class<?> DefineWeakClass(String displayName, byte[] b) {
 		if (JAVA_VERSION < 17) {
 			if (__asm("""
 				getstatic this u
@@ -131,7 +131,7 @@ final class VMInternals {
 				}
 			}
 		}
-		return _ClassDefiner.apply(new Object[]{VMInternals.class.getClassLoader(), VMInternals.class, null, b, 0, b.length, VMInternals.class.getProtectionDomain(), false, HIDDEN_CLASS, null});
+		return _ClassDefiner.apply(new Object[]{VMInternals.class.getClassLoader(), VMInternals.class, displayName, b, 0, b.length, VMInternals.class.getProtectionDomain(), false, HIDDEN_CLASS, null});
 	}
 	// 卡拉赞 (所以没意义)
 	// 嗯啊，其实还是有意义的 -> boot class loader only的注解 比如CallerSensitive ForceInline什么的

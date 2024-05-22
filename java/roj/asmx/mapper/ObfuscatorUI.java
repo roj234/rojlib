@@ -111,7 +111,7 @@ public class ObfuscatorUI extends JFrame {
 
 	private void run(ActionEvent e) {
 		uiRun.setEnabled(false);
-		TaskPool.Common().pushTask(() -> {
+		TaskPool.Common().submit(() -> {
 			try {
 				run0();
 			} finally {
@@ -160,7 +160,7 @@ public class ObfuscatorUI extends JFrame {
 		uiLoadPackage.addActionListener((e) -> {
 			File in = new File(uiInputPath.getText());
 			uiLoadPackage.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				GuiPathTreeBuilder<Void> builder = new GuiPathTreeBuilder<>();
 				MyHashSet<String> packages = new MyHashSet<>();
 				try (ZipFile za = new ZipFile(in)) {
@@ -230,7 +230,7 @@ public class ObfuscatorUI extends JFrame {
 		uiExcStart.addActionListener((e) -> {
 			uiExcStart.setEnabled(false);
 			uiPackageSelected.setModel(new DefaultListModel<>());
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				uiExcStart.setEnabled(true);
 				int flag = 0;
 				if (uiExcEnum.isSelected()) flag |= 1;
@@ -529,7 +529,7 @@ public class ObfuscatorUI extends JFrame {
 		o.lib = uiLibPath.getText();
 		o.exclusions = new ExclusionEntry[pActive.size()];
 		pActive.copyInto(o.exclusions);
-		ConfigMaster.YAML.writeObject(o, SF.serializer(SaveTo.class), file);
+		ConfigMaster.YAML.writeObject(SF.serializer(SaveTo.class), o, file);
 	}
 	private void readYml(File file) throws IOException, ParseException {
 		SaveTo o = ConfigMaster.fromExtension(file).readObject(SF.serializer(SaveTo.class), file);

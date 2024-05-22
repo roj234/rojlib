@@ -1,6 +1,7 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
@@ -33,13 +34,6 @@ final class Cast extends UnaryPre {
 		ctx.resolveType(type);
 		cast = ctx.castTo(rType, type, TypeCast.E_DOWNCAST);
 
-		// 这里还要多搞搞
-		if (cast.type >= 0) {
-			// 可能会影响方法的选择, 加一个cast original type什么的做检测吧
-			ctx.report(Kind.WARNING, "cast.warn.redundant:"+type);
-			//return right;
-		}
-
 		if (type.isPrimitive() && rType.isPrimitive() && right.isConstant()) {
 			AnnVal o = (AnnVal) right.constVal();
 			return new Constant(type, switch (TypeCast.getDataCap(type.getActualType())) {
@@ -63,6 +57,16 @@ final class Cast extends UnaryPre {
 	}
 
 	@Override
+	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
+		if (cast != null && this.cast.type >= 0 && this.cast.getOp1() != 42/*Do not check for AnyCast*/) {
+			LocalContext.get().report(Kind.WARNING, "cast.warn.redundant", type);
+		}
+
+		right.writeDyn(cw, this.cast);
+		if (cast != null) cast.write(cw);
+	}
+
+	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
@@ -72,11 +76,8 @@ final class Cast extends UnaryPre {
 		if (!type.equals(cast.type)) return false;
 		return right.equals(cast.right);
 	}
-
 	@Override
-	public int hashCode() {
-		return 31 * super.hashCode() + type.hashCode();
-	}
+	public int hashCode() {return 31 * super.hashCode() + type.hashCode();}
 
 	@Override
 	public String setRight(ExprNode right) {

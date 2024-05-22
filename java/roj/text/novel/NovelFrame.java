@@ -34,6 +34,7 @@ import java.nio.charset.Charset;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -61,6 +62,10 @@ public class NovelFrame extends JFrame {
 		initComponents();
 		OnChangeHelper uxChange = new OnChangeHelper(this);
 		uxChange.addRoot(advancedMenu);
+
+		JLabel draggedItem = new JLabel();
+		draggedItem.setEnabled(false);
+		getContentPane().add(draggedItem);
 		uxDrag = new DragReorderHelper(uiChapters, draggedItem);
 
 		GuiUtil.dropFilePath(uiNovelPath, (e) -> read_novel(null), false);
@@ -181,16 +186,15 @@ public class NovelFrame extends JFrame {
 		uiChapters.addMouseListener(uxChapterClick);
 
 		btnDelByLen.addActionListener(e -> {
-			chapters.clear();
-			((Chapter) chaptersTree.getRoot()).flat(chapters);
-			chapters.remove(0);
+			initChapters();
+
 			String s = JOptionPane.showInputDialog(this, "长度 (以!开始来小于等于)");
 			boolean lss = s.startsWith("!");
 			if (lss) s = s.substring(1);
 			int i = Integer.parseInt(s);
 			for (int j = chapters.size() - 1; j >= 0; j--) {
 				Chapter c = chapters.get(j);
-				int len = (c.data == null ? c.end - c.start : c.data.length());
+				int len = (c.text == null ? c.end - c.start : c.text.length());
 				if (lss ? len <= i : len == i) {
 					chapters.remove(j);
 				}
@@ -202,6 +206,67 @@ public class NovelFrame extends JFrame {
 		});
 
 		btnToEpub.addActionListener(this::write_epub);
+
+		btnLegadoImport.addActionListener(e -> {
+			initChapters();
+
+			File path = GuiUtil.fileLoadFrom("LegadoNewBee", this, JFileChooser.DIRECTORIES_ONLY);
+			if (path == null) return;
+			int offset = Integer.parseInt(JOptionPane.showInputDialog("chapter offset", "-1"));
+			for (File file : path.listFiles()) {
+				String name = file.getName();
+				int i = name.indexOf('-');
+				int chapter = Integer.parseInt(name.substring(0, i));
+
+				try {
+					Chapter chap = chapters.get(chapter + offset);
+					System.out.println("chapter "+chap.toString());
+					chap.text = new CharList(IOUtil.readUTF(file));
+					System.out.println("Data "+chap.text);
+				} catch (IOException ex) {
+					ex.printStackTrace();
+				}
+			}
+		});
+
+		btnGroup.addActionListener(e -> {
+			Chapter root = (Chapter) chaptersTree.getRoot();
+
+			char matcher = JOptionPane.showInputDialog("type matcher", "章").charAt(0);
+			char upcome = JOptionPane.showInputDialog("type target", "卷").charAt(0);
+
+			List<Chapter> _ch = root.children;
+			int pi = -1;
+			int i = 0;
+			for (; i < _ch.size(); i++) {
+				Chapter chapter =  _ch.get(i);
+				if (chapter.type != matcher && pi >= 0) {
+					// range [pi+1 ... i)
+					List<Chapter> toAdd = _ch.subList(pi + 1, i);
+					_ch.get(pi).children = new SimpleList<>(toAdd);
+					toAdd.clear();
+					i = pi+1;
+
+					pi = -1;
+				}
+				if (chapter.type == upcome) {
+					pi = i;
+				}
+			}
+
+			if (pi >= 0) {
+				List<Chapter> toAdd = _ch.subList(pi + 1, i);
+				_ch.get(pi).children = new SimpleList<>(toAdd);
+				toAdd.clear();
+			}
+
+			chaptersTree.setRoot(root);
+		});
+	}
+
+	private void initChapters() {
+		chapters.clear();
+		((Chapter) chaptersTree.getRoot()).flat(chapters);
 	}
 
 	private class ChapterDblClickHelper extends MouseAdapter {
@@ -220,7 +285,7 @@ public class NovelFrame extends JFrame {
 
 					cpwOutName.setEnabled(true);
 
-					cpwOrigName.setText("在下方修改【"+c.fullName+"】");
+					cpwOrigName.setText("在下方修改【"+c.matches +"】");
 					cpwOutName.setText(c.displayName);
 					cpwChapNo.setValue((int) c.no);
 					cpwChapName.setText(c.name);
@@ -230,7 +295,7 @@ public class NovelFrame extends JFrame {
 				focusLost();
 				prevId = c;
 				prevClick = System.currentTimeMillis();
-				errout.setText(c.data != null ? c.data.toString() : novel_in.toString(c.start, c.end));
+				errout.setText(c.text != null ? c.text.toString() : novel_in.substring(c.start, c.end));
 			} else {
 				focusLost();
 			}
@@ -244,12 +309,11 @@ public class NovelFrame extends JFrame {
 				if (cpwOutName.isEnabled()) {
 					if (!cpwOutName.getText().equals(c.displayName)) {
 						c.displayName = cpwOutName.getText();
-						c.flagOverride = true;
+						c.applyOverride = true;
+						cpwOrigName.setText("数据已保存");
+						chaptersTree.nodeChanged(c);
 					}
 
-					chaptersTree.nodeChanged(c);
-
-					cpwOrigName.setText("数据已保存");
 					cpwOutName.setEnabled(false);
 				}
 			}
@@ -392,68 +456,42 @@ public class NovelFrame extends JFrame {
 
 	private void test_chapter(ActionEvent e) {
 		Chapter root = new Chapter();
-		if (uiSmrtChapter.isSelected()) {
-			List<List<Chapter>> chapters = null;
+		List<Chapter> chapters = root.children = new SimpleList<>();
+
+		Chapter c = root;
+		c.name = ACalendar.toLocalTimeString(System.currentTimeMillis());
+		CharList tmp = this.tmp;
+
+		Matcher m = novel_regexp.matcher(novel_in);
+		int i = 0;
+		while (m.find(i)) {
+			c.end = m.start();
+
+			c = new Chapter();
+			c.start = m.end();
+
 			try {
-				chapters = Chapter.parse(LineReader.create(novel_in));
-			} catch (IOException ignored) {}
+				c.no = Chapter.parseChapterNo(novel_in.list, m.start(chapterId_group), m.end(chapterId_group));
+			} catch (NumberFormatException ignored) {}
 
-			root.children = Chapter.groupChapter(chapters, 0);
-			root.name = "Auto " + ACalendar.toLocalTimeString(System.currentTimeMillis());
+			for (int j = 1; j <= m.groupCount(); j++)
+				if (j != chapterName_group && j != chapterId_group && m.group(j).length() == 1)
+					c.type = m.group(j).charAt(0);
 
-			// fix: missing chapters
-			// fix: obfuscator bug
-			// add: InsnList2
-			// add: TLS1.3
-			this.chapters.clear();
-			root.flat(this.chapters);
-			int end = this.chapters.get(this.chapters.size() - 1).end;
-			if (end != novel_in.length()) {
-				Chapter fin = new Chapter();
-				fin.name = "Appendix";
-				fin.start = end;
-				fin.end = novel_in.length();
-				chaptersTree.insertNodeInto(fin, root, root.children.size());
+			c.name = mytrim(m.group(chapterName_group));
+
+			tmp.clear(); tmp.append(uiRegexRplTo.getText());
+			for (int j = 0; j <= m.groupCount(); j++) {
+				tmp.replace("$" + j, j == chapterName_group ? c.name : m.group(j));
 			}
-		} else {
-			Matcher m = novel_regexp.matcher(novel_in);
+			c.matches = m.group();
+			c.displayName = tmp.toStringAndFree();
 
-			List<Chapter> chapters = root.children = new SimpleList<>();
+			chapters.add(c);
 
-			Chapter c = root;
-			c.no = -1;
-			c.name = "Regexp " + ACalendar.toLocalTimeString(System.currentTimeMillis());
-			CharList tmp = this.tmp;
-
-			int i = 0;
-			while (m.find(i)) {
-				c.end = m.start();
-
-				c = new Chapter();
-				c.name = m.group(chapterName_group);
-
-				c.name = mytrim(c.name);
-
-				try {
-					c.no = Chapter.parseChapterNo(novel_in.list, m.start(chapterId_group), m.end(chapterId_group));
-				} catch (NumberFormatException e1) {
-					c.no = -1;
-				}
-				c.start = m.end();
-
-				i = m.end();
-
-				tmp.clear(); tmp.append(uiRegexRplTo.getText());
-				for (int j = 0; j <= m.groupCount(); j++) {
-					tmp.replace("$" + j, j == chapterName_group ? c.name : m.group(j));
-				}
-				c.fullName = m.group();
-				c.displayName = tmp.toStringAndFree();
-
-				chapters.add(c);
-			}
-			c.end = novel_in.length();
+			i = m.end();
 		}
+		c.end = novel_in.length();
 
 		root.setParents();
 		chaptersTree.setRoot(root);
@@ -506,8 +544,7 @@ public class NovelFrame extends JFrame {
 	private void nextDisorderChapter(ActionEvent e) {
 		Chapter[] cs = getSelectedChapters();
 
-		chapters.clear();
-		((Chapter) chaptersTree.getRoot()).flat(chapters);
+		initChapters();
 
 		int i;
 		if (cs == null || cs.length != 1) {
@@ -546,7 +583,7 @@ public class NovelFrame extends JFrame {
 		}
 
 		data(c).clear();
-		c.data.append(errout.getText());
+		c.text.append(errout.getText());
 	}
 
 	/** 合并 */
@@ -578,9 +615,9 @@ public class NovelFrame extends JFrame {
 				List<Chapter> flat = new SimpleList<>();
 				c.flat(flat);
 				for (Chapter c1 : flat)
-					str.append(c1.fullName).append(data(c1));
+					str.append(c1.matches).append(data(c1));
 			} else {
-				str.append(c.fullName).append(data(c));
+				str.append(c.matches).append(data(c));
 			}
 		}
 
@@ -594,8 +631,8 @@ public class NovelFrame extends JFrame {
 		new Thread(() -> {
 			LongAdder finished = new LongAdder();
 
-			chapters.clear();
-			((Chapter) chaptersTree.getRoot()).flat(chapters);
+			initChapters();
+
 			long total = (chapters.size() - 1) * chapters.size() / 2;
 
 			TaskPool pool = TaskPool.Common();
@@ -616,7 +653,7 @@ public class NovelFrame extends JFrame {
 
 			for (int i = 0; i < chapters.size(); i++) {
 				Chapter ca = chapters.get(i);
-				byte[] ba = IOUtil.SharedCoder.get().encode(ca.data != null ? ca.data : novel_in.subSequence(ca.start, ca.end));
+				byte[] ba = IOUtil.SharedCoder.get().encode(ca.text != null ? ca.text : novel_in.subSequence(ca.start, ca.end));
 
 				BsDiff diff = new BsDiff();
 				diff.setLeft(ba);
@@ -624,13 +661,13 @@ public class NovelFrame extends JFrame {
 				for (int j = i+1; j < chapters.size(); j++) {
 					Chapter cb = chapters.get(j);
 
-					pool.pushTask(() -> {
-						byte[] bb = IOUtil.SharedCoder.get().encode(cb.data != null ? cb.data : novel_in.subSequence(cb.start, cb.end));
+					pool.submit(() -> {
+						byte[] bb = IOUtil.SharedCoder.get().encode(cb.text != null ? cb.text : novel_in.subSequence(cb.start, cb.end));
 						int siz = Math.min(ba.length, bb.length);
 						int dd = diff.parallel().getDiffLength(bb, siz / 2);
 						if (dd >= 0) {
 							synchronized (list) {
-								list.add(new IntMap.Entry<>((int) ((double)(siz-dd) / siz * 10000), ca.fullName + "|" + cb.fullName));
+								list.add(new IntMap.Entry<>((int) ((double)(siz-dd) / siz * 10000), ca.matches + "|" + cb.matches));
 							}
 						}
 						finished.add(1);
@@ -670,8 +707,8 @@ public class NovelFrame extends JFrame {
 	}
 
 	private CharList data(Chapter c) {
-		if (c.data == null) c.data = new CharList(novel_in.subSequence(c.start, c.end));
-		return c.data;
+		if (c.text == null) c.text = new CharList(novel_in.subSequence(c.start, c.end));
+		return c.text;
 	}
 
 	private void btnInsertMode(ActionEvent e) {
@@ -680,19 +717,15 @@ public class NovelFrame extends JFrame {
 	// endregion
 	// region 功能区-输出格式
 	private void align_novel(ActionEvent e) {
-		chapters.clear();
-		((Chapter) chaptersTree.getRoot()).flat(chapters);
+		initChapters();
 
-		SimpleList<String> replacedName = null;
-		if (uiRegenName.isSelected()) {
-			replacedName = new SimpleList<>();
-			renameChapter(replacedName);
-		}
+		boolean regen = uiRegenName.isSelected();
+		if (regen) renameChapter();
 
 		novel_out.clear();
 		for (int i = 0; i < chapters.size(); i++) {
 			Chapter c = chapters.get(i);
-			if (i > 0) novel_out.append("\n\n").append(replacedName != null ? replacedName.get(i-1) : c.fullName == null ? c.displayName : c.fullName).append('\n');
+			if (i > 0) novel_out.append("\n\n").append(regen ? c.displayName : c.matches).append('\n');
 			writeChapter(c, novel_out, true);
 		}
 		errout.setText("");
@@ -721,41 +754,36 @@ public class NovelFrame extends JFrame {
 
 	private void write_epub(ActionEvent e) {
 		String text = uiNovelPath.getText();
-		File path = new File(IOUtil.fileName(new File(text).getAbsolutePath()) + ".epub");
+
+		String fileName = IOUtil.fileName(text);
+		File path = new File(new File(text).getParent(), fileName+".epub");
 
 		String title, author;
-		int pos = text.lastIndexOf(" - ");
+		int pos = fileName.lastIndexOf(" - ");
 		if (pos < 0) {
-			title = text;
+			title = fileName;
 			author = "未知";
 		} else {
-			title = text.substring(0, pos);
-			author = text.substring(pos+3);
+			title = fileName.substring(0, pos);
+			author = fileName.substring(pos+3);
 		}
 
 		File cover = GuiUtil.fileLoadFrom("选择小说封面");
 
+		Function<Chapter, CharList> encoder = c -> {
+			tmp.clear();
+			writeChapter(c, tmp, false);
+			return tmp;
+		};
+
 		try (EpubWriter epw = new EpubWriter(new ZipFileWriter(path), title, author, cover)) {
-			SimpleList<String> replacedName = null;
-			if (uiRegenName.isSelected()) {
-				replacedName = new SimpleList<>();
-				renameChapter(replacedName);
-			}
+			Chapter root = (Chapter) chaptersTree.getRoot();
+			epw.addChapter0(root, encoder);
 
-			CharList tmp = this.tmp;
-			for (int i = 0; i < chapters.size(); i++) {
-				Chapter c = chapters.get(i);
-				String name;
-				if (i > 0) {
-					name = replacedName != null ? replacedName.get(i - 1) : c.fullName == null ? c.displayName : c.fullName;
-				} else {
-					name = "@@intro";
-				}
+			List<Chapter> children = root.children;
+			for (int i = 0; i < children.size(); i++)
+				epw.addChapter(children.get(i), encoder);
 
-				tmp.clear();
-				writeChapter(c, tmp, false);
-				epw.addChapter(name, tmp);
-			}
 			errout.setText("写入成功！保存为同名epub文件");
 		} catch (Exception ex) {
 			errout.setText("");
@@ -766,10 +794,10 @@ public class NovelFrame extends JFrame {
 	private void writeChapter(Chapter c, CharList ob, boolean addSpace) {
 		int st, len;
 		char[] val;
-		if (c.data != null) {
+		if (c.text != null) {
 			st = 0;
-			len = c.data.length();
-			val = c.data.list;
+			len = c.text.length();
+			val = c.text.list;
 		} else {
 			st = c.start;
 			len = c.end;
@@ -808,18 +836,15 @@ public class NovelFrame extends JFrame {
 			}
 		}
 	}
-	private void renameChapter(SimpleList<String> replacedName) {
+	private void renameChapter() {
 		ToIntMap<String> myChapterNo = new ToIntMap<>();
 		CharList tmp = this.tmp;
 
 		for (int i = 1; i < chapters.size(); i++) {
 			Chapter c = chapters.get(i);
-			if (c.flagOverride) {
-				replacedName.add(c.displayName);
-				continue;
-			}
+			if (c.applyOverride) continue;
 
-			Matcher m = novel_regexp.matcher(c.fullName);
+			Matcher m = novel_regexp.matcher(c.matches);
 			boolean ok = m.matches();
 			assert ok;
 
@@ -836,7 +861,6 @@ public class NovelFrame extends JFrame {
 				if (j == chapterId_group) {
 					if (uiRegenId.isSelected()) {
 						str = Integer.toString(myChapterNo.increment(String.valueOf(c.type), 1));
-						System.out.println("type=" + c.type);
 					}
 
 					switch (uiRegenNameType.getSelectedIndex()) {
@@ -856,7 +880,8 @@ public class NovelFrame extends JFrame {
 
 				tmp.replace("$"+j, str);
 			}
-			replacedName.add(tmp.toStringAndFree());
+
+			c.displayName = tmp.toString();
 		}
 	}
 
@@ -873,8 +898,8 @@ public class NovelFrame extends JFrame {
 
 	private void sample(CharList in) {
 		GuiUtil.insert(errout, "chars:"+in.length()+
-					   "\nHead 15k\n"+in.toString(0,Math.min(15000, in.length()))+
-					   "\n\n\n\n\n\n\n\n\n\n==========Tail 15k==========\n\n\n\n\n\n\n\n\n\n"+in.toString(Math.max(0, in.length()-15000), in.length()));
+					   "\nHead 15k\n"+in.substring(0,Math.min(15000, in.length()))+
+					   "\n\n\n\n\n\n\n\n\n\n==========Tail 15k==========\n\n\n\n\n\n\n\n\n\n"+in.substring(Math.max(0, in.length()-15000), in.length()));
 	}
 
 	private String mytrim(String c) {
@@ -901,7 +926,6 @@ public class NovelFrame extends JFrame {
         var fg2 = new JSeparator();
         var lb2 = new JLabel();
         btnMakeChapter = new JButton();
-        uiSmrtChapter = new JCheckBox();
         var lb3 = new JLabel();
         uiRegexIdGroup = new JSpinner();
         var lb4 = new JLabel();
@@ -928,6 +952,7 @@ public class NovelFrame extends JFrame {
         btnDeDupChapter = new JButton();
         btnInsertMode = new JCheckBox();
         btnDelByLen = new JButton();
+        btnLegadoImport = new JButton();
         cpwOrigName = new JLabel();
         cpwOutName = new JTextField();
         var lb10 = new JLabel();
@@ -943,15 +968,15 @@ public class NovelFrame extends JFrame {
         uiRegenName = new JCheckBox();
         uiRegenNameType = new JComboBox<>();
         uiRegenId = new JCheckBox();
-        draggedItem = new JLabel();
         var scrollPane1 = new JScrollPane();
         errout = new JEditorPane();
+        btnGroup = new JButton();
         advancedMenu = new JDialog();
         scrollPane3 = new JScrollPane();
         presetRegexpInp = new JTextArea();
 
         //======== this ========
-        setTitle("\u5c0f\u8bf4\u7ba1\u7406\u7cfb\u7edf (Novel Management System) v2.0-beta");
+        setTitle("\u5c0f\u8bf4\u7ba1\u7406\u7cfb\u7edf (Novel Management System) v2.2");
         var contentPane = getContentPane();
         contentPane.setLayout(null);
 
@@ -982,14 +1007,14 @@ public class NovelFrame extends JFrame {
         btnLoad.setMargin(new Insets(2, 4, 2, 4));
         btnLoad.addActionListener(e -> read_novel(e));
         contentPane.add(btnLoad);
-        btnLoad.setBounds(5, 35, btnLoad.getPreferredSize().width, 23);
+        btnLoad.setBounds(5, 35, btnLoad.getPreferredSize().width, 21);
 
         //---- btnFindNovel ----
         btnFindNovel.setText("\u2026");
         btnFindNovel.setMargin(new Insets(2, 2, 2, 2));
         btnFindNovel.addActionListener(e -> select_novel(e));
         contentPane.add(btnFindNovel);
-        btnFindNovel.setBounds(208, 35, btnFindNovel.getPreferredSize().width, 23);
+        btnFindNovel.setBounds(208, 35, btnFindNovel.getPreferredSize().width, 21);
         contentPane.add(fg2);
         fg2.setBounds(5, 60, 420, 2);
 
@@ -1005,12 +1030,7 @@ public class NovelFrame extends JFrame {
         btnMakeChapter.setMargin(new Insets(2, 4, 2, 4));
         btnMakeChapter.addActionListener(e -> test_chapter(e));
         contentPane.add(btnMakeChapter);
-        btnMakeChapter.setBounds(5, 65, 60, 20);
-
-        //---- uiSmrtChapter ----
-        uiSmrtChapter.setText("\u542f\u53d1\u5f0f\u65ad\u7ae0");
-        contentPane.add(uiSmrtChapter);
-        uiSmrtChapter.setBounds(new Rectangle(new Point(65, 65), uiSmrtChapter.getPreferredSize()));
+        btnMakeChapter.setBounds(5, 95, 60, 20);
 
         //---- lb3 ----
         lb3.setText("\u7ae0\u8282\u5e8f\u53f7\u7ec4");
@@ -1036,13 +1056,15 @@ public class NovelFrame extends JFrame {
 
         //---- btnFixEnter ----
         btnFixEnter.setText("\u5171\u957f\u5408\u5e76");
+        btnFixEnter.setMargin(new Insets(2, 2, 2, 2));
         contentPane.add(btnFixEnter);
-        btnFixEnter.setBounds(new Rectangle(new Point(5, 90), btnFixEnter.getPreferredSize()));
+        btnFixEnter.setBounds(new Rectangle(new Point(90, 65), btnFixEnter.getPreferredSize()));
 
         //---- btnRemoveHalfLine ----
         btnRemoveHalfLine.setText("\u53bb\u9664\u4e00\u534a\u7a7a\u884c");
+        btnRemoveHalfLine.setMargin(new Insets(2, 4, 2, 4));
         contentPane.add(btnRemoveHalfLine);
-        btnRemoveHalfLine.setBounds(new Rectangle(new Point(105, 90), btnRemoveHalfLine.getPreferredSize()));
+        btnRemoveHalfLine.setBounds(new Rectangle(new Point(5, 65), btnRemoveHalfLine.getPreferredSize()));
 
         //---- uiPresetRegexs ----
         uiPresetRegexs.addActionListener(e -> on_preset_regexp_clicked(e));
@@ -1168,6 +1190,11 @@ public class NovelFrame extends JFrame {
         contentPane.add(btnDelByLen);
         btnDelByLen.setBounds(new Rectangle(new Point(85, 485), btnDelByLen.getPreferredSize()));
 
+        //---- btnLegadoImport ----
+        btnLegadoImport.setText("\u4ece\u9605\u8bfb\u5bfc\u5165");
+        contentPane.add(btnLegadoImport);
+        btnLegadoImport.setBounds(new Rectangle(new Point(265, 485), btnLegadoImport.getPreferredSize()));
+
         //---- cpwOrigName ----
         cpwOrigName.setText("\u53cc\u51fb\u9009\u62e9\u7ae0\u8282");
         contentPane.add(cpwOrigName);
@@ -1250,8 +1277,6 @@ public class NovelFrame extends JFrame {
         uiRegenId.setEnabled(false);
         contentPane.add(uiRegenId);
         uiRegenId.setBounds(new Rectangle(new Point(280, 610), uiRegenId.getPreferredSize()));
-        contentPane.add(draggedItem);
-        draggedItem.setBounds(new Rectangle(new Point(0, 0), draggedItem.getPreferredSize()));
 
         //======== scrollPane1 ========
         {
@@ -1264,6 +1289,11 @@ public class NovelFrame extends JFrame {
         }
         contentPane.add(scrollPane1);
         scrollPane1.setBounds(435, 5, 505, 630);
+
+        //---- btnGroup ----
+        btnGroup.setText("\u7ae0\u8282\u5206\u7ec4");
+        contentPane.add(btnGroup);
+        btnGroup.setBounds(new Rectangle(new Point(180, 485), btnGroup.getPreferredSize()));
 
         contentPane.setPreferredSize(new Dimension(945, 700));
         pack();
@@ -1318,7 +1348,6 @@ public class NovelFrame extends JFrame {
     private JButton btnLoad;
     private JButton btnFindNovel;
     private JButton btnMakeChapter;
-    private JCheckBox uiSmrtChapter;
     private JSpinner uiRegexIdGroup;
     private JSpinner uiRegexNameGroup;
     private JButton btnFixEnter;
@@ -1340,6 +1369,7 @@ public class NovelFrame extends JFrame {
     private JButton btnDeDupChapter;
     private JCheckBox btnInsertMode;
     private JButton btnDelByLen;
+    private JButton btnLegadoImport;
     private JLabel cpwOrigName;
     private JTextField cpwOutName;
     private JSpinner cpwChapNo;
@@ -1351,8 +1381,8 @@ public class NovelFrame extends JFrame {
     private JCheckBox uiRegenName;
     private JComboBox<String> uiRegenNameType;
     private JCheckBox uiRegenId;
-    private JLabel draggedItem;
     private JEditorPane errout;
+    private JButton btnGroup;
     private JDialog advancedMenu;
     private JScrollPane scrollPane3;
     private JTextArea presetRegexpInp;

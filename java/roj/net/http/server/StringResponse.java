@@ -3,48 +3,39 @@ package roj.net.http.server;
 import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.Headers;
-import roj.net.http.HttpCode;
+import roj.net.http.HttpUtil;
 import roj.net.http.IllegalRequestException;
+import roj.text.CharList;
 import roj.text.UTF8MB4;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.Objects;
 
 public class StringResponse implements Response {
 	final String mime;
 	final CharSequence str;
 
 	public StringResponse(CharSequence c, String mime) {
-		if (c == null) throw new NullPointerException("str");
-		str = c;
-		this.mime = mime==null?null:mime + "; charset=UTF-8";
+		str = Objects.requireNonNull(c, "str");
+		this.mime = mime==null?null:mime+"; charset=UTF-8";
 	}
 
-	public StringResponse(CharSequence c) {
-		this(c, "text/plain");
-	}
+	public CharSequence string() {return str;}
+	public String mimetype() {return mime;}
 
-	public static StringResponse of(String msg) {
-		return new StringResponse(msg, "text/html");
-	}
-
-	public static StringResponse httpErr(int code) {
-		String desc = code + " " + HttpCode.getDescription(code);
-		return new StringResponse("<title>" + desc + "</title><center><h1>" + desc + "</h1><hr/><div>"+HttpServer11.SERVER_NAME +"</div></center>", "text/html");
-	}
-
-	public static StringResponse forError(int code, Object e) {
+	public static StringResponse detailedErrorPage(int code, Object e) {
 		if (code == 0) {
-			code = e instanceof IllegalRequestException ? ((IllegalRequestException) e).code : HttpCode.INTERNAL_ERROR;
+			code = e instanceof IllegalRequestException ? ((IllegalRequestException) e).code : HttpUtil.INTERNAL_ERROR;
 		}
 
 		StringWriter sw = new StringWriter();
 		sw.write("<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><title>");
-		sw.write(HttpCode.getDescription(code));
-		sw.write("</title></head><body><div><i><h2>出现了错误:</h2></i><p><h3>");
-		sw.write(HttpCode.getDescription(code));
+		sw.write(HttpUtil.getDescription(code));
+		sw.write("</title></head><body><div><i><h2>编程错误:</h2></i><p><h3>");
+		sw.write(HttpUtil.getDescription(code));
 		sw.write("</h3><h3><font color='red'>");
 
 		if (e != null) {
@@ -71,11 +62,13 @@ public class StringResponse implements Response {
 	public boolean send(ResponseWriter rh) throws IOException {
 		if (buf == null) throw new IllegalStateException("Not prepared");
 
-		rh.write(buf);
-		if (buf.isReadable()) return true;
+		if (buf.isReadable()) {
+			rh.write(buf);
+			if (buf.isReadable()) return true;
+		}
 
 		buf.clear();
-		off = UTF8MB4.CODER.encodeFixedOut(str,off, str.length(),buf,buf.capacity());
+		off = UTF8MB4.CODER.encodeFixedOut(str,off,str.length(),buf,buf.capacity());
 		rh.write(buf);
 
 		return buf.isReadable() || off < str.length();
@@ -87,17 +80,17 @@ public class StringResponse implements Response {
 			BufferPool.reserve(buf);
 			buf = null;
 		}
+		if (str instanceof CharList cl) cl._free();
 	}
 
 	@Override
-	public void prepare(ResponseHeader srv, Headers h) {
+	public void prepare(ResponseHeader rh, Headers h) {
 		int len = str.length();
-		if (len > 127) srv.compressed();
+		if (len > 127) rh.enableCompression();
 
-		buf = srv.ch().alloc().allocate(true, 4096);
+		buf = rh.ch().alloc().allocate(true, 4096);
 		if (mime != null) h.putIfAbsent("content-type", mime);
 
 		if (len < 10000) h.putIfAbsent("content-length", Integer.toString(DynByteBuf.byteCountUTF8(str)));
-		else srv.chunked();
 	}
 }

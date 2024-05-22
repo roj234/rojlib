@@ -49,7 +49,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     boolean finished;
 
     public byte flag;
-    public static final int IGNORE_CLOSE = 4, TRIM_FILE = 8;
+    public static final int IGNORE_CLOSE = 1, NO_TRIM_FILE = 2;
     public void setIgnoreClose(boolean ignoreClose) { if (ignoreClose) flag |= IGNORE_CLOSE; else flag &= ~IGNORE_CLOSE; }
     public int[] getFlagSum() {return flagSum;}
 
@@ -151,13 +151,12 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
     /**
      * 固实大小
-     * 0: 合计一个字块
-     * -1: 否 (一个文件一个字块)
+     * 0: 固实 (合计一个字块)
+     * -1: 非固实 (每文件一个字块)
      * 大于零: 按此(输入)大小
      */
-    public void setSolidSize(long l) {
-        this.solidSize = l;
-    }
+    public void setSolidSize(long l) {solidSize = l;}
+    public long getSolidSize() {return solidSize;}
 
     // do not remove!
     public SimpleList<QZEntry> getFiles() { return files; }
@@ -309,7 +308,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     void closeWordBlock0() throws IOException {
         if (out == null) return;
 
-        WordBlock b = blocks.get(blocks.size()-1);
+        WordBlock b = blocks.getLast();
 
         flagSum[8]++;
         b.hasCrc |= 1;

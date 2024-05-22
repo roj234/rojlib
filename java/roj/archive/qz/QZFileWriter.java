@@ -1,26 +1,28 @@
 package roj.archive.qz;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.config.data.CInt;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
-import roj.io.source.CacheSource;
 import roj.io.source.FileSource;
+import roj.io.source.MemorySource;
 import roj.io.source.Source;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.Int2IntFunction;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.channels.AsynchronousCloseException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.BiConsumer;
-import java.util.function.IntFunction;
 
 import static roj.archive.qz.BlockId.*;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -53,12 +55,12 @@ public class QZFileWriter extends QZWriter {
 
     private List<ParallelWriter> parallelWriter;
 
-    public final QZWriter parallel() throws IOException { return parallel(new CacheSource()); }
+    /**
+     * 注意事项：本地的QZWriter不能和parallelWriter同时写入文件
+     */
+    public final QZWriter parallel() throws IOException { return parallel(new MemorySource(DynByteBuf.allocateDirect())); }
     public synchronized QZWriter parallel(Source cache) throws IOException {
         if (finished) throw new IOException("Stream closed");
-
-        closeWordBlock();
-
         if (parallelWriter == null)
             parallelWriter = new SimpleList<>();
 
@@ -175,13 +177,16 @@ public class QZFileWriter extends QZWriter {
         super.finish();
         waitAsyncFinish();
 
-        ByteList.WriteOut out = new ByteList.WriteOut(null) {
-            public void flush() {
-                blockCrc32 = CRC32s.update(blockCrc32, list, arrayOffset(), realWIndex());
-                super.flush();
+        var crcOut = new OutputStream() {
+            OutputStream out;
+            public void write(int b) {}
+            public void write(@NotNull byte[] b, int off, int len) throws IOException {
+                blockCrc32 = CRC32s.update(blockCrc32, b, off, len);
+                out.write(b, off, len);
             }
+            public void close() throws IOException {if (out != null) out.close();}
         };
-        buf = out;
+        var out = buf = new ByteList.WriteOut(crcOut);
 
         long hstart = s.position();
         try {
@@ -189,12 +194,11 @@ public class QZFileWriter extends QZWriter {
                 files.size()+emptyFiles.size() <= compressHeaderMin ||
                 coders[0] instanceof Copy) {
 
-                blockCrc32 = CRC32s.INIT_CRC;
-                out.setOut(s);
+                crcOut.out = s;
                 if ((files.size()|emptyFiles.size()) != 0)
                     writeHeader();
             } else {
-                out.setOut(out());
+                crcOut.out = out();
                 WordBlock metadata = blocks.pop();
 
                 writeHeader();
@@ -206,7 +210,7 @@ public class QZFileWriter extends QZWriter {
 
                 long pos1 = s.position();
                 blockCrc32 = CRC32s.INIT_CRC;
-                out.setOut(s);
+                crcOut.out = s;
 
                 out.write(kEncodedHeader);
                 writeStreamInfo(hstart-32);
@@ -215,22 +219,16 @@ public class QZFileWriter extends QZWriter {
 
                 hstart = pos1;
             }
-        } finally {
-            try {
-                out.flush();
-            } finally {
-                if (this.out != null) {
-                    this.out.close();
-                    this.out = null;
-                }
 
-                out.setOut(null);
-                out.close();
-            }
+            out.flush();
+            crcOut.out = null;
+        } finally {
+            // crcOut没写close, 并且如果出异常了也能关闭out()
+            out.close();
         }
 
         long hend = s.position();
-        if ((flag&TRIM_FILE) != 0 && s.length() > hend) s.setLength(hend);
+        if ((flag&NO_TRIM_FILE) == 0 && s.length() > hend) s.setLength(hend);
 
         // start header
         s.seek(0);
@@ -240,9 +238,8 @@ public class QZFileWriter extends QZWriter {
            .putIntLE(0)
            .putLongLE(hstart-32)
            .putLongLE(hend-hstart)
-           .putIntLE(CRC32s.retVal(blockCrc32));
-
-        buf.putIntLE(8, CRC32s.once(buf.list, 12, 20));
+           .putIntLE(CRC32s.retVal(blockCrc32))
+           .putIntLE(8, CRC32s.once(buf.list, 12, 20));
 
         s.write(buf);
     }
@@ -337,7 +334,7 @@ public class QZFileWriter extends QZWriter {
                 buf.write(1);
             } else {
                 buf.write(0);
-                writeBits(i -> (blocks.get(i).hasCrc&1) != 0, blocks.size(), buf);
+                writeBits(i -> blocks.get(i).hasCrc&1, blocks.size(), buf);
             }
             for (int i = 0; i < blocks.size(); i++) {
                 WordBlock b = blocks.get(i);
@@ -426,9 +423,9 @@ public class QZFileWriter extends QZWriter {
                     if ((e.flag&QZEntry.DIRECTORY) == 0) emptyFile.add(count.value);
                     if ((e.flag&QZEntry.ANTI) != 0) anti.add(count.value);
                     count.value++;
-                    return true;
+                    return 1;
                 }
-                return false;
+                return 0;
             }, files.size(), ob);
             buf.put(kEmptyStream).putVUInt(ob.wIndex()).put(ob);
 
@@ -456,22 +453,20 @@ public class QZFileWriter extends QZWriter {
         writeFileNames();
 
         int i;
-        i = flagSum[3];
-        if (i > 0) writeSparseAttribute(kCTime, QZEntry.CT, i, (entry, buf) -> buf.putLongLE(entry.createTime));
-        i = flagSum[4];
-        if (i > 0) writeSparseAttribute(kATime, QZEntry.AT, i, (entry, buf) -> buf.putLongLE(entry.accessTime));
-        i = flagSum[5];
-        if (i > 0) writeSparseAttribute(kMTime, QZEntry.MT, i, (entry, buf) -> buf.putLongLE(entry.modifyTime));
-        i = flagSum[6];
-        if (i > 0) writeSparseAttribute(kWinAttributes, QZEntry.ATTR, i, (entry, buf) -> buf.putIntLE(entry.attributes));
+        if ((i = flagSum[3]) > 0) writeSparseAttribute(kCTime, QZEntry.CT, i);
+        if ((i = flagSum[4]) > 0) writeSparseAttribute(kATime, QZEntry.AT, i);
+        if ((i = flagSum[5]) > 0) writeSparseAttribute(kMTime, QZEntry.MT, i);
+        if ((i = flagSum[6]) > 0) writeSparseAttribute(i);
 
         buf.write(kEnd);
     }
 
     private void writeFileNames() {
-        buf.write(kName);
+        int len = 1 + (files.size()<<1); // external=0 + terminators
+        for (int j = 0; j < files.size(); j++)
+            len += files.get(j).getName().length() << 1;
 
-        ByteList buf = IOUtil.getSharedByteBuf().put(0);
+        DynByteBuf buf = this.buf.put(kName).putVUInt(len).put(0);
 
         for (int j = 0; j < files.size(); j++) {
             String s = files.get(j).getName();
@@ -479,33 +474,48 @@ public class QZFileWriter extends QZWriter {
                 buf.putShortLE(s.charAt(i));
             buf.putShortLE(0);
         }
-
-        this.buf.putVUInt(buf.wIndex()).put(buf);
     }
-    private void writeSparseAttribute(int id, int flag, int count, BiConsumer<QZEntry, DynByteBuf> fn) {
-        ByteList buf = IOUtil.getSharedByteBuf();
-        if (count < files.size()) {
-            buf.write(0);
-            writeBits(i -> (files.get(i).flag&flag) != 0, files.size(), buf);
-        } else {
-            buf.write(1);
-        }
-        buf.write(0);
+    private void writeSparseAttribute(int count) {
+        DynByteBuf buf = writeSparseHeader(kWinAttributes, QZEntry.ATTR, count);
 
         for (int i = 0; i < files.size(); i++) {
             QZEntry entry = files.get(i);
-            if ((entry.flag&flag) != 0)
-                fn.accept(entry, buf);
+            if ((entry.flag&QZEntry.ATTR) != 0)
+                buf.putIntLE(entry.attributes);
         }
+    }
+    private void writeSparseAttribute(int id, int flag, int count) {
+        DynByteBuf buf = writeSparseHeader(id, flag, count);
 
-        this.buf.put((byte) id).putVUInt(buf.wIndex()).put(buf);
+        long offset = QZEntry.SPARSE_ATTRIBUTE_OFFSET[id-kCTime];
+        for (int i = 0; i < files.size(); i++) {
+            QZEntry entry = files.get(i);
+            if ((entry.flag&flag) != 0)
+                buf.putLongLE(u.getLong(entry, offset));
+        }
+    }
+    private DynByteBuf writeSparseHeader(int id, int flag, int count) {
+        int len = 2;
+        // bitset size
+        if (count < files.size()) len += (files.size()+7) >> 3;
+        len += count << (id == kWinAttributes ? 2 : 3);
+
+        DynByteBuf buf = this.buf.put(id).putVUInt(len);
+
+        if (count < files.size()) {
+            buf.write(0);
+            writeBits(i -> (files.get(i).flag&flag) != 0 ? 1 : 0, files.size(), buf);
+        } else {
+            buf.write(1);
+        }
+        return buf.put(0);
     }
 
-    private static void writeBits(IntFunction<Boolean> fn, int len, DynByteBuf buf) {
+    private static void writeBits(Int2IntFunction fn, int len, DynByteBuf buf) {
         int v = 0;
         int shl = 7;
         for (int i = 0; i < len; i++) {
-            v |= ((fn.apply(i) ? 1 : 0) << shl);
+            v |= fn.apply(i) << shl;
             if (--shl < 0) {
                 buf.write(v);
                 shl = 7;

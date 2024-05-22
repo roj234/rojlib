@@ -16,7 +16,7 @@ final class FieldListSingle extends ComponentList {
 		this.node = node;
 	}
 
-	private final IClass owner;
+	final IClass owner;
 	final FieldNode node;
 
 	@NotNull
@@ -32,6 +32,7 @@ final class FieldListSingle extends ComponentList {
 		try {
 			if (ctx.checkAccessible(owner, node, (flag&IN_STATIC) != 0, true)) {
 				tmp._free();
+				FieldList.checkBridgeMethod(ctx, owner, node);
 				return new FieldResult(owner, node);
 			}
 			return new FieldResult(tmp.replace('/', '.').toStringAndFree());

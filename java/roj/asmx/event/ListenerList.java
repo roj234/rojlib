@@ -1,11 +1,15 @@
 package roj.asmx.event;
 
 import roj.collect.SimpleList;
+import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
+import sun.misc.Unsafe;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -14,6 +18,9 @@ import java.util.List;
 public final class ListenerList {
 	final String type;
 	final ListenerList parent;
+
+	private volatile int modCount;
+	private static final long MODCOUNT_OFFSET = ReflectionUtils.fieldOffset(ListenerList.class, "modCount");
 
 	ListenerList mapNext;
 
@@ -29,50 +36,70 @@ public final class ListenerList {
 
 	final EventListener[] cook() {
 		var val = cooked;
-		if (val == null) {
-			// 2024-04-22 10:37 可以把EventListener变成单向链表（加一个next字段），然后改成SentryNode[] instances
-			// 除了没什么意义，都挺好的
+		if (val != null) return val;
 
-			synchronized (this) {
-				var i = 0;
-				for (List<EventListener> instance : instances) {
-					i += instance.size();
+		retry:
+		for(;;) {
+			int mc = modCount;
+
+			var i = 0;
+			for (var instance : instances) i += instance.size();
+
+			val = new EventListener[i];
+			i = 0;
+			for (int k = 0; k < instances.length; k++) {
+				var instance = instances[k];
+				if (instance.isEmpty()) continue;
+				var myi = (SimpleList<EventListener>) instance;
+
+				var array = myi.getInternalArray();
+				int size = myi.size();
+				if (size > array.length || size + i > val.length) continue retry;
+
+				for (int j = 0; j < size; j++) {
+					var offset = Unsafe.ARRAY_OBJECT_BASE_OFFSET + (long)j * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
+
+					var listener = (EventListener) array[j];
+					if (listener instanceof EventListenerImpl impl)
+						u.compareAndSwapObject(array, offset, listener, listener = impl.impl());
+
+					val[i++] = listener;
 				}
+			}
 
-				val = new EventListener[i];
-				i = 0;
-				for (List<EventListener> instance : instances) {
-					for (int j = 0; j < instance.size(); j++) {
-						EventListener listener = instance.get(j);
-						if (listener instanceof EventListenerImpl impl)
-							instance.set(j, listener = impl.impl());
-
-						val[i++] = listener;
-					}
-				}
-
+			if (u.getAndAddInt(this, MODCOUNT_OFFSET, 1) == mc) {
 				assert i == val.length;
-				cooked = val;
+				return cooked = val;
 			}
 		}
-		return val;
 	}
 
-	final synchronized void add(int priority, EventListener listener) {
+	@SuppressWarnings("unchecked")
+	final void add(int priority, EventListener listener) {
 		var instance = instances[priority];
-		if (instance == Collections.EMPTY_LIST) instances[priority] = instance = new SimpleList<>();
+		if (instance == Collections.EMPTY_LIST) {
+			int offset = Unsafe.ARRAY_OBJECT_BASE_OFFSET + priority * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
+			while (true) {
+				if (u.compareAndSwapObject(instances, offset, Collections.EMPTY_LIST, instance = new SimpleList<>())) break;
+				if ((instance = (List<EventListener>) u.getObjectVolatile(instances, offset)) != Collections.EMPTY_LIST) break;
+			}
+		}
 
-		instance.add(listener);
+		synchronized (instance) {instance.add(listener);}
 		cooked = null;
+		u.getAndAddInt(this, MODCOUNT_OFFSET, 1);
 	}
 
-	final synchronized boolean remove(int priority, Object ref, String name, String desc) {
+	final boolean remove(int priority, Object ref, String name, String desc) {
 		var instance = instances[priority];
-		for (int i = 0; i < instance.size(); i++) {
-			if (instance.get(i).isFor(ref, name, desc)) {
-				instance.remove(i);
-				cooked = null;
-				return true;
+		synchronized (instance) {
+			for (int i = 0; i < instance.size(); i++) {
+				if (instance.get(i).isFor(ref, name, desc)) {
+					instance.remove(i);
+					cooked = null;
+					u.getAndAddInt(this, MODCOUNT_OFFSET, 1);
+					return true;
+				}
 			}
 		}
 		return false;

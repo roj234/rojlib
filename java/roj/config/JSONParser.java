@@ -104,16 +104,16 @@ public class JSONParser extends Parser {
 			if (!more) wr.unexpected(name.val(), "逗号");
 			more = false;
 
-			String v = name.val();
-			if ((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(v)) throw wr.err("重复的key: " + v);
+			String k = Interner.intern(name.val());
+			if ((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(k)) throw wr.err("重复的key: "+k);
 
-			comment = wr.addComment(comment, v);
+			comment = wr.addComment(comment, k);
 
 			wr.except(colon, ":");
 			try {
-				map.put(v, element(wr.next(), wr, flag));
+				map.put(k, element(wr.next(), wr, flag));
 			} catch (ParseException e) {
-				throw e.addPath('.'+v);
+				throw e.addPath('.'+k);
 			}
 		}
 

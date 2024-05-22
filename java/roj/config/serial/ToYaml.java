@@ -66,8 +66,8 @@ public final class ToYaml extends ToSomeString {
 	}
 
 	@Override
-	protected final void valString(String val) {
-		if (multiline && val.indexOf('\n') >= 0) {
+	public final void valString(CharSequence val) {
+		if (multiline && TextUtil.gIndexOf(val, '\n') >= 0) {
 			sb.append(val.charAt(val.length()-1) == '\n'?"|+":"|-");
 
 			int i = 0;

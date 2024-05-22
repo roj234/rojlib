@@ -1,22 +1,27 @@
 package roj.compiler;
 
 import roj.asm.Opcodes;
+import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.type.TypeHelper;
-import roj.compiler.ast.block.ParseTask;
+import roj.compiler.ast.ParseTask;
+import roj.compiler.ast.expr.Constant;
 import roj.compiler.context.CompileUnit;
-import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LibraryZipFile;
 import roj.compiler.context.LocalContext;
+import roj.compiler.plugins.GlobalContextApi;
+import roj.compiler.plugins.annotations.AnnotationProcessor1;
+import roj.compiler.plugins.annotations.AnnotationProcessor2;
+import roj.compiler.plugins.asm.AsmHook;
+import roj.compiler.plugins.constant.ConstantEvaluator;
 import roj.compiler.resolve.TypeResolver;
-import roj.reflect.FastInit;
+import roj.compiler.test.CandyTestPlugin;
+import roj.io.IOUtil;
+import roj.reflect.ClassDefiner;
+import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
-import roj.text.CharList;
-import roj.util.Helpers;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.lang.reflect.Method;
 import java.util.Collections;
 
@@ -25,31 +30,29 @@ import java.util.Collections;
  * @since 2024/5/20 0020 2:52
  */
 public class LavaCompiler {
-	GlobalContext ctx;
-	LocalContext cache;
+	final GlobalContextApi ctx = new GlobalContextApi();
+	final LocalContext cache = ctx.createLocalContext();
+	final ClassLoader loader = new ClassDefiner(LavaCompiler.class.getClassLoader(), "LavaLambdaLink");
 
-	public LavaCompiler() throws IOException {
-		GlobalContext ctx = new GlobalContext();
-		ctx.addLibrary(new LibraryZipFile(Helpers.getJarByClass(LavaCompiler.class)));
+	public LavaCompiler() throws IOException {initDefaultPlugins(ctx);}
 
-		this.ctx = ctx;
-		this.cache = new LocalContext(ctx);
-	}
+	static void initDefaultPlugins(GlobalContextApi ctx) throws IOException {
+		ctx.addLibrary(new LibraryZipFile(IOUtil.getJar(LavaCompiler.class)));
 
-	public static void main(String[] args) throws Exception {
-		System.out.println("Lava编译器v0.8 交互式命令行 输入空行来开始编译");
-		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-		CharList tmp = new CharList();
-		while (true) {
-			String line = br.readLine();
-			if (line.isEmpty()) break;
-			tmp.append(line).append('\n');
-		}
-		new LavaCompiler().linkLambda(Runnable.class, tmp.toString()).run();
+		AsmHook hook = AsmHook.init(ctx);
+		hook.injectedProperties.put("咕咕咕", Constant.valueOf("咕咕咕咕，我是🕊"));
+		ConstantEvaluator.init(ctx);
+
+		ctx.addGenericProcessor(new AnnotationProcessor1());
+		ctx.addGenericProcessor(new AnnotationProcessor2());
+
+		new CandyTestPlugin().register(ctx);
 	}
 
 	@SuppressWarnings("unchecked")
 	public <T> T linkLambda(Class<T> functionalInterface, String methodStr) throws Exception {
+		ctx.reset();
+
 		LocalContext.set(cache);
 
 		Method myMethod = null;
@@ -60,15 +63,15 @@ public class LavaCompiler {
 		}
 		if (myMethod == null) throw new IllegalArgumentException(functionalInterface.getName()+"看起来不像FunctionalInterface");
 
-		CompileUnit u = new CompileUnit("<stdin>", ctx);
+		CompileUnit u = new CompileUnit("<stdin>", methodStr+"}");
 
+		u.version = CompileUnit.JavaVersion(8);
 		u.name("roj/generated/HelloFromStdin"+ReflectionUtils.uniqueId());
+		u.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
 		u.addInterface(functionalInterface.getName().replace('.', '/'));
 		u.npConstructor();
 
-		ctx.addCompileUnit(u);
-
-		u.getLexer().init(methodStr+"}");
+		ctx.addCompileUnit(u, false);
 
 		TypeResolver tr = u.getTypeResolver();
 		tr.setImportAny(true);
@@ -77,11 +80,15 @@ public class LavaCompiler {
 		u.methods.add(mn);
 
 		cache.setClass(u);
-		ParseTask.Method(u, mn, Collections.emptyList()).parse();
+		ParseTask.Method(u, mn, Collections.emptyList()).parse(cache);
 
 		LocalContext.set(null);
 
-		FastInit.prepare(u);
-		return (T) FastInit.make(u);
+		for (ConstantData data : ctx.getGeneratedClasses()) {
+			ClassDefiner.defineClass(loader, data);
+		}
+
+		ClassDefiner.premake(u);
+		return (T) ClassDefiner.make(u, loader);
 	}
 }

@@ -2,11 +2,10 @@ package roj.plugins.mychat;
 
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.TaskPool;
-import roj.concurrent.task.AsyncTask;
 import roj.crypt.SM3;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
-import roj.net.http.server.HttpServer11;
+import roj.net.http.server.HttpCache;
 import roj.net.http.server.MultipartFormHandler;
 import roj.net.http.server.Request;
 import roj.text.TextUtil;
@@ -51,7 +50,7 @@ public class UploadHandler extends MultipartFormHandler {
 	public void init(String req) {
 		super.init(req);
 
-		Map<String, Object> ctx = HttpServer11.TSO.get().ctx;
+		Map<String, Object> ctx = HttpCache.getInstance().ctx;
 		if (!ctx.containsKey("SM3U")) {
 			ctx.put("SM3U", sm3 = new SM3());
 		} else {
@@ -230,7 +229,31 @@ public class UploadHandler extends MultipartFormHandler {
 				}
 
 				// todo stream
-				TaskPool.Common().pushTask(new ConvertImage(r, ins, fmt, files[i]));
+				String v$fmt = fmt;
+				File v$file = files[i];
+				TaskPool.Common().submit(() -> {
+					BufferedImage dst = img.get();
+					if (dst == null || dst.getWidth() < r.getWidth(0) || dst.getHeight() < r.getHeight(0)) {
+						dst = new BufferedImage(r.getWidth(0), r.getHeight(0), BufferedImage.TYPE_3BYTE_BGR);
+						img.set(dst);
+					}
+					dst = dst.getSubimage(0, 0, r.getWidth(0), r.getHeight(0));
+
+					ImageReadParam param = new ImageReadParam();
+					param.setSourceBands(new int[] {0, 1, 2});
+					param.setDestination(dst);
+
+					BufferedImage img;
+					try {
+						img = r.read(0, param);
+					} finally {
+						r.dispose();
+						ins.close();
+					}
+
+					ImageIO.write(img, v$fmt, v$file);
+					return null;
+				});
 			} catch (Throwable e) {
 				e.printStackTrace();
 				if (errors == null) errors = new String[files.length];
@@ -238,45 +261,5 @@ public class UploadHandler extends MultipartFormHandler {
 			}
 		}
 	}
-
-	private static class ConvertImage extends AsyncTask<Void> {
-		static final FastThreadLocal<BufferedImage> img = new FastThreadLocal<>();
-
-		private final ImageReader v$r;
-		private final ImageInputStream v$in;
-		private final String v$fmt;
-		private final File v$file;
-
-		public ConvertImage(ImageReader v$r, ImageInputStream v$in, String v$fmt, File v$file) {
-			this.v$r = v$r;
-			this.v$in = v$in;
-			this.v$fmt = v$fmt;
-			this.v$file = v$file;
-		}
-
-		@Override
-		protected Void invoke() throws Exception {
-			BufferedImage dst = img.get();
-			if (dst == null || dst.getWidth() < v$r.getWidth(0) || dst.getHeight() < v$r.getHeight(0)) {
-				dst = new BufferedImage(v$r.getWidth(0), v$r.getHeight(0), BufferedImage.TYPE_3BYTE_BGR);
-				img.set(dst);
-			}
-			dst = dst.getSubimage(0, 0, v$r.getWidth(0), v$r.getHeight(0));
-
-			ImageReadParam param = new ImageReadParam();
-			param.setSourceBands(new int[] {0, 1, 2});
-			param.setDestination(dst);
-
-			BufferedImage img;
-			try {
-				img = v$r.read(0, param);
-			} finally {
-				v$r.dispose();
-				v$in.close();
-			}
-
-			ImageIO.write(img, v$fmt, v$file);
-			return null;
-		}
-	}
+	static final FastThreadLocal<BufferedImage> img = new FastThreadLocal<>();
 }

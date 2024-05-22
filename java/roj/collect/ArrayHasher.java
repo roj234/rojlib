@@ -4,7 +4,7 @@ import roj.asm.tree.ConstantData;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.visitor.CodeWriter;
-import roj.reflect.FastInit;
+import roj.reflect.ClassDefiner;
 
 import static roj.asm.Opcodes.*;
 
@@ -15,8 +15,8 @@ import static roj.asm.Opcodes.*;
 final class ArrayHasher {
 	private static final CharMap<Hasher<?>> built = new CharMap<>();
 	@SuppressWarnings("unchecked")
-	static <T> Hasher<T> primitiveArray(Class<T> type) {
-		if (!type.getComponentType().isPrimitive()) throw new IllegalStateException(type+" is not primitive array");
+	static <T> Hasher<T> array(Class<T> type) {
+		if (!type.getComponentType().isPrimitive()) type = (Class<T>) Object[].class;
 
 		Type clz = TypeHelper.class2type(type);
 
@@ -47,8 +47,8 @@ final class ArrayHasher {
 			cw.invokeS("java/util/Arrays", "equals", "("+clz.toDesc()+clz.toDesc()+")Z");
 			cw.one(IRETURN);
 
-			FastInit.prepare(hasher);
-			h = (Hasher<?>) FastInit.make(hasher);
+			ClassDefiner.premake(hasher);
+			h = (Hasher<?>) ClassDefiner.make(hasher);
 			built.put((char) clz.type, h);
 		}
 		return (Hasher<T>) h;

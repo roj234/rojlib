@@ -112,7 +112,7 @@ public class DirectByteList extends DynByteBuf {
 			return;
 		}
 
-		byte[] array = ArrayCache.getByteArray(4096, false);
+		byte[] array = ArrayCache.getByteArray(Math.min(len, 4096), false);
 		try {
 			long addr = address;
 			while (len > 0) {
@@ -480,14 +480,9 @@ public class DirectByteList extends DynByteBuf {
 		if (rIndex > 0) {
 			long addr = address;
 			if (addr != 0) {
-				if (wIndex < rIndex) {
-					rIndex = 0;
-					System.out.println("data = " + TextUtil.dumpBytes(toByteArray()));
-					new Throwable("windex < rindex").printStackTrace();
-					wIndex = rIndex = 0;
-					return this;
-				}
-				u.copyMemory(addr+rIndex, addr, wIndex-rIndex);
+				int wi = wIndex, ri = rIndex;
+				if ((wi -= ri) < 0) throw new AssertionError("Illegal Buffer State:"+info());
+				u.copyMemory(addr+ri, addr, wi);
 			}
 			wIndex -= rIndex;
 			rIndex = 0;
@@ -543,29 +538,10 @@ public class DirectByteList extends DynByteBuf {
 	}
 
 	@Override
-	public final boolean equals(Object o) {
-		if (this == o) return true;
-		if (!(o instanceof DynByteBuf b)) return false;
-
-		int len = readableBytes();
-		if (len != b.readableBytes()) return false;
-		assert len < length : info();
-
-		return ArrayUtil.vectorizedMismatch(null, address, b.array(), b._unsafeAddr(), len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
-	}
-
-	@Override
-	public int hashCode() {
-		int len = wIndex - rIndex;
-		assert len < length : info();
-		return ArrayUtil.byteHashCode(null, address, len);
-	}
-
-	@Override
 	@NotNull
 	public String toString() {
 		int len = wIndex - rIndex;
-		assert len < length : info();
+		assert len <= length : info();
 
 		byte[] tmp = new byte[len];
 		copyToArray(address, tmp, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, len);
@@ -629,6 +605,6 @@ public class DirectByteList extends DynByteBuf {
 		@Override
 		public boolean immutableCapacity() { return true; }
 		@Override
-		public void ensureCapacity(int required) { if (required > length) throw new BufferOverflowException(); }
+		public void ensureCapacity(int required) { if (required > length) throw new IndexOutOfBoundsException("cannot hold "+required+" bytes in this buffer("+length+")");}
 	}
 }

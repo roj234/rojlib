@@ -141,6 +141,7 @@ public class Annotation {
 
 	public static Annotation parse(ConstantPool pool, DynByteBuf r) {
 		String type = ((CstUTF) pool.get(r)).str();
+		if (!type.endsWith(";")) throw new IllegalArgumentException("无效的注解类型:"+type);
 		int len = r.readUnsignedShort();
 
 		Map<String, AnnVal> params;
@@ -173,7 +174,7 @@ public class Annotation {
 
 	public String toString() {
 		CharList sb = new CharList().append('@');
-		TypeHelper.toStringOptionalPackage(sb, type.endsWith(":") ? type.substring(1, type.length()-1) : type);
+		TypeHelper.toStringOptionalPackage(sb, type());
 		if (!values.isEmpty()) {
 			sb.append('(');
 			if (values.size() == 1 && values.containsKey("value")) {
@@ -189,5 +190,21 @@ public class Annotation {
 			sb.append(')');
 		}
 		return sb.toStringAndFree();
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof Annotation that)) return false;
+
+		if (!type.equals(that.type)) return false;
+		return values.equals(that.values);
+	}
+
+	@Override
+	public int hashCode() {
+		int result = type.hashCode();
+		result = 31 * result + values.hashCode();
+		return result;
 	}
 }

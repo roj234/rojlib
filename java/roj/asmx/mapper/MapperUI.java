@@ -22,7 +22,6 @@ import roj.ui.OnChangeHelper;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -220,7 +219,7 @@ public class MapperUI extends JFrame {
 
 		uiInit.addActionListener((e) -> {
 			uiInit.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				try {
 					File file = GuiUtil.fileLoadFrom("选择映射表(Srg / XSrg)", this);
 					if (file != null) load(file);
@@ -231,7 +230,7 @@ public class MapperUI extends JFrame {
 		});
 		uiMap.addActionListener((e) -> {
 			uiMap.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				try {
 					map();
 				} finally {
@@ -250,7 +249,7 @@ public class MapperUI extends JFrame {
 		});
 		uiLoadLines.addActionListener((e) -> {
 			uiLoadLines.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				try {
 					loadLines();
 				} finally {
@@ -286,12 +285,6 @@ public class MapperUI extends JFrame {
 		/*helper.addEventListener(uiStackTrace, (c) -> {
 			uiDeobfStackTrace.setEnabled(c.getDocument().getLength() > 0);
 		});*/
-		uiInputPath.addFocusListener(new FocusListener() {
-			@Override
-			public void focusGained(FocusEvent e) { scrollPane2.setSize(scrollPane2.getWidth(), 155); }
-			@Override
-			public void focusLost(FocusEvent e) { scrollPane2.setSize(scrollPane2.getWidth(), 19); }
-		});
 	}
 
 	private void initComponents() {

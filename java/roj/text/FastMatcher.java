@@ -39,7 +39,7 @@ public class FastMatcher {
 	public long next(long i) {return i+k;}
 
 	public int match(DynByteBuf buf, int off) {
-		long start = buf._unsafeAddr();
+		long start = buf._unsafeAddr()+buf.rIndex;
 		long pos = match(buf.array(), start + off, buf.readableBytes());
 		if (pos < 0) return -1;
 		return (int) (pos - start);
@@ -55,7 +55,7 @@ public class FastMatcher {
 			while(u.getByte(ref, off+tmp) == p[tmp])
 				if (--tmp < 0) return off;
 
-			off += skip[u.getByte(off + p_end) & 0xFF];
+			off += skip[u.getByte(ref, off + p_end) & 0xFF];
 		}
 		return -1;
 	}

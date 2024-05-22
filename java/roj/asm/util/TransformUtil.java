@@ -1,9 +1,9 @@
 package roj.asm.util;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.AsmShared;
 import roj.asm.Parser;
 import roj.asm.cp.Constant;
-import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstDynamic;
 import roj.asm.cp.CstNameAndType;
 import roj.asm.tree.*;
@@ -136,12 +136,12 @@ public class TransformUtil {
 	/**
 	 * 修改InnerClasses属性中定义的内部类的访问权限
 	 */
-	public static void makeSubclassAccessible(IClass data, Collection<String> toOpen) {
-		List<InnerClasses.InnerClass> classes = Attributes.getInnerClasses(data.cp(), data);
-		if (classes == null) throw new IllegalStateException("no InnerClass in " + data.name());
+	public static void makeSubclassAccessible(ConstantData data, Collection<String> toOpen) {
+		var classes = Attributes.getInnerClasses(data.cp, data);
+		if (classes == null) throw new IllegalStateException("no InnerClass in " + data.name);
 
 		for (int i = 0; i < classes.size(); i++) {
-			InnerClasses.InnerClass clz = classes.get(i);
+			InnerClasses.Item clz = classes.get(i);
 			if (toOpen.contains(clz.self)) {
 				clz.flags = (char) toPublic(clz.flags, true);
 			}
@@ -241,7 +241,7 @@ public class TransformUtil {
 	}
 
 	public static void compress(ConstantData data) {
-		ConstantPool cpw = new ConstantPool(data.cp.array().size());
+		var cpw = AsmShared.local().constPool();
 		CodeVisitor smallerLdc = new CodeVisitor() {
 			protected void ldc(byte code, Constant c) { cpw.reset(c); }
 		};
@@ -277,6 +277,7 @@ public class TransformUtil {
 		}
 
 		data.parsed();
+		AsmShared.local().constPool(data.cp);
 		data.cp = cpw;
 
 		for (int i = 0; i < methods.size(); i++) {

@@ -55,6 +55,7 @@ public final class AccessData implements IClass {
 			this.off = off;
 		}
 
+		public AccessData owner() {return AccessData.this;}
 		@Override
 		public String ownerClass() {return AccessData.this.name;}
 		@Override

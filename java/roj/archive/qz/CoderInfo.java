@@ -29,9 +29,9 @@ final class CoderInfo {
 
 	CoderInfo(QZCoder c, int sizeId) {
 		self = c;
-		if (c instanceof QZComplexCoder) {
-			uses = new Object[((QZComplexCoder) c).useCount()];
-			provides = ((QZComplexCoder) c).provideCount();
+		if (c instanceof QZComplexCoder cc) {
+			uses = new Object[cc.useCount()];
+			provides = cc.provideCount();
 		} else {
 			uses = new Object[1];
 			provides = 1;

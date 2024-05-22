@@ -1,5 +1,6 @@
 package roj.compiler.ast.expr;
 
+import roj.WillChange;
 import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
@@ -11,12 +12,15 @@ import roj.asm.type.TypeHelper;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
-import roj.compiler.api_rt.Evaluable;
+import roj.compiler.CompilerSpec;
+import roj.compiler.api.Evaluable;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
+import roj.compiler.resolve.Inferrer;
 import roj.compiler.resolve.MethodResult;
 import roj.compiler.resolve.ResolveException;
 import roj.text.CharList;
@@ -34,9 +38,9 @@ import java.util.Map;
  * @author Roj233
  * @since 2020/10/13 22:17
  */
-public class Invoke extends ExprNode {
+public final class Invoke extends ExprNode {
 	Object fn; // new anonymous class may change this later
-	private List<ExprNode> args;
+	List<ExprNode> args;
 	private List<IType> bounds;
 
 	private MethodNode methodNode;
@@ -44,49 +48,39 @@ public class Invoke extends ExprNode {
 	private List<IType> desc;
 	private IType genType1;
 
-	public static ExprNode unaryAlt(MethodNode node, ExprNode fn) {
-		assert node.parameters().size() == 0;
-		Invoke invoke = new Invoke(fn, Collections.emptyList());
-		invoke.methodNode = node;
-		invoke.desc = Collections.singletonList(node.returnType());
-		return invoke;
-	}
+	public static ExprNode staticMethod(MethodNode node) {return staticMethod(node, Collections.emptyList());}
+	public static ExprNode staticMethod(MethodNode node, @WillChange ExprNode... args) {return staticMethod(node, Arrays.asList(args));}
+	public static ExprNode staticMethod(MethodNode node, @WillChange List<ExprNode> args) {return create(node, null, args);}
 
-	public static ExprNode binaryAlt(MethodNode override, ExprNode left, ExprNode right) {
-		Invoke invoke;
-		if ((override.modifier()&Opcodes.ACC_STATIC) != 0) invoke = new Invoke(null, List.of(left, right));
-		else invoke = new Invoke(left, Collections.singletonList(right));
+	public static ExprNode virtualMethod(MethodNode node, ExprNode loader) {return virtualMethod(node, loader, Collections.emptyList());}
+	public static ExprNode virtualMethod(MethodNode node, ExprNode loader, @WillChange ExprNode... args) {return virtualMethod(node, loader, Arrays.asList(args));}
+	public static ExprNode virtualMethod(MethodNode node, ExprNode loader, @WillChange List<ExprNode> args) {return create(node, loader, args);}
 
-		invoke.methodNode = override;
-		invoke.desc = Helpers.cast(TypeHelper.parseMethod(override.rawDesc()));
-		return invoke;
-	}
-
-	public static ExprNode staticMethod(MethodNode node, ExprNode... args) {
-		Invoke invoke = new Invoke(null, Arrays.asList(args));
-		invoke.methodNode = node;
-		invoke.desc = Helpers.cast(TypeHelper.parseMethod(node.rawDesc()));
-		return invoke;
-	}
-	public static ExprNode virtualMethod(MethodNode node, ExprNode loader, ExprNode... args) {
-		Invoke invoke = new Invoke(loader, Arrays.asList(args));
-		invoke.methodNode = node;
-		invoke.desc = Helpers.cast(TypeHelper.parseMethod(node.rawDesc()));
-		return invoke;
-	}
-	public static ExprNode interfaceMethod(MethodNode node, ExprNode loader, ExprNode... args) {
-		Invoke invoke = new Invoke(loader, Arrays.asList(args));
-		invoke.methodNode = node;
-		invoke.desc = Helpers.cast(TypeHelper.parseMethod(node.rawDesc()));
+	public static ExprNode interfaceMethod(MethodNode node, ExprNode loader) {return interfaceMethod(node, loader, Collections.emptyList());}
+	public static ExprNode interfaceMethod(MethodNode node, ExprNode loader, @WillChange ExprNode... args) {return interfaceMethod(node, loader, Arrays.asList(args));}
+	public static ExprNode interfaceMethod(MethodNode node, ExprNode loader, @WillChange List<ExprNode> args) {
+		Invoke invoke = create(node, loader, args);
 		invoke.flag = INTERFACE_CLASS;
 		return invoke;
 	}
-	public static ExprNode constructor(MethodNode node, ExprNode... args) {
-		Invoke invoke = new Invoke(new Type(node.owner), Arrays.asList(args));
-		invoke.methodNode = node;
-		invoke.desc = Helpers.cast(TypeHelper.parseMethod(node.rawDesc()));
+
+	public static ExprNode constructor(MethodNode node) {return constructor(node, Collections.emptyList());}
+	public static ExprNode constructor(MethodNode node, @WillChange ExprNode... args) {return constructor(node, Arrays.asList(args));}
+	public static ExprNode constructor(MethodNode node, @WillChange List<ExprNode> args) {
+		Invoke invoke = create(node, new Type(node.owner), args);
+		if (!node.name().equals("<init>")) throw new IllegalArgumentException(invoke+"调用的不是构造函数");
 		return invoke;
 	}
+
+	private static Invoke create(MethodNode node, Object loader, List<ExprNode> args) {
+		Invoke invoke = new Invoke(loader, args);
+		invoke.methodNode = node;
+		invoke.desc = Helpers.cast(TypeHelper.parseMethod(node.rawDesc()));
+		if (((node.modifier&Opcodes.ACC_STATIC) == 0) == (loader == null)) throw new IllegalArgumentException("静态参数错误:"+invoke);
+		if (args.size() != invoke.desc.size()-1) throw new IllegalArgumentException("参数数量错误:"+invoke);
+		return invoke;
+	}
+
 
 	private static final ToIntMap<Class<?>> TypeId = new ToIntMap<>();
 	static {
@@ -120,7 +114,6 @@ public class Invoke extends ExprNode {
 	}
 
 	static final byte RESOLVED = 1, INVOKE_SPECIAL = ComponentList.THIS_ONLY, INTERFACE_CLASS = 4, PMSIGN = 8;
-	private static final byte MUST_VIRTUAL = ComponentList.IN_STATIC;
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if ((flag&RESOLVED) != 0) return this;
@@ -132,8 +125,9 @@ public class Invoke extends ExprNode {
 			for (int i = 0; i < tpHint.size(); i++) ctx.resolveType(tpHint.get(i));
 		}
 
+		boolean notStatic = true;
+		IClass type;
 		String klass, method;
-		int mode = 0;
 		block:
 		if (fn.getClass() == DotGet.class) {
 			DotGet fn1 = (DotGet) fn;
@@ -142,35 +136,55 @@ public class Invoke extends ExprNode {
 
 			ExprNode fn2;
 			// 只有一个点
+			check:
 			if (fn1.names.isEmpty()) {
-				// 省略this : a() => this.a(); 或继承/什么的静态
 				if (fn1.parent == null) {
-					String[] mn = ctx.tryImportMethod(method);
-					// 静态导入
-					if (mn != null) {
-						klass = mn[0];
-						method = mn[1];
-						fn = null;
-						break block;
+					notStatic = false;
+
+					// 省略this : a() => this.a();
+					fn2 = ctx.ep.This().resolve(ctx);
+
+					ComponentList list = ctx.methodListOrReport(ctx.file, method);
+					if (list != null) {
+						/*  这么设计源于下列代码无法编译
+							class TestN {
+								{ a(); }
+								void a (int a) {}
+							}
+							void a() {}
+						 */
+						for (MethodNode mn : list.getMethods()) {
+							if (ctx.checkAccessible(ctx.classes.getClassInfo(mn.owner), mn, false, false)) {
+								break check;
+							}
+						}
 					}
 
-					mode = MUST_VIRTUAL;
-					fn2 = ctx.ep.This().resolve(ctx);
+					var mn = ctx.tryImportMethod(method, args);
+					// 静态导入
+					if (mn != null) {
+						type = mn.owner;
+						if (type == null) return mn.prev;
+						method = mn.method;
+						fn = mn.prev;
+						break block;
+					}
 				} else {
 					// ((java.lang.Object) System.out).println(1);
 					fn2 = fn1.parent.resolve(ctx);
-					mode = MUST_VIRTUAL;
 
 					// [Type].[this|super]也走这个分支
-					if (fn2 == ctx.ep.Super() || fn2 instanceof EncloseRef ref && !ref.thisEnclosing) flag |= INVOKE_SPECIAL;
+					if (fn2 == ctx.ep.Super() || fn2 instanceof EncloseRef ref && !ref.thisEnclosing) {
+						flag |= INVOKE_SPECIAL;
+					}
 				}
 			} else {
 				// [x.y].a();
-				fn2 = fn1.resolveEx(ctx, this);
+				fn2 = fn1.resolveEx(ctx, x -> fn = x);
 
 				// 静态方法
 				if (fn2 == null) {
-					klass = ((IClass) fn).name();
+					type = (IClass) fn;
 					fn = null;
 					break block;
 				}
@@ -179,33 +193,57 @@ public class Invoke extends ExprNode {
 			fn = fn2;
 			// 如果是this，那么要擦到上界 (哦this本来就没有generic，霉逝了)
 			ownMirror = fn2.type();
-			if (ownMirror.genericType() == IType.ASTERISK_TYPE) return this;
-			klass = ownMirror.owner();
+			// Notfound
+			if (ownMirror.genericType() == IType.ASTERISK_TYPE) return NaE.RESOLVE_FAILED;
+
+			if (ownMirror.isPrimitive()) {
+				type = ctx.getPrimitiveMethod(ownMirror, fn2, args);
+				if (type == null) {
+					ctx.report(Kind.ERROR, "symbol.error.derefPrimitive", ownMirror);
+					return NaE.RESOLVE_FAILED;
+				} else {
+					SimpleList<ExprNode> tmp = Helpers.cast(ctx.tmpList); tmp.clear();
+					tmp.add(fn2); tmp.addAll(args);
+					args = ctx.ep.copyOf(tmp);
+					fn = null;
+					tmp.clear();
+				}
+			} else {
+				type = ctx.getClassOrArray(ownMirror);
+				if (type == null) {
+					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", ownMirror);
+					return NaE.RESOLVE_FAILED;
+				}
+			}
 		} else if (fn.getClass() == This.class) {
 			if (!ctx.in_constructor | !ctx.not_invoke_constructor) {
 				ctx.report(Kind.ERROR, "invoke.error.constructor", fn);
-				return this;
+				return NaE.RESOLVE_FAILED;
 			}
 
 			flag |= INVOKE_SPECIAL;
 			ownMirror = ((This) fn).resolve(ctx).type();
-			klass = ownMirror.owner();
+			type = ctx.classes.getClassInfo(ownMirror.owner());
 			method = "<init>";
 		} else {
 			ownMirror = ctx.resolveType((IType) fn);
+			if (Inferrer.hasUndefined(ownMirror)) ctx.report(Kind.ERROR, "invoke.noExact");
 			klass = ownMirror.owner();
 			method = "<init>";
 
-			IClass type = ctx.classes.getClassInfo(klass);
-			if (type == null) throw new ResolveException("symbol.error.noSuchClass:"+klass);
+			type = ctx.classes.getClassInfo(klass);
+			if (type == null) {
+				ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klass);
+				return NaE.RESOLVE_FAILED;
+			}
 
 			if ((type.modifier()&(Opcodes.ACC_ABSTRACT|Opcodes.ACC_INTERFACE)) != 0) {
 				ctx.report(Kind.ERROR, "invoke.error.instantiationAbstract", klass);
-				return this;
+				return NaE.RESOLVE_FAILED;
 			}
 		}
 
-		SimpleList<IType> tmp = Helpers.cast(ctx.tmpListForExpr2); tmp.clear();
+		SimpleList<IType> tmp = Helpers.cast(ctx.tmpList);
 		Map<String, IType> namedType = Collections.emptyMap();
 		int size = args.size()-1;
 		if (size >= 0) {
@@ -218,49 +256,56 @@ public class Invoke extends ExprNode {
 
 			if (last.getClass() != NamedParamList.class) tmp.add(last.type());
 			else namedType = ((NamedParamList) last).getExtraParams();
-		}
+		} else tmp.clear();
 
-		IClass cn = ctx.resolveType(klass);
-		block:
-		if (cn != null) {
-			ctx.assertAccessible(cn);
-			if ((cn.modifier()&Opcodes.ACC_INTERFACE) != 0) flag |= INTERFACE_CLASS;
+		block: {
+			ctx.assertAccessible(type);
+			if ((type.modifier()&Opcodes.ACC_INTERFACE) != 0) flag |= INTERFACE_CLASS;
 
-			ComponentList list = ctx.methodListOrReport(cn, method);
+			ComponentList list = ctx.methodListOrReport(type, method);
 			if (list == null) {
-				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", ctx.currentCodeBlockForReport());
-				break block;
+				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+type.name());
+				return NaE.RESOLVE_FAILED;
 			}
 
-			boolean staticEnv = (mode&MUST_VIRTUAL) != 0 ? ctx.in_static : fn == null;
-			int flags = (flag&INVOKE_SPECIAL) | (staticEnv ? ComponentList.IN_STATIC : 0);
+			int flags = fn == null ? ComponentList.IN_STATIC : 0;
+			if ((flag&INVOKE_SPECIAL) != 0) flags |= ComponentList.THIS_ONLY;
 
-			ctx.inferrer.typeParamHint = tpHint;
+			ctx.inferrer.manualTPBounds = tpHint;
 			MethodResult r = list.findMethod(ctx, ownMirror, tmp, namedType, flags);
-			ctx.inferrer.typeParamHint = null;
-			if (r == null) break block;
+			ctx.inferrer.manualTPBounds = null;
+			if (r == null) return NaE.RESOLVE_FAILED;
+
+			ctx.checkType(r.method.returnType().owner);
 
 			MethodNode mn = r.method;
 			methodNode = mn;
 			genType1 = ownMirror;
 
-			// Object#getClass泛型的特殊处理
+			// Object#getClass的特殊处理
 			if (mn.name().equals("getClass") && mn.rawDesc().equals("()Ljava/lang/Class;")) {
 				Generic val = ownMirror instanceof Generic ? (Generic) ownMirror.clone() : new Generic(ownMirror.owner(), ownMirror.array(), Generic.EX_NONE);
 				val.extendType = Generic.EX_EXTENDS;
 				desc = Collections.singletonList(new Generic("java/lang/Class", Collections.singletonList(val)));
+			} else if (mn == GlobalContext.arrayClone()) {
+				// 数组的clone方法的特殊处理
+				desc = Collections.singletonList(new Asterisk(ownMirror, LocalContext.OBJECT_TYPE));
 			} else {
 				desc = r.desc != null ? Arrays.asList(r.desc) : Helpers.cast(TypeHelper.parseMethod(mn.rawDesc()));
 			}
 
 			if ((mn.modifier&Opcodes.ACC_STATIC) != 0) {
-				if (!staticEnv & (mode&MUST_VIRTUAL) != 0)
-					ctx.report(Kind.SEVERE_WARNING, "symbol.warn.static_on_half", mn.owner, mn.name(), "invoke.method");
-				fn = null;
+				if (fn != null) {
+					if (notStatic) ctx.report(Kind.SEVERE_WARNING, "symbol.warn.static_on_half", mn.owner, mn.name(), "invoke.method");
+					else fn = null; // should be this
+				}
+				//fn = null;
+			} else if ((mn.modifier&Opcodes.ACC_PRIVATE) != 0) {
+				flag |= INVOKE_SPECIAL;
 			}
 
 			if ((mn.modifier & Opcodes.ACC_VARARGS) != 0) {
-				Annotation pmsign = ctx.getAnnotation(cn, mn, "java/lang/invoke/MethodHandle$PolymorphicSignature", true);
+				Annotation pmsign = ctx.getAnnotation(type, mn, "java/lang/invoke/MethodHandle$PolymorphicSignature", true);
 				if (pmsign != null) {
 					methodNode = new MethodNode(mn.modifier, mn.owner, mn.name(), "()V");
 					List<Type> pars = methodNode.parameters(); pars.clear();
@@ -295,14 +340,12 @@ public class Invoke extends ExprNode {
 				}
 			}
 
-			if (mn.attrByName("Evaluable") instanceof Evaluable eval) {
-				ExprNode result = eval.eval(fn instanceof ExprNode e ? e : null, args);
-				if (result != null) return result;
+			if (mn.attrByName(Evaluable.NAME) instanceof Evaluable eval) {
+				ExprNode result = eval.eval(mn, fn instanceof ExprNode e ? e : null, args);
+				if (result != null) return result.resolve(ctx);
 			}
 
-			r.addExceptions(ctx, cn, 0);
-		} else {
-			ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klass);
+			r.addExceptions(ctx, type, false);
 		}
 
 		tmp.clear();
@@ -310,13 +353,12 @@ public class Invoke extends ExprNode {
 	}
 
 	@Override
-	public IType type() { return fn instanceof IType ? ((IType) fn) : desc != null ? desc.get(desc.size()-1) : Asterisk.anyType; }
-
-	@Override
 	public boolean isKind(ExprKind kind) {return kind == ExprKind.INVOKE_CONSTRUCTOR && fn instanceof This;}
-
+	@Override
+	public IType type() { return fn instanceof IType ? ((IType) fn) : desc != null ? desc.get(desc.size()-1) : Asterisk.anyType; }
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
+		var lc = LocalContext.get();
 		byte opcode;
 		// 明显不是构造器
 		if ((methodNode.modifier&Opcodes.ACC_STATIC) != 0) {
@@ -327,7 +369,7 @@ public class Invoke extends ExprNode {
 			}
 			opcode = Opcodes.INVOKESTATIC;
 		} else if (fn instanceof ExprNode expr) {
-			expr.writeDyn(cw, genType1 == null || genType1.genericType() >= IType.ASTERISK_TYPE ? null : cw.ctx1.castTo(genType1, new Type(methodNode.owner), 0));
+			expr.writeDyn(cw, genType1 == null || genType1.genericType() >= IType.ASTERISK_TYPE ? null : lc.castTo(genType1, new Type(methodNode.owner), 0));
 			opcode = (flag&INVOKE_SPECIAL) != 0 ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL;
 		} else {
 			Type rawType = ((IType) fn).rawType();
@@ -339,16 +381,14 @@ public class Invoke extends ExprNode {
 
 		for (int i = 0; i < args.size(); i++) {
 			ExprNode expr = args.get(i);
-			expr.writeDyn(cw, cw.ctx1.castTo(expr.type(), desc.get(i), 0));
+			expr.writeDyn(cw, lc.castTo(expr.type(), desc.get(i), 0));
 		}
 
 		if ((flag&INTERFACE_CLASS) != 0) {
 			if (opcode == Opcodes.INVOKESTATIC) {
-				cw.invoke(Opcodes.INVOKESTATIC, methodNode.owner, methodNode.name(), methodNode.rawDesc(), true);
-			} else {
-				assert opcode == Opcodes.INVOKEVIRTUAL;
-				cw.invoke(Opcodes.INVOKEINTERFACE, methodNode);
+				LocalContext.get().file.setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_8);
 			}
+			cw.invoke(opcode == Opcodes.INVOKEVIRTUAL ? Opcodes.INVOKEINTERFACE : opcode, methodNode.owner, methodNode.name(), methodNode.rawDesc(), true);
 		} else {
 			cw.invoke(opcode, methodNode);
 		}

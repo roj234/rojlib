@@ -4,10 +4,7 @@ import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMap;
 import roj.net.ch.ChannelCtx;
-import roj.net.http.server.Request;
-import roj.net.http.server.ResponseHeader;
 import roj.net.http.ws.WebSocketHandler;
-import roj.net.http.ws.WebSocketServer;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -18,13 +15,7 @@ import java.io.IOException;
  */
 public class AEWebUI extends WebSocketHandler {
 	public static void fn() {
-
-		WebSocketServer man = new WebSocketServer() {
-			@Override
-			protected WebSocketHandler newWorker(Request req, ResponseHeader handle) {
-				return new AEWebUI();
-			}
-		};
+		//Response.websocket(req, request -> new AEWebUI());
 	}
 
 	@Override

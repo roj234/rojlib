@@ -5,5 +5,5 @@ package roj.compiler.diagnostic;
  * @since 2024/2/11 0011 12:43
  */
 public enum Kind {
-	OTHER, NOTE, WARNING, SEVERE_WARNING, ERROR
+	INCOMPATIBLE, NOTE, WARNING, SEVERE_WARNING, ERROR, INTERNAL_ERROR
 }

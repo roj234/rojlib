@@ -16,6 +16,7 @@ import roj.util.DynByteBuf;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -29,7 +30,7 @@ import static roj.asm.util.InsnHelper.ToPrimitiveArrayId;
  */
 public abstract class AbstractCodeWriter extends CodeVisitor {
 	protected DynByteBuf codeOb;
-	protected List<Segment> segments = new SimpleList<>();
+	protected List<Segment> segments = Collections.emptyList();
 
 	protected final MyHashSet<Label> labels = new MyHashSet<>(Hasher.identity());
 
@@ -165,11 +166,9 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	// endregion
 	// region complex
 	public final void newArraySized(Type t, int size) {
-		if (t.array() == 0) throw new IllegalStateException("不是数组");
-
 		ldc(size);
 
-		if (t.array() == 1) {
+		if (t.array() == 0) {
 			switch (t.type) {
 				case BYTE: case SHORT: case CHAR: case BOOLEAN:
 				case DOUBLE: case INT: case FLOAT: case LONG:
@@ -180,9 +179,8 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 
 		clazz(ANEWARRAY, t.getActualClass());
 	}
-	public final void newArraySized(Type t, int[] size) {
-		if (t.array() == 0) throw new IllegalStateException("不是数组");
-		if (t.array() < size.length) throw new IllegalArgumentException("t.array() < size.length");
+	public final void newArraySized(Type t, int... size) {
+		if (t.array()+1 < size.length) throw new IllegalArgumentException("t.array()+1 < size.length");
 		for (int i = 0; i < size.length; i++) ldc(size[i]);
 		multiArray(t.getActualClass(), size.length);
 	}

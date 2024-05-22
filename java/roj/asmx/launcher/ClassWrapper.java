@@ -13,7 +13,7 @@ import roj.crypt.CRC32s;
 import roj.crypt.jar.JarVerifier;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.text.logging.Level;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -65,13 +65,14 @@ public class ClassWrapper implements Function<String, Class<?>> {
 
 		try {
 			// preload asm classes
-			new Context("_classwrapper_", IOUtil.getResource("roj/asmx/launcher/ClassWrapper.class")).getData();
+			new Context("_classwrapper_", IOUtil.getResource("roj/asmx/launcher/ClassWrapper.class")).getData().parsed();
 		} catch (Exception e) {
 			throw new IllegalStateException("预加载转换器相关类时出现异常", e);
 		}
 	}
 
 	public void registerTransformer(ITransformer tr) {
+		if (transformers.contains(tr)) throw new IllegalArgumentException("Transformer already exist: "+tr);
 		transformers.add(tr);
 		if (tr instanceof INameTransformer) {
 			if (nameTransformer == null) {
@@ -227,9 +228,12 @@ public class ClassWrapper implements Function<String, Class<?>> {
 		}
 		reentrant = prev;
 		if (changed) {
-			list.clear();
 			// See ConstantPool#checkCollision
-			list.put(ctx.get());
+			ByteList b = ctx.get();
+			if (b != list) {
+				list.clear();
+				list.put(b);
+			}
 		}
 	}
 
@@ -263,7 +267,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	}
 
 	public void enableFastZip(URL url) throws IOException {
-		ZipFile zf = new ZipFile(new File(EscapeUtil.unescapeFilePath(url.getPath().substring(1), IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf()).toString()));
+		ZipFile zf = new ZipFile(new File(Escape.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), url.getPath().substring(1)).toString()));
 		JarVerifier jv = JarVerifier.create(zf);
 		if (archives.isEmpty()) zf.getStream(zf.entries().iterator().next()).close(); // INIT
 		archives.add(zf);
@@ -340,14 +344,40 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	private AnnotationRepo repo;
 	public AnnotationRepo getAnnotations() throws IOException {
 		if (this.repo == null) {
-			if (archives.isEmpty()) throw new IOException("没有任何源来自本地zip/jar文件，您的JVM可能不受支持");
+			if (archives.isEmpty()) LOGGER.warn("没有任何源来自本地zip/jar文件，您的JVM可能不受支持");
 
-			AnnotationRepo repo = new AnnotationRepo();
-			for (ZipFile archive : archives)
+			var repo = new AnnotationRepo();
+			var buf = IOUtil.getSharedByteBuf();
+			for (ZipFile archive : archives) {
+				ZEntry entry = archive.getEntry("META-INF/annotations.repo");
+				if (entry != null) {
+					buf.clear();
+					try {
+						if (repo.deserialize(archive.get(entry, buf)))
+							continue;
+					} catch (Exception ignored) {}
+				}
 				repo.add(archive);
+			}
 
 			this.repo = repo;
 		}
 		return repo;
+	}
+	public void setAnnotations(AnnotationRepo repo) {
+		if (this.repo != null) throw new IllegalStateException("Annotation already set");
+		this.repo = repo;
+	}
+	public long getAnnotationTimestamp() {
+		long time = 0;
+		for (ZipFile archive : archives) {
+			if (archive.source() instanceof FileSource fs) {
+				long mod = fs.getFile().lastModified();
+				if (time < mod) time = mod;
+			} else {
+				LOGGER.warn("有些源来自内存: {}, 注解时间戳可能无效.", archive.source());
+			}
+		}
+		return time;
 	}
 }

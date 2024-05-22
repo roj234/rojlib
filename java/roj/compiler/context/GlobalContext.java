@@ -1,29 +1,41 @@
 package roj.compiler.context;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
+import roj.asm.Parser;
 import roj.asm.tree.*;
-import roj.asm.tree.anno.Annotation;
+import roj.asm.tree.attr.AttrModule;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.IType;
+import roj.asm.type.Signature;
 import roj.asmx.AnnotationSelf;
 import roj.collect.*;
-import roj.compiler.CompilerConfig;
+import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
-import roj.compiler.api.impl.ResolveApiImpl;
-import roj.compiler.api_rt.*;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.ast.BlockParser;
+import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.Kind;
+import roj.compiler.diagnostic.SimpleDiagnosticListener;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.ResolveHelper;
+import roj.config.ConfigMaster;
 import roj.config.ParseException;
+import roj.config.auto.Serializer;
+import roj.config.auto.Serializers;
+import roj.crypt.CRC32s;
+import roj.io.IOUtil;
 import roj.text.logging.Logger;
+import roj.util.ByteList;
 import roj.util.Helpers;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -38,27 +50,30 @@ import java.util.function.Consumer;
  *   InnerClassFlags 获取内部类的真实权限 （TODO 尝试自动应用到类ASM数据上）
  * 3. 短名称缓存 (通过短名称获取全限定名) TypeResolver importAny需要用到
  * 4. 创建MethodWriter，为了以后切换编译目标，比如到C甚至x86
- * 5. 注解处理（这块待重构）
+ * 5. 注解处理
  *
  * @author solo6975
  * @since 2021/7/22 19:05
  */
-public class GlobalContext implements CompilerConfig, LavaApi {
+public class GlobalContext implements CompilerSpec {
 	private static final XHashSet.Shape<String, CompileUnit> COMPILE_UNIT_SHAPE = XHashSet.noCreation(CompileUnit.class, "name", "_next", Hasher.defaul());
 	private static final XHashSet.Shape<IClass, ResolveHelper> CLASS_EXTRA_INFO_SHAPE = XHashSet.shape(IClass.class, ResolveHelper.class, "owner", "_next", Hasher.identity());
 
-	private final XHashSet<String, CompileUnit> ctx = COMPILE_UNIT_SHAPE.create();
-	private final MyHashMap<String, Library> libraries = new MyHashMap<>();
-	private final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
-	private final MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
+	protected final XHashSet<String, CompileUnit> ctx = COMPILE_UNIT_SHAPE.create();
+	protected final MyHashMap<String, Library> libraries = new MyHashMap<>();
+	protected final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
+	protected MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
+	protected final SimpleList<CompileUnit> generatedCUs = new SimpleList<>();
 
-	@Deprecated
-	public static AnnotationSelf getAnnotationInfo(List<? extends Annotation> list) {
-		throw new NoSuchMethodError();
-	}
+	protected final LibraryGenerated generated = new LibraryGenerated();
+	protected static final class LibraryGenerated implements Library {
+		final MyHashMap<String, ConstantData> classes = new MyHashMap<>();
+		AttrModule module;
 
-	public boolean isSpecEnabled(int specId) {
-		return true;
+		@Override
+		public ConstantData get(CharSequence name) {return classes.get(name);}
+		@Override
+		public String getModule(String className) {return module == null ? null : module.self.name;}
 	}
 
 	public void addLibrary(Library library) {
@@ -66,70 +81,110 @@ public class GlobalContext implements CompilerConfig, LavaApi {
 			libraries.put(className, library);
 	}
 
-	// ◢◤
-	public IClass getClassInfo(CharSequence name) {
-		IClass clz = ctx.get(name);
-		if (clz == null) {
-			clz = libraries.getOrDefault(name, LibraryRuntime.INSTANCE).get(name);
-			if (clz == null && resolveApi != null) {
-				clz = resolveApi.preFilter(name);
-				if (clz == null) return null;
-
-				synchronized (libraries) {
-					libraries.put(name.toString(), resolveApi);
-				}
-			}
-		}
-
-		if (resolveApi != null) resolveApi.postFilter(clz);
+	public ConstantData getClassInfo(CharSequence name) {
+		ConstantData clz = ctx.get(name);
+		if (clz == null) clz = libraries.getOrDefault(name, LibraryRuntime.INSTANCE).get(name);
 		return clz;
 	}
 
-	public void addCompileUnit(CompileUnit unit) {
+	public void addCompileUnit(CompileUnit unit, boolean generated) {
 		CompileUnit prev = ctx.put(unit.name, unit);
-		if (prev != null) throw new IllegalStateException("重复的编译单位: " + unit.name);
+		if (prev != null) throw new IllegalStateException("重复的编译单位: "+unit.name);
+		if (generated) generatedCUs.add(unit);
 	}
-	public void reset() {
-		ctx.clear();
-		for (Iterator<ResolveHelper> itr = extraInfos.iterator(); itr.hasNext(); ) {
-			ResolveHelper info = itr.next();
-			if (info.owner instanceof CompileUnit) {
-				itr.remove();
-			}
-		}
+	public void addGeneratedCompileUnits(List<CompileUnit> ctxs) {
+		ctxs.addAll(generatedCUs);
+		generatedCUs.clear();
 	}
 
-	public final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
-	public IntBiMap<String> parentList(IClass info) throws ClassNotFoundException { return getResolveHelper(info).getClassList(this); }
-	public ComponentList methodList(IClass info, String name) throws ClassNotFoundException { return getResolveHelper(info).findMethod(this, name); }
-	public ComponentList fieldList(IClass info, String name) throws ClassNotFoundException { return getResolveHelper(info).findField(this, name); }
+	public synchronized void addGeneratedClass(ConstantData data) {
+		libraries.put(data.name, generated);
+		var prev = generated.classes.put(data.name, data);
+		if (prev != null) throw new IllegalStateException("重复的生成类: " + data.name);
+	}
+	public Collection<ConstantData> getGeneratedClasses() {return generated.classes.values();}
+
 	@NotNull
-	public List<IType> getTypeParamOwner(IClass info, IType superType) throws ClassNotFoundException {
-		Map<String, List<IType>> map = getResolveHelper(info).getTypeParamOwner(this);
+	public final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
+	@NotNull
+	public IntBiMap<String> getParentList(IClass info) throws ClassNotFoundException {return getResolveHelper(info).getClassList(this);}
+	@Nullable
+	public ComponentList getMethodList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).findMethod(this, name);}
+	@Nullable
+	public ComponentList getFieldList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).findField(this, name);}
+	@Nullable
+	public List<IType> getTypeParamOwner(IClass info, String superType) throws ClassNotFoundException {return getResolveHelper(info).getTypeParamOwner(this).get(superType);}
+	public MyHashMap<String, InnerClasses.Item> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClasses();}
+	public AnnotationSelf getAnnotationDescriptor(IClass clz) {return getResolveHelper(clz).annotationInfo();}
 
-		List<IType> tpws = map.get(superType.owner());
-		if (tpws != null) return tpws;
-		throw new IllegalArgumentException(superType+"不是"+info.name()+"的泛型超类或超接口");
+	public File packageCacheFile;
+	public int getLibraryHash() {
+		ByteList list = new ByteList();
+		for (Library library : new MyHashSet<>(libraries.values()))
+			list.putInt(library.fileHashCode());
+		int hash = CRC32s.once(list.list, 0, list.wIndex());
+		list._free();
+		return hash;
 	}
-	public MyHashMap<String, InnerClasses.InnerClass> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClassFlags(this);}
-
 	/**
 	 * 通过短名称获取全限定名（若存在）
 	 * @return 包含候选包名的列表 例如 [java/lang]
 	 */
+	@SuppressWarnings("unchecked")
 	public List<String> getAvailablePackages(String shortName) {
 		if (packageFastPath.isEmpty()) {
+			long time = System.nanoTime();
+			block:
 			synchronized (this) {
 				if (packageFastPath.isEmpty()) {
-					for (Map.Entry<String, Library> entry : libraries.entrySet()) {
-						addFastPath(entry.getKey());
+					var serializer = (Serializer<MyHashMap<String, List<String>>>) Serializers.SAFE.serializer(Signature.parseGeneric("Lroj/collect/MyHashMap<Ljava/lang/String;Ljava/util/List<Ljava/lang/String;>;>;"));
+
+					File cache = packageCacheFile;
+					if (cache != null && cache.isFile()) {
+						try {
+							packageFastPath = ConfigMaster.XNBT.readObject(serializer, cache);
+							System.out.println("Read PackageCache: "+(System.nanoTime() - time)/1000000d+"ms");
+							break block;
+						} catch (IOException | ParseException e) {
+							debugLogger().warn("包缓存读取失败", e);
+						}
 					}
+
+					for (String entry : libraries.keySet()) {
+						if (!entry.contains("$"))
+							addFastPath(entry);
+					}
+
+					// how to deal with rt.jar ?
 					for (String n : LibraryRuntime.INSTANCE.content()) {
-						addFastPath(n);
+						if (!n.contains("$") &&
+							(n.startsWith("java/") || n.startsWith("javax/") ||
+							LibraryRuntime.INSTANCE.getModule(n).startsWith("jdk.unsupported"))) {
+
+							try {
+								var in = LibraryRuntime.INSTANCE.getResource(n+".class");
+								var acc = Parser.parseAccess(IOUtil.getSharedByteBuf().readStreamFully(in), false);
+								if ((acc.acc&Opcodes.ACC_PUBLIC) == 0) continue;
+							} catch (Exception e) {
+								e.printStackTrace();
+							}
+
+							addFastPath(n);
+						}
 					}
+
 					for (Map.Entry<String, List<String>> entry : packageFastPath.entrySet()) {
-						List<String> value = entry.getValue();
-						if (value.size() == 1) entry.setValue(Collections.singletonList(value.get(0)));
+						var value = entry.getValue();
+						if (value.size() == 1) entry.setValue(Collections.singletonList(value.get(0).intern()));
+						else for (int i = 0; i < value.size(); i++) value.set(i, value.get(i).intern());
+					}
+
+					System.out.println("Build PackageCache: "+(System.nanoTime() - time)/1000000d+"ms");
+
+					if (cache != null) try {
+						ConfigMaster.XNBT.writeObject(serializer, packageFastPath, cache);
+					} catch (IOException e) {
+						debugLogger().warn("包缓存保存失败", e);
 					}
 				}
 			}
@@ -144,78 +199,77 @@ public class GlobalContext implements CompilerConfig, LavaApi {
 		packageFastPath.computeIfAbsent(name, Helpers.fnArrayList()).add(packag);
 	}
 
-	public MethodWriter createMethodPoet(CompileUnit unit, MethodNode node) {
-		return new MethodWriter(unit, node);
+	public void invalidateResolveHelper(IClass file) {
+		extraInfos.removeKey(file);
 	}
 
-	public boolean applicableToNode(AnnotationSelf ctx, Attributed key) {
-		return false;
+	public void reset() {
+		for (CompileUnit unit : ctx) extraInfos.removeKey(unit);
+		ctx.clear();
+
+		for (String s : generated.classes.keySet()) libraries.remove(s, generated);
+		generated.classes.clear();
 	}
 
-	public void invokePartialAnnotationProcessor(CompileUnit unit, AnnotationPrimer annotation, MyHashSet<String> missed) {}
+	public JavaLexer createLexer() {return new JavaLexer();}
+	public LocalContext createLocalContext() {return new LocalContext(this);}
 
-	public void invokeAnnotationProcessor(CompileUnit unit, Attributed key, List<AnnotationPrimer> annotations) {}
+	public ExprParser createExprParser(LocalContext ctx) {return new ExprParser(ctx);}
+	public BlockParser createBlockParser(LocalContext ctx) {return new BlockParser(ctx);}
+	public MethodWriter createMethodPoet(ConstantData file, MethodNode node) {return new MethodWriter(file, node);}
 
-	public AnnotationSelf getAnnotationDescriptor(IClass clz) {
-		return clz instanceof CompileUnit ? ((CompileUnit) clz).annoInfo : getResolveHelper(clz).annotationInfo();
+	public void setModule(AttrModule module) {
+		if (generated.module != null) report(null, Kind.ERROR, -1, "module.dup");
+		generated.module = module;
 	}
 
-	public boolean hasAnnotation(IClass clazz, String name) {
-		return false;
+	// DEFINE BY USER
+	public void invokeAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {
+		for (var annotation : annotations) {
+			if (annotation.type().equals("java/lang/Override") && annotation.values != Collections.EMPTY_MAP) {
+				report(file, Kind.ERROR, annotation.pos, "annotation.override");
+			}
+			if (annotation.type().equals("roj/compiler/api/Ignore")) {
+				debugLogger().info("\n\n当前的错误已被忽略\n\n");
+				// 临时解决方案
+				hasError = false;
+			}
+		}
 	}
 
-	public Consumer<Diagnostic> listener;
+	public boolean isSpecEnabled(int specId) {return true;}
+
+	public Consumer<Diagnostic> listener = new SimpleDiagnosticListener(1, 1, 1);
 	public boolean hasError;
 
-	public void report(CompileUnit source, Kind kind, int pos, String o) {
-		if (kind == Kind.ERROR) hasError = true;
-		new ParseException(source.getLexer().getText(), kind+":"+JavaLexer.translate.translate(o)+"\nin "+source.getFilePath(), pos).printStackTrace();
-		//listener.report();
+	public boolean hasError() {return hasError;}
+	public void report(IClass source, Kind kind, int pos, String code) { report(source, kind, pos, code, (Object[]) null);}
+	public void report(IClass source, Kind kind, int pos, String code, Object... args) {
+		Diagnostic diagnostic = new Diagnostic(source, kind, pos, pos, code, args);
+		if (kind.ordinal() >= Kind.ERROR.ordinal()) hasError = true;
+		listener.accept(diagnostic);
+	}
+	public void report(IClass source, Kind kind, int start, int end, String code, Object... args) {
+		Diagnostic diagnostic = new Diagnostic(source, kind, start, end, code, args);
+		if (kind.ordinal() >= Kind.ERROR.ordinal()) hasError = true;
+		listener.accept(diagnostic);
 	}
 
-	public boolean hasError() {
-		return hasError;
+	private static final ConstantData AnyArray;
+	static {
+		var array = Object[].class;
+		var ref = new ConstantData();
+		ref.name("java/lang/Array");
+		ref.parent(array.getSuperclass().getName().replace('.', '/'));
+		for (Class<?> itf : array.getInterfaces()) ref.addInterface(itf.getName().replace('.', '/'));
+		ref.fields.add(new FieldNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "length", "I"));
+		ref.methods.add(new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "java/lang/Object", "clone", "()Ljava/lang/Object;"));
+		AnyArray = ref;
 	}
-
-	private static ConstantData AnyArray;
-	public static IClass anyArray() {
-		if (AnyArray == null) {
-			Class<Object[]> array = Object[].class;
-			ConstantData data = new ConstantData();
-			data.name("java/lang/Array");
-			data.parent(array.getSuperclass().getName().replace('.', '/'));
-			for (Class<?> itf : array.getInterfaces())
-				data.addInterface(itf.getName().replace('.', '/'));
-			data.newField(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "length", "I");
-			AnyArray = data;
-		}
-		return AnyArray;
-	}
-	public static FieldNode arrayLength() {return (FieldNode) anyArray().fields().get(0);}
-
+	public static ConstantData anyArray() {return AnyArray;}
+	public static FieldNode arrayLength() {return AnyArray.fields.get(0);}
+	public static MethodNode arrayClone() {return AnyArray.methods.get(0);}
 
 	private static final Logger logger = Logger.getLogger("Lavac/Debug");
 	public static Logger debugLogger() {return logger;}
-
-	@Override
-	public AnnotationApi getAnnotationApi() {
-		throw new UnsupportedOperationException("not implemented yet");
-	}
-
-	@Override
-	public ExprApi getExprApi() {
-		return null;
-	}
-
-	@Override
-	public LexApi getLexApi() {
-		return null;
-	}
-
-	private ResolveApiImpl resolveApi;
-	@Override
-	public void addResolveListener(int priority, DynamicResolver dtr) {
-		if (resolveApi == null) resolveApi = new ResolveApiImpl();
-		resolveApi.addTypeResolver(priority, dtr);
-	}
 }

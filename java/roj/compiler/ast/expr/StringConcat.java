@@ -5,7 +5,7 @@ import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.SimpleList;
-import roj.compiler.JavaLexer;
+import roj.compiler.CompilerSpec;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
@@ -64,13 +64,14 @@ final class StringConcat extends ExprNode {
 	}
 
 	public ExprNode append(ExprNode right) {
-		while (right.getClass() == Binary.class) {
+		// 这个把 "s" + (1+2) 搞坏了
+		/*while (right.getClass() == Binary.class) {
 			Binary binary = (Binary) right;
 			if (binary.operator != JavaLexer.add) break;
 
 			nodes.add(binary.left);
 			right = binary.right;
-		}
+		}*/
 		nodes.add(right);
 		return this;
 	}
@@ -78,6 +79,14 @@ final class StringConcat extends ExprNode {
 	private static final Type CHARSEQUENCE_TYPE = new Type("java/lang/CharSequence");
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
+		var lc = LocalContext.get();
+		if (lc.classes.isSpecEnabled(CompilerSpec.SHARED_STRING_CONCAT)) {
+			viaCharList(cw, lc);
+		} else {
+			viaStringBuilder(cw, lc);
+		}
+	}
+	private void viaStringBuilder(MethodWriter cw, LocalContext lc) {
 		cw.newObject("java/lang/StringBuilder");
 		for (int i = 0; i < nodes.size(); i++) {
 			ExprNode node = nodes.get(i);
@@ -98,7 +107,7 @@ final class StringConcat extends ExprNode {
 			} else if (rawType.equals(Constant.STRING)) {
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;");
 			} else {
-				TypeCast.Cast cast = cw.ctx1.castTo(rawType, CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
+				TypeCast.Cast cast = lc.castTo(rawType, CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
 				if (cast.type >= 0) {
 					cast.write(cw);
 					cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/CharSequence;)Ljava/lang/StringBuilder;");
@@ -108,6 +117,38 @@ final class StringConcat extends ExprNode {
 			}
 		}
 		cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;");
+	}
+	private void viaCharList(MethodWriter cw, LocalContext lc) {
+		cw.newObject("roj/text/CharList");
+		for (int i = 0; i < nodes.size(); i++) {
+			ExprNode node = nodes.get(i);
+			node.write(cw, false);
+
+			Type rawType = node.type().rawType();
+			if (rawType.isPrimitive()) {
+				String desc = switch (TypeCast.getDataCap(rawType.type)) {
+					case 0 -> "(Z)Lroj/text/CharList;";
+					case 2 -> "(C)Lroj/text/CharList;";
+					case 5 -> "(J)Lroj/text/CharList;";
+					case 6 -> "(F)Lroj/text/CharList;";
+					case 7 -> "(D)Lroj/text/CharList;";
+					default -> "(I)Lroj/text/CharList;";
+				};
+
+				cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", desc);
+			} else if (rawType.equals(Constant.STRING)) {
+				cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", "(Ljava/lang/String;)Lroj/text/CharList;");
+			} else {
+				TypeCast.Cast cast = lc.castTo(rawType, CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
+				if (cast.type >= 0) {
+					cast.write(cw);
+					cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", "(Ljava/lang/CharSequence;)Lroj/text/CharList;");
+				} else {
+					cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", "(Ljava/lang/Object;)Lroj/text/CharList;");
+				}
+			}
+		}
+		cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "toStringAndFree", "()Ljava/lang/String;");
 	}
 
 	@Override

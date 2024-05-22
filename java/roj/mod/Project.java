@@ -5,13 +5,10 @@ import roj.archive.zip.ZipOutput;
 import roj.asmx.mapper.Mapper;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.concurrent.task.AsyncTask;
 import roj.config.FileConfig;
 import roj.config.data.CList;
 import roj.config.data.CMap;
 import roj.config.data.CString;
-import roj.dev.Compiler;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -25,6 +22,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.concurrent.locks.LockSupport;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,6 +49,7 @@ public final class Project extends FileConfig {
 	String version, atName;
 	Charset charset;
 	List<Project> dependencies;
+
 	final Compiler compiler;
 
 	Mapper.State state;
@@ -61,12 +60,12 @@ public final class Project extends FileConfig {
 	ZipOutput dstFile, binFile;
 
 	private Project(String name) {
-		super(new File(BASE, "config/"+name+".json"), true);
+		super(new File(PROJECT_DIR, name+"/project.json"), true);
 		this.name = name;
 
 		resPath = new File(BASE, getConfig().getString("OVERRIDE_RES_PATH", "projects/"+name+"/resources")).getAbsoluteFile();
 		srcPath = new File(BASE, getConfig().getString("OVERRIDE_SRC_PATH", "projects/"+name+"/java")).getAbsoluteFile();
-		binJar = new File(BASE, getConfig().getString("OVERRIDE_DEV_JAR", "bin/"+name+"-dev.jar")).getAbsoluteFile();
+		binJar = new File(BASE, getConfig().getString("OVERRIDE_DEV_JAR", "bin/"+name+".jar")).getAbsoluteFile();
 		resPrefix = resPath.getAbsolutePath().length()+1;
 
 		// noinspection all
@@ -76,15 +75,12 @@ public final class Project extends FileConfig {
 		// noinspection all
 		binJar.getParentFile().mkdir();
 
-		// 自动备份源码已删除
-
-		Set<String> ignores = new MyHashSet<>();
-		FMDMain.readTextList(ignores::add, "忽略的编译错误码");
-		this.compiler = new Compiler(null, null, ignores, srcPath.getAbsolutePath().replace(File.separatorChar, '/'));
+		compiler = Compiler.getInstance("JAVA", srcPath.getAbsolutePath().replace(File.separatorChar, '/'));
 
 		try {
 			if (binJar.length() == 0) if (!binJar.createNewFile() || !binJar.setLastModified(0)) CLIUtil.warning("无法初始化StampFileTime");
-			this.binFile = new ZipOutput(binJar);
+			binFile = new ZipOutput(binJar);
+			binFile.setCompress(true);
 		} catch (Throwable e) {
 			CLIUtil.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 "+binJar.getAbsolutePath(), e);
 			LockSupport.parkNanos(3_000_000_000L);
@@ -136,7 +132,7 @@ public final class Project extends FileConfig {
 	}
 
 	protected void load(CMap map) {
-		version = map.putIfAbsent("version", "1.0.0");
+		version = map.putIfAbsent("version", "1.0-SNAPSHOT");
 
 		String cs = map.putIfAbsent("charset", "UTF-8");
 		charset = StandardCharsets.UTF_8;
@@ -150,55 +146,53 @@ public final class Project extends FileConfig {
 		atConfigPathStr = atName.length() > 0 ? resPath.getPath() + "/META-INF/"+atName+".cfg" : null;
 
 		List<String> required = map.getOrCreateList("dependency").toStringList();
+		List<Project> cast = Helpers.cast(required);
 		if (!required.isEmpty()) {
 			for (int i = 0; i < required.size(); i++) {
-				File config = new File(BASE, "/config/"+required.get(i)+".json");
+				File config = new File(PROJECT_DIR, required.get(i)+"/project.json");
 				if (!config.exists()) {
 					CLIUtil.warning(name+" 的前置"+required.get(i)+"未找到");
 				} else {
-					required.set(i, Helpers.cast(load(required.get(i))));
+					cast.set(i, load(required.get(i)));
 				}
 			}
-			dependencies = Helpers.cast(required);
+			dependencies = cast;
 		} else {
 			dependencies = Collections.emptyList();
 		}
 	}
 
-	public AsyncTask<MyHashSet<String>> getResourceTask(boolean inc) {
-		return new AsyncTask<MyHashSet<String>>() {
-			@Override
-			protected MyHashSet<String> invoke() {
-				boolean prevCompress = dstFile.isCompress();
-				block: {
-					// 检测是否第一次运行 关机状态无法检测文件变化
-					if (state != null && inc) {
-						Set<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
-						if (!set.contains(null)) {
-							synchronized (set) {
-								for (String s : set) writeRes(s);
-								set.clear();
-							}
-							break block;
+	public Callable<Void> getResourceTask(boolean inc) {
+		return () -> {
+			boolean prevCompress = dstFile.isCompress();
+			block: {
+				// 检测是否第一次运行 关机状态无法检测文件变化
+				if (state != null && inc) {
+					Set<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
+					if (!set.contains(null)) {
+						synchronized (set) {
+							for (String s : set) writeRes(s);
+							set.clear();
 						}
+						break block;
 					}
-
-					IOUtil.findAllFiles(resPath, file -> {
-						writeRes(file.getAbsolutePath());
-						return false;
-					});
 				}
 
-				dstFile.setCompress(prevCompress);
-
-				loadMapper();
-				return null;
+				IOUtil.findAllFiles(resPath, file -> {
+					writeRes(file.getAbsolutePath());
+					return false;
+				});
 			}
+
+			dstFile.setCompress(prevCompress);
+
+			loadMapper();
+			return null;
 		};
 	}
 
 	final void writeRes(String s) {
-		String relPath = s.substring(resPrefix).replace('\\', '/');
+		String relPath = s.substring(resPrefix).replace(File.separatorChar, '/');
 		dstFile.setCompress(!ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath).toLowerCase()));
 		try {
 			dstFile.set(relPath, new FileInputStream(s));

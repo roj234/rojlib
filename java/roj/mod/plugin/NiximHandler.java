@@ -23,13 +23,10 @@ import java.util.Map;
  */
 public class NiximHandler implements Plugin {
 	@Override
-	public String name() {
-		return "Nixim注解上下文处理程序";
-	}
+	public String name() {return "Nixim注解上下文处理程序";}
 
 	@Override
-	public void afterCompile(List<Context> ctx, boolean mapped, PluginContext pc) {
-		if (!mapped) return;
+	public void afterMap(List<Context> ctx, PluginContext pc) {
 		ctx = pc.getAnnotatedClass(ctx, NiximSystemV2.A_NIXIM_CLASS_FLAG);
 
 		for (int i = 0; i < ctx.size(); i++) {

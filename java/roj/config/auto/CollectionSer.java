@@ -2,7 +2,6 @@ package roj.config.auto;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
-import roj.collect.Hasher;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -29,30 +28,30 @@ final class CollectionSer extends Adapter {
 	}
 
 	@Override
-	Adapter inheritBy(SerializerFactoryImpl factory, Class<?> type) {
-		IntFunction<Collection<?>> subType = SerializerFactory.dataContainer(type);
-		return subType == null ? this : new CollectionSer(valueType, set, subType);
+	public Adapter transform(SerializerFactoryImpl man, Class<?> subclass, List<IType> generic) {
+		var vType = valueType;
+		if (generic != null) {
+			if (generic.size() != 1) throw new IllegalArgumentException(generic.toString());
+			vType = man.get(generic.get(0));
+		}
+
+		IntFunction<Collection<?>> constructor = SerializerFactory.dataContainer(subclass);
+		if (constructor == null) constructor = newCollection;
+
+		return vType == valueType && constructor == newCollection ? this : new CollectionSer(vType, set, constructor);
 	}
 
 	@Override
-	Adapter withGenericType(SerializerFactoryImpl man, List<IType> genericType) {
-		if (genericType.size() != 1) throw new IllegalArgumentException(genericType.toString());
-		return new CollectionSer(man.get(genericType.get(0)), set, newCollection);
-	}
-
-	@Override
-	void list(AdaptContext ctx, int size) {
+	public void list(AdaptContext ctx, int size) {
 		ctx.fieldId = -1;
 		ctx.setRef(newCollection != null ? newCollection.apply(size) :
-			set ?
-				ctx instanceof AdaptContextEx ? new MyHashSet<>(Hasher.IDENTITY) :
-				size < 0 ? new MyHashSet<>() : new MyHashSet<>(size)
-			: size < 0 ? SimpleList.withCapacityType(0, 2) : new SimpleList<>(size));
+			set ? size < 0 ? new MyHashSet<>() : new MyHashSet<>(size)
+			: size < 0 ? SimpleList.hugeCapacity(0) : new SimpleList<>(size));
 		ctx.push(valueType);
 	}
 
 	@Override
-	void read(AdaptContext ctx, Object o) {
+	public void read(AdaptContext ctx, Object o) {
 		Collection<?> ref = (Collection<?>) ctx.ref;
 		if (ref == null) {
 			if (o == null) {
@@ -69,10 +68,10 @@ final class CollectionSer extends Adapter {
 
 	// empty collection
 	@Override
-	int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return 1; }
+	public int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return 1; }
 
 	@Override
-	void write(CVisitor c, Object o) {
+	public void write(CVisitor c, Object o) {
 		if (valueType == null) throw new IllegalStateException("开启Dynamic模式以序列化任意对象");
 
 		Collection<?> ref = (Collection<?>) o;

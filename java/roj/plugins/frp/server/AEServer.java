@@ -54,7 +54,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 
 	MyHashMap<byte[], Client> session = new MyHashMap<>();
 	{
-		session.setHasher(Hasher.primitiveArray(byte[].class));
+		session.setHasher(Hasher.array(byte[].class));
 	}
 
 	static RingBuffer<String> logBuffer = new RingBuffer<>(1000, false);
@@ -316,7 +316,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 		@Override
 		protected MSSPublicKey checkCertificate(int type, DynByteBuf data) throws GeneralSecurityException {
 			Blake3 md = new Blake3(32);
-			md.update(data);
+			md.update(data.slice());
 			userId = md.digestShared();
 			return super.checkCertificate(type, data);
 		}

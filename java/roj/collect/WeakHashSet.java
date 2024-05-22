@@ -199,8 +199,8 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _Gener
 				curr = curr.next;
 			}
 
-			if (prev == null) entries[entry.hash&mask] = null;
-			else prev.next = Helpers.cast(curr.next);
+			if (prev == null) entries[entry.hash&mask] = curr.next;
+			else prev.next = curr.next;
 			size--;
 		}
 	}

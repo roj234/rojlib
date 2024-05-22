@@ -1,6 +1,9 @@
 package roj.asm;
 
-import roj.asm.cp.*;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstClass;
+import roj.asm.cp.CstNameAndType;
+import roj.asm.cp.CstUTF;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.*;
 import roj.asm.type.Signature;
@@ -14,7 +17,6 @@ import roj.util.DynByteBuf;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
-import java.util.function.Consumer;
 
 /**
  * 字节码解析器
@@ -26,16 +28,6 @@ public final class Parser {
 	public static final int RECORD_ATTR = 8;
 
 	// region CLAZZ parse LOD 2
-
-	public static ConstantData parse(Class<?> o) {
-		String fn = o.getName().replace('.', '/').concat(".class");
-		ClassLoader cl = o.getClassLoader();
-		try (InputStream in = cl==null?ClassLoader.getSystemResourceAsStream(fn):cl.getResourceAsStream(fn)) {
-			return parse(IOUtil.getSharedByteBuf().readStreamFully(in));
-		} catch (Exception ignored) {}
-		return null;
-	}
-
 	public static ConstantData parse(byte[] b) { return parse(new ByteList(b)); }
 	public static ConstantData parse(DynByteBuf r) {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
@@ -48,9 +40,11 @@ public final class Parser {
 
 		int len = r.readUnsignedShort();
 
-		SimpleList<CstClass> itf = data.interfaces;
-		itf.ensureCapacity(len);
-		while (len-- > 0) itf.add((CstClass) pool.get(r));
+		if (len > 0) {
+			SimpleList<CstClass> itf = data.interfaceWritable();
+			itf.ensureCapacity(len);
+			while (len-- > 0) itf.add((CstClass) pool.get(r));
+		}
 
 		len = r.readUnsignedShort();
 		SimpleList<FieldNode> fields = data.fields;
@@ -198,21 +192,28 @@ public final class Parser {
 		} catch (IOException ignored) {}
 		return null;
 	}
-	public static ConstantData parseConstants(byte[] buf) { return parseConstants(new ByteList(buf)); }
-	public static ConstantData parseConstants(DynByteBuf r) {
+	public static ConstantData parseConstants(byte[] buf) {return parseConstants(new ByteList(buf));}
+	public static ConstantData parseConstants(DynByteBuf r) {return parseConstants(r, null);}
+	public static ConstantData parseConstants(DynByteBuf r, ConstantPool pool) {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		int version = r.readUnsignedShort() | (r.readUnsignedShort() << 16);
 
-		ConstantPool pool = new ConstantPool();
-		pool.read(r, ConstantPool.BYTE_STRING);
+		if (pool == null) {
+			pool = new ConstantPool();
+			pool.read(r, ConstantPool.BYTE_STRING);
+		} else {
+			r.rIndex += pool.byteLength()+2;
+		}
 
 		ConstantData data = new ConstantData(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
 
 		int len = r.readUnsignedShort();
 
-		SimpleList<CstClass> itf = data.interfaces;
-		itf.ensureCapacity(len);
-		while (len-- > 0) itf.add((CstClass) pool.get(r));
+		if (len > 0) {
+			SimpleList<CstClass> itf = data.interfaceWritable();
+			itf.ensureCapacity(len);
+			while (len-- > 0) itf.add((CstClass) pool.get(r));
+		}
 
 		len = r.readUnsignedShort();
 		SimpleList<FieldNode> fields = data.fields;
@@ -260,7 +261,7 @@ public final class Parser {
 
 		r.rIndex += 4; // ver
 
-		ConstantPool pool = AsmShared.local().constPool();
+		var pool = AsmShared.local().constPool();
 		pool.read(r, ConstantPool.ONLY_STRING);
 
 		int cfo = r.rIndex; // acc
@@ -297,27 +298,9 @@ public final class Parser {
 			if (k == 0) data.fields = com;
 			else data.methods = com;
 		}
+
+		AsmShared.local().constPool(pool);
 		return data;
-	}
-
-	// endregion
-	// region FOREACH CONSTANT LOD 0
-
-	public static void forEachConstant(DynByteBuf r, Consumer<Constant> c) {
-		if (r.readInt() != 0xcafebabe) {
-			throw new IllegalArgumentException("Illegal header");
-		}
-
-		r.rIndex += 4; // ver
-
-		ConstantPool cp = AsmShared.local().constPool();
-		cp.setAddListener(c);
-		try {
-			cp.read(r, ConstantPool.CHAR_STRING);
-		} finally {
-			cp.setAddListener(null);
-			cp.clear();
-		}
 	}
 
 	// endregion

@@ -124,6 +124,13 @@ new FormModel {
 				"y": 15
 				"width": 65
 			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiTest"
+				"text": "测试功能"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 160
+				"y": 65
+			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label2"
 				"text": "命令行工具"

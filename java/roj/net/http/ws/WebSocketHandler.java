@@ -18,6 +18,9 @@ import java.util.zip.Inflater;
 import static roj.reflect.ReflectionUtils.u;
 
 /**
+ * Websocket协议 <br>
+ * <a href="https://datatracker.ietf.org/doc/html/rfc6455">RFC6455</a>
+ *
  * @author Roj234
  * @since 2022/11/11 0011 1:30
  */
@@ -115,7 +118,7 @@ public abstract class WebSocketHandler implements ChannelHandler {
 	public void setMaxData(int maxData) {this.maxData = maxData;}
 	public void setMaxDataOnce(int maxDataOnce) {this.maxDataOnce = maxDataOnce;}
 
-	public static CharList decodeToUTF(DynByteBuf in) { return IOUtil.SharedCoder.get().decodeR(in); }
+	public static CharList decodeToUTF(DynByteBuf in) { return in.readUTF(in.readableBytes(), IOUtil.getSharedCharBuf()); }
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws IOException {

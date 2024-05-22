@@ -200,7 +200,7 @@ public final class Pipe implements Selectable {
 		// endregion
 	}
 
-	protected void cipher(DynByteBuf tmp, boolean toDown) {}
+	private void cipher(DynByteBuf tmp, boolean toDown) {}
 
 	@Override
 	public void tick(int elapsed) throws IOException {

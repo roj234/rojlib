@@ -14,14 +14,10 @@ import roj.net.http.HttpRequest;
 import roj.net.http.SyncHttpClient;
 import roj.text.ACalendar;
 import roj.text.CharList;
-import roj.text.EscapeUtil;
-import roj.text.TextUtil;
+import roj.text.Escape;
 import roj.ui.CLIUtil;
-import roj.util.Helpers;
 
 import java.net.InetAddress;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -42,9 +38,9 @@ public class Aliyun implements DDNSService {
 	private static final String DEFAULT_SIGNATURE_VERSION = "1.0";
 
 	private String AccessKeyId, AccessKeySecret;
-	private Random rnd = new SecureRandom();
+	private final Random rnd = new SecureRandom();
 
-	private URL makeUrl(Map<String, String> param) {
+	private String makeUrl(Map<String, String> param) {
 		Map<String, String> queries = new MyHashMap<>(param);
 		queries.put("Format", "JSON");
 		queries.put("Version", DEFAULT_API_VERSION);
@@ -60,19 +56,14 @@ public class Aliyun implements DDNSService {
 		//计算签名
 		String signature = makeSign(queries, AccessKeySecret);
 
-		try {
-			return new URL(API_URL+"/?"+makeQuery(queries)+"&Signature="+signature);
-		} catch (MalformedURLException e) {
-			// should not happen!
-			return Helpers.nonnull();
-		}
+		return API_URL+"/?"+makeQuery(queries)+"&Signature="+signature;
 	}
 
 	private String makeQuery(Map<String, String> queries) {
 		StringBuilder sb = new StringBuilder();
 		for (Map.Entry<String, String> p : queries.entrySet()) {
-			sb.append("&").append(EscapeUtil.encodeURIComponent(p.getKey()))
-			  .append("=").append(EscapeUtil.encodeURIComponent(p.getValue()));
+			sb.append("&").append(Escape.encodeURIComponent(p.getKey()))
+			  .append("=").append(Escape.encodeURIComponent(p.getValue()));
 		}
 		return sb.substring(1);
 	}
@@ -102,17 +93,9 @@ public class Aliyun implements DDNSService {
 			return null;
 		}
 	}
+
 	private static final MyBitSet aliyun_pass = MyBitSet.from("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~");
-	private static CharList encodeSignature(CharSequence src) {
-		CharList out = IOUtil.getSharedCharBuf();
-		byte[] data = src.toString().getBytes(StandardCharsets.UTF_8);
-		for (int i = 0; i < data.length; i++) {
-			int j = data[i] & 0xFF;
-			if (aliyun_pass.contains(j)) out.append((char) j);
-			else out.append('%').append(TextUtil.b2h(j>>>4)).append(TextUtil.b2h(j&0xF));
-		}
-		return out;
-	}
+	private static CharList encodeSignature(CharSequence src) {return Escape.escape(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf().putUTFData(src), aliyun_pass);}
 
 	private Map<String, DDnsRecord> domain2Id = new MyHashMap<>();
 	static final class DDnsRecord {
@@ -172,14 +155,14 @@ public class Aliyun implements DDNSService {
 				if (pos > 0) par.put("RRKeyWord", s.substring(0, pos));
 			}
 
-			th.pushTask(_init(par));
+			th.submit(_init(par));
 
 			par.put("TypeKeyWord", "AAAA");
-			th.pushTask(_init(par));
+			th.submit(_init(par));
 		}
 
-		th.awaitFinish();
 		th.shutdown();
+		th.awaitTermination();
 	}
 
 	@Override
@@ -284,7 +267,7 @@ public class Aliyun implements DDNSService {
 	}
 
 	private ITask _init(Map<String, String> param) {
-		URL url = makeUrl(param);
+		var url = makeUrl(param);
 		return () -> {
 			CMap cfg = _parse(pooledRequest(url));
 			System.out.println(cfg);

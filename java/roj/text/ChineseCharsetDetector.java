@@ -227,7 +227,7 @@ public final class ChineseCharsetDetector implements IntConsumer, AutoCloseable 
 		if (c < 0) {
 			if (c != UnsafeCharset.TRUNCATED)
 				ns += 10;
-		} else if (c < 32) { // control
+		} else if (c < 32 && c != '\r' && c != '\n' && c != '\t') { // control
 			ns++;
 		} else if (常用字.contains(c) || c >= Character.MIN_SUPPLEMENTARY_CODE_POINT) { // 表情: 至少验证更严格
 			ps += 3;

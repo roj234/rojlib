@@ -12,7 +12,7 @@ import java.util.Locale;
  */
 public class HttpHead extends Headers {
 	private final String a, b, c;
-	public final boolean isRequest;
+	private final boolean isRequest;
 
 	public HttpHead(boolean request, String a, String b, String c) {
 		this.a = a;
@@ -20,6 +20,8 @@ public class HttpHead extends Headers {
 		this.c = c;
 		this.isRequest = request;
 	}
+
+	public boolean isRequest() {return isRequest;}
 
 	public int getCode() {
 		if (isRequest) throw new IllegalStateException();
@@ -70,7 +72,7 @@ public class HttpHead extends Headers {
 				c = line.substring(j+1);
 				if (a.startsWith("HTTP/")) break success;
 				request = true;
-				if (Action.valueOf(a) < 0) break failed;
+				if (HttpUtil.parseMethod(a) < 0) break failed;
 				if (c.startsWith("HTTP/")) break success;
 			}
 			throw new IllegalArgumentException("无效请求头 " + line);

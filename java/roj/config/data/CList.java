@@ -22,7 +22,7 @@ import java.util.function.Consumer;
 public class CList extends CEntry implements Iterable<CEntry> {
 	protected List<CEntry> list;
 
-	public CList() { this(SimpleList.withCapacityType(0,2)); }
+	public CList() { this(SimpleList.hugeCapacity(0)); }
 	public CList(int size) { list = new SimpleList<>(size); }
 	@SuppressWarnings("unchecked")
 	public CList(List<? extends CEntry> list) { this.list = (List<CEntry>) list; }
@@ -132,6 +132,12 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		}
 		return array;
 	}
+
+	public boolean isCommentSupported() {return false;}
+	public String getComment(int key) {return null;}
+	public void putComment(int key, String val) {throw new UnsupportedOperationException();}
+	public CList withComments() { return new CCommList(list); }
+	public void clearComments() {}
 
 	@Override
 	public final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }

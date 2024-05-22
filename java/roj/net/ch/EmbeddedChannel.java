@@ -3,7 +3,6 @@ package roj.net.ch;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
-import roj.util.Identifier;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -20,7 +19,7 @@ import java.util.function.Function;
  * @since 2022/8/25 23:10
  */
 public class EmbeddedChannel extends MyChannel {
-	public static final Identifier EMBEDDED_CLOSE = Identifier.of("embedded:close");
+	public static final String EMBEDDED_CLOSE = "e_channel:close";
 	private static final SocketAddress address = new SocketAddress() {
 		@Override
 		public String toString() {
@@ -162,8 +161,10 @@ public class EmbeddedChannel extends MyChannel {
 	// endregion
 
 	public void readActive() {
+		lock.lock();
 		byte f = flag;
-		setFlagLock(f & ~READ_INACTIVE);
+		flag = (byte) (f & ~READ_INACTIVE);
+		lock.unlock();
 		if ((f & READ_INACTIVE) != 0) {
 			if (pair != null) {
 				try {
@@ -174,7 +175,11 @@ public class EmbeddedChannel extends MyChannel {
 			}
 		}
 	}
-	public void readInactive() { setFlagLock(flag | READ_INACTIVE); }
+	public void readInactive() {
+		lock.lock();
+		flag |= READ_INACTIVE;
+		lock.unlock();
+	}
 
 	@Override
 	public void tick(int elapsed) throws Exception {
@@ -192,7 +197,7 @@ public class EmbeddedChannel extends MyChannel {
 		flag |= 4;
 		if (pair != null) {
 			pair.flag |= 2;
-			pair.onInputClosed();
+			pair.onInputClosed(null);
 
 			if (pair.flag == 6) close();
 		}
@@ -223,7 +228,7 @@ public class EmbeddedChannel extends MyChannel {
 			} while (true);
 
 			if (pending.isEmpty()) {
-				flag &= ~PAUSE_FOR_FLUSH;
+				flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 				key.interestOps(SelectionKey.OP_READ);
 				fireFlushed();
 			}
@@ -233,9 +238,9 @@ public class EmbeddedChannel extends MyChannel {
 	}
 	protected void write(Object o) throws IOException {
 		if (writer != null) {
-			if (!writer.apply(o)) pending.ringAddLast(o);
+			if (!writer.apply(o)) pending.addLast(o);
 		} else {
-			if (pair.readDisabled()) pending.ringAddLast(o);
+			if (pair.readDisabled()) pending.addLast(o);
 			else pair.fireChannelRead(o);
 		}
 	}

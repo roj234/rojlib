@@ -23,7 +23,7 @@ public final class ParameterAnnotations extends Attribute {
 		vis = name.equals(VISIBLE);
 
 		int len = r.readUnsignedByte();
-		List<List<Annotation>> annos = this.annotations = new SimpleList<>(len);
+		List<List<Annotation>> annos = annotations = new SimpleList<>(len);
 		while (len-- > 0) {
 			annos.add(Annotations.parse(pool, r));
 		}
@@ -39,7 +39,7 @@ public final class ParameterAnnotations extends Attribute {
 
 	@Override
 	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
-		w.put((byte) annotations.size());
+		w.put(annotations.size());
 		for (int i = 0; i < annotations.size(); i++) {
 			List<Annotation> list = annotations.get(i);
 			w.putShort(list.size());

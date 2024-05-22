@@ -130,6 +130,9 @@ public class Tokenizer {
 	// endregion
 
 	public Tokenizer init(CharSequence seq) {
+		seek = 0;
+		seekPos = 0;
+		prevWords.clear();
 		prevLN = LN = LNIndex = 0;
 		prevIndex = index = 0;
 		input = seq;
@@ -151,14 +154,10 @@ public class Tokenizer {
 	public final void mark() throws ParseException {
 		if ((seek&1) != 0) throw new UnsupportedOperationException("嵌套的seek");
 
-		if (seek == 2) {
-			prevWords.add(lastWord.copy());
-		}
+		if (seek == 2) prevWords.add(seekPos, lastWord.copy());
 		seek = 1;
 		prevSeekPos = seekPos;
-
 	}
-	public final void reset() { seekPos = 0; }
 	public final void skip() { skip(0); }
 	public final void skip(int offset) {
 		assert (seek&1) != 0;
@@ -189,7 +188,8 @@ public class Tokenizer {
 		}
 		if (seekPos < prevWords.size()) return prevWords.get(seekPos++);
 
-		flushBefore(prevIndex);
+		// 20240608 change from prevIndex
+		flushBefore(index);
 
 		prevLN = LN;
 		prevIndex = index;
@@ -219,24 +219,19 @@ public class Tokenizer {
 	}
 
 	public final void retractWord() {
-		block: {
-			if (seek <= 1) {
-				if (seekPos > 0) {
-					seekPos--;
-					break block;
-				}
-
-				if (seek == 0) {
-					seek = 2;
-					if (lastWord == wd) lastWord.init(lwType, lwBegin, lwStr);
-					break block;
-				}
+		if (seek <= 1) {
+			if (seekPos > 0) {
+				seekPos--;
+				return;
 			}
-			throw new IllegalArgumentException("Unable retract");
-		}
 
-		LN = prevLN;
-		LNIndex = prevIndex;
+			if (seek == 0) {
+				seek = 2;
+				if (lastWord == wd) lastWord.init(lwType, lwBegin, lwStr);
+				return;
+			}
+		}
+		throw new IllegalArgumentException("Unable retract");
 	}
 	// endregion
 	// region 转义
@@ -257,6 +252,7 @@ public class Tokenizer {
 		a('\f', 'f');
 		a('\'', '\'');
 		a('"', '"');
+		DESLASHES.putInt('s', ' ');
 
 		// 仅解码
 		DESLASHES.putInt('/', -1);
@@ -452,7 +448,9 @@ public class Tokenizer {
 					// fall to literal(symbol)
 				default:
 					prevIndex = index = i;
-					return readSymbol();
+					Word w = readSymbol();
+					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
+					return w;
 				case C_NUMBER:
 					prevIndex = index = i;
 					return readDigit(false);
@@ -469,6 +467,7 @@ public class Tokenizer {
 	}
 
 	// region symbol matcher
+	protected static final Word COMMENT_RETRY_HINT = new Word();
 	private final CInt posHold = new CInt();
 	private final BiFunction<CInt, Word, Boolean> searcher = (kPos, v) -> {
 		// staticy is not valid
@@ -483,8 +482,10 @@ public class Tokenizer {
 	private Word _bestMatch;
 
 	protected final Word readSymbol() throws ParseException {
-		Word w = tryMatchToken();
-		if (w != null) return w;
+		if (tokens != null) {
+			Word w = tryMatchToken();
+			if (w != null) return w;
+		}
 		return readLiteral();
 	}
 
@@ -492,17 +493,17 @@ public class Tokenizer {
 		CharSequence in = input;
 		int i = index;
 
+		Word w;
 		_bestMatch = null;
-		if (tokens != null)
-			tokens.longestWithCallback(in, i, in.length(), posHold, searcher);
-
-		Word w = _bestMatch;
-		if (w == null) return null;
+		tokens.longestWithCallback(in, i, in.length(), posHold, searcher);
+		if ((w = _bestMatch) == null) return null;
 
 		if (w.getClass() == Word.class) {
 			if (w.pos < 0) {
 				index = i+_bestLength;
-				return onSpecialToken0(w);
+				w = onSpecialToken0(w);
+				if (w != null) return w;
+				return COMMENT_RETRY_HINT;
 			}
 
 			else w = formClip(w.type(), w.val());
@@ -520,8 +521,8 @@ public class Tokenizer {
 	private Word onSpecialToken0(Word w) throws ParseException {
 		switch (w.pos) {
 			default: return onSpecialToken(w);
-			case ST_SINGLE_LINE_COMMENT: singleLineComment(comment); return readWord();
-			case ST_MULTI_LINE_COMMENT: multiLineComment(comment, w.val); return readWord();
+			case ST_SINGLE_LINE_COMMENT: singleLineComment(comment); return null;
+			case ST_MULTI_LINE_COMMENT: multiLineComment(comment, w.val); return null;
 			case ST_STRING, ST_LITERAL_STRING:
 				String s = w.val;
 				if (s.length() != 1) throw new UnsupportedOperationException("readSlashString not support len > 1 terminator");
@@ -566,7 +567,8 @@ public class Tokenizer {
 
 	protected Word readStringLegacy(char key) throws ParseException { return formClip(STRING, readSlashString(key, true)); }
 
-	protected final Word wd = new Word();
+	protected Word newWord() {return new Word();}
+	protected final Word wd = newWord();
 	protected Word formClip(short id, CharSequence s) { return wd.init(id, prevIndex, s.toString()); }
 	protected final Word eof() { return wd.init(EOF, prevIndex, "/EOF"); }
 	// endregion
@@ -946,13 +948,14 @@ public class Tokenizer {
 	protected final void singleLineComment(CharList row) {
 		CharSequence in = input;
 
-		int i = TextUtil.gNextCRLF(in, index);
-		if (i < 0) i = in.length();
-		else i--;
-
-		if (row != null) row.append(in, index, i).trimLast().append('\n');
-
-		// keep \n
+		int i;
+		if (row != null) {
+			i = TextUtil.gAppendToNextCRLF(in, index, row);
+			row.trimLast().append('\n');
+		} else {
+			i = TextUtil.gNextCRLF(in, index);
+			if (i < 0) i = in.length();
+		}
 		index = i;
 	}
 	protected final void multiLineComment(CharList row, String end) throws ParseException {
@@ -967,8 +970,8 @@ public class Tokenizer {
 	}
 	// endregion
 	// region 行号
-	private int LNIndex;
-	protected int prevLN, LN;
+	public int LNIndex, LN;
+	protected int prevLN;
 
 	protected void afterWord() {
 		if (LN == 0) return;
@@ -1001,7 +1004,7 @@ public class Tokenizer {
 	public ParseException err(String reason, Word word) { return new ParseException(input, i18n(reason) + "at" + word.val(), word.pos(), null); }
 
 	public final ParseException err(String reason) { return err(reason, (Throwable) null); }
-	public ParseException err(String reason, Throwable cause) { return new ParseException(input, i18n(reason), this.index - 1, cause); }
+	public ParseException err(String reason, Throwable cause) { return new ParseException(input, i18n(reason), index, cause); }
 	// endregion
 	@Override
 	public String toString() { return "Lexer{"+"pos="+index + ", str="+input+"}"; }

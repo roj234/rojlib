@@ -20,7 +20,7 @@ public class ObfUtil {
 
 	static {
 		try {
-			ConstantData total = Parser.parse(IOUtil.getResource("roj/mapper/obf/ObfUtil.class"));
+			ConstantData total = Parser.parseConstants(IOUtil.getResource("roj/mapper/obf/ObfUtil.class"));
 			MethodNode txa = total.getMethodObj("TextXORA").parsed(total.cp);
 			//txa.code.attributes.clear();
 			textXOR_A = txa;

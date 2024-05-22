@@ -22,25 +22,27 @@ final class MapSer extends Adapter {
 	MapSer(Adapter type, IntFunction<Map<String,?>> newMap) { this.valueType = type; this.newMap = newMap; }
 
 	@Override
-	Adapter inheritBy(SerializerFactoryImpl factory, Class<?> type) {
-		IntFunction<Map<String, ?>> subType = SerializerFactory.dataContainer(type);
-		return subType == null ? this : new MapSer(valueType, subType);
+	public Adapter transform(SerializerFactoryImpl man, Class<?> subclass, List<IType> generic) {
+		var vType = valueType;
+		if (generic != null) {
+			if (generic.size() != 2) throw new IllegalArgumentException(generic.toString());
+			vType = man.get(generic.get(1));
+		}
+
+		IntFunction<Map<String, ?>> constructor = SerializerFactory.dataContainer(subclass);
+		if (constructor == null) constructor = newMap;
+
+		return vType == valueType && constructor == newMap ? this : new MapSer(vType, constructor);
 	}
 
 	@Override
-	Adapter withGenericType(SerializerFactoryImpl man, List<IType> genericType) {
-		if (genericType.size() != 2) throw new IllegalArgumentException(genericType.toString());
-		return new MapSer(man.get(genericType.get(1)), newMap);
-	}
-
-	@Override
-	protected void map(AdaptContext ctx, int size) {
+	public void map(AdaptContext ctx, int size) {
 		ctx.fieldId = -1;
 		ctx.setRef(newMap != null ? newMap.apply(size) : size < 0 ? new MyHashMap<>() : new MyHashMap<>(size));
 	}
 
 	@Override
-	protected void key(AdaptContext ctx, String key) {
+	public void key(AdaptContext ctx, String key) {
 		if (ctx.serCtx != null) throw new IllegalStateException("has key set");
 		ctx.serCtx = key;
 
@@ -50,7 +52,7 @@ final class MapSer extends Adapter {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	protected void read(AdaptContext ctx, Object o) {
+	public void read(AdaptContext ctx, Object o) {
 		if (ctx.serCtx == null) {
 			if (o == null) {
 				ctx.popd(true);
@@ -66,14 +68,14 @@ final class MapSer extends Adapter {
 	}
 
 	@Override
-	boolean valueIsMap() { return true; }
+	public boolean valueIsMap() { return true; }
 
 	// empty map
 	@Override
-	int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return 1; }
+	public int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return 1; }
 
 	@Override
-	void write(CVisitor c, Object o) {
+	public void write(CVisitor c, Object o) {
 		Map<?,?> ref = (Map<?,?>) o;
 		if (ref == null) c.valueNull();
 		else {
@@ -84,7 +86,7 @@ final class MapSer extends Adapter {
 	}
 
 	@Override
-	void writeMap(CVisitor c, Object o) {
+	public void writeMap(CVisitor c, Object o) {
 		if (valueType == null) throw new IllegalStateException("开启Dynamic模式以序列化任意对象");
 
 		Map<?,?> ref = (Map<?,?>) o;

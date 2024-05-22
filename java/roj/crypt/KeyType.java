@@ -175,9 +175,9 @@ public class KeyType {
 
 		try {
 			if (s1.equals("-----BEGIN PUBLIC KEY-----") && sb.equals("-----END PUBLIC KEY-----")) {
-				return FACTORY.generatePublic(new X509EncodedKeySpec(out.toByteArray()));
+				return FACTORY.generatePublic(new X509EncodedKeySpec(out.toByteArrayAndZero()));
 			} else if (s1.equals("-----BEGIN PRIVATE KEY-----") && sb.equals("-----END PRIVATE KEY-----")) {
-				return FACTORY.generatePrivate(new PKCS8EncodedKeySpec(out.toByteArray()));
+				return FACTORY.generatePrivate(new PKCS8EncodedKeySpec(out.toByteArrayAndZero()));
 			}
 		} catch (Exception e) {
 			e.printStackTrace();

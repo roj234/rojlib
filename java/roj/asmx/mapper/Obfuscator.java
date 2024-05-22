@@ -21,7 +21,7 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
-import roj.reflect.FastInit;
+import roj.reflect.ClassDefiner;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.logging.Level;
@@ -289,8 +289,8 @@ public class Obfuscator {
 			c.invoke(Opcodes.INVOKESTATIC, method);
 			c.one(Opcodes.ARETURN);
 
-			FastInit.prepare(cls);
-			return impl = (Decoder) FastInit.make(cls);
+			ClassDefiner.premake(cls);
+			return impl = (Decoder) ClassDefiner.make(cls);
 		}
 	}
 

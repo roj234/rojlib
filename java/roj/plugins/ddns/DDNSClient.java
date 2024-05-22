@@ -6,7 +6,7 @@ import roj.collect.ToIntMap;
 import roj.concurrent.timing.ScheduleTask;
 import roj.config.data.CEntry;
 import roj.config.data.CMap;
-import roj.platform.Plugin;
+import roj.plugin.Plugin;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;

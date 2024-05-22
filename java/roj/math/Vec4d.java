@@ -50,20 +50,6 @@ public class Vec4d extends Vector {
 		return this;
 	}
 
-	// 四元数旋转
-	public static void main(String[] args) {
-		double v = Math.sqrt(2) / 2;
-
-		Vec4d rot = new Vec4d().makeRotation(Math.toRadians(45), new Vec3d(v,0,v));
-		System.out.println(rot);
-		Vec4d aaa = new Vec4d(2,0,0, 0);
-		System.out.println(aaa.len(3));
-		aaa.applyRotation(rot);
-		System.out.println(aaa);
-		System.out.println(aaa.len(3));
-		System.out.println(rot);
-	}
-
 	// q*
 	public Vec4d star() {
 		x = -x;

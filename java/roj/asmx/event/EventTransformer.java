@@ -53,7 +53,7 @@ public final class EventTransformer implements ITransformer, NodeTransformer<Con
 				throw new TransformException("具有泛型参数的事件类"+data.name+"必须实现getGenericType或getGenericValueType方法");
 			}
 
-			return true;
+			//return true;
 		}
 
 		return false;

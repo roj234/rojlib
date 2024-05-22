@@ -10,8 +10,8 @@ import roj.asm.visitor.AbstractCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.io.IOUtil;
+import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
-import roj.reflect.FastInit;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 
@@ -53,18 +53,20 @@ final class EventListenerImpl implements EventListener {
 		if (infos.size() == 1) {
 			ListenerInfo mn = infos.get(0);
 
+			ASM impl;
 			synchronized (mn) {
-				ASM asm = (ASM) mn.impl;
-				if (asm == null) {
-					asm = asm();
-					mn.impl = asm;
-				} else if (handler != null) {
-					asm = (ASM) asm.clone();
+				impl = (ASM) mn.impl;
+				if (impl == null) {
+					mn.impl = impl = asm();
 				}
-
-				if (handler != null) asm.setInstance(handler);
-				return built = asm;
 			}
+
+			if (handler != null) {
+				impl = (ASM) impl.clone();
+				impl.setInstance(handler);
+			}
+
+			return built = impl;
 		} else {
 			// frozen mode
 			ASM asm = asm();
@@ -84,7 +86,7 @@ final class EventListenerImpl implements EventListener {
 
 		c.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
 		c.name("roj/gen/GEL$"+ReflectionUtils.uniqueId());
-		FastInit.prepare(c);
+		ClassDefiner.premake(c);
 		c.addInterface("roj/asmx/event/EventListenerImpl$ASM");
 
 		CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "invoke", "(Lroj/asmx/event/Event;)V");
@@ -173,7 +175,7 @@ final class EventListenerImpl implements EventListener {
 		}
 
 		cw.finish();
-		return (ASM) FastInit.make(c);
+		return (ASM) ClassDefiner.make(c);
 	}
 	private static int callEvent(ConstantData out, CodeWriter c, RawNode listener, int fid) {
 		String clz = listener.ownerClass();

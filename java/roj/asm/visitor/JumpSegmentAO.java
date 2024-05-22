@@ -1,5 +1,6 @@
 package roj.asm.visitor;
 
+import roj.compiler.context.GlobalContext;
 import roj.util.DynByteBuf;
 
 import static roj.asm.Opcodes.*;
@@ -20,6 +21,7 @@ public final class JumpSegmentAO extends JumpSegment {
 		// 或者这是无法访问的代码
 		// TODO 增加一个独立的unreachable code检测，在CodeWriter中
 		if (!to.isContinuousControlFlow(segmentId-1)) {
+			GlobalContext.debugLogger().warn("Unreachable code: SelfOn("+segmentId+")="+to.bci+"+?]=>"+target);
 			to.segments.set(segmentId, StaticSegment.EMPTY);
 			return true;
 		}
@@ -78,7 +80,10 @@ public final class JumpSegmentAO extends JumpSegment {
 			break;
 		}
 
-		if (target.getValue() == to.bci + newLen) new Error("无用的跳转=>"+to).printStackTrace();
+		if (target.getValue() == to.bci + newLen) {
+			GlobalContext.debugLogger().warn("如果这个提示重复出现代表程序又出bug辣 See MethodWriter#label for details");
+			return true;
+		}
 		return len != newLen;
 	}
 

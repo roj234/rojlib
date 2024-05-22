@@ -1,5 +1,6 @@
 package roj.util;
 
+import roj.compiler.plugins.asm.ASM;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.DirectAccessor;
@@ -8,9 +9,8 @@ import roj.ui.CLIUtil;
 
 import java.awt.*;
 import java.awt.datatransfer.*;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.function.ToIntFunction;
 
 import static roj.reflect.ReflectionUtils.u;
@@ -193,5 +193,17 @@ public final class ArrayUtil {
 	public static void checkRange(byte[] b, int off, int len) {
 		if ((off|len|(off+len)) < 0 || off + len > b.length)
 			throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+b.length);
+	}
+
+	private static final Class<?> IMMUTABLE_ARRAY_TYPE = Arrays.asList().getClass();
+	@SuppressWarnings("unchecked")
+	public static <T> List<T> copyOf(Collection<T> list) {
+		if (list.isEmpty()) return Collections.emptyList();
+		if (list.getClass() == IMMUTABLE_ARRAY_TYPE) return (List<T>) list;
+		if (ASM.TARGET_JAVA_VERSION > 9) {
+			return List.copyOf(list);
+		} else {
+			return (List<T>) Arrays.asList(list.toArray());
+		}
 	}
 }
