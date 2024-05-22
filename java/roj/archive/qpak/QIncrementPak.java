@@ -1,7 +1,6 @@
 package roj.archive.qpak;
 
 import roj.archive.qz.QZArchive;
-import roj.archive.qz.QZEntry;
 import roj.archive.qz.QZFileWriter;
 import roj.archive.qz.xz.LZMA2Writer;
 import roj.asmx.launcher.Autoload;
@@ -14,29 +13,18 @@ import roj.crypt.CRC32s;
 import roj.io.IOUtil;
 import roj.io.source.FragmentSource;
 import roj.io.source.Source;
-import roj.text.ACalendar;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 
 /**
  * @author Roj234
  * @since 2024/4/21 0021 1:23
  */
 public class QIncrementPak {
-	public static void main(String[] args) throws IOException {
-		QZFileWriter myfile = openIncrementalV2(new File("test.7z"));
-		myfile.beginEntry(new QZEntry("fileTest"+System.currentTimeMillis()));
-		for (int i = 0; i < 1000; i++) {
-			myfile.write(("testTime="+ACalendar.toLocalTimeString(System.currentTimeMillis())).getBytes(StandardCharsets.UTF_8));
-		}
-		closeIncrementalV2(myfile);
-	}
-
 	// 文件结构
 	// .001 32byte QZHeader
 	// .002 - .xxx Block data

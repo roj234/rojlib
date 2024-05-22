@@ -1,14 +1,9 @@
 package roj.collect;
 
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipFile;
 import roj.crypt.XXHash32;
-import roj.io.IOUtil;
-import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.function.IntFunction;
 
@@ -171,11 +166,13 @@ public class PerfectHashMap<E> {
 
 	public static class Entry<S> {
 		String key;
-		S value;
+		public S value;
 
 		public Entry(String key, S value) {
 			this.key = key;
 			this.value = value;
 		}
+
+		public String getKey() {return key;}
 	}
 }

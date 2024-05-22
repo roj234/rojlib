@@ -235,10 +235,7 @@ public class Signature extends Attribute {
 		signature.validate();
 	}
 
-	public static Signature parse(CharSequence s) {
-		return parse(s, 99);
-	}
-
+	public static Signature parse(CharSequence s) {return parse(s, 99);}
 	public static Signature parse(CharSequence s, int expect) {
 		CInt i1 = new CInt();
 		CharList tmp = IOUtil.getSharedCharBuf();

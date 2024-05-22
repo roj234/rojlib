@@ -1,4 +1,4 @@
-package roj.misc;
+package roj.generator;
 
 import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.LZMA2Writer;
@@ -28,12 +28,10 @@ import java.util.regex.Pattern;
  * @author Roj234
  * @since 2023/12/22 0022 16:31
  */
-public class UpdatePinyinData {
-
-	// region make pinyin data
-	public static void main(String[] args) throws Exception {
+class UpdatePinyinData {
+	public static void run(String pinyinData, String phrasePinyinData) throws Exception {
 		TrieTree<String[]> pinyinMap = new TrieTree<>();
-		try (TextReader in = TextReader.auto(new File("D:\\Desktop\\Python39\\pinyin-data-master.txt"))) {
+		try (TextReader in = TextReader.auto(new File(pinyinData))) {
 			CharList sb = IOUtil.getSharedCharBuf();
 			Pattern p = Pattern.compile("^U\\+([0-9A-F]+): (.+)  #");
 			while (in.readLine(sb)) {
@@ -56,7 +54,7 @@ public class UpdatePinyinData {
 				sb.clear();
 			}
 		}
-		try (TextReader in = TextReader.auto(new File("D:\\Desktop\\Python39\\phrase-pinyin-data-master.txt"))) {
+		try (TextReader in = TextReader.auto(new File(phrasePinyinData))) {
 			CharList sb = IOUtil.getSharedCharBuf();
 			while (in.readLine(sb)) {
 				if (sb.startsWith("#")) {
@@ -193,7 +191,7 @@ public class UpdatePinyinData {
 		LZMA2Options options = new LZMA2Options(9).setDictSize(524288);
 
 		// 让压缩率再高一点吧~
-		try (OutputStream out = options.getOutputStream(new FileOutputStream("D:\\Desktop\\pinyin.lzma2"))) {
+		try (OutputStream out = options.getOutputStream(new FileOutputStream(Main.resourcePath.getAbsolutePath()+"/META-INF/china/pinyin.lzma2"))) {
 			LZMA2Writer myOut = (LZMA2Writer) out;
 
 			bb.clear();
@@ -269,5 +267,4 @@ public class UpdatePinyinData {
 		sb.append('0');
 		return sb;
 	}
-	// endregion
 }
