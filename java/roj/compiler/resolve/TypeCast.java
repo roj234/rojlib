@@ -11,7 +11,7 @@ import roj.collect.Int2IntMap;
 import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.compiler.CompilerConfig;
+import roj.compiler.CompilerSpec;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.context.GlobalContext;
 import roj.concurrent.OperationDone;
@@ -85,9 +85,9 @@ public class TypeCast {
 				default: throw new UnsupportedOperationException(getCastDesc()+"无法生成字节码");
 				case NUMBER_UPCAST, E_EXPLICIT_CAST, E_NUMBER_DOWNCAST: break;
 				case BOXING:
-					Type wrapper = WRAPPER.get(box);
-					cw.invoke(Opcodes.INVOKESTATIC, wrapper.owner, "valueOf", "("+(char)box+")L"+wrapper.owner+";");
-				break;
+					writeOp(cw);
+					writeBox(cw);
+					return;
 				case UNBOXING:
 					cast(cw);
 					cw.invoke(Opcodes.INVOKEVIRTUAL, WRAPPER.get(box).owner, std(box).toString().concat("Value"), "()"+(char)box);
@@ -95,6 +95,13 @@ public class TypeCast {
 				case UPCAST, E_DOWNCAST: cast(cw); break;
 			}
 
+			writeOp(cw);
+		}
+		public void writeBox(CodeWriter cw) {
+			Type wrapper = WRAPPER.get(box);
+			cw.invoke(Opcodes.INVOKESTATIC, wrapper.owner, "valueOf", "("+(char)box+")L"+wrapper.owner+";");
+		}
+		private void writeOp(CodeWriter cw) {
 			if (op1 != 0) {
 				cw.one(op1);
 				if (op2 != 0) cw.one(op2);
@@ -302,7 +309,7 @@ public class TypeCast {
 			etype = gt.extendType;
 			tc = gt.children;
 		} else {
-			tc = !context.isSpecEnabled(CompilerConfig.ADVANCED_GENERIC_CHECK) ? null : getClassTPB(to);
+			tc = !context.isSpecEnabled(CompilerSpec.ADVANCED_GENERIC_CHECK) ? null : getClassTPB(to);
 		}
 
 		Cast r = checkCast(from.rawType(), to.rawType(), etype);
@@ -310,7 +317,7 @@ public class TypeCast {
 		if (from.genericType() == GENERIC_TYPE) {
 			fc = ((Generic)from).children;
 		} else {
-			fc = !context.isSpecEnabled(CompilerConfig.ADVANCED_GENERIC_CHECK) ? null : getClassTPB(from);
+			fc = !context.isSpecEnabled(CompilerSpec.ADVANCED_GENERIC_CHECK) ? null : getClassTPB(from);
 		}
 
 		if (fc != null && tc != null) {
@@ -412,14 +419,18 @@ public class TypeCast {
 			if (inheritType >= 0) return ERROR(E_NEVER);
 			// 装箱
 			if (!to.isPrimitive()) {
-				Cast cast = checkCast(WRAPPER.get(from.type), to, inheritType);
+				int primitive = getWrappedPrimitive(to);
+				if (primitive == 0) return ERROR(E_INT2OBJ);
+
+				//noinspection MagicConstant
+				Cast cast = checkCast(from, std(primitive), inheritType);
 				if (cast.type < E_NUMBER_DOWNCAST) return cast;
 				assert cast.type <= NUMBER_UPCAST;
 
 				// possible: E_EXPLICIT_CAST E_NUMBER_DOWNCAST UPCAST NUMBER_UPCAST
 				cast.type = BOXING;
 				cast.distance += DISTANCE_BOXING;
-				cast.box = from.type;
+				cast.box = (byte) primitive;
 				return cast;
 			}
 

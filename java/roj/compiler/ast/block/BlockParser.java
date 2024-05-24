@@ -1,6 +1,7 @@
 package roj.compiler.ast.block;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
@@ -77,6 +78,7 @@ public class BlockParser {
 		//cw = new MethodWriter(file, mn);
 		ctx.variables = Collections.emptyMap();
 		cw.ctx1 = ctx;
+		reset();
 		parse0();
 	}
 
@@ -88,6 +90,7 @@ public class BlockParser {
 		//cw = new MethodWriter(file, mn);
 		ctx.variables = Collections.emptyMap();
 		cw.ctx1 = ctx;
+		reset();
 		parse0();
 	}
 
@@ -105,6 +108,16 @@ public class BlockParser {
 		wr.labelGen = cw;
 		wr.table = new LineNumberTable();
 
+		reset();
+
+		if ((mn.modifier()&ACC_STATIC) == 0) fastSlot = 1;
+		// TODO generic
+		List<Type> parameters = mn.parameters();
+		for (int i = 0; i < names.size(); i++) {
+			String name = names.get(i);
+			newVar(name, parameters.get(i));
+		}
+
 		parse0();
 
 		//System.out.println(wr.table);
@@ -114,7 +127,6 @@ public class BlockParser {
 	}
 
 	private void parse0() throws ParseException {
-		reset();
 		beginCodeBlock();
 
 		while (true) {
@@ -203,9 +215,6 @@ public class BlockParser {
 				define(vd.type);
 			} else {
 				expr.resolve(ctx).write(cw, true);
-
-				// TODO remove this after skip_semicolon implemented
-				except(semicolon);
 			}
 			return;
 		}
@@ -249,7 +258,7 @@ public class BlockParser {
 				// TODO 等word改好了要更新
 				boolean isconstructor= w.val().equals("this") || w.val().equals("super") ;
 				wr.retractWord();
-				UnresolvedExprNode expr = ep.parse(file, 0);
+				UnresolvedExprNode expr = ep.parse(file, ExprParser.STOP_SEMICOLON);
 				if (expr != null) {
 					expr.resolve(ctx).write(cw, true);
 					except(semicolon);
@@ -304,8 +313,6 @@ public class BlockParser {
 	// region 条件
 
 	private List<ExprNode> deferrers = new SimpleList<>();
-	// TODO layered
-	private List<String> willThrowUnchecked = new SimpleList<>();
 
 	private void blockOrStatement() throws ParseException {
 		Word word = wr.next();
@@ -625,7 +632,6 @@ public class BlockParser {
 
 				// 这个magic number是新finally方式的最大overhead
 				if (copyCount*delta >= 36) {
-					// TODO use already known index
 					ctx.report(pos, Kind.WARNING, "block.try.warn.tooManyCopies", delta, copyCount);
 				}
 			} else {
@@ -919,7 +925,7 @@ public class BlockParser {
 	}
 	// endregion
 	// region 循环: for while do-while
-	private void loopBody(@NotNull Label continueTo, @NotNull Label breakTo) throws ParseException {
+	private void loopBody(@Nullable Label continueTo, @NotNull Label breakTo) throws ParseException {
 		LabelInfo info = immediateLabel;
 		if (info != null) {
 			info.onBreak = breakTo;
@@ -929,7 +935,7 @@ public class BlockParser {
 
 		Label prevBreak = curBreak, prevContinue = curContinue;
 
-		curContinue = continueTo;
+		if (continueTo != null) curContinue = continueTo;
 		curBreak = breakTo;
 
 		blockOrStatement();
@@ -1316,18 +1322,14 @@ public class BlockParser {
 	// endregion
 	// region 表达式和变量
 
-	private void define(IType type) throws ParseException {
-		define(type, semicolon);
-	}
 	/**
 	 * 定义变量 var/const/?
 	 * 没有支持注解的计划。
 	 */
-	private void define(IType type, short stop) throws ParseException {
+	private void define(IType type) throws ParseException {
 		int modifier = 0;
 		if (type == null) {
 			modifier = file._modifier(wr, FINAL);
-			// todo generic supporting
 			type = file.readType(CompileUnit.TYPE_PRIMITIVE|CompileUnit.TYPE_GENERIC);
 		}
 
@@ -1372,7 +1374,7 @@ public class BlockParser {
 			}
 		} while (w.type() == comma);
 
-		if (w.type() != stop) wr.unexpected(w.val(), byId(stop));
+		//if (w.type() != semicolon) wr.unexpected(w.val(), byId(stop));
 	}
 
 	private void writeCast(ExprNode node, IType type) {

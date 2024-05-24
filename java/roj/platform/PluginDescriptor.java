@@ -59,6 +59,7 @@ public class PluginDescriptor {
 		switch (state) {
 			case PluginManager.UNLOAD: sb.append("UNLOAD"); break;
 			case PluginManager.LOADING: sb.append("LOADING"); break;
+			case PluginManager.ERRORED: sb.append("ERRORED"); break;
 			case PluginManager.LOADED: sb.append("LOADED"); break;
 			case PluginManager.ENABLED: sb.append("ENABLED"); break;
 			case PluginManager.DISABLED: sb.append("DISABLED"); break;

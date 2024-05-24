@@ -1,41 +1,49 @@
+## 这是个模板
 
+### 💻 变更类型 | Change Type
+* [ ] ✨ feat
+* [ ] 🐛 fix
+* [ ] ♻️ refactor
+* [ ] 💄 style
+* [ ] 🔨 chore
+* [x] ⚡️ perf
+* [ ] 📝 docs
+### 🔀 变更说明 | Description of Change
+将性能提升了-73%  
+修复了-429个bug
 
-### TODO LIST
+### 📝 补充信息 | Additional Information
+
+## TODO LIST
 * [ ] DNS服务器重构
 * [ ] 修复P2P问题
 * [ ] yield (Generator)
-* [x] java compiler
 * [ ] data flow analyze for bytecode
 * [ ] retransform based advanced hot-reload
 * [ ] FrameVisitor
 * [ ] UDP Transport Protocol
-* [ ] MyJSPEngine
+* [ ] My VCS
 
 
 
-FF:
-把CompileUnit里面readType移动到JavaLexer  
- ↑ 职能专一  
-
-CompileContext作为ExprParser，BlocKParser和CompileUnit交互的桥梁  
- ↑ 这样可以通过CompileUnit暴露的一些方法，简单且可配置的编译单个表达式，单个方法或整个类  
- ↑ 脱耦  
-
-
-BlockParser
-try和switch必须要做成Node
-循环可以做成Node
-
-### 新语法  
-"[" LITERAL+ "]" KEYWORD  
-比如 [fast] finally  
-这样sw-finally就不用单独占一个keyword，还是为了兼容性
-
-#### switch扩展  
-[table] switch  
-使用static MyHashMap（基本泛型扩展）来优化switch，并使其支持任何基本类型、String和对象  
- * 如果是枚举或int，根据空间利用率可以选择替代方案：ordinal -> index数组  aka. legacy switchmap  
- * 如果是任意对象，才会独立一个$SwitchMap$n，目的是懒执行这些表达式，拖到switch第一次执行的时候，而不是当前类的clinit  
+### Lava Compiler
+* [ ] 把CompileUnit里面readType移动到JavaLexer  
+↑ 职能专一
+* [ ] 注解处理
+* [ ] 完整的泛型推断
+* [ ] Record
+* [ ] ...switch
+* 使用static MyHashMap（基本泛型扩展）来优化switch，并使其支持任何基本类型、String和对象
+* 如果是枚举或int，根据空间利用率可以选择替代方案：ordinal -> index数组  aka. legacy switchmap
+* 如果是任意对象，才会独立一个$SwitchMap$n，目的是懒执行这些表达式，拖到switch第一次执行的时候，而不是当前类的clinit
+* [ ] 完整的Try
+* try和switch必须要做成Node
+* [ ] 实现StreamChain
+* [ ] 
+* [x] foreach
+* [x] ImportAny
+* [x] Package-Restricted
+* [x] 可选的分号
 
 ### CompileUnit的多线程和同步解析
 

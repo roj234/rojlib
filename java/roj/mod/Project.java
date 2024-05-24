@@ -150,16 +150,17 @@ public final class Project extends FileConfig {
 		atConfigPathStr = atName.length() > 0 ? resPath.getPath() + "/META-INF/"+atName+".cfg" : null;
 
 		List<String> required = map.getOrCreateList("dependency").toStringList();
+		List<Project> cast = Helpers.cast(required);
 		if (!required.isEmpty()) {
 			for (int i = 0; i < required.size(); i++) {
 				File config = new File(BASE, "/config/"+required.get(i)+".json");
 				if (!config.exists()) {
 					CLIUtil.warning(name+" 的前置"+required.get(i)+"未找到");
 				} else {
-					required.set(i, Helpers.cast(load(required.get(i))));
+					cast.set(i, load(required.get(i)));
 				}
 			}
-			dependencies = Helpers.cast(required);
+			dependencies = cast;
 		} else {
 			dependencies = Collections.emptyList();
 		}

@@ -40,7 +40,7 @@ public final class JavaLexer extends Tokenizer {
 		"package,import," +
 		"default,throws,record,const,var,as,instanceof," +
 		"assert,yield,_with" +
-		"__sub,__end_sub,__struct,package-restricted,unimport", ',');
+		"__sub,__end_sub,__struct,package-restricted", ',');
 	public static final short
 		FOR = 10, WHILE = 11, DO = 12, CONTINUE = 13, BREAK = 14, CASE = 15, IF = 16, ELSE = 17, GOTO = 18, RETURN = 19, SWITCH = 20,
 		THIS = 21, NEW = 22,
@@ -54,7 +54,7 @@ public final class JavaLexer extends Tokenizer {
 		IMPLEMENTS = 54, EXTENDS = 55, SUPER = 56,
 		PACKAGE = 57, IMPORT = 58,
 		DEFAULT = 59, THROWS = 60, RECORD = 61, CONST = 62, VAR = 63, AS = 64, INSTANCEOF = 65,
-		ASSERT = 66, YIELD = 67, WITH = 68, SUB = 69, END_SUB = 70, STRUCT = 71, PACKAGE_RESTRICTED = 72, UNIMPORT = 73;
+		ASSERT = 66, YIELD = 67, WITH = 68, SUB = 69, END_SUB = 70, STRUCT = 71, PACKAGE_RESTRICTED = 72;
 
 	public static final String[] operators = {
 		// Syntax
@@ -162,7 +162,8 @@ public final class JavaLexer extends Tokenizer {
 		p.putInt(logic_and, 94);
 		p.putInt(logic_or, 94);
 
-		alias("sr-finally", FINALLY, null);
+		alias("...finally", FINALLY, null);
+		alias("...switch", SWITCH, null);
 
 		alias("。", dot, JAVA_LEND);
 		alias("，", comma, JAVA_LEND);
@@ -350,4 +351,14 @@ public final class JavaLexer extends Tokenizer {
 	}
 
 	public Word current() { return wd; }
+
+	public boolean nextIf(short type) throws ParseException {
+		if (next().type() == type) return true;
+		retractWord(); return false;
+	}
+
+	public Word optionalNext(short type) throws ParseException {
+		if (next().type() == type) next();
+		return wd;
+	}
 }

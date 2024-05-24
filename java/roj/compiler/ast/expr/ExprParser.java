@@ -1,6 +1,8 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.Opcodes;
+import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -8,10 +10,12 @@ import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
+import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.GenericPrimer;
 import roj.compiler.ast.VariableDeclare;
+import roj.compiler.ast.block.ParseTask;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ParseException;
@@ -460,7 +464,7 @@ public final class ExprParser {
 						// LITERAL => a.b
 
 						if (curIsObj) {
-							if ((flag& CHECK_VARIABLE_DECLARE) != 0) {
+							if ((flag&CHECK_VARIABLE_DECLARE) != 0) {
 								// 是第一个子表达式
 								if (up == null && words.size() == 0 && cur instanceof DotGet dot && dot.parent == null) {
 									assert wordsOff == 0 : "must be outside of any other expression";
@@ -469,6 +473,12 @@ public final class ExprParser {
 									return null;
 								}
 							}
+
+							if (file.ctx().isSpecEnabled(CompilerSpec.KOTLIN_SEMICOLON)) {
+								wr.retractWord();
+								break endValueConv;
+							}
+
 							ue(wr, w.val(), ".");
 						}
 						curIsObj = true;
@@ -561,7 +571,7 @@ public final class ExprParser {
 				break; // )
 				case semicolon:
 					if ((flag & STOP_SEMICOLON) == 0) ue(wr, w.val());
-					wr.retractWord();
+					if ((flag & SKIP_SEMICOLON) == 0) wr.retractWord();
 				break; // ;
 				case mapkv:
 					if ((flag & _ENV_EASYMAP) == 0) ue(wr, w.val());
@@ -575,6 +585,9 @@ public final class ExprParser {
 						binaryOps.add(new BinaryOp(words.size(), priority));
 						words.add(binary(w.type()));
 						continue;
+					} else if (file.ctx().isSpecEnabled(CompilerSpec.KOTLIN_SEMICOLON)) {
+						wr.retractWord();
+						break;
 					}
 				case Word.EOF: ue(wr, w.val());
 			}
@@ -737,8 +750,9 @@ public final class ExprParser {
 
 		Word w = wr.next();
 		if (w.type() == lBrace) {
-			// FIXME not implemented
-			throw wr.err("not implemented");
+			MethodNode mn = new MethodNode(Opcodes.ACC_PUBLIC, file.name, "unusedLambdaRef", "()V");
+			ParseTask lambdaTask = ParseTask.Method(file, mn, strings);
+			return new Lambda(mn, lambdaTask);
 		} else {
 			wr.retractWord();
 			ExprNode expr = parse1(file, STOP_RSB|STOP_COMMA|STOP_SEMICOLON);
@@ -890,12 +904,10 @@ public final class ExprParser {
 		return new NamedParamList();
 	}
 
-	public EasyMap newEasyMap() {
-		return new EasyMap();
-	}
+	public EasyMap newEasyMap() {return new EasyMap();}
 
-	public ExprNode newLambda(ExprNode cur, String val) {
-		return new Lambda(cur, val);
+	public ExprNode newLambda(ExprNode methodHandle, String refName) {
+		return new Lambda(methodHandle, refName);
 	}
 
 	public ExprNode newAssign(VarNode cur, ExprNode node) {
@@ -919,8 +931,8 @@ public final class ExprParser {
 		return new Trinary(cur, middle, right);
 	}
 
-	public ExprNode newLambda(SimpleList<String> strings, ExprNode expr) {
-		return new Lambda(strings, expr);
+	public ExprNode newLambda(SimpleList<String> args, ExprNode expr) {
+		return new Lambda(args, expr);
 	}
 
 	public ExprNode newDotGet(ExprNode e, String name, int flag) {

@@ -8,7 +8,7 @@ import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.IType;
 import roj.asmx.AnnotationSelf;
 import roj.collect.*;
-import roj.compiler.CompilerConfig;
+import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
 import roj.compiler.api.impl.ResolveApiImpl;
 import roj.compiler.api_rt.*;
@@ -43,7 +43,7 @@ import java.util.function.Consumer;
  * @author solo6975
  * @since 2021/7/22 19:05
  */
-public class GlobalContext implements CompilerConfig, LavaApi {
+public class GlobalContext implements CompilerSpec, LavaApi {
 	private static final XHashSet.Shape<String, CompileUnit> COMPILE_UNIT_SHAPE = XHashSet.noCreation(CompileUnit.class, "name", "_next", Hasher.defaul());
 	private static final XHashSet.Shape<IClass, ResolveHelper> CLASS_EXTRA_INFO_SHAPE = XHashSet.shape(IClass.class, ResolveHelper.class, "owner", "_next", Hasher.identity());
 

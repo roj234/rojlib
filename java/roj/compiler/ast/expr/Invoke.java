@@ -228,7 +228,7 @@ public class Invoke extends ExprNode {
 
 			ComponentList list = ctx.methodListOrReport(cn, method);
 			if (list == null) {
-				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", ctx.currentCodeBlockForReport());
+				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "{symbol.type} "+cn.name());
 				break block;
 			}
 

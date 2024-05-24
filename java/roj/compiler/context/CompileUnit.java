@@ -11,7 +11,7 @@ import roj.asm.type.*;
 import roj.asm.visitor.CodeWriter;
 import roj.asmx.AnnotationSelf;
 import roj.collect.*;
-import roj.compiler.CompilerConfig;
+import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.*;
 import roj.compiler.ast.block.ParseTask;
@@ -88,7 +88,7 @@ public final class CompileUnit extends ConstantData {
 		this.path = name;
 
 		this.ctx = LocalContext.get();
-		if (ctx.classes.isSpecEnabled(CompilerConfig.SOURCE_FILE)) putAttr(new AttrString(AttrString.SOURCE,name));
+		if (ctx.classes.isSpecEnabled(CompilerSpec.SOURCE_FILE)) putAttr(new AttrString(AttrString.SOURCE,name));
 
 		tr = new TypeResolver();
 	}
@@ -107,7 +107,7 @@ public final class CompileUnit extends ConstantData {
 		LocalContext.depth(1);
 		ctx = LocalContext.get();
 
-		if (ctx.classes.isSpecEnabled(CompilerConfig.SOURCE_FILE))
+		if (ctx.classes.isSpecEnabled(CompilerSpec.SOURCE_FILE))
 			putAttr(parent.attrByName(Attribute.SourceFile.name));
 
 		_parent = parent;
@@ -221,8 +221,6 @@ public final class CompileUnit extends ConstantData {
 
 	// region 阶段0 package、import、同时检查package-info
 	public boolean S0_Init() throws ParseException {
-		tr.clear();
-
 		JavaLexer wr = this.wr;// = (JavaLexer) new JavaLexer().init(IOUtil.readUTF(in));
 		CharList tmp = IOUtil.getSharedCharBuf();
 
@@ -233,23 +231,25 @@ public final class CompileUnit extends ConstantData {
 		Word w = wr.next();
 		if (w.type() == PACKAGE) {
 			_klass(wr, tmp, 0);
-			wr.except(semicolon);
 			pkg = tmp.append('/').toString();
 
-			w = wr.next();
+			w = wr.optionalNext(semicolon);
 			if (w.type() == EOF) return false;
 		}
 
-		while (w.type() == IMPORT) {
-			boolean impField;
-			if (wr.next().type() == STATIC) {
-				impField = true;
-			} else {
-				impField = false;
-				wr.retractWord();
-			}
-			_klass(wr, tmp, TYPE_STAR);
+		tr.clear();
+		if (w.type() == PACKAGE_RESTRICTED) {
+			tr.setRestricted(true);
+			w = wr.optionalNext(semicolon);
+		}
 
+		while (w.type() == IMPORT) {
+			boolean impField = wr.nextIf(STATIC);
+			int unimport = wr.nextIf(sub) ? 0 : TYPE_STAR;
+
+			_klass(wr, tmp, unimport);
+
+			importBlock:
 			if (tmp.charAt(tmp.length() - 1) == '*') {
 				// import *
 				if (tmp.length() == 1) {
@@ -267,24 +267,21 @@ public final class CompileUnit extends ConstantData {
 				int i = tmp.lastIndexOf("/");
 				if (i < 0) fireDiagnostic(Kind.SEVERE_WARNING, "import.unpackaged");
 
-				String name, qualified = tmp.toString();
+				MyHashMap<String, String> map = !impField ? tr.getImportClass() : tr.getImportStatic();
+				String qualified = tmp.toString();
 
-				w = wr.next();
-				if (w.type() == AS) {
-					name = wr.next().val();
-				} else {
-					wr.retractWord();
-					name = qualified.substring(i+1);
+				if (unimport == 0) {
+					map.put(qualified.substring(i+1), null);
+					break importBlock;
 				}
 
-				MyHashMap<String, String> map = !impField ? tr.getImportClass() : tr.getImportStatic();
+				String name = wr.nextIf(AS) ? wr.next().val() : qualified.substring(i+1);
 				if ((qualified = map.put(name, qualified)) != null) {
 					fireDiagnostic(Kind.ERROR, "import.conflict", tmp, name, qualified);
 				}
 			}
 
-			wr.except(semicolon);
-			w = wr.next();
+			wr.optionalNext(semicolon);
 		}
 
 		wr.retractWord();
@@ -551,7 +548,7 @@ public final class CompileUnit extends ConstantData {
 
 					boolean lsVarargs = false;
 					MethodParameters parAccName;
-					if (ctx.classes.isSpecEnabled(CompilerConfig.KEEP_PARAMETER_NAME)) {
+					if (ctx.classes.isSpecEnabled(CompilerSpec.KEEP_PARAMETER_NAME)) {
 						parAccName = new MethodParameters();
 						method.putAttr(parAccName);
 					} else {
@@ -1112,11 +1109,11 @@ public final class CompileUnit extends ConstantData {
 		for (int i = 0; i < itfs.size(); i++) {
 			IClass info = tr.resolve(ctx, itfs.get(i));
             if (info == null) {
-				fireDiagnostic(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", parent, name+".interface["+i+"]");
+				fireDiagnostic(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", itfs.get(i), name+".interface["+i+"]");
 			} else {
                 int acc = info.modifier();
                 if (0 == (acc & Opcodes.ACC_INTERFACE)) {
-					fireDiagnostic(Kind.ERROR, "cu.resolve.notInheritable", "cu.class", parent);
+					fireDiagnostic(Kind.ERROR, "cu.resolve.notInheritable", "cu.class", info.name());
                 }
 
 				ctx.assertAccessible(info);

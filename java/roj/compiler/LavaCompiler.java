@@ -25,15 +25,11 @@ import java.util.Collections;
  * @since 2024/5/20 0020 2:52
  */
 public class LavaCompiler {
-	GlobalContext ctx;
-	LocalContext cache;
+	final GlobalContext ctx = new GlobalContext();
+	final LocalContext cache = new LocalContext(ctx);
 
 	public LavaCompiler() throws IOException {
-		GlobalContext ctx = new GlobalContext();
 		ctx.addLibrary(new LibraryZipFile(Helpers.getJarByClass(LavaCompiler.class)));
-
-		this.ctx = ctx;
-		this.cache = new LocalContext(ctx);
 	}
 
 	public static void main(String[] args) throws Exception {

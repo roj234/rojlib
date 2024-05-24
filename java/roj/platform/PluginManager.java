@@ -77,7 +77,7 @@ public class PluginManager {
 		}
 	}
 
-	static final int UNLOAD = 0, LOADING = 1, LOADED = 2, ENABLED = 3, DISABLED = 4;
+	static final int UNLOAD = 0, LOADING = 1, ERRORED = 2, LOADED = 3, ENABLED = 4, DISABLED = 5;
 	private boolean loadPlugin(PluginDescriptor pd, boolean must) throws IOException {
 		if (pd == null) return false;
 		switch (pd.state) {
@@ -121,14 +121,14 @@ public class PluginManager {
 			}
 		} catch (ClassNotFoundException|NoClassDefFoundError e) {
 			LOGGER.error("无法初始化主类 {}", e, pd, pd.mainClass);
-			pd.state = DISABLED;
+			pd.state = ERRORED;
 			return false;
 		}
 
 		IntFunction<Object> fn = SerializerFactory.dataContainer(klass);
 		if (fn == null) {
 			LOGGER.error("在主类 {} 中找不到无参构造器", pd, pd.mainClass);
-			pd.state = DISABLED;
+			pd.state = ERRORED;
 		} else {
 			pd.instance = (Plugin) fn.apply(0);
 			pd.instance.init(this, new File(pluginFolder, pd.id), pd);

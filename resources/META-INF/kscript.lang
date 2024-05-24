@@ -86,11 +86,11 @@ cu.except.initBlock=初始化块
 cu.except.fieldName=字段名
 
 #Cu Stage2 [Resolve]
-cu.interface=类
-cu.class=接口
+cu.interface=继承接口
+cu.class=实现类
 cu.final=最终
 cu.genericException=异常类不能拥有泛型参数
-cu.resolve.notInheritable=[CU]无法继承%1 %2
+cu.resolve.notInheritable=[CU]无法%1 %2
 cu.throwException=[CU]扔出的 %1 不是异常
 cu.noDefaultConstructor=[CU]%1 没有默认(无参)构造器
 
@@ -130,9 +130,12 @@ block.try.error.generic=[Try]不能捕获泛型异常%1
 block.try.error.captured=[Try]异常%1已被%2捕获
 block.try.error.noHandler=[Try]孤立的try
 block.try.error.noAutoCloseable=[Try] try-with-resources 不适用 (%1无法转换为java.lang.AutoCloseable)
-block.try.warn.tooManyCopies=[Try]finally代码块（%1字节）被复制了%2次，用"sr-finally"替换finally以减小文件体积
+block.try.warn.tooManyCopies=[Try]finally代码块（%1字节）被复制了%2次，用"...finally"替换finally以减小文件体积
 
-block.var.error.final=[Var]Final变量未赋初值
+block.switch.warn.slowBinarySearch=[Switch]语句正在用时间复杂度为O(log%1)的二分查找，用"...switch"使用O(1)的哈希表
+block.switch.error.dynamicSwitch=[Switch]语句与原版不兼容(%1不是int类型), 请使用"...switch"来启用AnySwitch实验性特性
+
+block.var.error.final=[Var]Final变量未赋初值 （注：未来会允许延后赋值）
 
 # BlockParser Excepting Types
 block.except.tryOrAuto=(或{
@@ -203,6 +206,7 @@ invoke.error.instantiationAbstract=[Invoke] %1 是抽象的; 无法实例化
 invoke.compatible.plural="[Invoke]对 %1 的引用不明确\n%2"
 invoke.incompatible.single="[Invoke]无法将类 %1 中的方法 %2 应用到给定类型\n%3"
 invoke.incompatible.plural="[Invoke]对于%1找不到合适的方法\n%2"
+lambda.error.untyped=[Lambda]未知的目标类型
 
 symbol.type=类
 symbol.field=字段

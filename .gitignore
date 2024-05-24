@@ -1,3 +1,4 @@
 libcpp/.idea/*
 libcpp/bin/*
 *.iml
+resources/libcpp.dll

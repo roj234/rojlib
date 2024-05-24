@@ -122,16 +122,12 @@ public final class TypeResolver {
 		var entry = importClass.getEntry(name);
 		if (entry != null) return (IClass) entry.getValue();
 
-		GlobalContext gc = ctx.classes;
-		IClass c;
+		if (restricted) return null;
 
-		if (!restricted) {
-			c = gc.getClassInfo(name);
-			// 已经是全限定名
-			if (c != null) return c;
-		} else {
-			return null;
-		}
+		GlobalContext gc = ctx.classes;
+		IClass c = gc.getClassInfo(name);
+		// 已经是全限定名
+		if (c != null) return c;
 
 		if (name.indexOf('/') >= 0) return null;
 

@@ -71,20 +71,24 @@ public final class Constant extends ExprNode {
 		if (cast == null) {
 			write(cw, false);
 		} else {
-			if (cast.type == TypeCast.E_NUMBER_DOWNCAST || cast.type == TypeCast.NUMBER_UPCAST) {
-				String name = Opcodes.showOpcode(cast.getOp1());
-				assert name.length() == 3;
-				writePrimitive(cw, switch (name.charAt(2)) {
-					default  -> 4;
-					case 'L' -> 5;
-					case 'F' -> 6;
-					case 'D' -> 7;
-				});
-				return;
+			switch (cast.type) {
+				case TypeCast.E_NUMBER_DOWNCAST, TypeCast.NUMBER_UPCAST, TypeCast.BOXING -> {
+					String name = Opcodes.showOpcode(cast.getOp1());
+					assert name.length() == 3;
+					writePrimitive(cw, switch (name.charAt(2)) {
+						default -> 4;
+						case 'L' -> 5;
+						case 'F' -> 6;
+						case 'D' -> 7;
+					});
+					if (cast.type == TypeCast.BOXING)
+						cast.writeBox(cw);
+				}
+				default -> {
+					write(cw, false);
+					cast.write(cw);
+				}
 			}
-
-			write(cw, false);
-			cast.write(cw);
 		}
 	}
 

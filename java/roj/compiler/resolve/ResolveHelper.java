@@ -274,7 +274,7 @@ public final class ResolveHelper {
 			if (fields1.isEmpty()) {
 				String parent = owner.parent();
 				if (parent != null) fields = ctx.getResolveHelper(ctx.getClassInfo(parent)).fields;
-				else fields = new MyHashMap<>();
+				if (fields == null) fields = new MyHashMap<>();
 				break block;
 			}
 

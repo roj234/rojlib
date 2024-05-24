@@ -73,7 +73,7 @@ public final class FMDMain {
 			System.runFinalization();
 			System.gc();
 			System.runFinalization();
-			System.out.println("释放了 " + TextUtil.scaledNumber(used-(Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory())) + "B内存.");
+			System.out.println("释放了 "+TextUtil.scaledNumber1024(used-(Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory()))+"内存.");
 		}));
 
 		c.register(literal("build").then(argument("flags", Argument.stringFlags("zl", "showErrorCode", "noupdate")).executes(ctx -> {
