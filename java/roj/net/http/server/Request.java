@@ -14,7 +14,7 @@ import roj.net.http.Headers;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.auth.AuthScheme;
 import roj.text.CharList;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
@@ -49,7 +49,7 @@ public final class Request extends Headers {
 	Request init(int action, String path, String query) throws IllegalRequestException {
 		this.action = action;
 		try {
-			this.path = initPath = IOUtil.safePath(EscapeUtil.decodeURI(path));
+			this.path = initPath = IOUtil.safePath(Escape.decodeURI(path));
 		} catch (MalformedURLException e) {
 			throw new IllegalRequestException(400, "bad query");
 		}
@@ -298,7 +298,7 @@ public final class Request extends Headers {
 		// WWW-Authenticate: Basic realm="Fantasy"
 		CharList sb = new CharList();
 		for (AuthScheme authScheme : schemes) sb.append(authScheme.type()).append(' ');
-		Tokenizer.addSlashes(sb.append("realm=\""), EscapeUtil.encodeURI(message)).append("\"");
+		Tokenizer.addSlashes(sb.append("realm=\""), Escape.encodeURI(message)).append("\"");
 		responseHeader.put("www-authenticate", sb.toStringAndFree());
 
 		throw new IllegalRequestException(401, StringResponse.httpErr(401));

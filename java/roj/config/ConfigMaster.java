@@ -126,9 +126,10 @@ public enum ConfigMaster {
 			case TOML -> entry.appendTOML(out, new CharList());
 			case INI -> entry.appendINI(out);
 			case XML -> {
-				// TODO
-				CVisitor sb = new ToXml();
+				// convert to xml
+				ToXml sb = new ToXml();
 				entry.accept(sb);
+				sb.get().toCompatXML(out);
 			}
 			default -> throw new UnsupportedOperationException(this+"不支持序列化到字符串");
 		}

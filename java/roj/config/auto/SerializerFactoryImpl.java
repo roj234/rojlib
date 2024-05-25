@@ -21,6 +21,7 @@ import roj.asm.visitor.LongByeBye;
 import roj.asm.visitor.SwitchSegment;
 import roj.collect.*;
 import roj.io.IOUtil;
+import roj.reflect.ClassDefiner;
 import roj.reflect.FastInit;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
@@ -38,12 +39,11 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj233
- * @version 2.4
+ * @version 2.5
  * @since 2022/1/11 17:49
  */
 final class SerializerFactoryImpl extends SerializerFactory {
 	private static final ReentrantLock lock = new ReentrantLock();
-	private static final Map<String, Adapter> GENERATED = new MyHashMap<>();
 	private static final Map<String, Adapter> DEFAULT = new MyHashMap<>();
 	static {
 		PrimObj STR = new PrimObj(Type.CLASS);
@@ -67,6 +67,9 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		DEFAULT.put("java.util.Set", new CollectionSer(null, true, null));
 	}
 
+	private final ClassLoader classLoader;
+	private final Map<String, Adapter> GENERATED;
+
 	private final ObjAny dynamicRoot;
 	private final Map<String, Adapter> localRegistry = new MyHashMap<>(DEFAULT);
 	private final Map<String, AsType> asTypes = new MyHashMap<>();
@@ -89,8 +92,10 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		public String klass() { return reader.ownerClass(); }
 	}
 
-	SerializerFactoryImpl(int flag) {
+	SerializerFactoryImpl(int flag, ClassLoader cl) {
 		super(flag);
+		this.classLoader = cl;
+		this.GENERATED = Isolation.computeIfAbsent(cl, Fn).generared;
 
 		// 如果不开启AllowDynamic，那么对于raw Collection的反序列化将会失败
 		if ((flag & ALLOW_DYNAMIC) != 0) {
@@ -303,7 +308,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		Type type = generic.rawType();
 		Class<?> klass;
 		try {
-			klass = type.toJavaClass();
+			klass = type.toJavaClass(classLoader);
 		} catch (ClassNotFoundException e) {
 			throw new TypeNotPresentException(generic.toString(), e);
 		}
@@ -409,6 +414,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			name = ((this.flag&OBJECT_POOL) | (flag&(NO_CONSTRUCTOR|SERIALIZE_PARENT)))+";"+name;
 		}
 
+		var GENERATED = Isolation.computeIfAbsent(type.getClassLoader(), Fn).generared;
 		if ((ser = GENERATED.get(name)) == null) {
 			lock.lock();
 			try {
@@ -619,7 +625,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		copy.one(ALOAD_2);
 		copy.field(PUTFIELD, c, ua);
 
-		return build();
+		return build(classLoader);
 	}
 
 	// region 对象序列化器
@@ -659,8 +665,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			copy.one(ALOAD_0);
 			copy.one(ALOAD_1);
 			copy.ldc(new CstClass(data.parent));
-			if (sign == null || sign.values.get(1).genericType() != IType.GENERIC_TYPE) copy.one(ACONST_NULL);
-			else copy.ldc(new CstString(sign.values.get(1).toDesc()));
+			if (sign == null || sign.values.get(0).genericType() != IType.GENERIC_TYPE) copy.one(ACONST_NULL);
+			else copy.ldc(new CstString(sign.values.get(0).toDesc()));
 			copy.invoke(DIRECT_IF_OVERRIDE, "roj/config/auto/SerializerFactoryImpl", "gpa", "(Ljava/lang/Class;Ljava/lang/String;)Lroj/config/auto/Adapter;");
 			copy.field(PUTFIELD, c, parentSer);
 
@@ -847,7 +853,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		write.finish();
 		write = null;
 
-		CodeWriter init = c.newMethod(ACC_PUBLIC, "init", "(Lroj/collect/IntBiMap;Lroj/collect/MyBitSet;)V");
+		CodeWriter init = c.newMethod(ACC_PUBLIC|ACC_FINAL, "init", "(Lroj/collect/IntBiMap;Lroj/collect/MyBitSet;)V");
 		init.visitSize(1, 3);
 		init.one(ALOAD_1);
 		init.field(PUTSTATIC, c, fieldIdKey);
@@ -886,7 +892,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		init.one(RETURN);
 		init.finish();
 
-		return build();
+		return build(o.getClassLoader());
 	}
 
 	private String currentObject;
@@ -1219,17 +1225,17 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	private void begin(String ua) {
 		c = new ConstantData();
 		c.access = ACC_PUBLIC|ACC_SUPER|ACC_FINAL;
-		c.name((ua==null?"roj/config/auto/GA$":ua+"$")+GENERATED.size());
+		c.name((ua==null?"roj/config/auto/GA$":ua+"$")+ReflectionUtils.uniqueId());
 		c.parent("roj/config/auto/Adapter");
 		c.cloneable();
 		c.interfaces.clear();
 		c.interfaces.add(new CstClass("roj/config/auto/GA"));
 		FastInit.prepare(c);
 
-		copy = c.newMethod(ACC_PUBLIC, "init2", "(Lroj/config/auto/SerializerFactoryImpl;Ljava/lang/Object;)V");
+		copy = c.newMethod(ACC_PUBLIC|ACC_FINAL, "init2", "(Lroj/config/auto/SerializerFactoryImpl;Ljava/lang/Object;)V");
 		copy.visitSize(4, 3);
 	}
-	private Adapter build() {
+	private Adapter build(ClassLoader cl) {
 		ConstantData c1 = c;
 		c = null;
 
@@ -1244,7 +1250,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		readMethods.clear();
 		serializerId.clear();
 
-		return (Adapter) FastInit.make(c1);
+		return (Adapter) FastInit.make(c1, ClassDefiner.getFor(cl));
 	}
 	// endregion
 }

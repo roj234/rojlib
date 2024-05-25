@@ -9,13 +9,13 @@ import roj.util.DynByteBuf;
  */
 final class PrimArr extends Adapter {
 	@Override
-	void read(AdaptContext ctx, Object o) {
+	public void read(AdaptContext ctx, Object o) {
 		if (o != null) super.read(ctx, o);
 		else ctx.popd(true);
 	}
 
 	@Override
-	void pop(AdaptContext ctx) {
+	public void pop(AdaptContext ctx) {
 		if (ctx.fieldState == 0) {
 			DynByteBuf buf = (DynByteBuf) ctx.ref;
 			long[] arr = new long[ctx.fieldId];
@@ -28,7 +28,7 @@ final class PrimArr extends Adapter {
 	}
 
 	@Override
-	void list(AdaptContext ctx, int size) {
+	public void list(AdaptContext ctx, int size) {
 		if (size < 0) {
 			ctx.setRef(ctx.buffer());
 			ctx.fieldState = 0;
@@ -40,7 +40,7 @@ final class PrimArr extends Adapter {
 	}
 
 	@Override
-	void read(AdaptContext ctx, long l) {
+	public void read(AdaptContext ctx, long l) {
 		if (ctx.fieldState == 0) {
 			((DynByteBuf) ctx.ref).putLong(l);
 		} else {
@@ -50,7 +50,7 @@ final class PrimArr extends Adapter {
 	}
 
 	@Override
-	void write(CVisitor c, Object o) {
+	public void write(CVisitor c, Object o) {
 		if (o == null) c.valueNull();
 		else {
 			long[] arr = ((long[]) o);

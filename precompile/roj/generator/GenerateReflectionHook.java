@@ -124,7 +124,7 @@ class GenerateReflectionHook {
 		w.one(RETURN);
 		w.finish();
 
-		DataOutputStream fos = new DataOutputStream(new FileOutputStream(Main.resourcePath.getAbsolutePath()+"/META-INF/ReflectionCompat.class"));
+		DataOutputStream fos = new DataOutputStream(new FileOutputStream(Main.resourcePath.getAbsolutePath()+"/roj/reflect/Injector.class"));
 		Parser.toByteArrayShared(ILCD).writeToStream(fos);
 		fos.close();
 	}

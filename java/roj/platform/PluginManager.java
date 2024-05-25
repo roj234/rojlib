@@ -125,7 +125,7 @@ public class PluginManager {
 			return false;
 		}
 
-		IntFunction<Object> fn = SerializerFactory.dataContainer(klass);
+		IntFunction<?> fn = SerializerFactory.dataContainer(klass);
 		if (fn == null) {
 			LOGGER.error("在主类 {} 中找不到无参构造器", pd, pd.mainClass);
 			pd.state = ERRORED;

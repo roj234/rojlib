@@ -14,8 +14,7 @@ import roj.net.http.HttpRequest;
 import roj.net.http.SyncHttpClient;
 import roj.text.ACalendar;
 import roj.text.CharList;
-import roj.text.EscapeUtil;
-import roj.text.TextUtil;
+import roj.text.Escape;
 import roj.ui.CLIUtil;
 import roj.util.Helpers;
 
@@ -71,8 +70,8 @@ public class Aliyun implements DDNSService {
 	private String makeQuery(Map<String, String> queries) {
 		StringBuilder sb = new StringBuilder();
 		for (Map.Entry<String, String> p : queries.entrySet()) {
-			sb.append("&").append(EscapeUtil.encodeURIComponent(p.getKey()))
-			  .append("=").append(EscapeUtil.encodeURIComponent(p.getValue()));
+			sb.append("&").append(Escape.encodeURIComponent(p.getKey()))
+			  .append("=").append(Escape.encodeURIComponent(p.getValue()));
 		}
 		return sb.substring(1);
 	}
@@ -102,17 +101,9 @@ public class Aliyun implements DDNSService {
 			return null;
 		}
 	}
+
 	private static final MyBitSet aliyun_pass = MyBitSet.from("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~");
-	private static CharList encodeSignature(CharSequence src) {
-		CharList out = IOUtil.getSharedCharBuf();
-		byte[] data = src.toString().getBytes(StandardCharsets.UTF_8);
-		for (int i = 0; i < data.length; i++) {
-			int j = data[i] & 0xFF;
-			if (aliyun_pass.contains(j)) out.append((char) j);
-			else out.append('%').append(TextUtil.b2h(j>>>4)).append(TextUtil.b2h(j&0xF));
-		}
-		return out;
-	}
+	private static CharList encodeSignature(CharSequence src) {return Escape.escape(IOUtil.getSharedByteBuf().putUTFData(src), IOUtil.getSharedCharBuf(), aliyun_pass);}
 
 	private Map<String, DDnsRecord> domain2Id = new MyHashMap<>();
 	static final class DDnsRecord {

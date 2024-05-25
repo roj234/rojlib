@@ -3,7 +3,7 @@ package roj.platform;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.util.ByteList;
 
 import java.io.IOException;
@@ -43,7 +43,7 @@ public class PluginClassLoader extends ClassLoader {
 		PLUGIN_CONTEXT.set(this);
 		try {
 			ByteList buf = new ByteList().readStreamFully(archive.getStream(entry));
-			CodeSource cs = new CodeSource(new URL("jar:file:/"+desc.fileName+"!/"+ EscapeUtil.encodeURI(klass)), (CodeSigner[]) null);
+			CodeSource cs = new CodeSource(new URL("jar:file:/"+desc.fileName+"!/"+Escape.encodeURI(klass)), (CodeSigner[]) null);
 
 			DefaultPluginSystem.transform(name, buf);
 			Class<?> clazz = defineClass(name, buf.list, 0, buf.wIndex(), new ProtectionDomain(cs, null));
@@ -61,7 +61,7 @@ public class PluginClassLoader extends ClassLoader {
 	protected URL findResource(String name) {
 		if (archive.getEntry(name) != null) {
 			try {
-				return new URL("jar:file:/"+desc.fileName+"!/"+ EscapeUtil.encodeURI(name));
+				return new URL("jar:file:/"+desc.fileName+"!/"+Escape.encodeURI(name));
 			} catch (MalformedURLException ignored) {}
 		}
 		return null;

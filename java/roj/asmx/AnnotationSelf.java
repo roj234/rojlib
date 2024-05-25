@@ -1,11 +1,16 @@
 package roj.asmx;
 
+import roj.asm.tree.anno.AnnVal;
+import roj.collect.MyHashMap;
+
 public class AnnotationSelf {
 	public String name;
 
 	public String repeatOn = null;
 	public int applicableTo = -1;
 	public byte kind = 0;
+
+	public MyHashMap<String, AnnVal> values = new MyHashMap<>();
 
 	public String repeatOn() { return repeatOn; }
 

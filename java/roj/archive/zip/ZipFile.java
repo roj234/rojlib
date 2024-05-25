@@ -485,9 +485,9 @@ public class ZipFile implements ArchiveFile {
 
 	private void initDataOffset(Source r, ZEntry entry) throws IOException {
 		if ((entry.mzFlag & ZEntry.MZ_ERROR) != 0 && (flags & FLAG_VERIFY) != 0) throw new ZipException(entry+"报告自身已损坏");
-		if ((entry.mzFlag & ZEntry.MZ_BACKWARD) != 0) return;
+		if ((entry.mzFlag & ZEntry.MZ_BACKWARD) == 0) return;
 
-		r.seek(entry.offset - 2 - entry.nameBytes.length);
+		r.seek(entry.startPos() + 28);
 
 		int extraLen = r.read() | (r.read()<<8);
 		if (extraLen < 0) throw new EOFException();

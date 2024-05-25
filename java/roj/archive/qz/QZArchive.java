@@ -10,7 +10,6 @@ import roj.io.LimitInputStream;
 import roj.io.SourceInputStream;
 import roj.io.buf.BufferPool;
 import roj.io.source.Source;
-import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.util.ByteList;
 
@@ -134,11 +133,6 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 		// -- INTERNAL --
 		private ByteList buf = ByteList.EMPTY;
-		private static final long[] attributeReader = new long[] {
-			ReflectionUtils.fieldOffset(QZEntry.class, "createTime"),
-			ReflectionUtils.fieldOffset(QZEntry.class, "accessTime"),
-			ReflectionUtils.fieldOffset(QZEntry.class, "modifyTime")
-		};
 
 		final void load() throws IOException {
 			streamLen = null;
@@ -726,7 +720,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 						MyBitSet set = readBitsOrTrue(count);
 						if (buf.readByte() != 0) error("i_Time.external");
 
-						long off = attributeReader[id-kCTime];
+						long off = QZEntry.SPARSE_ATTRIBUTE_OFFSET[id-kCTime];
 						int flag = 8 << (id-kCTime);
 
 						for (IntIterator itr = set.iterator(); itr.hasNext(); ) {

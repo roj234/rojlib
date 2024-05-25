@@ -1,7 +1,6 @@
 package roj.io.down;
 
 import roj.concurrent.task.ITask;
-import roj.io.IOUtil;
 import roj.io.source.Source;
 import roj.net.ch.*;
 import roj.net.http.HttpHead;
@@ -18,6 +17,9 @@ import java.io.IOException;
  * @since 2022/2/28 21:49
  */
 abstract class Downloader implements ITask, Closeable, ChannelHandler {
+	// todo 支持HTTP2.0后移走
+	public static int timeout = 10000;
+
 	Downloader(Source file) { this.file = file; }
 
 	final Source file;
@@ -49,7 +51,7 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 	@Override
 	public final void channelTick(ChannelCtx ctx) throws IOException {
 		if (progress != null && progress.wasShutdown()) close();
-		if (++idle > IOUtil.timeout) retry();
+		if (++idle > timeout) retry();
 	}
 
 	@Override
@@ -191,7 +193,7 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 			ch = ctx = MyChannel.openTCP();
 			ctx.addLast("Downloader", this);
 
-			client.connect(ctx, IOUtil.timeout);
+			client.connect(ctx, timeout);
 			ServerLaunch.DEFAULT_LOOPER.register(ctx, null);
 		} catch (Exception e) {
 			e.printStackTrace();

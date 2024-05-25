@@ -6,7 +6,6 @@ import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.IType;
 import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
-import roj.compiler.context.CompileUnit;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.ResolveHelper;
@@ -24,8 +23,8 @@ public interface LavaApi {
 
 	public ResolveHelper getResolveHelper(IClass info);
 	public IntBiMap<String> parentList(IClass info) throws ClassNotFoundException;
-	public ComponentList methodList(IClass info, String name) throws ClassNotFoundException;
-	public ComponentList fieldList(IClass info, String name) throws ClassNotFoundException;
+	public ComponentList methodList(IClass info, String name) throws TypeNotPresentException;
+	public ComponentList fieldList(IClass info, String name) throws TypeNotPresentException;
 	@NotNull
 	public List<IType> getTypeParamOwner(IClass info, IType superType) throws ClassNotFoundException;
 	public MyHashMap<String, InnerClasses.InnerClass> getInnerClassFlags(IClass info);
@@ -36,7 +35,8 @@ public interface LavaApi {
 	 */
 	public List<String> getAvailablePackages(String shortName);
 
-	public void report(CompileUnit source, Kind kind, int pos, String o);
+	public void report(IClass source, Kind kind, int pos, String code);
+	public void report(IClass source, Kind kind, int pos, String code, Object... args);
 
 	AnnotationApi getAnnotationApi();
 	ExprApi getExprApi();

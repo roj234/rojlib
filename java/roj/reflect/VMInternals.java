@@ -45,7 +45,7 @@ final class VMInternals {
 		u = uu;
 
 		if (JAVA_VERSION > 8) {
-			try (DataInputStream in = new DataInputStream(VMInternals.class.getClassLoader().getResourceAsStream("META-INF/ReflectionCompat.class"))) {
+			try (DataInputStream in = new DataInputStream(VMInternals.class.getClassLoader().getResourceAsStream("roj/reflect/Injector.class"))) {
 				if (JAVA_VERSION >= 17) {
 					// 失效后解法，防止我忘了：Unsafe遍历找allowedMode替换
 					// 如果Unsafe也不让拿：

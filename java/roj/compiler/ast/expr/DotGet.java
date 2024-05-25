@@ -124,10 +124,12 @@ final class DotGet extends VarNode {
 				names.remove(0);
 				flags = 0;
 			} else {
-				var fields = ctx.get_frChain(); fields.clear();
-				if ((begin = ctx.tryImportField(part, fields)) != null) {
-					// 2. 静态字段导入
-					names.set(0, fields.get(0).name());
+				LocalContext.Import result;
+				// 2. 静态字段导入
+				if ((result = ctx.tryImportField(part)) != null) {
+					begin = result.owner;
+					names.set(0, result.method);
+					parent = result.prev;
 					flags = 0;
 				} else {
 					// 3. 省略this的当前类字段（包括继承！）
@@ -213,6 +215,7 @@ final class DotGet extends VarNode {
 			i = 1;
 			part = chain[0].fieldType().owner();
 		}
+		ctx.checkType(part);
 
 		flags = CHECKED;
 

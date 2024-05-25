@@ -3,6 +3,7 @@ package roj.reflect;
 import roj.asm.AsmShared;
 import roj.asm.Parser;
 import roj.asm.tree.IClass;
+import roj.concurrent.collect.IsolationMap;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 
@@ -13,8 +14,10 @@ import java.security.ProtectionDomain;
  * @since 2021/6/16 1:31
  */
 public class ClassDefiner extends ClassLoader {
-	public static ClassDefiner getFor(Class<?> c) { return new ClassDefiner(getParent(c)); }
-	public static final ClassDefiner INSTANCE = getFor(ClassDefiner.class);
+	private static final IsolationMap<ClassLoader, ClassDefiner> INSTANCES = new IsolationMap<>();
+	public static ClassDefiner getFor(ClassLoader c) { return INSTANCES.computeIfAbsent(c, ClassDefiner::new); }
+
+	public static final ClassDefiner INSTANCE = getFor(ClassDefiner.class.getClassLoader());
 
 	private static final H def;
 	private interface H {
@@ -56,11 +59,5 @@ public class ClassDefiner extends ClassLoader {
 		} finally {
 			buf.rIndex = buf.wIndex();
 		}
-	}
-
-	private static ClassLoader getParent(Class<?> type) {
-		ClassLoader parent = type.getClassLoader();
-		if (parent == null) parent = ClassLoader.getSystemClassLoader();
-		return parent;
 	}
 }

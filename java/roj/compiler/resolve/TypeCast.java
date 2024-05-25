@@ -227,7 +227,7 @@ public class TypeCast {
 				IType t = to_list.get(j);
 
 				Cast v = genericCast(f, t, etype);
-				if (v.type >= 0) if (ok == null || v.type < ok.type) ok = v;
+				if (v.type >= 0) {if (ok == null || v.type < ok.type) ok = v;}
 				else if (res == null || v.type < res.type) res = v;
 			}
 

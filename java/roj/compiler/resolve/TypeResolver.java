@@ -34,6 +34,7 @@ public final class TypeResolver {
 	public List<String> getImportStaticClass() {return importStaticClass;}
 	public void setImportAny(boolean importAny) {this.importAny = importAny;}
 	public void setRestricted(boolean restricted) {this.restricted = restricted;}
+	public boolean isRestricted() {return restricted;}
 
 	public void clear() {
 		importClass.clear();

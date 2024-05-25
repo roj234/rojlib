@@ -146,7 +146,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		return this;
 	}
 
-	public final ByteList put(byte[] b, int off, int len) {
+	public ByteList put(byte[] b, int off, int len) {
 		if (len < 0 || off < 0 || len > b.length - off) throw new ArrayIndexOutOfBoundsException();
 		if (len > 0) {
 			int off1 = arrayOffset() + moveWI(len);
@@ -156,12 +156,9 @@ public class ByteList extends DynByteBuf implements Appendable {
 	}
 
 	@Override
-	public final ByteList put(DynByteBuf b, int len) {
-		return put(b, b.rIndex, len);
-	}
-
+	public final ByteList put(DynByteBuf b, int len) {return put(b, b.rIndex, len);}
 	@Override
-	public final ByteList put(DynByteBuf b, int off, int len) {
+	public ByteList put(DynByteBuf b, int off, int len) {
 		if (off+len > b.wIndex) throw new IndexOutOfBoundsException();
 		ensureCapacity(wIndex+len);
 		b.readFully(off, list, wIndex+arrayOffset(), len);
@@ -612,6 +609,42 @@ public class ByteList extends DynByteBuf implements Appendable {
 		public final int arrayOffset() { return buf.arrayOffset(); }
 		public final int capacity() { return buf.capacity(); }
 		public final int maxCapacity() { return buf.maxCapacity(); }
+
+		@Override
+		public ByteList put(byte[] b, int off, int len) {
+			if (len < buf.capacity()) return super.put(b, off, len);
+			flush();
+			try {
+				out.write(b, off, len);
+			} catch (IOException e) {
+				Helpers.athrow(e);
+			}
+			fakeWriteIndex += len;
+			return this;
+		}
+
+		@Override
+		public ByteList put(DynByteBuf b, int off, int len) {
+			if (len < buf.capacity()) return super.put(b, off, len);
+			flush();
+			try {
+				if (b.hasArray()) out.write(b.array(), b.arrayOffset()+off, len);
+				else {
+					while (len > 0) {
+						int read = Math.min(len, capacity());
+						b.readFully(off, list, arrayOffset(), read);
+						out.write(list, arrayOffset(), read);
+
+						off += read;
+						len -= read;
+					}
+				}
+			} catch (IOException e) {
+				Helpers.athrow(e);
+			}
+			fakeWriteIndex += len;
+			return this;
+		}
 
 		@Override
 		public void ensureCapacity(int cap) {

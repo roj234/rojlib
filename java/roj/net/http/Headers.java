@@ -9,7 +9,7 @@ import roj.concurrent.OperationDone;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.text.LineReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
@@ -85,8 +85,8 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			String s = queries.get(i);
 			int j = s.indexOf('=');
 			try {
-				if (j == -1) map.put(EscapeUtil.decodeURI(s), "");
-				else map.put(EscapeUtil.decodeURI(s.substring(0, j)), EscapeUtil.decodeURI(s.substring(j+1)));
+				if (j == -1) map.put(Escape.decodeURI(s), "");
+				else map.put(Escape.decodeURI(s.substring(0, j)), Escape.decodeURI(s.substring(j+1)));
 			} catch (MalformedURLException e) {
 				if (throwOrSkip) throw e;
 			}
@@ -104,7 +104,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			if (flag == 1) {
 				if (c == '"') {
 					if (k == null) throw new IllegalArgumentException("Escaped key");
-					kvs.accept(EscapeUtil.decodeURI(k), Sub(field, j, i - 1));
+					kvs.accept(Escape.decodeURI(k), Sub(field, j, i - 1));
 					j = i;
 					k = null;
 					flag = 2;
@@ -132,7 +132,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 					case ',':
 					case ';':
 						if (k != null) {
-							kvs.accept(EscapeUtil.decodeURI(k), Sub(field, j, i - 1));
+							kvs.accept(Escape.decodeURI(k), Sub(field, j, i - 1));
 							k = null;
 						} else {
 							if (i - 1 > j) kvs.accept(Sub(field, j, i - 1), "");
@@ -146,7 +146,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		}
 
 		if (k != null) {
-			kvs.accept(EscapeUtil.decodeURI(k), Sub(field, j, i));
+			kvs.accept(Escape.decodeURI(k), Sub(field, j, i));
 		} else if (i > j) {
 			kvs.accept(Sub(field, j, i).toLowerCase(Locale.ROOT), "");
 		}
@@ -154,7 +154,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			if (throwOrSkip) Helpers.athrow(e);
 		}
 	}
-	private static String Sub(CharSequence c, int s, int e) throws MalformedURLException { return EscapeUtil.decodeURI(c.subSequence(s, e)); }
+	private static String Sub(CharSequence c, int s, int e) throws MalformedURLException { return Escape.decodeURI(c.subSequence(s, e)); }
 
 	public Headers() { super(4); }
 	public Headers(CharSequence data) { putAllS(data); }
@@ -255,7 +255,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 				try {
 					if (cookie != null) cookie.clearDirty();
-					cookie = new Cookie(EscapeUtil.decodeURI(k), EscapeUtil.decodeURI(v));
+					cookie = new Cookie(Escape.decodeURI(k), Escape.decodeURI(v));
 					cookies.add(cookie);
 				} catch (MalformedURLException e) {
 					cookie = new Cookie("invalid");

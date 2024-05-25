@@ -1,10 +1,13 @@
-package roj.unpkg;
+package roj.plugins.unpacker;
 
+import roj.collect.TrieTree;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.Optional;
 import roj.crypt.Base64;
+import roj.io.IOUtil;
 import roj.util.ByteList;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -20,19 +23,24 @@ import java.util.List;
  * @author solo6975
  * @since 2022/1/1 19:20
  */
-public class Har {
-	public static void main(String[] args) throws IOException, ParseException {
-		if (args.length < 2) {
-			System.out.println("HarExporter file store");
-			return;
+class Har implements Unpacker {
+	TrieTree<byte[]> tree;
+
+	@Override
+	public TrieTree<?> load(File file) throws IOException {
+		PojoHar har;
+		try {
+			har = ConfigMaster.JSON.readObject(PojoHar.class, file).log;
+		} catch (ParseException e) {
+			throw new IOException("无法解析文件", e);
 		}
 
-		File base = new File(args[1]);
-		PojoHar har = ConfigMaster.JSON.readObject(PojoHar.class, new File(args[0])).log;
-		System.out.println("Version " + har.version + " Created by " + har.creator);
-		ByteList tmp = new ByteList();
+		System.out.println("Version "+har.version+" Created by "+har.creator);
+		tree = new TrieTree<>();
+
+		ByteList tmp = IOUtil.getSharedByteBuf();
 		for (PojoHarItem entry : har.entries) {
-			PojoHarReqRep content1 = entry.response.content;
+			var content1 = entry.response.content;
 			if (content1 == null || content1.text == null) continue;
 
 			String url = entry.request.url;
@@ -44,27 +52,38 @@ public class Har {
 				e.printStackTrace();
 			}
 
-			String content = content1.text;
-			String encoding = content1.encoding;
+			String text = content1.text, encoding = content1.encoding;
 
 			tmp.clear();
-			if (!content.isEmpty() && encoding.equalsIgnoreCase("base64")) {
-				Base64.decode(content, tmp);
+
+			if (!text.isEmpty() && encoding.equalsIgnoreCase("base64")) {
+				Base64.decode(text, tmp);
 			} else if (encoding.isEmpty()) {
-				tmp.putUTFData(content);
+				tmp.putUTFData(text);
 			} else {
-				System.err.println("未知的编码方式for " + url + ": " + encoding);
+				System.err.println(url+": 未知的编码方式: "+encoding);
 			}
 
-			File file = new File(base, url);
-			file.getParentFile().mkdirs();
-			try (FileOutputStream fos = new FileOutputStream(file)) {
-				tmp.writeToStream(fos);
-				System.out.println("OK " + url);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+			tree.put(url, tmp.toByteArray());
 		}
+		return null;
+	}
+
+	@Override
+	public void export(File path, String prefix) throws IOException {
+		tree.forEachSince(prefix, (k, v) -> {
+			File file = new File(path, k.toString());
+			file.getParentFile().mkdirs();
+
+			try {
+				IOUtil.allocSparseFile(file, v.length);
+				try (var out = new FileOutputStream(file)) {
+					out.write(v);
+				}
+			} catch (IOException e) {
+				Helpers.athrow(e);
+			}
+		});
 	}
 
 	@Optional

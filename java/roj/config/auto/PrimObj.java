@@ -14,7 +14,7 @@ final class PrimObj extends Adapter {
 	}
 
 	@Override
-	void read(AdaptContext ctx, Object o) {
+	public void read(AdaptContext ctx, Object o) {
 		assert ctx.fieldId == -2;
 
 		ctx.setRef(o);
@@ -22,7 +22,7 @@ final class PrimObj extends Adapter {
 	}
 
 	@Override
-	void write(CVisitor c, Object o) {
+	public void write(CVisitor c, Object o) {
 		if (o == null) {
 			c.valueNull();
 			return;

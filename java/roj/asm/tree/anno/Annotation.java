@@ -173,7 +173,7 @@ public class Annotation {
 
 	public String toString() {
 		CharList sb = new CharList().append('@');
-		TypeHelper.toStringOptionalPackage(sb, type.endsWith(":") ? type.substring(1, type.length()-1) : type);
+		TypeHelper.toStringOptionalPackage(sb, type());
 		if (!values.isEmpty()) {
 			sb.append('(');
 			if (values.size() == 1 && values.containsKey("value")) {

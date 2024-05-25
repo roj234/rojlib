@@ -12,6 +12,7 @@ import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
+import roj.text.TextUtil;
 
 import java.util.List;
 import java.util.Map;
@@ -24,9 +25,9 @@ final class MethodListSingle extends ComponentList {
 	final MethodNode node;
 	MethodListSingle(MethodNode node) { this.node = node; }
 
-	public MethodResult findMethod(LocalContext ctx, IType genericHint, SimpleList<IType> params,
+	public MethodResult findMethod(LocalContext ctx, IType genericHint, List<IType> params,
 								   Map<String, IType> namedType, int flags) {
-		SimpleList<IType> myParam = params;
+		SimpleList<IType> myParam = null;
 		MethodNode mn = node;
 		IClass mnOwner = ctx.classes.getClassInfo(mn.owner);
 
@@ -78,7 +79,7 @@ final class MethodListSingle extends ComponentList {
 				}
 			}
 
-			MethodResult result = ctx.inferrer.infer(mnOwner, mn, genericHint, myParam);
+			MethodResult result = ctx.inferrer.infer(mnOwner, mn, genericHint, myParam == null ? params : myParam);
 			if (result.distance >= 0) {
 				result.namedParams = defParamState;
 				return result;
@@ -99,4 +100,7 @@ final class MethodListSingle extends ComponentList {
 		ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
 		return null;
 	}
+
+	@Override
+	public String toString() {return "["+node.ownerClass()+" => ("+TextUtil.join(node.parameters(), ", ")+") => "+node.returnType()+']';}
 }

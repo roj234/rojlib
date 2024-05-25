@@ -50,24 +50,23 @@ public abstract class BufferedDigest extends MessageDigest implements Cloneable 
 
 		ByteList L = buf;
 
-		if (L.wIndex() > 0) {
-			int avl = L.writableBytes();
-			if (b.readableBytes() < avl) {
-				L.put(b);
-				b.rIndex = b.wIndex();
-				return;
+		block: {
+			if (L.wIndex() > 0) {
+				int avl = L.writableBytes();
+				if (b.readableBytes() < avl) break block;
+
+				L.put(b, avl);
+				engineUpdateBlock(L);
+				L.clear();
+
+				b.rIndex += avl;
 			}
 
-			L.put(b, avl);
-			engineUpdateBlock(L);
-			L.clear();
-
-			b.rIndex += avl;
+			while (b.readableBytes() >= L.capacity()) engineUpdateBlock(b);
 		}
 
-		while (b.readableBytes() >= L.capacity()) engineUpdateBlock(b);
-
 		L.put(b);
+		b.rIndex = b.wIndex();
 	}
 
 	protected final byte[] engineDigest() {

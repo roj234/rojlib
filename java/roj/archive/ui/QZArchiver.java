@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.DosFileAttributes;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +60,7 @@ public class QZArchiver {
 	public File outputFolder;
 	public String outputName;
 	public boolean singleThread, keepArchive;
+	public Comparator<File> sorter;
 
 	public int autoSplitTaskSize;
 	public LZMA2Options autoSplitTaskOptions;
@@ -113,6 +115,12 @@ public class QZArchiver {
 				compressedLen[0] += file.length();
 			}
 		};
+
+		if (sorter != null) {
+			compressed.sort(sorter);
+			executable.sort(sorter);
+			uncompressed.sort(sorter);
+		}
 
 		if (pathType == PATH_FULL) {
 			String shortestCommonParent = paths.get(0).getAbsolutePath();

@@ -100,7 +100,7 @@ public final class NIOUtil {
 	}
 
 	private static void setReusePortW(FileDescriptor fd, boolean enabled) throws IOException {
-		if (!NativeLibrary.hasFunction(NativeLibrary.REUSE_PORT_WINDOWS)) throw new NativeException("native library not available");
+		if (!NativeLibrary.hasFunction(NativeLibrary.FUNC_WINDOWS)) throw new NativeException("native library not available");
 		int error = windowsOnlyReuseAddr(UTIL.fdVal(fd), enabled);
 		if (error != 0) {
 			switch (error) {

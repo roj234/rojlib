@@ -31,7 +31,7 @@ public final class Serializers {
 
 	public static void serializeCharArrayToString(SerializerFactory factory) { factory.add(char[].class,INSTANCE,"writeChars","readChars"); }
 
-	public final String writeHex(byte[] arr) {return IOUtil.SharedCoder.get().encodeBase64(arr);}
+	public final String writeHex(byte[] arr) {return IOUtil.SharedCoder.get().encodeHex(arr);}
 	public final byte[] readHex(String s) {
 		ByteList b = new ByteList();
 		byte[] bb = TextUtil.hex2bytes(s, b).toByteArray();
@@ -40,7 +40,7 @@ public final class Serializers {
 	}
 
 	public final String writeBase64(byte[] arr) { return IOUtil.SharedCoder.get().encodeBase64(arr); }
-	public final byte[] readBase64(String s) { return IOUtil.SharedCoder.get().decodeBase64(s); }
+	public final byte[] readBase64(String s) { return IOUtil.SharedCoder.get().decodeBase64(s).toByteArray(); }
 
 	public final String writeRGB(int color) { return "#".concat(Integer.toHexString(color&0xFFFFFF)); }
 	public final String writeRGBA(int color) { return "#".concat(Integer.toHexString(color)); }

@@ -33,7 +33,9 @@ public interface Argument<T> {
 				String pathStr = ctx.nextString();
 				File path = new File(pathStr);
 
-				if (completions != null && ctx.isWordEdge()) {
+				if (completions != null) {
+					if (!ctx.isWordEdge()) return null;
+
 					String match, prefix;
 
 					if (path.isFile()) return null;
@@ -56,7 +58,7 @@ public interface Argument<T> {
 				if (folder == null) {
 					if (!path.exists()) throw ctx.error("文件(夹)不存在");
 				} else if (folder) {
-					if (!path.isDirectory()) throw ctx.error("文件夹不存在");
+					if (!path.isDirectory() && !path.mkdirs()) throw ctx.error("文件夹不存在且无法创建");
 				} else {
 					if (!path.isFile()) throw ctx.error("文件不存在");
 				}
@@ -208,7 +210,7 @@ public interface Argument<T> {
 		};
 	}
 	static Argument<Integer> number(int min, int max) {
-		return new Argument<Integer>() {
+		return new Argument<>() {
 			@Override
 			public Integer parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
 				int val = ctx.nextInt();
@@ -219,6 +221,20 @@ public interface Argument<T> {
 
 			@Override
 			public String type() { return "int["+min+","+max+"]"; }
+		};
+	}
+	static Argument<Long> Long(long min, long max) {
+		return new Argument<>() {
+			@Override
+			public Long parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+				long val = ctx.nextLong();
+				if (val < min) throw ctx.error("整数过小(可用的范围是["+min+","+max+"])");
+				else if (val > max) throw ctx.error("整数过大(可用的范围是["+min+","+max+"])");
+				return val;
+			}
+
+			@Override
+			public String type() { return "long["+min+","+max+"]"; }
 		};
 	}
 	static Argument<Double> real(double min, double max) {

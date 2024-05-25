@@ -201,12 +201,12 @@ public final class DefaultPluginSystem extends PluginManager {
 			REPO.add(file);
 
 			MyHashMap<String, PluginDescriptor> builtin = new MyHashMap<>();
-			for (AnnotatedElement info : REPO.annotatedBy("roj/platform/BuiltinPlugin")) {
+			for (AnnotatedElement info : REPO.annotatedBy("roj/platform/SimplePlugin")) {
 				pd = new PluginDescriptor();
 				pd.fileName = "annotation:"+file.getName();
 				pd.mainClass = info.owner().replace('/', '.');
 
-				Annotation pin = info.annotations().get("roj/platform/BuiltinPlugin");
+				Annotation pin = info.annotations().get("roj/platform/SimplePlugin");
 				pd.id = pin.getString("id");
 				pd.version = new Version(pin.getString("version", CORE_VERSION));
 				pd.desc = pin.getString("desc", "");

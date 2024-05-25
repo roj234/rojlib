@@ -22,7 +22,6 @@ import roj.ui.OnChangeHelper;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -286,12 +285,6 @@ public class MapperUI extends JFrame {
 		/*helper.addEventListener(uiStackTrace, (c) -> {
 			uiDeobfStackTrace.setEnabled(c.getDocument().getLength() > 0);
 		});*/
-		uiInputPath.addFocusListener(new FocusListener() {
-			@Override
-			public void focusGained(FocusEvent e) { scrollPane2.setSize(scrollPane2.getWidth(), 155); }
-			@Override
-			public void focusLost(FocusEvent e) { scrollPane2.setSize(scrollPane2.getWidth(), 19); }
-		});
 	}
 
 	private void initComponents() {

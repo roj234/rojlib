@@ -7,18 +7,22 @@ import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.IType;
 import roj.asmx.AnnotationSelf;
-import roj.collect.*;
+import roj.collect.Hasher;
+import roj.collect.IntBiMap;
+import roj.collect.MyHashMap;
+import roj.collect.XHashSet;
 import roj.compiler.CompilerSpec;
-import roj.compiler.JavaLexer;
 import roj.compiler.api.impl.ResolveApiImpl;
 import roj.compiler.api_rt.*;
-import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.asm.ParamAnnotationRef;
+import roj.compiler.asm.Variable;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.Kind;
+import roj.compiler.diagnostic.SimpleDiagnosticListener;
 import roj.compiler.resolve.ComponentList;
+import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.ResolveHelper;
-import roj.config.ParseException;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
@@ -51,15 +55,6 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 	private final MyHashMap<String, Library> libraries = new MyHashMap<>();
 	private final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
 	private final MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
-
-	@Deprecated
-	public static AnnotationSelf getAnnotationInfo(List<? extends Annotation> list) {
-		throw new NoSuchMethodError();
-	}
-
-	public boolean isSpecEnabled(int specId) {
-		return true;
-	}
 
 	public void addLibrary(Library library) {
 		for (String className : library.content())
@@ -101,8 +96,8 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 
 	public final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
 	public IntBiMap<String> parentList(IClass info) throws ClassNotFoundException { return getResolveHelper(info).getClassList(this); }
-	public ComponentList methodList(IClass info, String name) throws ClassNotFoundException { return getResolveHelper(info).findMethod(this, name); }
-	public ComponentList fieldList(IClass info, String name) throws ClassNotFoundException { return getResolveHelper(info).findField(this, name); }
+	public ComponentList methodList(IClass info, String name) throws TypeNotPresentException { return getResolveHelper(info).findMethod(this, name); }
+	public ComponentList fieldList(IClass info, String name) throws TypeNotPresentException { return getResolveHelper(info).findField(this, name); }
 	@NotNull
 	public List<IType> getTypeParamOwner(IClass info, IType superType) throws ClassNotFoundException {
 		Map<String, List<IType>> map = getResolveHelper(info).getTypeParamOwner(this);
@@ -112,6 +107,7 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 		throw new IllegalArgumentException(superType+"不是"+info.name()+"的泛型超类或超接口");
 	}
 	public MyHashMap<String, InnerClasses.InnerClass> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClassFlags(this);}
+	public AnnotationSelf getAnnotationDescriptor(IClass clz) {return getResolveHelper(clz).annotationInfo();}
 
 	/**
 	 * 通过短名称获取全限定名（若存在）
@@ -144,37 +140,51 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 		packageFastPath.computeIfAbsent(name, Helpers.fnArrayList()).add(packag);
 	}
 
-	public MethodWriter createMethodPoet(CompileUnit unit, MethodNode node) {
+	public boolean applicableToNode(AnnotationSelf ctx, Attributed key) {
+		int flag;
+		if (key instanceof FieldNode) {
+			flag = AnnotationSelf.FIELD;
+		} else if (key instanceof MethodNode m) {
+			flag = m.name().startsWith("<") ? AnnotationSelf.CONSTRUCTOR : AnnotationSelf.METHOD;
+		} else if (key instanceof IClass c) {
+			// TODO package ??
+			flag = (c.modifier()&Opcodes.ACC_ANNOTATION) != 0 ? AnnotationSelf.ANNOTATION_TYPE : AnnotationSelf.TYPE;
+		} else if (key instanceof IType) {
+			// TYPE_PARAMETER, TYPE_USE
+			throw new ResolveException("unsupported case");
+		} else if (key instanceof ParamAnnotationRef) {
+			flag = AnnotationSelf.PARAMETER;
+		} else if (key instanceof Variable) {
+			flag = AnnotationSelf.LOCAL_VARIABLE;
+		} else {
+			throw new ResolveException("unsupported case");
+		}
+		return (ctx.applicableTo&flag) != 0;
+	}
+
+	public boolean hasError() {return hasError;}
+
+	public MethodWriter createMethodPoet(ConstantData unit, MethodNode node) {
 		return new MethodWriter(unit, node);
 	}
 
-	public boolean applicableToNode(AnnotationSelf ctx, Attributed key) {
-		return false;
+	public void invokeAnnotationProcessor(CompileUnit unit, Attributed key, List<? extends Annotation> annotations) {
+		// DEFINE BY USER
+		debugLogger().info("invokeAnnotationProcessor(): unit = " + unit + ", key = " + key + ", annotations = " + annotations);
 	}
 
-	public void invokePartialAnnotationProcessor(CompileUnit unit, AnnotationPrimer annotation, MyHashSet<String> missed) {}
+	public boolean isSpecEnabled(int specId) {return true;}
 
-	public void invokeAnnotationProcessor(CompileUnit unit, Attributed key, List<AnnotationPrimer> annotations) {}
-
-	public AnnotationSelf getAnnotationDescriptor(IClass clz) {
-		return clz instanceof CompileUnit ? ((CompileUnit) clz).annoInfo : getResolveHelper(clz).annotationInfo();
-	}
-
-	public boolean hasAnnotation(IClass clazz, String name) {
-		return false;
-	}
-
-	public Consumer<Diagnostic> listener;
+	public Consumer<Diagnostic> listener = new SimpleDiagnosticListener(1, 1, 1);
 	public boolean hasError;
 
-	public void report(CompileUnit source, Kind kind, int pos, String o) {
-		if (kind == Kind.ERROR) hasError = true;
-		new ParseException(source.getLexer().getText(), kind+":"+JavaLexer.translate.translate(o)+"\nin "+source.getFilePath(), pos).printStackTrace();
-		//listener.report();
-	}
-
-	public boolean hasError() {
-		return hasError;
+	@Override
+	public void report(IClass source, Kind kind, int pos, String code) { report(source, kind, pos, code, (Object[]) null);}
+	@Override
+	public void report(IClass source, Kind kind, int pos, String code, Object... args) {
+		Diagnostic diagnostic = new Diagnostic(source, kind, pos, pos, code, args);
+		if (kind.ordinal() >= Kind.ERROR.ordinal()) hasError = true;
+		listener.accept(diagnostic);
 	}
 
 	private static ConstantData AnyArray;

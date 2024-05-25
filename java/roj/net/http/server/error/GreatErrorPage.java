@@ -6,7 +6,7 @@ import roj.net.http.server.Request;
 import roj.net.http.server.Response;
 import roj.net.http.server.StringResponse;
 import roj.text.CharList;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.text.Template;
 import roj.text.TextReader;
 
@@ -52,7 +52,7 @@ public class GreatErrorPage {
 		sb.clear();
 		for (StackTraceElement el : els) {
 			parse_class(sb.append("<li>"), el.getClassName()).append('.');
-			EscapeUtil.htmlspecial(sb, el.getMethodName()).append("() at ");
+			Escape.htmlEntities_Append(el.getMethodName(), sb).append("() at ");
 			parse_file(sb, el.getFileName(), el.getLineNumber()).append("</li>");
 		}
 		data.put("trace", sb.toString());
@@ -110,7 +110,7 @@ public class GreatErrorPage {
 				if (lineNum == el.getLineNumber()) sb.append("<li class=\"line-error\">");
 				else sb.append("<li>");
 
-				sb.append(sb2.replaceMulti(EscapeUtil.HtmlSpecialEncode)).append("</li>");
+				sb.append(sb2.replaceMulti(Escape.HtmlEncode)).append("</li>");
 			}
 		} finally {
 			s.close();
@@ -187,7 +187,7 @@ public class GreatErrorPage {
 		if (map == null || map.isEmpty()) return sb.append("<small>").append(map == null ? "&lt;failed&gt;" : "empty").append("</small></caption>");
 		sb.append("</caption><tbody>");
 		for (Map.Entry<String, ?> entry : map.entrySet()) {
-			EscapeUtil.htmlspecial(sb.append("<tr><td>"), entry.getKey()).append("</td><td>");
+			Escape.htmlEntities_Append(entry.getKey(), sb.append("<tr><td>")).append("</td><td>");
 			parse_args(sb, entry.getValue());
 			sb.append("</td></tr>");
 		}
@@ -201,7 +201,7 @@ public class GreatErrorPage {
 		}
 
 		try {
-			EscapeUtil.htmlspecial(sb, String.valueOf(value));
+			Escape.htmlEntities_Append(String.valueOf(value), sb);
 		} catch (Exception e) {
 			sb.append("<b style=\"color:red\">").append(value.getClass().getName()).append(".toString()失败: ");
 			parse_args(sb, e);

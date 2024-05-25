@@ -12,6 +12,7 @@ import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Collection;
 import java.util.Map;
@@ -56,20 +57,31 @@ public class MultipartFormHandler extends HPostHandler {
 			switch (state) {
 				case 0: // find boundary | data
 					int next = matcher.match(buf, 0);
-					if (next < 0) { // full data block
-						int len = Math.min(buf.readableBytes(), boundary.length());
-						int i = buf.wIndex()-len;
-						while (len > 0) {
-							if (buf.getU(i) == boundary.charAt(0)) break;
+					if (next < 0) {
+						// 从前往后检查至多[boundary.length-1]个字节
+						// 对每个字节，尝试和boundary[0 -> i]匹配，
+						int keep = Math.min(buf.readableBytes(), boundary.length()-1);
+
+						int i = buf.wIndex()-keep;
+						while (keep > 0) {
+							findPartialMatch: {
+								for (int j = 0; j < keep; j++) {
+									if (buf.get(i+j) != boundary.charAt(j))
+										break findPartialMatch;
+								}
+								break;
+							}
+
 							i++;
-							len--;
+							keep--;
 						}
+
 						if (i == 0) return;
 
-						buf.wIndex(buf.wIndex()-len);
+						buf.wIndex(i);
 						onValue(ctx, buf);
-						buf.rIndex = buf.wIndex();
-						buf.wIndex(buf.wIndex()+len);
+						//buf.rIndex = buf.wIndex();
+						buf.wIndex(buf.wIndex()+keep);
 						return;
 					}
 
@@ -241,9 +253,7 @@ public class MultipartFormHandler extends HPostHandler {
 				if (data instanceof Closeable) ((Closeable) data).close();
 			} finally {
 				if (file != null && !file.delete()) {
-					try {
-						FileChannel.open(file.toPath(), StandardOpenOption.DELETE_ON_CLOSE).close();
-					} catch (IOException ignored) {}
+					Files.deleteIfExists(file.toPath());
 				}
 			}
 		}
@@ -272,8 +282,8 @@ public class MultipartFormHandler extends HPostHandler {
 	public void onComplete() throws IOException {
 		Collection<Object> values = Helpers.cast(map.values());
 		for (Object fd : values) {
-			if (fd instanceof Closeable)
-				((Closeable) fd).close();
+			if (fd instanceof Closeable c)
+				IOUtil.closeSilently(c);
 		}
 	}
 }

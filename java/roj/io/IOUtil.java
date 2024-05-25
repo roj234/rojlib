@@ -3,7 +3,6 @@ package roj.io;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
 import roj.concurrent.FastThreadLocal;
-import roj.concurrent.Waitable;
 import roj.config.data.CLong;
 import roj.crypt.Base64;
 import roj.text.CharList;
@@ -11,7 +10,6 @@ import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.text.UTF8MB4;
 import roj.util.ByteList;
-import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.*;
@@ -34,8 +32,9 @@ public final class IOUtil {
 	public static final FastThreadLocal<IOUtil> SharedCoder = FastThreadLocal.withInitial(IOUtil::new);
 
 	// region ThreadLocal part
-	private final CharList charBuf = new CharList();
+	private final CharList charBuf = new CharList(1024);
 	public final ByteList byteBuf = new ByteList();
+	{byteBuf.ensureCapacity(1024);}
 
 	private final ByteList.Slice shell = new ByteList.Slice();
 	public final ByteList.Slice shellB = new ByteList.Slice();
@@ -46,26 +45,22 @@ public final class IOUtil {
 		ByteList b = byteBuf; b.clear();
 		return b.putUTFData(str).toByteArray();
 	}
-
-	public String decode(byte[] b) { return decodeR(b).toString(); }
-	public CharList decodeR(byte[] b) { return decodeR(shell.setR(b,0,b.length)); }
-	public CharList decodeR(DynByteBuf b) {
-		charBuf.clear();
-		UTF8MB4.CODER.decodeFixedIn(b, b.readableBytes(), charBuf);
-		return charBuf;
+	public String decode(byte[] b) {
+		CharList c = charBuf; c.clear();
+		UTF8MB4.CODER.decodeFixedIn(shell.setR(b,0,b.length), b.length, c);
+		return c.toString();
 	}
 
 	public String encodeHex(byte[] b) { return shell.setR(b,0,b.length).hex(); }
+	public String encodeBase64(byte[] b) { return shell.setR(b,0,b.length).base64(); }
+
 	public byte[] decodeHex(CharSequence c) {
 		ByteList b = byteBuf; b.clear();
 		return TextUtil.hex2bytes(c, b).toByteArray();
 	}
 
-	public String encodeBase64(byte[] b) { return shell.setR(b,0,b.length).base64(); }
-
-	public byte[] decodeBase64(CharSequence c) { return decodeBase64R(c).toByteArray(); }
-	public ByteList decodeBase64R(CharSequence c) { return decodeBase64R(c, Base64.B64_CHAR_REV); }
-	public ByteList decodeBase64R(CharSequence c, byte[] chars) {
+	public ByteList decodeBase64(CharSequence c) { return decodeBase64(c, Base64.B64_CHAR_REV); }
+	public ByteList decodeBase64(CharSequence c, byte[] chars) {
 		ByteList b = byteBuf; b.clear();
 		Base64.decode(c, 0, c.length(), b, chars);
 		return b;
@@ -76,16 +71,12 @@ public final class IOUtil {
 	// endregion
 
 	public static ByteList getSharedByteBuf() {
-		ByteList o = SharedCoder.get().byteBuf;
-		o.clear();
-		o.ensureCapacity(1024);
+		ByteList o = SharedCoder.get().byteBuf; o.clear();
 		return o;
 	}
 
 	public static CharList getSharedCharBuf() {
-		CharList o = SharedCoder.get().charBuf;
-		o.clear();
-		o.ensureCapacity(1024);
+		CharList o = SharedCoder.get().charBuf; o.clear();
 		return o;
 	}
 
@@ -431,17 +422,5 @@ public final class IOUtil {
 				throw ex2;
 			}
 		}
-	}
-
-	// todo 支持HTTP2.0后移走
-	public static int timeout = 10000;
-
-	public static final class ImmediateFuture implements Waitable {
-		@Override
-		public void waitFor() {}
-		@Override
-		public boolean isDone() { return true; }
-		@Override
-		public boolean cancel() { return true; }
 	}
 }

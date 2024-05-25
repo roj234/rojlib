@@ -145,12 +145,12 @@ public class Invoke extends ExprNode {
 			if (fn1.names.isEmpty()) {
 				// 省略this : a() => this.a(); 或继承/什么的静态
 				if (fn1.parent == null) {
-					String[] mn = ctx.tryImportMethod(method);
+					LocalContext.Import mn = ctx.tryImportMethod(method);
 					// 静态导入
 					if (mn != null) {
-						klass = mn[0];
-						method = mn[1];
-						fn = null;
+						klass = mn.owner.name();
+						method = mn.method;
+						fn = mn.prev;
 						break block;
 					}
 
@@ -240,6 +240,8 @@ public class Invoke extends ExprNode {
 			ctx.inferrer.typeParamHint = null;
 			if (r == null) break block;
 
+			ctx.checkType(r.method.returnType().owner);
+
 			MethodNode mn = r.method;
 			methodNode = mn;
 			genType1 = ownMirror;
@@ -310,11 +312,9 @@ public class Invoke extends ExprNode {
 	}
 
 	@Override
-	public IType type() { return fn instanceof IType ? ((IType) fn) : desc != null ? desc.get(desc.size()-1) : Asterisk.anyType; }
-
-	@Override
 	public boolean isKind(ExprKind kind) {return kind == ExprKind.INVOKE_CONSTRUCTOR && fn instanceof This;}
-
+	@Override
+	public IType type() { return fn instanceof IType ? ((IType) fn) : desc != null ? desc.get(desc.size()-1) : Asterisk.anyType; }
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		byte opcode;

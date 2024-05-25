@@ -133,6 +133,12 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		return array;
 	}
 
+	public boolean isCommentSupported() {return false;}
+	public String getComment(int key) {return null;}
+	public void putComment(int key, String val) {throw new UnsupportedOperationException();}
+	public CList withComments() { return new CCommList(list); }
+	public void clearComments() {}
+
 	@Override
 	public final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }
 

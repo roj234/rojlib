@@ -13,7 +13,7 @@ import roj.collect.*;
 import roj.reflect.ClassDefiner;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.ReflectionUtils;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
@@ -37,7 +37,7 @@ import java.util.Iterator;
  * @author Roj234
  * @since 2023/8/4 0004 15:36
  */
-final class DPSSecurityManager extends MethodHook {
+public final class DPSSecurityManager extends MethodHook {
 	static final TrieTreeSet
 		GlobalClassBlackList = new TrieTreeSet("roj/platform/DPS"),
 		GlobalFileWhiteList = new TrieTreeSet(),
@@ -323,13 +323,13 @@ final class DPSSecurityManager extends MethodHook {
 	/* -- URL -- */
 	public static InputStream hook_callFrom_openStream(URL url, Class<?> caller) throws IOException {
 		if (url.getProtocol().equals("file")) {
-			if (!checkFileAccess(new File(EscapeUtil.decodeURI(url.getFile())), caller)) throw new SecurityException("没有读取权限");
+			if (!checkFileAccess(new File(Escape.decodeURI(url.getFile())), caller)) throw new SecurityException("没有读取权限");
 		} else if (url.getProtocol().equals("jar")) {
 			String spec = url.getFile();
 			int separator = spec.indexOf("!/");
 			if (separator == -1) throw new MalformedURLException("no !/ found in url spec:" + spec);
 
-			if (!checkFileAccess(new File(EscapeUtil.decodeURI(spec.substring(0, separator))), caller))
+			if (!checkFileAccess(new File(Escape.decodeURI(spec.substring(0, separator))), caller))
 				throw new SecurityException("没有读取权限");
 		}
 		return url.openStream();

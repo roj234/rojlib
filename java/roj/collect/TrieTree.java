@@ -88,13 +88,10 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		}
 
 		CharSequence text() { return val; }
-
 		@Override
-		void append(CharList sb) { sb.append(val); }
-
+		public void append(CharList sb) { sb.append(val); }
 		@Override
-		int length() { return val.length(); }
-
+		public int length() { return val.length(); }
 		@Override
 		public String toString() { return "PE{"+val+'}'; }
 	}

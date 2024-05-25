@@ -209,14 +209,7 @@ public final class ReflectionUtils {
 	}
 	private static final class Tracer extends SecurityManager {
 		// avoid security manager creation warning
-		static final Tracer INSTANCE;
-		static {
-			try {
-				INSTANCE = (Tracer) u.allocateInstance(Tracer.class);
-			} catch (InstantiationException e) {
-				throw new RuntimeException(e);
-			}
-		}
+		static final Tracer INSTANCE = new Tracer();
 
 		public Class<?> getCallerClass(int backward) {
 			Class<?>[] ctx = super.getClassContext();

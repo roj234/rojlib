@@ -195,6 +195,7 @@ public final class Inferrer {
 		if (sign == null) return r;
 
 		for (int i = 0; i < sign.values.size()-1; i++) {
+			if (bounds[i] == null) continue;
 			try {
 				mergeBound(bounds[i], sign.values.get(i));
 			} catch (UnableCastException e) {

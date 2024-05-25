@@ -37,6 +37,8 @@ public final class Constant extends ExprNode {
 	public String toString() { return c instanceof String ? '"'+ Tokenizer.addSlashes(c.toString())+'"' : isClassRef() ? type+".class" : String.valueOf(c); }
 
 	@Override
+	public boolean isKind(ExprKind kind) {return kind == ExprKind.IMMEDIATE_CONSTANT || (kind == ExprKind.LDC_CLASS && isClassRef());}
+	@Override
 	public IType type() { return type; }
 	@Override
 	public boolean isConstant() { return !isClassRef(); }

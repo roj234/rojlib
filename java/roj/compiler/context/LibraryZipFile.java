@@ -43,8 +43,9 @@ public class LibraryZipFile implements Library {
 	public Set<String> content() { return info.keySet(); }
 
 	@Override
+	@SuppressWarnings("unchecked")
 	public IClass get(CharSequence name) {
-		MyHashMap.AbstractEntry<String, Object> entry = info.getEntry(Helpers.cast(name));
+		var entry = (MyHashMap.AbstractEntry<String, Object>) ((MyHashMap<?,?>)info).getEntry(Helpers.cast(name));
 		if (entry == null) return null;
 		if (entry.getValue() instanceof IClass c) return c;
 		synchronized (info) {

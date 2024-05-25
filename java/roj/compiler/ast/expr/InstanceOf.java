@@ -70,7 +70,7 @@ public final class InstanceOf extends ExprNode {
 			default: throw new ResolveException("unknownState-"+cast);
 		}
 
-		ctx.report(Kind.SEVERE_WARNING, "instanceOf.warn.always", type.toString());
+		ctx.report(Kind.SEVERE_WARNING, "instanceOf.constant", type.toString());
 		return Constant.valueOf(result);
 	}
 

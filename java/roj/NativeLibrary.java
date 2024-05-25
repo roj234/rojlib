@@ -17,7 +17,7 @@ public class NativeLibrary {
 	@Deprecated
 	public static final boolean EXTRA_BUG_CHECK = System.getProperty("roj.debug.extraBugCheck")!=null;
 
-	public static final int REUSE_PORT_WINDOWS = 0, ANSI_CONSOLE = 1, BSDIFF = 2, SHARED_MEMORY = 3, FAST_LZMA = 4;
+	public static final int FUNC_WINDOWS = 0, ANSI_CONSOLE = 1, BSDIFF = 2, SHARED_MEMORY = 3, FAST_LZMA = 4;
 	public static boolean hasFunction(int bit) {return (bits&(1L << bit)) != 0;}
 	private static final long bits;
 
@@ -42,7 +42,7 @@ public class NativeLibrary {
 		String appendix = OS.CURRENT == OS.WINDOWS ? ".dll" : ".so";
 		InputStream in = NativeLibrary.class.getClassLoader().getResourceAsStream(lib+appendix);
 		if (in == null) {
-			System.err.println("Failed to load RojLib native");
+			System.err.println("RojLib: incompatible native binary");
 			return false;
 		}
 

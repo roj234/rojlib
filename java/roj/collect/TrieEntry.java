@@ -141,8 +141,8 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	public abstract boolean isLeaf();
 
 	CharSequence text() { return null; }
-	void append(CharList sb) { sb.append(c); }
-	int length() { return 1; }
+	public void append(CharList sb) { sb.append(c); }
+	public int length() { return 1; }
 
 	@Override
 	public String toString() { return "TE('"+(TextUtil.isPrintableAscii(c)?c:"\\"+Integer.toOctalString(c))+"',next="+next+")"; }

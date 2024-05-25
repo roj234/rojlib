@@ -6,18 +6,20 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 常量
- * 放在字段：如果该字段赋值表达式使用的方法和字段均为常量（包括该注解），则作为常量写入class
- * 放在方法：表示如果入参确定，则结果确定，编译时会执行该方法，以获得常量
- * 仅支持基本类型，Class（需要JVM能加载它们），String和它们的数组
- *
- * 计划删除：采用编译宏处理，这样设计起来更简单，因为不用再增加一个Pass
+ * 常量 <br>
+ * 放在字段：如果该字段是基本类型数组，并且是编译期常量，那么使用{@link roj.util.ArrayUtil#pack(int[]) Base128}压缩它 <br>
+ * 放在方法：如果入参是常量，则在编译时执行该方法 <br>
+ * 放在类：添加这个类到编译沙盒中 <p>
+ * <i>带有该注解的方法可能会被编译两次，有轻微的性能问题</i> <p>
+ * 有关编译沙盒的白名单，请看{@link roj.compiler.sandbox.SandboxClassLoader#allowed}
  * @author Roj233
  * @since 2021/9/2 21:52
  */
-@Deprecated
 @Retention(RetentionPolicy.CLASS)
-@Target({ElementType.FIELD, ElementType.METHOD})
+@Target({ElementType.FIELD, ElementType.METHOD, ElementType.TYPE})
 public @interface Constant {
-	boolean sandboxed() default true;
+	/**
+	 * 尚未实现，没法关掉
+	 */
+	boolean sandbox() default true;
 }

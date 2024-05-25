@@ -11,7 +11,7 @@ import java.lang.annotation.Target;
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
-public @interface BuiltinPlugin {
+public @interface SimplePlugin {
 	String id();
 	String version() default "";
 	String desc() default "";

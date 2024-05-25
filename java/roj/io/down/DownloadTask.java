@@ -62,7 +62,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 	 * 单线程下载文件
 	 */
 	public static Waitable download(String url, File file, IProgress handler) throws IOException {
-		if (file.isFile()) return new IOUtil.ImmediateFuture();
+		if (file.isFile()) throw new IllegalStateException("文件已存在");
 
 		DownloadTask ad = createTask(url, file, handler);
 		ad.operation = STREAM_DOWNLOAD;
@@ -78,7 +78,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 	 * 多线程下载文件
 	 */
 	public static Waitable downloadMTD(String url, File file, IProgress pg) throws IOException {
-		if (file.isFile()) return new IOUtil.ImmediateFuture();
+		if (file.isFile()) throw new IllegalStateException("文件已存在");
 
 		DownloadTask ad = createTask(url, file, pg);
 		QUERY.pushTask(ad);
@@ -138,10 +138,10 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 
 			ch = MyChannel.openTCP();
 
-			ch.addLast("Redirect", new AutoRedirect(client, IOUtil.timeout, maxRedirect))
+			ch.addLast("Redirect", new AutoRedirect(client, Downloader.timeout, maxRedirect))
 			  .addLast("Checker", this);
 
-			client.connect(ch, IOUtil.timeout);
+			client.connect(ch, Downloader.timeout);
 
 			ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 		} catch (Exception e) {
@@ -155,7 +155,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
-		ctx.channel().addBefore(ctx, "Timer", new Timeout(IOUtil.timeout, 2000));
+		ctx.channel().addBefore(ctx, "Timer", new Timeout(Downloader.timeout, 2000));
 
 		HttpHead h = client.response();
 		String lastMod = h.getField("last-modified");

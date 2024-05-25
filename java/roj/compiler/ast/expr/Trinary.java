@@ -42,12 +42,13 @@ final class Trinary extends ExprNode {
 		ctx.report(Kind.NOTE, "common parent of "+ok.type()+" and "+fail.type()+" is "+type);
 
 		if (cast.type >= 0 && val.isConstant()) {
-			ctx.report(Kind.WARNING, "trinary.warn.always");
+			if (val.isKind(ExprKind.IMMEDIATE_CONSTANT))
+				ctx.report(Kind.WARNING, "trinary.constant");
 			return (boolean) val.constVal() ? ok : fail;
 		}
 
 		if (ok.equals(fail)) {
-			ctx.report(Kind.WARNING, "trinary.warn.always");
+			ctx.report(Kind.WARNING, "trinary.constant");
 		}
 
 		if (ok.isConstant()&fail.isConstant()) {

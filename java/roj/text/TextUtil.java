@@ -83,16 +83,20 @@ public class TextUtil {
 		return node != null && node.isLeaf();
 	}
 
-	public static String scaledNumber1024(double size) { return scaledNumber1024(IOUtil.getSharedCharBuf(), size).toString(); }
-	private static final String[] SCALE = {"B", "KB", "MB", "GB", "TB"};
-	public static CharList scaledNumber1024(CharList sb, double size) {
+	public static String scaledNumber1024(long size) { return scaledNumber1024(IOUtil.getSharedCharBuf(), size).toString(); }
+	private static final String[] SCALE = {"B", "KB", "MB", "GB", "TB", "PB", "EB"};
+	public static CharList scaledNumber1024(CharList sb, long size) {
+		long cap = 1;
 		int i = 0;
-		while (size >= 1024) {
-			size /= 1024;
+		for (;;) {
+			long next = cap << 10;
+			if (next > size) break;
+
+			cap = next;
 			i++;
 		}
 
-		return sb.append(TextUtil.toFixed(size, i == 0 ? 0 : 2)).append(SCALE[i]);
+		return sb.append(TextUtil.toFixed(size / (double) cap, i == 0 ? 0 : 2)).append(SCALE[i]);
 	}
 	public static double unscaledNumber1024(String seq) {
 		int offset = 1;
@@ -106,40 +110,40 @@ public class TextUtil {
 
 		char c = seq.charAt(seq.length()-offset);
 		switch (c) {
-			default: return Double.parseDouble(seq.substring(0, seq.length()-offset+1));
+			default: throw new IllegalStateException("Unknown char "+c);
+			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9': offset--; break;
 
-			case 'K': case 'k': multiplier *= 1024; break;
-			case 'M': case 'm': multiplier *= 1024 * 1024; break;
-			case 'G': case 'g': multiplier *= 1024 * 1024 * 1024; break;
-			case 'T': case 't': multiplier *= 1024L * 1024 * 1024 * 1024; break;
+			case 'K', 'k': multiplier *= 1L<<10; break;
+			case 'M', 'm': multiplier *= 1L<<20; break;
+			case 'G', 'g': multiplier *= 1L<<30; break;
+			case 'T', 't': multiplier *= 1L<<40; break;
+			case 'P', 'p': multiplier *= 1L<<50; break;
+			case 'E', 'e': multiplier *= 1L<<60; break;
 		}
+
 		return Double.parseDouble(seq.substring(0, seq.length()-offset)) * multiplier;
 	}
+
+	private static final long[] PET = {1_000,1_000_000,1_000_000_000,1_000_000_000_000L,1_000_000_000_000_000L,1_000_000_000_000_000_000L};
 	public static String scaledNumber(long number) {
-		CharList sb = new CharList();
+		if (number < 0) return "-"+scaledNumber(number == Long.MIN_VALUE ? Long.MAX_VALUE : -number);
 
-		if (number < 0) return "-" + scaledNumber(-number);
-		if (number >= 1000000) {
-			if (number >= 1000000000) {
-				sb.append(number / 1000000000).append('.');
-				int v = (int) (number % 1000000000 / 10000000);
-				if (v < 10) sb.append('0');
-				return sb.append(v).append('G').toString();
-			}
-
-			sb.append(number / 1000000).append('.');
-			int v = (int) (number % 1000000 / 10000);
-			if (v < 10) sb.append('0');
-			return sb.append(v).append('M').toString();
+		int i;
+		if (number >= 1_000_000_000_000L) {
+			if (number >= 1_000_000_000_000_000_000L) i = 5;
+			else i = number >= 1_000_000_000_000_000L ? 4 : 3;
+		} else if (number >= 1_000_000) {
+			i = number >= 1_000_000_000 ? 2 : 1;
+		} else if (number >= 1000) {
+			i = 0;
 		} else {
-			if (number >= 1000) {
-				sb.append(number / 1000).append('.');
-				int v = (int) (number % 1000 / 10);
-				if (v < 10) sb.append('0');
-				return sb.append(v).append('K').toString();
-			}
 			return String.valueOf(number);
 		}
+
+		CharList sb = new CharList().append(number / PET[i]).append('.');
+		int v = (int) (number % PET[i] / (PET[i] / 100));
+		if (v < 10) sb.append('0');
+		return sb.append(v).append("KMGTPE".charAt(i)).toStringAndFree();
 	}
 
 	public static boolean isPrintableAscii(int j) {return j > 31 && j < 127;}

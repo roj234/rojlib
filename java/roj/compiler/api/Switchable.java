@@ -15,4 +15,8 @@ import java.lang.annotation.Target;
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
-public @interface Switchable {}
+public @interface Switchable {
+	boolean identity() default true;
+	// not implemented
+	boolean suggestion() default false;
+}

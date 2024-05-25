@@ -164,13 +164,12 @@ final class Binary extends ExprNode {
 					// 无法比较的类型
 					if (rType.isPrimitive()) castRight = ctx.castTo(rType, lType, TypeCast.E_DOWNCAST);
 					else if (lType.isPrimitive()) castLeft = ctx.castTo(lType, rType, TypeCast.E_DOWNCAST);
-					type = Type.std(Type.BOOLEAN);
 					dpType = 9;
-					break;
+				break;
 				case logic_and: case logic_or:
 					castLeft = ctx.castTo(lType, Type.std(Type.BOOLEAN), 0);
 					castRight = ctx.castTo(rType, Type.std(Type.BOOLEAN), 0);
-					break;
+				break;
 				default:
 					ExprNode override = ctx.getOperatorOverride(left, right, operator);
 					if (override == null) {
@@ -180,6 +179,8 @@ final class Binary extends ExprNode {
 					return override;
 			}
 		}
+
+		if (operator <= neq) type = Type.std(Type.BOOLEAN);
 
 		if (!left.isConstant()) {
 			if (right.isConstant()) {
@@ -204,10 +205,10 @@ final class Binary extends ExprNode {
 					return this;
 				}
 				case logic_and:
-					ctx.report(Kind.WARNING, "binary.warn.always");
+					ctx.report(Kind.WARNING, "binary.constant");
 					return ((boolean) left.constVal()) ? right : Constant.valueOf(false);
 				case logic_or:
-					ctx.report(Kind.WARNING, "binary.warn.always");
+					ctx.report(Kind.WARNING, "binary.constant");
 					return ((boolean) left.constVal()) ? Constant.valueOf(true) : right;
 				default: return this;
 			}
@@ -387,9 +388,8 @@ final class Binary extends ExprNode {
 						break;
 				}
 				if (!cw.jumpOn(opc += (operator - equ))) {
-					if (operator <= neq) {
-						cw.one(ICONST_1);
-						cw.one(IAND);
+					if (operator <= neq && flag == 0) {
+						cw.one(ISUB); // (left - right) == 0
 						if (operator == equ) {
 							cw.one(ICONST_1);
 							cw.one(IXOR);

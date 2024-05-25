@@ -41,11 +41,14 @@ public final class ToEntry implements CVisitor {
 
 	private void add(CEntry v) {
 		if (pendingComment != null) {
-			// TODO - may I need a CCommList
 			if (stackBottom.getType() == Type.MAP) {
-				CMap map = stackBottom.asMap();
-				if (!map.isCommentSupported()) stackBottom = new CCommMap(map.raw());
+				CMap map = stackBottom.asMap().withComments();
+				stackBottom = map;
 				map.putComment(key, pendingComment);
+			} else if (stackBottom.getType() == Type.LIST) {
+				CList list = stackBottom.asList().withComments();
+				stackBottom = list;
+				list.putComment(list.size(), pendingComment);
 			}
 			pendingComment = null;
 		}

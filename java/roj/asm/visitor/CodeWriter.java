@@ -324,17 +324,9 @@ public class CodeWriter extends AbstractCodeWriter {
 			bw.putShort(frames.size());
 			FrameVisitor.writeFrames(frames, bw, cpw);
 			visitAttributeIEnd(stack);
-
-			hasFrames = true;
 		}
 
 		if (debugLines) lineNumberDebug();
-	}
-
-	void _addFrames(DynByteBuf data) {
-		bw.putShort(cpw.getUtfId("StackMapTable")).putInt(data.readableBytes()).put(data);
-		data.rIndex = data.wIndex();
-		tmpLen++;
 	}
 
 	public final void lineNumberDebug() {
@@ -354,7 +346,6 @@ public class CodeWriter extends AbstractCodeWriter {
 	public final int visitAttributeI(String name) {
 		if (state != 3) throw new IllegalStateException();
 		if (name.equals("StackMapTable")) {
-			// TODO ??
 			if (hasFrames) return -1;
 			hasFrames = true;
 		}
@@ -510,7 +501,7 @@ public class CodeWriter extends AbstractCodeWriter {
 	public final void addSegment(Segment c) {
 		if (c == null) throw new NullPointerException("c");
 
-		if (segments.isEmpty()) segments.add(new FirstSegment(offset = bw.wIndex()-tmpLenOffset));
+		if (segments.isEmpty()) _addFirst();
 		else endSegment();
 
 		segments.add(c);
@@ -525,6 +516,9 @@ public class CodeWriter extends AbstractCodeWriter {
 		codeOb = ss.getData();
 	}
 
+	protected final void _addOffset(int c) {offset += c;}
+	protected final void _addFirst() {segments.add(new FirstSegment(offset = bw.wIndex()-tmpLenOffset));}
+
 	public boolean isContinuousControlFlow() {
 		int block = segments.size()-1;
 		return block < 0 || isContinuousControlFlow(block);
@@ -534,7 +528,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		Segment seg = segments.get(targetBlock);
 		if (!seg.isTerminate()) return true;
 
-		for (int i = 0; i < segments.size(); i++) {
+		for (int i = 1; i < segments.size(); i++) {
 			if (segments.get(i).willJumpTo(targetBlock, seg.length())) return true;
 		}
 		return false;

@@ -17,7 +17,7 @@ final class EnumSer extends Adapter {
 	}
 
 	@Override
-	void read(AdaptContext ctx, Object o) {
+	public void read(AdaptContext ctx, Object o) {
 		if (o != null && o.getClass() != String.class) throw new IllegalStateException();
 		ctx.setRef(o == null ? null : EnumHelper.cDirAcc.enumConstantDirectory(enumc).get(o));
 		ctx.fieldState = 1;
@@ -26,7 +26,7 @@ final class EnumSer extends Adapter {
 	}
 
 	@Override
-	void write(CVisitor c, Object o) {
+	public void write(CVisitor c, Object o) {
 		if (o == null) c.valueNull();
 		else c.value(((Enum<?>) o).name());
 	}

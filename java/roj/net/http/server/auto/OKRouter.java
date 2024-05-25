@@ -27,6 +27,8 @@ import roj.net.http.Headers;
 import roj.net.http.HttpCode;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.server.*;
+import roj.reflect.ClassDefiner;
+import roj.reflect.DirectAccessor;
 import roj.reflect.FastInit;
 import roj.reflect.ReflectionUtils;
 import roj.util.AttributeKey;
@@ -52,12 +54,12 @@ public class OKRouter implements Router {
 
 	private final Node route = new Text("");
 
-	private boolean catchError = true;
+	private final boolean debug;
 	private List<Callable<Void>> onFinishes = Collections.emptyList();
 
-	public OKRouter() {}
+	public OKRouter() {this(true);}
+	public OKRouter(boolean debug) {this.debug = debug;}
 
-	public void setCatchError(boolean b) { catchError = b; }
 	public void onFinish(Callable<Void> callback) {
 		if (onFinishes.isEmpty()) onFinishes = new SimpleList<>();
 		onFinishes.add(callback);
@@ -70,6 +72,7 @@ public class OKRouter implements Router {
 		ConstantData hndInst = new ConstantData();
 		hndInst.name("roj/net/http/server/auto/Router$"+ReflectionUtils.uniqueId());
 		hndInst.interfaces().add("roj/net/http/server/auto/OKRouter$Dispatcher");
+		hndInst.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
 		FastInit.prepare(hndInst);
 
 		hndInst.newField(0, "$methodId", "I");
@@ -186,7 +189,7 @@ public class OKRouter implements Router {
 		}
 		if (seg.def == null) throw new IllegalArgumentException(data.name+"没有任何处理函数");
 
-		if (catchError) {
+		if (debug) {
 			for (TryCatchEntry eh : exhandlers) {
 				cw.label(eh.handler);
 				cw.one(ASTORE_0);
@@ -212,7 +215,7 @@ public class OKRouter implements Router {
 			cw.finish();
 		}
 
-		Dispatcher ah = (Dispatcher) FastInit.make(hndInst);
+		Dispatcher ah = (Dispatcher) FastInit.make(hndInst, ClassDefiner.getFor(o.getClass().getClassLoader()));
 		for (IntMap.Entry<Annotation> entry : handlers.selfEntrySet()) {
 			int i = entry.getIntKey();
 			Annotation a = entry.getValue();

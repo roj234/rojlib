@@ -70,4 +70,6 @@ public interface MyDataInput extends DataInput {
 	String readLine() throws IOException;
 
 	long position() throws IOException;
+
+	boolean isReadable();
 }

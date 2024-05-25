@@ -191,7 +191,7 @@ class UpdatePinyinData {
 		LZMA2Options options = new LZMA2Options(9).setDictSize(524288);
 
 		// 让压缩率再高一点吧~
-		try (OutputStream out = options.getOutputStream(new FileOutputStream(Main.resourcePath.getAbsolutePath()+"/META-INF/china/pinyin.lzma2"))) {
+		try (OutputStream out = options.getOutputStream(new FileOutputStream(Main.resourcePath.getAbsolutePath()+ "/roj/text/JPinyin.lzma"))) {
 			LZMA2Writer myOut = (LZMA2Writer) out;
 
 			bb.clear();

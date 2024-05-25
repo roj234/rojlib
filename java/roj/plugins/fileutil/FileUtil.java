@@ -1,15 +1,20 @@
-package roj.archive.ui;
+package roj.plugins.fileutil;
 
 import roj.archive.qz.*;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.collect.CollectionX;
 import roj.collect.IntMap;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.concurrent.TaskPool;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.platform.Plugin;
+import roj.platform.SimplePlugin;
+import roj.text.CharList;
+import roj.text.TextReader;
+import roj.text.TextWriter;
 import roj.ui.CLIUtil;
 import roj.ui.EasyProgressBar;
 import roj.ui.terminal.Argument;
@@ -18,16 +23,18 @@ import roj.ui.terminal.CommandContext;
 import roj.ui.terminal.CommandNode;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
-import roj.util.HighResolutionTimer;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 import static roj.ui.terminal.CommandNode.argument;
 import static roj.ui.terminal.CommandNode.literal;
@@ -36,36 +43,88 @@ import static roj.ui.terminal.CommandNode.literal;
  * @author Roj234
  * @since 2024/5/15 0015 14:10
  */
-public final class Archiver4J extends Plugin {
+@SimplePlugin(id = "fileutil", version = "1.0", desc = "方便的文件工具")
+public class FileUtil extends Plugin {
 	private final CommandConsole c;
 	private static final TaskPool pool = TaskPool.Common();
 
-	public Archiver4J() {c = (CommandConsole) CLIUtil.getConsole();}
-	private Archiver4J(int v) {c = new CommandConsole("\u001b[96mArchiver4J \u001b[97m> ");}
-
-	public static void main(String[] args) {
-		Archiver4J a4j = new Archiver4J(0);
-		CommandConsole c = a4j.c;
-
-		CommandNode sevenZ = literal("7z"), zip = literal("zip");
-		c.register(sevenZ).register(zip);
-		a4j.registerCommands(zip, sevenZ);
-		CLIUtil.setConsole(c);
-
-		HighResolutionTimer.activate();
-	}
+	public FileUtil() {c = (CommandConsole) CLIUtil.getConsole();}
 
 	@Override
 	protected void onEnable() throws Exception {
-		CommandNode sevenZ = literal("7z"), zip = literal("zip");
-		registerCommand(literal("a4j").then(sevenZ).then(zip));
-		registerCommands(zip, sevenZ);
-	}
+		registerCommand(literal("zipupdate").then(argument("path", Argument.file(false)).executes(this::zipUpdate)));
+		registerCommand(literal("7zverify").then(argument("path", Argument.file(false)).executes(this::qzVerify)));
+		registerCommand(literal("7zdiff").then(argument("file1", Argument.file(false)).then(argument("file2", Argument.file(false)).executes(this::qzDiff))));
 
-	private void registerCommands(CommandNode zip, CommandNode sevenZ) {
-		zip.then(literal("update").then(argument("path", Argument.file(false)).executes(this::zipUpdate)));
-		sevenZ.then(literal("verify").then(argument("path", Argument.file(false)).executes(this::qzVerify)));
-		sevenZ.then(literal("diff").then(argument("file1", Argument.file(false)).then(argument("file2", Argument.file(false)).executes(this::qzDiff))));
+		registerCommand(literal("filemtime").then(
+				argument("src", Argument.file(null)).then(
+					argument("dst", Argument.file(null)).executes(ctx -> {
+
+						File s = ctx.argument("src", File.class);
+						File d = ctx.argument("dst", File.class);
+						System.out.println(d.setLastModified(s.lastModified()));
+					})).then(
+					argument("time", Argument.Long(0, Long.MAX_VALUE)).executes(ctx -> {
+						File s = ctx.argument("src", File.class);
+						long d = ctx.argument("time", Long.class);
+						System.out.println(s.setLastModified(d));
+					}))));
+
+		CommandNode child = argument("src", Argument.file(null)).then(
+			argument("dst", Argument.file(null)).executes(ctx -> {
+
+			File src = ctx.argument("src", File.class);
+			File dst = ctx.argument("dst", File.class);
+
+			if (!dst.exists() && !dst.mkdirs()) {
+				getLogger().error("目标不存在且无法创建");
+				return;
+			}
+
+			IOUtil.movePath(src, dst, ctx.context.startsWith("mv"));
+		}));
+		registerCommand(literal("cp").then(child));
+		registerCommand(literal("mv").then(child));
+
+		registerCommand(literal("rd").then(
+			argument("src", Argument.file(null)).executes(ctx -> {
+			File path = ctx.argument("src", File.class);
+			System.out.println("删除"+path.getAbsolutePath()+"及其所有文件？[y/n]");
+			char c = CLIUtil.awaitCharacter(MyBitSet.from("YyNn"));
+			if (c != 'y' && c != 'Y') return;
+
+			System.out.println(IOUtil.deletePath(path));
+		})));
+
+		registerCommand(literal("batchreplace").then(
+			argument("path", Argument.file(true)).then(
+				argument("regex", Argument.string()).then(
+					argument("replace", Argument.string()).executes(ctx -> {
+
+			Pattern regex = Pattern.compile(ctx.argument("regex", String.class));
+			String replace = ctx.argument("replace", String.class);
+			File path = ctx.argument("path", File.class);
+			for (File file : IOUtil.findAllFiles(path)) {
+				try (TextReader in = TextReader.auto(file)) {
+					AtomicBoolean change = new AtomicBoolean(false);
+					CharList sb = IOUtil.getSharedCharBuf().readFully(in);
+					sb.preg_replace_callback(regex, m -> {
+						CharList tmp = new CharList(replace);
+						for (int i = 0; i < m.groupCount(); i++)
+							tmp.replace("$"+i, m.group(i));
+						String str = tmp.toStringAndFree();
+
+						if (!str.equals(m.group())) change.set(true);
+						return str;
+					});
+
+					if (!change.get()) continue;
+					try (TextWriter out = TextWriter.to(file, Charset.forName(in.charset()))) {
+						out.append(sb);
+					}
+				}
+			}
+		})))));
 	}
 
 	private void zipUpdate(CommandContext ctx) throws IOException {
@@ -220,30 +279,8 @@ public final class Archiver4J extends Plugin {
 			bar.setUnit("Block");
 			bar.addMax(in1_should_copy.size()+in2_should_copy.size());
 
-			in1.parallelDecompress(pool, (entry, in) -> {
-				String prefix = in1_should_copy.get(entry);
-				if (prefix == null) return;
-
-				try (QZWriter w = out.parallel()) {
-					w.beginEntry(new QZEntry(prefix));
-					IOUtil.copyStream(in, w);
-					bar.addCurrent(1);
-				} catch (Exception e) {
-					Helpers.athrow(e);
-				}
-			});
-			in2.parallelDecompress(pool, (entry, in) -> {
-				String prefix = in2_should_copy.get(entry);
-				if (prefix == null) return;
-
-				try (QZWriter w = out.parallel()) {
-					w.beginEntry(new QZEntry(prefix));
-					IOUtil.copyStream(in, w);
-					bar.addCurrent(1);
-				} catch (Exception e) {
-					Helpers.athrow(e);
-				}
-			});
+			copy(in1, in1_should_copy, out, bar);
+			copy(in2, in2_should_copy, out, bar);
 
 			pool.awaitFinish();
 			in1.close();
@@ -255,5 +292,19 @@ public final class Archiver4J extends Plugin {
 			CLIUtil.setConsole(this.c);
 		})));
 		c1.register(literal("exit").executes(c -> CLIUtil.setConsole(this.c)));
+	}
+	private static void copy(QZArchive arc, MyHashMap<QZEntry, String> should_copy, QZFileWriter out, EasyProgressBar bar) {
+		arc.parallelDecompress(pool, (entry, in) -> {
+			String prefix = should_copy.get(entry);
+			if (prefix == null) return;
+
+			try (QZWriter w = out.parallel()) {
+				w.beginEntry(new QZEntry(prefix));
+				IOUtil.copyStream(in, w);
+				bar.addCurrent(1);
+			} catch (Exception e) {
+				Helpers.athrow(e);
+			}
+		});
 	}
 }

@@ -10,7 +10,7 @@ import roj.net.handler.JSslClient;
 import roj.net.handler.MSSCipher;
 import roj.net.handler.Timeout;
 import roj.text.CharList;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.util.*;
 
 import java.io.IOException;
@@ -251,9 +251,9 @@ public abstract class HttpRequest {
 			for (Map.Entry<String, String> entry : q) {
 				if (i != 0) sb.append('&');
 
-				EscapeUtil.escape(b.putUTFData(entry.getKey()), sb, EscapeUtil.URI_COMPONENT_SAFE).append('=');
+				Escape.escape(b.putUTFData(entry.getKey()), sb, Escape.URI_COMPONENT_SAFE).append('=');
 				b.clear();
-				EscapeUtil.escape(b.putUTFData(entry.getValue()), sb, EscapeUtil.URI_COMPONENT_SAFE);
+				Escape.escape(b.putUTFData(entry.getValue()), sb, Escape.URI_COMPONENT_SAFE);
 				i = 1;
 			}
 			query = sb.subSequence(begin,sb.length()).toString();

@@ -112,7 +112,7 @@ public class DirectByteList extends DynByteBuf {
 			return;
 		}
 
-		byte[] array = ArrayCache.getByteArray(4096, false);
+		byte[] array = ArrayCache.getByteArray(Math.min(len, 4096), false);
 		try {
 			long addr = address;
 			while (len > 0) {

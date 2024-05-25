@@ -1,5 +1,6 @@
-package roj.misc;
+package roj.plugins.unpacker;
 
+import roj.collect.TrieTree;
 import roj.crypt.Base64;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
@@ -11,7 +12,9 @@ import roj.util.ArrayRef;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import java.io.EOFException;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -22,28 +25,67 @@ import java.nio.file.StandardOpenOption;
  * @author Roj234
  * @since 2023/2/2 0002 7:21
  */
-public class MHTParser extends MultipartFormHandler {
-	public static void main(String[] args) throws Exception {
-		ByteList buf = new ByteList(IOUtil.read(new File(args[0])));
+class MHtml extends MultipartFormHandler implements Unpacker {
+	FileInputStream in;
+	ByteList buf = new ByteList();
+	Headers h;
+
+	@Override
+	public TrieTree<?> load(File file) throws IOException {
+		in = new FileInputStream(file);
 		Headers h = new Headers();
-		h.parseHead(buf);
-		buf.rIndex += 2;
+		for (;;) {
+			buf.compact();
+			if (buf.readStream(in, 1024) == 0)
+				throw new EOFException();
 
-		String type = h.get("Content-Type");
-		MHTParser parser = new MHTParser();
-		parser.init(type);
+			if (h.parseHead(buf)) {
+				buf.readShort(); // CRLF
+				break;
+			}
+		}
 
-		EmbeddedChannel ch = EmbeddedChannel.createReadonly();
-		ch.addLast("_", parser);
-		ch.fireChannelRead(buf);
-		parser.onSuccess();
-		parser.onComplete();
-		ch.close();
+		this.h = h;
+
+		TrieTree<String> unsupported = new TrieTree<>();
+		unsupported.put("", h.get("Content-Type"));
+		return unsupported;
 	}
 
-	FileChannel out;
-	File file;
-	int enc;
+	@Override
+	public void export(File path, String prefix) throws IOException {
+		if (!prefix.isEmpty()) throw new UnsupportedOperationException("不支持选择性导出");
+		basePath = path;
+
+		init(h.get("Content-Type"));
+
+		try (EmbeddedChannel ch = EmbeddedChannel.createReadonly()) {
+			ch.addLast("_", this);
+			for (;;) {
+				buf.compact();
+				if (buf.readStream(in, 1024) == 0) break;
+
+				ch.fireChannelRead(buf);
+			}
+
+			onSuccess();
+			onComplete();
+		} finally {
+			IOUtil.closeSilently(in);
+		}
+	}
+
+	@Override
+	public void close() throws IOException {
+		IOUtil.closeSilently(in);
+		IOUtil.closeSilently(out);
+		in = null;
+		out = null;
+	}
+
+	private File basePath;
+	private FileChannel out;
+	private int enc;
 
 	@Override
 	protected String getName(Headers hdr) throws IOException {
@@ -53,7 +95,7 @@ public class MHTParser extends MultipartFormHandler {
 		} else if (enc.equalsIgnoreCase("base64")) {
 			this.enc = 1;
 		} else {
-			throw new IOException("Unknown enc " + enc);
+			throw new IOException("Unknown encoding "+enc);
 		}
 
 		String url = hdr.get("content-location");
@@ -65,25 +107,36 @@ public class MHTParser extends MultipartFormHandler {
 		} catch (URISyntaxException e) {
 			e.printStackTrace();
 		}
-		file = new File(url);
-		File p = file.getParentFile();
-		if (p != null) p.mkdirs();
-		else System.out.println(url);
+
+		var file = new File(basePath, url);
+		file.getParentFile().mkdirs();
+
+		IOUtil.closeSilently(out);
 		out = FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
 		return url;
 	}
 
 	@Override
+	protected void onKey(ChannelCtx ctx, String name) {
+		// do not create direct buffer
+	}
+
+	private final ByteList encBuf = new ByteList();
+	@Override
 	protected void onValue(ChannelCtx ctx, DynByteBuf buf) throws IOException {
 		ByteList buf1 = IOUtil.getSharedByteBuf();
 		if (enc == 1) {
-			ByteList tmp = new ByteList();
+			ByteList tmp = encBuf;
 			ArrayRef range = buf.byteRangeR(buf.readableBytes());
 			for (int i = 0; i < range.length; i++) {
 				byte b = range.get(i);
 				if ((b&0xFF) >= 32) tmp.put(b);
 			}
-			Base64.decode(tmp, buf1);
+
+			int off = tmp.length() & ~3;
+			if (off > 0) Base64.decode(tmp, 0, off, buf1, Base64.B64_CHAR_REV);
+			tmp.rIndex = off;
+			tmp.compact();
 		}
 		else if (enc == 0) QuotedPrintable.decode(buf, buf1);
 		out.write(buf1.nioBuffer());
@@ -143,7 +196,7 @@ public class MHTParser extends MultipartFormHandler {
 					out.put(v);
 				} else {
 					if (in.readableBytes() < 2) {
-						in.rIndex -= 3;
+						in.rIndex --;
 						return 1;
 					}
 

@@ -107,7 +107,7 @@ public class Asn1Context {
 		@Override
 		public final String toString() { return append(IOUtil.getSharedCharBuf(), 0).toString(); }
 	}
-	public enum Simple implements Type {
+	protected enum Simple implements Type {
 		INTEGER(DerValue.INTEGER), BIT_STRING(DerValue.BIT_STRING), OCTET_STRING(DerValue.OCTET_STRING), NULL(DerValue.NULL),
 		UTF8_STRING(DerValue.UTF8_STRING), PrintableString(DerValue.PrintableString), IA5_STRING(DerValue.IA5String),
 		UTCTime(DerValue.UTCTime), GeneralizedTime(DerValue.GeneralizedTime),

@@ -39,8 +39,8 @@ public final class JavaLexer extends Tokenizer {
 		"implements,extends,super," +
 		"package,import," +
 		"default,throws,record,const,var,as,instanceof," +
-		"assert,yield,_with" +
-		"__sub,__end_sub,__struct,package-restricted", ',');
+		"assert," +
+		"yield,_with,_defer,_async,_await,__struct,package-restricted", ',');
 	public static final short
 		FOR = 10, WHILE = 11, DO = 12, CONTINUE = 13, BREAK = 14, CASE = 15, IF = 16, ELSE = 17, GOTO = 18, RETURN = 19, SWITCH = 20,
 		THIS = 21, NEW = 22,
@@ -54,7 +54,7 @@ public final class JavaLexer extends Tokenizer {
 		IMPLEMENTS = 54, EXTENDS = 55, SUPER = 56,
 		PACKAGE = 57, IMPORT = 58,
 		DEFAULT = 59, THROWS = 60, RECORD = 61, CONST = 62, VAR = 63, AS = 64, INSTANCEOF = 65,
-		ASSERT = 66, YIELD = 67, WITH = 68, SUB = 69, END_SUB = 70, STRUCT = 71, PACKAGE_RESTRICTED = 72;
+		ASSERT = 66, YIELD = 67, WITH = 68, DEFER = 69, ASYNC = 70, AWAIT = 71, STRUCT = 72, PACKAGE_RESTRICTED = 73;
 
 	public static final String[] operators = {
 		// Syntax
@@ -78,6 +78,7 @@ public final class JavaLexer extends Tokenizer {
 		"=",
 		"+=", "-=", "*=", "/=", "%=", "**=",
 		"<<=", ">>=", ">>>=", "&=", "^=", "|=",
+		"<<<"
 	};
 	public static final short
 		lBrace = 100, rBrace = 101,
@@ -99,7 +100,8 @@ public final class JavaLexer extends Tokenizer {
 
 		assign = 141,
 		add_assign = 142, sub_assign = 143, mul_assign = 144, div_assign = 145, mod_assign = 146, pow_assign = 147,
-		lsh_assign = 148, rsh_assign = 149, rsh_unsigned_assign = 150, and_assign = 151, xor_assign = 152, or_assign = 153;
+		lsh_assign = 148, rsh_assign = 149, rsh_unsigned_assign = 150, and_assign = 151, xor_assign = 152, or_assign = 153,
+		direct_assign = 154;
 
 	public static final int CAT_METHOD = 1, CAT_TYPE = 2, CAT_MODIFIER = 4, CAT_HEADER = 8, CAT_TYPE_TYPE = 16;
 
@@ -112,7 +114,7 @@ public final class JavaLexer extends Tokenizer {
 	static {
 		String path = System.getProperty("roj.lavac.i18n");
 		try {
-			translate = new I18n(path == null ? IOUtil.getTextResource("META-INF/kscript.lang") : IOUtil.readUTF(new File(path)));
+			translate = new I18n(path == null ? IOUtil.getTextResource("roj/compiler/kscript.lang") : IOUtil.readUTF(new File(path)));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -164,6 +166,7 @@ public final class JavaLexer extends Tokenizer {
 
 		alias("...finally", FINALLY, null);
 		alias("...switch", SWITCH, null);
+		alias("...for", FOR, null);
 
 		alias("。", dot, JAVA_LEND);
 		alias("，", comma, JAVA_LEND);
@@ -172,13 +175,14 @@ public final class JavaLexer extends Tokenizer {
 		alias("？", ask, JAVA_LEND);
 		alias("（", lParen, JAVA_LEND);
 		alias("）", rParen, JAVA_LEND);
+		alias("【", lBracket, JAVA_LEND);
+		alias("】", rBracket, JAVA_LEND);
 		alias("《", lss, JAVA_LEND);
 		alias("》", gtr, JAVA_LEND);
 
-		alias("的", dot, null);
-		alias("新", NEW, null);
-		alias("整数", INT, null);
-		alias("数组", FINALLY, null);
+		alias("新", NEW, JAVA_LEND);
+		alias("的", dot, JAVA_LEND);
+		alias("整数", INT, JAVA_LEND);
 		literalAlias("系统","System");
 		literalAlias("输出流","out");
 		literalAlias("打印","println");

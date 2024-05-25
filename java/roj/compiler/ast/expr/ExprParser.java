@@ -9,11 +9,11 @@ import roj.asm.type.Type;
 import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
-import roj.collect.ToIntMap;
 import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.GenericPrimer;
+import roj.compiler.ast.NaE;
 import roj.compiler.ast.VariableDeclare;
 import roj.compiler.ast.block.ParseTask;
 import roj.compiler.context.CompileUnit;
@@ -23,10 +23,8 @@ import roj.config.Word;
 import roj.config.auto.Serializer;
 import roj.config.auto.Serializers;
 import roj.config.serial.CVisitor;
-import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -56,7 +54,14 @@ public final class ExprParser {
 	}
 
 	private final SimpleList<BinaryOp> binaryOps = new SimpleList<>();
-	private record BinaryOp(int pos, int priority) {}
+	private static final class BinaryOp {
+		final int pos;
+		final int priority;
+		BinaryOp(int pos, int priority) {
+			this.pos = pos;
+			this.priority = priority;
+		}
+	}
 	private static final Comparator<BinaryOp> OPR_SORT = (a, b) -> Integer.compare(b.priority, a.priority);
 
 	private int depth;
@@ -74,7 +79,8 @@ public final class ExprParser {
 		_ENV_TYPED_ARRAY = 4096,
 		STOP_LAMBDA = 8192,
 		_ENV_EASYMAP = 16384,
-		CHECK_VARIABLE_DECLARE = 32768;
+		CHECK_VARIABLE_DECLARE = 32768,
+		NAE = 65536;
 	static final int OP_OPTIONAL = 1;
 
 	// com.sun.tools.javac.parser.JavacParser LINE 1742
@@ -150,6 +156,11 @@ public final class ExprParser {
 		if (node == null) {
 			node = pendNode;
 			pendNode = null;
+
+			if (node == null && (flag& NAE) != 0) {
+				node = NaE.INSTANCE;
+				file.fireDiagnostic(Kind.ERROR, "noExpression");
+			}
 		}
 		return node;
 	}
@@ -320,7 +331,7 @@ public final class ExprParser {
 					}
 				break endValueGen;
 				// constant
-				case -2: cur = new Constant(Type.std(Type.CHAR), w.val().charAt(0)); break;
+				case -2: cur = new Constant(Type.std(Type.CHAR), AnnVal.valueOf(w.val().charAt(0))); break;
 				case -3: cur = Constant.valueOf(w.val()); break;
 				case -4: cur = new Constant(Type.std(Type.INT), AnnVal.valueOf(w.asInt())); break;
 				case -5: cur = new Constant(Type.std(Type.LONG), AnnVal.valueOf(w.asLong())); break;
@@ -349,7 +360,7 @@ public final class ExprParser {
 						}
 						wr.skip();
 
-						NamedParamList npl = newNamedParamList();
+						var npl = new NamedParamList();
 						while (true) {
 							ExprNode val = parse1(file, STOP_RLB|STOP_COMMA|SKIP_COMMA);
 							if (val == null) file.fireDiagnostic(Kind.ERROR, "expr.namedCall.noExpr");
@@ -378,7 +389,7 @@ public final class ExprParser {
 				case -14://lBracket
 					//if ((flag & _ENV_FIELD) == 0) wr.unexpected(w.val());
 
-					EasyMap easyMap = newEasyMap();
+					var easyMap = new EasyMap();
 					// 形如 [ exprkey => exprval, ... ] 的直接Map<K, V>构建
 					do {
 						ExprNode key = parse1(file, _ENV_EASYMAP);
@@ -445,7 +456,7 @@ public final class ExprParser {
 						if (!curIsObj) ue(wr, w.val(), "type.literal");
 						ExprNode index = parse1(file, STOP_RMB|SKIP_RMB);
 						if (index == null) chain(cur, ";[", 0); // 用于.class
-						else cur = createArrayGet(cur, index);
+						else cur = newArrayGet(cur, index);
 					}
 					break;
 					case -3://dot, optional_chaining
@@ -457,7 +468,7 @@ public final class ExprParser {
 					case -4://THIS, SUPER
 						if (curIsObj) ue(wr, w.val(), ".");
 						curIsObj = true;
-						cur = EncloseClass(w.type() == THIS, _classRef(cur, wr, w));
+						cur = newEncloseRef(w.type() == THIS, _classRef(cur, wr, w));
 					break;
 					case -5:
 						// .class => TERMINATOR
@@ -526,7 +537,7 @@ public final class ExprParser {
 					break endValueConv;
 					case -9: //method_referent this::stop
 						if (!curIsObj) ue(wr, w.val(), "type.literal");
-						cur = newLambda(cur, wr.except(Word.LITERAL).val());
+						cur = new Lambda(cur, wr.except(Word.LITERAL).val());
 					break endValueConv;
 				}
 				w = wr.next();
@@ -580,12 +591,12 @@ public final class ExprParser {
 					int priority = binaryOperatorPriority(w.type());
 					if (priority >= 0) {
 						// 非法的表达式开始
-						if (cur == null) throw wr.err("not_statement");
+						if (cur == null) throw wr.err("noExpression");
 
 						binaryOps.add(new BinaryOp(words.size(), priority));
-						words.add(binary(w.type()));
+						words.add(new Binary(w.type()));
 						continue;
-					} else if (file.ctx().isSpecEnabled(CompilerSpec.KOTLIN_SEMICOLON)) {
+					} else if (file.ctx().isSpecEnabled(CompilerSpec.KOTLIN_SEMICOLON) && words.size() > wordsOff) {
 						wr.retractWord();
 						break;
 					}
@@ -667,12 +678,12 @@ public final class ExprParser {
 				}
 				break;
 			}
-			cur = newChained(copyOf(args));
+			cur = new Chained(copyOf(args));
 		}
 
 		// 这也是终结. 但是优先级最高
 		if (w.type() == ask) {
-			if (cur == null) ue(wr, w.val(), "type.expr");
+			if (cur == null) throw wr.err("noExpression");
 			ExprNode middle = parse1(file, flag|STOP_COLON);
 			if (middle == null) throw wr.err("expr.trinary.noMiddle");
 			wr.except(colon, ":");
@@ -691,10 +702,9 @@ public final class ExprParser {
 		if (dg.parent != null) throw wr.err("expr.symbol.refCheck:".concat(dg.parent.toString()));
 		return dg.toClassRef();
 	}
-	private ExprNode chain(ExprNode e, String name, int flag) { return e instanceof DotGet ? ((DotGet) e).add(name, flag) : newDotGet(e, name, flag); }
+	private ExprNode chain(ExprNode e, String name, int flag) { return e instanceof DotGet ? ((DotGet) e).add(name, flag) : new DotGet(e, name, flag); }
 	private ExprNode invoke(CompileUnit file, Object fn, List<IType> bounds) throws ParseException {
-		// this is just assert, always succeed
-		if (!(fn instanceof ExprNode) && !(fn instanceof IType)) throw file.getLexer().err("illegal_invoke");
+		assert fn instanceof ExprNode || fn instanceof IType : "validation error";
 
 		List<ExprNode> args = tmp();
 
@@ -756,8 +766,8 @@ public final class ExprParser {
 		} else {
 			wr.retractWord();
 			ExprNode expr = parse1(file, STOP_RSB|STOP_COMMA|STOP_SEMICOLON);
-			if (expr == null) throw wr.err("not_statement");
-			return newLambda(strings, expr);
+			if (expr == null) throw wr.err("noExpression");
+			return new Lambda(strings, expr);
 		}
 	}
 
@@ -765,180 +775,30 @@ public final class ExprParser {
 	private static void ue(JavaLexer wr, String wd) throws ParseException { throw wr.err("unexpected:"+wd); }
 
 	// region cache
-
-	private static final ToIntMap<Class<?>> CACHED_TYPES = new ToIntMap<>();
-	private static void cache(Class<?> type) { CACHED_TYPES.putInt(type, CACHED_TYPES.size()); }
-	static {
-		cache(ArrayDef.class);
-		cache(ArrayGet.class);
-		cache(Assign.class);
-		cache(Binary.class);
-		cache(Cast.class);
-		cache(Chained.class);
-		cache(Constant.class);
-		cache(DotGet.class);
-		cache(EasyMap.class);
-		cache(InstanceOf.class);
-		cache(Invoke.class);
-		cache(Lambda.class);
-		cache(NamedParamList.class);
-		cache(StringConcat.class);
-		cache(This.class);
-		cache(Trinary.class);
-		cache(UnaryPost.class);
-		cache(UnaryPre.class);
-	}
-
-	static final class Cache {
-		final Thread owner = Thread.currentThread();
-		final SimpleList<CacheBlock> ref = new SimpleList<>();
-		final SimpleList<Object> using = new SimpleList<>();
-		final SimpleList<Object>[] pool;
-
-		Cache() {
-			pool = Helpers.cast(new SimpleList<?>[CACHED_TYPES.size()]);
-			for (int i = 0; i < pool.length; i++) pool[i] = new SimpleList<>(10);
-		}
-
-		@SuppressWarnings("unchecked")
-		final <T> T get(Class<T> type) {
-			assert !ref.isEmpty();
-
-			int i = CACHED_TYPES.getOrDefault(type, -1);
-			SimpleList<Object> list = pool[i];
-			if (!list.isEmpty()) return (T) list.pop();
-			Object o;
-			try {
-				o = ReflectionUtils.u.allocateInstance(type);
-			} catch (InstantiationException e) {
-				throw new RuntimeException(e);
-			}
-			using.add(o);
-			return (T) o;
-		}
-
-		final void begin() {
-			if (ref.size() > 0) ref.get(ref.size()-1).end = using.size();
-			ref.add(new CacheBlock(this, using.size()));
-		}
-		final CacheBlock end() {
-			CacheBlock block = ref.pop();
-			block.end = using.size();
-			return block;
-		}
-		final void free(CacheBlock block) {
-			assert block.owner == this;
-			if (block.begin == block.end) return;
-
-			int pos = Arrays.binarySearch(ref.getInternalArray(), 0, ref.size(), block);
-			assert pos >= 0;
-
-			Object[] array = using.getInternalArray();
-			for (int i = block.begin; i < block.end; i++) {
-				Object o = array[i];
-				SimpleList<Object> list = pool[CACHED_TYPES.getOrDefault(o.getClass(), -1)];
-				if (list.size() < 100) list.add(o);
-			}
-			using.removeRange(block.begin, block.end);
-
-			int delta = block.end - block.begin;
-			ref.remove(pos);
-			for (int i = pos; i < ref.size(); i++) {
-				CacheBlock b = ref.get(i);
-				b.begin -= delta;
-				b.end -= delta;
-			}
-		}
-	}
-	static final class CacheBlock {
-		final Cache owner;
-		int begin, end;
-
-		CacheBlock(Cache owner, int begin) {
-			this.owner = owner;
-			this.begin = begin;
-		}
-	}
-
-	private static final ThreadLocal<Cache> CACHE = ThreadLocal.withInitial(Cache::new);
-	private Cache cache1;
-	private Cache getCache() {
-		Cache c = cache1;
-		if (c == null || c.owner != Thread.currentThread()) {
-			cache1 = c = CACHE.get();
-		}
-		return c;
-	}
-
-	public ExprNode This() { return This.THIS; }
-	public ExprNode Super() { return This.SUPER; }
-	public ExprNode EncloseClass(boolean ThisEnclosing, Type type) { return new EncloseRef(ThisEnclosing, type); }
-
-	public ExprNode createArrayGet(ExprNode array, ExprNode index) {
-		return new ArrayGet(array, index);
-	}
-
-	public UnaryPreNode unaryPre(short type) {
-		return new UnaryPre(type);
-	}
-
-	public UnaryPreNode cast(IType type) {
-		return new Cast(type);
-	}
-
 	public <T> SimpleList<T> copyOf(List<T> args) {
 		SimpleList<T> copy = new SimpleList<>(args);
 		args.clear();
 		return copy;
 	}
 
-	public ExprNode newArrayDef(IType type, SimpleList<ExprNode> args, boolean sized) {
-		return new ArrayDef(type, args, sized);
-	}
+	private final This _THIS = new This(true), _SUPER = new This(false);
 
-	public Invoke newInvoke(Object fn, List<ExprNode> pars) {
-		return new Invoke(fn, pars);
-	}
+	public ExprNode This() { return _THIS; }
+	public ExprNode Super() { return _SUPER; }
+	public UnaryPreNode unaryPre(short type) {return new UnaryPre(type);}
+	public UnaryPreNode cast(IType type) {return new Cast(type);}
 
-	public NamedParamList newNamedParamList() {
-		return new NamedParamList();
-	}
-
-	public EasyMap newEasyMap() {return new EasyMap();}
-
-	public ExprNode newLambda(ExprNode methodHandle, String refName) {
-		return new Lambda(methodHandle, refName);
-	}
-
-	public ExprNode newAssign(VarNode cur, ExprNode node) {
-		return new Assign(cur, node);
-	}
-	public ExprNode binary(short op) { return new Binary(op); }
+	public ExprNode newArrayGet(ExprNode array, ExprNode index) {return new ArrayGet(array, index);}
+	public ExprNode newArrayDef(IType type, SimpleList<ExprNode> args, boolean sized) {return new ArrayDef(type, args, sized);}
+	public ExprNode newAssign(VarNode cur, ExprNode node) {return new Assign(cur, node);}
+	public ExprNode newEncloseRef(boolean ThisEnclosing, Type type) { return new EncloseRef(ThisEnclosing, type); }
+	public Invoke newInvoke(Object fn, List<ExprNode> pars) {return new Invoke(fn, pars);}
 	public ExprNode binary(short op, ExprNode left, ExprNode right) { return new Binary(op, left, right); }
-
 	public ExprNode newUnaryPost(short op, ExprNode prev) { return new UnaryPost(op, prev); }
-
-
-	public ExprNode newInstanceOf(Type type, ExprNode cur, String variable) {
-		return new InstanceOf(type, cur, variable);
-	}
-
-	private ExprNode newChained(SimpleList<ExprNode> ts) {
-		return new Chained(ts);
-	}
-
-	public ExprNode newTrinary(ExprNode cur, ExprNode middle, ExprNode right) {
-		return new Trinary(cur, middle, right);
-	}
-
-	public ExprNode newLambda(SimpleList<String> args, ExprNode expr) {
-		return new Lambda(args, expr);
-	}
-
-	public ExprNode newDotGet(ExprNode e, String name, int flag) {
-		return new DotGet(e, name, flag);
-	}
+	public ExprNode newInstanceOf(Type type, ExprNode cur, String variable) {return new InstanceOf(type, cur, variable);}
+	public ExprNode newTrinary(ExprNode cur, ExprNode middle, ExprNode right) {return new Trinary(cur, middle, right);}
 	// endregion
+
 	// TODO store nodes ?
 	public static void serialize(ExprNode node, CVisitor visitor) { serializer().write(visitor, node); }
 	public static Serializer<ExprNode> serializer() { return Serializers.ANY_OBJECT.serializer(ExprNode.class); }

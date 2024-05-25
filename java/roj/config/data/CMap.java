@@ -255,15 +255,7 @@ public class CMap extends CEntry {
 	public String getComment(String key) {return null;}
 	public void putComment(String key, String val) {throw new UnsupportedOperationException();}
 	public CMap withComments() { return new CCommMap(map); }
-	public void clearComments(boolean withSub) {
-		if (withSub) {
-			for (CEntry entry : map.values()) {
-				if (entry.getType() == Type.MAP) {
-					entry.asMap().clearComments(true);
-				}
-			}
-		}
-	}
+	public void clearComments() {}
 
 	protected final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }
 

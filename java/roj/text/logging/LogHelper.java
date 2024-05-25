@@ -1,15 +1,16 @@
 package roj.text.logging;
 
+import org.jetbrains.annotations.NotNull;
 import roj.asm.type.TypeHelper;
 import roj.collect.MyHashMap;
 import roj.text.CharList;
-import roj.text.CharWriter;
 import roj.text.logging.d.LogDestination;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.io.Writer;
 import java.util.Arrays;
 import java.util.List;
 
@@ -20,10 +21,19 @@ import java.util.List;
 final class LogHelper extends PrintWriter {
 	static final ThreadLocal<LogHelper> LOCAL = ThreadLocal.withInitial(LogHelper::new);
 
-	private static final class ExcWriter extends CharWriter {
+	private static final class ExcWriter extends Writer {
 		private LogHelper o;
-		public final void flush() throws IOException { o.myOut.append(sb); sb.setLength(o.prefix); }
+		private CharList sb;
 		final void init(LogHelper h) { o = h; sb = h.sb; }
+
+		public final void flush() throws IOException { o.myOut.append(sb); sb.setLength(o.prefix); }
+		public void close(){}
+		public void write(int c){ sb.append((char) c); }
+		public void write(@NotNull char[] buf, int off, int len){ sb.append(buf, off, len); }
+		public void write(@NotNull String str){ sb.append(str); }
+		public void write(@NotNull String str, int off, int len){ sb.append(str, off, len); }
+		public Writer append(CharSequence csq){ sb.append(csq, 0, csq.length()); return this; }
+		public Writer append(CharSequence csq, int start, int end){ sb.append(csq, start, end); return this; }
 	}
 
 	static final class MyMap extends MyHashMap<String, Object> {

@@ -287,30 +287,37 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 	}
 	@Override
 	public int read(@NotNull char[] cbuf, int coff, int clen) throws IOException {
-		int remain = clen;
+		int need = clen;
 
-		int blen = len-off;
-		if (blen > 0) {
-			if (clen < blen) blen = clen;
+		int fRead = len-off;
+		if (fRead > 0) {
+			if (fRead > clen) fRead = clen;
 
-			System.arraycopy(buf, off, cbuf, coff, blen);
-			off += blen;
+			System.arraycopy(buf, off, cbuf, coff, fRead);
+			off += fRead;
 
-			coff += blen;
-			remain -= blen;
+			coff += fRead;
+			need -= fRead;
 		}
 
-		if (remain == 0) return clen;
-		if (remain < buf.length) {
-			int r = fill(buf, 0, buf.length);
-			if (r <= 0) return r;
-			this.off = remain;
-			this.len = r - remain;
-			System.arraycopy(buf, 0, cbuf, coff, remain);
-			return clen;
+		if (need < buf.length) {
+			int r;
+			if (need == 0 || (r = fill(buf, 0, buf.length)) <= 0) return fRead;
+
+			if (r >= need) {
+				off = need;
+				len = r - need;
+				System.arraycopy(buf, 0, cbuf, coff, need);
+				return clen;
+			} else {
+				off = len = 0;
+				System.arraycopy(buf, 0, cbuf, coff, r);
+				return clen - need + r;
+			}
 		}
 
-		return fill(cbuf, coff, remain) + clen-remain;
+		int r = fill(cbuf, coff, need);
+		return r < 0 ? fRead == 0 ? -1 : fRead : r+clen-need;
 	}
 	@Override
 	public long skip(long n) throws IOException {

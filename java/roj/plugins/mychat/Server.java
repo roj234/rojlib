@@ -208,7 +208,7 @@ public class Server extends WebSocketServer implements Router, Context {
 		User u = (User) req.threadContext().get("USER");
 
 		String safePath = IOUtil.safePath(req.subDirectory(1).path());
-		DynByteBuf bb = IOUtil.SharedCoder.get().decodeBase64R(safePath);
+		DynByteBuf bb = IOUtil.SharedCoder.get().decodeBase64(safePath);
 		if (bb.readInt() != u.id) {
 			return jsonErr("没有权限");
 		} else {

@@ -15,7 +15,7 @@ import roj.net.http.server.auto.Body;
 import roj.net.http.server.auto.From;
 import roj.net.http.server.auto.Route;
 import roj.text.CharList;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.BitBuffer;
@@ -846,7 +846,7 @@ public class DnsServer implements ChannelHandler {
 
 		if (msg != null && !msg.isEmpty()) {
 			sb.append("<div style='background: 0xAA8888; margin: 16px; padding: 16px; border: #000 1px dashed; font-size: 24px; text-align: center;'>")
-			  .append(EscapeUtil.decodeURI(msg))
+			  .append(Escape.decodeURI(msg))
 			  .append("</div>");
 		}
 
@@ -921,6 +921,6 @@ public class DnsServer implements ChannelHandler {
 			}
 		}
 
-		rh.code(302).header("Location", "/?msg="+EscapeUtil.encodeURI(msg));
+		rh.code(302).header("Location", "/?msg="+Escape.encodeURI(msg));
 	}
 }

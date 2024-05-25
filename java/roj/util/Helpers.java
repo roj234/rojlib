@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 
 import java.io.File;
 import java.net.MalformedURLException;
@@ -31,7 +31,7 @@ public class Helpers {
 		int i = loc.lastIndexOf('!');
 		loc = loc.substring(loc.startsWith("/")?1:0, i<0?loc.length():i);
 		try {
-			return new File(EscapeUtil.decodeURI(loc).toString());
+			return new File(Escape.decodeURI(loc).toString());
 		} catch (MalformedURLException e) {
 			e.printStackTrace();
 			return null;

@@ -468,6 +468,13 @@ public final class CLIUtil implements Runnable {
 		int len = CharLength.getOrDefaultInt(c, -1);
 		if (len >= 0) return len;
 
+		try {
+			instance.getCursorPos();
+		} catch (Exception e) {
+			CharLength = null;
+			return 2;
+		}
+
 		// https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters
 		// 这也太邪门了...... 但是可行，速度还飞快。。
 		synchronized (sysOut) {
@@ -479,8 +486,7 @@ public final class CLIUtil implements Runnable {
 				len = (instance.getCursorPos()&0xFF)-1;
 				CharLength.put(c, len);
 			} catch (Exception e) {
-				CharLength = null;
-				len = 2;
+				assert false;
 			}
 
 			writeSeq(bb.putAscii("\u001b[1K\u001b8"));
@@ -776,18 +782,11 @@ public final class CLIUtil implements Runnable {
 		}
 
 		inited = 2;
-		synchronized (CLIUtil.class) { if (console == null && ANSI) enableDirectInput(false); }
 
 		ByteList.Slice shellB = IOUtil.SharedCoder.get().shellB;
 		byte[] buf = new byte[260];
 
 		while (true) {
-			if (console == null) {
-				if (IN_READ.get() == 0 || rPtr != wPtr) {
-					LockSupport.park(IN_READ);
-				}
-			}
-
 			int r;
 			try {
 				r = sysIn.read(buf, 0, 256);
@@ -813,7 +812,6 @@ public final class CLIUtil implements Runnable {
 		}
 
 		sysErr.println("Console handler has terminated!");
-		LockSupport.parkNanos(1);
 		System.exit(13102);
 	}
 
@@ -838,7 +836,6 @@ public final class CLIUtil implements Runnable {
 		} else {
 			if (ANSI) enableDirectInput(false);
 		}
-		LockSupport.unpark(thread);
 	}
 	public static Console getConsole() { return console; }
 
@@ -1003,7 +1000,6 @@ public final class CLIUtil implements Runnable {
 				}
 
 				if (isGetCursor == -1) {
-					LockSupport.unpark(thread);
 					try {
 						lcb.wait(30);
 					} catch (InterruptedException e) {

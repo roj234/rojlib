@@ -8,7 +8,7 @@ import roj.config.serial.CVisitor;
 import roj.config.serial.ToEntry;
 import roj.config.serial.ToXml;
 import roj.text.CharList;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
@@ -337,7 +337,7 @@ public class XMLParser extends Parser {
 		}
 
 		if (hasEntity && (flag&DECODE_ENTITY) != 0) {
-			EscapeUtil.htmlspecial_decode_all(v, in.subSequence(prevI, lastNonEmpty));
+			Escape.deHtmlEntities_Append(in.subSequence(prevI, lastNonEmpty), v);
 		} else {
 			v.append(in, prevI, lastNonEmpty);
 		}

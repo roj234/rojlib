@@ -3,18 +3,22 @@ package roj.compiler;
 import roj.asm.Opcodes;
 import roj.asm.tree.MethodNode;
 import roj.asm.type.TypeHelper;
+import roj.asmx.AnnotationRepo;
 import roj.compiler.ast.block.ParseTask;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LibraryZipFile;
 import roj.compiler.context.LocalContext;
+import roj.compiler.plugins.sandbox.SandboxEvaluator;
 import roj.compiler.resolve.TypeResolver;
+import roj.reflect.DirectAccessor;
 import roj.reflect.FastInit;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.util.Helpers;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.Method;
@@ -29,19 +33,33 @@ public class LavaCompiler {
 	final LocalContext cache = new LocalContext(ctx);
 
 	public LavaCompiler() throws IOException {
-		ctx.addLibrary(new LibraryZipFile(Helpers.getJarByClass(LavaCompiler.class)));
+		File ImpLib = Helpers.getJarByClass(LavaCompiler.class);
+		ctx.addLibrary(new LibraryZipFile(ImpLib));
+
+		AnnotationRepo repo = new AnnotationRepo();
+		repo.add(ImpLib);
+
+		SandboxEvaluator.init(ctx, repo);
 	}
 
 	public static void main(String[] args) throws Exception {
-		System.out.println("Lava编译器v0.8 交互式命令行 输入空行来开始编译");
+		LavaCompiler compiler = new LavaCompiler();
+
+		System.out.println("Lava编译器v"+Lavac.VERSION+" 交互式命令行 输入空行来开始编译");
 		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 		CharList tmp = new CharList();
 		while (true) {
-			String line = br.readLine();
-			if (line.isEmpty()) break;
-			tmp.append(line).append('\n');
+			while (true) {
+				String line = br.readLine();
+				if (line.isEmpty()) break;
+				tmp.append(line).append('\n');
+			}
+
+			if (tmp.length() > 0) {
+				compiler.linkLambda(Runnable.class, tmp.toString()).run();
+				tmp.clear();
+			}
 		}
-		new LavaCompiler().linkLambda(Runnable.class, tmp.toString()).run();
 	}
 
 	@SuppressWarnings("unchecked")
@@ -56,9 +74,11 @@ public class LavaCompiler {
 		}
 		if (myMethod == null) throw new IllegalArgumentException(functionalInterface.getName()+"看起来不像FunctionalInterface");
 
-		CompileUnit u = new CompileUnit("<stdin>", ctx);
+		CompileUnit u = new CompileUnit("<stdin>");
 
+		u.version = CompileUnit.JavaVersion(8);
 		u.name("roj/generated/HelloFromStdin"+ReflectionUtils.uniqueId());
+		u.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
 		u.addInterface(functionalInterface.getName().replace('.', '/'));
 		u.npConstructor();
 
@@ -77,6 +97,7 @@ public class LavaCompiler {
 
 		LocalContext.set(null);
 
+		u.dump();
 		FastInit.prepare(u);
 		return (T) FastInit.make(u);
 	}

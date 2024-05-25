@@ -28,7 +28,12 @@ public class UIEntry extends JFrame {
 	private static void launchUI() {
 		GuiUtil.systemLook();
 		UIEntry f = new UIEntry();
+		f.uiInfo.setText("""
+			RojLib-CK Release 2.1.0-20240527
+			修复插件系统的兼容性问题
+			继续开发Lava编译器""");
 
+		f.uiCLITool.setText("正在读取……");
 		f.pack();
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		f.setVisible(true);

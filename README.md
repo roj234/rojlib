@@ -14,6 +14,12 @@
 [任意对象的安全序列化解决方案](docs/Re_SerializerFactory.md)  
 没列出来的还在WIP
 
+## 上新
+roj.minecraft.mcdiff  
+    特别适用于Minecraft存档的增量更新工具（当然，也支持其它文件类型）  
+    BsDiff的扩展用法正待开发  
+    带数字签名系统，目的类似安卓的apk签名  
+
 # 这里都有啥
 ## roj.archive
 `ZipArchive/ZipFileWriter`: zip
@@ -124,9 +130,10 @@ class混淆器 Obfuscator`
  * 完美哈希表
 
 ## roj.compiler
- java编译器
- 半成品，暂时不怎么支持泛型
- 更多见独立说明
+ java编译器  
+ 半成品，暂时不怎么支持泛型  
+ 然而，支持很多绝赞语法  
+ 更多见独立说明  
 
 ## roj.concurrent
 Promise:

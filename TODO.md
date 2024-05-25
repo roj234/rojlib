@@ -22,7 +22,11 @@
 * [ ] retransform based advanced hot-reload
 * [ ] FrameVisitor
 * [ ] UDP Transport Protocol
-* [ ] My VCS
+* [ ] ReedSolomon
+* [ ] FRP finish
+* [ ] PNG-8 Encode
+* [ ] QOA Encode/Decode
+* [ ] TextDiff
 
 
 
@@ -39,15 +43,10 @@
 * [ ] 完整的Try
 * try和switch必须要做成Node
 * [ ] 实现StreamChain
-* [ ] 
-* [x] foreach
-* [x] ImportAny
-* [x] Package-Restricted
-* [x] 可选的分号
 
 ### CompileUnit的多线程和同步解析
 
-Stage0/1  
+Stage 1  
  解析基本结构
 * import
 * package / name

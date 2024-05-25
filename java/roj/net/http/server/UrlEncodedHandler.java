@@ -2,7 +2,7 @@ package roj.net.http.server;
 
 import roj.net.ch.ChannelCtx;
 import roj.net.http.IllegalRequestException;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.util.DynByteBuf;
 
 import java.io.EOFException;
@@ -35,7 +35,7 @@ public class UrlEncodedHandler extends HPostHandler {
 				buf.wIndex(pos);
 
 				try {
-					String o = EscapeUtil.decodeURI(buf);
+					String o = Escape.decodeURI(buf);
 					if (key != null) {
 						onValue(o);
 						key = null;
@@ -56,7 +56,7 @@ public class UrlEncodedHandler extends HPostHandler {
 		}
 
 		if (state == 2) {
-			onValue(EscapeUtil.decodeURI(buf));
+			onValue(Escape.decodeURI(buf));
 			state = 3;
 		}
 	}

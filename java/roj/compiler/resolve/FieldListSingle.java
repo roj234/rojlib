@@ -16,7 +16,7 @@ final class FieldListSingle extends ComponentList {
 		this.node = node;
 	}
 
-	private final IClass owner;
+	final IClass owner;
 	final FieldNode node;
 
 	@NotNull

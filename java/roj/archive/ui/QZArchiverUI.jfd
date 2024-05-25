@@ -594,6 +594,13 @@ new FormModel {
 				"x": 125
 				"y": 333
 			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "uiSortByFilename"
+				"text": "按文件名排序"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 395
+				"y": 290
+			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 50, 30 )
 			"size": new java.awt.Dimension( 510, 495 )

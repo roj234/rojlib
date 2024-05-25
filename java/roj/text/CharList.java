@@ -563,7 +563,7 @@ public class CharList implements CharSequence, Appendable {
 	}
 	public final CharList replaceMulti(TrieTree<String> map) {
 		CharList out = null;
-		int prevI = 0, i = 0;
+		int prevI = 0;
 
 		int pos = 0;
 
@@ -595,7 +595,7 @@ public class CharList implements CharSequence, Appendable {
 	}
 	public final CharList replaceMulti(CharMap<String> map) {
 		CharList out = null;
-		int prevI = 0, i = 0;
+		int prevI = 0;
 		int pos = 0;
 
 		while (pos < len) {

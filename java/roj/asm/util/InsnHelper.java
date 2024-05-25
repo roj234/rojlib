@@ -2,15 +2,11 @@ package roj.asm.util;
 
 import roj.asm.Opcodes;
 import roj.asm.type.Type;
-import roj.asm.visitor.*;
+import roj.asm.visitor.XInsnList;
+import roj.asm.visitor.XInsnNodeView;
 import roj.collect.Int2IntMap;
-import roj.collect.IntMap;
-import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
-
-import java.util.List;
-import java.util.Map;
 
 import static roj.asm.Opcodes.*;
 
@@ -78,44 +74,6 @@ public class InsnHelper {
 			case 'C': return CALOAD;
 			case 'S': return SALOAD;
 			default: throw new IllegalArgumentException();
-		}
-	}
-
-	public static void switchString(CodeWriter c, Map<String, Label> target, Label def) {
-		if (target.isEmpty()) {
-			c.jump(GOTO, def);
-			return;
-		}
-
-		c.one(DUP);
-		c.invoke(INVOKESPECIAL, "java/lang/String", "hashCode", "()I");
-
-		SwitchSegment sw = CodeWriter.newSwitch(LOOKUPSWITCH);
-		c.addSegment(sw);
-		sw.def = def;
-
-		// check duplicate
-		IntMap<List<Map.Entry<String, Label>>> tmp = new IntMap<>(target.size());
-		for (Map.Entry<String, Label> entry : target.entrySet()) {
-			int hash = entry.getKey().hashCode();
-
-			List<Map.Entry<String, Label>> dup = tmp.get(hash);
-			if (dup == null) tmp.putInt(hash, dup = new SimpleList<>(2));
-			dup.add(entry);
-		}
-
-		for (IntMap.Entry<List<Map.Entry<String, Label>>> entry : tmp.selfEntrySet()) {
-			Label pos = new Label();
-			sw.branch(entry.getIntKey(), pos);
-			c.label(pos);
-			List<Map.Entry<String, Label>> list1 = entry.getValue();
-			for (int i = 0; i < list1.size(); i++) {
-				Map.Entry<String, Label> entry1 = list1.get(i);
-				c.ldc(entry1.getKey());
-				c.invoke(INVOKESPECIAL, "java/lang/String", "equals", "(Ljava/lang/Object;)Z");
-				c.jump(IFNE, entry1.getValue());
-			}
-			c.jump(GOTO, def);
 		}
 	}
 

@@ -5,7 +5,7 @@ import roj.io.source.FileSource;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.http.Headers;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.util.DirectByteList;
 import roj.util.DynByteBuf;
 
@@ -104,7 +104,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 		String ext = file.getName();
 		String type = FileResponse.getMimeType(ext);
 
-		if (download) h.putIfAbsent("Content-Disposition", "attachment; filename=\""+EscapeUtil.encodeURIComponent(file.getName())+'"');
+		if (download) h.putIfAbsent("Content-Disposition", "attachment; filename=\""+Escape.encodeURIComponent(file.getName())+'"');
 		h.putIfAbsent("Content-Type", type);
 	}
 

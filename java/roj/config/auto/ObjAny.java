@@ -15,24 +15,24 @@ final class ObjAny extends Adapter {
 	ObjAny(SerializerFactoryImpl type) { this.gen = type; }
 
 	@Override
-	void map(AdaptContext ctx, int size) { ctx.fieldId = -1; /* not primitive (-2) */ }
+	public void map(AdaptContext ctx, int size) { ctx.fieldId = -1; /* not primitive (-2) */ }
 
 	// 为了能读取之前版本序列化的数据而保留..
 	@Override
-	void list(AdaptContext ctx, int size) {
+	public void list(AdaptContext ctx, int size) {
 		Adapter ls = gen.get(List.class);
 		ctx.push(ls);
 		ls.list(ctx, size);
 	}
 
 	@Override
-	void key(AdaptContext ctx, String key) {
+	public void key(AdaptContext ctx, String key) {
 		if (!key.equals("==")) throw new IllegalArgumentException("第一个key必须是对象类型('=='):"+key);
 		ctx.setKeyHook(0);
 	}
 
 	@Override
-	void read(AdaptContext ctx, Object o) {
+	public void read(AdaptContext ctx, Object o) {
 		// primitive
 		if (ctx.fieldId == -2) {
 			ctx.setRef(o);
@@ -63,22 +63,22 @@ final class ObjAny extends Adapter {
 		} else {
 			ctx.replace(new Adapter() {
 				@Override
-				void key(AdaptContext ctx, String key) {
+				public void key(AdaptContext ctx, String key) {
 					if (!key.equals("v")) throw new IllegalArgumentException("第二个key必须是'v':"+key);
 					ctx.push(ser);
 				}
 				@Override
-				void read(AdaptContext ctx, Object o) {
+				public void read(AdaptContext ctx, Object o) {
 					ctx.ref = o;
 					ctx.fieldId = -1;
 				}
 				@Override
-				int fieldCount() { return 0; }
+				public int fieldCount() { return 0; }
 			});
 		}
 	}
 
-	void write(CVisitor c, Object o) {
+	public void write(CVisitor c, Object o) {
 		if (o == null) c.valueNull();
 		else {
 			Adapter ser = gen.get(o.getClass());

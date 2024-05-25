@@ -35,6 +35,7 @@ import roj.util.ArrayCache;
 
 import java.util.*;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /**
  * LocalContext 解决(resolve)环境 每线程一个
@@ -221,23 +222,8 @@ public class LocalContext {
 		method = node;
 	}
 
-	public ComponentList fieldListOrReport(IClass info, String name) {
-		try {
-			return classes.fieldList(info, name);
-		} catch (ClassNotFoundException e) {
-			report(Kind.WARNING, "symbol.warn.noSuchClass", e.getMessage());
-			return null;
-		}
-	}
-
-	public ComponentList methodListOrReport(IClass info, String name) {
-		try {
-			return classes.methodList(info, name);
-		} catch (ClassNotFoundException e) {
-			report(Kind.WARNING, "symbol.warn.noSuchClass", e.getMessage());
-			return null;
-		}
-	}
+	public ComponentList fieldListOrReport(IClass info, String name) {return classes.fieldList(info, name);}
+	public ComponentList methodListOrReport(IClass info, String name) {return classes.methodList(info, name);}
 
 	// region 解析符号引用 Class Field Method
 	@Nullable
@@ -373,7 +359,12 @@ public class LocalContext {
 		}
 		return anySuccess;
 	}
-	public String resolveField(IClass clz, CharList desc) { return resolveField(clz, null, desc, 0); }
+
+	/**
+	 * @param clz 前一个字段的owner
+	 * @param generic 前一个字段的类型
+	 * @param desc dot splitted field mapping
+	 */
 	public String resolveField(IClass clz, IType generic, CharList desc) { return resolveField(clz, generic, desc, 0); }
 	private String resolveField(IClass clz, IType fieldType, CharList desc, int prevI) {
 		_frBegin = clz;
@@ -383,8 +374,6 @@ public class LocalContext {
 		while (true) {
 			String name = desc.toString(prevI, i < 0 ? desc.length() : i);
 
-			// TODO 泛型的处理 而且没必要这么复杂
-			// then FieldNode (RawNode) => getfield opcode
 			FieldNode field;
 			block: {
 				ComponentList fields = fieldListOrReport(clz, name);
@@ -399,6 +388,7 @@ public class LocalContext {
 				return "symbol.error.noSuchSymbol:symbol.field:"+name+":"+currentCodeBlockForReport();
 			}
 
+			// TODO 泛型的处理可能没必要这么复杂
 			Signature cSign = clz.parsedAttr(clz.cp(), Attribute.SIGNATURE);
 			if (cSign != null) {
 				Signature fSign = field.parsedAttr(clz.cp(), Attribute.SIGNATURE);
@@ -406,13 +396,12 @@ public class LocalContext {
 					Map<String, List<IType>> tpBounds = cSign.typeParams;
 					MyHashMap<String, IType> knownTps = new MyHashMap<>(cSign.typeParams.size());
 
-					if (fieldType.genericType() != IType.GENERIC_TYPE) {
+					if (!(fieldType instanceof Generic gType)) {
 						for (Map.Entry<String, List<IType>> entry : tpBounds.entrySet()) {
 							List<IType> value = entry.getValue();
 							knownTps.put(entry.getKey(), value.get(0).genericType() == IType.PLACEHOLDER_TYPE ? OBJECT_TYPE : value.get(0));
 						}
 					} else {
-						Generic gType = (Generic) fieldType;
 						Iterator<String> itr = tpBounds.keySet().iterator();
 						assert gType.children.size() == tpBounds.size();
 						for (IType child : gType.children) knownTps.put(itr.next(), child);
@@ -449,6 +438,13 @@ public class LocalContext {
 	public IType get_frType() {return _frType;}
 	// endregion
 
+	public void checkType(String owner) {
+		// 检查type是否已导入
+		if (owner != null && tr.isRestricted() && null == tr.resolve(this, owner.substring(owner.lastIndexOf('/')+1))) {
+			report(Kind.ERROR, "lc.packageRestricted", owner);
+		}
+	}
+
 
 	// TODO move to GlobalContext
 	@Deprecated
@@ -471,12 +467,50 @@ public class LocalContext {
 	public Map<String, Variable> variables = Collections.emptyMap();
 	public Variable tryVariable(String name) {return variables.get(name);}
 
-	public String[] tryImportMethod(String name) {
+	public static final class Import {
+		public final IClass owner;
+		public final String method;
+		public final ExprNode prev;
+
+		public Import(IClass owner, String method) {
+			this.owner = owner;
+			this.method = method;
+			this.prev = null;
+		}
+
+		public Import(IClass owner, String method, ExprNode prev) {
+			this.owner = owner;
+			this.method = method;
+			this.prev = prev;
+		}
+	}
+	public Function<String, Import> dynamicMethodImport, dynamicFieldImport;
+
+	/**
+	 * @param name DotGet name
+	 * @return [owner, name, Nullable Expr]
+	 */
+	public Import tryImportMethod(String name) {
+		if (dynamicMethodImport != null) {
+			Import result = dynamicMethodImport.apply(name);
+			if (result != null) return result;
+		}
+
 		IClass owner = tr.resolveMethod(this, name);
 		if (owner == null) return null;
-		return new String[] {owner.name(), name};
+		return new Import(owner, name);
 	}
-	public IClass tryImportField(String name, List<FieldNode> nodes) {return tr.resolveField(this, name, nodes);}
+	public Import tryImportField(String name) {
+		if (dynamicFieldImport != null) {
+			Import result = dynamicFieldImport.apply(name);
+			if (result != null) return result;
+		}
+
+		_frChain.clear();
+		IClass begin = tr.resolveField(this, name, _frChain);
+		if (begin == null) return null;
+		return new Import(begin, name);
+	}
 
 	public boolean instanceOf(String testClass, String instClass) {
 		IClass info = classes.getClassInfo(testClass);
@@ -698,6 +732,10 @@ public class LocalContext {
 		}
 
 		return null;
+	}
+
+	public boolean setConstantValue(Variable var, roj.compiler.ast.expr.Constant val) {
+		return false;
 	}
 	// endregion
 	// region CompileUnit用到的

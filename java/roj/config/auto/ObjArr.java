@@ -19,7 +19,7 @@ final class ObjArr extends Adapter {
 	}
 
 	@Override
-	void pop(AdaptContext ctx) {
+	public void pop(AdaptContext ctx) {
 		if (ctx.fieldId == -1) {
 			SimpleList<?> buf = (SimpleList<?>) ctx.ref;
 			ctx.setRef(buf.toArray((Object[]) Array.newInstance(type,buf.size())));
@@ -28,7 +28,7 @@ final class ObjArr extends Adapter {
 	}
 
 	@Override
-	void list(AdaptContext ctx, int size) {
+	public void list(AdaptContext ctx, int size) {
 		if (size < 0) {
 			ctx.setRef(ctx.objBuffer());
 			ctx.fieldId = -1;
@@ -42,7 +42,7 @@ final class ObjArr extends Adapter {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	void read(AdaptContext ctx, Object o) {
+	public void read(AdaptContext ctx, Object o) {
 		if (ctx.ref == null) {
 			if (o == null) {
 				ctx.popd(true);
@@ -62,7 +62,7 @@ final class ObjArr extends Adapter {
 	}
 
 	@Override
-	void write(CVisitor c, Object o) {
+	public void write(CVisitor c, Object o) {
 		if (o == null) c.valueNull();
 		else {
 			Object[] arr = ((Object[]) o);

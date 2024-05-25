@@ -14,18 +14,13 @@ import roj.compiler.resolve.ResolveException;
  * @since 2023/1/30 0030 14:08
  */
 final class This extends ExprNode {
-	// TODO - concurrent (will be resolved via ReuseAST)
-	@Deprecated
-	public static final This THIS = new This();
-	@Deprecated
-	public static final This SUPER = new This();
-
-	public This() {}
+	private final boolean isThis;
+	This(boolean isThis) {this.isThis = isThis;}
 
 	private Type type;
 
 	@Override
-	public String toString() { return type != null ? type.toString() : this==THIS?"this":"super"; }
+	public String toString() { return type != null ? type.toString() : isThis?"this":"super"; }
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
@@ -36,7 +31,7 @@ final class This extends ExprNode {
 		CompileUnit file = ctx.file;
 		if (file.parent == null) throw new ResolveException("this.error.no_super");
 
-		type = new Type(this == THIS ? file.name : file.parent);
+		type = new Type(isThis ? file.name : file.parent);
 		return this;
 	}
 

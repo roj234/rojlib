@@ -7,6 +7,7 @@ import roj.asm.tree.attr.Attribute;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.IntMap;
 import roj.collect.MatchMap;
@@ -37,8 +38,8 @@ final class MethodList extends ComponentList {
 	private volatile MatchMap<String, Object> namedLookup;
 
 	void add(IClass klass, MethodNode mn) {
-		// 重载的处理
-		if (!ddtmp.add(mn.rawDesc())) return;
+		// 忽略改变返回类型的重载的parent
+		if (!ddtmp.add(TypeHelper.getMethod(mn.parameters()))) return;
 		methods.add(mn);
 		if ((mn.modifier & Opcodes.ACC_VARARGS) != 0) hasVarargs = true;
 		mn.parsedAttr(klass.cp(), Attribute.SIGNATURE);
@@ -74,7 +75,7 @@ final class MethodList extends ComponentList {
 			return super.add(entry);
 		}
 	}
-	public MethodResult findMethod(LocalContext ctx, IType genericHint, SimpleList<IType> params,
+	public MethodResult findMethod(LocalContext ctx, IType genericHint, List<IType> params,
 								   Map<String, IType> namedType, int flags) {
 		SimpleList<MethodNode> candidates;
 
@@ -106,7 +107,7 @@ final class MethodList extends ComponentList {
 
 		MethodResult best = null;
 		List<MethodNode> dup = new SimpleList<>();
-		SimpleList<IType> myParam = params;
+		SimpleList<IType> myParam = null;
 
 		int size = (flags&THIS_ONLY) != 0 ? childId : candidates.size();
 
@@ -131,7 +132,7 @@ final class MethodList extends ComponentList {
 				if (defReq > mdvalue.size()) continue;
 
 				defParamState = new IntMap<>();
-				if (myParam == params) myParam = new SimpleList<>(params);
+				if (myParam == null) myParam = new SimpleList<>(params);
 				else myParam._setSize(params.size());
 
 				List<String> names = ParamNameMapper.getParameterName(mnOwner.cp(), mn);
@@ -163,7 +164,7 @@ final class MethodList extends ComponentList {
 				}
 			}
 
-			MethodResult result = ctx.inferrer.infer(mnOwner, mn, genericHint, myParam);
+			MethodResult result = ctx.inferrer.infer(mnOwner, mn, genericHint, myParam == null ? params : myParam);
 			int score = result.distance;
 			if (score < 0) continue;
 
@@ -268,5 +269,17 @@ final class MethodList extends ComponentList {
 		Signature sign = mn.parsedAttr(null, Attribute.SIGNATURE);
 		List<? extends IType> params2 = sign == null ? mn.parameters() : sign.values.subList(0, sign.values.size()-1);
 		return sb.append(params2.isEmpty() ? "{invoke.no_param}" : TextUtil.join(params2, ","));
+	}
+
+	@Override
+	public String toString() {
+		CharList sb = new CharList().append('[');
+
+		for (MethodNode node : methods) {
+			sb.append(node.ownerClass()).append(" => (").append(TextUtil.join(node.parameters(), ", ")).append(") => ").append(node.returnType())
+			  .append(", ");
+		}
+
+		return sb.append(']').toStringAndFree();
 	}
 }

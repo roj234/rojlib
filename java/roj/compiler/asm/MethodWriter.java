@@ -1,5 +1,6 @@
 package roj.compiler.asm;
 
+import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.visitor.*;
@@ -7,7 +8,6 @@ import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.compiler.asm.node.LazyIINC;
 import roj.compiler.asm.node.LazyLoadStore;
-import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -21,14 +21,13 @@ import static roj.asm.Opcodes.*;
  * @since 2022/2/24 19:19
  */
 public class MethodWriter extends CodeWriter {
-	private CompileUnit owner;
+	private final ConstantData owner;
 
 	public LocalContext ctx1;
-	public Variable current_variable;
 
 	private SimpleList<TryCatchEntry> entryList = new SimpleList<>();
 
-	public MethodWriter(CompileUnit unit, MethodNode mn) {
+	public MethodWriter(ConstantData unit, MethodNode mn) {
 		this.owner = unit;
 		this.ctx1 = LocalContext.get();
 		this.init(new ByteList(),unit.cp,mn,(byte)0);
@@ -105,7 +104,11 @@ public class MethodWriter extends CodeWriter {
 	}
 
 	public void writeTo(MethodWriter cw) {
-		cw.codeOb.put(bw, 8, bw.wIndex()-8);
+		if (bw.wIndex() > 8) {
+			cw.codeOb.put(bw, 8, bw.wIndex()-8);
+			if (cw.segments.isEmpty()) cw._addFirst();
+		}
+
 		if (segments.isEmpty()) return;
 
 		List<Segment> tarSeg = cw.segments;
@@ -114,7 +117,10 @@ public class MethodWriter extends CodeWriter {
 		for (int i = 1; i < segments.size(); i++) {
 			Segment seg = segments.get(i);
 			if (seg.length() == 0 && i != segments.size()-1) continue;
-			tarSeg.add(seg.move(this, cw, offset, XInsnList.REP_CLONE));
+
+			Segment move = seg.move(this, cw, offset, XInsnList.REP_CLONE);
+			tarSeg.add(move);
+			cw._addOffset(move.length());
 		}
 
 		cw.codeOb = ((StaticSegment) tarSeg.get(tarSeg.size()-1)).getData();

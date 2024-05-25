@@ -5,6 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.tree.*;
+import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.attr.MethodParameters.MethodParam;
 import roj.asm.type.*;
@@ -23,12 +24,11 @@ import roj.config.ParseException;
 import roj.config.Word;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
+import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +49,6 @@ public final class CompileUnit extends ConstantData {
 	static final int _ACC_DEFAULT = 1 << 17, _ACC_ANNOTATION = 1 << 18, _ACC_RECORD = 1 << 19,
 		_ACC_INNERCLASS = 0x0040, _ACC_ANONYMOUS = 0x0080;
 
-	InputStream in;
 	private JavaLexer wr;
 
 	final TypeResolver tr;
@@ -59,9 +58,6 @@ public final class CompileUnit extends ConstantData {
 	// S0之后的诊断需要用到的起始位置等
 	int classIdx;
 	IntList methodIdx = new IntList(), fieldIdx = new IntList();
-
-	// 自己是注解时的信息
-	public AnnotationSelf annoInfo;
 
 	private List<String> interfacesPre = Helpers.cast(interfaces);
 	private Signature signature;
@@ -83,18 +79,18 @@ public final class CompileUnit extends ConstantData {
 	private String path;
 	private LocalContext ctx;
 
-	public CompileUnit(String name, InputStream in, GlobalContext ct1x) {
-		this.in = in;
-		this.path = name;
+	public CompileUnit(String name) {
+		path = name;
 
-		this.ctx = LocalContext.get();
+		ctx = LocalContext.get();
 		if (ctx.classes.isSpecEnabled(CompilerSpec.SOURCE_FILE)) putAttr(new AttrString(AttrString.SOURCE,name));
 
 		tr = new TypeResolver();
+		wr = new JavaLexer();
 	}
-	public CompileUnit(String name, GlobalContext ctx) {
-		this(name, null, ctx);
-		this.wr = new JavaLexer();
+	public CompileUnit(String name, InputStream in) throws IOException {
+		this(name);
+		wr.init(IOUtil.readString(in));
 	}
 
 	public TypeResolver getTypeResolver() {return tr;}
@@ -577,7 +573,7 @@ public final class CompileUnit extends ConstantData {
 						if (p.size() > 255) fireDiagnostic(Kind.ERROR, "cu.method.paramCount");
 
 						if (!annotations.isEmpty()) {
-							addAnnotation(new MPALazyTask(method, w.pos(), w.val(), paramNames.size()), new SimpleList<>(annotations));
+							addAnnotation(new ParamAnnotationRef(method, w.pos(), paramNames.size()), new SimpleList<>(annotations));
 						}
 
 						if (w.type() == LITERAL) {
@@ -1082,7 +1078,7 @@ public final class CompileUnit extends ConstantData {
 		ctx.setClass(this);
 		// region 继承可行性
 
-		wr.prevIndex = classIdx;
+		wr.index = classIdx;
 
 		IClass pInfo = tr.resolve(ctx, parent);
         if (pInfo == null) {
@@ -1124,7 +1120,7 @@ public final class CompileUnit extends ConstantData {
 		boolean autoInit = (access & Opcodes.ACC_INTERFACE) == 0;
 		List<MethodNode> methods = this.methods;
 		for (int i = 0; i < methods.size(); i++) {
-			wr.prevIndex = methodIdx.get(i);
+			wr.index = methodIdx.get(i);
 			MethodNode m = methods.get(i);
 
 			if (m.name().equals("<init>")) {
@@ -1181,7 +1177,7 @@ public final class CompileUnit extends ConstantData {
 
 		// endregion
 		// region Type扩展
-		wr.prevIndex = -2;
+		wr.index = -2;
 
 		for (IType type : toResolve_unc)
 			ctx.resolveType(type);
@@ -1195,59 +1191,9 @@ public final class CompileUnit extends ConstantData {
 		}
 
 		// endregion
-		// region 自己是注解
-		if ((access & Opcodes.ACC_ANNOTATION) != 0) {
-			List<AnnotationPrimer> list = annoTask.get(this);
-			if (list != null) annoInfo = GlobalContext.getAnnotationInfo(list);
-			if (annoInfo == null) fireDiagnostic(Kind.ERROR, "annotation_error:class");
-		}
-		// endregion
-		// region 注解预处理
-		for (Map.Entry<Attributed, List<AnnotationPrimer>> entry : annoTask.entrySet()) {
-			Annotations inv = null, vis = null;
-
-			List<AnnotationPrimer> list = entry.getValue();
-			for (int i = 0; i < list.size(); i++) {
-				AnnotationPrimer a = list.get(i);
-
-				String name1 = a.type();
-				IClass type1 = tr.resolve(ctx, name1);
-				if (type1 == null) {
-					fireDiagnostic(Kind.ERROR, "unable_resolve:ANNOTATION:" + a.type());
-				}
-				a.clazzInst = type1;
-
-				AnnotationSelf ad = ctx.classes.getAnnotationDescriptor(type1);
-				if (!ctx.classes.applicableToNode(ad, entry.getKey())) {
-					fireDiagnostic(Kind.ERROR, "not_applicable_to:" + entry.getKey().getClass().getSimpleName());
-				}
-
-				switch (ad.kind()) {
-					case AnnotationSelf.SOURCE:
-						break;// discard
-					case AnnotationSelf.CLASS:
-						if (inv == null) {
-							inv = new Annotations(false);
-							entry.getKey().putAttr(inv);
-						}
-						inv.annotations.add(a);
-						break;
-					case AnnotationSelf.RUNTIME:
-						if (vis == null) {
-							vis = new Annotations(true);
-							entry.getKey().putAttr(vis);
-						}
-						vis.annotations.add(a);
-						break;
-				}
-			}
-		}
-		// endregion
 	}
-
 	// endregion
 	// region 阶段3 编译代码块
-
 	private MethodWriter clinit, glinit;
 	public MethodWriter getStaticInit() {
 		if (clinit != null) return clinit;
@@ -1327,12 +1273,9 @@ public final class CompileUnit extends ConstantData {
 	// endregion
 
 	public String getFilePath() {return path;}
-	public String getContext() {return wr == null ? "~IO 错误~" : wr.getText().toString();}
 
-	public final void fireDiagnostic(Kind kind, String code) {ctx.classes.report(this, kind, wr.prevIndex, code);}
-	public final void fireDiagnostic(Kind kind, String code, Object ... args) {
-		fireDiagnostic(kind, code+":"+TextUtil.join(Arrays.asList(args), ":"));
-	}
+	public final void fireDiagnostic(Kind kind, String code) {ctx.classes.report(this, kind, wr.index, code);}
+	public final void fireDiagnostic(Kind kind, String code, Object ... args) {ctx.classes.report(this, kind, wr.index, code, args);}
 
 	public ByteList getBytes() {return Parser.toByteArrayShared(this);}
 

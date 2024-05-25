@@ -7,6 +7,7 @@ import roj.asm.tree.MethodNode;
 import roj.asm.tree.RawNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
+import roj.asm.tree.attr.AnnotationDefault;
 import roj.asm.tree.attr.Annotations;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.InnerClasses;
@@ -18,9 +19,9 @@ import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.compiler.context.GlobalContext;
+import roj.compiler.diagnostic.Kind;
 
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -93,6 +94,15 @@ public final class ResolveHelper {
 		if (ac != null || (owner.modifier() & Opcodes.ACC_ANNOTATION) == 0) return ac;
 
 		AnnotationSelf ac = this.ac = new AnnotationSelf();
+
+		List<? extends RawNode> methods = owner.methods();
+		for (int j = 0; j < methods.size(); j++) {
+			MethodNode m = (MethodNode) methods.get(j);
+			if ((m.modifier() & Opcodes.ACC_STATIC) != 0) continue;
+			AnnotationDefault dv = m.parsedAttr(owner.cp(), Attribute.AnnotationDefault);
+			ac.values.put(m.name(), dv == null ? null : dv.val);
+		}
+
 		Annotations attr = owner.parsedAttr(owner.cp(), Attribute.RtAnnotations);
 		if (attr == null) return ac;
 
@@ -167,61 +177,6 @@ public final class ResolveHelper {
 	// region 方法
 	private MyHashMap<String, ComponentList> methods;
 
-	public synchronized ComponentList findMethod(GlobalContext ctx, String name) throws ClassNotFoundException {
-		if (methods == null) {
-			methods = new MyHashMap<>();
-
-			List<? extends RawNode> methods1 = owner.methods();
-			for (int i = 0; i < methods1.size(); i++) {
-				MethodNode mn = (MethodNode) methods1.get(i);
-				if (mn.name().equals("<clinit>") || (mn.modifier & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) continue;
-
-				MethodList ml = (MethodList) methods.get(mn.name());
-				if (ml == null) methods.put(mn.name(), ml = new MethodList());
-				ml.add(owner, mn);
-			}
-
-			IClass type = owner;
-			List<Object> tmp = new SimpleList<>(); tmp.add(type);
-
-			String parent = type.parent();
-			if (parent != null) {
-				type = ctx.getClassInfo(parent);
-				while (true) {
-					if (type == null) throw new ClassNotFoundException(parent);
-					tmp.add(type);
-					addMethods(ctx, type);
-
-					parent = type.parent();
-					if (parent == null) break;
-					type = ctx.getClassInfo(parent);
-				}
-			}
-
-			// 尽量别走invokeinterface(毕竟多两个字节呢)
-			for (int i = 0; i < tmp.size(); i++) {
-				List<String> list = ((IClass) tmp.get(i)).interfaces();
-				for (int j = 0; j < list.size(); j++)
-					addMethods(ctx, ctx.getClassInfo(list.get(j)));
-			}
-
-			tmp.clear();
-			for (Iterator<ComponentList> itr = methods.values().iterator(); itr.hasNext(); ) {
-				if (itr.next() instanceof MethodList ml && ml.owner == null && ml.pack(owner)) {
-					tmp.add(new MethodListSingle(ml.methods.get(0)));
-					itr.remove();
-				}
-			}
-
-			for (int i = 0; i < tmp.size(); i++) {
-				MethodListSingle list = (MethodListSingle) tmp.get(i);
-				methods.put(list.node.name(), list);
-			}
-		}
-
-		return methods.get(name);
-	}
-
 	/*
 	 * <pre> 调用的实际方法由以下查找过程选择：
 	 * C = 符号引用的类名称
@@ -246,92 +201,130 @@ public final class ResolveHelper {
 	 * 2. M 未设置 ACC_PRIVATE 或 ACC_STATIC 标志
 	 * 3. 如果方法是在接口 I 中声明的，则接口 I 的子接口中没有 C 的最大特异性超接口方法
 	 */
-	private void addMethods(GlobalContext ctx, IClass type) throws ClassNotFoundException {
-		List<? extends RawNode> list = type.methods();
-		for (int i = 0; i < list.size(); i++) {
-			MethodNode mn = (MethodNode) list.get(i);
-			if (mn.name().charAt(0) == '<' || (mn.modifier & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) continue;
+	public synchronized ComponentList findMethod(GlobalContext ctx, String name) throws TypeNotPresentException {
+		if (methods == null) {
+			methods = new MyHashMap<>();
 
-			ComponentList cl = methods.get(mn.name());
-			if (cl instanceof MethodList ml) {
-				if (ml.owner == owner) {
-					ml.add(type, mn);
+			IClass type = owner;
+			List<? extends RawNode> methods1 = type.methods();
+			for (int i = 0; i < methods1.size(); i++) {
+				MethodNode mn = (MethodNode) methods1.get(i);
+				if (mn.name().equals("<clinit>") || (mn.modifier & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) continue;
+
+				MethodList ml = (MethodList) methods.get(mn.name());
+				if (ml == null) methods.put(mn.name(), ml = new MethodList());
+				ml.add(type, mn);
+			}
+
+			List<String> tmp = new SimpleList<>();
+			String parent = type.parent();
+			if (parent != null) tmp.add(parent);
+			// 尽量别走invokeinterface(毕竟多两个字节呢)
+			tmp.addAll(type.interfaces());
+
+			for (int i = 0; i < tmp.size(); i++) {
+				String className = tmp.get(i);
+
+				IClass info = ctx.getClassInfo(className);
+				if (info == null) {
+					ctx.report(type, Kind.WARNING, -1, "symbol.error.noSuchClass", className);
+					continue;
 				}
-			} else {
-				methods.put(mn.name(), ctx.methodList(type, mn.name()));
+
+				ResolveHelper rh = ctx.getResolveHelper(info);
+				rh.findMethod(ctx, "");
+
+				for (Map.Entry<String, ComponentList> entry : rh.methods.entrySet()) {
+					String key = entry.getKey();
+					if (key.startsWith("<")) continue;
+
+					ComponentList list = entry.getValue();
+
+					ComponentList cl = methods.putIfAbsent(key, list);
+					if (cl instanceof MethodList prev && prev.owner == null) {
+						if (list instanceof MethodList ml) {
+							for (MethodNode node : ml.methods) {
+								prev.add(ctx.getClassInfo(node.owner), node);
+							}
+						} else {
+							MethodNode node = ((MethodListSingle) list).node;
+							prev.add(ctx.getClassInfo(node.owner), node);
+						}
+					}
+				}
+			}
+
+			for (Map.Entry<String, ComponentList> entry : methods.entrySet()) {
+				if (entry.getValue() instanceof MethodList ml && ml.owner == null && ml.pack(type)) {
+					entry.setValue(new MethodListSingle(ml.methods.get(0)));
+				}
 			}
 		}
-	}
 
+		return methods.get(name);
+	}
 	//endregion
 	//region 字段
 	private MyHashMap<String, ComponentList> fields;
 
-	public synchronized ComponentList findField(GlobalContext ctx, String name) throws ClassNotFoundException {
-		block:
+	public synchronized ComponentList findField(GlobalContext ctx, String name) throws TypeNotPresentException {
 		if (fields == null) {
-			List<? extends RawNode> fields1 = owner.fields();
-			if (fields1.isEmpty()) {
-				String parent = owner.parent();
-				if (parent != null) fields = ctx.getResolveHelper(ctx.getClassInfo(parent)).fields;
-				if (fields == null) fields = new MyHashMap<>();
-				break block;
-			}
-
 			fields = new MyHashMap<>();
 
+			IClass type = owner;
+			List<? extends RawNode> fields1 = type.fields();
 			for (int i = 0; i < fields1.size(); i++) {
 				FieldNode fn = (FieldNode) fields1.get(i);
 
 				FieldList fl = (FieldList) fields.get(fn.name());
 				if (fl == null) fields.put(fn.name(), fl = new FieldList());
-				fl.add(owner, fn);
+				fl.add(type, fn);
 			}
 
-			IClass type = owner;
+			List<String> tmp = new SimpleList<>();
 			String parent = type.parent();
-			if (parent != null) {
-				type = ctx.getClassInfo(parent);
-				while (true) {
-					if (type == null) throw new ClassNotFoundException(parent);
-					addFields(ctx, type);
+			if (parent != null) tmp.add(parent);
+			tmp.addAll(type.interfaces());
 
-					parent = type.parent();
-					if (parent == null) break;
-					type = ctx.getClassInfo(parent);
+			for (int i = 0; i < tmp.size(); i++) {
+				String className = tmp.get(i);
+
+				IClass info = ctx.getClassInfo(className);
+				if (info == null) {
+					ctx.report(type, Kind.WARNING, -1, "symbol.error.noSuchClass", className);
+					continue;
+				}
+
+				ResolveHelper rh = ctx.getResolveHelper(info);
+				rh.findField(ctx, "");
+
+				for (Map.Entry<String, ComponentList> entry : rh.fields.entrySet()) {
+					String key = entry.getKey();
+					ComponentList list = entry.getValue();
+
+					ComponentList cl = fields.putIfAbsent(key, list);
+					if (cl instanceof FieldList prev && prev.owners.get(0) == type) {
+						if (list instanceof FieldList fl) {
+							SimpleList<FieldNode> nodes = fl.fields;
+							for (int j = 0; j < nodes.size(); j++) {
+								prev.add(fl.owners.get(j), nodes.get(j));
+							}
+						} else {
+							FieldListSingle fl = (FieldListSingle) list;
+							prev.add(fl.owner, fl.node);
+						}
+					}
 				}
 			}
 
-			List<FieldListSingle> tmp = new SimpleList<>();
-			for (Iterator<ComponentList> itr = fields.values().iterator(); itr.hasNext(); ) {
-				if (itr.next() instanceof FieldList fl && fl.owners.get(0) == owner && fl.pack(owner)) {
-					tmp.add(new FieldListSingle(owner, fl.fields.get(0)));
-					itr.remove();
+			for (Map.Entry<String, ComponentList> entry : fields.entrySet()) {
+				if (entry.getValue() instanceof FieldList fl && fl.owners.get(0) == type && fl.pack(type)) {
+					entry.setValue(new FieldListSingle(type, fl.fields.get(0)));
 				}
 			}
-
-			for (int i = 0; i < tmp.size(); i++)
-				fields.put(tmp.get(i).node.name(), tmp.get(i));
 		}
 
 		return fields.get(name);
-	}
-
-	private void addFields(GlobalContext ctx, IClass type) throws ClassNotFoundException {
-		List<? extends RawNode> list = type.fields();
-		for (int i = 0; i < list.size(); i++) {
-			FieldNode fn = (FieldNode) list.get(i);
-			if ((fn.modifier & (Opcodes.ACC_SYNTHETIC)) != 0) continue;
-
-			ComponentList cl = fields.get(fn.name());
-			if (cl instanceof FieldList fl) {
-				if (fl.owners.get(0) == owner) {
-					fl.add(type, fn);
-				}
-			} else {
-				fields.put(fn.name(), ctx.fieldList(type, fn.name()));
-			}
-		}
 	}
 	//endregion
 	// region 类型拥有者

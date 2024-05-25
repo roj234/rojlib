@@ -5,6 +5,7 @@ import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.Visitor;
 import roj.compiler.context.LocalContext;
+import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 
@@ -17,6 +18,10 @@ public abstract class ExprNode implements UnresolvedExprNode {
 
 	public abstract String toString();
 
+	public enum ExprKind {
+		INVOKE_CONSTRUCTOR, IMMEDIATE_CONSTANT, LDC_CLASS
+	}
+	public boolean isKind(ExprKind kind) {return false;}
 	public abstract IType type();
 	public ExprNode resolve(LocalContext ctx) throws ResolveException { return this; }
 
@@ -29,15 +34,11 @@ public abstract class ExprNode implements UnresolvedExprNode {
 		// NOT IMPLEMENTED
 	}
 
-	public enum ExprKind {
-		INVOKE_CONSTRUCTOR, BOOLY_COMPARE
-	}
-	public boolean isKind(ExprKind kind) {return false;}
 
 	public abstract void write(MethodWriter cw, boolean noRet);
 	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
 		write(cw, false);
 		if (cast != null) cast.write(cw);
 	}
-	protected static void mustBeStatement(boolean noRet) { if (noRet) throw new ResolveException("not_statement"); }
+	protected static void mustBeStatement(boolean noRet) { if (noRet) LocalContext.get().report(Kind.ERROR, "expr.skipReturnValue"); }
 }

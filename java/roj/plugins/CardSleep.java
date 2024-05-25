@@ -12,8 +12,8 @@ import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.config.CsvParser;
 import roj.io.IOUtil;
-import roj.platform.BuiltinPlugin;
 import roj.platform.Plugin;
+import roj.platform.SimplePlugin;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.CMBoxValue;
@@ -47,7 +47,7 @@ public class CardSleep extends JFrame {
 		p.onEnable();
 		Runtime.getRuntime().addShutdownHook(new Thread(p::onDisable));
 	}
-	@BuiltinPlugin(id = "card_sleep", version = "1.1", desc = "让你的显卡更凉快")
+	@SimplePlugin(id = "card_sleep", version = "1.1", desc = "让你的显卡更凉快")
 	public static class PluginHandler extends Plugin {
 		private CardSleep instance;
 

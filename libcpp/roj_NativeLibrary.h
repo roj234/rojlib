@@ -11,7 +11,7 @@ typedef signed char s1;
 #define U32_MAX 2147483647
 inline int min(int l, int r) {return l < r ? l : r;}
 
-#define REUSE_PORT_WINDOWS 1
+#define FUNC_WINDOWS 1
 #define ANSI_CONSOLE       2
 #define BSDIFF             4
 #define SHARED_MEMORY      8
@@ -40,6 +40,10 @@ JNIEXPORT jint JNICALL Java_roj_util_BsDiff_nGenPatch(JNIEnv *, jclass, jlong, j
 JNIEXPORT void JNICALL Java_roj_util_BsDiff_nClose(JNIEnv *, jclass, jlong);
 
 JNIEXPORT jint JNICALL Java_roj_io_NIOUtil_windowsOnlyReuseAddr(JNIEnv *, jclass, jint, jboolean);
+
+JNIEXPORT jlong JNICALL Java_roj_ui_GuiUtil_nGetWindowLong(JNIEnv *, jclass, jlong hwnd, jint dwType);
+JNIEXPORT void JNICALL Java_roj_ui_GuiUtil_nSetWindowLong(JNIEnv *, jclass, jlong hwnd, jint dwType, jlong flags);
+JNIEXPORT jlong JNICALL Java_roj_ui_GuiUtil_nGetConsoleWindow(JNIEnv *, jclass);
 
 #ifdef __cplusplus
 }

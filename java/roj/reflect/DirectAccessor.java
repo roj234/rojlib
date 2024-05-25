@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static roj.asm.Opcodes.*;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * 用接口替代反射，虽然看起来和{@link java.lang.invoke.MethodHandle}很相似，其实却是同一个原理 <br>
@@ -487,26 +488,52 @@ public final class DirectAccessor<T> {
 				Class<?>[] params2 = method.getParameterTypes();
 				CodeWriter cw = var.newMethod(ACC_PUBLIC, method.getName(), TypeHelper.class2asm(params2, void.class));
 
-				int localSize, stackSize = fType.length()+1;
-
-				if (!isStatic) {
-					localSize = stackSize+1;
-					cw.one(ALOAD_1);
-					if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0]))
-						cw.clazz(CHECKCAST, tName);
+				// MAI only ignore visibility, not final
+				if ((field.getModifiers()&ACC_FINAL) != 0) {
+					cw.visitSize(4, isStatic ? 2 : 3);
+					// stack = 4
+					// local = 2
+					cw.field(GETSTATIC, "roj/reflect/ReflectionUtils", "u", "Lsun/misc/Unsafe;");
+					if (isStatic) cw.ldc(new CstClass(tName));
+					else {
+						if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0]))
+							cw.clazz(CHECKCAST, tName);
+						cw.one(ALOAD_1);
+					}
+					cw.ldc(isStatic ? u.staticFieldOffset(field) : u.objectFieldOffset(field));
+					cw.varLoad(fType, isStatic ? 1 : 2);
+					if ((flags&UNCHECKED_CAST) == 0 && !fType.isPrimitive() && !field.getType().isAssignableFrom(params2[off]))
+						cw.clazz(CHECKCAST, fType.getActualClass());
+					cw.invoke(INVOKESPECIAL, "sun/misc/Unsafe", "put"+(fType.isPrimitive()?upper(fType.toString()):"Object"), "(Ljava/lang/Object;J"+(fType.isPrimitive()?fType.toDesc():"Ljava/lang/Object;")+")V");
 				} else {
-					localSize = stackSize--;
+					int localSize, stackSize = fType.length()+1;
+
+					if (!isStatic) {
+						localSize = stackSize+1;
+						cw.one(ALOAD_1);
+						if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0]))
+							cw.clazz(CHECKCAST, tName);
+					} else {
+						localSize = stackSize--;
+					}
+					cw.visitSize(stackSize, localSize);
+					cw.varLoad(fType, isStatic ? 1 : 2);
+					if ((flags&UNCHECKED_CAST) == 0 && !fType.isPrimitive() && !field.getType().isAssignableFrom(params2[off]))
+						cw.clazz(CHECKCAST, fType.getActualClass());
+					cw.field(isStatic ? PUTSTATIC : PUTFIELD, tName, field.getName(), fType);
 				}
-				cw.visitSize(stackSize, localSize);
-				cw.varLoad(fType, isStatic ? 1 : 2);
-				if ((flags&UNCHECKED_CAST) == 0 && !fType.isPrimitive() && !field.getType().isAssignableFrom(params2[off]))
-					cw.clazz(CHECKCAST, fType.getActualClass());
-				cw.field(isStatic ? PUTSTATIC : PUTFIELD, tName, field.getName(), fType);
+
 				cw.one(RETURN);
 				cw.finish();
 			}
 		}
 		return this;
+	}
+	private static String upper(String s) {
+		char[] tmp = new char[s.length()];
+		s.getChars(0, s.length(), tmp, 0);
+		tmp[0] = Character.toUpperCase(tmp[0]);
+		return new String(tmp);
 	}
 
 	public final DirectAccessor<T> i_construct(String target, String desc, String self) { return i_construct(target, desc, checkExistence(self)); }

@@ -13,7 +13,7 @@ import roj.crypt.CRC32s;
 import roj.crypt.jar.JarVerifier;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
-import roj.text.EscapeUtil;
+import roj.text.Escape;
 import roj.text.logging.Level;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -263,7 +263,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	}
 
 	public void enableFastZip(URL url) throws IOException {
-		ZipFile zf = new ZipFile(new File(EscapeUtil.unescapeFilePath(url.getPath().substring(1), IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf()).toString()));
+		ZipFile zf = new ZipFile(new File(Escape.decodeURI(url.getPath().substring(1), IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf()).toString()));
 		JarVerifier jv = JarVerifier.create(zf);
 		if (archives.isEmpty()) zf.getStream(zf.entries().iterator().next()).close(); // INIT
 		archives.add(zf);
