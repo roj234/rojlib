@@ -7,13 +7,12 @@ import roj.asm.type.IType;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.collect.MyHashMap;
-import roj.concurrent.collect.IsolationMap;
 import roj.config.serial.CVisitor;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
-import roj.reflect.FastInit;
 import roj.reflect.ReflectionUtils;
+import roj.reflect.VirtualReference;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
@@ -32,13 +31,12 @@ import static roj.asm.Opcodes.*;
  * @since 2024/3/24 0024 18:53
  */
 public abstract class SerializerFactory {
-	static final IsolationMap<ClassLoader, ClassLoaderRef> Isolation = new IsolationMap<>();
-	static final Function<ClassLoader, ClassLoaderRef> Fn = ClassLoaderRef::new;
-	static final class ClassLoaderRef {
-		ClassLoaderRef(ClassLoader loader) {definer = ClassDefiner.getFor(loader);}
-		final ClassDefiner definer;
+	static final VirtualReference<GenSerRepo> Isolation = new VirtualReference<>();
+	static final Function<ClassLoader, GenSerRepo> Fn = GenSerRepo::new;
+	static final class GenSerRepo {
+		GenSerRepo(ClassLoader loader) {}
 		final MyHashMap<String, IntFunction<?>> dataContainer = new MyHashMap<>();
-		final MyHashMap<String, Adapter> generared = new MyHashMap<>();
+		final MyHashMap<String, Adapter> generated = new MyHashMap<>();
 	}
 
 	static final boolean UNSAFE_ADAPTER;
@@ -47,7 +45,7 @@ public abstract class SerializerFactory {
 		try {
 			ConstantData c = Parser.parseConstants(IOUtil.getResource("roj/config/auto/Adapter.class"));
 			c.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
-			ClassDefiner.INSTANCE.defineClass(c);
+			ClassDefiner.defineGlobalClass(c);
 			unsafe = true;
 		} catch (Throwable ignored) {}
 
@@ -152,7 +150,7 @@ public abstract class SerializerFactory {
 			ConstantData c = new ConstantData();
 			c.name("roj/gen/DC$"+ ReflectionUtils.uniqueId());
 			c.addInterface("java/util/function/IntFunction");
-			FastInit.prepare(c);
+			ClassDefiner.premake(c);
 
 			CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "apply", "(I)Ljava/lang/Object;");
 
@@ -191,7 +189,7 @@ public abstract class SerializerFactory {
 
 			cw.one(ARETURN);
 
-			IntFunction<T> fn = Helpers.cast(FastInit.make(c, ClassDefiner.getFor(type.getClassLoader())));
+			IntFunction<T> fn = Helpers.cast(ClassDefiner.make(c, type.getClassLoader()));
 			dc.put(type.getName(), fn);
 			return fn;
 		}

@@ -26,7 +26,7 @@ public final class Constant extends ExprNode {
 	private boolean isClassRef() { return c == CLASSREF || c instanceof CstClass; }
 
 	private final IType type;
-	private final Object c;
+	private Object c;
 
 	public Constant(IType type, Object c) {
 		this.type = type;
@@ -52,7 +52,7 @@ public final class Constant extends ExprNode {
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
-		if (c instanceof IType t) ctx.resolveType(t);
+		if (c instanceof IType t) c = ctx.resolveType(t);
 		return this;
 	}
 

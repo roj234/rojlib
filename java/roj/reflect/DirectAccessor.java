@@ -69,12 +69,12 @@ public final class DirectAccessor<T> {
 		String itfClass = itf.getName().replace('.', '/');
 		String clsName = "roj/gen/DAc$"+ReflectionUtils.uniqueId();
 		makeHeader(clsName, itfClass, var);
-		FastInit.prepare(var);
+		ClassDefiner.premake(var);
 	}
 
-	public final T build() { return build(ClassDefiner.INSTANCE); }
+	public final T build() { return build(ClassDefiner.APP_LOADER); }
 	@SuppressWarnings("unchecked")
-	public final T build(ClassDefiner def) {
+	public final T build(ClassLoader def) {
 		if (var == null) throw new IllegalStateException("Already built");
 		methodByName.clear();
 
@@ -89,14 +89,14 @@ public final class DirectAccessor<T> {
 			try {
 				byte[] array = Parser.toByteArray(var);
 				Class<?> klass = VMInternals.DefineVMClass(null, array, 0, array.length);
-				return (T) FastInit.manualGet(klass);
+				return (T) ClassDefiner.postMake(klass);
 			} finally {
 				var = null;
 			}
 		}
 
 		try {
-			return (T) FastInit.make(var, (flags&WEAK_REF) == 0 ? def : null);
+			return (T) ClassDefiner.make(var, (flags&WEAK_REF) == 0 ? def : null);
 		} finally {
 			var = null;
 		}

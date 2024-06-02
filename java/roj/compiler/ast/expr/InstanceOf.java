@@ -18,7 +18,7 @@ import java.util.List;
  * @since 2022/2/24 19:55
  */
 public final class InstanceOf extends ExprNode {
-	private final IType type;
+	private IType type;
 	private ExprNode left;
 	private String variable;
 
@@ -41,7 +41,7 @@ public final class InstanceOf extends ExprNode {
 	@SuppressWarnings("fallthrough")
 	public ExprNode resolve(LocalContext ctx) {
 		left = left.resolve(ctx);
-		ctx.resolveType(type);
+		type = ctx.resolveType(type);
 
 		if (left.type().isPrimitive()) ctx.report(Kind.ERROR, "instanceOf.error.primitive");
 

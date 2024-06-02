@@ -6,7 +6,7 @@ import roj.asm.type.TypeHelper;
 import roj.asm.visitor.Label;
 import roj.concurrent.SegmentReadWriteLock;
 import roj.io.buf.LeakDetector;
-import roj.reflect.FastInit;
+import roj.reflect.ClassDefiner;
 import roj.reflect.Proxy;
 import roj.util.Helpers;
 
@@ -148,8 +148,8 @@ public class SimpleConnectionPool {
 					return false;
 				}, closeHandler);
 
-				FastInit.prepare(data);
-				proxy = Helpers.cast(FastInit.make(data));
+				ClassDefiner.premake(data);
+				proxy = Helpers.cast(ClassDefiner.make(data));
 			}
 		}
 

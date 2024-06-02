@@ -7,6 +7,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.visitor.Label;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
@@ -33,19 +34,20 @@ final class Trinary extends ExprNode {
 	@NotNull
 	@Override
 	public ExprNode resolve(LocalContext ctx) {
+		// must before resolve
+		if (val.isKind(ExprKind.IMMEDIATE_CONSTANT))
+			ctx.report(Kind.WARNING, "trinary.constant");
+
 		val = val.resolve(ctx);
 		cast = ctx.castTo(val.type(), Type.std(Type.BOOLEAN), 0);
 
 		ok = ok.resolve(ctx);
 		fail = fail.resolve(ctx);
 		type = ctx.getCommonParent(ok.type(), fail.type());
-		ctx.report(Kind.NOTE, "common parent of "+ok.type()+" and "+fail.type()+" is "+type);
+		GlobalContext.debugLogger().info("common parent of "+ok.type()+" and "+fail.type()+" is "+type);
 
-		if (cast.type >= 0 && val.isConstant()) {
-			if (val.isKind(ExprKind.IMMEDIATE_CONSTANT))
-				ctx.report(Kind.WARNING, "trinary.constant");
+		if (cast.type >= 0 && val.isConstant())
 			return (boolean) val.constVal() ? ok : fail;
-		}
 
 		if (ok.equals(fail)) {
 			ctx.report(Kind.WARNING, "trinary.constant");

@@ -1,10 +1,11 @@
-package roj.reflect;
+package roj.test;
 
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.type.Type;
 import roj.io.IOUtil;
+import roj.reflect.ClassDefiner;
 import roj.util.VarMapper;
 
 import java.util.Iterator;
@@ -26,8 +27,8 @@ public abstract class Generator<T> implements Iterator<T> {
 		data.dump();
 		register.dump();
 
-		ClassDefiner.INSTANCE.defineClass(register);
-		ClassDefiner.INSTANCE.defineClass(data);
+		ClassDefiner.defineGlobalClass(register);
+		ClassDefiner.defineGlobalClass(data);
 
 		runTest();
 	}

@@ -439,10 +439,11 @@ public final class DPSSecurityManager extends MethodHook {
 		if (d.owner.equals("sun/misc/Unsafe") || d.owner.equals("jdk/internal/misc/Unsafe"))
 			return IntMap.UNDEFINED;
 
-		if (d.owner.startsWith("roj/platform/") || d.owner.startsWith("roj/reflect/") || d.owner.startsWith("roj/mapper/"))
+		PluginDescriptor pd = DefaultPluginSystem.PM.getOwner(caller);
+
+		if (!pd.skipCheck && (d.owner.startsWith("roj/platform/") || d.owner.startsWith("roj/reflect/")))
 			return IntMap.UNDEFINED;
 
-		PluginDescriptor pd = DefaultPluginSystem.PM.getOwner(caller);
 		if (pd.skipCheck || GlobalReflectWhiteList.contains(d.owner) || pd.reflectiveClass.contains(d.owner)) {
 			LOGGER.debug("允许反射 {}", d);
 			return null;

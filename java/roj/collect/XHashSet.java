@@ -25,10 +25,10 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 			da.construct(vType, "createValueNoarg");
 		}
 		try {
-			ObjectNew creater = da.build();
+			ObjectNew creator = da.build();
 			Field key = ReflectionUtils.getField(vType, field_key);
 			Field next =  ReflectionUtils.getField(vType, field_next);
-			return new Shape<>(vType, u.objectFieldOffset(next), u.objectFieldOffset(key), hasher, creater);
+			return new Shape<>(vType, u.objectFieldOffset(next), u.objectFieldOffset(key), hasher, creator);
 		} catch (NoSuchFieldException e) {
 			throw new IllegalArgumentException("无法找到字段", e);
 		}
@@ -71,10 +71,15 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 
 		final int hashCode(@Nullable K k) { return hasher.hashCode(k); }
 		final boolean equals(K from_argument, Object stored_in) { return hasher.equals(from_argument, stored_in); }
+		@SuppressWarnings("unchecked")
+		final V checkCast(Object s) {
+			if (!type.isAssignableFrom(s.getClass())) throw new ClassCastException(s.getClass()+" cannot cast to "+type);
+			return (V) s;
+		}
 
 		@SuppressWarnings("unchecked")
 		final K GET_KEY(@NotNull Object obj) { return (K) u.getObject(obj, key_offset); }
-		final void SET_KEY(@NotNull Object obj, K key) { u.putObject(obj, key_offset, key); }
+		final void SET_KEY(@NotNull V obj, K key) { u.putObject(obj, key_offset, key); }
 		final Object GET_NEXT(@NotNull Object obj) { return u.getObject(obj, next_offset); }
 		final void SET_NEXT(@NotNull Object obj, Object next) { u.putObject(obj, next_offset, next); }
 
@@ -108,7 +113,7 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 	public int size() { return size; }
 
 	@Override
-	public final boolean contains(Object o) { return get(shape.GET_KEY(o)) != null; }
+	public final boolean contains(Object o) { return get(shape.GET_KEY(shape.checkCast(o))) != null; }
 	public boolean containsKey(Object o) { return get(o) != null; }
 	public V get(Object k) { return getOrDefault(k, null); }
 	@SuppressWarnings("unchecked")
@@ -123,8 +128,8 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 		return def;
 	}
 
-	public boolean add(V value) { return null == put1(shape.GET_KEY(value), value, false, false); }
-	public boolean set(V value) { return null == put1(shape.GET_KEY(value), value, true, false); }
+	public boolean add(V value) { return null == put1(shape.GET_KEY(shape.checkCast(value)), value, false, false); }
+	public boolean set(V value) { return null == put1(shape.GET_KEY(shape.checkCast(value)), value, true, false); }
 
 	public V put(K key, V val) {
 		if (val == null) throw new NullPointerException("val cannot be null");
@@ -140,7 +145,8 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 	private V put1(K k, V v, boolean replace, boolean add) {
 		int i = shape.hashCode(k)&mask;
 
-		if (v != null && shape.GET_NEXT(v) == v) throw new UnsupportedOperationException("entry "+v+" 被锁定，无法加入map");
+		if (v != null && shape.GET_NEXT(shape.checkCast(v)) == v)
+			throw new UnsupportedOperationException("entry "+v+" 被锁定，无法加入map");
 
 		if (entries == null) entries = new Object[mask+1];
 		Object obj = entries[i];
@@ -178,7 +184,7 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 	}
 
 	@Override
-	public boolean remove(Object o) { return removeKey(shape.GET_KEY(o)) != null; }
+	public boolean remove(Object o) { return removeKey(shape.GET_KEY(shape.checkCast(o))) != null; }
 	@SuppressWarnings("unchecked")
 	public V removeKey(Object o) {
 		if (entries == null) return null;

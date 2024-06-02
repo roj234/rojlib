@@ -309,7 +309,7 @@ public class TypeCast {
 			etype = gt.extendType;
 			tc = gt.children;
 		} else {
-			tc = !context.isSpecEnabled(CompilerSpec.ADVANCED_GENERIC_CHECK) ? null : getClassTPB(to);
+			tc = !context.isSpecEnabled(CompilerSpec.DISABLE_RAW_TYPE) ? null : getClassTPB(to);
 		}
 
 		Cast r = checkCast(from.rawType(), to.rawType(), etype);
@@ -357,21 +357,10 @@ public class TypeCast {
 				Cast v = checkCast(fc.get(i), tc.get(i), EX_EXTENDS);
 				if (v.type != UPCAST) return ERROR(E_NEVER);
 			}
-		} else {
-			// 基本类型泛型模板 SimpleList<int>继承自List<Integer>但不是SimpleList的实例
-			if (checkPrimitive(tc) || checkPrimitive(fc)) return ERROR(E_NEVER);
 		}
+		// 基本类型泛型由LocalContext的resolveType处理，并根据模板生产
 
 		return r;
-	}
-
-	private static boolean checkPrimitive(List<IType> fc) {
-		if (fc != null) {
-			for (int i = 0; i < fc.size(); i++) {
-				if (fc.get(i).getActualType() != CLASS) return true;
-			}
-		}
-		return false;
 	}
 
 	private List<IType> getClassTPB(IType from) {
@@ -419,18 +408,25 @@ public class TypeCast {
 			if (inheritType >= 0) return ERROR(E_NEVER);
 			// 装箱
 			if (!to.isPrimitive()) {
-				int primitive = getWrappedPrimitive(to);
-				if (primitive == 0) return ERROR(E_INT2OBJ);
+				int box = from.type;
+				Cast cast = checkCast(WRAPPER.get(box), to, inheritType);
 
-				//noinspection MagicConstant
-				Cast cast = checkCast(from, std(primitive), inheritType);
-				if (cast.type < E_NUMBER_DOWNCAST) return cast;
+				// 让byte可以转换到Integer
+				if (cast.type < UPCAST) {
+					box = getWrappedPrimitive(to);
+					if (box == 0) return ERROR(E_INT2OBJ);
+
+					//noinspection MagicConstant
+					cast = checkCast(from, std(box), inheritType);
+					if (cast.type < UPCAST) return ERROR(E_INT2OBJ);
+				}
+
 				assert cast.type <= NUMBER_UPCAST;
 
 				// possible: E_EXPLICIT_CAST E_NUMBER_DOWNCAST UPCAST NUMBER_UPCAST
 				cast.type = BOXING;
 				cast.distance += DISTANCE_BOXING;
-				cast.box = (byte) primitive;
+				cast.box = (byte) box;
 				return cast;
 			}
 

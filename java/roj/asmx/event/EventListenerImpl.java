@@ -10,8 +10,8 @@ import roj.asm.visitor.AbstractCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.io.IOUtil;
+import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
-import roj.reflect.FastInit;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 
@@ -84,7 +84,7 @@ final class EventListenerImpl implements EventListener {
 
 		c.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
 		c.name("roj/gen/GEL$"+ReflectionUtils.uniqueId());
-		FastInit.prepare(c);
+		ClassDefiner.premake(c);
 		c.addInterface("roj/asmx/event/EventListenerImpl$ASM");
 
 		CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "invoke", "(Lroj/asmx/event/Event;)V");
@@ -173,7 +173,7 @@ final class EventListenerImpl implements EventListener {
 		}
 
 		cw.finish();
-		return (ASM) FastInit.make(c);
+		return (ASM) ClassDefiner.make(c);
 	}
 	private static int callEvent(ConstantData out, CodeWriter c, RawNode listener, int fid) {
 		String clz = listener.ownerClass();

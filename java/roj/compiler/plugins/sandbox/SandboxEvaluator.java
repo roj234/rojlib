@@ -16,7 +16,6 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
-import roj.reflect.FastInit;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -53,7 +52,7 @@ public interface SandboxEvaluator {
 		invoker.add(new MethodNode(0, "java/lang/String", "replace", "(CC)Ljava/lang/String;"));
 
 		if (invoker.size() > 0) {
-			ctx.report(GlobalContext.anyArray(), Kind.WARNING, -1, "lava.sandbox.enabled");
+			ctx.report(null, Kind.WARNING, -1, "lava.sandbox.enabled");
 		}
 
 		SandboxClassLoader scl = new SandboxClassLoader(SandboxEvaluator.class.getClassLoader(), data);
@@ -61,7 +60,7 @@ public interface SandboxEvaluator {
 		ConstantData invokerInst = new ConstantData();
 		invokerInst.name("roj/compiler/plugins/sandbox/InvokerMe");
 		invokerInst.addInterface("roj/compiler/plugins/sandbox/SandboxEvaluator");
-		FastInit.prepare(invokerInst);
+		ClassDefiner.premake(invokerInst);
 		CodeWriter c = invokerInst.newMethod(ACC_PUBLIC, "eval", "(I[Ljava/lang/Object;)Ljava/lang/Object;");
 		c.visitSize(1, 3);
 		c.one(ALOAD_2);
@@ -123,7 +122,7 @@ public interface SandboxEvaluator {
 		}
 
 		invokerInst.dump();
-		SandboxEvaluator evaluator = (SandboxEvaluator) FastInit.make(invokerInst, ClassDefiner.getFor(scl));
+		SandboxEvaluator evaluator = (SandboxEvaluator) ClassDefiner.make(invokerInst, scl);
 
 		for (int j = 0; j < invoker.size(); j++) {
 			RawNode mof = invoker.get(j);

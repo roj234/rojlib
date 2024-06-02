@@ -15,10 +15,17 @@
 没列出来的还在WIP
 
 ## 上新
-roj.minecraft.mcdiff  
-    特别适用于Minecraft存档的增量更新工具（当然，也支持其它文件类型）  
-    BsDiff的扩展用法正待开发  
-    带数字签名系统，目的类似安卓的apk签名  
+roj.reflect.VirtualReference  
+  虚引用，via change GC root
+
+roj.reflect.GetCallerArgs  
+  像其它弱类型语言一样获取调用者的变量  
+```java
+  int[] s = {0};  
+  doSomeThingViaGetCallerArgs();  
+  assert s[0] != 0 : "这是可以做到的，相信我";  
+```
+  使用了很多内部API，但是兼容性应该不差
 
 # 这里都有啥
 ## roj.archive

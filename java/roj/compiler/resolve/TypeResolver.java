@@ -14,6 +14,7 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.Helpers;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -107,7 +108,7 @@ public final class TypeResolver {
 			// then Map.Entry
 			int slash = name.indexOf('/');
 			if (slash >= 0) {
-				var entry1 = importClass.getEntry(name);
+				var entry1 = importClass.getEntry(name.substring(0, slash));
 				if (entry1 == null || entry1.getValue() == null) break block;
 
 				String _name = ((IClass) entry1.getValue()).name();
@@ -123,12 +124,11 @@ public final class TypeResolver {
 		var entry = importClass.getEntry(name);
 		if (entry != null) return (IClass) entry.getValue();
 
-		if (restricted) return null;
-
 		GlobalContext gc = ctx.classes;
-		IClass c = gc.getClassInfo(name);
+		IClass c = null;
+
 		// 已经是全限定名
-		if (c != null) return c;
+		if (!restricted && (c = gc.getClassInfo(name)) != null) return c;
 
 		if (name.indexOf('/') >= 0) return null;
 
@@ -149,7 +149,7 @@ public final class TypeResolver {
 			}
 		}
 
-		if (qualifiedName == null) {
+		if (qualifiedName == null && !restricted) {
 			// 在当前包搜索 (此处包括自身)
 			String myName = ctx.file.name;
 			c = gc.getClassInfo(IOUtil.getSharedCharBuf().append(myName, 0, myName.lastIndexOf('/')+1).append(name));
@@ -160,6 +160,12 @@ public final class TypeResolver {
 		}
 
 		if (qualifiedName != null) c = gc.getClassInfo(qualifiedName);
+		else if (packages == Collections.EMPTY_LIST) {
+			// slow fallback for content unknown / generated libraries (well, this is cached)
+			for (String pkg : importPackage) {
+				if ((c = gc.getClassInfo(pkg+'/'+name)) != null) break;
+			}
+		}
 		return c;
 	}
 

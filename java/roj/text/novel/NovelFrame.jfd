@@ -7,7 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "小说管理系统 (Novel Management System) v2.0-beta"
+			"title": "小说管理系统 (Novel Management System) v2.1"
 			add( new FormComponent( "javax.swing.JProgressBar" ) {
 				name: "progress"
 				"value": 2000
@@ -363,6 +363,13 @@ new FormModel {
 				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 85
+				"y": 485
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnLegadoImport"
+				"text": "从阅读导入"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 250
 				"y": 485
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {

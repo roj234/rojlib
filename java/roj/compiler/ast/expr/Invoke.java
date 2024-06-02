@@ -36,7 +36,7 @@ import java.util.Map;
  */
 public class Invoke extends ExprNode {
 	Object fn; // new anonymous class may change this later
-	private List<ExprNode> args;
+	List<ExprNode> args;
 	private List<IType> bounds;
 
 	private MethodNode methodNode;
@@ -129,7 +129,7 @@ public class Invoke extends ExprNode {
 		IType ownMirror = null;
 		List<IType> tpHint = bounds;
 		if (tpHint != null) {
-			for (int i = 0; i < tpHint.size(); i++) ctx.resolveType(tpHint.get(i));
+			for (int i = 0; i < tpHint.size(); i++) tpHint.set(i, ctx.resolveType(tpHint.get(i)));
 		}
 
 		String klass, method;
@@ -298,7 +298,7 @@ public class Invoke extends ExprNode {
 			}
 
 			if (mn.attrByName("Evaluable") instanceof Evaluable eval) {
-				ExprNode result = eval.eval(fn instanceof ExprNode e ? e : null, args);
+				ExprNode result = eval.eval(mn, fn instanceof ExprNode e ? e : null, args);
 				if (result != null) return result;
 			}
 

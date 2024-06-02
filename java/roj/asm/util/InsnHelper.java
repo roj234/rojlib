@@ -34,31 +34,31 @@ public class InsnHelper {
 	}
 
 	public static byte ToPrimitiveArrayId(int nativeType) {
-		switch (nativeType) {
-			case 'Z': return 4;
-			case 'C': return 5;
-			case 'F': return 6;
-			case 'D': return 7;
-			case 'B': return 8;
-			case 'S': return 9;
-			case 'I': return 10;
-			case 'J': return 11;
-			default: throw new IllegalArgumentException(String.valueOf((char)nativeType));
-		}
+		return switch (nativeType) {
+			case 'Z' -> 4;
+			case 'C' -> 5;
+			case 'F' -> 6;
+			case 'D' -> 7;
+			case 'B' -> 8;
+			case 'S' -> 9;
+			case 'I' -> 10;
+			case 'J' -> 11;
+			default -> throw new IllegalArgumentException(String.valueOf((char) nativeType));
+		};
 	}
 
 	public static byte FromPrimitiveArrayId(int id) {
-		switch (id) {
-			case 4: return 'Z';
-			case 5: return 'C';
-			case 6: return 'F';
-			case 7: return 'D';
-			case 8: return 'B';
-			case 9: return 'S';
-			case 10: return 'I';
-			case 11: return 'J';
-		}
-		throw new IllegalStateException("Unknown PrimArrayType " + id);
+		return switch (id) {
+			case 4 -> 'Z';
+			case 5 -> 'C';
+			case 6 -> 'F';
+			case 7 -> 'D';
+			case 8 -> 'B';
+			case 9 -> 'S';
+			case 10 -> 'I';
+			case 11 -> 'J';
+			default -> throw new IllegalStateException("Unknown PrimArrayType " + id);
+		};
 	}
 
 	public static byte XAStore(Type type) { return (byte) (XALoad(type)+33); }

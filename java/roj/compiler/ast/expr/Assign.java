@@ -5,9 +5,9 @@ import roj.asm.tree.anno.AnnValInt;
 import roj.asm.type.IType;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asmlang.ASM;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
+import roj.compiler.plugins.asm.ASM;
 import roj.compiler.resolve.TypeCast;
 
 /**
@@ -61,6 +61,7 @@ class Assign extends ExprNode {
 		// == 4 (int) 防止byte自增导致溢出什么的...
 		if (expr instanceof LocalVariable lv) {
 			isLv = true;
+			lv.v.endPos = expr.wordEnd;
 
 			if (dtype == 4 && (short)amount == amount) {
 				if (!noRet & returnBefore) cw.load(lv.v);

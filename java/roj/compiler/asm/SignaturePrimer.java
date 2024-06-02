@@ -109,7 +109,7 @@ public class SignaturePrimer extends Signature {
 		for (int i = 0; i < list.size(); i++) {
 			IType type = list.get(i);
 			if (type instanceof GenericPrimer gp) gp.initS2(ctx);
-			ctx.resolveType(type);
+			list.set(i, ctx.resolveType(type));
 		}
 	}
 

@@ -1,6 +1,7 @@
 package roj.compiler.plugins.sandbox;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.tree.MethodNode;
 import roj.asm.type.Type;
 import roj.collect.SimpleList;
 import roj.compiler.api_rt.Evaluable;
@@ -30,7 +31,7 @@ class SandboxMethod extends Evaluable {
 	public String toString() {return "Evaluable[Sandboxed] "+evaluator+"#"+methodId;}
 
 	@Override
-	public @Nullable ExprNode eval(@Nullable ExprNode self, List<ExprNode> args) {
+	public @Nullable ExprNode eval(MethodNode owner, @Nullable ExprNode self, List<ExprNode> args) {
 		if (self != null) {
 			args = new SimpleList<>(args);
 			args.add(0, self);

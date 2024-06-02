@@ -6,7 +6,7 @@ import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
-import roj.reflect.FastInit;
+import roj.reflect.ClassDefiner;
 import roj.reflect.Proxy;
 import roj.text.CharList;
 import roj.text.LineReader;
@@ -128,8 +128,8 @@ public class Compiler implements DiagnosticListener<JavaFileObject> {
 			return false;
 		}, listId, nameId);
 
-		FastInit.prepare(data);
-		return Helpers.cast(FastInit.make(data));
+		ClassDefiner.premake(data);
+		return Helpers.cast(ClassDefiner.make(data));
 	}
 
 	@Deprecated

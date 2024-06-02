@@ -8,4 +8,5 @@ public interface CompilerSpec {
 	int INTERFACE_INACCESSIBLE_FIELD = 16;
 	int ADVANCED_GENERIC_CHECK = 32;
 	int KOTLIN_SEMICOLON = 33;
+	int DISABLE_RAW_TYPE = 114514;
 }

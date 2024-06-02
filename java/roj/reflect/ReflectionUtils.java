@@ -164,7 +164,7 @@ public final class ReflectionUtils {
 	public static Class<?> defineWeakClass(ByteList b) {
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
 		if (sm != null) b = sm.checkDefineClass(null, b);
-		return VMInternals.DefineWeakClass(b.toByteArray());
+		return VMInternals.DefineWeakClass(null, b.toByteArray());
 	}
 	public static void ensureClassInitialized(Class<?> klass) { VMInternals.InitializeClass(klass); }
 	/**

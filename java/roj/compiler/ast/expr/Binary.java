@@ -32,7 +32,7 @@ final class Binary extends ExprNode {
 	private static final MyBitSet KNOWN_NUMBER_STATE = MyBitSet.from(and,or,xor,lsh,rsh,rsh_unsigned);
 	private IType type;
 	private TypeCast.Cast castLeft, castRight;
-	private byte flag;
+	private byte flag, dType;
 
 	Binary(short op) { this.operator = op; }
 	// assign operation
@@ -149,7 +149,9 @@ final class Binary extends ExprNode {
 					int wrType = TypeCast.getWrappedPrimitive(prType.rawType());
 					if (wrType != 0) {
 						cap = TypeCast.getDataCap(wrType);
-						if (cap > dpType) type = Type.std(wrType);
+						if (cap > dpType)
+							//noinspection MagicConstant
+							type = Type.std(wrType);
 						else type = plType;
 						castLeft = ctx.castTo(lType, type, TypeCast.E_NUMBER_DOWNCAST);
 						castRight = ctx.castTo(rType, type, TypeCast.E_NUMBER_DOWNCAST);
@@ -180,7 +182,8 @@ final class Binary extends ExprNode {
 			}
 		}
 
-		if (operator <= neq) type = Type.std(Type.BOOLEAN);
+		dType = (byte) (TypeCast.getDataCap(type.rawType().type)-4);
+		if (operator >= equ) type = Type.std(Type.BOOLEAN);
 
 		if (!left.isConstant()) {
 			if (right.isConstant()) {
@@ -355,7 +358,7 @@ final class Binary extends ExprNode {
 	}
 	@SuppressWarnings("fallthrough")
 	final void writeOperator(MethodWriter cw) {
-		int opc = TypeCast.getDataCap(type.rawType().type)-4;
+		int opc = dType;
 		if (opc < 0) opc = 0;
 
 		switch (operator) {
@@ -373,22 +376,21 @@ final class Binary extends ExprNode {
 
 			case lss: case geq: case gtr: case leq: {
 				switch (opc) {
-					case 1:
+					case 1 -> {
 						cw.one(LCMP);
-						opc += IFEQ;
-						break;
-					case 2: case 3:
+						opc = IFEQ;
+					}
+					case 2, 3 -> {
 						// 遇到NaN时必须失败(不跳转
 						// lss => CMPG
-						cw.one((byte) (FCMPL - 1 + opc - ((operator-equ)&1)));
-						opc += IFEQ;
-						break;
-					default:
-						opc += flag != 0 ? IFEQ : IF_icmpeq;
-						break;
+						cw.one((byte) (FCMPL -4+opc*2 + ((operator-equ)&1)));
+						opc = IFEQ;
+					}
+					default -> opc = flag != 0 ? IFEQ : IF_icmpeq;
 				}
+
 				if (!cw.jumpOn(opc += (operator - equ))) {
-					if (operator <= neq && flag == 0) {
+					if (dType == 0 && operator <= neq && flag == 0) {
 						cw.one(ISUB); // (left - right) == 0
 						if (operator == equ) {
 							cw.one(ICONST_1);
@@ -418,8 +420,7 @@ final class Binary extends ExprNode {
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
-		if (!(o instanceof Binary)) return false;
-		Binary b = (Binary) o;
+		if (!(o instanceof Binary b)) return false;
 		return b.left.equals(o) && b.right.equals(right) && b.operator == operator;
 	}
 

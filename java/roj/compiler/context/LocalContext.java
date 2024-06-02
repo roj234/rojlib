@@ -20,7 +20,6 @@ import roj.collect.*;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.Asterisk;
-import roj.compiler.asm.GenericPrimer;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.block.BlockParser;
 import roj.compiler.ast.expr.ExprNode;
@@ -85,9 +84,8 @@ public class LocalContext {
 	}
 	public List<?> tmpListForExpr2 = new SimpleList<>();
 
-	public TypeCast.Cast castTo(@NotNull IType from, @NotNull IType to, int lower_limit) throws UnableCastException {
+	public TypeCast.Cast castTo(@NotNull IType from, @NotNull IType to, int lower_limit) {
 		TypeCast.Cast cast = castCheck.checkCast(from, to);
-		//if (cast.rawType) report(Kind.WARNING, "typeCast.warn.rawTypes", from, to);
 
 		// TODO change this
 		if ((cast.type == TypeCast.E_DOWNCAST || cast.type == TypeCast.UPCAST) && isDynamicType(to)) {
@@ -224,6 +222,14 @@ public class LocalContext {
 
 	public ComponentList fieldListOrReport(IClass info, String name) {return classes.fieldList(info, name);}
 	public ComponentList methodListOrReport(IClass info, String name) {return classes.methodList(info, name);}
+	public IntBiMap<String> parentListOrReport(IClass info) {
+		try {
+			return classes.parentList(info);
+		} catch (ClassNotFoundException e) {
+			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
+			return new IntBiMap<>();
+		}
+	}
 
 	// region 解析符号引用 Class Field Method
 	@Nullable
@@ -260,6 +266,28 @@ public class LocalContext {
 				IType type2 = resolveType(gp.get(i));
 				if (type2 instanceof Generic g && g.isAnyType()) {
 					gp.set(i, Signature.any());
+				} else if (type2.isPrimitive()) {
+					// TODO generate template class
+					// 这里是实现的关键……不再处理什么基本类型泛型的保存读取这个那个
+					// 从这里，把每一次带有基本类型
+					// roj.collect.MyHashMap<int, Object>
+					// 都换成类名为 ;PGEN;I;L;roj.collect.MyHashMap
+					// 泛型为 <Object>
+
+					// PGEN: Primitive Generic (Generator)
+					// I: int
+					// L: object
+
+					//return resolvePrimitiveGeneric(type);
+
+					// 吗？
+					// bushi(
+					// 为此，我们还需要生成一个;PGEN;int，作为T的内部类型
+					// 它不继承Object，这样就不会被作为普通对象处理
+					// 它仅提供hashCode和equals通过Evaluable接口，可以把他们inline成对应的比较
+					// 除此之外，传递给BlockParser的方法参数也需要是PGEN类型
+					// 真实的方法参数、fieldList类型、以及BlockParser生成变量的类型，依然是基本类型
+					report(Kind.ERROR, "当前版本暂时未实现这个功能");
 				}
 			}
 
@@ -527,7 +555,7 @@ public class LocalContext {
 		}
 	}
 
-	public IType getCommonParent(IType a, IType b) throws UnableCastException {
+	public IType getCommonParent(IType a, IType b) {
 		assert a.genericType() < 2 && b.genericType() < 2 : "无法比较的类型:"+a+","+b;
 
 		if (a.equals(b)) return a;
@@ -710,28 +738,30 @@ public class LocalContext {
 	 * 常量传播的统一处理
 	 * @param owner
 	 * @param field
+	 * @param fieldType field的泛型类型 可能为空
 	 * @return owner.field的常量值，若有
 	 */
 	@Nullable
-	public Object getConstantValue(IClass owner, FieldNode field) {
+	public ExprNode getConstantValue(IClass owner, FieldNode field, @Nullable IType fieldType) {
+		Object c;
 		assert owner.fields().contains(field);
 		ConstantValue cv = field.parsedAttr(owner.cp(), Attribute.ConstantValue);
-		if (cv != null) {
+		if (cv == null) {
+			if ((owner.modifier() & field.modifier & Opcodes.ACC_ENUM) == 0 || !annotationEnv) {return null;}
+			c = new AnnValEnum(owner.name(), field.name());
+		} else {
 			switch (cv.c.type()) {
-				case Constant.INT: return AnnVal.valueOf(((CstInt) cv.c).value);
-				case Constant.FLOAT: return AnnVal.valueOf(((CstFloat) cv.c).value);
-				case Constant.LONG: return AnnVal.valueOf(((CstLong) cv.c).value);
-				case Constant.DOUBLE: return AnnVal.valueOf(((CstDouble) cv.c).value);
-				case Constant.CLASS: return cv.c;
-				case Constant.STRING: return cv.c.getEasyCompareValue();
+				case Constant.INT: c = AnnVal.valueOf(((CstInt) cv.c).value); break;
+				case Constant.FLOAT: c = AnnVal.valueOf(((CstFloat) cv.c).value); break;
+				case Constant.LONG: c = AnnVal.valueOf(((CstLong) cv.c).value); break;
+				case Constant.DOUBLE: c = AnnVal.valueOf(((CstDouble) cv.c).value); break;
+				case Constant.CLASS: c = cv.c; break;
+				case Constant.STRING: c = cv.c.getEasyCompareValue(); break;
+				default: return null;
 			}
 		}
 
-		if ((owner.modifier()&field.modifier&Opcodes.ACC_ENUM) != 0 && annotationEnv) {
-			return new AnnValEnum(owner.name(), field.name());
-		}
-
-		return null;
+		return new roj.compiler.ast.expr.Constant(fieldType == null ? field.fieldType() : fieldType, c);
 	}
 
 	public boolean setConstantValue(Variable var, roj.compiler.ast.expr.Constant val) {
@@ -760,17 +790,14 @@ public class LocalContext {
 		if (v >= list.size()) list.add(new LocalContext(((LocalContext) list.get(1)).classes));
 	}
 
-	public List<GenericPrimer> genericDeDup = new SimpleList<>();
 	public MyHashSet<IType> toResolve_unc = new MyHashSet<>();
 
-	public MyHashSet<String> names = new MyHashSet<>();
+	public MyHashSet<String> tmpSet = new MyHashSet<>();
 	public SimpleList<AnnotationPrimer> annotationTmp = new SimpleList<>();
 	public CharList tmpList = new CharList();
 
-	public MyHashSet<String> annotationMissed = new MyHashSet<>();
-
-	public ExprParser ep = new ExprParser();
-	public BlockParser bp = new BlockParser(this);
+	public final ExprParser ep = new ExprParser();
+	public final BlockParser bp = new BlockParser(this);
 
 	public String currentCodeBlockForReport() {
 		return "{symbol.type} "+file.name;

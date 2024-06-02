@@ -17,6 +17,7 @@ import roj.compiler.ast.NaE;
 import roj.compiler.ast.VariableDeclare;
 import roj.compiler.ast.block.ParseTask;
 import roj.compiler.context.CompileUnit;
+import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ParseException;
 import roj.config.Word;
@@ -242,6 +243,7 @@ public final class ExprParser {
 						}
 
 						debug__counter_typeMatchSuccess++;
+						wr.skip();
 						pf = cast(type);
 					break;
 					case -3: //LITERAL
@@ -321,9 +323,8 @@ public final class ExprParser {
 						cur = invoke(file, newType, null);
 						w = wr.next();
 						if (w.type() == lBrace) {
-							throw wr.err("NewAnonymousClass not implemented");
-							// FIXME not implemented
-							// new Object(xxx) {}
+							var _type = file.newAnonymousClass(LocalContext.get().method);
+							cur = new NewAnonymousClass((Invoke) cur, _type);
 						}
 					} else {
 						// 语法糖: new n => 无参数调用
@@ -702,7 +703,7 @@ public final class ExprParser {
 		if (dg.parent != null) throw wr.err("expr.symbol.refCheck:".concat(dg.parent.toString()));
 		return dg.toClassRef();
 	}
-	private ExprNode chain(ExprNode e, String name, int flag) { return e instanceof DotGet ? ((DotGet) e).add(name, flag) : new DotGet(e, name, flag); }
+	public ExprNode chain(ExprNode e, String name, int flag) { return e instanceof DotGet ? ((DotGet) e).add(name, flag) : new DotGet(e, name, flag); }
 	private ExprNode invoke(CompileUnit file, Object fn, List<IType> bounds) throws ParseException {
 		assert fn instanceof ExprNode || fn instanceof IType : "validation error";
 

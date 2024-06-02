@@ -1,18 +1,21 @@
 package roj.compiler;
 
 import roj.asm.Opcodes;
+import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.type.TypeHelper;
 import roj.asmx.AnnotationRepo;
 import roj.compiler.ast.block.ParseTask;
+import roj.compiler.ast.expr.Constant;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LibraryZipFile;
 import roj.compiler.context.LocalContext;
+import roj.compiler.plugins.asm.AsmHook;
 import roj.compiler.plugins.sandbox.SandboxEvaluator;
 import roj.compiler.resolve.TypeResolver;
+import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
-import roj.reflect.FastInit;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.util.Helpers;
@@ -39,6 +42,8 @@ public class LavaCompiler {
 		AnnotationRepo repo = new AnnotationRepo();
 		repo.add(ImpLib);
 
+		AsmHook hook = AsmHook.init(ctx);
+		hook.injectedProperties.put("咕咕咕", Constant.valueOf("咕咕咕咕，我是🕊"));
 		SandboxEvaluator.init(ctx, repo);
 	}
 
@@ -64,6 +69,8 @@ public class LavaCompiler {
 
 	@SuppressWarnings("unchecked")
 	public <T> T linkLambda(Class<T> functionalInterface, String methodStr) throws Exception {
+		ctx.reset();
+
 		LocalContext.set(cache);
 
 		Method myMethod = null;
@@ -97,8 +104,13 @@ public class LavaCompiler {
 
 		LocalContext.set(null);
 
+		for (ConstantData data : ctx.getGeneratedClasses()) {
+			data.dump();
+			ClassDefiner.defineGlobalClass(data);
+		}
+
 		u.dump();
-		FastInit.prepare(u);
-		return (T) FastInit.make(u);
+		ClassDefiner.premake(u);
+		return (T) ClassDefiner.make(u);
 	}
 }

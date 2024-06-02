@@ -12,7 +12,6 @@ import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.text.ACalendar;
 import roj.text.TextUtil;
-import roj.util.ByteList;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -29,7 +28,7 @@ import java.util.function.Consumer;
 public final class Lavac {
 	@Constant
 	public static String getCompileTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
-	public static final String VERSION = "0.8.9[RC] (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "0.9.1[RC] (compiled on "+getCompileTime()+")";
 
 	int debugOps = 10;
 	GlobalContext ctx;
@@ -177,21 +176,19 @@ public final class Lavac {
 			}
 			if (ctx.hasError()) break compile;
 			for (int i = 0; i < ctxs.size(); i++) {
-				ctxs.get(i).S3_Code();
+				ctxs.get(i).S3_Annotation();
 			}
 			if (ctx.hasError()) break compile;
 			for (int i = 0; i < ctxs.size(); i++) {
-				ctxs.get(i).S4_Annotation();
+				ctxs.get(i).S4_Code();
 			}
 			if (ctx.hasError()) break compile;
 			// write
 			for (int i = 0; i < ctxs.size(); i++) {
 				CompileUnit ctx = ctxs.get(i);
 				try (FileOutputStream fos = new FileOutputStream(new File(dst, ctx.name+".class"))) {
-					ByteList bytes = ctx.getBytes();
-					bytes.writeToStream(fos);
-
-					((Runnable) ClassDefiner.INSTANCE.defineClass(null, bytes).newInstance()).run();
+					ctx.getBytes().writeToStream(fos);
+					((Runnable) ClassDefiner.defineGlobalClass(ctx).newInstance()).run();
 				} catch (IOException e) {
 					e.printStackTrace();
 				}

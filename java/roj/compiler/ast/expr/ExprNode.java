@@ -19,7 +19,14 @@ public abstract class ExprNode implements UnresolvedExprNode {
 	public abstract String toString();
 
 	public enum ExprKind {
-		INVOKE_CONSTRUCTOR, IMMEDIATE_CONSTANT, LDC_CLASS
+		// this() or super()
+		INVOKE_CONSTRUCTOR,
+		// constant literal
+		IMMEDIATE_CONSTANT,
+		// literal xxx.class
+		LDC_CLASS,
+		// special kind for block passing parser
+		CONSTANT_WRITABLE
 	}
 	public boolean isKind(ExprKind kind) {return false;}
 	public abstract IType type();

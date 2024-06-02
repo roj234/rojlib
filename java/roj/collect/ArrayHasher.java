@@ -4,7 +4,7 @@ import roj.asm.tree.ConstantData;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.visitor.CodeWriter;
-import roj.reflect.FastInit;
+import roj.reflect.ClassDefiner;
 
 import static roj.asm.Opcodes.*;
 
@@ -47,8 +47,8 @@ final class ArrayHasher {
 			cw.invokeS("java/util/Arrays", "equals", "("+clz.toDesc()+clz.toDesc()+")Z");
 			cw.one(IRETURN);
 
-			FastInit.prepare(hasher);
-			h = (Hasher<?>) FastInit.make(hasher);
+			ClassDefiner.premake(hasher);
+			h = (Hasher<?>) ClassDefiner.make(hasher);
 			built.put((char) clz.type, h);
 		}
 		return (Hasher<T>) h;

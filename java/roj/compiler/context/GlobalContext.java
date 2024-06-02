@@ -26,10 +26,7 @@ import roj.compiler.resolve.ResolveHelper;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Consumer;
 
 /**
@@ -55,6 +52,15 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 	private final MyHashMap<String, Library> libraries = new MyHashMap<>();
 	private final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
 	private final MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
+
+	private final LibraryGenerated generated = new LibraryGenerated();
+	private static final class LibraryGenerated implements Library {
+		final MyHashMap<String, ConstantData> classes = new MyHashMap<>();
+		@Override
+		public Set<String> content() {return Collections.emptySet();}
+		@Override
+		public IClass get(CharSequence name) {return classes.get(name);}
+	}
 
 	public void addLibrary(Library library) {
 		for (String className : library.content())
@@ -84,14 +90,20 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 		CompileUnit prev = ctx.put(unit.name, unit);
 		if (prev != null) throw new IllegalStateException("重复的编译单位: " + unit.name);
 	}
+
+	public synchronized void addGeneratedClass(ConstantData data) {
+		libraries.put(data.name, generated);
+		var prev = generated.classes.put(data.name, data);
+		if (prev != null) throw new IllegalStateException("重复的生成类: " + data.name);
+	}
+	public Collection<ConstantData> getGeneratedClasses() {return generated.classes.values();}
+
 	public void reset() {
+		for (CompileUnit unit : ctx) extraInfos.removeKey(unit);
 		ctx.clear();
-		for (Iterator<ResolveHelper> itr = extraInfos.iterator(); itr.hasNext(); ) {
-			ResolveHelper info = itr.next();
-			if (info.owner instanceof CompileUnit) {
-				itr.remove();
-			}
-		}
+
+		for (String s : generated.classes.keySet()) libraries.remove(s, generated);
+		generated.classes.clear();
 	}
 
 	public final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
@@ -173,7 +185,7 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 		debugLogger().info("invokeAnnotationProcessor(): unit = " + unit + ", key = " + key + ", annotations = " + annotations);
 	}
 
-	public boolean isSpecEnabled(int specId) {return true;}
+	public boolean isSpecEnabled(int specId) {return specId != DISABLE_RAW_TYPE;}
 
 	public Consumer<Diagnostic> listener = new SimpleDiagnosticListener(1, 1, 1);
 	public boolean hasError;

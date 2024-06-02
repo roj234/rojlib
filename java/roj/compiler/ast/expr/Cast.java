@@ -30,7 +30,7 @@ final class Cast extends UnaryPre {
 	@Override
 	public ExprNode resolve(LocalContext ctx) {
 		IType rType = (right = right.resolve(ctx)).type();
-		ctx.resolveType(type);
+		type = ctx.resolveType(type);
 		cast = ctx.castTo(rType, type, TypeCast.E_DOWNCAST);
 
 		// 这里还要多搞搞

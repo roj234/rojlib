@@ -249,9 +249,9 @@ final class DotGet extends VarNode {
 
 			// 替换常量 如你所见只有直接访问(<class>.<field>)才会替换,如果中途使用了非静态字段会警告，👆
 			if (!ctx.disableConstantValue) {
-				Object c = ctx.getConstantValue(begin, fn);
 				// 大概也用不到泛型... 不过还是留着
-				if (c != null) return new Constant(type == null ? fn.fieldType() : type, c);
+				ExprNode node = ctx.getConstantValue(begin, fn, type);
+				if (node != null) return node;
 			}
 		}
 
@@ -372,7 +372,7 @@ final class DotGet extends VarNode {
 
 	@Override
 	public int hashCode() {
-		int result = parent.hashCode();
+		int result = parent == null ? 42 : parent.hashCode();
 		result = 31 * result + names.hashCode();
 		result = 31 * result + bits.hashCode();
 		return result;

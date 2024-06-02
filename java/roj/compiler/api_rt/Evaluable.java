@@ -1,6 +1,7 @@
 package roj.compiler.api_rt;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.compiler.ast.expr.ExprNode;
 
@@ -17,5 +18,5 @@ public abstract class Evaluable extends Attribute {
 	public final String name() {return "Evaluable";}
 
 	@Nullable
-	public abstract ExprNode eval(@Nullable ExprNode self, List<ExprNode> args);
+	public abstract ExprNode eval(MethodNode owner, @Nullable ExprNode self, List<ExprNode> args);
 }

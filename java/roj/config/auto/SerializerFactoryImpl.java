@@ -95,7 +95,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	SerializerFactoryImpl(int flag, ClassLoader cl) {
 		super(flag);
 		this.classLoader = cl;
-		this.GENERATED = Isolation.computeIfAbsent(cl, Fn).generared;
+		this.GENERATED = Isolation.computeIfAbsent(cl, Fn).generated;
 
 		// 如果不开启AllowDynamic，那么对于raw Collection的反序列化将会失败
 		if ((flag & ALLOW_DYNAMIC) != 0) {
@@ -414,7 +414,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			name = ((this.flag&OBJECT_POOL) | (flag&(NO_CONSTRUCTOR|SERIALIZE_PARENT)))+";"+name;
 		}
 
-		var GENERATED = Isolation.computeIfAbsent(type.getClassLoader(), Fn).generared;
+		var GENERATED = Isolation.computeIfAbsent(type.getClassLoader(), Fn).generated;
 		if ((ser = GENERATED.get(name)) == null) {
 			lock.lock();
 			try {
@@ -508,8 +508,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		}
 
 		c.name("roj/config/auto/PAS$"+asmType);
-		FastInit.prepare(c);
-		return (Adapter) FastInit.make(c);
+		ClassDefiner.premake(c);
+		return (Adapter) ClassDefiner.make(c);
 	}
 	private static void copyArrayRef(ConstantData c, char type) {
 		CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "read", "(Lroj/config/auto/AdaptContext;["+type+")V");
@@ -1230,7 +1230,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		c.cloneable();
 		c.interfaces.clear();
 		c.interfaces.add(new CstClass("roj/config/auto/GA"));
-		FastInit.prepare(c);
+		ClassDefiner.premake(c);
 
 		copy = c.newMethod(ACC_PUBLIC|ACC_FINAL, "init2", "(Lroj/config/auto/SerializerFactoryImpl;Ljava/lang/Object;)V");
 		copy.visitSize(4, 3);
@@ -1250,7 +1250,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		readMethods.clear();
 		serializerId.clear();
 
-		return (Adapter) FastInit.make(c1, ClassDefiner.getFor(cl));
+		return (Adapter) ClassDefiner.make(c1, cl);
 	}
 	// endregion
 }

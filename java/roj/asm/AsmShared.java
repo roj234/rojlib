@@ -78,20 +78,8 @@ public final class AsmShared {
 	}
 
 	private final ByteList buf = new ByteList(4096);
-	private boolean unbuffered;
-
 	ByteList current() {
-		if (unbuffered) {
-			// uses ArrayCache now!
-			ByteList b = new ByteList();
-			b.ensureCapacity(4096);
-			return b;
-		}
-
 		buf.clear();
 		return buf;
 	}
-
-	@Deprecated
-	public void setUnbuffered(boolean add) { unbuffered = add; }
 }

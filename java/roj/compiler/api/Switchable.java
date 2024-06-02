@@ -17,6 +17,8 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface Switchable {
 	boolean identity() default true;
-	// not implemented
-	boolean suggestion() default false;
+	/**
+	 * 像enum一样建议同类中的static字段
+	 */
+	boolean suggest() default false;
 }

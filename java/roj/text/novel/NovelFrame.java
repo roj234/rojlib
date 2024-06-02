@@ -61,6 +61,8 @@ public class NovelFrame extends JFrame {
 		initComponents();
 		OnChangeHelper uxChange = new OnChangeHelper(this);
 		uxChange.addRoot(advancedMenu);
+
+		draggedItem.setFocusable(false);
 		uxDrag = new DragReorderHelper(uiChapters, draggedItem);
 
 		GuiUtil.dropFilePath(uiNovelPath, (e) -> read_novel(null), false);
@@ -202,6 +204,26 @@ public class NovelFrame extends JFrame {
 		});
 
 		btnToEpub.addActionListener(this::write_epub);
+
+		btnLegadoImport.addActionListener(e -> {
+			File path = GuiUtil.fileLoadFrom("LegadoNewBee", this, JFileChooser.DIRECTORIES_ONLY);
+			if (path == null) return;
+			int offset = Integer.parseInt(JOptionPane.showInputDialog("chapter offset", "-1"));
+			for (File file : path.listFiles()) {
+				String name = file.getName();
+				int i = name.indexOf('-');
+				int chapter = Integer.parseInt(name.substring(0, i));
+
+				try {
+					Chapter chap = chapters.get(chapter + offset);
+					System.out.println("chapter "+chap.toString());
+					chap.data = new CharList(IOUtil.readUTF(file));
+					System.out.println("Data "+chap.data);
+				} catch (IOException ex) {
+					ex.printStackTrace();
+				}
+			}
+		});
 	}
 
 	private class ChapterDblClickHelper extends MouseAdapter {
@@ -928,6 +950,7 @@ public class NovelFrame extends JFrame {
         btnDeDupChapter = new JButton();
         btnInsertMode = new JCheckBox();
         btnDelByLen = new JButton();
+        btnLegadoImport = new JButton();
         cpwOrigName = new JLabel();
         cpwOutName = new JTextField();
         var lb10 = new JLabel();
@@ -951,7 +974,7 @@ public class NovelFrame extends JFrame {
         presetRegexpInp = new JTextArea();
 
         //======== this ========
-        setTitle("\u5c0f\u8bf4\u7ba1\u7406\u7cfb\u7edf (Novel Management System) v2.0-beta");
+        setTitle("\u5c0f\u8bf4\u7ba1\u7406\u7cfb\u7edf (Novel Management System) v2.1");
         var contentPane = getContentPane();
         contentPane.setLayout(null);
 
@@ -1168,6 +1191,11 @@ public class NovelFrame extends JFrame {
         contentPane.add(btnDelByLen);
         btnDelByLen.setBounds(new Rectangle(new Point(85, 485), btnDelByLen.getPreferredSize()));
 
+        //---- btnLegadoImport ----
+        btnLegadoImport.setText("\u4ece\u9605\u8bfb\u5bfc\u5165");
+        contentPane.add(btnLegadoImport);
+        btnLegadoImport.setBounds(new Rectangle(new Point(250, 485), btnLegadoImport.getPreferredSize()));
+
         //---- cpwOrigName ----
         cpwOrigName.setText("\u53cc\u51fb\u9009\u62e9\u7ae0\u8282");
         contentPane.add(cpwOrigName);
@@ -1340,6 +1368,7 @@ public class NovelFrame extends JFrame {
     private JButton btnDeDupChapter;
     private JCheckBox btnInsertMode;
     private JButton btnDelByLen;
+    private JButton btnLegadoImport;
     private JLabel cpwOrigName;
     private JTextField cpwOutName;
     private JSpinner cpwChapNo;

@@ -51,6 +51,8 @@ public class MethodWriter extends CodeWriter {
 	public void store(Variable v) { addSegment(new LazyLoadStore(v, true)); }
 	public void iinc(Variable v, int delta) { addSegment(new LazyIINC(v, delta)); }
 
+	public void jump(byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new JumpSegmentAO(code, target)); }
+
 	private final SimpleList<Label> jumpNo = new SimpleList<>();
 	private final MyBitSet cond = new MyBitSet();
 	private boolean canuse;
@@ -68,6 +70,16 @@ public class MethodWriter extends CodeWriter {
 
 			Label target = jumpNo.pop();
 			jump(cond.remove(jumpNo.size()) ? IFNE : IFEQ, target);
+			canuse = true;
+		}
+	}
+
+	public void skipJumpOn(int size) {
+		if (jumpNo.size() > size) {
+			assert jumpNo.size() == size+1;
+
+			jumpNo.pop();
+			cond.remove(jumpNo.size());
 			canuse = true;
 		}
 	}

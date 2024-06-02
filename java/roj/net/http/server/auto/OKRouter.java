@@ -29,7 +29,6 @@ import roj.net.http.IllegalRequestException;
 import roj.net.http.server.*;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
-import roj.reflect.FastInit;
 import roj.reflect.ReflectionUtils;
 import roj.util.AttributeKey;
 import roj.util.Helpers;
@@ -73,7 +72,7 @@ public class OKRouter implements Router {
 		hndInst.name("roj/net/http/server/auto/Router$"+ReflectionUtils.uniqueId());
 		hndInst.interfaces().add("roj/net/http/server/auto/OKRouter$Dispatcher");
 		hndInst.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
-		FastInit.prepare(hndInst);
+		ClassDefiner.premake(hndInst);
 
 		hndInst.newField(0, "$methodId", "I");
 		hndInst.newField(0, "$handler", TypeHelper.class2asm(o.getClass()));
@@ -215,7 +214,7 @@ public class OKRouter implements Router {
 			cw.finish();
 		}
 
-		Dispatcher ah = (Dispatcher) FastInit.make(hndInst, ClassDefiner.getFor(o.getClass().getClassLoader()));
+		Dispatcher ah = (Dispatcher) ClassDefiner.make(hndInst, o.getClass().getClassLoader());
 		for (IntMap.Entry<Annotation> entry : handlers.selfEntrySet()) {
 			int i = entry.getIntKey();
 			Annotation a = entry.getValue();

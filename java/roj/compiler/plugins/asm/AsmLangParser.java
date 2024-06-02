@@ -1,4 +1,4 @@
-package roj.compiler.asmlang;
+package roj.compiler.plugins.asm;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
@@ -8,6 +8,7 @@ import roj.asm.visitor.CodeWriter;
 import roj.collect.MyBitSet;
 import roj.collect.ToIntMap;
 import roj.collect.TrieTree;
+import roj.compiler.asm.MethodWriter;
 import roj.config.ParseException;
 import roj.config.Tokenizer;
 import roj.config.Word;
@@ -53,5 +54,9 @@ public class AsmLangParser {
 		//CharList sb = IOUtil.getSharedCharBuf();
 		//new AsmLang().toAsmLang(data, sb);
 		System.out.println(data.toAsmLang(new CharList()));
+	}
+
+	public void parse(String asm, MethodWriter fork) {
+
 	}
 }

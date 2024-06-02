@@ -30,8 +30,11 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collection;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
@@ -69,6 +72,13 @@ public class FileUtil extends Plugin {
 						long d = ctx.argument("time", Long.class);
 						System.out.println(s.setLastModified(d));
 					}))));
+		registerCommand(literal("writecost").then(
+			argument("file", Argument.file(null)).executes(ctx -> {
+				File s = ctx.argument("file", File.class);
+				BasicFileAttributes attr = Files.readAttributes(s.toPath(), BasicFileAttributes.class);
+				long delta = attr.lastModifiedTime().to(TimeUnit.NANOSECONDS) - attr.creationTime().to(TimeUnit.NANOSECONDS);
+				System.out.println("delta= "+delta+"ns");
+			})));
 
 		CommandNode child = argument("src", Argument.file(null)).then(
 			argument("dst", Argument.file(null)).executes(ctx -> {

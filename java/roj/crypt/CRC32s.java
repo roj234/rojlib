@@ -63,7 +63,7 @@ public class CRC32s {
 	static {
 		CRC32h hwac;
 		try {
-			hwac = DirectAccessor.builder(CRC32h.class).delegate(CRC32.class, "update", "updateBytes", "updateByteBuffer").build();
+			hwac = DirectAccessor.builder(CRC32h.class).inline().delegate(CRC32.class, "update", "updateBytes", "updateByteBuffer").build();
 		} catch (Exception e) {
 			e.printStackTrace();
 			hwac = null;

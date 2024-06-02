@@ -7,7 +7,7 @@ import roj.config.ParseException;
 import roj.io.IOUtil;
 import roj.net.http.server.HttpServer11;
 import roj.net.http.server.StringResponse;
-import roj.reflect.FastInit;
+import roj.reflect.ClassDefiner;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -82,10 +82,11 @@ public class MyTemplateEngine {
 		u.S0_Init();
 		u.S1_Struct();
 		u.S2_Parse();
-		u.S3_Code();
+		u.S3_Annotation();
+		u.S4_Code();
 
-		FastInit.prepare(u);
-		return (Template) FastInit.make(u);
+		ClassDefiner.premake(u);
+		return (Template) ClassDefiner.make(u);
 	}
 
 	private static int parseToStringBlock(CharSequence in, int i, CharList out) {

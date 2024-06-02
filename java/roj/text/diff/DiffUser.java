@@ -38,10 +38,11 @@ public class DiffUser {
 			return;
 		}
 
-		basePath = ctx.argument("basePath", File.class);
+		File basePath = ctx.argument("basePath", File.class);
 
 		Serializer<List<DiffResult>> adapter = Serializers.SAFE.listOf(DiffResult.class);
-		List<DiffResult> diffs = ConfigMaster.YAML.readObject(adapter, ctx.argument("diffYml", File.class));
+		File file = ctx.argument("diffYml", File.class);
+		List<DiffResult> diffs = ConfigMaster.YAML.readObject(adapter, file);
 		for (int i = diffs.size() - 1; i >= 0; i--) {
 			DiffResult d = diffs.get(i);
 
@@ -76,7 +77,7 @@ public class DiffUser {
 			}
 		}
 		System.out.println("count:" + diffs.size());
-		ConfigMaster.YAML.writeObject(diffs, adapter, ctx.argument("diffYml", File.class));
+		ConfigMaster.YAML.writeObject(diffs, adapter, new File(file.getParentFile(), IOUtil.fileName(file.getName())+".new.yml"));
 
 		bar.addMax(diffs.size());
 		for (int i = 0; i < diffs.size(); i++) {
@@ -127,6 +128,5 @@ public class DiffUser {
 		}
 	}
 
-	private static File basePath;
 	private static final TaskPool POOL = TaskPool.MaxSize(9999, "TDD worker");
 }
