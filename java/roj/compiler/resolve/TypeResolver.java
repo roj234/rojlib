@@ -52,18 +52,11 @@ public final class TypeResolver {
 		inited = true;
 
 		GlobalContext gc = ctx.classes;
-
-		for (Map.Entry<String, Object> entry : importClass.entrySet()) {
-			String name = (String) entry.getValue();
-			if (name == null) continue;
-
-			IClass info = gc.getClassInfo(name);
-			if (info == null) info = fixStaticImport(ctx, name);
-			if (info == null) ctx.report(Kind.ERROR, "symbol.error.noSuchClass", name);
-			else entry.setValue(info);
-		}
-
-		for (Map.Entry<String, Object> entry : importStatic.entrySet()) {
+		resolveImport(ctx, gc, importClass);
+		resolveImport(ctx, gc, importStatic);
+	}
+	private void resolveImport(LocalContext ctx, GlobalContext gc, MyHashMap<String, Object> aStatic) {
+		for (Map.Entry<String, Object> entry : aStatic.entrySet()) {
 			String name = (String) entry.getValue();
 			if (name == null) continue;
 

@@ -12,6 +12,7 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Constant;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.Invoke;
+import roj.compiler.context.LocalContext;
 import roj.config.Word;
 import roj.util.Helpers;
 
@@ -55,7 +56,7 @@ public class CandyTestServer {
 			@Override
 			public void write(MethodWriter cw, boolean noRet) {
 				long millis = TimeUnit.DAYS.toMillis(1);
-				node.writeDyn(cw, cw.ctx1.castTo(node.type(), type(), 0));
+				node.writeDyn(cw, LocalContext.get().castTo(node.type(), type(), 0));
 				cw.ldc(millis);
 				cw.one(Opcodes.LMUL);
 			}

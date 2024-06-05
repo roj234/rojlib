@@ -78,6 +78,7 @@ final class StringConcat extends ExprNode {
 	private static final Type CHARSEQUENCE_TYPE = new Type("java/lang/CharSequence");
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
+		var lc = LocalContext.get();
 		cw.newObject("java/lang/StringBuilder");
 		for (int i = 0; i < nodes.size(); i++) {
 			ExprNode node = nodes.get(i);
@@ -98,7 +99,7 @@ final class StringConcat extends ExprNode {
 			} else if (rawType.equals(Constant.STRING)) {
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;");
 			} else {
-				TypeCast.Cast cast = cw.ctx1.castTo(rawType, CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
+				TypeCast.Cast cast = lc.castTo(rawType, CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
 				if (cast.type >= 0) {
 					cast.write(cw);
 					cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/CharSequence;)Ljava/lang/StringBuilder;");

@@ -100,7 +100,7 @@ public class CommandConsole extends DefaultConsole {
 		return words;
 	}
 	@Override
-	protected AnsiString highlight(String input) {
+	protected AnsiString highlight(CharList input) {
 		AnsiString root = new AnsiString("");
 
 		wr.init(input);

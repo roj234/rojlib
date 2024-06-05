@@ -14,6 +14,7 @@ import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -86,20 +87,25 @@ final class MethodListSingle extends ComponentList {
 			}
 		}
 
+		if ((flags & NO_REPORT) != 0) return null;
+
 		CharList sb = new CharList().append("invoke.incompatible.single:").append(mn.owner).append(':').append(mn.name()).append(':');
 
-		sb.append("  ").append("{invoke.except} ");
+		sb.append("  ").append("\1invoke.except\0 ");
 		MethodList.getArg(mn, sb).append('\n');
 
 		MethodList.appendInput(params, sb);
 
-		sb.append("  ").append("{invoke.reason} ");
+		sb.append("  ").append("\1invoke.reason\0 ");
 		MethodList.appendError(ctx.inferrer.infer(mnOwner, mn, genericHint, params), sb);
 		sb.append('\n');
 
 		ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
 		return null;
 	}
+
+	@Override
+	public List<MethodNode> getMethods() {return Collections.singletonList(node);}
 
 	@Override
 	public String toString() {return "["+node.ownerClass()+" => ("+TextUtil.join(node.parameters(), ", ")+") => "+node.returnType()+']';}

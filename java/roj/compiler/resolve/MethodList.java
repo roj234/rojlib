@@ -184,19 +184,21 @@ final class MethodList extends ComponentList {
 
 			appendInput(params, sb);
 
-			sb.append("  ").append(best.method.owner).append("{invoke.method}").append(name).append('(');
+			sb.append("  ").append(best.method.owner).append("\1invoke.method\0").append(name).append('(');
 			getArg(best.method, sb).append(')');
 
 			for (MethodNode mn : dup) {
-				sb.append(" {and}\n  ").append(mn.owner).append("{invoke.method}").append(name).append('(');
+				sb.append(" \1and\0\n  ").append(mn.owner).append("\1invoke.method\0").append(name).append('(');
 				getArg(mn, sb).append(')');
 			}
 
-			ctx.report(Kind.ERROR, sb.replace('/', '.').append(" {invoke.matches}").toStringAndFree());
+			ctx.report(Kind.ERROR, sb.replace('/', '.').append(" \1invoke.matches\0").toStringAndFree());
 		} else if (best == null) {
+			if ((flags & NO_REPORT) != 0) return null;
+
 			CharList sb = new CharList().append("invoke.incompatible.plural:").append(name).append('(');
 
-			if (params.isEmpty()) sb.append("{invoke.no_param}");
+			if (params.isEmpty()) sb.append("\1invoke.no_param\0");
 			else sb.append(TextUtil.join(params, ","));
 			sb.append("):");
 
@@ -210,11 +212,11 @@ final class MethodList extends ComponentList {
 
 			for (int i = 0; i < size; i++) {
 				MethodNode mn = methods.get(i);
-				sb.append("  {invoke.method}").append(mn.owner).append('.').append(mn.name());
-				getArg(mn, sb.append('(')).append("){invoke.notApplicable}\n    ");
+				sb.append("  \1invoke.method\0").append(mn.owner).append('.').append(mn.name());
+				getArg(mn, sb.append('(')).append(")\1invoke.notApplicable\0\n    ");
 
-				getErrorMsg(ctx, genericHint, params, (flags&IN_STATIC) != 0, mn, sb.append('('), tmp);
-				sb.append(')').append('\n');
+				getErrorMsg(ctx, genericHint, params, (flags&IN_STATIC) != 0, mn, sb.append("(\1"), tmp);
+				sb.append("\0)\n");
 			}
 
 			ctx.errorCapture = null;
@@ -260,16 +262,19 @@ final class MethodList extends ComponentList {
 		sb.append(JavaLexer.translate.translate(mr.error == null || mr.error.length == 0 ? "typeCast.error."+mr.distance : "typeCast.error."+mr.distance+":"+mr.error[0]+":"+mr.error[1]));
 	}
 	static void appendInput(List<IType> params, CharList sb) {
-		sb.append("  ").append("{invoke.found} ");
-		if (params.isEmpty()) sb.append("{invoke.no_param}");
+		sb.append("  ").append("\1invoke.found\0 ");
+		if (params.isEmpty()) sb.append("\1invoke.no_param\0");
 		else sb.append(TextUtil.join(params, ","));
 		sb.append('\n');
 	}
 	static CharList getArg(MethodNode mn, CharList sb) {
 		Signature sign = mn.parsedAttr(null, Attribute.SIGNATURE);
 		List<? extends IType> params2 = sign == null ? mn.parameters() : sign.values.subList(0, sign.values.size()-1);
-		return sb.append(params2.isEmpty() ? "{invoke.no_param}" : TextUtil.join(params2, ","));
+		return sb.append(params2.isEmpty() ? "\1invoke.no_param\0" : TextUtil.join(params2, ","));
 	}
+
+	@Override
+	public List<MethodNode> getMethods() {return methods;}
 
 	@Override
 	public String toString() {

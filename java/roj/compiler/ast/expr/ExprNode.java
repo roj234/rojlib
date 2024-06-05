@@ -26,7 +26,8 @@ public abstract class ExprNode implements UnresolvedExprNode {
 		// literal xxx.class
 		LDC_CLASS,
 		// special kind for block passing parser
-		CONSTANT_WRITABLE
+		CONSTANT_WRITABLE,
+		ENUM_REFERENCE
 	}
 	public boolean isKind(ExprKind kind) {return false;}
 	public abstract IType type();

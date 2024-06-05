@@ -60,7 +60,7 @@ class ArrayDef extends ExprNode {
 
 			type = type1 == null ? Asterisk.anyType : type1;
 		} else {
-			type = ctx.resolveType(type);
+			ctx.resolveType(type);
 		}
 
 		boolean isAllConstant = (flag&1) == 0;

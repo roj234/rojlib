@@ -34,7 +34,6 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	public MethodNode mn;
 	public int interpretFlags;
-	public boolean debugLines;
 
 	public SimpleList<Frame2> frames;
 	private FrameVisitor fv;
@@ -325,8 +324,6 @@ public class CodeWriter extends AbstractCodeWriter {
 			FrameVisitor.writeFrames(frames, bw, cpw);
 			visitAttributeIEnd(stack);
 		}
-
-		if (debugLines) lineNumberDebug();
 	}
 
 	public final void lineNumberDebug() {

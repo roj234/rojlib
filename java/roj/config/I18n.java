@@ -62,7 +62,7 @@ public class I18n {
 			while (true) {
 				i = str.indexOf(':', kk);
 
-				int bracket = str.indexOf('{', kk);
+				int bracket = str.indexOf('\1', kk);
 				if (bracket < 0 || bracket > i) break;
 
 				kk = getBracketEnd(str, bracket);
@@ -82,7 +82,7 @@ public class I18n {
 				inlineTranslate(seq, 0, tmp);
 				s = tmp;
 			}
-			sb.replace(j, j+2, s);
+			sb.replace("%"+num, s);
 
 			if (i < 0) break;
 			prevI = i+1;
@@ -93,7 +93,7 @@ public class I18n {
 	private void inlineTranslate(String str, int prevI, CharList out) {
 		int i;
 		while (true) {
-			i = str.indexOf('{', prevI);
+			i = str.indexOf('\1', prevI);
 			if (i < 0) break;
 			int j = getBracketEnd(str, i);
 
@@ -107,11 +107,11 @@ public class I18n {
 
 	private static int getBracketEnd(String str, int i) {
 		int depth = 1;
-		int j = i +1;
+		int j = i+1;
 		for (;;) {
 			char c = str.charAt(j);
-			if (c == '{') depth++;
-			else if (c == '}' && --depth == 0) break;
+			if (c == '\1') depth++;
+			else if (c == '\0' && --depth == 0) break;
 			if (++j == str.length()) throw new IllegalArgumentException("i18n错误 未闭合的括号: "+ str);
 		}
 		return j;

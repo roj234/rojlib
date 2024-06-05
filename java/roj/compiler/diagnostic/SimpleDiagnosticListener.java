@@ -67,7 +67,7 @@ public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 		for (int i = 2; i < trace.length; i++) {
 			String name = trace[i].getMethodName();
 			if (!name.equals("report") && !name.equals("fireDiagnostic")) {
-				System.err.println("\tat "+trace[i]);
+				System.err.println("    at "+trace[i]);
 				break;
 			}
 		}

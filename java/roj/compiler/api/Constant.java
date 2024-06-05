@@ -19,7 +19,7 @@ import java.lang.annotation.Target;
 @Target({ElementType.FIELD, ElementType.METHOD, ElementType.TYPE})
 public @interface Constant {
 	/**
-	 * 尚未实现，没法关掉
+	 * 尚未实现
 	 */
-	boolean sandbox() default true;
+	String[] classes() default {};
 }

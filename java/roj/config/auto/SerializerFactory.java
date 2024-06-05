@@ -66,7 +66,8 @@ public abstract class SerializerFactory {
 		PREFER_DYNAMIC = ALLOW_DYNAMIC|PREFER_DYNAMIC_INTERNAL,
 		OBJECT_POOL = 64,
 		SAFE = 128,
-		SERIALIZE_PARENT = 256;
+		SERIALIZE_PARENT = 256,
+		OPTIONAL_BY_DEFAULT = 512;
 
 	int flag;
 	public ToIntFunction<Class<?>> perClassFlag;

@@ -166,7 +166,6 @@ public class DefaultConsole implements Console {
 	}
 
 	public void keyEnter(int keyCode, boolean isVirtualKey) {
-		if (keyEnter_Pre(keyCode, isVirtualKey)) return;
 		if (!isVirtualKey) {
 			endCompletion(false);
 
@@ -179,7 +178,7 @@ public class DefaultConsole implements Console {
 			cursor += charDec.length();
 
 			if (autoComplete) {
-				complete(lastInput != null ? lastInput.substring(0, cursor) : input.toString(0, cursor), tabs);
+				complete(lastInput != null ? lastInput.substring(0, cursor) : input.substring(0, cursor), tabs);
 				if (tabs.size() > 0) {
 					isAutoComplete = true;
 					setComplete(0);
@@ -222,20 +221,6 @@ public class DefaultConsole implements Console {
 		} else {
 			switch (keyCode) {
 				case VK_F1: printHelp(); return;
-				case VK_F2:
-					autoLCA = !autoLCA;
-					tooltip().append(autoLCA ?
-						"\u001b[92m+AutoLCA" :
-						"\u001b[91m-AutoLCA");
-					displayTooltip(1000);
-				return;
-				case VK_F3:
-					autoHighlight = !autoHighlight;
-					tooltip().append(autoHighlight ?
-						"\u001b[92m+动态语法高亮" :
-						"\u001b[91m-动态语法高亮");
-					displayTooltip(1000);
-				return;
 				case VK_F4:
 					autoComplete = !autoComplete;
 					tooltip().append(autoComplete ?
@@ -318,9 +303,9 @@ public class DefaultConsole implements Console {
 						break;
 					}
 
-					complete(lastInput != null ? lastInput.substring(0, cursor) : input.toString(0, cursor), tabs);
+					complete(lastInput != null ? lastInput.substring(0, cursor) : input.substring(0, cursor), tabs);
 					if (tabs.size() > 0) {
-						if (autoLCA && !isAutoComplete) {
+						if (!isAutoComplete) {
 							String prev = null;
 							int lca = 0;
 							int offset = 1;
@@ -408,16 +393,11 @@ public class DefaultConsole implements Console {
 			return;
 		}
 
-		if (autoHighlight && tabCursor < 0 && highlight == null) {
-			lastInput = input.toString();
-			highlight = highlight(lastInput);
-			if (highlight == null) {
-				autoHighlight = false;
-				lastInput = null;
-				tooltip().append("不支持语法高亮");
-				displayTooltip(1000);
-			} else {
+		if (tabCursor < 0 && highlight == null) {
+			highlight = highlight(input);
+			if (highlight != null) {
 				assert highlight.length() == lastInput.length() : "input length mismatch";
+				lastInput = input.toString();
 				input.clear();
 				highlight.writeAnsi(input);
 				checkAnsi();
@@ -450,7 +430,7 @@ public class DefaultConsole implements Console {
 
 		int end = limitWidth(scrollLeft, maxWidth);
 		if (scrollLeft > end) {
-			if (CLIUtil.ANSI) System.err.println("[DefaultConsole]Invalid ANSI sequence detected.");
+			sysErr.println("[DefaultConsole]Invalid ANSI sequence detected.");
 			scrollLeft = 0;
 		}
 		prompt.append(staticHighlight).append(input, scrollLeft, end);
@@ -493,7 +473,7 @@ public class DefaultConsole implements Console {
 		return input.length();
 	}
 
-	private boolean autoHighlight = true, autoLCA = true, autoComplete, isAutoComplete;
+	private boolean autoComplete, isAutoComplete;
 	private final CharList tooltip = new CharList();
 	private ScheduleTask removeTooltip;
 	protected final CharList tooltip() { tooltip.clear(); return tooltip; }
@@ -508,24 +488,20 @@ public class DefaultConsole implements Console {
 		removeTooltip = Scheduler.getDefaultScheduler().delay(() -> displayTooltip(-1), timeout);
 	}
 
-	protected boolean keyEnter_Pre(int key, boolean vk) { return false; }
-
-	public static final String KEY_SHORTCUT =
-		"F1: 查看帮助\n" +
-		"F2: 切换Tab功能\n" +
-		"F3: 切换语法高亮\n" +
-		"F4: 切换即时补全\n" +
-		"Ctrl+A: 全选(WIP)\n" +
-		"Ctrl+B: 复制\n" +
-		"Ctrl+C: 键盘中断(默认退出)\n" +
-		"Ctrl+V: 粘贴\n" +
-		"↑: 上一条历史或补全候选\n" +
-		"↓: 下一条历史或补全候选, 或回到当前输入\n" +
-		"Ctrl+←: 光标移至开头\n" +
-		"Ctrl+→: 光标移至结尾\n" +
-		"Tab: 在当前位置补全代码\n" +
-		"ESC: 取消补全\n" +
-		"ENTER: 确认补全或执行指令";
+	public static final String KEY_SHORTCUT = """
+		F1: 查看帮助
+		F4: 切换即时补全
+		Ctrl+A: 全选(WIP)
+		Ctrl+B: 复制
+		Ctrl+C: 键盘中断(默认退出)
+		Ctrl+V: 粘贴
+		↑: 上一条历史或补全候选
+		↓: 下一条历史或补全候选, 或回到当前输入
+		Ctrl+←: 光标移至开头
+		Ctrl+→: 光标移至结尾
+		Tab: 在当前位置补全代码
+		ESC: 取消补全
+		ENTER: 确认补全或执行指令""";
 	protected void printHelp() {
 		CLIBoxRenderer.DEFAULT.render(new String[][]{
 			new String[] { "Roj234的终端模拟器 帮助", "简介", "快捷键" },
@@ -539,7 +515,7 @@ public class DefaultConsole implements Console {
 				KEY_SHORTCUT }
 		});
 	}
-	protected AnsiString highlight(String input) { return null; }
+	protected AnsiString highlight(CharList input) { return null; }
 	protected void complete(String prefix, List<Completion> out) {}
 	protected boolean evaluate(String cmd) { return true; }
 

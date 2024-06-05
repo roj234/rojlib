@@ -21,6 +21,9 @@ lexer.number.exceptDec=[Num]期待[阿拉伯数字]
 lexer.number.noExponent=[Num]数字在指数后被截断
 lexer.number.formatError=[Num]浮点文字的格式错误
 
+# Predefined annotation processor
+annotation.override=此方法未能覆盖超类的方法
+
 # CompileUnit
 
 # TypeResolver(class)
@@ -37,6 +40,9 @@ modifier.notAllowed=[Modifier]此处不允许修饰符%1
 modifier.superset=[Modifier]该修饰符组合不兼容Javac
 
 #Cu Stage1 [Struct]
+cu.record.header=[CU]record类必须有至少一个字段
+cu.struct.antibody=[CU]结构不能包含子节点
+
 cu.noInheritance=[CU]%1已隐式的从%2继承
 cu.noConstructor=[CU]构造器在%1中不可用
 cu.noConstructor.enum=[CU]枚举构造器必须是私有的
@@ -52,6 +58,7 @@ cu.method.paramConflict=参数名称重复
 cu.method.paramVararg=可变参数必须是最后一个 (未来会扩展varargs，只要继承链没有交集，那么可以设置多个可变参数！)
 cu.method.paramCount=方法参数过多
 cu.method.annotationThrow=注解方法不能抛出异常
+cu.method.noAbstract=在非抽象类%1中无法声明抽象方法%2
 
 cu.annotation.valueOnly=注解值必须采用 'name=value' 格式
 
@@ -74,8 +81,18 @@ cu.annotation.missing=注解 @%1 缺少参数'%2'的默认值
 cu.annotation.extra=注解 @%1 不存在参数'%2'
 cu.annotation.notApplicable=注解 @%1 无法应用于元素 %2
 
-cu.override.returnType="方法%1的返回类型%2无法覆盖%3的返回类型%4\n  原因: %5"
-cu.override.thrown=方法%1抛出了覆盖的方法%2未抛出的异常%3
+# any parent can override interface
+# but interface default can never override object parent
+
+#Cu Stage3/4
+cu.override.unable="%1中的方法%2无法实现%3中的方法%4\n  %5"
+cu.override.access=正在分配更低的访问权限 (%1=> %2)
+cu.override.returnType="返回类型不兼容\n  原因: %1"
+cu.override.thrown=覆盖的方法未抛出异常 %1
+cu.override.noImplement=%1 不是抽象的, 并且未覆盖%2中的抽象方法%3
+
+cu.finalField.assigned=无法为最终变量%1分配值
+cu.finalField.missed=可能尚未初始化变量%1
 
 #Cu TypeResolver(segment)
 type.illegalType=非法的类型(on %1)
@@ -94,7 +111,8 @@ lc.unReportedException=[LC]可能抛出未声明的异常%1
 lc.packageRestricted=[LC]类%1不在受限import的导入范围中
 
 # ParseTask
-ps.method.paramDef=[PS]参数默认值不是(立即)常量 (！！注意现在表达式还不支持深克隆，可能造成一些问题)
+ps.method.paramDef=[PS]默认参数不是立即常量
+ps.annoDef.notConst=[PS]注解的默认值不是常量
 
 # BlockParser
 block.missingReturnValue=[Block]缺少返回值
@@ -147,6 +165,7 @@ expr.cast.lambda=[Lambda]需要->
 expr.namedCall.noExpr=[NamedCall]参数不是语句
 expr.easyMap.noKey=[EasyMap]键不是语句
 expr.easyMap.noValue=[EasyMap]值不是语句
+expr.easyMap.kvOrRet='=>'或','
 expr.newArray.generic=[NewArray]创建泛型数组
 expr.newArray.unInit=[NewArray]期待数组初始化
 expr.newArray.noTypePresent=[NewArray]省略类型的数组初始化在此处不可用
@@ -189,8 +208,8 @@ symbol.error.accessDenied.symbol=[Symbol] %1 的修饰符是%2; 无法在 %3 访
 symbol.error.accessDenied.package=[Symbol]%1在 %2 中不是公共的; 无法从外部程序包中对其进行访问
 symbol.error.nonStatic.type=[Symbol]'%1'不是静态类，无法在静态上下文中访问
 symbol.error.nonStatic.symbol=[Symbol]无法从静态上下文中引用非静态 %3 '%1.%2'
-symbol.error.field.writeAfterWrite=[Symbol]修改final字段 '%1.%2'
-symbol.error.field.writeFinal=[Symbol]修改final字段 '%1.%2'
+symbol.error.field.writeAfterWrite=[Symbol]字段 '%1.%2' 已被赋值
+symbol.error.field.writeFinal=[Symbol]修改最终字段 '%1.%2'
 symbol.error.field.readBeforeWrite=[Symbol]非法前向引用 '%1.%2'
 symbol.warn.static_on_half=[Symbol]静态%3应由类型名称'%1.%2'而不是表达式限定
 encloseRef.incompatible.nds=[EncloseRef][Incompatible] %2 不是 %1 的直接超类或超接口
@@ -205,6 +224,8 @@ invoke.incompatible.single="[Invoke]无法将类 %1 中的方法 %2 应用到给
 invoke.incompatible.plural="[Invoke]对于%1找不到合适的方法\n%2"
 lambda.error.untyped=[Lambda]未知的目标类型
 trinary.constant=[Trinary]值总是常量
+this.static=[This]无法在静态上下文中引用this
+this.no_super=[This]%1没有超类引用
 unary.error.notApplicable=[Unary]运算符'%1'不适用于'%2'
 unary.warn.wrapper=[Unary]对包装类型%1的%2操作
 unary.error.void=[Unary]空类型
@@ -226,6 +247,7 @@ invoke.matches=都匹配
 invoke.notApplicable=不适用:
 and=和
 
+invoke.warn.illegalNameList=[Resolve]方法%1的参数列表不合法
 # 类型转换 (注意，当修改TypeCast中对应数值需要同步这里)
 typeCast.warn.rawTypes=[TypeCast]对原始类型的转换: %1 => %2
 typeCast.error.-1=%1无法隐式转换为%2 # char

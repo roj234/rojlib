@@ -240,7 +240,7 @@ public class MyPassIs extends Plugin {
 				CLIUtil.removeBottomLine(sb, true);
 				try {
 					if (ce == 'c') {
-						Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(sb.toString(s.length(), sb.length())), null);
+						Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(sb.substring(s.length(), sb.length())), null);
 						CLIUtil.success("密码已复制到剪贴板");
 					}
 				} catch (Exception ignored) {}

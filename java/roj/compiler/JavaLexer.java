@@ -40,7 +40,7 @@ public final class JavaLexer extends Tokenizer {
 		"package,import," +
 		"default,throws,record,const,var,as,instanceof," +
 		"assert," +
-		"yield,_with,_defer,_async,_await,__struct,package-restricted", ',');
+		"yield,with,defer,_async,_await,__struct,package-restricted,sealed,non-sealed,permits", ',');
 	public static final short
 		FOR = 10, WHILE = 11, DO = 12, CONTINUE = 13, BREAK = 14, CASE = 15, IF = 16, ELSE = 17, GOTO = 18, RETURN = 19, SWITCH = 20,
 		THIS = 21, NEW = 22,

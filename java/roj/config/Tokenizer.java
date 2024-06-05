@@ -189,7 +189,8 @@ public class Tokenizer {
 		}
 		if (seekPos < prevWords.size()) return prevWords.get(seekPos++);
 
-		flushBefore(prevIndex);
+		// 20240608 change from prevIndex
+		flushBefore(index);
 
 		prevLN = LN;
 		prevIndex = index;
@@ -219,24 +220,19 @@ public class Tokenizer {
 	}
 
 	public final void retractWord() {
-		block: {
-			if (seek <= 1) {
-				if (seekPos > 0) {
-					seekPos--;
-					break block;
-				}
-
-				if (seek == 0) {
-					seek = 2;
-					if (lastWord == wd) lastWord.init(lwType, lwBegin, lwStr);
-					break block;
-				}
+		if (seek <= 1) {
+			if (seekPos > 0) {
+				seekPos--;
+				return;
 			}
-			throw new IllegalArgumentException("Unable retract");
-		}
 
-		LN = prevLN;
-		LNIndex = prevIndex;
+			if (seek == 0) {
+				seek = 2;
+				if (lastWord == wd) lastWord.init(lwType, lwBegin, lwStr);
+				return;
+			}
+		}
+		throw new IllegalArgumentException("Unable retract");
 	}
 	// endregion
 	// region 转义
@@ -967,8 +963,8 @@ public class Tokenizer {
 	}
 	// endregion
 	// region 行号
-	private int LNIndex;
-	protected int prevLN, LN;
+	public int LNIndex, LN;
+	protected int prevLN;
 
 	protected void afterWord() {
 		if (LN == 0) return;

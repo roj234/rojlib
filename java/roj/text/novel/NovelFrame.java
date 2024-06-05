@@ -252,7 +252,7 @@ public class NovelFrame extends JFrame {
 				focusLost();
 				prevId = c;
 				prevClick = System.currentTimeMillis();
-				errout.setText(c.data != null ? c.data.toString() : novel_in.toString(c.start, c.end));
+				errout.setText(c.data != null ? c.data.toString() : novel_in.substring(c.start, c.end));
 			} else {
 				focusLost();
 			}
@@ -895,8 +895,8 @@ public class NovelFrame extends JFrame {
 
 	private void sample(CharList in) {
 		GuiUtil.insert(errout, "chars:"+in.length()+
-					   "\nHead 15k\n"+in.toString(0,Math.min(15000, in.length()))+
-					   "\n\n\n\n\n\n\n\n\n\n==========Tail 15k==========\n\n\n\n\n\n\n\n\n\n"+in.toString(Math.max(0, in.length()-15000), in.length()));
+					   "\nHead 15k\n"+in.substring(0,Math.min(15000, in.length()))+
+					   "\n\n\n\n\n\n\n\n\n\n==========Tail 15k==========\n\n\n\n\n\n\n\n\n\n"+in.substring(Math.max(0, in.length()-15000), in.length()));
 	}
 
 	private String mytrim(String c) {

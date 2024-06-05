@@ -61,7 +61,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 			lock = in;
 			type = 2;
 		} else {
-			DynByteBuf buf = pool.allocate(!(in instanceof InputStream), buffer);
+			DynByteBuf buf = pool.allocate(!(in instanceof InputStream), buffer, 0);
 			buf.clear();
 
 			lock = buf;
@@ -85,7 +85,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 				} else {
 					if (ib.capacity() < cd.limit()) {
 						BufferPool.reserve((DynByteBuf) lock);
-						DynByteBuf buf = pool.allocate(ib.isDirect(), cd.limit());
+						DynByteBuf buf = pool.allocate(ib.isDirect(), cd.limit(), 0);
 
 						lock = buf;
 						ib = buf.nioBuffer();

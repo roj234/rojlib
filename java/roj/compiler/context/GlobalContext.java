@@ -176,13 +176,22 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 
 	public boolean hasError() {return hasError;}
 
-	public MethodWriter createMethodPoet(ConstantData unit, MethodNode node) {
-		return new MethodWriter(unit, node);
+	public MethodWriter createMethodPoet(ConstantData file, MethodNode node) {
+		return new MethodWriter(file, node);
 	}
 
-	public void invokeAnnotationProcessor(CompileUnit unit, Attributed key, List<? extends Annotation> annotations) {
-		// DEFINE BY USER
-		debugLogger().info("invokeAnnotationProcessor(): unit = " + unit + ", key = " + key + ", annotations = " + annotations);
+	// DEFINE BY USER
+	public void invokeAnnotationProcessor(CompileUnit file, Attributed node, List<? extends Annotation> annotations) {
+		for (Annotation annotation : annotations) {
+			if (annotation.type().equals("java/lang/Override")) {
+				file.report(Kind.ERROR, "annotation.override");
+			}
+			if (annotation.type().equals("roj/compiler/api/Ignore")) {
+				debugLogger().info("\n\n当前的错误已被忽略\n\n");
+				// 临时解决方案
+				hasError = false;
+			}
+		}
 	}
 
 	public boolean isSpecEnabled(int specId) {return specId != DISABLE_RAW_TYPE;}

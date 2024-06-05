@@ -343,7 +343,7 @@ public final class IOUtil {
 		return sb.append(path).trim()
 				 .replaceInReplaceResult("../", "/")
 				 .replaceInReplaceResult("//", "/")
-				 .toString(sb.length() > 0 && sb.charAt(0) == '/' ? 1 : 0, sb.length());
+				 .substring(sb.length() > 0 && sb.charAt(0) == '/' ? 1 : 0, sb.length());
 	}
 
 	public static long movePath(File from, File to, boolean move) throws IOException {

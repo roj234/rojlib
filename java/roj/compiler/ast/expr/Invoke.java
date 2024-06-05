@@ -129,7 +129,7 @@ public class Invoke extends ExprNode {
 		IType ownMirror = null;
 		List<IType> tpHint = bounds;
 		if (tpHint != null) {
-			for (int i = 0; i < tpHint.size(); i++) tpHint.set(i, ctx.resolveType(tpHint.get(i)));
+			for (int i = 0; i < tpHint.size(); i++) ctx.resolveType(tpHint.get(i));
 		}
 
 		String klass, method;
@@ -154,7 +154,6 @@ public class Invoke extends ExprNode {
 						break block;
 					}
 
-					mode = MUST_VIRTUAL;
 					fn2 = ctx.ep.This().resolve(ctx);
 				} else {
 					// ((java.lang.Object) System.out).println(1);
@@ -179,6 +178,7 @@ public class Invoke extends ExprNode {
 			fn = fn2;
 			// 如果是this，那么要擦到上界 (哦this本来就没有generic，霉逝了)
 			ownMirror = fn2.type();
+			// Notfound
 			if (ownMirror.genericType() == IType.ASTERISK_TYPE) return this;
 			klass = ownMirror.owner();
 		} else if (fn.getClass() == This.class) {
@@ -228,7 +228,7 @@ public class Invoke extends ExprNode {
 
 			ComponentList list = ctx.methodListOrReport(cn, method);
 			if (list == null) {
-				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "{symbol.type} "+cn.name());
+				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+cn.name());
 				break block;
 			}
 
@@ -317,6 +317,7 @@ public class Invoke extends ExprNode {
 	public IType type() { return fn instanceof IType ? ((IType) fn) : desc != null ? desc.get(desc.size()-1) : Asterisk.anyType; }
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
+		var lc = LocalContext.get();
 		byte opcode;
 		// 明显不是构造器
 		if ((methodNode.modifier&Opcodes.ACC_STATIC) != 0) {
@@ -327,7 +328,7 @@ public class Invoke extends ExprNode {
 			}
 			opcode = Opcodes.INVOKESTATIC;
 		} else if (fn instanceof ExprNode expr) {
-			expr.writeDyn(cw, genType1 == null || genType1.genericType() >= IType.ASTERISK_TYPE ? null : cw.ctx1.castTo(genType1, new Type(methodNode.owner), 0));
+			expr.writeDyn(cw, genType1 == null || genType1.genericType() >= IType.ASTERISK_TYPE ? null : lc.castTo(genType1, new Type(methodNode.owner), 0));
 			opcode = (flag&INVOKE_SPECIAL) != 0 ? Opcodes.INVOKESPECIAL : Opcodes.INVOKEVIRTUAL;
 		} else {
 			Type rawType = ((IType) fn).rawType();
@@ -339,7 +340,7 @@ public class Invoke extends ExprNode {
 
 		for (int i = 0; i < args.size(); i++) {
 			ExprNode expr = args.get(i);
-			expr.writeDyn(cw, cw.ctx1.castTo(expr.type(), desc.get(i), 0));
+			expr.writeDyn(cw, lc.castTo(expr.type(), desc.get(i), 0));
 		}
 
 		if ((flag&INTERFACE_CLASS) != 0) {

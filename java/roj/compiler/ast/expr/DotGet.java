@@ -6,6 +6,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.IClass;
+import roj.asm.tree.anno.AnnValEnum;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
@@ -139,7 +140,8 @@ final class DotGet extends VarNode {
 					if (fieldList != null) {
 						inaccessibleThis = fieldList.findField(ctx, ctx.in_static ? ComponentList.IN_STATIC : 0);
 						if (inaccessibleThis.error == null) {
-							parent = ctx.ep.This();
+							begin = ctx.file;
+							parent = (inaccessibleThis.field.modifier&Opcodes.ACC_STATIC) != 0 ? null : ctx.ep.This();
 							flags = 0;
 						}
 					}
@@ -259,9 +261,21 @@ final class DotGet extends VarNode {
 			flags |= FINAL_FIELD;
 			if ((flags&ARRAY_LENGTH) != 0) ctx.report(Kind.ERROR, "dotGet.error.illegalArrayLength");
 		} else if ((fn.modifier&Opcodes.ACC_FINAL) != 0) flags |= FINAL_FIELD;
-		if (part != null && part.equals(ctx.file.name)) flags |= SELF_FIELD;
+
+		// == is better
+		//noinspection all
+		if (part != null && part == ctx.file.name) {
+			flags |= SELF_FIELD;
+			// redirect check to LocalContext
+			if (ctx.in_constructor) flags &= ~FINAL_FIELD;
+		}
 		return this;
 	}
+
+	@Override
+	public boolean isKind(ExprKind kind) {return kind == ExprKind.ENUM_REFERENCE && isStaticField() && (chain[0].modifier&Opcodes.ACC_ENUM) != 0;}
+	@Override
+	public Object constVal() {return isKind(ExprKind.ENUM_REFERENCE) ? new AnnValEnum(begin.name(), chain[0].name()) : super.constVal();}
 
 	@Override
 	public IType type() {return type == null ? Asterisk.anyType : type;}
@@ -280,12 +294,13 @@ final class DotGet extends VarNode {
 
 	@Override
 	public void preStore(MethodWriter cw) {
-		if ((flags&SELF_FIELD) != 0) cw.ctx1.checkSelfField(chain[chain.length-1], true);
+		if ((flags&SELF_FIELD) != 0) LocalContext.get().checkSelfField(chain[chain.length-1], true);
 		write0(cw, chain.length-1);
 	}
 
 	@Override
 	public void preLoadStore(MethodWriter cw) {
+		if ((flags&SELF_FIELD) != 0) LocalContext.get().checkSelfField(chain[chain.length-1], false);
 		preStore(cw);
 		if (!isStaticField()) cw.one(Opcodes.DUP);
 	}
@@ -307,8 +322,6 @@ final class DotGet extends VarNode {
 	private boolean isStaticField() { return chain.length == 1 && (chain[0].modifier & Opcodes.ACC_STATIC) != 0; }
 
 	private void write0(MethodWriter cw, int length) {
-		if ((flags&SELF_FIELD) != 0) cw.ctx1.checkSelfField(chain[chain.length-1], false);
-
 		int i = 0;
 		String owner = chain.length == 1 ? begin.name() : chain[chain.length-2].fieldType().owner();
 		FieldNode fn = chain[0];
@@ -333,6 +346,11 @@ final class DotGet extends VarNode {
 				cw.jump(Opcodes.IFNULL, ifNull);
 			}
 
+			// 应该不需要
+			// 在构造器里没法拿到间接且未初始化的this，ASM除外，但这论外了
+			/*LocalContext lc = LocalContext.get();
+			if (owner.equals(lc.file.name))
+				lc.checkSelfField(fn, false);*/
 			cw.field(opcode, owner, fn.name(), fn.rawDesc());
 			if (++i == length) break;
 

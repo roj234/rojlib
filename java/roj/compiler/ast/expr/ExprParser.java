@@ -19,11 +19,13 @@ import roj.compiler.ast.block.ParseTask;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
+import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.Word;
 import roj.config.auto.Serializer;
 import roj.config.auto.Serializers;
 import roj.config.serial.CVisitor;
+import roj.text.CharList;
 import roj.util.Helpers;
 
 import java.util.Collections;
@@ -158,9 +160,9 @@ public final class ExprParser {
 			node = pendNode;
 			pendNode = null;
 
-			if (node == null && (flag& NAE) != 0) {
+			if (node == null && (flag&NAE) != 0) {
 				node = NaE.INSTANCE;
-				file.fireDiagnostic(Kind.ERROR, "noExpression");
+				file.report(Kind.ERROR, "noExpression");
 			}
 		}
 		return node;
@@ -237,7 +239,7 @@ public final class ExprParser {
 							debug__counter_typeMatchFailed++;
 							wr.retract();
 							cur = parse1(file, STOP_RSB|SKIP_RSB);
-							if (cur == null) file.fireDiagnostic(Kind.ERROR, "expr.cast.lambda");
+							if (cur == null) file.report(Kind.ERROR, "expr.cast.lambda");
 							w = wr.next();
 							break endValueGen;
 						}
@@ -309,7 +311,7 @@ public final class ExprParser {
 
 						newType.setArrayDim(array);
 						if (newType instanceof GenericPrimer && ((GenericPrimer) newType).isGenericArray()) {
-							file.fireDiagnostic(Kind.ERROR, "expr.newArray.generic");
+							file.report(Kind.ERROR, "expr.newArray.generic");
 						}
 
 						if (!args.isEmpty()) {
@@ -346,7 +348,7 @@ public final class ExprParser {
 				case -12: cur = This(); break;
 				// lBrace (define unknown array)
 				case -13:
-					// noinspection all
+					//noinspection TextLabelInSwitchStatement
 					check_param_map:
 					if ((flag & _ENV_INVOKE) != 0) {
 						// invoke_env:
@@ -364,9 +366,9 @@ public final class ExprParser {
 						var npl = new NamedParamList();
 						while (true) {
 							ExprNode val = parse1(file, STOP_RLB|STOP_COMMA|SKIP_COMMA);
-							if (val == null) file.fireDiagnostic(Kind.ERROR, "expr.namedCall.noExpr");
+							if (val == null) file.report(Kind.ERROR, "expr.namedCall.noExpr");
 							if (!npl.add(firstName, val))
-								file.fireDiagnostic(Kind.ERROR, "expr.invoke.paramName", firstName);
+								file.report(Kind.ERROR, "expr.invoke.paramName", firstName);
 
 							w = wr.next();
 							if (w.type() == rBrace) break;
@@ -390,19 +392,38 @@ public final class ExprParser {
 				case -14://lBracket
 					//if ((flag & _ENV_FIELD) == 0) wr.unexpected(w.val());
 
+					ExprNode key;
+					//noinspection TextLabelInSwitchStatement
+					checkEasyMap: {
 					var easyMap = new EasyMap();
 					// 形如 [ exprkey => exprval, ... ] 的直接Map<K, V>构建
 					do {
-						ExprNode key = parse1(file, _ENV_EASYMAP);
-						if (key == null) file.fireDiagnostic(Kind.ERROR, "expr.easyMap.noKey");
+						key = parse1(file, _ENV_EASYMAP|STOP_COMMA|SKIP_COMMA);
+						if (key == null) file.report(Kind.ERROR, "expr.easyMap.noKey");
+						if (w.type() != mapkv) {
+							if (w.type() == comma && easyMap.map.isEmpty()) break checkEasyMap;
+							else ue(wr, w.val(), "expr.easyMap.kvOrRet");
+						}
 						ExprNode val = parse1(file, _ENV_FIELD|STOP_RMB|STOP_COMMA);
-						if (val == null) file.fireDiagnostic(Kind.ERROR, "expr.easyMap.noValue");
+						if (val == null) file.report(Kind.ERROR, "expr.easyMap.noValue");
 
 						easyMap.map.put(key, val);
 						w = wr.next();
 					} while (w.type() != rBracket);
 					cur = easyMap;
-				break;
+					break;
+					}
+
+					List<ExprNode> args = tmp();
+					args.add(key);
+
+					while (w.type() == comma) {
+						args.add(parse1(file, STOP_RMB|STOP_COMMA|SKIP_COMMA|NAE));
+					}
+
+					wr.except(rBracket, "]");
+					cur = new MultiReturn(copyOf(args));
+					break;
 				default:
 					if (_sid == 0) break endValueGen;
 					cur = ((Function<JavaLexer, ExprNode>) custom.get(_sid)).apply(wr);
@@ -552,7 +573,7 @@ public final class ExprParser {
 			// 应用前缀算符
 			if (up != null) {
 				String code = up.setRight(cur);
-				if (code != null) file.fireDiagnostic(Kind.ERROR, code);
+				if (code != null) file.report(Kind.ERROR, code);
 			} else {
 				// Nullable
 				words.add(cur);
@@ -734,10 +755,10 @@ public final class ExprParser {
 			if (arrayType == null) {
 				arrayType = childArrayType;
 				if (arrayType == null) {
-					file.fireDiagnostic(Kind.ERROR, "expr.newArray.noTypePresent");
+					file.report(Kind.ERROR, "expr.newArray.noTypePresent");
 					break updateChild;
 				} else if (arrayType.array() == 0) {
-					file.fireDiagnostic(Kind.ERROR, "expr.newArray.illegalDimension", arrayType);
+					file.report(Kind.ERROR, "expr.newArray.illegalDimension", arrayType);
 					break updateChild;
 				}
 			}
@@ -800,7 +821,8 @@ public final class ExprParser {
 	public ExprNode newTrinary(ExprNode cur, ExprNode middle, ExprNode right) {return new Trinary(cur, middle, right);}
 	// endregion
 
-	// TODO store nodes ?
+	public static UnresolvedExprNode deserialize(String string) throws ParseException {return ConfigMaster.JSON.readObject(serializer(), string);}
+	public static String serialize(ExprNode node) { return ConfigMaster.JSON.writeObject(node, serializer(), new CharList()).toStringAndFree(); }
 	public static void serialize(ExprNode node, CVisitor visitor) { serializer().write(visitor, node); }
 	public static Serializer<ExprNode> serializer() { return Serializers.ANY_OBJECT.serializer(ExprNode.class); }
 }

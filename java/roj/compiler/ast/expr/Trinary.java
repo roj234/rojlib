@@ -78,7 +78,7 @@ final class Trinary extends ExprNode {
 	public void write(MethodWriter cw, boolean noRet) {
 		if (boolHack != 0 && !(val instanceof Binary)) {
 			mustBeStatement(noRet);
-			cw.ctx1.report(Kind.WARNING, "trinary.note.boolean_hack", this);
+			GlobalContext.debugLogger().info("trinary.note.boolean_hack {}", this);
 
 			val.writeDyn(cw, cast);
 			int value = ((AnnValInt) ok.constVal()).value;

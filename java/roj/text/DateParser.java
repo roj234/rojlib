@@ -136,7 +136,7 @@ public class DateParser {
 				case 10, 11 -> cal[9] = dateNum(sb, cal, 2, 1, 42);
 				case 12, 13, 14, 15 -> cal[4] = dateNum(sb, cal, 2, 0, id > 13 ? 11 : 23);
 				case 16 -> {
-					String s = sb.toString(cal[0], cal[0] += 2);
+					String s = sb.substring(cal[0], cal[0] += 2);
 					if (s.equalsIgnoreCase("am")) {
 						cal[8] = 1;
 					} else if (s.equalsIgnoreCase("pm")) {
@@ -177,7 +177,7 @@ public class DateParser {
 					}
 
 					if (i == prevI) throw new IllegalArgumentException("无效的时区Str");
-					tz = TimeZone.getTimeZone(sb.toString(prevI, i));
+					tz = TimeZone.getTimeZone(sb.substring(prevI, i));
 				}
 			}
 			if (optional && cal[0] == sb.length()) break;

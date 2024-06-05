@@ -1,9 +1,9 @@
 package roj.compiler.ast;
 
 import roj.asm.type.IType;
-import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.context.LocalContext;
 
 /**
  * Not an Expression
@@ -16,7 +16,7 @@ public class NaE extends ExprNode {
 	@Override
 	public String toString() {return "<fallback>";}
 	@Override
-	public IType type() {return new Type("java/lang/Object");}
+	public IType type() {return LocalContext.OBJECT_TYPE;}
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {}
 }

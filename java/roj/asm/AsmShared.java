@@ -18,6 +18,7 @@ public final class AsmShared {
 	private static final ThreadLocal<AsmShared> BUFFERS = ThreadLocal.withInitial(AsmShared::new);
 
 	public static AsmShared local() { return BUFFERS.get(); }
+	public static void drop() { BUFFERS.remove(); }
 	public static ByteList getBuf() { return BUFFERS.get().current(); }
 
 	private final CodeWriter cw = new CodeWriter();

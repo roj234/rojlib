@@ -1,5 +1,10 @@
 package roj.compiler;
 
+import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipFileWriter;
+import roj.asm.Parser;
+import roj.asm.tree.ConstantData;
+import roj.asmx.launcher.Bootstrap;
 import roj.collect.MyHashMap;
 import roj.compiler.api.Constant;
 import roj.compiler.context.CompileUnit;
@@ -9,13 +14,11 @@ import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.SimpleDiagnosticListener;
 import roj.io.IOUtil;
-import roj.reflect.ClassDefiner;
 import roj.text.ACalendar;
 import roj.text.TextUtil;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +31,9 @@ import java.util.function.Consumer;
 public final class Lavac {
 	@Constant
 	public static String getCompileTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
-	public static final String VERSION = "0.9.1[RC] (compiled on "+getCompileTime()+")";
+	public static String getCurrentTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
+
+	public static final String VERSION = "0.9.2[RC] (compiled on "+getCompileTime()+")";
 
 	int debugOps = 10;
 	GlobalContext ctx;
@@ -120,7 +125,7 @@ public final class Lavac {
 				case "-GC" -> gcName = args[++i];
 				case "-LC" -> lcName = args[++i];
 				case "-T" -> tweakerOps.put(args[++i], args[++i]);
-				default -> throw new RuntimeException("Invalid config[" + i + "]=" + args[i]);
+				default -> throw new RuntimeException("Invalid config["+i+"]="+args[i]);
 			}
 		}
 
@@ -135,22 +140,28 @@ public final class Lavac {
 			compiler.addCp(f);
 		}
 
+		LavaCompiler.initDefaultPlugins(compiler.ctx);
+
 		while (i < args.length) {
 			addSrc(new File(args[i++]), compiler.CompileUnits);
 		}
 
-		File dst = bin == null ? null : new File(bin);
-		if (dst != null && !dst.isDirectory() && !dst.mkdirs()) {
-			throw new RuntimeException("Binary path is not exist and unable to create.");
-		}
+		File dst = bin == null ? new File("lava-class.zip") : new File(bin);
 
 		SimpleDiagnosticListener diagnostic = new SimpleDiagnosticListener(maxError, maxWarn, 0);
 
-		System.out.println("files="+compiler.CompileUnits.size());
 		boolean ok = compiler.compile(dst, diagnostic);
 		System.out.println("success="+ok);
 
 		diagnostic.conclusion();
+
+		try {
+			Bootstrap.classLoader.enableFastZip(dst.toURI().toURL());
+			((Runnable) Class.forName("StdIn").newInstance()).run();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
 		System.exit(ok ? 0 : -1);
 	}
 
@@ -160,7 +171,7 @@ public final class Lavac {
 
 		boolean done = false;
 		compile:
-		try {
+		try (ZipFileWriter zfw = new ZipFileWriter(dst)) {
 			for (int i = ctxs.size() - 1; i >= 0; i--) {
 				if (!ctxs.get(i).S0_Init())
 					// special process for package-info or empty java
@@ -184,21 +195,23 @@ public final class Lavac {
 			}
 			if (ctx.hasError()) break compile;
 			// write
+
 			for (int i = 0; i < ctxs.size(); i++) {
-				CompileUnit ctx = ctxs.get(i);
-				try (FileOutputStream fos = new FileOutputStream(new File(dst, ctx.name+".class"))) {
-					ctx.getBytes().writeToStream(fos);
-					((Runnable) ClassDefiner.defineGlobalClass(ctx).newInstance()).run();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
+				CompileUnit data = ctxs.get(i);
+				zfw.beginEntry(new ZEntry(data.name.concat(".class")));
+				Parser.toByteArrayShared(data).writeToStream(zfw);
 			}
+			for (ConstantData data : ctx.getGeneratedClasses()) {
+				zfw.beginEntry(new ZEntry(data.name.concat(".class")));
+				Parser.toByteArrayShared(data).writeToStream(zfw);
+			}
+
+			zfw.setComment("Lavac v"+VERSION);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
 		ctxs.clear();
-
 		return done;
 	}
 

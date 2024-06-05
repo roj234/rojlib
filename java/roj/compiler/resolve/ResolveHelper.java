@@ -177,6 +177,7 @@ public final class ResolveHelper {
 	// region 方法
 	private MyHashMap<String, ComponentList> methods;
 
+	public ComponentList findMethod(GlobalContext ctx, String name) {return getMethods(ctx).get(name);}
 	/*
 	 * <pre> 调用的实际方法由以下查找过程选择：
 	 * C = 符号引用的类名称
@@ -201,9 +202,12 @@ public final class ResolveHelper {
 	 * 2. M 未设置 ACC_PRIVATE 或 ACC_STATIC 标志
 	 * 3. 如果方法是在接口 I 中声明的，则接口 I 的子接口中没有 C 的最大特异性超接口方法
 	 */
-	public synchronized ComponentList findMethod(GlobalContext ctx, String name) throws TypeNotPresentException {
+	public MyHashMap<String, ComponentList> getMethods(GlobalContext ctx) {
 		if (methods == null) {
-			methods = new MyHashMap<>();
+			synchronized (this) {
+				if (methods != null) return methods;
+				methods = new MyHashMap<>();
+			}
 
 			IClass type = owner;
 			List<? extends RawNode> methods1 = type.methods();
@@ -261,15 +265,19 @@ public final class ResolveHelper {
 			}
 		}
 
-		return methods.get(name);
+		return methods;
 	}
 	//endregion
 	//region 字段
 	private MyHashMap<String, ComponentList> fields;
 
-	public synchronized ComponentList findField(GlobalContext ctx, String name) throws TypeNotPresentException {
+	public ComponentList findField(GlobalContext ctx, String name) {return getFields(ctx).get(name);}
+	public MyHashMap<String, ComponentList> getFields(GlobalContext ctx) {
 		if (fields == null) {
-			fields = new MyHashMap<>();
+			synchronized (this) {
+				if (fields != null) return fields;
+				fields = new MyHashMap<>();
+			}
 
 			IClass type = owner;
 			List<? extends RawNode> fields1 = type.fields();
@@ -324,7 +332,7 @@ public final class ResolveHelper {
 			}
 		}
 
-		return fields.get(name);
+		return fields;
 	}
 	//endregion
 	// region 类型拥有者

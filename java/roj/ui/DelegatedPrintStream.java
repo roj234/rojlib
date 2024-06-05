@@ -95,7 +95,7 @@ public abstract class DelegatedPrintStream extends PrintStream {
 	public final void print(String v) { append(v == null ? "null" : v); }
 	public final void print(Object v) { append(v == null ? "null" : v.toString()); }
 
-	public final synchronized void println() { newLine(); }
+	public final synchronized void println() { newLine(); flush(); }
 	public final synchronized void println(boolean v) { flushBytes(); sb.append(v); newLine(); flush(); }
 	public final synchronized void println(char v) { flushBytes(); sb.append(v); newLine(); flush(); }
 	public final synchronized void println(int v) { flushBytes(); sb.append(v); newLine(); flush(); }

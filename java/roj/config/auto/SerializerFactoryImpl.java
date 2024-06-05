@@ -406,12 +406,12 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		if ((type.getModifiers() & (ACC_ABSTRACT|ACC_INTERFACE)) != 0) return true;
 		return type == Object.class;
 	}
-	/**@param flag 只检查这些FLAG，其中SAFE不影响生成结果: CHECK_PARENT,SERIALIZE_PARENT,SAFE,NO_CONSTRUCTOR */
+	/**@param flag 只检查这些FLAG，其中SAFE不影响生成结果: CHECK_PARENT,SERIALIZE_PARENT,SAFE,NO_CONSTRUCTOR,OPTIONAL_BY_DEFAULT */
 	private Adapter make(Class<?> type, String name, int flag) {
 		Adapter ser;
 
 		if (!type.isEnum() && (type.getComponentType() == null || !type.getComponentType().isPrimitive())) {
-			name = ((this.flag&OBJECT_POOL) | (flag&(NO_CONSTRUCTOR|SERIALIZE_PARENT)))+";"+name;
+			name = ((this.flag&OBJECT_POOL) | (flag&(NO_CONSTRUCTOR|SERIALIZE_PARENT|OPTIONAL_BY_DEFAULT)))+";"+name;
 		}
 
 		var GENERATED = Isolation.computeIfAbsent(type.getClassLoader(), Fn).generated;
@@ -440,9 +440,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 				lock.unlock();
 			}
 
-			if (ser instanceof GA) {
-				((GA) ser).init(new IntBiMap<>(fieldIds), optionalEx);
-			}
+			if (ser instanceof GA g) g.init(new IntBiMap<>(fieldIds), optionalEx);
 		}
 		return ser;
 	}
@@ -473,8 +471,13 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		if ((this.flag&OBJECT_POOL) != 0 && make != dynamicRoot) make = new ObjectPoolWrapper(make);
 		return make;
 	}
-	final Adapter gpa(Class<?> type, String generic) {
-		return make(generic, type, generic == null ? null : (Generic) Signature.parse(generic, Signature.FIELD).values.get(0), true);
+	// Get parent adapter
+	@ReferenceByGeneratedClass
+	final Adapter gpa(Class<?> type) {
+		Adapter ser = make(type, type.getName().replace('.', '/'), SERIALIZE_PARENT | NO_CONSTRUCTOR);
+		if (ser instanceof GA g) ser = (Adapter) g.clone();
+		if (ser instanceof GA g) g.init2(this, null);
+		return ser;
 	}
 	// endregion
 	// region ASM
@@ -652,22 +655,19 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		fieldIds.clear();
 		parentExist.clear();
 		Adapter parentSerInst;
-		if ((flag & SERIALIZE_PARENT) != 0 && !data.parent.equals("java/lang/Object")) {
+		if ((flag & SERIALIZE_PARENT) != 0 && !"java/lang/Object".equals(data.parent) && data.parent != null) {
 			parentSerInst = make(o.getSuperclass(), data.parent, perClassFlag.applyAsInt(o.getSuperclass()));
 			assert parentSerInst instanceof GA;
 
 			begin(null);
 			currentObject = o.getName().replace('.', '/');
 
-			Signature sign = data.parsedAttr(data.cp, Attribute.SIGNATURE);
 			parentSer = c.newField(ACC_PRIVATE, "Sp", "Lroj/config/auto/Adapter;");
 			serializerId.putInt(null, parentSer);
 			copy.one(ALOAD_0);
 			copy.one(ALOAD_1);
 			copy.ldc(new CstClass(data.parent));
-			if (sign == null || sign.values.get(0).genericType() != IType.GENERIC_TYPE) copy.one(ACONST_NULL);
-			else copy.ldc(new CstString(sign.values.get(0).toDesc()));
-			copy.invoke(DIRECT_IF_OVERRIDE, "roj/config/auto/SerializerFactoryImpl", "gpa", "(Ljava/lang/Class;Ljava/lang/String;)Lroj/config/auto/Adapter;");
+			copy.invoke(DIRECT_IF_OVERRIDE, "roj/config/auto/SerializerFactoryImpl", "gpa", "(Ljava/lang/Class;)Lroj/config/auto/Adapter;");
 			copy.field(PUTFIELD, c, parentSer);
 
 			IntBiMap<String> oldFieldIds = ((GA) parentSerInst).fn();
@@ -690,8 +690,6 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			begin(null);
 			currentObject = o.getName().replace('.', '/');
 		}
-
-		if (data.fields.size() == 0 && fieldIds.size() == 0) throw new IllegalArgumentException("这"+o.getName()+"味道不对啊,怎么一个字段都没有");
 
 		c.putAttr(new AttrString("SourceFile", o.getName()));
 		CodeWriter cw;
@@ -760,7 +758,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		cw.one(IRETURN);
 		// endregion
 
-		boolean defaultOptional = false;
+		boolean defaultOptional = (flag&OPTIONAL_BY_DEFAULT) != 0;
 		int optional = 0;
 		optionalEx = null;
 
@@ -901,8 +899,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	private void invokeParent(CodeWriter cw, byte opcode) {
 		cw.one(ALOAD_0);
 		cw.field(GETFIELD, c, parentSer);
-		cw.vars(opcode, 1);
-		cw.one(ALOAD_2);
+		cw.one(ALOAD_1);
+		cw.vars(opcode, 2);
 		cw.invoke(INVOKEVIRTUAL, "roj/config/auto/Adapter", cw.mn.name(), cw.mn.rawDesc());
 	}
 
@@ -998,6 +996,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 		if (set == null) {
 			if (unsafePut != null) {
+				//noinspection MagicConstant
 				Type fType = Type.std(actualType);
 				cw.varStore(fType, 2);
 				cw.field(GETSTATIC, "roj/reflect/ReflectionUtils", "u", "Lsun/misc/Unsafe;");
@@ -1169,6 +1168,15 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			cw.invoke(INVOKESTATIC, "java/lang/Integer", "toString", "(I)Ljava/lang/String;");
 			cw.invoke(INVOKESPECIAL, "java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V");
 			cw.one(ATHROW);
+		}
+
+		if (methodType == Type.CLASS) {
+			t.seg.branch(-2, cw.label());
+			// todo 把这个抽走，不过现在貌似能跑了……
+			cw.one(ALOAD_1);
+			cw.one(ICONST_1);
+			cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/auto/AdaptContext", "popd", "(Z)V");
+			cw.one(RETURN);
 		}
 		return t;
 	}

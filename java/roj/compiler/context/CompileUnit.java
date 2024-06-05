@@ -3,14 +3,17 @@ package roj.compiler.context;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.AnnVal;
+import roj.asm.tree.anno.AnnValArray;
+import roj.asm.tree.anno.AnnValInt;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.attr.MethodParameters.MethodParam;
 import roj.asm.type.*;
+import roj.asm.visitor.AttrCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.asmx.AnnotationSelf;
+import roj.asmx.mapper.util.NameAndType;
 import roj.collect.*;
 import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
@@ -18,14 +21,13 @@ import roj.compiler.asm.*;
 import roj.compiler.ast.block.ParseTask;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
-import roj.compiler.resolve.MethodResult;
+import roj.compiler.resolve.ResolveHelper;
 import roj.compiler.resolve.TypeCast;
 import roj.compiler.resolve.TypeResolver;
 import roj.config.ParseException;
 import roj.config.Word;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -35,8 +37,7 @@ import java.util.stream.Collectors;
 
 import static roj.asm.Opcodes.*;
 import static roj.compiler.JavaLexer.*;
-import static roj.config.Word.EOF;
-import static roj.config.Word.LITERAL;
+import static roj.config.Word.*;
 
 /**
  * @author solo6975
@@ -46,28 +47,34 @@ public final class CompileUnit extends ConstantData {
 	public static final Type RUNTIME_EXCEPTION = new Type("java/lang/RuntimeException");
 	private Object _next;
 
-	static final int ACC_METHOD_INACCEPTABLE = ACC_TRANSIENT|ACC_VOLATILE;
-	static final int ACC_FIELD_INACCEPTABLE = ACC_STRICT|ACC_NATIVE;
-	static final int _ACC_DEFAULT = 1 << 17, _ACC_ANNOTATION = 1 << 18, _ACC_RECORD = 1 << 19, _ACC_INNERCLASS = 0x0040, _ACC_ANONYMOUS = 0x0080;
+	static final int ACC_METHOD_ILLEGAL = ACC_TRANSIENT|ACC_VOLATILE, ACC_FIELD_ILLEGAL = ACC_STRICT|ACC_NATIVE|ACC_ABSTRACT;
+	static final int
+		_ACC_DEFAULT = 1 << 17, _ACC_ANNOTATION = 1 << 18, _ACC_RECORD = 1 << 19, _ACC_STRUCT = 1 << 20,
+		_ACC_INNERCLASS = 0x0040, _ACC_ANONYMOUS = 0x0080;
 
-	private JavaLexer wr;
+	private final String path;
+	private final JavaLexer wr;
 
-	final TypeResolver tr;
+	private final TypeResolver tr;
 
-	SimpleList<AnnotationPrimer> annotations;
+	// S0 only
+	private SimpleList<AnnotationPrimer> annotations;
 
-	// S0之后的诊断需要用到的起始位置等
-	int classIdx;
-	IntList methodIdx = new IntList(), fieldIdx = new IntList();
-
-	private List<String> interfacesPre = Helpers.cast(interfaces);
-	private Signature signature;
+	// 诊断的起始位置
+	private int classIdx;
+	private final IntList methodIdx = new IntList(), fieldIdx = new IntList();
 
 	// S2前的缓存
-	private SignaturePrimer currentNode;
+	private MyHashSet<IType> toResolve = new MyHashSet<>();
 
-	private MyHashSet<IType> toResolve_unc = new MyHashSet<>();
-	private MyHashSet<IType> genericPending = new MyHashSet<>();
+	// Generic
+	private SignaturePrimer signature, currentNode;
+
+	// Supplementary
+	private int recordFieldPos;
+	public MyHashSet<FieldNode> finalFields = new MyHashSet<>(Hasher.identity());
+	private MyHashSet<Desc> abstractMethods = new MyHashSet<>();
+	private AccessData overridableMethods = new AccessData(null, 0, "myClass", null);
 
 	// code block task
 	private final List<ParseTask> lazyTasks = new SimpleList<>();
@@ -77,14 +84,13 @@ public final class CompileUnit extends ConstantData {
 	private CompileUnit _parent;
 	public int _children;
 
-	private String path;
 	private LocalContext ctx;
 
 	public CompileUnit(String name) {
 		path = name;
 
 		ctx = LocalContext.get();
-		if (ctx.classes.isSpecEnabled(CompilerSpec.SOURCE_FILE)) putAttr(new AttrString(AttrString.SOURCE,name));
+		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_SOURCE_FILE)) putAttr(new AttrString(AttrString.SOURCE,name));
 
 		tr = new TypeResolver();
 		wr = new JavaLexer();
@@ -94,17 +100,18 @@ public final class CompileUnit extends ConstantData {
 		wr.init(IOUtil.readString(in));
 	}
 
+	public GlobalContext ctx() {return ctx.classes;}
+	public JavaLexer getLexer() {return wr;}
 	public TypeResolver getTypeResolver() {return tr;}
 
 	// region 文件中的其余类
-
 	private CompileUnit(CompileUnit parent) {
 		this.path = parent.path;
 
 		LocalContext.depth(1);
 		ctx = LocalContext.get();
 
-		if (ctx.classes.isSpecEnabled(CompilerSpec.SOURCE_FILE))
+		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_SOURCE_FILE))
 			putAttr(parent.attrByName(Attribute.SourceFile.name));
 
 		_parent = parent;
@@ -114,6 +121,7 @@ public final class CompileUnit extends ConstantData {
 		classIdx = wr.index;
 
 		tr = parent.tr;
+		toResolve = parent.toResolve;
 	}
 
 	private static CompileUnit _newHelper(CompileUnit p) throws ParseException {
@@ -123,10 +131,26 @@ public final class CompileUnit extends ConstantData {
 		c.name(i <= 0 ? "" : p.name.substring(0, i));
 		c.S1_Struct();
 
+		p.ctx.classes.addCompileUnit(c);
 		LocalContext.depth(-1);
 		return c;
 	}
+	private static CompileUnit _newInner(CompileUnit p, int flag) throws ParseException {
+		CompileUnit c = new CompileUnit(p);
 
+		c.name(p.name.concat("$"));
+		c.access = (char) (flag|_ACC_INNERCLASS);
+
+		var desc = InnerClasses.InnerClass.innerClass(c.name, 0);
+		p._innerClass().add(desc);
+		c._innerClass().add(desc);
+
+		c.S1_Struct();
+
+		p.ctx.classes.addCompileUnit(c);
+		LocalContext.depth(-1);
+		return c;
+	}
 	public CompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException {
 		CompileUnit c = new CompileUnit(this);
 
@@ -145,12 +169,11 @@ public final class CompileUnit extends ConstantData {
 		c.access = ACC_SYNTHETIC|ACC_FINAL|ACC_SUPER|_ACC_ANONYMOUS;
 
 		c.copyTmpFromCache();
-		ctx.classes.addCompileUnit(c);
 		c.body();
 
-		InnerClasses.InnerClass desc = InnerClasses.InnerClass.anonymous(c.name, c.access);
-		_innerClass(this).add(desc);
-		_innerClass(c).add(desc);
+		var desc = InnerClasses.InnerClass.anonymous(c.name, c.access);
+		this._innerClass().add(desc);
+		c._innerClass().add(desc);
 
 		EnclosingMethod ownerAttr = new EnclosingMethod();
 		ownerAttr.owner = name;
@@ -165,40 +188,12 @@ public final class CompileUnit extends ConstantData {
 		return c;
 	}
 
-	private static CompileUnit _newInner(CompileUnit p, int flag) throws ParseException {
-		CompileUnit c = new CompileUnit(p);
-
-		c.name(p.name.concat("$"));
-		c.access = (char) (flag|_ACC_INNERCLASS);
-
-		InnerClasses.InnerClass desc = InnerClasses.InnerClass.innerClass(c.name, 0);
-		_innerClass(p).add(desc);
-		_innerClass(c).add(desc);
-
-		c.S1_Struct();
-
-		LocalContext.depth(-1);
-		return c;
-	}
-
-	private static List<InnerClasses.InnerClass> _innerClass(CompileUnit parent) {
-		InnerClasses c = parent.parsedAttr(parent.cp, Attribute.InnerClasses);
-		if (c == null) parent.putAttr(c = new InnerClasses());
+	public List<InnerClasses.InnerClass> _innerClass() {
+		InnerClasses c = parsedAttr(cp, Attribute.InnerClasses);
+		if (c == null) putAttr(c = new InnerClasses());
 		return c.classes;
 	}
-
 	// endregion
-
-	public String getSimpleName() {
-		int m = name.lastIndexOf('$');
-		if (m < 0) m = name.lastIndexOf('/');
-		if (m < 0) return name;
-		return name.substring(m + 1);
-	}
-
-	public JavaLexer getLexer() {return wr;}
-	public GlobalContext ctx() {return ctx.classes;}
-
 	// region 阶段0 package、import、同时检查package-info
 	public boolean S0_Init() throws ParseException {
 		JavaLexer wr = this.wr;// = (JavaLexer) new JavaLexer().init(IOUtil.readUTF(in));
@@ -233,7 +228,7 @@ public final class CompileUnit extends ConstantData {
 			if (tmp.charAt(tmp.length() - 1) == '*') {
 				// import *
 				if (tmp.length() == 1) {
-					fireDiagnostic(Kind.WARNING, "import.any");
+					report(Kind.WARNING, "import.any");
 					tmp.clear();
 					tr.setImportAny(true);
 				} else {
@@ -245,7 +240,7 @@ public final class CompileUnit extends ConstantData {
 				if (!list.contains(tmp)) list.add(tmp.toString());
 			} else {
 				int i = tmp.lastIndexOf("/");
-				if (i < 0) fireDiagnostic(Kind.SEVERE_WARNING, "import.unpackaged");
+				if (i < 0) report(Kind.SEVERE_WARNING, "import.unpackaged");
 
 				MyHashMap<String, String> map = !impField ? tr.getImportClass() : tr.getImportStatic();
 				String qualified = tmp.toString();
@@ -257,7 +252,7 @@ public final class CompileUnit extends ConstantData {
 
 				String name = wr.nextIf(AS) ? wr.next().val() : qualified.substring(i+1);
 				if ((qualified = map.put(name, qualified)) != null) {
-					fireDiagnostic(Kind.ERROR, "import.conflict", tmp, name, qualified);
+					report(Kind.ERROR, "import.conflict", tmp, name, qualified);
 				}
 			}
 
@@ -276,9 +271,6 @@ public final class CompileUnit extends ConstantData {
 	public CharList copyTmpFromCache() {
 		LocalContext cache = ctx;
 
-		toResolve_unc = cache.toResolve_unc;
-		toResolve_unc.clear();
-
 		annotations = cache.annotationTmp;
 		annotations.clear();
 
@@ -288,9 +280,11 @@ public final class CompileUnit extends ConstantData {
 
 	public void S1_Struct() throws ParseException {
 		LocalContext ctx = this.ctx = LocalContext.get();
+		ctx.setClass(this);
 
 		tr.init(ctx);
 		copyTmpFromCache();
+		List<String> itfs = Helpers.cast(interfaces);
 
 		JavaLexer wr = this.wr;
 
@@ -307,30 +301,34 @@ public final class CompileUnit extends ConstantData {
 				acc |= ACC_SUPER;
 			break;
 			case INTERFACE: // interface
-				if ((acc & (ACC_FINAL)) != 0) fireDiagnostic(Kind.ERROR, "modifier.conflict:interface:final");
+				if ((acc & (ACC_FINAL)) != 0) report(Kind.ERROR, "modifier.conflict:interface:final");
 				acc |= ACC_ABSTRACT|ACC_INTERFACE;
 			break;
 			case ENUM: // enum
-				if ((acc & (ACC_ABSTRACT)) != 0) fireDiagnostic(Kind.ERROR, "modifier.conflict:enum:abstract");
+				if ((acc & (ACC_ABSTRACT)) != 0) report(Kind.ERROR, "modifier.conflict:enum:abstract");
 				acc |= ACC_ENUM|ACC_FINAL;
 				parent("java/lang/Enum");
 			break;
 			case AT_INTERFACE: // @interface
-				if ((acc & (ACC_FINAL)) != 0) fireDiagnostic(Kind.ERROR, "modifier.conflict:@interface:final");
+				if ((acc & (ACC_FINAL)) != 0) report(Kind.ERROR, "modifier.conflict:@interface:final");
 				acc |= ACC_ANNOTATION|ACC_INTERFACE|ACC_ABSTRACT;
-				interfacesPre.add("java/lang/annotation/Annotation");
+				itfs.add("java/lang/annotation/Annotation");
 			break;
 			case RECORD:
 				acc |= ACC_FINAL|_ACC_RECORD;
 				parent("java/lang/Record");
 			break;
-			default: throw wr.err("unexpected:"+w.val()+":cu.except.type");
+			case STRUCT:
+				acc |= ACC_FINAL|_ACC_RECORD|_ACC_STRUCT;
+				parent(null);
+			break;
+			default: throw wr.err("unexpected_2:"+w.val()+":cu.except.type");
 		}
 		access = (char)acc;
 
 		if ((acc&_ACC_INNERCLASS) != 0) {
-			List<InnerClasses.InnerClass> c = _innerClass(this);
 			if ((acc & (ACC_INTERFACE|ACC_ENUM)) != 0) acc |= ACC_STATIC;
+			var c = _innerClass();
 			c.get(c.size()-1).flags = (char) acc;
 		}
 
@@ -349,7 +347,7 @@ public final class CompileUnit extends ConstantData {
 		// 继承
 		checkExtends:
 		if (w.type() == EXTENDS) {
-			if ((acc & (ACC_ENUM|ACC_ANNOTATION|_ACC_RECORD)) != 0) fireDiagnostic(Kind.ERROR, "cu.noInheritance", name, parent);
+			if ((acc & (ACC_ENUM|ACC_ANNOTATION|_ACC_RECORD)) != 0) report(Kind.ERROR, "cu.noInheritance", name, parent);
 			if ((acc & ACC_INTERFACE) != 0) break checkExtends;
 
 			IType type = _type(wr, ctx.tmpList, 0);
@@ -359,37 +357,66 @@ public final class CompileUnit extends ConstantData {
 			w = wr.next();
 		}
 
+		structCheck:{
 		// record
-		if (w.type() == lParen && (acc & _ACC_RECORD) != 0) {
+		recordCheck:
+		if ((acc & _ACC_RECORD) != 0) {
+			if (w.type() != lParen) {
+				report(Kind.ERROR, "cu.record.header");
+				break recordCheck;
+			}
+
 			do {
 				_modifier(wr, _ACC_ANNOTATION);
 
 				IType type = _type(wr, ctx.tmpList, TYPE_PRIMITIVE|TYPE_GENERIC);
-				if (type.genericType() != 0) _signature().returns = (Generic) type;
+				if (type.genericType() != 0) _signature().returns = type;
 
 				String name = wr.except(LITERAL, "cu.name").val();
 
 				FieldNode field = new FieldNode(ACC_PUBLIC|ACC_FINAL, name, type.rawType());
 
 				if (!annotations.isEmpty()) addAnnotation(field, new SimpleList<>(annotations));
-				Signature s = _signatureCommit((SignaturePrimer) signature, Signature.FIELD, null);
+				Signature s = _signatureCommit(signature, Signature.FIELD, null);
 				if (s != null) field.putAttr(s);
 
 				fields.add(field);
 				fieldIdx.add(w.pos());
 
 				w = wr.next();
+				if (w.type() == lBracket) {
+					// C-style array definition
+					field.modifier |= ACC_NATIVE; // SPECIAL PROCESSING
+
+					List<AnnVal> list = new SimpleList<>();
+					do {
+						list.add(AnnValInt.valueOf(wr.except(INTEGER).asInt()));
+						wr.except(rBracket);
+						w = wr.next();
+					} while (w.type() == lBracket);
+
+					Type clone = field.fieldType().clone();
+					clone.setArrayDim(list.size());
+					field.fieldType(clone);
+
+					field.putAttr(new AnnotationDefault(new AnnValArray(list)));
+				}
 			} while (w.type() == comma);
 
-			if (w.type() != rParen) ctx.report(Kind.ERROR, "cu.except.record");
+			if (w.type() != rParen) throw wr.err("unexpected_2:"+w.val()+":cu.except.record");
 			w = wr.next();
 
 			recordFieldPos = fields.size();
+
+			if ((acc & _ACC_STRUCT) != 0) {
+				access |= ACC_NATIVE;
+				if (w.type() != lBrace || !wr.nextIf(rBrace)) throw wr.err("cu.struct.antibody");
+				break structCheck;
+			}
 		}
 
 		// 实现
 		if (w.type() == ((acc & ACC_INTERFACE) != 0 ? EXTENDS : IMPLEMENTS)) {
-			List<String> itfs = interfacesPre;
 			do {
 				IType type = _type(wr, ctx.tmpList, 0);
 				if (type.genericType() > 0 || currentNode != null) _signature()._impl(type);
@@ -401,10 +428,12 @@ public final class CompileUnit extends ConstantData {
 
 		wr.retractWord();
 
-		signature = _signatureCommit(_parent == null ? null : (SignaturePrimer) _parent.signature, Signature.CLASS, null);
+		signature = _signatureCommit(_parent == null ? null : _parent.signature, Signature.CLASS, null);
 		if (signature != null) putAttr(signature);
 
 		body();
+		}
+		ctx.classes.addCompileUnit(this);
 
 		// 辅助类 (把文件读完)
 		if (_parent == null) while (wr.hasNext()) {
@@ -437,11 +466,11 @@ public final class CompileUnit extends ConstantData {
 			w = wr.next();
 			while (w.type() == LITERAL) {
 				String name = w.val();
-				if (!names.add(name)) fireDiagnostic(Kind.ERROR, "cu.nameConflict", ctx.currentCodeBlockForReport(), "symbol.field", name);
+				if (!names.add(name)) report(Kind.ERROR, "cu.nameConflict", ctx.currentCodeBlockForReport(), "symbol.field", name);
 
 				fieldIdx.add(w.pos());
 
-				FieldNode f = new FieldNode(ACC_PUBLIC|ACC_STATIC|ACC_FINAL, name, selfType);
+				FieldNode f = new FieldNode(ACC_PUBLIC|ACC_STATIC|ACC_FINAL|ACC_ENUM, name, selfType);
 				lazyTasks.add(ParseTask.Enum(this, fields.size(), f));
 				fields.add(f);
 
@@ -503,7 +532,7 @@ public final class CompileUnit extends ConstantData {
 			// 3.3.2 方法、字段、构造器
 			mof: {
 				constructor:
-				if (w.val().equals(getSimpleName())) {
+				if (isConstructor(w.val())) {
 					wr.mark();
 					if (wr.next().type() != lParen) {
 						wr.retract();
@@ -516,24 +545,37 @@ public final class CompileUnit extends ConstantData {
 
 					// 接口不能有构造器
 					if ((access & ACC_INTERFACE) != 0)
-						fireDiagnostic(Kind.ERROR, "cu.noConstructor:interface");
+						report(Kind.ERROR, "cu.noConstructor:interface");
 
 					// 枚举必须是private构造器
 					else if ((access & ACC_ENUM) != 0) {
 						if ((acc & (ACC_PUBLIC|ACC_PROTECTED)) != 0) {
-							fireDiagnostic(Kind.ERROR, "cu.noConstructor.enum");
+							report(Kind.ERROR, "cu.noConstructor.enum");
 						} else {
 							acc |= ACC_PRIVATE;
 						}
 					}
 					break mof;
 				}
-				wr.retractWord();
 
 				// ## 5.1.3 类型
-				IType type1 = _type(wr, tmp, TYPE_PRIMITIVE|TYPE_GENERIC);
+				IType type1;
+				if (w.type() == lBracket) {
+					// [ra, rb, rc]
+					Generic g = new Generic("roj/compiler/runtime/ReturnStack", 0, Generic.EX_NONE);
+					type1 = g;
+					do {
+						g.addChild(_type(wr, tmp, TYPE_PRIMITIVE|TYPE_GENERIC));
+						w = wr.next();
+					} while (w.type() == comma);
+					if (w.type() != rBracket) throw wr.err("unexpected_2:"+w.type()+":cu.except.multiArg");
+				} else {
+					wr.retractWord();
+					type1 = _type(wr, tmp, TYPE_PRIMITIVE|TYPE_GENERIC);
+				}
+
 				if (type1.genericType() != 0)
-					_signature().returns = (Generic) type1;
+					_signature().returns = type1;
 				type = type1.rawType();
 
 				// method or field
@@ -544,7 +586,8 @@ public final class CompileUnit extends ConstantData {
 
 			if (w.type() == lParen) { // method
 				methodIdx.add(w.pos());
-				if ((acc & ACC_METHOD_INACCEPTABLE) != 0) fireDiagnostic(Kind.ERROR, "modifier.notAllowed", acc);
+				if ((acc&ACC_METHOD_ILLEGAL) != 0) report(Kind.ERROR, "modifier.notAllowed", showModifiers(acc&ACC_METHOD_ILLEGAL, ACC_SHOW_FIELD));
+				if ((acc&ACC_ABSTRACT) != 0 && (access&ACC_ABSTRACT) == 0)  report(Kind.ERROR, "cu.method.noAbstract", this.name, name);
 
 				MethodNode method = new MethodNode(acc, this.name, name, "()V");
 				method.setReturnType(type);
@@ -560,7 +603,7 @@ public final class CompileUnit extends ConstantData {
 
 					boolean lsVarargs = false;
 					MethodParameters parAccName;
-					if (ctx.classes.isSpecEnabled(CompilerSpec.KEEP_PARAMETER_NAME)) {
+					if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_METHOD_PARAMETERS)) {
 						parAccName = new MethodParameters();
 						method.putAttr(parAccName);
 					} else {
@@ -568,9 +611,7 @@ public final class CompileUnit extends ConstantData {
 					}
 
 					do {
-						if (lsVarargs) {
-							fireDiagnostic(Kind.ERROR, "cu.method.paramVararg");
-						}
+						if (lsVarargs) report(Kind.ERROR, "cu.method.paramVararg");
 
 						int acc1 = _modifier(wr, ACC_FINAL|_ACC_ANNOTATION);
 
@@ -585,15 +626,15 @@ public final class CompileUnit extends ConstantData {
 
 						List<Type> p = method.parameters();
 						p.add(parType.rawType());
-						if (parType.rawType().type == VOID) fireDiagnostic(Kind.ERROR, "cu.method.paramVoid");
-						if (p.size() > 255) fireDiagnostic(Kind.ERROR, "cu.method.paramCount");
+						if (parType.rawType().type == VOID) report(Kind.ERROR, "cu.method.paramVoid");
+						if (p.size() > 255) report(Kind.ERROR, "cu.method.paramCount");
 
 						if (!annotations.isEmpty()) {
 							addAnnotation(new ParamAnnotationRef(method, w.pos(), paramNames.size()), new SimpleList<>(annotations));
 						}
 
 						if (w.type() == LITERAL) {
-							if (paramNames.contains(w.val())) fireDiagnostic(Kind.ERROR, "cu.method.paramConflict");
+							if (paramNames.contains(w.val())) report(Kind.ERROR, "cu.method.paramConflict");
 							paramNames.add(w.val());
 						} else {
 							throw wr.err("unexpected:" + w.val());
@@ -604,20 +645,19 @@ public final class CompileUnit extends ConstantData {
 						}
 
 						w = wr.next();
-						if (w.type() == equ) {
-							lazyTasks.add(ParseTask.MethodDefault(this, method, paramNames.size()));
+						if (w.type() == assign) {
+							ParseTask.MethodDefault(this, method, paramNames.size());
+							w = wr.next();
 						}
 					} while (w.type() == comma);
 
 					if (w.type() != rParen) throw wr.err("unexpected:"+w.val());
 
-					if (lsVarargs) method.modifier |= ACC_VARARGS;
+					if (lsVarargs) acc |= ACC_VARARGS;
 				} else {
 					paramNames = Collections.emptyList();
 				}
 
-				if (!names.add(method.name() + method.rawDesc()))
-					fireDiagnostic(Kind.ERROR, "cu.nameConflict", ctx.currentCodeBlockForReport(), "invoke.method", method.name());
 				method.modifier = (char) acc;
 				methods.add(method);
 
@@ -625,7 +665,7 @@ public final class CompileUnit extends ConstantData {
 				// throws XX异常
 				if (w.type() == THROWS) {
 					if ((access & ACC_ANNOTATION) != 0) {
-						fireDiagnostic(Kind.ERROR, "cu.method.annotationThrow");
+						report(Kind.ERROR, "cu.method.annotationThrow");
 					}
 
 					AttrClassList excList = new AttrClassList(AttrClassList.EXCEPTIONS);
@@ -640,7 +680,7 @@ public final class CompileUnit extends ConstantData {
 					} while (w.type() == comma);
 				}
 
-				SignaturePrimer sign = _signatureCommit((SignaturePrimer) signature, Signature.METHOD, method);
+				SignaturePrimer sign = _signatureCommit(signature, Signature.METHOD, method);
 				if (sign != null) method.putAttr(sign);
 
 				// 不能包含方法体:
@@ -665,7 +705,7 @@ public final class CompileUnit extends ConstantData {
 						if ((acc & (ACC_STATIC|_ACC_DEFAULT)) == 0) {
 							if ((acc & ACC_FINAL) != 0) {
 								// 接口不能加final
-								fireDiagnostic(Kind.ERROR, "modifier.notAllowed:final");
+								report(Kind.ERROR, "modifier.notAllowed:final");
 							}
 							break noMethodBody;
 						}
@@ -681,11 +721,11 @@ public final class CompileUnit extends ConstantData {
 				if (w.type() != semicolon) throw wr.err("cu.method.mustNotBody");
 			} else {
 				// field
-				if ((acc & ACC_FIELD_INACCEPTABLE) != 0) fireDiagnostic(Kind.ERROR, "modifier.notAllowed", acc);
+				if ((acc&ACC_FIELD_ILLEGAL) != 0) report(Kind.ERROR, "modifier.notAllowed", showModifiers(acc&ACC_FIELD_ILLEGAL, ACC_SHOW_METHOD));
 				// 接口的字段必须是静态的
 				if ((access & ACC_INTERFACE) != 0) {
 					if ((acc & (ACC_PRIVATE|ACC_PROTECTED)) != 0) {
-						fireDiagnostic(Kind.SEVERE_WARNING, "modifier.superset", acc);
+						report(Kind.SEVERE_WARNING, "modifier.superset", acc);
 					}
 
 					acc |= ACC_STATIC;
@@ -693,20 +733,21 @@ public final class CompileUnit extends ConstantData {
 
 				wr.retractWord();
 
-				Signature s = _signatureCommit((SignaturePrimer) signature, Signature.FIELD, null);
+				Signature s = _signatureCommit(signature, Signature.FIELD, null);
 
 				List<AnnotationPrimer> list = annotations.isEmpty() ? null : new SimpleList<>(annotations);
 
 				while (true) {
 					FieldNode field = new FieldNode(acc, name, type);
 					if (!names.add(name)) {
-						fireDiagnostic(Kind.ERROR, "cu.nameConflict", ctx.currentCodeBlockForReport(), "symbol.field", name);
+						report(Kind.ERROR, "cu.nameConflict", ctx.currentCodeBlockForReport(), "symbol.field", name);
 					}
 
 					if (list != null) addAnnotation(field, list);
 					if (s != null) field.putAttr(s);
 
 					fields.add(field);
+					if ((acc & ACC_FINAL) != 0) finalFields.add(field);
 					fieldIdx.add(w.pos());
 
 					w = wr.next();
@@ -721,6 +762,11 @@ public final class CompileUnit extends ConstantData {
 			}
 		}
 	}
+	private boolean isConstructor(String val) {
+		int i = name.lastIndexOf('$');
+		if (i < 0) i = name.lastIndexOf('/');
+		return val.regionMatches(0, name, i+1, name.length() - i - 1);
+	}
 
 	public int _modifier(JavaLexer wr, int mask) throws ParseException {
 		if ((mask & _ACC_ANNOTATION) != 0) annotations.clear();
@@ -732,7 +778,7 @@ public final class CompileUnit extends ConstantData {
 			w = wr.next();
 			switch (w.type()) {
 				case at -> {
-					if ((mask & _ACC_ANNOTATION) == 0) fireDiagnostic(Kind.ERROR, "modifier.annotation");
+					if ((mask & _ACC_ANNOTATION) == 0) report(Kind.ERROR, "modifier.annotation");
 					_annotations(annotations);
 					acc |= _ACC_ANNOTATION;
 					continue;
@@ -758,12 +804,12 @@ public final class CompileUnit extends ConstantData {
 			}
 
 			if ((f & mask) == 0) {
-				fireDiagnostic(Kind.ERROR, "modifier.notAllowed", w.val());
+				report(Kind.ERROR, "modifier.notAllowed", w.val());
 				continue;
 			}
 
 			if ((acc & f) != 0) {
-				fireDiagnostic(Kind.ERROR, "modifier.conflict", w.val(), showModifiers(acc, ACC_SHOW_METHOD));
+				report(Kind.ERROR, "modifier.conflict", w.val(), showModifiers(acc, ACC_SHOW_METHOD));
 				continue;
 			}
 			acc |= f;
@@ -827,7 +873,7 @@ public final class CompileUnit extends ConstantData {
 
 				if (w.type() == lss ||
 					(currentNode != null && sb != (bound = currentNode.getTypeBound(sb))) ||
-					(signature != null && sb != (bound = ((SignaturePrimer) signature).getTypeBound(sb)))) {
+					(signature != null && sb != (bound = signature.getTypeBound(sb)))) {
 
 					type = _genericUse(sb, (flags&TYPE_LEVEL2) != 0 ? GENERIC_SUBCLASS : 0);
 
@@ -863,7 +909,7 @@ public final class CompileUnit extends ConstantData {
 			}
 
 			wr.retractWord();
-			return toResolve_unc.intern(type);
+			return toResolve.intern(type);
 		}
 
 		return type;
@@ -887,7 +933,7 @@ public final class CompileUnit extends ConstantData {
 
 		s.parent = parent;
 		s.type = (byte) kind;
-		s.initS0(mn);
+		s.commit(mn);
 		return s;
 	}
 
@@ -977,7 +1023,7 @@ public final class CompileUnit extends ConstantData {
 				if (child == Asterisk.anyGeneric) {
 					//TODO WHICH FLAG?
 					if ((flag&GENERIC_INNER) != 0 || w.type() != gtr) {
-						fireDiagnostic(Kind.ERROR, "type.error.illegalAnyType");
+						report(Kind.ERROR, "type.error.illegalAnyType");
 					}
 				}
 
@@ -998,7 +1044,7 @@ public final class CompileUnit extends ConstantData {
 			IType sub1 = _genericUse(wr.except(LITERAL).val(), flag&TYPE_OPTIONAL|GENERIC_SUBCLASS);
 			if (sub1 == null) return Helpers.maybeNull();
 			// 无法从参数化的类型中选择静态类
-			if (sub1.genericType() != IType.GENERIC_TYPE) fireDiagnostic(Kind.ERROR, "type.error.partialGenericSub", sub1.owner());
+			if (sub1.genericType() != IType.GENERIC_TYPE) report(Kind.ERROR, "type.error.partialGenericSub", sub1.owner());
 			else g.sub = ((GenericPrimer) sub1).toGenericSub();
 
 			w = wr.next();
@@ -1016,14 +1062,12 @@ public final class CompileUnit extends ConstantData {
 		wr.retractWord();
 
 		if (result != null) {
-			if (g.isRealGeneric()) fireDiagnostic(Kind.ERROR, "type.error.primitiveGeneric");
+			if (g.isRealGeneric()) report(Kind.ERROR, "type.error.primitiveGeneric");
 			return result;
 		}
 
-		result = g.toRealType(null);
-		//TODO generic resolve
-		genericPending.add(result);
-		return toResolve_unc.intern(result);
+		result = g.resolve(null);
+		return toResolve.intern(result);
 	}
 
 	public List<AnnotationPrimer> _annotations(List<AnnotationPrimer> list) throws ParseException {
@@ -1045,26 +1089,31 @@ public final class CompileUnit extends ConstantData {
 				return list;
 			}
 
-			do {
-				if (a.assertValueOnly) fireDiagnostic(Kind.ERROR, "cu.annotation.valueOnly");
+			wr.mark();
 
-				wr.mark();
-				String name = wr.next().val();
+			String name = wr.next().val();
+			w = wr.next();
+			if (w.type() != assign) {
+				wr.retract();
+
+				a.valueOnly = true;
+				a.newEntry("value", ParseTask.Annotation(this, a, "value"));
 
 				w = wr.next();
-				if (w.type() != assign) {
-					wr.retract();
+			} else {
+				wr.skip();
 
-					a.assertValueOnly = true;
-					a.newEntry("value", ParseTask.Annotation(this, a, "value"));
-				} else {
-					wr.skip();
-
+				while (true) {
 					a.newEntry(name, ParseTask.Annotation(this, a, name));
-				}
-			} while (w.type() == comma);
 
-			if (w.type() != rParen) throw wr.err("unexpected:"+w.val());
+					if (wr.next().type() != comma) break;
+
+					name = wr.next().val();
+					wr.except(assign);
+				}
+			}
+
+			if (w.type() != rParen) throw wr.err(a.valueOnly ? "cu.annotation.valueOnly" : "unexpected:"+w.val());
 
 			w = wr.next();
 			if (w.type() != at) {
@@ -1074,102 +1123,105 @@ public final class CompileUnit extends ConstantData {
 		}
 	}
 	private void addAnnotation(Attributed node, List<AnnotationPrimer> anno) {annoTask.put(node, anno);}
-
 	// endregion
 	// region 阶段2 解析并验证类自身的引用
-	public List<IType> getGenericEnv(CharSequence sb) {
-		CharSequence bound;
-		if ((currentNode != null && sb != (bound = currentNode.getTypeBound(sb))) ||
-			(signature != null && sb != (bound = ((SignaturePrimer) signature).getTypeBound(sb)))) {
-			return Collections.singletonList(new Type(bound.toString())); // TODO type bounds
-		}
-		return null;
-	}
-
-	public int recordFieldPos;
-	public MyHashSet<FieldNode> finalStaticField = new MyHashSet<>(), finalObjectField = new MyHashSet<>();
-
-	public void createDelegation(int acc, MethodNode mn) {
-		CodeWriter c = newMethod(acc, mn.name(), mn.rawDesc());
-		int size = (1 + TypeHelper.paramSize(mn.rawDesc()));
-		c.visitSize(size, size);
-		c.one(ALOAD_0);
-		List<Type> pars = mn.parameters();
-		for (int i = 0; i < pars.size(); i++) {
-			c.varLoad(pars.get(i), i);
-		}
-		c.invoke(mn.name().startsWith("<") ? INVOKESPECIAL : INVOKEVIRTUAL, mn);
-		c.finish();
-	}
 	public void S2_Parse() {
 		LocalContext ctx = this.ctx = LocalContext.get();
 		ctx.setClass(this);
+
+		// region Type扩展
+		wr.index = -2;
+
+		// 自动处理在Stage0/1阶段产生的
+		//  class, method param/return, field type
+		//  和他们的泛型
+		// TODO Typeparam subclass merged?
+		for (IType type : toResolve) ctx.resolveType(type);
+		toResolve.clear();
+
+		if (signature != null) signature.resolve();
+
+		for (int i = 0; i < methods.size(); i++) {
+			SignaturePrimer s = (SignaturePrimer) methods.get(i).attrByName("Signature");
+			if (s != null) s.resolve();
+		}
+
+		// endregion
 		// region 继承可行性
 
+		overridableMethods.methods = new SimpleList<>();
+		overridableMethods.itf = Collections.emptyList();
 		wr.index = classIdx;
 
 		IClass pInfo = tr.resolve(ctx, parent);
         if (pInfo == null) {
-			fireDiagnostic(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", parent, name+".parent");
-			// TODO better fallback
-			pInfo = GlobalContext.anyArray();
+			report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", parent, name+".parent");
+			pInfo = ctx.classes.getClassInfo("java/lang/Object");
 		} else {
             int acc = pInfo.modifier();
 			if (0 != (acc & ACC_FINAL)) {
-				fireDiagnostic(Kind.ERROR, "cu.resolve.notInheritable", "cu.final", parent);
+				report(Kind.ERROR, "cu.resolve.notInheritable", "cu.final", parent);
 			} else if (0 != (acc & ACC_INTERFACE)) {
-				fireDiagnostic(Kind.ERROR, "cu.resolve.notInheritable", "cu.interface", parent);
+				report(Kind.ERROR, "cu.resolve.notInheritable", "cu.interface", parent);
 			}
 
 			ctx.assertAccessible(pInfo);
 			parent(pInfo.name());
+
+			preCheck(ctx, pInfo);
         }
 
 		if (signature != null && ctx.instanceOf(parent, "java/lang/Throwable")) {
-			fireDiagnostic(Kind.ERROR, "cu.genericException");
+			report(Kind.ERROR, "cu.genericException");
 		}
 
-		List<String> itfs = interfacesPre;
-		interfacesPre = null;
-
+		List<String> itfs = Helpers.cast(interfaces);
 		for (int i = 0; i < itfs.size(); i++) {
 			IClass info = tr.resolve(ctx, itfs.get(i));
             if (info == null) {
-				fireDiagnostic(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", itfs.get(i), name+".interface["+i+"]");
+				report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", itfs.get(i), name+".interface["+i+"]");
 			} else {
                 int acc = info.modifier();
                 if (0 == (acc & ACC_INTERFACE)) {
-					fireDiagnostic(Kind.ERROR, "cu.resolve.notInheritable", "cu.class", info.name());
+					report(Kind.ERROR, "cu.resolve.notInheritable", "cu.class", info.name());
                 }
 
 				ctx.assertAccessible(info);
 				interfaces.set(i, cp.getClazz(info.name()));
+
+				preCheck(ctx, info);
             }
 		}
 
 		boolean autoInit = (access & ACC_INTERFACE) == 0;
+		// 方法冲突在这里检查，因为stage0/1拿不到完整的rawDesc
+		var names = ctx.tmpSet; names.clear();
 		List<MethodNode> methods = this.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			wr.index = methodIdx.get(i);
-			MethodNode m = methods.get(i);
+			var method = methods.get(i);
 
-			if (m.name().equals("<init>")) {
+			String par = method.rawDesc();
+			if (!names.add(method.name()+par.substring(0, par.lastIndexOf(')')+1)))
+				report(Kind.ERROR, "cu.nameConflict", this.name, "invoke.method", method.name());
+
+			if (method.name().equals("<init>")) {
 				autoInit = false;
 			}
 
 			// resolve异常
-			AttrClassList exThrown = (AttrClassList) m.attrByName("Exceptions");
+			AttrClassList exThrown = (AttrClassList) method.attrByName("Exceptions");
 			if (exThrown != null) {
 				List<String> classes = exThrown.value;
 				for (int j = 0; j < classes.size(); j++) {
 					IClass info = tr.resolve(ctx, classes.get(j));
 					if (info == null) {
-						fireDiagnostic(Kind.ERROR, "symbol.error.noSuchClass", classes.get(i));
+						report(Kind.ERROR, "symbol.error.noSuchClass", classes.get(i));
 					} else {
 						ctx.assertAccessible(info);
 
 						if (!ctx.instanceOf(info.name(), "java/lang/Throwable"))
-							fireDiagnostic(Kind.ERROR, "cu.throwException", classes.get(i));
+							report(Kind.ERROR, "cu.throwException", classes.get(i));
 
 						classes.set(j, info.name());
 					}
@@ -1181,7 +1233,7 @@ public final class CompileUnit extends ConstantData {
 		if (autoInit) {
 			int superInit = pInfo.getMethod("<init>", "()V");
 			if (superInit < 0) {
-				fireDiagnostic(Kind.ERROR, "cu.noDefaultConstructor");
+				report(Kind.ERROR, "cu.noDefaultConstructor");
 				break autoInit;
 			}
 
@@ -1194,28 +1246,157 @@ public final class CompileUnit extends ConstantData {
 			cw.one(Opcodes.RETURN);
 			cw.finish();
 		}
-
-		// endregion
-		// region Type扩展
-		wr.index = -2;
-
-		// Depreacted
-		for (IType type : toResolve_unc)
-			ctx.resolveType(type);
-		toResolve_unc.clear();
-
-		if (signature != null) ((SignaturePrimer) signature).resolveS2();
-
-		for (int i = 0; i < methods.size(); i++) {
-			SignaturePrimer s = (SignaturePrimer) methods.get(i).attrByName("Signature");
-			if (s != null) s.resolveS2();
-		}
-
 		// endregion
 	}
+	private void preCheck(LocalContext ctx, IClass info) {
+		if ((access&ACC_ABSTRACT) != 0) return;
+		for (ComponentList list : ctx.classes.getResolveHelper(info).getMethods(ctx.classes).values()) {
+			var list1 = list.getMethods();
+			for (int i = 0; i < list1.size(); i++) {
+				var node = list1.get(i);
+				if (node.name().startsWith("<")) continue;
+
+				if ((node.modifier & ACC_ABSTRACT) != 0) {
+					String param = node.rawDesc();
+
+					var d = new NameAndType();
+					d.owner = node.owner;
+					d.name = node.name();
+					d.param = param.substring(0, param.lastIndexOf(')')+1);
+
+					// 不检测权限，就像你没法继承ByteBuffer一样
+					abstractMethods.add(d);
+				}
+
+				if (ctx.checkAccessible(info, node, false, false)) {
+					if (getMethod(node.name()) >= 0) {
+						List<?> methods1 = overridableMethods.methods;
+						methods1.add(Helpers.cast(node));
+					}
+				}
+			}
+		}
+	}
+	public void createDelegation(int acc, MethodNode mn) {
+		CodeWriter c = newMethod(acc, mn.name(), mn.rawDesc());
+		int size = (1 + TypeHelper.paramSize(mn.rawDesc()));
+		c.visitSize(size, size);
+		c.one(ALOAD_0);
+		List<Type> pars = mn.parameters();
+		for (int i = 0; i < pars.size(); i++) {
+			c.varLoad(pars.get(i), i);
+		}
+		c.invoke(mn.name().startsWith("<") ? INVOKESPECIAL : INVOKEVIRTUAL, mn);
+		c.finish();
+	}
 	// endregion
-	// region 阶段3 可能执行多次 注解处理
+	// region 阶段3 可能执行多次 注解处理 MethodDefault
 	public void S3_Annotation() throws ParseException {
+		LocalContext ctx = this.ctx = LocalContext.get();
+		ctx.setClass(this);
+
+		// region 方法覆盖检测
+		ResolveHelper override = new ResolveHelper(overridableMethods);
+		var d = new NameAndType();
+
+		for (int i = 0; i < methods.size(); i++) {
+			MethodNode method = methods.get(i);
+			var ml = override.findMethod(ctx.classes, method.name());
+			if (ml == null) continue;
+
+			// TODO also needed to check "implemented interface method via superclass" and "two defaults"
+			//  generic is NULL ?
+			//  and check access & raw types
+			var r = ml.findMethod(ctx, Helpers.cast(method.parameters()), ComponentList.NO_REPORT);
+			if (r == null) continue;
+
+			wr.index = methodIdx.get(i);
+
+			String param = method.rawDesc();
+			d.name = method.name();
+			d.param = param.substring(0, param.lastIndexOf(')')+1);
+			abstractMethods.remove(d);
+
+			var method1 = r.method;
+
+			// 访问权限是否降级以及能否override 注：preCheck检测了必须有访问权限
+			int myLevel = method .modifier&(ACC_PUBLIC|ACC_PROTECTED);
+			int itLevel = method1.modifier&(ACC_PUBLIC|ACC_PROTECTED);
+			pass: {
+				if (myLevel == ACC_PUBLIC || myLevel == itLevel) break pass;
+				if (itLevel == 0 && myLevel == ACC_PROTECTED) break pass;
+
+				String inline = "\1cu.override.access:"+
+					(itLevel==0?"\1package-private\0":showModifiers(itLevel, ACC_SHOW_CLASS))+":"+
+					(myLevel==0?"\1package-private\0":showModifiers(myLevel, ACC_SHOW_CLASS))+"\0";
+				ctx.report(Kind.ERROR, "cu.override.unable", name, method, method1.owner, method1, inline);
+			}
+
+			// 检测Override
+			var annotations = annoTask.getOrDefault(method, Collections.emptyList());
+			for (int j = 0; j < annotations.size(); j++) {
+				AnnotationPrimer a = annotations.get(j);
+				IClass info = tr.resolve(ctx, a.type());
+				if (info == null) continue;
+				if (info.name().equals("java/lang/Override")) {
+					annotations.remove(j);
+					if (annotations.isEmpty()) annoTask.remove(method);
+				}
+				break;
+			}
+
+			// 生成桥接方法
+			IType returnType = r.desc != null ? r.desc[r.desc.length-1] : method1.returnType();
+
+			Signature sig = method.parsedAttr(null, Attribute.SIGNATURE);
+			IType myReturnType = sig != null ? sig.values.get(sig.values.size()-1) : method.returnType();
+
+			// 返回值更精确而需要桥接，或更不精确而无法覆盖
+			// TODO 泛型参数是否兼容
+			TypeCast.Cast cast = ctx.castTo(myReturnType, returnType, TypeCast.E_NEVER);
+			if (cast.type != 0) {
+				String inline = "\1cu.override.returnType:\1typeCast.error."+cast.type+':'+myReturnType+':'+returnType+"\0\0";
+				ctx.report(Kind.ERROR, "cu.override.unable", name, method, method1.owner, method1, inline);
+			}
+
+			if (!Objects.equals(returnType.owner(), myReturnType.owner())) {
+				createDelegation((method1.modifier&(ACC_PUBLIC|ACC_PROTECTED)) | ACC_FINAL | ACC_SYNTHETIC | ACC_BRIDGE, method1);
+			}
+
+			var myException = method.parsedAttr(null, Attribute.Exceptions);
+			// 是否声明了相同或更少的异常
+			if (myException != null) {
+				List<IType> exThrownP;
+				if (r.exception != null) exThrownP = Arrays.asList(r.exception);
+				else {
+					var list = method1.parsedAttr(ctx.classes.getClassInfo(method1.owner).cp(), Attribute.Exceptions);
+					// TODO StreamChain简单的示例
+					exThrownP = list != null ? list.value.stream().map(Type::new).collect(Collectors.toList()) : Collections.emptyList();
+				}
+
+				outer:
+				for (String s : myException.value) {
+					Type f = new Type(s);
+					if (ctx.castTo(f, RUNTIME_EXCEPTION, TypeCast.E_NEVER).type == 0) continue;
+
+					for (IType type : exThrownP) {
+						TypeCast.Cast c = ctx.castTo(f, type, TypeCast.E_NEVER);
+						if (c.type == 0) continue outer;
+					}
+
+					String inline = "\1cu.override.thrown:"+s.replace('/', '.')+'\0';
+					ctx.report(Kind.ERROR, "cu.override.unable", name, method, method1.owner.replace('/', '.'), method1, inline);
+				}
+			}
+		}
+		// endregion
+
+		wr.index = classIdx;
+		for (Desc method : abstractMethods) {
+			ctx.report(Kind.ERROR, "cu.override.noImplement", name, method.owner.replace('/', '.'), method.name);
+		}
+		abstractMethods.clear();
+
 		MyHashSet<String> missed = ctx.tmpSet;
 		for (Map.Entry<Attributed, List<AnnotationPrimer>> annotated : annoTask.entrySet()) {
 			Annotations inv = null, vis = null;
@@ -1227,26 +1408,26 @@ public final class CompileUnit extends ConstantData {
 
 				IClass inst = tr.resolve(ctx, a.type());
 				if (inst == null) {
-					fireDiagnostic(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", a.type(), ctx.currentCodeBlockForReport());
+					report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", a.type(), ctx.currentCodeBlockForReport());
 					continue;
 				}
 				a.setType(inst.name());
 
 				AnnotationSelf ad = ctx.classes.getAnnotationDescriptor(inst);
 
-				if (!ctx.classes.applicableToNode(ad, annotated.getKey())) fireDiagnostic(Kind.ERROR, "cu.annotation.notApplicable", inst.name(), annotated.getKey().getClass());
+				if (!ctx.classes.applicableToNode(ad, annotated.getKey())) report(Kind.ERROR, "cu.annotation.notApplicable", inst, annotated.getKey().getClass());
 
 				missed.clear();
 				for (Map.Entry<String, AnnVal> entry : ad.values.entrySet()) {
 					String name = entry.getKey();
 
-					ParseTask task = Helpers.cast(a.values.remove(name));
-					if (task != null) task.parse();
-					else if (entry.getValue() == null) missed.add(name);
+					Object task = Helpers.cast(a.values.remove(name));
+					if (task instanceof ParseTask t) t.parse();
+					else if (task == null && entry.getValue() == null) missed.add(name);
 				}
 
-				if (!a.values.isEmpty()) fireDiagnostic(Kind.ERROR, "cu.annotation.extra", inst.name(), a.values.keySet());
-				if (!missed.isEmpty()) fireDiagnostic(Kind.ERROR, "cu.annotation.missing", inst.name(), missed);
+				if (!a.values.isEmpty()) report(Kind.ERROR, "cu.annotation.extra", inst, a.values.keySet());
+				if (!missed.isEmpty()) report(Kind.ERROR, "cu.annotation.missing", inst, missed);
 
 				switch (ad.kind()) {
 					case AnnotationSelf.SOURCE: break; // discard
@@ -1273,6 +1454,14 @@ public final class CompileUnit extends ConstantData {
 	}
 	// endregion
 	// region 阶段4 编译代码块
+	public List<IType> getGenericEnv(CharSequence sb) {
+		CharSequence bound;
+		if (currentNode != null && sb != (bound = currentNode.getTypeBound(sb))) {
+			return Collections.singletonList(new Type(bound.toString())); // TODO type bounds
+		}
+		return null;
+	}
+
 	private MethodWriter clinit, glinit;
 	public MethodWriter getStaticInit() {
 		if (clinit != null) return clinit;
@@ -1280,46 +1469,49 @@ public final class CompileUnit extends ConstantData {
 		int v = getMethod("<clinit>");
 		if (v < 0) {
 			v = methods.size();
-			methods.add(new MethodNode(ACC_PUBLIC|ACC_STATIC|ACC_SYNTHETIC, name, "<clinit>", "()V"));
+			methods.add(new MethodNode(ACC_PUBLIC|ACC_STATIC, name, "<clinit>", "()V"));
 		}
 
-		return clinit = ctx.classes.createMethodPoet(this, methods.get(v));
+		MethodNode node = methods.get(v);
+		clinit = ctx.classes.createMethodPoet(this, node);
+		node.putAttr(new AttrCodeWriter(cp, node, clinit));
+		clinit.visitSize(10,10);
+		return clinit;
 	}
-
 	public MethodWriter getGlobalInit() {
 		if (glinit != null) return glinit;
-
-		MethodNode mn = new MethodNode(ACC_PUBLIC | ACC_SYNTHETIC, name, "<glinit>", "()V");
-
+		MethodNode mn = new MethodNode(ACC_PRIVATE, name, "<glinit>", "()V");
 		return glinit = ctx.classes.createMethodPoet(this, mn);
 	}
 
 	public void S4_Code() throws ParseException {
-		currentNode = (SignaturePrimer) signature;
+		currentNode = signature;
 
-		// todo setCurrentNode, createGlobalInit, updateCurrentNode
-		for (int i = 0; i < lazyTasks.size(); i++) {
-			lazyTasks.get(i).parse();
-		}
+		// todo update CurrentNode
+		// 优先级的定义写在ParseTask中
+		lazyTasks.sort((o1, o2) -> Integer.compare(o1.priority(), o2.priority()));
+		for (int i = 0; i < lazyTasks.size(); i++) lazyTasks.get(i).parse();
 		lazyTasks.clear();
 
-		if (glinit != null) {
+		if (clinit != null) clinit.one(Opcodes.RETURN);
 
+		for (FieldNode field : finalFields) {
+			wr.index = fieldIdx.get(fields.indexOfAddress(field));
+			report(Kind.ERROR, "cu.finalField.missed", field.name());
 		}
+		finalFields.clear();
 	}
 	// endregion
 
-	public String getFilePath() {return path;}
+	public String getSourceFile() {return path;}
 
-	public final void fireDiagnostic(Kind kind, String code) {ctx.classes.report(this, kind, wr.index, code);}
-	public final void fireDiagnostic(Kind kind, String code, Object ... args) {ctx.classes.report(this, kind, wr.index, code, args);}
-
-	public ByteList getBytes() {return Parser.toByteArrayShared(this);}
+	public final void report(Kind kind, String code) {ctx.classes.report(this, kind, wr.index, code);}
+	public final void report(Kind kind, String code, Object ... args) {ctx.classes.report(this, kind, wr.index, code, args);}
 
 	public IType readType(@MagicConstant(flags = {TYPE_PRIMITIVE, TYPE_OPTIONAL, TYPE_STAR, TYPE_GENERIC, TYPE_LEVEL2}) int flag) throws ParseException {
 		IType type = _type(wr, ctx.tmpList, flag);
 		// TODO maybe not full suitable (resolve later)
-		if (type instanceof GenericPrimer g) return g.toRealType(currentNode);
+		if (type instanceof GenericPrimer g) return g.resolve(currentNode);
 		return type;
 	}
 }

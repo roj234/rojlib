@@ -2,13 +2,13 @@ package roj.compiler.asm;
 
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
+import roj.asm.tree.attr.LineNumberTable;
 import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.visitor.*;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.compiler.asm.node.LazyIINC;
 import roj.compiler.asm.node.LazyLoadStore;
-import roj.compiler.context.LocalContext;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -23,13 +23,13 @@ import static roj.asm.Opcodes.*;
 public class MethodWriter extends CodeWriter {
 	private final ConstantData owner;
 
-	public LocalContext ctx1;
+	private final SimpleList<TryCatchEntry> entryList = new SimpleList<>();
 
-	private SimpleList<TryCatchEntry> entryList = new SimpleList<>();
+	public LineNumberTable lines;
+	public boolean debugLines;
 
 	public MethodWriter(ConstantData unit, MethodNode mn) {
 		this.owner = unit;
-		this.ctx1 = LocalContext.get();
 		this.init(new ByteList(),unit.cp,mn,(byte)0);
 	}
 
@@ -45,6 +45,15 @@ public class MethodWriter extends CodeWriter {
 		for (TryCatchEntry entry : entryList) {
 			visitException(entry.start,entry.end,entry.handler,entry.type);
 		}
+		entryList.clear();
+	}
+
+	@Override
+	public void visitAttributes() {
+		super.visitAttributes();
+
+		if (debugLines) lineNumberDebug();
+		else if (lines != null) visitAttribute(lines);
 	}
 
 	public void load(Variable v) { addSegment(new LazyLoadStore(v, false)); }
@@ -118,10 +127,10 @@ public class MethodWriter extends CodeWriter {
 	public void writeTo(MethodWriter cw) {
 		if (bw.wIndex() > 8) {
 			cw.codeOb.put(bw, 8, bw.wIndex()-8);
-			if (cw.segments.isEmpty()) cw._addFirst();
 		}
 
 		if (segments.isEmpty()) return;
+		if (cw.segments.isEmpty()) cw._addFirst();
 
 		List<Segment> tarSeg = cw.segments;
 		int offset = tarSeg.size();

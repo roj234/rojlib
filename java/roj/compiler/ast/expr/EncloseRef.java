@@ -27,7 +27,7 @@ final class EncloseRef extends ExprNode {
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
-		type = ctx.resolveType(type);
+		ctx.resolveType(type);
 		if (thisEnclosing) {
 			ctx.report(Kind.ERROR, "this enclosing class暂未实现（non static ref）");
 		} else {

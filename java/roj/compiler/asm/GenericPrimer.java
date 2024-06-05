@@ -14,7 +14,7 @@ import java.util.List;
  * @since 2022/9/17 0017 20:37
  */
 public class GenericPrimer extends Generic {
-	public IType toRealType(SignaturePrimer s) {
+	public IType resolve(SignaturePrimer s) {
 		if (s != null && s.hasTypeParam(owner)) return new TypeParam(owner);
 		if ("*".equals(owner)) return Signature.any();
 		return isRealGeneric() ? this : rawType();

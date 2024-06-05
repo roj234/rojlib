@@ -35,7 +35,7 @@ public final class SwitchMap {
 			this.mask = entries.length - 1;
 		}
 
-		public Builder add(Object o, int v) {
+		public Object add(Object o, int v) {
 			int slot = (useEquals ? o.hashCode() : System.identityHashCode(o)) & mask;
 			Entry entry = new Entry(o, v);
 			entry.next = entries[slot];
@@ -45,11 +45,11 @@ public final class SwitchMap {
 			entry = entry.next;
 			while (entry != null) {
 				if (useEquals ? o.equals(entry.k) : o == entry.k)
-					throw new IncompatibleClassChangeError("Many expressions have same value "+o);
+					throw new IncompatibleClassChangeError("case重复: "+o);
 				entry = entry.next;
 			}
 
-			return this;
+			return null;
 		}
 
 		public SwitchMap build() {

@@ -68,6 +68,7 @@ public class SystemAudioOutput implements AudioOutput {
 
 	public boolean paused() { return out != null && !out.isActive(); }
 	public synchronized void pause() {
-		if (paused = !paused) notify();
+		paused = !paused;
+		if (!paused) notifyAll();
 	}
 }

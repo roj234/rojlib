@@ -33,16 +33,12 @@
 ### Lava Compiler
 * [ ] 把CompileUnit里面readType移动到JavaLexer  
 ↑ 职能专一
-* [ ] 注解处理
 * [ ] 完整的泛型推断
-* [ ] Record
-* [ ] ...switch
-* 使用static MyHashMap（基本泛型扩展）来优化switch，并使其支持任何基本类型、String和对象
-* 如果是枚举或int，根据空间利用率可以选择替代方案：ordinal -> index数组  aka. legacy switchmap
-* 如果是任意对象，才会独立一个$SwitchMap$n，目的是懒执行这些表达式，拖到switch第一次执行的时候，而不是当前类的clinit
+* [ ] 完整的Record
+* [ ] switch null 和 switch Class
 * [ ] 完整的Try
 * try和switch必须要做成Node
-* [ ] 实现StreamChain
+* [ ] StreamChain
 
 ### CompileUnit的多线程和同步解析
 

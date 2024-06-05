@@ -41,7 +41,7 @@ public final class InstanceOf extends ExprNode {
 	@SuppressWarnings("fallthrough")
 	public ExprNode resolve(LocalContext ctx) {
 		left = left.resolve(ctx);
-		type = ctx.resolveType(type);
+		ctx.resolveType(type);
 
 		if (left.type().isPrimitive()) ctx.report(Kind.ERROR, "instanceOf.error.primitive");
 

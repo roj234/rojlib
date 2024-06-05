@@ -95,7 +95,7 @@ public class Chapter extends TreeNodeImpl<Chapter> {
 				chap.start = offset;
 				chap.type = buf.equals("番外") ? '卷' : '章';
 
-				chap.name = buf.toString(off, len);
+				chap.name = buf.substring(off, len);
 				chap.no = -1;
 
 				chapters.computeIfAbsentIntS((chap.type << 16), SimpleList::new).add(chap);

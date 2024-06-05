@@ -18,6 +18,7 @@ import roj.asm.util.Attributes;
 import roj.asm.util.ClassUtil;
 import roj.collect.*;
 import roj.compiler.JavaLexer;
+import roj.compiler.api_rt.MethodDefault;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.Variable;
@@ -27,10 +28,12 @@ import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
+import roj.config.ParseException;
 import roj.config.data.CInt;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.ArrayCache;
+import roj.util.Helpers;
 
 import java.util.*;
 import java.util.function.BiConsumer;
@@ -57,7 +60,6 @@ public class LocalContext {
 	public MethodNode method;
 	public boolean in_static, in_constructor, not_invoke_constructor;
 
-	public boolean annotationEnv;
 	public final TypeCast castCheck = new TypeCast();
 	public final Inferrer inferrer = new Inferrer(this);
 
@@ -72,11 +74,11 @@ public class LocalContext {
 
 	public void report(Kind kind, String message) {
 		if (kind == Kind.ERROR && errorCapture != null) errorCapture.accept(message, ArrayCache.OBJECTS);
-		else file.fireDiagnostic(kind, message);
+		else file.report(kind, message);
 	}
 	public void report(Kind kind, String message, Object... args) {
 		if (errorCapture != null) errorCapture.accept(message, args);
-		else file.fireDiagnostic(kind, message+":"+TextUtil.join(Arrays.asList(args), ":"));
+		else file.report(kind, message+":"+TextUtil.join(Arrays.asList(args), ":"));
 	}
 	public void report(int knownPos, Kind kind, String message, Object... args) {
 		if (errorCapture != null) errorCapture.accept(message, args);
@@ -97,7 +99,7 @@ public class LocalContext {
 	}
 
 	// region 权限管理
-	private ToIntMap<String> flagCache = new ToIntMap<>();
+	private final ToIntMap<String> flagCache = new ToIntMap<>();
 	public void assertAccessible(IClass type) {
 		if (type == file) return;
 
@@ -171,7 +173,7 @@ public class LocalContext {
 		return false;
 	}
 
-	private final MyHashSet<String> constructorFields = new MyHashSet<>();
+	private MyHashSet<FieldNode> constructorFields;
 	public void checkSelfField(FieldNode node, boolean write) {
 		boolean constructor = in_constructor;
 		if (in_static) {
@@ -184,7 +186,7 @@ public class LocalContext {
 		if ((node.modifier()&Opcodes.ACC_FINAL) != 0) {
 			if (write) {
 				if (constructor) {
-					if (!constructorFields.add(node.name())) {
+					if (!constructorFields.remove(node)) {
 						report(Kind.ERROR, "symbol.error.field.writeAfterWrite", file.name(), node.name());
 					}
 				} else {
@@ -192,7 +194,7 @@ public class LocalContext {
 				}
 			} else {
 				if (constructor) {
-					if (!constructorFields.contains(node.name())) {
+					if (constructorFields.contains(node)) {
 						report(Kind.ERROR, "symbol.error.field.readBeforeWrite", file.name(), node.name());
 					}
 				}
@@ -207,16 +209,23 @@ public class LocalContext {
 		// TODO getGenericEnv应该随着方法变吧
 		this.castCheck.genericResolver = file::getGenericEnv;
 
-		this.tr = file.tr;
+		this.tr = file.getTypeResolver();
 		this.importCache.clear();
 		this.importCacheMethod.clear();
 		this.importCacheField.clear();
+		this.flagCache.clear();
 	}
 	public void setMethod(MethodNode node) {
-		constructorFields.clear();
 		in_static = (node.modifier&Opcodes.ACC_STATIC) != 0;
-		not_invoke_constructor =
-		in_constructor = node.name().equals("<init>") || node.name().equals("<clinit>");
+		not_invoke_constructor = in_constructor = node.name().startsWith("<");
+		if (in_constructor) {
+			if (node.name().equals("<init>")) {
+				constructorFields = new MyHashSet<>(Hasher.identity());
+				constructorFields.addAll(file.finalFields);
+			} else {
+				constructorFields = file.finalFields;
+			}
+		}
 		method = node;
 	}
 
@@ -240,30 +249,33 @@ public class LocalContext {
 	public IType resolveType(IType type) {
 		if (type.genericType() == 0 ? type.rawType().type != Type.CLASS : type.genericType() != 1) return type;
 
-		IClass info = classes.getClassInfo(type.owner());
+		// 不预先检查全限定名，适配package-restricted模式
+		IClass info = resolveType(type.owner());
 		if (info == null) {
-			info = resolveType(type.owner());
-			if (info == null) {
-				report(Kind.ERROR, "symbol.error.noSuchClass", type);
-				return type;
-			}
-			type.owner(info.name());
+			report(Kind.ERROR, "symbol.error.noSuchClass", type);
+			return type;
 		}
+		type.owner(info.name());
 
 		Signature sign = info.parsedAttr(info.cp(), Attribute.SIGNATURE);
 		int count = sign == null ? 0 : sign.typeParams.size();
 
 		if (type.genericType() == IType.GENERIC_TYPE) {
+			// TODO hack..
+			boolean genericIgnore = info.interfaces().contains("roj/compiler/runtime/GenericIgnore");
+
 			Generic type1 = (Generic) type;
 			List<IType> gp = type1.children;
 
-			if (gp.size() != count) {
+			if (!genericIgnore && gp.size() != count) {
 				if (count == 0) report(Kind.ERROR, "symbol.error.generic.paramCount.0", type.rawType());
 				else if (gp.size() != 1 || gp.get(0) != Asterisk.anyGeneric) report(Kind.ERROR, "symbol.error.generic.paramCount", type.rawType(), gp.size(), count);
 			}
 
 			for (int i = 0; i < gp.size(); i++) {
 				IType type2 = resolveType(gp.get(i));
+				if (genericIgnore) continue;
+
 				if (type2 instanceof Generic g && g.isAnyType()) {
 					gp.set(i, Signature.any());
 				} else if (type2.isPrimitive()) {
@@ -297,7 +309,7 @@ public class LocalContext {
 				while (x != null) {
 					InnerClasses.InnerClass ic = flags1.get(x.owner);
 					if (ic == null || (info = classes.getClassInfo(ic.self)) == null) {
-						report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", x.owner, "{symbol.type} "+type1);
+						report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", x.owner, "\1symbol.type\0 "+type1);
 						break;
 					}
 
@@ -341,7 +353,7 @@ public class LocalContext {
 		String anySuccess = "";
 		int slash = desc.indexOf("/");
 		if (slash >= 0) {
-			directClz = tr.resolve(this, desc.toString(0, slash));
+			directClz = tr.resolve(this, desc.substring(0, slash));
 			if (directClz != null) {
 				String error = resolveField(directClz, null, desc, slash+1);
 				if (error == null) return null;
@@ -400,7 +412,7 @@ public class LocalContext {
 
 		int i = desc.indexOf("/", prevI);
 		while (true) {
-			String name = desc.toString(prevI, i < 0 ? desc.length() : i);
+			String name = desc.substring(prevI, i < 0 ? desc.length() : i);
 
 			FieldNode field;
 			block: {
@@ -437,6 +449,8 @@ public class LocalContext {
 
 					fieldType = Inferrer.clearTypeParams(fSign.values.get(0), knownTps, tpBounds);
 				}
+			} else {
+				fieldType = field.fieldType();
 			}
 			result.add(field);
 
@@ -473,17 +487,11 @@ public class LocalContext {
 		}
 	}
 
-
-	// TODO move to GlobalContext
-	@Deprecated
-	public Annotation getAnnotation(IClass type, Attributed node, String annotation, boolean rt) {
-		return Attributes.getAnnotation(Attributes.getAnnotations(type.cp(), node, rt), annotation);
-	}
-
 	public void addException(IType type) {
-		TypeCast.Cast cast = castCheck.checkCast(type, new Type("java/lang/RuntimeException"));
+		TypeCast.Cast cast = castCheck.checkCast(type, CompileUnit.RUNTIME_EXCEPTION);
 		if (cast.type >= 0) return;
-		AttrClassList exceptions = (AttrClassList) method.attrByName("Exceptions");
+
+		var exceptions = (AttrClassList) method.attrByName("Exceptions");
 		if (exceptions != null) {
 			for (String s : exceptions.value) {
 				if (castCheck.checkCast(type, new Type(s)).type >= 0) return;
@@ -492,7 +500,8 @@ public class LocalContext {
 		report(Kind.ERROR, "lc.unReportedException", type);
 	}
 
-	public Map<String, Variable> variables = Collections.emptyMap();
+	// Assigned by BlockParser
+	public MyHashMap<String, Variable> variables = new MyHashMap<>();
 	public Variable tryVariable(String name) {return variables.get(name);}
 
 	public static final class Import {
@@ -663,22 +672,34 @@ public class LocalContext {
 			return a;
 		}
 	}
-	// region 应该代理给不知道哪个类的
+	// region 也许应该放在GlobalContext中的一些实现特殊语法的函数
+	public Annotation getAnnotation(IClass type, Attributed node, String annotation, boolean rt) {
+		return Attributes.getAnnotation(Attributes.getAnnotations(type.cp(), node, rt), annotation);
+	}
+
 	private static final IntMap<ExprNode> EMPTY = new IntMap<>(0);
-	public IntMap<ExprNode> getDefaultValue(IClass owner, MethodNode mn) {
-		if (mn.name().equals("emptyTest")) {
-			IntMap<ExprNode> test = new IntMap<>();
-			test.putInt(0, new roj.compiler.ast.expr.Constant(Type.std(Type.INT), AnnVal.valueOf(114514)));
-			test.putInt(1, new roj.compiler.ast.expr.Constant(new Type("java/lang/String"), "STRING"));
-			return test;
-		}
-		return EMPTY;
+	/**
+	 * 方法默认值的统一处理
+	 */
+	public IntMap<ExprNode> getDefaultValue(IClass klass, MethodNode method) {
+		MethodDefault attr = method.parsedAttr(klass.cp(), MethodDefault.METHOD_DEFAULT);
+		if (attr != null) {
+			IntMap<String> value = attr.defaultValue;
+			IntMap<ExprNode> value1 = new IntMap<>();
+			for (IntMap.Entry<String> entry : value.selfEntrySet()) {
+				try {
+					value1.putInt(entry.getIntKey(), ExprParser.deserialize(entry.getValue()).resolve(this));
+				} catch (ParseException|ResolveException e) {
+					e.printStackTrace();
+					return null;
+				}
+			}
+			return value1;
+		} else {return EMPTY;}
 	}
 
 	// 被cast和intanceof调用，若返回true则禁用编译警告和化简
-	public boolean isDynamicType(IType type) {
-		return false;
-	}
+	public boolean isDynamicType(IType type) {return false;}
 
 	public static final int UNARY_PRE = 0, UNARY_POST = 65536;
 	/**
@@ -686,12 +707,12 @@ public class LocalContext {
 	 * 注意：重载是次低优先级，仅高于报错，所以无法覆盖默认行为
 	 * @param e1 左侧
 	 * @param e2 右侧， 当operator属于一元运算符时为null
-	 * @param operator JavaLexer中的tokenId,可以是一元运算符、一元运算符|UNARY_POST、二元运算符、lBracket
+	 * @param operator JavaLexer中的tokenId,可以是一元运算符、一元运算符|UNARY_POST、二元运算符、lBracket(数组取值)
 	 * @return 替代的表达式
 	 */
 	@Nullable
 	public ExprNode getOperatorOverride(@NotNull ExprNode e1, @Nullable ExprNode e2, int operator) {
-		IType left = e1.type(), right = e2 == null ? null : e2.type();
+		IType left = e1.type(), right = e2 == null ? /*deal with null check*/Helpers.maybeNull() : e2.type();
 
 		switch (operator) {
 			case JavaLexer.mul -> {
@@ -736,19 +757,17 @@ public class LocalContext {
 
 	/**
 	 * 常量传播的统一处理
-	 * @param owner
-	 * @param field
 	 * @param fieldType field的泛型类型 可能为空
-	 * @return owner.field的常量值，若有
+	 * @return klass.field的常量值，若有
 	 */
 	@Nullable
-	public ExprNode getConstantValue(IClass owner, FieldNode field, @Nullable IType fieldType) {
+	public ExprNode getConstantValue(IClass klass, FieldNode field, @Nullable IType fieldType) {
 		Object c;
-		assert owner.fields().contains(field);
-		ConstantValue cv = field.parsedAttr(owner.cp(), Attribute.ConstantValue);
+		assert klass.fields().contains(field);
+		ConstantValue cv = field.parsedAttr(klass.cp(), Attribute.ConstantValue);
 		if (cv == null) {
-			if ((owner.modifier() & field.modifier & Opcodes.ACC_ENUM) == 0 || !annotationEnv) {return null;}
-			c = new AnnValEnum(owner.name(), field.name());
+			if ((klass.modifier() & field.modifier & Opcodes.ACC_ENUM) == 0) return null;
+			c = new AnnValEnum(klass.name(), field.name());
 		} else {
 			switch (cv.c.type()) {
 				case Constant.INT: c = AnnVal.valueOf(((CstInt) cv.c).value); break;
@@ -764,6 +783,7 @@ public class LocalContext {
 		return new roj.compiler.ast.expr.Constant(fieldType == null ? field.fieldType() : fieldType, c);
 	}
 
+	// WIP
 	public boolean setConstantValue(Variable var, roj.compiler.ast.expr.Constant val) {
 		return false;
 	}
@@ -800,7 +820,7 @@ public class LocalContext {
 	public final BlockParser bp = new BlockParser(this);
 
 	public String currentCodeBlockForReport() {
-		return "{symbol.type} "+file.name;
+		return "\1symbol.type\0 "+file.name;
 	}
 	// endregion
 }

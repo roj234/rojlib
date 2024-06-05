@@ -10,10 +10,7 @@ import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
 import roj.text.*;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.ArgumentContext;
-import roj.ui.terminal.CommandConsole;
-import roj.ui.terminal.CommandNode;
+import roj.ui.terminal.*;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -22,8 +19,6 @@ import roj.util.NativeException;
 import java.io.*;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.LockSupport;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -187,13 +182,11 @@ public final class CLIUtil implements Runnable {
 	private static final UnsafeCharset CE = GB18030.is(TextUtil.ConsoleCharset) ? GB18030.CODER : UTF8MB4.CODER;
 	private static final ByteList SEQ = new ByteList(256);
 
-	private static final CLIUtil instance = new CLIUtil();
+	private static final CLIUtil reader = new CLIUtil();
 	private static Thread thread;
 
-	public static Thread getConsoleThread() { return thread; }
-
 	private static boolean initialize() {
-		if (Boolean.getBoolean("roj.disableAnsi")) return false;
+		if (Boolean.getBoolean("roj.noAnsi")) return false;
 		if (System.console() == null) return false;
 
 		if (NativeLibrary.hasFunction(NativeLibrary.ANSI_CONSOLE)) {
@@ -203,13 +196,12 @@ public final class CLIUtil implements Runnable {
 				System.err.println("Failed to initialize VT output: " + e.getMessage());
 				return false;
 			}
+			enableDirectInput(true);
 		}
 
-		enableDirectInput(true);
+		CLIUtil con = reader;
 
-		CLIUtil con = instance;
-
-		Thread t = new Thread(con, "终端模拟器");
+		Thread t = new Thread(con, "Console-Reader");
 		t.setPriority(Thread.MAX_PRIORITY);
 		t.setDaemon(true);
 		t.start();
@@ -222,9 +214,8 @@ public final class CLIUtil implements Runnable {
 			}
 		}
 
-		if (con.inited == 0) {
-			con.inited = -1;
-			System.err.println("不是控制台。 注:谁教教我怎么检测STDIN有没有东西,要能跨平台的");
+		if (con.state <= 0) {
+			con.state = -1;
 			enableDirectInput(false);
 			return false;
 		}
@@ -241,14 +232,6 @@ public final class CLIUtil implements Runnable {
 		System.setOut(out);
 		System.setErr(out);
 		return true;
-	}
-	private static void pipeStdIn() {
-		System.setIn(new MBInputStream() {
-			@Override
-			public int read(@NotNull byte[] b, int off, int len) throws IOException { return instance.read(b, off, len); }
-			@Override
-			public int available() { return instance.available(); }
-		});
 	}
 
 	private static final int STDIN = 0, STDOUT = 1, STDERR = 2;
@@ -408,8 +391,7 @@ public final class CLIUtil implements Runnable {
 			}
 		};
 
-		if (prev == null) setConsole(c);
-		else console = c;
+		setConsole(c);
 		try {
 			while (true) {
 				synchronized (ref) {
@@ -425,8 +407,7 @@ public final class CLIUtil implements Runnable {
 			if (exitOnCancel) System.exit(1);
 			return 0;
 		} finally {
-			if (prev == null) setConsole(null);
-			else console = prev;
+			setConsole(prev);
 		}
 	}
 
@@ -459,7 +440,7 @@ public final class CLIUtil implements Runnable {
 
 	private static Int2IntMap CharLength = new Int2IntMap();
 	public static int getCharWidth(char c) {
-		if (c < 16) return c == '\t' ? 4 : 0;
+		if (c < 32) return c == '\t' ? 8 : 0;
 		if (TextUtil.isPrintableAscii(c)) return 1;
 		if (TextUtil.isChinese(c)) return 2;
 
@@ -469,7 +450,7 @@ public final class CLIUtil implements Runnable {
 		if (len >= 0) return len;
 
 		try {
-			instance.getCursorPos();
+			reader.getCursorPos();
 		} catch (Exception e) {
 			CharLength = null;
 			return 2;
@@ -483,7 +464,7 @@ public final class CLIUtil implements Runnable {
 			writeSeq(bb);
 
 			try {
-				len = (instance.getCursorPos()&0xFF)-1;
+				len = (reader.getCursorPos()&0xFF)-1;
 				CharLength.put(c, len);
 			} catch (Exception e) {
 				assert false;
@@ -542,65 +523,6 @@ public final class CLIUtil implements Runnable {
 	}
 
 	private CLIUtil() {}
-
-	// region PipeInputStream
-	private static final AtomicInteger IN_READ = new AtomicInteger();
-	private static final int RING_BUFFER_CAPACITY = 4096;
-	private final byte[] Pipe = new byte[RING_BUFFER_CAPACITY];
-	private int rPtr, wPtr;
-
-	public int read(@NotNull byte[] b, int off, int len) throws IOException {
-		ArrayUtil.checkRange(b, off, len);
-		if (len == 0) return 0;
-
-		while (true) {
-			synchronized (this) {
-				if (rPtr == wPtr) {
-					IN_READ.incrementAndGet();
-					LockSupport.unpark(thread);
-
-					try {
-						wait();
-					} catch (InterruptedException e) {
-						throw new ClosedByInterruptException();
-					}
-
-					IN_READ.decrementAndGet();
-				}
-
-				int read = Math.min(len, available());
-				if (read > 0) {
-					System.arraycopy(Pipe, rPtr, b, off, read);
-					rPtr = (rPtr+read) & 4095;
-					return read;
-				}
-			}
-		}
-	}
-	public int available() {
-		int readLen = wPtr - rPtr;
-		return readLen < 0 ? readLen+RING_BUFFER_CAPACITY : readLen;
-	}
-
-	private synchronized void pipe(byte[] buf, int off, int len) {
-		while (true) {
-			int write = Math.min(len, Pipe.length - wPtr);
-			System.arraycopy(buf, off, Pipe, wPtr, write);
-
-			len -= write;
-			if (len == 0) {
-				wPtr += write;
-				break;
-			}
-
-			wPtr = 0;
-			off += write;
-		}
-
-		notifyAll();
-	}
-	public static void writeToSystemIn(byte[] b, int off, int len) { instance.pipe(b, off, len); }
-	// endregion
 
 	// region bottom line
 	static final SimpleList<CharList> LINES = new SimpleList<>();
@@ -760,28 +682,25 @@ public final class CLIUtil implements Runnable {
 	}
 	// endregion
 
-	private volatile int inited;
+	private volatile int state;
 	public void run() {
-		if (inited == 0) {
+		if (state == 0) {
 			try {
 				System.out.print("\u001b[6n");
-				long time = System.currentTimeMillis();
-				System.in.read();
-
-				if (inited == 0) inited = 1;
-				else {
-					sysErr.println("对read()的调用返回。耗时："+(System.currentTimeMillis()-time)+"ms");
+				int r = System.in.read();
+				if (r < 0) {
+					state = -1;
 					return;
 				}
 
-				synchronized (this) { notify(); }
-				//checkResize();
+				if (state == 0) state = 1;
+				else sysErr.println("对System.in.read()的调用超时");
 			} catch (Throwable e) {
 				Helpers.athrow(e);
+			} finally {
+				synchronized (this) { notify(); }
 			}
 		}
-
-		inited = 2;
 
 		ByteList.Slice shellB = IOUtil.SharedCoder.get().shellB;
 		byte[] buf = new byte[260];
@@ -802,40 +721,74 @@ public final class CLIUtil implements Runnable {
 
 			try {
 				if (ANSI) processInput(buf, 0, r, shellB);
-				else if (console != null)
-					for (int i = 0; i < r; i++)
-						keyEnter(buf[i]&0xFF, buf[i] == '\n');
-				else pipe(buf, 0, r);
+				else for (int i = 0; i < r; i++)
+					console.keyEnter(buf[i]&0xFF, buf[i] == '\n');
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
 
-		sysErr.println("Console handler has terminated!");
-		System.exit(13102);
+		sysErr.println("Console handler terminated!");
 	}
+	// region PipeInputStream
+	private static final int RING_BUFFER_CAPACITY = 4096;
+	private final byte[] Pipe = new byte[RING_BUFFER_CAPACITY];
+	private int rPtr, wPtr, waiters;
 
-	private static volatile Console console;
+	synchronized void write(byte[] buf, int off, int len) {
+		while (true) {
+			int write = Math.min(len, Pipe.length - wPtr);
+			System.arraycopy(buf, off, Pipe, wPtr, write);
+
+			len -= write;
+			if (len == 0) {
+				wPtr += write;
+				break;
+			}
+
+			wPtr = 0;
+			off += write;
+		}
+
+		notify();
+	}
+	private static final Console PIPE = new DefaultConsole("") {
+		@Override
+		public void keyEnter(int keyCode, boolean isVirtualKey) {
+			if (keyCode == (VK_CTRL|VK_C)) {
+				sysOut.println("Received SIGINT");
+				System.exit(0);
+			}
+
+			if (reader.waiters == 0) return;
+			super.keyEnter(keyCode, isVirtualKey);
+		}
+
+		@Override
+		protected boolean evaluate(String cmd) {
+			System.out.println(cmd);
+
+			ByteList b = IOUtil.getSharedByteBuf().putUTFData(cmd).put('\n');
+			reader.write(b.list, 0, b.wIndex());
+			return true;
+		}
+	};
+	// endregion
+
+	@NotNull
+	private static volatile Console console = PIPE;
 	public static void setConsole(Console c) {
+		if (c == null) c = PIPE;
+
 		synchronized (CLIUtil.class) {
 			Console prev = console;
 			if (prev == c) return;
-			if (prev != null) {
-				synchronized (prev) {
-					prev.unregistered();
-					console = c;
-				}
-			}
+			prev.unregistered();
 
 			console = c;
 		}
 
-		if (c != null) {
-			if (ANSI) enableDirectInput(true);
-			c.registered();
-		} else {
-			if (ANSI) enableDirectInput(false);
-		}
+		c.registered();
 	}
 	public static Console getConsole() { return console; }
 
@@ -914,7 +867,8 @@ public final class CLIUtil implements Runnable {
 			KeyMap.match(inBuf, i, len, matcher);
 			int matchLen = matcher.getKey().value;
 			if (matchLen < 0) {
-				keyEnter(buf[i++], false);
+				int keyCode = buf[i++];
+				console.keyEnter(keyCode, false);
 				continue;
 			}
 
@@ -937,24 +891,10 @@ public final class CLIUtil implements Runnable {
 						break found;
 					}
 				}
-				keyEnter(matcher.v, true);
+				console.keyEnter(matcher.v, true);
 			}
 
 			i += matchLen;
-		}
-
-		if (console == null && inited == 2) {
-			ByteList shell = IOUtil.SharedCoder.get().wrap(buf, off, len);
-			stripAnsi(shell);
-			if (shell.wIndex() > 0) pipe(buf, off, shell.wIndex());
-		}
-	}
-	private void keyEnter(int keyCode, boolean isVirtual) {
-		Console line = console;
-		if (line != null) line.keyEnter(keyCode, isVirtual);
-		else if (keyCode == (VK_CTRL|VK_C)) {
-			sysOut.println("Received SIGINT");
-			System.exit(0);
 		}
 	}
 	private void escEnter(ByteList buf) {
@@ -975,7 +915,6 @@ public final class CLIUtil implements Runnable {
 		sysOut.println("额外的ESC转义组: "+buf.dump()+" (可以考虑报告该问题)");
 	}
 	// endregion
-
 	// region cursor position
 	public static int windowHeight, windowWidth;
 
@@ -1021,7 +960,7 @@ public final class CLIUtil implements Runnable {
 		synchronized (sysOut) {
 			writeSeq(SEQ.putAscii("\u001b[?25l\u001b7\u001b[999E\u001b[999C"));
 			try {
-				int winSize = instance.getCursorPos();
+				int winSize = reader.getCursorPos();
 				windowWidth = winSize&0xFFFF;
 				windowHeight = winSize >>> 16;
 			} finally {
@@ -1033,14 +972,40 @@ public final class CLIUtil implements Runnable {
 
 	static {
 		ANSI = initialize();
-		if (!ANSI) {
-			instance.inited = 1;
+		System.setIn(new MBInputStream() {
+			@Override
+			public int read(@NotNull byte[] b, int off, int len) throws IOException {
+				ArrayUtil.checkRange(b, off, len);
+				if (len == 0) return 0;
 
-			Thread t = thread = new Thread(instance, "TermEmu-Fallback");
-			t.setDaemon(true);
-			t.start();
-		}
-		pipeStdIn();
+				synchronized (reader) {
+					if (reader.waiters++ == 0 && console == PIPE) PIPE.registered();
+					try {
+						while (reader.rPtr == reader.wPtr) {
+							try {
+								reader.wait();
+							} catch (InterruptedException e) {
+								throw new ClosedByInterruptException();
+							}
+						}
+					} finally {
+						if (--reader.waiters == 0 && console == PIPE) PIPE.unregistered();
+					}
+
+					int read = Math.min(len, available());
+					System.arraycopy(reader.Pipe, reader.rPtr, b, off, read);
+					reader.rPtr = (reader.rPtr+read) & (RING_BUFFER_CAPACITY - 1);
+
+					if (reader.rPtr != reader.wPtr) reader.notify();
+					return read;
+				}
+			}
+			@Override
+			public int available() {
+				int readLen = reader.wPtr - reader.rPtr;
+				return readLen < 0 ? readLen+RING_BUFFER_CAPACITY : readLen;
+			}
+		});
 		in = new BufferedReader(new InputStreamReader(System.in));
 	}
 }

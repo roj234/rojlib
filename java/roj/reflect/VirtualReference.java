@@ -92,14 +92,15 @@ public class VirtualReference<V> {
 			ClassLoader loader = get();
 			if (loader == null) throw new IllegalStateException("key was freed???");
 
-			ConstantData xref = new ConstantData();
-			xref.name("isolated/Context$"+ReflectionUtils.uniqueId());
-			xref.newField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, "value", "Ljava/lang/Object;");
+			var xref = new ConstantData();
+			xref.access = 0;
+			xref.name("vr/R$"+ReflectionUtils.uniqueId());
+			xref.newField(Opcodes.ACC_STATIC, "r", "Ljava/lang/Object;");
 
 			Class<?> klass = ClassDefiner.defineClass(loader, xref);
 
 			this.v = new WeakReference<>(klass);
-			offset = ReflectionUtils.fieldOffset(klass, "value");
+			offset = ReflectionUtils.fieldOffset(klass, "r");
 			u.putObject(klass, offset, v);
 		}
 	}

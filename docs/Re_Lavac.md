@@ -28,6 +28,16 @@ for (int i = 0; i < arr.length; i++) {
   System.out.println("循环未开始，或未通过break终止");
 }
 ```
+### 多返回值
+*该语法可能随时变动
+```java
+static [int, long, String] multiReturnTest() {
+	return [3, 5, "233"];
+}
+
+var [a, b, c] = multiReturnTest();
+var a = multiReturnTest()[0];
+```
 ### 分支完全忽略 (已实现)
 如果一个if、while、do-while或switch语句处理的是立即或非立即常量，那么比较会在编译期完成  
 下列代码能够通过编译  
@@ -44,12 +54,18 @@ if (false) {
 ### List foreach (已实现)
 对于同时实现List和RandomAccess接口的类，它的foreach会以顺序访问而不是Iterator编译  
 如果你正好有这么个列表，还是多线程访问的（必须用Iterator），请使用 ...for 来禁用这个优化
-### 参数默认值  
+### 参数默认值 (已实现)
   在方法定义处使用形如 `method(int a = 3)` 的语句来为参数指定默认值  
-  默认值可以是任意表达式，实际上它相当于一个宏，你可以使用在当前上下文不可用，而在函数调用上下文可用的变量
+  默认值可以是*任意*表达式，实际上它相当于一个宏，你可以使用仅在函数调用上下文可用的变量  
+  如下代码会*成功编译*
 ```java
-static void test(int a = 3, Object o = some_variable.some_field) {
+static void test(int a = 3, Object o = some_variable) {
 	// ...
+}
+
+{
+    int some_variable = 5;
+    test(5);
 }
 ```
 ### EasyMap (已实现)
@@ -154,11 +170,11 @@ defer u.freeMemory(addr);
 ### 附加函数
    将自己的静态函数以静态形式或动态形式附加到第三方类
 ### inline ASM (WIP)
+### record
 
 ## Java17支持，Lava暂时不支持
 ### switch作为表达式
 ### 封闭类
-### record
 ### 模块系统
 ### 非静态类，以及和它相关的泛型调用
 

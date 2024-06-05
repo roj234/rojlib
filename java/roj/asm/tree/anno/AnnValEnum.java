@@ -32,6 +32,8 @@ public final class AnnValEnum extends AnnVal {
 		TypeHelper.toStringOptionalPackage(sb, rawOwner());
 		return sb.replace('/', '.').append('.').append(field).toStringAndFree();
 	}
+	@Override
+	public String toRawString() {return field;}
 
 	@Override
 	public boolean equals(Object o) {

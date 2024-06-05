@@ -35,13 +35,21 @@ public class Diagnostic {
 
 	public Kind getKind() { return kind; }
 
-	public String getFilePath() {return source == null ? "<compiler>" : source instanceof CompileUnit cu ? cu.getFilePath() : source.name();}
+	public String getFilePath() {return source == null ? "<compiler>" : source instanceof CompileUnit cu ? cu.getSourceFile() : source.name();}
 	public IClass getSource() { return source; }
 	public int getStartPosition() { return wordStart; }
 	public int getEndPosition() { return wordEnd; }
 
 	public String getCode() { return code; }
-	public Object[] getArgs() { return args; }
+	public Object[] getArgs_original() { return args; }
+	public Object[] getArgs() {
+		Object[] clone = args.clone();
+		for (int i = 0; i < clone.length; i++) {
+			Object o = clone[i];
+			if (o instanceof IClass t) clone[i] = t.name().replace('/', '.');
+		}
+		return clone;
+	}
 
 	public int getLineNumber() { initLines(); return lineNumber; }
 	public int getColumnNumber() { initLines(); return columnNumber; }
@@ -78,6 +86,6 @@ public class Diagnostic {
 	@Nls
 	public String getMessage(Locale locale) {
 		if (!locale.equals(Locale.SIMPLIFIED_CHINESE)) return code;
-		return JavaLexer.translate.translate(code+(args == null ? "" : ":"+(TextUtil.join(Arrays.asList(args), ":"))));
+		return JavaLexer.translate.translate(code+(args == null ? "" : ":"+(TextUtil.join(Arrays.asList(getArgs()), ":"))));
 	}
 }

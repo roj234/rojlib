@@ -121,7 +121,6 @@ public interface SandboxEvaluator {
 			c.one(ARETURN);
 		}
 
-		invokerInst.dump();
 		SandboxEvaluator evaluator = (SandboxEvaluator) ClassDefiner.make(invokerInst, scl);
 
 		for (int j = 0; j < invoker.size(); j++) {

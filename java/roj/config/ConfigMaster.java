@@ -178,7 +178,7 @@ public enum ConfigMaster {
 		parser(true).parse(buf, 0, ser.reset());
 		return ser.get();
 	}
-	public <T> T readObject(Serializer<T> ser, CharSequence sb) throws IOException, ParseException {
+	public <T> T readObject(Serializer<T> ser, CharSequence sb) throws ParseException {
 		BinaryParser p = parser(true);
 		if (!(p instanceof Parser tp)) throw new UnsupportedOperationException(this+"不是文本配置格式");
 		tp.parse(sb, 0, ser.reset());

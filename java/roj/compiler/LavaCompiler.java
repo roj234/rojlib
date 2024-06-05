@@ -17,13 +17,10 @@ import roj.compiler.resolve.TypeResolver;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
-import roj.text.CharList;
 import roj.util.Helpers;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.lang.reflect.Method;
 import java.util.Collections;
 
@@ -35,7 +32,9 @@ public class LavaCompiler {
 	final GlobalContext ctx = new GlobalContext();
 	final LocalContext cache = new LocalContext(ctx);
 
-	public LavaCompiler() throws IOException {
+	public LavaCompiler() throws IOException {initDefaultPlugins(ctx);}
+
+	static void initDefaultPlugins(GlobalContext ctx) throws IOException {
 		File ImpLib = Helpers.getJarByClass(LavaCompiler.class);
 		ctx.addLibrary(new LibraryZipFile(ImpLib));
 
@@ -45,26 +44,6 @@ public class LavaCompiler {
 		AsmHook hook = AsmHook.init(ctx);
 		hook.injectedProperties.put("咕咕咕", Constant.valueOf("咕咕咕咕，我是🕊"));
 		SandboxEvaluator.init(ctx, repo);
-	}
-
-	public static void main(String[] args) throws Exception {
-		LavaCompiler compiler = new LavaCompiler();
-
-		System.out.println("Lava编译器v"+Lavac.VERSION+" 交互式命令行 输入空行来开始编译");
-		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-		CharList tmp = new CharList();
-		while (true) {
-			while (true) {
-				String line = br.readLine();
-				if (line.isEmpty()) break;
-				tmp.append(line).append('\n');
-			}
-
-			if (tmp.length() > 0) {
-				compiler.linkLambda(Runnable.class, tmp.toString()).run();
-				tmp.clear();
-			}
-		}
 	}
 
 	@SuppressWarnings("unchecked")

@@ -688,8 +688,9 @@ public class CharList implements CharSequence, Appendable {
 		if (start == 0 && end == len) return this;
 		return start==end ? "" : new Slice(list, start, end);
 	}
-	public final String toString() { return toString(0, len); }
-	public final String toString(int start, int end) {
+	public final String toString() {return substring(0, len);}
+	public String substring(int start) {return substring(start, len);}
+	public final String substring(int start, int end) {
 		checkBounds(start,end,len);
 		return start==end ? "" : new String(list, start, end-start);
 	}

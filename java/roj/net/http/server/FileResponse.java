@@ -225,7 +225,7 @@ public class FileResponse implements Response {
 
 			// 看了一眼标准，第一个可以不加\r\n，不过无所谓
 			b.replace(28, 32, "\r\n--");
-			splitter = b.toString(28, b.length()-1);
+			splitter = b.substring(28, b.length()-1);
 			b._free();
 
 			req.handler.chunked();

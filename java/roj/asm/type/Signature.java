@@ -30,7 +30,13 @@ public class Signature extends Attribute {
 
 	public byte type;
 	/**
-	 * Contract: values[0] is extend, other is implement
+	 * Class:
+	 *   values[0] is extends, other is implements
+	 *   Throws: Empty
+	 * Field:
+	 *   typeParams: Empty
+	 *   values[0] is type
+	 *   Throws: Empty
 	 */
 	public List<IType> values;
 	public List<IType> Throws;

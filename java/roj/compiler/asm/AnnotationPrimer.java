@@ -6,7 +6,7 @@ import roj.util.Helpers;
 
 public final class AnnotationPrimer extends Annotation {
 	public int pos;
-	public boolean assertValueOnly;
+	public boolean valueOnly;
 
 	public AnnotationPrimer(String type, int pos) {
 		this.setType(type);

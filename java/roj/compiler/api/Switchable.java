@@ -16,6 +16,9 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
 public @interface Switchable {
+	/**
+	 * 使用identityHashcode还是Object#hashCode
+	 */
 	boolean identity() default true;
 	/**
 	 * 像enum一样建议同类中的static字段

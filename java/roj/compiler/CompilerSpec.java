@@ -1,9 +1,12 @@
 package roj.compiler;
 
 public interface CompilerSpec {
-	int KEEP_PARAMETER_NAME = 0;
-	int SOURCE_FILE = 1;
-	int PRE_COMPILE = 5;
+	int ATTR_METHOD_PARAMETERS = 0;
+	int ATTR_SOURCE_FILE = 1;
+	int ATTR_LINE_NUMBERS = 2;
+	int ATTR_LOCAL_VARIABLES = 3;
+	int ATTR_INNER_CLASS = 4;
+	int ATTR_STACK_FRAME = 5;
 	int PRIMITIVE_GENERIC = 6;
 	int INTERFACE_INACCESSIBLE_FIELD = 16;
 	int ADVANCED_GENERIC_CHECK = 32;
