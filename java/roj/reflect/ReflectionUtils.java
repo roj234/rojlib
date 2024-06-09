@@ -190,23 +190,7 @@ public final class ReflectionUtils {
 		}
 	}
 
-	private static boolean smRemoved = JAVA_VERSION > 21;
-	public static Class<?> getCallerClass(int backward) {
-		if (!smRemoved) {
-			try {
-				return Tracer.INSTANCE.getCallerClass(backward+1);
-			} catch (Throwable e) {
-				smRemoved = true;
-			}
-		}
-
-		try {
-			StackTraceElement[] trace = new Throwable().getStackTrace();
-			return trace.length < backward ? null : Class.forName(trace[backward].getClassName());
-		} catch (ClassNotFoundException e) {
-			return null;
-		}
-	}
+	public static Class<?> getCallerClass(int backward) {return JAVA_VERSION < 17 ? Tracer.INSTANCE.getCallerClass(backward+1) : GetCallerArgs.getCallerClass(backward+2);}
 	private static final class Tracer extends SecurityManager {
 		// avoid security manager creation warning
 		static final Tracer INSTANCE = new Tracer();

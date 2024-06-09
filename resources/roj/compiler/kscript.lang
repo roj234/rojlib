@@ -4,6 +4,7 @@ type.literal=标识符(identifier)
 unexpected=此时不应有 '%1'
 unexpected_2=未预料的 '%1', 期待 '%2'
 
+braceMismatch=未关闭的花括号
 not_statement=不是语句
 noExpression=非法的表达式开始
 
@@ -29,7 +30,22 @@ annotation.override=此方法未能覆盖超类的方法
 # TypeResolver(class)
 # Nothing here
 
-#Cu Stage0 [Import]
+#Cu Stage1 [Module]
+package.annotation=程序包注释应在文件 package-info.java 中
+
+module.dup=一个编译环境中只允许一个模块
+module.unexpected=模块描述应在文件 module-info.java 中
+module.open=开放的模块不允许使用opens语句
+module.dup.requires=模块%1已导入
+module.dup.exports=包%1已导出
+module.dup.exports2=包%1已导出至%2
+module.dup.uses=服务提供接口%1已注册
+module.dup.provides=服务提供接口%1已注册实现
+module.dup.provides2=服务提供接口%1的实现%2已注册
+module.semicolon=此处期待分号
+module.eof=模块文本在解析完成前终止
+
+#Cu Stage1 [Import]
 import.unpackaged=[Import]不带包名的导入
 import.any=[Import]任意导入可能导致安全性或可靠性下降，建议仅用于脚本模式
 import.conflict=[Import] %1 的短名称%2与 %3 重复
@@ -39,15 +55,13 @@ modifier.conflict=[Modifier]修饰符%1不能与%2组合
 modifier.notAllowed=[Modifier]此处不允许修饰符%1
 modifier.superset=[Modifier]该修饰符组合不兼容Javac
 
-#Cu Stage1 [Struct]
+#Cu Stage1 [Class]
 cu.record.header=[CU]record类必须有至少一个字段
 cu.struct.antibody=[CU]结构不能包含子节点
 
 cu.noInheritance=[CU]%1已隐式的从%2继承
 cu.noConstructor=[CU]构造器在%1中不可用
 cu.noConstructor.enum=[CU]枚举构造器必须是私有的
-
-cu.name=名字
 
 # 已在<context>中定义了<type> <name>
 cu.nameConflict=[CU]已在%1中定义了%2 %3
@@ -61,9 +75,10 @@ cu.method.annotationThrow=注解方法不能抛出异常
 cu.method.noAbstract=在非抽象类%1中无法声明抽象方法%2
 
 cu.annotation.valueOnly=注解值必须采用 'name=value' 格式
+ps.annotation.noConstant=注解值不是常量
 
 cu.except.type=class、interface、enum、@interface或record
-cu.except.name=<类名>
+cu.name=<名称>
 cu.except.initBlock=初始化块
 cu.except.fieldName=字段名
 cu.except.record=','或')'
@@ -88,8 +103,12 @@ cu.annotation.notApplicable=注解 @%1 无法应用于元素 %2
 cu.override.unable="%1中的方法%2无法实现%3中的方法%4\n  %5"
 cu.override.access=正在分配更低的访问权限 (%1=> %2)
 cu.override.returnType="返回类型不兼容\n  原因: %1"
-cu.override.thrown=覆盖的方法未抛出异常 %1
+cu.override.thrown=被覆盖的方法未抛出异常 %1
 cu.override.noImplement=%1 不是抽象的, 并且未覆盖%2中的抽象方法%3
+cu.override.static.self=被覆盖的方法不是静态的
+cu.override.static.other=被覆盖的方法是静态的
+
+cu.unrelatedDefault=方法%1在%2实现的其它接口中也有默认值, 必须覆盖此方法
 
 cu.finalField.assigned=无法为最终变量%1分配值
 cu.finalField.missed=可能尚未初始化变量%1
@@ -127,13 +146,14 @@ block.return.error.outsideMethod=[Return]方法外的返回
 block.return.error.exceptVoid=[Return]意外的返回值
 block.return.error.exceptExpr=[Return]缺少返回值
 
-block.try.error.duplicateCatch=[Try]在AnyCatch后不能再有catch
-block.try.error.notException=[Try]%1不是异常
-block.try.error.generic=[Try]不能捕获泛型异常%1
-block.try.error.captured=[Try]异常%1已被%2捕获
-block.try.error.noHandler=[Try]孤立的try
-block.try.error.noAutoCloseable=[Try] try-with-resources 不适用 (%1无法转换为java.lang.AutoCloseable)
-block.try.warn.tooManyCopies=[Try]finally代码块（%1字节）被复制了%2次，用"...finally"替换finally以减小文件体积
+block.try.duplicateCatch=[Try]在AnyCatch后不能再有catch
+block.try.notException=[Try]%1不是异常
+block.try.generic=[Try]不能捕获泛型异常%1
+block.try.captured=[Try]异常%1已被%2捕获
+block.try.noHandler=[Try]孤立的try
+block.try.noAutoCloseable=[Try] try-with-resources 不适用 (%1无法转换为java.lang.AutoCloseable)
+block.try.waste=[Try]finally代码块（%1字节）被复制了%2次，用"...finally"替换finally以减小文件体积
+block.try.interrupted=[Try]对close()的隐式调用可能抛出InterruptedException
 
 
 block.switch.mixedCase=[Switch]使用了不同的 case 类型
@@ -141,6 +161,7 @@ block.switch.manyDefault=[Switch]default 标签重复
 block.switch.duplicate=[Switch]标签 %1 重复
 block.switch.uncovered="[Switch]缺少default分支\n  %1"
 block.switch.collisionType=[Switch]分支类型%1和%2之间存在交集
+block.switch.nullfail=[Switch]基本类型不允许case null
 
 block.switch.noBranch=[Switch]没有分支
 block.switch.incompatible=[Switch]类型%1不能使用switch比较 (对于对象类型，添加@Switchable即可)
@@ -222,7 +243,6 @@ invoke.error.instantiationAbstract=[Invoke] %1 是抽象的; 无法实例化
 invoke.compatible.plural="[Invoke]对 %1 的引用不明确\n%2"
 invoke.incompatible.single="[Invoke]无法将类 %1 中的方法 %2 应用到给定类型\n%3"
 invoke.incompatible.plural="[Invoke]对于%1找不到合适的方法\n%2"
-lambda.error.untyped=[Lambda]未知的目标类型
 trinary.constant=[Trinary]值总是常量
 this.static=[This]无法在静态上下文中引用this
 this.no_super=[This]%1没有超类引用
@@ -230,6 +250,13 @@ unary.error.notApplicable=[Unary]运算符'%1'不适用于'%2'
 unary.warn.wrapper=[Unary]对包装类型%1的%2操作
 unary.error.void=[Unary]空类型
 unary.error.final=[Unary]无法为最终变量%1分配值
+
+# lambda表达式
+lambda.untyped=[Lambda]未知的目标类型
+# 这些magic number的定义见ResolveHelper
+lambda.unsupported.3=[Lambda]不是抽象的
+lambda.unsupported.4=[Lambda]没有抽象方法
+lambda.unsupported.5=[Lambda]有好多抽象方法
 
 # 表达式 write
 expr.skipReturnValue=[Expr]该语句的返回值不能省略

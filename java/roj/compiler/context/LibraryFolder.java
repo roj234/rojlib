@@ -3,13 +3,13 @@ package roj.compiler.context;
 import org.jetbrains.annotations.NotNull;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.IClass;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -45,12 +45,12 @@ public class LibraryFolder implements Library, Predicate<File> {
 	public Set<String> content() { return info.keySet(); }
 
 	@Override
-	public IClass get(CharSequence name) {
+	public ConstantData get(CharSequence name) {
 		Object o = info.get(name);
-		if (o instanceof IClass) return (IClass) o;
+		if (o instanceof ConstantData) return (ConstantData) o;
 		if (o == null) return null;
 		try {
-			ConstantData data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(new FileInputStream((File) o)));
+			ConstantData data = Parser.parseConstants(IOUtil.read((File) o));
 			info.put(name.toString(), data);
 			return data;
 		} catch (IOException e) {
@@ -59,4 +59,7 @@ public class LibraryFolder implements Library, Predicate<File> {
 			return null;
 		}
 	}
+
+	@Override
+	public InputStream getResource(CharSequence name) throws IOException {return new FileInputStream((File) info.get(name));}
 }

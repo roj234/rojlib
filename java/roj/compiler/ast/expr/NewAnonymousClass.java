@@ -2,9 +2,11 @@ package roj.compiler.ast.expr;
 
 import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
+import roj.asm.tree.MethodNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.ast.NaE;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -18,7 +20,6 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * TODO TEST
  * @author Roj234
  * @since 2024/6/3 0003 2:27
  */
@@ -49,39 +50,56 @@ final class NewAnonymousClass extends ExprNode {
 
 		argTypes.set(args.size(), Type.std(Type.VOID));
 
-		String parent = ((Type) init.fn).owner;
-
-		type.parent(parent);
-
+		String parent = (ctx.resolveType((Type) init.fn)).owner();
 		IClass info = ctx.classes.getClassInfo(parent);
 		if (info == null) {
 			ctx.report(Kind.ERROR, "symbol.error.noSuchClass", parent);
-			return this;
+			return NaE.RESOLVE_FAILED;
 		}
 
-		//will be done via S2 parent check
-		//ctx.assertAccessible(info);
+		if ((info.modifier() & Opcodes.ACC_INTERFACE) != 0) {
+			type.addInterface(parent);
+			type.createDelegation(Opcodes.ACC_SYNTHETIC, new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/Object", "<init>", "()V"));
+		} else {
+			type.parent(parent);
 
-		ComponentList list = ctx.methodListOrReport(info, "<init>");
-		if (list == null) {
-			ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", "<init>"+"("+ TextUtil.join(argTypes, ",")+")", "{symbol.type} "+parent);
-			return this;
+			ComponentList list = ctx.methodListOrReport(info, "<init>");
+			if (list == null) {
+				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", "<init>"+"("+TextUtil.join(argTypes, ",")+")", "\1symbol.type\0 "+parent);
+				return NaE.RESOLVE_FAILED;
+			}
+
+			MethodResult r = list.findMethod(ctx, argTypes, ComponentList.THIS_ONLY);
+			if (r == null) return NaE.RESOLVE_FAILED;
+
+			r.addExceptions(ctx, info, false);
+			type.createDelegation(Opcodes.ACC_SYNTHETIC, r.method);
 		}
-
-		MethodResult r = list.findMethod(ctx, argTypes, ComponentList.THIS_ONLY);
-		if (r == null) return this;
-
-		r.addExceptions(ctx, info, 0);
-		type.createDelegation(Opcodes.ACC_SYNTHETIC, r.method);
 		ctx.classes.addGeneratedClass(type);
 
+		var lexer = type.getLexer();
+		var table = lexer.table;
+		var gen = lexer.labelGen;
+		int pos;
+
+		LocalContext.depth(1);
 		try {
-			type.S2_Parse();
+			pos = lexer.next().pos();
+			lexer.table = null;
+			lexer.labelGen = null;
+
+			type.S2_Resolve();
 			type.S3_Annotation();
 			type.S4_Code();
 		} catch (ParseException e) {
 			throw new ResolveException("newAnonymousClass failed", e);
 		}
+
+		LocalContext.depth(-1);
+
+		lexer.index = pos;
+		lexer.table = table;
+		lexer.labelGen = gen;
 
 		init.fn = new Type(type.name);
 		return init.resolve(ctx);

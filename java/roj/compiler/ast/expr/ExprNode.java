@@ -3,7 +3,6 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.Visitor;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
@@ -37,11 +36,6 @@ public abstract class ExprNode implements UnresolvedExprNode {
 	public boolean isConstant() { return UnresolvedExprNode.super.isConstant(); }
 	@Override
 	public Object constVal() { return UnresolvedExprNode.super.constVal(); }
-
-	public void visit(Visitor visitor, TypeCast.Cast exceptingType) {
-		// NOT IMPLEMENTED
-	}
-
 
 	public abstract void write(MethodWriter cw, boolean noRet);
 	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {

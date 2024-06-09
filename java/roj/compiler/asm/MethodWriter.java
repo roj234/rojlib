@@ -13,6 +13,7 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.util.List;
+import java.util.Objects;
 
 import static roj.asm.Opcodes.*;
 
@@ -34,7 +35,7 @@ public class MethodWriter extends CodeWriter {
 	}
 
 	public TryCatchEntry addException(Label str, Label end, Label proc, String s) {
-		TryCatchEntry entry = new TryCatchEntry(str, end, proc, s);
+		TryCatchEntry entry = new TryCatchEntry(Objects.requireNonNull(str, "start"), Objects.requireNonNull(end, "end"), Objects.requireNonNull(proc, "handler"), s);
 		entryList.add(entry);
 		return entry;
 	}
@@ -53,7 +54,7 @@ public class MethodWriter extends CodeWriter {
 		super.visitAttributes();
 
 		if (debugLines) lineNumberDebug();
-		else if (lines != null) visitAttribute(lines);
+		else if (lines != null && !lines.isEmpty()) visitAttribute(lines);
 	}
 
 	public void load(Variable v) { addSegment(new LazyLoadStore(v, false)); }

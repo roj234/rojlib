@@ -68,6 +68,9 @@ static void test(int a = 3, Object o = some_variable) {
     test(5);
 }
 ```
+### lambdaify
+  只有一个抽象方法的抽象类（不是接口），也可以使用lambda(不过会编译成new匿名类)  
+  没有抽象方法的可继承类，可以使用*什么*指定一个方法？
 ### EasyMap (已实现)
   使用类似PHP的语法来构建Map&lt;?,?&gt;
 ```java
@@ -108,7 +111,7 @@ var map = [ 1+1 => 3+4 , "mixed type" => also.can.be.used() ];
 ### finally优化 (已实现)
   在多个嵌套的finally块中，防止代码体积暴增
 ### 预编译函数 (已实现)
-  在编译期间执行标为【可预编译 @roj.compiler.api.Constant】并已知入参的函数，并生成常量结果
+  在编译期间执行标为【可预编译 @roj.compiler.plugins.constant.Constant】并已知入参的函数，并生成常量结果
 ### 数组压缩
   将基本类型数组压缩为字符串(Base128)，减少文件体积
 ### 隐式导入|ImportAny (已实现)
@@ -145,30 +148,48 @@ yyy = a = 3;
 // 但是，现在有了第二种方式
 int a = yyy <<< 3;
 ```
-### 过程
-  在方法中使用`__sub name(type name)`标记一个过程  
-  几乎用不到，但，我可以不用，你不能没有
+### defer (已实现)
+  以try-with-resource形式在代码块结束时执行多个表达式  
+  若一表达式发生错误，不影响其余表达式执行，异常会一起抛出  
+  可以和AutoCloseable混用  
+  最后一个分号可以省略  
+  注意：  
+  defer的执行顺序和定义顺序是相反的（对于AutoCloseable是先new后close）  
+  下列代码的执行结果是：  
+  * 打印 b
+  * 打印 a
+  * 关闭文件输入流  
 ```java
-static void test() {
-	__sub sub1(String string) {
-		System.out.println(string);
-		__end_sub; // 等同于return
-        // 然而它本质上仍然属于这个方法，所以用了return会退出整个方法
-    }
+try (
+      InputStream in = new FileInputStram(...);
+      defer System.out.println("a");
+      defer System.out.println("b");
+) {
+	
 }
-```
-### defer (部分实现)
-  在当前代码块结束时执行表达式（try-finally的语法糖，让缩进更好看）  
-  若一表达式发生错误，不影响其余表达式执行，异常会一起抛出
-```java
-defer u.freeMemory(addr);
 ```
 ### yield
    生成器函数 (WIP)
 ### async / await
    Promise (WIP)
-### 附加函数
-   将自己的静态函数以静态形式或动态形式附加到第三方类
+### 附加函数 (已实现 扩展功能)
+   将静态函数附加到其它类上
+
+```java
+
+import roj.compiler.plugins.annotations.Attach;
+
+@Attach
+public class Attacher {
+    public static boolean isNotEmpty(String s) {
+		return !s.isEmpty();
+    }
+}
+
+```
+
+这么做之后，无论这个类以源代码编译还是在classpath中  
+都可在字符串对象（或它的子类，虽然字符串是final的）上使用 isNotEmpty() 函数
 ### inline ASM (WIP)
 ### record
 

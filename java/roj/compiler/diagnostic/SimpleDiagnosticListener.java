@@ -1,6 +1,7 @@
 package roj.compiler.diagnostic;
 
 import roj.text.CharList;
+import roj.ui.AnsiString;
 import roj.ui.CLIUtil;
 
 import java.io.PrintStream;
@@ -13,7 +14,7 @@ import java.util.function.Consumer;
  */
 public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 	int err, warn;
-	int[] counter = new int[5];
+	int[] counter = new int[6];
 
 	public SimpleDiagnosticListener(int maxError, int maxWarn, int warnOps) {
 		this.err = maxError;
@@ -23,6 +24,7 @@ public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 	private String getErrorType(Kind kind) {
 		counter[kind.ordinal()]++;
 		return switch (kind) {
+			case INCOMPATIBLE -> "INCOMPATIBLE";
 			case NOTE -> "注";
 			case WARNING -> "警告";
 			case SEVERE_WARNING -> "强警告";
@@ -54,12 +56,26 @@ public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 		sb.append(getErrorType(diag.getKind())).append(':').append(' ').append(diag.getMessage(Locale.CHINA)).append('\n');
 
 		if (diag.getLine() != null) {
-			sb.append(diag.getLine()).append('\n');
-			int realWidth = -1;
-			for (int i = 0; i < diag.getColumnNumber(); i++) {
-				realWidth += CLIUtil.getCharWidth(diag.getLine().charAt(i));
+			String line = diag.getLine();
+
+			if (diag.getLength() > 0) {
+				sb.append(line, 0, diag.getColumnNumber());
+
+				AnsiString as = new AnsiString(line.substring(diag.getColumnNumber(), diag.getColumnNumber() + diag.getLength()));
+				as.bgColorRGB(0xff3333);
+				as.append(new AnsiString("").clear()).writeAnsi(sb);
+
+				sb.append(line, diag.getColumnNumber()+diag.getLength(), line.length());
+				sb.append('\n');
+			} else {
+				sb.append(line).append('\n');
+
+				int realWidth = -1;
+				for (int i = 0; i < diag.getColumnNumber(); i++) {
+					realWidth += CLIUtil.getCharWidth(line.charAt(i));
+				}
+				sb.padEnd(' ', realWidth).append('^').append('\n');
 			}
-			sb.padEnd(' ', realWidth).append('^').append('\n');
 		}
 
 		System.err.print(sb);
@@ -75,7 +91,7 @@ public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 
 	public void conclusion() {
 		PrintStream err = System.err;
-		err.println((counter[1]+counter[2]) + " 个 警告");
-		err.println((counter[3]+counter[4]) + " 个 错误");
+		err.println((counter[2]+counter[3]) + " 个 警告");
+		err.println((counter[4]+counter[5]) + " 个 错误");
 	}
 }

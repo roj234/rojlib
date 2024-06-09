@@ -37,6 +37,35 @@ public final class ResolveHelper {
 
 	public ResolveHelper(IClass owner) {this.owner = owner;}
 
+	private MethodNode lambdaMethod;
+	private byte lambdaType;
+	public int getLambdaType() {
+		if (lambdaType == 0) {
+			if ((owner.modifier()&Opcodes.ACC_ABSTRACT) == 0) {
+				lambdaType = 3;
+			} else {
+				RawNode mn = null;
+				for (RawNode method : owner.methods()) {
+					if ((method.modifier()&Opcodes.ACC_ABSTRACT) != 0) {
+						if (mn != null) return lambdaType = 5;
+						mn = method;
+					}
+				}
+
+				if (mn == null) {
+					lambdaType = 4;
+				} else {
+					lambdaMethod = (MethodNode) mn;
+					lambdaType = (byte) ((owner.modifier()&Opcodes.ACC_INTERFACE) != 0 ? 1 : 2);
+				}
+
+			}
+		}
+		return lambdaType;
+	}
+	public MethodNode getLambdaMethod() {return lambdaMethod;}
+
+	// region 父类列表
 	private IntBiMap<String> classList;
 
 	public synchronized IntBiMap<String> getClassList(GlobalContext ctx) throws ClassNotFoundException {
@@ -65,7 +94,7 @@ public final class ResolveHelper {
 				String name = itf.get(i);
 
 				IClass itfInfo = ctx.getClassInfo(name);
-				if (itfInfo == null) throw new ClassNotFoundException(owner);
+				if (itfInfo == null) throw new ClassNotFoundException(name);
 
 				if (list.getInt(name) < 0) DIST(list, castDistance, name);
 
@@ -82,11 +111,10 @@ public final class ResolveHelper {
 
 		return this.classList = list;
 	}
-
 	private static void DIST(IntBiMap<String> list, int castDistance, String name) {
 		list.putInt((list.size()<<16) | castDistance, name);
 	}
-
+	// endregion
 	// region 注解
 	private AnnotationSelf ac;
 
@@ -213,7 +241,8 @@ public final class ResolveHelper {
 			List<? extends RawNode> methods1 = type.methods();
 			for (int i = 0; i < methods1.size(); i++) {
 				MethodNode mn = (MethodNode) methods1.get(i);
-				if (mn.name().equals("<clinit>") || (mn.modifier & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) continue;
+				// <init> 允许 synthetic
+				if (mn.name().startsWith("<") ? mn.name().equals("<clinit>") : (mn.modifier & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) continue;
 
 				MethodList ml = (MethodList) methods.get(mn.name());
 				if (ml == null) methods.put(mn.name(), ml = new MethodList());
@@ -235,10 +264,7 @@ public final class ResolveHelper {
 					continue;
 				}
 
-				ResolveHelper rh = ctx.getResolveHelper(info);
-				rh.findMethod(ctx, "");
-
-				for (Map.Entry<String, ComponentList> entry : rh.methods.entrySet()) {
+				for (Map.Entry<String, ComponentList> entry : ctx.getResolveHelper(info).getMethods(ctx).entrySet()) {
 					String key = entry.getKey();
 					if (key.startsWith("<")) continue;
 

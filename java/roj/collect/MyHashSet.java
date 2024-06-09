@@ -169,17 +169,23 @@ public final class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 		}
 	}
 
+	public boolean remove(Object o) {return remove1(o) != UNDEFINED;}
 	@SuppressWarnings("unchecked")
-	public boolean remove(Object o) {
+	public K removeValue(Object o) {
+		Object o1 = remove1(o);
+		return o1 == UNDEFINED ? null : (K) o1;
+	}
+	@SuppressWarnings("unchecked")
+	private Object remove1(Object o) {
 		if (o == null) {
 			if (hasNull) {
 				hasNull = false;
 				size--;
-				return true;
+				return null;
 			}
-			return false;
+			return UNDEFINED;
 		}
-		if (entries == null) return false;
+		if (entries == null) return UNDEFINED;
 
 		K id = (K) o;
 
@@ -194,19 +200,16 @@ public final class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 				obj = prev.next;
 			}
 
-			if (obj == null || !hasher.equals(id, obj)) return false;
+			if (obj == null || !hasher.equals(id, obj)) return UNDEFINED;
 		}
 
-		this.size--;
+		size--;
 
 		Object next = obj instanceof Entry ? ((Entry) obj).next : null;
-		if (prev != null) {
-			prev.next = next;
-		} else {
-			this.entries[i] = next;
-		}
+		if (prev != null) prev.next = next;
+		else entries[i] = next;
 
-		return true;
+		return obj instanceof Entry entry ? entry.k : obj;
 	}
 
 	public boolean contains(Object o) {

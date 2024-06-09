@@ -8,6 +8,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.IntMap;
 import roj.compiler.context.LocalContext;
+import roj.compiler.diagnostic.Kind;
 
 import java.util.List;
 
@@ -39,17 +40,26 @@ public final class MethodResult {
 		this.error = error;
 	}
 
-	public void addExceptions(LocalContext ctx, IClass cn, int issuer) {
+	public void addExceptions(LocalContext ctx, IClass cn, boolean twr) {
 		if (exception != null) {
 			for (IType ex : exception) {
+				if (twr && ex.owner().equals("java/lang/InterruptedException"))
+					ctx.report(Kind.WARNING, "block.try.interrupted");
+
 				ctx.addException(ex);
 			}
 		} else {
 			AttrClassList exAttr = method.parsedAttr(cn.cp(), Attribute.Exceptions);
 			if (exAttr != null) {
 				List<String> value = exAttr.value;
-				for (int i = 0; i < value.size(); i++)
-					ctx.addException(new Type(value.get(i)));
+				for (int i = 0; i < value.size(); i++) {
+					String type = value.get(i);
+
+					if (twr && type.equals("java/lang/InterruptedException"))
+						ctx.report(Kind.WARNING, "block.try.interrupted");
+
+					ctx.addException(new Type(type));
+				}
 			}
 		}
 	}

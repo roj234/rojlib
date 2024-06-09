@@ -20,7 +20,7 @@ import java.net.InetSocketAddress;
  */
 public class MyTemplateEngine {
 	GlobalContext compiler = new GlobalContext();
-	LocalContext ctx = new LocalContext(compiler);
+	LocalContext ctx = compiler.createLocalContext();
 	CharList meta = new CharList(), tmp = new CharList();
 
 	public static void main(String[] args) throws Exception {
@@ -79,9 +79,8 @@ public class MyTemplateEngine {
 
 		ctx.setClass(u);
 
-		u.S0_Init();
 		u.S1_Struct();
-		u.S2_Parse();
+		u.S2_Resolve();
 		u.S3_Annotation();
 		u.S4_Code();
 

@@ -33,18 +33,25 @@ public final class MethodNode extends CNode {
 		this.name = name;
 		this.desc = type;
 	}
-	public MethodNode copyDesc() { return new MethodNode(modifier, owner, name, desc); }
+	public MethodNode(RawNode m) {
+		modifier = m.modifier();
+		owner = m.ownerClass();
+		name = m.name();
+		desc = m.rawDesc();
+	}
+
+	public MethodNode(java.lang.reflect.Method m) {
+		modifier = (char) m.getModifiers();
+		owner = m.getDeclaringClass().getName().replace('.', '/');
+		name = m.getName();
+		desc = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
+	}
+
+	public MethodNode copyDesc() { return new MethodNode(modifier, owner, name, in != null ? rawDesc() : desc); }
 	public MethodNode copy() {
 		MethodNode inst = copyDesc();
 		if (attributes != null) inst.attributes = new AttributeList(attributes);
 		return inst;
-	}
-
-	public MethodNode(java.lang.reflect.Method m) {
-		name = m.getName();
-		modifier = (char) m.getModifiers();
-		desc = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
-		owner = m.getDeclaringClass().getName().replace('.', '/');
 	}
 
 	// todo move to parameter
@@ -210,9 +217,13 @@ public final class MethodNode extends CNode {
 		if (def != null) sb.append(" default ").append(def.val);
 
 		try {
-			XAttrCode code = parsedAttr(cp, Attribute.Code);
-			if (code != null) code.toString(sb.append(" {\n"), prefix+4).padEnd(' ', prefix).append("}\n");
-			else sb.append(';');
+			if (attrByName("Code") instanceof AttrCodeWriter cw) {
+				sb.append(cw.cw.toString());
+			} else {
+				XAttrCode code = parsedAttr(cp, Attribute.Code);
+				if (code != null) code.toString(sb.append(" {\n"), prefix+4).padEnd(' ', prefix).append("}\n");
+				else sb.append(';');
+			}
 		} catch (Exception e) {
 			sb.append(e);
 		}

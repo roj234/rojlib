@@ -70,7 +70,7 @@ public final class TypeResolver {
 		// import java.util.Map.Entry
 		int slash = name.lastIndexOf('/');
 		if (slash >= 0) {
-			CharList sb = ctx.tmpList;
+			CharList sb = ctx.tmpSb;
 			sb.clear();
 			sb.append(name);
 

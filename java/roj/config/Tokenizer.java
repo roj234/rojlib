@@ -562,7 +562,8 @@ public class Tokenizer {
 
 	protected Word readStringLegacy(char key) throws ParseException { return formClip(STRING, readSlashString(key, true)); }
 
-	protected final Word wd = new Word();
+	protected Word newWord() {return new Word();}
+	protected final Word wd = newWord();
 	protected Word formClip(short id, CharSequence s) { return wd.init(id, prevIndex, s.toString()); }
 	protected final Word eof() { return wd.init(EOF, prevIndex, "/EOF"); }
 	// endregion

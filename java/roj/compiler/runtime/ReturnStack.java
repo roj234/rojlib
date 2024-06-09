@@ -13,11 +13,7 @@ public final class ReturnStack<T> implements GenericIgnore {
 	private static final int MEMORY_CAPACITY = 8 * 256;
 
 	public static final ThreadLocal<ReturnStack<?>> TL = ThreadLocal.withInitial(ReturnStack::new);
-	public static ReturnStack<?> get() {
-		ReturnStack<?> stack = TL.get();
-		stack.objects.clear();
-		return stack.forRead();
-	}
+	public static ReturnStack<?> get() {return TL.get().forWrite();}
 
 	private final NativeMemory memory;
 	public ReturnStack() {this(MEMORY_CAPACITY);}
@@ -29,11 +25,16 @@ public final class ReturnStack<T> implements GenericIgnore {
 		stack.objects.addAll(objects);
 		return stack;
 	}
+	public ReturnStack<T> forWrite() {
+		objects.clear();
+		return forRead();
+	}
 	public ReturnStack<T> forRead() {
 		address = memory.address();
 		index = 0;
 		return this;
 	}
+	public long address() {return memory.address();}
 
 	/**
 	 * Optional: put return crc32 at +0, and throw IncompatibleClassChangeError on demand

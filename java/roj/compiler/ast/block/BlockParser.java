@@ -35,6 +35,7 @@ import roj.compiler.resolve.TypeCast;
 import roj.config.ParseException;
 import roj.config.Word;
 import roj.util.Helpers;
+import roj.util.VarMapper;
 
 import java.util.AbstractMap;
 import java.util.Collections;
@@ -54,6 +55,9 @@ import static roj.compiler.JavaLexer.*;
  * @since 2020/10/3 19:20
  */
 public class BlockParser {
+	static final String VARIABLE_IGNORE = "_";
+	static final Type exc = new Type("java/lang/Throwable");
+
 	private final LocalContext ctx;
 	private final ExprParser ep;
 
@@ -98,6 +102,7 @@ public class BlockParser {
 		reset();
 		parse0();
 
+		System.out.println(wr.table);
 		wr.labelGen = null;
 		wr.table = null;
 	}
@@ -142,7 +147,7 @@ public class BlockParser {
 		while (true) {
 			Word w = wr.next();
 			if (w.type() == Word.EOF || w.type() == rBrace) {
-				if ((sectionFlag&SF_BLOCK_END) == 0 && !blockMethod) {
+				if (!blockMethod && cw.isContinuousControlFlow()) {
 					if (cw.mn.returnType().type == Type.VOID) cw.one(Opcodes.RETURN);
 					else ctx.report(Kind.ERROR, "block.missingReturnValue");
 				}
@@ -156,34 +161,6 @@ public class BlockParser {
 	}
 
 	//endregion
-	//region 函数
-
-	/**
-	 * Unreachable statement检测 <BR>
-	 * TODO stack this
-	 */
-	private byte sectionFlag;
-	private static final byte SF_BLOCK = 1, SF_BLOCK_END = 2, SF_SWITCH = 4, SF_EMPTY = 8;
-
-	/**
-	 * 函数体
-	 */
-	@SuppressWarnings("fallthrough")
-	private void block() throws ParseException { block(true); }
-	private void block(boolean shouldBegin) throws ParseException {
-		boolean prevIsEmpty = (sectionFlag & SF_EMPTY) != 0;
-
-		if (shouldBegin) beginCodeBlock();
-		sectionFlag |= SF_BLOCK|SF_EMPTY;
-		while (true) {
-			Word w = wr.next();
-			switch (w.type()) {
-				case Word.EOF: case rBrace: endCodeBlock(); return;
-				default: statement(w); sectionFlag &= ~SF_EMPTY;
-			}
-		}
-	}
-
 	/**
 	 * 语句
 	 */
@@ -238,7 +215,6 @@ public class BlockParser {
 			case DO -> _doWhile();
 			case TRY -> _try();
 			case SYNCHRONIZED -> _sync();
-			case DEFER -> _defer();
 			case WITH -> _with();
 			//case YIELD -> _yield(); // require Generator function
 			//case AWAIT -> _await(); // require Async function
@@ -260,6 +236,7 @@ public class BlockParser {
 					}
 
 					if (type == lBracket) {
+						// TODO
 						ctx.report(Kind.ERROR, "此功能暂未实现");
 						while (wr.next().type() != semicolon);
 						return;
@@ -286,117 +263,34 @@ public class BlockParser {
 
 		immediateLabel = null;
 	}
+	// region Block, SectionFlag, 变量ID和作用域
+	/**
+	 * Unreachable statement检测
+	 */
+	private byte sectionFlag;
+	private static final byte SF_BLOCK = 1, SF_BLOCK_END = 2, SF_EMPTY = 4;
 
-	private void _sync() throws ParseException {
-		except(lParen);
-
-		ExprNode node = ep.parse(file, ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
-
-		if (node.type().isPrimitive()) {
-			ctx.report(Kind.ERROR, "type.primitiveNotAllowed", node.type());
-		}
-
-		node.write(cw, false);
-
-		beginCodeBlock();
-		Variable syncVar = newVar("@SYNC", node.type());
-
-		cw.one(DUP);
-		cw.store(syncVar);
-		cw.one(MONITORENTER);
-
-		Label start = cw.label();
-
-		except(lBrace);
-		block(false);
-
-		Label end = cw.label();
-		Label realEnd = new Label();
-
-		cw.jump(realEnd);
-
-		Label exception = cw.label();
-		cw.load(syncVar);
-		cw.one(MONITOREXIT);
-		cw.one(ATHROW);
-
-		cw.label(realEnd);
-		cw.load(syncVar);
-		cw.one(MONITOREXIT);
-
-		cw.addException(start,end,exception,TryCatchEntry.ANY);
-	}
-
-	// endregion
-	// region 自定义语法
-	private void _with() throws ParseException {
-		except(lParen);
-
-		ExprNode node = ep.parse(file, ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
-
-		if (node.type().isPrimitive()) {
-			ctx.report(Kind.ERROR, "block.sync.unexpectedPrimitive", node.type());
-		}
-
-		beginCodeBlock();
-		except(lBrace);
-
-		Variable ref;
-		if (node.isKind(ExprNode.ExprKind.LDC_CLASS)) ref = null;
-		else {
-			node.write(cw, false);
-			ref = newVar("@WITH", node.type());
-			cw.store(ref);
-		}
-
-		IClass info = ctx.classes.getClassInfo(node.type().owner());
-
-		var fi = ctx.dynamicFieldImport;
-		var mi = ctx.dynamicMethodImport;
-
-		ctx.dynamicFieldImport = getFieldDFI(info, ref, fi);
-		ctx.dynamicMethodImport = name -> {
-			ComponentList cl = ctx.methodListOrReport(info, name);
-			if (cl != null) return new LocalContext.Import(info, name, ref == null ? null : new LocalVariable(ref));
-
-			return mi == null ? null : mi.apply(name);
-		};
-
-		try {
-			block(false);
-		} finally {
-			ctx.dynamicFieldImport = fi;
-			ctx.dynamicMethodImport = mi;
-		}
-	}
-	@NotNull
-	private Function<String, LocalContext.Import> getFieldDFI(IClass info, Variable ref, Function<String, LocalContext.Import> prev) {
-		return name -> {
-			ComponentList cl = ctx.fieldListOrReport(info, name);
-			if (cl != null) {
-				FieldResult result = cl.findField(ctx, ref == null ? ComponentList.IN_STATIC : 0);
-				if (result.error == null) return new LocalContext.Import(info, result.field.name(), ref == null ? null : new LocalVariable(ref));
+	/**
+	 * 函数体
+	 */
+	private void block() throws ParseException { block(true); }
+	private void block(boolean shouldBegin) throws ParseException {
+		if (shouldBegin) beginCodeBlock();
+		sectionFlag |= SF_BLOCK|SF_EMPTY;
+		while (true) {
+			Word w = wr.next();
+			switch (w.type()) {
+				case Word.EOF: case rBrace: endCodeBlock(); return;
+				default: statement(w); sectionFlag &= ~SF_EMPTY;
 			}
-
-			return prev == null ? null : prev.apply(name);
-		};
-	}
-
-	private void _defer() throws ParseException {
-		UnresolvedExprNode expr = ep.parse(file, ExprParser.STOP_SEMICOLON | ExprParser.SKIP_SEMICOLON);
-		if (expr == null) {
-			ctx.report(Kind.ERROR, "noExpression");
-			return;
 		}
-		regionNew.getLast().add(expr);
 	}
-	// region Block, SectionFlag和条件
+
 	private void blockOrStatement() throws ParseException {
 		Word word = wr.next();
 		if (word.type() == lBrace) {
 			block();
 		} else {
-			// TODO 有问题吗？
 			sectionFlag &= ~SF_BLOCK;
 			statement(word);
 		}
@@ -422,7 +316,53 @@ public class BlockParser {
 		}
 		sectionFlag |= SF_BLOCK_END;
 	}
+
+	// 当前作用域新增的东西
+	private final SimpleList<SimpleList<Object>> regionNew = new SimpleList<>();
+	private final MyHashMap<String, Variable> variables;
+
+	private void beginCodeBlock() {
+		SimpleList<Object> list = new SimpleList<>();
+		list.add(cw.label());
+		regionNew.add(list);
+	}
+	private void endCodeBlock() {
+		SimpleList<Object> added = regionNew.pop();
+		for (int i = 1; i < added.size(); i++) {
+			Object var = added.get(i);
+			if (var instanceof Variable v) {
+				if (v.startPos == v.endPos && !v.name.startsWith("@"))
+					ctx.report(v.startPos, Kind.WARNING, "block.var.warn.unused", v.name);
+
+				variables.remove(v.name);
+				fastSlot -= v.type.rawType().length();
+			} else {
+				labels.remove(var.toString());
+			}
+		}
+	}
+
+	private final VarMapper varMapper = new VarMapper();
+	// 自然也有slowSlot => VarMapper
+	private int fastSlot;
+	private Variable newVar(String name, IType type) {
+		// TODO => CONSIDER TYPE MERGING (if var)
+		Variable v = new Variable(name, type);
+		v.slot = fastSlot;
+		v.startPos = v.endPos = wr.index;
+
+		if (null != variables.putIfAbsent(name, v)) {
+			ctx.report(Kind.ERROR, "block.var.error.duplicate", name);
+			return v;
+		}
+
+		if (!regionNew.isEmpty()) regionNew.get(regionNew.size()-1).add(v);
+
+		fastSlot += type.rawType().length();
+		return v;
+	}
 	// endregion
+	// try-finally重定向return
 	private Label returnHook;
 	private IntList returnHookUsed;
 	// region 异常: try-catch-finally try-with-resource
@@ -440,39 +380,60 @@ public class BlockParser {
 
 		Label tryBegin = cw.label();
 
-		Label tryADefined = null;
-		Variable tryADefinedVar = null;
-		boolean tryANullable = false;
+		var tryNode = new TryNode();
 		// try with resource
 		if (w.type() != lBrace) {
 			if (w.type() != lParen) wr.unexpected(w.val(), "block.except.tryOrAuto");
 
 			beginCodeBlock();
 			do {
-				int modifier = file._modifier(wr, FINAL);
-				// todo infer
-				IType type = ctx.resolveType(file.readType(CompileUnit.TYPE_GENERIC));
+				w = wr.next();
+				if (w.type() == rParen && !tryNode.vars.isEmpty()) break;
 
-				if (!ctx.instanceOf(type.owner(), "java/lang/AutoCloseable")) {
-					ctx.report(Kind.ERROR, "block.try.error.noAutoCloseable", type);
-				}
-
-				tryADefinedVar = newVar(wr.except(Word.LITERAL).val(), type);
-				tryADefinedVar.isFinal = true;
-				regionNew.getLast().pop();
-
-				except(assign);
-				UnresolvedExprNode node = ep.parse(file, ExprParser.STOP_RSB|ExprParser.STOP_SEMICOLON);
-				if (node == null) {
-					ctx.report(Kind.ERROR, "noExpression");
+				if (w.val().equals("defer")) {
+					tryNode.add(ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.STOP_RSB|ExprParser.NAE).resolve(ctx));
 				} else {
-					tryANullable = !(node instanceof Invoke i && i.isNew());
+					IType type;
+					if (w.val().equals("var") || w.val().equals("const")) {
+						type = null;
+					} else {
+						wr.retractWord();
+						file._modifiers(wr, FINAL);
+						type = ctx.resolveType(file.readType(CompileUnit.TYPE_GENERIC));
+					}
 
-					writeCast(node.resolve(ctx), type);
-					cw.store(tryADefinedVar);
-					tryADefined = cw.label();
+					String name = wr.except(Word.LITERAL).val();
+
+					except(assign);
+					var expr = ep.parse(file, ExprParser.STOP_RSB|ExprParser.STOP_SEMICOLON);
+					if (expr == null) {
+						ctx.report(Kind.ERROR, "noExpression");
+					} else {
+						ExprNode node = expr.resolve(ctx);
+						if (type == null) type = node.type();
+
+						var tryADefinedVar = newVar(name, type);
+						tryADefinedVar.isFinal = true;
+						regionNew.getLast().pop();
+
+						if (!ctx.instanceOf(type.owner(), "java/lang/AutoCloseable")) {
+							ctx.report(Kind.ERROR, "block.try.noAutoCloseable", type);
+						}
+
+						var tryANullable = !(node instanceof Invoke i && i.isNew());
+
+						writeCast(node, type);
+						cw.store(tryADefinedVar);
+
+						var tryADefined = cw.label();
+
+						tryNode.add(tryADefinedVar, tryANullable, tryADefined);
+					}
 				}
 			} while (wr.next().type() == semicolon);
+
+			if (tryNode.hasDefer && tryNode.pos.get(0) == null)
+				tryNode.pos.set(0, cw.label());
 
 			flag |= 2;
 			except(lBrace);
@@ -488,104 +449,16 @@ public class BlockParser {
 
 		if ((flag&2) != 0) {
 			beginCodeBlock();
-			variables.remove(tryADefinedVar.name);
-			regionNew.getLast().add(tryADefinedVar);
 
-			Label tryACloser = new Label();
-
-			int moreSituations = 0;
-			if (anyNormal) moreSituations++;
-			if (returnHookUsed.size() > 0) moreSituations++;
-
-			Variable sri = moreSituations < 2 ? null : newVar("@TWR|跳转自", Type.std(Type.INT));
-			// 到此为止，不要过早优化(LavaHelper.ABSOLUTE_0)
-			if (anyNormal) {
-				if (sri != null) {
-					cw.ldc(0);
-					cw.store(sri);
-					cw.one(ACONST_NULL);
-					cw.jump(tryACloser);
-				} else {
-					cw.one(ACONST_NULL);
+			var vars = tryNode.vars;
+			for (int i = 0; i < vars.size(); i++) {
+				if (vars.get(i) instanceof Variable v) {
+					variables.remove(v.name);
+					regionNew.getLast().add(v);
 				}
 			}
 
-			if (returnHookUsed.size() > 0) {
-				cw.label(returnHook);
-				if (sri != null) {
-					cw.ldc(1);
-					cw.store(sri);
-					cw.one(ACONST_NULL);
-					cw.jump(tryACloser);
-				} else {
-					cw.one(ACONST_NULL);
-				}
-			}
-
-			cw.addException(tryADefined, tryEnd, cw.label(), TryCatchEntry.ANY);
-			if (sri != null) {
-				cw.ldc(0); // 这个值不可能用上
-				cw.store(sri);
-			}
-
-			Variable exc = newVar("@TWR|异常", LocalContext.OBJECT_TYPE);
-			cw.store(exc);
-
-			Label tryCloseTotallyEnd = new Label();
-			Label tryCloseHandler = new Label();
-
-			cw.label(tryACloser);
-			if (tryANullable) {
-				cw.load(tryADefinedVar);
-				cw.jump(IFNULL, tryCloseTotallyEnd);
-			}
-			cw.addException(cw.label(), tryCloseHandler, tryCloseHandler, TryCatchEntry.ANY);
-			cw.load(tryADefinedVar);
-
-			IClass info = ctx.classes.getClassInfo(tryADefinedVar.type.owner());
-			if ((info.modifier()&ACC_INTERFACE) != 0) cw.invokeItf(tryADefinedVar.type.owner(), "close", "()V");
-			else cw.invokeV(tryADefinedVar.type.owner(), "close", "()V");
-
-			ComponentList list = ctx.methodListOrReport(info, "close");
-			if (list != null) {
-				MethodResult result = list.findMethod(ctx, tryADefinedVar.type, Collections.emptyList(), null, 0);
-				if (result != null) {
-					// TODO 提示是由隐式调用产生的异常
-					result.addExceptions(ctx, info, 1);
-				}
-			}
-
-			cw.jump(tryCloseTotallyEnd);
-			cw.label(tryCloseHandler);
-			cw.load(exc);
-			Label nextHandler = new Label();
-			cw.jump(IFNONNULL, nextHandler);
-			cw.one(ATHROW);
-			cw.jump(tryCloseTotallyEnd);
-			cw.label(nextHandler);
-			cw.load(exc);
-			cw.invokeV("java/lang/Throwable", "addSuppressed", "(Ljava/lang/Throwable;)V");
-
-			cw.label(tryCloseTotallyEnd);
-			cw.load(exc);
-			if (moreSituations > 0) {
-				if (sri != null) {
-					Label label1 = new Label();
-					cw.jump(IFNULL, label1);
-					cw.load(exc);
-					cw.one(ATHROW);
-					cw.label(label1);
-					cw.load(sri);
-					cw.jump(IFEQ, blockEnd);
-					cw.jump(returnHook = new Label());
-				} else {
-					cw.jump(IFNULL, anyNormal ? blockEnd : (returnHook = new Label()));
-					cw.load(exc);
-					cw.one(ATHROW);
-				}
-			} else {
-				cw.one(ATHROW);
-			}
+			closeResource(anyNormal, tryNode, blockEnd, tryEnd);
 
 			endCodeBlock();
 		} else {
@@ -613,16 +486,16 @@ public class BlockParser {
 					entry.type = type.owner();
 
 					if (!ctx.instanceOf(entry.type, "java/lang/Throwable")) {
-						ctx.report(Kind.ERROR, "block.try.error.notException", type);
+						ctx.report(Kind.ERROR, "block.try.notException", type);
 					}
 
 					if (type.genericType() != IType.STANDARD_TYPE) {
-						ctx.report(Kind.ERROR, "block.try.error.generic", type);
+						ctx.report(Kind.ERROR, "block.try.generic", type);
 					}
 
 					for (int i = 0; i < exTypes.size(); i++) {
 						if (ctx.instanceOf(entry.type, exTypes.get(i))) {
-							ctx.report(Kind.ERROR, "block.try.error.captured", type, type);
+							ctx.report(Kind.ERROR, "block.try.captured", type, type);
 							break;
 						}
 					}
@@ -631,8 +504,8 @@ public class BlockParser {
 					if ("java/lang/Throwable".equals(entry.type)) flag |= 1;
 
 					w = wr.except(Word.LITERAL, "block.except.name");
-					Variable v = newVar(w.val(), type);
-					cw.store(v);
+					if (w.val().equals(VARIABLE_IGNORE)) cw.one(POP);
+					else cw.store(newVar(w.val(), type));
 
 					except(rParen);
 					except(lBrace);
@@ -719,7 +592,7 @@ public class BlockParser {
 
 				// 这个magic number是新finally方式的最大overhead
 				if (copyCount*delta >= 36) {
-					ctx.report(pos, Kind.WARNING, "block.try.warn.tooManyCopies", delta, copyCount);
+					ctx.report(pos, Kind.WARNING, "block.try.waste", delta, copyCount);
 				}
 			} else {
 				// sri => subroutine id
@@ -802,7 +675,7 @@ public class BlockParser {
 			wr.retractWord();
 			if ((flag&2) == 0) {
 				// 孤立的try
-				if (exTypes.isEmpty()) ctx.report(Kind.ERROR, "block.try.error.noHandler");
+				if (exTypes.isEmpty()) ctx.report(Kind.ERROR, "block.try.noHandler");
 
 				StaticSegment ret = new StaticSegment(cw.mn.returnType().shiftedOpcode(IRETURN));
 				for (int i = 0; i < used.size(); i++) cw.replaceSegment(used.get(i), ret);
@@ -813,65 +686,160 @@ public class BlockParser {
 
 		if (anyNormal) cw.label(blockEnd);
 	}
-	// endregion
-	// 当前作用域新增的东西
-	private final SimpleList<SimpleList<Object>> regionNew = new SimpleList<>();
+	private void closeResource(boolean anyNormal, TryNode tn, Label blockEnd, Label tryEnd) {
+		int moreSituations = 0;
+		if (anyNormal) moreSituations++;
+		if (returnHookUsed.size() > 0) moreSituations++;
 
-	private final MyHashMap<String, LabelInfo> labels = new MyHashMap<>();
-	private final MyHashMap<String, Variable> variables;
+		var sri = moreSituations < 2 ? null : newVar("@TWR|跳转自", Type.std(Type.INT));
+		var exc = newVar("@TWR|异常", LocalContext.OBJECT_TYPE);
 
-	// 对循环或代码块上label的支持
-	private LabelInfo immediateLabel;
-	// 按照代码块(循环)深度递增的,方便break/continue寻找
-	private Label curBreak, curContinue;
-	// region 作用域 标签 控制流终止: break continue goto return throw
-	private void beginCodeBlock() {
-		SimpleList<Object> list = new SimpleList<>();
-		list.add(cw.label());
-		regionNew.add(list);
-	}
-	private void endCodeBlock() {
-		Label blockEnd = null;
-		SimpleList<Object> added = regionNew.pop();
-		for (int i = 1; i < added.size(); i++) {
-			Object var = added.get(i);
-			if (var instanceof Variable v) {
-				if (v.startPos == v.endPos && !v.name.startsWith("@"))
-					ctx.report(v.startPos, Kind.WARNING, "block.var.warn.unused", v.name);
+		if (sri != null) {
+			var label = new Label();
+			cw.ldc(0);
+			cw.store(sri);
+			cw.jump(label);
 
-				variables.remove(v.name);
-				fastSlot -= v.type.rawType().length();
-			} else if (var instanceof UnresolvedExprNode expr) {
-				if (blockEnd == null) blockEnd = cw.label();
-				expr.resolve(ctx).write(cw, true);
+			cw.label(returnHook);
+			cw.ldc(1);
+			cw.store(sri);
+
+			cw.label(label);
+		} else if (returnHookUsed.size() > 0) {
+			cw.label(returnHook);
+		}
+
+		Label[] normalHandlers;
+		if (moreSituations > 0) {
+			List<Object> vars = tn.vars;
+			Label prev_nc = null;
+
+			normalHandlers = ctx.getTmpLabels(vars.size() << 1);
+			for (int i = vars.size()-1; i >= 0; i--) {
+				var o = vars.get(i);
+
+				Label nc = new Label();
+				//    TCE [a2_normal_close, a1_normal_close, @local] => LABEL1
+				if (prev_nc != null) {
+					normalHandlers[i*2] = prev_nc;
+					normalHandlers[i*2 + 1] = new Label();
+				}
+				prev_nc = nc;
+
+				if (o instanceof Variable v) {
+					if (tn.exception.contains(i)) {
+						cw.load(v);
+						cw.jump(IFNULL, nc);
+					}
+
+					invokeClose(v, false);
+				} else {
+					((ExprNode) o).write(cw, true);
+				}
+
+				cw.label(nc);
+			}
+
+			if (sri != null) {
+				cw.load(sri);
+				cw.jump(IFEQ, blockEnd);
+				cw.jump(returnHook = new Label());
 			} else {
-				labels.remove(var.toString());
+				cw.jump(anyNormal ? blockEnd : (returnHook = new Label()));
+			}
+		} else {
+			normalHandlers = null;
+		}
+
+		var pos = tn.pos;
+		int i = pos.size()-1;
+
+		for (int j = 1; j < tn.pos.size(); j++) {
+			if (pos.get(j) == null) pos.set(j, pos.get(j-1));
+		}
+
+		cw.addException(pos.get(i), tryEnd, cw.label(), TryCatchEntry.ANY);
+
+		boolean smallTwr = i > 2;
+		while (true) {
+			var o = tn.vars.get(i);
+
+			noCatch:
+			if (smallTwr && o instanceof Variable v) {
+				cw.load(v);
+				cw.invokeS("roj/compiler/runtime/QuickUtils", "twr", "(Ljava/lang/Throwable;Ljava/lang/AutoCloseable;)Ljava/lang/Throwable;");
+			} else {
+				cw.store(exc);
+
+				var l_closed = new Label();
+				Label l_preClose;
+				boolean isException = tn.exception.contains(i);
+
+				if (o instanceof Variable v) {
+					if (isException) {
+						cw.load(v);
+						cw.jump(IFNULL, l_closed);
+					}
+
+					l_preClose = cw.label();
+					invokeClose(v, true);
+				} else {
+					l_preClose = cw.label();
+					((ExprNode) o).write(cw, true);
+
+					if (!isException) {
+						cw.load(exc);
+						break noCatch;
+					}
+				}
+
+				cw.jump(l_closed);
+
+				var l_postClose = cw.label();
+				cw.addException(l_preClose, l_postClose, l_postClose, null);
+				cw.load(exc);
+				cw.one(SWAP);
+				cw.invokeV("java/lang/Throwable", "addSuppressed", "(Ljava/lang/Throwable;)V");
+
+				cw.label(l_closed);
+				cw.load(exc);
+			}
+
+			if (i == 0) {
+				cw.one(ATHROW);
+				break;
+			}
+			i--;
+
+			if (normalHandlers == null) {
+				if (!pos.get(i).equals(pos.get(i+1)))
+					cw.addException(pos.get(i), pos.get(i+1), cw.label(), TryCatchEntry.ANY);
+			} else {
+				Label ph_start = normalHandlers[i*2], ph_handler = normalHandlers[i*2 + 1];
+				cw.label(ph_handler);
+				cw.addException(pos.get(i), ph_start, ph_handler, TryCatchEntry.ANY);
 			}
 		}
-
-		if (blockEnd != null)
-			cw.addException((Label) added.get(0), blockEnd, blockEnd, null);
 	}
+	private void invokeClose(Variable v, boolean report) {
+		IClass info = ctx.classes.getClassInfo(v.type.owner());
+		var list = ctx.methodListOrReport(info, "close");
+		var result = list.findMethod(ctx, Collections.emptyList(), 0);
+		assert result != null;
 
-	// 自然也有slowSlot => VarMapperX
-	private int fastSlot;
-	private Variable newVar(String name, IType type) {
-		// TODO => CONSIDER TYPE MERGING (if var)
-		Variable v = new Variable(name, type);
-		v.slot = fastSlot;
-		v.startPos = v.endPos = wr.index;
+		if (report) result.addExceptions(ctx, info, true);
 
-		if (null != variables.putIfAbsent(name, v)) {
-			ctx.report(Kind.ERROR, "block.var.error.duplicate", name);
-			return v;
-		}
-
-		if (!regionNew.isEmpty()) regionNew.get(regionNew.size()-1).add(v);
-
-		fastSlot += type.rawType().length();
-		return v;
+		cw.load(v);
+		cw.invoke((result.method.modifier&ACC_INTERFACE) != 0 ? INVOKEINTERFACE : INVOKEVIRTUAL, result.method);
 	}
-
+	// endregion
+	// 带名称的label
+	private final MyHashMap<String, LabelInfo> labels = new MyHashMap<>();
+	// 对循环或代码块上label的支持
+	private LabelInfo immediateLabel;
+	// 当前代码块可用的break和continue目标
+	private Label curBreak, curContinue;
+	// region 控制流终止: break continue goto return throw
 	private void _goto() throws ParseException {
 		Word w = wr.except(Word.LITERAL);
 		LabelInfo info = labels.get(w.val());
@@ -938,9 +906,8 @@ public class BlockParser {
 		}
 
 		if (returnHook != null) {
-			if (expr instanceof MultiReturn) {
-				// TODO get actual memory capacity
-				cw.ldc(256);
+			if (expr instanceof MultiReturn mr) {
+				cw.ldc(mr.capacity());
 				cw.invokeV("roj/compiler/runtime/ReturnStack", "toImmutable", "(I)Lroj/compiler/runtime/ReturnStack;");
 			}
 
@@ -954,14 +921,11 @@ public class BlockParser {
 	}
 
 	private void _throw() throws ParseException {
-		UnresolvedExprNode expr = ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.NAE);
-		except(semicolon);
-
+		var expr = ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON);
 		if (expr == null) {
 			ctx.report(Kind.ERROR, "noExpression");
 		} else {
-			//writeCast(expr, new Type("java/lang/Throwable"));
-			expr.resolve(ctx).write(cw, false);
+			writeCast(expr.resolve(ctx), exc);
 		}
 
 		cw.one(ATHROW);
@@ -1298,7 +1262,8 @@ public class BlockParser {
 		IType sType = sval.type();
 		/* see switch(kind) for detail */
 		int kind = 0;
-		var prevDFI = ctx.dynamicFieldImport;
+		Function<String, LocalContext.Import> prevDFI = ctx.dynamicFieldImport, DFI = prevDFI;
+
 		switch (sType.getActualType()) {
 			case Type.BOOLEAN, Type.VOID -> ctx.report(Kind.ERROR, "block.switch.incompatible", sType);
 			case Type.LONG, Type.FLOAT, Type.DOUBLE -> kind = 3;
@@ -1318,7 +1283,7 @@ public class BlockParser {
 				IClass clazz = ctx.classes.getClassInfo(owner);
 				if (ctx.instanceOf(owner, "java/lang/Enum")) {
 					kind = tableFix ? 3 : 2;
-					ctx.dynamicFieldImport = getFieldDFI(clazz, null, prevDFI);
+					DFI = getFieldDFI(clazz, null, prevDFI);
 					break;
 				}
 
@@ -1326,7 +1291,7 @@ public class BlockParser {
 				if (switchable != null) {
 					kind = switchable.getBoolean("identity", true) ? 3 : 4;
 					if (switchable.getBoolean("suggest", false)) {
-						ctx.dynamicFieldImport = getFieldDFI(clazz, null, prevDFI);
+						DFI = getFieldDFI(clazz, null, prevDFI);
 					}
 				} else {
 					ctx.report(Kind.ERROR, "block.switch.incompatible", sType);
@@ -1337,13 +1302,14 @@ public class BlockParser {
 		Object cst = sval.isConstant() ? sval.constVal() : null;
 		except(lBrace);
 
-		List<Object> labels = Helpers.cast(ctx.annotationTmp); labels.clear();
+		List<Object> labels = Helpers.cast(ctx.tmpAnnotations); labels.clear();
 		MyHashSet<Object> labelDeDup = Helpers.cast(ctx.tmpSet); labelDeDup.clear();
 
 		Label breakTo = new Label();
 		MethodWriter tmp = cw;
 
 		List<SwitchNode> branches = new SimpleList<>();
+		SwitchNode nullBranch = null;
 
 		int flags = (sectionFlag << 8) | 128;
 		boolean defaultBranch = false;
@@ -1361,17 +1327,10 @@ public class BlockParser {
 
 				case CASE:
 					labels.clear();
+					boolean hasNull = false;
 					do {
 						var expr = ep.parse(file, ExprParser.STOP_COLON|ExprParser.STOP_COMMA|ExprParser.STOP_LAMBDA|ExprParser.CHECK_VARIABLE_DECLARE|ExprParser.NAE);
 
-						/*
-						 * switch (o) {
-						 *         case Integer i -> i.doubleValue();
-						 *         case Float f -> f.doubleValue();
-						 *         case String s -> Double.parseDouble(s);
-						 *         default -> 0d;
-						 * };
-						 */
 						if (expr instanceof VariableDeclare vd) {
 							IType type = ctx.resolveType(vd.type);
 							if (type.isPrimitive()) {
@@ -1401,8 +1360,17 @@ public class BlockParser {
 							break skipVD;
 						}
 
+						ctx.dynamicFieldImport = DFI;
 						ExprNode node = expr.resolve(ctx);
-						if (cst != null && node.isConstant() && cst.equals(node.constVal())) match = true;
+						ctx.dynamicFieldImport = prevDFI;
+						if (node.isConstant()) {
+							if (node.constVal() == null) {
+								if (sval.type().isPrimitive()) ctx.report(Kind.ERROR, "block.switch.nullfail");
+								hasNull = true;
+							}
+							if (cst != null && cst.equals(node.constVal()))
+								match = true;
+						}
 						if (!labelDeDup.add(node)) ctx.report(Kind.ERROR, "block.switch.duplicate", node);
 						labels.add(node);
 
@@ -1411,6 +1379,8 @@ public class BlockParser {
 
 					kase = new SwitchNode(new SimpleList<>(labels));
 					kase.lineNumber = wr.LN;
+
+					if (hasNull) nullBranch = kase;
 				break;
 				case DEFAULT:
 					w = wr.next();
@@ -1450,7 +1420,6 @@ public class BlockParser {
 		}
 
 		setCw(tmp);
-		ctx.dynamicFieldImport = prevDFI;
 		sectionFlag = (byte) (flags >>> 8);
 		// if switch will never continue
 		// TODO check continuous control flow for EVERY subblock
@@ -1460,6 +1429,14 @@ public class BlockParser {
 		switch (flags & 3) {
 			case 3 -> ctx.report(Kind.ERROR, "block.switch.mixedCase");
 			case 2 -> {
+				/*
+				 * switch (o) {
+				 *         case Integer i -> i.doubleValue();
+				 *         case Float f -> f.doubleValue();
+				 *         case String s -> Double.parseDouble(s);
+				 *         default -> 0d;
+				 * };
+				 */
 				// class switch, must be final/sealed class to use getClass();
 				ctx.report(Kind.ERROR, "Class switch 暂未实现");
 				return;
@@ -1525,7 +1502,6 @@ public class BlockParser {
 			return;
 		}
 
-		// TODO case null
 		switch (kind) {
 			case 0 -> {// int
 				writeCast(sval, Type.std(Type.INT));
@@ -1554,6 +1530,7 @@ public class BlockParser {
 			}
 			case 1 -> {// legacy string
 				sval.write(cw, false);
+				makeNullsafe(nullBranch, sval);
 				switchString(branches, breakTo);
 				ctx.report(Kind.WARNING, "block.switch.lookupSwitch");
 			}
@@ -1566,6 +1543,7 @@ public class BlockParser {
 				Label start = cw.label();
 				cw.field(GETSTATIC, switchMap, 0);
 				sval.write(cw, false);
+				makeNullsafe(nullBranch, sval);
 				cw.invoke(INVOKEVIRTUAL, "java/lang/Enum", "ordinal", "()I");
 				cw.one(IALOAD);
 				cw.jump(next);
@@ -1595,7 +1573,7 @@ public class BlockParser {
 
 	private void addGeneratedClass(ConstantData data) {
 		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_INNER_CLASS)) {
-			ctx.file._innerClass().add(InnerClasses.InnerClass.anonymous("SwitchMap"+(ctx.file._children-1), ACC_PRIVATE|ACC_STATIC|ACC_FINAL));
+			ctx.file.innerClasses().add(InnerClasses.InnerClass.anonymous("SwitchMap"+(ctx.file._children-1), ACC_PRIVATE|ACC_STATIC|ACC_FINAL));
 
 			var enclosed = new EnclosingMethod();
 			enclosed.owner = ctx.file.name;
@@ -1622,11 +1600,30 @@ public class BlockParser {
 		for (int i = 0; i < branches.size();) {
 			SwitchNode branch = branches.get(i++);
 
-			Label pos = cw.label();
+			Label pos;
+			if (branch.location != null) cw.label(pos = branch.location);
+			else pos = cw.label();
+
 			branch.block.writeTo(cw);
 
 			if (branch.labels == null) sw.def = pos;
 			else sw.branch(++j, pos);
+		}
+	}
+	private void makeNullsafe(SwitchNode branch, ExprNode sval) {
+		for (Object label : branch.labels) {
+			if (label instanceof ExprNode n && n.isConstant() && n.constVal() == null) {
+				beginCodeBlock();
+
+				Variable xvar = newVar("@@temp", sval.type());
+				cw.one(DUP);
+				cw.store(xvar);
+				cw.jump(IFNULL, branch.location = new Label());
+				cw.load(xvar);
+
+				endCodeBlock();
+				return;
+			}
 		}
 	}
 	private void switchString(List<SwitchNode> branches, Label breakTo) {
@@ -1647,7 +1644,7 @@ public class BlockParser {
 
 		for (int i = 0; i < branches.size();) {
 			SwitchNode branch = branches.get(i++);
-			Label pos = branch.location = new Label();
+			Label pos = branch.location == null ? branch.location = new Label() : branch.location;
 
 			if (branch.labels == null) {
 				sw.def = pos;
@@ -1692,8 +1689,8 @@ public class BlockParser {
 		ConstantData sm = new ConstantData();
 		sm.access |= ACC_SYNTHETIC;
 
-		sm.name(ctx.file.name+"$SwitchMap$"+ ++ctx.file._children);
-		sm.newField(ACC_STATIC|ACC_FINAL, "map", "[I");
+		sm.name(ctx.file.name+"$"+ ++ctx.file._children);
+		sm.newField(ACC_STATIC|ACC_FINAL, "switchMap", "[I");
 
 		sm.newMethod(ACC_STATIC, "<clinit>", "()V");
 		MethodWriter c = ctx.classes.createMethodPoet(sm, sm.methods.getLast());
@@ -1824,7 +1821,7 @@ public class BlockParser {
 			switch (w.type()) {
 				case CASE, DEFAULT, rBrace:
 					if (newSwitch) {
-						if ((sectionFlag&SF_BLOCK_END) == 0) cw.jump(endPoint);
+						if (/*(sectionFlag&SF_BLOCK_END) == 0*/cw.isContinuousControlFlow()) cw.jump(endPoint);
 						endCodeBlock();
 					}
 				return;
@@ -1834,7 +1831,103 @@ public class BlockParser {
 		}
 	}
 	// endregion
-	// region 表达式和变量
+	// region 其它: synchronized with 变量定义
+	private void _sync() throws ParseException {
+		except(lParen);
+
+		ExprNode node = ep.parse(file, ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
+
+		if (node.type().isPrimitive()) {
+			ctx.report(Kind.ERROR, "type.primitiveNotAllowed", node.type());
+		}
+
+		node.write(cw, false);
+
+		beginCodeBlock();
+		Variable syncVar = newVar("@SYNC", node.type());
+
+		cw.one(DUP);
+		cw.store(syncVar);
+		cw.one(MONITORENTER);
+
+		Label start = cw.label();
+
+		except(lBrace);
+		block(false);
+
+		Label end = cw.label();
+		Label realEnd = new Label();
+
+		cw.jump(realEnd);
+
+		Label exception = cw.label();
+		cw.load(syncVar);
+		cw.one(MONITOREXIT);
+		cw.one(ATHROW);
+
+		cw.label(realEnd);
+		cw.load(syncVar);
+		cw.one(MONITOREXIT);
+
+		cw.addException(start,end,exception,TryCatchEntry.ANY);
+	}
+
+	private void _with() throws ParseException {
+		except(lParen);
+
+		ExprNode node = ep.parse(file, ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
+
+		if (node.type().isPrimitive()) {
+			ctx.report(Kind.ERROR, "block.sync.unexpectedPrimitive", node.type());
+		}
+
+		beginCodeBlock();
+		except(lBrace);
+
+		Variable ref;
+		if (node.isKind(ExprNode.ExprKind.LDC_CLASS)) ref = null;
+		else if (node instanceof LocalVariable lv) {
+			// trust user
+			ref = lv.getVariable();
+		} else {
+			node.write(cw, false);
+			ref = newVar("@WITH", node.type());
+			cw.store(ref);
+		}
+
+		IClass info = ctx.classes.getClassInfo(node.type().owner());
+
+		var fi = ctx.dynamicFieldImport;
+		var mi = ctx.dynamicMethodImport;
+
+		ctx.dynamicFieldImport = getFieldDFI(info, ref, fi);
+		ctx.dynamicMethodImport = name -> {
+			ComponentList cl = ctx.methodListOrReport(info, name);
+			if (cl != null) return new LocalContext.Import(info, name, ref == null ? null : new LocalVariable(ref));
+
+			return mi == null ? null : mi.apply(name);
+		};
+
+		try {
+			block(false);
+		} finally {
+			ctx.dynamicFieldImport = fi;
+			ctx.dynamicMethodImport = mi;
+		}
+	}
+	@NotNull
+	private Function<String, LocalContext.Import> getFieldDFI(IClass info, Variable ref, Function<String, LocalContext.Import> prev) {
+		return name -> {
+			ComponentList cl = ctx.fieldListOrReport(info, name);
+			if (cl != null) {
+				FieldResult result = cl.findField(ctx, ref == null ? ComponentList.IN_STATIC : 0);
+				if (result.error == null) return new LocalContext.Import(info, result.field.name(), ref == null ? null : new LocalVariable(ref));
+			}
+
+			return prev == null ? null : prev.apply(name);
+		};
+	}
+
 	/**
 	 * 定义变量 var/const/?
 	 * 没有支持注解的计划。
@@ -1842,7 +1935,7 @@ public class BlockParser {
 	private void define(IType type) throws ParseException {
 		int modifier = 0;
 		if (type == null) {
-			modifier = file._modifier(wr, FINAL);
+			modifier = file._modifiers(wr, FINAL);
 			type = file.readType(CompileUnit.TYPE_PRIMITIVE|CompileUnit.TYPE_GENERIC);
 		}
 
@@ -1877,15 +1970,15 @@ public class BlockParser {
 			}
 		} while (w.type() == comma);
 
-		//if (w.type() != semicolon) wr.unexpected(w.val(), byId(stop));
-	}
-
-	private void writeCast(ExprNode node, IType type) {
-		TypeCast.Cast cast = ctx.castTo(node.type(), type, 0);
-		node.writeDyn(cw, cast);
+		if (!ctx.classes.isSpecEnabled(CompilerSpec.KOTLIN_SEMICOLON) && w.type() != semicolon)
+			wr.unexpected(w.val(), ";");
 	}
 	//endregion
-	// region 输出错误
+
+	private void writeCast(ExprNode node, IType type) {
+		var cast = ctx.castTo(node.type(), type, 0);
+		node.writeDyn(cw, cast);
+	}
 
 	private void except(short id) throws ParseException {wr.except(id, byId(id));}
 
@@ -1895,5 +1988,4 @@ public class BlockParser {
 			//item.pos;
 		}
 	}
-	//endregion
 }

@@ -161,7 +161,7 @@ public final class ExprParser {
 			pendNode = null;
 
 			if (node == null && (flag&NAE) != 0) {
-				node = NaE.INSTANCE;
+				node = NaE.NOEXPR;
 				file.report(Kind.ERROR, "noExpression");
 			}
 		}
@@ -249,15 +249,17 @@ public final class ExprParser {
 						pf = cast(type);
 					break;
 					case -3: //LITERAL
-						String name = w.val();
-						wr.mark();
-						if (wr.next().type() == lambda) {
-							wr.skip();
-							cur = lambda(file, wr, Collections.singletonList(name));
-							break endValueConv;
-						}
+						if ((flag&STOP_LAMBDA) == 0) {
+							String name = w.val();
+							wr.mark();
+							if (wr.next().type() == lambda) {
+								wr.skip();
+								cur = lambda(file, wr, Collections.singletonList(name));
+								break endValueConv;
+							}
 
-						wr.retract();
+							wr.retract();
+						}
 					break loop;
 					case -4: // [Dynamic]UserExprGen
 						cur = ((Function<JavaLexer, ExprNode>) custom.get(st.getOrDefaultInt(w.type()|SM_UserExprGen, -1))).apply(wr);
@@ -325,8 +327,13 @@ public final class ExprParser {
 						cur = invoke(file, newType, null);
 						w = wr.next();
 						if (w.type() == lBrace) {
+							wr.retractWord();
+							wr.state = STATE_CLASS;
 							var _type = file.newAnonymousClass(LocalContext.get().method);
 							cur = new NewAnonymousClass((Invoke) cur, _type);
+							wr.state = STATE_EXPR;
+
+							w = wr.next();
 						}
 					} else {
 						// 语法糖: new n => 无参数调用
@@ -444,7 +451,7 @@ public final class ExprParser {
 							if (up == null && words.size() == 0 && cur instanceof DotGet dot && dot.parent == null && (flag & CHECK_VARIABLE_DECLARE) != 0) {
 								wr.retractWord();
 								wr.mark();
-								IType type = file._genericUse(dot.toClassRef().owner, 5);
+								IType type = file._genericRef(dot.toClassRef().owner, 5);
 								if (type != null) {
 									Word w2 = wr.next();
 									// TYPE<GENERIC> + LITERAL
@@ -606,6 +613,10 @@ public final class ExprParser {
 					if ((flag & STOP_SEMICOLON) == 0) ue(wr, w.val());
 					if ((flag & SKIP_SEMICOLON) == 0) wr.retractWord();
 				break; // ;
+				case lambda:
+					if ((flag & STOP_LAMBDA) == 0) ue(wr, w.val());
+					wr.retractWord();
+				break; // ->
 				case mapkv:
 					if ((flag & _ENV_EASYMAP) == 0) ue(wr, w.val());
 				break; // =>
@@ -778,13 +789,13 @@ public final class ExprParser {
 		return newArrayDef(arrayType, copyOf(args), false);
 	}
 	private ExprNode lambda(CompileUnit file, JavaLexer wr, List<String> parNames) throws ParseException {
-		SimpleList<String> strings = copyOf(parNames);
+		var strings = copyOf(parNames);
 
 		Word w = wr.next();
 		if (w.type() == lBrace) {
-			MethodNode mn = new MethodNode(Opcodes.ACC_PUBLIC, file.name, "unusedLambdaRef", "()V");
+			MethodNode mn = new MethodNode(Opcodes.ACC_PRIVATE|Opcodes.ACC_SYNTHETIC, file.name, "", "()V");
 			ParseTask lambdaTask = ParseTask.Method(file, mn, strings);
-			return new Lambda(mn, lambdaTask);
+			return new Lambda(strings, mn, lambdaTask);
 		} else {
 			wr.retractWord();
 			ExprNode expr = parse1(file, STOP_RSB|STOP_COMMA|STOP_SEMICOLON);
@@ -797,7 +808,8 @@ public final class ExprParser {
 	private static void ue(JavaLexer wr, String wd) throws ParseException { throw wr.err("unexpected:"+wd); }
 
 	// region cache
-	public <T> SimpleList<T> copyOf(List<T> args) {
+	public <T> List<T> copyOf(List<T> args) {
+		if (!(args instanceof SimpleList<T>)) return args;
 		SimpleList<T> copy = new SimpleList<>(args);
 		args.clear();
 		return copy;
@@ -811,7 +823,7 @@ public final class ExprParser {
 	public UnaryPreNode cast(IType type) {return new Cast(type);}
 
 	public ExprNode newArrayGet(ExprNode array, ExprNode index) {return new ArrayGet(array, index);}
-	public ExprNode newArrayDef(IType type, SimpleList<ExprNode> args, boolean sized) {return new ArrayDef(type, args, sized);}
+	public ExprNode newArrayDef(IType type, List<ExprNode> args, boolean sized) {return new ArrayDef(type, args, sized);}
 	public ExprNode newAssign(VarNode cur, ExprNode node) {return new Assign(cur, node);}
 	public ExprNode newEncloseRef(boolean ThisEnclosing, Type type) { return new EncloseRef(ThisEnclosing, type); }
 	public Invoke newInvoke(Object fn, List<ExprNode> pars) {return new Invoke(fn, pars);}

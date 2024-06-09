@@ -9,10 +9,11 @@ import roj.collect.LinkedMyHashMap;
 import roj.collect.SimpleList;
 import roj.compiler.context.LocalContext;
 
+import java.util.Collections;
 import java.util.List;
 
 public class SignaturePrimer extends Signature {
-	public Generic returns;
+	public IType returns;
 
 	private String current;
 	public SignaturePrimer parent;
@@ -26,22 +27,15 @@ public class SignaturePrimer extends Signature {
 		current = name;
 		return null == typeParams.put(name, new SimpleList<>());
 	}
-
-	public void addBound(IType g) {
-		typeParams.get(current).add(g);
-	}
+	public void addBound(IType g) {typeParams.get(current).add(g);}
 
 	public void _add(IType parent) {
-		if (values.isEmpty()) {
-			values = new SimpleList<>(3);
-		}
+		if (values.isEmpty()) values = new SimpleList<>(3);
 		values.add(parent);
 	}
 
 	public void _add(int size, Generic use) {
-		if (values.isEmpty()) {
-			values = new SimpleList<>(size + 1);
-		}
+		if (values.isEmpty()) values = new SimpleList<>(size + 1);
 		while (values.size() < size) values.add(object);
 		values.add(use);
 	}
@@ -56,18 +50,17 @@ public class SignaturePrimer extends Signature {
 
 	static final Type object = new Type("java/lang/Object");
 
-	public void initS0(MethodNode mn) {
+	public void commit(MethodNode mn) {
 		for (List<IType> list : typeParams.values()) {
 			if (list.isEmpty()) list.add(object);
-			else init1(list);
+			else commit(list);
 		}
-		init1(values);
+		commit(values);
 
 		if (mn == null) {
 			// field
 			if (returns != null) {
-				if (values.isEmpty()) values = new SimpleList<>(1);
-				values.add(returns);
+				values = Collections.singletonList(returns);
 				returns = null;
 			}
 			return;
@@ -90,31 +83,31 @@ public class SignaturePrimer extends Signature {
 			values.add(mn.returnType());
 		}
 	}
-	private void init1(List<IType> list) {
+	// 查找类型为Type的类型变量，并用TypeParam替换他们
+	private void commit(List<IType> list) {
 		for (int i = 0; i < list.size(); i++) {
 			IType type = list.get(i);
 			if (type instanceof GenericPrimer gp)
-				list.set(i, gp.toRealType(this));
+				list.set(i, gp.resolve(this));
 		}
 	}
 
-	// 查找类型为Type的类型变量，并用TypeParam替换他们
-	public void resolveS2() {
+	public void resolve() {
 		LocalContext ctx = LocalContext.get();
-		for (List<IType> value : typeParams.values())
-			resolve1(value, ctx);
-		resolve1(values, ctx);
+		for (List<IType> value : typeParams.values()) resolve(value, ctx);
+		resolve(values, ctx);
 	}
-	private void resolve1(List<IType> list, LocalContext ctx) {
+	private void resolve(List<IType> list, LocalContext ctx) {
 		for (int i = 0; i < list.size(); i++) {
 			IType type = list.get(i);
 			if (type instanceof GenericPrimer gp) gp.initS2(ctx);
-			list.set(i, ctx.resolveType(type));
+			ctx.resolveType(type);
 		}
 	}
 
+	@Deprecated
 	public CharSequence getTypeBound(CharSequence name) {
-		SignaturePrimer sp = this;
+		var sp = this;
 		do {
 			List<IType> list = sp.typeParams.get(name);
 			if (list != null) {
@@ -133,11 +126,30 @@ public class SignaturePrimer extends Signature {
 		} while (sp != null);
 		return name;
 	}
-
-	public boolean hasTypeParam(CharSequence name) {
-		SignaturePrimer sp = this;
+	public IType getTypeBound2(CharSequence name) {
+		var sp = this;
 		do {
 			List<IType> list = sp.typeParams.get(name);
+			if (list != null) {
+				if (list.isEmpty()) return object;
+
+				IType g = list.get(0);
+				if (g.genericType() != 2) return new Asterisk(list);
+
+				System.out.println("name="+name);
+				System.out.println("type boundary for " + name + " is " + g);
+				if (sp.parent == null) throw new NullPointerException("type param not found ?");
+				return sp.parent.getTypeBound2(g.owner());
+			}
+			sp = sp.parent;
+		} while (sp != null);
+		return null;
+	}
+
+	public boolean hasTypeParam(CharSequence name) {
+		var sp = this;
+		do {
+			var list = sp.typeParams.get(name);
 			if (list != null) return true;
 			sp = sp.parent;
 		} while (sp != null);

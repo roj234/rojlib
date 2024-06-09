@@ -53,14 +53,14 @@ public class TypeCast {
 	public static final class Cast {
 		public int type;
 		public int distance;
-		//public boolean rawType;
+
 		byte op1, op2, box;
-		Type type1;
+		IType type1;
 
 		Cast(int t, int d) { type = t; distance = d; }
 
-		public boolean isNoop() { return op1 == op2 && type1 == null; }
-		public Type getType1() { return type1; }
+		public boolean isNoop() { return type1 == null ? op1 == op2 : op1 != 0; }
+		public IType getType1() { return type1; }
 		public byte getOp1() { return op1; }
 		public byte getOp2() { return op2; }
 
@@ -109,8 +109,10 @@ public class TypeCast {
 		}
 
 		private void cast(CodeWriter cw) {
-			if (type1 != null) cw.clazz(Opcodes.CHECKCAST, type1.getActualClass());
+			if (type1 != null && op1 == 0) cw.clazz(Opcodes.CHECKCAST, type1.rawType().getActualClass());
 		}
+
+		public boolean canCast() {return type > E_OBJ2INT;}
 	}
 
 	// region 'macro'
@@ -122,7 +124,7 @@ public class TypeCast {
 		}
 	}
 	private static Cast ERROR(@Range(from = E_NEVER, to = E_DOWNCAST) int type) { return SOLID[type-E_NEVER]; }
-	private static Cast DOWNCAST(Type type) {
+	private static Cast DOWNCAST(IType type) {
 		Cast cast = new Cast(E_DOWNCAST, -1);
 		cast.type1 = type;
 		return cast; }
@@ -171,10 +173,18 @@ public class TypeCast {
 			break;
 
 			case TYPE_PARAMETER_TYPE: isTypeParam = true; break;
-			case ANY_TYPE: if (!isTypeParam) return DOWNCAST(to.rawType()); break;
+			case ANY_TYPE: if (!isTypeParam) return DOWNCAST(to); break;
 			case ASTERISK_TYPE:
 				asterisk = (Asterisk) from;
-				if (asterisk.getBound() == null) return to.isPrimitive() ? ERROR(E_OBJ2INT) : RESULT(UPCAST, 0);
+				if (asterisk.getBound() == null) {
+					if (to.isPrimitive()) return ERROR(E_OBJ2INT);
+
+					var c = RESULT(UPCAST, 0);
+					c.op1 = 42/* ANSWER TO THE UNIVERSE AND EVERYTHING :) */;
+					// And unbounded asterisk type is literally anytype
+					c.type1 = to;
+					return c;
+				}
 
 				from = to;
 				to = asterisk.getBound();
@@ -194,7 +204,7 @@ public class TypeCast {
 			if (asterisk.genericType() == CONCRETE_ASTERISK_TYPE) {
 				if (genericCast(bounds.get(0), to, etype).type >= 0)
 					return result;
-				result.type1 = asterisk.getBound().rawType();
+				result.type1 = asterisk.getBound();
 			} else {
 				for (int i = 1; i < bounds.size(); i++) {
 					Cast r = genericCast(from, bounds.get(i), etype);
@@ -205,7 +215,7 @@ public class TypeCast {
 					result.type ^= 1;
 					result.type1 = WRAPPER.get(from.getActualType());
 				} else if (result.distance != 0) {
-					result.type1 = from.rawType();
+					result.type1 = from;
 				}
 			}
 		}

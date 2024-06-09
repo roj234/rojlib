@@ -16,11 +16,14 @@ import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.*;
 import roj.asm.util.Attributes;
 import roj.asm.util.ClassUtil;
+import roj.asm.visitor.Label;
+import roj.asmx.mapper.util.NameAndType;
 import roj.collect.*;
 import roj.compiler.JavaLexer;
-import roj.compiler.api_rt.MethodDefault;
+import roj.compiler.api.MethodDefault;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.Asterisk;
+import roj.compiler.asm.SignaturePrimer;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.block.BlockParser;
 import roj.compiler.ast.expr.ExprNode;
@@ -30,6 +33,7 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
 import roj.config.ParseException;
 import roj.config.data.CInt;
+import roj.reflect.GetCallerArgs;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.ArrayCache;
@@ -56,9 +60,9 @@ public class LocalContext {
 	public static final Type OBJECT_TYPE = new Type("java/lang/Object");
 
 	public final GlobalContext classes;
-	public CompileUnit file;
-	public MethodNode method;
-	public boolean in_static, in_constructor, not_invoke_constructor;
+
+	public final ExprParser ep;
+	public final BlockParser bp;
 
 	public final TypeCast castCheck = new TypeCast();
 	public final Inferrer inferrer = new Inferrer(this);
@@ -67,24 +71,61 @@ public class LocalContext {
 	public final MyHashMap<String, IClass> importCache = new MyHashMap<>(), importCacheMethod = new MyHashMap<>();
 	public final MyHashMap<String, Object[]> importCacheField = new MyHashMap<>();
 
-	public LocalContext(GlobalContext classes) {this.classes = classes;}
+	public CompileUnit file;
+	public MethodNode method;
+	public boolean in_static, in_constructor, not_invoke_constructor;
+
+	public LocalContext(GlobalContext classes) {
+		this.classes = classes;
+		this.ep = classes.createExprParser();
+		this.bp = classes.createBlockParser(this);
+		this.castCheck.context = classes;
+		this.castCheck.genericResolver = sb -> {
+			SignaturePrimer node = this.file.currentNode;
+			CharSequence bound;
+			// TODO type bounds V2
+			if (node != null && sb != (bound = node.getTypeBound(sb))) {
+				return Collections.singletonList(new Type(bound.toString()));
+			}
+			return null;
+		};
+	}
 
 	public boolean disableConstantValue;
 	public BiConsumer<String, Object[]> errorCapture;
 
 	public void report(Kind kind, String message) {
-		if (kind == Kind.ERROR && errorCapture != null) errorCapture.accept(message, ArrayCache.OBJECTS);
-		else file.report(kind, message);
+		if (errorCapture != null) {
+			errorCapture.accept(message, ArrayCache.OBJECTS);
+			return;
+		}
+
+		Object caller = GetCallerArgs.INSTANCE.getCallerInstance();
+		if (caller instanceof ExprNode node) {
+			classes.report(file, kind, node.wordStart, node.wordEnd, message, ArrayCache.OBJECTS);
+			return;
+		}
+
+		file.report(kind, message);
 	}
 	public void report(Kind kind, String message, Object... args) {
-		if (errorCapture != null) errorCapture.accept(message, args);
-		else file.report(kind, message+":"+TextUtil.join(Arrays.asList(args), ":"));
+		if (errorCapture != null) {
+			errorCapture.accept(message, args);
+			return;
+		}
+
+		Object caller = GetCallerArgs.INSTANCE.getCallerInstance();
+		if (caller instanceof ExprNode node) {
+			classes.report(file, kind, node.wordStart, node.wordEnd, message, args);
+			return;
+		}
+
+		file.report(kind, message+":"+TextUtil.join(Arrays.asList(args), ":"));
 	}
 	public void report(int knownPos, Kind kind, String message, Object... args) {
 		if (errorCapture != null) errorCapture.accept(message, args);
-		else classes.report(file, kind, knownPos,message+":"+TextUtil.join(Arrays.asList(args), ":"));
+		else classes.report(file, kind, knownPos,message, args);
 	}
-	public List<?> tmpListForExpr2 = new SimpleList<>();
 
 	public TypeCast.Cast castTo(@NotNull IType from, @NotNull IType to, int lower_limit) {
 		TypeCast.Cast cast = castCheck.checkCast(from, to);
@@ -155,7 +196,7 @@ public class LocalContext {
 			default: throw new ResolveException("非法的修饰符组合: 0x"+Integer.toHexString(flag));
 			case Opcodes.ACC_PUBLIC: return true;
 			case Opcodes.ACC_PROTECTED:
-				if (instanceOf(type.name(), file.name())) return true;
+				if (instanceOf(file.name(), type.name())) return true;
 				modifier = "protected";
 				break;
 			case Opcodes.ACC_PRIVATE:
@@ -205,10 +246,6 @@ public class LocalContext {
 
 	public void setClass(CompileUnit file) {
 		this.file = file;
-		this.castCheck.context = classes;
-		// TODO getGenericEnv应该随着方法变吧
-		this.castCheck.genericResolver = file::getGenericEnv;
-
 		this.tr = file.getTypeResolver();
 		this.importCache.clear();
 		this.importCacheMethod.clear();
@@ -216,6 +253,8 @@ public class LocalContext {
 		this.flagCache.clear();
 	}
 	public void setMethod(MethodNode node) {
+		file._setSign(node);
+
 		in_static = (node.modifier&Opcodes.ACC_STATIC) != 0;
 		not_invoke_constructor = in_constructor = node.name().startsWith("<");
 		if (in_constructor) {
@@ -800,27 +839,28 @@ public class LocalContext {
 
 	public static LocalContext get() {
 		List<Object> list = FTL.get();
-		return (LocalContext) list.get(((CInt) list.get(0)).value);
+		return list == null ? Helpers.maybeNull() : (LocalContext) list.get(((CInt) list.get(0)).value);
 	}
 
 	public static void depth(int ud) {
 		List<Object> list = FTL.get();
 		CInt mi = (CInt) list.get(0);
 		int v = mi.value += ud;
-		if (v >= list.size()) list.add(new LocalContext(((LocalContext) list.get(1)).classes));
+		if (v >= list.size()) list.add(((LocalContext) list.get(1)).classes.createLocalContext());
 	}
 
-	public MyHashSet<IType> toResolve_unc = new MyHashSet<>();
-
+	public List<?> tmpList = new SimpleList<>();
 	public MyHashSet<String> tmpSet = new MyHashSet<>();
-	public SimpleList<AnnotationPrimer> annotationTmp = new SimpleList<>();
-	public CharList tmpList = new CharList();
+	public SimpleList<AnnotationPrimer> tmpAnnotations = new SimpleList<>();
+	public CharList tmpSb = new CharList();
+	public NameAndType tmpNat = new NameAndType();
 
-	public final ExprParser ep = new ExprParser();
-	public final BlockParser bp = new BlockParser(this);
+	public String currentCodeBlockForReport() {return "\1symbol.type\0 "+file.name;}
 
-	public String currentCodeBlockForReport() {
-		return "\1symbol.type\0 "+file.name;
+	private Label[] labels = new Label[8];
+	public Label[] getTmpLabels(int i) {
+		if (i > labels.length) return labels = new Label[i];
+		return labels;
 	}
 	// endregion
 }

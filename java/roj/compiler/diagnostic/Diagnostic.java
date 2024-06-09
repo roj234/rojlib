@@ -19,7 +19,7 @@ public class Diagnostic {
 	private final Kind kind;
 	private final String code;
 	private final Object[] args;
-	private final int wordStart, wordEnd;
+	private final int offset, length;
 
 	private int lineNumber, columnNumber;
 	private String line;
@@ -29,16 +29,17 @@ public class Diagnostic {
 		this.kind = kind;
 		this.code = code;
 		this.args = args;
-		this.wordStart = wordStart;
-		this.wordEnd = wordEnd;
+
+		this.offset = wordStart;
+		this.length = wordEnd-wordStart;
 	}
 
 	public Kind getKind() { return kind; }
 
 	public String getFilePath() {return source == null ? "<compiler>" : source instanceof CompileUnit cu ? cu.getSourceFile() : source.name();}
 	public IClass getSource() { return source; }
-	public int getStartPosition() { return wordStart; }
-	public int getEndPosition() { return wordEnd; }
+	public int getStartPosition() { return offset; }
+	public int getEndPosition() { return offset+length; }
 
 	public String getCode() { return code; }
 	public Object[] getArgs_original() { return args; }
@@ -53,13 +54,14 @@ public class Diagnostic {
 
 	public int getLineNumber() { initLines(); return lineNumber; }
 	public int getColumnNumber() { initLines(); return columnNumber; }
+	public int getLength() { return length; }
 	public String getLine() { initLines(); return line; }
 
 	private void initLines() {
 		if (line != null || !(source instanceof CompileUnit cu)) return;
 
 		CharSequence lines = cu.getLexer().getText();
-		int pos = wordStart;
+		int pos = offset;
 		if (pos < 0) {
 			lineNumber = -1;
 			columnNumber = -1;

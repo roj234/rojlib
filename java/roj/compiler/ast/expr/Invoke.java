@@ -11,9 +11,10 @@ import roj.asm.type.TypeHelper;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
-import roj.compiler.api_rt.Evaluable;
+import roj.compiler.api.Evaluable;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.ast.NaE;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
@@ -62,8 +63,9 @@ public class Invoke extends ExprNode {
 		return invoke;
 	}
 
-	public static ExprNode staticMethod(MethodNode node, ExprNode... args) {
-		Invoke invoke = new Invoke(null, Arrays.asList(args));
+	public static ExprNode staticMethod(MethodNode node, ExprNode... args) {return staticMethod(node, Arrays.asList(args));}
+	public static ExprNode staticMethod(MethodNode node, List<ExprNode> args) {
+		Invoke invoke = new Invoke(null, args);
 		invoke.methodNode = node;
 		invoke.desc = Helpers.cast(TypeHelper.parseMethod(node.rawDesc()));
 		return invoke;
@@ -179,12 +181,12 @@ public class Invoke extends ExprNode {
 			// 如果是this，那么要擦到上界 (哦this本来就没有generic，霉逝了)
 			ownMirror = fn2.type();
 			// Notfound
-			if (ownMirror.genericType() == IType.ASTERISK_TYPE) return this;
+			if (ownMirror.genericType() == IType.ASTERISK_TYPE) return NaE.RESOLVE_FAILED;
 			klass = ownMirror.owner();
 		} else if (fn.getClass() == This.class) {
 			if (!ctx.in_constructor | !ctx.not_invoke_constructor) {
 				ctx.report(Kind.ERROR, "invoke.error.constructor", fn);
-				return this;
+				return NaE.RESOLVE_FAILED;
 			}
 
 			flag |= INVOKE_SPECIAL;
@@ -201,11 +203,11 @@ public class Invoke extends ExprNode {
 
 			if ((type.modifier()&(Opcodes.ACC_ABSTRACT|Opcodes.ACC_INTERFACE)) != 0) {
 				ctx.report(Kind.ERROR, "invoke.error.instantiationAbstract", klass);
-				return this;
+				return NaE.RESOLVE_FAILED;
 			}
 		}
 
-		SimpleList<IType> tmp = Helpers.cast(ctx.tmpListForExpr2); tmp.clear();
+		SimpleList<IType> tmp = Helpers.cast(ctx.tmpList); tmp.clear();
 		Map<String, IType> namedType = Collections.emptyMap();
 		int size = args.size()-1;
 		if (size >= 0) {
@@ -229,7 +231,7 @@ public class Invoke extends ExprNode {
 			ComponentList list = ctx.methodListOrReport(cn, method);
 			if (list == null) {
 				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+cn.name());
-				break block;
+				return NaE.RESOLVE_FAILED;
 			}
 
 			boolean staticEnv = (mode&MUST_VIRTUAL) != 0 ? ctx.in_static : fn == null;
@@ -238,7 +240,7 @@ public class Invoke extends ExprNode {
 			ctx.inferrer.typeParamHint = tpHint;
 			MethodResult r = list.findMethod(ctx, ownMirror, tmp, namedType, flags);
 			ctx.inferrer.typeParamHint = null;
-			if (r == null) break block;
+			if (r == null) return NaE.RESOLVE_FAILED;
 
 			ctx.checkType(r.method.returnType().owner);
 
@@ -259,6 +261,8 @@ public class Invoke extends ExprNode {
 				if (!staticEnv & (mode&MUST_VIRTUAL) != 0)
 					ctx.report(Kind.SEVERE_WARNING, "symbol.warn.static_on_half", mn.owner, mn.name(), "invoke.method");
 				fn = null;
+			} else if ((mn.modifier&Opcodes.ACC_PRIVATE) != 0) {
+				flag |= INVOKE_SPECIAL;
 			}
 
 			if ((mn.modifier & Opcodes.ACC_VARARGS) != 0) {
@@ -299,10 +303,10 @@ public class Invoke extends ExprNode {
 
 			if (mn.attrByName("Evaluable") instanceof Evaluable eval) {
 				ExprNode result = eval.eval(mn, fn instanceof ExprNode e ? e : null, args);
-				if (result != null) return result;
+				if (result != null) return result.resolve(ctx);
 			}
 
-			r.addExceptions(ctx, cn, 0);
+			r.addExceptions(ctx, cn, false);
 		} else {
 			ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klass);
 		}

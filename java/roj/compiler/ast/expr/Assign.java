@@ -5,6 +5,7 @@ import roj.asm.tree.anno.AnnValInt;
 import roj.asm.type.IType;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.ast.NaE;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.plugins.asm.ASM;
@@ -52,7 +53,7 @@ class Assign extends ExprNode {
 		IType lType = left.type();
 		cast = ctx.castTo(right.type(), lType, TypeCast.getDataCap(lType.getActualType()) < 4 ? TypeCast.E_NUMBER_DOWNCAST : 0);
 
-		return this;
+		return cast.canCast() ? this : NaE.RESOLVE_FAILED;
 	}
 
 	static void incOrDec(VarNode expr, MethodWriter cw, boolean noRet, boolean returnBefore, int amount) {

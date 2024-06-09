@@ -35,7 +35,7 @@ final class Cast extends UnaryPre {
 
 		// 这里还要多搞搞
 		if (cast.type >= 0) {
-			// 可能会影响方法的选择, 加一个cast original type什么的做检测吧
+			// TODO 这个不一定是“redundant” 可能会影响方法的选择, 加一个cast original type什么的做检测吧
 			ctx.report(Kind.WARNING, "cast.warn.redundant:"+type);
 			//return right;
 		}

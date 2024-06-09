@@ -3,13 +3,17 @@ package roj.compiler.context;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.Parser;
+import roj.asm.tree.ConstantData;
 import roj.asm.tree.IClass;
+import roj.asm.tree.attr.AttrModule;
+import roj.asm.tree.attr.Attribute;
 import roj.collect.MyHashMap;
-import roj.util.ByteList;
+import roj.io.IOUtil;
 import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Set;
 
 /**
@@ -29,11 +33,13 @@ public class LibraryZipFile implements Library {
 			String name = entry.getName();
 			if (name.endsWith(".class")) info.put(name.substring(0, name.length()-6), entry);
 		}
-		zf.entries().clear();
-	}
-	public LibraryZipFile(File file, String moduleName) throws IOException {
-		this(file);
-		this.moduleName = moduleName;
+		//zf.entries().clear();
+
+		IClass module = get("module-info");
+		if (module != null) {
+			AttrModule module1 = module.parsedAttr(module.cp(), Attribute.Module);
+			moduleName = module1.self.name;
+		}
 	}
 
 	@Override
@@ -44,15 +50,14 @@ public class LibraryZipFile implements Library {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public IClass get(CharSequence name) {
+	public ConstantData get(CharSequence name) {
 		var entry = (MyHashMap.AbstractEntry<String, Object>) ((MyHashMap<?,?>)info).getEntry(Helpers.cast(name));
 		if (entry == null) return null;
-		if (entry.getValue() instanceof IClass c) return c;
+		if (entry.getValue() instanceof ConstantData c) return c;
 		synchronized (info) {
-			IClass v = null;
+			ConstantData v = null;
 			try {
-				ByteList data = ByteList.wrap(zf.get((ZEntry) entry.getValue()));
-				v = Parser.parseConstants(data);
+				v = Parser.parseConstants(IOUtil.read(zf.getStream((ZEntry) entry.getValue())));
 				entry.setValue(v);
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -60,6 +65,9 @@ public class LibraryZipFile implements Library {
 			return v;
 		}
 	}
+
+	@Override
+	public InputStream getResource(CharSequence name) throws IOException {return zf.getStream(name.toString());}
 
 	@Override
 	public void close() throws Exception { zf.close(); }

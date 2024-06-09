@@ -518,7 +518,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	public boolean isContinuousControlFlow() {
 		int block = segments.size()-1;
-		return block < 0 || isContinuousControlFlow(block);
+		return block >= 0 ? isContinuousControlFlow(block) : !StaticSegment.isTerminate(bw, tmpLenOffset, bw.wIndex());
 	}
 
 	public boolean isContinuousControlFlow(int targetBlock) {

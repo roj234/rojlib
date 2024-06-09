@@ -4,6 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.Opcodes;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.Annotation;
+import roj.asm.tree.attr.AttrModule;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.IType;
 import roj.asmx.AnnotationSelf;
@@ -12,16 +13,15 @@ import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.XHashSet;
 import roj.compiler.CompilerSpec;
-import roj.compiler.api.impl.ResolveApiImpl;
-import roj.compiler.api_rt.*;
+import roj.compiler.JavaLexer;
+import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asm.ParamAnnotationRef;
-import roj.compiler.asm.Variable;
+import roj.compiler.ast.block.BlockParser;
+import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.diagnostic.SimpleDiagnosticListener;
 import roj.compiler.resolve.ComponentList;
-import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.ResolveHelper;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
@@ -39,27 +39,31 @@ import java.util.function.Consumer;
  *   InnerClassFlags 获取内部类的真实权限 （TODO 尝试自动应用到类ASM数据上）
  * 3. 短名称缓存 (通过短名称获取全限定名) TypeResolver importAny需要用到
  * 4. 创建MethodWriter，为了以后切换编译目标，比如到C甚至x86
- * 5. 注解处理（这块待重构）
+ * 5. 注解处理
  *
  * @author solo6975
  * @since 2021/7/22 19:05
  */
-public class GlobalContext implements CompilerSpec, LavaApi {
+public class GlobalContext implements CompilerSpec {
 	private static final XHashSet.Shape<String, CompileUnit> COMPILE_UNIT_SHAPE = XHashSet.noCreation(CompileUnit.class, "name", "_next", Hasher.defaul());
 	private static final XHashSet.Shape<IClass, ResolveHelper> CLASS_EXTRA_INFO_SHAPE = XHashSet.shape(IClass.class, ResolveHelper.class, "owner", "_next", Hasher.identity());
 
-	private final XHashSet<String, CompileUnit> ctx = COMPILE_UNIT_SHAPE.create();
-	private final MyHashMap<String, Library> libraries = new MyHashMap<>();
-	private final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
-	private final MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
+	protected final XHashSet<String, CompileUnit> ctx = COMPILE_UNIT_SHAPE.create();
+	protected final MyHashMap<String, Library> libraries = new MyHashMap<>();
+	protected final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
+	protected final MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
 
-	private final LibraryGenerated generated = new LibraryGenerated();
-	private static final class LibraryGenerated implements Library {
+	protected final LibraryGenerated generated = new LibraryGenerated();
+	protected static final class LibraryGenerated implements Library {
 		final MyHashMap<String, ConstantData> classes = new MyHashMap<>();
+		AttrModule module;
+
 		@Override
 		public Set<String> content() {return Collections.emptySet();}
 		@Override
-		public IClass get(CharSequence name) {return classes.get(name);}
+		public ConstantData get(CharSequence name) {return classes.get(name);}
+		@Override
+		public String getModule(String className) {return module == null ? null : module.self.name;}
 	}
 
 	public void addLibrary(Library library) {
@@ -67,22 +71,9 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 			libraries.put(className, library);
 	}
 
-	// ◢◤
-	public IClass getClassInfo(CharSequence name) {
-		IClass clz = ctx.get(name);
-		if (clz == null) {
-			clz = libraries.getOrDefault(name, LibraryRuntime.INSTANCE).get(name);
-			if (clz == null && resolveApi != null) {
-				clz = resolveApi.preFilter(name);
-				if (clz == null) return null;
-
-				synchronized (libraries) {
-					libraries.put(name.toString(), resolveApi);
-				}
-			}
-		}
-
-		if (resolveApi != null) resolveApi.postFilter(clz);
+	public ConstantData getClassInfo(CharSequence name) {
+		ConstantData clz = ctx.get(name);
+		if (clz == null) clz = libraries.getOrDefault(name, LibraryRuntime.INSTANCE).get(name);
 		return clz;
 	}
 
@@ -97,14 +88,6 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 		if (prev != null) throw new IllegalStateException("重复的生成类: " + data.name);
 	}
 	public Collection<ConstantData> getGeneratedClasses() {return generated.classes.values();}
-
-	public void reset() {
-		for (CompileUnit unit : ctx) extraInfos.removeKey(unit);
-		ctx.clear();
-
-		for (String s : generated.classes.keySet()) libraries.remove(s, generated);
-		generated.classes.clear();
-	}
 
 	public final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
 	public IntBiMap<String> parentList(IClass info) throws ClassNotFoundException { return getResolveHelper(info).getClassList(this); }
@@ -152,36 +135,32 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 		packageFastPath.computeIfAbsent(name, Helpers.fnArrayList()).add(packag);
 	}
 
-	public boolean applicableToNode(AnnotationSelf ctx, Attributed key) {
-		int flag;
-		if (key instanceof FieldNode) {
-			flag = AnnotationSelf.FIELD;
-		} else if (key instanceof MethodNode m) {
-			flag = m.name().startsWith("<") ? AnnotationSelf.CONSTRUCTOR : AnnotationSelf.METHOD;
-		} else if (key instanceof IClass c) {
-			// TODO package ??
-			flag = (c.modifier()&Opcodes.ACC_ANNOTATION) != 0 ? AnnotationSelf.ANNOTATION_TYPE : AnnotationSelf.TYPE;
-		} else if (key instanceof IType) {
-			// TYPE_PARAMETER, TYPE_USE
-			throw new ResolveException("unsupported case");
-		} else if (key instanceof ParamAnnotationRef) {
-			flag = AnnotationSelf.PARAMETER;
-		} else if (key instanceof Variable) {
-			flag = AnnotationSelf.LOCAL_VARIABLE;
-		} else {
-			throw new ResolveException("unsupported case");
-		}
-		return (ctx.applicableTo&flag) != 0;
+	public void invalidateResolveHelper(IClass file) {
+		extraInfos.removeKey(file);
 	}
 
-	public boolean hasError() {return hasError;}
+	public void reset() {
+		for (CompileUnit unit : ctx) extraInfos.removeKey(unit);
+		ctx.clear();
 
-	public MethodWriter createMethodPoet(ConstantData file, MethodNode node) {
-		return new MethodWriter(file, node);
+		for (String s : generated.classes.keySet()) libraries.remove(s, generated);
+		generated.classes.clear();
+	}
+
+	public JavaLexer createLexer() {return new JavaLexer();}
+	public LocalContext createLocalContext() {return new LocalContext(this);}
+
+	public ExprParser createExprParser() {return new ExprParser();}
+	public BlockParser createBlockParser(LocalContext ctx) {return new BlockParser(ctx);}
+	public MethodWriter createMethodPoet(ConstantData file, MethodNode node) {return new MethodWriter(file, node);}
+
+	public void setModule(AttrModule module) {
+		if (generated.module != null) report(null, Kind.ERROR, -1, "module.dup");
+		generated.module = module;
 	}
 
 	// DEFINE BY USER
-	public void invokeAnnotationProcessor(CompileUnit file, Attributed node, List<? extends Annotation> annotations) {
+	public void invokeAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {
 		for (Annotation annotation : annotations) {
 			if (annotation.type().equals("java/lang/Override")) {
 				file.report(Kind.ERROR, "annotation.override");
@@ -199,11 +178,15 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 	public Consumer<Diagnostic> listener = new SimpleDiagnosticListener(1, 1, 1);
 	public boolean hasError;
 
-	@Override
+	public boolean hasError() {return hasError;}
 	public void report(IClass source, Kind kind, int pos, String code) { report(source, kind, pos, code, (Object[]) null);}
-	@Override
 	public void report(IClass source, Kind kind, int pos, String code, Object... args) {
 		Diagnostic diagnostic = new Diagnostic(source, kind, pos, pos, code, args);
+		if (kind.ordinal() >= Kind.ERROR.ordinal()) hasError = true;
+		listener.accept(diagnostic);
+	}
+	public void report(IClass source, Kind kind, int start, int end, String code, Object... args) {
+		Diagnostic diagnostic = new Diagnostic(source, kind, start, end, code, args);
 		if (kind.ordinal() >= Kind.ERROR.ordinal()) hasError = true;
 		listener.accept(diagnostic);
 	}
@@ -224,29 +207,6 @@ public class GlobalContext implements CompilerSpec, LavaApi {
 	}
 	public static FieldNode arrayLength() {return (FieldNode) anyArray().fields().get(0);}
 
-
 	private static final Logger logger = Logger.getLogger("Lavac/Debug");
 	public static Logger debugLogger() {return logger;}
-
-	@Override
-	public AnnotationApi getAnnotationApi() {
-		throw new UnsupportedOperationException("not implemented yet");
-	}
-
-	@Override
-	public ExprApi getExprApi() {
-		return null;
-	}
-
-	@Override
-	public LexApi getLexApi() {
-		return null;
-	}
-
-	private ResolveApiImpl resolveApi;
-	@Override
-	public void addResolveListener(int priority, DynamicResolver dtr) {
-		if (resolveApi == null) resolveApi = new ResolveApiImpl();
-		resolveApi.addTypeResolver(priority, dtr);
-	}
 }

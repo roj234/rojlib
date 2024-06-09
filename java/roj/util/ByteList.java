@@ -1,7 +1,7 @@
 package roj.util;
 
 import org.jetbrains.annotations.NotNull;
-import roj.compiler.api.Constant;
+import roj.compiler.plugins.constant.Constant;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.text.CharList;

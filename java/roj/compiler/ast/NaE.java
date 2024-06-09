@@ -1,9 +1,12 @@
 package roj.compiler.ast;
 
+import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
+import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.context.LocalContext;
+import roj.compiler.resolve.TypeCast;
 
 /**
  * Not an Expression
@@ -11,12 +14,15 @@ import roj.compiler.context.LocalContext;
  * @since 2024/5/30 0030 1:40
  */
 public class NaE extends ExprNode {
-	public static final NaE INSTANCE = new NaE();
+	public static final NaE NOEXPR = new NaE();
+	public static final ExprNode RESOLVE_FAILED = new NaE();
 
 	@Override
 	public String toString() {return "<fallback>";}
 	@Override
-	public IType type() {return LocalContext.OBJECT_TYPE;}
+	public IType type() {return this == NOEXPR ? LocalContext.OBJECT_TYPE : Asterisk.anyType;}
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {}
+	@Override
+	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {}
 }

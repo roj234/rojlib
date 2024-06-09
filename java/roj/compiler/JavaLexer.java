@@ -7,6 +7,7 @@ import roj.collect.MyBitSet;
 import roj.collect.TrieTree;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
+import roj.compiler.plugins.annotations.AutoIncrement;
 import roj.config.I18n;
 import roj.config.ParseException;
 import roj.config.Tokenizer;
@@ -18,6 +19,7 @@ import roj.text.TextUtil;
 import java.io.File;
 import java.io.IOException;
 
+import static roj.config.Word.EOF;
 import static roj.config.Word.LITERAL;
 
 /**
@@ -29,32 +31,64 @@ import static roj.config.Word.LITERAL;
 public final class JavaLexer extends Tokenizer {
 	public static final short CHARACTER = 9;
 
-	public static final String[] keywords = TextUtil.split1("for,while,do,continue,break,case,if,else,goto,return,switch," +
-		"this,new,true,false,null," +
-		"void,int,long,double,float,short,byte,char,boolean," +
-		"try,catch,finally,throw," +
-		"public,protected,private,static,final,abstract," +
-		"strictfp,native,volatile,transient,synchronized," +
-		"class,interface,@interface,enum," +
-		"implements,extends,super," +
-		"package,import," +
-		"default,throws,record,const,var,as,instanceof," +
-		"assert," +
-		"yield,with,defer,_async,_await,__struct,package-restricted,sealed,non-sealed,permits", ',');
+	public static final String[] keywords = TextUtil.split1(
+		// 类结构
+		// 这些除外:
+		// class => 常量
+		// extends, super => 泛型
+		"package,module,package-restricted,import,as," +
+		"interface,@interface,enum,record,__struct,class," +
+		"sealed,non-sealed," +
+		"permits,implements,extends,super," +
+		// MethodOnly
+		"default,throws," +
+
+		// 权限
+		"public,protected,private,static,final," +
+		// FieldOnly
+		"volatile,transient," +
+		// MethodOnly
+		"strictfp,abstract,native,synchronized," +
+		"_async,\1MOD0,\1MOD1," +
+
+		// 类型
+		"void,boolean,byte,char,short,int,long,float,double," +
+		// 表达式
+		"this,true,false,null,new,instanceof,\1EXP1," +
+
+		// 方法内
+		"for,while,do," +
+		"continue,break,goto,return,throw," +
+		"if,switch,try,assert," +
+		"const,var,yield,with,_await,\1STM0,"+
+		// statement rest
+		"else,case,defer,catch,finally," +
+
+		// 模块 with: #74
+		"requires,exports,opens,uses,provides,transitive,to", ',');
+	@AutoIncrement(10)
 	public static final short
-		FOR = 10, WHILE = 11, DO = 12, CONTINUE = 13, BREAK = 14, CASE = 15, IF = 16, ELSE = 17, GOTO = 18, RETURN = 19, SWITCH = 20,
-		THIS = 21, NEW = 22,
-		TRUE = 23, FALSE = 24, NULL = 25,
-		VOID = 26, INT = 27, LONG = 28, DOUBLE = 29, FLOAT = 30, SHORT = 31, BYTE = 32, CHAR = 33, BOOLEAN = 34,
-		TRY = 35, CATCH = 36, FINALLY = 37, THROW = 38,
-		PUBLIC = 39, PROTECTED = 40, PRIVATE = 41,
-		STATIC = 42, FINAL = 43, ABSTRACT = 44,
-		STRICTFP = 45, NATIVE = 46, VOLATILE = 47, TRANSIENT = 48, SYNCHRONIZED = 49,
-		CLASS = 50, INTERFACE = 51, AT_INTERFACE = 52, ENUM = 53,
-		IMPLEMENTS = 54, EXTENDS = 55, SUPER = 56,
-		PACKAGE = 57, IMPORT = 58,
-		DEFAULT = 59, THROWS = 60, RECORD = 61, CONST = 62, VAR = 63, AS = 64, INSTANCEOF = 65,
-		ASSERT = 66, YIELD = 67, WITH = 68, DEFER = 69, ASYNC = 70, AWAIT = 71, STRUCT = 72, PACKAGE_RESTRICTED = 73;
+		PACKAGE = 10, MODULE = 11, PACKAGE_RESTRICTED = 12, IMPORT = 13, AS = 14,
+		INTERFACE = 15, AT_INTERFACE = 16, ENUM = 17, RECORD = 18, STRUCT = 19, CLASS = 20,
+		SEALED = 21, NON_SEALED = 22,
+		PERMITS = 23, IMPLEMENTS = 24, EXTENDS = 25, SUPER = 26,
+		DEFAULT = 27, THROWS = 28,
+
+		PUBLIC = 29, PROTECTED = 30, PRIVATE = 31, STATIC = 32, FINAL = 33,
+		VOLATILE = 34, TRANSIENT = 35,
+		STRICTFP = 36, ABSTRACT = 37, NATIVE = 38, SYNCHRONIZED = 39,
+		ASYNC = 40, _1MOD0 = 41, _1MOD1 = 42,
+
+		VOID = 43, BOOLEAN = 44, BYTE = 45, CHAR = 46, SHORT = 47, INT = 48, LONG = 49, FLOAT = 50, DOUBLE = 51,
+		THIS = 52, TRUE = 53, FALSE = 54, NULL = 55, NEW = 56, INSTANCEOF = 57, _1EXP1 = 58,
+
+		FOR = 59, WHILE = 60, DO = 61,
+		CONTINUE = 62, BREAK = 63, GOTO = 64, RETURN = 65, THROW = 66,
+		IF = 67, SWITCH = 68, TRY = 69, ASSERT = 70,
+		CONST = 71, VAR = 72, YIELD = 73, WITH = 74, AWAIT = 75, _1STM0 = 76,
+		ELSE = 77, CASE = 78, DEFER = 79, CATCH = 80, FINALLY = 81,
+
+		REQUIRES = 82, EXPORTS = 83, OPENS = 84, USES = 85, PROVIDES = 86, TRANSITIVE = 87, TO = 88;
 
 	public static final String[] operators = {
 		// Syntax
@@ -80,6 +114,7 @@ public final class JavaLexer extends Tokenizer {
 		"<<=", ">>=", ">>>=", "&=", "^=", "|=",
 		"<<<"
 	};
+	@AutoIncrement(100)
 	public static final short
 		lBrace = 100, rBrace = 101,
 		lBracket = 102, rBracket = 103,
@@ -102,8 +137,6 @@ public final class JavaLexer extends Tokenizer {
 		add_assign = 142, sub_assign = 143, mul_assign = 144, div_assign = 145, mod_assign = 146, pow_assign = 147,
 		lsh_assign = 148, rsh_assign = 149, rsh_unsigned_assign = 150, and_assign = 151, xor_assign = 152, or_assign = 153,
 		direct_assign = 154;
-
-	public static final int CAT_METHOD = 1, CAT_TYPE = 2, CAT_MODIFIER = 4, CAT_HEADER = 8, CAT_TYPE_TYPE = 16;
 
 	private static final TrieTree<Word> JAVA_TOKEN = new TrieTree<>();
 	private static final MyBitSet JAVA_LEND = new MyBitSet();
@@ -137,32 +170,32 @@ public final class JavaLexer extends Tokenizer {
 		// 操作符优先级
 		Int2IntMap p = priorities;
 
-		p.putInt(and, 100);
-		p.putInt(or, 100);
-		p.putInt(xor, 100);
+		p.putInt(and, 10);
+		p.putInt(or, 10);
+		p.putInt(xor, 10);
 
-		p.putInt(lsh, 99);
-		p.putInt(rsh, 99);
-		p.putInt(rsh_unsigned, 99);
+		p.putInt(lsh, 9);
+		p.putInt(rsh, 9);
+		p.putInt(rsh_unsigned, 9);
 
-		p.putInt(pow, 98);
+		p.putInt(pow, 8);
 
-		p.putInt(mul, 97);
-		p.putInt(div, 97);
-		p.putInt(mod, 97);
+		p.putInt(mul, 7);
+		p.putInt(div, 7);
+		p.putInt(mod, 7);
 
-		p.putInt(add, 96);
-		p.putInt(sub, 96);
+		p.putInt(add, 6);
+		p.putInt(sub, 6);
 
-		p.putInt(lss, 95);
-		p.putInt(gtr, 95);
-		p.putInt(geq, 95);
-		p.putInt(leq, 95);
-		p.putInt(equ, 95);
-		p.putInt(neq, 95);
+		p.putInt(lss, 5);
+		p.putInt(gtr, 5);
+		p.putInt(geq, 5);
+		p.putInt(leq, 5);
+		p.putInt(equ, 5);
+		p.putInt(neq, 5);
 
-		p.putInt(logic_and, 94);
-		p.putInt(logic_or, 94);
+		p.putInt(logic_and, 4);
+		p.putInt(logic_or, 4);
 
 		alias("...finally", FINALLY, null);
 		alias("...switch", SWITCH, null);
@@ -189,6 +222,15 @@ public final class JavaLexer extends Tokenizer {
 		literalAlias("长度","length");
 	}
 
+	{ literalEnd = JAVA_LEND; tokens = JAVA_TOKEN; }
+
+	@Override
+	public final Tokenizer init(CharSequence seq) {
+		super.init(seq);
+		LN = 1;
+		return this;
+	}
+
 	private static void literalAlias(String from, String to) {
 		JAVA_TOKEN.put(from, new Word().init(Word.LITERAL, 0, to));
 	}
@@ -200,29 +242,55 @@ public final class JavaLexer extends Tokenizer {
 	public static short byName(String token) { return JAVA_TOKEN.get(token).type(); }
 	public static String byId(short id) { return id < 100 ? keywords[id - 10] : operators[id - 100]; }
 
-	public static int category(int id) {
-		return switch (id) {
-			// 防止泛型boom
-			case VAR, rsh, rsh_unsigned -> CAT_METHOD;
-			case TRUE, FALSE, NULL, VOID, INT, LONG, DOUBLE, FLOAT, SHORT, BYTE, CHAR, BOOLEAN -> CAT_TYPE;
-			case PUBLIC, PROTECTED, PRIVATE, STATIC, FINAL, ABSTRACT, STRICTFP, NATIVE, VOLATILE, TRANSIENT, SYNCHRONIZED, DEFAULT -> CAT_MODIFIER;
-			case PACKAGE, IMPORT, AS -> CAT_HEADER;
-			case CLASS, INTERFACE, ENUM, RECORD, IMPLEMENTS, EXTENDS, AT_INTERFACE -> CAT_TYPE_TYPE;
-			default -> 0;
+	public static int binaryOperatorPriority(short op) { return priorities.getOrDefaultInt(op, -1); }
+
+	public static final int STATE_CLASS = 0, STATE_MODULE = 1, STATE_EXPR = 2, STATE_TYPE = 3;
+	public int state = STATE_CLASS;
+
+	@Override
+	protected Word newWord() {
+		return new Word() {
+			@Override
+			public short type() {
+				short id = super.type();
+				return id <= CHARACTER || id >= 100 || switch (state) {
+					case STATE_CLASS -> id <= JavaLexer.DOUBLE;
+					case STATE_EXPR -> id >= VOID && id <= FINALLY || id == CLASS || id == FINAL;
+					case STATE_TYPE -> id >= VOID && id <= FINALLY;
+					case STATE_MODULE -> id >= EXPORTS && id <= TO || id == WITH || id == STATIC;
+					default -> false;
+				} ? id : LITERAL;
+			}
 		};
 	}
 
-	public static int binaryOperatorPriority(short op) { return priorities.getOrDefaultInt(op, -1); }
-
-	public long env = -1;
-
-	{ literalEnd = JAVA_LEND; tokens = JAVA_TOKEN; }
-
 	@Override
-	public final Tokenizer init(CharSequence seq) {
-		super.init(seq);
-		LN = 1;
-		return this;
+	protected boolean isValidToken(int off, Word w) {
+		if (!super.isValidToken(off, w)) return false;
+		int id = w.type();
+		return state != STATE_TYPE || id < inc || id == gtr || id == lss;
+	}
+
+	public int skipBrace() throws ParseException {
+		if (wd.type() != lBrace) throw new IllegalStateException("not lBrace");
+		int pos = index;
+
+		int L = 1;
+
+		while (true) {
+			Word w = next();
+			switch (w.type()) {
+				case lBrace: L++; break;
+				case rBrace: if (--L == 0) return pos; break;
+				case EOF: throw err("braceMismatch");
+			}
+		}
+	}
+	public void init(int pos, int ln, int lnIndex) throws ParseException {
+		next();
+		index = pos;
+		LN = ln;
+		LNIndex = lnIndex;
 	}
 
 	@Override

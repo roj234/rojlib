@@ -11,13 +11,13 @@ import java.util.Collections;
 import java.util.List;
 
 public final class ParamAnnotationRef implements Attributed {
-	private final MethodNode m;
-	private final int parId;
+	public final MethodNode method;
+	public final int parameterId;
 	public int pos;
 
-	public ParamAnnotationRef(MethodNode method, int pos, int parId) {
-		this.m = method;
-		this.parId = parId;
+	public ParamAnnotationRef(MethodNode method, int pos, int parameterId) {
+		this.method = method;
+		this.parameterId = parameterId;
 		this.pos = pos;
 	}
 
@@ -25,12 +25,12 @@ public final class ParamAnnotationRef implements Attributed {
 	public void putAttr(Attribute attr) {
 		boolean vis = ((Annotations) attr).vis;
 
-		ParameterAnnotations p = (ParameterAnnotations) m.attrByName((vis ? Attribute.RtParameterAnnotations : Attribute.ClParameterAnnotations).name);
-		if (p == null) m.putAttr(p = new ParameterAnnotations(vis));
+		ParameterAnnotations p = (ParameterAnnotations) method.attrByName((vis ? Attribute.RtParameterAnnotations : Attribute.ClParameterAnnotations).name);
+		if (p == null) method.putAttr(p = new ParameterAnnotations(vis));
 
 		List<List<Annotation>> list = p.annotations;
-		while (list.size() <= parId) list.add(Collections.emptyList());
-		list.set(parId, ((Annotations) attr).annotations);
+		while (list.size() <= parameterId) list.add(Collections.emptyList());
+		list.set(parameterId, ((Annotations) attr).annotations);
 	}
 
 	@Override

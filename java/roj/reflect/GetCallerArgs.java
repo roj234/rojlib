@@ -53,6 +53,23 @@ public final class GetCallerArgs {
 	public <T> T walk(Function<? super Stream<XSF>, ? extends T> function) {return walker.walk(stream -> function.apply(stream.skip(1).map(XSF::new)));}
 	public void forEach(Consumer<? super XSF> action) {walker.walk(stream -> {stream.skip(1).map(XSF::new).forEach(action); return null;});}
 
+	public Object getCallerInstance() {return getCallerInstance(3);}
+	public Object getCallerInstance(int skip) {
+		return walker.walk(stream -> {
+			StackFrame frame = stream.skip(skip).findFirst().orElse(null);
+			return frame == null ? null : new XSF(frame).getLocals()[0];
+		});
+	}
+
+	public static final StackWalker NOT_LIVE = StackWalker.getInstance(EnumSet.of(StackWalker.Option.RETAIN_CLASS_REFERENCE));
+	public static Class<?> getCallerClass() {return getCallerClass(3);}
+	public static Class<?> getCallerClass(int skip) {
+		return NOT_LIVE.walk(stream -> {
+			StackFrame frame = stream.skip(skip).findFirst().orElse(null);
+			return frame == null ? null : frame.getDeclaringClass();
+		});
+	}
+
 	public static class XSF implements StackFrame {
 		private final StackFrame f;
 

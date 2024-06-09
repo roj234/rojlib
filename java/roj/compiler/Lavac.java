@@ -6,13 +6,14 @@ import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asmx.launcher.Bootstrap;
 import roj.collect.MyHashMap;
-import roj.compiler.api.Constant;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LibraryZipFile;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.SimpleDiagnosticListener;
+import roj.compiler.plugins.GlobalContextApi;
+import roj.compiler.plugins.constant.Constant;
 import roj.io.IOUtil;
 import roj.text.ACalendar;
 import roj.text.TextUtil;
@@ -33,7 +34,7 @@ public final class Lavac {
 	public static String getCompileTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
 	public static String getCurrentTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
 
-	public static final String VERSION = "0.9.2[RC] (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "0.9.4[RC] (compiled on "+getCompileTime()+")";
 
 	int debugOps = 10;
 	GlobalContext ctx;
@@ -61,7 +62,6 @@ public final class Lavac {
 				            -precomp <flag1>[,<flag2>...] 预编译沙盒白名单 (未实现)
 
 				            -GC <class>                设定全局上下文的类名称
-				            -LC <class>                设定本地上下文的类名称 (未实现)
 				            -T <key> <val>             传递给上下文的参数 (未实现)
 
 				            -EnableSpec/DisableSpec ID 启用或禁用Lavac特性 (未实现)
@@ -74,8 +74,7 @@ public final class Lavac {
 		String cp = "";
 		String bin = null;
 
-		String gcName = "roj.compiler.context.GlobalContext";
-		String lcName = "roj.compiler.context.LocalContext";
+		String gcName = "roj.compiler.plugins.GlobalContextApi";
 
 		MyHashMap<String, String> tweakerOps = new MyHashMap<>();
 
@@ -123,7 +122,6 @@ public final class Lavac {
 				}
 				case "-debug" -> compiler.debugOps |= 1;
 				case "-GC" -> gcName = args[++i];
-				case "-LC" -> lcName = args[++i];
 				case "-T" -> tweakerOps.put(args[++i], args[++i]);
 				default -> throw new RuntimeException("Invalid config["+i+"]="+args[i]);
 			}
@@ -132,7 +130,7 @@ public final class Lavac {
 		if (i == args.length) throw new RuntimeException("没有源文件");
 
 		compiler.ctx = (GlobalContext) Class.forName(gcName).newInstance();
-		LocalContext.set(new LocalContext(compiler.ctx));
+		LocalContext.set(compiler.ctx.createLocalContext());
 
 		for (String s : TextUtil.split(new ArrayList<>(), cp, File.pathSeparatorChar)) {
 			File f = new File(s);
@@ -140,13 +138,13 @@ public final class Lavac {
 			compiler.addCp(f);
 		}
 
-		LavaCompiler.initDefaultPlugins(compiler.ctx);
+		LavaCompiler.initDefaultPlugins((GlobalContextApi) compiler.ctx);
 
 		while (i < args.length) {
 			addSrc(new File(args[i++]), compiler.CompileUnits);
 		}
 
-		File dst = bin == null ? new File("lava-class.zip") : new File(bin);
+		File dst = bin == null ? new File("Lava.jar") : new File(bin);
 
 		SimpleDiagnosticListener diagnostic = new SimpleDiagnosticListener(maxError, maxWarn, 0);
 
@@ -157,7 +155,7 @@ public final class Lavac {
 
 		try {
 			Bootstrap.classLoader.enableFastZip(dst.toURI().toURL());
-			((Runnable) Class.forName("StdIn").newInstance()).run();
+			((Runnable) Class.forName("Test").newInstance()).run();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -173,17 +171,16 @@ public final class Lavac {
 		compile:
 		try (ZipFileWriter zfw = new ZipFileWriter(dst)) {
 			for (int i = ctxs.size() - 1; i >= 0; i--) {
-				if (!ctxs.get(i).S0_Init())
-					// special process for package-info or empty java
+				if (!ctxs.get(i).S1_Struct())
+					// 下列可能性
+					// 文件是空的
+					// package-info
+					// module-info
 					ctxs.remove(i);
 			}
 			if (ctx.hasError()) break compile;
 			for (int i = 0; i < ctxs.size(); i++) {
-				ctxs.get(i).S1_Struct();
-			}
-			if (ctx.hasError()) break compile;
-			for (int i = 0; i < ctxs.size(); i++) {
-				ctxs.get(i).S2_Parse();
+				ctxs.get(i).S2_Resolve();
 			}
 			if (ctx.hasError()) break compile;
 			for (int i = 0; i < ctxs.size(); i++) {

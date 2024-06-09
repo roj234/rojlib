@@ -17,6 +17,7 @@ import roj.collect.ToIntMap;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
+import roj.compiler.ast.NaE;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -25,6 +26,8 @@ import roj.compiler.resolve.FieldResult;
 import roj.compiler.resolve.ResolveException;
 import roj.text.CharList;
 import roj.text.TextUtil;
+
+import java.util.function.Consumer;
 
 /**
  * 操作符 - 获取定名字的量
@@ -45,7 +48,7 @@ final class DotGet extends VarNode {
 	private FieldNode[] chain;
 	private IType type;
 
-	private static final byte ARRAY_LENGTH = 1, FINAL_FIELD = 2, SELF_FIELD = 4, CHECKED = 8;
+	private static final byte ARRAY_LENGTH = 1, FINAL_FIELD = 2, SELF_FIELD = 4, RESOLVED = 8;
 
 	// parent可以是Constant This Super ArrayGet Invoke ArrayDef New
 	private static final ToIntMap<Class<?>> TypeId = new ToIntMap<>();
@@ -80,7 +83,7 @@ final class DotGet extends VarNode {
 	public Type toClassRef() {
 		if (flags >= 0) throw new IllegalArgumentException("cannot be class ref");
 
-		CharList sb = LocalContext.get().tmpList; sb.clear();
+		CharList sb = LocalContext.get().tmpSb; sb.clear();
 		int i = 0;
 		String part = names.get(0);
 		while (true) {
@@ -104,8 +107,8 @@ final class DotGet extends VarNode {
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException { return resolveEx(ctx, null); }
 	@Contract("_, null -> !null")
-	final ExprNode resolveEx(LocalContext ctx, Invoke invoke) throws ResolveException {
-		if ((flags&CHECKED) != 0) return this;
+	final ExprNode resolveEx(LocalContext ctx, Consumer<IClass> invoke) throws ResolveException {
+		if ((flags& RESOLVED) != 0) return this;
 
 		// 用于错误提示
 		FieldResult inaccessibleThis = null;
@@ -153,7 +156,7 @@ final class DotGet extends VarNode {
 
 		String part = names.get(0);
 		int i = 0;
-		CharList sb = ctx.tmpList; sb.clear();
+		CharList sb = ctx.tmpSb; sb.clear();
 		while (true) {
 			sb.append(part);
 			if (++i == names.size()) break;
@@ -172,7 +175,7 @@ final class DotGet extends VarNode {
 				fType = (parent = parent.resolve(ctx)).type();
 				if (fType.isPrimitive()) {
 					ctx.report(Kind.ERROR, "symbol.error.derefPrimitiveField", fType);
-					return this;
+					return NaE.RESOLVE_FAILED;
 				}
 
 				symbol = ctx.getClassOrArray(fType);
@@ -182,7 +185,7 @@ final class DotGet extends VarNode {
 			String error = ctx.resolveField(symbol, fType, sb);
 			if (error != null) {
 				ctx.report(Kind.ERROR, error);
-				return this;
+				return NaE.RESOLVE_FAILED;
 			}
 
 			begin = ctx.get_frBegin();
@@ -201,13 +204,13 @@ final class DotGet extends VarNode {
 			if (error != null) {
 				if (error.isEmpty()) {
 					assert invoke != null;
-					invoke.fn = ctx.get_frBegin();
+					invoke.accept(ctx.get_frBegin());
 					return null;
 				}
 
 				if (inaccessibleThis != null) error = inaccessibleThis.error;
 				ctx.report(Kind.ERROR, error);
-				return this;
+				return NaE.RESOLVE_FAILED;
 			}
 
 			begin = ctx.get_frBegin();
@@ -219,7 +222,7 @@ final class DotGet extends VarNode {
 		}
 		ctx.checkType(part);
 
-		flags = CHECKED;
+		flags = RESOLVED;
 
 		assert chain != null;
 

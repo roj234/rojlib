@@ -3,6 +3,7 @@ package roj.compiler.context;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
+import roj.asm.cp.CstClass;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.AnnValArray;
@@ -20,10 +21,7 @@ import roj.compiler.JavaLexer;
 import roj.compiler.asm.*;
 import roj.compiler.ast.block.ParseTask;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.resolve.ComponentList;
-import roj.compiler.resolve.ResolveHelper;
-import roj.compiler.resolve.TypeCast;
-import roj.compiler.resolve.TypeResolver;
+import roj.compiler.resolve.*;
 import roj.config.ParseException;
 import roj.config.Word;
 import roj.io.IOUtil;
@@ -32,7 +30,10 @@ import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static roj.asm.Opcodes.*;
@@ -50,15 +51,14 @@ public final class CompileUnit extends ConstantData {
 	static final int ACC_METHOD_ILLEGAL = ACC_TRANSIENT|ACC_VOLATILE, ACC_FIELD_ILLEGAL = ACC_STRICT|ACC_NATIVE|ACC_ABSTRACT;
 	static final int
 		_ACC_DEFAULT = 1 << 17, _ACC_ANNOTATION = 1 << 18, _ACC_RECORD = 1 << 19, _ACC_STRUCT = 1 << 20,
-		_ACC_INNERCLASS = 0x0040, _ACC_ANONYMOUS = 0x0080;
+		_ACC_INNERCLASS = 0x0040;
 
-	private final String path;
+	private static final char UNRELATED_MARKER = 32768, PARENT_MARKER = 16384;
+
+	private final String source;
 	private final JavaLexer wr;
 
 	private final TypeResolver tr;
-
-	// S0 only
-	private SimpleList<AnnotationPrimer> annotations;
 
 	// 诊断的起始位置
 	private int classIdx;
@@ -68,13 +68,14 @@ public final class CompileUnit extends ConstantData {
 	private MyHashSet<IType> toResolve = new MyHashSet<>();
 
 	// Generic
-	private SignaturePrimer signature, currentNode;
+	public SignaturePrimer signature, currentNode;
 
 	// Supplementary
 	private int recordFieldPos;
 	public MyHashSet<FieldNode> finalFields = new MyHashSet<>(Hasher.identity());
-	private MyHashSet<Desc> abstractMethods = new MyHashSet<>();
-	private AccessData overridableMethods = new AccessData(null, 0, "myClass", null);
+	private final MyHashSet<Desc> abstractOrUnrelated = new MyHashSet<>();
+	private final AccessData overridableMethods = new AccessData(null, 0, "_", null);
+	private final List<MethodNode> methodCache = new SimpleList<>();
 
 	// code block task
 	private final List<ParseTask> lazyTasks = new SimpleList<>();
@@ -87,13 +88,13 @@ public final class CompileUnit extends ConstantData {
 	private LocalContext ctx;
 
 	public CompileUnit(String name) {
-		path = name;
-
-		ctx = LocalContext.get();
-		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_SOURCE_FILE)) putAttr(new AttrString(AttrString.SOURCE,name));
-
+		source = name;
 		tr = new TypeResolver();
-		wr = new JavaLexer();
+
+		LocalContext ctx = LocalContext.get();
+		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_SOURCE_FILE))
+			putAttr(new AttrString(AttrString.SOURCE, name));
+		wr = ctx.classes.createLexer();
 	}
 	public CompileUnit(String name, InputStream in) throws IOException {
 		this(name);
@@ -106,13 +107,13 @@ public final class CompileUnit extends ConstantData {
 
 	// region 文件中的其余类
 	private CompileUnit(CompileUnit parent) {
-		this.path = parent.path;
+		this.source = parent.source;
 
 		LocalContext.depth(1);
 		ctx = LocalContext.get();
 
 		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_SOURCE_FILE))
-			putAttr(parent.attrByName(Attribute.SourceFile.name));
+			putAttr(parent.attrByName("SourceFile"));
 
 		_parent = parent;
 		access = 0;
@@ -129,25 +130,26 @@ public final class CompileUnit extends ConstantData {
 
 		int i = p.name.lastIndexOf('/') + 1;
 		c.name(i <= 0 ? "" : p.name.substring(0, i));
-		c.S1_Struct();
+		c.header();
 
 		p.ctx.classes.addCompileUnit(c);
 		LocalContext.depth(-1);
 		return c;
 	}
-	private static CompileUnit _newInner(CompileUnit p, int flag) throws ParseException {
-		CompileUnit c = new CompileUnit(p);
+	private CompileUnit _newInner(int flag) throws ParseException {
+		CompileUnit c = new CompileUnit(this);
 
-		c.name(p.name.concat("$"));
+		c.name(name.concat("$"));
 		c.access = (char) (flag|_ACC_INNERCLASS);
 
 		var desc = InnerClasses.InnerClass.innerClass(c.name, 0);
-		p._innerClass().add(desc);
-		c._innerClass().add(desc);
+		this.innerClasses().add(desc);
+		c.innerClasses().add(desc);
+		c.putAttr(new AttrString("NestHost", name));
 
-		c.S1_Struct();
+		c.header();
 
-		p.ctx.classes.addCompileUnit(c);
+		ctx.classes.addCompileUnit(c);
 		LocalContext.depth(-1);
 		return c;
 	}
@@ -166,49 +168,86 @@ public final class CompileUnit extends ConstantData {
 		// }
 
 		c.name(IOUtil.getSharedCharBuf().append(name).append("$").append(++_children).toString());
-		c.access = ACC_SYNTHETIC|ACC_FINAL|ACC_SUPER|_ACC_ANONYMOUS;
+		c.access = ACC_FINAL|ACC_SUPER;
 
-		c.copyTmpFromCache();
 		c.body();
 
 		var desc = InnerClasses.InnerClass.anonymous(c.name, c.access);
-		this._innerClass().add(desc);
-		c._innerClass().add(desc);
+		this.innerClasses().add(desc);
+		c.innerClasses().add(desc);
 
-		EnclosingMethod ownerAttr = new EnclosingMethod();
-		ownerAttr.owner = name;
-		if (mn != null) {
-			ownerAttr.name = mn.name();
-			ownerAttr.parameters = mn.parameters();
-			ownerAttr.returnType = mn.returnType();
+		addNextMember(c);
+
+		var ownerMethod = new EnclosingMethod();
+		ownerMethod.owner = name;
+		if (mn != null && !mn.name().startsWith("<")) {
+			ownerMethod.name = mn.name();
+			ownerMethod.parameters = mn.parameters();
+			ownerMethod.returnType = mn.returnType();
 		}
-		c.putAttr(ownerAttr);
+		c.putAttr(ownerMethod);
+		c.putAttr(new AttrString("NestHost", name));
 
 		LocalContext.depth(-1);
 		return c;
 	}
 
-	public List<InnerClasses.InnerClass> _innerClass() {
+	private void addNextMember(CompileUnit c) {
+		AttrClassList nestMembers = (AttrClassList) attrByName("NestMembers");
+		if (nestMembers == null) putAttr(nestMembers = new AttrClassList("NestMembers"));
+		nestMembers.value.add(c.name);
+	}
+	public List<InnerClasses.InnerClass> innerClasses() {
 		InnerClasses c = parsedAttr(cp, Attribute.InnerClasses);
 		if (c == null) putAttr(c = new InnerClasses());
 		return c.classes;
 	}
 	// endregion
-	// region 阶段0 package、import、同时检查package-info
-	public boolean S0_Init() throws ParseException {
-		JavaLexer wr = this.wr;// = (JavaLexer) new JavaLexer().init(IOUtil.readUTF(in));
+	// region 阶段1非公共部分: package, import, package-info, module-info
+	public boolean S1_Struct() throws ParseException {
+		var ctx = this.ctx = LocalContext.get();
+		ctx.setClass(this);
+
+		JavaLexer wr = this.wr;
 		CharList tmp = IOUtil.getSharedCharBuf();
 
-		wr.env = CAT_HEADER|CAT_MODIFIER|CAT_TYPE_TYPE;
+		wr.state = STATE_CLASS;
 
 		// 默认包""
 		String pkg = "";
 		Word w = wr.next();
+
+		// 空
+		if (w.type() == EOF) return false;
+
+		boolean isNormalClass = !source.contains("-info");
+
+		if (w.type() == at) {
+			if (isNormalClass) ctx.report(Kind.ERROR, "package.annotation");
+
+			ctx.tmpAnnotations.clear();
+			_annotations(ctx.tmpAnnotations);
+			w = wr.next();
+		}
+
+		boolean moduleIsOpen = w.val().equals("open");
+		if (w.type() == MODULE || moduleIsOpen) {
+			if (isNormalClass) ctx.report(Kind.ERROR, "module.unexpected");
+
+			if (moduleIsOpen) wr.except(MODULE);
+
+			wr.state = STATE_MODULE;
+			parseModuleInfo(moduleIsOpen);
+			return false;
+		}
+
 		if (w.type() == PACKAGE) {
-			_klass(wr, tmp, 0);
+			typeRef(wr, tmp, 0);
 			pkg = tmp.append('/').toString();
 
 			w = wr.optionalNext(semicolon);
+
+			// package-info without helper classes
 			if (w.type() == EOF) return false;
 		}
 
@@ -222,10 +261,10 @@ public final class CompileUnit extends ConstantData {
 			boolean impField = wr.nextIf(STATIC);
 			int unimport = wr.nextIf(sub) ? 0 : TYPE_STAR;
 
-			_klass(wr, tmp, unimport);
+			typeRef(wr, tmp, unimport);
 
 			importBlock:
-			if (tmp.charAt(tmp.length() - 1) == '*') {
+			if (tmp.charAt(tmp.length()-1) == '*') {
 				// import *
 				if (tmp.length() == 1) {
 					report(Kind.WARNING, "import.any");
@@ -260,59 +299,135 @@ public final class CompileUnit extends ConstantData {
 		}
 
 		wr.retractWord();
-		wr.env = CAT_MODIFIER|CAT_TYPE_TYPE;
-
 		name(pkg);
-		return true;
-	}
 
+		if (isNormalClass) header();
+		else name(pkg+"package-info");
+
+		// 辅助类
+		while (!wr.nextIf(EOF)) _newHelper(this);
+
+		return isNormalClass;
+	}
+	private void parseModuleInfo(boolean moduleIsOpen) throws ParseException {
+		access = ACC_MODULE;
+		name("module-info");
+
+		var a = new AttrModule(wr.except(LITERAL, "cu.name").val(), moduleIsOpen ? ACC_OPEN : 0);
+		putAttr(a);
+
+		var names = ctx.tmpSet; names.clear();
+
+		// 某些重复可能并非错误
+		// 我从未用过模块系统，因为它不让我引用未命名模块
+		// 当然，也许很快就变了
+		// https://blog.csdn.net/qq_60914456/article/details/126206715
+		loop:
+		while (true) {
+			Word w = wr.next();
+			switch (w.type()) {
+				case EOF -> throw wr.err("module.eof");
+				case lBrace -> {break loop;}
+				case REQUIRES -> {
+					int access = 0;
+					if (wr.nextIf(TRANSITIVE)) access |= ACC_TRANSITIVE;
+					if (wr.nextIf(STATIC)) access |= ACC_STATIC_PHASE;
+					do {
+						String name = _type(wr, 0).owner();
+						if (!names.add("R;"+name)) report(Kind.ERROR, "module.dup.requires", name);
+
+						a.requires.add(new AttrModule.Module(name, access));
+
+						w = wr.next();
+					} while (w.type() == comma);
+				}
+				case EXPORTS, OPENS -> {
+					boolean isExport = w.type() == EXPORTS;
+					if (!isExport && moduleIsOpen) report(Kind.ERROR, "module.open");
+
+					String from = _type(wr, 0).owner();
+
+					var info = new AttrModule.Export(from);
+					(isExport?a.exports:a.opens).add(info);
+
+					if (!names.add((isExport?"E;":"O;")+from)) report(Kind.ERROR, "module.dup.exports", from);
+
+					w = wr.next();
+					if (w.type() == TO) {
+						do {
+							String to = _type(wr, 0).owner();
+							if (!names.add((isExport?"E;":"O;")+from+';'+to)) report(Kind.ERROR, "module.dup.exports2", from, to);
+
+							info.to.add(to);
+
+							w = wr.next();
+						} while (w.type() == comma);
+					}
+				}
+				case USES -> {
+					String spi = _type(wr, 0).owner();
+					w = wr.next();
+
+					if (!names.add("U;"+spi)) report(Kind.ERROR, "module.dup.uses", spi);
+					a.uses.add(spi);
+				}
+				case PROVIDES -> {
+					String spi = _type(wr, 0).owner();
+
+					var info = new AttrModule.Provide(spi);
+					a.provides.add(info);
+
+					if (!names.add("P;"+spi)) report(Kind.ERROR, "module.dup.provides", spi);
+
+					w = wr.next();
+					if (w.type() == WITH) {
+						do {
+							String to = _type(wr, 0).owner();
+							if (!names.add("P;"+spi+";"+to)) report(Kind.ERROR, "module.dup.provides2", spi, to);
+
+							info.impl.add(to);
+
+							w = wr.next();
+						} while (w.type() == comma);
+					}
+				}
+			}
+
+			if (w.type() != semicolon) report(Kind.ERROR, "module.semicolon");
+		}
+
+		ctx.classes.setModule(a);
+	}
 	// endregion
 	// region 阶段1 类的结构
-	public CharList copyTmpFromCache() {
-		LocalContext cache = ctx;
-
-		annotations = cache.annotationTmp;
-		annotations.clear();
-
-		CharList tmp = cache.tmpList; tmp.clear();
-		return tmp;
-	}
-
-	public void S1_Struct() throws ParseException {
+	private void header() throws ParseException {
 		LocalContext ctx = this.ctx = LocalContext.get();
 		ctx.setClass(this);
 
 		tr.init(ctx);
-		copyTmpFromCache();
-		List<String> itfs = Helpers.cast(interfaces);
 
 		JavaLexer wr = this.wr;
 
 		// 修饰符和注解
-		int acc = (char) _modifier(wr, ACC_PUBLIC|ACC_FINAL|ACC_ABSTRACT|_ACC_ANNOTATION);
-		if (!annotations.isEmpty()) addAnnotation(this, new SimpleList<>(annotations));
-
-		wr.env = CAT_TYPE|CAT_MODIFIER|CAT_TYPE_TYPE|CAT_METHOD;
+		int acc = (char) _modifiers(wr, ACC_PUBLIC|ACC_FINAL|ACC_ABSTRACT|_ACC_ANNOTATION);
+		if (!ctx.tmpAnnotations.isEmpty()) annoTask.put(this, new SimpleList<>(ctx.tmpAnnotations));
 
 		// 类型(class enum...)
 		Word w = wr.next();
 		switch (w.type()) {
-			case CLASS: // class
-				acc |= ACC_SUPER;
-			break;
 			case INTERFACE: // interface
 				if ((acc & (ACC_FINAL)) != 0) report(Kind.ERROR, "modifier.conflict:interface:final");
 				acc |= ACC_ABSTRACT|ACC_INTERFACE;
+			break;
+			case AT_INTERFACE: // @interface
+				if ((acc & (ACC_FINAL)) != 0) report(Kind.ERROR, "modifier.conflict:@interface:final");
+				acc |= ACC_ANNOTATION|ACC_INTERFACE|ACC_ABSTRACT;
+				addInterface("java/lang/annotation/Annotation");
 			break;
 			case ENUM: // enum
 				if ((acc & (ACC_ABSTRACT)) != 0) report(Kind.ERROR, "modifier.conflict:enum:abstract");
 				acc |= ACC_ENUM|ACC_FINAL;
 				parent("java/lang/Enum");
-			break;
-			case AT_INTERFACE: // @interface
-				if ((acc & (ACC_FINAL)) != 0) report(Kind.ERROR, "modifier.conflict:@interface:final");
-				acc |= ACC_ANNOTATION|ACC_INTERFACE|ACC_ABSTRACT;
-				itfs.add("java/lang/annotation/Annotation");
 			break;
 			case RECORD:
 				acc |= ACC_FINAL|_ACC_RECORD;
@@ -322,25 +437,30 @@ public final class CompileUnit extends ConstantData {
 				acc |= ACC_FINAL|_ACC_RECORD|_ACC_STRUCT;
 				parent(null);
 			break;
+			case CLASS:
+				acc |= ACC_SUPER;
+			break;
 			default: throw wr.err("unexpected_2:"+w.val()+":cu.except.type");
 		}
 		access = (char)acc;
 
 		if ((acc&_ACC_INNERCLASS) != 0) {
-			if ((acc & (ACC_INTERFACE|ACC_ENUM)) != 0) acc |= ACC_STATIC;
-			var c = _innerClass();
+			if ((acc & (ACC_INTERFACE|ACC_ENUM|_ACC_RECORD)) != 0) acc |= ACC_STATIC;
+			var c = innerClasses();
 			c.get(c.size()-1).flags = (char) acc;
+
+			access ^= _ACC_INNERCLASS;
 		}
 
 		// 名称
-		w = wr.except(LITERAL, "cu.except.name");
-		classIdx = w.pos();
+		w = wr.except(LITERAL, "cu.name");
+		classIdx = w.pos()+1;
 		name(name.concat(w.val()));
 
 		// 泛型参数和范围
 		w = wr.next();
 		if (w.type() == lss) { // <
-			_genericDeclare(wr, _signature());
+			genericDecl(wr);
 			w = wr.next();
 		}
 
@@ -350,8 +470,8 @@ public final class CompileUnit extends ConstantData {
 			if ((acc & (ACC_ENUM|ACC_ANNOTATION|_ACC_RECORD)) != 0) report(Kind.ERROR, "cu.noInheritance", name, parent);
 			if ((acc & ACC_INTERFACE) != 0) break checkExtends;
 
-			IType type = _type(wr, ctx.tmpList, 0);
-			if (type.genericType() > 0 || currentNode != null) _signature()._add(type);
+			IType type = _type(wr, TYPE_LEVEL2);
+			if (type.genericType() > 0 || currentNode != null) makeSignature()._add(type);
 			parent(type.owner());
 
 			w = wr.next();
@@ -367,18 +487,17 @@ public final class CompileUnit extends ConstantData {
 			}
 
 			do {
-				_modifier(wr, _ACC_ANNOTATION);
+				_modifiers(wr, _ACC_ANNOTATION);
 
-				IType type = _type(wr, ctx.tmpList, TYPE_PRIMITIVE|TYPE_GENERIC);
-				if (type.genericType() != 0) _signature().returns = type;
+				IType type = _type(wr, TYPE_PRIMITIVE|TYPE_GENERIC);
+				if (type.genericType() != 0) makeSignature().returns = type;
 
 				String name = wr.except(LITERAL, "cu.name").val();
 
 				FieldNode field = new FieldNode(ACC_PUBLIC|ACC_FINAL, name, type.rawType());
 
-				if (!annotations.isEmpty()) addAnnotation(field, new SimpleList<>(annotations));
-				Signature s = _signatureCommit(signature, Signature.FIELD, null);
-				if (s != null) field.putAttr(s);
+				if (!ctx.tmpAnnotations.isEmpty()) annoTask.put(field, new SimpleList<>(ctx.tmpAnnotations));
+				finishSignature(null, Signature.FIELD, field);
 
 				fields.add(field);
 				fieldIdx.add(w.pos());
@@ -418,9 +537,9 @@ public final class CompileUnit extends ConstantData {
 		// 实现
 		if (w.type() == ((acc & ACC_INTERFACE) != 0 ? EXTENDS : IMPLEMENTS)) {
 			do {
-				IType type = _type(wr, ctx.tmpList, 0);
-				if (type.genericType() > 0 || currentNode != null) _signature()._impl(type);
-				itfs.add(type.owner());
+				IType type = _type(wr, TYPE_LEVEL2);
+				if (type.genericType() > 0 || currentNode != null) makeSignature()._impl(type);
+				interfaces.add(new CstClass(type.owner()));
 
 				w = wr.next();
 			} while (w.type() == comma);
@@ -428,31 +547,24 @@ public final class CompileUnit extends ConstantData {
 
 		wr.retractWord();
 
-		signature = _signatureCommit(_parent == null ? null : _parent.signature, Signature.CLASS, null);
-		if (signature != null) putAttr(signature);
+		signature = finishSignature(_parent == null ? null : _parent.signature, Signature.CLASS, this);
+		for (int i = 0; i < recordFieldPos; i++) {
+			var sign = (SignaturePrimer) fields.get(i).attrByName("Signature");
+			if (sign != null) sign.parent = signature;
+		}
 
 		body();
 		}
 		ctx.classes.addCompileUnit(this);
-
-		// 辅助类 (把文件读完)
-		if (_parent == null) while (wr.hasNext()) {
-			w = wr.next();
-			if (w.type() != EOF) {
-				wr.retractWord();
-				_newHelper(this);
-			}
-		}
 	}
-
 	private void body() throws ParseException {
+		LocalContext ctx = this.ctx;
 		JavaLexer wr = this.wr;
 		Word w;
-		CharList tmp = ctx.tmpList;
 
 		wr.except(lBrace);
 
-		MyHashSet<String> names = ctx.tmpSet; names.clear();
+		var names = ctx.tmpSet; names.clear();
 		// for record
 		for (int i = 0; i < fields.size(); i++) {
 			String name = fields.get(i).name();
@@ -505,12 +617,12 @@ public final class CompileUnit extends ConstantData {
 					acc |= ACC_NATIVE|ACC_PRIVATE|ACC_PROTECTED|ACC_TRANSIENT|ACC_VOLATILE|ACC_SYNCHRONIZED;
 					break;
 			}
-			acc = _modifier(wr, acc);
+			acc = _modifiers(wr, acc);
 
 			// ## 3.2 泛型参数<T>
 			w = wr.next();
 			if (w.type() == lss) {
-				_genericDeclare(wr, _signature());
+				genericDecl(wr);
 				w = wr.next();
 			}
 
@@ -522,7 +634,7 @@ public final class CompileUnit extends ConstantData {
 				continue;
 				case CLASS, INTERFACE, ENUM, AT_INTERFACE, RECORD:
 					wr.retractWord();
-					_newInner(this, acc);
+					_newInner(acc);
 				continue;
 			}
 
@@ -565,17 +677,17 @@ public final class CompileUnit extends ConstantData {
 					Generic g = new Generic("roj/compiler/runtime/ReturnStack", 0, Generic.EX_NONE);
 					type1 = g;
 					do {
-						g.addChild(_type(wr, tmp, TYPE_PRIMITIVE|TYPE_GENERIC));
+						g.addChild(_type(wr, TYPE_PRIMITIVE|TYPE_GENERIC));
 						w = wr.next();
 					} while (w.type() == comma);
 					if (w.type() != rBracket) throw wr.err("unexpected_2:"+w.type()+":cu.except.multiArg");
 				} else {
 					wr.retractWord();
-					type1 = _type(wr, tmp, TYPE_PRIMITIVE|TYPE_GENERIC);
+					type1 = _type(wr, TYPE_PRIMITIVE|TYPE_GENERIC);
 				}
 
 				if (type1.genericType() != 0)
-					_signature().returns = type1;
+					makeSignature().returns = type1;
 				type = type1.rawType();
 
 				// method or field
@@ -591,7 +703,7 @@ public final class CompileUnit extends ConstantData {
 
 				MethodNode method = new MethodNode(acc, this.name, name, "()V");
 				method.setReturnType(type);
-				if (!annotations.isEmpty()) addAnnotation(method, new SimpleList<>(annotations));
+				if (!ctx.tmpAnnotations.isEmpty()) annoTask.put(method, new SimpleList<>(ctx.tmpAnnotations));
 
 				List<String> paramNames;
 
@@ -613,10 +725,10 @@ public final class CompileUnit extends ConstantData {
 					do {
 						if (lsVarargs) report(Kind.ERROR, "cu.method.paramVararg");
 
-						int acc1 = _modifier(wr, ACC_FINAL|_ACC_ANNOTATION);
+						int acc1 = _modifiers(wr, ACC_FINAL|_ACC_ANNOTATION);
 
-						IType parType = _type(wr, tmp, TYPE_PRIMITIVE|TYPE_GENERIC);
-						if (parType.genericType() != 0) _signature()._add(paramNames.size(), (Generic) parType);
+						IType parType = _type(wr, TYPE_PRIMITIVE|TYPE_GENERIC);
+						if (parType.genericType() != 0) makeSignature()._add(paramNames.size(), (Generic) parType);
 
 						w = wr.next();
 						if (w.type() == varargs) {
@@ -629,8 +741,9 @@ public final class CompileUnit extends ConstantData {
 						if (parType.rawType().type == VOID) report(Kind.ERROR, "cu.method.paramVoid");
 						if (p.size() > 255) report(Kind.ERROR, "cu.method.paramCount");
 
-						if (!annotations.isEmpty()) {
-							addAnnotation(new ParamAnnotationRef(method, w.pos(), paramNames.size()), new SimpleList<>(annotations));
+						if (!ctx.tmpAnnotations.isEmpty()) {
+							Attributed node = new ParamAnnotationRef(method, w.pos(), paramNames.size());
+							annoTask.put(node, new SimpleList<>(ctx.tmpAnnotations));
 						}
 
 						if (w.type() == LITERAL) {
@@ -672,16 +785,15 @@ public final class CompileUnit extends ConstantData {
 					method.putAttr(excList);
 
 					do {
-						IType type1 = _type(wr, tmp, TYPE_GENERIC);
+						IType type1 = _type(wr, TYPE_GENERIC);
 						excList.value.add(type1.owner());
-						if (type1.genericType() != 0) _signature().Throws.add(type1);
+						if (type1.genericType() != 0) makeSignature().Throws.add(type1);
 
 						w = wr.next();
 					} while (w.type() == comma);
 				}
 
-				SignaturePrimer sign = _signatureCommit(signature, Signature.METHOD, method);
-				if (sign != null) method.putAttr(sign);
+				finishSignature(signature, Signature.METHOD, method);
 
 				// 不能包含方法体:
 				noMethodBody: {
@@ -733,9 +845,9 @@ public final class CompileUnit extends ConstantData {
 
 				wr.retractWord();
 
-				Signature s = _signatureCommit(signature, Signature.FIELD, null);
+				Signature s = finishSignature(signature, Signature.FIELD, null);
 
-				List<AnnotationPrimer> list = annotations.isEmpty() ? null : new SimpleList<>(annotations);
+				List<AnnotationPrimer> list = ctx.tmpAnnotations.isEmpty() ? null : new SimpleList<>(ctx.tmpAnnotations);
 
 				while (true) {
 					FieldNode field = new FieldNode(acc, name, type);
@@ -743,7 +855,7 @@ public final class CompileUnit extends ConstantData {
 						report(Kind.ERROR, "cu.nameConflict", ctx.currentCodeBlockForReport(), "symbol.field", name);
 					}
 
-					if (list != null) addAnnotation(field, list);
+					if (list != null) annoTask.put(field, list);
 					if (s != null) field.putAttr(s);
 
 					fields.add(field);
@@ -768,8 +880,8 @@ public final class CompileUnit extends ConstantData {
 		return val.regionMatches(0, name, i+1, name.length() - i - 1);
 	}
 
-	public int _modifier(JavaLexer wr, int mask) throws ParseException {
-		if ((mask & _ACC_ANNOTATION) != 0) annotations.clear();
+	public int _modifiers(JavaLexer wr, int mask) throws ParseException {
+		if ((mask & _ACC_ANNOTATION) != 0) ctx.tmpAnnotations.clear();
 
 		Word w;
 		int acc = 0;
@@ -779,7 +891,7 @@ public final class CompileUnit extends ConstantData {
 			switch (w.type()) {
 				case at -> {
 					if ((mask & _ACC_ANNOTATION) == 0) report(Kind.ERROR, "modifier.annotation");
-					_annotations(annotations);
+					_annotations(ctx.tmpAnnotations);
 					acc |= _ACC_ANNOTATION;
 					continue;
 				}
@@ -821,7 +933,7 @@ public final class CompileUnit extends ConstantData {
 	 * 获取类 (a.b.c)
 	 * @param flags 0 | {@link #TYPE_STAR} allow * (in import)
 	 */
-	private static void _klass(JavaLexer wr, CharList sb, int flags) throws ParseException {
+	private static void typeRef(JavaLexer wr, CharList sb, int flags) throws ParseException {
 		sb.clear();
 
 		while (true) {
@@ -849,7 +961,7 @@ public final class CompileUnit extends ConstantData {
 	 * 获取类型
 	 * @param flags {@link #TYPE_PRIMITIVE} bit set
 	 */
-	private IType _type(JavaLexer wr, CharList sb, int flags) throws ParseException {
+	private IType _type(JavaLexer wr, int flags) throws ParseException {
 		IType type;
 
 		Word w = wr.next();
@@ -863,7 +975,9 @@ public final class CompileUnit extends ConstantData {
 			}
 
 			wr.retractWord();
-			_klass(wr, sb, 0);
+
+			CharList sb = ctx.tmpSb;
+			typeRef(wr, sb, 0);
 
 			if ((flags&TYPE_GENERIC) != 0) {
 				CharSequence bound = null;
@@ -875,7 +989,7 @@ public final class CompileUnit extends ConstantData {
 					(currentNode != null && sb != (bound = currentNode.getTypeBound(sb))) ||
 					(signature != null && sb != (bound = signature.getTypeBound(sb)))) {
 
-					type = _genericUse(sb, (flags&TYPE_LEVEL2) != 0 ? GENERIC_SUBCLASS : 0);
+					type = _genericRef(sb, (flags&TYPE_LEVEL2) != 0 ? GENERIC_SUBCLASS : 0);
 
 					if (bound != null) {
 						sb.clear();
@@ -922,23 +1036,28 @@ public final class CompileUnit extends ConstantData {
 		}
 	}
 
-	private SignaturePrimer _signature() {
+	private SignaturePrimer makeSignature() {
 		if (currentNode == null) currentNode = new SignaturePrimer(0);
 		return currentNode;
 	}
-	private SignaturePrimer _signatureCommit(SignaturePrimer parent, int kind, MethodNode mn) {
-		SignaturePrimer s = currentNode;
-		if (s == null) return null;
+	private SignaturePrimer finishSignature(SignaturePrimer parent, byte kind, Attributed attr) {
+		var sign = currentNode;
+		if (sign == null) return null;
 		currentNode = null;
 
-		s.parent = parent;
-		s.type = (byte) kind;
-		s.commit(mn);
-		return s;
+		sign.parent = parent;
+		sign.type = kind;
+
+		if (attr != null) {
+			if (attr instanceof MethodNode mn) sign.commit(mn);
+			attr.putAttr(sign);
+		}
+		return sign;
 	}
 
 	// <T extends YYY<T, V> & ZZZ, V extends T & XXX>
-	private void _genericDeclare(JavaLexer wr, SignaturePrimer s) throws ParseException {
+	private void genericDecl(JavaLexer wr) throws ParseException {
+		SignaturePrimer s = makeSignature();
 		Word w;
 		do {
 			w = wr.next();
@@ -951,7 +1070,7 @@ public final class CompileUnit extends ConstantData {
 				w = wr.next();
 				if (w.type() != id) break;
 
-				s.addBound(_genericUse(null, 0));
+				s.addBound(_genericRef(null, 0));
 
 				id = and;
 			}
@@ -961,7 +1080,7 @@ public final class CompileUnit extends ConstantData {
 	}
 
 	private static final int GENERIC_INNER = 1, GENERIC_SUBCLASS = 2;
-	public IType _genericUse(CharSequence type, int flag) throws ParseException {
+	public IType _genericRef(CharSequence type, int flag) throws ParseException {
 		GenericPrimer g = new GenericPrimer();
 		IType result = null;
 
@@ -998,7 +1117,7 @@ public final class CompileUnit extends ConstantData {
 
 			// resolve B
 			if ((flag & GENERIC_INNER) != 0) {
-				Type pt = (Type) _type(wr, IOUtil.getSharedCharBuf(), TYPE_PRIMITIVE|TYPE_OPTIONAL);
+				Type pt = (Type) _type(wr, TYPE_PRIMITIVE|TYPE_OPTIONAL);
 				if (pt == null) {
 					wr.retractWord();
 					// 钻石操作符<>
@@ -1012,16 +1131,17 @@ public final class CompileUnit extends ConstantData {
 
 		Word w = wr.next();
 		if (w.type() == lss) {
+			int prev = wr.state;
 			seg:
 			while (true) {
 				// <<或者>>
-				wr.env &= ~CAT_METHOD;
-				IType child = _genericUse(null, flag&TYPE_OPTIONAL|GENERIC_INNER);
+				wr.state = STATE_TYPE;
+				IType child = _genericRef(null, flag&TYPE_OPTIONAL|GENERIC_INNER);
 				g.addChild(child);
 				w = wr.next();
 
 				if (child == Asterisk.anyGeneric) {
-					//TODO WHICH FLAG?
+					// check for <>
 					if ((flag&GENERIC_INNER) != 0 || w.type() != gtr) {
 						report(Kind.ERROR, "type.error.illegalAnyType");
 					}
@@ -1035,13 +1155,13 @@ public final class CompileUnit extends ConstantData {
 						wr.unexpected(w.val(), "type.except.afterLss");
 				}
 			}
-			wr.env |= CAT_METHOD;
+			wr.state = prev;
 
 			w = wr.next();
 		}
 
 		if (w.type() == dot) {
-			IType sub1 = _genericUse(wr.except(LITERAL).val(), flag&TYPE_OPTIONAL|GENERIC_SUBCLASS);
+			IType sub1 = _genericRef(wr.except(LITERAL).val(), flag&TYPE_OPTIONAL|GENERIC_SUBCLASS);
 			if (sub1 == null) return Helpers.maybeNull();
 			// 无法从参数化的类型中选择静态类
 			if (sub1.genericType() != IType.GENERIC_TYPE) report(Kind.ERROR, "type.error.partialGenericSub", sub1.owner());
@@ -1072,12 +1192,13 @@ public final class CompileUnit extends ConstantData {
 
 	public List<AnnotationPrimer> _annotations(List<AnnotationPrimer> list) throws ParseException {
 		JavaLexer wr = this.wr;
-		CharList tmp = IOUtil.getSharedCharBuf();
+		CharList tmp = ctx.tmpSb;
 
 		while (true) {
-			_klass(wr, tmp, 0);
+			int pos = wr.index;
+			typeRef(wr, tmp, 0);
 
-			AnnotationPrimer a = new AnnotationPrimer(tmp.toString(), wr.index);
+			var a = new AnnotationPrimer(tmp.toString(), pos+1);
 			// 允许忽略注解
 			if (list != Collections.EMPTY_LIST) list.add(a);
 
@@ -1122,10 +1243,9 @@ public final class CompileUnit extends ConstantData {
 			}
 		}
 	}
-	private void addAnnotation(Attributed node, List<AnnotationPrimer> anno) {annoTask.put(node, anno);}
 	// endregion
 	// region 阶段2 解析并验证类自身的引用
-	public void S2_Parse() {
+	public void S2_Resolve() {
 		LocalContext ctx = this.ctx = LocalContext.get();
 		ctx.setClass(this);
 
@@ -1153,6 +1273,8 @@ public final class CompileUnit extends ConstantData {
 		overridableMethods.itf = Collections.emptyList();
 		wr.index = classIdx;
 
+		List<IClass> accessCheck = Helpers.cast(ctx.tmpList); accessCheck.clear();
+
 		IClass pInfo = tr.resolve(ctx, parent);
         if (pInfo == null) {
 			report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", parent, name+".parent");
@@ -1165,37 +1287,44 @@ public final class CompileUnit extends ConstantData {
 				report(Kind.ERROR, "cu.resolve.notInheritable", "cu.interface", parent);
 			}
 
-			ctx.assertAccessible(pInfo);
+			accessCheck.add(pInfo);
 			parent(pInfo.name());
-
-			preCheck(ctx, pInfo);
         }
 
 		if (signature != null && ctx.instanceOf(parent, "java/lang/Throwable")) {
 			report(Kind.ERROR, "cu.genericException");
 		}
 
-		List<String> itfs = Helpers.cast(interfaces);
+		var itfs = interfaces;
 		for (int i = 0; i < itfs.size(); i++) {
-			IClass info = tr.resolve(ctx, itfs.get(i));
+			String iname = itfs.get(i).name().str();
+			IClass info = tr.resolve(ctx, iname);
             if (info == null) {
-				report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", itfs.get(i), name+".interface["+i+"]");
+				report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", iname, name+".interface["+i+"]");
 			} else {
                 int acc = info.modifier();
                 if (0 == (acc & ACC_INTERFACE)) {
 					report(Kind.ERROR, "cu.resolve.notInheritable", "cu.class", info.name());
                 }
 
-				ctx.assertAccessible(info);
+				accessCheck.add(info);
 				interfaces.set(i, cp.getClazz(info.name()));
-
-				preCheck(ctx, info);
             }
 		}
 
+		var names = ctx.tmpSet; names.clear();
+
+		// assertAccessible要用到resolved interface
+		for (int i = 0; i < accessCheck.size(); i++) {
+			IClass info = accessCheck.get(i);
+			ctx.assertAccessible(info);
+			collectMethods(ctx, info, i != 0);
+		}
+		accessCheck.clear();
+
 		boolean autoInit = (access & ACC_INTERFACE) == 0;
 		// 方法冲突在这里检查，因为stage0/1拿不到完整的rawDesc
-		var names = ctx.tmpSet; names.clear();
+		names.clear();
 		List<MethodNode> methods = this.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			wr.index = methodIdx.get(i);
@@ -1248,24 +1377,64 @@ public final class CompileUnit extends ConstantData {
 		}
 		// endregion
 	}
-	private void preCheck(LocalContext ctx, IClass info) {
-		if ((access&ACC_ABSTRACT) != 0) return;
+	// 检测抽象方法，可以覆盖的方法和多个default
+	private void collectMethods(LocalContext ctx, IClass info, boolean itf) {
+		var d = ctx.tmpNat;
+		MyHashSet<Desc> hasDefault = Helpers.cast(ctx.tmpSet);
+
 		for (ComponentList list : ctx.classes.getResolveHelper(info).getMethods(ctx.classes).values()) {
 			var list1 = list.getMethods();
 			for (int i = 0; i < list1.size(); i++) {
 				var node = list1.get(i);
+				if ((node.modifier&ACC_PRIVATE) != 0) continue;
 				if (node.name().startsWith("<")) continue;
+				if (itf && node.owner.equals("java/lang/Object")) continue;
+
+				String param = node.rawDesc();
+				param = param.substring(0, param.lastIndexOf(')')+1);
+
+				d.owner = node.owner;
+				d.name = node.name();
+				d.param = param;
 
 				if ((node.modifier & ACC_ABSTRACT) != 0) {
-					String param = node.rawDesc();
-
-					var d = new NameAndType();
-					d.owner = node.owner;
-					d.name = node.name();
-					d.param = param.substring(0, param.lastIndexOf(')')+1);
-
 					// 不检测权限，就像你没法继承ByteBuffer一样
-					abstractMethods.add(d);
+					if ((access&ACC_ABSTRACT) == 0) {
+						// 如果已经有实现，那就不处理抽象
+						if (hasDefault.contains(d)) continue;
+
+						// 虽然有点像下面的，但目的只是让owner更具体
+						var d1 = abstractOrUnrelated.intern(d);
+						if (d != d1) {
+							if (ctx.parentListOrReport(info).containsValue(d1.owner)) {
+								assert itf;
+								d1.flags = (char) cacheMethod(node);
+								d1.owner = d.owner;
+							}
+						} else {
+							d.flags = (char) (cacheMethod(node) | (itf ? 0 : PARENT_MARKER));
+							d = new NameAndType();
+						}
+					}
+				} else if (itf && (node.modifier&ACC_STATIC) == 0) {
+					// 这里也是相同的部分，不过处理相反的顺序：
+					// 如果已经有实现，那就不处理抽象
+					var existing = abstractOrUnrelated.find(d);
+					if (existing != d && (existing.flags&(UNRELATED_MARKER|PARENT_MARKER)) == 0)
+						abstractOrUnrelated.remove(d);
+
+					var d1 = hasDefault.intern(d);
+					if (d != d1) {
+						if (ctx.parentListOrReport(info).containsValue(d1.owner)) {
+							d1.flags = (char) (cacheMethod(node) | UNRELATED_MARKER);
+							d1.owner = d.owner;
+						} else if (!ctx.parentListOrReport(ctx.classes.getClassInfo(d1.owner)).containsValue(d.owner)) {
+							abstractOrUnrelated.add(d1);
+						}
+					} else {
+						d.flags = (char) (cacheMethod(node) | UNRELATED_MARKER);
+						d = new NameAndType();
+					}
 				}
 
 				if (ctx.checkAccessible(info, node, false, false)) {
@@ -1276,7 +1445,15 @@ public final class CompileUnit extends ConstantData {
 				}
 			}
 		}
+
+		ctx.tmpNat = d;
 	}
+	private int cacheMethod(MethodNode node) {
+		var cache = methodCache;
+		cache.add(node);
+		return cache.size();
+	}
+
 	public void createDelegation(int acc, MethodNode mn) {
 		CodeWriter c = newMethod(acc, mn.name(), mn.rawDesc());
 		int size = (1 + TypeHelper.paramSize(mn.rawDesc()));
@@ -1287,117 +1464,137 @@ public final class CompileUnit extends ConstantData {
 			c.varLoad(pars.get(i), i);
 		}
 		c.invoke(mn.name().startsWith("<") ? INVOKESPECIAL : INVOKEVIRTUAL, mn);
+		c.one(mn.returnType().shiftedOpcode(IRETURN));
 		c.finish();
 	}
 	// endregion
+	void _setSign(Attributed merhod) {
+		var sign = (SignaturePrimer) merhod.attrByName("Signature");
+		currentNode = sign != null ? sign : signature;
+	}
 	// region 阶段3 可能执行多次 注解处理 MethodDefault
 	public void S3_Annotation() throws ParseException {
 		LocalContext ctx = this.ctx = LocalContext.get();
 		ctx.setClass(this);
 
 		// region 方法覆盖检测
-		ResolveHelper override = new ResolveHelper(overridableMethods);
-		var d = new NameAndType();
+		var ovrh = new ResolveHelper(overridableMethods);
+		var parh = ctx.classes.getResolveHelper(ctx.classes.getClassInfo(parent));
+		var d = ctx.tmpNat;
 
 		for (int i = 0; i < methods.size(); i++) {
-			MethodNode method = methods.get(i);
-			var ml = override.findMethod(ctx.classes, method.name());
+			var my = methods.get(i);
+			var ml = ovrh.findMethod(ctx.classes, my.name());
 			if (ml == null) continue;
 
-			// TODO also needed to check "implemented interface method via superclass" and "two defaults"
-			//  generic is NULL ?
-			//  and check access & raw types
-			var r = ml.findMethod(ctx, Helpers.cast(method.parameters()), ComponentList.NO_REPORT);
-			if (r == null) continue;
+			_setSign(my);
+			var rm = ctx.inferrer.getGenericParameters(this, my, null);
+
+			List<IType> params;
+			IType myRt;
+			if (rm.desc != null) {
+				var list = SimpleList.asModifiableList(rm.desc);
+				myRt = list.pop();
+				params = list;
+			} else {
+				myRt = my.returnType();
+				params = Helpers.cast(my.parameters());
+			}
+
+			var ri = ml.findMethod(ctx, params, ComponentList.NO_REPORT);
+			if (ri == null) continue;
 
 			wr.index = methodIdx.get(i);
 
-			String param = method.rawDesc();
-			d.name = method.name();
+			String param = my.rawDesc();
+			d.name = my.name();
 			d.param = param.substring(0, param.lastIndexOf(')')+1);
-			abstractMethods.remove(d);
+			var d1 = abstractOrUnrelated.removeValue(d);
 
-			var method1 = r.method;
-
-			// 访问权限是否降级以及能否override 注：preCheck检测了必须有访问权限
-			int myLevel = method .modifier&(ACC_PUBLIC|ACC_PROTECTED);
-			int itLevel = method1.modifier&(ACC_PUBLIC|ACC_PROTECTED);
-			pass: {
-				if (myLevel == ACC_PUBLIC || myLevel == itLevel) break pass;
-				if (itLevel == 0 && myLevel == ACC_PROTECTED) break pass;
-
-				String inline = "\1cu.override.access:"+
-					(itLevel==0?"\1package-private\0":showModifiers(itLevel, ACC_SHOW_CLASS))+":"+
-					(myLevel==0?"\1package-private\0":showModifiers(myLevel, ACC_SHOW_CLASS))+"\0";
-				ctx.report(Kind.ERROR, "cu.override.unable", name, method, method1.owner, method1, inline);
+			if (d1 != null && (d1.flags&PARENT_MARKER) != 0 && !ri.method.owner.equals(parent)) {
+				// 未能覆盖父类的方法——通常是权限不够
+				ri = parh.findMethod(ctx.classes, my.name()).findMethod(ctx, params, 0);
+				assert ri == null;
+				continue;
 			}
 
+			var it = ri.method;
+
+			// 检查覆盖静态或访问权限降低
+			checkDowngrade(my, it, ctx);
+
 			// 检测Override
-			var annotations = annoTask.getOrDefault(method, Collections.emptyList());
+			var annotations = annoTask.getOrDefault(my, Collections.emptyList());
 			for (int j = 0; j < annotations.size(); j++) {
 				AnnotationPrimer a = annotations.get(j);
 				IClass info = tr.resolve(ctx, a.type());
 				if (info == null) continue;
 				if (info.name().equals("java/lang/Override")) {
 					annotations.remove(j);
-					if (annotations.isEmpty()) annoTask.remove(method);
+					if (annotations.isEmpty()) annoTask.remove(my);
 				}
 				break;
 			}
 
-			// 生成桥接方法
-			IType returnType = r.desc != null ? r.desc[r.desc.length-1] : method1.returnType();
-
-			Signature sig = method.parsedAttr(null, Attribute.SIGNATURE);
-			IType myReturnType = sig != null ? sig.values.get(sig.values.size()-1) : method.returnType();
+			IType itRt = ri.desc != null ? ri.desc[ri.desc.length-1] : it.returnType();
 
 			// 返回值更精确而需要桥接，或更不精确而无法覆盖
-			// TODO 泛型参数是否兼容
-			TypeCast.Cast cast = ctx.castTo(myReturnType, returnType, TypeCast.E_NEVER);
+			TypeCast.Cast cast = ctx.castTo(myRt, itRt, TypeCast.E_NEVER);
 			if (cast.type != 0) {
-				String inline = "\1cu.override.returnType:\1typeCast.error."+cast.type+':'+myReturnType+':'+returnType+"\0\0";
-				ctx.report(Kind.ERROR, "cu.override.unable", name, method, method1.owner, method1, inline);
+				String inline = "\1cu.override.returnType:\1typeCast.error."+cast.type+':'+myRt+':'+itRt+"\0\0";
+				ctx.report(Kind.ERROR, "cu.override.unable", name, my, it.owner, it, inline);
 			}
 
-			if (!Objects.equals(returnType.owner(), myReturnType.owner())) {
-				createDelegation((method1.modifier&(ACC_PUBLIC|ACC_PROTECTED)) | ACC_FINAL | ACC_SYNTHETIC | ACC_BRIDGE, method1);
+			// 生成桥接方法 这里不检测泛型(主要是TypeParam)
+			if (!it.returnType().equals(my.returnType())) {
+				createDelegation((it.modifier&(ACC_PUBLIC|ACC_PROTECTED)) | ACC_FINAL | ACC_SYNTHETIC | ACC_BRIDGE, it);
 			}
 
-			var myException = method.parsedAttr(null, Attribute.Exceptions);
-			// 是否声明了相同或更少的异常
-			if (myException != null) {
-				List<IType> exThrownP;
-				if (r.exception != null) exThrownP = Arrays.asList(r.exception);
-				else {
-					var list = method1.parsedAttr(ctx.classes.getClassInfo(method1.owner).cp(), Attribute.Exceptions);
-					// TODO StreamChain简单的示例
-					exThrownP = list != null ? list.value.stream().map(Type::new).collect(Collectors.toList()) : Collections.emptyList();
-				}
-
+			// 声明相同或更少的异常
+			var itThrows = getExceptions(ctx, it, ri);
+			if (!itThrows.isEmpty()) {
 				outer:
-				for (String s : myException.value) {
-					Type f = new Type(s);
+				for (IType f : getExceptions(ctx, my, rm)) {
 					if (ctx.castTo(f, RUNTIME_EXCEPTION, TypeCast.E_NEVER).type == 0) continue;
 
-					for (IType type : exThrownP) {
+					for (IType type : itThrows) {
 						TypeCast.Cast c = ctx.castTo(f, type, TypeCast.E_NEVER);
 						if (c.type == 0) continue outer;
 					}
 
-					String inline = "\1cu.override.thrown:"+s.replace('/', '.')+'\0';
-					ctx.report(Kind.ERROR, "cu.override.unable", name, method, method1.owner.replace('/', '.'), method1, inline);
+					String inline = "\1cu.override.thrown:"+f.owner().replace('/', '.')+'\0';
+					ctx.report(Kind.ERROR, "cu.override.unable", name, my, it.owner.replace('/', '.'), it, inline);
 				}
 			}
 		}
 		// endregion
 
 		wr.index = classIdx;
-		for (Desc method : abstractMethods) {
-			ctx.report(Kind.ERROR, "cu.override.noImplement", name, method.owner.replace('/', '.'), method.name);
-		}
-		abstractMethods.clear();
+		for (Desc method : abstractOrUnrelated) {
+			if (!method.owner.equals(parent)) {
+				// check parent implement
+				var ml = parh.findMethod(ctx.classes, method.name);
+				if (ml != null) {
+					var mn = methodCache.get(method.flags&16383);
+					//Signature sign = mn.parsedAttr(info.cp(), Attribute.SIGNATURE);
 
-		MyHashSet<String> missed = ctx.tmpSet;
+					var r = ml.findMethod(ctx, Helpers.cast(mn.parameters()), ComponentList.NO_REPORT);
+					if (r != null) {
+						checkDowngrade(r.method, mn, ctx);
+						continue;
+					}
+				}
+			}
+
+			if (method.flags == UNRELATED_MARKER) {
+				ctx.report(Kind.ERROR, "cu.unrelatedDefault", method, name.replace('/', '.'));
+			} else {
+				ctx.report(Kind.ERROR, "cu.override.noImplement", name, method.owner.replace('/', '.'), method.name);
+			}
+		}
+		abstractOrUnrelated.clear();
+
+		var missed = ctx.tmpSet;
 		for (Map.Entry<Attributed, List<AnnotationPrimer>> annotated : annoTask.entrySet()) {
 			Annotations inv = null, vis = null;
 
@@ -1415,7 +1612,7 @@ public final class CompileUnit extends ConstantData {
 
 				AnnotationSelf ad = ctx.classes.getAnnotationDescriptor(inst);
 
-				if (!ctx.classes.applicableToNode(ad, annotated.getKey())) report(Kind.ERROR, "cu.annotation.notApplicable", inst, annotated.getKey().getClass());
+				if (!applicableToNode(ad, annotated.getKey())) report(Kind.ERROR, "cu.annotation.notApplicable", inst, annotated.getKey().getClass());
 
 				missed.clear();
 				for (Map.Entry<String, AnnVal> entry : ad.values.entrySet()) {
@@ -1452,16 +1649,59 @@ public final class CompileUnit extends ConstantData {
 		}
 		annoTask.clear();
 	}
+	// 访问权限是否降级以及能否override 注：preCheck检测了必须有访问权限
+	private void checkDowngrade(MethodNode my, MethodNode it, LocalContext ctx) {
+		if ((my.modifier&ACC_STATIC) != (it.modifier&ACC_STATIC)) {
+			String inline = "cu.override.static."+((my.modifier&ACC_STATIC) != 0 ? "self" : "other");
+			ctx.report(Kind.ERROR, "cu.override.unable", my.owner.replace('/', '.'), my, it.owner.replace('/', '.'), it, inline);
+		}
+
+		int myLevel = my.modifier&(ACC_PUBLIC|ACC_PROTECTED);
+		int itLevel = it.modifier&(ACC_PUBLIC|ACC_PROTECTED);
+		pass: {
+			if (myLevel == ACC_PUBLIC || myLevel == itLevel) break pass;
+			if (itLevel == 0 && myLevel == ACC_PROTECTED) break pass;
+
+			String inline = "\1cu.override.access:"+
+				(itLevel==0?"\1package-private\0":showModifiers(itLevel, ACC_SHOW_METHOD))+":"+
+				(myLevel==0?"\1package-private\0":showModifiers(myLevel, ACC_SHOW_METHOD))+"\0";
+			ctx.report(Kind.ERROR, "cu.override.unable", my.owner.replace('/', '.'), my, it.owner.replace('/', '.'), it, inline);
+		}
+	}
+	private static List<IType> getExceptions(LocalContext ctx, MethodNode mn, MethodResult mr) {
+		if (mr.exception != null) return Arrays.asList(mr.exception);
+		else {
+			var list = mn.parsedAttr(ctx.classes.getClassInfo(mn.owner).cp(), Attribute.Exceptions);
+			if (list == null) return Collections.emptyList();
+			// TODO StreamChain简单的示例
+			return list.value.stream().map(Type::new).collect(Collectors.toList());
+		}
+	}
+	// 注解的试用类型
+	private static boolean applicableToNode(AnnotationSelf ctx, Attributed key) {
+		int mask;
+		if (key instanceof FieldNode) {
+			mask = AnnotationSelf.FIELD;
+		} else if (key instanceof MethodNode m) {
+			mask = m.name().startsWith("<") ? AnnotationSelf.CONSTRUCTOR : AnnotationSelf.METHOD;
+		} else if (key instanceof IClass c) {
+			if (c.name().endsWith("/package-info")) mask = AnnotationSelf.PACKAGE;
+			else if (c.name().equals("module-info")) mask = AnnotationSelf.MODULE;
+			else mask = (c.modifier()&Opcodes.ACC_ANNOTATION) != 0 ? AnnotationSelf.ANNOTATION_TYPE : AnnotationSelf.TYPE;
+		} else if (key instanceof IType) {
+			// TYPE_PARAMETER, TYPE_USE
+			throw new ResolveException("unsupported case");
+		} else if (key instanceof ParamAnnotationRef) {
+			mask = AnnotationSelf.PARAMETER;
+		} else if (key instanceof Variable) {
+			mask = AnnotationSelf.LOCAL_VARIABLE;
+		} else {
+			throw new ResolveException("unsupported case");
+		}
+		return (ctx.applicableTo&mask) != 0;
+	}
 	// endregion
 	// region 阶段4 编译代码块
-	public List<IType> getGenericEnv(CharSequence sb) {
-		CharSequence bound;
-		if (currentNode != null && sb != (bound = currentNode.getTypeBound(sb))) {
-			return Collections.singletonList(new Type(bound.toString())); // TODO type bounds
-		}
-		return null;
-	}
-
 	private MethodWriter clinit, glinit;
 	public MethodWriter getStaticInit() {
 		if (clinit != null) return clinit;
@@ -1485,9 +1725,10 @@ public final class CompileUnit extends ConstantData {
 	}
 
 	public void S4_Code() throws ParseException {
+		// 类型参数的更新在LocalContext#setMethod里，有点想移走
 		currentNode = signature;
+		wr.state = STATE_EXPR;
 
-		// todo update CurrentNode
 		// 优先级的定义写在ParseTask中
 		lazyTasks.sort((o1, o2) -> Integer.compare(o1.priority(), o2.priority()));
 		for (int i = 0; i < lazyTasks.size(); i++) lazyTasks.get(i).parse();
@@ -1503,15 +1744,21 @@ public final class CompileUnit extends ConstantData {
 	}
 	// endregion
 
-	public String getSourceFile() {return path;}
+	public String getSourceFile() {return source;}
 
 	public final void report(Kind kind, String code) {ctx.classes.report(this, kind, wr.index, code);}
 	public final void report(Kind kind, String code, Object ... args) {ctx.classes.report(this, kind, wr.index, code, args);}
 
+	// this function only invoke on Stage 4
 	public IType readType(@MagicConstant(flags = {TYPE_PRIMITIVE, TYPE_OPTIONAL, TYPE_STAR, TYPE_GENERIC, TYPE_LEVEL2}) int flag) throws ParseException {
-		IType type = _type(wr, ctx.tmpList, flag);
+		IType type = _type(wr, flag);
 		// TODO maybe not full suitable (resolve later)
 		if (type instanceof GenericPrimer g) return g.resolve(currentNode);
 		return type;
+	}
+
+	public void cancelTask(Attributed node) {
+		// field method parseTask
+		throw new UnsupportedOperationException("not implemented yet!");
 	}
 }

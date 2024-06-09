@@ -27,7 +27,7 @@ public final class MultiReturn extends ExprNode {
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		for (int i = 0; i < values.size(); i++) {
-			values.set(i, values.get(i));
+			values.set(i, values.get(i).resolve(ctx));
 		}
 		return this;
 	}
@@ -46,10 +46,23 @@ public final class MultiReturn extends ExprNode {
 			v.write(cw, false);
 
 			var type = v.type();
-			cw.invokeV("roj/compiler/runtime/ReturnStack", "put", "("+(type.isPrimitive()? type.rawType().type:"Ljava/lang/Object;")+")Lroj/compiler/runtime/ReturnStack;");
+			cw.invokeV("roj/compiler/runtime/ReturnStack", "put", "("+(type.isPrimitive()?(char)type.rawType().type:"Ljava/lang/Object;")+")Lroj/compiler/runtime/ReturnStack;");
 		}
 	}
 
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {throw new ResolveException("未预料的情况");}
+
+	public int capacity() {
+		int cap = 0;
+		for (ExprNode value : values) {
+			switch (TypeCast.getDataCap(value.type().getActualType())) {
+				case 0, 1 -> cap += 1;
+				case 2, 3 -> cap += 2;
+				case 4, 6 -> cap += 4;
+				case 5, 7 -> cap += 8;
+			}
+		}
+		return cap;
+	}
 }

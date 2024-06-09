@@ -5,7 +5,7 @@ import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.collect.MyHashMap;
-import roj.compiler.api_rt.Evaluable;
+import roj.compiler.api.Evaluable;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.resolve.ResolveException;

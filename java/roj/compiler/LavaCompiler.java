@@ -4,22 +4,23 @@ import roj.asm.Opcodes;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.type.TypeHelper;
-import roj.asmx.AnnotationRepo;
 import roj.compiler.ast.block.ParseTask;
 import roj.compiler.ast.expr.Constant;
 import roj.compiler.context.CompileUnit;
-import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LibraryZipFile;
 import roj.compiler.context.LocalContext;
+import roj.compiler.plugins.GlobalContextApi;
+import roj.compiler.plugins.annotations.AnnotationProcessor1;
+import roj.compiler.plugins.annotations.AnnotationProcessor2;
 import roj.compiler.plugins.asm.AsmHook;
-import roj.compiler.plugins.sandbox.SandboxEvaluator;
+import roj.compiler.plugins.constant.ConstantEvaluator;
 import roj.compiler.resolve.TypeResolver;
+import roj.compiler.test.CandyTestPlugin;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.Collections;
@@ -29,21 +30,22 @@ import java.util.Collections;
  * @since 2024/5/20 0020 2:52
  */
 public class LavaCompiler {
-	final GlobalContext ctx = new GlobalContext();
-	final LocalContext cache = new LocalContext(ctx);
+	final GlobalContextApi ctx = new GlobalContextApi();
+	final LocalContext cache = ctx.createLocalContext();
 
 	public LavaCompiler() throws IOException {initDefaultPlugins(ctx);}
 
-	static void initDefaultPlugins(GlobalContext ctx) throws IOException {
-		File ImpLib = Helpers.getJarByClass(LavaCompiler.class);
-		ctx.addLibrary(new LibraryZipFile(ImpLib));
-
-		AnnotationRepo repo = new AnnotationRepo();
-		repo.add(ImpLib);
+	static void initDefaultPlugins(GlobalContextApi ctx) throws IOException {
+		ctx.addLibrary(new LibraryZipFile(Helpers.getJarByClass(LavaCompiler.class)));
 
 		AsmHook hook = AsmHook.init(ctx);
 		hook.injectedProperties.put("咕咕咕", Constant.valueOf("咕咕咕咕，我是🕊"));
-		SandboxEvaluator.init(ctx, repo);
+		ConstantEvaluator.init(ctx);
+
+		ctx.addGenericProcessor(new AnnotationProcessor1());
+		ctx.addGenericProcessor(new AnnotationProcessor2());
+
+		new CandyTestPlugin().register(ctx);
 	}
 
 	@SuppressWarnings("unchecked")

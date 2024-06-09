@@ -8,6 +8,7 @@ import roj.asm.visitor.Label;
 import roj.collect.MyBitSet;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.ast.NaE;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
@@ -94,7 +95,7 @@ final class Binary extends ExprNode {
 
 		if (lType.getActualType() == Type.VOID || rType.getActualType() == Type.VOID) {
 			ctx.report(Kind.ERROR, "binary.error.void");
-			return this;
+			return NaE.RESOLVE_FAILED;
 		}
 
 		// (A + 1) - 2 => A + (1 - 2)
@@ -141,7 +142,7 @@ final class Binary extends ExprNode {
 						}
 					} else if (dpType != 8 || operator > xor || operator < and) {
 						ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
-						return this;
+						return NaE.RESOLVE_FAILED;
 					}
 
 					break primitive;
@@ -176,7 +177,7 @@ final class Binary extends ExprNode {
 					ExprNode override = ctx.getOperatorOverride(left, right, operator);
 					if (override == null) {
 						ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
-						return this;
+						return NaE.RESOLVE_FAILED;
 					}
 					return override;
 			}

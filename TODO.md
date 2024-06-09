@@ -36,8 +36,6 @@
 * [ ] 完整的泛型推断
 * [ ] 完整的Record
 * [ ] switch null 和 switch Class
-* [ ] 完整的Try
-* try和switch必须要做成Node
 * [ ] StreamChain
 
 ### CompileUnit的多线程和同步解析

@@ -1,6 +1,7 @@
 package roj.util;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Range;
 import roj.ReferenceByGeneratedClass;
 import roj.crypt.Base64;
 import roj.io.IOUtil;
@@ -400,13 +401,16 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public abstract byte get(int i);
 	public abstract byte readByte();
 
+	@Range(from = 0, to = 255)
 	public final int getU(int i) { return get(i)&0xFF; }
 	public final int readUnsignedByte() {return readByte()&0xFF; }
 
 	public final int readUnsignedShort() { return readUnsignedShort(moveRI(2)); }
+	@Range(from = 0, to = 65535)
 	public abstract int readUnsignedShort(int i);
 
 	public final int readUShortLE() { return readUShortLE(moveRI(2)); }
+	@Range(from = 0, to = 65535)
 	public abstract int readUShortLE(int i);
 
 	@Override
@@ -417,10 +421,14 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final char readChar() { return (char) readUnsignedShort(); }
 	public final char readChar(int i) { return (char) readUnsignedShort(i); }
 
+	@Range(from = 0, to = 16777215)
 	public final int readMedium() { return readMedium(moveRI(3)); }
+	@Range(from = 0, to = 16777215)
 	public abstract int readMedium(int i);
 
+	@Range(from = 0, to = 16777215)
 	public final int readMediumLE() { return readMediumLE(moveRI(3)); }
+	@Range(from = 0, to = 16777215)
 	public abstract int readMediumLE(int i);
 
 	public final int readVarInt(int max) {
@@ -488,10 +496,14 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final int readIntLE() { return readIntLE(moveRI(4)); }
 	public abstract int readIntLE(int i);
 
+	@Range(from = 0, to = 0xFFFFFFFFL)
 	public final long readUInt(int i) { return readInt(i) & 0xFFFFFFFFL; }
+	@Range(from = 0, to = 0xFFFFFFFFL)
 	public final long readUInt() { return readInt() & 0xFFFFFFFFL; }
 
+	@Range(from = 0, to = 0xFFFFFFFFL)
 	public final long readUIntLE() { return readIntLE() & 0xFFFFFFFFL; }
+	@Range(from = 0, to = 0xFFFFFFFFL)
 	public final long readUIntLE(int i) { return readIntLE(i) & 0xFFFFFFFFL; }
 
 	public final long readLong() { return readLong(moveRI(8)); }

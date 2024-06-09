@@ -11,9 +11,8 @@ import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.ConstantValue;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.collect.SimpleList;
 import roj.compiler.JavaLexer;
-import roj.compiler.api_rt.MethodDefault;
+import roj.compiler.api.MethodDefault;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Constant;
@@ -24,15 +23,10 @@ import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ParseException;
-import roj.config.Word;
 import roj.util.Helpers;
 
 import java.util.Arrays;
 import java.util.List;
-
-import static roj.compiler.JavaLexer.lBrace;
-import static roj.compiler.JavaLexer.rBrace;
-import static roj.config.Word.EOF;
 
 /**
  * Stage 3:
@@ -44,23 +38,19 @@ import static roj.config.Word.EOF;
  */
 public interface ParseTask {
 	static Object Annotation(CompileUnit ctx, AnnotationPrimer annotation, String name) throws ParseException {
-		var lc = LocalContext.get();
-
 		// TODO 检测值是否合法，以及进行数字的转换
 
 		// _ENV_TYPED_ARRAY允许直接使用数组生成式而不用给定类型
-		var expr = lc.ep.parse(ctx, ExprParser.STOP_COMMA|ExprParser.STOP_RSB|ExprParser._ENV_TYPED_ARRAY);
-		if (expr == null) {
-			ctx.report(Kind.ERROR, "empty annotation value");
-			return null;
-		}
+		var expr = LocalContext.get().ep.parse(ctx, ExprParser.STOP_COMMA|ExprParser.STOP_RSB|ExprParser._ENV_TYPED_ARRAY|ExprParser.NAE);
 
 		if (expr.isConstant()) return convert((ExprNode) expr);
 
 		return (ParseTask) () -> {
-			ExprNode node = expr.resolve(lc);
+			var lc = LocalContext.get();
+			var node = expr.resolve(lc);
+
 			if (!node.isConstant() && !node.isKind(ExprNode.ExprKind.ENUM_REFERENCE)) {
-				ctx.report(Kind.ERROR, "non-constant annotation value");
+				lc.report(Kind.ERROR, "ps.annotation.noConstant");
 				return;
 			}
 
@@ -89,7 +79,7 @@ public interface ParseTask {
 		LocalContext lc1 = LocalContext.get();
 
 		UnresolvedExprNode expr = lc1.ep.parse(file, ExprParser.STOP_RSB|ExprParser.STOP_COMMA|ExprParser.NAE);
-		if (!expr.isConstant()) lc1.report(Kind.WARNING, "ps.method.paramDef");
+		if (!expr.isConstant()) lc1.report(file.getLexer().current().pos(), Kind.WARNING, "ps.method.paramDef");
 
 		String jsonString = ExprParser.serialize((ExprNode) expr);
 
@@ -144,34 +134,28 @@ public interface ParseTask {
 
 	static ParseTask StaticInitBlock(CompileUnit file) throws ParseException {
 		JavaLexer wr = file.getLexer();
-		int pos = wr.index;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
-		skipMethodBody(wr);
+		int pos = wr.skipBrace();
 
 		return () -> {
-			wr.index = pos;
-			wr.LN = linePos;
-			wr.LNIndex = lineIdx;
+			wr.init(pos, linePos, lineIdx);
 			LocalContext.get().bp.parseBlockMethod(file, file.getStaticInit());
 		};
 	}
 
 	static ParseTask InstanceInitBlock(CompileUnit file) throws ParseException {
 		JavaLexer wr = file.getLexer();
-		int pos = wr.index;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
-		skipMethodBody(wr);
+		int pos = wr.skipBrace();
 
 		return new ParseTask() {
 			@Override
 			public int priority() {return 1;}
 			@Override
 			public void parse() throws ParseException {
-				wr.index = pos;
-				wr.LN = linePos;
-				wr.LNIndex = lineIdx;
+				wr.init(pos, linePos, lineIdx);
 				LocalContext.get().bp.parseBlockMethod(file, file.getGlobalInit());
 			}
 		};
@@ -233,19 +217,16 @@ public interface ParseTask {
 
 	static ParseTask Method(CompileUnit file, MethodNode mn, List<String> argNames) throws ParseException {
 		JavaLexer wr = file.getLexer();
-		int pos = wr.index;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
-		skipMethodBody(wr);
+		int pos = wr.skipBrace();
 
 		return new ParseTask() {
 			@Override
 			public int priority() {return 2;}
 			@Override
 			public void parse() throws ParseException {
-				wr.index = pos;
-				wr.LN = linePos;
-				wr.LNIndex = lineIdx;
+				wr.init(pos, linePos, lineIdx);
 
 				var lc = LocalContext.get();
 				MethodWriter cw = lc.bp.parseMethod(file, mn, argNames);
@@ -269,7 +250,7 @@ public interface ParseTask {
 					cw = ac;
 				}
 
-				cw.visitSizeMax(10, 10);
+				cw.visitSizeMax(10, 15);
 				cw.finish();
 
 				mn.putAttr(new AttrUnknown("Code", cw.bw.toByteArray()));
@@ -278,21 +259,5 @@ public interface ParseTask {
 	}
 
 	default int priority() {return 0;}
-	// TODO priority (for static initializator)
 	void parse() throws ParseException;
-
-	private static List<Word> skipMethodBody(JavaLexer wr) throws ParseException {
-		List<Word> collect = new SimpleList<>();
-		int L = 0;
-		while (true) {
-			Word w = wr.next();
-			switch (w.type()) {
-				case lBrace: L++; break;
-				case rBrace: if (--L < 0) return collect; break;
-				case EOF: throw wr.err("unclosed_bracket");
-			}
-
-			collect.add(w.copy());
-		}
-	}
 }
