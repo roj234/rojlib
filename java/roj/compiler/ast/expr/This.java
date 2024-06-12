@@ -17,21 +17,19 @@ final class This extends ExprNode {
 	private final boolean isThis;
 	This(boolean isThis) {this.isThis = isThis;}
 
-	private Type type;
+	private final Type type = new Type("");
 
 	@Override
 	public String toString() { return (isThis?"<this>(":"<super>(")+type+")"; }
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
-		if (type != null) return this;
-
 		if (ctx.in_static) ctx.report(Kind.ERROR, "this.static");
 
 		CompileUnit file = ctx.file;
 		if (file.parent == null) throw new ResolveException("this.no_super:"+file.name);
 
-		type = new Type(isThis ? file.name : file.parent);
+		type.owner = isThis ? file.name : file.parent;
 		return this;
 	}
 

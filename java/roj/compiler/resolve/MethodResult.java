@@ -2,7 +2,6 @@ package roj.compiler.resolve;
 
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.AttrClassList;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -10,7 +9,10 @@ import roj.collect.IntMap;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * @author Roj234
@@ -26,10 +28,6 @@ public final class MethodResult {
 	public int distance;
 	public Object[] error;
 
-	public MethodResult(MethodNode mn) {
-		this.method = mn;
-		// 0 and false
-	}
 	public MethodResult(MethodNode mn, int distance, boolean dvc) {
 		this.method = mn;
 		this.distance = distance;
@@ -40,27 +38,22 @@ public final class MethodResult {
 		this.error = error;
 	}
 
+	public List<IType> getExceptions(LocalContext ctx) {
+		if (exception != null) return Arrays.asList(exception);
+		else {
+			var list = method.parsedAttr(ctx.classes.getClassInfo(method.owner).cp(), Attribute.Exceptions);
+			if (list == null) return Collections.emptyList();
+			// TODO StreamChain简单的示例
+			return list.value.stream().map(Type::new).collect(Collectors.toList());
+		}
+	}
+
 	public void addExceptions(LocalContext ctx, IClass cn, boolean twr) {
-		if (exception != null) {
-			for (IType ex : exception) {
-				if (twr && ex.owner().equals("java/lang/InterruptedException"))
-					ctx.report(Kind.WARNING, "block.try.interrupted");
+		for (IType ex : getExceptions(ctx)) {
+			if (twr && ex.owner().equals("java/lang/InterruptedException"))
+				ctx.report(Kind.WARNING, "block.try.interrupted");
 
-				ctx.addException(ex);
-			}
-		} else {
-			AttrClassList exAttr = method.parsedAttr(cn.cp(), Attribute.Exceptions);
-			if (exAttr != null) {
-				List<String> value = exAttr.value;
-				for (int i = 0; i < value.size(); i++) {
-					String type = value.get(i);
-
-					if (twr && type.equals("java/lang/InterruptedException"))
-						ctx.report(Kind.WARNING, "block.try.interrupted");
-
-					ctx.addException(new Type(type));
-				}
-			}
+			ctx.addException(ex);
 		}
 	}
 }

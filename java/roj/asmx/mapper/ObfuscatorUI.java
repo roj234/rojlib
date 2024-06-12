@@ -529,7 +529,7 @@ public class ObfuscatorUI extends JFrame {
 		o.lib = uiLibPath.getText();
 		o.exclusions = new ExclusionEntry[pActive.size()];
 		pActive.copyInto(o.exclusions);
-		ConfigMaster.YAML.writeObject(o, SF.serializer(SaveTo.class), file);
+		ConfigMaster.YAML.writeObject(SF.serializer(SaveTo.class), o, file);
 	}
 	private void readYml(File file) throws IOException, ParseException {
 		SaveTo o = ConfigMaster.fromExtension(file).readObject(SF.serializer(SaveTo.class), file);

@@ -15,6 +15,7 @@ import roj.util.Helpers;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.lang.reflect.Method;
 
 /**
  * @author Roj234
@@ -59,14 +60,23 @@ public class UIEntry extends JFrame {
 		button.addActionListener(e -> {
 			button.setEnabled(false);
 			try {
-				JFrame frame = (JFrame) Class.forName(klass).newInstance();
-				frame.pack();
-				frame.setResizable(false);
-				frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-				frame.setVisible(true);
-				frame.addWindowListener(new WindowAdapter() {
-					public void windowClosing(WindowEvent e) { button.setEnabled(true); }
-				});
+				Class<?> aClass = Class.forName(klass);
+				try {
+					Method main = aClass.getDeclaredMethod("main", String[].class);
+					main.setAccessible(true);
+					main.invoke(null, (Object) new String[0]);
+				} catch (Exception e2) {
+					e2.printStackTrace();
+
+					JFrame frame = (JFrame) aClass.newInstance();
+					frame.pack();
+					frame.setResizable(false);
+					frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+					frame.setVisible(true);
+					frame.addWindowListener(new WindowAdapter() {
+						public void windowClosing(WindowEvent e) { button.setEnabled(true); }
+					});
+				}
 			} catch (Exception ex) {
 				throw new RuntimeException(ex);
 			}

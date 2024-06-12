@@ -2,7 +2,6 @@ package roj.asmx.event;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.tree.AccessData;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.RawNode;
@@ -77,7 +76,7 @@ public class EventBus {
 			for (AnnotatedElement.Node child : el.parent().children()) {
 				Annotation subscribe = child.annotations().get(SUBSCRIBE_NAME);
 				if (subscribe != null) {
-					AccessData.MOF mn = child.node();
+					var mn = child.node();
 					toListenerInfo(mn, subscribe, objectList, staticList);
 				}
 			}

@@ -1,10 +1,24 @@
 package roj.util;
 
+import roj.reflect.ReflectionUtils;
+
 /**
  * @author Roj234
  * @since 2023/12/26 9:09
  */
 public class VMUtil {
+	private static final Class<?> Hooks_Instance;
+	private static final long Hooks_Offset;
+	static {
+		try {
+			// might not applicable for Java8
+			Hooks_Instance = Class.forName("java.lang.ApplicationShutdownHooks");
+			Hooks_Offset = ReflectionUtils.fieldOffset(Hooks_Instance, "hooks");
+		} catch (ClassNotFoundException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
 	private static Boolean isRoot;
 
 	public static synchronized Boolean isRoot() {
@@ -20,6 +34,8 @@ public class VMUtil {
 		}
 		return isRoot;
 	}
+
+	public static boolean isShutdown() {return ReflectionUtils.u.getObject(Hooks_Instance, Hooks_Offset) == null;}
 
 	public static long usableMemory() { Runtime r = Runtime.getRuntime(); return r.maxMemory() - r.totalMemory() + r.freeMemory(); }
 }

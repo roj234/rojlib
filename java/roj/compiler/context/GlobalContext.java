@@ -1,17 +1,17 @@
 package roj.compiler.context;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
+import roj.asm.Parser;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.AttrModule;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.IType;
+import roj.asm.type.Signature;
 import roj.asmx.AnnotationSelf;
-import roj.collect.Hasher;
-import roj.collect.IntBiMap;
-import roj.collect.MyHashMap;
-import roj.collect.XHashSet;
+import roj.collect.*;
 import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.AnnotationPrimer;
@@ -23,9 +23,18 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.diagnostic.SimpleDiagnosticListener;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.ResolveHelper;
+import roj.config.ConfigMaster;
+import roj.config.ParseException;
+import roj.config.auto.Serializer;
+import roj.config.auto.Serializers;
+import roj.crypt.CRC32s;
+import roj.io.IOUtil;
 import roj.text.logging.Logger;
+import roj.util.ByteList;
 import roj.util.Helpers;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -51,15 +60,14 @@ public class GlobalContext implements CompilerSpec {
 	protected final XHashSet<String, CompileUnit> ctx = COMPILE_UNIT_SHAPE.create();
 	protected final MyHashMap<String, Library> libraries = new MyHashMap<>();
 	protected final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
-	protected final MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
+	protected MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
+	protected final SimpleList<CompileUnit> generatedCUs = new SimpleList<>();
 
 	protected final LibraryGenerated generated = new LibraryGenerated();
 	protected static final class LibraryGenerated implements Library {
 		final MyHashMap<String, ConstantData> classes = new MyHashMap<>();
 		AttrModule module;
 
-		@Override
-		public Set<String> content() {return Collections.emptySet();}
 		@Override
 		public ConstantData get(CharSequence name) {return classes.get(name);}
 		@Override
@@ -77,9 +85,14 @@ public class GlobalContext implements CompilerSpec {
 		return clz;
 	}
 
-	public void addCompileUnit(CompileUnit unit) {
+	public void addCompileUnit(CompileUnit unit, boolean generated) {
 		CompileUnit prev = ctx.put(unit.name, unit);
-		if (prev != null) throw new IllegalStateException("重复的编译单位: " + unit.name);
+		if (prev != null) throw new IllegalStateException("重复的编译单位: "+unit.name);
+		if (generated) generatedCUs.add(unit);
+	}
+	public void addGeneratedCompileUnits(ArrayList<CompileUnit> ctxs) {
+		ctxs.addAll(generatedCUs);
+		generatedCUs.clear();
 	}
 
 	public synchronized void addGeneratedClass(ConstantData data) {
@@ -89,38 +102,87 @@ public class GlobalContext implements CompilerSpec {
 	}
 	public Collection<ConstantData> getGeneratedClasses() {return generated.classes.values();}
 
-	public final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
-	public IntBiMap<String> parentList(IClass info) throws ClassNotFoundException { return getResolveHelper(info).getClassList(this); }
-	public ComponentList methodList(IClass info, String name) throws TypeNotPresentException { return getResolveHelper(info).findMethod(this, name); }
-	public ComponentList fieldList(IClass info, String name) throws TypeNotPresentException { return getResolveHelper(info).findField(this, name); }
 	@NotNull
-	public List<IType> getTypeParamOwner(IClass info, IType superType) throws ClassNotFoundException {
-		Map<String, List<IType>> map = getResolveHelper(info).getTypeParamOwner(this);
-
-		List<IType> tpws = map.get(superType.owner());
-		if (tpws != null) return tpws;
-		throw new IllegalArgumentException(superType+"不是"+info.name()+"的泛型超类或超接口");
-	}
-	public MyHashMap<String, InnerClasses.InnerClass> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClassFlags(this);}
+	public final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
+	@NotNull
+	public IntBiMap<String> getParentList(IClass info) throws ClassNotFoundException {return getResolveHelper(info).getClassList(this);}
+	@Nullable
+	public ComponentList getMethodList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).findMethod(this, name);}
+	@Nullable
+	public ComponentList getFieldList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).findField(this, name);}
+	@Nullable
+	public List<IType> getTypeParamOwner(IClass info, String superType) throws ClassNotFoundException {return getResolveHelper(info).getTypeParamOwner(this).get(superType);}
+	public MyHashMap<String, InnerClasses.InnerClass> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClasses();}
 	public AnnotationSelf getAnnotationDescriptor(IClass clz) {return getResolveHelper(clz).annotationInfo();}
 
+	public File packageCacheFile;
+	public int getLibraryHash() {
+		ByteList list = new ByteList();
+		for (Library library : new MyHashSet<>(libraries.values()))
+			list.putInt(library.fileHashCode());
+		int hash = CRC32s.once(list.list, 0, list.wIndex());
+		list._free();
+		return hash;
+	}
 	/**
 	 * 通过短名称获取全限定名（若存在）
 	 * @return 包含候选包名的列表 例如 [java/lang]
 	 */
+	@SuppressWarnings("unchecked")
 	public List<String> getAvailablePackages(String shortName) {
 		if (packageFastPath.isEmpty()) {
+			long time = System.nanoTime();
+			block:
 			synchronized (this) {
 				if (packageFastPath.isEmpty()) {
-					for (Map.Entry<String, Library> entry : libraries.entrySet()) {
-						addFastPath(entry.getKey());
+					var serializer = (Serializer<MyHashMap<String, List<String>>>) Serializers.SAFE.serializer(Signature.parseGeneric("Lroj/collect/MyHashMap<Ljava/lang/String;Ljava/util/List<Ljava/lang/String;>;>;"));
+
+					File cache = packageCacheFile;
+					if (cache != null && cache.isFile()) {
+						try {
+							packageFastPath = ConfigMaster.XNBT.readObject(serializer, cache);
+							System.out.println("Read PackageCache: "+(System.nanoTime() - time)/1000000d+"ms");
+							break block;
+						} catch (IOException | ParseException e) {
+							debugLogger().warn("包缓存读取失败", e);
+						}
 					}
+
+					for (String entry : libraries.keySet()) {
+						if (!entry.contains("$"))
+							addFastPath(entry);
+					}
+
+					// how to deal with rt.jar ?
 					for (String n : LibraryRuntime.INSTANCE.content()) {
-						addFastPath(n);
+						if (!n.contains("$") &&
+							(n.startsWith("java/") || n.startsWith("javax/") ||
+							LibraryRuntime.INSTANCE.getModule(n).startsWith("jdk.unsupported"))) {
+
+							try {
+								var in = LibraryRuntime.INSTANCE.getResource(n+".class");
+								var acc = Parser.parseAccess(IOUtil.getSharedByteBuf().readStreamFully(in), false);
+								if ((acc.acc&Opcodes.ACC_PUBLIC) == 0) continue;
+							} catch (Exception e) {
+								e.printStackTrace();
+							}
+
+							addFastPath(n);
+						}
 					}
+
 					for (Map.Entry<String, List<String>> entry : packageFastPath.entrySet()) {
-						List<String> value = entry.getValue();
-						if (value.size() == 1) entry.setValue(Collections.singletonList(value.get(0)));
+						var value = entry.getValue();
+						if (value.size() == 1) entry.setValue(Collections.singletonList(value.get(0).intern()));
+						else for (int i = 0; i < value.size(); i++) value.set(i, value.get(i).intern());
+					}
+
+					System.out.println("Build PackageCache: "+(System.nanoTime() - time)/1000000d+"ms");
+
+					if (cache != null) try {
+						ConfigMaster.XNBT.writeObject(serializer, packageFastPath, cache);
+					} catch (IOException e) {
+						debugLogger().warn("包缓存保存失败", e);
 					}
 				}
 			}
@@ -150,7 +212,7 @@ public class GlobalContext implements CompilerSpec {
 	public JavaLexer createLexer() {return new JavaLexer();}
 	public LocalContext createLocalContext() {return new LocalContext(this);}
 
-	public ExprParser createExprParser() {return new ExprParser();}
+	public ExprParser createExprParser(LocalContext ctx) {return new ExprParser(ctx);}
 	public BlockParser createBlockParser(LocalContext ctx) {return new BlockParser(ctx);}
 	public MethodWriter createMethodPoet(ConstantData file, MethodNode node) {return new MethodWriter(file, node);}
 
@@ -173,7 +235,7 @@ public class GlobalContext implements CompilerSpec {
 		}
 	}
 
-	public boolean isSpecEnabled(int specId) {return specId != DISABLE_RAW_TYPE;}
+	public boolean isSpecEnabled(int specId) {return true;}
 
 	public Consumer<Diagnostic> listener = new SimpleDiagnosticListener(1, 1, 1);
 	public boolean hasError;
@@ -192,7 +254,7 @@ public class GlobalContext implements CompilerSpec {
 	}
 
 	private static ConstantData AnyArray;
-	public static IClass anyArray() {
+	public static ConstantData anyArray() {
 		if (AnyArray == null) {
 			Class<Object[]> array = Object[].class;
 			ConstantData data = new ConstantData();
@@ -205,7 +267,7 @@ public class GlobalContext implements CompilerSpec {
 		}
 		return AnyArray;
 	}
-	public static FieldNode arrayLength() {return (FieldNode) anyArray().fields().get(0);}
+	public static FieldNode arrayLength() {return anyArray().fields().get(0);}
 
 	private static final Logger logger = Logger.getLogger("Lavac/Debug");
 	public static Logger debugLogger() {return logger;}

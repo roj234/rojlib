@@ -11,13 +11,14 @@ import roj.asm.type.TypeHelper;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
+import roj.compiler.CompilerSpec;
 import roj.compiler.api.Evaluable;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.NaE;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
+import roj.compiler.resolve.Inferrer;
 import roj.compiler.resolve.MethodResult;
 import roj.compiler.resolve.ResolveException;
 import roj.text.CharList;
@@ -144,9 +145,29 @@ public class Invoke extends ExprNode {
 
 			ExprNode fn2;
 			// 只有一个点
+			check:
 			if (fn1.names.isEmpty()) {
-				// 省略this : a() => this.a(); 或继承/什么的静态
 				if (fn1.parent == null) {
+
+					// 省略this : a() => this.a();
+					fn2 = ctx.ep.This().resolve(ctx);
+
+					ComponentList list = ctx.methodListOrReport(ctx.file, method);
+					if (list != null) {
+						/*  这么设计源于下列代码无法编译
+							class TestN {
+								{ a(); }
+								void a (int a) {}
+							}
+							void a() {}
+						 */
+						for (MethodNode mn : list.getMethods()) {
+							if (ctx.checkAccessible(ctx.classes.getClassInfo(mn.owner), mn, false, false)) {
+								break check;
+							}
+						}
+					}
+
 					LocalContext.Import mn = ctx.tryImportMethod(method);
 					// 静态导入
 					if (mn != null) {
@@ -155,8 +176,6 @@ public class Invoke extends ExprNode {
 						fn = mn.prev;
 						break block;
 					}
-
-					fn2 = ctx.ep.This().resolve(ctx);
 				} else {
 					// ((java.lang.Object) System.out).println(1);
 					fn2 = fn1.parent.resolve(ctx);
@@ -167,7 +186,7 @@ public class Invoke extends ExprNode {
 				}
 			} else {
 				// [x.y].a();
-				fn2 = fn1.resolveEx(ctx, this);
+				fn2 = fn1.resolveEx(ctx, x -> fn = x);
 
 				// 静态方法
 				if (fn2 == null) {
@@ -195,6 +214,7 @@ public class Invoke extends ExprNode {
 			method = "<init>";
 		} else {
 			ownMirror = ctx.resolveType((IType) fn);
+			if (Inferrer.hasUndefined(ownMirror)) ctx.report(Kind.ERROR, "invoke.noExact");
 			klass = ownMirror.owner();
 			method = "<init>";
 
@@ -237,9 +257,9 @@ public class Invoke extends ExprNode {
 			boolean staticEnv = (mode&MUST_VIRTUAL) != 0 ? ctx.in_static : fn == null;
 			int flags = (flag&INVOKE_SPECIAL) | (staticEnv ? ComponentList.IN_STATIC : 0);
 
-			ctx.inferrer.typeParamHint = tpHint;
+			ctx.inferrer.manualTPBounds = tpHint;
 			MethodResult r = list.findMethod(ctx, ownMirror, tmp, namedType, flags);
-			ctx.inferrer.typeParamHint = null;
+			ctx.inferrer.manualTPBounds = null;
 			if (r == null) return NaE.RESOLVE_FAILED;
 
 			ctx.checkType(r.method.returnType().owner);
@@ -349,6 +369,7 @@ public class Invoke extends ExprNode {
 
 		if ((flag&INTERFACE_CLASS) != 0) {
 			if (opcode == Opcodes.INVOKESTATIC) {
+				LocalContext.get().file.setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_8);
 				cw.invoke(Opcodes.INVOKESTATIC, methodNode.owner, methodNode.name(), methodNode.rawDesc(), true);
 			} else {
 				assert opcode == Opcodes.INVOKEVIRTUAL;

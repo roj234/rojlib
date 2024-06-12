@@ -21,15 +21,15 @@ public abstract class ComponentList {
 	@Nullable
 	public final MethodResult findMethod(LocalContext ctx, List<IType> params, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) {return findMethod(ctx, null, params, Collections.emptyMap(), flags);}
 	@Nullable
-	public final MethodResult findMethod(LocalContext ctx, IType generic, List<IType> params, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) {return findMethod(ctx, generic, params, Collections.emptyMap(), flags);}
+	public final MethodResult findMethod(LocalContext ctx, IType that, List<IType> params, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) {return findMethod(ctx, that, params, Collections.emptyMap(), flags);}
 	/**
-	 * @param generic this类型
+	 * @param that this类型
 	 * @param params 参数数量及类型
 	 * @param namedType 具名参数
 	 * @param flags
 	 */
 	@Nullable
-	public MethodResult findMethod(LocalContext ctx, IType generic, List<IType> params, Map<String, IType> namedType, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) { throw new UnsupportedOperationException("这不是方法列表"); }
+	public MethodResult findMethod(LocalContext ctx, IType that, List<IType> params, Map<String, IType> namedType, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) { throw new UnsupportedOperationException("这不是方法列表"); }
 	@NotNull
 	public FieldResult findField(LocalContext ctx, @MagicConstant(flags = {IN_STATIC, THIS_ONLY}) int flags) { throw new UnsupportedOperationException("这不是字段列表"); }
 

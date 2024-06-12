@@ -80,7 +80,7 @@ public class Test {
 		p.map = Map.of("114514", Map.of("1919810", 23333L));
 
 		// simple
-		ConfigMaster.YAML.writeObject(p, adapter, new File("C:\\test.yml"));
+		ConfigMaster.YAML.writeObject(adapter, p, new File("C:\\test.yml"));
 		p = ConfigMaster.YAML.readObject(adapter, new File("C:\\test.yml"));
 
 		// or CVisitor

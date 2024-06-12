@@ -11,13 +11,11 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.visitor.Label;
-import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.ast.NaE;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -36,13 +34,11 @@ import java.util.function.Consumer;
  * @since 2022/2/27 20:27
  */
 final class DotGet extends VarNode {
-	private static final MyBitSet EMPTY_BITS = new MyBitSet();
-
 	ExprNode parent;
 	SimpleList<String> names;
 
 	private byte flags;
-	private MyBitSet bits = EMPTY_BITS;
+	private long bits;
 
 	private IClass begin;
 	private FieldNode[] chain;
@@ -50,7 +46,6 @@ final class DotGet extends VarNode {
 
 	private static final byte ARRAY_LENGTH = 1, FINAL_FIELD = 2, SELF_FIELD = 4, RESOLVED = 8;
 
-	// parent可以是Constant This Super ArrayGet Invoke ArrayDef New
 	private static final ToIntMap<Class<?>> TypeId = new ToIntMap<>();
 	static {
 		TypeId.putInt(This.class, 0);
@@ -60,16 +55,17 @@ final class DotGet extends VarNode {
 		TypeId.putInt(Constant.class, 4);
 		TypeId.putInt(Cast.class, 5);
 		TypeId.putInt(EncloseRef.class, 6);
+
+		// only after resolve (via getOperatorOverride)
+		TypeId.putInt(LocalVariable.class, 114);
 	}
 
 	public DotGet(@Nullable ExprNode parent, String name, int flag) {
 		this.parent = parent;
 		this.names = new SimpleList<>(4);
 		this.names.add(name);
-		if (flag != 0) {
-			bits = new MyBitSet();
-			bits.add(1);
-		}
+		// a() ?. expr
+		if (flag != 0) bits = 1;
 
 		if (parent != null) {
 			int type = TypeId.getOrDefault(parent.getClass(), -1);
@@ -82,6 +78,7 @@ final class DotGet extends VarNode {
 
 	public Type toClassRef() {
 		if (flags >= 0) throw new IllegalArgumentException("cannot be class ref");
+		if (bits != 0) LocalContext.get().report(Kind.ERROR, "dotGet.opChain.inClassDecl");
 
 		CharList sb = LocalContext.get().tmpSb; sb.clear();
 		int i = 0;
@@ -107,8 +104,8 @@ final class DotGet extends VarNode {
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException { return resolveEx(ctx, null); }
 	@Contract("_, null -> !null")
-	final ExprNode resolveEx(LocalContext ctx, Consumer<IClass> invoke) throws ResolveException {
-		if ((flags& RESOLVED) != 0) return this;
+	final ExprNode resolveEx(LocalContext ctx, Consumer<IClass> classExprTarget) throws ResolveException {
+		if ((flags&RESOLVED) != 0) return this;
 
 		// 用于错误提示
 		FieldResult inaccessibleThis = null;
@@ -120,6 +117,7 @@ final class DotGet extends VarNode {
 			String part = names.get(0);
 
 			Variable varParent = ctx.tryVariable(part);
+			check:
 			if (varParent != null) {
 				// 1. 变量
 				parent = new LocalVariable(varParent);
@@ -127,27 +125,29 @@ final class DotGet extends VarNode {
 
 				names.remove(0);
 				flags = 0;
+				bits >>>= 1;
 			} else {
+				// 2. 省略this的当前类字段（包括继承！）
+				// * => 在错误处理中需要二次检查以生成更有帮助的错误信息（static）
+
+				ComponentList fieldList = ctx.fieldListOrReport(ctx.file, part);
+				if (fieldList != null) {
+					inaccessibleThis = fieldList.findField(ctx, ctx.in_static ? ComponentList.IN_STATIC : 0);
+					if (inaccessibleThis.error == null) {
+						begin = ctx.file;
+						parent = (inaccessibleThis.field.modifier&Opcodes.ACC_STATIC) != 0 ? null : ctx.ep.This();
+						flags = 0;
+						break check;
+					}
+				}
+
 				LocalContext.Import result;
-				// 2. 静态字段导入
+				// 3. 静态字段导入
 				if ((result = ctx.tryImportField(part)) != null) {
 					begin = result.owner;
 					names.set(0, result.method);
 					parent = result.prev;
 					flags = 0;
-				} else {
-					// 3. 省略this的当前类字段（包括继承！）
-					// * => 在错误处理中需要二次检查以生成更有帮助的错误信息（static）
-
-					ComponentList fieldList = ctx.fieldListOrReport(ctx.file, part);
-					if (fieldList != null) {
-						inaccessibleThis = fieldList.findField(ctx, ctx.in_static ? ComponentList.IN_STATIC : 0);
-						if (inaccessibleThis.error == null) {
-							begin = ctx.file;
-							parent = (inaccessibleThis.field.modifier&Opcodes.ACC_STATIC) != 0 ? null : ctx.ep.This();
-							flags = 0;
-						}
-					}
 				}
 			}
 
@@ -160,7 +160,10 @@ final class DotGet extends VarNode {
 		while (true) {
 			sb.append(part);
 			if (++i == names.size()) break;
-			if ((part = names.get(i)).equals(";[")) throw new ResolveException("symbol.error.arrayBrOutsideClassRef");
+			if ((part = names.get(i)).equals(";[")) {
+				ctx.report(Kind.ERROR, "symbol.error.arrayBrOutsideClassRef");
+				return NaE.RESOLVE_FAILED;
+			}
 			sb.append('/');
 		}
 
@@ -179,7 +182,10 @@ final class DotGet extends VarNode {
 				}
 
 				symbol = ctx.getClassOrArray(fType);
-				if (symbol == null) throw new ResolveException("symbol.error.noSuchClass:"+fType);
+				if (symbol == null) {
+					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", fType);
+					return NaE.RESOLVE_FAILED;
+				}
 			}
 
 			String error = ctx.resolveField(symbol, fType, sb);
@@ -192,19 +198,26 @@ final class DotGet extends VarNode {
 			chain = ctx.get_frChain().toArray(new FieldNode[0]);
 			type = ctx.get_frType();
 
-			i = 1;
 			part = fType.owner();
 		} else {
 			assert chain == null;
 			// 4. 前缀包名.字段 ^
 			// ^ => 我决定采用（已经设计好的）这种机制，虽然可能没必要
 
-			String error = ctx.resolveDotGet(sb, invoke != null);
+			String error = ctx.resolveDotGet(sb, classExprTarget != null);
+
+			if (bits != 0) {
+				if (classExprTarget != null) ctx.report(Kind.ERROR, "dotGet.opChain.isChild");
+
+				int offset = ctx.get_frOffset();
+				if (Long.numberOfTrailingZeros(bits) < offset) ctx.report(Kind.ERROR, "dotGet.opChain.inClassDecl");
+				bits >>>= offset;
+			}
 
 			if (error != null) {
 				if (error.isEmpty()) {
-					assert invoke != null;
-					invoke.accept(ctx.get_frBegin());
+					assert classExprTarget != null;
+					classExprTarget.accept(ctx.get_frBegin());
 					return null;
 				}
 
@@ -217,7 +230,6 @@ final class DotGet extends VarNode {
 			chain = ctx.get_frChain().toArray(new FieldNode[0]);
 			type = ctx.get_frType();
 
-			i = 1;
 			part = chain[0].fieldType().owner();
 		}
 		ctx.checkType(part);
@@ -240,13 +252,14 @@ final class DotGet extends VarNode {
 		}
 
 		FieldNode fn;
-		if (i < length) for (;;) {
-			fn = chain[i];
+		int i1 = 1;
+		if (i1 < length) for (;;) {
+			fn = chain[i1];
 			if ((fn.modifier & Opcodes.ACC_STATIC) != 0) {
 				ctx.report(Kind.SEVERE_WARNING, "symbol.warn.static_on_half", part, fn.name(), "symbol.field");
 			}
 
-			if (++i == length) break;
+			if (++i1 == length) break;
 			part = fn.fieldType().owner();
 		} else  {
 			fn = chain[0];
@@ -260,9 +273,10 @@ final class DotGet extends VarNode {
 			}
 		}
 
-		if (bits != EMPTY_BITS) {
+		if (isStaticField()) bits &= ~1;
+		if (bits != 0) {
 			flags |= FINAL_FIELD;
-			if ((flags&ARRAY_LENGTH) != 0) ctx.report(Kind.ERROR, "dotGet.error.illegalArrayLength");
+			if ((flags&ARRAY_LENGTH) != 0) ctx.report(Kind.ERROR, "dotGet.opChain.arrayLen");
 		} else if ((fn.modifier&Opcodes.ACC_FINAL) != 0) flags |= FINAL_FIELD;
 
 		// == is better
@@ -326,7 +340,7 @@ final class DotGet extends VarNode {
 
 	private void write0(MethodWriter cw, int length) {
 		int i = 0;
-		String owner = chain.length == 1 ? begin.name() : chain[chain.length-2].fieldType().owner();
+		String owner = begin.name();
 		FieldNode fn = chain[0];
 		byte opcode;
 
@@ -342,9 +356,9 @@ final class DotGet extends VarNode {
 
 		if (i == length) return;
 
-		Label ifNull = bits == EMPTY_BITS ? null : new Label();
+		Label ifNull = bits == 0 ? null : new Label();
 		for (;;) {
-			if (bits.contains(i)) {
+			if ((bits&(1L << i)) != 0) {
 				cw.one(Opcodes.DUP);
 				cw.jump(Opcodes.IFNULL, ifNull);
 			}
@@ -368,17 +382,30 @@ final class DotGet extends VarNode {
 			}
 		}
 
-		if (ifNull != null) cw.label(ifNull);
+		if (ifNull != null) {
+			if (cw.noverify) {
+				cw.label(ifNull);
+			} else {
+				Label tmp = new Label();
+				cw.jump(tmp);
+				cw.label(ifNull);
+				cw.one(Opcodes.POP);
+				cw.one(Opcodes.ACONST_NULL);
+				cw.label(tmp);
+			}
+		}
 	}
 
 	public DotGet add(String name, int flag) {
-		names.add(name);
 		if (flag != 0) {
-			if (bits.size() == 0) bits = new MyBitSet();
-			bits.add(names.size());
+			if (names.size() > 64) throw new ResolveException("dotGet.opChain.tooLong");
+			bits |= 1L << names.size();
 		}
+		names.add(name);
 		return this;
 	}
+
+	public boolean maybeStringTemplate() {return parent == null && names.size() == 1 && bits == 0;}
 
 	@Override
 	public boolean equals(Object o) {
@@ -395,7 +422,7 @@ final class DotGet extends VarNode {
 	public int hashCode() {
 		int result = parent == null ? 42 : parent.hashCode();
 		result = 31 * result + names.hashCode();
-		result = 31 * result + bits.hashCode();
+		result = 31 * result + (int) (bits ^ (bits >>> 32));
 		return result;
 	}
 }

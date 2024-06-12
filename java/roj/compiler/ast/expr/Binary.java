@@ -8,7 +8,6 @@ import roj.asm.visitor.Label;
 import roj.collect.MyBitSet;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.NaE;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;

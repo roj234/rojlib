@@ -14,6 +14,7 @@ import roj.compiler.resolve.TypeCast;
 import roj.config.Tokenizer;
 
 import java.util.Collections;
+import java.util.Objects;
 
 /**
  * 操作符 - 常量
@@ -46,9 +47,18 @@ public final class Constant extends ExprNode {
 	public Object constVal() { return c; }
 
 	public static final Type STRING = new Type("java/lang/String");
-	public static ExprNode classRef(Type type) { return new Constant(new Generic("java/lang/Class", Collections.singletonList(type)), type); }
+	public static Constant classRef(Type type) { return new Constant(new Generic("java/lang/Class", Collections.singletonList(type)), type); }
 	public static Constant valueOf(boolean v) { return new Constant(Type.std(Type.BOOLEAN), v); }
 	public static Constant valueOf(String v) { return new Constant(STRING, v); }
+	public static Constant valueOf(AnnVal v) {
+		return switch (v.type()) {
+			case 's' -> valueOf(v.asString());
+			case 'e' -> new Constant(new Type(v.asEnum().owner), v);
+			case 'c' -> classRef(v.asClass());
+			case '@', '[' -> throw new IllegalArgumentException("not supported at this time");
+			default -> new Constant(Type.std(v.type()), v);
+		};
+	}
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
@@ -59,8 +69,13 @@ public final class Constant extends ExprNode {
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
-		if (c instanceof IType t) cw.ldc(new CstClass(t.rawType().ownerForCstClass()));
-		else if (c instanceof CstClass cx) cw.ldc(cx);
+		if (c instanceof IType t) {
+			if (t.isPrimitive()) {
+				cw.field(Opcodes.GETSTATIC, Objects.requireNonNull(TypeCast.getWrapper(t)).owner, "TYPE", "Ljava/lang/Class;");
+			} else {
+				cw.ldc(new CstClass(t.rawType().ownerForCstClass()));
+			}
+		} else if (c instanceof CstClass cx) cw.ldc(cx);
 		else if (c == null) cw.one(Opcodes.ACONST_NULL);
 		else if ("java/lang/String".equals(type.owner())) cw.ldc(c.toString());
 		else {

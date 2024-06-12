@@ -4,7 +4,9 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.asm.SignaturePrimer;
 import roj.compiler.context.LocalContext;
+import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 
@@ -16,6 +18,7 @@ import java.util.List;
  */
 public final class MultiReturn extends ExprNode {
 	private final List<ExprNode> values;
+	private int hashCode;
 	public MultiReturn(List<ExprNode> values) {
 		this.values = values;
 		if (values.size() == 0 || values.size() > 255) throw new UnsupportedOperationException("Illegal return size "+values.size());
@@ -27,8 +30,32 @@ public final class MultiReturn extends ExprNode {
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		for (int i = 0; i < values.size(); i++) {
-			values.set(i, values.get(i).resolve(ctx));
+			ExprNode node = values.get(i).resolve(ctx);
+			values.set(i, node);
+			if ("roj/compiler/runtime/ReturnStack".equals(node.type().owner())) {
+				ctx.report(Kind.ERROR, "multiReturn.russianToy");
+			}
 		}
+
+		SignaturePrimer node = ctx.file.currentNode;
+		ok: {
+			if (node != null) {
+				IType type1 = node.values.get(node.values.size() - 1);
+				if (type1.owner().equals("roj/compiler/runtime/ReturnStack") && type1 instanceof Generic g) {
+					for (IType child : g.children) {
+						if ("roj/compiler/runtime/ReturnStack".equals(child.owner())) {
+							ctx.report(Kind.ERROR, "multiReturn.russianToy");
+						}
+					}
+					hashCode = g.children.hashCode();
+					break ok;
+				}
+			}
+
+			ctx.report(Kind.ERROR, "multiReturn.incompatible");
+		}
+
+
 		return this;
 	}
 
@@ -41,7 +68,8 @@ public final class MultiReturn extends ExprNode {
 
 	@Override
 	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
-		cw.invokeS("roj/compiler/runtime/ReturnStack", "get", "()Lroj/compiler/runtime/ReturnStack;");
+		cw.ldc(hashCode);
+		cw.invokeS("roj/compiler/runtime/ReturnStack", "get", "(I)Lroj/compiler/runtime/ReturnStack;");
 		for (ExprNode v : values) {
 			v.write(cw, false);
 

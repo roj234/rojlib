@@ -1,7 +1,6 @@
 package roj.compiler.resolve;
 
 import roj.asm.Opcodes;
-import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -26,11 +25,11 @@ final class MethodListSingle extends ComponentList {
 	final MethodNode node;
 	MethodListSingle(MethodNode node) { this.node = node; }
 
-	public MethodResult findMethod(LocalContext ctx, IType genericHint, List<IType> params,
+	public MethodResult findMethod(LocalContext ctx, IType that, List<IType> params,
 								   Map<String, IType> namedType, int flags) {
 		SimpleList<IType> myParam = null;
 		MethodNode mn = node;
-		IClass mnOwner = ctx.classes.getClassInfo(mn.owner);
+		var mnOwner = ctx.classes.getClassInfo(mn.owner);
 
 		if (!ctx.checkAccessible(mnOwner, mn, (flags&IN_STATIC) != 0, true)) return null;
 
@@ -80,7 +79,7 @@ final class MethodListSingle extends ComponentList {
 				}
 			}
 
-			MethodResult result = ctx.inferrer.infer(mnOwner, mn, genericHint, myParam == null ? params : myParam);
+			MethodResult result = ctx.inferrer.infer(mnOwner, mn, that, myParam == null ? params : myParam);
 			if (result.distance >= 0) {
 				result.namedParams = defParamState;
 				return result;
@@ -97,7 +96,7 @@ final class MethodListSingle extends ComponentList {
 		MethodList.appendInput(params, sb);
 
 		sb.append("  ").append("\1invoke.reason\0 ");
-		MethodList.appendError(ctx.inferrer.infer(mnOwner, mn, genericHint, params), sb);
+		MethodList.appendError(ctx.inferrer.infer(mnOwner, mn, that, params), sb);
 		sb.append('\n');
 
 		ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());

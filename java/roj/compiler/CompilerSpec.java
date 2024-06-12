@@ -7,9 +7,22 @@ public interface CompilerSpec {
 	int ATTR_LOCAL_VARIABLES = 3;
 	int ATTR_INNER_CLASS = 4;
 	int ATTR_STACK_FRAME = 5;
-	int PRIMITIVE_GENERIC = 6;
-	int INTERFACE_INACCESSIBLE_FIELD = 16;
-	int ADVANCED_GENERIC_CHECK = 32;
-	int KOTLIN_SEMICOLON = 33;
-	int DISABLE_RAW_TYPE = 114514;
+	int EXTRA_DEBUG_INFO = 6;
+	int OPTIONAL_SEMICOLON = 8;
+	int SHARED_ARRAY_STRING_CONCAT = 9;
+	int DISABLE_ASSERT = 10;
+
+
+	// no stack frame
+	int COMPATIBILITY_LEVEL_JAVA_6 = 6;
+	// lambda
+	int COMPATIBILITY_LEVEL_JAVA_8 = 8;
+	// module
+	int COMPATIBILITY_LEVEL_JAVA_9 = 9;
+	// constant_dynamic
+	int COMPATIBILITY_LEVEL_JAVA_11 = 11;
+	// record
+	int COMPATIBILITY_LEVEL_JAVA_17 = 17;
+	// string template via lambda
+	int COMPATIBILITY_LEVEL_JAVA_21 = 21;
 }

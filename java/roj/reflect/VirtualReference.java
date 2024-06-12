@@ -93,7 +93,7 @@ public class VirtualReference<V> {
 			if (loader == null) throw new IllegalStateException("key was freed???");
 
 			var xref = new ConstantData();
-			xref.access = 0;
+			xref.modifier = 0;
 			xref.name("vr/R$"+ReflectionUtils.uniqueId());
 			xref.newField(Opcodes.ACC_STATIC, "r", "Ljava/lang/Object;");
 

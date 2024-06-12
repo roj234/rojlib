@@ -1,5 +1,6 @@
 # Common
 type.literal=标识符(identifier)
+type.expr=表达式
 
 unexpected=此时不应有 '%1'
 unexpected_2=未预料的 '%1', 期待 '%2'
@@ -11,6 +12,9 @@ noExpression=非法的表达式开始
 lava.sandbox.enabled=[Sandbox]预编译模式已开启，请注意安全
 lava.sandbox.error=[Sandbox]计算出错: %1
 
+# ResolveHelper
+rh.cyclicDepend=[RH]包括%1在内的循环继承
+
 # Tokenizer
 lexer.number.floatLarge=[Num]浮点数过大
 lexer.number.floatSmall=[Num]浮点数过小
@@ -21,6 +25,10 @@ lexer.number.exceptBlank=[Num]期待[空白]
 lexer.number.exceptDec=[Num]期待[阿拉伯数字]
 lexer.number.noExponent=[Num]数字在指数后被截断
 lexer.number.formatError=[Num]浮点文字的格式错误
+
+lexer.stringBlock.noCRLF=[StringBlock]期待换行
+lexer.stringBlock.noIndent=[StringBlock]缩进为零
+lexer.stringBlock.indentChange=[StringBlock][Incompatible]文本块的最小缩进必须在第一行确定
 
 # Predefined annotation processor
 annotation.override=此方法未能覆盖超类的方法
@@ -53,15 +61,17 @@ import.conflict=[Import] %1 的短名称%2与 %3 重复
 modifier.annotation=[Modifier]此处不允许注解
 modifier.conflict=[Modifier]修饰符%1不能与%2组合
 modifier.notAllowed=[Modifier]此处不允许修饰符%1
-modifier.superset=[Modifier]该修饰符组合不兼容Javac
 
 #Cu Stage1 [Class]
 cu.record.header=[CU]record类必须有至少一个字段
 cu.struct.antibody=[CU]结构不能包含子节点
 
 cu.noInheritance=[CU]%1已隐式的从%2继承
-cu.noConstructor=[CU]构造器在%1中不可用
-cu.noConstructor.enum=[CU]枚举构造器必须是私有的
+cu.interfaceInit=[CU]接口中不允许有初始化程序
+cu.interfacePrivateNonstatic=[CU]仅接口中的静态方法和字段允许私有修饰
+cu.enumInit=[CU]枚举的初始化程序必须是私有的
+
+cu.sealed.noPermits=密封类必须具有permits字句
 
 # 已在<context>中定义了<type> <name>
 cu.nameConflict=[CU]已在%1中定义了%2 %3
@@ -84,8 +94,8 @@ cu.except.fieldName=字段名
 cu.except.record=','或')'
 
 #Cu Stage2 [Resolve]
-cu.interface=继承接口
-cu.class=实现类
+cu.interface=继承 接口
+cu.class=实现 类
 cu.final=最终
 cu.genericException=异常类不能拥有泛型参数
 cu.resolve.notInheritable=[CU]无法%1 %2
@@ -96,8 +106,10 @@ cu.annotation.missing=注解 @%1 缺少参数'%2'的默认值
 cu.annotation.extra=注解 @%1 不存在参数'%2'
 cu.annotation.notApplicable=注解 @%1 无法应用于元素 %2
 
-# any parent can override interface
-# but interface default can never override object parent
+cu.sealed.noPermits=允许的子类%1必须直接继承或实现密封类%2
+cu.sealed.unlisted.c="无法继承自密封类%1\n  只允许下列类继承: %2"
+cu.sealed.unlisted.i="无法实现密封接口%1\n  只允许下列类实现: %2"
+cu.sealed.missing=需要sealed、non-sealed或final修饰符
 
 #Cu Stage3/4
 cu.override.unable="%1中的方法%2无法实现%3中的方法%4\n  %5"
@@ -134,10 +146,13 @@ ps.method.paramDef=[PS]默认参数不是立即常量
 ps.annoDef.notConst=[PS]注解的默认值不是常量
 
 # BlockParser
-block.missingReturnValue=[Block]缺少返回值
-block.unreachable=[Block]无法访问的语句
-block.emptyStatement=[Block]多余的分号
-block.error.dupLabel=[Block]标签名称%1已存在
+block.initializorCannotComplete=初始化程序必须能够正常完成
+block.missingReturnValue=缺少返回值
+block.unreachable=无法访问的语句
+block.emptyStatement=多余的分号
+block.error.dupLabel=标签名称%1已存在
+
+block.assert.constant=[Assert]值始终为真
 
 block.goto.error.outsideLoop=[Goto]在switch或循环外%1
 block.goto.error.noSuchLabel=[Goto]未定义的标签: %1
@@ -168,9 +183,21 @@ block.switch.incompatible=[Switch]类型%1不能使用switch比较 (对于对象
 block.switch.lookupSwitch=[Switch]当前语句以二分查找O(log2 n)编译，使用"...switch"语句以哈希表O(1)编译
 block.switch.noCast=[Switch]标签%1无法转换为用于比较的类型%2
 
-block.var.warn.unused=未使用的变量 %1
-block.var.error.duplicate=[Var]变量名称%1已存在
-block.var.error.final=[Var]Final变量未赋初值
+block.switch.exprMode=不能在switch表达式中使用%1
+block.switch.exprMode.legacy=switch表达式必须使用新式switch
+block.switch.exprMode.return=不能在switch表达式中使用（被try挂钩的）return
+block.switch.yield=yield 不在 switch 表达式中, 也不在生成器函数中
+block.switch.exprMode.noYield=switch表达式的每个分支必须提供值或抛出
+block.switch.exprMode.uncovered="switch表达式未覆盖所有可能结果\n  1. 添加default分支\n  2. 如果类型是枚举或封闭类，列出每一种可能结果"
+
+block.multiReturn.typeError=多返回值自动解包仅适用于ReturnStack<?>类型
+block.multiReturn.countError=多返回值数量错误: 期待%1, 实际%2
+block.except.multiReturn=','或']'
+
+block.var.unused=未使用的变量 %1
+block.var.exist=变量%1已存在
+block.var.final=最终变量未赋初值
+block.var.var=var变量必须初始化
 
 # BlockParser Excepting Types
 block.except.tryOrAuto=(或{
@@ -214,7 +241,10 @@ binary.error.notApplicable=[Binary]%1和%2不是操作符%3的有效参数
 binary.constant=[Binary]值总是常量
 cast.warn.redundant=[Cast]出现冗余的到 %1 的转换
 chained.warn.constant_expr=[Chained]在逗号分隔中的常量表达式
-dotGet.error.illegalArrayLength=[DotGet]无法在?.表达式中访问数组长度
+dotGet.opChain.arrayLen=无法在?.表达式中访问数组长度
+dotGet.opChain.isChild= ?. 表达式只能在字段访问语句中使用
+dotGet.opChain.inClassDecl= ?. 表达式不能在类型引用中使用
+dotGet.opChain.tooLong= ?. 表达式仅适用于64级以内的字段访问 （李在赣神魔？）
 dotGet.incompatible.plural="[DotGet]对于%1找不到合适的字段\n%2"
 symbol.error.arrayBrOutsideClassRef=[Symbol]数组索引不能为<空>
 symbol.error.derefPrimitiveField=[Symbol]不能取消引用 %1
@@ -233,8 +263,10 @@ symbol.error.field.writeAfterWrite=[Symbol]字段 '%1.%2' 已被赋值
 symbol.error.field.writeFinal=[Symbol]修改最终字段 '%1.%2'
 symbol.error.field.readBeforeWrite=[Symbol]非法前向引用 '%1.%2'
 symbol.warn.static_on_half=[Symbol]静态%3应由类型名称'%1.%2'而不是表达式限定
-encloseRef.incompatible.nds=[EncloseRef][Incompatible] %2 不是 %1 的直接超类或超接口
-encloseRef.error.nds=[EncloseRef] %2 不是 %1 的超类或超接口
+encloseRef.nds=[EncloseRef] %2 不是 %1 的超类或超接口
+encloseRef.tooFar=[EncloseRef][Incompatible] %2 不是 %1 的直接超类或超接口
+encloseRef.staticEnv=[EncloseRef] 无法从静态上下文中引用非静态 变量 this
+encloseRef.noRef=[EncloseRef] %1 不是可选的this类型
 instanceof.error.unsafeCast=[InstanceOf]%1 无法安全地转换为 %2
 instanceOf.error.primitive=[InstanceOf]不能取消引用 %1
 instanceOf.constant=[InstanceOf]对 %1 的检测总是常量
@@ -243,6 +275,7 @@ invoke.error.instantiationAbstract=[Invoke] %1 是抽象的; 无法实例化
 invoke.compatible.plural="[Invoke]对 %1 的引用不明确\n%2"
 invoke.incompatible.single="[Invoke]无法将类 %1 中的方法 %2 应用到给定类型\n%3"
 invoke.incompatible.plural="[Invoke]对于%1找不到合适的方法\n%2"
+invoke.noExact=创建的类型参数不得包含非具体泛型(<>除外)
 trinary.constant=[Trinary]值总是常量
 this.static=[This]无法在静态上下文中引用this
 this.no_super=[This]%1没有超类引用
@@ -250,6 +283,11 @@ unary.error.notApplicable=[Unary]运算符'%1'不适用于'%2'
 unary.warn.wrapper=[Unary]对包装类型%1的%2操作
 unary.error.void=[Unary]空类型
 unary.error.final=[Unary]无法为最终变量%1分配值
+var.notAssigned=[Var]可能尚未初始化变量%1
+multiReturn.incompatible=[MR]只有多返回值方法才能使用多返回值语法糖
+multiReturn.russianToy=[MR]此处禁止套娃！！！
+anonymousClass.inferFailed=匿名类的自动泛型推断无法在该状态下使用
+anonymousClass.interfaceArg=匿名类实现接口; 不能有参数
 
 # lambda表达式
 lambda.untyped=[Lambda]未知的目标类型

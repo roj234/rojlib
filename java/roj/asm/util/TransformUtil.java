@@ -136,9 +136,9 @@ public class TransformUtil {
 	/**
 	 * 修改InnerClasses属性中定义的内部类的访问权限
 	 */
-	public static void makeSubclassAccessible(IClass data, Collection<String> toOpen) {
-		List<InnerClasses.InnerClass> classes = Attributes.getInnerClasses(data.cp(), data);
-		if (classes == null) throw new IllegalStateException("no InnerClass in " + data.name());
+	public static void makeSubclassAccessible(ConstantData data, Collection<String> toOpen) {
+		var classes = Attributes.getInnerClasses(data.cp, data);
+		if (classes == null) throw new IllegalStateException("no InnerClass in " + data.name);
 
 		for (int i = 0; i < classes.size(); i++) {
 			InnerClasses.InnerClass clz = classes.get(i);

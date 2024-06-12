@@ -13,7 +13,6 @@ import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.GenericPrimer;
-import roj.compiler.ast.NaE;
 import roj.compiler.ast.VariableDeclare;
 import roj.compiler.ast.block.ParseTask;
 import roj.compiler.context.CompileUnit;
@@ -43,6 +42,8 @@ import static roj.compiler.JavaLexer.*;
 public final class ExprParser {
 	public static int debug__counter_typeMatchSuccess, debug__counter_typeMatchFailed;
 
+	private final LocalContext ctx;
+
 	private UnresolvedExprNode pendNode;
 
 
@@ -68,11 +69,11 @@ public final class ExprParser {
 	private static final Comparator<BinaryOp> OPR_SORT = (a, b) -> Integer.compare(b.priority, a.priority);
 
 	private int depth;
-	public ExprParser() {}
+	public ExprParser(LocalContext ctx) {this.ctx = ctx;}
 
 	public static final int
 		STOP_COMMA = 1, SKIP_COMMA = 2,
-		STOP_SEMICOLON = 4, SKIP_SEMICOLON = 32768,
+		STOP_SEMICOLON = 4, SKIP_SEMICOLON = 512,
 		STOP_COLON = 8,
 		STOP_RSB = 16, SKIP_RSB = 32,
 		STOP_RLB = 64,
@@ -98,6 +99,9 @@ public final class ExprParser {
 	public static final int
 		SM_UnaryPreOnce = 0 << 29, SM_UnaryPreMany = 1 << 29, SM_ExprStart = 2 << 29, SM_ExprNext = 3 << 29,
 		SM_UserContinue = 4 << 29, SM_UserTerminate = 5 << 29, SM_UserExprGen = 6 << 29;
+
+	public static final int SMUser_ExprGen = -5, SMUser_ExprConv = -11, SMUser_ExprTerm = -12;
+
 	public Int2IntMap st = DST;
 	public List<Object> custom;
 
@@ -112,6 +116,7 @@ public final class ExprParser {
 		DST.putInt(SM_UnaryPreMany | rev, -1);
 		DST.putInt(SM_UnaryPreMany | lParen, -2);
 		DST.putInt(SM_UnaryPreMany | Word.LITERAL, -3);
+		DST.putInt(SM_UnaryPreMany | SWITCH, -4);
 
 		DST.putInt(SM_ExprStart | NEW, -1);
 		DST.putInt(SM_ExprStart | CHARACTER, -2);
@@ -142,6 +147,7 @@ public final class ExprParser {
 		DST.putInt(SM_ExprNext | inc, -8);
 		DST.putInt(SM_ExprNext | dec, -8);
 		DST.putInt(SM_ExprNext | method_referent, -9);
+		DST.putInt(SM_ExprNext | Word.STRING, -10);
 	}
 	private static void batch(int mask, int val, short... tokens) {
 		for (short token : tokens) DST.putInt(token|mask, val);
@@ -199,7 +205,7 @@ public final class ExprParser {
 			endValueConvNrt:{
 			endValueConv:{
 			endValueGen:{
-			// region 可重复前缀操作 (+ - ! ~ 类型转换) 和 检测lambda
+			// region 可重复前缀操作 (+ - ! ~ 类型转换) 和 检测lambda 和 switch / if 作为表达式
 			loop:
 			while (true) {
 				UnaryPreNode pf;
@@ -251,6 +257,7 @@ public final class ExprParser {
 					case -3: //LITERAL
 						if ((flag&STOP_LAMBDA) == 0) {
 							String name = w.val();
+							wr.retractWord();
 							wr.mark();
 							if (wr.next().type() == lambda) {
 								wr.skip();
@@ -259,9 +266,13 @@ public final class ExprParser {
 							}
 
 							wr.retract();
+							w = wr.next();
 						}
 					break loop;
-					case -4: // [Dynamic]UserExprGen
+					case -4: // switch
+						cur = new Switch(ctx.bp.parseSwitch(true));
+					break endValueConv;
+					case SMUser_ExprGen: // [Dynamic]UserExprGen
 						cur = ((Function<JavaLexer, ExprNode>) custom.get(st.getOrDefaultInt(w.type()|SM_UserExprGen, -1))).apply(wr);
 					break endValueConv;
 					default:
@@ -329,7 +340,7 @@ public final class ExprParser {
 						if (w.type() == lBrace) {
 							wr.retractWord();
 							wr.state = STATE_CLASS;
-							var _type = file.newAnonymousClass(LocalContext.get().method);
+							var _type = file.newAnonymousClass(ctx.method);
 							cur = new NewAnonymousClass((Invoke) cur, _type);
 							wr.state = STATE_EXPR;
 
@@ -514,7 +525,7 @@ public final class ExprParser {
 								}
 							}
 
-							if (file.ctx().isSpecEnabled(CompilerSpec.KOTLIN_SEMICOLON)) {
+							if (file.ctx().isSpecEnabled(CompilerSpec.OPTIONAL_SEMICOLON)) {
 								wr.retractWord();
 								break endValueConv;
 							}
@@ -533,18 +544,24 @@ public final class ExprParser {
 						if (!curIsObj) ue(wr, w.val(), "type.literal");
 						cur = invoke(file, cur, null);
 					break;
-					case -10: // 自定义继续
+					case SMUser_ExprConv: // 自定义继续
 						_sid = st.getOrDefaultInt(w.type() | SM_UserContinue, -1);
 						cur = ((BiFunction<JavaLexer, ExprNode, ExprNode>) custom.get(_sid)).apply(wr, cur);
 					break;
 
 					// 我是无敌可爱的分隔线
 
-					case -11: // 自定义终止
+					case SMUser_ExprTerm: // 自定义终止
 						_sid = st.getOrDefaultInt(w.type() | SM_UserTerminate, -1);
 						cur = ((BiFunction<JavaLexer, ExprNode, ExprNode>) custom.get(_sid)).apply(wr, cur);
 					break endValueConv;
 
+					case -10: // 字符串格式化
+						// FMT. ""
+						if (cur instanceof DotGet dg && dg.maybeStringTemplate()) {
+							cur = new StringFormat(dg, w.val());
+							break endValueConv;
+						}
 					case 0: // 其他token
 						if (cur != null && !curIsObj) ue(wr, w.val(), "type.literal");
 					break endValueConvNrt;
@@ -554,7 +571,7 @@ public final class ExprParser {
 
 						short vtype = w.type();
 
-						ExprNode right = parse1(file, flag & (~CHECK_VARIABLE_DECLARE) | STOP_COMMA);
+						ExprNode right = parse1(file, flag & ~(CHECK_VARIABLE_DECLARE|SKIP_SEMICOLON|SKIP_COMMA|SKIP_RMB|SKIP_RSB) | STOP_COMMA);
 						if (right == null) throw wr.err("expr.assign.right");
 
 						cur = newAssign(vn, vtype == assign ? right : binary((short) (add + (vtype - add_assign)), cur, right));
@@ -629,7 +646,7 @@ public final class ExprParser {
 						binaryOps.add(new BinaryOp(words.size(), priority));
 						words.add(new Binary(w.type()));
 						continue;
-					} else if (file.ctx().isSpecEnabled(CompilerSpec.KOTLIN_SEMICOLON) && words.size() > wordsOff) {
+					} else if (file.ctx().isSpecEnabled(CompilerSpec.OPTIONAL_SEMICOLON) && words.size() > wordsOff) {
 						wr.retractWord();
 						break;
 					}
@@ -834,7 +851,7 @@ public final class ExprParser {
 	// endregion
 
 	public static UnresolvedExprNode deserialize(String string) throws ParseException {return ConfigMaster.JSON.readObject(serializer(), string);}
-	public static String serialize(ExprNode node) { return ConfigMaster.JSON.writeObject(node, serializer(), new CharList()).toStringAndFree(); }
+	public static String serialize(ExprNode node) { return ConfigMaster.JSON.writeObject(serializer(), node, new CharList()).toStringAndFree(); }
 	public static void serialize(ExprNode node, CVisitor visitor) { serializer().write(visitor, node); }
 	public static Serializer<ExprNode> serializer() { return Serializers.ANY_OBJECT.serializer(ExprNode.class); }
 }

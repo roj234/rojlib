@@ -1,5 +1,6 @@
 package roj.asm.type;
 
+import roj.asm.AsmShared;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.Tokenizer;
@@ -32,21 +33,28 @@ public final class TypeHelper {
 		}
 	}
 
-	public static List<Type> parseMethod(String desc) { List<Type> p = new SimpleList<>(); parseMethod(desc, p); return p; }
+	public static List<Type> parseMethod(String desc) {
+		SimpleList<Type> p = AsmShared.local().methodTypeTmp();
+		parseMethod(desc, p); return new SimpleList<>(p);
+	}
 	@SuppressWarnings("fallthrough")
 	public static void parseMethod(String desc, List<Type> params) {
-		int index = desc.indexOf(')');
+		if (desc.charAt(0) != '(') throw new IllegalArgumentException("方法描述符无效:"+desc);
 
 		int arr = 0;
-		for (int i = 1; i < index; i++) {
+		for (int i = 1; i < desc.length(); i++) {
 			char c = desc.charAt(i);
 			switch (c) {
+				case ')':
+					Type returns = parse(desc, i+1);
+					params.add(returns);
+					return;
 				case '[':
 					arr++;
 				break;
 				case 'L':
 					int j = desc.indexOf(';', i+1);
-					if (j < 0) throw new IllegalArgumentException("class end missing: "+desc);
+					if (j < 0) throw new IllegalArgumentException("雷星未终止:"+desc);
 					params.add(new Type(desc.substring(i+1, j), arr));
 					i = j;
 				break;
@@ -58,8 +66,6 @@ public final class TypeHelper {
 			}
 		}
 
-		Type returns = parse(desc, index+1);
-		params.add(returns);
 	}
 
 	/**

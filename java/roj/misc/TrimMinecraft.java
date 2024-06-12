@@ -38,7 +38,7 @@ public class TrimMinecraft {
 		MyHashMap<String, File> librariesToRemove = new MyHashMap<>();
 		int pathLen = libraries.getAbsolutePath().length() + 1;
 		IOUtil.findAllFiles(libraries, file -> {
-			librariesToRemove.put(file.getAbsolutePath().substring(pathLen).replace('\\', '/'), file);
+			librariesToRemove.put(file.getAbsolutePath().substring(pathLen).replace(File.separatorChar, '/'), file);
 			return false;
 		});
 

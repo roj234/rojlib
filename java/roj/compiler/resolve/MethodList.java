@@ -30,7 +30,7 @@ import java.util.Map;
  */
 final class MethodList extends ComponentList {
 	IClass owner;
-	final SimpleList<MethodNode> methods = new SimpleList<>(4);
+	final SimpleList<MethodNode> methods = new SimpleList<>();
 	private int childId;
 	private boolean hasVarargs, hasDefault;
 	private MyHashSet<String> ddtmp = new MyHashSet<>();
@@ -75,7 +75,7 @@ final class MethodList extends ComponentList {
 			return super.add(entry);
 		}
 	}
-	public MethodResult findMethod(LocalContext ctx, IType genericHint, List<IType> params,
+	public MethodResult findMethod(LocalContext ctx, IType that, List<IType> params,
 								   Map<String, IType> namedType, int flags) {
 		SimpleList<MethodNode> candidates;
 
@@ -114,7 +114,7 @@ final class MethodList extends ComponentList {
 		loop:
 		for (int j = 0; j < size; j++) {
 			MethodNode mn = candidates.get(j);
-			IClass mnOwner = ctx.classes.getClassInfo(mn.owner);
+			var mnOwner = ctx.classes.getClassInfo(mn.owner);
 
 			if (!ctx.checkAccessible(mnOwner, mn, (flags&IN_STATIC) != 0, false)) continue;
 
@@ -164,7 +164,7 @@ final class MethodList extends ComponentList {
 				}
 			}
 
-			MethodResult result = ctx.inferrer.infer(mnOwner, mn, genericHint, myParam == null ? params : myParam);
+			MethodResult result = ctx.inferrer.infer(mnOwner, mn, that, myParam == null ? params : myParam);
 			int score = result.distance;
 			if (score < 0) continue;
 
@@ -215,7 +215,7 @@ final class MethodList extends ComponentList {
 				sb.append("  \1invoke.method\0").append(mn.owner).append('.').append(mn.name());
 				getArg(mn, sb.append('(')).append(")\1invoke.notApplicable\0\n    ");
 
-				getErrorMsg(ctx, genericHint, params, (flags&IN_STATIC) != 0, mn, sb.append("(\1"), tmp);
+				getErrorMsg(ctx, that, params, (flags&IN_STATIC) != 0, mn, sb.append("(\1"), tmp);
 				sb.append("\0)\n");
 			}
 
@@ -227,7 +227,7 @@ final class MethodList extends ComponentList {
 	}
 
 	private static void getErrorMsg(LocalContext ctx, IType genericHint, List<IType> params, boolean in_static, MethodNode mn, CharList sb, CharList errRpt) {
-		IClass info = ctx.classes.getClassInfo(mn.owner);
+		var info = ctx.classes.getClassInfo(mn.owner);
 		if (!ctx.checkAccessible(info, mn, in_static, true)) {
 			sb.append(errRpt);
 		} else {

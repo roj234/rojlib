@@ -689,8 +689,8 @@ public final class DirectAccessor<T> {
 		clz.name(selfName.replace('.', '/'));
 
 		clz.parent(MAGIC_ACCESSOR_CLASS);
-		clz.interfaces.add(new CstClass(invokerName.replace('.', '/')));
-		clz.access = ACC_SUPER | ACC_PUBLIC;
+		clz.addInterface(invokerName.replace('.', '/'));
+		clz.modifier = ACC_SUPER | ACC_PUBLIC;
 	}
 
 	private static Class<?>[] toFuzzyMode(Class<?>[] params) {

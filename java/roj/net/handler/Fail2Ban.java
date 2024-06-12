@@ -47,7 +47,7 @@ public class Fail2Ban implements ChannelHandler {
 
 		public int getFailType() {
 			if (count < LOGIN_ATTEMPTS) return 0;
-			if (count < LOGIN_ATTEMPTS*2) return 1;
+			if (count == LOGIN_ATTEMPTS) return 1;
 			return 2;
 		}
 	}
@@ -61,7 +61,7 @@ public class Fail2Ban implements ChannelHandler {
 		if (attempt != null && attempt.getFailType() != 0) {
 			if (attempt.getFailType() == 1) {
 				LOGGER.info("已阻止 {} 的连接请求", ipAddr);
-				ctx.channelWrite(IOUtil.getSharedByteBuf().putAscii("您触发了流量限制！请"+LOGIN_TIMEOUT+"毫秒后再试！"));
+				ctx.channelWrite(IOUtil.getSharedByteBuf().putAscii("ThrottleStop"));
 				ctx.channel().closeGracefully();
 			} else {
 				ctx.channel().readInactive();

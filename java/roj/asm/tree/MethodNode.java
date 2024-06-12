@@ -142,7 +142,7 @@ public final class MethodNode extends CNode {
 		if (a != null) a.toString(sb, prefix).append('\n');
 
 		sb.padEnd(' ', prefix);
-		if ((modifier &Opcodes.ACC_ABSTRACT) == 0 && owner != null && (owner.access&Opcodes.ACC_INTERFACE) != 0) sb.append("default ");
+		if ((modifier&Opcodes.ACC_ABSTRACT) == 0 && owner != null && (owner.modifier&(Opcodes.ACC_INTERFACE|Opcodes.ACC_ANNOTATION)) == Opcodes.ACC_INTERFACE) sb.append("default ");
 		Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_METHOD, sb);
 		if (attrByName("Synthetic") != null) sb.append("/*synthetic*/ ");
 

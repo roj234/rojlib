@@ -13,7 +13,7 @@ public final class ReturnStack<T> implements GenericIgnore {
 	private static final int MEMORY_CAPACITY = 8 * 256;
 
 	public static final ThreadLocal<ReturnStack<?>> TL = ThreadLocal.withInitial(ReturnStack::new);
-	public static ReturnStack<?> get() {return TL.get().forWrite();}
+	public static ReturnStack<?> get(int hashCode) {return TL.get().forWrite().put(hashCode);}
 
 	private final NativeMemory memory;
 	public ReturnStack() {this(MEMORY_CAPACITY);}
@@ -29,9 +29,16 @@ public final class ReturnStack<T> implements GenericIgnore {
 		objects.clear();
 		return forRead();
 	}
-	public ReturnStack<T> forRead() {
+	ReturnStack<T> forRead() {
 		address = memory.address();
 		index = 0;
+		return this;
+	}
+	public ReturnStack<T> forRead(int hashCode) {
+		address = memory.address();
+		index = 0;
+		int genericHash = getI();
+		if (genericHash != hashCode) throw new IncompatibleClassChangeError("Excepting generic hash "+hashCode+", but got "+genericHash);
 		return this;
 	}
 	public long address() {return memory.address();}

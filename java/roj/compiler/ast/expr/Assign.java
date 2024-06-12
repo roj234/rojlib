@@ -5,7 +5,6 @@ import roj.asm.tree.anno.AnnValInt;
 import roj.asm.type.IType;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.NaE;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.plugins.asm.ASM;
@@ -35,13 +34,16 @@ class Assign extends ExprNode {
 	public ExprNode resolve(LocalContext ctx) {
 		ExprNode node = left.resolve(ctx);
 		if (node instanceof VarNode vn && !vn.isFinal()) left = vn;
-		else ctx.report(Kind.ERROR, "assign.error.final", left);
+		else {
+			ctx.report(Kind.ERROR, "assign.error.final", left);
+			return NaE.RESOLVE_FAILED;
+		}
 
 		ExprNode prev = right;
-		if (prev.getClass() == Cast.class) {
-			int castType = ((Cast) prev).cast.type;
+		if (prev instanceof Cast c) {
+			int castType = c.cast.type;
 			if ((castType == -1 || castType == -2) && !(left instanceof LocalVariable))
-				ctx.report(Kind.NOTE, "assign.incompatible.redundantCast");
+				ctx.report(Kind.INCOMPATIBLE, "assign.incompatible.redundantCast");
 		}
 		right = prev.resolve(ctx);
 
@@ -63,6 +65,7 @@ class Assign extends ExprNode {
 		if (expr instanceof LocalVariable lv) {
 			isLv = true;
 			lv.v.endPos = expr.wordEnd;
+			if (!lv.v.hasValue) LocalContext.get().report(Kind.ERROR, "var.notAssigned", lv.v.name);
 
 			if (dtype == 4 && (short)amount == amount) {
 				if (!noRet & returnBefore) cw.load(lv.v);

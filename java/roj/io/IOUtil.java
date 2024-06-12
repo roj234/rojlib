@@ -156,10 +156,10 @@ public final class IOUtil {
 	}
 
 	public static List<File> findAllFiles(File file) {
-		return findAllFiles(file, SimpleList.withCapacityType(0,2), Helpers.alwaysTrue());
+		return findAllFiles(file, SimpleList.hugeCapacity(0), Helpers.alwaysTrue());
 	}
 	public static List<File> findAllFiles(File file, Predicate<File> predicate) {
-		return findAllFiles(file, SimpleList.withCapacityType(0,2), predicate);
+		return findAllFiles(file, SimpleList.hugeCapacity(0), predicate);
 	}
 	public static List<File> findAllFiles(File file, List<File> files, Predicate<File> predicate) {
 		try {

@@ -16,6 +16,7 @@ import roj.util.DynByteBuf;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -29,7 +30,7 @@ import static roj.asm.util.InsnHelper.ToPrimitiveArrayId;
  */
 public abstract class AbstractCodeWriter extends CodeVisitor {
 	protected DynByteBuf codeOb;
-	protected List<Segment> segments = new SimpleList<>();
+	protected List<Segment> segments = Collections.emptyList();
 
 	protected final MyHashSet<Label> labels = new MyHashSet<>(Hasher.identity());
 

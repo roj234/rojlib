@@ -76,6 +76,9 @@ public class CodeWriter extends AbstractCodeWriter {
 		initFrames(owner, flags);
 	}
 
+	protected final int getTmpLenOffset() {return tmpLenOffset;}
+	protected final int getTmpLen() {return tmpLen;}
+
 	public void visitSize(int stackSize, int localSize) {
 		if (state != 1) throw new IllegalStateException();
 		bw.putShort(tmpLenOffset-8, stackSize).putShort(tmpLenOffset-6, localSize);
@@ -471,7 +474,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		return lbl;
 	}
 
-	public final void label(Label x) {
+	public void label(Label x) {
 		if (x.block >= 0) throw new IllegalStateException("Label already had a position at "+x);
 
 		if (segments.isEmpty()) {
@@ -514,7 +517,10 @@ public class CodeWriter extends AbstractCodeWriter {
 	}
 
 	protected final void _addOffset(int c) {offset += c;}
-	protected final void _addFirst() {segments.add(new FirstSegment(offset = bw.wIndex()-tmpLenOffset));}
+	protected final void _addFirst() {
+		segments = new SimpleList<>(3);
+		segments.add(new FirstSegment(offset = bw.wIndex()-tmpLenOffset));
+	}
 
 	public boolean isContinuousControlFlow() {
 		int block = segments.size()-1;
@@ -523,8 +529,8 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	public boolean isContinuousControlFlow(int targetBlock) {
 		Segment seg = segments.get(targetBlock);
-		if (!seg.isTerminate()) return true;
-
+		// targetBlock-1 : 有机会走到这个长度为0的StaticSegment
+		if (seg.length() > 0 ? !seg.isTerminate() : targetBlock == 0 || !segments.get(targetBlock-1).isTerminate()) return true;
 		for (int i = 1; i < segments.size(); i++) {
 			if (segments.get(i).willJumpTo(targetBlock, seg.length())) return true;
 		}

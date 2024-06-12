@@ -1,10 +1,10 @@
 package roj.compiler;
 
 import roj.asm.tree.attr.LineNumberTable;
-import roj.asm.visitor.CodeWriter;
 import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.TrieTree;
+import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.plugins.annotations.AutoIncrement;
@@ -49,7 +49,7 @@ public final class JavaLexer extends Tokenizer {
 		"volatile,transient," +
 		// MethodOnly
 		"strictfp,abstract,native,synchronized," +
-		"_async,\1MOD0,\1MOD1," +
+		"_async,const,\1MOD1," +
 
 		// 类型
 		"void,boolean,byte,char,short,int,long,float,double," +
@@ -60,7 +60,7 @@ public final class JavaLexer extends Tokenizer {
 		"for,while,do," +
 		"continue,break,goto,return,throw," +
 		"if,switch,try,assert," +
-		"const,var,yield,with,_await,\1STM0,"+
+		"\1STM1,\1STM2,yield,with,_await,\1STM0,"+
 		// statement rest
 		"else,case,defer,catch,finally," +
 
@@ -77,7 +77,7 @@ public final class JavaLexer extends Tokenizer {
 		PUBLIC = 29, PROTECTED = 30, PRIVATE = 31, STATIC = 32, FINAL = 33,
 		VOLATILE = 34, TRANSIENT = 35,
 		STRICTFP = 36, ABSTRACT = 37, NATIVE = 38, SYNCHRONIZED = 39,
-		ASYNC = 40, _1MOD0 = 41, _1MOD1 = 42,
+		ASYNC = 40, CONST = 41, _1MOD1 = 42,
 
 		VOID = 43, BOOLEAN = 44, BYTE = 45, CHAR = 46, SHORT = 47, INT = 48, LONG = 49, FLOAT = 50, DOUBLE = 51,
 		THIS = 52, TRUE = 53, FALSE = 54, NULL = 55, NEW = 56, INSTANCEOF = 57, _1EXP1 = 58,
@@ -85,7 +85,7 @@ public final class JavaLexer extends Tokenizer {
 		FOR = 59, WHILE = 60, DO = 61,
 		CONTINUE = 62, BREAK = 63, GOTO = 64, RETURN = 65, THROW = 66,
 		IF = 67, SWITCH = 68, TRY = 69, ASSERT = 70,
-		CONST = 71, VAR = 72, YIELD = 73, WITH = 74, AWAIT = 75, _1STM0 = 76,
+		_1STM1 = 71, _1STM2 = 72, YIELD = 73, WITH = 74, AWAIT = 75, _1STM0 = 76,
 		ELSE = 77, CASE = 78, DEFER = 79, CATCH = 80, FINALLY = 81,
 
 		REQUIRES = 82, EXPORTS = 83, OPENS = 84, USES = 85, PROVIDES = 86, TRANSITIVE = 87, TO = 88;
@@ -138,7 +138,7 @@ public final class JavaLexer extends Tokenizer {
 		lsh_assign = 148, rsh_assign = 149, rsh_unsigned_assign = 150, and_assign = 151, xor_assign = 152, or_assign = 153,
 		direct_assign = 154;
 
-	private static final TrieTree<Word> JAVA_TOKEN = new TrieTree<>();
+	public static final TrieTree<Word> JAVA_TOKEN = new TrieTree<>();
 	private static final MyBitSet JAVA_LEND = new MyBitSet();
 	private static final Int2IntMap JAVA_C2C = new Int2IntMap();
 	private static final Int2IntMap priorities = new Int2IntMap();
@@ -158,6 +158,7 @@ public final class JavaLexer extends Tokenizer {
 		// 文本块的支持
 		JAVA_C2C.putAll(SIGNED_NUMBER_C2C);
 		JAVA_C2C.remove('"');
+
 		JAVA_TOKEN.put("\"", new Word().init(0, ST_STRING, "\""));
 		JAVA_TOKEN.put("//", new Word().init(0, ST_SINGLE_LINE_COMMENT, "//"));
 		JAVA_TOKEN.put("/*", new Word().init(0, ST_MULTI_LINE_COMMENT, "*/"));
@@ -212,14 +213,6 @@ public final class JavaLexer extends Tokenizer {
 		alias("】", rBracket, JAVA_LEND);
 		alias("《", lss, JAVA_LEND);
 		alias("》", gtr, JAVA_LEND);
-
-		alias("新", NEW, JAVA_LEND);
-		alias("的", dot, JAVA_LEND);
-		alias("整数", INT, JAVA_LEND);
-		literalAlias("系统","System");
-		literalAlias("输出流","out");
-		literalAlias("打印","println");
-		literalAlias("长度","length");
 	}
 
 	{ literalEnd = JAVA_LEND; tokens = JAVA_TOKEN; }
@@ -253,10 +246,10 @@ public final class JavaLexer extends Tokenizer {
 			@Override
 			public short type() {
 				short id = super.type();
-				return id <= CHARACTER || id >= 100 || switch (state) {
+				return id <= CHARACTER || (id >= 100 && id <= 200) || switch (state) {
 					case STATE_CLASS -> id <= JavaLexer.DOUBLE;
-					case STATE_EXPR -> id >= VOID && id <= FINALLY || id == CLASS || id == FINAL;
-					case STATE_TYPE -> id >= VOID && id <= FINALLY;
+					case STATE_EXPR -> id >= VOID && id <= FINALLY || id == CLASS || id == FINAL || id == CONST || id == DEFAULT || id > 999;
+					case STATE_TYPE -> id >= VOID && id <= FINALLY || id == SUPER || id == EXTENDS;
 					case STATE_MODULE -> id >= EXPORTS && id <= TO || id == WITH || id == STATIC;
 					default -> false;
 				} ? id : LITERAL;
@@ -346,7 +339,7 @@ public final class JavaLexer extends Tokenizer {
 
 		char c = in.charAt(i++);
 		if (c != '\n' && (c != '\r' || in.charAt(i++) != '\n'))
-			throw err("期待换行", i);
+			throw err("lexer.stringBlock.noCRLF", i);
 
 		// 然后算初始的Indent
 		int indent = i;
@@ -362,7 +355,7 @@ public final class JavaLexer extends Tokenizer {
 		}
 
 		indent -= i;
-		if (indent == 0) throw err("缩进不得为零", i);
+		if (indent == 0) throw err("lexer.stringBlock.noIndent", i);
 
 		CharList line = new CharList();
 		while (true) {
@@ -378,7 +371,7 @@ public final class JavaLexer extends Tokenizer {
 					break identSucc;
 				}
 
-				throw err("文本块的最小缩进必须在第一行确定,我故意的", lend);
+				throw err("lexer.stringBlock.indentChange", lend);
 			}
 
 			int j = line.trimLast().indexOf("\"\"\"", indent);
@@ -388,7 +381,7 @@ public final class JavaLexer extends Tokenizer {
 				line._free();
 
 				index = i+j+3;
-				return formClip(Word.STRING, v);
+				return formClip(Word.STRING, removeSlashes(v));
 			}
 
 			i = lend;
@@ -399,16 +392,19 @@ public final class JavaLexer extends Tokenizer {
 		}
 	}
 
-	public CodeWriter labelGen;
+	public MethodWriter labelGen;
 	public LineNumberTable table;
+	public int prevBci;
 
 	@Override
 	protected void afterWord() {
 		int line = LN;
 		super.afterWord();
 		if (line != LN) {
-			if (table != null) table.list.add(new LineNumberTable.Item(labelGen.label(), LN));
-			//System.out.println("line changed on "+index+"|"+wd);
+			if (table != null && labelGen.bci() != prevBci) {
+				prevBci = labelGen.bci();
+				table.list.add(new LineNumberTable.Item(labelGen.lineMarker(), LN));
+			}
 		}
 	}
 
@@ -419,7 +415,7 @@ public final class JavaLexer extends Tokenizer {
 		Word w = next();
 		if (w.type() == type) return w;
 		String s = type == LITERAL ? "标识符" : byId(type);
-		throw err("未预料的: " + w.val() + ", 期待: " + s);
+		throw err("unexpected_2:"+w.val()+':'+s);
 	}
 
 	public Word current() { return wd; }

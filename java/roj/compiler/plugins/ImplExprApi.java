@@ -45,16 +45,7 @@ class ImplExprApi implements ExprApi {
 		}
 	}
 
-	{
-		custom.add(null);
-	}
-
-	final ExprParser override_createExprParser() {
-		ExprParser parser = new ExprParser();
-		parser.st = st;
-		parser.custom = custom;
-		return parser;
-	}
+	{custom.add(null);}
 
 	ExprNode override_getOperatorOverride(GlobalContextApi.LCImpl api, @NotNull ExprNode e1, @Nullable ExprNode e2, int operator) {
 		IType left = e1.type(), right = e2 == null ? /*deal with null check*/Helpers.maybeNull() : e2.type();
@@ -87,19 +78,19 @@ class ImplExprApi implements ExprApi {
 	public void addUnaryPre(String token, BiFunction<JavaLexer, @Nullable UnaryPreNode, UnaryPreNode> fn) {register(ExprParser.SM_UnaryPreMany, token, fn);}
 	@Override
 	public void addExprGen(String token, Function<JavaLexer, ExprNode> fn) {
-		st.put(ExprParser.SM_UnaryPreMany|tokenId(token), -4);
+		st.put(ExprParser.SM_UnaryPreMany|tokenId(token), ExprParser.SMUser_ExprGen);
 		register(ExprParser.SM_UserExprGen, token, fn);
 	}
 	@Override
 	public void addExprStart(String token, Function<JavaLexer, ExprNode> fn) {register(ExprParser.SM_ExprStart, token, fn);}
 	@Override
 	public void addExprConv(String token, BiFunction<JavaLexer, ExprNode, ExprNode> fn) {
-		st.put(ExprParser.SM_ExprNext|tokenId(token), -10);
+		st.put(ExprParser.SM_ExprNext|tokenId(token), ExprParser.SMUser_ExprConv);
 		register(ExprParser.SM_UserContinue, token, fn);
 	}
 	@Override
 	public void addExprTerminal(String token, BiFunction<JavaLexer, ExprNode, ExprNode> fn) {
-		st.put(ExprParser.SM_ExprNext|tokenId(token), -11);
+		st.put(ExprParser.SM_ExprNext|tokenId(token), ExprParser.SMUser_ExprTerm);
 		register(ExprParser.SM_UserTerminate, token, fn);
 	}
 

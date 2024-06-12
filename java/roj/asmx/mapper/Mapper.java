@@ -375,14 +375,14 @@ public class Mapper extends Mapping {
 	 */
 	public final void S1_parse(Context c) {
 		ConstantData data = c.getData();
-		List<CstClass> itfs = data.interfaces;
+		var itfs = data.interfaces();
 
 		int size = itfs.size() + ("java/lang/Object".equals(data.parent) ? 0 : 1);
 		if (size == 0 && (flag&MF_ANNOTATION_INHERIT) == 0) return;
 
 		ArrayList<String> list = new ArrayList<>(size);
 		if (!"java/lang/Object".equals(data.parent)) list.add(data.parent);
-		for (int i = 0; i < itfs.size(); i++) list.add(itfs.get(i).name().str());
+		for (int i = 0; i < itfs.size(); i++) list.add(itfs.get(i));
 
 		if ((flag&MF_ANNOTATION_INHERIT) != 0) {
 			Annotations a = data.parsedAttr(data.cp, Attribute.ClAnnotations);
@@ -759,7 +759,7 @@ public class Mapper extends Mapping {
 			ConstantData data = ctx.get(i).getData();
 			if ((data.modifier() & (ACC_INTERFACE|ACC_ANNOTATION|ACC_MODULE)) != 0) continue;
 
-			List<CstClass> itfs = data.interfaces;
+			List<String> itfs = data.interfaces();
 			if (itfs.isEmpty()) continue;
 
 			interfaceMethods.clear();
@@ -771,7 +771,7 @@ public class Mapper extends Mapping {
 			}
 
 			for (int j = 0; j < itfs.size(); j++) {
-				String name = itfs.get(j).name().str();
+				String name = itfs.get(j);
 				if (!parents.contains(name)) {
 					List<RawNode> nodes = getMethodInfoEx(name);
 

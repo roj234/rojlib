@@ -70,7 +70,7 @@ public class LavaCompiler {
 		u.addInterface(functionalInterface.getName().replace('.', '/'));
 		u.npConstructor();
 
-		ctx.addCompileUnit(u);
+		ctx.addCompileUnit(u, false);
 
 		u.getLexer().init(methodStr+"}");
 

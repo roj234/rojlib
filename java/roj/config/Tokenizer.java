@@ -151,9 +151,7 @@ public class Tokenizer {
 	public final void mark() throws ParseException {
 		if ((seek&1) != 0) throw new UnsupportedOperationException("嵌套的seek");
 
-		if (seek == 2) {
-			prevWords.add(lastWord.copy());
-		}
+		if (seek == 2) prevWords.add(seekPos, lastWord.copy());
 		seek = 1;
 		prevSeekPos = seekPos;
 
@@ -253,6 +251,7 @@ public class Tokenizer {
 		a('\f', 'f');
 		a('\'', '\'');
 		a('"', '"');
+		DESLASHES.putInt('s', ' ');
 
 		// 仅解码
 		DESLASHES.putInt('/', -1);

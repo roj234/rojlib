@@ -25,6 +25,7 @@ import roj.config.data.CInt;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -261,12 +262,12 @@ public class NiximSystemV2 implements ITransformer {
 	}
 	public final boolean unload(String target) { return registry.remove(target) != null; }
 
-	public static boolean transformNiximUser(ConstantData data, NiximData nx, Map<String, NiximData> ctx) {
+	public static boolean transformNiximUser(ConstantPool cp, NiximData nx, Map<String, NiximData> ctx) {
 		boolean changed = false;
 		AbstractMap<String, String> fakeMap = getFakeMap(nx, ctx);
 
 		Pcd tmpPCD = new Pcd();
-		List<Constant> constants = data.cp.array();
+		List<Constant> constants = cp.array();
 		for (int i = 0; i < constants.size(); i++) {
 			Constant c = constants.get(i);
 			switch (c.type()) {
@@ -282,11 +283,11 @@ public class NiximSystemV2 implements ITransformer {
 						if (pcd != tmpPCD) {
 							changed = true;
 
-							if (!pcd.mapOwner.equals(ref.className())) ref.clazz(data.cp.getClazz(pcd.mapOwner));
-							if (!pcd.mapName.equals(pcd.name)) ref.desc(data.cp.getDesc(pcd.mapName, ref.descType()));
+							if (!pcd.mapOwner.equals(ref.className())) ref.clazz(cp.getClazz(pcd.mapOwner));
+							if (!pcd.mapName.equals(pcd.name)) ref.desc(cp.getDesc(pcd.mapName, ref.descType()));
 
 							CstUTF desc = ref.desc().getType();
-							data.cp.setUTFValue(desc, ClassUtil.getInstance().mapMethodParam(fakeMap, desc.str()));
+							cp.setUTFValue(desc, ClassUtil.getInstance().mapMethodParam(fakeMap, desc.str()));
 						}
 					}
 					break;
@@ -300,7 +301,7 @@ public class NiximSystemV2 implements ITransformer {
 				if (nx1 != null) {
 					changed = true;
 
-					data.cp.setUTFValue(ref1.name(), nx1.target);
+					cp.setUTFValue(ref1.name(), nx1.target);
 				}
 			}
 		}
@@ -335,10 +336,7 @@ public class NiximSystemV2 implements ITransformer {
 		nx.target = unifyClassName(a.getString("value"));
 		if (nx.target.equals("/")) nx.target = data.parent;
 
-		if (a.getBoolean("copyItf", true)) {
-			List<CstClass> itf = data.interfaces;
-			if (!itf.isEmpty()) nx.impls = new SimpleList<>(data.interfaces());
-		}
+		if (a.getBoolean("copyItf", true)) nx.impls = ArrayUtil.copyOf(data.interfaces());
 
 		//int flag = a.getInt("flags");
 
@@ -387,7 +385,7 @@ public class NiximSystemV2 implements ITransformer {
 		readAnnotations(data, nx, data.methods);
 		readAnnotations(data, nx, data.fields);
 
-		transformNiximUser(data, nx, ctx);
+		transformNiximUser(data.cp, nx, ctx);
 
 		// 查找无法访问的方法
 		MyHashSet<Desc> inaccessible = new MyHashSet<>();
@@ -869,27 +867,15 @@ public class NiximSystemV2 implements ITransformer {
 
 	@Override
 	public boolean transform(String name, Context ctx) throws NiximException {
-		ConstantData data = ctx.getData();
+		if (registry.isEmpty()) return false;
 
-		boolean changed = false;
-
-		NiximData nx1 = registry.get(data.name);
+		NiximData nx1 = registry.get(name);
 		if (nx1 != null) {
-			apply(data, nx1);
-			changed = true;
+			apply(ctx.getData(), nx1);
+			return true;
+		} else {
+			return transformNiximUser(ctx.getConstantPool(), null, registry);
 		}
-
-		NiximData nx2 = registry.get(name);
-		if (nx2 == nx1) {
-			if (nx2 == null) {
-				changed = transformNiximUser(data, null, registry);
-			}
-		} else if (nx2 != null) {
-			apply(data, nx2);
-			changed = true;
-		}
-
-		return changed;
 	}
 
 	public void apply(ConstantData data, NiximData nx) throws NiximException {

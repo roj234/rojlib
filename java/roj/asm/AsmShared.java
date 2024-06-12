@@ -1,14 +1,14 @@
 package roj.asm;
 
+import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstTop;
+import roj.asm.type.Type;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.collect.IntMap;
-import roj.util.ArrayCache;
-import roj.util.ByteList;
-import roj.util.DirectByteList;
-import roj.util.DynByteBuf;
+import roj.collect.SimpleList;
+import roj.util.*;
 
 /**
  * @author Roj234
@@ -21,10 +21,46 @@ public final class AsmShared {
 	public static void drop() { BUFFERS.remove(); }
 	public static ByteList getBuf() { return BUFFERS.get().current(); }
 
+	private final SimpleList<Type> mp = new SimpleList<>();
+	public <T> SimpleList<T> methodTypeTmp() {
+		mp.clear(); return Helpers.cast(mp);
+	}
+
+	private final Object[][] cpArr = new Object[10][];
+	private int cpCount;
+
+	public void getCpWriter(SimpleList<Constant> constants) {
+		if (cpCount == 10) return;
+		int i = cpCount++;
+		Object[] objects = cpArr[i];
+		if (objects == null) objects = new Object[1024];
+
+		if (constants.isEmpty()) {
+			constants._setArray(objects);
+		}
+	}
+
+	public void freeCpWriter(SimpleList<Constant> constants, boolean discard) {
+		if (cpCount == 0) return;
+
+		Object[] cpArray = constants.getInternalArray();
+
+		if (discard) constants._setArray(null);
+		else {
+			if (cpArray.length == constants.size()) return;
+			constants.trimToSize();
+		}
+
+		int len = constants.size();
+		for (int i = len-1; i >= 0; i--) cpArray[i] = null;
+
+		cpArr[--cpCount] = cpArray;
+	}
+
 	private final CodeWriter cw = new CodeWriter();
 	public CodeWriter cw() { return cw; }
 
-	private IntMap<Label> pcm = new IntMap<>();
+	private final IntMap<Label> pcm = new IntMap<>();
 	public IntMap<Label> getBciMap() {
 		pcm.clear(); return pcm;
 	}

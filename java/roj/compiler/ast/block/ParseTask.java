@@ -10,12 +10,10 @@ import roj.asm.tree.attr.AnnotationDefault;
 import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.ConstantValue;
 import roj.asm.type.IType;
-import roj.asm.type.Type;
 import roj.compiler.JavaLexer;
 import roj.compiler.api.MethodDefault;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.expr.Constant;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.UnresolvedExprNode;
@@ -37,11 +35,15 @@ import java.util.List;
  *   method
  */
 public interface ParseTask {
-	static Object Annotation(CompileUnit ctx, AnnotationPrimer annotation, String name) throws ParseException {
+	static Object Annotation(CompileUnit file, AnnotationPrimer annotation, String name) throws ParseException {
 		// TODO 检测值是否合法，以及进行数字的转换
 
 		// _ENV_TYPED_ARRAY允许直接使用数组生成式而不用给定类型
-		var expr = LocalContext.get().ep.parse(ctx, ExprParser.STOP_COMMA|ExprParser.STOP_RSB|ExprParser._ENV_TYPED_ARRAY|ExprParser.NAE);
+		JavaLexer lexer = file.getLexer();
+		int state = lexer.state;
+		lexer.state = JavaLexer.STATE_EXPR;
+		var expr = LocalContext.get().ep.parse(file, ExprParser.STOP_COMMA|ExprParser.STOP_RSB|ExprParser._ENV_TYPED_ARRAY|ExprParser.NAE);
+		lexer.state = state;
 
 		if (expr.isConstant()) return convert((ExprNode) expr);
 
@@ -78,7 +80,11 @@ public interface ParseTask {
 	static void MethodDefault(CompileUnit file, MethodNode mn, int id) throws ParseException {
 		LocalContext lc1 = LocalContext.get();
 
+		JavaLexer lexer = file.getLexer();
+		int state = lexer.state;
+		lexer.state = JavaLexer.STATE_EXPR;
 		UnresolvedExprNode expr = lc1.ep.parse(file, ExprParser.STOP_RSB|ExprParser.STOP_COMMA|ExprParser.NAE);
+		lexer.state = state;
 		if (!expr.isConstant()) lc1.report(file.getLexer().current().pos(), Kind.WARNING, "ps.method.paramDef");
 
 		String jsonString = ExprParser.serialize((ExprNode) expr);
@@ -90,7 +96,11 @@ public interface ParseTask {
 	}
 
 	static ParseTask AnnotationDefault(CompileUnit file, MethodNode mn) throws ParseException {
+		JavaLexer lexer = file.getLexer();
+		int state = lexer.state;
+		lexer.state = JavaLexer.STATE_EXPR;
 		var expr = LocalContext.get().ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE);
+		lexer.state = state;
 
 		var attr = new AnnotationDefault(null);
 		mn.putAttr(attr);
@@ -108,29 +118,6 @@ public interface ParseTask {
 		};
 	}
 
-
-	static ParseTask Enum(CompileUnit file, int ordinal, FieldNode f) throws ParseException {
-		ExprParser ep = LocalContext.get().ep;
-
-		ExprNode expr;
-		Type type = new Type(file.name);
-		if (file.getLexer().next().type() == JavaLexer.lParen) {
-			expr = ep.enumHelper(file, type);
-		} else {
-			// comma or semicolon will be checked
-			expr = ep.newInvoke(type, Arrays.asList(new Constant(Type.std(Type.INT), AnnVal.valueOf(ordinal)), Constant.valueOf(f.name())));
-		}
-
-		return () -> {
-			var lc = LocalContext.get();
-
-			MethodWriter mp = file.getStaticInit();
-			lc.setMethod(mp.mn);
-
-			expr.resolve(lc).write(mp, false);
-			mp.field(Opcodes.PUTSTATIC, file.name, f.name(), f.rawDesc());
-		};
-	}
 
 	static ParseTask StaticInitBlock(CompileUnit file) throws ParseException {
 		JavaLexer wr = file.getLexer();
@@ -161,7 +148,11 @@ public interface ParseTask {
 		};
 	}
 	static ParseTask Field(CompileUnit file, FieldNode f) throws ParseException {
+		JavaLexer lexer = file.getLexer();
+		int state = lexer.state;
+		lexer.state = JavaLexer.STATE_EXPR;
 		var expr = LocalContext.get().ep.parse(file, ExprParser.STOP_COMMA|ExprParser.STOP_SEMICOLON|ExprParser.NAE);
+		lexer.state = state;
 
 		return new ParseTask() {
 			@Override
@@ -233,10 +224,21 @@ public interface ParseTask {
 
 				autoConstructor:
 				if (lc.not_invoke_constructor) {
+					if ((file.modifier&Opcodes.ACC_ENUM) != 0) {
+						MethodWriter ac = lc.classes.createMethodPoet(file, mn);
+						ac.one(Opcodes.ALOAD_0);
+						ac.one(Opcodes.ALOAD_1);
+						ac.one(Opcodes.ILOAD_2);
+						ac.invokeD("java/lang/Enum", "<init>", "(Ljava/lang/String;I)V");
+
+						cw.insertBefore(ac.writeTo());
+						break autoConstructor;
+					}
+
 					IClass pInfo = lc.classes.getClassInfo(file.parent);
 					int superInit = pInfo.getMethod("<init>", "()V");
 					if (superInit < 0) {
-						lc.report(Kind.ERROR, "cu.noDefaultConstructor");
+						lc.report(Kind.ERROR, "cu.noDefaultConstructor", file.parent);
 						break autoConstructor;
 					}
 					if (!lc.checkAccessible(pInfo, pInfo.methods().get(superInit), false, true)) break autoConstructor;
@@ -250,7 +252,7 @@ public interface ParseTask {
 					cw = ac;
 				}
 
-				cw.visitSizeMax(10, 15);
+				cw.visitSizeMax(10, 20);
 				cw.finish();
 
 				mn.putAttr(new AttrUnknown("Code", cw.bw.toByteArray()));

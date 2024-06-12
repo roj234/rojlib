@@ -1,18 +1,19 @@
 package roj.compiler.ast.expr;
 
+import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
-import roj.asm.tree.MethodNode;
+import roj.asm.type.Generic;
 import roj.asm.type.IType;
+import roj.asm.type.Signature;
 import roj.asm.type.Type;
+import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.NaE;
+import roj.compiler.asm.SignaturePrimer;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.resolve.ComponentList;
-import roj.compiler.resolve.MethodResult;
-import roj.compiler.resolve.ResolveException;
+import roj.compiler.resolve.*;
 import roj.config.ParseException;
 import roj.text.TextUtil;
 
@@ -50,7 +51,12 @@ final class NewAnonymousClass extends ExprNode {
 
 		argTypes.set(args.size(), Type.std(Type.VOID));
 
-		String parent = (ctx.resolveType((Type) init.fn)).owner();
+		IType parentType = ctx.resolveType((IType) init.fn);
+
+		// 实际上可以处理它，for assign only
+		if (Inferrer.hasUndefined(parentType)) ctx.report(Kind.ERROR, "invoke.noExact");
+
+		String parent = parentType.owner();
 		IClass info = ctx.classes.getClassInfo(parent);
 		if (info == null) {
 			ctx.report(Kind.ERROR, "symbol.error.noSuchClass", parent);
@@ -58,9 +64,27 @@ final class NewAnonymousClass extends ExprNode {
 		}
 
 		if ((info.modifier() & Opcodes.ACC_INTERFACE) != 0) {
+			if (parentType.genericType() != 0) {
+				type.signature = new SignaturePrimer(Signature.CLASS);
+				type.signature.parent = ctx.file.signature;
+				type.signature._impl(parentType);
+				type.putAttr(type.signature);
+			}
 			type.addInterface(parent);
-			type.createDelegation(Opcodes.ACC_SYNTHETIC, new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/Object", "<init>", "()V"));
+			// TODO this ref
+
+			if (!args.isEmpty()) {
+				// anonymousClass.interfaceArg
+				ctx.report(Kind.ERROR, "invoke.incompatible.single", info, "<init>", "  \1invoke.except\0 \1invoke.no_param\0\n  \1invoke.found\0 "+TextUtil.join(argTypes, ", "));
+				return NaE.RESOLVE_FAILED;
+			}
 		} else {
+			if (parentType.genericType() != 0) {
+				type.signature = new SignaturePrimer(Signature.CLASS);
+				type.signature.parent = ctx.file.signature;
+				type.signature._add(parentType);
+				type.putAttr(type.signature);
+			}
 			type.parent(parent);
 
 			ComponentList list = ctx.methodListOrReport(info, "<init>");
@@ -73,10 +97,17 @@ final class NewAnonymousClass extends ExprNode {
 			if (r == null) return NaE.RESOLVE_FAILED;
 
 			r.addExceptions(ctx, info, false);
-			type.createDelegation(Opcodes.ACC_SYNTHETIC, r.method);
+			type.createDelegation(Opcodes.ACC_SYNTHETIC, r.method, r.method);
 		}
 		ctx.classes.addGeneratedClass(type);
 
+		if (parentType instanceof Generic g && g.children.size() == 1 && g.children.get(0) == Asterisk.anyGeneric) {
+			return this;// write on demand
+		}
+		return resolveNow(ctx);
+	}
+
+	private ExprNode resolveNow(LocalContext ctx) {
 		var lexer = type.getLexer();
 		var table = lexer.table;
 		var gen = lexer.labelGen;
@@ -88,7 +119,8 @@ final class NewAnonymousClass extends ExprNode {
 			lexer.table = null;
 			lexer.labelGen = null;
 
-			type.S2_Resolve();
+			type.S2_ResolveSelf();
+			type.S2_ResolveRef();
 			type.S3_Annotation();
 			type.S4_Code();
 		} catch (ParseException e) {
@@ -106,5 +138,19 @@ final class NewAnonymousClass extends ExprNode {
 	}
 
 	@Override
-	public void write(MethodWriter cw, boolean noRet) {throw new ResolveException("resolve failed");}
+	public void write(MethodWriter cw, boolean noRet) {writeDyn(cw, null);}
+	@Override
+	public void writeDyn(MethodWriter cw, TypeCast.@Nullable Cast cast) {
+		if (cast == null || !(cast.getType1() instanceof Generic g)) {
+			LocalContext.get().report(Kind.ERROR, "anonymousClass.inferFailed");
+			return;
+		}
+
+		Generic parentType = (Generic) init.fn;
+		parentType.children.clear();
+		parentType.children.addAll(g.children);
+
+		resolveNow(LocalContext.get()).write(cw, false);
+	}
+
 }

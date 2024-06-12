@@ -40,7 +40,7 @@ public interface ConstantEvaluator {
 				invoker.add(node);
 			}
 
-			IClass info = ctx.getClassInfo(element.owner());
+			var info = ctx.getClassInfo(element.owner());
 			if (!data.containsKey(element.owner()) && info != null) {
 				DynByteBuf bytes = info.getBytes(IOUtil.getSharedByteBuf());
 				data.put(element.owner(), bytes.toByteArray());

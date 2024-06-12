@@ -33,10 +33,13 @@
 ### Lava Compiler
 * [ ] 把CompileUnit里面readType移动到JavaLexer  
 ↑ 职能专一
-* [ ] 完整的泛型推断
 * [ ] 完整的Record
-* [ ] switch null 和 switch Class
+* [ ] switch Class
 * [ ] StreamChain
+* [ ] lambda
+* [ ] auto type merge
+* [ ] struct
+* [ ] generator
 
 ### CompileUnit的多线程和同步解析
 

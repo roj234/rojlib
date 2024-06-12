@@ -136,8 +136,7 @@ public class Cpk {
 				if (altData != null) ctxs.add(new Context(altData));
 				else classId--;
 
-				ConstantData dd = Parser.parse(ctx.get());
-				Parser.toByteArrayShared(dd).writeToStream(zo);
+				ctx.getCompressedShared().writeToStream(zo);
 				zo.closeEntry();
 			}
 

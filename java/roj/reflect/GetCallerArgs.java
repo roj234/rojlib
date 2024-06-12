@@ -64,6 +64,7 @@ public final class GetCallerArgs {
 	public static final StackWalker NOT_LIVE = StackWalker.getInstance(EnumSet.of(StackWalker.Option.RETAIN_CLASS_REFERENCE));
 	public static Class<?> getCallerClass() {return getCallerClass(3);}
 	public static Class<?> getCallerClass(int skip) {
+		if (NOT_LIVE == null) return GetCallerArgs.class;
 		return NOT_LIVE.walk(stream -> {
 			StackFrame frame = stream.skip(skip).findFirst().orElse(null);
 			return frame == null ? null : frame.getDeclaringClass();

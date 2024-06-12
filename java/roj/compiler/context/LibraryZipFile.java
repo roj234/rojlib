@@ -4,10 +4,10 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.IClass;
 import roj.asm.tree.attr.AttrModule;
 import roj.asm.tree.attr.Attribute;
 import roj.collect.MyHashMap;
+import roj.crypt.CRC32s;
 import roj.io.IOUtil;
 import roj.util.Helpers;
 
@@ -35,15 +35,31 @@ public class LibraryZipFile implements Library {
 		}
 		//zf.entries().clear();
 
-		IClass module = get("module-info");
+		var module = get("module-info");
 		if (module != null) {
-			AttrModule module1 = module.parsedAttr(module.cp(), Attribute.Module);
+			AttrModule module1 = module.parsedAttr(module.cp, Attribute.Module);
 			moduleName = module1.self.name;
 		}
 	}
 
 	@Override
 	public String getModule(String className) {return moduleName;}
+
+	@Override
+	public int fileHashCode() {
+		int hash = CRC32s.INIT_CRC;
+		var b = IOUtil.getSharedByteBuf();
+
+		for (ZEntry entry : zf.entries()) {
+			b.putChars(entry.getName()).putShort(0).putInt(entry.getCrc32()).putLong(entry.getModificationTime());
+			if (b.wIndex() > 1024) {
+				hash = CRC32s.update(hash, b.list, 0, b.wIndex());
+				b.clear();
+			}
+		}
+
+		return CRC32s.retVal(hash);
+	}
 
 	@Override
 	public Set<String> content() { return info.keySet(); }

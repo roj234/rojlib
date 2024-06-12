@@ -44,6 +44,10 @@ public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 	 */
 	@Override
 	public void accept(Diagnostic diag) {
+		if (diag.getCode().equals("import.any") || diag.getCode().equals("ps.method.paramDef")) {
+			return;
+		}
+
 		CharList sb = new CharList();
 
 		if (diag.getFilePath() != null) {
@@ -82,7 +86,7 @@ public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 		StackTraceElement[] trace = new Throwable().getStackTrace();
 		for (int i = 2; i < trace.length; i++) {
 			String name = trace[i].getMethodName();
-			if (!name.equals("report") && !name.equals("fireDiagnostic")) {
+			if (!name.equals("report") && !name.equals("fireDiagnostic") && !name.equals("castTo") && !name.equals("writeCast")) {
 				System.err.println("    at "+trace[i]);
 				break;
 			}

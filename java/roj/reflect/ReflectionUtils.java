@@ -190,7 +190,7 @@ public final class ReflectionUtils {
 		}
 	}
 
-	public static Class<?> getCallerClass(int backward) {return JAVA_VERSION < 17 ? Tracer.INSTANCE.getCallerClass(backward+1) : GetCallerArgs.getCallerClass(backward+2);}
+	public static Class<?> getCallerClass(int backward) {return JAVA_VERSION < 17 ? Tracer.INSTANCE.getCallerClass(backward+1) : GetCallerArgs.getCallerClass(backward+1);}
 	private static final class Tracer extends SecurityManager {
 		// avoid security manager creation warning
 		static final Tracer INSTANCE = new Tracer();

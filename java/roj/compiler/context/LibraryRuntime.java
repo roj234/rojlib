@@ -3,6 +3,7 @@ package roj.compiler.context;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
+import roj.crypt.CRC32s;
 import roj.io.IOUtil;
 import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
@@ -68,8 +69,17 @@ public final class LibraryRuntime implements Library {
 	}
 
 	@Override
-	public String getModule(String className) {initMap();return classToModules.get(className);}
-
+	public int fileHashCode() {
+		var prop = System.getProperties();
+		var b = IOUtil.getSharedByteBuf();
+		b.putChars(prop.getProperty("java.vendor", "")).putShort(0)
+		 .putChars(prop.getProperty("java.vm.version", "")).putShort(0)
+		 .putChars(prop.getProperty("os.arch", "")).putShort(0)
+		 .putChars(prop.getProperty("os.name", "")).putShort(0)
+		 .putChars(prop.getProperty("sun.boot.library.path", ""));
+		return CRC32s.once(b.list, 0, b.wIndex());
+	}
+	// 尽管如此，我暂时也不知道怎么拿到module-info
 	@Override
 	public Set<String> content() {initMap();return classToModules.keySet();}
 
@@ -84,6 +94,8 @@ public final class LibraryRuntime implements Library {
 			return v;
 		}
 	}
+	@Override
+	public String getModule(String className) {initMap();return classToModules.get(className);}
 
 	@Override
 	public InputStream getResource(CharSequence name) throws IOException {return ClassLoader.getSystemResourceAsStream(name.toString());}

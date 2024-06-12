@@ -23,17 +23,14 @@ public class ConstantPool {
 	public static final int ONLY_STRING = -1, BYTE_STRING = 0, CHAR_STRING = 1;
 
 	private final SimpleList<Constant> constants;
-	private final MyHashSet<Constant> refMap;
+	private MyHashSet<Constant> refMap;
 	private int length;
+	private boolean isForWrite;
 
+	public ConstantPool(int size) {constants = new SimpleList<>(size);}
 	public ConstantPool() {
 		constants = new SimpleList<>();
 		refMap = new MyHashSet<>();
-	}
-
-	public ConstantPool(int size) {
-		constants = new SimpleList<>(size);
-		refMap = new MyHashSet<>(size);
 	}
 
 	public void read(DynByteBuf r, int stringDecodeType) {
@@ -44,8 +41,7 @@ public class ConstantPool {
 		constants.ensureCapacity(len);
 		constants._setSize(len);
 
-		refMap.clear();
-		refMap.ensureCapacity(len);
+		if (refMap != null) refMap.clear();
 
 		Object[] csts = constants.getInternalArray();
 
@@ -255,7 +251,12 @@ public class ConstantPool {
 	}
 
 	private void initRefMap() {
-		if (!refMap.isEmpty()) return;
+		if (refMap == null) refMap = new MyHashSet<>(constants.size());
+		else {
+			if (!refMap.isEmpty()) return;
+			refMap.ensureCapacity(constants.size());
+		}
+
 		Object[] cst = constants.getInternalArray();
 		for (int i = 0; i < constants.size(); i++) {
 			Constant c = (Constant) cst[i];
@@ -263,6 +264,11 @@ public class ConstantPool {
 
 			Constant c1 = refMap.intern(c);
 			if (c != c1) c.setIndex(c1.getIndex());
+		}
+
+		if (!isForWrite) {
+			isForWrite = true;
+			AsmShared.local().getCpWriter(constants);
 		}
 	}
 
@@ -588,11 +594,16 @@ public class ConstantPool {
 		return length;
 	}
 
-	public void write(DynByteBuf w) {
+	public void write(DynByteBuf w, boolean discard) {
 		w.putShort(constants.size()+1);
 		List<Constant> csts = constants;
 		for (int i = 0; i < csts.size(); i++)
 			csts.get(i).write(w);
+
+		if (isForWrite) {
+			isForWrite = false;
+			AsmShared.local().freeCpWriter(constants, discard);
+		}
 	}
 
 	@Override

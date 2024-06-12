@@ -44,7 +44,7 @@ public abstract class XlsxReader {
 	private Consumer<Element> consumer;
 
 	// row-col
-	private final SimpleList<String> sharedStrings = SimpleList.withCapacityType(64, 2);
+	private final SimpleList<String> sharedStrings = SimpleList.hugeCapacity(64);
 	private final SimpleList<String> cells = new SimpleList<>();
 	private final int[] cellPos = new int[2];
 	private boolean emptyRow;

@@ -22,7 +22,7 @@ import java.util.function.Consumer;
 public class CList extends CEntry implements Iterable<CEntry> {
 	protected List<CEntry> list;
 
-	public CList() { this(SimpleList.withCapacityType(0,2)); }
+	public CList() { this(SimpleList.hugeCapacity(0)); }
 	public CList(int size) { list = new SimpleList<>(size); }
 	@SuppressWarnings("unchecked")
 	public CList(List<? extends CEntry> list) { this.list = (List<CEntry>) list; }

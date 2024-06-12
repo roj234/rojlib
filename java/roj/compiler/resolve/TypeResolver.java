@@ -1,8 +1,8 @@
 package roj.compiler.resolve;
 
 import roj.asm.Opcodes;
+import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
-import roj.asm.tree.IClass;
 import roj.asm.tree.RawNode;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
@@ -14,7 +14,6 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.Helpers;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -60,13 +59,13 @@ public final class TypeResolver {
 			String name = (String) entry.getValue();
 			if (name == null) continue;
 
-			IClass info = gc.getClassInfo(name);
+			ConstantData info = gc.getClassInfo(name);
 			if (info == null) info = fixStaticImport(ctx, name);
 			if (info == null) ctx.report(Kind.ERROR, "symbol.error.noSuchClass", name);
 			else entry.setValue(info);
 		}
 	}
-	private IClass fixStaticImport(LocalContext ctx, String name) {
+	private ConstantData fixStaticImport(LocalContext ctx, String name) {
 		// import java.util.Map.Entry
 		int slash = name.lastIndexOf('/');
 		if (slash >= 0) {
@@ -77,7 +76,7 @@ public final class TypeResolver {
 			do {
 				sb.set(slash, '$');
 
-				IClass info = ctx.classes.getClassInfo(sb);
+				ConstantData info = ctx.classes.getClassInfo(sb);
 				if (info != null) return info;
 
 				slash = sb.lastIndexOf("/", slash-1);
@@ -90,35 +89,40 @@ public final class TypeResolver {
 	/**
 	 * 将短名称解析为全限定名称
 	 */
-	public IClass resolve(LocalContext ctx, String name) {
+	public ConstantData resolve(LocalContext ctx, String name) {
 		var entry = ctx.importCache.getEntry(name);
 		if (entry != null) return entry.getValue();
 
-		IClass info = resolve1(ctx, name);
+		var info = resolve1(ctx, name);
 		block:
 		if (info == null) {
 			// import java.util.Map
 			// then Map.Entry
+			// TODO add InnerClass reference attribute if used such import
 			int slash = name.indexOf('/');
 			if (slash >= 0) {
-				var entry1 = importClass.getEntry(name.substring(0, slash));
-				if (entry1 == null || entry1.getValue() == null) break block;
+				String myName = ctx.file.name;
+				if (slash != myName.length() || !name.startsWith(myName)) {
+					var entry1 = resolve1(ctx, name.substring(0, slash));
+					if (entry1 == null) break block;
+					myName = entry1.name();
+				}
+				// else fastpath
 
-				String _name = ((IClass) entry1.getValue()).name();
-				info = ctx.classes.getClassInfo(_name + name.substring(slash).replace('/', '$'));
+				info = ctx.classes.getClassInfo(myName + name.substring(slash).replace('/', '$'));
 			}
 		}
 
 		ctx.importCache.put(name, info);
 		return info;
 	}
-	private IClass resolve1(LocalContext ctx, String name) {
-		// 具名和unimported
+	private ConstantData resolve1(LocalContext ctx, String name) {
+		// 具名和unimport (delete)
 		var entry = importClass.getEntry(name);
-		if (entry != null) return (IClass) entry.getValue();
+		if (entry != null) return (ConstantData) entry.getValue();
 
 		GlobalContext gc = ctx.classes;
-		IClass c = null;
+		ConstantData c = null;
 
 		// 已经是全限定名
 		if (!restricted && (c = gc.getClassInfo(name)) != null) return c;
@@ -143,18 +147,60 @@ public final class TypeResolver {
 		}
 
 		if (qualifiedName == null && !restricted) {
-			// 在当前包搜索 (此处包括自身)
+			// 下列注释中: myName = A$B$C
 			String myName = ctx.file.name;
-			c = gc.getClassInfo(IOUtil.getSharedCharBuf().append(myName, 0, myName.lastIndexOf('/')+1).append(name));
+
+			// 看看是不是对自身的引用
+			// A$B$C B$C C => self
+			checkSelf:
+			if (myName.endsWith(name)) {
+				int i = myName.length() - name.length() - 1;
+				if (i >= 0) {
+					char c1 = myName.charAt(i);
+					if (c1 != '/' && c1 != '$') break checkSelf;
+				}
+				return ctx.file;
+			}
+
+			// 再看看是不是内部类
+			// A$B B => inner
+			CharList sb = IOUtil.getSharedCharBuf().append(myName);
+			int i = myName.lastIndexOf('$');
+
+			// longer
+			c = gc.getClassInfo(sb.append('$').append(name));
 			if (c != null) return c;
 
-			if (packages.contains("java/lang")) qualifiedName = "java/lang/"+name;
-			else if (importAny && packages.size() == 1) qualifiedName = packages.get(0)+"/"+name;
+			// shorter
+			if (i > 0) {
+				do {
+					sb.setLength(i+1);
+					c = gc.getClassInfo(sb.append(name));
+					if (c != null) return c;
+
+					i = sb.lastIndexOf("$", i-1);
+				} while (i > 0);
+			}
+
+			// 最后在当前包查找
+			// A => root
+			i = myName.lastIndexOf('/')+1;
+			if (i > 0) {
+				sb.clear();
+				c = gc.getClassInfo(sb.append(myName, 0, i).append(name));
+				if (c != null) return c;
+			}
+
+			// java.lang.* 和 importAny
+			if (importAny && packages.size() == 1) qualifiedName = packages.get(0)+"/"+name;
+			else if (packages.contains("java/lang")) qualifiedName = "java/lang/"+name;
 		}
 
 		if (qualifiedName != null) c = gc.getClassInfo(qualifiedName);
-		else if (packages == Collections.EMPTY_LIST) {
-			// slow fallback for content unknown / generated libraries (well, this is cached)
+		else /*if (packages == Collections.EMPTY_LIST) */{
+			// 有的Library可能没实现content()那就只能慢一些了
+			// 而且在最后节约资源也没有必要，因为找不到直接报错了，不会有明天
+			// 另外packages对于runtime只导入java和javax和sun.misc
 			for (String pkg : importPackage) {
 				if ((c = gc.getClassInfo(pkg+'/'+name)) != null) break;
 			}
@@ -163,17 +209,17 @@ public final class TypeResolver {
 	}
 
 	/**
-	 * @return [IClass owner, FieldNode node]
+	 * @return [ConstantData owner, FieldNode node]
 	 */
-	public IClass resolveField(LocalContext ctx, String name, List<FieldNode> out2) {
-		IClass imported = (IClass) importStatic.get(name);
+	public ConstantData resolveField(LocalContext ctx, String name, List<FieldNode> out2) {
+		var imported = (ConstantData) importStatic.get(name);
 		if (imported != null) {
 			int fid = imported.getField(name);
 			if (fid < 0) return null;
-			RawNode node = imported.fields().get(fid);
+			var node = imported.fields().get(fid);
 
 			if ((node.modifier() & Opcodes.ACC_STATIC) != 0 && ctx.checkAccessible(imported, node, true, false)) {
-				out2.add((FieldNode) node);
+				out2.add(node);
 				return imported;
 			}
 			return null;
@@ -185,7 +231,7 @@ public final class TypeResolver {
 
 			MyHashSet<String> oneClass = new MyHashSet<>(), allClass = new MyHashSet<>();
 			for (String klassName : importStaticClass) {
-				IClass info = ctx.classes.getClassInfo(klassName);
+				ConstantData info = ctx.classes.getClassInfo(klassName);
 				if (info == null) {
 					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klassName);
 					continue;
@@ -211,26 +257,26 @@ public final class TypeResolver {
 				return null;
 			}
 
-			if (ctx.checkAccessible((IClass) arr[0], (RawNode) arr[1], true, false)) {
+			if (ctx.checkAccessible((ConstantData) arr[0], (RawNode) arr[1], true, false)) {
 				out2.add((FieldNode) arr[1]);
-				return (IClass) arr[0];
+				return (ConstantData) arr[0];
 			}
 		}
 		return null;
 	}
 
 	/**
-	 * @return [IClass owner]
+	 * @return [ConstantData owner]
 	 */
-	public IClass resolveMethod(LocalContext ctx, String name) {
-		IClass imported = (IClass) importStatic.get(name);
+	public ConstantData resolveMethod(LocalContext ctx, String name) {
+		ConstantData imported = (ConstantData) importStatic.get(name);
 		if (imported != null) return imported;
 
 		var methodCache = ctx.importCacheMethod;
 		if (methodCache.isEmpty()) {
 			MyHashSet<String> oneClass = new MyHashSet<>(), allClass = new MyHashSet<>();
 			for (String klassName : importStaticClass) {
-				IClass info = ctx.classes.getClassInfo(klassName);
+				ConstantData info = ctx.classes.getClassInfo(klassName);
 				if (info == null) {
 					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klassName);
 					continue;

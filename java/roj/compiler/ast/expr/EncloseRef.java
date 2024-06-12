@@ -19,24 +19,39 @@ final class EncloseRef extends ExprNode {
 		this.type = type;
 	}
 
-	private IType type;
+	private final IType type;
 	final boolean thisEnclosing;
+	private int thisEnclosingRef;
 
 	@Override
 	public String toString() { return type.toString() + (thisEnclosing?".this":".super"); }
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
+		if (ctx.in_static) ctx.report(Kind.ERROR, "this.static");
+
 		ctx.resolveType(type);
 		if (thisEnclosing) {
-			ctx.report(Kind.ERROR, "this enclosing class暂未实现（non static ref）");
+			check:
+			if (ctx.enclosingThis.isEmpty()) {
+				ctx.report(Kind.ERROR, "encloseRef.staticEnv");
+			} else {
+				var fields = ctx.enclosingThis;
+				for (int i = 0; i < fields.size();) {
+					if (fields.get(i++).thisType().equals(type.owner())) {
+						thisEnclosingRef = i;
+						break check;
+					}
+				}
+				ctx.report(Kind.ERROR, "encloseRef.noRef");
+			}
 		} else {
-			IType thisType = ctx.ep.This().resolve(ctx).type();
-			TypeCast.Cast cast = ctx.castTo(thisType, type, TypeCast.E_NEVER);
+			var thisType = ctx.ep.This().resolve(ctx).type();
+			var cast = ctx.castTo(thisType, type, TypeCast.E_NEVER);
 			if (cast.type < 0) {
-				ctx.report(Kind.ERROR, "encloseRef.error.nds", thisType, type);
+				ctx.report(Kind.ERROR, "encloseRef.nds", thisType, type);
 			} else if (cast.distance > 1) {
-				ctx.report(Kind.NOTE, "encloseRef.incompatible.nds", thisType, type);
+				ctx.report(Kind.INCOMPATIBLE, "encloseRef.tooFar", thisType, type);
 			}
 		}
 		return this;
@@ -49,6 +64,17 @@ final class EncloseRef extends ExprNode {
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
 		cw.one(Opcodes.ALOAD_0);
+
+		if (thisEnclosingRef > 0) {
+			var lc = LocalContext.get();
+			var owner = lc.file.name;
+			var fields = lc.enclosingThis;
+			for (int i = 0; i < fields.size(); i++) {
+				var fn = fields.get(i).thisRef();
+				cw.field(Opcodes.GETFIELD, owner, fn.name(), fn.rawDesc());
+				owner = fn.fieldType().owner();
+			}
+		}
 	}
 
 	@Override

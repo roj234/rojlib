@@ -12,6 +12,7 @@ import roj.compiler.asm.node.LazyLoadStore;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
@@ -28,6 +29,7 @@ public class MethodWriter extends CodeWriter {
 
 	public LineNumberTable lines;
 	public boolean debugLines;
+	public boolean noverify;
 
 	public MethodWriter(ConstantData unit, MethodNode mn) {
 		this.owner = unit;
@@ -58,7 +60,7 @@ public class MethodWriter extends CodeWriter {
 	}
 
 	public void load(Variable v) { addSegment(new LazyLoadStore(v, false)); }
-	public void store(Variable v) { addSegment(new LazyLoadStore(v, true)); }
+	public void store(Variable v) { v.hasValue = true; addSegment(new LazyLoadStore(v, true)); }
 	public void iinc(Variable v, int delta) { addSegment(new LazyIINC(v, delta)); }
 
 	public void jump(byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new JumpSegmentAO(code, target)); }
@@ -114,7 +116,23 @@ public class MethodWriter extends CodeWriter {
 
 	public MethodWriter fork() {return new MethodWriter(owner, mn);}
 
-	public StaticSegment writeTo() {
+	public Label lineMarker() {
+		LineMarker marker = new LineMarker();
+		super.label(marker);
+		labels.add(marker);
+		return marker;
+	}
+
+	@Override
+	public void label(Label x) {
+		// 预优化无用的跳转
+		if (!segments.isEmpty() && segments.get(segments.size()-1).length() == 0 && segments.get(segments.size()-2) instanceof JumpSegment jump && jump.target == x) {
+			segments.remove(segments.size()-2);
+		}
+		super.label(x);
+	}
+
+	public DynByteBuf writeTo() {
 		MethodWriter fork = fork();
 		writeTo(fork);
 		fork.visitExceptions();
@@ -122,12 +140,35 @@ public class MethodWriter extends CodeWriter {
 		DynByteBuf b = fork.bw;
 		b.remove(0, 8);
 		b.wIndex(b.wIndex()-2);
-		return new StaticSegment(b);
+		return b;
+	}
+
+	public void insertBefore(DynByteBuf buf) {
+		int offset = getTmpLenOffset();
+		bw.preInsert(offset, buf.readableBytes());
+		int pos = bw.wIndex();
+		bw.wIndex(offset);
+		bw.put(buf);
+		bw.wIndex(pos);
 	}
 
 	public void writeTo(MethodWriter cw) {
+		int off;
+
 		if (bw.wIndex() > 8) {
 			cw.codeOb.put(bw, 8, bw.wIndex()-8);
+			off = bw.wIndex()-8;
+		} else {
+			off = 0;
+		}
+
+		for (Iterator<Label> itr = labels.iterator(); itr.hasNext(); ) {
+			Label label = itr.next();
+			if (label instanceof LineMarker m) {
+				m.move(cw.segments.size(), off);
+				cw.labels.add(m);
+				itr.remove();
+			}
 		}
 
 		if (segments.isEmpty()) return;

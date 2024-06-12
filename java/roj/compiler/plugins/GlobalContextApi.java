@@ -21,6 +21,7 @@ import roj.compiler.plugins.api.LavaApi;
 import roj.compiler.plugins.api.Processor;
 import roj.compiler.plugins.api.Resolver;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -34,17 +35,8 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 
 	@Override
 	public void addLibrary(Library library) {
+		if (repo != null) throw new IllegalStateException("Classpath annotation was created");
 		super.addLibrary(library);
-
-		if (repo != null) {
-			for (Processor processor : processors) {
-				if (processor.acceptClasspath()) {
-					for (String name : library.content()) {
-						repo.add(library.get(name));
-					}
-				}
-			}
-		}
 	}
 
 	// ◢◤
@@ -121,11 +113,14 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 	}
 
 	@Override
-	public ExprParser createExprParser() {
-		return exprApi.override_createExprParser();
+	public ExprParser createExprParser(LocalContext ctx) {
+		var parser = new ExprParser(ctx);
+		parser.st = exprApi.st;
+		parser.custom = exprApi.custom;
+		return parser;
 	}
 
-	public boolean isSpecEnabled(int specId) {return specId != DISABLE_RAW_TYPE;}
+	public boolean isSpecEnabled(int specId) {return true;}
 
 	@Override
 	public ExprApi getExprApi() {return exprApi;}
@@ -168,12 +163,23 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 		if (repo == null) {
 			repo = new AnnotationRepo();
 			for (Library library : new MyHashSet<>(libraries.values())) {
-				for (String s : library.content()) {
-					repo.add(library.get(s));
-				}
+				addAnnotations(library);
 			}
 		}
 		return repo;
+	}
+	private void addAnnotations(Library library) {
+		if (library instanceof LibraryZipFile zf) {
+			try {
+				repo.add(zf.zf);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		} else {
+			for (String name : library.content()) {
+				repo.add(library.get(name));
+			}
+		}
 	}
 
 	final class LCImpl extends LocalContext {
@@ -181,6 +187,8 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 
 		@Override
 		public @Nullable ExprNode getOperatorOverride(@NotNull ExprNode e1, @Nullable ExprNode e2, int operator) {
+			ExprNode override = super.getOperatorOverride(e1, e2, operator);
+			if (override != null) return override;
 			return exprApi.override_getOperatorOverride(this, e1, e2, operator);
 		}
 	}

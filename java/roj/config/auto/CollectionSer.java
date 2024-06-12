@@ -47,7 +47,7 @@ final class CollectionSer extends Adapter {
 			set ?
 				ctx instanceof AdaptContextEx ? new MyHashSet<>(Hasher.IDENTITY) :
 				size < 0 ? new MyHashSet<>() : new MyHashSet<>(size)
-			: size < 0 ? SimpleList.withCapacityType(0, 2) : new SimpleList<>(size));
+			: size < 0 ? SimpleList.hugeCapacity(0) : new SimpleList<>(size));
 		ctx.push(valueType);
 	}
 

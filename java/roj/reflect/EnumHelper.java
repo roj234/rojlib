@@ -45,7 +45,7 @@ public final class EnumHelper extends CodeVisitor {
 	private int lvid;
 
 	public EnumHelper(ConstantData klass) {
-		if ((klass.access & ACC_ENUM) == 0) throw new IllegalStateException("Not enum class: " + klass.name());
+		if ((klass.modifier & ACC_ENUM) == 0) throw new IllegalStateException("Not enum class: " + klass.name());
 
 		ref = klass;
 		klass.unparsed();

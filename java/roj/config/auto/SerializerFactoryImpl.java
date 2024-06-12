@@ -22,7 +22,6 @@ import roj.asm.visitor.SwitchSegment;
 import roj.collect.*;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
-import roj.reflect.FastInit;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -134,7 +133,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	public SerializerFactory add(Class<?> type, Object adapter, String writeMethod, String readMethod) {
 		if (type.isPrimitive() || type == String.class) throw new IllegalStateException("type不能是基本类型或字符串");
 
-		ConstantData data = Parser.parse(adapter.getClass());
+		ConstantData data = Parser.parseConstants(adapter.getClass());
 		if (data == null) throw new IllegalArgumentException("无法获取"+adapter+"的类文件");
 
 		int wid = data.getMethod(writeMethod), rid = data.getMethod(readMethod);
@@ -217,7 +216,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	 */
 	@Override
 	public SerializerFactory as(String name, Class<?> type, Object adapter, String writeMethod, String readMethod) {
-		ConstantData data = Parser.parse(adapter.getClass());
+		ConstantData data = Parser.parseConstants(adapter.getClass());
 		if (data == null) throw new IllegalArgumentException("无法获取"+adapter+"的类文件");
 
 		MethodNode w = data.getMethodObj(writeMethod), r = data.getMethodObj(readMethod);
@@ -257,8 +256,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 	private record RW(ConstantData data, MethodNode writer, MethodNode reader) {}
 	private static RW autoRW(Class<?> type, Object adapter) {
-		ConstantData data = Parser.parse(adapter.getClass());
-		if (data == null) throw new IllegalArgumentException("无法获取"+ adapter +"的类文件");
+		ConstantData data = Parser.parseConstants(adapter.getClass());
+		if (data == null) throw new IllegalArgumentException("无法获取"+adapter+"的类文件");
 
 		Type clsType = TypeHelper.class2type(type);
 		MethodNode writer = null, reader = null;
@@ -295,12 +294,12 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	 * @inheritDoc
 	 */
 	@Override
-	public <T> Serializer<List<T>> listOf(Class<T> content) { return context(get(Generic.parameterized(List.class, content))); }
+	public <T> Serializer<List<T>> listOf(Class<T> content) { return context(get(Signature.parseGeneric("Ljava/util/List<"+TypeHelper.class2asm(content)+">;"))); }
 	/**
 	 * @inheritDoc
 	 */
 	@Override
-	public <T> Serializer<Map<String, T>> mapOf(Class<T> content) { return context(get(Generic.parameterized(Map.class, String.class, content))); }
+	public <T> Serializer<Map<String, T>> mapOf(Class<T> content) { return context(get(Signature.parseGeneric("Ljava/util/Map<Ljava/lang/String;"+TypeHelper.class2asm(content)+">;"))); }
 	private <T> Serializer<T> context(Adapter root) { return Helpers.cast((flag&OBJECT_POOL) == 0 ? new AdaptContext(root) : new AdaptContextEx(root)); }
 
 	@NotNull
@@ -319,7 +318,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			return make(generic.toDesc(), klass, (Generic) generic, false);
 		}
 	}
-	final Adapter getByName(String name) { return make(name, null, null, false); }
+	final Adapter getByName(String name) { return make(name, null, null, true); }
 
 	private Adapter make(String name, Class<?> type, Generic generic, boolean mustExact) {
 		Adapter ser = localRegistry.get(name!=null?name:(name=type.getName()));
@@ -378,10 +377,9 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 		if ((flag & GENERATE) == 0) throw new IllegalArgumentException("未找到"+name+"的序列化器");
 
-		if (mustBeDynamic(type) && !mustExact) {
-			if ((this.flag & ALLOW_DYNAMIC) != 0) return dynamicRoot;
-
-			throw new IllegalArgumentException(name+"无法被序列化(ALLOW_DYNAMIC)");
+		if (mustBeDynamic(type)) {
+			if (!mustExact && (this.flag & ALLOW_DYNAMIC) != 0) return dynamicRoot;
+			throw new IllegalArgumentException(name+"是抽象的，无法直接生成序列化器");
 		}
 
 		// 它们不会有withGenericType
@@ -641,7 +639,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		if ((flag&t) == t) throw new IllegalArgumentException("CHECK_PARENT SERIALIZE_PARENT 不能同时为真");
 
 		if ((o.getModifiers()&ACC_PUBLIC) == 0 && (flag&SAFE) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
-		ConstantData data = Parser.parse(o);
+		ConstantData data = Parser.parseConstants(o);
 		if (data == null) throw new IllegalArgumentException("无法获取"+o.getName()+"的类文件");
 
 		int _init = data.getMethod("<init>", "()V");
@@ -1232,12 +1230,12 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	}
 	private void begin(String ua) {
 		c = new ConstantData();
-		c.access = ACC_PUBLIC|ACC_SUPER|ACC_FINAL;
+		c.modifier = ACC_PUBLIC|ACC_SUPER|ACC_FINAL;
 		c.name((ua==null?"roj/config/auto/GA$":ua+"$")+ReflectionUtils.uniqueId());
 		c.parent("roj/config/auto/Adapter");
 		c.cloneable();
-		c.interfaces.clear();
-		c.interfaces.add(new CstClass("roj/config/auto/GA"));
+		c.interfaceWritable().clear();
+		c.addInterface("roj/config/auto/GA");
 		ClassDefiner.premake(c);
 
 		copy = c.newMethod(ACC_PUBLIC|ACC_FINAL, "init2", "(Lroj/config/auto/SerializerFactoryImpl;Ljava/lang/Object;)V");

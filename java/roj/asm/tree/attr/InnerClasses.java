@@ -87,7 +87,7 @@ public final class InnerClasses extends Attribute {
 
 		public static InnerClass innerClass(String name, int flags) {
 			int i = name.lastIndexOf('$');
-			return new InnerClass(name, name.substring(i), name.substring(i+1), flags);
+			return new InnerClass(name, name.substring(0, i), name.substring(i+1), flags);
 		}
 
 		public static InnerClass anonymous(String name, int flags) {

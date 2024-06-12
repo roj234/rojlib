@@ -5,6 +5,7 @@ import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.context.LocalContext;
+import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 
 /**
@@ -40,6 +41,7 @@ public class LocalVariable extends VarNode {
 	public void write(MethodWriter cw, boolean noRet) {
 		v.endPos = wordEnd;
 		mustBeStatement(noRet);
+		if (!v.hasValue) LocalContext.get().report(Kind.ERROR, "var.notAssigned", v.name);
 		cw.load(v);
 	}
 
@@ -58,7 +60,7 @@ public class LocalVariable extends VarNode {
 	@Override
 	public void preStore(MethodWriter cw) {}
 	@Override
-	public void preLoadStore(MethodWriter cw) { cw.load(v); }
+	public void preLoadStore(MethodWriter cw) { if (!v.hasValue) LocalContext.get().report(Kind.ERROR, "var.notAssigned", v.name); cw.load(v); }
 	@Override
 	public void postStore(MethodWriter cw) { cw.store(v); }
 	@Override

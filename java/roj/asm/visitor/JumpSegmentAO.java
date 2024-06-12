@@ -1,5 +1,6 @@
 package roj.asm.visitor;
 
+import roj.compiler.context.GlobalContext;
 import roj.util.DynByteBuf;
 
 import static roj.asm.Opcodes.*;
@@ -78,7 +79,10 @@ public final class JumpSegmentAO extends JumpSegment {
 			break;
 		}
 
-		if (target.getValue() == to.bci + newLen) new Error("无用的跳转=>"+to).printStackTrace();
+		if (target.getValue() == to.bci + newLen) {
+			to.segments.set(segmentId, StaticSegment.EMPTY);
+			GlobalContext.debugLogger().warn("无用的跳转: [b"+segmentId+"+0]=>"+target);
+		}
 		return len != newLen;
 	}
 

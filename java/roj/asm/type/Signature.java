@@ -1,5 +1,6 @@
 package roj.asm.type;
 
+import roj.asm.AsmShared;
 import roj.asm.cp.ConstantPool;
 import roj.asm.tree.attr.Attribute;
 import roj.collect.LinkedMyHashMap;
@@ -298,8 +299,7 @@ public class Signature extends Attribute {
 			}
 		}
 
-		List<IType> v = sign.values = new SimpleList<>(2);
-
+		List<IType> v = AsmShared.local().methodTypeTmp();
 		boolean isMethod = s.charAt(i) == '(';
 		if (isMethod) {
 			if (expect != 99 && expect != METHOD) error("excepting " + expect + " and is METHOD", i, s);
@@ -315,16 +315,20 @@ public class Signature extends Attribute {
 			// out
 			v.add(getSignatureValue(s, i1, F_PRIMITIVE, tmp));
 
+			sign.values = new SimpleList<>(v);
+
 			// throws
 			i = i1.value++;
 			if (i < s.length()) {
-				if (s.charAt(i) != '^') error("THROWS should begin with '^'", i, s);
+				if (s.charAt(i) != '^') error("THROWS应以^开始", i, s);
 
-				v = sign.Throws = new SimpleList<>(2);
+				v.clear();
 				while (i1.value < s.length()) {
 					v.add(getSignatureValue(s, i1, 0, tmp));
 					i1.value++;
 				}
+
+				sign.values = new SimpleList<>(v);
 			}
 		} else {
 			i1.value = i;
@@ -334,13 +338,15 @@ public class Signature extends Attribute {
 			// implements
 			i = i1.value;
 			if (i < s.length()) {
-				if (expect != 99 && expect != CLASS) error("excepting " + expect + " and is CLASS", i, s);
+				if (expect != 99 && expect != CLASS) error("未预料的Implements(不是CLASS):"+expect, i, s);
 				sign.type = CLASS;
 
 				while (i1.value < s.length()) {
 					v.add(getSignatureValue(s, i1, F_INTERFACE, tmp));
 				}
 			}
+
+			sign.values = new SimpleList<>(v);
 		}
 
 		if (sign.type != expect && expect != 99) {
@@ -405,13 +411,11 @@ public class Signature extends Attribute {
 		IGeneric g;
 		if ((flag & F_SUBCLASS) != 0) {
 			g = new GenericSub(tmp.toString());
-		} else if ((flag & 0xF00) != 0) {
+		} else if ((flag & 0xF00) != 0 || c == '<') {
 			g = new Generic(tmp.toString(), flag&0xFF, (byte) ((flag >>> 8)&0xF));
 		} else g = null;
 
 		if (c == '<') {
-			if (g == null) g = new Generic(tmp.toString(), flag&0xFF, (byte) ((flag >>> 8)&0xF));
-
 			childrenLoop:
 			while (true) {
 				if (pos >= s.length()) error("在参数结束之前",pos,s);

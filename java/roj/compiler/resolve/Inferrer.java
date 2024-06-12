@@ -2,16 +2,17 @@ package roj.compiler.resolve;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
-import roj.asm.tree.IClass;
+import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.*;
 import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
 import roj.compiler.asm.Asterisk;
+import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.util.ArrayCache;
 
+import java.util.AbstractList;
 import java.util.List;
 import java.util.Map;
 
@@ -22,14 +23,17 @@ import java.util.Map;
  */
 public final class Inferrer {
 	public static final MethodResult FAIL_ARGCOUNT = new MethodResult(TypeCast.E_GEN_PARAM_COUNT, ArrayCache.OBJECTS);
+	public static final MethodResult FAIL_GENERIC = new MethodResult(TypeCast.E_GEN_PARAM_COUNT, ArrayCache.OBJECTS);
+
 	private static final int LEVEL_DEPTH = 5120;
 
 	private final LocalContext ctx;
 	private final TypeCast castChecker = new TypeCast();
 
+	// 类型参数的当前类型
 	private final Map<String, IType> typeParams = new MyHashMap<>();
+	// 类型参数的上界
 	private final Map<String, List<IType>> typeParamBounds = new MyHashMap<>();
-	private final MyHashSet<String> pgUser = new MyHashSet<>();
 
 	@Nullable
 	private Signature sign;
@@ -40,7 +44,18 @@ public final class Inferrer {
 		this.castChecker.genericResolver = typeParamBounds::get;
 	}
 
-	public List<IType> typeParamHint;
+	public MethodResult getGenericParameters(ConstantData info, MethodNode method, IType instanceType) {
+		int argc = method.parameters().size();
+		return infer(info, method, instanceType instanceof Generic g ? g : null, new AbstractList<>() {
+			public IType get(int index) {return Asterisk.anyType;}
+			public int size() {return argc;}
+		});
+	}
+
+	// 泛型附加上界, 可以用来缩小上界的范围，但是没啥用
+	public List<IType> manualTPBounds;
+	// 覆盖模式, 推断方法覆盖时使用
+	public boolean overrideMode;
 
 	/**
 	 * <a href="https://docs.oracle.com/javase/specs/jls/se21/html/jls-15.html#jls-15.12">Method Invocation Expressions</a>
@@ -48,17 +63,16 @@ public final class Inferrer {
 	 * 如果性能不够再优化吧
 	 */
 	@SuppressWarnings("fallthrough")
-	public MethodResult infer(IClass owner, MethodNode mn, IType typeMirror, List<IType> input) {
+	public MethodResult infer(ConstantData owner, MethodNode mn, IType that, List<IType> input) {
 		this.castChecker.context = ctx.classes;
 
 		List<? extends IType> mpar;
 		int mnSize;
 
-		sign = mn.parsedAttr(owner.cp(), Attribute.SIGNATURE);
+		sign = mn.parsedAttr(owner.cp, Attribute.SIGNATURE);
 		if (sign != null) {
 			typeParamBounds.clear();
 			typeParams.clear();
-			pgUser.clear();
 
 			int len = sign.values.size()-1;
 			if (bounds == null || bounds.length < len) bounds = new IType[len];
@@ -66,29 +80,37 @@ public final class Inferrer {
 			Map<String, List<IType>> myTP = sign.typeParams;
 			typeParamBounds.putAll(myTP);
 
-			if (typeParamHint != null) {
-				if (typeParamHint.size() != myTP.size()) return FAIL_ARGCOUNT;
+			if (manualTPBounds != null) {
+				if (manualTPBounds.size() != myTP.size()) return FAIL_ARGCOUNT;
 
 				int i = 0;
 				for (String name : myTP.keySet())
-					typeParams.put(name, typeParamHint.get(i++));
+					typeParams.put(name, manualTPBounds.get(i++));
 			}
 
-			Signature classSign = owner.parsedAttr(owner.cp(), Attribute.SIGNATURE);
+			Signature classSign = owner.parsedAttr(owner.cp, Attribute.SIGNATURE);
 			if (classSign != null) {
 				for (Map.Entry<String, List<IType>> entry : classSign.typeParams.entrySet()) {
 					typeParamBounds.putIfAbsent(entry.getKey(), entry.getValue());
 				}
 
+				if (that != null && !that.owner().equals(owner.name)) {
+					List<IType> myBounds = ctx.inferGeneric(that, owner.name);
+
+					Generic g = new Generic(owner.name, (byte) 0);
+					g.children = myBounds;
+					that = g;
+				}
+
 				boundPreCheck:
-				if (typeMirror instanceof Generic gHint) {
+				if (that instanceof Generic gHint) {
 					// TODO 非静态 泛型 内部类
 					assert gHint.sub == null : "dynamic subclass not supported at this time";
 					if (gHint.children.size() != typeParamBounds.size()) {
 						if (gHint.children.size() == 1 && gHint.children.get(0) == Asterisk.anyGeneric)
 							break boundPreCheck;
 
-						throw new ResolveException("GENERIC ARG COUNT ERROR");
+						return FAIL_GENERIC;
 					}
 
 					int i = 0;
@@ -103,7 +125,7 @@ public final class Inferrer {
 			mpar = sign.values;
 			mnSize = mpar.size()-1;
 		} else {
-			if (typeParamHint != null) return FAIL_ARGCOUNT;
+			if (manualTPBounds != null) return FAIL_ARGCOUNT;
 
 			mpar = mn.parameters();
 			mnSize = mpar.size();
@@ -114,7 +136,7 @@ public final class Inferrer {
 		boolean dvc = false;
 
 		checkSpecial:
-		if ((mn.modifier&Opcodes.ACC_VARARGS) != 0) {
+		if ((mn.modifier&Opcodes.ACC_VARARGS) != 0 && !overrideMode) {
 			int vararg = mnSize-1;
 			if (inSize < vararg) return FAIL_ARGCOUNT;
 
@@ -172,7 +194,7 @@ public final class Inferrer {
 		for (int i = 0; i < inSize; i++) {
 			IType from = input.get(i), to = mpar.get(i);
 
-			TypeCast.Cast cast = cast(from, to);
+			var cast = overrideMode ? overrideCast(from, to) : cast(from, to);
 			switch (cast.type) {
 				default: return FAIL(i, from, to, cast);
 
@@ -187,6 +209,31 @@ public final class Inferrer {
 		if (hasBox) distance += LEVEL_DEPTH;
 
 		return addGeneric(new MethodResult(mn, distance, dvc));
+	}
+	// TODO 暂时能跑，不过能cover 100%么
+	public TypeCast.Cast overrideCast(IType from, IType to) {
+		if (to instanceof TypeParam n) to = typeParams.get(n.name);
+		if (from.equals(to)) return TypeCast.RESULT(0, 0);
+
+		if (from.genericType() <= IType.GENERIC_TYPE) {
+			if (!from.isPrimitive() && !to.isPrimitive()) {
+				// <?> or AnyType
+				if (to.genericType() == IType.ANY_TYPE) {
+					if (from.owner().equals("java/lang/Object") && from.array() == 0) {
+						return TypeCast.RESULT(0, 0);
+					}
+				} else if (to.genericType() == IType.ASTERISK_TYPE) {
+					return TypeCast.RESULT(0, 0);
+				} else if (from.owner().equals(to.owner())) {
+					// Generic cast check
+					return castChecker.checkCast(from, to);
+				}
+			}
+		} else {
+			GlobalContext.debugLogger().warn("Unknown from type: "+from);
+		}
+
+		return TypeCast.ERROR(TypeCast.E_NEVER);
 	}
 	private TypeCast.Cast cast(IType from, IType to) { return castChecker.checkCast(from, to); }
 	private static MethodResult FAIL(int pos, IType from, IType to, TypeCast.Cast cast) { return new MethodResult(cast.type, from, to, pos); }
@@ -203,13 +250,7 @@ public final class Inferrer {
 			}
 			bounds[i] = null;
 		}
-		for (Map.Entry<String, List<IType>> entry : typeParamBounds.entrySet()) {
-			List<IType> value = entry.getValue();
-			if (!typeParams.containsKey(entry.getKey())) {
-				// 这里返回any的反向 - nullType => [? extends T] 可以upcast转换为任意继承T的对象，而不是downcast
-				typeParams.put(entry.getKey(), new Asterisk(value.get(0).genericType() == IType.PLACEHOLDER_TYPE ? value.subList(1, value.size()) : value));
-			}
-		}
+		fillDefaultTypeParam(typeParamBounds, typeParams);
 
 		if (!sign.values.isEmpty()) {
 			r.desc = new IType[sign.values.size()];
@@ -229,7 +270,25 @@ public final class Inferrer {
 
 		return r;
 	}
-	private IType cloneTP(IType tt) { return hasTypeParam(tt) ? clearTypeParams(tt.clone(), typeParams, typeParamBounds) : tt; }
+	private IType cloneTP(IType tt) { return clearTypeParam(tt, typeParams, typeParamBounds); }
+
+	@SuppressWarnings("fallthrough")
+	public static boolean hasUndefined(IType type) {
+		switch (type.genericType()) {
+			case IType.TYPE_PARAMETER_TYPE: return ((TypeParam) type).extendType != 0;
+			case IType.ANY_TYPE: return true;
+			case IType.GENERIC_TYPE: if (((Generic) type).extendType != 0) return true;
+			case IType.GENERIC_SUBCLASS_TYPE:
+				IGeneric t = (IGeneric) type;
+				for (int i = 0; i < t.children.size(); i++)
+					if (hasUndefined(t.children.get(i)))
+						return true;
+				if (t.sub != null && hasTypeParam(t.sub))
+					return true;
+		}
+
+		return false;
+	}
 
 	public static boolean hasTypeParam(IType type) {
 		switch (type.genericType()) {
@@ -246,26 +305,65 @@ public final class Inferrer {
 
 		return false;
 	}
-	public static IType clearTypeParams(IType type, Map<String, IType> visType, Map<String, List<IType>> bounds) {
+	public static void fillDefaultTypeParam(Map<String, List<IType>> bounds, Map<String, IType> realType) {
+		for (Map.Entry<String, List<IType>> entry : bounds.entrySet()) {
+			if (!realType.containsKey(entry.getKey())) {
+				var value = entry.getValue();
+
+				// 这里返回any的反向 - nullType => [? extends T] 可以upcast转换为任意继承T的对象，而不是downcast
+				realType.put(entry.getKey(), new Asterisk(value.get(0).genericType() == IType.PLACEHOLDER_TYPE ? value.subList(1, value.size()) : value));
+			}
+		}
+	}
+	/**
+	 * 按需复制 请勿再调用.clone()
+	 * @param type
+	 * @param realType
+	 * @param bounds
+	 * @return
+	 */
+	public static IType clearTypeParam(IType type, Map<String, IType> realType, Map<String, List<IType>> bounds) {
 		switch (type.genericType()) {
-			case IType.TYPE_PARAMETER_TYPE:
+			case IType.TYPE_PARAMETER_TYPE -> {
 				TypeParam tt = (TypeParam) type;
-				IType alt = visType.get(tt.name);
-				if (alt == null) throw new IllegalArgumentException("missing type param "+tt);
-				// TODO check line below
-				if (alt.genericType() == IType.ASTERISK_TYPE) return alt;
 
-				List<IType> types = bounds.get(tt.name);
+				var exact = realType.get(tt.name);
+				if (exact == null) throw new IllegalArgumentException("missing type param "+tt);
+
+				// TODO 下面这两行没问题吗
+				if (exact.genericType() == IType.ASTERISK_TYPE) return exact;
+				if (exact.genericType() == IType.ANY_TYPE) {
+					GlobalContext.debugLogger().warn("return anytype ");
+					return LocalContext.OBJECT_TYPE;//Asterisk.anyType;
+				}
+
+				var bound = bounds.get(tt.name);
 				return new Asterisk(tt.extendType == 0
-					? new Type(alt.owner(), alt.array()+tt.array())
-					: new Generic(alt.owner(), alt.array()+tt.array(), tt.extendType),
-					types.get(types.get(0).genericType() == IType.PLACEHOLDER_TYPE ? 1 : 0));
-
-			case IType.GENERIC_TYPE, IType.GENERIC_SUBCLASS_TYPE:
+					? new Type(exact.owner(), exact.array()+tt.array())
+					: new Generic(exact.owner(), exact.array()+tt.array(), tt.extendType),
+					bound.get(bound.get(0).genericType() == IType.PLACEHOLDER_TYPE ? 1 : 0));
+			}
+			case IType.GENERIC_TYPE, IType.GENERIC_SUBCLASS_TYPE -> {
 				IGeneric t = (IGeneric) type;
-				for (int i = 0; i < t.children.size(); i++)
-					t.children.set(i, clearTypeParams(t.children.get(i), visType, bounds));
-				if (t.sub != null) clearTypeParams(t.sub, visType, bounds);
+				for (int i = 0; i < t.children.size(); i++) {
+					IType prev = t.children.get(i);
+					IType elem = clearTypeParam(prev, realType, bounds);
+
+					if (prev != elem && type == t) t = t.clone();
+
+					t.children.set(i, elem);
+				}
+
+				if (t.sub != null) {
+					var elem = clearTypeParam(t.sub, realType, bounds);
+					if (t.sub != elem && type == t) {
+						t = t.clone();
+						t.sub = (GenericSub) elem;
+					}
+				}
+
+				return t;
+			}
 		}
 
 		return type;
@@ -289,7 +387,7 @@ public final class Inferrer {
 			break;
 			case Type.TYPE_PARAMETER_TYPE:
 				TypeParam tp = (TypeParam) methodSide;
-				if (paramSide.isPrimitive() && !pgUser.contains(tp.name))
+				if (paramSide.isPrimitive())
 					paramSide = TypeCast.getWrapper(paramSide.rawType());
 				addBound(tp, paramSide);
 			break;

@@ -28,8 +28,8 @@ for (int i = 0; i < arr.length; i++) {
   System.out.println("循环未开始，或未通过break终止");
 }
 ```
-### 多返回值
-*该语法可能随时变动
+### 多返回值 (已实现)
+一个方法可以返回多个返回值（不超过256个）
 ```java
 static [int, long, String] multiReturnTest() {
 	return [3, 5, "233"];
@@ -99,7 +99,7 @@ var map = [ 1+1 => 3+4 , "mixed type" => also.can.be.used() ];
 #### 默认的重载
 * ! String => String#isEmpty
 * String * int => String#repeat(int)
-### 可选连接操作符 (部分实现)
+### 可选连接操作符 (已实现)
 ```javascript
  var nullable = a?.b?.c?.d;
 ```
@@ -191,17 +191,20 @@ public class Attacher {
 这么做之后，无论这个类以源代码编译还是在classpath中  
 都可在字符串对象（或它的子类，虽然字符串是final的）上使用 isNotEmpty() 函数
 ### inline ASM (WIP)
-### record
 
 ## Java17支持，Lava暂时不支持
-### switch作为表达式
-### 封闭类
+### record
 ### 模块系统
 ### 非静态类，以及和它相关的泛型调用
+### 在内部类中使用this或变量
+### lambda
+### instanceof cast
+### 这(大概)是全列举，未写出的，比如匿名类、参数注解、封闭类、都已经实现
+
 
 ## Lava未来不会支持的
-### 方法中的private类
-### 兼容javac标准的注解处理程序
+### 方法中的具名类
+### javac API
 
 
 ## API

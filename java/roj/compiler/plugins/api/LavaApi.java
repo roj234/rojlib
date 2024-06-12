@@ -1,6 +1,6 @@
 package roj.compiler.plugins.api;
 
-import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.Annotation;
@@ -25,11 +25,11 @@ public interface LavaApi {
 	IClass getClassInfo(CharSequence name);
 
 	ResolveHelper getResolveHelper(IClass info);
-	IntBiMap<String> parentList(IClass info) throws ClassNotFoundException;
-	ComponentList methodList(IClass info, String name) throws TypeNotPresentException;
-	ComponentList fieldList(IClass info, String name) throws TypeNotPresentException;
-	@NotNull
-	List<IType> getTypeParamOwner(IClass info, IType superType) throws ClassNotFoundException;
+	IntBiMap<String> getParentList(IClass info) throws ClassNotFoundException;
+	ComponentList getMethodList(IClass info, String name) throws TypeNotPresentException;
+	ComponentList getFieldList(IClass info, String name) throws TypeNotPresentException;
+	@Nullable
+	List<IType> getTypeParamOwner(IClass info, String superType) throws ClassNotFoundException;
 	MyHashMap<String, InnerClasses.InnerClass> getInnerClassFlags(IClass info);
 
 	/**

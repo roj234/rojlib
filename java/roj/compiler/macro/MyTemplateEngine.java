@@ -80,7 +80,8 @@ public class MyTemplateEngine {
 		ctx.setClass(u);
 
 		u.S1_Struct();
-		u.S2_Resolve();
+		u.S2_ResolveSelf();
+		u.S2_ResolveRef();
 		u.S3_Annotation();
 		u.S4_Code();
 

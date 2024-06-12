@@ -68,7 +68,7 @@ public class LocalContext {
 	public final Inferrer inferrer = new Inferrer(this);
 
 	public TypeResolver tr;
-	public final MyHashMap<String, IClass> importCache = new MyHashMap<>(), importCacheMethod = new MyHashMap<>();
+	public final MyHashMap<String, ConstantData> importCache = new MyHashMap<>(), importCacheMethod = new MyHashMap<>();
 	public final MyHashMap<String, Object[]> importCacheField = new MyHashMap<>();
 
 	public CompileUnit file;
@@ -77,7 +77,7 @@ public class LocalContext {
 
 	public LocalContext(GlobalContext classes) {
 		this.classes = classes;
-		this.ep = classes.createExprParser();
+		this.ep = classes.createExprParser(this);
 		this.bp = classes.createBlockParser(this);
 		this.castCheck.context = classes;
 		this.castCheck.genericResolver = sb -> {
@@ -196,12 +196,13 @@ public class LocalContext {
 			default: throw new ResolveException("非法的修饰符组合: 0x"+Integer.toHexString(flag));
 			case Opcodes.ACC_PUBLIC: return true;
 			case Opcodes.ACC_PROTECTED:
-				if (instanceOf(file.name(), type.name())) return true;
+				if (ClassUtil.arePackagesSame(type.name(), file.name()) || instanceOf(file.name(), type.name())) return true;
 				modifier = "protected";
 				break;
 			case Opcodes.ACC_PRIVATE:
 				// 同一个类可以互相访问
 				// 条件: a/b仅比较$之前的部分
+				// TODO 验证是不是InnerClass属性导致的
 				if (ClassUtil.canAccessPrivate(type.name(), file.name())) return true;
 				modifier = "private";
 				break;
@@ -268,30 +269,126 @@ public class LocalContext {
 		method = node;
 	}
 
-	public ComponentList fieldListOrReport(IClass info, String name) {return classes.fieldList(info, name);}
-	public ComponentList methodListOrReport(IClass info, String name) {return classes.methodList(info, name);}
+	public ComponentList fieldListOrReport(IClass info, String name) {return classes.getFieldList(info, name);}
+	public ComponentList methodListOrReport(IClass info, String name) {return classes.getMethodList(info, name);}
 	public IntBiMap<String> parentListOrReport(IClass info) {
 		try {
-			return classes.parentList(info);
+			return classes.getParentList(info);
 		} catch (ClassNotFoundException e) {
 			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
 			return new IntBiMap<>();
 		}
 	}
 
+	/**
+	 * 擦除泛型
+	 * 如果有 A<K, V> extends B<String> implements C<K>
+	 *
+	 * @param typeInst 提供A的泛型实例以擦除K到具体类型
+	 * @param targetType B or C
+	 *
+	 * @return [String] or [K] or [具体类型]
+	 */
+	@Nullable
+	public List<IType> inferGeneric(@NotNull IType typeInst, @NotNull String targetType) {
+		var info = classes.getClassInfo(typeInst.owner());
+
+		List<IType> bounds = null;
+		try {
+			bounds = classes.getTypeParamOwner(info, targetType);
+		} catch (ClassNotFoundException e) {
+			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
+		}
+
+		if (bounds == null ||
+			bounds.getClass() == SimpleList.class ||
+			!(typeInst instanceof Generic g)) return bounds;
+
+		if (g.children.size() == 1 && g.children.get(0) == Asterisk.anyGeneric) {
+			var sign = info.parsedAttr(info.cp, Attribute.SIGNATURE);
+
+			MyHashMap<String, IType> realType = new MyHashMap<>();
+			Inferrer.fillDefaultTypeParam(sign.typeParams, realType);
+
+			bounds = new SimpleList<>(bounds);
+			for (int i = 0; i < bounds.size(); i++) {
+				bounds.set(i, Inferrer.clearTypeParam(bounds.get(i), realType, sign.typeParams));
+			}
+
+			return bounds;
+		}
+
+		// 含有类型参数，需要动态解析
+		return inferGeneric0(classes.getClassInfo(g.owner), g.children, targetType);
+	}
+	// B <T1, T2> extends A <T1> implements Z<T2>
+	// C <T3> extends B <String, T3>
+	// 假设我要拿A的类型，那就要先通过已知的C（params）推断B，再推断A
+	private List<IType> inferGeneric0(ConstantData typeInst, List<IType> params, String target) {
+		Map<String, IType> visType = new MyHashMap<>();
+
+		while (true) {
+			var g = typeInst.parsedAttr(typeInst.cp, Attribute.SIGNATURE);
+
+			int i = 0;
+			visType.clear();
+			for (String s : g.typeParams.keySet())
+				visType.put(s, params.get(i++));
+
+			var map = parentListOrReport(typeInst);
+			int depthInfo = map.getValueOrDefault(target, -1);
+			if (depthInfo < 0) throw new IllegalArgumentException("Unknown error");
+
+			int depth = depthInfo >>> 16;
+			if (depth == 0) {
+				// parentList
+				IType parent = g.values.get(0);
+				if (target.equals(parent.owner())) {
+					if (parent.genericType() == IType.STANDARD_TYPE) return Collections.emptyList();
+
+					var rubber = Inferrer.clearTypeParam(parent, visType, g.typeParams);
+					return ((Generic) rubber).children;
+				}
+
+				typeInst = classes.getClassInfo(typeInst.parent);
+			} else {
+				// 如果在parentList里存上一些信息用于计算interface从哪继承可能会更好
+
+				// interfaceList
+				for (int j = 1; j < g.values.size(); j++) {
+					IType itf = g.values.get(j);
+					if (target.equals(itf.owner())) {
+						if (itf.genericType() == IType.STANDARD_TYPE) return Collections.emptyList();
+
+						var rubber = Inferrer.clearTypeParam(itf, visType, g.typeParams);
+						return ((Generic) rubber).children;
+					}
+
+					if (depth == 1) continue;
+
+					var info = classes.getClassInfo(typeInst.interfaces().get(j - 1));
+					if (parentListOrReport(info).containsValue(target)) {
+						typeInst = info;
+						break;
+					}
+				}
+			}
+		}
+	}
+
 	// region 解析符号引用 Class Field Method
 	@Nullable
-	public IClass getClassOrArray(IType type) { return type.array() > 0 ? GlobalContext.anyArray() : classes.getClassInfo(type.owner()); }
+	public ConstantData getClassOrArray(IType type) { return type.array() > 0 ? GlobalContext.anyArray() : classes.getClassInfo(type.owner()); }
 
-	public IClass resolveType(String klass) { return tr.resolve(this, klass); }
+	public ConstantData resolveType(String klass) { return tr.resolve(this, klass); }
 	@Contract("_ -> param1")
 	public IType resolveType(IType type) {
 		if (type.genericType() == 0 ? type.rawType().type != Type.CLASS : type.genericType() != 1) return type;
 
 		// 不预先检查全限定名，适配package-restricted模式
-		IClass info = resolveType(type.owner());
+		var info = resolveType(type.owner());
 		if (info == null) {
-			report(Kind.ERROR, "symbol.error.noSuchClass", type);
+			report(Kind.ERROR, "symbol.error.noSuchClass", type.owner());
 			return type;
 		}
 		type.owner(info.name());
@@ -311,9 +408,20 @@ public class LocalContext {
 				else if (gp.size() != 1 || gp.get(0) != Asterisk.anyGeneric) report(Kind.ERROR, "symbol.error.generic.paramCount", type.rawType(), gp.size(), count);
 			}
 
+			if (sign == null) return type;
+			var itr = sign.typeParams.values().iterator();
+			Function<String, List<IType>> prev = castCheck.genericResolver, curr = sign.typeParams::get;
+
 			for (int i = 0; i < gp.size(); i++) {
 				IType type2 = resolveType(gp.get(i));
 				if (genericIgnore) continue;
+
+				// skip if is AnyType (?)
+				if (type2.genericType() <= 2) {
+					castCheck.genericResolver = curr;
+					for (IType iType : itr.next()) castTo(type2, iType, 0);
+					castCheck.genericResolver = prev;
+				}
 
 				if (type2 instanceof Generic g && g.isAnyType()) {
 					gp.set(i, Signature.any());
@@ -379,6 +487,7 @@ public class LocalContext {
 	private IClass _frBegin;
 	private final SimpleList<FieldNode> _frChain = new SimpleList<>();
 	private IType _frType;
+	private int _frOffset;
 
 	/**
 	 * 将这种格式的字符串 net/minecraft/client/Minecraft/fontRender/FONT_HEIGHT
@@ -390,6 +499,7 @@ public class LocalContext {
 
 		IClass directClz = null;
 		String anySuccess = "";
+		_frOffset = 0;
 		int slash = desc.indexOf("/");
 		if (slash >= 0) {
 			directClz = tr.resolve(this, desc.substring(0, slash));
@@ -401,6 +511,7 @@ public class LocalContext {
 			}
 
 			do {
+				_frOffset++;
 				sb.clear(); sb.append(desc, 0, slash);
 
 				int dollar = slash++;
@@ -467,29 +578,27 @@ public class LocalContext {
 				return "symbol.error.noSuchSymbol:symbol.field:"+name+":"+currentCodeBlockForReport();
 			}
 
-			// TODO 泛型的处理可能没必要这么复杂
 			Signature cSign = clz.parsedAttr(clz.cp(), Attribute.SIGNATURE);
+			block:{
 			if (cSign != null) {
 				Signature fSign = field.parsedAttr(clz.cp(), Attribute.SIGNATURE);
 				if (fSign != null) {
 					Map<String, List<IType>> tpBounds = cSign.typeParams;
 					MyHashMap<String, IType> knownTps = new MyHashMap<>(cSign.typeParams.size());
 
-					if (!(fieldType instanceof Generic gType)) {
-						for (Map.Entry<String, List<IType>> entry : tpBounds.entrySet()) {
-							List<IType> value = entry.getValue();
-							knownTps.put(entry.getKey(), value.get(0).genericType() == IType.PLACEHOLDER_TYPE ? OBJECT_TYPE : value.get(0));
-						}
-					} else {
-						Iterator<String> itr = tpBounds.keySet().iterator();
+					if (fieldType instanceof Generic gType) {
 						assert gType.children.size() == tpBounds.size();
+						Iterator<String> itr = tpBounds.keySet().iterator();
 						for (IType child : gType.children) knownTps.put(itr.next(), child);
+					} else {
+						Inferrer.fillDefaultTypeParam(tpBounds, knownTps);
 					}
 
-					fieldType = Inferrer.clearTypeParams(fSign.values.get(0), knownTps, tpBounds);
+					fieldType = Inferrer.clearTypeParam(fSign.values.get(0), knownTps, tpBounds);
+					break block;
 				}
-			} else {
-				fieldType = field.fieldType();
+			}
+			fieldType = field.fieldType();
 			}
 			result.add(field);
 
@@ -507,7 +616,7 @@ public class LocalContext {
 					return null;
 				}
 				// 不能解引用基本类型
-				return "symbol.error.derefPrimitiveField";
+				return "symbol.error.derefPrimitiveField:"+type;
 			}
 
 			clz = type.array() > 0 ? GlobalContext.anyArray() : classes.getClassInfo(type.owner);
@@ -517,6 +626,8 @@ public class LocalContext {
 	public IClass get_frBegin() {return _frBegin;}
 	public SimpleList<FieldNode> get_frChain() {return _frChain;}
 	public IType get_frType() {return _frType;}
+	// optional chaining offset
+	public int get_frOffset() {return _frOffset;}
 	// endregion
 
 	public void checkType(String owner) {
@@ -532,12 +643,21 @@ public class LocalContext {
 
 		var exceptions = (AttrClassList) method.attrByName("Exceptions");
 		if (exceptions != null) {
-			for (String s : exceptions.value) {
-				if (castCheck.checkCast(type, new Type(s)).type >= 0) return;
+			if (type.genericType() == 0) {
+				var parents = parentListOrReport(classes.getClassInfo(type.owner()));
+				for (String s : exceptions.value) {
+					if (parents.containsValue(s)) return;
+				}
+			} else {
+				for (String s : exceptions.value) {
+					if (castCheck.checkCast(type, new Type(s)).type >= 0) return;
+				}
 			}
 		}
 		report(Kind.ERROR, "lc.unReportedException", type);
 	}
+
+	public SimpleList<TransitiveContext> enclosingThis = new SimpleList<>();
 
 	// Assigned by BlockParser
 	public MyHashMap<String, Variable> variables = new MyHashMap<>();
@@ -572,6 +692,11 @@ public class LocalContext {
 			if (result != null) return result;
 		}
 
+		for (int i = enclosingThis.size()-1; i >= 0; i--) {
+			Import imp = enclosingThis.get(i).tryMethodRef(this, name);
+			if (imp != null) return imp;
+		}
+
 		IClass owner = tr.resolveMethod(this, name);
 		if (owner == null) return null;
 		return new Import(owner, name);
@@ -580,6 +705,11 @@ public class LocalContext {
 		if (dynamicFieldImport != null) {
 			Import result = dynamicFieldImport.apply(name);
 			if (result != null) return result;
+		}
+
+		for (int i = enclosingThis.size()-1; i >= 0; i--) {
+			Import imp = enclosingThis.get(i).tryFieldRef(this, name);
+			if (imp != null) return imp;
 		}
 
 		_frChain.clear();
@@ -596,7 +726,7 @@ public class LocalContext {
 		}
 
 		try {
-			return classes.parentList(info).containsValue(instClass);
+			return classes.getParentList(info).containsValue(instClass);
 		} catch (ClassNotFoundException e) {
 			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
 			return false;
@@ -674,43 +804,40 @@ public class LocalContext {
 
 		if (infoA == infoB) return a;
 
-		try {
-			IntBiMap<String> tmp,
-				listA = classes.parentList(infoA),
-				listB = classes.parentList(infoB);
+		String commonParent = getCommonParent(infoA, infoB);
+		assert commonParent != null;
+		if (typeParams.isEmpty() && extendType == 0) return new Type(commonParent);
 
-			if (listA.size() > listB.size()) {
-				tmp = listA;
-				listA = listB;
-				listB = tmp;
-			}
-
-			String commonParent = infoA.name();
-			int minIndex = listB.size();
-			for (IntBiMap.Entry<String> entry : listA.selfEntrySet()) {
-				String klass = entry.getValue();
-
-				int val = listB.getValueOrDefault(klass, minIndex);
-				int j = val&0xFFFF;
-				if (j < minIndex || (j == minIndex && val < minIndex)) {
-					commonParent = klass;
-					minIndex = j;
-				}
-			}
-
-			assert commonParent != null;
-			if (typeParams.isEmpty() && extendType == 0) {
-				return new Type(commonParent);
-			}
-
-			Generic generic = new Generic(commonParent, a.array(), (byte) extendType);
-			generic.children = typeParams;
-			return generic;
-		} catch (ClassNotFoundException e) {
-			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
-			return a;
-		}
+		Generic generic = new Generic(commonParent, a.array(), (byte) extendType);
+		generic.children = typeParams;
+		return generic;
 	}
+	public String getCommonParent(IClass infoA, IClass infoB) {
+		IntBiMap<String> tmp,
+			listA = parentListOrReport(infoA),
+			listB = parentListOrReport(infoB);
+
+		if (listA.size() > listB.size()) {
+			tmp = listA;
+			listA = listB;
+			listB = tmp;
+		}
+
+		String commonParent = infoA.name();
+		int minIndex = listB.size();
+		for (IntBiMap.Entry<String> entry : listA.selfEntrySet()) {
+			String klass = entry.getValue();
+
+			int val = listB.getValueOrDefault(klass, minIndex);
+			int j = val&0xFFFF;
+			if (j < minIndex || (j == minIndex && val < minIndex)) {
+				commonParent = klass;
+				minIndex = j;
+			}
+		}
+		return commonParent;
+	}
+
 	// region 也许应该放在GlobalContext中的一些实现特殊语法的函数
 	public Annotation getAnnotation(IClass type, Attributed node, String annotation, boolean rt) {
 		return Attributes.getAnnotation(Attributes.getAnnotations(type.cp(), node, rt), annotation);
@@ -769,24 +896,8 @@ public class LocalContext {
 			case JavaLexer.lBracket -> {
 				TypeCast.Cast cast = castTo(left, new Type("java/util/Map"), TypeCast.E_NEVER);
 				if (cast.type == TypeCast.UPCAST) {
-					MethodNode mn = new MethodNode(Opcodes.ACC_PUBLIC, "java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
-
-					List<IType> owner = null;
-					if (cast.distance == 0) {
-						owner = left.genericType() == IType.GENERIC_TYPE ? ((Generic) left).children : null;
-					} else {
-						try {
-							owner = classes.getTypeParamOwner(classes.getClassInfo(left.owner()), new Type("java/util/Map"));
-						} catch (Exception e) {
-							e.printStackTrace();
-						}
-					}
-					if (owner != null) {
-						System.out.println("GenType1="+owner.get(1));
-					}
-
-					return Invoke.interfaceMethod(mn, e1, e2);
-
+					// cannot use SingletonList, will call set()
+					return new Invoke(ep.chain(e1, "get", 0), Arrays.asList(e2)).resolve(this);
 				}
 			}
 		}
@@ -849,7 +960,7 @@ public class LocalContext {
 		if (v >= list.size()) list.add(((LocalContext) list.get(1)).classes.createLocalContext());
 	}
 
-	public List<?> tmpList = new SimpleList<>();
+	public List<String> tmpList = new SimpleList<>();
 	public MyHashSet<String> tmpSet = new MyHashSet<>();
 	public SimpleList<AnnotationPrimer> tmpAnnotations = new SimpleList<>();
 	public CharList tmpSb = new CharList();

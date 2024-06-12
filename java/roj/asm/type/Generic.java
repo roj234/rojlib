@@ -20,14 +20,6 @@ public class Generic extends IGeneric {
 	public byte extendType;
 	private byte array;
 
-	public static Generic parameterized(Class<?> owner, Class<?>... params) {
-		List<Type> types = TypeHelper.parseMethod(TypeHelper.class2asm(params, owner));
-		Type own = types.remove(types.size()-1);
-		Generic g = new Generic(own.owner,own.array(),EX_NONE);
-		g.children = Helpers.cast(types);
-		return g;
-	}
-
 	public Generic() {}
 
 	public Generic(String owner) { this.owner = owner; }

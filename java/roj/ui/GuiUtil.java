@@ -210,4 +210,8 @@ public final class GuiUtil {
 			}
 		};
 	}
+
+	public static void removeComponent(Component component) {
+		component.getParent().remove(component);
+	}
 }

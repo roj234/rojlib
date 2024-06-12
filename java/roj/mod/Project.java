@@ -199,7 +199,7 @@ public final class Project extends FileConfig {
 	}
 
 	final void writeRes(String s) {
-		String relPath = s.substring(resPrefix).replace('\\', '/');
+		String relPath = s.substring(resPrefix).replace(File.separatorChar, '/');
 		dstFile.setCompress(!ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath).toLowerCase()));
 		try {
 			dstFile.set(relPath, new FileInputStream(s));

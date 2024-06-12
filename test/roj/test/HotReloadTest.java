@@ -43,7 +43,7 @@ public class HotReloadTest {
 
 		String path = "roj/dev/hr/Test$A.class";
 		byte[] bytes = IOUtil.getResource(path);
-		ConstantData data2 = Parser.parse(bytes);
+		ConstantData data2 = Parser.parseConstants(bytes);
 		context.update(data2);
 		context.commit(inst);
 
