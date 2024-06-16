@@ -143,6 +143,7 @@ public class IntList implements Iterable<Integer> {
 		if (begin >= end) return;
 		// will throw exceptions if out of bounds...
 		System.arraycopy(list, end, list, begin, size - end);
+		size -= end - begin;
 	}
 
 	public int[] getRawArray() {return list;}

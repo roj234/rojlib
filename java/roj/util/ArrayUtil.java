@@ -1,6 +1,5 @@
 package roj.util;
 
-import roj.collect.SimpleList;
 import roj.compiler.plugins.asm.ASM;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
@@ -198,13 +197,14 @@ public final class ArrayUtil {
 	}
 
 	private static final Class<?> IMMUTABLE_ARRAY_TYPE = Arrays.asList().getClass();
+	@SuppressWarnings("unchecked")
 	public static <T> List<T> copyOf(Collection<T> list) {
 		if (list.isEmpty()) return Collections.emptyList();
 		if (list.getClass() == IMMUTABLE_ARRAY_TYPE) return (List<T>) list;
 		if (ASM.inject("_TARGET_JAVA_VERSION", ReflectionUtils.JAVA_VERSION) >= 10) {
 			return List.copyOf(list);
 		} else {
-			return new SimpleList<>(list);
+			return (List<T>) Arrays.asList(list.toArray());
 		}
 	}
 }

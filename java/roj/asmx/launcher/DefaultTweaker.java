@@ -71,6 +71,7 @@ public class DefaultTweaker implements ITweaker {
 					w.clazz(Opcodes.CHECKCAST, "roj/asmx/ITransformer");
 					w.invokeV("roj/asmx/launcher/ClassWrapper", "registerTransformer", "(Lroj/asmx/ITransformer;)V");
 				}
+				w.one(Opcodes.RETURN);
 
 				Class<?> klass = ReflectionUtils.defineWeakClass(Parser.toByteArrayShared(autoloader));
 				ReflectionUtils.ensureClassInitialized(klass);

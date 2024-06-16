@@ -1,11 +1,14 @@
-package roj.compiler.ast.block;
+package roj.compiler.ast;
 
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
-import roj.asm.tree.anno.*;
+import roj.asm.tree.anno.AnnValDouble;
+import roj.asm.tree.anno.AnnValFloat;
+import roj.asm.tree.anno.AnnValInt;
+import roj.asm.tree.anno.AnnValLong;
 import roj.asm.tree.attr.AnnotationDefault;
 import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.ConstantValue;
@@ -21,71 +24,36 @@ import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ParseException;
-import roj.util.Helpers;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
+ * Lava Compiler - 表达式或代码块懒解析<p>
+ * Parser levels: <ol>
+ *     <li>{@link CompileUnit Class Parser}</li>
+ *     <li><b><i>Segment Parser</i></b></li>
+ *     <li>{@link BlockParser Method Parser}</li>
+ *     <li>{@link ExprParser Expression Parser}</li>
+ * </ol>
+ *
  * Stage 3:
  *   annotation, methodDefault
  * Stage 4:
  *   static {}, static field, enum
  *   {}, field
  *   method
+ *
+ * @author Roj234
  */
 public interface ParseTask {
-	static Object Annotation(CompileUnit file, AnnotationPrimer annotation, String name) throws ParseException {
-		// TODO 检测值是否合法，以及进行数字的转换
-
-		// _ENV_TYPED_ARRAY允许直接使用数组生成式而不用给定类型
-		JavaLexer lexer = file.getLexer();
-		int state = lexer.state;
-		lexer.state = JavaLexer.STATE_EXPR;
-		var expr = LocalContext.get().ep.parse(file, ExprParser.STOP_COMMA|ExprParser.STOP_RSB|ExprParser._ENV_TYPED_ARRAY|ExprParser.NAE);
-		lexer.state = state;
-
-		if (expr.isConstant()) return convert((ExprNode) expr);
-
-		return (ParseTask) () -> {
-			var lc = LocalContext.get();
-			var node = expr.resolve(lc);
-
-			if (!node.isConstant() && !node.isKind(ExprNode.ExprKind.ENUM_REFERENCE)) {
-				lc.report(Kind.ERROR, "ps.annotation.noConstant");
-				return;
-			}
-
-			annotation.newEntry(name, convert(node));
-		};
-	}
-	private static AnnVal convert(ExprNode expr) {
-		Object o = expr.constVal();
-		if (o instanceof Object[] arr) {
-			for (int i = 0; i < arr.length; i++) {
-				arr[i] = convert(arr[i]);
-			}
-			return new AnnValArray(Helpers.cast(Arrays.asList(arr)));
-		}
-		return convert(o);
-	}
-	private static AnnVal convert(Object o) {
-		if (o instanceof AnnVal a) return a;
-		if (o instanceof String) return AnnVal.valueOf(o.toString());
-		if (o instanceof IType type) return new AnnValClass(type.rawType().toDesc());
-		throw new UnsupportedOperationException("未预料的常量类型:"+o);
-	}
-
-
 	static void MethodDefault(CompileUnit file, MethodNode mn, int id) throws ParseException {
-		LocalContext lc1 = LocalContext.get();
+		var lc = file.lc();
+		var wr = lc.lexer;
+		int state = wr.setState(JavaLexer.STATE_EXPR);
+		UnresolvedExprNode expr = lc.ep.parse(ExprParser.STOP_RSB|ExprParser.STOP_COMMA|ExprParser.NAE);
+		wr.state = state;
 
-		JavaLexer lexer = file.getLexer();
-		int state = lexer.state;
-		lexer.state = JavaLexer.STATE_EXPR;
-		UnresolvedExprNode expr = lc1.ep.parse(file, ExprParser.STOP_RSB|ExprParser.STOP_COMMA|ExprParser.NAE);
-		lexer.state = state;
-		if (!expr.isConstant()) lc1.report(file.getLexer().current().pos(), Kind.WARNING, "ps.method.paramDef");
+		if (!expr.isConstant()) lc.report(wr.current().pos(), Kind.WARNING, "ps.method.paramDef");
 
 		String jsonString = ExprParser.serialize((ExprNode) expr);
 
@@ -96,43 +64,37 @@ public interface ParseTask {
 	}
 
 	static ParseTask AnnotationDefault(CompileUnit file, MethodNode mn) throws ParseException {
-		JavaLexer lexer = file.getLexer();
-		int state = lexer.state;
-		lexer.state = JavaLexer.STATE_EXPR;
-		var expr = LocalContext.get().ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE);
-		lexer.state = state;
+		var wr = file.lc().lexer;
+		int index = wr.index;
+		int state = wr.setState(JavaLexer.STATE_EXPR);
+		var expr = file.lc().ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE);
+		wr.state = state;
 
 		var attr = new AnnotationDefault(null);
 		mn.putAttr(attr);
 
-		return () -> {
-			var lc = LocalContext.get();
-			lc.setMethod(file.getStaticInit().mn);
-
-			ExprNode node = expr.resolve(lc);
-			if (!node.isConstant() && !node.isKind(ExprNode.ExprKind.ENUM_REFERENCE)) {
-				lc.report(Kind.ERROR, "ps.annoDef.notConst");
-			} else {
-				attr.val = convert(node);
-			}
+		return (ctx) -> {
+			ctx.lexer.index = index;
+			ctx.setMethod(file.getStaticInit().mn);
+			attr.val = AnnotationPrimer.toAnnVal(ctx, (ExprNode) expr, mn.returnType());
 		};
 	}
 
 
 	static ParseTask StaticInitBlock(CompileUnit file) throws ParseException {
-		JavaLexer wr = file.getLexer();
+		var wr = file.lc().lexer;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
 		int pos = wr.skipBrace();
 
-		return () -> {
-			wr.init(pos, linePos, lineIdx);
-			LocalContext.get().bp.parseBlockMethod(file, file.getStaticInit());
+		return (ctx) -> {
+			ctx.lexer.init(pos, linePos, lineIdx);
+			ctx.bp.parseBlockMethod(file, file.getStaticInit());
 		};
 	}
 
 	static ParseTask InstanceInitBlock(CompileUnit file) throws ParseException {
-		JavaLexer wr = file.getLexer();
+		var wr = file.lc().lexer;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
 		int pos = wr.skipBrace();
@@ -141,31 +103,29 @@ public interface ParseTask {
 			@Override
 			public int priority() {return 1;}
 			@Override
-			public void parse() throws ParseException {
-				wr.init(pos, linePos, lineIdx);
-				LocalContext.get().bp.parseBlockMethod(file, file.getGlobalInit());
+			public void parse(LocalContext ctx) throws ParseException {
+				ctx.lexer.init(pos, linePos, lineIdx);
+				ctx.bp.parseBlockMethod(file, file.getGlobalInit());
 			}
 		};
 	}
 	static ParseTask Field(CompileUnit file, FieldNode f) throws ParseException {
-		JavaLexer lexer = file.getLexer();
-		int state = lexer.state;
-		lexer.state = JavaLexer.STATE_EXPR;
-		var expr = LocalContext.get().ep.parse(file, ExprParser.STOP_COMMA|ExprParser.STOP_SEMICOLON|ExprParser.NAE);
-		lexer.state = state;
+		var wr = file.lc().lexer;
+		int state = wr.setState(JavaLexer.STATE_EXPR);
+		var expr = file.lc().ep.parse(ExprParser.STOP_COMMA|ExprParser.STOP_SEMICOLON|ExprParser.NAE);
+		wr.state = state;
 
 		return new ParseTask() {
 			@Override
 			public int priority() {return (f.modifier&Opcodes.ACC_STATIC) != 0 ? 0 : 1;}
 			@Override
-			public void parse() {
-				var lc = LocalContext.get();
-				var node = expr.resolve(lc);
+			public void parse(LocalContext ctx) {
+				var node = expr.resolve(ctx);
 
 				if ((f.modifier & Opcodes.ACC_STATIC) != 0) {
 					if ((f.modifier & Opcodes.ACC_FINAL) != 0) {
 						if (!file.finalFields.remove(f)) {
-							lc.report(Kind.ERROR, "cu.finalField.assigned", f);
+							ctx.report(Kind.ERROR, "cu.finalField.assigned", f);
 						}
 
 						if (node.isConstant() || node.isKind(ExprNode.ExprKind.LDC_CLASS)) {
@@ -175,19 +135,19 @@ public interface ParseTask {
 					}
 
 					MethodWriter mp = file.getStaticInit();
-					lc.setMethod(mp.mn);
+					ctx.setMethod(mp.mn);
 
 					node.write(mp, false);
 					mp.field(Opcodes.PUTSTATIC, file.name, f.name(), f.rawDesc());
 				} else {
 					if ((f.modifier & Opcodes.ACC_FINAL) != 0) {
 						if (!file.finalFields.remove(f)) {
-							lc.report(Kind.ERROR, "ps.field.assigned", f);
+							ctx.report(Kind.ERROR, "ps.field.assigned", f);
 						}
 					}
 
 					MethodWriter mp = file.getGlobalInit();
-					lc.setMethod(mp.mn);
+					ctx.setMethod(mp.mn);
 
 					mp.one(Opcodes.ALOAD_0);
 					node.write(mp, false);
@@ -207,7 +167,7 @@ public interface ParseTask {
 	}
 
 	static ParseTask Method(CompileUnit file, MethodNode mn, List<String> argNames) throws ParseException {
-		JavaLexer wr = file.getLexer();
+		var wr = file.lc().lexer;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
 		int pos = wr.skipBrace();
@@ -216,16 +176,14 @@ public interface ParseTask {
 			@Override
 			public int priority() {return 2;}
 			@Override
-			public void parse() throws ParseException {
-				wr.init(pos, linePos, lineIdx);
-
-				var lc = LocalContext.get();
-				MethodWriter cw = lc.bp.parseMethod(file, mn, argNames);
+			public void parse(LocalContext ctx) throws ParseException {
+				ctx.lexer.init(pos, linePos, lineIdx);
+				MethodWriter cw = ctx.bp.parseMethod(file, mn, argNames);
 
 				autoConstructor:
-				if (lc.not_invoke_constructor) {
+				if (ctx.not_invoke_constructor) {
 					if ((file.modifier&Opcodes.ACC_ENUM) != 0) {
-						MethodWriter ac = lc.classes.createMethodPoet(file, mn);
+						MethodWriter ac = ctx.classes.createMethodPoet(file, mn);
 						ac.one(Opcodes.ALOAD_0);
 						ac.one(Opcodes.ALOAD_1);
 						ac.one(Opcodes.ILOAD_2);
@@ -235,15 +193,15 @@ public interface ParseTask {
 						break autoConstructor;
 					}
 
-					IClass pInfo = lc.classes.getClassInfo(file.parent);
+					IClass pInfo = ctx.classes.getClassInfo(file.parent);
 					int superInit = pInfo.getMethod("<init>", "()V");
 					if (superInit < 0) {
-						lc.report(Kind.ERROR, "cu.noDefaultConstructor", file.parent);
+						ctx.report(Kind.ERROR, "cu.noDefaultConstructor", file.parent);
 						break autoConstructor;
 					}
-					if (!lc.checkAccessible(pInfo, pInfo.methods().get(superInit), false, true)) break autoConstructor;
+					if (!ctx.checkAccessible(pInfo, pInfo.methods().get(superInit), false, true)) break autoConstructor;
 
-					MethodWriter ac = lc.classes.createMethodPoet(file, mn);
+					MethodWriter ac = ctx.classes.createMethodPoet(file, mn);
 					ac.one(Opcodes.ALOAD_0);
 					ac.invokeD(file.parent, "<init>", "()V");
 
@@ -261,5 +219,5 @@ public interface ParseTask {
 	}
 
 	default int priority() {return 0;}
-	void parse() throws ParseException;
+	void parse(LocalContext ctx) throws ParseException;
 }

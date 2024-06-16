@@ -13,7 +13,18 @@ import roj.compiler.resolve.TypeCast;
  * @since 2022/2/24 19:16
  */
 public abstract class ExprNode implements UnresolvedExprNode {
-	protected int wordStart, wordEnd;
+	public int wordStart, wordEnd;
+	public int getWordStart() {return wordStart;}
+	public int getWordEnd() {return wordEnd;}
+
+	protected ExprNode() {
+		var lc = LocalContext.get();
+		if (lc != null) {
+			wordStart = lc.lexer.current().pos();
+			wordEnd = lc.lexer.index;
+		}
+	}
+	protected ExprNode(int _noUpdate) {}
 
 	public abstract String toString();
 

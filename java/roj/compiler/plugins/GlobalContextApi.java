@@ -22,6 +22,7 @@ import roj.compiler.plugins.api.Processor;
 import roj.compiler.plugins.api.Resolver;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -29,8 +30,8 @@ import java.util.List;
  * @since 2024/6/10 4:05
  */
 public class GlobalContextApi extends GlobalContext implements LavaApi {
-	private ImplResolveApi resolveApi = new ImplResolveApi();
-	private ImplExprApi exprApi = new ImplExprApi();
+	private final ImplResolveApi resolveApi = new ImplResolveApi();
+	private final ImplExprApi exprApi = new ImplExprApi();
 	private AnnotationRepo repo;
 
 	@Override
@@ -61,12 +62,10 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 	// DEFINE BY USER
 	public void invokeAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {
 		for (AnnotationPrimer annotation : annotations) {
-			if (annotation.type().equals("java/lang/Override")) {
-				file.getLexer().index = annotation.pos;
-				file.report(Kind.ERROR, "annotation.override");
+			if (annotation.type().equals("java/lang/Override") && annotation.values != Collections.EMPTY_MAP) {
+				report(file, Kind.ERROR, annotation.pos, "annotation.override");
 			}
 			if (annotation.type().equals("roj/compiler/api/Ignore")) {
-				file.getLexer().index = annotation.pos;
 				debugLogger().info("\n\n当前的错误已被忽略\n\n");
 				// 临时解决方案
 				hasError = false;
@@ -115,7 +114,7 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 	@Override
 	public ExprParser createExprParser(LocalContext ctx) {
 		var parser = new ExprParser(ctx);
-		parser.st = exprApi.st;
+		parser.sm = exprApi.st;
 		parser.custom = exprApi.custom;
 		return parser;
 	}

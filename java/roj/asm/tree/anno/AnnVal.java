@@ -37,7 +37,7 @@ public abstract class AnnVal {
 	public Annotation asAnnotation() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not ANNOTATION"); }
 	public List<AnnVal> asArray() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not ARRAY"); }
 
-	AnnVal() {}
+	protected AnnVal() {}
 
 	public static AnnVal parse(ConstantPool pool, DynByteBuf r) {
 		int type = r.readUnsignedByte();
@@ -54,7 +54,7 @@ public abstract class AnnVal {
 					case ANNOTATION_CLASS -> new AnnValClass(((CstUTF) c).str());
 					default -> new AnnValInt((char) type, ((CstInt) c).value);
 				};
-			case ENUM: return new AnnValEnum(((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str());
+			case ENUM: return new AnnValEnum(checkSemicolon(((CstUTF) pool.get(r)).str()), ((CstUTF) pool.get(r)).str());
 			case ANNOTATION: return new AnnValAnnotation(Annotation.parse(pool, r));
 			case ARRAY:
 				int len = r.readUnsignedShort();
@@ -63,6 +63,11 @@ public abstract class AnnVal {
 				return new AnnValArray(annos);
 		}
 		throw new IllegalArgumentException("Unknown annotation value type '"+(char) type+"'");
+	}
+
+	private static String checkSemicolon(String str) {
+		if (!str.endsWith(";")) throw new IllegalArgumentException("无效的枚举类型:"+str);
+		return str;
 	}
 
 	public abstract byte type();

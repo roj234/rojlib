@@ -31,13 +31,7 @@ import java.util.function.Function;
  */
 public interface ExprApi {
 	/**
-	 * 新增不可重复前缀一元运算符<br>
-	 * 该运算符只能作为表达式中第一个前缀一元运算
-	 */
-	void addUnaryPreFirst(String token, Function<JavaLexer, UnaryPreNode> fn);
-	/**
-	 * 新增可重复前缀一元运算符<br>
-	 * 该运算符可与自身或其它可重复的前缀一元运算叠加
+	 * 新增前缀一元运算符
 	 */
 	void addUnaryPre(String token, BiFunction<JavaLexer, @Nullable UnaryPreNode, UnaryPreNode> fn);
 

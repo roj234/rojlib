@@ -9,7 +9,6 @@ import roj.asm.tree.IClass;
 import roj.asm.tree.anno.AnnValEnum;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.type.TypeHelper;
 import roj.asm.visitor.Label;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
@@ -76,10 +75,7 @@ final class DotGet extends VarNode {
 		}
 	}
 
-	public Type toClassRef() {
-		if (flags >= 0) throw new IllegalArgumentException("cannot be class ref");
-		if (bits != 0) LocalContext.get().report(Kind.ERROR, "dotGet.opChain.inClassDecl");
-
+	Type toClassRef() {
 		CharList sb = LocalContext.get().tmpSb; sb.clear();
 		int i = 0;
 		String part = names.get(0);
@@ -89,8 +85,7 @@ final class DotGet extends VarNode {
 			sb.append('/');
 		}
 
-		int pt = i == 1 ? TypeHelper.toPrimitiveType(names.get(0)) : -1;
-		return pt > 0 ? new Type(pt, names.size()-i) : new Type(sb.toString(), names.size()-i);
+		return new Type(sb.toString(), names.size()-i);
 	}
 
 	@Override

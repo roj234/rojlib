@@ -50,11 +50,21 @@ final class EncloseRef extends ExprNode {
 			var cast = ctx.castTo(thisType, type, TypeCast.E_NEVER);
 			if (cast.type < 0) {
 				ctx.report(Kind.ERROR, "encloseRef.nds", thisType, type);
-			} else if (cast.distance > 1) {
+			} else if (cast.distance > 1 || checkInterfaceInherit(ctx, type)) {
 				ctx.report(Kind.INCOMPATIBLE, "encloseRef.tooFar", thisType, type);
 			}
 		}
 		return this;
+	}
+
+	private static boolean checkInterfaceInherit(LocalContext ctx, IType type) {
+		String target = type.owner();
+		for (String itf : ctx.file.interfaces()) {
+			if (itf.equals(target)) continue;
+			if (ctx.parentListOrReport(ctx.classes.getClassInfo(itf)).containsValue(target))
+				return true;
+		}
+		return false;
 	}
 
 	@Override

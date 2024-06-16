@@ -20,9 +20,9 @@ final class UnaryPost extends ExprNode {
 	private VarNode left;
 
 	// inc(++) or dec(--)
-	UnaryPost(short op, ExprNode left) {
+	UnaryPost(short op, VarNode left) {
 		this.op = op;
-		this.left = (VarNode) left;
+		this.left = left;
 	}
 
 	@Override

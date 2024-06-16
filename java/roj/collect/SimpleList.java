@@ -328,6 +328,11 @@ public class SimpleList<E> extends AbstractCollection<E> implements List<E>, Ran
 		if (i < 0 || i >= size) throw new ArrayIndexOutOfBoundsException(i);
 		return (E) list[i];
 	}
+	@SuppressWarnings("unchecked")
+	public E get(int i, E def) {
+		if (i < 0 || i >= size) return def;
+		return (E) list[i];
+	}
 
 	public E getLast() {return getLast(null);}
 	@SuppressWarnings("unchecked")

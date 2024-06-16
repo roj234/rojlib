@@ -1,6 +1,7 @@
 package roj.compiler;
 
 import roj.asm.tree.attr.LineNumberTable;
+import roj.asm.visitor.Label;
 import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.TrieTree;
@@ -95,7 +96,7 @@ public final class JavaLexer extends Tokenizer {
 		"{", "}",
 		"[", "]",
 		"(", ")",
-		"->", "=>", "?", ":",
+		"->", ">>>>>>>>>>>", "?", ":",
 		".", ",", ";",
 		// Misc
 		"?.", "@", "...", "::",
@@ -119,7 +120,7 @@ public final class JavaLexer extends Tokenizer {
 		lBrace = 100, rBrace = 101,
 		lBracket = 102, rBracket = 103,
 		lParen = 104, rParen = 105,
-		lambda = 106, mapkv = 107, ask = 108, colon = 109,
+		lambda = 106, UNUSED = 107, ask = 108, colon = 109,
 		dot = 110, comma = 111, semicolon = 112,
 
 		optional_chaining = 113, at = 114, varargs = 115, method_referent = 116,
@@ -141,7 +142,6 @@ public final class JavaLexer extends Tokenizer {
 	public static final TrieTree<Word> JAVA_TOKEN = new TrieTree<>();
 	private static final MyBitSet JAVA_LEND = new MyBitSet();
 	private static final Int2IntMap JAVA_C2C = new Int2IntMap();
-	private static final Int2IntMap priorities = new Int2IntMap();
 
 	public static I18n translate;
 	static {
@@ -167,36 +167,6 @@ public final class JavaLexer extends Tokenizer {
 
 		addWhitespace(JAVA_LEND);
 		JAVA_LEND.remove('$');
-
-		// 操作符优先级
-		Int2IntMap p = priorities;
-
-		p.putInt(and, 10);
-		p.putInt(or, 10);
-		p.putInt(xor, 10);
-
-		p.putInt(lsh, 9);
-		p.putInt(rsh, 9);
-		p.putInt(rsh_unsigned, 9);
-
-		p.putInt(pow, 8);
-
-		p.putInt(mul, 7);
-		p.putInt(div, 7);
-		p.putInt(mod, 7);
-
-		p.putInt(add, 6);
-		p.putInt(sub, 6);
-
-		p.putInt(lss, 5);
-		p.putInt(gtr, 5);
-		p.putInt(geq, 5);
-		p.putInt(leq, 5);
-		p.putInt(equ, 5);
-		p.putInt(neq, 5);
-
-		p.putInt(logic_and, 4);
-		p.putInt(logic_or, 4);
 
 		alias("...finally", FINALLY, null);
 		alias("...switch", SWITCH, null);
@@ -235,8 +205,6 @@ public final class JavaLexer extends Tokenizer {
 	public static short byName(String token) { return JAVA_TOKEN.get(token).type(); }
 	public static String byId(short id) { return id < 100 ? keywords[id - 10] : operators[id - 100]; }
 
-	public static int binaryOperatorPriority(short op) { return priorities.getOrDefaultInt(op, -1); }
-
 	public static final int STATE_CLASS = 0, STATE_MODULE = 1, STATE_EXPR = 2, STATE_TYPE = 3;
 	public int state = STATE_CLASS;
 
@@ -248,7 +216,7 @@ public final class JavaLexer extends Tokenizer {
 				short id = super.type();
 				return id <= CHARACTER || (id >= 100 && id <= 200) || switch (state) {
 					case STATE_CLASS -> id <= JavaLexer.DOUBLE;
-					case STATE_EXPR -> id >= VOID && id <= FINALLY || id == CLASS || id == FINAL || id == CONST || id == DEFAULT || id > 999;
+					case STATE_EXPR -> id >= VOID && id <= FINALLY || id == CLASS || id == FINAL || id == CONST || id == DEFAULT || id == SUPER || id > 999;
 					case STATE_TYPE -> id >= VOID && id <= FINALLY || id == SUPER || id == EXTENDS;
 					case STATE_MODULE -> id >= EXPORTS && id <= TO || id == WITH || id == STATIC;
 					default -> false;
@@ -261,7 +229,7 @@ public final class JavaLexer extends Tokenizer {
 	protected boolean isValidToken(int off, Word w) {
 		if (!super.isValidToken(off, w)) return false;
 		int id = w.type();
-		return state != STATE_TYPE || id < inc || id == gtr || id == lss;
+		return state != STATE_TYPE || (id != rsh && id != rsh_unsigned);
 	}
 
 	public int skipBrace() throws ParseException {
@@ -393,17 +361,30 @@ public final class JavaLexer extends Tokenizer {
 	}
 
 	public MethodWriter labelGen;
-	public LineNumberTable table;
-	public int prevBci;
+	private LineNumberTable lines;
+
+	public void setLines(LineNumberTable _new) {
+		assert lines == null;
+		_new.add(new Label(0), LN);
+		lines = _new;
+	}
+	public void getLines(MethodWriter cw) {
+		assert labelGen == cw;
+
+		if (labelGen.bci() == lines.lastBci()) lines.list.pop();
+		if (!lines.isEmpty()) cw.lines = lines;
+
+		lines = null;
+		labelGen = null;
+	}
 
 	@Override
 	protected void afterWord() {
 		int line = LN;
 		super.afterWord();
 		if (line != LN) {
-			if (table != null && labelGen.bci() != prevBci) {
-				prevBci = labelGen.bci();
-				table.list.add(new LineNumberTable.Item(labelGen.lineMarker(), LN));
+			if (lines != null && labelGen.bci() != lines.lastBci()) {
+				lines.add(labelGen.lineMarker(), LN);
 			}
 		}
 	}
@@ -428,5 +409,11 @@ public final class JavaLexer extends Tokenizer {
 	public Word optionalNext(short type) throws ParseException {
 		if (next().type() == type) next();
 		return wd;
+	}
+
+	public int setState(int state1) {
+		int prev = state;
+		state = state1;
+		return prev;
 	}
 }

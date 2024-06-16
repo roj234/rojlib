@@ -7,10 +7,11 @@ public interface CompilerSpec {
 	int ATTR_LOCAL_VARIABLES = 3;
 	int ATTR_INNER_CLASS = 4;
 	int ATTR_STACK_FRAME = 5;
-	int EXTRA_DEBUG_INFO = 6;
+	int NEST_CLASS_INFO = 6;
 	int OPTIONAL_SEMICOLON = 8;
 	int SHARED_ARRAY_STRING_CONCAT = 9;
 	int DISABLE_ASSERT = 10;
+	int SPEC_SEALED_ENUM = 11;
 
 
 	// no stack frame

@@ -29,14 +29,16 @@ final class Chained extends ExprNode {
 	@NotNull
 	@Override
 	public ExprNode resolve(LocalContext ctx) {
-		for (int i = 0; i < par.size(); i++) {
+		int i = 0;
+		while (i < par.size()) {
 			ExprNode node = par.get(i).resolve(ctx);
-			if (node.isConstant()) {
+			if (node.isConstant() && i != par.size()-1) {
 				ctx.report(Kind.SEVERE_WARNING, "chained.warn.constant_expr");
-				par.remove(i--);
-			} else par.set(i, node);
+				par.remove(i);
+			} else {
+				par.set(i++, node);
+			}
 		}
-		par.set(par.size()-1, par.get(par.size()-1).resolve(ctx));
 		return par.size() == 1 ? par.get(0) : this;
 	}
 

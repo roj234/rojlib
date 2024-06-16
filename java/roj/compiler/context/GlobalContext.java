@@ -5,7 +5,6 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.tree.*;
-import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.AttrModule;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.IType;
@@ -16,7 +15,7 @@ import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.block.BlockParser;
+import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.Kind;
@@ -223,9 +222,9 @@ public class GlobalContext implements CompilerSpec {
 
 	// DEFINE BY USER
 	public void invokeAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {
-		for (Annotation annotation : annotations) {
-			if (annotation.type().equals("java/lang/Override")) {
-				file.report(Kind.ERROR, "annotation.override");
+		for (var annotation : annotations) {
+			if (annotation.type().equals("java/lang/Override") && annotation.values != Collections.EMPTY_MAP) {
+				report(file, Kind.ERROR, annotation.pos, "annotation.override");
 			}
 			if (annotation.type().equals("roj/compiler/api/Ignore")) {
 				debugLogger().info("\n\n当前的错误已被忽略\n\n");
@@ -253,21 +252,20 @@ public class GlobalContext implements CompilerSpec {
 		listener.accept(diagnostic);
 	}
 
-	private static ConstantData AnyArray;
-	public static ConstantData anyArray() {
-		if (AnyArray == null) {
-			Class<Object[]> array = Object[].class;
-			ConstantData data = new ConstantData();
-			data.name("java/lang/Array");
-			data.parent(array.getSuperclass().getName().replace('.', '/'));
-			for (Class<?> itf : array.getInterfaces())
-				data.addInterface(itf.getName().replace('.', '/'));
-			data.newField(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "length", "I");
-			AnyArray = data;
-		}
-		return AnyArray;
+	private static final ConstantData AnyArray;
+	static {
+		var array = Object[].class;
+		var ref = new ConstantData();
+		ref.name("java/lang/Array");
+		ref.parent(array.getSuperclass().getName().replace('.', '/'));
+		for (Class<?> itf : array.getInterfaces()) ref.addInterface(itf.getName().replace('.', '/'));
+		ref.fields.add(new FieldNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "length", "I"));
+		ref.methods.add(new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "java/lang/Object", "clone", "()Ljava/lang/Object;"));
+		AnyArray = ref;
 	}
-	public static FieldNode arrayLength() {return anyArray().fields().get(0);}
+	public static ConstantData anyArray() {return AnyArray;}
+	public static FieldNode arrayLength() {return AnyArray.fields.get(0);}
+	public static MethodNode arrayClone() {return AnyArray.methods.get(0);}
 
 	private static final Logger logger = Logger.getLogger("Lavac/Debug");
 	public static Logger debugLogger() {return logger;}

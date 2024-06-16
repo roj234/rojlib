@@ -289,6 +289,7 @@ public class XMLParser extends Parser {
 	final Word readElementValue() throws ParseException {
 		CharSequence in = input;
 		int i = index;
+		if (i == in.length()) return eof();
 		int prevI = i;
 
 		// skip and collect whitespace

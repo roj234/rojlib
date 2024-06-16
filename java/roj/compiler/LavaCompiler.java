@@ -4,7 +4,7 @@ import roj.asm.Opcodes;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.type.TypeHelper;
-import roj.compiler.ast.block.ParseTask;
+import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.Constant;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LibraryZipFile;
@@ -81,7 +81,7 @@ public class LavaCompiler {
 		u.methods.add(mn);
 
 		cache.setClass(u);
-		ParseTask.Method(u, mn, Collections.emptyList()).parse();
+		ParseTask.Method(u, mn, Collections.emptyList()).parse(cache);
 
 		LocalContext.set(null);
 

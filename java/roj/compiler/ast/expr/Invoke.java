@@ -15,6 +15,7 @@ import roj.compiler.CompilerSpec;
 import roj.compiler.api.Evaluable;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
@@ -123,7 +124,6 @@ public class Invoke extends ExprNode {
 	}
 
 	static final byte RESOLVED = 1, INVOKE_SPECIAL = ComponentList.THIS_ONLY, INTERFACE_CLASS = 4, PMSIGN = 8;
-	private static final byte MUST_VIRTUAL = ComponentList.IN_STATIC;
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if ((flag&RESOLVED) != 0) return this;
@@ -135,8 +135,9 @@ public class Invoke extends ExprNode {
 			for (int i = 0; i < tpHint.size(); i++) ctx.resolveType(tpHint.get(i));
 		}
 
+		boolean notStatic = true;
+		IClass type;
 		String klass, method;
-		int mode = 0;
 		block:
 		if (fn.getClass() == DotGet.class) {
 			DotGet fn1 = (DotGet) fn;
@@ -148,6 +149,7 @@ public class Invoke extends ExprNode {
 			check:
 			if (fn1.names.isEmpty()) {
 				if (fn1.parent == null) {
+					notStatic = false;
 
 					// 省略this : a() => this.a();
 					fn2 = ctx.ep.This().resolve(ctx);
@@ -171,7 +173,7 @@ public class Invoke extends ExprNode {
 					LocalContext.Import mn = ctx.tryImportMethod(method);
 					// 静态导入
 					if (mn != null) {
-						klass = mn.owner.name();
+						type = mn.owner;
 						method = mn.method;
 						fn = mn.prev;
 						break block;
@@ -179,10 +181,11 @@ public class Invoke extends ExprNode {
 				} else {
 					// ((java.lang.Object) System.out).println(1);
 					fn2 = fn1.parent.resolve(ctx);
-					mode = MUST_VIRTUAL;
 
 					// [Type].[this|super]也走这个分支
-					if (fn2 == ctx.ep.Super() || fn2 instanceof EncloseRef ref && !ref.thisEnclosing) flag |= INVOKE_SPECIAL;
+					if (fn2 == ctx.ep.Super() || fn2 instanceof EncloseRef ref && !ref.thisEnclosing) {
+						flag |= INVOKE_SPECIAL;
+					}
 				}
 			} else {
 				// [x.y].a();
@@ -190,7 +193,7 @@ public class Invoke extends ExprNode {
 
 				// 静态方法
 				if (fn2 == null) {
-					klass = ((IClass) fn).name();
+					type = (IClass) fn;
 					fn = null;
 					break block;
 				}
@@ -201,7 +204,26 @@ public class Invoke extends ExprNode {
 			ownMirror = fn2.type();
 			// Notfound
 			if (ownMirror.genericType() == IType.ASTERISK_TYPE) return NaE.RESOLVE_FAILED;
-			klass = ownMirror.owner();
+
+			if (ownMirror.isPrimitive()) {
+				type = ctx.getPrimitiveMethod(fn2, args);
+				if (type == null) {
+					ctx.report(Kind.ERROR, "symbol.error.derefPrimitiveField", ownMirror);
+					return NaE.RESOLVE_FAILED;
+				} else {
+					SimpleList<ExprNode> tmp = Helpers.cast(ctx.tmpList);
+					tmp.add(fn2); tmp.addAll(args);
+					args = ctx.ep.copyOf(tmp);
+					fn = null;
+					tmp.clear();
+				}
+			} else {
+				type = ctx.getClassOrArray(ownMirror);
+				if (type == null) {
+					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", ownMirror);
+					return NaE.RESOLVE_FAILED;
+				}
+			}
 		} else if (fn.getClass() == This.class) {
 			if (!ctx.in_constructor | !ctx.not_invoke_constructor) {
 				ctx.report(Kind.ERROR, "invoke.error.constructor", fn);
@@ -210,7 +232,7 @@ public class Invoke extends ExprNode {
 
 			flag |= INVOKE_SPECIAL;
 			ownMirror = ((This) fn).resolve(ctx).type();
-			klass = ownMirror.owner();
+			type = ctx.classes.getClassInfo(ownMirror.owner());
 			method = "<init>";
 		} else {
 			ownMirror = ctx.resolveType((IType) fn);
@@ -218,8 +240,11 @@ public class Invoke extends ExprNode {
 			klass = ownMirror.owner();
 			method = "<init>";
 
-			IClass type = ctx.classes.getClassInfo(klass);
-			if (type == null) throw new ResolveException("symbol.error.noSuchClass:"+klass);
+			type = ctx.classes.getClassInfo(klass);
+			if (type == null) {
+				ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klass);
+				return NaE.RESOLVE_FAILED;
+			}
 
 			if ((type.modifier()&(Opcodes.ACC_ABSTRACT|Opcodes.ACC_INTERFACE)) != 0) {
 				ctx.report(Kind.ERROR, "invoke.error.instantiationAbstract", klass);
@@ -242,20 +267,18 @@ public class Invoke extends ExprNode {
 			else namedType = ((NamedParamList) last).getExtraParams();
 		}
 
-		IClass cn = ctx.resolveType(klass);
-		block:
-		if (cn != null) {
-			ctx.assertAccessible(cn);
-			if ((cn.modifier()&Opcodes.ACC_INTERFACE) != 0) flag |= INTERFACE_CLASS;
+		block: {
+			ctx.assertAccessible(type);
+			if ((type.modifier()&Opcodes.ACC_INTERFACE) != 0) flag |= INTERFACE_CLASS;
 
-			ComponentList list = ctx.methodListOrReport(cn, method);
+			ComponentList list = ctx.methodListOrReport(type, method);
 			if (list == null) {
-				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+cn.name());
+				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+type.name());
 				return NaE.RESOLVE_FAILED;
 			}
 
-			boolean staticEnv = (mode&MUST_VIRTUAL) != 0 ? ctx.in_static : fn == null;
-			int flags = (flag&INVOKE_SPECIAL) | (staticEnv ? ComponentList.IN_STATIC : 0);
+			int flags = fn == null ? ComponentList.IN_STATIC : 0;
+			if ((flag&INVOKE_SPECIAL) != 0) flags |= ComponentList.THIS_ONLY;
 
 			ctx.inferrer.manualTPBounds = tpHint;
 			MethodResult r = list.findMethod(ctx, ownMirror, tmp, namedType, flags);
@@ -268,25 +291,30 @@ public class Invoke extends ExprNode {
 			methodNode = mn;
 			genType1 = ownMirror;
 
-			// Object#getClass泛型的特殊处理
+			// Object#getClass的特殊处理
 			if (mn.name().equals("getClass") && mn.rawDesc().equals("()Ljava/lang/Class;")) {
 				Generic val = ownMirror instanceof Generic ? (Generic) ownMirror.clone() : new Generic(ownMirror.owner(), ownMirror.array(), Generic.EX_NONE);
 				val.extendType = Generic.EX_EXTENDS;
 				desc = Collections.singletonList(new Generic("java/lang/Class", Collections.singletonList(val)));
+			} else if (mn == GlobalContext.arrayClone()) {
+				// 数组的clone方法的特殊处理
+				desc = Collections.singletonList(new Asterisk(ownMirror, LocalContext.OBJECT_TYPE));
 			} else {
 				desc = r.desc != null ? Arrays.asList(r.desc) : Helpers.cast(TypeHelper.parseMethod(mn.rawDesc()));
 			}
 
 			if ((mn.modifier&Opcodes.ACC_STATIC) != 0) {
-				if (!staticEnv & (mode&MUST_VIRTUAL) != 0)
-					ctx.report(Kind.SEVERE_WARNING, "symbol.warn.static_on_half", mn.owner, mn.name(), "invoke.method");
-				fn = null;
+				if (fn != null) {
+					if (notStatic) ctx.report(Kind.SEVERE_WARNING, "symbol.warn.static_on_half", mn.owner, mn.name(), "invoke.method");
+					else fn = null; // should be this
+				}
+				//fn = null;
 			} else if ((mn.modifier&Opcodes.ACC_PRIVATE) != 0) {
 				flag |= INVOKE_SPECIAL;
 			}
 
 			if ((mn.modifier & Opcodes.ACC_VARARGS) != 0) {
-				Annotation pmsign = ctx.getAnnotation(cn, mn, "java/lang/invoke/MethodHandle$PolymorphicSignature", true);
+				Annotation pmsign = ctx.getAnnotation(type, mn, "java/lang/invoke/MethodHandle$PolymorphicSignature", true);
 				if (pmsign != null) {
 					methodNode = new MethodNode(mn.modifier, mn.owner, mn.name(), "()V");
 					List<Type> pars = methodNode.parameters(); pars.clear();
@@ -326,9 +354,7 @@ public class Invoke extends ExprNode {
 				if (result != null) return result.resolve(ctx);
 			}
 
-			r.addExceptions(ctx, cn, false);
-		} else {
-			ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klass);
+			r.addExceptions(ctx, type, false);
 		}
 
 		tmp.clear();
@@ -370,11 +396,8 @@ public class Invoke extends ExprNode {
 		if ((flag&INTERFACE_CLASS) != 0) {
 			if (opcode == Opcodes.INVOKESTATIC) {
 				LocalContext.get().file.setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_8);
-				cw.invoke(Opcodes.INVOKESTATIC, methodNode.owner, methodNode.name(), methodNode.rawDesc(), true);
-			} else {
-				assert opcode == Opcodes.INVOKEVIRTUAL;
-				cw.invoke(Opcodes.INVOKEINTERFACE, methodNode);
 			}
+			cw.invoke(opcode == Opcodes.INVOKEVIRTUAL ? Opcodes.INVOKEINTERFACE : opcode, methodNode.owner, methodNode.name(), methodNode.rawDesc(), true);
 		} else {
 			cw.invoke(opcode, methodNode);
 		}

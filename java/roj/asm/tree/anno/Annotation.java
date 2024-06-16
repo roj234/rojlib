@@ -141,6 +141,7 @@ public class Annotation {
 
 	public static Annotation parse(ConstantPool pool, DynByteBuf r) {
 		String type = ((CstUTF) pool.get(r)).str();
+		if (!type.endsWith(";")) throw new IllegalArgumentException("无效的注解类型:"+type);
 		int len = r.readUnsignedShort();
 
 		Map<String, AnnVal> params;

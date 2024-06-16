@@ -3,8 +3,8 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
+import roj.compiler.asm.LPSignature;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asm.SignaturePrimer;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
@@ -37,7 +37,7 @@ public final class MultiReturn extends ExprNode {
 			}
 		}
 
-		SignaturePrimer node = ctx.file.currentNode;
+		LPSignature node = ctx.file.currentNode;
 		ok: {
 			if (node != null) {
 				IType type1 = node.values.get(node.values.size() - 1);

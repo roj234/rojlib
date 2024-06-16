@@ -34,7 +34,7 @@ public final class Lavac {
 	public static String getCompileTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
 	public static String getCurrentTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
 
-	public static final String VERSION = "0.9.6[RC] (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "0.9.7[RC] (compiled on "+getCompileTime()+")";
 
 	int debugOps = 10;
 	GlobalContext ctx;

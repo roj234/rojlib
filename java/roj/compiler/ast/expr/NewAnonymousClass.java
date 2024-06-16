@@ -8,8 +8,8 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.compiler.asm.Asterisk;
+import roj.compiler.asm.LPSignature;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asm.SignaturePrimer;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -27,10 +27,13 @@ import java.util.List;
 final class NewAnonymousClass extends ExprNode {
 	private final Invoke init;
 	private final CompileUnit type;
+	private final boolean inherit;
 
-	NewAnonymousClass(Invoke cur, CompileUnit type) {
+	NewAnonymousClass(Invoke cur, CompileUnit type) {this(cur, type, true);}
+	NewAnonymousClass(Invoke cur, CompileUnit type, boolean inherit) {
 		this.init = cur;
 		this.type = type;
+		this.inherit = inherit;
 	}
 
 	@Override
@@ -42,14 +45,12 @@ final class NewAnonymousClass extends ExprNode {
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		List<ExprNode> args = init.args;
-		List<IType> argTypes = Arrays.asList(new IType[args.size()+1]);
+		List<IType> argTypes = Arrays.asList(new IType[args.size()]);
 		for (int i = 0; i < args.size(); i++) {
 			ExprNode node = args.get(i).resolve(ctx);
 			args.set(i, node);
 			argTypes.set(i, node.type());
 		}
-
-		argTypes.set(args.size(), Type.std(Type.VOID));
 
 		IType parentType = ctx.resolveType((IType) init.fn);
 
@@ -63,28 +64,25 @@ final class NewAnonymousClass extends ExprNode {
 			return NaE.RESOLVE_FAILED;
 		}
 
+		if (parentType.genericType() != 0) {
+			var sign = new LPSignature(Signature.CLASS);
+			if ((info.modifier() & Opcodes.ACC_INTERFACE) != 0) sign._impl(parentType);
+			else sign._add(parentType);
+			type.signature = sign;
+			type.putAttr(sign);
+		}
+
 		if ((info.modifier() & Opcodes.ACC_INTERFACE) != 0) {
-			if (parentType.genericType() != 0) {
-				type.signature = new SignaturePrimer(Signature.CLASS);
-				type.signature.parent = ctx.file.signature;
-				type.signature._impl(parentType);
-				type.putAttr(type.signature);
-			}
 			type.addInterface(parent);
-			// TODO this ref
 
 			if (!args.isEmpty()) {
 				// anonymousClass.interfaceArg
 				ctx.report(Kind.ERROR, "invoke.incompatible.single", info, "<init>", "  \1invoke.except\0 \1invoke.no_param\0\n  \1invoke.found\0 "+TextUtil.join(argTypes, ", "));
 				return NaE.RESOLVE_FAILED;
 			}
+
+			type.npConstructor();
 		} else {
-			if (parentType.genericType() != 0) {
-				type.signature = new SignaturePrimer(Signature.CLASS);
-				type.signature.parent = ctx.file.signature;
-				type.signature._add(parentType);
-				type.putAttr(type.signature);
-			}
 			type.parent(parent);
 
 			ComponentList list = ctx.methodListOrReport(info, "<init>");
@@ -108,30 +106,19 @@ final class NewAnonymousClass extends ExprNode {
 	}
 
 	private ExprNode resolveNow(LocalContext ctx) {
-		var lexer = type.getLexer();
-		var table = lexer.table;
-		var gen = lexer.labelGen;
-		int pos;
-
+		if (inherit) ctx.enclosing.add(EncloseContext.anonymousClass(ctx, type, init));
 		LocalContext.depth(1);
 		try {
-			pos = lexer.next().pos();
-			lexer.table = null;
-			lexer.labelGen = null;
-
 			type.S2_ResolveSelf();
 			type.S2_ResolveRef();
 			type.S3_Annotation();
 			type.S4_Code();
 		} catch (ParseException e) {
 			throw new ResolveException("newAnonymousClass failed", e);
+		} finally {
+			LocalContext.depth(-1);
+			if (inherit) ctx.enclosing.pop();
 		}
-
-		LocalContext.depth(-1);
-
-		lexer.index = pos;
-		lexer.table = table;
-		lexer.labelGen = gen;
 
 		init.fn = new Type(type.name);
 		return init.resolve(ctx);
@@ -140,7 +127,7 @@ final class NewAnonymousClass extends ExprNode {
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {writeDyn(cw, null);}
 	@Override
-	public void writeDyn(MethodWriter cw, TypeCast.@Nullable Cast cast) {
+	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
 		if (cast == null || !(cast.getType1() instanceof Generic g)) {
 			LocalContext.get().report(Kind.ERROR, "anonymousClass.inferFailed");
 			return;
@@ -152,5 +139,4 @@ final class NewAnonymousClass extends ExprNode {
 
 		resolveNow(LocalContext.get()).write(cw, false);
 	}
-
 }

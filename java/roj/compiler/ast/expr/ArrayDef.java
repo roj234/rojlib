@@ -1,6 +1,7 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -23,7 +24,7 @@ import static roj.asm.type.TypeHelper.componentType;
  * @author Roj233
  * @since 2022/2/27 19:43
  */
-class ArrayDef extends ExprNode {
+public final class ArrayDef extends ExprNode {
 	IType type;
 	private TypeCast.Cast[] casts;
 	private final List<ExprNode> expr;
@@ -36,7 +37,9 @@ class ArrayDef extends ExprNode {
 	}
 
 	@Override
-	public IType type() { return type; }
+	public IType type() { return type == null ? Asterisk.anyType : type; }
+
+	public void setType(IType type) {this.type = type;}
 
 	@NotNull
 	@Override
@@ -44,43 +47,54 @@ class ArrayDef extends ExprNode {
 		if ((flag&4) != 0) return this;
 		flag |= 4;
 
-		boolean resolved = false;
 		if (type == null) {
-			resolved = true;
-			ctx.report(Kind.WARNING, "arrayDef.warn.autoType");
-			IType type1 = null;
-
-			for (int i = 0; i < expr.size(); i++) {
-				ExprNode node = expr.get(i).resolve(ctx);
-				expr.set(i, node);
-
-				if (type1 == null) type1 = node.type();
-				else type1 = ctx.getCommonParent(type1, node.type());
-			}
-
-			type = type1 == null ? Asterisk.anyType : type1;
+			autoType(ctx);
+			return this;
 		} else {
 			ctx.resolveType(type);
+			if (type.array() == 0)
+				ctx.report(Kind.ERROR, "arrayDef.notArray", type);
 		}
 
+		// useless if sized creation
 		boolean isAllConstant = (flag&1) == 0;
 		IType exprType = isAllConstant ? componentType(type) : Type.std(Type.INT);
 		casts = new TypeCast.Cast[expr.size()];
 		for (int i = 0; i < expr.size(); i++) {
-			ExprNode node = expr.get(i);
-			if (!resolved) {
-				node = node.resolve(ctx);
-				expr.set(i, node);
-			}
+			var node = expr.get(i);
+			if (node instanceof ArrayDef ad) ad.type = exprType;
+			node = node.resolve(ctx);
+			expr.set(i, node);
+
 			if (!node.isConstant()) isAllConstant = false;
 
-			TypeCast.Cast cast = ctx.castTo(node.type(), exprType, TypeCast.E_NUMBER_DOWNCAST);
-			if (cast.type < 0) ctx.report(Kind.NOTE, "arrayDef.note.autoDownCastNumber");
+			var cast = ctx.castTo(node.type(), exprType, TypeCast.E_NUMBER_DOWNCAST);
+			if (cast.type < 0) ctx.report(Kind.NOTE, "arrayDef.autoCastNumber");
 			casts[i] = cast;
 		}
 
 		if (isAllConstant) flag |= 2;
 		return this;
+	}
+	private void autoType(LocalContext ctx) {
+		flag |= 8;
+
+		ctx.report(Kind.WARNING, "arrayDef.autoTypeTip");
+		IType cp = null;
+
+		for (int i = 0; i < expr.size(); i++) {
+			var node = expr.get(i).resolve(ctx);
+			expr.set(i, node);
+
+			if (cp == null) cp = node.type();
+			else cp = ctx.getCommonParent(cp, node.type());
+		}
+
+		if (cp != null) {
+			cp = cp.clone();
+			cp.setArrayDim(cp.array()+1);
+			type = cp;
+		}
 	}
 
 	@Override
@@ -114,6 +128,21 @@ class ArrayDef extends ExprNode {
 				cw.one(storeType);
 			}
 		}
+	}
+
+	@Override
+	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
+		if ((flag&8) != 0) {
+			var ctx = LocalContext.get();
+			if (cast == null) {
+				ctx.report(Kind.ERROR, "arrayDef.inferFailed");
+				return;
+			}
+			flag = 0;
+			type = cast.getType1();
+			resolve(ctx);
+		}
+		super.writeDyn(cw, cast);
 	}
 
 	private Type makeArray(MethodWriter cw, int dimension) {

@@ -85,7 +85,8 @@ cu.method.annotationThrow=注解方法不能抛出异常
 cu.method.noAbstract=在非抽象类%1中无法声明抽象方法%2
 
 cu.annotation.valueOnly=注解值必须采用 'name=value' 格式
-ps.annotation.noConstant=注解值不是常量
+cu.annotation.multiAnnotation=非法的类型开始
+ap.annotation.noConstant=注解值不是常量
 
 cu.except.type=class、interface、enum、@interface或record
 cu.name=<名称>
@@ -105,6 +106,9 @@ cu.noDefaultConstructor=[CU]%1 没有默认(无参)构造器
 cu.annotation.missing=注解 @%1 缺少参数'%2'的默认值
 cu.annotation.extra=注解 @%1 不存在参数'%2'
 cu.annotation.notApplicable=注解 @%1 无法应用于元素 %2
+cu.annotation.invalidDefault=注解值只能是基本类型、字符串、枚举、注解或它们的数组
+cu.annotation.cyclic=循环引用
+cu.annotation.noRepeat=注解@%1不可重复(@Repeatable|@Stackable)
 
 cu.sealed.noPermits=允许的子类%1必须直接继承或实现密封类%2
 cu.sealed.unlisted.c="无法继承自密封类%1\n  只允许下列类继承: %2"
@@ -125,17 +129,20 @@ cu.unrelatedDefault=方法%1在%2实现的其它接口中也有默认值, 必须
 cu.finalField.assigned=无法为最终变量%1分配值
 cu.finalField.missed=可能尚未初始化变量%1
 
-#Cu TypeResolver(segment)
-type.illegalType=非法的类型(on %1)
+#Cu readType
+type.illegalType=非法的类型开始(在'%1')
 type.arrayDepth=超过255维的数组
 type.primitiveNotAllowed=此处不允许基本类型
+type.voidNotAllowed=此处不允许void类型
 
+#Cu readGeneric
+type.parameterizedParam=类型参数不能有参数 (类型参数已是具体的类)
+type.illegalGenericDecl=此处不能定义泛型
+type.partialGenericSub=动态泛型组合格式不正确, 缺少%1的参数
+type.staticGenericSub=在动态泛型组合格式%1中引用静态类%2
+type.illegalAnyType=非法的类型开始
 type.except.afterAsk=大于号、逗号、extends或super
 type.except.afterLss=大于号或逗号
-type.error.partialGenericSub=[Type]动态泛型组合格式不正确, 缺少%1的参数
-type.error.staticGenericSub=[Type]在动态泛型组合格式%1中引用静态类%2
-type.error.primitiveGeneric=[Type]此处不允许使用基本类型
-type.error.illegalAnyType=[Type]非法的类型开始
 
 # LocalContext
 lc.unReportedException=[LC]可能抛出未声明的异常%1
@@ -143,7 +150,6 @@ lc.packageRestricted=[LC]类%1不在受限import的导入范围中
 
 # ParseTask
 ps.method.paramDef=[PS]默认参数不是立即常量
-ps.annoDef.notConst=[PS]注解的默认值不是常量
 
 # BlockParser
 block.initializorCannotComplete=初始化程序必须能够正常完成
@@ -177,6 +183,7 @@ block.switch.duplicate=[Switch]标签 %1 重复
 block.switch.uncovered="[Switch]缺少default分支\n  %1"
 block.switch.collisionType=[Switch]分支类型%1和%2之间存在交集
 block.switch.nullfail=[Switch]基本类型不允许case null
+block.switch.nonConstant=[Switch]使用"...switch"允许非编译期常量
 
 block.switch.noBranch=[Switch]没有分支
 block.switch.incompatible=[Switch]类型%1不能使用switch比较 (对于对象类型，添加@Switchable即可)
@@ -208,28 +215,22 @@ block.except.switch=case, default或'}'
 
 # 表达式Parse阶段
 
-expr.stackOverflow=[StackOverflow]表达式过于复杂
-expr.cast.lambda=[Lambda]需要->
-expr.namedCall.noExpr=[NamedCall]参数不是语句
-expr.easyMap.noKey=[EasyMap]键不是语句
-expr.easyMap.noValue=[EasyMap]值不是语句
-expr.easyMap.kvOrRet='=>'或','
+expr.stackOverflow=表达式太复杂
+expr.cast.lambda=需要->
+expr.easyMap.kvOrRet='->'或','
+expr.notVariable='%1'期待变量类型
 expr.newArray.generic=[NewArray]创建泛型数组
 expr.newArray.unInit=[NewArray]期待数组初始化
 expr.newArray.noTypePresent=[NewArray]省略类型的数组初始化在此处不可用
-expr.newArray.illegalDimension=[NewArray]无法对%1应用数组初始化
 expr.invoke.paramName=[Invoke]参数名称%1重复
-expr.symbol.refCheck=[Symbol].class的parent不是空:'%1'
-expr.unary.notVariable=[Unary]'%1'要求变量类型
-expr.unary.noOperand=[Unary]'%1'缺少操作数
-expr.assign.left=[Assign]无效的左值
-expr.assign.right=[Assign]无效的右值
-expr.trinary.noMiddle=[Trinary]无效的中值
-expr.trinary.noRight=[Trinary]无效的右值
+expr.typeRef.illegal=[TypeRef]无效的基本定义
+expr.typeRef.arrayDecl=[TypeRef]未预料的数组定义
 
 # 表达式Resolve阶段
-arrayDef.note.autoDownCastNumber=[ArrayDef]自动将超过范围的数字降级
-arrayDef.warn.autoType=[ArrayDef]自动类型适配尚未经过测试
+arrayDef.notArray=[NewArray]无法对%1应用数组初始化
+arrayDef.autoCastNumber=[NewArray]自动将超过范围的数字降级
+arrayDef.autoTypeTip=[NewArray]自动类型推断正在测试
+arrayDef.inferFailed=[NewArray]类型推断失败
 arrayGet.error.notArray=[ArrayGet] %1 不是数组
 arrayGet.warn.constant=[ArrayGet]值总是常量
 arrayGet.note.uselessCreation=[ArrayGet]建议将该数组转换为static final字段
@@ -243,12 +244,11 @@ cast.warn.redundant=[Cast]出现冗余的到 %1 的转换
 chained.warn.constant_expr=[Chained]在逗号分隔中的常量表达式
 dotGet.opChain.arrayLen=无法在?.表达式中访问数组长度
 dotGet.opChain.isChild= ?. 表达式只能在字段访问语句中使用
-dotGet.opChain.inClassDecl= ?. 表达式不能在类型引用中使用
 dotGet.opChain.tooLong= ?. 表达式仅适用于64级以内的字段访问 （李在赣神魔？）
 dotGet.incompatible.plural="[DotGet]对于%1找不到合适的字段\n%2"
 symbol.error.arrayBrOutsideClassRef=[Symbol]数组索引不能为<空>
 symbol.error.derefPrimitiveField=[Symbol]不能取消引用 %1
-symbol.error.expression=[Symbol]期待表达式
+symbol.error.expression=[Symbol]期待表达式 而不是%1
 symbol.error.noSuchClass=[Symbol]找不到 %1 的类
 symbol.error.noSuchSymbol="[Symbol]找不到符号\n符号: %1 %2\n位置: %3"
 symbol.error.generic.paramCount=[Symbol] %1 的类型变量数目错误; 找到%2; 需要%3

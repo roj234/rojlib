@@ -15,7 +15,7 @@ import roj.compiler.resolve.ResolveException;
  */
 final class This extends ExprNode {
 	private final boolean isThis;
-	This(boolean isThis) {this.isThis = isThis;}
+	This(boolean isThis) {super(0);this.isThis = isThis;}
 
 	private final Type type = new Type("");
 

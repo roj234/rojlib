@@ -172,7 +172,7 @@ public class SelectorLoop implements Shutdownable {
 
 					if (missedTime < 0) {
 						time = System.currentTimeMillis();
-						LOGGER.warn("时间倒流了{}ms", -missedTime);
+						if (missedTime < -1) LOGGER.warn("时间倒流了{}ms", -missedTime);
 					}
 				}
 

@@ -133,8 +133,8 @@ public final class BootstrapMethods extends Attribute {
 		public List<Constant> arguments;
 
 		static void checkInvariant(String desc) {
-			if (!desc.startsWith("(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"))
-				throw new IllegalArgumentException("invokedynamic的前三个参数应当固定: "+desc);
+			//if (!desc.startsWith("(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"))
+			//	throw new IllegalArgumentException("invokedynamic的前三个参数应当固定: "+desc);
 		}
 
 		public String interfaceDesc() {

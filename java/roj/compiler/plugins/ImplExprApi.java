@@ -31,7 +31,7 @@ import java.util.function.Function;
  * @since 2024/5/21 0021 2:23
  */
 class ImplExprApi implements ExprApi {
-	public ImplExprApi() {st.putAll(ExprParser.DST);}
+	public ImplExprApi() {st.putAll(ExprParser.getStateMap());}
 
 	final Int2IntMap st = new Int2IntMap();
 	final List<Object> custom = new SimpleList<>();
@@ -66,33 +66,22 @@ class ImplExprApi implements ExprApi {
 		return w.type();
 	}
 
-	private void register(int mask, String token, Object fn) {
-		int i = st.putIntIfAbsent(mask | tokenId(token), custom.size());
-		if (i != custom.size()) throw new IllegalStateException("token "+ token +" was occupied");
+	private void register(int mask, String token, Object fn, int terminate) {
+		int i = st.putIntIfAbsent(tokenId(token) | mask, terminate |= custom.size());
+		if (i != terminate) throw new IllegalStateException("token "+token+" was occupied");
 		custom.add(fn);
 	}
 
 	@Override
-	public void addUnaryPreFirst(String token, Function<JavaLexer, UnaryPreNode> fn) {register(ExprParser.SM_UnaryPreOnce, token, fn);}
+	public void addUnaryPre(String token, BiFunction<JavaLexer, @Nullable UnaryPreNode, UnaryPreNode> fn) {register(ExprParser.SM_UnaryPre, token, fn, 0);}
 	@Override
-	public void addUnaryPre(String token, BiFunction<JavaLexer, @Nullable UnaryPreNode, UnaryPreNode> fn) {register(ExprParser.SM_UnaryPreMany, token, fn);}
+	public void addExprGen(String token, Function<JavaLexer, ExprNode> fn) {register(ExprParser.SM_UnaryPre, token, fn, ExprParser.CU_TerminateFlag);}
 	@Override
-	public void addExprGen(String token, Function<JavaLexer, ExprNode> fn) {
-		st.put(ExprParser.SM_UnaryPreMany|tokenId(token), ExprParser.SMUser_ExprGen);
-		register(ExprParser.SM_UserExprGen, token, fn);
-	}
+	public void addExprStart(String token, Function<JavaLexer, ExprNode> fn) {register(ExprParser.SM_ExprStart, token, fn, 0);}
 	@Override
-	public void addExprStart(String token, Function<JavaLexer, ExprNode> fn) {register(ExprParser.SM_ExprStart, token, fn);}
+	public void addExprConv(String token, BiFunction<JavaLexer, ExprNode, ExprNode> fn) {register(ExprParser.SM_ExprNext, token, fn, 0);}
 	@Override
-	public void addExprConv(String token, BiFunction<JavaLexer, ExprNode, ExprNode> fn) {
-		st.put(ExprParser.SM_ExprNext|tokenId(token), ExprParser.SMUser_ExprConv);
-		register(ExprParser.SM_UserContinue, token, fn);
-	}
-	@Override
-	public void addExprTerminal(String token, BiFunction<JavaLexer, ExprNode, ExprNode> fn) {
-		st.put(ExprParser.SM_ExprNext|tokenId(token), ExprParser.SMUser_ExprTerm);
-		register(ExprParser.SM_UserTerminate, token, fn);
-	}
+	public void addExprTerminal(String token, BiFunction<JavaLexer, ExprNode, ExprNode> fn) {register(ExprParser.SM_ExprNext, token, fn, ExprParser.CU_TerminateFlag);}
 
 	@Override
 	public void addBinary(String token, int priority, BiFunction<ExprNode, ExprNode, ExprNode> callback) {

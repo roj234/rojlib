@@ -130,6 +130,9 @@ public class Tokenizer {
 	// endregion
 
 	public Tokenizer init(CharSequence seq) {
+		seek = 0;
+		seekPos = 0;
+		prevWords.clear();
 		prevLN = LN = LNIndex = 0;
 		prevIndex = index = 0;
 		input = seq;

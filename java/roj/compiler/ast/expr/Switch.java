@@ -1,14 +1,16 @@
 package roj.compiler.ast.expr;
 
+import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.tree.FieldNode;
 import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.block.SwitchNode;
+import roj.compiler.ast.SwitchNode;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
+import roj.compiler.resolve.TypeCast;
 import roj.util.Helpers;
 
 /**
@@ -42,15 +44,6 @@ final class Switch extends ExprNode {
 			else coveredAll += branch.labels.size();
 		}
 		this.type = type;
-
-		for (SwitchNode.Case branch : node.branches) {
-			ExprNode expr = branch.value;
-			if (expr != null) {
-				expr.writeDyn(branch.block, ctx.castTo(expr.type(), type, 0));
-				branch.block.jump(node.breakTo);
-				branch.value = null;
-			}
-		}
 
 		type = node.sval.type();
 		if (coveredAll > 0 && !type.isPrimitive()) {
@@ -88,6 +81,25 @@ final class Switch extends ExprNode {
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
-		LocalContext.get().bp.writeSwitch(node);
+		writeDyn(cw, null);
+	}
+
+	@Override
+	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
+		var ctx = LocalContext.get();
+
+		var type = this.type;
+		if (cast != null && cast.getType1() != null) type = cast.getType1();
+
+		for (SwitchNode.Case branch : node.branches) {
+			ExprNode expr = branch.value;
+			if (expr != null) {
+				expr.writeDyn(branch.block, ctx.castTo(expr.type(), type, 0));
+				branch.block.jump(node.breakTo);
+				branch.value = null;
+			}
+		}
+
+		ctx.bp.writeSwitch(node);
 	}
 }

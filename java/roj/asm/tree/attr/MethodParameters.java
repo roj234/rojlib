@@ -55,4 +55,6 @@ public final class MethodParameters extends Attribute {
 			this.flag = flag;
 		}
 	}
+
+	public int getFlag(int i, int def) { return flags.size() > i ? flags.get(i).flag : def; }
 }

@@ -23,9 +23,9 @@ import roj.compiler.JavaLexer;
 import roj.compiler.api.MethodDefault;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.Asterisk;
-import roj.compiler.asm.SignaturePrimer;
+import roj.compiler.asm.LPSignature;
 import roj.compiler.asm.Variable;
-import roj.compiler.ast.block.BlockParser;
+import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.Invoke;
@@ -35,7 +35,6 @@ import roj.config.ParseException;
 import roj.config.data.CInt;
 import roj.reflect.GetCallerArgs;
 import roj.text.CharList;
-import roj.text.TextUtil;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
@@ -63,30 +62,29 @@ public class LocalContext {
 
 	public final ExprParser ep;
 	public final BlockParser bp;
+	public final JavaLexer lexer;
 
-	public final TypeCast castCheck = new TypeCast();
+	private final TypeCast castCheck = new TypeCast();
 	public final Inferrer inferrer = new Inferrer(this);
 
-	public TypeResolver tr;
+	private TypeResolver tr;
 	public final MyHashMap<String, ConstantData> importCache = new MyHashMap<>(), importCacheMethod = new MyHashMap<>();
 	public final MyHashMap<String, Object[]> importCacheField = new MyHashMap<>();
 
 	public CompileUnit file;
 	public MethodNode method;
 	public boolean in_static, in_constructor, not_invoke_constructor;
+	public boolean disableRawTypeWarning;
 
-	public LocalContext(GlobalContext classes) {
-		this.classes = classes;
-		this.ep = classes.createExprParser(this);
-		this.bp = classes.createBlockParser(this);
-		this.castCheck.context = classes;
+	public LocalContext(GlobalContext ctx) {
+		this.classes = ctx;
+		this.lexer = ctx.createLexer();
+		this.ep = ctx.createExprParser(this);
+		this.bp = ctx.createBlockParser(this);
+		this.castCheck.context = ctx;
 		this.castCheck.genericResolver = sb -> {
-			SignaturePrimer node = this.file.currentNode;
-			CharSequence bound;
-			// TODO type bounds V2
-			if (node != null && sb != (bound = node.getTypeBound(sb))) {
-				return Collections.singletonList(new Type(bound.toString()));
-			}
+			LPSignature node = this.file.currentNode;
+			if (node != null) return node.getTypeParamBounds(sb);
 			return null;
 		};
 	}
@@ -102,11 +100,11 @@ public class LocalContext {
 
 		Object caller = GetCallerArgs.INSTANCE.getCallerInstance();
 		if (caller instanceof ExprNode node) {
-			classes.report(file, kind, node.wordStart, node.wordEnd, message, ArrayCache.OBJECTS);
+			classes.report(file, kind, node.getWordStart(), node.getWordEnd(), message, ArrayCache.OBJECTS);
 			return;
 		}
 
-		file.report(kind, message);
+		classes.report(file, kind, lexer.index, message);
 	}
 	public void report(Kind kind, String message, Object... args) {
 		if (errorCapture != null) {
@@ -116,11 +114,11 @@ public class LocalContext {
 
 		Object caller = GetCallerArgs.INSTANCE.getCallerInstance();
 		if (caller instanceof ExprNode node) {
-			classes.report(file, kind, node.wordStart, node.wordEnd, message, args);
+			classes.report(file, kind, node.getWordStart(), node.getWordEnd(), message, args);
 			return;
 		}
 
-		file.report(kind, message+":"+TextUtil.join(Arrays.asList(args), ":"));
+		classes.report(file, kind, lexer.index, message, args);
 	}
 	public void report(int knownPos, Kind kind, String message, Object... args) {
 		if (errorCapture != null) errorCapture.accept(message, args);
@@ -252,6 +250,9 @@ public class LocalContext {
 		this.importCacheMethod.clear();
 		this.importCacheField.clear();
 		this.flagCache.clear();
+		int pos = this.lexer.index;
+		this.lexer.init(file.getCode());
+		this.lexer.index = pos;
 	}
 	public void setMethod(MethodNode node) {
 		file._setSign(node);
@@ -423,7 +424,7 @@ public class LocalContext {
 					castCheck.genericResolver = prev;
 				}
 
-				if (type2 instanceof Generic g && g.isAnyType()) {
+				if (type2 instanceof Generic g && g.canBeAny()) {
 					gp.set(i, Signature.any());
 				} else if (type2.isPrimitive()) {
 					// TODO generate template class
@@ -450,33 +451,34 @@ public class LocalContext {
 				}
 			}
 
-			if (type1.sub != null) {
-				MyHashMap<String, InnerClasses.InnerClass> flags1 = classes.getInnerClassFlags(info);
-				GenericSub x = type1.sub;
-				while (x != null) {
-					InnerClasses.InnerClass ic = flags1.get(x.owner);
-					if (ic == null || (info = classes.getClassInfo(ic.self)) == null) {
-						report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", x.owner, "\1symbol.type\0 "+type1);
-						break;
-					}
-
-					if ((ic.flags&Opcodes.ACC_STATIC) != 0) {
-						report(Kind.ERROR, "type.error.staticGenericSub", type1, ic.name);
-						break;
-					}
-
-					sign = info.parsedAttr(info.cp(), Attribute.SIGNATURE);
-					count = sign == null ? 0 : sign.typeParams.size();
-
-					if (x.children.size() != count) {
-						if (count == 0) report(Kind.ERROR, "symbol.error.generic.paramCount.0", ic.self);
-						else report(Kind.ERROR, "symbol.error.generic.paramCount", ic.self, x.children.size(), count);
-					}
-
-					x = x.sub;
+			//TODO not tested yet
+			// MyHashMap<K,V>.Entry<Z>
+			// MyHashMap.Entry<K,V>
+			// MyHashMap<K,V>.Entry.SomeClass<Z>
+			// class G1<T> { class G2 { class G3<T2> {} } }
+			GenericSub x = type1.sub;
+			while (x != null) {
+				var ic = classes.getInnerClassFlags(info).get(x.owner);
+				if (ic == null || (info = classes.getClassInfo(ic.self)) == null) {
+					report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", x.owner, "\1symbol.type\0 "+type1);
+					break;
 				}
+
+				if ((ic.flags&Opcodes.ACC_STATIC) != 0) {
+					report(Kind.ERROR, "type.error.staticGenericSub", type1, ic.name);
+				}
+
+				sign = info.parsedAttr(info.cp(), Attribute.SIGNATURE);
+				count = sign == null ? 0 : sign.typeParams.size();
+
+				if (x.children.size() != count) {
+					if (count == 0) report(Kind.ERROR, "symbol.error.generic.paramCount.0", ic.self);
+					else report(Kind.ERROR, "symbol.error.generic.paramCount", ic.self, x.children.size(), count);
+				}
+
+				x = x.sub;
 			}
-		} else if (count > 0) {
+		} else if (count > 0 && !disableRawTypeWarning) {
 			report(Kind.WARNING, "symbol.warn.generic.rawTypes", type);
 		}
 		return type;
@@ -516,7 +518,7 @@ public class LocalContext {
 
 				int dollar = slash++;
 				while (true) {
-					IClass clz = classes.getClassInfo(sb);
+					var clz = classes.getClassInfo(sb);
 					if (clz != null) {
 						String error = resolveField(clz, null, desc, slash);
 						if (error == null) return null;
@@ -697,7 +699,7 @@ public class LocalContext {
 			if (imp != null) return imp;
 		}
 
-		IClass owner = tr.resolveMethod(this, name);
+		var owner = tr.resolveMethod(this, name);
 		if (owner == null) return null;
 		return new Import(owner, name);
 	}
@@ -713,7 +715,7 @@ public class LocalContext {
 		}
 
 		_frChain.clear();
-		IClass begin = tr.resolveField(this, name, _frChain);
+		var begin = tr.resolveField(this, name, _frChain);
 		if (begin == null) return null;
 		return new Import(begin, name);
 	}
@@ -734,9 +736,16 @@ public class LocalContext {
 	}
 
 	public IType getCommonParent(IType a, IType b) {
-		assert a.genericType() < 2 && b.genericType() < 2 : "无法比较的类型:"+a+","+b;
-
 		if (a.equals(b)) return a;
+
+		if (a.genericType() >= IType.ASTERISK_TYPE) {
+			a = ((Asterisk) a).getBound();
+			if (a == null) return b;
+		}
+		if (b.genericType() >= IType.ASTERISK_TYPE) {
+			b = ((Asterisk) b).getBound();
+			if (b == null) return a;
+		}
 
 		int capa = TypeCast.getDataCap(a.getActualType());
 		int capb = TypeCast.getDataCap(b.getActualType());
@@ -854,7 +863,7 @@ public class LocalContext {
 			IntMap<ExprNode> value1 = new IntMap<>();
 			for (IntMap.Entry<String> entry : value.selfEntrySet()) {
 				try {
-					value1.putInt(entry.getIntKey(), ExprParser.deserialize(entry.getValue()).resolve(this));
+					value1.putInt(entry.getIntKey(), ep.deserialize(entry.getValue()).resolve(this));
 				} catch (ParseException|ResolveException e) {
 					e.printStackTrace();
 					return null;
@@ -903,6 +912,13 @@ public class LocalContext {
 		}
 
 		return null;
+	}
+
+	public IClass getPrimitiveMethod(ExprNode caller, List<ExprNode> args) {
+		var type1 = new ConstantData();
+		type1.name("java/lang/Integer");
+		type1.newMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, "toHexString", "(I)Ljava/lang/String;");
+		return type1;
 	}
 
 	/**

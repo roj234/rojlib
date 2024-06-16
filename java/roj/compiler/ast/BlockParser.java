@@ -1,4 +1,4 @@
-package roj.compiler.ast.block;
+package roj.compiler.ast;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -24,7 +24,6 @@ import roj.compiler.JavaLexer;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.ast.VariableDeclare;
 import roj.compiler.ast.expr.*;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
@@ -48,29 +47,33 @@ import static roj.asm.util.InsnHelper.XALoad;
 import static roj.compiler.JavaLexer.*;
 
 /**
- * KScript语法分析器
- *
+ * Lava Compiler - 代码块<p>
+ * Parser levels: <ol>
+ *     <li>{@link CompileUnit Class Parser}</li>
+ *     <li>{@link ParseTask Segment Parser}</li>
+ *     <li><b><i>Method Parser</i></b></li>
+ *     <li>{@link ExprParser Expression Parser}</li>
+ * </ol>
  * @author solo6975
  * @since 2020/10/3 19:20
  */
-public class BlockParser {
+public final class BlockParser {
 	static final String VARIABLE_IGNORE = "_";
 	static final Type T_EXCEPTION = new Type("java/lang/Throwable");
 	private static final Type T_VAR = new Type(";"), T_CONST = new Type(";", 1);
 
 	private final LocalContext ctx;
 	private final ExprParser ep;
+	private final JavaLexer wr;
 
 	private CompileUnit file;
-	private JavaLexer wr;
 	private MethodWriter cw;
 	private boolean blockMethod;
-
-	private int variableSlot;
 
 	public BlockParser(LocalContext ctx) {
 		this.ctx = ctx;
 		this.ep = ctx.ep;
+		this.wr = ctx.lexer;
 		this.variables = ctx.variables;
 	}
 
@@ -90,58 +93,46 @@ public class BlockParser {
 		return this;
 	}
 
-	/// region 解析
-
+	// region 解析
 	public void parseBlockMethod(CompileUnit file, MethodWriter mw) throws ParseException {
-		this.file = file;
-		this.wr = file.getLexer();
-
 		blockMethod = true;
+		this.file = file;
 
 		ctx.setMethod(mw.mn);
-
-		wr.table = new LineNumberTable();
-		wr.prevBci = -1;
+		wr.setLines(new LineNumberTable());
 		setCw(mw);
 		reset();
 		parse0();
 
-		cw.lines = wr.table;
-		if (!cw.lines.isEmpty())
-			cw.lines.list.remove(cw.lines.list.size()-1);
-		wr.labelGen = null;
-		wr.table = null;
+		wr.getLines(cw);
 	}
 
 	public MethodWriter parseMethod(CompileUnit file, MethodNode mn, List<String> names) throws ParseException {
-		this.file = file;
-		this.wr = file.getLexer();
-
 		blockMethod = false;
+		this.file = file;
 
 		ctx.setMethod(mn);
-
-		wr.table = new LineNumberTable();
-		wr.prevBci = -1;
+		wr.setLines(new LineNumberTable());
 		setCw(ctx.classes.createMethodPoet(file, mn));
 		reset();
 
-		// TODO copy lines
 		if (mn.name().equals("<init>")) file.appendGlobalInit(cw);
 
 		if ((mn.modifier()&ACC_STATIC) == 0) fastSlot = 1;
 
-		// todo final
-		List<? extends IType> parameters = file.currentNode != null ? file.currentNode.values : mn.parameters();
-		for (int i = 0; i < names.size(); i++) newVar(names.get(i), parameters.get(i)).hasValue = true;
+		var flags = mn.parsedAttr(null, Attribute.MethodParameters);
+		var sign = mn.parsedAttr(null, Attribute.SIGNATURE);
+		List<? extends IType> parameters = sign != null ? sign.values : mn.parameters();
+		// 用names.size是因为sign.values会有return value
+		for (int i = 0; i < names.size(); i++) {
+			Variable var = newVar(names.get(i), parameters.get(i));
+			if (flags != null && (flags.getFlag(i, 0)&ACC_FINAL) != 0) var.isFinal = true;
+			var.hasValue = true;
+		}
 
 		parse0();
 
-		cw.lines = wr.table;
-		if (!cw.lines.isEmpty())
-			cw.lines.list.remove(cw.lines.list.size()-1);
-		wr.labelGen = null;
-		wr.table = null;
+		wr.getLines(cw);
 		return cw;
 	}
 
@@ -167,14 +158,13 @@ public class BlockParser {
 
 		endCodeBlock();
 	}
-
 	//endregion
 	/**
 	 * 语句
 	 */
 	@SuppressWarnings("fallthrough")
 	private void statement(Word w) throws ParseException {
-		LabelInfo imLabel = null;
+		LabelNode imLabel = null;
 		for(;;) {
 		switch (w.type()) {
 			case semicolon -> ctx.report(Kind.WARNING, "block.emptyStatement");
@@ -213,7 +203,7 @@ public class BlockParser {
 				file._annotations(Collections.emptyList());
 			}
 
-			case FINAL, BOOLEAN, BYTE, SHORT, CHAR, INT, LONG, FLOAT, DOUBLE -> {
+			case FINAL -> {
 				wr.retractWord();
 				define(null);
 			}
@@ -234,7 +224,7 @@ public class BlockParser {
 					if (!regionNew.isEmpty()) regionNew.get(regionNew.size()-1).add(val);
 
 					if (imLabel == null) {
-						imLabel = new LabelInfo(cw.label());
+						imLabel = new LabelNode(cw.label());
 						imLabel.onBreak = new Label();
 					}
 					labels.put(val, imLabel);
@@ -246,7 +236,7 @@ public class BlockParser {
 				wr.retract();
 				wr.retractWord();
 
-				var expr = ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.CHECK_VARIABLE_DECLARE|ExprParser.NAE);
+				var expr = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.CHECK_VARIABLE_DECLARE|ExprParser.NAE);
 				if (expr instanceof VariableDeclare vd) {
 					wr.retractWord(); // get vd.name
 					define(vd.type);
@@ -257,19 +247,22 @@ public class BlockParser {
 			default -> {
 				wr.retractWord();
 
-				var expr = ep.parse(file, ExprParser.STOP_SEMICOLON);
-				if (expr != null) {
+				var expr = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.CHECK_VARIABLE_DECLARE);
+				// case BOOLEAN, BYTE, SHORT, CHAR, INT, LONG, FLOAT, DOUBLE
+				if (expr instanceof VariableDeclare vd) {
+					wr.retractWord(); // get vd.name
+					define(vd.type);
+				} else if (expr != null) {
 					ExprNode node = expr.resolve(ctx);
 					if (node.isKind(ExprNode.ExprKind.INVOKE_CONSTRUCTOR)) {
 						ctx.not_invoke_constructor = false;
 					}
 
 					node.write(cw, true);
-					except(semicolon);
-				} else if (wr.current().type() != semicolon) {
-					// 这是为了适配省略分号的模式，防止ExprParser未处理任何Token然后在这里死循环
-					ctx.report(Kind.ERROR, "noExpression");
-					wr.next();
+
+					if (!wr.nextIf(semicolon) && !ctx.classes.isSpecEnabled(CompilerSpec.OPTIONAL_SEMICOLON)) {
+						wr.unexpected(w.val(), ";");
+					}
 				}
 			}
 		}
@@ -331,7 +324,7 @@ public class BlockParser {
 				else if (w.type() == rBrace && --level == 0) break;
 			}
 		} else {
-			ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON);
+			ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON);
 		}
 	}
 	private void controlFlowTerminate() throws ParseException {
@@ -415,7 +408,7 @@ public class BlockParser {
 				if (w.type() == rParen && !tryNode.vars.isEmpty()) break;
 
 				if (w.val().equals("defer")) {
-					tryNode.add(ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.STOP_RSB|ExprParser.NAE).resolve(ctx));
+					tryNode.add(ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.STOP_RSB|ExprParser.NAE).resolve(ctx));
 				} else {
 					IType type;
 					if (w.val().equals("var") || w.val().equals("const")) {
@@ -429,7 +422,7 @@ public class BlockParser {
 					String name = wr.except(Word.LITERAL).val();
 
 					except(assign);
-					var expr = ep.parse(file, ExprParser.STOP_RSB|ExprParser.STOP_SEMICOLON);
+					var expr = ep.parse(ExprParser.STOP_RSB|ExprParser.STOP_SEMICOLON);
 					if (expr == null) {
 						ctx.report(Kind.ERROR, "noExpression");
 					} else {
@@ -859,15 +852,15 @@ public class BlockParser {
 	}
 	// endregion
 	// 带名称的label
-	private final MyHashMap<String, LabelInfo> labels = new MyHashMap<>();
+	private final MyHashMap<String, LabelNode> labels = new MyHashMap<>();
 	// 对循环上标签的支持 (continue XX)
-	private LabelInfo immediateLabel;
+	private LabelNode immediateLabel;
 	// 当前代码块可用的break和continue目标
 	private Label curBreak, curContinue;
 	// region 控制流终止: break continue goto return throw
 	private void _goto() throws ParseException {
 		Word w = wr.except(Word.LITERAL);
-		LabelInfo info = labels.get(w.val());
+		LabelNode info = labels.get(w.val());
 		if (info != null && info.head != null) {
 			cw.jump(info.head);
 			// TODO check variable change
@@ -888,7 +881,7 @@ public class BlockParser {
 
 		Word w = wr.next();
 		if (w.type() == Word.LITERAL) {
-			LabelInfo info = labels.get(w.val());
+			LabelNode info = labels.get(w.val());
 			Label node;
 			if (info != null && (node = isBreak ? info.onBreak : info.onContinue) != null) {
 				cw.jump(node);
@@ -915,7 +908,7 @@ public class BlockParser {
 
 		UnresolvedExprNode expr;
 		if (!wr.nextIf(semicolon)) {
-			expr = ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE);
+			expr = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE);
 
 			var signature = (Signature) cw.mn.attrByName("Signature");
 			writeCast(expr.resolve(ctx), signature == null ? cw.mn.returnType() : signature.values.get(signature.values.size()-1));
@@ -950,7 +943,7 @@ public class BlockParser {
 	}
 
 	private void _throw() throws ParseException {
-		var expr = ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON);
+		var expr = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON);
 		if (expr == null) {
 			ctx.report(Kind.ERROR, "noExpression");
 		} else {
@@ -1005,7 +998,7 @@ public class BlockParser {
 		if (target == null) target = new Label();
 
 		constantHint = 0;
-		UnresolvedExprNode expr = ep.parse(file, (checkLSB ? ExprParser.STOP_RSB|ExprParser.SKIP_RSB : ExprParser.STOP_SEMICOLON));
+		UnresolvedExprNode expr = ep.parse((checkLSB ? ExprParser.STOP_RSB|ExprParser.SKIP_RSB : ExprParser.STOP_SEMICOLON));
 		if (expr == null) {
 			if (checkLSB) ctx.report(Kind.ERROR, "noExpression");
 		} else {
@@ -1033,7 +1026,7 @@ public class BlockParser {
 	// endregion
 	// region 循环: for while do-while
 	private void loopBody(@Nullable Label continueTo, @NotNull Label breakTo) throws ParseException {
-		LabelInfo info = immediateLabel;
+		LabelNode info = immediateLabel;
 		if (info != null) {
 			info.onBreak = breakTo;
 			info.onContinue = continueTo;
@@ -1072,7 +1065,7 @@ public class BlockParser {
 			if (wr.current().type() == colon) {
 				Variable lastVar = (Variable) regionNew.getLast().getLast();
 
-				ExprNode iter = ep.parse(file, ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
+				ExprNode iter = ep.parse(ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
 				IType type = iter.type();
 				IClass owner;
 				TypeCast.Cast cast;
@@ -1192,7 +1185,7 @@ public class BlockParser {
 
 			continueTo = cw.label();
 			breakTo = condition(null, 1);
-			execLast = ep.parse(file, ExprParser.STOP_RSB | ExprParser.SKIP_RSB);
+			execLast = ep.parse(ExprParser.STOP_RSB | ExprParser.SKIP_RSB);
 		}
 
 		nBreakTo = CodeWriter.newLabel();
@@ -1289,10 +1282,10 @@ public class BlockParser {
 		boolean tableFix = wr.current().val().equals("...switch");
 		except(lParen);
 
-		var sval = ep.parse(file, ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
+		var sval = ep.parse(ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
 		IType sType = sval.type();
 		/* see switch(kind) for detail */
-		int kind = 0;
+		int kind = tableFix ? 3 : 0;
 		Function<String, LocalContext.Import> prevDFI = ctx.dynamicFieldImport, DFI = prevDFI;
 
 		switch (sType.getActualType()) {
@@ -1333,17 +1326,30 @@ public class BlockParser {
 		Object cst = sval.isConstant() ? sval.constVal() : null;
 		except(lBrace);
 
-		List<Object> labels = Helpers.cast(ctx.tmpAnnotations); labels.clear();
+		List<ExprNode> labels = Helpers.cast(ctx.tmpAnnotations); labels.clear();
 		MyHashSet<Object> labelDeDup = Helpers.cast(ctx.tmpSet); labelDeDup.clear();
 
 		Label breakTo = new Label();
 		MethodWriter tmp = cw;
 
-		List<SwitchNode.Case> branches = new SimpleList<>();
+		var branches = new SimpleList<SwitchNode.Case>();
 		SwitchNode.Case nullBranch = null;
 
+		/*
+		 * error checking:
+		 * 1  => type switch
+		 * 2  => pattern switch
+		 *
+		 * 4  => legacy switch grammar
+		 * 8  => new switch grammar
+		 * 16 => grammar error reported
+		 *
+		 * 32 => non-constant error reported
+		 *
+		 * 64 => hasDefault
+		 */
 		int flags = 0;
-		boolean defaultBranch = false;
+		boolean lastBreak = false;
 
 		loop:
 		while (wr.hasNext()) {
@@ -1360,7 +1366,7 @@ public class BlockParser {
 					labels.clear();
 					boolean hasNull = false;
 					do {
-						var expr = ep.parse(file, ExprParser.STOP_COLON|ExprParser.STOP_COMMA|ExprParser.STOP_LAMBDA|ExprParser.CHECK_VARIABLE_DECLARE|ExprParser.NAE);
+						var expr = ep.parse(ExprParser.STOP_COLON|ExprParser.STOP_COMMA|ExprParser.STOP_LAMBDA|ExprParser.CHECK_VARIABLE_DECLARE|ExprParser.NAE);
 
 						if (expr instanceof VariableDeclare vd) {
 							IType type = ctx.resolveType(vd.type);
@@ -1386,8 +1392,7 @@ public class BlockParser {
 							flags |= 10;
 
 							beginCodeBlock();
-							kase = new SwitchNode.Case(Collections.singletonList(vd));
-							kase.variable = newVar(vd.name, type);
+							kase = new SwitchNode.Case(newVar(vd.name, type));
 							break skipVD;
 						}
 
@@ -1401,6 +1406,11 @@ public class BlockParser {
 							}
 							if (cst != null && cst.equals(node.constVal()))
 								match = true;
+						} else {
+							if (kind < 3 && (flags&32) == 0) {
+								ctx.report(Kind.ERROR, "block.switch.nonConstant");
+								flags |= 32;
+							}
 						}
 						if (!labelDeDup.add(node)) ctx.report(Kind.ERROR, "block.switch.duplicate", node);
 						labels.add(node);
@@ -1411,11 +1421,14 @@ public class BlockParser {
 					kase = new SwitchNode.Case(new SimpleList<>(labels));
 					kase.lineNumber = wr.LN;
 
-					if (hasNull) nullBranch = kase;
+					if (hasNull) {
+						if (nullBranch != null) ctx.report(Kind.ERROR, "block.switch.duplicate:null");
+						nullBranch = kase;
+					}
 				break;
 				case DEFAULT:
 					w = wr.next();
-					kase = new SwitchNode.Case(null);
+					kase = new SwitchNode.Case((List<ExprNode>) null);
 					match = true;
 				break;
 			}
@@ -1439,8 +1452,8 @@ public class BlockParser {
 
 			// default
 			if (kase.labels == null) {
-				if (defaultBranch) ctx.report(Kind.ERROR, "block.switch.manyDefault");
-				defaultBranch = true;
+				if ((flags&64) != 0) ctx.report(Kind.ERROR, "block.switch.manyDefault");
+				flags |= 64;
 			}
 
 			boolean parse = cst == null || match;
@@ -1449,11 +1462,15 @@ public class BlockParser {
 			if (isExpr) {
 				if (w.type() != lambda) ctx.report(Kind.ERROR, "block.switch.exprMode.legacy");
 				kase.value = switchExprBlock(parse);
-				kase.isContinuous = kase.value != null;
+				// switchExpr必然返回一个值，所以不可能有lastBreak
 			} else {
-				kase.isContinuous = switchBlock(breakTo, w.type() == lambda, parse);
+				lastBreak = switchBlock(breakTo, w.type() == lambda, parse);
 			}
 		}
+
+		// 忽略最后一个分支的最后的break;
+		var last = branches.getLast();
+		if (lastBreak) last.block.replaceSegment(last.block.nextSegmentId()-1, new StaticSegment());
 
 		setCw(tmp);
 
@@ -1461,6 +1478,7 @@ public class BlockParser {
 		// TODO check continuous control flow for EVERY subblock
 		// if (defaultBranch && (flags&128) != 0 && cw.isContinuousControlFlow()) sectionFlag |= SF_BLOCK_END;
 
+		boolean defaultBranch = (flags & 64) != 0;
 		// 检测type switch和pattern switch的混用
 		flags &= 3;
 		if (flags == 3) {
@@ -1489,14 +1507,17 @@ public class BlockParser {
 		ctx.report(Kind.ERROR, "Class switch 暂未实现");
 	}
 	private void writeTypeSwitch(SwitchNode result) {
-		List<SwitchNode.Case> branches = result.branches;
-		ExprNode sval = result.sval;
-		Label breakTo = result.breakTo;
+		var branches = result.branches;
+		var sval = result.sval;
+		var breakTo = result.breakTo;
 
 		smallOptimize:
 		if (branches.size()-(result.defaultBranch?1:0) <= 1) {
 			int size = branches.size();
-			if (size == 0) return;
+			if (size == 0) {
+				ctx.report(Kind.SEVERE_WARNING, "block.switch.noBranch");
+				return;
+			}
 
 			SwitchNode.Case node;
 
@@ -1510,10 +1531,9 @@ public class BlockParser {
 			if (result.cst != null) {
 				node.block.writeTo(cw);
 			} else {
-				ctx.report(Kind.SEVERE_WARNING, "block.switch.noBranch");
-
 				if (node.labels == null) {
 					// default, 没找到任何case
+					ctx.report(Kind.SEVERE_WARNING, "block.switch.noBranch");
 
 					sval.write(cw, false);
 					// POP or POP2
@@ -1526,7 +1546,7 @@ public class BlockParser {
 				}
 
 				// if
-				ExprNode cmp = ep.binary(equ, sval, ((ExprNode) node.labels.get(0))).resolve(ctx);
+				ExprNode cmp = ep.binary(equ, sval, node.labels.get(0)).resolve(ctx);
 
 				Label ifNe = new Label();
 
@@ -1562,7 +1582,7 @@ public class BlockParser {
 				cw.addSegment(sw);
 
 				for (int i = 0; i < branches.size();) {
-					SwitchNode.Case branch = branches.get(i++);
+					var branch = branches.get(i++);
 
 					Label pos = cw.label();
 					branch.block.writeTo(cw);
@@ -1570,8 +1590,8 @@ public class BlockParser {
 					if (branch.labels == null) {
 						sw.def = pos;
 					} else {
-						for (Object label : branch.labels)
-							sw.branch(((AnnValInt) ((ExprNode) label).constVal()).value, pos);
+						for (ExprNode label : branch.labels)
+							sw.branch(((AnnValInt) label.constVal()).value, pos);
 					}
 				}
 
@@ -1580,7 +1600,7 @@ public class BlockParser {
 			}
 			case 1 -> {// legacy string
 				sval.write(cw, false);
-				makeNullsafe(result.nullBranch, sval);
+				if (result.nullBranch != null) makeNullsafe(result.nullBranch, sval);
 				switchString(branches, breakTo);
 				ctx.report(Kind.WARNING, "block.switch.lookupSwitch");
 			}
@@ -1593,7 +1613,8 @@ public class BlockParser {
 				Label start = cw.label();
 				cw.field(GETSTATIC, switchMap, 0);
 				sval.write(cw, false);
-				makeNullsafe(result.nullBranch, sval);
+				if (result.nullBranch != null) makeNullsafe(result.nullBranch, sval);
+
 				cw.invoke(INVOKEVIRTUAL, "java/lang/Enum", "ordinal", "()I");
 				cw.one(IALOAD);
 				cw.jump(next);
@@ -1621,27 +1642,30 @@ public class BlockParser {
 		cw.label(breakTo);
 	}
 
+	// 以后可以用load constantDynamic实现？
 	private int switchMapId;
 	private void addGeneratedClass(ConstantData data) {
 		CompileUnit owner = ctx.file;
-		if (ctx.classes.isSpecEnabled(CompilerSpec.EXTRA_DEBUG_INFO) && ctx.classes.isSpecEnabled(CompilerSpec.ATTR_INNER_CLASS)) {
-			owner.addNestMember(data);
-
-			var map = new InnerClasses.InnerClass(data.name, owner.name, "SwitchMap"+ switchMapId ++, ACC_PRIVATE | ACC_STATIC | ACC_FINAL);
+		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_INNER_CLASS)) {
+			var map = new InnerClasses.InnerClass(data.name, owner.name, "SwitchMap"+switchMapId++, ACC_PRIVATE|ACC_STATIC|ACC_FINAL);
 			owner.innerClasses().add(map);
 
 			InnerClasses attr1 = new InnerClasses();
 			attr1.classes.add(map);
 			data.putAttr(attr1);
 
-			var attr = new EnclosingMethod();
-			attr.owner = owner.name;
-			if (!ctx.method.name().startsWith("<")) {
-				attr.name = ctx.method.name();
-				attr.parameters = ctx.method.parameters();
-				attr.returnType = ctx.method.returnType();
+			if (ctx.classes.isSpecEnabled(CompilerSpec.NEST_CLASS_INFO)) {
+				owner.addNestMember(data);
+
+				var attr = new EnclosingMethod();
+				attr.owner = owner.name;
+				if (!ctx.method.name().startsWith("<")) {
+					attr.name = ctx.method.name();
+					attr.parameters = ctx.method.parameters();
+					attr.returnType = ctx.method.returnType();
+				}
+				data.putAttr(attr);
 			}
-			data.putAttr(attr);
 		}
 
 		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_SOURCE_FILE)) {
@@ -1659,15 +1683,12 @@ public class BlockParser {
 
 		int j = 0;
 		for (int i = 0; i < branches.size();) {
-			SwitchNode.Case branch = branches.get(i++);
+			var branch = branches.get(i++);
 
 			Label pos;
 			if (branch.location != null) cw.label(pos = branch.location);
 			else pos = cw.label();
 
-			if (i == branches.size() && branch.isContinuous) {
-				branch.block.replaceSegment(branch.block.nextSegmentId()-1, new StaticSegment());
-			}
 			branch.block.writeTo(cw);
 
 			if (branch.labels == null) sw.def = pos;
@@ -1675,20 +1696,24 @@ public class BlockParser {
 		}
 	}
 	private void makeNullsafe(SwitchNode.Case branch, ExprNode sval) {
-		for (Object label : branch.labels) {
-			if (label instanceof ExprNode n && n.isConstant() && n.constVal() == null) {
-				beginCodeBlock();
-
-				Variable xvar = newVar("@", sval.type());
-				cw.one(DUP);
-				cw.store(xvar);
-				cw.jump(IFNULL, branch.location = new Label());
-				cw.load(xvar);
-
-				endCodeBlock();
-				return;
+		var labels = branch.labels;
+		for (int i = 0; i < labels.size(); i++) {
+			var n = (ExprNode) labels.get(i);
+			if (n.isConstant() && n.constVal() == null) {
+				labels.remove(i);
+				break;
 			}
 		}
+
+		beginCodeBlock();
+
+		Variable xvar = newVar("@", sval.type());
+		cw.one(DUP);
+		cw.store(xvar);
+		cw.jump(IFNULL, branch.location = new Label());
+		cw.load(xvar);
+
+		endCodeBlock();
 	}
 	private void switchString(List<SwitchNode.Case> branches, Label breakTo) {
 		var v = newVar("@", new Type("java/lang/String"));
@@ -1707,14 +1732,14 @@ public class BlockParser {
 		IntMap<List<Map.Entry<String, Label>>> tmp = new IntMap<>();
 
 		for (int i = 0; i < branches.size();) {
-			SwitchNode.Case branch = branches.get(i++);
+			var branch = branches.get(i++);
 			Label pos = branch.location == null ? branch.location = new Label() : branch.location;
 
 			if (branch.labels == null) {
 				sw.def = pos;
 			} else {
-				for (Object label : branch.labels) {
-					String key = (String) ((ExprNode) label).constVal();
+				for (ExprNode label : branch.labels) {
+					String key = (String) label.constVal();
 					int hash = key.hashCode();
 
 					var dup = tmp.get(hash);
@@ -1741,7 +1766,7 @@ public class BlockParser {
 			c.jump(sw.def);
 		}
 
-		// 如果要内联到上面的循环，那么需要确定不是continuousControlFlow（检查有没有人用break）
+		// 如果要内联到上面的循环，条件判断比较麻烦，每个list1的长度都是1才可以，懒得做了
 		for (int i = 0; i < branches.size();) {
 			SwitchNode.Case branch = branches.get(i++);
 			c.label(branch.location);
@@ -1754,15 +1779,15 @@ public class BlockParser {
 		sm.modifier |= ACC_SYNTHETIC;
 
 		sm.name(ctx.file.name+"$"+ ++ctx.file._children);
-		sm.newField(ACC_STATIC|ACC_FINAL, "switchMap", "[I");
+		sm.newField(ACC_SYNTHETIC|ACC_STATIC|ACC_FINAL, "switchMap", "[I");
 
-		sm.newMethod(ACC_STATIC, "<clinit>", "()V");
+		sm.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
 		MethodWriter c = ctx.classes.createMethodPoet(sm, sm.methods.getLast());
 		c.visitSize(3, 1);
 
 		int size = 0;
 		for (int i = 0; i < branches.size(); i++) {
-			List<Object> labels = branches.get(i).labels;
+			var labels = branches.get(i).labels;
 			if (labels != null) size += labels.size();
 		}
 		c.ldc(size);
@@ -1771,15 +1796,15 @@ public class BlockParser {
 
 		int i = 0;
 		for (SwitchNode.Case branch : branches) {
-			List<Object> labels1 = branch.labels;
-			if (labels1 == null) continue;
+			var labels = branch.labels;
+			if (labels == null) continue;
 
-			for (Object o : labels1) {
+			for (ExprNode o : labels) {
 				Label start = c.label();
 
 				// an enum constant
 				c.field(GETSTATIC, sm, 0);
-				((ExprNode) o).write(c, false);
+				o.write(c, false);
 				c.invoke(INVOKEVIRTUAL, "java/lang/Enum", "ordinal", "()I");
 				c.ldc(i);
 				c.one(IASTORE);
@@ -1812,16 +1837,16 @@ public class BlockParser {
 		sm.modifier |= ACC_SYNTHETIC;
 
 		sm.name(ctx.file.name+"$"+ ++ctx.file._children);
-		sm.newField(ACC_STATIC|ACC_FINAL, "map", "Lroj/compiler/runtime/SwitchMap;");
+		sm.newField(ACC_SYNTHETIC|ACC_STATIC|ACC_FINAL, "map", "Lroj/compiler/runtime/SwitchMap;");
 
-		sm.newMethod(ACC_STATIC, "<clinit>", "()V");
+		sm.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
 		MethodWriter c = ctx.classes.createMethodPoet(sm, sm.methods.getLast());
 		c.visitSize(5, 1);
 
 		int size = 0;
 		for (SwitchNode.Case branch : branches) {
-			List<Object> labels1 = branch.labels;
-			if (labels1 != null) size += labels1.size();
+			var labels = branch.labels;
+			if (labels != null) size += labels.size();
 		}
 
 		c.ldc(size);
@@ -1833,19 +1858,19 @@ public class BlockParser {
 
 		int i = 1; // start from 1, 0 is default
 		for (SwitchNode.Case branch : branches) {
-			List<Object> labels1 = branch.labels;
-			if (labels1 == null) continue;
+			var labels = branch.labels;
+			if (labels == null) continue;
 
 			Label start = null;
-			for (Object o : labels1) {
-				if (start == null) lines.list.add(new LineNumberTable.Item(start = c.label(), branch.lineNumber));
+			for (ExprNode o : labels) {
+				if (start == null) lines.add(start = c.label(), branch.lineNumber);
 				else start = c.label();
 
 				c.one(ALOAD_0);
 				// TODO write with cast (primitive), while this is better implemented via
 				//  PrimitiveGenericHelper.forClass(ctx.classes.getClassInfo("...")).argumentType(Type.std(Type.INT)).make();
 				//  and this will have a snippet: ;PGEN;I;...
-				((ExprNode) o).write(c, false);
+				o.write(c, false);
 				Label end = c.label();
 				c.ldc(i);
 				c.invokeV("roj/compiler/runtime/SwitchMap$Builder", "add", "(Ljava/lang/Object;I)Ljava/lang/Object;");
@@ -1890,7 +1915,7 @@ public class BlockParser {
 						endCodeBlock();
 						return flow;
 					}
-				return false;
+				return cw.isJumpingTo(endPoint);
 			}
 
 			if (newSwitch) ctx.report(Kind.ERROR, "unexpected_2", w.val(), "block.except.switch");
@@ -1918,7 +1943,7 @@ public class BlockParser {
 					ctx.report(Kind.ERROR, "block.switch.exprMode.noYield");
 					return NaE.RESOLVE_FAILED;
 				} catch (OperationDone od) {
-					expr = ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE).resolve(ctx);
+					expr = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE).resolve(ctx);
 					controlFlowTerminate();
 					except(rBrace);
 				} finally {
@@ -1928,7 +1953,7 @@ public class BlockParser {
 			} else  {
 				wr.retractWord();
 
-				expr = ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE).resolve(ctx);
+				expr = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE).resolve(ctx);
 			}
 		} else {
 			skipBlockOrStatement();
@@ -1944,7 +1969,7 @@ public class BlockParser {
 		if ((sectionFlag&SF_SWITCH) != 0) {
 			throw OperationDone.INSTANCE;
 		} else {
-			var expr = ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE).resolve(ctx);
+			var expr = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE).resolve(ctx);
 
 			ctx.report(Kind.ERROR, "block.switch.yield");
 			// require Generator function
@@ -1955,7 +1980,7 @@ public class BlockParser {
 	private void _sync() throws ParseException {
 		except(lParen);
 
-		ExprNode node = ep.parse(file, ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
+		ExprNode node = ep.parse(ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
 
 		if (node.type().isPrimitive()) {
 			ctx.report(Kind.ERROR, "type.primitiveNotAllowed", node.type());
@@ -1995,7 +2020,7 @@ public class BlockParser {
 	private void _with() throws ParseException {
 		except(lParen);
 
-		ExprNode node = ep.parse(file, ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
+		ExprNode node = ep.parse(ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
 
 		if (node.type().isPrimitive()) {
 			ctx.report(Kind.ERROR, "block.sync.unexpectedPrimitive", node.type());
@@ -2050,8 +2075,8 @@ public class BlockParser {
 
 	private void _assert() throws ParseException {
 		if (ctx.classes.isSpecEnabled(CompilerSpec.DISABLE_ASSERT)) {
-			ep.parse(file, ExprParser.STOP_SEMICOLON | ExprParser.SKIP_SEMICOLON | ExprParser.STOP_COLON | ExprParser.NAE);
-			if (wr.nextIf(colon)) ep.parse(file, ExprParser.STOP_SEMICOLON | ExprParser.SKIP_SEMICOLON | ExprParser.NAE);
+			ep.parse(ExprParser.STOP_SEMICOLON | ExprParser.SKIP_SEMICOLON | ExprParser.STOP_COLON | ExprParser.NAE);
+			if (wr.nextIf(colon)) ep.parse(ExprParser.STOP_SEMICOLON | ExprParser.SKIP_SEMICOLON | ExprParser.NAE);
 			return;
 		}
 
@@ -2061,7 +2086,7 @@ public class BlockParser {
 		Label assertDone = new Label();
 		cw.jump(IFEQ, assertDone);
 
-		ExprNode condition = ep.parse(file, ExprParser.STOP_SEMICOLON | ExprParser.SKIP_SEMICOLON | ExprParser.STOP_COLON | ExprParser.NAE).resolve(ctx);
+		ExprNode condition = ep.parse(ExprParser.STOP_SEMICOLON | ExprParser.SKIP_SEMICOLON | ExprParser.STOP_COLON | ExprParser.NAE).resolve(ctx);
 		alwaysThrow: {
 			if (condition.isConstant()) {
 				if (condition.constVal() instanceof Boolean v) {
@@ -2077,7 +2102,7 @@ public class BlockParser {
 		}
 
 		if (wr.nextIf(colon)) {
-			ExprNode message = ep.parse(file, ExprParser.STOP_SEMICOLON | ExprParser.SKIP_SEMICOLON | ExprParser.NAE).resolve(ctx);
+			ExprNode message = ep.parse(ExprParser.STOP_SEMICOLON | ExprParser.SKIP_SEMICOLON | ExprParser.NAE).resolve(ctx);
 
 			int type = message.type().getActualType();
 			switch (type) {
@@ -2138,7 +2163,7 @@ public class BlockParser {
 
 		wr.except(assign);
 
-		var node = ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE).resolve(ctx);
+		var node = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE).resolve(ctx);
 		IType type = node.type();
 		if (!type.owner().equals("roj/compiler/runtime/ReturnStack") || ! (type instanceof Generic g)) {
 			ctx.report(Kind.ERROR, "block.multiReturn.typeError");
@@ -2208,7 +2233,7 @@ public class BlockParser {
 				var.hasValue = true;
 				if (isFinal != 0) var.isFinal = true;
 
-				ExprNode node = ep.parse(file, ExprParser.STOP_SEMICOLON|ExprParser.STOP_COMMA|ExprParser.NAE).resolve(ctx);
+				ExprNode node = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.STOP_COMMA|ExprParser.NAE).resolve(ctx);
 
 				if (type == T_VAR) {
 					var.isDynamic = true;

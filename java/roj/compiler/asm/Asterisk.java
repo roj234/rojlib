@@ -22,16 +22,20 @@ public final class Asterisk implements IType {
 	private boolean limited;
 
 	private Asterisk() {}
+	/**
+	 * "泛型返回值"类型
+	 * @param visualType 表现类型 以这个类型去测试能否转换
+	 * @param rawType 真实类型 以这个类型的转换写入二进制
+	 */
 	public Asterisk(IType visualType, IType rawType) {
 		this.bound = visualType;
 		this.bounds = Collections.singletonList(rawType);
 		this.limited = true;
 	}
-	public Asterisk(List<IType> bound) {this(bound,false);}
-	public Asterisk(List<IType> bound, boolean limited) {
+	public Asterisk(List<IType> bound) {
 		this.bound = bound.get(0);
 		this.bounds = bound;
-		this.limited = limited;
+		this.limited = false;
 	}
 
 	public IType getBound() { return bound; }

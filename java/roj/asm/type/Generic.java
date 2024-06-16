@@ -37,10 +37,7 @@ public class Generic extends IGeneric {
 		setArrayDim(array);
 	}
 
-	public boolean isRealGeneric() {
-		return !children.isEmpty() || "*".equals(owner) || extendType != 0 || sub != null;
-	}
-	public boolean isAnyType() { return extendType == EX_EXTENDS && owner.equals("java/lang/Object") && children.isEmpty() && sub == null; }
+	public boolean canBeAny() { return extendType == EX_EXTENDS && owner.equals("java/lang/Object") && children.isEmpty() && sub == null; }
 
 	public void toDesc(CharList sb) {
 		if (extendType != 0) sb.append(extendType == EX_SUPER ? '-' : '+');

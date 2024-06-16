@@ -43,6 +43,7 @@ public class Signature extends Attribute {
 	public List<IType> Throws;
 
 	public static IType any() { return Any.I; }
+	public static IType placeholder() { return EmptyClass.I; }
 
 	public Signature(int type) {
 		this.typeParams = Collections.emptyMap();

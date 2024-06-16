@@ -7,7 +7,6 @@ import roj.asm.tree.MethodNode;
 import roj.asm.tree.RawNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.AnnotationDefault;
 import roj.asm.tree.attr.Annotations;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.InnerClasses;
@@ -19,6 +18,7 @@ import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.compiler.asm.LazyAnnVal;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.diagnostic.Kind;
 
@@ -142,8 +142,9 @@ public final class ResolveHelper {
 			for (int j = 0; j < methods.size(); j++) {
 				MethodNode m = (MethodNode) methods.get(j);
 				if ((m.modifier() & Opcodes.ACC_STATIC) != 0) continue;
-				AnnotationDefault dv = m.parsedAttr(owner.cp(), Attribute.AnnotationDefault);
-				ac.values.put(m.name(), dv == null ? null : dv.val);
+				var dv = m.parsedAttr(owner.cp(), Attribute.AnnotationDefault);
+				if (dv != null) ac.values.put(m.name(), dv.val == null ? new LazyAnnVal(dv) : dv.val);
+				ac.types.put(m.name(), m.returnType());
 			}
 
 			Annotations attr = owner.parsedAttr(owner.cp(), Attribute.RtAnnotations);
@@ -189,6 +190,7 @@ public final class ResolveHelper {
 						}
 						ac.applicableTo = tmp;
 					}
+					case "roj/compiler/api/Stackable" -> ac.stackable = true;
 				}
 			}
 			return ac;

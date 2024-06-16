@@ -74,11 +74,13 @@ static void test(int a = 3, Object o = some_variable) {
 ### EasyMap (已实现)
   使用类似PHP的语法来构建Map&lt;?,?&gt;
 ```java
-var map = [ 1+1 => 3+4 , "mixed type" => also.can.be.used() ];
+var map = [ 1+1 -> 3+4 , "mixed type" -> also.can.be.used() ];
 ```
 ### goto语句 (部分实现)
   使用goto语句在任意标签之间跳转  
   在跳转过程中增加的变量必须立即赋值
+### 基本类型函数 (已实现)
+  12345 . toHexString() => Integer.toHexString (static)
 ### Switchable (已实现)
 * Lavac生成的switch具有更小的文件体积和更好的性能
 * 给任意一个类打上@Switchable注解，这个类就可以像枚举一样switch

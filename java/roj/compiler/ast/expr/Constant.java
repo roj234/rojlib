@@ -53,7 +53,7 @@ public final class Constant extends ExprNode {
 	public static Constant valueOf(AnnVal v) {
 		return switch (v.type()) {
 			case 's' -> valueOf(v.asString());
-			case 'e' -> new Constant(new Type(v.asEnum().owner), v);
+			case 'e' -> new Constant(new Type(v.asEnum().owner()), v);
 			case 'c' -> classRef(v.asClass());
 			case '@', '[' -> throw new IllegalArgumentException("not supported at this time");
 			default -> new Constant(Type.std(v.type()), v);

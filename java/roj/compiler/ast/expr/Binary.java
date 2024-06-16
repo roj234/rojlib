@@ -6,7 +6,6 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.visitor.Label;
 import roj.collect.MyBitSet;
-import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -57,8 +56,9 @@ final class Binary extends ExprNode {
 		return sb.toStringAndFree();
 	}
 	private boolean shouldAddBracket(ExprNode node) {
+		ExprParser ep = LocalContext.get().ep;
 		return !node.isConstant() && (!(node instanceof Binary) ||
-			(binaryOperatorPriority(((Binary) node).operator) > binaryOperatorPriority(operator)));
+			(ep.binaryOperatorPriority(((Binary) node).operator) > ep.binaryOperatorPriority(operator)));
 	}
 
 	private static final ThreadLocal<Boolean> IN_ANY_BINARY = new ThreadLocal<>();
@@ -103,7 +103,7 @@ final class Binary extends ExprNode {
 		// 3. 变量不能移动
 		if (left instanceof Binary br &&
 			br.right.isConstant() && TypeCast.getDataCap(br.right.type().getActualType()) <= 4 &&
-			JavaLexer.binaryOperatorPriority(br.operator) == JavaLexer.binaryOperatorPriority(operator) ) {
+			ctx.ep.binaryOperatorPriority(br.operator) == ctx.ep.binaryOperatorPriority(operator) ) {
 
 			left = br.right;
 			br.right = this.resolve(ctx);
