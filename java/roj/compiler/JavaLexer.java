@@ -1,8 +1,8 @@
 package roj.compiler;
 
 import roj.asm.tree.attr.LineNumberTable;
-import roj.asm.visitor.Label;
 import roj.collect.Int2IntMap;
+import roj.collect.IntBiMap;
 import roj.collect.MyBitSet;
 import roj.collect.TrieTree;
 import roj.compiler.asm.MethodWriter;
@@ -360,13 +360,25 @@ public final class JavaLexer extends Tokenizer {
 		}
 	}
 
-	public MethodWriter labelGen;
+	private IntBiMap<MethodWriter> stack = new IntBiMap<>();
+	private MethodWriter labelGen;
 	private LineNumberTable lines;
+
+	public void setCw(MethodWriter cw) {
+		if (!stack.containsValue(cw)) {
+			stack.putByValue(stack.size(), cw);
+			if (lines != null) lines.add(cw.label(), LN);
+		} else {
+			int id = stack.getInt(cw);
+			while (++id < stack.size()) stack.remove(id);
+		}
+		labelGen = cw;
+	}
 
 	public void setLines(LineNumberTable _new) {
 		assert lines == null;
-		_new.add(new Label(0), LN);
 		lines = _new;
+		stack.clear();
 	}
 	public void getLines(MethodWriter cw) {
 		assert labelGen == cw;
@@ -376,6 +388,7 @@ public final class JavaLexer extends Tokenizer {
 
 		lines = null;
 		labelGen = null;
+		stack.clear();
 	}
 
 	@Override
@@ -383,8 +396,8 @@ public final class JavaLexer extends Tokenizer {
 		int line = LN;
 		super.afterWord();
 		if (line != LN) {
-			if (lines != null && labelGen.bci() != lines.lastBci()) {
-				lines.add(labelGen.lineMarker(), LN);
+			if (lines != null && (labelGen.bci() != lines.lastBci())) {
+				lines.add(labelGen.label(), LN);
 			}
 		}
 	}

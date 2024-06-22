@@ -5,6 +5,7 @@ import roj.collect.SimpleList;
 import roj.concurrent.FastThreadLocal;
 import roj.config.data.CLong;
 import roj.crypt.Base64;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -80,18 +81,19 @@ public final class IOUtil {
 		return o;
 	}
 
-	public static byte[] getResource(String path) throws IOException { return getResource(IOUtil.class, path); }
+	public static byte[] getResource(String path) throws IOException { return getResource(ReflectionUtils.getCallerClass(2), path); }
 	public static byte[] getResource(Class<?> caller, String path) throws IOException {
-		InputStream in = caller.getClassLoader().getResourceAsStream(path);
+		var in = caller.getClassLoader().getResourceAsStream(path);
 		if (in == null) throw new FileNotFoundException(path+" is not in jar "+caller.getName());
-		return read(in);
+		return new ByteList(Math.max(in.available(), 4096)).readStreamFully(in).toByteArrayAndFree();
 	}
-	public static String getTextResource(String path) throws IOException { return getTextResource(IOUtil.class, path); }
+	public static String getTextResource(String path) throws IOException { return getTextResource(ReflectionUtils.getCallerClass(2), path); }
 	public static String getTextResource(Class<?> caller, String path) throws IOException {
-		ClassLoader cl = caller.getClassLoader();
-		InputStream in = cl == null ? ClassLoader.getSystemResourceAsStream(path) : cl.getResourceAsStream(path);
+		var in = caller.getClassLoader().getResourceAsStream(path);
 		if (in == null) throw new FileNotFoundException(path+" is not in jar "+caller.getName());
-		return readUTF(in);
+		try (var r = TextReader.from(in, StandardCharsets.UTF_8)) {
+			return new CharList(Math.max(in.available()/3, 4096)).readFully(r).toStringAndFree();
+		}
 	}
 
 	public static byte[] read(File file) throws IOException {
@@ -107,22 +109,22 @@ public final class IOUtil {
 
 
 	public static String readUTF(File f) throws IOException {
-		try (Reader r = TextReader.from(f, StandardCharsets.UTF_8)) {
+		try (var r = TextReader.from(f, StandardCharsets.UTF_8)) {
 			return f.length() > 1048576L ? read1(r) : read(r);
 		}
 	}
 	public static String readUTF(InputStream in) throws IOException {
-		try (Reader r = TextReader.from(in, StandardCharsets.UTF_8)) {
+		try (var r = TextReader.from(in, StandardCharsets.UTF_8)) {
 			return in.available() > 1048576L ? read1(r) : read(r);
 		}
 	}
 	public static String readString(File f) throws IOException {
-		try (TextReader r = TextReader.auto(f)) {
+		try (var r = TextReader.auto(f)) {
 			return f.length() > 1048576L ? read1(r) : read(r);
 		}
 	}
 	public static String readString(InputStream in) throws IOException {
-		try (Reader r = TextReader.auto(in)) {
+		try (var r = TextReader.auto(in)) {
 			return in.available() > 1048576L ? read1(r) : read(r);
 		}
 	}

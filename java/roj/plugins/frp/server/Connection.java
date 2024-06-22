@@ -9,7 +9,6 @@ import roj.net.handler.Timeout;
 import roj.plugins.frp.Constants;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.util.Identifier;
 
 import java.io.IOException;
 
@@ -35,11 +34,11 @@ public abstract class Connection extends Constants {
 
 	@Override
 	public final void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		Identifier id = event.id;
-		if (id == Timeout.WRITE_TIMEOUT) {
+		String id = event.id;
+		if (id.equals(Timeout.WRITE_TIMEOUT)) {
 			LOGGER.info("[{}] WRITE_TIMEOUT", this);
 			ctx.close();
-		} else if (id == Timeout.READ_TIMEOUT) {
+		} else if (id.equals(Timeout.READ_TIMEOUT)) {
 			LOGGER.info("[{}] READ_TIMEOUT", this);
 			kickWithMessage(ctx, PS_ERROR_TIMEOUT);
 		}

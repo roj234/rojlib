@@ -2,6 +2,7 @@ package roj.collect;
 
 import roj.util.Helpers;
 
+import java.util.Comparator;
 import java.util.Set;
 import java.util.function.ToIntFunction;
 
@@ -27,6 +28,9 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 
 		@Override
 		public String toString() { return String.valueOf(k)+'='+v; }
+
+		public static <T> Comparator<Entry<T>> comparator() {return (o1, o2) -> Integer.compare(o1.v, o2.v);}
+		public static <T> Comparator<Entry<T>> reverseComparator() {return (o1, o2) -> Integer.compare(o2.v, o1.v);}
 	}
 
 	public static <T> ToIntMap<T> fromArray(T[] arr) {

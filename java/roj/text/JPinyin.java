@@ -80,7 +80,7 @@ public class JPinyin {
 	public static final int PINYIN_DUOYINZI = 4;
 
 	public String toPinyin(CharSequence s) { return toPinyin(s, "", IOUtil.getSharedCharBuf(), PINYIN_NONE).toString(); }
-	public String toPinyin(CharSequence s, int mode) { return toPinyin(s, " ", IOUtil.getSharedCharBuf(), mode).toString(); }
+	public String toPinyin(CharSequence s, int mode) { return toPinyin(s, "", IOUtil.getSharedCharBuf(), mode).toString(); }
 	public CharList toPinyin(CharSequence str, String splitter, CharList sb, int mode) {
 		int i = 0, len = str.length();
 		if (len == 0) return sb;

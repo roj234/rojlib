@@ -1,6 +1,7 @@
 package roj.asm.util;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.AsmShared;
 import roj.asm.Parser;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
@@ -241,7 +242,7 @@ public class TransformUtil {
 	}
 
 	public static void compress(ConstantData data) {
-		ConstantPool cpw = new ConstantPool(data.cp.array().size());
+		ConstantPool cpw = AsmShared.local().constPool();
 		CodeVisitor smallerLdc = new CodeVisitor() {
 			protected void ldc(byte code, Constant c) { cpw.reset(c); }
 		};

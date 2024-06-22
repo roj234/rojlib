@@ -2,8 +2,11 @@ package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
+import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
+import roj.asm.tree.attr.Attribute;
 import roj.asm.type.IType;
+import roj.collect.MyHashSet;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.SwitchNode;
 import roj.compiler.context.GlobalContext;
@@ -12,6 +15,8 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.util.Helpers;
+
+import java.util.List;
 
 /**
  * @author Roj234
@@ -47,12 +52,20 @@ final class Switch extends ExprNode {
 
 		type = node.sval.type();
 		if (coveredAll > 0 && !type.isPrimitive()) {
+			var info = ctx.getClassOrArray(type);
+			if (info == null) throw new IllegalStateException("parent node "+node.sval+" did not return NaE.RESOLVE_FAILED for null type");
+
 			if (node.kind < 0) {
-				// just class switch pattern
-				// check sealed class
+				// abstract sealed
+				if ((info.modifier&Opcodes.ACC_ABSTRACT) != 0 && info.attrByName("PermittedSubclasses") != null) {
+					MyHashSet<String> patternType = new MyHashSet<>();
+					for (SwitchNode.Case branch : node.branches) {
+						patternType.add(branch.variable.type.owner());
+					}
+					coveredAll = iterSealed(ctx.classes, info, patternType) ? -1 : 0;
+				}
 			} else {
-				var info = ctx.getClassOrArray(type);
-				if (info != null && (info.modifier&Opcodes.ACC_ENUM) != 0) {
+				if ((info.modifier&Opcodes.ACC_ENUM) != 0) {
 					int count = 0;
 					for (FieldNode field : info.fields) {
 						if ((field.modifier&Opcodes.ACC_ENUM) != 0) {
@@ -73,6 +86,20 @@ final class Switch extends ExprNode {
 		if (coveredAll >= 0) ctx.report(Kind.ERROR, "block.switch.exprMode.uncovered");
 
 		return this;
+	}
+
+	private boolean iterSealed(GlobalContext ctx, ConstantData info, MyHashSet<String> patterns) {
+		var s = info.parsedAttr(info.cp, Attribute.PermittedSubclasses);
+		if (s != null) {
+			List<String> value = s.value;
+			for (int i = 0; i < value.size(); i++) {
+				String type = value.get(i);
+				if (!patterns.remove(type)) return false;
+				info = ctx.getClassInfo(type);
+				if (info == null || !iterSealed(ctx, info, patterns)) return false;
+			}
+		}
+		return true;
 	}
 
 	@Override

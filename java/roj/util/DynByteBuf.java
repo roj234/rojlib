@@ -252,26 +252,28 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	}
 
 	public final DynByteBuf putVarInt(int i) {
-		putVarLong(this, i);
-		return this;
+		//ensureWritable(VarintSplitter.getVarIntLength(i));
+		while (true) {
+			if (i < 0x80) {
+				put(i);
+				return this;
+			} else {
+				put((i & 0x7F) | 0x80);
+				i >>>= 7;
+			}
+		}
 	}
 
 	public final DynByteBuf putVarLong(long i) {
-		putVarLong(this, i);
-		return this;
-	}
-
-	public static void putVarLong(DynByteBuf list, long i) {
-		//list.ensureWritable(VarintSplitter.getVarIntLength(i));
-		do {
+		while (true) {
 			if (i < 0x80) {
-				list.put((byte) i);
-				return;
+				put((byte) i);
+				return this;
 			} else {
-				list.put((byte) ((i & 0x7F) | 0x80));
+				put((byte) ((i & 0x7F) | 0x80));
 				i >>>= 7;
 			}
-		} while (true);
+		}
 	}
 
 	// fastpath for int
@@ -361,7 +363,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		if (len > 0xFFFF) throw new ArrayIndexOutOfBoundsException("UTF too long: " + len);
 		return putShort(len).putUTFData0(s, len);
 	}
-	public final DynByteBuf putVarIntUTF(CharSequence s) { int len = byteCountUTF8(s); putVarLong(this, len); return putUTFData0(s, len); }
+	public final DynByteBuf putVarIntUTF(CharSequence s) { int len = byteCountUTF8(s); return putVarInt(len).putUTFData0(s, len); }
 	public final DynByteBuf putVUIUTF(CharSequence s) { int len = byteCountUTF8(s); return putVUInt(len).putUTFData0(s, len); }
 	public DynByteBuf putUTFData(CharSequence s) { UTF8MB4.CODER.encodeFixedIn(s, this); return this; }
 	public final DynByteBuf putUTFData0(CharSequence s, int len) { ensureWritable(len); UTF8MB4.CODER.encodePreAlloc(s, this, len); return this; }

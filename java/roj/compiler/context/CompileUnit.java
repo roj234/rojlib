@@ -34,10 +34,7 @@ import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static roj.asm.Opcodes.*;
 import static roj.compiler.JavaLexer.*;
@@ -103,19 +100,15 @@ public final class CompileUnit extends ConstantData {
 		this.version = Math.max(JavaVersion(level), version);
 	}
 
-	public CompileUnit(String name) {
+	public CompileUnit(String name, String code) {
 		source = name;
+		this.code = code;
 		tr = new TypeResolver();
 
 		_parent = this;
 	}
-	public CompileUnit(String name, InputStream in) throws IOException {
-		this(name);
-		code = IOUtil.readString(in);
-	}
+	public CompileUnit(String name, InputStream in) throws IOException {this(name, IOUtil.readString(in));}
 
-	@Deprecated
-	public JavaLexer getLexer() {return ctx.lexer;}
 	public TypeResolver getTypeResolver() {return tr;}
 
 	// region 文件中的其余类
@@ -157,11 +150,9 @@ public final class CompileUnit extends ConstantData {
 			var desc = InnerClasses.InnerClass.innerClass(c.name, acc);
 			this.innerClasses().add(desc);
 			c.innerClasses().add(desc);
-
-			if (ctx.classes.isSpecEnabled(CompilerSpec.NEST_CLASS_INFO)) {
-				addNestMember(c);
-			}
 		}
+
+		if (ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) addNestMember(c);
 
 		if ((acc&ACC_PROTECTED) != 0) {
 			acc &= ~ACC_PROTECTED;
@@ -178,7 +169,7 @@ public final class CompileUnit extends ConstantData {
 		c.name(IOUtil.getSharedCharBuf().append(name).append("$").append(++_children).toString());
 		c.modifier = ACC_FINAL|ACC_SUPER;
 		// magic number to disable auto constructor
-		c.extraModifier = ACC_INTERFACE;
+		c.extraModifier = ACC_FINAL|ACC_INTERFACE;
 
 		c.body();
 
@@ -187,28 +178,33 @@ public final class CompileUnit extends ConstantData {
 			this.innerClasses().add(desc);
 			c.innerClasses().add(desc);
 
-			if (ctx.classes.isSpecEnabled(CompilerSpec.NEST_CLASS_INFO)) {
-				addNestMember(c);
-
-				var ownerMethod = new EnclosingMethod();
-				ownerMethod.owner = name;
-				if (mn != null && !mn.name().startsWith("<")) {
-					ownerMethod.name = mn.name();
-					ownerMethod.parameters = mn.parameters();
-					ownerMethod.returnType = mn.returnType();
-				}
-				c.putAttr(ownerMethod);
+			var ownerMethod = new EnclosingMethod();
+			ownerMethod.owner = name;
+			if (mn != null && !mn.name().startsWith("<")) {
+				ownerMethod.name = mn.name();
+				ownerMethod.parameters = mn.parameters();
+				ownerMethod.returnType = mn.returnType();
 			}
+			c.putAttr(ownerMethod);
 		}
+
+		if (ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) addNestMember(c);
 
 		return c;
 	}
 
 	public void addNestMember(ConstantData c) {
-		var that = _parent;
-		c.putAttr(new AttrString("NestHost", that.name));
-		AttrClassList nestMembers = (AttrClassList) that.attrByName("NestMembers");
-		if (nestMembers == null) that.putAttr(nestMembers = new AttrClassList(Attribute.NestMembers));
+		assert ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER);
+
+		var top = _parent;
+		while (top._parent != top) top = top._parent;
+
+		if (c instanceof CompileUnit cu) cu.setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_11);
+		top.setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_11);
+
+		c.putAttr(new AttrString("NestHost", top.name));
+		AttrClassList nestMembers = (AttrClassList) top.attrByName("NestMembers");
+		if (nestMembers == null) top.putAttr(nestMembers = new AttrClassList(Attribute.NestMembers));
 		nestMembers.value.add(c.name);
 	}
 	public List<InnerClasses.InnerClass> innerClasses() {
@@ -984,10 +980,6 @@ public final class CompileUnit extends ConstantData {
 			expr.wordStart = start1;
 
 			if (w.type() == lBrace) {
-				//setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_17);
-				//extraModifier |= _ACC_SEALED;
-				// TODO permited class
-
 				modifier &= ~ACC_FINAL;
 
 				wr.retractWord();
@@ -995,6 +987,14 @@ public final class CompileUnit extends ConstantData {
 
 				var _type = newAnonymousClass(null);
 				expr = ctx.ep.newAnonymousClass(expr, _type);
+
+				if (ctx.classes.isSpecEnabled(CompilerSpec.SEALED_ENUM)) {
+					setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_17);
+
+					var ps = (AttrClassList) attrByName("PermittedSubclasses");
+					if (ps == null) putAttr(ps = new AttrClassList(Attribute.PermittedSubclasses));
+					ps.value.add(_type.name);
+				}
 
 				w = wr.next();
 			}
@@ -1064,13 +1064,13 @@ public final class CompileUnit extends ConstantData {
 				case PRIVATE -> 	f = (     0b11 << 22) | ACC_PRIVATE;
 				case NATIVE -> 		f = (    0b100 << 22) | ACC_NATIVE;
 				case SYNCHRONIZED ->f = (   0b1000 << 22) | ACC_SYNCHRONIZED;
-				case FINAL -> 		f = (  0b10000 << 22) | ACC_FINAL;
+				case FINAL -> 		f = (0b1010000 << 22) | ACC_FINAL;
 				case STATIC -> 		f = ( 0b100000 << 22) | ACC_STATIC;
 				case CONST -> 		f = ( 0b110001 << 22) | ACC_PUBLIC | ACC_STATIC | ACC_FINAL;
 				case DEFAULT -> 	f = ( 0b110110 << 22) | _ACC_DEFAULT;
 				case ABSTRACT -> 	f = ( 0b111110 << 22) | ACC_ABSTRACT;
-				case SEALED ->      f = (  0b10000 << 22) | _ACC_SEALED;
-				case NON_SEALED ->  f = (  0b10000 << 22) | _ACC_NON_SEALED;
+				case SEALED ->      f = (0b1000000 << 22) | _ACC_SEALED;
+				case NON_SEALED ->  f = (0b1000000 << 22) | _ACC_NON_SEALED;
 				case STRICTFP -> 	f = ACC_STRICT; // on method, cannot be used with abstract
 				case VOLATILE -> 	f = ACC_VOLATILE;
 				case TRANSIENT -> 	f = ACC_TRANSIENT;
@@ -1093,7 +1093,7 @@ public final class CompileUnit extends ConstantData {
 		}
 	}
 
-	public static final int TYPE_PRIMITIVE = 1, TYPE_GENERIC = 2, TYPE_NO_ARRAY = 4;
+	public static final int TYPE_PRIMITIVE = 1, TYPE_GENERIC = 2, TYPE_NO_ARRAY = 4, TYPE_ALLOW_VOID = 8;
 	// this function only invoke on Stage 4
 	public IType readType(@MagicConstant(flags = {TYPE_PRIMITIVE, TYPE_GENERIC, TYPE_NO_ARRAY}) int flags) throws ParseException {
 		IType type = readType(ctx.lexer, flags);
@@ -1362,14 +1362,14 @@ public final class CompileUnit extends ConstantData {
 				wr.retract();
 
 				a.valueOnly = true;
-				a.newEntry("value", ParseTask.Annotation(this, a, "value"));
+				a.newEntry(this, "value");
 
 				w = wr.next();
 			} else {
 				wr.skip();
 
 				while (true) {
-					a.newEntry(name, ParseTask.Annotation(this, a, name));
+					a.newEntry(this, name);
 
 					if (wr.next().type() != comma) break;
 
@@ -1393,15 +1393,23 @@ public final class CompileUnit extends ConstantData {
 		LocalContext ctx = this.ctx = LocalContext.get();
 		ctx.setClass(this);
 
+		// init TypeResolver
+		tr.init(ctx);
+		var wr = ctx.lexer;
+
 		wr.index = classIdx;
 		var s1 = signature;
-		if (s1 != null) s1.resolve(ctx);
+		if (s1 != null) {
+			currentNode = s1;
+			s1.resolve(ctx);
+		}
 
 		for (int i = 0; i < fieldIdx.size(); i++) {
 			wr.index = fieldIdx.get(i);
 			var field = fields.get(i);
 			var s = (LPSignature) field.attrByName("Signature");
 			if (s != null) {
+				currentNode = s;
 				s.resolve(ctx);
 				ctx.disableRawTypeWarning = true;
 			}
@@ -1414,6 +1422,7 @@ public final class CompileUnit extends ConstantData {
 			var method = methods.get(i);
 			var s = (LPSignature) method.attrByName("Signature");
 			if (s != null) {
+				currentNode = s;
 				s.resolve(ctx);
 				ctx.disableRawTypeWarning = true;
 			}
@@ -1473,7 +1482,43 @@ public final class CompileUnit extends ConstantData {
 				}
 			}
 		}
+
+		// annotation
+		for (Map.Entry<Attributed, List<AnnotationPrimer>> annotated : annoTask.entrySet()) {
+			var list = annotated.getValue();
+			for (int i = 0; i < list.size(); i++) {
+				var a = list.get(i);
+				resolveAnnotationType(ctx, a);
+
+				for (Iterator<?> itr = a.values.values().iterator(); itr.hasNext(); ) {
+					if (itr.next() instanceof AnnVal value) {
+						if (value instanceof AnnValArray array) {
+							for (AnnVal val : array.value) {
+								var a1 = (AnnotationPrimer) ((AnnValAnnotation) val).value;
+								resolveAnnotationType(ctx, a1);
+								annoTask.computeIfAbsent(null, Helpers.fnArrayList()).add(a1);
+							}
+						} else {
+							var a1 = (AnnotationPrimer) ((AnnValAnnotation) value).value;
+							resolveAnnotationType(ctx, a1);
+							annoTask.computeIfAbsent(null, Helpers.fnArrayList()).add(a1);
+						}
+					}
+				}
+			}
+			//ctx.classes.invokeAnnotationProcessorPre0(this, annotated.getKey(), list);
+		}
 	}
+	private void resolveAnnotationType(LocalContext ctx, AnnotationPrimer a) {
+		ctx.lexer.index = a.pos;
+		var type = tr.resolve(ctx, a.type());
+		if (type == null) {
+			ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", a.type(), ctx.currentCodeBlockForReport());
+		} else {
+			a.setType(type.name());
+		}
+	}
+
 	public void S2_ResolveRef() {
 		LocalContext ctx = this.ctx = LocalContext.get();
 		ctx.setClass(this);
@@ -1582,7 +1627,9 @@ public final class CompileUnit extends ConstantData {
 				break autoInit;
 			}
 
-			ctx.checkAccessible(pInfo, pInfo.methods().get(superInit), false, true);
+			var mn = pInfo.methods().get(superInit);
+			ctx.checkAccessible(pInfo, mn, false, true);
+			if (_parent != this) j11PrivateConstructor(mn);
 
 			CodeWriter cw = newMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", "()V");
 			cw.visitSize(1,1);
@@ -1603,7 +1650,7 @@ public final class CompileUnit extends ConstantData {
 
 				ctx.assertAccessible(info);
 				if (!info.parent.equals(name) && !info.interfaces().contains(name)) {
-					ctx.report(Kind.ERROR, "cu.sealed.noPermits", type, name);
+					ctx.report(Kind.ERROR, "cu.sealed.indirectInherit", type, name);
 				}
 			}
 		}
@@ -1713,13 +1760,16 @@ public final class CompileUnit extends ConstantData {
 		if (type.owner != null && !type.owner.equals("java/lang/String")) {
 			if (name.equals(type.owner)) {
 				ctx.report(Kind.ERROR, "cu.annotation.cyclic");
-			} else if ((ctx.classes.getClassInfo(type.owner).modifier & (ACC_ENUM | ACC_ANNOTATION)) == 0) {
-				ctx.report(Kind.ERROR, "cu.annotation.invalidDefault");
+			} else {
+				var mod = ctx.classes.getClassInfo(type.owner).modifier;
+				if ((mod & (ACC_ENUM | ACC_ANNOTATION)) == 0 || (type.array() > 1 && (mod & ACC_ANNOTATION) != 0)) {
+					ctx.report(Kind.ERROR, "cu.annotation.invalidDefault");
+				}
 			}
 		}
 	}
 	// endregion
-	// region 阶段3 可能执行多次 注解处理 MethodDefault
+	// region 阶段3 注解处理 MethodDefault
 	void _setSign(Attributed merhod) {
 		var sign = (LPSignature) merhod.attrByName("Signature");
 		currentNode = sign != null ? sign : signature;
@@ -1798,7 +1848,7 @@ public final class CompileUnit extends ConstantData {
 
 			// 生成桥接方法 这里不检测泛型(主要是TypeParam)
 			if (!it.rawDesc().equals(my.rawDesc())) {
-				createDelegation((it.modifier&(ACC_PUBLIC|ACC_PROTECTED)) | ACC_FINAL | ACC_SYNTHETIC | ACC_BRIDGE, my, it);
+				createDelegation((it.modifier&(ACC_PUBLIC|ACC_PROTECTED)) | ACC_FINAL | ACC_SYNTHETIC | ACC_BRIDGE, my, it, true);
 			}
 
 			// 声明相同或更少的异常
@@ -1846,55 +1896,90 @@ public final class CompileUnit extends ConstantData {
 		}
 		abstractOrUnrelated.clear();
 
+		// check annotations
+		MyHashMap<String, Object> dup = ctx.tmpMap1, extra = ctx.tmpMap2;
 		var missed = ctx.tmpSet;
 		for (Map.Entry<Attributed, List<AnnotationPrimer>> annotated : annoTask.entrySet()) {
 			Annotations inv = null, vis = null;
 
-			List<AnnotationPrimer> list = annotated.getValue();
+			dup.clear();
+			var list = annotated.getValue();
 			for (int i = 0; i < list.size(); i++) {
-				AnnotationPrimer a = list.get(i);
+				var a = list.get(i);
 				ctx.lexer.index = a.pos;
 
-				IClass inst = tr.resolve(ctx, a.type());
-				if (inst == null) {
+				var type = tr.resolve(ctx, a.type());
+				if (type == null) {
 					ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", a.type(), ctx.currentCodeBlockForReport());
 					continue;
 				}
-				a.setType(inst.name());
+				a.setType(type.name());
 
-				AnnotationSelf ad = ctx.classes.getAnnotationDescriptor(inst);
+				var desc = ctx.classes.getAnnotationDescriptor(type);
+				Object prev;
+				// S2会给嵌套的注解增加key=null
+				if (annotated.getKey() != null) if (!desc.stackable && (prev = dup.putIfAbsent(type.name(), i)) != null) {
+					if (desc.repeatOn == null) ctx.report(Kind.ERROR, "cu.annotation.noRepeat", type);
+					else {
+						List<AnnVal> values;
+						if (prev instanceof Integer p) {
+							var removable = list.get(p);
 
-				if (!applicableToNode(ad, annotated.getKey())) ctx.report(Kind.ERROR, "cu.annotation.notApplicable", inst, annotated.getKey().getClass());
+							values = new SimpleList<>();
+							values.add(new AnnValAnnotation(removable));
+
+							var repeat = new AnnotationPrimer(desc.repeatOn, removable.pos);
+							repeat.values = Collections.singletonMap("value", new AnnValArray(values));
+							list.set(p, repeat);
+							if (desc.kind != AnnotationSelf.SOURCE) {
+								//noinspection all
+								List<Annotation> list1 = (desc.kind == AnnotationSelf.CLASS ? inv : vis).annotations;
+								list1.set(list1.indexOf(removable), repeat);
+							}
+
+							dup.put(type.name, values);
+						} else {
+							values = Helpers.cast(prev);
+						}
+
+						values.add(new AnnValAnnotation(a));
+						list.remove(i--);
+					}
+				} else {
+					if (!applicableToNode(desc, annotated.getKey())) {
+						ctx.report(Kind.ERROR, "cu.annotation.notApplicable", type, annotated.getKey().getClass());
+					}
+
+					if (desc.kind != AnnotationSelf.SOURCE) {
+						if (desc.kind == AnnotationSelf.CLASS) {
+							if (inv == null) {
+								inv = new Annotations(false);
+								annotated.getKey().putAttr(inv);
+							}
+							inv.annotations.add(a);
+						} else {
+							if (vis == null) {
+								vis = new Annotations(true);
+								annotated.getKey().putAttr(vis);
+							}
+							vis.annotations.add(a);
+						}
+					}
+				}
 
 				missed.clear();
-				for (Map.Entry<String, AnnVal> entry : ad.values.entrySet()) {
+				extra.clear(); extra.putAll(a.values);
+
+				for (Map.Entry<String, Type> entry : desc.types.entrySet()) {
 					String name = entry.getKey();
 
-					Object task = Helpers.cast(a.values.remove(name));
-					if (task instanceof ParseTask t) t.parse(ctx);
-					else if (task == null && entry.getValue() == null) missed.add(name);
+					Object node = Helpers.cast(extra.remove(name));
+					if (node instanceof ExprNode expr) a.values.put(name, AnnotationPrimer.toAnnVal(ctx, expr, entry.getValue()));
+					else if (node == null && !desc.values.containsKey(entry.getKey())) missed.add(name);
 				}
 
-				if (!a.values.isEmpty()) report(Kind.ERROR, "cu.annotation.extra", inst, a.values.keySet());
-				if (!missed.isEmpty()) report(Kind.ERROR, "cu.annotation.missing", inst, missed);
-
-				switch (ad.kind()) {
-					case AnnotationSelf.SOURCE: break; // discard
-					case AnnotationSelf.CLASS:
-						if (inv == null) {
-							inv = new Annotations(false);
-							annotated.getKey().putAttr(inv);
-						}
-						inv.annotations.add(a);
-						break;
-					case AnnotationSelf.RUNTIME:
-						if (vis == null) {
-							vis = new Annotations(true);
-							annotated.getKey().putAttr(vis);
-						}
-						vis.annotations.add(a);
-						break;
-				}
+				if (!extra.isEmpty()) ctx.report(Kind.ERROR, "cu.annotation.extra", type, extra.keySet());
+				if (!missed.isEmpty()) ctx.report(Kind.ERROR, "cu.annotation.missing", type, missed);
 			}
 
 			ctx.classes.invokeAnnotationProcessor(this, annotated.getKey(), list);
@@ -1943,7 +2028,7 @@ public final class CompileUnit extends ConstantData {
 		}
 		return (ctx.applicableTo&mask) != 0;
 	}
-	public void createDelegation(int acc, MethodNode my, MethodNode it) {
+	public CodeWriter createDelegation(int acc, MethodNode my, MethodNode it, boolean end) {
 		CodeWriter c = newMethod(acc, it.name(), it.rawDesc());
 		int size = (1 + TypeHelper.paramSize(it.rawDesc()));
 		c.visitSize(size, size);
@@ -1962,8 +2047,11 @@ public final class CompileUnit extends ConstantData {
 		c.invoke(my.name().startsWith("<") ? INVOKESPECIAL : INVOKEVIRTUAL, my);
 
 		ctx.castTo(my.returnType(), it.returnType(), TypeCast.E_DOWNCAST).write(c);
-		c.one(it.returnType().shiftedOpcode(IRETURN));
-		c.finish();
+		if (end) {
+			c.one(it.returnType().shiftedOpcode(IRETURN));
+			c.finish();
+		}
+		return c;
 	}
 	// endregion
 	// region 阶段4 编译代码块
@@ -1987,8 +2075,13 @@ public final class CompileUnit extends ConstantData {
 		if (glinit != null) return glinit;
 
 		SimpleList<ConstantData> _throws = new SimpleList<>();
-		for (MethodNode method : methods) {
+
+		for (int i = 0; i < methods.size(); i++) {
+			MethodNode method = methods.get(i);
 			if (method.name().equals("<init>")) {
+				// synthetic auto constructor (and the only one)
+				if (i >= methodIdx.size()) return glinit = ctx.classes.createMethodPoet(this, method);
+
 				var list = method.parsedAttr(cp, Attribute.Exceptions);
 				if (list == null) {
 					_throws.clear();
@@ -2000,8 +2093,8 @@ public final class CompileUnit extends ConstantData {
 						_throws.add(ctx.classes.getClassInfo(exc));
 				} else {
 					loop:
-					for (int i = _throws.size()-1; i >= 0; i--) {
-						var exParent = ctx.parentListOrReport(_throws.get(i));
+					for (int j = _throws.size() - 1; j >= 0; j--) {
+						var exParent = ctx.parentListOrReport(_throws.get(j));
 						for (String s : list.value) {
 							var self = ctx.classes.getClassInfo(s);
 
@@ -2010,7 +2103,7 @@ public final class CompileUnit extends ConstantData {
 							} else if (exParent.containsValue(s)) continue loop;
 						}
 
-						_throws.remove(i);
+						_throws.remove(j);
 					}
 
 					if (_throws.isEmpty()) break;
@@ -2030,7 +2123,14 @@ public final class CompileUnit extends ConstantData {
 		}
 		return glinit = ctx.classes.createMethodPoet(this, mn);
 	}
-	public void appendGlobalInit(MethodWriter target) {if (glinit != null) glinit.writeTo(target);}
+	private DynByteBuf glInitBytes;
+	public void appendGlobalInit(MethodWriter target, LineNumberTable lines) {
+		if (glinit != null) {
+			if (glInitBytes == null) glInitBytes = glinit.writeTo();
+			target.insertBefore(glInitBytes);
+			if (glinit.lines != null) lines.list.addAll(glinit.lines.list);
+		}
+	}
 
 	private int assertionId = -1;
 	public int getAssertEnabled() {
@@ -2100,5 +2200,12 @@ public final class CompileUnit extends ConstantData {
 	public void cancelTask(Attributed node) {
 		// field method parseTask
 		throw new UnsupportedOperationException("not implemented yet!");
+	}
+
+	public void j11PrivateConstructor(MethodNode method) {
+		// package-private on demand
+		if ((method.modifier&Opcodes.ACC_PRIVATE) != 0 && !ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) {
+			method.modifier ^= Opcodes.ACC_PRIVATE;
+		}
 	}
 }

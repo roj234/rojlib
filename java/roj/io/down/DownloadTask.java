@@ -273,7 +273,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 	}
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id == Timeout.READ_TIMEOUT) ex = new FastFailException("Read Timeout");
+		if (event.id.equals(Timeout.READ_TIMEOUT)) ex = new FastFailException("Read Timeout");
 	}
 
 	private List<Downloader> tasks;

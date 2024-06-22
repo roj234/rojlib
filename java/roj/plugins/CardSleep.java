@@ -165,12 +165,12 @@ public class CardSleep extends JFrame {
 			uuid = desc.get(0);
 			name = desc.get(1);
 			try {
-				tMax = Integer.parseInt(desc.get(5));
+				tMax = Integer.parseInt(desc.get(9));
 			} catch (Exception ignored) {}
-			pMin = Float.parseFloat(desc.get(6));
-			pMax = Float.parseFloat(desc.get(7));
+			pMin = Float.parseFloat(desc.get(5));
+			pMax = Float.parseFloat(desc.get(6));
 			longDesc = name+" ("+desc.get(2)+" PCIe "+desc.get(3)+".0x"+desc.get(4)+") \n" +
-				"TMax="+desc.get(5)+",PL="+pMin+"-"+pMax+"W,Core="+desc.get(8)+"MHz,Mem="+desc.get(9)+"MHz";
+				"TMax="+tMax+",PL="+pMin+"-"+pMax+"W,Core="+desc.get(7)+"MHz,Mem="+desc.get(8)+"MHz";
 		}
 
 		@Override
@@ -220,7 +220,11 @@ public class CardSleep extends JFrame {
 		new OnChangeHelper(this);
 
 		DefaultListModel<GraphicCard> cards = new DefaultListModel<>();
-		query(strings -> cards.addElement(new GraphicCard(strings)), "--query-gpu=gpu_uuid,name,pci.bus_id,pcie.link.gen.max,pcie.link.width.max,temperature.gpu.tlimit,power.min_limit,power.max_limit,clocks.max.graphics,clocks.max.memory");
+		try {
+			query(strings -> cards.addElement(new GraphicCard(strings)), "--query-gpu=gpu_uuid,name,pci.bus_id,pcie.link.gen.max,pcie.link.width.max,power.min_limit,power.max_limit,clocks.max.graphics,clocks.max.memory,temperature.gpu.tlimit");
+		} catch (ArrayIndexOutOfBoundsException e) {
+			query(strings -> cards.addElement(new GraphicCard(strings)), "--query-gpu=gpu_uuid,name,pci.bus_id,pcie.link.gen.max,pcie.link.width.max,power.min_limit,power.max_limit,clocks.max.graphics,clocks.max.memory");
+		}
 		uiCardList.setModel(cards);
 
 		uiCardList.addMouseListener(new DoubleClickHelper(uiCardList, 500, list -> {
@@ -614,6 +618,8 @@ public class CardSleep extends JFrame {
 				int exitCode = p.waitFor();
 				return exitCode == 0;
 			}
+		} catch (RuntimeException e) {
+			throw e;
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

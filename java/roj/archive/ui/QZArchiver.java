@@ -59,7 +59,7 @@ public class QZArchiver {
 	public File cacheFolder;
 	public File outputFolder;
 	public String outputName;
-	public boolean singleThread, keepArchive;
+	public boolean keepArchive;
 	public Comparator<File> sorter;
 
 	public int autoSplitTaskSize;
@@ -577,12 +577,7 @@ public class QZArchiver {
 		pool.awaitFinish();
 
 		// finally write header
-		if (bar != null) {
-			bar.setName("4/4 写入文件头");
-			bar.setHideBar(true);
-			bar.setHideSpeed(true);
-			bar.updateForce(0);
-		}
+		if (bar != null) bar.setName("4/4 写入文件头");
 
 		List<QZCoder> coders = new SimpleList<>();
 		if (compressHeader) coders.add(new LZMA2(new LZMA2Options(9).setDictSize(524288)));
@@ -594,7 +589,6 @@ public class QZArchiver {
 			writer.setCompressHeader(0);
 		}
 
-		writer.flag |= QZWriter.TRIM_FILE;
 		writer.setIgnoreClose(false);
 		writer.close();
 		if (bar != null) bar.end("压缩成功");
@@ -603,7 +597,7 @@ public class QZArchiver {
 	}
 
 	private QZWriter parallel(QZFileWriter qfw) throws IOException {
-		return singleThread ? qfw :
+		return threads == 1 ? qfw :
 			cacheFolder == null ? qfw.parallel() : qfw.parallel(new CacheSource(1048576, 134217728, "qzx-", cacheFolder));
 	}
 

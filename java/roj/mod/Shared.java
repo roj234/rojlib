@@ -7,7 +7,6 @@ import roj.concurrent.timing.Scheduler;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMap;
-import roj.dev.HRRemote;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.mod.plugin.Plugin;
@@ -17,7 +16,6 @@ import roj.util.HighResolutionTimer;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,77 +30,29 @@ import static roj.config.JSONParser.NO_DUPLICATE_KEY;
  */
 public final class Shared {
 	public static final boolean DEBUG;
-	public static final String VERSION = "3.0.1";
+	public static final String VERSION = "3.1.0";
 
-	public static final File BASE, CONFIG_DIR;
+	public static final File BASE, PROJECT_DIR;
 
 	static IFileWatcher watcher;
-	static HRRemote hotReload;
-
-	public static void launchHotReload() {
-		if (hotReload == null && CONFIG.getBool("启用热重载")) {
-			int port = 0xFFFF & CONFIG.getInteger("重载端口");
-			if (port == 0) port = 4485;
-			try {
-				hotReload = new HRRemote(port);
-			} catch (IOException e) {
-				CLIUtil.warning("重载工具无法绑定端口", e);
-			}
-		}
-	}
+	static HRServer hotReload;
 
 	public static final Scheduler PeriodicTask = Scheduler.getDefaultScheduler();
 	public static final TaskPool Task = TaskPool.Common();
 	public static CMap CONFIG;
 
-	static void loadConfig() {
-		File file = new File(BASE, "config.json");
-		try {
-			CONFIG = new JSONParser().parse(file, NO_DUPLICATE_KEY).asMap();
-			CONFIG.dot(true);
-		} catch (ParseException | ClassCastException e) {
-			CLIUtil.error("config.json 有语法错误! 请修正!", e);
-		} catch (IOException e) {
-			CLIUtil.error("config.json 读取失败!", e);
-		}
-	}
-
 	static Project project;
 	public static void setProject(String name) {
 		if (name == null) name = project.name;
 
-		try (FileOutputStream fos = new FileOutputStream(new File(BASE, "config/index"))) {
+		try (FileOutputStream fos = new FileOutputStream(new File(BASE, "projects/index"))) {
 			fos.write(name.getBytes(StandardCharsets.UTF_8));
 		} catch (IOException e) {
 			CLIUtil.error("配置保存", e);
 		}
 
 		if (project != (project = Project.load(name)))
-			AutoCompile.notifyIt();
-	}
-	public static void loadProject() {
-		if (project == null) {
-			String cf = null;
-			File proj = null;
-
-			File index = new File(BASE, "config/index");
-			if (index.isFile()) {
-				try {
-					cf = IOUtil.readUTF(index);
-					proj = new File(BASE, "/config/"+cf+".json");
-				} catch (IOException e) {
-					CLIUtil.warning("无法读取 " + index);
-				}
-			}
-
-			if (proj != null) {
-				try {
-					project = Project.load(cf);
-				} catch (Throwable e) {
-					CLIUtil.warning("配置读取失败", e);
-				}
-			}
-		}
+			AutoCompile.notifyUpdate();
 	}
 
 	public static final Mapper mapperFwd = new Mapper();
@@ -112,13 +62,13 @@ public final class Shared {
 		if (!mappingIsClean) {
 			synchronized (mapperFwd) {
 				if (mapperFwd.getClassMap().isEmpty()) {
-					File map = new File(BASE, "/util/mcp-srg.srg");
+					File map = new File(BASE, "util/mcp-srg.srg");
 					if (!map.isFile()) {
 						CLIUtil.error("混淆映射表"+map+"不存在,建议重新安装");
 						return;
 					}
 					try {
-						mapperFwd.initEnv(map, new File(BASE, "/class/"), new File(BASE, "/util/mapCache.lzma"), false);
+						mapperFwd.initEnv(map, new File(BASE, "class"), new File(BASE, "util/mapCache.lzma"), false);
 					} catch (Exception e) {
 						CLIUtil.error("混淆映射表加载失败", e);
 					}
@@ -128,27 +78,13 @@ public final class Shared {
 		}
 	}
 
-	private static ServerSocket ProcessLock;
-	private static AtomicInteger ThreadLock;
+	private static final AtomicInteger ThreadLock = new AtomicInteger();
 	public static void _lock() {
-		if (ProcessLock != null) {
-			if (!ThreadLock.compareAndSet(0, 1)) {
-				throw new FastFailException("无法获取线程锁");
-			}
-		} else {
-			int port = CONFIG.getInteger("单例锁端口");
-			if (port == 0) return;
-			try {
-				ProcessLock = new ServerSocket(port);
-			} catch (Throwable e) {
-				throw new FastFailException("无法获取单例锁: "+e.getMessage());
-			}
-			ThreadLock = new AtomicInteger();
+		if (!ThreadLock.compareAndSet(0, 1)) {
+			throw new FastFailException("其他线程正在编译");
 		}
 	}
-	public static void _unlock() {
-		if (ThreadLock != null) ThreadLock.set(0);
-	}
+	public static void _unlock() {ThreadLock.set(0);}
 
 	static List<Plugin> plugins;
 	static {
@@ -157,18 +93,26 @@ public final class Shared {
 		String basePath = System.getProperty("fmd.base_path", "");
 		BASE = new File(basePath).getAbsoluteFile();
 
-		loadConfig();
+		try {
+			File file = new File(BASE, "config.json");
+			CONFIG = new JSONParser().parse(file, NO_DUPLICATE_KEY).asMap();
+			CONFIG.dot(true);
+		} catch (ParseException | ClassCastException e1) {
+			CLIUtil.error("config.json 有语法错误! 请修正!", e1);
+		} catch (IOException e1) {
+			CLIUtil.error("config.json 读取失败!", e1);
+		}
 		if (CONFIG == null) System.exit(-2);
 
 		File classDir = new File(BASE, "class");
-		if (!classDir.isDirectory() && !classDir.mkdir()) {
+		if (!classDir.isDirectory() && !classDir.mkdirs()) {
 			CLIUtil.error("无法创建库文件夹: " + classDir.getAbsolutePath());
 			System.exit(-2);
 		}
 
-		CONFIG_DIR = new File(BASE, "config");
-		if (!CONFIG_DIR.isDirectory() && !CONFIG_DIR.mkdirs()) {
-			CLIUtil.error("无法创建配置文件夹: " + CONFIG_DIR.getAbsolutePath());
+		PROJECT_DIR = new File(BASE, "projects");
+		if (!PROJECT_DIR.isDirectory() && !PROJECT_DIR.mkdirs()) {
+			CLIUtil.error("无法创建项目文件夹: "+PROJECT_DIR.getAbsolutePath());
 			System.exit(-2);
 		}
 
@@ -183,8 +127,7 @@ public final class Shared {
 			}
 
 			if (CONFIG.getBool("自动编译")) {
-				AutoCompile.Debounce = CONFIG.getInteger("自动编译防抖");
-				AutoCompile.setEnabled(true);
+				AutoCompile.setEnabled(CONFIG.getInteger("自动编译防抖"));
 			}
 		}
 		if (w == null) w = new IFileWatcher();
@@ -202,6 +145,24 @@ public final class Shared {
 
 		if (CONFIG.getBool("子类实现")) {
 			mapperFwd.flag |= Mapper.MF_FIX_SUBIMPL;
+		}
+
+		int port1 = CONFIG.getInteger("重载端口");
+		if (port1 <= 0 || port1 > 65535) port1 = 4485;
+		try {
+			hotReload = new HRServer(port1);
+		} catch (IOException e) {
+			CLIUtil.warning("单例锁冲突(如果你确实要多开，请在配置文件中修改端口为0)", e);
+			System.exit(-2);
+		}
+
+		File index = new File(BASE, "projects/index");
+		if (index.isFile()) {
+			try {
+				project = Project.load(IOUtil.readUTF(index));
+			} catch (IOException e) {
+				CLIUtil.warning("项目配置读取失败", e);
+			}
 		}
 	}
 }

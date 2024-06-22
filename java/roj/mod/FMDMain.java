@@ -12,11 +12,11 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.task.AsyncTask;
 import roj.concurrent.timing.ScheduleTask;
-import roj.config.data.*;
-import roj.dev.ByteListOutput;
-import roj.dev.Compiler;
+import roj.config.data.CEntry;
+import roj.config.data.CList;
+import roj.config.data.CMap;
+import roj.config.data.Type;
 import roj.io.IOUtil;
-import roj.mod.MCLauncher.RunMinecraftTask;
 import roj.mod.plugin.PluginContext;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -27,6 +27,7 @@ import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
 import roj.util.Helpers;
 import roj.util.HighResolutionTimer;
+import roj.util.VMUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -46,7 +47,6 @@ import static roj.ui.terminal.CommandNode.literal;
  * @since 2021/6/18 10:51
  */
 public final class FMDMain {
-	static boolean isCLI;
 	static ScheduleTask shinyTask;
 	public static CommandConsole console = new CommandConsole("") {
 		@Override
@@ -59,24 +59,13 @@ public final class FMDMain {
 
 	@SuppressWarnings("fallthrough")
 	public static void main(String[] args) throws IOException, InterruptedException {
-		Shared.loadProject();
 		CommandConsole c = console;
 
-		c.register(literal("auto").then(argument("auto", Argument.bool()).executes(ctx -> AutoCompile.setEnabled(ctx.argument("auto", Boolean.class)))));
-		c.register(literal("kill").executes(ctx -> {
-			if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
-				MCLauncher.task.cancel();
-			}
-		}));
-		c.register(literal("gc").executes(ctx -> {
-			long used = Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory();
-			System.runFinalization();
-			System.gc();
-			System.runFinalization();
-			System.out.println("释放了 "+TextUtil.scaledNumber1024(used-(Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory()))+"内存.");
-		}));
+		/*jvmArg
+				String par = " -javaagent:" + new File(BASE, "util/FMD-agent.jar").getAbsolutePath() + "=" + port;
+		 */
 
-		c.register(literal("build").then(argument("flags", Argument.stringFlags("zl", "showErrorCode", "noupdate")).executes(ctx -> {
+		c.register(literal("build").then(argument("flags", Argument.stringFlags("zl", "showErrorCode")).executes(ctx -> {
 			List<String> flags = Helpers.cast(ctx.argument("flags", List.class));
 			Map<String, Object> map = new MyHashMap<>();
 			for (String flag : flags) map.put(flag, "");
@@ -92,26 +81,19 @@ public final class FMDMain {
 				}
 			}
 		})));
-		c.register(literal("run").then(argument("flags", Argument.stringFlags("zl", "showErrorCode", "noupdate")).executes(ctx -> {
-			List<String> flags = Helpers.cast(ctx.argument("flags", List.class));
-			Map<String, Object> map = new MyHashMap<>();
-			for (String flag : flags) map.put(flag, "");
-			try {
-				exitCode = run(map);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		})));
 
-		Argument.ArgSetOf<File> dynamicProject = new Argument.ArgSetOf<File>(1, new MyHashMap<>()) {
+		Argument.ArgSetOf<String> dynamicProject = new Argument.ArgSetOf<>(1, new MyHashMap<>()) {
 			@Override
 			protected void updateChoices() {
 				choice.clear();
-				IOUtil.findAllFiles(CONFIG_DIR, (f) -> {
-					String name = f.getName().toLowerCase();
-					if (name.endsWith(".json")) choice.put(name.substring(0, name.length()-5), f);
-					return false;
-				});
+				File[] files = PROJECT_DIR.listFiles();
+				if (files != null) {
+					for (File file : files) {
+						if (new File(file, "project.json").isFile()) {
+							choice.put(file.getName(), file.getName());
+						}
+					}
+				}
 			}
 		};
 		c.register(literal("create").then(argument("name", Argument.string()).executes(ctx -> {
@@ -119,28 +101,29 @@ public final class FMDMain {
 			ConfigEditWindow.open(Project.load(name), null);
 		})));
 		c.register(literal("edit").then(argument("name", dynamicProject).executes(ctx -> {
-			File selected = ctx.argument("name", File.class);
-			Project conf = Project.load(selected.getName().substring(0, selected.getName().lastIndexOf('.')));
+			var selected = ctx.argument("name", String.class);
+			Project conf = Project.load(selected);
 			ConfigEditWindow.open(conf, null);
 		})));
-		c.register(literal("project").then(argument("name", dynamicProject).executes(ctx -> {
-			File selected = ctx.argument("name", File.class);
-			String name = selected.getName().substring(0, selected.getName().lastIndexOf('.'));
-			Shared.setProject(name);
-			CLIUtil.success("配置文件已选择: " + name);
+		c.register(literal("set").then(argument("name", dynamicProject).executes(ctx -> {
+			var selected = ctx.argument("name", String.class);
+			Shared.setProject(selected);
+			CLIUtil.success("配置文件已选择: "+selected);
 			c.setPrompt("\u001b[33mFMD\u001b[97m[\u001b[96m"+project.name+"\u001b[97m]\u001b[33m > ");
 		})));
-		c.register(literal("exit").executes(ctx -> System.exit(0)));
+		c.register(literal("gc").executes(ctx -> {
+			long free = VMUtil.usableMemory();
+			System.gc();
+			System.out.println("释放了 "+TextUtil.scaledNumber1024(VMUtil.usableMemory() - free)+"内存.");
+		}));
 
 		if (project == null) {
-			CLIUtil.warning("未加载项目配置文件! 请使用create <名称(modid)>创建配置、和/或使用project <名称(modid)>选择配置");
+			CLIUtil.warning("未加载项目配置文件! 请使用create <名称>创建配置、和/或使用set <名称>选择配置");
 		} else {
 			c.setPrompt("\u001b[33mFMD\u001b[97m[\u001b[96m"+project.name+"\u001b[97m]\u001b[33m > ");
 		}
 
 		if (args.length == 0) {
-			isCLI = true;
-
 			String slogan = "FMD编译器 "+VERSION+" By Roj234";
 			System.out.println(slogan);
 			System.out.println("\u001b[96mhttps://www.github.com/roj234/rojlib");
@@ -168,75 +151,6 @@ public final class FMDMain {
 			c.executeSync(TextUtil.join(Arrays.asList(args), " "));
 			System.exit(exitCode);
 		}
-	}
-
-	public static int run(Map<String, Object> args) throws IOException {
-		// TODO not use Minecraft anymore!
-		//   switch to custom command
-		if (MCLauncher.task != null && !MCLauncher.task.isDone()) {
-			if (CLIUtil.readBoolean("是否结束游戏进程?")) {
-				MCLauncher.task.cancel();
-				MCLauncher.task = null;
-			} else {
-				return -1;
-			}
-		}
-
-		CMap mc_conf = new CMap();
-		if (mc_conf.size() == 0) {
-			CLIUtil.error("启动配置不存在，请重新setup");
-			return -1;
-		}
-
-		File dest = new File(mc_conf.getString("root") + "/mods/");
-		if (!dest.isDirectory() && !dest.mkdirs()) {
-			CLIUtil.warning("无法创建mods文件夹");
-			return -1;
-		}
-
-		Shared._lock();
-		AutoCompile.beforeCompile();
-		int v = -1;
-		try {
-			v = compile(args, project, BASE, 0);
-		} finally {
-			Shared._unlock();
-			AutoCompile.afterCompile(v);
-			if (project.dstFile != null) project.dstFile.end();
-		}
-
-		if (v < 0) return v;
-
-		for (Project proj : project.getAllDependencies()) {
-			copy4run(dest, proj);
-		}
-		copy4run(dest, project);
-
-		if (CONFIG.getBool("启用热重载")) {
-			launchHotReload();
-
-			int port = 0xFFFF & CONFIG.getInteger("重载端口");
-			if (port == 0) port = 4485;
-
-			if (!mc_conf.containsKey("__hr_patched")) {
-				String par = " -javaagent:" + new File(BASE, "util/FMD-agent.jar").getAbsolutePath() + "=" + port;
-				CEntry jvm = mc_conf.get("jvmArg");
-				((CString) jvm).value = ((CString) jvm).value.concat(par);
-				mc_conf.put("__hr_patched", 1);
-			}
-
-			if (DEBUG) CLIUtil.info("重载工具已在端口 "+port+" 上启动");
-		}
-
-		MCLauncher.clearLogs(null);
-		Task.pushTask(MCLauncher.task = new RunMinecraftTask(true));
-		return 0;
-	}
-
-	private static void copy4run(File dest, Project p) throws IOException {
-		File src = new File(BASE, p.name+'-'+p.version+".jar");
-		File dst = new File(dest, p.name+".jar");
-		IOUtil.copyFile(src, dst);
 	}
 
 	public static int build(Map<String, Object> args) throws IOException {
@@ -403,20 +317,14 @@ public final class FMDMain {
 		SimpleList<String> options = CONFIG.getList("编译参数").toStringList();
 		options.addAll("-cp", libBuf.toString(), "-encoding", p.charset.name());
 
-		Compiler.showErrorCode(args.containsKey("showErrorCode"));
+		p.compiler.showErrorCode(args.containsKey("showErrorCode"));
 		// endregion
 
 		Profiler.endStartSection("compile <= makeCompileParam");
-		if (!p.compiler.compile(options, files)) {
-			if (!args.containsKey("zl")) AutoCompile.setEnabled(false);
-			return -1;
-		}
-
-		if (CONFIG.getBool("自动编译")) AutoCompile.setEnabled(true);
-
+		var outputs = p.compiler.compile(options, files);
+		if (outputs == null) return -1;
 		Profiler.endStartSection("writeDevJar <= compile");
 
-		List<ByteListOutput> outputs = p.compiler.getCompiled();
 		int compiledCount = outputs.size();
 		List<Context> list = Helpers.cast(outputs);
 
@@ -425,9 +333,9 @@ public final class FMDMain {
 			devJar.begin(!increment);
 
 			for (int i = 0; i < outputs.size(); i++) {
-				ByteListOutput out = outputs.get(i);
-				devJar.set(out.getName(), out.getOutput());
-				list.set(i, new Context(out.getName(), out.getOutput()));
+				var out = outputs.get(i);
+				devJar.set(out.getName(), out.getData());
+				list.set(i, new Context(out.getName(), out.getData()));
 			}
 
 			if (increment && p.state == null) {
@@ -507,9 +415,8 @@ public final class FMDMain {
 
 		Profiler.endStartSection("writeBinJar <= lockBinJar");
 		// region 写入映射结果
-		Context ctx = null;
+		Context ctx = Helpers.maybeNull();
 		try {
-
 			for (int i = 0; i < list.size(); i++) {
 				ctx = list.get(i);
 				binWriter.set(ctx.getFileName(), ctx::getCompressedShared);
@@ -525,8 +432,7 @@ public final class FMDMain {
 		CLIUtil.success("编译成功! "+(System.currentTimeMillis()-time)+"ms");
 		Profiler.endStartSection("executeCommand <= writeBinJar");
 
-		if (!args.containsKey("noupdate") && !p.binJar.setLastModified(time))
-			CLIUtil.warning("设置时间戳失败!");
+		if (!p.binJar.setLastModified(time)) CLIUtil.warning("设置时间戳失败!");
 
 		p.registerWatcher();
 

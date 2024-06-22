@@ -25,6 +25,7 @@ import roj.compiler.diagnostic.Kind;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static roj.asmx.AnnotationSelf.*;
 
@@ -36,7 +37,7 @@ public final class ResolveHelper {
 	private Object _next;
 	public final IClass owner;
 
-	public ResolveHelper(IClass owner) {this.owner = owner;}
+	public ResolveHelper(IClass owner) {this.owner = Objects.requireNonNull(owner);}
 
 	private MethodNode lambdaMethod;
 	private byte lambdaType;

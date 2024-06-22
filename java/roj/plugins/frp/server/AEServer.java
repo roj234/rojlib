@@ -316,7 +316,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 		@Override
 		protected MSSPublicKey checkCertificate(int type, DynByteBuf data) throws GeneralSecurityException {
 			Blake3 md = new Blake3(32);
-			md.update(data);
+			md.update(data.slice());
 			userId = md.digestShared();
 			return super.checkCertificate(type, data);
 		}

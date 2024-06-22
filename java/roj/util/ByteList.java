@@ -326,6 +326,11 @@ public class ByteList extends DynByteBuf implements Appendable {
 		System.arraycopy(list, arrayOffset() + rIndex, b, 0, b.length);
 		return b;
 	}
+	public byte[] toByteArrayAndFree() {
+		byte[] array = toByteArray();
+		_free();
+		return array;
+	}
 
 	@Override
 	public void preInsert(int off, int len) {
@@ -502,8 +507,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	@Override
 	public final ByteList compact() {
 		if (rIndex > 0) {
-			System.arraycopy(list, arrayOffset() + rIndex, list, arrayOffset(), wIndex - rIndex);
-			wIndex -= rIndex;
+			System.arraycopy(list, arrayOffset() + rIndex, list, arrayOffset(), wIndex -= rIndex);
 			rIndex = 0;
 		}
 		return this;
@@ -578,7 +582,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	@Override
 	public CharList hex(CharList sb) {return TextUtil.bytes2hex(list, arrayOffset()+rIndex, arrayOffset()+wIndex, sb);}
 
-	public static class WriteOut extends ByteList {
+	public static final class WriteOut extends ByteList {
 		private OutputStream out;
 		private int fakeWriteIndex;
 

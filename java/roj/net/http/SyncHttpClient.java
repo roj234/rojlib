@@ -10,7 +10,6 @@ import roj.net.ch.Event;
 import roj.text.TextReader;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.Identifier;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -26,7 +25,7 @@ import java.util.function.Consumer;
  * @since 2022/10/15 0015 11:24
  */
 public class SyncHttpClient implements ChannelHandler {
-	public static final Identifier SHC_CLOSE_CHECK = new Identifier("shc:finish");
+	public static final String SHC_CLOSE_CHECK = "shc:finish";
 
 	private HttpHead head;
 	private DynByteBuf data;
@@ -90,7 +89,7 @@ public class SyncHttpClient implements ChannelHandler {
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id == HttpRequest.DOWNLOAD_EOF) {
+		if (event.id.equals(HttpRequest.DOWNLOAD_EOF)) {
 			finish(ctx, (boolean) event.getData());
 
 			if (state != SUCCESS || ctx.postEvent(SHC_CLOSE_CHECK).getResult() == Event.RESULT_DEFAULT) {
@@ -130,17 +129,22 @@ public class SyncHttpClient implements ChannelHandler {
 		if (callback != null) callback.accept(this);
 	}
 
-	void retain(HttpRequest http, SyncHttpClient shc) {
+	/**
+	 * try reuse connection
+	 */
+	boolean retain(HttpRequest http, SyncHttpClient shc) {
 		assert state == SyncHttpClient.SUCCESS;
 		o.replaceSelf(shc);
 		try {
 			ChannelCtx ctx = findHandler(o);
-			ChannelHandler handler = (ChannelHandler) http;
+			var handler = (ChannelHandler) http;
 			ctx.replaceSelf(handler);
 			handler.channelOpened(ctx);
+			return true;
 		} catch (Exception e) {
 			shc.ex = e;
 			shc.finish(o, false);
+			return false;
 		}
 	}
 

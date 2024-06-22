@@ -4,7 +4,6 @@ import roj.collect.SimpleList;
 import roj.io.buf.BufferPool;
 import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
-import roj.util.Identifier;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -63,12 +62,11 @@ public final class ChannelCtx {
 		if (next != null) next.handler.channelRead(next, data);
 	}
 
-	public Event postEvent(Identifier key) throws IOException {
-		Event event = new Event(key);
+	public Event postEvent(String id) throws IOException {
+		Event event = new Event(id);
 		postEvent(event);
 		return event;
 	}
-
 	public void postEvent(Event event) throws IOException { root.postEvent(event); }
 
 	public void exceptionCaught(Throwable ex) throws Exception {

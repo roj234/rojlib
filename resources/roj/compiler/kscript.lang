@@ -106,11 +106,11 @@ cu.noDefaultConstructor=[CU]%1 没有默认(无参)构造器
 cu.annotation.missing=注解 @%1 缺少参数'%2'的默认值
 cu.annotation.extra=注解 @%1 不存在参数'%2'
 cu.annotation.notApplicable=注解 @%1 无法应用于元素 %2
-cu.annotation.invalidDefault=注解值只能是基本类型、字符串、枚举、注解或它们的数组
+cu.annotation.invalidDefault=注解值只能是基本类型、字符串、枚举、注解或它们的数组，其中注解只能是一维数组
 cu.annotation.cyclic=循环引用
 cu.annotation.noRepeat=注解@%1不可重复(@Repeatable|@Stackable)
 
-cu.sealed.noPermits=允许的子类%1必须直接继承或实现密封类%2
+cu.sealed.indirectInherit=允许的子类%1必须直接继承或实现密封类%2
 cu.sealed.unlisted.c="无法继承自密封类%1\n  只允许下列类继承: %2"
 cu.sealed.unlisted.i="无法实现密封接口%1\n  只允许下列类实现: %2"
 cu.sealed.missing=需要sealed、non-sealed或final修饰符
@@ -184,6 +184,7 @@ block.switch.uncovered="[Switch]缺少default分支\n  %1"
 block.switch.collisionType=[Switch]分支类型%1和%2之间存在交集
 block.switch.nullfail=[Switch]基本类型不允许case null
 block.switch.nonConstant=[Switch]使用"...switch"允许非编译期常量
+block.switch.fallthrough=[Switch]在分支最后没有break
 
 block.switch.noBranch=[Switch]没有分支
 block.switch.incompatible=[Switch]类型%1不能使用switch比较 (对于对象类型，添加@Switchable即可)
@@ -206,6 +207,8 @@ block.var.exist=变量%1已存在
 block.var.final=最终变量未赋初值
 block.var.var=var变量必须初始化
 
+expr.constantWritable.ifOnly=ASM_if只能在if语句中使用
+
 # BlockParser Excepting Types
 block.except.tryOrAuto=(或{
 block.except.name=变量名称(标识符)
@@ -214,7 +217,6 @@ block.except.switchCase=逗号, 分号或'->'
 block.except.switch=case, default或'}'
 
 # 表达式Parse阶段
-
 expr.stackOverflow=表达式太复杂
 expr.cast.lambda=需要->
 expr.easyMap.kvOrRet='->'或','
@@ -240,6 +242,7 @@ assignD.error.cast=[AssignD]直接赋值操作符无法进行%1到%2的类型转
 binary.error.void=[Binary]void不是有效的值
 binary.error.notApplicable=[Binary]%1和%2不是操作符%3的有效参数
 binary.constant=[Binary]值总是常量
+binary.divisionByZero=除数为零
 cast.warn.redundant=[Cast]出现冗余的到 %1 的转换
 chained.warn.constant_expr=[Chained]在逗号分隔中的常量表达式
 dotGet.opChain.arrayLen=无法在?.表达式中访问数组长度

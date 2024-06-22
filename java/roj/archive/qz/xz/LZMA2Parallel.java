@@ -95,10 +95,7 @@ public final class LZMA2Parallel {
 		Compressor task;
 		getTask:
 		synchronized (tasksFree) {
-			if (!tasksFree.isEmpty()) {
-				task = tasksFree.pop();
-				break getTask;
-			}
+			if ((task = tasksFree.pop()) != null) break getTask;
 
 			if (taskFree > 0) {
 				DynByteBuf in = acquireBuffer(caller, asyncBufLen);
@@ -119,7 +116,8 @@ public final class LZMA2Parallel {
 
 		try {
 			task.owner = caller;
-			options.getAsyncExecutor().pushTask(() -> caller.prepareTask(task));
+			var javac傻逼 = task;
+			options.getAsyncExecutor().pushTask(() -> caller.prepareTask(javac傻逼));
 		} catch (Exception e) {
 			Helpers.athrow(e);
 		}

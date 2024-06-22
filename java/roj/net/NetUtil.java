@@ -1,17 +1,19 @@
 package roj.net;
 
-import roj.asm.type.Type;
+import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.net.ch.MyChannel;
+import roj.net.handler.Socks5Client;
 import roj.reflect.DirectAccessor;
 import roj.text.CharList;
+import roj.text.Escape;
 import roj.text.TextUtil;
 
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.util.Enumeration;
-import java.util.LinkedHashMap;
 
 /**
  * @author Roj234
@@ -186,13 +188,42 @@ public final class NetUtil {
 	}
 	// endregion
 
-	public static void putHostCache(boolean negative, String host, long expire, InetAddress... addresses) {
-		initUtil();
-		Object cache = negative ? Util.getNegativeHostCache() : Util.getHostCache();
-		synchronized (cache) {
-			Object entry = Util.newCacheEntry(addresses, expire);
-			Util.getInternalMap(cache).put(host, entry);
+	public static URI socks5(InetSocketAddress server) {return makeUri("socks5://"+server);}
+	public static URI socks5(InetSocketAddress server, String username, String password) {return makeUri("socks5://"+ Escape.encodeURIComponent(username)+":"+Escape.encodeURIComponent(password)+"@"+server);}
+	private static URI makeUri(String uri) {
+		try {
+			return new URI(uri);
+		} catch (URISyntaxException e) {
+			throw new IllegalArgumentException(uri, e);
 		}
+	}
+
+	public static InetSocketAddress applyProxy(@Nullable URI proxy, InetSocketAddress originalAddr, MyChannel ch) throws IOException {
+		if (proxy == null) return originalAddr;
+		switch (proxy.getScheme()) {
+			default -> throw new IllegalArgumentException("Not know "+proxy+" proxy");
+			case "socks5" -> {
+				String info = proxy.getRawUserInfo();
+				String user = null, pass = null;
+				if (info != null) {
+					int i = info.indexOf(':');
+					if (i < 0) {
+						user = Escape.decodeURI(info);
+					} else {
+						user = Escape.decodeURI(info.substring(0, i));
+						pass = Escape.decodeURI(info.substring(i+1));
+					}
+				}
+				ch.addFirst("@proxy", new Socks5Client(originalAddr, user, pass));
+				return new InetSocketAddress(InetAddress.getByName(proxy.getHost()), proxy.getPort());
+			}
+		}
+	}
+
+	@Nullable
+	public static String getOriginalHostName(InetAddress address) {
+		initUtil();
+		return Util.getOriginalHostName(Util.getHolder(address));
 	}
 
 	public static void setHostCachePolicy(boolean negative, int seconds) {
@@ -213,13 +244,6 @@ public final class NetUtil {
 				if (Util == null) {
 					DirectAccessor<H> b = DirectAccessor.builder(H.class);
 					try {
-						b.i_construct("java.net.InetAddress$CacheEntry", "([Ljava/net/InetAddress;J)V", "newCacheEntry")
-						 .access(InetAddress.class, new String[] {"addressCache", "negativeCache"}, new String[] {"getHostCache", "getNegativeHostCache"}, null)
-						 .i_access("java.net.InetAddress$Cache", "cache", new Type("java/util/LinkedHashMap"), "getInternalMap", null, false);
-					} catch (Throwable e) {
-						e.printStackTrace();
-					}
-					try {
 						Class<?> pl = Class.forName("sun.net.InetAddressCachePolicy");
 						String[] fieldName = new String[] {"cachePolicy", "negativeCachePolicy", "propertySet", "propertyNegativeSet"};
 						try {
@@ -232,6 +256,13 @@ public final class NetUtil {
 					} catch (Throwable e) {
 						e.printStackTrace();
 					}
+					try {
+						Class<?> pl = Class.forName("java.net.InetAddress$InetAddressHolder");
+						b.access(pl, "originalHostName", "getOriginalHostName", null);
+						b.access(InetAddress.class, "holder", "getHolder", null);
+					} catch (Throwable e) {
+						e.printStackTrace();
+					}
 					Util = b.build();
 				}
 			}
@@ -240,16 +271,8 @@ public final class NetUtil {
 
 	private static volatile H Util;
 	private interface H {
-		Object newCacheEntry(InetAddress[] addresses, long expire);
-
-		default Object getHostCache() {
-			throw new UnsupportedOperationException();
-		}
-		default Object getNegativeHostCache() {
-			throw new UnsupportedOperationException();
-		}
-
-		LinkedHashMap<String, Object> getInternalMap(Object cache);
+		Object getHolder(InetAddress address);
+		String getOriginalHostName(Object o);
 
 		default void setPosCachePolicy(int seconds) {
 			throw new UnsupportedOperationException();

@@ -60,7 +60,7 @@ public class Diagnostic {
 	private void initLines() {
 		if (line != null || !(source instanceof CompileUnit cu)) return;
 
-		CharSequence lines = cu.getLexer().getText();
+		CharSequence lines = cu.getCode();
 		int pos = offset;
 		if (pos < 0) {
 			lineNumber = -1;

@@ -179,6 +179,22 @@ public class CharList implements CharSequence, Appendable {
 	public final boolean startsWith(CharSequence s) { return s.length() == 0 || doMatch(s, 0, 1) >= 0; }
 	public final boolean endsWith(CharSequence s) { return s.length() == 0 || (len >= s.length() && doMatch(s, len-s.length(), len-s.length()+1) >= 0); }
 
+	public final int indexOf(TrieTree<String> map, int pos) {
+		MyHashMap.Entry<CInt, String> entry = new MyHashMap.Entry<>(new CInt(), null);
+		while (pos < len) {
+			map.match(this, pos, len, entry);
+			int len = entry.getKey().value;
+			if (len < 0) {
+				pos++;
+				continue;
+			}
+
+			return pos;
+		}
+
+		return -1;
+	}
+
 	public final int match(CharSequence s, int start, int end) {
 		checkBounds(start, end, len);
 		return doMatch(s, start, end);

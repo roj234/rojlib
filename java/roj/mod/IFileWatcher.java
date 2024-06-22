@@ -15,5 +15,4 @@ class IFileWatcher {
 	public void register(Project proj) throws IOException {}
 
 	public void removeAll() {}
-	public void terminate() {}
 }

@@ -5,9 +5,9 @@ import roj.asm.util.Context;
 import roj.asmx.AnnotatedElement;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.ITransformer;
-import roj.asmx.NodeFilter;
 import roj.asmx.event.EventTransformer;
 import roj.asmx.launcher.Bootstrap;
+import roj.asmx.launcher.DefaultTweaker;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.concurrent.task.ITask;
@@ -52,8 +52,6 @@ import static roj.ui.terminal.CommandNode.literal;
  */
 public final class DefaultPluginSystem extends PluginManager {
 	static final AnnotationRepo REPO = new AnnotationRepo();
-	static final NodeFilter FILTER = new NodeFilter();
-
 	static final CommandConsole CMD = new CommandConsole("Panger> ");
 
 	private static final Scheduler ticker = new Scheduler(task -> {
@@ -81,9 +79,8 @@ public final class DefaultPluginSystem extends PluginManager {
 		mainThread = Thread.currentThread();
 		long time = System.currentTimeMillis();
 
-		Bootstrap.classLoader.registerTransformer(FILTER);
 		Bootstrap.classLoader.registerTransformer(new DPSAutoObfuscate());
-		Bootstrap.classLoader.registerTransformer(EventTransformer.register(FILTER));
+		Bootstrap.classLoader.registerTransformer(EventTransformer.register(DefaultTweaker.CONDITIONAL));
 
 		transformers.add(new DPSSecurityManager());
 		DPSSecurityManager.LOGGER.setLevel(Level.INFO);

@@ -1,43 +1,30 @@
 package roj.net.ch;
 
-import roj.util.Identifier;
-
 public class Event {
-	public final Identifier id;
+	public final String id;
 
 	public static final int RESULT_DEFAULT = 0, RESULT_ACCEPT = 1, RESULT_DENY = 2;
 	private byte state;
 	protected Object data;
 
-	public Event(Identifier id) {
-		this(id, null);
-	}
-
-	public Event(Identifier id, Object data) {
-		this.id = id;
+	public Event(String id) {this(id, null);}
+	public Event(String id, Object data) {
+		this.id = id.toString();
 		this.data = data;
 	}
 
-	public int getResult() {
-		return state >>> 1;
-	}
+	public int getResult() {return state >>> 1;}
 
 	public void setResult(int result) {
 		if (result < 0 || result > 2) throw new IllegalArgumentException();
 		state = (byte) ((result << 1) | (state & 1));
 	}
 
-	public Object getData() {
-		return data;
-	}
+	public Object getData() {return data;}
 
-	public void setData(Object data) {
-		this.data = data;
-	}
+	public void setData(Object data) {this.data = data;}
 
-	public boolean isCancelled() {
-		return (state & 1) != 0;
-	}
+	public boolean isCancelled() {return (state & 1) != 0;}
 
 	public void setCancelled(boolean cancelled) {
 		if (cancelled) state |= 1;

@@ -7,11 +7,9 @@ import roj.asm.Opcodes;
 import roj.asm.cp.*;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.AnnVal;
-import roj.asm.tree.anno.AnnValEnum;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.AttrClassList;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.attr.ConstantValue;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.*;
 import roj.asm.util.Attributes;
@@ -499,7 +497,7 @@ public class LocalContext {
 	public String resolveDotGet(CharList desc, boolean allowClassExpr) {
 		CharList sb = fieldResolveTmp;
 
-		IClass directClz = null;
+		ConstantData directClz = null;
 		String anySuccess = "";
 		_frOffset = 0;
 		int slash = desc.indexOf("/");
@@ -577,7 +575,7 @@ public class LocalContext {
 					}
 					return fr.error;
 				}
-				return "symbol.error.noSuchSymbol:symbol.field:"+name+":"+currentCodeBlockForReport();
+				return "symbol.error.noSuchSymbol:symbol.field:"+name+":\1symbol.type\0 "+clz.name();
 			}
 
 			Signature cSign = clz.parsedAttr(clz.cp(), Attribute.SIGNATURE);
@@ -656,7 +654,7 @@ public class LocalContext {
 				}
 			}
 		}
-		report(Kind.ERROR, "lc.unReportedException", type);
+		report(classes.isSpecEnabled(CompilerSpec.CHECKED_EXCEPTION) ? Kind.WARNING : Kind.ERROR, "lc.unReportedException", type);
 	}
 
 	public SimpleList<TransitiveContext> enclosingThis = new SimpleList<>();
@@ -670,15 +668,21 @@ public class LocalContext {
 		public final String method;
 		public final ExprNode prev;
 
+		public Import(ExprNode node) {
+			this.owner = null;
+			this.method = null;
+			this.prev = Objects.requireNonNull(node);
+		}
+
 		public Import(IClass owner, String method) {
-			this.owner = owner;
-			this.method = method;
+			this.owner = Objects.requireNonNull(owner);
+			this.method = Objects.requireNonNull(method);
 			this.prev = null;
 		}
 
 		public Import(IClass owner, String method, ExprNode prev) {
-			this.owner = owner;
-			this.method = method;
+			this.owner = Objects.requireNonNull(owner);
+			this.method = Objects.requireNonNull(method);
 			this.prev = prev;
 		}
 	}
@@ -688,7 +692,7 @@ public class LocalContext {
 	 * @param name DotGet name
 	 * @return [owner, name, Nullable Expr]
 	 */
-	public Import tryImportMethod(String name) {
+	public Import tryImportMethod(String name, List<ExprNode> args) {
 		if (dynamicMethodImport != null) {
 			Import result = dynamicMethodImport.apply(name);
 			if (result != null) return result;
@@ -860,17 +864,25 @@ public class LocalContext {
 		MethodDefault attr = method.parsedAttr(klass.cp(), MethodDefault.METHOD_DEFAULT);
 		if (attr != null) {
 			IntMap<String> value = attr.defaultValue;
-			IntMap<ExprNode> value1 = new IntMap<>();
-			for (IntMap.Entry<String> entry : value.selfEntrySet()) {
-				try {
-					value1.putInt(entry.getIntKey(), ep.deserialize(entry.getValue()).resolve(this));
-				} catch (ParseException|ResolveException e) {
-					e.printStackTrace();
-					return null;
+			IntMap<ExprNode> def = new IntMap<>();
+
+			depth(1);
+			var ctx = get();
+			ctx.lexer.init(lexer.getText());
+			ctx.setClass(file);
+			ctx.setMethod(method);
+			depth(-1);
+
+			try {
+				for (IntMap.Entry<String> entry : value.selfEntrySet()) {
+					def.putInt(entry.getIntKey(), ep.deserialize(entry.getValue()).resolve(ctx));
 				}
+				return def;
+			} catch (ParseException|ResolveException e) {
+				e.printStackTrace();
 			}
-			return value1;
-		} else {return EMPTY;}
+		}
+		return EMPTY;
 	}
 
 	// 被cast和intanceof调用，若返回true则禁用编译警告和化简
@@ -893,13 +905,13 @@ public class LocalContext {
 			case JavaLexer.mul -> {
 				if (left.array() == 0 && "java/lang/String".equals(left.owner()) && right.getActualType() == Type.INT) {
 					MethodNode mn = new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "repeat", "(I)Ljava/lang/String;");
-					return Invoke.binaryAlt(mn, e1, e2);
+					return Invoke.staticMethod(mn, e1, e2);
 				}
 			}
 			case JavaLexer.logic_not -> {
 				if (left.array() == 0 && "java/lang/String".equals(left.owner())) {
 					MethodNode mn = new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "isEmpty", "()Z");
-					return Invoke.unaryAlt(mn, e1);
+					return Invoke.virtualMethod(mn, e1);
 				}
 			}
 			case JavaLexer.lBracket -> {
@@ -928,24 +940,20 @@ public class LocalContext {
 	 */
 	@Nullable
 	public ExprNode getConstantValue(IClass klass, FieldNode field, @Nullable IType fieldType) {
-		Object c;
 		assert klass.fields().contains(field);
-		ConstantValue cv = field.parsedAttr(klass.cp(), Attribute.ConstantValue);
-		if (cv == null) {
-			if ((klass.modifier() & field.modifier & Opcodes.ACC_ENUM) == 0) return null;
-			c = new AnnValEnum(klass.name(), field.name());
-		} else {
-			switch (cv.c.type()) {
-				case Constant.INT: c = AnnVal.valueOf(((CstInt) cv.c).value); break;
-				case Constant.FLOAT: c = AnnVal.valueOf(((CstFloat) cv.c).value); break;
-				case Constant.LONG: c = AnnVal.valueOf(((CstLong) cv.c).value); break;
-				case Constant.DOUBLE: c = AnnVal.valueOf(((CstDouble) cv.c).value); break;
-				case Constant.CLASS: c = cv.c; break;
-				case Constant.STRING: c = cv.c.getEasyCompareValue(); break;
-				default: return null;
-			}
-		}
 
+		var cv = field.parsedAttr(klass.cp(), Attribute.ConstantValue);
+		if (cv == null) return null;
+
+		var c = switch (cv.c.type()) {
+			case Constant.INT -> AnnVal.valueOf(((CstInt) cv.c).value);
+			case Constant.FLOAT -> AnnVal.valueOf(((CstFloat) cv.c).value);
+			case Constant.LONG -> AnnVal.valueOf(((CstLong) cv.c).value);
+			case Constant.DOUBLE -> AnnVal.valueOf(((CstDouble) cv.c).value);
+			case Constant.CLASS -> cv.c;
+			case Constant.STRING -> cv.c.getEasyCompareValue();
+			default -> throw new IllegalArgumentException("Illegal ConstantValue "+cv.c);
+		};
 		return new roj.compiler.ast.expr.Constant(fieldType == null ? field.fieldType() : fieldType, c);
 	}
 
@@ -979,6 +987,7 @@ public class LocalContext {
 	public List<String> tmpList = new SimpleList<>();
 	public MyHashSet<String> tmpSet = new MyHashSet<>();
 	public SimpleList<AnnotationPrimer> tmpAnnotations = new SimpleList<>();
+	public MyHashMap<String, Object> tmpMap1 = new MyHashMap<>(), tmpMap2 = new MyHashMap<>();
 	public CharList tmpSb = new CharList();
 	public NameAndType tmpNat = new NameAndType();
 

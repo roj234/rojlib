@@ -60,14 +60,15 @@ public class UIEntry extends JFrame {
 		button.addActionListener(e -> {
 			button.setEnabled(false);
 			try {
-				Class<?> aClass = Class.forName(klass);
-				try {
+				String copy = klass;
+				boolean useMainClass = copy.startsWith("^");
+				if (useMainClass) copy = copy.substring(1);
+				Class<?> aClass = Class.forName(copy);
+				if (useMainClass) {
 					Method main = aClass.getDeclaredMethod("main", String[].class);
 					main.setAccessible(true);
 					main.invoke(null, (Object) new String[0]);
-				} catch (Exception e2) {
-					e2.printStackTrace();
-
+				} else {
 					JFrame frame = (JFrame) aClass.newInstance();
 					frame.pack();
 					frame.setResizable(false);
@@ -89,12 +90,12 @@ public class UIEntry extends JFrame {
 		bind(uiUnarchiver, "roj.archive.ui.UnarchiverUI");
 		bind(uiFindClass, "roj.misc.FindClass");
 		bind(uiNovel, "roj.text.novel.NovelFrame");
-		bind(uiNat, "roj.plugins.frp.AEGui");
+		bind(uiNat, "^roj.plugins.frp.AEGui");
 		bind(uiMapper, "roj.asmx.mapper.MapperUI");
 		bind(uiObfuscator, "roj.asmx.mapper.ObfuscatorUI");
 		bind(uiSM, "roj.novel.SimpleMergeUI");
 		bind(uiDIffFinder, "roj.text.diff.DiffFinder");
-		bind(uiCardSleep, "roj.plugins.CardSleep");
+		bind(uiCardSleep, "^roj.plugins.CardSleep");
 	}
 
 	private void initComponents() {

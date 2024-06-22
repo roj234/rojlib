@@ -7,6 +7,8 @@ import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
+import roj.asm.visitor.CodeWriter;
+import roj.collect.SimpleList;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.LPSignature;
 import roj.compiler.asm.MethodWriter;
@@ -20,6 +22,8 @@ import roj.text.TextUtil;
 import java.util.Arrays;
 import java.util.List;
 
+import static roj.asm.Opcodes.*;
+
 /**
  * @author Roj234
  * @since 2024/6/3 0003 2:27
@@ -28,6 +32,7 @@ final class NewAnonymousClass extends ExprNode {
 	private final Invoke init;
 	private final CompileUnit type;
 	private final boolean inherit;
+	private CodeWriter initMethod;
 
 	NewAnonymousClass(Invoke cur, CompileUnit type) {this(cur, type, true);}
 	NewAnonymousClass(Invoke cur, CompileUnit type, boolean inherit) {
@@ -81,7 +86,10 @@ final class NewAnonymousClass extends ExprNode {
 				return NaE.RESOLVE_FAILED;
 			}
 
-			type.npConstructor();
+			CodeWriter c = initMethod = type.newMethod(ACC_PUBLIC, "<init>", "()V");
+			c.visitSize(1, 1);
+			c.one(ALOAD_0);
+			c.invoke(INVOKESPECIAL, "java/lang/Object", "<init>", "()V");
 		} else {
 			type.parent(parent);
 
@@ -95,7 +103,8 @@ final class NewAnonymousClass extends ExprNode {
 			if (r == null) return NaE.RESOLVE_FAILED;
 
 			r.addExceptions(ctx, info, false);
-			type.createDelegation(Opcodes.ACC_SYNTHETIC, r.method, r.method);
+			type.j11PrivateConstructor(r.method);
+			initMethod = type.createDelegation(Opcodes.ACC_SYNTHETIC, r.method, r.method, false);
 		}
 		ctx.classes.addGeneratedClass(type);
 
@@ -106,7 +115,7 @@ final class NewAnonymousClass extends ExprNode {
 	}
 
 	private ExprNode resolveNow(LocalContext ctx) {
-		if (inherit) ctx.enclosing.add(EncloseContext.anonymousClass(ctx, type, init));
+		if (inherit) ctx.enclosing.add(EncloseContext.anonymousClass(ctx, initMethod, init.args = new SimpleList<>(init.args)));
 		LocalContext.depth(1);
 		try {
 			type.S2_ResolveSelf();
@@ -119,6 +128,9 @@ final class NewAnonymousClass extends ExprNode {
 			LocalContext.depth(-1);
 			if (inherit) ctx.enclosing.pop();
 		}
+
+		initMethod.one(RETURN);
+		initMethod.finish();
 
 		init.fn = new Type(type.name);
 		return init.resolve(ctx);

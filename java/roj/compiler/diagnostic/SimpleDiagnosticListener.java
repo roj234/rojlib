@@ -65,11 +65,16 @@ public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 			if (diag.getLength() > 0) {
 				sb.append(line, 0, diag.getColumnNumber());
 
-				AnsiString as = new AnsiString(line.substring(diag.getColumnNumber(), diag.getColumnNumber() + diag.getLength()));
-				as.bgColorRGB(0xff3333);
-				as.append(new AnsiString("").clear()).writeAnsi(sb);
+				// 多行
+				if (diag.getColumnNumber()+diag.getLength() <= line.length()) {
+					AnsiString as = new AnsiString(line.substring(diag.getColumnNumber(), diag.getColumnNumber() + diag.getLength()));
+					as.bgColorRGB(0xff3333).append(new AnsiString("").clear()).writeAnsi(sb);
 
-				sb.append(line, diag.getColumnNumber()+diag.getLength(), line.length());
+					sb.append(line, diag.getColumnNumber()+diag.getLength(), line.length());
+				} else {
+					AnsiString as = new AnsiString(line.substring(diag.getColumnNumber()));
+					as.bgColorRGB(0xff3333).append(new AnsiString("").clear()).writeAnsi(sb);
+				}
 				sb.append('\n');
 			} else {
 				sb.append(line).append('\n');

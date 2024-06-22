@@ -1,13 +1,13 @@
 package roj.minecraft.server.network;
 
+import roj.io.CorruptedInputException;
 import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
+import roj.net.handler.GDeflate;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
-import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
@@ -15,12 +15,14 @@ import java.util.zip.Inflater;
  * @author Roj234
  * @since 2024/3/19 0019 22:21
  */
-public class Compress implements ChannelHandler {
+public class Compress extends GDeflate {
 	private final int thr;
-	private final Inflater inf = new Inflater();
-	private final Deflater def = new Deflater();
-
-	public Compress(int thr) {this.thr = thr;}
+	public Compress(int thr) {
+		this.thr = thr;
+		this.buf = 1024;
+		this.inf = new Inflater();
+		this.def = new Deflater();
+	}
 
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
@@ -33,44 +35,20 @@ public class Compress implements ChannelHandler {
 				if (uncompLen < thr) throw new IOException("Badly compressed packet - size of "+uncompLen+" is below server threshold of "+thr);
 				if (uncompLen > 8388608) throw new IOException("Badly compressed packet - size of"+uncompLen+" is larger than protocol maximum of 8388608");
 
-				ByteList out = (ByteList) ctx.allocate(false, uncompLen);
-				ByteList tmp = null;
-
+				var out = ctx.allocate(false, uncompLen);
 				try {
-					if (buf instanceof ByteList b) {
-						inf.setInput(b.array(), b.relativeArrayOffset(), b.readableBytes());
-						b.rIndex = b.wIndex();
-					} else {
-						tmp = (ByteList) ctx.allocate(false, Math.min(buf.readableBytes(), 1024));
-					}
-
-					int i = 0;
-					while (true) {
-						int len = inf.inflate(out.array(), out.arrayOffset()+i, uncompLen-i);
-						if (len == 0) {
-							if (i == uncompLen) break;
-
-							tmp.clear();
-							int count = Math.min(tmp.capacity(), buf.readableBytes());
-							tmp.put(buf, count);
-							buf.rIndex += count;
-
-							inf.setInput(tmp.array(), tmp.arrayOffset(), count);
-						}
-						i += len;
-					}
-					inf.reset();
-
-					out.wIndex(uncompLen);
-					ctx.channelRead(out);
-				} catch (DataFormatException e) {
-					throw new IOException(e);
+					inflateRead(ctx, buf, out);
 				} finally {
 					BufferPool.reserve(out);
-					if (tmp != null) BufferPool.reserve(tmp);
 				}
 			}
 		}
+	}
+	@Override
+	protected void readPacket(ChannelCtx ctx, DynByteBuf out) throws IOException {
+		if (out.readableBytes() != out.capacity()) throw new CorruptedInputException();
+		ctx.channelRead(out);
+		BufferPool.reserve(out);
 	}
 
 	@Override
@@ -89,43 +67,21 @@ public class Compress implements ChannelHandler {
 			}
 		} else {
 			ByteList out = new ByteList();
-			out.putVarInt(buf.readableBytes());
-
-			def.reset();
-			ByteList tmp = null;
-			if (buf instanceof ByteList b) {
-				def.setInput(b.array(), b.relativeArrayOffset(), b.readableBytes());
-				def.finish();
-				b.rIndex = b.wIndex();
-			} else {
-				tmp = (ByteList) ctx.allocate(false, Math.min(buf.readableBytes(), 1024));
-			}
-
 			try {
-				while (true) {
-					while (true) {
-						out.ensureWritable(1024);
-						int len = def.deflate(out.array(), out.wIndex(), out.unsafeWritableBytes());
-						if (len == 0 && out.isWritable()) break;
-						out.wIndex(out.wIndex()+len);
-					}
-
-					if (tmp == null || !buf.isReadable()) break;
-
-					tmp.clear();
-					int count = Math.min(tmp.capacity(), buf.readableBytes());
-					tmp.put(buf, count);
-					buf.rIndex += count;
-
-					def.setInput(tmp.array(), tmp.arrayOffset(), count);
-					if (!buf.isReadable()) def.finish();
-				}
+				out.putVarInt(buf.readableBytes());
+				out.ensureWritable(512);
+				def.reset();
+				deflateWrite(ctx, buf, out, /*FINISH*/2);
 				ctx.channelWrite(out);
 			} finally {
 				out._free();
-				if (tmp != null) BufferPool.reserve(tmp);
 			}
 		}
+	}
+	@Override
+	protected int writePacket(ChannelCtx ctx, DynByteBuf out, boolean isFull) {
+		if (isFull) out.ensureWritable(out.capacity());
+		return out.wIndex();
 	}
 
 	@Override

@@ -17,7 +17,6 @@ import roj.text.ACalendar;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
-import roj.util.Identifier;
 
 import javax.net.ssl.SSLException;
 import java.io.IOException;
@@ -369,8 +368,8 @@ public final class HttpServer11 extends PacketMerger implements
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		Identifier id = event.id;
-		if (id.equals(ChunkSplitter.CHUNK_IN_EOF)) {
+		String id = event.id;
+		if (id.equals(HChunk.EVENT_IN_END)) {
 			if (state != RECV_BODY) return;
 
 			req.postFields = ph == null ? postBuffer : ph;
@@ -683,7 +682,7 @@ public final class HttpServer11 extends PacketMerger implements
 	private void outEof() throws IOException {
 		if (!ch.isOutputOpen()) return;
 
-		if (def != null) ch.postEvent(StreamCompress.OUT_EOF);
+		if (def != null) ch.postEvent(HCompress.EVENT_CLOSE_OUT);
 		if ((flag & GZIP_MODE) != 0) {
 			DynByteBuf buf = ch.allocate(false, 8);
 			buf.putIntLE((int) crc.getValue()).putIntLE(def.getTotalIn());
@@ -695,7 +694,7 @@ public final class HttpServer11 extends PacketMerger implements
 				BufferPool.reserve(buf);
 			}
 		}
-		ch.postEvent(ChunkSplitter.CHUNK_OUT_EOF);
+		ch.postEvent(HChunk.EVENT_CLOSE_OUT);
 	}
 
 	// endregion
@@ -730,14 +729,14 @@ public final class HttpServer11 extends PacketMerger implements
 	private Deflater def;
 
 	private void setCompr(ChannelCtx ctx, int enc, ByteList hdr) {
-		StreamCompress sc;
+		HCompress sc;
 
 		ChannelCtx hwarp = ctx.channel().handler("h11@compr");
 		if (hwarp == null) {
 			if (enc == ENC_PLAIN) return;
-			ctx.channel().addBefore(ctx, "h11@compr", sc = new StreamCompress(1024));
+			ctx.channel().addBefore(ctx, "h11@compr", sc = new HCompress(1024));
 		} else {
-			sc = (StreamCompress) hwarp.handler();
+			sc = (HCompress) hwarp.handler();
 		}
 
 		if (enc != ENC_PLAIN) {

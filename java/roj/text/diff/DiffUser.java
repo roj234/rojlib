@@ -56,6 +56,7 @@ public class DiffUser {
 			d.rightFile = new File(basePath, d.right);
 
 			if(!d.leftFile.isFile() || !d.rightFile.isFile()) {
+				System.out.println("removed: "+d);
 				diffs.remove(i);
 				continue;
 			}
@@ -77,7 +78,7 @@ public class DiffUser {
 			}
 		}
 		System.out.println("count:" + diffs.size());
-		ConfigMaster.YAML.writeObject(diffs, adapter, new File(file.getParentFile(), IOUtil.fileName(file.getName())+".new.yml"));
+		ConfigMaster.YAML.writeObject(adapter, diffs, new File(file.getParentFile(), IOUtil.fileName(file.getName())+".new.yml"));
 
 		bar.addMax(diffs.size());
 		for (int i = 0; i < diffs.size(); i++) {

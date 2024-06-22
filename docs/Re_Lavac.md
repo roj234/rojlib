@@ -95,7 +95,18 @@ var map = [ 1+1 -> 3+4 , "mixed type" -> also.can.be.used() ];
 			case Test.NulL -> System.out.println("null (real)");
 		}
 ```
-
+#### SwitchEx (WIP)
+  看到隔壁CSharp那么多switch的语法糖，我给switch加了一个goto default  
+  你可以用goto default跳到default分支的开始，不能在default分支中使用
+#### SwitchArray / SwitchTuple (WIP)
+  数组类型和record类型
+  switch (someRecord) {
+    case (_, > 3): ...
+    case (< 3, _): ...
+    case [..., > 114514]: ...
+    case [1, 2, 3]: ...
+    case [1, _, 3]: ...
+  }
 ### 操作符重载 (已实现)
   允许重载已有的二元或一元运算符，还能添加自定义的运算符，它们会在解析时被换成方法调用
 #### 默认的重载
@@ -105,7 +116,8 @@ var map = [ 1+1 -> 3+4 , "mixed type" -> also.can.be.used() ];
 ```javascript
  var nullable = a?.b?.c?.d;
 ```
-任意为null => 结果为null
+任意为null => 结果为null  
+暂时还不支持方法调用
 ### 基本类型泛型
   通过模板生成基本类型的泛型类，在运行时节约内存  
 ### 递归泛型推断 (已实现)
@@ -155,6 +167,8 @@ int a = yyy <<< 3;
   若一表达式发生错误，不影响其余表达式执行，异常会一起抛出  
   可以和AutoCloseable混用  
   最后一个分号可以省略  
+  非常抱歉没满足你不想缩进的目的  
+  但是至少不要很多try-finally了  
   注意：  
   defer的执行顺序和定义顺序是相反的（对于AutoCloseable是先new后close）  
   下列代码的执行结果是：  
@@ -174,8 +188,10 @@ try (
    生成器函数 (WIP)
 ### async / await
    Promise (WIP)
-### 附加函数 (已实现 扩展功能)
-   将静态函数附加到其它类上
+## 扩展功能 (通过Lavac API实现)
+### 注解处理: annotations
+#### @Attach
+  将静态函数附加到其它类上
 
 ```java
 
@@ -192,7 +208,60 @@ public class Attacher {
 
 这么做之后，无论这个类以源代码编译还是在classpath中  
 都可在字符串对象（或它的子类，虽然字符串是final的）上使用 isNotEmpty() 函数
-### inline ASM (WIP)
+#### @AutoIncrement
+  以指定的start和step为每个字段分配整数常量值
+```java
+@AutoIncrement(value = 100, step = 1)
+public static final int A,B,C,D;
+```
+等效于  
+public static final int A = 100,B = 101,C = 102,D = 103;
+#### @Getter/Setter
+  生成getXXX和setXXX方法  
+  但与lombok不同的是……  
+  你可以直接以属性调用这些字段 (WIP)
+#### @Operator
+  自定义操作符  
+  WIP
+### 编译期执行: constant
+  使用@Constant标记纯函数  
+  自动推断还在研发  
+### 参数注入 / inline ASM / 泛型转换: asm
+
+	/**
+	 * 获取注入的属性
+	 * @return 返回类型为属性或def的真实类型，不一定是对象，并且可能随属性注入改变
+	 */
+	public static <T> T inject(String name, T def) {return def;}
+
+	/**
+	 * 执行无返回值的操作，语法为AsmLang
+	 * @param asm 常量
+	 * @return true => 不在Lavac环境中
+	 */
+	public static boolean __asm(String asm) {return true;}
+	//public static void __asmx(Object... asm) {}
+
+	/**
+	 * 强制的 <b>泛型</b> 转换
+	 * @see roj.util.Helpers#cast(Object)
+	 */
+	@SuppressWarnings("unchecked")
+	public static <T> T cast(Object input) {return (T) input;}
+
+	/**
+	 * 解释为<none>
+	 */
+	public static boolean i2z(int v) { return v != 0; }
+	/**
+	 * 解释为<none>
+	 */
+	public static int z2i(boolean b) { return b?1:0; }
+	/**
+	 * 解释为POP或POP2
+	 */
+	public static void pop(Object input) {}
+### PrimGen
 
 ## Java17支持，Lava暂时不支持
 ### record
@@ -218,3 +287,73 @@ GlobalContext
 LocalContext  
 TypeResolver  
 Library  
+
+
+## 多线程编译 (CompileUnit)
+
+### Stage 1  
+解析基本结构
+* package / name
+* module-info / package-info
+* import / import static / import any / package-restricted
+* access modifier
+* inner class / helper class
+* method / constructor / {} / static {}
+* field
+* generic
+  同时会解析注解和field initializator中的表达式，但不resolve  
+  TODO 检测子类名称是否唯一？
+
+****
+线程同步
+****
+
+### Stage 2.1
+解析并验证对其它类的直接引用
+* extends / implements / permits (仅类型)
+* field type / method parameter
+* signature (泛型)
+* annotation (仅类型)
+
+****
+线程同步
+****
+
+### Stage 2.2
+解析并验证对其它类的(可能的)间接引用
+* 循环引用
+* 泛型异常
+* 收集可被覆盖的方法
+* sealed和permits检查
+* 方法定义冲突 / throws (要判断instanceof Throwable，所以需要放在2.2)
+* field type, method parameter or throws
+* 生成默认构造器、Enum的values和valueOf和$VALUES
+
+****
+线程同步
+****
+
+### Stage 3
+PreCheck  
+该阶段还在TODO  
+该阶段的注解不能引用static final字段，十分遗憾  
+所以应该把static field的赋值放到这个阶段解析，并且应该给这些字段放属性，确保依赖能正确解析
+* 检查方法是否可以覆盖
+* * 处理Override
+* * 接口方法是否存在实现冲突而必须在本类实现
+* * 父类是否实现了本类接口的方法
+* * 是否有某些抽象方法未实现
+* * 访问权限是否降级
+* * 生成泛型桥接方法
+* 注解
+
+****
+线程同步
+****
+
+### Stage 4
+解析方法体
+* static {}和 {}的代码合并
+* 匿名类
+* assert
+* final字段是否被赋值

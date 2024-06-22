@@ -1,5 +1,6 @@
 package roj.archive.qz;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.config.data.CInt;
@@ -15,6 +16,7 @@ import roj.util.Int2IntFunction;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.channels.AsynchronousCloseException;
 import java.util.Arrays;
 import java.util.List;
@@ -175,13 +177,16 @@ public class QZFileWriter extends QZWriter {
         super.finish();
         waitAsyncFinish();
 
-        ByteList.WriteOut out = new ByteList.WriteOut(null) {
-            public void flush() {
-                blockCrc32 = CRC32s.update(blockCrc32, list, arrayOffset(), realWIndex());
-                super.flush();
+        var crcOut = new OutputStream() {
+            OutputStream out;
+            public void write(int b) {}
+            public void write(@NotNull byte[] b, int off, int len) throws IOException {
+                blockCrc32 = CRC32s.update(blockCrc32, b, off, len);
+                out.write(b, off, len);
             }
+            public void close() throws IOException {if (out != null) out.close();}
         };
-        buf = out;
+        var out = buf = new ByteList.WriteOut(crcOut);
 
         long hstart = s.position();
         try {
@@ -189,12 +194,11 @@ public class QZFileWriter extends QZWriter {
                 files.size()+emptyFiles.size() <= compressHeaderMin ||
                 coders[0] instanceof Copy) {
 
-                blockCrc32 = CRC32s.INIT_CRC;
-                out.setOut(s);
+                crcOut.out = s;
                 if ((files.size()|emptyFiles.size()) != 0)
                     writeHeader();
             } else {
-                out.setOut(out());
+                crcOut.out = out();
                 WordBlock metadata = blocks.pop();
 
                 writeHeader();
@@ -206,7 +210,7 @@ public class QZFileWriter extends QZWriter {
 
                 long pos1 = s.position();
                 blockCrc32 = CRC32s.INIT_CRC;
-                out.setOut(s);
+                crcOut.out = s;
 
                 out.write(kEncodedHeader);
                 writeStreamInfo(hstart-32);
@@ -215,22 +219,16 @@ public class QZFileWriter extends QZWriter {
 
                 hstart = pos1;
             }
-        } finally {
-            try {
-                out.flush();
-            } finally {
-                if (this.out != null) {
-                    this.out.close();
-                    this.out = null;
-                }
 
-                out.setOut(null);
-                out.close();
-            }
+            out.flush();
+            crcOut.out = null;
+        } finally {
+            // crcOut没写close, 并且如果出异常了也能关闭out()
+            out.close();
         }
 
         long hend = s.position();
-        if ((flag&TRIM_FILE) != 0 && s.length() > hend) s.setLength(hend);
+        if ((flag&NO_TRIM_FILE) == 0 && s.length() > hend) s.setLength(hend);
 
         // start header
         s.seek(0);
@@ -240,9 +238,8 @@ public class QZFileWriter extends QZWriter {
            .putIntLE(0)
            .putLongLE(hstart-32)
            .putLongLE(hend-hstart)
-           .putIntLE(CRC32s.retVal(blockCrc32));
-
-        buf.putIntLE(8, CRC32s.once(buf.list, 12, 20));
+           .putIntLE(CRC32s.retVal(blockCrc32))
+           .putIntLE(8, CRC32s.once(buf.list, 12, 20));
 
         s.write(buf);
     }

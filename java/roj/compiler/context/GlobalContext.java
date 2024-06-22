@@ -34,7 +34,10 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -89,7 +92,7 @@ public class GlobalContext implements CompilerSpec {
 		if (prev != null) throw new IllegalStateException("重复的编译单位: "+unit.name);
 		if (generated) generatedCUs.add(unit);
 	}
-	public void addGeneratedCompileUnits(ArrayList<CompileUnit> ctxs) {
+	public void addGeneratedCompileUnits(List<CompileUnit> ctxs) {
 		ctxs.addAll(generatedCUs);
 		generatedCUs.clear();
 	}

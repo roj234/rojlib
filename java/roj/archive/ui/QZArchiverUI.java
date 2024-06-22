@@ -80,10 +80,15 @@ public class QZArchiverUI extends JFrame {
 		arc.storeCT = uiStoreCT.isSelected();
 		arc.storeAT = uiStoreAT.isSelected();
 		arc.storeAttr = uiStoreAttr.isSelected();
-		arc.threads = ((Number) uiThreads.getValue()).intValue();
-		arc.autoSolidSize = uiAutoSolidSize.isSelected();
-		if (!arc.autoSolidSize)
+		if (!(arc.autoSolidSize = uiAutoSolidSize.isSelected())) {
 			arc.solidSize = (long) TextUtil.unscaledNumber1024(uiSolidSize.getText());
+		}
+		if (uiSplitTask.isSelected() & !uiAutoSplitTask.isSelected() & !uiMixedMode.isSelected()) {
+			arc.autoSolidSize = false;
+			arc.solidSize = -1;
+			arc.threads = 1;
+		}
+		else arc.threads = ((Number) uiThreads.getValue()).intValue();
 		arc.splitSize = uiSplitSize.getText().isEmpty() ? 0 : (long) TextUtil.unscaledNumber1024(uiSplitSize.getText());
 		arc.compressHeader = uiCompressHeader.isSelected();
 		if (uiCrypt.isSelected()) {
@@ -132,7 +137,7 @@ public class QZArchiverUI extends JFrame {
 			int blockSize = (int) MathUtils.clamp(chunkSize, LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX);
 
 			LZMA2Parallel man = new LZMA2Parallel(myOpt, blockSize, uiSplitTaskType.getSelectedIndex(), threads);
-			long mem = man.getExtraMemoryUsageBytes(uiMixedMode.isSelected());
+			long mem = (man.getExtraMemoryUsageBytes(uiMixedMode.isSelected()) & ~7) + (16 * threads);// 8-byte alignment
 			long needed = mem - ((long) arr[1]<<10);
 			if (needed > 0) {
 				JOptionPane.showMessageDialog(this, "压缩所需的内存超过了内存输入框的限制\n还需要"+TextUtil.scaledNumber1024(needed)+"的内存", "压缩流并行导致的内存不足", JOptionPane.ERROR_MESSAGE);
@@ -144,13 +149,13 @@ public class QZArchiverUI extends JFrame {
 			buffer = new BufferPool(mem, 0, mem, 0, 0, 0, 0, 0, threads, 0, BufferPool.OOM_NULL);
 
 			myOpt.setAsyncMode(pool2, buffer, man);
+			if (arc.threads == 1) threads = 1;
 		} else {
 			pool2 = null;
 			buffer = null;
 		}
 
-		arc.singleThread = uiSplitTask.isSelected() & !uiAutoSplitTask.isSelected() & !uiMixedMode.isSelected();
-		TaskPool pool = TaskPool.MaxThread(arc.singleThread ? 1 : threads, "7z-worker-");
+		TaskPool pool = TaskPool.MaxThread(threads, "7z-worker-");
 
 		ActionListener stopListener = e -> pool.shutdown();
 
@@ -360,9 +365,10 @@ public class QZArchiverUI extends JFrame {
 				注意事项：
 				  · 开启后，【固实大小】越小，压缩效果越差，CPU占用率也越低
 				    （和不开启时相反）
-				  · 若CPU跑不满，取消勾选【固实大小】的【自动】，并填写【512MB】
-				    填写【512MB】后，CPU仍无法跑满，请开启【混合模式】，CPU必定跑满（会使用更多内存）
-				  · 也可以开启【自动拆分任务】，可以适应大部分文件""", "关于压缩流并行……", JOptionPane.WARNING_MESSAGE);
+				  · 若CPU跑不满
+				    1. 取消勾选【固实大小】的【自动】，并填写【1TB】
+				    2. 开启【混合模式】，CPU必定跑满（会使用更多内存）
+				  · 开启【自动拆分任务】，可以在不降低很多速度的同时，提升压缩效果""", "关于压缩流并行……", JOptionPane.WARNING_MESSAGE);
 			uiSplitTask.removeActionListener(tip[0]);
 		};
 		tip[1] = e -> {

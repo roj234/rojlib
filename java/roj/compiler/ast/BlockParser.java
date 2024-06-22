@@ -99,9 +99,10 @@ public final class BlockParser {
 		this.file = file;
 
 		ctx.setMethod(mw.mn);
+		reset();
+		wr.next(); wr.retractWord();
 		wr.setLines(new LineNumberTable());
 		setCw(mw);
-		reset();
 		parse0();
 
 		wr.getLines(cw);
@@ -112,11 +113,13 @@ public final class BlockParser {
 		this.file = file;
 
 		ctx.setMethod(mn);
-		wr.setLines(new LineNumberTable());
-		setCw(ctx.classes.createMethodPoet(file, mn));
 		reset();
-
-		if (mn.name().equals("<init>")) file.appendGlobalInit(cw);
+		wr.next(); wr.retractWord();
+		var cw = ctx.classes.createMethodPoet(file, mn);
+		var lines = new LineNumberTable();
+		if (mn.name().equals("<init>")) file.appendGlobalInit(cw, lines);
+		wr.setLines(lines);
+		setCw(cw);
 
 		if ((mn.modifier()&ACC_STATIC) == 0) fastSlot = 1;
 
@@ -1318,7 +1321,7 @@ public final class BlockParser {
 						DFI = getFieldDFI(clazz, null, prevDFI);
 					}
 				} else {
-					ctx.report(Kind.ERROR, "block.switch.incompatible", sType);
+					kind = -1;
 				}
 			}
 		}
@@ -1355,6 +1358,7 @@ public final class BlockParser {
 		while (wr.hasNext()) {
 			SwitchNode.Case kase;
 			boolean match = false;
+			boolean blockBegin = true;
 
 			Word w = wr.next();
 			skipVD:
@@ -1377,22 +1381,25 @@ public final class BlockParser {
 
 							for (Object o : labelDeDup) {
 								if (o instanceof IType t1) {
-									if (ctx.parentListOrReport(ctx.getClassOrArray(t1)).containsValue(type.owner()) ||
-										ctx.parentListOrReport(ctx.getClassOrArray(type)).containsValue(t1.owner())) {
-
+									// 没有反向检查，因为本来就是一个一个instanceof
+									if (ctx.parentListOrReport(ctx.getClassOrArray(t1)).containsValue(type.owner())) {
 										ctx.report(Kind.ERROR, "block.switch.collisionType", t1, type);
 									}
 								}
 							}
-							ctx.castTo(sType, type, 0);
+							ctx.castTo(type, sType, 0);
 							labelDeDup.add(type);
 
 							w = wr.next();
 							// flag8: check type switch in case ':'
 							flags |= 10;
+							blockBegin = false;
 
 							beginCodeBlock();
-							kase = new SwitchNode.Case(newVar(vd.name, type));
+							var v = newVar(vd.name, type);
+							v.hasValue = true;
+							v.endPos++;
+							kase = new SwitchNode.Case(v);
 							break skipVD;
 						}
 
@@ -1437,8 +1444,7 @@ public final class BlockParser {
 				flags |= 4;
 			} else if (w.type() == lambda) {
 				flags |= 8;
-				// is not VD
-				if ((flags&2) == 0) beginCodeBlock();
+				if (blockBegin) beginCodeBlock();
 			} else throw wr.err("unexpected_2:"+w.type()+":block.except.switchCase");
 
 			// has 4, 8 but not 16
@@ -1451,7 +1457,7 @@ public final class BlockParser {
 			kase.block = cw;
 
 			// default
-			if (kase.labels == null) {
+			if (kase.labels == null && kase.variable == null) {
 				if ((flags&64) != 0) ctx.report(Kind.ERROR, "block.switch.manyDefault");
 				flags |= 64;
 			}
@@ -1481,10 +1487,23 @@ public final class BlockParser {
 		boolean defaultBranch = (flags & 64) != 0;
 		// 检测type switch和pattern switch的混用
 		flags &= 3;
+		mixedButOnlyNull:
 		if (flags == 3) {
+			fail:
+			if (nullBranch != null && nullBranch.labels.size() == 1) {
+				for (var branch : branches) {
+					if (branch.labels != null && branch != nullBranch) break fail;
+				}
+
+				kind = -1;
+				break mixedButOnlyNull;
+			}
+
 			ctx.report(Kind.ERROR, "block.switch.mixedCase");
 		} else if (flags == 2) {
 			kind = -1;
+		} else if (kind == -1) {
+			ctx.report(Kind.ERROR, "block.switch.incompatible", sType);
 		}
 
 		return new SwitchNode(sval, kind, cst, breakTo, branches, nullBranch, defaultBranch);
@@ -1654,19 +1673,17 @@ public final class BlockParser {
 			attr1.classes.add(map);
 			data.putAttr(attr1);
 
-			if (ctx.classes.isSpecEnabled(CompilerSpec.NEST_CLASS_INFO)) {
-				owner.addNestMember(data);
-
-				var attr = new EnclosingMethod();
-				attr.owner = owner.name;
-				if (!ctx.method.name().startsWith("<")) {
-					attr.name = ctx.method.name();
-					attr.parameters = ctx.method.parameters();
-					attr.returnType = ctx.method.returnType();
-				}
-				data.putAttr(attr);
+			var attr = new EnclosingMethod();
+			attr.owner = owner.name;
+			if (!ctx.method.name().startsWith("<")) {
+				attr.name = ctx.method.name();
+				attr.parameters = ctx.method.parameters();
+				attr.returnType = ctx.method.returnType();
 			}
+			data.putAttr(attr);
 		}
+
+		if (ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) owner.addNestMember(data);
 
 		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_SOURCE_FILE)) {
 			data.putAttr(new AttrString("SourceFile", owner.getSourceFile()));
@@ -1909,12 +1926,12 @@ public final class BlockParser {
 
 			switch (w.type()) {
 				case CASE, DEFAULT, rBrace:
+					boolean flow = cw.isContinuousControlFlow();
 					if (newSwitch) {
-						boolean flow = cw.isContinuousControlFlow();
 						if (flow) cw.jump(endPoint);
 						endCodeBlock();
 						return flow;
-					}
+					} else if (flow) ctx.report(Kind.WARNING, "block.switch.fallthrough");
 				return cw.isJumpingTo(endPoint);
 			}
 
@@ -2277,6 +2294,6 @@ public final class BlockParser {
 
 	private void except(short id) throws ParseException {wr.except(id, byId(id));}
 
-	private void setCw(MethodWriter cw) {wr.labelGen = this.cw = cw;}
+	private void setCw(MethodWriter cw) {wr.setCw(this.cw = cw);}
 	public MethodWriter getCw() {return cw;}
 }

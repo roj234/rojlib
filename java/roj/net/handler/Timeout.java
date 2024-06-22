@@ -3,7 +3,6 @@ package roj.net.handler;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
-import roj.util.Identifier;
 
 import java.io.IOException;
 
@@ -12,8 +11,7 @@ import java.io.IOException;
  * @since 2022/5/17 16:22
  */
 public class Timeout implements ChannelHandler {
-	public static final String ID = "timer";
-	public static final Identifier READ_TIMEOUT = Identifier.of(ID, "r"), WRITE_TIMEOUT = Identifier.of(ID, "w");
+	public static final String READ_TIMEOUT = "timeout:r", WRITE_TIMEOUT = "timeout:w";
 
 	public int writeTimeout, readTimeout, pending;
 	public long lastRead, lastWrite;

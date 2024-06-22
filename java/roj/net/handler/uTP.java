@@ -78,7 +78,7 @@ public class uTP implements ChannelHandler {
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id == EmbeddedChannel.EMBEDDED_CLOSE) {
+		if (event.id.equals(EmbeddedChannel.EMBEDDED_CLOSE)) {
 			connections.removeByValue((Ctx) event.getData());
 		}
 	}

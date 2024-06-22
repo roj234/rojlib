@@ -1,7 +1,8 @@
-package roj.dev;
+package roj.mod;
 
 import roj.asm.Parser;
 import roj.asm.tree.IClass;
+import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
@@ -16,7 +17,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.StandardSocketOptions;
 import java.util.List;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * 热重载,支持一对多
@@ -25,8 +25,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * @author Roj233
  * @since 2022/2/21 15:09
  */
-public class HRRemote {
-	public static final byte R_OK = 0, R_ERR = 1, R_SHUTDOWN = 2;
+public final class HRServer {
 	public static final int DEFAULT_PORT = 4485;
 
 	final class Client implements ChannelHandler {
@@ -41,7 +40,10 @@ public class HRRemote {
 		}
 
 		@Override
-		public void channelClosed(ChannelCtx ctx) { clients.remove(this); }
+		public void channelClosed(ChannelCtx ctx) {
+			synchronized (HRServer.this) {clients.remove(this);}
+			System.out.println(ctx.remoteAddress()+" 下线了");
+		}
 
 		@Override
 		public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
@@ -63,13 +65,13 @@ public class HRRemote {
 			ByteList data = Parser.toByteArrayShared(clz);
 
 			tmp.clear();
-			send(tmp.put(0).put(data));
+			send(tmp.put(/*CLASS_INFO*/0).put(data));
 		}
 		tmp.clear();
-		send(tmp.put(1));
+		send(tmp.put(/*COMMIT*/1));
 	}
 
-	private void send(DynByteBuf tmp) {
+	private synchronized void send(DynByteBuf tmp) {
 		for (Client client : clients) {
 			try {
 				tmp.rIndex = 0;
@@ -80,20 +82,19 @@ public class HRRemote {
 		}
 	}
 
-	private final ConcurrentLinkedQueue<Client> clients;
+	private final SimpleList<Client> clients = new SimpleList<>();
 
-	public HRRemote(int port) throws IOException {
-		clients = new ConcurrentLinkedQueue<>();
-
+	public HRServer(int port) throws IOException {
 		ServerLaunch.tcp("热重载服务器")
 					.bind2(InetAddress.getLoopbackAddress(), port)
 					.option(StandardSocketOptions.SO_REUSEADDR, true)
-					.initializator((ctx) -> {
+					.initializator(ctx -> {
+						System.out.println(ctx.remoteAddress()+" 上线了");
 						Client t = new Client(ctx);
 						ctx.addLast("Length", VarintSplitter.twoMbVLUI())
 						   .addLast("Compress", new Compress())
 						   .addLast("handler", t);
-						clients.add(t);
+						synchronized (this) {clients.add(t);}
 					}).launch();
 	}
 }

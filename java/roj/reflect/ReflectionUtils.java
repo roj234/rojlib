@@ -77,6 +77,7 @@ public final class ReflectionUtils {
 		Field[] out = new Field[names.length];
 		ToIntMap<String> map = ToIntMap.fromArray(names);
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
+		var origClass = clazz;
 
 		while (clazz != null && clazz != Object.class) {
 			Field[] fields = clazz.getDeclaredFields();
@@ -94,7 +95,7 @@ public final class ReflectionUtils {
 			clazz = clazz.getSuperclass();
 		}
 
-		throw new IllegalStateException("未找到某些字段:"+clazz+"."+map.keySet());
+		throw new IllegalStateException("未找到某些字段:"+origClass+"."+map.keySet());
 	}
 
 	/**

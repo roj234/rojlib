@@ -11,7 +11,6 @@ import roj.config.FileConfig;
 import roj.config.data.CList;
 import roj.config.data.CMap;
 import roj.config.data.CString;
-import roj.dev.Compiler;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -51,6 +50,7 @@ public final class Project extends FileConfig {
 	String version, atName;
 	Charset charset;
 	List<Project> dependencies;
+
 	final Compiler compiler;
 
 	Mapper.State state;
@@ -61,12 +61,12 @@ public final class Project extends FileConfig {
 	ZipOutput dstFile, binFile;
 
 	private Project(String name) {
-		super(new File(BASE, "config/"+name+".json"), true);
+		super(new File(PROJECT_DIR, name+"/project.json"), true);
 		this.name = name;
 
 		resPath = new File(BASE, getConfig().getString("OVERRIDE_RES_PATH", "projects/"+name+"/resources")).getAbsoluteFile();
 		srcPath = new File(BASE, getConfig().getString("OVERRIDE_SRC_PATH", "projects/"+name+"/java")).getAbsoluteFile();
-		binJar = new File(BASE, getConfig().getString("OVERRIDE_DEV_JAR", "bin/"+name+"-dev.jar")).getAbsoluteFile();
+		binJar = new File(BASE, getConfig().getString("OVERRIDE_DEV_JAR", "bin/"+name+".jar")).getAbsoluteFile();
 		resPrefix = resPath.getAbsolutePath().length()+1;
 
 		// noinspection all
@@ -76,15 +76,12 @@ public final class Project extends FileConfig {
 		// noinspection all
 		binJar.getParentFile().mkdir();
 
-		// 自动备份源码已删除
-
-		Set<String> ignores = new MyHashSet<>();
-		FMDMain.readTextList(ignores::add, "忽略的编译错误码");
-		this.compiler = new Compiler(null, null, ignores, srcPath.getAbsolutePath().replace(File.separatorChar, '/'));
+		compiler = Compiler.getInstance("JAVA", srcPath.getAbsolutePath().replace(File.separatorChar, '/'));
 
 		try {
 			if (binJar.length() == 0) if (!binJar.createNewFile() || !binJar.setLastModified(0)) CLIUtil.warning("无法初始化StampFileTime");
-			this.binFile = new ZipOutput(binJar);
+			binFile = new ZipOutput(binJar);
+			binFile.setCompress(true);
 		} catch (Throwable e) {
 			CLIUtil.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 "+binJar.getAbsolutePath(), e);
 			LockSupport.parkNanos(3_000_000_000L);
@@ -136,7 +133,7 @@ public final class Project extends FileConfig {
 	}
 
 	protected void load(CMap map) {
-		version = map.putIfAbsent("version", "1.0.0");
+		version = map.putIfAbsent("version", "1.0-SNAPSHOT");
 
 		String cs = map.putIfAbsent("charset", "UTF-8");
 		charset = StandardCharsets.UTF_8;
@@ -153,7 +150,7 @@ public final class Project extends FileConfig {
 		List<Project> cast = Helpers.cast(required);
 		if (!required.isEmpty()) {
 			for (int i = 0; i < required.size(); i++) {
-				File config = new File(BASE, "/config/"+required.get(i)+".json");
+				File config = new File(PROJECT_DIR, required.get(i)+"/project.json");
 				if (!config.exists()) {
 					CLIUtil.warning(name+" 的前置"+required.get(i)+"未找到");
 				} else {

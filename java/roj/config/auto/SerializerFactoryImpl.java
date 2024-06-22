@@ -326,7 +326,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 		if (type == null) {
 			try {
-				type = Class.forName(name, false, SerializerFactoryImpl.class.getClassLoader());
+				type = Class.forName(name, false, classLoader);
 			} catch (ClassNotFoundException e) {
 				throw new TypeNotPresentException(generic==null?name:generic.toString(), e);
 			}

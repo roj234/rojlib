@@ -28,7 +28,7 @@ final class Binary extends ExprNode {
 	ExprNode left, right;
 
 	// 对于下列操作，由于范围已知，可以保证它们的类型不会自动变int
-	private static final MyBitSet KNOWN_NUMBER_STATE = MyBitSet.from(and,or,xor,lsh,rsh,rsh_unsigned);
+	private static final MyBitSet KNOWN_NUMBER_STATE = MyBitSet.from(and,or,xor,rsh);
 	private IType type;
 	private TypeCast.Cast castLeft, castRight;
 	private byte flag, dType;
@@ -48,7 +48,7 @@ final class Binary extends ExprNode {
 		if (shouldAddBracket(left)) sb.append('(').append(left).append(')');
 		else sb.append(left);
 
-		sb.append(byId(operator));
+		sb.append(' ').append(byId(operator)).append(' ');
 
 		if (shouldAddBracket(right)) sb.append('(').append(right).append(')');
 		else sb.append(right);
@@ -57,8 +57,8 @@ final class Binary extends ExprNode {
 	}
 	private boolean shouldAddBracket(ExprNode node) {
 		ExprParser ep = LocalContext.get().ep;
-		return !node.isConstant() && (!(node instanceof Binary) ||
-			(ep.binaryOperatorPriority(((Binary) node).operator) > ep.binaryOperatorPriority(operator)));
+		if (node.isConstant() || node instanceof VarNode || node instanceof Invoke) return false;
+		return !(node instanceof Binary n) || ep.binaryOperatorPriority(n.operator) > ep.binaryOperatorPriority(operator);
 	}
 
 	private static final ThreadLocal<Boolean> IN_ANY_BINARY = new ThreadLocal<>();
@@ -196,9 +196,11 @@ final class Binary extends ExprNode {
 						return this;
 					}
 				}
+				checkDivZero(right, ctx);
 			}
 			return this;
 		}
+		checkDivZero(left, ctx);
 		if (!right.isConstant()) {
 			switch (operator) {
 				case equ: case neq: case lss: case geq: case gtr: case leq: {
@@ -315,6 +317,12 @@ final class Binary extends ExprNode {
 		}
 
 		return this;
+	}
+
+	private void checkDivZero(ExprNode left, LocalContext ctx) {
+		if (dType <= 1 && operator == div && ((AnnVal) left.constVal()).asInt() == 0) {
+			ctx.report(Kind.WARNING, "binary.divisionByZero");
+		}
 	}
 
 	@Override

@@ -5,20 +5,21 @@ import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
+import roj.net.NetUtil;
 import roj.net.ch.*;
 import roj.net.handler.JSslClient;
 import roj.net.handler.MSSCipher;
 import roj.net.handler.Timeout;
 import roj.text.CharList;
 import roj.text.Escape;
-import roj.util.*;
+import roj.util.AttributeKey;
+import roj.util.ByteList;
+import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.*;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.AbstractMap;
 import java.util.List;
@@ -54,6 +55,8 @@ public abstract class HttpRequest {
 	private Headers headers;
 	private final SimpleList<Map.Entry<String, String>> addHeader = new SimpleList<>(4);
 
+	private URI proxy;
+
 	InetSocketAddress _address;
 
 	public HttpRequest() { this(true); }
@@ -67,6 +70,8 @@ public abstract class HttpRequest {
 		return this;
 	}
 	public final String method() { return action; }
+
+	public final HttpRequest withProxy(URI uri) { proxy = uri; return this; }
 
 	public final HttpRequest header(CharSequence k, String v) { headers.put(k, v); return this; }
 	public final HttpRequest headers(Map<? extends CharSequence, String> map) { headers.putAll(map); return this; }
@@ -90,6 +95,19 @@ public abstract class HttpRequest {
 
 	public final HttpRequest url(URL url) {
 		this.protocol = url.getProtocol().toLowerCase();
+
+		String host = url.getHost();
+		if (url.getPort() >= 0) host += ":"+url.getPort();
+		this.site = host;
+
+		this.path = url.getPath();
+		this.query = url.getQuery();
+
+		_address = null;
+		return this;
+	}
+	public final HttpRequest url(URI url) {
+		this.protocol = url.getScheme().toLowerCase();
 
 		String host = url.getHost();
 		if (url.getPort() >= 0) host += ":"+url.getPort();
@@ -148,14 +166,15 @@ public abstract class HttpRequest {
 			ch.addFirst("h11@tls", NativeLibrary.EXTRA_BUG_CHECK ? new MSSCipher().sslMode() : new JSslClient());
 		}
 
-		return ch.connect(_getAddress(), timeout);
+		var addr = NetUtil.applyProxy(proxy, _getAddress(), ch);
+		return ch.connect(addr, timeout);
 	}
 
-	public void _redirect(MyChannel ch, URL url, int timeout) throws IOException {
-		InetSocketAddress prev = _address;
-		InetSocketAddress addr = url(url)._getAddress();
+	void _redirect(MyChannel ch, URL url, int timeout) throws IOException {
+		var oldAddr = _address;
+		var newAddr = url(url)._getAddress();
 
-		if (addr.equals(prev)) {
+		if (newAddr.equals(oldAddr)) {
 			ChannelCtx h = ch.handler("h11@client");
 			h.handler().channelOpened(h);
 		} else {
@@ -174,7 +193,9 @@ public abstract class HttpRequest {
 				ch.close();
 				ch = ch1;
 			}
-			ch.connect(_address, timeout);
+
+			var addr = NetUtil.applyProxy(proxy, _address, ch);
+			ch.connect(addr, timeout);
 
 			ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 		}
@@ -217,14 +238,13 @@ public abstract class HttpRequest {
 
 		int port = site.lastIndexOf(':');
 		InetAddress host = InetAddress.getByName(port < 0 ? site : site.substring(0, port));
-		InetSocketAddress addr;
 		if (port < 0) {
-			switch (protocol) {
-				case "https": port = 443; break;
-				case "http": port = 80; break;
-				case "ftp": port = 21; break;
-				default: throw new IOException("Unknown protocol");
-			}
+			port = switch (protocol) {
+				case "https" -> 443;
+				case "http" -> 80;
+				case "ftp" -> 21;
+				default -> throw new IOException("Unknown protocol");
+			};
 		} else {
 			port = Integer.parseInt(site.substring(port+1));
 		}
@@ -341,7 +361,7 @@ public abstract class HttpRequest {
 	}
 	public abstract HttpRequest clone();
 
-	public static final Identifier DOWNLOAD_EOF = Identifier.of("hc","data_eof");
+	public static final String DOWNLOAD_EOF = "httpReq:dataEnd";
 
 	protected Object _body;
 	protected byte state;
@@ -380,9 +400,9 @@ public abstract class HttpRequest {
 
 		@Override
 		public void onEvent(ChannelCtx ctx, Event event) {
-			if (event.id == SyncHttpClient.SHC_CLOSE_CHECK) {
+			if (event.id.equals(SyncHttpClient.SHC_CLOSE_CHECK)) {
 				_add(ctx, event);
-			} else if (event.id == Timeout.READ_TIMEOUT) {
+			} else if (event.id.equals(Timeout.READ_TIMEOUT)) {
 				AtomicLong aLong = ctx.attachment(SLEEP);
 				if (aLong != null && System.currentTimeMillis() - aLong.get() < POOLED_KEEPALIVE_TIMEOUT) {
 					event.setResult(Event.RESULT_DENY);
@@ -429,10 +449,13 @@ public abstract class HttpRequest {
 						lock.unlock();
 
 						SyncHttpClient shc = (SyncHttpClient) ch.handler("h11@merger").handler();
-						shc.retain(request, client);
-						ch.remove("super_timer");
-						ch.addBefore("h11@merger", "super_timer", timer);
-						return;
+						if (shc.retain(request, client)) {
+							ch.remove("super_timer");
+							ch.addBefore("h11@merger", "super_timer", timer);
+							return;
+						} else {
+							IOUtil.closeSilently(ch);
+						}
 					}
 					lock.unlock();
 				}

@@ -24,6 +24,7 @@ import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ParseException;
+import roj.io.IOUtil;
 
 import java.util.List;
 
@@ -67,7 +68,7 @@ public interface ParseTask {
 		var wr = file.lc().lexer;
 		int index = wr.index;
 		int state = wr.setState(JavaLexer.STATE_EXPR);
-		var expr = file.lc().ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE);
+		var expr = file.lc().ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser._ENV_TYPED_ARRAY|ExprParser.NAE);
 		wr.state = state;
 
 		var attr = new AnnotationDefault(null);
@@ -183,13 +184,13 @@ public interface ParseTask {
 				autoConstructor:
 				if (ctx.not_invoke_constructor) {
 					if ((file.modifier&Opcodes.ACC_ENUM) != 0) {
-						MethodWriter ac = ctx.classes.createMethodPoet(file, mn);
-						ac.one(Opcodes.ALOAD_0);
-						ac.one(Opcodes.ALOAD_1);
-						ac.one(Opcodes.ILOAD_2);
-						ac.invokeD("java/lang/Enum", "<init>", "(Ljava/lang/String;I)V");
-
-						cw.insertBefore(ac.writeTo());
+						var buf = IOUtil.getSharedByteBuf()
+							.put(Opcodes.ALOAD_0)
+							.put(Opcodes.ALOAD_1)
+							.put(Opcodes.ILOAD_2)
+							.put(Opcodes.INVOKESPECIAL)
+							.putShort(file.cp.getMethodRefId("java/lang/Enum", "<init>", "(Ljava/lang/String;I)V"));
+						cw.insertBefore(buf);
 						break autoConstructor;
 					}
 
@@ -201,13 +202,11 @@ public interface ParseTask {
 					}
 					if (!ctx.checkAccessible(pInfo, pInfo.methods().get(superInit), false, true)) break autoConstructor;
 
-					MethodWriter ac = ctx.classes.createMethodPoet(file, mn);
-					ac.one(Opcodes.ALOAD_0);
-					ac.invokeD(file.parent, "<init>", "()V");
-
-					cw.writeTo(ac);
-
-					cw = ac;
+					var buf = IOUtil.getSharedByteBuf()
+						.put(Opcodes.ALOAD_0)
+						.put(Opcodes.INVOKESPECIAL)
+						.putShort(file.cp.getMethodRefId(file.parent, "<init>", "()V"));
+					cw.insertBefore(buf);
 				}
 
 				cw.visitSizeMax(10, 20);

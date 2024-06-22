@@ -190,17 +190,17 @@ public enum ConfigMaster {
 	@SuppressWarnings("unchecked")
 	public void writeObject(Object o, OutputStream out) throws IOException { writeObject((Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), o, out); }
 	@SuppressWarnings("unchecked")
-	public DynByteBuf writeObject(Object o, DynByteBuf buf) throws IOException { return writeObject(o, (Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), buf); }
+	public DynByteBuf writeObject(Object o, DynByteBuf buf) throws IOException { return writeObject((Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), o, buf); }
 	@SuppressWarnings("unchecked")
 	public CharList writeObject(Object o, CharList sb) { return writeObject((Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), o, sb); }
 
-	public <T> void writeObject(Serializer<T> ser, T o, File file) throws IOException { writeObject0(o, ser, file, ""); }
-	public <T> void writeObject(Serializer<T> ser, T o, File file, String indent) throws IOException { writeObject0(o, ser, file, indent); }
-	public <T> void writeObject(Serializer<T> ser, T o, OutputStream out) throws IOException { writeObject0(o, ser, out, ""); }
-	public <T> DynByteBuf writeObject(T o, Serializer<T> ser, DynByteBuf buf) throws IOException { writeObject0(o, ser, buf, ""); return buf; }
+	public <T> void writeObject(Serializer<T> ser, T o, File file) throws IOException { writeObject0(ser, o, file, ""); }
+	public <T> void writeObject(Serializer<T> ser, T o, File file, String indent) throws IOException { writeObject0(ser, o, file, indent); }
+	public <T> void writeObject(Serializer<T> ser, T o, OutputStream out) throws IOException { writeObject0(ser, o, out, ""); }
+	public <T> DynByteBuf writeObject(Serializer<T> ser, T o, DynByteBuf buf) throws IOException { writeObject0(ser, o, buf, ""); return buf; }
 	public <T> CharList writeObject(Serializer<T> ser, T o, CharList sb) { ser.write(textSerializer(sb, ""), o); return sb; }
 
-	private <T> void writeObject0(T o, Serializer<T> ser, Object out, String indent) throws IOException {
+	private <T> void writeObject0(Serializer<T> ser, T o, Object out, String indent) throws IOException {
 		if (hasSerializer()) {
 			try (CVisitor v = serializer(out, indent)) {
 				ser.write(v, o);

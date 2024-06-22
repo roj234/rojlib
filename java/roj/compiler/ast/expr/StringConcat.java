@@ -80,7 +80,7 @@ final class StringConcat extends ExprNode {
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		var lc = LocalContext.get();
-		if (lc.classes.isSpecEnabled(CompilerSpec.SHARED_ARRAY_STRING_CONCAT)) {
+		if (lc.classes.isSpecEnabled(CompilerSpec.SHARED_STRING_CONCAT)) {
 			viaCharList(cw, lc);
 		} else {
 			viaStringBuilder(cw, lc);

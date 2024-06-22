@@ -6,7 +6,6 @@ import roj.net.ch.*;
 import roj.net.http.HttpHead;
 import roj.net.http.HttpRequest;
 import roj.util.DynByteBuf;
-import roj.util.Identifier;
 
 import java.io.Closeable;
 import java.io.FileNotFoundException;
@@ -88,7 +87,7 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		Identifier id = event.id;
+		String id = event.id;
 		if (id.equals(HttpRequest.DOWNLOAD_EOF)) {
 			if (event.getData() == Boolean.TRUE)
 				done();

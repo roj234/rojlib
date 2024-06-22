@@ -27,7 +27,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @since 2022/5/17 12:47
  */
 public abstract class MyChannel implements Selectable, Closeable {
-	public static final Identifier IN_EOF = new Identifier("input_eof");
+	public static final String IN_EOF = "channel:inEnd";
 
 	ChannelCtx pipelineHead, pipelineTail;
 
@@ -401,8 +401,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	public final boolean connect(SocketAddress address) throws IOException { return connect(address, -1); }
 	public final boolean connect(SocketAddress address, int timeout) throws IOException {
-		if (!(address instanceof InetSocketAddress)) throw new UnsupportedOperationException("Not InetSocketAddress");
-		InetSocketAddress na = (InetSocketAddress) address;
+		if (!(address instanceof InetSocketAddress na)) throw new UnsupportedOperationException("Not InetSocketAddress");
 
 		lock.lock();
 		try {
@@ -596,6 +595,10 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	// TODO - add checks
 	public void bind(InetSocketAddress na) throws IOException {
+		if (state != INITIAL) {
+			if (state > OPENED) throw new ClosedChannelException();
+			throw new IOException("Must INITIAL not "+state);
+		}
 		bind0(na);
 	}
 

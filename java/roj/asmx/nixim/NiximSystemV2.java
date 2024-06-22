@@ -245,13 +245,19 @@ public class NiximSystemV2 implements ITransformer {
 	public final void load(ConstantData data) throws NiximException {
 		NiximData nx = read(data);
 		if (nx == null) return;
+		if (registry.putIfAbsent(nx.self, nx) != null) {
+			throw new NiximException("Nixim类"+nx.self+"已存在！");
+		}
 		nx.next = registry.put(nx.target, nx);
 	}
-	public final boolean unload(String target, String source) {
-		NiximData nx = registry.get(target), prev = null;
+	public final boolean unloadBySource(String source) {
+		NiximData self = registry.remove(source);
+		if (self == null) return false;
+
+		NiximData nx = registry.get(self.target), prev = null;
 		while (nx != null) {
 			if (nx.self.equals(source)) {
-				if (prev == null) registry.remove(target);
+				if (prev == null) registry.remove(self.target);
 				else prev.next = nx.next;
 				return true;
 			}
@@ -260,7 +266,7 @@ public class NiximSystemV2 implements ITransformer {
 		}
 		return false;
 	}
-	public final boolean unload(String target) { return registry.remove(target) != null; }
+	public final boolean unloadByTarget(String target) { return registry.remove(target) != null; }
 
 	public static boolean transformNiximUser(ConstantPool cp, NiximData nx, Map<String, NiximData> ctx) {
 		boolean changed = false;
@@ -276,7 +282,7 @@ public class NiximSystemV2 implements ITransformer {
 				case Constant.FIELD:
 					CstRef ref = (CstRef) c;
 					NiximData nx1 = nx!=null&&ref.className().equals(nx.self) ? nx : ctx.get(ref.className());
-					if (nx1 != null) {
+					if (nx1 != null && nx1.self.equals(ref.className())) {
 						tmpPCD.name = ref.descName();
 						tmpPCD.desc = ref.descType();
 						Pcd pcd = nx1.preconditions.find(tmpPCD);
@@ -297,8 +303,9 @@ public class NiximSystemV2 implements ITransformer {
 			Constant c = constants.get(i);
 			if (c.type() == Constant.CLASS) {
 				CstClass ref1 = (CstClass) c;
-				NiximData nx1 = ctx.get(ref1.name().str());
-				if (nx1 != null) {
+				String name = ref1.name().str();
+				NiximData nx1 = ctx.get(name);
+				if (nx1 != null && nx1.self.equals(name)) {
 					changed = true;
 
 					cp.setUTFValue(ref1.name(), nx1.target);

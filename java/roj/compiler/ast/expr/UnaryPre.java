@@ -47,7 +47,7 @@ class UnaryPre extends UnaryPreNode {
 			iType = TypeCast.getWrappedPrimitive(type);
 			if (iType == 0) {
 				ctx.report(Kind.ERROR, "unary.error.notApplicable", byId(op), type);
-				return this;
+				return NaE.RESOLVE_FAILED;
 			}
 
 			assert !right.isConstant() : "wrapped primitive is constant? weird";
@@ -55,34 +55,30 @@ class UnaryPre extends UnaryPreNode {
 		}
 
 		switch (iType) {
-			case Type.VOID: ctx.report(Kind.ERROR, "unary.error.void"); return this;
+			case Type.VOID: ctx.report(Kind.ERROR, "unary.error.void"); return NaE.RESOLVE_FAILED;
 			case Type.BOOLEAN:
 				if (op != logic_not) {
 					ctx.report(Kind.ERROR, "unary.error.notApplicable", byId(op), type);
-					return this;
+					return NaE.RESOLVE_FAILED;
 				}
 				break;
 			case Type.DOUBLE: case Type.FLOAT:
-				if (op == rev) {
-					ctx.report(Kind.ERROR, "unary.error.notApplicable:~", type);
-					return this;
-				}
-				if (op == logic_not) {
-					ctx.report(Kind.ERROR, "unary.error.notApplicable:!", type);
-					return this;
+				if (op == rev || op == logic_not) {
+					ctx.report(Kind.ERROR, "unary.error.notApplicable", byId(op), type);
+					return NaE.RESOLVE_FAILED;
 				}
 				break;
 			default: type = Type.std(Type.INT);
 			case Type.LONG:
 				if (op == logic_not) {
 					ctx.report(Kind.ERROR, "unary.error.notApplicable:!", type);
-					return this;
+					return NaE.RESOLVE_FAILED;
 				}
 		}
 
 		if (incrNode && (!(right instanceof VarNode vn) || vn.isFinal())) {
 			ctx.report(Kind.ERROR, "unary.error.final", right);
-			return this;
+			return NaE.RESOLVE_FAILED;
 		}
 
 		if (!right.isConstant()) return this;

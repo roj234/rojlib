@@ -32,6 +32,7 @@ import java.util.Collections;
 public class LavaCompiler {
 	final GlobalContextApi ctx = new GlobalContextApi();
 	final LocalContext cache = ctx.createLocalContext();
+	final ClassLoader loader = new ClassLoader() {};
 
 	public LavaCompiler() throws IOException {initDefaultPlugins(ctx);}
 
@@ -62,7 +63,7 @@ public class LavaCompiler {
 		}
 		if (myMethod == null) throw new IllegalArgumentException(functionalInterface.getName()+"看起来不像FunctionalInterface");
 
-		CompileUnit u = new CompileUnit("<stdin>");
+		CompileUnit u = new CompileUnit("<stdin>", methodStr+"}");
 
 		u.version = CompileUnit.JavaVersion(8);
 		u.name("roj/generated/HelloFromStdin"+ReflectionUtils.uniqueId());
@@ -71,8 +72,6 @@ public class LavaCompiler {
 		u.npConstructor();
 
 		ctx.addCompileUnit(u, false);
-
-		u.getLexer().init(methodStr+"}");
 
 		TypeResolver tr = u.getTypeResolver();
 		tr.setImportAny(true);
@@ -86,12 +85,10 @@ public class LavaCompiler {
 		LocalContext.set(null);
 
 		for (ConstantData data : ctx.getGeneratedClasses()) {
-			data.dump();
-			ClassDefiner.defineGlobalClass(data);
+			ClassDefiner.defineClass(loader, data);
 		}
 
-		u.dump();
 		ClassDefiner.premake(u);
-		return (T) ClassDefiner.make(u);
+		return (T) ClassDefiner.make(u, loader);
 	}
 }

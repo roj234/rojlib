@@ -3,23 +3,25 @@ package roj.crypt.jar;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFile;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
 import roj.crypt.Base64;
+import roj.crypt.KeyType;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.net.mss.X509CertFormat;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import javax.net.ssl.X509TrustManager;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.URL;
 import java.security.*;
 import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.List;
@@ -56,10 +58,9 @@ public class JarVerifier {
 	public boolean isSigned() { return block != null; }
 	public boolean isSignTrusted() {
 		List<X509Certificate> certs = block.getCertificates();
-		X509Certificate cert = certs.get(0);
 		try {
 			X509TrustManager tm = X509CertFormat.getDefault();
-			tm.checkServerTrusted(certs.toArray(new X509Certificate[0]), cert.getPublicKey().getAlgorithm());
+			tm.checkServerTrusted(certs.toArray(new X509Certificate[0]), "UNKNOWN");
 			return true;
 		} catch (Exception e) {
 			return false;
@@ -133,19 +134,10 @@ public class JarVerifier {
 			if (!MessageDigest.isEqual(except, computed)) throw new SecurityException("清单"+entry.getKey()+"属性校验失败");
 		}
 
-		found: {
-		for (X509Certificate cert : block.getCertificates()) {
-			if (!cert.getSerialNumber().equals(block.getSignerSn())) continue;
-
-			Signature sign = Signature.getInstance(block.getSignatureAlg());
-			sign.initVerify(cert.getPublicKey());
-			sign.update(sb);
-			if (!sign.verify(block.getSignature())) throw new SecurityException("元签名校验失败");
-
-			break found;
-		}
-		throw new SecurityException("未找到序列号匹配的证书");
-		}
+		Signature sign = Signature.getInstance(block.getSignatureAlg());
+		sign.initVerify(block.getSigner().getPublicKey());
+		sign.update(sb);
+		if (!sign.verify(block.getSignature())) throw new SecurityException("元签名校验失败");
 
 		this.algorithm = algorithm;
 		this.prevName = prevName;
@@ -260,30 +252,136 @@ public class JarVerifier {
 		return new JarVerifier(url, manifest, mb, signature, sb, signatureBlock);
 	}
 
-	public static void main(String[] args) throws Exception {
-		try (ZipFile zf = new ZipFile(args[0])) {
-			JarVerifier verifier = create(zf);
-			if (verifier == null) {
-				System.out.println("文件没有清单属性");
-				return;
-			}
-			if (!verifier.isSigned()) {
-				System.out.println("文件没有签名");
-				return;
-			}
+	@Nullable
+	public static String signJar(ZipArchive zf, String signAlg, String hashAlg, String signHashAlg, File pem, File key) throws GeneralSecurityException, IOException {
+		if (!VALID_CERTIFICATE_EXTENSION.contains(signAlg)) return "Invalid SignAlg: not in "+VALID_CERTIFICATE_EXTENSION;
+		if (!SECURE_HASH_ALGORITHMS.contains(hashAlg) || !SECURE_HASH_ALGORITHMS.contains(signHashAlg)) return "Invalid HashAlg: not in "+SECURE_HASH_ALGORITHMS;
 
-			System.out.println("是CA证书:"+verifier.isSignTrusted());
-			verifier.ensureManifestValid();
+		var md = MessageDigest.getInstance(hashAlg);
 
-			for (ZEntry entry : zf.entries()) {
-				try (InputStream in = verifier.wrapInput(entry.getName(), zf.getStream(entry))) {
-					IOUtil.read(in);
-				} catch (Exception e) {
-					System.out.println(e.getMessage());
+		byte[] buf = new byte[1024];
+		var mfin = zf.getStream("META-INF/MANIFEST.MF");
+		if (mfin == null) return "未找到MANIFEST.MF";
+		var mf = new Manifest(mfin);
+
+		var digestKey = new Attributes.Name(hashAlg +"-Digest");
+		for (ZEntry entry : zf.entries()) {
+			if (entry.getName().startsWith("META-INF/")) {
+				if (entry.getName().equals("META-INF/MANIFEST.MF")) continue;
+				if (VALID_CERTIFICATE_EXTENSION.contains(IOUtil.extensionName(entry.getName()))) {
+					String sfName = "META-INF/"+IOUtil.fileName(entry.getName())+".SF";
+					zf.put(entry.getName(), null);
+					zf.put(sfName, null);
+					mf.getEntries().remove(entry.getName());
+					mf.getEntries().remove(sfName);
+					continue;
 				}
+				if (entry.getName().endsWith(".SF")) continue;
 			}
 
-			System.out.println("文件验证完成，有问题的文件已在上方列出");
+			var subattr = mf.getAttributes(entry.getName());
+			if (subattr == null) {
+				subattr = new Attributes(1);
+				mf.getEntries().put(entry.getName(), subattr);
+			}
+
+			try (var in = zf.getStream(entry)) {
+				while (true) {
+					int r = in.read(buf);
+					if (r < 0) break;
+					md.update(buf, 0, r);
+				}
+
+				var digest = Base64.encode(DynByteBuf.wrap(md.digest()), IOUtil.getSharedCharBuf()).toString();
+				subattr.put(digestKey, digest);
+			}
+		}
+
+		var ob = IOUtil.getSharedByteBuf();
+		mf.write(ob);
+		byte[] mfBytes = ob.toByteArray();
+		zf.put("META-INF/MANIFEST.MF", new ByteList(mfBytes));
+
+		var mb = new ManifestBytes(mfBytes);
+
+		var sf = new Manifest();
+		var sfMain = sf.getMainAttributes();
+		sfMain.put(Attributes.Name.SIGNATURE_VERSION, "1.0");
+		sfMain.put(new Attributes.Name("Created-By"), "ImpLib/JarSigner (v1.0)");
+		sfMain.put(new Attributes.Name(hashAlg +"-Digest-Manifest"), Base64.encode(DynByteBuf.wrap(md.digest(mfBytes)), IOUtil.getSharedCharBuf()).toString());
+		sfMain.put(new Attributes.Name(hashAlg +"-Digest-Manifest-Main-Attributes"), Base64.encode(DynByteBuf.wrap(mb.digest(md, null)), IOUtil.getSharedCharBuf()).toString());
+		for (String name : mb.namedAttrMap.keySet()) {
+			var attr = new Attributes(1);
+			attr.put(digestKey, Base64.encode(DynByteBuf.wrap(mb.digest(md, name)), IOUtil.getSharedCharBuf()).toString());
+			sf.getEntries().put(name, attr);
+		}
+
+		var sfName = IOUtil.fileName(pem.getName());
+
+		ob.clear();
+		sf.write(ob);
+		byte[] sfBytes = ob.toByteArray();
+		zf.put("META-INF/"+sfName+".SF", DynByteBuf.wrap(sfBytes));
+
+		var signer = Signature.getInstance(signHashAlg.replace("-", "")+"with"+(signAlg.equals("EC")?"ECDSA": signAlg));
+		List<X509Certificate> certs = new SimpleList<>();
+		var cf = CertificateFactory.getInstance("X509");
+		// 垃圾爪洼！
+		try (var in = new BufferedInputStream(new FileInputStream(pem))) {
+			while (true) {
+				certs.add((X509Certificate) cf.generateCertificate(in));
+
+				in.mark(1);
+				if (in.read() < 0) break;
+				in.reset();
+			}
+		}
+
+		PrivateKey prk = (PrivateKey) KeyType.getInstance(signAlg).fromPEM(IOUtil.readString(key));
+
+		signer.initSign(prk);
+		signer.update(sfBytes);
+		byte[] signature = signer.sign();
+
+		var sb = new SignatureBlock(certs, signature, signer.getAlgorithm(), 0, null);
+		zf.put("META-INF/"+sfName+"."+signAlg, DynByteBuf.wrap(sb.getEncoded("PKCS7")));
+		return null;
+	}
+
+	public static void main(String[] args) throws Exception {
+		try (ZipArchive zf = new ZipArchive(args[0])) {
+			if (args.length == 1) {
+				JarVerifier verifier = create(zf);
+				if (verifier == null) {
+					System.out.println("文件没有清单属性");
+					return;
+				}
+				if (!verifier.isSigned()) {
+					System.out.println("文件没有签名");
+					return;
+				}
+
+				System.out.println("清单和元签名校验通过");
+				System.out.println("是自签证书:"+!verifier.isSignTrusted());
+				System.out.println("签名算法:"+verifier.block.getSignatureAlg());
+				verifier.ensureManifestValid();
+
+				for (ZEntry entry : zf.entries()) {
+					try (InputStream in = verifier.wrapInput(entry.getName(), zf.getStream(entry))) {
+						IOUtil.read(in);
+					} catch (Exception e) {
+						System.out.println(e.getMessage());
+					}
+				}
+
+				System.out.println("文件验证完成，有问题的文件已在上方列出");
+			} else {
+				File pem = new File(args[1]);
+				File key = new File(args[2]);
+				String error = signJar(zf, args[3], "SHA-256", "SHA-256", pem, key);
+				if (error != null) System.err.println("签名失败: "+error);
+				else zf.save();
+			}
 		}
 	}
 }

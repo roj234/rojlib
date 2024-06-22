@@ -3,9 +3,9 @@ package roj.test;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.visitor.CodeWriter;
-import roj.dev.HRAgent;
-import roj.dev.hr.HRContext;
 import roj.io.IOUtil;
+import roj.mod.agent.HRAgent;
+import roj.mod.agent.HRContext;
 import roj.ui.CLIUtil;
 
 import java.lang.instrument.Instrumentation;

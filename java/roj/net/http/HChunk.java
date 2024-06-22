@@ -1,25 +1,23 @@
 package roj.net.http;
 
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
 import roj.net.handler.PacketMerger;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.Identifier;
 
 import java.io.IOException;
 
 import static roj.text.TextUtil.digits;
 
 /**
+ * ChunkEncoding
  * @author Roj233
  * @since 2022/6/2 3:29
  */
-public class ChunkSplitter extends PacketMerger implements ChannelHandler {
-	public static final Identifier CHUNK_IN_EOF = Identifier.of("cs", "cin");
-	public static final Identifier CHUNK_OUT_EOF = Identifier.of("cs", "cout");
+public final class HChunk extends PacketMerger {
+	public static final String EVENT_IN_END = "hChunk:inEnd", EVENT_CLOSE_OUT = "hChunk:closeOut";
 
 	private static final int IN_ENABLE = 1, OUT_ENABLE = 2, IN_EOF = 4;
 
@@ -30,17 +28,9 @@ public class ChunkSplitter extends PacketMerger implements ChannelHandler {
 
 	private long inLen;
 
-	public ChunkSplitter() {
-		this(0);
-	}
-
-	public ChunkSplitter(int flag) {
-		super();
-
+	public HChunk() {
 		tmp = ByteList.allocate(18);
 		hex = tmp.list;
-
-		this.flag = (byte) flag;
 	}
 
 	@Override
@@ -73,7 +63,7 @@ public class ChunkSplitter extends PacketMerger implements ChannelHandler {
 					throw new IllegalArgumentException("ChunkEncoding: 尾部无效");
 				if ((flag & IN_EOF) != 0) {
 					flag &= ~(IN_ENABLE|IN_EOF);
-					ctx.postEvent(CHUNK_IN_EOF);
+					ctx.postEvent(EVENT_IN_END);
 
 					mergedRead(ctx, buf);
 					return;
@@ -153,7 +143,7 @@ public class ChunkSplitter extends PacketMerger implements ChannelHandler {
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id == CHUNK_OUT_EOF) {
+		if (event.id.equals(EVENT_CLOSE_OUT)) {
 			if ((flag&OUT_ENABLE) != 0) {
 				flag &= ~OUT_ENABLE;
 
@@ -164,16 +154,7 @@ public class ChunkSplitter extends PacketMerger implements ChannelHandler {
 		}
 	}
 
-	public void reset() {
-		flag = 0;
-	}
-
-	public void enableIn() {
-		flag |= IN_ENABLE;
-		inLen = -1;
-	}
-
-	public void enableOut() {
-		flag |= OUT_ENABLE;
-	}
+	public void reset() {flag = 0;}
+	public void enableIn() {flag |= IN_ENABLE;inLen = -1;}
+	public void enableOut() {flag |= OUT_ENABLE;}
 }

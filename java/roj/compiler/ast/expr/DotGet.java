@@ -32,7 +32,7 @@ import java.util.function.Consumer;
  * @author Roj233
  * @since 2022/2/27 20:27
  */
-final class DotGet extends VarNode {
+public final class DotGet extends VarNode {
 	ExprNode parent;
 	SimpleList<String> names;
 
@@ -73,6 +73,18 @@ final class DotGet extends VarNode {
 		} else {
 			this.flags = -128;
 		}
+	}
+	DotGet() {}
+
+	public static ExprNode resolved(ExprNode parent, IClass begin, IType type, boolean isFinal, FieldNode... chain) {
+		DotGet el = new DotGet();
+		el.names = new SimpleList<>();
+		el.parent = parent;
+		el.begin = begin;
+		el.chain = chain;
+		el.type = type == null ? chain[chain.length-1].fieldType() : type;
+		el.flags = (byte) (RESOLVED | (isFinal ? FINAL_FIELD : 0));
+		return el;
 	}
 
 	Type toClassRef() {
@@ -140,6 +152,7 @@ final class DotGet extends VarNode {
 				// 3. 静态字段导入
 				if ((result = ctx.tryImportField(part)) != null) {
 					begin = result.owner;
+					if (begin == null) return result.prev;
 					names.set(0, result.method);
 					parent = result.prev;
 					flags = 0;
@@ -189,16 +202,10 @@ final class DotGet extends VarNode {
 				return NaE.RESOLVE_FAILED;
 			}
 
-			begin = ctx.get_frBegin();
-			chain = ctx.get_frChain().toArray(new FieldNode[0]);
-			type = ctx.get_frType();
-
 			part = fType.owner();
 		} else {
-			assert chain == null;
 			// 4. 前缀包名.字段 ^
 			// ^ => 我决定采用（已经设计好的）这种机制，虽然可能没必要
-
 			String error = ctx.resolveDotGet(sb, classExprTarget != null);
 
 			if (bits != 0) {
@@ -221,17 +228,16 @@ final class DotGet extends VarNode {
 				return NaE.RESOLVE_FAILED;
 			}
 
-			begin = ctx.get_frBegin();
-			chain = ctx.get_frChain().toArray(new FieldNode[0]);
-			type = ctx.get_frType();
-
-			part = chain[0].fieldType().owner();
+			part = ctx.get_frChain().get(0).fieldType().owner();
 		}
+
+		begin = ctx.get_frBegin();
+		chain = ctx.get_frChain().toArray(new FieldNode[ctx.get_frChain().size()]);
+		type = ctx.get_frType();
+
 		ctx.checkType(part);
 
 		flags = RESOLVED;
-
-		assert chain != null;
 
 		int length = chain.length;
 		FieldNode last = chain[length-1];

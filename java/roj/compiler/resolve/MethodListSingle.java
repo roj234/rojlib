@@ -33,6 +33,7 @@ final class MethodListSingle extends ComponentList {
 
 		if (!ctx.checkAccessible(mnOwner, mn, (flags&IN_STATIC) != 0, true)) return null;
 
+		MethodResult result = null;
 		error: {
 			List<Type> mParam = mn.parameters();
 			IntMap<Object> defParamState = null;
@@ -79,7 +80,7 @@ final class MethodListSingle extends ComponentList {
 				}
 			}
 
-			MethodResult result = ctx.inferrer.infer(mnOwner, mn, that, myParam == null ? params : myParam);
+			result = ctx.inferrer.infer(mnOwner, mn, that, myParam == null ? params : myParam);
 			if (result.distance >= 0) {
 				result.namedParams = defParamState;
 				return result;
@@ -87,16 +88,17 @@ final class MethodListSingle extends ComponentList {
 		}
 
 		if ((flags & NO_REPORT) != 0) return null;
+		if (result == null) result = ctx.inferrer.infer(mnOwner, mn, that, params);
 
 		CharList sb = new CharList().append("invoke.incompatible.single:").append(mn.owner).append(':').append(mn.name()).append(':');
 
 		sb.append("  ").append("\1invoke.except\0 ");
 		MethodList.getArg(mn, sb).append('\n');
 
-		MethodList.appendInput(params, sb);
+		MethodList.appendInput(myParam == null ? params : myParam, sb);
 
 		sb.append("  ").append("\1invoke.reason\0 ");
-		MethodList.appendError(ctx.inferrer.infer(mnOwner, mn, that, params), sb);
+		MethodList.appendError(result, sb);
 		sb.append('\n');
 
 		ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());

@@ -72,6 +72,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	}
 
 	public void registerTransformer(ITransformer tr) {
+		if (transformers.contains(tr)) throw new IllegalArgumentException("Transformer already exist: "+tr);
 		transformers.add(tr);
 		if (tr instanceof INameTransformer) {
 			if (nameTransformer == null) {
@@ -227,9 +228,12 @@ public class ClassWrapper implements Function<String, Class<?>> {
 		}
 		reentrant = prev;
 		if (changed) {
-			list.clear();
 			// See ConstantPool#checkCollision
-			list.put(ctx.get());
+			ByteList b = ctx.get();
+			if (b != list) {
+				list.clear();
+				list.put(b);
+			}
 		}
 	}
 

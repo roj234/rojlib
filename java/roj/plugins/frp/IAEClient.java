@@ -11,7 +11,6 @@ import roj.net.handler.VarintSplitter;
 import roj.net.mss.SimpleEngineFactory;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.Identifier;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -73,11 +72,11 @@ abstract class IAEClient extends Constants implements Shutdownable {
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		Identifier id = event.id;
-		if (id == Timeout.READ_TIMEOUT) {
+		String id = event.id;
+		if (id.equals(Timeout.READ_TIMEOUT)) {
 			if (onlyOneMissed) {
 				onlyOneMissed = false;
-				ctx.channelWrite(IOUtil.getSharedByteBuf().put(P___HEARTBEAT));
+				ctx.channelWrite(IOUtil.getSharedByteBuf().put(P___HEARTBEAT).putLong(System.currentTimeMillis()));
 				event.setResult(Event.RESULT_DENY);
 			} else {
 				LOGGER.warn("读取超时!");

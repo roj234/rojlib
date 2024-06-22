@@ -9,10 +9,10 @@ import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.compiler.asm.node.LazyIINC;
 import roj.compiler.asm.node.LazyLoadStore;
+import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
@@ -113,36 +113,34 @@ public class MethodWriter extends CodeWriter {
 
 	public int nextSegmentId() {return segments.size()-1;}
 	public void replaceSegment(int id, Segment segment) {segments.set(id, segment);}
+	public boolean isJumpingTo(Label point) {return !segments.isEmpty() && segments.get(segments.size()-1) instanceof JumpSegment js && js.target == point;}
 
 	public MethodWriter fork() {return new MethodWriter(owner, mn);}
 
-	public Label lineMarker() {
-		LineMarker marker = new LineMarker();
-		super.label(marker);
-		labels.add(marker);
-		return marker;
-	}
+	private final List<Label> zeroLabels = new SimpleList<>();
 
 	@Override
 	public void label(Label x) {
 		// 预优化无用的跳转
-		if (!segments.isEmpty() && segments.get(segments.size()-1).length() == 0 && segments.get(segments.size()-2) instanceof JumpSegment jump && jump.target == x) {
+		if (segments.isEmpty()) {
+			zeroLabels.add(x);
+		} else if (segments.get(segments.size()-1).length() == 0 && segments.get(segments.size()-2) instanceof JumpSegment jump && jump.target == x) {
 			segments.remove(segments.size()-2);
 		}
+
 		super.label(x);
 	}
 
 	public DynByteBuf writeTo() {
-		MethodWriter fork = fork();
-		writeTo(fork);
-		fork.visitExceptions();
-
-		DynByteBuf b = fork.bw;
+		visitExceptions();
+		var b = bw;
 		b.remove(0, 8);
 		b.wIndex(b.wIndex()-2);
 		return b;
 	}
 
+	private static final long BLOCK_INDEX = ReflectionUtils.fieldOffset(Label.class, "block");
+	private static final long OFFSET_INDEX = ReflectionUtils.fieldOffset(Label.class, "offset");
 	public void insertBefore(DynByteBuf buf) {
 		int offset = getTmpLenOffset();
 		bw.preInsert(offset, buf.readableBytes());
@@ -150,26 +148,30 @@ public class MethodWriter extends CodeWriter {
 		bw.wIndex(offset);
 		bw.put(buf);
 		bw.wIndex(pos);
+
+		int delta = buf.readableBytes();
+		for (Label label : zeroLabels) ReflectionUtils.u.getAndAddInt(label, OFFSET_INDEX, delta);
 	}
 
+	private boolean disposed;
 	public void writeTo(MethodWriter cw) {
-		int off;
+		if (disposed) throw new AssertionError();
+		disposed = true;
 
-		if (bw.wIndex() > 8) {
-			cw.codeOb.put(bw, 8, bw.wIndex()-8);
-			off = bw.wIndex()-8;
-		} else {
-			off = 0;
-		}
+		if (bw.wIndex() > 8) cw.codeOb.put(bw, 8, bw.wIndex()-8);
 
-		for (Iterator<Label> itr = labels.iterator(); itr.hasNext(); ) {
-			Label label = itr.next();
-			if (label instanceof LineMarker m) {
-				m.move(cw.segments.size(), off);
-				cw.labels.add(m);
-				itr.remove();
-			}
+		int mb = cw.segments.size();
+		if (mb == 0) mb = 1;
+		for (Label label : labels) {
+			ReflectionUtils.u.getAndAddInt(label, BLOCK_INDEX, mb);
+			cw.labels.add(label);
 		}
+		labels.clear();
+		for (Label label : zeroLabels) {
+			ReflectionUtils.u.getAndAddInt(label, BLOCK_INDEX, mb-1);
+			cw.labels.add(label);
+		}
+		zeroLabels.clear();
 
 		if (segments.isEmpty()) return;
 		if (cw.segments.isEmpty()) cw._addFirst();

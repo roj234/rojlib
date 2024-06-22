@@ -401,12 +401,11 @@ public final class ExprParser {
 								ctx.report(Kind.ERROR, "expr.invoke.paramName", firstName);
 
 							w = wr.next();
-							if (w.type() == rBrace) break;
-							else if (w.type() != Word.LITERAL) ue(wr, "type.literal");
+							if (w.type() != Word.LITERAL) break;
 							firstName = w.val();
 							wr.except(colon);
 						}
-						cur = npl;
+						if (w.type() != rBrace) ue(wr, "type.literal");
 						break endValueConv;
 					}
 
@@ -929,7 +928,9 @@ public final class ExprParser {
 
 		List<ExprNode> args = tmp();
 		do {
-			args.add(parse1(STOP_RLB|STOP_COMMA|SKIP_COMMA|_ENV_TYPED_ARRAY|NAE));
+			var node = parse1(STOP_RLB|STOP_COMMA|SKIP_COMMA|_ENV_TYPED_ARRAY);
+			if (node == null) break;
+			args.add(node);
 		} while (w.type() == comma);
 		ctx.lexer.except(rBrace);
 

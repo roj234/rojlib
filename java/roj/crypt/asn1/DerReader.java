@@ -131,4 +131,9 @@ public class DerReader {
 	}
 
 	public int position() throws IOException { return (int) in.position(); }
+
+	public void skip(int i) throws IOException {
+		int i1 = in.skipBytes(i);
+		if (i1 < i) throw new EOFException();
+	}
 }

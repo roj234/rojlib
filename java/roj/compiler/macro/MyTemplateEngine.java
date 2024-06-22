@@ -74,8 +74,7 @@ public class MyTemplateEngine {
 		System.out.println("MetaBlock="+meta);
 
 		LocalContext.set(ctx);
-		CompileUnit u = new CompileUnit("<Generator MyJspServlet>");
-		u.getLexer().init(out.append("\n}}").toString());
+		CompileUnit u = new CompileUnit("<Generator MyJspServlet>", out.append("\n}}").toString());
 
 		ctx.setClass(u);
 

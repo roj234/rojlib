@@ -8,16 +8,21 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 
+import java.util.concurrent.atomic.LongAdder;
+
 /**
  * @author Roj233
  * @since 2022/2/24 19:16
  */
 public abstract class ExprNode implements UnresolvedExprNode {
+	public static final LongAdder ExprNodeNewCount = new LongAdder();
+
 	public int wordStart, wordEnd;
 	public int getWordStart() {return wordStart;}
 	public int getWordEnd() {return wordEnd;}
 
 	protected ExprNode() {
+		ExprNodeNewCount.increment();
 		var lc = LocalContext.get();
 		if (lc != null) {
 			wordStart = lc.lexer.current().pos();

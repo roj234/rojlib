@@ -157,9 +157,7 @@ public class Tokenizer {
 		if (seek == 2) prevWords.add(seekPos, lastWord.copy());
 		seek = 1;
 		prevSeekPos = seekPos;
-
 	}
-	public final void reset() { seekPos = 0; }
 	public final void skip() { skip(0); }
 	public final void skip(int offset) {
 		assert (seek&1) != 0;

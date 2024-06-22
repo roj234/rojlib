@@ -11,7 +11,6 @@ import roj.net.handler.Timeout;
 import roj.net.http.HttpHead;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.Identifier;
 
 import javax.net.ssl.SSLException;
 import java.io.IOException;
@@ -22,7 +21,7 @@ import java.io.IOException;
  * @since 2022/10/7 0007 21:38
  */
 public class HttpClient20 implements ChannelHandler {
-	public static final Identifier H2_GOAWAY = Identifier.of("h2:go_away");
+	public static final String H2_GOAWAY = String.valueOf("h2:go_away");
 
 	private static final boolean PROTOCOL_IGNORE = true;
 	public static final String MAGIC = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
@@ -440,7 +439,7 @@ public class HttpClient20 implements ChannelHandler {
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id == Timeout.READ_TIMEOUT && state == WAITING_MAGIC) {
+		if (event.id.equals(Timeout.READ_TIMEOUT) && state == WAITING_MAGIC) {
 			error(ERROR_INITIAL_TIMEOUT);
 		}
 	}

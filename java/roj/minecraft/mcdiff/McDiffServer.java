@@ -198,8 +198,6 @@ public final class McDiffServer {
 		System.out.println("正在签名 (4/4)");
 
 		addSignature(diffFile, qzfw);
-
-		qzfw.flag = QZFileWriter.TRIM_FILE;
 		qzfw.close();
 	}
 
