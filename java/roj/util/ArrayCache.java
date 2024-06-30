@@ -17,6 +17,7 @@ public class ArrayCache {
 	public static final long[] LONGS = new long[0];
 	public static final Object[] OBJECTS = new Object[0];
 	public static final Class<?>[] CLASSES = new Class<?>[0];
+	public static <T> WeakReference<T> emptyWeakRef() {return Helpers.cast(G_Sential);}
 
 	private static final int MIN_ARRAY_SIZE = 256, LARGE_ARRAY_SIZE = 1048576;
 	private static final int ID_COUNT = 3, CACHE_COUNT = 15;

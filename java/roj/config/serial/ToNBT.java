@@ -1,5 +1,6 @@
 package roj.config.serial;
 
+import roj.compiler.plugins.asm.ASM;
 import roj.text.J9String;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
@@ -31,7 +32,7 @@ public class ToNBT implements CVisitor {
 	private byte state = -1;
 	private int sizeOffset, size;
 
-	private long[] states = new long[4];
+	private int[] states = new int[4];
 	private int stateLen;
 
 	public final void value(boolean l) { value((byte)(l?1:0)); }
@@ -61,7 +62,7 @@ public class ToNBT implements CVisitor {
 	}
 	public final void value(String l) {
 		if (XNbt) {
-			if (J9String.isLatin1(l)) {
+			if (ASM.TARGET_JAVA_VERSION > 8 && J9String.isLatin1(l)) {
 				onValue(X_LATIN1_STRING);
 				ob.putVUInt(l.length()).putAscii(l);
 				return;
@@ -86,7 +87,6 @@ public class ToNBT implements CVisitor {
 	public final void valueNull() {
 		if (!XNbt) throw new NullPointerException("NBT不支持Null (请使用XNBT)");
 		onValue(X_NULL);
-		ob.put(X_NULL);
 	}
 	public final boolean supportArray() {return true;}
 	public final void value(byte[] ba) {
@@ -155,17 +155,21 @@ public class ToNBT implements CVisitor {
 		push(1);
 	}
 
-	private void push(int state1) {
-		int depth = stateLen++;
+	private void push(int newState) {
+		int slot = stateLen++;
 
-		long[] arr = states;
-		if (arr.length <= depth) states = arr = Arrays.copyOf(arr, depth+1);
+		if (state == 2) stateLen += 2;
 
-		if (size < -0x3FFFFFF || size > 0x3FFFFFF) throw new IllegalStateException("天哪你这是哪家的列表/size="+size);
+		int[] arr = states;
+		if (arr.length <= slot) states = arr = Arrays.copyOf(arr, stateLen);
 
-		arr[depth] = ((long) state << 60) | ((long) (sizeOffset+1) << 28) | ((size+0x3FFFFFF)&0xFFFFFFFL);
+		if (state == 2) {
+			arr[slot++] = sizeOffset;
+			arr[slot++] = size;
+		}
+		arr[slot] = state;
 
-		state = (byte) state1;
+		state = (byte) newState;
 		size = 0;
 	}
 	public final void pop() {
@@ -173,26 +177,30 @@ public class ToNBT implements CVisitor {
 		if (stateLen == 0) throw new IllegalStateException("Stack underflow");
 
 		// map
-		if (state == 0) throw new IllegalStateException("未预料的pop");
-		else if (state == 1) ob.write(END);
-		else {
-			// has content
-			if (sizeOffset > 0) {
-				ob.putInt(sizeOffset, size);
-			} else if (sizeOffset < 0) {
-				if (size != 0) throw new IllegalStateException("距离预定的LIST大小还有"+ -size +"个项目");
-				// pre-sized
-			} else if (size == 0) {
-				// empty
-				ob.put(END).writeInt(0);
+		switch (state) {
+			case 0 -> throw new IllegalStateException("未预料的pop");
+			case 1 -> ob.write(END);
+			case 2 -> {
+				if (sizeOffset > 0) {
+					ob.putInt(sizeOffset, size);
+				} else {
+					if (size != 0) throw new IllegalStateException("距离预定的LIST大小还有" + -size + "个项目");
+					// 空列表
+					if (sizeOffset == 0) ob.put(END).writeInt(0);
+					// else 预定大小
+				}
 			}
 		}
 
-		long data = states[--stateLen];
+		int data = states[--stateLen];
 
-		state = (byte) (data >>> 60);
-		sizeOffset = (int) (data >>> 28) - 1;
-		size = ((int) data&0xFFFFFFF) - 0x3FFFFFF;
+		if ((state = (byte) data) == 2) {
+			size = states[--stateLen];
+			sizeOffset = states[--stateLen];
+		} else {
+			size = 0;
+			sizeOffset = 0;
+		}
 	}
 
 	public final ToNBT reset() {

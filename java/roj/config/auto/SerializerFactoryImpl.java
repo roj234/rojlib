@@ -64,6 +64,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		DEFAULT.put("java.util.Collection", LIST);
 		DEFAULT.put("java.util.List", LIST);
 		DEFAULT.put("java.util.Set", new CollectionSer(null, true, null));
+
+		DEFAULT.put("roj.config.auto.Either", new EitherSer());
 	}
 
 	private final ClassLoader classLoader;
@@ -97,15 +99,15 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		this.GENERATED = Isolation.computeIfAbsent(cl, Fn).generated;
 
 		// 如果不开启AllowDynamic，那么对于raw Collection的反序列化将会失败
+		ObjAny any = dynamicRoot = new ObjAny(this);
 		if ((flag & ALLOW_DYNAMIC) != 0) {
-			ObjAny any = dynamicRoot = new ObjAny(this);
 			localRegistry.put("java.util.Map", new MapSer(any, null));
 			CollectionSer LIST = new CollectionSer(any, false, null);
 			localRegistry.put("java.util.Collection", LIST);
 			localRegistry.put("java.util.List", LIST);
 			localRegistry.put("java.util.Set", new CollectionSer(any, true, null));
 		} else {
-			dynamicRoot = null;
+			//dynamicRoot = null;
 		}
 	}
 
@@ -302,6 +304,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	public <T> Serializer<Map<String, T>> mapOf(Class<T> content) { return context(get(Signature.parseGeneric("Ljava/util/Map<Ljava/lang/String;"+TypeHelper.class2asm(content)+">;"))); }
 	private <T> Serializer<T> context(Adapter root) { return Helpers.cast((flag&OBJECT_POOL) == 0 ? new AdaptContext(root) : new AdaptContextEx(root)); }
 
+	// 被手动Adapter调用的部分也应当使用ObjectPoolWrapper封装
+	// 不过bug貌似很多（hashCode failed）
 	@NotNull
 	final Adapter get(IType generic) {
 		Type type = generic.rawType();
@@ -318,7 +322,10 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			return make(generic.toDesc(), klass, (Generic) generic, false);
 		}
 	}
-	final Adapter getByName(String name) { return make(name, null, null, true); }
+	//ObjAny
+	final Adapter getByName(String name) {
+		return (flag & ALLOW_DYNAMIC) == 0 ? localRegistry.get(name) : make(name, null, null, true);
+	}
 
 	private Adapter make(String name, Class<?> type, Generic generic, boolean mustExact) {
 		Adapter ser = localRegistry.get(name!=null?name:(name=type.getName()));
@@ -336,7 +343,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		// so check original type and derive
 		if (generic != null) {
 			ser = localRegistry.get(type.getName());
-			if (ser != null) return ser.withGenericType(this, generic.children);
+			if (ser != null) return ser.transform(this, type, generic.children);
 		}
 
 		int flag = perClassFlag.applyAsInt(type);
@@ -367,18 +374,15 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			}
 			sb._free();
 
-			ser = ser.inheritBy(this, type);
-			if (generic != null) ser = ser.withGenericType(this, generic.children);
-			synchronized (localRegistry) {
-				localRegistry.put(name, ser);
-			}
+			ser = ser.transform(this, type, generic == null ? null : generic.children);
+			synchronized (localRegistry) {localRegistry.put(name, ser);}
 			return ser;
 		}
 
 		if ((flag & GENERATE) == 0) throw new IllegalArgumentException("未找到"+name+"的序列化器");
 
 		if (mustBeDynamic(type)) {
-			if (!mustExact && (this.flag & ALLOW_DYNAMIC) != 0) return dynamicRoot;
+			if (!mustExact/* && (this.flag & ALLOW_DYNAMIC) != 0*/) return dynamicRoot;
 			throw new IllegalArgumentException(name+"是抽象的，无法直接生成序列化器");
 		}
 
@@ -462,7 +466,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		if ((flag & PREFER_DYNAMIC_INTERNAL) != 0) {
 			generic = null;
 		} else if (generic != null) {
-			genericType = (Generic) Signature.parse(generic, Signature.FIELD).values.get(0);
+			genericType = Signature.parse(generic, Signature.FIELD).values.get(0) instanceof Generic g ? g : null;
 		}
 
 		Adapter make = make(generic, type, genericType, false);

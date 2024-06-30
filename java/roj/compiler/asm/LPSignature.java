@@ -12,6 +12,7 @@ import java.util.List;
 
 public final class LPSignature extends Signature {
 	public static final List<IType> UNBOUNDED_TYPE_PARAM = Collections.singletonList(LocalContext.OBJECT_TYPE);
+	private static final Type SKIP = new Type('S');
 
 	public LPSignature parent;
 	public LPSignature(int type) {
@@ -35,7 +36,7 @@ public final class LPSignature extends Signature {
 	// method decl
 	public void _add(int size, Generic use) {
 		if (values.isEmpty()) values = new SimpleList<>(size+1);
-		while (values.size() < size) values.add(null);
+		while (values.size() < size) values.add(SKIP);
 		values.add(use);
 	}
 
@@ -61,7 +62,7 @@ public final class LPSignature extends Signature {
 		if (values.isEmpty()) values = new SimpleList<>(list.size() + 1);
 		else {
 			for (int i = 0; i < values.size(); i++)
-				if (values.get(i) == null)
+				if (values.get(i) == SKIP)
 					values.set(i, list.get(i));
 		}
 		while (values.size() < list.size()) values.add(list.get(values.size()));

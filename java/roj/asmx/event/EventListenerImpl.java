@@ -53,18 +53,20 @@ final class EventListenerImpl implements EventListener {
 		if (infos.size() == 1) {
 			ListenerInfo mn = infos.get(0);
 
+			ASM impl;
 			synchronized (mn) {
-				ASM asm = (ASM) mn.impl;
-				if (asm == null) {
-					asm = asm();
-					mn.impl = asm;
-				} else if (handler != null) {
-					asm = (ASM) asm.clone();
+				impl = (ASM) mn.impl;
+				if (impl == null) {
+					mn.impl = impl = asm();
 				}
-
-				if (handler != null) asm.setInstance(handler);
-				return built = asm;
 			}
+
+			if (handler != null) {
+				impl = (ASM) impl.clone();
+				impl.setInstance(handler);
+			}
+
+			return built = impl;
 		} else {
 			// frozen mode
 			ASM asm = asm();

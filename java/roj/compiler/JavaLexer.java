@@ -8,6 +8,7 @@ import roj.collect.TrieTree;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
+import roj.compiler.doc.Javadoc;
 import roj.compiler.plugins.annotations.AutoIncrement;
 import roj.config.I18n;
 import roj.config.ParseException;
@@ -19,6 +20,7 @@ import roj.text.TextUtil;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 import static roj.config.Word.EOF;
 import static roj.config.Word.LITERAL;
@@ -105,10 +107,12 @@ public final class JavaLexer extends Tokenizer {
 		// Number Binary (sorted to match java opcode order)
 		"+", "-", "*", "/", "%", "**",
 		"<<", ">>", ">>>",
+		// Number Binary with boolean support
 		"&", "|", "^",
-		// Boolean Binary
-		"==", "!=", "<", ">=", ">", "<=",
+		// Boolean Binary with boolean support
 		"&&", "||",
+		// Boolean Binary without boolean support
+		"==", "!=", "<", ">=", ">", "<=",
 		// Assign
 		"=",
 		"+=", "-=", "*=", "/=", "%=", "**=",
@@ -130,9 +134,8 @@ public final class JavaLexer extends Tokenizer {
 		add = 121, sub = 122, mul = 123, div = 124, mod = 125, pow = 126,
 		lsh = 127, rsh = 128, rsh_unsigned = 129,
 		and = 130, or = 131, xor = 132,
-
-		equ = 133, neq = 134, lss = 135, geq = 136, gtr = 137, leq = 138,
-		logic_and = 139, logic_or = 140,
+		logic_and = 133, logic_or = 134,
+		equ = 135, neq = 136, lss = 137, geq = 138, gtr = 139, leq = 140,
 
 		assign = 141,
 		add_assign = 142, sub_assign = 143, mul_assign = 144, div_assign = 145, mod_assign = 146, pow_assign = 147,
@@ -295,12 +298,64 @@ public final class JavaLexer extends Tokenizer {
 		LocalContext.get().report(Kind.ERROR, "lexer.number.overflow");
 	}
 
+	public List<Javadoc> javadocCollector;
+
 	@Override
 	protected Word onSpecialToken(Word w) throws ParseException {
-		if (w.type() == -2) {
-			throw err("javadoc暂未支持");
+		if (w.type() == 2) {
+			if (javadocCollector == null) multiLineComment(null, "*/");
+			else readJavadoc();
+			return null;
+		} else {
+			return readStringBlock();
 		}
+	}
+	private void readJavadoc() {
+		var doc = new Javadoc();
+		var in = input;
+		int i = index;
+		var line = found;
+		do {
+			line.clear();
+			i = TextUtil.gAppendToNextCRLF(in, i, line);
+			for (int j = 0; j < line.length(); j++) {
+				char c = line.charAt(j);
+				if (c != ' ' && c != '\t') {
+					isBlockTag:
+					if (c == '@' && !WHITESPACE.contains(line.charAt(++j))) {
+						int k = j;
+						while (k < line.length()) {
+							if (WHITESPACE.contains(line.charAt(k))) {
+								doc.visitBlockTag(line.substring(j, k));
+								line.delete(0, k+1);
+								break isBlockTag;
+							}
+							k++;
+						}
+						doc.visitText(line.substring(j));
+						line.clear();
+					}
+					// not block
+					break;
+				}
+			}
 
+			doc.visitText(line);
+
+			while (true) {
+				char c = in.charAt(i);
+				if (c == ' ' || c == '\t') i++;
+				else {
+					if (c == '*') i++;
+					break;
+				}
+			}
+		} while (in.charAt(i) != '/');
+
+		doc.visitEnd();
+		commentPostprocess(i+1);
+	}
+	private Word readStringBlock() throws ParseException {
 		CharSequence in = input;
 		int i = index;
 		CharList v = found; v.clear();

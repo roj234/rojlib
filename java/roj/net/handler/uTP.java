@@ -266,7 +266,7 @@ public class uTP implements ChannelHandler {
 				} while (true);
 
 				if (pending.isEmpty()) {
-					flag &= ~PAUSE_FOR_FLUSH;
+					flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 					fireFlushed();
 				}
 			} finally {

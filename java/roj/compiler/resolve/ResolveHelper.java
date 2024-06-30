@@ -13,6 +13,7 @@ import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
+import roj.asm.util.Attributes;
 import roj.asmx.AnnotationSelf;
 import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
@@ -67,6 +68,36 @@ public final class ResolveHelper {
 	}
 	public MethodNode getLambdaMethod() {return lambdaMethod;}
 
+	private byte foreachType;
+	public boolean isFastForeach(GlobalContext ctx) {
+		if (foreachType != 0) return foreachType > 0;
+
+		IntBiMap<String> classes;
+		try {
+			classes = getClassList(ctx);
+		} catch (ClassNotFoundException e) {
+			ctx.report(owner, Kind.WARNING, -1, "symbol.error.noSuchClass", e.getMessage());
+			foreachType = -1;
+			return false;
+		}
+
+		if (classes.containsValue("java/util/List") && classes.containsValue("java/util/RandomAccess")) {
+			foreachType = 1;
+			return true;
+		}
+
+		var attr = owner.parsedAttr(owner.cp(), Attribute.ClAnnotations);
+		if (attr != null && Attributes.getAnnotation(attr.annotations, "roj/compiler/api/ListIterable") != null) {
+			if (owner.getMethod("get") >= 0 && owner.getMethod("size", "()I") >= 0) {
+				foreachType = 1;
+				return true;
+			}
+		}
+
+		foreachType = -1;
+		return false;
+	}
+
 	// region 父类列表
 	private IntBiMap<String> classList;
 	private boolean query;
@@ -79,27 +110,25 @@ public final class ResolveHelper {
 
 		IntBiMap<String> list = new IntBiMap<>();
 
-		String owner = this.owner.name();
-		list.putInt(0, owner);
-
+		IClass info = owner;
 		while (true) {
-			IClass info = ctx.getClassInfo(owner);
-			if (info == null) throw new ClassNotFoundException(owner);
-			owner = info.parent();
-			if (owner == null) break;
-
+			String owner = info.name();
 			try {
-				list.putInt(list.size()/* +0 CLASS*/, owner);
+				int i = list.size();
+				list.putInt((i << 16) | i, owner);
 			} catch (IllegalArgumentException e) {
 				throw new ResolveException("rh.cyclicDepend:"+owner);
 			}
+
+			owner = info.parent();
+			if (owner == null) break;
+			info = ctx.getClassInfo(owner);
+			if (info == null) throw new ClassNotFoundException(owner);
 		}
 
-		owner = this.owner.name();
+		info = owner;
 		int castDistance = 1;
-		do {
-			IClass info = ctx.getClassInfo(owner);
-
+		while (true) {
 			List<String> itf = info.interfaces();
 			for (int i = 0; i < itf.size(); i++) {
 				String name = itf.get(i);
@@ -107,21 +136,26 @@ public final class ResolveHelper {
 				IClass itfInfo = ctx.getClassInfo(name);
 				if (itfInfo == null) throw new ClassNotFoundException(name);
 
-				if (list.getInt(name) < 0) list.putByValue((list.size() << 16) + castDistance + 0x100_0000/*INTERFACE*/, name);
+				list.forcePut((castDistance == 1 ? 0x80000000 : 0) | (list.size() << 16) | castDistance, name);
 
-				IntBiMap<String> superInterfaces = ctx.getParentList(itfInfo);
-				for (IntBiMap.Entry<String> entry : superInterfaces.selfEntrySet()) {
+				for (var entry : ctx.getParentList(itfInfo).selfEntrySet()) {
+					int id = entry.getIntKey();
 					name = entry.getValue();
-					if (list.getInt(name) < 0) {
-						int key = entry.getIntKey();
-						list.putByValue((list.size() << 16) + key + castDistance + 0x100_0000, name);
+
+					// id's castDistance is smaller
+					// parentList是包含自身的
+					if ((list.getInt(name)&0xFFFF) > (id&0xFFFF)) {
+						list.forcePut((list.size() << 16) | (castDistance + (id & 0xFFFF)), name);
 					}
 				}
 			}
 
 			castDistance++;
-			owner = info.parent();
-		} while (owner != null);
+			String owner = info.parent();
+			if (owner == null) break;
+			info = ctx.getClassInfo(owner);
+			if (info == null) throw new ClassNotFoundException(owner);
+		}
 
 		query = false;
 
@@ -413,9 +447,9 @@ public final class ResolveHelper {
 		return typeParamOwner;
 	}
 	// endregion
-	private MyHashMap<String, InnerClasses.InnerClass> subclassDecl;
+	private MyHashMap<String, InnerClasses.Item> subclassDecl;
 
-	public MyHashMap<String, InnerClasses.InnerClass> getInnerClasses() {
+	public MyHashMap<String, InnerClasses.Item> getInnerClasses() {
 		if (subclassDecl == null) {
 			synchronized (this) {
 				if (subclassDecl != null) return subclassDecl;

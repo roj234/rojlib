@@ -13,7 +13,7 @@ import java.net.MalformedURLException;
  * @author Roj233
  * @since 2022/3/13 15:15
  */
-public class UrlEncodedHandler extends HPostHandler {
+public final class UrlEncodedHandler extends LocalPostHandler {
 	private String key;
 	private byte state;
 
@@ -70,5 +70,5 @@ public class UrlEncodedHandler extends HPostHandler {
 	}
 
 	protected void onKey(String key) throws IllegalRequestException {}
-	protected void onValue(String value) throws IllegalRequestException { map.put(key, value); }
+	protected void onValue(String value) throws IllegalRequestException { data.put(key, value); }
 }

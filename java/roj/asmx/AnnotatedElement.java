@@ -26,8 +26,8 @@ public abstract sealed class AnnotatedElement permits AnnotatedElement.Type, Ann
 	public Map<String, Annotation> annotations() { return annotations; }
 
 	public boolean isLeaf() { return false; }
-	public Type parent() { return null; }
-	public Attributed node() { return null; }
+	public abstract Type parent();
+	public abstract Attributed node();
 
 	public static final class Type extends AnnotatedElement {
 		final IClass owner;

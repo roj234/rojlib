@@ -7,7 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "Roj234 SevenZ Archiver 2.5"
+			"title": "Roj234 SevenZ Archiver 2.6"
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label4"
 				"text": "压缩这个目录或文件"

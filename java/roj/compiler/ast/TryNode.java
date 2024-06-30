@@ -22,8 +22,9 @@ public final class TryNode {
 	 */
 	final List<Object> vars = new SimpleList<>();
 	/**
-	 * 表面上：表达式的返回值有没有可能是null
-	 * 实际上：是否要为close或defer创建异常处理器
+	 * true:
+	 * 对于Variable：变量可能是null
+	 * 对于ExprNode：表达式可能抛出异常
 	 */
 	final MyBitSet exception = new MyBitSet();
 	/** 表达式刚执行完的位置 (defer => null) */
@@ -36,7 +37,6 @@ public final class TryNode {
 	}
 	public void add(ExprNode node) {
 		hasDefer = true;
-		// TODO remove useless exception handler on demand
 		exception.add(vars.size());
 		vars.add(node);
 		pos.add(null);

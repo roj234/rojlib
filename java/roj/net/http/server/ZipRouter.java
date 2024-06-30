@@ -3,7 +3,7 @@ package roj.net.http.server;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.net.http.Headers;
-import roj.net.http.HttpCode;
+import roj.net.http.HttpUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,11 +34,11 @@ public class ZipRouter implements Router {
 				ZEntry dir = zip.getEntry(url);
 				if (dir != null && dir.getName().endsWith("/")) {
 					rh.code(403);
-					return StringResponse.httpErr(HttpCode.FORBIDDEN);
+					return StringResponse.simpleErrorPage(HttpUtil.FORBIDDEN);
 				}
 			}
 			rh.code(404);
-			return StringResponse.httpErr(HttpCode.NOT_FOUND);
+			return StringResponse.simpleErrorPage(HttpUtil.NOT_FOUND);
 		}
 		rh.code(200).headers("Cache-Control: max-age=86400");
 		return FileResponse.response(req, new ZipFileInfo(zip, ze));

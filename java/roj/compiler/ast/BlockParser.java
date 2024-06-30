@@ -126,11 +126,16 @@ public final class BlockParser {
 		var flags = mn.parsedAttr(null, Attribute.MethodParameters);
 		var sign = mn.parsedAttr(null, Attribute.SIGNATURE);
 		List<? extends IType> parameters = sign != null ? sign.values : mn.parameters();
-		// 用names.size是因为sign.values会有return value
-		for (int i = 0; i < names.size(); i++) {
-			Variable var = newVar(names.get(i), parameters.get(i));
-			if (flags != null && (flags.getFlag(i, 0)&ACC_FINAL) != 0) var.isFinal = true;
-			var.hasValue = true;
+		for (int i = 0; i < parameters.size(); i++) {
+			IType type = parameters.get(i);
+			if (i < names.size()) {
+				// TODO @skip(_)不应该占据slot
+				Variable var = newVar(names.get(i), type);
+				if (flags != null && (flags.getFlag(i, 0)&ACC_FINAL) != 0) var.isFinal = true;
+				var.hasValue = true;
+			} else {
+				fastSlot += type.rawType().length();
+			}
 		}
 
 		parse0();
@@ -171,7 +176,7 @@ public final class BlockParser {
 		for(;;) {
 		switch (w.type()) {
 			case semicolon -> ctx.report(Kind.WARNING, "block.emptyStatement");
-			case lBrace -> block();
+			case lBrace -> blockV();
 
 			case TRY -> _try();
 
@@ -291,11 +296,10 @@ public final class BlockParser {
 	private static final byte SF_BLOCK = 1, SF_SWITCH = 2;
 
 	/**
-	 * 函数体
+	 * 好点的代码块
 	 */
-	private void block() throws ParseException { block(true); }
-	private void block(boolean shouldBegin) throws ParseException {
-		if (shouldBegin) beginCodeBlock();
+	private void blockV() throws ParseException {beginCodeBlock();block();}
+	private void block() throws ParseException {
 		sectionFlag |= SF_BLOCK;
 		while (true) {
 			Word w = wr.next();
@@ -309,7 +313,7 @@ public final class BlockParser {
 	private void blockOrStatement() throws ParseException {
 		Word w = wr.next();
 		if (w.type() == lBrace) {
-			block();
+			blockV();
 		} else {
 			sectionFlag &= ~SF_BLOCK;
 			statement(w);
@@ -457,9 +461,9 @@ public final class BlockParser {
 
 			flag |= 2;
 			except(lBrace);
-			block(false);
-		} else {
 			block();
+		} else {
+			blockV();
 		}
 
 		Label tryEnd = cw.label();
@@ -532,7 +536,7 @@ public final class BlockParser {
 				}
 			}
 
-			block(false);
+			block();
 
 			nowNormal = cw.isContinuousControlFlow();
 			if (nowNormal) {
@@ -571,7 +575,7 @@ public final class BlockParser {
 				MethodWriter prev = cw;
 
 				setCw(tmp);
-				block();
+				blockV();
 				tmp.writeTo(prev);
 				setCw(prev);
 
@@ -663,7 +667,7 @@ public final class BlockParser {
 
 				cw.label(real_finally_handler);
 
-				block();
+				blockV();
 
 				// finally可以执行完
 				if (cw.isContinuousControlFlow()) {
@@ -1088,15 +1092,8 @@ public final class BlockParser {
 					}
 
 					owner = ctx.getClassOrArray(type);
-					IntBiMap<String> fpCheck;
-					try {
-						fpCheck = ctx.classes.getParentList(owner);
-					} catch (ClassNotFoundException e) {
-						ctx.report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
-						fpCheck = new IntBiMap<>();
-					}
-
-					if (concurrent || !fpCheck.containsValue("java/util/List") || !fpCheck.containsValue("java/util/RandomAccess")) {
+					boolean foreach = ctx.classes.getResolveHelper(owner).isFastForeach(ctx.classes);
+					if (concurrent || !foreach) {
 						// iterable
 
 						Variable _itr = newVar("@迭代器", new Type("java/util/Iterator"));
@@ -1142,21 +1139,19 @@ public final class BlockParser {
 				// int __i = 0;
 				// int __len = __var.length;
 				cw.load(_arr);
-				if (type.array() == 0) cw.invokeItf("java/util/List", "size", "()I");
-				else cw.one(ARRAYLENGTH);
+				if (type.array() == 0) {
+					MethodResult result = ctx.methodListOrReport(owner, "size").findMethod(ctx, type, Collections.emptyList(), 0);
+					assert result != null;
+					MethodResult.writeInvoke(result.method, ctx, cw);
+				} else {
+					cw.one(ARRAYLENGTH);
+				}
 				cw.store(_len);
 				cw.one(ICONST_0);
 				cw.store(_i);
 
 				continueTo = cw.label();
-				execLast = new ExprNode() {
-					@Override
-					public String toString() {return "<internal> _i++;";}
-					@Override
-					public IType type() {return Type.std(Type.INT);}
-					@Override
-					public void write(MethodWriter cw, boolean noRet) {cw.iinc(_i, 1);}
-				};
+				execLast = ctx.ep.newUnaryPost(inc, new LocalVariable(_i));
 
 				// :continue_to
 				cw.load(_i);
@@ -1169,8 +1164,7 @@ public final class BlockParser {
 					// 检查可能存在的override
 					MethodResult result = ctx.methodListOrReport(owner, "get").findMethod(ctx, type, Collections.singletonList(Type.std(Type.INT)), 0);
 					assert result != null;
-
-					cw.invoke((ctx.classes.getClassInfo(result.method.owner).modifier()&ACC_INTERFACE) != 0 ? INVOKEINTERFACE : INVOKEVIRTUAL, result.method);
+					MethodResult.writeInvoke(result.method, ctx, cw);
 					ctx.castTo(result.method.returnType(), lastVar.type, TypeCast.E_DOWNCAST).write(cw);
 				} else {
 					cw.one(XALoad(type.rawType()));
@@ -1666,7 +1660,7 @@ public final class BlockParser {
 	private void addGeneratedClass(ConstantData data) {
 		CompileUnit owner = ctx.file;
 		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_INNER_CLASS)) {
-			var map = new InnerClasses.InnerClass(data.name, owner.name, "SwitchMap"+switchMapId++, ACC_PRIVATE|ACC_STATIC|ACC_FINAL);
+			var map = new InnerClasses.Item(data.name, owner.name, "SwitchMap"+switchMapId++, ACC_PRIVATE|ACC_STATIC|ACC_FINAL);
 			owner.innerClasses().add(map);
 
 			InnerClasses attr1 = new InnerClasses();
@@ -1953,7 +1947,7 @@ public final class BlockParser {
 				sectionFlag |= SF_SWITCH;
 
 				try {
-					block();
+					blockV();
 					// athrow
 					if (!cw.isContinuousControlFlow()) return null;
 
@@ -2015,7 +2009,7 @@ public final class BlockParser {
 		Label start = cw.label();
 
 		except(lBrace);
-		block(false);
+		block();
 
 		Label end = cw.label();
 		Label realEnd = new Label();
@@ -2071,7 +2065,7 @@ public final class BlockParser {
 		};
 
 		try {
-			block(false);
+			block();
 		} finally {
 			ctx.dynamicFieldImport = fi;
 			ctx.dynamicMethodImport = mi;

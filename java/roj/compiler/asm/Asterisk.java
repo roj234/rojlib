@@ -2,6 +2,7 @@ package roj.compiler.asm;
 
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.collect.SimpleList;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -46,8 +47,6 @@ public final class Asterisk implements IType {
 	@Override
 	public void toDesc(CharList sb) { throw new UnsupportedOperationException("Asterisk仅用于类型转换的比较"); }
 	@Override
-	public void toString(CharList sb) { sb.append(toString()); }
-	@Override
 	public void checkPosition(int env, int pos) {throw new UnsupportedOperationException("Asterisk仅用于类型转换的比较");}
 
 	@Override
@@ -75,6 +74,7 @@ public final class Asterisk implements IType {
 		try {
 			Asterisk clone = (Asterisk) super.clone();
 			clone.bound = clone.bound.clone();
+			clone.bounds = new SimpleList<>(clone.bounds);
 			return clone;
 		} catch (CloneNotSupportedException e) {
 			Helpers.athrow(e);
@@ -82,6 +82,22 @@ public final class Asterisk implements IType {
 		}
 	}
 
+	@Override
+	public void toString(CharList sb) {
+		if (this == anyType) sb.append("<AnyType>");
+		if (this == anyGeneric) sb.append("<AnyGeneric>");
+		if (limited) {
+			bound.toString(sb.append('*'));
+		} else {
+			sb.append("* extends ");
+			var itr = bounds.iterator();
+			while (true) {
+				itr.next().toString(sb);
+				if (!itr.hasNext()) break;
+				sb.append('&');
+			}
+		}
+	}
 	@Override
 	public String toString() {
 		if (this == anyType) return "<AnyType>";

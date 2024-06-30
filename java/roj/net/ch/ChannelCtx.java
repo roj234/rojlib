@@ -51,7 +51,10 @@ public final class ChannelCtx {
 
 	public void channelWrite(Object data) throws IOException {
 		if (prev != null) prev.handler.channelWrite(prev, data);
-		else root.write(data);
+		else {
+			if (!root.lock.isHeldByCurrentThread()) throw new IllegalStateException("Call MyChannel#fireChannelWrite or lock()");
+			root.write(data);
+		}
 	}
 
 	public void pauseAndFlush() { root.pauseAndFlush(); }

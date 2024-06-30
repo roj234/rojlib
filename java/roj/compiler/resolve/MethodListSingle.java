@@ -83,6 +83,7 @@ final class MethodListSingle extends ComponentList {
 			result = ctx.inferrer.infer(mnOwner, mn, that, myParam == null ? params : myParam);
 			if (result.distance >= 0) {
 				result.namedParams = defParamState;
+				MethodList.checkBridgeMethod(ctx, result);
 				return result;
 			}
 		}

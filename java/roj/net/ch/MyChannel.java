@@ -5,7 +5,10 @@ import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.io.buf.BufferPool;
-import roj.util.*;
+import roj.util.AttributeKey;
+import roj.util.DynByteBuf;
+import roj.util.Helpers;
+import roj.util.NativeMemory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -44,9 +47,9 @@ public abstract class MyChannel implements Selectable, Closeable {
 	public static final int INITIAL = 0, CONNECTED = 1, CONNECT_PENDING = 2, OPENED = 3, CLOSE_PENDING = 4, CLOSED = 5;
 	protected volatile byte state;
 
-	protected final RingBuffer<Object> pending = new RingBuffer<>(0, 100);
+	protected final RingBuffer<Object> pending = new RingBuffer<>(0, 30);
 
-	protected static final int PAUSE_FOR_FLUSH = 1, REINVOKE_READ = 2, READ_INACTIVE = 4;
+	protected static final int PAUSE_FOR_FLUSH = 1, REINVOKE_READ = 2, READ_INACTIVE = 4, TIMED_FLUSH = 8;
 	protected byte flag;
 
 	protected final ReentrantLock lock = new ReentrantLock();
@@ -277,15 +280,12 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 
 	// region State
-	final void setFlagLock(int newFlag) {
-		lock.lock();
-		flag = (byte) newFlag;
-		lock.unlock();
-	}
 
 	public void readActive() {
 		int ops = key.interestOps();
-		setFlagLock(flag & ~READ_INACTIVE);
+		lock.lock();
+		flag &= ~READ_INACTIVE;
+		lock.unlock();
 		if ((ops & SelectionKey.OP_READ) == 0) {
 			key.interestOps(ops | SelectionKey.OP_READ);
 
@@ -297,7 +297,9 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 	public void readInactive() {
 		int ops = key.interestOps();
-		setFlagLock(flag | READ_INACTIVE);
+		lock.lock();
+		flag |= READ_INACTIVE;
+		lock.unlock();
 		if ((ops & SelectionKey.OP_READ) != 0) {
 			key.interestOps(ops & ~SelectionKey.OP_READ);
 		}
@@ -306,7 +308,9 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	public void pauseAndFlush() {
 		if (!pending.isEmpty()) {
-			setFlagLock(flag | PAUSE_FOR_FLUSH);
+			lock.lock();
+			flag |= PAUSE_FOR_FLUSH;
+			lock.unlock();
 			key.interestOps(SelectionKey.OP_WRITE);
 		}
 	}
@@ -371,7 +375,9 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 
 	public void invokeReadLater() {
-		setFlagLock(flag | REINVOKE_READ);
+		lock.lock();
+		flag |= REINVOKE_READ;
+		lock.unlock();
 	}
 
 	private ChannelCtx head() {
@@ -490,6 +496,10 @@ public abstract class MyChannel implements Selectable, Closeable {
 			throw new ConnectException("Connect timeout");
 		}
 
+		if ((flag&TIMED_FLUSH) != 0 && (System.currentTimeMillis()&15) == (hashCode()&15)) {
+			flush();
+		}
+
 		lock.lock();
 		try {
 			if ((flag & REINVOKE_READ) != 0) {
@@ -552,8 +562,19 @@ public abstract class MyChannel implements Selectable, Closeable {
 			if (!finishConnect()) return;
 		}
 
-		if (!pending.isEmpty() && (readyOps & SelectionKey.OP_WRITE) != 0) flush();
-		if ((flag & PAUSE_FOR_FLUSH) != 0 || (readyOps & SelectionKey.OP_READ) == 0) return;
+		if (!pending.isEmpty() && (readyOps & SelectionKey.OP_WRITE) != 0) {
+			int size = pending.size();
+			flush();
+			if (pending.size() == size) {
+				key.interestOps(0);
+
+				lock.lock();
+				flag |= TIMED_FLUSH;
+				lock.unlock();
+			}
+			return;
+		}
+		if ((readyOps & SelectionKey.OP_READ) == 0) return;
 
 		if (!lock.tryLock()) return;
 		try {
@@ -593,7 +614,6 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 	// endregion
 
-	// TODO - add checks
 	public void bind(InetSocketAddress na) throws IOException {
 		if (state != INITIAL) {
 			if (state > OPENED) throw new ClosedChannelException();

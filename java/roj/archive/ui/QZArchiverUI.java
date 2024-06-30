@@ -157,7 +157,10 @@ public class QZArchiverUI extends JFrame {
 
 		TaskPool pool = TaskPool.MaxThread(threads, "7z-worker-");
 
-		ActionListener stopListener = e -> pool.shutdown();
+		ActionListener stopListener = e -> {
+			arc.interrupt();
+			pool.shutdown();
+		};
 
 		uiBegin.setText("停下");
 		uiBegin.removeActionListener(beginListener);
@@ -560,7 +563,7 @@ public class QZArchiverUI extends JFrame {
         uiSortByFilename = new JCheckBox();
 
         //======== this ========
-        setTitle("Roj234 SevenZ Archiver 2.5");
+        setTitle("Roj234 SevenZ Archiver 2.6");
         var contentPane = getContentPane();
         contentPane.setLayout(null);
 

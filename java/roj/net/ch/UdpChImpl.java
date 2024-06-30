@@ -118,7 +118,7 @@ class UdpChImpl extends MyChannel {
 			} while (true);
 
 			if (pending.isEmpty()) {
-				flag &= ~PAUSE_FOR_FLUSH;
+				flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 				key.interestOps(SelectionKey.OP_READ);
 
 				fireFlushed();
@@ -169,10 +169,13 @@ class UdpChImpl extends MyChannel {
 
 			if (buf.isReadable()) {
 				if (pending.isEmpty()) key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
-				else if (pending.size() > 30) pauseAndFlush();
+				else if (pending.size() > 5) pauseAndFlush();
 
-				Object o1 = pending.ringAddLast(new DatagramPkt(p, bp.allocate(true, buf.readableBytes(), 0).put(buf)));
-				if (o1 != null) throw new IOException("上层发送缓冲区过载");
+				DynByteBuf put = bp.allocate(true, buf.readableBytes(), 0).put(buf);
+				if (!pending.offerLast(new DatagramPkt(p, put))) {
+					BufferPool.reserve(put);
+					throw new IOException("上层发送缓冲区过载");
+				}
 			} else {
 				fireFlushed();
 			}

@@ -146,7 +146,7 @@ type.except.afterLss=大于号或逗号
 
 # LocalContext
 lc.unReportedException=[LC]可能抛出未声明的异常%1
-lc.packageRestricted=[LC]类%1不在受限import的导入范围中
+lc.packageRestricted=[LC]中间变量或返回值%1不在受限import的导入范围中
 
 # ParseTask
 ps.method.paramDef=[PS]默认参数不是立即常量

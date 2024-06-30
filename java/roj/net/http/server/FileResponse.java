@@ -148,7 +148,7 @@ public class FileResponse implements Response {
 				rh.header("Content-Encoding", "deflate");
 			} else if ((stat & FileInfo.FILE_WANT_DEFLATE) != 0) {
 				def = 2;
-				rh.compressed();
+				rh.enableCompression();
 			}
 		}
 
@@ -184,7 +184,7 @@ public class FileResponse implements Response {
 		String s = req.get("Range");
 		if (!s.startsWith("bytes=")) {
 			rh.code(400);
-			return StringResponse.of("not 'bytes' range");
+			return StringResponse.html("not 'bytes' range");
 		}
 
 		long len = file.length(def == 1);
@@ -227,8 +227,6 @@ public class FileResponse implements Response {
 			b.replace(28, 32, "\r\n--");
 			splitter = b.substring(28, b.length()-1);
 			b._free();
-
-			req.handler.chunked();
 		}
 
 		return plus(206, req);
@@ -259,9 +257,8 @@ public class FileResponse implements Response {
 	}
 
 	@Override
-	public void prepare(ResponseHeader srv, Headers h) throws IOException {
+	public void prepare(ResponseHeader rh, Headers h) throws IOException {
 		boolean def = this.def == 1;
-		if (def) srv.uncompressed();
 
 		off = 0;
 		if (ranges.length == 0) {
@@ -278,7 +275,7 @@ public class FileResponse implements Response {
 			}
 		}
 
-		file.prepare(srv, h);
+		file.prepare(rh, h);
 	}
 
 	@Override

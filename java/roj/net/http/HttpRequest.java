@@ -65,7 +65,7 @@ public abstract class HttpRequest {
 	}
 
 	public final HttpRequest method(String type) {
-		if (Action.valueOf(type) < 0) throw new IllegalArgumentException(type);
+		if (HttpUtil.parseMethod(type) < 0) throw new IllegalArgumentException(type);
 		action = type;
 		return this;
 	}
@@ -271,6 +271,7 @@ public abstract class HttpRequest {
 			for (Map.Entry<String, String> entry : q) {
 				if (i != 0) sb.append('&');
 
+				b.clear();
 				Escape.escape(b.putUTFData(entry.getKey()), sb, Escape.URI_COMPONENT_SAFE).append('=');
 				b.clear();
 				Escape.escape(b.putUTFData(entry.getValue()), sb, Escape.URI_COMPONENT_SAFE);

@@ -191,4 +191,20 @@ public class Annotation {
 		}
 		return sb.toStringAndFree();
 	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof Annotation that)) return false;
+
+		if (!type.equals(that.type)) return false;
+		return values.equals(that.values);
+	}
+
+	@Override
+	public int hashCode() {
+		int result = type.hashCode();
+		result = 31 * result + values.hashCode();
+		return result;
+	}
 }

@@ -161,8 +161,10 @@ public class EmbeddedChannel extends MyChannel {
 	// endregion
 
 	public void readActive() {
+		lock.lock();
 		byte f = flag;
-		setFlagLock(f & ~READ_INACTIVE);
+		flag = (byte) (f & ~READ_INACTIVE);
+		lock.unlock();
 		if ((f & READ_INACTIVE) != 0) {
 			if (pair != null) {
 				try {
@@ -173,7 +175,11 @@ public class EmbeddedChannel extends MyChannel {
 			}
 		}
 	}
-	public void readInactive() { setFlagLock(flag | READ_INACTIVE); }
+	public void readInactive() {
+		lock.lock();
+		flag |= READ_INACTIVE;
+		lock.unlock();
+	}
 
 	@Override
 	public void tick(int elapsed) throws Exception {
@@ -222,7 +228,7 @@ public class EmbeddedChannel extends MyChannel {
 			} while (true);
 
 			if (pending.isEmpty()) {
-				flag &= ~PAUSE_FOR_FLUSH;
+				flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 				key.interestOps(SelectionKey.OP_READ);
 				fireFlushed();
 			}
@@ -232,9 +238,9 @@ public class EmbeddedChannel extends MyChannel {
 	}
 	protected void write(Object o) throws IOException {
 		if (writer != null) {
-			if (!writer.apply(o)) pending.ringAddLast(o);
+			if (!writer.apply(o)) pending.addLast(o);
 		} else {
-			if (pair.readDisabled()) pending.ringAddLast(o);
+			if (pair.readDisabled()) pending.addLast(o);
 			else pair.fireChannelRead(o);
 		}
 	}

@@ -8,9 +8,9 @@ import roj.io.session.SessionProvider;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.EmbeddedChannel;
 import roj.net.ch.MyChannel;
-import roj.net.http.Action;
 import roj.net.http.Cookie;
 import roj.net.http.Headers;
+import roj.net.http.HttpUtil;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.auth.AuthScheme;
 import roj.text.CharList;
@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class Request extends Headers {
-	private int action;
+	private byte action;
 
 	private String path, initPath;
 
@@ -46,7 +46,7 @@ public final class Request extends Headers {
 	public ResponseHeader server() { return handler; }
 	public MyChannel connection() { return handler.ch.channel(); }
 
-	Request init(int action, String path, String query) throws IllegalRequestException {
+	Request init(byte action, String path, String query) throws IllegalRequestException {
 		this.action = action;
 		try {
 			this.path = initPath = IOUtil.safePath(Escape.decodeURI(path));
@@ -111,7 +111,7 @@ public final class Request extends Headers {
 						@Override
 						protected void onKey(ChannelCtx ctx, String name) {}
 						@Override
-						protected void onValue(ChannelCtx ctx, DynByteBuf buf) { map.put(name, buf.readUTF(buf.readableBytes())); }
+						protected void onValue(ChannelCtx ctx, DynByteBuf buf) { data.put(name, buf.readUTF(buf.readableBytes())); }
 					};
 
 					EmbeddedChannel ch = EmbeddedChannel.createReadonly();
@@ -121,7 +121,7 @@ public final class Request extends Headers {
 					handler.onComplete();
 					ch.close();
 
-					postFields = handler.map;
+					postFields = handler.data;
 				} catch (IOException e) {
 					IllegalRequestException ex = new IllegalRequestException(400, e.getMessage());
 					ex.setStackTrace(e.getStackTrace());
@@ -163,7 +163,7 @@ public final class Request extends Headers {
 		return Helpers.cast(getFields);
 	}
 
-	public String GET_Fields_Raw() {
+	public String query() {
 		if (getFields == null) {
 			return null;
 		} else if (getFields instanceof String) {
@@ -301,11 +301,11 @@ public final class Request extends Headers {
 		Tokenizer.addSlashes(sb.append("realm=\""), Escape.encodeURI(message)).append("\"");
 		responseHeader.put("www-authenticate", sb.toStringAndFree());
 
-		throw new IllegalRequestException(401, StringResponse.httpErr(401));
+		throw new IllegalRequestException(401, StringResponse.simpleErrorPage(401));
 	}
 
 	public String toString() {
-		StringBuilder sb = new StringBuilder().append(Action.toString(action)).append(" /").append(path).append(" HTTP/1.1\n");
+		StringBuilder sb = new StringBuilder().append(HttpUtil.getMethodName(action)).append(" /").append(path).append(" HTTP/1.1\n");
 		encode(sb);
 		return sb.toString();
 	}

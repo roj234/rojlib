@@ -1,6 +1,7 @@
 package roj.mod.plugin;
 
 import roj.asm.util.Context;
+import roj.mod.Compiler;
 
 import java.io.File;
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.List;
  */
 public interface Plugin {
 	String name();
-	default void beforeCompile(List<File> source) {}
-	default void afterCompile(List<Context> data, boolean mapped, PluginContext ctx) {}
+	default void beforeCompile(Compiler compiler, List<String> options, List<File> source, PluginContext ctx) {}
+	default void afterCompile(List<Context> data, PluginContext ctx) {}
+	default void afterMap(List<Context> data, PluginContext ctx) {}
 }

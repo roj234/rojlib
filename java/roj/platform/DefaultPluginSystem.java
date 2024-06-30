@@ -51,8 +51,8 @@ import static roj.ui.terminal.CommandNode.literal;
  * @since 2023/12/25 0025 18:01
  */
 public final class DefaultPluginSystem extends PluginManager {
-	static final AnnotationRepo REPO = new AnnotationRepo();
 	static final CommandConsole CMD = new CommandConsole("Panger> ");
+	static AnnotationRepo REPO;
 
 	private static final Scheduler ticker = new Scheduler(task -> {
 		ITask _task = task.getTask();
@@ -81,6 +81,7 @@ public final class DefaultPluginSystem extends PluginManager {
 
 		Bootstrap.classLoader.registerTransformer(new DPSAutoObfuscate());
 		Bootstrap.classLoader.registerTransformer(EventTransformer.register(DefaultTweaker.CONDITIONAL));
+		REPO = Bootstrap.classLoader.getAnnotations();
 
 		transformers.add(new DPSSecurityManager());
 		DPSSecurityManager.LOGGER.setLevel(Level.INFO);
@@ -193,40 +194,33 @@ public final class DefaultPluginSystem extends PluginManager {
 				"\u001b[0m------------------------------------------------------------").toStringAndFree());
 		}
 
-		file = Helpers.getJarByClass(DefaultPluginSystem.class);
-		if (file != null) {
-			REPO.add(file);
+		MyHashMap<String, PluginDescriptor> builtin = new MyHashMap<>();
+		for (AnnotatedElement info : REPO.annotatedBy("roj/platform/SimplePlugin")) {
+			pd = new PluginDescriptor();
+			pd.fileName = "annotation:"+file.getName();
+			pd.mainClass = info.owner().replace('/', '.');
 
-			MyHashMap<String, PluginDescriptor> builtin = new MyHashMap<>();
-			for (AnnotatedElement info : REPO.annotatedBy("roj/platform/SimplePlugin")) {
-				pd = new PluginDescriptor();
-				pd.fileName = "annotation:"+file.getName();
-				pd.mainClass = info.owner().replace('/', '.');
+			Annotation pin = info.annotations().get("roj/platform/SimplePlugin");
+			pd.id = pin.getString("id");
+			pd.version = new Version(pin.getString("version", CORE_VERSION));
+			pd.desc = pin.getString("desc", "");
 
-				Annotation pin = info.annotations().get("roj/platform/SimplePlugin");
-				pd.id = pin.getString("id");
-				pd.version = new Version(pin.getString("version", CORE_VERSION));
-				pd.desc = pin.getString("desc", "");
+			if (pin.containsKey("depend"))
+				pd.depend = Arrays.asList(pin.getStringArray("depend"));
+			if (pin.containsKey("loadAfter"))
+				pd.loadAfter = Arrays.asList(pin.getStringArray("loadAfter"));
 
-				if (pin.containsKey("depend"))
-					pd.depend = Arrays.asList(pin.getStringArray("depend"));
-				if (pin.containsKey("loadAfter"))
-					pd.loadAfter = Arrays.asList(pin.getStringArray("loadAfter"));
-
-				builtin.put(pd.id, pd);
-			}
-			if (builtin.size() > 0) {
-				CMD.register(literal("load_builtin").then(argument("plugin", Argument.oneOf(builtin)).executes(ctx -> {
-					PluginDescriptor pd1 = ctx.argument("plugin", PluginDescriptor.class);
-					ticker.runAsync(() -> {
-						plugins.putIfAbsent(pd1.id, pd1);
-						loadPlugin(pd1);
-					});
-				})));
-			}
+			builtin.put(pd.id, pd);
+		}
+		if (builtin.size() > 0) {
+			CMD.register(literal("load_builtin").then(argument("plugin", Argument.oneOf(builtin)).executes(ctx -> {
+				PluginDescriptor pd1 = ctx.argument("plugin", PluginDescriptor.class);
+				ticker.runAsync(() -> {
+					plugins.putIfAbsent(pd1.id, pd1);
+					loadPlugin(pd1);
+				});
+			})));
 			LOGGER.info("找到{}个内置插件", builtin.size());
-		} else {
-			LOGGER.warn("未从jar加载，无法加载内置插件");
 		}
 	}
 

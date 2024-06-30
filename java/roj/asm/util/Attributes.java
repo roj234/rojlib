@@ -32,7 +32,7 @@ public abstract class Attributes extends Attribute {
 		return null;
 	}
 
-	public static List<InnerClasses.InnerClass> getInnerClasses(ConstantPool cp, IClass node) {
+	public static List<InnerClasses.Item> getInnerClasses(ConstantPool cp, IClass node) {
 		InnerClasses ic = node.parsedAttr(cp, InnerClasses);
 		return ic == null ? null : ic.classes;
 	}

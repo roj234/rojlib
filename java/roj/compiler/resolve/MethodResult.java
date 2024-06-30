@@ -6,6 +6,7 @@ import roj.asm.tree.attr.Attribute;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.IntMap;
+import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 
@@ -13,6 +14,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
@@ -55,5 +58,20 @@ public final class MethodResult {
 
 			ctx.addException(ex);
 		}
+	}
+
+	public static void writeInvoke(MethodNode method, LocalContext ctx, MethodWriter cw) {
+		byte opcode;
+		if ((ctx.classes.getClassInfo(method.owner).modifier & ACC_INTERFACE) != 0) {
+			opcode = INVOKEINTERFACE;
+		} else if ((method.modifier & ACC_STATIC) != 0) {
+			opcode = INVOKESTATIC;
+		} else if ((method.modifier & ACC_PRIVATE) != 0 && method.owner.equals(ctx.file.name)) {
+			opcode = INVOKESPECIAL;
+		} else {
+			opcode = INVOKEVIRTUAL;
+		}
+
+		cw.invoke(opcode, method);
 	}
 }

@@ -3,7 +3,6 @@ package roj.net.http.server;
 import roj.collect.RingBuffer;
 import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.MyChannel;
 import roj.net.http.Headers;
 import roj.util.DynByteBuf;
 
@@ -15,41 +14,42 @@ import java.io.IOException;
  * @since 2021/2/16 11:21
  */
 public class AsyncResponse implements Response {
-	private final RingBuffer<DynByteBuf> packets = new RingBuffer<>(10, 100);
-	private MyChannel ctx;
+	private final RingBuffer<DynByteBuf> packets = new RingBuffer<>(3);
 	private boolean eof;
+	protected Runnable hasSpaceCallback;
 
 	public AsyncResponse() {}
 
-	public boolean asyncOffer(DynByteBuf buf) {
+	public boolean offer(DynByteBuf buf) {
 		synchronized (packets) {
 			if (eof) throw new IllegalStateException("eof");
 			if (packets.remaining() == 0) return false;
-			packets.ringAddLast(ctx.alloc().allocate(true, buf.readableBytes(), 0).put(buf));
+			packets.addLast(BufferPool.localPool().allocate(true, buf.readableBytes(), 0).put(buf));
 			return true;
 		}
 	}
-	public boolean asyncOfferAsyncRelease(DynByteBuf buf) {
+	public boolean offerAndRelease(DynByteBuf buf) {
 		if (!BufferPool.isPooled(buf)) throw new IllegalArgumentException("buffer is not pooled");
 		synchronized (packets) {
 			if (eof) throw new IllegalStateException("eof");
-			if (packets.remaining() == 0) return false;
-			packets.ringAddLast(buf);
-			return true;
+			return packets.offerLast(buf);
 		}
 	}
-	public void asyncSetEof() { eof = true; }
+	public void setEof() { eof = true; }
+	public boolean isEof() {return eof;}
+	public int getPendingCount() { return packets.size(); }
 
 	@Override
-	public void prepare(ResponseHeader srv, Headers h) throws IOException { ctx = srv.ch(); }
+	public void prepare(ResponseHeader rh, Headers h) throws IOException {}
 
 	public boolean send(ResponseWriter rh) throws IOException {
 		DynByteBuf buf = packets.peekFirst();
 		if (buf != null) {
 			rh.write(buf);
 			if (!buf.isReadable()) {
-				packets.removeFirst();
+				synchronized (packets) {packets.removeFirst();}
 				BufferPool.reserve(buf);
+				if (hasSpaceCallback != null) hasSpaceCallback.run();
 			}
 		}
 		return buf != null || !eof;

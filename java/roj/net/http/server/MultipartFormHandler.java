@@ -22,7 +22,7 @@ import java.util.Map;
  * @author Roj233
  * @since 2022/3/13 15:15
  */
-public class MultipartFormHandler extends HPostHandler {
+public class MultipartFormHandler extends LocalPostHandler {
 	private String boundary;
 	private FastMatcher matcher;
 
@@ -32,7 +32,6 @@ public class MultipartFormHandler extends HPostHandler {
 	private MultipartFormHandler child;
 
 	protected String name;
-	private long totalSize;
 
 	public MultipartFormHandler() {}
 	public MultipartFormHandler(Request req) { init(req.getField("content-type")); }
@@ -178,8 +177,7 @@ public class MultipartFormHandler extends HPostHandler {
 		}
 
 		public boolean append(DynByteBuf buf) throws IOException {
-			if (data instanceof DynByteBuf) {
-				DynByteBuf b = ((DynByteBuf) data);
+			if (data instanceof DynByteBuf b) {
 				if (b.writableBytes() >= buf.readableBytes()) {
 					b.put(buf);
 					return true;
@@ -236,8 +234,7 @@ public class MultipartFormHandler extends HPostHandler {
 				fc.position(0);
 				if (data instanceof DynByteBuf) {
 					fc.write(((DynByteBuf) data).nioBuffer());
-				} else if (data instanceof FileChannel) {
-					FileChannel fr = (FileChannel) data;
+				} else if (data instanceof FileChannel fr) {
 					fc.transferFrom(fr, 0, fr.size());
 				} else {
 					throw new IOException("is " + data.getClass().getName());
@@ -259,14 +256,14 @@ public class MultipartFormHandler extends HPostHandler {
 		}
 	}
 
-	public FormData file(String name) { return (FormData) map.get(name); }
+	public FormData file(String name) { return (FormData) data.get(name); }
 
 	protected MultipartFormHandler terracottaBegin() { return new MultipartFormHandler(); }
-	protected void terracottaEnd(String name, MultipartFormHandler child) { map.put(name, new FormData(name, child.map)); }
+	protected void terracottaEnd(String name, MultipartFormHandler child) { data.put(name, new FormData(name, child.data)); }
 
-	protected void onKey(ChannelCtx ctx, String name) throws IOException { map.put(name, new FormData(name, ctx.allocate(true, 0xFFFF))); }
+	protected void onKey(ChannelCtx ctx, String name) throws IOException { data.put(name, new FormData(name, ctx.allocate(true, 0xFFFF))); }
 	protected void onValue(ChannelCtx ctx, DynByteBuf buf) throws IOException {
-		FormData fd = (FormData) map.get(name);
+		FormData fd = (FormData) data.get(name);
 		if (!fd.append(buf)) {
 			throw new IOException("数据太大，请覆盖该函数提供临时文件缓存");
 		}
@@ -280,7 +277,7 @@ public class MultipartFormHandler extends HPostHandler {
 
 	@Override
 	public void onComplete() throws IOException {
-		Collection<Object> values = Helpers.cast(map.values());
+		Collection<Object> values = Helpers.cast(data.values());
 		for (Object fd : values) {
 			if (fd instanceof Closeable c)
 				IOUtil.closeSilently(c);

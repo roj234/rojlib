@@ -15,7 +15,12 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2021/6/16 1:31
  */
-public final class ClassDefiner {
+public final class ClassDefiner extends ClassLoader {
+	static {registerAsParallelCapable();}
+	private final String desc;
+	public ClassDefiner(ClassLoader parent, String desc) {super(parent);this.desc = desc;}
+	public String toString() {return "ClassDefiner<"+desc+">";}
+
 	public static final ClassLoader APP_LOADER = ClassDefiner.class.getClassLoader();
 
 	private static final ThreadLocal<Object> Callback = new ThreadLocal<>();

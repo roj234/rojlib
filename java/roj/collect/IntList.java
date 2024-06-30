@@ -1,6 +1,7 @@
 package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
+import roj.compiler.api.ListIterable;
 import roj.util.ArrayCache;
 
 import java.util.Arrays;
@@ -11,6 +12,7 @@ import java.util.PrimitiveIterator;
  * @author Roj234
  * @since 2021/5/27 13:37
  */
+@ListIterable
 public class IntList implements Iterable<Integer> {
 	protected int[] list;
 	protected int size;

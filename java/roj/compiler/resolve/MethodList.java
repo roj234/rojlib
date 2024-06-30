@@ -13,8 +13,11 @@ import roj.collect.IntMap;
 import roj.collect.MatchMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
+import roj.compiler.api.Evaluable;
 import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.context.CompileUnit;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -223,6 +226,7 @@ final class MethodList extends ComponentList {
 			ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
 		}
 
+		checkBridgeMethod(ctx, best);
 		return best;
 	}
 
@@ -286,5 +290,19 @@ final class MethodList extends ComponentList {
 		}
 
 		return sb.append(']').toStringAndFree();
+	}
+
+	static void checkBridgeMethod(LocalContext ctx, MethodResult mr) {
+		var mn = mr.method;
+		if ((mn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file.name.equals(mn.owner) ||
+			ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) return;
+
+		var prev = (Evaluable)mn.attrByName(Evaluable.NAME);
+		if (prev != null) {
+			GlobalContext.debugLogger().warn("Method {} Already have Evaluable!!!", mn);
+		}
+
+		var fwr = new MethodBridge((CompileUnit) ctx.classes.getClassInfo(mn.owner), mn, prev);
+		mn.putAttr(fwr);
 	}
 }

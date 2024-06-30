@@ -88,6 +88,9 @@ public final class BufferPool {
 	private static final AtomicLong UNPOOLED_REMAIN = new AtomicLong(UNPOOLED_SIZE);
 	private static final Object _UNPOOLED = IntMap.UNDEFINED;
 
+	private static final PooledHeapBuf EMPTY_HEAP_SENTIAL = new PooledHeapBuf();
+	private static final PooledDirectBuf EMPTY_DIRECT_SENTIAL = new PooledDirectBuf();
+
 	private static final ReentrantLock lgDirect = new ReentrantLock(), lgHeap = new ReentrantLock();
 	private static final Page pgDirect = Page.create(GLOBAL_DIRECT_SIZE), pgHeap = Page.create(GLOBAL_HEAP_SIZE);
 	private static long gDirect;
@@ -207,9 +210,10 @@ public final class BufferPool {
 	public static DynByteBuf buffer(boolean direct, int cap) { return localPool().allocate(direct, cap); }
 	public DynByteBuf allocate(boolean direct, int cap) { return allocate(direct, cap, DEFAULT_KEEP_BEFORE); }
 	public DynByteBuf allocate(boolean direct, int cap, int keepBefore) {
-		if (cap < 0) throw new IllegalArgumentException("size < 0");
+		if ((cap|keepBefore) < 0) throw new IllegalArgumentException("size < 0");
 
 		cap += keepBefore;
+		if (cap == 0) return direct ? EMPTY_DIRECT_SENTIAL : EMPTY_HEAP_SENTIAL;
 
 		PooledBuffer buf;
 		int threshold = direct ? directThreshold : heapThreshold;
@@ -460,8 +464,10 @@ public final class BufferPool {
 	public static void reserve(DynByteBuf buf) {
 		Object pool = ((PooledBuffer) buf).pool(null);
 
-		if (pool == null) throwUnpooled(buf);
-		else if (pool != _UNPOOLED) ((BufferPool) pool).reserve0(buf);
+		if (pool == null) {
+			if (buf != EMPTY_DIRECT_SENTIAL && buf != EMPTY_HEAP_SENTIAL)
+				throwUnpooled(buf);
+		} else if (pool != _UNPOOLED) ((BufferPool) pool).reserve0(buf);
 		else {
 			UNPOOLED_REMAIN.addAndGet(buf.capacity() + ((PooledBuffer) buf).getKeepBefore());
 
@@ -560,8 +566,10 @@ public final class BufferPool {
 		} else {
 			// 禁止异步reserve
 			pool = ((PooledBuffer) buf).pool(null);
-			if (pool == null) throwUnpooled(buf);
-			else if(pool == _UNPOOLED
+			if (pool == null) {
+				if (buf != EMPTY_DIRECT_SENTIAL && buf != EMPTY_HEAP_SENTIAL)
+					throwUnpooled(buf);
+			} else if(pool == _UNPOOLED
 					? tryZeroCopyExt(more, addAtEnd, (PooledBuffer) buf)
 					: tryZeroCopy(buf, more, addAtEnd, (BufferPool) pool, (PooledBuffer) buf)) {
 				((PooledBuffer) buf).pool(pool);

@@ -33,10 +33,10 @@ final class EncloseRef extends ExprNode {
 		ctx.resolveType(type);
 		if (thisEnclosing) {
 			check:
-			if (ctx.enclosingThis.isEmpty()) {
+			if (ctx.enclosing.isEmpty()) {
 				ctx.report(Kind.ERROR, "encloseRef.staticEnv");
 			} else {
-				var fields = ctx.enclosingThis;
+				var fields = ctx.enclosing;
 				for (int i = 0; i < fields.size();) {
 					if (fields.get(i++).thisType().equals(type.owner())) {
 						thisEnclosingRef = i;
@@ -61,7 +61,7 @@ final class EncloseRef extends ExprNode {
 		String target = type.owner();
 		for (String itf : ctx.file.interfaces()) {
 			if (itf.equals(target)) continue;
-			if (ctx.parentListOrReport(ctx.classes.getClassInfo(itf)).containsValue(target))
+			if (ctx.instanceOf(itf, target))
 				return true;
 		}
 		return false;
@@ -78,7 +78,7 @@ final class EncloseRef extends ExprNode {
 		if (thisEnclosingRef > 0) {
 			var lc = LocalContext.get();
 			var owner = lc.file.name;
-			var fields = lc.enclosingThis;
+			var fields = lc.enclosing;
 			for (int i = 0; i < fields.size(); i++) {
 				var fn = fields.get(i).thisRef();
 				cw.field(Opcodes.GETFIELD, owner, fn.name(), fn.rawDesc());

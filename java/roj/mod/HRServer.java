@@ -8,8 +8,6 @@ import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.ch.MyChannel;
 import roj.net.ch.ServerLaunch;
-import roj.net.handler.Compress;
-import roj.net.handler.VarintSplitter;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -36,7 +34,9 @@ public final class HRServer {
 		@Override
 		public void channelRead(ChannelCtx ctx, Object msg) {
 			DynByteBuf buf = (DynByteBuf) msg;
-			System.out.println(ctx.remoteAddress()+": "+buf.readUTF());
+			if (buf.readableBytes() >= 2 && buf.readableBytes() >= buf.readShort(buf.rIndex)+2) {
+				System.out.println(ctx.remoteAddress()+": "+buf.readUTF());
+			}
 		}
 
 		@Override
@@ -60,18 +60,22 @@ public final class HRServer {
 		if (modified.size() > 9999) throw new IllegalArgumentException("Too many classes modified");
 
 		ByteList tmp = IOUtil.getSharedByteBuf();
+		tmp.put(1).putShort(modified.size());
+
 		for (int i = 0; i < modified.size(); i++) {
 			IClass clz = modified.get(i);
 			ByteList data = Parser.toByteArrayShared(clz);
 
+			try {
+				send(tmp.putUTF(clz.name().replace('/', '.')).putInt(data.readableBytes()).put(data));
+			} catch (Exception ignored) {
+				// concurrent modification
+			}
 			tmp.clear();
-			send(tmp.put(/*CLASS_INFO*/0).put(data));
 		}
-		tmp.clear();
-		send(tmp.put(/*COMMIT*/1));
 	}
 
-	private synchronized void send(DynByteBuf tmp) {
+	private void send(DynByteBuf tmp) {
 		for (Client client : clients) {
 			try {
 				tmp.rIndex = 0;
@@ -91,9 +95,7 @@ public final class HRServer {
 					.initializator(ctx -> {
 						System.out.println(ctx.remoteAddress()+" 上线了");
 						Client t = new Client(ctx);
-						ctx.addLast("Length", VarintSplitter.twoMbVLUI())
-						   .addLast("Compress", new Compress())
-						   .addLast("handler", t);
+						ctx.addLast("handler", t);
 						synchronized (this) {clients.add(t);}
 					}).launch();
 	}

@@ -479,32 +479,39 @@ public class Tokenizer {
 	private Word _bestMatch;
 
 	protected final Word readSymbol() throws ParseException {
-		Word w = tryMatchToken();
-		if (w != null) return w;
+		if (tokens != null) {
+			Word w = tryMatchToken();
+			if (w != null) return w;
+		}
 		return readLiteral();
 	}
 
 	protected final Word tryMatchToken() throws ParseException {
 		CharSequence in = input;
-		int i = index;
+		int i;
+		Word w;
 
-		_bestMatch = null;
-		if (tokens != null)
+		for(;;) {
+			i = index;
+
+			_bestMatch = null;
 			tokens.longestWithCallback(in, i, in.length(), posHold, searcher);
+			if ((w = _bestMatch) == null) return null;
 
-		Word w = _bestMatch;
-		if (w == null) return null;
+			if (w.getClass() == Word.class) {
+				if (w.pos < 0) {
+					index = i+_bestLength;
+					w = onSpecialToken0(w);
+					if (w != null) return w;
+					continue;
+				}
 
-		if (w.getClass() == Word.class) {
-			if (w.pos < 0) {
-				index = i+_bestLength;
-				return onSpecialToken0(w);
+				else w = formClip(w.type(), w.val());
+			} else {
+				w = w.copy();
+				w.pos = index;
 			}
-
-			else w = formClip(w.type(), w.val());
-		} else {
-			w = w.copy();
-			w.pos = index;
+			break;
 		}
 
 		index = i+_bestLength;
@@ -516,8 +523,8 @@ public class Tokenizer {
 	private Word onSpecialToken0(Word w) throws ParseException {
 		switch (w.pos) {
 			default: return onSpecialToken(w);
-			case ST_SINGLE_LINE_COMMENT: singleLineComment(comment); return readWord();
-			case ST_MULTI_LINE_COMMENT: multiLineComment(comment, w.val); return readWord();
+			case ST_SINGLE_LINE_COMMENT: singleLineComment(comment); return null;
+			case ST_MULTI_LINE_COMMENT: multiLineComment(comment, w.val); return null;
 			case ST_STRING, ST_LITERAL_STRING:
 				String s = w.val;
 				if (s.length() != 1) throw new UnsupportedOperationException("readSlashString not support len > 1 terminator");
@@ -948,9 +955,7 @@ public class Tokenizer {
 		else i--;
 
 		if (row != null) row.append(in, index, i).trimLast().append('\n');
-
-		// keep \n
-		index = i;
+		commentPostprocess(i);
 	}
 	protected final void multiLineComment(CharList row, String end) throws ParseException {
 		CharSequence in = input;
@@ -960,7 +965,12 @@ public class Tokenizer {
 		if (i < 0) throw err("在注释结束前遇到了文件尾");
 
 		if (row != null) row.append(in, prevI, i-1).append('\n');
-		index = i+end.length();
+		commentPostprocess(i+end.length());
+	}
+	protected final void commentPostprocess(int i) {
+		CharSequence in = input;
+		while (i < in.length() && WHITESPACE.contains(in.charAt(i))) i++;
+		index = i;
 	}
 	// endregion
 	// region 行号
@@ -998,7 +1008,7 @@ public class Tokenizer {
 	public ParseException err(String reason, Word word) { return new ParseException(input, i18n(reason) + "at" + word.val(), word.pos(), null); }
 
 	public final ParseException err(String reason) { return err(reason, (Throwable) null); }
-	public ParseException err(String reason, Throwable cause) { return new ParseException(input, i18n(reason), this.index - 1, cause); }
+	public ParseException err(String reason, Throwable cause) { return new ParseException(input, i18n(reason), index, cause); }
 	// endregion
 	@Override
 	public String toString() { return "Lexer{"+"pos="+index + ", str="+input+"}"; }

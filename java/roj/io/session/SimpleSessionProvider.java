@@ -190,7 +190,7 @@ public class SimpleSessionProvider extends SessionProvider implements BiConsumer
 	private static Serializer<Map<String, Object>> adapter() {
 		Serializer<?> c = local.get();
 		if (c == null) {
-			c = Serializers.ANY_OBJECT.mapOf(Object.class);
+			c = Serializers.POOLED.mapOf(Object.class);
 			local.set(c);
 		}
 		return Helpers.cast(c);

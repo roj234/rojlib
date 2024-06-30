@@ -1,10 +1,14 @@
 package roj.compiler.plugins.asm;
 
+import roj.reflect.ReflectionUtils;
+
 /**
  * @author Roj234
  * @since 2023/9/23 0023 19:21
  */
 public class ASM {
+	public static final int TARGET_JAVA_VERSION = ReflectionUtils.JAVA_VERSION;
+
 	/**
 	 * 获取注入的属性
 	 * @return 返回类型为属性或def的真实类型，不一定是对象，并且可能随属性注入改变

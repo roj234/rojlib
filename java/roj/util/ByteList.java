@@ -47,7 +47,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	}
 
 	public int capacity() { return list.length; }
-	public int maxCapacity() { return Integer.MAX_VALUE - 1024; }
+	public int maxCapacity() { return Integer.MAX_VALUE - 16; }
 	public final boolean isDirect() { return false; }
 	public long _unsafeAddr() { return (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+arrayOffset(); }
 	public boolean hasArray() { return true; }
@@ -86,7 +86,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	@Override
 	final int testWI(int i, int req) {
-		if (i < 0 || i + req > wIndex) throw new ArrayIndexOutOfBoundsException("pos="+i+",len="+req+",cap="+wIndex);
+		if ((i|req) < 0 || i + req > wIndex) throw new ArrayIndexOutOfBoundsException("pos="+i+",len="+req+",cap="+wIndex);
 		return i + arrayOffset();
 	}
 
@@ -326,7 +326,12 @@ public class ByteList extends DynByteBuf implements Appendable {
 		System.arraycopy(list, arrayOffset() + rIndex, b, 0, b.length);
 		return b;
 	}
-	public byte[] toByteArrayAndFree() {
+	public final byte[] toByteArrayAndZero() {
+		byte[] array = toByteArray();
+		for (int i = 0; i < wIndex; i++) array[i] = 0;
+		return array;
+	}
+	public final byte[] toByteArrayAndFree() {
 		byte[] array = toByteArray();
 		_free();
 		return array;
@@ -501,7 +506,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	// region Buffer Ops
 
 	public final ByteList slice(int off, int len) {
-		return len == 0 ? EMPTY : new Slice(list, off + arrayOffset(), len);
+		return len == 0 ? EMPTY : new Slice(list, testWI(off, len), len);
 	}
 
 	@Override
@@ -760,7 +765,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		public boolean immutableCapacity() { return true; }
 		@Override
 		public void ensureCapacity(int required) {
-			if (required > len) throw new IndexOutOfBoundsException("cannot hold "+required+"bytes in this buffer("+len+")");
+			if (required > len) throw new IndexOutOfBoundsException("cannot hold "+required+" bytes in this buffer("+len+")");
 		}
 
 		@Override

@@ -709,6 +709,9 @@ public final class CLIUtil implements Runnable {
 			int r;
 			try {
 				r = sysIn.read(buf, 0, 256);
+			} catch (ArrayIndexOutOfBoundsException e) {
+				sysErr.println("Windows Terminal又在打电动了:"+e.getMessage());
+				continue;
 			} catch (Throwable e) {
 				e.printStackTrace(sysErr);
 				break;

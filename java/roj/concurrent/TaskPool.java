@@ -114,14 +114,12 @@ public class TaskPool implements TaskHandler {
 
 		lock.lock();
 		try {
-			if (tasks.remaining() == 0) {
+			if (!tasks.offerLast(task)) {
 				if (policy != null) {
 					policy.onReject(this, task);
 				} else {
 					throwPolicy(this, task);
 				}
-			} else {
-				tasks.ringAddLast(task);
 			}
 		} finally {
 			lock.unlock();
@@ -215,13 +213,7 @@ public class TaskPool implements TaskHandler {
 		}
 	}
 	public static void waitPolicy(TaskPool pool, ITask task) {
-		while (true) {
-			if (pool.fastPath.tryTransfer(task)) break;
-			if (pool.tasks.remaining() > 0) {
-				pool.tasks.ringAddLast(task);
-				break;
-			}
-
+		while (!pool.fastPath.tryTransfer(task) && !pool.tasks.offerLast(task)) {
 			pool.noFull.awaitUninterruptibly();
 			if (pool.running < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
 		}

@@ -321,6 +321,13 @@ public final class FMDMain {
 		// endregion
 
 		Profiler.endStartSection("compile <= makeCompileParam");
+
+		var pc = new PluginContext();
+		pc.isPartialUpdate = increment;
+
+		for (int i = 0; i < plugins.size(); i++) {
+			plugins.get(i).beforeCompile(p.compiler, options, files, pc);
+		}
 		var outputs = p.compiler.compile(options, files);
 		if (outputs == null) return -1;
 		Profiler.endStartSection("writeDevJar <= compile");
@@ -365,9 +372,9 @@ public final class FMDMain {
 
 		Profiler.endStartSection("applyPlugin <= writeDevJar");
 
-		PluginContext pc = new PluginContext();
+		pc.isPartialUpdate = increment;
 		for (int i = 0; i < plugins.size(); i++) {
-			plugins.get(i).afterCompile(list, false, pc);
+			plugins.get(i).afterCompile(list, pc);
 		}
 
 		Profiler.endStartSection("waitResource <= applyPlugin");
@@ -394,7 +401,7 @@ public final class FMDMain {
 
 		pc = new PluginContext();
 		for (int i = 0; i < plugins.size(); i++) {
-			plugins.get(i).afterCompile(list, true, pc);
+			plugins.get(i).afterMap(list, pc);
 		}
 
 		// endregion

@@ -2,11 +2,8 @@ package roj.asmx.event;
 
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodNode;
 import roj.asm.tree.RawNode;
 import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.Annotations;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
@@ -17,6 +14,7 @@ import roj.collect.SimpleList;
 import roj.collect.XHashSet;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
+import roj.util.Helpers;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -49,6 +47,7 @@ public class EventBus {
 	}
 	private ListenerList createListenerList(Class<?> c, RawNode mn, String event) {
 		Class<?> type = null;
+		block:
 		try {
 			type = Class.forName(event);
 		} catch (ClassNotFoundException e) {
@@ -57,10 +56,11 @@ public class EventBus {
 					Class<?>[] parType = method.getParameterTypes();
 					if (TypeHelper.class2asm(parType, method.getReturnType()).equals(mn.rawDesc())) {
 						type = parType[0];
-						break;
+						break block;
 					}
 				}
 			}
+			Helpers.athrow(e);
 		}
 		return createListenerList(type);
 	}
@@ -90,16 +90,16 @@ public class EventBus {
 	}
 	private final XHashSet<String, ListenerInfo.MapEntry> entries = INFO_SHAPE.create();
 	private ListenerInfo[] getListenerInfo(Class<?> type, boolean object) {
-		ListenerInfo.MapEntry entry = entries.get(type.getName());
+		var entry = entries.get(type.getName());
 		if (entry == null) {
-			ConstantData data = Parser.parseConstants(type);
-			if (data == null) throw new IllegalArgumentException("无法解析" + type.getName() + "的源文件！");
+			var data = Parser.parseConstants(type);
+			if (data == null) throw new IllegalArgumentException("无法解析"+type.getName()+"的源文件！");
 
 			List<ListenerInfo> objectList = new SimpleList<>(), staticList = new SimpleList<>();
-			for (MethodNode mn : data.methods) {
-				Annotations attr = mn.parsedAttr(data.cp, Attribute.ClAnnotations);
-				if (attr == null) continue;
-				for (Annotation annotation : attr.annotations) {
+			for (var mn : data.methods) {
+				var annotations = mn.parsedAttr(data.cp, Attribute.ClAnnotations);
+				if (annotations == null) continue;
+				for (var annotation : annotations.annotations) {
 					if (annotation.type().equals(SUBSCRIBE_NAME)) {
 						toListenerInfo(mn, annotation, objectList, staticList);
 						break;
@@ -108,7 +108,7 @@ public class EventBus {
 			}
 
 			if (objectList.isEmpty() & staticList.isEmpty()) {
-				throw new IllegalArgumentException(type.getName() + "没有事件监听器");
+				throw new IllegalArgumentException(type.getName()+"没有事件监听器");
 			}
 
 			entry = new ListenerInfo.MapEntry(
@@ -116,7 +116,11 @@ public class EventBus {
 				objectList.toArray(new ListenerInfo[objectList.size()]),
 				staticList.toArray(new ListenerInfo[staticList.size()])
 			);
-			entries.add(entry);
+			synchronized (entries) {
+				if (!entries.add(entry)) {
+					entry = entries.get(type.getName());
+				}
+			}
 		}
 		return object ? entry.objectList : entry.staticList;
 	}
@@ -134,11 +138,13 @@ public class EventBus {
 
 	public void register(Object o) {
 		Class<?> c = o instanceof Class<?> ? (Class<?>) o : o.getClass();
-		for (ListenerInfo info : getListenerInfo(c, c != o)) {
-			ListenerList list = eventListenerList.get(info.event);
+		for (var info : getListenerInfo(c, c != o)) {
+			var list = eventListenerList.get(info.event);
 			if (list == null) {
-				synchronized (this) {
-					list = createListenerList(c, info.mn, info.event);
+				synchronized (eventListenerList) {
+					if ((list = eventListenerList.get(info.event)) == null) {
+						list = createListenerList(c, info.mn, info.event);
+					}
 				}
 			}
 			list.add(info.flags&Priority.MASK, new EventListenerImpl(o, info));
@@ -148,8 +154,8 @@ public class EventBus {
 	public void unregister(Object o) {
 		Class<?> c = o instanceof Class<?> ? (Class<?>) o : o.getClass();
 		Object inst = c != o ? o : null;
-		for (ListenerInfo info : getListenerInfo(c, c != o)) {
-			ListenerList list = eventListenerList.get(info.event);
+		for (var info : getListenerInfo(c, c != o)) {
+			var list = eventListenerList.get(info.event);
 			if (list != null) {
 				list.remove(info.flags&Priority.MASK, inst, info.mn.name(), info.mn.rawDesc());
 			}
@@ -159,17 +165,17 @@ public class EventBus {
 	public boolean hasListener(Class<? extends Event> type) { return eventListenerList.get(type.getName()) != null; }
 
 	public boolean post(Event event) {
-		ListenerList list = getListeners(event);
+		var list = getListeners(event);
 		if (list == null) return false;
 
-		EventListener[] cook;
+		EventListener[] listeners;
 		do {
-			cook = list.cook();
-			for (int i = 0; i < cook.length; i++) {
+			listeners = list.cook();
+			for (int i = 0; i < listeners.length; i++) {
 				try {
-					cook[i].invoke(event);
+					listeners[i].invoke(event);
 				} catch (Throwable e) {
-					makeDebugInfo(event, e, list.type, cook, i);
+					makeDebugInfo(event, e, list.type, listeners, i);
 				}
 			}
 

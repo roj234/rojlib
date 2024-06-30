@@ -202,8 +202,9 @@ public class TypeCast {
 		if (asterisk != null) {
 			List<IType> bounds = asterisk.getBounds();
 			if (asterisk.genericType() == CONCRETE_ASTERISK_TYPE) {
-				if (genericCast(bounds.get(0), to, etype).type >= 0)
-					return result;
+				var cast = genericCast(bounds.get(0), to, etype);
+				// direct cast
+				if (cast.type >= 0) return cast;
 				result.type1 = asterisk.getBound();
 			} else {
 				for (int i = 1; i < bounds.size(); i++) {
@@ -367,6 +368,7 @@ public class TypeCast {
 
 	public Cast checkCast(Type from, Type to, int inheritType) {
 		if (from.equals(to)) return RESULT(UPCAST, 0);
+		if (from.type == VOID || to.type == VOID) return ERROR(E_NEVER);
 
 		if (from.isPrimitive()) {
 			// 泛型
@@ -397,7 +399,6 @@ public class TypeCast {
 
 			// 皆为基本
 			int fCap = DataCap.getOrDefaultInt(from.type, 0);
-
 			int tCap = DataCap.getOrDefaultInt(to.type, 0);
 			// downcast
 			if (fCap > tCap) {

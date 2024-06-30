@@ -338,20 +338,43 @@ public final class Inferrer {
 				}
 
 				var bound = bounds.get(tt.name);
-				return new Asterisk(tt.extendType == 0
-					? new Type(exact.owner(), exact.array()+tt.array())
-					: new Generic(exact.owner(), exact.array()+tt.array(), tt.extendType),
+				if (tt.extendType == Generic.EX_SUPER) {
+					GlobalContext.debugLogger().warn("EX_SUPER how to deal? typeParam={}, realType={}", tt, exact);
+					return new Type(exact.owner(), exact.array()+tt.array());
+				}
+				return new Asterisk(new Type(exact.owner(), exact.array()+tt.array()),
 					bound.get(bound.get(0).genericType() == IType.PLACEHOLDER_TYPE ? 1 : 0));
+			}
+			case IType.ASTERISK_TYPE -> {
+				Asterisk t = (Asterisk) type;
+				List<IType> bounds1 = t.getBounds();
+				for (int i = 0; i < bounds1.size(); i++) {
+					IType prev = bounds1.get(i);
+					IType elem = clearTypeParam(prev, realType, bounds);
+
+					if (prev != elem && type == t) {
+						t = t.clone();
+						bounds1 = t.getBounds();
+					}
+
+					bounds1.set(i, elem);
+				}
+
+				return t;
 			}
 			case IType.GENERIC_TYPE, IType.GENERIC_SUBCLASS_TYPE -> {
 				IGeneric t = (IGeneric) type;
-				for (int i = 0; i < t.children.size(); i++) {
-					IType prev = t.children.get(i);
+				List<IType> children = t.children;
+				for (int i = 0; i < children.size(); i++) {
+					IType prev = children.get(i);
 					IType elem = clearTypeParam(prev, realType, bounds);
 
-					if (prev != elem && type == t) t = t.clone();
+					if (prev != elem && type == t) {
+						t = t.clone();
+						children = t.children;
+					}
 
-					t.children.set(i, elem);
+					children.set(i, elem);
 				}
 
 				if (t.sub != null) {

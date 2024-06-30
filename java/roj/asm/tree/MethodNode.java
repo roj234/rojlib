@@ -89,11 +89,11 @@ public final class MethodNode extends CNode {
 			putAttr(code);
 		}
 
-		if (cv instanceof CodeWriter) {
+		if (cv instanceof CodeWriter cv1) {
 			ByteList b = new ByteList();
-			((CodeWriter) cv).init(b, cp, this, (byte) 0);
+			cv1.init(b, cp, this, (byte) 0);
 			cv.visit(cp, Parser.reader(code));
-			((CodeWriter) cv).finish();
+			cv1.finish();
 			((AttrUnknown) code).setRawData(b);
 		} else {
 			cv.visit(cp, Parser.reader(code));

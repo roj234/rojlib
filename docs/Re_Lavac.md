@@ -2,12 +2,10 @@
 ![lavac](images%2Flavac.png)* 纯属玩梗，并未注册任何商标
 
 ## 用前须知
-Lava编译器并非设计为Javac的替代品  
-它的API更多为修改java语法设计  
-（我认为比Javac的API更好）  
-并且不兼容所有Javac的API和部分Java语言特性  
-这意味着如果你习惯使用一些编译插件来帮助你写代码，那么它们无法支持  
-对于一些喜欢使用某些特性的人来说，代码也无法无缝迁移到Lava编译器
+Lava编译器并非旨在取代Javac，其API主要为修改Java语法设计（个人认为比Javac的API更优）。
+与Javac不同，Lava编译器不支持所有Javac的API和部分Java语言特性。
+因此，如果您习惯使用编译插件来辅助编码，Lava编译器可能无法支持。
+对于那些习惯使用特定语言特性的人来说，迁移代码到Lava编译器可能并不十分顺畅。
 
 ## 绝赞语法
 ### 参数调用 (已实现)
@@ -52,8 +50,8 @@ if (false) {
 }
 ```
 ### List foreach (已实现)
-对于同时实现List和RandomAccess接口的类，它的foreach会以顺序访问而不是Iterator编译  
-如果你正好有这么个列表，还是多线程访问的（必须用Iterator），请使用 ...for 来禁用这个优化
+针对同时实现List和RandomAccess接口的类，其foreach循环将按顺序访问而非使用Iterator进行编译。  
+若遇到这种类，并且需要在多线程环境中进行访问（必须使用Iterator），请考虑使用【...for】关键字以禁用该优化。
 ### 参数默认值 (已实现)
   在方法定义处使用形如 `method(int a = 3)` 的语句来为参数指定默认值  
   默认值可以是*任意*表达式，实际上它相当于一个宏，你可以使用仅在函数调用上下文可用的变量  
@@ -82,11 +80,11 @@ var map = [ 1+1 -> 3+4 , "mixed type" -> also.can.be.used() ];
 ### 基本类型函数 (已实现)
   12345 . toHexString() => Integer.toHexString (static)
 ### Switchable (已实现)
-* Lavac生成的switch具有更小的文件体积和更好的性能
-* 给任意一个类打上@Switchable注解，这个类就可以像枚举一样switch
-* * 时间复杂度 O(1)
-* * 使用...switch 可以强行开启这个功能，即使没有Switchable注解
-* * 包括基本类型，和非编译期常量
+- Lavac生成的switch语句具有更小的文件大小和更优越的性能。
+- 通过在任何类上加上@Switchable注解，该类可以像枚举一样进行switch操作。
+- 时间复杂度为O(1)。
+- 使用【...switch】关键字可以强制启用此功能，即使没有Switchable注解。
+- 支持基本数据类型和非编译时常量。
 ```java
 		var v = Test.A;
 		switch (v) {
@@ -131,11 +129,10 @@ var map = [ 1+1 -> 3+4 , "mixed type" -> also.can.be.used() ];
 ### 隐式导入|ImportAny (已实现)
   若全局没有同名的类，则该类视为已导入，妈妈再也不要去操心import了
 ### 受信执行环境|Package-Restricted (已实现)
-  在import语句之前插入package-restricted  
-  启用后，只能使用import语句导入的类  
-  使用import - className取消导入某个类（可能是因为import *导入的）  
-  空格可以省略  
-  同时，在未导入的方法返回值或字段类型上调用也会被阻止 (这有效的防止了一些漏洞)
+在任何import语句之前，可以插入package-restricted关键字。  
+启用此选项后，只能使用通过import语句导入的类。  
+若需取消导入特定类（可能是由于使用import *通配符导入），可通过使用import - className来实现。此外，可以省略减号旁边的空格。  
+在使用未导入的方法返回值或字段类型时，同样会进行导入检查，从而有效地防止某些潜在的漏洞。
 ### 别名 (已实现)
   import a.b as c;  
   或  
@@ -163,21 +160,18 @@ yyy = a = 3;
 int a = yyy <<< 3;
 ```
 ### defer (已实现)
-  以try-with-resource形式在代码块结束时执行多个表达式  
-  若一表达式发生错误，不影响其余表达式执行，异常会一起抛出  
-  可以和AutoCloseable混用  
-  最后一个分号可以省略  
-  非常抱歉没满足你不想缩进的目的  
-  但是至少不要很多try-finally了  
-  注意：  
-  defer的执行顺序和定义顺序是相反的（对于AutoCloseable是先new后close）  
-  下列代码的执行结果是：  
-  * 打印 b
-  * 打印 a
-  * 关闭文件输入流  
+在代码块结束时，可以通过try-with-resource形式执行多个表达式。  
+如果其中一个表达式发生错误，不会影响其他表达式的执行，所有异常会一起抛出。  
+此外，可以与AutoCloseable接口混用。最后一个分号可以省略。  
+尽管可能无法完全避免缩进，但至少可以减少使用try-finally的情况。
+
+需要注意的是，defer的执行顺序和定义顺序是相反的（对于AutoCloseable是先创建的实例后调用close方法）。下面是代码执行的结果：
+- 打印 b
+- 打印 a
+- 关闭文件输入流
 ```java
 try (
-      InputStream in = new FileInputStram(...);
+      var in = new FileInputStream(...);
       defer System.out.println("a");
       defer System.out.println("b");
 ) {

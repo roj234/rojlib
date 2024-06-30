@@ -6,8 +6,8 @@ import roj.collect.SimpleList;
 import roj.config.data.CInt;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
-import roj.io.source.CacheSource;
 import roj.io.source.FileSource;
+import roj.io.source.MemorySource;
 import roj.io.source.Source;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -58,7 +58,7 @@ public class QZFileWriter extends QZWriter {
     /**
      * 注意事项：本地的QZWriter不能和parallelWriter同时写入文件
      */
-    public final QZWriter parallel() throws IOException { return parallel(new CacheSource()); }
+    public final QZWriter parallel() throws IOException { return parallel(new MemorySource(DynByteBuf.allocateDirect())); }
     public synchronized QZWriter parallel(Source cache) throws IOException {
         if (finished) throw new IOException("Stream closed");
         if (parallelWriter == null)

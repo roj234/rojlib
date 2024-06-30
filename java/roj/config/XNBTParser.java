@@ -37,7 +37,7 @@ public final class XNBTParser implements BinaryParser {
 
 	private static void element(MyDataInput in, byte type, CVisitor cc) throws IOException {
 		switch (type) {
-			default -> throw new IOException("Corrupted NBT");
+			default -> throw new IOException("Corrupted NBT(invalid id "+type+")");
 			case X_NULL -> cc.valueNull();
 			case BYTE -> cc.value(in.readByte());
 			case SHORT -> cc.value(in.readShort());

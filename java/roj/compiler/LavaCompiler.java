@@ -32,7 +32,7 @@ import java.util.Collections;
 public class LavaCompiler {
 	final GlobalContextApi ctx = new GlobalContextApi();
 	final LocalContext cache = ctx.createLocalContext();
-	final ClassLoader loader = new ClassLoader() {};
+	final ClassLoader loader = new ClassDefiner(LavaCompiler.class.getClassLoader(), "LavaLambdaLink");
 
 	public LavaCompiler() throws IOException {initDefaultPlugins(ctx);}
 

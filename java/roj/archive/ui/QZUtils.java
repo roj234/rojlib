@@ -1,8 +1,7 @@
 package roj.archive.ui;
 
-import roj.io.IOUtil;
 import roj.ui.EasyProgressBar;
-import roj.util.ByteList;
+import roj.util.ArrayCache;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,18 +14,19 @@ import java.nio.channels.ClosedByInterruptException;
  */
 public class QZUtils {
 	public static void copyStreamWithProgress(InputStream in, OutputStream out, EasyProgressBar bar) throws IOException {
-		ByteList b = IOUtil.getSharedByteBuf();
-		b.ensureCapacity(4096);
-		byte[] data = b.list;
+		byte[] tmp = ArrayCache.getByteArray(65536, false);
+		try {
+			while (true) {
+				if (Thread.interrupted()) throw new ClosedByInterruptException();
 
-		while (true) {
-			if (Thread.interrupted()) throw new ClosedByInterruptException();
+				int len = in.read(tmp);
+				if (len < 0) break;
+				out.write(tmp, 0, len);
 
-			int len = in.read(data);
-			if (len < 0) break;
-			out.write(data, 0, len);
-
-			if (bar != null) bar.addCurrent(len);
+				if (bar != null) bar.addCurrent(len);
+			}
+		} finally {
+			ArrayCache.putArray(tmp);
 		}
 	}
 }

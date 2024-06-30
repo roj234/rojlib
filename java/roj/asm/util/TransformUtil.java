@@ -142,7 +142,7 @@ public class TransformUtil {
 		if (classes == null) throw new IllegalStateException("no InnerClass in " + data.name);
 
 		for (int i = 0; i < classes.size(); i++) {
-			InnerClasses.InnerClass clz = classes.get(i);
+			InnerClasses.Item clz = classes.get(i);
 			if (toOpen.contains(clz.self)) {
 				clz.flags = (char) toPublic(clz.flags, true);
 			}

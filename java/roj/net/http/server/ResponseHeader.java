@@ -10,10 +10,12 @@ public interface ResponseHeader {
 
 	ResponseHeader code(int code);
 	ResponseHeader die();
+	// 停在Process阶段，直到异步返回Response
+	ResponseHeader asyncResponse();
 
-	ResponseHeader chunked();
-	ResponseHeader compressed();
-	ResponseHeader uncompressed();
+	ResponseHeader enableCompression();
+	// 除非调用了enableCompression，否则不会主动压缩
+	ResponseHeader disableCompression();
 
 	ResponseHeader body(Response resp);
 
@@ -22,10 +24,6 @@ public interface ResponseHeader {
 	ResponseHeader headers(String hdr);
 	Headers headers();
 
-	default <T> T returnNull() {
-		return null;
-	}
-	default <T> T returns(T t) {
-		return t;
-	}
+	default <T> T returnNull() {return null;}
+	default <T> T returns(T t) {return t;}
 }

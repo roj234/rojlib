@@ -8,5 +8,6 @@ public enum Priority {
 	HIGHEST, HIGH, NORMAL, LOW, LOWEST;
 
 	public static final byte MASK = 7;
+	public static final int PRIORITY_COUNT = 5;
 	static final Priority[] PRIORITIES = values();
 }

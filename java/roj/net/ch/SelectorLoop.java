@@ -34,7 +34,7 @@ public class SelectorLoop implements Shutdownable {
 
 		Poller() throws IOException {
 			this.selector = MySelector.open();
-			setName(prefix + " #" + index++);
+			setName(prefix+" #"+index++);
 			setDaemon(daemon);
 		}
 
@@ -136,7 +136,7 @@ public class SelectorLoop implements Shutdownable {
 
 					if (missedTime >= 50) {
 						if (prevAlert - time > 10000) {
-							LOGGER.warn(Thread.currentThread().getName() + "@" + Thread.currentThread().getId() + "超过50ms未同步 请降低该线程的负载 / CT=" + missedTime);
+							LOGGER.warn("网络IO线程'{}'连续{}ms未同步 请降低该线程的负载", Thread.currentThread().getName(), missedTime);
 							prevAlert = time;
 						}
 						missedTime = 1;
@@ -158,15 +158,15 @@ public class SelectorLoop implements Shutdownable {
 						//}
 					}
 				} else {
-					if (selected.isEmpty()) delayed++;
-
-					if (delayed > 1000) {
+					delayed += selected.isEmpty() ? 10 : 1;
+					if (delayed > 10000) {
+						int prevSize = sel.keys().size();
 						refresh();
 						sel = selector;
 						selected = (MySelector) sel.selectedKeys();
 						keys = MySelector.getForeacher(sel);
 						delayed = 0;
-						System.err.println("rebuild selector");
+						LOGGER.warn("重建选择器, size={}/{}", prevSize, sel.keys().size());
 						continue;
 					}
 

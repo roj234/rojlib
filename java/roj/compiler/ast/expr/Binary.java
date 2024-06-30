@@ -139,7 +139,7 @@ final class Binary extends ExprNode {
 								else castLeft = cast;
 							}
 						}
-					} else if (dpType != 8 || operator > xor || operator < and) {
+					} else if (dpType != 8 || operator > logic_or || operator < and) {
 						ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
 						return NaE.RESOLVE_FAILED;
 					}
@@ -162,13 +162,13 @@ final class Binary extends ExprNode {
 			}
 
 			switch (operator) {
-				case equ: case neq:
+				case equ, neq:
 					// 无法比较的类型
 					if (rType.isPrimitive()) castRight = ctx.castTo(rType, lType, TypeCast.E_DOWNCAST);
 					else if (lType.isPrimitive()) castLeft = ctx.castTo(lType, rType, TypeCast.E_DOWNCAST);
 					dpType = 9;
 				break;
-				case logic_and: case logic_or:
+				case logic_and, logic_or:
 					castLeft = ctx.castTo(lType, Type.std(Type.BOOLEAN), 0);
 					castRight = ctx.castTo(rType, Type.std(Type.BOOLEAN), 0);
 				break;
@@ -189,7 +189,7 @@ final class Binary extends ExprNode {
 			if (right.isConstant()) {
 				switch (operator) {
 					// equ 和 neq 应该可以直接删除跳转？反正boolean也就是0和非0 （AND 1就行）
-					case equ: case neq: case lss: case geq: case gtr: case leq: {
+					case equ, neq, lss, geq, gtr, leq: {
 						if (dpType <= 4 && ((AnnVal) right.constVal()).asInt() == 0) {
 							flag = 1;
 						}
@@ -203,7 +203,7 @@ final class Binary extends ExprNode {
 		checkDivZero(left, ctx);
 		if (!right.isConstant()) {
 			switch (operator) {
-				case equ: case neq: case lss: case geq: case gtr: case leq: {
+				case equ, neq, lss, geq, gtr, leq: {
 					if (dpType <= 4 && ((AnnVal) left.constVal()).asInt() == 0) {
 						flag = 2;
 					}
@@ -220,7 +220,7 @@ final class Binary extends ExprNode {
 		}
 
 		switch (operator) {
-			case lss: case gtr: case geq: case leq:
+			case lss, gtr, geq, leq:
 				double l = ((AnnVal) left.constVal()).asDouble(), r = ((AnnVal) right.constVal()).asDouble();
 				boolean v = switch (operator) {
 					case lss -> l < r;
@@ -231,14 +231,14 @@ final class Binary extends ExprNode {
 				};
 				return Constant.valueOf(v);
 
-			case equ: case neq:
+			case equ, neq:
 				return Constant.valueOf((operator == equ) == (dpType == 9 ?
 					left.constVal().equals(right.constVal()) :
 					((AnnVal)left.constVal()).asDouble() == ((AnnVal)right.constVal()).asDouble()));
 		}
 
 		switch (dpType) {
-			case 1: case 2: case 3: case 4: {
+			case 1, 2, 3, 4: {
 				int l = ((AnnVal) left.constVal()).asInt(), r = ((AnnVal) right.constVal()).asInt();
 				int o = switch (operator) {
 					case add -> l+r;
@@ -333,7 +333,7 @@ final class Binary extends ExprNode {
 	public void write(MethodWriter cw, boolean noRet) {
 		switch (operator) {
 			// && 和 || 想怎么用，就怎么用！
-			case logic_and: case logic_or: {
+			case logic_and, logic_or: {
 				Label end = new Label();
 				int id = cw.beginJumpOn(operator == logic_or, end);
 				left.writeDyn(cw, castLeft);
@@ -371,10 +371,10 @@ final class Binary extends ExprNode {
 
 		switch (operator) {
 			default: throw OperationDone.NEVER;
-			case add: case sub: case mul: case div: case mod: opc += ((operator - add) << 2) + IADD; break;
+			case add, sub, mul, div, mod: opc += ((operator - add) << 2) + IADD; break;
 			case pow: throw new IllegalArgumentException("pow未实现");
-			case lsh: case rsh: case rsh_unsigned: case and: case or: case xor: opc += ((operator - lsh) << 1) + ISHL; break;
-			case equ: case neq:
+			case lsh, rsh, rsh_unsigned, and, or, xor: opc += ((operator - lsh) << 1) + ISHL; break;
+			case equ, neq:
 				if (!left.type().isPrimitive() & !right.type().isPrimitive()) {
 					if (!cw.jumpOn(opc = IF_acmpeq + (operator - equ))) {
 						jump(cw, opc);
@@ -382,7 +382,7 @@ final class Binary extends ExprNode {
 					return;
 				}
 
-			case lss: case geq: case gtr: case leq: {
+			case lss, geq, gtr, leq: {
 				switch (opc) {
 					case 1 -> {
 						cw.one(LCMP);

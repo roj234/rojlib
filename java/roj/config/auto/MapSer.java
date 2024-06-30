@@ -22,15 +22,17 @@ final class MapSer extends Adapter {
 	MapSer(Adapter type, IntFunction<Map<String,?>> newMap) { this.valueType = type; this.newMap = newMap; }
 
 	@Override
-	public Adapter inheritBy(SerializerFactoryImpl factory, Class<?> type) {
-		IntFunction<Map<String, ?>> subType = SerializerFactory.dataContainer(type);
-		return subType == null ? this : new MapSer(valueType, subType);
-	}
+	public Adapter transform(SerializerFactoryImpl man, Class<?> subclass, List<IType> generic) {
+		var vType = valueType;
+		if (generic != null) {
+			if (generic.size() != 2) throw new IllegalArgumentException(generic.toString());
+			vType = man.get(generic.get(1));
+		}
 
-	@Override
-	public Adapter withGenericType(SerializerFactoryImpl man, List<IType> genericType) {
-		if (genericType.size() != 2) throw new IllegalArgumentException(genericType.toString());
-		return new MapSer(man.get(genericType.get(1)), newMap);
+		IntFunction<Map<String, ?>> constructor = SerializerFactory.dataContainer(subclass);
+		if (constructor == null) constructor = newMap;
+
+		return vType == valueType && constructor == newMap ? this : new MapSer(vType, constructor);
 	}
 
 	@Override

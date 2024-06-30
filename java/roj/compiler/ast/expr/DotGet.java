@@ -12,6 +12,7 @@ import roj.asm.type.Type;
 import roj.asm.visitor.Label;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
+import roj.compiler.api.FieldWriteReplace;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
@@ -327,7 +328,12 @@ public final class DotGet extends VarNode {
 	public void postStore(MethodWriter cw) {
 		FieldNode fn = chain[chain.length-1];
 		String owner = chain.length == 1 ? begin.name() : chain[chain.length-2].fieldType().owner();
-		cw.field((fn.modifier & Opcodes.ACC_STATIC) != 0 ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, owner, fn.name(), fn.rawDesc());
+
+		if (fn.attrByName(FieldWriteReplace.NAME) instanceof FieldWriteReplace hook) {
+			hook.writeWrite(cw, owner, fn);
+		} else {
+			cw.field((fn.modifier & Opcodes.ACC_STATIC) != 0 ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, owner, fn.name(), fn.rawDesc());
+		}
 	}
 
 	@Override
@@ -364,12 +370,11 @@ public final class DotGet extends VarNode {
 				cw.jump(Opcodes.IFNULL, ifNull);
 			}
 
-			// 应该不需要
-			// 在构造器里没法拿到间接且未初始化的this，ASM除外，但这论外了
-			/*LocalContext lc = LocalContext.get();
-			if (owner.equals(lc.file.name))
-				lc.checkSelfField(fn, false);*/
-			cw.field(opcode, owner, fn.name(), fn.rawDesc());
+			if (fn.attrByName(FieldWriteReplace.NAME) instanceof FieldWriteReplace hook) {
+				hook.writeRead(cw, owner, fn);
+			} else {
+				cw.field(opcode, owner, fn.name(), fn.rawDesc());
+			}
 			if (++i == length) break;
 
 			owner = fn.fieldType().owner();

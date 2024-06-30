@@ -197,7 +197,7 @@ public final class Invoke extends ExprNode {
 			if (ownMirror.genericType() == IType.ASTERISK_TYPE) return NaE.RESOLVE_FAILED;
 
 			if (ownMirror.isPrimitive()) {
-				type = ctx.getPrimitiveMethod(fn2, args);
+				type = ctx.getPrimitiveMethod(ownMirror, fn2, args);
 				if (type == null) {
 					ctx.report(Kind.ERROR, "symbol.error.derefPrimitiveField", ownMirror);
 					return NaE.RESOLVE_FAILED;
@@ -340,7 +340,7 @@ public final class Invoke extends ExprNode {
 				}
 			}
 
-			if (mn.attrByName("Evaluable") instanceof Evaluable eval) {
+			if (mn.attrByName(Evaluable.NAME) instanceof Evaluable eval) {
 				ExprNode result = eval.eval(mn, fn instanceof ExprNode e ? e : null, args);
 				if (result != null) return result.resolve(ctx);
 			}

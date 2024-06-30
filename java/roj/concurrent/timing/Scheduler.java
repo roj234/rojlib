@@ -57,6 +57,7 @@ public class Scheduler implements Runnable {
 			return "ScheduleTask{"+"state="+state+'}';
 		}
 
+		static final long OFF_LOCK = ReflectionUtils.fieldOffset(TaskHolder.class, "lock");
 		static final long OFF_NEXT = ReflectionUtils.fieldOffset(TaskHolder.class, "next");
 		static final long OFF_TIME_LEFT = ReflectionUtils.fieldOffset(TaskHolder.class, "timeLeft");
 
@@ -217,35 +218,28 @@ public class Scheduler implements Runnable {
 				}
 			}
 
-			assert task.lock == null;
-			u.getAndAddInt(clk, OFF_TASK_COUNT, 1);
-
 			int i = clk.clock + ((int) (time >> (DEPTH_SHL*slot)) & DEPTH_MASK) - 1;
 			TaskHolder root = clk.tasks[i & DEPTH_MASK];
 
+			if (!u.compareAndSwapObject(task, TaskHolder.OFF_LOCK, null, root)) throw new AssertionError(task.lock);
+			u.getAndAddInt(clk, OFF_TASK_COUNT, 1);
+
+			task.prev = root;
 			synchronized (root) {
-				task.lock = root;
-
-				task.prev = root;
 				task.next = root.next;
-
-				root.next = root.next.prev = task;
+				root.next.prev = task;
+				root.next = task;
 			}
 		}
 		final boolean remove(TaskHolder root, TaskHolder task) {
-			assert root != task;
+			if (!u.compareAndSwapObject(task, TaskHolder.OFF_LOCK, root, null)) return false;
+			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
 
 			synchronized (root) {
-				if (task.lock == null) return false;
-				assert task.lock == root;
-
-				task.prev.next = task.next;
 				task.next.prev = task.prev;
-				task.prev = task.next = null;
-				task.lock = null;
+				task.prev.next = task.next;
 			}
-
-			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
+			task.prev = task.next = null;
 			return true;
 		}
 

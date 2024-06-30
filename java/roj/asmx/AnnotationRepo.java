@@ -16,6 +16,7 @@ import roj.asmx.AnnotatedElement.Node;
 import roj.asmx.AnnotatedElement.Type;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.collect.ToIntMap;
 import roj.io.IOUtil;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
@@ -32,7 +33,7 @@ import java.util.Set;
  * @author Roj234
  * @since 2023/12/26 0026 12:47
  */
-public class AnnotationRepo {
+public final class AnnotationRepo {
 	private final MyHashMap<String, Set<AnnotatedElement>> annotations = new MyHashMap<>();
 
 	public AnnotationRepo() {}
@@ -106,12 +107,12 @@ public class AnnotationRepo {
 			var itf = new String[len];
 			for (int i = 0; i < len; i++) itf[i] = cp.getRefName(r);
 			skeleton.itf = Arrays.asList(itf);
+		} else {
+			skeleton.itf = Collections.emptyList();
 		}
 
 		for (int i = 0; i < 2; i++) {
 			len = r.readUnsignedShort();
-			if (len == 0) continue;
-
 			rawNodes.clear();
 			while (len-- > 0) {
 				acc = r.readChar();
@@ -144,6 +145,9 @@ public class AnnotationRepo {
 			if (!rawNodes.isEmpty()) {
 				if (i == 0) skeleton.fields = ArrayUtil.copyOf(rawNodes);
 				else skeleton.methods = ArrayUtil.copyOf(rawNodes);
+			} else {
+				if (i == 0) skeleton.fields = Collections.emptyList();
+				else skeleton.methods = Collections.emptyList();
 			}
 		}
 
@@ -162,4 +166,138 @@ public class AnnotationRepo {
 
 	public Set<AnnotatedElement> annotatedBy(String type) { return annotations.getOrDefault(type, Collections.emptySet()); }
 	public MyHashMap<String, Set<AnnotatedElement>> getAnnotations() {return annotations;}
+
+	public void serialize(DynByteBuf buf) {
+		ToIntMap<Annotation> annotations = new ToIntMap<>();
+		ToIntMap<Object> elements = new ToIntMap<>();
+
+		annotations.put(null, 0);
+		elements.put(null, 0);
+
+		var cp = AsmShared.local().constPool();
+		var rest = IOUtil.getSharedByteBuf();
+
+		for (var value : this.annotations.values()) {
+			for (var el : value) {
+				Type parent = el.parent();
+				int idx = elements.putOrGet(parent, elements.size(), 0);
+				if (idx == 0) {
+					rest.put(0);
+					writeAcc(rest, parent, cp, elements);
+					idx = parent == el ? elements.size() - 1 : elements.getInt(el.node());
+				}
+				rest.putVUInt(idx).putVUInt(el.annotations.size());
+				for (var annotation : el.annotations.values()) {
+					idx = annotations.putOrGet(annotation, annotations.size(), 0);
+					if (idx == 0) {
+						rest.put(0);
+						annotation.toByteArray(cp, rest);
+					} else {
+						rest.putVUInt(idx);
+					}
+				}
+			}
+		}
+
+		buf.putAscii("ANNOREP").put(0).putShort(annotations.size()).putShort(elements.size()).putShort(this.annotations.size());
+		cp.write(buf, false);
+		buf.put(rest);
+	}
+	private static void writeAcc(DynByteBuf buf, Type parent, ConstantPool cp, ToIntMap<Object> elements) {
+		var owner = (AccessData) parent.owner;
+		buf.putShort(cp.getUtfId(owner.name))
+		   .putShort(cp.getUtfId(owner.parent))
+		   .putShort(owner.acc)
+		   .putShort(owner.itf.size());
+		for (String itf : owner.itf) buf.putShort(cp.getUtfId(itf));
+		buf.putShort(owner.methods.size());
+		for (var node : owner.methods) {
+			elements.putIfAbsent(node, elements.size());
+			buf.putShort(cp.getUtfId(node.name)).putShort(cp.getUtfId(node.desc)).putShort(node.acc);
+		}
+		buf.putShort(owner.fields.size());
+		for (var node : owner.fields) {
+			elements.putIfAbsent(node, elements.size());
+			buf.putShort(cp.getUtfId(node.name)).putShort(cp.getUtfId(node.desc)).putShort(node.acc);
+		}
+	}
+	public boolean deserialize(DynByteBuf buf) {
+		if (!buf.readAscii(7).equals("ANNOREP") || buf.readUnsignedByte() != 0)
+			return false;
+
+		Annotation[] annotations = new Annotation[buf.readShort()];
+		int annotationCount = 0;
+		AnnotatedElement[] elements = new AnnotatedElement[buf.readShort()];
+		int elementCount = 0;
+
+		int repoSize = buf.readShort();
+		this.annotations.ensureCapacity(repoSize);
+
+		var cp = AsmShared.local().constPool();
+		cp.read(buf, ConstantPool.CHAR_STRING);
+
+		while (buf.isReadable()) {
+			int id = buf.readVUInt();
+			if (id == 0) {
+				elementCount = readAcc(buf, cp, elements, elementCount);
+				id = buf.readVUInt();
+			}
+			var ae = elements[id-1];
+
+			int len = buf.readVUInt();
+			while (len-- > 0) {
+				id = buf.readVUInt();
+				Annotation annotation;
+				if (id == 0) {
+					annotation = Annotation.parse(cp, buf);
+					annotations[annotationCount++] = annotation;
+				} else {
+					annotation = annotations[id-1];
+				}
+
+				ae.annotations.put(annotation.type(), annotation);
+				this.annotations.computeIfAbsent(annotation.type(), Helpers.fnMyHashSet()).add(ae);
+			}
+		}
+
+		return true;
+	}
+	private static int readAcc(DynByteBuf r, ConstantPool cp, AnnotatedElement[] elements, int elementCount) {
+		var skeleton = new AccessData(null, 0, ((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str());
+		skeleton.acc = r.readChar();
+		int len = r.readShort();
+		if (len == 0) {
+			skeleton.itf = Collections.emptyList();
+		} else {
+			var itf = new String[len];
+			for (int i = 0; i < len; i++) itf[i] = ((CstUTF) cp.get(r)).str();
+			skeleton.itf = Arrays.asList(itf);
+		}
+
+		Type type = new Type(skeleton);
+		elements[elementCount++] = type;
+
+		for (int i = 0; i < 2; i++) {
+			len = r.readShort();
+
+			List<AccessData.MOF> methods;
+			if (len == 0) {
+				methods = Collections.emptyList();
+			} else {
+				var list = new AccessData.MOF[len];
+				for (int j = 0; j < len; j++) {
+					var mof = skeleton.new MOF(((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str(), 0);
+					mof.acc = r.readChar();
+					list[j] = mof;
+					elements[elementCount++] = new Node(type, mof);
+				}
+				methods = Arrays.asList(list);
+			}
+
+			if (i == 0) skeleton.methods = methods;
+			else skeleton.fields = methods;
+		}
+
+		return elementCount;
+	}
 }

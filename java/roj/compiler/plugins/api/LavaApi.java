@@ -30,7 +30,7 @@ public interface LavaApi {
 	ComponentList getFieldList(IClass info, String name) throws TypeNotPresentException;
 	@Nullable
 	List<IType> getTypeParamOwner(IClass info, String superType) throws ClassNotFoundException;
-	MyHashMap<String, InnerClasses.InnerClass> getInnerClassFlags(IClass info);
+	MyHashMap<String, InnerClasses.Item> getInnerClassFlags(IClass info);
 
 	/**
 	 * 通过短名称获取全限定名（若存在）

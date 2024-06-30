@@ -80,53 +80,53 @@ public final class Logger {
 	public final void log(Level lv, CharSequence msg, Throwable ex) {
 		if (!level.canLog(lv)) return;
 
-		LogHelper h = LogHelper.LOCAL.get();
-		h.doLog(ctx, lv, msg, ex, null, 0);
+		LogWriter h = ctx.getWriter();
+		h.log(ctx, lv, msg, ex, null, 0);
 	}
 	public final void log(Level lv, String msg, Throwable ex, Object p0) {
 		if (!level.canLog(lv)) return;
 
-		LogHelper h = LogHelper.LOCAL.get();
+		LogWriter h = ctx.getWriter();
 
 		Object[] f = h.holder;
 		f[0] = p0;
-		h.doLog(ctx, lv, msg, ex, f, 1);
+		h.log(ctx, lv, msg, ex, f, 1);
 		f[0] = null;
 	}
 	public final void log(Level lv, String msg, Throwable ex, Object p0, Object p1) {
 		if (!level.canLog(lv)) return;
 
-		LogHelper h = LogHelper.LOCAL.get();
+		LogWriter h = ctx.getWriter();
 
 		Object[] f = h.holder;
 		f[0] = p0;f[1] = p1;
-		h.doLog(ctx, lv, msg, ex, f, 2);
+		h.log(ctx, lv, msg, ex, f, 2);
 		f[0] = null;f[1] = null;
 	}
 	public final void log(Level lv, String msg, Throwable ex, Object p0, Object p1, Object p2) {
 		if (!level.canLog(lv)) return;
 
-		LogHelper h = LogHelper.LOCAL.get();
+		LogWriter h = ctx.getWriter();
 
 		Object[] f = h.holder;
 		f[0] = p0;f[1] = p1;f[2] = p2;
-		h.doLog(ctx, lv, msg, ex, f, 3);
+		h.log(ctx, lv, msg, ex, f, 3);
 		f[0] = null;f[1] = null;f[2] = null;
 	}
 	public final void log(Level lv, String msg, Throwable ex, Object p0, Object p1, Object p2, Object p3) {
 		if (!level.canLog(lv)) return;
 
-		LogHelper h = LogHelper.LOCAL.get();
+		LogWriter h = ctx.getWriter();
 
 		Object[] f = h.holder;
 		f[0] = p0;f[1] = p1;f[2] = p2;f[3] = p3;
-		h.doLog(ctx, lv, msg, ex, f, 4);
+		h.log(ctx, lv, msg, ex, f, 4);
 		f[0] = null;f[1] = null;f[2] = null;f[3] = null;
 	}
 	public final void log(Level lv, String msg, Throwable ex, Object... pars) {
 		if (!level.canLog(lv)) return;
 
-		LogHelper h = LogHelper.LOCAL.get();
-		h.doLog(ctx, lv, msg, null, pars, pars.length);
+		LogWriter h = ctx.getWriter();
+		h.log(ctx, lv, msg, ex, pars, pars.length);
 	}
 }

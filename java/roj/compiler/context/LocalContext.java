@@ -62,10 +62,10 @@ public class LocalContext {
 	public final BlockParser bp;
 	public final JavaLexer lexer;
 
-	private final TypeCast castCheck = new TypeCast();
+	public final TypeCast caster = new TypeCast();
 	public final Inferrer inferrer = new Inferrer(this);
 
-	private TypeResolver tr;
+	protected TypeResolver tr;
 	public final MyHashMap<String, ConstantData> importCache = new MyHashMap<>(), importCacheMethod = new MyHashMap<>();
 	public final MyHashMap<String, Object[]> importCacheField = new MyHashMap<>();
 
@@ -79,12 +79,7 @@ public class LocalContext {
 		this.lexer = ctx.createLexer();
 		this.ep = ctx.createExprParser(this);
 		this.bp = ctx.createBlockParser(this);
-		this.castCheck.context = ctx;
-		this.castCheck.genericResolver = sb -> {
-			LPSignature node = this.file.currentNode;
-			if (node != null) return node.getTypeParamBounds(sb);
-			return null;
-		};
+		this.caster.context = ctx;
 	}
 
 	public boolean disableConstantValue;
@@ -124,7 +119,7 @@ public class LocalContext {
 	}
 
 	public TypeCast.Cast castTo(@NotNull IType from, @NotNull IType to, int lower_limit) {
-		TypeCast.Cast cast = castCheck.checkCast(from, to);
+		TypeCast.Cast cast = caster.checkCast(from, to);
 
 		// TODO change this
 		if ((cast.type == TypeCast.E_DOWNCAST || cast.type == TypeCast.UPCAST) && isDynamicType(to)) {
@@ -145,9 +140,9 @@ public class LocalContext {
 			flag = 0;
 			InnerClasses ics = type.parsedAttr(type.cp(), Attribute.InnerClasses);
 			if (ics != null) {
-				List<InnerClasses.InnerClass> list = ics.classes;
+				List<InnerClasses.Item> list = ics.classes;
 				for (int i = 0; i < list.size(); i++) {
-					InnerClasses.InnerClass ic = list.get(i);
+					InnerClasses.Item ic = list.get(i);
 					if (ic.self.equals(type.name())) {
 						flag = ic.flags;
 						break;
@@ -198,7 +193,7 @@ public class LocalContext {
 			case Opcodes.ACC_PRIVATE:
 				// 同一个类可以互相访问
 				// 条件: a/b仅比较$之前的部分
-				// TODO 验证是不是InnerClass属性导致的
+				// 除了桥接方法, NestHost属性也可以达成该目的
 				if (ClassUtil.canAccessPrivate(type.name(), file.name())) return true;
 				modifier = "private";
 				break;
@@ -326,6 +321,7 @@ public class LocalContext {
 	private List<IType> inferGeneric0(ConstantData typeInst, List<IType> params, String target) {
 		Map<String, IType> visType = new MyHashMap<>();
 
+		loop:
 		while (true) {
 			var g = typeInst.parsedAttr(typeInst.cp, Attribute.SIGNATURE);
 
@@ -336,42 +332,41 @@ public class LocalContext {
 
 			var map = parentListOrReport(typeInst);
 			int depthInfo = map.getValueOrDefault(target, -1);
-			if (depthInfo < 0) throw new IllegalArgumentException("Unknown error");
+			if (depthInfo == -1) throw new IllegalStateException("Cannot infer "+target+" "+params);
 
-			int depth = depthInfo >>> 16;
-			if (depth == 0) {
-				// parentList
-				IType parent = g.values.get(0);
-				if (target.equals(parent.owner())) {
-					if (parent.genericType() == IType.STANDARD_TYPE) return Collections.emptyList();
+			// depthInfo & 0x80000000 == 0 => is parent class' interface
+			boolean isFromParent = depthInfo > 0;
+			for (int j = 0; j < g.values.size(); j++) {
+				IType type = g.values.get(j);
+				if (target.equals(type.owner())) {
+					if (type.genericType() == IType.STANDARD_TYPE) return Collections.emptyList();
 
-					var rubber = Inferrer.clearTypeParam(parent, visType, g.typeParams);
+					var rubber = Inferrer.clearTypeParam(type, visType, g.typeParams);
 					return ((Generic) rubber).children;
 				}
 
-				typeInst = classes.getClassInfo(typeInst.parent);
-			} else {
-				// 如果在parentList里存上一些信息用于计算interface从哪继承可能会更好
+				if (isFromParent) continue;
 
-				// interfaceList
-				for (int j = 1; j < g.values.size(); j++) {
-					IType itf = g.values.get(j);
-					if (target.equals(itf.owner())) {
-						if (itf.genericType() == IType.STANDARD_TYPE) return Collections.emptyList();
-
-						var rubber = Inferrer.clearTypeParam(itf, visType, g.typeParams);
-						return ((Generic) rubber).children;
-					}
-
-					if (depth == 1) continue;
-
-					var info = classes.getClassInfo(typeInst.interfaces().get(j - 1));
-					if (parentListOrReport(info).containsValue(target)) {
-						typeInst = info;
-						break;
-					}
+				var info = classes.getClassInfo(type.owner());
+				if (parentListOrReport(info).containsValue(target)) {
+					var rubber = Inferrer.clearTypeParam(type, visType, g.typeParams);
+					params = ((Generic) rubber).children;
+					typeInst = info;
+					continue loop;
 				}
 			}
+
+			// parentList
+			IType parent = g.values.get(0);
+			var rubber = (Generic) Inferrer.clearTypeParam(parent, visType, g.typeParams);
+
+			if (target.equals(parent.owner())) {
+				if (parent.genericType() == IType.STANDARD_TYPE) return Collections.emptyList();
+				return rubber.children;
+			}
+
+			params = rubber.children;
+			typeInst = classes.getClassInfo(typeInst.parent);
 		}
 	}
 
@@ -396,12 +391,10 @@ public class LocalContext {
 		int count = sign == null ? 0 : sign.typeParams.size();
 
 		if (type.genericType() == IType.GENERIC_TYPE) {
-			// TODO hack..
-			boolean genericIgnore = info.interfaces().contains("roj/compiler/runtime/GenericIgnore");
-
 			Generic type1 = (Generic) type;
 			List<IType> gp = type1.children;
 
+			boolean genericIgnore = info.interfaces().contains("roj/compiler/runtime/GenericIgnore");
 			if (!genericIgnore && gp.size() != count) {
 				if (count == 0) report(Kind.ERROR, "symbol.error.generic.paramCount.0", type.rawType());
 				else if (gp.size() != 1 || gp.get(0) != Asterisk.anyGeneric) report(Kind.ERROR, "symbol.error.generic.paramCount", type.rawType(), gp.size(), count);
@@ -638,7 +631,7 @@ public class LocalContext {
 	}
 
 	public void addException(IType type) {
-		TypeCast.Cast cast = castCheck.checkCast(type, CompileUnit.RUNTIME_EXCEPTION);
+		TypeCast.Cast cast = caster.checkCast(type, CompileUnit.RUNTIME_EXCEPTION);
 		if (cast.type >= 0) return;
 
 		var exceptions = (AttrClassList) method.attrByName("Exceptions");
@@ -650,14 +643,15 @@ public class LocalContext {
 				}
 			} else {
 				for (String s : exceptions.value) {
-					if (castCheck.checkCast(type, new Type(s)).type >= 0) return;
+					if (caster.checkCast(type, new Type(s)).type >= 0) return;
 				}
 			}
 		}
 		report(classes.isSpecEnabled(CompilerSpec.CHECKED_EXCEPTION) ? Kind.WARNING : Kind.ERROR, "lc.unReportedException", type);
 	}
 
-	public SimpleList<TransitiveContext> enclosingThis = new SimpleList<>();
+	// this should inherit in depths
+	public SimpleList<EncloseContext> enclosing = new SimpleList<>();
 
 	// Assigned by BlockParser
 	public MyHashMap<String, Variable> variables = new MyHashMap<>();
@@ -690,6 +684,8 @@ public class LocalContext {
 
 	/**
 	 * @param name DotGet name
+	 * @param args arguments
+	 *
 	 * @return [owner, name, Nullable Expr]
 	 */
 	public Import tryImportMethod(String name, List<ExprNode> args) {
@@ -698,8 +694,8 @@ public class LocalContext {
 			if (result != null) return result;
 		}
 
-		for (int i = enclosingThis.size()-1; i >= 0; i--) {
-			Import imp = enclosingThis.get(i).tryMethodRef(this, name);
+		for (int i = enclosing.size()-1; i >= 0; i--) {
+			Import imp = enclosing.get(i).tryMethodRef(this, name);
 			if (imp != null) return imp;
 		}
 
@@ -713,8 +709,8 @@ public class LocalContext {
 			if (result != null) return result;
 		}
 
-		for (int i = enclosingThis.size()-1; i >= 0; i--) {
-			Import imp = enclosingThis.get(i).tryFieldRef(this, name);
+		for (int i = enclosing.size()-1; i >= 0; i--) {
+			Import imp = enclosing.get(i).tryFieldRef(this, name);
 			if (imp != null) return imp;
 		}
 
@@ -838,10 +834,10 @@ public class LocalContext {
 
 		String commonParent = infoA.name();
 		int minIndex = listB.size();
-		for (IntBiMap.Entry<String> entry : listA.selfEntrySet()) {
+		for (var entry : listA.selfEntrySet()) {
 			String klass = entry.getValue();
 
-			int val = listB.getValueOrDefault(klass, minIndex);
+			int val = listB.getValueOrDefault(klass, minIndex)&0x7FFF_FFFF;
 			int j = val&0xFFFF;
 			if (j < minIndex || (j == minIndex && val < minIndex)) {
 				commonParent = klass;
@@ -926,11 +922,14 @@ public class LocalContext {
 		return null;
 	}
 
-	public IClass getPrimitiveMethod(ExprNode caller, List<ExprNode> args) {
-		var type1 = new ConstantData();
-		type1.name("java/lang/Integer");
-		type1.newMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, "toHexString", "(I)Ljava/lang/String;");
-		return type1;
+	public IClass getPrimitiveMethod(IType type, ExprNode caller, List<ExprNode> args) {
+		if (type.getActualType() == Type.INT) {
+			var type1 = new ConstantData();
+			type1.name("java/lang/Integer");
+			type1.newMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, "toHexString", "(I)Ljava/lang/String;");
+			return type1;
+		}
+		return null;
 	}
 
 	/**

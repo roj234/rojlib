@@ -22,9 +22,8 @@ import roj.collect.ToIntMap;
 import roj.config.CCJson;
 import roj.config.auto.Serializer;
 import roj.config.auto.Serializers;
-import roj.net.http.Action;
 import roj.net.http.Headers;
-import roj.net.http.HttpCode;
+import roj.net.http.HttpUtil;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.server.*;
 import roj.reflect.ClassDefiner;
@@ -272,7 +271,7 @@ public class OKRouter implements Router {
 					for (int j = 0; j < 8; j++) {
 						if ((set.accepts & (1<<j)) != 0) {
 							if (newReq[j] != null)
-								throw new IllegalArgumentException("冲突的请求类型处理器/"+o+" in "+newReq[j]+"|"+set+":"+Action.toString(j));
+								throw new IllegalArgumentException("冲突的请求类型处理器/"+o+" in "+newReq[j]+"|"+set+":"+HttpUtil.getMethodName(j));
 							newReq[j] = set;
 						}
 					}
@@ -868,7 +867,7 @@ public class OKRouter implements Router {
 		}
 
 		if (set == null) throw new IllegalRequestException(403, "路径没有匹配的路由");
-		if (((1 << req.action()) & set.accepts) == 0) throw new IllegalRequestException(HttpCode.METHOD_NOT_ALLOWED, "路由不接受请求方法");
+		if (((1 << req.action()) & set.accepts) == 0) throw new IllegalRequestException(HttpUtil.METHOD_NOT_ALLOWED, "路由不接受请求方法");
 
 		req.connection().attachment(RouterImplKey, set);
 		for (Dispatcher prec : set.prec) {

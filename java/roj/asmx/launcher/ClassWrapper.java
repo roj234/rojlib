@@ -344,11 +344,21 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	private AnnotationRepo repo;
 	public AnnotationRepo getAnnotations() throws IOException {
 		if (this.repo == null) {
-			if (archives.isEmpty()) throw new IOException("没有任何源来自本地zip/jar文件，您的JVM可能不受支持");
+			if (archives.isEmpty()) LOGGER.warn("没有任何源来自本地zip/jar文件，您的JVM可能不受支持");
 
-			AnnotationRepo repo = new AnnotationRepo();
-			for (ZipFile archive : archives)
+			var repo = new AnnotationRepo();
+			var buf = IOUtil.getSharedByteBuf();
+			for (ZipFile archive : archives) {
+				ZEntry entry = archive.getEntry("META-INF/annotations.repo");
+				if (entry != null) {
+					buf.clear();
+					try {
+						if (repo.deserialize(archive.get(entry, buf)))
+							continue;
+					} catch (Exception ignored) {}
+				}
 				repo.add(archive);
+			}
 
 			this.repo = repo;
 		}

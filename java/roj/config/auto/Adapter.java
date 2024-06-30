@@ -17,8 +17,7 @@ abstract class Adapter {
 	@ReferenceByGeneratedClass
 	static void value(CVisitor v, String s) {if(s == null) v.valueNull(); else v.value(s);}
 
-	public Adapter withGenericType(SerializerFactoryImpl man, List<IType> genericType) { return this; }
-	public Adapter inheritBy(SerializerFactoryImpl factory, Class<?> type) { return this; }
+	public Adapter transform(SerializerFactoryImpl man, Class<?> subclass, @Nullable List<IType> generic) { return this; }
 
 	public void read(AdaptContext ctx, boolean l) {read(ctx, (Object)l);}
 	public void read(AdaptContext ctx, int l) {read(ctx, (Object)l);}

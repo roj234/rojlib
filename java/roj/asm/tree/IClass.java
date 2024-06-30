@@ -24,8 +24,8 @@ public interface IClass extends Attributed {
 	List<? extends RawNode> fields();
 
 	default int getMethod(String name, String desc) {
-		List<? extends RawNode> methods = methods();
-		for (int i = 0; i < methods.size(); i++) {
+		var methods = methods();
+		for (int i = 0, size = methods.size(); i < size; i++) {
 			RawNode ms = methods.get(i);
 			if (name.equals(ms.name()) && (desc == null || ms.rawDesc().equals(desc))) {
 				return i;
@@ -35,8 +35,8 @@ public interface IClass extends Attributed {
 	}
 	default int getMethod(String name) {return getMethod(name, null);}
 	default int getField(CharSequence key) {
-		List<? extends RawNode> fields = fields();
-		for (int i = 0; i < fields.size(); i++) {
+		var fields = fields();
+		for (int i = 0, size = fields.size(); i < size; i++) {
 			RawNode fs = fields.get(i);
 			if (key.equals(fs.name())) return i;
 		}

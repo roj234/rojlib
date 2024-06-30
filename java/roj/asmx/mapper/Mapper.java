@@ -1115,12 +1115,12 @@ public class Mapper extends Mapping {
 	}
 	/** InnerClass type */
 	private void mapInnerClass(ClassUtil U, ConstantData data) {
-		List<InnerClasses.InnerClass> classes = Attributes.getInnerClasses(data.cp, data);
+		List<InnerClasses.Item> classes = Attributes.getInnerClasses(data.cp, data);
 		if (classes == null) return;
 
 		CharList sb = IOUtil.getSharedCharBuf();
 		for (int j = 0; j < classes.size(); j++) {
-			InnerClasses.InnerClass clz = classes.get(j);
+			InnerClasses.Item clz = classes.get(j);
 			if (clz.parent != null) {
 				sb.clear();
 				String name = U.mapClassName(classMap, sb.append(clz.parent).append('$').append(clz.name));

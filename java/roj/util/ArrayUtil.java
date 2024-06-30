@@ -4,7 +4,6 @@ import roj.compiler.plugins.asm.ASM;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.DirectAccessor;
-import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.ui.CLIUtil;
 
@@ -201,7 +200,7 @@ public final class ArrayUtil {
 	public static <T> List<T> copyOf(Collection<T> list) {
 		if (list.isEmpty()) return Collections.emptyList();
 		if (list.getClass() == IMMUTABLE_ARRAY_TYPE) return (List<T>) list;
-		if (ASM.inject("_TARGET_JAVA_VERSION", ReflectionUtils.JAVA_VERSION) >= 10) {
+		if (ASM.TARGET_JAVA_VERSION > 9) {
 			return List.copyOf(list);
 		} else {
 			return (List<T>) Arrays.asList(list.toArray());

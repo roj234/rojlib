@@ -49,4 +49,6 @@ public class LogContext {
 
 	public LogDestination destination() { return destination != null ? destination : parent.destination(); }
 	public LogContext destination(LogDestination d) { destination = d; return this; }
+
+	LogWriter getWriter() {return getPrefix() == null ? LogWriterJson.LOCAL.get() : LogWriter.LOCAL.get();}
 }

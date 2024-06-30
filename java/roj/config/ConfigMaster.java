@@ -164,7 +164,7 @@ public enum ConfigMaster {
 	public <T> T readObject(Class<T> type, File file) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), file); }
 	public <T> T readObject(Class<T> type, InputStream in) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), in); }
 	public <T> T readObject(Class<T> type, DynByteBuf buf) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), buf); }
-	public <T> T readObject(Class<T> type, CharSequence sb) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), sb); }
+	public <T> T readObject(Class<T> type, CharSequence sb) throws ParseException { return readObject(Serializers.SAFE.serializer(type), sb); }
 
 	public <T> T readObject(Serializer<T> ser, File file) throws IOException, ParseException {
 		parser(true).parse(file, 0, ser.reset());

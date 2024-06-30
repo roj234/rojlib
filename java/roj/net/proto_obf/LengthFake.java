@@ -3,7 +3,6 @@ package roj.net.proto_obf;
 import roj.collect.RingBuffer;
 import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
 import roj.net.handler.PacketMerger;
 import roj.net.handler.VarintSplitter;
 import roj.util.ArrayCache;
@@ -17,7 +16,7 @@ import java.util.Random;
  * @author Roj234
  * @since 2023/9/15 0015 22:04
  */
-public class LengthFake extends PacketMerger implements ChannelHandler {
+public class LengthFake extends PacketMerger {
 	final Random rnd;
 	final RingBuffer<DynByteBuf> buffers = new RingBuffer<>(5, 999);
 	int delay;
@@ -58,7 +57,7 @@ public class LengthFake extends PacketMerger implements ChannelHandler {
 					ctx.channelWrite(tmp);
 					delay = _delay(len);
 				} else {
-					buffers.ringAddLast(ctx.allocate(true, tmp.readableBytes()).put(tmp));
+					buffers.addLast(ctx.allocate(true, tmp.readableBytes()).put(tmp));
 				}
 			}
 		} finally {

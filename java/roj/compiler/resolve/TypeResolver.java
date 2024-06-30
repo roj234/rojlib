@@ -122,10 +122,10 @@ public final class TypeResolver {
 		if (entry != null) return (ConstantData) entry.getValue();
 
 		GlobalContext gc = ctx.classes;
-		ConstantData c = null;
+		ConstantData c;
 
 		// 已经是全限定名
-		if (!restricted && (c = gc.getClassInfo(name)) != null) return c;
+		if ((c = gc.getClassInfo(name)) != null) return restricted ? checkRestricted(c) : c;
 
 		if (name.indexOf('/') >= 0) return null;
 
@@ -206,6 +206,13 @@ public final class TypeResolver {
 			}
 		}
 		return c;
+	}
+
+	private ConstantData checkRestricted(ConstantData c) {
+		if (importClass.containsValue(c.name)) return c;
+		int index = c.name.lastIndexOf('/');
+		if (index > 0 && importPackage.contains(c.name.substring(index))) return c;
+		return null;
 	}
 
 	/**

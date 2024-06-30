@@ -25,7 +25,7 @@ public class GreatErrorPage {
 	private static Template template;
 	static {
 		try {
-			template = Template.compile(IOUtil.getTextResource("META-INF/html/system_error.html"));
+			template = Template.compile(IOUtil.getTextResource("roj/net/http/server/error/system_error.html"));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -147,7 +147,7 @@ public class GreatErrorPage {
 		data.put("cookie", display_table(sb, "COOKIE", map).toString());
 
 		try {
-			map = req.session();
+			map = req.session(false);
 		} catch (Exception ex) {
 			map = null;
 		}

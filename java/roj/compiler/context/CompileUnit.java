@@ -1,6 +1,7 @@
 package roj.compiler.context;
 
 import org.intellij.lang.annotations.MagicConstant;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.cp.CstClass;
@@ -56,8 +57,8 @@ public final class CompileUnit extends ConstantData {
 	private Object _next;
 
 	static final int _ACC_DEFAULT = 1 << 16, _ACC_ANNOTATION = 1 << 17, _ACC_RECORD = 1 << 18, _ACC_STRUCT = 1 << 19, _ACC_SEALED = 1 << 20, _ACC_NON_SEALED = 1 << 21,
-		_ACC_INNER_CLASS = 1 << 22;
-	static final int CLASS_ACC = ACC_PUBLIC|ACC_FINAL|ACC_ABSTRACT|ACC_STRICT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED;
+		_ACC_INNER_CLASS = 1 << 22, _ACC_JAVADOC = 1 << 23;
+	static final int CLASS_ACC = ACC_PUBLIC|ACC_FINAL|ACC_ABSTRACT|ACC_STRICT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED|_ACC_JAVADOC;
 	static final int
 		ACC_CLASS_ILLEGAL = ACC_NATIVE|ACC_TRANSIENT|ACC_VOLATILE|ACC_SYNCHRONIZED,
 		ACC_METHOD_ILLEGAL = ACC_TRANSIENT|ACC_VOLATILE|_ACC_SEALED,
@@ -91,6 +92,7 @@ public final class CompileUnit extends ConstantData {
 	private final MyHashMap<Attributed, List<AnnotationPrimer>> annoTask = new MyHashMap<>();
 
 	// Inner Class
+	@NotNull
 	private final CompileUnit _parent;
 	public int _children;
 
@@ -147,7 +149,7 @@ public final class CompileUnit extends ConstantData {
 		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_INNER_CLASS)) {
 			if ((acc & (ACC_INTERFACE|ACC_ENUM|_ACC_RECORD)) != 0) acc |= ACC_STATIC;
 
-			var desc = InnerClasses.InnerClass.innerClass(c.name, acc);
+			var desc = InnerClasses.Item.innerClass(c.name, acc);
 			this.innerClasses().add(desc);
 			c.innerClasses().add(desc);
 		}
@@ -174,7 +176,7 @@ public final class CompileUnit extends ConstantData {
 		c.body();
 
 		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_INNER_CLASS)) {
-			var desc = InnerClasses.InnerClass.anonymous(c.name, c.modifier);
+			var desc = InnerClasses.Item.anonymous(c.name, c.modifier);
 			this.innerClasses().add(desc);
 			c.innerClasses().add(desc);
 
@@ -207,7 +209,7 @@ public final class CompileUnit extends ConstantData {
 		if (nestMembers == null) top.putAttr(nestMembers = new AttrClassList(Attribute.NestMembers));
 		nestMembers.value.add(c.name);
 	}
-	public List<InnerClasses.InnerClass> innerClasses() {
+	public List<InnerClasses.Item> innerClasses() {
 		InnerClasses c = parsedAttr(cp, Attribute.InnerClasses);
 		if (c == null) putAttr(c = new InnerClasses());
 		return c.classes;
@@ -223,6 +225,7 @@ public final class CompileUnit extends ConstantData {
 
 		wr.index = 0;
 		wr.state = STATE_CLASS;
+		//wr.javadocCollector = new SimpleList<>();
 
 		// 默认包""
 		String pkg = "";
@@ -236,8 +239,10 @@ public final class CompileUnit extends ConstantData {
 		if (w.type() == at) {
 			if (isNormalClass) ctx.report(Kind.ERROR, "package.annotation");
 
+			commitJavadoc(this);
 			ctx.tmpAnnotations.clear();
 			_annotations(ctx.tmpAnnotations);
+			commitAnnotations(this);
 			w = wr.next();
 		}
 
@@ -304,7 +309,7 @@ public final class CompileUnit extends ConstantData {
 				}
 
 				String name = wr.nextIf(AS) ? wr.next().val() : qualified.substring(i+1);
-				if ((qualified = map.put(name, qualified)) != null) {
+				if ((qualified = map.put(name, impField ? qualified.substring(0, i) : qualified)) != null) {
 					ctx.report(Kind.ERROR, "import.conflict", tmp, name, qualified);
 				}
 			}
@@ -316,14 +321,14 @@ public final class CompileUnit extends ConstantData {
 		name(pkg);
 
 		if (isNormalClass) {
-			int acc = (char) _modifiers(wr, CLASS_ACC);
+			int acc = _modifiers(wr, CLASS_ACC);
 			header(acc);
 			ctx.classes.addCompileUnit(this, false);
 		} else name(pkg+"package-info");
 
 		// 辅助类
 		while (!wr.nextIf(EOF)) {
-			int acc = (char) _modifiers(wr, CLASS_ACC);
+			int acc = _modifiers(wr, CLASS_ACC);
 			_newHelper(acc);
 		}
 
@@ -425,8 +430,10 @@ public final class CompileUnit extends ConstantData {
 	private void header(int acc) throws ParseException {
 		JavaLexer wr = ctx.lexer;
 
+		// 虽然看起来很怪，但是确实满足了this inner和helper正确的javadoc提交逻辑
+		_parent.commitJavadoc(this);
 		// 修饰符和注解
-		if (!ctx.tmpAnnotations.isEmpty()) annoTask.put(this, new SimpleList<>(ctx.tmpAnnotations));
+		commitAnnotations(this);
 
 		// 类型(class enum...)
 		Word w = wr.next();
@@ -522,7 +529,7 @@ public final class CompileUnit extends ConstantData {
 
 				FieldNode field = new FieldNode(ACC_PUBLIC|ACC_FINAL, name, type.rawType());
 
-				if (!ctx.tmpAnnotations.isEmpty()) annoTask.put(field, new SimpleList<>(ctx.tmpAnnotations));
+				commitAnnotations(field);
 				finishSignature(null, Signature.FIELD, field);
 
 				fields.add(field);
@@ -595,7 +602,7 @@ public final class CompileUnit extends ConstantData {
 
 		wr.retractWord();
 
-		signature = finishSignature(_parent == null ? null : _parent.signature, Signature.CLASS, this);
+		signature = finishSignature(_parent == this ? null : _parent.signature, Signature.CLASS, this);
 		for (int i = 0; i < miscFieldId; i++) {
 			var sign = (LPSignature) fields.get(i).attrByName("Signature");
 			if (sign != null) sign.parent = signature;
@@ -634,7 +641,7 @@ public final class CompileUnit extends ConstantData {
 			}
 
 			// ## 3.1 访问级别和注解
-			acc = ACC_PUBLIC|ACC_STATIC|ACC_STRICT|ACC_FINAL|ACC_ABSTRACT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED;
+			acc = ACC_PUBLIC|ACC_STATIC|ACC_STRICT|ACC_FINAL|ACC_ABSTRACT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED|_ACC_JAVADOC;
 			switch (modifier & (ACC_INTERFACE|ACC_ANNOTATION)) {
 				case ACC_INTERFACE:
 					acc |= _ACC_DEFAULT|ACC_PRIVATE;
@@ -665,6 +672,7 @@ public final class CompileUnit extends ConstantData {
 			// ## 3.3.1 初始化和内部类
 			switch (w.type()) {
 				case lBrace: // static initializator
+					commitJavadoc(null);
 					if ((acc& ~(ACC_STATIC|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED)) != 0) ctx.report(Kind.ERROR, "modifier.conflict", showModifiers(acc & ~ACC_STATIC, ACC_SHOW_METHOD), "cu.except.initBlock");
 					if ((acc & ACC_STATIC) == 0) {
 						if ((acc & ACC_INTERFACE) != 0) ctx.report(Kind.ERROR, "cu.interfaceInit");
@@ -759,8 +767,9 @@ public final class CompileUnit extends ConstantData {
 				}
 
 				MethodNode method = new MethodNode(acc, this.name, name, "()V");
+				commitJavadoc(method);
 				method.setReturnType(type);
-				if (!ctx.tmpAnnotations.isEmpty()) annoTask.put(method, new SimpleList<>(ctx.tmpAnnotations));
+				commitAnnotations(method);
 
 				List<String> paramNames = ctx.tmpList; paramNames.clear();
 
@@ -810,10 +819,15 @@ public final class CompileUnit extends ConstantData {
 						}
 
 						if (w.type() == LITERAL) {
-							if (paramNames.contains(w.val())) ctx.report(Kind.ERROR, "cu.method.paramConflict");
-							paramNames.add(w.val());
+							var pname = w.val();
+							if (pname.equals("_")) {
+								pname = "@skip";
+							} else {
+								if (paramNames.contains(pname)) ctx.report(Kind.ERROR, "cu.method.paramConflict");
+							}
+							paramNames.add(pname);
 						} else {
-							throw wr.err("unexpected:" + w.val());
+							throw wr.err("unexpected:"+w.val());
 						}
 
 						if (parAccName != null) {
@@ -908,10 +922,11 @@ public final class CompileUnit extends ConstantData {
 
 				Signature s = finishSignature(signature, Signature.FIELD, null);
 
-				List<AnnotationPrimer> list = ctx.tmpAnnotations.isEmpty() ? null : new SimpleList<>(ctx.tmpAnnotations);
+				var list = ctx.tmpAnnotations.isEmpty() ? null : new SimpleList<>(ctx.tmpAnnotations);
 
 				while (true) {
 					FieldNode field = new FieldNode(acc, name, type);
+					commitJavadoc(field);
 					if (!names.add(name)) {
 						ctx.report(Kind.ERROR, "cu.nameConflict", ctx.currentCodeBlockForReport(), "symbol.field", name);
 					}
@@ -1045,6 +1060,9 @@ public final class CompileUnit extends ConstantData {
 
 	public int _modifiers(JavaLexer wr, int mask) throws ParseException {
 		if ((mask & _ACC_ANNOTATION) != 0) ctx.tmpAnnotations.clear();
+		if ((mask & _ACC_JAVADOC) != 0) {
+			// TODO javadoc
+		}
 
 		Word w;
 		int acc = 0;
@@ -1091,6 +1109,9 @@ public final class CompileUnit extends ConstantData {
 			}
 			acc |= f;
 		}
+	}
+	private void commitJavadoc(Attributed node) {
+
 	}
 
 	public static final int TYPE_PRIMITIVE = 1, TYPE_GENERIC = 2, TYPE_NO_ARRAY = 4, TYPE_ALLOW_VOID = 8;
@@ -1212,7 +1233,7 @@ public final class CompileUnit extends ConstantData {
 		if (w.type() == gtr) {
 			// 钻石操作符<>
 			if (g.children.isEmpty()) {
-				if ((flags&GENERIC_INNER) != 0) report(Kind.ERROR, "type.illegalAnyType");
+				if ((flags&GENERIC_INNER) != 0) ctx.report(Kind.ERROR, "type.illegalAnyType");
 				else g.addChild(Asterisk.anyGeneric);
 			}
 		} else while (true) {
@@ -1263,9 +1284,9 @@ public final class CompileUnit extends ConstantData {
 		if (w.type() == dot) {
 			IType sub = readGeneric(wr.except(LITERAL).val(), TYPE_NO_ARRAY);
 			// 无法从参数化的类型中选择静态类
-			if (!(sub instanceof LPGeneric gp)) report(Kind.ERROR, "type.partialGenericSub", sub);
+			if (!(sub instanceof LPGeneric gp)) ctx.report(Kind.ERROR, "type.partialGenericSub", sub);
 			else {
-				if (gp.extendType != Generic.EX_NONE) report(Kind.ERROR, "type.illegalSub", sub);
+				if (gp.extendType != Generic.EX_NONE) ctx.report(Kind.ERROR, "type.illegalSub", sub);
 				else g.sub = new GenericSub(gp.owner, gp.children);
 			}
 
@@ -1386,6 +1407,9 @@ public final class CompileUnit extends ConstantData {
 				return list;
 			}
 		}
+	}
+	private void commitAnnotations(Attributed node) {
+		if (!ctx.tmpAnnotations.isEmpty()) annoTask.put(node, new SimpleList<>(ctx.tmpAnnotations));
 	}
 	// endregion
 	// region 阶段2 解析并验证类自身的引用
@@ -2028,27 +2052,38 @@ public final class CompileUnit extends ConstantData {
 		}
 		return (ctx.applicableTo&mask) != 0;
 	}
-	public CodeWriter createDelegation(int acc, MethodNode my, MethodNode it, boolean end) {
-		CodeWriter c = newMethod(acc, it.name(), it.rawDesc());
-		int size = (1 + TypeHelper.paramSize(it.rawDesc()));
-		c.visitSize(size, size);
-		c.one(ALOAD_0);
+	public CodeWriter createDelegation(int acc, MethodNode it, MethodNode my, boolean end) {
+		CodeWriter c = newMethod(acc, my.name(), my.rawDesc());
+		boolean special = it.name().startsWith("<");
+		int base = 1;
+
+		if (special) {
+			c.clazz(Opcodes.NEW, it.owner);
+			c.one(DUP);
+			c.visitSize(TypeHelper.paramSize(it.rawDesc())+2, TypeHelper.paramSize(my.rawDesc()));
+		} else if ((it.modifier&ACC_STATIC) == 0) {
+			c.one(ALOAD_0);
+			c.visitSize(TypeHelper.paramSize(it.rawDesc())+1, TypeHelper.paramSize(my.rawDesc())+1);
+		} else {
+			base = 0;
+			c.visitSize(TypeHelper.paramSize(it.rawDesc()), TypeHelper.paramSize(my.rawDesc()));
+		}
 
 		List<Type> myPar = my.parameters();
 		List<Type> itPar = it.parameters();
 
 		for (int i = 0; i < myPar.size(); i++) {
-			Type castFrom = itPar.get(i), cTo = myPar.get(i);
-			c.varLoad(cTo, i+1);
-
-			ctx.castTo(castFrom, cTo, TypeCast.E_DOWNCAST).write(c);
+			Type from = myPar.get(i);
+			c.varLoad(from, base);
+			ctx.castTo(from, itPar.get(i), TypeCast.E_DOWNCAST).write(c);
+			base += from.length();
 		}
 
-		c.invoke(my.name().startsWith("<") ? INVOKESPECIAL : INVOKEVIRTUAL, my);
+		c.invoke(special ? INVOKESPECIAL : (it.modifier&ACC_STATIC) == 0 ? INVOKEVIRTUAL : INVOKESTATIC, it);
 
-		ctx.castTo(my.returnType(), it.returnType(), TypeCast.E_DOWNCAST).write(c);
+		ctx.castTo(it.returnType(), my.returnType(), TypeCast.E_DOWNCAST).write(c);
 		if (end) {
-			c.one(it.returnType().shiftedOpcode(IRETURN));
+			c.one(my.returnType().shiftedOpcode(IRETURN));
 			c.finish();
 		}
 		return c;
@@ -2061,8 +2096,10 @@ public final class CompileUnit extends ConstantData {
 
 		int v = getMethod("<clinit>");
 		if (v < 0) {
-			v = methods.size();
-			methods.add(new MethodNode(ACC_PUBLIC|ACC_STATIC, name, "<clinit>", "()V"));
+			synchronized (getStage4Lock()) {
+				v = methods.size();
+				methods.add(new MethodNode(ACC_PUBLIC|ACC_STATIC, name, "<clinit>", "()V"));
+			}
 		}
 
 		MethodNode node = methods.get(v);
@@ -2076,7 +2113,7 @@ public final class CompileUnit extends ConstantData {
 
 		SimpleList<ConstantData> _throws = new SimpleList<>();
 
-		for (int i = 0; i < methods.size(); i++) {
+		for (int i = 0, size = methods.size(); i < size; i++) {
 			MethodNode method = methods.get(i);
 			if (method.name().equals("<init>")) {
 				// synthetic auto constructor (and the only one)
@@ -2136,7 +2173,10 @@ public final class CompileUnit extends ConstantData {
 	public int getAssertEnabled() {
 		if (assertionId >= 0) return assertionId;
 
-		int fid = newField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, "$assertionEnabled", "Z");
+		int fid;
+		synchronized (getStage4Lock()) {
+			fid = newField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, "$assertionEnabled", "Z");
+		}
 		assertionId = fid;
 
 		MethodWriter initAssert;
@@ -2162,6 +2202,9 @@ public final class CompileUnit extends ConstantData {
 		}
 		return i;
 	}
+
+	// 异步操作methods和fields时需要这个锁
+	public Object getStage4Lock() {return methods;}
 
 	public void S4_Code() throws ParseException {
 		LocalContext ctx = this.ctx = LocalContext.get();

@@ -18,6 +18,8 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
 
+import static roj.reflect.ReflectionUtils.u;
+
 /**
  * @author Roj233
  * @since 2022/5/19 1:44
@@ -103,6 +105,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 
 	public int wIndex() { return wIndex; }
 	public void wIndex(int w) {
+		if (w < 0) throw new IllegalArgumentException("negative size:"+w);
 		ensureCapacity(w);
 		this.wIndex = w;
 	}
@@ -156,6 +159,8 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	int moveWI(int i) {
 		int t = wIndex;
 		int e = t+i;
+		// overflow or < 0
+		if (e < t) throw new IndexOutOfBoundsException("pos="+t+",len="+i);
 		ensureCapacity(e);
 		wIndex = e;
 		return t;
@@ -225,6 +230,12 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final DynByteBuf putBool(boolean b) { return put(b?1:0); }
 	@ReferenceByGeneratedClass
 	public final DynByteBuf putByte(byte e) { return put(e); }
+
+	public final DynByteBuf putZero(int count) {
+		long offset = _unsafeAddr() + moveWI(count);
+		u.setMemory(array(), offset, count, (byte)0);
+		return this;
+	}
 
 	public abstract DynByteBuf put(int e);
 	public abstract DynByteBuf put(int i, int e);

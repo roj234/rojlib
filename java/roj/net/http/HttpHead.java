@@ -70,7 +70,7 @@ public class HttpHead extends Headers {
 				c = line.substring(j+1);
 				if (a.startsWith("HTTP/")) break success;
 				request = true;
-				if (Action.valueOf(a) < 0) break failed;
+				if (HttpUtil.parseMethod(a) < 0) break failed;
 				if (c.startsWith("HTTP/")) break success;
 			}
 			throw new IllegalArgumentException("无效请求头 " + line);

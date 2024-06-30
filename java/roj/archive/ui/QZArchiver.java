@@ -235,25 +235,33 @@ public class QZArchiver {
 
 		QzAES qzAes = password == null ? null : new QzAES(password, cryptPower, cryptSalt);
 
+		boolean isUncompressed = options.getMode() == LZMA2Options.MODE_UNCOMPRESSED;
+		if (isUncompressed) {
+			uncompressed.addAll(compressed);
+			uncompressed.addAll(executable);
+		}
+
 		// UNCOMPRESSED
 		if (!uncompressed.isEmpty()) {
+			long size = 0;
 			firstIsUncompressed = true;
 			for (File file : uncompressed) {
 				QZEntry entry = entryFor(file);
 				if (entry != null) {
 					tmpa.add(file);
 					tmpb.add(entry);
+					size += file.length();
 				}
 			}
 
-			addBlock(new QZCoder[] {qzAes == null ? Copy.INSTANCE : qzAes}, tmpa, tmpb, 0);
+			addBlock(new QZCoder[] {qzAes == null ? Copy.INSTANCE : qzAes}, tmpa, tmpb, size);
 		}
+		if (isUncompressed) return Long.MAX_VALUE;
 
 		long chunkSize = autoSolidSize ? MathUtils.clamp(compressedLen[0] / threads, LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX) : solidSize;
 		if (chunkSize < 0) chunkSize = Long.MAX_VALUE;
 
-		QZCoder lzma2 = options.getMode() == LZMA2Options.MODE_UNCOMPRESSED ? Copy.INSTANCE : new LZMA2(options);
-
+		QZCoder lzma2 = new LZMA2(options);
 		QZCoder[] coders = qzAes == null ? new QZCoder[] {lzma2} : new QZCoder[] {lzma2, qzAes};
 		makeBlock(compressed, chunkSize, coders, tmpa, tmpb);
 
@@ -427,7 +435,13 @@ public class QZArchiver {
 		long size;
 	}
 
+	private Thread worker;
+	public void interrupt() {
+		Thread w = worker;
+		if (w != null) w.interrupt();
+	}
 	public void compress(TaskPool pool, EasyProgressBar bar) throws IOException {
+		worker = Thread.currentThread();
 		QZFileWriter writer;
 		File tmp;
 
@@ -489,6 +503,7 @@ public class QZArchiver {
 			bar.addMax(keepSize);
 		}
 
+		try {
 		// first copy unchanged
 		for (Iterator<Map.Entry<WordBlock, List<QZEntry>>> itr = keep.entrySet().iterator(); itr.hasNext(); ) {
 			Map.Entry<WordBlock, List<QZEntry>> entry = itr.next();
@@ -589,11 +604,12 @@ public class QZArchiver {
 			writer.setCompressHeader(0);
 		}
 
-		writer.setIgnoreClose(false);
-		writer.close();
-		if (bar != null) bar.end("压缩成功");
-
-		if (tmp != null && !keepArchive) Files.move(tmp.toPath(), new File(outputFolder, outputName).toPath());
+		} finally {
+			writer.setIgnoreClose(false);
+			writer.close();
+			if (tmp != null && !keepArchive) Files.move(tmp.toPath(), new File(outputFolder, outputName).toPath());
+			if (bar != null) bar.end("压缩成功");
+		}
 	}
 
 	private QZWriter parallel(QZFileWriter qfw) throws IOException {

@@ -1,6 +1,5 @@
 package roj.net.ch;
 
-import roj.io.FastFailException;
 import roj.io.NIOUtil;
 import roj.io.buf.BufferPool;
 import roj.reflect.DirectAccessor;
@@ -109,7 +108,7 @@ class TcpChImpl extends MyChannel {
 			} while (true);
 
 			if (pending.isEmpty()) {
-				flag &= ~PAUSE_FOR_FLUSH;
+				flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 				key.interestOps(SelectionKey.OP_READ);
 				fireFlushed();
 			}
@@ -121,18 +120,14 @@ class TcpChImpl extends MyChannel {
 	@Override
 	protected void read() throws IOException {
 		DynByteBuf buf = rb;
+		if (buf == EMPTY) rb = buf = alloc().allocate(true, buffer, 0);
 		while (state == OPENED && sc.isOpen()) {
-			if (!buf.isWritable()) {
-				if (buf == EMPTY) rb = buf = alloc().allocate(true, buffer, 0);
-				else rb = buf = alloc().expand(buf, buf.capacity());
-			}
-
 			ByteBuffer nioBuffer = syncNioRead(buf);
 			int r;
 			try {
 				r = sc.read(nioBuffer);
 			} catch (IOException e) {
-				if (TcpUtil.isOutputOpen(sc)) throw new FastFailException(e.getMessage());
+				if (TcpUtil.isOutputOpen(sc)) throw e;
 				close();
 				return;
 			}
@@ -140,7 +135,7 @@ class TcpChImpl extends MyChannel {
 
 			if (r < 0) {
 				onInputClosed();
-			} else if (r == 0) {
+			} else if (!buf.isReadable()) {
 				break;
 			} else {
 				try {
@@ -148,6 +143,9 @@ class TcpChImpl extends MyChannel {
 				} finally {
 					buf.compact();
 				}
+
+				if ((flag&READ_INACTIVE) != 0) return;
+				if (!buf.isWritable()) rb = buf = alloc().expand(buf, buf.capacity());
 			}
 		}
 	}
@@ -156,6 +154,7 @@ class TcpChImpl extends MyChannel {
 		BufferPool bp = alloc();
 
 		DynByteBuf buf = (DynByteBuf) o;
+		if (!buf.isReadable()) return;
 		if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes(), 0).put(buf);
 
 		try {
@@ -163,10 +162,13 @@ class TcpChImpl extends MyChannel {
 
 			if (buf.isReadable()) {
 				if (pending.isEmpty()) key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
-				else if (pending.size() > 30) pauseAndFlush();
+				else if (pending.size() > 5) pauseAndFlush();
 
-				Object o1 = pending.ringAddLast(bp.allocate(true, buf.readableBytes(), 0).put(buf));
-				if (o1 != null) throw new IOException("上层发送缓冲区过载");
+				DynByteBuf put = bp.allocate(true, buf.readableBytes(), 0).put(buf);
+				if (!pending.offerLast(put)) {
+					BufferPool.reserve(put);
+					throw new IOException("上层发送缓冲区过载");
+				}
 			} else {
 				fireFlushed();
 			}
