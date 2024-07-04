@@ -107,10 +107,19 @@ public class HttpUtil {
 	public static final String ACCESS_CONTROL_ALLOW_METHODS = "Access-Control-Allow-Methods";
 	public static final String ACCESS_CONTROL_ALLOW_CREDENTIALS = "Access-Control-Allow-Credentials";
 
+	// 204 No Content
 	public static boolean isCORSPreflight(Request req) {
 		return req.action() == OPTIONS && req.containsKey("Origin") && req.containsKey("Access-Control-Request-Method");
 	}
 	// endregion
+	//region cache-control
+	// Vary用于请求头决定的缓存
+	public static final String
+		NO_CACHE = "no-store",
+		CACHED = "max-age=604800",
+		CACHED_REVALIDATE = "no-cache",
+		IMMUTABLE = "max-age=604800, immutable";
+	//endregion
 
 	static final Pattern pa = Pattern.compile("(up.browser|up.link|mmp|symbian|smartphone|midp|wap|phone|iphone|ipad|ipod|android|xoom)", Pattern.CASE_INSENSITIVE);
 

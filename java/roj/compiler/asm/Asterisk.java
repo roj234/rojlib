@@ -15,14 +15,16 @@ import java.util.List;
  * @since 2024/1/27 0001 11:04
  */
 public final class Asterisk implements IType {
-	public static final Asterisk anyType = new Asterisk();
-	public static final Asterisk anyGeneric = new Asterisk();
+	// 尽管AnyGeneric有专门的检测，AnyType是没有的
+	public static final Asterisk anyType = new Asterisk("<AnyType>");
+	public static final Asterisk anyGeneric = new Asterisk("<AnyGeneric>");
 
+	private String typename;
 	private IType bound;
 	private List<IType> bounds = Collections.emptyList();
 	private boolean limited;
 
-	private Asterisk() {}
+	public Asterisk(String typename) {this.typename = typename;}
 	/**
 	 * "泛型返回值"类型
 	 * @param visualType 表现类型 以这个类型去测试能否转换
@@ -84,9 +86,8 @@ public final class Asterisk implements IType {
 
 	@Override
 	public void toString(CharList sb) {
-		if (this == anyType) sb.append("<AnyType>");
-		if (this == anyGeneric) sb.append("<AnyGeneric>");
-		if (limited) {
+		if (typename != null) sb.append(typename);
+		else if (limited) {
 			bound.toString(sb.append('*'));
 		} else {
 			sb.append("* extends ");
@@ -100,8 +101,7 @@ public final class Asterisk implements IType {
 	}
 	@Override
 	public String toString() {
-		if (this == anyType) return "<AnyType>";
-		if (this == anyGeneric) return "<AnyGeneric>";
+		if (typename != null) return typename;
 		return limited ? "*"+bound : "* extends "+TextUtil.join(bounds, "&");
 	}
 
@@ -109,9 +109,22 @@ public final class Asterisk implements IType {
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (!(o instanceof Asterisk asterisk)) return false;
-		return bound == null ? asterisk.bound == null : bound.equals(asterisk.bound);
+
+		if (typename != null) return asterisk.typename != null;
+		if (asterisk.typename != null) return false;
+
+		if (limited != asterisk.limited) return false;
+		if (!bound.equals(asterisk.bound)) return false;
+		return bounds.equals(asterisk.bounds);
 	}
 
 	@Override
-	public int hashCode() { return bound == null ? 1 : bound.hashCode(); }
+	public int hashCode() {
+		if (typename != null) return 42;
+
+		int hash = bound.hashCode();
+		hash = 31 * hash + bounds.hashCode();
+		hash = 31 * hash + (limited ? 1 : 0);
+		return hash;
+	}
 }

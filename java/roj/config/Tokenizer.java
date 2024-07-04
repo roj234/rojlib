@@ -448,7 +448,9 @@ public class Tokenizer {
 					// fall to literal(symbol)
 				default:
 					prevIndex = index = i;
-					return readSymbol();
+					Word w = readSymbol();
+					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
+					return w;
 				case C_NUMBER:
 					prevIndex = index = i;
 					return readDigit(false);
@@ -465,6 +467,7 @@ public class Tokenizer {
 	}
 
 	// region symbol matcher
+	protected static final Word COMMENT_RETRY_HINT = new Word();
 	private final CInt posHold = new CInt();
 	private final BiFunction<CInt, Word, Boolean> searcher = (kPos, v) -> {
 		// staticy is not valid
@@ -488,30 +491,25 @@ public class Tokenizer {
 
 	protected final Word tryMatchToken() throws ParseException {
 		CharSequence in = input;
-		int i;
+		int i = index;
+
 		Word w;
+		_bestMatch = null;
+		tokens.longestWithCallback(in, i, in.length(), posHold, searcher);
+		if ((w = _bestMatch) == null) return null;
 
-		for(;;) {
-			i = index;
-
-			_bestMatch = null;
-			tokens.longestWithCallback(in, i, in.length(), posHold, searcher);
-			if ((w = _bestMatch) == null) return null;
-
-			if (w.getClass() == Word.class) {
-				if (w.pos < 0) {
-					index = i+_bestLength;
-					w = onSpecialToken0(w);
-					if (w != null) return w;
-					continue;
-				}
-
-				else w = formClip(w.type(), w.val());
-			} else {
-				w = w.copy();
-				w.pos = index;
+		if (w.getClass() == Word.class) {
+			if (w.pos < 0) {
+				index = i+_bestLength;
+				w = onSpecialToken0(w);
+				if (w != null) return w;
+				return COMMENT_RETRY_HINT;
 			}
-			break;
+
+			else w = formClip(w.type(), w.val());
+		} else {
+			w = w.copy();
+			w.pos = index;
 		}
 
 		index = i+_bestLength;
@@ -950,11 +948,14 @@ public class Tokenizer {
 	protected final void singleLineComment(CharList row) {
 		CharSequence in = input;
 
-		int i = TextUtil.gNextCRLF(in, index);
-		if (i < 0) i = in.length();
-		else i--;
-
-		if (row != null) row.append(in, index, i).trimLast().append('\n');
+		int i;
+		if (row != null) {
+			i = TextUtil.gAppendToNextCRLF(in, index, row);
+			row.trimLast().append('\n');
+		} else {
+			i = TextUtil.gNextCRLF(in, index);
+			if (i < 0) i = in.length();
+		}
 		commentPostprocess(i);
 	}
 	protected final void multiLineComment(CharList row, String end) throws ParseException {

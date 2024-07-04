@@ -142,13 +142,7 @@ public class MethodWriter extends CodeWriter {
 	private static final long BLOCK_INDEX = ReflectionUtils.fieldOffset(Label.class, "block");
 	private static final long OFFSET_INDEX = ReflectionUtils.fieldOffset(Label.class, "offset");
 	public void insertBefore(DynByteBuf buf) {
-		int offset = getTmpLenOffset();
-		bw.preInsert(offset, buf.readableBytes());
-		int pos = bw.wIndex();
-		bw.wIndex(offset);
-		bw.put(buf);
-		bw.wIndex(pos);
-
+		super.insertBefore(buf);
 		int delta = buf.readableBytes();
 		for (Label label : zeroLabels) ReflectionUtils.u.getAndAddInt(label, OFFSET_INDEX, delta);
 	}

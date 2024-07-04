@@ -24,11 +24,13 @@ public class PluginClassLoader extends ClassLoader {
 	public static final ThreadLocal<PluginClassLoader> PLUGIN_CONTEXT = new ThreadLocal<>();
 
 	final PluginDescriptor desc;
+	final PluginDescriptor[] accessible;
 	final ZipFile archive;
 
-	public PluginClassLoader(ClassLoader parent, PluginDescriptor plugin) throws IOException {
+	public PluginClassLoader(ClassLoader parent, PluginDescriptor plugin, PluginDescriptor[] accessible) throws IOException {
 		super(parent);
 		this.desc = plugin;
+		this.accessible = accessible;
 		this.archive = new ZipFile(plugin.source, ZipFile.FLAG_VERIFY|ZipFile.FLAG_BACKWARD_READ, plugin.charset);
 		this.archive.reload();
 	}
@@ -37,7 +39,14 @@ public class PluginClassLoader extends ClassLoader {
 	protected Class<?> findClass(String name) throws ClassNotFoundException {
 		String klass = name.replace('.', '/').concat(".class");
 		ZEntry entry = archive.getEntry(klass);
-		if (entry == null) throw new ClassNotFoundException(name);
+		if (entry == null) {
+			for (var s : accessible) {
+				if (s.cl != null && s.cl.archive.getEntry(klass) != null) {
+					return s.cl.findClass(name);
+				}
+			}
+			throw new ClassNotFoundException(name);
+		}
 
 		PluginClassLoader prev = PLUGIN_CONTEXT.get();
 		PLUGIN_CONTEXT.set(this);

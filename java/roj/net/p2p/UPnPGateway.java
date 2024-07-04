@@ -16,6 +16,7 @@ import java.util.Map;
  * @since 2022/1/15 17:36
  */
 public class UPnPGateway {
+	static final Logger LOGGER = Logger.getLogger("UPnP");
 	private static UPnPDevice gateway;
 	private static UPnPDevice.Service service;
 	private static List<UPnPDevice> gateways;
@@ -32,7 +33,7 @@ public class UPnPGateway {
 				if (!gateways.isEmpty())
 					setGateway(gateways.get(0));
 			} catch (Exception e) {
-				Logger.getLogger("P2P").error("无法找到可用的UPnP网关设备", e);
+				LOGGER.error("无法找到支持UPnP的网关", e);
 				gateways = Collections.emptyList();
 			}
 		}
@@ -44,7 +45,7 @@ public class UPnPGateway {
 	public static void setGateway(UPnPDevice device) {
 		List<String> types = Arrays.asList("urn:schemas-upnp-org:service:WANIPConnection:1", "urn:schemas-upnp-org:service:WANPPPConnection:1");
 		List<UPnPDevice.Service> services = device.getServices(types);
-		if (services.isEmpty()) throw new IllegalArgumentException("No specified service available");
+		if (services.isEmpty()) throw new IllegalArgumentException(types+" service not available");
 		service = services.get(0);
 		gateway = device;
 	}

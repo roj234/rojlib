@@ -37,7 +37,10 @@ public class PluginDescriptor {
 	boolean loadNative, dynamicLoadClass, accessUnsafe;
 	boolean skipCheck;
 
+	final Object stateLock = new Object();
 	volatile int state;
+
+	private PluginDescriptor _next;
 
 	public String getId() { return id; }
 	public Version getVersion() { return version; }

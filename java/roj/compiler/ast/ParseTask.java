@@ -122,6 +122,7 @@ public interface ParseTask {
 			@Override
 			public void parse(LocalContext ctx) {
 				var node = expr.resolve(ctx);
+				var cast = LocalContext.get().castTo(node.type(), f.fieldType(), 0);
 
 				if ((f.modifier & Opcodes.ACC_STATIC) != 0) {
 					if ((f.modifier & Opcodes.ACC_FINAL) != 0) {
@@ -135,10 +136,12 @@ public interface ParseTask {
 						}
 					}
 
-					MethodWriter mp = file.getStaticInit();
+					if (cast.type < 0) return;
+
+					var mp = file.getStaticInit();
 					ctx.setMethod(mp.mn);
 
-					node.write(mp, false);
+					node.writeDyn(mp, cast);
 					mp.field(Opcodes.PUTSTATIC, file.name, f.name(), f.rawDesc());
 				} else {
 					if ((f.modifier & Opcodes.ACC_FINAL) != 0) {
@@ -147,11 +150,13 @@ public interface ParseTask {
 						}
 					}
 
-					MethodWriter mp = file.getGlobalInit();
+					if (cast.type < 0) return;
+
+					var mp = file.getGlobalInit();
 					ctx.setMethod(mp.mn);
 
 					mp.one(Opcodes.ALOAD_0);
-					node.write(mp, false);
+					node.writeDyn(mp, cast);
 					mp.field(Opcodes.PUTFIELD, file.name, f.name(), f.rawDesc());
 				}
 			}

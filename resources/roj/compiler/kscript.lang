@@ -116,7 +116,7 @@ cu.sealed.unlisted.i="无法实现密封接口%1\n  只允许下列类实现: %2
 cu.sealed.missing=需要sealed、non-sealed或final修饰符
 
 #Cu Stage3/4
-cu.override.unable="%1中的方法%2无法实现%3中的方法%4\n  %5"
+cu.override.unable="%1无法实现%2中的方法%3\n  %4"
 cu.override.access=正在分配更低的访问权限 (%1=> %2)
 cu.override.returnType="返回类型不兼容\n  原因: %1"
 cu.override.thrown=被覆盖的方法未抛出异常 %1
@@ -218,7 +218,8 @@ block.except.switch=case, default或'}'
 
 # 表达式Parse阶段
 expr.stackOverflow=表达式太复杂
-expr.cast.lambda=需要->
+expr.lambda.pattern=需要->
+expr.lambda.illegal=lambda表达式格式错误
 expr.easyMap.kvOrRet='->'或','
 expr.notVariable='%1'期待变量类型
 expr.newArray.generic=[NewArray]创建泛型数组

@@ -12,13 +12,13 @@ public interface Router {
 	// 1MB
 	int DEFAULT_POST_SIZE = 1048576;
 
-	default int writeTimeout(@Nullable Request req, @Nullable Response resp) { return 2500; }
+	default int writeTimeout(@Nullable Request req, @Nullable Response resp) { return resp == null ? 1000 : 3600_000; }
 	default int readTimeout() { return 5000; }
 
 	Response response(Request req, ResponseHeader rh) throws Exception;
 
 	default void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
-		if (cfg != null) cfg.postAccept(8388608, 0);
+		if (cfg != null) cfg.postAccept(DEFAULT_POST_SIZE, 0);
 	}
 
 	default int keepaliveTimeout() { return 300_000; }

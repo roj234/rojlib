@@ -16,11 +16,8 @@ import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.text.Escape;
 import roj.ui.CLIUtil;
-import roj.util.Helpers;
 
 import java.net.InetAddress;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -41,9 +38,9 @@ public class Aliyun implements DDNSService {
 	private static final String DEFAULT_SIGNATURE_VERSION = "1.0";
 
 	private String AccessKeyId, AccessKeySecret;
-	private Random rnd = new SecureRandom();
+	private final Random rnd = new SecureRandom();
 
-	private URL makeUrl(Map<String, String> param) {
+	private String makeUrl(Map<String, String> param) {
 		Map<String, String> queries = new MyHashMap<>(param);
 		queries.put("Format", "JSON");
 		queries.put("Version", DEFAULT_API_VERSION);
@@ -59,12 +56,7 @@ public class Aliyun implements DDNSService {
 		//计算签名
 		String signature = makeSign(queries, AccessKeySecret);
 
-		try {
-			return new URL(API_URL+"/?"+makeQuery(queries)+"&Signature="+signature);
-		} catch (MalformedURLException e) {
-			// should not happen!
-			return Helpers.nonnull();
-		}
+		return API_URL+"/?"+makeQuery(queries)+"&Signature="+signature;
 	}
 
 	private String makeQuery(Map<String, String> queries) {
@@ -103,7 +95,7 @@ public class Aliyun implements DDNSService {
 	}
 
 	private static final MyBitSet aliyun_pass = MyBitSet.from("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~");
-	private static CharList encodeSignature(CharSequence src) {return Escape.escape(IOUtil.getSharedByteBuf().putUTFData(src), IOUtil.getSharedCharBuf(), aliyun_pass);}
+	private static CharList encodeSignature(CharSequence src) {return Escape.escape(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf().putUTFData(src), aliyun_pass);}
 
 	private Map<String, DDnsRecord> domain2Id = new MyHashMap<>();
 	static final class DDnsRecord {
@@ -275,7 +267,7 @@ public class Aliyun implements DDNSService {
 	}
 
 	private ITask _init(Map<String, String> param) {
-		URL url = makeUrl(param);
+		var url = makeUrl(param);
 		return () -> {
 			CMap cfg = _parse(pooledRequest(url));
 			System.out.println(cfg);

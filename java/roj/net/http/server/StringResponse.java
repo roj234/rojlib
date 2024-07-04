@@ -12,6 +12,7 @@ import roj.util.DynByteBuf;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.Objects;
 
 public class StringResponse implements Response {
 	final String mime;
@@ -19,8 +20,7 @@ public class StringResponse implements Response {
 
 	public StringResponse(CharSequence c) {this(c, "text/plain");}
 	public StringResponse(CharSequence c, String mime) {
-		if (c == null) throw new NullPointerException("str");
-		str = c;
+		str = Objects.requireNonNull(c, "str");
 		this.mime = mime==null?null:mime + "; charset=UTF-8";
 	}
 
@@ -72,7 +72,7 @@ public class StringResponse implements Response {
 		if (buf.isReadable()) return true;
 
 		buf.clear();
-		off = UTF8MB4.CODER.encodeFixedOut(str,off, str.length(),buf,buf.capacity());
+		off = UTF8MB4.CODER.encodeFixedOut(str,off,str.length(),buf,buf.capacity());
 		rh.write(buf);
 
 		return buf.isReadable() || off < str.length();

@@ -3,6 +3,7 @@ package roj.compiler.context;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Range;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
 import roj.asm.tree.*;
@@ -118,15 +119,11 @@ public class LocalContext {
 		else classes.report(file, kind, knownPos,message, args);
 	}
 
-	public TypeCast.Cast castTo(@NotNull IType from, @NotNull IType to, int lower_limit) {
+	public TypeCast.Cast castTo(@NotNull IType from, @NotNull IType to, @Range(from = -8, to = 0) int lower_limit) {
 		TypeCast.Cast cast = caster.checkCast(from, to);
 
-		// TODO change this
-		if ((cast.type == TypeCast.E_DOWNCAST || cast.type == TypeCast.UPCAST) && isDynamicType(to)) {
-			cast = TypeCast.RESULT(TypeCast.E_DOWNCAST, 99);
-		}
-
-		if (cast.type < lower_limit) report(Kind.ERROR, "typeCast.error."+cast.type, from, to);
+		if (cast.type == TypeCast.E_NEVER && isDynamicType(to)) cast = TypeCast.RESULT(TypeCast.UPCAST, 0);
+		else if (cast.type < lower_limit) report(Kind.ERROR, "typeCast.error."+cast.type, from, to);
 		return cast;
 	}
 
@@ -650,8 +647,8 @@ public class LocalContext {
 		report(classes.isSpecEnabled(CompilerSpec.CHECKED_EXCEPTION) ? Kind.WARNING : Kind.ERROR, "lc.unReportedException", type);
 	}
 
-	// this should inherit in depths
-	public SimpleList<EncloseContext> enclosing = new SimpleList<>();
+	// this should inherit, see #parent for details
+	public SimpleList<NestContext> enclosing = new SimpleList<>();
 
 	// Assigned by BlockParser
 	public MyHashMap<String, Variable> variables = new MyHashMap<>();
@@ -694,8 +691,8 @@ public class LocalContext {
 			if (result != null) return result;
 		}
 
-		for (int i = enclosing.size()-1; i >= 0; i--) {
-			Import imp = enclosing.get(i).tryMethodRef(this, name);
+		if (enclosing != null) {
+			Import imp = NestContext.tryMethodRef(enclosing, this, name);
 			if (imp != null) return imp;
 		}
 
@@ -709,8 +706,8 @@ public class LocalContext {
 			if (result != null) return result;
 		}
 
-		for (int i = enclosing.size()-1; i >= 0; i--) {
-			Import imp = enclosing.get(i).tryFieldRef(this, name);
+		if (enclosing != null) {
+			Import imp = NestContext.tryFieldRef(enclosing, this, name);
 			if (imp != null) return imp;
 		}
 
@@ -862,20 +859,17 @@ public class LocalContext {
 			IntMap<String> value = attr.defaultValue;
 			IntMap<ExprNode> def = new IntMap<>();
 
-			depth(1);
-			var ctx = get();
-			ctx.lexer.init(lexer.getText());
-			ctx.setClass(file);
-			ctx.setMethod(method);
-			depth(-1);
-
+			var tmpPrev = tmpList;
+			tmpList = new SimpleList<>();
 			try {
 				for (IntMap.Entry<String> entry : value.selfEntrySet()) {
-					def.putInt(entry.getIntKey(), ep.deserialize(entry.getValue()).resolve(ctx));
+					def.putInt(entry.getIntKey(), ep.deserialize(entry.getValue()).resolve(this));
 				}
 				return def;
 			} catch (ParseException|ResolveException e) {
 				e.printStackTrace();
+			} finally {
+				tmpList = tmpPrev;
 			}
 		}
 		return EMPTY;
@@ -976,12 +970,18 @@ public class LocalContext {
 		return list == null ? Helpers.maybeNull() : (LocalContext) list.get(((CInt) list.get(0)).value);
 	}
 
-	public static void depth(int ud) {
+	public static LocalContext next() {
 		List<Object> list = FTL.get();
-		CInt mi = (CInt) list.get(0);
-		int v = mi.value += ud;
-		if (v >= list.size()) list.add(((LocalContext) list.get(1)).classes.createLocalContext());
+		int v = ++((CInt) list.get(0)).value;
+		if (v >= list.size()) {
+			LocalContext first = (LocalContext) list.get(1);
+			LocalContext next = first.classes.createLocalContext();
+			next.enclosing = first.enclosing;
+			list.add(next);
+		}
+		return (LocalContext) list.get(v);
 	}
+	public static void prev() {((CInt) FTL.get().get(0)).value--;}
 
 	public List<String> tmpList = new SimpleList<>();
 	public MyHashSet<String> tmpSet = new MyHashSet<>();

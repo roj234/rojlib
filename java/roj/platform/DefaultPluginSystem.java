@@ -8,6 +8,7 @@ import roj.asmx.ITransformer;
 import roj.asmx.event.EventTransformer;
 import roj.asmx.launcher.Bootstrap;
 import roj.asmx.launcher.DefaultTweaker;
+import roj.collect.CollectionX;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.concurrent.task.ITask;
@@ -19,8 +20,9 @@ import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.math.Version;
 import roj.net.ch.ServerLaunch;
-import roj.net.http.server.FileResponse;
 import roj.net.http.server.HttpServer11;
+import roj.net.http.server.MimeType;
+import roj.net.http.server.ZipRouter;
 import roj.net.http.server.auto.OKRouter;
 import roj.reflect.ILSecurityManager;
 import roj.text.CharList;
@@ -130,7 +132,7 @@ public final class DefaultPluginSystem extends PluginManager {
 	}
 
 	private void onLoad() {
-		String CORE_VERSION = "1.6.1";
+		String CORE_VERSION = "1.7.0";
 
 		PluginDescriptor pd = new PluginDescriptor();
 		pd.id = "Core";
@@ -148,13 +150,13 @@ public final class DefaultPluginSystem extends PluginManager {
 			File plugin = ctx.argument("name", File.class);
 			ticker.runAsync(() -> loadPlugin(plugin));
 		})));
-		CMD.register(literal("unload").then(argument("id", Argument.oneOf(plugins)).executes(ctx -> {
+		CMD.register(literal("unload").then(argument("id", Argument.oneOf(CollectionX.toMap(plugins))).executes(ctx -> {
 			String id = ctx.argument("id", PluginDescriptor.class).id;
 			ticker.runAsync(() -> unloadPlugin(id));
 		})));
 		CMD.register(literal("help").executes(ctx -> {
 			System.out.println("加载的插件:");
-			for (PluginDescriptor value : plugins.values()) {
+			for (var value : plugins) {
 				System.out.println("  "+value.getFullDesc().replace("\n", "\n  ")+"\n");
 			}
 			System.out.println("注册的指令:");
@@ -237,10 +239,11 @@ public final class DefaultPluginSystem extends PluginManager {
 		if (router == null) {
 			router = new OKRouter();
 			try {
+				router.addPrefixDelegation("", new ZipRouter(new File(PM.getPluginFolder(), "Core/resource.zip")));
 				httpServer = HttpServer11.simple(new InetSocketAddress(CONFIG.getInteger("http_port", 12345)), 512, router).launch();
-				FileResponse.loadMimeMap(IOUtil.readUTF(new File(PM.getPluginFolder(), "Core/mime.ini")));
+				MimeType.loadMimeMap(IOUtil.readUTF(new File(PM.getPluginFolder(), "Core/mime.ini")));
 			} catch (IOException e) {
-				e.printStackTrace();
+				LOGGER.error("HTTP服务器启动失败", e);
 			}
 		}
 		return router;

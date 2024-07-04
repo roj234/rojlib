@@ -46,13 +46,13 @@ public class GreatErrorPage {
 
 		sb.clear();
 		parse_class(sb.append("["), e.getClass().getName()).append("] at ");
-		parse_file(sb, els[0].getFileName(), els[0].getLineNumber());
+		if (els.length > 0) parse_file(sb, els[0].getFileName(), els[0].getLineNumber());
 		data.put("title", sb.toString());
 
 		sb.clear();
 		for (StackTraceElement el : els) {
 			parse_class(sb.append("<li>"), el.getClassName()).append('.');
-			Escape.htmlEntities_Append(el.getMethodName(), sb).append("() at ");
+			Escape.htmlEntities_Append(sb, el.getMethodName()).append("() at ");
 			parse_file(sb, el.getFileName(), el.getLineNumber()).append("</li>");
 		}
 		data.put("trace", sb.toString());
@@ -187,7 +187,7 @@ public class GreatErrorPage {
 		if (map == null || map.isEmpty()) return sb.append("<small>").append(map == null ? "&lt;failed&gt;" : "empty").append("</small></caption>");
 		sb.append("</caption><tbody>");
 		for (Map.Entry<String, ?> entry : map.entrySet()) {
-			Escape.htmlEntities_Append(entry.getKey(), sb.append("<tr><td>")).append("</td><td>");
+			Escape.htmlEntities_Append(sb.append("<tr><td>"), entry.getKey()).append("</td><td>");
 			parse_args(sb, entry.getValue());
 			sb.append("</td></tr>");
 		}
@@ -201,7 +201,7 @@ public class GreatErrorPage {
 		}
 
 		try {
-			Escape.htmlEntities_Append(String.valueOf(value), sb);
+			Escape.htmlEntities_Append(sb, String.valueOf(value));
 		} catch (Exception e) {
 			sb.append("<b style=\"color:red\">").append(value.getClass().getName()).append(".toString()失败: ");
 			parse_args(sb, e);

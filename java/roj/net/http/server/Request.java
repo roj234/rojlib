@@ -42,7 +42,7 @@ public final class Request extends Headers {
 
 	Request() {}
 
-	public Map<String, Object> threadContext() { return threadCtx; }
+	public Map<String, Object> localCtx() { return threadCtx; }
 	public ResponseHeader server() { return handler; }
 	public MyChannel connection() { return handler.ch.channel(); }
 
@@ -70,24 +70,15 @@ public final class Request extends Headers {
 
 	public int action() { return action; }
 	public String path() { return path; }
-
-	public String getRawPath() { return initPath; }
+	public String absolutePath() { return initPath; }
 
 	public void setPath(String path) { this.path = path; }
 	public void setArguments(Headers arguments) {this.arguments = arguments;}
 	public Headers getArguments() {return arguments;}
 
 	@Deprecated
-	public Request resetPath() { path = initPath; return this; }
-	@Deprecated
 	public Request subDirectory(int i) {
 		while (i-- > 0) path = path.substring(path.lastIndexOf('/')+1);
-		return this;
-	}
-	@Deprecated
-	public Request subDirectory(String mypath) {
-		if (!path.startsWith(mypath) || mypath.endsWith("/")) throw new IllegalArgumentException();
-		path = path.substring(mypath.length()+1);
 		return this;
 	}
 
@@ -164,9 +155,7 @@ public final class Request extends Headers {
 	}
 
 	public String query() {
-		if (getFields == null) {
-			return null;
-		} else if (getFields instanceof String) {
+		if (getFields instanceof String) {
 			return (String) getFields;
 		} else if (getFields == Collections.EMPTY_MAP) {
 			return "";

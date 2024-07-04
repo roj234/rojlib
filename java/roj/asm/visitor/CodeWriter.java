@@ -1,5 +1,6 @@
 package roj.asm.visitor;
 
+import org.jetbrains.annotations.Range;
 import roj.RequireUpgrade;
 import roj.asm.AsmShared;
 import roj.asm.Opcodes;
@@ -76,8 +77,20 @@ public class CodeWriter extends AbstractCodeWriter {
 		initFrames(owner, flags);
 	}
 
-	protected final int getTmpLenOffset() {return tmpLenOffset;}
-	protected final int getTmpLen() {return tmpLen;}
+	/**
+	 * 将buf插入代码开始之前
+	 * 可能需要处理位于index0的label（见重载）
+	 */
+	public void insertBefore(DynByteBuf buf) {
+		if (state != 1) throw new IllegalStateException();
+		var bw = this.bw;
+		int offset = tmpLenOffset;
+		bw.preInsert(offset, buf.readableBytes());
+		int pos = bw.wIndex();
+		bw.wIndex(offset);
+		bw.put(buf);
+		bw.wIndex(pos);
+	}
 
 	public void visitSize(int stackSize, int localSize) {
 		if (state != 1) throw new IllegalStateException();
@@ -191,7 +204,7 @@ public class CodeWriter extends AbstractCodeWriter {
 	}
 	protected void ldc2(Constant c) { codeOb.put(LDC2_W).putShort(cpw.reset(c).getIndex()); }
 
-	public void invokeDyn(int idx, String name, String desc, int type) { codeOb.put(INVOKEDYNAMIC).putShort(cpw.getInvokeDynId(idx, name, desc)).putShort(type); }
+	public void invokeDyn(int idx, String name, String desc, @Range(from = 0, to = 0) int type) { codeOb.put(INVOKEDYNAMIC).putShort(cpw.getInvokeDynId(idx, name, desc)).putShort(type); }
 	public void invokeItf(String owner, String name, String desc) { codeOb.put(INVOKEINTERFACE).putShort(cpw.getItfRefId(owner, name, desc)).putShortLE(1+TypeHelper.paramSize(desc)); }
 	public void invoke(byte code, String owner, String name, String desc, boolean isInterfaceMethod) {
 		// calling by user code

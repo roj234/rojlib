@@ -10,6 +10,7 @@ import roj.asm.type.TypeHelper;
 import roj.collect.MyHashSet;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
+import roj.compiler.diagnostic.Kind;
 import roj.compiler.plugins.api.Processor;
 import roj.util.Helpers;
 
@@ -34,9 +35,11 @@ public final class AnnotationProcessor2 implements Processor {
 		String type = annotation.type();
 		if (type.endsWith("Attach")) {
 			if (file == node) {
-				for (RawNode mn : file.methods()) apply(mn, gctx);
+				if (annotation.getString("value") != null)
+					ctx.report(Kind.SEVERE_WARNING, "plugins.annotation.namedAttachOnType", file);
+				for (RawNode mn : file.methods()) attach(mn, gctx, annotation);
 			} else {
-				apply((RawNode) node, gctx);
+				attach((RawNode) node, gctx, annotation);
 			}
 		} else if (type.endsWith("Operator")) {
 			String token = annotation.getString("value");
@@ -44,7 +47,7 @@ public final class AnnotationProcessor2 implements Processor {
 		}
 	}
 
-	private static void apply(RawNode mn, GlobalContext gctx) {
+	private static void attach(RawNode mn, GlobalContext gctx, Annotation annotation) {
 		if ((mn.modifier()&Opcodes.ACC_STATIC) == 0) return;
 		String desc = mn.rawDesc();
 		if (!desc.startsWith("(L")) return;
@@ -57,7 +60,7 @@ public final class AnnotationProcessor2 implements Processor {
 			desc = TypeHelper.getMethod(params);
 			if (info.getMethod(mn.name(), desc) >= 0) return;
 
-			MethodNode replace = new MethodNode(Opcodes.ACC_PUBLIC, info.name(), mn.name(), desc);
+			MethodNode replace = new MethodNode(Opcodes.ACC_PUBLIC, info.name(), annotation.getString("value", mn.name()), desc);
 			replace.putAttr(new AttachedMethod(new MethodNode(mn)));
 			info.methods().add(Helpers.cast(replace));
 

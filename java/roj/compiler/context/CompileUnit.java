@@ -1867,12 +1867,12 @@ public final class CompileUnit extends ConstantData {
 			var cast = ctx.inferrer.overrideCast(myRt, itRt);
 			if (cast.type != 0) {
 				String inline = "\1cu.override.returnType:\1typeCast.error."+cast.type+':'+myRt+':'+itRt+"\0\0";
-				ctx.report(Kind.ERROR, "cu.override.unable", name, my, it.owner, it, inline);
+				ctx.report(Kind.ERROR, "cu.override.unable", name, it.owner, it, inline);
 			}
 
 			// 生成桥接方法 这里不检测泛型(主要是TypeParam)
 			if (!it.rawDesc().equals(my.rawDesc())) {
-				createDelegation((it.modifier&(ACC_PUBLIC|ACC_PROTECTED)) | ACC_FINAL | ACC_SYNTHETIC | ACC_BRIDGE, my, it, true);
+				createDelegation((it.modifier&(ACC_PUBLIC|ACC_PROTECTED)) | ACC_FINAL | ACC_SYNTHETIC | ACC_BRIDGE, my, it, true, false);
 			}
 
 			// 声明相同或更少的异常
@@ -1889,7 +1889,7 @@ public final class CompileUnit extends ConstantData {
 					}
 
 					String inline = "\1cu.override.thrown:"+f.owner().replace('/', '.')+'\0';
-					ctx.report(Kind.ERROR, "cu.override.unable", name, my, it.owner.replace('/', '.'), it, inline);
+					ctx.report(Kind.ERROR, "cu.override.unable", name, it.owner.replace('/', '.'), it, inline);
 				}
 			}
 		}
@@ -2014,7 +2014,7 @@ public final class CompileUnit extends ConstantData {
 	private void checkDowngrade(MethodNode my, MethodNode it, LocalContext ctx) {
 		if ((my.modifier&ACC_STATIC) != (it.modifier&ACC_STATIC)) {
 			String inline = "cu.override.static."+((my.modifier&ACC_STATIC) != 0 ? "self" : "other");
-			ctx.report(Kind.ERROR, "cu.override.unable", my.owner.replace('/', '.'), my, it.owner.replace('/', '.'), it, inline);
+			ctx.report(Kind.ERROR, "cu.override.unable", my.owner.replace('/', '.'), it.owner.replace('/', '.'), it, inline);
 		}
 
 		int myLevel = my.modifier&(ACC_PUBLIC|ACC_PROTECTED);
@@ -2026,7 +2026,7 @@ public final class CompileUnit extends ConstantData {
 			String inline = "\1cu.override.access:"+
 				(itLevel==0?"\1package-private\0":showModifiers(itLevel, ACC_SHOW_METHOD))+":"+
 				(myLevel==0?"\1package-private\0":showModifiers(myLevel, ACC_SHOW_METHOD))+"\0";
-			ctx.report(Kind.ERROR, "cu.override.unable", my.owner.replace('/', '.'), my, it.owner.replace('/', '.'), it, inline);
+			ctx.report(Kind.ERROR, "cu.override.unable", my.owner.replace('/', '.'), it.owner.replace('/', '.'), it, inline);
 		}
 	}
 	// 注解的适用类型
@@ -2052,12 +2052,11 @@ public final class CompileUnit extends ConstantData {
 		}
 		return (ctx.applicableTo&mask) != 0;
 	}
-	public CodeWriter createDelegation(int acc, MethodNode it, MethodNode my, boolean end) {
+	public CodeWriter createDelegation(int acc, MethodNode it, MethodNode my, boolean end, boolean newObject) {
 		CodeWriter c = newMethod(acc, my.name(), my.rawDesc());
-		boolean special = it.name().startsWith("<");
 		int base = 1;
 
-		if (special) {
+		if (newObject) {
 			c.clazz(Opcodes.NEW, it.owner);
 			c.one(DUP);
 			c.visitSize(TypeHelper.paramSize(it.rawDesc())+2, TypeHelper.paramSize(my.rawDesc()));
@@ -2079,7 +2078,7 @@ public final class CompileUnit extends ConstantData {
 			base += from.length();
 		}
 
-		c.invoke(special ? INVOKESPECIAL : (it.modifier&ACC_STATIC) == 0 ? INVOKEVIRTUAL : INVOKESTATIC, it);
+		c.invoke(it.name().equals("<init>") ? INVOKESPECIAL : (it.modifier&ACC_STATIC) == 0 ? INVOKEVIRTUAL : INVOKESTATIC, it);
 
 		ctx.castTo(it.returnType(), my.returnType(), TypeCast.E_DOWNCAST).write(c);
 		if (end) {
@@ -2161,7 +2160,7 @@ public final class CompileUnit extends ConstantData {
 		return glinit = ctx.classes.createMethodPoet(this, mn);
 	}
 	private DynByteBuf glInitBytes;
-	public void appendGlobalInit(MethodWriter target, LineNumberTable lines) {
+	public void appendGlobalInit(CodeWriter target, LineNumberTable lines) {
 		if (glinit != null) {
 			if (glInitBytes == null) glInitBytes = glinit.writeTo();
 			target.insertBefore(glInitBytes);
@@ -2236,9 +2235,6 @@ public final class CompileUnit extends ConstantData {
 	public LocalContext lc() {return ctx;}
 	public String getSourceFile() {return source;}
 	public CharSequence getCode() {return code;}
-
-	@Deprecated
-	public final void report(Kind kind, String code) {ctx.report(kind, code);}
 
 	public void cancelTask(Attributed node) {
 		// field method parseTask

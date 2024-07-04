@@ -328,8 +328,14 @@ public class ByteList extends DynByteBuf implements Appendable {
 	}
 	public final byte[] toByteArrayAndZero() {
 		byte[] array = toByteArray();
-		for (int i = 0; i < wIndex; i++) array[i] = 0;
+		byte[] arr1 = list;
+		for (int i = 0; i < wIndex; i++) arr1[i] = 0;
 		return array;
+	}
+	public final void clearAndZero() {
+		byte[] arr1 = list;
+		for (int i = 0; i < wIndex; i++) arr1[i] = 0;
+		wIndex = 0;
 	}
 	public final byte[] toByteArrayAndFree() {
 		byte[] array = toByteArray();
@@ -508,6 +514,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	public final ByteList slice(int off, int len) {
 		return len == 0 ? EMPTY : new Slice(list, testWI(off, len), len);
 	}
+	public final ByteList sliceNoIndexCheck(int off, int len) {return new Slice(list, off, len);}
 
 	@Override
 	public final ByteList compact() {
@@ -564,20 +571,6 @@ public class ByteList extends DynByteBuf implements Appendable {
 			}
 		}
 	}
-
-	@Override
-	public boolean equals(Object o) {
-		if (this == o) return true;
-		if (!(o instanceof DynByteBuf b)) return false;
-
-		int length = wIndex-rIndex;
-		if (length != b.readableBytes()) return false;
-
-		return ArrayUtil.vectorizedMismatch(list, _unsafeAddr()+rIndex, b.array(), b._unsafeAddr()+b.rIndex, length, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
-	}
-
-	@Override
-	public int hashCode() { return ArrayUtil.byteHashCode(list, _unsafeAddr()+rIndex, wIndex-rIndex); }
 
 	@Override
 	@NotNull

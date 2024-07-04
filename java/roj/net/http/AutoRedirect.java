@@ -9,7 +9,7 @@ import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.IOException;
-import java.net.URL;
+import java.net.URI;
 
 /**
  * @author Roj234
@@ -18,7 +18,7 @@ import java.net.URL;
 public class AutoRedirect extends Timeout implements ChannelHandler {
 	private final HttpRequest req;
 	private int maxRedirect, maxRetry;
-	private URL redirectPending;
+	private URI redirectPending;
 
 	public AutoRedirect(HttpRequest req, int timeout, int redirect) {
 		this(req,timeout,redirect,0);
@@ -46,7 +46,7 @@ public class AutoRedirect extends Timeout implements ChannelHandler {
 					throw new FastFailException("AutoRedirect:重定向过多");
 				}
 
-				redirectPending = new URL(req.url(), location);
+				redirectPending = req.url().resolve(location);
 				return;
 			}
 		}

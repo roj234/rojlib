@@ -270,7 +270,11 @@ public class XMLParser extends Parser {
 						return readDigit(true);
 					}
 					// fall to literal(symbol)
-				default: prevIndex = index = i; return readSymbol();
+				default:
+					prevIndex = index = i;
+					Word w = readSymbol();
+					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
+					return w;
 				case C_NUMBER: prevIndex = index = i; return readDigit(false);
 				case C_STRING:
 					prevIndex = i;
@@ -338,7 +342,7 @@ public class XMLParser extends Parser {
 		}
 
 		if (hasEntity && (flag&DECODE_ENTITY) != 0) {
-			Escape.deHtmlEntities_Append(in.subSequence(prevI, lastNonEmpty), v);
+			Escape.deHtmlEntities_Append(v, in.subSequence(prevI, lastNonEmpty));
 		} else {
 			v.append(in, prevI, lastNonEmpty);
 		}

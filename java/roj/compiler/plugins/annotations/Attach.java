@@ -12,4 +12,6 @@ import java.lang.annotation.Target;
  */
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.METHOD, ElementType.TYPE})
-public @interface Attach {}
+public @interface Attach {
+	String value() default "";
+}

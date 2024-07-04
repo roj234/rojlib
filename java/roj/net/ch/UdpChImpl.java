@@ -12,7 +12,6 @@ import java.lang.reflect.Field;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -129,30 +128,33 @@ class UdpChImpl extends MyChannel {
 	}
 
 	private void write1(DatagramPkt p, DynByteBuf buf) throws IOException {
-		ByteBuffer nioBuffer = syncNioWrite(buf);
-		InetSocketAddress address = setAddress(nioAddr, p.addr, p.port);
-		int w = dc.send(nioBuffer, address);
+		var nioBuffer = syncNioWrite(buf);
+		var address = setAddress(nioAddr, p.addr, p.port);
+		// buf.readableBytes() or 0
+		dc.send(nioBuffer, address);
 		buf.rIndex = nioBuffer.position();
 	}
 
 	protected void read() throws IOException {
-		while (state == OPENED && dc.isOpen()) {
-			DynByteBuf buf = alloc().allocate(true, UDP_MAX_SIZE, 0);
+		while (state == OPENED) {
+			var buf = alloc().allocate(true, UDP_MAX_SIZE, 0);
 			try {
-				ByteBuffer nioBuffer = syncNioRead(buf);
-				InetSocketAddress r = (InetSocketAddress) dc.receive(nioBuffer);
+				var nioBuffer = syncNioRead(buf);
+				var addr = (InetSocketAddress) dc.receive(nioBuffer);
+				if (addr == null) break;
+
 				buf.wIndex(nioBuffer.position());
 				alloc().expand(buf, buf.wIndex()-buf.capacity());
 
-				if (r == null) break;
-
 				first.buf = buf;
-				first.addr = r.getAddress();
-				first.port = r.getPort();
+				first.addr = addr.getAddress();
+				first.port = addr.getPort();
 				fireChannelRead(first);
 			} finally {
 				BufferPool.reserve(buf);
 			}
+
+			if ((flag&READ_INACTIVE) != 0) break;
 		}
 	}
 

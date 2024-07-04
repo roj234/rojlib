@@ -2,6 +2,7 @@ package roj.io;
 
 import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
+import roj.compiler.plugins.annotations.Attach;
 import roj.concurrent.FastThreadLocal;
 import roj.config.data.CLong;
 import roj.crypt.Base64;
@@ -33,7 +34,7 @@ public final class IOUtil {
 	public static final FastThreadLocal<IOUtil> SharedCoder = FastThreadLocal.withInitial(IOUtil::new);
 
 	// region ThreadLocal part
-	private final CharList charBuf = new CharList(1024);
+	public final CharList charBuf = new CharList(1024);
 	public final ByteList byteBuf = new ByteList();
 	{byteBuf.ensureCapacity(1024);}
 
@@ -132,7 +133,9 @@ public final class IOUtil {
 	public static String read(Reader r) throws IOException { return getSharedCharBuf().readFully(r).toString(); }
 	private static String read1(Reader r) throws IOException { return new CharList(1048576).readFully(r).toStringAndFree(); }
 
-	public static void readFully(InputStream in, byte[] b) throws IOException { readFully(in, b, 0, b.length); }
+	@Attach
+	public static void readFully(InputStream in, byte[] b) throws IOException {readFully(in, b, 0, b.length);}
+	@Attach
 	public static void readFully(InputStream in, byte[] b, int off, int len) throws IOException {
 		while (len > 0) {
 			int r = in.read(b, off, len);
@@ -140,6 +143,21 @@ public final class IOUtil {
 			len -= r;
 			off += r;
 		}
+	}
+
+	@Attach("skipAlt")
+	public static long skip(InputStream in, long count) throws IOException {
+		for(;;) {
+			long i = in.skip(count);
+			if (i == 0) break;
+			count -= i;
+			if (count == 0) break;
+		}
+		return count;
+	}
+	@Attach
+	public static void skipFully(InputStream in, long count) throws IOException {
+		if (skip(in, count) < count) throw new EOFException();
 	}
 
 	public static void copyFile(File source, File target) throws IOException {
@@ -157,12 +175,15 @@ public final class IOUtil {
 		}
 	}
 
+	@Attach("listAll")
 	public static List<File> findAllFiles(File file) {
 		return findAllFiles(file, SimpleList.hugeCapacity(0), Helpers.alwaysTrue());
 	}
+	@Attach("listAll")
 	public static List<File> findAllFiles(File file, Predicate<File> predicate) {
 		return findAllFiles(file, SimpleList.hugeCapacity(0), predicate);
 	}
+	@Attach("listAll")
 	public static List<File> findAllFiles(File file, List<File> files, Predicate<File> predicate) {
 		try {
 			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
@@ -179,6 +200,7 @@ public final class IOUtil {
 		return files;
 	}
 
+	@Attach
 	public static boolean deletePath(File file) {
 		try {
 			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
@@ -402,6 +424,7 @@ public final class IOUtil {
 		return state.value;
 	}
 
+	@Attach
 	public static void closeSilently(@Nullable AutoCloseable c) {
 		if (c != null) try {
 			c.close();

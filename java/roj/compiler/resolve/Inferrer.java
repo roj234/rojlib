@@ -317,10 +317,6 @@ public final class Inferrer {
 	}
 	/**
 	 * 按需复制 请勿再调用.clone()
-	 * @param type
-	 * @param realType
-	 * @param bounds
-	 * @return
 	 */
 	public static IType clearTypeParam(IType type, Map<String, IType> realType, Map<String, List<IType>> bounds) {
 		switch (type.genericType()) {

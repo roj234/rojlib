@@ -7,6 +7,7 @@ import roj.asm.cp.CstString;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnVal;
+import roj.asm.tree.anno.AnnValEnum;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.insn.TryCatchEntry;
@@ -17,6 +18,7 @@ import roj.asm.visitor.Label;
 import roj.asm.visitor.SwitchSegment;
 import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.IntMap;
+import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.config.CCJson;
@@ -49,6 +51,7 @@ public class OKRouter implements Router {
 	private static final String REQ = "roj/net/http/server/Request";
 
 	private final AttributeKey<Route> RouterImplKey = new AttributeKey<>("or:router");
+	private final MyHashMap<String, Dispatcher> interceptors = new MyHashMap<>();
 
 	private final Node route = new Text("");
 
@@ -63,7 +66,8 @@ public class OKRouter implements Router {
 		onFinishes.add(callback);
 	}
 
-	public final OKRouter register(Object o) {
+	public final OKRouter register(Object o) {return register(o, "");}
+	public final OKRouter register(Object o, String pathRel) {
 		ConstantData data = Parser.parseConstants(o.getClass());
 		if (data == null) throw new IllegalStateException("找不到"+o.getClass().getName()+"的类文件");
 
@@ -117,21 +121,22 @@ public class OKRouter implements Router {
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
 
-			List<Annotation> list = Attributes.getAnnotations(data.cp, mn, false);
-			Annotation a = Attributes.getAnnotation(list, "roj/net/http/server/auto/Route");
-			Annotation a2 = Attributes.getAnnotation(list, "roj/net/http/server/auto/Interceptor");
-			if (a == null) {
-				if (a2 == null) continue;
-				List<AnnVal> value = a2.getArray("value");
+			var list = Attributes.getAnnotations(data.cp, mn, false);
+			if (list == null) continue;
+			Annotation a = parseAnnotations(list);
+			if (a == null) continue;
+
+			if (a.type().endsWith("Interceptor")) {
+				List<AnnVal> value = a.getArray("value");
 				if (value.size() > 1) throw new IllegalArgumentException("Interceptor的values长度只能为0或1");
 
-				interceptors.putInt(value.isEmpty()?mn.name():value.get(0).asString(), id++);
-				a = a2;
+				String name = value.isEmpty() ? mn.name() : value.get(0).asString();
+				if (this.interceptors.containsKey(name)) throw new IllegalStateException("拦截器名称"+name+"在全局重复");
+				interceptors.putInt(name, id++);
 			} else {
 				handlers.putInt(id++, a);
 				if (a.getString("value") == null)
 					a.put("value", AnnVal.valueOf(mn.name().replace("__", "/")));
-				if (a2 != null) a.put("interceptor", a2.values.get("value"));
 			}
 
 			Label self = cw.label();
@@ -181,9 +186,6 @@ public class OKRouter implements Router {
 				else cw.one(ACONST_NULL);
 			}
 			cw.one(ARETURN);
-
-			Annotation a1 = Attributes.getAnnotation(list, "roj/net/http/server/auto/Accepts");
-			if (a1 != null) a.put("accepts", a1.values.get("value"));
 		}
 		if (seg.def == null) throw new IllegalArgumentException(data.name+"没有任何处理函数");
 
@@ -206,12 +208,21 @@ public class OKRouter implements Router {
 				cw.invoke(INVOKESPECIAL, "roj/net/http/IllegalRequestException", "<init>", "(ILjava/lang/String;)V");
 				cw.one(ATHROW);
 			}
-			cw.visitExceptions();
+		} else {
 			for (TryCatchEntry eh : exhandlers) {
-				cw.visitException(eh.start,eh.end,eh.handler,null);
+				cw.label(eh.handler);
+				cw.clazz(NEW, "roj/net/http/IllegalRequestException");
+				cw.one(DUP);
+				cw.ldc(400);
+				cw.invoke(INVOKESPECIAL, "roj/net/http/IllegalRequestException", "<init>", "(I)V");
+				cw.one(ATHROW);
 			}
-			cw.finish();
 		}
+		cw.visitExceptions();
+		for (TryCatchEntry eh : exhandlers) {
+			cw.visitException(eh.start,eh.end,eh.handler,null);
+		}
+		cw.finish();
 
 		Dispatcher ah = (Dispatcher) ClassDefiner.make(hndInst, o.getClass().getClassLoader());
 		for (IntMap.Entry<Annotation> entry : handlers.selfEntrySet()) {
@@ -221,15 +232,22 @@ public class OKRouter implements Router {
 
 			set.accepts = a.getInt("accepts", 255);
 			set.req = ah.copyWith(i, o);
+			set.mime = a.getString("mime");
 
 			List<Dispatcher> precs = Collections.emptyList();
 			List<AnnVal> vname = a.getArray("interceptor");
 			if (!vname.isEmpty()) {
 				for (int j = 0; j < vname.size(); j++) {
-					int vid = interceptors.getOrDefault(vname.get(j).asString(), -1);
-					if (vid < 0) throw new IllegalArgumentException("未找到"+a+"引用的拦截器"+vname.get(j));
+					String name = vname.get(j).asString();
+					var prec = this.interceptors.get(name);
+					if (prec == null) {
+						int vid = interceptors.getOrDefault(name, -1);
+						if (vid < 0) throw new IllegalArgumentException("未找到"+a+"引用的拦截器"+vname.get(j));
 
-					Dispatcher prec = ah.copyWith(vid, o);
+						prec = ah.copyWith(vid, o);
+						this.interceptors.put(name, prec);
+					}
+
 					if (precs.size() == 0) {
 						precs = Collections.singletonList(prec);
 					} else {
@@ -241,7 +259,7 @@ public class OKRouter implements Router {
 			set.prec = precs.toArray(new Dispatcher[precs.size()]);
 
 			int prefix = a.getBoolean("prefix")?Node.PREFIX:0;
-			String url = a.getString("value");
+			String url = pathRel.concat(a.getString("value"));
 
 			Node node = route.add(url, 0, url.length());
 
@@ -281,6 +299,51 @@ public class OKRouter implements Router {
 
 		return this;
 	}
+	private static Annotation parseAnnotations(List<Annotation> list) {
+		AnnVal accepts = null, mime = null;
+		Annotation body = null, interceptor = null, route = null, easyMapping = null;
+
+		for (int j = 0; j < list.size(); j++) {
+			var a = list.get(j);
+			switch (a.type()) {
+				case "roj/net/http/server/auto/Interceptor" -> interceptor = a;
+				case "roj/net/http/server/auto/Route" -> route = a;
+				case "roj/net/http/server/auto/Accepts" -> accepts = a.values.get("value");
+				case "roj/net/http/server/auto/Body" -> body = a;
+				case "roj/net/http/server/auto/Mime" -> mime = a.values.get("value");
+				case "roj/net/http/server/auto/GET", "roj/net/http/server/auto/POST" -> {
+					if (easyMapping != null) throw new IllegalArgumentException(easyMapping+"不能和"+a+"共用");
+					easyMapping = a;
+				}
+			}
+		}
+
+		if (easyMapping != null) {
+			if (route != null) throw new IllegalArgumentException(easyMapping+"不能和@Route共用");
+			if (accepts != null) throw new IllegalArgumentException(easyMapping+"不能和@Accepts共用");
+
+			boolean isGet = easyMapping.type().endsWith("GET");
+			if (body == null) list.add(new Annotation("roj/net/http/server/auto/Body", Collections.singletonMap("value", new AnnValEnum("roj/net/http/server/auto/From", isGet ? "GET" : "POST_KV"))));
+
+			var map = easyMapping.values;
+			if (map.isEmpty()) map = easyMapping.values = new MyHashMap<>();
+			map.put("accepts", AnnVal.valueOf(isGet ? Accepts.GET : Accepts.POST));
+
+			route = easyMapping;
+			route.setType("roj/net/http/server/auto/Route");
+		} else if (route == null) return interceptor;
+
+		var values = route.values;
+		if (values.isEmpty()) values = route.values = new MyHashMap<>();
+		if (interceptor != null) values.put("interceptor", interceptor.values.get("value"));
+		if (mime != null) values.put("mime", mime);
+
+		return route;
+	}
+
+	public final Object getInterceptor(String name) {return interceptors.get(name);}
+	public final void setInterceptor(String name, Object interceptor) {interceptors.put(name, (Dispatcher) interceptor);}
+	public final void removeInterceptor(String name) {interceptors.remove(name);}
 
 	public final OKRouter addPrefixDelegation(String path, Router router) {
 		Node node = route.add(path, 0, path.length());
@@ -418,6 +481,11 @@ public class OKRouter implements Router {
 
 			if (fromSlot == 0) throw new IllegalStateException("不支持的类型/"+from1);
 
+			var tce = new TryCatchEntry();
+			tce.start = cw.label();
+			tce.handler = new Label();
+			tce.type = type+" "+name;
+
 			c.vars(ALOAD, fromSlot);
 			c.ldc(name);
 			String orDefault = field.getString("orDefault", null);
@@ -426,12 +494,17 @@ public class OKRouter implements Router {
 				c.invokeItf("java/util/Map", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
 			} else {
 				c.invokeItf("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
+				cw.one(DUP);
+				var label = new Label();
+				cw.jump(IFNONNULL, label);
+				cw.one(POP);
+				cw.clazz(NEW, "roj/io/FastFailException");
+				cw.one(DUP);
+				cw.ldc("该必选参数不存在");
+				cw.invokeD("roj/io/FastFailException", "<init>", "(Ljava/lang/String;)V");
+				cw.one(ATHROW);
+				cw.label(label);
 			}
-
-			TryCatchEntry entry = new TryCatchEntry();
-			entry.start = cw.label();
-			entry.handler = new Label();
-			entry.type = type+" "+name;
 
 			addExHandler:{
 			if (type.owner != null || type.array() > 0) {
@@ -452,7 +525,10 @@ public class OKRouter implements Router {
 				cw.one(I2C);
 				Label label = new Label();
 				cw.jump(IF_icmpeq, label);
-				cw.newObject("roj/io/FastFailException");
+				cw.clazz(NEW, "roj/io/FastFailException");
+				cw.one(DUP);
+				cw.ldc("值不能为零");
+				cw.invokeD("roj/io/FastFailException", "<init>", "(Ljava/lang/String;)V");
 				cw.one(ATHROW);
 				cw.label(label);
 			} else {
@@ -462,13 +538,14 @@ public class OKRouter implements Router {
 				cw.invoke(INVOKESTATIC, "java/lang/"+(name.equals("Int")?"Integer":name), "parse"+name, "(Ljava/lang/String;)"+(char)type.type);
 			}
 			}
-			entry.end = cw.label();
-			tries.add(entry);
+			tce.end = cw.label();
+			tries.add(tce);
 		}
 	}
 
 	private static final class Route {
 		int accepts;
+		String mime;
 		Dispatcher req;
 		Dispatcher[] prec;
 	}
@@ -677,10 +754,9 @@ public class OKRouter implements Router {
 		}
 
 		Node add(String path, int i, int end) {
-			if (i >= end) return this;
-
 			int j = path.indexOf('/', i);
 			if (j >= end || j < 0) j = end;
+			if (i >= j) return this;
 
 			if (table == null) {
 				table = new Text[4];
@@ -854,8 +930,8 @@ public class OKRouter implements Router {
 			Object o = route.value;
 			set = o == null ? null : getASet(o, req.action());
 		} else {
-			RouteMatcher m = (RouteMatcher) req.threadContext().get("or:fn");
-			if (m == null) req.threadContext().put("or:fn", m = new RouteMatcher());
+			RouteMatcher m = (RouteMatcher) req.localCtx().get("or:fn");
+			if (m == null) req.localCtx().put("or:fn", m = new RouteMatcher());
 
 			if (m.match(route, path, 0, len) && m.value != null) {
 				set = getASet(m.value, req.action());
@@ -866,14 +942,14 @@ public class OKRouter implements Router {
 			}
 		}
 
-		if (set == null) throw new IllegalRequestException(403, "路径没有匹配的路由");
-		if (((1 << req.action()) & set.accepts) == 0) throw new IllegalRequestException(HttpUtil.METHOD_NOT_ALLOWED, "路由不接受请求方法");
+		if (set == null) throw new IllegalRequestException(403, debug ? "路径没有匹配的路由" : null);
+		if (((1 << req.action()) & set.accepts) == 0) throw new IllegalRequestException(HttpUtil.METHOD_NOT_ALLOWED, debug ? "路由不接受请求方法" : null);
 
 		req.connection().attachment(RouterImplKey, set);
 		for (Dispatcher prec : set.prec) {
 			Object ret = prec.invoke(req, req.server(), cfg);
 			if (ret != null) {
-				if (ret instanceof Response) throw new IllegalRequestException(200, ((Response) ret));
+				if (ret instanceof Response r) throw new IllegalRequestException(200, r);
 				throw new IllegalRequestException(200, ret.toString());
 			}
 		}
@@ -889,7 +965,7 @@ public class OKRouter implements Router {
 		try {
 			ret = set.req.invoke(req, rh, req.getArguments());
 		} finally {
-			for (Callable<Void> c : onFinishes) {
+			for (var c : onFinishes) {
 				try {
 					c.call();
 				} catch (Exception e) {
@@ -897,16 +973,16 @@ public class OKRouter implements Router {
 				}
 			}
 		}
-		if (ret instanceof Response) return (Response) ret;
+		if (ret instanceof Response r) return r;
 		if (ret == null) return null;
-		return new StringResponse(ret.toString());
+		return new StringResponse(ret.toString(), set.mime != null ? set.mime : "text/plain");
 	}
 
 	public static Object _JAdapt(Request req, String type) throws IllegalRequestException {
 		if (req.postBuffer() == null) throw new IllegalRequestException(400, "没有请求体");
 
-		CCJson jsonp = (CCJson) req.threadContext().get("or:jsonp");
-		if (jsonp == null) req.threadContext().put("or:jsonp", jsonp = new CCJson());
+		CCJson jsonp = (CCJson) req.localCtx().get("or:jsonp");
+		if (jsonp == null) req.localCtx().put("or:jsonp", jsonp = new CCJson());
 
 		Serializer<?> adapter = Serializers.SAFE.serializer(Signature.parseGeneric(type));
 		try {

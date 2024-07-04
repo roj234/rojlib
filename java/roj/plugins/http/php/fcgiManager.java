@@ -16,7 +16,7 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2024/3/3 0003 3:27
+ * @since 2024/7/1 19:14
  */
 public abstract class fcgiManager implements Router {
 	static final Logger LOGGER = Logger.getLogger("FastCGI");
@@ -24,7 +24,7 @@ public abstract class fcgiManager implements Router {
 
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws Exception {
-		var h = (fcgiResponse) req.threadContext().remove("fcgi:handler");
+		var h = (fcgiResponse) req.localCtx().remove("fcgi:handler");
 		if (h == null) {
 			h = fcgi_pass(req, new MyHashMap<>());
 			h.onSuccess();
@@ -38,7 +38,7 @@ public abstract class fcgiManager implements Router {
 	@Override
 	public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
 		if (cfg != null) {
-			cfg.postAccept(Integer.MAX_VALUE, writeTimeout(req, null));
+			cfg.postAccept(Integer.MAX_VALUE, 900000);
 
 			fcgiResponse h;
 			try {
@@ -50,14 +50,11 @@ public abstract class fcgiManager implements Router {
 			}
 
 			cfg.postHandler(h);
-			req.threadContext().put("fcgi:handler", h);
+			req.localCtx().put("fcgi:handler", h);
 		} else {
-			req.threadContext().remove("fcgi:handler");
+			req.localCtx().remove("fcgi:handler");
 		}
 	}
-
-	@Override
-	public int writeTimeout(@Nullable Request req, @Nullable Response resp) {return Integer.MAX_VALUE;}
 
 	protected fcgiResponse fcgi_pass(Request req, Map<String, String> param) throws IOException {
 		param.putIfAbsent("SERVER_SOFTWARE", HttpServer11.SERVER_NAME);

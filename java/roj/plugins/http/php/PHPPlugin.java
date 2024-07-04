@@ -1,0 +1,82 @@
+package roj.plugins.http.php;
+
+import org.jetbrains.annotations.Nullable;
+import roj.config.data.CMap;
+import roj.net.http.IllegalRequestException;
+import roj.net.http.server.*;
+import roj.platform.Plugin;
+
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+/**
+ * @author Roj234
+ * @since 2024/7/10 0010 3:17
+ */
+public class PHPPlugin extends Plugin implements Router {
+	private Win32FPM fpm;
+
+	@Override
+	protected void onEnable() throws Exception {
+		CMap config = getConfig();
+
+		String executable = config.getString("fcgi_executable");
+		Path cgi_exe = getDataFolder().toPath().resolve(Path.of(executable));
+		if (!Files.isExecutable(cgi_exe)) {
+			getLogger().error("PHP可执行文件{}不存在", cgi_exe);
+			getPluginManager().unloadPlugin(getDescription());
+			return;
+		}
+		Path document_root = getDataFolder().toPath().resolve(Path.of(config.getString("document_root")));
+		if (!Files.isDirectory(document_root)) {
+			getLogger().error("文档根目录{}不存在", document_root);
+			getPluginManager().unloadPlugin(getDescription());
+			return;
+		}
+
+		fpm = new Win32FPM(config.getInteger("fcgi_process_stale_max"), config.getInteger("fcgi_process_max"), config.getInteger("fcgi_process_timeout", 600000), cgi_exe.toString(), "-b");
+		fpm.docRoot = document_root.toFile();
+
+		String pluginRoot = config.getString("dps_root");
+		registerRoute(pluginRoot, this);
+
+		getLogger().warn("PHP服务器已在路径{} => {}上启动", fpm.docRoot, pluginRoot);
+	}
+
+	@Override
+	public Response response(Request req, ResponseHeader rh) throws Exception {
+		if (req.path().endsWith(".php")) return fpm.response(req, rh);
+
+		File file = new File(fpm.docRoot, req.path());
+		check: {
+			if (!file.isFile()) {
+				if (file.isDirectory()) {
+					File[] files = file.listFiles((dir, name) -> name.equals("index.html") || name.equals("index.php"));
+					if (files != null && files.length > 0 && files[0].isFile()) {
+						file = files[0];
+						if (file.getName().endsWith(".php")) {
+							req.setPath(req.path()+"/"+file.getName());
+							return fpm.response(req, rh);
+						}
+						break check;
+					}
+				}
+
+				return StringResponse.simpleErrorPage(404);
+			}
+		}
+
+		return FileResponse.response(req, new DiskFileInfo(file));
+	}
+
+	@Override
+	public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
+		if (req.path().endsWith(".php")) fpm.checkHeader(req, cfg);
+	}
+
+	@Override
+	protected void onDisable() {
+		if (fpm != null) fpm.killAll();
+	}
+}

@@ -250,7 +250,7 @@ public final class ExprParser {
 							wr.retract();
 
 							cur = parse1(STOP_RSB|SKIP_RSB);
-							if (cur == null) ctx.report(Kind.ERROR, "expr.cast.lambda");
+							if (cur == null) ctx.report(Kind.ERROR, "expr.lambda.illegal");
 							w = wr.next();
 							break endValueGen;
 						} else if (o instanceof IType type) {// 类型转换
@@ -835,7 +835,18 @@ public final class ExprParser {
 			wr.skip();
 			return ctx.file.readType(CompileUnit.TYPE_PRIMITIVE);
 		}
-		if (w.type() != Word.LITERAL) return null;
+		if (w.type() != Word.LITERAL) {
+			// () -> ...
+			if (w.type() == rParen) {
+				if (wr.next().type() == lambda) {
+					wr.skip();
+					return Collections.emptyList();
+				} else {
+					ctx.report(Kind.ERROR, "expr.lambda.pattern");
+				}
+			}
+			return null;
+		}
 
 		String first = w.val();
 
@@ -875,7 +886,13 @@ public final class ExprParser {
 				if (w.type() != comma) {
 					if (w.type() == rParen) {
 						w = wr.next();
-						if (w.type() == lambda) return names;
+						if (w.type() == lambda) {
+							wr.skip();
+							return names;
+						} else {
+							ctx.report(Kind.ERROR, "expr.lambda.pattern");
+						}
+						break;
 					}
 				}
 			}
@@ -885,7 +902,6 @@ public final class ExprParser {
 			// 只能是 泛型 或 数组
 			// 因为我没有设计 (TYPE NAME [, TYPE NAME]) -> ... 的语法 这很鸡肋
 			if (w.type() == lss || w.type() == lBracket) {
-				wr.retractWord();
 				wr.skip();
 				return ctx.file.genericTypePart(sb.toString());
 			}

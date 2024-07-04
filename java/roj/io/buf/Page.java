@@ -76,12 +76,14 @@ public sealed class Page {
 	}
 	public final boolean alloc(long off, long len) {
 		assert validOffLen(off, len);
+		if (off+len > totalSpace()) return false;
 		boolean ok = malloc(off, align(len));
 		assert validate();
 		return ok;
 	}
 	public final void free(long off, long len) {
 		assert validOffLen(off, len);
+		assert off+len <= totalSpace() : "mfree("+off+","+len+")";
 		mfree(off, align(len));
 		assert validate();
 	}
@@ -233,6 +235,7 @@ public sealed class Page {
 
 				for (int i = 0; i < childCount; i++) {
 					int j = cap-child[i].childId-1;
+					if (j < 0) j = 0;
 					bin.set(j, bin.charAt(j) != BITMAP_USED ? 'E' : BITMAP_SUBPAGE);
 				}
 
@@ -369,19 +372,20 @@ public sealed class Page {
 		final boolean malloc(long off, long len) {
 			if (free < len) return false;
 
-			if (prefix == off) {
+			if (!prefixLocked && prefix == off) {
 				prefix = align(prefix+len);
 				free -= len;
 				return true;
 			}
 
-			int bitFrom = (int) (off >>> SHIFT),
-				bitTo = (int) ((off+len) >>> SHIFT);
+			int bitFrom = (int) (off >>> SHIFT);
 
 			if ((prefix+MASK64[SHIFT]) >>> SHIFT > bitFrom) return false;
 			lockPrefix();
 
-			if (bitFrom == bitTo) {
+			long beforeMaxCap = MASK64[SHIFT] + 1 - (off&MASK64[SHIFT]);
+			if (len <= MASK64[SHIFT] && beforeMaxCap >= len) {
+				if (bitFrom >= bitmapCapacity()) return false;
 				if (goc(bitFrom).malloc(off&MASK64[SHIFT], len)) {
 					free -= len;
 					return true;
@@ -391,18 +395,25 @@ public sealed class Page {
 
 			long before = off&MASK64[SHIFT], after = (off+len)&MASK64[SHIFT];
 
-			// bitFrom is inclusive (bitFrom = off+MASK64[SHIFT] >>> SHIFT也许更好理解？)
-			long flag = BIT(before != 0 ? bitFrom+1 : bitFrom, bitTo);
-			if ((bitmap&flag) != 0 || !isAllEmpty(flag)) return false;
+			int bitTo = (int) ((off+len) >>> SHIFT);
+			if (bitTo >= bitmapCapacity() && after != 0) return false;
 
-			// assert len >= MASK64[SHIFT], so this is smaller
-			if (before != 0 && !goc(bitFrom).malloc(before, MASK64[SHIFT]+1 - before)) // BEFORE
-				return false;
+			long flag;
+			int lbStart = before == 0 ? bitFrom : bitFrom+1;
+			if (lbStart <= bitTo) {
+				flag = BIT(lbStart, bitTo);
+				if ((bitmap&flag) != 0 || !isAllEmpty(flag)) return false;
+			} else {
+				flag = 0;
+			}
 
-			if (after != 0 && !goc(bitTo).malloc(0, after)) { // AFTER
-				// ATOMIC
-				if (before > 0) goc(bitFrom).free(before, MASK64[SHIFT]+1 - before);
-				return false;
+			if (before != 0 && goc(bitFrom).tailEmpty() < beforeMaxCap) return false;
+			if (after != 0 && !goc(bitTo).malloc(0, after)) return false;
+			if (before != 0) {
+				int id = get(bitFrom);
+				System.arraycopy(child, id+1, child, id, childCount-id-1);
+				child[--childCount] = null;
+				//bitmap[i] already set
 			}
 
 			bitmap |= flag;
@@ -420,25 +431,26 @@ public sealed class Page {
 				splitPrefix();
 			}
 
-			int bitFrom = (int) (off >>> SHIFT),
-				bitTo = (int) ((off+len) >>> SHIFT);
+			int bitFrom = (int) (off >>> SHIFT);
 
-			if (bitFrom == bitTo) {
+			long beforeMaxCap = MASK64[SHIFT]+1 - (off&MASK64[SHIFT]);
+			if (len <= MASK64[SHIFT] && beforeMaxCap >= len) {
 				goc(bitFrom).mfree(off&MASK64[SHIFT], len);
 				return;
 			}
 
+			int bitTo = (int) ((off+len) >>> SHIFT);
+
 			long ext = off&MASK64[SHIFT];
-			if (ext > 0) goc(bitFrom++).mfree(ext, MASK64[SHIFT]+1 - ext); // BEFORE
-
-			ext = (off+len)&MASK64[SHIFT];
-			if (ext > 0) goc(bitTo).mfree(0, ext); // AFTER
-
-			if (bitFrom < bitTo) {
-				long flag = BIT(bitFrom, bitTo);
+			int lbStart = ext == 0 ? bitFrom : bitFrom+1;
+			if (lbStart <= bitTo) {
+				long flag = BIT(lbStart, bitTo);
 				assert ((bitmap) & flag) == flag : Long.toBinaryString(bitmap)+" & ~BIT["+bitFrom+", "+bitTo+"): space not allocated";
 				bitmap &= ~flag;
 			}
+
+			if (ext != 0) goc(bitFrom).mfree(ext, beforeMaxCap);
+			if ((ext = (off+len)&MASK64[SHIFT]) != 0) goc(bitTo).mfree(0, ext);
 
 			if (prefixLocked && bitmap == 0) { // 尝试解锁
 				for (int i = childCount-1; i >= 0; i--) {
@@ -450,7 +462,7 @@ public sealed class Page {
 
 		final long headEmpty() {
 			if (prefix > 0) return 0;
-			if (bitmap == 0 && childCount == 0) return totalSpace();
+			if (bitmap == 0) return totalSpace();
 
 			int a = Long.numberOfTrailingZeros(bitmap);
 			if (childCount > 0) {
@@ -460,13 +472,13 @@ public sealed class Page {
 			return (long) a << SHIFT;
 		}
 		final long tailEmpty() {
-			if (bitmap == 0 && childCount == 0) return totalSpace() - prefix;
+			if (bitmap == 0) return totalSpace() - prefix;
 
 			int a = Long.numberOfLeadingZeros(bitmap);
 			if (childCount > 0) {
-				int i = childCount - 1;
+				int i = childCount-1;
 				int id = child[i].childId;
-				if (id >= a) return ((long) (63-id) << SHIFT) + child[i].tailEmpty();
+				if (id >= 63-a) return ((long) (63-id) << SHIFT) + child[i].tailEmpty();
 			}
 			return (long) a << SHIFT;
 		}
@@ -547,7 +559,7 @@ public sealed class Page {
 			return ((long) p.childId << SHIFT) + off;
 		}
 		private int get(int blockId) {
-			assert blockId >= 0 && blockId <= 63 : blockId+" not in [0,63]";
+			assert blockId >= 0 && blockId < bitmapCapacity() : blockId+" not in [0,"+bitmapCapacity()+"]";
 			if (childCount == 64) return blockId;
 
 			int low = 0;

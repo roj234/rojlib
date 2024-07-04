@@ -156,6 +156,24 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		return ArrayRef.create(array(), _unsafeAddr()+off, 1, len);
 	}
 
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof DynByteBuf b)) return false;
+
+		int len = readableBytes();
+		if (len != b.readableBytes()) return false;
+		assert len <= capacity() : info();
+
+		return ArrayUtil.vectorizedMismatch(array(), _unsafeAddr()+rIndex, b.array(), b._unsafeAddr()+b.rIndex, len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
+	}
+	@Override
+	public int hashCode() {
+		int len = readableBytes();
+		assert len <= capacity() : info();
+		return ArrayUtil.byteHashCode(array(), _unsafeAddr()+rIndex, len);
+	}
+
 	int moveWI(int i) {
 		int t = wIndex;
 		int e = t+i;
@@ -605,10 +623,10 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	// endregion
 
 	public final String base64() {return base64(IOUtil.getSharedCharBuf()).toString();}
-	public final CharList base64(CharList sb) {return Base64.encode(this, sb);}
+	public final CharList base64(CharList sb) {return Base64.encode(slice(), sb);}
 
 	public final String base64UrlSafe() {return base64UrlSafe(IOUtil.getSharedCharBuf()).toString();}
-	public final CharList base64UrlSafe(CharList sb) {return Base64.encode(this, sb, Base64.B64_URL_SAFE);}
+	public final CharList base64UrlSafe(CharList sb) {return Base64.encode(slice(), sb, Base64.B64_URL_SAFE);}
 
 	public final String hex() {return hex(IOUtil.getSharedCharBuf()).toString();}
 	public abstract CharList hex(CharList sb);

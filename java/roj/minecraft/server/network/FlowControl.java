@@ -11,8 +11,8 @@ import java.io.IOException;
  * @since 2024/3/22 0022 1:21
  */
 public class FlowControl implements ChannelHandler {
-	private long lastTime;
-	private int bucket;
+	private long lastTime = System.currentTimeMillis();
+	private int bucket = 100;
 
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {

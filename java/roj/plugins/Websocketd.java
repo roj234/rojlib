@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.Lock;
 
 /**
  * @author solo6975
@@ -65,11 +66,15 @@ public class Websocketd extends WebSocketServer implements Router {
 
 			for (int i = 0; i < copy.size(); i++) {
 				CmdWorker worker = copy.get(i);
+				Lock lock = worker.ch.channel().lock();
+				lock.lock();
 				try {
-					worker.error(WebSocketHandler.ERR_CLOSED, "plugin disabled");
+					worker.error(WebSocketHandler.ERR_CLOSED, "插件卸载");
 					worker.ch.close();
 				} catch (Throwable e) {
 					e.printStackTrace();
+				} finally {
+					lock.unlock();
 				}
 			}
 		}

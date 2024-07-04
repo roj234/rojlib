@@ -224,9 +224,10 @@ final class MethodList extends ComponentList {
 
 			ctx.errorCapture = null;
 			ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
+		} else {
+			checkBridgeMethod(ctx, best);
 		}
 
-		checkBridgeMethod(ctx, best);
 		return best;
 	}
 

@@ -6,7 +6,6 @@ import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.net.NetUtil;
 import roj.net.ch.*;
-import roj.net.http.HttpUtil;
 import roj.net.http.server.Request;
 import roj.net.http.server.ResponseHeader;
 import roj.net.http.server.StringResponse;
@@ -872,7 +871,7 @@ public class DnsServer implements ChannelHandler {
 	}
 
 	@Route
-	@Accepts(HttpUtil.POST)
+	@Accepts(Accepts.POST)
 	@Body(From.POST_KV)
 	public void set(Request req, ResponseHeader rh, String url, String type, String cnt) {
 		String msg = null;

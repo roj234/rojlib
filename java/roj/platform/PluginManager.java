@@ -1,9 +1,10 @@
 package roj.platform;
 
 import roj.archive.zip.ZipFile;
-import roj.collect.MyHashMap;
+import roj.collect.Hasher;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
+import roj.collect.XHashSet;
 import roj.config.YAMLParser;
 import roj.config.auto.SerializerFactory;
 import roj.config.data.CMap;
@@ -18,7 +19,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
-import java.util.Iterator;
 import java.util.function.IntFunction;
 
 /**
@@ -27,7 +27,8 @@ import java.util.function.IntFunction;
  */
 public class PluginManager {
 	static final Logger LOGGER = Logger.getLogger("PM");
-	final MyHashMap<String, PluginDescriptor> plugins = new MyHashMap<>();
+	static final XHashSet.Shape<String, PluginDescriptor> PM_SHAPE = XHashSet.noCreation(PluginDescriptor.class, "id", "_next", Hasher.defaul());
+	final XHashSet<String, PluginDescriptor> plugins = PM_SHAPE.create();
 
 	private final ClassLoader env = getClass().getClassLoader();
 	private final File pluginFolder;
@@ -35,9 +36,7 @@ public class PluginManager {
 	public PluginManager(File pluginFolder) { this.pluginFolder = pluginFolder; }
 	public File getPluginFolder() {return pluginFolder;}
 
-	protected boolean isCriticalPlugin(PluginDescriptor pd) {
-		return pd.fileName == null;
-	}
+	protected boolean isCriticalPlugin(PluginDescriptor pd) {return pd.fileName == null;}
 
 	protected final void readPlugins() {
 		for (File file : pluginFolder.listFiles()) {
@@ -47,15 +46,15 @@ public class PluginManager {
 		loadPlugins();
 	}
 	protected final void loadPlugins() {
-		for (PluginDescriptor pd : plugins.values()) {
+		for (var pd : plugins) {
 			for (String s : pd.loadBefore) {
-				PluginDescriptor dep = plugins.get(s);
+				var dep = plugins.get(s);
 				if (dep != null) dep.loadAfter.add(pd.id);
 			}
 		}
 
-		for (Iterator<PluginDescriptor> itr = plugins.values().iterator(); itr.hasNext(); ) {
-			PluginDescriptor pd = itr.next();
+		for (var itr = plugins.iterator(); itr.hasNext(); ) {
+			var pd = itr.next();
 			try {
 				loadPlugin(pd, true);
 			} catch (Throwable e) {
@@ -65,8 +64,8 @@ public class PluginManager {
 			}
 		}
 
-		for (Iterator<PluginDescriptor> itr = plugins.values().iterator(); itr.hasNext(); ) {
-			PluginDescriptor pd = itr.next();
+		for (var itr = plugins.iterator(); itr.hasNext(); ) {
+			var pd = itr.next();
 			try {
 				enablePlugin(pd);
 			} catch (Throwable e) {
@@ -113,7 +112,11 @@ public class PluginManager {
 		Class<?> klass;
 		try {
 			if (pd.source != null) {
-				PluginClassLoader pcl = new PluginClassLoader(env, pd);
+				var accessible = new PluginDescriptor[pd.depend.size()];
+				for (int i = 0; i < pd.depend.size(); i++) accessible[i] = getPlugin(pd.depend.get(i));
+
+				var pcl = new PluginClassLoader(env, pd, accessible);
+
 				pd.cl = pcl;
 				klass = pcl.loadClass(pd.mainClass);
 			} else {
@@ -140,7 +143,7 @@ public class PluginManager {
 	}
 
 	protected final void loadPlugin(File plugin) throws IOException {
-		PluginDescriptor pd = preloadPlugin(plugin);
+		var pd = preloadPlugin(plugin);
 		if (pd != null) loadPlugin(pd);
 	}
 	protected final void loadPlugin(PluginDescriptor pd) throws IOException {
@@ -153,11 +156,11 @@ public class PluginManager {
 	}
 	private PluginDescriptor preloadPlugin(File plugin) {
 		try {
-			PluginDescriptor pd = getMetadata(plugin);
+			var pd = getMetadata(plugin);
 			if (pd == null) {
 				LOGGER.warn("{} 不是插件, 忽略", plugin);
 			} else {
-				PluginDescriptor prev = plugins.get(pd.id);
+				var prev = plugins.get(pd.id);
 				if (prev != null) {
 					LOGGER.warn("插件 {} 已加载另外的版本 {}", pd, prev.version);
 					if (prev.version.compareTo(pd.version) >= 0) {
@@ -167,7 +170,7 @@ public class PluginManager {
 					}
 				}
 
-				plugins.put(pd.id, pd);
+				plugins.add(pd);
 				return pd;
 			}
 		} catch (Exception e) {
@@ -216,7 +219,7 @@ public class PluginManager {
 
 	public PluginDescriptor getPlugin(String id) { return plugins.get(id); }
 	public void enablePlugin(PluginDescriptor pd) {
-		synchronized (pd) {
+		synchronized (pd.stateLock) {
 			if (pd.state < LOADED) throw new IllegalStateException("无法启用未加载的插件 "+pd);
 			if (pd.state == ENABLED) return;
 			try {
@@ -229,7 +232,7 @@ public class PluginManager {
 		}
 	}
 	public void disablePlugin(PluginDescriptor pd) {
-		synchronized (pd) {
+		synchronized (pd.stateLock) {
 			if (pd.state == UNLOAD) return;
 			try {
 				if (pd.state == ENABLED && pd.instance != null) pd.instance.onDisable();
@@ -244,24 +247,27 @@ public class PluginManager {
 	}
 
 	protected final void unloadPlugins() {
-		for (PluginDescriptor pd : plugins.values()) {
-			unloadPlugin(pd);
-		}
-		plugins.clear();
+		for (PluginDescriptor pd : plugins)
+			unloadPluginTrusted(pd);
 		System.gc();
 	}
 	public void unloadPlugin(String name) {
-		PluginDescriptor pd = plugins.get(name);
+		PluginDescriptor pd;
+		synchronized (plugins) {pd = plugins.removeKey(name);}
 		if (pd == null) return;
-		if (isCriticalPlugin(pd)) throw new IllegalArgumentException("不能禁用关键插件"+pd);
-
-		synchronized (plugins) {plugins.remove(name);}
-		unloadPlugin(pd);
+		unloadPluginTrusted(pd);
 		System.gc();
 	}
-	private void unloadPlugin(PluginDescriptor pd) {
-		LOGGER.info("正在卸载插件 {}", pd);
-		synchronized (pd) {
+	public void unloadPlugin(PluginDescriptor pd) {
+		if (isCriticalPlugin(pd)) throw new IllegalArgumentException("不能禁用关键插件"+pd);
+		synchronized (plugins) {if (!plugins.remove(pd)) return;}
+		unloadPluginTrusted(pd);
+	}
+	private void unloadPluginTrusted(PluginDescriptor pd) {
+		synchronized (pd.stateLock) {
+			if (pd.state == UNLOAD) return;
+			LOGGER.info("正在卸载插件 {}", pd);
+
 			disablePlugin(pd);
 			pd.instance = null;
 			if (pd.cl != null) {

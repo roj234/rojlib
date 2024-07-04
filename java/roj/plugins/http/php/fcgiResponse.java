@@ -135,6 +135,7 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 			headers = new Headers();
 			headers.put("status", "502 Bad Gateway");
 			sendHeaders();
+			headerFinished = true;
 			CharSequence str = StringResponse.detailedErrorPage(502, ex).getStr();
 			offer(IOUtil.getSharedByteBuf().putUTFData(str));
 			setEof();

@@ -32,18 +32,18 @@ final class EncloseRef extends ExprNode {
 
 		ctx.resolveType(type);
 		if (thisEnclosing) {
+			var fields = ctx.enclosing;
 			check:
-			if (ctx.enclosing.isEmpty()) {
+			if (fields.isEmpty()) {
 				ctx.report(Kind.ERROR, "encloseRef.staticEnv");
 			} else {
-				var fields = ctx.enclosing;
 				for (int i = 0; i < fields.size();) {
-					if (fields.get(i++).thisType().equals(type.owner())) {
+					if (fields.get(i++).nestType().equals(type.owner())) {
 						thisEnclosingRef = i;
 						break check;
 					}
 				}
-				ctx.report(Kind.ERROR, "encloseRef.noRef");
+				ctx.report(Kind.ERROR, "encloseRef.noRef", type);
 			}
 		} else {
 			var thisType = ctx.ep.This().resolve(ctx).type();
@@ -79,8 +79,8 @@ final class EncloseRef extends ExprNode {
 			var lc = LocalContext.get();
 			var owner = lc.file.name;
 			var fields = lc.enclosing;
-			for (int i = 0; i < fields.size(); i++) {
-				var fn = fields.get(i).thisRef();
+			for (int i = fields.size()-1; i >= thisEnclosingRef; i--) {
+				var fn = fields.get(i).nestRef();
 				cw.field(Opcodes.GETFIELD, owner, fn.name(), fn.rawDesc());
 				owner = fn.fieldType().owner();
 			}

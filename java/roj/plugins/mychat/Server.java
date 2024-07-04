@@ -72,7 +72,7 @@ public class Server extends WebSocketServer implements Router, Context {
 			throw new IOException("Failed to create attachment directory");
 		}
 
-		FileResponse.loadMimeMap(IOUtil.readUTF(new File("plugins/mychat/mime.ini")));
+		MimeType.loadMimeMap(IOUtil.readUTF(new File("plugins/mychat/mime.ini")));
 
 		User S = new User();
 		S.name = "系统";
@@ -172,7 +172,7 @@ public class Server extends WebSocketServer implements Router, Context {
 
 	@Interceptor
 	public Object parallelLimit(Request req, ResponseHeader rh, PostSetting ps) {
-		User u = (User) req.threadContext().get("USER");
+		User u = (User) req.localCtx().get("USER");
 
 		if (u.parallelUD.get() < 0) {
 			rh.code(503).header("Retry-After", "60");
@@ -205,7 +205,7 @@ public class Server extends WebSocketServer implements Router, Context {
 	@Accepts(Accepts.DELETE)
 	@Interceptor("logon")
 	public Object deleteFile(Request req) {
-		User u = (User) req.threadContext().get("USER");
+		User u = (User) req.localCtx().get("USER");
 
 		String safePath = IOUtil.safePath(req.subDirectory(1).path());
 		DynByteBuf bb = IOUtil.SharedCoder.get().decodeBase64(safePath);
@@ -220,7 +220,7 @@ public class Server extends WebSocketServer implements Router, Context {
 
 	@Interceptor
 	public void fileUpload(Request req, ResponseHeader rh, PostSetting ps) {
-		User u = (User) req.threadContext().get("USER");
+		User u = (User) req.localCtx().get("USER");
 
 		List<String> restful = req.directories();
 
@@ -304,7 +304,7 @@ public class Server extends WebSocketServer implements Router, Context {
 	@Interceptor("logon")
 	@Accepts(Accepts.POST)
 	public Object user__set_info(Request req) throws IllegalRequestException {
-		User u = (User) req.threadContext().get("USER");
+		User u = (User) req.localCtx().get("USER");
 
 		Map<String, String> x = req.postFields();
 

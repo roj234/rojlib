@@ -31,14 +31,11 @@ import static roj.asm.Opcodes.*;
 final class NewAnonymousClass extends ExprNode {
 	private final Invoke init;
 	private final CompileUnit type;
-	private final boolean inherit;
 	private CodeWriter initMethod;
 
-	NewAnonymousClass(Invoke cur, CompileUnit type) {this(cur, type, true);}
-	NewAnonymousClass(Invoke cur, CompileUnit type, boolean inherit) {
+	NewAnonymousClass(Invoke cur, CompileUnit type) {
 		this.init = cur;
 		this.type = type;
-		this.inherit = inherit;
 	}
 
 	@Override
@@ -104,7 +101,7 @@ final class NewAnonymousClass extends ExprNode {
 
 			r.addExceptions(ctx, info, false);
 			type.j11PrivateConstructor(r.method);
-			initMethod = type.createDelegation(Opcodes.ACC_SYNTHETIC, r.method, r.method, false);
+			initMethod = type.createDelegation(Opcodes.ACC_SYNTHETIC, r.method, r.method, false, false);
 		}
 		ctx.classes.addGeneratedClass(type);
 
@@ -115,18 +112,19 @@ final class NewAnonymousClass extends ExprNode {
 	}
 
 	private ExprNode resolveNow(LocalContext ctx) {
-		if (inherit) ctx.enclosing.add(EncloseContext.anonymousClass(ctx, initMethod, init.args = new SimpleList<>(init.args)));
-		LocalContext.depth(1);
+		ctx.enclosing.add(NestContext.anonymousClass(ctx, type, initMethod, init.args = new SimpleList<>(init.args)));
 		try {
+			LocalContext.next();
 			type.S2_ResolveSelf();
 			type.S2_ResolveRef();
 			type.S3_Annotation();
 			type.S4_Code();
+			type.appendGlobalInit(initMethod, null);
 		} catch (ParseException e) {
 			throw new ResolveException("newAnonymousClass failed", e);
 		} finally {
-			LocalContext.depth(-1);
-			if (inherit) ctx.enclosing.pop();
+			ctx.enclosing.pop();
+			LocalContext.prev();
 		}
 
 		initMethod.one(RETURN);

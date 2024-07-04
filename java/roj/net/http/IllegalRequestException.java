@@ -16,7 +16,7 @@ public class IllegalRequestException extends IOException {
 	public IllegalRequestException(int code, String msg) {
 		super(msg);
 		this.code = code;
-		response = new StringResponse(msg);
+		response = msg == null ? null : new StringResponse(msg);
 	}
 
 	public IllegalRequestException(int code, String msg, Throwable cause) {
@@ -28,6 +28,7 @@ public class IllegalRequestException extends IOException {
 	public IllegalRequestException(int code, Throwable x) {
 		super(x);
 		this.code = code;
+		response = StringResponse.detailedErrorPage(code, x);
 	}
 
 	public IllegalRequestException(int code, Response ret) {

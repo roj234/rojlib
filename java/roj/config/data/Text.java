@@ -27,14 +27,14 @@ public final class Text extends Node {
 		switch (nodeType) {
 			case CDATA: sb.append("<![CDATA[").append(value).append("]]>"); break;
 			case COMMENT: sb.append("<!--").append(value).append("-->"); break;
-			default: Escape.htmlEntities_Append(value, sb); break;
+			default: Escape.htmlEntities_Append(sb, value); break;
 		}
 	}
 	public void toCompatXML(CharList sb) {
 		switch (nodeType) {
 			case CDATA: sb.append("<![CDATA[").append(value).append("]]>"); break;
 			case COMMENT: break; // no comment in compat XMLs
-			default: Escape.htmlEntities_Append(value, sb); break;
+			default: Escape.htmlEntities_Append(sb, value); break;
 		}
 	}
 }

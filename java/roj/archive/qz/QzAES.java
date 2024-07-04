@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -20,13 +21,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since 2023/3/15 15:32
  */
 public final class QzAES extends QZCoder {
-    public QzAES(String pass) {
-        // 7z uses 19 by default (似乎也不能改)
-        this(pass, 16, 0);
-    }
-    public QzAES(String pass, int cyclePower, int saltLength) {
-        this(pass.getBytes(StandardCharsets.UTF_16LE), cyclePower, saltLength);
-    }
+    //PBKDF2-HMAC-SHA256: 600,000 iterations
+    public QzAES(String pass) {this(pass, 19, 0);}
+    public QzAES(String pass, int cyclePower, int saltLength) {this(pass.getBytes(StandardCharsets.UTF_16LE), cyclePower, saltLength);}
     public QzAES(byte[] pass, int cyclePower, int saltLength) {
         if (cyclePower < 1 || cyclePower > 63) throw new IllegalStateException("别闹");
         if (saltLength < 0 || saltLength > 16) throw new IllegalStateException("salt length [0,16]");
@@ -74,7 +71,7 @@ public final class QzAES extends QZCoder {
     private byte[] lastKey;
     private final AES dec = new AES();
     private void init(byte[] key) {
-        if (lastKey == key) return;
+        if (Arrays.equals(lastKey, key)) return;
         lastKey = key;
 
         byte[] realKey;

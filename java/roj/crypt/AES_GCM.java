@@ -19,7 +19,6 @@ import java.util.Arrays;
  * @since 2022/12/28 0028 14:20
  */
 public class AES_GCM extends AES {
-
 	public AES_GCM() {}
 
 	private ByteList aadBuffer;
@@ -34,7 +33,7 @@ public class AES_GCM extends AES {
 		super.init(mode, key, null, null);
 
 		ByteList H = tmp; H.clear(); Arrays.fill(H.array(), (byte) 0);
-		aes_encrypt(encrypt_key, limit, H.slice(0, AES_BLOCK_SIZE), H);
+		aes_encrypt(encrypt_key, limit, H.sliceNoIndexCheck(0, AES_BLOCK_SIZE), H);
 
 		H0 = H.readLong();
 		H1 = H.readLong();
@@ -208,7 +207,7 @@ public class AES_GCM extends AES {
 		if (len > 0) {
 			assert len < AES_BLOCK_SIZE;
 			// encrypt ctr inline
-			aes_encrypt(encrypt_key, limit, ctr.slice(0, AES_BLOCK_SIZE), ctr);
+			aes_encrypt(encrypt_key, limit, ctr.sliceNoIndexCheck(0, AES_BLOCK_SIZE), ctr);
 
 			processed += len;
 

@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
  */
 public class CharList implements CharSequence, Appendable {
 	// region Number helper
-	static void getChars(long l, int charPos, char[] buf) {
+	public static void getChars(long l, int charPos, char[] buf) {
 		long q;
 		int r;
 
@@ -41,7 +41,7 @@ public class CharList implements CharSequence, Appendable {
 
 		getChars((int) l, charPos, buf);
 	}
-	static void getChars(int i, int charPos, char[] buf) {
+	public static void getChars(int i, int charPos, char[] buf) {
 		int r;
 
 		int q;

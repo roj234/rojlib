@@ -2,9 +2,12 @@ package roj.net.http.server;
 
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
+import roj.io.IOUtil;
 import roj.net.http.Headers;
 import roj.net.http.HttpUtil;
+import roj.net.http.IllegalRequestException;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.zip.ZipEntry;
@@ -16,23 +19,28 @@ import java.util.zip.ZipEntry;
 public class ZipRouter implements Router {
 	public final ZipFile zip;
 	private String prefix = "";
+	private String cacheControl = HttpUtil.CACHED;
 
 	public ZipRouter(String path) throws IOException {this.zip = new ZipFile(path);}
+	public ZipRouter(File path) throws IOException {this.zip = new ZipFile(path);}
 	public ZipRouter(ZipFile zf) {this.zip = zf;}
 	public ZipRouter(ZipFile zf, String prefix) {this.zip = zf;this.prefix = prefix;}
+
+	public ZipRouter setCacheControl(String var) {cacheControl = var;return this;}
+	protected String getCacheControl(ZEntry ze) {return cacheControl;}
 
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws IOException {
 		String url = req.path();
 
-		boolean flag = url.isEmpty() || url.endsWith("/");
+		boolean isDir = url.isEmpty() || url.endsWith("/");
 		url = prefix.concat(url);
 
-		ZEntry ze = zip.getEntry(flag ? url + "index.html" : url);
+		ZEntry ze = zip.getEntry(isDir ? url+"index.html" : url);
 		if (ze == null) {
-			if (flag) {
-				ZEntry dir = zip.getEntry(url);
-				if (dir != null && dir.getName().endsWith("/")) {
+			if (isDir) {
+				ze = zip.getEntry(url);
+				if (ze != null && ze.getName().endsWith("/")) {
 					rh.code(403);
 					return StringResponse.simpleErrorPage(HttpUtil.FORBIDDEN);
 				}
@@ -40,7 +48,9 @@ public class ZipRouter implements Router {
 			rh.code(404);
 			return StringResponse.simpleErrorPage(HttpUtil.NOT_FOUND);
 		}
-		rh.code(200).headers("Cache-Control: max-age=86400");
+
+		rh.code(200).header("cache-control", getCacheControl(ze));
+		if (ze.isEncrypted()) throw new IllegalRequestException(500, "该文件已加密");
 		return FileResponse.response(req, new ZipFileInfo(zip, ze));
 	}
 
@@ -49,13 +59,12 @@ public class ZipRouter implements Router {
 		final ZEntry ze;
 
 		ZipFileInfo(ZipFile zf, ZEntry ze) {
-			if (ze.isEncrypted()) throw new IllegalArgumentException("encrypted");
 			this.zf = zf;
 			this.ze = ze;
 		}
 
 		@Override
-		public int stats() { return ze.getMethod() == ZipEntry.DEFLATED ? FILE_DEFLATED|FILE_RA_DEFLATE : FILE_RA; }
+		public int stats() { return ze.getMethod() == ZipEntry.DEFLATED ? FILE_DEFLATED : FILE_RA; }
 
 		@Override
 		public long length(boolean deflated) { return deflated ? ze.getCompressedSize() : ze.getSize(); }
@@ -64,20 +73,21 @@ public class ZipRouter implements Router {
 		public InputStream get(boolean deflated, long offset) throws IOException {
 			InputStream in;
 			if (deflated) {
-				if (ze.getMethod() != ZipEntry.DEFLATED)
-					throw new UnsupportedOperationException();
+				assert ze.getMethod() == ZipEntry.DEFLATED;
 				in = zf.getFileStream(ze);
 			} else {
 				in = zf.getStream(ze);
 			}
-			in.skip(offset);
+			IOUtil.skipFully(in, offset);
 			return in;
 		}
 
 		@Override
 		public long lastModified() { return ze.getModificationTime(); }
+		@Override
+		public String getETag() {return '"'+Integer.toString(ze.getCrc32(), 36)+'"';}
 
 		@Override
-		public void prepare(ResponseHeader srv, Headers h) { h.put("Content-Type", FileResponse.getMimeType(ze.getName())); }
+		public void prepare(ResponseHeader rh, Headers h) { h.put("content-type", MimeType.getMimeType(ze.getName())); }
 	}
 }

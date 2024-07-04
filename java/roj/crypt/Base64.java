@@ -69,6 +69,7 @@ public final class Base64 {
 	}
 
 	public static DynByteBuf decode(CharSequence s, DynByteBuf out) { return decode(s, 0, s.length(), out, B64_CHAR_REV); }
+	public static DynByteBuf decode(CharSequence s, DynByteBuf out, byte[] tab) { return decode(s, 0, s.length(), out, tab); }
 	public static DynByteBuf decode(CharSequence s, int i, int len, DynByteBuf out, byte[] tab) {
 		do {
 			int bits = tab[s.charAt(i++)] << 18 | tab[s.charAt(i++)] << 12;

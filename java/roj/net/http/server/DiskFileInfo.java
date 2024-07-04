@@ -1,18 +1,15 @@
 package roj.net.http.server;
 
 import roj.io.IOUtil;
-import roj.io.source.FileSource;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.net.http.Headers;
+import roj.reflect.ReflectionUtils;
 import roj.text.Escape;
 import roj.util.DirectByteList;
 import roj.util.DynByteBuf;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 
 /**
  * @author solo6975
@@ -26,6 +23,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	private DirectByteList cc;
 	private byte[] uc;
 
+	private static final long STATE_OFFSET = ReflectionUtils.fieldOffset(DiskFileInfo.class, "state");
 	private volatile int state;
 
 	public DiskFileInfo(File file) {this(file, false);}
@@ -35,18 +33,12 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 		this.download = download;
 	}
 
-	public DiskFileInfo compressCached() {
-		if (state == 0) state = 1;
-		return this;
-	}
-	public DiskFileInfo dontCompress() {
-		state = -1;
-		cc = null;
-		return this;
-	}
+	public Response response(Request req) {return FileResponse.response(req, this);}
+
+	public DiskFileInfo compressed() {if (state < 1) state = 1;return this;}
+	public DiskFileInfo compressCached() {if (state < 2) state = 2;return this;}
 	public DiskFileInfo cached() throws IOException {
-		if (file.length() >= Integer.MAX_VALUE-24)
-			throw new IllegalArgumentException("File too large");
+		if (file.length() >= Integer.MAX_VALUE-24) throw new IllegalArgumentException("File too large");
 		if (uc == null) {
 			uc = IOUtil.read(file);
 			time = file.lastModified();
@@ -61,9 +53,10 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 
 		int stat = FILE_RA;
 		int v = state;
-		if (v >= 0) {
-			stat |= FILE_WANT_DEFLATE;
-			if (v == 3) stat |= FILE_DEFLATED| FILE_RA_DEFLATE;
+		if (v == 0) v = MimeType.get(file.getName()).zip ? 1 : -1;
+		if (v > 0) {
+			stat |= FILE_CAN_DEFLATE;
+			if (v == 4) stat |= FILE_DEFLATED;
 		}
 		return stat;
 	}
@@ -77,35 +70,24 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	@Override
 	public InputStream get(boolean deflated, long offset) throws IOException {
 		if (deflated) return cc.slice((int) offset, cc.readableBytes() - (int) offset).asInputStream();
-		return uc == null ? new FileSource(file, offset).asInputStream() : new ByteArrayInputStream(uc);
+
+		var in = uc == null ? new FileInputStream(file) : new ByteArrayInputStream(uc);
+		IOUtil.skipFully(in, offset);
+		return in;
 	}
 
 	@Override
-	public long lastModified() {
-		return time;
-	}
-
-	public Response response(Request req) {
-		return FileResponse.response(req, this);
-	}
+	public long lastModified() {return time;}
 
 	@Override
-	public void prepare(ResponseHeader srv, Headers h) {
-		if (state == 1) {
-			synchronized (this) {
-				if (state == 1) {
-					state = 2;
-					srv.ch().addBefore("h11@compr", "compress-capture", this);
-					cc = DirectByteList.allocateDirect();
-				}
-			}
+	public void prepare(ResponseHeader rh, Headers h) {
+		if (ReflectionUtils.u.compareAndSwapInt(this, STATE_OFFSET, 2, 3)) {
+			cc = DirectByteList.allocateDirect();
+			rh.ch().addBefore("h11@compr", "compress-capture", this);
 		}
 
-		String ext = file.getName();
-		String type = FileResponse.getMimeType(ext);
-
 		if (download) h.putIfAbsent("Content-Disposition", "attachment; filename=\""+Escape.encodeURIComponent(file.getName())+'"');
-		h.putIfAbsent("Content-Type", type);
+		h.putIfAbsent("Content-Type", MimeType.getMimeType(file.getName()));
 	}
 
 	@Override
@@ -118,6 +100,6 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	@Override
 	public void release(ChannelCtx ctx) {
 		ChannelHandler h = ctx.channel().remove("compress-capture");
-		if (h != null) state = 3;
+		if (h != null) state = 4;
 	}
 }

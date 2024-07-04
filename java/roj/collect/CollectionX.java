@@ -108,4 +108,50 @@ public class CollectionX {
 			public boolean containsKey(Object key) {return from.contains((From) key);}
 		};
 	}
+
+	public static <K, V> Map<K, V> toMap(XHashSet<K, V> from) {
+		return new AbstractMap<>() {
+			@NotNull
+			@Override
+			public Set<Map.Entry<K, V>> entrySet() {
+				return new AbstractSet<>() {
+					@Override
+					public Iterator<Map.Entry<K, V>> iterator() {
+						Iterator<V> itr = from.iterator();
+						return new AbstractIterator<>() {
+							@Override
+							protected boolean computeNext() {
+								if (itr.hasNext()) {
+									V next = itr.next();
+									result = new SimpleImmutableEntry<>(from._valueGetKey(next), next);
+									return true;
+								}
+								return false;
+							}
+						};
+					}
+
+					@Override
+					public int size() {return from.size();}
+				};
+			}
+
+			@Override
+			public int size() { return from.size; }
+			@Override
+			public boolean containsKey(Object key) { return from.containsKey(key); }
+			@Override
+			public boolean containsValue(Object value) { return from.contains(value); }
+			@Override
+			public V get(Object key) { return from.get(key); }
+			@Override
+			public V put(K key, V value) { return from.put(key, value); }
+			@Override
+			public V remove(Object key) { return from.removeKey(key); }
+			@Override
+			public void clear() { from.clear(); }
+			@Override
+			public V putIfAbsent(K key, V value) { return from.putIfAbsent(key, value); }
+		};
+	}
 }

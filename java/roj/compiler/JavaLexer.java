@@ -274,7 +274,9 @@ public final class JavaLexer extends Tokenizer {
 					// fall to literal(symbol)
 				default:
 					prevIndex = index = i;
-					return readSymbol();
+					Word w = readSymbol();
+					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
+					return w;
 				case C_NUMBER:
 					prevIndex = index = i;
 					return digitReader(false, DIGIT_DFL|DIGIT_HBO);

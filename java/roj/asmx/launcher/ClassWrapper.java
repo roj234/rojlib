@@ -267,7 +267,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	}
 
 	public void enableFastZip(URL url) throws IOException {
-		ZipFile zf = new ZipFile(new File(Escape.decodeURI(url.getPath().substring(1), IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf()).toString()));
+		ZipFile zf = new ZipFile(new File(Escape.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), url.getPath().substring(1)).toString()));
 		JarVerifier jv = JarVerifier.create(zf);
 		if (archives.isEmpty()) zf.getStream(zf.entries().iterator().next()).close(); // INIT
 		archives.add(zf);

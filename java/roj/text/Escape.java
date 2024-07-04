@@ -3,6 +3,7 @@ package roj.text;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
+import roj.compiler.plugins.annotations.Attach;
 import roj.config.Tokenizer;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
@@ -24,12 +25,12 @@ public class Escape {
 	public static String decodeURI(CharSequence src) throws MalformedURLException {
 		ByteList bb = new ByteList();
 		try {
-			return decodeURI(src, new CharList(), bb).toStringAndFree();
+			return decodeURI(new CharList(), bb, src).toStringAndFree();
 		} finally {
 			bb._free();
 		}
 	}
-	public static <T extends Appendable> T decodeURI(CharSequence src, T sb, DynByteBuf tmp) throws MalformedURLException {
+	public static <T extends Appendable> T decodeURI(T sb, DynByteBuf tmp, CharSequence src) throws MalformedURLException {
 		tmp.clear();
 
 		int len = src.length();
@@ -100,25 +101,27 @@ public class Escape {
 	public static final MyBitSet URI_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!@#$&*()_+-=/?.,:;'");
 	public static final MyBitSet URI_COMPONENT_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!*()_-.'");
 
-	public static String encodeURI(CharSequence src) { return encodeURI(src, new CharList()).toStringAndFree(); }
-	public static String encodeURIComponent(CharSequence src) { return encodeURIComponent(src, new CharList()).toStringAndFree(); }
-	public static <T extends Appendable> T encodeURI(CharSequence src, T sb) {
+	public static String encodeURI(CharSequence src) { return encodeURI(new CharList(), src).toStringAndFree(); }
+	public static String encodeURIComponent(CharSequence src) { return encodeURIComponent(new CharList(), src).toStringAndFree(); }
+	@Attach("appendURI")
+	public static <T extends Appendable> T encodeURI(T sb, CharSequence src) {
 		ByteList bb = new ByteList();
 		try {
-			return escape(bb.putUTFData(src), sb, URI_SAFE);
+			return escape(sb, bb.putUTFData(src), URI_SAFE);
 		} finally {
 			bb._free();
 		}
 	}
-	public static <T extends Appendable> T encodeURIComponent(CharSequence src, T sb) {
+	@Attach("appendURIComponent")
+	public static <T extends Appendable> T encodeURIComponent(T sb, CharSequence src) {
 		ByteList bb = new ByteList();
 		try {
-			return escape(bb.putUTFData(src), sb, URI_COMPONENT_SAFE);
+			return escape(sb, bb.putUTFData(src), URI_COMPONENT_SAFE);
 		} finally {
 			bb._free();
 		}
 	}
-	public static <T extends Appendable> T escape(DynByteBuf src, T sb, MyBitSet safe) {
+	public static <T extends Appendable> T escape(T sb, DynByteBuf src, MyBitSet safe) {
 		try {
 			for (int i = 0; i < src.length(); i++) {
 				char c = src.charAt(i);
@@ -149,12 +152,14 @@ public class Escape {
 		var out = h(str);
 		return out == null ? str : out.toStringAndFree();
 	}
-	public static CharList htmlEntities_Append(CharSequence str, CharList to) {
+	@Attach("appendHtmlEntities")
+	public static CharList htmlEntities_Append(CharList to, CharSequence str) {
 		var out = h(str);
 		if (out == null) to.append(str);
 		else out.appendToAndFree(to);
 		return to;
 	}
+	@Attach("htmlEntities")
 	public static CharList htmlEntities_Inline(CharList sb) {
 		var out = h(sb);
 		if (out != null) {
@@ -169,11 +174,13 @@ public class Escape {
 		var out = hd(str);
 		return out == null ? str : out.toStringAndFree();
 	}
-	public static void deHtmlEntities_Append(CharSequence str, CharList to) {
+	@Attach("appendDeHtmlEntities")
+	public static void deHtmlEntities_Append(CharList to, CharSequence str) {
 		CharList out = hd(str);
 		if (out == null) to.append(str);
 		else out.appendToAndFree(to);
 	}
+	@Attach("deHtmlEntities")
 	public static CharList deHtmlEntities_Inline(CharList sb) {
 		var out = hd(sb);
 		if (out != null) {

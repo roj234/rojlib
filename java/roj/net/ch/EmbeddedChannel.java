@@ -197,7 +197,7 @@ public class EmbeddedChannel extends MyChannel {
 		flag |= 4;
 		if (pair != null) {
 			pair.flag |= 2;
-			pair.onInputClosed();
+			pair.onInputClosed(null);
 
 			if (pair.flag == 6) close();
 		}

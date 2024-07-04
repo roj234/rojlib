@@ -4,12 +4,12 @@ import roj.collect.IntMap;
 import roj.concurrent.SegmentReadWriteLock;
 import roj.concurrent.task.ITask;
 import roj.concurrent.timing.Scheduler;
+import roj.text.logging.Logger;
 import roj.util.*;
 import sun.misc.Unsafe;
 
 import java.lang.ref.WeakReference;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -27,7 +27,7 @@ public final class BufferPool {
 	private static final int TL_DIRECT_INITIAL = 65536, TL_DIRECT_INCR = 65536, TL_DIRECT_MAX = 16777216, TL_DIRECT_THRES = 131072;
 
 	private static final int GLOBAL_HEAP_SIZE = 4194304, GLOBAL_DIRECT_SIZE = 4194304;
-	private static final int UNPOOLED_SIZE = 10485760, DEFAULT_KEEP_BEFORE = 16;
+	private static final int DEFAULT_KEEP_BEFORE = 16;
 
 	private static final class PooledDirectBuf extends DirectByteList.Slice implements PooledBuffer {
 		private static final long u_pool = fieldOffset(PooledDirectBuf.class, "pool");
@@ -85,7 +85,7 @@ public final class BufferPool {
 		u_heap = fieldOffset(BufferPool.class, "heap"),
 		u_directRef = fieldOffset(BufferPool.class, "directRef");
 
-	private static final AtomicLong UNPOOLED_REMAIN = new AtomicLong(UNPOOLED_SIZE);
+	private static final Logger LOGGER = Logger.getLogger();
 	private static final Object _UNPOOLED = IntMap.UNDEFINED;
 
 	private static final PooledHeapBuf EMPTY_HEAP_SENTIAL = new PooledHeapBuf();
@@ -251,10 +251,7 @@ public final class BufferPool {
 			case OOM_NULL: return Helpers.maybeNull();
 		}
 
-		if (UNPOOLED_REMAIN.addAndGet(-cap) < 0) {
-			long remain = UNPOOLED_REMAIN.addAndGet(cap);
-			throw new OutOfMemoryError("ThreadLocal, Global, and Unpooled buffer pool are exhausted="+remain);
-		}
+		LOGGER.warn("Pool is OOM: {}, using Unpooled impl {}", direct?pDirect:pHeap, cap);
 
 		if (direct) {
 			NativeMemory mem = new NativeMemory(cap);
@@ -469,8 +466,6 @@ public final class BufferPool {
 				throwUnpooled(buf);
 		} else if (pool != _UNPOOLED) ((BufferPool) pool).reserve0(buf);
 		else {
-			UNPOOLED_REMAIN.addAndGet(buf.capacity() + ((PooledBuffer) buf).getKeepBefore());
-
 			if (buf.isDirect()) ((DirectByteList) buf)._free();
 			else ((ByteList) buf)._free();
 		}
@@ -571,7 +566,7 @@ public final class BufferPool {
 					throwUnpooled(buf);
 			} else if(pool == _UNPOOLED
 					? tryZeroCopyExt(more, addAtEnd, (PooledBuffer) buf)
-					: tryZeroCopy(buf, more, addAtEnd, (BufferPool) pool, (PooledBuffer) buf)) {
+					: tryZeroCopy(more, addAtEnd, (BufferPool) pool, (PooledBuffer) buf)) {
 				((PooledBuffer) buf).pool(pool);
 				return buf;
 			}
@@ -586,25 +581,26 @@ public final class BufferPool {
 		if (reserveOld) reserve(buf);
 		return newBuf;
 	}
-	private static boolean tryZeroCopy(DynByteBuf buf, int more, boolean addAtEnd, BufferPool p, PooledBuffer pb) {
+	private static boolean tryZeroCopy(int more, boolean addAtEnd, BufferPool p, PooledBuffer pb) {
 		Page page;
 		Lock lock;
 		int offset;
 
-		if (buf.isDirect()) {
-			NativeMemory nm = ((DirectByteList) buf).memory();
+		var b = (DynByteBuf) pb;
+		if (b.isDirect()) {
+			NativeMemory nm = ((DirectByteList) b).memory();
 			if (nm == null) {
 				page = pgDirect;
 				lock = lgDirect;
-				offset = (int) (buf.address()-gDirect);
+				offset = (int) (b.address()-gDirect);
 			} else {
 				page = pb.page();
 				lock = p.lock.asReadLock(System.identityHashCode(page));
-				offset = (int) (buf.address()-nm.address());
+				offset = (int) (b.address()-nm.address());
 			}
 		} else {
-			offset = buf.arrayOffset();
-			if (buf.array() == gHeap) {
+			offset = b.arrayOffset();
+			if (b.array() == gHeap) {
 				page = pgHeap;
 				lock = lgHeap;
 			} else {
@@ -613,25 +609,31 @@ public final class BufferPool {
 			}
 		}
 
-		DynByteBuf b = ((DynByteBuf) pb);
+		int prefix = pb.getKeepBefore();
 		if (addAtEnd) {
 			lock.lock();
 			try {
 				if (more < 0) {
-					more = (int) Page.align(more+Page.MINIMUM_MASK);
-					int off = (int) Page.align(offset + b.capacity()) + more;
-					page.free(off, -more);
-				} else if (!page.allocAfter(offset - pb.getKeepBefore(), b.capacity() + pb.getKeepBefore(), more)) return false;
+					int x = -more & ~7;
+					if (x > 0) {
+						int off = (int) Page.align(offset + b.capacity()) - x;
+						page.free(off, x);
+					} else {
+						LOGGER.debug("FreeTooSmall: "+b.info()+", size="+more+" => 0");
+					}
+				} else if (!page.allocAfter(offset - prefix, b.capacity() + prefix, more)) return false;
 			} finally {
 				lock.unlock();
 			}
 			pb._expand(more, false);
 		} else {
-			if (pb.getKeepBefore() >= more) pb.setKeepBefore(pb.getKeepBefore() - more);
-			else {
+			if (prefix >= more) {
+				pb.setKeepBefore(prefix - more);
+				LOGGER.debug("UseKeepBefore: "+b.info()+", remain="+(prefix-more));
+			} else {
 				lock.lock();
 				try {
-					if (!page.allocBefore(offset - pb.getKeepBefore(), b.capacity() + pb.getKeepBefore(), more)) return false;
+					if (!page.allocBefore(offset - prefix, b.capacity() + prefix, more)) return false;
 				} finally {
 					lock.unlock();
 				}

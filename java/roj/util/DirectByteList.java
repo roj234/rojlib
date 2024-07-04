@@ -538,25 +538,6 @@ public class DirectByteList extends DynByteBuf {
 	}
 
 	@Override
-	public final boolean equals(Object o) {
-		if (this == o) return true;
-		if (!(o instanceof DynByteBuf b)) return false;
-
-		int len = readableBytes();
-		if (len != b.readableBytes()) return false;
-		assert len <= length : info();
-
-		return ArrayUtil.vectorizedMismatch(null, address, b.array(), b._unsafeAddr(), len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
-	}
-
-	@Override
-	public int hashCode() {
-		int len = wIndex - rIndex;
-		assert len <= length : info();
-		return ArrayUtil.byteHashCode(null, address, len);
-	}
-
-	@Override
 	@NotNull
 	public String toString() {
 		int len = wIndex - rIndex;

@@ -1,16 +1,13 @@
 package roj.plugins.http.php;
 
-import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
 import roj.concurrent.timing.Scheduler;
 import roj.io.FastFailException;
-import roj.io.IOUtil;
 import roj.net.http.IllegalRequestException;
-import roj.net.http.server.*;
+import roj.net.http.server.Request;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,7 +17,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @author Roj234
- * @since 2024/3/3 0003 3:27
+ * @since 2024/7/2 1:55
  */
 public class Win32FPM extends fcgiManager {
 	final String[] command;
@@ -35,40 +32,7 @@ public class Win32FPM extends fcgiManager {
 		this.maxProcess = maxProcess;
 		this.timeout = timeout;
 
-		Runtime.getRuntime().addShutdownHook(new Thread(this::killAll));
 		if (timeout != 0) Scheduler.getDefaultScheduler().loop(this::killStale, timeout);
-	}
-
-	public static void main(String[] args) throws Exception {
-		if (args.length < 2) {
-			System.out.println("Win32FPM <document root> <php-cgi executable path>");
-			return;
-		}
-		var fpm = new Win32FPM(1, 4, 600000, args[1], "-b");
-		fpm.docRoot = new File(args[0]);
-
-		FileResponse.loadMimeMap(IOUtil.readString(new File("plugins/Core/mime.ini")));
-		HttpServer11.simple(new InetSocketAddress(8080), 256, new Router() {
-			@Override
-			public Response response(Request req, ResponseHeader rh) throws Exception {
-				if (req.path().endsWith(".php")) return fpm.response(req, rh);
-				File file = new File(fpm.docRoot, IOUtil.safePath(req.path()));
-				if (file.isFile()) return FileResponse.response(req, new DiskFileInfo(file));
-				return StringResponse.simpleErrorPage(404);
-			}
-
-			@Override
-			public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
-				if (req.path().endsWith(".php")) fpm.checkHeader(req, cfg);
-			}
-
-			@Override
-			public int writeTimeout(@Nullable Request req, @Nullable Response resp) {
-				if (req != null && req.path().endsWith(".php")) return fpm.writeTimeout(req, resp);
-				return Router.super.writeTimeout(req, resp);
-			}
-		}).launch();
-		System.out.println("Server launched");
 	}
 
 	public boolean killStale() {
@@ -93,7 +57,7 @@ public class Win32FPM extends fcgiManager {
 	}
 
 	protected void fcgi_set_param(Request req, Map<String, String> param) throws IOException {
-		String scriptName = IOUtil.safePath(req.path());
+		String scriptName = req.path();
 
 		File scriptFile = new File(docRoot, scriptName);
 		if (!scriptFile.isFile() || !scriptFile.getName().endsWith(".php")) throw new IllegalRequestException(404);

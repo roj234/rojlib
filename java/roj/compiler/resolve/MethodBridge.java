@@ -28,11 +28,12 @@ final class MethodBridge extends Evaluable {
 		synchronized (this.owner.getStage4Lock()) {
 			accessor = this.owner.methods.size();
 			MethodNode delegate = new MethodNode(0, "", this.owner.getNextAccessorName(), mn.rawDesc());
-			if ((owner.modifier&Opcodes.ACC_STATIC) != 0 || mn.name().equals("<init>")) {
-				if (mn.name().equals("<init>")) delegate.setReturnType(new Type(owner.name));
-				this.owner.createDelegation(Opcodes.ACC_STATIC|Opcodes.ACC_SYNTHETIC, mn, delegate, true);
+			boolean invokeSpecial = mn.name().equals("<init>");
+			if ((owner.modifier&Opcodes.ACC_STATIC) != 0 || invokeSpecial) {
+				if (invokeSpecial) delegate.setReturnType(new Type(owner.name));
+				this.owner.createDelegation(Opcodes.ACC_STATIC|Opcodes.ACC_SYNTHETIC, mn, delegate, true, invokeSpecial);
 			} else {
-				this.owner.createDelegation(Opcodes.ACC_FINAL|Opcodes.ACC_SYNTHETIC, mn, delegate, true);
+				this.owner.createDelegation(Opcodes.ACC_FINAL|Opcodes.ACC_SYNTHETIC, mn, delegate, true, false);
 			}
 		}
 	}

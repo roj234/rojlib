@@ -396,7 +396,6 @@ public class DefaultConsole implements Console {
 		if (tabCursor < 0 && highlight == null) {
 			highlight = highlight(input);
 			if (highlight != null) {
-				assert lastInput == null || highlight.length() == lastInput.length() : "input length mismatch";
 				lastInput = input.toString();
 				input.clear();
 				highlight.writeAnsi(input);

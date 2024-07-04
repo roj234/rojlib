@@ -13,6 +13,12 @@ import java.io.InputStream;
 public interface ResponseWriter {
 	MyChannel ch();
 
+	/**
+	 * Gets speed limit in KB per second
+	 */
+	int getStreamLimit();
+	void setStreamLimit(int kbps);
+
 	int write(DynByteBuf buf) throws IOException;
 	default int write(InputStream in) throws IOException {return write(in, 0);}
 	int write(InputStream in, int limit) throws IOException;

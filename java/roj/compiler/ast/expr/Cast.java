@@ -58,11 +58,12 @@ final class Cast extends UnaryPre {
 
 	@Override
 	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
-		if (cast != null && this.cast.type >= 0) {
-			LocalContext.get().report(Kind.WARNING, "cast.warn.redundant:"+type);
+		if (cast != null && this.cast.type >= 0 && this.cast.getOp1() != 42/*Do not check for AnyCast*/) {
+			LocalContext.get().report(Kind.WARNING, "cast.warn.redundant", type);
 		}
 
-		right.writeDyn(cw, cast);
+		right.writeDyn(cw, this.cast);
+		if (cast != null) cast.write(cw);
 	}
 
 	@Override

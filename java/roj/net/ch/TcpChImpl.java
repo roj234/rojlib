@@ -119,11 +119,13 @@ class TcpChImpl extends MyChannel {
 
 	@Override
 	protected void read() throws IOException {
-		DynByteBuf buf = rb;
+		if (state != OPENED || (flag&READ_INACTIVE) != 0) return;
+		var buf = rb;
 		if (buf == EMPTY) rb = buf = alloc().allocate(true, buffer, 0);
-		while (state == OPENED && sc.isOpen()) {
-			ByteBuffer nioBuffer = syncNioRead(buf);
+		while (true) {
+			int w = buf.writableBytes();
 			int r;
+			ByteBuffer nioBuffer = syncNioRead(buf);
 			try {
 				r = sc.read(nioBuffer);
 			} catch (IOException e) {
@@ -134,19 +136,20 @@ class TcpChImpl extends MyChannel {
 			buf.wIndex(nioBuffer.position());
 
 			if (r < 0) {
-				onInputClosed();
-			} else if (!buf.isReadable()) {
-				break;
-			} else {
-				try {
-					fireChannelRead(buf);
-				} finally {
-					buf.compact();
-				}
-
-				if ((flag&READ_INACTIVE) != 0) return;
-				if (!buf.isWritable()) rb = buf = alloc().expand(buf, buf.capacity());
+				onInputClosed(buf);
+				return;
 			}
+
+			if (r > 0) {
+				fireChannelRead(buf);
+				buf.compact();
+				// reset to initial capacity if buffer is empty
+				if (buf.capacity() > buffer && !buf.isReadable()) alloc().expand(buf, buffer-buf.capacity());
+			}
+
+			if (r < w || (flag&READ_INACTIVE) != 0 || state != OPENED) return;
+
+			if (!buf.isWritable()) rb = buf = alloc().expand(buf, buf.capacity());
 		}
 	}
 

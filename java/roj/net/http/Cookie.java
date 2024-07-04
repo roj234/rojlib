@@ -86,12 +86,12 @@ public class Cookie {
 	}
 
 	public void write(CharList sb, boolean atServer) {
-		Escape.encodeURIComponent(name, sb).append('=');
-		Escape.encodeURIComponent(value, sb);
+		Escape.encodeURIComponent(sb, name).append('=');
+		Escape.encodeURIComponent(sb, value);
 		if (!atServer) return;
-		if (expires != 0) sb.append("; Max-Age=").append((expires-System.currentTimeMillis()) / 1000);
+		if (expires != 0) sb.append("; Max-Age=").append(expires < 0 ? "-1" : (expires-System.currentTimeMillis()) / 1000);
 		if (domain != null) sb.append("; Domain=").append(domain);
-		if (path != null) Escape.encodeURIComponent(path, sb.append("; Path="));
+		if (path != null) Escape.encodeURIComponent(sb.append("; Path="), path);
 		if ((flag&4)!=0) sb.append("; HttpOnly");
 		if ((flag&3)!=0) sb.append("; SameSite=").append(sameSite());
 		if ((flag&10)!=0) sb.append("; Secure");

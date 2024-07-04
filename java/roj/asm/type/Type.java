@@ -6,6 +6,7 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.Helpers;
 
+import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 /**
@@ -91,7 +92,7 @@ public final class Type implements IType, Cloneable {
 	 */
 	public Type(String owner, int array) {
 		this.type = CLASS;
-		this.owner = owner;
+		this.owner = Objects.requireNonNull(owner);
 		setArrayDim(array);
 	}
 

@@ -57,9 +57,10 @@ public abstract class Plugin {
 	}
 	protected final void reloadConfig() {
 		try {
-			YAMLParser parser = new YAMLParser();
-
+			var parser = new YAMLParser();
+			saveDefaultConfig();
 			config = parser.parse(configFile, YAMLParser.LENIENT).asMap();
+
 			InputStream defaults = getResource("config.yml");
 			if (defaults != null) config.merge(parser.parse(defaults, YAMLParser.LENIENT).asMap(), true, true);
 		} catch (ParseException|IOException e) {
@@ -85,7 +86,7 @@ public abstract class Plugin {
 
 		InputStream in = getResource(path);
 		if (in == null) {
-			logger.error("无法找到资源文件{}",path);
+			logger.error("无法找到资源文件{}", path);
 			return;
 		}
 
@@ -118,6 +119,14 @@ public abstract class Plugin {
 	protected final void unregisterRoute(String path) {
 		if (pPaths.remove(path)) DefaultPluginSystem.initHttp().removePrefixDelegation(path);
 	}
+	private Set<String> pIntecs = Collections.emptySet();
+	protected final void registerInterceptor(String name, Object interceptor) {
+		if (pIntecs.isEmpty()) pIntecs = new MyHashSet<>(4, Hasher.identity());
+		if (pIntecs.add(name)) DefaultPluginSystem.initHttp().setInterceptor(name, interceptor);
+	}
+	protected final void unregisterInterceptor(String name) {
+		if (pPaths.remove(name)) DefaultPluginSystem.initHttp().removeInterceptor(name);
+	}
 
 	private Set<CommandNode> pCmds = Collections.emptySet();
 	protected final void registerCommand(CommandNode node) {
@@ -140,7 +149,8 @@ public abstract class Plugin {
 	final void postDisable() {
 		if (pSched != null) pSched.clearTasks();
 		for (CommandNode cmd : pCmds) DefaultPluginSystem.CMD.unregister(cmd);
-		for (String path : pPaths) DefaultPluginSystem.initHttp().removePrefixDelegation(path);
+		for (String path : pPaths) unregisterRoute(path);
+		for (String path : pIntecs) unregisterInterceptor(path);
 		pCmds = Collections.emptySet();
 		pPaths = Collections.emptySet();
 	}

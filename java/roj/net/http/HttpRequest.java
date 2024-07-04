@@ -82,6 +82,7 @@ public abstract class HttpRequest {
 	}
 
 	public final HttpRequest body(DynByteBuf b) { return setBody(b,0); }
+	//public final HttpRequest body(Headers b) { return setBody(b,0); }
 	public final HttpRequest bodyG1(Function<ChannelCtx, Boolean> b) { return setBody(b,1); }
 	public final HttpRequest bodyG3(Supplier<InputStream> b) { return setBody(b,2); }
 	private HttpRequest setBody(Object b, int i) {
@@ -93,18 +94,13 @@ public abstract class HttpRequest {
 	}
 	public final Object body() { return body; }
 
+	@Deprecated
 	public final HttpRequest url(URL url) {
-		this.protocol = url.getProtocol().toLowerCase();
-
-		String host = url.getHost();
-		if (url.getPort() >= 0) host += ":"+url.getPort();
-		this.site = host;
-
-		this.path = url.getPath();
-		this.query = url.getQuery();
-
-		_address = null;
-		return this;
+		try {
+			return url(url.toURI());
+		} catch (URISyntaxException e) {
+			throw new RuntimeException(e);
+		}
 	}
 	public final HttpRequest url(URI url) {
 		this.protocol = url.getScheme().toLowerCase();
@@ -119,29 +115,21 @@ public abstract class HttpRequest {
 		_address = null;
 		return this;
 	}
-	public final HttpRequest url(String protocol, String site, String path) { return url(protocol, site, path, null); }
-
-	/**
-	 * @param protocol http/https
-	 * @param site 站点(Host|Address)
-	 * @param path 路径
-	 * @param query 不以?开始的请求参数
-	 */
-	public final HttpRequest url(String protocol, String site, String path, String query) {
-		this.protocol = protocol.toLowerCase();
+	public final HttpRequest url(String url) {
+		/*this.protocol = protocol.toLowerCase();
 		this.site = site;
 		if (!path.startsWith("/")) path = "/".concat(path);
 		this.path = path;
 		this.query = query;
 
-		_address = null;
-		return this;
+		_address = null;*/
+		return url(URI.create(url));
 	}
 	public final HttpRequest query(Map<String, String> q) { query = q; return this; }
 	public final HttpRequest query(List<Map.Entry<String, String>> q) { query = q; return this; }
 	public final HttpRequest query(String q) { query = q; return this; }
 
-	public final URL url() {
+	public final URI url() {
 		String site = this.site;
 		int port = site.lastIndexOf(':');
 		if (port > 0) {
@@ -149,8 +137,8 @@ public abstract class HttpRequest {
 			port = Integer.parseInt(this.site.substring(port+1));
 		}
 		try {
-			return new URL(protocol, site, port, _appendPath(new CharList()).toStringAndFree());
-		} catch (MalformedURLException e) {
+			return new URI(protocol, null, site, port, _appendPath(new CharList()).toStringAndFree(), null, null);
+		} catch (URISyntaxException e) {
 			Helpers.athrow(e);
 			return Helpers.nonnull();
 		}
@@ -170,7 +158,7 @@ public abstract class HttpRequest {
 		return ch.connect(addr, timeout);
 	}
 
-	void _redirect(MyChannel ch, URL url, int timeout) throws IOException {
+	void _redirect(MyChannel ch, URI url, int timeout) throws IOException {
 		var oldAddr = _address;
 		var newAddr = url(url)._getAddress();
 
@@ -272,9 +260,9 @@ public abstract class HttpRequest {
 				if (i != 0) sb.append('&');
 
 				b.clear();
-				Escape.escape(b.putUTFData(entry.getKey()), sb, Escape.URI_COMPONENT_SAFE).append('=');
+				Escape.escape(sb, b.putUTFData(entry.getKey()), Escape.URI_COMPONENT_SAFE).append('=');
 				b.clear();
-				Escape.escape(b.putUTFData(entry.getValue()), sb, Escape.URI_COMPONENT_SAFE);
+				Escape.escape(sb, b.putUTFData(entry.getValue()), Escape.URI_COMPONENT_SAFE);
 				i = 1;
 			}
 			query = sb.subSequence(begin,sb.length()).toString();

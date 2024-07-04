@@ -10,7 +10,6 @@ import roj.ui.CLIUtil;
 import roj.util.ByteList;
 
 import java.net.InetAddress;
-import java.net.URL;
 
 /**
  * @author Roj234
@@ -24,18 +23,18 @@ public class CTLightCat extends IpGetter {
 		try {
 			ByteList body = IOUtil.getSharedByteBuf().putAscii("username=useradmin&psd=").putAscii(Escape.encodeURIComponent(pass));
 			SyncHttpClient shc = HttpRequest.nts()
-				.url(new URL("http://"+catUrl+"/cgi-bin/luci"))
+				.url("http://"+catUrl+"/cgi-bin/luci")
 				.header("Content-Type","application/x-www-form-urlencoded")
 				.body(ByteList.wrap(body.toByteArray()))
 				.executePooled();
 
 			if (shc.head().getCode() == 302) {
 				refreshTime = System.currentTimeMillis();
-				accessToken = shc.head().getFieldValue("Set-Cookie", "sysauth");
+				accessToken = shc.head().getFieldValue("set-cookie", "sysauth");
 				if (accessToken != null) return true;
 			}
 
-			CLIUtil.warning("[getAddress]无法获取AccessToken 是否密码错误？: " + shc.head());
+			CLIUtil.warning("[getAddress]无法获取AccessToken 是否密码错误？: "+shc.head());
 		} catch (Exception e) {
 			CLIUtil.error("getAddress", e);
 		}
@@ -43,9 +42,6 @@ public class CTLightCat extends IpGetter {
 	}
 
 	private String pass, catUrl;
-
-	@Override
-	public boolean supportsV6() { return true; }
 
 	@Override
 	public void loadConfig(CMap config) {
@@ -58,7 +54,7 @@ public class CTLightCat extends IpGetter {
 		if (System.currentTimeMillis() - refreshTime > 60000) refreshAccessToken();
 
 		SyncHttpClient shc = HttpRequest.nts()
-			.url(new URL("http://"+catUrl+"/cgi-bin/luci/admin/settings/gwinfo?get=part"))
+			.url("http://"+catUrl+"/cgi-bin/luci/admin/settings/gwinfo?get=part")
 			.header("Cookie", "sysauth="+accessToken)
 			.executePooled();
 

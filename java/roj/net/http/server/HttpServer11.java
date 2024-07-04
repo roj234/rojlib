@@ -35,7 +35,7 @@ import static roj.net.http.HttpClient11.setChunk;
 public final class HttpServer11 extends PacketMerger implements
 								PostSetting, BiConsumer<String, String>,
 								ResponseHeader, ResponseWriter {
-	public static final String SERVER_NAME = "nginx/1.24.0";
+	public static final String SERVER_NAME = "openresty";
 	static final Logger LOGGER = Logger.getLogger("HttpServer11");
 
 	private static final int KEEPALIVE_MAX = 32;
@@ -95,25 +95,21 @@ public final class HttpServer11 extends PacketMerger implements
 		time = System.currentTimeMillis() + router.readTimeout();
 	}
 
-	private static final int SPIN_TIMEOUT = 1_000_000;
 	@Override
 	@SuppressWarnings("fallthrough")
 	public void channelTick(ChannelCtx ctx) throws IOException {
-		seg:
 		switch (state) {
 			case UNOPENED: return;
 			case SEND_BODY:
 				if (ctx.isPendingSend()) break;
 
-				long t = System.nanoTime();
-				int spin = 5;
-				while (body.send(this)) {
-					if (--spin == 0 || System.nanoTime() - t > SPIN_TIMEOUT) break seg;
-					if (ctx.isPendingSend()) {
-						ctx.pauseAndFlush();
-						break seg;
-					}
+				streamLimit = streamLimitDefault;
+				boolean hasMore = body.send(this);
+				if (ctx.isPendingSend()) {
+					ctx.pauseAndFlush();
+					break;
 				}
+				if (hasMore) break;
 			case SEND_DONE:
 				outEof();
 
@@ -388,12 +384,6 @@ public final class HttpServer11 extends PacketMerger implements
 
 	@Override
 	public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
-		if (ex instanceof IOException) {
-			LOGGER.debug(ex.getClass().getName()+": "+ex.getMessage());
-			ctx.close();
-			return;
-		}
-
 		boolean hasError = (flag&UNCAUGHT_ERROR) != 0;
 		flag |= UNCAUGHT_ERROR;
 		if (!hasError && req != null && state <= SEND_HEAD) {
@@ -408,9 +398,14 @@ public final class HttpServer11 extends PacketMerger implements
 				}
 
 				onError(ex);
-				sendHead();
 				return;
 			} catch (Throwable ignored) {}
+		}
+
+		if (ex.getClass() == IOException.class) {
+			LOGGER.debug(ex.getClass().getName()+": "+ex.getMessage());
+			ctx.close();
+			return;
 		}
 
 		LOGGER.warn("未捕获的异常", ex);
@@ -423,7 +418,6 @@ public final class HttpServer11 extends PacketMerger implements
 			ctx.channelOpened();
 		} catch (Throwable e) {
 			onError(e);
-			sendHead();
 			return true;
 		}
 		return false;
@@ -440,7 +434,7 @@ public final class HttpServer11 extends PacketMerger implements
 			Response resp = router.response(req, this);
 			if (body == null) body = resp;
 			else if (resp != null) throw new FastFailException("已调用body()设置请求体,response必须返回null");
-		} catch (Throwable e) {
+		} catch (Exception e) {
 			onError(e);
 		}
 
@@ -451,7 +445,7 @@ public final class HttpServer11 extends PacketMerger implements
 			else time += router.writeTimeout(req, null);
 		}
 	}
-	private void onError(Throwable e) {
+	private void onError(Throwable e) throws IOException {
 		if (exceptPostSize != -2) {
 			req.responseHeader.put("connection", "close");
 		}
@@ -465,6 +459,8 @@ public final class HttpServer11 extends PacketMerger implements
 
 			e.printStackTrace();
 		}
+
+		sendHead();
 	}
 
 	private Response makeErrorResponse(Throwable e) {
@@ -607,6 +603,7 @@ public final class HttpServer11 extends PacketMerger implements
 
 		code = 0;
 		flag &= (KEPT_ALIVE | GZIP_MODE);
+		streamLimitDefault = WRITE_ONCE;
 
 		if (def != null && close) def.end();
 
@@ -656,32 +653,60 @@ public final class HttpServer11 extends PacketMerger implements
 	// endregion
 	// region ResponseWriter
 	private static final int WRITE_ONCE = 4080;
+	private int streamLimit, streamLimitDefault = WRITE_ONCE;
+
+	@Override
+	public int getStreamLimit() {return streamLimitDefault * 1000 / 1024;}
+	@Override
+	public void setStreamLimit(int kbps) {streamLimit = streamLimitDefault = (int)Math.round(kbps*1024D/1000);}
 
 	public int write(DynByteBuf buf) throws IOException {
 		if (state != SEND_BODY) throw new IllegalStateException();
 
-		int len = buf.readableBytes();
+		int len = Math.min(buf.readableBytes(), streamLimit);
+		if (len == 0 || ch.isPendingSend()) return 0;
+
 		if ((flag & GZIP_MODE) != 0) {
 			crc = buf.hasArray()
 				? CRC32s.update(crc, buf.array(), buf.arrayOffset() + buf.rIndex, len)
 				: CRC32s.update(crc, buf.address(), len);
 		}
-		if (len > 0) ch.channelWrite(buf);
-		return len - buf.readableBytes();
+		ch.channelWrite(len < buf.readableBytes() ? buf.slice(len) : buf);
+		streamLimit -= len;
+		return len;
 	}
 	public int write(InputStream in, int limit) throws IOException {
 		if (state != SEND_BODY) throw new IllegalStateException();
 
-		if (limit <= 0) limit = WRITE_ONCE;
-		ByteList buf = (ByteList) ch.allocate(false, limit = Math.min(WRITE_ONCE, limit));
+		limit = limit <= 0 ? streamLimit : Math.min(streamLimit, limit);
+		if (limit <= 0 || ch.isPendingSend()) return 0;
+
+		int writeOnce = Math.min(WRITE_ONCE, limit);
+		ByteList buf = (ByteList) ch.allocate(false, writeOnce);
 		try {
-			int v = buf.readStream(in, limit);
-			if (v <= 0) return v;
-			ch.channelWrite(buf);
-			if ((flag & GZIP_MODE) != 0) {
-				crc = CRC32s.update(crc, buf.array(), buf.arrayOffset(), buf.wIndex());
+			int totalRead = 0;
+			while (true) {
+				int remain = Math.min(limit - totalRead, writeOnce);
+				if (remain == 0) break;
+
+				int r = buf.readStream(in, remain);
+				if (r <= 0) {
+					if (totalRead == 0) return r;
+					break;
+				}
+
+				totalRead += r;
+
+				ch.channelWrite(buf);
+				if ((flag & GZIP_MODE) != 0) {
+					crc = CRC32s.update(crc, buf.array(), buf.arrayOffset(), buf.wIndex());
+				}
+				if (ch.isPendingSend()) break;
+				buf.clear();
 			}
-			return v;
+
+			streamLimit -= totalRead;
+			return totalRead;
 		} finally {
 			BufferPool.reserve(buf);
 		}
@@ -707,7 +732,6 @@ public final class HttpServer11 extends PacketMerger implements
 
 	// endregion
 	// region Compress / Chunk
-
 	@Override
 	public void handlerAdded(ChannelCtx ctx) {ch = ctx;}
 

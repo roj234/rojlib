@@ -4,6 +4,8 @@ import roj.collect.RingBuffer;
 import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.Headers;
+import roj.util.ByteList;
+import roj.util.DirectByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -29,7 +31,6 @@ public class AsyncResponse implements Response {
 		}
 	}
 	public boolean offerAndRelease(DynByteBuf buf) {
-		if (!BufferPool.isPooled(buf)) throw new IllegalArgumentException("buffer is not pooled");
 		synchronized (packets) {
 			if (eof) throw new IllegalStateException("eof");
 			return packets.offerLast(buf);
@@ -48,8 +49,8 @@ public class AsyncResponse implements Response {
 			rh.write(buf);
 			if (!buf.isReadable()) {
 				synchronized (packets) {packets.removeFirst();}
-				BufferPool.reserve(buf);
-				if (hasSpaceCallback != null) hasSpaceCallback.run();
+				free(buf);
+				if (packets.size() <= 1 && hasSpaceCallback != null) hasSpaceCallback.run();
 			}
 		}
 		return buf != null || !eof;
@@ -59,9 +60,18 @@ public class AsyncResponse implements Response {
 	public void release(ChannelCtx ctx) throws IOException {
 		eof = true;
 		synchronized (packets) {
-			for (DynByteBuf packet : packets)
-				BufferPool.reserve(packet);
+			for (DynByteBuf buf : packets)
+				free(buf);
 		}
 		packets.clear();
+	}
+
+	private static void free(DynByteBuf buf) {
+		if (BufferPool.isPooled(buf)) {
+			BufferPool.reserve(buf);
+		} else {
+			if (buf.isDirect()) ((DirectByteList) buf)._free();
+			else ((ByteList) buf)._free();
+		}
 	}
 }

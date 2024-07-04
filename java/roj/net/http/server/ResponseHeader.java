@@ -6,6 +6,12 @@ import roj.net.http.Headers;
 public interface ResponseHeader {
 	MyChannel ch();
 
+	/**
+	 * Gets speed limit in KB per second
+	 */
+	int getStreamLimit();
+	void setStreamLimit(int kbps);
+
 	void onFinish(HFinishHandler o);
 
 	ResponseHeader code(int code);

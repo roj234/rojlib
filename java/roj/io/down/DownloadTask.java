@@ -19,7 +19,7 @@ import roj.text.DateParser;
 import roj.util.Helpers;
 
 import java.io.*;
-import java.net.URL;
+import java.net.URI;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -94,7 +94,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 			throw new IOException("下载进度文件无法写入");
 		}
 
-		return new DownloadTask(new URL(url), file, pg, info);
+		return new DownloadTask(URI.create(url), file, pg, info);
 	}
 
 	volatile Throwable ex;
@@ -118,7 +118,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 
 	public final HttpRequest client;
 
-	public DownloadTask(URL address, File file, IProgress handler, File info) {
+	public DownloadTask(URI address, File file, IProgress handler, File info) {
 		client = HttpRequest.nts().url(address).headers(defHeaders);
 		this.file = file;
 		this.handler = handler;
@@ -205,7 +205,6 @@ public final class DownloadTask implements ChannelHandler, ITask, Waitable {
 			}
 		}
 
-		URL url = client.url();
 		List<Downloader> tasks = new SimpleList<>();
 
 		if (operation == STREAM_DOWNLOAD || len < 0 || (

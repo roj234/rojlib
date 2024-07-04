@@ -635,8 +635,8 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	// callback
 
-	final void onInputClosed() throws IOException {
-		Event inputEndEvent = new Event(IN_EOF);
+	final void onInputClosed(Object data) throws IOException {
+		Event inputEndEvent = new Event(IN_EOF, data);
 		postEvent(inputEndEvent);
 		if (inputEndEvent.getResult() == Event.RESULT_DEFAULT) {
 			close();

@@ -305,29 +305,5 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 		}
 	}
 
-	/*public Map<K, V> asMap() {
-		return new AbstractMap<>() {
-			@Override
-			public int size() { return XHashSet.this.size; }
-			@Override
-			public boolean containsKey(Object key) { return XHashSet.this.containsKey(key); }
-			@Override
-			public boolean containsValue(Object value) { return contains(value); }
-			@Override
-			public V get(Object key) { return XHashSet.this.get(key); }
-			@Override
-			public V put(K key, V value) { return XHashSet.this.put(key, value); }
-			@Override
-			public V remove(Object key) { return XHashSet.this.removeKey(key); }
-			@Override
-			public void clear() { XHashSet.this.clear(); }
-			@Nullable
-			@Override
-			public V putIfAbsent(K key, V value) { return XHashSet.this.putIfAbsent(key, value); }
-
-			@NotNull
-			@Override
-			public Set<Entry<K, V>> entrySet() {throw new UnsupportedOperationException("未实现");}
-		};
-	}*/
+	final K _valueGetKey(V next) {return shape.GET_KEY(next);}
 }

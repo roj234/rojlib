@@ -5,6 +5,7 @@ import roj.net.http.Headers;
 
 import java.io.IOException;
 
+@FunctionalInterface
 public interface Response {
 	Response EMPTY = new Response() {
 		public void prepare(ResponseHeader rh, Headers h) { h.put("content-length", "0"); }
@@ -12,12 +13,10 @@ public interface Response {
 		public void release(ChannelCtx ctx) {}
 	};
 
-	void prepare(ResponseHeader rh, Headers h) throws IOException;
-
+	default void prepare(ResponseHeader rh, Headers h) throws IOException {}
 	/**
 	 * @return true if not all data were written.
 	 */
 	boolean send(ResponseWriter rh) throws IOException;
-
 	default void release(ChannelCtx ctx) throws IOException {}
 }
