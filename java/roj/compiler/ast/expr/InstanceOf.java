@@ -43,7 +43,7 @@ public final class InstanceOf extends ExprNode {
 		left = left.resolve(ctx);
 		ctx.resolveType(type);
 
-		if (left.type().isPrimitive()) ctx.report(Kind.ERROR, "instanceOf.error.primitive");
+		if (left.type().isPrimitive()) ctx.report(Kind.ERROR, "symbol.error.derefPrimitive");
 
 		if (type.genericType() != IType.STANDARD_TYPE) {
 			if (type.genericType() == IType.GENERIC_TYPE) {

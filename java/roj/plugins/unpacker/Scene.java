@@ -57,7 +57,7 @@ class Scene implements Unpacker {
 				file.getParentFile().mkdirs();
 
 				try {
-					IOUtil.allocSparseFile(file, v.length);
+					IOUtil.createSparseFile(file, v.length);
 
 					FileOutputStream out = new FileOutputStream(file);
 					try {

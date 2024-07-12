@@ -279,7 +279,7 @@ MSS协议，My Secure Socket`roj.net.mss`
 协议混淆  
 P2P  
 
-## roj.platform
+## roj.plugin
   * 插件系统，见独立介绍
 
 ## roj.plugins

@@ -12,7 +12,7 @@ import java.util.Locale;
  */
 public class HttpHead extends Headers {
 	private final String a, b, c;
-	public final boolean isRequest;
+	private final boolean isRequest;
 
 	public HttpHead(boolean request, String a, String b, String c) {
 		this.a = a;
@@ -20,6 +20,8 @@ public class HttpHead extends Headers {
 		this.c = c;
 		this.isRequest = request;
 	}
+
+	public boolean isRequest() {return isRequest;}
 
 	public int getCode() {
 		if (isRequest) throw new IllegalStateException();

@@ -158,7 +158,8 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	}
 
 	public static abstract class Itr<NEXT, ENTRY extends TrieEntry> extends AbstractIterator<NEXT> {
-		SimpleList<ENTRY> a = new SimpleList<>(), b = new SimpleList<>();
+		SimpleList<ENTRY> a = new SimpleList<>();
+		SimpleList<Object> b = new SimpleList<>();
 		ENTRY ent;
 		int i;
 		protected CharList seq;
@@ -223,7 +224,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 				}
 				i = 0;
 
-				SimpleList<ENTRY> b = this.b;
+				SimpleList<ENTRY> b = Helpers.cast(this.b);
 				for (ENTRY entry : a) {
 					if (entry.size > 0) {
 						b.ensureCapacity(b.size + entry.size);
@@ -235,8 +236,8 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 
 				// Swap
 				a.size = 0;
-				this.a = this.b;
-				this.b = a;
+				this.a = Helpers.cast(this.b);
+				this.b = Helpers.cast(a);
 				a = this.a;
 			}
 		}

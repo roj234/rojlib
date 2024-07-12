@@ -5,8 +5,6 @@ import roj.archive.zip.ZipOutput;
 import roj.asmx.mapper.Mapper;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.concurrent.task.AsyncTask;
 import roj.config.FileConfig;
 import roj.config.data.CList;
 import roj.config.data.CMap;
@@ -24,6 +22,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.concurrent.locks.LockSupport;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -163,35 +162,32 @@ public final class Project extends FileConfig {
 		}
 	}
 
-	public AsyncTask<MyHashSet<String>> getResourceTask(boolean inc) {
-		return new AsyncTask<MyHashSet<String>>() {
-			@Override
-			protected MyHashSet<String> invoke() {
-				boolean prevCompress = dstFile.isCompress();
-				block: {
-					// 检测是否第一次运行 关机状态无法检测文件变化
-					if (state != null && inc) {
-						Set<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
-						if (!set.contains(null)) {
-							synchronized (set) {
-								for (String s : set) writeRes(s);
-								set.clear();
-							}
-							break block;
+	public Callable<Void> getResourceTask(boolean inc) {
+		return () -> {
+			boolean prevCompress = dstFile.isCompress();
+			block: {
+				// 检测是否第一次运行 关机状态无法检测文件变化
+				if (state != null && inc) {
+					Set<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
+					if (!set.contains(null)) {
+						synchronized (set) {
+							for (String s : set) writeRes(s);
+							set.clear();
 						}
+						break block;
 					}
-
-					IOUtil.findAllFiles(resPath, file -> {
-						writeRes(file.getAbsolutePath());
-						return false;
-					});
 				}
 
-				dstFile.setCompress(prevCompress);
-
-				loadMapper();
-				return null;
+				IOUtil.findAllFiles(resPath, file -> {
+					writeRes(file.getAbsolutePath());
+					return false;
+				});
 			}
+
+			dstFile.setCompress(prevCompress);
+
+			loadMapper();
+			return null;
 		};
 	}
 

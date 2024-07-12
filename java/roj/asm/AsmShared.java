@@ -97,10 +97,15 @@ public final class AsmShared {
 	public final CstTop fp = new CstTop();
 	private ConstantPool pool;
 	public ConstantPool constPool() {
-		if (pool == null) pool = new ConstantPool();
+		if (pool == null) return new ConstantPool();
+		var t = pool;
+		pool = null;
+		return t;
+	}
+	public void constPool(ConstantPool cp) {
+		pool = cp;
 		pool.setAddListener(null);
 		pool.clear();
-		return pool;
 	}
 
 	private final ByteList.Slice wrapB = new ByteList.Slice();

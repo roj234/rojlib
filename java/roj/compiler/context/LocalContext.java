@@ -606,7 +606,7 @@ public class LocalContext {
 					return null;
 				}
 				// 不能解引用基本类型
-				return "symbol.error.derefPrimitiveField:"+type;
+				return "symbol.error.derefPrimitive:"+type;
 			}
 
 			clz = type.array() > 0 ? GlobalContext.anyArray() : classes.getClassInfo(type.owner);

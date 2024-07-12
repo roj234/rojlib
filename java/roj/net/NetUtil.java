@@ -137,29 +137,16 @@ public final class NetUtil {
 	}
 
 	public static String bytes2ip(byte[] addr) {
-		if (addr.length == 4) { // IPv4
-			return v4bytesIp(addr, 0);
-		} else { // IPv6
-			assert addr.length == 16 : "address length neither v4 nor v6";
-			return v6bytesIp(addr, 0);
+		try {
+			return InetAddress.getByAddress(addr).getHostAddress();
+		} catch (UnknownHostException e) {
+			throw new IllegalArgumentException("address length neither v4 nor v6");
 		}
-	}
-	public static String v4bytesIp(byte[] addr, int off) { return new CharList().append(addr[off++]&0xFF).append('.').append(addr[off++]&0xFF).append('.').append(addr[off++]&0xFF).append('.').append(addr[off]&0xFF).toStringAndFree(); }
-	public static String v6bytesIp(byte[] addr, int off) {
-		// xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
-		CharList sb = new CharList(40);
-		int i = 0;
-		while (true) {
-			sb.append(Integer.toHexString((0xFF & addr[off++]) << 8 | (addr[off++] & 0xFF)));
-			if (++i == 8) break;
-			sb.append(':');
-		}
-
-		return sb.toStringAndFree();
 	}
 	// endregion
 	// region utils for reading string a:b port
 	public static InetSocketAddress parseListeningAddress(String s) { return parseAddress(s, null); }
+	@Deprecated
 	public static InetSocketAddress parseConnectAddress(String s) { return parseAddress(s, InetAddress.getLoopbackAddress()); }
 	public static InetSocketAddress parseAddress(String s, InetAddress defaultAddr) {
 		if (s == null || s.isEmpty()) throw new IllegalArgumentException("null port");
@@ -181,6 +168,11 @@ public final class NetUtil {
 		}
 		return addr;
 	}
+	public static InetSocketAddress parseAddress(String hostStr, int defaultPort) {
+		if (hostStr == null || hostStr.isEmpty()) throw new IllegalArgumentException("null port");
+		int pos = hostStr.lastIndexOf(':');
+		return new InetSocketAddress(pos < 0 ? hostStr : hostStr.substring(0, pos), pos < 0 ? defaultPort : Integer.parseInt(hostStr.substring(pos+1)));
+	}
 	public static InetSocketAddress parseUnresolvedAddress(String hostStr, int defaultPort) {
 		if (hostStr == null || hostStr.isEmpty()) throw new IllegalArgumentException("null port");
 		int pos = hostStr.lastIndexOf(':');
@@ -188,15 +180,8 @@ public final class NetUtil {
 	}
 	// endregion
 
-	public static URI socks5(InetSocketAddress server) {return makeUri("socks5://"+server);}
-	public static URI socks5(InetSocketAddress server, String username, String password) {return makeUri("socks5://"+ Escape.encodeURIComponent(username)+":"+Escape.encodeURIComponent(password)+"@"+server);}
-	private static URI makeUri(String uri) {
-		try {
-			return new URI(uri);
-		} catch (URISyntaxException e) {
-			throw new IllegalArgumentException(uri, e);
-		}
-	}
+	public static URI socks5(InetSocketAddress server) {return URI.create("socks5://"+server);}
+	public static URI socks5(InetSocketAddress server, String username, String password) {return URI.create("socks5://"+ Escape.encodeURIComponent(username)+":"+Escape.encodeURIComponent(password)+"@"+server);}
 
 	public static InetSocketAddress applyProxy(@Nullable URI proxy, InetSocketAddress originalAddr, MyChannel ch) throws IOException {
 		if (proxy == null) return originalAddr;

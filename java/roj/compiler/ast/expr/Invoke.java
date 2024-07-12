@@ -199,7 +199,7 @@ public final class Invoke extends ExprNode {
 			if (ownMirror.isPrimitive()) {
 				type = ctx.getPrimitiveMethod(ownMirror, fn2, args);
 				if (type == null) {
-					ctx.report(Kind.ERROR, "symbol.error.derefPrimitiveField", ownMirror);
+					ctx.report(Kind.ERROR, "symbol.error.derefPrimitive", ownMirror);
 					return NaE.RESOLVE_FAILED;
 				} else {
 					SimpleList<ExprNode> tmp = Helpers.cast(ctx.tmpList); tmp.clear();

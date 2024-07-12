@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.config.data.CMap;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.server.*;
-import roj.platform.Plugin;
+import roj.plugin.Plugin;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -39,7 +39,7 @@ public class PHPPlugin extends Plugin implements Router {
 		fpm.docRoot = document_root.toFile();
 
 		String pluginRoot = config.getString("dps_root");
-		registerRoute(pluginRoot, this);
+		registerRoute(pluginRoot, this, "loginRedirect");
 
 		getLogger().warn("PHP服务器已在路径{} => {}上启动", fpm.docRoot, pluginRoot);
 	}
@@ -52,6 +52,11 @@ public class PHPPlugin extends Plugin implements Router {
 		check: {
 			if (!file.isFile()) {
 				if (file.isDirectory()) {
+					if (!req.path().endsWith("/")) {
+						rh.code(302).header("Location", req.path()+"/");
+						return null;
+					}
+
 					File[] files = file.listFiles((dir, name) -> name.equals("index.html") || name.equals("index.php"));
 					if (files != null && files.length > 0 && files[0].isFile()) {
 						file = files[0];
@@ -63,11 +68,12 @@ public class PHPPlugin extends Plugin implements Router {
 					}
 				}
 
-				return StringResponse.simpleErrorPage(404);
+				rh.code(404);
+				return Response.httpError(404);
 			}
 		}
 
-		return FileResponse.response(req, new DiskFileInfo(file));
+		return Response.file(req, new DiskFileInfo(file));
 	}
 
 	@Override

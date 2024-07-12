@@ -42,16 +42,16 @@ public class ZipRouter implements Router {
 				ze = zip.getEntry(url);
 				if (ze != null && ze.getName().endsWith("/")) {
 					rh.code(403);
-					return StringResponse.simpleErrorPage(HttpUtil.FORBIDDEN);
+					return Response.httpError(HttpUtil.FORBIDDEN);
 				}
 			}
 			rh.code(404);
-			return StringResponse.simpleErrorPage(HttpUtil.NOT_FOUND);
+			return Response.httpError(HttpUtil.NOT_FOUND);
 		}
 
 		rh.code(200).header("cache-control", getCacheControl(ze));
 		if (ze.isEncrypted()) throw new IllegalRequestException(500, "该文件已加密");
-		return FileResponse.response(req, new ZipFileInfo(zip, ze));
+		return Response.file(req, new ZipFileInfo(zip, ze));
 	}
 
 	static final class ZipFileInfo implements FileInfo {
@@ -83,11 +83,11 @@ public class ZipRouter implements Router {
 		}
 
 		@Override
-		public long lastModified() { return ze.getModificationTime(); }
+		public long lastModified() {return ze.getModificationTime();}
 		@Override
 		public String getETag() {return '"'+Integer.toString(ze.getCrc32(), 36)+'"';}
 
 		@Override
-		public void prepare(ResponseHeader rh, Headers h) { h.put("content-type", MimeType.getMimeType(ze.getName())); }
+		public void prepare(ResponseHeader rh, Headers h) {h.put("content-type", MimeType.getMimeType(ze.getName()));}
 	}
 }

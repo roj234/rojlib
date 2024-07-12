@@ -40,9 +40,9 @@ public final class QzAES extends QZCoder {
     }
     QzAES() {}
 
-    QZCoder factory() { return new QzAES(); }
+    QZCoder factory() {return new QzAES();}
     private static final byte[] ID = {6,-15,7,1};
-    byte[] id() { return ID; }
+    byte[] id() {return ID;}
 
     public OutputStream encode(OutputStream out) throws IOException {
         if (lastKey == null) throw new IllegalArgumentException("缺少密码");

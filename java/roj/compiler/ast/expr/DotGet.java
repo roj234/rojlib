@@ -186,7 +186,7 @@ public final class DotGet extends VarNode {
 			} else {
 				fType = (parent = parent.resolve(ctx)).type();
 				if (fType.isPrimitive()) {
-					ctx.report(Kind.ERROR, "symbol.error.derefPrimitiveField", fType);
+					ctx.report(Kind.ERROR, "symbol.error.derefPrimitive", fType);
 					return NaE.RESOLVE_FAILED;
 				}
 

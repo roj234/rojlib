@@ -10,7 +10,6 @@ import roj.asmx.mapper.Mapper.State;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.concurrent.task.AsyncTask;
 import roj.concurrent.timing.ScheduleTask;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
@@ -153,7 +152,7 @@ public final class FMDMain {
 		}
 	}
 
-	public static int build(Map<String, Object> args) throws IOException {
+	public static int build(Map<String, Object> args) throws Exception {
 		if (hotReload != null) args.put("$$HR$$", new ArrayList<>());
 
 		Shared._lock();
@@ -196,7 +195,7 @@ public final class FMDMain {
 	/**
 	 * @param flag Bit 1 : run (NoVersion) , Bit 2 : dependency mode
 	 */
-	private static int compile(Map<String, ?> args, Project p, File dest, int flag) throws IOException {
+	private static int compile(Map<String, ?> args, Project p, File dest, int flag) throws Exception {
 		if ((flag & 2) == 0) {
 			Profiler.startSection("dependProject");
 			for (Project proj : p.getAllDependencies()) {
@@ -249,7 +248,7 @@ public final class FMDMain {
 			if (increment) {
 				try (ZipOutput zo1 = updateDst(p, jarFile)) {
 					zo1.begin(false);
-					p.getResourceTask(true).execute();
+					p.getResourceTask(true).call();
 				}
 
 				if ((flag & 3) == 0) CLIUtil.info("更新了资源(若有)");
@@ -273,8 +272,7 @@ public final class FMDMain {
 		binWriter.begin(!increment);
 		binWriter.setComment("FMD "+VERSION+"\r\nBy Roj234 @ https://www.github.com/roj234/rojlib");
 
-		AsyncTask<MyHashSet<String>> writeRes = p.getResourceTask(increment);
-		Task.pushTask(writeRes);
+		var writeRes = Task.submit(p.getResourceTask(increment));
 		Profiler.endStartSection("applyAT <= openWriter");
 		// region 应用权限转换
 		if (false) {
@@ -466,7 +464,7 @@ public final class FMDMain {
 
 	private static boolean ensureWritable(File jarFile) {
 		int amount = 30 * 20;
-		while (jarFile.isFile() && !IOUtil.checkTotalWritePermission(jarFile) && amount > 0) {
+		while (jarFile.isFile() && !IOUtil.isReallyWritable(jarFile) && amount > 0) {
 			if ((amount % 100) == 0) CLIUtil.warning("输出jar已被锁定, 请在30秒内解除对它的锁定，否则编译无法继续");
 			LockSupport.parkNanos(50_000_000L);
 			amount--;

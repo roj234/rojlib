@@ -37,7 +37,7 @@ final class AutoCompile {
 	static void afterCompile(int ok) {
 		if (cancelled) {
 			cancelled = false;
-			if (ok > 0) Task.pushTask(AutoCompile::check);
+			if (ok > 0) Task.submit(AutoCompile::check);
 		}
 	}
 

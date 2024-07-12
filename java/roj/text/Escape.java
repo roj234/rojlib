@@ -30,6 +30,7 @@ public class Escape {
 			bb._free();
 		}
 	}
+	@SuppressWarnings("fallthrough")
 	public static <T extends Appendable> T decodeURI(T sb, DynByteBuf tmp, CharSequence src) throws MalformedURLException {
 		tmp.clear();
 
@@ -38,61 +39,30 @@ public class Escape {
 
 		while (i < len) {
 			char c = src.charAt(i);
-			switch (c) {
-				case '+': c = ' '; break;
-				case '%':
+			if (c == '%') {
+				while (i+2 < len && src.charAt(i) == '%') {
 					try {
-						while (true) {
-							if (i+1 >= len) {
-								try {
-									sb.append(src.charAt(i++));
-								} catch (IndexOutOfBoundsException ignored) {}
-								break;
-							}
-							if (src.charAt(i) != '%') break;
+						tmp.put((byte)Tokenizer.parseNumber(src, i+1, i+3, 1));
+					} catch (NumberFormatException e) {break;}
+					i += 3;
+				}
 
-							if (src.charAt(i+1) == 'u') {
-								if (tmp.wIndex() > 0) {
-									UTF8MB4.CODER.decodeFixedIn(tmp, tmp.wIndex(), sb);
-									tmp.clear();
-								}
+				try {
+					UTF8MB4.CODER.decodeFixedIn(tmp, tmp.wIndex(), sb);
+				} catch (Exception e) {
+					// not compatible with RFC 2396
+					throw new MalformedURLException("无法解析UTF8:"+e.getMessage());
+				}
 
-								if (i+6 > len) break;
-								try {
-									sb.append((char) Tokenizer.parseNumber(src, i + 2, i + 6, 1));
-								} catch (NumberFormatException|IndexOutOfBoundsException e) {
-									i++;
-									break;
-								}
-								i += 6;
-							} else {
-								try {
-									tmp.put((byte) Tokenizer.parseNumber(src, i + 1, i + 3, 1));
-								} catch (NumberFormatException|IndexOutOfBoundsException e) {
-									i++;
-									break;
-								}
-								i += 3;
-							}
-						}
-
-						if (tmp.wIndex() > 0) {
-							UTF8MB4.CODER.decodeFixedIn(tmp, tmp.wIndex(), sb);
-							tmp.clear();
-						}
-
-						continue;
-					} catch (Exception e) {
-						// not compatible with RFC 2396
-						throw new MalformedURLException("无法作为UTF8解析:" + e.getMessage());
-					}
+				tmp.clear();
+				if (i == len) break;
+				c = src.charAt(i);
 			}
+			if (c == '+') c = ' ';
 
 			try {
 				sb.append(c);
-			} catch (IOException e) {
-				Helpers.athrow(e);
-			}
+			} catch (IOException e) {Helpers.athrow(e);}
 			i++;
 		}
 		return sb;

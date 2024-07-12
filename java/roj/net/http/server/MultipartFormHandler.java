@@ -22,7 +22,7 @@ import java.util.Map;
  * @author Roj233
  * @since 2022/3/13 15:15
  */
-public class MultipartFormHandler extends LocalPostHandler {
+public class MultipartFormHandler extends UrlEncodedHandler {
 	private String boundary;
 	private FastMatcher matcher;
 
@@ -30,8 +30,6 @@ public class MultipartFormHandler extends LocalPostHandler {
 
 	private final Headers header = new Headers();
 	private MultipartFormHandler child;
-
-	protected String name;
 
 	public MultipartFormHandler() {}
 	public MultipartFormHandler(Request req) { init(req.getField("content-type")); }

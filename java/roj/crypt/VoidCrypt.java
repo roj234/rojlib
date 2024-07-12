@@ -49,6 +49,7 @@ public class VoidCrypt {
 		return max - min >= 256;
 	}
 	public static DynByteBuf _encrypt2r(Random srnd, DynByteBuf ciphertext, CipherPair... pairs) {
+		if (pairs.length > 6) throw new IllegalArgumentException("超过物理上限！");
 		int maxLen = 0;
 		byte[][] sbox = new byte[pairs.length][];
 
@@ -64,6 +65,7 @@ public class VoidCrypt {
 			hash1.update(nonce);
 			sbox[i] = hash1.digest();
 		}
+		MT19937 rnd = new MT19937();
 
 		maxLen /= 2;
 		outer:
@@ -71,7 +73,8 @@ public class VoidCrypt {
 			for (int j = 0; j < pairs.length; j++) pairs[j].next(2);
 
 			retry:
-			for (int nonce1 = 0; nonce1 <= 0xFFFF; nonce1++) {
+			for (int tries = 0; tries <= 0xFFFF; tries++) {
+				int nonce1 = rnd.nextInt(65536);
 				for (int k = 0; k < pairs.length; k++) {
 					int hash = XXHash32.xxHash32(nonce1, sbox[k], 0, 64);
 					if ((Integer.bitCount(hash & 0xFF) & 3) != pairs[k].bit) continue retry;
@@ -86,6 +89,7 @@ public class VoidCrypt {
 		return ciphertext;
 	}
 	public static DynByteBuf _encrypt1i(Random srnd, DynByteBuf ciphertext, CipherPair... pairs) {
+		if (pairs.length > 24) throw new IllegalArgumentException("超过物理上限！");
 		int maxLen = 0;
 		byte[][] sbox = new byte[pairs.length][];
 
@@ -126,6 +130,7 @@ public class VoidCrypt {
 		return ciphertext;
 	}
 	public static DynByteBuf _encrypt1b(Random srnd, DynByteBuf ciphertext, CipherPair... pairs) {
+		if (pairs.length > 24) throw new IllegalArgumentException("超过物理上限！");
 		int maxLen = 0;
 		byte[][] sbox = new byte[pairs.length][];
 

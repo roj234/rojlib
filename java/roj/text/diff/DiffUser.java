@@ -10,6 +10,7 @@ import roj.config.auto.Serializer;
 import roj.config.auto.Serializers;
 import roj.io.IOUtil;
 import roj.ui.CLIUtil;
+import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandContext;
 import roj.ui.terminal.SimpleCliParser;
 
@@ -17,7 +18,6 @@ import java.io.File;
 import java.util.List;
 
 import static roj.text.diff.DiffResult.bar;
-import static roj.ui.terminal.Argument.file;
 import static roj.ui.terminal.CommandNode.argument;
 import static roj.ui.terminal.SimpleCliParser.nullImpl;
 
@@ -28,8 +28,8 @@ import static roj.ui.terminal.SimpleCliParser.nullImpl;
 public class DiffUser {
 	public static void main(String[] args) throws Exception {
 		CommandContext ctx = new SimpleCliParser()
-			.add(argument("basePath", file(true))
-					.then(argument("diffYml", file(false))
+			.add(argument("basePath", Argument.folder())
+					.then(argument("diffYml", Argument.file())
 						.executes(nullImpl())))
 			.parse(args, true);
 
@@ -62,7 +62,7 @@ public class DiffUser {
 			}
 
 			bar.addMax(1);
-			POOL.pushTask(() -> d.postProcess(true));
+			POOL.submit(() -> d.postProcess(true));
 		}
 
 		POOL.awaitFinish();

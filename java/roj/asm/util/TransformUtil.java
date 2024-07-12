@@ -4,7 +4,6 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.AsmShared;
 import roj.asm.Parser;
 import roj.asm.cp.Constant;
-import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstDynamic;
 import roj.asm.cp.CstNameAndType;
 import roj.asm.tree.*;
@@ -242,7 +241,7 @@ public class TransformUtil {
 	}
 
 	public static void compress(ConstantData data) {
-		ConstantPool cpw = AsmShared.local().constPool();
+		var cpw = AsmShared.local().constPool();
 		CodeVisitor smallerLdc = new CodeVisitor() {
 			protected void ldc(byte code, Constant c) { cpw.reset(c); }
 		};
@@ -278,6 +277,7 @@ public class TransformUtil {
 		}
 
 		data.parsed();
+		AsmShared.local().constPool(data.cp);
 		data.cp = cpw;
 
 		for (int i = 0; i < methods.size(); i++) {

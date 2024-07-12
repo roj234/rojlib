@@ -2,10 +2,8 @@ package roj.text.logging;
 
 import roj.text.Formatter;
 import roj.text.Template;
-import roj.text.TextUtil;
 import roj.text.logging.c.LCTime;
 import roj.text.logging.c.LogComponent;
-import roj.text.logging.d.LDStream;
 import roj.text.logging.d.LogDestination;
 
 import java.util.Collections;
@@ -19,6 +17,7 @@ public class LogContext {
 	LogContext parent;
 
 	private String name;
+	private Level level;
 
 	private Formatter prefix;
 	private List<LogComponent> components;
@@ -34,9 +33,10 @@ public class LogContext {
 
 	LogContext() {
 		name = "root";
+		level = Level.DEBUG;
 		prefix = Template.compile("[${0}][${THREAD}/${LEVEL}]: ");
 		components = Collections.singletonList(LCTime.of("H:i:s"));
-		destination = LDStream.of(System.out, TextUtil.ConsoleCharset);
+		destination = () -> System.out;
 	}
 
 	public List<LogComponent> getComponents() { return components != null ? components : parent.getComponents(); }
@@ -50,5 +50,10 @@ public class LogContext {
 	public LogDestination destination() { return destination != null ? destination : parent.destination(); }
 	public LogContext destination(LogDestination d) { destination = d; return this; }
 
+	public Level level() {return level != null ? level : parent.level;}
+	public LogContext level(Level level) {this.level = level;return this;}
+
 	LogWriter getWriter() {return getPrefix() == null ? LogWriterJson.LOCAL.get() : LogWriter.LOCAL.get();}
+
+	public LogContext child(String name) {return new LogContext(this, this.name+"/"+name);}
 }

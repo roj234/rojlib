@@ -122,7 +122,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 			if (remove != null) {
 				for (X set : remove) {
 					actions.remove(set);
-					Shared.Task.pushTask(set.key::cancel);
+					Shared.Task.submit(set.key::cancel);
 					synchronized (set.mod) {
 						set.mod.clear();
 						set.mod.add(null);

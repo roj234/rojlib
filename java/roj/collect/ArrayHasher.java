@@ -15,8 +15,8 @@ import static roj.asm.Opcodes.*;
 final class ArrayHasher {
 	private static final CharMap<Hasher<?>> built = new CharMap<>();
 	@SuppressWarnings("unchecked")
-	static <T> Hasher<T> primitiveArray(Class<T> type) {
-		if (!type.getComponentType().isPrimitive()) throw new IllegalStateException(type+" is not primitive array");
+	static <T> Hasher<T> array(Class<T> type) {
+		if (!type.getComponentType().isPrimitive()) type = (Class<T>) Object[].class;
 
 		Type clz = TypeHelper.class2type(type);
 

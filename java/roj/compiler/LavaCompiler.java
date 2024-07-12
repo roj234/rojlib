@@ -16,10 +16,10 @@ import roj.compiler.plugins.asm.AsmHook;
 import roj.compiler.plugins.constant.ConstantEvaluator;
 import roj.compiler.resolve.TypeResolver;
 import roj.compiler.test.CandyTestPlugin;
+import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
-import roj.util.Helpers;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -37,7 +37,7 @@ public class LavaCompiler {
 	public LavaCompiler() throws IOException {initDefaultPlugins(ctx);}
 
 	static void initDefaultPlugins(GlobalContextApi ctx) throws IOException {
-		ctx.addLibrary(new LibraryZipFile(Helpers.getJarByClass(LavaCompiler.class)));
+		ctx.addLibrary(new LibraryZipFile(IOUtil.getJar(LavaCompiler.class)));
 
 		AsmHook hook = AsmHook.init(ctx);
 		hook.injectedProperties.put("咕咕咕", Constant.valueOf("咕咕咕咕，我是🕊"));

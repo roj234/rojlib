@@ -3,7 +3,6 @@ package roj.net.ch;
 import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
-import roj.concurrent.TaskPool;
 import roj.io.buf.BufferPool;
 import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
@@ -242,13 +241,8 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 	// endregion
 
-	public final int getState() {
-		return state;
-	}
-
-	public boolean isOpen() {
-		return state < CLOSED && ch.isOpen();
-	}
+	public final int getState() {return state;}
+	public boolean isOpen() {return state < CLOSED && ch.isOpen();}
 	public boolean isInputOpen() { return isOpen(); }
 	public boolean isOutputOpen() { return isOpen(); }
 
@@ -507,7 +501,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 				fireChannelRead(rb);
 			}
 
-			ChannelCtx pipe = pipelineHead;
+			var pipe = pipelineHead;
 			while (pipe != null) {
 				pipe.handler.channelTick(pipe);
 				if (state >= CLOSE_PENDING) break;
@@ -706,23 +700,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 		}
 	}
 
-	public boolean isTCP() {
-		return true;
-	}
-	public final boolean isClosePending() {
-		return state == CLOSE_PENDING;
-	}
-
-	public void invokeLater(Runnable r) {
-		TaskPool.Common().pushTask(() -> {
-			lock.lock();
-			try {
-				r.run();
-			} finally {
-				lock.unlock();
-			}
-		});
-	}
-
-	public Lock lock() { return lock; }
+	public boolean isTCP() {return true;}
+	public boolean canSendfile() {return false;}
+	public Lock lock() {return lock;}
 }

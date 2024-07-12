@@ -253,7 +253,24 @@ public class JarVerifier {
 	}
 
 	@Nullable
-	public static String signJar(ZipArchive zf, String signAlg, String hashAlg, String signHashAlg, File pem, File key) throws GeneralSecurityException, IOException {
+	public static String signJar(ZipArchive zf, String hashAlg, String signHashAlg, File pem, File key) throws GeneralSecurityException, IOException {
+		List<X509Certificate> certs = new SimpleList<>();
+		var cf = CertificateFactory.getInstance("X509");
+		// 垃圾爪洼！
+		try (var in = new BufferedInputStream(new FileInputStream(pem))) {
+			while (true) {
+				certs.add((X509Certificate) cf.generateCertificate(in));
+
+				in.mark(1);
+				if (in.read() < 0) break;
+				in.reset();
+			}
+		}
+
+		String signAlg = certs.get(0).getPublicKey().getAlgorithm();
+		PrivateKey prk = (PrivateKey) KeyType.getInstance(signAlg).fromPEM(IOUtil.readString(key));
+		var signer = Signature.getInstance(signHashAlg.replace("-", "")+"with"+(signAlg.equals("EC")?"ECDSA": signAlg));
+
 		if (!VALID_CERTIFICATE_EXTENSION.contains(signAlg)) return "Invalid SignAlg: not in "+VALID_CERTIFICATE_EXTENSION;
 		if (!SECURE_HASH_ALGORITHMS.contains(hashAlg) || !SECURE_HASH_ALGORITHMS.contains(signHashAlg)) return "Invalid HashAlg: not in "+SECURE_HASH_ALGORITHMS;
 
@@ -323,22 +340,6 @@ public class JarVerifier {
 		byte[] sfBytes = ob.toByteArray();
 		zf.put("META-INF/"+sfName+".SF", DynByteBuf.wrap(sfBytes));
 
-		var signer = Signature.getInstance(signHashAlg.replace("-", "")+"with"+(signAlg.equals("EC")?"ECDSA": signAlg));
-		List<X509Certificate> certs = new SimpleList<>();
-		var cf = CertificateFactory.getInstance("X509");
-		// 垃圾爪洼！
-		try (var in = new BufferedInputStream(new FileInputStream(pem))) {
-			while (true) {
-				certs.add((X509Certificate) cf.generateCertificate(in));
-
-				in.mark(1);
-				if (in.read() < 0) break;
-				in.reset();
-			}
-		}
-
-		PrivateKey prk = (PrivateKey) KeyType.getInstance(signAlg).fromPEM(IOUtil.readString(key));
-
 		signer.initSign(prk);
 		signer.update(sfBytes);
 		byte[] signature = signer.sign();
@@ -349,39 +350,31 @@ public class JarVerifier {
 	}
 
 	public static void main(String[] args) throws Exception {
-		try (ZipArchive zf = new ZipArchive(args[0])) {
-			if (args.length == 1) {
-				JarVerifier verifier = create(zf);
-				if (verifier == null) {
-					System.out.println("文件没有清单属性");
-					return;
-				}
-				if (!verifier.isSigned()) {
-					System.out.println("文件没有签名");
-					return;
-				}
-
-				System.out.println("清单和元签名校验通过");
-				System.out.println("是自签证书:"+!verifier.isSignTrusted());
-				System.out.println("签名算法:"+verifier.block.getSignatureAlg());
-				verifier.ensureManifestValid();
-
-				for (ZEntry entry : zf.entries()) {
-					try (InputStream in = verifier.wrapInput(entry.getName(), zf.getStream(entry))) {
-						IOUtil.read(in);
-					} catch (Exception e) {
-						System.out.println(e.getMessage());
-					}
-				}
-
-				System.out.println("文件验证完成，有问题的文件已在上方列出");
-			} else {
-				File pem = new File(args[1]);
-				File key = new File(args[2]);
-				String error = signJar(zf, args[3], "SHA-256", "SHA-256", pem, key);
-				if (error != null) System.err.println("签名失败: "+error);
-				else zf.save();
+		try (var zf = new ZipFile(args[0])) {
+			JarVerifier verifier = create(zf);
+			if (verifier == null) {
+				System.out.println("文件没有清单属性");
+				return;
 			}
+			if (!verifier.isSigned()) {
+				System.out.println("文件没有签名");
+				return;
+			}
+
+			System.out.println("清单和元签名校验通过");
+			System.out.println("是自签证书:"+!verifier.isSignTrusted());
+			System.out.println("签名算法:"+verifier.block.getSignatureAlg());
+			verifier.ensureManifestValid();
+
+			for (ZEntry entry : zf.entries()) {
+				try (InputStream in = verifier.wrapInput(entry.getName(), zf.getStream(entry))) {
+					IOUtil.read(in);
+				} catch (Exception e) {
+					System.out.println(e.getMessage());
+				}
+			}
+
+			System.out.println("文件验证完成，有问题的文件已在上方列出");
 		}
 	}
 }

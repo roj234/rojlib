@@ -4,7 +4,7 @@ import roj.config.data.CMap;
 import roj.crypt.MySaltedHash;
 import roj.net.http.server.ZipRouter;
 import roj.net.http.server.auto.OKRouter;
-import roj.platform.Plugin;
+import roj.plugin.Plugin;
 import roj.text.ACalendar;
 import roj.ui.CLIUtil;
 import roj.ui.terminal.Argument;
@@ -36,7 +36,7 @@ public class SSOPlugin extends Plugin {
 		sso.disableRegister = cfg.getBool("disableRegister");
 		sso.siteName = cfg.getString("siteName");
 
-		ZipRouter resource = new ZipRouter(getDescription().getArchive());
+		ZipRouter resource = new ZipRouter(getDescription().getArchive(), "web/");
 		var router = new OKRouter().register(sso).addPrefixDelegation("", resource);
 		registerRoute("sso", router);
 		registerInterceptor("loginRedirect", router.getInterceptor("loginRedirect"));

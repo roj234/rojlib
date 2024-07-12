@@ -18,20 +18,14 @@ public class StringResponse implements Response {
 	final String mime;
 	final CharSequence str;
 
-	public StringResponse(CharSequence c) {this(c, "text/plain");}
 	public StringResponse(CharSequence c, String mime) {
 		str = Objects.requireNonNull(c, "str");
-		this.mime = mime==null?null:mime + "; charset=UTF-8";
+		this.mime = mime==null?null:mime+"; charset=UTF-8";
 	}
 
-	public CharSequence getStr() {return str;}
-	public String getMime() {return mime;}
+	public CharSequence string() {return str;}
+	public String mimetype() {return mime;}
 
-	public static StringResponse html(String msg) {return new StringResponse(msg, "text/html");}
-	public static StringResponse simpleErrorPage(int code) {
-		String desc = code+" "+HttpUtil.getDescription(code);
-		return new StringResponse("<title>"+desc+"</title><center><h1>"+desc+"</h1><hr/><div>"+HttpServer11.SERVER_NAME+"</div></center>", "text/html");
-	}
 	public static StringResponse detailedErrorPage(int code, Object e) {
 		if (code == 0) {
 			code = e instanceof IllegalRequestException ? ((IllegalRequestException) e).code : HttpUtil.INTERNAL_ERROR;
@@ -68,8 +62,10 @@ public class StringResponse implements Response {
 	public boolean send(ResponseWriter rh) throws IOException {
 		if (buf == null) throw new IllegalStateException("Not prepared");
 
-		rh.write(buf);
-		if (buf.isReadable()) return true;
+		if (buf.isReadable()) {
+			rh.write(buf);
+			if (buf.isReadable()) return true;
+		}
 
 		buf.clear();
 		off = UTF8MB4.CODER.encodeFixedOut(str,off,str.length(),buf,buf.capacity());

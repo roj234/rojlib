@@ -3,8 +3,8 @@ package roj.plugins.unpacker;
 import roj.collect.CollectionX;
 import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
-import roj.platform.Plugin;
-import roj.platform.SimplePlugin;
+import roj.plugin.Plugin;
+import roj.plugin.SimplePlugin;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandContext;
 
@@ -19,7 +19,17 @@ import static roj.ui.terminal.CommandNode.literal;
  * @author Roj234
  * @since 2024/5/31 0031 0:26
  */
-@SimplePlugin(id = "unpacker", version = "1.0", desc = "解包几种常见的文件格式")
+@SimplePlugin(id = "unpacker", version = "1.0", desc = """
+	通用文件解包器
+	[支持的文件格式]
+	asar (Electron静态资源)
+	har (F12工具保存的网页)
+	mhtml (Ctrl+S保存的网页)
+	scene (壁纸引擎壁纸包)
+	
+	[指令]
+	unpack <文件> <输出目录> [格式] [模式]
+	""")
 public class UnpackerPlugin extends Plugin {
 	@Override
 	protected void onEnable() throws Exception {
@@ -28,7 +38,7 @@ public class UnpackerPlugin extends Plugin {
 
 		registerCommand(literal("unpack").then(
 			argument("in", Argument.file()).executes(this::autoUnpack).then(
-				argument("out", Argument.file(true)).executes(this::autoUnpack).then(
+				argument("out", Argument.folder()).executes(this::autoUnpack).then(
 					argument("packType", Argument.anyOf(type)).executes(this::unpack).then(
 						argument("mode", Argument.anyOf(mode)).executes(ctx -> getLogger().warn("未实现"))
 		)))));

@@ -381,8 +381,12 @@ public final class CLIUtil implements Runnable {
 
 		char[] ref = new char[1];
 		Console c = new Console() {
-			public void registered() {}
-			public void unregistered() {}
+			public void registered() {
+				if (line != null) renderBottomLine(line, false, getStringWidth(line)+1);
+			}
+			public void unregistered() {
+				if (line != null) removeBottomLine(line, true);
+			}
 			public void keyEnter(int keyCode, boolean isVirtualKey) {
 				synchronized (ref) {
 					ref[0] = (char) keyCode;
@@ -793,7 +797,7 @@ public final class CLIUtil implements Runnable {
 
 		c.registered();
 	}
-	public static Console getConsole() { return console; }
+	public static Console getConsole() {return console == PIPE ? null : console;}
 
 	// region keyboard handling
 	public static final int VK_CTRL = 0x100;

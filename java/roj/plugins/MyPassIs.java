@@ -9,10 +9,9 @@ import roj.config.data.CEntry;
 import roj.config.data.CMap;
 import roj.crypt.*;
 import roj.io.IOUtil;
-import roj.platform.Plugin;
+import roj.plugin.Plugin;
 import roj.text.CharList;
 import roj.ui.CLIUtil;
-import roj.ui.Console;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
 import roj.util.ByteList;
@@ -103,13 +102,7 @@ public class MyPassIs extends Plugin {
 				login();
 				if (data == null) return;
 
-				Console prev = CLIUtil.getConsole();
-				CLIUtil.setConsole(null);
-				try {
-					site(ctx.argument("site", String.class));
-				} finally {
-					CLIUtil.setConsole(prev);
-				}
+				site(ctx.argument("site", String.class));
 			}))
 		);
 
@@ -233,14 +226,13 @@ public class MyPassIs extends Plugin {
 			}
 
 			if (accounts.containsKey(account)) {
-				String s = "您的密码是[(c)opy/Enter] > ";
-				sb.insert(0, s);
-				CLIUtil.renderBottomLine(sb, true, CLIUtil.getStringWidth(sb)+1);
-				char ce = CLIUtil.awaitCharacter(MyBitSet.from("c\n"));
-				CLIUtil.removeBottomLine(sb, true);
+				String tip = "您的密码是[(c)opy/Enter] > ";
+				sb.insert(0, tip);
+
+				char ce = CLIUtil.awaitCharacter(MyBitSet.from("c\n"), sb, false);
 				try {
 					if (ce == 'c') {
-						Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(sb.substring(s.length(), sb.length())), null);
+						Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(sb.substring(tip.length(), sb.length())), null);
 						CLIUtil.success("密码已复制到剪贴板");
 					}
 				} catch (Exception ignored) {}

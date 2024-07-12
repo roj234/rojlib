@@ -237,7 +237,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 		this.taskExecutor = taskExecutor;
 		this.taskFree = affinity;
 		ReflectionUtils.u.storeFence();
-		taskExecutor.pushTask(() -> { while (!noMoreInput) nextChunk(); });
+		taskExecutor.submit(() -> { while (!noMoreInput) nextChunk(); });
 	}
 
 	public int read(byte[] buf, int off, int len) throws IOException {
@@ -339,7 +339,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 
 			task.id = taskId++;
 
-			taskExecutor.pushTask(task);
+			taskExecutor.submit(task);
 			synchronized (tasksFree) { taskRunning++; }
 
 			decoder = task;

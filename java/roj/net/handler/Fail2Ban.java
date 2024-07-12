@@ -3,10 +3,8 @@ package roj.net.handler;
 import roj.concurrent.task.ITask;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
-import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
-import roj.net.http.Headers;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
 
@@ -59,14 +57,10 @@ public class Fail2Ban implements ChannelHandler {
 		InetAddress ipAddr = ((InetSocketAddress) ctx.remoteAddress()).getAddress();
 		LoginAttempt attempt = data.get(ipAddr);
 		if (attempt != null && attempt.getFailType() != 0) {
-			if (attempt.getFailType() == 1) {
-				LOGGER.info("已阻止 {} 的连接请求", ipAddr);
-				ctx.channelWrite(IOUtil.getSharedByteBuf().putAscii("ThrottleStop"));
-				ctx.channel().closeGracefully();
-			} else {
-				ctx.channel().readInactive();
-				Scheduler.getDefaultScheduler().delay(ctx::close, 60000);
-			}
+			// TODO either netsh block or JVM drop packet
+			LOGGER.info("已阻止 {} 的连接请求", ipAddr);
+			ctx.channel().readInactive();
+			Scheduler.getDefaultScheduler().delay(ctx::close, 60000);
 		}
 	}
 
@@ -83,25 +77,6 @@ public class Fail2Ban implements ChannelHandler {
 		DynByteBuf copy = in.slice(0, in.readableBytes());
 		if (copy.getU(copy.rIndex) != 0x40) {
 			LOGGER.info("{} 发送了无效的数据包: {}", ctx.remoteAddress(), copy.dump());
-			block:
-			if (copy.isReadable() && copy.readLine().contains("HTTP/")) {
-				try {
-					Headers h = new Headers();
-					if (!h.parseHead(copy)) break block;
-					if (h.containsKey("host")) {
-						InetSocketAddress addr = (InetSocketAddress) ctx.localAddress();
-						if (!(addr.getHostString()+":"+addr.getPort()).equals(h.get("host"))) {
-							break block;
-						}
-					}
-				} catch (Exception ignored) {}
-
-				ctx.channelWrite(IOUtil.getSharedByteBuf().putAscii("""
-								HTTP/1.1 400 Bad Request\r
-								Connection: close\r
-								\r
-								<h1>This is not a HTTP server</h1>"""));
-			}
 			ctx.close();
 			return;
 		}

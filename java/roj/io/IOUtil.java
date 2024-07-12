@@ -1,20 +1,20 @@
 package roj.io;
 
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
 import roj.compiler.plugins.annotations.Attach;
 import roj.concurrent.FastThreadLocal;
+import roj.config.data.CInt;
 import roj.config.data.CLong;
 import roj.crypt.Base64;
 import roj.reflect.ReflectionUtils;
-import roj.text.CharList;
-import roj.text.TextReader;
-import roj.text.TextUtil;
-import roj.text.UTF8MB4;
+import roj.text.*;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.*;
+import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.FileChannel;
@@ -22,7 +22,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -82,6 +81,7 @@ public final class IOUtil {
 		return o;
 	}
 
+	//region InputStream/TextReader
 	public static byte[] getResource(String path) throws IOException { return getResource(ReflectionUtils.getCallerClass(2), path); }
 	public static byte[] getResource(Class<?> caller, String path) throws IOException {
 		var in = caller.getClassLoader().getResourceAsStream(path);
@@ -157,11 +157,7 @@ public final class IOUtil {
 	}
 	@Attach
 	public static void skipFully(InputStream in, long count) throws IOException {
-		if (skip(in, count) < count) throw new EOFException();
-	}
-
-	public static void copyFile(File source, File target) throws IOException {
-		Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+		if (skip(in, count) < count) throw new EOFException(in+"无法跳过"+count+"个字节");
 	}
 
 	public static void copyStream(InputStream in, OutputStream out) throws IOException {
@@ -174,15 +170,32 @@ public final class IOUtil {
 			out.write(data, 0, len);
 		}
 	}
+	//endregion
+
+	/**
+	 * 获取这个类所属的jar
+	 */
+	public static File getJar(Class<?> clazz) {
+		URL location = clazz.getProtectionDomain().getCodeSource().getLocation();
+		if (location == null) return null;
+		String loc = location.getPath();
+		if (loc.startsWith("file:")) loc = loc.substring(5);
+		int i = loc.lastIndexOf('!');
+		loc = loc.substring(loc.startsWith("/")?1:0, i<0?loc.length():i);
+		try {
+			return new File(Escape.decodeURI(loc)).getCanonicalFile();
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+
+	public static void copyFile(File source, File target) throws IOException {Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);}
 
 	@Attach("listAll")
-	public static List<File> findAllFiles(File file) {
-		return findAllFiles(file, SimpleList.hugeCapacity(0), Helpers.alwaysTrue());
-	}
+	public static List<File> findAllFiles(File file) {return findAllFiles(file, SimpleList.hugeCapacity(0), Helpers.alwaysTrue());}
 	@Attach("listAll")
-	public static List<File> findAllFiles(File file, Predicate<File> predicate) {
-		return findAllFiles(file, SimpleList.hugeCapacity(0), predicate);
-	}
+	public static List<File> findAllFiles(File file, Predicate<File> predicate) {return findAllFiles(file, SimpleList.hugeCapacity(0), predicate);}
 	@Attach("listAll")
 	public static List<File> findAllFiles(File file, List<File> files, Predicate<File> predicate) {
 		try {
@@ -223,7 +236,26 @@ public final class IOUtil {
 		return true;
 	}
 
-	public static void allocSparseFile(File file, long length) throws IOException {
+	@Attach
+	public static int removeEmptyPaths(File file) {
+		CInt tmp = new CInt();
+		try {
+			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
+				int size;
+				@Override
+				public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {size++;return FileVisitResult.CONTINUE;}
+				@Override
+				public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
+					if (--size > 0 && dir.toFile().delete()) tmp.value++;
+					return FileVisitResult.CONTINUE;
+				}
+			});
+		} catch (IOException ignored) {}
+		return tmp.value;
+	}
+
+	@Attach
+	public static void createSparseFile(File file, long length) throws IOException {
 		// noinspection all
 		if (file.length() != length) {
 			// noinspection all
@@ -240,8 +272,8 @@ public final class IOUtil {
 		} else if (length == 0) file.createNewFile();
 	}
 
-	public static boolean checkTotalWritePermission(File file) {
-		try (RandomAccessFile f = new RandomAccessFile(file, "rw")) {
+	public static boolean isReallyWritable(File file) {
+		try (var f = new RandomAccessFile(file, "rw")) {
 			long l = f.length();
 			f.seek(l);
 			f.writeByte(1);
@@ -250,24 +282,6 @@ public final class IOUtil {
 			return false;
 		}
 		return true;
-	}
-
-	public static int removeEmptyPaths(Collection<String> files) {
-		boolean oneRemoved = true;
-		int i = 0;
-		while (oneRemoved) {
-			oneRemoved = false;
-			for (String path : files) {
-				File dir = new File(path);
-				while ((dir = dir.getParentFile()) != null) {
-					if (!dir.delete()) break;
-
-					oneRemoved = true;
-					i++;
-				}
-			}
-		}
-		return i;
 	}
 
 	public static long transferFileSelf(FileChannel cf, long from, long to, long len) throws IOException {
@@ -353,21 +367,47 @@ public final class IOUtil {
 	}
 
 	/**
-	 * no URLDecode
-	 * no \ TO /
-	 * @param path
-	 * @return
+	 * 路径过滤函数，处理不可信的用户输入路径.
+	 * 这个函数会删除路径中的
+	 *   //
+	 *   ../
+	 *   ./
+	 *   开头的/
+	 *   空白字符
+	 * 并截断字符串到任意(不可打印, ':', ' ')字符之前
 	 */
-	public static String safePath(String path) {
+	@NotNull
+	public static String safePath(String path) throws InvalidPathException {
 		CharList sb = getSharedCharBuf();
 
-		int altStream = path.lastIndexOf(':');
-		if (altStream > 1) path = path.substring(0, altStream);
+		int end = 0;
+		int i = 0;
+		while (i < path.length()) {
+			var c = path.charAt(i);
+			if (c < 32 || c == ':') break;
+			i++;
+			if (c != ' ') end = i;
+		}
 
-		return sb.append(path).trim()
-				 .replaceInReplaceResult("../", "/")
+		return sb.append(path, 0, end).trim()
+				 .replace(File.separatorChar, '/')
+				 .replaceInReplaceResult("./", "/")
 				 .replaceInReplaceResult("//", "/")
 				 .substring(sb.length() > 0 && sb.charAt(0) == '/' ? 1 : 0, sb.length());
+	}
+	/**
+	 * 这是另外一个实现
+	 * @param base 允许访问的目录
+	 * @param relative 不可信的用户输入
+	 * @return 如果输入合法，那么返回非空
+	 */
+	@Nullable
+	public static File safePath(String base, String relative) {
+		File file = new File(base, relative);
+		try {
+			if (file.getCanonicalPath().startsWith(base)) return file;
+		} catch (IOException ignored) {}
+		return null;
 	}
 
 	public static long movePath(File from, File to, boolean move) throws IOException {
@@ -438,7 +478,7 @@ public final class IOUtil {
 			try {
 				waiter.wait();
 			} catch (InterruptedException e) {
-				ClosedByInterruptException ex2 = new ClosedByInterruptException();
+				var ex2 = new ClosedByInterruptException();
 				try {
 					closeable.close();
 				} catch (Throwable ex) {

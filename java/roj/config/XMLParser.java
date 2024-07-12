@@ -134,7 +134,7 @@ public class XMLParser extends Parser {
 	}
 
 	private void ccXmlElem() throws ParseException {
-		String name = except(LITERAL, "元素名称").val();
+		String name = Interner.intern(except(LITERAL, "元素名称").val());
 
 		cc.valueList();
 		cc.value(name);
@@ -209,7 +209,7 @@ public class XMLParser extends Parser {
 	}
 
 	private Word readAttribute(Word w) throws ParseException {
-		cc.key(w.val());
+		cc.key(Interner.intern(w.val()));
 		w = next();
 
 		if (w.type() == equ) {

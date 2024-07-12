@@ -124,15 +124,9 @@ class TcpChImpl extends MyChannel {
 		if (buf == EMPTY) rb = buf = alloc().allocate(true, buffer, 0);
 		while (true) {
 			int w = buf.writableBytes();
-			int r;
 			ByteBuffer nioBuffer = syncNioRead(buf);
-			try {
-				r = sc.read(nioBuffer);
-			} catch (IOException e) {
-				if (TcpUtil.isOutputOpen(sc)) throw e;
-				close();
-				return;
-			}
+			// IOException => exceptionCaught
+			int r = sc.read(nioBuffer);
 			buf.wIndex(nioBuffer.position());
 
 			if (r < 0) {
@@ -156,7 +150,13 @@ class TcpChImpl extends MyChannel {
 	protected void write(Object o) throws IOException {
 		BufferPool bp = alloc();
 
-		DynByteBuf buf = (DynByteBuf) o;
+		if (o instanceof SendfilePkt req) {
+			if (!pending.isEmpty()) flush();
+			req.written = pending.isEmpty() ? req.channel.transferTo(req.offset, req.length, sc) : -1;
+			return;
+		}
+
+		var buf = (DynByteBuf) o;
 		if (!buf.isReadable()) return;
 		if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes(), 0).put(buf);
 
@@ -184,8 +184,11 @@ class TcpChImpl extends MyChannel {
 	}
 
 	private void write0(DynByteBuf buf) throws IOException {
-		ByteBuffer nioBuffer = syncNioWrite(buf);
-		int w = sc.write(nioBuffer);
+		var nioBuffer = syncNioWrite(buf);
+		sc.write(nioBuffer);
 		buf.rIndex = nioBuffer.position();
 	}
+
+	@Override
+	public boolean canSendfile() {return true;}
 }

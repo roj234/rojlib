@@ -51,10 +51,9 @@ public class Scheduler implements Runnable {
 		public String toString() {
 			String state;
 			if (lock instanceof TimingWheel) state = "list-root";
-			else if (lock instanceof Long) state = "lone,delayed";
 			else if (lock instanceof TaskHolder) state = "queued";
-			else state = timeLeft == 0 ? "expired" : timeLeft == -1 ? "cancelled" : "lone";
-			return "ScheduleTask{"+"state="+state+'}';
+			else state = timeLeft == 0 ? "expired" : timeLeft == -1 ? "cancelled" : "detached";
+			return "ScheduleTask{state="+state+",task="+task+",lock="+lock+",approx.timeLeft="+timeLeft+'}';
 		}
 
 		static final long OFF_LOCK = ReflectionUtils.fieldOffset(TaskHolder.class, "lock");
@@ -77,7 +76,7 @@ public class Scheduler implements Runnable {
 				if (t < 0) break;
 			} while (!u.compareAndSwapLong(this, OFF_TIME_LEFT, t, t == 0 ? -2 : -1));
 
-			TaskHolder root = (TaskHolder) lock;
+			var root = (TaskHolder) lock;
 			return (root != null && ((TimingWheel) root.lock).remove(root, this)) | task.cancel() | t < 0;
 		}
 	}
@@ -221,13 +220,13 @@ public class Scheduler implements Runnable {
 			int i = clk.clock + ((int) (time >> (DEPTH_SHL*slot)) & DEPTH_MASK) - 1;
 			TaskHolder root = clk.tasks[i & DEPTH_MASK];
 
-			if (!u.compareAndSwapObject(task, TaskHolder.OFF_LOCK, null, root)) throw new AssertionError(task.lock);
+			u.putObjectVolatile(task, TaskHolder.OFF_LOCK, root);
 			u.getAndAddInt(clk, OFF_TASK_COUNT, 1);
 
-			task.prev = root;
 			synchronized (root) {
 				task.next = root.next;
 				root.next.prev = task;
+				task.prev = root;
 				root.next = task;
 			}
 		}
@@ -236,10 +235,12 @@ public class Scheduler implements Runnable {
 			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
 
 			synchronized (root) {
+				//按说这是不可能的，不过就是发生了，算了不去管它
+				if (task.next == null) return false;
 				task.next.prev = task.prev;
 				task.prev.next = task.next;
+				task.prev = task.next = null;
 			}
-			task.prev = task.next = null;
 			return true;
 		}
 
@@ -279,7 +280,7 @@ public class Scheduler implements Runnable {
 		callback = task -> {
 			ITask _task = task.getTask();
 			long nextRun = _task instanceof LoopTaskWrapper loop ? loop.getNextRun() : 0;
-			th.pushTask(_task);
+			th.submit(_task);
 			return nextRun;
 		};
 	}

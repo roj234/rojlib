@@ -31,7 +31,7 @@ public abstract class fcgiManager implements Router {
 		}
 
 		if (h.isHeaderFinished()) return h;
-		req.server().asyncResponse();
+		rh.enableAsyncResponse();
 		return null;
 	}
 
@@ -82,27 +82,18 @@ public abstract class fcgiManager implements Router {
 		param.put("SERVER_ADDR", addr.getHostString());
 		param.put("SERVER_PORT", String.valueOf(addr.getPort()));
 
-		for (Map.Entry<CharSequence, String> entry : req.entrySet()) {
+		for (var entry : req.entrySet()) {
 			param.put("HTTP_"+entry.getKey().toString().replace('-', '_').toUpperCase(Locale.ROOT), entry.getValue());
 		}
 
 		fcgi_set_param(req, param);
-
-		var server = req.server();
-		server.ch().readInactive();
-		var response = new fcgiResponse(server);
-
-		TaskPool.Common().pushTask(() -> {
+		var response = new fcgiResponse(req.server());
+		TaskPool.Common().submit(() -> {
 			try {
 				fcgi_attach(response, param);
 			} catch (Throwable ex) {
 				response.fail(ex);
-			} finally {
-				try {
-					if (server.ch() != null) server.ch().readActive();
-				} catch (Throwable ignored) {}
 			}
-
 		});
 		return response;
 	}

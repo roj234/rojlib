@@ -115,7 +115,7 @@ final class Binary extends ExprNode {
 
 		primitive: {
 			IType plType = lType.isPrimitive() ? lType : rType;
-			if (plType.isPrimitive()) {
+			if (plType.isPrimitive() && (operator < logic_and || operator > nullish_consolidating)) {
 				int cap = TypeCast.getDataCap(plType.getActualType());
 				if ((cap&7) != 0) dpType = Math.max(cap, dpType);
 				else dpType = 8; // boolean
@@ -162,15 +162,21 @@ final class Binary extends ExprNode {
 			}
 
 			switch (operator) {
-				case equ, neq:
-					// 无法比较的类型
+				case equ, neq:// 无法比较的类型
 					if (rType.isPrimitive()) castRight = ctx.castTo(rType, lType, TypeCast.E_DOWNCAST);
 					else if (lType.isPrimitive()) castLeft = ctx.castTo(lType, rType, TypeCast.E_DOWNCAST);
 					dpType = 9;
 				break;
-				case logic_and, logic_or:
-					castLeft = ctx.castTo(lType, Type.std(Type.BOOLEAN), 0);
-					castRight = ctx.castTo(rType, Type.std(Type.BOOLEAN), 0);
+				case logic_and, logic_or, nullish_consolidating:
+					if (operator == nullish_consolidating) {
+						if (lType.isPrimitive()) ctx.report(Kind.ERROR, "symbol.error.derefPrimitive", lType);
+						type = ctx.getCommonParent(lType, rType);
+					} else {
+						type = Type.std(Type.BOOLEAN);
+					}
+
+					castLeft = ctx.castTo(lType, type, 0);
+					castRight = ctx.castTo(rType, type, 0);
 				break;
 				default:
 					ExprNode override = ctx.getOperatorOverride(left, right, operator);
@@ -180,6 +186,8 @@ final class Binary extends ExprNode {
 					}
 					return override;
 			}
+
+			if ((castLeft.type|castRight.type) < 0) return NaE.RESOLVE_FAILED;
 		}
 
 		dType = (byte) (TypeCast.getDataCap(type.rawType().type)-4);
@@ -189,47 +197,59 @@ final class Binary extends ExprNode {
 			if (right.isConstant()) {
 				switch (operator) {
 					// equ 和 neq 应该可以直接删除跳转？反正boolean也就是0和非0 （AND 1就行）
-					case equ, neq, lss, geq, gtr, leq: {
+					case equ, neq, lss, geq, gtr, leq -> {
 						if (dpType <= 4 && ((AnnVal) right.constVal()).asInt() == 0) {
 							flag = 1;
 						}
 						return this;
 					}
+					// expr ?? null => expr
+					case nullish_consolidating -> {
+						if (right.constVal() == null) {
+							ctx.report(Kind.WARNING, "binary.uselessNullish");
+							return left;
+						}
+					}
+					default -> checkDivZero(right, ctx);
 				}
-				checkDivZero(right, ctx);
 			}
 			return this;
 		}
-		checkDivZero(left, ctx);
+
+		switch (operator) {
+			default: checkDivZero(right, ctx); break;
+			case logic_and, logic_or:
+				var exprVal = (boolean) left.constVal();
+				var v = exprVal == (operator == logic_and) ? right : Constant.valueOf(exprVal);
+				ctx.report(Kind.WARNING, "binary.constant", v);
+				return v;
+			case nullish_consolidating:
+				v = left.constVal() == null ? right : left;
+				ctx.report(Kind.WARNING, "binary.constant", v);
+				return v;
+		}
+
 		if (!right.isConstant()) {
 			switch (operator) {
 				case equ, neq, lss, geq, gtr, leq: {
 					if (dpType <= 4 && ((AnnVal) left.constVal()).asInt() == 0) {
 						flag = 2;
 					}
-					return this;
 				}
-				case logic_and:
-					ctx.report(Kind.WARNING, "binary.constant");
-					return ((boolean) left.constVal()) ? right : Constant.valueOf(false);
-				case logic_or:
-					ctx.report(Kind.WARNING, "binary.constant");
-					return ((boolean) left.constVal()) ? Constant.valueOf(true) : right;
-				default: return this;
 			}
+			return this;
 		}
 
 		switch (operator) {
 			case lss, gtr, geq, leq:
 				double l = ((AnnVal) left.constVal()).asDouble(), r = ((AnnVal) right.constVal()).asDouble();
-				boolean v = switch (operator) {
+				return Constant.valueOf(switch (operator) {
 					case lss -> l < r;
 					case gtr -> l > r;
 					case geq -> l >= r;
 					case leq -> l <= r;
 					default -> throw OperationDone.NEVER;
-				};
-				return Constant.valueOf(v);
+				});
 
 			case equ, neq:
 				return Constant.valueOf((operator == equ) == (dpType == 9 ?
@@ -319,8 +339,8 @@ final class Binary extends ExprNode {
 		return this;
 	}
 
-	private void checkDivZero(ExprNode left, LocalContext ctx) {
-		if (dType <= 1 && operator == div && ((AnnVal) left.constVal()).asInt() == 0) {
+	private void checkDivZero(ExprNode node, LocalContext ctx) {
+		if (dType <= 1 && operator == div && ((AnnVal) node.constVal()).asInt() == 0) {
 			ctx.report(Kind.WARNING, "binary.divisionByZero");
 		}
 	}
@@ -349,6 +369,18 @@ final class Binary extends ExprNode {
 					cw.one((byte) (operator-logic_and + ICONST_0));
 					cw.label(realEnd);
 				}
+				return;
+			}
+			case nullish_consolidating: {
+				mustBeStatement(noRet);
+
+				Label end = new Label();
+				left.writeDyn(cw, castLeft);
+				cw.one(DUP);
+				cw.jump(IFNONNULL, end);
+				cw.one(POP);
+				right.writeDyn(cw, castRight);
+				cw.label(end);
 				return;
 			}
 		}

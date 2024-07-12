@@ -1,8 +1,10 @@
 package roj.net.http.server;
 
+import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.net.ch.ChannelCtx;
+import roj.net.ch.SendfilePkt;
 import roj.net.http.Headers;
 import roj.net.http.IllegalRequestException;
 import roj.text.CharList;
@@ -15,41 +17,36 @@ import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.FileChannel;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * @author Roj234
  * @since 2023/2/3 0003 17:18
  */
-public class FileResponse implements Response {
+final class FileResponse implements Response {
 	private FileInfo file;
 
-	private byte def;
+	//def标记 2bit
+	// 0 不能压缩
+	// 1 已经压缩 (支持随机访问)
+	// 2 允许压缩
+	//sendfile标记 1bit
+	// 4 禁用sendfile (由于带宽限制)
+	private byte flag;
 
 	private long[] ranges;
 	private int off = 0;
 
+	private SendfilePkt sendfile;
 	private InputStream in;
 	private long remain;
 
 	private String splitter;
 
 	FileResponse() {}
-
-	public static Response response(Request req, FileInfo info) {
-		Map<String, Object> map = req.localCtx();
-
-		FileResponse resp = (FileResponse) map.get("h11:send_file");
-		if (resp == null) map.put("h11:send_file", resp = new FileResponse());
-		if (resp.file != null) resp = new FileResponse();
-
-		return resp.init(req, info);
-	}
-
-	private Response init(Request req, FileInfo info) {
-		def = 0;
+	Response init(int flag, Request req, FileInfo info) {
 		file = info;
 
 		String v;
@@ -101,16 +98,17 @@ public class FileResponse implements Response {
 
 		int stat = info.stats();
 
+		int def = 0;
 		if (req.getFieldValue("accept-encoding", "deflate") != null) {
 			if ((stat & FileInfo.FILE_DEFLATED) != 0) {
 				def = 1;
-				// same as rh.header()
 				req.responseHeader.put("content-encoding", "deflate");
 			} else if ((stat & FileInfo.FILE_CAN_DEFLATE) != 0) {
 				def = 2;
 				rh.enableCompression();
 			}
 		}
+		this.flag = (byte) (flag | def);
 
 		ranges = ArrayCache.LONGS;
 
@@ -135,19 +133,23 @@ public class FileResponse implements Response {
 			}
 		}
 
-		if ((v = req.get("Range")) == null || (stat & (def==1 ? FileInfo.FILE_DEFLATED : FileInfo.FILE_RA)) == 0) {
+		if ((v = req.get("Range")) == null || (stat & (def ==1 ? FileInfo.FILE_DEFLATED : FileInfo.FILE_RA)) == 0) {
 			plus(200, req);
 			return this;
 		}
 
 		if (!v.startsWith("bytes=")) {
 			rh.code(400);
-			return StringResponse.html("not 'bytes' range");
+			return Response.text("invalid 'range' field");
 		}
 
 		long len = file.length(def == 1);
 
 		List<String> ranges = TextUtil.split(v.substring(6), ", ");
+		if (ranges.size() > 16) {
+			rh.code(400);
+			return Response.text("invalid 'range' field");
+		}
 		long[] data = this.ranges = new long[ranges.size() << 1];
 
 		long total = 0;
@@ -199,47 +201,58 @@ public class FileResponse implements Response {
 	}
 
 	private Response plus(int r, Request req) {
-		ResponseHeader h = req.handler;
+		var h = req.handler;
 		h.code(r).date();
 		if (r != 304) {
-			h.header("last-modified", HttpServer11.TSO.get().toRFC(file.lastModified()));
+			h.header("last-modified", HttpCache.getInstance().toRFC(file.lastModified()));
 			if (r == 206) return this;
 
 			String tag = file.getETag();
 			if (tag != null) h.header("etag", tag);
-			if (def != 2 && (file.stats() & (1<<(def+1))) != 0) h.header("accept-ranges", "bytes");
+			var def = flag&3;
+			if (def != 2 && (file.stats() & (1<<def)) != 0) h.header("accept-ranges", "bytes");
 		}
 		return null;
 	}
 
 	@Override
 	public void prepare(ResponseHeader rh, Headers h) throws IOException {
-		boolean def = this.def == 1;
+		boolean def = (flag&3) == 1;
 
+		FileChannel fch;
 		off = 0;
 		if (ranges.length == 0) {
-			in = file.get(def, 0);
 			remain = file.length(def);
-			if (this.def != 2) h.put("content-length", Long.toString(remain));
+			if (cantSendfile(rh) || (fch = file.getSendFile(def)) == null) {
+				in = file.get(def, 0);
+			} else {
+				sendfile = new SendfilePkt(fch);
+				sendfile.length = remain;
+			}
+			if ((flag&3) != 2) h.put("content-length", Long.toString(remain));
 		} else {
 			if (ranges.length > 2) {
 				off = -2;
 				remain = 0;
 			} else {
-				in = file.get(def, ranges[0]);
 				remain = ranges[1]-ranges[0]+1;
+				if (cantSendfile(rh) || (fch = file.getSendFile(def)) == null) {
+					in = file.get(def, ranges[0]);
+				} else {
+					sendfile = new SendfilePkt(fch, ranges[0], remain);
+				}
 			}
 		}
 
 		file.prepare(rh, h);
 	}
+	private boolean cantSendfile(ResponseHeader rh) {return (flag&6) != 0 || !rh.ch().canSendfile();}
 
 	@Override
 	public boolean send(ResponseWriter rh) throws IOException {
 		if (remain < 0) return false;
 
 		if (remain == 0) {
-			if (in != null) in.close();
 			off += 2;
 
 			if (ranges.length > 2) {
@@ -248,7 +261,7 @@ public class FileResponse implements Response {
 				t.putAscii("\r\n");
 
 				if (off < ranges.length) {
-					t.putAscii("content-range: byte "+ranges[off]+"-"+ranges[off+1]+"/"+file.length(def==1)+"\r\n\r\n");
+					t.putAscii("content-range: byte "+ranges[off]+"-"+ranges[off+1]+"/"+file.length((flag&3) == 1)+"\r\n\r\n");
 				}
 
 				try {
@@ -258,25 +271,41 @@ public class FileResponse implements Response {
 				}
 			}
 
-			if (off >= ranges.length) {
-				remain = -1;
-				in = null;
-				return false;
-			}
+			if (off >= ranges.length) {remain = -1;return false;}
 
-			in = file.get(def == 1, ranges[off]);
 			remain = ranges[off+1] - ranges[off] + 1;
+			if (sendfile != null) {
+				sendfile.offset = ranges[off];
+				sendfile.length = remain;
+			} else {
+				long delta = ranges[off]/*next position*/ - ranges[off-1]/*in position*/;
+				if (delta >= 0) {
+					IOUtil.skipFully(in, delta);
+				} else {
+					IOUtil.closeSilently(in);
+					in = file.get((flag&3) == 1, ranges[off]);
+				}
+			}
 		}
 
-		remain -= rh.write(in, (int) MathUtils.clamp(remain, 0, Integer.MAX_VALUE));
+		if (sendfile != null) {
+			rh.ch().fireChannelWrite(sendfile);
+			sendfile.flip();
+			remain = sendfile.length;
+		} else {
+			remain -= rh.write(in, (int) MathUtils.clamp(remain, 0, Integer.MAX_VALUE));
+		}
 
 		return true;
 	}
 
 	@Override
-	public void release(ChannelCtx ctx) throws IOException {
-		if (in != null) {
-			in.close();
+	public void release(ChannelCtx ctx) {
+		if (sendfile != null) {
+			IOUtil.closeSilently(sendfile.channel);
+			sendfile = null;
+		} else {
+			IOUtil.closeSilently(in);
 			in = null;
 		}
 

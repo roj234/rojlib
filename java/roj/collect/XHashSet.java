@@ -186,10 +186,8 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 	@Override
 	public boolean remove(Object o) { return removeKey(shape.GET_KEY(shape.checkCast(o))) != null; }
 	@SuppressWarnings("unchecked")
-	public V removeKey(Object o) {
+	public V removeKey(K key) {
 		if (entries == null) return null;
-
-		K key = (K) o;
 
 		int i = shape.hashCode(key)&mask;
 		Object entry = entries[i], prev = null;

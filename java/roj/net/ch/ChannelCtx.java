@@ -26,7 +26,6 @@ public final class ChannelCtx {
 	}
 
 	public MyChannel channel() { return root; }
-	public void invokeLater(Runnable r) { root.invokeLater(r); }
 
 	public SocketAddress remoteAddress() { return root.remoteAddress(); }
 	public SocketAddress localAddress() { return root.localAddress(); }

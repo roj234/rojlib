@@ -155,14 +155,14 @@ public class Aliyun implements DDNSService {
 				if (pos > 0) par.put("RRKeyWord", s.substring(0, pos));
 			}
 
-			th.pushTask(_init(par));
+			th.submit(_init(par));
 
 			par.put("TypeKeyWord", "AAAA");
-			th.pushTask(_init(par));
+			th.submit(_init(par));
 		}
 
-		th.awaitFinish();
 		th.shutdown();
+		th.awaitTermination();
 	}
 
 	@Override

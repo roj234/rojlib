@@ -126,7 +126,7 @@ abstract class Downloader implements ITask, Closeable, ChannelHandler {
 			}
 
 			ch.close();
-			DownloadTask.QUERY.pushTask(this);
+			DownloadTask.QUERY.submit(this);
 		} else {
 			if (progress != null) progress.shutdown();
 			close();

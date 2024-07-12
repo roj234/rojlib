@@ -261,7 +261,7 @@ public final class Parser {
 
 		r.rIndex += 4; // ver
 
-		ConstantPool pool = AsmShared.local().constPool();
+		var pool = AsmShared.local().constPool();
 		pool.read(r, ConstantPool.ONLY_STRING);
 
 		int cfo = r.rIndex; // acc
@@ -298,6 +298,8 @@ public final class Parser {
 			if (k == 0) data.fields = com;
 			else data.methods = com;
 		}
+
+		AsmShared.local().constPool(pool);
 		return data;
 	}
 

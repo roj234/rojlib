@@ -488,7 +488,7 @@ public class QZArchiver {
 			} while (tmp.isFile());
 
 			if (splitSize == 0) {
-				IOUtil.allocSparseFile(tmp, totalLength);
+				IOUtil.createSparseFile(tmp, totalLength);
 				writer = new QZFileWriter(tmp);
 			} else {
 				// .tmp.001
@@ -530,7 +530,7 @@ public class QZArchiver {
 				}
 			}
 
-			pool.pushTask(() -> {
+			pool.submit(() -> {
 				try (QZReader _in = oldArchive.parallel()) {
 					try (QZWriter _out = parallel(writer)) {
 						_out.setCodec(coders);
@@ -581,7 +581,7 @@ public class QZArchiver {
 		writer.setIgnoreClose(true);
 		for (int i = 0; i < appends.size(); i++) {
 			int myi = i;
-			pool.pushTask(() -> {
+			pool.submit(() -> {
 				try (QZWriter writer1 = /*myi == 0 ? writer : */parallel(writer)) {
 					writeBlock(bar, appends.get(myi), writer1, pool);
 				}

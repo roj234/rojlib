@@ -65,7 +65,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 
 		try {
 			// preload asm classes
-			new Context("_classwrapper_", IOUtil.getResource("roj/asmx/launcher/ClassWrapper.class")).getData();
+			new Context("_classwrapper_", IOUtil.getResource("roj/asmx/launcher/ClassWrapper.class")).getData().parsed();
 		} catch (Exception e) {
 			throw new IllegalStateException("预加载转换器相关类时出现异常", e);
 		}
@@ -363,5 +363,21 @@ public class ClassWrapper implements Function<String, Class<?>> {
 			this.repo = repo;
 		}
 		return repo;
+	}
+	public void setAnnotations(AnnotationRepo repo) {
+		if (this.repo != null) throw new IllegalStateException("Annotation already set");
+		this.repo = repo;
+	}
+	public long getAnnotationTimestamp() {
+		long time = 0;
+		for (ZipFile archive : archives) {
+			if (archive.source() instanceof FileSource fs) {
+				long mod = fs.getFile().lastModified();
+				if (time < mod) time = mod;
+			} else {
+				LOGGER.warn("有些源来自内存: {}, 注解时间戳可能无效.", archive.source());
+			}
+		}
+		return time;
 	}
 }

@@ -159,22 +159,22 @@ public class QZArchiverUI extends JFrame {
 
 		ActionListener stopListener = e -> {
 			arc.interrupt();
-			pool.shutdown();
+			pool.shutdownAndCancel();
 		};
 
 		uiBegin.setText("停下");
 		uiBegin.removeActionListener(beginListener);
 		uiBegin.addActionListener(stopListener);
 
-		TaskPool.Common().pushTask(() -> {
+		TaskPool.Common().submit(() -> {
 			pool.setRejectPolicy(TaskPool::waitPolicy);
 			EasyProgressBar bar = new GuiProgressBar(uiLog, uiProgress);
 			try {
 				arc.compress(pool, bar);
 			} finally {
-				pool.awaitShutdown();
+				pool.shutdownAndCancel();
 				if (pool2 != null) {
-					pool2.awaitShutdown();
+					pool2.shutdownAndCancel();
 
 					try {
 						buffer.release();
@@ -290,7 +290,7 @@ public class QZArchiverUI extends JFrame {
 			uiLog.setText("开始测试,时间依据您除了LcLpPb的LZMA设定而变化,请耐心等待\n" +
 				"请不要在测试过程中修改LZMA设定,这会导致结果不准确");
 
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				TaskPool pool = TaskPool.MaxThread(createTaskPool()[0], "LcLpTest-worker-");
 				try {
 					ByteList data = new ByteList();
@@ -313,7 +313,7 @@ public class QZArchiverUI extends JFrame {
 						"使用它们的压缩大小为"+toDigital(minSize)+" ("+TextUtil.toFixed((double)minSize/data.length() * 100, 2)+"%)");
 				} finally {
 					uiFindBestProp.setEnabled(true);
-					pool.shutdown();
+					pool.shutdownAndCancel();
 				}
 			});
 		});

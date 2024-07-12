@@ -3,6 +3,7 @@ package roj.config.serial;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.config.Interner;
 import roj.config.data.*;
 
 import java.util.Arrays;
@@ -70,7 +71,7 @@ public final class ToEntry implements CVisitor {
 	public final void key(String key) {
 		if (state != 2) throw new IllegalStateException("栈顶不是映射: "+stackBottom.getType());
 		if (this.key != null) throw new IllegalStateException("映射缺少值: 在键 "+this.key+" 后立即输入了键 "+key);
-		this.key = key;
+		this.key = Interner.intern(key);
 	}
 
 	public final void valueList() { push(new CList(), 3); }

@@ -165,6 +165,7 @@ public final class ExprParser {
 		SM.putInt(SM_ExprTerm | equ, 5);
 		SM.putInt(SM_ExprTerm | neq, 5);
 
+		SM.putInt(SM_ExprTerm | nullish_consolidating, 4);
 		SM.putInt(SM_ExprTerm | logic_and, 4);
 		SM.putInt(SM_ExprTerm | logic_or, 4);
 	}

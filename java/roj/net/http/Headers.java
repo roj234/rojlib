@@ -2,12 +2,13 @@ package roj.net.http;
 
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.collect.ObjectPool;
 import roj.collect.SimpleList;
-import roj.concurrent.FastThreadLocal;
+import roj.collect.ToIntMap;
 import roj.concurrent.OperationDone;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
+import roj.net.http.server.HttpCache;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.Escape;
 import roj.text.LineReader;
@@ -359,11 +360,9 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	public AbstractEntry<CharSequence, String> getEntry(CharSequence key) { return super.getEntry(lower(key)); }
 	public AbstractEntry<CharSequence, String> getOrCreateEntry(CharSequence key) { return super.getOrCreateEntry(lower(key)); }
 
-	private static final FastThreadLocal<ObjectPool<E>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(128));
-
 	@Override
 	protected AbstractEntry<CharSequence, String> useEntry() {
-		E entry = Helpers.cast(MY_OBJECT_POOL.get().get());
+		E entry = Helpers.cast(HttpCache.getInstance().headers.pop());
 
 		if (entry == null) entry = new E();
 		entry.k = entry.v = Helpers.cast(UNDEFINED);
@@ -375,7 +374,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		e.k = null;
 		e.next = null;
 		e.all.clear();
-		MY_OBJECT_POOL.get().reserve(e);
+		HttpCache.getInstance().headers.add(e);
 	}
 
 	@Override
@@ -470,45 +469,78 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 	public final void encode(Appendable sb) {
 		try {
-			for (Iterator<Map.Entry<CharSequence, String>> it = entrySet().iterator(); it.hasNext(); ) {
+			for (var it = entrySet().iterator(); it.hasNext(); ) {
 				E entry = (E) it.next();
-				h(sb, entry, entry.getValue());
+				var key = entry.getKey();
+
+				char c = key.charAt(0);
+				int offset = c == ':' || c == '*' || c == '^' ? 1 : 0;
+
+				h(sb, key, offset, entry.getValue());
 
 				List<String> all = entry.all;
-				for (int i = 0; i < all.size(); i++) h(sb, entry, all.get(i));
+				for (int i = 0; i < all.size(); i++) {
+					h(sb, key, offset, all.get(i));
+				}
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
 	}
-	private static Appendable h(Appendable sb, E entry, String value) throws IOException { return sb.append(entry.getKey()).append(value.isEmpty()?":":": ").append(value).append("\r\n"); }
+	private static Appendable h(Appendable sb, CharSequence key, int off, String value) throws IOException {return sb.append(key, off, key.length()).append(value.isEmpty()?":":": ").append(value).append("\r\n");}
 
 	private static void checkKey(CharSequence key) {
 		for (int i = 0; i < key.length(); i++) {
 			char c = key.charAt(i);
-			if (c < 0x20 || c == 0x3a || c >= 0x7f) {
+			if (c <= 0x20 || c == 0x3a || c >= 0x7f) {
+				if (i == 0 && c == ':' && key.length() > 1) continue;
 				illegalChar(key, i, c);
 			}
 		}
 	}
-
 	private static void checkVal(CharSequence val) {
+		int found = -1;
 		for (int i = 0; i < val.length(); i++) {
-			char c = val.charAt(i);
-			if (c < 0x20 && c != '\t') {
-				illegalChar(val, i, c);
+			var c = val.charAt(i);
+			if (c == 0 || c == '\r' || c == '\n') illegalChar(val, i, c);
+
+			if (c == ' ' || c == '\t') {
+				if (found < 0) illegalChar(val, i, c);
+			} else {
+				found = i;
 			}
 		}
+		if (found != val.length()-1) illegalChar(val, ++found, val.charAt(found));
 	}
-
-	private static void illegalChar(CharSequence key, int i, char c) {
-		throw new IllegalArgumentException("HTTP头/无效字符 #"+(int)c+" 偏移 "+i+" 内容 "+ Tokenizer.addSlashes(key));
-	}
+	private static void illegalChar(CharSequence key, int i, char c) {throw new IllegalArgumentException("HTTP头/无效字符 #"+(int)c+" 偏移 "+i+" 内容 "+Tokenizer.addSlashes(key));}
 
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		encode(sb);
 		return sb.toString();
+	}
+
+	private ToIntMap<String> encType;
+	public int getEncType(String name) {return encType == null ? 0 : encType.getOrDefault(name, 0);}
+	public void setEncType(String name, int enc) {
+		if (encType == null) encType = new ToIntMap<>();
+		encType.putInt(name, enc);
+	}
+
+	private static final long LENGTH_OFFSET = ReflectionUtils.fieldOffset(MyHashMap.class, "length");
+	public void _moveFrom(Headers head) {
+		entries = null;
+		if (head.entries != null) {
+			ReflectionUtils.u.putInt(this, LENGTH_OFFSET, 0);
+			ensureCapacity(head.entries.length);
+			entries = head.entries;
+		}
+		size = head.size;
+		encType = head.encType;
+
+		head.entries = null;
+		head.size = 0;
+		head.encType = null;
 	}
 }

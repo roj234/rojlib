@@ -1,6 +1,7 @@
 package roj.config.data;
 
 import org.intellij.lang.annotations.MagicConstant;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 import roj.config.ConfigMaster;
 import roj.config.serial.CVisitor;
@@ -32,6 +33,7 @@ public abstract class CEntry {
 
 	public static final int Q_SET = 1, Q_SET_IF_ABSENT = 2, Q_SET_IF_NOT_SIMILAR = 4, Q_CREATE_MID = 8, Q_REPLACE_MID = 16, Q_RETURN_CONTAINER = 32;
 	public final CEntry query(CharSequence sql) { return query(sql, 0, null, IOUtil.getSharedCharBuf()); }
+	@Contract("_,_,!null,_ -> !null")
 	public final CEntry query(CharSequence sql, @MagicConstant(flags = {Q_SET,Q_SET_IF_ABSENT,Q_SET_IF_NOT_SIMILAR,Q_CREATE_MID,Q_REPLACE_MID,Q_RETURN_CONTAINER}) int flag, @Nullable CEntry def, CharList tmp) {
 		CEntry node = this;
 

@@ -488,29 +488,26 @@ public class DefaultConsole implements Console {
 	}
 
 	public static final String KEY_SHORTCUT = """
-		F1: 查看帮助
-		F4: 切换即时补全
+		F1: 帮助
+		F4: 开关即时补全
+		Tab: 补全 ENTER确认 ESC取消
 		Ctrl+A: 全选(WIP)
-		Ctrl+B: 复制
-		Ctrl+C: 键盘中断(默认退出)
+		Ctrl+B: 复制输入
+		Ctrl+C: 退出
 		Ctrl+V: 粘贴
-		↑: 上一条历史或补全候选
-		↓: 下一条历史或补全候选, 或回到当前输入
 		Ctrl+←: 光标移至开头
 		Ctrl+→: 光标移至结尾
-		Tab: 在当前位置补全代码
-		ESC: 取消补全
-		ENTER: 确认补全或执行指令""";
+		""";
 	protected void printHelp() {
 		CLIBoxRenderer.DEFAULT.render(new String[][]{
 			new String[] { "Roj234的终端模拟器 帮助", "简介", "快捷键" },
-			new String[] {
-				"怎么，其实又是一个JLine不会用的人啊/doge 可惜这里不能放图，哈哈哈\n" +
-					"有兴趣可以看看我是如何计算字符显示长度的\n" +
-					"早期版本：c<16 => 0, c<255 => 1, else => 2\n" +
-					"然而：https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters\n" +
-					"\n" +
-					"做什么都不简单。。。还很邪道",
+			new String[] {"""
+怎么，其实又是一个JLine不会用的人啊/doge 可惜这里不能放图，哈哈哈
+有兴趣可以看看我是如何计算字符显示长度的
+早期版本：c<16 => 0, c<255 => 1, else => 2
+然而：https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters
+
+做什么都不简单。。。还很邪道""",
 				KEY_SHORTCUT }
 		});
 	}

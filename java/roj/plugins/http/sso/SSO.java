@@ -293,7 +293,7 @@ public final class SSO {
 		long expire = TOKEN_EXPIRE + (is_refresh ? -180000 : 0);
 
 		var login_token = makeToken(u, "USER_LOGIN", expire, o, sc);
-		req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie("xsso_token", login_token).expires(0).httpOnly(true).sameSite("Strict")));
+		req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie("xsso_token", login_token).path("/").expires(0).httpOnly(true).sameSite("Strict")));
 
 		var refresh_token = makeToken(u, "USER_REFRESH", 86400_000L * 30, o, sc);
 		var access_token = makeToken(u, "USER_ACCESS", 300000L, o, sc);

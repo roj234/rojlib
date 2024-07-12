@@ -34,6 +34,18 @@ import java.util.stream.Collectors;
  * @since 2024/1/23 0023 11:32
  */
 public class Lambda extends ExprNode {
+	private static final Asterisk[] AnyLambda = new Asterisk[10];
+	static {
+		for (int i = 0; i < 10; i++) AnyLambda[i] = new Asterisk("<Lambda/"+i+">");
+	}
+	public static int getLambdaArgCount(IType anyLambda) {
+		String name;
+		if (anyLambda.genericType() != IType.ASTERISK_TYPE || !(name = anyLambda.toString()).startsWith("<Lambda/")) return -1;
+
+		char c = name.charAt(8);
+		return c != '/' ? c - '0' : Integer.parseInt(name.substring(8, name.length() - 1));
+	}
+
 	private List<String> args;
 	private ExprNode expr;
 	private MethodNode mn;
@@ -49,6 +61,7 @@ public class Lambda extends ExprNode {
 	public Lambda(List<String> args, MethodNode mn, ParseTask task) {
 		this.args = args;
 		this.mn = mn;
+		this.task = task;
 	}
 	// parent::methodRef
 	public Lambda(ExprNode parent, String methodRef) {
@@ -57,9 +70,9 @@ public class Lambda extends ExprNode {
 	}
 
 	@Override
-	public String toString() { return (args.size() == 1 ? args.get(0) : "("+TextUtil.join(args, ", ")+")") + " -> " + expr; }
+	public String toString() { return (args.size() == 1 ? args.get(0) : "("+TextUtil.join(args, ", ")+")")+" -> "+expr; }
 	@Override
-	public IType type() {return Asterisk.anyType;}
+	public IType type() {return args.size() < 10 ? AnyLambda[args.size()] : new Asterisk("<Lambda//"+args.size()+">");}
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		ctx.file.setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_8);
@@ -161,7 +174,7 @@ public class Lambda extends ExprNode {
 		int tableIdx = ctx.file.addLambdaRef(item);
 		System.out.println(item);
 
-		cw.invokeDyn(tableIdx, method.name(), ref.descType(), BootstrapMethods.Kind.INVOKESTATIC);
+		cw.invokeDyn(tableIdx, method.name(), ref.descType(), 0);
 	}
 
 	private static BootstrapMethods.Item createRef(MethodNode mn, CstRef actualMethod, String actualDesc) {

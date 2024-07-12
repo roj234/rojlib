@@ -1,6 +1,7 @@
 package roj.net.http.server.auto;
 
 import org.jetbrains.annotations.Nullable;
+import roj.NativeLibrary;
 import roj.asm.Parser;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstString;
@@ -22,7 +23,6 @@ import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.config.CCJson;
-import roj.config.auto.Serializer;
 import roj.config.auto.Serializers;
 import roj.net.http.Headers;
 import roj.net.http.HttpUtil;
@@ -225,7 +225,7 @@ public class OKRouter implements Router {
 		cw.finish();
 
 		Dispatcher ah = (Dispatcher) ClassDefiner.make(hndInst, o.getClass().getClassLoader());
-		for (IntMap.Entry<Annotation> entry : handlers.selfEntrySet()) {
+		for (var entry : handlers.selfEntrySet()) {
 			int i = entry.getIntKey();
 			Annotation a = entry.getValue();
 			Route set = new Route();
@@ -297,6 +297,11 @@ public class OKRouter implements Router {
 			}
 		}
 
+		for (var entry : interceptors.selfEntrySet()) {
+			if (!this.interceptors.containsKey(entry.k)) {
+				this.interceptors.put(entry.k, ah.copyWith(entry.v, o));
+			}
+		}
 		return this;
 	}
 	private static Annotation parseAnnotations(List<Annotation> list) {
@@ -345,7 +350,8 @@ public class OKRouter implements Router {
 	public final void setInterceptor(String name, Object interceptor) {interceptors.put(name, (Dispatcher) interceptor);}
 	public final void removeInterceptor(String name) {interceptors.remove(name);}
 
-	public final OKRouter addPrefixDelegation(String path, Router router) {
+	public final OKRouter addPrefixDelegation(String path, Router router) {return addPrefixDelegation(path, router, (String[])null);}
+	public final OKRouter addPrefixDelegation(String path, Router router, String... interceptors) {
 		Node node = route.add(path, 0, path.length());
 		if (node.value != null) throw new IllegalArgumentException("子路径"+path+"已存在");
 
@@ -355,10 +361,21 @@ public class OKRouter implements Router {
 		node.value = aset;
 		aset.accepts = 511;
 
-		aset.prec = new Dispatcher[] {(req, srv, extra) -> {
+		Dispatcher dispatcher = (req, srv, extra) -> {
 			router.checkHeader(req, (PostSetting) extra);
 			return null;
-		}};
+		};
+		if (interceptors == null || interceptors.length == 0) aset.prec = new Dispatcher[] {dispatcher};
+		else {
+			var prec = new Dispatcher[interceptors.length + 1];
+			for (int i = 0; i < interceptors.length; i++) {
+				Dispatcher dp = this.interceptors.get(interceptors[i]);
+				if (dp == null) throw new IllegalArgumentException("无法找到请求拦截器"+interceptors[i]);
+				prec[i] = dp;
+			}
+			prec[interceptors.length] = dispatcher;
+			aset.prec = prec;
+		}
 		aset.req = (req, srv, extra) -> {
 			try {
 				return router.response(req, srv);
@@ -435,7 +452,7 @@ public class OKRouter implements Router {
 						bodyKind |= 2;
 
 						c.one(ALOAD_1);
-						c.invoke(INVOKEVIRTUAL, REQ, "postFields", "()Ljava/util/Map;");
+						c.invoke(INVOKEVIRTUAL, REQ, "PostFields", "()Ljava/util/Map;");
 						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++ << 8;
 					}
@@ -446,7 +463,7 @@ public class OKRouter implements Router {
 						bodyKind |= 1;
 
 						c.one(ALOAD_1);
-						c.invoke(INVOKEVIRTUAL, REQ, "GET_Fields", "()Ljava/util/Map;");
+						c.invoke(INVOKEVIRTUAL, REQ, "GetFields", "()Ljava/util/Map;");
 						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++;
 					}
@@ -963,7 +980,7 @@ public class OKRouter implements Router {
 
 		Object ret;
 		try {
-			ret = set.req.invoke(req, rh, req.getArguments());
+			ret = set.req.invoke(req, rh, req.arguments());
 		} finally {
 			for (var c : onFinishes) {
 				try {
@@ -984,13 +1001,14 @@ public class OKRouter implements Router {
 		CCJson jsonp = (CCJson) req.localCtx().get("or:jsonp");
 		if (jsonp == null) req.localCtx().put("or:jsonp", jsonp = new CCJson());
 
-		Serializer<?> adapter = Serializers.SAFE.serializer(Signature.parseGeneric(type));
+		var adapter = Serializers.SAFE.serializer(Signature.parseGeneric(type));
 		try {
 			adapter.reset();
 			jsonp.parse(req.postBuffer(), 0, adapter);
 			return adapter.get();
 		} catch (Exception e) {
-			throw new IllegalRequestException(400, e.getMessage() == null ? "JSON数据无效" : e.getMessage(), e);
+			if (NativeLibrary.IN_DEV) throw new IllegalRequestException(400, "JSON数据无效", e);
+			else throw new IllegalRequestException(400, "JSON数据无效");
 		}
 	}
 

@@ -942,7 +942,7 @@ public final class CompileUnit extends ConstantData {
 					if (w.type() == assign) lazyTasks.add(ParseTask.Field(this, field));
 
 					if (w.type() != comma) {
-						assert w.type() == semicolon;
+						if (w.type() != semicolon) throw wr.err("cu.except.fieldEnd");
 						break;
 					}
 					name = wr.except(LITERAL, "cu.except.fieldName").val();

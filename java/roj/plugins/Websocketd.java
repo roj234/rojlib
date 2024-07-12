@@ -8,8 +8,7 @@ import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.server.*;
 import roj.net.http.ws.WebSocketHandler;
-import roj.net.http.ws.WebSocketServer;
-import roj.platform.Plugin;
+import roj.plugin.Plugin;
 import roj.text.TextUtil;
 import roj.text.UTF8MB4;
 import roj.text.logging.Logger;
@@ -36,58 +35,46 @@ import java.util.concurrent.locks.Lock;
  * @author solo6975
  * @since 2022/3/20 22:53
  */
-public class Websocketd extends WebSocketServer implements Router {
+public class Websocketd extends Plugin implements Router {
 	List<String> cmd;
 	static volatile boolean disabled;
-	static final List<CmdWorker> workers = new ArrayList<>();
+	static final List<Worker> workers = new ArrayList<>();
 	static Logger logger;
 
-	public static class PluginHandler extends Plugin {
-		protected void onEnable() {
-			logger = getLogger();
-			for (Map.Entry<String, CEntry> entry : getConfig().getMap("path_to_command").entrySet()) {
-				Websocketd ws = new Websocketd();
-				CEntry value = entry.getValue();
-				ws.cmd = value.getType() == Type.STRING ? Collections.singletonList(value.asString()) : value.asList().toStringList();
-				registerRoute(entry.getKey(), ws);
+	protected void onEnable() {
+		logger = getLogger();
+		for (Map.Entry<String, CEntry> entry : getConfig().getMap("path_to_command").entrySet()) {
+			Websocketd ws = new Websocketd();
+			CEntry value = entry.getValue();
+			ws.cmd = value.getType() == Type.STRING ? Collections.singletonList(value.asString()) : value.asList().toStringList();
+			registerRoute(entry.getKey(), ws);
 
-				getLogger().info("URL子路径: {}, 指令: {}", entry.getKey(), ws.cmd);
-			}
-		}
-
-		@Override
-		protected void onDisable() {
-			SimpleList<CmdWorker> copy;
-			synchronized (workers) {
-				disabled = true;
-				copy = new SimpleList<>(workers);
-				workers.clear();
-			}
-
-			for (int i = 0; i < copy.size(); i++) {
-				CmdWorker worker = copy.get(i);
-				Lock lock = worker.ch.channel().lock();
-				lock.lock();
-				try {
-					worker.error(WebSocketHandler.ERR_CLOSED, "插件卸载");
-					worker.ch.close();
-				} catch (Throwable e) {
-					e.printStackTrace();
-				} finally {
-					lock.unlock();
-				}
-			}
+			getLogger().info("URL子路径: {}, 指令: {}", entry.getKey(), ws.cmd);
 		}
 	}
 
 	@Override
-	protected WebSocketHandler newWorker(Request req, ResponseHeader handle) {
-		try {
-			if (!disabled) return new CmdWorker(cmd);
-		} catch (IOException e) {
-			e.printStackTrace();
+	protected void onDisable() {
+		SimpleList<Worker> copy;
+		synchronized (workers) {
+			disabled = true;
+			copy = new SimpleList<>(workers);
+			workers.clear();
 		}
-		return null;
+
+		for (int i = 0; i < copy.size(); i++) {
+			Worker worker = copy.get(i);
+			Lock lock = worker.ch.channel().lock();
+			lock.lock();
+			try {
+				worker.error(WebSocketHandler.ERR_CLOSED, "插件卸载");
+				worker.ch.close();
+			} catch (Throwable e) {
+				e.printStackTrace();
+			} finally {
+				lock.unlock();
+			}
+		}
 	}
 
 	private static final MyHashMap<String, String> tmp = new MyHashMap<>();
@@ -98,18 +85,26 @@ public class Websocketd extends WebSocketServer implements Router {
 	}
 
 	@Override
+	@Deprecated
 	public Response response(Request req, ResponseHeader rh) throws IOException {
 		switch (req.path()) {
 			case "bundle.min.css": return new StringResponse(res("bundle.min.css"), "text/css");
 			case "bundle.min.js": return new StringResponse(res("bundle.min.js"), "text/javascript");
 			case "":
-				if ("websocket".equals(req.getField("Upgrade"))) return switchToWebsocket(req);
+				if ("websocket".equals(req.getField("upgrade"))) return Response.websocket(req, req1 -> {
+					try {
+						if (!disabled) return new Worker(cmd);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+					return null;
+				});
 				return new StringResponse(res("websocketd_ui.html"), "text/html");
 			default: return rh.code(404).returnNull();
 		}
 	}
 
-	static final class CmdWorker extends WebSocketHandler {
+	static final class Worker extends WebSocketHandler {
 		Process process;
 
 		CharsetEncoder sysEnc;
@@ -118,7 +113,7 @@ public class Websocketd extends WebSocketServer implements Router {
 		CharBuffer tmp1;
 		ByteBuffer tmp2, sndRem;
 
-		CmdWorker(List<String> cmd) throws IOException {
+		Worker(List<String> cmd) throws IOException {
 			process = new ProcessBuilder().command(cmd).redirectErrorStream(true)
 				.redirectInput(ProcessBuilder.Redirect.PIPE)
 				.redirectOutput(ProcessBuilder.Redirect.PIPE).start();

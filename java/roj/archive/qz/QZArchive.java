@@ -128,6 +128,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		private long offset;
 		private long[] streamLen;
 
+		MyHashSet<Object[]> coders = new MyHashSet<>(Hasher.array(Object[].class));
+		QZCoder[] temp = new QZCoder[32];
 		WordBlock[] blocks;
 		QZEntry[] files;
 
@@ -253,11 +255,12 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		private void readEncodedHeader() throws IOException {
 			readStreamInfo();
 
-			if (blocks.length == 0) throw new CorruptedInputException("元数据错误");
+			if (blocks.length != 1) throw new CorruptedInputException("元数据错误");
 			if (files != null) error("files != null");
 
 			computeOffset();
 			WordBlock b = blocks[0];
+			blocks = null;
 
 			buf.close();
 
@@ -330,7 +333,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 				if (b.complexCoder == null && out.length > 0) {
 					long[] sortedSize = new long[out.length];
-					Int2IntMap sorter = ((Int2IntMap) b.tmp);
+					Int2IntMap sorter = (Int2IntMap) b.tmp;
 					for (i = 0; i < out.length; i++)
 						sortedSize[i] = out[sorter.getOrDefaultInt(i,-1)];
 
@@ -369,8 +372,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 			int ioLen = readVarInt(32);
 			if (ioLen == 0) error("没有coder");
-			QZCoder[] coders = new QZCoder[ioLen];
 
+			QZCoder[] coders = temp;
 			for (int i = 0; i < ioLen; i++) {
 				int flag = buf.readUnsignedByte();
 
@@ -406,7 +409,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				b.tmp = sorter;
 			}
 
-			QZCoder[] sorted = b.coder = new QZCoder[ioLen];
+			QZCoder[] sorted = new QZCoder[ioLen];
 			for (int i = 0; i < ioLen; i++) {
 				if (!pipe.containsKey(i)) {
 					int sortId = 0, id = i;
@@ -420,6 +423,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					b.hasCrc |= i<<2;
 				}
 			}
+
+			b.coder = (QZCoder[]) this.coders.intern(sorted);
 			return b;
 		}
 		private WordBlock readComplexBlock(QZCoder[] coders, WordBlock b, int i) throws IOException {
@@ -436,7 +441,6 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				inputs.add(entry);
 				outputs.add(entry);
 			}
-			b.tmp = ordered;
 
 			for (; i < coders.length; i++) {
 				int flag = buf.readUnsignedByte();
@@ -468,6 +472,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					buf.rIndex = ri+len;
 				}
 			}
+			// 2024/07/13 以后再intern吧
+			b.tmp = ordered;
 
 			int inCount = inputs.size();
 			int outCount = outputs.size();
@@ -843,7 +849,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback, byte[] pass) {
 		if (blocks == null) return;
 		for (WordBlock b : blocks) {
-			th.pushTask(() -> {
+			th.submit(() -> {
 				if (r == null) throw new AsynchronousCloseException();
 
 				try (InputStream in = getSolidStream(b, pass, false)) {

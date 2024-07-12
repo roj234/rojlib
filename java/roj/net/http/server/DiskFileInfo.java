@@ -10,6 +10,9 @@ import roj.util.DirectByteList;
 import roj.util.DynByteBuf;
 
 import java.io.*;
+import java.nio.channels.FileChannel;
+import java.nio.file.OpenOption;
+import java.nio.file.StandardOpenOption;
 
 /**
  * @author solo6975
@@ -32,8 +35,6 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 		this.time = file.lastModified();
 		this.download = download;
 	}
-
-	public Response response(Request req) {return FileResponse.response(req, this);}
 
 	public DiskFileInfo compressed() {if (state < 1) state = 1;return this;}
 	public DiskFileInfo compressCached() {if (state < 2) state = 2;return this;}
@@ -66,6 +67,10 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 		if (deflated) return cc.readableBytes();
 		return uc == null ? file.length() : uc.length;
 	}
+
+	private static final OpenOption[] READ = {StandardOpenOption.READ};
+	@Override
+	public FileChannel getSendFile(boolean deflated) throws IOException {return deflated ? null : FileChannel.open(file.toPath(), READ);}
 
 	@Override
 	public InputStream get(boolean deflated, long offset) throws IOException {

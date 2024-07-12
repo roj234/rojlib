@@ -19,7 +19,7 @@ public interface ResponseWriter {
 	int getStreamLimit();
 	void setStreamLimit(int kbps);
 
-	int write(DynByteBuf buf) throws IOException;
+	void write(DynByteBuf buf) throws IOException;
 	default int write(InputStream in) throws IOException {return write(in, 0);}
 	int write(InputStream in, int limit) throws IOException;
 }

@@ -24,7 +24,6 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -81,10 +80,10 @@ public final class AnnotationRepo {
 	}
 	private void add3(AnnotatedElement info, Annotation anno) {
 		info.annotations.put(anno.type(), anno);
-		annotations.computeIfAbsent(anno.type(), Helpers.cast(Helpers.myhashsetfn)).add(info);
+		annotations.computeIfAbsent(anno.type(), Helpers.fnMyHashSet()).add(info);
 	}
 
-	private final SimpleList<AccessData.MOF> rawNodes = new SimpleList<>();
+	private final SimpleList<Object> rawNodes = new SimpleList<>();
 	public void addRaw(DynByteBuf r, String fileName) {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		r.rIndex += 4;
@@ -102,14 +101,10 @@ public final class AnnotationRepo {
 
 		Type klass = new Type(skeleton);
 
+		rawNodes.clear();
 		int len = r.readUnsignedShort();
-		if (len > 0) {
-			var itf = new String[len];
-			for (int i = 0; i < len; i++) itf[i] = cp.getRefName(r);
-			skeleton.itf = Arrays.asList(itf);
-		} else {
-			skeleton.itf = Collections.emptyList();
-		}
+		for (int i = 0; i < len; i++) rawNodes.add(cp.getRefName(r));
+		skeleton.itf = Helpers.cast(ArrayUtil.copyOf(rawNodes));
 
 		for (int i = 0; i < 2; i++) {
 			len = r.readUnsignedShort();
@@ -142,13 +137,8 @@ public final class AnnotationRepo {
 				}
 			}
 
-			if (!rawNodes.isEmpty()) {
-				if (i == 0) skeleton.fields = ArrayUtil.copyOf(rawNodes);
-				else skeleton.methods = ArrayUtil.copyOf(rawNodes);
-			} else {
-				if (i == 0) skeleton.fields = Collections.emptyList();
-				else skeleton.methods = Collections.emptyList();
-			}
+			if (i == 0) skeleton.fields = Helpers.cast(ArrayUtil.copyOf(rawNodes));
+			else skeleton.methods = Helpers.cast(ArrayUtil.copyOf(rawNodes));
 		}
 
 		int attrSize = r.readUnsignedShort();
@@ -180,11 +170,12 @@ public final class AnnotationRepo {
 		for (var value : this.annotations.values()) {
 			for (var el : value) {
 				Type parent = el.parent();
-				int idx = elements.putOrGet(parent, elements.size(), 0);
+				int size = elements.size();
+				int idx = elements.putOrGet(parent, size, 0);
 				if (idx == 0) {
 					rest.put(0);
 					writeAcc(rest, parent, cp, elements);
-					idx = parent == el ? elements.size() - 1 : elements.getInt(el.node());
+					idx = parent == el ? size : elements.getInt(el.node());
 				}
 				rest.putVUInt(idx).putVUInt(el.annotations.size());
 				for (var annotation : el.annotations.values()) {
@@ -225,9 +216,9 @@ public final class AnnotationRepo {
 		if (!buf.readAscii(7).equals("ANNOREP") || buf.readUnsignedByte() != 0)
 			return false;
 
-		Annotation[] annotations = new Annotation[buf.readShort()];
+		var annotations = new Annotation[buf.readShort()];
 		int annotationCount = 0;
-		AnnotatedElement[] elements = new AnnotatedElement[buf.readShort()];
+		var elements = new AnnotatedElement[buf.readShort()];
 		int elementCount = 0;
 
 		int repoSize = buf.readShort();
@@ -262,17 +253,14 @@ public final class AnnotationRepo {
 
 		return true;
 	}
-	private static int readAcc(DynByteBuf r, ConstantPool cp, AnnotatedElement[] elements, int elementCount) {
+	private int readAcc(DynByteBuf r, ConstantPool cp, AnnotatedElement[] elements, int elementCount) {
 		var skeleton = new AccessData(null, 0, ((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str());
 		skeleton.acc = r.readChar();
-		int len = r.readShort();
-		if (len == 0) {
-			skeleton.itf = Collections.emptyList();
-		} else {
-			var itf = new String[len];
-			for (int i = 0; i < len; i++) itf[i] = ((CstUTF) cp.get(r)).str();
-			skeleton.itf = Arrays.asList(itf);
-		}
+
+		rawNodes.clear();
+		int len = r.readUnsignedShort();
+		for (int i = 0; i < len; i++) rawNodes.add(((CstUTF) cp.get(r)).str());
+		skeleton.itf = Helpers.cast(ArrayUtil.copyOf(rawNodes));
 
 		Type type = new Type(skeleton);
 		elements[elementCount++] = type;
@@ -280,22 +268,16 @@ public final class AnnotationRepo {
 		for (int i = 0; i < 2; i++) {
 			len = r.readShort();
 
-			List<AccessData.MOF> methods;
-			if (len == 0) {
-				methods = Collections.emptyList();
-			} else {
-				var list = new AccessData.MOF[len];
-				for (int j = 0; j < len; j++) {
-					var mof = skeleton.new MOF(((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str(), 0);
-					mof.acc = r.readChar();
-					list[j] = mof;
-					elements[elementCount++] = new Node(type, mof);
-				}
-				methods = Arrays.asList(list);
+			rawNodes.clear();
+			for (int j = 0; j < len; j++) {
+				var mof = skeleton.new MOF(((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str(), 0);
+				mof.acc = r.readChar();
+				rawNodes.add(mof);
+				elements[elementCount++] = new Node(type, mof);
 			}
 
-			if (i == 0) skeleton.methods = methods;
-			else skeleton.fields = methods;
+			if (i == 0) skeleton.fields = Helpers.cast(ArrayUtil.copyOf(rawNodes));
+			else skeleton.methods = Helpers.cast(ArrayUtil.copyOf(rawNodes));
 		}
 
 		return elementCount;

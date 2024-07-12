@@ -1,8 +1,8 @@
 package roj.test;
 
 import roj.asm.util.Context;
+import roj.io.IOUtil;
 import roj.test.internal.Test;
-import roj.util.Helpers;
 
 import java.io.IOException;
 import java.util.List;
@@ -14,7 +14,7 @@ import java.util.List;
 @Test("测试RojASM")
 public class AsmTest {
 	public static void main(String[] args) throws IOException {
-		List<Context> ctxList = Context.fromZip(Helpers.getJarByClass(Context.class), null);
+		List<Context> ctxList = Context.fromZip(IOUtil.getJar(Context.class), null);
 		for (int i = 0; i < 2; i++) {
 			for (Context ctx : ctxList) {
 				ctx.getData();

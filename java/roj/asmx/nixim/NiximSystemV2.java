@@ -1030,8 +1030,7 @@ public class NiximSystemV2 implements ITransformer {
 			if (m != null) removeLVT(m);
 		}
 
-
-		data.verify();
+		assert data.verify();
 	}
 	private static void verifyPcd(String self, MyHashSet<Pcd> pcds, Pcd tmp, List<? extends CNode> nodes) throws NiximException {
 		int size = nodes.size();
@@ -1065,8 +1064,6 @@ public class NiximSystemV2 implements ITransformer {
 	}
 	private static MethodNode doInject(InjectState s, ConstantData data, MethodNode input) throws NiximException {
 		XAttrCode nxCode = (XAttrCode) s.method.attrByName("Code");
-		assert nxCode != null;
-
 		s.method.owner = data.name;
 
 		if (s.mapName.equals("<init>")) {

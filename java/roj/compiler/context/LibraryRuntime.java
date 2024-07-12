@@ -7,7 +7,6 @@ import roj.crypt.CRC32s;
 import roj.io.IOUtil;
 import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
-import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
@@ -62,7 +61,7 @@ public final class LibraryRuntime implements Library {
 			} catch (Exception e) {
 				e.printStackTrace();
 			} else {
-				File file = Helpers.getJarByClass(Object.class);
+				File file = IOUtil.getJar(Object.class);
 				throw new UnsupportedOperationException("暂不支持java8"+file);
 			}
 		}

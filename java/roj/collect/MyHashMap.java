@@ -47,7 +47,22 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		}
 
 		@Override
-		public String toString() { return String.valueOf(k)+'='+v; }
+		public String toString() {return String.valueOf(k)+'='+v;}
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+
+			var entry = (Entry<?, ?>) o;
+			if (!(k != null ? k.equals(entry.k) : entry.k == null)) return false;
+			return v != null ? v.equals(entry.v) : entry.v == null;
+		}
+		@Override
+		public int hashCode() {
+			int hash = k != null ? k.hashCode() : 0;
+			hash = hash ^ (v != null ? v.hashCode() : 0);
+			return hash;
+		}
 	}
 	private final class Entry2 extends AbstractEntry<Object[], Object> implements Comparator<Object> {
 		int slot, len, lastPos;

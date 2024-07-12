@@ -468,6 +468,7 @@ public class TextUtil {
 					deepToString(sb, entry.getKey(), off2);
 					sb.append(" = ");
 					deepToString(sb, entry.getValue(), off2);
+					sb.append('\n');
 				}
 				sb.append(']').append('\n');
 			} else if (o.getClass().isArray()) {

@@ -1,5 +1,6 @@
 package roj.util;
 
+import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
 
 /**
@@ -23,13 +24,17 @@ public class VMUtil {
 
 	public static synchronized Boolean isRoot() {
 		if (isRoot == null) {
-			if (OS.CURRENT == OS.WINDOWS) {
-				try {
-					int i = new ProcessBuilder("REG","QUERY","HKU\\S-1-5-19").start().waitFor();
-					isRoot = i == 0;
-				} catch (Exception e) {
-					isRoot = false;
+			try {
+				if (OS.CURRENT == OS.WINDOWS) {
+					int exitCode = new ProcessBuilder("REG","QUERY","HKU\\S-1-5-19").start().waitFor();
+					isRoot = exitCode == 0;
+				} else {
+					var id = new ProcessBuilder("id").start();
+					ByteList buf = IOUtil.getSharedByteBuf().readStreamFully(id.getInputStream());
+					isRoot = buf.readAscii(buf.readableBytes()).contains("0(root)");
 				}
+			} catch (Exception e) {
+				isRoot = false;
 			}
 		}
 		return isRoot;

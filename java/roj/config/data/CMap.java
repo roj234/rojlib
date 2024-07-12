@@ -1,5 +1,8 @@
 package roj.config.data;
 
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashMap;
 import roj.config.IniParser;
 import roj.config.TOMLParser;
@@ -137,46 +140,52 @@ public class CMap extends CEntry {
 	// endregion
 	// region GET
 
-	public final boolean containsKey(String key) { return get1(key, null) != null; }
-	public final boolean containsKey(String key, Type type) { return get(key).mayCastTo(type); }
+	public final boolean containsKey(String key) {return getOr(key, null) != null;}
+	public final boolean containsKey(String key, Type type) {return get(key).mayCastTo(type);}
 
 	public final boolean getBool(String key) {
 		CEntry entry = get(key);
 		return entry.mayCastTo(Type.BOOL) && entry.asBool();
 	}
-	public final String getString(String key) { return getString(key, ""); }
+	@NotNull
+	public final String getString(String key) {return getString(key, "");}
+	@Contract("_,!null -> !null")
 	public final String getString(String key, String def) {
 		CEntry entry = get(key);
 		return entry.mayCastTo(Type.STRING) ? entry.asString() : def;
 	}
-	public final int getInteger(String key) { return getInteger(key, 0); }
+	public final int getInteger(String key) {return getInteger(key, 0);}
 	public final int getInteger(String key, int def) {
 		CEntry entry = get(key);
 		return entry.mayCastTo(Type.INTEGER) ? entry.asInteger() : def;
 	}
-	public final long getLong(String key) { return getLong(key, 0); }
+	public final long getLong(String key) {return getLong(key, 0);}
 	public final long getLong(String key, long def) {
 		CEntry entry = get(key);
 		return entry.mayCastTo(Type.LONG) ? entry.asLong() : def;
 	}
-	public final float getFloat(String key) { return getFloat(key, 0); }
+	public final float getFloat(String key) {return getFloat(key, 0);}
 	public final float getFloat(String key, float def) {
 		CEntry entry = get(key);
 		return entry.mayCastTo(Type.Float4) ? entry.asFloat() : def;
 	}
-	public final double getDouble(String key) { return getDouble(key, 0); }
+	public final double getDouble(String key) {return getDouble(key, 0);}
 	public final double getDouble(String key, double def) {
 		CEntry entry = get(key);
 		return entry.mayCastTo(Type.DOUBLE) ? entry.asDouble() : def;
 	}
-
-	public final CList getList(String key) { return get(key).asList(); }
-	public final CMap getMap(String key) { return get(key).asMap(); }
-
-	public final CEntry get(String key) { return get1(key, CNull.NULL); }
-	public final CEntry getDot(String path) { return query(path, 0, CNull.NULL, dot == null ? new CharList() : dot); }
-
-	private CEntry get1(String k, CEntry def) {
+	@NotNull
+	public final CList getList(String key) {return get(key).asList();}
+	@NotNull
+	public final CMap getMap(String key) {return get(key).asMap();}
+	@NotNull
+	public final CEntry get(String key) {return getOr(key, CNull.NULL);}
+	@NotNull
+	public final CEntry getDot(String path) {return query(path, 0, CNull.NULL, dot == null ? new CharList() : dot);}
+	@Nullable
+	public final CEntry getOr(String k) {return getOr(k,null);}
+	@Contract("_,!null -> !null")
+	public final CEntry getOr(String k, CEntry def) {
 		if (k == null) return def;
 		if (null == dot) return map.getOrDefault(k, def);
 		return query(k, 0, CNull.NULL, dot);

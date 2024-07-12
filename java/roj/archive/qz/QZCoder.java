@@ -19,7 +19,7 @@ public abstract class QZCoder {
 	private static final MyHashMap<ByteList, QZCoder> coders = new MyHashMap<>();
 	private static void reg(QZCoder c) { coders.put(ByteList.wrap(c.id()), c); }
 
-	abstract QZCoder factory();
+	QZCoder factory() {return this;}
 	abstract byte[] id();
 
 	public OutputStream encode(OutputStream out) throws IOException { throw new UnsupportedOperationException(); }

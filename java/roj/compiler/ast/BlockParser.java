@@ -1080,7 +1080,7 @@ public final class BlockParser {
 				breakTo = CodeWriter.newLabel();
 				if (type.array() == 0) {
 					if (type.isPrimitive()) {
-						ctx.report(Kind.ERROR, "symbol.error.derefPrimitiveField", type);
+						ctx.report(Kind.ERROR, "symbol.error.derefPrimitive", type);
 						skipBlockOrStatement();
 						return;
 					}

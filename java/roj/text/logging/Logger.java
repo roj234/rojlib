@@ -15,18 +15,13 @@ public final class Logger {
 	public static Logger getLogger(String name) { return getLogger(new LogContext(rootContext, name)); }
 	public static Logger getLogger(LogContext ctx) { return ctx.logger == null ? ctx.logger = new Logger(ctx) : ctx.logger; }
 
-	LogContext ctx;
-	Level level;
+	private final LogContext ctx;
+	private Logger(LogContext ctx) {this.ctx = ctx;}
 
-	private Logger(LogContext ctx) {
-		this.ctx = ctx;
-		this.level = Level.DEBUG;
-	}
+	public void setLevel(Level level) {ctx.level(level);}
+	public Level getLevel() {return ctx.level();}
 
-	public void setLevel(Level level) { this.level = level; }
-	public Level getLevel() { return level; }
-
-	public LogContext getContext() { return ctx; }
+	public LogContext context() {return ctx;}
 
 	public final void trace(String msg) { log(Level.TRACE, msg, null); }
 	public final void trace(String msg, Object p0) { log(Level.TRACE, msg, null, p0); }
@@ -78,13 +73,13 @@ public final class Logger {
 	public final void fatal(String msg, Throwable ex, Object p0, Object p1) { log(Level.FATAL, msg, ex, p0, p1); }
 
 	public final void log(Level lv, CharSequence msg, Throwable ex) {
-		if (!level.canLog(lv)) return;
+		if (!getLevel().canLog(lv)) return;
 
 		LogWriter h = ctx.getWriter();
 		h.log(ctx, lv, msg, ex, null, 0);
 	}
 	public final void log(Level lv, String msg, Throwable ex, Object p0) {
-		if (!level.canLog(lv)) return;
+		if (!getLevel().canLog(lv)) return;
 
 		LogWriter h = ctx.getWriter();
 
@@ -94,7 +89,7 @@ public final class Logger {
 		f[0] = null;
 	}
 	public final void log(Level lv, String msg, Throwable ex, Object p0, Object p1) {
-		if (!level.canLog(lv)) return;
+		if (!getLevel().canLog(lv)) return;
 
 		LogWriter h = ctx.getWriter();
 
@@ -104,7 +99,7 @@ public final class Logger {
 		f[0] = null;f[1] = null;
 	}
 	public final void log(Level lv, String msg, Throwable ex, Object p0, Object p1, Object p2) {
-		if (!level.canLog(lv)) return;
+		if (!getLevel().canLog(lv)) return;
 
 		LogWriter h = ctx.getWriter();
 
@@ -114,7 +109,7 @@ public final class Logger {
 		f[0] = null;f[1] = null;f[2] = null;
 	}
 	public final void log(Level lv, String msg, Throwable ex, Object p0, Object p1, Object p2, Object p3) {
-		if (!level.canLog(lv)) return;
+		if (!getLevel().canLog(lv)) return;
 
 		LogWriter h = ctx.getWriter();
 
@@ -124,7 +119,7 @@ public final class Logger {
 		f[0] = null;f[1] = null;f[2] = null;f[3] = null;
 	}
 	public final void log(Level lv, String msg, Throwable ex, Object... pars) {
-		if (!level.canLog(lv)) return;
+		if (!getLevel().canLog(lv)) return;
 
 		LogWriter h = ctx.getWriter();
 		h.log(ctx, lv, msg, ex, pars, pars.length);

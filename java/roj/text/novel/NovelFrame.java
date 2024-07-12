@@ -661,7 +661,7 @@ public class NovelFrame extends JFrame {
 				for (int j = i+1; j < chapters.size(); j++) {
 					Chapter cb = chapters.get(j);
 
-					pool.pushTask(() -> {
+					pool.submit(() -> {
 						byte[] bb = IOUtil.SharedCoder.get().encode(cb.text != null ? cb.text : novel_in.subSequence(cb.start, cb.end));
 						int siz = Math.min(ba.length, bb.length);
 						int dd = diff.parallel().getDiffLength(bb, siz / 2);

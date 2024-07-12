@@ -219,7 +219,7 @@ public class MapperUI extends JFrame {
 
 		uiInit.addActionListener((e) -> {
 			uiInit.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				try {
 					File file = GuiUtil.fileLoadFrom("选择映射表(Srg / XSrg)", this);
 					if (file != null) load(file);
@@ -230,7 +230,7 @@ public class MapperUI extends JFrame {
 		});
 		uiMap.addActionListener((e) -> {
 			uiMap.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				try {
 					map();
 				} finally {
@@ -249,7 +249,7 @@ public class MapperUI extends JFrame {
 		});
 		uiLoadLines.addActionListener((e) -> {
 			uiLoadLines.setEnabled(false);
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				try {
 					loadLines();
 				} finally {

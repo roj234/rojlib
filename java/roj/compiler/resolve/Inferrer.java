@@ -8,6 +8,7 @@ import roj.asm.tree.attr.Attribute;
 import roj.asm.type.*;
 import roj.collect.MyHashMap;
 import roj.compiler.asm.Asterisk;
+import roj.compiler.ast.expr.Lambda;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.util.ArrayCache;
@@ -41,7 +42,7 @@ public final class Inferrer {
 
 	public Inferrer(LocalContext ctx) {
 		this.ctx = ctx;
-		this.castChecker.genericResolver = typeParamBounds::get;
+		this.castChecker.typeParamsL = typeParamBounds;
 	}
 
 	public MethodResult getGenericParameters(ConstantData info, MethodNode method, IType instanceType) {
@@ -235,7 +236,21 @@ public final class Inferrer {
 
 		return TypeCast.ERROR(TypeCast.E_NEVER);
 	}
-	private TypeCast.Cast cast(IType from, IType to) { return castChecker.checkCast(from, to); }
+	private TypeCast.Cast cast(IType from, IType to) {
+		int lambdaArgCount = Lambda.getLambdaArgCount(from);
+		if (lambdaArgCount >= 0) {
+			if (!to.isPrimitive()) {
+				var mn = ctx.classes.getResolveHelper(ctx.getClassOrArray(to)).getLambdaMethod();
+				if (mn != null) {
+					if (mn.parameters().size() == lambdaArgCount)
+						return TypeCast.RESULT(TypeCast.UPCAST, 0);
+				}
+			}
+			return TypeCast.RESULT(-99/*无效的函数接口; 仅定义在i18n中*/, lambdaArgCount);
+		}
+
+		return castChecker.checkCast(from, to);
+	}
 	private static MethodResult FAIL(int pos, IType from, IType to, TypeCast.Cast cast) { return new MethodResult(cast.type, from, to, pos); }
 
 	private MethodResult addGeneric(MethodResult r) {

@@ -53,7 +53,7 @@ import static roj.plugins.frp.Constants.PHS_UPDATE_MOTD;
  */
 public class AEGui extends JFrame implements ChannelHandler {
 	static IAEClient client;
-	static final SelectorLoop loop = new SelectorLoop(null, "AE 网络IO", 1, 30000, 1);
+	static final SelectorLoop loop = new SelectorLoop("AE 网络IO", 1, 30000, 1);
 
 	static KeyType keyType = KeyType.getInstance("EdDSA");
 	static KeyPair userCert;
@@ -151,7 +151,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 			CMap whitelist = yml.getMap("whitelist");
 			if (whitelist.size() > 0) {
 				userWhiteList = new MyHashMap<>(whitelist.size());
-				userWhiteList.setHasher(Hasher.primitiveArray(byte[].class));
+				userWhiteList.setHasher(Hasher.array(byte[].class));
 				for (Map.Entry<String, CEntry> entry : whitelist.raw().entrySet()) {
 					String string = entry.getValue().asString();
 					if (string.length() != 64) System.err.println(string+"不是有效的Blake3-32指纹");
@@ -565,7 +565,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 					return new StringResponse(ConfigMaster.JSON.toString(lx, new CharList()), "application/json");
 				case "kick_user":
 					int count = 0;
-					String[] arr = request.postFields().get("users").split(",");
+					String[] arr = request.PostFields().get("users").split(",");
 					int[] arrs = new int[arr.length];
 					for (int i = 0; i < arr.length; i++) {
 						arrs[i] = Integer.parseInt(arr[i]);

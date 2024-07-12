@@ -11,14 +11,15 @@ import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.Optional;
 import roj.io.IOUtil;
-import roj.net.http.server.*;
-import roj.net.http.server.error.GreatErrorPage;
+import roj.net.http.server.Request;
+import roj.net.http.server.Response;
+import roj.net.http.server.ResponseHeader;
+import roj.plugins.http.error.GreatErrorPage;
 import roj.reflect.ClassDefiner;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
 import java.io.File;
-import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -39,13 +40,6 @@ public class MyTemplateEngine {
 	private static final XHashSet.Shape<File, Cache> SHAPE = XHashSet.shape(File.class, Cache.class, "file", "_next");
 	private final XHashSet<File, Cache> cache = SHAPE.create();
 
-	public static void main(String[] args) throws Exception {
-		var file = new File("plugins/myTemplateEngine.html");
-		var engine = new MyTemplateEngine();
-		HttpServer11.simple(new InetSocketAddress(8080), 256, (req, rh) -> engine.render(file, req, rh)).launch();
-		System.out.println("Server launched");
-	}
-
 	static final class Cache {
 		Cache _next;
 		File file;
@@ -54,7 +48,7 @@ public class MyTemplateEngine {
 		String nothingSpecial;
 	}
 
-	private Response render(File file, Request req, ResponseHeader rh) {
+	public Response render(File file, Request req, ResponseHeader rh) {
 		Cache fc;
 		synchronized (cache) {
 			fc = cache.computeIfAbsent(file);
@@ -79,14 +73,14 @@ public class MyTemplateEngine {
 		}
 
 		var tpl = fc.template;
-		if (tpl == null) return new StringResponse(fc.nothingSpecial, "text/html");
+		if (tpl == null) return Response.html(fc.nothingSpecial);
 		if (tpl.isFast(req, rh.enableCompression())) {
 			CharList tmp = new CharList();
 			tpl.render(req, tmp, null);
-			return new StringResponse(tmp, "text/html");
+			return Response.html(tmp);
 		} else {
 			var resp = new TemplateRenderer();
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				try {
 					CharList tmp = new CharList();
 					tpl.render(req, tmp, resp);

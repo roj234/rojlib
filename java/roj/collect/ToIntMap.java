@@ -28,6 +28,20 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 
 		@Override
 		public String toString() { return String.valueOf(k)+'='+v; }
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+
+			var entry = (Entry<?>) o;
+			if (!(k != null ? k.equals(entry.k) : entry.k == null)) return false;
+			return v == entry.v;
+		}
+		@Override
+		public int hashCode() {
+			int hash = k != null ? k.hashCode() : 0;
+			return v ^ hash;
+		}
 
 		public static <T> Comparator<Entry<T>> comparator() {return (o1, o2) -> Integer.compare(o1.v, o2.v);}
 		public static <T> Comparator<Entry<T>> reverseComparator() {return (o1, o2) -> Integer.compare(o2.v, o1.v);}

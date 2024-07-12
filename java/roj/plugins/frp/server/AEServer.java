@@ -54,7 +54,7 @@ public class AEServer implements Shutdownable, Consumer<MyChannel> {
 
 	MyHashMap<byte[], Client> session = new MyHashMap<>();
 	{
-		session.setHasher(Hasher.primitiveArray(byte[].class));
+		session.setHasher(Hasher.array(byte[].class));
 	}
 
 	static RingBuffer<String> logBuffer = new RingBuffer<>(1000, false);

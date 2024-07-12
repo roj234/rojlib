@@ -50,10 +50,10 @@ public final class IniParser extends Parser {
 				Word w = next();
 				if (w.type() != lBracket) break;
 
-				CharSequence in = input;
+				var in = input;
 				int j = TextUtil.gIndexOf(in, ']', index);
 				if (j < 0) throw err("no more");
-				name = in.subSequence(index, index = j+1).toString();
+				name = Interner.intern(in, index, index = j+1);
 
 				if ((flags & NO_DUPLICATE_KEY) != 0 && map.containsKey(name)) throw err("重复的key: "+name);
 			}
@@ -75,8 +75,6 @@ public final class IniParser extends Parser {
 			retractWord();
 			return new CMap();
 		}
-
-		String name = w.val();
 
 		boolean eq1 = readWord().type() == eq;
 		retractWord();
@@ -106,8 +104,8 @@ public final class IniParser extends Parser {
 				break;
 			}
 
-			String name = w.val();
-			if ((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(name)) throw err("重复的key: " + name);
+			String name = Interner.intern(w.val());
+			if ((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(name)) throw err("重复的key: "+name);
 			except(eq, "=");
 			try {
 				CEntry prev = map.get(name);

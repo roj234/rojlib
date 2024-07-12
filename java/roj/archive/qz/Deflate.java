@@ -18,9 +18,8 @@ public final class Deflate extends QZCoder {
 	public Deflate(int level) { this.level = level; }
 	private final int level;
 
-	QZCoder factory() { return this; }
 	private static final byte[] ID = {4,1,8};
-	byte[] id() { return ID; }
+	byte[] id() {return ID;}
 
 	private final AtomicReference<Deflater> def = new AtomicReference<>();
 

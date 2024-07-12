@@ -91,6 +91,7 @@ public class HttpUtil {
 		codes.put((char) 415, "Unsupported Media Type");
 		codes.put((char) 416, "Requested Range Not Satisfiable");
 		codes.put((char) 417, "Expectation Failed");
+		codes.put((char) 431, "Request Header Fields Too Large");
 		codes.put((char) 426, "Upgrade Required");
 		codes.put((char) 500, "Internal Server Error");
 		codes.put((char) 501, "Not Implemented");
@@ -101,16 +102,15 @@ public class HttpUtil {
 	}
 	// endregion
 	// region CORS
-	public static final String ACCESS_CONTROL_ALLOW_HEADERS = "Access-Control-Allow-Headers";
-	public static final String ACCESS_CONTROL_ALLOW_ORIGIN = "Access-Control-Allow-Origin";
-	public static final String ACCESS_CONTROL_MAX_aGE = "Access-Control-Max-Age";
-	public static final String ACCESS_CONTROL_ALLOW_METHODS = "Access-Control-Allow-Methods";
-	public static final String ACCESS_CONTROL_ALLOW_CREDENTIALS = "Access-Control-Allow-Credentials";
+	public static final String
+		ACCESS_CONTROL_ALLOW_HEADERS = "Access-Control-Allow-Headers",
+		ACCESS_CONTROL_ALLOW_ORIGIN = "Access-Control-Allow-Origin",
+		ACCESS_CONTROL_MAX_AGE = "Access-Control-Max-Age",
+		ACCESS_CONTROL_ALLOW_METHODS = "Access-Control-Allow-Methods",
+		ACCESS_CONTROL_ALLOW_CREDENTIALS = "Access-Control-Allow-Credentials";
 
 	// 204 No Content
-	public static boolean isCORSPreflight(Request req) {
-		return req.action() == OPTIONS && req.containsKey("Origin") && req.containsKey("Access-Control-Request-Method");
-	}
+	public static boolean isCORSPreflight(Request req) {return req.action() == OPTIONS && req.containsKey("origin") && req.containsKey("access-control-request-method");}
 	// endregion
 	//region cache-control
 	// Vary用于请求头决定的缓存
@@ -121,12 +121,6 @@ public class HttpUtil {
 		IMMUTABLE = "max-age=604800, immutable";
 	//endregion
 
-	static final Pattern pa = Pattern.compile("(up.browser|up.link|mmp|symbian|smartphone|midp|wap|phone|iphone|ipad|ipod|android|xoom)", Pattern.CASE_INSENSITIVE);
-
-	public static boolean is_wap(Request req) {
-		String ua = req.get("user-agent");
-		if (ua != null && pa.matcher(ua).matches()) return true;
-
-		return req.getField("accept").contains("application/vnd.wap.xhtml+xml");
-	}
+	private static final Pattern MOBILE = Pattern.compile("(mobile|wap|phone|ios|android)", Pattern.CASE_INSENSITIVE);
+	public static boolean isMobile(Request req) {return "?1".equals(req.getField("sec-ch-ua-mobile")) || MOBILE.matcher(req.getField("user-agent")).matches();}
 }

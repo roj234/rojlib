@@ -8,10 +8,9 @@ public final class Copy extends QZCoder {
     public static final Copy INSTANCE = new Copy();
     private Copy() {}
 
-    QZCoder factory() { return this; }
     private static final byte[] ID = {0};
-    byte[] id() { return ID; }
+    byte[] id() {return ID;}
 
-    public OutputStream encode(OutputStream out) { return out; }
-    public InputStream decode(InputStream in, byte[] password, long uncompressedSize, AtomicInteger memoryLimit) { return in; }
+    public OutputStream encode(OutputStream out) {return out;}
+    public InputStream decode(InputStream in, byte[] password, long uncompressedSize, AtomicInteger memoryLimit) {return in;}
 }

@@ -1,5 +1,6 @@
 package roj.net.http;
 
+import roj.concurrent.TaskPool;
 import roj.io.FastFailException;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
@@ -69,12 +70,18 @@ public class AutoRedirect extends Timeout implements ChannelHandler {
 			if (event.getData() == Boolean.TRUE) {
 				if (redirectPending != null) {
 					event.stopPropagate();
-					ctx.invokeLater(() -> {
+
+					var ch = ctx.channel();
+					TaskPool.Common().submit(() -> {
+						var lock = ch.lock();
 						try {
-							req._redirect(ctx.channel(), redirectPending, readTimeout);
+							lock.lock();
+							req._redirect(ch, redirectPending, readTimeout);
 							redirectPending = null;
 						} catch (IOException e) {
 							Helpers.athrow(e);
+						} finally {
+							lock.unlock();
 						}
 					});
 					return;

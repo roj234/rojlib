@@ -5,6 +5,7 @@ import roj.net.http.Headers;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.FileChannel;
 
 /**
  * @author Roj234
@@ -16,6 +17,7 @@ public interface FileInfo {
 	int stats();
 
 	long length(boolean deflated);
+	default FileChannel getSendFile(boolean deflated) throws IOException {return null;}
 	InputStream get(boolean deflated, long offset) throws IOException;
 
 	long lastModified();

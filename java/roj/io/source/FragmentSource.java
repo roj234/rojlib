@@ -149,7 +149,7 @@ public final class FragmentSource extends Source {
 		File file = new File(path, t.toString());
 		if (!file.isFile() && fragmentSize > 0) {
 			try {
-				IOUtil.allocSparseFile(file, fragmentSize);
+				IOUtil.createSparseFile(file, fragmentSize);
 			} catch (IOException ignored) {}
 		}
 		ref.add(file);

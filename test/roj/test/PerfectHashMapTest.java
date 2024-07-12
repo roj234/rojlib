@@ -6,7 +6,6 @@ import roj.collect.PerfectHashMap;
 import roj.io.IOUtil;
 import roj.test.internal.Test;
 import roj.util.ByteList;
-import roj.util.Helpers;
 
 import java.io.File;
 
@@ -17,7 +16,7 @@ import java.io.File;
 @Test("测试完美哈希表的构建速度")
 public class PerfectHashMapTest {
 	public static void main(String[] args) throws Exception {
-		File aClass = Helpers.getJarByClass(PerfectHashMap.class);
+		File aClass = IOUtil.getJar(PerfectHashMap.class);
 
 		PerfectHashMap.Builder<ZEntry> builder = new PerfectHashMap.Builder<>();
 		ZipFile zf = new ZipFile(aClass);

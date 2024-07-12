@@ -64,7 +64,7 @@ public class ConstantData implements IClass {
 	private AttributeList attributes;
 
 	@SuppressWarnings("fallthrough")
-	public void verify() {
+	public boolean verify() {
 		/*
 		 * If the ACC_MODULE flag is set in the access_flags item, then no other flag in the access_flags item may be
 		 * set, and the following rules apply to the rest of the ClassFile structure:
@@ -108,6 +108,7 @@ public class ConstantData implements IClass {
 		fastValidate(Helpers.cast(methods), descs);
 		descs.clear();
 		fastValidate(Helpers.cast(fields), descs);
+		return true;
 	}
 
 	private void fastValidate(SimpleList<RawNode> nodes, MyHashSet<String> out) {
@@ -327,7 +328,7 @@ public class ConstantData implements IClass {
 	}
 
 	public final String name() { return nameCst.name().str(); }
-	public final String parent() { return parentCst == null ? null : parentCst.name().str(); }
+	public final String parent() { return parentCst == null ? Helpers.maybeNull() : parentCst.name().str(); }
 
 	public final void modifier(int flag) { modifier = (char) flag; }
 	public final char modifier() { return modifier; }

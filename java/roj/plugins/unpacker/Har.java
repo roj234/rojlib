@@ -76,7 +76,7 @@ class Har implements Unpacker {
 			file.getParentFile().mkdirs();
 
 			try {
-				IOUtil.allocSparseFile(file, v.length);
+				IOUtil.createSparseFile(file, v.length);
 				try (var out = new FileOutputStream(file)) {
 					out.write(v);
 				}

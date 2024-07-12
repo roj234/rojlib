@@ -65,7 +65,7 @@ public final class UPnPDevice {
 	}
 
 	public static Supplier<List<UPnPDevice>> discover(List<String> deviceTypes) throws IOException {
-		SelectorLoop loop = new SelectorLoop(null, "UPnP discover", 1);
+		SelectorLoop loop = new SelectorLoop("UPnP discover", 1);
 
 		List<UPnPDevice> devices = new SimpleList<>();
 
@@ -183,7 +183,7 @@ public final class UPnPDevice {
 			}
 
 			List<Service> services = device.services = new SimpleList<>();
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				UPnPGateway.LOGGER.debug("正在请求设备描述: {}", loc);
 				Element xml;
 				try {

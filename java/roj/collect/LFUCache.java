@@ -1,6 +1,5 @@
 package roj.collect;
 
-import roj.concurrent.FastThreadLocal;
 import roj.util.Helpers;
 
 import java.util.function.BiConsumer;
@@ -90,12 +89,10 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 	@Override
 	protected boolean acceptTreeNode() {return false;}
 
-	private static final FastThreadLocal<ObjectPool<AbstractEntry<?, ?>>> MY_OBJECT_POOL = FastThreadLocal.withInitial(() -> new ObjectPool<>(99));
 	protected AbstractEntry<K, V> useEntry() {
 		if (size == maximumCapacity) evict(removeAtOnce);
 
-		Entry<K, V> entry = Helpers.cast(MY_OBJECT_POOL.get().get());
-		if (entry == null) entry = new Entry<>();
+		Entry<K, V> entry = new Entry<>();
 
 		entry.k = Helpers.cast(UNDEFINED);
 		append(entry, head);
@@ -111,8 +108,6 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 		ent.lfuPrev = ent.lfuNext = null;
 		ent.next = null;
 		ent.k = null;
-
-		MY_OBJECT_POOL.get().reserve(ent);
 	}
 
 	private void unlink(Entry<K, V> entry) {

@@ -21,8 +21,6 @@ import roj.net.http.server.auto.Accepts;
 import roj.net.http.server.auto.Interceptor;
 import roj.net.http.server.auto.OKRouter;
 import roj.net.http.server.auto.Route;
-import roj.net.http.ws.WebSocketHandler;
-import roj.net.http.ws.WebSocketServer;
 import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -43,23 +41,12 @@ import java.util.Set;
  * @author solo6975
  * @since 2022/2/7 17:05
  */
-public class Server extends WebSocketServer implements Router, Context {
+public class Server implements Router, Context {
 	static final SecureRandom rnd = new SecureRandom();
 	final byte[] secKey = new byte[16];
 
-	public Server() {
-		Set<String> prot = getValidProtocol();
-		prot.clear();
-		prot.add("WSChat2");
-		rnd.nextBytes(secKey);
-	}
-
-	@Override
-	protected WebSocketHandler newWorker(Request req, ResponseHeader handle) {
-		ChatImpl w = new ChatImpl();
-		w.owner = (User) userMap.get(1);
-		return w;
-	}
+	static final Set<String> PROTOCOLS = Collections.singleton("WSChar2");
+	public Server() {rnd.nextBytes(secKey);}
 
 	static File attDir;
 	static IntMap<AbstractUser> userMap = new IntMap<>();
@@ -133,14 +120,14 @@ public class Server extends WebSocketServer implements Router, Context {
 		if (cfg != null) {
 			if (!cfg.postAccepted()) cfg.postAccept(131072, 200);
 		}
-		req.server().headers("Access-Control-Allow-Headers: MCTK\r\n" +
+		req.server().headers().putAllS("Access-Control-Allow-Headers: MCTK\r\n" +
 			"Access-Control-Allow-Origin: " + req.getOrDefault("Origin", "*") + "\r\n" +
 			"Access-Control-Max-Age: 2592000\r\n" +
 			"Access-Control-Allow-Methods: *");
 	}
 
-	private static void jsonErrorPre(Request req, String str) {
-		req.server().die().code(200).headers("Access-Control-Allow-Origin: *").body(jsonErr(str));
+	private static void jsonErrorPre(Request req, String str) throws IOException {
+		req.server().die().code(200).header("Access-Control-Allow-Origin", "*").body(jsonErr(str));
 	}
 
 	OKRouter router = new OKRouter().register(this);
@@ -149,7 +136,7 @@ public class Server extends WebSocketServer implements Router, Context {
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws Exception {
 		if (HttpUtil.isCORSPreflight(req)) {
-			return rh.code(200).returnNull();
+			return rh.code(204).returnNull();
 		}
 
 		// Strict-Transport-Security: max-age=1000; includeSubDomains
@@ -198,7 +185,8 @@ public class Server extends WebSocketServer implements Router, Context {
 		String safePath = IOUtil.safePath(req.subDirectory(1).path());
 		File file = new File(attDir, safePath);
 		if (!file.isFile()) return rh.code(404).returnNull();
-		return new DiskFileInfo(file).response(req);
+		DiskFileInfo info = new DiskFileInfo(file);
+		return Response.file(req, info);
 	}
 
 	@Route(value = "file/", prefix = true)
@@ -262,7 +250,13 @@ public class Server extends WebSocketServer implements Router, Context {
 
 	@Route
 	@Accepts(Accepts.GET)
-	public Response im(Request req) { return switchToWebsocket(req); }
+	public Response im(Request req) {
+		return Response.websocket(req, req1 -> {
+			ChatImpl w = new ChatImpl();
+			w.owner = (User) userMap.get(1);
+			return w;
+		}, PROTOCOLS);
+	}
 
 	@Route
 	@Accepts(Accepts.GET)
@@ -285,7 +279,7 @@ public class Server extends WebSocketServer implements Router, Context {
 			m.put("address", "ws://127.0.0.1:1999/im/");
 			m.put("token", "114514");//createToken(u, -1, 86400000));
 			m.put("ok", true);
-			return new StringResponse(ConfigMaster.JSON.toString(m, new CharList()));
+			return Response.json(ConfigMaster.JSON.toString(m, new CharList()));
 		}
 	}
 
@@ -296,8 +290,9 @@ public class Server extends WebSocketServer implements Router, Context {
 		System.out.println(img.getAbsolutePath());
 		if (!img.isFile()) img = new File(attDir, "default");
 
-		rh.headers("Access-Control-Allow-Origin: *");
-		return new DiskFileInfo(img).response(req);
+		rh.header("Access-Control-Allow-Origin", "*");
+		DiskFileInfo info = new DiskFileInfo(img);
+		return Response.file(req, info);
 	}
 
 	@Route
@@ -306,7 +301,7 @@ public class Server extends WebSocketServer implements Router, Context {
 	public Object user__set_info(Request req) throws IllegalRequestException {
 		User u = (User) req.localCtx().get("USER");
 
-		Map<String, String> x = req.postFields();
+		Map<String, String> x = req.PostFields();
 
 		/*ByteList face = (ByteList) x.get("face");
 		if (face != null) {
@@ -321,7 +316,7 @@ public class Server extends WebSocketServer implements Router, Context {
 		u.name = x.get("name");
 		u.onDataChanged(this);
 
-		return new StringResponse("{\"ok\":1}");
+		return Response.json("{\"ok\":1}");
 	}
 
 	private Response block(Request req, int uid, boolean add, boolean inGroup) {
@@ -330,12 +325,10 @@ public class Server extends WebSocketServer implements Router, Context {
 
 	// region Misc
 
-	private static Response jsonErr(String s) {
-		return new StringResponse("{\"ok\":0,\"err\":\"" + Tokenizer.addSlashes(s) + "\"}", "application/json");
-	}
+	private static Response jsonErr(String s) {return Response.json("{\"ok\":0,\"err\":\""+Tokenizer.addSlashes(s)+"\"}");}
 
 	private static MyHashMap<String, Object> initLocal() {
-		MyHashMap<String, Object> L = HttpServer11.TSO.get().ctx;
+		var L = HttpCache.getInstance().ctx;
 		if (!L.containsKey("LST")) {
 			L.put("HASH", new HMAC(new SM3()));
 			L.put("IA", new int[1]);

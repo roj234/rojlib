@@ -1,6 +1,7 @@
 package roj.config.serial;
 
 import roj.collect.SimpleList;
+import roj.config.Interner;
 import roj.config.data.*;
 
 import java.util.List;
@@ -35,7 +36,7 @@ public class ToXml implements CVisitor {
 				state = XML_ATTR;
 				if (stack.size() >= maxDepth) throw new IllegalStateException("栈溢出: 最大深度是 "+maxDepth);
 				stack.add(stackBottom);
-				stackBottom.add(stackBottom = createElement(str));
+				stackBottom.add(stackBottom = createElement(Interner.intern(str)));
 				break;
 			default: add(CString.valueOf(str)); break;
 		}
@@ -56,7 +57,7 @@ public class ToXml implements CVisitor {
 		key = null;
 	}
 
-	public final void key(String k) { _state(XML_ATTR_KEY, XML_ATTR_VAL); key = k; }
+	public final void key(String k) { _state(XML_ATTR_KEY, XML_ATTR_VAL); key = Interner.intern(k); }
 	@SuppressWarnings("fallthrough")
 	public final void valueList() {
 		switch (state) {

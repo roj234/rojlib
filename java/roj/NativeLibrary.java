@@ -42,7 +42,7 @@ public class NativeLibrary {
 		String appendix = OS.CURRENT == OS.WINDOWS ? ".dll" : ".so";
 		InputStream in = NativeLibrary.class.getClassLoader().getResourceAsStream(lib+appendix);
 		if (in == null) {
-			System.err.println("RojLib: incompatible native binary");
+			System.err.println("RojLib Warning: 您的平台没有可用的二进制，下列功能将不可用：Ansi回读、SharedMemory、BsDiff(加速)、LZMA(加速)");
 			return false;
 		}
 

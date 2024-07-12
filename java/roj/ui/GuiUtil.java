@@ -31,24 +31,29 @@ import static roj.reflect.ReflectionUtils.u;
  */
 public final class GuiUtil {
 	public static void systemLook() {
+		int dpi;
 		try {
-			int dpi;
-			try {
-				dpi = Toolkit.getDefaultToolkit().getScreenResolution();
-			} catch (HeadlessException ex) {
-				dpi = 96;
-			}
-			System.out.println("Dpi="+dpi);
-			int size = 12;
-			if (Math.round(size * 72F / dpi) < 8) {
-				size = Math.round(8 * dpi / 72F);
-			}
+			dpi = Toolkit.getDefaultToolkit().getScreenResolution();
+		} catch (HeadlessException ex) {
+			dpi = 96;
+		}
+		System.out.println("Dpi="+dpi);
+		int size = 12;
+		if (Math.round(size * 72F / dpi) < 8) {
+			size = Math.round(8 * dpi / 72F);
+		}
 
-			if (size < 12) System.setProperty("swing.useSystemFontSettings","false");
+		if (size < 12) System.setProperty("swing.useSystemFontSettings","false");
 
-			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+		try {
+			UIManager.setLookAndFeel("com.sun.java.swing.plaf.windows.WindowsLookAndFeel");
 		} catch (Exception e) {
-			e.printStackTrace();
+			System.err.println("RojLib Warning: Windows皮肤不可用，您可能会感受到绝对定位的痛苦");
+			try {
+				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+			} catch (Exception ex) {
+				Helpers.athrow(ex);
+			}
 		}
 	}
 

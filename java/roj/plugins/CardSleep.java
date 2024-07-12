@@ -12,8 +12,8 @@ import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.config.CsvParser;
 import roj.io.IOUtil;
-import roj.platform.Plugin;
-import roj.platform.SimplePlugin;
+import roj.plugin.Plugin;
+import roj.plugin.SimplePlugin;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.CMBoxValue;
@@ -403,7 +403,7 @@ public class CardSleep extends JFrame {
 			uiST_Toggle.setText("停止");
 			Arrays.fill(prevFreq, 0);
 
-			monitorRead.pushTask(() -> {
+			monitorRead.submit(() -> {
 				CsvParser cp = new CsvParser();
 				byte[] buf = new byte[256];
 				int rIndex = 0, wIndex = 0;
@@ -576,13 +576,13 @@ public class CardSleep extends JFrame {
 			e.printStackTrace();
 		}
 		if (isGraphicClock) {
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				JOptionPane.showMessageDialog(this, "该显卡不支持或没有权限调节核心频率");
 			});
 			uiST_Core.setSelected(false);
 			uiST_Core.setEnabled(false);
 		} else {
-			TaskPool.Common().pushTask(() -> {
+			TaskPool.Common().submit(() -> {
 				JOptionPane.showMessageDialog(this, "该显卡不支持或没有权限调节显存频率");
 			});
 			uiST_Memory.setSelected(false);

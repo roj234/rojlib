@@ -956,7 +956,7 @@ public class Tokenizer {
 			i = TextUtil.gNextCRLF(in, index);
 			if (i < 0) i = in.length();
 		}
-		commentPostprocess(i);
+		index = i;
 	}
 	protected final void multiLineComment(CharList row, String end) throws ParseException {
 		CharSequence in = input;
@@ -966,12 +966,7 @@ public class Tokenizer {
 		if (i < 0) throw err("在注释结束前遇到了文件尾");
 
 		if (row != null) row.append(in, prevI, i-1).append('\n');
-		commentPostprocess(i+end.length());
-	}
-	protected final void commentPostprocess(int i) {
-		CharSequence in = input;
-		while (i < in.length() && WHITESPACE.contains(in.charAt(i))) i++;
-		index = i;
+		index = i+end.length();
 	}
 	// endregion
 	// region 行号

@@ -111,6 +111,8 @@ public final class JavaLexer extends Tokenizer {
 		"&", "|", "^",
 		// Boolean Binary with boolean support
 		"&&", "||",
+		// nullish_consolidating (是这个名字吗？)
+		"??",
 		// Boolean Binary without boolean support
 		"==", "!=", "<", ">=", ">", "<=",
 		// Assign
@@ -135,12 +137,13 @@ public final class JavaLexer extends Tokenizer {
 		lsh = 127, rsh = 128, rsh_unsigned = 129,
 		and = 130, or = 131, xor = 132,
 		logic_and = 133, logic_or = 134,
-		equ = 135, neq = 136, lss = 137, geq = 138, gtr = 139, leq = 140,
+		nullish_consolidating = 135,
+		equ = 136, neq = 137, lss = 138, geq = 139, gtr = 140, leq = 141,
 
-		assign = 141,
-		add_assign = 142, sub_assign = 143, mul_assign = 144, div_assign = 145, mod_assign = 146, pow_assign = 147,
-		lsh_assign = 148, rsh_assign = 149, rsh_unsigned_assign = 150, and_assign = 151, xor_assign = 152, or_assign = 153,
-		direct_assign = 154;
+		assign = 142,
+		add_assign = 143, sub_assign = 144, mul_assign = 145, div_assign = 146, mod_assign = 147, pow_assign = 148,
+		lsh_assign = 149, rsh_assign = 150, rsh_unsigned_assign = 151, and_assign = 152, xor_assign = 153, or_assign = 154,
+		direct_assign = 155;
 
 	public static final TrieTree<Word> JAVA_TOKEN = new TrieTree<>();
 	private static final MyBitSet JAVA_LEND = new MyBitSet();
@@ -355,7 +358,7 @@ public final class JavaLexer extends Tokenizer {
 		} while (in.charAt(i) != '/');
 
 		doc.visitEnd();
-		commentPostprocess(i+1);
+		index = i+1;
 	}
 	private Word readStringBlock() throws ParseException {
 		CharSequence in = input;

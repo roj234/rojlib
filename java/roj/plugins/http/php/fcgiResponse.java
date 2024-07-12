@@ -4,7 +4,10 @@ import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.Headers;
-import roj.net.http.server.*;
+import roj.net.http.server.AsyncResponse;
+import roj.net.http.server.HPostHandler;
+import roj.net.http.server.ResponseHeader;
+import roj.net.http.server.StringResponse;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -25,9 +28,9 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 	private ByteList tmpData;
 	private Headers headers = new Headers();
 	private boolean headerFinished;
-	private final HttpServer11 server;
+	private final ResponseHeader server;
 
-	public fcgiResponse(ResponseHeader server) {this.server = (HttpServer11) server;}
+	public fcgiResponse(ResponseHeader server) {this.server = server;}
 
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
@@ -59,6 +62,7 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 				return;
 			}
 			fcgiManager.LOGGER.warn("fcgi_STDIN的状态错误({}), 期待OPENED", state);
+			if (state == LOCAL_FINISH) return;
 		}
 
 		var ctx = conn.ensureOpen();
@@ -101,10 +105,14 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 	public boolean offer(DynByteBuf buf) {
 		if (!headerFinished && headers.parseHead(buf)) {
 			headerFinished = true;
-			sendHeaders();
+			try {
+				server.body(this);
+			} catch (IOException e) {
+				Helpers.athrow(e);
+			}
 			if (headers != null) {
 				var ch = server.ch();
-				throw new FastFailException("Http客户端("+(ch==null?"<地址不可知>":ch.remoteAddress())+")的请求已完成("+server.getState()+"), 异步FastCGI响应被忽略");
+				throw new FastFailException("来自"+(ch==null?"<地址不可知>":ch.remoteAddress())+"的请求已提前完成("+server._getState()+")");
 			}
 		}
 		return !buf.isReadable() || super.offer(buf);
@@ -134,20 +142,15 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 		if (!isEof()) {
 			headers = new Headers();
 			headers.put("status", "502 Bad Gateway");
-			sendHeaders();
+			server.body(this);
+			if (headers != null) {
+				release(null/*AsyncResponse not using this*/);
+				return;
+			}
 			headerFinished = true;
-			CharSequence str = StringResponse.detailedErrorPage(502, ex).getStr();
+			CharSequence str = StringResponse.detailedErrorPage(502, ex).string();
 			offer(IOUtil.getSharedByteBuf().putUTFData(str));
 			setEof();
-		}
-	}
-
-	private void sendHeaders() {
-		try {
-			if (server.getState() == 3/*HARDCODED PROCESSING*/)
-				server.ch().fireChannelWrite(this);
-		} catch (IOException e) {
-			Helpers.athrow(e);
 		}
 	}
 
