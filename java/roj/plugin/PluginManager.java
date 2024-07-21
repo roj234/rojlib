@@ -123,25 +123,32 @@ public class PluginManager {
 				klass = PluginManager.class.getClassLoader().loadClass(pd.mainClass);
 			}
 		} catch (ClassNotFoundException|NoClassDefFoundError|IOException e) {
-			pd.state = ERRORED;
+			synchronized (pd.stateLock) {
+				pd.state = LOADED;
+				unloadPluginTrusted(pd);
+				pd.state = ERRORED;
+			}
 			throw new FastFailException("无法初始化插件主类"+pd.mainClass, e);
 		}
 
 		var fn = SerializerFactory.dataContainer(klass);
-		if (fn == null) {
-			pd.state = ERRORED;
-			throw new FastFailException("在插件主类"+pd.mainClass+"中找不到无参构造器");
-		} else {
-			try {
+		try {
+			if (fn == null) {
+				throw new FastFailException("在插件主类"+pd.mainClass+"中找不到无参构造器");
+			} else {
 				pd.instance = (Plugin) fn.apply(0);
 				pd.instance.init(this, new File(pluginFolder, pd.id), pd);
 				pd.instance.onLoad();
 
 				pd.state = LOADED;
-			} catch (Exception e) {
-				pd.state = ERRORED;
-				throw e;
 			}
+		} catch (Exception e) {
+			synchronized (pd.stateLock) {
+				pd.state = LOADED;
+				unloadPluginTrusted(pd);
+				pd.state = ERRORED;
+			}
+			throw e;
 		}
 	}
 
@@ -221,16 +228,37 @@ public class PluginManager {
 
 	public PluginDescriptor getPlugin(String id) { return plugins.get(id); }
 	public void enablePlugin(PluginDescriptor pd) throws Exception {
-		for (String s : pd.depend) enablePlugin(plugins.get(s));
-		for (String s : pd.loadAfter) enablePlugin(plugins.get(s));
+		for (String s : pd.depend) {
+			var dep = plugins.get(s);
+			try {
+				enablePlugin(dep);
+			} catch (Throwable e) {
+				throw new IllegalStateException("前置 "+dep.id+" 启用失败",e);
+			}
+		}
+		for (String s : pd.loadAfter) {
+			var dep = plugins.get(s);
+			if (dep != null) try {
+				enablePlugin(dep);
+			} catch (Throwable e) {
+				throw new IllegalStateException("可选前置 "+dep.id+" 启用失败",e);
+			}
+		}
 
 		synchronized (pd.stateLock) {
 			if (pd.state < LOADED) throw new IllegalStateException("无法启用未加载的插件 "+pd);
 			if (pd.state == ENABLED) return;
 
 			LOGGER.debug("正在启用插件 {}", pd);
-			pd.instance.onEnable();
-			pd.state = ENABLED;
+			try {
+				pd.instance.onEnable();
+				pd.state = ENABLED;
+			} catch (Throwable e) {
+				pd.state = ENABLED;
+				unloadPluginTrusted(pd);
+				pd.state = ERRORED;
+				throw e;
+			}
 		}
 	}
 	public void disablePlugin(PluginDescriptor pd) {
@@ -239,7 +267,7 @@ public class PluginManager {
 			try {
 				if (pd.state == ENABLED && pd.instance != null) pd.instance.onDisable();
 				pd.state = DISABLED;
-			} catch (Exception e) {
+			} catch (Throwable e) {
 				LOGGER.error("无法禁用插件 {}",e,pd);
 			} finally {
 				Plugin instance = pd.instance;

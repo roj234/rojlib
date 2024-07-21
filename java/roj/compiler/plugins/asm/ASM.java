@@ -1,13 +1,17 @@
 package roj.compiler.plugins.asm;
 
-import roj.reflect.ReflectionUtils;
-
 /**
  * @author Roj234
  * @since 2023/9/23 0023 19:21
  */
 public class ASM {
-	public static final int TARGET_JAVA_VERSION = ReflectionUtils.JAVA_VERSION;
+	public static final int TARGET_JAVA_VERSION;
+	static {
+		// 如果使用Lavac，就不会用到这个了
+		String v = System.getProperty("java.version");
+		String major = v.substring(0, v.indexOf('.'));
+		TARGET_JAVA_VERSION = Integer.parseInt(major);
+	}
 
 	/**
 	 * 获取注入的属性

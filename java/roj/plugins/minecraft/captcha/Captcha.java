@@ -27,7 +27,7 @@ import roj.text.LineReader;
 import roj.text.Template;
 import roj.text.TextUtil;
 import roj.ui.AnsiString;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandNode;
 import roj.ui.terminal.SimpleCliParser;
@@ -111,7 +111,7 @@ public final class Captcha implements ChannelHandler {
 		map.put("ip", ((InetSocketAddress)ctx.remoteAddress()).getAddress().getHostAddress());
 
 		for (String line : LineReader.create(template.format(map, new CharList()).toString())) {
-			pc.sendMessage(new AnsiString(line).color16(CLIUtil.PURPLE + CLIUtil.HIGHLIGHT), false);
+			pc.sendMessage(new AnsiString(line).color16(Terminal.PURPLE + Terminal.HIGHLIGHT), false);
 		}
 
 		timeoutTask = pl.getScheduler().loop(() -> {

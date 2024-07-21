@@ -387,18 +387,16 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 	public boolean strStartsWithThis(CharSequence s, int i, int len) {
 		Entry entry = root;
 
-		for (; i < len; i++) {
+		for (; i < len;) {
 			entry = (Entry) entry.getChild(s.charAt(i));
 			if (entry == null) return false;
-			final CharSequence text = entry.text();
+			var text = entry.text();
 			if (text != null) {
 				int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
-				if (lastMatch != text.length()) {
-					return false;
-					// 不符合规定: entry.isEnd && lastMatch == len - i;
-				}
-				i += text.length() - 1;
+				// 不符合规定: entry.isEnd && lastMatch == len - i;
+				if (lastMatch != text.length()) return false;
 			}
+			i += entry.length();
 
 			if (entry.isEnd) return true;
 		}

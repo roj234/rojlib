@@ -1,6 +1,5 @@
 package roj.net.http;
 
-import roj.NativeLibrary;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
@@ -8,7 +7,6 @@ import roj.io.buf.BufferPool;
 import roj.net.NetUtil;
 import roj.net.ch.*;
 import roj.net.handler.JSslClient;
-import roj.net.handler.MSSCipher;
 import roj.net.handler.Timeout;
 import roj.text.CharList;
 import roj.text.Escape;
@@ -150,8 +148,8 @@ public abstract class HttpRequest {
 
 		ch.remove("h11@tls");
 		if ("https".equals(protocol)) {
-			// todo: ALPN and HTTP/2
-			ch.addFirst("h11@tls", NativeLibrary.EXTRA_BUG_CHECK ? new MSSCipher().sslMode() : new JSslClient());
+			// todo now we supported HTTP/2, but still not TLS1.3(with my own implementation)
+			ch.addFirst("h11@tls", /*RojLib.EXTRA_BUG_CHECK ? new MSSCipher().sslMode() : */new JSslClient());
 		}
 
 		var addr = NetUtil.applyProxy(proxy, _getAddress(), ch);

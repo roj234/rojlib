@@ -1,12 +1,15 @@
-package roj.text;
+package roj.plugins.pinyin;
 
 import roj.archive.qz.xz.LZMA2InputStream;
 import roj.collect.Int2IntMap;
 import roj.collect.MyHashMap;
+import roj.collect.TrieEntry;
 import roj.collect.TrieTree;
 import roj.config.Tokenizer;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
+import roj.text.CharList;
+import roj.text.GB18030;
 import roj.util.DirectByteList;
 
 import java.nio.CharBuffer;
@@ -22,7 +25,7 @@ public class JPinyin {
 	private static final Int2IntMap FastSwitch = new Int2IntMap(8);
 	static {
 		// https://github.com/mozillazg/pinyin-data
-		try (LZMA2InputStream in = new LZMA2InputStream(JPinyin.class.getClassLoader().getResourceAsStream("roj/text/JPinyin.lzma"), 524288)) {
+		try (LZMA2InputStream in = new LZMA2InputStream(JPinyin.class.getClassLoader().getResourceAsStream("roj/plugins/pinyin/JPinyin.lzma"), 524288)) {
 			int DATALEN = 1432238;
 			DirectByteList bb = DirectByteList.allocateDirect(DATALEN);
 			int i = in.read(bb.address(), DATALEN);
@@ -63,9 +66,23 @@ public class JPinyin {
 		FastSwitch.put('u', 4);
 		FastSwitch.put('v', 5);
 	}
+	/**
+	 * 这个字是中文吗
+	 */
+	public static boolean isChinese(int c) {
+		TrieEntry node = JPinyin.getPinyinWords().getRoot();
+		if (Character.isSupplementaryCodePoint(c)) {
+			node = node.getChild(Character.highSurrogate(c));
+			if (node == null) return false;
+			node = node.getChild(Character.lowSurrogate(c));
+		} else {
+			node = node.getChild((char) c);
+		}
+		return node != null && node.isLeaf();
+	}
 
-	private static JPinyin pinyin;
-	public static JPinyin pinyin() { return pinyin == null ? pinyin = new JPinyin() : pinyin; }
+	private static final JPinyin instance = new JPinyin();
+	public static JPinyin getInstance() { return instance; }
 
 	public static TrieTree<Integer> getPinyinWords() { return PinyinWords; }
 

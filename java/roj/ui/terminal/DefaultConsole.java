@@ -7,24 +7,17 @@ import roj.concurrent.timing.Scheduler;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.GB18030;
-import roj.text.UTF8MB4;
-import roj.text.UnsafeCharset;
-import roj.ui.AnsiString;
-import roj.ui.CLIBoxRenderer;
-import roj.ui.CLIUtil;
-import roj.ui.Console;
-import roj.util.ByteList;
+import roj.ui.*;
 
-import java.awt.*;
 import java.awt.datatransfer.*;
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.util.Collections;
 import java.util.List;
+import java.util.function.IntFunction;
 import java.util.regex.Matcher;
 
 import static java.awt.event.KeyEvent.*;
-import static roj.ui.CLIUtil.*;
+import static roj.ui.Terminal.*;
 
 /**
  * @author Roj234
@@ -41,9 +34,6 @@ public class DefaultConsole implements Console {
 	private int prefixLen, prefixCLen;
 	private int cursorMoveBound = 24;
 
-	private static final UnsafeCharset CE = GB18030.is(Charset.defaultCharset()) ? GB18030.CODER : UTF8MB4.CODER;
-	private final ByteList byteDec = new ByteList(8);
-
 	private final CharList input = new CharList();
 	private int cursor, scrollLeft;
 	private final MyBitSet invisible = new MyBitSet();
@@ -57,7 +47,10 @@ public class DefaultConsole implements Console {
 	private int tabCursor = -1, tabId;
 
 	private boolean _history = true, _echo = true;
-	private Runnable keyboardInterruptHandler;
+	private Runnable interruptHandler;
+	private List<IntFunction<Boolean>> keyHandler = Collections.emptyList();
+
+	private boolean _isDirty;
 
 	public DefaultConsole(String prompt) {
 		setPrompt(prompt);
@@ -71,20 +64,20 @@ public class DefaultConsole implements Console {
 		this.prompt.append("\u001b[0m").append(prompt);
 
 		prefixLen = prompt.length()+4;
-		prefixCLen = CLIUtil.getStringWidth(prompt);
+		prefixCLen = Terminal.getStringWidth(prompt);
 
-		if (CLIUtil.hasBottomLine(this.prompt)) doRender();
+		if (Terminal.hasBottomLine(this.prompt)) doRender();
 	}
 	public void setDefaultHighlight(String postfix) { staticHighlight = postfix; }
 	public void setCursorMoveBound(int cmb) { cursorMoveBound = cmb; }
 
-	public void registered() {
-		CLIUtil.enableQuickEditMode();
-		doRender();
-	}
+	public void registered() {doRender();}
 	public void unregistered() {
-		CLIUtil.removeBottomLine(prompt, true);
-		CLIUtil.removeBottomLine(tooltip, true);
+		Terminal.removeBottomLine(prompt, true);
+		Terminal.removeBottomLine(tooltip, true);
+	}
+	public void idleCallback() {
+		if (_isDirty) {_isDirty = false;doRender();}
 	}
 
 	private void checkAnsi() {
@@ -106,7 +99,7 @@ public class DefaultConsole implements Console {
 
 		Completion c = tabs.get(id);
 		if (c.description != null) {
-			c.description.writeLimited(tooltip(), new CInt(CLIUtil.windowWidth), true);
+			c.description.writeLimited(tooltip(), new CInt(Terminal.windowWidth), true);
 			displayTooltip(5000);
 		} else {
 			displayTooltip(-1);
@@ -171,11 +164,8 @@ public class DefaultConsole implements Console {
 
 			if (input.length() > MAX_INPUT) { beep(); return; }
 
-			CharList charDec = IOUtil.getSharedCharBuf();
-			CE.decodeLoop(byteDec.put(keyCode), byteDec.readableBytes(), charDec, 99, true);
-			byteDec.compact();
-			input.insert(cursor, charDec);
-			cursor += charDec.length();
+			input.insert(cursor, (char)keyCode);
+			cursor ++;
 
 			if (autoComplete) {
 				complete(lastInput != null ? lastInput.substring(0, cursor) : input.substring(0, cursor), tabs);
@@ -186,40 +176,35 @@ public class DefaultConsole implements Console {
 			}
 
 			afterInput();
-		} else if ((keyCode&VK_CTRL) != 0) {
-			keyCode ^= VK_CTRL;
-			switch (keyCode) {
-				case VK_A: break;
-				case VK_V:
-					Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-					DataFlavor stringFlavor = DataFlavor.stringFlavor;
-					if (clipboard.isDataFlavorAvailable(stringFlavor)) {
-						try {
-							String text = filterText(clipboard.getData(stringFlavor).toString());
-							endCompletion(false);
-							input.insert(cursor, text);
-							cursor += text.length();
-							afterInput();
-						} catch (UnsupportedFlavorException | IOException e) {
-							e.printStackTrace();
-						}
-					}
-				break;
-				case VK_B:
-					Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(CLIUtil.stripAnsi(new CharList(input)).toStringAndFree()), null);
-				return;
-				case VK_C:
-					if (keyboardInterruptHandler == null) System.exit(0);
-					else keyboardInterruptHandler.run();
-				return;
-				case VK_UP: scrollLeft++; break;
-				case VK_DOWN: scrollLeft--; break;
-				case VK_LEFT: cursor = 0; break;
-				case VK_RIGHT: cursor = input.length() - invisible.size(); break;
-				default: return;
-			}
 		} else {
 			switch (keyCode) {
+				case VK_CTRL|VK_B:
+					var clipboard = GuiUtil.CLIPBOARD;
+					if (clipboard != null)clipboard.setContents(new StringSelection(Terminal.stripAnsi(new CharList(input)).toStringAndFree()), null);
+					else System.err.println("您的环境没有剪贴板，复制失败");
+				return;
+				case VK_CTRL|VK_V:
+					clipboard = GuiUtil.CLIPBOARD;
+					if (clipboard != null) {
+						DataFlavor stringFlavor = DataFlavor.stringFlavor;
+						if (clipboard.isDataFlavorAvailable(stringFlavor)) {
+							try {
+								String text = filterText(clipboard.getData(stringFlavor).toString());
+								endCompletion(false);
+								input.insert(cursor, text);
+								cursor += text.length();
+								afterInput();
+							} catch (UnsupportedFlavorException | IOException e) {
+								e.printStackTrace();
+							}
+						}
+					} else System.err.println("您的环境没有剪贴板，粘贴失败");
+				break;
+				case VK_CTRL|VK_UP: scrollLeft++; break;
+				case VK_CTRL|VK_DOWN: scrollLeft--; break;
+				case VK_CTRL|VK_LEFT: cursor = 0; break;
+				case VK_CTRL|VK_RIGHT: cursor = input.length() - invisible.size(); break;
+
 				case VK_F1: printHelp(); return;
 				case VK_F4:
 					autoComplete = !autoComplete;
@@ -363,11 +348,25 @@ public class DefaultConsole implements Console {
 					input.delete(--cursor);
 					afterInput();
 				break;
-				default: return;
+				default:
+					for (int i = 0; i < keyHandler.size(); i++) {
+						var result = keyHandler.get(i).apply(keyCode);
+						if (result != null) {
+							if (result) _isDirty = true;
+							return;
+						}
+					}
+
+					if (keyCode == (VK_CTRL|VK_C)) {
+						var r = interruptHandler;
+						if (r == null) System.exit(0);
+						else r.run();
+					}
+					return;
 			}
 		}
 
-		doRender();
+		_isDirty = true;
 	}
 
 	private static String filterText(String string) {
@@ -385,11 +384,12 @@ public class DefaultConsole implements Console {
 		System.out.println(pp);
 	}
 	protected synchronized final void doRender() {
-		if (CLIUtil.getConsole() != this || !ANSI) return;
+		assert Terminal.getConsole() == this;
+		if (!ANSI_OUTPUT) return;
 
 		if (!_echo) {
 			prompt.setLength(prefixLen);
-			CLIUtil.renderBottomLine(prompt, true, prefixCLen+1);
+			Terminal.renderBottomLine(prompt, true, prefixCLen+1);
 			return;
 		}
 
@@ -429,7 +429,7 @@ public class DefaultConsole implements Console {
 
 		int end = limitWidth(scrollLeft, maxWidth);
 		if (scrollLeft > end) {
-			sysErr.println("[DefaultConsole]Invalid ANSI sequence detected.");
+			Terminal.directWrite("RojLib Warning: [VT]找到无效的ANSI转义.\n");
 			scrollLeft = 0;
 		}
 		prompt.append(staticHighlight).append(input, scrollLeft, end);
@@ -437,10 +437,10 @@ public class DefaultConsole implements Console {
 		if (end < input.length()) prompt.append("\u001b[1;5;41;97m+"); // + after
 		prompt.append("\u001b[0m");
 
-		CLIUtil.renderBottomLine(prompt, true, prefixCLen+relCursor+1);
+		Terminal.renderBottomLine(prompt, true, prefixCLen+relCursor+1);
 	}
 	private int computeMaxWidth() {
-		int maxWidth = CLIUtil.windowWidth-prefixCLen;
+		int maxWidth = Terminal.windowWidth-prefixCLen;
 		if (scrollLeft > 0) maxWidth--;
 		if (limitWidth(scrollLeft, maxWidth) < input.length()) maxWidth--;
 		return maxWidth;
@@ -451,7 +451,7 @@ public class DefaultConsole implements Console {
 		int width = 0;
 		for (int i = 0; i < input.length(); i++) {
 			if (!invisible.contains(i)) {
-				width += CLIUtil.getCharWidth(input.charAt(i));
+				width += Terminal.getCharWidth(input.charAt(i));
 				if (--visLen == 0) break;
 			} else if (countInvisible) {
 				if (--visLen == 0) break;
@@ -465,7 +465,7 @@ public class DefaultConsole implements Console {
 		int width = 0;
 		for (; i < input.length(); i++) {
 			if (!invisible.contains(i)) {
-				width += CLIUtil.getCharWidth(input.charAt(i));
+				width += Terminal.getCharWidth(input.charAt(i));
 				if (width >= maxWidth) return i;
 			}
 		}
@@ -479,11 +479,11 @@ public class DefaultConsole implements Console {
 	protected final void displayTooltip(int timeout) {
 		if (removeTooltip != null) removeTooltip.cancel();
 		if (timeout < 0) {
-			CLIUtil.removeBottomLine(tooltip, true);
+			Terminal.removeBottomLine(tooltip, true);
 			return;
 		}
 
-		CLIUtil.renderBottomLine(tooltip, true, 0);
+		Terminal.renderBottomLine(tooltip, true, 0);
 		removeTooltip = Scheduler.getDefaultScheduler().delay(() -> displayTooltip(-1), timeout);
 	}
 
@@ -496,26 +496,29 @@ public class DefaultConsole implements Console {
 		Ctrl+C: 退出
 		Ctrl+V: 粘贴
 		Ctrl+←: 光标移至开头
-		Ctrl+→: 光标移至结尾
-		""";
+		Ctrl+→: 光标移至结尾""";
 	protected void printHelp() {
 		CLIBoxRenderer.DEFAULT.render(new String[][]{
 			new String[] { "Roj234的终端模拟器 帮助", "简介", "快捷键" },
 			new String[] {"""
 怎么，其实又是一个JLine不会用的人啊/doge 可惜这里不能放图，哈哈哈
 有兴趣可以看看我是如何计算字符显示长度的
-早期版本：c<16 => 0, c<255 => 1, else => 2
-然而：https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters
-
-做什么都不简单。。。还很邪道""",
+非常邪门的写法，但是很好用
+https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters""",
 				KEY_SHORTCUT }
 		});
 	}
-	protected AnsiString highlight(CharList input) { return null; }
+	protected AnsiString highlight(CharList input) {return null;}
 	protected void complete(String prefix, List<Completion> out) {}
-	protected boolean evaluate(String cmd) { return true; }
+	protected boolean evaluate(String cmd) {return true;}
 
-	public void setInputEcho(boolean echo) { this._echo = echo; doRender(); }
-	public void setInputHistory(boolean history) { this._history = history; }
-	public void onKeyboardInterrupt(Runnable o) { keyboardInterruptHandler = o; }
+	public void setInputEcho(boolean echo) {this._echo = echo; _isDirty = true;}
+	public void setInputHistory(boolean history) {this._history = history;}
+	@Deprecated
+	public void onKeyboardInterrupt(Runnable o) {interruptHandler = o;}
+	public void onVirtualKey(IntFunction<Boolean> h) {
+		if (keyHandler.isEmpty()) keyHandler = new SimpleList<>();
+		keyHandler.add(h);
+	}
+	public void removeKeyHandler(IntFunction<Boolean> h) {keyHandler.remove(h);}
 }

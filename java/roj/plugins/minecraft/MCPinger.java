@@ -21,7 +21,7 @@ import java.net.*;
 import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 
-import static roj.ui.CLIUtil.MinecraftColor.minecraftJsonStyleToString;
+import static roj.ui.Terminal.MinecraftColor.minecraftJsonStyleToString;
 import static roj.ui.terminal.CommandNode.argument;
 import static roj.ui.terminal.CommandNode.literal;
 

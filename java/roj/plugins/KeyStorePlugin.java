@@ -9,7 +9,7 @@ import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandImpl;
+import roj.ui.terminal.Command;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -38,7 +38,7 @@ public class KeyStorePlugin extends Plugin {
 
 	@Override
 	protected void onEnable() throws Exception {
-		CommandImpl load = ctx -> {
+		Command load = ctx -> {
 			var pem = ctx.argument("证书pem", File.class);
 			var key = ctx.argument("私钥key", File.class);
 			var name = ctx.argument("别名", String.class, IOUtil.fileName(key.getName()));
@@ -60,7 +60,7 @@ public class KeyStorePlugin extends Plugin {
 
 		List<String> hashAlgs = Arrays.asList("SHA-512", "SHA-384", "SHA-256");
 
-		CommandImpl sign = ctx -> {
+		Command sign = ctx -> {
 			var jar = ctx.argument("jar", File.class);
 			var pem = ctx.argument("证书pem", File.class);
 			var key = ctx.argument("私钥key", File.class);

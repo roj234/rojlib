@@ -3,7 +3,7 @@ package roj.mod;
 import com.sun.nio.file.ExtendedWatchEventModifier;
 import roj.collect.*;
 import roj.io.NIOUtil;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 
 import java.io.File;
 import java.io.IOException;
@@ -81,7 +81,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 				}
 			}
 
-			if (!key.reset()) CLIUtil.warning("[watcher reset failed]class没了？");
+			if (!key.reset()) Terminal.warning("[watcher reset failed]class没了？");
 			return;
 		}
 
@@ -92,7 +92,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 			MyHashSet<String> s = csm.mod;
 			switch (name) {
 				case "OVERFLOW": {
-					CLIUtil.error("[PW]更改的文件过多，已暂停自动编译 "+key.watchable());
+					Terminal.error("[PW]更改的文件过多，已暂停自动编译 "+key.watchable());
 					isOverflow = true;
 					break x;
 				}

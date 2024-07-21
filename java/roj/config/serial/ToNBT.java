@@ -1,8 +1,8 @@
 package roj.config.serial;
 
 import roj.compiler.plugins.asm.ASM;
+import roj.text.GB18030;
 import roj.text.J9String;
-import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -71,7 +71,7 @@ public class ToNBT implements CVisitor {
 			int utfExtra = l.length() * 2 / 3;
 			int numCn = 0;
 			for (int i = 0; i < l.length(); i++) {
-				if (TextUtil.isChinese(l.charAt(i))) {
+				if (GB18030.isTwoByte(l.charAt(i))) {
 					if (++numCn > utfExtra) {
 						onValue(X_GB18030_STRING);
 						ob.putVUIGB(l);

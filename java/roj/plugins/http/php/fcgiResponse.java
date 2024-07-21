@@ -148,7 +148,7 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 				return;
 			}
 			headerFinished = true;
-			CharSequence str = StringResponse.detailedErrorPage(502, ex).string();
+			var str = StringResponse.errorPage("Bad Gateway(FastCGI Error)", ex).string();
 			offer(IOUtil.getSharedByteBuf().putUTFData(str));
 			setEof();
 		}

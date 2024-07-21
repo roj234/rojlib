@@ -28,7 +28,7 @@ public class Scheduler implements Runnable {
 				if (defaultScheduler != null) return defaultScheduler;
 
 				defaultScheduler = new Scheduler(TaskPool.Common());
-				Thread t = new Thread(defaultScheduler, "定时任务");
+				Thread t = new Thread(defaultScheduler, "RojLib - 任务定时器");
 				t.setDaemon(true);
 				t.start();
 			}

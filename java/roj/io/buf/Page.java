@@ -672,8 +672,8 @@ public sealed class Page {
 
 		Top(int shift, long totalSpace) {
 			super(shift, 0);
-			this.free = this.totalSpace = totalSpace;
-			this.bmpCap = (byte) ((totalSpace+MASK64[SHIFT]) >>> shift);
+			this.bmpCap = (byte) ((totalSpace+MASK64[shift]) >>> shift);
+			this.free = this.totalSpace = (MASK64[shift]+1) * bmpCap;
 		}
 
 		final int bitmapCapacity() { return bmpCap; }

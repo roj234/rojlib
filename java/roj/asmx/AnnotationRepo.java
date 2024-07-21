@@ -88,7 +88,7 @@ public final class AnnotationRepo {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		r.rIndex += 4;
 
-		ConstantPool cp = AsmShared.local().constPool();
+		var cp = AsmShared.local().constPool();
 		cp.read(r, ConstantPool.BYTE_STRING);
 
 		var acc = r.readChar();
@@ -152,6 +152,7 @@ public final class AnnotationRepo {
 				r.rIndex += length;
 			}
 		}
+		AsmShared.local().constPool(cp);
 	}
 
 	public Set<AnnotatedElement> annotatedBy(String type) { return annotations.getOrDefault(type, Collections.emptySet()); }
@@ -193,6 +194,7 @@ public final class AnnotationRepo {
 		buf.putAscii("ANNOREP").put(0).putShort(annotations.size()).putShort(elements.size()).putShort(this.annotations.size());
 		cp.write(buf, false);
 		buf.put(rest);
+		AsmShared.local().constPool(cp);
 	}
 	private static void writeAcc(DynByteBuf buf, Type parent, ConstantPool cp, ToIntMap<Object> elements) {
 		var owner = (AccessData) parent.owner;
@@ -251,6 +253,7 @@ public final class AnnotationRepo {
 			}
 		}
 
+		AsmShared.local().constPool(cp);
 		return true;
 	}
 	private int readAcc(DynByteBuf r, ConstantPool cp, AnnotatedElement[] elements, int elementCount) {

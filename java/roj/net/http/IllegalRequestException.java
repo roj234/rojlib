@@ -1,39 +1,43 @@
 package roj.net.http;
 
+import org.jetbrains.annotations.Range;
 import roj.net.http.server.Response;
-import roj.net.http.server.StringResponse;
 
 import java.io.IOException;
 
+/**
+ * 中断请求处理并返回状态码和响应
+ */
 public class IllegalRequestException extends IOException {
 	public final int code;
 	public Response response;
 
-	public IllegalRequestException(int code) {this.code = code;}
-	public IllegalRequestException(int code, String msg) {
-		super(msg);
+	/**
+	 * 中断请求处理并返回'标准'错误响应
+	 */
+	public IllegalRequestException(@Range(from = 300, to = 599) int code) {this.code = code;}
+	public IllegalRequestException(int code, String text) {
+		super(text);
 		this.code = code;
-		response = Response.text(msg);
+		response = text == null ? null : Response.text(text);
 	}
-
-	public IllegalRequestException(int code, String msg, Throwable x) {
-		super(msg, x);
+	public IllegalRequestException(int code, Response resp) {
 		this.code = code;
-		response = StringResponse.detailedErrorPage(code, x);
-	}
-	public IllegalRequestException(int code, Throwable x) {
-		super(x);
-		this.code = code;
-		response = StringResponse.detailedErrorPage(code, x);
-	}
-
-	public IllegalRequestException(int code, Response ret) {
-		this.code = code;
-		response = ret;
+		response = resp;
 	}
 
 	@Override
 	public Throwable fillInStackTrace() {return this;}
 
 	public Response createResponse() {return response != null || code < 400 ? response : Response.httpError(code);}
+
+	public static final IllegalRequestException BAD_REQUEST = new IllegalRequestException(HttpUtil.BAD_REQUEST);
+	/**
+	 * 内部使用，保留可选的调试信息，如果以后要调试
+	 */
+	public static IllegalRequestException badRequest(String debugInformation) {
+		return BAD_REQUEST
+		/*new IllegalRequestException(HttpUtil.BAD_REQUEST, debugInformation)*/
+		;
+	}
 }

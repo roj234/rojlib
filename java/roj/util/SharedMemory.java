@@ -1,6 +1,6 @@
 package roj.util;
 
-import roj.NativeLibrary;
+import roj.RojLib;
 
 import java.io.Closeable;
 
@@ -19,7 +19,7 @@ public class SharedMemory implements Closeable {
 	private final Releaser ref;
 
 	public SharedMemory(String name) {
-		if (!NativeLibrary.hasFunction(NativeLibrary.SHARED_MEMORY)) throw new NativeException("平台不受支持");
+		if (!RojLib.hasNative(RojLib.SHARED_MEMORY)) throw new NativeException("平台不受支持");
 
 		this.name = name;
 		NativeMemory.createCleaner(this, ref = new Releaser());

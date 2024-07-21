@@ -2,7 +2,8 @@ package roj.ui;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.NativeLibrary;
+import roj.RojLib;
+import roj.compiler.plugins.annotations.Attach;
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
 import roj.util.Helpers;
@@ -30,6 +31,18 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2021/5/29 18:40
  */
 public final class GuiUtil {
+	@Nullable
+	public static final Clipboard CLIPBOARD;
+	static {
+		Clipboard c;
+		try {
+			c = Toolkit.getDefaultToolkit().getSystemClipboard();
+		} catch (Exception e) {
+			c = null;
+		}
+		CLIPBOARD = c;
+	}
+
 	public static void systemLook() {
 		int dpi;
 		try {
@@ -69,7 +82,7 @@ public final class GuiUtil {
 	}
 
 	public static void setClickThrough(Window window) throws Exception {
-		if (!NativeLibrary.hasFunction(NativeLibrary.FUNC_WINDOWS)) throw new NativeException("不支持所请求的操作");
+		if (!RojLib.hasNative(RojLib.WIN32)) throw new NativeException("不支持所请求的操作");
 
 		Object peer = u.getObject(window, u.objectFieldOffset(Component.class.getDeclaredField("peer")));
 		long hwnd = u.getLong(peer, u.objectFieldOffset(ReflectionUtils.getField(peer.getClass(), "hwnd")));
@@ -123,7 +136,7 @@ public final class GuiUtil {
 		return doc;
 	}
 
-	private static File lastPath = new File(".");
+	private static File lastPath = new File("");
 	@Nullable
 	public static File fileSaveTo(String title, String defaultFileName) { return fileSaveTo(title, defaultFileName, null, false); }
 	@Nullable
@@ -204,8 +217,7 @@ public final class GuiUtil {
 					dropFilePath(comp, this::setSelectedFile, false);
 				}
 
-				if (comp instanceof Container) {
-					Container c = (Container) comp;
+				if (comp instanceof Container c) {
 					synchronized (c.getTreeLock()) {
 						for (int i = 0; i < c.getComponentCount(); i++) {
 							myadd(c.getComponent(i));
@@ -216,6 +228,7 @@ public final class GuiUtil {
 		};
 	}
 
+	@Attach("remove")
 	public static void removeComponent(Component component) {
 		component.getParent().remove(component);
 	}

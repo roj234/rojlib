@@ -1,13 +1,13 @@
 package roj.text.logging;
 
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 
 /**
  * @author Roj233
  * @since 2022/6/1 5:26
  */
 public enum Level {
-	ALL, TRACE(CLIUtil.YELLOW), DEBUG(CLIUtil.CYAN), INFO(CLIUtil.WHITE+CLIUtil.HIGHLIGHT), WARN(CLIUtil.YELLOW+CLIUtil.HIGHLIGHT), ERROR(CLIUtil.RED+CLIUtil.HIGHLIGHT), FATAL(CLIUtil.RED), OFF;
+	ALL, TRACE(Terminal.YELLOW), DEBUG(Terminal.CYAN), INFO(Terminal.WHITE+ Terminal.HIGHLIGHT), WARN(Terminal.YELLOW+ Terminal.HIGHLIGHT), ERROR(Terminal.RED+ Terminal.HIGHLIGHT), FATAL(Terminal.RED), OFF;
 
 	public final int color;
 	public final String shortName = String.valueOf(name().charAt(0));

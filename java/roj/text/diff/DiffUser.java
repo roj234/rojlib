@@ -9,7 +9,7 @@ import roj.config.Word;
 import roj.config.auto.Serializer;
 import roj.config.auto.Serializers;
 import roj.io.IOUtil;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandContext;
 import roj.ui.terminal.SimpleCliParser;
@@ -112,7 +112,7 @@ public class DiffUser {
 					System.out.println("left:" + d.left);
 					System.out.println("right:" + d.right);
 					System.out.println("删除左(l)右(r)取消(c)");
-					char c = CLIUtil.awaitCharacter(MyBitSet.from("lrc"));
+					char c = Terminal.readChar(MyBitSet.from("lrc"));
 					if (c != 'c') {
 						if (c == 'l') {
 							d.leftFile.delete();

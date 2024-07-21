@@ -20,8 +20,8 @@ import roj.mod.plugin.PluginContext;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.TextWriter;
-import roj.ui.CLIUtil;
 import roj.ui.Profiler;
+import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
 import roj.util.Helpers;
@@ -107,7 +107,7 @@ public final class FMDMain {
 		c.register(literal("set").then(argument("name", dynamicProject).executes(ctx -> {
 			var selected = ctx.argument("name", String.class);
 			Shared.setProject(selected);
-			CLIUtil.success("配置文件已选择: "+selected);
+			Terminal.success("配置文件已选择: "+selected);
 			c.setPrompt("\u001b[33mFMD\u001b[97m[\u001b[96m"+project.name+"\u001b[97m]\u001b[33m > ");
 		})));
 		c.register(literal("gc").executes(ctx -> {
@@ -117,7 +117,7 @@ public final class FMDMain {
 		}));
 
 		if (project == null) {
-			CLIUtil.warning("未加载项目配置文件! 请使用create <名称>创建配置、和/或使用set <名称>选择配置");
+			Terminal.warning("未加载项目配置文件! 请使用create <名称>创建配置、和/或使用set <名称>选择配置");
 		} else {
 			c.setPrompt("\u001b[33mFMD\u001b[97m[\u001b[96m"+project.name+"\u001b[97m]\u001b[33m > ");
 		}
@@ -127,22 +127,22 @@ public final class FMDMain {
 			System.out.println(slogan);
 			System.out.println("\u001b[96mhttps://www.github.com/roj234/rojlib");
 
-			if (CLIUtil.ANSI) {
+			if (Terminal.ANSI_OUTPUT) {
 				shinyTask = PeriodicTask.loop(() -> {
 					CharList sb1 = IOUtil.getSharedCharBuf().append("\u001b7\u001b[?25l\u001b[1;1H\u001b[2K");
-					CLIUtil.MinecraftColor.sonic(slogan, sb1);
+					Terminal.MinecraftColor.sonic(slogan, sb1);
 					sb1.append("\u001b8\u001b[?25h");
-					CLIUtil.sysOut.print(sb1);
+					Terminal.directWrite(sb1);
 				}, 1000 / 60, 9999);
 
 				System.out.println();
-				CLIUtil.info("使用Tab补全指令、或按下F1查看帮助");
+				Terminal.info("使用Tab补全指令、或按下F1查看帮助");
 				System.out.println();
 			} else {
-				System.out.println("建议使用支持ANSI转义序列的终端以获得更好的体验");
+				System.out.println("使用支持ANSI转义的终端以获得更好的体验");
 			}
 
-			CLIUtil.setConsole(c);
+			Terminal.setConsole(c);
 
 			// only non-daemon thread
 			HighResolutionTimer.activate();
@@ -169,7 +169,7 @@ public final class FMDMain {
 		List<ConstantData> modified = Helpers.cast(args.get("$$HR$$"));
 		if (modified != null && !modified.isEmpty()) {
 			hotReload.sendChanges(modified);
-			if (DEBUG) CLIUtil.success("发送重载请求");
+			if (DEBUG) Terminal.success("发送重载请求");
 		}
 
 		return v;
@@ -201,7 +201,7 @@ public final class FMDMain {
 			for (Project proj : p.getAllDependencies()) {
 				Profiler.startSection(proj.name);
 				if (compile(args, proj, dest, flag|2) < 0) {
-					CLIUtil.info("前置编译失败");
+					Terminal.info("前置编译失败");
 					if (proj.dstFile != null) proj.dstFile.end();
 					return -1;
 				}
@@ -212,7 +212,7 @@ public final class FMDMain {
 
 		File source = p.srcPath;
 		if (!source.isDirectory()) {
-			CLIUtil.warning("源码目录 "+source.getAbsolutePath()+" 不存在");
+			Terminal.warning("源码目录 "+source.getAbsolutePath()+" 不存在");
 			return -1;
 		}
 
@@ -238,7 +238,7 @@ public final class FMDMain {
 			}
 
 			long stamp = increment ? p.binJar.lastModified() : -1;
-			files = IOUtil.findAllFiles(source, file -> file.getName().toLowerCase().endsWith(".java") && file.lastModified() > stamp);
+			files = IOUtil.findAllFiles(source, file -> IOUtil.extensionName(file.getName()).equalsIgnoreCase("java") && file.lastModified() > stamp);
 		}
 		// endregion
 		Profiler.endStartSection("ensureWritable <= getSource("+files.size()+")");
@@ -251,15 +251,15 @@ public final class FMDMain {
 					p.getResourceTask(true).call();
 				}
 
-				if ((flag & 3) == 0) CLIUtil.info("更新了资源(若有)");
+				if ((flag & 3) == 0) Terminal.info("更新了资源(若有)");
 			} else {
-				if ((flag & 3) == 0) CLIUtil.info("无源文件");
+				if ((flag & 3) == 0) Terminal.info("无源文件");
 			}
 
 			try {
 				executeCommand(p, BASE);
 			} catch (IOException e) {
-				CLIUtil.warning("无法执行指令", e);
+				Terminal.warning("无法执行指令", e);
 			}
 
 			p.registerWatcher();
@@ -277,7 +277,7 @@ public final class FMDMain {
 		// region 应用权限转换
 		if (false) {
 			if (p.atName.isEmpty()) {
-				CLIUtil.error(p.name+" 使用了AT注解,请设置AT配置的存放位置");
+				Terminal.error(p.name+" 使用了AT注解,请设置AT配置的存放位置");
 				return -1;
 			}
 
@@ -362,7 +362,7 @@ public final class FMDMain {
 				Profiler.endSection();
 			}
 		} catch (Throwable e) {
-			CLIUtil.warning("压缩文件有错误,请尝试全量", e);
+			Terminal.warning("压缩文件有错误,请尝试全量", e);
 			return -1;
 		} finally {
 			devJar.end();
@@ -380,7 +380,7 @@ public final class FMDMain {
 		try {
 			writeRes.get();
 		} catch (Exception e) {
-			CLIUtil.warning("资源写入失败", e);
+			Terminal.warning("资源写入失败", e);
 		}
 
 		Profiler.endStartSection("mapClass <= waitResource");
@@ -427,24 +427,24 @@ public final class FMDMain {
 				binWriter.set(ctx.getFileName(), ctx::getCompressedShared);
 			}
 		} catch (Throwable e) {
-			CLIUtil.error(ctx.getFileName()+" write error", e);
+			Terminal.error(ctx.getFileName()+" write error", e);
 			return -1;
 		} finally {
 			binWriter.end();
 		}
 		// endregion
 
-		CLIUtil.success("编译成功! "+(System.currentTimeMillis()-time)+"ms");
+		Terminal.success("编译成功! "+(System.currentTimeMillis()-time)+"ms");
 		Profiler.endStartSection("executeCommand <= writeBinJar");
 
-		if (!p.binJar.setLastModified(time)) CLIUtil.warning("设置时间戳失败!");
+		if (!p.binJar.setLastModified(time)) Terminal.warning("设置时间戳失败!");
 
 		p.registerWatcher();
 
 		try {
 			executeCommand(p, BASE);
 		} catch (IOException e) {
-			CLIUtil.warning("无法执行指令", e);
+			Terminal.warning("无法执行指令", e);
 		}
 
 		return 0;
@@ -465,7 +465,7 @@ public final class FMDMain {
 	private static boolean ensureWritable(File jarFile) {
 		int amount = 30 * 20;
 		while (jarFile.isFile() && !IOUtil.isReallyWritable(jarFile) && amount > 0) {
-			if ((amount % 100) == 0) CLIUtil.warning("输出jar已被锁定, 请在30秒内解除对它的锁定，否则编译无法继续");
+			if ((amount % 100) == 0) Terminal.warning("输出jar已被锁定, 请在30秒内解除对它的锁定，否则编译无法继续");
 			LockSupport.parkNanos(50_000_000L);
 			amount--;
 		}
@@ -493,14 +493,14 @@ public final class FMDMain {
 			if (!(ext.endsWith(".zip") || ext.endsWith(".jar")) || file.length() == 0) continue;
 
 			try (ZipFile zf = new ZipFile(file)) {
-				if (zf.size() == 0) CLIUtil.warning(file.getPath()+" 是空的");
+				if (zf.size() == 0) Terminal.warning(file.getPath()+" 是空的");
 				else sb.append(file.getAbsolutePath()).append(File.pathSeparatorChar);
 			} catch (Throwable e) {
-				CLIUtil.error(file.getPath()+ " 不是有效的jar", e);
+				Terminal.error(file.getPath()+ " 不是有效的jar", e);
 				if (!file.renameTo(new File(file.getAbsolutePath()+".err"))) {
 					throw new RuntimeException("未指定的I/O错误");
 				} else {
-					CLIUtil.info("文件已被自动重命名为.err");
+					Terminal.info("文件已被自动重命名为.err");
 				}
 			}
 		}

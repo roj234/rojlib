@@ -21,6 +21,14 @@ public interface Response {
 	static Response html(CharSequence msg) {return new StringResponse(msg, "text/html");}
 	static Response file(Request req, FileInfo info) {return new FileResponse().init(4, req, info);}
 	static Response sendfile(Request req, DiskFileInfo info) {return new FileResponse().init(0, req, info);}
+	/**
+	 * 显示一个用户友好的错误界面
+	 */
+	static Response internalError(String message) {return StringResponse.errorPage(message);}
+	/**
+	 * 显示一个用户友好的错误界面
+	 */
+	static Response internalError(String message, Throwable exception) {return StringResponse.errorPage(message, exception);}
 	static Response httpError(int code) {
 		String desc = code+" "+HttpUtil.getDescription(code);
 		return new StringResponse("<title>"+desc+"</title><center><h1>"+desc+"</h1><hr/><div>"+HttpServer11.SERVER_NAME+"</div></center>", "text/html");

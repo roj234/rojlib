@@ -5,7 +5,7 @@ import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.DirectAccessor;
 import roj.text.CharList;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 
 import java.awt.*;
 import java.awt.datatransfer.*;
@@ -48,7 +48,7 @@ public final class ArrayUtil {
 		if (br.readableBits() > 0) sb.append((char) (br.readBit(br.readableBits())+1));
 
 		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(Tokenizer.addSlashes(sb, 0, new CharList().append('"'), '\'').append('"').toStringAndFree()), null);
-		CLIUtil.pause();
+		Terminal.pause();
 	}
 
 	private static ByteList UnBase128(String s) {

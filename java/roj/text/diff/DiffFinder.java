@@ -315,7 +315,7 @@ public class DiffFinder extends JFrame {
 			boolean notText = uiNotTextCompare.isSelected();
 			for (FileMeta meta : metas) {
 				if (notText) {
-					POOL.pushTask(() -> {
+					POOL.submit(() -> {
 						byte[] out = ArrayCache.getByteArray(preWindow * 2, false);
 						try (FileInputStream in = new FileInputStream(new File(base, meta.path))) {
 							int i = 0;
@@ -325,9 +325,9 @@ public class DiffFinder extends JFrame {
 								i = r;
 							}
 
-							meta.data = BufferPool.buffer(true, i).put(out, 0, i);
+							meta.data = BufferPool.localPool().allocate(true, i, 0).put(out, 0, i);
 							ArrayCache.putArray(out);
-							memoryUsage.addAndGet(out.length);
+							memoryUsage.addAndGet(i);
 
 							bar.addCurrent(1);
 						} catch (Exception e) {
@@ -335,7 +335,7 @@ public class DiffFinder extends JFrame {
 						}
 					});
 				} else {
-					POOL.pushTask(() -> {
+					POOL.submit(() -> {
 						byte[] out = ArrayCache.getByteArray(preWindow * 2, false);
 						CharList sb = new CharList();
 						try (TextReader in = TextReader.auto(new File(base, meta.path))) {
@@ -350,9 +350,9 @@ public class DiffFinder extends JFrame {
 								sb.clear();
 							}
 
-							meta.data = BufferPool.buffer(true, i).put(out, 0, i);
+							meta.data = BufferPool.localPool().allocate(true, i, 0).put(out, 0, i);
 							ArrayCache.putArray(out);
-							memoryUsage.addAndGet(out.length);
+							memoryUsage.addAndGet(i);
 
 							bar.addCurrent(1);
 						} catch (Exception e) {
@@ -370,7 +370,7 @@ public class DiffFinder extends JFrame {
 		void start(File progress_, File output, List<List<FileMeta>> layered, int completed, int window) {
 			progressOffset = completed;
 			lastProgress = 0;
-			generator.pushTask(() -> {
+			generator.submit(() -> {
 				try {
 					progressFile = new RandomAccessFile(progress_, "rwd");
 					result = new ToYaml().sb(TextWriter.append(output));
@@ -464,7 +464,7 @@ public class DiffFinder extends JFrame {
 							if (terminateFlag) return;
 							if (group >= 0 && right.group == group) continue;
 
-							DynByteBuf dataB = right.data;
+							var dataB = right.data;
 							int maxHeadDiff = (int) (dataB.readableBytes() * DIFF_MAX);
 
 							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.readableBytes()-slideWindow, maxHeadDiff);
@@ -482,7 +482,7 @@ public class DiffFinder extends JFrame {
 							if (terminateFlag) return;
 							if (group >= 0 && right.group == group) continue;
 
-							DynByteBuf dataB = right.data;
+							var dataB = right.data;
 							int maxHeadDiff = (int) (dataB.readableBytes() * DIFF_MAX);
 
 							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.readableBytes()-slideWindow, maxHeadDiff);
@@ -559,7 +559,7 @@ public class DiffFinder extends JFrame {
 			progressFile.close();
 			generator.shutdown();
 			cleanup.shutdown();
-			comparator.shutdown();
+			comparator.shutdownAndCancel();
 			if (result != null) result.close();
 			if (updateProgressTask != null) updateProgressTask.cancel();
 		}

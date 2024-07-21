@@ -39,7 +39,7 @@ public class PHPPlugin extends Plugin implements Router {
 		fpm.docRoot = document_root.toFile();
 
 		String pluginRoot = config.getString("dps_root");
-		registerRoute(pluginRoot, this, "loginRedirect");
+		registerRoute(pluginRoot, this, "PermissionManager");
 
 		getLogger().warn("PHP服务器已在路径{} => {}上启动", fpm.docRoot, pluginRoot);
 	}

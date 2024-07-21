@@ -2,17 +2,16 @@ package roj.text;
 
 import java.util.function.IntConsumer;
 
-import static java.lang.Character.*;
 import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
  */
-public final class UTF8MB4 extends UnsafeCharset {
-	public static final UnsafeCharset CODER = new UTF8MB4(), THROW_ON_FAIL = new UTF8MB4();
+public final class UTF8 extends UnsafeCharset {
+	public static final UnsafeCharset CODER = new UTF8(), THROW_ON_FAIL = new UTF8();
 
 	@Override
-	public String name() { return "UTF-8"; }
+	public String name() {return "UTF-8";}
 
 	@Override
 	public long unsafeEncode(char[] s, int i, int end, Object ref, long addr, int max_len) {
@@ -30,11 +29,9 @@ public final class UTF8MB4 extends UnsafeCharset {
 			previ = i;
 
 			int c = s[i++];
-			if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
-				if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+			if (isSurrogate(c)) {
 				if (i == end) { i--; break; }
-
-				c = TextUtil.codepoint(c,s[i++]);
+				c = codepoint(c,s[i++]);
 			}
 
 			if (c <= 0x7FF) {
@@ -64,8 +61,6 @@ public final class UTF8MB4 extends UnsafeCharset {
 
 	@Override
 	public long unsafeDecode(Object ref, long base, int pos, int end, char[] out, int off, int outMax) {
-		if (pos < 0) throw new IllegalArgumentException("pos="+pos);
-
 		long i = base+pos;
 		long max = base+end;
 		outMax += off;
@@ -84,12 +79,11 @@ public final class UTF8MB4 extends UnsafeCharset {
 		while (i < max && off < outMax) {
 			c = u.getByte(ref, i++);
 			switch ((c>>>4)&0xF) {
-				case 0: case 1: case 2: case 3:
-				case 4: case 5: case 6: case 7:
+				case 0, 1, 2, 3, 4, 5, 6, 7:
 					/* 0xxxxxxx*/
 					out[off++] = (char) c;
 					break;
-				case 12: case 13:
+				case 12, 13:
 					if (i >= max) { i--; break truncate; }
 
 					c2 = u.getByte(ref, i++);
@@ -119,15 +113,18 @@ public final class UTF8MB4 extends UnsafeCharset {
 					c2 = u.getByte(ref, i++);
 					c3 = u.getByte(ref, i++);
 					c4 = u.getByte(ref, i++);
-					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80) { i -= 3; break malformed; }
+					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80
+						// 11110xxx
+						// 11111110xxxxxx
+						// 11111111111110xxxxxx
+						// 11111111111111111110xxxxxx
+						//     1110000001111110000000 (bound = 2^22-1 | 2097151)
+						|| (c4 = c << 18 ^ c2 << 12 ^ c3 << 6 ^ c4 ^ 0b1110000001111110000000) > Character.MAX_CODE_POINT) { i -= 3; break malformed; }
 
-					// 11110xxx
-					// 11111110xxxxxx
-					// 11111111111110xxxxxx
-					// 11111111111111111110xxxxxx
-					//     1110000001111110000000 (bound = 2^22-1 | 2097151)
-					c4 = c << 18 ^ c2 << 12 ^ c3 << 6 ^ c4 ^ 0b1110000001111110000000;
-					if (c4 < Character.MIN_SUPPLEMENTARY_CODE_POINT || c4 > Character.MAX_CODE_POINT) { i -= 3; break malformed; }
+					if (c4 < Character.MIN_SUPPLEMENTARY_CODE_POINT) {
+						out[off++] = (char) c4;
+						break;
+					}
 
 					if (outMax-off < 2) { i -= 4; break truncate; }
 
@@ -152,11 +149,10 @@ public final class UTF8MB4 extends UnsafeCharset {
 		while (i < max) {
 			c = u.getByte(ref, i++) & 0xFF;
 			switch (c >> 4) {
-				case 0: case 1: case 2: case 3:
-				case 4: case 5: case 6: case 7:
+				case 0, 1, 2, 3, 4, 5, 6, 7:
 					cs.accept(c);
 					break;
-				case 12: case 13:
+				case 12, 13:
 					if (i >= max) { cs.accept(TRUNCATED); break loop; }
 
 					c2 = u.getByte(ref, i++);
@@ -180,9 +176,9 @@ public final class UTF8MB4 extends UnsafeCharset {
 					c2 = u.getByte(ref, i++);
 					c3 = u.getByte(ref, i++);
 					c4 = u.getByte(ref, i++);
-					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80) { i -= 3; cs.accept(MALFORMED - 4); continue; }
+					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80
+						|| (c4=((c << 18 ^ c2 << 12 ^ c3 << 6 ^ c4 ^ 0b1110000001111110000000) & 2097151)) > Character.MAX_CODE_POINT) { i -= 3; cs.accept(MALFORMED - 4); continue; }
 
-					c4 = (c << 18 ^ c2 << 12 ^ c3 << 6 ^ c4 ^ 0b1110000001111110000000) & 2097151;
 					cs.accept(c4);
 					break;
 			}
@@ -194,11 +190,9 @@ public final class UTF8MB4 extends UnsafeCharset {
 		int end = i+len;
 		while (i < end) {
 			int c = s.charAt(i++);
-			if (c >= MIN_HIGH_SURROGATE && c <= MAX_LOW_SURROGATE) {
-				if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+			if (isSurrogate(c)) {
 				if (i == end) throw new IllegalStateException("Trailing high surrogate \\U+"+Integer.toHexString(c));
-
-				c = TextUtil.codepoint(c,s.charAt(i++));
+				c = codepoint(c,s.charAt(i++));
 				len--;
 			}
 

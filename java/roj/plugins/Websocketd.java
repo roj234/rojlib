@@ -9,9 +9,9 @@ import roj.net.ch.ChannelCtx;
 import roj.net.http.server.*;
 import roj.net.http.ws.WebSocketHandler;
 import roj.plugin.Plugin;
-import roj.text.TextUtil;
-import roj.text.UTF8MB4;
+import roj.text.UTF8;
 import roj.text.logging.Logger;
+import roj.ui.Terminal;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -120,9 +120,9 @@ public class Websocketd extends Plugin implements Router {
 
 			tmp2 = ByteBuffer.allocate(1024);
 
-			if (TextUtil.ConsoleCharset != StandardCharsets.UTF_8) {
-				sysEnc = TextUtil.ConsoleCharset.newEncoder();
-				sysDec = TextUtil.ConsoleCharset.newDecoder();
+			if (Terminal.nativeCharset != StandardCharsets.UTF_8) {
+				sysEnc = Terminal.nativeCharset.newEncoder();
+				sysDec = Terminal.nativeCharset.newDecoder();
 
 				tmp1 = CharBuffer.allocate(1024);
 				sndRem = ByteBuffer.allocate(8);
@@ -173,7 +173,7 @@ public class Websocketd extends Plugin implements Router {
 
 							CoderResult r = sysDec.decode(inByte, tmpChar, false);
 							if (r.isError() || r.isMalformed() || r.isUnmappable()) {
-								error(ERR_UNEXPECTED, "charset decode error for " + TextUtil.ConsoleCharset);
+								error(ERR_UNEXPECTED, "charset decode error for " + Terminal.nativeCharset);
 							}
 
 							if (tmpChar.position() == 0) {
@@ -234,14 +234,14 @@ public class Websocketd extends Plugin implements Router {
 
 				while (in.isReadable()) {
 					tmp1.clear();
-					UTF8MB4.CODER.decodeFixedIn(in, Math.min(in.readableBytes(), tmp1.capacity()), tmp1);
+					UTF8.CODER.decodeFixedIn(in, Math.min(in.readableBytes(), tmp1.capacity()), tmp1);
 					tmp1.flip();
 
 					sndBuf.clear();
 
 					CoderResult r = sysEnc.encode(tmp1, sndBuf, false);
 					if (r.isError() || r.isMalformed() || r.isUnmappable()) {
-						error(ERR_UNEXPECTED, "charset encode error for " + TextUtil.ConsoleCharset);
+						error(ERR_UNEXPECTED, "charset encode error for " + Terminal.nativeCharset);
 						return;
 					}
 

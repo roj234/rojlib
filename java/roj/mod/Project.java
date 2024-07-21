@@ -12,7 +12,7 @@ import roj.config.data.CString;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -55,7 +55,7 @@ public final class Project extends FileConfig {
 	Mapper.State state;
 	String atConfigPathStr;
 	final File srcPath, resPath, binJar;
-	private final int resPrefix;
+	private final String resPrefix;
 
 	ZipOutput dstFile, binFile;
 
@@ -66,7 +66,7 @@ public final class Project extends FileConfig {
 		resPath = new File(BASE, getConfig().getString("OVERRIDE_RES_PATH", "projects/"+name+"/resources")).getAbsoluteFile();
 		srcPath = new File(BASE, getConfig().getString("OVERRIDE_SRC_PATH", "projects/"+name+"/java")).getAbsoluteFile();
 		binJar = new File(BASE, getConfig().getString("OVERRIDE_DEV_JAR", "bin/"+name+".jar")).getAbsoluteFile();
-		resPrefix = resPath.getAbsolutePath().length()+1;
+		resPrefix = resPath.getAbsolutePath();
 
 		// noinspection all
 		resPath.mkdirs();
@@ -78,11 +78,11 @@ public final class Project extends FileConfig {
 		compiler = Compiler.getInstance("JAVA", srcPath.getAbsolutePath().replace(File.separatorChar, '/'));
 
 		try {
-			if (binJar.length() == 0) if (!binJar.createNewFile() || !binJar.setLastModified(0)) CLIUtil.warning("无法初始化StampFileTime");
+			if (binJar.length() == 0) if (!binJar.createNewFile() || !binJar.setLastModified(0)) Terminal.warning("无法初始化StampFileTime");
 			binFile = new ZipOutput(binJar);
 			binFile.setCompress(true);
 		} catch (Throwable e) {
-			CLIUtil.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 "+binJar.getAbsolutePath(), e);
+			Terminal.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 "+binJar.getAbsolutePath(), e);
 			LockSupport.parkNanos(3_000_000_000L);
 			System.exit(-2);
 		}
@@ -139,7 +139,7 @@ public final class Project extends FileConfig {
 		try {
 			charset = Charset.forName(cs);
 		} catch (UnsupportedCharsetException e) {
-			CLIUtil.warning(name+" 的字符集 "+cs+" 不存在, 使用默认的UTF-8");
+			Terminal.warning(name+" 的字符集 "+cs+" 不存在, 使用默认的UTF-8");
 		}
 
 		String atName = this.atName = map.putIfAbsent("atConfig", "");
@@ -151,7 +151,7 @@ public final class Project extends FileConfig {
 			for (int i = 0; i < required.size(); i++) {
 				File config = new File(PROJECT_DIR, required.get(i)+"/project.json");
 				if (!config.exists()) {
-					CLIUtil.warning(name+" 的前置"+required.get(i)+"未找到");
+					Terminal.warning(name+" 的前置"+required.get(i)+"未找到");
 				} else {
 					cast.set(i, load(required.get(i)));
 				}
@@ -182,6 +182,12 @@ public final class Project extends FileConfig {
 					writeRes(file.getAbsolutePath());
 					return false;
 				});
+
+				/*IOUtil.findAllFiles(srcPath, file -> {
+					if (!IOUtil.extensionName(file.getName()).equalsIgnoreCase("java"))
+						writeRes(file.getAbsolutePath());
+					return false;
+				});*/
 			}
 
 			dstFile.setCompress(prevCompress);
@@ -192,12 +198,17 @@ public final class Project extends FileConfig {
 	}
 
 	final void writeRes(String s) {
-		String relPath = s.substring(resPrefix).replace(File.separatorChar, '/');
+		String relPath;
+		//if (s.startsWith(resPrefix)) {
+			relPath = s.substring(resPrefix.length()+1).replace(File.separatorChar, '/');
+		//} else {
+		//	relPath = s.substring(srcPrefix.length()+1).replace(File.separatorChar, '/');
+		//}
 		dstFile.setCompress(!ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath).toLowerCase()));
 		try {
 			dstFile.set(relPath, new FileInputStream(s));
 		} catch (IOException e) {
-			CLIUtil.warning("资源文件", e);
+			Terminal.warning("资源文件", e);
 		}
 	}
 
@@ -205,7 +216,7 @@ public final class Project extends FileConfig {
 		try {
 			Shared.watcher.register(this);
 		} catch (IOException e) {
-			CLIUtil.warning("无法启动文件监控", e);
+			Terminal.warning("无法启动文件监控", e);
 		}
 	}
 

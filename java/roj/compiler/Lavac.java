@@ -4,7 +4,7 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
-import roj.asmx.launcher.Bootstrap;
+import roj.asmx.launcher.ClassWrapper;
 import roj.collect.MyHashMap;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.GlobalContext;
@@ -155,7 +155,7 @@ public final class Lavac {
 		diagnostic.conclusion();
 
 		try {
-			Bootstrap.classLoader.enableFastZip(dst.toURI().toURL());
+			ClassWrapper.instance.enableFastZip(dst.toURI().toURL());
 			((Runnable) Class.forName("Test").newInstance()).run();
 		} catch (Exception e) {
 			e.printStackTrace();

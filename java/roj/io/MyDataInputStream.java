@@ -2,7 +2,7 @@ package roj.io;
 
 import org.jetbrains.annotations.NotNull;
 import roj.text.GB18030;
-import roj.text.UTF8MB4;
+import roj.text.UTF8;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
@@ -311,7 +311,7 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 		if (len < 0) throw new IllegalArgumentException("length="+len);
 		if (len > 0) {
 			int i = doRead(len);
-			UTF8MB4.CODER.decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
+			UTF8.CODER.decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
 		}
 		return target;
 	}

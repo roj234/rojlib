@@ -63,7 +63,7 @@ public class JsonUserManager implements UserManager {
 	public void setDirty(User user, String... field) {
 		block: {
 			for (String s : field) {
-				if (s.equals("passHash") || s.equals("totpKey")) break block;
+				if (s.equals("passHash") || s.equals("totpKey") || s.equals("group")) break block;
 			}
 			return;
 		}

@@ -1,11 +1,9 @@
 package roj.plugins.http.sso;
 
-import roj.collect.MyHashSet;
 import roj.config.auto.As;
 import roj.config.auto.Optional;
 
 import java.net.InetSocketAddress;
-import java.util.Set;
 
 /**
  * @author Roj234
@@ -28,6 +26,8 @@ public class User {
 	@Optional
 	long registerTime, loginTime;
 
-	public Set<String> permissions = new MyHashSet<>();
-	public boolean isAdmin() {return permissions.contains("*");}
+	@Optional
+	public String group = "default";
+	public transient UserGroup groupInst;
+	public boolean isAdmin() {return id == 0 || groupInst.isAdmin();}
 }

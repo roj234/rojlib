@@ -19,7 +19,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler {
 	volatile int state = 0;
 
 	public TaskExecutor() {
-		setName("TaskScheduler-"+hashCode());
+		setName("RojLib - 未命名任务线程#"+hashCode());
 		setDaemon(true);
 	}
 

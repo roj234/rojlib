@@ -13,7 +13,10 @@ import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
-import java.nio.charset.*;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CoderResult;
+import java.nio.charset.CodingErrorAction;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
@@ -61,23 +64,23 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 			lock = in;
 			type = 2;
 		} else {
-			DynByteBuf buf = pool.allocate(!(in instanceof InputStream), buffer, 0);
-			buf.clear();
-
-			lock = buf;
-			ib = buf.nioBuffer();
-
 			if (in instanceof InputStream) {
 				type = 0;
 			} else if (in instanceof ReadableByteChannel) {
 				type = 1;
 			} else {
-				throw new IllegalArgumentException("无法确定 " + in.getClass().getName() + " 的类型");
+				throw new IllegalArgumentException("无法确定 "+in.getClass().getName()+" 的类型");
 			}
+
+			var buf = pool.allocate(!(in instanceof InputStream), buffer, 0);
+			buf.clear();
+
+			lock = buf;
+			ib = buf.nioBuffer();
 		}
 
 		if (charset == null) {
-			try (ChineseCharsetDetector cd = new ChineseCharsetDetector(in)) {
+			try (var cd = new CharsetDetector(in)) {
 				charset = Charset.forName(cd.detect());
 
 				if (type == 2) {
@@ -101,11 +104,9 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 			}
 		}
 
-		if (StandardCharsets.UTF_8 == charset) {
-			ucs = UTF8MB4.CODER;
-			cd = null;
-		} else if (GB18030.is(charset)) {
-			ucs = GB18030.CODER;
+		var _ucs = UnsafeCharset.getInstance(charset);
+		if (_ucs != null) {
+			ucs = _ucs;
 			cd = null;
 		} else {
 			ucs = null;

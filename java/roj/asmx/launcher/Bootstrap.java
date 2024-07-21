@@ -4,7 +4,6 @@ import roj.ReferenceByGeneratedClass;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.visitor.CodeWriter;
-import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
@@ -15,7 +14,10 @@ import roj.util.ByteList;
 import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 import static roj.asm.Opcodes.*;
 
@@ -24,16 +26,14 @@ import static roj.asm.Opcodes.*;
  * @since 2023/8/6 0006 0:13
  */
 public final class Bootstrap {
-	public static final ClassWrapper classLoader = new ClassWrapper();
-	static { EntryPoint.actualLoader = classLoader; }
+	static {EntryPoint.actualLoader = ClassWrapper.instance;}
 
-	public static final Logger LOGGER = Logger.getLogger("Launcher");
-	public static final Map<String, Object> blackboard = new MyHashMap<>();
+	static final Logger LOGGER = Logger.getLogger("Launcher");
 
 	@ReferenceByGeneratedClass
-	public static final List<ITweaker> tweakers = new SimpleList<>();
+	static final List<ITweaker> tweakers = new SimpleList<>();
 
-	public static String[] initArgs;
+	static String[] initArgs;
 	// 这里和Bootstrap$Loader是同一个包了
 	static SimpleList<String> args;
 	static String[] getArg() {
@@ -44,10 +44,10 @@ public final class Bootstrap {
 
 	public static void boot(String[] args) {
 		// 甚至都不用传参
-		EntryPoint entryPoint = (EntryPoint) Bootstrap.class.getClassLoader();
+		var entryPoint = (EntryPoint) Bootstrap.class.getClassLoader();
 
 		// necessary (加载Logger相关类)
-		LOGGER.info("ImpLib TLauncher 2.1");
+		LOGGER.info("ImpLib TLauncher 2.2");
 
 		{
 			URL[] urls = GetOtherJars();
@@ -56,7 +56,7 @@ public final class Bootstrap {
 					LOGGER.warn("非文件的classpath {}", url);
 				} else {
 					try {
-						classLoader.enableFastZip(url);
+						ClassWrapper.instance.enableFastZip(url);
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
@@ -65,7 +65,7 @@ public final class Bootstrap {
 				URL myJar = EntryPoint.class.getProtectionDomain().getCodeSource().getLocation();
 				if (myJar != null) {
 					try {
-						classLoader.enableFastZip(myJar);
+						ClassWrapper.instance.enableFastZip(myJar);
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
@@ -121,7 +121,7 @@ public final class Bootstrap {
 		c.one(ASTORE_0);
 
 		for (String name : tweakerNames) {
-			classLoader.addTransformerExclusion(name.substring(0, name.lastIndexOf('.')+1));
+			ClassWrapper.instance.addTransformerExclusion(name.substring(0, name.lastIndexOf('.')+1));
 			if (debug) {
 				c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "LOGGER", "Lroj/text/logging/Logger;");
 				c.ldc("Tweaker => '"+name+"'");
@@ -132,7 +132,7 @@ public final class Bootstrap {
 
 			c.one(ALOAD_1);
 			c.one(ALOAD_0);
-			c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "classLoader", "Lroj/asmx/launcher/ClassWrapper;");
+			c.field(GETSTATIC, "roj/asmx/launcher/ClassWrapper", "instance", "Lroj/asmx/launcher/ClassWrapper;");
 			c.invokeItf("roj/asmx/launcher/ITweaker", "init", "(Ljava/util/List;Lroj/asmx/launcher/ClassWrapper;)V");
 
 			c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "tweakers", "Ljava/util/List;");

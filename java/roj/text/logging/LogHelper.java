@@ -9,9 +9,11 @@ import java.util.List;
  * @author Roj234
  * @since 2024/7/1 0001 15:07
  */
-interface LogHelper {
+public interface LogHelper {
 	LogHelper INSTANCE = DirectAccessor.builder(LogHelper.class).access(Throwable.class, "suppressedExceptions", "getSuppressed", null).delegate(Throwable.class, "getOurStackTrace", "getStackTrace").build();
 	@Nullable
 	List<Throwable> getSuppressed(Throwable t);
 	StackTraceElement[] getStackTrace(Throwable t);
+
+	static void printError(Throwable e, Appendable myOut, String prefix) {LogWriter.LOCAL.get().printError(e, myOut, prefix);}
 }

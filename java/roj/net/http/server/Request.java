@@ -27,6 +27,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static roj.net.http.IllegalRequestException.badRequest;
+
 public final class Request extends Headers {
 	public static final String JSESSIONID = "JSESSIONID";
 
@@ -43,21 +45,14 @@ public final class Request extends Headers {
 	public ResponseHeader server() { return handler; }
 	public MyChannel connection() { return handler.ch(); }
 
-	Request init(byte action, String path, String version) throws IllegalRequestException {
+	Request init(byte action, String path, String query, String version) throws IllegalRequestException {
 		this.action = action;
 		this.version = version;
-
-		int i = path.indexOf('?');
-		if (i < 0) getFields = Collections.emptyMap();
-		else {
-			getFields = path.substring(i+1);
-			path = path.substring(0, i);
-		}
-
 		try {
 			this.path = initPath = IOUtil.safePath(Escape.decodeURI(path));
+			this.getFields = query.isEmpty() ? Collections.emptyMap() : query;
 		} catch (MalformedURLException e) {
-			throw new IllegalRequestException(400, "bad query");
+			throw badRequest(e.getMessage());
 		}
 		return this;
 	}
@@ -101,7 +96,7 @@ public final class Request extends Headers {
 	public String host() {
 		String host = get("host");
 		if (host == null) host = get(":authority");
-		return host == null ? ((InetSocketAddress)handler.ch().remoteAddress()).getHostString() : host;
+		return host == null ? ((InetSocketAddress)handler.ch().localAddress()).getHostString() : host;
 	}
 
 	// region fields
@@ -118,7 +113,7 @@ public final class Request extends Headers {
 			try {
 				getFields = simpleValue((CharSequence) getFields, "&", true);
 			} catch (MalformedURLException e) {
-				throw new IllegalRequestException(400, e.getMessage());
+				throw badRequest(e.getMessage());
 			}
 		}
 		return Helpers.cast(getFields);
@@ -146,7 +141,7 @@ public final class Request extends Headers {
 
 					postFields = handler.data;
 				} catch (IOException e) {
-					throw new IllegalRequestException(400, e.getMessage());
+					throw badRequest(e.getMessage());
 				} catch (IllegalArgumentException e) {
 					throw new IllegalRequestException(500, "Request.postFields()不支持二进制(文件)数据,请使用PostHandler");
 				}
@@ -154,7 +149,7 @@ public final class Request extends Headers {
 				try {
 					postFields = simpleValue(pf, "&", true);
 				} catch (MalformedURLException e) {
-					throw new IllegalRequestException(400, e.getMessage());
+					throw badRequest(e.getMessage());
 				}
 			}
 		}
@@ -176,7 +171,7 @@ public final class Request extends Headers {
 				fromClient = getCookieFromClient();
 				if (fromClient.isEmpty()) return cookie = new MyHashMap<>();
 			} catch (MalformedURLException e) {
-				throw new IllegalRequestException(400, e.getMessage());
+				throw badRequest(e.getMessage());
 			}
 
 			for (Map.Entry<String, ?> entry : fromClient.entrySet()) {
@@ -272,11 +267,12 @@ public final class Request extends Headers {
 		Tokenizer.addSlashes(sb.append("realm=\""), Escape.encodeURI(message)).append("\"");
 		responseHeader.put("www-authenticate", sb.toStringAndFree());
 
-		throw new IllegalRequestException(401, Response.httpError(401));
+		throw new IllegalRequestException(401);
 	}
 
+	public CharList headerLine(CharList sb) {return sb.append(HttpUtil.getMethodName(action)).append(" http://").append(host()).append('/').append(initPath).append(getFields).append(' ').append(version);}
 	public String toString() {
-		var sb = new CharList().append(HttpUtil.getMethodName(action)).append(" /").append(path).append(getFields).append(' ').append(version).append('\n');
+		var sb = headerLine(new CharList()).append('\n');
 		encode(sb);
 		return sb.toStringAndFree();
 	}

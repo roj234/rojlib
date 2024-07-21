@@ -24,7 +24,7 @@ bool LzJni_init(JNIEnv *env) {
 
     bool success = false;
     auto fn = reinterpret_cast<FL2_versionNumber>(GetProcAddress(fastLzma, "FL2_versionNumber"));
-    if (fn == nullptr) {
+    if (fn != nullptr) {
         success = fn() == FL2_VERSION_NUMBER;
     }
 
@@ -68,7 +68,7 @@ bool LzJni_init(JNIEnv *env) {
 }
 
 
-#ifdef COMPILE_TARGET_WINDOWS
+#ifdef _WIN32
 FARPROC funcptr[11];
 #endif
 
@@ -97,7 +97,7 @@ JNIEXPORT void JNICALL Java_roj_archive_qz_xz_LZMA2WriterN_initNatives(JNIEnv *e
         i++;
     }
 
-#ifdef COMPILE_TARGET_WINDOWS
+#ifdef _WIN32
     HINSTANCE fastLzma = LoadLibrary("fast-lzma2");
     if (fastLzma == nullptr) {
         Error(env, "Fast lzma dll not found");

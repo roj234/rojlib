@@ -1,6 +1,6 @@
 package roj.util;
 
-import roj.NativeLibrary;
+import roj.RojLib;
 import roj.io.CorruptedInputException;
 import roj.io.MyDataInput;
 import roj.reflect.ReflectionUtils;
@@ -34,7 +34,7 @@ public final class BsDiff {
 		}
 	}
 	public void setLeft(DynByteBuf left) {
-		if (!NativeLibrary.hasFunction(NativeLibrary.BSDIFF))
+		if (!RojLib.hasNative(RojLib.BSDIFF))
 			throw new NativeException("native not ready");
 
 		if (impl instanceof NativeImpl ni) ni.close();
@@ -58,7 +58,7 @@ public final class BsDiff {
 	public int getDiffLength(byte[] right, int off, int end, int stopOn) {return impl.getDiffLength(right, off, end, stopOn);}
 
 	public int getDiffLength(DynByteBuf right, int off, int end, int stopOn) {
-		if (!NativeLibrary.hasFunction(NativeLibrary.BSDIFF))
+		if (!RojLib.hasNative(RojLib.BSDIFF))
 			throw new NativeException("native not ready");
 		return ((NativeImpl)impl).getDiffLength(right, off, end, stopOn);}
 

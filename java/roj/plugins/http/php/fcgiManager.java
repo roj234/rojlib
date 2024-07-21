@@ -40,15 +40,7 @@ public abstract class fcgiManager implements Router {
 		if (cfg != null) {
 			cfg.postAccept(Integer.MAX_VALUE, 900000);
 
-			fcgiResponse h;
-			try {
-				h = fcgi_pass(req, new MyHashMap<>());
-			} catch (IllegalRequestException e) {
-				throw e;
-			}  catch (IOException e) {
-				throw new IllegalRequestException(502, e);
-			}
-
+			var h = fcgi_pass(req, new MyHashMap<>());
 			cfg.postHandler(h);
 			req.localCtx().put("fcgi:handler", h);
 		} else {
@@ -56,7 +48,7 @@ public abstract class fcgiManager implements Router {
 		}
 	}
 
-	protected fcgiResponse fcgi_pass(Request req, Map<String, String> param) throws IOException {
+	protected fcgiResponse fcgi_pass(Request req, Map<String, String> param) throws IllegalRequestException {
 		param.putIfAbsent("SERVER_SOFTWARE", HttpServer11.SERVER_NAME);
 		param.putIfAbsent("GATEWAY_INTERFACE", "CGI/1.1");
 		param.putIfAbsent("SERVER_NAME", "localhost");
@@ -98,7 +90,7 @@ public abstract class fcgiManager implements Router {
 		return response;
 	}
 
-	protected abstract void fcgi_set_param(Request req, Map<String, String> param) throws IOException;
+	protected abstract void fcgi_set_param(Request req, Map<String, String> param) throws IllegalRequestException;
 	protected abstract void fcgi_attach(fcgiResponse response, Map<String, String> param) throws IOException;
 
 	protected void connectionClosed(fcgiConnection conn) {}

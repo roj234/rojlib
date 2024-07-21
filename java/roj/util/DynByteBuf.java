@@ -8,7 +8,7 @@ import roj.io.IOUtil;
 import roj.io.MyDataInput;
 import roj.text.CharList;
 import roj.text.GB18030;
-import roj.text.UTF8MB4;
+import roj.text.UTF8;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -385,17 +385,17 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public DynByteBuf putAscii(CharSequence s) { return putAscii(moveWI(s.length()), s); }
 	public abstract DynByteBuf putAscii(int wi, CharSequence s);
 
-	public static int byteCountUTF8(CharSequence s) { return UTF8MB4.CODER.byteCount(s); }
+	public static int byteCountUTF8(CharSequence s) { return UTF8.CODER.byteCount(s); }
 	public final DynByteBuf putUTF(CharSequence s) {
 		if (s.length() > 0xFFFF) throw new ArrayIndexOutOfBoundsException("UTF too long: " + s.length());
-		int len = UTF8MB4.CODER.byteCount(s);
+		int len = UTF8.CODER.byteCount(s);
 		if (len > 0xFFFF) throw new ArrayIndexOutOfBoundsException("UTF too long: " + len);
 		return putShort(len).putUTFData0(s, len);
 	}
 	public final DynByteBuf putVarIntUTF(CharSequence s) { int len = byteCountUTF8(s); return putVarInt(len).putUTFData0(s, len); }
 	public final DynByteBuf putVUIUTF(CharSequence s) { int len = byteCountUTF8(s); return putVUInt(len).putUTFData0(s, len); }
-	public DynByteBuf putUTFData(CharSequence s) { UTF8MB4.CODER.encodeFixedIn(s, this); return this; }
-	public final DynByteBuf putUTFData0(CharSequence s, int len) { ensureWritable(len); UTF8MB4.CODER.encodePreAlloc(s, this, len); return this; }
+	public DynByteBuf putUTFData(CharSequence s) { UTF8.CODER.encodeFixedIn(s, this); return this; }
+	public final DynByteBuf putUTFData0(CharSequence s, int len) { ensureWritable(len); UTF8.CODER.encodePreAlloc(s, this, len); return this; }
 
 	public static int byteCountGB(CharSequence s) { return GB18030.CODER.byteCount(s); }
 	public final DynByteBuf putVUIGB(CharSequence s) { int len = byteCountGB(s); return putVUInt(len).putGBData0(s, len); }
@@ -570,7 +570,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		if (len < 0) throw new IllegalArgumentException("length < 0: "+len);
 		if (len > 0) {
 			testWI(rIndex,len);
-			UTF8MB4.CODER.decodeFixedIn(this,len,target);
+			UTF8.CODER.decodeFixedIn(this,len,target);
 		}
 		return target;
 	}

@@ -11,8 +11,8 @@ import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.TextUtil;
-import roj.ui.CLIUtil;
 import roj.ui.ProgressBar;
+import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
 import roj.util.ByteList;
 
@@ -138,7 +138,7 @@ public class Main extends Plugin {
 			int selection;
 			if (keys.size() > 1) {
 				System.out.println("输入选择并按回车");
-				selection = CLIUtil.readInt(0, keys.size());
+				selection = Terminal.readInt(0, keys.size());
 			} else {
 				selection = 0;
 			}

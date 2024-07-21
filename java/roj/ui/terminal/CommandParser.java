@@ -12,7 +12,7 @@ import java.util.List;
  * @author Roj234
  * @since 2023/11/20 0020 15:05
  */
-public class ArgumentContext {
+public class CommandParser {
 	public static final Word EOF = new Word().init(Word.EOF, 0, "");
 
 	public TaskHandler executor;
@@ -24,7 +24,7 @@ public class ArgumentContext {
 
 	private final MyHashMap<String, Object> map = new MyHashMap<>();
 
-	public ArgumentContext(TaskHandler executor) { this.executor = executor; }
+	public CommandParser(TaskHandler executor) { this.executor = executor; }
 
 	public void init(String context, List<Word> words) {
 		this.context = context;
@@ -82,15 +82,12 @@ public class ArgumentContext {
 	public int getMaxI() { return maxI; }
 
 	protected final CommandContext createContext() { return new CommandContext(context, map); }
-	public void wrapExecute(CommandImpl command) {
-		CommandContext ctx = createContext();
-		if (executor != null) executor.submit(() -> {
-			synchronized (this) {}
-			command.accept(ctx);
-		});
+	public void wrapExecute(Command command) {
+		var ctx = createContext();
+		if (executor != null) executor.submit(() -> {command.exec(ctx);});
 		else {
 			try {
-				command.accept(ctx);
+				command.exec(ctx);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}

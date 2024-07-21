@@ -1,7 +1,7 @@
 package roj.io.down;
 
-import roj.ui.CLIUtil;
 import roj.ui.ProgressBar;
+import roj.ui.Terminal;
 
 /**
  * @author Roj234
@@ -34,7 +34,7 @@ public class ProgressSimple implements IProgress {
 
 	@Override
 	public void shutdown() {
-		bar.end("下载失败", CLIUtil.RED);
+		bar.end("下载失败", Terminal.RED);
 		kill = true;
 	}
 

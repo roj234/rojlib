@@ -1,24 +1,30 @@
 package roj;
 
+import roj.collect.MyHashMap;
 import roj.util.OS;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.util.Map;
 
 /**
- * Native library loader
- *
  * @author Roj233
  * @since 2021/10/15 12:57
  */
-public class NativeLibrary {
-	public static final boolean IN_DEV = new File("D:\\mc\\FMD-1.5.2").isDirectory();
-	@Deprecated
-	public static final boolean EXTRA_BUG_CHECK = System.getProperty("roj.debug.extraBugCheck")!=null;
+public final class RojLib {
+	public static final Map<String, Object> DATA = new MyHashMap<>();
+	/**
+	 * 用于某些类加载顺序强相关的依赖注入
+	 * @author Roj234
+	 * @since 2024/7/22 0022 6:49
+	 */
+	public static Object inject(String s) {return DATA.get(s);}
 
-	public static final int FUNC_WINDOWS = 0, ANSI_CONSOLE = 1, BSDIFF = 2, SHARED_MEMORY = 3, FAST_LZMA = 4;
-	public static boolean hasFunction(int bit) {return (bits&(1L << bit)) != 0;}
+	public static final boolean IS_DEV = new File("D:\\mc\\FMD-1.5.2").isDirectory();
+
+	public static final int WIN32 = 0, ANSI_READBACK = 1, BSDIFF = 2, SHARED_MEMORY = 3, FAST_LZMA = 4;
+	public static boolean hasNative(int bit) {return (bits&(1L << bit)) != 0;}
 	private static final long bits;
 
 	static {
@@ -40,9 +46,9 @@ public class NativeLibrary {
 	private static boolean loadLibrary() throws Exception {
 		String lib = System.getProperty("os.arch").contains("64") ? "libcpp" : "libcpp32";
 		String appendix = OS.CURRENT == OS.WINDOWS ? ".dll" : ".so";
-		InputStream in = NativeLibrary.class.getClassLoader().getResourceAsStream(lib+appendix);
+		InputStream in = RojLib.class.getClassLoader().getResourceAsStream(lib+appendix);
 		if (in == null) {
-			System.err.println("RojLib Warning: 您的平台没有可用的二进制，下列功能将不可用：Ansi回读、SharedMemory、BsDiff(加速)、LZMA(加速)");
+			System.err.println("RojLib Warning: 您的平台没有可用的二进制，部分功能将不可用.");
 			return false;
 		}
 

@@ -1,7 +1,7 @@
 package roj.mod;
 
+import roj.ToBeRemoved;
 import roj.collect.MyHashSet;
-import roj.text.TextUtil;
 import roj.ui.GuiUtil;
 
 import javax.swing.*;
@@ -163,7 +163,7 @@ final class ConfigEditWindow extends JFrame {
 			}
 			opened = null;
 		} else {
-			JOptionPane.showMessageDialog(this, TextUtil.deepToString(error), "错误", JOptionPane.WARNING_MESSAGE);
+			JOptionPane.showMessageDialog(this, ToBeRemoved.deepToString(error), "错误", JOptionPane.WARNING_MESSAGE);
 		}
 	}
 }

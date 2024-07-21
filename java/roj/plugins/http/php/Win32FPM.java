@@ -56,7 +56,7 @@ public class Win32FPM extends fcgiManager {
 		}
 	}
 
-	protected void fcgi_set_param(Request req, Map<String, String> param) throws IOException {
+	protected void fcgi_set_param(Request req, Map<String, String> param) throws IllegalRequestException {
 		String scriptName = req.path();
 
 		File scriptFile = new File(docRoot, scriptName);

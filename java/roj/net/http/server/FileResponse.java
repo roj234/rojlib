@@ -75,7 +75,7 @@ final class FileResponse implements Response {
 					time = DateParser.parseRFCDate(v) / 1000;
 				} catch (Exception e) {
 					rh.code(400);
-					return null;
+					return Response.httpError(400);
 				}
 
 				if (file.lastModified() / 1000 <= time) return plus(304, req);
@@ -85,7 +85,7 @@ final class FileResponse implements Response {
 					time = DateParser.parseRFCDate(v) / 1000;
 				} catch (Exception e) {
 					rh.code(400);
-					return null;
+					return Response.httpError(400);
 				}
 				// 当资源在指定的时间之后没有修改，服务器才会返回请求的资源
 				// 除以 1000 是RFC时间戳精度问题
@@ -124,7 +124,7 @@ final class FileResponse implements Response {
 					time = DateParser.parseRFCDate(v) / 1000;
 				} catch (Exception e) {
 					rh.code(400);
-					return null;
+					return Response.httpError(400);
 				}
 				if (file.lastModified() / 1000 > time) {
 					plus(200, req);
@@ -139,16 +139,16 @@ final class FileResponse implements Response {
 		}
 
 		if (!v.startsWith("bytes=")) {
-			rh.code(400);
-			return Response.text("invalid 'range' field");
+			rh.code(416);
+			return Response.httpError(416);
 		}
 
 		long len = file.length(def == 1);
 
 		List<String> ranges = TextUtil.split(v.substring(6), ", ");
 		if (ranges.size() > 16) {
-			rh.code(400);
-			return Response.text("invalid 'range' field");
+			rh.code(416);
+			return Response.httpError(416);
 		}
 		long[] data = this.ranges = new long[ranges.size() << 1];
 
@@ -166,7 +166,10 @@ final class FileResponse implements Response {
 			}
 
 			long seglen = data[(i << 1) + 1] - data[i << 1] + 1;
-			if (seglen < 0) Helpers.athrow(new IllegalRequestException(416, (Response) null));
+			if (seglen < 0) {
+				rh.code(416);
+				return Response.httpError(416);
+			}
 			total += seglen;
 		}
 
@@ -196,7 +199,7 @@ final class FileResponse implements Response {
 			long num = Long.parseLong(str);
 			if (num >= 0 && num < max) return num;
 		}
-		Helpers.athrow(new IllegalRequestException(416, (Response) null));
+		Helpers.athrow(new IllegalRequestException(416));
 		return 0;
 	}
 

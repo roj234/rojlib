@@ -47,6 +47,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 			throw new IllegalStateException("不能在非TLauncher环境中引用ClassWrapper");
 		}
 	}
+	public static final ClassWrapper instance = new ClassWrapper();
 
 	private final List<ZipFile> archives = new ArrayList<>();
 	private final List<CodeSource> locations = new ArrayList<>();

@@ -6,7 +6,7 @@ import roj.io.DummyOutputStream;
 import roj.text.CharList;
 import roj.text.GB18030;
 import roj.text.TextUtil;
-import roj.text.UTF8MB4;
+import roj.text.UTF8;
 import roj.util.ByteList;
 
 import java.io.PrintStream;
@@ -30,9 +30,10 @@ public abstract class DelegatedPrintStream extends PrintStream {
 	protected void partialLine() {}
 	protected void flushBytes() {
 		Charset cs = Charset.defaultCharset();
-		(GB18030.is(cs) ? GB18030.CODER : UTF8MB4.CODER).decodeLoop(bb, bb.readableBytes(), sb, Integer.MAX_VALUE, true);
+		(GB18030.is(cs) ? GB18030.CODER : UTF8.CODER).decodeLoop(bb, bb.readableBytes(), sb, Integer.MAX_VALUE, true);
 		bb.clear();
 	}
+	public void flush() {}
 
 	// region stub
 	public final synchronized void write(int v) {

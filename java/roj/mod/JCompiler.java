@@ -12,7 +12,7 @@ import roj.text.CharList;
 import roj.text.Escape;
 import roj.text.LineReader;
 import roj.ui.AnsiString;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -69,7 +69,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 
 		if (errors > 0) buf.append('\n').append(errors).append(" 个 错误");
 		if (warnings > 0) buf.append('\n').append(warnings).append('/').append(warnings+ ignored).append(" 个 警告");
-		System.out.println(new AnsiString(buf).bgColor16(result ? CLIUtil.BLUE : CLIUtil.RED).color16(CLIUtil.WHITE + CLIUtil.HIGHLIGHT).toAnsiString());
+		System.out.println(new AnsiString(buf).bgColor16(result ? Terminal.BLUE : Terminal.RED).color16(Terminal.WHITE + Terminal.HIGHLIGHT).toAnsiString());
 		return result ? compiled : null;
 	}
 

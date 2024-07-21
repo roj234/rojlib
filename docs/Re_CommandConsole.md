@@ -11,11 +11,12 @@
 ![CommandConsole example image](images/fmd.png)
 
 ## 代码
+
 ```java
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
+import roj.ui.terminal.Command;
 import roj.ui.terminal.CommandConsole;
-import roj.ui.terminal.CommandImpl;
 
 import static roj.ui.terminal.CommandNode.argument;
 import static roj.ui.terminal.CommandNode.literal;
@@ -33,13 +34,12 @@ public final class Example {
 		// 简单的指令
 		c.register(literal("reflect").executes(ctx -> ReflectTool.start(!isCLI)));
 		c.register(literal("auto").then(argument("auto", Argument.bool()).executes(
-			ctx -> AutoCompile.setEnabled(ctx.argument("auto", Boolean.class))
-                )));
+			ctx -> AutoCompile.setEnabled(ctx.argument("auto", Boolean.class)))));
 
 		// 复杂一点的Argument
-		CommandImpl cDeobf = ctx -> {};
+		Command cDeobf = ctx -> {};
 		c.register(literal("deobf").executes(cDeobf)
-			.then(argument("reverse", Argument.string("mcp2srg", "srg2mcp")).executes(cDeobf)));
+								   .then(argument("reverse", Argument.string("mcp2srg", "srg2mcp")).executes(cDeobf)));
 
 		// 变长参数
 		c.register(literal("build").then(
@@ -66,7 +66,7 @@ public final class Example {
 		// prompt (new的参数也是)
 		c.setPrompt("114514 > ");
 		// 别忘了
-		CLIUtil.setConsole(c);
+		Terminal.setConsole(c);
 
 		// Console线程也是daemon的
 		LockSupport.park();

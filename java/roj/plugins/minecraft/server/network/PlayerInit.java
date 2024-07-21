@@ -6,7 +6,7 @@ import roj.net.ch.ChannelHandler;
 import roj.plugins.minecraft.server.util.TranslatedString;
 import roj.plugins.minecraft.server.util.Utils;
 import roj.ui.AnsiString;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.util.ByteList;
 
 import java.io.IOException;
@@ -131,7 +131,7 @@ public class PlayerInit implements ChannelHandler {
 			.putLong(Utils.pos2long(0,32,0)).putFloat(90)
 		));
 
-		player.sendMessage(new TranslatedString("multiplayer.player.joined", new AnsiString(player.getName())).color16(CLIUtil.YELLOW+CLIUtil.HIGHLIGHT), false);
+		player.sendMessage(new TranslatedString("multiplayer.player.joined", new AnsiString(player.getName())).color16(Terminal.YELLOW+ Terminal.HIGHLIGHT), false);
 
 		ctx.removeSelf();
 		ctx.channelOpened();

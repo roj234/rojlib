@@ -1,6 +1,6 @@
 package roj.io;
 
-import roj.NativeLibrary;
+import roj.RojLib;
 import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
@@ -108,7 +108,7 @@ public final class NIOUtil {
 	}
 
 	private static void setReusePortW(FileDescriptor fd, boolean enabled) throws IOException {
-		if (!NativeLibrary.hasFunction(NativeLibrary.FUNC_WINDOWS)) throw new NativeException("native library not available");
+		if (!RojLib.hasNative(RojLib.WIN32)) throw new NativeException("native library not available");
 		int error = windowsOnlyReuseAddr(UTIL.fdVal(fd), enabled);
 		if (error != 0) {
 			switch (error) {

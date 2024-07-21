@@ -48,7 +48,7 @@ public final class IOUtil {
 	}
 	public String decode(byte[] b) {
 		CharList c = charBuf; c.clear();
-		UTF8MB4.CODER.decodeFixedIn(shell.setR(b,0,b.length), b.length, c);
+		UTF8.CODER.decodeFixedIn(shell.setR(b,0,b.length), b.length, c);
 		return c.toString();
 	}
 
@@ -147,13 +147,14 @@ public final class IOUtil {
 
 	@Attach("skipAlt")
 	public static long skip(InputStream in, long count) throws IOException {
+		long start = count;
 		for(;;) {
 			long i = in.skip(count);
 			if (i == 0) break;
 			count -= i;
 			if (count == 0) break;
 		}
-		return count;
+		return start-count;
 	}
 	@Attach
 	public static void skipFully(InputStream in, long count) throws IOException {

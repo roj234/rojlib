@@ -25,14 +25,14 @@ import static roj.net.http.server.HttpCache.*;
  * @since 2024/7/14 0014 8:38
  */
 public final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader, ResponseWriter, ChannelHandler {
-	private static final Logger LOGGER = Logger.getLogger("HttpServer20");
+	private static final Logger LOGGER = Logger.getLogger("HtpSvr/2");
 
 	private final Router router;
 
 	public HttpServer20(Router router, int id) {
 		super(id);
 		this.router = router;
-		this.time = System.currentTimeMillis() + router.readTimeout();
+		this.time = System.currentTimeMillis() + router.readTimeout(null);
 	}
 
 	private static final byte FLAG_ASYNC = 1, FLAG_COMPRESS = 2, FLAG_GOAWAY = 4, FLAG_ERRORED = 8, FLAG_GZIP = 16;
@@ -45,7 +45,14 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 
 	@Override
 	protected void onHeaderDone(H2Connection man, HttpHead head, boolean hasData) throws IOException {
-		var req = HttpCache.getInstance().request().init(HttpUtil.parseMethod(head.getMethod()), head.getPath(), head.versionStr());
+		String path = head.getPath(), query;
+		int i = path.indexOf('?');
+		if (i < 0) query = "";
+		else {
+			query = path.substring(i+1);
+			path = path.substring(0, i);
+		}
+		var req = HttpCache.getInstance().request().init(HttpUtil.parseMethod(head.getMethod()), path, query, head.versionStr());
 		req._moveFrom(head);
 
 		req.handler = this;
@@ -61,6 +68,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		postSize = -1;
 		exceptPostSize = head.getContentLengthLong();
 		router.checkHeader(req, this);
+		time = System.currentTimeMillis() + router.readTimeout(req);
 
 		long len = postSize;
 		if (len < 0) {
@@ -140,7 +148,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 				onError(man, e);
 			}
 
-			time += router.writeTimeout(req, body);
+			time = System.currentTimeMillis() + router.writeTimeout(req, body);
 			if ((flag & FLAG_ASYNC) != 0 && body == null) return;
 		}
 		sendHead(man);
@@ -191,11 +199,14 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		if (System.currentTimeMillis() > time) {
 			switch (getState()) {
 				case HEAD_V, HEAD_R, DATA, HEAD_T -> {
-					if (req != null) throw new IllegalRequestException(408);
+					if (req != null) throw new IllegalRequestException(HttpUtil.TIMEOUT);
 					man.streamError(id, H2Exception.ERROR_CANCEL/*TIMEOUT*/);
 				}
-				case PROCESSING -> body(StringResponse.detailedErrorPage(504, "异步处理超时[PROCESSING]"));
-				case SEND_BODY -> throw new IllegalRequestException(504, "异步处理超时[SEND_BODY]:"+body);
+				case PROCESSING -> code(504).body(Response.internalError("处理超时\n在规定的时间内未收到响应头，请求代理失败"));
+				case SEND_BODY -> {
+					LOGGER.warn("发送超时[在规定的时间内未能将响应体全部发送]: {}", body);
+					man.streamError(id, H2Exception.ERROR_INTERNAL/*TIMEOUT*/);
+				}
 			}
 		}
 	}
@@ -406,6 +417,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 				lock.lock();
 				try {
 					body = resp;
+					time = System.currentTimeMillis() + router.writeTimeout(req, body);
 					sendHead(man);
 				} finally {
 					lock.unlock();

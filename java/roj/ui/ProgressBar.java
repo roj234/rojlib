@@ -10,9 +10,9 @@ import roj.text.TextUtil;
 public class ProgressBar implements AutoCloseable {
 	protected final CharList batch = new CharList();
 
-	protected void render(CharList b) { CLIUtil.renderBottomLine(batch); }
+	protected void render(CharList b) { Terminal.renderBottomLine(batch); }
 	protected void dispose(boolean clearText) {
-		CLIUtil.removeBottomLine(batch, clearText);
+		Terminal.removeBottomLine(batch, clearText);
 		barUpdate = dataUpdate = 0;
 	}
 
@@ -112,12 +112,12 @@ public class ProgressBar implements AutoCloseable {
 	public void close() { end(); }
 
 	public void end() { dispose(true); }
-	public void end(String k) { end(k, CLIUtil.GREEN); }
+	public void end(String k) { end(k, Terminal.GREEN); }
 	public void end(String k, int color) {
 		batch.clear();
 		CharList b = batch
 			.append("\u001b[2K").append(name).append(": ")
-			.append("\u001B[").append(color+CLIUtil.HIGHLIGHT).append('m')
+			.append("\u001B[").append(color+ Terminal.HIGHLIGHT).append('m')
 			.append(k)
 			.append("\u001B[0m");
 

@@ -9,8 +9,8 @@ import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
-import roj.ui.CLIUtil;
 import roj.ui.GuiUtil;
+import roj.ui.Terminal;
 import roj.ui.TextAreaPrintStream;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandNode;
@@ -52,7 +52,7 @@ public class CodeStat extends Plugin {
 	}
 
 	public static void main(String[] args) throws IOException {
-		if (!CLIUtil.ANSI) {
+		if (!Terminal.ANSI_OUTPUT) {
 			if (!hasUI) {
 				hasUI = true;
 				GuiUtil.systemLook();

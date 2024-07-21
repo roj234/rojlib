@@ -8,7 +8,7 @@ import roj.io.IOUtil;
 import roj.text.LineReader;
 import roj.text.TextReader;
 import roj.text.TextUtil;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -73,13 +73,13 @@ public final class MCPMapping extends Mapping {
 
 				tmp.clear();
 				if (TextUtil.split(tmp, line, ',').size() < 2) {
-					CLIUtil.warning(name+":"+ln+": 未知标记: " + line);
+					Terminal.warning(name+":"+ln+": 未知标记: " + line);
 					continue;
 				}
 
 				List<Desc> desc = map.get(tmp.get(0));
 				if (desc == null) {
-					if (printAll != Boolean.FALSE) CLIUtil.warning(name+":"+ln+": 不存在的Srg: "+tmp.get(0));
+					if (printAll != Boolean.FALSE) Terminal.warning(name+":"+ln+": 不存在的Srg: "+tmp.get(0));
 					if (printAll == null) printAll = false;
 				} else {
 					for (Desc d : desc) {
@@ -121,7 +121,7 @@ public final class MCPMapping extends Mapping {
 			TextUtil.split(tmp, key, '_');
 
 			if (tmp.size() < 3) {
-				CLIUtil.warning("格式非法 " + key);
+				Terminal.warning("格式非法 " + key);
 				continue;
 			}
 
@@ -144,7 +144,7 @@ public final class MCPMapping extends Mapping {
 			Set<Desc> data = methodData.get(tmp.get(1));
 			if (data == null) {
 				if (!tmp.get(1).startsWith("i")) {
-					if (printAll != Boolean.FALSE) CLIUtil.warning("参数不存在: " + tmp.get(1));
+					if (printAll != Boolean.FALSE) Terminal.warning("参数不存在: " + tmp.get(1));
 					if (printAll == null) printAll = false;
 				}
 				continue;

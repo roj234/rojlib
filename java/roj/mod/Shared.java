@@ -10,7 +10,7 @@ import roj.config.data.CMap;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.mod.plugin.Plugin;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.util.HighResolutionTimer;
 
 import java.io.File;
@@ -48,7 +48,7 @@ public final class Shared {
 		try (FileOutputStream fos = new FileOutputStream(new File(BASE, "projects/index"))) {
 			fos.write(name.getBytes(StandardCharsets.UTF_8));
 		} catch (IOException e) {
-			CLIUtil.error("配置保存", e);
+			Terminal.error("配置保存", e);
 		}
 
 		if (project != (project = Project.load(name)))
@@ -64,13 +64,13 @@ public final class Shared {
 				if (mapperFwd.getClassMap().isEmpty()) {
 					File map = new File(BASE, "util/mcp-srg.srg");
 					if (!map.isFile()) {
-						CLIUtil.error("混淆映射表"+map+"不存在,建议重新安装");
+						Terminal.error("混淆映射表"+map+"不存在,建议重新安装");
 						return;
 					}
 					try {
 						mapperFwd.initEnv(map, new File(BASE, "class"), new File(BASE, "util/mapCache.lzma"), false);
 					} catch (Exception e) {
-						CLIUtil.error("混淆映射表加载失败", e);
+						Terminal.error("混淆映射表加载失败", e);
 					}
 					mappingIsClean = true;
 				}
@@ -98,21 +98,21 @@ public final class Shared {
 			CONFIG = new JSONParser().parse(file, NO_DUPLICATE_KEY).asMap();
 			CONFIG.dot(true);
 		} catch (ParseException | ClassCastException e1) {
-			CLIUtil.error("config.json 有语法错误! 请修正!", e1);
+			Terminal.error("config.json 有语法错误! 请修正!", e1);
 		} catch (IOException e1) {
-			CLIUtil.error("config.json 读取失败!", e1);
+			Terminal.error("config.json 读取失败!", e1);
 		}
 		if (CONFIG == null) System.exit(-2);
 
 		File classDir = new File(BASE, "class");
 		if (!classDir.isDirectory() && !classDir.mkdirs()) {
-			CLIUtil.error("无法创建库文件夹: " + classDir.getAbsolutePath());
+			Terminal.error("无法创建库文件夹: " + classDir.getAbsolutePath());
 			System.exit(-2);
 		}
 
 		PROJECT_DIR = new File(BASE, "projects");
 		if (!PROJECT_DIR.isDirectory() && !PROJECT_DIR.mkdirs()) {
-			CLIUtil.error("无法创建项目文件夹: "+PROJECT_DIR.getAbsolutePath());
+			Terminal.error("无法创建项目文件夹: "+PROJECT_DIR.getAbsolutePath());
 			System.exit(-2);
 		}
 
@@ -123,7 +123,7 @@ public final class Shared {
 			try {
 				w = new FileWatcher();
 			} catch (IOException e) {
-				CLIUtil.warning("无法启动文件监控", e);
+				Terminal.warning("无法启动文件监控", e);
 			}
 
 			if (CONFIG.getBool("自动编译")) {
@@ -152,7 +152,7 @@ public final class Shared {
 		try {
 			hotReload = new HRServer(port1);
 		} catch (IOException e) {
-			CLIUtil.warning("单例锁冲突(如果你确实要多开，请在配置文件中修改端口为0)", e);
+			Terminal.warning("单例锁冲突(如果你确实要多开，请在配置文件中修改端口为0)", e);
 			System.exit(-2);
 		}
 
@@ -161,7 +161,7 @@ public final class Shared {
 			try {
 				project = Project.load(IOUtil.readUTF(index));
 			} catch (IOException e) {
-				CLIUtil.warning("项目配置读取失败", e);
+				Terminal.warning("项目配置读取失败", e);
 			}
 		}
 	}

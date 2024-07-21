@@ -15,7 +15,6 @@ import roj.ui.GuiUtil;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.File;
 import java.lang.reflect.Method;
 
 /**
@@ -99,6 +98,8 @@ public class UIEntry extends JFrame {
 		bind(uiSM, "roj.novel.SimpleMergeUI");
 		bind(uiDIffFinder, "roj.text.diff.DiffFinder");
 		bind(uiCardSleep, "^roj.plugins.CardSleep");
+
+		uiTest.setEnabled(false);
 	}
 
 	private void initComponents() {

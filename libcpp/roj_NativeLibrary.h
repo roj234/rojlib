@@ -21,12 +21,12 @@ inline int min(int l, int r) {return l < r ? l : r;}
 extern "C" {
 #endif
 
-JNIEXPORT jlong JNICALL Java_roj_NativeLibrary_init(JNIEnv *, jclass);
-JNIEXPORT jint JNICALL Java_roj_NativeLibrary_getLastError(JNIEnv *, jclass);
+JNIEXPORT jlong JNICALL Java_roj_RojLib_init(JNIEnv *, jclass);
+JNIEXPORT jint JNICALL Java_roj_RojLib_getLastError(JNIEnv *, jclass);
 
-JNIEXPORT jint JNICALL Java_roj_ui_CLIUtil_setConsoleMode0(JNIEnv *, jclass, jint, jint, jint);
+JNIEXPORT jint JNICALL Java_roj_ui_NativeVT_setConsoleMode0(JNIEnv *, jclass, jint, jint, jint);
 
-JNIEXPORT jclass JNICALL Java_roj_reflect_Java9Compat_defineClass0(JNIEnv *, jclass, jstring, jobject, jbyteArray, jint);
+JNIEXPORT jclass JNICALL Java_roj_reflect_VMInternals_defineClass0(JNIEnv *, jclass, jstring, jobject, jbyteArray, jint);
 
 JNIEXPORT jlong JNICALL Java_roj_util_SharedMemory_nCreate(JNIEnv *, jclass, jstring, jlong);
 JNIEXPORT jlong JNICALL Java_roj_util_SharedMemory_nAttach(JNIEnv *, jclass, jstring, jboolean);

@@ -54,7 +54,7 @@ public abstract class Plugin {
 		if (config == null) reloadConfig();
 		return config;
 	}
-	protected final void reloadConfig() {
+	protected void reloadConfig() {
 		try {
 			var parser = new YAMLParser();
 			saveDefaultConfig();

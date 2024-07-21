@@ -9,31 +9,22 @@ import roj.collect.IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.concurrent.TaskPool;
-import roj.crypt.Base64;
-import roj.crypt.VoidCrypt;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
-import roj.net.http.server.AsyncResponse;
-import roj.net.http.server.DiskFileInfo;
-import roj.net.http.server.Request;
-import roj.net.http.server.Response;
-import roj.net.http.server.auto.*;
 import roj.plugin.Panger;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextWriter;
-import roj.ui.CLIUtil;
 import roj.ui.EasyProgressBar;
+import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
 import roj.ui.terminal.CommandContext;
 import roj.ui.terminal.CommandNode;
 import roj.util.ArrayCache;
-import roj.util.ByteList;
-import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -46,9 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.security.SecureRandom;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -81,7 +70,6 @@ import static roj.ui.terminal.CommandNode.literal;
 	
 	[网页工具]
 	多线程下载文件: curl <url> <saveTo> [threads]
-	Web: /file/encrypt: 抵赖加密测试
 	""")
 public class LazyBox extends Plugin {
 	private static final TaskPool pool = TaskPool.Common();
@@ -131,7 +119,7 @@ public class LazyBox extends Plugin {
 		registerCommand(literal("rd").then(argument("路径", Argument.path()).executes(ctx -> {
 			File path = ctx.argument("路径", File.class);
 			System.out.println("删除"+path.getAbsolutePath()+"及其所有文件？[y/n]");
-			char c = CLIUtil.awaitCharacter(MyBitSet.from("YyNn"));
+			char c = Terminal.readChar(MyBitSet.from("YyNn"));
 			if (c != 'y' && c != 'Y') return;
 
 			System.out.println(IOUtil.deletePath(path));
@@ -177,8 +165,6 @@ public class LazyBox extends Plugin {
 			.then(argument("自解压模板", Argument.file())
 				.then(argument("压缩包", Argument.file())
 				.executes(this::updateExe))));
-
-		registerRoute("file", new OKRouter().register(this));
 	}
 
 	private void zipUpdate(CommandContext ctx) throws IOException {
@@ -210,10 +196,10 @@ public class LazyBox extends Plugin {
 		update.register(literal("save").executes(c -> za.save()));
 		update.register(literal("exit").executes(c -> {
 			za.close();
-			CLIUtil.setConsole(Panger.console());
+			Terminal.setConsole(Panger.console());
 		}));
 		update.sortCommands();
-		CLIUtil.setConsole(update);
+		Terminal.setConsole(update);
 	}
 
 	private void qzVerify(CommandContext ctx) {
@@ -311,7 +297,7 @@ public class LazyBox extends Plugin {
 
 		System.out.println("\u001b[93m新增\u001b[94m"+add+" \u001b[93m删除\u001b[94m"+del+" \u001b[93m修改\u001b[94m"+change+" \u001b[93m移动\u001b[94m"+move);
 		CommandConsole c1 = new CommandConsole("\u001b[96m7zDiff \u001b[97m> ");
-		CLIUtil.setConsole(c1);
+		Terminal.setConsole(c1);
 		c1.register(literal("save").then(argument("out", Argument.string()).executes(c -> {
 			QZFileWriter out = new QZFileWriter(c.argument("out", String.class));
 			out.setCodec(new LZMA2(3));
@@ -343,9 +329,9 @@ public class LazyBox extends Plugin {
 			out.close();
 			bar.end("Diff已保存");
 
-			CLIUtil.setConsole(Panger.console());
+			Terminal.setConsole(Panger.console());
 		})));
-		c1.register(literal("exit").executes(c -> CLIUtil.setConsole(Panger.console())));
+		c1.register(literal("exit").executes(c -> Terminal.setConsole(Panger.console())));
 	}
 	private static void copy(QZArchive arc, MyHashMap<QZEntry, String> should_copy, QZFileWriter out, EasyProgressBar bar) {
 		arc.parallelDecompress(pool, (entry, in) -> {
@@ -403,94 +389,5 @@ public class LazyBox extends Plugin {
 
 		if (to.size() != to.position()) to.truncate(to.position());
 		to.close();
-	}
-
-	public static final class EncryptRequest {
-		List<String> keys, texts, types, paddings;
-		String algorithm;
-	}
-
-	@GET
-	public Object encrypt(Request req) {return Response.file(req, new DiskFileInfo(new File("plugins/Core/deniable_encryption.html")));}
-
-	@POST
-	@Body(From.JSON)
-	public Object encrypt(Request req, EncryptRequest json) {
-		req.responseHeader().put("content-type", "text/plain");
-
-		if (json.keys.isEmpty() || json.keys.size() != json.texts.size()) return "参数错误";
-
-		int length = 0;
-		var pairs = new VoidCrypt.CipherPair[json.keys.size()];
-		List<String> keys = json.keys;
-		for (int i = 0; i < keys.size(); i++) {
-			byte[] text;
-			var str = json.texts.get(i);
-			switch (json.types.get(i)) {
-				case "UTF8" -> text = IOUtil.getSharedByteBuf().putUTFData(str).toByteArray();
-				case "GB18030" -> text = IOUtil.getSharedByteBuf().putGBData(str).toByteArray();
-				case "UTF-16LE" -> text = str.getBytes(StandardCharsets.UTF_16LE);
-				case "hex" -> text = IOUtil.SharedCoder.get().decodeHex(str);
-				case "base64" -> text = IOUtil.SharedCoder.get().decodeBase64(str).toByteArray();
-				default -> {return "参数错误";}
-			}
-
-			pairs[i] = new VoidCrypt.CipherPair(keys.get(i).getBytes(StandardCharsets.UTF_8), new ByteList(text));
-			length += pairs[i].key.length + text.length;
-		}
-		if (length > 524288) return "内容过多(512KB max)";
-
-		if (!json.algorithm.equals("r")) req.server().enableCompression();
-
-		var callback = new AsyncResponse();
-		TaskPool.Common().submit(() -> {
-			ByteList buf = IOUtil.getSharedByteBuf();
-			try {
-				switch (json.algorithm) {
-					case "r" -> VoidCrypt._encrypt2r(new SecureRandom(), buf, pairs);
-					case "i" -> VoidCrypt._encrypt1i(new SecureRandom(), buf, pairs);
-					case "b" -> VoidCrypt._encrypt1b(new SecureRandom(), buf, pairs);
-				}
-				callback.offerAndRelease(Base64.encode(buf, new ByteList()));
-			} catch (Exception e){
-				buf.clear();
-				callback.offer(buf.putUTFData("加密失败: "+e));
-			} finally {
-				callback.setEof();
-			}
-		});
-		return callback;
-	}
-
-	@POST
-	public Object decrypt(Request req, String key, String text, String type, String padding) {
-		var sc = IOUtil.SharedCoder.get();
-		try {
-			DynByteBuf plaintext = VoidCrypt.statistic_decrypt(key.getBytes(StandardCharsets.UTF_8), sc.decodeBase64(text), new ByteList());
-			switch (padding) {
-				case "zero":
-					int i = plaintext.wIndex();
-					if (i > 0) {
-						while (plaintext.get(i - 1) == 0) i--;
-						plaintext.wIndex(i);
-					}
-					break;
-			}
-
-			switch (type) {
-				case "UTF8","GB18030","UTF-16LE":
-					req.responseHeader().put("content-type", "text/plain; charset="+type);
-					req.responseHeader().put("content-length", String.valueOf(plaintext.readableBytes()));
-					return (Response) rh -> {
-						rh.write(plaintext);
-						return plaintext.isReadable();
-					};
-				case "hex": return plaintext.hex();
-				case "base64": return plaintext.base64();
-			}
-		} catch (Exception e) {
-			return "解密失败: "+e;
-		}
-		return "参数错误";
 	}
 }

@@ -11,7 +11,7 @@ import roj.asm.util.Context;
 import roj.asmx.mapper.Mapper;
 import roj.asmx.nixim.NiximSystemV2;
 import roj.mod.Shared;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 
 import java.util.Collections;
 import java.util.List;
@@ -64,7 +64,7 @@ public class NiximHandler implements Plugin {
 							}
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							CLIUtil.warning("无法为对象找到签名: " + data.name + " " + node);
+							Terminal.warning("无法为对象找到签名: " + data.name + " " + node);
 						}
 					}
 					break;
@@ -74,7 +74,7 @@ public class NiximHandler implements Plugin {
 						if (name != null) {
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							CLIUtil.warning("无法为对象找到签名: " + data.name + " " + node);
+							Terminal.warning("无法为对象找到签名: " + data.name + " " + node);
 						}
 					}
 					break;
@@ -85,7 +85,7 @@ public class NiximHandler implements Plugin {
 						if (name != null) {
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							CLIUtil.warning("无法为对象找到签名: " + data.name + " " + node);
+							Terminal.warning("无法为对象找到签名: " + data.name + " " + node);
 						}
 					}
 					break;

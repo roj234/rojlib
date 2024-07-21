@@ -2,7 +2,7 @@ package roj.mod;
 
 import roj.collect.MyHashMap;
 import roj.concurrent.timing.ScheduleTask;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 
 import static roj.mod.Shared.*;
 
@@ -58,7 +58,7 @@ final class AutoCompile {
 			args.put("zl", "");
 			FMDMain.build(args);
 		} catch (Throwable e) {
-			CLIUtil.error("自动编译出错", e);
+			Terminal.error("自动编译出错", e);
 		} finally {
 			idle = true;
 		}
