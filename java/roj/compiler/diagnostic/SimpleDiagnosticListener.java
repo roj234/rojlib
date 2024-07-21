@@ -2,7 +2,7 @@ package roj.compiler.diagnostic;
 
 import roj.text.CharList;
 import roj.ui.AnsiString;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 
 import java.io.PrintStream;
 import java.util.Locale;
@@ -81,7 +81,7 @@ public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 
 				int realWidth = -1;
 				for (int i = 0; i < diag.getColumnNumber(); i++) {
-					realWidth += CLIUtil.getCharWidth(line.charAt(i));
+					realWidth += Terminal.getCharWidth(line.charAt(i));
 				}
 				sb.padEnd(' ', realWidth).append('^').append('\n');
 			}

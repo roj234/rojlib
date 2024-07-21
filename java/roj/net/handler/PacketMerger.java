@@ -4,7 +4,6 @@ import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
 import roj.util.ByteList;
-import roj.util.DirectByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -51,7 +50,7 @@ public abstract class PacketMerger implements ChannelHandler {
 	public DynByteBuf getAs(boolean direct) {
 		if (merged == null || !merged.isReadable()) return ByteList.EMPTY;
 
-		DynByteBuf copy = direct ? DirectByteList.allocateDirect(merged.readableBytes()) : ByteList.allocate(merged.readableBytes());
+		DynByteBuf copy = direct ? DynByteBuf.allocateDirect(merged.readableBytes()) : DynByteBuf.allocate(merged.readableBytes());
 		return copy.put(merged);
 	}
 

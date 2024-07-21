@@ -4,13 +4,17 @@ import roj.ReferenceByGeneratedClass;
 import roj.asm.Parser;
 import roj.asm.cp.CstString;
 import roj.asm.tree.ConstantData;
+import roj.asm.tree.MethodNode;
+import roj.asm.tree.anno.Annotation;
+import roj.asm.tree.attr.Annotations;
 import roj.asm.type.Type;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
+import roj.reflect.ClassDefiner;
 
-import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.security.ProtectionDomain;
+import java.util.Collections;
 
 import static roj.asm.Opcodes.*;
 
@@ -124,8 +128,109 @@ class GenerateReflectionHook {
 		w.one(RETURN);
 		w.finish();
 
-		DataOutputStream fos = new DataOutputStream(new FileOutputStream(Main.resourcePath.getAbsolutePath()+"/roj/reflect/Injector.class"));
+		var fos = new FileOutputStream(Main.resourcePath.getAbsolutePath()+"/roj/reflect/Injector.class");
 		Parser.toByteArrayShared(ILCD).writeToStream(fos);
 		fos.close();
+	}
+	public static void run2() throws Exception {
+		ConstantData BE = makeImpl(true);
+		ConstantData LE = makeImpl(false);
+
+		var fos = new FileOutputStream(Main.resourcePath.getAbsolutePath()+"/roj/reflect/Unaligned$BE.class");
+		Parser.toByteArrayShared(BE).writeToStream(fos);
+		fos.close();
+
+		fos = new FileOutputStream(Main.resourcePath.getAbsolutePath()+"/roj/reflect/Unaligned$LE.class");
+		Parser.toByteArrayShared(LE).writeToStream(fos);
+		fos.close();
+	}
+
+	private static ConstantData makeImpl(boolean nativeBE) {
+		var impl = new ConstantData();
+		impl.name("roj/reflect/Unaligned$Impl");
+		impl.addInterface("roj/reflect/Unaligned");
+		impl.parent(CLASS_NAME);
+		impl.npConstructor();
+		ClassDefiner.premake(impl);
+
+		String unsafe = "jdk/internal/misc/Unsafe";
+		String unsafeType = 'L'+unsafe+';';
+
+		var w = impl.newMethod(ACC_PUBLIC|ACC_FINAL, "allocateUninitializedArray", "(Ljava/lang/Class;I)Ljava/lang/Object;");
+		w.visitSize(3, 3);
+		w.field(GETSTATIC, CLASS_NAME, "theInternalUnsafe", unsafeType);
+		w.one(ALOAD_1);
+		w.one(ILOAD_2);
+		w.invoke(INVOKEVIRTUAL, unsafe, "allocateUninitializedArray", "(Ljava/lang/Class;I)Ljava/lang/Object;");
+		w.one(ARETURN);
+		w.finish();
+
+		String[] name1 = {"getCharUnaligned", "getIntUnaligned", "getLongUnaligned"};
+		String[] name2 = {"java/lang/Character","java/lang/Integer","java/lang/Long"};
+		String[] name3 = {"putCharUnaligned", "putIntUnaligned", "putLongUnaligned"};
+		String[] desc1 = {"(C)C", "(I)I", "(J)J"};
+		String theDesc = "CIJ";
+
+		int i = 0;
+		int v = 16;
+		for(;;) {
+			String usDesc = "(Ljava/lang/Object;J)"+theDesc.charAt(i);
+			String myDesc = usDesc.replace('C', 'I');
+
+			w = impl.newMethod(ACC_PUBLIC|ACC_FINAL, "get"+v+"U"+(nativeBE ?'B':'L'), myDesc);
+			w.visitSize(4, 4);
+			w.field(GETSTATIC, CLASS_NAME, "theInternalUnsafe", unsafeType);
+			w.one(ALOAD_1);
+			w.one(LLOAD_2);
+			w.invoke(INVOKEVIRTUAL, unsafe, name1[i], usDesc);
+			w.one(i==2 ? LRETURN : IRETURN);
+			w.finish();
+
+			w = impl.newMethod(ACC_PUBLIC|ACC_FINAL, "get"+v+"U"+(nativeBE ?'L':'B'), myDesc);
+			w.visitSize(4, 4);
+			w.field(GETSTATIC, CLASS_NAME, "theInternalUnsafe", unsafeType);
+			w.one(ALOAD_1);
+			w.one(LLOAD_2);
+			w.invoke(INVOKEVIRTUAL, unsafe, name1[i], usDesc);
+			w.invoke(INVOKESTATIC, name2[i], "reverseBytes", desc1[i]);
+			w.one(i==2 ? LRETURN : IRETURN);
+			w.finish();
+
+			usDesc = "(Ljava/lang/Object;J"+theDesc.charAt(i)+")V";
+			myDesc = usDesc.replace('C', 'I');
+			int size = v == 64 ? 6 : 5;
+
+			w = impl.newMethod(ACC_PUBLIC|ACC_FINAL, "put"+v+"U"+(nativeBE ?'B':'L'), myDesc);
+			w.visitSize(size, size);
+			w.field(GETSTATIC, CLASS_NAME, "theInternalUnsafe", unsafeType);
+			w.one(ALOAD_1);
+			w.one(LLOAD_2);
+			w.vars(i==2 ? LLOAD : ILOAD, 4);
+			w.invoke(INVOKEVIRTUAL, unsafe, name3[i], usDesc);
+			w.one(RETURN);
+			w.finish();
+
+			w = impl.newMethod(ACC_PUBLIC|ACC_FINAL, "put"+v+"U"+(nativeBE ?'L':'B'), myDesc);
+			w.visitSize(size, size);
+			w.field(GETSTATIC, CLASS_NAME, "theInternalUnsafe", unsafeType);
+			w.one(ALOAD_1);
+			w.one(LLOAD_2);
+			w.vars(i==2 ? LLOAD : ILOAD, 4);
+			w.invoke(INVOKESTATIC, name2[i], "reverseBytes", desc1[i]);
+			w.invoke(INVOKEVIRTUAL, unsafe, name3[i], usDesc);
+			w.one(RETURN);
+			w.finish();
+
+			if (i == 2) break;
+			v <<= 1;
+			i++;
+		}
+
+		Annotation annotation = new Annotation("Ljdk/internal/vm/annotation/ForceInline;", Collections.emptyMap());
+		for (MethodNode mn : impl.methods) {
+			if (mn.name().startsWith("<")) continue;
+			mn.putAttr(new Annotations(true, annotation));
+		}
+		return impl;
 	}
 }

@@ -1,5 +1,6 @@
 package roj.net.http;
 
+import roj.compiler.plugins.asm.ASM;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.net.ch.ChannelCtx;
@@ -58,7 +59,7 @@ public final class HCompress extends GDeflate {
 		}
 
 		DynByteBuf in = (DynByteBuf) msg;
-		DynByteBuf out = ctx.allocate(false, MathUtils.clamp(in.readableBytes(), 128, buf));
+		DynByteBuf out = ctx.allocate(ASM.TARGET_JAVA_VERSION >= 11, MathUtils.clamp(in.readableBytes(), 128, buf));
 		try {
 			deflateWrite(ctx, in, out, 0);
 		} finally {

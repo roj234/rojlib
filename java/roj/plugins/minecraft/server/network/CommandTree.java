@@ -3,8 +3,8 @@ package roj.plugins.minecraft.server.network;
 import roj.collect.ToIntMap;
 import roj.config.ParseException;
 import roj.ui.terminal.Argument;
-import roj.ui.terminal.ArgumentContext;
 import roj.ui.terminal.CommandNode;
+import roj.ui.terminal.CommandParser;
 import roj.ui.terminal.Completion;
 import roj.util.DynByteBuf;
 
@@ -21,7 +21,7 @@ public class CommandTree extends CommandNode {
 	public CommandTree() {}
 
 	@Override
-	public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+	public boolean apply(CommandParser ctx, List<Completion> completions) throws ParseException {
 		return false;
 	}
 
@@ -144,7 +144,7 @@ public class CommandTree extends CommandNode {
 
 		public void write(DynByteBuf buf) {
 			buf.putVarIntUTF(this.id);
-			if (argumentType.type().equals("string")) {
+			if (argumentType.type().equals("字符串")) {
 				buf.putVarInt(5).put(0);
 				// string:word
 			} else {

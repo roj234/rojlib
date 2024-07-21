@@ -1,8 +1,8 @@
 package roj.config.serial;
 
 import roj.collect.SimpleList;
-import roj.config.Interner;
 import roj.config.data.*;
+import roj.text.Interner;
 
 import java.util.List;
 
@@ -11,7 +11,7 @@ import java.util.List;
  * @since 2022/11/15 0015 2:07
  */
 public class ToXml implements CVisitor {
-	private static final byte
+	public static final byte
 		XML_BEGIN    = 0,
 		XML_NAME     = 1,
 		XML_ATTR     = 2,

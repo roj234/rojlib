@@ -34,6 +34,22 @@ import java.util.function.Consumer;
  * @since 2022/2/27 20:27
  */
 public final class DotGet extends VarNode {
+	static final ThreadLocal<Label> NULLISH_TARGET = new ThreadLocal<>();
+	static void writeNullishTarget(MethodWriter cw, Label ifNull, IType targetType) {
+		NULLISH_TARGET.remove();
+
+		var tmp = new Label();
+		cw.jump(tmp);
+		cw.label(ifNull);
+		cw.one(Opcodes.POP);
+		int type1 = targetType.getActualType();
+		if (type1 != Type.VOID) {
+			if (type1 != Type.CLASS) throw new ResolveException("symbol.error.derefPrimitive:"+targetType);
+			cw.one(Opcodes.ACONST_NULL);
+		}
+		cw.label(tmp);
+	}
+
 	ExprNode parent;
 	SimpleList<String> names;
 
@@ -48,13 +64,16 @@ public final class DotGet extends VarNode {
 
 	private static final ToIntMap<Class<?>> TypeId = new ToIntMap<>();
 	static {
-		TypeId.putInt(This.class, 0);
-		TypeId.putInt(Invoke.class, 1);
+		// Notnull
+		TypeId.putInt(This.class, 1);
+		TypeId.putInt(EncloseRef.class, 1);
+		TypeId.putInt(Constant.class, 1);
+		TypeId.putInt(ArrayDef.class, 1);
+
+		TypeId.putInt(Invoke.class, 2);
 		TypeId.putInt(ArrayGet.class, 2);
-		TypeId.putInt(ArrayDef.class, 3);
-		TypeId.putInt(Constant.class, 4);
-		TypeId.putInt(Cast.class, 5);
-		TypeId.putInt(EncloseRef.class, 6);
+
+		TypeId.putInt(Cast.class, 3);
 
 		// only after resolve (via getOperatorOverride)
 		TypeId.putInt(LocalVariable.class, 114);
@@ -195,6 +214,12 @@ public final class DotGet extends VarNode {
 					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", fType);
 					return NaE.RESOLVE_FAILED;
 				}
+
+				if (bits != 0 && flags == 1) {
+					final int offset = 0;
+					if (Long.numberOfTrailingZeros(bits) <= offset) ctx.report(Kind.ERROR, "dotGet.opChain.inClassDecl");
+					//bits >>>= offset;
+				}
 			}
 
 			String error = ctx.resolveField(symbol, fType, sb);
@@ -210,10 +235,8 @@ public final class DotGet extends VarNode {
 			String error = ctx.resolveDotGet(sb, classExprTarget != null);
 
 			if (bits != 0) {
-				if (classExprTarget != null) ctx.report(Kind.ERROR, "dotGet.opChain.isChild");
-
-				int offset = ctx.get_frOffset();
-				if (Long.numberOfTrailingZeros(bits) < offset) ctx.report(Kind.ERROR, "dotGet.opChain.inClassDecl");
+				int offset = ctx.get_frOffset()+1;
+				if (Long.numberOfTrailingZeros(bits) <= offset) ctx.report(Kind.ERROR, "dotGet.opChain.inClassDecl");
 				bits >>>= offset;
 			}
 
@@ -363,7 +386,17 @@ public final class DotGet extends VarNode {
 
 		if (i == length) return;
 
-		Label ifNull = bits == 0 ? null : new Label();
+		boolean isSet = false;
+		Label ifNull;
+		if (bits == 0) ifNull = null;
+		else {
+			ifNull = NULLISH_TARGET.get();
+			if (ifNull == null) {
+				NULLISH_TARGET.set(ifNull = new Label());
+				isSet = true;
+			}
+		}
+
 		for (;;) {
 			if ((bits&(1L << i)) != 0) {
 				cw.one(Opcodes.DUP);
@@ -388,18 +421,7 @@ public final class DotGet extends VarNode {
 			}
 		}
 
-		if (ifNull != null) {
-			if (cw.noverify) {
-				cw.label(ifNull);
-			} else {
-				Label tmp = new Label();
-				cw.jump(tmp);
-				cw.label(ifNull);
-				cw.one(Opcodes.POP);
-				cw.one(Opcodes.ACONST_NULL);
-				cw.label(tmp);
-			}
-		}
+		if (isSet) writeNullishTarget(cw, ifNull, fn.fieldType());
 	}
 
 	public DotGet add(String name, int flag) {
@@ -412,6 +434,10 @@ public final class DotGet extends VarNode {
 	}
 
 	public boolean maybeStringTemplate() {return parent == null && names.size() == 1 && bits == 0;}
+	public int isNullish() {
+		int off = (chain[0].modifier & Opcodes.ACC_STATIC) != 0 ? 1 : 0;
+		return ((1L << names.size() - off) & bits) != 0 ? 2 : bits != 0 ? 1 : 0;
+	}
 
 	@Override
 	public boolean equals(Object o) {

@@ -14,7 +14,7 @@ import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.TextWriter;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
 
@@ -41,7 +41,7 @@ public class MCTrim extends Plugin {
 
 			SimpleList<File> versions = new SimpleList<>();
 			while (true) {
-				File file = CLIUtil.awaitCommand(c, Argument.folder());
+				File file = Terminal.readLine(c, Argument.folder());
 				if (file == null) break;
 				versions.add(file);
 			}
@@ -64,13 +64,13 @@ public class MCTrim extends Plugin {
 			File versions = versionss.get(i);
 			File[] files = versions.listFiles();
 			if (files == null) {
-				CLIUtil.warning(versions+" 不是有效的版本文件夹夹");
+				Terminal.warning(versions+" 不是有效的版本文件夹夹");
 				continue;
 			}
 			for (File version : files) {
 				File versionJson = new File(version, version.getName()+".json");
 				if (!versionJson.isFile()) {
-					CLIUtil.warning(versions+" 不是有效的版本文件夹");
+					Terminal.warning(versions+" 不是有效的版本文件夹");
 					continue;
 				}
 
@@ -78,7 +78,7 @@ public class MCTrim extends Plugin {
 				try {
 					json = new JSONParser().charset(StandardCharsets.UTF_8).parse(versionJson).asMap();
 				} catch (ParseException e) {
-					CLIUtil.warning(versionJson+" 不是有效的版本JSON");
+					Terminal.warning(versionJson+" 不是有效的版本JSON");
 					continue;
 				}
 				json.dot(true);
@@ -103,7 +103,7 @@ public class MCTrim extends Plugin {
 		for (String assetId : assetIds) {
 			File file = new File(assets, "indexes/"+assetId+".json");
 			if (!file.isFile()) {
-				CLIUtil.warning(file + " 不是有效的资源索引");
+				Terminal.warning(file + " 不是有效的资源索引");
 				continue;
 			}
 
@@ -111,7 +111,7 @@ public class MCTrim extends Plugin {
 			try {
 				json = new JSONParser().parse(file).asMap().getMap("objects");
 			} catch (ParseException e) {
-				CLIUtil.warning(file+" 不是有效的资源索引");
+				Terminal.warning(file+" 不是有效的资源索引");
 				continue;
 			}
 			for (CEntry value : json.values()) {
@@ -124,7 +124,7 @@ public class MCTrim extends Plugin {
 
 		c:
 		while (true) {
-			var selection = CLIUtil.awaitCharacter(MyBitSet.from("LlSs\n"), new CharList("回车 删除, L 查看列表, S 保存列表, Ctrl+C 取消"), false);
+			var selection = Terminal.readChar(MyBitSet.from("LlSs\n"), new CharList("回车 删除, L 查看列表, S 保存列表, Ctrl+C 取消"), false);
 			switch (selection) {
 				case 0: return;
 				case '\n': break c;
@@ -133,7 +133,7 @@ public class MCTrim extends Plugin {
 					for (String key : librariesToRemove.keySet()) System.out.println("库文件 "+key);
 					break;
 				case 'S', 's':
-					File file = CLIUtil.awaitCommand(new CommandConsole("保存到 > "), Argument.fileOptional(true));
+					File file = Terminal.readLine(new CommandConsole("保存到 > "), Argument.fileOptional(true));
 					try (var tw = TextWriter.to(file)) {
 						tw.append("assets\n");
 						for (String key : assetsToRemove.keySet())  tw.append(key).append('\n');

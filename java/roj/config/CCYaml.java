@@ -23,6 +23,7 @@ public final class CCYaml extends YAMLParser implements CCParser {
 		this.flag = flag;
 		cc = cv;
 		init(text);
+		if (!next().val().equals("---")) retractWord();
 		try {
 			ccElement(flag);
 		} catch (ParseException e) {

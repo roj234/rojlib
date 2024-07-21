@@ -15,6 +15,7 @@ import roj.asm.tree.attr.Attribute;
 import roj.asmx.AnnotatedElement.Node;
 import roj.asmx.AnnotatedElement.Type;
 import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.io.IOUtil;
@@ -27,6 +28,8 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+
+import static roj.text.Interner.intern;
 
 /**
  * @author Roj234
@@ -46,7 +49,7 @@ public final class AnnotationRepo {
 	}
 	public void add(ZipFile za) throws IOException {
 		for (ZEntry ze : za.entries()) {
-			if (IOUtil.extensionName(ze.getName()).equalsIgnoreCase("class")) {
+			if (IOUtil.extensionName(ze.getName()).equals("class")) {
 				addRaw(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(ze)), ze.getName());
 			}
 		}
@@ -64,8 +67,11 @@ public final class AnnotationRepo {
 			Node subNode = new Node(klass, node);
 			add2(data.cp, node, subNode);
 
-			if (!subNode.annotations.isEmpty())
+			if (!subNode.annotations.isEmpty()) {
+				if (klass.children.isEmpty())
+					klass.children = new MyHashSet<>();
 				klass.children.add(subNode);
+			}
 		}
 	}
 	private void add2(ConstantPool cp, Attributed node, AnnotatedElement info) {
@@ -88,13 +94,13 @@ public final class AnnotationRepo {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		r.rIndex += 4;
 
-		ConstantPool cp = AsmShared.local().constPool();
+		var cp = AsmShared.local().constPool();
 		cp.read(r, ConstantPool.BYTE_STRING);
 
 		var acc = r.readChar();
-		var name = cp.getRefName(r);
-		if (!name.concat(".class").equals(fileName)) return;
-		var parent = cp.getRefName(r);
+		var name = intern(cp.getRefName(r));
+		if (name.endsWith("-info") || !name.concat(".class").equals(fileName)) return;
+		var parent = intern(cp.getRefName(r));
 
 		var skeleton = new AccessData(null, -1, name, parent);
 		skeleton.acc = acc;
@@ -103,7 +109,7 @@ public final class AnnotationRepo {
 
 		rawNodes.clear();
 		int len = r.readUnsignedShort();
-		for (int i = 0; i < len; i++) rawNodes.add(cp.getRefName(r));
+		for (int i = 0; i < len; i++) rawNodes.add(intern(cp.getRefName(r)));
 		skeleton.itf = Helpers.cast(ArrayUtil.copyOf(rawNodes));
 
 		for (int i = 0; i < 2; i++) {
@@ -111,7 +117,7 @@ public final class AnnotationRepo {
 			rawNodes.clear();
 			while (len-- > 0) {
 				acc = r.readChar();
-				var node = skeleton.new MOF(((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str(), 0);
+				var node = skeleton.new MOF(intern(((CstUTF) cp.get(r)).str()), intern(((CstUTF) cp.get(r)).str()), 0);
 				node.acc = acc;
 
 				int attrSize = r.readUnsignedShort();
@@ -125,6 +131,8 @@ public final class AnnotationRepo {
 					if (name1.equals("RuntimeVisibleAnnotations") || name1.equals("RuntimeInvisibleAnnotations")) {
 						if (xnode == null) {
 							xnode = new Node(klass, node);
+							if (klass.children.isEmpty())
+								klass.children = new MyHashSet<>();
 							klass.children.add(xnode);
 							rawNodes.add(node);
 						}
@@ -152,6 +160,7 @@ public final class AnnotationRepo {
 				r.rIndex += length;
 			}
 		}
+		AsmShared.local().constPool(cp);
 	}
 
 	public Set<AnnotatedElement> annotatedBy(String type) { return annotations.getOrDefault(type, Collections.emptySet()); }
@@ -193,6 +202,7 @@ public final class AnnotationRepo {
 		buf.putAscii("ANNOREP").put(0).putShort(annotations.size()).putShort(elements.size()).putShort(this.annotations.size());
 		cp.write(buf, false);
 		buf.put(rest);
+		AsmShared.local().constPool(cp);
 	}
 	private static void writeAcc(DynByteBuf buf, Type parent, ConstantPool cp, ToIntMap<Object> elements) {
 		var owner = (AccessData) parent.owner;
@@ -251,6 +261,7 @@ public final class AnnotationRepo {
 			}
 		}
 
+		AsmShared.local().constPool(cp);
 		return true;
 	}
 	private int readAcc(DynByteBuf r, ConstantPool cp, AnnotatedElement[] elements, int elementCount) {

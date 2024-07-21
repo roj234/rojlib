@@ -3,15 +3,12 @@ package roj.net.http.server;
 import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.Headers;
-import roj.net.http.HttpUtil;
-import roj.net.http.IllegalRequestException;
 import roj.text.CharList;
-import roj.text.UTF8MB4;
+import roj.text.UTF8;
+import roj.text.logging.LogHelper;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.Objects;
 
 public class StringResponse implements Response {
@@ -26,34 +23,18 @@ public class StringResponse implements Response {
 	public CharSequence string() {return str;}
 	public String mimetype() {return mime;}
 
-	public static StringResponse detailedErrorPage(int code, Object e) {
-		if (code == 0) {
-			code = e instanceof IllegalRequestException ? ((IllegalRequestException) e).code : HttpUtil.INTERNAL_ERROR;
-		}
-
-		StringWriter sw = new StringWriter();
-		sw.write("<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"><title>");
-		sw.write(HttpUtil.getDescription(code));
-		sw.write("</title></head><body><div><i><h2>编程错误:</h2></i><p><h3>");
-		sw.write(HttpUtil.getDescription(code));
-		sw.write("</h3><h3><font color='red'>");
-
-		if (e != null) {
-			if (e instanceof Throwable) {
-				sw.write("以下为错误详细信息: <br/><pre>");
-				((Throwable) e).printStackTrace(new PrintWriter(sw));
-				sw.write("</pre>");
-			} else {
-				sw.write(e.toString());
-			}
-		}
-
-		sw.write(
-			"</font></h3></p><p>您可以点击<a href='javascript:location.reload();'>重试</a>.</p><br/><hr/>" +
-				"<div>"+HttpServer11.SERVER_NAME +"</div></div><!-- padding for ie --><!-- padding for ie -->" +
-				"<!-- padding for ie --><!-- padding for ie --></body></html>");
-
-		return new StringResponse(sw.toString(), "text/html");
+	public static StringResponse errorPage(CharSequence e) {return errorPage("内部错误", e);}
+	public static StringResponse errorPage(String title, Object o) {
+		var sb = new CharList();
+		sb.append("<html><head><title>").append(title)
+		  .append(" - openresty</title><style>*{margin:0;padding:0}i{color:#888;font-size:13px;cursor:pointer}i:hover{color:#1890ff;text-decoration:underline}</style></head>"+
+			  "<body style=\"background-color:#ebf0f6;font-family:'Microsoft Yahei';line-height:1.5;position:fixed;width:100%;height:100%;display:flex;justify-content:center;align-items:center\">" +
+			  "<div style=\"background:#fff;border-radius:8px;padding-bottom:50px;box-shadow:0 5px 20px rgb(0,0,0,0.3)\"><div style=\"font-size:24px;margin:20px 0;text-align:center\">").append(title)
+		  .append("</div><div style=\"color:#333;background:#f8f8f8;font-size:16px;margin:0 24px;border-radius:2px;padding:24px 40px\"><pre style=\"border-left:5px solid #1890ff;padding:5px 10px;color:#666\">");
+		if (o instanceof Throwable ex) LogHelper.printError(ex, sb, "");
+		else sb.append(o);
+		sb.append("</pre><i onclick=\"location.reload()\">刷新一下？</i></div></div></body></html>");
+		return new StringResponse(sb, "text/html");
 	}
 
 	private DynByteBuf buf;
@@ -68,7 +49,7 @@ public class StringResponse implements Response {
 		}
 
 		buf.clear();
-		off = UTF8MB4.CODER.encodeFixedOut(str,off,str.length(),buf,buf.capacity());
+		off = UTF8.CODER.encodeFixedOut(str,off,str.length(),buf,buf.capacity());
 		rh.write(buf);
 
 		return buf.isReadable() || off < str.length();
@@ -88,9 +69,13 @@ public class StringResponse implements Response {
 		int len = str.length();
 		if (len > 127) rh.enableCompression();
 
-		buf = rh.ch().alloc().allocate(true, 4096);
+		int bufferCap = 4096;
+		if (len < 10000) {
+			int utfLen = DynByteBuf.byteCountUTF8(str);
+			h.putIfAbsent("content-length", Integer.toString(utfLen));
+			if (bufferCap > utfLen) bufferCap = utfLen;
+		}
+		buf = rh.ch().alloc().allocate(true, bufferCap);
 		if (mime != null) h.putIfAbsent("content-type", mime);
-
-		if (len < 10000) h.putIfAbsent("content-length", Integer.toString(DynByteBuf.byteCountUTF8(str)));
 	}
 }

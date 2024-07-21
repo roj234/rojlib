@@ -202,11 +202,8 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 * EdDSA / X25519DH
 * XXHash32
 
-## roj.dev
-    热重载
-* 修改方法
-* 增加方法、字段 （JVM原生可不支持）
-* 删除方法、字段 （JVM也不支持）
+## roj.excel
+    xlsx读写
 
 ## roj.exe
     PE文件格式(.exe .dll)和ELF文件格式(.so)的解析
@@ -220,21 +217,15 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 ## roj.math  
     各种向量啊矩阵啊并不是我写的，不过我感觉我现在也能写出来...  
 
-`MutableBigInteger`: 如其名
+`MutableBigInteger`: 如其名  
 `Version`: 1.2.3版本解析
   
 ## roj.misc  
-    各种工具，也可以看作是这个lib的测试样例  
+    不好分类的命令行工具
   
-1.   `AdGuard` 基于DNS的广告屏蔽器  
-2.   `FindClass` 查找类中元素的引用或定义，比jd-gui更好！
-3.   `MHTParser` 解析mhtml
-4.   `MP3Player` MP3播放器
-5.   `PluginRenamer` 恢复被无良腐竹改了的插件名
-6.   `SameServerFinder` 端口扫描
-7.   `Translator` String常量修改（翻译）
-8.   `TrimMinecraft` 删除Minecraft不被版本JSON引用的资源和库文件
-9.   `UIEntry` 所有GUI的入口
+1. `FindClass` 查找类中元素的引用或定义，比jd-gui更好！
+2. `ModuleKiller` 一行代码干掉Jigsaw
+3. `UIEntry` 所有GUI的入口
   
 ## roj.mod
     我自己写的模组编译器  
@@ -265,8 +256,8 @@ HTTP服务器, 客户端
   * 压缩缓存
   * 注解路由
   * 错误友好
-  * Websocket ready
-  * HTTP2.0 (WIP)
+  * Websocket
+  * HTTP2.0
 
 DNS服务器  
 
@@ -290,10 +281,18 @@ P2P
 ### 图片展示
 ![roj.plugins.frp.AEGui](docs/images/port transfer.png)
 ddns
-* DDNS服务器，现支持阿里云API  
-CardSleep: 显卡频率限制  
-MyPassIs: 安全密码生成器  
-`Websocketed` 用Websocket执行任意脚本
+* DDNS服务器，现支持阿里云和dynv6 API  
+* CardSleep: 显卡频率限制  
+* MyPassIs: 安全密码生成器  
+* `Websocketed` 用Websocket执行任意脚本
+* PHP  
+* EasySSO
+* WebTerminal
+* MusicPlayer
+* SimpleMQ
+* CodeStat
+* Unpacker
+* MinecraftServer
 
 ## roj.reflect
 `EnumHelper`,  动态增删枚举  

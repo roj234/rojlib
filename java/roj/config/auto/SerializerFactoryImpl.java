@@ -20,6 +20,10 @@ import roj.asm.visitor.Label;
 import roj.asm.visitor.LongByeBye;
 import roj.asm.visitor.SwitchSegment;
 import roj.collect.*;
+import roj.compiler.context.GlobalContext;
+import roj.compiler.context.LibraryClassLoader;
+import roj.compiler.context.LocalContext;
+import roj.compiler.resolve.Inferrer;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.ReflectionUtils;
@@ -30,8 +34,7 @@ import roj.util.Helpers;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static roj.asm.Opcodes.*;
@@ -173,11 +176,9 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		ser = (Adapter) ((GA)ser).clone();
 
 		synchronized (localRegistry) {
+			((GA) ser).init2(this, adapter);
 			localRegistry.put(type.getName(), ser);
 		}
-
-		((GA) ser).init2(this, adapter);
-
 		return this;
 	}
 	/**
@@ -206,10 +207,9 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		ser = (Adapter) ((GA)ser).clone();
 
 		synchronized (localRegistry) {
+			((GA) ser).init2(this, adapter);
 			localRegistry.put(type.getName(), ser);
 		}
-
-		((GA) ser).init2(this, adapter);
 		return this;
 	}
 
@@ -374,6 +374,19 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			}
 			sb._free();
 
+			// 就是有点太重量级了
+			// 然而，java反射自带的泛型API就是依托答辩
+			if (generic != null) {
+				try {
+					Inferrer.TEMPORARY_DISABLE_ASTERISK.set(true);
+					var types = genericInferrer().inferGeneric(generic, c.getName().replace('.', '/'));
+					if (types != null) generic.children = types;
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				Inferrer.TEMPORARY_DISABLE_ASTERISK.remove();
+			}
+
 			ser = ser.transform(this, type, generic == null ? null : generic.children);
 			synchronized (localRegistry) {localRegistry.put(name, ser);}
 			return ser;
@@ -394,15 +407,22 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		}
 
 		synchronized (localRegistry) {
+			if (ser instanceof GA) ((GA) ser).init2(this, null);
 			localRegistry.put(name, ser);
 		}
-
-		if (ser instanceof GA) {
-			((GA) ser).init2(this, null);
-		}
-
 		return ser;
 	}
+
+	private GlobalContext gc_;
+	private LocalContext genericInferrer() {
+		var gc = gc_;
+		if (gc == null) {
+			gc_ = gc = new GlobalContext();
+			gc.addLibrary(new LibraryClassLoader(classLoader));
+		}
+		return gc.createLocalContext();
+	}
+
 	private static boolean mustBeDynamic(Class<?> type) {
 		if (type.getComponentType() != null) return false;
 		if ((type.getModifiers() & (ACC_ABSTRACT|ACC_INTERFACE)) != 0) return true;
@@ -437,12 +457,11 @@ final class SerializerFactoryImpl extends SerializerFactory {
 					}
 				}
 
+				if (ser instanceof GA g) g.init(new IntBiMap<>(fieldIds), optionalEx);
 				GENERATED.put(name, ser);
 			} finally {
 				lock.unlock();
 			}
-
-			if (ser instanceof GA g) g.init(new IntBiMap<>(fieldIds), optionalEx);
 		}
 		return ser;
 	}
@@ -526,6 +545,9 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		cw.one(ICONST_1);
 		cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/auto/AdaptContext", "popd", "(Z)V");
 		cw.one(RETURN);
+
+		c.methods.remove(c.getMethod("write"));
+		c.getMethodObj("write1").name("write");
 	}
 	private static void addUpgrader(ConstantData c, byte code) {
 		String orig = showOpcode(code);
@@ -964,7 +986,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		} else {
 			if (myCode == -1) {
 				cw.vars(ALOAD, 2);
-				cw.invoke(INVOKESTATIC, "java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;");
+				cw.invoke(INVOKESTATIC, "roj/config/auto/SerializerFactory", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;");
 				switch (actualType) { // BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT
 					case Type.BOOLEAN: cw.invoke(INVOKESTATIC, "java/lang/Boolean", "parseBoolean", "(Ljava/lang/String;)Z"); break;
 					case Type.BYTE: cw.invoke(INVOKESTATIC, "java/lang/Byte", "parseByte", "(Ljava/lang/String;)B"); break;
@@ -979,7 +1001,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 				if (actualType == Type.CLASS) {
 					String type1 = type.getActualClass();
 					if (type1.equals("java/lang/String")) {
-						cw.invoke(INVOKESTATIC, "java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;");
+						cw.invoke(INVOKESTATIC, "roj/config/auto/SerializerFactory", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;");
 					} else {
 						cw.clazz(CHECKCAST, type1);
 					}
@@ -1055,7 +1077,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			int id;
 			String serType = type.getActualClass();
 			Signature serSig = fn.parsedAttr(data.cp, Attribute.SIGNATURE);
-			id = ser(serType, serSig != null ? serSig.toDesc() : null);
+			id = ser(serType, serSig != null ? typeParamToRaw(serSig) : null);
 
 			keySwitch.branch(fieldId, cw.label());
 			cw.one(ALOAD_1);
@@ -1127,6 +1149,19 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 		if (skip != null) cw.label(skip);
 	}
+
+	private String typeParamToRaw(Signature sig) {
+		var mapper = new AbstractMap<String, IType>() {
+			@Override public Set<Entry<String, IType>> entrySet() {return Collections.emptySet();}
+			@Override public IType get(Object key) {return Signature.any();}
+		};
+
+		List<IType> values = sig.values;
+		for (int i = 0; i < values.size(); i++)
+			values.set(i, Inferrer.clearTypeParam(values.get(i), mapper, null));
+		return sig.toDesc();
+	}
+
 	private Tmp2 createReadMethod(ConstantData data, int methodType) {
 		String desc;
 		int size = 1;
@@ -1248,6 +1283,10 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	private Adapter build(ClassLoader cl) {
 		ConstantData c1 = c;
 		c = null;
+		// 2024/7/23 让ConstantPool可以释放
+		keyCw = null;
+		keySwitch = null;
+		keyPrimitive = null;
 
 		if (serializerId.isEmpty()) {
 			c1.methods.remove(c1.getMethod("init2"));

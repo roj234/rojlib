@@ -18,6 +18,7 @@ import roj.asm.util.ClassUtil;
 import roj.asm.visitor.Label;
 import roj.asmx.mapper.util.NameAndType;
 import roj.collect.*;
+import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
 import roj.compiler.api.MethodDefault;
 import roj.compiler.asm.AnnotationPrimer;
@@ -74,6 +75,8 @@ public class LocalContext {
 	public MethodNode method;
 	public boolean in_static, in_constructor, not_invoke_constructor;
 	public boolean disableRawTypeWarning;
+	// Tailrec使用
+	public boolean inReturn;
 
 	public LocalContext(GlobalContext ctx) {
 		this.classes = ctx;
@@ -485,27 +488,30 @@ public class LocalContext {
 	 * @return 错误码,null为成功
 	 */
 	public String resolveDotGet(CharList desc, boolean allowClassExpr) {
-		CharList sb = fieldResolveTmp;
-
 		ConstantData directClz = null;
 		String anySuccess = "";
 		_frOffset = 0;
+
 		int slash = desc.indexOf("/");
 		if (slash >= 0) {
-			directClz = tr.resolve(this, desc.substring(0, slash));
+			directClz = tr.resolve(this, desc.substring(0, slash++));
 			if (directClz != null) {
-				String error = resolveField(directClz, null, desc, slash+1);
+				String error = resolveField(directClz, null, desc, slash);
 				if (error == null) return null;
 
 				anySuccess = error;
 			}
 
-			do {
+			var sb = fieldResolveTmp;
+			for(;;) {
+				slash = desc.indexOf("/", slash);
+				if (slash < 0) break;
+
 				_frOffset++;
 				sb.clear(); sb.append(desc, 0, slash);
 
 				int dollar = slash++;
-				while (true) {
+				for(;;) {
 					var clz = classes.getClassInfo(sb);
 					if (clz != null) {
 						String error = resolveField(clz, null, desc, slash);
@@ -518,9 +524,7 @@ public class LocalContext {
 					if (dollar < 0) break;
 					sb.set(dollar, '$');
 				}
-
-				slash = desc.indexOf("/", slash);
-			} while (slash >= 0);
+			}
 		}
 
 		if (anySuccess.isEmpty()) {

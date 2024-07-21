@@ -6,6 +6,7 @@ import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.config.data.*;
 import roj.text.CharList;
+import roj.text.Interner;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
@@ -32,12 +33,14 @@ public class YAMLParser extends Parser {
 
 	private static final TrieTree<Word> YAML_TOKENS = new TrieTree<>();
 	// - for timestamp
-	private static final MyBitSet YAML_LENDS = new MyBitSet(), TMP1 = MyBitSet.from("\r\n:#");
+	private static final MyBitSet YAML_LENDS = new MyBitSet(), TMP1 = MyBitSet.from("\r\n:#"), TMP_JSON = MyBitSet.from(":,{}[]\r\n \t");
 
 	static {
 		put(TRUE, "True", "On", "Yes");
 		put(FALSE, "False", "Off", "No");
 		put(NULL, "Null");
+		put(EOF, "---"); // 文档起始标记
+		put(EOF, "..."); // 文档结束标记
 		addSymbols(YAML_TOKENS, YAML_LENDS, lBrace, "{","}","[","]",",",":","-","?","<<","&","*","!!","|",">");
 		addWhitespace(YAML_LENDS);
 		markSpecial(YAML_TOKENS,"&","*","!!","|",">");
@@ -59,7 +62,7 @@ public class YAMLParser extends Parser {
 	{ tokens = YAML_TOKENS; literalEnd = YAML_LENDS; }
 
 	public YAMLParser() {}
-	public YAMLParser(int flag) { super(flag); }
+	public YAMLParser(int flag) {super(flag);}
 
 	public Map<String, Integer> dynamicFlags() { return Map.of("OrderedMap", ORDERED_MAP,  "Lenient", LENIENT, "NoDuplicateKey", NO_DUPLICATE_KEY); }
 	public final ConfigMaster format() { return ConfigMaster.YAML; }
@@ -169,7 +172,18 @@ public class YAMLParser extends Parser {
 		return comment == null ? new CMap(map) : new CCommMap(map, comment);
 	}
 
-	// TODO 使用 --- 开始 ... 结束，在同一个文档中包含多个YAML
+	public CEntry parse(CharSequence text, int flag) throws ParseException {
+		this.flag = flag;
+		init(text);
+		if (!next().val().equals("---")) retractWord();
+		try {
+			return element(flag);
+		} catch (ParseException e) {
+			throw e.addPath("$");
+		} finally {
+			init(null);
+		}
+	}
 	final CEntry element(int flag) throws ParseException {
 		Word w = next();
 		String cnt = w.val();
@@ -428,7 +442,14 @@ public class YAMLParser extends Parser {
 
 	protected final Word readLiteral() throws ParseException {
 		// {a:b}
-		if ((flag & JSON_MODE) != 0) return super.readLiteral();
+		if ((flag & JSON_MODE) != 0) {
+			literalEnd = TMP_JSON;
+			try {
+				return super.readLiteral();
+			} finally {
+				literalEnd = YAML_LENDS;
+			}
+		}
 
 		CharSequence in = input;
 		int i = index;
@@ -438,13 +459,8 @@ public class YAMLParser extends Parser {
 		while (i < in.length()) {
 			char c = in.charAt(i);
 			if (TMP1.contains(c)) {
-				if (c == '\r' || c == '\n') break;
-
-				if (c == ':') {
-					if (i + 1 >= in.length() || WHITESPACE.contains(in.charAt(i + 1))) {
-						break;
-					}
-				} else if (textI == i-1) { // #
+				// 对于冒号，额外要求后面是空白字符
+				if (c != ':' || (i + 1 >= in.length() || WHITESPACE.contains(in.charAt(i + 1)))) {
 					break;
 				}
 			}

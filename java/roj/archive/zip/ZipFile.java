@@ -1,6 +1,9 @@
 package roj.archive.zip;
 
-import roj.archive.*;
+import roj.archive.ArchiveEntry;
+import roj.archive.ArchiveFile;
+import roj.archive.ArchiveUtils;
+import roj.archive.CRC32InputStream;
 import roj.collect.SimpleList;
 import roj.collect.XHashSet;
 import roj.crypt.CipherInputStream;
@@ -517,7 +520,7 @@ public class ZipFile implements ArchiveFile {
 
 		initDataOffset(src, entry);
 		src.seek(entry.offset);
-		return new SourceStreamCAS(src, entry.cSize, this, FPREAD_OFFSET);
+		return new SourceInputStream.Shared(src, entry.cSize, this, FPREAD_OFFSET);
 	}
 
 	public final byte[] get(String entry) throws IOException {

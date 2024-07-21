@@ -13,9 +13,7 @@ import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.UnaryPreNode;
-import roj.compiler.plugins.api.ExprApi;
-import roj.compiler.plugins.api.StreamChain;
-import roj.compiler.plugins.api.StreamChainExpr;
+import roj.compiler.plugins.api.*;
 import roj.config.Word;
 import roj.util.Helpers;
 
@@ -23,7 +21,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 /**
  * 这个类的设计只是为了能跑起来，之后再优化
@@ -74,17 +71,13 @@ class ImplExprApi implements ExprApi {
 
 	@Override
 	public void addUnaryPre(String token, BiFunction<JavaLexer, @Nullable UnaryPreNode, UnaryPreNode> fn) {register(ExprParser.SM_UnaryPre, token, fn, 0);}
-	@Override
-	public void addExprGen(String token, Function<JavaLexer, ExprNode> fn) {register(ExprParser.SM_UnaryPre, token, fn, ExprParser.CU_TerminateFlag);}
-	@Override
-	public void addExprStart(String token, Function<JavaLexer, ExprNode> fn) {register(ExprParser.SM_ExprStart, token, fn, 0);}
-	@Override
-	public void addExprConv(String token, BiFunction<JavaLexer, ExprNode, ExprNode> fn) {register(ExprParser.SM_ExprNext, token, fn, 0);}
-	@Override
-	public void addExprTerminal(String token, BiFunction<JavaLexer, ExprNode, ExprNode> fn) {register(ExprParser.SM_ExprNext, token, fn, ExprParser.CU_TerminateFlag);}
+	@Override public void addExprGen(String token, LEG fn) {register(ExprParser.SM_UnaryPre, token, fn, ExprParser.CU_TerminateFlag);}
+	@Override public void addExprStart(String token, LEG fn) {register(ExprParser.SM_ExprStart, token, fn, 0);}
+	@Override public void addExprConv(String token, LEC fn) {register(ExprParser.SM_ExprNext, token, fn, 0);}
+	@Override public void addExprTerminal(String token, LEC fn) {register(ExprParser.SM_ExprNext, token, fn, ExprParser.CU_TerminateFlag);}
 
 	@Override
-	public void addBinary(String token, int priority, BiFunction<ExprNode, ExprNode, ExprNode> callback) {
+	public void addBinary(String token, int priority, LEC callback) {
 		throw new UnsupportedOperationException("not implemented yet");
 	}
 

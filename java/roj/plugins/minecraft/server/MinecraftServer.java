@@ -184,5 +184,6 @@ public class MinecraftServer extends Plugin {
 		return event.getPlayerEntity();
 	}
 
-	public int getCompressionThreshold() { return 255; }
+	public int getCompressionThreshold() {return 256;}
+	public int getViewDistance() {return 12;}
 }

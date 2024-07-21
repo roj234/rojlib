@@ -32,7 +32,7 @@ public class CLIBoxRenderer {
 		NPR = npr.toCharArray();
 	}
 
-	public void render(String[][] table) { render(CLIUtil.windowWidth, table); }
+	public void render(String[][] table) { render(Terminal.windowWidth, table); }
 	public void render(int _width, String[][] table) {
 		sb.clear();
 
@@ -44,7 +44,7 @@ public class CLIBoxRenderer {
 			String[] box = table[i];
 			int off = i==0?1:0;
 			for (int j = off; j < box.length; j++) {
-				int w = CLIUtil.getStringWidth(box[j]);
+				int w = Terminal.getStringWidth(box[j]);
 				boxWidth[j-off] = Math.max(boxWidth[j-off], w);
 			}
 		}
@@ -82,7 +82,7 @@ public class CLIBoxRenderer {
 		List<List<String>> totalLines = new SimpleList<>();
 		for (int i = i1; i < box.length; i++) {
 			// -1来强制边距..算了,纯英文开比较好
-			List<String> lines = CLIUtil.splitByWidth(box[i], boxWidth[i-i1]);
+			List<String> lines = Terminal.splitByWidth(box[i], boxWidth[i-i1]);
 			for (int j = 0; j < lines.size(); j++) {
 				String line = lines.get(j);
 				if (totalLines.size() <= j) totalLines.add(new SimpleList<>());
@@ -97,7 +97,7 @@ public class CLIBoxRenderer {
 			for (int i = 0; i < boxOffset.size(); i++) {
 				String str = i >= line.size() ? "" : line.get(i);
 				sb.append(NPR[VERITAL_SEPARATOR]).append(NPR[SPACE]).append(str);
-				int width = CLIUtil.getStringWidth(str);
+				int width = Terminal.getStringWidth(str);
 				vOffset += width+2;
 				while (width < boxWidth[i]) {
 					sb.append(NPR[SPACE]);
@@ -108,7 +108,7 @@ public class CLIBoxRenderer {
 		}
 	}
 	private void writeTop(String head) {
-		int width = CLIUtil.getStringWidth(head)+3;
+		int width = Terminal.getStringWidth(head)+3;
 		int half = (realWidth-width)/2;
 		int vOffset = 1;
 

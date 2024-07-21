@@ -4,6 +4,7 @@ import roj.archive.qz.QZArchive;
 import roj.archive.qz.QZEntry;
 import roj.archive.qz.WordBlock;
 import roj.collect.MyHashMap;
+import roj.concurrent.TaskPool;
 import roj.config.NBTParser;
 import roj.config.serial.ToNBT;
 import roj.crypt.Blake3;
@@ -13,9 +14,9 @@ import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.MyDataInputStream;
 import roj.io.MyRegionFile;
-import roj.io.source.FileSource;
 import roj.text.TextReader;
 import roj.text.TextUtil;
+import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
 import roj.util.BsDiff;
 import roj.util.ByteList;
@@ -37,6 +38,7 @@ public class McDiffClient {
 
 	public void apply(File basePath) throws IOException {
 		QZEntry hashes = archive.getEntry(".vcs|hashes");
+		System.out.println("正在验证哈希");
 		if (hashes != null) try (MyDataInputStream in = new MyDataInputStream(archive.getStream(hashes))) {
 			byte[] tmp = ArrayCache.getByteArray(1024, false);
 			while (in.isReadable()) {
@@ -49,6 +51,9 @@ public class McDiffClient {
 			ArrayCache.putArray(tmp);
 		}
 
+		var pool = TaskPool.Common();
+		var bar = new EasyProgressBar("应用更新包");
+		bar.addMax(archive.getEntriesByPresentOrder().length);
 		for (QZEntry entry : archive.getEntriesByPresentOrder()) {
 			String name = entry.getName();
 
@@ -67,68 +72,71 @@ public class McDiffClient {
 						System.out.println("移动文件 "+name+" => "+destFile+" 失败");
 					}
 				}
+				bar.addCurrent(1);
 			} else {
 				File file = new File(basePath, name);
 				file.getParentFile().mkdirs();
 
-				switch ((int) entry.getModificationTime()) {
-					case 0 -> {
-						try (InputStream in = archive.getStream(entry)) {
-							try (OutputStream out = new FileOutputStream(file)) {
-								IOUtil.copyStream(in, out);
+				pool.submit(() -> {
+					var data = archive.getInputUncached(entry);
+					try (InputStream in = data) {
+						switch ((int) entry.getModificationTime()) {
+							case 0 -> {
+								try (var out = new FileOutputStream(file)) {
+									IOUtil.copyStream(in, out);
+								}
 							}
-						}
-					}
-					case McDiffServer.GZIP -> {
-						try (InputStream in = archive.getStream(entry)) {
-							try (OutputStream out = new GZIPOutputStream(new FileOutputStream(file))) {
-								IOUtil.copyStream(in, out);
+							case McDiffServer.GZIP -> {
+								try (var out = new GZIPOutputStream(new FileOutputStream(file))) {
+									IOUtil.copyStream(in, out);
+								}
 							}
-						}
-					}
-					case McDiffServer.REGION -> {
-						MyRegionFile rf = new MyRegionFile(new FileSource(file), 4096, 1024, 0);
-						try {
-							rf.load();
-						} catch (Exception e) {
-							rf.clear();
-						}
-
-						try (MyDataInputStream in = new MyDataInputStream(archive.getStream(entry))) {
-							// short pos int timestamp int patchLength
-							while (in.isReadable()) {
-								int pos = in.readShort();
-								int time = in.readInt();
-								int patch = in.readInt();
-
-								try (DataOutputStream dos = rf.getDataOutput(pos)) {
-									if (patch == 0) {
-										ByteList.WriteOut buf = new ByteList.WriteOut(dos);
-										new NBTParser().parse(in, 0, new ToNBT(buf));
-										buf.close();
-									} else {
-										if (!rf.hasData(pos)) throw new CorruptedInputException("diff source missing");
-
-										ByteList xin = IOUtil.getSharedByteBuf().readStreamFully(rf.getData(pos, null));
-										BsDiff.patchStream(xin, in, dos);
-									}
+							case McDiffServer.REGION -> {
+								MyRegionFile rf;
+								try {
+									rf = new MyRegionFile(file);
+								} catch (Exception e) {
+									return;
 								}
 
-								rf.setTimestamp(pos, time);
-							}
-						}
+								try (var mdi = new MyDataInputStream(in)) {
+									// short pos int timestamp int patchLength
+									while (mdi.isReadable()) {
+										int pos = mdi.readShort();
+										int time = mdi.readInt();
+										int patch = mdi.readInt();
 
-						rf.close();
+										try (var dos = rf.getDataOutput(pos)) {
+											if (patch == 0) {
+												try (var buf = new ByteList.WriteOut(dos)) {
+													new NBTParser().parse(mdi, 0, new ToNBT(buf));
+												}
+											} else {
+												if (!rf.hasData(pos)) throw new CorruptedInputException("diff source missing");
+
+												ByteList xin = IOUtil.getSharedByteBuf().readStreamFully(rf.getInputStream(pos, null));
+												BsDiff.patchStream(xin, mdi, dos);
+											}
+										}
+										rf.setTimestamp(pos, time);
+									}
+								} finally {
+									IOUtil.closeSilently(rf);
+								}
+							}
+							case McDiffServer.DIFF -> throw new IllegalStateException("not supported yet");
+						}
 					}
-					case McDiffServer.DIFF -> {
-						throw new IllegalStateException("not supported yet");
-					}
-				}
+					bar.addCurrent(1);
+				});
 			}
 		}
+		pool.awaitFinish();
+		bar.end("应用成功");
+		archive.close();
 	}
 
-	public void load(File arc) throws IOException, GeneralSecurityException {
+	public void load(File arc, boolean skipSignatureCheck) throws IOException, GeneralSecurityException {
 		archive = new QZArchive(arc);
 
 		for (QZEntry entry : archive.getEntriesByPresentOrder()) {
@@ -149,10 +157,13 @@ public class McDiffClient {
 		}
 
 		QZEntry entry = archive.getEntry(".vcs|signature");
-		if (entry == null) throw new CorruptedInputException("更新包未签名");
+		if (entry == null) {
+			if (skipSignatureCheck) return;
+			throw new CorruptedInputException("更新包未签名");
+		}
 
 		WordBlock[] blocks = archive.getWordBlocks();
-		if (entry.getBlock() != blocks[blocks.length-1] || blocks[blocks.length-1].getFileCount() != 1) throw new CorruptedInputException("签名方式不合法");
+		if (entry.block() != blocks[blocks.length-1] || blocks[blocks.length-1].getFileCount() != 1) throw new CorruptedInputException("签名方式不合法");
 
 		verifySign(arc, entry, blocks);
 	}

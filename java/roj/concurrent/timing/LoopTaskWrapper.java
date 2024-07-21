@@ -35,13 +35,16 @@ public class LoopTaskWrapper implements ITask {
 			case 0: task.execute(); break; // ACCURATE_TIMER
 			case 1:
 				if (u.compareAndSwapInt(this, STATE_OFFSET, 1, 2)) {
-					task.execute();
-					// 任务执行时间超过一个周期，在完成之后重新添加
-					if (u.compareAndSwapInt(this, STATE_OFFSET, 3, 1)) {
-						// re-schedule
-						sched.delay(this, interval);
-					} else {
-						u.compareAndSwapInt(this, STATE_OFFSET, 2, 1);
+					try {
+						task.execute();
+					} finally {
+						// 任务执行时间超过一个周期，在完成之后重新添加
+						if (u.compareAndSwapInt(this, STATE_OFFSET, 3, 1)) {
+							// re-schedule
+							sched.delay(this, interval);
+						} else {
+							u.compareAndSwapInt(this, STATE_OFFSET, 2, 1);
+						}
 					}
 				}
 				break;

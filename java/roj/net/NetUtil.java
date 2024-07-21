@@ -5,7 +5,7 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.net.ch.MyChannel;
 import roj.net.handler.Socks5Client;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.text.CharList;
 import roj.text.Escape;
 import roj.text.TextUtil;
@@ -227,7 +227,7 @@ public final class NetUtil {
 		if (Util == null) {
 			synchronized (NetUtil.class) {
 				if (Util == null) {
-					DirectAccessor<H> b = DirectAccessor.builder(H.class);
+					Bypass<H> b = Bypass.builder(H.class);
 					try {
 						Class<?> pl = Class.forName("sun.net.InetAddressCachePolicy");
 						String[] fieldName = new String[] {"cachePolicy", "negativeCachePolicy", "propertySet", "propertyNegativeSet"};

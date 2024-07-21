@@ -7,7 +7,7 @@ import roj.io.IOUtil;
 import roj.text.LinedReader;
 import roj.text.TextReader;
 import roj.text.TextUtil;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -122,7 +122,7 @@ public final class YarnMapping extends Mapping {
 					}
 					break;
 				case "COMMENT": break;
-				default: CLIUtil.error(name+":"+ln+": 未知标记类型. "+tmp);
+				default: Terminal.error(name+":"+ln+": 未知标记类型. "+tmp);
 			}
 		}
 	}
@@ -150,7 +150,7 @@ public final class YarnMapping extends Mapping {
 					fieldMap.put(new Desc(tmp.get(1), tmp.get(3), checkFieldType?tmp.get(2):""), tmp.get(4));
 					break;
 				default:
-					CLIUtil.error(name + ":" + i + ": 未知标记类型. " + tmp);
+					Terminal.error(name + ":" + i + ": 未知标记类型. " + tmp);
 					break;
 			}
 			i++;

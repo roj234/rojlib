@@ -14,7 +14,10 @@ import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
-import java.nio.charset.*;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.CoderResult;
+import java.nio.charset.CodingErrorAction;
 import java.nio.file.StandardOpenOption;
 
 /**
@@ -41,45 +44,39 @@ public class TextWriter extends CharList implements Closeable, Finishable {
 		return new TextWriter(FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE, StandardOpenOption.APPEND), cs);
 	}
 	public static void write(File file, CharSequence str) throws IOException {
-		try (TextWriter tw = to(file)) { tw.append(str); }
+		try (var tw = to(file)) { tw.append(str); }
 	}
 
 	public TextWriter(Closeable out, Charset charset) { this(out,charset,BufferPool.localPool()); }
-	public TextWriter(Closeable out, Charset cs, BufferPool pool) {
-		if (out instanceof DynByteBuf) {
-			type = 2;
-		} else if (out instanceof OutputStream) {
-			type = 0;
-		} else if (out instanceof WritableByteChannel) {
-			type = 1;
-		} else {
-			throw new IllegalArgumentException("无法确定 " + out.getClass().getName() + " 的类型");
-		}
+	public TextWriter(Closeable out, Charset charset, BufferPool pool) {
+		if (out instanceof DynByteBuf) type = 2;
+		else if (out instanceof OutputStream) type = 0;
+		else if (out instanceof WritableByteChannel) type = 1;
+		else throw new IllegalArgumentException("无法确定 "+out.getClass().getName()+" 的类型");
 
-		if (cs == null) cs = TextUtil.DefaultOutputCharset;
-
-		if (StandardCharsets.UTF_8 == cs) {
-			ucs = UTF8MB4.CODER;
-			ce = null;
-		} else if (GB18030.is(cs)) {
-			ucs = GB18030.CODER;
-			ce = null;
-		} else {
-			ucs = null;
-			ce = cs.newEncoder().onUnmappableCharacter(CodingErrorAction.REPORT);
-		}
-
-		if (ucs != null && type == 2) {
-			buf1 = null;
-			ob = null;
-		} else {
-			buf1 = pool.allocate(!(out instanceof OutputStream), 1024);
-			ob = buf1.nioBuffer();
-			ob.clear();
-		}
+		if (charset == null) charset = TextUtil.DefaultOutputCharset;
 
 		this.list = ArrayCache.getCharArray(512, false);
 		this.out = out;
+
+		var _ucs = UnsafeCharset.getInstance(charset);
+		if (_ucs != null) {
+			ucs = _ucs;
+			ce = null;
+
+			if (type == 2) {
+				buf1 = null;
+				ob = null;
+				return;
+			}
+		} else {
+			ucs = null;
+			ce = charset.newEncoder().onUnmappableCharacter(CodingErrorAction.REPORT);
+		}
+
+		buf1 = pool.allocate(!(out instanceof OutputStream), 1024);
+		ob = buf1.nioBuffer();
+		ob.clear();
 	}
 
 	@Override

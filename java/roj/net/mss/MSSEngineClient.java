@@ -101,7 +101,7 @@ public class MSSEngineClient extends MSSEngine {
 				// opaque[0..2^16-1] key_exchange_data;
 				// u4 support_key_bits
 				// extension[]
-				ByteList ob = IOUtil.getSharedByteBuf().putInt(H_MAGIC).put(PROTOCOL_VERSION);
+				var ob = IOUtil.getSharedByteBuf().putInt(H_MAGIC).put(PROTOCOL_VERSION);
 				sharedKey = new byte[64];
 				random.nextBytes(sharedKey);
 				// should <= 1024
@@ -191,7 +191,7 @@ public class MSSEngineClient extends MSSEngine {
 		switch (stage) {
 			case INITIAL:
 				// u2 legacy_version 0x0303
-				ByteList ob = IOUtil.getSharedByteBuf().putShort(0x0303);
+				var ob = IOUtil.getSharedByteBuf().putShort(0x0303);
 
 				// opaque[32] random
 				sharedKey = new byte[64];

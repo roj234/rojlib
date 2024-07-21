@@ -10,7 +10,7 @@ import java.lang.annotation.Target;
  * @since 2023/2/5 0005 11:35
  */
 @Retention(RetentionPolicy.CLASS)
-@Target(ElementType.METHOD)
+@Target({ElementType.METHOD, ElementType.TYPE})
 public @interface Interceptor {
 	String[] value() default "";
 }

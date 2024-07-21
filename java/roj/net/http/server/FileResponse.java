@@ -62,6 +62,7 @@ final class FileResponse implements Response {
 					if (!tags.contains(eTag)) return plus(304, req);
 					break checkIfModified;
 				} else if ((v = req.get("If-None-Match")) != null) {
+					//if (v.startsWith("W/")) v = v.substring(2);
 					// 当且仅当服务器上没有任何资源的 ETag 属性值与这个首部中列出的相匹配的时候，服务器端才会返回所请求的资源
 					List<String> tags = TextUtil.split(v, ", ");
 					if (tags.contains(eTag)) return plus(304, req);
@@ -75,7 +76,7 @@ final class FileResponse implements Response {
 					time = DateParser.parseRFCDate(v) / 1000;
 				} catch (Exception e) {
 					rh.code(400);
-					return null;
+					return Response.httpError(400);
 				}
 
 				if (file.lastModified() / 1000 <= time) return plus(304, req);
@@ -85,7 +86,7 @@ final class FileResponse implements Response {
 					time = DateParser.parseRFCDate(v) / 1000;
 				} catch (Exception e) {
 					rh.code(400);
-					return null;
+					return Response.httpError(400);
 				}
 				// 当资源在指定的时间之后没有修改，服务器才会返回请求的资源
 				// 除以 1000 是RFC时间戳精度问题
@@ -124,7 +125,7 @@ final class FileResponse implements Response {
 					time = DateParser.parseRFCDate(v) / 1000;
 				} catch (Exception e) {
 					rh.code(400);
-					return null;
+					return Response.httpError(400);
 				}
 				if (file.lastModified() / 1000 > time) {
 					plus(200, req);
@@ -139,16 +140,16 @@ final class FileResponse implements Response {
 		}
 
 		if (!v.startsWith("bytes=")) {
-			rh.code(400);
-			return Response.text("invalid 'range' field");
+			rh.code(416);
+			return Response.httpError(416);
 		}
 
 		long len = file.length(def == 1);
 
 		List<String> ranges = TextUtil.split(v.substring(6), ", ");
 		if (ranges.size() > 16) {
-			rh.code(400);
-			return Response.text("invalid 'range' field");
+			rh.code(416);
+			return Response.httpError(416);
 		}
 		long[] data = this.ranges = new long[ranges.size() << 1];
 
@@ -161,12 +162,16 @@ final class FileResponse implements Response {
 				data[(i << 1) + 1] = parseLong(v.substring(1), len);
 			} else {
 				// start, end
-				data[i << 1] = parseLong(v.substring(0, j), len);
+				// 加1是允许长度为0时的[Range: 0-]请求
+				data[i << 1] = parseLong(v.substring(0, j), len+1);
 				data[(i << 1) + 1] = j == v.length() - 1 ? len - 1 : parseLong(v.substring(j + 1), len);
 			}
 
 			long seglen = data[(i << 1) + 1] - data[i << 1] + 1;
-			if (seglen < 0) Helpers.athrow(new IllegalRequestException(416, (Response) null));
+			if (seglen < 0) {
+				rh.code(416);
+				return Response.httpError(416);
+			}
 			total += seglen;
 		}
 
@@ -196,7 +201,7 @@ final class FileResponse implements Response {
 			long num = Long.parseLong(str);
 			if (num >= 0 && num < max) return num;
 		}
-		Helpers.athrow(new IllegalRequestException(416, (Response) null));
+		Helpers.athrow(new IllegalRequestException(416));
 		return 0;
 	}
 

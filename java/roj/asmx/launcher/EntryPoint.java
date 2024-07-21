@@ -15,19 +15,20 @@ import java.util.function.Function;
 public final class EntryPoint extends SecureClassLoader {
 	public final ClassLoader PARENT = EntryPoint.class.getClassLoader();
 
-	public EntryPoint() { super(null); }
+	public EntryPoint() {super(null);}
+	static {ClassLoader.registerAsParallelCapable();}
 
-	public final Class<?> defineClassA(String name, byte[] b, int off, int len, CodeSource cs) throws ClassFormatError { return defineClass(name, b, off, len, cs); }
-	public final Class<?> defineClassB(String name, byte[] b, int off, int len) throws ClassFormatError { return defineClass(name, b, off, len, EntryPoint.class.getProtectionDomain()); }
+	public final Class<?> defineClassA(String name, byte[] b, int off, int len, CodeSource cs) throws ClassFormatError {return defineClass(name, b, off, len, cs);}
+	public final Class<?> defineClassB(String name, byte[] b, int off, int len) throws ClassFormatError {return defineClass(name, b, off, len, EntryPoint.class.getProtectionDomain());}
 
 	@Override
 	public Package definePackage(String name, String specTitle, String specVersion, String specVendor, String implTitle, String implVersion, String implVendor, URL sealBase) {
 		return super.definePackage(name, specTitle, specVersion, specVendor, implTitle, implVersion, implVendor, sealBase); }
-	@Override
-	public Package getPackage(String name) { return super.getPackage(name); }
+	@Override public Package getPackage(String name) {return super.getPackage(name);}
+	final public Class<?> findLoadedClass1(String name) {return super.findLoadedClass(name);}
 
 	protected final Class<?> findClass(String name) throws ClassNotFoundException {
-		if (actualLoader == null) {
+		if (clImpl == null) {
 			// 这样，只有一个类(EntryPoint)是AppClassLoader加载的
 			if (name.equals("roj.asmx.launcher.EntryPoint")) return EntryPoint.class;
 
@@ -39,22 +40,20 @@ public final class EntryPoint extends SecureClassLoader {
 			} catch (IOException ignored) {}
 			throw new ClassNotFoundException(name);
 		}
-		return actualLoader.apply(name);
+		return clImpl.apply(name);
 	}
 
-	@Override
-	public URL getResource(String name) { return PARENT.getResource(name); }
-	@Override
-	public Enumeration<URL> getResources(String name) throws IOException { return PARENT.getResources(name); }
-	@Override
-	public InputStream getResourceAsStream(String name) { return PARENT.getResourceAsStream(name); }
+	@Override public URL getResource(String name) {return PARENT.getResource(name);}
+	@Override public Enumeration<URL> getResources(String name) throws IOException {return PARENT.getResources(name);}
+	@Override public InputStream getResourceAsStream(String name) {return rlImpl != null ? rlImpl.apply(name) : PARENT.getResourceAsStream(name);}
 
 	// 这种设计是因为EntryPoint引用的任何类，都会由AppClassLoader加载
 	// 如果引用具体类型，就会造成两个不同加载器的类无法转换
 	// 类似的设计可以看VMInternal如何获取ReflectCompat的实例
 	// public是因为不同加载器不能访问非public字段
-	// 另，不是很理解forge为什么放弃lunchwrapper
-	public static Function<String, Class<?>> actualLoader;
+	// (看原文)我现在可能理解了，因为这个东西设计复杂
+	public static Function<String, Class<?>> clImpl;
+	public static Function<String, InputStream> rlImpl;
 	public static Runnable loaderInst;
 
 	public static void main(String[] args) throws Exception {

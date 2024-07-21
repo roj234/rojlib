@@ -29,7 +29,7 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.StringPool;
 import roj.text.logging.Level;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -1340,7 +1340,7 @@ public class Mapper extends Mapping {
 								try (InputStream in = archive.getStream(entry)) {
 									readLibFile(new Context(entry.getName(), in), classes, m);
 								} catch (Throwable e) {
-									CLIUtil.warning(f+"#!"+entry.getName()+" 无法读取", e);
+									Terminal.warning(f+"#!"+entry.getName()+" 无法读取", e);
 								}
 							}
 						}
@@ -1467,9 +1467,9 @@ public class Mapper extends Mapping {
 				result = readCache(hash, cacheFile);
 			} catch (Throwable e) {
 				if (!(e instanceof IllegalArgumentException)) {
-					CLIUtil.warning("缓存读取失败!", e);
+					Terminal.warning("缓存读取失败!", e);
 				} else {
-					CLIUtil.warning("缓存读取失败: " + e.getMessage());
+					Terminal.warning("缓存读取失败: " + e.getMessage());
 				}
 			}
 

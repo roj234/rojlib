@@ -21,7 +21,7 @@ public class QPak2Test {
 	public static void main(String[] args) throws IOException {
 		for (int i = 0; i < 3; i++) {
 			QZFileWriter myfile = openIncrementalV2(new File("testqpv2.7z"));
-			myfile.beginEntry(new QZEntry("fileTest"+i));
+			myfile.beginEntry(QZEntry.ofNoAttribute("fileTest"+i));
 			for (int j = 0; j < 1000; j++) {
 				myfile.write(("testTime="+ACalendar.toLocalTimeString(System.currentTimeMillis())).getBytes(StandardCharsets.UTF_8));
 			}

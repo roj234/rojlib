@@ -1,6 +1,6 @@
 package roj.util;
 
-import roj.NativeLibrary;
+import roj.RojLib;
 import roj.io.CorruptedInputException;
 import roj.io.MyDataInput;
 import roj.reflect.ReflectionUtils;
@@ -34,13 +34,12 @@ public final class BsDiff {
 		}
 	}
 	public void setLeft(DynByteBuf left) {
-		if (!NativeLibrary.hasFunction(NativeLibrary.BSDIFF))
+		if (!RojLib.hasNative(RojLib.BSDIFF))
 			throw new NativeException("native not ready");
 
 		if (impl instanceof NativeImpl ni) ni.close();
 		impl = new NativeImpl(this, left);
 	}
-
 
 	/**
 	 * 你应该用LZMA之类的压缩patch
@@ -58,8 +57,7 @@ public final class BsDiff {
 	public int getDiffLength(byte[] right, int off, int end, int stopOn) {return impl.getDiffLength(right, off, end, stopOn);}
 
 	public int getDiffLength(DynByteBuf right, int off, int end, int stopOn) {
-		if (!NativeLibrary.hasFunction(NativeLibrary.BSDIFF))
-			throw new NativeException("native not ready");
+		if (!RojLib.hasNative(RojLib.BSDIFF)) throw new NativeException("native not ready");
 		return ((NativeImpl)impl).getDiffLength(right, off, end, stopOn);}
 
 	public static long patch(DynByteBuf in, DynByteBuf patch, DynByteBuf out) throws IOException {
@@ -251,11 +249,11 @@ public final class BsDiff {
 		public int getDiffLength(byte[] right, int off, int end, int stopOn) {
 			if (u.getAndAddInt(this, REFCOUNT_OFF, 1) < 0) throw new IllegalStateException("closed");
 
-			int len = right.length;
+			int len = end - off;
 			long m = u.allocateMemory(len);
 
 			try {
-				u.copyMemory(right, Unsafe.ARRAY_BYTE_BASE_OFFSET, null, m, len);
+				u.copyMemory(right, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, null, m, len);
 				return nGetDiffLength(ptr, m, len, stopOn);
 			} finally {
 				u.freeMemory(m);
@@ -268,8 +266,9 @@ public final class BsDiff {
 		public int getDiffLength(DynByteBuf right, int off, int end, int stopOn) {
 			if (u.getAndAddInt(this, REFCOUNT_OFF, 1) < 0) throw new IllegalStateException("closed");
 
+			int len = end - off;
 			try {
-				return nGetDiffLength(ptr, right.address(), right.wIndex(), stopOn);
+				return nGetDiffLength(ptr, right.address()+off, len, stopOn);
 			} finally {
 				int v = u.getAndAddInt(this, REFCOUNT_OFF, -1);
 				checkClose(v);
@@ -328,6 +327,7 @@ public final class BsDiff {
 			ArrayCache.putArray(bucket);
 			bucket = null;
 
+			// sort, 也许不是最优结果了？
 			int h = 1;
 			while (sfx[0] != -size) {
 				int j = 0, len = 0;
@@ -627,7 +627,6 @@ public final class BsDiff {
 
 		private int len;
 		private int search(byte[] right, int rightOff, byte[] left, int leftOff, int leftEnd) {
-			loop:
 			while (true) {
 				int leftLen = leftEnd - leftOff;
 				if (leftLen < 2) {
@@ -647,23 +646,20 @@ public final class BsDiff {
 				// 二分查找 log2(n)
 				int mid = leftLen/2 + leftOff;
 
-				int i = sfx[mid], j = rightOff;
-				int max = i + Math.min(left.length-i, right.length-rightOff);
+				int i = sfx[mid];
+				int len = Math.min(left.length-i, right.length-rightOff);
+				int ret = ArrayUtil.vectorizedMismatch(
+					left, Unsafe.ARRAY_BYTE_BASE_OFFSET+i,
+					right, Unsafe.ARRAY_BYTE_BASE_OFFSET+rightOff,
+					len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE);
 
-				while (i < max) {
-					if (left[i] < right[j]) {
-						// 小于
-						leftOff = mid;
-						continue loop;
-					}
-					if (left[i] > right[j]) break;
-
-					i++;
-					j++;
+				if (ret >= 0 && left[i+ret] < right[rightOff+ret]) {
+					// 小于
+					leftOff = mid;
+				} else {
+					// 大于和等于
+					leftEnd = mid;
 				}
-
-				// 大于和等于
-				leftEnd = mid;
 			}
 		}
 		private static int matchLen(byte[] lData, int lStart, byte[] rData, int rStart) {

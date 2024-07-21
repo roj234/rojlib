@@ -1,5 +1,9 @@
 package roj.util;
 
+import roj.plugin.Status;
+import roj.reflect.Unaligned;
+import roj.text.CharList;
+import roj.text.TextUtil;
 import sun.misc.Unsafe;
 
 import java.lang.ref.Reference;
@@ -38,6 +42,62 @@ public class ArrayCache {
 	private final Object[] cache = new Object[ID_COUNT * 13 * CACHE_COUNT];
 	private final int[] using = new int[ID_COUNT * 13];
 
+	@Status
+	public static CharList status(CharList sb) {
+		sb.append("小数组缓存(Reserved/Total):\n");
+		var ac = CACHE.get();
+		if (ac == null) sb.append("未创建");
+		else {
+			int[] ints = ac.using;
+			for (int i = 0; i < ints.length; i++) {
+				int bitset = ints[i];
+				int exist = 0, reserved = 0;
+				var base = i * CACHE_COUNT;
+				for (int j = 0; j < CACHE_COUNT; j++) {
+					var r = (Reference<?>) ac.cache[base+j];
+					if (r != null && r.get() != null) {
+						exist++;
+						if ((bitset&(1 << j)) != 0) reserved++;
+					}
+				}
+				if ((exist|reserved) == 0) continue;
+
+				sb.append("  类型").append(typeOf(i / 13)).append(" 容量");
+				TextUtil.scaledNumber1024(sb, 1L << (8 + i % 13));
+				sb.append(": ").append(reserved).append('/').append(exist).append('\n');
+			}
+		}
+
+		sb.append("大数组缓存:\n");
+		int[] ints = G_Using;
+		for (int i = 0; i < ints.length; i++) {
+			int bitset = ints[i];
+			int exist = 0, reserved = 0;
+			var base = i * CACHE_COUNT;
+			for (int j = 0; j < CACHE_COUNT; j++) {
+				var r = (Reference<?>) G_Cache[base+j];
+				if (r != null && r.get() != null) {
+					exist++;
+					if ((bitset&(1 << j)) != 0) reserved++;
+				}
+			}
+			if ((exist|reserved) == 0) continue;
+
+			sb.append("  类型").append(typeOf(i / 256)).append(" 容量").append((i&255)+1).append("M: ")
+			  .append(reserved).append('/').append(exist).append('\n');
+		}
+
+		return sb;
+	}
+	private static String typeOf(int i) {
+		return switch (i) {
+			case 0 -> "byte";
+			case 1 -> "int";
+			case 2 -> "char";
+			default -> "unknown";
+		};
+	}
+
 	public ArrayCache() {}
 
 	@SuppressWarnings("unchecked")
@@ -55,7 +115,7 @@ public class ArrayCache {
 		long offUsing = Unsafe.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
 		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
 			var r = (Reference<?>) u.getObjectVolatile(G_Cache, offCache);
-			var t = r == null ? null : r.get();
+			Object t;
 			if (r != null && (t = r.get()) != null) {
 				while (true) {
 					int bits = u.getIntVolatile(G_Using, offUsing);
@@ -117,7 +177,7 @@ public class ArrayCache {
 		int used = using[idx];
 		for (int i = 0; i < CACHE_COUNT; i++) {
 			var r = (Reference<?>) cache[base+i];
-			var t = r == null ? null : r.get();
+			Object t;
 			if (r != null && (t = r.get()) != null && (used&(1<<i)) == 0) {
 				using[idx] |= 1<<i;
 				return (T) t;
@@ -132,21 +192,24 @@ public class ArrayCache {
 		int idx = base * 13 + (23 - Integer.numberOfLeadingZeros(size));
 		base = idx * CACHE_COUNT;
 
-		int free = -1;
+		int used = using[idx];
+		int free = -4;
 		for (int i = 0; i < CACHE_COUNT; i++) {
 			var r = (Reference<?>) cache[base+i];
 			var t = r == null ? null : r.get();
-			if (t == null && free < 0) free = i;
-			else if (t == array) {
-				using[idx] &= ~(1<<i);
+			if (t == array) {
+				using[idx] = used & ~(1<<i);
 				return;
+			}
+			if (free < 0) {
+				if (t == null) free = i;
+				else if ((used&(1<<i)) != 0) free = -(i + 1);
 			}
 		}
 
-		if (free >= 0) {
-			cache[base+free] = free < 3 ? new SoftReference<>(array) : new WeakReference<>(array);
-			using[idx] &= ~(1<<free);
-		}
+		if (free < 0) free = -free - 1;
+		cache[base+free] = free < 3 ? new SoftReference<>(array) : new WeakReference<>(array);
+		using[idx] &= ~(1<<free);
 	}
 
 	public static byte[] getByteArray(int size, boolean fillWithZeros) {
@@ -154,7 +217,7 @@ public class ArrayCache {
 
 		byte[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(0, size1) : small().getArray(0, size1);
 
-		if (array == null) array = new byte[size1];
+		if (array == null) array = fillWithZeros ? new byte[size1] : (byte[]) Unaligned.U.allocateUninitializedArray(byte.class, size1);
 		else if (fillWithZeros) {
 			for (int i = 0; i < size; i++)
 				array[i] = 0;
@@ -172,7 +235,7 @@ public class ArrayCache {
 
 		int[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(1, size1) : small().getArray(1, size1);
 
-		if (array == null) array = new int[size1];
+		if (array == null) array = fillWithZeros != 0 ? new int[size1] : (int[]) Unaligned.U.allocateUninitializedArray(int.class, size1);
 		else {
 			for (int i = 0; i < fillWithZeros; i++)
 				array[i] = 0;
@@ -192,7 +255,7 @@ public class ArrayCache {
 
 		char[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(2, size1) : small().getArray(2, size1);
 
-		if (array == null) array = new char[size1];
+		if (array == null) array = fillWithZeros ? new char[size1] : (char[]) Unaligned.U.allocateUninitializedArray(char.class, size1);
 		else if (fillWithZeros) {
 			for (int i = 0; i < size; i++)
 				array[i] = 0;

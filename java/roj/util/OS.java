@@ -1,5 +1,7 @@
 package roj.util;
 
+import roj.reflect.ReflectionUtils;
+
 import java.util.Locale;
 
 /**
@@ -7,44 +9,35 @@ import java.util.Locale;
  * @since 2021/4/21 22:51
  */
 public enum OS {
-	WINDOWS, UNIX, JVM, MAC_OS, UNKNOWN;
+	WINDOWS, UNIX, JVM, OSX, UNKNOWN;
 	public static final OS CURRENT = getOS();
-	public static final String ARCH = getArch();
+	public static final int ARCH = getArch();
 
-	private static String getArch() {
-		switch (System.getProperty("os.arch", "")) {
-			case "amd64":
-			case "x86_64":
-				return "64";
-			case "x86":
-			case "i386":
-				return "32";
-			default:
-				return "UNKNOWN";
-		}
+	private static int getArch() {
+		return switch (ReflectionUtils.u.addressSize()) {
+			case 4 -> 32;
+			case 8 -> 64;
+			default -> 0;
+		};
 	}
 
 	private static OS getOS() {
 		String property = System.getProperty("os.name").toLowerCase(Locale.ROOT);
 		if (property.startsWith("windows")) return WINDOWS;
-		if (property.startsWith("mac")) return MAC_OS;
-		switch (property) {
-			case "solaris":
-			case "sunos":
-			case "mpc/ix":
-			case "hp-ux":
-			case "os/390":
-			case "freebsd":
-			case "irix":
-			case "digital":
-			case "aix":
-			case "netware":
-				return UNIX;
-			case "osf1":
-			case "openvms":
-				return JVM;
-			default:
-				return UNKNOWN;
-		}
+		if (property.startsWith("mac")) return OSX;
+		return switch (property) {
+			case "solaris", "sunos", "mpc/ix", "hp-ux", "os/390", "freebsd", "irix", "digital", "aix", "netware" -> UNIX;
+			case "osf1", "openvms" -> JVM;
+			default -> UNKNOWN;
+		};
+	}
+
+	public String libext() {
+		return switch (this) {
+			case WINDOWS -> ".dll";
+			case OSX -> ".dynlib";
+			case UNIX -> ".so";
+			default -> throw new IllegalArgumentException("Unsupported Operation System");
+		};
 	}
 }

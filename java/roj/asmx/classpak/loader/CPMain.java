@@ -3,6 +3,7 @@ package roj.asmx.classpak.loader;
 import roj.archive.qz.xz.LZMA2InputStream;
 
 import java.io.*;
+import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.CodeSource;
@@ -36,15 +37,12 @@ public class CPMain extends ClassLoader {
 	private final int mask;
 
 	public CPMain() throws IOException {
-		ProtectionDomain pd = CPMain.class.getProtectionDomain();
-
-		String loc = pd.getCodeSource().getLocation().getPath();
-		if (loc.startsWith("file:")) loc = loc.substring(5);
-		int i = loc.lastIndexOf('!');
-		loc = loc.substring(loc.startsWith("/")?1:0, i<0?loc.length():i);
+		var pd = CPMain.class.getProtectionDomain();
+		var loc = pd.getCodeSource().getLocation().getPath();
+		loc = loc.substring(loc.startsWith("/")?1:0);
 
 		File self = new File(URLDecoder.decode(loc, StandardCharsets.UTF_8));
-		CodeSource cs = new CodeSource(null, pd.getCodeSource().getCertificates());
+		CodeSource cs = new CodeSource(new URL("file:"+loc+"!CraftKuro.pak"), pd.getCodeSource().getCertificates());
 		this.pd = new ProtectionDomain(cs, pd.getPermissions(), this, pd.getPrincipals());
 
 		this.zip = new BareZIP(self);

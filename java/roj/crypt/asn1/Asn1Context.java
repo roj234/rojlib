@@ -1,6 +1,5 @@
 package roj.crypt.asn1;
 
-import roj.NativeLibrary;
 import roj.collect.*;
 import roj.config.ParseException;
 import roj.config.Word;
@@ -79,8 +78,7 @@ public class Asn1Context {
 				return Simple.PrintableString;
 		}
 
-		if (NativeLibrary.EXTRA_BUG_CHECK) System.err.println("无法获取 "+struct+"."+target+"的类型，通过已知信息 "+value);
-		return null;
+		throw new IllegalStateException("无法解析ANY类型\n数据: "+value+"\n结构: "+struct+'.'+target);
 	}
 
 	static final class NamedOID extends CIntArray {
@@ -588,6 +586,8 @@ public class Asn1Context {
 	}
 
 	private static Type readType(Word w, Asn1Tokenizer wr, SimpleList<MapStub> stubs, Asn1Context ctx) throws ParseException {
+		var strict = false;
+
 		Type type;
 		if (w.type() >= 10 && w.type() <= AsnBoolean) {
 			type = Simple.VALUES[w.type()-10];
@@ -628,10 +628,7 @@ public class Asn1Context {
 			default -> throw wr.err("未预料的字符: "+w);
 			case LITERAL -> {
 				Type original = ctx.map.get(w.val());
-				if (original == null) {
-					if (NativeLibrary.EXTRA_BUG_CHECK) System.err.println("无法找到引用："+w.val());
-					original = Simple.ANY;
-				}
+				if (strict && original == null) throw wr.err("找不到该结构: "+w.val());
 				type = new Alias(w.val(), original);
 			}
 			case AsnSetOf, AsnSequenceOf -> type = new List(w.type() == AsnSetOf, readType(wr.next(), wr, new SimpleList<>(), ctx));

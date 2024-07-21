@@ -3,7 +3,6 @@ package roj.net.http.h2;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
-import roj.NativeLibrary;
 import roj.collect.IntMap;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
@@ -11,6 +10,7 @@ import roj.net.ch.ChannelHandler;
 import roj.net.ch.Event;
 import roj.net.http.Headers;
 import roj.net.http.server.H2C;
+import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -27,12 +27,10 @@ import static roj.net.http.h2.H2Exception.*;
  * @since 2022/10/7 0007 21:38
  */
 public final class H2Connection implements ChannelHandler {
-	public static final boolean DEBUG = NativeLibrary.IN_DEV;
+	public static final Logger LOGGER = Logger.getLogger("HTTP/2");
 	public static final String H2_GOAWAY = "h2:go_away";
 	// HPACK Dynamic Table encType
 	public static final byte FIELD_SAVE = 0, FIELD_DISCARD = 1, FIELD_DISCARD_ALWAYS = 2;
-
-	static final Logger LOGGER = Logger.getLogger("HTTP/2");
 
 	private static final int
 		FRAME_DATA = 0,
@@ -439,7 +437,7 @@ public final class H2Connection implements ChannelHandler {
 	public void error(int errno, String reason) {
 		if (errno != ERROR_INTERNAL) LOGGER.debug("协议错误({}): {}", errno, reason);
 
-		if ((flag& FLAG_GOAWAY_SENT) == 0) goaway(errno, reason == null || !DEBUG ? "" : reason);
+		if ((flag& FLAG_GOAWAY_SENT) == 0) goaway(errno, reason != null && LOGGER.canLog(Level.DEBUG) ? reason : "");
 
 		try {
 			ctx.channel().close();
@@ -614,7 +612,7 @@ public final class H2Connection implements ChannelHandler {
 	}
 
 	public int getImmediateWindow(H2Stream stream) {
-		if (ctx.isPendingSend()) return 0;
+		if (ctx.isFlushing()) return 0;
 		int v = stream == null ? sendWindow : Math.min(sendWindow, stream.sendWindow);
 		return Math.min(remoteSetting.max_frame_size, v);
 	}
@@ -628,7 +626,7 @@ public final class H2Connection implements ChannelHandler {
 
 		int window = Math.min(stream.sendWindow, this.sendWindow);
 		// 两年过去，我已经忘了BLOCK帧是干啥的了，RFC里也没看到
-		if (window <= 0 || ctx.isPendingSend()) return true;
+		if (window <= 0 || ctx.isFlushing()) return true;
 
 		DynByteBuf wt;
 		boolean limitedByFlowControl;
@@ -655,7 +653,7 @@ public final class H2Connection implements ChannelHandler {
 			ob.rIndex = 0;
 			ob.wIndex(9);
 
-			if (ctx.isPendingSend()) {
+			if (ctx.isFlushing()) {
 				stream.sendWindow += wt.readableBytes();
 				this.sendWindow += wt.readableBytes();
 				data.rIndex -= wt.readableBytes();

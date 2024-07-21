@@ -26,7 +26,7 @@ public record PlayerPublicKey(long expiresAt, PublicKey key, byte[] keySignature
 	}
 
 	@Override
-	public String toString() { return "PPK:hash="+TextUtil.bytes2hex(keySignature); }
+	public String toString() { return "PPK:hash="+TextUtil.bytes2hex(keySignature).substring(0, 16); }
 
 	public PlayerPublicKey(DynByteBuf buf) { this(buf.readLong(), decodePublicKey(buf.readBytes(buf.readVarInt(512))), buf.readBytes(buf.readVarInt(4096))); }
 	public static PublicKey decodePublicKey(byte[] b) {

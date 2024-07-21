@@ -260,29 +260,30 @@ public class PacketDecoder implements ChannelHandler {
 
 	@Override
 	public void channelWrite(ChannelCtx ctx, Object msg) throws IOException {
-		Packet p = (Packet) msg;
+		var p = (Packet) msg;
 		int id = PACKET_ID[state|1].getValueOrDefault(p.name, -1);
 		if (id < 0) throw new IOException("未知的数据包"+p.name);
 
 		if (p instanceof ConstantPacket cp) {
-			DynByteBuf data = cp.getConstantData();
-			if (data != null) {
+			var cdata = cp.getConstantData();
+			if (cdata != null) {
 				ChannelCtx ctx1 = ctx.channel().handler("cipher");
-				ctx1.handler().channelWrite(ctx1, data);
+				ctx1.handler().channelWrite(ctx1, cdata);
 				return;
 			} else {
 				ctx.channel().addAfter("cipher", "constant_capture", cp);
 			}
 		}
 
-		DynByteBuf buf = ctx.alloc().expandBefore(p.getData(), VarintSplitter.getVarIntLength(id));
+		var data = p.getData();
+		var buf = ctx.alloc().expandBefore(data, VarintSplitter.getVarIntLength(id));
 		try {
 			int pos = buf.wIndex();
 			buf.wIndex(0);
 			buf.putVarInt(id).wIndex(pos);
 			ctx.channelWrite(buf);
 		} finally {
-			if (buf != p.getData()) BufferPool.reserve(buf);
+			if (buf != data) BufferPool.reserve(buf);
 		}
 	}
 

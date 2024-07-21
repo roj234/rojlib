@@ -28,6 +28,7 @@ import roj.config.auto.Serializer;
 import roj.config.auto.Serializers;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
+import roj.text.Interner;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -61,6 +62,7 @@ public class GlobalContext implements CompilerSpec {
 
 	protected final XHashSet<String, CompileUnit> ctx = COMPILE_UNIT_SHAPE.create();
 	protected final MyHashMap<String, Library> libraries = new MyHashMap<>();
+	protected final List<Library> fallbackLibraries = new SimpleList<>();
 	protected final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
 	protected MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
 	protected final SimpleList<CompileUnit> generatedCUs = new SimpleList<>();
@@ -77,13 +79,26 @@ public class GlobalContext implements CompilerSpec {
 	}
 
 	public void addLibrary(Library library) {
-		for (String className : library.content())
-			libraries.put(className, library);
+		var set = library.content();
+		if (set.isEmpty()) {
+			fallbackLibraries.add(library);
+		} else {
+			for (String className : set)
+				libraries.put(className, library);
+		}
 	}
 
 	public ConstantData getClassInfo(CharSequence name) {
 		ConstantData clz = ctx.get(name);
-		if (clz == null) clz = libraries.getOrDefault(name, LibraryRuntime.INSTANCE).get(name);
+		if (clz == null) {
+			var library = libraries.get(name);
+			if (library != null) return library.get(name);
+			for (int i = 0; i < fallbackLibraries.size(); i++) {
+				library = fallbackLibraries.get(i);
+				if ((clz = library.get(name)) != null) return clz;
+			}
+			clz = LibraryRuntime.INSTANCE.get(name);
+		}
 		return clz;
 	}
 
@@ -175,8 +190,8 @@ public class GlobalContext implements CompilerSpec {
 
 					for (Map.Entry<String, List<String>> entry : packageFastPath.entrySet()) {
 						var value = entry.getValue();
-						if (value.size() == 1) entry.setValue(Collections.singletonList(value.get(0).intern()));
-						else for (int i = 0; i < value.size(); i++) value.set(i, value.get(i).intern());
+						if (value.size() == 1) entry.setValue(Collections.singletonList(Interner.intern(value.get(0))));
+						else for (int i = 0; i < value.size(); i++) value.set(i, Interner.intern(value.get(i).intern()));
 					}
 
 					System.out.println("Build PackageCache: "+(System.nanoTime() - time)/1000000d+"ms");

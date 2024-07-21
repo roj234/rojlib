@@ -35,7 +35,7 @@ public class ConstantPacket extends Packet implements ChannelHandler {
 				}
 			}
 		}
-		return data;
+		return data.slice();
 	}
 
 	public DynByteBuf getConstantData() { return constantData == null ? null : new ByteList(constantData); }

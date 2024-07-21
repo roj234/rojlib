@@ -1,5 +1,6 @@
 package roj.plugin;
 
+import org.jetbrains.annotations.Nullable;
 import roj.collect.Hasher;
 import roj.collect.MyHashSet;
 import roj.concurrent.TaskPool;
@@ -10,10 +11,10 @@ import roj.concurrent.timing.Scheduler;
 import roj.config.ParseException;
 import roj.config.YAMLParser;
 import roj.config.data.CMap;
-import roj.config.serial.ToSomeString;
 import roj.config.serial.ToYaml;
 import roj.io.IOUtil;
 import roj.net.http.server.Router;
+import roj.net.http.server.auto.OKRouter;
 import roj.text.TextWriter;
 import roj.text.logging.Logger;
 import roj.ui.terminal.CommandNode;
@@ -34,7 +35,7 @@ public abstract class Plugin {
 	private PluginManager pluginManager;
 	private PluginDescriptor desc;
 
-	private CMap config;
+	protected CMap config;
 	private File dataFolder, configFile;
 
 	final void init(PluginManager pm, File dataFolder, PluginDescriptor pd) {
@@ -45,30 +46,30 @@ public abstract class Plugin {
 		this.logger = Logger.getLogger(pd.id);
 	}
 
-	public final File getDataFolder() { return dataFolder; }
-	public final PluginManager getPluginManager() { return pluginManager; }
-	public final PluginDescriptor getDescription() { return desc; }
-	protected Logger getLogger() { return logger; }
+	public final File getDataFolder() {return dataFolder;}
+	public final PluginManager getPluginManager() {return pluginManager;}
+	public final PluginDescriptor getDescription() {return desc;}
+	public Logger getLogger() {return logger;}
 
 	protected final CMap getConfig() {
 		if (config == null) reloadConfig();
 		return config;
 	}
-	protected final void reloadConfig() {
+	protected void reloadConfig() {
 		try {
 			var parser = new YAMLParser();
 			saveDefaultConfig();
 			config = parser.parse(configFile, YAMLParser.LENIENT).asMap();
 
-			InputStream defaults = getResource("config.yml");
+			var defaults = getResource("config.yml");
 			if (defaults != null) config.merge(parser.parse(defaults, YAMLParser.LENIENT).asMap(), true, true);
 		} catch (ParseException|IOException e) {
 			throw new IllegalArgumentException("无法读取配置文件"+configFile.getName(),e);
 		}
 	}
 	protected final void saveConfig() {
-		try (TextWriter tw = TextWriter.to(configFile)) {
-			ToSomeString sb = new ToYaml("    ").sb(tw);
+		try (var tw = TextWriter.to(configFile)) {
+			var sb = new ToYaml("    ").sb(tw);
 			config.accept(sb);
 		} catch (IOException e) {
 			logger.error("无法保存配置文件{}",e,configFile);
@@ -111,39 +112,58 @@ public abstract class Plugin {
 	}
 
 	private Set<String> pPaths = Collections.emptySet();
-	protected final void registerRoute(String path, Router router) {
-		if (pPaths.isEmpty()) pPaths = new MyHashSet<>(4, Hasher.identity());
-		if (pPaths.add(path)) Panger.initHttp().addPrefixDelegation(path, router);
-	}
-	protected final void registerRoute(String path, Router router, String... interceptors) {
-		if (pPaths.isEmpty()) pPaths = new MyHashSet<>(4, Hasher.identity());
-		if (pPaths.add(path)) Panger.initHttp().addPrefixDelegation(path, router, interceptors);
+	protected final void registerRoute(String path, Router router) {router(path).addPrefixDelegation(path, router);}
+	protected final void registerRoute(String path, Router router, boolean directoryMatchOnly) {router(path).addPrefixDelegation(path, router, directoryMatchOnly);}
+	protected final void registerRoute(String path, Router router, boolean directoryMatchOnly, String... interceptors) {router(path).addPrefixDelegation(path, router, directoryMatchOnly, interceptors);}
+	private OKRouter router(String path) {
+		synchronized (desc.stateLock) {
+			if (pPaths.isEmpty()) pPaths = new MyHashSet<>(4);
+			if (pPaths.add(path)) return Panger.initHttp();
+		}
+		throw new IllegalStateException("路径"+path+"已注册");
 	}
 	protected final void unregisterRoute(String path) {
-		if (pPaths.remove(path)) Panger.initHttp().removePrefixDelegation(path);
+		synchronized (desc.stateLock) {
+			if (pPaths.remove(path)) Panger.initHttp().removePrefixDelegation(path);
+		}
 	}
 	private Set<String> pIntecs = Collections.emptySet();
-	protected final void registerInterceptor(String name, Object interceptor) {
-		if (pIntecs.isEmpty()) pIntecs = new MyHashSet<>(4, Hasher.identity());
-		if (pIntecs.add(name)) Panger.initHttp().setInterceptor(name, interceptor);
+	protected final void registerInterceptor(String name, OKRouter.Dispatcher interceptor) {
+		synchronized (desc.stateLock) {
+			if (pIntecs.isEmpty()) pIntecs = new MyHashSet<>(4);
+			if (pIntecs.add(name)) Panger.initHttp().setInterceptor(name, interceptor);
+		}
 	}
+	@Nullable
+	protected final OKRouter.Dispatcher getInterceptor(String name) {return Panger.initHttp().getInterceptor(name);}
 	protected final void unregisterInterceptor(String name) {
-		if (pIntecs.remove(name)) Panger.initHttp().removeInterceptor(name);
+		synchronized (desc.stateLock) {
+			if (pIntecs.remove(name)) Panger.initHttp().removeInterceptor(name);
+		}
 	}
 
 	private Set<CommandNode> pCmds = Collections.emptySet();
 	protected final void registerCommand(CommandNode node) {
-		assert node.getName() != null;
-
-		if (pCmds.isEmpty()) pCmds = new MyHashSet<>(4, Hasher.identity());
-		if (pCmds.add(node)) Panger.CMD.register(node);
+		synchronized (desc.stateLock) {
+			if (pCmds.isEmpty()) pCmds = new MyHashSet<>(4, Hasher.identity());
+			if (pCmds.add(node)) Panger.CMD.register(node);
+		}
 	}
 	protected final void unregisterCommand(CommandNode node) {
-		if (pCmds.remove(node)) Panger.CMD.unregister(node);
+		synchronized (desc.stateLock) {
+			if (pCmds.remove(node)) Panger.CMD.unregister(node);
+		}
 	}
 
-	private PSched pSched;
-	public final Scheduler getScheduler() { return pSched == null ? pSched = new PSched(this, Scheduler.getDefaultScheduler()) : pSched; }
+	private volatile PSched pSched;
+	public final Scheduler getScheduler() {
+		if (pSched == null) {
+			synchronized (desc.stateLock) {
+				if (pSched == null) pSched = new PSched(this, Scheduler.getDefaultScheduler());
+			}
+		}
+		return pSched;
+	}
 
 	protected void onLoad() {}
 	protected void onEnable() throws Exception {}

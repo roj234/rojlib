@@ -12,7 +12,6 @@ import roj.util.Helpers;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.nio.channels.ClosedByInterruptException;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -60,23 +59,19 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 		ClientLaunch.tcp().connect(InetAddress.getLocalHost(), port).timeout(500).initializator(this).launch();
 	}
 
-	final int attach(fcgiResponse resp, Map<String, String> param) throws IOException {
+	final int attach(fcgiResponse resp, Map<String, String> param) throws Exception {
 		if (!ctx.isOpen()) return -1;
 
-		while (!opened) {
-			try {
-				synchronized (lock) {lock.wait();}
-				if (!ctx.isOpen() || closeEx != null) return -1;
-			} catch (InterruptedException e) {
-				throw new ClosedByInterruptException();
-			}
+		if (!opened) {
+			synchronized (lock) {lock.wait();}
+			if (closeEx != null) Helpers.athrow(closeEx);
+			if (!(opened & ctx.isOpen())) return -1;
 		}
 
 		if (!u.compareAndSwapObject(this, OFF, null, resp)) return 0;
 		abort = -1;
 		abortEx = null;
 
-		int requestId = 1;
 		ByteList buf = IOUtil.getSharedByteBuf();
 		// typedef struct {
 		//    unsigned byte version;
@@ -86,7 +81,7 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 		//    unsigned byte paddingLength;
 		//    unsigned byte reserved;
 		//} FCGI_Header;
-		buf.putLong(/*FCGI_BEGIN_REQUEST*/0x01_01_0000_0008_0000L | ((long) requestId << 32));
+		buf.putLong(/*FCGI_BEGIN_REQUEST*/0x01_01_0001_0008_0000L);
 
 		// typedef struct {
 		//    unsigned char role;
@@ -95,7 +90,7 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 		//} FCGI_BeginRequestBody;
 		buf.putLong(/*FCGI_RESPONDER + keep-alive*/0x0001_01_0000000000L);
 
-		buf.putLong(/*FCGI_PARAMS*/0x01_04_0000_0000_0000L | ((long) requestId << 32));
+		buf.putLong(/*FCGI_PARAMS*/0x01_04_0001_0000_0000L);
 		int offset = buf.wIndex();
 
 		ByteList b = new ByteList();
@@ -121,12 +116,11 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 		buf.putShort(offset-4, len);
 
 		// end of params
-		buf.putLong(/*FCGI_PARAMS*/0x01_04_0000_0000_0000L | ((long) requestId << 32));
+		buf.putLong(/*FCGI_PARAMS*/0x01_04_0001_0000_0000L);
 
 		ctx.channel().fireChannelWrite(buf);
 
 		resp.conn = this;
-		resp.requestId = requestId;
 		resp.opened();
 		return 1;
 	}
@@ -136,13 +130,12 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 	public void channelOpened(ChannelCtx ctx) {opened = true;synchronized (lock) {lock.notifyAll();}}
 	public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {this.closeEx = ex; ctx.close();}
 	public void channelClosed(ChannelCtx ctx) {
-		if (!opened) fcgiManager.LOGGER.warn("FastCGI服务{}连接失败", ctx.remoteAddress());
 		if (closeEx == null) closeEx = new Exception();
 
 		try {
 			var response = activeResponse;
 			if (response != null) response.fail(closeEx);
-		} catch (IOException ignored) {}
+		} catch (Exception ignored) {}
 
 		synchronized (lock) {lock.notifyAll();}
 		manager.connectionClosed(this);
@@ -167,6 +160,7 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 			if (type == 0x0103) {
 				if (resp != null) {
 					resp.setEof();
+					ctx.readActive();
 					abort = -1;
 					activeResponse = null;
 					manager.requestFinished(this);
@@ -207,17 +201,13 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 
 							ib.rIndex = start;
 							ctx.readInactive();
-							resp.onEmpty(() -> {
-								ctx.readActive();
-								ctx.channel().invokeReadLater();
-							});
 							return;
 						}
 					} catch (Exception e) {
+						ctx.readActive();
 						abortEx = e;
 						fcgiManager.LOGGER.warn("服务器{}; 请求#{}; 本地连接已关闭", e, ctx.remoteAddress(), id);
 						abort = 0;
-						manager.requestAborted(this);
 					}
 				}
 			}
@@ -231,5 +221,30 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 	}
 
 	@Override
+	public void channelFlushed(ChannelCtx ctx) {
+		if (remote != null) {
+			remote.readActive();
+			remote = null;
+		}
+	}
+
+	@Override
 	public void accept(MyChannel x) {x.addLast("fastcgi_handler", this);}
+
+	private ChannelCtx remote;
+	void checkFlushing(ChannelCtx ctx1) {
+		if (ctx.isFlushing()) {
+			ctx.pauseAndFlush();
+
+			remote = ctx1;
+			ctx1.readInactive();
+		}
+	}
+
+	void requestFinished(fcgiResponse response) {
+		//potential release before setEof()
+		if (u.compareAndSwapObject(this, OFF, response, null)) {
+			abort = 0;
+		}
+	}
 }

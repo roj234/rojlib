@@ -48,7 +48,6 @@ public class Compress extends GDeflate {
 	protected void readPacket(ChannelCtx ctx, DynByteBuf out) throws IOException {
 		if (out.readableBytes() != out.capacity()) throw new CorruptedInputException();
 		ctx.channelRead(out);
-		BufferPool.reserve(out);
 	}
 
 	@Override
@@ -60,7 +59,7 @@ public class Compress extends GDeflate {
 				DynByteBuf out = ctx.alloc().expandBefore(buf, 1);
 				try {
 					out.put(0, 0);
-					ctx.channelWrite(buf);
+					ctx.channelWrite(out);
 				} finally {
 					if (out != buf) BufferPool.reserve(out);
 				}

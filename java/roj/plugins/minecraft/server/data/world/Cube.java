@@ -24,16 +24,16 @@ public final class Cube<T> {
 	private MyBitSet emptySlot;
 
 	final Registry<T> registry;
-	byte pack;
+	short pack;
 
 	public Cube(@Range(from = 2, to = 15) int globalRegistryThresholdBits, @Range(from = 0, to = 7) int xyzBits, Registry<T> registry) {
-		this.pack = (byte) ((xyzBits&7) | (globalRegistryThresholdBits << 4));
+		this.pack = (short) ((xyzBits&7) | (globalRegistryThresholdBits << 5));
 		this.registry = registry;
 		setAll(registry.getById(0));
 	}
 
 	private int LEN() { return 1 << ((pack&7) * 3); }
-	private int THR() { return pack>>>4; }
+	private int THR() { return pack>>>5; }
 
 	public void compact() {
 		if (bits == 0) return;
@@ -174,7 +174,7 @@ public final class Cube<T> {
 		if (nBits < 4 && nBits != 0) nBits = 4;
 
 		if (nBits > THR()) {
-			nBits = MathUtils.getMin2PowerOf(registry.nextId());
+			nBits = Integer.numberOfTrailingZeros(MathUtils.getMin2PowerOf(registry.nextId()));
 			BitArray nPalette = new BitArray(nBits, LEN());
 			for (int i = LEN()-1; i >= 0; i--) {
 				nPalette.set(i, registry.getId(byId.get(palette.get(i)).block));
@@ -217,9 +217,7 @@ public final class Cube<T> {
 					}
 				}
 
-				int[] data = palette.getInternal();
-				Utils.writeFakeLongArray(buf, data);
-
+				Utils.writeUncompressedLongArray(buf, palette);
 				p = packet = buf.toByteArray();
 			}
 		}

@@ -4,7 +4,6 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
-import roj.asmx.launcher.Bootstrap;
 import roj.collect.MyHashMap;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.GlobalContext;
@@ -21,6 +20,8 @@ import roj.text.TextUtil;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -155,8 +156,8 @@ public final class Lavac {
 		diagnostic.conclusion();
 
 		try {
-			Bootstrap.classLoader.enableFastZip(dst.toURI().toURL());
-			((Runnable) Class.forName("Test").newInstance()).run();
+			var ucl = new URLClassLoader(new URL[] {dst.toURL()});
+			((Runnable) Class.forName("Test", true, ucl).newInstance()).run();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -201,6 +202,7 @@ public final class Lavac {
 
 			for (int i = 0; i < ctxs.size(); i++) {
 				CompileUnit data = ctxs.get(i);
+				data.S5_noStore();
 				zfw.beginEntry(new ZEntry(data.name.concat(".class")));
 				Parser.toByteArrayShared(data).writeToStream(zfw);
 			}
@@ -226,8 +228,8 @@ public final class Lavac {
 			return true;
 		}
 
-		if ("java".equalsIgnoreCase(IOUtil.extensionName(f.getName()))) {
-			ctxs.add(new CompileUnit(f.getAbsolutePath(), new FileInputStream(f)));
+		if ("java".equals(IOUtil.extensionName(f.getName()))) {
+			ctxs.add(new CompileUnit(f.getName(), new FileInputStream(f)));
 			return true;
 		} else {
 			return false;
@@ -242,7 +244,7 @@ public final class Lavac {
 			return true;
 		}
 
-		switch (IOUtil.extensionName(f.getName()).toLowerCase()) {
+		switch (IOUtil.extensionName(f.getName())) {
 			case "zip", "jar":
 				ctx.addLibrary(new LibraryZipFile(f));
 			return true;

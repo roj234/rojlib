@@ -51,7 +51,9 @@ interface H {
 }
 ```
 ### 生成代码
+
 ```java 
+import roj.reflect.Bypass;
 import roj.reflect.DirectAccessor;
 
 class Example {
@@ -59,11 +61,12 @@ class Example {
 
 	static {
 		String version = getNMSPackage(); // for example: net.minecraft.server.v1_12_R2.
-		h = DirectAccessor.builder(H.class)
-		    .access(Class.forName(version+"Player"), {"conn"}, {"getConn"}, null)
-		    .delegate(Class.forName(version+"Connection"), {"sendPacket"}, DirectAccessor.EMPTY_BITS,  {"sendPacket"}, Collections.emptyList())
-		    .construct(Class.forName(version+"TitlePacket"), {"getTitlePacket"}, Collections.emptyList())
-		    .build();
+		h = Bypass.builder(H.class)
+				  .access(Class.forName(version + "Player"), {"conn"}, {"getConn"}, null)
+				  .delegate(Class.forName(version + "Connection"), {"sendPacket"}, Bypass.EMPTY_BITS, {"sendPacket"},
+					  Collections.emptyList())
+				  .construct(Class.forName(version + "TitlePacket"), {"getTitlePacket"}, Collections.emptyList())
+				  .build();
 	}
 
 	public static void sendTitle(AbstractPlayer player, String title) {

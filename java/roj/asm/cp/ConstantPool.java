@@ -93,19 +93,15 @@ public class ConstantPool {
 		int i = 0;
 		while (i < len) {
 			switch (r.get(r.rIndex)) {
-				case UTF: case CLASS:
-					Constant c = readConstant(r, csts, i, false);
+				case UTF, CLASS:
+					var c = readConstant(r, csts, i, false);
 					if (c == null) c = (Constant) csts[i];
 					if (listener != null) listener.accept(c);
 
 					csts[i++] = c;
 					c.setIndex(i);
 					break;
-				case INT: case FLOAT:
-				case NAME_AND_TYPE:
-				case FIELD: case METHOD: case INTERFACE:
-				case DYNAMIC:
-				case INVOKE_DYNAMIC:
+				case INT, FLOAT, NAME_AND_TYPE, FIELD, METHOD, INTERFACE, DYNAMIC, INVOKE_DYNAMIC:
 					r.rIndex += 5;
 					i++;
 					break;
@@ -113,10 +109,7 @@ public class ConstantPool {
 					r.rIndex += 9;
 					i += 2;
 					break;
-				case METHOD_TYPE:
-				case MODULE:
-				case PACKAGE:
-				case STRING:
+				case METHOD_TYPE, MODULE, PACKAGE, STRING:
 					r.rIndex += 3;
 					i++;
 					break;
@@ -155,11 +148,7 @@ public class ConstantPool {
 			case LONG: return new CstLong(r.readLong());
 			case DOUBLE: return new CstDouble(r.readDouble());
 
-			case METHOD_TYPE:
-			case MODULE:
-			case PACKAGE:
-			case CLASS:
-			case STRING: {
+			case METHOD_TYPE, MODULE, PACKAGE, CLASS, STRING: {
 				int id = r.readUnsignedShort()-1;
 				CstUTF utf;
 				if (arr[id] == null) arr[id] = utf = new CstUTF();
@@ -174,13 +163,13 @@ public class ConstantPool {
 					return null;
 				}
 
-				switch (b) {
-					case METHOD_TYPE: return new CstMethodType(utf);
-					case MODULE: return new CstModule(utf);
-					case PACKAGE: return new CstPackage(utf);
-					case CLASS: return new CstClass(utf);
-					default: return new CstString(utf);
-				}
+				return switch (b) {
+					case METHOD_TYPE -> new CstMethodType(utf);
+					case MODULE -> new CstModule(utf);
+					case PACKAGE -> new CstPackage(utf);
+					case CLASS -> new CstClass(utf);
+					default -> new CstString(utf);
+				};
 			}
 			case NAME_AND_TYPE: {
 				int id = r.readUnsignedShort()-1;
@@ -206,9 +195,7 @@ public class ConstantPool {
 
 				return new CstNameAndType(name, type);
 			}
-			case FIELD:
-			case METHOD:
-			case INTERFACE: {
+			case FIELD, METHOD, INTERFACE: {
 				int id = r.readUnsignedShort()-1;
 				CstClass clz;
 				if (arr[id] == null) arr[id] = clz = new CstClass();
@@ -219,14 +206,13 @@ public class ConstantPool {
 				if (arr[id] == null) arr[id] = nat = new CstNameAndType();
 				else nat = (CstNameAndType) arr[id];
 
-				switch (b) {
-					case FIELD: return new CstRefField(clz, nat);
-					case METHOD: return new CstRefMethod(clz, nat);
-					default: return new CstRefItf(clz, nat);
-				}
+				return switch (b) {
+					case FIELD -> new CstRefField(clz, nat);
+					case METHOD -> new CstRefMethod(clz, nat);
+					default -> new CstRefItf(clz, nat);
+				};
 			}
-			case DYNAMIC:
-			case INVOKE_DYNAMIC: {
+			case DYNAMIC, INVOKE_DYNAMIC: {
 				int id = r.readUnsignedShort(r.rIndex + 2)-1;
 				CstNameAndType desc;
 				if (arr[id] == null) arr[id] = desc = new CstNameAndType();
@@ -306,7 +292,7 @@ public class ConstantPool {
 
 		switch (c.type()) {
 			case UTF -> length += 3 + DynByteBuf.byteCountDioUTF(((CstUTF) c).str());
-			case INT, FLOAT, NAME_AND_TYPE, INVOKE_DYNAMIC, METHOD, FIELD, INTERFACE -> length += 5;
+			case INT, FLOAT, NAME_AND_TYPE, INVOKE_DYNAMIC, DYNAMIC, METHOD, FIELD, INTERFACE -> length += 5;
 			case LONG, DOUBLE -> {
 				length += 9;
 				constants.add(CstTop.TOP);
@@ -531,17 +517,12 @@ public class ConstantPool {
 	@SuppressWarnings({"unchecked", "fallthrough"})
 	public <T extends Constant> T reset(T c) {
 		switch (c.type()) {
-			case DYNAMIC:
-			case INVOKE_DYNAMIC: {
+			case DYNAMIC, INVOKE_DYNAMIC: {
 				CstDynamic dyn = (CstDynamic) c;
 				dyn.setDesc(reset(dyn.desc()));
 			}
 			break;
-			case CLASS:
-			case STRING:
-			case METHOD_TYPE:
-			case MODULE:
-			case PACKAGE: {
+			case CLASS, STRING, METHOD_TYPE, MODULE, PACKAGE: {
 				CstRefUTF ref = (CstRefUTF) c;
 				ref.setValue(reset(ref.name()));
 			}
@@ -551,9 +532,7 @@ public class ConstantPool {
 				ref.setRef(reset(ref.getRef()));
 			}
 			break;
-			case METHOD:
-			case INTERFACE:
-			case FIELD: {
+			case METHOD, INTERFACE, FIELD: {
 				CstRef ref = (CstRef) c;
 				ref.clazz(reset(ref.clazz()));
 				ref.desc(reset(ref.desc()));
@@ -567,10 +546,7 @@ public class ConstantPool {
 			break;
 			case UTF:
 				((CstUTF) c).str();
-			case INT:
-			case DOUBLE:
-			case FLOAT:
-			case LONG:
+			case INT, DOUBLE, FLOAT, LONG:
 				// No need to do anything, just append it
 				break;
 			default: throw new IllegalArgumentException("Unsupported type: " + c.type());

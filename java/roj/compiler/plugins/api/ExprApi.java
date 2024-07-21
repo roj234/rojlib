@@ -4,12 +4,10 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.tree.MethodNode;
 import roj.asm.type.Type;
 import roj.compiler.JavaLexer;
-import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.UnaryPreNode;
 
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 /**
  * 表达式解析流程:<br>
@@ -40,28 +38,28 @@ public interface ExprApi {
 	 * 该运算符自身就是一个完整的表达式<br>
 	 * 值模式流程：(生成 -> 转换 -> 终止)
 	 */
-	void addExprGen(String token, Function<JavaLexer, ExprNode> fn);
+	void addExprGen(String token, LEG fn);
 
 	/**
 	 * 新增值生成运算符
 	 * 参考: &lt;minecraft:stone&gt;
 	 */
-	void addExprStart(String token, Function<JavaLexer, ExprNode> fn);
+	void addExprStart(String token, LEG fn);
 	/**
 	 * 新增值转换运算符
 	 */
-	void addExprConv(String token, BiFunction<JavaLexer, ExprNode, ExprNode> fn);
+	void addExprConv(String token, LEC fn);
 	/**
 	 * 新增值终止运算符
 	 */
-	void addExprTerminal(String token, BiFunction<JavaLexer, ExprNode, ExprNode> fn);
+	void addExprTerminal(String token, LEC fn);
 
 	/**
 	 * 新增一个二元运算符
 	 * @param token 运算符 如果重复会报错
 	 * @param priority 运算符优先级，不加括号时，越大越晚处理
 	 */
-	void addBinary(String token, int priority, BiFunction<ExprNode, ExprNode, ExprNode> callback);
+	void addBinary(String token, int priority, LEC callback);
 
 	/**
 	 * TODO 指定转换器，而不是方法

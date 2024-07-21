@@ -102,7 +102,7 @@ public class Element extends Node {
 		writeTag(sb);
 
 		if (shortTag && children.isEmpty()) {
-			sb.append(" />");
+			sb.append("!DOCTYPE".equals(tag) ? ">" : " />");
 			return;
 		}
 

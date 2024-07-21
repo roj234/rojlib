@@ -169,7 +169,7 @@ public class MapperUI extends JFrame {
 	}
 	private static Predicate<File> jarFilter() {
 		return fn -> {
-			String ext = IOUtil.extensionName(fn.getName().toLowerCase());
+			String ext = IOUtil.extensionName(fn.getName());
 			return ext.equals("jar") || ext.equals("zip");
 		};
 	}
@@ -289,13 +289,12 @@ public class MapperUI extends JFrame {
 
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
-		JScrollPane scrollPane1 = new JScrollPane();
+		var scrollPane1 = new JScrollPane();
 		uiLibraries = new JTextArea();
-		scrollPane2 = new JScrollPane();
 		uiInputPath = new JTextArea();
 		uiOutputPath = new JTextField();
-		JLabel label1 = new JLabel();
-		JLabel label2 = new JLabel();
+		var label1 = new JLabel();
+		var label2 = new JLabel();
 		uiCharset = new JTextField();
 		uiInvert = new JCheckBox();
 		uiFlag1 = new JCheckBox();
@@ -306,7 +305,7 @@ public class MapperUI extends JFrame {
 		uiMFlag64 = new JCheckBox();
 		uiInit = new JButton();
 		uiMap = new JButton();
-		JLabel label3 = new JLabel();
+		var label3 = new JLabel();
 		uiMapUsers = new JCheckBox();
 		uiCheckFieldType = new JCheckBox();
 		uiOverwriteOut = new JCheckBox();
@@ -315,13 +314,13 @@ public class MapperUI extends JFrame {
 		dlgMapTrace = new JDialog();
 		uiLoadLines = new JButton();
 		uiDeobfStackTrace = new JButton();
-		JScrollPane scrollPane4 = new JScrollPane();
+		var scrollPane4 = new JScrollPane();
 		uiStackTrace = new JTextArea();
 
 		//======== this ========
 		setTitle("Roj234 Jar Mapper 3.1.1");
 		setResizable(false);
-		Container contentPane = getContentPane();
+		var contentPane = getContentPane();
 		contentPane.setLayout(null);
 
 		//======== scrollPane1 ========
@@ -333,16 +332,8 @@ public class MapperUI extends JFrame {
 		}
 		contentPane.add(scrollPane1);
 		scrollPane1.setBounds(4, 160, 380, 210);
-
-		//======== scrollPane2 ========
-		{
-
-			//---- uiInputPath ----
-			uiInputPath.setToolTipText("\u4e5f\u53ef\u4ee5\u662f\u6587\u4ef6\u5939");
-			scrollPane2.setViewportView(uiInputPath);
-		}
-		contentPane.add(scrollPane2);
-		scrollPane2.setBounds(30, 5, 215, 19);
+		contentPane.add(uiInputPath);
+		uiInputPath.setBounds(30, 5, 215, uiInputPath.getPreferredSize().height);
 		contentPane.add(uiOutputPath);
 		uiOutputPath.setBounds(30, 30, 215, uiOutputPath.getPreferredSize().height);
 
@@ -458,7 +449,7 @@ public class MapperUI extends JFrame {
 		//======== dlgMapTrace ========
 		{
 			dlgMapTrace.setTitle("StackTrace\u6062\u590d");
-			Container dlgMapTraceContentPane = dlgMapTrace.getContentPane();
+			var dlgMapTraceContentPane = dlgMapTrace.getContentPane();
 			dlgMapTraceContentPane.setLayout(null);
 
 			//---- uiLoadLines ----
@@ -490,7 +481,6 @@ public class MapperUI extends JFrame {
 
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
 	private JTextArea uiLibraries;
-	private JScrollPane scrollPane2;
 	private JTextArea uiInputPath;
 	private JTextField uiOutputPath;
 	private JTextField uiCharset;

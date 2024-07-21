@@ -235,15 +235,18 @@ public final class CompileUnit extends ConstantData {
 		if (w.type() == EOF) return false;
 
 		boolean isNormalClass = !source.contains("-info");
+		boolean packageAnnotation;
 
 		if (w.type() == at) {
-			if (isNormalClass) ctx.report(Kind.ERROR, "package.annotation");
+			packageAnnotation = isNormalClass;
 
 			commitJavadoc(this);
 			ctx.tmpAnnotations.clear();
 			_annotations(ctx.tmpAnnotations);
 			commitAnnotations(this);
 			w = wr.next();
+		} else {
+			packageAnnotation = false;
 		}
 
 		boolean moduleIsOpen = w.val().equals("open");
@@ -258,6 +261,8 @@ public final class CompileUnit extends ConstantData {
 		}
 
 		if (w.type() == PACKAGE) {
+			if (packageAnnotation) ctx.report(Kind.ERROR, "package.annotation");
+
 			readRef(wr, tmp, false);
 			pkg = tmp.append('/').toString();
 
@@ -471,6 +476,11 @@ public final class CompileUnit extends ConstantData {
 		// 名称
 		w = wr.except(LITERAL, "cu.name");
 		classIdx = w.pos()+1;
+
+		if (ctx.classes.isSpecEnabled(CompilerSpec.VERIFY_FILENAME) && (acc&ACC_PUBLIC) != 0 && !IOUtil.fileName(source).equals(w.val())) {
+			ctx.report(Kind.SEVERE_WARNING, "cu.filename", source);
+		}
+
 		name(name.concat(w.val()));
 
 		// 泛型参数和范围
@@ -522,7 +532,7 @@ public final class CompileUnit extends ConstantData {
 			if (!wr.nextIf(rParen)) do {
 				_modifiers(wr, _ACC_ANNOTATION);
 
-				IType type = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC);
+				IType type = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|SKIP_TYPE_PARAM);
 				if (type.genericType() != 0) makeSignature().returns = type;
 
 				String name = wr.except(LITERAL, "cu.name").val();
@@ -745,7 +755,7 @@ public final class CompileUnit extends ConstantData {
 					if (w.type() != rBracket) throw wr.err("unexpected_2:"+w.type()+":cu.except.multiArg");
 				} else {
 					wr.retractWord();
-					type1 = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|TYPE_ALLOW_VOID);
+					type1 = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|TYPE_ALLOW_VOID|SKIP_TYPE_PARAM);
 				}
 
 				if (type1.genericType() != 0)
@@ -799,7 +809,7 @@ public final class CompileUnit extends ConstantData {
 
 						int acc1 = _modifiers(wr, ACC_FINAL|_ACC_ANNOTATION);
 
-						IType parType = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC);
+						IType parType = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|SKIP_TYPE_PARAM);
 						if (parType.genericType() != 0) makeSignature()._add(paramNames.size(), (Generic) parType);
 
 						w = wr.next();
@@ -1115,8 +1125,9 @@ public final class CompileUnit extends ConstantData {
 	}
 
 	public static final int TYPE_PRIMITIVE = 1, TYPE_GENERIC = 2, TYPE_NO_ARRAY = 4, TYPE_ALLOW_VOID = 8;
+	private static final int GENERIC_INNER = 8, SKIP_TYPE_PARAM = 16;
 	// this function only invoke on Stage 4
-	public IType readType(@MagicConstant(flags = {TYPE_PRIMITIVE, TYPE_GENERIC, TYPE_NO_ARRAY}) int flags) throws ParseException {
+	public IType readType(@MagicConstant(flags = {TYPE_PRIMITIVE, TYPE_GENERIC, TYPE_NO_ARRAY, TYPE_ALLOW_VOID}) int flags) throws ParseException {
 		IType type = readType(ctx.lexer, flags);
 		if (currentNode != null && type instanceof LPGeneric g)
 			return currentNode.applyTypeParam(g);
@@ -1149,7 +1160,7 @@ public final class CompileUnit extends ConstantData {
 				}
 			}
 
-			type = currentNode == null || !currentNode.isTypeParam(klass) ? new Type(klass) : new TypeParam(klass);
+			type = currentNode == null || !currentNode.isTypeParam(klass) ? new Type(klass) : (flags&SKIP_TYPE_PARAM) != 0 ? new LPGeneric(klass) : new TypeParam(klass);
 		}
 
 		if ((flags & TYPE_NO_ARRAY) == 0) {
@@ -1209,7 +1220,6 @@ public final class CompileUnit extends ConstantData {
 		}
 	}
 
-	private static final int GENERIC_INNER = 8;
 	public IType genericTypePart(String type) throws ParseException {
 		int prev = ctx.lexer.setState(STATE_TYPE);
 		try {
@@ -1435,6 +1445,8 @@ public final class CompileUnit extends ConstantData {
 			if (s != null) {
 				currentNode = s;
 				s.resolve(ctx);
+				field.fieldType(s.typeParamToBound(field.fieldType()));
+
 				ctx.disableRawTypeWarning = true;
 			}
 			ctx.resolveType(field.fieldType());
@@ -1445,14 +1457,16 @@ public final class CompileUnit extends ConstantData {
 			wr.index = methodIdx.get(i);
 			var method = methods.get(i);
 			var s = (LPSignature) method.attrByName("Signature");
+			List<Type> par = method.parameters();
 			if (s != null) {
 				currentNode = s;
 				s.resolve(ctx);
+				for (int j = 0; j < par.size(); j++) par.set(j, s.typeParamToBound(par.get(j)));
+				method.setReturnType(s.typeParamToBound(method.returnType()));
+
 				ctx.disableRawTypeWarning = true;
 			}
-			List<Type> par = method.parameters();
-			for (int j = 0; j < par.size(); j++)
-				ctx.resolveType(par.get(j));
+			for (int j = 0; j < par.size(); j++) ctx.resolveType(par.get(j));
 			ctx.resolveType(method.returnType());
 
 			ctx.disableRawTypeWarning = false;
@@ -1632,14 +1646,12 @@ public final class CompileUnit extends ConstantData {
 		autoInit:
 		if (autoInit) {
 			if ((modifier&ACC_ENUM) != 0) {
-				CodeWriter cw = newMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", "(Ljava/lang/String;I)V");
+				var cw = glinit = newWritableMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", "(Ljava/lang/String;I)V");
 				cw.visitSize(3,3);
 				cw.one(ALOAD_0);
 				cw.one(ALOAD_1);
 				cw.one(ILOAD_2);
 				cw.invoke(INVOKESPECIAL, "java/lang/Enum", "<init>", "(Ljava/lang/String;I)V");
-				cw.one(Opcodes.RETURN);
-				cw.finish();
 				break autoInit;
 			}
 
@@ -1655,12 +1667,10 @@ public final class CompileUnit extends ConstantData {
 			ctx.checkAccessible(pInfo, mn, false, true);
 			if (_parent != this) j11PrivateConstructor(mn);
 
-			CodeWriter cw = newMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", "()V");
+			var cw = glinit = newWritableMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", "()V");
 			cw.visitSize(1,1);
 			cw.one(ALOAD_0);
 			cw.invoke(INVOKESPECIAL, parent, "<init>", "()V");
-			cw.one(Opcodes.RETURN);
-			cw.finish();
 		}
 
 		// permits validate
@@ -1791,6 +1801,15 @@ public final class CompileUnit extends ConstantData {
 				}
 			}
 		}
+	}
+
+	private MethodWriter newWritableMethod(int acc, String name, String desc) {
+		var mn = new MethodNode(acc, this.name, name, desc);
+		methods.add(mn);
+		if ((acc & (ACC_ABSTRACT|ACC_NATIVE)) != 0) return Helpers.nonnull();
+		var cw = ctx.classes.createMethodPoet(this, mn);
+		mn.putAttr(new AttrCodeWriter(cp, mn, cw));
+		return cw;
 	}
 	// endregion
 	// region 阶段3 注解处理 MethodDefault
@@ -2108,6 +2127,7 @@ public final class CompileUnit extends ConstantData {
 		return clinit;
 	}
 	public MethodWriter getGlobalInit() {
+		// 隐式构造器会主动设置这个，不再需要额外检测
 		if (glinit != null) return glinit;
 
 		SimpleList<ConstantData> _throws = new SimpleList<>();
@@ -2115,8 +2135,6 @@ public final class CompileUnit extends ConstantData {
 		for (int i = 0, size = methods.size(); i < size; i++) {
 			MethodNode method = methods.get(i);
 			if (method.name().equals("<init>")) {
-				// synthetic auto constructor (and the only one)
-				if (i >= methodIdx.size()) return glinit = ctx.classes.createMethodPoet(this, method);
 
 				var list = method.parsedAttr(cp, Attribute.Exceptions);
 				if (list == null) {
@@ -2203,6 +2221,7 @@ public final class CompileUnit extends ConstantData {
 	}
 
 	// 异步操作methods和fields时需要这个锁
+	// TODO 如果把内部类放在同一个线程中，就不需要这个锁了
 	public Object getStage4Lock() {return methods;}
 
 	public void S4_Code() throws ParseException {
@@ -2225,12 +2244,30 @@ public final class CompileUnit extends ConstantData {
 		}
 		finalFields.clear();
 
-		if (name.equals("Test")) {
-			// NOVERIFY
-			parent("java/lang/🔓_IL🐟");
+		// 隐式构造器
+		if (glinit != null && glInitBytes == null) {
+			glinit.one(Opcodes.RETURN);
+			glinit.finish();
 		}
+
+		// FIXME NOVERIFY
+		if (name.equals("Test")) parent("java/lang/🔓_IL🐟");
 	}
 	// endregion
+	//region 阶段5 序列化之前……
+	private List<RawNode> noStore = Collections.emptyList();
+	public void noStore(RawNode fn) {
+		if (noStore.isEmpty()) noStore = new SimpleList<>();
+		noStore.add(fn);
+	}
+
+	public void S5_noStore() {
+		for (RawNode node : noStore) {
+			fields.remove(node);
+			methods.remove(node);
+		}
+	}
+	//endregion
 
 	public LocalContext lc() {return ctx;}
 	public String getSourceFile() {return source;}

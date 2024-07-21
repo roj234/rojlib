@@ -2,7 +2,7 @@ package roj.net.ch;
 
 import roj.asm.type.TypeHelper;
 import roj.io.buf.BufferPool;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
@@ -33,7 +33,7 @@ class UdpChImpl extends MyChannel {
 		H inst;
 		try {
 			Class<?> type = InetSocketAddress.class.getDeclaredField("holder").getType();
-			DirectAccessor<H> b = DirectAccessor.builder(H.class).i_access("java/net/InetSocketAddress", "holder", TypeHelper.class2type(type), "getHolder", null, false);
+			Bypass<H> b = Bypass.builder(H.class).i_access("java/net/InetSocketAddress", "holder", TypeHelper.class2type(type), "getHolder", null, false);
 			Field field = ReflectionUtils.checkFieldName(type, "address", "addr");
 			inst = b.access(type, new String[]{field.getName(),"port"}, null, new String[]{"setAddress","setPort"}).delegate(AbstractSelectableChannel.class, "removeKey").build();
 		} catch (Exception e) {
@@ -159,19 +159,25 @@ class UdpChImpl extends MyChannel {
 	}
 
 	protected void write(Object o) throws IOException {
-		BufferPool bp = alloc();
+		var bp = alloc();
 
-		DatagramPkt p = (DatagramPkt) o;
-		DynByteBuf buf = p.buf;
+		var p = (DatagramPkt) o;
+		var buf = p.buf;
 		if (buf.readableBytes() > UDP_MAX_SIZE) throw new IOException("packet too large");
-		if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes(), 0).put(buf);
 
 		try {
-			write1(p, buf);
+			if (pending.isEmpty()) {
+				if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes(), 0).put(buf);
+				write1(p, buf);
+			}
 
 			if (buf.isReadable()) {
-				if (pending.isEmpty()) key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
-				else if (pending.size() > 5) pauseAndFlush();
+				if (pending.isEmpty()) {
+					fireFlushing();
+					key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
+				} else if (pending.size() > 5) {
+					pauseAndFlush();
+				}
 
 				DynByteBuf put = bp.allocate(true, buf.readableBytes(), 0).put(buf);
 				if (!pending.offerLast(new DatagramPkt(p, put))) {

@@ -1,7 +1,7 @@
 package roj.io;
 
-import roj.NativeLibrary;
-import roj.reflect.DirectAccessor;
+import roj.RojLib;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 import roj.util.NativeException;
@@ -38,7 +38,7 @@ public final class NIOUtil {
 	static {
 		ByteBuffer b = ByteBuffer.allocateDirect(1);
 
-		DirectAccessor<NUT> da = DirectAccessor.builder(NUT.class).inline().unchecked();
+		Bypass<NUT> da = Bypass.builder(NUT.class).inline().unchecked();
 		try {
 			Class<?> itf = b.getClass().getInterfaces()[0];
 			da.delegate_o(itf, "attachment", "cleaner", "address");
@@ -80,7 +80,7 @@ public final class NIOUtil {
 		String[] ss1 = new String[] {"read", "readVector", "write", "writeVector"};
 		String[] ss2 = new String[] {"read0", "readv0", "write0", "writev0"};
 		try {
-			SCN = DirectAccessor.builder(LLIO.class).inline().delegate(UTIL.sChNd().getClass(), ss2, ss1).build();
+			SCN = Bypass.builder(LLIO.class).inline().delegate(UTIL.sChNd().getClass(), ss2, ss1).build();
 		} catch (Throwable e1) {
 			Logger.getLogger("NIOUtil").error("无法加载模块 {}", e1, "TCP_LLIO");
 		}
@@ -108,7 +108,7 @@ public final class NIOUtil {
 	}
 
 	private static void setReusePortW(FileDescriptor fd, boolean enabled) throws IOException {
-		if (!NativeLibrary.hasFunction(NativeLibrary.FUNC_WINDOWS)) throw new NativeException("native library not available");
+		if (!RojLib.hasNative(RojLib.WIN32)) throw new NativeException("native library not available");
 		int error = windowsOnlyReuseAddr(UTIL.fdVal(fd), enabled);
 		if (error != 0) {
 			switch (error) {

@@ -48,7 +48,7 @@ public class Escape {
 				}
 
 				try {
-					UTF8MB4.CODER.decodeFixedIn(tmp, tmp.wIndex(), sb);
+					UTF8.CODER.decodeFixedIn(tmp, tmp.wIndex(), sb);
 				} catch (Exception e) {
 					// not compatible with RFC 2396
 					throw new MalformedURLException("无法解析UTF8:"+e.getMessage());

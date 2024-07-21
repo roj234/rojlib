@@ -8,6 +8,7 @@ import java.io.IOException;
 public interface ResponseHeader {
 	MyChannel ch();
 	String _getState();
+	Request request();
 
 	/**
 	 * Gets speed limit in KB per second
@@ -23,6 +24,14 @@ public interface ResponseHeader {
 	 * 不立即发送请求头, 等待异步调用body()再响应.
 	 */
 	ResponseHeader enableAsyncResponse();
+	/**
+	 * Request对象不会在连接关闭后被共享
+	 */
+	void unsharedRequest();
+	/**
+	 * (默认)该请求对应的Request对象会在连接关闭后共享给其它请求使用
+	 */
+	void sharedRequest();
 	/**
 	 * 异步调用返回响应.
 	 * 未调用enableAsyncResponse: 和return resp效果相同

@@ -1,17 +1,12 @@
 #include <jni.h>
+#include <stddef.h>
 
 #ifndef _Included_roj_NativeLibrary
 #define _Included_roj_NativeLibrary
 
-typedef unsigned long int u4;
-typedef signed long int s4;
-typedef unsigned char u1;
-typedef signed char s1;
-
-#define U32_MAX 2147483647
 inline int min(int l, int r) {return l < r ? l : r;}
 
-#define FUNC_WINDOWS 1
+#define FUNC_WINDOWS       1
 #define ANSI_CONSOLE       2
 #define BSDIFF             4
 #define SHARED_MEMORY      8
@@ -21,12 +16,10 @@ inline int min(int l, int r) {return l < r ? l : r;}
 extern "C" {
 #endif
 
-JNIEXPORT jlong JNICALL Java_roj_NativeLibrary_init(JNIEnv *, jclass);
-JNIEXPORT jint JNICALL Java_roj_NativeLibrary_getLastError(JNIEnv *, jclass);
+JNIEXPORT jlong JNICALL Java_roj_RojLib_init(JNIEnv *, jclass);
+JNIEXPORT jint JNICALL Java_roj_RojLib_getLastError(JNIEnv *, jclass);
 
-JNIEXPORT jint JNICALL Java_roj_ui_CLIUtil_setConsoleMode0(JNIEnv *, jclass, jint, jint, jint);
-
-JNIEXPORT jclass JNICALL Java_roj_reflect_Java9Compat_defineClass0(JNIEnv *, jclass, jstring, jobject, jbyteArray, jint);
+JNIEXPORT jint JNICALL Java_roj_ui_NativeVT_setConsoleMode0(JNIEnv *, jclass, jint, jint, jint);
 
 JNIEXPORT jlong JNICALL Java_roj_util_SharedMemory_nCreate(JNIEnv *, jclass, jstring, jlong);
 JNIEXPORT jlong JNICALL Java_roj_util_SharedMemory_nAttach(JNIEnv *, jclass, jstring, jboolean);

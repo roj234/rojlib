@@ -1,5 +1,7 @@
 package roj.archive;
 
+import roj.io.fs.Filesystem;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -9,7 +11,7 @@ import java.util.Collection;
  * @author Roj234
  * @since 2023/3/15 0015 8:37
  */
-public interface ArchiveFile extends Closeable {
+public interface ArchiveFile extends Closeable, Filesystem {
 	void close() throws IOException;
 	/**
 	 * Reload this archive file from disk, discarding any unsaved changes
@@ -19,6 +21,10 @@ public interface ArchiveFile extends Closeable {
 	ArchiveEntry getEntry(String name);
 	Collection<? extends ArchiveEntry> entries();
 
+	default InputStream getStream(String name) throws IOException {
+		var entry = getEntry(name);
+		return entry != null ? getStream(entry) : null;
+	}
 	default InputStream getStream(ArchiveEntry entry) throws IOException { return getStream(entry, null); }
 	InputStream getStream(ArchiveEntry entry, byte[] pw) throws IOException;
 }

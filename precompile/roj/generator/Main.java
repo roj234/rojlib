@@ -11,6 +11,7 @@ public class Main {
 
 	public static void main(String[] args) throws Exception {
 		GenerateReflectionHook.run();
+		GenerateReflectionHook.run2();
 		UpdatePinyinData.run("D:\\Desktop\\Python39\\pinyin-data-master.txt", "D:\\Desktop\\Python39\\phrase-pinyin-data-master.txt");
 	}
 }

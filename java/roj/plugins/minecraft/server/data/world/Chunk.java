@@ -36,14 +36,14 @@ public final class Chunk {
 	}
 
 	public Block getBlock(int x, int y, int z) {
-		ChunkSection cube = cubes.get(y >> 4);
+		var cube = cubes.get(y >> 4);
 		return cube == null ? Block.AIR : cube.blocks.getBlock(x & 15, y & 15, z & 15);
 	}
 
 	public boolean setBlock(int x, int y, int z, Block block) {
 		if (block == Block.AIR && !cubes.containsKey(y >> 4)) return false;
 
-		ChunkSection cube = cubes.computeIfAbsentInt(y >> 4, ALLOC);
+		var cube = cubes.computeIfAbsentInt(y >> 4, ALLOC);
 		boolean modified = cube.setBlock(x &= 15, y & 15, z &= 15, block);
 		if (modified) {
 			if (cube.nonEmpty == 0) cubes.remove(y >> 4);
@@ -68,10 +68,10 @@ public final class Chunk {
 	}
 
 	public ByteList getSectionData() {
-		ByteList buf = new ByteList();
+		var buf = new ByteList();
 		int count = (maxHeight - baseHeight) >> 4;
 		for (int i = 0; i < count; i++) {
-			ChunkSection section = cubes.get(i);
+			var section = cubes.get(i);
 			if (section == null) ChunkSection.writeEmpty(buf);
 			else section.toMinecraftPacket(buf);
 		}

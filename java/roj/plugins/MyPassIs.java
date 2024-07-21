@@ -11,7 +11,7 @@ import roj.crypt.*;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.text.CharList;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
 import roj.util.ByteList;
@@ -59,7 +59,7 @@ public class MyPassIs extends Plugin {
 				mac = null;
 
 				System.gc();
-				CLIUtil.success("清除内存中的密码");
+				Terminal.success("清除内存中的密码");
 			}))
 			.then(literal("unregister").then(argument("site", Argument.oneOf(hints)).executes(ctx -> {
 				login();
@@ -68,16 +68,16 @@ public class MyPassIs extends Plugin {
 				c.setPrompt("\u001b[;97m再次键入网站名并按回车以删除 > ");
 				c.setInputEcho(true);
 
-				String site = CLIUtil.awaitCommand(c, Argument.rest());
+				String site = Terminal.readLine(c, Argument.rest());
 				String site1 = ctx.argument("site", String.class);
 				if (site1.equals(site)){
 					data.getMap("record").remove(site1);
 					hints.remove(site1);
 					save();
 
-					CLIUtil.warning("永久的删除了网站"+site1+"的生成器数据");
+					Terminal.warning("永久的删除了网站"+site1+"的生成器数据");
 				} else {
-					CLIUtil.warning("两次键入的名称不同");
+					Terminal.warning("两次键入的名称不同");
 				}
 			})))
 			.then(literal("upgrade").then(argument("site", Argument.oneOf(hints)).executes(ctx -> {
@@ -87,15 +87,15 @@ public class MyPassIs extends Plugin {
 				c.setPrompt("\u001b[;97m请确定已复制完旧版密码,再次键入网站名并按回车 > ");
 				c.setInputEcho(true);
 
-				String site = CLIUtil.awaitCommand(c, Argument.rest());
+				String site = Terminal.readLine(c, Argument.rest());
 				String site1 = ctx.argument("site", String.class);
 				if (site1.equals(site)) {
 					data.getMap("record").getMap(site1).put("v", 2);
 					save();
 
-					CLIUtil.warning("已升级到v2生成器，您可以重新获取密码");
+					Terminal.warning("已升级到v2生成器，您可以重新获取密码");
 				} else {
-					CLIUtil.warning("两次键入的名称不同");
+					Terminal.warning("两次键入的名称不同");
 				}
 			})))
 			.then(argument("site", Argument.suggest(hints)).executes(ctx -> {
@@ -115,7 +115,7 @@ public class MyPassIs extends Plugin {
 
 		c.setPrompt("\u001b[;97m请输入密码 > ");
 		c.setInputEcho(false);
-		String passStr = CLIUtil.awaitCommand(c, Argument.rest());
+		String passStr = Terminal.readLine(c, Argument.rest());
 		c.setInputEcho(true);
 
 		this.mac = new HMAC(MessageDigest.getInstance("SHA-256"));
@@ -128,7 +128,7 @@ public class MyPassIs extends Plugin {
 			if (keyFile.isFile()) throw new IllegalStateException("明文和加密的数据同时存在");
 			data = ConfigMaster.fromExtension(plaintextKey).parse(plaintextKey).asMap();
 			data.put("key", new CByteArray(data.get("key").asList().toByteArray()));
-			CLIUtil.warning("数据已导入");
+			Terminal.warning("数据已导入");
 		} else if (keyFile.length() == 0) {
 			data = new CMap();
 
@@ -138,7 +138,7 @@ public class MyPassIs extends Plugin {
 			data.put("key", new CByteArray(master_key));
 			data.put("record", new CMap());
 
-			CLIUtil.warning("新的密钥已生成，创建任意账号来保存");
+			Terminal.warning("新的密钥已生成，创建任意账号来保存");
 		} else {
 			try (InputStream in = new FileInputStream(keyFile)) {
 				byte[] iv = new byte[16];
@@ -147,7 +147,7 @@ public class MyPassIs extends Plugin {
 
 				data = new NBTParser().parse(new CipherInputStream(in, cipher)).asMap();
 			} catch (Exception e) {
-				CLIUtil.error("密码错误:"+e.getMessage());
+				Terminal.error("密码错误:"+e.getMessage());
 				return;
 			}
 		}
@@ -157,7 +157,7 @@ public class MyPassIs extends Plugin {
 		for (String name : data.getMap("record").keySet())
 			hints.put(name, name);
 
-		CLIUtil.success("登录成功");
+		Terminal.success("登录成功");
 		if (plaintextKey.isFile()) save();
 	}
 
@@ -172,19 +172,19 @@ public class MyPassIs extends Plugin {
 			while (true) {
 				try {
 					c.setPrompt("字符集[1数字a小写字母A大写字母@特殊符号] > ");
-					String cs = CLIUtil.awaitCommand(c, Argument.string());
+					String cs = Terminal.readLine(c, Argument.string());
 					charset = buildCharset(cs);
 					m.put("c", cs);
 
 					c.setPrompt("密码长度 > ");
-					length = CLIUtil.awaitCommand(c, Argument.number(6, 60));
+					length = Terminal.readLine(c, Argument.number(6, 60));
 					m.put("l", length);
 
 					data.getOrCreateMap("record").put(site, m);
 				break;
 				} catch (Exception e) {
 					if (e instanceof NullPointerException) {
-						CLIUtil.warning("用户取消操作");
+						Terminal.warning("用户取消操作");
 						return;
 					}
 					System.out.println("输入错误");
@@ -204,9 +204,9 @@ public class MyPassIs extends Plugin {
 		MyHashMap<String, String> hints = new MyHashMap<>();
 		for (String s : accounts.keySet()) hints.put(s, s);
 		c.setPrompt("账号 > ");
-		String account = CLIUtil.awaitCommand(c, Argument.suggest(hints));
+		String account = Terminal.readLine(c, Argument.suggest(hints));
 		if (account == null) {
-			CLIUtil.warning("用户取消操作");
+			Terminal.warning("用户取消操作");
 			return;
 		}
 
@@ -229,19 +229,19 @@ public class MyPassIs extends Plugin {
 				String tip = "您的密码是[(c)opy/Enter] > ";
 				sb.insert(0, tip);
 
-				char ce = CLIUtil.awaitCharacter(MyBitSet.from("c\n"), sb, false);
+				char ce = Terminal.readChar(MyBitSet.from("c\n"), sb, false);
 				try {
 					if (ce == 'c') {
 						Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(sb.substring(tip.length(), sb.length())), null);
-						CLIUtil.success("密码已复制到剪贴板");
+						Terminal.success("密码已复制到剪贴板");
 					}
 				} catch (Exception ignored) {}
 				return;
 			}
 			sb.insert(0, "您的密码是[\u001b[;92m(a)ccept\u001b[;0m,\u001b[;91m(c)ancel\u001b[;96m,\u001b[;93m(r)andom\u001b[;0m] > ");
-			CLIUtil.renderBottomLine(sb, true, CLIUtil.getStringWidth(sb)+1);
-			char acr = CLIUtil.awaitCharacter(MyBitSet.from("acr"));
-			CLIUtil.removeBottomLine(sb, true);
+			Terminal.renderBottomLine(sb, true, Terminal.getStringWidth(sb)+1);
+			char acr = Terminal.readChar(MyBitSet.from("acr"));
+			Terminal.removeBottomLine(sb, true);
 			Arrays.fill(sb.list, (char) 0);
 			sb._free();
 			switch (acr) {

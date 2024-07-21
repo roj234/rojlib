@@ -43,10 +43,9 @@ public class JsonUserManager implements UserManager {
 		for (User user : users) userByName.put(user.name, user);
 	}
 
-	@Override
-	public User getUserById(int uid) {return uid < 0 || uid >= users.size() ? null : users.get(uid);}
-	@Override
-	public User getUserByName(String user) {return userByName.get(user);}
+	@Override public User getUserById(int uid) {return uid < 0 || uid >= users.size() ? null : users.get(uid);}
+	@Override public User getUserByName(String user) {return userByName.get(user);}
+	public Map<String, User> getUserSet() {return userByName;}
 
 	@Override
 	public User createUser(String name) {
@@ -63,7 +62,7 @@ public class JsonUserManager implements UserManager {
 	public void setDirty(User user, String... field) {
 		block: {
 			for (String s : field) {
-				if (s.equals("passHash") || s.equals("totpKey")) break block;
+				if (s.equals("passHash") || s.equals("totpKey") || s.equals("group")) break block;
 			}
 			return;
 		}

@@ -1,6 +1,7 @@
 package roj.text.novel;
 
 import roj.collect.Int2IntMap;
+import roj.config.auto.Optional;
 import roj.text.CharList;
 import roj.text.ChinaNumeric;
 import roj.ui.TreeNodeImpl;
@@ -9,6 +10,7 @@ import roj.ui.TreeNodeImpl;
  * @author Roj234
  * @since 2023/6/26 0026 21:29
  */
+@Optional
 public class Chapter extends TreeNodeImpl<Chapter> {
 	private static final Int2IntMap CP_NUMBER = new Int2IntMap();
 	static {
@@ -50,6 +52,8 @@ public class Chapter extends TreeNodeImpl<Chapter> {
 	public String name;
 
 	public CharList text;
+
+	public CharSequence getText(CharList base) {return text != null ? text : base.subSequence(start, end);}
 
 	public String toString() {
 		String s = "("+no+") "+ (displayName !=null ? displayName : matches) + " | "+(text == null ? end-start : text.length())+"字";

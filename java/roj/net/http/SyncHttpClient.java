@@ -17,7 +17,7 @@ import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.Lock;
 import java.util.function.Consumer;
 
 /**
@@ -31,8 +31,8 @@ public class SyncHttpClient implements ChannelHandler {
 	private DynByteBuf data;
 	private InputStream is;
 
-	private final ReentrantLock lock = new ReentrantLock(true);
-	private final Condition hasData = lock.newCondition();
+	private Lock lock;
+	private Condition hasData;
 
 	static final byte READY = 0, HEAD = 1, FAIL = 2, SUCCESS = 3;
 	volatile byte state;
@@ -47,6 +47,8 @@ public class SyncHttpClient implements ChannelHandler {
 	public void handlerAdded(ChannelCtx ctx) {
 		reset();
 		o = ctx;
+		lock = ctx.channel().lock();
+		hasData = lock.newCondition();
 	}
 
 	@Override
@@ -62,7 +64,7 @@ public class SyncHttpClient implements ChannelHandler {
 	}
 
 	@NotNull
-	private ChannelCtx findHandler(ChannelCtx ctx) {
+	static ChannelCtx findHandler(ChannelCtx ctx) {
 		ChannelCtx ctx1 = ctx.prev();
 		while (!(ctx1.handler() instanceof HttpRequest)) {
 			ctx1 = ctx1.prev();
@@ -75,14 +77,11 @@ public class SyncHttpClient implements ChannelHandler {
 		DynByteBuf in = (DynByteBuf) msg;
 		if (!in.isReadable()) return;
 
-
-		lock.lock();
 		try {
 			data.compact().put(in);
 			if (async) ctx.channelRead(data);
 			hasData.signalAll();
 		} finally {
-			lock.unlock();
 			in.rIndex = in.wIndex();
 		}
 	}

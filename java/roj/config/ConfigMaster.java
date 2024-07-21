@@ -23,7 +23,7 @@ public enum ConfigMaster {
 
 	public static ConfigMaster fromExtension(File path) {
 		String ext = IOUtil.extensionName(path.getName());
-		return switch (ext.toLowerCase()) {
+		return switch (ext) {
 			case "yml", "yaml" -> YAML;
 			case "xml" -> XML;
 			case "json", "json5" -> JSON;
@@ -162,24 +162,18 @@ public enum ConfigMaster {
 	}
 
 	public <T> T readObject(Class<T> type, File file) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), file); }
+	/**
+	 * @implNote 由于部分二进制格式可能存在数据分界，所以不会关闭in
+	 */
 	public <T> T readObject(Class<T> type, InputStream in) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), in); }
 	public <T> T readObject(Class<T> type, DynByteBuf buf) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), buf); }
 	public <T> T readObject(Class<T> type, CharSequence sb) throws ParseException { return readObject(Serializers.SAFE.serializer(type), sb); }
 
-	public <T> T readObject(Serializer<T> ser, File file) throws IOException, ParseException {
-		parser(true).parse(file, 0, ser.reset());
-		return ser.get();
-	}
-	public <T> T readObject(Serializer<T> ser, InputStream in) throws IOException, ParseException {
-		parser(true).parse(in, 0, ser.reset());
-		return ser.get();
-	}
-	public <T> T readObject(Serializer<T> ser, DynByteBuf buf) throws IOException, ParseException {
-		parser(true).parse(buf, 0, ser.reset());
-		return ser.get();
-	}
+	public <T> T readObject(Serializer<T> ser, File file) throws IOException, ParseException {parser(true).parse(file, 0, ser.reset());return ser.get();}
+	public <T> T readObject(Serializer<T> ser, InputStream in) throws IOException, ParseException {parser(true).parse(in, 0, ser.reset());return ser.get();}
+	public <T> T readObject(Serializer<T> ser, DynByteBuf buf) throws IOException, ParseException {parser(true).parse(buf, 0, ser.reset());return ser.get();}
 	public <T> T readObject(Serializer<T> ser, CharSequence sb) throws ParseException {
-		BinaryParser p = parser(true);
+		var p = parser(true);
 		if (!(p instanceof Parser tp)) throw new UnsupportedOperationException(this+"不是文本配置格式");
 		tp.parse(sb, 0, ser.reset());
 		return ser.get();
@@ -206,7 +200,7 @@ public enum ConfigMaster {
 				ser.write(v, o);
 			}
 		} else {
-			ToEntry tmp = new ToEntry();
+			var tmp = new ToEntry();
 			tmp.setProperty("centry:linked_map", true);
 			ser.write(tmp, o);
 			serialize(out, tmp.get());

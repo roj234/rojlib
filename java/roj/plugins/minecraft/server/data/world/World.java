@@ -4,6 +4,8 @@ import org.jetbrains.annotations.NotNull;
 import roj.collect.LongMap;
 import roj.plugins.minecraft.server.data.Block;
 
+import java.util.Collection;
+
 /**
  * @author Roj234
  * @since 2024/3/19 0019 16:51
@@ -50,6 +52,15 @@ public class World {
 		}
 		return chunk;
 	}
+	@NotNull
+	public Chunk getChunkNoGenerate(int x, int z) {
+		Chunk chunk = chunks.get(chunkPos(x, z));
+		if (chunk == null) {
+			if (loader != null) chunk = loader.loadChunk(x, z);
+			if (chunk == null) return new Chunk(x, z);
+		}
+		return chunk;
+	}
 	private static long chunkPos(int x, int z) { return ((long) x << 32) | (z&0xFFFFFFFFL); }
 
 	@NotNull
@@ -64,7 +75,7 @@ public class World {
 		}
 	}
 
-	public int getSectionCount() {
-		return 128/16;
-	}
+	public int getSectionCount() {return 128/16;}
+
+	public Collection<Chunk> getChunks() {return chunks.values();}
 }

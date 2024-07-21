@@ -14,7 +14,7 @@ import java.util.Enumeration;
  * @since 2024/5/30 0030 3:34
  */
 class SandboxClassLoader extends ClassLoader {
-	private MyHashSet<String> allowed = new MyHashSet<>("java.lang", "java.util", "java.util.regex", "java.util.function", "java.text", "roj.compiler.plugins.constant", "roj.reflect", "roj.compiler", "roj.asm.cp", "roj.asm.tree.anno");
+	private MyHashSet<String> allowed = new MyHashSet<>("java.lang", "java.util", "java.util.regex", "java.util.function", "java.text", "roj.compiler.plugins.constant", "roj.reflect", "roj.compiler", "roj.asm.cp", "roj.asm.tree.anno", "roj.text");
 	private MyHashSet<String> disallowed = new MyHashSet<>("java.lang.Process", "java.lang.ProcessBuilder", "java.lang.Thread", "java.lang.ClassLoader");
 
 	private final MyHashMap<String, byte[]> classData;
@@ -30,6 +30,7 @@ class SandboxClassLoader extends ClassLoader {
 			// First, check if the class has already been loaded
 			Class<?> c = findLoadedClass(name);
 			if (c == null) {
+				ClassNotFoundException cne;
 				try {
 					Class<?> type = getParent().loadClass(name);
 
@@ -40,12 +41,11 @@ class SandboxClassLoader extends ClassLoader {
 
 					return type;
 				} catch (ClassNotFoundException e) {
-					// ClassNotFoundException thrown if class not found
-					// from the non-null parent class loader
+					cne = e;
 				}
 
 				byte[] bytes = classData.get(name);
-				if (bytes == null) throw new ClassNotFoundException(name);
+				if (bytes == null) throw cne;
 
 				System.out.println("SCL define "+name);
 				c = defineClass(name, bytes, 0, bytes.length);

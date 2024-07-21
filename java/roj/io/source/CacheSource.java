@@ -23,7 +23,7 @@ public class CacheSource extends Source {
 	public CacheSource() { this(0, Integer.MAX_VALUE); }
 	public CacheSource(int initMem, int maxMemory) { this(initMem, maxMemory, null, null); }
 	public CacheSource(int initMem, int maxMemory, String prefix, File folder) {
-		this.source = new MemorySource(DirectByteList.allocateDirect(initMem, maxMemory));
+		this.source = new MemorySource(DynByteBuf.allocateDirect(initMem, maxMemory));
 		this.maxLength = maxMemory;
 		this.next = folder;
 		this.prefix = prefix;

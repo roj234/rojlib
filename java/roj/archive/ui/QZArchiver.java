@@ -106,7 +106,7 @@ public class QZArchiver {
 				return;
 			}
 
-			String ext = IOUtil.extensionName(file.getName()).toLowerCase();
+			String ext = IOUtil.extensionName(file.getName());
 			if (UNCOMPRESSED.contains(ext)) uncompressed.add(file);
 			else {
 				if (useBCJ && EXECUTABLE_X86.contains(ext)) executable.add(file);
@@ -313,7 +313,7 @@ public class QZArchiver {
 	}
 
 	private void keepEntry(QZEntry entry) {
-		WordBlock block = entry.getBlock();
+		WordBlock block = entry.block();
 		if (block == null) empties.add(entry);
 		else {
 			keep.computeIfAbsent(block, Helpers.fnArrayList()).add(entry);
@@ -404,7 +404,7 @@ public class QZArchiver {
 			throw new RuntimeException("Read BasicAttributes for "+file+" failed");
 		}
 
-		QZEntry entry = new QZEntry(name, attr.size());
+		QZEntry entry = QZEntry.of(name);
 
 		if (attr.isDirectory()) entry.setIsDirectory(true);
 		if (storeMT) entry.setModificationTime(attr.lastModifiedTime().toMillis());
@@ -445,9 +445,9 @@ public class QZArchiver {
 		QZFileWriter writer;
 		File tmp;
 
-		long totalLength = 0;
+		long totalUncompressedSize = 0;
 		for (WordBlockAppend block : appends) {
-			totalLength += block.size;
+			totalUncompressedSize += block.size;
 		}
 
 		createNewQZFW: {
@@ -488,7 +488,7 @@ public class QZArchiver {
 			} while (tmp.isFile());
 
 			if (splitSize == 0) {
-				IOUtil.createSparseFile(tmp, totalLength);
+				if (totalUncompressedSize > 1073741823) IOUtil.createSparseFile(tmp, totalUncompressedSize);
 				writer = new QZFileWriter(tmp);
 			} else {
 				// .tmp.001
@@ -560,7 +560,7 @@ public class QZArchiver {
 			bar.reset();
 
 			bar.setName("2/4 复制不压缩的文件");
-			bar.addMax(totalLength);
+			bar.addMax(totalUncompressedSize);
 			bar.updateForce(0);
 		}
 

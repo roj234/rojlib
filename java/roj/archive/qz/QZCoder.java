@@ -52,11 +52,13 @@ public abstract class QZCoder {
 			}
 		}
 
-		int wIdx = buf.wIndex();
-		buf.wIndex(buf.rIndex+len);
-		QZCoder coder = coders.get(buf);
-		buf.rIndex = buf.wIndex();
-		buf.wIndex(wIdx);
-		return coder == null ? new Unknown(buf.readBytes(len)) : coder.factory();
+		int idx = buf.wIndex();
+		int end = buf.rIndex+len;
+		buf.wIndex(end);
+		var coder = coders.get(buf);
+		buf.wIndex(idx);
+		if (coder == null) return new Unknown(buf.readBytes(len));
+		buf.rIndex = end;
+		return coder.factory();
 	}
 }

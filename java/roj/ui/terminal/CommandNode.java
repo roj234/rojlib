@@ -15,7 +15,7 @@ import java.util.Objects;
  */
 public abstract class CommandNode {
 	private final List<CommandNode> children = new SimpleList<>();
-	private CommandImpl impl;
+	private Command impl;
 
 	@Nullable
 	public String getName() { return null; }
@@ -41,14 +41,14 @@ public abstract class CommandNode {
 		return sb;
 	}
 
-	public CommandNode executes(CommandImpl e) {
+	public CommandNode executes(Command e) {
 		if (impl != null) throw new IllegalStateException("Already have executor");
 		impl = e;
 		return this;
 	}
 
-	public abstract boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException;
-	final boolean doApply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+	public abstract boolean apply(CommandParser ctx, List<Completion> completions) throws ParseException;
+	final boolean doApply(CommandParser ctx, List<Completion> completions) throws ParseException {
 		if (ctx.peekWord() == null) {
 			if (completions == null && impl != null) {
 				ctx.wrapExecute(impl);
@@ -77,7 +77,7 @@ public abstract class CommandNode {
 	}
 
 	public List<CommandNode> getChildren() { return children; }
-	public CommandImpl getCommand() { return impl; }
+	public Command getCommand() { return impl; }
 	public CommandNode getRedirect() { return null; }
 
 	static final Comparator<CommandNode> sorter = (o1, o2) -> {
@@ -113,7 +113,7 @@ public abstract class CommandNode {
 		@Override
 		public String getName() { return redirect.getName(); }
 		@Override
-		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException { return redirect.apply(ctx, completions);}
+		public boolean apply(CommandParser ctx, List<Completion> completions) throws ParseException { return redirect.apply(ctx, completions);}
 		@Override
 		public CommandNode getRedirect() { return redirect; }
 		public void setRedirect(CommandNode redirect) { this.redirect = redirect; }
@@ -131,7 +131,7 @@ public abstract class CommandNode {
 		public CharList dump(CharList sb, int depth) { return super.dump(sb.append(name), depth); }
 
 		@Override
-		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+		public boolean apply(CommandParser ctx, List<Completion> completions) throws ParseException {
 			if (ctx.isEOF()) {
 				if (completions != null) completions.add(new Completion(name));
 				return false;
@@ -163,7 +163,7 @@ public abstract class CommandNode {
 		}
 
 		@Override
-		public boolean apply(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+		public boolean apply(CommandParser ctx, List<Completion> completions) throws ParseException {
 			if (ctx.isEOF()) {
 				if (completions != null) argument.example(completions);
 				else {

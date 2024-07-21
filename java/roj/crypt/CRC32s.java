@@ -2,7 +2,7 @@ package roj.crypt;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 
 import java.util.zip.CRC32;
 
@@ -63,7 +63,7 @@ public class CRC32s {
 	static {
 		CRC32h hwac;
 		try {
-			hwac = DirectAccessor.builder(CRC32h.class).inline().delegate(CRC32.class, "update", "updateBytes", "updateByteBuffer").build();
+			hwac = Bypass.builder(CRC32h.class).inline().delegate(CRC32.class, "update", "updateBytes", "updateByteBuffer").build();
 		} catch (Exception e) {
 			e.printStackTrace();
 			hwac = null;

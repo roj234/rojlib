@@ -3,10 +3,11 @@ package roj.plugins.minecraft.server.network;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.ChannelHandler;
+import roj.plugins.minecraft.server.MinecraftServer;
 import roj.plugins.minecraft.server.util.TranslatedString;
 import roj.plugins.minecraft.server.util.Utils;
 import roj.ui.AnsiString;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.util.ByteList;
 
 import java.io.IOException;
@@ -36,13 +37,13 @@ public class PlayerInit implements ChannelHandler {
 			.putBool(false) // hardcore
 			.put(GAMEMODE_SURVIVAL) // ubyte[GAMEMODE] gameMode
 			.put(GAMEMODE_SURVIVAL) // ubyte[GAMEMODE] previousGameMode
-			.putVarInt(1).putVarIntUTF("custom:captcha") // collection dimensionIds
+			.putVarInt(1).putVarIntUTF("pmcs:overworld") // collection dimensionIds
 			.put(NBT) // optional[NBT] dynamicRegistryManager
-			.putVarIntUTF("custom:the_end") // identifier dimensionType
-			.putVarIntUTF("custom:captcha") // identifier dimensionId
+			.putVarIntUTF("custom:pmcs_overworld") // identifier dimensionType
+			.putVarIntUTF("pmcs:overworld") // identifier dimensionId
 			.putLong(0x1234567890L) // sha256Seed
 			.putVarInt(1) // maxPlayers
-			.putVarInt(4) // viewDistance
+			.putVarInt(MinecraftServer.INSTANCE.getViewDistance()) // viewDistance
 			.putVarInt(4) // simulationDistance
 			.putBool(false) // reducedDebugInfo
 			.putBool(false) // showDeathScreen
@@ -55,7 +56,7 @@ public class PlayerInit implements ChannelHandler {
 		// identifier channel
 		// opaque data
 		buf.clear();
-		ctx.channelWrite(new Packet("CustomPayload", buf.putVarIntUTF("minecraft:brand").putVarIntUTF("史上最酷验证码")));
+		ctx.channelWrite(new Packet("CustomPayload", buf.putVarIntUTF("minecraft:brand").putVarIntUTF("[IL]PMCS")));
 
 		// ubyte[Difficulty] difficulty
 		// boolean difficultyLocked
@@ -131,7 +132,7 @@ public class PlayerInit implements ChannelHandler {
 			.putLong(Utils.pos2long(0,32,0)).putFloat(90)
 		));
 
-		player.sendMessage(new TranslatedString("multiplayer.player.joined", new AnsiString(player.getName())).color16(CLIUtil.YELLOW+CLIUtil.HIGHLIGHT), false);
+		player.sendMessage(new TranslatedString("multiplayer.player.joined", new AnsiString(player.getName())).color16(Terminal.YELLOW+ Terminal.HIGHLIGHT), false);
 
 		ctx.removeSelf();
 		ctx.channelOpened();

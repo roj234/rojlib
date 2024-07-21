@@ -1,8 +1,11 @@
 package roj.plugins.minecraft.diff;
 
+import roj.collect.MyBitSet;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.plugins.KeyStorePlugin;
+import roj.text.CharList;
+import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
 import roj.util.Helpers;
 
@@ -16,14 +19,20 @@ import static roj.ui.terminal.CommandNode.literal;
  * @author Roj234
  * @since 2024/7/16 0016 4:53
  */
-@SimplePlugin(id = "mcDiff", desc = """
-	为Minecraft存档设计的差异文件格式，同时支持数字签名
-	[patch]
+@SimplePlugin(id = "mcdiff", desc = """
+	为Minecraft存档设计的支持数字签名的差异文件格式
+	
+	[高压更新包]
 	前置为keyStore插件
 	先用它加载或创建一个EdDSA证书
-	然后用mcdiff init <证书名称>初始化
-	之后使用mcdiff <压缩包(老状态)> <源文件夹(新状态)> <差异输出>""",
-	version = "1.1", depend = "keyStore")
+	然后用mcdiff init <证书名称>或mcdiff initNoSign初始化
+	之后使用mcdiff <压缩包(老状态)> <源文件夹(新状态)> <差异输出>
+	
+	[存档压缩&备份]
+	压缩regions,entities和poi: chunktrim 世界文件夹
+	创建压缩的备份: chunktrim backup 世界文件夹 备份文件夹
+	""",
+	version = "2.0", depend = "keyStore")
 public class McDiffPlugin extends Plugin {
 	private McDiffServer server;
 
@@ -38,14 +47,18 @@ public class McDiffPlugin extends Plugin {
 						.executes(ctx -> {
 
 			var diff = new McDiffClient();
-			diff.load(ctx.argument("差异文件", File.class));
+			diff.load(ctx.argument("差异文件", File.class), true);
 			diff.apply(ctx.argument("源文件夹", File.class));
 		})))).then(literal("init")
 				.then(argument("证书名称", ks.asKeyPair())
 					.executes(ctx -> {
 
 			server = new McDiffServer(ctx.argument("证书名称", KeyPair.class));
-		}))).then(argument("压缩包", Argument.file())
+		}))).then(literal("initNoSign")
+				.executes(ctx -> {
+
+			server = new McDiffServer(null);
+		})).then(argument("压缩包", Argument.file())
 				.then(argument("源文件夹", Argument.folder())
 					.then(argument("差异输出", Argument.fileOptional(true))
 						.executes(ctx -> {
@@ -62,5 +75,20 @@ public class McDiffPlugin extends Plugin {
 				ctx.argument("差异输出", File.class)
 			);
 		})))));
+
+		registerCommand(literal("chunktrim").then(argument("chunk", Argument.folder()).executes(ctx -> {
+			char c = Terminal.readChar(MyBitSet.from("yn"), new CharList("您正在尝试原位替换世界，确认吗？"), false);
+			if (c != 'y') return;
+			System.out.println("您确认了操作.");
+			ChunkTrim.createInline(ctx.argument("chunk", File.class));
+		}).then(argument("backup", Argument.fileOptional(false)).executes(ctx -> {
+			var file = ctx.argument("chunk", File.class);
+			var backup = ctx.argument("backup", File.class);
+			if (!backup.isDirectory() && !backup.mkdirs()) {
+				Terminal.error("无法创建保存目录");
+				return;
+			}
+			ChunkTrim.createBackup(file, backup);
+		}))));
 	}
 }

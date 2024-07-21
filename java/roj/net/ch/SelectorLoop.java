@@ -69,7 +69,7 @@ public class SelectorLoop implements Shutdownable {
 			var sel = selector;
 			var loop = SelectorLoop.this;
 			var selected = (MySelector) sel.selectedKeys();
-			var keys = MySelector.getForeacher(sel);
+			var keys = MySelector.getIterable(sel);
 			long time = System.currentTimeMillis();
 			int delayed = 0;
 
@@ -167,7 +167,7 @@ public class SelectorLoop implements Shutdownable {
 						refresh();
 						sel = selector;
 						selected = (MySelector) sel.selectedKeys();
-						keys = MySelector.getForeacher(sel);
+						keys = MySelector.getIterable(sel);
 						delayed = 0;
 						LOGGER.warn("重建选择器, size={}/{}", prevSize, sel.keys().size());
 						continue;
@@ -217,7 +217,7 @@ public class SelectorLoop implements Shutdownable {
 				Boolean result = t.exceptionCaught(stage, e);
 				if (result != null) return result;
 			} catch (Exception e1) {
-				e.addSuppressed(e1);
+				if (e != e1) e.addSuppressed(e1);
 			}
 			exception.accept(stage, e);
 			return true;

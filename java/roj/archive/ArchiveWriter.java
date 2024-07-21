@@ -23,7 +23,6 @@ public interface ArchiveWriter extends Closeable, Finishable {
 	default void write(ArchiveEntry entry, DynByteBuf data) throws IOException {
 		beginEntry(entry);
 		if (!data.hasArray()) {
-			BufferPool pool = BufferPool.localPool();
 			try (ByteList bb = (ByteList) BufferPool.buffer(false,Math.min(data.readableBytes(),1024))) {
 				while (data.isReadable()) {
 					bb.put(data, Math.min(data.readableBytes(),1024));

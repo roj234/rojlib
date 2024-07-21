@@ -284,7 +284,7 @@ public class DateParser {
 			case '-':
 				i = 1;
 			case '+':
-				i *= TextUtil.parseInt(seq, 27, 30);
+				i *= TextUtil.parseInt(seq, 27, 31);
 				int d = i % 100;
 				if (d < -59 || d > 59) throw new IllegalArgumentException("你一小时" + d + "分钟");
 				a += 60000 * d;

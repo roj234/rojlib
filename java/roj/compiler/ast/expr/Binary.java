@@ -187,7 +187,8 @@ final class Binary extends ExprNode {
 					return override;
 			}
 
-			if ((castLeft.type|castRight.type) < 0) return NaE.RESOLVE_FAILED;
+			if (castLeft != null && (castLeft.type) < 0 ||
+				castRight != null && (castRight.type) < 0) return NaE.RESOLVE_FAILED;
 		}
 
 		dType = (byte) (TypeCast.getDataCap(type.rawType().type)-4);

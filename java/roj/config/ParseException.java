@@ -2,7 +2,7 @@ package roj.config;
 
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 
 /**
  * Signals that an error has been reached unexpectedly
@@ -122,7 +122,7 @@ public class ParseException extends Exception {
 			k.append("偏移: ").append(column);
 		} else {
 			k.append(line).append("\n");
-			int off = 6 + TextUtil.digitCount(this.line) + CLIUtil.getStringWidth(line.substring(0, column));
+			int off = 6 + TextUtil.digitCount(this.line) + Terminal.getStringWidth(line.substring(0, column));
 			for (int i = 0; i < off; i++) k.append('-');
 
 			k.append('^');

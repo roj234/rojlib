@@ -60,7 +60,7 @@ public final class Block {
 				int allDefault = STATE_ID.nextId();
 				if (prop != null) {
 					iterateStates(block, new MyHashMap<>(), prop, 0);
-					STATE_ID.REGISTRY.remove(allDefault);
+					STATE_ID.remove(allDefault);
 
 					Block prev = block;
 					for (int j = allDefault+1; j < STATE_ID.nextId(); j++) {
@@ -132,7 +132,10 @@ public final class Block {
 	}
 
 	public static Block getBlock(String name) { return byName.getOrDefault(name, AIR); }
-	public static Block getBlock(int id) { return REGISTRY.REGISTRY.getOrDefault(id, AIR); }
+	public static Block getBlock(int id) {
+		Block block = REGISTRY.getById(id);
+		return block == null ? AIR : block;
+	}
 
 	public static final Block AIR = getBlock("minecraft:air");
 

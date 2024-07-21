@@ -63,6 +63,7 @@ modifier.conflict=[Modifier]修饰符%1不能与%2组合
 modifier.notAllowed=[Modifier]此处不允许修饰符%1
 
 #Cu Stage1 [Class]
+cu.filename=[CU]%1中的公共类名称应当与文件名相同
 cu.record.header=[CU]record类必须有至少一个字段
 cu.struct.antibody=[CU]结构不能包含子节点
 
@@ -251,6 +252,7 @@ chained.warn.constant_expr=[Chained]在逗号分隔中的常量表达式
 dotGet.opChain.arrayLen=无法在?.表达式中访问数组长度
 dotGet.opChain.isChild= ?. 表达式只能在字段访问语句中使用
 dotGet.opChain.tooLong= ?. 表达式仅适用于64级以内的字段访问 （李在赣神魔？）
+dotGet.opChain.inClassDecl= ?. 表达式不能插入在<不可空>的部分中
 dotGet.incompatible.plural="[DotGet]对于%1找不到合适的字段\n%2"
 symbol.error.arrayBrOutsideClassRef=[Symbol]数组索引不能为<空>
 symbol.error.derefPrimitive=[Symbol]不能取消引用 %1
@@ -329,3 +331,13 @@ typeCast.error.-6=实际参数列表和形式参数列表长度不同
 typeCast.error.-7=找不到符号，无法处理%1与%2的转换关系
 typeCast.error.-8=%1不可能转换为%2
 typeCast.error.-99=%2不是具有%1个参数的函数式接口
+
+
+# 插件
+plugins.annotation.namedAttachOnType=在类型上使用具名Attach
+plugins.annotation.propertyExist=要生成的伪字段%1已存在
+plugins.annotation.getterNotFound=属性%1的getter %2 不存在
+plugins.annotation.argError.getter=属性%1的getter %2 参数验证失败
+plugins.annotation.argError.setter=属性%1的setter %2 参数验证失败
+
+plugins.annotation.singleton=Singleton的方法必须是静态，无参数，有返回值

@@ -63,6 +63,7 @@ public sealed class Page {
 		for (int i = 0; i < depth; i++) sb.append(' ');
 		CharList bin = new CharList(Long.toBinaryString(bitmap)).replace('0', BITMAP_FREE).replace('1', BITMAP_USED);
 		sb.append("  mapping = ").padEnd(BITMAP_FREE, 64-bin.length()).append(bin).append('\n');
+		bin._free();
 
 		for (int i = 0; i < depth; i++) sb.append(' ');
 		return sb.append(']');
@@ -240,6 +241,7 @@ public sealed class Page {
 				}
 
 				sb.append("  mapping = ").append(bin).append('\n');
+				bin._free();
 			}
 
 			for (int i = 0; i < childCount; i++) {
@@ -672,8 +674,8 @@ public sealed class Page {
 
 		Top(int shift, long totalSpace) {
 			super(shift, 0);
-			this.free = this.totalSpace = totalSpace;
-			this.bmpCap = (byte) ((totalSpace+MASK64[SHIFT]) >>> shift);
+			this.bmpCap = (byte) ((totalSpace+MASK64[shift]) >>> shift);
+			this.free = this.totalSpace = (MASK64[shift]+1) * bmpCap;
 		}
 
 		final int bitmapCapacity() { return bmpCap; }

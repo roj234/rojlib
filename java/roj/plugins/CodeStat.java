@@ -9,8 +9,8 @@ import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
-import roj.ui.CLIUtil;
 import roj.ui.GuiUtil;
+import roj.ui.Terminal;
 import roj.ui.TextAreaPrintStream;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandNode;
@@ -52,7 +52,7 @@ public class CodeStat extends Plugin {
 	}
 
 	public static void main(String[] args) throws IOException {
-		if (!CLIUtil.ANSI) {
+		if (!Terminal.ANSI_OUTPUT) {
 			if (!hasUI) {
 				hasUI = true;
 				GuiUtil.systemLook();
@@ -116,7 +116,7 @@ public class CodeStat extends Plugin {
 				@Override
 				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
 					String name = file.getFileName().toString();
-					String ext = IOUtil.extensionName(name).toLowerCase();
+					String ext = IOUtil.extensionName(name);
 					switch (ext) {
 						case "java", "go", "c", "cpp", "h", "hpp", "js", "jsx", "ts", "py":
 						case "php", "asp", "jsp", "html", "aspx", "xhtml", "htm", "css":

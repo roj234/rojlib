@@ -200,13 +200,12 @@ public class MyTemplateEngine {
 
 		LocalContext.set(ctx);
 		try {
-			ctx.setClass(cu);
-
 			cu.S1_Struct();
 			cu.S2_ResolveSelf();
 			cu.S2_ResolveRef();
 			cu.S3_Annotation();
 			cu.S4_Code();
+			cu.S5_noStore();
 		} finally {
 			LocalContext.set(null);
 		}

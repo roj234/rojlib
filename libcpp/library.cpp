@@ -3,16 +3,14 @@
 static jclass nativeException = nullptr;
 void Error(JNIEnv *env, const char* msg) { env->ThrowNew(nativeException, msg); }
 
-#define COMPILE_TARGET_WINDOWS
-
 #include "bsdiff.cpp"
 #include "lz/LZ_Jni.cpp"
 
-JNIEXPORT jlong JNICALL Java_roj_NativeLibrary_init(JNIEnv *env, jclass) {
+JNIEXPORT jlong JNICALL Java_roj_RojLib_init(JNIEnv *env, jclass) {
     if (nativeException == nullptr)
         nativeException = (jclass) (env->NewGlobalRef(env->FindClass("roj/util/NativeException")));
     jlong bitset = ANSI_CONSOLE | BSDIFF | SHARED_MEMORY
-#ifdef COMPILE_TARGET_WINDOWS
+#ifdef _WIN32
      |FUNC_WINDOWS
 #endif
             ;
@@ -20,12 +18,12 @@ JNIEXPORT jlong JNICALL Java_roj_NativeLibrary_init(JNIEnv *env, jclass) {
     return bitset;
 }
 
-const int MODE_GET = 0, MODE_SET = 1, MODE_ADD = 2, MODE_REMOVE = 3, MODE_XOR = 4;
+const int MODE_GET = 0, MODE_SET = 1;
 
-#ifdef COMPILE_TARGET_WINDOWS
+#ifdef _WIN32
 #include <windows.h>
 
-JNIEXPORT jint JNICALL Java_roj_NativeLibrary_getLastError(JNIEnv *, jclass) {
+JNIEXPORT jint JNICALL Java_roj_RojLib_getLastError(JNIEnv *, jclass) {
     return static_cast<jint>(GetLastError());
 }
 
@@ -47,10 +45,10 @@ static void restoreHandle() {
     }
 }
 
-JNIEXPORT jint JNICALL Java_roj_ui_CLIUtil_setConsoleMode0(JNIEnv *env, jclass, jint handle, jint mode, jint flags) {
+JNIEXPORT jint JNICALL Java_roj_ui_NativeVT_setConsoleMode0(JNIEnv *env, jclass, jint handle, jint mode, jint flags) {
     DWORD dwHandle;
     switch (handle) {
-        default: Error(env, "INVALID_HANDLE_VALUE"); return 0;
+        default: Error(env, "no such handle"); return 0;
         case 0: dwHandle = STD_INPUT_HANDLE; break;
         case 1: dwHandle = STD_OUTPUT_HANDLE; break;
         case 2: dwHandle = STD_ERROR_HANDLE; break;
@@ -58,7 +56,7 @@ JNIEXPORT jint JNICALL Java_roj_ui_CLIUtil_setConsoleMode0(JNIEnv *env, jclass, 
 
     HANDLE h = GetStdHandle(dwHandle);
     if (h == INVALID_HANDLE_VALUE) {
-        Error(env, "INVALID_HANDLE_VALUE");
+        Error(env, "no such handle");
         return 0;
     }
 
@@ -68,25 +66,20 @@ JNIEXPORT jint JNICALL Java_roj_ui_CLIUtil_setConsoleMode0(JNIEnv *env, jclass, 
         return 0;
     }
 
-    if (mode != MODE_GET && !(modHandle & (1 << handle))) {
-        if (modHandle == 0) atexit(restoreHandle);
+    if (mode == MODE_SET) {
+        if (!(modHandle & (1 << handle))) {
+            if (modHandle == 0) atexit(restoreHandle);
 
-        modHandle |= 1 << handle;
-        prevMode[handle] = lpMode;
-    }
+            modHandle |= 1 << handle;
+            prevMode[handle] = lpMode;
+        }
 
-    switch (mode) {
-        default:
-        case MODE_GET: return static_cast<jint>(lpMode);
-        case MODE_REMOVE: lpMode &= ~flags; break;
-        case MODE_ADD: lpMode |= flags; break;
-        case MODE_SET: lpMode = flags; break;
-        case MODE_XOR: lpMode ^= flags; break;
-    }
+        lpMode = flags;
 
-    if (!SetConsoleMode(h, lpMode)) {
-        Error(env, "SetConsoleMode() failed");
-        return 0;
+        if (!SetConsoleMode(h, lpMode)) {
+            Error(env, "SetConsoleMode() failed");
+            return 0;
+        }
     }
 
     return static_cast<jint>(lpMode);
@@ -204,8 +197,7 @@ JNIEXPORT jlong JNICALL Java_roj_ui_GuiUtil_nGetConsoleWindow(JNIEnv *, jclass) 
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
-
-JNIEXPORT jint JNICALL Java_roj_ui_CLIUtil_setConsoleMode0(JNIEnv *env, jclass, jint handle, jint mode, jint flags) {
+JNIEXPORT jint JNICALL Java_roj_ui_NativeVT_setConsoleMode0(JNIEnv *env, jclass, jint handle, jint mode, jint flags) {
     Error(env, "Unsupported operation system");
     return 0;
 }
@@ -230,29 +222,3 @@ JNIEXPORT void JNICALL Java_roj_util_SharedMemory_nClose(JNIEnv *env, jclass, jl
 }
 
 #endif
-
-JNIEXPORT jclass JNICALL Java_roj_reflect_Java9Compat_defineClass0(JNIEnv *env, jclass, jstring name, jobject cl, jbyteArray b, jint len) {
-    if (b == nullptr) {
-        Error(env, "buffer is null");
-        return nullptr;
-    }
-
-    auto len1 = env->GetArrayLength(b);
-    if (len > len1) {
-        Error(env, "array index out of bounds");
-        return nullptr;
-    }
-
-    auto realName = name == nullptr ? nullptr : env->GetStringUTFChars(name, nullptr);
-    if (realName == nullptr) return nullptr;
-
-    auto realData = env->GetByteArrayElements(b, nullptr);
-    if (realData == nullptr) return nullptr;
-
-    jclass klass = env->DefineClass(realName, cl, realData, len);
-
-    env->ReleaseByteArrayElements(b, realData, JNI_ABORT);
-    env->ReleaseStringUTFChars(name,realName);
-
-    return klass;
-}

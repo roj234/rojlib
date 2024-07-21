@@ -94,12 +94,12 @@ public class IntList implements Iterable<Integer> {
 	public void trimToSize() {if (list.length != size) list = Arrays.copyOf(list, size);}
 
 	public int get(int i) {
-		if (i > size) throw new ArrayIndexOutOfBoundsException(i);
+		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
 		return list[i];
 	}
 
 	public int set(int i, int e) {
-		if (i < 0 || i >= size) throw new ArrayIndexOutOfBoundsException(i);
+		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
 		int o = list[i];
 		list[i] = e;
 		return o;
@@ -109,18 +109,16 @@ public class IntList implements Iterable<Integer> {
 		if (i > size) throw new ArrayIndexOutOfBoundsException(i);
 		System.arraycopy(list, i, list, i + 1, size - i);
 		list[i] = e;
+		size++;
 	}
 
 	public int remove(int i) {
-		if (i >= 0 && i < size) {
-			int val = list[i];
-			if (size - 1 - i >= 0) {
-				System.arraycopy(list, i + 1, list, i, size - 1 - i);
-			}
-			size--;
-			return val;
-		}
-		throw new ArrayIndexOutOfBoundsException(i);
+		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
+
+		int val = list[i];
+		if (size - 1 - i > 0) System.arraycopy(list, i + 1, list, i, size - 1 - i);
+		size--;
+		return val;
 	}
 
 	public int indexOf(int key) {

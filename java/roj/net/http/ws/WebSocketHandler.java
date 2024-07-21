@@ -18,24 +18,18 @@ import java.util.zip.Inflater;
 import static roj.reflect.ReflectionUtils.u;
 
 /**
- * Websocket协议 <br>
- * <a href="https://datatracker.ietf.org/doc/html/rfc6455">RFC6455</a>
- *
+ * <a href="https://datatracker.ietf.org/doc/html/rfc6455">RFC6455 - Websocket</a>
  * @author Roj234
  * @since 2022/11/11 0011 1:30
  */
 public abstract class WebSocketHandler implements ChannelHandler {
 	public static final byte
-		/**
-		 * 延续帧。本次数据传输采用了数据分片，当前收到的数据帧为其中一个数据分片。
-		 */
 		FRAME_CONTINUE = 0x0,
 		FRAME_TEXT = 0x1,
 		FRAME_BINARY = 0x2,
 		FRAME_CLOSE = 0x8,
 		FRAME_PING = 0x9,
 		FRAME_PONG = 0xA;
-	// B-F control frame
 
 	/**
 	 * 关闭握手异常代号
@@ -74,12 +68,10 @@ public abstract class WebSocketHandler implements ChannelHandler {
 		LOCAL_NO_CTX = 0x02, // 本地压缩无上下文
 		LOCAL_SIMPLE_MASK = 0x04, // 作为客户端时,跳过mask步骤
 		ACCEPT_PARTIAL_MSG = 0x08, // 允许处理组合之前的分片 (此时onPacket函数的ph参数将会有0x80位,并可以通过cf字段获取)
-		I_SEND_COMPRESS = 0x10, // 发送需要压缩 (内部使用)
+		__SEND_COMPRESS = 0x10, // 发送需要压缩 (内部使用)
 		CONTINUOUS_SENDING = 0x20, // 正在发送分片帧
 		COMPRESS_AVAILABLE = 0x40, // 对等端允许压缩 (permessage-deflate)
 		REMOTE_MASK = 0x80; // 标志为服务端
-
-	private static final int ZIP_BUFFER_CAPACITY = 256;
 
 	private Deflater def;
 	private Inflater inf;
@@ -148,7 +140,7 @@ public abstract class WebSocketHandler implements ChannelHandler {
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 		idle = 0;
 
-		DynByteBuf rb = (DynByteBuf) msg;
+		var rb = (DynByteBuf) msg;
 		switch (state) {
 			case HEADER:
 				if (rb.readableBytes() < 2) return;
@@ -231,94 +223,101 @@ public abstract class WebSocketHandler implements ChannelHandler {
 			head = (head & 0x80) | (rcvFrag.data & 0x7F);
 		}
 
-		if ((head & RSV_COMPRESS) != 0) {
+		boolean compressed = (head & RSV_COMPRESS) != 0;
+		if (compressed) {
 			if (inf == null) {
 				error(ERR_PROTOCOL, "Illegal rsv bits");
 				return;
 			}
 
-			ByteList buf = IOUtil.getSharedByteBuf();
-			buf.ensureCapacity(ZIP_BUFFER_CAPACITY);
-			byte[] zi = buf.list;
+			var hasNext = true;
+			byte[] zi = IOUtil.getSharedByteBuf().list;
 
-			DynByteBuf zo = ctx.allocate(false, 1024);
+			var zo = ctx.allocate(false, 1024);
 
-			while (buf != null) {
-				int $len = Math.min(rb.readableBytes(), zi.length);
-				rb.readFully(zi, 0, $len);
+			try {
+				while (hasNext) {
+					int $len = Math.min(rb.readableBytes(), zi.length);
+					rb.readFully(zi, 0, $len);
 
-				pushEOS:
-				if (!rb.isReadable()) {
-					if ((head & 0x80) != 0) {
-						// not enough space, process input data first
-						if (zi.length - $len < 4) break pushEOS;
+					pushEOS:
+					if (!rb.isReadable()) {
+						if ((head & 0x80) != 0) {
+							// not enough space, process input data first
+							if (zi.length - $len < 4) break pushEOS;
 
-						zi[$len++] = 0;
-						zi[$len++] = 0;
-						zi[$len++] = -1;
-						zi[$len++] = -1;
+							zi[$len++] = 0;
+							zi[$len++] = 0;
+							zi[$len++] = -1;
+							zi[$len++] = -1;
 
-						// break on next cycle
-						buf = null;
-					} else {
-						break;
+							// break on next cycle
+							hasNext = false;
+						} else {
+							break;
+						}
+					}
+
+					inf.setInput(zi, 0, $len);
+
+					try {
+						do {
+							int i = inf.inflate(zo.array(), zo.arrayOffset() + zo.wIndex(), zo.capacity() - zo.wIndex());
+							zo.wIndex(zo.wIndex() + i);
+
+							if (!zo.isWritable()) {
+								if (zo.capacity() << 1 > maxDataOnce) {
+									error(ERR_TOO_LARGE, "decompressed data > "+zo.capacity()+" bytes");
+									return;
+								}
+								zo = ctx.alloc().expand(zo, zo.capacity());
+							}
+						} while (!inf.needsInput());
+					} catch (Exception e) {
+						Helpers.athrow(e);
 					}
 				}
 
-				inf.setInput(zi, 0, $len);
-
-				try {
-					do {
-						int i = inf.inflate(zo.array(), zo.arrayOffset() + zo.wIndex(), zo.capacity() - zo.wIndex());
-						zo.wIndex(zo.wIndex() + i);
-
-						if (!zo.isWritable()) {
-							if (zo.capacity() << 1 > maxDataOnce) {
-								error(ERR_TOO_LARGE, "decompressed data > " + zo.capacity() + " bytes");
-								return;
-							}
-							zo = ctx.alloc().expand(zo, zo.capacity());
-						}
-					} while (!inf.needsInput());
-				} catch (Exception e) {
-					Helpers.athrow(e);
+				// not continuous
+				if ((head & 0x80) != 0 && (flag & REMOTE_NO_CTX) != 0) {
+					inf.reset();
 				}
-			}
-
-			// not continuous
-			if ((head & 0x80) != 0 && (flag & REMOTE_NO_CTX) != 0) {
-				inf.reset();
+			} catch (Exception e) {
+				BufferPool.reserve(zo);
+				throw e;
 			}
 
 			rb = zo;
 		}
 
-		if (rcvFrag != null) {
-			if ((flag & ACCEPT_PARTIAL_MSG) != 0) {
-				onPacket(0x80 | (rcvFrag.data&0xF), rb);
-				rcvFrag.fragments++;
-			} else {
-				rcvFrag.append(ctx, rb);
-				if (rcvFrag.length > maxData) {
-					error(ERR_TOO_LARGE, null);
-				}
+		try {
+			if (rcvFrag != null) {
+				if ((flag & ACCEPT_PARTIAL_MSG) != 0) {
+					onPacket(0x80 | (rcvFrag.data&0xF), rb);
+					rcvFrag.fragments++;
+				} else {
+					rcvFrag.append(ctx, rb);
+					if (rcvFrag.length > maxData) {
+						error(ERR_TOO_LARGE, null);
+					}
 
-				if ((head & 0x80) != 0) {
-					try {
-						onPacket(rcvFrag.data&0xF, rcvFrag.payload());
-					} finally {
-						rcvFrag.clear();
-						rcvFrag = null;
+					if ((head & 0x80) != 0) {
+						try {
+							onPacket(rcvFrag.data&0xF, rcvFrag.payload());
+						} finally {
+							rcvFrag.clear();
+							rcvFrag = null;
+						}
 					}
 				}
+			} else {
+				onPacket(head & 15, rb);
 			}
-		} else {
-			onPacket(head & 15, rb);
+		} finally {
+			state = HEADER;
+			if (compressed) BufferPool.reserve(rb);
+			else if (rb.capacity() != 0) rb.wIndex(wPos);
 		}
-
-		state = HEADER;
-		if (rb.capacity() == 0) return;
-		rb.wIndex(wPos);
 	}
 
 	private void mask(DynByteBuf b) {
@@ -358,8 +357,7 @@ public abstract class WebSocketHandler implements ChannelHandler {
 				break;
 			case FRAME_PONG: break;
 			case FRAME_PING: send(FRAME_PONG, null); break;
-			case FRAME_TEXT:
-			case FRAME_BINARY: onData(ph, in); break;
+			case FRAME_TEXT, FRAME_BINARY: onData(ph, in); break;
 			default: throw new IOException("Unsupported packet id #"+ph);
 		}
 	}
@@ -377,12 +375,14 @@ public abstract class WebSocketHandler implements ChannelHandler {
 		}
 
 		if (msg == null) msg = "";
-		else if (msg.length() > 252) msg = msg.substring(0, 252);
+		else if (msg.length() > 125) msg = msg.substring(0, 125);
 
 		errCode = code;
 		errMsg = msg;
 
-		send(FRAME_CLOSE, IOUtil.getSharedByteBuf().putShort(code).putUTFData(msg));
+		var data = IOUtil.getSharedByteBuf().putShort(code).putUTFData(msg);
+		if (data.wIndex() > 125) data.wIndex(125);
+		send(FRAME_CLOSE, data);
 		ch.channel().closeGracefully();
 	}
 
@@ -395,17 +395,17 @@ public abstract class WebSocketHandler implements ChannelHandler {
 	public final void send(int opcode, DynByteBuf data) throws IOException {
 		if ((flag & CONTINUOUS_SENDING) != 0) throw new IOException("sendContinuous() not reach EOF");
 		if ((opcode & RSV_COMPRESS) > (flag & RSV_COMPRESS)) throw new IOException("Invalid compress state");
-		opcode |= 0x80;
 
 		if (data == null) data = ByteList.EMPTY;
-		else if (compressSize > 0 && data.readableBytes() > compressSize && (flag & RSV_COMPRESS) != 0) opcode |= RSV_COMPRESS;
+		else if (compressSize != 0 && data.readableBytes() > compressSize && (flag & RSV_COMPRESS) != 0) opcode |= RSV_COMPRESS;
 
 		int rem = data.readableBytes();
 		boolean comp = rem > 0 && (opcode & RSV_COMPRESS) != 0;
 		if (fragmentSize > 0 && rem > fragmentSize) {
 			// frame[0]: continuous flag + original opcode
 			data.wIndex(data.rIndex + fragmentSize);
-			send0(opcode ^ 0x80, data, comp);
+			send0(opcode, data, comp);
+			rem -= fragmentSize;
 
 			// frame[1] ... frame[count - 1]: opcode=0
 			while (rem > fragmentSize) {
@@ -418,7 +418,7 @@ public abstract class WebSocketHandler implements ChannelHandler {
 			data.wIndex(data.rIndex + rem);
 			send0(0x80, data, comp);
 		} else {
-			send0(opcode, data, comp);
+			send0(opcode | 0x80, data, comp);
 		}
 	}
 
@@ -430,15 +430,15 @@ public abstract class WebSocketHandler implements ChannelHandler {
 			} else {
 				if ((opcode & RSV_COMPRESS) > (flag & RSV_COMPRESS)) throw new IOException("Invalid compress state");
 				opcode &= ~0x80;
-				if ((opcode & RSV_COMPRESS) != 0) flag |= I_SEND_COMPRESS;
+				if ((opcode & RSV_COMPRESS) != 0) flag |= __SEND_COMPRESS;
 				flag |= CONTINUOUS_SENDING;
 			}
 		} else {
 			opcode = endOfFrame ? 0x80 : 0;
 		}
-		send0(opcode, data, (flag & I_SEND_COMPRESS) != 0);
+		send0(opcode, data, (flag & __SEND_COMPRESS) != 0);
 
-		if (endOfFrame) flag &= ~(CONTINUOUS_SENDING | I_SEND_COMPRESS);
+		if (endOfFrame) flag &= ~(CONTINUOUS_SENDING | __SEND_COMPRESS);
 	}
 
 	public ChannelCtx ch;
@@ -450,7 +450,6 @@ public abstract class WebSocketHandler implements ChannelHandler {
 			DynByteBuf buf = null;
 			if (data.hasArray()) {
 				def.setInput(data.array(), data.arrayOffset() + data.rIndex, data.readableBytes());
-				data.rIndex = data.wIndex();
 			} else {
 				buf = ch.allocate(false, $len);
 				byte[] zb = buf.array();
@@ -496,11 +495,7 @@ public abstract class WebSocketHandler implements ChannelHandler {
 			data = ByteList.wrap(zb, 0, $len);
 		}
 
-		if ((flag & REMOTE_MASK) == 0) {
-			$len += 4;
-		}
-
-		DynByteBuf out = ch.allocate(true, $len + 10).put((byte) opcode);
+		var out = ch.allocate(true, $len + 10).put((byte) opcode);
 		if ($len <= 125) {
 			out.put((byte) $len);
 		} else if ($len <= 65535) {
@@ -525,6 +520,7 @@ public abstract class WebSocketHandler implements ChannelHandler {
 		}
 
 		out.put(data);
+		data.rIndex = data.wIndex();
 		try {
 			ch.channelWrite(out);
 		} finally {

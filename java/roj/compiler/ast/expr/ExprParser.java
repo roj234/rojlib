@@ -18,8 +18,11 @@ import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.VariableDeclare;
 import roj.compiler.context.CompileUnit;
+import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
+import roj.compiler.plugins.api.LEC;
+import roj.compiler.plugins.api.LEG;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.Word;
@@ -34,7 +37,6 @@ import roj.util.TimSortForEveryone;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 import static roj.compiler.JavaLexer.*;
 import static roj.config.Word.LITERAL;
@@ -282,7 +284,7 @@ public final class ExprParser {
 					default: // 自定义前缀 | 自定义完整表达式
 						int alt_sid = _sid & ~CU_TerminateFlag;
 						if (_sid != alt_sid) {
-							cur = ((Function<JavaLexer, ExprNode>) custom.get(alt_sid)).apply(wr);
+							cur = ((LEG) custom.get(alt_sid)).generate(wr, ctx);
 							break endValueConv;
 						}
 
@@ -518,7 +520,7 @@ public final class ExprParser {
 				break;
 				case 0: break endValueGen;
 				default:
-					cur = ((Function<JavaLexer, ExprNode>) custom.get(_sid)).apply(wr);
+					cur = ((LEG) custom.get(_sid)).generate(wr, ctx);
 				break;
 			}
 			w = wr.next();
@@ -619,7 +621,7 @@ public final class ExprParser {
 					default: // 自定义继续 | 自定义终止
 						int alt_sid = _sid & ~CU_TerminateFlag;
 
-						cur = ((BiFunction<JavaLexer, ExprNode, ExprNode>) custom.get(alt_sid)).apply(wr, cur);
+						cur = ((LEC) custom.get(alt_sid)).generate(wr, cur, ctx);
 
 						if (_sid == alt_sid) break;
 						else break endValueConv;

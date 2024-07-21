@@ -28,7 +28,7 @@ public class Scheduler implements Runnable {
 				if (defaultScheduler != null) return defaultScheduler;
 
 				defaultScheduler = new Scheduler(TaskPool.Common());
-				Thread t = new Thread(defaultScheduler, "定时任务");
+				Thread t = new Thread(defaultScheduler, "RojLib - 任务定时器");
 				t.setDaemon(true);
 				t.start();
 			}
@@ -235,11 +235,10 @@ public class Scheduler implements Runnable {
 			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
 
 			synchronized (root) {
-				//按说这是不可能的，不过就是发生了，算了不去管它
-				if (task.next == null) return false;
-				task.next.prev = task.prev;
-				task.prev.next = task.next;
-				task.prev = task.next = null;
+				var next = task.next;
+				next.prev = task.prev;
+				task.prev.next = next;
+				// 但是不要清除task.next，因为上面(#127/#142)可能会引用
 			}
 			return true;
 		}

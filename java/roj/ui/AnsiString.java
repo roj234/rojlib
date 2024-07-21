@@ -80,7 +80,7 @@ public class AnsiString {
 			if (isColorRGB()) {
 				ser.value("#"+Integer.toHexString(fgColor));
 			} else {
-				ser.value(CLIUtil.MinecraftColor.getByConsoleCode(fgColor&0xFF));
+				ser.value(Terminal.MinecraftColor.getByConsoleCode(fgColor&0xFF));
 			}
 		}
 
@@ -136,12 +136,12 @@ public class AnsiString {
 		return out;
 	}
 	public AnsiString writeLimited(CharList sb, CInt maxWidth, boolean ansi) {
-		int width = CLIUtil.getStringWidth(value);
+		int width = Terminal.getStringWidth(value);
 		if (width > maxWidth.value) {
 			int i = 0;
 			width = 0;
 			while (i < value.length()) {
-				int w = CLIUtil.getCharWidth(value.charAt(i));
+				int w = Terminal.getCharWidth(value.charAt(i));
 				if (width+w > maxWidth.value) {
 					sb.append(value, 0, i);
 					return new AnsiString(this, value.subSequence(i, value.length()));

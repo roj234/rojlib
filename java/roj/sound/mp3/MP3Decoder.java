@@ -52,7 +52,7 @@ public final class MP3Decoder implements AudioDecoder {
 		header.reset();
 		// 定位并解码第一帧
 		nextHeader();
-		if (!eof) out.start(header.getAudioFormat(), header.getPcmSize());
+		if (!eof) out.init(header.getAudioFormat(), (header.getMode()==3?1:2)*header.getSamplingRate());
 
 		return metadata;
 	}
@@ -118,12 +118,10 @@ public final class MP3Decoder implements AudioDecoder {
 	@Override
 	public void stop() {
 		eof = true;
+		in = null;
+		out = null;
 		synchronized (this) { notify(); }
 		header.reset();
-		if (out != null) {
-			in = null;
-			out.stop();
-		}
 	}
 
 	@Override
@@ -160,17 +158,14 @@ public final class MP3Decoder implements AudioDecoder {
 			}
 		} finally {
 			layer.close();
-
-			if (pcmOff[0] > 0) out.write(pcm, pcmOff[0]);
-			out.flush();
-
+			if (pcmOff[0] > 0) out.write(pcm, 0, pcmOff[0], true);
 			ArrayCache.putArray(pcm);
 		}
 	}
 
 	// 2. 输出到音频对象
 	final void flush() {
-		if (pcmOff[0] > 0) out.write(pcm, pcmOff[0]);
+		if (pcmOff[0] > 0) out.write(pcm, 0, pcmOff[0], true);
 		pcmOff[0] = 0;
 		pcmOff[1] = 2;
 	}

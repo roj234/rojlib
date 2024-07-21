@@ -5,6 +5,7 @@ import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.config.data.*;
+import roj.text.Interner;
 import roj.util.Helpers;
 
 import java.util.Map;
@@ -124,17 +125,17 @@ public class JSONParser extends Parser {
 	@SuppressWarnings("fallthrough")
 	private static CEntry element(Word w, Parser wr, int flag) throws ParseException {
 		switch (w.type()) {
+			default: wr.unexpected(w.val()); return Helpers.nonnull();
 			case lBracket: return list(wr, new CList(), flag);
 			case lBrace: return map(wr, flag);
-			case STRING: return CString.valueOf(w.val());
+			case LITERAL, STRING: return CString.valueOf(w.val());
 			case NULL: return CNull.NULL;
 			case TRUE: return CBoolean.TRUE;
 			case FALSE: return CBoolean.FALSE;
 			case INTEGER: return CInt.valueOf(w.asInt());
 			case LONG: return CLong.valueOf(w.asLong());
-			case DOUBLE: return CFloat.valueOf(w.asFloat());
-			case FLOAT: return CDouble.valueOf(w.asDouble());
-			default: wr.unexpected(w.val()); return Helpers.nonnull();
+			case FLOAT: return CFloat.valueOf(w.asFloat());
+			case DOUBLE: return CDouble.valueOf(w.asDouble());
 		}
 	}
 

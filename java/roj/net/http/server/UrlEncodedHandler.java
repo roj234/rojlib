@@ -74,7 +74,7 @@ public class UrlEncodedHandler implements HPostHandler {
 		if (name == null && !data.isEmpty()) throw invalidKey();
 	}
 
-	private static IllegalRequestException invalidKey() {return new IllegalRequestException(400, "invalid form key");}
+	private static IllegalRequestException invalidKey() {return IllegalRequestException.badRequest("invalid form key");}
 
 	protected void onKey(ChannelCtx ctx, String key) throws IOException {data.put(name, new ByteList());}
 	protected void onValue(ChannelCtx ctx, DynByteBuf value) throws IOException {((ByteList)data.get(name)).put(value);}

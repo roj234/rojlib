@@ -66,110 +66,35 @@ public class CodeVisitor {
 			else _visitNodePre();
 
 			switch (code) {
-				case PUTFIELD:
-				case GETFIELD:
-				case PUTSTATIC:
-				case GETSTATIC:
-					field(code, (CstRefField) cp.get(r));
-					break;
-
-				case INVOKEVIRTUAL:
-				case INVOKESPECIAL:
-				case INVOKESTATIC:
-					invoke(code, (CstRef) cp.get(r));
-					break;
-				case INVOKEINTERFACE:
-					invokeItf((CstRefItf) cp.get(r), r.readShort());
-					break;
-				case INVOKEDYNAMIC:
-					invokeDyn((CstDynamic) cp.get(r), r.readUnsignedShort());
-					break;
-
-				case GOTO:
-				case IFEQ:
-				case IFNE:
-				case IFLT:
-				case IFGE:
-				case IFGT:
-				case IFLE:
-				case IF_icmpeq:
-				case IF_icmpne:
-				case IF_icmplt:
-				case IF_icmpge:
-				case IF_icmpgt:
-				case IF_icmple:
-				case IF_acmpeq:
-				case IF_acmpne:
-				case IFNULL:
-				case IFNONNULL:
-				case JSR:
-					jump(code, r.readShort());
-					break;
-				case GOTO_W:
-				case JSR_W:
-					jump(code, r.readInt());
-					break;
-				case SIPUSH:
-					smallNum(code, r.readShort());
-					break;
-				case RET:
-					ret(widen ? r.readShort() : r.readByte());
-					break;
-				case BIPUSH:
-					smallNum(code, r.readByte());
-					break;
-				case NEWARRAY:
-					newArray(r.readByte());
-					break;
-				case LDC:
-					ldc(LDC, cp.array(r.readUnsignedByte()));
-					break;
-				case LDC_W:
-				case LDC2_W:
-					ldc(code, cp.get(r));
-					break;
-
-				case IINC:
-					iinc(widen ? r.readUnsignedShort() : r.readUnsignedByte(), widen ? r.readShort() : r.readByte());
-					break;
-
-				case WIDE:
+				case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, (CstRefField) cp.get(r));
+				case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, (CstRef) cp.get(r));
+				case INVOKEINTERFACE -> invokeItf((CstRefItf) cp.get(r), r.readShort());
+				case INVOKEDYNAMIC -> invokeDyn((CstDynamic) cp.get(r), r.readUnsignedShort());
+				case GOTO, IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE, IF_icmpeq, IF_icmpne, IF_icmplt, IF_icmpge, IF_icmpgt, IF_icmple, IF_acmpeq, IF_acmpne, IFNULL, IFNONNULL, JSR -> jump(code, r.readShort());
+				case GOTO_W, JSR_W -> jump(code, r.readInt());
+				case SIPUSH -> smallNum(code, r.readShort());
+				case RET -> ret(widen ? r.readShort() : r.readByte());
+				case BIPUSH -> smallNum(code, r.readByte());
+				case NEWARRAY -> newArray(r.readByte());
+				case LDC -> ldc(LDC, cp.array(r.readUnsignedByte()));
+				case LDC_W, LDC2_W -> ldc(code, cp.get(r));
+				case IINC -> iinc(widen ? r.readUnsignedShort() : r.readUnsignedByte(), widen ? r.readShort() : r.readByte());
+				case WIDE -> {
 					if (prev == WIDE) throw new IllegalArgumentException("multi wide");
-					break;
-
-				case NEW:
-				case ANEWARRAY:
-				case INSTANCEOF:
-				case CHECKCAST:
-					clazz(code, (CstClass) cp.get(r));
-					break;
-
-				case MULTIANEWARRAY:
-					multiArray((CstClass) cp.get(r), r.readUnsignedByte());
-					break;
-
-				case ISTORE:
-				case LSTORE:
-				case FSTORE:
-				case DSTORE:
-				case ASTORE:
-				case ILOAD:
-				case LLOAD:
-				case FLOAD:
-				case DLOAD:
-				case ALOAD:
-					vars(code, widen ? r.readUnsignedShort() : r.readUnsignedByte());
-					break;
-				case TABLESWITCH:
+				}
+				case NEW, ANEWARRAY, INSTANCEOF, CHECKCAST -> clazz(code, (CstClass) cp.get(r));
+				case MULTIANEWARRAY -> multiArray((CstClass) cp.get(r), r.readUnsignedByte());
+				case ISTORE, LSTORE, FSTORE, DSTORE, ASTORE, ILOAD, LLOAD, FLOAD, DLOAD, ALOAD -> vars(code, widen ? r.readUnsignedShort() : r.readUnsignedByte());
+				case TABLESWITCH -> {
 					// align
 					r.rIndex += (4 - ((r.rIndex - rBegin) & 3)) & 3;
 					tableSwitch(r);
-					break;
-				case LOOKUPSWITCH:
+				}
+				case LOOKUPSWITCH -> {
 					r.rIndex += (4 - ((r.rIndex - rBegin) & 3)) & 3;
 					lookupSwitch(r);
-					break;
-				default: one(code);
+				}
+				default -> one(code);
 			}
 
 			prev = code;

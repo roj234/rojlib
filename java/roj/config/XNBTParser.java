@@ -66,7 +66,7 @@ public final class XNBTParser implements BinaryParser {
 				type = in.readByte();
 				int len = in.readInt();
 				cc.valueList(len);
-				while (len-- > 0) element(in, type, cc);
+				while (len-- > 0) element(in, type != 0 ? type : in.readByte(), cc);
 				cc.pop();
 			}
 			case COMPOUND -> {

@@ -1,15 +1,17 @@
 package roj.net.http;
 
-import roj.NativeLibrary;
+import org.jetbrains.annotations.ApiStatus;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
+import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.net.NetUtil;
 import roj.net.ch.*;
 import roj.net.handler.JSslClient;
-import roj.net.handler.MSSCipher;
 import roj.net.handler.Timeout;
+import roj.net.http.server.HttpCache;
+import roj.net.http.ws.WebSocketHandler;
 import roj.text.CharList;
 import roj.text.Escape;
 import roj.util.AttributeKey;
@@ -150,8 +152,8 @@ public abstract class HttpRequest {
 
 		ch.remove("h11@tls");
 		if ("https".equals(protocol)) {
-			// todo: ALPN and HTTP/2
-			ch.addFirst("h11@tls", NativeLibrary.EXTRA_BUG_CHECK ? new MSSCipher().sslMode() : new JSslClient());
+			// todo now we supported HTTP/2, but still not TLS1.3(with my own implementation)
+			ch.addFirst("h11@tls", /*RojLib.EXTRA_BUG_CHECK ? new MSSCipher().sslMode() : */new JSslClient());
 		}
 
 		var addr = NetUtil.applyProxy(proxy, _getAddress(), ch);
@@ -197,13 +199,88 @@ public abstract class HttpRequest {
 	public final SyncHttpClient execute(int timeout) throws IOException {
 		headers.putIfAbsent("connection", "close");
 
-		MyChannel ch = MyChannel.openTCP();
-		SyncHttpClient client = new SyncHttpClient();
+		var ch = MyChannel.openTCP();
+		var client = new SyncHttpClient();
 		ch.addLast("h11@timer", new Timeout(timeout, 1000))
 		  .addLast("h11@merger", client);
 		connect(ch, timeout);
 		ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 		return client;
+	}
+
+	@ApiStatus.Experimental
+	public ClientWSHandler executeWebsocket(int timeout, ClientWSHandler handler) throws IOException {
+		var randKey = IOUtil.getSharedByteBuf().putLong(System.currentTimeMillis() ^ hashCode() ^ ((long) handler.hashCode() << 32)).base64UrlSafe();
+
+		var uc = IOUtil.SharedCoder.get();
+		ByteList in = uc.byteBuf; in.clear();
+		var sha1 = HttpCache.getInstance().sha1();
+
+		sha1.update(in.putAscii(randKey).putAscii("258EAFA5-E914-47DA-95CA-C5AB0DC85B11").list, 0, in.wIndex());
+		handler.acceptKey = uc.encodeBase64(sha1.digest());
+
+		headers.put("connection", "upgrade");
+		headers.put("upgrade", "websocket");
+		headers.putIfAbsent("sec-webSocket-extensions", "permessage-deflate; client_max_window_bits");
+		headers.putIfAbsent("sec-webSocket-key", randKey);
+		headers.putIfAbsent("sec-webSocket-version", "13");
+
+		var ch = MyChannel.openTCP();
+		ch.addLast("h11@timer", new Timeout(timeout, 1000))
+		  .addLast("h11@merger", handler);
+		connect(ch, timeout);
+		ServerLaunch.DEFAULT_LOOPER.register(ch, null);
+		return handler;
+	}
+
+	public abstract static class ClientWSHandler extends WebSocketHandler {
+		String acceptKey;
+		byte state;
+		Throwable exception;
+
+		{flag = 0;}
+
+		@Override public final void channelOpened(ChannelCtx ctx) throws IOException {
+			ctx.channel().handler("h11@timer").removeSelf();
+
+			var httpClient = SyncHttpClient.findHandler(ctx);
+			var head = ((HttpRequest) httpClient.handler()).response();
+			httpClient.removeSelf();
+
+			var accept = head.get("sec-websocket-accept");
+			if (accept == null || !accept.equals(acceptKey)) throw new FastFailException("Remote not accept websocket");
+
+			var deflate = head.getFieldValue("sec-websocket-extensions", "permessage-deflate");
+			if (deflate != null) enableZip();
+
+			checkResponseHead(head);
+			state = 1;
+			synchronized (this) {notifyAll();}
+		}
+		protected void checkResponseHead(HttpHead head) {}
+
+		@Override
+		public void channelClosed(ChannelCtx ctx) throws IOException {
+			super.channelClosed(ctx);
+			state = 2;
+			if (exception == null) exception = new IllegalStateException("未预料的连接关闭");
+			synchronized (this) {notifyAll();}
+		}
+
+		@Override
+		public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
+			super.exceptionCaught(ctx, ex);
+			if (exception == null) exception = ex;
+		}
+
+		public void awaitOpen() throws Exception {
+			while (state == 0) {
+				synchronized (this) {
+					wait();
+				}
+			}
+			if (exception != null) Helpers.athrow(exception);
+		}
 	}
 
 	public final SyncHttpClient executePooled() throws IOException { return executePooled(DEFAULT_TIMEOUT); }

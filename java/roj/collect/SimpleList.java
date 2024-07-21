@@ -246,7 +246,7 @@ public class SimpleList<E> extends AbstractCollection<E> implements List<E>, Ran
 
 	@SuppressWarnings("unchecked")
 	public E set(int i, E e) {
-		if (i < 0 || i >= size) throw new ArrayIndexOutOfBoundsException(i);
+		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
 		Object o = list[i];
 		list[i] = e;
 		return (E) o;
@@ -285,16 +285,12 @@ public class SimpleList<E> extends AbstractCollection<E> implements List<E>, Ran
 
 	@SuppressWarnings("unchecked")
 	public E remove(int index) {
-		if (index >= 0 && index < size) {
-			Object o = list[index];
-			if (size - 1 - index > 0) {
-				System.arraycopy(list, index + 1, list, index, size - 1 - index);
-			}
+		if (index >= size) throw new ArrayIndexOutOfBoundsException(index);
+		Object o = list[index];
+		if (size - 1 - index > 0) System.arraycopy(list, index + 1, list, index, size - 1 - index);
+		list[--size] = null;
+		return (E) o;
 
-			list[--size] = null;
-			return (E) o;
-		}
-		throw new ArrayIndexOutOfBoundsException(index);
 	}
 
 	@Override

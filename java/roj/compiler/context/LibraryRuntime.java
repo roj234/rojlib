@@ -3,10 +3,11 @@ package roj.compiler.context;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.collect.MyHashMap;
+import roj.compiler.plugins.asm.ASM;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
-import roj.reflect.DirectAccessor;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Bypass;
+import roj.text.Interner;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,26 +41,28 @@ public final class LibraryRuntime implements Library {
 		synchronized (this) {
 			if (!classToModules.isEmpty()) return;
 
-			if (ReflectionUtils.JAVA_VERSION > 8) try {
-				Rwkk rwkk = DirectAccessor.builder(Rwkk.class).weak()
+			if (ASM.TARGET_JAVA_VERSION > 8) {
+				try {
+					Rwkk rwkk = Bypass.builder(Rwkk.class).weak()
 					.access(Class.forName("jdk.internal.jrtfs.SystemImage"), new String[] {"modulesImageExists", "moduleImageFile"}, new String[] {"modulesImageExists", "moduleImageFile"}, null)
 					.delegate_o(Class.forName("jdk.internal.jimage.ImageReader"), new String[] {"open", "getEntryNames"})
 					.build();
 
-				if (!rwkk.modulesImageExists()) throw new IllegalStateException("module image not exist");
+					if (!rwkk.modulesImageExists()) throw new IllegalStateException("module image not exist");
 
-				Object ir = rwkk.open(rwkk.moduleImageFile());
-				String[] dir = (String[]) rwkk.getEntryNames(ir);
-				for (String path : dir) {
-					if (path.startsWith("/package/") || path.startsWith("/modules/") || !path.endsWith(".class")) continue;
+					Object ir = rwkk.open(rwkk.moduleImageFile());
+					String[] dir = (String[]) rwkk.getEntryNames(ir);
+					for (String path : dir) {
+						if (path.startsWith("/package/") || path.startsWith("/modules/") || !path.endsWith(".class")) continue;
 
-					int i = path.indexOf('/', 1);
-					String module = path.substring(1, i);
+						int i = path.indexOf('/', 1);
+						String module = path.substring(1, i);
 
-					classToModules.put(path.substring(i+1, path.length()-6).intern(), module.intern());
+						classToModules.put(Interner.intern(path.substring(i+1, path.length()-6)), Interner.intern(module));
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
-			} catch (Exception e) {
-				e.printStackTrace();
 			} else {
 				File file = IOUtil.getJar(Object.class);
 				throw new UnsupportedOperationException("暂不支持java8"+file);

@@ -21,7 +21,7 @@ import java.util.function.Predicate;
 public class QPakFileSystem {
 	private List<QZArchive> archives;
 	private final IntMap<QZFileWriter> metadataOverride = new IntMap<>();
-	private final Map<String, QPakPath> files = new MyHashMap<>();
+	private final MyHashMap<String, QPakPath> files = new MyHashMap<>();
 
 	private final File alsoReadFrom;
 	private final QZFileWriter patch;
@@ -32,58 +32,54 @@ public class QPakFileSystem {
 		this.alsoReadFrom = alsoReadFrom;
 		this.patch = patch;
 		this.writeToPatch = writeToPatch;
-
-		for (int i = 0; i < archives.size(); i++) {
-			QZArchive archive = archives.get(i);
-			for (QZEntry entry : archive.getEntriesByPresentOrder()) {
-				if (entry.isAntiItem()) files.remove(entry.getName());
-				else {
-					QPakPath path;
-					File file = new File(alsoReadFrom, entry.getName());
-					if (file.exists()) path = new QPakPath(this, entry.getName(), file);
-					else {
-						path = new QPakPath(this, entry.getName(), entry);
-						path.archiveIndex = (short) i;
-					}
-
-					files.put(entry.getName(), path);
-				}
-			}
-		}
 	}
 
-	public boolean isOpen() { return archives != Collections.EMPTY_LIST; }
+	public boolean isOpen() {return archives != Collections.EMPTY_LIST;}
 	public void close() throws IOException {
-		for (QZFileWriter writer : metadataOverride.values()) writer.close();
+		for (var writer : metadataOverride.values()) writer.close();
 		patch.close();
 
-		for (QZArchive archive : archives) archive.close();
+		for (var archive : archives) archive.close();
 		archives = Collections.emptyList();
-		for (QPakPath value : files.values()) value.ref = null;
+		for (var value : files.values()) value.ref = null;
 		files.clear();
 	}
 
-	public boolean canWrite() { return writeToPatch || alsoReadFrom != null; }
+	public boolean canWrite() {return writeToPatch || alsoReadFrom != null;}
 
 	public QPakPath getPath(String pathname) {
-		QPakPath exist = files.get(pathname);
-		if (exist != null) return exist;
+		var path = files.get(pathname);
+		if (path != null) return path;
 
+		// 2024/07/24 将文件存在检查移动到这里
 		if (alsoReadFrom != null) {
 			String safePath = IOUtil.safePath(pathname);
 			if (safePath.isEmpty()) safePath = "/";
 			File file = safePath.equals("/") ? alsoReadFrom : new File(alsoReadFrom, safePath);
 			if (file.exists()) {
-				files.put(safePath, exist = new QPakPath(this, safePath, file));
-				return exist;
+				files.put(safePath, path = new QPakPath(this, safePath, file));
+				return path;
 			}
 		}
 
-		return new QPakPath(this, pathname);
+		path = new QPakPath(this, pathname);
+		for (int i = 0; i < archives.size(); i++) {
+			var entry = archives.get(i).getEntry(pathname);
+			if (entry == null) continue;
+			if (entry.isAntiItem()) {
+				path.ref = null;
+				path.archiveIndex = 0;
+			} else {
+				path.ref = entry;
+				path.archiveIndex = (short) i;
+			}
+		}
+		if (path.ref != null) files.put(pathname, path);
+		return path;
 	}
 
 	void markMetadataDirty(QZEntry entry, short archiveIndex) {
-		QZFileWriter qzfw = metadataOverride.get(archiveIndex);
+		var qzfw = metadataOverride.get(archiveIndex);
 		if (qzfw == null) {
 			try {
 				metadataOverride.putInt(archiveIndex, qzfw = archives.get(archiveIndex).append());
@@ -99,7 +95,7 @@ public class QPakFileSystem {
 		if (dest.ref != null) return false;
 
 		if (writeToPatch) {
-			QZEntry entry = new QZEntry(dest.getName());
+			QZEntry entry = QZEntry.of(dest.getName());
 			entry.setModificationTime(System.currentTimeMillis());
 			entry.setIsDirectory(directory);
 			dest.ref = entry;
@@ -129,7 +125,7 @@ public class QPakFileSystem {
 		} else {
 			QZEntry entry = (QZEntry) path.ref;
 
-			QZEntry entry1 = new QZEntry(entry.getName());
+			QZEntry entry1 = QZEntry.of(entry.getName());
 			entry1.setModificationTime(System.currentTimeMillis());
 			entry1.setAntiItem(true);
 			patch.beginEntry(entry1);

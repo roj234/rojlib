@@ -86,7 +86,7 @@ public final class ChunkLoader implements Closeable {
 		if (!region.hasData(id)) return null;
 
 		Chunk chunk = new Chunk(x, z);
-		chunk.loadData(region.getData(id, null));
+		chunk.loadData(region.getInputStream(id, null));
 		return chunk;
 	}
 
@@ -110,13 +110,13 @@ public final class ChunkLoader implements Closeable {
 			Chunk chunk = (Chunk) array[i];
 
 			int x = chunk.x, z = chunk.z;
-			MyRegionFile.ManagedOutputStream out = getRegion(x, z).getOutput(((x & 31) << 5) | (z & 31), MyRegionFile.DEFLATE);
+			MyRegionFile.CancellableOutputStream out = getRegion(x, z).getOutputStream(((x & 31) << 5) | (z & 31), MyRegionFile.DEFLATE);
 			assert out != null;
 			try {
 				chunk.write(out);
 				out.close();
 			} catch (Exception e) {
-				out.fail();
+				out.cancel();
 				LOGGER.error("chunk save error", e);
 			}
 		}

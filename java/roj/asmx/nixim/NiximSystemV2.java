@@ -1,7 +1,6 @@
 package roj.asmx.nixim;
 
 import org.jetbrains.annotations.NotNull;
-import roj.archive.zip.ZipArchive;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cp.*;
@@ -28,13 +27,11 @@ import roj.text.TextUtil;
 import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
-import java.io.File;
-import java.io.InputStream;
 import java.util.*;
 
 import static roj.asm.Opcodes.*;
-import static roj.reflect.ClassDumper.DUMP_ENABLED;
-import static roj.reflect.ClassDumper.dump;
+import static roj.reflect.Debug.CLASS_DUMP;
+import static roj.reflect.Debug.dump;
 
 /**
  * Nixim class injector 3.1
@@ -42,49 +39,6 @@ import static roj.reflect.ClassDumper.dump;
  * @since 2023/10/9 18:49
  */
 public class NiximSystemV2 implements ITransformer {
-	public static void main(String[] args) throws Exception {
-		if (args.length < 3) {
-			System.out.println("NiximSystem <jar-to-nixim> <nixim-class-in-classpath>");
-			return;
-		}
-
-		NiximSystemV2 nx = new NiximSystemV2();
-		for (int i = 1; i < args.length; i++) {
-			InputStream in = NiximSystemV2.class.getClassLoader().getResourceAsStream(args[i].replace('.', '/')+".class");
-			if (in == null) throw new NiximException("nixim source "+args[i]+" not found");
-			nx.read(Parser.parseConstants(IOUtil.read(in)));
-		}
-
-		int index = args[0].lastIndexOf('.');
-		File target = new File(index < 0 ? args[0] + "-结果.jar" : args[0].substring(0, index) + "-结果" + args[0].substring(index));
-		IOUtil.copyFile(new File(args[0]), target);
-
-		try (ZipArchive toNixim = new ZipArchive(target)) {
-			for (Map.Entry<String, NiximData> entry : nx.registry.entrySet()) {
-				String file = entry.getKey().replace('.', '/')+".class";
-				InputStream in = toNixim.getStream(file);
-				if (in == null) {
-					System.err.println("nixim target "+file+" not found");
-					continue;
-				}
-
-				try {
-					Context ctx = new Context(entry.getKey(), in);
-					nx.transform(entry.getKey(), ctx);
-					toNixim.put(file, ctx::getCompressedShared, true);
-				} catch (Exception e) {
-					e.printStackTrace();
-				} finally {
-					in.close();
-				}
-			}
-
-			toNixim.save();
-		}
-
-		System.out.println("OK");
-	}
-
 	public static final String A_NIXIM_CLASS_FLAG = unifyClassName(Nixim.class.getName());
 	public static final String A_INJECT = unifyClassName(Inject.class.getName());
 	public static final String A_SHADOW = unifyClassName(Shadow.class.getName());
@@ -225,7 +179,7 @@ public class NiximSystemV2 implements ITransformer {
 				at = map.getEnumValue("at", "OLD_SUPER_INJECT");
 				switch (at) {
 					case "REMOVE": isAbstract = false; break;
-					case "HEAD": case "TAIL": nodeList = new ArrayList<>(); break;
+					case "HEAD", "TAIL": nodeList = new ArrayList<>(); break;
 					default: break;
 				}
 			}
@@ -332,7 +286,7 @@ public class NiximSystemV2 implements ITransformer {
 	}
 
 	public NiximData read(ConstantData data) throws NiximException {
-		if (DUMP_ENABLED) dump("nixim_mapping", data);
+		if (CLASS_DUMP) dump("nixim_mapping", data);
 
 		NiximData nx = new NiximData(data.name);
 
@@ -377,7 +331,7 @@ public class NiximSystemV2 implements ITransformer {
 				autoCopy.add(methods.get(i));
 		}
 
-		Map<String, NiximData> ctx = getParentMap();
+		Map<String, NiximData> ctx = registry();
 		AbstractMap<String, String> fakeMap = getFakeMap(nx, ctx);
 		for (MethodNode method : data.methods) {
 			String desc = ClassUtil.getInstance().mapMethodParam(fakeMap, method.rawDesc());
@@ -526,6 +480,8 @@ public class NiximSystemV2 implements ITransformer {
 		// special case
 		nx.copied.remove(nx.copyInit);
 
+		// fields
+		for (CNode node : nx.copied) node.parsed(data.cp);
 		return nx;
 	}
 	// region Utilities for reading Nixim classes
@@ -585,7 +541,7 @@ public class NiximSystemV2 implements ITransformer {
 		}
 
 		switch (s.at) {
-			case "REMOVE": case "REPLACE": break;
+			case "REMOVE", "REPLACE": break;
 			case "HEAD": {
 				List<Label> usedContinue = s.headJump();
 				int paramLength = TypeHelper.paramSize(method.rawDesc());
@@ -617,12 +573,12 @@ public class NiximSystemV2 implements ITransformer {
 			break;
 			case "INVOKE":
 				// nothing to check
-			break;
+				break;
 			case "LDC":
 				checkLdcMatch(s, s.extra.getString("matchValue"));
 				String value = s.extra.getString("replaceValue", "");
 				if (!value.isEmpty()) checkLdcMatch(s, value);
-			break;
+				break;
 			case "TAIL": {
 				ToIntMap<XInsnNodeView> usedVar = new ToIntMap<>();
 				int paramLength = TypeHelper.paramSize(method.rawDesc());
@@ -655,7 +611,7 @@ public class NiximSystemV2 implements ITransformer {
 				if ((s.flags & 65536) == 0) {
 					s.at = "REPLACE";
 				}
-			break;
+				break;
 			case "MIDDLE":
 				String matcher = s.extra.getString("matcher");
 				MethodNode mn = data.getMethodObj(matcher);
@@ -664,7 +620,7 @@ public class NiximSystemV2 implements ITransformer {
 				s.matcher = makeMatcher(data, mn, null);
 				// replace
 				s.method.parsedAttr(data.cp, Attribute.Code).instructions = makeMatcher(data, s.method, s);
-			break;
+				break;
 		}
 	}
 	private void readAnnotations(ConstantData data, NiximData nx, SimpleList<? extends CNode> nodes) throws NiximException {
@@ -888,13 +844,14 @@ public class NiximSystemV2 implements ITransformer {
 	public void apply(ConstantData data, NiximData nx) throws NiximException {
 		if (!data.name.equals(nx.target)) throw new NiximException("期待目标为"+nx.target+"而不是"+data.name);
 
-		if (DUMP_ENABLED) dump("nixim_in", data);
+		if (CLASS_DUMP) dump("nixim_in", data);
 		while (nx != null) {
 			data.unparsed();
 			applyLoop(data, nx);
 			nx = nx.next;
 		}
-		if (DUMP_ENABLED) dump("nixim_out", data);
+		data.unparsed();
+		if (CLASS_DUMP) dump("nixim_out", data);
 	}
 	private void applyLoop(ConstantData data, NiximData nx) throws NiximException {
 		//System.out.println("NiximClass " + data.name);
@@ -1066,7 +1023,7 @@ public class NiximSystemV2 implements ITransformer {
 		XAttrCode nxCode = (XAttrCode) s.method.attrByName("Code");
 		s.method.owner = data.name;
 
-		if (s.mapName.equals("<init>")) {
+		if (s.mapName.equals("<init>") && !s.at.equals("TAIL")) {
 			Desc iin = nxCode.instructions.getNodeAt(s.initBci).desc();
 			st:
 			if (iin.name.startsWith(SPEC_M_CONSTRUCTOR_THIS)) {
@@ -1106,8 +1063,8 @@ public class NiximSystemV2 implements ITransformer {
 								break block1;
 							}
 						}
-						throw new NiximException(data.name + " 存在错误: 无法找到替换构造器中<init>的调用");
 					}
+					throw new NiximException(data.name+" 存在错误: 无法找到替换构造器中<init>的调用");
 				} else {
 					endMy = new Label(0);
 				}
@@ -1143,6 +1100,7 @@ public class NiximSystemV2 implements ITransformer {
 				MyBitSet occurrences = s.getOccurrences();
 				int ordinal = 0;
 
+				List<XInsnNodeView.InsnMod> rpls = new SimpleList<>();
 				int isStatic = (s.method.modifier & ACC_STATIC);
 				int used = 0;
 				for (XInsnList.NodeIterator itr = mnCode.instructions.iterator(); itr.hasNext(); ) {
@@ -1166,7 +1124,9 @@ public class NiximSystemV2 implements ITransformer {
 								continue;
 							}
 
-							node.setOpcode(isStatic > 0 ? INVOKESTATIC : INVOKEVIRTUAL);
+							if (node.opcode() != INVOKEINTERFACE) {
+								node.setOpcode(isStatic > 0 ? INVOKESTATIC : INVOKEVIRTUAL);
+							}
 
 							block:
 							if (!s.method.rawDesc().equals(desc)) {
@@ -1186,12 +1146,20 @@ public class NiximSystemV2 implements ITransformer {
 									break block;
 								}
 
-								throw new NiximException("@InvokeRedirect "+m+" 参数不匹配: except " + desc+" , got "+s.method.rawDesc());
+								throw new NiximException("@InvokeRedirect "+m+" 参数不匹配: except "+desc+" , got "+s.method.rawDesc());
 							}
 
 							d.owner = data.name;
 							d.name = s.method.name();
 							d.param = s.method.rawDesc();
+
+							// TODO 可能无法和aload_0一起使用
+							if (node.opcode() == INVOKEINTERFACE) {
+								XInsnNodeView.InsnMod rpl = node.replace();
+								rpl.list.invoke(isStatic > 0 ? INVOKESTATIC : INVOKEVIRTUAL, d.owner, d.name, d.param);
+								rpls.add(rpl);
+							}
+
 							used++;
 						}
 					}
@@ -1199,6 +1167,8 @@ public class NiximSystemV2 implements ITransformer {
 
 				if (used < (occurrences == null ? 1 : occurrences.size()) && (s.flags & Inject.OPTIONAL) == 0)
 					throw new NiximException("@InvokeRedirect "+m+" 没有全部匹配("+used+")");
+
+				for (int i = rpls.size() - 1; i >= 0; i--) rpls.get(i).commit();
 			}
 			return input;
 			case "LDC": {
@@ -1233,39 +1203,39 @@ public class NiximSystemV2 implements ITransformer {
 
 				for (XInsnNodeView node : mnCode.instructions) {
 					switch (node.opcode()) {
-						case ICONST_M1: case ICONST_0:
-						case ICONST_1: case ICONST_2: case ICONST_3: case ICONST_4: case ICONST_5:
+						case ICONST_M1, ICONST_0:
+						case ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5:
 							if (type == Constant.INT && doLdcMatchBytecode(node, ICONST_0, find, occurrences, ordinal)) {
 								node.replace(replaceTo, XInsnList.REP_SHARED);
 								used++;
 							}
 						break;
-						case LCONST_0: case LCONST_1:
+						case LCONST_0, LCONST_1:
 							if (type == Constant.LONG && doLdcMatchBytecode(node, LCONST_0, find, occurrences, ordinal)) {
 								node.replace(replaceTo, XInsnList.REP_SHARED);
 								used++;
 							}
 						break;
-						case FCONST_0: case FCONST_1: case FCONST_2:
+						case FCONST_0, FCONST_1, FCONST_2:
 							if (type == Constant.FLOAT && doLdcMatchBytecode(node, FCONST_0, find, occurrences, ordinal)) {
 								node.replace(replaceTo, XInsnList.REP_SHARED);
 								used++;
 							}
 						break;
-						case DCONST_0: case DCONST_1:
+						case DCONST_0, DCONST_1:
 							if (type == Constant.DOUBLE && doLdcMatchBytecode(node, DCONST_0, find, occurrences, ordinal)) {
 								node.replace(replaceTo, XInsnList.REP_SHARED);
 								used++;
 							}
 						break;
-						case BIPUSH: case SIPUSH:
+						case BIPUSH, SIPUSH:
 							if (type == Constant.INT && find.equals(String.valueOf(node.getNumberExact())) &&
 								(occurrences == null || occurrences.contains(++ordinal.value))) {
 								node.replace(replaceTo, XInsnList.REP_SHARED);
 								used++;
 							}
 						break;
-						case LDC: case LDC_W: case LDC2_W:
+						case LDC, LDC_W, LDC2_W:
 							if (type == node.constant().type() && find.equals(node.constant().getEasyCompareValue()) &&
 								(occurrences == null || occurrences.contains(++ordinal.value))) {
 								node.replace(replaceTo, XInsnList.REP_SHARED);
@@ -1418,7 +1388,8 @@ public class NiximSystemV2 implements ITransformer {
 				for (Map.Entry<Label, Object> entry : nxCode.instructions.nodeData()) {
 					if (entry.getValue().getClass() == Desc.class) {
 						Desc d = (Desc) entry.getValue();
-						if (data.name.equals(d.owner) && s.mapName.equals(d.name) && s.method.rawDesc().equals(d.param)) {
+						if ((data.name.equals(d.owner) || d.owner.contains("SIJ")) && s.mapName.equals(d.name) && s.method.rawDesc().equals(d.param)) {
+							d.owner = data.name;
 							d.name = mapName;
 						}
 					}
@@ -1672,6 +1643,6 @@ public class NiximSystemV2 implements ITransformer {
 	}
 
 	protected boolean shouldApply(String annotation, Attributed node, List<AnnValString> args) { throw new UnsupportedOperationException(); }
-	protected Map<String, NiximData> getParentMap() { return registry; }
+	public Map<String, NiximData> registry() { return registry; }
 	protected String mapName(String owner, String newOwner, String name, CNode node) { return name; }
 }

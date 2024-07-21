@@ -35,8 +35,7 @@ public class SimpleConnectionPool {
 	private volatile int multiplier;
 
 	private final LinkedTransferQueue<Object[]> transfer = new LinkedTransferQueue<>();
-
-	static final ThreadLocal<Object[]> connId = new ThreadLocal<>();
+	private final ThreadLocal<Object[]> connId = new ThreadLocal<>();
 
 	public SimpleConnectionPool(DbConnector connector, int pooledConnections) {
 		this.connector = connector;

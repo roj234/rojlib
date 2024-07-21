@@ -3,7 +3,7 @@ package roj.collect;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.math.MathUtils;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 
 import java.lang.reflect.Field;
@@ -18,7 +18,7 @@ import static roj.reflect.ReflectionUtils.u;
 public final class XHashSet<K, V> extends AbstractSet<V> {
 	public static <K, V> Shape<K, V> shape(Class<K> kType, Class<V> vType, String field_key, String field_next) { return shape(kType, vType, field_key, field_next, Hasher.defaul()); }
 	public static <K, V> Shape<K, V> shape(Class<K> kType, Class<V> vType, String field_key, String field_next, Hasher<K> hasher) {
-		DirectAccessor<ObjectNew> da = DirectAccessor.builder(ObjectNew.class).weak().unchecked();
+		Bypass<ObjectNew> da = Bypass.builder(ObjectNew.class).weak().unchecked();
 		try {
 			da.construct(vType, "createValue", kType);
 		} catch (IllegalArgumentException e) {

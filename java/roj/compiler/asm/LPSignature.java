@@ -80,12 +80,15 @@ public final class LPSignature extends Signature {
 	}
 
 	public IType applyTypeParam(IType type) {
+		if (type == Asterisk.anyGeneric) return type;
+
 		String owner = type.owner();
 		if (owner == null) return type;
 
 		int i = owner.indexOf('/');
 
-		List<IType> bounds = getTypeParamBounds(i < 0 ? owner : owner.substring(0, i));
+		String name = i < 0 ? owner : owner.substring(0, i);
+		List<IType> bounds = typeParams.get(name);
 		if (bounds != null) {
 			if (type instanceof LPGeneric g && !g.children.isEmpty()) {
 				// 意外的类型
@@ -122,14 +125,17 @@ public final class LPSignature extends Signature {
 		for (int i = 0; i < list.size(); i++) ctx.resolveType(list.get(i));
 	}
 
-	public List<IType> getTypeParamBounds(String name) {
-		var sp = this;
-		do {
-			List<IType> list = sp.typeParams.get(name);
-			if (list != null) return list;
-			sp = sp.parent;
-		} while (sp != null);
-		return null;
+	public boolean isTypeParam(String name) {return typeParams.get(name) != null;}
+	public Type typeParamToBound(Type type) {
+		var types = typeParams.get(type.owner);
+		if (types == null) return type;
+
+		for(;;) {
+			var gt = types.get(0);
+			if (gt.genericType() == IType.PLACEHOLDER_TYPE) gt = types.get(1);
+			if (gt.genericType() != IType.TYPE_PARAMETER_TYPE) return gt.rawType();
+			types = typeParams.get(((TypeParam) gt).name);
+			if (types == null) throw new IllegalStateException("未知的类型参数" + ((TypeParam) gt).name + "？？？");
+		}
 	}
-	public boolean isTypeParam(String name) {return getTypeParamBounds(name) != null;}
 }

@@ -14,10 +14,10 @@ public final class MethodParameters extends Attribute {
 	public MethodParameters() { flags = new SimpleList<>(); }
 	public MethodParameters(DynByteBuf r, ConstantPool pool) {
 		int len = r.readUnsignedByte();
-		SimpleList<MethodParam> params = this.flags = new SimpleList<>(len);
+		var params = this.flags = new SimpleList<>(len);
 		while (len-- > 0) {
-			String name = ((CstUTF) pool.get(r)).str();
-			params.add(new MethodParam(name, r.readChar()));
+			var utf = (CstUTF) pool.get(r);
+			params.add(new MethodParam(utf == null ? null : utf.str(), r.readChar()));
 		}
 	}
 
@@ -25,10 +25,10 @@ public final class MethodParameters extends Attribute {
 
 	@Override
 	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
-		w.put((byte) flags.size());
+		w.put(flags.size());
 		for (int i = 0; i < flags.size(); i++) {
-			MethodParam e = flags.get(i);
-			w.putShort(pool.getUtfId(e.name)).putShort(e.flag);
+			var mp = flags.get(i);
+			w.putShort(mp.name == null ? 0 : pool.getUtfId(mp.name)).putShort(mp.flag);
 		}
 	}
 

@@ -11,6 +11,7 @@ public interface CompilerSpec {
 	int ATTR_INNER_CLASS = 4;
 	int ATTR_STACK_FRAME = 5;
 	int OPTIONAL_SEMICOLON = 6;
+	int VERIFY_FILENAME = 7;
 	// change bytecode
 	/** Use {@link CharList#_free()} instead of StringBuilder */
 	int SHARED_STRING_CONCAT = 10;

@@ -34,7 +34,17 @@ final class StringConcat extends ExprNode {
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
-		for (int i = 0; i < nodes.size(); i++) nodes.set(i, nodes.get(i).resolve(ctx));
+		for (int i = 0; i < nodes.size();) {
+			ExprNode node = nodes.get(i).resolve(ctx);
+			if (node instanceof StringConcat sc) {
+				nodes.remove(i);
+				nodes.addAll(i, sc.nodes);
+				i += sc.nodes.size();
+			} else {
+				nodes.set(i, node);
+				i++;
+			}
+		}
 
 		CharList sb = IOUtil.getSharedCharBuf();
 		for (int i = 0; i < nodes.size()-1;) {
@@ -58,27 +68,13 @@ final class StringConcat extends ExprNode {
 	}
 	private static String safeToString(Object o) { return o instanceof AnnVal ? ((AnnVal) o).toRawString() : o.toString(); }
 
-	public ExprNode prepend(ExprNode left) {
-		nodes.add(0, left);
-		return this;
-	}
-
-	public ExprNode append(ExprNode right) {
-		// 这个把 "s" + (1+2) 搞坏了
-		/*while (right.getClass() == Binary.class) {
-			Binary binary = (Binary) right;
-			if (binary.operator != JavaLexer.add) break;
-
-			nodes.add(binary.left);
-			right = binary.right;
-		}*/
-		nodes.add(right);
-		return this;
-	}
+	public ExprNode prepend(ExprNode left) {nodes.add(0, left);return this;}
+	public ExprNode append(ExprNode right) {nodes.add(right);return this;}
 
 	private static final Type CHARSEQUENCE_TYPE = new Type("java/lang/CharSequence");
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
+		mustBeStatement(noRet);
 		var lc = LocalContext.get();
 		if (lc.classes.isSpecEnabled(CompilerSpec.SHARED_STRING_CONCAT)) {
 			viaCharList(cw, lc);

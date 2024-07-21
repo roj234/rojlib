@@ -1,5 +1,6 @@
 package roj.text;
 
+import org.jetbrains.annotations.Nullable;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -7,7 +8,11 @@ import roj.util.Helpers;
 
 import java.io.IOException;
 import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.function.IntConsumer;
+
+import static java.lang.Character.*;
 
 /**
  * @author Roj234
@@ -16,9 +21,26 @@ import java.util.function.IntConsumer;
  * FixedOut: 固定输出,适用循环和缓冲的组合
  */
 public abstract class UnsafeCharset {
+	@Nullable
+	public static UnsafeCharset getInstance(Charset charset) {
+		if (StandardCharsets.UTF_8.equals(charset)) return UTF8.CODER;
+		else if (UTF16n.is(charset)) return UTF16n.CODER;
+		else if (GB18030.is(charset)) return GB18030.CODER;
+		return null;
+	}
+
 	public abstract String name();
 
 	public static final char INVALID = '�';
+	static boolean isSurrogate(int c) {
+		if (c < MIN_HIGH_SURROGATE || c > MAX_LOW_SURROGATE) return false;
+		if (c >= MIN_LOW_SURROGATE) throw new IllegalArgumentException("unexpected low surrogate U+"+Integer.toHexString(c));
+		return true;
+	}
+	static int codepoint(int h, int l) {
+		if (l < MIN_LOW_SURROGATE || l > MAX_LOW_SURROGATE) throw new IllegalStateException("invalid surrogate pair "+h+","+l);
+		return ((h << 10) + l) + (MIN_SUPPLEMENTARY_CODE_POINT - (MIN_HIGH_SURROGATE << 10) - MIN_LOW_SURROGATE);
+	}
 
 	public final void encodeFixedIn(CharSequence s, DynByteBuf out) { encodeFixedIn(s, 0, s.length(), out); }
 	public final void encodeFixedIn(CharSequence s, int off, int end, DynByteBuf out) {
@@ -213,33 +235,33 @@ public abstract class UnsafeCharset {
 			kind = 2;
 		}
 
-		len += in.rIndex;
+		int rin = in.rIndex;
+		if (rin < 0) throw new IllegalArgumentException("in.rIndex < 0");
+		len += rin;
 		try {
 			while (true) {
 				int uw = Math.min(outMax, unsafeWritable);
-				long x = unsafeDecode(in.array(),in._unsafeAddr(),in.rIndex,len,arr,off,uw);
+				long x = unsafeDecode(in.array(),in._unsafeAddr(),rin,len,arr,off,uw);
 
-				in.rIndex = (int) (x >>> 32);
+				rin = (int) (x >>> 32);
 				int delta = (int) x - off;
 				outMax -= delta;
 
 				switch (kind) {
-					case 0:
+					case 0 -> {
 						off += delta;
 						((CharList) out).len = off;
 						unsafeWritable -= delta;
-						break;
-					case 1:
+					}
+					case 1 -> {
 						off += delta;
 						((CharBuffer) out).position(off);
 						unsafeWritable -= delta;
-						break;
-					case 2:
-						out.append(new CharList.Slice(arr,0,delta));
-						break;
+					}
+					case 2 -> out.append(new CharList.Slice(arr, 0, delta));
 				}
 
-				if (in.rIndex == len || outMax == 0) break;
+				if (rin == len || outMax == 0) break;
 
 				if (kind == 0 && unsafeWritable < 1024) {
 					CharList sb = (CharList) out;
@@ -254,6 +276,7 @@ public abstract class UnsafeCharset {
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		} finally {
+			in.rIndex = rin;
 			if (kind == 2) ArrayCache.putArray(arr);
 		}
 

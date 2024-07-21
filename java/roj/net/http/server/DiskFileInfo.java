@@ -87,7 +87,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	@Override
 	public void prepare(ResponseHeader rh, Headers h) {
 		if (ReflectionUtils.u.compareAndSwapInt(this, STATE_OFFSET, 2, 3)) {
-			cc = DirectByteList.allocateDirect();
+			cc = DynByteBuf.allocateDirect();
 			rh.ch().addBefore("h11@compr", "compress-capture", this);
 		}
 

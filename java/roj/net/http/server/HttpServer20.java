@@ -19,23 +19,24 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.Deflater;
 
 import static roj.net.http.server.HttpCache.*;
+import static roj.net.http.server.HttpServer11.*;
 
 /**
  * @author Roj234
  * @since 2024/7/14 0014 8:38
  */
 public final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader, ResponseWriter, ChannelHandler {
-	private static final Logger LOGGER = Logger.getLogger("HttpServer20");
+	private static final Logger LOGGER = Logger.getLogger("HtpSvr/2");
 
 	private final Router router;
 
 	public HttpServer20(Router router, int id) {
 		super(id);
 		this.router = router;
-		this.time = System.currentTimeMillis() + router.readTimeout();
+		this.time = System.currentTimeMillis() + router.readTimeout(null);
 	}
 
-	private static final byte FLAG_ASYNC = 1, FLAG_COMPRESS = 2, FLAG_GOAWAY = 4, FLAG_ERRORED = 8, FLAG_GZIP = 16;
+	private static final byte FLAG_GOAWAY = 1;
 	private byte flag;
 
 	private long time;
@@ -45,7 +46,14 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 
 	@Override
 	protected void onHeaderDone(H2Connection man, HttpHead head, boolean hasData) throws IOException {
-		var req = HttpCache.getInstance().request().init(HttpUtil.parseMethod(head.getMethod()), head.getPath(), head.versionStr());
+		String path = head.getPath(), query;
+		int i = path.indexOf('?');
+		if (i < 0) query = "";
+		else {
+			query = path.substring(i+1);
+			path = path.substring(0, i);
+		}
+		var req = HttpCache.getInstance().request().init(HttpUtil.parseMethod(head.getMethod()), path, query, head.versionStr());
 		req._moveFrom(head);
 
 		req.handler = this;
@@ -61,6 +69,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		postSize = -1;
 		exceptPostSize = head.getContentLengthLong();
 		router.checkHeader(req, this);
+		time = System.currentTimeMillis() + router.readTimeout(req);
 
 		long len = postSize;
 		if (len < 0) {
@@ -140,7 +149,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 				onError(man, e);
 			}
 
-			time += router.writeTimeout(req, body);
+			time = System.currentTimeMillis() + router.writeTimeout(req, body);
 			if ((flag & FLAG_ASYNC) != 0 && body == null) return;
 		}
 		sendHead(man);
@@ -191,11 +200,14 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		if (System.currentTimeMillis() > time) {
 			switch (getState()) {
 				case HEAD_V, HEAD_R, DATA, HEAD_T -> {
-					if (req != null) throw new IllegalRequestException(408);
+					if (req != null) throw new IllegalRequestException(HttpUtil.TIMEOUT);
 					man.streamError(id, H2Exception.ERROR_CANCEL/*TIMEOUT*/);
 				}
-				case PROCESSING -> body(StringResponse.detailedErrorPage(504, "异步处理超时[PROCESSING]"));
-				case SEND_BODY -> throw new IllegalRequestException(504, "异步处理超时[SEND_BODY]:"+body);
+				case PROCESSING -> code(504).body(Response.internalError("处理超时\n在规定的时间内未收到响应头，请求代理失败"));
+				case SEND_BODY -> {
+					LOGGER.warn("发送超时[在规定的时间内未能将响应体全部发送]: {}", body);
+					man.streamError(id, H2Exception.ERROR_INTERNAL/*TIMEOUT*/);
+				}
 			}
 		}
 	}
@@ -245,8 +257,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		}
 
 		if (req != null) {
-			req.free();
-			t.reserve(req);
+			if ((flag&FLAG_UNSHARED) == 0) t.reserve(req);
 			req = null;
 		}
 
@@ -254,8 +265,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 
 		var pb = postBuffer;
 		if (pb != null) {
-			if (BufferPool.isPooled(pb)) IOUtil.closeSilently(pb);
-			else pb._free();
+			BufferPool.reserve(pb);
 			postBuffer = null;
 		}
 
@@ -371,63 +381,35 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 
 	//endregion
 	//region ResponseHeader
-	@Override
-	public void onFinish(HFinishHandler o) {throw new UnsupportedOperationException("HTTP/2不支持FinishHandler");}
+	@Override public void onFinish(HFinishHandler o) {throw new UnsupportedOperationException("HTTP/2不支持FinishHandler");}
+	@Override public Request request() {return req;}
 
-	public ResponseHeader code(int code) {
-		req.responseHeader.put(":status", String.valueOf(code));
-		return this;
-	}
-
-	public ResponseHeader die() {
-		flag |= FLAG_GOAWAY;
-		return this;
-	}
-
-	public ResponseHeader enableAsyncResponse() {
-		flag |= FLAG_ASYNC;
-		return this;
-	}
-
-	public ResponseHeader enableCompression() {
-		flag |= FLAG_COMPRESS;
-		return this;
-	}
-
-	public ResponseHeader disableCompression() {
-		flag &= ~FLAG_COMPRESS;
-		return this;
-	}
-
-	public void body(Response resp) throws IOException {
+	@Override public ResponseHeader code(int code) {req.responseHeader.put(":status", String.valueOf(code));return this;}
+	@Override public ResponseHeader die() {flag |= FLAG_GOAWAY;return this;}
+	@Override public void unsharedRequest() {flag |= FLAG_UNSHARED;}
+	@Override public void sharedRequest() {flag &= ~FLAG_UNSHARED;}
+	@Override public ResponseHeader enableAsyncResponse() {flag |= FLAG_ASYNC;return this;}
+	@Override public void body(Response resp) throws IOException {
 		if ((flag & FLAG_ASYNC) != 0) {
-			if (getState() == PROCESSING) {
-				var lock = man.channel().channel().lock();
-				lock.lock();
-				try {
-					body = resp;
-					sendHead(man);
-				} finally {
-					lock.unlock();
-				}
-			} else if (getState() == SEND_BODY) {
-				if ((flag & FLAG_ERRORED) != 0) {
-					man.error(H2Exception.ERROR_INTERNAL, "AsyncResponseFailed");
-				} else {
-					flag |= FLAG_ERRORED;
-					time += 100;
-					body.release(man.channel());
-					body = resp;
-					body.prepare(this, headers());
-				}
-			} else {
-				throw new IllegalStateException("Expect PROCESSING or SEND_BODY: " + _getState());
+			if (getState() != PROCESSING) throw new IllegalStateException("Expect PROCESSING: "+_getState());
+
+			var lock = man.channel().channel().lock();
+			lock.lock();
+			try {
+				body = resp;
+				time = System.currentTimeMillis() + router.writeTimeout(req, body);
+				sendHead(man);
+			} catch (Exception e) {
+				onError(man, e);
+			} finally {
+				lock.unlock();
 			}
 		} else {
 			this.body = resp;
 		}
 	}
-
-	public Headers headers() {return req.responseHeader;}
+	@Override public ResponseHeader enableCompression() {flag |= FLAG_COMPRESS;return this;}
+	@Override public ResponseHeader disableCompression() {flag &= ~FLAG_COMPRESS;return this;}
+	@Override public Headers headers() {return req.responseHeader;}
 	//endregion
 }

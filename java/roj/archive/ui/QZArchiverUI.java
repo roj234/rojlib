@@ -4,7 +4,7 @@
 
 package roj.archive.ui;
 
-import roj.NativeLibrary;
+import roj.RojLib;
 import roj.archive.qz.QZArchive;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.LZMA2Parallel;
@@ -425,7 +425,7 @@ public class QZArchiverUI extends JFrame {
 			}
 		});
 
-		if (!NativeLibrary.hasFunction(NativeLibrary.FAST_LZMA))
+		if (!RojLib.hasNative(RojLib.FAST_LZMA))
 			uiNativeAccel.setEnabled(false);
 		else {
 			uiNativeAccel.addActionListener(e -> {

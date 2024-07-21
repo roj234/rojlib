@@ -1,6 +1,5 @@
 package roj.image;
 
-import roj.concurrent.OperationDone;
 import roj.io.CorruptedInputException;
 import roj.io.MyDataInput;
 
@@ -119,7 +118,6 @@ public class QOIDecoder implements ImageDecoder {
 							}
 						}
 					}
-					default -> throw OperationDone.NEVER;
 				}
 
 				int h = ((r * 3 + g * 5 + b * 7 + a * 11) & 63) << 2;

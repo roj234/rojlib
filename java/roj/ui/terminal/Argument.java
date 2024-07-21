@@ -12,7 +12,7 @@ import roj.io.IOUtil;
 import roj.reflect.EnumHelper;
 import roj.text.CharList;
 import roj.ui.AnsiString;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -31,7 +31,7 @@ public interface Argument<T> {
 	static Argument<File> file(int filter) {
 		return new Argument<>() {
 			@Override
-			public File parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+			public File parse(CommandParser ctx, List<Completion> completions) throws ParseException {
 				boolean edge = ctx.isWordEdge();
 				String pathStr = ctx.nextString();
 				File path = new File(pathStr);
@@ -106,7 +106,7 @@ public interface Argument<T> {
 					}
 
 					AnsiString desc = path.isAbsolute() ? null : new AnsiString("绝对路径: ").append(new AnsiString(file.getAbsolutePath()).colorRGB(0xffccee));
-					completions.add(new Completion(new AnsiString(fname).color16(file.isFile() ? CLIUtil.CYAN : CLIUtil.YELLOW), desc, offset));
+					completions.add(new Completion(new AnsiString(fname).color16(file.isFile() ? Terminal.CYAN : Terminal.YELLOW), desc, offset));
 				}
 			}
 
@@ -134,7 +134,7 @@ public interface Argument<T> {
 		var file = file(filter);
 		return new Argument<>() {
 			@Override
-			public List<File> parse(ArgumentContext ctx, @Nullable List<Completion> completions) throws ParseException {
+			public List<File> parse(CommandParser ctx, @Nullable List<Completion> completions) throws ParseException {
 				if (completions != null) {
 					while (true) {
 						if (ctx.isWordEdge()) {
@@ -163,7 +163,7 @@ public interface Argument<T> {
 	}
 	static Argument<String> string() { return new Argument<>() {
 		@Override
-		public String parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {return ctx.nextString();}
+		public String parse(CommandParser ctx, List<Completion> completions) throws ParseException {return ctx.nextString();}
 		@Override
 		public String type() {return "字符串";}
 	}; }
@@ -192,7 +192,7 @@ public interface Argument<T> {
 		}
 
 		@Override
-		public T parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+		public T parse(CommandParser ctx, List<Completion> completions) throws ParseException {
 			updateChoices();
 			if (mode > 1) {
 				List<T> arr = new SimpleList<>();
@@ -263,7 +263,7 @@ public interface Argument<T> {
 	static Argument<String> rest() {
 		return new Argument<>() {
 			@Override
-			public String parse(ArgumentContext ctx, @Nullable List<Completion> completions) throws ParseException {
+			public String parse(CommandParser ctx, @Nullable List<Completion> completions) throws ParseException {
 				if (ctx.peekWord() == null) return "";
 
 				CharList sb = IOUtil.getSharedCharBuf();
@@ -285,7 +285,7 @@ public interface Argument<T> {
 	static Argument<String[]> restArray() {
 		return new Argument<>() {
 			@Override
-			public String[] parse(ArgumentContext ctx, @Nullable List<Completion> completions) throws ParseException {
+			public String[] parse(CommandParser ctx, @Nullable List<Completion> completions) throws ParseException {
 				List<String> tmp = new SimpleList<>();
 				while (true) {
 					var w = ctx.peekWord();
@@ -303,7 +303,7 @@ public interface Argument<T> {
 	static Argument<Integer> number(int min, int max) {
 		return new Argument<>() {
 			@Override
-			public Integer parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+			public Integer parse(CommandParser ctx, List<Completion> completions) throws ParseException {
 				int val = ctx.nextInt();
 				if (val < min) throw ctx.error("整数过小(范围是["+min+","+max+"])");
 				else if (val > max) throw ctx.error("整数过大(范围是["+min+","+max+"])");
@@ -317,7 +317,7 @@ public interface Argument<T> {
 	static Argument<Long> Long(long min, long max) {
 		return new Argument<>() {
 			@Override
-			public Long parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+			public Long parse(CommandParser ctx, List<Completion> completions) throws ParseException {
 				long val = ctx.nextLong();
 				if (val < min) throw ctx.error("整数过小(范围是["+min+","+max+"])");
 				else if (val > max) throw ctx.error("整数过大(范围是["+min+","+max+"])");
@@ -331,7 +331,7 @@ public interface Argument<T> {
 	static Argument<Double> real(double min, double max) {
 		return new Argument<Double>() {
 			@Override
-			public Double parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+			public Double parse(CommandParser ctx, List<Completion> completions) throws ParseException {
 				double val = ctx.nextDouble();
 				if (val < min) throw ctx.error("实数过小(范围是["+min+","+max+"])");
 				else if (val > max) throw ctx.error("实数过大(范围是["+min+","+max+"])");
@@ -346,7 +346,7 @@ public interface Argument<T> {
 		final MyHashSet<String> truly = new MyHashSet<>("true", "t", "yes", "y"), falsy = new MyHashSet<>("false", "f", "no", "n");
 		return new Argument<Boolean>() {
 			@Override
-			public Boolean parse(ArgumentContext ctx, List<Completion> completions) throws ParseException {
+			public Boolean parse(CommandParser ctx, List<Completion> completions) throws ParseException {
 				String s = ctx.nextUnquotedString();
 				if (truly.contains(s)) return true;
 				if (falsy.contains(s)) return false;
@@ -371,7 +371,7 @@ public interface Argument<T> {
 		};
 	}
 
-	T parse(ArgumentContext ctx, @Nullable List<Completion> completions) throws ParseException;
+	T parse(CommandParser ctx, @Nullable List<Completion> completions) throws ParseException;
 	default void example(List<Completion> completions) {}
 	default String type() { return getClass().getSimpleName(); }
 

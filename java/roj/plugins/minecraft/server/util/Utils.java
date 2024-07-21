@@ -1,12 +1,16 @@
 package roj.plugins.minecraft.server.util;
 
+import roj.collect.BitArray;
 import roj.config.JSONParser;
 import roj.config.serial.ToNBT;
 import roj.io.IOUtil;
 import roj.math.Vec3i;
 import roj.plugins.minecraft.server.MinecraftServer;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+
+import java.util.function.IntConsumer;
 
 /**
  * @author Roj234
@@ -36,10 +40,7 @@ public class Utils {
 		return new Vec3i((int) (pos >> 38), (int) (pos << 64-12 >> 64-12), (int) (pos << 64-38 >> 64-26));
 	}
 
-	public static void writeFakeLongArray(DynByteBuf buf, int[] data) {
-		buf.putVarInt((data.length+1) / 2);
-		writeFakeLongArray2(buf, data);
-	}
+	@Deprecated
 	public static void writeFakeLongArray2(DynByteBuf buf, int[] data) {
 		int i = 1;
 		while (i < data.length) {
@@ -47,5 +48,37 @@ public class Utils {
 			i += 2;
 		}
 		if (i == data.length) buf.putInt(0).putInt(data[i-1]);
+	}
+
+	public static void writeUncompressedLongArray(ByteList buf, BitArray palette) {
+		int bits = palette.bits();
+		int size = palette.length();
+
+		var elementsPerLong = (char)(64 / bits);
+		int arrayLength = (size + elementsPerLong - 1) / elementsPerLong;
+
+		var writer = new IntConsumer() {
+			long data = 0;
+			int index;
+			int written;
+
+			@Override
+			public void accept(int value) {
+				data |= (long) value << (index * bits);
+				if (++index == elementsPerLong) {
+					index = 0;
+					written++;
+					buf.putLong(data);
+					data = 0;
+				}
+			}
+		};
+
+		buf.putVarInt(arrayLength);
+		palette.getAll(0, palette.length(), writer);
+		if (writer.index != 0) {
+			buf.putLong(writer.data);
+			writer.written++;
+		}
 	}
 }

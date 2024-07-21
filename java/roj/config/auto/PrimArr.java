@@ -59,4 +59,8 @@ final class PrimArr extends Adapter {
 			c.pop();
 		}
 	}
+	public void write1(CVisitor c, Object o) {
+		if (o == null) c.valueNull();
+		else c.value(((long[]) o));
+	}
 }

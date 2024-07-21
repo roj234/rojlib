@@ -24,7 +24,7 @@ bool LzJni_init(JNIEnv *env) {
 
     bool success = false;
     auto fn = reinterpret_cast<FL2_versionNumber>(GetProcAddress(fastLzma, "FL2_versionNumber"));
-    if (fn == nullptr) {
+    if (fn != nullptr) {
         success = fn() == FL2_VERSION_NUMBER;
     }
 
@@ -68,7 +68,7 @@ bool LzJni_init(JNIEnv *env) {
 }
 
 
-#ifdef COMPILE_TARGET_WINDOWS
+#ifdef _WIN32
 FARPROC funcptr[11];
 #endif
 
@@ -97,7 +97,7 @@ JNIEXPORT void JNICALL Java_roj_archive_qz_xz_LZMA2WriterN_initNatives(JNIEnv *e
         i++;
     }
 
-#ifdef COMPILE_TARGET_WINDOWS
+#ifdef _WIN32
     HINSTANCE fastLzma = LoadLibrary("fast-lzma2");
     if (fastLzma == nullptr) {
         Error(env, "Fast lzma dll not found");
@@ -230,7 +230,7 @@ JNIEXPORT jlong JNICALL Java_roj_archive_qz_xz_LZMA2WriterN_nWrite(JNIEnv *env, 
     size_t retVal = ((FL2_compressStream) funcptr[6]) (ctx, ob, ib);
 
     if (ib->pos == ib->size) ib->pos = ib->size = 0;
-    env->SetIntField(self, fields[2], ib->pos);
+    env->SetIntField(self, fields[2], static_cast<jint>(ib->pos));
 
     env->SetIntField(self, fields[5], static_cast<jint>(ob->pos));
     return retVal;

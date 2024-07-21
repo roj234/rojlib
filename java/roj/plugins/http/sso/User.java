@@ -1,11 +1,10 @@
 package roj.plugins.http.sso;
 
-import roj.collect.MyHashSet;
+import roj.collect.IntSet;
 import roj.config.auto.As;
 import roj.config.auto.Optional;
 
 import java.net.InetSocketAddress;
-import java.util.Set;
 
 /**
  * @author Roj234
@@ -15,6 +14,8 @@ public class User {
 	public int id;
 
 	public String name;
+	// 一次有效的临时密码
+	transient String tempOtp;
 	String passHash;
 	@Optional
 	@As("base64")
@@ -23,11 +24,16 @@ public class User {
 	transient byte loginAttempt;
 	transient long suspendTimer;
 
+	transient final IntSet accessNonceUsed = new IntSet();
+	transient long accessNonceTime;
+
 	@Optional
 	InetSocketAddress registerAddr, loginAddr;
 	@Optional
 	long registerTime, loginTime;
 
-	public Set<String> permissions = new MyHashSet<>();
-	public boolean isAdmin() {return permissions.contains("*");}
+	@Optional
+	public String group = "default";
+	public transient UserGroup groupInst;
+	public boolean isAdmin() {return id == 0 || groupInst.isAdmin();}
 }

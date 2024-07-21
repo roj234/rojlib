@@ -3,6 +3,7 @@ package roj.plugin;
 import roj.asm.tree.anno.Annotation;
 import roj.collect.CollectionX;
 import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
 import roj.config.Tokenizer;
 import roj.config.data.CBoolean;
 import roj.config.data.CEntry;
@@ -10,9 +11,7 @@ import roj.config.data.Type;
 import roj.io.IOUtil;
 import roj.math.Version;
 import roj.net.ch.ServerLaunch;
-import roj.net.http.server.HttpServer11;
-import roj.net.http.server.MimeType;
-import roj.net.http.server.ZipRouter;
+import roj.net.http.server.*;
 import roj.net.http.server.auto.OKRouter;
 import roj.reflect.ILSecurityManager;
 import roj.text.CharList;
@@ -21,10 +20,11 @@ import roj.text.Template;
 import roj.text.TextReader;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
-import roj.ui.CLIUtil;
 import roj.ui.Console;
+import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
+import roj.util.Helpers;
 import roj.util.HighResolutionTimer;
 
 import java.io.File;
@@ -33,8 +33,10 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.function.BiConsumer;
 
+import static roj.plugin.PanTweaker.CONFIG;
 import static roj.ui.terminal.CommandNode.argument;
 import static roj.ui.terminal.CommandNode.literal;
 
@@ -55,7 +57,7 @@ public final class Panger extends PluginManager {
 		long time = System.currentTimeMillis();
 
 		Formatter f;
-		if (CLIUtil.ANSI) {
+		if (Terminal.ANSI_OUTPUT) {
 			f = (env, sb) -> {
 				((BiConsumer<Object, CharList>) env.get("0")).accept(env, sb.append('['));
 
@@ -70,12 +72,8 @@ public final class Panger extends PluginManager {
 			f = Template.compile("[${0}][${THREAD}][${NAME}/${LEVEL}]: ");
 		}
 		Logger.getRootContext().setPrefix(f);
-		boolean debugLoading = PanTweaker.CONFIG.getBool("debug_loading");
-		LOGGER.setLevel(debugLoading ? Level.ALL : Level.INFO);
-		if (!debugLoading) LOGGER.warn("有关插件加载顺序的详细信息，请开启debug_loading查看");
-		boolean debugSecurity = PanTweaker.CONFIG.getBool("debug_security");
-		PanSecurityManager.LOGGER.setLevel(debugSecurity ? Level.ALL : Level.INFO);
-		if (!debugSecurity) LOGGER.warn("有关安全限制的详细信息，请开启debug_security查看");
+		LOGGER.setLevel(Level.valueOf(CONFIG.getString("plugin_log", "INFO")));
+		PanSecurityManager.LOGGER.setLevel(Level.valueOf(CONFIG.getString("security_log", "INFO")));
 
 		File plugins = new File("plugins"); plugins.mkdir();
 		pm = new Panger(plugins);
@@ -86,19 +84,29 @@ public final class Panger extends PluginManager {
 
 		pm.readPlugins();
 
-		if (CLIUtil.ANSI) {
-			CMD.sortCommands();
-			CLIUtil.setConsole(CMD);
-		} else {
-			LOGGER.warn("在交互式终端中能获得更好的体验");
+		if (CONFIG.containsKey("webui")) {
+			boolean webTerminal = CONFIG.getBool("web_terminal");
+			initHttp().register(new WebUI(webTerminal), "webui/");
+			var noPerm = router.getInterceptor("PermissionManager") == null;
+			if (noPerm) LOGGER.fatal("警告：您未安装任何权限管理插件，这会导致webui能被任何人访问！");
+			if (webTerminal) {
+				LOGGER.warn("""
+				您已开启Web终端功能，远程终端的操作会与本地终端（若存在）同步。
+				如果受到干扰，按下Ctrl+Q可临时关闭5分钟Web终端""");
+			}
 		}
+
+		if (!Terminal.ANSI_INPUT) LOGGER.error("使用支持ANSI转义的终端以获得更好的体验");
+		if (httpServer != null) httpServer.launch();
+		CMD.sortCommands();
+		Terminal.setConsole(CMD);
 
 		LOGGER.info("启动耗时: {}ms", System.currentTimeMillis()-time);
 		HighResolutionTimer.activate();
 	}
 
 	private void onLoad() {
-		String CORE_VERSION = "1.7.5";
+		String CORE_VERSION = "1.8.1";
 		splash(CORE_VERSION);
 
 		var pd = new PluginDescriptor();
@@ -156,28 +164,24 @@ public final class Panger extends PluginManager {
 			\u001b[38;2;255;255;255m
 			""").replace("{V}", CORE_VERSION);
 
-		File file = new File(getPluginFolder(), "Core/splashes.txt");
-		if (file.isFile()) try (TextReader tr = TextReader.from(file, StandardCharsets.UTF_8)) {
-			int line = 863;
-			line = (int)(System.currentTimeMillis()/86400000L)%line;
+		readMOTD();
+		if (!motds.isEmpty()) {
+			try{
+				var motd = motds.get((int)(System.currentTimeMillis()/86400000L)%motds.size());
+				motd = Tokenizer.removeSlashes(motd.replace("{user}", System.getProperty("user.name")));
 
-			CharList sb = IOUtil.getSharedCharBuf();
-			while (line-- >= 0) {
-				sb.clear();
-				tr.readLine(sb);
-			}
-			String slogan = Tokenizer.removeSlashes(sb.replace("{user}", System.getProperty("user.name")));
+				s.append(" + ").append(motd).append('\n');
+			} catch (Exception ignored) {}
+		}
 
-			s.append(" + ").append(slogan).append('\n');
-		} catch (Exception ignored) {}
-
-		System.out.print("\u001b[1;1H\u001b[0J\u001b]0;Panger VT\7");
+		if (CONFIG.getBool("clear_screen")) System.out.print("\u001b[1;1H\u001b[0J");
+		System.out.print("\u001b]0;Panger VT\7");
 		System.out.println(s.append(" + Copyright (c) 2019-2024 Roj234\n\u001b[0m------------------------------------------------------------").toStringAndFree());
 	}
 	private void loadBuiltin() {
 		PluginDescriptor pd;
-		CEntry entry = PanTweaker.CONFIG.getOr("load_builtin", CBoolean.TRUE);
-		if (entry.getType() != Type.BOOL || entry.asBool()) {
+		CEntry entry = CONFIG.getOr("load_builtin", CBoolean.TRUE);
+		if (!entry.mayCastTo(Type.BOOL) || entry.asBool()) {
 			MyHashMap<String, PluginDescriptor> builtin = new MyHashMap<>();
 			for (var info : PanTweaker.annotations.annotatedBy("roj/plugin/SimplePlugin")) {
 				pd = new PluginDescriptor();
@@ -197,25 +201,33 @@ public final class Panger extends PluginManager {
 				builtin.put(pd.id, pd);
 			}
 			LOGGER.info("找到{}个内置插件", builtin.size());
-			if (entry.getType() == Type.LIST) {
-				for (var name : entry.asList().raw()) {
+			if (entry.mayCastTo(Type.BOOL) && entry.asBool()) {
+				for (var name : CONFIG.getList("load_builtins").asList().raw()) {
 					pd = builtin.remove(name.asString());
 					if (pd != null) plugins.add(pd);
 					else LOGGER.warn("找不到内置插件 {}", name.asString());
 				}
 			}
 			if (builtin.size() > 0) {
-				CMD.register(literal("load_builtin").then(argument("plugin", Argument.oneOf(builtin)).executes(ctx -> {
-					var pd1 = ctx.argument("plugin", PluginDescriptor.class);
-					builtin.remove(pd1.id);
-					loadAndEnablePlugin(pd1);
+				CMD.register(literal("load_builtin").then(argument("plugin", Argument.someOf(builtin)).executes(ctx -> {
+					List<PluginDescriptor> lt = Helpers.cast(ctx.argument("plugin", List.class));
+					for (int i = 0; i < lt.size(); i++) {
+						var pd1 = lt.get(i);
+						builtin.remove(pd1.id);
+						plugins.add(pd1);
+					}
+					for (int i = 0; i < lt.size(); i++) {
+						var pd1 = lt.get(i);
+						loadPlugin(pd1);
+						enablePlugin(pd1);
+					}
 				})));
 			}
 		}
 	}
 
 	private static void shutdown() {
-		CLIUtil.setConsole(null);
+		Terminal.setConsole(null);
 		LOGGER.info("正在关闭系统");
 		pm.unloadPlugins();
 		IOUtil.closeSilently(httpServer);
@@ -225,15 +237,37 @@ public final class Panger extends PluginManager {
 	private static OKRouter router;
 	static OKRouter initHttp() {
 		if (router == null) {
-			router = new OKRouter();
+			var level = Level.valueOf(CONFIG.getString("http_log", "INFO"));
+			HttpServer11.LOGGER.setLevel(level);
+			router = new OKRouter(level.canLog(Level.DEBUG));
 			try {
-				router.addPrefixDelegation("", new ZipRouter(new File("plugins/Core/resource.zip")));
-				httpServer = HttpServer11.simple(new InetSocketAddress(PanTweaker.CONFIG.getInteger("http_port", 8080)), 512, router).launch();
+				httpServer = HttpServer11.simple(new InetSocketAddress(CONFIG.getInteger("http_port", 8080)), 512, router);
 				MimeType.loadMimeMap(IOUtil.readUTF(new File("plugins/Core/mime.ini")));
+
+				router.setInterceptor("PermissionManager", null);
+				router.addPrefixDelegation("", new ZipRouter(new File("plugins/Core/resource.zip")));
+				router.addPrefixDelegation("xui", new PathRouter(new File("plugins/Core")));
+
+				var http = new PanHttp();
+				var proxyToken = CONFIG.getString("http_reverse_proxy");
+				if (!proxyToken.isEmpty()) HttpCache.proxyRequestRetainer = http;
+				if (CONFIG.getBool("http_status")) router.register(http);
 			} catch (IOException e) {
 				LOGGER.error("HTTP服务启动失败", e);
 			}
 		}
+
 		return router;
+	}
+
+	static final SimpleList<String> motds = new SimpleList<>();
+	private void readMOTD() {
+		try (var tr = TextReader.from(new File(getPluginFolder(), "Core/splashes.txt"), StandardCharsets.UTF_8)) {
+			for (;;) {
+				var line = tr.readLine();
+				if (line == null) break;
+				motds.add(line);
+			}
+		} catch (Exception ignored) {}
 	}
 }

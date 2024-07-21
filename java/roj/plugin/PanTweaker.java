@@ -1,5 +1,6 @@
 package roj.plugin;
 
+import roj.RojLib;
 import roj.asm.Opcodes;
 import roj.asm.util.Context;
 import roj.asmx.AnnotationRepo;
@@ -11,6 +12,10 @@ import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.data.CMap;
 import roj.io.IOUtil;
+import roj.text.CharList;
+import roj.ui.ITerminal;
+import roj.ui.NativeVT;
+import roj.ui.Terminal;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -72,6 +77,18 @@ public final class PanTweaker extends DefaultTweaker implements ITransformer {
 		loader.registerTransformer(this);
 
 		annotations = repo;
+
+		if (NativeVT.getInstance() == null) {
+			var sout = System.out;
+			System.err.println("[警告]NativeVT不可用，请使用Web终端输入内容，否则可能造成不可预知的问题");
+			RojLib.DATA.put("roj.ui.Terminal.fallback", new ITerminal() {
+				@Override public boolean readBack(boolean sync) {return sync;}
+				@Override public void write(CharSequence str) {
+					CharList x = Terminal.stripAnsi(new CharList(str));
+					sout.print(x.toStringAndFree());
+				}
+			});
+		}
 	}
 
 	@Override

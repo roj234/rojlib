@@ -108,16 +108,17 @@ public final class CCJson extends JSONParser implements CCParser {
 		Word w = next();
 		try {
 			switch (w.type()) {
-				case lBracket: jsonList(this, flag); break;
-				case STRING: cc.value(w.val()); break;
-				case DOUBLE: case FLOAT: cc.value(w.asDouble()); break;
-				case INTEGER: cc.value(w.asInt()); break;
-				case LONG: cc.value(w.asLong()); break;
-				case TRUE: cc.value(true); break;
-				case FALSE: cc.value(false); break;
-				case NULL: cc.valueNull(); break;
-				case lBrace: jsonMap(this, flag); break;
-				default: unexpected(w.val());
+				default -> unexpected(w.val());
+				case lBracket -> jsonList(this, flag);
+				case lBrace -> jsonMap(this, flag);
+				case LITERAL, STRING -> cc.value(w.val());
+				case NULL -> cc.valueNull();
+				case TRUE -> cc.value(true);
+				case FALSE -> cc.value(false);
+				case INTEGER -> cc.value(w.asInt());
+				case LONG -> cc.value(w.asLong());
+				case FLOAT -> cc.value(w.asFloat());
+				case DOUBLE -> cc.value(w.asDouble());
 			}
 		} catch (Exception e) {
 			if (e instanceof ParseException) throw e;

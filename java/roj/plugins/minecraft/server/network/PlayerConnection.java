@@ -88,7 +88,7 @@ public class PlayerConnection implements ChannelHandler/*, ViaCommandSender*/ {
 					pingTime = System.currentTimeMillis();
 					ctx.channel().fireChannelWrite(new Packet("KeepAlive", IOUtil.getSharedByteBuf().putLong(pingTime)));
 				}
-			}, 15000);
+			}, 15000, -1, 15000);
 			tickTask = scheduler.loop(this::tick, 50);
 
 			ctx.attachment(MinecraftServer.PLAYER, this);
@@ -444,6 +444,7 @@ public class PlayerConnection implements ChannelHandler/*, ViaCommandSender*/ {
 	public void disconnect(AnsiString message) { sendDisconnect(message.toMinecraftJson()); }
 	private static String simpleJsonMessage(String message) { return "{\"text\":\"" + Tokenizer.addSlashes(message) + "\"}"; }
 	private void sendDisconnect(CharSequence message) {
+		if (!connection().isOutputOpen()) return;
 		sendPacket(new Packet("Disconnect", IOUtil.getSharedByteBuf().putVarIntUTF(message)));
 		try {
 			connection().closeGracefully();

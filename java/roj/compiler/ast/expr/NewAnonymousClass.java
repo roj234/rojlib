@@ -119,6 +119,7 @@ final class NewAnonymousClass extends ExprNode {
 			type.S2_ResolveRef();
 			type.S3_Annotation();
 			type.S4_Code();
+			type.S5_noStore();
 			type.appendGlobalInit(initMethod, null);
 		} catch (ParseException e) {
 			throw new ResolveException("newAnonymousClass failed", e);

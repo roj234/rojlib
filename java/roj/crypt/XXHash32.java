@@ -1,10 +1,9 @@
 package roj.crypt;
 
+import roj.reflect.Unaligned;
 import sun.misc.Unsafe;
 
 import static java.lang.Integer.rotateLeft;
-import static roj.reflect.ReflectionUtils.BIG_ENDIAN;
-import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
@@ -61,7 +60,5 @@ public class XXHash32 {
 		return hash;
 	}
 
-	private static int getIntLE(byte[] b, int i) {
-		return !BIG_ENDIAN ? u.getInt(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+i) : (b[i++] & 0xFF) | (b[i++] & 0xFF) << 8 | (b[i++] & 0xFF) << 16 | (b[i] & 0xFF) << 24;
-	}
+	private static int getIntLE(byte[] b, int i) {return Unaligned.U.get32UL(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
 }

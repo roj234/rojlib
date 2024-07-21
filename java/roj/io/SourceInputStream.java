@@ -7,11 +7,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.zip.ZipException;
 
+import static roj.reflect.ReflectionUtils.u;
+
 /**
  * @author Roj234
  * @since 2022/12/7 0007 14:27
  */
-public class SourceInputStream extends InputStream {
+public sealed class SourceInputStream extends InputStream {
 	public SourceInputStream(Source src, long length) {
 		this.src = src;
 		this.doClose = src != null;
@@ -69,5 +71,30 @@ public class SourceInputStream extends InputStream {
 	public void close() throws IOException {
 		if (doClose) src.close();
 		remain = 0;
+	}
+
+	/**
+	 * @author Roj234
+	 * @since 2023/9/14 0014 14:01
+	 */
+	public static final class Shared extends SourceInputStream {
+		private Object ref;
+		private final long off;
+
+		public Shared(Source in, long len, Object ref, long off) {
+			super(in, len);
+			this.ref = ref;
+			this.off = off;
+		}
+
+		@Override
+		public synchronized void close() throws IOException {
+			if (ref != null && !u.compareAndSwapObject(ref, off, null, src)) {
+				super.close();
+			}
+
+			ref = null;
+			remain = 0;
+		}
 	}
 }

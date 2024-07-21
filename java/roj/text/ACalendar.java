@@ -10,7 +10,7 @@ import java.util.TimeZone;
  * @since 2021/6/16 2:48
  */
 public final class ACalendar {
-	public static ACalendar GMT() { return new ACalendar(TimeZone.getTimeZone("GMT")); }
+	public static ACalendar GMT() { return new ACalendar(null); }
 	public static ACalendar Local() { return new ACalendar(TimeZone.getDefault()); }
 
 	public ACalendar copy() { return new ACalendar(zone); }
@@ -199,58 +199,56 @@ public final class ACalendar {
 		char c;
 		for (int i = 0; i < format.length(); i++) {
 			switch (c = format.charAt(i)) {
-				case 'Y': sb.append(fields[YEAR]); break;
-				case 'y': sb.append(fields[YEAR] % 100); break;
+				case 'Y' -> sb.append(fields[YEAR]);
+				case 'y' -> sb.append(fields[YEAR] % 100);
 
-				case 'L': sb.append(fields[LEAP_YEAR]); break;
+				case 'L' -> sb.append(fields[LEAP_YEAR]);
 
-				case 'M': sb.append(UTCMONTH[fields[MONTH] - 1]); break;
-				case 'm': sb.padNumber(fields[MONTH], 2); break;
-				case 'n': sb.append(fields[MONTH]); break;
+				case 'M' -> sb.append(UTCMONTH[fields[MONTH] - 1]);
+				case 'm' -> sb.padNumber(fields[MONTH], 2);
+				case 'n' -> sb.append(fields[MONTH]);
 
-				case 't': // 本月有几天
+				case 't' -> {// 本月有几天
 					int mth = fields[MONTH];
 					sb.append(mth == 2 ? 28 + fields[LEAP_YEAR] : ((mth & 1) != 0) == mth < 8 ? 31 : 30);
-				break;
+				}
 
-				case 'd': sb.padNumber(fields[DAY], 2); break;
-				case 'j': sb.append(fields[DAY]); break;
+				case 'd' -> sb.padNumber(fields[DAY], 2);
+				case 'j' -> sb.append(fields[DAY]);
+				case 'D' -> sb.append(stamp / 86400000L);
 
-				case 'l': sb.append("星期").append(ChinaNumeric.NUMBER[fields[DAY_OF_WEEK]]); break;
-				case 'W': sb.append(UTCWEEK[fields[DAY_OF_WEEK]-1]); break;
-				case 'w': sb.append(fields[DAY_OF_WEEK]-1); break;
+				case 'l' -> sb.append("星期").append(ChinaNumeric.NUMBER[fields[DAY_OF_WEEK]]);
+				case 'W' -> sb.append(UTCWEEK[fields[DAY_OF_WEEK]-1]);
+				case 'w' -> sb.append(fields[DAY_OF_WEEK]-1);
 
-				case 'H': sb.padNumber(fields[HOUR], 2); break;
-				case 'G': sb.append(fields[HOUR]); break;
+				case 'H' -> sb.padNumber(fields[HOUR], 2);
+				case 'G' -> sb.append(fields[HOUR]);
 
-				case 'A': sb.append(fields[HOUR] > 11 ? "PM" : "AM"); break;
-				case 'a': sb.append(fields[HOUR] > 11 ? "pm" : "am"); break;
+				case 'A' -> sb.append(fields[HOUR] > 11 ? "PM" : "AM");
+				case 'a' -> sb.append(fields[HOUR] > 11 ? "pm" : "am");
 
-				case 'h':
+				case 'h' -> {
 					int h = fields[HOUR] % 12;
 					sb.padNumber(h == 0 ? 12 : h, 2);
-				break;
-				case 'g': // am/pm时间
-					h = fields[HOUR] % 12;
+				}
+				case 'g' -> {// am/pm时间
+					int h = fields[HOUR] % 12;
 					sb.append(h == 0 ? 12 : h);
-				break;
+				}
 
-				case 'i': sb.padNumber(fields[MINUTE], 2); break;
-				case 's': sb.padNumber(fields[SECOND], 2); break;
-				case 'x': sb.padNumber(fields[MILLISECOND], 3); break;
+				case 'i' -> sb.padNumber(fields[MINUTE], 2);
+				case 's' -> sb.padNumber(fields[SECOND], 2);
+				case 'x' -> sb.padNumber(fields[MILLISECOND], 3);
 
 				// unix秒时间戳
-				case 'U': sb.append(stamp / 1000); break;
+				case 'U' -> sb.append(stamp / 1000);
 
-				case 'O': // timezone offset 2
-					if (tzoff(stamp, sb)) sb.append("GMT");
-					break;
-				case 'P':
-					if (tzoff(stamp, sb)) sb.append('Z');
-				break;
+				case 'O', 'P' -> {// TimeZone offset
+					if (tzoff(stamp, sb)) sb.append(c == 'P' ? "Z" : "GMT");
+				}
 
-				case 'c': format("Y-m-dTH:i:sP", stamp, sb); break;
-				default: sb.append(c); break;
+				case 'c' -> format("Y-m-dTH:i:sP", stamp, sb);
+				default -> sb.append(c);
 			}
 		}
 		return sb;
@@ -276,7 +274,7 @@ public final class ACalendar {
 
 	public static String toLocalTimeString(long time) {
 		ACalendar cal = new ACalendar();
-		return cal.format("Y-m-d H:i:s.x", time, new CharList()).append(" (").append(cal.zone.getDisplayName()).append(')').toStringAndFree(); }
+		return cal.format("Y-m-d H:i:s.x", time, new CharList()).append(" (").append(cal.zone!=null?cal.zone.getDisplayName():"GMT").append(')').toStringAndFree(); }
 
 	private static final int[]
 		TIME_DT = {60, 1800, 3600, 86400, 604800, 2592000, 15552000},

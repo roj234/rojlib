@@ -156,7 +156,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		validateBciRef();
 	}
 	@Override
-	final void _visitNodePre() {
+	protected void _visitNodePre() {
 		IntMap.Entry<Label> entry = bciR2W.getEntry(bci);
 		if (entry != null) label(entry.getValue());
 	}
@@ -198,9 +198,13 @@ public class CodeWriter extends AbstractCodeWriter {
 	public void clazz(byte code, String clz) { assertCate(code, Opcodes.CATE_CLASS); codeOb.put(code).putShort(cpw.getClassId(clz)); }
 
 	protected void ldc1(byte code, Constant c) {
-		int i = cpw.reset(c).getIndex();
-		if (i < 256) codeOb.put(LDC).put(i);
-		else codeOb.put(LDC_W).putShort(i);
+		// 同时读写，长度可能会变，特别是Transformer#compress...
+		if (bciR2W != null) addSegment(new LdcSegment(code, c));
+		else {
+			int i = cpw.reset(c).getIndex();
+			if (i < 256) codeOb.put(LDC).put(i);
+			else codeOb.put(LDC_W).putShort(i);
+		}
 	}
 	protected void ldc2(Constant c) { codeOb.put(LDC2_W).putShort(cpw.reset(c).getIndex()); }
 
@@ -506,10 +510,8 @@ public class CodeWriter extends AbstractCodeWriter {
 		return bci;
 	}
 
-	@RequireUpgrade
-	public FrameVisitor getFv() {
-		return fv;
-	}
+	@RequireUpgrade public FrameVisitor getFv() {return fv;}
+	public int getState() {return state;}
 
 	public final void addSegment(Segment c) {
 		if (c == null) throw new NullPointerException("c");

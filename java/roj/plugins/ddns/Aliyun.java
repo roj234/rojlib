@@ -15,7 +15,7 @@ import roj.net.http.SyncHttpClient;
 import roj.text.ACalendar;
 import roj.text.CharList;
 import roj.text.Escape;
-import roj.ui.CLIUtil;
+import roj.ui.Terminal;
 
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
@@ -240,7 +240,7 @@ public class Aliyun implements DDNSService {
 			SyncHttpClient shc = HttpRequest.nts().url(makeUrl(par)).executePooled();
 			CMap cfg = _parse(shc);
 		} catch (Exception e) {
-			CLIUtil.error("请求参数: " + par, e);
+			Terminal.error("请求参数: " + par, e);
 		}
 	}
 
@@ -255,7 +255,7 @@ public class Aliyun implements DDNSService {
 		try {
 			CMap cfg = _parse(pooledRequest(makeUrl(par)));
 		} catch (Exception e) {
-			CLIUtil.error("请求参数: " + par, e);
+			Terminal.error("请求参数: " + par, e);
 		}
 	}
 

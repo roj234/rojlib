@@ -153,23 +153,15 @@ public class CharList implements CharSequence, Appendable {
 
 	// region search
 	public final boolean contains(CharSequence s) { return indexOf(s, 0) >= 0; }
-	public final boolean containsAny(TrieTree<CInt> map, boolean stopOnFirst) {
+	public final boolean containsAny(TrieTree<CInt> map) {
 		int pos = 0;
 
 		MyHashMap.Entry<CInt, CInt> entry = new MyHashMap.Entry<>(new CInt(), null);
 		while (pos < len) {
 			map.match(this, pos, len, entry);
-
 			int len = entry.getKey().value;
-			if (len < 0) {
-				pos++;
-				continue;
-			}
-
-			if (stopOnFirst) return true;
-
-			entry.getValue().value++;
-			pos += len;
+			if (len >= 0) return true;
+			pos++;
 		}
 
 		return false;
@@ -722,11 +714,13 @@ public class CharList implements CharSequence, Appendable {
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
-		if (!(o instanceof CharSequence)) return false;
-
-		CharSequence cs = (CharSequence) o;
-
+		if (!(o instanceof CharSequence cs)) return false;
 		if (len != cs.length()) return false;
+
+		if (cs instanceof CharList anotherList && anotherList.getClass() == CharList.class) {
+			return Arrays.equals(list, 0, len, anotherList.list, 0, len);
+		}
+
 		char[] c = list;
 		for (int i = 0; i < len; i++) {
 			if (c[i] != cs.charAt(i)) return false;

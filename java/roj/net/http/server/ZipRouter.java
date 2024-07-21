@@ -26,8 +26,12 @@ public class ZipRouter implements Router {
 	public ZipRouter(ZipFile zf) {this.zip = zf;}
 	public ZipRouter(ZipFile zf, String prefix) {this.zip = zf;this.prefix = prefix;}
 
-	public ZipRouter setCacheControl(String var) {cacheControl = var;return this;}
 	protected String getCacheControl(ZEntry ze) {return cacheControl;}
+	public ZipRouter setCacheControl(String var) {cacheControl = var;return this;}
+	public String getPrefix() {return prefix;}
+	public void setPrefix(String prefix) {this.prefix = prefix;}
+
+	public static Response zip(Request req, ZipFile zf, ZEntry ze) {return Response.file(req, new ZipFileInfo(zf, ze));}
 
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws IOException {

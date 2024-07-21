@@ -23,6 +23,7 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Predicate;
 
 /**
@@ -48,7 +49,7 @@ public final class IOUtil {
 	}
 	public String decode(byte[] b) {
 		CharList c = charBuf; c.clear();
-		UTF8MB4.CODER.decodeFixedIn(shell.setR(b,0,b.length), b.length, c);
+		UTF8.CODER.decodeFixedIn(shell.setR(b,0,b.length), b.length, c);
 		return c.toString();
 	}
 
@@ -147,13 +148,14 @@ public final class IOUtil {
 
 	@Attach("skipAlt")
 	public static long skip(InputStream in, long count) throws IOException {
+		long start = count;
 		for(;;) {
 			long i = in.skip(count);
 			if (i == 0) break;
 			count -= i;
 			if (count == 0) break;
 		}
-		return count;
+		return start-count;
 	}
 	@Attach
 	public static void skipFully(InputStream in, long count) throws IOException {
@@ -348,10 +350,17 @@ public final class IOUtil {
 		return cl.append('.').append(ext);
 	}
 
+	public static File deriveOutput(File src, String postfix) {
+		var path = src.getName();
+		int i = path.lastIndexOf('.');
+		if (i < 0) return new File(src.getAbsolutePath()+postfix);
+		return new File(src.getParentFile(), path.substring(0, i)+postfix+path.substring(i));
+	}
+
 	public static String extensionName(String path) {
 		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
 		int i = path.lastIndexOf('.');
-		return i < 0 ? "" : path.substring(i+1);
+		return i < 0 ? "" : path.substring(i+1).toLowerCase(Locale.ROOT);
 	}
 
 	public static String fileName(String pat) {
@@ -374,7 +383,7 @@ public final class IOUtil {
 	 *   ./
 	 *   开头的/
 	 *   空白字符
-	 * 并截断字符串到任意(不可打印, ':', ' ')字符之前
+	 * 并截断字符串到任意(不可打印, ' ')字符之前
 	 */
 	@NotNull
 	public static String safePath(String path) throws InvalidPathException {
@@ -384,7 +393,7 @@ public final class IOUtil {
 		int i = 0;
 		while (i < path.length()) {
 			var c = path.charAt(i);
-			if (c < 32 || c == ':') break;
+			if (c < 32/* || c == ':'*/) break;
 			i++;
 			if (c != ' ') end = i;
 		}

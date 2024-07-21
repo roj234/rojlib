@@ -7,7 +7,6 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnValInt;
-import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.type.Generic;
@@ -81,6 +80,7 @@ public final class BlockParser {
 		this.variables.clear();
 		this.regionNew.clear();
 		this.sectionFlag = 0;
+		this.fastSlot = 0;
 
 		this.returnHook = null;
 		this.returnHookUsed = null;
@@ -125,12 +125,12 @@ public final class BlockParser {
 
 		var flags = mn.parsedAttr(null, Attribute.MethodParameters);
 		var sign = mn.parsedAttr(null, Attribute.SIGNATURE);
-		List<? extends IType> parameters = sign != null ? sign.values : mn.parameters();
+		var parameters = mn.parameters();
 		for (int i = 0; i < parameters.size(); i++) {
 			IType type = parameters.get(i);
 			if (i < names.size()) {
 				// TODO @skip(_)不应该占据slot
-				Variable var = newVar(names.get(i), type);
+				Variable var = newVar(names.get(i), sign != null ? sign.values.get(i) : type);
 				if (flags != null && (flags.getFlag(i, 0)&ACC_FINAL) != 0) var.isFinal = true;
 				var.hasValue = true;
 			} else {
@@ -918,7 +918,12 @@ public final class BlockParser {
 			expr = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE);
 
 			var signature = (Signature) cw.mn.attrByName("Signature");
-			writeCast(expr.resolve(ctx), signature == null ? cw.mn.returnType() : signature.values.get(signature.values.size()-1));
+			ctx.inReturn = true;
+			try {
+				writeCast(expr.resolve(ctx), signature == null ? cw.mn.returnType() : signature.values.get(signature.values.size()-1));
+			} finally {
+				ctx.inReturn = false;
+			}
 		} else {
 			expr = null;
 		}
@@ -1308,7 +1313,7 @@ public final class BlockParser {
 					break;
 				}
 
-				Annotation switchable = ctx.getAnnotation(clazz, clazz, "roj/compiler/api/Switchable", false);
+				var switchable = ctx.getAnnotation(clazz, clazz, "roj/compiler/api/Switchable", false);
 				if (switchable != null) {
 					kind = switchable.getBoolean("identity", true) ? 3 : 4;
 					if (switchable.getBoolean("suggest", false)) {

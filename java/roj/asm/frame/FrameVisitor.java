@@ -272,207 +272,214 @@ public class FrameVisitor implements IFrameVisitor {
 
 			Var2 t1, t2, t3;
 			switch (code) {
-				default:
-				case NOP:
-				case LNEG: case FNEG: case DNEG: case INEG:
-				case I2B: case I2C: case I2S: break;
+				/*case NOP,
+					LNEG, FNEG, DNEG, INEG,
+					I2B, I2C, I2S -> {}*/
 
-				case ACONST_NULL: push(NULL); break;
-				case ICONST_M1: case ICONST_0:
-				case ICONST_1: case ICONST_2: case ICONST_3: case ICONST_4: case ICONST_5:
-					push(INT); break;
-				case LCONST_0: case LCONST_1:
-					push(LONG); break;
-				case FCONST_0: case FCONST_1: case FCONST_2:
-					push(FLOAT); break;
-				case DCONST_0: case DCONST_1:
-					push(DOUBLE); break;
-
-				case IADD: case ISUB: case IMUL: case IDIV: case IREM:
-				case IAND: case IOR: case IXOR:
-				case ISHL: case ISHR: case IUSHR:
-					math(INT); break;
-				case FADD: case FSUB: case FMUL: case FDIV: case FREM:
-					math(FLOAT); break;
-				case LADD: case LSUB: case LMUL: case LDIV: case LREM:
-				case LAND: case LOR: case LXOR:
-					math(LONG); break;
-				case LSHL: case LSHR: case LUSHR:
-					pop(INT); /*pop(LONG); push(LONG);*/ break;
-				case DADD: case DSUB: case DMUL: case DDIV: case DREM:
-					math(DOUBLE); break;
-
-				case LDC: ldc(cp.array(r.readUnsignedByte())); break;
-				case LDC_W: case LDC2_W: ldc(cp.get(r)); break;
-
-				case BIPUSH: push(INT); r.rIndex += 1; break;
-				case SIPUSH: push(INT); r.rIndex += 2; break;
-
-				case IINC:
+				case ACONST_NULL -> push(NULL);
+				case ICONST_M1, ICONST_0, ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5 -> push(INT);
+				case LCONST_0, LCONST_1 -> push(LONG);
+				case FCONST_0, FCONST_1, FCONST_2 -> push(FLOAT);
+				case DCONST_0, DCONST_1 -> push(DOUBLE);
+				case IADD, ISUB, IMUL, IDIV, IREM, IAND, IOR, IXOR, ISHL, ISHR, IUSHR -> math(INT);
+				case FADD, FSUB, FMUL, FDIV, FREM -> math(FLOAT);
+				case LADD, LSUB, LMUL, LDIV, LREM, LAND, LOR, LXOR -> math(LONG);
+				case LSHL, LSHR, LUSHR -> pop(INT);
+				case DADD, DSUB, DMUL, DDIV, DREM -> math(DOUBLE);
+				case LDC -> ldc(cp.array(r.readUnsignedByte()));
+				case LDC_W, LDC2_W -> ldc(cp.get(r));
+				case BIPUSH -> {
+					push(INT);
+					r.rIndex += 1;
+				}
+				case SIPUSH -> {
+					push(INT);
+					r.rIndex += 2;
+				}
+				case IINC -> {
 					int id = widen ? r.readUnsignedShort() : r.readUnsignedByte();
 					// set(id, get(id, INT));
 					get(id, INT);
 					r.rIndex += widen ? 2 : 1;
-					break;
-
-				case ISTORE: case LSTORE: case FSTORE: case DSTORE: case ASTORE:
-				case ILOAD: case LLOAD: case FLOAD: case DLOAD: case ALOAD:
-					var(code, widen ? r.readUnsignedShort() : r.readUnsignedByte());
-					break;
-
-				case FCMPL: case FCMPG: cmp(FLOAT); break;
-				case DCMPL: case DCMPG: cmp(DOUBLE); break;
-				case LCMP: cmp(LONG); break;
-
-				case F2I: pop(FLOAT); push(INT); break;
-				case L2I: pop(LONG); push(INT); break;
-				case D2I: pop(DOUBLE); push(INT); break;
-				case I2F: pop(INT); push(FLOAT); break;
-				case L2F: pop(LONG); push(FLOAT); break;
-				case D2F: pop(DOUBLE); push(FLOAT); break;
-				case I2L: pop(INT); push(LONG); break;
-				case F2L: pop(FLOAT); push(LONG); break;
-				case D2L: pop(DOUBLE); push(LONG); break;
-				case I2D: pop(INT); push(DOUBLE); break;
-				case F2D: pop(FLOAT); push(DOUBLE); break;
-				case L2D: pop(LONG); push(DOUBLE); break;
-
-				case ARRAYLENGTH: pop("["); push(INT); break;
-
-				case IALOAD: arrayLoadI("[I"); break;
-				case BALOAD: arrayLoadI("[B"); break;
-				case CALOAD: arrayLoadI("[C"); break;
-				case SALOAD: arrayLoadI("[S"); break;
-				case LALOAD: arrayLoad("[J", LONG); break;
-				case FALOAD: arrayLoad("[F", FLOAT); break;
-				case DALOAD: arrayLoad("[D", DOUBLE); break;
-				case IASTORE: arrayStoreI("[I"); break;
-				case BASTORE: arrayStoreI("[B"); break;
-				case CASTORE: arrayStoreI("[C"); break;
-				case SASTORE: arrayStoreI("[S"); break;
-				case FASTORE: arrayStore("[F", FLOAT); break;
-				case LASTORE: arrayStore("[J", LONG); break;
-				case DASTORE: arrayStore("[D", DOUBLE); break;
-
-				case AALOAD:
+				}
+				case ISTORE, LSTORE, FSTORE, DSTORE, ASTORE,
+					ILOAD, LLOAD, FLOAD, DLOAD, ALOAD -> var(code, widen ? r.readUnsignedShort() : r.readUnsignedByte());
+				case FCMPL, FCMPG -> cmp(FLOAT);
+				case DCMPL, DCMPG -> cmp(DOUBLE);
+				case LCMP -> cmp(LONG);
+				case F2I -> {
+					pop(FLOAT);
+					push(INT);
+				}
+				case L2I -> {
+					pop(LONG);
+					push(INT);
+				}
+				case D2I -> {
+					pop(DOUBLE);
+					push(INT);
+				}
+				case I2F -> {
+					pop(INT);
+					push(FLOAT);
+				}
+				case L2F -> {
+					pop(LONG);
+					push(FLOAT);
+				}
+				case D2F -> {
+					pop(DOUBLE);
+					push(FLOAT);
+				}
+				case I2L -> {
+					pop(INT);
+					push(LONG);
+				}
+				case F2L -> {
+					pop(FLOAT);
+					push(LONG);
+				}
+				case D2L -> {
+					pop(DOUBLE);
+					push(LONG);
+				}
+				case I2D -> {
+					pop(INT);
+					push(DOUBLE);
+				}
+				case F2D -> {
+					pop(FLOAT);
+					push(DOUBLE);
+				}
+				case L2D -> {
+					pop(LONG);
+					push(DOUBLE);
+				}
+				case ARRAYLENGTH -> {
+					pop("[");
+					push(INT);
+				}
+				case IALOAD -> arrayLoadI("[I");
+				case BALOAD -> arrayLoadI("[B");
+				case CALOAD -> arrayLoadI("[C");
+				case SALOAD -> arrayLoadI("[S");
+				case LALOAD -> arrayLoad("[J", LONG);
+				case FALOAD -> arrayLoad("[F", FLOAT);
+				case DALOAD -> arrayLoad("[D", DOUBLE);
+				case IASTORE -> arrayStoreI("[I");
+				case BASTORE -> arrayStoreI("[B");
+				case CASTORE -> arrayStoreI("[C");
+				case SASTORE -> arrayStoreI("[S");
+				case FASTORE -> arrayStore("[F", FLOAT);
+				case LASTORE -> arrayStore("[J", LONG);
+				case DASTORE -> arrayStore("[D", DOUBLE);
+				case AALOAD -> {
 					pop(INT);
 					String v = pop("[Ljava/lang/Object;").owner;
-					v = v.charAt(1) == 'L' ? v.substring(2, v.length()-1) : v.substring(1);
+					v = v.charAt(1) == 'L' ? v.substring(2, v.length() - 1) : v.substring(1);
 					push(new Var2(REFERENCE, v));
-				break;
-				case AASTORE:
+				}
+				case AASTORE -> {
 					Var2 ref1 = pop("java/lang/Object");
 					pop(INT);
 					Var2 ref2 = pop("[Ljava/lang/Object;");
-					//ref1.merge(new Var2(ref2.owner.substring(1)));
-				break;
-
-				case PUTFIELD:
-				case GETFIELD:
-				case PUTSTATIC:
-				case GETSTATIC: field(code, (CstRefField) cp.get(r)); break;
-
-				case INVOKEVIRTUAL:
-				case INVOKESPECIAL:
-				case INVOKESTATIC: invoke(code, (CstRef) cp.get(r)); break;
-				case INVOKEINTERFACE:
+					//ref1.merge(new Var2(REFERENCE, ref2.owner.substring(1)));
+				}
+				case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, (CstRefField) cp.get(r));
+				case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, (CstRef) cp.get(r));
+				case INVOKEINTERFACE -> {
 					invoke(code, (CstRef) cp.get(r));
 					r.rIndex += 2;
-					break;
-				case INVOKEDYNAMIC:
-					invoke_dynamic((CstDynamic) cp.get(r), r.readUnsignedShort());
-					break;
-
-				case JSR: case JSR_W: case RET: ret(); break;
-
-				case NEWARRAY:
+				}
+				case INVOKEDYNAMIC -> invoke_dynamic((CstDynamic) cp.get(r), r.readUnsignedShort());
+				case JSR, JSR_W, RET -> ret();
+				case NEWARRAY -> {
 					pop(INT);
 					push("[" + (char) InsnHelper.FromPrimitiveArrayId(r.readByte()));
-					break;
-
-				case INSTANCEOF:
+				}
+				case INSTANCEOF -> {
 					r.rIndex += 2;
 					pop(ANY_OBJECT);
 					push(INT);
-					break;
-				case NEW:
-				case ANEWARRAY:
-				case CHECKCAST:
-					clazz(code, (CstClass) cp.get(r));
-					break;
-
-				case MULTIANEWARRAY:
+				}
+				case NEW, ANEWARRAY, CHECKCAST -> clazz(code, (CstClass) cp.get(r));
+				case MULTIANEWARRAY -> {
 					CstClass c = (CstClass) cp.get(r);
 					int alen = r.readUnsignedByte();
 					while (alen-- > 0) pop(INT);
 					push(c.name().str());
-					break;
-
-				case RETURN: eof = true; break;
-				case IRETURN:
-				case FRETURN:
-				case LRETURN:
-				case DRETURN:
-				case ARETURN: pop(castType(mn.returnType())); eof = true; break;
-				case ATHROW: pop("java/lang/Throwable"); eof = true; break;
-
-				case MONITORENTER: case MONITOREXIT: pop(ANY_OBJECT); break;
-
-				case IFEQ: case IFNE:
-				case IFLT: case IFGE: case IFGT: case IFLE:
+				}
+				case RETURN -> eof = true;
+				case IRETURN, FRETURN, LRETURN, DRETURN, ARETURN -> {
+					pop(castType(mn.returnType()));
+					eof = true;
+				}
+				case ATHROW -> {
+					pop("java/lang/Throwable");
+					eof = true;
+				}
+				case MONITORENTER, MONITOREXIT -> pop(ANY_OBJECT);
+				case IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE -> {
 					pop(INT);
 					r.rIndex += 2;
 					jump();
-					break;
-				case IF_icmpeq: case IF_icmpne:
-				case IF_icmplt: case IF_icmpge: case IF_icmpgt: case IF_icmple:
-					pop(INT); pop(INT);
+				}
+				case IF_icmpeq, IF_icmpne, IF_icmplt, IF_icmpge, IF_icmpgt, IF_icmple -> {
+					pop(INT);
+					pop(INT);
 					r.rIndex += 2;
 					jump();
-					break;
-				case IFNULL: case IFNONNULL:
+				}
+				case IFNULL, IFNONNULL -> {
 					pop(ANY_OBJECT);
 					r.rIndex += 2;
 					jump();
-					break;
-				case IF_acmpeq: case IF_acmpne:
-					pop(ANY_OBJECT); pop(ANY_OBJECT);
+				}
+				case IF_acmpeq, IF_acmpne -> {
+					pop(ANY_OBJECT);
+					pop(ANY_OBJECT);
 					r.rIndex += 2;
 					jump();
-					break;
-				case GOTO: r.rIndex += 2; eof = true; jump(); break;
-				case GOTO_W: r.rIndex += 4; eof = true; jump(); break;
-				case TABLESWITCH:
+				}
+				case GOTO -> {
+					r.rIndex += 2;
+					eof = true;
+					jump();
+				}
+				case GOTO_W -> {
+					r.rIndex += 4;
+					eof = true;
+					jump();
+				}
+				case TABLESWITCH -> {
 					// align
 					r.rIndex += (4 - ((r.rIndex - rBegin) & 3)) & 3;
 					tableSwitch(r);
-					break;
-				case LOOKUPSWITCH:
+				}
+				case LOOKUPSWITCH -> {
 					r.rIndex += (4 - ((r.rIndex - rBegin) & 3)) & 3;
 					lookupSwitch(r);
-					break;
-
-				case POP2:
+				}
+				case POP2 -> {
 					t1 = pop12();
 					if (t1.type != DOUBLE && t1.type != LONG) {
 						pop1();
 					}
-					break;
-				case POP: pop1(); break;
-
-				case DUP:
+				}
+				case POP -> pop1();
+				case DUP -> {
 					t1 = pop1();
 					push(t1);
 					push(t1);
-					break;
-				case DUP_X1:
+				}
+				case DUP_X1 -> {
 					t1 = pop1();
 					t2 = pop1();
 					push(t1);
 					push(t2);
 					push(t1);
-					break;
-				case DUP_X2:
+				}
+				case DUP_X2 -> {
 					t1 = pop1();
 					t2 = pop1();
 					t3 = pop1();
@@ -480,8 +487,8 @@ public class FrameVisitor implements IFrameVisitor {
 					push(t3);
 					push(t2);
 					push(t1);
-					break;
-				case DUP2:
+				}
+				case DUP2 -> {
 					t1 = pop12();
 					if (t1.type == DOUBLE || t1.type == LONG) {
 						push(t1);
@@ -493,8 +500,8 @@ public class FrameVisitor implements IFrameVisitor {
 						push(t2);
 						push(t1);
 					}
-					break;
-				case DUP2_X1:
+				}
+				case DUP2_X1 -> {
 					t1 = pop12();
 					t2 = t1.type == DOUBLE || t1.type == LONG ? null : pop1();
 					t3 = pop1();
@@ -508,8 +515,8 @@ public class FrameVisitor implements IFrameVisitor {
 						push(t3);
 					}
 					push(t1);
-					break;
-				case DUP2_X2:
+				}
+				case DUP2_X2 -> {
 					t1 = pop12();
 					t2 = t1.type == DOUBLE || t1.type == LONG ? null : pop1();
 					t3 = pop1();
@@ -526,13 +533,13 @@ public class FrameVisitor implements IFrameVisitor {
 						push(t3);
 					}
 					push(t1);
-					break;
-				case SWAP:
+				}
+				case SWAP -> {
 					t1 = pop1();
 					t2 = pop1();
 					push(t1);
 					push(t2);
-					break;
+				}
 			}
 
 			prev = code;
@@ -572,8 +579,8 @@ public class FrameVisitor implements IFrameVisitor {
 					new Throwable("debug:type_class:"+typeStr).printStackTrace();
 					push(typeStr.substring(1,typeStr.length()-1));
 					break;
-				case Type.BOOLEAN: case Type.BYTE:
-				case Type.SHORT: case Type.CHAR:
+				case Type.BOOLEAN, Type.BYTE:
+				case Type.SHORT, Type.CHAR:
 				case Type.INT: push(INT); break;
 				case Type.DOUBLE: push(DOUBLE); break;
 				case Type.FLOAT: push(FLOAT); break;
@@ -865,7 +872,7 @@ public class FrameVisitor implements IFrameVisitor {
 					break;
 				case same_ex:
 					// keep original chop count
-				case chop: case chop2: case chop3:
+				case chop, chop2, chop3:
 					off = r.readUnsignedShort();
 					break;
 				case same_local_1_stack:
@@ -957,7 +964,7 @@ public class FrameVisitor implements IFrameVisitor {
 				case same_local_1_stack:
 					putVar(curr.stacks[0], w, cp);
 					break;
-				case chop: case chop2: case chop3:
+				case chop, chop2, chop3:
 				case same_ex:
 					w.putShort(offset);
 					break;

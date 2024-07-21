@@ -4,8 +4,6 @@ import roj.collect.RingBuffer;
 import roj.io.buf.BufferPool;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.Headers;
-import roj.util.ByteList;
-import roj.util.DirectByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -18,7 +16,6 @@ import java.io.IOException;
 public class AsyncResponse implements Response {
 	private final RingBuffer<DynByteBuf> packets = new RingBuffer<>(3);
 	private boolean eof;
-	protected Runnable hasSpaceCallback;
 
 	public AsyncResponse() {}
 
@@ -49,29 +46,21 @@ public class AsyncResponse implements Response {
 			rh.write(buf);
 			if (!buf.isReadable()) {
 				synchronized (packets) {packets.removeFirst();}
-				free(buf);
-				if (packets.size() <= 1 && hasSpaceCallback != null) hasSpaceCallback.run();
+				BufferPool.reserve(buf);
+				if (packets.size() <= 1) hasSpaceCallback();
 			}
 		}
 		return buf != null || !eof;
 	}
+	protected void hasSpaceCallback() {}
 
 	@Override
 	public void release(ChannelCtx ctx) throws IOException {
 		eof = true;
 		synchronized (packets) {
 			for (DynByteBuf buf : packets)
-				free(buf);
+				BufferPool.reserve(buf);
 		}
 		packets.clear();
-	}
-
-	private static void free(DynByteBuf buf) {
-		if (BufferPool.isPooled(buf)) {
-			BufferPool.reserve(buf);
-		} else {
-			if (buf.isDirect()) ((DirectByteList) buf)._free();
-			else ((ByteList) buf)._free();
-		}
 	}
 }

@@ -1,5 +1,6 @@
 package roj.plugins.dns;
 
+import roj.ToBeRemoved;
 import roj.collect.TrieTreeSet;
 import roj.config.data.CList;
 import roj.config.data.CMap;
@@ -135,7 +136,7 @@ public class ADnsGuard extends Plugin {
 	}
 
 	@GET
-	public String stat() {return TextUtil.deepToString(resolved.entrySet());}
+	public String stat() {return ToBeRemoved.deepToString(resolved.entrySet());}
 
 	@POST
 	public void set(Request req, ResponseHeader rh, String url, String type, String cnt) {

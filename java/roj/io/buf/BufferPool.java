@@ -1,14 +1,18 @@
 package roj.io.buf;
 
 import roj.collect.IntMap;
+import roj.collect.SimpleList;
 import roj.concurrent.SegmentReadWriteLock;
 import roj.concurrent.task.ITask;
 import roj.concurrent.timing.Scheduler;
+import roj.plugin.Status;
+import roj.text.CharList;
 import roj.text.logging.Logger;
 import roj.util.*;
 import sun.misc.Unsafe;
 
 import java.lang.ref.WeakReference;
+import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -23,8 +27,8 @@ import static roj.reflect.ReflectionUtils.u;
 public final class BufferPool {
 	// 数据瞎填的
 	// 另外req >= CAP+INCR也不会用
-	private static final int TL_HEAP_INITIAL = 65536, TL_HEAP_INCR = 65536, TL_HEAP_MAX = 16777216, TL_HEAP_THRES = 131072;
-	private static final int TL_DIRECT_INITIAL = 65536, TL_DIRECT_INCR = 65536, TL_DIRECT_MAX = 16777216, TL_DIRECT_THRES = 131072;
+	private static final int TL_HEAP_INITIAL = 32768, TL_HEAP_INCR = 32768, TL_HEAP_MAX = 16777216, TL_HEAP_THRES = 131072;
+	private static final int TL_DIRECT_INITIAL = 32768, TL_DIRECT_INCR = 32768, TL_DIRECT_MAX = 16777216, TL_DIRECT_THRES = 131072;
 
 	private static final int GLOBAL_HEAP_SIZE = 4194304, GLOBAL_DIRECT_SIZE = 4194304;
 	private static final int DEFAULT_KEEP_BEFORE = 16;
@@ -116,6 +120,8 @@ public final class BufferPool {
 	private final PooledBuffer[] directShell, heapShell;
 	private int directShellLen, heapShellLen;
 
+	private final SimpleList<ByteBuffer> directBufferShell = new SimpleList<>();
+
 	private long directTimeStamp, heapTimestamp;
 	private boolean hasTask;
 	private final int maxStall;
@@ -123,7 +129,7 @@ public final class BufferPool {
 
 	private BufferPool() {
 		this(TL_DIRECT_INITIAL, TL_DIRECT_INCR, TL_DIRECT_MAX, TL_DIRECT_THRES,
-		TL_HEAP_INITIAL, TL_HEAP_INCR, TL_HEAP_MAX, TL_HEAP_THRES, 15, 60000, OOM_UNPOOLED); }
+		TL_HEAP_INITIAL, TL_HEAP_INCR, TL_HEAP_MAX, TL_HEAP_THRES, 15, 900000, OOM_UNPOOLED); }
 
 	public BufferPool(long directInit, long directIncr, long directMax, int directGlobalThreshold,
 					  int heapInit, int heapIncr, int heapMax, int heapGlobalThreshold,
@@ -189,6 +195,7 @@ public final class BufferPool {
 					p.directRef.release();
 					p.directRef = null;
 				}
+				p.directBufferShell.clear();
 				p.pDirect = Page.create(Math.max(p.directInit, (int) p.pDirect.totalSpace() - p.directIncr));
 			}
 		} finally {
@@ -254,7 +261,7 @@ public final class BufferPool {
 		LOGGER.warn("Pool is OOM: {}, using Unpooled impl {}", direct?pDirect:pHeap, cap);
 
 		if (direct) {
-			NativeMemory mem = new NativeMemory(cap);
+			var mem = new NativeMemory(cap);
 			buf.set(mem, mem.address()+keepBefore, cap-keepBefore);
 		} else {
 			byte[] b = ArrayCache.getByteArray(cap, false);
@@ -352,7 +359,7 @@ public final class BufferPool {
 					long space = Math.min(p.totalSpace() + ((cap+directIncr-1)/directIncr)*directIncr, directMax);
 					p = Page.create(space);
 					directRef = new NativeMemory(p.totalSpace());
-
+					directBufferShell.clear();
 					pDirect = p;
 				}
 			} finally {
@@ -456,11 +463,47 @@ public final class BufferPool {
 		}
 	}
 
+	public static ByteBuffer mallocShell(DynByteBuf buf) {
+		if (buf instanceof PooledDirectBuf pb) {
+			var nm = pb.memory();
+			var pool = (BufferPool) pb.pool;
+			pool.lock.lock(0);
+			try {
+				if (pool.directRef == nm) {
+					var shell = pool.directBufferShell.pop();
+					if (shell != null) {
+						NativeMemory.setBufferCapacityAndAddress(shell, pb.address(), pb.capacity());
+						return shell.limit(pb.wIndex()).position(pb.rIndex);
+					}
+				}
+			} finally {
+				pool.lock.unlock(0);
+			}
+		}
+
+		return buf.nioBuffer();
+	}
+	public static void mfreeShell(DynByteBuf buf, ByteBuffer shell) {
+		if (!(buf instanceof PooledDirectBuf pb)) return;
+		var nm = pb.memory();
+		var pool = (BufferPool) pb.pool;
+		if (pool.directRef != nm) return;
+
+		pool.lock.lock(0);
+		try {
+			if (pool.directRef == nm) {
+				NativeMemory.setBufferCapacityAndAddress(shell, 0, 0);
+				pool.directBufferShell.add(shell);
+			}
+		} finally {
+			pool.lock.unlock(0);
+		}
+	}
+
 	public static boolean isPooled(DynByteBuf buf) { return buf instanceof PooledBuffer; }
 
 	public static void reserve(DynByteBuf buf) {
-		Object pool = ((PooledBuffer) buf).pool(null);
-
+		Object pool = buf instanceof PooledBuffer pb ? pb.pool(null) : _UNPOOLED;
 		if (pool == null) {
 			if (buf != EMPTY_DIRECT_SENTIAL && buf != EMPTY_HEAP_SENTIAL)
 				throwUnpooled(buf);
@@ -552,8 +595,6 @@ public final class BufferPool {
 	public DynByteBuf expand(DynByteBuf buf, int more) { return expand(buf, more, true, true); }
 	public DynByteBuf expandBefore(DynByteBuf buf, int more) { return expand(buf, more, false, false); }
 	public DynByteBuf expand(DynByteBuf buf, int more, boolean addAtEnd, boolean reserveOld) {
-		if (more < 0 && (!addAtEnd || !reserveOld)) throw new IllegalArgumentException("size < 0");
-
 		Object pool;
 		if (!(buf instanceof PooledBuffer)) {
 			if (reserveOld) throwUnpooled(buf);
@@ -568,6 +609,7 @@ public final class BufferPool {
 					? tryZeroCopyExt(more, addAtEnd, (PooledBuffer) buf)
 					: tryZeroCopy(more, addAtEnd, (BufferPool) pool, (PooledBuffer) buf)) {
 				((PooledBuffer) buf).pool(pool);
+				__expand_1++;
 				return buf;
 			}
 		}
@@ -575,6 +617,7 @@ public final class BufferPool {
 		if (pool != null) ((PooledBuffer) buf).pool(pool);
 		if (more < 0) return buf;
 
+		__expand_2++;
 		DynByteBuf newBuf = allocate(buf.isDirect(), buf.capacity()+more);
 		if (!addAtEnd) newBuf.wIndex(more);
 		newBuf.put(buf);
@@ -629,7 +672,6 @@ public final class BufferPool {
 		} else {
 			if (prefix >= more) {
 				pb.setKeepBefore(prefix - more);
-				LOGGER.debug("UseKeepBefore: "+b.info()+", remain="+(prefix-more));
 			} else {
 				lock.lock();
 				try {
@@ -648,5 +690,14 @@ public final class BufferPool {
 		pb.setKeepBefore(pb.getKeepBefore() - more);
 		pb._expand(more, true);
 		return true;
+	}
+
+	private int __expand_1, __expand_2;
+	@Status
+	public CharList status(CharList sb) {
+		sb.append("本机缓冲池:");
+		(directRef == null ? sb.append("未初始化") : pDirect.toString(sb, 0)).append("\n堆缓冲池:");
+		(heap==null?sb.append("未初始化"):pHeap.toString(sb, 0)).append("\n缓冲区扩展:");
+		return sb.append("预留空间:").append(DEFAULT_KEEP_BEFORE).append(", 零拷贝成功:").append(__expand_1).append(", 调用:").append(__expand_2);
 	}
 }

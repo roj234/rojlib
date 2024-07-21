@@ -23,8 +23,9 @@ import java.util.Map;
  * @since 2024/1/28 11:59
  */
 public final class Inferrer {
-	public static final MethodResult FAIL_ARGCOUNT = new MethodResult(TypeCast.E_GEN_PARAM_COUNT, ArrayCache.OBJECTS);
-	public static final MethodResult FAIL_GENERIC = new MethodResult(TypeCast.E_GEN_PARAM_COUNT, ArrayCache.OBJECTS);
+	public static final MethodResult
+		FAIL_ARGCOUNT = new MethodResult(TypeCast.E_GEN_PARAM_COUNT, ArrayCache.OBJECTS),
+		FAIL_GENERIC = new MethodResult(TypeCast.E_GEN_PARAM_COUNT, ArrayCache.OBJECTS);
 
 	private static final int LEVEL_DEPTH = 5120;
 
@@ -64,7 +65,7 @@ public final class Inferrer {
 	 * 如果性能不够再优化吧
 	 */
 	@SuppressWarnings("fallthrough")
-	public MethodResult infer(ConstantData owner, MethodNode mn, IType that, List<IType> input) {
+	public MethodResult infer(ConstantData owner, MethodNode mn, IType instanceType, List<IType> input) {
 		this.castChecker.context = ctx.classes;
 
 		List<? extends IType> mpar;
@@ -90,21 +91,27 @@ public final class Inferrer {
 			}
 
 			Signature classSign = owner.parsedAttr(owner.cp, Attribute.SIGNATURE);
+			block:
 			if (classSign != null) {
 				for (Map.Entry<String, List<IType>> entry : classSign.typeParams.entrySet()) {
 					typeParamBounds.putIfAbsent(entry.getKey(), entry.getValue());
 				}
 
-				if (that != null && !that.owner().equals(owner.name)) {
-					List<IType> myBounds = ctx.inferGeneric(that, owner.name);
+				if (instanceType == null) break block;
+
+				if (!instanceType.owner().equals(owner.name)) {
+					List<IType> myBounds = ctx.inferGeneric(instanceType, owner.name);
 
 					Generic g = new Generic(owner.name, (byte) 0);
 					g.children = myBounds;
-					that = g;
+					instanceType = g;
+				} else if (instanceType.genericType() == IType.CONCRETE_ASTERISK_TYPE) {
+					// 解决了问题，但是它*必须*放在这里么
+					instanceType = ((Asterisk) instanceType).getBound();
 				}
 
 				boundPreCheck:
-				if (that instanceof Generic gHint) {
+				if (instanceType instanceof Generic gHint) {
 					// TODO 非静态 泛型 内部类
 					assert gHint.sub == null : "dynamic subclass not supported at this time";
 					if (gHint.children.size() != typeParamBounds.size()) {
@@ -330,6 +337,7 @@ public final class Inferrer {
 			}
 		}
 	}
+	public static final ThreadLocal<Boolean> TEMPORARY_DISABLE_ASTERISK = new ThreadLocal<>();
 	/**
 	 * 按需复制 请勿再调用.clone()
 	 */
@@ -341,20 +349,23 @@ public final class Inferrer {
 				var exact = realType.get(tt.name);
 				if (exact == null) throw new IllegalArgumentException("missing type param "+tt);
 
-				// TODO 下面这两行没问题吗
 				if (exact.genericType() == IType.ASTERISK_TYPE) return exact;
-				if (exact.genericType() == IType.ANY_TYPE) {
-					GlobalContext.debugLogger().warn("return anytype ");
-					return LocalContext.OBJECT_TYPE;//Asterisk.anyType;
+				if (exact.genericType() == IType.ANY_TYPE) return LocalContext.OBJECT_TYPE;//Asterisk.anyType;
+
+				if (tt.array() > 0) {
+					exact = exact.clone();
+					exact.setArrayDim(exact.array()+tt.array());
 				}
 
 				var bound = bounds.get(tt.name);
 				if (tt.extendType == Generic.EX_SUPER) {
 					GlobalContext.debugLogger().warn("EX_SUPER how to deal? typeParam={}, realType={}", tt, exact);
-					return new Type(exact.owner(), exact.array()+tt.array());
+					return exact;
 				}
-				return new Asterisk(new Type(exact.owner(), exact.array()+tt.array()),
-					bound.get(bound.get(0).genericType() == IType.PLACEHOLDER_TYPE ? 1 : 0));
+
+				// TODO temporary workaround for SerializerFactory
+				if (TEMPORARY_DISABLE_ASTERISK.get() != null) return exact;
+				return new Asterisk(exact, bound.get(bound.get(0).genericType() == IType.PLACEHOLDER_TYPE ? 1 : 0));
 			}
 			case IType.ASTERISK_TYPE -> {
 				Asterisk t = (Asterisk) type;
@@ -363,12 +374,14 @@ public final class Inferrer {
 					IType prev = bounds1.get(i);
 					IType elem = clearTypeParam(prev, realType, bounds);
 
-					if (prev != elem && type == t) {
-						t = t.clone();
-						bounds1 = t.getBounds();
-					}
+					if (prev != elem) {
+						if (type == t) {
+							t = t.clone();
+							bounds1 = t.getBounds();
+						}
 
-					bounds1.set(i, elem);
+						bounds1.set(i, elem);
+					}
 				}
 
 				return t;
@@ -380,12 +393,14 @@ public final class Inferrer {
 					IType prev = children.get(i);
 					IType elem = clearTypeParam(prev, realType, bounds);
 
-					if (prev != elem && type == t) {
-						t = t.clone();
-						children = t.children;
-					}
+					if (prev != elem) {
+						if (type == t) {
+							t = t.clone();
+							children = t.children;
+						}
 
-					children.set(i, elem);
+						children.set(i, elem);
+					}
 				}
 
 				if (t.sub != null) {

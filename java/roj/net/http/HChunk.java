@@ -3,6 +3,7 @@ package roj.net.http;
 import roj.net.ch.ChannelCtx;
 import roj.net.ch.Event;
 import roj.net.handler.PacketMerger;
+import roj.reflect.ReflectionUtils;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -23,15 +24,11 @@ public final class HChunk extends PacketMerger {
 
 	private byte flag;
 
-	private final byte[] hex;
 	private final ByteList tmp;
 
 	private long inLen;
 
-	public HChunk() {
-		tmp = ByteList.allocate(18);
-		hex = tmp.list;
-	}
+	public HChunk() {tmp = ByteList.allocate(16);}
 
 	@Override
 	public void channelRead(ChannelCtx ctx, Object o) throws IOException {
@@ -85,12 +82,12 @@ public final class HChunk extends PacketMerger {
 				continue;
 			}
 
-			buf.readFully(hex, 0, i-prevI);
+			int len = i - prevI;
+			tmp.clear();
+			tmp.put(buf, len);
+			buf.rIndex += len;
 
 			try {
-				tmp.rIndex = 0;
-				tmp.wIndex(i-prevI);
-
 				inLen = TextUtil.parseInt(tmp, 1);
 			} catch (NumberFormatException e) {
 				throw new IllegalArgumentException("ChunkEncoding: 长度无效: "+tmp.dump());
@@ -115,30 +112,37 @@ public final class HChunk extends PacketMerger {
 			return;
 		}
 
-		DynByteBuf in = (DynByteBuf) o;
+		var in = (DynByteBuf) o;
 		if (!in.isReadable()) flag &= ~OUT_ENABLE;
 
-		tmp.rIndex = writeLength(in.readableBytes(), hex);
-		tmp.wIndex(8);
-		// header
-		ctx.channelWrite(tmp.putShort(0x0D0A));
-		// content
-		ctx.channelWrite(in);
-		// trailer
-		tmp.clear();tmp.putShort(0x0D0A);
-		ctx.channelWrite(tmp);
+		try (var lenBuf = ctx.alloc().allocate(true, 10, 0)) {
+			// header
+			lenBuf.rIndex = writeLength(in.readableBytes(), lenBuf.address());
+			lenBuf.wIndex(8);
+			ctx.channelWrite(lenBuf.putShort(0x0D0A));
+
+			// content
+			ctx.channelWrite(in);
+
+			// trailer
+			lenBuf.rIndex = 8;
+			ctx.channelWrite(lenBuf);
+		}
+
+		// TODo 测试Lavac的Tailrec
+		//  另外把我之前做的上传UI找到，和ChunkUpload搞一搞
 	}
 
-	public static int writeLength(int i, byte[] buf) {
-		int pos = 7;
+	private int writeLength(int i, long addr) {
+		long pos = 7;
 
 		while (i > 15) {
-			buf[pos--] = digits[i&15];
+			ReflectionUtils.u.putByte(addr + pos--, digits[i&0xF]);
 			i >>>= 4;
 		}
-		buf[pos] = digits[i&15];
+		ReflectionUtils.u.putByte(addr + pos, digits[i&0xF]);
 
-		return pos;
+		return (int) pos;
 	}
 
 	@Override
@@ -147,9 +151,10 @@ public final class HChunk extends PacketMerger {
 			if ((flag&OUT_ENABLE) != 0) {
 				flag &= ~OUT_ENABLE;
 
-				tmp.clear();
-				tmp.put((byte) '0').putInt(0x0D0A0D0A);
-				ctx.channelWrite(tmp);
+				try (var buf = ctx.alloc().allocate(true, 5, 0)) {
+					buf.put('0').putInt(0x0D0A0D0A);
+					ctx.channelWrite(buf);
+				}
 			}
 		}
 	}

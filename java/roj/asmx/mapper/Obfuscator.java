@@ -1,5 +1,6 @@
 package roj.asmx.mapper;
 
+import roj.ToBeRemoved;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cp.*;
@@ -23,7 +24,6 @@ import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.text.CharList;
-import roj.text.TextUtil;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.ui.Profiler;
@@ -127,10 +127,6 @@ public class Obfuscator {
 			for (int i = 0; i < arr.size(); i++) m.S5_mapClassName(cur = arr.get(i));
 			Profiler.endStartSection("compress");
 			for (int i = 0; i < arr.size(); i++) (cur = arr.get(i)).compress();
-			for (int i = 0; i < arr.size(); i++) {
-				System.out.println("print 1");
-				System.out.println(arr.get(i).getData());
-			}
 
 			Profiler.endStartSection("afterMapCode");
 			//decryptString(arr);
@@ -229,12 +225,12 @@ public class Obfuscator {
 
 	public void dumpMissingClasses() {
 		List<String> notFoundClasses = new SimpleList<>();
-		/*for (Map.Entry<String, ReflectClass> s : ClassUtil.getInstance().classInfo.entrySet()) {
+		for (Map.Entry<String, ?> s : ClassUtil.classInfo.entrySet()) {
 			if (s.getValue() == ClassUtil.FAILED) notFoundClasses.add(s.getKey());
-		}*/
+		}
 
 		if (!notFoundClasses.isEmpty()) {
-			System.out.print(TextUtil.deepToString(notFoundClasses));
+			System.out.print(ToBeRemoved.deepToString(notFoundClasses));
 			System.out.println(notFoundClasses.size() + "个类没有找到");
 			System.out.println("【如果】你没有在libPath中提供这些类, 可能会降低混淆水平");
 		}

@@ -2,7 +2,8 @@ package roj.io;
 
 import org.jetbrains.annotations.NotNull;
 import roj.text.GB18030;
-import roj.text.UTF8MB4;
+import roj.text.Interner;
+import roj.text.UTF8;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
@@ -13,8 +14,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
-import static roj.reflect.ReflectionUtils.BIG_ENDIAN;
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * 不会有MyDataOutput，因为有ByteList.WriteOut了，我承认它很难懂，但是我不想再复制同样的代码了
@@ -132,35 +132,13 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 		}
 	}
 
-	@Override
-	public final boolean readBoolean() throws IOException {
-		int i = doRead(1);
-		return buf[i] != 0;
-	}
-	@Override
-	public final byte readByte() throws IOException {
-		int i = doRead(1);
-		return buf[i];
-	}
-	@Override
-	public final int readUnsignedByte() throws IOException {
-		int i = doRead(1);
-		return buf[i]&0xFF;
-	}
-	@Override
-	public final short readShort() throws IOException { return (short) readUnsignedShort(); }
-	@Override
-	public final char readChar() throws IOException { return (char) readUnsignedShort(); }
-	@Override
-	public final int readUnsignedShort() throws IOException {
-		int i = doRead(2);
-		return ((buf[i]&0xFF) << 8) | (buf[i+1]&0xFF);
-	}
-	@Override
-	public final int readUShortLE() throws IOException {
-		int i = doRead(2);
-		return (buf[i] & 0xFF) | ((buf[i+1] & 0xFF) << 8);
-	}
+	@Override public final boolean readBoolean() throws IOException {int i = doRead(1);return buf[i] != 0;}
+	@Override public final byte readByte() throws IOException {int i = doRead(1);return buf[i];}
+	@Override public final int readUnsignedByte() throws IOException {int i = doRead(1);return buf[i]&0xFF;}
+	@Override public final short readShort() throws IOException {return (short) readUnsignedShort();}
+	@Override public final char readChar() throws IOException {return (char) readUnsignedShort();}
+	@Override public final int readUnsignedShort() throws IOException {int i = doRead(2);return U.get16UB(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
+	@Override public final int readUShortLE() throws IOException {int i = doRead(2);return U.get16UL(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
 	@Override
 	public final int readMedium() throws IOException {
 		int i = doRead(3);
@@ -173,55 +151,14 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 		byte[] l = buf;
 		return (l[i++] & 0xFF)| (l[i++] & 0xFF) << 8 | (l[i] & 0xFF) << 16;
 	}
-	@Override
-	public final int readInt() throws IOException {
-		int i = doRead(4);
-		byte[] l = this.buf;
-		return BIG_ENDIAN ? u.getInt(l, Unsafe.ARRAY_BYTE_BASE_OFFSET+i) : (l[i++] & 0xFF) << 24 | (l[i++] & 0xFF) << 16 | (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
-	}
-	@Override
-	public final int readIntLE() throws IOException {
-		int i = doRead(4);
-		byte[] l = this.buf;
-		return !BIG_ENDIAN ? u.getInt(l, Unsafe.ARRAY_BYTE_BASE_OFFSET+i) : (l[i++] & 0xFF) | (l[i++] & 0xFF) << 8 | (l[i++] & 0xFF) << 16 | (l[i] & 0xFF) << 24;
-	}
-	@Override
-	public final long readUInt() throws IOException { return readInt() & 0xFFFFFFFFL; }
-	@Override
-	public final long readUIntLE() throws IOException { return readIntLE() & 0xFFFFFFFFL; }
-	@Override
-	public final long readLong() throws IOException {
-		int i = doRead(8);
-		byte[] l = this.buf;
-		if (BIG_ENDIAN) return u.getLong(l, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);
-		return (l[i++] & 0xFFL) << 56 |
-			(l[i++] & 0xFFL) << 48 |
-			(l[i++] & 0xFFL) << 40 |
-			(l[i++] & 0xFFL) << 32 |
-			(l[i++] & 0xFFL) << 24 |
-			(l[i++] & 0xFFL) << 16 |
-			(l[i++] & 0xFFL) << 8 |
-			l[i] & 0xFFL;
-	}
-	@Override
-	public final long readLongLE() throws IOException {
-		int i = doRead(8);
-		byte[] l = this.buf;
-		if (!BIG_ENDIAN) return u.getLong(l, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);
-		return (l[i++] & 0xFFL) |
-			(l[i++] & 0xFFL) << 8 |
-			(l[i++] & 0xFFL) << 16 |
-			(l[i++] & 0xFFL) << 24 |
-			(l[i++] & 0xFFL) << 32 |
-			(l[i++] & 0xFFL) << 40 |
-			(l[i++] & 0xFFL) << 48 |
-			(l[i] & 0xFFL) << 56;
-	}
-	@Override
-	public final float readFloat() throws IOException { return Float.intBitsToFloat(readInt()); }
-	@Override
-	public final double readDouble() throws IOException { return Double.longBitsToDouble(readLong()); }
-
+	@Override public final int readInt() throws IOException {int i = doRead(4);return U.get32UB(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
+	@Override public final int readIntLE() throws IOException {int i = doRead(4);return U.get32UL(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
+	@Override public final long readUInt() throws IOException {return readInt() & 0xFFFFFFFFL;}
+	@Override public final long readUIntLE() throws IOException {return readIntLE() & 0xFFFFFFFFL;}
+	@Override public final long readLong() throws IOException {int i = doRead(8);return U.get64UB(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
+	@Override public final long readLongLE() throws IOException {int i = doRead(8);return U.get64UL(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
+	@Override public final float readFloat() throws IOException {return Float.intBitsToFloat(readInt());}
+	@Override public final double readDouble() throws IOException {return Double.longBitsToDouble(readLong());}
 
 	@Override
 	public final int readVarInt() throws IOException {
@@ -290,42 +227,36 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 	@Override
 	public final String readAscii(int len) throws IOException {
 		int i = doRead(len);
-		return new String(buf, i, len, StandardCharsets.ISO_8859_1);
+		return Interner.intern(new String(buf, i, len, StandardCharsets.ISO_8859_1));
 	}
 
-	@Override
-	@NotNull
-	public final String readUTF() throws IOException { return readUTF(readUnsignedShort()); }
-	@Override
-	public final String readVUIUTF() throws IOException { return readVUIUTF(DEFAULT_MAX_STRING_LEN); }
+	@Override @NotNull public final String readUTF() throws IOException { return readUTF(readUnsignedShort()); }
+	@Override public final String readVUIUTF() throws IOException { return readVUIUTF(DEFAULT_MAX_STRING_LEN); }
 	@Override
 	public final String readVUIUTF(int max) throws IOException {
 		int len = readVUInt();
 		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
 		return readUTF(len);
 	}
-	@Override
-	public final String readUTF(int len) throws IOException { return readUTF(len, IOUtil.getSharedCharBuf()).toString(); }
+	@Override public final String readUTF(int len) throws IOException { return Interner.intern(readUTF(len, IOUtil.getSharedCharBuf())); }
 	@Override
 	public final <T extends Appendable> T readUTF(int len, T target) throws IOException {
 		if (len < 0) throw new IllegalArgumentException("length="+len);
 		if (len > 0) {
 			int i = doRead(len);
-			UTF8MB4.CODER.decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
+			UTF8.CODER.decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
 		}
 		return target;
 	}
 
-	@Override
-	public final String readVUIGB() throws IOException { return readVUIGB(DEFAULT_MAX_STRING_LEN); }
+	@Override public final String readVUIGB() throws IOException { return readVUIGB(DEFAULT_MAX_STRING_LEN); }
 	@Override
 	public final String readVUIGB(int max) throws IOException {
 		int len = readVUInt();
 		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
 		return readGB(len);
 	}
-	@Override
-	public final String readGB(int len) throws IOException { return readGB(len, IOUtil.getSharedCharBuf()).toString(); }
+	@Override public final String readGB(int len) throws IOException { return Interner.intern(readGB(len, IOUtil.getSharedCharBuf())); }
 	@Override
 	public final <T extends Appendable> T readGB(int len, T target) throws IOException {
 		if (len < 0) throw new IllegalArgumentException("length="+len);
@@ -342,10 +273,7 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 	}
 
 	private long totalRead;
-	@Override
-	public long position() throws IOException {
-		return totalRead + pos - lim;
-	}
+	@Override public long position() throws IOException {return totalRead + pos - lim;}
 
 	@Override
 	public boolean isReadable() {

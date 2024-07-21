@@ -3,19 +3,20 @@ package roj.asmx.launcher;
 import roj.ReferenceByGeneratedClass;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
+import roj.asm.type.Type;
 import roj.asm.visitor.CodeWriter;
-import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 
-import java.lang.reflect.Field;
+import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.*;
+import java.util.jar.JarFile;
 
 import static roj.asm.Opcodes.*;
 
@@ -24,16 +25,13 @@ import static roj.asm.Opcodes.*;
  * @since 2023/8/6 0006 0:13
  */
 public final class Bootstrap {
-	public static final ClassWrapper classLoader = new ClassWrapper();
-	static { EntryPoint.actualLoader = classLoader; }
-
-	public static final Logger LOGGER = Logger.getLogger("Launcher");
-	public static final Map<String, Object> blackboard = new MyHashMap<>();
+	static {EntryPoint.clImpl = ClassWrapper.instance;EntryPoint.rlImpl = ClassWrapper.instance.resourceLoader();}
+	static final Logger LOGGER = Logger.getLogger(/*Transforming Class Loader*/"TCL");
 
 	@ReferenceByGeneratedClass
-	public static final List<ITweaker> tweakers = new SimpleList<>();
+	static final List<ITweaker> tweakers = new SimpleList<>();
 
-	public static String[] initArgs;
+	static String[] initArgs;
 	// 这里和Bootstrap$Loader是同一个包了
 	static SimpleList<String> args;
 	static String[] getArg() {
@@ -44,32 +42,21 @@ public final class Bootstrap {
 
 	public static void boot(String[] args) {
 		// 甚至都不用传参
-		EntryPoint entryPoint = (EntryPoint) Bootstrap.class.getClassLoader();
+		var entryPoint = (EntryPoint) Bootstrap.class.getClassLoader();
 
 		// necessary (加载Logger相关类)
-		LOGGER.info("ImpLib TLauncher 2.1");
+		LOGGER.info("ImpLib TLauncher 2.3");
 
-		{
-			URL[] urls = GetOtherJars();
-			if (urls != null && urls.length > 0) for (URL url : urls) {
-				if (!url.getProtocol().equals("file")) {
-					LOGGER.warn("非文件的classpath {}", url);
-				} else {
-					try {
-						classLoader.enableFastZip(url);
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
+		if (GetOtherJars()) {
+			URL myJar = EntryPoint.class.getProtectionDomain().getCodeSource().getLocation();
+			if (myJar != null && myJar.getProtocol().equals("file") && myJar.getPath().indexOf('!') < 0) {
+				try {
+					ClassWrapper.instance.enableFastZip(myJar);
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
 			} else {
-				URL myJar = EntryPoint.class.getProtectionDomain().getCodeSource().getLocation();
-				if (myJar != null) {
-					try {
-						classLoader.enableFastZip(myJar);
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
-				}
+				LOGGER.warn("未能开启高性能ZIP，如果你是Java17或更高版本，那就无所谓了");
 			}
 		}
 
@@ -121,7 +108,7 @@ public final class Bootstrap {
 		c.one(ASTORE_0);
 
 		for (String name : tweakerNames) {
-			classLoader.addTransformerExclusion(name.substring(0, name.lastIndexOf('.')+1));
+			ClassWrapper.instance.addTransformerExclusion(name.substring(0, name.lastIndexOf('.')+1));
 			if (debug) {
 				c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "LOGGER", "Lroj/text/logging/Logger;");
 				c.ldc("Tweaker => '"+name+"'");
@@ -132,7 +119,7 @@ public final class Bootstrap {
 
 			c.one(ALOAD_1);
 			c.one(ALOAD_0);
-			c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "classLoader", "Lroj/asmx/launcher/ClassWrapper;");
+			c.field(GETSTATIC, "roj/asmx/launcher/ClassWrapper", "instance", "Lroj/asmx/launcher/ClassWrapper;");
 			c.invokeItf("roj/asmx/launcher/ITweaker", "init", "(Ljava/util/List;Lroj/asmx/launcher/ClassWrapper;)V");
 
 			c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "tweakers", "Ljava/util/List;");
@@ -163,27 +150,74 @@ public final class Bootstrap {
 		ReflectionUtils.ensureClassInitialized(loaderClass);
 	}
 
-	private static URL[] GetOtherJars() {
-		ClassLoader loader = EntryPoint.class.getClassLoader();
-		if (loader instanceof URLClassLoader) return ((URLClassLoader) loader).getURLs();
-		if (loader.getClass().getName().endsWith("AppClassLoader")) {
-			for (Field field : ReflectionUtils.getFields(loader.getClass())) {
-				if (field.getType().getName().endsWith("URLClassPath")) {
-					for (Field field1 : field.getType().getDeclaredFields()) {
-						if (field1.getName().equals("path")) {
-							H fn = DirectAccessor.builder(H.class).weak().access(loader.getClass(), field.getName(), "getUCP", null).access(field.getType(), field1.getName(), "getPath", null).build();
-							ArrayList<URL> path = fn.getPath(fn.getUCP(loader));
-							return path.toArray(new URL[path.size()]);
+	private static boolean GetOtherJars() {
+		H fn = null;
+		var builder = Bypass.builder(H.class).weak().i_access("sun.net.www.protocol.jar.JarFileFactory", "fileCache", new Type("java/util/HashMap"), "getCache", null, true);
+		Object ucp;
+		URL[] urls;
+		var loader = EntryPoint.class.getClassLoader();
+		findURL: {
+			if (loader instanceof URLClassLoader ucl) {
+				// 这个异常实际上不可能发生
+				try {
+					fn = builder.access(URLClassLoader.class, "ucp", "getUCP", null)
+							   .delegate_o(ReflectionUtils.getField(URLClassLoader.class, "ucp").getType(), "closeLoaders").build();
+				} catch (NoSuchFieldException ignored) {}
+				ucp = fn.getUCP(loader);
+				urls = ucl.getURLs();
+				break findURL;
+			} else {
+				if (loader.getClass().getName().endsWith("AppClassLoader")) {
+					var _ucp = ReflectionUtils.getFieldIfMatch(loader.getClass(), "URLClassPath");
+					if (_ucp != null) {
+						for (var _path : _ucp.getType().getDeclaredFields()) {
+							if (_path.getName().equals("path")) {
+								fn = builder.access(loader.getClass(), _ucp.getName(), "getUCP", null)
+									.access(_ucp.getType(), _path.getName(), "getPath", null)
+									.delegate_o(_ucp.getType(), "closeLoaders").build();
+
+								ucp = fn.getUCP(loader);
+								var path = fn.getPath(ucp);
+								urls = path.toArray(new URL[path.size()]);
+								break findURL;
+							}
 						}
 					}
 				}
 			}
+
+			LOGGER.warn("并非直接从从文件加载: {}", loader.getClass().getName());
+			return true;
 		}
-		LOGGER.warn("并非直接从从文件加载: {}", loader.getClass().getName());
-		return null;
+		if (urls.length == 0) return true;
+
+		boolean hasError = false;
+		for (URL url : urls) {
+			if (!url.getProtocol().equals("file")) {
+				LOGGER.warn("非文件的classpath {}", url);
+				hasError = true;
+			} else {
+				try {
+					ClassWrapper.instance.enableFastZip(url);
+				} catch (Exception e) {
+					hasError = true;
+					e.printStackTrace();
+				}
+			}
+		}
+
+		if (!hasError) {
+			fn.closeLoaders(ucp);
+			try {
+				fn.getCache().clear();
+			} catch (Throwable ignored) {}
+		}
+		return false;
 	}
 	private interface H {
 		Object getUCP(Object o);
 		ArrayList<URL> getPath(Object o);
+		List<IOException> closeLoaders(Object o);
+		HashMap<String, JarFile> getCache();
 	}
 }

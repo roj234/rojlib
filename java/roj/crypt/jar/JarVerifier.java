@@ -7,9 +7,7 @@ import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFile;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
 import roj.crypt.Base64;
-import roj.crypt.KeyType;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.net.mss.X509CertFormat;
@@ -17,11 +15,13 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import javax.net.ssl.X509TrustManager;
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.security.*;
 import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.List;
@@ -253,22 +253,8 @@ public class JarVerifier {
 	}
 
 	@Nullable
-	public static String signJar(ZipArchive zf, String hashAlg, String signHashAlg, File pem, File key) throws GeneralSecurityException, IOException {
-		List<X509Certificate> certs = new SimpleList<>();
-		var cf = CertificateFactory.getInstance("X509");
-		// 垃圾爪洼！
-		try (var in = new BufferedInputStream(new FileInputStream(pem))) {
-			while (true) {
-				certs.add((X509Certificate) cf.generateCertificate(in));
-
-				in.mark(1);
-				if (in.read() < 0) break;
-				in.reset();
-			}
-		}
-
+	public static String signJar(ZipArchive zf, String hashAlg, String signHashAlg, List<X509Certificate> certs, PrivateKey prk, String sfName) throws GeneralSecurityException, IOException {
 		String signAlg = certs.get(0).getPublicKey().getAlgorithm();
-		PrivateKey prk = (PrivateKey) KeyType.getInstance(signAlg).fromPEM(IOUtil.readString(key));
 		var signer = Signature.getInstance(signHashAlg.replace("-", "")+"with"+(signAlg.equals("EC")?"ECDSA": signAlg));
 
 		if (!VALID_CERTIFICATE_EXTENSION.contains(signAlg)) return "Invalid SignAlg: not in "+VALID_CERTIFICATE_EXTENSION;
@@ -286,11 +272,11 @@ public class JarVerifier {
 			if (entry.getName().startsWith("META-INF/")) {
 				if (entry.getName().equals("META-INF/MANIFEST.MF")) continue;
 				if (VALID_CERTIFICATE_EXTENSION.contains(IOUtil.extensionName(entry.getName()))) {
-					String sfName = "META-INF/"+IOUtil.fileName(entry.getName())+".SF";
+					String oldSfName = "META-INF/"+IOUtil.fileName(entry.getName())+".SF";
 					zf.put(entry.getName(), null);
-					zf.put(sfName, null);
+					zf.put(oldSfName, null);
 					mf.getEntries().remove(entry.getName());
-					mf.getEntries().remove(sfName);
+					mf.getEntries().remove(oldSfName);
 					continue;
 				}
 				if (entry.getName().endsWith(".SF")) continue;
@@ -324,7 +310,7 @@ public class JarVerifier {
 		var sf = new Manifest();
 		var sfMain = sf.getMainAttributes();
 		sfMain.put(Attributes.Name.SIGNATURE_VERSION, "1.0");
-		sfMain.put(new Attributes.Name("Created-By"), "ImpLib/JarSigner (v1.0)");
+		sfMain.put(new Attributes.Name("Created-By"), "ImpLib/JarSigner (v1.1)");
 		sfMain.put(new Attributes.Name(hashAlg +"-Digest-Manifest"), Base64.encode(DynByteBuf.wrap(md.digest(mfBytes)), IOUtil.getSharedCharBuf()).toString());
 		sfMain.put(new Attributes.Name(hashAlg +"-Digest-Manifest-Main-Attributes"), Base64.encode(DynByteBuf.wrap(mb.digest(md, null)), IOUtil.getSharedCharBuf()).toString());
 		for (String name : mb.namedAttrMap.keySet()) {
@@ -332,8 +318,6 @@ public class JarVerifier {
 			attr.put(digestKey, Base64.encode(DynByteBuf.wrap(mb.digest(md, name)), IOUtil.getSharedCharBuf()).toString());
 			sf.getEntries().put(name, attr);
 		}
-
-		var sfName = IOUtil.fileName(pem.getName());
 
 		ob.clear();
 		sf.write(ob);

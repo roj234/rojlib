@@ -17,8 +17,9 @@ import java.util.*;
 public final class DBA implements AutoCloseable {
 	public static final ThreadLocal<DBA> CMAP = new ThreadLocal<>();
 
-	private static SimpleConnectionPool pool;
-	public static void setConnectionPool(SimpleConnectionPool p) { pool = p; }
+	private static SimpleConnectionPool defaultPool;
+	public static void setConnectionPool(SimpleConnectionPool p) {defaultPool = p;}
+	private SimpleConnectionPool pool = defaultPool;
 
 	private String group, order;
 	private final CharList table = new CharList(), field = new CharList(), where = new CharList(), limit = new CharList();
@@ -42,6 +43,13 @@ public final class DBA implements AutoCloseable {
 		DBA inst = CMAP.get();
 		if (inst != null) inst.close();
 	}
+
+	public static DBA getInstance(SimpleConnectionPool pool) {
+		DBA dba = new DBA();
+		dba.pool = pool;
+		return dba;
+	}
+	public DBA copy() {return new DBA(this);}
 
 	static {
 		GreatErrorPage.addCustomTag("QUERIES", req -> {
@@ -236,7 +244,7 @@ public final class DBA implements AutoCloseable {
 		String sql = makeSelect(true).toStringAndFree();
 		logs.ringAddLast(sql);
 
-		if (defaultStm == null) defaultStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_UPDATABLE);
+		if (defaultStm == null) defaultStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_READ_ONLY);
 
 		set = defaultStm.executeQuery(sql);
 		select_index = null;
@@ -276,7 +284,7 @@ public final class DBA implements AutoCloseable {
 	public DBA query(String sql) throws SQLException {
 		logs.ringAddLast(sql);
 
-		if (defaultStm == null) defaultStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_UPDATABLE);
+		if (defaultStm == null) defaultStm = connection().createStatement(ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_READ_ONLY);
 		set = defaultStm.executeQuery(sql);
 		select_index = null;
 
@@ -572,11 +580,10 @@ public final class DBA implements AutoCloseable {
 
 		boolean success = false;
 		int successCount = 0;
-		try(PreparedStatement stm = connection().prepareStatement(sql)) {
+		try(var stm = connection().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 			while (true) {
 				for (int i = 0; i < values.size(); i++) {
-					Object x = values.get(i);
-					stm.setObject(i, values.get(i));
+					stm.setObject(i+1, values.get(i));
 				}
 				stm.addBatch();
 

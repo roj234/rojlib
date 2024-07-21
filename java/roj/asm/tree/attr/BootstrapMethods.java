@@ -48,14 +48,14 @@ public final class BootstrapMethods extends Attribute {
 	public boolean isEmpty() { return methods.isEmpty(); }
 
 	public static final class Kind {
-		public static byte GETFIELD = 1, GETSTATIC = 2, PUTFIELD = 3, PUTSTATIC = 4, INVOKEVIRTUAL = 5, INVOKESTATIC = 6, INVOKESPECIAL = 7, NEW_INVOKESPECIAL = 8, INVOKEINTERFACE = 9;
+		public static final byte GETFIELD = 1, GETSTATIC = 2, PUTFIELD = 3, PUTSTATIC = 4, INVOKEVIRTUAL = 5, INVOKESTATIC = 6, INVOKESPECIAL = 7, NEW_INVOKESPECIAL = 8, INVOKEINTERFACE = 9;
 
 		public static boolean verifyType(byte kind, byte type) {
 			return switch (kind) {
-				case 1, 2, 3, 4 -> type == Constant.FIELD;
-				case 5, 8 -> type == Constant.METHOD;
-				case 6, 7 -> type == Constant.METHOD || type == Constant.INTERFACE;
-				case 9 -> type == Constant.INTERFACE;
+				case GETFIELD, GETSTATIC, PUTFIELD, PUTSTATIC -> type == Constant.FIELD;
+				case INVOKEVIRTUAL, NEW_INVOKESPECIAL -> type == Constant.METHOD;
+				case INVOKESTATIC, INVOKESPECIAL -> type == Constant.METHOD || type == Constant.INTERFACE;
+				case INVOKEINTERFACE -> type == Constant.INTERFACE;
 				default -> false;
 			};
 		}
@@ -100,6 +100,7 @@ public final class BootstrapMethods extends Attribute {
 			if (methodType != item.methodType) return false;
 			if (!owner.equals(item.owner)) return false;
 			if (!name.equals(item.name)) return false;
+			if (!arguments.equals(item.arguments)) return false;
 			return rawDesc().equals(item.rawDesc());
 		}
 		@Override

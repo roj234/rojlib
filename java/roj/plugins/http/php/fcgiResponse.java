@@ -4,14 +4,13 @@ import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
 import roj.net.http.Headers;
-import roj.net.http.server.AsyncResponse;
-import roj.net.http.server.HPostHandler;
-import roj.net.http.server.ResponseHeader;
-import roj.net.http.server.StringResponse;
+import roj.net.http.server.*;
+import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
+import java.io.File;
 import java.io.IOException;
 
 /**
@@ -19,23 +18,30 @@ import java.io.IOException;
  * @since 2024/7/1 0001 19:12
  */
 public final class fcgiResponse extends AsyncResponse implements HPostHandler {
-	static final int INITIAL = 0, OPENED = 1, LOCAL_SIGNAL = 2, LOCAL_FINISH = 3, REMOTE_FINISH = 4, ERROR = 5;
-
 	fcgiConnection conn;
-	int requestId;
-	int state;
+
+	private static final int INITIAL = 0, OPENED = 1, LOCAL_SIGNAL = 2, LOCAL_FINISH = 3, REMOTE_FINISH = 4, ERROR = 5;
+	private int state;
 
 	private ByteList tmpData;
 	private Headers headers = new Headers();
 	private boolean headerFinished;
-	private final ResponseHeader server;
+	private final Request req;
 
-	public fcgiResponse(ResponseHeader server) {this.server = server;}
+	public fcgiResponse(Request req) {this.req = req;}
 
+	private ChannelCtx lazyRead;
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 		var b = (DynByteBuf) msg;
-		if (b.isReadable()) fcgi_STDIN(b);
+		if (b.isReadable()) {
+			fcgi_STDIN(b);
+			if (conn != null) conn.checkFlushing(ctx);
+			else {
+				ctx.readInactive();
+				lazyRead = ctx;
+			}
+		}
 	}
 	@Override
 	public void onSuccess() throws IOException {
@@ -48,6 +54,9 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 		if (tmpData != null) {
 			fcgi_STDIN(tmpData);
 			tmpData._free();
+			if (lazyRead != null)
+				lazyRead.readActive();
+			assert state != LOCAL_FINISH;
 		}
 		if (signalled) onSuccess();
 	}
@@ -74,7 +83,7 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 			// well this is TCP, right ?
 			while (b.readableBytes() > FCGI_MAX) {
 				tmp.clear();
-				ctx.channelWrite(tmp.putShort(0x0105).putShort(requestId).putInt(FCGI_MAX << 16));
+				ctx.channelWrite(tmp.putLong(0x0105_0001_0000_0000L | ((long) FCGI_MAX << 16)));
 				ctx.channelWrite(b.slice(FCGI_MAX));
 			}
 
@@ -82,7 +91,7 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 			if (len == 0) state = LOCAL_FINISH;
 
 			tmp.clear();
-			ctx.channelWrite(tmp.putShort(0x0105).putShort(requestId).putShort(len).putShort(0));
+			ctx.channelWrite(tmp.putInt(0x0105_0001).putShort(len).putShort(0));
 			ctx.channelWrite(b);
 		} finally {
 			ctx.channel().lock().unlock();
@@ -105,19 +114,32 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 	public boolean offer(DynByteBuf buf) {
 		if (!headerFinished && headers.parseHead(buf)) {
 			headerFinished = true;
-			try {
-				server.body(this);
-			} catch (IOException e) {
-				Helpers.athrow(e);
-			}
-			if (headers != null) {
-				var ch = server.ch();
-				throw new FastFailException("来自"+(ch==null?"<地址不可知>":ch.remoteAddress())+"的请求已提前完成("+server._getState()+")");
-			}
+			sendBody();
 		}
 		return !buf.isReadable() || super.offer(buf);
 	}
+	private void sendBody() {
+		var msg = isInvalid();
+		if (msg != null) throw new FastFailException(req.headerLine(new CharList().append("请求(")).append(")被客户端取消: ").append(msg).toStringAndFree());
 
+		String sendFile = headers.remove("x-sendfile");
+		Response body;
+		if (sendFile != null) {
+			req.responseHeader().putAll(headers);
+			File file = new File(sendFile);
+			if (!file.isFile()) body = Response.internalError("x-sendfile返回的路径无效:"+sendFile);
+			else body = Response.file(req, new DiskFileInfo(file));
+		} else {
+			body = this;
+		}
+
+		try {
+			req.server().body(body);
+		} catch (IOException e) {
+			Helpers.athrow(e);
+		}
+		headers = null;
+	}
 	@Override
 	public void setEof() {
 		if (state < REMOTE_FINISH)
@@ -127,32 +149,42 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 
 	@Override
 	public void release(ChannelCtx ctx) throws IOException {
-		try {
-			super.release(ctx);
-		} finally {
-			if (state < REMOTE_FINISH)
-				state = ERROR;
-			if (hasSpaceCallback != null) hasSpaceCallback.run();
-		}
-	}
+		super.release(ctx);
 
-	public void fail(Throwable ex) throws IOException {
-		if (conn != null) conn.abort = 0;
-		fcgiManager.LOGGER.warn("FastCGI Error", ex);
-		if (!isEof()) {
-			headers = new Headers();
-			headers.put("status", "502 Bad Gateway");
-			server.body(this);
-			if (headers != null) {
-				release(null/*AsyncResponse not using this*/);
-				return;
+		if (state != REMOTE_FINISH) state = ERROR;
+		else if (isInvalid() == null) req.server().sharedRequest();
+
+		if (conn != null) conn.requestFinished(this);
+		hasSpaceCallback();
+	}
+	@Override protected void hasSpaceCallback() {if (conn != null) conn.ensureOpen().readActive();}
+
+	public void fail(Throwable ex) {
+		if (conn != null) conn.requestFinished(this);
+
+		var msg = isInvalid();
+		fcgiManager.LOGGER.warn("FastCGI Error ({})", ex, msg);
+		state = ERROR;
+		if (msg == null) {
+			if (!headerFinished) {
+				headers.clear();
+				headers.put("status", "502 Bad Gateway");
+				sendBody();
+				headerFinished = true;
 			}
-			headerFinished = true;
-			CharSequence str = StringResponse.detailedErrorPage(502, ex).string();
-			offer(IOUtil.getSharedByteBuf().putUTFData(str));
+			offer(IOUtil.getSharedByteBuf().putUTFData("<div class='position:absolute;background:black;color:red;font-size:24px'>Bad Gateway (FastCGI Error)</div>"));
 			setEof();
 		}
 	}
 
-	public void onEmpty(Runnable o) {hasSpaceCallback = o;}
+	public String isInvalid() {
+		if (state >= REMOTE_FINISH) return "LState: "+state;
+		try {
+			var state = req.server()._getState();
+			if (!state.equals("PROCESSING") && !state.equals("RECV_BODY")) return "HState: "+state;
+			return null;
+		} catch (Exception e) {
+			return "Unexpected: "+e;
+		}
+	}
 }

@@ -178,6 +178,11 @@ try (
 	
 }
 ```
+### 尾递归优化 (已实现)
+在return中调用当前函数会被转换为循环而不是再次调用
+* 对于不可继承的方法（含有任意修饰符：static，final，private），它是自动启用的
+* 对于其它方法，你可以使用@Tailrec注解来启用优化
+* 你也可以使value=false来禁用优化
 ### yield
    生成器函数 (WIP)
 ### async / await
@@ -212,8 +217,25 @@ public static final int A,B,C,D;
 public static final int A = 100,B = 101,C = 102,D = 103;
 #### @Getter/Setter
   生成getXXX和setXXX方法  
-  但与lombok不同的是……  
-  你可以直接以属性调用这些字段 (WIP)
+#### @Property
+  以属性访问getter和setter  
+  这个注解可以*堆叠*
+* getter和setter可以自动从value生成，但不会为布尔值生成isXXX，依然是getXXX
+* 你也可以手动输入名称
+```java
+@Property(value = "some", getter = "getSome", setter = "setSome")
+public class Some {
+	public String getSome() { return "我是一个字段"; }
+	public void setSome(String setter) {}
+
+	{
+		System.out.println(this.some);
+		this.some = "awsl";
+		System.out.println(this.some);
+	}
+}
+```
+  你可以直接以属性调用这些字段
 #### @Operator
   自定义操作符  
   WIP

@@ -32,7 +32,7 @@ import static roj.asm.Opcodes.*;
 public final class EnumHelper extends CodeVisitor {
 	public static final CDirAcc cDirAcc;
 	public interface CDirAcc { Map<String, Enum<?>> enumConstantDirectory(Class<? extends Enum<?>> clazz); }
-	static { cDirAcc = DirectAccessor.builder(CDirAcc.class).unchecked().inline().delegate(Class.class, "enumConstantDirectory", "enumConstantDirectory").build(); }
+	static { cDirAcc = Bypass.builder(CDirAcc.class).unchecked().inline().delegate(Class.class, "enumConstantDirectory", "enumConstantDirectory").build(); }
 	// 以上都没用
 
 	private final ToLongMap<String> parPos = new ToLongMap<>();

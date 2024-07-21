@@ -27,7 +27,7 @@ public class CandyTestPlugin {
 	public void register(LavaApi api) {
 		ExprApi rtApi = api.getExprApi();
 		// <minecraft:stone>
-		rtApi.addExprStart("<", lexer -> {
+		rtApi.addExprStart("<", (lexer, lc) -> {
 			try {
 				String nsKey = lexer.except(Word.LITERAL).val();
 				lexer.except(JavaLexer.colon);
@@ -47,7 +47,7 @@ public class CandyTestPlugin {
 		rtApi.onBinary("*", new Type("roj/compiler/test/CandyTestPlugin$Item"), Type.std(Type.INT), mn, true);
 
 		// 5 day + 3 hour
-		rtApi.addExprTerminal("day", (lexer, node) -> new ExprNode() {
+		rtApi.addExprTerminal("day", (lexer, node, lc) -> new ExprNode() {
 			@Override
 			public String toString() { return node+" day"; }
 			@Override
@@ -62,7 +62,7 @@ public class CandyTestPlugin {
 				cw.one(Opcodes.LMUL);
 			}
 		});
-		rtApi.addExprTerminal("hour", (lexer, node) -> new ExprNode() {
+		rtApi.addExprTerminal("hour", (lexer, node, lc) -> new ExprNode() {
 			@Override
 			public String toString() { return node+" hour"; }
 			@Override
@@ -100,7 +100,7 @@ public class CandyTestPlugin {
 
 			List<Invoke> methods = ch.chain();
 			for (Invoke m : methods) {
-				switch (m.getMethodNode().name()) {
+				switch (m.getMethod().name()) {
 					case "compare":
 					case "result":
 				}

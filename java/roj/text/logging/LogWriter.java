@@ -2,9 +2,9 @@ package roj.text.logging;
 
 import roj.asm.type.TypeHelper;
 import roj.collect.MyHashMap;
+import roj.compiler.plugins.asm.ASM;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
-import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.logging.d.LogDestination;
@@ -35,6 +35,14 @@ class LogWriter extends PrintWriter {
 		} catch (Exception e) {
 			Helpers.athrow(e);
 		}
+	}
+
+	void printError(Throwable e, Appendable myOut, String prefix) {
+		sb.clear();
+		sb.append(prefix);
+		this.prefix = sb.length();
+		this.myOut = myOut;
+		e.printStackTrace(this);
 	}
 
 	private static void simplifyPackage(String name, CharList sb) {
@@ -71,7 +79,7 @@ class LogWriter extends PrintWriter {
 	final CharList sb = new CharList(256);
 
 	public LogWriter() {
-		super(ReflectionUtils.JAVA_VERSION >= 11 ? nullWriter() : new Writer() {
+		super(ASM.TARGET_JAVA_VERSION >= 11 ? nullWriter() : new Writer() {
 			public void write(char[] cbuf, int off, int len){}
 			public void flush(){}
 			public void close(){}
@@ -86,6 +94,7 @@ class LogWriter extends PrintWriter {
 	private Throwable prevExc;
 	private Object[] prevArg;
 	private volatile int prevCount;
+	private long prevTime;
 
 	private static boolean equals(Object[] a, Object[] a2, int len) {
 		if (a==a2) return true;
@@ -116,7 +125,7 @@ class LogWriter extends PrintWriter {
 	void log(LogContext ctx, Level level, CharSequence msg, Throwable ex, Object[] args, int argc) {
 		if (ex == prevExc && msg.equals(prevTxt) && equals(args, prevArg, argc)) {
 			if (++prevCount % 100 == 0) msg += " (x100)";
-			else {
+			else if (System.currentTimeMillis() - prevTime < 100) {
 				if (prevCount == 1) {
 					task = Scheduler.getDefaultScheduler().delay(this::delayedShowTask, 100);
 				}
@@ -131,6 +140,7 @@ class LogWriter extends PrintWriter {
 			prevTxt = msg;
 			prevExc = ex;
 			prevArg = args == holder ? Arrays.copyOf(args, argc) : args;
+			prevTime = System.currentTimeMillis();
 		}
 
 		MyMap m = tmpCtx;

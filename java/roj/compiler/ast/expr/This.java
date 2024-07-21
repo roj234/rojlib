@@ -20,12 +20,10 @@ final class This extends ExprNode {
 	private final Type type = new Type("");
 
 	@Override
-	public String toString() { return (isThis?"<this>(":"<super>(")+type+")"; }
+	public String toString() { return (isThis?"this<":"super<")+type+'>'; }
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
-		if (ctx.in_static) ctx.report(Kind.ERROR, "this.static");
-
 		CompileUnit file = ctx.file;
 		if (file.parent == null) throw new ResolveException("this.no_super:"+file.name);
 
@@ -38,6 +36,10 @@ final class This extends ExprNode {
 
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
+		// 不在上面检查是为了Invoke local method
+		var ctx = LocalContext.get();
+		if (ctx.in_static) ctx.report(Kind.ERROR, "this.static");
+
 		mustBeStatement(noRet);
 		cw.one(Opcodes.ALOAD_0);
 	}

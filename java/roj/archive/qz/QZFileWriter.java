@@ -293,10 +293,8 @@ public class QZFileWriter extends QZWriter {
 
         ByteList w = IOUtil.getSharedByteBuf();
         for (WordBlock b : blocks) {
-            if (b.complexCoder != null) {
-                b.complexCoder.writeCoder(b, buf);
-                continue;
-            }
+            var cc = b.complexCoder();
+            if (cc != null) {cc.writeCoder(b, buf);continue;}
 
             buf.putVUInt(b.coder.length);
             // always simple codec
@@ -478,16 +476,17 @@ public class QZFileWriter extends QZWriter {
     private void writeSparseAttribute(int count) {
         DynByteBuf buf = writeSparseHeader(kWinAttributes, QZEntry.ATTR, count);
 
+        long offset = QZEntryA.SPARSE_ATTRIBUTE_OFFSET[3];
         for (int i = 0; i < files.size(); i++) {
             QZEntry entry = files.get(i);
             if ((entry.flag&QZEntry.ATTR) != 0)
-                buf.putIntLE(entry.attributes);
+                buf.putIntLE(u.getInt(entry, offset));
         }
     }
     private void writeSparseAttribute(int id, int flag, int count) {
         DynByteBuf buf = writeSparseHeader(id, flag, count);
 
-        long offset = QZEntry.SPARSE_ATTRIBUTE_OFFSET[id-kCTime];
+        long offset = QZEntryA.SPARSE_ATTRIBUTE_OFFSET[id-kCTime];
         for (int i = 0; i < files.size(); i++) {
             QZEntry entry = files.get(i);
             if ((entry.flag&flag) != 0)

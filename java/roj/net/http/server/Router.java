@@ -12,8 +12,8 @@ public interface Router {
 	// 1MB
 	int DEFAULT_POST_SIZE = 1048576;
 
-	default int writeTimeout(@Nullable Request req, @Nullable Response resp) {return 3600_000;}
-	default int readTimeout() { return 5000; }
+	default int writeTimeout(@Nullable Request req, @Nullable Response resp) {return resp == null ? 60000 : 3600_000;}
+	default int readTimeout(Request req) {return req != null ? 30000 : 3000;}
 
 	Response response(Request req, ResponseHeader rh) throws Exception;
 

@@ -132,7 +132,7 @@ public class MethodWriter extends CodeWriter {
 	}
 
 	public DynByteBuf writeTo() {
-		visitExceptions();
+		if (getState() < 2) visitExceptions();
 		var b = bw;
 		b.remove(0, 8);
 		b.wIndex(b.wIndex()-2);

@@ -9,6 +9,9 @@ import roj.asm.type.Generic;
 public final class LPGeneric extends Generic {
 	public int wrPos;
 
+	public LPGeneric() {}
+	public LPGeneric(String owner) { this.owner = owner; }
+
 	public boolean isGenericArray() {
 		if (array() == 0) return false;
 		for (int i = 0; i < children.size(); i++) {

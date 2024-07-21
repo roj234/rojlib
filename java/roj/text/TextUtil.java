@@ -1,43 +1,33 @@
 package roj.text;
 
 import org.jetbrains.annotations.Range;
-import roj.collect.*;
+import roj.collect.IntList;
+import roj.collect.IntMap;
+import roj.collect.MyBitSet;
+import roj.collect.SimpleList;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
-import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Random;
 
-import static java.lang.Character.*;
-import static roj.ui.CLIUtil.getStringWidth;
+import static roj.ui.Terminal.getStringWidth;
 
 /**
  * @author Roj234
  * @since 2021/6/19 0:14
  */
 public class TextUtil {
-	public static Charset DefaultOutputCharset, ConsoleCharset;
+	public static Charset DefaultOutputCharset;
 	static {
 		String property = System.getProperty("roj.text.outputCharset", null);
-		DefaultOutputCharset = property == null ? StandardCharsets.UTF_8 : Charset.forName(property);
-
-		ConsoleCharset = getStdOutCharset();
-	}
-
-	private static Charset getStdOutCharset() {
-		if (ReflectionUtils.JAVA_VERSION >= 17) {
-			java.io.Console c = System.console();
-			if (c != null) return c.charset();
-		}
-
-		String property = System.getProperty("sun.stdout.encoding", null);
-		return property == null ? Charset.defaultCharset() : Charset.forName(property);
+		DefaultOutputCharset = property == null ? Charset.defaultCharset()/*file.encoding*/ : Charset.forName(property);
 	}
 
 	public static final MyBitSet HEX = MyBitSet.from("0123456789ABCDEFabcdef");
@@ -67,21 +57,6 @@ public class TextUtil {
 										 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D',
 										 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N',
 										 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
-
-	/**
-	 * 这个字是中文吗
-	 */
-	public static boolean isChinese(int c) {
-		TrieEntry node = JPinyin.getPinyinWords().getRoot();
-		if (Character.isSupplementaryCodePoint(c)) {
-			node = node.getChild(Character.highSurrogate(c));
-			if (node == null) return false;
-			node = node.getChild(Character.lowSurrogate(c));
-		} else {
-			node = node.getChild((char) c);
-		}
-		return node != null && node.isLeaf();
-	}
 
 	public static String scaledNumber1024(long size) { return scaledNumber1024(IOUtil.getSharedCharBuf(), size).toString(); }
 	private static final String[] SCALE = {"B", "KB", "MB", "GB", "TB", "PB", "EB"};
@@ -316,39 +291,10 @@ public class TextUtil {
 		return (int) Tokenizer.parseNumber(s, start, end, 0, false);
 	}
 
-	@Deprecated
-	public static boolean parseIntOptional(CharSequence s, int[] radixAndReturn) {
-		if (s == null) return false;
-
-		long result = 0;
-		int radix = radixAndReturn[0];
-
-		if (s.length() > 0) {
-			int i = 0, len = s.length();
-
-			int digit;
-
-			while (i < len) {
-				if ((digit = Character.digit(s.charAt(i++), radix)) < 0) return false;
-
-				result *= radix;
-				result += digit;
-			}
-		} else {
-			return false;
-		}
-
-		if (result > 4294967295L || result < Integer.MIN_VALUE) return false;
-
-		radixAndReturn[0] = (int) result;
-
-		return true;
-	}
-
 	public static final byte[] INT_MAXS = new byte[] {'2', '1', '4', '7', '4', '8', '3', '6', '4', '8'};
 	public static final byte[] LONG_MAXS = new byte[] {'9', '2', '2', '3', '3', '7', '2', '0', '3', '6', '8', '5', '4', '7', '7', '5', '8', '0', '8'};
-
 	public static boolean checkMax(byte[] maxs, CharSequence s, int off, int end, boolean negative) {
+		//noinspection StatementWithEmptyBody
 		while (s.charAt(off) == '0' && ++off < end);
 
 		int k = maxs.length + off;
@@ -392,7 +338,6 @@ public class TextUtil {
 
 	// endregion
 	// region Pretty print
-
 	public static String dumpBytes(byte[] b) { return dumpBytes(new CharList(), b, 0, b.length).toStringAndFree(); }
 	public static String dumpBytes(byte[] b, int off, int len) { return dumpBytes(new CharList(), b, off, len).toStringAndFree(); }
 	public static CharList dumpBytes(CharList sb, byte[] b, int off, final int len) {
@@ -441,48 +386,6 @@ public class TextUtil {
 		String offStr = Integer.toHexString(off);
 		sb.append("\n0x").padEnd('0', prefix-offStr.length()).append(offStr).append("  ");
 	}
-
-	public static String deepToString(Object o) {
-		StringBuilder sb = new StringBuilder();
-		deepToString(sb, o, "");
-		return sb.toString();
-	}
-	private static void deepToString(StringBuilder sb, Object o, CharSequence off) {
-		sb.append(off);
-
-		String off2 = off + "  ";
-		try {
-			if (o == null) sb.append("null");
-			else if (o instanceof Iterable) {
-				Iterable<?> itr = (Iterable<?>) o;
-				sb.append("[").append('\n');
-				for (Object o1 : itr) {
-					deepToString(sb, o1, off2);
-					sb.append('\n');
-				}
-				sb.append(']').append('\n');
-			} else if (o instanceof Map) {
-				Map<?, ?> map = (Map<?, ?>) o;
-				sb.append("[").append('\n');
-				for (Map.Entry<?, ?> entry : map.entrySet()) {
-					deepToString(sb, entry.getKey(), off2);
-					sb.append(" = ");
-					deepToString(sb, entry.getValue(), off2);
-					sb.append('\n');
-				}
-				sb.append(']').append('\n');
-			} else if (o.getClass().isArray()) {
-				if (o.getClass().getComponentType().isPrimitive()) {
-					sb.append(Arrays.class.getDeclaredMethod("toString", o.getClass()).invoke(null, o));
-				} else {
-					sb.append(Arrays.deepToString((Object[]) o));
-				}
-			} else {
-				sb.append(o);
-			}
-		} catch (Throwable ignored) {}
-	}
-
 	// endregion
 	// region regionMatches
 	public static int lastMatches(CharSequence a, int aIndex, CharSequence b, int bIndex, int max) {
@@ -754,12 +657,13 @@ public class TextUtil {
 					sb.append(s);
 
 					int myMaxLen = maxLens.get(j);
+					if (++j == line.length) break;
+
 					if (myMaxLen < 100) {
 						int k = myMaxLen - getStringWidth(s);
 						while (k-- > 0) sb.append(' ');
 					}
 
-					if (++j == line.length) break;
 					sb.append(separators.length == 0 ? " " : separators[j > separators.length ? separators.length-1 : j-1]);
 				}
 			}
@@ -767,13 +671,6 @@ public class TextUtil {
 			Helpers.athrow(e);
 		}
 		return sb;
-	}
-
-	public static int codepoint(int h, int l) {
-		if (l < MIN_LOW_SURROGATE || l >= (MAX_LOW_SURROGATE + 1)) throw new IllegalStateException("invalid surrogate pair "+h+","+l);
-		return ((h << 10) + l) + (MIN_SUPPLEMENTARY_CODE_POINT
-			- (MIN_HIGH_SURROGATE << 10)
-			- MIN_LOW_SURROGATE);
 	}
 
 	public static String join(Iterable<?> split, CharSequence c) {

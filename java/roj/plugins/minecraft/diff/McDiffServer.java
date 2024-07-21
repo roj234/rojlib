@@ -8,17 +8,16 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
+import roj.config.NBTParser;
+import roj.config.serial.ToNBT;
 import roj.crypt.Blake3;
 import roj.crypt.CRC32s;
 import roj.crypt.KeyType;
 import roj.crypt.SM3;
-import roj.io.CorruptedInputException;
-import roj.io.DummyOutputStream;
-import roj.io.IOUtil;
-import roj.io.MyRegionFile;
+import roj.io.*;
 import roj.io.buf.BufferPool;
-import roj.io.source.MemorySource;
 import roj.text.TextUtil;
+import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
 import roj.util.BsDiff;
 import roj.util.ByteList;
@@ -39,6 +38,7 @@ import java.util.zip.GZIPInputStream;
  */
 public final class McDiffServer {
 	static final byte REGION = 1, GZIP = 2, DIFF = 3;
+	private static final EasyProgressBar bar = new EasyProgressBar("压缩文件");
 
 	private final KeyPair userCert;
 	public McDiffServer(KeyPair kp) {userCert = kp;}
@@ -51,19 +51,22 @@ public final class McDiffServer {
 		MyHashMap<String, String> moved = new MyHashMap<>();
 		List<String> deleted = new SimpleList<>();
 
-		computeDiff(directory, filter, pack, empty, added, deleted, moved);
+		TaskPool pool = TaskPool.Common();
+		//TaskPool.MaxThread(Runtime.getRuntime().availableProcessors(), "MCDiff-CRC32-Worker");
+
+		computeDiff(directory, filter, pack, empty, added, deleted, moved, pool);
 
 		QZFileWriter qzfw = new QZFileWriter(diffFile.getAbsolutePath());
 
 		System.out.println("正在处理删除 (2/4)");
-		for (String path : deleted) qzfw.beginEntry(new QZEntry(".vcs/"+path));
+		for (String path : deleted) qzfw.beginEntry(QZEntry.ofNoAttribute(".vcs/"+path));
 		for (Map.Entry<String, String> entry : moved.entrySet()) {
-			qzfw.beginEntry(new QZEntry(".vcs/"+entry.getKey()));
+			qzfw.beginEntry(QZEntry.ofNoAttribute(".vcs/"+entry.getKey()));
 			qzfw.write(entry.getValue().getBytes(StandardCharsets.UTF_16LE));
 		}
 		qzfw.closeWordBlock();
 		for (String path : empty) {
-			qzfw.beginEntry(new QZEntry(path));
+			qzfw.beginEntry(QZEntry.ofNoAttribute(path));
 		}
 
 		int affinity = Runtime.getRuntime().availableProcessors();
@@ -75,10 +78,11 @@ public final class McDiffServer {
 		genericParallel.setCodec(new LZMA2(opt));
 
 		System.out.println("正在处理新增 (3/4)");
-		TaskPool pool = TaskPool.Common();
+		bar.reset();
+		bar.addMax(added.size());
 		for (String path : added) {
 			File file = new File(directory, path);
-			QZEntry entry = new QZEntry(path);
+			QZEntry entry = QZEntry.of(path);
 
 			int flag = 0;
 
@@ -103,6 +107,7 @@ public final class McDiffServer {
 					genericParallel.beginEntry(entry);
 					IOUtil.copyStream(in, genericParallel);
 				}
+				bar.addCurrent(1);
 			} else if (path.contains(".mca")) {
 				MyRegionFile rin;
 				try {
@@ -114,16 +119,34 @@ public final class McDiffServer {
 				entry.setModificationTime(REGION);
 				flag = REGION;
 
+				File tempFile = null;
 				MyRegionFile prevRin = null;
 				try {
-					InputStream in = pack.getStream(path);
+					var in = pack.getStream(path);
 					if (in != null) {
-						prevRin = new MyRegionFile(new MemorySource(new ByteList(IOUtil.read(in))), 4096, 1024, 0);
-						prevRin.load();
+						// 加载会失败的，如果对于diff
+						prevRin = new MyRegionFile(tempFile = File.createTempFile("mcDiffChunkTemp", ".tmp"));
+						try (var in1 = new MyDataInputStream(in)) {
+							while (in1.isReadable()) {
+								int block = in1.readShort();
+								int timestamp = in1.readInt();
+								int length = in1.readInt();
+								if (length != 0) {
+									IOUtil.skipFully(in1, length);
+									continue;
+								}
+
+								var buf = IOUtil.getSharedByteBuf();
+								new NBTParser().parse(in1, 0, new ToNBT(buf));
+								prevRin.write(block, buf);
+								prevRin.setTimestamp(block, timestamp);
+							}
+						}
 					}
 				} catch (Exception ignored) {}
 
 				MyRegionFile javac傻逼 = prevRin;
+				File javac大傻逼 = tempFile;
 				QZWriter w = qzfw.parallel();
 				w.setCodec(new LZMA2(7));
 				w.beginEntry(entry);
@@ -133,12 +156,12 @@ public final class McDiffServer {
 						for (int i = 0; i < 1024; i++) {
 							if (!rin.hasData(i)) continue;
 
-							DataInputStream din = rin.getDataInput(i);
+							var din = rin.getInputStream(i);
 							if (javac傻逼 != null && javac傻逼.hasData(i)) {
-								if (compare(javac傻逼.getDataInput(i), din)) continue;
+								if (compare(javac傻逼.getInputStream(i), din)) continue;
 
-								byte[] l = IOUtil.read(javac傻逼.getDataInput(i));
-								byte[] r = IOUtil.read(rin.getDataInput(i));
+								byte[] l = IOUtil.read(javac傻逼.getInputStream(i));
+								byte[] r = IOUtil.read(rin.getInputStream(i));
 
 								BsDiff diff = new BsDiff();
 								diff.setLeft(l);
@@ -161,26 +184,39 @@ public final class McDiffServer {
 							out.putShort(i).putInt(rin.getTimestamp(i)).putInt(0);
 							out.flush();
 
-							IOUtil.copyStream(din, w);
-							IOUtil.closeSilently(din);
+							try {
+								IOUtil.copyStream(din, w);
+							} finally {
+								IOUtil.closeSilently(din);
+							}
 						}
+						bar.addCurrent(1);
+					} finally {
+						IOUtil.closeSilently(javac傻逼);
+						IOUtil.closeSilently(rin);
+						if (javac大傻逼 != null) javac大傻逼.delete();
 					}
-
-					IOUtil.closeSilently(javac傻逼);
-					IOUtil.closeSilently(rin);
 				});
 			}
 
 			if (flag == 0) try (FileInputStream in = new FileInputStream(file)) {
 				genericParallel.beginEntry(entry);
-				IOUtil.copyStream(in, genericParallel);
+				try {
+					IOUtil.copyStream(in, genericParallel);
+				} catch (Exception e) {
+					System.out.println("Warning: failed read file");
+					e.printStackTrace();
+					entry.setName("出现异常/"+entry.getName());
+				}
+				bar.addCurrent(1);
 			}
 		}
 		pool.awaitFinish();
+		bar.end();
 
 		genericParallel.close();
 
-		qzfw.beginEntry(new QZEntry(".vcs|hashes"));
+		qzfw.beginEntry(QZEntry.ofNoAttribute(".vcs|hashes"));
 		try (ByteList.WriteOut out = new ByteList.WriteOut(qzfw, false)) {
 			for (QZEntry file : qzfw.getFiles()) {
 				// or other kind that need original file
@@ -193,14 +229,18 @@ public final class McDiffServer {
 
 		addWarning(qzfw);
 
-		System.out.println("正在签名 (4/4)");
+		if (userCert != null) {
+			System.out.println("正在签名 (4/4)");
+			addSignature(diffFile, qzfw);
+			return;
+		}
 
-		addSignature(diffFile, qzfw);
+		System.out.println("成功.");
 		qzfw.close();
 	}
 
 	private static void addWarning(QZFileWriter qzfw) throws IOException {
-		QZEntry entry = new QZEntry(".vcs|请勿修改包内文件");
+		QZEntry entry = QZEntry.of(".vcs|请勿修改包内文件");
 		entry.setModificationTime(System.currentTimeMillis());
 		qzfw.beginEntry(entry);
 	}
@@ -277,7 +317,7 @@ public final class McDiffServer {
 			   .putAscii(hexSign).put('\n')
 			   .putAscii(KeyType.getInstance(algorithm).toPEM(userCert.getPublic()));
 
-			qzfw.beginEntry(new QZEntry(".vcs|signature"));
+			qzfw.beginEntry(QZEntry.ofNoAttribute(".vcs|signature"));
 			buf.writeToStream(qzfw);
 		} catch (Exception e) {
 			System.out.println("签名失败！");
@@ -290,7 +330,8 @@ public final class McDiffServer {
 									List<String> empty,
 									MyHashSet<String> added,
 									List<String> deleted,
-									MyHashMap<String, String> moved) throws IOException {
+									MyHashMap<String, String> moved,
+									TaskPool pool) throws IOException {
 		var oldEntries = new MyHashMap<>(pack.getEntries());
 
 		IntMap<String> moveCheck = new IntMap<>();
@@ -299,7 +340,6 @@ public final class McDiffServer {
 		List<File> newEntries = IOUtil.findAllFiles(directory, filter);
 		byte[] tmp = new byte[1024];
 
-		TaskPool pool = TaskPool.Common();
 		System.out.println("正在计算哈希 (1/4)");
 
 		for (File file : newEntries) {
@@ -309,23 +349,10 @@ public final class McDiffServer {
 				continue;
 			}
 
-			int crc = computeCrc32(file, tmp);
-
 			QZEntry oldEntry = oldEntries.remove(name);
 			synchronized (added) {
-				if (oldEntry == null) {
-					String prev = moveCheck.putIfAbsent(crc, name);
-					if (prev != null) {
-						System.out.println("警告：在"+crc+"["+name+"]上出现了CRC冲突, 这可能会导致diff略大");
-						moveCheck.putInt(crc, null);
-					}
-
-					added.add(name);
-				} else if (oldEntry.getSize() != file.length()) {
-					added.add(name);
-				} else {
-					added.add(name);
-
+				added.add(name);
+				if (oldEntry != null && oldEntry.getSize() == file.length()) {
 					pool.submit(() -> {
 						long delta = oldEntry.getSize() - file.length();
 						if (delta == 0 && compare(file, pack, oldEntry)) {
@@ -334,6 +361,13 @@ public final class McDiffServer {
 							}
 						}
 					});
+				} else if (oldEntry == null && !oldEntries.isEmpty()) {
+					int crc = computeCrc32(file, tmp);
+					String prev = moveCheck.putIfAbsent(crc, name);
+					if (prev != null) {
+						System.out.println("警告：在"+crc+"["+name+"]上出现了CRC冲突, 这可能会导致diff略大");
+						moveCheck.putInt(crc, null);
+					}
 				}
 			}
 		}

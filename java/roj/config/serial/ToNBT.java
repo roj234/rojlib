@@ -1,8 +1,8 @@
 package roj.config.serial;
 
 import roj.compiler.plugins.asm.ASM;
+import roj.text.GB18030;
 import roj.text.J9String;
-import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -62,6 +62,7 @@ public class ToNBT implements CVisitor {
 	}
 	public final void value(String l) {
 		if (XNbt) {
+			if (l == null) {valueNull();return;}
 			if (ASM.TARGET_JAVA_VERSION > 8 && J9String.isLatin1(l)) {
 				onValue(X_LATIN1_STRING);
 				ob.putVUInt(l.length()).putAscii(l);
@@ -71,7 +72,7 @@ public class ToNBT implements CVisitor {
 			int utfExtra = l.length() * 2 / 3;
 			int numCn = 0;
 			for (int i = 0; i < l.length(); i++) {
-				if (TextUtil.isChinese(l.charAt(i))) {
+				if (GB18030.isTwoByte(l.charAt(i))) {
 					if (++numCn > utfExtra) {
 						onValue(X_GB18030_STRING);
 						ob.putVUIGB(l);
@@ -120,7 +121,7 @@ public class ToNBT implements CVisitor {
 				break;
 			case 2:
 				state = (byte) (type+2);
-				sizeOffset = ob.put(type).wIndex();
+				sizeOffset = ob.put(XNbt ? 0 : type).wIndex();
 				if (size < 0) {
 					ob.writeInt(-size);
 					sizeOffset = -1;
@@ -131,7 +132,8 @@ public class ToNBT implements CVisitor {
 				}
 				break;
 			default:
-				if (state != type+2) throw new IllegalStateException("NBT列表的每项类型必须相同/at="+stateLen+":"+size+"/type="+(type+2)+",exceptType="+state);
+				if (XNbt) ob.putShort(type);
+				else if (state != type+2) throw new IllegalStateException("NBT列表的每项类型必须相同(使用XNbt避免此限制)/at="+stateLen+":"+size+"/type="+(type+2)+",exceptType="+state);
 				size++;
 				break;
 		}
@@ -148,6 +150,7 @@ public class ToNBT implements CVisitor {
 		onValue(LIST);
 		push(2);
 		this.size = size < 0 ? 0 : -size;
+		this.sizeOffset = 0;
 	}
 
 	public final void valueMap() {
@@ -184,7 +187,7 @@ public class ToNBT implements CVisitor {
 				if (sizeOffset > 0) {
 					ob.putInt(sizeOffset, size);
 				} else {
-					if (size != 0) throw new IllegalStateException("距离预定的LIST大小还有" + -size + "个项目");
+					if (size != 0) throw new IllegalStateException("距离预定的LIST大小还有"+ -size +"个项目");
 					// 空列表
 					if (sizeOffset == 0) ob.put(END).writeInt(0);
 					// else 预定大小
