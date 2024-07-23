@@ -1,6 +1,6 @@
 package roj.concurrent;
 
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 
 import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 
@@ -9,7 +9,7 @@ import java.util.concurrent.locks.AbstractQueuedSynchronizer;
  * @since 2023/3/5 0005 2:39
  */
 interface AQSHelper {
-	AQSHelper INSTANCE = DirectAccessor.builder(AQSHelper.class).delegate(AbstractQueuedSynchronizer.class, "apparentlyFirstQueuedIsExclusive").build();
+	AQSHelper INSTANCE = Bypass.builder(AQSHelper.class).delegate(AbstractQueuedSynchronizer.class, "apparentlyFirstQueuedIsExclusive").build();
 
 	boolean apparentlyFirstQueuedIsExclusive(AbstractQueuedSynchronizer aqs);
 }

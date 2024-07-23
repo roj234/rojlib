@@ -2,7 +2,7 @@ package roj.net.ch;
 
 import roj.asm.type.TypeHelper;
 import roj.io.buf.BufferPool;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
@@ -33,7 +33,7 @@ class UdpChImpl extends MyChannel {
 		H inst;
 		try {
 			Class<?> type = InetSocketAddress.class.getDeclaredField("holder").getType();
-			DirectAccessor<H> b = DirectAccessor.builder(H.class).i_access("java/net/InetSocketAddress", "holder", TypeHelper.class2type(type), "getHolder", null, false);
+			Bypass<H> b = Bypass.builder(H.class).i_access("java/net/InetSocketAddress", "holder", TypeHelper.class2type(type), "getHolder", null, false);
 			Field field = ReflectionUtils.checkFieldName(type, "address", "addr");
 			inst = b.access(type, new String[]{field.getName(),"port"}, null, new String[]{"setAddress","setPort"}).delegate(AbstractSelectableChannel.class, "removeKey").build();
 		} catch (Exception e) {

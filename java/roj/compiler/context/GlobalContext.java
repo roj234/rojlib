@@ -28,6 +28,7 @@ import roj.config.auto.Serializer;
 import roj.config.auto.Serializers;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
+import roj.text.Interner;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -175,8 +176,8 @@ public class GlobalContext implements CompilerSpec {
 
 					for (Map.Entry<String, List<String>> entry : packageFastPath.entrySet()) {
 						var value = entry.getValue();
-						if (value.size() == 1) entry.setValue(Collections.singletonList(value.get(0).intern()));
-						else for (int i = 0; i < value.size(); i++) value.set(i, value.get(i).intern());
+						if (value.size() == 1) entry.setValue(Collections.singletonList(Interner.intern(value.get(0))));
+						else for (int i = 0; i < value.size(); i++) value.set(i, Interner.intern(value.get(i).intern()));
 					}
 
 					System.out.println("Build PackageCache: "+(System.nanoTime() - time)/1000000d+"ms");

@@ -10,8 +10,8 @@ import roj.asm.visitor.AbstractCodeWriter;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.io.IOUtil;
+import roj.reflect.Bypass;
 import roj.reflect.ClassDefiner;
-import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 
@@ -84,7 +84,7 @@ final class EventListenerImpl implements EventListener {
 		ListenerInfo info = this.infos.get(0);
 		ConstantData c = new ConstantData();
 
-		c.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
+		c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 		c.name("roj/gen/GEL$"+ReflectionUtils.uniqueId());
 		ClassDefiner.premake(c);
 		c.addInterface("roj/asmx/event/EventListenerImpl$ASM");

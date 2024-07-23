@@ -17,8 +17,8 @@ import roj.compiler.plugins.constant.ConstantEvaluator;
 import roj.compiler.resolve.TypeResolver;
 import roj.compiler.test.CandyTestPlugin;
 import roj.io.IOUtil;
+import roj.reflect.Bypass;
 import roj.reflect.ClassDefiner;
-import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
 
 import java.io.IOException;
@@ -67,7 +67,7 @@ public class LavaCompiler {
 
 		u.version = CompileUnit.JavaVersion(8);
 		u.name("roj/generated/HelloFromStdin"+ReflectionUtils.uniqueId());
-		u.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
+		u.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 		u.addInterface(functionalInterface.getName().replace('.', '/'));
 		u.npConstructor();
 

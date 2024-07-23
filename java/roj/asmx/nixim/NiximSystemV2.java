@@ -33,8 +33,8 @@ import java.io.InputStream;
 import java.util.*;
 
 import static roj.asm.Opcodes.*;
-import static roj.reflect.ClassDumper.DUMP_ENABLED;
-import static roj.reflect.ClassDumper.dump;
+import static roj.reflect.Debug.CLASS_DUMP;
+import static roj.reflect.Debug.dump;
 
 /**
  * Nixim class injector 3.1
@@ -332,7 +332,7 @@ public class NiximSystemV2 implements ITransformer {
 	}
 
 	public NiximData read(ConstantData data) throws NiximException {
-		if (DUMP_ENABLED) dump("nixim_mapping", data);
+		if (CLASS_DUMP) dump("nixim_mapping", data);
 
 		NiximData nx = new NiximData(data.name);
 
@@ -888,13 +888,13 @@ public class NiximSystemV2 implements ITransformer {
 	public void apply(ConstantData data, NiximData nx) throws NiximException {
 		if (!data.name.equals(nx.target)) throw new NiximException("期待目标为"+nx.target+"而不是"+data.name);
 
-		if (DUMP_ENABLED) dump("nixim_in", data);
+		if (CLASS_DUMP) dump("nixim_in", data);
 		while (nx != null) {
 			data.unparsed();
 			applyLoop(data, nx);
 			nx = nx.next;
 		}
-		if (DUMP_ENABLED) dump("nixim_out", data);
+		if (CLASS_DUMP) dump("nixim_out", data);
 	}
 	private void applyLoop(ConstantData data, NiximData nx) throws NiximException {
 		//System.out.println("NiximClass " + data.name);

@@ -2,6 +2,8 @@ package roj.reflect;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nullable;
+import roj.RojLib;
+import roj.ToBeRemoved;
 import roj.asm.Parser;
 import roj.asm.cp.CstClass;
 import roj.asm.tree.ConstantData;
@@ -13,9 +15,17 @@ import roj.asm.type.TypeHelper;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
+import roj.io.IOUtil;
+import roj.io.fs.Filesystem;
+import roj.io.fs.WritableFilesystem;
 import roj.text.CharList;
 import roj.util.ArrayCache;
+import roj.util.ByteList;
+import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -30,12 +40,12 @@ import static roj.reflect.ReflectionUtils.u;
  * 用接口替代反射，虽然看起来和{@link java.lang.invoke.MethodHandle}很相似，其实却是同一个原理 <br>
  * * 但是理论上比MethodHandle快<br>
  * * 而且MethodHandle也不能随便用(不限制权限)啊<br>
- * 限制: 不能写final字段，因为JVM太安全辣，请使用{@link ReflectionUtils#access(Field)} <br>
+ * 限制: 不能写final字段，因为JVM太安全辣，请使用{@link ToBeRemoved#access(Field)} <br>
  *
  * @author Roj233
  * @since 2021/8/13 20:16
  */
-public final class DirectAccessor<T> {
+public sealed class Bypass<T> {
 	public static final String MAGIC_ACCESSOR_CLASS = ReflectionUtils.JAVA_VERSION <= 8 ?
 		"sun/reflect/MagicAccessorImpl" : VMInternals.HackMagicAccessor();
 
@@ -43,13 +53,13 @@ public final class DirectAccessor<T> {
 
 	private final MyHashMap<String, Method> methodByName;
 	private final Class<T> itf;
-	private ConstantData var;
+	ConstantData var;
 
 	// Cast check
-	private byte flags;
+	byte flags;
 	private static final byte UNCHECKED_CAST = 1, WEAK_REF = 2, INLINE = 4;
 
-	private DirectAccessor(Class<T> itf, boolean checkDuplicate) {
+	private Bypass(Class<T> itf, boolean checkDuplicate) {
 		if (!itf.isInterface()) throw new IllegalArgumentException(itf.getName()+" must be a interface");
 		this.itf = itf;
 		Method[] methods = itf.getMethods();
@@ -71,10 +81,15 @@ public final class DirectAccessor<T> {
 		makeHeader(clsName, itfClass, var);
 		ClassDefiner.premake(var);
 	}
+	Bypass() {
+		assert getClass() != Bypass.class;
+		this.methodByName = null;
+		this.itf = null;
+	}
 
 	public final T build() { return build(ClassDefiner.APP_LOADER); }
 	@SuppressWarnings("unchecked")
-	public final T build(ClassLoader def) {
+	public T build(ClassLoader def) {
 		if (var == null) throw new IllegalStateException("Already built");
 		methodByName.clear();
 
@@ -85,21 +100,22 @@ public final class DirectAccessor<T> {
 				if (mn.name().startsWith("<")) continue;
 				mn.putAttr(new Annotations(true, annotation));
 			}
-
-			try {
-				byte[] array = Parser.toByteArray(var);
-				Class<?> klass = VMInternals.DefineVMClass(null, array, 0, array.length);
-				return (T) ClassDefiner.postMake(klass);
-			} finally {
-				var = null;
-			}
 		}
 
+		var data = Parser.toByteArrayShared(var);
 		try {
-			return (T) ClassDefiner.make(var, (flags&WEAK_REF) == 0 ? def : null);
+			return (T) define(def, data);
 		} finally {
 			var = null;
 		}
+	}
+	Object define(ClassLoader def, ByteList b) {
+		if ((flags&(INLINE|WEAK_REF)) != 0) def = null;
+
+		var klass = def == null
+			? ReflectionUtils.defineWeakClass(b)
+			: ClassDefiner.defineClass(def, null, b);
+		return ClassDefiner.postMake(klass);
 	}
 
 	private Method checkExistence(String name) {
@@ -112,30 +128,25 @@ public final class DirectAccessor<T> {
 	/**
 	 * @see #construct(Class, String[], List)
 	 */
-	public final DirectAccessor<T> construct(Class<?> target, String name) {
-		return construct(target, new String[] {name}, null);
-	}
-
+	public final Bypass<T> construct(Class<?> target, String name) {return construct(target, new String[] {name}, null);}
 	/**
 	 * @see #construct(Class, String[], List)
 	 */
-	public final DirectAccessor<T> construct(Class<?> target, String... names) {
+	public final Bypass<T> construct(Class<?> target, String... names) {
 		if (names.length == 0) throw new IllegalArgumentException("Wrong call");
 		return construct(target, names, null);
 	}
-
 	/**
 	 * @see #construct(Class, String[], List)
 	 */
-	public final DirectAccessor<T> construct(Class<?> target, String name, Class<?>... param) {
+	public final Bypass<T> construct(Class<?> target, String name, Class<?>... param) {
 		if (param.length == 0) throw new IllegalArgumentException("Wrong call");
 		return construct(target, new String[] {name}, Collections.singletonList(param));
 	}
-
 	/**
 	 * @see #construct(Class, String[], List)
 	 */
-	public final DirectAccessor<T> constructFuzzy(Class<?> target, String... names) {
+	public final Bypass<T> constructFuzzy(Class<?> target, String... names) {
 		if (names.length == 0) throw new IllegalArgumentException("Wrong call");
 		return construct(target, names, Collections.emptyList());
 	}
@@ -154,7 +165,7 @@ public final class DirectAccessor<T> {
 	 * 对其中值为null的项使用模糊的 all-object 模式 <br>
 	 * 否则使用精确的 all-object 模式 <br>
 	 */
-	public DirectAccessor<T> construct(Class<?> target, String[] names, List<Class<?>[]> fuzzy) throws IllegalArgumentException {
+	public Bypass<T> construct(Class<?> target, String[] names, List<Class<?>[]> fuzzy) throws IllegalArgumentException {
 		if (names.length == 0) return this;
 
 		String tName = target.getName().replace('.', '/');
@@ -236,11 +247,11 @@ public final class DirectAccessor<T> {
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate(Class<?> target, String name) { String[] arr = new String[] {name}; return delegate(target, arr, EMPTY_BITS, arr, null); }
+	public final Bypass<T> delegate(Class<?> target, String name) { String[] arr = new String[] {name}; return delegate(target, arr, EMPTY_BITS, arr, null); }
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate(Class<?> target, String... names) {
+	public final Bypass<T> delegate(Class<?> target, String... names) {
 		if (names.length == 0) throw new IllegalArgumentException("Wrong call");
 		return delegate(target, names, EMPTY_BITS, names, null);
 	}
@@ -248,41 +259,38 @@ public final class DirectAccessor<T> {
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate(Class<?> target, String name, String selfName) { return delegate(target, new String[] {name}, EMPTY_BITS, new String[] {selfName}, null); }
+	public final Bypass<T> delegate(Class<?> target, String name, String selfName) { return delegate(target, new String[] {name}, EMPTY_BITS, new String[] {selfName}, null); }
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate(Class<?> target, String[] names, String[] selfNames) { return delegate(target, names, EMPTY_BITS, selfNames, null); }
+	public final Bypass<T> delegate(Class<?> target, String[] names, String[] selfNames) { return delegate(target, names, EMPTY_BITS, selfNames, null); }
 
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate_o(Class<?> target, String name) { String[] arr = new String[] {name}; return delegate(target, arr, EMPTY_BITS, arr, Collections.emptyList()); }
+	public final Bypass<T> delegate_o(Class<?> target, String name) { String[] arr = new String[] {name}; return delegate(target, arr, EMPTY_BITS, arr, Collections.emptyList()); }
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate_o(Class<?> target, String... names) {
+	public final Bypass<T> delegate_o(Class<?> target, String... names) {
 		if (names.length == 0) throw new IllegalArgumentException("Wrong call");
 		return delegate(target, names, EMPTY_BITS, names, Collections.emptyList());
 	}
-
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate_o(Class<?> target, String name, String selfName) { return delegate(target, new String[] {name}, EMPTY_BITS, new String[] {selfName}, Collections.emptyList()); }
-
+	public final Bypass<T> delegate_o(Class<?> target, String name, String selfName) { return delegate(target, new String[] {name}, EMPTY_BITS, new String[] {selfName}, Collections.emptyList()); }
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate_o(Class<?> target, String name, String selfName, Class<?>... param) {
+	public final Bypass<T> delegate_o(Class<?> target, String name, String selfName, Class<?>... param) {
 		if (param.length == 0) throw new IllegalArgumentException("Wrong call");
 		return delegate(target, new String[] {name}, EMPTY_BITS, new String[] {selfName}, Collections.singletonList(param));
 	}
-
 	/**
 	 * @see #delegate(Class, String[], MyBitSet, String[], List)
 	 */
-	public final DirectAccessor<T> delegate_o(Class<?> target, String[] names, String[] selfNames) { return delegate(target, names, EMPTY_BITS, selfNames, Collections.emptyList()); }
+	public final Bypass<T> delegate_o(Class<?> target, String[] names, String[] selfNames) { return delegate(target, names, EMPTY_BITS, selfNames, Collections.emptyList()); }
 
 	/**
 	 * 将target.methodNames方法代理到selfNames，参数从方法获取，或通过fuzzyMode <br>
@@ -291,13 +299,13 @@ public final class DirectAccessor<T> {
 	 * @param flags 当set中对应index项为true时代表直接调用此方法(忽略继承)
 	 * @param fuzzyMode : {@link #construct(Class, String[], List)}
 	 */
-	public DirectAccessor<T> delegate(Class<?> target, String[] methodNames, @Nullable MyBitSet flags, String[] selfNames, List<Class<?>[]> fuzzyMode) throws IllegalArgumentException {
+	public Bypass<T> delegate(Class<?> target, String[] methodNames, @Nullable MyBitSet flags, String[] selfNames, List<Class<?>[]> fuzzyMode) throws IllegalArgumentException {
 		if (selfNames.length == 0) return this;
 
 		String tName = target.getName().replace('.', '/');
 
 		ILSecurityManager sm1 = ILSecurityManager.getSecurityManager();
-		List<Method> methods = ReflectionUtils.getMethods(target);
+		List<Method> methods = ReflectionUtils.getMethods(target, methodNames);
 		for (int i = 0; i < selfNames.length; i++) {
 			String name = selfNames[i];
 			Method sm = methodByName.get(name), tm = null;
@@ -345,7 +353,7 @@ public final class DirectAccessor<T> {
 							} else {
 								// 继承，却改变了返回值的类型
 								// 同参同反不考虑
-								m = findInheritLower(m, tm);
+								m = findSuccessor(m, tm);
 							}
 						}
 						found = j;
@@ -404,7 +412,7 @@ public final class DirectAccessor<T> {
 		return this;
 	}
 
-	private static Method findInheritLower(Method a, Method b) {
+	private static Method findSuccessor(Method a, Method b) {
 		Class<?> aClass = a.getDeclaringClass();
 		Class<?> bClass = b.getDeclaringClass();
 		// b instanceof a
@@ -414,22 +422,20 @@ public final class DirectAccessor<T> {
 	/**
 	 * @see #access(Class, String[], String[], String[])
 	 */
-	public final DirectAccessor<T> access(Class<?> target, String fieldName) { return access(target, new String[] {fieldName}); }
-
+	public final Bypass<T> access(Class<?> target, String fieldName) { return access(target, new String[] {fieldName}); }
 	/**
 	 * @see #access(Class, String[], String[], String[])
 	 */
-	public final DirectAccessor<T> access(Class<?> target, String[] fields) { return access(target, fields, capitalize(fields, "get"), capitalize(fields, "set")); }
-
+	public final Bypass<T> access(Class<?> target, String[] fields) { return access(target, fields, capitalize(fields, "get"), capitalize(fields, "set")); }
 	/**
 	 * @see #access(Class, String[], String[], String[])
 	 */
-	public final DirectAccessor<T> access(Class<?> target, String field, String getter, String setter) { return access(target, new String[] {field}, new String[] {getter}, new String[] {setter}); }
+	public final Bypass<T> access(Class<?> target, String field, String getter, String setter) { return access(target, new String[] {field}, new String[] {getter}, new String[] {setter}); }
 
 	/**
 	 * 把 setter/getters 中的方法标记为 target 的 fields 的 setter / getter
 	 */
-	public DirectAccessor<T> access(Class<?> target, String[] fields, String[] getters, String[] setters) throws IllegalArgumentException {
+	public Bypass<T> access(Class<?> target, String[] fields, String[] getters, String[] setters) throws IllegalArgumentException {
 		if (fields.length == 0) return this;
 
 		String tName = target.getName().replace('.', '/');
@@ -536,8 +542,8 @@ public final class DirectAccessor<T> {
 		return new String(tmp);
 	}
 
-	public final DirectAccessor<T> i_construct(String target, String desc, String self) { return i_construct(target, desc, checkExistence(self)); }
-	public final DirectAccessor<T> i_construct(String target, String desc, Method self) {
+	public final Bypass<T> i_construct(String target, String desc, String self) { return i_construct(target, desc, checkExistence(self)); }
+	public Bypass<T> i_construct(String target, String desc, Method self) {
 		target = target.replace('.', '/');
 
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
@@ -568,8 +574,8 @@ public final class DirectAccessor<T> {
 	}
 
 	public static final byte INVOKE_STATIC = 1, INVOKE_SPECIAL = 2, INVOKE_INTERFACE = 4;
-	public final DirectAccessor<T> i_delegate(String target, String name, String desc, String self, byte flags) { return i_delegate(target, name, desc, checkExistence(self), flags); }
-	public final DirectAccessor<T> i_delegate(String target, String name, String desc, Method self, @MagicConstant(flags = {INVOKE_STATIC,INVOKE_SPECIAL,INVOKE_INTERFACE}) byte flags) {
+	public final Bypass<T> i_delegate(String target, String name, String desc, String self, byte flags) { return i_delegate(target, name, desc, checkExistence(self), flags); }
+	public Bypass<T> i_delegate(String target, String name, String desc, Method self, @MagicConstant(flags = {INVOKE_STATIC, INVOKE_SPECIAL, INVOKE_INTERFACE}) byte flags) {
 		target = target.replace('.', '/');
 
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
@@ -610,10 +616,10 @@ public final class DirectAccessor<T> {
 		return this;
 	}
 
-	public final DirectAccessor<T> i_access(String target, String name, Type type, String getter, String setter, boolean isStatic) {
+	public final Bypass<T> i_access(String target, String name, Type type, String getter, String setter, boolean isStatic) {
 		return i_access(target, name, type, checkExistence(getter), checkExistence(setter), isStatic);
 	}
-	public final DirectAccessor<T> i_access(String target, String name, Type type, Method getter, Method setter, boolean isStatic) {
+	public Bypass<T> i_access(String target, String name, Type type, Method getter, Method setter, boolean isStatic) {
 		target = target.replace('.', '/');
 
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
@@ -662,12 +668,55 @@ public final class DirectAccessor<T> {
 		return this;
 	}
 
-	public static <V> DirectAccessor<V> builder(Class<V> impl) { return new DirectAccessor<>(impl, true); }
-	public static <V> DirectAccessor<V> builderInternal(Class<V> impl) { return new DirectAccessor<>(impl, false); }
+	public static <V> Bypass<V> builder(Class<V> impl) {return new Bypass<>(impl, true);}
+	public static <V> Bypass<V> custom(Class<V> impl) {return new Bypass<>(impl, false);}
 
-	public final DirectAccessor<T> unchecked() { flags |= UNCHECKED_CAST; return this; }
-	public final DirectAccessor<T> weak() { flags |= WEAK_REF; return this; }
-	public final DirectAccessor<T> inline() { flags |= INLINE; return this; }
+	public final Bypass<T> unchecked() { flags |= UNCHECKED_CAST; return this; }
+	public final Bypass<T> weak() { flags |= WEAK_REF; return this; }
+	public final Bypass<T> inline() { flags |= INLINE; return this; }
+
+	public static <V> Bypass<V> cached(String cache, Class<V> impl) {
+		var fs = (Filesystem)RojLib.inject("roj.reflect.Bypass.cache");
+		try {
+			InputStream in;
+			if (fs != null && (in=fs.getStream(cache)) != null)
+				return Helpers.cast(new Cached(IOUtil.read(in)));
+		} catch (IOException ignored) {}
+		if (fs instanceof WritableFilesystem wfs)
+			return Helpers.cast(new ToCache(wfs, cache, impl));
+
+		return builder(impl);
+	}
+	private static final class ToCache extends Bypass<Object> {
+		private final WritableFilesystem wfs;
+		private final String name;
+		public ToCache(WritableFilesystem wfs, String name, Class<?> impl) {
+			super(Helpers.cast(impl), true);
+			this.wfs = wfs;
+			this.name = name;
+		}
+
+		@Override
+		Object define(ClassLoader def, ByteList b) {
+			try {
+				wfs.write(name, b);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			return super.define(def, b);
+		}
+	}
+	private static final class Cached extends Bypass<Object> {
+		private final byte[] data;
+		private Cached(byte[] data) {this.data = data;}
+		@Override public Bypass<Object> access(Class<?> a, String[] b, String[] c, String[] d) throws IllegalArgumentException {return this;}
+		@Override public Bypass<Object> construct(Class<?> a, String[] b, List<Class<?>[]> c) throws IllegalArgumentException {return this;}
+		@Override public Bypass<Object> delegate(Class<?> a, String[] b, MyBitSet c, String[] d, List<Class<?>[]> e) throws IllegalArgumentException {return this;}
+		@Override public Bypass<Object> i_access(String a, String b, Type c, Method d, Method e, boolean f) {return this;}
+		@Override public Bypass<Object> i_construct(String a, String b, Method c) {return this;}
+		@Override public Bypass<Object> i_delegate(String a, String b, String c, Method d, byte e) {return this;}
+		@Override public Object build(ClassLoader def) {return define(def, DynByteBuf.wrap(data));}
+	}
 
 	/**
 	 * 首字母大写: xx,set => setXxx

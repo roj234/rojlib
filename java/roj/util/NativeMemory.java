@@ -1,6 +1,6 @@
 package roj.util;
 
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 
 import java.nio.Buffer;
@@ -51,7 +51,7 @@ public class NativeMemory {
 	static final H hlp;
 	static {
 		try {
-			DirectAccessor<H> da = DirectAccessor.builder(H.class);
+			Bypass<H> da = Bypass.builder(H.class);
 			da.access(ByteBuffer.class, new String[]{"hb","offset"});
 
 			boolean j17 = ReflectionUtils.JAVA_VERSION >= 17;

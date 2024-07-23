@@ -5,7 +5,7 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.type.TypeHelper;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -128,8 +128,8 @@ public final class MutableBigInteger implements Comparable<MutableBigInteger> {
 			throw new Error();
 		}
 
-		DirectAccessor<Opr> dab = DirectAccessor
-			.builderInternal(Opr.class).inline().unchecked()
+		Bypass<Opr> dab = Bypass
+			.custom(Opr.class).inline().unchecked()
 			.construct(mb, "_n1", "_n2", "_n3", "_n4")
 			.construct(mb, "_n5", mb)
 			.access(mb, new String[] {"value", "intLen"}, new String[] {"_nArrG", "_nArrLen"}, new String[] {"_nArrS", null});
@@ -152,7 +152,7 @@ public final class MutableBigInteger implements Comparable<MutableBigInteger> {
 			if (m.getName().startsWith("_")) continue;
 			Method im = itMethods[j++];
 			dab.i_delegate(target, m.getName(), TypeHelper.class2asm(im.getParameterTypes(), im.getReturnType()), m,
-						   (im.getModifiers() & Opcodes.ACC_STATIC) != 0 ? DirectAccessor.INVOKE_STATIC : DirectAccessor.INVOKE_SPECIAL);
+						   (im.getModifiers() & Opcodes.ACC_STATIC) != 0 ? Bypass.INVOKE_STATIC : Bypass.INVOKE_SPECIAL);
 		}
 
 		o = dab.build();

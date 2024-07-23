@@ -9,8 +9,8 @@ import roj.asm.visitor.Label;
 import roj.collect.MyHashMap;
 import roj.config.serial.CVisitor;
 import roj.io.IOUtil;
+import roj.reflect.Bypass;
 import roj.reflect.ClassDefiner;
-import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.reflect.VirtualReference;
 import roj.util.ArrayCache;
@@ -44,7 +44,7 @@ public abstract class SerializerFactory {
 		boolean unsafe = false;
 		try {
 			ConstantData c = Parser.parseConstants(IOUtil.getResource("roj/config/auto/Adapter.class"));
-			c.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
+			c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 			ClassDefiner.defineGlobalClass(c);
 			unsafe = true;
 		} catch (Throwable ignored) {}

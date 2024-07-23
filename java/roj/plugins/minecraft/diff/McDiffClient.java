@@ -152,7 +152,7 @@ public class McDiffClient {
 		if (entry == null) throw new CorruptedInputException("更新包未签名");
 
 		WordBlock[] blocks = archive.getWordBlocks();
-		if (entry.getBlock() != blocks[blocks.length-1] || blocks[blocks.length-1].getFileCount() != 1) throw new CorruptedInputException("签名方式不合法");
+		if (entry.block() != blocks[blocks.length-1] || blocks[blocks.length-1].getFileCount() != 1) throw new CorruptedInputException("签名方式不合法");
 
 		verifySign(arc, entry, blocks);
 	}

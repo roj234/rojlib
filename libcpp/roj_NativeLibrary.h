@@ -1,17 +1,12 @@
 #include <jni.h>
+#include <stddef.h>
 
 #ifndef _Included_roj_NativeLibrary
 #define _Included_roj_NativeLibrary
 
-typedef unsigned long int u4;
-typedef signed long int s4;
-typedef unsigned char u1;
-typedef signed char s1;
-
-#define U32_MAX 2147483647
 inline int min(int l, int r) {return l < r ? l : r;}
 
-#define FUNC_WINDOWS 1
+#define FUNC_WINDOWS       1
 #define ANSI_CONSOLE       2
 #define BSDIFF             4
 #define SHARED_MEMORY      8

@@ -3,8 +3,8 @@ package roj.config.serial;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.config.Interner;
 import roj.config.data.*;
+import roj.text.Interner;
 
 import java.util.Arrays;
 

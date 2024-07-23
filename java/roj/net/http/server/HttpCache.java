@@ -8,7 +8,6 @@ import roj.text.ACalendar;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.TimeZone;
 import java.util.function.BiConsumer;
 import java.util.zip.Deflater;
 
@@ -24,8 +23,7 @@ public final class HttpCache implements BiConsumer<String, String> {
 	public static HttpCache getInstance() {return TL.get();}
 	private HttpCache() {}
 
-	private static final TimeZone GMT = TimeZone.getTimeZone("GMT");
-	public final ACalendar date = new ACalendar(GMT);
+	public final ACalendar date = new ACalendar(null);
 	public String toRFC(long time) {return date.toRFCString(time);}
 
 	public final MyHashMap<String, Object> ctx = new MyHashMap<>();

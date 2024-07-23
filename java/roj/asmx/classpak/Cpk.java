@@ -5,6 +5,7 @@ import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
+import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
@@ -15,11 +16,12 @@ import roj.asmx.nixim.NiximException;
 import roj.asmx.nixim.NiximSystemV2;
 import roj.collect.Flippable;
 import roj.collect.SimpleList;
+import roj.concurrent.TaskPool;
+import roj.io.DummyOutputStream;
 import roj.io.IOUtil;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
-import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
@@ -28,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 
@@ -38,7 +41,7 @@ import static roj.asmx.mapper.Mapper.MF_RENAME_CLASS;
  * @since 2024/3/17 0017 0:49
  */
 public class Cpk {
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) {
 		if (args.length == 0) {
 			System.out.println("Usage: Cpk <input jar> [chunk size]");
 			return;
@@ -61,14 +64,14 @@ public class Cpk {
 			List<Context> ctxs = new SimpleList<>();
 			int classId = 0;
 			ConstantData cpkLoader;
-			try (ZipFile myself = new ZipFile(Helpers.getJarByClass(Cpk.class))) {
+			try (ZipFile self = new ZipFile(IOUtil.getJar(Cpk.class))) {
 				cMap.put("roj.archive.qz.xz.rangecoder.RangeCoder".replace('.', '/'), "cpk/A");
 				cMap.put("roj.archive.qz.xz.rangecoder.RangeDecoder".replace('.', '/'), "cpk/B");
 				cMap.put("roj.archive.qz.xz.lzma.LZMACoder".replace('.', '/'), "cpk/C");
 				cMap.put("roj.archive.qz.xz.lzma.LZMADecoder".replace('.', '/'), "cpk/D");
 
 				for (Map.Entry<String, String> entry : cMap.entrySet()) {
-					ctxs.add(new Context(entry.getKey(), myself.get(entry.getKey().concat(".class"))));
+					ctxs.add(new Context(entry.getKey(), self.get(entry.getKey().concat(".class"))));
 				}
 
 				cMap.put("roj.archive.qz.xz.LZMA2InputStream".replace('.', '/'), "cpk/E");
@@ -77,7 +80,7 @@ public class Cpk {
 				cMap.put("roj.io.CorruptedInputException".replace('.', '/'), "java/io/IOException");
 				cMap.put("roj.io.MBInputStream".replace('.', '/'), "java/io/InputStream");
 
-				byte[] bytes = myself.get("roj/asmx/classpak/ArrayCacheN_.class");
+				byte[] bytes = self.get("roj/asmx/classpak/ArrayCacheN_.class");
 				ConstantData cd = Parser.parseConstants(bytes);
 				cd.name("cpk/G");
 				ctxs.add(new Context(cd));
@@ -85,31 +88,32 @@ public class Cpk {
 				NiximSystemV2 nx = new NiximSystemV2();
 
 				try {
-					byte[] patchBytes = myself.get("roj/asmx/classpak/LZDecoderN_.class");
+					byte[] patchBytes = self.get("roj/asmx/classpak/LZDecoderN_.class");
 					NiximSystemV2.NiximData patch = nx.read(Parser.parseConstants(patchBytes));
 
-					bytes = myself.get("roj/archive/qz/xz/lz/LZDecoder.class");
+					bytes = self.get("roj/archive/qz/xz/lz/LZDecoder.class");
 					cd = Parser.parseConstants(bytes);
 					nx.apply(cd, patch);
 					ctxs.add(new Context(cd));
 
-					patchBytes = myself.get("roj/asmx/classpak/LZMA2InN_.class");
+					patchBytes = self.get("roj/asmx/classpak/LZMA2InN_.class");
 					patch = nx.read(Parser.parseConstants(patchBytes));
 
-					bytes = myself.get("roj/archive/qz/xz/LZMA2InputStream.class");
+					bytes = self.get("roj/archive/qz/xz/LZMA2InputStream.class");
 					cd = Parser.parseConstants(bytes);
 					nx.apply(cd, patch);
 					ctxs.add(new Context(cd));
 				} catch (NiximException e) {
 					e.printStackTrace();
 				}
-				cpkLoader = Parser.parseConstants(myself.get("roj/asmx/classpak/FakeMain$Loader.class"));
+				cpkLoader = Parser.parseConstants(self.get("roj/asmx/classpak/FakeMain.class"));
+				cpkLoader.modifier |= Opcodes.ACC_PUBLIC;
 
-				for (ZEntry entry : myself.entries()) {
+				for (ZEntry entry : self.entries()) {
 					String name = entry.getName();
 					if (name.startsWith("roj/asmx/classpak/loader/")) {
 						cMap.put(name.substring(0, name.length()-6), name.endsWith("CPMain.class") ? "cpk/Main" : "cpk/"+(char)('H'+ classId++));
-						ctxs.add(new Context("", myself.get(entry)));
+						ctxs.add(new Context("", self.get(entry)));
 					}
 				}
 			}
@@ -120,7 +124,6 @@ public class Cpk {
 			for (int i = 0; i < size; i++) {
 				Context ctx = ctxs.get(i);
 				zo.beginEntry(new ZEntry(ctx.getFileName()));
-				System.out.println("Support: "+ctx.getFileName());
 
 				ConstantData data = ctx.getData();
 
@@ -143,7 +146,6 @@ public class Cpk {
 			for (int i = size; i < ctxs.size(); i++) {
 				Context ctx = ctxs.get(i);
 				zo.beginEntry(new ZEntry(ctx.getFileName()));
-				System.out.println("Lambda: "+ctx.getFileName());
 				ctx.getCompressedShared().writeToStream(zo);
 				zo.closeEntry();
 			}
@@ -193,8 +195,8 @@ public class Cpk {
 				}
 			}
 
-			cMap.put("roj.asmx.classpak.FakeMain$Loader".replace('.', '/'), "cpk/@");
-			cMap.put("roj.asmx.classpak.FakeMain".replace('.', '/'), mainClass.replace('.', '/'));
+			cMap.put("roj.asmx.classpak.FakeMain".replace('.', '/'), "cpk/@");
+			cMap.put("roj.asmx.classpak.Cpk".replace('.', '/'), mainClass.replace('.', '/'));
 			mapper.map(Collections.singletonList(new Context(cpkLoader)));
 			writer.add(cpkLoader);
 
@@ -206,10 +208,12 @@ public class Cpk {
 
 			writer.finish();
 			writer.out.writeToStream(zo);
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
 
-	public final ByteList out, tmp, tmp2 = new ByteList();
+	public final ByteList out, tmp;
 	private final int chunkSize;
 	public Cpk(int chunkSize) {
 		this.chunkSize = chunkSize;
@@ -254,12 +258,42 @@ public class Cpk {
 		files.add(new OffA(name, misc.length));
 	}
 
+	private int findBestProps(LZMA2Options opt, byte[] data, TaskPool th) {
+		AtomicReference<Object[]> ref = new AtomicReference<>();
+		for (int lc = 0; lc <= 4; lc++) {
+			LZMA2Options copy = opt.clone().setDictSize(Math.max(data.length, 4096)).setLcLp(lc, 0);
+			th.submit(() -> {
+				DummyOutputStream counter = new DummyOutputStream();
+				try (OutputStream os = copy.getOutputStream(counter)) {
+					os.write(data);
+				} catch (Exception ignored) {}
+
+				Object[] b = new Object[]{copy, counter.wrote};
+				while (true) {
+					Object[] prev = ref.get();
+					if (prev != null && (int)prev[1] <= counter.wrote) return;
+					if (ref.compareAndSet(prev, b)) return;
+				}
+			});
+		}
+
+		try {
+			th.awaitTermination();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		Object[] min = ref.get();
+		LZMA2Options best = (LZMA2Options) min[0];
+		opt.setLcLp(best.getLc(), best.getLp());
+		return (int)min[1];
+	}
+
 	private void flush() {
 		byte[] dict = tmp.toByteArray();
 		int uLen = dict.length;
 
-		LZMA2Options opt = new LZMA2Options(9).setDictSize(Math.max(uLen,4096)).setDepthLimit(999);
-		int bestSize = opt.findBestProps(dict);
+		LZMA2Options opt = new LZMA2Options(9).setDictSize(Math.max(uLen,4096)).setPb(0).setDepthLimit(999);
+		int bestSize = findBestProps(opt, dict, TaskPool.Common());
 		System.out.println("Block: #"+ cpSize++ +" ("+opt+") "+uLen+" => "+bestSize+" ("+TextUtil.toFixed(100d * bestSize / uLen, 2)+"%)");
 
 		int cLen = out.wIndex();

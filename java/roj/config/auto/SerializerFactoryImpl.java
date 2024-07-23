@@ -1248,6 +1248,10 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	private Adapter build(ClassLoader cl) {
 		ConstantData c1 = c;
 		c = null;
+		// 2024/7/23 让ConstantPool可以释放
+		keyCw = null;
+		keySwitch = null;
+		keyPrimitive = null;
 
 		if (serializerId.isEmpty()) {
 			c1.methods.remove(c1.getMethod("init2"));

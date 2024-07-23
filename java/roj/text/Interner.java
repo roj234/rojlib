@@ -1,4 +1,4 @@
-package roj.config;
+package roj.text;
 
 import roj.collect.LFUCache;
 

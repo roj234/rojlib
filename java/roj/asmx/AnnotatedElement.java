@@ -6,10 +6,10 @@ import roj.asm.tree.IClass;
 import roj.asm.tree.RawNode;
 import roj.asm.tree.anno.Annotation;
 import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
 import roj.io.IOUtil;
 import roj.text.CharList;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
@@ -31,7 +31,7 @@ public abstract sealed class AnnotatedElement permits AnnotatedElement.Type, Ann
 
 	public static final class Type extends AnnotatedElement {
 		final IClass owner;
-		final MyHashSet<Node> children = new MyHashSet<>();
+		Set<Node> children = Collections.emptySet();
 
 		public Type(IClass owner) { this.owner = owner; }
 
@@ -90,7 +90,7 @@ public abstract sealed class AnnotatedElement permits AnnotatedElement.Type, Ann
 
 		@Override
 		public int hashCode() {
-			int result = 1;
+			int result = parent.hashCode();
 			result = 31 * result + node.name().hashCode();
 			result = 31 * result + node.rawDesc().hashCode();
 			return result;

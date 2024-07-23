@@ -43,7 +43,7 @@ public class CaptchaPlugin extends Plugin {
 		captchaFonts = CaptchaFont.load(config);
 
 		BlockSet set = new BlockSet();
-		for (Block value : Block.STATE_ID.REGISTRY.values()) {
+		for (Block value : Block.STATE_ID.VALUES) {
 			if ((value.flags&2) != 0)
 				set.addBlock(value);
 		}

@@ -70,7 +70,7 @@ public class TransformUtil {
 	}
 
 	private static final MyHashSet<String>
-		class_allow = new MyHashSet<>("RuntimeVisibleAnnotations", "BootstrapMethods"),
+		class_allow = new MyHashSet<>("RuntimeVisibleAnnotations", "BootstrapMethods", "NestMembers", "NestHost"),
 		field_allow = new MyHashSet<>("ConstantValue", "RuntimeVisibleAnnotations"),
 		method_allow = new MyHashSet<>("Code", "RuntimeVisibleAnnotations", "AnnotationDefault");
 
@@ -80,10 +80,13 @@ public class TransformUtil {
 	public static void runOnly(ConstantData data) {
 		filter(data, class_allow);
 
-		boolean low = false;
-		if (data.version >= 52 << 16 && data.attrByName("BootstrapMethods") == null) {
-			data.version = 49 << 16;
-			low = true;
+		int minVersion = 6;
+		if (data.attrByName("BootstrapMethods") != null) minVersion = 8;
+		if (data.attrByName("NestMembers") != null || data.attrByName("NestHost") != null) minVersion = 11;
+
+		int minVer = ConstantData.JavaVersion(minVersion);
+		if (data.version > minVer) {
+			data.version = minVer;
 		}
 
 		SimpleList<FieldNode> fields = data.fields;
@@ -99,7 +102,7 @@ public class TransformUtil {
 			XAttrCode code = mn.parsedAttr(data.cp, Attribute.Code);
 			if (code == null) continue;
 
-			if (low) code.frames = null;
+			if (minVer == 6) code.frames = null;
 
 			AttributeList list = code.attributesNullable();
 			if (list != null) list.clear();

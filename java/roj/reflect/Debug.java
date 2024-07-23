@@ -15,11 +15,11 @@ import java.io.IOException;
  * @author Roj234
  * @since 2024/5/15 16:45
  */
-public final class ClassDumper {
-	public static final boolean DUMP_ENABLED = System.clearProperty("roj.debug.dumpClass") != null;
+public final class Debug {
+	public static final boolean CLASS_DUMP = System.clearProperty("roj.debug.dumpClass") != null;
 	private static ZipFileWriter dumper;
 	static {
-		if (DUMP_ENABLED) {
+		if (CLASS_DUMP) {
 			try {
 				AsmShared.drop(); // ZFW may call ClassDefiners
 				dumper = new ZipFileWriter(new File("IL-Debug-ClassDump.zip"));

@@ -3,7 +3,7 @@ package roj.util;
 import roj.compiler.plugins.asm.ASM;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.text.CharList;
 import roj.ui.Terminal;
 
@@ -29,7 +29,7 @@ public final class ArrayUtil {
 	private static H SCOPED_MEMORY_ACCESS;
 	static {
 		try {
-			SCOPED_MEMORY_ACCESS = DirectAccessor.builder(H.class).inline().delegate(Class.forName("jdk.internal.util.ArraysSupport"), "vectorizedMismatch").build();
+			SCOPED_MEMORY_ACCESS = Bypass.builder(H.class).inline().delegate(Class.forName("jdk.internal.util.ArraysSupport"), "vectorizedMismatch").build();
 		} catch (Throwable ignored) {}
 	}
 

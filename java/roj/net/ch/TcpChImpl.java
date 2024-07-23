@@ -2,7 +2,7 @@ package roj.net.ch;
 
 import roj.io.NIOUtil;
 import roj.io.buf.BufferPool;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 import roj.util.DynByteBuf;
 
@@ -49,7 +49,7 @@ class TcpChImpl extends MyChannel {
 			synchronized (TcpChImpl.class) {
 				if (TcpUtil == null) {
 					String[] fields = ReflectionUtils.JAVA_VERSION < 11 ? new String[] {"isInputOpen", "isOutputOpen"} : new String[] {"isInputClosed", "isOutputClosed"};
-					TcpUtil = DirectAccessor.builder(H.class).access(server.getClass(), fields, fields, null).build();
+					TcpUtil = Bypass.builder(H.class).access(server.getClass(), fields, fields, null).build();
 				}
 			}
 		}

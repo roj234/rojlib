@@ -10,7 +10,7 @@ import java.util.TimeZone;
  * @since 2021/6/16 2:48
  */
 public final class ACalendar {
-	public static ACalendar GMT() { return new ACalendar(TimeZone.getTimeZone("GMT")); }
+	public static ACalendar GMT() { return new ACalendar(null); }
 	public static ACalendar Local() { return new ACalendar(TimeZone.getDefault()); }
 
 	public ACalendar copy() { return new ACalendar(zone); }
@@ -276,7 +276,7 @@ public final class ACalendar {
 
 	public static String toLocalTimeString(long time) {
 		ACalendar cal = new ACalendar();
-		return cal.format("Y-m-d H:i:s.x", time, new CharList()).append(" (").append(cal.zone.getDisplayName()).append(')').toStringAndFree(); }
+		return cal.format("Y-m-d H:i:s.x", time, new CharList()).append(" (").append(cal.zone!=null?cal.zone.getDisplayName():"GMT").append(')').toStringAndFree(); }
 
 	private static final int[]
 		TIME_DT = {60, 1800, 3600, 86400, 604800, 2592000, 15552000},

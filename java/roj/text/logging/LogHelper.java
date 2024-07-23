@@ -1,7 +1,7 @@
 package roj.text.logging;
 
 import org.jetbrains.annotations.Nullable;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 
 import java.util.List;
 
@@ -10,7 +10,7 @@ import java.util.List;
  * @since 2024/7/1 0001 15:07
  */
 public interface LogHelper {
-	LogHelper INSTANCE = DirectAccessor.builder(LogHelper.class).access(Throwable.class, "suppressedExceptions", "getSuppressed", null).delegate(Throwable.class, "getOurStackTrace", "getStackTrace").build();
+	LogHelper INSTANCE = Bypass.builder(LogHelper.class).access(Throwable.class, "suppressedExceptions", "getSuppressed", null).delegate(Throwable.class, "getOurStackTrace", "getStackTrace").build();
 	@Nullable
 	List<Throwable> getSuppressed(Throwable t);
 	StackTraceElement[] getStackTrace(Throwable t);

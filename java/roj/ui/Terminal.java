@@ -608,7 +608,7 @@ public final class Terminal extends DelegatedPrintStream {
 				return;
 			}
 		}
-		sout.println("未识别的ANSI转义: "+buf.substring(start, end+1)+" (考虑报告该问题)");
+		serr.println("未识别的ANSI转义: "+buf.substring(start, end+1)+" (考虑报告该问题)");
 	}
 	//endregion
 	//region AnsiInput基础
@@ -891,7 +891,7 @@ public final class Terminal extends DelegatedPrintStream {
 	//region StdIO
 	public static final boolean ANSI_INPUT, ANSI_OUTPUT;
 	public static final BufferedReader in;
-	public static final PrintStream sout = System.out;
+	public static final PrintStream serr = System.err;
 
 	// T和其它终端不同之处在于，光标（字符长度）会通过它获取
 	private static final ITerminal T;

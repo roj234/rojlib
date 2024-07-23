@@ -13,15 +13,15 @@ extern "C" {
 
 #pragma pack(push, 1)
 typedef struct {
-    u1 compressionLevel;
-    u4 dictSize;
-    void* presetDict;
-    u4 presetDictLength;
-    u1 lc, lp, pb;
-    u1 mode, mf;
-    u4 niceLen;
-    u4 depthLimit;
-    u1 async;
+    uint8_t compressionLevel;
+    uint32_t dictSize;
+    uint8_t* presetDict;
+    uint32_t presetDictLength;
+    uint8_t lc, lp, pb;
+    uint8_t mode, mf;
+    uint32_t niceLen;
+    uint32_t depthLimit;
+    uint8_t async;
 } LZMA_OPTIONS_NATIVE;
 #pragma pack(pop)
 

@@ -37,7 +37,7 @@ public final class GetCallerArgs {
 
 			primitive = Class.forName("java.lang.LiveStackFrame$PrimitiveSlot");
 
-			builder = DirectAccessor.builder(H.class).inline().delegate_o(StackWalker.class, "newInstance").delegate_o(primitive, new String[] {"size", "intValue", "longValue"}).build();
+			builder = Bypass.builder(H.class).inline().delegate_o(StackWalker.class, "newInstance").delegate_o(primitive, new String[] {"size", "intValue", "longValue"}).build();
 
 			INSTANCE = new GetCallerArgs(EnumSet.allOf(StackWalker.Option.class));
 		} catch (Exception e) {

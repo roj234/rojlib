@@ -6,6 +6,7 @@ import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.config.data.*;
 import roj.text.CharList;
+import roj.text.Interner;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 

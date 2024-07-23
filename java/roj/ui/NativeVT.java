@@ -104,7 +104,9 @@ final class NativeVT implements ITerminal, Runnable {
 	private boolean read;
 	private NativeVT() {}
 	private static ITerminal init() {
-		if (System.console() == null || Boolean.getBoolean("roj.noAnsi")) return null;
+		if (Boolean.getBoolean("roj.noAnsi")) return null;
+		// 避免初始化System.console()造成16KB的内存浪费
+		if (RojLib.hasNative(RojLib.WIN32) ? GuiUtil.getConsoleWindow() == 0 : System.console() == null) return null;
 		// current: win32 only
 		if (RojLib.hasNative(RojLib.ANSI_READBACK)) {
 			try {

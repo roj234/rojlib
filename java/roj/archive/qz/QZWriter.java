@@ -55,7 +55,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
     private long solidSize;
 
-    Object[] coders;
+    QZCoder[] coders;
     public static final QZCoder[] NO_COMPRESS = {Copy.INSTANCE};
 
     private CoderInfo complexCoder;
@@ -322,19 +322,17 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     final OutputStream out() throws IOException {
         if (out != null) return out;
 
-        WordBlock wb = new WordBlock();
+        var wb = new WordBlock();
         blocks.add(wb);
 
+        wb.coder = coders;
         if (complexCoder != null) {
-            wb.tmp = coders;
+            flagSum[9] += cOffsets;
             wb.complexCoder = complexCoder;
             wb.extraSizes = new long[cOffsets];
-            flagSum[9] += cOffsets;
             wb.outSizes = new long[cOutSizes];
             return this.out = complexCoder.getOutputStream(wb, s);
         }
-
-        wb.coder = (QZCoder[]) coders;
 
         if (coders.length > 1)
             wb.outSizes = new long[coders.length-1];
@@ -342,11 +340,8 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         OutputStream out = s;
         for (int i = 0; i < wb.coder.length; i++) {
             out = wb.new Counter(out, i-1);
-
-            QZCoder m = wb.coder[i];
-            out = m.encode(out);
+            out = wb.coder[i].encode(out);
         }
-
         return this.out = out;
     }
 

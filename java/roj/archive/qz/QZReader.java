@@ -19,7 +19,7 @@ import static roj.reflect.ReflectionUtils.u;
  */
 public abstract class QZReader implements Closeable {
 	Source r;
-	boolean recovery;
+	byte flag;
 
 	Source fpRead;
 	static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(QZReader.class, "fpRead");
@@ -70,7 +70,7 @@ public abstract class QZReader implements Closeable {
 			activeIn = fin;
 		}
 
-		if (!recovery && (file.flag&QZEntry.CRC) != 0) return new CRC32InputStream(fin, file.crc32);
+		if ((flag&QZArchive.FLAG_RECOVERY) != 0 && (file.flag&QZEntry.CRC) != 0) return new CRC32InputStream(fin, file.crc32);
 		return fin;
 	}
 

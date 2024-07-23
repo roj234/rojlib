@@ -9,6 +9,7 @@ import roj.config.serial.ToEntry;
 import roj.config.serial.ToXml;
 import roj.text.CharList;
 import roj.text.Escape;
+import roj.text.Interner;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 

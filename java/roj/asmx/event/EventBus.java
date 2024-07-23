@@ -1,5 +1,6 @@
 package roj.asmx.event;
 
+import roj.ToBeRemoved;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.tree.RawNode;
@@ -12,11 +13,9 @@ import roj.asmx.AnnotationRepo;
 import roj.collect.Hasher;
 import roj.collect.SimpleList;
 import roj.collect.XHashSet;
-import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
 
@@ -186,7 +185,7 @@ public class EventBus {
 	}
 
 	private static void makeDebugInfo(Event event, Throwable e, String type, EventListener[] listeners, int index) {
-		Logger log = Logger.getLogger();
+		var log = Logger.getLogger();
 		log.error("发布 {} 事件 (继承监听器为{}) 时发生了异常:", e, event.getClass().getName(), type);
 		log.error("位于第 {}/{} 个接收者(从1开始):", index+1, listeners.length);
 
@@ -194,16 +193,7 @@ public class EventBus {
 			log.error("  {}: {}", i+1, listeners[i]);
 		}
 
-		log.error("事件的字段:");
-		for (Field field : ReflectionUtils.getFields(event.getClass())) {
-			if ((field.getModifiers() & Opcodes.ACC_STATIC) == 0) {
-				try {
-					Object value = ReflectionUtils.access(field).getObject(event);
-					log.error("  {}: {}", field.getName(), String.valueOf(value));
-				} catch (Throwable e2) {
-					log.error("  {}: <在调用toString时发生了异常>", e2, field.getName());
-				}
-			}
-		}
+		log.error("事件的详细信息:");
+		log.error(ToBeRemoved.deepToString(event));
 	}
 }

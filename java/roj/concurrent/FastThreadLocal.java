@@ -2,7 +2,7 @@ package roj.concurrent;
 
 import roj.collect.IntMap;
 import roj.collect.MyBitSet;
-import roj.reflect.DirectAccessor;
+import roj.reflect.Bypass;
 import roj.util.Helpers;
 
 import java.util.function.BiConsumer;
@@ -78,8 +78,8 @@ public class FastThreadLocal<T> {
 				} else {
 					if (getMap == null) {
 						try {
-							getMap = DirectAccessor.builder(BiFunction.class).delegate_o(ThreadLocal.class, "getMap", "apply").build();
-							remove = DirectAccessor.builder(BiConsumer.class).delegate_o(getMap.apply(fallback, Thread.currentThread()).getClass(), "remove", "accept").build();
+							getMap = Bypass.builder(BiFunction.class).delegate_o(ThreadLocal.class, "getMap", "apply").build();
+							remove = Bypass.builder(BiConsumer.class).delegate_o(getMap.apply(fallback, Thread.currentThread()).getClass(), "remove", "accept").build();
 						} catch (Throwable e) {
 							e.printStackTrace();
 						}

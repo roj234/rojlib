@@ -29,8 +29,8 @@ import roj.net.http.Headers;
 import roj.net.http.HttpUtil;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.server.*;
+import roj.reflect.Bypass;
 import roj.reflect.ClassDefiner;
-import roj.reflect.DirectAccessor;
 import roj.reflect.ReflectionUtils;
 import roj.util.AttributeKey;
 import roj.util.Helpers;
@@ -88,7 +88,7 @@ public final class OKRouter implements Router {
 		var hndInst = new ConstantData();
 		hndInst.name("roj/net/http/server/auto/Router$"+ReflectionUtils.uniqueId());
 		hndInst.interfaces().add("roj/net/http/server/auto/OKRouter$Dispatcher");
-		hndInst.parent(DirectAccessor.MAGIC_ACCESSOR_CLASS);
+		hndInst.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 		ClassDefiner.premake(hndInst);
 
 		hndInst.newField(0, "$methodId", "I");

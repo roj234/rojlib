@@ -1,8 +1,7 @@
 package roj.net.ch;
 
 import roj.collect.SimpleList;
-import roj.reflect.DirectAccessor;
-import roj.reflect.FieldAccessor;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 
 import java.io.IOException;
@@ -12,19 +11,18 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
+import static roj.reflect.ReflectionUtils.u;
+
 /**
  * @author Roj233
  * @since 2022/1/24 11:32
  */
 public final class MySelector extends SimpleList<SelectionKey> implements Set<SelectionKey> {
-	private MySelector() {
-		super(100);
-	}
+	private MySelector() {super(100);}
 
-	public static Set<SelectionKey> getForeacher(Selector sel) {
-		Set<SelectionKey> v = getter.getSet(sel);
-		if (v.getClass() == HashSet.class) return getter.getMap((HashSet<SelectionKey>) v).keySet();
-		return v;
+	public static Set<SelectionKey> getIterable(Selector sel) {
+		var v = getter.getSet(sel);
+		return v instanceof HashSet<SelectionKey> set ? getter.getMap(set).keySet() : v;
 	}
 
 	private interface H {
@@ -33,31 +31,31 @@ public final class MySelector extends SimpleList<SelectionKey> implements Set<Se
 	}
 
 	private static volatile H getter;
-	private static FieldAccessor setSelectedSet1, setPublicSelectedSet1, setPublicSet1;
+	private static long oSelectedSet, oPublicSelectedSet, oPublicSet;
 	public static Selector open() throws IOException {
-		Selector t = Selector.open();
+		var t = Selector.open();
 		if (getter == null) {
 			synchronized (H.class) {
 				if (getter == null) {
-					getter = DirectAccessor.builder(H.class).unchecked().access(t.getClass(), "keys", "getSet", null)
-										   .access(HashSet.class, "map", "getMap", null).build();
+					getter = Bypass.builder(H.class).unchecked().access(t.getClass(), "keys", "getSet", null)
+								   .access(HashSet.class, "map", "getMap", null).build();
 					try {
-						if (ReflectionUtils.JAVA_VERSION > 8)
-							ReflectionUtils.openModule(HashSet.class, "sun.nio.ch", MySelector.class);
-
-						setSelectedSet1 = ReflectionUtils.access(ReflectionUtils.getField(t.getClass(), "selectedKeys"));
-						setPublicSelectedSet1 = ReflectionUtils.access(ReflectionUtils.getField(t.getClass(), "publicSelectedKeys"));
-						setPublicSet1 = ReflectionUtils.access(ReflectionUtils.getField(t.getClass(), "publicKeys"));
-					} catch (NoSuchFieldException ignored) {}
+						//if (ReflectionUtils.JAVA_VERSION > 8) ReflectionUtils.openModule(HashSet.class, "sun.nio.ch", MySelector.class);
+						oSelectedSet = u.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "selectedKeys"));
+						oPublicSelectedSet = u.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "publicSelectedKeys"));
+						oPublicSet = u.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "publicKeys"));
+					} catch (NoSuchFieldException e){
+						e.printStackTrace();
+					}
 				}
 			}
 		}
 
-		MySelector set = new MySelector();
-		setSelectedSet1.setObject(t, set);
-		setPublicSelectedSet1.setObject(t, set);
+		var sel = new MySelector();
+		u.putObjectVolatile(t, oSelectedSet, sel);
+		u.putObjectVolatile(t, oPublicSelectedSet, sel);
 		//字段类型直接是HashSet 没法改了...
-		setPublicSet1.setObject(t, getter.getSet(t));
+		u.putObjectVolatile(t, oPublicSet, getter.getSet(t));
 		return t;
 	}
 }

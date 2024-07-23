@@ -5,6 +5,7 @@ import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.config.data.*;
+import roj.text.Interner;
 import roj.util.Helpers;
 
 import java.util.Map;

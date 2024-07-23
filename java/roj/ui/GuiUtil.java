@@ -91,6 +91,7 @@ public final class GuiUtil {
 		flags |= 524320/*WS_EX_LAYERED|WS_EX_TRANSPARENT*/;
 		nSetWindowLong(hwnd, -20, flags);
 	}
+	public static long getConsoleWindow() {return nGetConsoleWindow();}
 	private static native long nGetWindowLong(long hwnd, int dwType);
 	private static native void nSetWindowLong(long hwnd, int dwType, long flags);
 	private static native long nGetConsoleWindow();

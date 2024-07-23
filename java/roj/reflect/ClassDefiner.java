@@ -61,7 +61,7 @@ public final class ClassDefiner extends ClassLoader {
 	}
 
 	// 用weak(), 这样不会走ClassDefiner#defineClass分支
-	private static final H def = DirectAccessor.builder(H.class).inline().delegate(ClassLoader.class, new String[] {"defineClass", "findLoadedClass"}).build();
+	private static final H def = Bypass.builder(H.class).inline().delegate(ClassLoader.class, new String[] {"defineClass", "findLoadedClass"}).build();
 	private interface H {
 		Class<?> defineClass(ClassLoader loader, String name, byte[] b, int off, int len, ProtectionDomain pd);
 		Class<?> findLoadedClass(ClassLoader loader, String name);
@@ -75,7 +75,7 @@ public final class ClassDefiner extends ClassLoader {
 	public static Class<?> defineClass(ClassLoader cl, IClass data) {return defineClass(cl, null, Parser.toByteArrayShared(data));}
 	public static Class<?> defineClass(ClassLoader cl, String name, ByteList buf) throws ClassFormatError {
 		if (cl == null) throw new NullPointerException("classLoader cannot be null");
-		if (ClassDumper.DUMP_ENABLED) ClassDumper.dump("define", buf);
+		if (Debug.CLASS_DUMP) Debug.dump("define", buf);
 
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
 		if (sm != null) buf = sm.checkDefineClass(name, buf);

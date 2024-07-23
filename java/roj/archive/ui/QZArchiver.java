@@ -313,7 +313,7 @@ public class QZArchiver {
 	}
 
 	private void keepEntry(QZEntry entry) {
-		WordBlock block = entry.getBlock();
+		WordBlock block = entry.block();
 		if (block == null) empties.add(entry);
 		else {
 			keep.computeIfAbsent(block, Helpers.fnArrayList()).add(entry);
@@ -404,7 +404,7 @@ public class QZArchiver {
 			throw new RuntimeException("Read BasicAttributes for "+file+" failed");
 		}
 
-		QZEntry entry = new QZEntry(name, attr.size());
+		QZEntry entry = QZEntry.of(name);
 
 		if (attr.isDirectory()) entry.setIsDirectory(true);
 		if (storeMT) entry.setModificationTime(attr.lastModifiedTime().toMillis());

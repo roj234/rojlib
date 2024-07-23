@@ -230,7 +230,7 @@ JNIEXPORT jlong JNICALL Java_roj_archive_qz_xz_LZMA2WriterN_nWrite(JNIEnv *env, 
     size_t retVal = ((FL2_compressStream) funcptr[6]) (ctx, ob, ib);
 
     if (ib->pos == ib->size) ib->pos = ib->size = 0;
-    env->SetIntField(self, fields[2], ib->pos);
+    env->SetIntField(self, fields[2], static_cast<jint>(ib->pos));
 
     env->SetIntField(self, fields[5], static_cast<jint>(ob->pos));
     return retVal;

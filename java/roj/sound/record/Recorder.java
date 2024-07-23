@@ -38,7 +38,7 @@ public class Recorder implements Runnable {
 	public void start() throws LineUnavailableException {
 		line.open(format/*, buffer*/);
 		line.start();
-		handler.start(format, 4096);
+		handler.init(format, 4096);
 	}
 
 	@Override
@@ -53,7 +53,7 @@ public class Recorder implements Runnable {
 			if (got <= 0) {
 				break;
 			}
-			handler.write(buf, got);
+			handler.write(buf, 0, got, true);
 		} while (!self.isInterrupted() && line.isOpen());
 	}
 
