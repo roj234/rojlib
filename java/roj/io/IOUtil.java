@@ -375,7 +375,7 @@ public final class IOUtil {
 	 *   ./
 	 *   开头的/
 	 *   空白字符
-	 * 并截断字符串到任意(不可打印, ':', ' ')字符之前
+	 * 并截断字符串到任意(不可打印, ' ')字符之前
 	 */
 	@NotNull
 	public static String safePath(String path) throws InvalidPathException {
@@ -385,7 +385,7 @@ public final class IOUtil {
 		int i = 0;
 		while (i < path.length()) {
 			var c = path.charAt(i);
-			if (c < 32 || c == ':') break;
+			if (c < 32/* || c == ':'*/) break;
 			i++;
 			if (c != ' ') end = i;
 		}

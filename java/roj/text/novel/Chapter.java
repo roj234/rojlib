@@ -51,6 +51,8 @@ public class Chapter extends TreeNodeImpl<Chapter> {
 
 	public CharList text;
 
+	public CharSequence getText(CharList base) {return text != null ? text : base.subSequence(start, end);}
+
 	public String toString() {
 		String s = "("+no+") "+ (displayName !=null ? displayName : matches) + " | "+(text == null ? end-start : text.length())+"字";
 		if (children != null) s += " +"+ children.size();

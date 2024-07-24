@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * XML Value Base
@@ -226,6 +227,14 @@ public abstract class Node {
 				if (elem.tag.equals(tag)) collector.add(elem);
 				elem.getElementsByTagName(tag, collector);
 			}
+		}
+	}
+
+	public void forEach(Consumer<Node> consumer) {
+		consumer.accept(this);
+		var nodes = _childNodes();
+		for (int i = 0; i < nodes.size(); i++) {
+			nodes.get(i).forEach(consumer);
 		}
 	}
 	// endregion

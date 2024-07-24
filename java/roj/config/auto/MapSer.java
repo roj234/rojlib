@@ -91,11 +91,8 @@ final class MapSer extends Adapter {
 
 		Map<?,?> ref = (Map<?,?>) o;
 		for (Map.Entry<?,?> entry : ref.entrySet()) {
-			try {
-				c.key((String) entry.getKey());
-			} catch (ClassCastException e) {
-				throw new IllegalArgumentException("MapSer的map必须用字符串key");
-			}
+			// 能不能反序列化回来，就不是我考虑的事情了
+			c.key(String.valueOf(entry.getKey()));
 			valueType.write(c, entry.getValue());
 		}
 	}

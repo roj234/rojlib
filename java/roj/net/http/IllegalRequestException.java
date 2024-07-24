@@ -31,7 +31,9 @@ public class IllegalRequestException extends IOException {
 
 	public Response createResponse() {return response != null || code < 400 ? response : Response.httpError(code);}
 
-	public static final IllegalRequestException BAD_REQUEST = new IllegalRequestException(HttpUtil.BAD_REQUEST);
+	public static final IllegalRequestException
+		BAD_REQUEST = new IllegalRequestException(HttpUtil.BAD_REQUEST),
+		NOT_FOUND = new IllegalRequestException(HttpUtil.NOT_FOUND);
 	/**
 	 * 内部使用，保留可选的调试信息，如果以后要调试
 	 */

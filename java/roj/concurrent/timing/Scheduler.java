@@ -235,11 +235,9 @@ public class Scheduler implements Runnable {
 			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
 
 			synchronized (root) {
-				//按说这是不可能的，不过就是发生了，算了不去管它
-				if (task.next == null) return false;
 				task.next.prev = task.prev;
 				task.prev.next = task.next;
-				task.prev = task.next = null;
+				// 但是不要清除task.next，因为上面(#127/#142)可能会引用
 			}
 			return true;
 		}

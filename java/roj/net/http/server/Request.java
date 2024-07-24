@@ -50,7 +50,7 @@ public final class Request extends Headers {
 		this.version = version;
 		try {
 			this.path = initPath = IOUtil.safePath(Escape.decodeURI(path));
-			this.getFields = query.isEmpty() ? Collections.emptyMap() : query;
+			this.getFields = query.isEmpty() ? "" : query;
 		} catch (MalformedURLException e) {
 			throw badRequest(e.getMessage());
 		}
@@ -104,14 +104,14 @@ public final class Request extends Headers {
 	private Map<String, Cookie> cookie;
 
 	public String query() {
-		if (getFields instanceof String) return (String) getFields;
-		else if (getFields == Collections.EMPTY_MAP) return "";
+		if (getFields instanceof String s) return s;
 		throw new IllegalStateException("Parsed");
 	}
 	public Map<String, String> GetFields() throws IllegalRequestException {
-		if (getFields instanceof CharSequence) {
+		if (getFields instanceof String s) {
+			if (s.isEmpty()) return Collections.emptyMap();
 			try {
-				getFields = simpleValue((CharSequence) getFields, "&", true);
+				getFields = simpleValue(s, "&", true);
 			} catch (MalformedURLException e) {
 				throw badRequest(e.getMessage());
 			}

@@ -20,6 +20,9 @@ import roj.asm.visitor.Label;
 import roj.asm.visitor.LongByeBye;
 import roj.asm.visitor.SwitchSegment;
 import roj.collect.*;
+import roj.compiler.context.GlobalContext;
+import roj.compiler.context.LibraryClassLoader;
+import roj.compiler.context.LocalContext;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.ReflectionUtils;
@@ -374,6 +377,17 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			}
 			sb._free();
 
+			// 就是有点太重量级了
+			// 然而，java反射自带的泛型API就是依托答辩
+			if (generic != null) {
+				try {
+					var types = genericInferrer().inferGeneric(generic, c.getName().replace('.', '/'));
+					if (types != null) generic.children = types;
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+
 			ser = ser.transform(this, type, generic == null ? null : generic.children);
 			synchronized (localRegistry) {localRegistry.put(name, ser);}
 			return ser;
@@ -403,6 +417,17 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 		return ser;
 	}
+
+	private GlobalContext gc_;
+	private LocalContext genericInferrer() {
+		var gc = gc_;
+		if (gc == null) {
+			gc_ = gc = new GlobalContext();
+			gc.addLibrary(new LibraryClassLoader(classLoader));
+		}
+		return gc.createLocalContext();
+	}
+
 	private static boolean mustBeDynamic(Class<?> type) {
 		if (type.getComponentType() != null) return false;
 		if ((type.getModifiers() & (ACC_ABSTRACT|ACC_INTERFACE)) != 0) return true;

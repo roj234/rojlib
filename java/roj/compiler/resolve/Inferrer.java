@@ -348,13 +348,20 @@ public final class Inferrer {
 					return LocalContext.OBJECT_TYPE;//Asterisk.anyType;
 				}
 
+				if (tt.array() > 0) {
+					exact = exact.clone();
+					exact.setArrayDim(exact.array()+tt.array());
+				}
+
 				var bound = bounds.get(tt.name);
 				if (tt.extendType == Generic.EX_SUPER) {
 					GlobalContext.debugLogger().warn("EX_SUPER how to deal? typeParam={}, realType={}", tt, exact);
-					return new Type(exact.owner(), exact.array()+tt.array());
+					return exact;
 				}
-				return new Asterisk(new Type(exact.owner(), exact.array()+tt.array()),
-					bound.get(bound.get(0).genericType() == IType.PLACEHOLDER_TYPE ? 1 : 0));
+
+				// TODO temporary workaround for SerializerFactory
+				if (LocalContext.get() == null) return exact;
+				return new Asterisk(exact, bound.get(bound.get(0).genericType() == IType.PLACEHOLDER_TYPE ? 1 : 0));
 			}
 			case IType.ASTERISK_TYPE -> {
 				Asterisk t = (Asterisk) type;

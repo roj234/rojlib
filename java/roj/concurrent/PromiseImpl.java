@@ -4,6 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.collect.IntMap;
 import roj.concurrent.task.ITask;
 import roj.reflect.ReflectionUtils;
+import roj.text.logging.Logger;
 import roj.util.Helpers;
 
 import java.util.concurrent.CancellationException;
@@ -32,7 +33,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 	private void head(Consumer<PromiseCallback> handler) {
 		try {
 			handler.accept(this);
-			if (_state == PENDING) resolve(null);
+			//if (_state == PENDING) resolve(null);
 		} catch (Throwable e) {
 			reject(e);
 		}
@@ -145,7 +146,14 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 					}
 				}
 
-				p.reject(val);
+				var prev = SKIP_PRINT.get();
+				SKIP_PRINT.set(val);
+				try {
+					p.reject(val);
+				} finally {
+					if (prev != null) SKIP_PRINT.set(prev);
+					else SKIP_PRINT.remove();
+				}
 				p = p.next;
 			}
 		}
@@ -165,9 +173,12 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 			else executor.submit(this);
 		} else if (state == 2) {
 			Object v = _val;
-			throw new RuntimeException("Uncaught in "+this, v instanceof Throwable ? (Throwable) v : null);
+			if (SKIP_PRINT.get() == v) return;
+			LOGGER.error("{}发生了异常", v instanceof Throwable ? (Throwable) v : new Exception("未捕获的Reject"), this);
 		}
 	}
+	private static final ThreadLocal<Object> SKIP_PRINT = new ThreadLocal<>();
+	private static final Logger LOGGER = Logger.getLogger("Promise");
 
 	private boolean invokeOnce(int flag) {
 		while (true) {
@@ -189,7 +200,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 		PromiseImpl<?> p = next;
 		try {
 			handler_success.accept(Helpers.cast(_val), p);
-			if (p._state == PENDING) p.resolve(null);
+			//if (p._state == PENDING) p.resolve(null);
 		} catch (Throwable e) {
 			p.reject(e);
 		}

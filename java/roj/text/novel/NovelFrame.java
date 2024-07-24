@@ -45,9 +45,7 @@ import java.util.regex.Pattern;
 public class NovelFrame extends JFrame {
 	public static void main(String[] args) {
 		GuiUtil.systemLook();
-		NovelFrame f = new NovelFrame();
-
-		f.pack();
+		var f = new NovelFrame();
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		f.show();
 	}
@@ -269,6 +267,8 @@ public class NovelFrame extends JFrame {
 		((Chapter) chaptersTree.getRoot()).flat(chapters);
 	}
 
+	public Chapter getRootChapter() {return (Chapter) chaptersTree.getRoot();}
+
 	private class ChapterDblClickHelper extends MouseAdapter {
 		long prevClick;
 		Chapter prevId;
@@ -350,9 +350,8 @@ public class NovelFrame extends JFrame {
 			uiNovelPath.setText(fileChooser.getSelectedFile().getAbsolutePath());
 		}
 	}
-
-	private void read_novel(ActionEvent e) {
-		try (TextReader sr = TextReader.auto(new File(uiNovelPath.getText()))) {
+	public void load(File file) {
+		try (var sr = TextReader.auto(file)) {
 			novel_in.clear();
 			novel_in.readFully(sr).replace("\r\n", "\n").replace('\r', '\n');
 			errout.setText("charset:"+sr.charset()+"\n");
@@ -367,6 +366,7 @@ public class NovelFrame extends JFrame {
 		btnWrite.setEnabled(false);
 		btnToEpub.setEnabled(false);
 	}
+	private void read_novel(ActionEvent e) {load(new File(uiNovelPath.getText()));}
 	// endregion
 	// region 功能区-校对整理
 	private void on_preset_regexp_clicked(ActionEvent e) {
@@ -791,7 +791,7 @@ public class NovelFrame extends JFrame {
 		}
 	}
 
-	private void writeChapter(Chapter c, CharList ob, boolean addSpace) {
+	public void writeChapter(Chapter c, CharList ob, boolean addSpace) {
 		int st, len;
 		char[] val;
 		if (c.text != null) {
@@ -971,6 +971,7 @@ public class NovelFrame extends JFrame {
         var scrollPane1 = new JScrollPane();
         errout = new JEditorPane();
         btnGroup = new JButton();
+        btnExport = new JButton();
         advancedMenu = new JDialog();
         scrollPane3 = new JScrollPane();
         presetRegexpInp = new JTextArea();
@@ -1295,6 +1296,12 @@ public class NovelFrame extends JFrame {
         contentPane.add(btnGroup);
         btnGroup.setBounds(new Rectangle(new Point(180, 485), btnGroup.getPreferredSize()));
 
+        //---- btnExport ----
+        btnExport.setText("\u5bfc\u51fa");
+        btnExport.setEnabled(false);
+        contentPane.add(btnExport);
+        btnExport.setBounds(new Rectangle(new Point(10, 667), btnExport.getPreferredSize()));
+
         contentPane.setPreferredSize(new Dimension(945, 700));
         pack();
         setLocationRelativeTo(getOwner());
@@ -1341,6 +1348,7 @@ public class NovelFrame extends JFrame {
 		// JFormDesigner - End of component initialization  //GEN-END:initComponents  @formatter:on
 	}
 
+
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
     private JProgressBar progress;
     private JLabel progressStr;
@@ -1383,6 +1391,7 @@ public class NovelFrame extends JFrame {
     private JCheckBox uiRegenId;
     private JEditorPane errout;
     private JButton btnGroup;
+    public JButton btnExport;
     private JDialog advancedMenu;
     private JScrollPane scrollPane3;
     private JTextArea presetRegexpInp;

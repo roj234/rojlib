@@ -531,6 +531,17 @@ new FormModel {
 				"x": 180
 				"y": 485
 			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "btnExport"
+				"text": "导出"
+				"enabled": false
+				auxiliary() {
+					"JavaCodeGenerator.variableModifiers": 1
+				}
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 10
+				"y": 667
+			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 0, 0 )
 			"size": new java.awt.Dimension( 945, 700 )

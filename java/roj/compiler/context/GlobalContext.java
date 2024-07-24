@@ -62,6 +62,7 @@ public class GlobalContext implements CompilerSpec {
 
 	protected final XHashSet<String, CompileUnit> ctx = COMPILE_UNIT_SHAPE.create();
 	protected final MyHashMap<String, Library> libraries = new MyHashMap<>();
+	protected final List<Library> fallbackLibraries = new SimpleList<>();
 	protected final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
 	protected MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
 	protected final SimpleList<CompileUnit> generatedCUs = new SimpleList<>();
@@ -78,13 +79,26 @@ public class GlobalContext implements CompilerSpec {
 	}
 
 	public void addLibrary(Library library) {
-		for (String className : library.content())
-			libraries.put(className, library);
+		var set = library.content();
+		if (set.isEmpty()) {
+			fallbackLibraries.add(library);
+		} else {
+			for (String className : set)
+				libraries.put(className, library);
+		}
 	}
 
 	public ConstantData getClassInfo(CharSequence name) {
 		ConstantData clz = ctx.get(name);
-		if (clz == null) clz = libraries.getOrDefault(name, LibraryRuntime.INSTANCE).get(name);
+		if (clz == null) {
+			var library = libraries.get(name);
+			if (library != null) return library.get(name);
+			for (int i = 0; i < fallbackLibraries.size(); i++) {
+				library = fallbackLibraries.get(i);
+				if ((clz = library.get(name)) != null) return clz;
+			}
+			clz = LibraryRuntime.INSTANCE.get(name);
+		}
 		return clz;
 	}
 
