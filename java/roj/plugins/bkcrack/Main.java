@@ -156,7 +156,7 @@ public class Main extends Plugin {
 			thread.start();
 			try {
 				Thread.sleep(5000);
-				thread.stop();
+				pool.shutdownNow();
 			} catch (InterruptedException ignored) {}
 			tryUnlock(file);
 		}

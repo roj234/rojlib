@@ -144,7 +144,7 @@ public class CommandTree extends CommandNode {
 
 		public void write(DynByteBuf buf) {
 			buf.putVarIntUTF(this.id);
-			if (argumentType.type().equals("string")) {
+			if (argumentType.type().equals("字符串")) {
 				buf.putVarInt(5).put(0);
 				// string:word
 			} else {

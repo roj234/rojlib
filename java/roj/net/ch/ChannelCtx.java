@@ -56,9 +56,9 @@ public final class ChannelCtx {
 		}
 	}
 
-	public void pauseAndFlush() { root.pauseAndFlush(); }
-	public void flush() throws IOException { root.flush(); }
-	public boolean isPendingSend() { return root.isPendingSend(); }
+	public void pauseAndFlush() {root.pauseAndFlush();}
+	public void flush() throws IOException {root.flush();}
+	public boolean isFlushing() {return root.isFlushing();}
 
 	public void channelRead(Object data) throws IOException {
 		if (next != null) next.handler.channelRead(next, data);

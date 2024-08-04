@@ -27,7 +27,7 @@ public final class MySaltedHash {
 		this.saltLength = (byte) saltLength;
 	}
 
-	public static MySaltedHash hasher(SecureRandom srnd) {return new MySaltedHash(Objects.requireNonNull(srnd), 19, 32, 16);}
+	public static MySaltedHash hasher(SecureRandom srnd) {return new MySaltedHash(Objects.requireNonNull(srnd), 16, 32, 16);}
 	public static MySaltedHash hasher(SecureRandom srnd, int cost, int length, int saltLength) {
 		if (length < 16 || length > 64) throw new IllegalArgumentException("length not in [16,64]");
 		if (cost < 0 || cost > 20) throw new IllegalArgumentException("cost not in [0,20]");

@@ -49,6 +49,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 
 		System.out.println("请选择作为发起方(o)或接受方(x)");
 		char c = Terminal.readChar(MyBitSet.from("ox"));
+		if (c == 0) return;
 		InetSocketAddress remote;
 		if (c == 'x') {
 			String addr = Terminal.readString("请输入对方地址: ");

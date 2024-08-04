@@ -36,6 +36,7 @@ import roj.util.AttributeKey;
 import roj.util.Helpers;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -228,11 +229,11 @@ public final class OKRouter implements Router {
 		for (var tce : exhandlers) cw.visitException(tce.start,tce.end,tce.handler,null);
 		cw.finish();
 
-		Dispatcher ah = (Dispatcher) ClassDefiner.make(hndInst, o.getClass().getClassLoader());
+		var ah = (Dispatcher) ClassDefiner.make(hndInst, o.getClass().getClassLoader());
 		for (var entry : handlers.selfEntrySet()) {
 			int i = entry.getIntKey();
-			Annotation a = entry.getValue();
-			Route set = new Route();
+			var a = entry.getValue();
+			var set = new Route();
 
 			set.accepts = a.getInt("accepts", 255);
 			set.req = ah.copyWith(i, o);
@@ -269,17 +270,17 @@ public final class OKRouter implements Router {
 			}
 			set.prec = precs.toArray(new Dispatcher[precs.size()]);
 
-			int prefix = a.getBoolean("prefix")?Node.PREFIX:0;
+			int prefix = a.getBoolean("prefix")?Node.PREFIX|Node.DIRECTORY:0;
 			String url = pathRel.concat(a.getString("value"));
 
 			Node node = route.add(url, 0, url.length());
 
 			Object prev = node.value;
 			if (prev == null) {
-				node.flag |= prefix;
+				node.flag = (byte) prefix;
 				node.value = set;
 			} else {
-				if ((node.flag&Node.PREFIX) != prefix) throw new IllegalArgumentException("prefix定义不同/"+o+" in "+prev+"|"+set);
+				if (node.flag != prefix) throw new IllegalArgumentException("prefix定义不同/"+o+" in "+prev+"|"+set);
 
 				if (prev instanceof Route prevReq) {
 					Route[] newReq = new Route[8];
@@ -372,35 +373,41 @@ public final class OKRouter implements Router {
 		return route;
 	}
 
-	public final Object getInterceptor(String name) {return interceptors.get(name);}
-	public final void setInterceptor(String name, Object interceptor) {interceptors.put(name, (Dispatcher) interceptor);}
+	public final Dispatcher getInterceptor(String name) {return interceptors.get(name);}
+	public final void setInterceptor(String name, Dispatcher interceptor) {interceptors.put(name, interceptor);}
 	public final void removeInterceptor(String name) {interceptors.remove(name);}
 
 	public final OKRouter addPrefixDelegation(String path, Router router) {return addPrefixDelegation(path, router, (String[])null);}
-	public final OKRouter addPrefixDelegation(String path, Router router, String... interceptors) {
+	public final OKRouter addPrefixDelegation(String path, Router router, String... interceptors) {return addPrefixDelegation(path, router, true, interceptors);}
+	public final OKRouter addPrefixDelegation(String path, Router router, boolean directoryMatchOnly, @Nullable String... interceptors) {
 		Node node = route.add(path, 0, path.length());
 		if (node.value != null) throw new IllegalArgumentException("子路径"+path+"已存在");
 
 		Route aset = new Route();
 
-		node.flag |= Node.PREFIX;
+		node.flag = (byte) (Node.PREFIX|(directoryMatchOnly?Node.DIRECTORY:0));
 		node.value = aset;
 		aset.accepts = 511;
 
-		Dispatcher dispatcher = (req, srv, extra) -> {
+		Dispatcher lastCheck = (req, srv, extra) -> {
 			router.checkHeader(req, (PostSetting) extra);
 			return null;
 		};
-		if (interceptors == null || interceptors.length == 0) aset.prec = new Dispatcher[] {dispatcher};
+		if (interceptors == null || interceptors.length == 0) aset.prec = new Dispatcher[] {lastCheck};
 		else {
 			var prec = new Dispatcher[interceptors.length + 1];
-			for (int i = 0; i < interceptors.length; i++) {
-				Dispatcher dp = this.interceptors.get(interceptors[i]);
-				if (dp == null) throw new IllegalArgumentException("无法找到请求拦截器"+interceptors[i]);
-				prec[i] = dp;
+			int size = 0;
+			for (String name : interceptors) {
+				Dispatcher dp = this.interceptors.get(name);
+				if (dp == null) {
+					if (!this.interceptors.containsKey(name))
+						throw new IllegalArgumentException("无法找到请求拦截器"+name);
+				} else {
+					prec[size++] = dp;
+				}
 			}
-			prec[interceptors.length] = dispatcher;
-			aset.prec = prec;
+			prec[size] = lastCheck;
+			aset.prec = size == interceptors.length ? prec : Arrays.copyOf(prec, size+1);
 		}
 		aset.req = (req, srv, extra) -> {
 			try {
@@ -690,7 +697,7 @@ public final class OKRouter implements Router {
 				Node n = nodeS.get(j);
 				if (n.value != null) {
 					// prefix只接受目录
-					if ((n.flag&Node.PREFIX) != 0 && path.charAt(end-1) != '/') {
+					if ((n.flag&Node.DIRECTORY) != 0 && path.charAt(end-1) != '/') {
 						continue;
 					}
 
@@ -757,7 +764,7 @@ public final class OKRouter implements Router {
 		Object value;
 
 		byte flag;
-		static final byte PREFIX = 1;
+		static final byte PREFIX = 1, DIRECTORY = 2;
 
 		private int mask;
 		private Text[] table;
@@ -1043,7 +1050,7 @@ public final class OKRouter implements Router {
 		return adapter.get();
 	}
 
-	interface Dispatcher {
+	public interface Dispatcher {
 		Object invoke(Request req, ResponseHeader srv, Object extra) throws IllegalRequestException;
 		default Dispatcher copyWith(int methodId, Object ref) { return this; }
 	}

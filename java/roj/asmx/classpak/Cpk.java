@@ -48,9 +48,11 @@ public class Cpk {
 		}
 
 		File input = new File(args[0]);
-		File output = new File(input.getParentFile(), IOUtil.fileName(input.getName())+".cpk."+IOUtil.extensionName(input.getName()));
+		File output = IOUtil.deriveOutput(input, ".cpk");
 		int chunkSize = args.length > 1 ? Integer.parseInt(args[1]) : 262144;
-
+		main_alt(input, output, chunkSize);
+	}
+	public static void main_alt(File input, File output, int chunkSize) {
 		List<ConstantData> loadable = new SimpleList<>();
 		try (ZipFileWriter zo = new ZipFileWriter(output, Deflater.BEST_COMPRESSION, 0)) {
 			zo.beginEntry(new ZEntry("META-INF/MANIFEST.MF"));

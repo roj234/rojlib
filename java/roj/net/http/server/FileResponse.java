@@ -161,7 +161,8 @@ final class FileResponse implements Response {
 				data[(i << 1) + 1] = parseLong(v.substring(1), len);
 			} else {
 				// start, end
-				data[i << 1] = parseLong(v.substring(0, j), len);
+				// 加1是允许长度为0时的[Range: 0-]请求
+				data[i << 1] = parseLong(v.substring(0, j), len+1);
 				data[(i << 1) + 1] = j == v.length() - 1 ? len - 1 : parseLong(v.substring(j + 1), len);
 			}
 

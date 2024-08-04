@@ -238,7 +238,7 @@ public final class FMDMain {
 			}
 
 			long stamp = increment ? p.binJar.lastModified() : -1;
-			files = IOUtil.findAllFiles(source, file -> IOUtil.extensionName(file.getName()).equalsIgnoreCase("java") && file.lastModified() > stamp);
+			files = IOUtil.findAllFiles(source, file -> IOUtil.extensionName(file.getName()).equals("java") && file.lastModified() > stamp);
 		}
 		// endregion
 		Profiler.endStartSection("ensureWritable <= getSource("+files.size()+")");

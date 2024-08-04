@@ -73,8 +73,6 @@ public abstract class WebSocketHandler implements ChannelHandler {
 		COMPRESS_AVAILABLE = 0x40, // 对等端允许压缩 (permessage-deflate)
 		REMOTE_MASK = 0x80; // 标志为服务端
 
-	private static final int ZIP_BUFFER_CAPACITY = 256;
-
 	private Deflater def;
 	private Inflater inf;
 
@@ -142,7 +140,7 @@ public abstract class WebSocketHandler implements ChannelHandler {
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 		idle = 0;
 
-		DynByteBuf rb = (DynByteBuf) msg;
+		var rb = (DynByteBuf) msg;
 		switch (state) {
 			case HEADER:
 				if (rb.readableBytes() < 2) return;
@@ -225,94 +223,101 @@ public abstract class WebSocketHandler implements ChannelHandler {
 			head = (head & 0x80) | (rcvFrag.data & 0x7F);
 		}
 
-		if ((head & RSV_COMPRESS) != 0) {
+		boolean compressed = (head & RSV_COMPRESS) != 0;
+		if (compressed) {
 			if (inf == null) {
 				error(ERR_PROTOCOL, "Illegal rsv bits");
 				return;
 			}
 
-			ByteList buf = IOUtil.getSharedByteBuf();
-			buf.ensureCapacity(ZIP_BUFFER_CAPACITY);
-			byte[] zi = buf.list;
+			var hasNext = true;
+			byte[] zi = IOUtil.getSharedByteBuf().list;
 
-			DynByteBuf zo = ctx.allocate(false, 1024);
+			var zo = ctx.allocate(false, 1024);
 
-			while (buf != null) {
-				int $len = Math.min(rb.readableBytes(), zi.length);
-				rb.readFully(zi, 0, $len);
+			try {
+				while (hasNext) {
+					int $len = Math.min(rb.readableBytes(), zi.length);
+					rb.readFully(zi, 0, $len);
 
-				pushEOS:
-				if (!rb.isReadable()) {
-					if ((head & 0x80) != 0) {
-						// not enough space, process input data first
-						if (zi.length - $len < 4) break pushEOS;
+					pushEOS:
+					if (!rb.isReadable()) {
+						if ((head & 0x80) != 0) {
+							// not enough space, process input data first
+							if (zi.length - $len < 4) break pushEOS;
 
-						zi[$len++] = 0;
-						zi[$len++] = 0;
-						zi[$len++] = -1;
-						zi[$len++] = -1;
+							zi[$len++] = 0;
+							zi[$len++] = 0;
+							zi[$len++] = -1;
+							zi[$len++] = -1;
 
-						// break on next cycle
-						buf = null;
-					} else {
-						break;
+							// break on next cycle
+							hasNext = false;
+						} else {
+							break;
+						}
+					}
+
+					inf.setInput(zi, 0, $len);
+
+					try {
+						do {
+							int i = inf.inflate(zo.array(), zo.arrayOffset() + zo.wIndex(), zo.capacity() - zo.wIndex());
+							zo.wIndex(zo.wIndex() + i);
+
+							if (!zo.isWritable()) {
+								if (zo.capacity() << 1 > maxDataOnce) {
+									error(ERR_TOO_LARGE, "decompressed data > "+zo.capacity()+" bytes");
+									return;
+								}
+								zo = ctx.alloc().expand(zo, zo.capacity());
+							}
+						} while (!inf.needsInput());
+					} catch (Exception e) {
+						Helpers.athrow(e);
 					}
 				}
 
-				inf.setInput(zi, 0, $len);
-
-				try {
-					do {
-						int i = inf.inflate(zo.array(), zo.arrayOffset() + zo.wIndex(), zo.capacity() - zo.wIndex());
-						zo.wIndex(zo.wIndex() + i);
-
-						if (!zo.isWritable()) {
-							if (zo.capacity() << 1 > maxDataOnce) {
-								error(ERR_TOO_LARGE, "decompressed data > " + zo.capacity() + " bytes");
-								return;
-							}
-							zo = ctx.alloc().expand(zo, zo.capacity());
-						}
-					} while (!inf.needsInput());
-				} catch (Exception e) {
-					Helpers.athrow(e);
+				// not continuous
+				if ((head & 0x80) != 0 && (flag & REMOTE_NO_CTX) != 0) {
+					inf.reset();
 				}
-			}
-
-			// not continuous
-			if ((head & 0x80) != 0 && (flag & REMOTE_NO_CTX) != 0) {
-				inf.reset();
+			} catch (Exception e) {
+				BufferPool.reserve(zo);
+				throw e;
 			}
 
 			rb = zo;
 		}
 
-		if (rcvFrag != null) {
-			if ((flag & ACCEPT_PARTIAL_MSG) != 0) {
-				onPacket(0x80 | (rcvFrag.data&0xF), rb);
-				rcvFrag.fragments++;
-			} else {
-				rcvFrag.append(ctx, rb);
-				if (rcvFrag.length > maxData) {
-					error(ERR_TOO_LARGE, null);
-				}
+		try {
+			if (rcvFrag != null) {
+				if ((flag & ACCEPT_PARTIAL_MSG) != 0) {
+					onPacket(0x80 | (rcvFrag.data&0xF), rb);
+					rcvFrag.fragments++;
+				} else {
+					rcvFrag.append(ctx, rb);
+					if (rcvFrag.length > maxData) {
+						error(ERR_TOO_LARGE, null);
+					}
 
-				if ((head & 0x80) != 0) {
-					try {
-						onPacket(rcvFrag.data&0xF, rcvFrag.payload());
-					} finally {
-						rcvFrag.clear();
-						rcvFrag = null;
+					if ((head & 0x80) != 0) {
+						try {
+							onPacket(rcvFrag.data&0xF, rcvFrag.payload());
+						} finally {
+							rcvFrag.clear();
+							rcvFrag = null;
+						}
 					}
 				}
+			} else {
+				onPacket(head & 15, rb);
 			}
-		} else {
-			onPacket(head & 15, rb);
+		} finally {
+			state = HEADER;
+			if (compressed) BufferPool.reserve(rb);
+			else if (rb.capacity() != 0) rb.wIndex(wPos);
 		}
-
-		state = HEADER;
-		if (rb.capacity() == 0) return;
-		rb.wIndex(wPos);
 	}
 
 	private void mask(DynByteBuf b) {

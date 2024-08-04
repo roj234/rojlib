@@ -21,7 +21,6 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.reflect.ReflectionUtils.u;
@@ -82,7 +81,33 @@ public class MusicPlayer extends Plugin implements Runnable {
 				if (meta != null && meta.getTitle() != null) name = meta.getArtist() == null ? meta.getTitle()+" - 佚名" : meta.getTitle()+" - "+meta.getArtist();
 				if (name == null) name = IOUtil.fileName(playList.get(playIndex).getName());
 
-				if (name.length() > 20) name = name.substring(0, 20);
+				int displayWidth = 40;
+
+				int prefix = 0, prefixLen = 0;
+				for (; prefix < name.length(); prefix++) {
+					int w = Terminal.getCharWidth(name.charAt(prefix));
+					if (prefixLen + w > displayWidth) break;
+					prefixLen += w;
+				}
+
+				finish:
+				if (prefix < name.length()) {
+					int length = name.length();
+					int realLength = length - prefix;
+
+					int i = iPlayed % (realLength * 2);
+					if (i >= realLength) i = realLength*2 - i - 1;
+
+					int j = i;
+					int tmp = 0;
+					while (j < name.length()) {
+						int w = Terminal.getCharWidth(name.charAt(j++));
+						if ((tmp += w) > displayWidth) {
+							name = name.substring(i, j);
+							break finish;
+						}
+					}
+				}
 
 				progress.setName(name);
 				var sb = IOUtil.getSharedCharBuf();
@@ -190,8 +215,12 @@ public class MusicPlayer extends Plugin implements Runnable {
 		unpause();
 		playIndex = song;
 		int f = u.getAndSetInt(this, FLAG, SKIP_AUTO);
-		if ((f&STOP) != 0) LockSupport.unpark(player);
-		else decoder.stop();
+		if ((f&STOP) != 0) {
+			flag = 0;
+			LockSupport.unpark(player);
+		} else {
+			decoder.stop();
+		}
 	}
 
 	@Nullable
@@ -206,7 +235,7 @@ public class MusicPlayer extends Plugin implements Runnable {
 			if ((flag & STOP) != 0) {LockSupport.park();continue;}
 
 			var song = playList.get(playIndex);
-			String type = IOUtil.extensionName(song.getName()).toLowerCase(Locale.ROOT);
+			String type = IOUtil.extensionName(song.getName());
 			switch (type) {
 				case "mp3" -> decoder = new MP3Decoder();
 				case "wav" -> decoder = new WavDecoder();

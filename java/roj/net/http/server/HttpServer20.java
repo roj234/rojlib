@@ -19,6 +19,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.Deflater;
 
 import static roj.net.http.server.HttpCache.*;
+import static roj.net.http.server.HttpServer11.*;
 
 /**
  * @author Roj234
@@ -35,7 +36,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		this.time = System.currentTimeMillis() + router.readTimeout(null);
 	}
 
-	private static final byte FLAG_ASYNC = 1, FLAG_COMPRESS = 2, FLAG_GOAWAY = 4, FLAG_ERRORED = 8, FLAG_GZIP = 16;
+	private static final byte FLAG_GOAWAY = 1;
 	private byte flag;
 
 	private long time;
@@ -256,8 +257,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		}
 
 		if (req != null) {
-			req.free();
-			t.reserve(req);
+			if ((flag&FLAG_UNSHARED) == 0) t.reserve(req);
 			req = null;
 		}
 
@@ -265,8 +265,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 
 		var pb = postBuffer;
 		if (pb != null) {
-			if (BufferPool.isPooled(pb)) IOUtil.closeSilently(pb);
-			else pb._free();
+			BufferPool.reserve(pb);
 			postBuffer = null;
 		}
 
@@ -382,64 +381,35 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 
 	//endregion
 	//region ResponseHeader
-	@Override
-	public void onFinish(HFinishHandler o) {throw new UnsupportedOperationException("HTTP/2不支持FinishHandler");}
+	@Override public void onFinish(HFinishHandler o) {throw new UnsupportedOperationException("HTTP/2不支持FinishHandler");}
+	@Override public Request request() {return req;}
 
-	public ResponseHeader code(int code) {
-		req.responseHeader.put(":status", String.valueOf(code));
-		return this;
-	}
-
-	public ResponseHeader die() {
-		flag |= FLAG_GOAWAY;
-		return this;
-	}
-
-	public ResponseHeader enableAsyncResponse() {
-		flag |= FLAG_ASYNC;
-		return this;
-	}
-
-	public ResponseHeader enableCompression() {
-		flag |= FLAG_COMPRESS;
-		return this;
-	}
-
-	public ResponseHeader disableCompression() {
-		flag &= ~FLAG_COMPRESS;
-		return this;
-	}
-
-	public void body(Response resp) throws IOException {
+	@Override public ResponseHeader code(int code) {req.responseHeader.put(":status", String.valueOf(code));return this;}
+	@Override public ResponseHeader die() {flag |= FLAG_GOAWAY;return this;}
+	@Override public void unsharedRequest() {flag |= FLAG_UNSHARED;}
+	@Override public void sharedRequest() {flag &= ~FLAG_UNSHARED;}
+	@Override public ResponseHeader enableAsyncResponse() {flag |= FLAG_ASYNC;return this;}
+	@Override public void body(Response resp) throws IOException {
 		if ((flag & FLAG_ASYNC) != 0) {
-			if (getState() == PROCESSING) {
-				var lock = man.channel().channel().lock();
-				lock.lock();
-				try {
-					body = resp;
-					time = System.currentTimeMillis() + router.writeTimeout(req, body);
-					sendHead(man);
-				} finally {
-					lock.unlock();
-				}
-			} else if (getState() == SEND_BODY) {
-				if ((flag & FLAG_ERRORED) != 0) {
-					man.error(H2Exception.ERROR_INTERNAL, "AsyncResponseFailed");
-				} else {
-					flag |= FLAG_ERRORED;
-					time += 100;
-					body.release(man.channel());
-					body = resp;
-					body.prepare(this, headers());
-				}
-			} else {
-				throw new IllegalStateException("Expect PROCESSING or SEND_BODY: " + _getState());
+			if (getState() != PROCESSING) throw new IllegalStateException("Expect PROCESSING: "+_getState());
+
+			var lock = man.channel().channel().lock();
+			lock.lock();
+			try {
+				body = resp;
+				time = System.currentTimeMillis() + router.writeTimeout(req, body);
+				sendHead(man);
+			} catch (Exception e) {
+				onError(man, e);
+			} finally {
+				lock.unlock();
 			}
 		} else {
 			this.body = resp;
 		}
 	}
-
-	public Headers headers() {return req.responseHeader;}
+	@Override public ResponseHeader enableCompression() {flag |= FLAG_COMPRESS;return this;}
+	@Override public ResponseHeader disableCompression() {flag &= ~FLAG_COMPRESS;return this;}
+	@Override public Headers headers() {return req.responseHeader;}
 	//endregion
 }

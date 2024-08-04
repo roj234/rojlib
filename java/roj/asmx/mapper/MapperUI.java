@@ -169,7 +169,7 @@ public class MapperUI extends JFrame {
 	}
 	private static Predicate<File> jarFilter() {
 		return fn -> {
-			String ext = IOUtil.extensionName(fn.getName().toLowerCase());
+			String ext = IOUtil.extensionName(fn.getName());
 			return ext.equals("jar") || ext.equals("zip");
 		};
 	}

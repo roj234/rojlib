@@ -13,6 +13,8 @@ public class User {
 	public int id;
 
 	public String name;
+	// 一次有效的临时密码
+	transient String tempOtp;
 	String passHash;
 	@Optional
 	@As("base64")

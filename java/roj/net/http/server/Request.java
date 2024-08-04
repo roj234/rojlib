@@ -34,7 +34,7 @@ public final class Request extends Headers {
 
 	private byte action;
 
-	private String path, initPath, version;
+	private String path, initPath, version, query;
 
 	ResponseHeader handler;
 
@@ -50,7 +50,7 @@ public final class Request extends Headers {
 		this.version = version;
 		try {
 			this.path = initPath = IOUtil.safePath(Escape.decodeURI(path));
-			this.getFields = query.isEmpty() ? "" : query;
+			this.query = query.isEmpty() ? "" : query;
 		} catch (MalformedURLException e) {
 			throw badRequest(e.getMessage());
 		}
@@ -58,7 +58,7 @@ public final class Request extends Headers {
 	}
 
 	void free() {
-		path = initPath = null;
+		path = initPath = query = null;
 		handler = null;
 		cookie = null;
 		postFields = getFields = null;
@@ -103,15 +103,12 @@ public final class Request extends Headers {
 	Object postFields, getFields;
 	private Map<String, Cookie> cookie;
 
-	public String query() {
-		if (getFields instanceof String s) return s;
-		throw new IllegalStateException("Parsed");
-	}
+	public String query() {return query;}
 	public Map<String, String> GetFields() throws IllegalRequestException {
-		if (getFields instanceof String s) {
-			if (s.isEmpty()) return Collections.emptyMap();
+		if (getFields == null) {
+			if (query.isEmpty()) return Collections.emptyMap();
 			try {
-				getFields = simpleValue(s, "&", true);
+				getFields = simpleValue(query, "&", true);
 			} catch (MalformedURLException e) {
 				throw badRequest(e.getMessage());
 			}
@@ -126,10 +123,8 @@ public final class Request extends Headers {
 			if (getField("content-type").startsWith("multipart/")) {
 				try {
 					var handler = new MultipartFormHandler(this) {
-						@Override
-						protected void onKey(ChannelCtx ctx, String name) {}
-						@Override
-						protected void onValue(ChannelCtx ctx, DynByteBuf buf) { data.put(name, buf.readUTF(buf.readableBytes())); }
+						@Override protected void onKey(ChannelCtx ctx, String name) {}
+						@Override protected void onValue(ChannelCtx ctx, DynByteBuf buf) { data.put(name, buf.readUTF(buf.readableBytes())); }
 					};
 
 					try (var ch = EmbeddedChannel.createReadonly()) {
@@ -270,7 +265,19 @@ public final class Request extends Headers {
 		throw new IllegalRequestException(401);
 	}
 
-	public CharList headerLine(CharList sb) {return sb.append(HttpUtil.getMethodName(action)).append(" http://").append(host()).append('/').append(initPath).append(getFields).append(' ').append(version);}
+	public InetSocketAddress proxyRemoteAddress() {
+		var conn = handler;
+		if (conn == null) return null;
+		return HttpCache.proxyRequestRetainer == null
+			? (InetSocketAddress) conn.ch().remoteAddress()
+			: HttpCache.proxyRequestRetainer.apply(this);
+	}
+
+	public CharList headerLine(CharList sb) {
+		sb.append(HttpUtil.getMethodName(action)).append(" http://").append(host()).append('/').append(initPath);
+		if (query != "") sb.append('?').append(query);
+		return sb.append(' ').append(version);
+	}
 	public String toString() {
 		var sb = headerLine(new CharList()).append('\n');
 		encode(sb);

@@ -11,10 +11,7 @@ import roj.config.data.Type;
 import roj.io.IOUtil;
 import roj.math.Version;
 import roj.net.ch.ServerLaunch;
-import roj.net.http.server.HttpServer11;
-import roj.net.http.server.MimeType;
-import roj.net.http.server.PathRouter;
-import roj.net.http.server.ZipRouter;
+import roj.net.http.server.*;
 import roj.net.http.server.auto.OKRouter;
 import roj.reflect.ILSecurityManager;
 import roj.text.CharList;
@@ -106,7 +103,7 @@ public final class Panger extends PluginManager {
 	}
 
 	private void onLoad() {
-		String CORE_VERSION = "1.8.0";
+		String CORE_VERSION = "1.8.1";
 		splash(CORE_VERSION);
 
 		var pd = new PluginDescriptor();
@@ -230,14 +227,20 @@ public final class Panger extends PluginManager {
 	static OKRouter initHttp() {
 		if (router == null) {
 			var level = Level.valueOf(CONFIG.getString("http_log", "INFO"));
-			router = new OKRouter(level.canLog(Level.DEBUG));
 			HttpServer11.LOGGER.setLevel(level);
+			router = new OKRouter(level.canLog(Level.DEBUG));
 			try {
-				router.addPrefixDelegation("", new ZipRouter(new File("plugins/Core/resource.zip")));
 				httpServer = HttpServer11.simple(new InetSocketAddress(CONFIG.getInteger("http_port", 8080)), 512, router).launch();
-				router.setInterceptor("PermissionManager", null);
-				router.addPrefixDelegation("xui", new PathRouter(new File("plugins/Core")));
 				MimeType.loadMimeMap(IOUtil.readUTF(new File("plugins/Core/mime.ini")));
+
+				router.setInterceptor("PermissionManager", null);
+				router.addPrefixDelegation("", new ZipRouter(new File("plugins/Core/resource.zip")));
+				router.addPrefixDelegation("xui", new PathRouter(new File("plugins/Core")));
+
+				var http = new PanHttp();
+				var proxyToken = CONFIG.getString("http_reverse_proxy");
+				if (!proxyToken.isEmpty()) HttpCache.proxyRequestRetainer = http;
+				if (CONFIG.getBool("http_status")) router.register(http);
 			} catch (IOException e) {
 				LOGGER.error("HTTP服务启动失败", e);
 			}

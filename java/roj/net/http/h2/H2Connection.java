@@ -612,7 +612,7 @@ public final class H2Connection implements ChannelHandler {
 	}
 
 	public int getImmediateWindow(H2Stream stream) {
-		if (ctx.isPendingSend()) return 0;
+		if (ctx.isFlushing()) return 0;
 		int v = stream == null ? sendWindow : Math.min(sendWindow, stream.sendWindow);
 		return Math.min(remoteSetting.max_frame_size, v);
 	}
@@ -626,7 +626,7 @@ public final class H2Connection implements ChannelHandler {
 
 		int window = Math.min(stream.sendWindow, this.sendWindow);
 		// 两年过去，我已经忘了BLOCK帧是干啥的了，RFC里也没看到
-		if (window <= 0 || ctx.isPendingSend()) return true;
+		if (window <= 0 || ctx.isFlushing()) return true;
 
 		DynByteBuf wt;
 		boolean limitedByFlowControl;
@@ -653,7 +653,7 @@ public final class H2Connection implements ChannelHandler {
 			ob.rIndex = 0;
 			ob.wIndex(9);
 
-			if (ctx.isPendingSend()) {
+			if (ctx.isFlushing()) {
 				stream.sendWindow += wt.readableBytes();
 				this.sendWindow += wt.readableBytes();
 				data.rIndex -= wt.readableBytes();

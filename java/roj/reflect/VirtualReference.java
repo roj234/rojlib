@@ -94,7 +94,7 @@ public class VirtualReference<V> {
 
 			var xref = new ConstantData();
 			xref.modifier = 0;
-			xref.name("vr/R$"+ReflectionUtils.uniqueId());
+			xref.name("roj/gen/VR$"+ReflectionUtils.uniqueId());
 			xref.newField(Opcodes.ACC_STATIC, "r", "Ljava/lang/Object;");
 
 			Class<?> klass = ClassDefiner.defineClass(loader, xref);

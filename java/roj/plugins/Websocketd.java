@@ -1,12 +1,13 @@
 package roj.plugins;
 
+import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
-import roj.config.data.CEntry;
 import roj.config.data.Type;
 import roj.io.IOUtil;
 import roj.net.ch.ChannelCtx;
+import roj.net.http.IllegalRequestException;
 import roj.net.http.server.*;
+import roj.net.http.server.auto.OKRouter;
 import roj.net.http.ws.WebSocketHandler;
 import roj.plugin.Plugin;
 import roj.text.UTF8;
@@ -25,55 +26,56 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.CoderResult;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.locks.Lock;
+import java.util.Stack;
+import java.util.function.Function;
 
 /**
  * @author solo6975
  * @since 2022/3/20 22:53
  */
 public class Websocketd extends Plugin implements Router {
-	List<String> cmd;
-	static volatile boolean disabled;
-	static final List<Worker> workers = new ArrayList<>();
-	static Logger logger;
+	private static final MyHashMap<String, List<String>> cmdList = new MyHashMap<>();
+
+	static volatile List<Worker> workers = new Stack<>();
+
+	private static Logger logger;
+	private OKRouter.Dispatcher manager;
 
 	protected void onEnable() {
+		manager = getInterceptor("PermissionManager");
 		logger = getLogger();
-		for (Map.Entry<String, CEntry> entry : getConfig().getMap("path_to_command").entrySet()) {
-			Websocketd ws = new Websocketd();
-			CEntry value = entry.getValue();
-			ws.cmd = value.getType() == Type.STRING ? Collections.singletonList(value.asString()) : value.asList().toStringList();
-			registerRoute(entry.getKey(), ws);
+		for (var entry : getConfig().getMap("path_to_command").entrySet()) {
+			var value = entry.getValue();
+			var cmd = value.getType() == Type.STRING ? Collections.singletonList(value.asString()) : value.asList().toStringList();
+			registerRoute(entry.getKey(), this, false);
+			cmdList.put(entry.getKey(), cmd);
 
-			getLogger().info("URL子路径: {}, 指令: {}", entry.getKey(), ws.cmd);
+			getLogger().info("URL子路径: {}, 指令: {}", entry.getKey(), cmd);
 		}
 	}
 
 	@Override
 	protected void onDisable() {
-		SimpleList<Worker> copy;
-		synchronized (workers) {
-			disabled = true;
-			copy = new SimpleList<>(workers);
-			workers.clear();
+		List<Worker> prev;
+		synchronized (cmdList) {
+			prev = workers;
+			workers = Collections.emptyList();
 		}
 
-		for (int i = 0; i < copy.size(); i++) {
-			Worker worker = copy.get(i);
-			Lock lock = worker.ch.channel().lock();
-			lock.lock();
-			try {
-				worker.error(WebSocketHandler.ERR_CLOSED, "插件卸载");
-				worker.ch.close();
-			} catch (Throwable e) {
-				e.printStackTrace();
-			} finally {
-				lock.unlock();
+		for (int i = 0; i < prev.size(); i++) {
+			var worker = prev.get(i);
+			var ch = worker.ch.channel();
+			var lock = ch.lock();
+			if (lock.tryLock()) {
+				try {
+					worker.error(WebSocketHandler.ERR_CLOSED, "插件卸载");
+				} catch (Throwable e) {
+					logger.error(e);
+				}
 			}
+			IOUtil.closeSilently(ch);
 		}
 	}
 
@@ -85,26 +87,21 @@ public class Websocketd extends Plugin implements Router {
 	}
 
 	@Override
-	@Deprecated
+	public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
+		if (manager != null) manager.invoke(req, req.server(), cfg);
+	}
+	@Override
 	public Response response(Request req, ResponseHeader rh) throws IOException {
-		switch (req.path()) {
-			case "bundle.min.css": return new StringResponse(res("bundle.min.css"), "text/css");
-			case "bundle.min.js": return new StringResponse(res("bundle.min.js"), "text/javascript");
-			case "":
-				if ("websocket".equals(req.getField("upgrade"))) return Response.websocket(req, req1 -> {
-					try {
-						if (!disabled) return new Worker(cmd);
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-					return null;
-				});
-				return new StringResponse(res("websocketd_ui.html"), "text/html");
-			default: return rh.code(404).returnNull();
+		var cmd = cmdList.get(req.absolutePath());
+		if (cmd != null) {
+			if ("websocket".equals(req.getField("upgrade"))) return Response.websocket(req, new Worker(cmd));
+			var archive = getDescription().getArchive();
+			return ZipRouter.zip(req, archive, archive.getEntry("index.html"));
 		}
+		return rh.code(404).returnNull();
 	}
 
-	static final class Worker extends WebSocketHandler {
+	static final class Worker extends WebSocketHandler implements Function<Request, WebSocketHandler> {
 		Process process;
 
 		CharsetEncoder sysEnc;
@@ -113,23 +110,35 @@ public class Websocketd extends Plugin implements Router {
 		CharBuffer tmp1;
 		ByteBuffer tmp2, sndRem;
 
-		Worker(List<String> cmd) throws IOException {
-			process = new ProcessBuilder().command(cmd).redirectErrorStream(true)
-				.redirectInput(ProcessBuilder.Redirect.PIPE)
-				.redirectOutput(ProcessBuilder.Redirect.PIPE).start();
+		private List<String> _cmd;
+		Worker(List<String> cmd) {this._cmd = cmd;}
 
-			tmp2 = ByteBuffer.allocate(1024);
+		@Override
+		public WebSocketHandler apply(Request request) {
+			if (workers == Collections.EMPTY_LIST) return null;
+			try {
+				process = new ProcessBuilder().command(_cmd).redirectErrorStream(true)
+					.redirectInput(ProcessBuilder.Redirect.PIPE)
+					.redirectOutput(ProcessBuilder.Redirect.PIPE).start();
 
-			if (Terminal.nativeCharset != StandardCharsets.UTF_8) {
-				sysEnc = Terminal.nativeCharset.newEncoder();
-				sysDec = Terminal.nativeCharset.newDecoder();
+				tmp2 = ByteBuffer.allocate(1024);
 
-				tmp1 = CharBuffer.allocate(1024);
-				sndRem = ByteBuffer.allocate(8);
-				sndRem.flip();
+				if (Terminal.nativeCharset != StandardCharsets.UTF_8) {
+					sysEnc = Terminal.nativeCharset.newEncoder();
+					sysDec = Terminal.nativeCharset.newDecoder();
+
+					tmp1 = CharBuffer.allocate(1024);
+					sndRem = ByteBuffer.allocate(8);
+					sndRem.flip();
+				}
+				synchronized (cmdList) {workers.add(this);}
+				logger.info("会话 "+Integer.toHexString(hashCode())+" 开始");
+			} catch (Exception e) {
+				if (process != null) process.destroy();
+				logger.error("启动进程失败", e);
+				return null;
 			}
-			synchronized (workers) { workers.add(this); }
-			logger.info("会话 "+Integer.toHexString(hashCode())+" 开始");
+			return this;
 		}
 
 		@Override
@@ -137,7 +146,7 @@ public class Websocketd extends Plugin implements Router {
 			super.channelClosed(ctx);
 
 			process.destroy();
-			synchronized (workers) { workers.remove(this); }
+			synchronized (cmdList) {workers.remove(this);}
 			logger.info("会话 "+Integer.toHexString(hashCode())+" 结束: "+errCode+"@"+errMsg);
 		}
 

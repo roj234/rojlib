@@ -226,7 +226,7 @@ public final class Lavac {
 			return true;
 		}
 
-		if ("java".equalsIgnoreCase(IOUtil.extensionName(f.getName()))) {
+		if ("java".equals(IOUtil.extensionName(f.getName()))) {
 			ctxs.add(new CompileUnit(f.getAbsolutePath(), new FileInputStream(f)));
 			return true;
 		} else {
@@ -242,7 +242,7 @@ public final class Lavac {
 			return true;
 		}
 
-		switch (IOUtil.extensionName(f.getName()).toLowerCase()) {
+		switch (IOUtil.extensionName(f.getName())) {
 			case "zip", "jar":
 				ctx.addLibrary(new LibraryZipFile(f));
 			return true;

@@ -159,19 +159,25 @@ class UdpChImpl extends MyChannel {
 	}
 
 	protected void write(Object o) throws IOException {
-		BufferPool bp = alloc();
+		var bp = alloc();
 
-		DatagramPkt p = (DatagramPkt) o;
-		DynByteBuf buf = p.buf;
+		var p = (DatagramPkt) o;
+		var buf = p.buf;
 		if (buf.readableBytes() > UDP_MAX_SIZE) throw new IOException("packet too large");
-		if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes(), 0).put(buf);
 
 		try {
-			write1(p, buf);
+			if (pending.isEmpty()) {
+				if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes(), 0).put(buf);
+				write1(p, buf);
+			}
 
 			if (buf.isReadable()) {
-				if (pending.isEmpty()) key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
-				else if (pending.size() > 5) pauseAndFlush();
+				if (pending.isEmpty()) {
+					fireFlushing();
+					key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
+				} else if (pending.size() > 5) {
+					pauseAndFlush();
+				}
 
 				DynByteBuf put = bp.allocate(true, buf.readableBytes(), 0).put(buf);
 				if (!pending.offerLast(new DatagramPkt(p, put))) {

@@ -4,3 +4,4 @@ libcpp/bin/*
 *.psd
 *.lava
 resources/libcpp.dll
+project.json

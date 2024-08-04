@@ -14,6 +14,7 @@ import roj.net.handler.PacketMerger;
 import roj.net.http.*;
 import roj.plugins.http.error.GreatErrorPage;
 import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
@@ -73,7 +74,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	// state
 	private static final byte UNOPENED = 0, RECV_HEAD = 1, RECV_BODY = 2, PROCESSING = 3, SEND_BODY = 4, SEND_DONE = 5, HANG_PRE = 6, HANG = 7, CLOSED = 8;
 	// flag
-	private static final byte KEPT_ALIVE = 1, FLAG_GZIP = 2, FLAG_ERRORED = 4, FLAG_COMPRESS = 8, FLAG_ASYNC = 16;
+	static final byte KEPT_ALIVE = 1, FLAG_ERRORED = 2, FLAG_COMPRESS = 4, FLAG_GZIP = 8, FLAG_ASYNC = 16, FLAG_UNSHARED = 32;
 
 	private byte state, flag;
 	private long time;
@@ -109,11 +110,11 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		switch (state) {
 			case UNOPENED: return;
 			case SEND_BODY:
-				if (ctx.isPendingSend()) break;
+				if (ctx.isFlushing()) break;
 
 				streamLimit = streamLimitDefault;
 				boolean hasMore = body.send(this);
-				if (ctx.isPendingSend()) {
+				if (ctx.isFlushing()) {
 					ctx.pauseAndFlush();
 					break;
 				}
@@ -256,6 +257,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 					return;
 				}
 
+				if (TextUtil.isNumber(lenStr) != 0) throw IllegalRequestException.badRequest("content-length非法");
 				exceptPostSize = lenStr != null ? Long.parseLong(lenStr) : -1;
 				postSize = Router.DEFAULT_POST_SIZE;
 
@@ -366,11 +368,14 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
 		String id = event.id;
-		if (id.equals(HChunk.EVENT_IN_END)) {
-			if (state != RECV_BODY) return;
-
-			req.postFields = ph == null ? postBuffer : ph;
-			process();
+		if (id.equals(MyChannel.IN_EOF) || id.equals(HChunk.EVENT_IN_END)) {
+			if (state == RECV_BODY) {
+				req.postFields = ph == null ? postBuffer : ph;
+				process();
+			} else if (state < RECV_BODY || state > SEND_DONE) {
+				assert id.equals(MyChannel.IN_EOF); // close
+				return;
+			}
 			event.setResult(Event.RESULT_ACCEPT);
 		}
 	}
@@ -509,10 +514,8 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	}
 	//endregion
 	//region ResponseHeader
-	@Override
-	public MyChannel ch() {return ch.channel();}
-	@Override
-	public String _getState() {
+	@Override public MyChannel ch() {return ch.channel();}
+	@Override public String _getState() {
 		return switch (state) {
 			case UNOPENED -> "UNOPENED";
 			case RECV_HEAD -> "RECV_HEAD";
@@ -526,49 +529,41 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 			default -> "Unknown state#"+state;
 		};
 	}
+	@Override public Request request() {return req;}
 
-	@Override
-	public ResponseHeader code(int code) {this.code = (short) code;return this;}
-	@Override
-	public ResponseHeader die() {req.responseHeader.put("connection", "close");return this;}
-	@Override
-	public ResponseHeader enableAsyncResponse() {flag |= FLAG_ASYNC;return this;}
-	public void body(Response resp) throws IOException {
+	@Override public ResponseHeader code(int code) {this.code = (short) code;return this;}
+	@Override public ResponseHeader die() {req.responseHeader.put("connection", "close");return this;}
+	@Override public void unsharedRequest() {flag |= FLAG_UNSHARED;}
+	@Override public void sharedRequest() {flag &= ~FLAG_UNSHARED;}
+	@Override public ResponseHeader enableAsyncResponse() {flag |= FLAG_ASYNC;return this;}
+	@Override public void body(Response resp) throws IOException {
 		if ((flag & FLAG_ASYNC) != 0) {
-			if (state == PROCESSING) {
-				var lock = ch.channel().lock();
-				lock.lock();
+			if (state != PROCESSING) throw new IllegalStateException("Expect PROCESSING: "+_getState());
+
+			var lock = ch.channel().lock();
+			lock.lock();
+			try {
+				body = resp;
+				time = System.currentTimeMillis() + router.writeTimeout(req, body);
+				sendHead();
+			} catch (Exception e) {
 				try {
-					body = resp;
-					time = System.currentTimeMillis() + router.writeTimeout(req, body);
-					sendHead();
-				} finally {
-					lock.unlock();
+					exceptionCaught(ch, e);
+				} catch (Exception ex) {
+					Helpers.athrow(ex);
 				}
-			} else if (state == SEND_BODY) {
-				if (hasError()) {
-					ch.close();
-				} else {
-					flag |= FLAG_ERRORED;
-					time += 100;
-					body.release(ch);
-					body = resp;
-					body.prepare(this, headers());
-				}
-			} else {
-				throw new IllegalStateException("Expect PROCESSING or SEND_BODY: "+_getState());
+				e.printStackTrace();
+			} finally {
+				lock.unlock();
 			}
 		} else {
 			this.body = resp;
 		}
 	}
 
-	public ResponseHeader enableCompression() {flag |= FLAG_COMPRESS; return this;}
-	public ResponseHeader disableCompression() {flag &= ~FLAG_COMPRESS; return this;}
-
-	@Override
-	public Headers headers() {return req.responseHeader;}
-
+	@Override public ResponseHeader enableCompression() {flag |= FLAG_COMPRESS; return this;}
+	@Override public ResponseHeader disableCompression() {flag &= ~FLAG_COMPRESS; return this;}
+	@Override public Headers headers() {return req.responseHeader;}
 	//endregion
 	//region ResponseWriter
 	private static final int WRITE_ONCE = 4080;
@@ -583,7 +578,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		if (state != SEND_BODY) throw new IllegalStateException();
 
 		int len = Math.min(buf.readableBytes(), streamLimit);
-		if (len == 0 || ch.isPendingSend()) return;
+		if (len == 0 || ch.isFlushing()) return;
 
 		if ((flag & FLAG_GZIP) != 0) {
 			crc = buf.hasArray()
@@ -598,7 +593,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		if (state != SEND_BODY) throw new IllegalStateException();
 
 		limit = limit <= 0 ? streamLimit : Math.min(streamLimit, limit);
-		if (limit <= 0 || ch.isPendingSend()) return 0;
+		if (limit <= 0 || ch.isFlushing()) return 0;
 
 		int writeOnce = Math.min(WRITE_ONCE, limit);
 		ByteList buf = (ByteList) ch.allocate(false, writeOnce);
@@ -620,7 +615,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 				if ((flag & FLAG_GZIP) != 0) {
 					crc = CRC32s.update(crc, buf.array(), buf.arrayOffset(), buf.wIndex());
 				}
-				if (ch.isPendingSend()) break;
+				if (ch.isFlushing()) break;
 				buf.clear();
 			}
 
@@ -721,41 +716,35 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		if (state == HANG) t.hanging.remove(this);
 
 		Exception e = null;
-		if (body != null) {
-			try {
-				body.release(ch);
-			} catch (Exception e1) {
-				e = e1;
-			}
-			body = null;
-		}
 		if (ph != null) {
 			ch.channel().remove("h11@body_handler");
 			try {
 				ph.onComplete();
 			} catch (Exception e1) {
+				e = e1;
+			}
+			ph = null;
+		}
+		if (body != null) {
+			try {
+				body.release(ch);
+			} catch (Exception e1) {
 				if (e == null) e = e1;
 				else e.addSuppressed(e1);
 			}
-			ph = null;
+			body = null;
 		}
 
 		if (req != null) {
 			if (LOGGER.canLog(Level.TRACE)) accessLog();
-			req.free();
-			t.reserve(req);
+			if ((flag&FLAG_UNSHARED) == 0) t.reserve(req);
 			req = null;
 		}
 
-		ByteList pb = postBuffer;
-		if (pb != null) {
-			if (BufferPool.isPooled(pb)) {
-				IOUtil.closeSilently(pb);
-				postBuffer = null;
-			} else if (close) {
-				pb._free();
-				postBuffer = null;
-			}
+		var pb = postBuffer;
+		if (pb != null && (BufferPool.isPooled(pb) || close)) {
+			BufferPool.reserve(pb);
+			postBuffer = null;
 		}
 
 		code = 0;

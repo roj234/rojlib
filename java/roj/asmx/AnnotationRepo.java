@@ -49,7 +49,7 @@ public final class AnnotationRepo {
 	}
 	public void add(ZipFile za) throws IOException {
 		for (ZEntry ze : za.entries()) {
-			if (IOUtil.extensionName(ze.getName()).equalsIgnoreCase("class")) {
+			if (IOUtil.extensionName(ze.getName()).equals("class")) {
 				addRaw(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(ze)), ze.getName());
 			}
 		}

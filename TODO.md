@@ -19,7 +19,6 @@
 * [ ] 修复P2P问题
 * [ ] yield (Generator)
 * [ ] data flow analyze for bytecode
-* [ ] retransform based advanced hot-reload
 * [ ] FrameVisitor
 * [ ] UDP Transport Protocol
 * [ ] ReedSolomon

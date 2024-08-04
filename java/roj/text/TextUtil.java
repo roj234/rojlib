@@ -657,12 +657,13 @@ public class TextUtil {
 					sb.append(s);
 
 					int myMaxLen = maxLens.get(j);
+					if (++j == line.length) break;
+
 					if (myMaxLen < 100) {
 						int k = myMaxLen - getStringWidth(s);
 						while (k-- > 0) sb.append(' ');
 					}
 
-					if (++j == line.length) break;
 					sb.append(separators.length == 0 ? " " : separators[j > separators.length ? separators.length-1 : j-1]);
 				}
 			}

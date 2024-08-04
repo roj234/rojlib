@@ -917,8 +917,33 @@ public final class BlockParser {
 		if (!wr.nextIf(semicolon)) {
 			expr = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE);
 
+			// TODO test
+			// tailRec (set lv & goto 0)
+			ExprNode node = expr.resolve(ctx);
+			if (node.isKind(ExprNode.ExprKind.TAILREC)) {
+				Annotation tailrec;
+				// static，private，final或者@Tailrec(true)
+				if ((tailrec = ctx.getAnnotation(ctx.file, ctx.method, "roj/compiler/api/Tailrec", false)) != null
+					? tailrec.getBoolean("value", true)
+					: (ctx.method.modifier&(ACC_STATIC|ACC_PRIVATE|ACC_FINAL)) != 0
+				) {
+
+					int slot = (ctx.method.modifier&ACC_STATIC) != 0 ? 0 : 1;
+					var argType = ctx.method.parameters();
+					var argVal = ((Invoke) node).getArguments();
+					for (int i = 0; i < argVal.size(); i++) {
+						Type type = argType.get(i);
+						writeCast(argVal.get(i), type);
+						cw.varStore(type, slot);
+						slot += type.length();
+					}
+
+					cw.jump(new Label(0));
+				}
+			}
+
 			var signature = (Signature) cw.mn.attrByName("Signature");
-			writeCast(expr.resolve(ctx), signature == null ? cw.mn.returnType() : signature.values.get(signature.values.size()-1));
+			writeCast(node, signature == null ? cw.mn.returnType() : signature.values.get(signature.values.size()-1));
 		} else {
 			expr = null;
 		}
@@ -1308,7 +1333,7 @@ public final class BlockParser {
 					break;
 				}
 
-				Annotation switchable = ctx.getAnnotation(clazz, clazz, "roj/compiler/api/Switchable", false);
+				var switchable = ctx.getAnnotation(clazz, clazz, "roj/compiler/api/Switchable", false);
 				if (switchable != null) {
 					kind = switchable.getBoolean("identity", true) ? 3 : 4;
 					if (switchable.getBoolean("suggest", false)) {

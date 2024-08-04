@@ -19,7 +19,7 @@ import java.util.Objects;
  * @author Roj234
  * @since 2024/7/21 0021 7:38
  */
-final class NativeVT implements ITerminal, Runnable {
+public final class NativeVT implements ITerminal, Runnable {
 	private static final int STDIN = 0, STDOUT = 1, STDERR = 2;
 	private static final int MODE_GET = 0, MODE_SET = 1;
 	private static final int

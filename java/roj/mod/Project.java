@@ -204,7 +204,7 @@ public final class Project extends FileConfig {
 		//} else {
 		//	relPath = s.substring(srcPrefix.length()+1).replace(File.separatorChar, '/');
 		//}
-		dstFile.setCompress(!ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath).toLowerCase()));
+		dstFile.setCompress(!ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath)));
 		try {
 			dstFile.set(relPath, new FileInputStream(s));
 		} catch (IOException e) {

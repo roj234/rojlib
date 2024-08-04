@@ -6,9 +6,11 @@ import roj.collect.SimpleList;
 import roj.net.http.Headers;
 import roj.text.ACalendar;
 
+import java.net.InetSocketAddress;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.zip.Deflater;
 
 /**
@@ -16,6 +18,8 @@ import java.util.zip.Deflater;
  * @since 2024/7/13 0013 17:34
  */
 public final class HttpCache implements BiConsumer<String, String> {
+	public static Function<Request, InetSocketAddress> proxyRequestRetainer;
+
 	private static final int KEEPALIVE_MAX = 32;
 	private static final int MAX_REQEUST_CACHE = 10;
 
@@ -40,7 +44,10 @@ public final class HttpCache implements BiConsumer<String, String> {
 	}
 	public void reserve(Request req) {
 		assert req.localCtx() == ctx;
-		if (requests.size() < MAX_REQEUST_CACHE) requests.add(req);
+		if (requests.size() < MAX_REQEUST_CACHE) {
+			req.free();
+			requests.add(req);
+		}
 	}
 
 	private MessageDigest sha1;
@@ -51,6 +58,8 @@ public final class HttpCache implements BiConsumer<String, String> {
 			} catch (NoSuchAlgorithmException e) {
 				assert false;
 			}
+		} else {
+			sha1.reset();
 		}
 		return sha1;
 	}

@@ -26,8 +26,7 @@ public class IllegalRequestException extends IOException {
 		response = resp;
 	}
 
-	@Override
-	public Throwable fillInStackTrace() {return this;}
+	@Override public Throwable fillInStackTrace() {return this;}
 
 	public Response createResponse() {return response != null || code < 400 ? response : Response.httpError(code);}
 

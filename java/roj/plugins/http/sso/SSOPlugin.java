@@ -26,7 +26,6 @@ import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.File;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -162,6 +161,13 @@ public class SSOPlugin extends Plugin {
 
 			 u.totpKey = null;
 			 users.setDirty(u, "totpKey");
+		 })))
+		 .then(literal("genotp").then(argument("用户名", Argument.string()).executes(ctx -> {
+			 User u = users.getUserByName(ctx.argument("用户名", String.class));
+			 if (u == null) {Terminal.warning("账户不存在");return;}
+
+			 u.tempOtp = TextUtil.bytes2hex(new SecureRandom().generateSeed(8));
+			 System.out.println("一次有效的临时密码:"+u.tempOtp);
 		 })));
 		registerCommand(c);
 	}
@@ -240,7 +246,7 @@ public class SSOPlugin extends Plugin {
 			}
 			if (++u.loginAttempt >= 5) return "{\"ok\":false,\"msg\":\"你的账户已被锁定\"}";
 
-			if (o.hasher.compare(u.passHash, getUTFBytes(pass)))
+			if (pass.equals(u.tempOtp) || o.hasher.compare(u.passHash, getUTFBytes(pass)))
 				return loginSuccess(o, u, req, false);
 
 			if (u.totpKey != null) {
@@ -264,7 +270,7 @@ public class SSOPlugin extends Plugin {
 		User u = users.createUser(user);
 		u.passHash = LocalData.get(req).hasher.hash(getUTFBytes(pass));
 		u.registerTime = System.currentTimeMillis();
-		u.registerAddr = (InetSocketAddress) req.connection().remoteAddress();
+		u.registerAddr = req.proxyRemoteAddress();
 		users.setDirty(u, "passHash", "registerTime", "registerAddr");
 		return "{\"ok\":true}";
 	}
@@ -276,7 +282,7 @@ public class SSOPlugin extends Plugin {
 		User u = (User) req.localCtx().get("xsso:user");
 		byte[] key = new byte[20];
 		LocalData.get(req).srnd.nextBytes(key);
-		return "{\"ok\":true,\"url\":\""+TOTP.makeURL(key, u.name, siteName != null ? siteName : req.host())+"\",\"secret\":\""+ TextUtil.bytes2hex(key)+"\"}";
+		return "{\"ok\":true,\"url\":\""+TOTP.makeURL(key, u.name, siteName != null ? siteName : req.host())+"\",\"secret\":\""+TextUtil.bytes2hex(key)+"\"}";
 	}
 
 	@POST
@@ -422,9 +428,10 @@ public class SSOPlugin extends Plugin {
 		var sc = IOUtil.SharedCoder.get();
 		ByteList bb = sc.byteBuf; bb.clear();
 
+		u.tempOtp = null;
 		u.loginAttempt = 0;
 		u.loginTime = System.currentTimeMillis();
-		u.loginAddr = (InetSocketAddress) req.connection().remoteAddress();
+		u.loginAddr = req.proxyRemoteAddress();
 		users.setDirty(u, "loginAttempt", "loginTime", "loginAddr");
 		long expire = TOKEN_EXPIRE + (is_refresh ? -180000 : 0);
 

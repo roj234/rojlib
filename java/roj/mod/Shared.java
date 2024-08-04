@@ -148,12 +148,14 @@ public final class Shared {
 		}
 
 		int port1 = CONFIG.getInteger("重载端口");
-		if (port1 <= 0 || port1 > 65535) port1 = 4485;
-		try {
-			hotReload = new HRServer(port1);
-		} catch (IOException e) {
-			Terminal.warning("单例锁冲突(如果你确实要多开，请在配置文件中修改端口为0)", e);
-			System.exit(-2);
+		if (port1 != 0) {
+			if (port1 < 0 || port1 > 65535) port1 = 4485;
+			try {
+				hotReload = new HRServer(port1);
+			} catch (IOException e) {
+				Terminal.warning("单例锁冲突(如果你确实要多开，请在配置文件中修改端口为0)", e);
+				System.exit(-2);
+			}
 		}
 
 		File index = new File(BASE, "projects/index");

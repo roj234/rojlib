@@ -730,7 +730,7 @@ public final class Terminal extends DelegatedPrintStream {
 		Console c = (keyCode, isVirtualKey) -> {
 			synchronized (ref) {
 				ref[0] = (char) keyCode;
-				ref.notify();
+				ref.notifyAll();
 			}
 		};
 
@@ -763,7 +763,7 @@ public final class Terminal extends DelegatedPrintStream {
 	// public版本等用到的时候再写
 	private int readCursor() throws IOException {
 		int val;
-		if (!T.readBack(false)) {
+		if (!terminals.get(0).readBack(false)) {
 			long endTime = System.currentTimeMillis() + 10;
 			do {
 				// 等待escEnter通知
@@ -777,16 +777,18 @@ public final class Terminal extends DelegatedPrintStream {
 		return val;
 	}
 
-	public static int windowHeight, windowWidth;
+	// 宽度是字符，高度是行，下面仅仅是windows的默认值作为fallback，没有特殊意义
+	public static int windowHeight = 30, windowWidth = 120;
 	public static final String GET_CONSOLE_DIMENSION = "\u001b[?25l\u001b7\u001b[999E\u001b[999C\u001b[6n\u001b8\u001b[?25h";
 	public static void updateConsoleSize() throws IOException {
+		var t = terminals.get(0);
 		synchronized (CURSOR_LOCK) {
 			if (out.cursorPos == 0) throw new IllegalStateException("递归读取光标?");
 			out.cursorPos = 0;
 
 			synchronized (out) {
-				T.write(GET_CONSOLE_DIMENSION);
-				T.flush();
+				t.write(GET_CONSOLE_DIMENSION);
+				t.flush();
 			}
 
 			int winSize = out.readCursor();
@@ -810,16 +812,19 @@ public final class Terminal extends DelegatedPrintStream {
 		int len = CharLength.getOrDefaultInt(c, -1);
 		if (len >= 0) return len;
 
+		var t = terminals.get(0);
 		// https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters
 		// 这也太邪门了……
 		synchronized (CURSOR_LOCK) {
+			if (CharLength.size() == 0) return 2;
+
 			if (out.cursorPos == 0) throw new IllegalStateException("递归读取光标?");
 			out.cursorPos = 0;
 
 			synchronized (out) {
-				T.write(OSEQ.append("\u001b7\u001b[1E").append(c).append("\u001b[6n\u001b[1K\u001b8"));
+				t.write(OSEQ.append("\u001b7\u001b[1E").append(c).append("\u001b[6n\u001b[1K\u001b8"));
 				OSEQ.clear();
-				T.flush();
+				t.flush();
 			}
 
 			try {
@@ -852,6 +857,8 @@ public final class Terminal extends DelegatedPrintStream {
 		}
 		return Math.max(maxLen, len);
 	}
+	public static void enableAutoStringWidth() {synchronized (CURSOR_LOCK) {if (CharLength.size() == 0) CharLength.put(0, 0);}}
+	public static void disableAutoStringWidth() {synchronized (CURSOR_LOCK) {CharLength.clear();}}
 	/**
 	 * 根据width切分字符串，目前的版本可能会把ANSI转义序列弄丢.
 	 * @param width 长度，按终端英文记
@@ -894,10 +901,10 @@ public final class Terminal extends DelegatedPrintStream {
 	public static final PrintStream serr = System.err;
 
 	// T和其它终端不同之处在于，光标（字符长度）会通过它获取
+	@Nullable
 	private static final ITerminal T;
 	private static final SimpleList<ITerminal> terminals = new SimpleList<>();
 	public static void addListener(ITerminal t) {
-		if (T == null) throw new IllegalStateException("Terminal not enabled");
 		int i = terminals.indexOfAddress(t);
 		if (i < 0) terminals.add(t);
 	}
@@ -924,13 +931,13 @@ public final class Terminal extends DelegatedPrintStream {
 	//endregion
 	//out必须最后初始化
 	public static final Terminal out = new Terminal();
+	public static boolean hasNativeTerminal() {return T != null;}
 	static {
 		nativeCharset = NativeVT.charset;
-		var t = (ITerminal) RojLib.inject("roj.ui.Terminal.T");
-		if (t == null) t = NativeVT.getInstance();
-		T = t;
-		if (T != null) {
-			addListener(T);
+		var t = T = NativeVT.getInstance();
+		if (t == null) t = (ITerminal) RojLib.inject("roj.ui.Terminal.fallback");
+		if (t != null) {
+			addListener(t);
 			CharLength.put(0, 0);
 
 			System.setOut(out);
@@ -939,16 +946,13 @@ public final class Terminal extends DelegatedPrintStream {
 
 			ANSI_OUTPUT = true;
 			try {
-				ANSI_INPUT = T.readBack(true);
+				ANSI_INPUT = t.readBack(true);
 			} catch (IOException e) {
 				throw new IllegalStateException(e);
 			}
 
 			int winSize = out.cursorPos;
-			if (winSize <= 0) {
-				windowWidth = 120;
-				windowHeight = 30;
-			} else {
+			if (winSize > 0) {
 				windowWidth = winSize&0xFFFF;
 				windowHeight = winSize >>> 16;
 			}

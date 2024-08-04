@@ -53,10 +53,16 @@ public class KeyStorePlugin extends Plugin {
 			}
 		};
 
-		registerCommand(literal("ks").then(literal("load")
+		registerCommand(literal("ksload")
 			.then(argument("证书pem", Argument.file())
 				.then(argument("私钥key", Argument.file()).executes(load)
-					.then(argument("别名", Argument.string()).executes(load))))));
+					.then(argument("别名", Argument.string()).executes(load)))));
+		registerCommand(literal("ksunload")
+			.then(argument("别名", Argument.oneOf(CollectionX.toMap(certificates.keySet()))).executes(ctx -> {
+				String name = ctx.argument("别名", String.class);
+				certificates.remove(name);
+				privateKeys.remove(name);
+			})));
 
 		List<String> hashAlgs = Arrays.asList("SHA-512", "SHA-384", "SHA-256");
 

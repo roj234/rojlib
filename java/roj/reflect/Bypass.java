@@ -3,7 +3,6 @@ package roj.reflect;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
-import roj.ToBeRemoved;
 import roj.asm.Parser;
 import roj.asm.cp.CstClass;
 import roj.asm.tree.ConstantData;
@@ -40,15 +39,12 @@ import static roj.reflect.ReflectionUtils.u;
  * 用接口替代反射，虽然看起来和{@link java.lang.invoke.MethodHandle}很相似，其实却是同一个原理 <br>
  * * 但是理论上比MethodHandle快<br>
  * * 而且MethodHandle也不能随便用(不限制权限)啊<br>
- * 限制: 不能写final字段，因为JVM太安全辣，请使用{@link ToBeRemoved#access(Field)} <br>
  *
  * @author Roj233
  * @since 2021/8/13 20:16
  */
 public sealed class Bypass<T> {
-	public static final String MAGIC_ACCESSOR_CLASS = ReflectionUtils.JAVA_VERSION <= 8 ?
-		"sun/reflect/MagicAccessorImpl" : VMInternals.HackMagicAccessor();
-
+	public static final String MAGIC_ACCESSOR_CLASS = VMInternals.HackMagicAccessor();
 	public static final MyBitSet EMPTY_BITS = new MyBitSet(0);
 
 	private final MyHashMap<String, Method> methodByName;
@@ -396,7 +392,7 @@ public sealed class Bypass<T> {
 				varId += type.length();
 			}
 
-			cw.visitSize(varId == 1 && !sDesc.endsWith("V") ? 1 : varId-1, varId);
+			cw.visitSize(varId == 1 && !sDesc.endsWith("V") ? 1 : varId, varId);
 
 			if (isStatic != 0) {
 				cw.invoke(INVOKESTATIC, tName, tm.getName(), tDesc, target.isInterface());

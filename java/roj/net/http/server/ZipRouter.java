@@ -31,6 +31,8 @@ public class ZipRouter implements Router {
 	public String getPrefix() {return prefix;}
 	public void setPrefix(String prefix) {this.prefix = prefix;}
 
+	public static Response zip(Request req, ZipFile zf, ZEntry ze) {return Response.file(req, new ZipFileInfo(zf, ze));}
+
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws IOException {
 		String url = req.path();

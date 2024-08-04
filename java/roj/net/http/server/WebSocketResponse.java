@@ -14,7 +14,7 @@ import java.util.function.Function;
  * @author Roj234
  * @since 2021/2/14 18:26
  */
-final class WebSocketResponse {
+final class WebSocketResponse implements HFinishHandler {
 	static final Set<String> EMPTY_PROTOCOL = Collections.singleton("");
 	static Response websocket(Request req, Function<Request, WebSocketHandler> newHandler, Set<String> protocols) {
 		var rh = req.server();
@@ -50,13 +50,25 @@ final class WebSocketResponse {
 			// "Per-Message Compressed": RSV1 => compressed bit
 		}
 
-		rh.onFinish(tcp -> {
-			WebSocketHandler h;
-			if (tcp.hasError() || (h = newHandler.apply(req)) == null) return false;
-			if (zip) h.enableZip();
-			tcp.ch().addLast("WS-Handler", h);
-			return true;
-		});
+		rh.onFinish(new WebSocketResponse(newHandler, req, zip));
 		return null;
+	}
+
+	private final Function<Request, WebSocketHandler> newHandler;
+	private final Request req;
+	private final boolean zip;
+	private WebSocketResponse(Function<Request, WebSocketHandler> handler, Request req, boolean zip) {
+		newHandler = handler;
+		this.req = req;
+		this.zip = zip;
+	}
+
+	@Override
+	public boolean onRequestFinish(HttpServer11 tcp) {
+		WebSocketHandler h;
+		if (tcp.hasError() || (h = newHandler.apply(req)) == null) return false;
+		if (zip) h.enableZip();
+		tcp.ch().addLast("WS-Handler", h);
+		return true;
 	}
 }

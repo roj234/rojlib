@@ -23,6 +23,7 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Predicate;
 
 /**
@@ -349,10 +350,17 @@ public final class IOUtil {
 		return cl.append('.').append(ext);
 	}
 
+	public static File deriveOutput(File src, String postfix) {
+		var path = src.getName();
+		int i = path.lastIndexOf('.');
+		if (i < 0) return new File(src.getAbsolutePath()+postfix);
+		return new File(src.getParentFile(), path.substring(0, i)+postfix+path.substring(i));
+	}
+
 	public static String extensionName(String path) {
 		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
 		int i = path.lastIndexOf('.');
-		return i < 0 ? "" : path.substring(i+1);
+		return i < 0 ? "" : path.substring(i+1).toLowerCase(Locale.ROOT);
 	}
 
 	public static String fileName(String pat) {

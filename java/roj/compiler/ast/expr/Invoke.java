@@ -353,7 +353,11 @@ public final class Invoke extends ExprNode {
 	}
 
 	@Override
-	public boolean isKind(ExprKind kind) {return kind == ExprKind.INVOKE_CONSTRUCTOR && fn instanceof This;}
+	public boolean isKind(ExprKind kind) {
+		if (kind == ExprKind.INVOKE_CONSTRUCTOR) return fn instanceof This;
+		if (kind == ExprKind.TAILREC) return methodNode == LocalContext.get().method;
+		return false;
+	}
 	@Override
 	public IType type() { return fn instanceof IType ? ((IType) fn) : desc != null ? desc.get(desc.size()-1) : Asterisk.anyType; }
 	@Override
@@ -418,7 +422,8 @@ public final class Invoke extends ExprNode {
 	// 泛型边界，用于推断
 	public void setBounds(List<IType> bounds) { this.bounds = bounds; }
 
-	public boolean isNew() { return fn instanceof IType; }
-	public ExprNode getParent() { return fn instanceof ExprNode expr ? expr : null; }
-	public MethodNode getMethodNode() { return methodNode; }
+	public boolean isNew() {return fn instanceof IType;}
+	public ExprNode getParent() {return fn instanceof ExprNode expr ? expr : null;}
+	public MethodNode getMethod() {return methodNode;}
+	public List<ExprNode> getArguments() {return args;}
 }

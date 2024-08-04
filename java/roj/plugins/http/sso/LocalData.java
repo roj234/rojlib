@@ -4,8 +4,8 @@ import org.jetbrains.annotations.NotNull;
 import roj.crypt.AES_GCM;
 import roj.crypt.HMAC;
 import roj.crypt.MySaltedHash;
+import roj.net.http.server.HttpCache;
 import roj.net.http.server.Request;
-import roj.util.Helpers;
 
 import java.security.SecureRandom;
 
@@ -16,7 +16,7 @@ import java.security.SecureRandom;
 final class LocalData {
 	final SecureRandom srnd = new SecureRandom();
 	final MySaltedHash hasher = MySaltedHash.hasher(srnd);
-	HMAC hmac;
+	final HMAC hmac = new HMAC(HttpCache.getInstance().sha1());
 	final AES_GCM aesGcm = new AES_GCM();
 
 	@NotNull
@@ -24,13 +24,5 @@ final class LocalData {
 		var o = (LocalData) req.localCtx().get("xsso:data");
 		if (o == null) req.localCtx().put("xsso:data", o = new LocalData());
 		return o;
-	}
-
-	public LocalData() {
-		try {
-			hmac = TOTP.createHMAC();
-		} catch (Exception e) {
-			Helpers.athrow(e);
-		}
 	}
 }

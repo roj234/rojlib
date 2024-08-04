@@ -47,7 +47,6 @@ public class PluginDescriptor {
 	public int getState() { return state; }
 	@Nullable
 	public Source getFile() {return source;}
-	@Nullable
 	public ZipFile getArchive() {return cl == null ? null : cl.archive;}
 
 	@Override

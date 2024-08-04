@@ -69,9 +69,13 @@ public class StringResponse implements Response {
 		int len = str.length();
 		if (len > 127) rh.enableCompression();
 
-		buf = rh.ch().alloc().allocate(true, 4096);
+		int bufferCap = 4096;
+		if (len < 10000) {
+			int utfLen = DynByteBuf.byteCountUTF8(str);
+			h.putIfAbsent("content-length", Integer.toString(utfLen));
+			if (bufferCap > utfLen) bufferCap = utfLen;
+		}
+		buf = rh.ch().alloc().allocate(true, bufferCap);
 		if (mime != null) h.putIfAbsent("content-type", mime);
-
-		if (len < 10000) h.putIfAbsent("content-length", Integer.toString(DynByteBuf.byteCountUTF8(str)));
 	}
 }

@@ -4,6 +4,11 @@ import roj.archive.qz.*;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFile;
+import roj.asm.Parser;
+import roj.asm.util.Context;
+import roj.asmx.classpak.Cpk;
+import roj.asmx.nixim.NiximException;
+import roj.asmx.nixim.NiximSystemV2;
 import roj.collect.CollectionX;
 import roj.collect.IntMap;
 import roj.collect.MyBitSet;
@@ -20,17 +25,11 @@ import roj.text.TextReader;
 import roj.text.TextWriter;
 import roj.ui.EasyProgressBar;
 import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandConsole;
-import roj.ui.terminal.CommandContext;
-import roj.ui.terminal.CommandNode;
+import roj.ui.terminal.*;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.*;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -70,6 +69,10 @@ import static roj.ui.terminal.CommandNode.literal;
 	
 	[网页工具]
 	多线程下载文件: curl <url> <saveTo> [threads]
+	
+	[Java工具]
+	Cpk压缩: cpk <input> [output]
+	Nixim注入: nixim <injector> <reference> [output]
 	""")
 public class LazyBox extends Plugin {
 	private static final TaskPool pool = TaskPool.Common();
@@ -165,6 +168,81 @@ public class LazyBox extends Plugin {
 			.then(argument("自解压模板", Argument.file())
 				.then(argument("压缩包", Argument.file())
 				.executes(this::updateExe))));
+
+		Command cpk = ctx -> {
+			Integer chunkSize = ctx.argument("分块大小", Integer.class);
+			File src = ctx.argument("输入", File.class);
+			File dst = ctx.argument("输出", File.class);
+			if (dst == null) dst = IOUtil.deriveOutput(src, "-cpk");
+			Cpk.main_alt(src, dst, chunkSize == null ? 262144 : chunkSize);
+		};
+		registerCommand(literal("cpk").then(argument("输入", Argument.file()).executes(cpk)
+			.then(argument("输出", Argument.fileOptional(true)).executes(cpk)
+				.then(argument("分块大小", Argument.number(4096, Integer.MAX_VALUE)).executes(cpk)))));
+
+		Command nixim = ctx -> {
+			var nx = new NiximSystemV2();
+			File src = ctx.argument("注入(Nixim)", File.class);
+			if (src.isDirectory()) {
+				IOUtil.findAllFiles(src, file -> {
+					if (IOUtil.extensionName(file.getName()).equals("class")) {
+						try {
+							nx.read(Parser.parseConstants(IOUtil.read(file)));
+						} catch (NiximException | IOException e) {
+							Helpers.athrow(e);
+						}
+					}
+					return false;
+				});
+			} else {
+				if (IOUtil.extensionName(src.getName()).equals("class")) {
+					nx.read(Parser.parseConstants(IOUtil.read(src)));
+				} else {
+					try (var zf = new ZipFile(src)) {
+						for (var ze : zf.entries()) {
+							if (IOUtil.extensionName(ze.getName()).equals("class")) {
+								nx.read(Parser.parseConstants(zf.get(ze)));
+							}
+						}
+					}
+				}
+			}
+
+			src = ctx.argument("源", File.class);
+			File dst = ctx.argument("保存至", File.class);
+			if (dst == null) dst = IOUtil.deriveOutput(src, "-注入");
+			IOUtil.copyFile(src, dst);
+
+			try (var archive = new ZipArchive(dst)) {
+				for (var entry : nx.registry().entrySet()) {
+					String file = entry.getKey().replace('.', '/')+".class";
+					InputStream in = archive.getStream(file);
+					if (in == null) {
+						System.err.println("nixim target "+file+" not found");
+						continue;
+					}
+
+					try {
+						var klass = new Context(entry.getKey(), in);
+						nx.transform(entry.getKey(), klass);
+						archive.put(file, klass::getCompressedShared, true);
+					} catch (Exception e) {
+						e.printStackTrace();
+					} finally {
+						in.close();
+					}
+				}
+
+				archive.save();
+			}
+
+			System.out.println("注入完成");
+		};
+		registerCommand(literal("nixim")
+			.then(argument("注入(Nixim)", Argument.file())
+				.then(argument("源", Argument.file())
+					.executes(nixim)
+					.then(argument("保存至", Argument.fileOptional(true)).executes(nixim)))));
 	}
 
 	private void zipUpdate(CommandContext ctx) throws IOException {

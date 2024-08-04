@@ -43,9 +43,7 @@ final class WebTerminal extends WebSocketHandler implements ITerminal {
 	private final ByteList buffer = new ByteList();
 
 	@Override
-	public boolean readBack(boolean sync) throws IOException {
-		return false;
-	}
+	public boolean readBack(boolean sync) throws IOException {return false;}
 
 	@Override
 	public void write(CharSequence str) {
@@ -66,11 +64,11 @@ final class WebTerminal extends WebSocketHandler implements ITerminal {
 		super.channelTick(ctx);
 
 		var ob = buffer;
-		if (ob.isReadable() && !ctx.channel().isPendingSend()) {
+		if (ob.isReadable() && !ctx.channel().isFlushing()) {
 			synchronized (ob) {
 				while (ob.readableBytes() > 4096) {
 					send(ob.slice(4096));
-					if (ctx.channel().isPendingSend()) {ob.compact();return;}
+					if (ctx.channel().isFlushing()) {ob.compact();return;}
 				}
 				send(ob);
 				ob.clear();

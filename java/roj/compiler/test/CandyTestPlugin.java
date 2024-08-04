@@ -100,7 +100,7 @@ public class CandyTestPlugin {
 
 			List<Invoke> methods = ch.chain();
 			for (Invoke m : methods) {
-				switch (m.getMethodNode().name()) {
+				switch (m.getMethod().name()) {
 					case "compare":
 					case "result":
 				}

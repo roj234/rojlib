@@ -280,14 +280,9 @@ public abstract class MyChannel implements Selectable, Closeable {
 		lock.lock();
 		flag &= ~READ_INACTIVE;
 		lock.unlock();
-		if ((ops & SelectionKey.OP_READ) == 0) {
-			key.interestOps(ops | SelectionKey.OP_READ);
-
-			DynByteBuf rb = this.rb;
-			if (rb != null && rb.isReadable()) {
-				invokeReadLater();
-			}
-		}
+		if ((ops & SelectionKey.OP_READ) == 0) key.interestOps(ops | SelectionKey.OP_READ);
+		var rb = this.rb;
+		if (rb != null && rb.isReadable()) invokeReadLater();
 	}
 	public void readInactive() {
 		int ops = key.interestOps();
@@ -308,27 +303,24 @@ public abstract class MyChannel implements Selectable, Closeable {
 			key.interestOps(SelectionKey.OP_WRITE);
 		}
 	}
-
-	public final boolean isPendingSend() {
-		return !pending.isEmpty();
-	}
+	public final boolean isFlushing() {return !pending.isEmpty();}
 	// endregion
 
+	private static ChannelHandler flushedHandler_;
 	public final void closeGracefully() throws IOException {
 		flush();
 		if (!pending.isEmpty()) {
 			pauseAndFlush();
-			if (handler("@@flush_callback") == null) {
-				addLast("@@flush_callback", new ChannelHandler() {
-					@Override
-					public void channelFlushed(ChannelCtx ctx) throws IOException {
-						ctx.channel().closeGracefully();
-					}
-				});
+			if (handler("channel:flushed") == null) {
+				if (flushedHandler_ == null) {
+					flushedHandler_ = new ChannelHandler() {
+						@Override public void channelFlushed(ChannelCtx ctx) throws IOException {ctx.channel().closeGracefully();}
+					};
+				}
+				addLast("channel:flushed", flushedHandler_);
 			}
-		} else {
-			closeGracefully0();
 		}
+		else closeGracefully0();
 	}
 
 	public BufferPool alloc() {
@@ -630,7 +622,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 	// callback
 
 	final void onInputClosed(Object data) throws IOException {
-		Event inputEndEvent = new Event(IN_EOF, data);
+		var inputEndEvent = new Event(IN_EOF, data);
 		postEvent(inputEndEvent);
 		if (inputEndEvent.getResult() == Event.RESULT_DEFAULT) {
 			close();
@@ -639,7 +631,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	protected void closeHandler() throws IOException {
 		Throwable ee = null;
-		ChannelCtx pipe = pipelineTail;
+		var pipe = pipelineTail;
 		while (pipe != null) {
 			try {
 				pipe.handler.channelClosed(pipe);
@@ -652,16 +644,17 @@ public abstract class MyChannel implements Selectable, Closeable {
 		if (ee != null) Helpers.athrow(ee);
 	}
 
+	// isFlushing() false => true
 	protected final void fireFlushing() throws IOException {
-		ChannelCtx pipe = pipelineTail;
+		var pipe = pipelineTail;
 		while (pipe != null) {
 			pipe.handler.channelFlushing(pipe);
 			pipe = pipe.prev;
 		}
 	}
-
+	// isFlushing() true => false
 	protected final void fireFlushed() throws IOException {
-		ChannelCtx pipe = pipelineHead;
+		var pipe = pipelineHead;
 		while (pipe != null) {
 			pipe.handler.channelFlushed(pipe);
 			pipe = pipe.next;

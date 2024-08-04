@@ -1,7 +1,6 @@
 package roj.asmx.nixim;
 
 import org.jetbrains.annotations.NotNull;
-import roj.archive.zip.ZipArchive;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cp.*;
@@ -28,8 +27,6 @@ import roj.text.TextUtil;
 import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
-import java.io.File;
-import java.io.InputStream;
 import java.util.*;
 
 import static roj.asm.Opcodes.*;
@@ -42,49 +39,6 @@ import static roj.reflect.Debug.dump;
  * @since 2023/10/9 18:49
  */
 public class NiximSystemV2 implements ITransformer {
-	public static void main(String[] args) throws Exception {
-		if (args.length < 3) {
-			System.out.println("NiximSystem <jar-to-nixim> <nixim-class-in-classpath>");
-			return;
-		}
-
-		NiximSystemV2 nx = new NiximSystemV2();
-		for (int i = 1; i < args.length; i++) {
-			InputStream in = NiximSystemV2.class.getClassLoader().getResourceAsStream(args[i].replace('.', '/')+".class");
-			if (in == null) throw new NiximException("nixim source "+args[i]+" not found");
-			nx.read(Parser.parseConstants(IOUtil.read(in)));
-		}
-
-		int index = args[0].lastIndexOf('.');
-		File target = new File(index < 0 ? args[0] + "-结果.jar" : args[0].substring(0, index) + "-结果" + args[0].substring(index));
-		IOUtil.copyFile(new File(args[0]), target);
-
-		try (ZipArchive toNixim = new ZipArchive(target)) {
-			for (Map.Entry<String, NiximData> entry : nx.registry.entrySet()) {
-				String file = entry.getKey().replace('.', '/')+".class";
-				InputStream in = toNixim.getStream(file);
-				if (in == null) {
-					System.err.println("nixim target "+file+" not found");
-					continue;
-				}
-
-				try {
-					Context ctx = new Context(entry.getKey(), in);
-					nx.transform(entry.getKey(), ctx);
-					toNixim.put(file, ctx::getCompressedShared, true);
-				} catch (Exception e) {
-					e.printStackTrace();
-				} finally {
-					in.close();
-				}
-			}
-
-			toNixim.save();
-		}
-
-		System.out.println("OK");
-	}
-
 	public static final String A_NIXIM_CLASS_FLAG = unifyClassName(Nixim.class.getName());
 	public static final String A_INJECT = unifyClassName(Inject.class.getName());
 	public static final String A_SHADOW = unifyClassName(Shadow.class.getName());
@@ -377,7 +331,7 @@ public class NiximSystemV2 implements ITransformer {
 				autoCopy.add(methods.get(i));
 		}
 
-		Map<String, NiximData> ctx = getParentMap();
+		Map<String, NiximData> ctx = registry();
 		AbstractMap<String, String> fakeMap = getFakeMap(nx, ctx);
 		for (MethodNode method : data.methods) {
 			String desc = ClassUtil.getInstance().mapMethodParam(fakeMap, method.rawDesc());
@@ -1672,6 +1626,6 @@ public class NiximSystemV2 implements ITransformer {
 	}
 
 	protected boolean shouldApply(String annotation, Attributed node, List<AnnValString> args) { throw new UnsupportedOperationException(); }
-	protected Map<String, NiximData> getParentMap() { return registry; }
+	public Map<String, NiximData> registry() { return registry; }
 	protected String mapName(String owner, String newOwner, String name, CNode node) { return name; }
 }

@@ -23,7 +23,7 @@ public enum ConfigMaster {
 
 	public static ConfigMaster fromExtension(File path) {
 		String ext = IOUtil.extensionName(path.getName());
-		return switch (ext.toLowerCase()) {
+		return switch (ext) {
 			case "yml", "yaml" -> YAML;
 			case "xml" -> XML;
 			case "json", "json5" -> JSON;
