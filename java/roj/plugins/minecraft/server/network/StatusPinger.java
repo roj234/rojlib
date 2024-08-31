@@ -1,8 +1,8 @@
 package roj.plugins.minecraft.server.network;
 
 import roj.io.IOUtil;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
+import roj.net.ChannelCtx;
+import roj.net.ChannelHandler;
 import roj.plugins.minecraft.server.MinecraftServer;
 
 import java.io.IOException;

@@ -3,8 +3,8 @@ package roj.net.handler;
 import roj.concurrent.task.ITask;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
+import roj.net.ChannelCtx;
+import roj.net.ChannelHandler;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
 

@@ -1,9 +1,9 @@
 package roj.net.handler;
 
 import roj.io.IOUtil;
+import roj.net.ChannelCtx;
+import roj.net.ChannelHandler;
 import roj.net.NetUtil;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;

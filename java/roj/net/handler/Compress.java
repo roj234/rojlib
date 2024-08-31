@@ -2,7 +2,7 @@ package roj.net.handler;
 
 import roj.io.CorruptedInputException;
 import roj.io.buf.BufferPool;
-import roj.net.ch.ChannelCtx;
+import roj.net.ChannelCtx;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -16,7 +16,7 @@ import java.util.zip.Inflater;
 public class Compress extends GDeflate {
 	public static final int F_PER_INPUT_RESET = 1;
 
-	public static final byte[] SYNC_END = {0, 0, -1, -1};
+	public static final byte[] _FULL_FLUSH = {0, 0, -1, -1};
 
 	private int max, thr;
 	private byte flag;

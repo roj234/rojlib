@@ -8,7 +8,7 @@ import roj.config.XMLParser;
 import roj.config.data.Element;
 import roj.config.data.Node;
 import roj.io.CorruptedInputException;
-import roj.net.ch.*;
+import roj.net.*;
 import roj.net.handler.Timeout;
 import roj.net.http.HttpHead;
 import roj.net.http.HttpRequest;

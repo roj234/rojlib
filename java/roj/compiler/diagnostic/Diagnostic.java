@@ -75,7 +75,7 @@ public class Diagnostic {
 			if (j > pos || j < 0) {
 				CharList sb = new CharList().append(lines, i, j < 0 ? lines.length() : j).trimLast();
 				lineNumber = ln;
-				columnNumber = pos-i;
+				columnNumber = Math.min(pos, lines.length())-i;
 				line = sb.toStringAndFree();
 				break;
 			}

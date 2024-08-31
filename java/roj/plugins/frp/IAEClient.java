@@ -3,7 +3,7 @@ package roj.plugins.frp;
 import roj.collect.MyHashSet;
 import roj.concurrent.Shutdownable;
 import roj.io.IOUtil;
-import roj.net.ch.*;
+import roj.net.*;
 import roj.net.handler.MSSCipher;
 import roj.net.handler.Pipe2;
 import roj.net.handler.Timeout;

@@ -1,6 +1,6 @@
 package roj.plugins.dns;
 
-import roj.net.ch.DatagramPkt;
+import roj.net.DatagramPkt;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;

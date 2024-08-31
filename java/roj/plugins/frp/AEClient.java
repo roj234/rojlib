@@ -2,7 +2,7 @@ package roj.plugins.frp;
 
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
-import roj.net.ch.*;
+import roj.net.*;
 import roj.net.handler.MSSCipher;
 import roj.net.handler.Pipe2;
 import roj.net.handler.Timeout;

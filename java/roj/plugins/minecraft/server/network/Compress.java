@@ -2,7 +2,7 @@ package roj.plugins.minecraft.server.network;
 
 import roj.io.CorruptedInputException;
 import roj.io.buf.BufferPool;
-import roj.net.ch.ChannelCtx;
+import roj.net.ChannelCtx;
 import roj.net.handler.GDeflate;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;

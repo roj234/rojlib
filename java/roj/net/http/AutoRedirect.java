@@ -2,9 +2,9 @@ package roj.net.http;
 
 import roj.concurrent.TaskPool;
 import roj.io.FastFailException;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
-import roj.net.ch.Event;
+import roj.net.ChannelCtx;
+import roj.net.ChannelHandler;
+import roj.net.Event;
 import roj.net.handler.Timeout;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;

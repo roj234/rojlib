@@ -1,8 +1,8 @@
 package roj.plugins.frp.server;
 
 import org.jetbrains.annotations.Nullable;
-import roj.net.ch.MyChannel;
-import roj.net.ch.Pipe;
+import roj.net.MyChannel;
+import roj.net.Pipe;
 
 import java.io.IOException;
 import java.util.function.Consumer;

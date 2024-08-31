@@ -2,7 +2,7 @@ package roj.net.http.server;
 
 import roj.collect.RingBuffer;
 import roj.io.buf.BufferPool;
-import roj.net.ch.ChannelCtx;
+import roj.net.ChannelCtx;
 import roj.net.http.Headers;
 import roj.util.DynByteBuf;
 

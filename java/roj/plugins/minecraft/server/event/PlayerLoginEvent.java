@@ -2,7 +2,7 @@ package roj.plugins.minecraft.server.event;
 
 import roj.asmx.event.Cancellable;
 import roj.asmx.event.Event;
-import roj.net.ch.MyChannel;
+import roj.net.MyChannel;
 import roj.plugins.minecraft.server.data.PlayerEntity;
 import roj.plugins.minecraft.server.network.PlayerConnection;
 import roj.ui.AnsiString;

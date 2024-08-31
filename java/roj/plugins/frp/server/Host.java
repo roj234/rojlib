@@ -7,8 +7,8 @@ import roj.collect.SimpleList;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
 import roj.config.data.CMap;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.Pipe;
+import roj.net.ChannelCtx;
+import roj.net.Pipe;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 

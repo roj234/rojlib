@@ -2,8 +2,8 @@ package roj.net.handler;
 
 import roj.compiler.plugins.asm.ASM;
 import roj.io.buf.BufferPool;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
+import roj.net.ChannelCtx;
+import roj.net.ChannelHandler;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;

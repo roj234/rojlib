@@ -6,7 +6,7 @@ import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
-import roj.net.ch.*;
+import roj.net.*;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 

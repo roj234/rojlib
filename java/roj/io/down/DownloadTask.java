@@ -9,7 +9,7 @@ import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
-import roj.net.ch.*;
+import roj.net.*;
 import roj.net.handler.Timeout;
 import roj.net.http.AutoRedirect;
 import roj.net.http.HttpClient11;

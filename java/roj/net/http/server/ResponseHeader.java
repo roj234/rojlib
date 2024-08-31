@@ -1,6 +1,6 @@
 package roj.net.http.server;
 
-import roj.net.ch.MyChannel;
+import roj.net.MyChannel;
 import roj.net.http.Headers;
 
 import java.io.IOException;

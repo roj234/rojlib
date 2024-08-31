@@ -1,10 +1,10 @@
 package roj.net.http;
 
 import roj.io.IOUtil;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
-import roj.net.ch.Event;
-import roj.net.ch.MyChannel;
+import roj.net.ChannelCtx;
+import roj.net.ChannelHandler;
+import roj.net.Event;
+import roj.net.MyChannel;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;

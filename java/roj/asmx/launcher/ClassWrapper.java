@@ -58,8 +58,10 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	private final List<ITransformer> transformers = new ArrayList<>();
 
 	private final TrieTreeSet transformExcept = new TrieTreeSet();
+	private final TrieTreeSet loadExcept = new TrieTreeSet();
 	public ClassWrapper() {
 		transformExcept.addAll(Arrays.asList("roj.asm.", "roj.asmx.", "roj.reflect."));
+		loadExcept.addAll(Arrays.asList("java.", "javax."));
 
 		try {
 			// preload asm classes
@@ -153,8 +155,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 				}
 
 				var in = ENTRY_POINT.PARENT.getResourceAsStream(name);
-				if (in == null) in = ClassLoader.getSystemResourceAsStream(name);
-				if (in == null) return ENTRY_POINT.PARENT.loadClass(newName);
+				if (in == null || loadExcept.strStartsWithThis(newName)) return ENTRY_POINT.PARENT.loadClass(newName);
 
 				buf.readStreamFully(in);
 
