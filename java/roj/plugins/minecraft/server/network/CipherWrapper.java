@@ -1,8 +1,8 @@
 package roj.plugins.minecraft.server.network;
 
 import roj.crypt.RCipherSpi;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
+import roj.net.ChannelCtx;
+import roj.net.ChannelHandler;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;

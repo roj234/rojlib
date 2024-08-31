@@ -2,7 +2,7 @@ package roj.io.down;
 
 import roj.concurrent.task.ITask;
 import roj.io.source.Source;
-import roj.net.ch.*;
+import roj.net.*;
 import roj.net.http.HttpHead;
 import roj.net.http.HttpRequest;
 import roj.util.DynByteBuf;

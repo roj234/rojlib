@@ -3,7 +3,7 @@ package roj.plugins.mychat;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMap;
-import roj.net.ch.ChannelCtx;
+import roj.net.ChannelCtx;
 import roj.net.http.ws.WebSocketHandler;
 import roj.util.DynByteBuf;
 

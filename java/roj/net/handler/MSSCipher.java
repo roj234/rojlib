@@ -2,7 +2,7 @@ package roj.net.handler;
 
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
-import roj.net.ch.ChannelCtx;
+import roj.net.ChannelCtx;
 import roj.net.mss.MSSEngine;
 import roj.net.mss.MSSEngineClient;
 import roj.net.mss.MSSException;

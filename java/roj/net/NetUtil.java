@@ -3,7 +3,6 @@ package roj.net;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.net.ch.MyChannel;
 import roj.net.handler.Socks5Client;
 import roj.reflect.Bypass;
 import roj.text.CharList;
@@ -12,7 +11,6 @@ import roj.text.TextUtil;
 
 import java.io.IOException;
 import java.net.*;
-import java.nio.ByteBuffer;
 import java.util.Enumeration;
 
 /**
@@ -20,9 +18,6 @@ import java.util.Enumeration;
  * @since 2020/10/30 23:05
  */
 public final class NetUtil {
-	@Deprecated
-	public static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
-
 	private static SimpleList<NetworkInterface> networkInterfaces;
 	private static MyHashSet<InetAddress> endpoints;
 	private static boolean hasAnyIpV6Address;

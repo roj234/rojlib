@@ -1,7 +1,7 @@
 package roj.net.http.server;
 
 import roj.io.buf.BufferPool;
-import roj.net.ch.ChannelCtx;
+import roj.net.ChannelCtx;
 import roj.net.http.Headers;
 import roj.text.CharList;
 import roj.text.UTF8;

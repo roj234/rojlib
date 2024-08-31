@@ -4,7 +4,7 @@ import roj.crypt.CRC32s;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
-import roj.net.ch.*;
+import roj.net.*;
 import roj.net.http.*;
 import roj.net.http.h2.H2Connection;
 import roj.net.http.h2.H2Exception;

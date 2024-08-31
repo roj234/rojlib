@@ -1,9 +1,9 @@
 package roj.plugins.dns;
 
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
-import roj.net.ch.DatagramPkt;
-import roj.net.ch.MyChannel;
+import roj.net.ChannelCtx;
+import roj.net.ChannelHandler;
+import roj.net.DatagramPkt;
+import roj.net.MyChannel;
 
 import java.net.InetSocketAddress;
 import java.util.function.Consumer;

@@ -5,7 +5,7 @@ import roj.collect.MyBitSet;
 import roj.collect.RingBuffer;
 import roj.config.data.CMap;
 import roj.io.IOUtil;
-import roj.net.ch.ChannelCtx;
+import roj.net.ChannelCtx;
 import roj.plugin.Plugin;
 import roj.plugins.minecraft.server.MinecraftServer;
 import roj.plugins.minecraft.server.data.Block;

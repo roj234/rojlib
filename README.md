@@ -300,7 +300,7 @@ ddns
 `ModuleKiller`, 在Java9-21中一键禁用模块系统
 `Proxy`, ASM版本的java.lang.reflect.Proxy
 
-## roj.sound  
+## roj.media.audio  
     MP3和WAV解码器
     TODO => AudioContext
 

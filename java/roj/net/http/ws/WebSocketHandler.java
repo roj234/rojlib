@@ -2,8 +2,8 @@ package roj.net.http.ws;
 
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.ChannelHandler;
+import roj.net.ChannelCtx;
+import roj.net.ChannelHandler;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;

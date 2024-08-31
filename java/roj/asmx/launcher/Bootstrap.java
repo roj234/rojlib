@@ -6,6 +6,7 @@ import roj.asm.tree.ConstantData;
 import roj.asm.type.Type;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.SimpleList;
+import roj.compiler.plugins.asm.ASM;
 import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Level;
@@ -47,7 +48,7 @@ public final class Bootstrap {
 		// necessary (加载Logger相关类)
 		LOGGER.info("ImpLib TLauncher 2.3");
 
-		if (GetOtherJars()) {
+		if (ASM.TARGET_JAVA_VERSION >= 17 || GetOtherJars()) {
 			URL myJar = EntryPoint.class.getProtectionDomain().getCodeSource().getLocation();
 			if (myJar != null && myJar.getProtocol().equals("file") && myJar.getPath().indexOf('!') < 0) {
 				try {

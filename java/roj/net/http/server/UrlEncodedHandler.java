@@ -1,7 +1,7 @@
 package roj.net.http.server;
 
 import roj.collect.MyHashMap;
-import roj.net.ch.ChannelCtx;
+import roj.net.ChannelCtx;
 import roj.net.http.IllegalRequestException;
 import roj.text.Escape;
 import roj.util.ByteList;

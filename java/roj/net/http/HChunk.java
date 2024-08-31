@@ -1,7 +1,7 @@
 package roj.net.http;
 
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.Event;
+import roj.net.ChannelCtx;
+import roj.net.Event;
 import roj.net.handler.PacketMerger;
 import roj.reflect.ReflectionUtils;
 import roj.text.TextUtil;

@@ -2,8 +2,8 @@ package roj.plugins.frp.server;
 
 import roj.config.data.CMap;
 import roj.io.IOUtil;
-import roj.net.ch.ChannelCtx;
-import roj.net.ch.Pipe;
+import roj.net.ChannelCtx;
+import roj.net.Pipe;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;

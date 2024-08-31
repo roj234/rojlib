@@ -6,7 +6,7 @@ import roj.config.JSONParser;
 import roj.config.data.CList;
 import roj.config.data.CMap;
 import roj.io.IOUtil;
-import roj.net.ch.ChannelCtx;
+import roj.net.ChannelCtx;
 import roj.net.http.ws.WebSocketHandler;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;

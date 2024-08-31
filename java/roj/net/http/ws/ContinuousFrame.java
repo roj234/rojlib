@@ -1,7 +1,7 @@
 package roj.net.http.ws;
 
 import roj.io.buf.BufferPool;
-import roj.net.ch.ChannelCtx;
+import roj.net.ChannelCtx;
 import roj.util.DynByteBuf;
 
 /**
