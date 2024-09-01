@@ -8,4 +8,4 @@ import java.lang.annotation.RetentionPolicy;
  * @since 2022/11/11 0011 19:19
  */
 @Retention(RetentionPolicy.SOURCE)
-public @interface RequireUpgrade {}
+public @interface Beta {}

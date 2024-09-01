@@ -5,7 +5,7 @@ import roj.collect.MyHashMap;
 import roj.concurrent.SegmentReadWriteLock;
 import roj.config.NBTParser;
 import roj.config.auto.Serializer;
-import roj.config.auto.Serializers;
+import roj.config.auto.SerializerFactory;
 import roj.config.serial.ToNBT;
 import roj.io.source.BufferedSource;
 import roj.io.source.FileSource;
@@ -190,7 +190,7 @@ public class SimpleSessionProvider extends SessionProvider implements BiConsumer
 	private static Serializer<Map<String, Object>> adapter() {
 		Serializer<?> c = local.get();
 		if (c == null) {
-			c = Serializers.POOLED.mapOf(Object.class);
+			c = SerializerFactory.POOLED.mapOf(Object.class);
 			local.set(c);
 		}
 		return Helpers.cast(c);

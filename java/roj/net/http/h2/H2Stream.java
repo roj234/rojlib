@@ -28,6 +28,8 @@ public abstract class H2Stream {
 	protected static final byte C_SEND_BODY = 0, OPEN = 1, HEAD_V = 2, HEAD_R = 3, DATA = 4, HEAD_T = 5, PROCESSING = 6, SEND_BODY = 7, CLOSED = 8, ERRORED = 9;
 	byte state;
 	protected final byte getState() {return state;}
+	protected static final byte FLAG_GOAWAY = 1, FLAG_HEADER_SENT = -128;
+	protected byte flag;
 
 	int sendWindow, receiveWindow;
 	public final int getReceiveWindow() {return receiveWindow;}

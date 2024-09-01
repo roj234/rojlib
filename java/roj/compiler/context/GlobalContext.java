@@ -19,13 +19,13 @@ import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.diagnostic.SimpleDiagnosticListener;
+import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.ResolveHelper;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.Serializer;
-import roj.config.auto.Serializers;
+import roj.config.auto.SerializerFactory;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
 import roj.text.Interner;
@@ -152,7 +152,7 @@ public class GlobalContext implements CompilerSpec {
 			block:
 			synchronized (this) {
 				if (packageFastPath.isEmpty()) {
-					var serializer = (Serializer<MyHashMap<String, List<String>>>) Serializers.SAFE.serializer(Signature.parseGeneric("Lroj/collect/MyHashMap<Ljava/lang/String;Ljava/util/List<Ljava/lang/String;>;>;"));
+					var serializer = (Serializer<MyHashMap<String, List<String>>>) SerializerFactory.SAFE.serializer(Signature.parseGeneric("Lroj/collect/MyHashMap<Ljava/lang/String;Ljava/util/List<Ljava/lang/String;>;>;"));
 
 					File cache = packageCacheFile;
 					if (cache != null && cache.isFile()) {
@@ -254,7 +254,7 @@ public class GlobalContext implements CompilerSpec {
 
 	public boolean isSpecEnabled(int specId) {return true;}
 
-	public Consumer<Diagnostic> listener = new SimpleDiagnosticListener(1, 1, 1);
+	public Consumer<Diagnostic> listener = new TextDiagnosticReporter(1, 1, 1);
 	public boolean hasError;
 
 	public boolean hasError() {return hasError;}

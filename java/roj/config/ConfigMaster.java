@@ -1,7 +1,7 @@
 package roj.config;
 
 import roj.config.auto.Serializer;
-import roj.config.auto.Serializers;
+import roj.config.auto.SerializerFactory;
 import roj.config.data.CEntry;
 import roj.config.serial.*;
 import roj.io.IOUtil;
@@ -161,13 +161,13 @@ public enum ConfigMaster {
 		};
 	}
 
-	public <T> T readObject(Class<T> type, File file) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), file); }
+	public <T> T readObject(Class<T> type, File file) throws IOException, ParseException { return readObject(SerializerFactory.SAFE.serializer(type), file); }
 	/**
 	 * @implNote 由于部分二进制格式可能存在数据分界，所以不会关闭in
 	 */
-	public <T> T readObject(Class<T> type, InputStream in) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), in); }
-	public <T> T readObject(Class<T> type, DynByteBuf buf) throws IOException, ParseException { return readObject(Serializers.SAFE.serializer(type), buf); }
-	public <T> T readObject(Class<T> type, CharSequence sb) throws ParseException { return readObject(Serializers.SAFE.serializer(type), sb); }
+	public <T> T readObject(Class<T> type, InputStream in) throws IOException, ParseException { return readObject(SerializerFactory.SAFE.serializer(type), in); }
+	public <T> T readObject(Class<T> type, DynByteBuf buf) throws IOException, ParseException { return readObject(SerializerFactory.SAFE.serializer(type), buf); }
+	public <T> T readObject(Class<T> type, CharSequence sb) throws ParseException { return readObject(SerializerFactory.SAFE.serializer(type), sb); }
 
 	public <T> T readObject(Serializer<T> ser, File file) throws IOException, ParseException {parser(true).parse(file, 0, ser.reset());return ser.get();}
 	public <T> T readObject(Serializer<T> ser, InputStream in) throws IOException, ParseException {parser(true).parse(in, 0, ser.reset());return ser.get();}
@@ -180,13 +180,13 @@ public enum ConfigMaster {
 	}
 
 	@SuppressWarnings("unchecked")
-	public void writeObject(Object o, File file) throws IOException { writeObject((Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), o, file); }
+	public void writeObject(Object o, File file) throws IOException { writeObject((Serializer<Object>) SerializerFactory.SAFE.serializer(o.getClass()), o, file); }
 	@SuppressWarnings("unchecked")
-	public void writeObject(Object o, OutputStream out) throws IOException { writeObject((Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), o, out); }
+	public void writeObject(Object o, OutputStream out) throws IOException { writeObject((Serializer<Object>) SerializerFactory.SAFE.serializer(o.getClass()), o, out); }
 	@SuppressWarnings("unchecked")
-	public DynByteBuf writeObject(Object o, DynByteBuf buf) throws IOException { return writeObject((Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), o, buf); }
+	public DynByteBuf writeObject(Object o, DynByteBuf buf) throws IOException { return writeObject((Serializer<Object>) SerializerFactory.SAFE.serializer(o.getClass()), o, buf); }
 	@SuppressWarnings("unchecked")
-	public CharList writeObject(Object o, CharList sb) { return writeObject((Serializer<Object>) Serializers.SAFE.serializer(o.getClass()), o, sb); }
+	public CharList writeObject(Object o, CharList sb) { return writeObject((Serializer<Object>) SerializerFactory.SAFE.serializer(o.getClass()), o, sb); }
 
 	public <T> void writeObject(Serializer<T> ser, T o, File file) throws IOException { writeObject0(ser, o, file, ""); }
 	public <T> void writeObject(Serializer<T> ser, T o, File file, String indent) throws IOException { writeObject0(ser, o, file, indent); }

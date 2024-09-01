@@ -34,11 +34,11 @@ public class MSSException extends IOException {
 		if (buf.writableBytes() < extra) return;
 
 		int pos = buf.wIndex();
-		buf.put(MSSEngine.P_ALERT).putShort(extra-3).put((byte) code).put((byte) data.length).put(data);
+		buf.put(MSSEngine.P_ALERT).putMedium(extra-3).put(code).put(data.length).put(data);
 
 		if (kd != null) {
 			kd.setSignKey(engine.deriveKey("alert", kd.getDigestLength()));
-			kd.update(buf.slice(pos+3,2+data.length));
+			kd.update(buf.slice(pos+4,2+data.length));
 			buf.put(kd.digestShared());
 		}
 	}

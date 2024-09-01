@@ -560,7 +560,6 @@ public final class H2Connection implements ChannelHandler {
 	 */
 	public void sendHeader(@NotNull H2Stream stream, @NotNull Headers header, boolean noBody) throws IOException {
 		if (!isServer()) throw new IllegalArgumentException("客户端请使用sendHeaderClientSide()");
-		if (stream.state != H2Stream.PROCESSING) throw new IllegalArgumentException("流"+stream+"不在可以发送头部的状态");
 		sendHeader0(stream, header, noBody, 0, 0);
 		if (stream.state == H2Stream.CLOSED) {
 			streams.remove(stream.id);
@@ -568,6 +567,9 @@ public final class H2Connection implements ChannelHandler {
 		}
 	}
 	private void sendHeader0(H2Stream stream, Headers header, boolean noBody, int depend, int weight) throws IOException {
+		if ((stream.flag&H2Stream.FLAG_HEADER_SENT) != 0) throw new IllegalArgumentException("流"+stream+"不在可以发送头部的状态");
+		stream.flag |= H2Stream.FLAG_HEADER_SENT;
+
 		ByteList ob = IOUtil.getSharedByteBuf();
 		ob.putMedium(0).put(FRAME_HEADER).put(0).putInt(stream.id);
 		if (weight != 0) {

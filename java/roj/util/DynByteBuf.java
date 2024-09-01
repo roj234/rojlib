@@ -26,11 +26,11 @@ import static roj.reflect.Unaligned.U;
  * @since 2022/5/19 1:44
  */
 public abstract class DynByteBuf extends OutputStream implements CharSequence, MyDataInput, DataOutput {
-	public static ByteList wrap(byte[] b) { return new ByteList(b); }
-	public static ByteList wrap(byte[] b, int off, int len) { return new ByteList.Slice(b, off, len); }
+	public static ByteList wrap(byte[] b) {return new ByteList(b);}
+	public static ByteList wrap(byte[] b, int off, int len) {return new ByteList.Slice(b, off, len);}
 
-	public static ByteList wrapWrite(byte[] b) { return wrapWrite(b, 0, b.length); }
-	public static ByteList wrapWrite(byte[] b, int off, int len) { ByteList bl = new ByteList.Slice(b, off, len); bl.wIndex = 0; return bl; }
+	public static ByteList wrapWrite(byte[] b) {return wrapWrite(b, 0, b.length);}
+	public static ByteList wrapWrite(byte[] b, int off, int len) {return new ByteList.Slice().set(b,off,len);}
 
 	public static ByteList allocate() { return new ByteList(); }
 	public static ByteList allocate(int cap) { return new ByteList(cap); }

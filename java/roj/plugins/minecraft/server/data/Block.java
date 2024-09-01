@@ -6,7 +6,7 @@ import roj.collect.MyHashSet;
 import roj.compiler.plugins.asm.ASM;
 import roj.config.NBTParser;
 import roj.config.auto.Optional;
-import roj.config.auto.Serializers;
+import roj.config.auto.SerializerFactory;
 import roj.io.MyDataInputStream;
 import roj.plugins.minecraft.server.MinecraftServer;
 import roj.util.Helpers;
@@ -28,7 +28,7 @@ public final class Block {
 	private static MyHashSet<Object> _tmp;
 	static {
 		try (var in = MinecraftServer.INSTANCE.getResource("assets/Blocks_1.19.2.nbt")) {
-			var conv = Serializers.SAFE.serializer(BlockInfo.class);
+			var conv = SerializerFactory.SAFE.serializer(BlockInfo.class);
 			var nbt = new NBTParser();
 
 			Comparator<PropertyInfo> propertyCmp = (o1, o2) -> o1.name.compareTo(o2.name);

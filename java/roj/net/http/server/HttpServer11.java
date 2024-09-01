@@ -72,9 +72,9 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	}
 
 	// state
-	private static final byte UNOPENED = 0, RECV_HEAD = 1, RECV_BODY = 2, PROCESSING = 3, SEND_BODY = 4, SEND_DONE = 5, HANG_PRE = 6, HANG = 7, CLOSED = 8;
+	private static final byte UNOPENED = 0, RECV_HEAD = 1, RECV_BODY = 2, PROCESSING = 3, SEND_BODY = 4, HANG_PRE = 5, HANG = 6, CLOSED = 7;
 	// flag
-	static final byte KEPT_ALIVE = 1, FLAG_ERRORED = 2, FLAG_COMPRESS = 4, FLAG_GZIP = 8, FLAG_ASYNC = 16, FLAG_UNSHARED = 32;
+	static final byte KEPT_ALIVE = 1, FLAG_ERRORED = 2, FLAG_COMPRESS = 8, FLAG_GZIP = 16, FLAG_ASYNC = 32, FLAG_UNSHARED = 64;
 
 	private byte state, flag;
 	private long time;
@@ -107,40 +107,14 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	@Override
 	@SuppressWarnings("fallthrough")
 	public void channelTick(ChannelCtx ctx) throws IOException {
-		switch (state) {
-			case UNOPENED: return;
-			case SEND_BODY:
-				if (ctx.isFlushing()) break;
+		if (state == UNOPENED) return;
 
-				streamLimit = streamLimitDefault;
-				boolean hasMore = body.send(this);
-				if (ctx.isFlushing()) {
-					ctx.pauseAndFlush();
-					break;
-				}
-				if (hasMore) break;
-			case SEND_DONE:
-				outEof();
+		if ((flag&SEND_BODY) != 0 && !ctx.isFlushing()) {
+			streamLimit = streamLimitDefault;
 
-				if (fh != null && fh.onRequestFinish(this)) {
-					state = CLOSED;
-					ch.readActive();
-					ch.removeSelf();
-					return;
-				}
-
-				// 500ms for close-notify or hang
-				time = System.currentTimeMillis() + 500;
-
-				if ("close".equalsIgnoreCase(req.responseHeader.get("connection"))) {
-					ch.channel().closeGracefully();
-					state = CLOSED;
-				} else {
-					state = HANG_PRE;
-					ch.readActive();
-					finish(false);
-				}
-				break;
+			boolean hasMore = body.send(this);
+			if (ctx.isFlushing()) ctx.pauseAndFlush();
+			else if (!hasMore) outEof();
 		}
 
 		if (System.currentTimeMillis() > time || !ctx.isInputOpen()) {
@@ -163,6 +137,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 					sendHead();
 					flag |= FLAG_ERRORED;
 				break;
+				case SEND_BODY: LOGGER.warn("发送超时[在规定的时间内未能将响应体全部发送]: {}", body); break;
 				case HANG_PRE:
 					if (ctx.isInputOpen()) {
 						time = System.currentTimeMillis() + router.keepaliveTimeout();
@@ -172,7 +147,6 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 						state = HANG;
 						break;
 					}
-				case SEND_BODY: LOGGER.warn("发送超时[在规定的时间内未能将响应体全部发送]: {}", body);
 				default:
 				case HANG, CLOSED: ctx.close(); break;
 			}
@@ -372,7 +346,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 			if (state == RECV_BODY) {
 				req.postFields = ph == null ? postBuffer : ph;
 				process();
-			} else if (state < RECV_BODY || state > SEND_DONE) {
+			} else if (state < RECV_BODY || state > SEND_BODY) {
 				assert id.equals(MyChannel.IN_EOF); // close
 				return;
 			}
@@ -431,6 +405,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 				mergedRead(ch, ByteList.EMPTY);
 				ph.onSuccess();
 			}
+			if ((flag&SEND_BODY) != 0) return;
 
 			var resp = router.response(req, this);
 			if (body == null) body = resp;
@@ -503,7 +478,11 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		out.channelWrite(hdr.putShort(0x0D0A));
 
 		//time added
-		state = body == null ? SEND_DONE : SEND_BODY;
+		if (body == null) outEof();
+		else {
+			state = SEND_BODY;
+			flag |= SEND_BODY;
+		}
 
 		if (enc == ENC_GZIP) {
 			hdr.clear();
@@ -522,7 +501,6 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 			case RECV_BODY -> "RECV_BODY";
 			case PROCESSING -> "PROCESSING";
 			case SEND_BODY -> "SEND_BODY";
-			case SEND_DONE -> "SEND_DONE";
 			case HANG_PRE -> "HANG_PRE";
 			case HANG -> "HANG";
 			case CLOSED -> "CLOSED";
@@ -537,32 +515,39 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	@Override public void sharedRequest() {flag &= ~FLAG_UNSHARED;}
 	@Override public ResponseHeader enableAsyncResponse() {flag |= FLAG_ASYNC;return this;}
 	@Override public void body(Response resp) throws IOException {
-		if ((flag & FLAG_ASYNC) != 0) {
-			if (state != PROCESSING) throw new IllegalStateException("Expect PROCESSING: "+_getState());
-
-			var lock = ch.channel().lock();
-			lock.lock();
-			try {
-				body = resp;
-				time = System.currentTimeMillis() + router.writeTimeout(req, body);
-				sendHead();
-			} catch (Exception e) {
-				try {
-					exceptionCaught(ch, e);
-				} catch (Exception ex) {
-					Helpers.athrow(ex);
-				}
-				e.printStackTrace();
-			} finally {
-				lock.unlock();
+		if ((flag & FLAG_ASYNC) == 0) {
+			if (state != RECV_HEAD) {
+				this.body = resp;
+				return;
 			}
-		} else {
-			this.body = resp;
+
+			flag |= SEND_BODY;
+			LOGGER.warn("全双工模式正开发中");
+		} else if (state != PROCESSING) {
+			throw new IllegalStateException("Expect PROCESSING: "+_getState());
+		}
+
+		var lock = ch.channel().lock();
+		lock.lock();
+		try {
+			body = resp;
+			time = System.currentTimeMillis() + router.writeTimeout(req, body);
+			sendHead();
+		} catch (Exception e) {
+			try {
+				exceptionCaught(ch, e);
+			} catch (Exception ex) {
+				Helpers.athrow(ex);
+			}
+			e.printStackTrace();
+		} finally {
+			lock.unlock();
 		}
 	}
 
 	@Override public ResponseHeader enableCompression() {flag |= FLAG_COMPRESS; return this;}
 	@Override public ResponseHeader disableCompression() {flag &= ~FLAG_COMPRESS; return this;}
+
 	@Override public Headers headers() {return req.responseHeader;}
 	//endregion
 	//region ResponseWriter
@@ -575,7 +560,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	public void setStreamLimit(int kbps) {streamLimit = streamLimitDefault = (int)Math.round(kbps*1024D/1000);}
 
 	public void write(DynByteBuf buf) throws IOException {
-		if (state != SEND_BODY) throw new IllegalStateException();
+		if ((flag&SEND_BODY) == 0) throw new IllegalStateException();
 
 		int len = Math.min(buf.readableBytes(), streamLimit);
 		if (len == 0 || ch.isFlushing()) return;
@@ -590,7 +575,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		streamLimit -= len;
 	}
 	public int write(InputStream in, int limit) throws IOException {
-		if (state != SEND_BODY) throw new IllegalStateException();
+		if ((flag&SEND_BODY) == 0) throw new IllegalStateException();
 
 		limit = limit <= 0 ? streamLimit : Math.min(streamLimit, limit);
 		if (limit <= 0 || ch.isFlushing()) return 0;
@@ -627,22 +612,42 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		}
 	}
 
-	private void outEof() throws IOException {
-		if (!ch.isOutputOpen()) return;
+	private boolean outEof() throws IOException {
+		// for close-notify or hang
+		time = System.currentTimeMillis() + 100;
 
-		if (def != null) ch.postEvent(HCompress.EVENT_CLOSE_OUT);
-		if ((flag & FLAG_GZIP) != 0) {
-			DynByteBuf buf = ch.allocate(false, 8);
-			buf.putIntLE(CRC32s.retVal(crc)).putIntLE(def.getTotalIn());
-			try {
-				ChannelCtx ctx = ch.channel().handler("h11@chunk");
-				// noinspection all
-				ctx.handler().channelWrite(ctx, buf);
-			} finally {
-				BufferPool.reserve(buf);
+		if (ch.isOutputOpen()) {
+			if (def != null) ch.postEvent(HCompress.EVENT_CLOSE_OUT);
+			if ((flag & FLAG_GZIP) != 0) {
+				var buf = ch.allocate(false, 8).putIntLE(CRC32s.retVal(crc)).putIntLE(def.getTotalIn());
+				try {
+					var ctx = ch.channel().handler("h11@chunk");
+					// noinspection all
+					ctx.handler().channelWrite(ctx, buf);
+				} finally {
+					BufferPool.reserve(buf);
+				}
 			}
+			ch.postEvent(HChunk.EVENT_CLOSE_OUT);
 		}
-		ch.postEvent(HChunk.EVENT_CLOSE_OUT);
+
+		if (fh != null && fh.onRequestFinish(this)) {
+			state = CLOSED;
+			finish(true);
+			ch.removeSelf();
+			ch.readActive();
+			return true;
+		}
+
+		if ("close".equalsIgnoreCase(req.responseHeader.get("connection"))) {
+			ch.channel().closeGracefully();
+			state = CLOSED;
+		} else {
+			state = HANG_PRE;
+			ch.readActive();
+			finish(false);
+		}
+		return false;
 	}
 
 	//endregion

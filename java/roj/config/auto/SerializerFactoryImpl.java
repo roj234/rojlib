@@ -82,18 +82,19 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		final Type output;
 		final MethodNode reader, writer;
 		final Object ref;
-		final boolean user;
+		final boolean user, fieldType;
 
-		public AsType(String name, MethodNode writer, MethodNode reader, Object o, boolean user_writer) {
+		public AsType(String name, MethodNode writer, MethodNode reader, Object o, boolean user_writer, boolean actualTypeMode) {
 			this.name = name;
 			this.ref = o;
 			this.reader = reader;
 			this.writer = writer;
 			this.output = reader.parameters().get(0);
 			this.user = user_writer;
+			this.fieldType = actualTypeMode;
 		}
 
-		public String klass() { return reader.ownerClass(); }
+		public String type() { return reader.ownerClass(); }
 	}
 
 	SerializerFactoryImpl(int flag, ClassLoader cl) {
@@ -101,7 +102,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		this.classLoader = cl;
 		this.GENERATED = Isolation.computeIfAbsent(cl, Fn).generated;
 
-		// 如果不开启AllowDynamic，那么对于raw Collection的反序列化将会失败
+		// 不开启AllowDynamic仍然可以序列化集合，只是不能反序列化
 		ObjAny any = dynamicRoot = new ObjAny(this);
 		if ((flag & ALLOW_DYNAMIC) != 0) {
 			localRegistry.put("java.util.Map", new MapSer(any, null));
@@ -109,8 +110,6 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			localRegistry.put("java.util.Collection", LIST);
 			localRegistry.put("java.util.List", LIST);
 			localRegistry.put("java.util.Set", new CollectionSer(any, true, null));
-		} else {
-			//dynamicRoot = null;
 		}
 	}
 
@@ -138,13 +137,14 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	public SerializerFactory add(Class<?> type, Object adapter, String writeMethod, String readMethod) {
 		if (type.isPrimitive() || type == String.class) throw new IllegalStateException("type不能是基本类型或字符串");
 
-		ConstantData data = Parser.parseConstants(adapter.getClass());
-		if (data == null) throw new IllegalArgumentException("无法获取"+adapter+"的类文件");
+		var adapterType = adapter.getClass() == Class.class ? (Class<?>) adapter : adapter.getClass();
+		var data = Parser.parseConstants(adapterType);
+		if (data == null) throw new IllegalArgumentException("无法获取"+adapterType.getName()+"的类文件");
 
 		int wid = data.getMethod(writeMethod), rid = data.getMethod(readMethod);
 		MethodNode w = data.methods.get(wid), r = data.methods.get(rid);
 
-		String name = "U|"+wid+"|"+rid+"|"+type.getName()+"|"+adapter.getClass().getName();
+		String name = "U|"+wid+"|"+rid+"|"+type.getName()+"|"+adapterType.getName();
 		Adapter ser = GENERATED.get(name);
 		if (ser == null) {
 			Type clsType = TypeHelper.class2type(type);
@@ -162,11 +162,14 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 			if (rid >= 0) throw new IllegalArgumentException("reader不符合要求");
 			if (wid >= 0) throw new IllegalArgumentException("writer不符合要求");
+			if (((r.modifier ^ w.modifier)&ACC_STATIC) != 0) throw new IllegalArgumentException("R/W方法静态不同");
+			boolean isStatic = adapterType == adapter;
+			if ((r.modifier&ACC_STATIC) == 0 == isStatic) throw new IllegalArgumentException("R/W方法与参数的静态不同");
 
 			lock.lock();
 			try {
 				if ((ser = GENERATED.get(name)) == null) {
-					ser = user(data, w, r);
+					ser = user(data, w, r, isStatic);
 					GENERATED.put(name, ser);
 				}
 			} finally {
@@ -197,7 +200,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			lock.lock();
 			try {
 				if ((ser = GENERATED.get(name)) == null) {
-					ser = user(rw.data(), rw.writer(), rw.reader());
+					ser = user(rw.data(), rw.writer(), rw.reader(), false);
 					GENERATED.put(name, ser);
 				}
 			} finally {
@@ -218,27 +221,32 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	 */
 	@Override
 	public SerializerFactory as(String name, Class<?> type, Object adapter, String writeMethod, String readMethod) {
-		ConstantData data = Parser.parseConstants(adapter.getClass());
-		if (data == null) throw new IllegalArgumentException("无法获取"+adapter+"的类文件");
+		var adapterType = adapter.getClass() == Class.class ? (Class<?>) adapter : adapter.getClass();
+		var data = Parser.parseConstants(adapterType);
+		if (data == null) throw new IllegalArgumentException("无法获取"+adapterType.getName()+"的类文件");
 
 		MethodNode w = data.getMethodObj(writeMethod), r = data.getMethodObj(readMethod);
 
-		boolean visitorMode = false;
+		boolean visitorMode = false, actualTypeMode;
 		sp: {
 			List<Type> wp = w.parameters(), rp = r.parameters();
+			if (((r.modifier ^ w.modifier)&ACC_STATIC) != 0) throw new IllegalArgumentException("R/W方法静态不同");
+			if ((r.modifier&ACC_STATIC) == 0 == (adapterType == adapter)) throw new IllegalArgumentException("R/W方法与参数的静态不同");
 			if (wp.get(0).equals(TypeHelper.class2type(type))) {
+				actualTypeMode = rp.size() == 2 && "java/lang/String".equals(rp.get(1).getActualClass());
+
 				if (rp.get(0).equals(w.returnType())) break sp;
 				if (wp.size() == 2 && "roj/config/serial/CVisitor".equals(wp.get(1).getActualClass())) {
-					if (!wp.get(0).isPrimitive()) throw new IllegalArgumentException("object output not support user");
+					if (!wp.get(0).isPrimitive()) throw new IllegalArgumentException("只有基本类型目标可以使用UserVisitor输出");
 					visitorMode = true;
 					break sp;
 				}
 			}
-			throw new IllegalStateException("R/W param not mirrored");
+			throw new IllegalStateException("R/W方法参数不正确");
 		}
 
 		synchronized (asTypes) {
-			AsType old = asTypes.putIfAbsent(name, new AsType(name, w, r, adapter, visitorMode));
+			AsType old = asTypes.putIfAbsent(name, new AsType(name, w, r, adapterType == adapter ? null : adapter, visitorMode, actualTypeMode));
 			if (old != null) throw new IllegalArgumentException(name+"已存在");
 		}
 		return this;
@@ -250,7 +258,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	public SerializerFactory as(String name, Class<?> type, Object adapter) {
 		RW rw = autoRW(type, adapter);
 		synchronized (asTypes) {
-			AsType old = asTypes.putIfAbsent(name, new AsType(name, rw.writer, rw.reader, adapter, false));
+			AsType old = asTypes.putIfAbsent(name, new AsType(name, rw.writer, rw.reader, adapter, false, false));
 			if (old != null) throw new IllegalArgumentException(name+"已存在");
 		}
 		return this;
@@ -279,6 +287,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 		if (reader == null) throw new IllegalArgumentException("没找到reader");
 		if (writer == null) throw new IllegalArgumentException("没找到writer");
+		if (((reader.modifier|writer.modifier)&ACC_STATIC) != 0) throw new IllegalArgumentException("抱歉，自动识别不允许静态方法，请手动指定方法名称");
 		return new RW(data, writer, reader);
 	}
 
@@ -567,7 +576,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	/**
 	 * 包装用户提供的序列化器
  	 */
-	private Adapter user(ConstantData data, MethodNode writer, MethodNode reader) {
+	private Adapter user(ConstantData data, MethodNode writer, MethodNode reader, boolean isStatic) {
 		String klassIn = reader.returnType().getActualClass();
 		if (klassIn == null) throw new IllegalArgumentException("覆盖"+reader.returnType()+"的序列化");
 
@@ -577,7 +586,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		Type type = writer.returnType();
 		String klassOut = type.getActualClass();
 
-		int ua = c.newField(ACC_PRIVATE, "Sa", "L"+data.name+";");
+		int ua = isStatic ? -1 : c.newField(ACC_PRIVATE, "Sa", "L"+data.name+";");
 		int ser;
 		if (klassOut != null && !klassOut.equals("java/lang/String")) {
 			String genSig;
@@ -608,11 +617,13 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		}
 
 		cw.one(ALOAD_1);
-		cw.one(ALOAD_0);
-		cw.field(GETFIELD, c, ua);
+		if (ua >= 0) {
+			cw.one(ALOAD_0);
+			cw.field(GETFIELD, c, ua);
+		}
 		cw.varLoad(type, 2);
 		if (klassOut != null) cw.clazz(CHECKCAST, klassOut);
-		cw.invoke(INVOKEVIRTUAL, reader);
+		cw.invoke(ua >= 0 ? INVOKEVIRTUAL : INVOKESTATIC, reader);
 		cw.field(PUTFIELD, "roj/config/auto/AdaptContext", "ref", "Ljava/lang/Object;");
 
 		cw.one(ALOAD_1);
@@ -627,11 +638,13 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "write", "(Lroj/config/serial/CVisitor;Ljava/lang/Object;)V");
 		cw.visitSizeMax(3,3);
 
-		cw.one(ALOAD_0);
-		cw.field(GETFIELD, c, ua);
+		if (ua >= 0) {
+			cw.one(ALOAD_0);
+			cw.field(GETFIELD, c, ua);
+		}
 		cw.one(ALOAD_2);
 		cw.clazz(CHECKCAST, klassIn);
-		cw.invoke(INVOKEVIRTUAL, writer);
+		cw.invoke(ua >= 0 ? INVOKEVIRTUAL : INVOKESTATIC, writer);
 		cw.varStore(type, 2);
 
 		if (ser >= 0) {
@@ -664,7 +677,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		int t = CHECK_PARENT|SERIALIZE_PARENT;
 		if ((flag&t) == t) throw new IllegalArgumentException("CHECK_PARENT SERIALIZE_PARENT 不能同时为真");
 
-		if ((o.getModifiers()&ACC_PUBLIC) == 0 && (flag&SAFE) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
+		if ((o.getModifiers()&ACC_PUBLIC) == 0 && (flag&CHECK_PUBLIC) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
 		ConstantData data = Parser.parseConstants(o);
 		if (data == null) throw new IllegalArgumentException("无法获取"+o.getName()+"的类文件");
 
@@ -673,7 +686,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			if ((flag & NO_CONSTRUCTOR) == 0) throw new IllegalArgumentException("找不到无参构造器"+o.getName());
 		} else if ((data.methods.get(_init).modifier() & ACC_PUBLIC) == 0) {
 			if (!UNSAFE_ADAPTER) throw new IllegalArgumentException("UnsafeAdapter没有激活,不能跳过无参构造器生成对象"+o.getName());
-			if ((flag & SAFE) != 0) throw new IllegalArgumentException("UNSAFE: "+o.getName()+".<init>");
+			if ((flag & CHECK_PUBLIC) != 0) throw new IllegalArgumentException("UNSAFE: "+o.getName()+".<init>");
 		}
 
 		fieldIds.clear();
@@ -852,7 +865,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			if (unsafe != 0 ||
 				set != null && (set.modifier()& ACC_PUBLIC) == 0 ||
 				get != null && (get.modifier()& ACC_PUBLIC) == 0) {
-				if ((flag & SAFE) != 0)
+				if ((flag & CHECK_PUBLIC) != 0)
 					throw new RuntimeException("无权访问"+data.name+"."+f+" ("+unsafe+")\n" +
 					"解决方案:\n" +
 					" 1. 开启UNSAFE模式\n" +
@@ -958,18 +971,17 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 		cw.vars(ALOAD, t.pos);
 
-
-		if (as != null) {
-			String asName = "as$"+as.klass().replace('/', '`');
+		if (as != null && as.ref != null) {
+			String asName = "as$"+as.type().replace('/', '`');
 			asId = c.getField(asName);
 			if (asId < 0) {
-				asId = c.newField(ACC_PRIVATE, asName, "L"+as.klass()+";");
+				asId = c.newField(ACC_PRIVATE, asName, "L"+as.type()+";");
 
 				copy.one(ALOAD_0);
 				copy.one(ALOAD_1);
 				copy.ldc(new CstString(as.name));
 				copy.invoke(DIRECT_IF_OVERRIDE, "roj/config/auto/SerializerFactoryImpl", "gas", "(Ljava/lang/String;)Ljava/lang/Object;");
-				copy.clazz(CHECKCAST, as.klass());
+				copy.clazz(CHECKCAST, as.type());
 				copy.field(PUTFIELD, c, asId);
 			}
 
@@ -1016,7 +1028,10 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			}
 		}
 
-		if (as != null) cw.invoke(INVOKEVIRTUAL, as.reader);
+		if (as != null) {
+			if (as.fieldType) cw.ldc(fn.rawDesc());
+			cw.invoke(as.ref == null ? INVOKESTATIC : INVOKEVIRTUAL, as.reader);
+		}
 
 		if (set == null) {
 			if (unsafePut != null) {
@@ -1092,7 +1107,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			cw.one(ALOAD_0);
 			cw.field(GETFIELD, c, id);
 			cw.one(ALOAD_1);
-			if (as != null) {
+			if (as != null && as.ref != null) {
 				assert !as.user;
 				cw.visitSizeMax(4,0);
 				cw.one(ALOAD_0);
@@ -1103,9 +1118,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			if (get == null) cw.field(GETFIELD, data.name, fn.name(), fn.rawDesc());
 			else cw.invoke(INVOKEVIRTUAL, get);
 
-			if (as != null) {
-				cw.invoke(INVOKEVIRTUAL, as.writer);
-			}
+			if (as != null) cw.invoke(as.ref == null ? INVOKESTATIC : INVOKEVIRTUAL, as.writer);
 
 			cw.invoke(INVOKEVIRTUAL, "roj/config/auto/Adapter", "write", "(Lroj/config/serial/CVisitor;Ljava/lang/Object;)V");
 		} else {
@@ -1122,8 +1135,10 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			cw = write;
 			if (as != null) {
 				if (!as.user) cw.one(ALOAD_1);
-				cw.one(ALOAD_0);
-				cw.field(GETFIELD, c, asId);
+				if (as.ref != null) {
+					cw.one(ALOAD_0);
+					cw.field(GETFIELD, c, asId);
+				}
 			} else {
 				cw.one(ALOAD_1);
 			}
@@ -1134,7 +1149,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 			if (as != null) {
 				if (as.user) cw.one(ALOAD_1);
-				cw.invoke(INVOKEVIRTUAL, as.writer);
+				cw.invoke(as.ref == null ? INVOKESTATIC : INVOKEVIRTUAL, as.writer);
 				if (as.user) break block;
 			}
 

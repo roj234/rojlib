@@ -36,10 +36,7 @@ public final class VarintSplitter implements ChannelHandler {
 	private final int maxLengthBytes;
 	private final boolean vlui;
 
-	public VarintSplitter(int maxLengthBytes) {
-		this(maxLengthBytes, false);
-	}
-
+	public VarintSplitter(int maxLengthBytes) {this(maxLengthBytes, false);}
 	public VarintSplitter(int maxLengthBytes, boolean vlui) {
 		super();
 		this.maxLengthBytes = maxLengthBytes;
@@ -110,7 +107,7 @@ public final class VarintSplitter implements ChannelHandler {
 
 			b = data.readByte();
 			length |= (b & 0x7F) << (i++ * 7);
-			if (i > maxBytes) throw new IllegalArgumentException("packet too large " + length);
+			if (i > maxBytes) throw new IllegalArgumentException("数据包过大: "+length);
 		} while ((b & 0x80) != 0);
 		return length;
 	}
@@ -144,6 +141,6 @@ public final class VarintSplitter implements ChannelHandler {
 			if ((b&7) == 0) return data.readIntLE();
 		}
 
-		throw new IllegalArgumentException("数据包过大: " + Integer.toHexString(b));
+		throw new IllegalArgumentException("数据包过大: "+Integer.toHexString(b));
 	}
 }

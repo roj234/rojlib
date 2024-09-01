@@ -7,7 +7,6 @@ import roj.net.Event;
 import roj.net.MyChannel;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -71,13 +70,8 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 				ctx.postEvent(HCompress.EVENT_CLOSE_OUT);
 				ctx.postEvent(HChunk.EVENT_CLOSE_OUT);
 
-				if (_body instanceof AutoCloseable) {
-					try {
-						((AutoCloseable) _body).close();
-					} catch (Exception e) {
-						Helpers.athrow(e);
-					}
-				}
+				if (_body instanceof AutoCloseable c)
+					IOUtil.closeSilently(c);
 			}
 
 			_body = body1;

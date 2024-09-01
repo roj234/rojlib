@@ -10,6 +10,7 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 
 import static roj.util.ByteList.EMPTY;
 
@@ -19,24 +20,15 @@ import static roj.util.ByteList.EMPTY;
  */
 public class MSSCipher extends PacketMerger {
 	private final MSSEngine engine;
-	private boolean sslMode;
 
-	public MSSCipher(MSSEngine engine) {
-		super();
-		this.engine = engine;
-	}
+	private static final byte TLS13 = 1;
+	private byte flag;
 
-	public MSSCipher() {
-		super();
-		this.engine = new MSSEngineClient();
-	}
+	public MSSCipher(MSSEngine engine) {this.engine = engine;}
+	public MSSCipher() {this.engine = new MSSEngineClient();}
 
-	public MSSCipher sslMode() {
-		sslMode = true;
-		return this;
-	}
-
-	public MSSEngine getEngine() { return engine; }
+	public MSSCipher sslMode() {flag |= TLS13;return this;}
+	public MSSEngine getEngine() {return engine;}
 
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
@@ -48,14 +40,14 @@ public class MSSCipher extends PacketMerger {
 	public void channelWrite(ChannelCtx ctx, Object msg) throws IOException {
 		if (!ctx.isOutputOpen()) return;
 
-		DynByteBuf in = (DynByteBuf) msg;
-		DynByteBuf out = ctx.allocate(false, 1024);
+		var in = (DynByteBuf) msg;
+		var out = ctx.allocate(false, 1024);
 		try {
-			do {
+			while (in.isReadable()) {
 				int req = engine.wrap(in, out);
 				if (req >= 0) ctx.channelWrite(out);
-				else out = ctx.alloc().expand(out,-req);
-			} while (in.isReadable());
+				else out = ctx.alloc().expand(out, -req);
+			}
 		} finally {
 			BufferPool.reserve(out);
 		}
@@ -63,7 +55,7 @@ public class MSSCipher extends PacketMerger {
 
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
-		DynByteBuf in = (DynByteBuf) msg;
+		var in = (DynByteBuf) msg;
 
 		if (!engine.isHandshakeDone()) {
 			handshake(ctx, in);
@@ -73,33 +65,32 @@ public class MSSCipher extends PacketMerger {
 			if (!in.isReadable()) return;
 		}
 
-		DynByteBuf out = ctx.allocate(false, 1024);
-		try {
-			while (true) {
-				int req = engine.unwrap(in, out);
-				if (req > 0) {
-					out = ctx.alloc().expand(out, req);
-				} else if (req == 0) {
-					mergedRead(ctx, out);
-					out.clear();
+		int lim = in.wIndex();
+		while (in.isReadable()) {
+			var packet = engine.publicReadPacket(in);
+			if (packet != 0) break;
 
-					if (!in.isReadable()) return;
-				} else {
-					return;
-				}
+			var decoder = engine.getDecoder();
+
+			int size = decoder.engineGetOutputSize(in.readableBytes());
+			try(var out = ctx.allocate(in.isDirect(), size)) {
+				decoder.cryptFinal(in, out);
+				mergedRead(ctx, out);
+			} catch (GeneralSecurityException e) {
+				throw new MSSException("解密失败:"+e.getMessage());
+			} finally {
+				in.wIndex(lim);
 			}
-		} finally {
-			BufferPool.reserve(out);
 		}
 	}
 
 	private void handshake(ChannelCtx ctx, DynByteBuf rx) throws IOException {
 		int req;
 
-		DynByteBuf tx = ctx.allocate(true, 1024);
+		var tx = ctx.allocate(true, 1024);
 		try {
-			do {
-				req = sslMode ? engine.handshakeSSL(tx, rx) : engine.handshake(tx, rx);
+			for(;;) {
+				req = (flag&TLS13) != 0 ? engine.handshakeTLS13(tx, rx) : engine.handshake(tx, rx);
 
 				// overflow
 				if (req == MSSEngine.HS_OK) {
@@ -109,11 +100,12 @@ public class MSSCipher extends PacketMerger {
 					}
 					if (engine.isHandshakeDone()) return;
 				} else if (req < 0) {
-					return;
+					if (req != MSSEngine.HS_PRE_DATA) return;
+					ctx.channelRead(tx);
 				} else {
 					tx = ctx.alloc().expand(tx, req);
 				}
-			} while (true);
+			}
 		} finally {
 			BufferPool.reserve(tx);
 		}
@@ -128,7 +120,7 @@ public class MSSCipher extends PacketMerger {
 	@Override
 	public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
 		if (ex instanceof MSSException e && e.code != MSSEngine.ILLEGAL_PACKET) {
-			if (!sslMode) {
+			if ((flag&TLS13) == 0) {
 				try {
 					ByteList ob = IOUtil.getSharedByteBuf();
 					e.notifyRemote(engine, ob);

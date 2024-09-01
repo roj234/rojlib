@@ -24,7 +24,7 @@ import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.concurrent.task.ITask;
 import roj.config.CCJson;
-import roj.config.auto.Serializers;
+import roj.config.auto.SerializerFactory;
 import roj.io.FastFailException;
 import roj.net.http.Headers;
 import roj.net.http.HttpUtil;
@@ -1044,7 +1044,7 @@ public final class OKRouter implements Router {
 		var parser = (CCJson) req.localCtx().get("or:parser");
 		if (parser == null) req.localCtx().put("or:parser", parser = new CCJson());
 
-		var adapter = Serializers.SAFE.serializer(Signature.parseGeneric(type));
+		var adapter = SerializerFactory.SAFE.serializer(Signature.parseGeneric(type));
 		adapter.reset();
 		parser.parse(req.postBuffer(), 0, adapter);
 		return adapter.get();
